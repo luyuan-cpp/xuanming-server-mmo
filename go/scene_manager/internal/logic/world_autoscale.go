@@ -485,8 +485,8 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 		// 节点已死:实体随进程一起没了,玩家会走各自的掉线/重连路径。
 		// 这里只负责把 Redis 状态清干净。
 		//
-		// 再入屏障(2026-11-05):摘出负载集不代表老节点已经停笔,它丢租约后还有 emergency drain 在
-		// SavePlayerToRedis。收尾删映射、成员集合与名额记录,属于「销毁」一类,与死节点收尾、孤儿清理同受屏障约束
+		// 再入屏障(2026-11-05):摘出负载集不代表老节点已经停笔,它若走了冲突关停还有有界疏散在
+		// 存盘(SavePlayer)。收尾删映射、成员集合与名额记录,属于「销毁」一类,与死节点收尾、孤儿清理同受屏障约束
 		// (reentry_barrier.go 顶部)。屏障未到本拍什么都不做,频道留在排空集合,下一拍 sweep 再来。
 		if reentryBarrierBlocks(svcCtx, zoneID, nodeID, barrierSiteAutoscaleDrain) {
 			return
@@ -523,24 +523,29 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 // 映射已经没了。
 //
 // 场景键(属主映射、成员集合、zone、agones_gs)由 atomicTeardownScene 按本拍读到的属主 nodeID 一次性认领并删除,
-// 同一步把它从排空集合摘掉(2026-10-23)。以前是逐条 DEL:读到属主 X 之后、删映射之前,若有写者把频道改派到
-// 活节点 Y 并 CreateScene,逐条 DEL 会把 Y 上那份带着玩家的实体变成没有映射的孤儿,还会扣错节点的计数。
-// 现在属主已不是 nodeID(nodeID 为空时:期间被写入了属主)就一个键都不动,下一拍按新属主重来(还有人就继续排空)。
-// Agones 名额也取脚本删除前读到的值,不再单独读。
+// 同一步把它从排空集合摘掉、改好属主的反向索引与计数、写下拆除任务(2026-10-23;拆除任务 2026-11-05)。以前是逐条
+// DEL:读到属主 X 之后、删映射之前,若有写者把频道改派到活节点 Y 并 CreateScene,逐条 DEL 会把 Y 上那份带着玩家的
+// 实体变成没有映射的孤儿,还会扣错节点的计数。现在属主已不是 nodeID(nodeID 为空时:期间被写入了属主)就一个键
+// 都不动,下一拍按新属主重来(还有人就继续排空)。认领之后的副作用见 runWorldDrainTeardown。
 //
-// 级联兜底:排空窗口里可能又有镜像以这个频道为源建起来了(pickScaleInVictim 只保证**开始排空那一刻**
-// 没有镜像)。源频道马上要没了,留着镜像就是谁也进不去的孤儿,而且 scene:{id}:mirrors 会永久泄漏。
 // 镜像子集合在认领之前预读一次:读不到本拍什么都不做,频道留在排空集合等下一拍。
 func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, sceneID uint64, nodeID string) {
-	sceneIDStr := strconv.FormatUint(sceneID, 10)
-
 	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
 	if err != nil {
 		noteReadUnknown(zoneID, readUnknownSiteAutoscaleFinish, fmt.Sprintf("mirror set of draining scene %d", sceneID), err)
 		return
 	}
 
-	claim, err := atomicTeardownScene(svcCtx, zoneID, sceneID, nodeID, worldDrainingSetKey(zoneID, confID))
+	req := sceneTeardownRequest{
+		ZoneID: zoneID, SceneID: sceneID, Kind: teardownKindWorldDrain, Reason: "world_channel_scale_in",
+		ExpectedOwner: nodeID,
+		// 只扣活属主的 scene_count(2026-11-05,与孤儿清理 tearDownOrphanScene 同口径)。死属主的计数键由死节点收尾在
+		// 收尾完成时整个删掉;死属主分支又要等屏障走完,与那次删除差不多同时到期,删了之后再扣会把键重建成 -1,
+		// 被复用同一 node_id 的新进程继承。扣减在认领脚本里做,活不活在认领之前判。
+		CountOwner: nodeID != "" && IsNodeAlive(svcCtx, zoneID, nodeID),
+		UnlistKeys: []string{worldDrainingSetKey(zoneID, confID)},
+	}
+	claim, err := atomicTeardownScene(svcCtx, req)
 	if err != nil {
 		// 脚本可能已执行也可能没有,结论未知:本拍不再往下做,频道若还在排空集合里,下一拍重读属主再来。
 		logx.Errorf("[WorldAutoscale] draining channel %d: atomic teardown (expected owner %q) failed, outcome unknown: %v",
@@ -554,26 +559,34 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 		return
 	}
 
-	cascadeDestroyMirrors(ctx, svcCtx, zoneID, sceneID, preMirrorChildren, "source_scaled_in")
+	// 认领已提交,剩下的副作用记在拆除任务里:这里当场做,没做完的由扫描补(scale_in/drained 在任务做完时记)。
+	completeSceneTeardown(ctx, svcCtx, newSceneTeardownJob(req, claim), preMirrorChildren, false)
+	logx.Infof("[WorldAutoscale] channel %d drained and removed (zone=%d node=%s)", sceneID, zoneID, nodeID)
+}
 
+// runWorldDrainTeardown 是排空完成的世界频道认领之后的副作用(拆除任务 teardownKindWorldDrain),认领方与扫描共用,
+// 可以重跑:级联镜像、删排空标记与放置代次、摘剩余成员、还 Agones 名额。属主的反向索引与计数已在认领脚本里改好。
+//
+// 级联兜底:排空窗口里可能又有镜像以这个频道为源建起来了(pickScaleInVictim 只保证**开始排空那一刻**
+// 没有镜像)。源频道马上要没了,留着镜像就是谁也进不去的孤儿,而且 scene:{id}:mirrors 会永久泄漏。
+func runWorldDrainTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sceneTeardownJob, preMirrorChildren []string) error {
+	zoneID, sceneID, nodeID := job.ZoneID, job.SceneID, job.Claim.NodeID
+	var deferred []string
+	if !cascadeDestroyMirrors(ctx, svcCtx, zoneID, sceneID, preMirrorChildren, "source_scaled_in") {
+		deferred = append(deferred, "mirror cascade")
+	}
+	// 排空标记带 TTL,删不掉也会自己过期。
 	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
+	if err := deletePlacementGeneration(svcCtx, sceneID); err != nil {
+		deferred = append(deferred, "delete the placement generation")
+	}
 	if nodeID != "" {
-		svcCtx.Redis.Srem(nodeScenesKey(zoneID, nodeID), sceneIDStr)
-		// 只扣活属主的 scene_count(2026-11-05,与孤儿清理 tearDownOrphanScene 同口径)。死属主的计数键由死节点收尾在
-		// 收尾完成时整个删掉;死属主分支又要等屏障走完,与那次删除差不多同时到期,删了之后再扣会把键重建成 -1,
-		// 被复用同一 node_id 的新进程继承(理由同 luaReassignSceneNode 对老节点只在 > 0 时才减)。
-		if IsNodeAlive(svcCtx, zoneID, nodeID) {
-			svcCtx.Redis.Incrby(nodeSceneCountKey(zoneID, nodeID), -1)
-		}
-		removeResidualSceneMembers(svcCtx, sceneID, zoneID, nodeID, claim.Members)
+		removeResidualSceneMembers(svcCtx, sceneID, zoneID, nodeID, job.Claim.Members)
 	}
-	if claim.AgonesGs != "" {
-		ReleaseAgonesRoomForScene(ctx, svcCtx, sceneID, claim.AgonesGs, "world_channel_scale_in")
+	if err := releaseTeardownRoom(ctx, svcCtx, job); err != nil {
+		deferred = append(deferred, "take the Agones release step")
 	}
-
-	logx.Infof("[WorldAutoscale] channel %d fully drained and removed (zone=%d node=%s)",
-		sceneID, zoneID, nodeID)
-	metrics.ObserveWorldAutoscale(zoneID, "scale_in", "drained")
+	return teardownDeferred(deferred)
 }
 
 // inCooldown 报告这张图是否还在伸缩冷却期。读不到冷却标记按「仍在冷却」处理:本轮不伸缩,

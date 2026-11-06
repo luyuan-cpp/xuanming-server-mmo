@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/service.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/db/proto_option.pb.h"
@@ -58,6 +59,8 @@ struct TableStruct_proto_2fscene_2fplayer_5fmovement_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto;
 }  // extern "C"
+enum TeamFollowStopReason : int;
+extern const uint32_t TeamFollowStopReason_internal_data_[];
 class ActorMoveListS2C;
 struct ActorMoveListS2CGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -106,6 +109,22 @@ extern const ::google::protobuf::internal::ClassDataFull MoveSyncC2S_class_data_
 #else
 extern const MoveSyncC2SGlobalsTypeInternal MoveSyncC2S_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class TeamFollowC2S;
+struct TeamFollowC2SGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TeamFollowC2SGlobalsTypeInternal TeamFollowC2S_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TeamFollowC2S_class_data_;
+#else
+extern const TeamFollowC2SGlobalsTypeInternal TeamFollowC2S_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TeamFollowStateS2C;
+struct TeamFollowStateS2CGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TeamFollowStateS2CGlobalsTypeInternal TeamFollowStateS2C_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TeamFollowStateS2C_class_data_;
+#else
+extern const TeamFollowStateS2CGlobalsTypeInternal TeamFollowStateS2C_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class TeleportRequestC2S;
 struct TeleportRequestC2SGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -132,13 +151,502 @@ extern const TeleportS2CGlobalsTypeInternal TeleportS2C_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::TeamFollowStopReason_internal_data_>
+    internal::EnumTraitsImpl::value<::TeamFollowStopReason>;
 }  // namespace protobuf
 }  // namespace google
 
+enum TeamFollowStopReason : int {
+  TEAM_FOLLOW_STOP_REASON_UNSPECIFIED = 0,
+  TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW = 1,
+  TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED = 2,
+  TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED = 3,
+  TEAM_FOLLOW_STOP_REASON_BECAME_LEADER = 4,
+  TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED = 5,
+  TEAM_FOLLOW_STOP_REASON_LEADER_GONE = 6,
+  TEAM_FOLLOW_STOP_REASON_LEAVING = 7,
+  TeamFollowStopReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TeamFollowStopReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TeamFollowStopReason_internal_data_[];
+inline constexpr TeamFollowStopReason TeamFollowStopReason_MIN =
+    static_cast<TeamFollowStopReason>(0);
+inline constexpr TeamFollowStopReason TeamFollowStopReason_MAX =
+    static_cast<TeamFollowStopReason>(7);
+[[nodiscard]] inline bool TeamFollowStopReason_IsValid(int value) {
+  return 0 <= value && value <= 7;
+}
+inline constexpr int TeamFollowStopReason_ARRAYSIZE = 7 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TeamFollowStopReason_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TeamFollowStopReason) {
+  return TeamFollowStopReason_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TeamFollowStopReason_Name(T value) {
+  static_assert(::std::is_same<T, TeamFollowStopReason>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TeamFollowStopReason_Name().");
+  return TeamFollowStopReason_Name(static_cast<TeamFollowStopReason>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TeamFollowStopReason_Name(TeamFollowStopReason value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TeamFollowStopReason_descriptor, 0, 7>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TeamFollowStopReason_Parse(
+    ::absl::string_view name, TeamFollowStopReason* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TeamFollowStopReason>(TeamFollowStopReason_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamFollowStateS2C final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:TeamFollowStateS2C) */ {
+ public:
+  inline TeamFollowStateS2C() : TeamFollowStateS2C(nullptr) {}
+  ~TeamFollowStateS2C() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TeamFollowStateS2C* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TeamFollowStateS2C));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TeamFollowStateS2C(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TeamFollowStateS2C(const TeamFollowStateS2C& from) : TeamFollowStateS2C(nullptr, from) {}
+  inline TeamFollowStateS2C(TeamFollowStateS2C&& from) noexcept : TeamFollowStateS2C(nullptr, ::std::move(from)) {}
+  inline TeamFollowStateS2C& operator=(const TeamFollowStateS2C& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TeamFollowStateS2C& operator=(TeamFollowStateS2C&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TeamFollowStateS2C& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamFollowStateS2C>(&TeamFollowStateS2C_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(TeamFollowStateS2C& a, TeamFollowStateS2C& b) { a.Swap(&b); }
+  inline void Swap(TeamFollowStateS2C* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TeamFollowStateS2C* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TeamFollowStateS2C* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TeamFollowStateS2C>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TeamFollowStateS2C& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TeamFollowStateS2C& from) { TeamFollowStateS2C::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TeamFollowStateS2C* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "TeamFollowStateS2C"; }
+
+  explicit TeamFollowStateS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TeamFollowStateS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TeamFollowStateS2C& from);
+  TeamFollowStateS2C(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TeamFollowStateS2C&& from) noexcept
+      : TeamFollowStateS2C(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kLeaderEntityFieldNumber = 2,
+    kDrivenFieldNumber = 1,
+    kSlotFieldNumber = 3,
+    kReasonFieldNumber = 4,
+  };
+  // uint64 leader_entity = 2;
+  void clear_leader_entity() ;
+  [[nodiscard]] ::uint64_t leader_entity() const;
+  void set_leader_entity(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_leader_entity() const;
+  void _internal_set_leader_entity(::uint64_t value);
+
+  public:
+  // bool driven = 1;
+  void clear_driven() ;
+  [[nodiscard]] bool driven() const;
+  void set_driven(bool value);
+
+  private:
+  bool _internal_driven() const;
+  void _internal_set_driven(bool value);
+
+  public:
+  // uint32 slot = 3;
+  void clear_slot() ;
+  [[nodiscard]] ::uint32_t slot() const;
+  void set_slot(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_slot() const;
+  void _internal_set_slot(::uint32_t value);
+
+  public:
+  // .TeamFollowStopReason reason = 4;
+  void clear_reason() ;
+  [[nodiscard]] ::TeamFollowStopReason reason() const;
+  void set_reason(::TeamFollowStopReason value);
+
+  private:
+  ::TeamFollowStopReason _internal_reason() const;
+  void _internal_set_reason(::TeamFollowStopReason value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:TeamFollowStateS2C)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TeamFollowStateS2C& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t leader_entity_;
+    bool driven_;
+    ::uint32_t slot_;
+    int reason_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fmovement_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamFollowC2S final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:TeamFollowC2S) */ {
+ public:
+  inline TeamFollowC2S() : TeamFollowC2S(nullptr) {}
+  ~TeamFollowC2S() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TeamFollowC2S* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TeamFollowC2S));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TeamFollowC2S(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TeamFollowC2S(const TeamFollowC2S& from) : TeamFollowC2S(nullptr, from) {}
+  inline TeamFollowC2S(TeamFollowC2S&& from) noexcept : TeamFollowC2S(nullptr, ::std::move(from)) {}
+  inline TeamFollowC2S& operator=(const TeamFollowC2S& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TeamFollowC2S& operator=(TeamFollowC2S&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TeamFollowC2S& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TeamFollowC2S>(&TeamFollowC2S_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(TeamFollowC2S& a, TeamFollowC2S& b) { a.Swap(&b); }
+  inline void Swap(TeamFollowC2S* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TeamFollowC2S* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TeamFollowC2S* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TeamFollowC2S>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TeamFollowC2S& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TeamFollowC2S& from) { TeamFollowC2S::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TeamFollowC2S* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "TeamFollowC2S"; }
+
+  explicit TeamFollowC2S(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TeamFollowC2S(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TeamFollowC2S& from);
+  TeamFollowC2S(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TeamFollowC2S&& from) noexcept
+      : TeamFollowC2S(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kFollowFieldNumber = 1,
+  };
+  // bool follow = 1;
+  void clear_follow() ;
+  [[nodiscard]] bool follow() const;
+  void set_follow(bool value);
+
+  private:
+  bool _internal_follow() const;
+  void _internal_set_follow(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:TeamFollowC2S)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TeamFollowC2S& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool follow_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fmovement_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeleportRequestC2SResponse final : public ::google::protobuf::Message
@@ -2383,6 +2891,14 @@ class SceneMovementClientPlayer : public ::google::protobuf::Service {
                         const ::TeleportS2C* PROTOBUF_NONNULL request,
                         ::Empty* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void TeamFollow(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::TeamFollowC2S* PROTOBUF_NONNULL request,
+                        ::Empty* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void NotifyTeamFollowState(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::TeamFollowStateS2C* PROTOBUF_NONNULL request,
+                        ::Empty* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -2445,6 +2961,14 @@ class SceneMovementClientPlayer_Stub final : public SceneMovementClientPlayer {
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
   void NotifyTeleport(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::TeleportS2C* PROTOBUF_NONNULL request,
+                        ::Empty* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void TeamFollow(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::TeamFollowC2S* PROTOBUF_NONNULL request,
+                        ::Empty* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void NotifyTeamFollowState(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::TeamFollowStateS2C* PROTOBUF_NONNULL request,
                         ::Empty* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
@@ -4402,12 +4926,153 @@ inline void TeleportS2C::_internal_set_reason(::uint32_t value) {
   _impl_.reason_ = value;
 }
 
+// -------------------------------------------------------------------
+
+// TeamFollowC2S
+
+// bool follow = 1;
+inline void TeamFollowC2S::clear_follow() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.follow_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool TeamFollowC2S::follow() const {
+  // @@protoc_insertion_point(field_get:TeamFollowC2S.follow)
+  return _internal_follow();
+}
+inline void TeamFollowC2S::set_follow(bool value) {
+  _internal_set_follow(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:TeamFollowC2S.follow)
+}
+inline bool TeamFollowC2S::_internal_follow() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.follow_;
+}
+inline void TeamFollowC2S::_internal_set_follow(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.follow_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TeamFollowStateS2C
+
+// bool driven = 1;
+inline void TeamFollowStateS2C::clear_driven() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.driven_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool TeamFollowStateS2C::driven() const {
+  // @@protoc_insertion_point(field_get:TeamFollowStateS2C.driven)
+  return _internal_driven();
+}
+inline void TeamFollowStateS2C::set_driven(bool value) {
+  _internal_set_driven(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:TeamFollowStateS2C.driven)
+}
+inline bool TeamFollowStateS2C::_internal_driven() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.driven_;
+}
+inline void TeamFollowStateS2C::_internal_set_driven(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.driven_ = value;
+}
+
+// uint64 leader_entity = 2;
+inline void TeamFollowStateS2C::clear_leader_entity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leader_entity_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t TeamFollowStateS2C::leader_entity() const {
+  // @@protoc_insertion_point(field_get:TeamFollowStateS2C.leader_entity)
+  return _internal_leader_entity();
+}
+inline void TeamFollowStateS2C::set_leader_entity(::uint64_t value) {
+  _internal_set_leader_entity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:TeamFollowStateS2C.leader_entity)
+}
+inline ::uint64_t TeamFollowStateS2C::_internal_leader_entity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.leader_entity_;
+}
+inline void TeamFollowStateS2C::_internal_set_leader_entity(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leader_entity_ = value;
+}
+
+// uint32 slot = 3;
+inline void TeamFollowStateS2C::clear_slot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t TeamFollowStateS2C::slot() const {
+  // @@protoc_insertion_point(field_get:TeamFollowStateS2C.slot)
+  return _internal_slot();
+}
+inline void TeamFollowStateS2C::set_slot(::uint32_t value) {
+  _internal_set_slot(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:TeamFollowStateS2C.slot)
+}
+inline ::uint32_t TeamFollowStateS2C::_internal_slot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.slot_;
+}
+inline void TeamFollowStateS2C::_internal_set_slot(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_ = value;
+}
+
+// .TeamFollowStopReason reason = 4;
+inline void TeamFollowStateS2C::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::TeamFollowStopReason TeamFollowStateS2C::reason() const {
+  // @@protoc_insertion_point(field_get:TeamFollowStateS2C.reason)
+  return _internal_reason();
+}
+inline void TeamFollowStateS2C::set_reason(::TeamFollowStopReason value) {
+  _internal_set_reason(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:TeamFollowStateS2C.reason)
+}
+inline ::TeamFollowStopReason TeamFollowStateS2C::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::TeamFollowStopReason>(_impl_.reason_);
+}
+inline void TeamFollowStateS2C::_internal_set_reason(::TeamFollowStopReason value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
 
 // @@protoc_insertion_point(namespace_scope)
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::TeamFollowStopReason> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::TeamFollowStopReason>() {
+  return ::TeamFollowStopReason_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

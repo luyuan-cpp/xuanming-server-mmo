@@ -10,6 +10,7 @@
 #include "player/system/role_admission_system.h"
 #include "player/system/player_scene.h"
 #include "world/scene_lifecycle.h"
+#include "world/scene_placement_fence.h"
 #include "player/player_gm_guard.h" // 客户端 GM 指令统一闸门(guild-phase2 §S4 4.34)
 #include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
@@ -423,10 +424,23 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 		return;
 	}
 
+	// 放置代次(docs/design/world-channel-placement-generation.md),与 gRPC 入口同一判定:本节点已按 >= 这个代次拆过
+	// 这个场景时,这是一次晚到的旧建场景,不建、不复用,回空应答。判在参数与许可的拒收之后(放行就等于建成或
+	// 复用)、去重之前(过期的建场景不走 ReuseExistingScene)。
+	if (auto& fence = SceneLifecycle::PlacementFence();
+		!fence.AdmitCreate(request->scene_id(), request->placement_generation()))
+	{
+		LOG_WARN << "CreateScene: scene_id=" << request->scene_id()
+				 << " placement_generation=" << request->placement_generation()
+				 << " is stale (destroyed through " << fence.Find(request->scene_id())->destroyedThrough << "), rejected";
+		return;
+	}
+
 	// 按 Go 分配的全局场景号幂等,不维护第二份场景索引。
 	if (const SceneEntity existing = PlayerSceneSystem::FindSceneById(request->scene_id()); existing != entt::null)
 	{
-		response->mutable_scene_info()->CopyFrom(tlsEcs.sceneRegistry.get<SceneInfoComp>(existing));
+		// 命中已有实体可能是 scene_manager「先建后改」迁回本节点的预建:归属核对从头算宽限期(见 ReuseExistingScene)。
+		response->mutable_scene_info()->CopyFrom(SceneLifecycle::ReuseExistingScene(existing));
 		LOG_INFO << "CreateScene: scene_id=" << request->scene_id()
 				 << " already exists (entity=" << entt::to_integral(existing) << "), returning existing";
 		return;
@@ -451,6 +465,15 @@ void SceneHandler::DestroyScene(::google::protobuf::RpcController* controller, c
 	if (sceneId == 0)
 	{
 		LOG_ERROR << "DestroyScene: scene_id is 0";
+		return;
+	}
+
+	// 放置代次,与 gRPC 入口同一判定:本节点已按更新的代次建过这个场景时,这是一次晚到的旧拆除,忽略;代次 0 无条件执行。
+	if (auto& fence = SceneLifecycle::PlacementFence(); !fence.AdmitDestroy(sceneId, request->placement_generation()))
+	{
+		LOG_WARN << "DestroyScene: scene_id=" << sceneId
+				 << " placement_generation=" << request->placement_generation()
+				 << " is older than the newest create " << fence.Find(sceneId)->newestCreate << ", ignored";
 		return;
 	}
 

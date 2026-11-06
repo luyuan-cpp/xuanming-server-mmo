@@ -40,7 +40,6 @@ import (
 	"friend/internal/logic"
 	"friend/internal/metrics"
 	"friend/internal/server"
-	"friend/internal/session"
 	"friend/internal/svc"
 
 	base "proto/common/base"
@@ -50,10 +49,12 @@ import (
 	"schemamigrate"
 
 	"shared/buildinfo"
+	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/releasetrack"
+	"shared/roleidentity"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
 
@@ -265,10 +266,10 @@ func runFriend(c config.Config) (runErr error) {
 
 	serverReady := make(chan struct{})
 	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
-		// 只挂一个服务:ClientPlayerFriend 标了 OptionIsClientProtocolService=true,
-		// 客户端来源的方法级准入由 internal/session 的白名单负责(S2C 的 NotifyFriendEvent 必须挡住)。
+		// 客户端服务 ClientPlayerFriend 标了 OptionIsClientProtocolService=true;客户端来源的方法级准入由
+		// 入口准入按生成的客户端方法集合负责(S2C 的 NotifyFriendEvent 标了 PUSH,带会话拨它被挡住)。
 		friendpb.RegisterClientPlayerFriendServer(grpcServer, server.NewFriendServer(deps))
-		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被白名单挡住。
+		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被入口准入挡住。
 		rfpb.RegisterRoleFenceParticipantServer(grpcServer, participant)
 		if config.IsRelaxedMode(c.Mode) {
 			reflection.Register(grpcServer)
@@ -285,9 +286,12 @@ func runFriend(c config.Config) (runErr error) {
 	if authErr != nil {
 		return authErr
 	}
+	onlineEntry, entryErr := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if entryErr != nil {
+		return entryErr
+	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks,
-		session.OriginalIdentityInterceptor(c.RequestBudget(), deps.CheckOriginalRole))...)
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, onlineEntry)...)
 
 	// **先起 gRPC,再注册**(契约 §2)。Start 在监听失败时 panic:recover 成错误交回主线程,
 	// 走同一条收尾后以非 0 退出(进程拉起方 / K8s 仍可见),不带着已创建的资源直接崩。
@@ -437,7 +441,11 @@ func exitRequested(ctx context.Context) bool {
 // 抽成函数是为了让链本身可测(friend_test.go)——
 // main() 无法在单测里跑起来,而"哪次重构顺手把 killswitch / session 那行删了"是最容易发生、
 // 又最难被发现的回归:删掉之后一切照常工作,只有真出事那天才发现止血阀 / 准入是假的。
-func buildUnaryInterceptors(ks *killswitch.Switch, original grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
+//
+// onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),由装配层传入。
+// 入口不再做原角色归属预检(docs/design/gate-online-identity.md §9.3):写方法在业务事务里锁 role_fence
+// 复核原件,读方法经 roleReader 复核,核不过回 ErrRoleNotVerified;每个 handler 自己套整请求预算。
+func buildUnaryInterceptors(ks *killswitch.Switch, onlineEntry grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
 	return []grpc.UnaryServerInterceptor{
 		// ① 流量统计最外层:被热关停短路、被会话准入拒绝的请求也要被统计到。
 		//    否则"关停生效后这个方法的 QPS 归零"会被误读成客户端不再调用了。
@@ -447,10 +455,10 @@ func buildUnaryInterceptors(ks *killswitch.Switch, original grpc.UnaryServerInte
 		//    被关停的调用不进 rpc_duration_seconds —— 它们的账记在 killswitch_blocked_total{method} 上。
 		ks.UnaryServerInterceptor(),
 
-		// ③ 会话与方法准入(D-9):无会话 = 内部调用放行;坏会话 → Unauthenticated;
-		//    带会话调白名单外方法(S2C 的 NotifyFriendEvent)→ PermissionDenied。放在 serverbase 之前:
-		//    被拒绝的调用没进业务链路,不计入业务耗时。
-		session.ClientIdentityInterceptor(session.ClientMethods, original),
+		// ③ 入口准入(docs/design/gate-online-identity.md §9.2):客户端方法必须带 gate 签名的完整原身份;
+		//    带会话调非客户端方法(S2C 的 NotifyFriendEvent、RoleFenceParticipant)→ PermissionDenied;会话未验签 → Unauthenticated;
+		//    不带会话的内部调用放行。放在 serverbase 之前:被拒绝的调用没进业务链路,不计入业务耗时。
+		onlineEntry,
 
 		// ④ in-band 故障定性:handler 一律 `return resp, nil`,这层读 TipInfoMessage.id 按 Tip.xlsx 的
 		//    fault 列定性(kServiceUnavailable = 故障告警,其余 = 业务拒绝)。紧贴 handler。

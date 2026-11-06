@@ -1,7 +1,8 @@
 package loginqueue
 
 // 排队取走放行时复核放行时选定的 gate(admit_recheck.go,2026-11-05):
-//   - 纯逻辑 chooseAdmitGate:仍合格就签它(地址取此刻的候选),停写 / 满载 / 不在候选里就重挑,全部不合格时留着它;
+//   - 纯逻辑 chooseAdmitGate:仍在分档选出的那一档里就签它(地址取此刻的候选),停写 / 排空 / 满载 / 不在候选里就重挑,
+//     没有更好的 gate 时留着它;
 //   - NewAdmitSigner:签出的票绑复核之后的 gate;读不到候选时照签放行槽里的 gate,复核本身不回错误;
 //   - 经 Queue.Lookup 的端到端:放行之后选定的 gate 卡住,取走时拿到的票绑另一台。
 
@@ -85,7 +86,7 @@ func TestChooseAdmitGate_KeepsEligibleOriginal(t *testing.T) {
 	}
 }
 
-// 选定的 gate 停写、满载或不在候选里:在合格的候选里按快速通道规则重挑,并说明原因。
+// 选定的 gate 停写、排空、满载或不在候选里:在合格的候选里按快速通道规则重挑,并说明原因。
 func TestChooseAdmitGate_RepicksIneligibleOriginal(t *testing.T) {
 	others := []GateCandidate{
 		{NodeID: 2, IP: "10.0.0.2", Port: 9000, PlayerCount: 40, MaxConnections: 100, ZoneID: 3},
@@ -97,6 +98,7 @@ func TestChooseAdmitGate_RepicksIneligibleOriginal(t *testing.T) {
 		want     string
 	}{
 		{"stale", &GateCandidate{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, Stale: true}, admitRecheckStale},
+		{"draining", &GateCandidate{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, Draining: true}, admitRecheckDraining},
 		{"full", &GateCandidate{NodeID: 1, IP: "10.0.0.1", Port: 9000, PlayerCount: 95, MaxConnections: 100, ZoneID: 3}, admitRecheckFull},
 		{"gone", nil, admitRecheckGone},
 	}
@@ -125,7 +127,31 @@ func TestChooseAdmitGate_ReplacedNodeIDIsRepicked(t *testing.T) {
 	}
 }
 
-// 全部不合格时回落全集:选定的 gate 只要还在候选里就留着它,与放行时一样,不为了换而换。
+// 整区都在排空:分档退到连得上的,选定的 gate 就在这一档里,留着它,不为了换而换。
+func TestChooseAdmitGate_AllDrainingKeepsOriginal(t *testing.T) {
+	cands := []GateCandidate{
+		{NodeID: 2, IP: "10.0.0.2", Port: 9000, ZoneID: 3, Draining: true},
+		{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, Draining: true},
+	}
+	gate, outcome := chooseAdmitGate(admittedToGate1(), cands, seqIntn(t))
+	if outcome != admitRecheckKept || gate.NodeID != 1 {
+		t.Fatalf("got gate %d (%s), want gate 1 kept under the reachable fallback", gate.NodeID, outcome)
+	}
+}
+
+// 选定的 gate 在排空、别的都停写:排空中的连得上,留着它;不会被换到卡住的 gate 上(2026-11-06 分档)。
+func TestChooseAdmitGate_DrainingOriginalBeatsStaleOthers(t *testing.T) {
+	cands := []GateCandidate{
+		{NodeID: 2, IP: "10.0.0.2", Port: 9000, ZoneID: 3, Stale: true},
+		{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, Draining: true},
+	}
+	gate, outcome := chooseAdmitGate(admittedToGate1(), cands, seqIntn(t))
+	if outcome != admitRecheckKept || gate.NodeID != 1 {
+		t.Fatalf("got gate %d (%s), want draining gate 1 kept instead of the stale one", gate.NodeID, outcome)
+	}
+}
+
+// 全部停写时退到全部:选定的 gate 只要还在候选里就留着它,与放行时一样,不为了换而换。
 func TestChooseAdmitGate_AllIneligibleKeepsOriginal(t *testing.T) {
 	cands := []GateCandidate{
 		{NodeID: 2, IP: "10.0.0.2", Port: 9000, ZoneID: 3, Stale: true},

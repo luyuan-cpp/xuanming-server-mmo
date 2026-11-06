@@ -63,6 +63,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [auth-provider-framework.md](design/auth-provider-framework.md) — Auth Provider Framework
 - [client-access-band-routing.md](design/client-access-band-routing.md) — 客户端接入的标准形态，与 gate 按号段整体转发给路由服（client-rpc-router 续篇，D51–D64）
 - [client-request-ordering.md](design/client-request-ordering.md) — 客户端请求按会话保序:路由服水平扩展下的乱序修复(gate 路由 lane)
+- [client-request-idempotency.md](design/client-request-idempotency.md) — 客户端请求幂等键：场景服经济操作的去重账本，随存档落盘（防连点与结果未知后的重发，2026-11-05 起）
 - [client-rpc-router.md](design/client-rpc-router.md) — 客户端 RPC 路由服(client_rpc_router):gate 唯一的 gRPC 目标
 - [dual-token-authentication.md](design/dual-token-authentication.md) — Dual Token Authentication Design (Access + Refresh)
 - [gate-connection-admission-control.md](design/gate-connection-admission-control.md) — gate 连接准入控制：muduo 无条件 accept 的业界解法与本仓落地 (2026-09-03)
@@ -70,6 +71,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [gate-login-rpc-boundary.md](design/gate-login-rpc-boundary.md) — Gate ↔ Login RPC 边界 (2026-05)
 - [gate-scene-relay-architecture.md](design/gate-scene-relay-architecture.md) — Gate–Scene 连接规模与跨 zone 换 Gate
 - [gate_client_high_water_mark.md](design/gate_client_high_water_mark.md) — Gate 客户端 TCP 高水位处理（重要） · [EN](design/gate_client_high_water_mark_en.md) · [中文](design/gate_client_high_water_mark_zh.md)
+- [gate-client-heartbeat.md](design/gate-client-heartbeat.md) — gate 与客户端的连接存活:建连 10s 内须验签;验签后客户端 10s 一跳、gate 回包,静默 30s 即关闭并走断线保留（2026-11-06，未编译）
 - [hmac-message-signing.md](design/hmac-message-signing.md) — Per-Message HMAC Signing — Design (todo.md #76)
 - [java-gateway-portal-decision.md](design/java-gateway-portal-decision.md) — Java Gateway Portal Decision (2026-04-14)
 - [k8s-client-entry.md](design/k8s-client-entry.md) — gate / battle 集群外客户端入口(D76–D93)
@@ -96,17 +98,19 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [scene-enter-session-fence.md](design/scene-enter-session-fence.md) — 入场会话栅栏:登录代次(login_generation)
 - [scene-external-data-views.md](design/scene-external-data-views.md) — 跨服务数据副本：按需缓存、版本视图与 C++ 协程边界
 - [scene-navmesh-pipeline.md](design/scene-navmesh-pipeline.md) — 场景导航网格管线(Recast 烘焙 + 服务器寻路阻挡校验)
+- [scene-node-ownership-reconcile.md](design/scene-node-ownership-reconcile.md) — scene 节点回来之后的场景归属对账:按 `scene:{id}:node` 排空已被改派或拆掉的本地场景(缺口第 33 条)
 - [scene-node-threading-model.md](design/scene-node-threading-model.md) — Scene Node 线程归属、帧循环与停机
 - [scene-owner-reentry-barrier.md](design/scene-owner-reentry-barrier.md) — 场景所有权：再入屏障与 owner_epoch
 - [scene-switch-release-design.md](design/scene-switch-release-design.md) — SceneManager跨节点切场景释放玩家方案选型
 - [world-channel-autoscale.md](design/world-channel-autoscale.md) — 按人数自动扩缩容:大世界频道 / gate / Scene Node 进程
+- [world-channel-placement-generation.md](design/world-channel-placement-generation.md) — 世界频道的放置代次:建场景、拆场景带代次,节点拒收晚到的旧请求(2026-11-06,未编译)
 - [world-channel-switch.md](design/world-channel-switch.md) — 玩家主动切线(分线列表 + 选线切换)
 - [world-channel-system.md](design/world-channel-system.md) — 主世界场景分线系统 (Main World Scene Lines)
 
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
-- [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：观众版帧随终局原件同事务存进 match 库，参战者按 battle_id 取回放（2026-11-05，设计稿，未落码）
+- [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：只录 PVP，观众版帧随终局原件同事务存进 match 库，每名玩家保留最近 100 条（2026-11-06 已落码，未编译）
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
@@ -126,6 +130,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [bag-service-srp-refactor.md](design/bag-service-srp-refactor.md) — Bag → BagService SRP Refactor (2026-03-26) · [EN](design/bag-service-srp-refactor_en.md) · [中文](design/bag-service-srp-refactor_zh.md)
 - [character-appearance-identity.md](design/character-appearance-identity.md) — 人物外观身份链
 - [chat-sensitive-word-filter.md](design/chat-sensitive-word-filter.md) — Chat Sensitive-Word Filter — Design (todo.md #68)
+- [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与 gate 推送扇出(两批都已落码,未编译),缺口清单第 19 条
 - [equipment-attributes.md](design/equipment-attributes.md) — 装备属性系统(问道式:基础属性 + 蓝/粉/黄随机属性)
 - [equipment-enhance-inlay.md](design/equipment-enhance-inlay.md) — 装备强化与镶嵌(装备属性系统二期)
 - [exploit_loss_prevention.md](design/exploit_loss_prevention.md) — Exploit & Loss Prevention Systems (漏洞止损与回收系统) · [EN](design/exploit_loss_prevention_en.md) · [中文](design/exploit_loss_prevention_zh.md)
@@ -146,6 +151,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player-pet.md](design/player-pet.md) — 宝宝(宠物)系统 —— 核心线
 - [stall-system.md](design/stall-system.md) — 摆摊系统设计(草案)
 - [team-system.md](design/team-system.md) — 组队系统设计(team-in-match)
+- [team-follow-server-trail.md](design/team-follow-server-trail.md) — 组队跟随:服务器沿队长轨迹驱动队员(同动作同间隔、原地来回不带动队员、不用 dtCrowd)
 
 #### 玩家数据与存储
 
@@ -209,13 +215,13 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 基础设施与中间件
 
-- [distributed-tracing.md](design/distributed-tracing.md) — Distributed Tracing — Design (todo.md #152)
+- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;2026-11-06 重写,未落码)
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
 - [go-zero-rpc-timeout-fix.md](design/go-zero-rpc-timeout-fix.md) — go-zero RPC Client Timeout Fix
 - [grpc-muduo-transport.md](design/grpc-muduo-transport.md) — C++ gRPC 传输改由 muduo 驱动(nghttp2 + 自有 gRPC 调用语义)
 - [hashed-timing-wheel.md](design/hashed-timing-wheel.md) — Hashed Timing Wheel
-- [infra-reconnect-overview.md](design/infra-reconnect-overview.md) — Infrastructure Reconnection Overview
+- [infra-reconnect-overview.md](design/infra-reconnect-overview.md) — 断线重连：处理原则与各服务现状（Redis / MySQL·TiDB / etcd / Kafka / gRPC / 节点链路，2026-11-06 按代码重写，含 19 条缺口）
 - [kafka-topic-retention-strategy.md](design/kafka-topic-retention-strategy.md) — Kafka topic 保留与耐久策略
 - [muduo-rpc-channel.md](design/muduo-rpc-channel.md) — 节点间 muduo RPC:每次调用的回调、延后回包与完整的完成语义(RpcChannel 改造)
 - [muduo-timer-cancellation-hazards.md](design/muduo-timer-cancellation-hazards.md) — muduo 定时器取消语义与野引用
@@ -223,6 +229,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
 - [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化(发现只看本 zone、scene_manager 按 zone 选主)与控制域 Redis 按 zone 组分实例(缺口第 4、5 条)
+- [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:gate→路由服与路由服→全服池目标按 HRW 取确定性子集、每类 C++ 节点只发现自己用到的类型、命令 topic 读放大与场景亲和先测(缺口第 30 条、第 28 条后半;设计稿,未落码)
 - [thread-count-monitoring.md](design/thread-count-monitoring.md) — Thread Count Monitoring & Control per Process · [EN](design/thread-count-monitoring_en.md) · [中文](design/thread-count-monitoring_zh.md)
 - [traffic-statistics-design.md](design/traffic-statistics-design.md) — Traffic Statistics Design
 
@@ -239,6 +246,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
 - [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05，未落码）
+- [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧已落码未编译，批 B gate 待做）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
 
@@ -265,6 +273,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
 - [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
 - [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计（2026-10-20）
+- [player-connection-lost-hold.md](design/player-connection-lost-hold.md) — 玩家断线保留与短重连回原处:意外断线角色原地留 25 秒,租约内新会话接回同一实体、回原场景（2026-11-05）
 - [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、逐级扩大范围、每池单写者
 - [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展:逻辑库自治、角色护栏、目录分片、不停服迁移、多地域
 - [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
@@ -307,6 +316,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [linux-staging-stress-runbook.md](ops/linux-staging-stress-runbook.md) — Linux Staging 部署 + 阶梯压测留位
 - [log-management.md](ops/log-management.md) — Log Management
 - [login-queue-stress-runbook.md](ops/login-queue-stress-runbook.md) — 登录排队压测 — 判读清单
+- [match-formation-manual-abort-runbook.md](ops/match-formation-manual-abort-runbook.md) — 全球成局人工 ABORT 处置手册（`go/match/cmd/formationfix`，只处置永久 UNKNOWN 的成局）
 - [merge-zone-runbook.md](ops/merge-zone-runbook.md) — 不停服合服操作手册
 - [mysql-backup-pitr-runbook.md](ops/mysql-backup-pitr-runbook.md) — MySQL Backup & PITR Runbook
 - [online-debug-data-fetch.md](ops/online-debug-data-fetch.md) — 线上玩家数据拉取与本地复现
@@ -350,14 +360,18 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 ### 交接说明(`handoff/`)
 
 - [aoi-and-player-safeguards-20261104.md](handoff/aoi-and-player-safeguards-20261104.md) — Claude Code 交接：AOI 单向关注与两项玩家止损能力
+- [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接：战报回放的客户端细节（列表、取回放、gzip 解码、复用观战播放、测试，2026-11-06）
 - [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
 - [client-rpc-callback-handoff-20261019.md](handoff/client-rpc-callback-handoff-20261019.md) — 交接:客户端请求自带回调(按请求号认领回包)(2026-10-19)
 - [client-rpc-callback-robot-handoff-20261019.md](handoff/client-rpc-callback-robot-handoff-20261019.md) — 交接:robot 请求自带回调(按 MessageContent.id 认领回包)(2026-10-19)
+- [client-request-idempotency-unity-20261106.md](handoff/client-request-idempotency-unity-20261106.md) — 交接:客户端请求幂等键的 Unity 客户端细则与 robot 冒烟步骤(交 Codex 实施,2026-11-06)
 - [configurable-templates-handoff-20261019.md](handoff/configurable-templates-handoff-20261019.md) — 交接：战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）——从设计到落码（2026-10-19）
 - [d1-review-fix-handoff-20261023.md](handoff/d1-review-fix-handoff-20261023.md) — 交接:D1 最终语义评审与修复(10-19 ~ 10-23)——移交「映射直读 TiDB」新方向
 - [friend-handoff-20260920.md](handoff/friend-handoff-20260920.md) — friend 服务移植 —— 交接文档(2026-09-20)
 - [gate-auth-role-fence-review-20261104.md](handoff/gate-auth-role-fence-review-20261104.md) — Gate 登录身份修复与 Claude Code 审核说明
 - [gate-online-identity-single-source-20261105/CODEX.md](handoff/gate-online-identity-single-source-20261105/CODEX.md) — 在线原身份只认 gate 签名（删 login Redis 回退）的 Codex 执行清单
+- [gate-online-identity-simplify-20261105/PLAN.md](handoff/gate-online-identity-simplify-20261105/PLAN.md) — 在线身份简化（统一客户端入口、关 guild 无会话冒名口、删 friend 重复预检）的落码计划；第 1 批已落码未编译，第 2 批未开始
+- [gate-online-identity-simplify-20261105/CODEX.md](handoff/gate-online-identity-simplify-20261105/CODEX.md) — 在线身份简化第 1 批的 Codex 执行清单（与删 login Redis 回退那一批合并验证）
 - [global-economy-claude-review-20261022.md](handoff/global-economy-claude-review-20261022.md) — 全球同服、交易与角色归属：Claude Code 审核入口
 - [global-economy-review-20261021.md](handoff/global-economy-review-20261021.md) — 全球交易、角色归属与双版交付审核交接
 - [global-final-acceptance-resume-20261027.md](handoff/global-final-acceptance-resume-20261027.md) — 全球同服剩余验收：全新主窗口交接（2026-10-27）

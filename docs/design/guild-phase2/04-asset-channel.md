@@ -10,9 +10,9 @@
 ## 4.0 结论(先读这段)
 
 - **一句话**:Go 服务先在自己库里写一行"待办资产指令"(outbox),给它一个"该玩家该流"的递增流水号 seq;再按 `player:{id}:location` 找到玩家所在 scene,调 `SceneNodeGrpc.AssetDebit / AssetCredit / AssetAbortDebit`;scene 在 loop 线程**同一次处理**里做"查账本 → 闸门 → 改资产 → 记账本 → 触发存盘";账本和资产在 `player_database` 同一条记录里,**一起落盘、一起丢**;Go 只在响应为 `(APPLIED 或 REJECTED) 且 durable=true` 时才终结这一行。
-- **类比**:像银行柜台办业务要"流水号 + 回执"。流水号(seq)由 Go 发;柜台(scene)见过的流水号直接把原回执再给你一遍,绝不重办;回执要"盖了入库章"(durable,已写进 Redis 玩家数据)才算数。
+- **类比**:像银行柜台办业务要"流水号 + 回执"。流水号(seq)由 Go 发;柜台(scene)见过的流水号直接把原回执再给你一遍,绝不重办;回执要"盖了入库章"(durable,已进入 TiDB 提交成功的玩家存档)才算数。
 - **不在 gRPC 线程上等存盘**:生成器模板在 `future.get()` 之后没有守护段(`tools/proto_generator/protogen/internal/grpc_handler_gen.go:130-141`),硬塞等待会被重生成吞掉。改为:scene 应用后立刻 `SavePlayerToRedis`,响应里如实报 `durable`;Go 用**同一 seq** 按 100/200/400ms 重查,重查时 scene 只读答复(不会重办)。实测 Redis SET 为毫秒级,一般第二次就拿到 `durable=true`。(**2026-10-16 更正**,grpc-muduo-transport 第 4 批,未编译:上面的理由已过时 —— 节点上没有 gRPC 线程,也没有 `future.get()`,资产 RPC 在 scene 的 EventLoop 上同步执行。结论不变,理由换成:handler 不得阻塞 loop,在调用里等存盘会卡住整个逻辑帧,所以仍是「应用后立刻存盘、如实报 `durable`、Go 同 seq 重查」。见 grpc-muduo-transport.md §15.6 / §15.8。)
-- **durable 的判定只看"确实落盘的字节"**:`PlayerLastPersistedSnapshotComp.snapshot` 是 `HandlePlayerAsyncSaved` 回调里写入的、刚写进 Redis 的整份 `PlayerAllData`(`player_lifecycle.cpp:315-319`,`last_persisted_snapshot_comp.h:9-16`)。某 seq 的结局出现在这份快照的账本里 = durable。不另建"已持久化水位"状态,不存在两份真相。
+- **durable 的判定只看"确实落盘的字节"**:`PlayerLastPersistedSnapshotComp.snapshot` 是 go/db `Save` 回 COMMITTED / EQUAL(这一笔 `player_store` 的 TiDB 事务已提交)之后,由 `HandlePlayerAsyncSaved` 或 `OnPlayerStoreSaveDone` 换上的整份 `PlayerAllData`(2026-10-31 起玩家存档只存 TiDB,Redis 不再存档;`last_persisted_snapshot_comp.h`)。某 seq 的结局出现在这份快照的账本里 = durable。不另建"已持久化水位"状态,不存在两份真相。
 - **账本窗口**:每条流一个 1024 位窗口,窗口上沿始终跟着"见过的最大 seq"滑动;Go 端用"每流未决 ≤16 行、未决跨度 <512"守卫,保证任何仍未决的 seq 永远在窗口内(证明见第 2 部分)。
 - **第二轮评审补强**(第 8–11 部分,优先于前文):seq 空间加"流纪元" `stream_epoch`,帮会库重建/恢复后旧 seq 不会被误认,另有跳号上限;请求体带 HMAC 签名,每条流只认对应服务;Credit 部分发放如实报 `partial`;客户端 `Gm*` 指令在分发入口统一闸住;单写者只在重连租约内成立,根治放新批次 B4c(**2026-09-21 订正**:已被 [08-save-owner-fence.md](./08-save-owner-fence.md) 取代,不造 token 围栏;共享环境门禁见 08 §8.3)。
 
@@ -31,7 +31,7 @@
 | 同一 key 只有一个写在途;更新的整份快照覆盖旧的;只有最新值成功才回调 `save_callback_` | `redis_client.h:152-160,574-590` |
 | 存盘失败只通知不更新快照(快照仍是旧值) | `player_lifecycle.cpp:154-183` |
 | `CurrencySystem::Add/DeductCurrency(entity, type, int64)` 无 tx/correlation;冻结、余额不足、类型错误都回 `kInvalidParameter`;Add 有全局/个人封禁与补缴 | `currency_system.h:36-41`;`currency_system.cpp:59-226` |
-| `BagService::AddItems(ItemCountMap, txType)`:冻结/封禁回 `kInvalidParameter`;空间不足整批拒且回 `kBagItemNotStacked(6006)`;无战斗拦截 | `bag_service.cpp:135-204`;`bag_system.cpp:348-360` |
+| `BagService::AddItems(ItemCountMap, txType)`:冻结回 `kInvalidParameter`;物品获得封禁(全服 + 本人,`GainBlockService::IsItemGainBlocked`)回 `kAssetBlocked`(2026-11-05 起,此前全服封禁回 `kInvalidParameter`);空间不足整批拒且回 `kBagItemNotStacked(6006)`;无战斗拦截 | `bag_service.cpp:135-204`;`bag_system.cpp:348-360` |
 | 写操作前置惯例:`PlayerFrozenComp` → 拒;`PlayerBattleSystem::IsInBattle`(= `InBattleComp`) → 拒 | `player_attribute.cpp:279-291`;`player_battle.cpp:412-416` |
 | `TransactionType` 最大值 23(TX_BUFF_GAIN);`TransactionLogEntry.correlation_id=13` | `transaction_log.proto:20-69,96-97` |
 | GM 货币消息客户端可发、无鉴权 | `player_currency_handler.cpp:14-49` |
@@ -109,7 +109,7 @@ message AssetOpRequest {
 message AssetOpResponse {
   AssetOpOutcome outcome = 1;
   TipInfoMessage reason = 2;  // asset_error 段码;无原因时 id=0
-  bool durable = 3;           // 该 seq 的结局已在"最后一次成功写入 Redis 的玩家数据"里
+  bool durable = 3;           // 该 seq 的结局已在"最后一次提交成功的玩家存档"里(go/db Save 的 TiDB 事务已提交)
   bool partial = 4;           // APPLIED 但只发放了一部分(reason=kAssetPartialApplied);Go 不做对侧入账,转人工补偿
   // 聚宝斋 P2 追加字段从 5 起
 }
@@ -339,18 +339,18 @@ return wrote
 
 **存盘失败**:`HandlePlayerAsyncSaveFailed` 不更新快照(:170-172),durable 保持 false,Go 行保持 PENDING,直到 MessageAsyncClient 的封顶退避重试成功。
 
-**durable 的范围**:只保证写进 zone Redis 的 `PlayerAllData`。MySQL 回写是 fire-and-forget 的 Kafka DBTask(:1309-1314),这是全体玩家数据共同的既有风险(见 C5)。
+**durable 的范围**:保证该 seq 的结局已在 TiDB 提交成功的玩家存档里。scene 存盘是一次 go/db `Save`,在一个 TiDB 事务里提交这一笔全部有变化的行,资产与资产账本同笔提交;玩家存档不再经 Redis 或 Kafka DBTask 回写,没有"Redis 成功、MySQL 未必"的中间态。写权由 TiDB 写权行(owner_epoch、holder_instance、claim_seq、released)判定,被接管的老进程再写回 `STALE_OWNER` / `NOT_HOLDER`(见 player-save-direct-commit.md)。仍成立的同类风险只有整库按时间点恢复(PITR)到更早时刻,见 C5。
 
 ## 4.7 崩溃与并发窗口
 
 | # | 场景 | 结果 |
 |---|---|---|
 | C1 | scene 应用后、存盘前崩溃 | 内存里的资产与账本一起丢;Go 没见过 durable,重投同 seq;新进程见 kUnseen,只应用一次 ✓ |
-| C2 | Redis 写成功、响应前崩溃 | 重投 → 加载后账本已见 → 回原结局;新实体无快照 → 触发存盘 → durable ✓ |
+| C2 | 存盘提交成功、响应前崩溃 | 重投 → 加载后账本已见 → 回原结局;新实体无快照 → 触发存盘 → durable ✓ |
 | C3 | 响应丢失 / Go 进程崩溃 | reconcile 按行重投,同 C2 ✓ |
 | C4 | Go 终结事务提交失败 | 行仍 PENDING → 重投 → 同结局 → 再终结;终结以 `status=PENDING` 做 CAS,重复无效 ✓ |
-| C5 | durable 之后 Redis 丢数据(FLUSH/主从切换)回退到 MySQL 旧值 | 资产与账本一起回退,Go 已终结 → 该笔可能重复。与全部玩家数据同级的基础设施风险;缓解:Redis AOF + 交易流水 `correlation_id=op_id` 可对账。文档化接受 |
-| C6 | 跨 zone:最后一次存盘在途时应用了指令 | 迁移包在冻结当刻整份 marshal(:843-846);冻结后本端拒绝一切改动。于是"迁移包 ⊇ 源端任何快照",目的地账本不会落后于 Go 已看到的 durable ✓ **2026-10-20 更正(2026-10-22 按对抗复核修订)**:迁移包和 :843-846 的当场 marshal 已随 CZ-1 下线,上面的论证没有依据了。结论仍成立,理由换成以下四步(按函数名查 `player_lifecycle.cpp`):<br>① **冻结后账本不再变**。`StartTravelHandoff` 先挂 `PlayerTravelHandoffComp` 与 `PlayerFrozenComp`,再存盘。之后未见的 seq 一律回 RETRY `kAssetFrozen`:`asset_op_system.cpp` 的改动闸门对这两个组件任一在就拦,`player_mutability.h` 的 `IsPlayerMutable` 也把这两种状态判为不可改。账本组件只在这道闸门之后被资产通道改写。<br>② **冻结内存 ⊇ 任何已报 durable 的快照**。durable 只按 `PlayerLastPersistedSnapshotComp` 判定;这份快照只会换成已经落地的载荷,而它们都是冻结前某一刻的 marshal。冻结后账本不再变,所以冻结内存包含其中任何已报 durable 的结局。<br>③ **标记发出时 Redis ⊇ 冻结内存**(交接骨架 I1)。交接开始时,要么发起一次真实存盘,要么经快路径确认盘上已是冻结内存、且同 key 没有未落地的存盘。快路径判定"盘上已是同一份"、但同 key 还有未落地的存盘时,会强制做一次真实存盘(计数 `handoff_fastpath_forced`)。同 key 只有一笔在途,只对最新值发布完成回调;Redis 端的父快照提交屏障还会拒绝版本倒退的写入。所以触发 `BeginTravelHandoff` 的只能是这次交接存盘自己落地,之后也不会再有更旧的载荷落地。另外,`BeginTravelHandoff` 要等冻结快照的两张子表 SQL ACK 与 pending 同版才写标记(`handoff_sql_barrier::kPublishMarkLua`;没追平时每 250ms 重试,直到 35s 晚发闸),这保证目标节点冷读 SQL 时也读得到同一份。<br>④ 目标节点从同一份 Redis `PlayerAllData` 载入,所以目的地账本不会落后于 Go 已看到的 durable ✓。<br>标记发出后有四种结局,都不破坏上面的结论:放行时,见 ④;归属核实不了时,由 `ConcludeHandoffAfterMarkSent` 不存盘销毁(cross-zone-scene-travel.md §13.2),这时 Redis 已 ⊇ 冻结内存;GO-2 原子取证判 B4(归属未动)或 B5(凭本次回执采纳 E+2,随后强制存盘一次,内容就是冻结内存)时,源端解冻、仍是唯一属主;退出优先时,撤回标记,按退出收敛。<br>前提与残余:(a) 依赖 CZ-2「生产 Redis 物理共享」,以及父快照提交屏障与标记脚本在同一实例上原子执行。负责人 2026-10-17 已把 CZ-2 改写为"逻辑单一、物理按 `{player_id}` 分片"(shared-redis-split-by-purpose.md §20.1,第 4 批未落码)。这两段多键 Lua 都在 §20.3 / §20.4 的跨 tag 改形清单上,第 4 批落码时 C6 必须随改形重核,不预判结论;跨单元按转区处理,另议。(b) Redis 丢数据仍归 C5。(c) SET 发出前中止,或 SET 发出后经 B4 / B5 解冻的,源端仍是唯一属主,回到 C1–C3。B5 时 A2′ 与回滚靠同一 Redis 上的原子 Lua 互斥(见 `exit_release_mark.h` 文件头):回滚在先,目标节点的 A2′ 回 -1、拒建实体,不会有另一个节点在旁边报 durable。(d) 证据缺口:③ 的强制存盘分支没有单测(`cross_zone_test.cpp` 宿主里 `HasUnsettledPlayerSave` 恒为 false)。runbook 也没有专门制造它的场景:场景 H2 遇到它判 SKIP,F1 只附注它可能出现。目前只有代码审查。要补的话,可加一个场景(例如让一名 Redis 退避重试中的玩家发起交接,看 `handoff_fastpath_forced` +1 且标记晚于该次落地),或补一个带真玩家数据 Redis 客户端的单测 |
+| C5 | durable 之后整库按时间点恢复(PITR)到更早时刻 | 资产与账本一起回退,Go 已终结 → 该笔可能重复。原先"Redis 丢数据回退 MySQL 旧值"的形态随玩家存档移出 Redis 已不存在(没有 Redis 存档,也没有回退路径)。缓解:恢复手册 `docs/ops/mysql-backup-pitr-runbook.md` §4.1a——只回档存档库时,回档点之后已终局的资产结果要人工核账(交易流水 `correlation_id=op_id` 可对账),能全库一起回档(§4.0)就不单回存档库。文档化接受 |
+| C6 | 跨 zone:最后一次存盘在途时应用了指令 | 交接先冻结、再存盘、存盘提交后才放行,目标节点用更高代次认领后读到的就是源端已提交的那一份,所以目的地账本不会落后于 Go 已看到的 durable ✓ **2026-11-06 按现行交接重写**(原论证基于迁移包和 Redis `PlayerAllData`,迁移包随 CZ-1 下线,存档随玩家存档移出 Redis 作废;函数名按 `player_lifecycle.cpp` 查):<br>① **冻结后账本不再变**。`StartTravelHandoff` 先挂 `PlayerTravelHandoffComp` 与 `PlayerFrozenComp`,再存盘。之后未见的 seq 一律回 RETRY `kAssetFrozen`:`asset_op_system.cpp` 的改动闸门对这两个组件任一在就拦,`player_mutability.h` 的 `IsPlayerMutable` 也把这两种状态判为不可改。账本组件只在这道闸门之后被资产通道改写。<br>② **冻结内存 ⊇ 任何已报 durable 的快照**。durable 只按 `PlayerLastPersistedSnapshotComp` 判定;这份快照只会换成 TiDB 已提交的载荷,而它们都是冻结前某一刻的 marshal。冻结后账本不再变,所以冻结内存包含其中任何已报 durable 的结局。<br>③ **标记发出时,TiDB 已提交 ⊇ 冻结内存**。交接的最终存盘是一次 go/db `Save`;`BeginTravelHandoff` 只在这次存盘明确成功之后才写交接标记,超时或未成功就不写标记,由应答看门狗解冻。快路径判定"盘上已是同一份"、但同 key 还有在途或排队的存盘时,会强制做一次真实存盘(计数 `handoff_fastpath_forced`),所以标记之后不会再有更旧的载荷落地。<br>④ **目标节点认领即抬代次**。scene_manager 铸造更高的 owner_epoch(E+1),目标节点进场时 `LoadAndClaim` 带着它,在一个 TiDB 事务里读出库里原字节、并把写权行的代次抬到 E+1。载入的账本因此就是源端已提交的那份,不落后于 Go 已看到的 durable ✓;源端此后若再写,回 `STALE_OWNER`,不会覆盖目标节点的账本(不再依赖 Redis Lua 比对)。<br>标记发出后有四种结局,都不破坏上面的结论:放行时,见 ④;归属核实不了时,由 `ConcludeHandoffAfterMarkSent` 不存盘销毁(cross-zone-scene-travel.md §13.2),这时 TiDB 已 ⊇ 冻结内存;GO-2 原子取证判 B4(归属未动)或 B5(凭本次回执采纳 E+2,随后强制存盘一次,内容就是冻结内存)时,源端解冻、仍是唯一属主;退出优先时,撤回标记,按退出收敛。<br>前提与残余:(a) 交接标记、`owner_epoch`、`location` 仍是 Redis 里的协调键,标记脚本与父快照提交屏障要求同一 Redis 实例原子执行的那部分已随屏障删除而消失,剩下的标记脚本是否随 Redis 按 `{player_id}` 分片改形,见 shared-redis-split-by-purpose.md §20.3 / §20.4,改形落码时 C6 要重核,不预判结论;跨单元按转区处理,另议。(b) Redis 丢数据只会丢协调键,不丢玩家存档,不再归 C5;整库 PITR 才归 C5。(c) SET 发出前中止,或 SET 发出后经 B4 / B5 解冻的,源端仍是唯一属主,回到 C1–C3。B5 时 A2′ 与回滚靠同一 Redis 上的原子 Lua 互斥(见 `exit_release_mark.h` 文件头):回滚在先,目标节点的 A2′ 回 -1、拒建实体,不会有另一个节点在旁边报 durable。(d) 证据缺口:③ 的强制存盘分支没有单测(`cross_zone_test.cpp` 宿主里 `HasUnsettledPlayerSave` 恒为 false)。runbook 也没有专门制造它的场景:场景 H2 遇到它判 SKIP,F1 只附注它可能出现。目前只有代码审查。要补的话,可加一个场景(例如让一名存盘在退避重试中的玩家发起交接,看 `handoff_fastpath_forced` +1 且标记晚于该次提交),或补一个带假 `go/db` 客户端的单测 |
 | C7 | 同 zone 换节点(ReleasePlayer) | 旧节点挂 `UnregisterPlayer` 后改动回 RETRY;退出存盘覆盖账本;新节点从 Redis 加载 ✓ |
 | C8 | Abort 与 Debit 同时发给同一玩家 | 同节点在 loop 线程串行,账本保证二者只有一个成立;跨节点只在单写者被破坏时才可能。I1 只在 player_locator 30s 租约内成立,租约外见 C14 ✓(租约内) |
 | C9 | REJECTED(或中止占位)未 durable 就终结,随后 scene 崩溃 | 若 Go 此时已终结,旧副本租约过期后重发的请求落到新进程,见 kUnseen → APPLIED,但 Go 的行已是 REJECTED → 玩家资产被扣却无对侧账。**所以 I4 要求 REJECTED 也必须 durable**,代价只是拒绝场景多一次重查 |
@@ -417,7 +417,7 @@ static void SetSecretLookupForTest(AssetOpSecretLookup fn);     // 第 8 部分 
    - 否则 `err = CurrencySystem::DeductCurrency(player, type, amount, txType, correlation_id)`。
      - `err == kSuccess` → `Record(APPLIED)` → RequestPersist → APPLIED。
      - 其它 → 前面的闸门都已通过,这里不应失败:LOG_ERROR,回 `RETRY`、reason=err,不记账。
-10. **Credit 应用**(先物品后货币:只有物品会暂时失败,先做它就不会留下半截)。**本步以第 9 部分 4.33 为准**:货币封禁预检 → 物品 guid 余量预检 → `AddItems(..., txType, correlation_id)`（2026-10-15 起 Bag 候选提交，mutated 出参已删，物品失败恒零改动；各分支同原稿：背包满 RETRY kAssetBagFull、kInvalidParameter 记 REJECTED kAssetBlocked、其它 RETRY)→ 逐条 AddCurrency(补缴抵扣属于正常应用)。一旦已有改动后又失败,记 `kAppliedPartial` 并回 `APPLIED + partial=true + kAssetPartialApplied`,**不再**把部分发放记成完整成功。
+10. **Credit 应用**(先物品后货币:只有物品会暂时失败,先做它就不会留下半截)。**本步以第 9 部分 4.33 为准**:货币封禁预检 → 物品获得封禁预检(全服 + 本人,按数量与完整实例一起判,2026-11-05)→ 物品 guid 余量预检 → 背包空间预检 → `AddItems(..., txType, correlation_id)`（2026-10-15 起 Bag 候选提交，mutated 出参已删，物品失败恒零改动；各分支：背包满 RETRY kAssetBagFull、kAssetBlocked 或 kInvalidParameter 记 REJECTED kAssetBlocked、其它 RETRY)→ 逐条 AddCurrency(补缴抵扣属于正常应用)。一旦已有改动后又失败,记 `kAppliedPartial` 并回 `APPLIED + partial=true + kAssetPartialApplied`,**不再**把部分发放记成完整成功。
 11. 每次调用结束打一行 INFO:`[AssetOp] rpc=… player_id=… stream=… seq=… corr=… outcome=… reason=… durable=…`(日志不是指标,可以带 player_id)。
 
 **客户端余额/背包刷新**:本批不加 scene 推送。帮会写 RPC 返回后,由客户端主动拉背包(S5 负责)。
@@ -978,7 +978,7 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error)   // �
    ````
    其后原有的请求/响应字段说明(含快照、结果环)**保留原文**,只把其中出现的 `Trade*` RPC 名换成通用名。§6.4 末尾追加"开放项(待交易会话确认)":
    > - J-A1 结果环与资产快照:通用通道 v1 没有;若需要,P2 在 `AssetBundle` 从 3、`AssetOpResponse` 从 5 起追加字段(4 已被 `partial` 占用)。
-   > - J-A2 持久化等级:通用通道的 `durable` 只保证写进 zone Redis;Redis 丢数据回退到 MySQL 时可能重复(guild-phase2 §S4 C5)。人民币寄售是否接受,或需要"MySQL 落库确认",由交易会话决定。
+   > - J-A2 持久化等级:通用通道的 `durable` 现在就是 TiDB 提交确认(2026-11-06 改写;原写"只保证写进 zone Redis"已随玩家存档移出 Redis 作废)。剩下的同类风险只有整库 PITR 到更早时刻(guild-phase2 §S4 C5),处置按 PITR 手册 §4.1a;收口说明见 jubaozhai-market.md J-A2。
    > - J-A3 correlation_id 取值(listing_id / order_id)与按 guid 扣物、宠物、角色锁的字段形状。
 9. **全文残留**:`rg -n "TradeDebit|TradeAbortDebit|TradeCredit|TradeAssetOpOutcome|TradeDebitRequest|TradeCreditRequest" docs/design/jubaozhai-market.md`,每处按上表换成通用名(第 7 部分 E5 核实:§6 之外只有 :303 分期行)。消息名 `TradeDebitRequest/TradeCreditRequest` 换成 `AssetOpRequest` 时,其字段说明若与通用消息不一致,不改字段,写入开放项 J-A3。
    - PROGRESS.md 只追加一条"聚宝斋资产 RPC 改通用名"的流水,不改旧条目。
@@ -1056,7 +1056,7 @@ B4a 的 proto 生成必须先完成,`go/proto/common/asset` 要已存在。
 9. **B4a 手改正好 30 个**。若 `dev_mprocs_proc.ps1` 与 `currency_crash_window.ps1` 都要改,把 GM 闸门的脚本改动拆成 B4a-2(≤4 个文件)。
 10. **`go/shared/go.mod` 新增 `proto` 依赖**,契约未提;已核实下游模块都有 replace。
 11. ~~GM 闸门覆盖不全~~ **已关闭**(第二轮):改为分发入口统一拦截全部 18 个客户端 `Gm*`,见第 9 部分 4.34 与偏差 #27。
-12. **durable 只到 Redis**(C5)。Redis 丢数据回退到 MySQL 时可能出现重复,与全部玩家数据同级风险;帮会侧文档化接受,跳号上限(4.29)可检出部分回退;聚宝斋是否接受列为开放项 J-A2。
+12. **durable 是 TiDB 提交确认**(2026-11-06 改写,原写"durable 只到 Redis")。仍成立的风险只有整库 PITR 到更早时刻(C5):账本与资产一起回退,Go 已终结的笔可能重复,帮会侧文档化接受并按 PITR 手册 §4.1a 核账,跳号上限(4.29)可检出部分回退;聚宝斋的开放项 J-A2 已按此口径收口。
 13. ~~回档与帮会账不一致 v1 接受 + 审计~~ **已改为 fail-closed**(第二轮),见偏差 #25。
 14. **本批无 scene 余额推送**。客户端在帮会写 RPC 返回后主动拉背包(S5 负责)。
 15. **`player_database` 字段号与 B3a 可能撞 15**,谁先落谁拿 15,后落者用 16;验证步骤已含检查命令。
@@ -1188,7 +1188,7 @@ const (
 **跳号上限的证明**(同一纪元内):设新分配的 seq 为 n。
 - 无未决行:n−1 已终结;终结要求 scene 答复过,于是 n−1 ≤ max_seq,n ≤ max_seq+1。
 - 有未决行:I5 保证 `n − min_pending < 512`;min_pending−1 已终结(或 min_pending=1),所以 max_seq ≥ min_pending−1 > n−513,即 n < max_seq+513 ≤ max_seq+1024。
-- 例外:人工终结(第 10 部分 4.38)一个 scene 从未见过的 seq,会让差距变大;累计超过 511 时新 seq 被判 kJumpTooFar。这是 fail-closed,按 4.31 抬纪元。Redis 回退到旧 blob(C5)使 max_seq 变小时,也会命中此上限并告警,这正是想要的。
+- 例外:人工终结(第 10 部分 4.38)一个 scene 从未见过的 seq,会让差距变大;累计超过 511 时新 seq 被判 kJumpTooFar。这是 fail-closed,按 4.31 抬纪元。整库 PITR 回到更早的存档(C5)使 max_seq 变小时,也会命中此上限并告警,这正是想要的。
 
 **Go 侧改动**(表 message 属 S1/S5,列为契约偏差 #20):
 - `guild_player_op_seq` 追加 `uint64 epoch = 5;`(S1 追加区从 5 起)。
@@ -1318,10 +1318,11 @@ func (s *Signer) Sign(rpc RPC, req *assetpb.AssetOpRequest, nowMs uint64) // 就
 
 **新第 10 步**(Credit 应用,顺序固定;`anyMutated` 初值 false):
 - (a) **货币预检**:任一 `GainBlockService::IsGainBlocked(kCurrency, type)` 或 `CurrencySystem::IsCurrencyBlocked(player, type)` → `Record(kRejected, kAssetBlocked)` → REJECTED。
+- (a') **物品获得封禁预检**(2026-11-05,`player-inbox-service.md` §2.2):`bundle.items` 与 `bundle.item_instances` 的任一配置 `GainBlockService::IsItemGainBlocked(player, config)`(全服 + 本人)→ `Record(kRejected, kAssetBlocked)` → REJECTED。排在 (b) 与背包空间两道 RETRY 预检之前:被封禁的物品无论背包满不满都是终局拒绝,不回「背包满、稍后重试」。
 - (b) **物品 guid 余量预检**(有物品时):`tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available()`(`guid_segment_client.h:158`;取法同 `item_store.cpp:375-377`)< Σcount → `RETRY`,reason 0,WARN,不记账。Σcount 是新实例数的上界(每堆至少 1 个),只会偏严。
 - (c) **物品**：`AddItems(...)`。2026-10-15 起 Bag 候选提交，mutated 出参已删，物品失败恒零改动。
   - `kSuccess` → `anyMutated = true`,继续;
-  - 失败时按原稿分类（背包满 → RETRY kAssetBagFull；kInvalidParameter → REJECTED kAssetBlocked；其它 → RETRY reason=err），均不改物品资产；
+  - 失败时分类（背包满 → RETRY kAssetBagFull；kAssetBlocked 或 kInvalidParameter → REJECTED kAssetBlocked，(a') 已先判，这里只是防线；其它 → RETRY reason=err），均不改物品资产；
   - 物品整批成功后置 `anyMutated = true`，继续货币段；货币部分发放处理仍按下文。
 - (d) **货币**:逐条 `AddCurrencyFn(player, type, amount, txType, correlationId)`(默认 `&CurrencySystem::AddCurrency`,测试可换)。失败时:`anyMutated == false` → `RETRY`、reason=err、不记账;否则记下失败信息,跳到 (e)。成功一条就置 `anyMutated = true`。
 - (e) 全部成功 → `Record(kApplied)` → RequestPersist → APPLIED。有失败且 `anyMutated` → `Record(kAppliedPartial)` → RequestPersist → `APPLIED + partial=true + reason=kAssetPartialApplied`,并打 ERROR:`[AssetOp] partial player_id=… stream=… epoch=… seq=… corr=… failed=<item config_id 或 currency type> err=…`(补偿依据)。
@@ -1396,6 +1397,8 @@ inline bool IsClientGmMethodName(std::string_view name) {
 - 玩家存盘 `GetPlayerDataRedis()->Save(message, playerId)`(`player_lifecycle.cpp:1277`),键 `full_name() + ":" + key`(`redis_client.h:140`),单条 hiredis 连接。
 
 **K1 场景**:旧节点退出存盘因 Redis 抖动超过 30s → 玩家在新节点加载旧数据 → 新节点应用 Y、存盘、durable,Go 终结 → 旧节点排队的存盘晚到,覆盖 Redis → 新节点再无改动时脏比较判相等不再存盘 → 捐献的钱回到玩家手里,帮会资金保留(复制)。
+
+**2026-11-06 现行**:上面是 B4a 当时(Redis 存档)的分析。现在旧节点晚到的存盘被 TiDB 写权行拒绝:新节点认领(`LoadAndClaim`)抬代次之后,旧进程再写回 `STALE_OWNER` / `NOT_HOLDER`,覆盖不了新节点的账本,K1 的复制路径不再成立;下面 B4a / B4c 的处理保留作当时的设计记录。
 
 **B4a 内的处理**:
 1. I1 改写为"在重连租约内成立"(第 1 部分已改),K1 列为已知资产复制风险(偏差 #22)。
@@ -1537,9 +1540,9 @@ type LedgerReader interface {
 // 新文件 classify.go。Go 版只读分类,与 C++ ClassifyAssetOpSeq 同语义;两边单测用同一张用例表
 func ClassifyPersisted(l *componentpb.PlayerAssetOpLedgerComp, s assetpb.AssetOpStream, epoch, seq uint64) (outcome assetpb.AssetOpOutcome, partial bool, reason uint32)
 ```
-`Loop` 增可选字段 `Ledger LedgerReader`。`ProcessOne` 在 Decide 之前:若 `res.Local`(无位置)且 `op.Attempts >= LedgerReadMinAttempts` 且 `Ledger != nil` → 读账本;分类为 APPLIED/REJECTED 时按 `Result{Outcome, Reason, Partial, Durable: true}` 走 Finalize(已在 Redis,即 durable)。未见 → 照常退避。计 `assetop_ledger_read_total{service,result}`,result ∈ finalized / unseen / absent / error。
+`Loop` 增可选字段 `Ledger LedgerReader`。`ProcessOne` 在 Decide 之前:若 `res.Local`(无位置)且 `op.Attempts >= LedgerReadMinAttempts` 且 `Ledger != nil` → 读账本;分类为 APPLIED/REJECTED 时按 `Result{Outcome, Reason, Partial, Durable: true}` 走 Finalize(已落盘账本,即 durable)。未见 → 照常退避。计 `assetop_ledger_read_total{service,result}`,result ∈ finalized / unseen / absent / error。
 
-为什么安全:已落盘账本里的结局按 I2 永不改变,所以玩家在不在线都不影响这次读取。剩余风险只有 K1(旧存盘覆盖)与 C5(Redis 丢数据),与在线路径同级。离线且未见的行**不**在 Go 侧自行判中止(I7):scene 没记账就无法保证不会被晚到的请求应用。
+为什么安全:已落盘账本里的结局按 I2 永不改变,所以玩家在不在线都不影响这次读取。剩余风险只有 C5(整库 PITR 回到更早时刻;K1 旧存盘覆盖已被 TiDB 写权行挡住),与在线路径同级。离线且未见的行**不**在 Go 侧自行判中止(I7):scene 没记账就无法保证不会被晚到的请求应用。
 
 ## 4.38 卡死行处置
 

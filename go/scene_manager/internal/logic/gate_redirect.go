@@ -33,8 +33,9 @@ const (
 )
 
 // AssignGateForZone picks a Gate in the target zone (two random choices by
-// load, skipping gates marked draining, stale or full) and signs a redirect
-// token. Returns nil if no gate is available.
+// load among the best tier: gates neither draining, stale nor full first,
+// then reachable ones, then all) and signs a redirect token. Returns nil if
+// no gate is available.
 //
 // 票据绑定持票者(player_id)与目标 zone(target_zone_id):目标 zone 的 gate / login
 // 只接受本人持票,并且看到 target_zone_id == 本 zone 时不再按 home_zone 弹回
@@ -63,14 +64,15 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 	stale := staleGateIDs(&svcCtx.RedirectGateRevisions, targetZoneId, records, time.Now())
 	gates := gateRecordNodes(records)
 	marks := gateMarks{
-		draining: drainingGateIDs(ctx, svcCtx.Redis, gates),
+		// 排空标记在核心实例(G4a §25.3 的 10-23 订正),不在本 zone 的控制域实例里(control-plane-zone-scoping-20261105.md §4.2)。
+		draining: drainingGateIDs(ctx, svcCtx.CoreRedis, gates),
 		stale:    stale,
 	}
 	return signRedirectToGate(gates, marks, svcCtx.Config.RequireClientEndpoint,
 		svcCtx.Config.GateTokenSecret, targetZoneId, playerID, time.Now(), mathrand.IntN)
 }
 
-// gateMarks 是 AssignGateForZone 经 I/O 得到的两类按 node_id 记的标记,纯函数 signRedirectToGate 据此过滤。
+// gateMarks 是 AssignGateForZone 经 I/O 得到的两类按 node_id 记的标记,纯函数 signRedirectToGate 据此分档。
 // 两个 map 都可以为 nil(没有标记)。
 type gateMarks struct {
 	draining map[uint32]bool // 正在排空(Redis 标记,drainingGateIDs)
@@ -82,11 +84,11 @@ type gateMarks struct {
 // 便于直接对出口做面向契约的测试。
 //
 // 前置条件:secret 非空(AssignGateForZone 在读 etcd 之前已校验)。
-// 顺序与 login 的 CandidatesForZone + PickGate 一致:先经 selectGateTargets 选客户端地址并按地址去重,再剔除 marks.draining
-// 里的 gate(先去重后过滤:排空标记打在活着的那台上,先过滤会让同地址的陈旧影子顶上来),再剔除停写与满载的 gate
-// (eligibleTargets,规则在 shared/gatepick.Eligible,2026-11-05 起),最后按 player_count 随机二选一
-// (shared/gatepick,2026-10-18 起;此前确定性取最小,一个上报周期里重定向的人全落同一台)。
-// 两层过滤各自在全部不合格时回落,不因过滤让重定向无 gate 可选。
+// 顺序与 login 的 CandidatesForZone + PickGate 一致:先经 selectGateTargets 选客户端地址并按地址去重,再经 eligibleTargets
+// 按排空、停写与满载分档(规则在 shared/gatepick.Eligible;2026-11-06 起排空也并进这一次判定,不再单独先剔),最后在选出的
+// 那一档里按 player_count 随机二选一(shared/gatepick,2026-10-18 起;此前确定性取最小,一个上报周期里重定向的人全落同一台)。
+// 先去重后分档:排空标记打在活着的那台上,先按标记剔除会让同地址的陈旧影子顶上来。分档总会给出非空的一档,
+// 不因过滤让重定向无 gate 可选。
 // 没有任何可下发地址的 gate 时返回错误(调用方映射成 ErrNoAvailableNode,不改任何状态)。
 func signRedirectToGate(nodes []*commonpb.NodeInfo, marks gateMarks, requireClientEndpoint bool, secret string,
 	targetZoneId uint32, playerID uint64, now time.Time, intn func(int) int) (*scene_manager.RedirectToGateInfo, error) {
@@ -98,8 +100,7 @@ func signRedirectToGate(nodes []*commonpb.NodeInfo, marks gateMarks, requireClie
 		return nil, fmt.Errorf("no gate with client-reachable address for zone %d (gates=%d require_client_endpoint=%v)",
 			targetZoneId, len(nodes), requireClientEndpoint)
 	}
-	targets = filterDrainingTargets(targets, marks.draining, targetZoneId)
-	targets = eligibleTargets(targets, marks.stale, targetZoneId, now)
+	targets = eligibleTargets(targets, marks, targetZoneId, now)
 
 	idx, _ := gatepick.TwoChoices(targets, func(t gateTarget) uint32 { return t.node.GetPlayerCount() }, intn)
 	best := targets[idx]
@@ -219,26 +220,6 @@ func drainingGateIDs(ctx context.Context, rdb *redis.Redis, nodes []*commonpb.No
 	return draining
 }
 
-// filterDrainingTargets 剔除正在排空的 gate。**全部都在排空时原样返回**并打 ERROR,与 login 的
-// loginqueue.FilterDrainingGates 同语义:整个 zone 都被标了排空多半是误操作,此时拒绝重定向比分到待缩容的 gate 更糟。
-func filterDrainingTargets(targets []gateTarget, draining map[uint32]bool, targetZoneId uint32) []gateTarget {
-	if len(draining) == 0 || len(targets) == 0 {
-		return targets
-	}
-	kept := make([]gateTarget, 0, len(targets))
-	for _, t := range targets {
-		if !draining[t.node.GetNodeId()] {
-			kept = append(kept, t)
-		}
-	}
-	if len(kept) == 0 {
-		logx.Errorf("filterDrainingTargets: every gate candidate (%d) in zone %d is marked draining; ignoring the marks "+
-			"so the redirect can still land — check whether a scale-in marked the whole zone by mistake", len(targets), targetZoneId)
-		return targets
-	}
-	return kept
-}
-
 // gateRedirectLogEvery:eligibleTargets 两条日志各自的最小间隔。跨 zone 重定向平时稀疏,但一次大规模跨区(活动开场)
 // 会让同一台卡住的 gate 每次重定向都被剔一次;持续多久看指标,日志只负责告诉运维是哪几台。
 const gateRedirectLogEvery = 30 * time.Second
@@ -248,36 +229,40 @@ var (
 	redirectFallbackLog  redirectLogThrottle
 )
 
-// eligibleTargets 剔除停写与满载的 gate,保持原顺序;全部不合格时回落全集(规则在 shared/gatepick.Eligible,
-// 与 login 挑 gate 同一份;回落的理由见那里)。停写看 stale(按 node_id,staleGateIDs 判),满载看 NodeInfo 自报的
+// eligibleTargets 给候选分档,返回最高的非空一档,保持原顺序(规则在 shared/gatepick.Eligible,与 login 挑 gate 同一份;
+// 为什么分档、为什么不拒绝见那里):完全合格的 > 连得上的(在排空或到水位,但没停写)> 全部(全部停写时)。
+// 排空看 marks.draining(Redis 标记),停写看 marks.stale(按 node_id,staleGateIDs 判),满载看 NodeInfo 自报的
 // max_connections(人数到 90%;0 = 没声明,不判)。副作用只有指标与节流日志,now 只用于日志节流。
-func eligibleTargets(targets []gateTarget, stale map[uint32]bool, targetZoneId uint32, now time.Time) []gateTarget {
+func eligibleTargets(targets []gateTarget, marks gateMarks, targetZoneId uint32, now time.Time) []gateTarget {
 	kept, ex := gatepick.Eligible(targets, func(t gateTarget) gatepick.State {
+		id := t.node.GetNodeId()
 		return gatepick.State{
 			PlayerCount:    t.node.GetPlayerCount(),
 			MaxConnections: t.node.GetMaxConnections(),
-			Stale:          stale[t.node.GetNodeId()],
+			Stale:          marks.stale[id],
+			Draining:       marks.draining[id],
 		}
 	})
-	if ex.Stale > 0 {
-		metrics.ObserveGateRedirectExcluded(targetZoneId, gatepick.ReasonStale, ex.Stale)
-		if staleRedirectGateLog.allow(now, gateRedirectLogEvery) {
-			logx.Errorf("eligibleTargets: gates of zone %d left out of the redirect because their etcd record has not been "+
-				"rewritten for %s (likely hung while the lease lives on): node_ids=%v; further reports are suppressed for %s, "+
-				"see scene_manager_gate_redirect_excluded_total{reason=\"stale\"}",
-				targetZoneId, gatepick.StaleAfter, staleTargetIDs(targets, stale), gateRedirectLogEvery)
-		}
+	ex.EachExcluded(func(reason string, count int) {
+		metrics.ObserveGateRedirectExcluded(targetZoneId, reason, count)
+	})
+	if ex.Excluded(gatepick.ReasonStale) > 0 && staleRedirectGateLog.allow(now, gateRedirectLogEvery) {
+		logx.Errorf("eligibleTargets: gates of zone %d left out of the redirect because their etcd record has not been "+
+			"rewritten for %s (likely hung while the lease lives on): node_ids=%v; further reports are suppressed for %s, "+
+			"see scene_manager_gate_redirect_excluded_total{reason=\"stale\"}",
+			targetZoneId, gatepick.StaleAfter, staleTargetIDs(targets, marks.stale), gateRedirectLogEvery)
 	}
-	if ex.Full > 0 {
-		metrics.ObserveGateRedirectExcluded(targetZoneId, gatepick.ReasonFull, ex.Full)
-	}
-	if ex.FellBack {
+	if ex.FellBack() {
 		metrics.ObserveGateRedirectFallback(targetZoneId, ex.FallbackReason())
 		if redirectFallbackLog.allow(now, gateRedirectLogEvery) {
-			logx.Errorf("eligibleTargets: every gate of zone %d is stale or full (stale=%d full=%d of %d); falling back to all "+
-				"of them so the redirect can still land; further reports are suppressed for %s, "+
-				"see scene_manager_gate_redirect_fallback_total",
-				targetZoneId, ex.Stale, ex.Full, len(targets), gateRedirectLogEvery)
+			scope := "the reachable ones (draining or at 90% of max_connections)"
+			if ex.Fallback == gatepick.FallbackAll {
+				scope = "all of them (every gate is stale, the ticket will likely land on a hung gate)"
+			}
+			logx.Errorf("eligibleTargets: no gate of zone %d is fully eligible (stale=%d draining=%d full=%d of %d); "+
+				"picking among %s so the redirect can still land; further reports are suppressed for %s, "+
+				"see scene_manager_gate_redirect_fallback_total{reason=%q}",
+				targetZoneId, ex.Stale, ex.Draining, ex.Full, len(targets), scope, gateRedirectLogEvery, ex.FallbackReason())
 		}
 	}
 	return kept

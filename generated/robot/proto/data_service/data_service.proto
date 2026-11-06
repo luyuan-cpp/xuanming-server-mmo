@@ -48,6 +48,9 @@ service DataService {
   // 持有节点已判死:同一个事务里抬写权行的代次、清持有者、置 released=1,旧持有者恢复之后的写被挡住
   // (docs/design/player-save-direct-commit.md §6)。只有 scene_manager 能调。
   rpc ReleaseDeadPlayerStoreHolder(ReleaseDeadPlayerStoreHolderRequest) returns (google.protobuf.Empty) {}
+  // 判死释放的第一步:普通读写权行判持有者用的三列,scene_manager 拿去复核持有实例仍不在册,再按读到的值比较并写
+  // (ReleaseDeadPlayerStoreHolderRequest.seen,docs/design/player-save-direct-commit.md §5.5)。只有 scene_manager 能调。
+  rpc ReadPlayerStoreHolder(ReadPlayerStoreHolderRequest) returns (ReadPlayerStoreHolderResponse) {}
 
   // ── Player-zone mapping (registration / lookup) ───────────────
   rpc RegisterPlayerZone(RegisterPlayerZoneRequest) returns (google.protobuf.Empty) {}
@@ -82,6 +85,8 @@ service DataService {
   // 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
   // 设计见 docs/design/guild-phase2/03-names.md §3.1。
   rpc ReservePlayerName(ReservePlayerNameRequest) returns (ReservePlayerNameResponse) {}
+  // 只释放预留态的名字:不带 x-admin-token 时只认 login 签名的建角回滚,带合法 token 是运维清孤儿;
+  // 已绑定的名字一律拒绝,预留态的先在玩家片证明角色永远不会提交(§3.4a)。删角之后的释放不走这里。
   rpc ReleasePlayerName(ReleasePlayerNameRequest) returns (google.protobuf.Empty) {}
   rpc BatchGetPlayerName(BatchGetPlayerNameRequest) returns (BatchGetPlayerNameResponse) {}
   // 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
@@ -110,6 +115,9 @@ message AccountRoleOwnership {
   uint64 owner_revision = 3;
   uint64 trade_listing_id = 4; // 最终冻结令牌。入场和归属判定只看它
   uint64 prepare_token = 5;    // 还在投票的准备令牌。只给目录内部和护栏判定用,LookupAccountRole 恒回 0
+  // account_role.initial_player_commit=1:现行建角流程提交的,初始存档行先于角色行写进了存档库。只有 LookupAccountRole 回填。
+  // 这样的角色缺写权行只可能是存档库的恢复点早于建角写初始行(docs/ops/mysql-backup-pitr-runbook.md §4.1a),摘孤儿据此拒绝写墓碑。
+  bool initial_player_commit = 6;
 }
 message AccountRoleVersion { uint64 player_id = 1; uint64 owner_revision = 2; }
 message ReadAccountDirectoryRequest {
@@ -130,6 +138,23 @@ message ReleaseDeadPlayerStoreHolderRequest {
   uint64 player_id = 1;
   uint64 owner_epoch = 2;              // 判死时 location 这一代;库里已比它新就不动
   common.base.ServiceCallAuth auth = 3;
+  // 非空时与交易判死同一口径比较并写:写权行还是 ReadPlayerStoreHolder 读到的这三列才释放,变了回 FAILED_PRECONDITION
+  // (读之后有人认领过,同实例同代次重登只有 claim_seq 变)。LeaveScene 判死释放恒带;为空只按代次判(无资格撤销之后的补释放)。
+  PlayerStoreHolder seen = 4;
+}
+// PlayerStoreHolder 是 player_store 写权行里判持有者用的三列。
+message PlayerStoreHolder {
+  uint64 owner_epoch = 1;
+  bytes holder_instance = 2;           // 持有者的 scene_instance_id;空 = 没有持有者(建角初行、已被判死释放)
+  uint64 claim_seq = 3;                // 每次认领加 1,同实例同代次重新认领也加
+}
+message ReadPlayerStoreHolderRequest {
+  uint64 player_id = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message ReadPlayerStoreHolderResponse {
+  bool found = 1;                      // false = 没有路由或写权行(角色不存在或未建完),没有东西要释放
+  PlayerStoreHolder holder = 2;        // found 时非空
 }
 message RepairAccountRoleRequest {
   string account = 1;
@@ -415,6 +440,33 @@ message BatchRecallItemsResponse {
   uint64 amount_debt = 12;
   uint64 amount_shortfall = 13;
   uint64 cancelled_ms = 14;
+  repeated RecallReviewRow needs_review = 15;  // 只有预览回:没进自动回收、要人工核对的流水
+}
+
+// 一条流水为什么没进自动回收。流水在内存改动时就发出、早于存盘提交,只是线索;
+// 只有玩家已提交的资产账本(player_store)能证明一条收益真的落了盘、只落了一次。
+enum RecallReviewReason {
+  RECALL_REVIEW_REASON_UNSPECIFIED = 0;
+  RECALL_REVIEW_NO_CORRELATION = 1;      // 流水没有指令号(correlation_id = 0),和已提交账本对不上
+  RECALL_REVIEW_NO_PLAYER_STORE = 2;     // 玩家没有已提交的存档
+  RECALL_REVIEW_NOT_IN_LEDGER = 3;       // 已提交账本里没有这条指令:不是资产通道发的(掉落、任务、战斗结算、GM 直发),或已滑出账本窗口,或从未落盘
+  RECALL_REVIEW_LEDGER_AMBIGUOUS = 4;    // 已提交账本里不止一条收据带这个指令号
+  RECALL_REVIEW_LEDGER_REJECTED = 5;     // 已提交账本记的是拒绝:这笔收益从没落盘,不该回收
+  RECALL_REVIEW_LEDGER_PARTIAL = 6;      // 已提交账本记的是部分应用:落盘了多少说不清
+  RECALL_REVIEW_LEDGER_NOT_APPLIED = 7;  // 已提交账本有这条指令的收据,但没有已应用的结局
+  RECALL_REVIEW_ROWS_DISAGREE = 8;       // 账本证实只应用了一次,这条指令的几条流水却还原不成同一次发放
+}
+
+// 待人工核对的一条流水。
+message RecallReviewRow {
+  uint64 player_id = 1;                // 收到这笔收益的玩家(to_player)
+  uint64 tx_id = 2;
+  uint64 correlation_id = 3;
+  uint32 tx_type = 4;
+  uint64 amount = 5;                   // 这条流水记的收益:货币是 currency_delta,道具是 item_quantity
+  uint64 item_uuid = 6;
+  uint64 timestamp = 7;                // 流水时间(Unix 秒)
+  RecallReviewReason reason = 8;
 }
 
 message GetRecallBatchRequest {
@@ -428,17 +480,22 @@ message CancelRecallBatchRequest {
   string reason = 3;                   // 必填,≤ 191 字
 }
 
-// 人工终结一行卡死的指令(scene 反复回 UNKNOWN)。判定依据是 scene 流水的 correlation_id = op_id。
+// 人工终结一行卡死的指令(scene 反复回 UNKNOWN,或一直投不出去)。证据只认这名玩家已提交的资产账本(player_store),
+// 判据与 trade、guild 的 assetopfix 同一份;transaction_log 只是线索。放行对表见 exploit_loss_prevention_zh.md「人工终结」。
 message ResolveRecallOpRequest {
   uint64 op_id = 1;
-  uint32 final_status = 2;             // GmRecallOpStatus:只收 REJECTED、ABORTED(确认没应用)、PARTIAL(可能应用了)
+  uint32 final_status = 2;             // GmRecallOpStatus:只收 REJECTED、ABORTED、PARTIAL;收不收看证据(error_code 39)
   string operator = 3;                 // 必填,≤ 64 字
   string reason = 4;                   // 必填,≤ 191 字
 }
 
+// error_code:0 且 resolved = 终结了;0 且未 resolved = 这一行已不是 PENDING,现状见 status;39 = 证据不支持所选结局;
+// 40 = 读证据之后这一行被领过、发过或已终结,重新调用;34 = 没有这个 op_id;11 = 读不到账本或库故障。除 0 且 resolved 外都没改数据。
 message ResolveRecallOpResponse {
   uint32 error_code = 1;
-  bool resolved = 2;                   // false = 这一行已不是 PENDING,什么都没改
+  bool resolved = 2;                   // true = 本次终结了这一行
+  uint32 status = 3;                   // GmRecallOpStatus:终结了是新状态;不是 PENDING 时是现状;其余是读证据时的 PENDING
+  string evidence = 4;                 // 证据说明(读过账本才有):recall_accepts = 这条证据下能收的结局,其后是结论、来源和原因
 }
 
 // ── Transaction Log Query ──────────────────────────────────────
@@ -529,11 +586,15 @@ message ReservePlayerNameResponse {
 
 // 条件删除:player_id 与 name 归一化后的 name_norm 都匹配才删 —— 只带 player_id 会
 // 在"建角失败补偿"与"后来重登记了别的名字"撞车时删错行。
-// 不带 x-admin-token:只删 created_ms 落在 PlayerName.ReleaseWindow 内的行(login 建角补偿);
+// 不带 x-admin-token:auth 必须是 login 的签名(密钥 MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN),
+// 只删 created_ms 落在 PlayerName.ReleaseWindow 内的行(login 建角补偿);
 // 带合法 x-admin-token:不限登记时间(运维按日志清孤儿)。
+// 两条路径都只删预留态的行:已绑定的回 FAILED_PRECONDITION;删之前在玩家片证明这名角色永远不会提交,
+// 角色已提交同样回 FAILED_PRECONDITION(docs/design/guild-phase2/03-names.md §3.4a)。
 message ReleasePlayerNameRequest {
   uint64 player_id = 1;
   string name = 2;
+  common.base.ServiceCallAuth auth = 3;
 }
 
 // 一次最多 500 个 id;超了返回 InvalidArgument,不做截断 —— 静默截断会让调用方

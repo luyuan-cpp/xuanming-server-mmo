@@ -70,7 +70,7 @@ func auditStrandedExpired(ctx context.Context, a globalOutcomeAuditor, gauges gl
 	}
 	metrics.ObserveGlobalFlow("recover", "expired_unrecoverable")
 	logx.Errorf("global formations past deadline cannot reach expired-outcome recovery: count=%d,tickets stay in state 2/3;"+
-		"outcome shape check failed(see cross-zone-matchmaking.md 13.3 for the query and handling)", stranded)
+		"outcome shape check failed(list and handle them with go/match/cmd/formationfix, see docs/ops/match-formation-manual-abort-runbook.md)", stranded)
 }
 
 // auditOutcomeOutboxBacklog 用 COUNT / MIN 刷新终局发件箱三类积压的 gauge。读失败保留上一次读数并打 ERROR。

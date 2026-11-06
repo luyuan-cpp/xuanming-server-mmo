@@ -31,7 +31,7 @@ x-sql-boot: &sql-boot
   entrypoint: [/bin/sh, -ec, 'umask 077; exec pwsh -NoLogo -NoProfile -NonInteractive -File /app/sql-boot/tools/scripts/lib/sql_boot_catalog_docker.ps1 "$$@"', --]
   environment:
     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先准备配置}
-    DB_ALLOWED_DATABASES: zone_1_db
+    DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
 
 # 授权逐表给，所以注册排在全部建表之后。
 x-sql-boot-deps: &sql-boot-deps
@@ -94,9 +94,11 @@ services:
 
   etcd:
     <<: *app
-    image: ${ETCD_IMAGE:-bitnamilegacy/etcd:latest}
+    # 缺省与 deploy/docker-compose.yml、K8s etcd.yaml 同一个官方镜像(etcd_maintenance_contract.tests.ps1 守住)。
+    # 官方镜像没有 shell,健康检查直接跑 etcdctl(exec 形式);不开认证是 etcd 缺省,不需要 bitnami 的 ALLOW_NONE_AUTHENTICATION。
+    image: ${ETCD_IMAGE:-quay.io/coreos/etcd:v3.6.16@sha256:a9c7cc12156f4b26ca41f0b57ba5b76c45037ff6c1e47ea3d68cb7908d48a965}
     environment:
-      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_DATA_DIR: /var/lib/etcd
       ETCD_NAME: debug
       ETCD_INITIAL_CLUSTER: debug=http://etcd:2380
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd:2380
@@ -107,9 +109,9 @@ services:
       ETCD_AUTO_COMPACTION_RETENTION: "1000000"
       ETCD_QUOTA_BACKEND_BYTES: "3221225472"
     volumes:
-      - etcd-data:/bitnami/etcd/data
+      - etcd-data:/var/lib/etcd
     healthcheck:
-      test: [CMD, /opt/bitnami/etcd/bin/etcdctl, --endpoints=http://127.0.0.1:2379, endpoint, health]
+      test: [CMD, /usr/local/bin/etcdctl, --endpoints=http://127.0.0.1:2379, endpoint, health]
       interval: 5s
       timeout: 4s
       retries: 30
@@ -179,7 +181,7 @@ services:
     entrypoint: [/app/service]
     command: [-f, /app/etc/service.yaml, -command, up]
     environment:
-      DB_ALLOWED_DATABASES: zone_1_db
+      DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/db.schema.yaml:/app/etc/service.yaml:ro
     depends_on:
@@ -254,7 +256,7 @@ services:
     command: [/app/service, -f, /run/sql-writer/runtime/db.yaml]
     environment:
       <<: *go-env
-      DB_ALLOWED_DATABASES: zone_1_db
+      DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
       POD_IP: ${DB_IP:?请先准备配置}
       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
       # 认领前调 data_service 的 GetPlayerRoute 选库，缺了拒启。
@@ -296,7 +298,7 @@ services:
       <<: *go-env
       POD_IP: ${DATA_SERVICE_IP:?请先准备配置}
       # 角色交易 SQL 证明的玩家库白名单，与 go/db 同一份。
-      DB_ALLOWED_DATABASES: zone_1_db
+      DB_ALLOWED_DATABASES: zone_1_db,player_store_1000000_db
       # 账号目录四个调用方各一把，缺任何一把 data_service 拒启（validateGlobalCallerSecrets）。
       MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}

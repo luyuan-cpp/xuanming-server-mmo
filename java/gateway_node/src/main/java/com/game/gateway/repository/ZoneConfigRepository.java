@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -19,7 +20,9 @@ import java.util.Optional;
  * {@link #updateSettings}、{@link #updateManualStatus}、{@link #deleteByZoneId}。每条语句在 InnoDB 里最多取
  * <b>一把</b>行锁 —— 主键记录上的 X(记录不在时是一把间隙锁,间隙锁从不等待)—— 而且是它所在事务的第一把锁;
  * 调用方事务里其后只有非锁定的一致性读回读。一个事务「等锁时手里什么都没有、拿到锁之后再不等」,就不可能出现在
- * 任何等待环上,所以这四条之间、以及与任何别的写者之间都只会排队。
+ * 任何等待环上,所以这四条之间、以及与任何别的写者之间都只会排队。update 与改维护状态在写之前先用
+ * {@link #lockZoneIdForUpdate} 按主键加锁判存在:那一把锁就是事务的第一把,随后的 UPDATE 改同一条已持 X 的记录,
+ * 不再等锁,上面的结论不变。
  *
  * <p>刻意继承 {@link Repository} 而不是 {@code JpaRepository}:不再暴露 {@code save()} / {@code deleteById()}。
  * 对业务赋值主键、又没有 {@code @Version} 的实体,{@code save()} 永远走 merge:先非锁定 SELECT,查不到就发普通
@@ -73,11 +76,30 @@ public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
     /** {@link #deleteByZoneId} 的语句(JPQL)。Hibernate 翻译成按主键定位的单条 DELETE。 */
     String DELETE_BY_ID_JPQL = "DELETE FROM ZoneConfig z WHERE z.zoneId = :zoneId";
 
+    /** {@link #lockZoneIdForUpdate} 的语句:按主键的加锁点查,只取主键列。 */
+    String LOCK_FOR_UPDATE_SQL = "SELECT zone_id FROM zone_config WHERE zone_id = :zoneId FOR UPDATE";
+
     /** 全部区服。普通一致性读,不加锁。 */
     List<ZoneConfig> findAll();
 
     /** 按主键点查。普通一致性读,不加锁。 */
     Optional<ZoneConfig> findById(Long zoneId);
+
+    /**
+     * 按主键加锁判存在:行在则取它的 X 并持到事务结束,返回只含这个 zone_id 的列表;行不在返回空列表。
+     *
+     * <p>为什么要有它(2026-11-05,mmorpg 迁 TiDB,docs/design/no-single-node-horizontal-scaling-20261001.md §6.4):
+     * 「改已存在的区服、不在就回 404」若靠 UPDATE 之后的回读判定存在性,只在 MySQL 的 REPEATABLE READ 下成立 ——
+     * 靠 UPDATE 没命中时留下的间隙锁挡住并发插入。READ COMMITTED 与 TiDB 都没有这把间隙锁,并发 create 能插在
+     * UPDATE 与回读之间,回读看见那一行就回 200,而 UPDATE 其实一行没改。先加锁点查、再决定执行不执行 UPDATE,
+     * 存在性就不再依赖隔离级别。
+     *
+     * <p>取锁口径与类注释一致:它是调用方事务里的第一把锁,随后的 UPDATE 改的是同一条已持 X 的记录,不再等锁。
+     * 只能在调用方的事务里调用:自动提交下加锁读读完就释放锁,判了也白判,所以声明为 MANDATORY,没有事务直接抛错。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = LOCK_FOR_UPDATE_SQL, nativeQuery = true)
+    List<Long> lockZoneIdForUpdate(@Param("zoneId") Long zoneId);
 
     /**
      * 区服不存在则按 {@code zone} 插入整行,已存在则什么也不改:见 {@link #INSERT_IF_ABSENT_SQL}。{@code zone} 必须是

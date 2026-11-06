@@ -71,3 +71,21 @@ func requestOp(req *assetpb.AssetOpRequest) Op {
 	return Op{PlayerID: req.GetPlayerId(), Stream: req.GetStream(), StreamEpoch: req.GetStreamEpoch(),
 		Seq: req.GetSeq(), CorrelationID: req.GetCorrelationId(), TxType: req.GetTxType(), Bundle: req.GetBundle()}
 }
+
+// CommittedOutcomeOf 从玩家已提交的账本取 op 这一条请求的结局,口径与重投循环读已提交账本终结时完全相同
+// (ClassifyPersisted + resultWithReceipt):位图只说明这个 seq 有过结局,收据唯一、correlation 与请求摘要逐字节一致,
+// 才能把结局算到这一行头上;回收还要有明细,托管扣出还要有可用原件。
+//
+// 只有已应用 / 已拒绝且收据对得上时 ok=true;partial 是账本里的部分发放标记(行上粘性的 last_reason 由调用方另看)。
+// 给人工终结工具用:人工判 applied / aborted 的证据只能是它,不能是 scene 流水(流水在内存改动时就发出,早于存盘提交)。
+func CommittedOutcomeOf(ledger *componentpb.PlayerAssetOpLedgerComp, op Op) (assetpb.AssetOpOutcome, bool, bool) {
+	outcome, partial, reason := ClassifyPersisted(ledger, op.Stream, op.StreamEpoch, op.Seq)
+	if outcome != assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED && outcome != assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_REJECTED {
+		return assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN, false, false
+	}
+	res := resultWithReceipt(ledger, op, Result{Outcome: outcome, Reason: reason, Durable: true, SQLCommitted: true, Partial: partial})
+	if res.Outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN {
+		return assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN, false, false
+	}
+	return res.Outcome, res.Partial, true
+}

@@ -14,14 +14,17 @@
 4. **车队对等**：两侧最大车队人数之差叫车队差。车队差不超过 1 的立即可成（双排打单人）。更大的差要**吃亏一侧**（最大车队较小的那侧）的每个单位都等够：一个单位能接受的车队差 = 1 + 等待 ÷ `GlobalMatch.PremadeGapStepSeconds`（缺省 10 秒）。按缺省值，5V5 里 3 人队打 5 个单人，要这些单人等满 10 秒；4 人队要等 20 秒，5 人队要等 30 秒。等得够久自然全放开，不会饿死。等待取单位里最短的那名成员，和范围树的双向同意一个道理：刚入队的单人不会被拉去给车队垫背。步长为 0 时不限车队差。
 5. **分边**：选中的单位最多 10 个。锚点固定在 0 侧，枚举其余单位的全部分法（最多 512 种），在两侧各 N 人、满足车队对等的分法里，取车队差最小、再取两侧"队伍分 × 人数"之和相差最小的一种。
 6. **先选哪一组**：先比成局时机：这组用到的最晚排队位置越靠前越好，也就是先来先成局。同一时机再依次比车队差、两侧分差、组内极差，最后按单位的排队位置定序，结果确定。不计分、也不限车队差时，成局时机和原来的二维 0-1 背包 DP 相同。
-7. **提交点**：分边复核不变。新增计分排队局（`RequeueOnFailure` 为真的 1V1、5V5、PVP_TEAM）的组内队伍分极差复核：用加锁读出的票按同一公式算队伍分，极差不得超过组内最长等待者的容差（数据库时钟），否则回 `ErrRatingSpread`。撮合用的是锚点的容差，锚点的等待不超过组内最长等待，容差又随等待单调不减，所以复核只会更宽、不会误拒。车队对等和分边平衡是质量规则，提交点不复核。
+7. **提交点**：分边复核不变。新增计分排队局（`RequeueOnFailure` 为真的 1V1、5V5、PVP_TEAM）的组内队伍分极差复核：用加锁读出的票按同一公式算队伍分，极差不得超过组内最长等待者的容差（数据库时钟），否则回 `ErrRatingSpread`。撮合用的是锚点的容差，锚点的等待不超过组内最长等待，容差又随等待单调不减，所以复核只会更宽、不会误拒。复核看的是撮合用过的同一批原票，正常不会触发；一旦触发，说明撮合与提交点的规则或配置不一致，`claimGroup` 记一条 Error 日志（带模式、模板与对局号）。车队对等和分边平衡是质量规则，提交点不复核。三个配置项（组队加成、车队差步长、组队成员评分差上限）显式写在 `go/match/etc/match_service.yaml` 的 `GlobalMatch` 段，K8s ConfigMap 从这里镜像。
 8. **指纹**：计分模式集合与组队加成进全局策略指纹（提交点要用）；车队差步长不进。
+9. **每侧 5 人不收 4 人队**（负责人 2026-11-05 定，借鉴 LoL 灵活组排）：PVP_TEAM 每侧 5 人的池不接受 4 人队伍开战，免得一个单人被塞进 4 黑；4 人队可以打每侧 4 人的池，或者等第 5 人进队。StartTeamMatch 入口先判（`team.CheckPvpPartySize`），开战原件的提交事务里按锁住的名单再判一次，拒绝回 `TeamPvpPartySizeNotAllowed`。单人入队和其他人数档不受影响。
+10. **组队成员评分差上限**（负责人 2026-11-05 定，借鉴 LoL 排位的组队段位限制，防止高分号带低分号刷分）：计分模式的整队开战，在开战原件的同一个事务里按本模式读每个成员的评分，最高与最低之差超过 `GlobalMatch.PartyRatingGapMax`（缺省 500 分，0 = 不限）就整笔回滚，回 `TeamRatingGapTooLarge`，名册和开战锁都不动（`authority.RequirePartyRatingGapTx`）。只在开战时判这一次：已经排上队的队伍不会因为之后评分变化被撤，排队期间队员也打不了别的局。上限是提交点规则，进全局策略指纹。
+
+第 9、10 条的两个码在 `Tip.xlsx` 的 `//team_error` 组末尾追加，由导表器发号，都是业务拒绝（`fault` 留空）；客户端按 id 查文案，不需要新消息或字段。
 
 单侧 1 人的 PVP_TEAM 池也计分，与 1V1 是两条评分轨道。
 
 **未做**：
 
-- 产品规则：5V5 不收 4 人队（免得一个单人被塞进 4 黑），以及组队成员评分差上限。两条都要新 tip 码和客户端可见的拒绝，等负责人定。
 - Elo 的组队修正：车队赢了照常按两队平均分加分。
 - 5V5（`MATCH_MODE_5V5`）的组排：仍只收单排。
 
@@ -47,7 +50,7 @@
 | D4 | 模板入口用新表 **PlayMode**（白名单 + 人数上限），Dungeon 只描述"打什么"。撤销 Java `MatchProperties.java:28-30`「不能改成查表」的约束 | match 不读表；任意 `battle_config_id` 都能建池（joinqueuelogic.go:70-98）；改模板要停全部副本（policy.go:27-34） |
 | D5 | 首领本 Dungeon id3 首发不开放（不进 PlayMode）。开放前先给 Dungeon 加"每人怪物只数 / 固定阵容"列，并让 Java 引擎追平按人数放大 | 表里 max_team_size=10 而引擎上限 5；缺每人只数列 |
 | D6 | 战斗期限 = 成局时刻 + 备战预算 + 模板 `time_limit`，上限 3600 秒；PVP 回合打满判平的阈值由 `time_limit` 推导，删掉 `RatingDrawRoundCap*` | claimTx 写死 +300000ms（store.go:543-546），模板时长在生产不生效 |
-| D7 | PVP：每个计分模式一行白名单；1V1 与 5V5 分开计分；计分局禁止观战（复用 16018）；赛季首发不做（运维手册禁止调用 `StopRankSource`，它一停写就会卡住结果消费） | 客户端可任填 config 建私有池刷分；评分全服一份；计分局可实时观战 |
+| D7 | PVP：每个计分模式一行白名单；1V1 与 5V5 分开计分；计分局禁止观战（复用 16018）；赛季首发不做（「停写 → 投完 → 封榜」的编排没有生产调用方；2026-11-06 起停写不再卡住结果消费，见 §8 R5「迟到与重复」） | 客户端可任填 config 建私有池刷分；评分全服一份；计分局可实时观战 |
 | D8 | 错误码：新增"需要重新探测"与"没有机房满足延迟"两个码；16004 只留给权威库不可用并标为 fault。16002 / 16003 分工以 Go 为准，两版与客户端同批改 | 16004 混用四种情况（global_match.go:41-61），客户端无法区分 |
 | D9 | Redis 兼容路径冻结：不再加新语义。dev/test 改用本机一次性 TiDB/MySQL 跑全局路径，删除时机另定 | dev 与生产两套算法与失败语义（logic 包 18 个文件有 Authority 分支） |
 | D10 | 架构：原位改造（每池单写者 + 一轮多局 + 单人即时成局），不做内存撮合；只在压测满足 §5.6 的切换条件时再评估 | — |
@@ -149,9 +152,17 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 ### 5.2 池归属（取代原"租约"）
 
 - 归属键 `(模式, 模板)`，用最高随机权重哈希（rendezvous / HRW）在成员表上选主，结果只取决于成员集合。
-- 本实例注册成功后才进入成员表（`SetPoolMember`），关机注销前先退出；不在成员表里的副本不负责任何池。
-- 已提交成局的 `Pending` 恢复按同一归属键分给负责副本；成员表为空时全部副本都恢复（退化为旧行为）。恢复的正确性只靠 `AcquireWork` 的工作租约与行锁。
-- 原计划的 `recovery_shard` 列与"提交前核对租约"的软围栏随租约表一起不做。
+- 本实例注册成功后才进入成员表（`SetPoolMember`），关机注销前先退出。
+- **一条归属规则管全部后台工作（2026-11-06，未编译；缺口清单第 24 条）**：`svc.OwnsWork(key)`，撮合池与下面几项按片分工的工作共用。成员表为空（watch 还没同步，或 etcd 一直起不来）时全部副本都做，保活优先；成员表非空、但本实例不在其中时什么都不负责。归属只管分工，正确性都在各自的 SQL 提交点。
+  - 按片分工的工作（`authority/work_owner.go`，`WorkShards = 64`，片号 = 业务实体 id 取模；发号器的 id 已打散，取模足够均匀；只决定分工，不进主键，改它不用迁移）：
+    - **成局推进**（`Pending`）：片号 = `battle_id`，条件在 SQL 里、`LIMIT 32` 之前。原先全局先取 32 条再在内存里按 (模式, 模板) 过滤，一个副本备战槽满了，它的到期成局占满队头，别的副本看不到自己的。
+    - **整队维护**（`TeamLaunchesAfter` 的 prepared / queued / forming / completed 四个循环）：片号 = 发起者 `actor_id`，这一列在扫描索引里，不用回表。原先每个副本每 500ms 给每支排队整队开一个锁全员票的事务。
+    - **闲置队伍到期**：片号 = `team_id`。
+    - **投榜**（`PublishRankOnce`）：每个 (计分模式, 来源片) 一个键。原先每个副本串行投全部 64 片；两个副本偶尔同投一片也安全，rank 按 (榜, 片, 游标) 幂等。
+    - **已建房票巡检**（`ReadyAfter`）：同类问题，每个副本都扫全部 state=3 的票、逐张开事务。片号 = `player_id`，键常量 `workReadyTicket` 已定义；`ready_recovery.go` 正由数据覆盖审计会话改，约定在它的下一批里接上同一分片条件（2026-11-06）。
+  - **不在这条规则里**：到期终局恢复（`RecoverExpiredOutcomeLane`）由数据覆盖审计会话按车道轮转，所有副本都跑，同一成局靠行锁只写一份终局（两套做法互不依赖）；终局发件箱按缺口清单第 25 条另行处理。
+- 原计划的 `recovery_shard` 列与"提交前核对租约"的软围栏随租约表一起不做；成局推进改用 `battle_id` 取模，不需要新列。
+- **热池仍是单写者**：一个池只归一个副本，热池上限就是单副本能力（每轮一页、至多 8 个提交事务并发）。拆法（按首选机房拆本机房阶段、跨机房阶段单写）要有压测证据再做，见 §5.6 第 1 条。
 
 ### 5.3 写者一轮（按实现）
 
@@ -222,10 +233,29 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 ## 8. PVP
 
 - 白名单按 §7；评分读失败时计分模式 Join 拒绝，不再静默按 1500（global_match.go:45）。
-- 评分按 `(player_id, mode)` 分开存。
-- 计分局禁止观战（复用 16018，观战列表排除计分局）。
+- **评分按 `(player_id, mode)` 分开存**（R5，2026-11-05 已落码，未编译，待 Codex 验证，§12.6）：
+  - 哪些模式计分只看 `ratingrule.Rated`（1V1、5V5、PVP_TEAM）。每个计分模式一条评分轨道：`match_rating` 主键 `(player_id, mode)`，分数和局数各算各的，打 1V1 不动 5V5 的分。PVP_TEAM 各档每侧人数共用一条轨道（与 R7 约定），和 1V1 是两条轨道。不计分的模式没有评分行，`Store.Rating`、`ApplyRating`、`StopRankSource` 收到它直接报错，不给缺省分。
+  - **mode 同源**：单人入队读分用 JoinQueue 的 `mode`（已过模板白名单），整队入队的快照用队伍原件的 mode（`queueRatingCentiTx`，与单人入队同一条 SQL `authority.ratingCenti`）；5V5 蛇形分队用成局原件的 mode（`gather.teamAssignment`）；结算用结果的 `match_mode`。三处是同一个值：票的 mode → 成局原件 `mode` → `CreateBattleRequest.match_mode` → battle 回显到 `BattleResultEvent.match_mode`；新终局协议在 `CommitBattleOutcome` 提交点还核了结果的 mode 与持久建房原件、成局原件一致（`validateTerminalResult`）。点名成局（切磋、活动、整队直接开战）都不计分，票上的评分快照记 0，不为它读库。
+  - **榜按模式分开**：一张榜混进两种模式，批次的 `score_version`（这名玩家在本模式第几局）两边各数各的，1V1 的第 9 局会被 5V5 的第 3 局当成旧版本挡掉，或者把新分盖回旧分。所以每个计分模式一张榜：`match_rank_source` 主键 `(source_epoch, mode, shard)`、`match_rank_outbox` 主键 `(source_epoch, mode, shard, source_cursor)`，每个模式自己的 64 片，各片游标从 1 连续；发布循环按模式找（或打开）各自的榜，一个模式的榜打不开不拦别的模式。榜键 `board_type` 如下（其余固定为 GLOBAL、period `all`、第 1 代），是客户端契约（`GetRankPage` 按它找榜），两版服务器同值；唯一来源是 `authority.rankBoardTypes`，`TestRankBoardTypesCoverExactlyRatedModes` 钉住它与计分模式集合一一对应：
+
+    | 模式 | board_type | 说明 |
+    |---|---|---|
+    | 1V1 | 1 | 沿用拆分前唯一那张评分榜的键（robot rank-smoke 读它），打开请求与拆分前逐字节相同 |
+    | 5V5 | 2 | 新增 |
+    | PVP_TEAM | 3 | 新增，各档每侧人数一张榜 |
+
+  - rank 服务不用改：它按 (board, generation, source_shard) 管游标和幂等，按 (board, generation, entity) 管版本，与生产者开几张榜无关。
+  - **封榜按模式**：`StopRankSource(ctx, epoch, mode)` 停一个模式的 64 片，返回该模式各片最终游标之和，就是那张榜封榜时的 `expected_source_cursor`。要停全部计分模式，对每个计分模式各调一次，先后不限、彼此独立：各模式各自封榜，没有跨模式的原子要求，一个模式停了不影响别的模式入账。赛季首发仍不做（D7），「停写 → 投完 → 封榜」的编排没有生产调用方。
+  - **迟到与重复**：`match_rating_applied` 仍按 battle_id 幂等，摘要覆盖整条结果（含 match_mode），同一局换个模式重放判冲突，不会记进另一条轨道；重复判定在停写检查之前，已入账的局在停写之后重放照样回「重复」，不卡结果消费。
+  - **停写之后的新局（2026-11-06，未编译）**：评分照记、入账标记照写，只是这局不进榜——不写 outbox、不推进来源游标，`StopRankSource` 返回的封榜批次总数不变；`ApplyRating` 回 applied，另计 `match_rating_unpublished_total{mode}`。原先这里报错，结果消费（全部模式共用一条流）会重试到 HOLD、把别的模式和别的局一起卡住（数据覆写审计 r2 §4 第 12 条）。取舍：评分是玩家的实力轨道，榜只是它的快照，封榜不该吞掉已经打完的计分局；新代次怎么开、要不要重置评分，等赛季功能立项时定。
+- **回合打满判平**（R5，取代 `RatingDrawRoundCap*`，2026-11-05 已落码，未编译）：引擎的胜负规则对所有模式相同（`TurnBattleEngine::UpdateOutcome`）：一方全灭判另一方胜，同时全灭判平，都没全灭而回合数到了上限判进攻方（0 队）负；整场期限打满由 battle 节点直接盖平局章（`OnBattleDeadline`），结果本来就是 DRAW。结果里没有「终局原因」字段，但完整个人原件（`settlement_format_version=1`）带每名玩家和宝宝的终局存活状态，能直接判出是不是打满，比用回合数反推准（`logic.ratedScoreA`）：
+  - DRAW 计 0.5。SIDE_A_WIN 计 1：打满只会判 1 队胜，0 队胜一定是把对面打到全灭，哪怕在最后一回合（旧实现把它也改判平局）。
+  - SIDE_B_WIN：0 队还有能行动的单位（玩家未阵亡未逃跑，或他的宝宝未阵亡）就是打满，改判平局；0 队全灭才是真输，最后一回合真打死也分得清（旧实现分不清，一律保守判平）。
+  - 只有没有个人原件的旧版结果（version 0）才看回合数：`total_rounds ≥ catalog.RoundLimit(battle_config_id)` 判平，否则算输。`RoundLimit` 与引擎同一换算：`max(1, ceil(time_limit × 1000 / 6000))`，`time_limit` 为 0 或模板不在表里取 300（`turn_battle_constants.h` 的 `kRoundDurationMs` / `kDefaultMaxRounds`），不截断到 3600 秒（截断的是整场期限）。PVP 现在借用的副本 1 是 1800 秒，正好 300 回合，与删掉的 `RatingDrawRoundCap: 300` 相同。
+  - 原件证明打满、回合数却没到本副本推导的上限时（battle 与本副本的 Dungeon 表版本不同，或引擎多了胜负规则），仍按原件判平局，记一条 ERROR 日志。指标 `match_rating_round_cap_draw_total{mode,basis}`，basis 取 `survivors` / `round_limit`，只计真正入账的局。
+  - 配置 `RatingDrawRoundCap` / `RatingDrawRoundCapByConfigId` 已删（`config.go`、`etc/match_service.yaml`、`k8s_deploy.ps1` 的 match ConfigMap 键清单）。它们不在全局策略指纹里，删除不改指纹。
+- **计分局禁止观战（复用 16018，观战列表排除计分局）：已做，2026-11-05 核对**。可见性在建房时按模式定一次，冻结进 `CreateBattleRequest.spectate_visibility`（`logic/spectate_visibility.go` 的 `spectateVisibilityOfMode`：1V1、5V5、PVP_TEAM 都是 PRIVATE），之后各执法点只读冻结值：WatchBattle 落原件之前判 `globalFormationWatchable`，不满足回 16018（`kMatchBattleNotWatchable`，`logic/global_spectator.go` 的 `locateGlobalWatch`）；活跃集合拒收私密局（`logic/spectate.go` 的 `addSpectateActive`），观战列表和随机选场都读不到它；列表读取和运营推荐再各滤一次（`listwatchablebattleslogic.go`、`setspectatefeaturedlogic.go`）；battle 的 AddObserver 对非 PUBLIC 房间一律拒绝（`cpp/nodes/battle/logic/battle_room_manager.cpp` 两处，第二道闸）。`TestRatedModesAreNeverSpectatable` 按 `ratingrule` 遍历全部计分模式断言都是私密，以后加计分模式漏改观战表会红。
 - 1V1 谁在 0 队由 battle_id 决定（splitmix64 终混取一位，`sideFlip`），不再恒归排在前面的锚点；同一局重放结果不变。切磋仍是发起者在 0 队。（第二批已落）
-- 评分按模式分开存、平局阈值由 `time_limit` 推导：未做，计分功能上线前补（R5）。
 - 人数档真人 PVP（PVP_TEAM）2026-11-05 起计分，组排、车队对等与分边枚举见开头「计分组排」。
 - 不做：Glicko、赛季、5V5（`MATCH_MODE_5V5`）的组排与分边枚举。5V5 先用"前 N 局大 K"的 Elo 加现有蛇形分边，加一个"期望胜率差"直方图，看数据再定。
 
@@ -234,6 +264,7 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 - 16002 新增拒绝场景：模板不在白名单 / 未开放。
 - 新增两个 tip 码（导表器发号，`data/tip/Tip.xlsx`）："需要重新探测"、"没有机房满足延迟"；16004 标 fault。
 - 不新增消息号与字段。逐级放宽、单人即时成局对客户端是行为变化，不是协议变化。
+- 2026-11-05（R7）：`//team_error` 组新增 `TeamPvpPartySizeNotAllowed`（每侧 5 人的 PVP_TEAM 不收 4 人队）与 `TeamRatingGapTooLarge`（组队成员评分差超过上限），StartTeamMatch 开 PVP_TEAM 时回这两个业务拒绝。车队对等让大车队多等，对客户端是行为变化，不是协议变化。
 
 ## 10. 不做
 
@@ -253,9 +284,10 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 | R2 | 模板目录接线、白名单（JoinQueue / StartTeamMatch / ChallengePlayer）、期限按模板 | 第二批已落源码，未编译、未测试；PVP 平局阈值推导挪到 R5 |
 | R3 | 池归属（HRW，取代分片租约）+ 一轮多局 + 范围树接入撮合与提交点 | 第二批已落源码，未编译、未测试 |
 | R4 | §6 TiDB 热点治理 | 投影表退役已落源码（2026-11-05，未编译、未测试）；其余按压测证据 |
-| R5 | §8 PVP 口径：评分按模式分开、平局阈值、计分局禁观战核对 | 1V1 分边已落；评分按模式、平局阈值归回合制缺口会话（2026-11-05 确认） |
+| R5 | §8 PVP 口径：评分按模式分开、平局阈值、计分局禁观战核对 | 1V1 分边已落；评分按模式、榜按模式、平局判定已落码（2026-11-05，回合制缺口会话），未编译，待 Codex 验证（§12.6）：`match_rating` 主键 `(player_id, mode)`，投榜来源与 outbox 按 `(epoch, mode, shard)`，每个计分模式一张榜（board_type 1V1=1、5V5=2、PVP_TEAM=3），`StopRankSource` 按模式停；回合打满先看个人原件里 0 队是否全灭，旧版结果按 `catalog.RoundLimit`（模板 `time_limit` 换算），删 `RatingDrawRoundCap*`；计分局禁观战已做（位置见 §8）；Java 版待做 |
 | R6 | battle 上报可分配状态与房间数，match 按负载放置 | 已落码（2026-11-05，回合制缺口会话），未编译，待 Codex 验证（§12.4）：`NodeInfo.admission`（14）只在变化时写 etcd、按 watch 回读对账；`CreateBattleResponse.room_count`（5）随成功应答捎回；battleplace 跳过 CLOSED、UNSPECIFIED 视为可选，按「60 秒内的上报房间数 + 本副本在途」比较；指标 `match_battle_nodes{state}`（§5.1）。「可分配」判定已落为 `battle_admission::AcceptsNewRooms` + `BattleNodeImpl::LifecycleGrantsPermits`；match 侧落库前预检 `rejects_new_battles` 已落（§5.5），battle 侧填值复用这一判定，那一行仍待补 |
-| R7 | 人数档真人 PVP 计分组排（开头一节）：PVP_TEAM 计分、整队入队读分、按人数分桶与拆分模板选人、车队对等、分边平衡、提交点组内极差复核 | 已落码（2026-11-05），未编译、未测试，待 Codex 验证（§12.5）；评分按模式分开存由 R5 负责；Java 版待做 |
+| R7 | 人数档真人 PVP 计分组排（开头一节）：PVP_TEAM 计分、整队入队读分、按人数分桶与拆分模板选人、车队对等、分边平衡、提交点组内极差复核、每侧 5 人不收 4 人队、组队成员评分差上限 | 已落码（2026-11-05），未编译、未测试，待 Codex 验证（§12.5）；评分按模式分开存由 R5 负责；Java 版待做 |
+| R8 | 后台工作按片分工（缺口清单第 24 条）：成局推进、整队维护、闲置队伍到期、投榜与撮合池共用一条 `OwnsWork` 归属规则（§5.2）；评级来源停写后评分照记、不进榜、不卡结果消费（§8 R5「迟到与重复」） | 已落源码（2026-11-06，全服匹配方案讨论会话），未编译、未测试，待 Codex 验证（§12.7）；热池拆归属键按压测证据定（§5.2 末条） |
 
 **文件归属（2026-10-24 与并行会话约定）**：
 
@@ -264,7 +296,7 @@ Join 事务提交后派一个后台任务（`claimImmediately`，3 秒预算，�
 - 「全服观战架构设计」会话在改 `constants/errors.go`、`metrics/metrics.go`、`spectate*.go`、`watchbattlelogic.go`、`global_spectator.go`、`authority/spectator.go`、`entry_guard.go`（只加哨兵错误）、`match_authority.proto` 的 `MatchSpectatorIntentRecord`。它以后的可见性改动要碰 `gather.go` 两处，`gather.go` 由本设计负责，届时在本设计的版本上补。
 - `match_authority.proto` 两边改的是不同 message；proto 生成只由 Codex 在两边落稳后统一跑一次。
 - **第二批（2026-10-30）动到的他人文件**，并行会话请按段落合并：`logic/pvp_team_test.go` 两处 `newPartySvcCtx` 少接一个返回值（编译错误，改为 `s, mr, _ :=`）；`team/service.go`、`team/sql_launch.go` 的组队人数上限改为 `TeamSizeFor(mode, config)`（PVP_TEAM 也查 PlayMode 表，删掉固定 `Capacity` 分支）；`logic/challengelogic.go` 入口加 PlayMode 白名单；`logic/gather.go` 的 `errPrepareRejected`、肇事者传递、`not_allocatable` 熔断与 1V1 `sideFlip`；`logic/global_match.go` 的 `globalAbortPrepared` 改为带肇事者调用 `FinishFailed`。单测的模板目录替身统一用 `logic/catalog_fixture_test.go` 的 `useTestCatalog`。
-- **计分组排（R7，2026-11-05）与 R5 的分工**（R5 在回合制缺口会话）：R7 改 `logic/rating.go` 里 `isRatedMode`、`ratingToleranceFor`、`ratingToleranceMaxWaitFor`、`anchorToleranceFor` 四个函数体（改成委托 `ratingrule`），新包 `ratingrule`，`poolgroup` 整包，`logic/global_pool_matcher.go` 的 `poolPolicy` / `poolUnitInput` / `expectedClaimRejection`，`authority` 的 `claimTx` 复核段、`policy.go` 指纹段、`team_queue.go` 的 `EnqueueTeamLaunchTx`、新文件 `rated_spread.go` / `party_rating.go`，以及 `config.GlobalMatchConf` 的两个字段。R5 改 `authority/rating.go`、`loadRating*`、`ApplyBattleResult` 的平局判定、`global_match.go` 的入队读分、`gather.go` 的 `loadRatings`、`RatingDrawRoundCap*`、榜单与建表。R5 改完表结构后，由它把 `queueRatingCentiTx` 的 SQL 和对应真库用例改成按模式读。
+- **计分组排（R7，2026-11-05）与 R5 的分工**（R5 在回合制缺口会话）：R7 改 `logic/rating.go` 里 `isRatedMode`、`ratingToleranceFor`、`ratingToleranceMaxWaitFor`、`anchorToleranceFor` 四个函数体（改成委托 `ratingrule`），新包 `ratingrule`，`poolgroup` 整包，`logic/global_pool_matcher.go` 的 `poolPolicy` / `poolUnitInput` / `expectedClaimRejection`，`authority` 的 `claimTx` 复核段、`policy.go` 指纹段、`team_queue.go` 的 `EnqueueTeamLaunchTx`、新文件 `rated_spread.go` / `party_rating.go`，以及 `config.GlobalMatchConf` 的两个字段。R5 改 `authority/rating.go`、`loadRating*`、`ApplyBattleResult` 的平局判定、`global_match.go` 的入队读分、`gather.go` 的 `loadRatings`、`RatingDrawRoundCap*`、榜单与建表。R5 已把 `queueRatingCentiTx` 改成调用 `rating.go` 的 `ratingCenti`（按 `(player_id, mode)` 读）。R7 补充的 `RequirePartyRatingGapTx` 也走它；真库用例 `TestAuthorityTiDBQueueRatingSnapshot`、`TestAuthorityTiDBPartyRatingGap` 按 `match_rating(player_id, mode, rating_centi, games, updated_ms, score_changed_ms)` 插数据。以后改 `ratingCenti` 的签名或这张表的结构，要连这几处一起改。（2026-11-05 R5 已改：`queueRatingCentiTx` 改走 `authority/rating.go` 的 `ratingCenti`，按 `(player_id, mode)` 读；对应真库用例 `rated_spread_test.go` 的 `TestAuthorityTiDBQueueRatingSnapshot` 本来就按 `(player_id, mode)` 插数，与新主键一致，不用改。）
 
 ## 12. 验证清单（交给 Codex）
 
@@ -344,8 +376,9 @@ Claude 未执行任何编译、测试或生成。协议生成可与 §12.3 合�
 
 ### 12.5 R7（2026-11-05：人数档真人 PVP 计分组排）
 
-Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译、测试或生成。本批不改 proto、不改配置表、不加 tip 码，不需要导表或协议生成。评分按模式分开存（R5，回合制缺口会话）同时在改 `authority/rating.go`、`logic/rating.go` 等文件，编译失败时先确认出错的是哪一批的文件；`match_rating` 的建表变化以 R5 的清单为准，真库用例要在 R5 落地之后跑。
+Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译、测试或生成。本批不改 proto、不改配置表；开头第 9、10 条在 `Tip.xlsx` 的 `//team_error` 组末尾加了两个码，要先导表，再编译。评分按模式分开存（R5，回合制缺口会话）同时在改 `authority/rating.go`、`logic/rating.go` 等文件，编译失败时先确认出错的是哪一批的文件；`match_rating` 的建表变化以 R5 的清单为准，真库用例要在 R5 落地之后跑。
 
+0. **导表与 tip 码**（仓库根）：`dev.bat gen`。期望：`go/shared/generated/pb/table` 里出现 `TeamError_kTeamPvpPartySizeNotAllowed` 与 `TeamError_kTeamRatingGapTooLarge`，号码落在 team 段 [4000, 5000)，state 只新增这两个名字、已有名字的号不变；`go/shared/generated/tip/faults.go` 不变（两个都不是故障）。C++ 与 Java 的 TeamError 生成物各多两个枚举值，C++ 的 table 库与链接它的节点照常串行 `/m:1` 重编。失败时保留导表器完整报错。
 1. **编译与静态检查**（工作目录 `go/match`）：
    ```bash
    go build ./...
@@ -356,18 +389,56 @@ Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译�
    ```bash
    go test ./internal/ratingrule/... ./internal/poolgroup/... ./internal/config/... ./internal/logic/... ./internal/authority/... -count=1
    ```
-   重点用例：`ratingrule` 包全部；`poolgroup` 的 `TestPickSides*`、`TestCompositionsForCountsPartitions`、`TestFormRatedSides*`、`TestFormSidesPremadeGapUsesUnitWait`，以及原有的 `TestSides*`、`TestRated*`；`authority` 的 `TestRequireRatedSpread*`；`logic` 的 `TestPoolUnitInputScoresPartiesWithBonus`、`TestPoolPolicyRatesPvpTeamPools`、`TestRatedModeIncludesPvpTeam`、`TestRatingSpreadIsExpectedClaimRejection`、`TestPoolUnitInputIntersectsMemberLatency`（整队队伍分的断言已改），以及 `rating_match_test.go` / `rating_review_fix_test.go`（容差曲线改成委托 `ratingrule`，数值不变）。通过标准：全部 PASS。没有 TiDB 时 `TestAuthorityTiDB*` 跳过属正常，如实报告为未运行。失败时保留用例名与断言原文。
+   重点用例：`ratingrule` 包全部；`poolgroup` 的 `TestPickSides*`、`TestCompositionsForCountsPartitions`、`TestFormRatedSides*`、`TestFormSidesPremadeGapUsesUnitWait`，以及原有的 `TestSides*`、`TestRated*`；`authority` 的 `TestRequireRatedSpread*`；`logic` 的 `TestPoolUnitInputScoresPartiesWithBonus`、`TestPoolPolicyRatesPvpTeamPools`、`TestRatedModeIncludesPvpTeam`、`TestRatingSpreadIsExpectedClaimRejection`、`TestPoolUnitInputIntersectsMemberLatency`（整队队伍分的断言已改），以及 `rating_match_test.go` / `rating_review_fix_test.go`（容差曲线改成委托 `ratingrule`，数值不变）；`team` 的 `TestCheckPvpPartySize` 与 `errors_test.go` 的 tip 码护栏（新增两个码）；`config` 的 `TestPvpPartyRuleDefaults`。通过标准：全部 PASS。没有 TiDB 时 `TestAuthorityTiDB*` 跳过属正常，如实报告为未运行。失败时保留用例名与断言原文。
 3. **真库回归**（隔离的一次性 TiDB，清库后用 `match -f <配置> -migrate` 建表；旧库里 `match_global_policy` 的摘要会让新进程拒启，见 §14）：
    ```bash
    cd go/match
    MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/team/... -count=1
    ```
-   重点用例：`TestAuthorityTiDBQueueRatingSnapshot`（整队入队按模式读分、没有记录按 1500、非计分模式为 0）；`TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRules`（新增 `party-bonus` 子用例，改车队差步长仍应准入）；team 包的整队入队与成局用例（PVE_TEAM 整队票的 `rating_centi` 仍为 0）。
-4. **冒烟**（本机全局路径，清空 redis / mysql / etcd 后起服；PVP_TEAM 用 `battle_config_id=1`）：
-   - 2V2（`team_size=2`）：一支双排 + 两个单人入队，成一局，双排在同一侧；
-   - 3V3（`team_size=3`）：一支 3 人队 + 3 个单人同时入队，前 10 秒不成局（车队差 2），单人等满 10 秒后成局；
-   - 打完一局，`match_rating` 里这些人 `mode=7` 的行按胜负变化，`mode=3`（1V1）的行不动（R5 的口径）；
-   - `match_pool_claim_total{mode="MATCH_MODE_PVP_TEAM"}` 没有持续的 `conflict`：`ErrRatingSpread` 只应在撮合与提交之间票变化时偶发。
+   重点用例：`TestAuthorityTiDBQueueRatingSnapshot`（整队入队按模式读分、没有记录按 1500、非计分模式为 0）；`TestAuthorityTiDBPartyRatingGap`（成员分差超过上限回 `ErrPartyRatingGap`，恰好等于上限、上限为 0、非计分模式都放行）；`TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRules`（新增 `party-bonus`、`party-gap` 子用例，改车队差步长仍应准入）；team 包的整队入队与成局用例（PVE_TEAM 整队票的 `rating_centi` 仍为 0），以及 `pvp_party_rules_integration_test.go` 的 `TestTeamTiDBPvpFiveSideRejectsFourStack`（4 人队开 5V5 被拒、名册与开战锁不动，同一队开 4V4 直接进队列）与 `TestTeamTiDBPvpRatingGapRejectsBeforeLaunch`（队员分差 600 被拒、不留开战原件；差 500 放行，成员票带本模式评分快照）。team 夹具的建表列表加了 `match_rating`。
+4. **冒烟**（本机全局路径，清空 redis / mysql / etcd 后起服；PVP_TEAM 用 `battle_config_id=1`）。robot 现有的组队冒烟（`team_smoke`、`team_backfill_smoke`）只开 PVE，没有组队开 PVP_TEAM 的场景；组队路径（双排同侧、车队对等、4 人队、组队评分差）由第 2、3 步的单测与真库用例覆盖。能用现有 robot 跑的是单人路径：
+   - 复制一份 `robot/etc/robot.match-stress-100.yaml`，把 `match_queue.mode` 改成 `MATCH_MODE_PVP_TEAM`、`team_size` 改成 2（2V2）跑一轮：成局正常，两侧各 2 人；
+   - 打完的局里，这些人在 `match_rating` 里 `mode=7` 的行按胜负变化，`mode=3`（1V1）的行不动（R5 的口径）；
+   - match 日志里没有 `Rating spread rejected at commit`：撮合与提交点按同一份规则判同一批票，出现就说明两边的规则或配置不一致，保留日志上报。
+
+### 12.6 R5（2026-11-05：评分按模式分开、榜按模式、平局判定）
+
+Claude 未执行任何编译、测试或生成。项目未上线，库可清空，不写迁移。与 §12.5 共用一个工作区，同包有 R7 与观战、数据覆盖审计会话的在途改动，红在别处时先分清是哪边的。
+
+1. **proto**（仓库根，no-unity，可与 §12.3～§12.5 合并成一次）：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。本批只改 `proto/match/match_authority.proto` 的三个表记录：`MatchRatingRecord` 加 `mode = 6`、主键 `player_id,mode`；`MatchRankSourceRecord` 加 `mode = 7`、主键 `source_epoch,mode,shard`；`MatchRankOutboxRecord` 加 `mode = 6`、主键 `source_epoch,mode,shard,source_cursor`。期望：`go/proto/match` 里这三个 message 有 `GetMode()`。C++ 生成物（`match_authority.pb.cc`）也会变，没有 C++ 代码引用这三个 message，随下次 C++ 编译即可。
+2. **建表**（清空 match 库与 rank 库）：TiDB 用迁移账号执行 `match -f <配置> -migrate`；本机 MySQL 档 `pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-migrate -LocalMySQL -GoServices match`。新库：三张表按新主键建出。旧库（本批之前建的）：迁移器会补 `mode` 列，但主键不符记人工项（`主键列不符:match_rating 实际 PRIMARY KEY (player_id)…`，ExitCode 4），常驻进程的 `requireCurrentSchema` 拒绝接流。这是预期的 fail-closed，不要手改主键或断言，清库重建；rank 库要一起清，否则旧榜上 (shard, cursor) 的收据会和新来源从 1 起的游标撞成冲突，投榜卡住。
+3. **Go**（cwd `go/match`，`GOTOOLCHAIN=local`）：`go build ./... && go vet ./... && go test ./... -count=1`。通过标准：全部 PASS。重点用例：
+   - `internal/logic`：`TestRatedScoreAJudgesRoundCapByOriginals`（13 个子用例）、`TestOldResultsDrawAtTemplateRoundLimit`、`TestRatedModesAreNeverSpectatable`，既有 `TestApplyBattleResultIgnoresUnratedResults`、`TestSpectateVisibilityPolicy`；
+   - `internal/catalog`：`TestRoundLimitMirrorsEngine`；
+   - `internal/authority`（不连库也跑）：`TestRankBoardTypesCoverExactlyRatedModes`、`TestOrderRankShardsByBacklogServesLargestFirst`；
+   - `internal/config`、根包 `match_service_test.go`：删配置项后照常 PASS。
+   失败时保留编译错误全文、失败用例名和断言原文。
+4. **真库回归**（隔离的一次性 TiDB，清库；cwd `go/match`）：
+   ```bash
+   MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... -count=1 -run 'Rating|RankBoard|QueueRatingSnapshot'
+   MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/logic/... ./internal/team/... -count=1
+   ```
+   重点：`TestRatingTiDBModesKeepSeparateRatingsSourcesAndBoards`（同一玩家两种模式的分数、局数、score_version、同一片的游标、榜号互不相干，一局换模式重放判冲突，按模式停写）、`TestRatingTiDBRejectsUnratedModeWithoutSideEffects`、R7 的 `TestAuthorityTiDBQueueRatingSnapshot`（整队入队按模式读分），既有 `TestRatingTiDBShardedSourceCursorsVersionsAndStopTotal`、`OneShardFailureDoesNotBlockOthers`、`RoundBudgetExhaustedStopsWithoutError`、`CursorAheadFromOtherReplicaIsNotAFailure`、`AchievedMsFollowsScoreChangeNotGames`、`TransactionOutboxReplayAndStopBarrier`（新增断言：停写后已入账的局重放回「重复」、不报错）。整链 `TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss` 要 `RANK_MAIL_CHAIN_IT_TIDB` 和预编译的 mail / rank 夹具（`RANK_MAIL_CHAIN_MAIL_EXE`、`RANK_MAIL_CHAIN_RANK_EXE`），有环境才跑；它只打 1V1，期望不变。
+5. **ConfigMap**：`tools/scripts/k8s_deploy.ps1` 渲染一次 match ConfigMap，核对不再有 `RatingDrawRoundCap`，其余评分键照旧。
+6. **冒烟**（本机，清空 redis / mysql / etcd 后起服）：机器人打一局 1V1、一局 PVP_TEAM（或 5V5）后，`SELECT player_id,mode,rating_centi,games FROM match_rating` 每人每个模式一行；`match_rank_source` 出现两个 mode，各自的 `board_id`；rank 库 `rank_board` 有 `board_type` 1 与 3（或 2）两行；robot rank-smoke（读 `board_type` 1）照常通过。打满回合的 PVP 局 `match_rating_round_cap_draw_total{basis="survivors"}` 增长，`basis="round_limit"` 只在旧版结果出现。
+
+### 12.7 第四批（2026-11-06：后台工作按片分工、评级停写不卡消费）
+
+Claude 只跑过 `gofmt`，没有编译、测试或生成。本批不改 proto，不需要重新生成。
+
+1. **Go**（工作目录 `go/match`）：
+   ```bash
+   go vet ./...
+   go test ./internal/authority/... ./internal/svc/... ./internal/logic/... ./internal/team/... ./internal/metrics/... -count=1
+   ```
+   新增纯单测 `TestWorkShardFilterKeepsOnlyOwnedShards`（不需要真库）。通过标准：全部 PASS；失败保留编译错误全文、用例名与断言原文。
+2. **真库**（一次性 TiDB，清库后 `match -f <配置> -migrate`）：
+   ```bash
+   MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/team/... -count=1 -run 'Work|Rating|FormationExit|TeamTiDB'
+   ```
+   重点：`TestWorkTiDBPendingReturnsOnlyOwnedShards`、`TestWorkTiDBRankPublisherSendsOnlyOwnedShards`、`TestTeamTiDBMaintenanceReadsOnlyOwnedShards`。评级停写改了 4 处既有断言，从"停写即报错"改成"评分照记、不进榜、封榜批次总数不变"：`TestRatingTiDBShardedSourceCursorsVersionsAndStopTotal`、`TestRatingTiDBTransactionOutboxReplayAndStopBarrier`、`TestRatingTiDBModesKeepSeparateRatingsSourcesAndBoards`、整链 `TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss`（要 `RANK_MAIL_CHAIN_*` 环境，有才跑）。
+3. **部署合同**：`pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`（`match-alerts.yaml` 的 `MatchPoolsUnowned` 只改了描述）。
+4. **多副本冒烟**（本机起 2 个 match 副本，清空数据后）：两个副本的 `match_pool_owned` 之和等于目录里的池数；造几局失败成局，两边日志里推进的 battle_id 不重复；停掉一个副本，约一个 etcd 租约周期后另一个副本接手它的片（`match_pool_owned` 涨到全部）。
 
 ## 13. Java 版（AGENTS.md §12）
 
@@ -379,7 +450,8 @@ Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译�
 - 肇事者剔除、离线撤票推广到单排与 PVP、拒绝码按 Go 口径对齐；
 - Java 已有而 Go 待追的：离线撤单位（只写进本仓文档，不往 PARITY 加行）。单人即时成局 Go 第二批已追平。按可分配状态 + 房间数选节点（R6）Go 已于 2026-11-05 追平（未编译）：Java 版 battle 周期把 accepting / roomCount 写进 Redis 目录，Go 版只在变化时写 etcd、房间数随建房应答捎回（§5.1）。两版服务端内部实现不同（AGENTS §12 允许），对外语义相同：match 只选可分配的节点、按房间数比较负载。Java 已有等价，不往 Java 仓 PARITY.md 加行。
 - 前提：Java 全局匹配路径目前只有源码、没有编译和运行证据（match-spec.md:2418-2447），要先让它跑通。
-- 人数档真人 PVP 计分组排（开头一节，R7，2026-11-05）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-05 人数档真人 PVP 计分组排（Java 待做）」。Java 版人数档 PVP 的撮合本身也还没有（11-05 核对：game-match 主代码里 `PVP_TEAM` 只出现在观战可见性表），要一起做。客户端契约不变：没有新消息、字段和 tip 码。
+- 人数档真人 PVP 计分组排（开头一节，R7，2026-11-05）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-05 人数档真人 PVP 计分组排（Java 待做）」。Java 版人数档 PVP 的撮合本身也还没有（11-05 核对：game-match 主代码里 `PVP_TEAM` 只出现在观战可见性表），要一起做。客户端契约多两个 team_error 码（第 9、10 条），表数据两版共用，Java 版开战入口要回同样的码；没有新消息和字段。
+- 评分按模式分开、榜按模式、回合打满判平（§8，R5，2026-11-05）：Java 版待做，已登记 Java 仓 `PARITY.md`「2026-11-05 评分按模式分开、榜按模式、回合打满判平（R5，Java 待做）」。11-05 核对：Java 的 `match_rating` 每人一行，`RatingRankOutbox` 只开 `board_type` 1 一张榜。`board_type` 1 / 2 / 3（1V1 / 5V5 / PVP_TEAM）是客户端契约，两版同值；计分局禁观战 Java 已有（`SpectateVisibilityPolicy`）。
 
 状态：待做。PARITY.md 第 149、187 行已过期，需按当前源码更正后再登记新行。
 
@@ -392,8 +464,8 @@ Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译�
 - 本文所有吞吐数字都是推算，没有压测证据前不宣称性能提升（AGENTS.md §6）。
 - 期限按模板（D6）的代价：已持久 Create 原件之后失败（含节点准入拒绝）的成局只能等唯一 SQL 终局，玩家被占用到"提交时刻 + 120 秒 + 模板时长"。缺省模板仍是 300 秒；开放长模板（如 3600 秒）前要先有"确定未建房即提前终局"，否则一次建房失败会把整组人卡一小时。2026-11-05 起分三层收窄：R6 让 match 不选正在排空的节点；落库前预检 `rejects_new_battles` 收窄"选中之后才排空"的窗口（battle 侧填值待 R6）；提前终局由数据覆盖审计会话评估落码。三者都落地之前不开放长模板。
 - PVP_TEAM 只在 PlayMode 第 6 行（`battle_config_id=1`）开放；客户端若按 0 入队会被白名单拒绝。
-- 计分组排（R7）的缺省值（组队加成每人 25 分、车队差步长 10 秒）没有数据依据，要按车队胜率与 PVP_TEAM 的等待分布定标。车队对等会让大车队在冷门时段多等，最长约 3 个步长（5V5 的 5 人队打单人）。
-- R7 改了全局策略指纹（计分模式集合、组队加成）：已有库里 `match_global_policy` 的旧摘要会让新进程拒启，本地与 dev 清库重建；上线后改这两项要停全部副本受控调整。
+- 计分组排（R7）的缺省值（组队加成每人 25 分、车队差步长 10 秒、组队成员评分差上限 500 分）没有数据依据，要按车队胜率、PVP_TEAM 的等待分布和被评分差挡下的开战次数定标。车队对等会让大车队在冷门时段多等，最长约 3 个步长（5V5 的 5 人队打单人）。
+- R7 改了全局策略指纹（计分模式集合、组队加成、组队成员评分差上限）：已有库里 `match_global_policy` 的旧摘要会让新进程拒启，本地与 dev 清库重建；上线后改这两项要停全部副本受控调整。
 - R7 开启前已在排队的 PVP_TEAM 票没有评分快照（`rating_centi=0`），与新票的分差超过容差，只能等终态兜底；上线前本来就清库，不单独迁移。
 - Elo 不做组队修正，车队的评分会比同水平单排涨得快；要不要修正看 PVP_TEAM 上线后的胜率数据。
 - R6 的残余：① battle 写可分配状态的前提是「回读看得到自己的键、注册链空闲」；初始引导时服务键 CAS 失败或超时后，注册链在 1 秒退避里没有在途 CAS，这个窗口里的写仍可能抢先建出服务键（与 gate 每 10 秒写人数同一类既有残余），只在注册失败重试时出现。② 负载读数只在本副本选中某台建房时刷新，各副本看到的读数不同，没有读数的节点会先被多选；均衡效果要按 AGENTS §6 压测验证，没有对比表前不宣称改善。③ 混版本期间不上报的旧 battle 显得更闲、多分到成局。④ 排空标签每 5 秒读一次、对账 1 秒一拍，排空开始到 match 看到 CLOSED 最长约 6 秒加 watch 延迟，期间选中的节点仍由 §5.5 的落库前预检或准入闸拒绝、熔断。

@@ -159,6 +159,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="routing_identity_test.cpp" />
+    <ClCompile Include="gate_client_entry_admission_test.cpp" />
     <ClCompile Include="scene_client_call_reply_test.cpp" />
     <ClCompile Include="scene_manager_selector_test.cpp" />
     <ClCompile Include="session_details_builder_test.cpp" />
@@ -188,6 +189,20 @@
     <ClCompile Include="../../nodes/gate/tests/gate_push_delivery_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_push\</ObjectFileName>
+    </ClCompile>
+    <!-- gate 客户端心跳(docs/design/gate-client-heartbeat.md):纯逻辑头 client_liveness.h 只依赖 STL;装配层 client_heartbeat.cpp
+         直接编进测试,会话表 tlsSessionManager 来自 gate.lib,连接是回环 TCP。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/client_heartbeat.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_heartbeat\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/client_heartbeat_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_heartbeat\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/client_liveness_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_heartbeat\</ObjectFileName>
     </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

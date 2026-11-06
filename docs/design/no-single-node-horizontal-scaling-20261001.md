@@ -6,6 +6,8 @@
 
 > **2026-10-23 需求扩展**：负责人要求所有实际部署节点具备平滑停机／缩容、水平扩展及灰度／金丝雀发布能力。统一目标、源码现状、差距与验收见 [全类型节点生命周期与发布需求](node-lifecycle-elasticity-release-20261023.md)。本文的“可多开”不等于已通过在线无感维护或渐进发布验收；两版目前均未完成全类型验收。
 
+> **2026-11-05 第二轮**：负责人要求把剩下的单点修完。逐项现状、修法与分批见 §8～§11，MySQL 一节（§6）同日改写。
+
 ## 1. 盘点(以 2026-10-01 的 `main` 为准)
 
 「有备份、挂一个不停服」和「能多开、一起分担压力」是两件事,本文按后者判断。
@@ -352,9 +354,57 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 真实集群:staging 上按 README「切换」步骤做一次 1 → 3,再做删主 Pod、杀主进程两项,用 robot 登录压测看中断时长与丢写。
 
-## 6. MySQL:单实例 → TiDB(方向已定,待做)
+## 6. MySQL：单实例 → TiDB（2026-11-05 改写为批 A 设计，未落码）
 
-见 `docs/design/global-data-layer-tidb-decision.md`。deploy 里目前没有任何 TiDB 清单。
+方向见 [全局数据层 TiDB 决策](global-data-layer-tidb-decision.md)。10-01 时 deploy 里没有任何 TiDB 清单；此后 tidb 档（`-DatabaseBackend tidb`，缺省值）已让 db、data_service、guild、trade、friend、player_inbox、match、mail、rank、chat 的逻辑库全部连外部 TiDB（脚本不建 TiDB 集群，`-GlobalAuthorityTiDBHost` 指向入口）。还留在 infra 单实例 MySQL（`manifests/infra/mysql.yaml`，1 副本，无主从）上的只剩 `mmorpg` 逻辑库，负责人 11-05 拍板把它迁到 TiDB。
+
+### 6.1 `mmorpg` 上有什么、谁依赖它
+
+- Java 网关（`java/gateway_node`）的区目录、公告、白名单，以及这个库自己的写者闸门表。区目录读不到，选服和分配 gate 就都失败，所以它在登录链路上。
+- login 作为 SQL 写者登记在这个库的闸门上（`Apply-OneGoSvc` 注释：「login 登记在网关的 mmorpg 库上」）；login 的常驻进程不写业务表。
+- login 的 PasswordAuth（读 `user_accounts`）在 K8s 上没有部署，ConfigMap 里只有 DevPasswordAuth。`user_accounts` 归哪个库，文档互相矛盾：[TiDB 一期](tidb-phase1-and-launch-readiness.md) §2.7 写 zone 库，`docs/ops/db-move-runbook.md` §9 写 `mmorpg`，`gateway_tables.sql` 里没有这张表。这件事不在批 A，见 §6.5。
+
+### 6.2 现在被固定在 MySQL 的地方（11-05 只读核对）
+
+| 位置 | 现状 | 批 A 的改法 |
+|---|---|---|
+| `k8s_deploy.ps1` 的 `New-JavaSvcConfigMapYaml` | JDBC 主机写死 `mysql.<infra>:3306/mmorpg`；不写 `mmorpg.sql.require-tidb`，而网关这一项缺省 true、prod 档不许关。按现在的配置，prod 档网关连 MySQL 本来就起不来（读代码得出，未实测） | 主机与档位取 `Get-GlobalAuthoritySqlSettings`。tidb 档写 require-tidb true；dev 回落 MySQL 时写 run-mode dev 加 require-tidb false，与本机脚本同法 |
+| `Add-SqlWriterBootManifest` | login、gateway 的 registrar 档位写死 mysql | 一律跟 `-DatabaseBackend` |
+| `Apply-OneGoSvc` 与 Java 的部署路径 | login 不加 `MMORPG_DB_PLACEMENT`，Java 路径从不加 | 两处都加，`mmorpg` 按库映射连 |
+| `Apply-Infra` | `$infraManifests` 无条件 apply `mysql.yaml` | 只在 mysql 档部署；前提是下一行先改掉 |
+| 5 个 `*-migrate.yaml` 与 `Apply-GoSvcMigrateJob` | init 容器等待写死 `mysql.<infra>:3306`；非 dev 档先等 `deploy/mysql` 就绪 | 等实际的 SQL 入口 |
+| MySQL 连接总账 | gateway 计入 `mmorpg`；tidb 档在 K=1 时仍对照 `mysql.yaml` 的上限 | tidb 档一律对照 TiDB 预算 |
+| `mmorpg` 的建库建表 | 只靠 `mysql.yaml` 的 `MYSQL_DATABASE=mmorpg` 和 mysql-init 里的 `gateway_tables.sql`，TiDB 上没有任何入口 | 新增建表 Job，见 §6.3 |
+
+### 6.3 TiDB 上的建库建表
+
+- 库：与其余逻辑库同一口径，由运维预建，显式写排序规则（TiDB 一期 §2.6）。
+- 闸门表：与其余逻辑库走同一份 `authoritysql.EnsureCatalogSchema`，由 `writer_authority -command prepare-schema -schema mmorpg` 执行，不再复制第三份闸门 DDL。本机脚本给商城建库就是这条路。
+- 业务表（zone_config、zone_whitelist、announcement）和种子行：在同一个 Job 里、闸门表之后执行，DDL 以网关的 `schema.sql` 为唯一来源（`GatewaySchemaContractTest` 已在真 TiDB 上校验过它）。
+- Job 用 schema 权限账号，与其余 `*-migrate` Job 同法；网关的常驻账号不给 DDL 权限。
+- 三张业务表补 `COLLATE=utf8mb4_0900_ai_ci`（TiDB 一期 §4 第 10 项：只写 CHARSET 的表，两边的排序规则一定不同）。这个值就是 MySQL 上这些表现在实际用的排序规则，MySQL 档的行为不变。
+
+### 6.4 网关代码在 TiDB 上要改的一处
+
+`AdminZoneController` 的 update 与改维护状态：「区服不存在回 404」原来靠 MySQL 默认 RR 隔离级别下 UPDATE 取的间隙锁。TiDB 没有间隙锁，RC 也没有，于是并发 create 能在 UPDATE 和回读之间插进来，出现「UPDATE 一行没改，却回 200」。
+
+改成同一个事务里先按主键 `SELECT … FOR UPDATE`：行不在就直接回 404，不执行 UPDATE；行在就已经持有这一行的 X 锁，再 UPDATE、再回读。这样在 MySQL 的 RR、RC 和 TiDB 上都成立。create（ODKU 加回读）与 delete（按主键 DELETE、看删除行数）的论证不依赖间隙锁，不用改。
+
+### 6.5 不在批 A 的
+
+- login 的 PasswordAuth：`user_accounts` 归哪个库、K8s 上怎么注入、`20260803_password_auth.sql` 里的存储过程改成应用侧检查（TiDB 不支持存储过程），三件事要一起定。只在启用 PasswordAuth 时才阻塞。
+- 运维侧要按 TiDB 重新产出：runtimeConfigSecret、registrar DSN、名册（新 generation，锁原语从 LOCK_TOUCH 换成 SELECT_ONLY）、物理身份摘要。写进开服手册，脚本不代办。
+- 存量数据：项目未上线，不写 `mmorpg` 从 MySQL 到 TiDB 的数据迁移；已有的环境按开服手册重建。
+
+### 6.6 批 A 的落码顺序
+
+1. A1：网关代码与 DDL（§6.3 的 COLLATE、§6.4）。MySQL 档行为不变，可以先合。
+2. A2：建表 Job，以及 `k8s_deploy.ps1` 里网关的 JDBC 与档位、两个写者的档位与库映射、连接总账。
+3. A3：migrate Job 的等待目标改为实际 SQL 入口，`mysql.yaml` 改成只在 mysql 档部署。
+4. A4：翻转契约测试（`logical_db_deploy_contract.tests.ps1` 与 `k8s_deploy_contract.tests.ps1` 里钉住「login、gateway 用 mysql」的用例），新增「mysql 档产物逐字不变」用例。
+5. A5：改 `deploy/k8s/README.md`、TiDB 一期文档、[逻辑库设计](horizontal-scale-logical-db.md)、`docs/ops/db-move-runbook.md` 和开服手册。
+
+A2 到 A4 要改 `k8s_deploy.ps1`，发布轨道批 2b 同时也在改这个文件，等它改完再动。
 
 ## 7. guild 的 K8s 清单(第一、二块已落码:部署本体、资产通道与 gRPC 口准入;BK8s 其余块按批推进)
 
@@ -369,3 +419,63 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 帮会二期会话 2026-10-01 答复:清单归本线补;ConfigMap 要等它通知 B6b-srv2 落完再照最终的 `guild.yaml` 写。
 约束:全局服务(Etcd 显式 `Key: ""`)、2 副本标注「未验证」、`PlayerLocatorRedis` 指共享库、AssetOp 密钥走 Secret、
 data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首次起服前跑 `-migrate`。
+
+## 8. 2026-11-05 第二轮：剩余单点的现状与处理
+
+负责人 2026-11-05 要求把剩下的单点「修复完毕」，并拍板三件事：`mmorpg` 库迁到 TiDB；Loki 的对象存储，外部 S3 兼容存储和集群内存储两种都要支持；按项分批，在同一个会话里依次做（每批不超过 30 个文件，先写设计再落码，编译与测试交 Codex）。
+
+| 项 | 现状（11-05 核对） | 处理 | 状态 |
+|---|---|---|---|
+| `mmorpg` 库（Java 网关的区目录、公告、白名单与写者闸门，login 的口令表） | 只在 infra 的单实例 MySQL 上。`k8s_deploy.ps1` 把 login、gateway 的写者档位写死为 mysql，网关的 JDBC 地址写死 `mysql.<infra>` | 迁到 TiDB，见 §6 | 批 A，待落码 |
+| 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话在做 |
+| scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话在做，4a、4b 已落码未编译 |
+| 选主的后台任务 | 见 §9 | 两处改分片，一把挂在请求路径上的全服锁缩小范围，其余保持单 leader | 批 C，待落码 |
+| 排行榜 Redis | rank 自 10-19 起以 SQL 为权威，不连 Redis。`redis-rank.yaml` 只作历史保留，部署脚本不 apply 它，契约测试「R2b Redis清单保留历史，现役SQL排行不自动部署旧写榜存储」守着 | 不是单点，不用改 | — |
+| Loki | 单副本加本地盘 | 单体模式 3 副本加共享对象存储，见 §10 | 批 B，待落码 |
+
+## 9. 选主的后台任务：哪些要分片（2026-11-05 只读核对）
+
+判据：同一时刻只有一个副本在干活，只有当这份活随在线人数或业务量增长时，才是容量问题。只随异常或节点数增长的维护任务，单 leader 加快速接任就够；硬拆成分片只会多出跨副本聚合和重复扫描的问题。
+
+| 选主点 | 作用域 | 每拍的活 | 负载随什么增长 | 处理 |
+|---|---|---|---|---|
+| `guild:assetop:maintenance:leader` | 全服 | 日对账只读 PENDING、刷 gauge；每小时最多自动放弃 200 行。重投 Tick 每个副本都跑，不归这把锁管 | 异常积压 | 保持 |
+| `trade:assetop:maintenance:leader` | 全服 | 同上，只放弃 TRADE_DEBIT；`AssetOp.Enabled` 现为 false | 异常积压 | 保持 |
+| `player_inbox:maintenance:leader` 下的清理、补发、gauge | 全服 | 清理已空转；补发只扫到期未通知的行；gauge 是两条聚合查询 | 近零、异常、在途量 | 保持 |
+| 同一把锁下的定时对账 | 全服 | 每小时读 24 小时内由消费方终结的行，每轮最多 2000 名玩家，超出就截断 | 业务量（战斗结算也进对账） | **改分片**（11-06 已落码，未编译）：64 个逻辑片用 HRW 分给 etcd 里注册的 stable 副本（与 match 的 poolowner 同法），每个副本只对账自己的分片，gauge 按本副本的分片求和，告警仍取 max() > 0。做法见[收件箱设计](player-inbox-service.md) §9.3「分片归属」 |
+| `player_locator:session_reconciler:leader` 下的写者检查 | 全服 | 每 60 秒一次 etcd 只读 Txn | 节点数 | 保持 |
+| 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**：复用死 gate 清扫已有的 256 段租约（`slot_shard.go`），按段分给副本，游标按段持久化 |
+| `guild_rank:maintenance_lock` | 全服互斥，挂在请求路径上 | 帮会积分写入、解散和启动重建都抢它；不续期，持锁者崩溃最长堵 5 分钟 | 积分写入量 | **缩小范围**：只让整表重建与合区折叠独占，积分写入不再抢全服锁（[容量模型](capacity-model-hok-scale.md)第 949 行已指出加副本解决不了） |
+| login 出队 `dispatcher:lock:login_queue:zone:<z>` | 按 zone | 每秒放行一批，受空位封顶 | 排队人数 | 保持按 zone |
+| guild 历练巡检 `guild:trial:sweep:lease` | 全服 | 每 60 秒只扫超时的对局，每轮最多 200 条 | 异常 | 保持 |
+
+另外两点：
+
+- friend 的 `sweep.go` 没有选主，每个副本每 5 分钟跑同一批 `DELETE … LIMIT 1000`，是重复执行而不是分摊。它缺省 report_only，不删数据，本轮不改，记为后续项。
+- data_service、match、mail、rank、chat、db 没有全服单例：靠消费组、HRW 或行级租约分摊。
+
+§1 那条 2026-10-18 增补说 player_locator 对账「多开分担没有收益」，写于死 gate 清扫拆出 leader 之前，对补建与日审计已不成立，以本节为准。
+
+## 10. Loki：单副本 → 单体模式 3 副本加共享对象存储（2026-11-05 定，未落码）
+
+- 形态由 `-LokiReplicas` 选，只接受 1 或 3，缺省按档位（与 `-KafkaBrokers`、`-RedisReplicas` 同一判据：非 dev 或非 custom 取 3，其余取 1）：
+  - 1：现状，单副本 Deployment 加 PVC 和本地盘，只给 dev、kind 用；
+  - 3：单体模式 3 副本 StatefulSet。每个 Pod 都跑全部组件（`-target=all`），既收日志也答查询；memberlist 组环，`replication_factor: 3`，写入要 2 份确认，挂一个照常写；日志块与 TSDB 索引放共享对象存储，每个 Pod 的 WAL 放自己的 PVC；PDB `minAvailable: 2`，加反亲和。
+- 不用读写分离的三组（write、read、backend）：单体多副本的 Service 名和推送地址不变（`loki.<infra>:3100`），C++ 日志 sidecar 和 Grafana 都不用改；Loki 官方文档写明单体模式可以靠共享对象存储和 memberlist 横向扩展。读写分离要多一个按路径转发的网关和三套工作负载，等日志量证明单体不够再拆。
+- 对象存储（负责人 11-06 定）：**生产只接外部 S3 兼容存储，本仓库不部署生产级对象存储。**
+  - 3 副本形态只认 S3 接口：部署时传 endpoint、bucket、region、是否 path-style、是否 TLS；访问密钥经环境变量注入成 Secret，不进 ConfigMap，也不进日志。
+  - 云上用云厂商的对象存储（S3、OSS、COS 等），可以和 TiDB BR 备份共用一套、另开一个桶。
+  - 自建机房由平台层提供，标准做法是 Rook-Ceph 的 RGW。自建 K8s 本来就要一套分布式存储给 MySQL、TiDB、Kafka 的 PVC 用，Ceph 同时给块存储和 S3 接口。对本仓库来说它也只是一个外部 S3 地址，与「TiDB 由外部提供、脚本不建」同一口径。
+  - dev 和 kind 上验证 3 副本时，用单进程的 SeaweedFS 当测试夹具提供 S3 接口，只在 dev 档可选，不进 staging、prod。
+  - 为什么不在集群里自建生产级对象存储：负责人原定的 MinIO 社区版 2025-10 起不再发布镜像（Docker Hub 上已查不到 `minio/minio`），2025-12 进入维护模式，2026-02 仓库归档，不再出安全修复；SeaweedFS 做高可用要 3 个 master、多台 volume 和带外部元数据库的 filer，等于在仓库里再养一套分布式存储；Garage 是 AGPL，社区小，缺 bucket 策略和版本；RustFS 尚不成熟；MinIO 的社区分叉由第三方维护，安全修复没有保障。
+- 拓扑变更闸：1 → 3 要显式确认（旧 PVC 里的日志不迁移，只保留 PVC 供手工导出）；3 → 1 拒绝。
+
+## 11. 分批（2026-11-05）
+
+| 批 | 内容 | 规模估计 | 状态 |
+|---|---|---|---|
+| A | `mmorpg` 迁 TiDB（§6） | 12～18 个文件 | 待落码 |
+| B | Loki 3 副本加外部 S3；dev 档可选单进程 SeaweedFS 做测试夹具 | 6～10 个文件 | 待落码 |
+| C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁缩小范围（C3，要加分数版本号，先确认有没有真实调用方再定） | 10～15 个文件 | C1 11-06 已落码未编译；C2、C3 待做 |
+
+`k8s_deploy.ps1` 和它的契约测试同时有发布轨道（批 2b）、控制面按 zone 化等会话在改。动之前先给对方发消息，每次改前重读要改的那一段。Java 版（0.1.0-SNAPSHOT）只在 `PARITY.md` 登记待做。

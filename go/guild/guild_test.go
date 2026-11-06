@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"os"
 	"strings"
@@ -12,19 +11,18 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	"guild/internal/config"
 	"guild/internal/data"
 	"guild/internal/logic"
-	"guild/internal/session"
-	base "proto/common/base"
 	pb "proto/guild"
 	"schemamigrate"
+	"shared/callerauth/callerauthtest"
+	"shared/generated/clientrpc"
 	"shared/kafkautil"
 	"shared/killswitch"
+	"shared/roleidentity"
 )
 
 func TestNodeAdvertiseHostPinsPodIP(t *testing.T) {
@@ -97,6 +95,22 @@ func TestGlobalGuildTrialRequiresDurableTopicBeforeServing(t *testing.T) {
 // "The first interceptor will be the outer most")。
 // 这个副本在 friend / player_locator / scene_manager 的同名测试里逐字相同 ——
 // 四个服务是四个独立 go module,没有共同的测试工具包可放。
+// guildEntry 是 guild.go 装配的同一个入口准入(GetPlayerGuild 登记为匿名只读例外)。
+func guildEntry(t *testing.T) grpc.UnaryServerInterceptor {
+	t.Helper()
+	entry, err := roleidentity.EntryInterceptor(clientrpc.Callable, guildAnonymousReads...)
+	if err != nil {
+		t.Fatalf("入口准入装配失败: %v", err)
+	}
+	return entry
+}
+
+// guildSession 模拟 gate 发来、已过验签拦截器的客户端请求:会话带完整原身份,签名绑定 method。
+func guildSession(t *testing.T, method string, playerID uint64) context.Context {
+	t.Helper()
+	return callerauthtest.Incoming(t, method, callerauthtest.OnlineSession("guild-account", playerID, 7))
+}
+
 func chainUnary(
 	interceptors []grpc.UnaryServerInterceptor,
 	info *grpc.UnaryServerInfo,
@@ -133,7 +147,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 		blocked: {Deny: true, Reason: "单测:建帮把库打爆了"},
 	})
 
-	chain := buildUnaryInterceptors(ks, time.Second)
+	chain := buildUnaryInterceptors(ks, time.Second, guildEntry(t))
 
 	t.Run("命中规则的方法被短路", func(t *testing.T) {
 		handlerCalled := false
@@ -170,7 +184,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			return &pb.GetGuildResponse{}, nil
 		})
 
-		if _, err := h(context.Background(), &pb.GetGuildRequest{}); err != nil {
+		if _, err := h(guildSession(t, info.FullMethod, 42), &pb.GetGuildRequest{}); err != nil {
 			t.Fatalf("未命中规则的方法不该报错: %v", err)
 		}
 		if !handlerCalled {
@@ -189,12 +203,12 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_CreateGuild_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(ks, time.Second), info, func(ctx context.Context, req any) (any, error) {
+	h := chainUnary(buildUnaryInterceptors(ks, time.Second, guildEntry(t)), info, func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return &pb.CreateGuildResponse{}, nil
 	})
 
-	if _, err := h(context.Background(), &pb.CreateGuildRequest{}); err != nil {
+	if _, err := h(guildSession(t, info.FullMethod, 42), &pb.CreateGuildRequest{}); err != nil {
 		t.Fatalf("无规则时必须放行: %v", err)
 	}
 	if !handlerCalled {
@@ -202,31 +216,57 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 	}
 }
 
-// TestSessionGateWiredIntoUnaryChain 证明会话准入**确实挂在**拦截器链上:带客户端会话调用
-// 内部方法 UpdateGuildScore 必须在 handler 之前被拒。与 killswitch 那条同理 —— 删掉
-// buildUnaryInterceptors 里 session 那一行,其余测试与联调全绿,客户端却能任意改公会积分。
+// TestSessionGateWiredIntoUnaryChain 证明入口准入**确实挂在**拦截器链上:带客户端会话调用
+// 内部方法 UpdateGuildScore(标了 CLIENT_RPC_SERVER_ONLY,不在生成的客户端方法集合里)必须在 handler 之前被拒。
+// 与 killswitch 那条同理 —— 删掉 buildUnaryInterceptors 里入口准入那一行,其余测试与联调全绿,客户端却能任意改公会积分。
 func TestSessionGateWiredIntoUnaryChain(t *testing.T) {
-	raw, err := proto.Marshal(&base.SessionDetails{SessionId: 1, PlayerId: 42})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := metadata.NewIncomingContext(context.Background(),
-		metadata.Pairs(session.MetadataKey, base64.StdEncoding.EncodeToString(raw)))
-
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_UpdateGuildScore_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), time.Second), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), time.Second, guildEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &pb.UpdateGuildScoreResponse{}, nil
 		})
 
-	_, err = h(ctx, &pb.UpdateGuildScoreRequest{GuildId: 1, Score: 999999})
+	_, err := h(guildSession(t, info.FullMethod, 42), &pb.UpdateGuildScoreRequest{GuildId: 1, Score: 999999})
 	if handlerCalled {
 		t.Fatal("客户端会话调用 UpdateGuildScore 走到了 handler:会话准入没有挂上拦截器链")
 	}
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("期望 PermissionDenied,得到 %v", err)
+	}
+}
+
+// TestOnlyGetPlayerGuildAcceptsCallsWithoutSession 钉住 docs/design/gate-online-identity.md §7.5 的关闭:
+// 不带会话的调用只剩只读的 GetPlayerGuild(mail 领附件在用)能进 handler;建帮、退帮、解散、改公告
+// 以前会按请求体身份执行,现在在入口就被 PermissionDenied。
+func TestOnlyGetPlayerGuildAcceptsCallsWithoutSession(t *testing.T) {
+	for _, tc := range []struct {
+		method string
+		allow  bool
+	}{
+		{pb.GuildService_GetPlayerGuild_FullMethodName, true},
+		{pb.GuildService_CreateGuild_FullMethodName, false},
+		{pb.GuildService_LeaveGuild_FullMethodName, false},
+		{pb.GuildService_DisbandGuild_FullMethodName, false},
+		{pb.GuildService_SetAnnouncement_FullMethodName, false},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			handlerCalled := false
+			info := &grpc.UnaryServerInfo{FullMethod: tc.method}
+			h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), time.Second, guildEntry(t)), info,
+				func(ctx context.Context, req any) (any, error) {
+					handlerCalled = true
+					return nil, nil
+				})
+			_, err := h(context.Background(), nil)
+			if handlerCalled != tc.allow {
+				t.Fatalf("无会话调用进 handler = %v,期望 %v", handlerCalled, tc.allow)
+			}
+			if !tc.allow && status.Code(err) != codes.PermissionDenied {
+				t.Fatalf("期望 PermissionDenied,得到 %v", err)
+			}
+		})
 	}
 }
 
@@ -239,15 +279,15 @@ func TestRequestBudgetInterceptorSetsDeadline(t *testing.T) {
 	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_GetGuild_FullMethodName}
 	var deadline time.Time
 	var hasDeadline bool
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), 300*time.Millisecond), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), 300*time.Millisecond, guildEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			deadline, hasDeadline = ctx.Deadline()
 			return &pb.GetGuildResponse{}, nil
 		})
 
-	// 不带会话 metadata:internal/session 规定无会话即内部调用,放行到 handler。
-	if _, err := h(context.Background(), &pb.GetGuildRequest{}); err != nil {
-		t.Fatalf("内部调用不该报错: %v", err)
+	// 带完整原身份的客户端请求:过了入口准入才到预算拦截器。
+	if _, err := h(guildSession(t, info.FullMethod, 42), &pb.GetGuildRequest{}); err != nil {
+		t.Fatalf("合法客户端请求不该报错: %v", err)
 	}
 	if !hasDeadline {
 		t.Fatal("handler 的 ctx 没有截止时间:预算拦截器没挂上")

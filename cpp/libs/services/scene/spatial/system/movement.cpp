@@ -1,6 +1,7 @@
 #include "movement.h"
 #include "actor/actor_net_id.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 
@@ -11,6 +12,7 @@
 #include "network/client_message_sender.h"
 #include "player/comp/afk_comp.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/comp/team_follow_comp.h"  // TeamFollowerComp:组队跟随中的队员位置由队形写,不积分
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:战斗在途不积分位移
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"  // Player:只有玩家实体才有客户端可发 TeleportS2C
@@ -70,8 +72,10 @@ void MovementSystem::Update(const double delta)
 	// cross-zone-readiness-audit.md §11.2(该文只有 §11 仍有效)。
 	// InBattleComp:回合制战斗在途不积分位移(进战时的残留速度会让玩家在战斗中
 	// 一路飘走,战后位置与客户端画面对不上)
+	// TeamFollowerComp:组队跟随中由服务器驱动的队员,位置每 tick 由 TeamFollowSystem 沿队长轨迹写入,
+	// Velocity 只是给观察者外推用的这一 tick 位移;再积分一次就走了两遍(team-follow-server-trail.md)。
 	auto view = tlsEcs.actorRegistry.view<Transform, Velocity>(
-		entt::exclude<AfkComp, PlayerFrozenComp, InBattleComp>);
+		entt::exclude<AfkComp, PlayerFrozenComp, InBattleComp, TeamFollowerComp>);
 	for (auto&& [entity, transform, velocity] : view.each())
 	{
 		if (velocity.x() == 0.0 && velocity.y() == 0.0 && velocity.z() == 0.0)
@@ -118,7 +122,7 @@ void MovementSystem::Update(const double delta)
 	}
 }
 
-void MovementSystem::BroadcastMove(const entt::entity entity)
+void MovementSystem::BroadcastMove(const entt::entity entity, const bool includeSelf)
 {
 	// 接收者 = 客户端正在显示我的观察者(AOI 反向索引中可见的那些):关注是单向的,
 	// 我是否看得见对方与此无关;网格范围外的显式关注者同样收到。没显示我的人(隐身、对方表满)
@@ -128,6 +132,15 @@ void MovementSystem::BroadcastMove(const entt::entity entity)
 	// 没有会话快照的实体(NPC 等)没有客户端可发;留在名单里只会让广播函数为每一个打一条 ERROR。
 	std::erase_if(observers, [](entt::entity observer)
 				  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(observer); });
+	// 本人:只在会话有效时发(断线保留中的会话已被置无效,发了也只会打一条"找不到会话")。
+	if (includeSelf && std::ranges::find(observers, entity) == observers.end())
+	{
+		if (const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(entity);
+			session != nullptr && session->gate_session_id() != 0 && session->gate_session_id() != kInvalidSessionId)
+		{
+			observers.push_back(entity);
+		}
+	}
 	if (observers.empty())
 	{
 		return;
@@ -247,4 +260,12 @@ bool MovementSystem::ShouldDropReportAfterTeleport(const entt::entity entity, co
 	// settle 指针在 remove 之后失效,上面的日志必须先打完。
 	tlsEcs.actorRegistry.remove<TeleportSettleComp>(entity);
 	return false;
+}
+
+void MovementSystem::CancelTeleportSettle(const entt::entity entity)
+{
+	if (tlsEcs.actorRegistry.valid(entity))
+	{
+		tlsEcs.actorRegistry.remove<TeleportSettleComp>(entity);
+	}
 }

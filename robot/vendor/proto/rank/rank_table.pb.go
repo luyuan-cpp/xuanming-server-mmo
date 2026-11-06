@@ -42,8 +42,11 @@ type RankBoardRecord struct {
 	CreatedMs       uint64                 `protobuf:"varint,15,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
 	SealedMs        uint64                 `protobuf:"varint,16,opt,name=sealed_ms,json=sealedMs,proto3" json:"sealed_ms,omitempty"`
 	DeletedMs       uint64                 `protobuf:"varint,17,opt,name=deleted_ms,json=deletedMs,proto3" json:"deleted_ms,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 本代榜上现有的实体数(2026-11-05,缺口清单第 18 条):Submit 新增实体时加、Remove 删行时减,都在榜行锁里改,
+	// 与 rank_score 同事务提交。读路径的总数直接取它,不再对全榜 COUNT。
+	Entries       uint64 `protobuf:"varint,18,opt,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RankBoardRecord) Reset() {
@@ -195,15 +198,25 @@ func (x *RankBoardRecord) GetDeletedMs() uint64 {
 	return 0
 }
 
+func (x *RankBoardRecord) GetEntries() uint64 {
+	if x != nil {
+		return x.Entries
+	}
+	return 0
+}
+
 type RankScoreRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BoardId       uint64                 `protobuf:"varint,1,opt,name=board_id,json=boardId,proto3" json:"board_id,omitempty"`
-	Generation    uint64                 `protobuf:"varint,2,opt,name=generation,proto3" json:"generation,omitempty"`
-	EntityId      uint64                 `protobuf:"varint,3,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
-	Score         int64                  `protobuf:"varint,4,opt,name=score,proto3" json:"score,omitempty"`
-	AchievedMs    uint64                 `protobuf:"varint,5,opt,name=achieved_ms,json=achievedMs,proto3" json:"achieved_ms,omitempty"`
-	SourceCursor  uint64                 `protobuf:"varint,6,opt,name=source_cursor,json=sourceCursor,proto3" json:"source_cursor,omitempty"`
-	ScoreVersion  uint64                 `protobuf:"varint,7,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"` // 最后写入这一行的批次版本,0 = 生产者不带版本。
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	BoardId      uint64                 `protobuf:"varint,1,opt,name=board_id,json=boardId,proto3" json:"board_id,omitempty"`
+	Generation   uint64                 `protobuf:"varint,2,opt,name=generation,proto3" json:"generation,omitempty"`
+	EntityId     uint64                 `protobuf:"varint,3,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	Score        int64                  `protobuf:"varint,4,opt,name=score,proto3" json:"score,omitempty"`
+	AchievedMs   uint64                 `protobuf:"varint,5,opt,name=achieved_ms,json=achievedMs,proto3" json:"achieved_ms,omitempty"`
+	SourceCursor uint64                 `protobuf:"varint,6,opt,name=source_cursor,json=sourceCursor,proto3" json:"source_cursor,omitempty"`
+	ScoreVersion uint64                 `protobuf:"varint,7,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"` // 最后写入这一行的批次版本,0 = 生产者不带版本。
+	// 名次越靠前越小的排序键:升序榜 = score,降序榜 = ^score(按位取反,即 -score-1,单调递减且覆盖整个 int64 不溢出)。
+	// 只由 go/rank 写(data.orderKey),与 score 同一条语句写入,不单独改。
+	OrderKey      int64 `protobuf:"varint,8,opt,name=order_key,json=orderKey,proto3" json:"order_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -283,6 +296,13 @@ func (x *RankScoreRecord) GetSourceCursor() uint64 {
 func (x *RankScoreRecord) GetScoreVersion() uint64 {
 	if x != nil {
 		return x.ScoreVersion
+	}
+	return 0
+}
+
+func (x *RankScoreRecord) GetOrderKey() int64 {
+	if x != nil {
+		return x.OrderKey
 	}
 	return 0
 }
@@ -566,20 +586,26 @@ func (x *RankSnapshotRecord) GetAchievedMs() uint64 {
 
 // 与seal及所有快照同事务插入。工作器只投MailAdmin，不直接发资产。
 type RankMailRewardRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RewardId      uint64                 `protobuf:"varint,1,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"`
-	SettlementId  uint64                 `protobuf:"varint,2,opt,name=settlement_id,json=settlementId,proto3" json:"settlement_id,omitempty"`
-	PlayerId      uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Rank          uint64                 `protobuf:"varint,4,opt,name=rank,proto3" json:"rank,omitempty"`
-	Attachments   []byte                 `protobuf:"bytes,5,opt,name=attachments,proto3" json:"attachments,omitempty"`
-	Status        uint32                 `protobuf:"varint,6,opt,name=status,proto3" json:"status,omitempty"`
-	MailId        uint64                 `protobuf:"varint,7,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
-	NextAttemptMs uint64                 `protobuf:"varint,8,opt,name=next_attempt_ms,json=nextAttemptMs,proto3" json:"next_attempt_ms,omitempty"`
-	LeaseUntilMs  uint64                 `protobuf:"varint,9,opt,name=lease_until_ms,json=leaseUntilMs,proto3" json:"lease_until_ms,omitempty"`
-	LeaseToken    uint64                 `protobuf:"varint,10,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
-	Attempts      uint32                 `protobuf:"varint,11,opt,name=attempts,proto3" json:"attempts,omitempty"`
-	CreatedMs     uint64                 `protobuf:"varint,12,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
-	UpdatedMs     uint64                 `protobuf:"varint,13,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	RewardId     uint64                 `protobuf:"varint,1,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"`
+	SettlementId uint64                 `protobuf:"varint,2,opt,name=settlement_id,json=settlementId,proto3" json:"settlement_id,omitempty"`
+	PlayerId     uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Rank         uint64                 `protobuf:"varint,4,opt,name=rank,proto3" json:"rank,omitempty"`
+	Attachments  []byte                 `protobuf:"bytes,5,opt,name=attachments,proto3" json:"attachments,omitempty"`
+	// 1 = 待投;2 = 已投(mail_id 非 0);3 = 放弃(终态:邮件明确拒收且已过期或尝试次数到顶,工作器不再投,
+	// 行原样保留供人工核对重投,见 docs/design/leaderboard-system.md「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」节)。
+	// 取值定义在 go/rank/internal/data/rewards.go。
+	Status        uint32 `protobuf:"varint,6,opt,name=status,proto3" json:"status,omitempty"`
+	MailId        uint64 `protobuf:"varint,7,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	NextAttemptMs uint64 `protobuf:"varint,8,opt,name=next_attempt_ms,json=nextAttemptMs,proto3" json:"next_attempt_ms,omitempty"`
+	LeaseUntilMs  uint64 `protobuf:"varint,9,opt,name=lease_until_ms,json=leaseUntilMs,proto3" json:"lease_until_ms,omitempty"`
+	LeaseToken    uint64 `protobuf:"varint,10,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	Attempts      uint32 `protobuf:"varint,11,opt,name=attempts,proto3" json:"attempts,omitempty"` // 已完成的投递尝试次数,含结果未知。
+	CreatedMs     uint64 `protobuf:"varint,12,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	UpdatedMs     uint64 `protobuf:"varint,13,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	// 奖励邮件的过期时刻,封榜时写定为 封榜时刻 + min(30 天, 邮件个人邮件最大有效期)。每次重投原样带上,
+	// 载荷摘要因此不变;邮件在过期之后对同一请求只会回原邮件或明确拒收,不会再新建。
+	ExpireMs      uint64 `protobuf:"varint,14,opt,name=expire_ms,json=expireMs,proto3" json:"expire_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -701,6 +727,13 @@ func (x *RankMailRewardRecord) GetCreatedMs() uint64 {
 func (x *RankMailRewardRecord) GetUpdatedMs() uint64 {
 	if x != nil {
 		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *RankMailRewardRecord) GetExpireMs() uint64 {
+	if x != nil {
+		return x.ExpireMs
 	}
 	return 0
 }
@@ -854,7 +887,7 @@ var File_proto_rank_rank_table_proto protoreflect.FileDescriptor
 
 const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/rank/rank_table.proto\x12\x06rankpb\x1a\x1bproto/db/proto_option.proto\"\xf4\x04\n" +
+	"\x1bproto/rank/rank_table.proto\x12\x06rankpb\x1a\x1bproto/db/proto_option.proto\"\x8e\x05\n" +
 	"\x0fRankBoardRecord\x12\x19\n" +
 	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1d\n" +
 	"\n" +
@@ -878,8 +911,9 @@ const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"created_ms\x18\x0f \x01(\x04R\tcreatedMs\x12\x1b\n" +
 	"\tsealed_ms\x18\x10 \x01(\x04R\bsealedMs\x12\x1d\n" +
 	"\n" +
-	"deleted_ms\x18\x11 \x01(\x04R\tdeletedMs:L\x8a\x92\xf4\x01\n" +
-	"rank_board\x92\x92\xf4\x01\bboard_id\xe2\x92\xf4\x01+board_type,scope,scope_id,period,generation\"\xd1\x02\n" +
+	"deleted_ms\x18\x11 \x01(\x04R\tdeletedMs\x12\x18\n" +
+	"\aentries\x18\x12 \x01(\x04R\aentries:L\x8a\x92\xf4\x01\n" +
+	"rank_board\x92\x92\xf4\x01\bboard_id\xe2\x92\xf4\x01+board_type,scope,scope_id,period,generation\"\xf2\x02\n" +
 	"\x0fRankScoreRecord\x12\x19\n" +
 	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1e\n" +
 	"\n" +
@@ -890,8 +924,9 @@ const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"\vachieved_ms\x18\x05 \x01(\x04R\n" +
 	"achievedMs\x12#\n" +
 	"\rsource_cursor\x18\x06 \x01(\x04R\fsourceCursor\x12#\n" +
-	"\rscore_version\x18\a \x01(\x04R\fscoreVersion:e\x8a\x92\xf4\x01\n" +
-	"rank_score\x92\x92\xf4\x01\x1dboard_id,generation,entity_idڒ\xf4\x01/board_id,generation,score,achieved_ms,entity_id\"\xcc\x02\n" +
+	"\rscore_version\x18\a \x01(\x04R\fscoreVersion\x12\x1b\n" +
+	"\torder_key\x18\b \x01(\x03R\borderKey:i\x8a\x92\xf4\x01\n" +
+	"rank_score\x92\x92\xf4\x01\x1dboard_id,generation,entity_idڒ\xf4\x013board_id,generation,order_key,achieved_ms,entity_id\"\xcc\x02\n" +
 	"\x16RankInputReceiptRecord\x12\x19\n" +
 	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1e\n" +
 	"\n" +
@@ -922,7 +957,7 @@ const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"\tentity_id\x18\x03 \x01(\x04R\bentityId\x12\x14\n" +
 	"\x05score\x18\x04 \x01(\x03R\x05score\x12\x1f\n" +
 	"\vachieved_ms\x18\x05 \x01(\x04R\n" +
-	"achievedMs:)\x8a\x92\xf4\x01\rrank_snapshot\x92\x92\xf4\x01\x12settlement_id,rank\"\x81\x04\n" +
+	"achievedMs:)\x8a\x92\xf4\x01\rrank_snapshot\x92\x92\xf4\x01\x12settlement_id,rank\"\x9e\x04\n" +
 	"\x14RankMailRewardRecord\x12\x1b\n" +
 	"\treward_id\x18\x01 \x01(\x04R\brewardId\x12#\n" +
 	"\rsettlement_id\x18\x02 \x01(\x04R\fsettlementId\x12\x1b\n" +
@@ -940,7 +975,8 @@ const file_proto_rank_rank_table_proto_rawDesc = "" +
 	"\n" +
 	"created_ms\x18\f \x01(\x04R\tcreatedMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\r \x01(\x04R\tupdatedMs:Z\x8a\x92\xf4\x01\x10rank_mail_reward\x92\x92\xf4\x01\treward_idڒ\xf4\x01\x16status,next_attempt_ms\xe2\x92\xf4\x01\x17settlement_id,player_id\"\xe7\x01\n" +
+	"updated_ms\x18\r \x01(\x04R\tupdatedMs\x12\x1b\n" +
+	"\texpire_ms\x18\x0e \x01(\x04R\bexpireMs:Z\x8a\x92\xf4\x01\x10rank_mail_reward\x92\x92\xf4\x01\treward_idڒ\xf4\x01\x16status,next_attempt_ms\xe2\x92\xf4\x01\x17settlement_id,player_id\"\xe7\x01\n" +
 	"\x12RankMutationRecord\x12!\n" +
 	"\frequest_hash\x18\x01 \x01(\tR\vrequestHash\x12\x19\n" +
 	"\bboard_id\x18\x02 \x01(\x04R\aboardId\x12\x1e\n" +

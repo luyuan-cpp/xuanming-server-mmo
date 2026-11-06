@@ -216,12 +216,12 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 	return finish(ratingOutcomeApplied), nil
 }
 
-// 回合打满改判平局的依据(指标 match_rating_round_cap_draw_total{mode,basis} 的 basis,封闭集合)。
+// 回合打满改判平局的依据(指标 match_rating_round_cap_draw_total{mode,basis} 的 basis,封闭集合):
+//   - roundCapBySurvivors:完整个人原件(settlement_format_version=1)证明 0 队还有能行动的单位。引擎只有回合打满
+//     这一条路会在 0 队没全灭时判 1 队胜,所以这是确定的「打满」,不用回合数猜;
+//   - roundCapByRoundLimit:没有个人原件的旧版结果,只能看回合数达到模板回合上限(catalog.RoundLimit,与引擎同一换算)。
 const (
-	// roundCapBySurvivors:完整个人原件(settlement_format_version=1)证明 0 队还有能行动的单位。引擎只有回合打满
-	// 这一条路会在 0 队没全灭时判 1 队胜,所以这是确定的「打满」,不用回合数猜。
-	roundCapBySurvivors = "survivors"
-	// roundCapByRoundLimit:没有个人原件的旧版结果,只能看回合数达到模板回合上限(catalog.RoundLimit,与引擎同一换算)。
+	roundCapBySurvivors  = "survivors"
 	roundCapByRoundLimit = "round_limit"
 )
 

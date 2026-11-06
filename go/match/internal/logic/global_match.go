@@ -14,12 +14,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"match/internal/authority"
-	"match/internal/catalog"
 	"match/internal/constants"
 	"match/internal/discovery"
 	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
-	"match/internal/poolowner"
 	"match/internal/svc"
 	battlepb "proto/battle"
 	pb "proto/match"
@@ -221,14 +219,10 @@ func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
 		logx.Error("全球匹配恢复查询失败")
 		return
 	}
-	// 已提交成局的恢复按 (模式, 模板) 与新成局同样分给负责副本，副本之间不再抢同一批 Pending；
-	// 成员表为空（etcd 不可用、本实例尚未注册时仍有其它成员则交给它们）时全部副本都恢复，退化为旧行为。
-	// 恢复的正确性只靠 AcquireWork 的工作租约与行锁，归属只是分工。
-	members, self := s.PoolMembers(), s.PoolMember()
+	// Pending 只回本副本负责的片(按 battle_id 分片,在 SQL 里过滤,见 authority/work_owner.go),副本之间不再抢同一批,
+	// 一个副本的积压也挡不住别的副本。恢复的正确性只靠 AcquireWork 的工作租约与行锁,归属只是分工。
 	for _, f := range pending {
-		if len(members) == 0 || poolowner.Owns(self, catalog.OwnerKey(pb.MatchMode(f.Mode), f.ConfigId), members) {
-			launchGlobalFormation(s, f)
-		}
+		launchGlobalFormation(s, f)
 	}
 }
 
@@ -382,12 +376,19 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 // 要有一条不起 TiDB、不起 Battle 的回归（global_destroy_test.go）。
 type formationDestroyAuthority interface {
 	CreateIntentPersisted(ctx context.Context, work *pb.MatchFormationRecord) (bool, error)
+	battleAdoptionRecorder
+}
+
+// battleAdoptionRecorder 是 tombstoneAndConfirmAborted 查到房间在时记采用版本、提交 state 4 要的能力。
+type battleAdoptionRecorder interface {
 	RecordBattleAdopted(ctx context.Context, work *pb.MatchFormationRecord, instance string, version uint32) error
 	Finish(ctx context.Context, work *pb.MatchFormationRecord, success bool) error
 }
 
 // globalDestroy 返回 true 表示原 operation 已确定不会在目标 Battle 上建房，调用方才可按发房前失败收尾。
 // 只是判定，不提交任何释放：释放与计数在 globalAbortPrepared。
+// true 有两种来源，不能混用：本代租约下没有 Create 原件（不问 Battle），或原件已持久且原实例回 ABORTED。
+// 只认第二种的调用方（提前 ABORT）直接调 tombstoneAndConfirmAborted，不经这里的短路。
 func globalDestroy(store formationDestroyAuthority, f *pb.MatchFormationRecord) bool {
 	check, stop := context.WithTimeout(context.Background(), 3*time.Second)
 	intentPersisted, err := store.CreateIntentPersisted(check, f)
@@ -403,6 +404,16 @@ func globalDestroy(store formationDestroyAuthority, f *pb.MatchFormationRecord) 
 		// 真正的释放仍是 globalAbortPrepared → Finish(false)，它在行锁内复核同一租约且仍无原件。
 		return true
 	}
+	return tombstoneAndConfirmAborted(store, f)
+}
+
+// tombstoneAndConfirmAborted 只问原执行实例、不看 SQL：向原 TargetInstanceId 发 DestroyBattle（原 operation，
+// reason=global_match_abort_if_absent），再查询同一 operation。Battle 在逻辑线程里对尚无房间的原操作立拒收墓碑、
+// 有房间则忽略，所以只有查到 ABORTED 且回显的实例就是原 TargetInstanceId 才返回 true：原实例上这份 Create 现在没建、
+// 墓碑保留期内也建不了。拨号或任一 RPC 失败、实例不符（Battle 空回包）、UNKNOWN、PRESENT 都返回 false。
+// PRESENT 且实例相符时按既有规则记采用版本，采用 1 则提交 state 4。2026-11-05 从 globalDestroy 拆出（评审修正）：
+// 提前 ABORT 的证据只能来自这里，不能借 globalDestroy「无原件」那条不问 Battle 的 true。
+func tombstoneAndConfirmAborted(store battleAdoptionRecorder, f *pb.MatchFormationRecord) bool {
 	conn, e := discovery.DialEndpoint(f.TargetEndpoint)
 	if e != nil {
 		return false
@@ -447,10 +458,11 @@ func CommitBattleOutcome(ctx context.Context, s *svc.ServiceContext, in *pb.Comm
 	decision, err := s.Authority.CommitBattleOutcome(ctx, in)
 	if err != nil {
 		if errors.Is(err, authority.ErrBattleOutcomeOriginal) {
-			logx.Error("metric=match_terminal_outcome_rejected reason=original_conflict")
+			// battle_id 与校验原因只进正文(2026-11-05):值班要据此定位是哪一局、哪条规则。
+			logx.Errorf("metric=match_terminal_outcome_rejected reason=original_conflict battle_id=%d: %v", in.GetBattleId(), err)
 			return nil, status.Error(codes.FailedPrecondition, "终局原件存在永久冲突")
 		}
-		logx.Error("metric=match_terminal_outcome_unconfirmed reason=storage_or_transport")
+		logx.Errorf("metric=match_terminal_outcome_unconfirmed reason=storage_or_transport battle_id=%d: %v", in.GetBattleId(), err)
 		return nil, status.Error(codes.Unavailable, "终局原提交尚未确认")
 	}
 	// 终局已落库,这场的观战数据不再需要。尽力而为,失败只记日志,不影响终局回执。
@@ -523,10 +535,14 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culp
 	if len(f.CreateRequest) != 0 {
 		// 已发房的runtime ABORTED也不能先释放原票；仅唯一SQL ABORT允许清原备战。
 		// UNKNOWN等原工作租约/固定deadline巡检收尾，COMPLETE仍等待个人APPLIED。
-		terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 3*time.Second)
-		decision, err := s.Authority.RecoverExpiredOutcome(terminalCtx, f)
+		// 2026-11-05:原执行实例能证明这份 Create 没建、以后也不会再建时,先争提前 ABORT,不等截止(global_no_room_abort.go)。
+		decision, err := abortProvablyNoRoom(s.Authority, f)
+		if err == nil && decision != pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
+			terminalCtx, terminalCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			decision, err = s.Authority.RecoverExpiredOutcome(terminalCtx, f)
+			terminalCancel()
+		}
 		s.HoldRelay(err)
-		terminalCancel()
 		if err == nil && decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
 			cancelPrepared(s, prepared, f.BattleId)
 		}

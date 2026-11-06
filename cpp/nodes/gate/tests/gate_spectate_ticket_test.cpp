@@ -8,6 +8,9 @@
 #include <cstdint>
 #include <string>
 
+#include "handler/event/authenticated_session_binding.h"
+#include "handler/event/scene_route_helper.h"
+#include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/gate/gate_spectate_ticket.pb.h"
 #include "security/token_security.h"
 #include "spectate/gate_spectate_ticket.h"
@@ -138,6 +141,52 @@ TEST(SpectateTicket, SessionWithoutBoundPlayerIsRejected)
 {
 	EXPECT_EQ(VerifySpectateTicket(kSecret, SignedTicket(), 0, kBattleId, kNowMs).verdict,
 			  TicketVerdict::kPlayerMismatch);
+}
+
+// 订阅只认经认证绑定的角色(观战第二轮评审 R2-GATE 一般-1),走真实的 Bind 与 LeaveGame 重置:
+// Bind 之后是本角色;LeaveGame 之后会话还留着旧角色号,但认证绑定已清,旧角色的凭证订不上;换角的 Bind 之后是新角色。
+TEST(SpectateSessionIdentity, LeaveGameClearsTheIdentityUntilTheNextBind)
+{
+	SessionInfo session;
+	session.incarnation = 9;
+	session.loginSucceeded = true;
+	EXPECT_EQ(gate_spectate::SpectateIdentityOf(session), 0u) << "刚连上,还没绑定";
+
+	contracts::kafka::BindSessionEvent bind;
+	bind.set_session_incarnation(9);
+	bind.set_authenticated_account("spectate-identity-account");
+	bind.set_owner_revision(7);
+	bind.set_player_id(kPlayerId);
+	bind.set_login_generation(1);
+	ASSERT_TRUE(gate_authenticated_session::Bind(session, bind));
+	gate_scene_route::ApplyLoginBinding(session, kPlayerId, /*sessionVersion=*/1, /*loginGeneration=*/1, /*enterGsType=*/0);
+	EXPECT_EQ(gate_spectate::SpectateIdentityOf(session), kPlayerId);
+	EXPECT_TRUE(VerifySpectateTicket(kSecret, SignedTicket(), gate_spectate::SpectateIdentityOf(session), kBattleId, kNowMs).ok());
+
+	gate_scene_route::ResetSceneRoute(session);
+	EXPECT_EQ(session.playerId, kPlayerId) << "LeaveGame 之后会话还留着旧角色号";
+	EXPECT_EQ(gate_spectate::SpectateIdentityOf(session), 0u);
+	EXPECT_EQ(VerifySpectateTicket(kSecret, SignedTicket(), gate_spectate::SpectateIdentityOf(session), kBattleId, kNowMs).verdict,
+			  TicketVerdict::kPlayerMismatch)
+		<< "旧角色的凭证订不上";
+
+	constexpr uint64_t kNextRole = kPlayerId + 1;
+	bind.set_player_id(kNextRole);
+	bind.set_login_generation(2);
+	ASSERT_TRUE(gate_authenticated_session::Bind(session, bind));
+	gate_scene_route::ApplyLoginBinding(session, kNextRole, /*sessionVersion=*/2, /*loginGeneration=*/2, /*enterGsType=*/0);
+	EXPECT_EQ(gate_spectate::SpectateIdentityOf(session), kNextRole);
+	EXPECT_EQ(VerifySpectateTicket(kSecret, SignedTicket(), gate_spectate::SpectateIdentityOf(session), kBattleId, kNowMs).verdict,
+			  TicketVerdict::kPlayerMismatch)
+		<< "换角之后旧角色的凭证同样订不上";
+}
+
+// 只有路由写进会话的角色(没有被接受的 Bind)不算订阅身份:fail-closed。
+TEST(SpectateSessionIdentity, RouteOnlyPlayerIsNotASubscriber)
+{
+	SessionInfo session;
+	session.playerId = kPlayerId;
+	EXPECT_EQ(gate_spectate::SpectateIdentityOf(session), 0u);
 }
 
 TEST(SpectateTicket, TicketIsBoundToItsBattle)

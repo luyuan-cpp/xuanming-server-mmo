@@ -28,19 +28,18 @@ service PlayerStore {
 // 分行只按「大小 × 变化频率 × 是否一起变」分,是性能决定;一致性由「一次存盘的所有脏行同事务、同一个整笔序号」保证,
 // 与分行无关(规格 §1.1)。所以 I3 这类「必须同一次提交」的不变量不要求同一行。
 //
-// 1、2 是 2026-11-05 退役的 HOT、ASSET:字段拆到了 CHARACTER、WALLET、BAG、LOCATION、PROFILE。退役号不复用,
-// 旧库残留的 1、2 行按未知 kind 拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
+// 1、2 是 2026-11-05 退役的 HOT、ASSET:字段拆到了 CHARACTER、WALLET、BAG、LOCATION、PROFILE。
+// 5 是随 player_database_1 一起删掉的 LEGACY1(规格 §1.2)。退役号不复用,
+// 旧库残留的 1、2、5 行按未知 kind 拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
 // 新加一行取下一个空闲号,不回填空号。
 enum PlayerStoreKind {
-  reserved 1, 2;
-  reserved "PLAYER_STORE_KIND_HOT", "PLAYER_STORE_KIND_ASSET";
+  reserved 1, 2, 5;
+  reserved "PLAYER_STORE_KIND_HOT", "PLAYER_STORE_KIND_ASSET", "PLAYER_STORE_KIND_LEGACY1";
   PLAYER_STORE_KIND_OWNER = 0;    // 写权行,payload 恒为空
   // 技能、加点、宠物、任务。中等大小,随进度变
   PLAYER_STORE_KIND_GROWTH = 3 [(OptionPersistRowSavePolicy) = PERSIST_ROW_SAVE_PERIODIC];
   // 职业、注册时间、名字副本、外观、性别、近期战斗结果、物品获取封禁、压测探针。都很小,大多建角后不变
   PLAYER_STORE_KIND_PROFILE = 4 [(OptionPersistRowSavePolicy) = PERSIST_ROW_SAVE_PERIODIC];
-  // player_database_1 整个消息,随 player_database_1 一起删除(规格 §1.1「第二批」)
-  PLAYER_STORE_KIND_LEGACY1 = 5 [(OptionPersistRowSavePolicy) = PERSIST_ROW_SAVE_PERIODIC];
   // 等级、基础属性与当前血蓝。小,战斗和升级时变
   PLAYER_STORE_KIND_CHARACTER = 6 [(OptionPersistRowSavePolicy) = PERSIST_ROW_SAVE_PERIODIC];
   // 货币、资产通道账本、收件箱账本、神秘商人限购。小,任何经济行为都会改它

@@ -157,8 +157,13 @@ struct BagProfile
     // 固定包留 0:它们不经注册表,BagType 就是身份。
     uint32_t id{kBagProfileUnspecified};
 
-    // 人物背包 / 仓库:自由格 + 什么都收 + 满了就拒。
-    // 两者只有容量不同,所以共用一个工厂 —— 免得多一个只差一个数字的函数。
+    // 人物背包 / 仓库 / 临时格:自由格 + 什么都收 + 满了就拒。
+    // 三者只有容量不同,所以共用一个工厂 —— 免得多一个只差一个数字的函数。
+    //
+    // 临时格 2026-11-05 之前配的是先进先出淘汰(EvictOldestFirst),满 200 件后新掉落会销毁最早进包的那件 ——
+    // 被挤掉的东西没有任何去处,就是真丢(审计 cpp-economy#2)。现在满了同样就拒:入账方在任何副作用之前被拒,
+    // 由来源保留(战斗结算整笔延后),玩家经 RetrieveTemporaryItems 取回腾位后再补发。
+    // 见 docs/design/bag-rule-policy-layering.md §6.6。
     static BagProfile Flat(std::size_t capacity)
     {
         return BagProfile{std::make_unique<FlatLayout>(capacity),
@@ -183,17 +188,8 @@ struct BagProfile
                           std::make_unique<RejectWhenFull>()};
     }
 
-    // 临时格:自由格 + 什么都收 + **先进先出**。
-    //
-    // 这个包是掉落溢出的缓冲,语义本来就是"新的进来、旧的顶出去",而不是
-    // "满了就捡不起来"。它是目前唯一一个会挤掉存量物品的包 —— 被挤掉的实例
-    // 由 BagService::AddItem 落 LogItemDestroy,绝不无声消失。
-    static BagProfile Temporary(std::size_t capacity)
-    {
-        return BagProfile{std::make_unique<FlatLayout>(capacity),
-                          std::make_unique<AcceptAll>(),
-                          std::make_unique<EvictOldestFirst>()};
-    }
+    // (2026-11-05 删除了 Temporary() 工厂:临时格改用上面的 Flat,见那里的说明。今天没有任何生产包配
+    //  会淘汰的策略;要给哪个包配淘汰,先得给被挤掉的东西一个去处,否则就是丢数据。)
 
     // 节日 / 活动包:自由格 + **只收名单上的道具** + 满了就拒。
     //
@@ -238,8 +234,9 @@ public:
 
     // ── 淘汰策略 ──────────────────────────────────────────────────────
     // 默认 RejectWhenFull,即拆分前的唯一行为(那句 `// TODO: overflow to
-    // temp bag or mail` 底下直接返回"背包满了")。
-    // 换成 EvictOldestFirst(临时格 FIFO)只需在这里换一个对象。
+    // temp bag or mail` 底下直接返回"背包满了")。四个固定包今天都是它。
+    // 换成 EvictOldestFirst(先进先出)只需在这里换一个对象 —— 但被挤掉的实例没有去处时那就是丢数据,
+    // 临时格因此在 2026-11-05 改回满即拒(BagProfile::Flat 的说明)。
     void SetEviction(std::unique_ptr<IEvictionPolicy> eviction);
     [[nodiscard]] const IEvictionPolicy &Eviction() const { return *eviction_; }
 
@@ -291,13 +288,19 @@ public:
     // CheckQuantities 映射成 tip 码,静默:kSuccess / kFeatureUnavailable(版本错位)/ kBagInsufficientItems。
     [[nodiscard]] uint32_t CheckItemsAvailable(const ItemCountMap &requiredItems) const;
     // evictedOut(可为 nullptr)按退役顺序收集**本次入包为了腾位而销毁的实例**
-    // (销毁前抓拍 guid/config/size)。今天只有临时格(EvictOldestFirst)会非空。
+    // (销毁前抓拍 guid/config/size)。只有配了会淘汰的策略(EvictOldestFirst)的包才会非空;
+    // 2026-11-05 起四个固定包都是 RejectWhenFull,生产路径上恒为空。
     // 与 MergeAndCompact 的 destroyedOut 是同一个形状、同一个理由:被挤掉的
     // item_uuid 是 transaction_log 做外挂回收的关联键,不留痕追溯链就断了。
     // 生产代码请走 BagService::AddItem / AddItems,那里会把回执落成流水。
     // 先完成最终空间规划及全部发号，再发布整批实例和布局；失败时所有输出保持原值。
     // writtenByEntryOut 与 map 的配置升序或 vector 的输入顺序一一对应，供服务层提交后落流水。
     // 候选复制的时间与临时内存随本包实例和布局大小增长，换取失败时不依赖反向回滚。
+    // 日志契约(2026-11-06 定):放不下回 kBagItemNotStacked,**不打任何日志、不打调用栈** —— 背包满是玩家自己能造出来的
+    // 业务拒绝,不是故障。要日志的入口自己打:BagService 的入包入口经 RETURN_ON_ERROR 打一条带错误码的 WARN;
+    // 战斗结算两包都满时按玩家限频打 metric=bag_grant_overflow_rejected。**新接的入口别指望这里替你记**。
+    // 真正的故障照打 ERROR,在各自的分支里:PlanEviction(要淘汰却没有回执、淘汰规划不收敛)、PlanInstances(配置 / 准入)、
+    // CanReserve(具名槽按部位不够)、落位失败(规划说放得下、布局却落不了位,ERROR + 调用栈)、发号失败。
     uint32_t AddItems(const ItemCountMap &itemsToAdd,
                       std::vector<DestroyedInstance> *evictedOut = nullptr,
                       std::vector<GuidVector> *writtenByEntryOut = nullptr,
@@ -435,6 +438,32 @@ public:
     // (空槽返回 kInvalidGuid;已有的公开只读接口,没有另加一个)。
     // 自由格布局的槽位没有部位语义,恒返回空;equipKind == 0(不是装备)同样返回空。
     [[nodiscard]] std::vector<uint32_t> SlotsAcceptingKind(uint32_t equipKind) const;
+
+    // ── 包间批量搬运(同一玩家名下的两个包;全或无)──────────────────────────
+    //
+    // 把本包里 guids 这几件按给定顺序搬进 target。搬的是**整份实例**,不是数量,所以它
+    // **不铸号、不掷属性、不触发淘汰、不改任何一种物品的总数**:
+    //   * 不能并堆的实例(不可叠加、带实例数据、带更新版本字段 —— ItemStore::IsIndependentInstance)
+    //     原样搬过去:guid、equip 段、未知字段一个都不改,在 target 里另占一格;
+    //   * 可叠加的实例先灌进 target 里同 config 的未满堆(与入包同一套 PlanStackIntoExistingStacks),
+    //     灌不完的余量仍用**原来的 guid** 在 target 里另占一格;整堆都灌进去的,原 guid 退役,
+    //     进 absorbedOut(size 恒为 0:数量没有消失,并进了别的堆 —— 与 MergeAndCompact 的回执同口径)。
+    // acquire_seq 清 0 由 target 重新盖章(同 PutInstance:入包序号是本包内的先后)。
+    // target 的准入策略照常问(搬运不是绕过「这个包收不收」的后门)。
+    //
+    // 两个包都在候选上改:源包摘除、target 并堆与落位全部成功才同时发布;任何失败两包都不动、
+    // absorbedOut 不变。候选复制的时间与内存随两个包的实例数增长(临时格 ≤ 200、人物背包 ≤ 100)。
+    // 不写流水 —— 编排层(BagService::RetrieveFromTemporary)负责。
+    //
+    // 返回:
+    //   kBagAddItemInvalidParam      guids 为空 / 有重复 / target 就是本包 / target 的准入不收其中某件
+    //   kBagDeleteItemFindGuid       有一件不在本包
+    //   kBagDeleteItemAlreadyHasGuid target 里已有同 guid 的实例
+    //   kInvalidTableId / kInvalidTableData  config 查不到表 / max_stack_size == 0
+    //   kBagItemDeletionSizeMismatch 实例 size == 0,或不可叠加实例的 size != 1(数据损坏,fail-closed)
+    //   kBagAddItemBagFull           target 摆不下这一批(玩家可触发的常规拒绝,不打调用栈)
+    uint32_t MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
+                             std::vector<DestroyedInstance> *absorbedOut = nullptr);
 
     // destroyedOut(可为 nullptr)按销毁顺序收集**本次整理销毁掉的实例**(销毁前
     // 抓拍 guid/config/size)。整理会退役掉一批 item_uuid,而那是 transaction_log

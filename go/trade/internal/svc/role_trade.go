@@ -23,31 +23,33 @@ type RmbIdentity struct {
 	Directory *accountdirectory.TradeClient
 }
 
-func (a *RmbIdentity) Resolve(ctx context.Context, in *base.SessionDetails, player uint64) (*dspb.AccountRoleOwnership, error) {
-	if a == nil || a.Directory == nil || in.GetPlayerId() == 0 || in.GetOwnerRevision() == 0 {
+// Resolve 用验签原件里的原账号、原修订与角色核角色目录;player 非 0 且不是本角色时,再核目标角色仍归同一账号。
+func (a *RmbIdentity) Resolve(ctx context.Context, player uint64) (*dspb.AccountRoleOwnership, error) {
+	if a == nil || a.Directory == nil {
 		return nil, commerce.ErrInvalid
 	}
-	account, err := roleidentity.SessionAccount(ctx, in)
+	original, err := roleidentity.SessionOwnership(ctx)
 	if err != nil {
-		// 未签名、与原件不符或缺原账号是请求本身无效(同上面的缺会话),不是服务端故障:
+		// 未签名、缺会话或缺原账号 / 原修订是请求本身无效,不是服务端故障:
 		// 回故障 tip 会被计成故障并让 RootAdmission 把排空证明打成 Hold。
 		return nil, commerce.ErrInvalid
 	}
-	me, err := a.Directory.Lookup(ctx, in.PlayerId)
+	self := original.Role.GetPlayerId()
+	me, err := a.Directory.Lookup(ctx, self)
 	if err != nil {
 		return nil, err
 	}
-	if me.Account != account || me.OwnerRevision != in.OwnerRevision {
+	if me.Account != original.Account || me.OwnerRevision != original.OwnerRevision {
 		return nil, commerce.ErrConflict
 	}
-	if player == 0 || player == in.PlayerId {
+	if player == 0 || player == self {
 		return me, nil
 	}
 	target, err := a.Directory.Lookup(ctx, player)
 	if err != nil {
 		return nil, err
 	}
-	if target.Account != account {
+	if target.Account != original.Account {
 		return nil, commerce.ErrConflict
 	}
 	return target, nil

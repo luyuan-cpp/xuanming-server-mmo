@@ -8,6 +8,7 @@
 #include "player/system/role_admission_system.h"
 #include "player/system/player_scene.h"
 #include "world/scene_lifecycle.h"
+#include "world/scene_placement_fence.h"
 #include "thread_context/ecs_context.h"
 #include "muduo/base/Logging.h"
 #include "battle/system/player_battle.h"
@@ -29,7 +30,8 @@ boost::cobalt::task<void> CreateSceneWithPermit(muduo::net::EventLoop& loop,
                 [done](Permit value) { done(std::make_unique<Permit>(std::move(value))); });
             return true;
         }, nullptr);
-    if (!permit || call->ServerDraining())
+    if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none ||
+        call->ServerDraining())
     {
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
         co_return;
@@ -61,9 +63,22 @@ void SceneNodeGrpcImpl::HandleCreateScene(const ::CreateSceneRequest* request,
         return;
     }
 
+    // 放置代次(docs/design/world-channel-placement-generation.md):本节点已按 >= 这个代次拆过这个场景时,
+    // 这是一次晚到的旧建场景,不建、不复用,回空应答,scene_manager 按建场景失败处理。判在去重之前:过期的建场景不走
+    // ReuseExistingScene,不重算归属对账的宽限期。Agones 许可在本函数之前的协程里等,等待期间到达的拆场景已经记下。
+    if (auto& fence = SceneLifecycle::PlacementFence();
+        !fence.AdmitCreate(request->scene_id(), request->placement_generation()))
+    {
+        LOG_WARN << "[gRPC] CreateScene: scene_id=" << request->scene_id()
+                 << " placement_generation=" << request->placement_generation()
+                 << " is stale (destroyed through " << fence.Find(request->scene_id())->destroyedThrough << "), rejected";
+        return;
+    }
+
     if (const SceneEntity existing = PlayerSceneSystem::FindSceneById(request->scene_id()); existing != entt::null)
     {
-        response->mutable_scene_info()->CopyFrom(tlsEcs.sceneRegistry.get<SceneInfoComp>(existing));
+        // 命中已有实体可能是 scene_manager「先建后改」迁回本节点的预建:归属核对从头算宽限期(见 ReuseExistingScene)。
+        response->mutable_scene_info()->CopyFrom(SceneLifecycle::ReuseExistingScene(existing));
         LOG_INFO << "[gRPC] CreateScene: scene_id=" << request->scene_id()
                  << " already exists (entity=" << entt::to_integral(existing) << "), returning existing";
         return;
@@ -82,6 +97,22 @@ void SceneNodeGrpcImpl::HandleDestroyScene(const ::DestroySceneRequest* request)
 {
     ///<<< BEGIN WRITING YOUR CODE
     const auto sceneId = request->scene_id();
+    if (sceneId == 0)
+    {
+        LOG_ERROR << "[gRPC] DestroyScene: scene_id is 0";
+        return;
+    }
+
+    // 放置代次:本节点已按更新的代次建过这个场景时,这是一次晚到的旧拆除(之后有过一次合法的放置),忽略、照常回 OK。
+    // 代次 0(世界频道的退役拆除、副本与镜像)无条件执行。判在查找实体之前:实体不在也要记下这次拆除,挡住同一次尝试
+    // 晚到的建场景。
+    if (auto& fence = SceneLifecycle::PlacementFence(); !fence.AdmitDestroy(sceneId, request->placement_generation()))
+    {
+        LOG_WARN << "[gRPC] DestroyScene: scene_id=" << sceneId
+                 << " placement_generation=" << request->placement_generation()
+                 << " is older than the newest create " << fence.Find(sceneId)->newestCreate << ", ignored";
+        return;
+    }
 
     const SceneEntity targetEntity = PlayerSceneSystem::FindSceneById(sceneId);
 
@@ -200,8 +231,8 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
     // Agones 高密度模式:进程必须先被 Allocate,才能创建第一个场景。
     // POST /allocate 在 lifecycle worker 线程,结果经 queueInLoop 回 loop,不阻塞逻辑帧;等待上限
     // LifecycleOptions::allocateWaitTimeout。失败一律 fail-closed:不建实体,回非 OK,让 SceneManager 回滚重试,
-    // 而不是留下一个 Agones 不知道的房间。createPermit 是回调参数,活到 Proceed() 返回(Handle* 同步建完场景),
-    // 在途创建才能阻止提前回到 Ready。回调只捕获 call,不捕获 this(AGENTS §11.7)。
+    // 许可移入协程的自有 RAII 对象，活到 Proceed() 返回(Handle* 同步建完场景)，
+    // 在途创建才能阻止提前回到 Ready。任务由服务对象持有，传输回调不捕获 this(AGENTS §11.7)。
     //
     // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
     if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "场景创建许可"))

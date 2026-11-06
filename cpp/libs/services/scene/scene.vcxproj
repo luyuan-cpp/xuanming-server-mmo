@@ -22,6 +22,8 @@
     <ClInclude Include="actor\actor_net_id.h" />
     <ClInclude Include="battle\system\battle_lock_reply_shape.h" />
     <ClInclude Include="battle\system\battle_lock_rules.h" />
+    <ClInclude Include="battle\system\battle_freeze_hold_rules.h" />
+    <ClInclude Include="battle\system\battle_terminal_query.h" />
     <ClInclude Include="actor\action_state\constants\actor_effect_state.h" />
     <ClInclude Include="actor\action_state\constants\actor_state.h" />
     <ClInclude Include="actor\action_state\system\actor_action_state.h" />
@@ -61,6 +63,7 @@
     <ClInclude Include="player\system\afk.h" />
     <ClInclude Include="player\system\asset_op_auth.h" />
     <ClInclude Include="player\system\asset_op_ledger.h" />
+    <ClInclude Include="player\system\client_request_ledger.h" />
     <ClInclude Include="player\system\asset_op_system.h" />
     <ClInclude Include="player\comp\player_inbox_runtime_comp.h" />
     <ClInclude Include="player\system\player_mutability.h" />
@@ -87,6 +90,10 @@
     <ClInclude Include="player\system\player_scene.h" />
     <ClInclude Include="player\system\player_team.h" />
     <ClInclude Include="player\system\player_team_follow_scope.h" />
+    <ClInclude Include="player\comp\team_follow_comp.h" />
+    <ClInclude Include="player\system\team_follow_formation.h" />
+    <ClInclude Include="player\system\team_follow_system.h" />
+    <ClInclude Include="player\system\afk_hosting.h" />
     <ClInclude Include="player\system\player_landing.h" />
     <ClInclude Include="player\system\player_skill.h" />
     <ClInclude Include="player\system\player_attribute.h" />
@@ -117,6 +124,9 @@
     <ClInclude Include="spatial\system\scene_spawn.h" />
     <ClInclude Include="spatial\system\view.h" />
     <ClInclude Include="world\scene_lifecycle.h" />
+    <ClInclude Include="world\scene_ownership_reconciler.h" />
+    <ClInclude Include="world\scene_ownership_rules.h" />
+    <ClInclude Include="world\scene_placement_fence.h" />
     <ClInclude Include="world\world.h" />
   </ItemGroup>
   <ItemGroup>
@@ -145,6 +155,7 @@
     <ClCompile Include="player\system\asset_op_auth.cpp" />
     <ClCompile Include="player\system\asset_op_ledger.cpp" />
     <ClCompile Include="player\system\asset_op_system.cpp" />
+    <ClCompile Include="player\system\client_request_ledger.cpp" />
     <ClCompile Include="player\system\player_inbox_rules.cpp" />
     <ClCompile Include="player\system\player_inbox_registry.cpp" />
     <ClCompile Include="player\system\gm_sanction_inbox_executor.cpp" />
@@ -152,8 +163,8 @@
     <ClCompile Include="player\system\player_store_client.cpp" />
     <ClCompile Include="player\system\player_store_projection.cpp" />
     <ClCompile Include="player\system\player_database_loader.cpp" />
-    <ClCompile Include="player\system\player_database_1_loader.cpp" />
     <ClCompile Include="battle\system\player_battle.cpp" />
+    <ClCompile Include="battle\system\battle_terminal_query.cpp" />
     <ClCompile Include="player\system\player_lifecycle.cpp" />
     <ClCompile Include="player\system\player_ownership_metrics.cpp" />
     <ClCompile Include="player\system\player_save_metrics.cpp" />
@@ -161,6 +172,9 @@
     <ClCompile Include="player\system\player_scene.cpp" />
     <ClCompile Include="player\system\player_team.cpp" />
     <ClCompile Include="player\system\player_team_aoi.cpp" />
+    <ClCompile Include="player\system\team_follow_formation.cpp" />
+    <ClCompile Include="player\system\team_follow_system.cpp" />
+    <ClCompile Include="player\system\afk_hosting.cpp" />
     <ClCompile Include="player\system\player_landing.cpp" />
     <ClCompile Include="player\system\player_skill.cpp" />
     <ClCompile Include="player\system\player_attribute.cpp" />
@@ -180,6 +194,7 @@
     <ClCompile Include="spatial\system\scene_spawn.cpp" />
     <ClCompile Include="spatial\system\view.cpp" />
     <ClCompile Include="world\scene_lifecycle.cpp" />
+    <ClCompile Include="world\scene_ownership_reconciler.cpp" />
     <ClCompile Include="world\world.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

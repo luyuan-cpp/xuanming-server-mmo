@@ -278,26 +278,32 @@ TEST(AgonesLifecycleTest, ReadyRetriesWithBoundedBackoffWhenSidecarIsLate)
 	EXPECT_EQ(4, h.sidecar->CallCount("/ready")); // 3 次失败 + 1 次成功
 }
 
-// Ready 重试有上限:超过上限必须停在 Starting 并继续 fail-closed,
-// 不能"到期后假设成功"。
-TEST(AgonesLifecycleTest, ReadyGivesUpAfterMaxAttemptsAndKeepsFailingClosed)
+// Ready 的快速重试用完之后不能放弃:sidecar 晚于快速阶段才就绪时,放弃就让实例永远停在 Starting、
+// 永远不可分配(docs/design/infra-reconnect-overview.md §4 R10)。超过 readyMaxAttempts 之后继续重试,
+// 期间必须停在 Starting 并继续 fail-closed,不能"到期后假设成功";sidecar 一恢复就进入 Ready。
+TEST(AgonesLifecycleTest, ReadyKeepsRetryingPastMaxAttemptsAndStaysFailClosedUntilSidecarRecovers)
 {
 	auto options = FastOptions();
 	options.readyMaxAttempts = 3;
 	options.allocateWaitTimeout = 100ms;
 
+	// 100 次失败 × 退避封顶 10ms ≈ 1s:足够在恢复之前核对 fail-closed。
+	constexpr int kFailures = 100;
 	Harness h;
-	h.sidecar->FailAlways("/ready");
+	h.sidecar->FailFirst("/ready", kFailures);
 	h.Start(options);
 
-	EXPECT_TRUE(WaitUntil([&] { return h.sidecar->CallCount("/ready") >= 3; }, 3000ms));
-	std::this_thread::sleep_for(50ms);
-	EXPECT_EQ(3, h.sidecar->CallCount("/ready"));
+	// 快速重试的上限过了还在试。
+	EXPECT_TRUE(WaitUntil([&] { return h.sidecar->CallCount("/ready") > options.readyMaxAttempts + 1; }, 3000ms));
 	EXPECT_EQ(agones::LifecycleState::Starting, h.lifecycle.State());
 
 	// 关键:没 Ready 成功就绝不允许创建房间。
 	EXPECT_FALSE(h.lifecycle.EnsureAllocatedBlocking());
 	EXPECT_EQ(0, h.sidecar->CallCount("/allocate"));
+
+	// sidecar 恢复后进入 Ready。
+	ASSERT_TRUE(h.lifecycle.WaitForState(agones::LifecycleState::Ready, 5000ms));
+	EXPECT_EQ(kFailures + 1, h.sidecar->CallCount("/ready")); // 全部失败 + 1 次成功
 }
 
 // 第一个 Scene 之前必须 Allocate,而且只 Allocate 一次。

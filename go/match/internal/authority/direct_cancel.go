@@ -70,6 +70,7 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 	}
 	battle, cancelled := current.BattleId, current.Cancelled
 	out := &pb.CancelActivityBattleResponse{BattleId: battle}
+	abortWritten := false // 本事务写下了截止 ABORT(而不是回放既有终局),提交成功后计数
 	if battle == 0 {
 		if start != nil {
 			err = closeDirectPendingTx(ctx, tx, current, start.Tickets)
@@ -92,7 +93,7 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 		if start == nil || start.Formation.BattleId != formation.BattleId || start.Formation.OperationId != formation.OperationId {
 			return nil, false, ErrDirectConflict
 		}
-		out.TerminalDecision, err = s.abortTerminalTx(ctx, tx, formation)
+		out.TerminalDecision, abortWritten, err = s.abortTerminalTx(ctx, tx, formation)
 		if err != nil {
 			return nil, false, err
 		}
@@ -110,6 +111,9 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, false, err
+	}
+	if abortWritten {
+		observeTerminalAbort(battle, terminalAbortCancel)
 	}
 	return out, false, nil
 }

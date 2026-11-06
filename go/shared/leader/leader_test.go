@@ -30,6 +30,9 @@ type fakeStore struct {
 	lastRenewOKAt time.Time
 	// renewFailsSinceOK 是最近一次成功续期之后报错的续期次数,成功即清零;释放脚本不计。
 	renewFailsSinceOK int
+	// replaySetNX 为 true 时下一次 SetNX 写入成功却回 false(一次性):模拟首发已写入、回包丢失后客户端自动重发,
+	// 重发看到「已存在」。
+	replaySetNX bool
 }
 
 func (s *fakeStore) SetNX(_ context.Context, _ string, value string, ttl time.Duration) (bool, error) {
@@ -37,6 +40,12 @@ func (s *fakeStore) SetNX(_ context.Context, _ string, value string, ttl time.Du
 	defer s.mu.Unlock()
 	if s.failEval {
 		return false, context.DeadlineExceeded
+	}
+	if s.replaySetNX {
+		s.replaySetNX = false
+		s.val = value
+		s.expireAt = time.Now().Add(ttl)
+		return false, nil
 	}
 	if s.val != "" && time.Now().Before(s.expireAt) {
 		return false, nil
@@ -114,6 +123,11 @@ func (s *fakeStore) EvalInt(_ context.Context, script string, _ []string, args .
 		}
 		s.val = ""
 		return 1, nil
+	case ownedScript:
+		if expired || s.val != args[0] {
+			return 0, nil
+		}
+		return 1, nil
 	}
 	return 0, nil
 }
@@ -177,6 +191,41 @@ func TestElectorBecomesLeaderAndReleasesOnCtxCancel(t *testing.T) {
 	if h := store.holder(); h != "" {
 		t.Fatalf("退出时应释放锁,实际属主 %q", h)
 	}
+}
+
+// 竞选的 SETNX 首发已经写入、回包丢了,客户端自动重发时回「已存在」。锁里其实是自己这一次的值,
+// 必须认出来并当选,不能让锁空占到 TTL 过期(docs/design/infra-reconnect-overview.md §4 R8)。
+// TTL 取 1 小时:没修时要等一个竞选间隔(20 分钟)才再试,这里 3s 内当不上就失败。
+func TestCampaignRecognizesOwnWriteAfterReplayedSetNX(t *testing.T) {
+	store := &fakeStore{replaySetNX: true}
+	e := New(store, "test:lock", Options{TTL: time.Hour, ID: "a"})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { e.Run(ctx, nil); close(done) }()
+
+	eventually(t, "认出自己写进去的锁并当选", e.IsLeader)
+	if h := store.holder(); !strings.HasPrefix(h, "a:") {
+		t.Fatalf("锁属主应为 a:*,实际 %q", h)
+	}
+	cancel()
+	<-done
+}
+
+// 回「已存在」且锁确实是别人的:不能误认成自己的。
+func TestCampaignDoesNotAdoptSomeoneElsesLock(t *testing.T) {
+	store := &fakeStore{}
+	store.steal("other:token", time.Hour)
+	e := New(store, "test:lock", Options{TTL: testTTL, ID: "a"})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { e.Run(ctx, nil); close(done) }()
+
+	time.Sleep(3 * testTTL)
+	if e.IsLeader() {
+		t.Fatal("锁属于别人时不能当选")
+	}
+	cancel()
+	<-done
 }
 
 func TestMutualExclusionAndTakeover(t *testing.T) {

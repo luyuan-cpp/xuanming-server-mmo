@@ -40,7 +40,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
 #include <thread_context/ecs_context.h>
-// 以下几个头只为 SendSceneInfo 的分线目录转发:zone Redis 的异步 GET(tlsRedis)、hiredis 应答类型
+// 以下几个头只为 SendSceneInfo 的分线目录转发:场景控制域 Redis 的异步 GET(tlsSceneControlRedis)、hiredis 应答类型
 // (redisReply / REDIS_REPLY_* / REDIS_OK)、长度保护与命令拼接。
 // hiredis.h 已被 redis_manager.h 经 muduo 的 Hiredis.h 带进来,这里显式再包含一次,
 // 是为了不靠传递包含拿这些符号(本库 player_team.h / player_battle.cpp 同样显式包含)。
@@ -144,9 +144,11 @@ private:
 cobalt::task<void> CreateMirrorAndEnter(entt::entity player, entt::entity manager,
 	::scene_manager::CreateSceneRequest request, PlayerSceneSystem::MirrorCreateSubmit submit);
 
-bool ZoneRedisReady()
+// 分线目录在本 zone 的场景控制域实例里(scene_manager 写,docs/design/control-plane-zone-scoping-20261105.md §4.5),
+// 不在核心 zoneredis 里。
+bool SceneControlRedisReady()
 {
-	auto& redis = tlsRedis.GetZoneRedis();
+	auto& redis = tlsSceneControlRedis.GetZoneRedis();
 	return redis && redis->connected();
 }
 
@@ -658,7 +660,7 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 								sceneInfo->scene_config_id() != 0;
 	// 调用方没要目录(withChannelDirectory == false)时不读 Redis:与加目录之前的开销完全相同。
 	// 实体上没有 Guid(playerId == 0)时回调里无从核对"还是不是这名玩家",同样不走异步。
-	if (!withChannelDirectory || !isWorldChannel || playerId == 0 || !ZoneRedisReady())
+	if (!withChannelDirectory || !isWorldChannel || playerId == 0 || !SceneControlRedisReady())
 	{
 		PushSceneInfo(player, *sceneInfo, nullptr);
 		return;
@@ -668,7 +670,7 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 	// 捕获一律用 init-capture:MSVC 对 entt::entity 的简单捕获有 C3495(.github/copilot-instructions.md)。
 	const uint64_t sceneId = sceneInfo->scene_id();
 	const uint32_t sceneConfigId = sceneInfo->scene_config_id();
-	const int ret = tlsRedis.GetZoneRedis()->command(
+	const int ret = tlsSceneControlRedis.GetZoneRedis()->command(
 		[player = player, playerId = playerId, sceneId = sceneId, sceneConfigId = sceneConfigId,
 		 sceneInfoCopy = *sceneInfo](hiredis::Hiredis*, redisReply* reply) {
 			if (!IsSamePlayer(player, playerId))

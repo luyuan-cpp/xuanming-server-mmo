@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	"match/internal/metrics"
 	battlepb "proto/battle"
 	pb "proto/match"
 	inboxpb "proto/player_inbox"
@@ -182,6 +183,8 @@ func TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline(t *testin
 	_, err := s.ReserveDirect(ctx, key, body, formation, tickets)
 	require.NoError(t, err)
 	startFormation(t, s, battleID)
+	// abort_cancel 只在取消入口确认提交了 ABORT 之后计(2026-11-05):截止前的取消、两副本并发里输掉的那一个、之后的重放都不计。
+	cancelAborts := metrics.GlobalFlowValue("terminal", terminalAbortCancel)
 
 	// 帮会恢复器每轮重放原 Start 的取消。截止前：只报告真实 formation=4，不签终局，原票不动 —— guild 不能据此释放。
 	for range 2 {
@@ -193,6 +196,7 @@ func TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline(t *testin
 		require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, receipt.TerminalDecision)
 		requireStartedAndOccupied(t, s, battleID, tickets, "截止前的取消不能释放")
 	}
+	require.Equal(t, cancelAborts, metrics.GlobalFlowValue("terminal", terminalAbortCancel), "截止前没有 ABORT,不计数")
 
 	// 权威截止已过：两个 guild 副本同时取消，同一主键上只提交一份 ABORT，两份回执都证明 ABORT。
 	expireStartedFormation(t, s, battleID)
@@ -219,6 +223,7 @@ func TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline(t *testin
 		require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, r.receipt.TerminalDecision)
 	}
 	f := requireAbortedOnceAndReleased(t, s, battleID, tickets)
+	require.Equal(t, cancelAborts+1, metrics.GlobalFlowValue("terminal", terminalAbortCancel), "两个副本并发,只有写下 ABORT 的那一个计数")
 	lateCompleteAfterAbort(t, s, f)
 
 	// 释放之后的重放回同一份证明，不再改任何行。
@@ -228,6 +233,7 @@ func TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline(t *testin
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, receipt.TerminalDecision)
 	again := requireAbortedOnceAndReleased(t, s, battleID, tickets)
 	require.True(t, proto.Equal(f, again))
+	require.Equal(t, cancelAborts+1, metrics.GlobalFlowValue("terminal", terminalAbortCancel), "回放既有 ABORT 不计数")
 }
 
 // lockedInbox 让 completion_test.go 的 terminalInboxFixture 能被两个副本并发调用(它的 seen 不加锁)。

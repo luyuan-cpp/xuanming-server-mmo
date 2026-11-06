@@ -128,3 +128,24 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 | 源码一致性 | 生产代码、恢复/存储测试及既有帮会测试在运行前后及收尾时 SHA-256 相同 | `final-sources-before.json`、`final-sources-after.json` |
 
 完整筛选器存于 `green-filters.txt`，最终回归沿用该筛选器。未执行联网冒烟、播放器打包或真实资产到账验收。本聊天未执行提交或推送；收尾时检测到外部操作已将相同客户端源码与九份 Unity 导入时间戳一并提交至 `1dfb79433`，保护检查停止了时间戳清理，没有回退外部提交；服务端文档也已被外部提交 `0f484db0d` 收录。本节最终验证记录随后单独补写。
+
+## 6. 2026-11-06 损坏记录出口的真实联网验收
+
+负责人要求补齐联网冒烟。客户端新增独立 PlayMode 程序集 `Assets/Tests/PlayMode/GuildNetwork/`，唯一显式用例 `GuildEconomyNetworkSmokeTests.CorruptRecordRetirementAllowsRealDonationAndRedemption` 通过正式 `GatewayHttpClient`、`GameClient` 和 TCP RPC 登录建角入场，观察器只记录真实请求与回包，不生成响应。启动仅在 batchmode、显式环境开关、精确程序集和测试名全部匹配时使用既有沙盒排除入口；沙盒组件立即禁用，不启动离线地图或角色，未知客户端宿主和世界仍使测试失败。
+
+最终批次为客户端 `Logs/guild-corrupt-online-20261106/attempt-4/`：Unity 6000.6.0f1 原生退出 0，1/1 通过，零失败、零跳过、无超时；运行前后全部生产 C# 源码与本用例/程序集 SHA-256 一致。`result.json`、`results.xml`、`unity.log`、`sources-before.json`、`sources-after.json` 和 `evidence/summary.txt` 保留实际证据。
+
+| 检查 | 实际结果 |
+|---|---|
+| 捐献前空文件、兑换前损坏头 | 每次首次点击保留原字节、零帮会请求；第二次删除同一坏记录，仅一发 `GetPlayerGuild`、零经济写，捐献/商店缓存失效 |
+| 新捐献 | 新非零请求号、原帮会栏正确；恰一发写请求，订单 `APPLIED`；银两 100000→0，资金 0→12000，帮贡可用/累计 0→120，今日次数 0→1 |
+| 新兑换 | 与捐献不同的非零请求号和订单号；恰一发写请求，订单 `APPLIED`；帮贡 120→90，物品 15 数量 0→5，限购次数 0→1；银两、资金及累计帮贡保持不变 |
+| 收尾 | 成功用例解散本次独占的单人帮会，确认回到未入帮状态；断开自有客户端，恢复先前选角偏好，保留证据 |
+
+后端为本机独立 Compose 项目 `xuanming-guild-corrupt-20261106`（Gateway 18105、Gate 28100），使用独立网络、卷与新账号。Go guild 从上一轮固定 HEAD `993b6da9d4ea51d5e4a27cc6ec17004af0fb97c1` 隔离副本构建，758 份源文件前后摘要不变；其他节点复用已有成功登录基线镜像，未构建或修改 Claude Code 在途主树。镜像、冻结配置及隔离检查见本仓 `build/verification/guild-corrupt-online-20261106/` 的 `provenance.json`、`shared-source-compatibility.json`、`guild-build-result.json`、`isolation-proof.json`、`runtime-readiness.json`。协议核对的 161 个消息号全部一致；已删除的 EnterGameResponse 两个旧合服提示字段仍在客户端生成类中，但客户端无读取调用，故该证据仅证明本轮新账号经济链路，不宣称描述符逐字一致。
+
+失败批次均保留：attempt-1 是新增测试未独立引用 Protobuf 的编译错误；attempt-2 是自动 UI 启动器先创建 ActorWorld 触发保护；attempt-3 已真实建角建帮，但夹具错误要求零余额新角色的货币列表非空。只修本用例装配与取值，按服务端 `econCurrency` / `EnsureCurrencySlots` 契约将缺失货币槽位读作零，保留 Currency 快照非空、GM 后余额、扣款和到账断言，再得到 attempt-4 通过。没有跳过断言或伪造服务端结果。
+
+执行入口及必要环境变量见客户端 `Docs/GuildUI.md` 本日追加节；本次实际运行器保留在 `Logs/guild-corrupt-online-20261106/run-live-smoke.ps1`，密码只经子进程环境传入，不写入证据。此前 EditMode 501/501 证据不变，本轮没有生产源码修改，因此没有重复执行该组测试。未执行 Java 后端联机、播放器打包、真实 TiDB 或跨区验收。
+
+**Claude Code 审核状态**：按负责人要求已准备只读审核材料 `Logs/guild-corrupt-online-20261106/claude-review-prompt.txt` 及限定范围补丁。准备操作 Claude 桌面时收到物理 Esc 停止信号，已停止电脑操作；审核请求尚未发送，不能声称已审核。尚待继续该审核。本聊天没有提交或推送。

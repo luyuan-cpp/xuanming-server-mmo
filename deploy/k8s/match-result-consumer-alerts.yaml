@@ -1,0 +1,81 @@
+# match 对局结果消费组(topic ResultTopic、组 ResultConsumerGroup,缺省 match-results / match-rating)的积压告警(r2-kc#1)。
+# 安装方式与 match-alerts.yaml 相同:
+#   kubectl apply -n observability -f deploy/k8s/match-result-consumer-alerts.yaml
+# 抓取前提:同 match-alerts.yaml(按注解抓取 match 指标端口 9170 的 job 或 PodMonitor)。没有序列时规则不触发,和「一切正常」长得一样。
+# 本文件里以 match 加下划线开头的词都会被契约测试当成指标名核对,注释里不要写这种形状的文件名。
+#
+# 积压由 match 进程内的 lag 探针每 30s 从 broker 读出(组的已提交位点 vs 日志起止,kafkautil.RunGroupLagProbe),
+# 与消费本身无关:消费者停了、卡在一条消息上,探针照样报。所有副本读同一个组、报同一个数,规则一律取 max;
+# 某副本探针失败时它的 gauge 是陈值(保留上一次的值),照样参与 max,由按实例触发的 MatchResultLagProbeBlind 点名。
+#
+# 消费者语义(go/shared/kafkautil 的 BoundConsumerGroup):逐条处理、逐条同步提交;遇再均衡与暂时失败(TiDB 抖动、协调者切换)
+# 不停 —— 代次还在就有界退避原地重试同一条,代次结束就交还 Kafka 由新属主重投(入账与来源归档有 SQL 收据,幂等)。
+# 只有不变量破坏、组内提交点越过保留期,或维护排空时仍有没结清的记录,才 HOLD 并永久停止取新(日志「结果消费者 HOLD」)。
+# 高负载时积压在探测时刻常常不为 0,这不说明有问题;有问题的是有积压的分区上组内已提交位点不再前进(消费者停了 / 卡在一条上 / 持续失败的 SQL)。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: match-result-consumer-alerts
+  labels:
+    app: match
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: match.result-consumer
+      interval: 30s
+      rules:
+        # 积压不前进(2026-11-06 评审跟进改判据):有积压的分区上,组内已提交位点 15 分钟没动。
+        # match_result_consumer_commit_stall_seconds 由 lag 探针跨轮按分区算(kafkautil.CommitStall):位点一动、或积压清零即从头计。
+        # 旧判据「合计积压 > 0 持续 15m」在高负载下误报:逐条提交的消费者每次探测都有刚到、还没处理的结果,积压几乎从不为 0,
+        # 而位点一直在前进。按分区算:一个分区卡住、其余分区照常前进时,组的合计位点照样在动,这里照样报。
+        # 本组是 handler 模式:代次还在就原地重试同一条,代次结束交还、下一代次立刻重投,没有「已落库却挂着积压」的情形,
+        # 所以安静分区上卡住的那一条也报。gauge 已经是持续时长,for 0m;各副本各自计时取 max,进程重启从 0 重计
+        # (全部副本同时重启后最多晚 15 分钟才响)。
+        - alert: MatchResultConsumerLagging
+          expr: |
+            max(match_result_consumer_commit_stall_seconds) >= 900
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "对局结果消费组有积压的分区上已提交位点 {{ $value | humanizeDuration }} 没有前进"
+            description: >-
+              评分与完整结算来源归档跟着停:排行、封榜奖励、离线玩家的个人结算都晚到。
+              先查 match 日志:`[kafka-bound]` 行是原地重试(看 stage 与错误,TiDB 故障先修库,恢复后自动追上);
+              「结果消费者 HOLD」是 owner 永久停止取新(不变量破坏 / 提交点越过保留期 / 排空期间没结清),修复后要重启 match;
+              同一条 offset 反复处理失败(日志「结果处理未确认」)时位点不会自己越过它,按 cross-zone-matchmaking.md 的结果处置人工处理。
+              对照合计积压 match_result_consumer_lag_messages 与单分区最大积压 match_result_consumer_lag_max_partition_messages:
+              两者接近 = 卡在一个分区。topic 只保留 7 天,积压到那之前必须处置,否则 MatchResultConsumerRetentionGap 会响(结果已丢)。
+
+        # 保留期已经删掉了还没消费的对局结果:**结果已丢**(评分与来源归档都缺这些局)。任何一次出现都响:取窗口最大值、for 0m,
+        # 窗口 15m 的取法同 data-service-audit-alerts.yaml 的 DataServiceAuditRetentionGap(规则评估间隔 + 探针间隔的余量)。
+        - alert: MatchResultConsumerRetentionGap
+          expr: |
+            max(max_over_time(match_result_consumer_retention_gap_messages[15m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "match-results 的保留期删掉了约 {{ $value | printf \"%.0f\" }} 条评分消费组还没提交到的对局结果"
+            description: >-
+              这些局的评分与完整结算来源没有入账(采样值,是下界;match 日志另有 `BATTLE RESULTS LOST` 行)。
+              缺口消失后告警还会保持约 15 分钟,resolve 不代表结果找回。按对局号从 battle 侧日志或 match 权威库的终局行核对缺了哪些局,
+              记录条数与时间段上报负责人。根因通常是消费者长时间停摆或卡住(先看 MatchResultConsumerLagging 是否早已在响)。
+
+        # 探针失明(按实例):15 分钟内一次都没探成、且有失败。它的 lag / retention_gap 是陈值,上面两条此时都不可信。
+        - alert: MatchResultLagProbeBlind
+          expr: |
+            sum by (instance) (increase(match_result_consumer_lag_probe_total{result="ok"}[15m])) == 0
+            and
+            sum by (instance) (increase(match_result_consumer_lag_probe_total{result="error"}[15m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }} 上对局结果消费组的 lag 探针 15 分钟没有成功过"
+            description: >-
+              该实例的 match_result_consumer_lag_messages / match_result_consumer_retention_gap_messages 是陈值。
+              查该实例 match 日志 `result consumer lag probe failed`(broker 不可达、消费组位点拉取失败,
+              或 committed 越过 log end = topic 被删了重建)。所有实例都在报本告警时,积压与丢结果告警此刻都不可信。

@@ -50,3 +50,11 @@ constexpr uint32_t MatchServiceRequestBattleTicketIndex = 10;
 constexpr uint32_t MatchServiceListWatchableBattlesMessageId = 164;
 constexpr uint32_t MatchServiceListWatchableBattlesIndex = 11;
 #define MatchServiceListWatchableBattlesMethod  ::MatchService_Stub::descriptor()->method(11)
+
+constexpr uint32_t MatchServiceListBattleReportsMessageId = 379;
+constexpr uint32_t MatchServiceListBattleReportsIndex = 12;
+#define MatchServiceListBattleReportsMethod  ::MatchService_Stub::descriptor()->method(12)
+
+constexpr uint32_t MatchServiceGetBattleReportMessageId = 380;
+constexpr uint32_t MatchServiceGetBattleReportIndex = 13;
+#define MatchServiceGetBattleReportMethod  ::MatchService_Stub::descriptor()->method(13)

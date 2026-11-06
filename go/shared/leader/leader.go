@@ -52,6 +52,14 @@ else
 	return 0
 end
 `
+	// ownedScript 核对锁里是不是这次竞选写进去的值(只读)。见 Run 里 SETNX 回「已存在」之后的核对。
+	ownedScript = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+	return 1
+else
+	return 0
+end
+`
 )
 
 // Store 是选主锁需要的最小 Redis 能力。go-zero 与 go-redis 两套客户端
@@ -155,6 +163,16 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 		// 本任期心跳的自我降级从这里起算。
 		campaignAt := time.Now()
 		ok, err := e.store.SetNX(ctx, e.key, val, e.ttl)
+		if err == nil && !ok {
+			// 回「已存在」不一定是别人在任:go-redis / go-zero 的 MaxRetries 缺省 3,首发 SETNX 已经写入、回包丢了时,
+			// 客户端会原样重发,重发看到的正是自己这一次的值。不核对的话这把锁没人续期、空占到 TTL 过期,期间没有领导者
+			// (docs/design/infra-reconnect-overview.md §4 R8)。写入发生在这次 SETNX 发出之后,campaignAt 仍是安全的起算点。
+			// 核对失败按「别人在任」处理,下一拍再竞选。
+			if owned, checkErr := e.store.EvalInt(ctx, ownedScript, []string{e.key}, val); checkErr == nil && owned == 1 {
+				logx.Infof("[leader] campaign setnx key=%s id=%s was replayed after its first attempt won; the lock is ours", e.key, e.id)
+				ok = true
+			}
+		}
 		if err != nil {
 			// 竞选失败必须出声:Redis ACL/网络长期不通时,否则所有副本都
 			// 静默当跟随者,变更类循环无人执行且没有任何日志线索。

@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"proto/scene_manager"
 	"scene_manager/internal/config"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
+	"shared/redisslot"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -245,4 +247,36 @@ func TestOwnsControlZoneSkipsForeignMembership(t *testing.T) {
 	ok, err = mr.SIsMember(instanceMembersKey(902), "42")
 	require.NoError(t, err)
 	assert.True(t, ok, "别的 zone 的场景成员不由本进程摘")
+}
+
+// CreateScene 只替本 zone 登记场景:别的 zone 的请求在任何写入之前拒绝(路由不变量,§3.3)。
+func TestCreateSceneRejectsOtherZoneWithoutWrites(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	before := len(mr.Keys())
+	resp, err := NewCreateSceneLogic(context.Background(), sc).CreateScene(&scene_manager.CreateSceneRequest{
+		SceneConfId: 2001,
+		ZoneId:      testZoneId + 1,
+		SceneType:   scene_manager.SceneType_SCENE_TYPE_INSTANCE,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrNoAvailableNode, resp.GetErrorCode())
+	assert.Zero(t, resp.GetSceneId())
+	assert.Equal(t, before, len(mr.Keys()), "拒绝时一个键都不写")
+}
+
+// EnterScene 同理:gate zone 不是本 zone 的请求在任何写入之前拒绝。
+func TestEnterSceneRejectsOtherGateZoneWithoutWrites(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: 6990, GateZoneId: testZoneId + 1, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "wrong-zone",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrInvalidGateID, resp.GetErrorCode())
+	assert.Equal(t, uint64(6990), resp.GetPlayerId(), "拒绝应答照样回显 player_id,scene 节点靠它对回玩家")
+	assert.False(t, mr.Exists(getPlayerLocationKey(6990)), "不写 location")
+	assert.Empty(t, *captured, "不发路由")
+	exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(6990, "wrong-zone"))
+	require.NoError(t, existsErr)
+	assert.False(t, exists, "早于去重占位,不留 request_id 占位")
 }

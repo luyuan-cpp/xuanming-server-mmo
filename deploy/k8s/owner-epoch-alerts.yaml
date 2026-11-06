@@ -15,10 +15,13 @@
 # (SAVE_PLAYER_STALE_OWNER / SAVE_PLAYER_NOT_HOLDER / SAVE_PLAYER_UNCLAIMED / SAVE_PLAYER_OLDER_SEQ /
 # LOAD_AND_CLAIM_STALE_OWNER / LOAD_AND_CLAIM_NOT_HOLDER 等)。告警在 player-store-alerts.yaml。
 #
-# scene 侧的对应信号(旧持有者被拒 metric=stale_owner_write_rejected、资产操作因 epoch = 0 被挡、"save outran reconnect lease")
-# 只存在于 scene 日志:scene 的计数不进 Prometheus,而仓库里 Loki 的 ruler 目前没有挂载规则目录、
-# 也没有 alertmanager_url,不存在能生效的日志告警通路。那几条 LogQL 写在
-# docs/ops/cross-zone-failure-test-runbook.md,作为值班固定查询;ruler 接线归上线批 BK8s。
+# scene 侧也有 Prometheus 出口(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400),
+# 已导出 scene_owner_epoch_events_total{event}(含旧持有者被拒 stale_owner_write_rejected)、
+# scene_travel_handoff_*、scene_player_store_save_refused_total{result}
+# (cpp/libs/services/scene/player/system/player_ownership_metrics.{h,cpp}),本文件暂未给它们写规则。
+# 其余信号(资产操作因 epoch = 0 被挡、"save outran reconnect lease" 等 metric=... 日志行)仍只存在于 scene 日志,
+# 而仓库里 Loki 的 ruler 目前没有挂载规则目录、也没有 alertmanager_url,不存在能生效的日志告警通路。
+# 这几条 LogQL 写在 docs/ops/cross-zone-failure-test-runbook.md,作为值班固定查询;ruler 接线归上线批 BK8s。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

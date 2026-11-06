@@ -21,6 +21,7 @@ import (
 	"shared/authoritysql"
 	"shared/dirshard"
 	"shared/drainproof"
+	"shared/etcdwatch"
 	"shared/playerredis"
 	"shared/rolefence"
 	"shared/safego"
@@ -60,13 +61,31 @@ const (
 
 // RecallStore 是 logic 依赖的回收存储能力。*store.RecallStore 满足它,单测注入假实现。
 type RecallStore interface {
-	assetop.ManualResolver
 	Close() error
 	ReadBatch(ctx context.Context, requestID uint64) (*store.RecallBatchRow, error)
 	ListOps(ctx context.Context, requestID uint64) ([]*store.RecallOpRow, error)
 	ConsumedSources(ctx context.Context, txIDs []uint64) (map[uint64]bool, error)
 	CreateBatch(ctx context.Context, batch *store.RecallBatchRow, ops []*store.RecallOpPlan, nowMs uint64) error
 	CancelBatch(ctx context.Context, requestID uint64, operator, reason string, nowMs uint64) error
+	// ReadOpState、ResolveManuallyIfQuiet 是人工终结的两步:读行核证据,再带读到的租约与发送时刻终结。
+	ReadOpState(ctx context.Context, opID uint64) (store.RecallOpState, error)
+	ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error)
+}
+
+// recallLoopConfig 是回收重投循环的配置。人工终结判「安静」用的租约也从这里取(RecallLeaseDuration),不各写一份。
+func recallLoopConfig() assetop.LoopConfig {
+	loopConfig := assetop.DefaultLoopConfig()
+	// 不开自动放弃:放弃等于玩家躲够时间就把赃物带回来。不开日对账:按类 gauge 要选主,回收量小,最老年龄告警够用。
+	loopConfig.AbandonAfter = 0
+	loopConfig.AuditInterval = 0
+	loopConfig.Streams = []assetpb.AssetOpStream{assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL}
+	return loopConfig
+}
+
+// RecallLeaseDuration 是回收重投循环每领一行持有的租约。ResolveRecallOp 按它和 assetop.ManualQuietFloor 取较大者
+// 算「安静」间隔(assetop.ManualQuietGap):距最后一次可能的投递超过这个间隔,才能判一行「从未应用」。
+func RecallLeaseDuration() time.Duration {
+	return recallLoopConfig().Lease
 }
 
 // configureRecall 装配回收存储和资产通道。存储总要有:护栏要靠它判挂起,关掉 Enabled 也不能让未结束的行失去保护。
@@ -235,7 +254,8 @@ func newRecallChannel(c config.Config, recall *store.RecallStore, assets PlayerS
 		etcdConf.Username = c.Etcd.User
 		etcdConf.Password = c.Etcd.Pass
 	}
-	ch.etcd, err = clientv3.New(etcdConf)
+	// keepalive:场景节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	ch.etcd, err = clientv3.New(etcdwatch.WithKeepAlive(etcdConf))
 	if err != nil {
 		return nil, fmt.Errorf("etcd client: %w", err)
 	}
@@ -258,18 +278,14 @@ func newRecallChannel(c config.Config, recall *store.RecallStore, assets PlayerS
 		Metrics:     assetMetrics,
 	}
 
-	loopConfig := assetop.DefaultLoopConfig()
-	// 不开自动放弃:放弃等于玩家躲够时间就把赃物带回来。不开日对账:按类 gauge 要选主,回收量小,最老年龄告警够用。
-	loopConfig.AbandonAfter = 0
-	loopConfig.AuditInterval = 0
-	loopConfig.Streams = []assetpb.AssetOpStream{assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL}
-	ch.loop, err = assetop.NewLoop(loopConfig, recall, caller, assetMetrics, time.Now)
+	ch.loop, err = assetop.NewLoop(recallLoopConfig(), recall, caller, assetMetrics, time.Now)
 	if err != nil {
 		return nil, err
 	}
 	ch.loop.Relay = relay
 	ch.loop.Ledger = recallLedger{assets: assets}
-	ch.loop.Manual = recall
+	// 不挂 Manual:Loop.ResolveManually 不核证据。回收的人工终结只有 ResolveRecallOp 一个入口,先核已提交账本,
+	// 再走带见证的结算(store.RecallStore.ResolveManuallyIfQuiet)。
 	ch.loop.Rand = rand.Float64
 	if err = ch.loop.CheckWiring(); err != nil {
 		return nil, err
@@ -443,6 +459,5 @@ var (
 	_ assetop.Store               = (*store.RecallStore)(nil)
 	_ assetop.PendingAgeReader    = (*store.RecallStore)(nil)
 	_ assetop.PlayerPendingLister = (*store.RecallStore)(nil)
-	_ assetop.ManualResolver      = (*store.RecallStore)(nil)
 	_ RecallStore                 = (*store.RecallStore)(nil)
 )

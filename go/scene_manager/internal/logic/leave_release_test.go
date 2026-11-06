@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	dspb "proto/data_service"
 	"proto/scene_manager"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
@@ -593,16 +594,55 @@ func TestLeaveScene_OwnerGoneFromRegistryDeletes(t *testing.T) {
 	assert.Equal(t, before+1, leaveReleaseCount(t, "owner_dead"))
 }
 
+// fakePlayerStoreHolders 同时替身两条释放路径:只按代次的 PlayerStoreHolderReleaser(无资格撤销的补释放),
+// 和 LeaveScene 判死释放的 PlayerStoreDeadHolderFence(读写权行 → 比较并写)。两条路的释放都记进 players / epochs。
 type fakePlayerStoreHolders struct {
 	err     error
 	players []uint64
 	epochs  []uint64
+
+	// holder 是 ReadPlayerStoreHolder 读到的写权行,nil = 建角初行(代次 1、没有持有者);missing = 没有写权行;
+	// readErr 是读的错误。reads 是读的次数,seen 记下每次比较并写带来的那一份。
+	holder  *dspb.PlayerStoreHolder
+	missing bool
+	readErr error
+	reads   int
+	seen    []*dspb.PlayerStoreHolder
 }
 
 func (f *fakePlayerStoreHolders) ReleaseDeadPlayerStoreHolder(_ context.Context, player, ownerEpoch uint64) error {
 	f.players = append(f.players, player)
 	f.epochs = append(f.epochs, ownerEpoch)
 	return f.err
+}
+
+func (f *fakePlayerStoreHolders) ReadPlayerStoreHolder(context.Context, uint64) (*dspb.ReadPlayerStoreHolderResponse, error) {
+	f.reads++
+	if f.readErr != nil {
+		return nil, f.readErr
+	}
+	if f.missing {
+		return &dspb.ReadPlayerStoreHolderResponse{}, nil
+	}
+	holder := f.holder
+	if holder == nil {
+		holder = &dspb.PlayerStoreHolder{OwnerEpoch: 1}
+	}
+	return &dspb.ReadPlayerStoreHolderResponse{Found: true, Holder: holder}, nil
+}
+
+func (f *fakePlayerStoreHolders) ReleaseDeadPlayerStoreHolderIfUnchanged(_ context.Context, player, ownerEpoch uint64,
+	seen *dspb.PlayerStoreHolder) error {
+	f.players = append(f.players, player)
+	f.epochs = append(f.epochs, ownerEpoch)
+	f.seen = append(f.seen, seen)
+	return f.err
+}
+
+// installFakePlayerStoreHolders 把两条释放路径都换成 holders(生产上两者是同一个 data_service 客户端)。
+func installFakePlayerStoreHolders(sc *svc.ServiceContext, holders *fakePlayerStoreHolders) {
+	sc.PlayerStoreHolders = holders
+	sc.PlayerStoreDeadHolders = holders
 }
 
 // 判死的持有者可能只是暂停了,先在写权行上把它挡住,再删 location。
@@ -612,7 +652,7 @@ func TestLeaveScene_OwnerDeadReleasesPlayerStoreBeforeDeleting(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	installLeaveReleaseRecorder(t)
 	holders := &fakePlayerStoreHolders{}
-	sc.PlayerStoreHolders = holders
+	installFakePlayerStoreHolders(sc, holders)
 	const (
 		playerID = uint64(8331)
 		sceneID  = uint64(9431)
@@ -636,7 +676,7 @@ func TestLeaveScene_OwnerDeadReleasesTheLocationEpochNotTheKey(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	installLeaveReleaseRecorder(t)
 	holders := &fakePlayerStoreHolders{}
-	sc.PlayerStoreHolders = holders
+	installFakePlayerStoreHolders(sc, holders)
 	const (
 		playerID = uint64(8334)
 		sceneID  = uint64(9434)
@@ -658,7 +698,7 @@ func TestLeaveScene_OwnerDeadWithoutLocationEpochSkipsPlayerStoreRelease(t *test
 	sc, mr := newTestSvcCtx(t, "")
 	installLeaveReleaseRecorder(t)
 	holders := &fakePlayerStoreHolders{}
-	sc.PlayerStoreHolders = holders
+	installFakePlayerStoreHolders(sc, holders)
 	const (
 		playerID = uint64(8335)
 		sceneID  = uint64(9435)
@@ -680,7 +720,7 @@ func TestLeaveScene_OwnerDeadKeepsLocationWhenPlayerStoreReleaseFails(t *testing
 	t.Cleanup(clearKnownNodesForTest)
 	sc, mr := newTestSvcCtx(t, "")
 	installLeaveReleaseRecorder(t)
-	sc.PlayerStoreHolders = &fakePlayerStoreHolders{err: errors.New("data_service down")}
+	installFakePlayerStoreHolders(sc, &fakePlayerStoreHolders{err: errors.New("data_service down")})
 	const (
 		playerID = uint64(8332)
 		sceneID  = uint64(9432)
@@ -699,7 +739,7 @@ func TestLeaveScene_MarkerReleaseDoesNotCallPlayerStore(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	installLeaveReleaseRecorder(t)
 	holders := &fakePlayerStoreHolders{}
-	sc.PlayerStoreHolders = holders
+	installFakePlayerStoreHolders(sc, holders)
 	const (
 		playerID = uint64(8333)
 		sceneID  = uint64(9433)

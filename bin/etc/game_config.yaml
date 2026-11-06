@@ -28,7 +28,16 @@ zoneredis:
   max_connections: 100     # 最大连接数
   retry_interval: 1000     # 连接重试间隔时间（毫秒）
 
-# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;上面的 zoneredis 是控制域。
+# 本 zone 的场景控制域 Redis(docs/design/control-plane-zone-scoping-20261105.md §4.5),只有 scene 连它:scene_manager 写的
+# 分线目录、神秘商人读模型。整段缺失 = 与上面的 zoneredis 是同一个实例,开发环境不用改。K8s 上指向本 zone 所属组的
+# redis-ctl-g<N>,由 k8s_deploy.ps1 渲染。写了这一段时 host 必填,口令不继承 zoneredis,可用环境变量
+# SCENE_CONTROL_REDIS_PASSWORD 注入,值不进日志。
+# scene_control_redis:
+#   host: "127.0.0.1"
+#   port: 6379
+#   password: ""
+
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;上面的 zoneredis 是核心共享实例。
 # 整段缺失 = standalone,地址与口令沿用 zoneredis,开发环境不用改。上集群时打开:
 #   mode      standalone | cluster,其它取值 scene 拒绝启动
 #   seeds     host:port 列表。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑

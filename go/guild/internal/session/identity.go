@@ -3,40 +3,27 @@ package session
 import (
 	"context"
 
-	base "proto/common/base"
 	"shared/roleidentity"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
-func Details(ctx context.Context) *base.SessionDetails {
-	detail, _ := ctx.Value(contextKey{}).(*base.SessionDetails)
-	if detail == nil {
-		return nil
-	}
-	return proto.Clone(detail).(*base.SessionDetails)
-}
-
-// 在线域原账号只认 gate 签名原件，不读 login Redis；修订只读gate发出时的会话原件，不从当前归属补造。
+// OriginalIdentityInterceptor 在入口准入之后,对客户端请求做一次原角色归属预检(check 读本库护栏副本、不加锁)。
+// 入口准入已把验签原件里的原账号、原修订与角色捕获进 ctx;取不到原件就是内部调用或匿名只读例外,直接放行。
+// 它是 guild 读方法唯一的归属检查;写方法在提交点还会持副本行锁按同一份原件复核。
 // roleRejected 判 check 的错误是不是确实查到角色变了或被冻结。
 func OriginalIdentityInterceptor(check func(context.Context) error, roleRejected func(error) bool) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
-		detail := Details(ctx)
-		if detail == nil {
+		if _, ok := roleidentity.Original(ctx); !ok {
 			return next(ctx, req)
 		}
-		if detail.GetOwnerRevision() == 0 || check == nil {
-			return nil, status.Error(codes.Unauthenticated, "原登录修订未就绪")
+		if check == nil {
+			return nil, status.Error(codes.Unauthenticated, "原登录身份验证依赖未就绪")
 		}
-		ctx, err := roleidentity.CaptureSession(ctx, detail)
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "原登录身份缺少gate签名原件")
-		}
-		if err = check(ctx); err != nil {
+		if err := check(ctx); err != nil {
 			if roleRejected != nil && roleRejected(err) {
 				return nil, status.Error(codes.PermissionDenied, "角色归属已变化或被冻结")
 			}

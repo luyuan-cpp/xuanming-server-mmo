@@ -37,7 +37,9 @@ message PlayerAllData {
   option (OptionPersistFrozen) = true;
 
   player_database player_database_data = 2;
-  player_database_1 player_database_1_data = 3;
+  // 3 是 player_database_1_data,随 player_database_1 删除(docs/design/player-save-direct-commit.md §1.2)。
+  reserved 3;
+  reserved "player_database_1_data";
 
   BagAllData   bag_data   = 4 [(OptionPersistUncarried) = true];
   QuestAllData quest_data = 5 [(OptionPersistUncarried) = true];

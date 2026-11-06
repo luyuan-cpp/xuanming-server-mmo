@@ -33,6 +33,10 @@
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 // 本人近期战斗结果(docs/design/battle-result-recovery.md):结算应用同一帧写入,随同一次存盘提交。
 #include "proto/common/component/player_battle_result_comp.pb.h"
+// 客户端请求幂等键账本(docs/design/client-request-idempotency.md §5.3):与资产账本同一条不变量 I3,
+// 必须与 currency / bag_component 同记录同一次落盘,否则「效果落了、记录没落」会让带原键的重发再执行一次。
+#include "proto/common/component/client_request_ledger_comp.pb.h"
+#include "client_request_ledger.h"
 #include "asset_op_ledger.h"
 #include "asset_op_system.h"
 #include "player/comp/player_inbox_runtime_comp.h" // PlayerInboxLedgerInvalidComp
@@ -186,6 +190,16 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 原样挂上、不在加载时整理:列表规则(去重、序号、条数上限)在下一次写入时由 battle_result::Record 维持,
 	// 加载就改写会让未知字段与存放顺序在一次往返里变样。唯一创建点,结算与查询路径缺它一律 fail-closed。
 	tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player, message.battle_results());
+	// 客户端请求幂等键账本(字段 25)跟着同一条 player_database 记录回来;旧存档没有这个字段 = 空账本,合法。
+	// 原样挂上、不在加载时整理(淘汰在下一次记账时做)。校验不过只挂 ClientRequestLedgerInvalidComp
+	// (带键的请求一律 fail-closed),不阻断登录、不改写原数据:清空重建会让已执行过的请求在重发时再执行一次。
+	// 唯一创建点,接入点只 try_get,不补建。
+	auto& clientRequests = tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player, message.client_request_ledger());
+	if (auto err = client_request_ledger::Validate(clientRequests); !err.empty()) {
+		LOG_ERROR << "[ClientRequest] metric=client_request_ledger_invalid source=loader player_id=" << message.player_id()
+				  << " reason=" << err << "; keyed requests refused for this player until the ledger is repaired";
+		tlsEcs.actorRegistry.emplace_or_replace<ClientRequestLedgerInvalidComp>(player);
+	}
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -239,6 +253,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 		FindPersistedComp<PlayerMysteryMerchantComp>(player, "PlayerMysteryMerchantComp", missing);
 	// 近期战斗结果缺失同样整份拒存:补一份空列表落盘,等于把玩家还没看过的结算结果抹掉。
 	const auto* battleResults = FindPersistedComp<PlayerBattleResultComp>(player, "PlayerBattleResultComp", missing);
+	// 幂等键账本缺失同样整份拒存:补一本空账本落盘,等于让已经执行过的请求在重发时再执行一次。
+	const auto* clientRequests = FindPersistedComp<ClientRequestLedgerComp>(player, "ClientRequestLedgerComp", missing);
 	const auto* currency = FindPersistedComp<CurrencyComp>(player, "CurrencyComp", missing);
 	const auto* currencyRuntime = FindPersistedComp<PlayerCurrencyComp>(player, "PlayerCurrencyComp", missing);
 	// 顶层未知字段缺了载体同样整份拒存:补空等于把新版本写进来的整列抹掉(混版本设计 §4.2 L1)。
@@ -289,6 +305,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_mystery_merchant()->CopyFrom(*mysteryMerchant);
 	// 近期战斗结果:与结算效果同一次 Marshal、同一次提交;位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	message.mutable_battle_results()->CopyFrom(*battleResults);
+	// 幂等键账本:与它保护的效果同一次 Marshal、同一次提交(不变量 I3);位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
+	message.mutable_client_request_ledger()->CopyFrom(*clientRequests);
 	message.mutable_currency()->CopyFrom(*currency);
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

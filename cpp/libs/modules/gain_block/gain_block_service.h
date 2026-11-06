@@ -16,7 +16,8 @@
 //         (docs/design/player-inbox-service.md §2.2)。
 //
 // **物品获得只认 IsItemGainBlocked 一个判定**(全服 + 本人)。BagService 的三个入包入口与
-// ConsumeInventoryAndGrant、资产转入(含完整实例直接入包)、商店的扣款前预检都调它;新增物品获得入口也必须调它,
+// ConsumeInventoryAndGrant、资产转入(含完整实例直接入包)、商店的扣款前预检、战斗结算剔除被封掉落
+// (player_battle.cpp 的 DropBlockedGains)都调它;新增物品获得入口也必须调它,
 // 不要只调 IsGloballyBlocked / IsGainBlocked(kItem, …),那样会漏掉单人封禁。
 // 存档还原与同一所有者内部搬运(整理、仓库互转、装备穿脱)不是新增获得,不调它。
 class GainBlockService

@@ -1,6 +1,6 @@
 # 存盘直接提交 TiDB:落码规格
 
-> **状态**:v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**;开关缺省 redis,行为不变,新分支只在 `PlayerStorePath=direct` 时走。B8(翻默认值、删旧路径)要等全链路验收。
+> **状态**:v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**;开关缺省 redis,行为不变,新分支只在 `PlayerStorePath=direct` 时走。B8(翻默认值、删旧路径)要等全链路验收。
 > **上游**:[总体方案](./player-data-tidb-scaling-plan.md) §3、§4(本文是它 §13 的 A0,细化 A1~A6);[TiDB 决策 §9](./global-data-layer-tidb-decision.md)(方向与键族,本文回答 §9.4)。
 > **现状依据**:[三路盘点](../handoff/player-save-direct-commit-20261030/survey.md),行号以它为准。标注:[C] 读代码确认,[D] 文档记载,[I] 推断。
 > **用户已定**:玩家数据只放 TiDB;存盘服务放 go/db;关键变化立即存 + 拆出热行;正常运行不丢、不回档;存盘不再按归属区选 topic 和库。
@@ -10,7 +10,7 @@
 1. **一张新表 `player_store`,主键 `(player_id, kind)`。** 同一玩家的所有行挨在一起;`kind=0` 是写权行,其余每个 kind 一行,`payload` 是一组字段的序列化结果。一条语句就能读出一个玩家的全部行。
 2. **go/db 提供两个 RPC:`LoadAndClaim`、`Save`。** 都是一个 TiDB 事务,先 `FOR UPDATE` 锁写权行,再判定、再读写。
 3. **写权以 TiDB 写权行为准,代次的铸造不变。** scene_manager 继续在 Redis 里铸造 E(`max(观察+1, 当前毫秒)` [C]),它只是候选值;scene 进场时用它认领,写权行抬到这个值之后,旧持有者的写在 SQL 层被拒。location、handoff、再入屏障这套协调逻辑基本不动。
-4. **C++ 内存结构不变。** `PlayerAllData`、loader、Unmarshal 全部不改。存盘时把 `player_database` 按字段投影成若干片段,只发有变化的片段;加载时把片段拼接后 `ParseFromString`,protobuf 的合并语义还原整个消息。分组由 proto 字段选项声明,漏标字段启动即失败。
+4. **C++ 内存结构不变。** `PlayerAllData`、loader、Unmarshal 全部不改。存盘时把 `player_database` 按字段投影成若干片段,只发有变化的片段;加载时把片段拼接后 `ParseFromString`,protobuf 的合并语义还原整个消息。字段属于哪一行由 proto 字段选项声明,每一行怎么存由行枚举值的选项声明,漏标启动即失败(§1.1)。
 5. **每个玩家同时只有一个在途存盘。** 结果未知就用同样的内容、同一个序号重试,直到拿到明确结果才发下一笔。脏判断以「上一次确认提交」为基准。
 6. **「SQL 已追平」的判据全部换成事务结果。** 不再需要 Redis 里的 ACK 镜像、PING 探测、补投。
 7. **新旧路径用开关并存**(`PlayerStorePath: redis | direct`,缺省 redis),切换批翻转,验收后删除旧路径。主干全程可运行,不打断 Codex 验收。开关的约束见 §7.1。
@@ -45,26 +45,88 @@ CREATE TABLE IF NOT EXISTS `player_store` (
 - 声明在 `proto/common/database/mysql_database_table.proto`,走现有 `mysql_database_table_list.json`,不手写第二份。全新的库由现有基线建出来。基线已跑过的库上 `cmd/migrate` 建不出新表,而且只告警(`PS:406`),所以新路径启动时用 `VerifySchema` 拒绝启动,翻开关时清库(§7.1),不做在线补表。proto2mysql 只负责建表;读写用 `database/sql` 手写语句(它的事务接口没有原生 SQL 出口 [C])。
 - 建在每个落点库里(`zone_{N}_db` 或 `player_store_{N}_db`),落点选择规则不变。新号的 `storage_id` 在建角时写定,默认等于建角 zone;是否统一到一个全局库是配置问题,受 TiDB 决策 §D8 约束,不在本规格内。
 - TiDB 上用 `SPLIT TABLE … BETWEEN` 预切(发号打散之后 ID 均匀),纳入 `tidb-prepare`。
-- `kind` 枚举放在 proto:`kOwner=0`、`kHot=1`、`kAsset=2`、`kGrowth=3`、`kProfile=4`、`kLegacy1=5`。
+- `kind` 枚举放在 proto(`proto/player_store/player_store.proto`):`kOwner=0`、`kGrowth=3`、`kProfile=4`、`kCharacter=6`、`kWallet=7`、`kBag=8`、`kLocation=9`;1、2 是 2026-11-05 退役的 kHot、kAsset,5 是随 `player_database_1` 删除的 kLegacy1,都 `reserved`,不复用(§1.1、§1.2)。
 
-### 1.1 字段分组
+### 1.1 分行与存盘方式(v3,2026-11-05)
 
-`player_database` 每个字段用新选项 `(OptionPersistGroup)` 声明所属 kind。分组初值(字段清单 [C],最终以规格评审和压测为准):
+负责人 2026-11-05:「player_db player_db_1 这种分法我觉得很奇怪……我想在数据存储这块极限提高性能,但是又要强一致性,可读可扩展移动」,随后「开始实施吧」「把代码做完给我」。v2 的四组(热、资产、成长、低频)把「按频率分」和「按领域分」混在一维里:位置一动,等级、职业、基础属性整行跟着写;改几个铜板,整个背包跟着写。本节按下面四条重排。
 
-| kind | 字段 |
-|---|---|
-| kHot | `transform`、`level_component`、`uint64_pb_component`、`uint32_pb_component`、`derived_attributes_component` |
-| kAsset | `currency`、`bag_component`、`asset_op_ledger`、`settlement_ledger`、`inbox_ledger`、`mystery_merchant` |
-| kGrowth | `skill_list`、`attribute_component`、`pet_component`、`mission_component` |
-| kProfile | `profile_component`、`merge_state`、`stress_test_probe`、`battle_results`(本人近期战斗结果,2026-11-05,[战斗结果重登恢复](battle-result-recovery.md) §4.1:只在结算与客户端确认时变,不放 kAsset 免得每次资产写入都带上它) |
-| 元数据(不入 payload) | `player_id`、`fence_owner_epoch`、`fence_save_seq`、`persist_schema_gen` |
+**原则**
 
-- `player_database_1` 整个消息作为一行 `kLegacy1`。它基本是空的,不变就不写。去留是独立事项。它和 `player_database` 是两个消息,字段号有重叠(字段 2 与 `transform` 冲突),加载时要单独解析,不参与拼接。
-- 账本不变量 I3(货币、背包、任务领取标记、三本账本、限购同一次落盘 [C])由「一次存盘的所有脏行同事务」保证,所以任务放 kGrowth 不违反 I3。
+1. **一致性只靠整笔快照。** 一次存盘是内存某一时刻的完整快照,所有和上次确认提交不同的行在同一个事务里、带同一个整笔序号提交(§2、§4)。盘上永远是内存里真实存在过的某个时刻。所以怎么分行、什么时候存,只影响性能和崩溃时丢多少,不影响正确性。I3 这类「必须同一次提交」的不变量要的是同一次提交,不是同一行。
+2. **行按「大小 × 变化频率 × 和谁一起变」分。** 小而常变的不和大而少变的放一行。TiDB 一行就是一个 KV,只改一列也要重写整行(TiDB 决策 §8.1)。
+3. **存盘时机按「丢了的代价」定**,写在每行的存盘方式和领域入口的事件上(§5.3「关键进度」),和分行是两件事。重要的(资产、账本)要快存;经常变但不重要的(位置)要少存、合并着存,而不是「经常变就马上存」。
+4. **策略只决定什么时候拍快照,不能让一次存盘只写一部分脏行。** 位置可以不触发存盘,但只要这次存盘了,位置变了就一起写。
+
+**分行**(`PlayerStoreKind` 在 `proto/player_store/player_store.proto`;字段用 `mysql_database_table.proto` 的 `OptionPersistGroup` 标行)
+
+| kind | 值 | 字段 | 特点 | 存盘方式 |
+|---|---|---|---|---|
+| kOwner(写权行) | 0 | 代次、序号、世代、持有者 | 每笔都写 | — |
+| kLocation(位置) | 9 | `transform` | 一直在变,丢了不心疼 | 只顺带 |
+| kCharacter(角色) | 6 | `level_component`、`derived_attributes_component`(基础属性与当前血蓝) | 小,战斗和升级时变 | 定时 |
+| kWallet(钱包) | 7 | `currency`、`asset_op_ledger`、`inbox_ledger`、`mystery_merchant`、`client_request_ledger`(客户端请求幂等键账本,2026-11-06 别的批次加,[请求幂等](client-request-idempotency.md) §5.3) | 小,任何经济行为都改它 | 定时 |
+| kBag(背包) | 8 | `bag_component` | 最大的一行,只在道具操作时变 | 定时 |
+| kGrowth(成长) | 3 | `skill_list`、`attribute_component`、`pet_component`、`mission_component` | 中等,随进度变 | 定时 |
+| kProfile(资料) | 4 | `uint32_pb_component`(职业)、`uint64_pb_component`(注册时间)、`profile_component`、`battle_results`、`item_gain_block`、`stress_test_probe` | 都很小,大多建角后不变 | 定时 |
+| 元数据(不入 payload) | — | `player_id`、`persist_schema_gen` | | |
+
+- 退役号:1(旧 kHot)、2(旧 kAsset),proto 里 `reserved`。新加一行取下一个空闲号,不回填。
+- 钱包和背包分开之后,一次交易同时改了两者时两行同一事务提交(原则 1)。
+- 职业、注册时间移到资料行:建角只写写权行和资料行(§5.4);展示资料读 kCharacter(等级)和 kProfile(职业、名字、外观、性别)(§5.6)。
+- `battle_results`(本人近期战斗结果,[战斗结果重登恢复](battle-result-recovery.md) §4.1)和 `item_gain_block`(物品获取封禁,[玩家收件箱](player-inbox-service.md) §2.2)是 2026-11-05 别的批次加的,原本就放资料行,不动:只在结算、GM 处置时变,资料行仍然小。
+- `derived_attributes_component` 字段名沿用旧名(改名要动生成代码和全部调用点,随 §1.2 的改名批一起);装的是基础属性和当前血蓝,真正的派生属性 `DerivedAttributesComp` 不落库、加载时重算。基础属性能不能由职业和加点重算,待核对:能重算的就不该落库(AGENTS §11.6),只存当前血蓝。
+- 新加字段按上面的原则选行。小而常变的不放背包行;资产、账本、任务领取标记不放只顺带的行。
+- 认领回包的上限按「每行都到上限」算(§5.2,`playerstore.New` 校验):现在 6 个数据行 × 1 MiB + 64 KiB ≤ 8 MiB(第二批删掉 kLegacy1 之前是 7 行)。再加行要先核这条。
+
+**存盘方式**(`PersistRowSavePolicy` 在 `proto/db/proto_option.proto`,用 `OptionPersistRowSavePolicy` 写在 `PlayerStoreKind` 每个数据行的枚举值上)
+
+- **定时(PERIODIC)**:有变化就随下一次定时存盘写入(缺省 60 秒,`SCENE_PLAYER_SAVE_INTERVAL_SECONDS`)。
+- **只顺带(PIGGYBACK)**:单独有变化不触发定时存盘。别的行要写、任何非定时的存盘(资产、关键进度、下线、交接、疏散、停机)、或者被推迟超过兜底间隔时一起写。兜底间隔缺省 300 秒,环境变量 `SCENE_PLAYER_PIGGYBACK_FALLBACK_SECONDS`,0 = 不推迟(压测对照用),初值压测后定。崩溃时位置最多回到几分钟前;位置不是资产,可以接受(总体方案 §4.6 第一行,本次从「压测之后再定」提前为缺省)。
+- 只顺带的行只许放 `transform`(白名单 `kPiggybackAllowedFields`,`player_store_projection.cpp`)。白名单防的是资产的崩溃丢失窗口从定时间隔拉长到兜底间隔;它不防拆分提交,拆分本来就不会发生(原则 4)。
+
+**落码(2026-11-05,第一批,未编译)**
+
+- 推迟只发生在定时存盘入口 `PlayerLifecycleSystem::SavePlayerPeriodic`(`RedisSystem` 的周期回调调用它)。`SavePlayer` 不变:它还以函数指针给资产通道用,不能推迟。`SubmitPlayerSave` 在不带 release、不必强制写时先问 `PlayerStoreClient::DeferPeriodicSave`,返回 true 就返回 `SaveResult::kDeferred`。这份快照不进状态机,没有回调、不取号,所以「已落盘」类结果(`kAlreadyPersisted`、落盘快照替换)永远不代表一份没写的位置。
+- `DeferPeriodicSave` 只在这些条件都成立时返回 true:已播种;没有在途或排队的存盘;和上次确认提交相比只有只顺带的行不同;只顺带的行不在结果未决集合里;上一笔不带 release;代次不落后;从第一次推迟算起不到兜底间隔。`Start` 发出一笔带着只顺带的行的存盘时清掉推迟计时,所以别的入口顺带写出位置之后重新计时。
+- 启动校验(`ValidatePersistGroups`):每个数据行都声明了存盘方式;字段只能标到现存的数据行(0 = 元数据;退役号、不存在的号都拒绝);只顺带的行只许白名单字段。
+- 加载:库里出现退役号或不认识的 kind,`AssemblePlayer` 和认领回包校验都整份拒绝,不按现在的分行去解读别的布局写的行(那会清掉不属于本行的字段,等于静默丢数据)。项目未上线,遇到就清库。
+- 计数:`dirty_save_stats::PiggybackDeferred`;`/metrics` 的 `scene_player_save_events_total{event="piggyback_deferred"}`;`[DirtySave]` 汇总行尾 `piggyback_deferred=N`。推迟判断本身计进 compare 段,不推迟时 `Start` 还会再比一次,两次都计。
+- 测试:`cpp/tests/bag_test/player_store_client_test.cpp` 末尾一组(推迟、顺带写出、兜底、重新计时、在途与结果未决不推迟、0 不推迟、退役行拒绝、存盘方式声明、位置行只有 transform);Go 侧建角初始行、展示资料、账本读、导出包、全栈资产测试按新行改。
+- 别的会话同批配合改的:`redis.cpp` 改调 `SavePlayerPeriodic`;`stress_summarize.ps1` 的行名表与 `test_stress_summarize.ps1` 夹具换成新行名。
+
+**这次重排为什么没有违反下面「不能直接换组」那一条。** 生成器只拒绝「台账已经记下分组之后再改」。本次重排时 `proto/persist_schema_gen.txt` 里所有字段行都还没有 `group=`,第一次生成会按新分行补记,此后就受换组检查约束。旧布局的行一律拒绝加载(上一段),所以也不会出现 N1 说的「换组后第一次载入把字段清掉」:搬走字段的旧 kHot、kAsset 用的是退役号,kGrowth、kProfile 只多了从退役行搬来的字段,没有字段在两个现存行之间搬。
+
+**变化提示:以后要省序列化 CPU 时怎么做**(负责人 2026-11-05 问:要不要像属性同步 `SetActorBaseAttributesS2CAttrDirtyBit` 那样打脏标记,又怕别人忘了标没存,要兜底)
+
+- **写什么永远由字节比较算出,标记只当提示**:标了的行先序列化,没标的行可以跳过序列化。漏标不能导致「这一行永远不写」。
+- **兜底**:最终存盘(下线、交接、疏散、停机)和每 N 次定时存盘一律全量序列化比较,不看提示。漏标最多晚到一个兜底周期,正常下线不丢。
+- **抓漏标**:全量比较时发现「没被标却变了」的行,计数 `scene_player_save_unhinted_dirty_total{kind}` 并打日志(不带 player_id 标签);单测里直接断言失败。这样漏标会被发现、被修,不是默默被兜底吃掉。
+- **提示是行级,不是字段级**:存盘的单位是行。打标记的地方收口在领域入口(货币、背包、任务、等级各自的写入函数),不散在玩法代码里。
+- 和属性同步的区别:属性同步漏标,客户端看不到更新,马上就能发现;存盘漏标平时看不出来,只在崩溃时多丢,所以兜底和抓漏标必须同时有。
+- **现在不做**:每次存盘都全量序列化比较,没有提示,不存在漏标丢数据。压测显示序列化占 CPU 明显再加(总体方案 §4.6 表「序列化占 CPU 明显」一行)。
+
+**仍然成立的规则**
+
+- 账本不变量 I3(货币、背包、任务领取标记、两本账本、限购同一次落盘 [C])由「一次存盘的所有脏行同事务」保证,所以货币和背包分行、任务放 kGrowth 都不违反 I3。
 - 启动时按描述符校验:每个字段恰好属于一组,否则拒绝启动(fail-closed)。这样以后加字段漏标,不会静默丢数据。
 - **不能直接换组(2026-11-05 起由生成器拒绝)。** 加载时**逐行解析,清除不属于本 kind 的字段,再合并**,以当前分组为准。这一步防的是两行各有一份时合并翻倍(拼接会合并消息字段、追加 repeated 字段,背包翻倍),但它挡不住丢失:字段 F 从 kGrowth 改到 kAsset 之后,新二进制第一次载入会把 kGrowth 那一行里的 F 清掉,而 kAsset 那一行里还没有 F,第一次存盘就把两行都写成不含 F 的版本,所有登录过的玩家永久丢 F(数据覆写审计 R2 的 N1)。所以分组一旦记下就不得再改:持久 schema 台账给玩家表顶层字段记 `group=<分组>`,换组或删掉分组选项时 proto 生成直接失败(`persistschema.Apply`,[混版本持久字段保护](mixed-version-persist-field-protection.md) R4)。确需换存储位置,按 R4 走 expand / contract:在新分组加一个新字段,新旧双写一个完整版本周期,再切读方,旧字段写 `reserved` 退役。
 - 顶层出现未知字段的消息拒绝存盘:新二进制写的字段被旧二进制丢掉,比拒写更糟。
 - `PlayerAllData` 顶层的 `last_save_seq`、未携带字段不变。
+
+### 1.2 第二批:删掉 player_database_1(2026-11-06 落码,未编译)
+
+- **为什么删**:`player_database_1` 只剩 `player_id`、`stress_test_probe`、`persist_schema_gen`,后两个 `player_database` 里都有。它原来的用意(重要数据放 `player_database`、登录立即加载,不重要的放另一张)已经被分行取代;留着只有负担:多一个 kLegacy1 行;它和 `player_database` 是两个消息,字段号有重叠(字段 2 与 `transform` 冲突),加载时要单独解析、不参与拼接;覆盖世代要两边盖同一个值,载体组件、身份核对、快照都要做两份。
+- **删完之后的规矩**:玩家持久数据只有 `player_database` 一个消息。不要再按「重要 / 不重要」开第二张子表;存在哪里由 `OptionPersistGroup` 选行,什么时候存由行的存盘方式和领域事件决定(§1.1)。
+- **改了什么**:
+  - proto:删 `player_database_1` 消息;`PlayerAllData` 字段 3、`PlayerSnapshotEntry` 字段 6(`player_database_1_blob`)、`PlayerStoreKind` 的 5(kLegacy1)都写 `reserved`(连名字)。`persist_schema_gen.txt` 不手改:生成器会给 `PlayerAllData#3` 记退役行,`player_database_1` 自己的字段行按「类型已不可达」保留(`persistschema/apply.go`)。已落库的旧快照里字段 6 解析成未知字段,不影响读取。
+  - 生成的 `player_data_loader.h` 不手改(AGENTS §3),重新生成后不再声明 `PlayerDatabase1MessageFields*`,`PlayerAllDataMessageFields*` 也只处理一张表。
+  - C++:删 `player_database_1_loader.cpp`(`scene.vcxproj`、`.filters` 已去掉;`CMakeLists.txt` 由 vcxproj 生成,不手改,Linux 构建前要重新生成);删 `PlayerDatabase1CarryComp`;`player_persist::LoadedSchemaGen` 只看主表载体,不再取两表最小值;删 `StampPlayerDatabase1`;入场证据和快照提交核对只核主表的 `player_id`;快照不再带 db1 blob;`player_lifecycle.cpp` 的退出收敛比较、载入身份核对、认领拼装、存盘投影四处;`ProjectPlayer(player_database&, KindBytes&, error)`、`AssemblePlayer(rows, player_database&, error)` 去掉 db1 参数,kLegacy1 行在加载时按退役号拒绝。
+  - Go:导出包不再认 kLegacy1;Kafka 快照测试夹具去掉 db1 blob。`go/db/internal/maintenancephase/restore.go` 里 `"player_database_1"` 是拒绝 Redis 旧字段名残留的字符串检查,保留。
+  - 测试:12 个 C++ 测试按单表改(往返测试的世代断言从「两表取最小」改成单表,载体缺失只测一个;快照提交核对的串号用例改成主表串号)。
+  - 脚本与说明:压测汇总去掉 legacy1 列(`stress_summarize.ps1` 与 `test_stress_summarize.ps1`),`stress_round19.ps1`、`cpp/AGENTS.md`、`go/AGENTS.md`、`proto/AGENTS.md` 的说明。
+- **没改的**:`go/db/model`、`go/login/model`、`go/player_locator` 下的 `mysql_database_table.sql` 文件头写明是历史手工导出、不是权威 DDL,里面 `player_database` 也早就不是表了,这次不动;生成器测试 `db_model_test.go` 里的 `player_database_1` 只是自造的夹具名,不依赖真 proto。
+- **暂不改名**:`player_database` 改成按职责的名字(比如 `PlayerSaveData`)、`derived_attributes_component` 改成 `base_attributes`,能提升可读性,但 `player_database` 被 100 多个文件引用,2026-11-05 工作区里有二十多个会话在并行改这些文件,大面积改名会互相冲突。等并行改动收敛后单独一批。
 
 ## 2. `Save`
 
@@ -222,7 +284,7 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 - **什么时候必须写一笔,哪怕没有脏行**:带 `release`;调用方要确定的提交(`allowSkipWhenPersisted=false`);快照上没有当前代次的提交(和旧路径同一个口径:资产、结算、收件箱拿快照当「已提交」的证据,加载之后第一笔不写,它们就等不到快照);上一次提交带了 `release`,要把 `released` 清掉;本地代次比库里新,要把代次抬上去。后两条由状态机自己判断,不依赖快照组件。
 - **退出被取消**:同节点重连(`EnterScene` 第 0 步之后)和退出被更新的会话取代(`HandlePlayerAsyncSaved`)都立刻写一笔,不等定时存盘,否则这段时间库里显示玩家已下线。
 - **关键进度**:`PlayerLifecycleSystem::RequestKeyProgressSave`。事件:任务完成、任务领奖、等级变化(目前只有 GM 设等级这一个入口)。每名玩家 1 秒节流,窗口内合并;存盘不在调用方的栈上发生,调用方可能正处在一连串状态变化的中间。总体方案 §4 列的另外几项:副本通关、充值到账走已有的资产、结算立即存盘;稀有掉落现在没有判定入口,留到掉落系统有品质规则时再接,定时存盘兜 60 秒。
-- **定时存盘**:新路径缺省 60 秒(初值,压测后定),环境变量 `SCENE_PLAYER_SAVE_INTERVAL_SECONDS` 优先。
+- **定时存盘**:新路径缺省 60 秒(初值,压测后定),环境变量 `SCENE_PLAYER_SAVE_INTERVAL_SECONDS` 优先。只有位置变了的那一笔推迟,最长 `SCENE_PLAYER_PIGGYBACK_FALLBACK_SECONDS`(缺省 300 秒),见 §1.1「存盘方式」。
 - **序号饱和**:发送前发现就同步返回拒绝,不走回调,调用方还在自己的栈上;排队的快照开始时才发现,走回调。
 
 ### 5.4 B5 落码时定下的细节
@@ -233,7 +295,7 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 - **载入被放弃时回收播种的状态**:没有实体、也没有待入场条目时 `Forget`。写权行留着 `released=0`、持有者是本实例,是 §9.8 接受的残余。
 - **退役字段**:拼接时只拒绝「更新版本才有的字段」,已退役字段的残留直接丢掉。否则以后退役一个字段,所有存过它的玩家都进不来。
 - **login**:`PlayerStorePath=direct` 时 EnterGame 跳过预加载、不补身份,直接走 `applyLoadedPlayerSession`。
-- **建角**:`data_service` 在建角事务里写 `player_store` 的写权行(E=1、q=1、当前世代、`released=1`、持有者为空)、kHot(职业)、kProfile(名字、外观、性别);不再写两张旧表,不返回种子原件。其余 kind 没有行,首次进场由 scene 按 `registration_timestamp=0` 判新号。这回答了 §9.2。
+- **建角**:`data_service` 在建角事务里写 `player_store` 的写权行(E=1、q=1、当前世代、`released=1`、持有者为空)、kProfile(职业、名字、外观、性别;v3 之前职业在 kHot,§1.1);不再写两张旧表,不返回种子原件。其余 kind 没有行,首次进场由 scene 按 `registration_timestamp=0`(也在 kProfile)判新号。这回答了 §9.2。
 - **开关覆盖范围**:`bin/etc/base_deploy_config.yaml`、`go/db/etc/db.yaml`、`go/login/etc/login.yaml`、`go/data_service/etc/data_service.yaml`、`go/scene_manager/etc/scene_manager_service.yaml`、`go/friend/etc/friend.yaml`、`go/match/etc/match_service.yaml` 七份必须相同,`k8s_deploy.ps1` 生成期、`start_game.ps1` 启动前都核对。
 
 ### 5.5 B6 落码时定下的细节
@@ -241,15 +303,15 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 - **`ConfirmSnapshotSqlCommit`**:新路径上核对完「这份快照就是这个实体当前代次的提交」就同步回 true,不读证据。结算、收件箱的调用方都能处理同步回调,不用逐个改。探测与退避的代码留到旧路径删除时一起删。
 - **`CheckSql`(交易冻结)**:`required` 只在提交回调和认领时抬高,走到这里实体已经销毁,所以「没有未落定的存盘」就等于「required 已提交」。
 - **PING 快路径**换成 `PlayerStoreClient::RunWhenSettled`:存盘落定时看一次结果。结算的这条回调只看不压存盘,压了也会被拒,原地重试就是死循环;收件箱的 `RequestPersist` 自身有节流。
-- **账本读**:`data_service` 新增 `AccountDirectoryStore.ReadPlayerStoreAsset`,按 `player_route` 选库,一条语句读 kind 0、2。`GetPlayerAssetOpLedger` 的三种读法(普通、`verify_redis_copy`、`require_sql_commit`)和 `GetPlayerInboxLedger` 都走它:只有一个来源,核验恒真,证据就是账本本身。写权行在、kAsset 行不在是「账本为空」,不是「没有存档」。
+- **账本读**:`data_service` 新增 `AccountDirectoryStore.ReadPlayerStoreAsset`,按 `player_route` 选库,一条语句读写权行和 kWallet(v3 之前是 kAsset,§1.1;账本只在钱包行,不读背包)。`GetPlayerAssetOpLedger` 的三种读法(普通、`verify_redis_copy`、`require_sql_commit`)和 `GetPlayerInboxLedger` 都走它:只有一个来源,核验恒真,证据就是账本本身。写权行在、kWallet 行不在是「账本为空」,不是「没有存档」。
 - **自动放弃**:`GetPlayerAssetOpLedger` 加 `read_player_store`,回带 `player_released`。`assetop.Loop` 先问一次:对端走新路径就用 `judgeWithPlayerStore`(`released=1` 代替「没有位置」,与账本同一次读),走旧路径回到原判定,不读 Redis。不给 guild、trade、mail 各加一个开关:判断跟着 data_service 走,不会分叉。
-- **判死释放**:`LeaveScene` 判出 `owner_dead` 时,先调 `data_service.ReleaseDeadPlayerStoreHolder`,再删 location;失败就保留 location 重试。事务里 E 抬到 `location 这一代 + 1`、持有者清空、`released=1`。库里已比它新就不动,所以幂等。代次用 location 记的这一代,不用之后才读的 `owner_epoch` 键:这期间另一路 `EnterScene` 可能已经接手、铸了新代次,拿新值释放会把刚接手的新持有者围掉(它已认领就丢认领后未提交的进度,没认领就进不了场)。location 没记代次时不释放,下一次认领照样抬代次把旧持有者挡住。写在 data_service 是因为它已有跨库写、scene_manager 已有它的客户端和独立密钥,不用给 scene_manager 再接一条 go/db 的发现与鉴权。`EnterScene` 判死接管不用调:新认领抬 E 就把旧持有者挡住了。
+- **判死释放**:`LeaveScene` 判出 `owner_dead` 时,先释放写权,再删 location;任何一步失败或拿不准就保留 location 重试。释放分三步,与交易判死(`fenceDeadTradeHolders`)同一口径(2026-11-05 起,`go/scene_manager/internal/logic/dead_holder_release.go`、`go/data_service/internal/store/player_store_dead_holder.go`):① `data_service.ReadPlayerStoreHolder` 普通读写权行,记下 (E, H, claim_seq);没有写权行或 E 已比 location 这一代新就没有东西要释放。② H 非空时 scene_manager 向 etcd 做一次线性一致读(与 GO-3 顶替判定共用 `freshRegistryInstances`),H 在册就不释放、回 FailedPrecondition,读不到 etcd 回 Unavailable。判死看的是本副本镜像,可能滞后;判死之后持有进程也可能失租重注册、以同一 UUID 回来,玩家同节点重连复用实体 —— 只比代次的旧实现会照样释放,把在线玩家踢掉。③ `ReleaseDeadPlayerStoreHolder` 带上 `seen`:存档库事务里写权行还是 ① 读到的三列才释放,变了回 FailedPrecondition。① 排在 ② 前面是 ③ 的依据:② 看到 H 不在册,H 之后再认领一定晚于 ①,claim_seq 必变(同实例同代次重登只有它变)。剩下的窗口是 ② 与 ③ 提交之间(一次 RPC)H 重注册且玩家复用实体(不认领,claim_seq 不变);H 在册但不是判死节点上的进程时也不释放:判死节点还没认领(交接不 release,写权行停在仍然活着的交接源上),拿不准它此刻是否还持有这名玩家(交接回滚之后它就是现任);代价是 `released` 保持 0、location 留着,自动放弃与这次清理都等玩家下次进场或那个进程下线,归入 §9 第 8 条已接受的残余。两处都不丢不盖。事务里 E 抬到 `location 这一代 + 1`、持有者清空、`released=1`。库里已比它新就不动,所以幂等。不带 `seen` 的只按代次释放留给无资格撤销之后的补释放(`location-release-binding.md` §17)。代次用 location 记的这一代,不用之后才读的 `owner_epoch` 键:这期间另一路 `EnterScene` 可能已经接手、铸了新代次,拿新值释放会把刚接手的新持有者围掉(它已认领就丢认领后未提交的进度,没认领就进不了场)。location 没记代次时不释放,下一次认领照样抬代次把旧持有者挡住。写在 data_service 是因为它已有跨库写、scene_manager 已有它的客户端和独立密钥,不用给 scene_manager 再接一条 go/db 的发现与鉴权。`EnterScene` 判死接管不用调:新认领抬 E 就把旧持有者挡住了。
 - **交易冻结证据**:`SQLRoleFreezeVerifier.UsePlayerStore` 后读 `player_store`,版本取写权行,摘要覆盖这名玩家所有行的所有列(`claim_seq` 除外:它不是存档内容,冻结期间也没有人能认领);初始提交判定改成「所有行还是 (1, 1)」。
 - **维护恢复**(`verifyMaintenanceRecovery`)建立在 Redis 屏障和两张旧表的提升上,新路径先拒绝(`maintenance_recovery_not_on_player_store`)。崩溃持有者在交易冻结上卡住时要人工处理;是否要做新路径的恢复证明放到旧路径删除时一起定。
 
 ### 5.6 B7 落码时定下的细节
 
-- **展示资料**:`data_service` 新增 `BatchGetPlayerDisplay`,按路由分库读 kHot(等级、职业)和 kProfile(名字、外观、性别)。好友列表、在线目录、队伍视图走它;会话、战斗锁这些还在 Redis,不动。没有另做 Redis 投影:那要多一个写方和一份会过期的副本,等压测说读量扛不住再加。
+- **展示资料**:`data_service` 新增 `BatchGetPlayerDisplay`,按路由分库读 kCharacter(等级)和 kProfile(职业、名字、外观、性别)(v3 之前等级、职业在 kHot,§1.1)。好友列表、在线目录、队伍视图走它;会话、战斗锁这些还在 Redis,不动。没有另做 Redis 投影:那要多一个写方和一份会过期的副本,等压测说读量扛不住再加。
 - **login 外观**(`fillMissingRoleAppearances`):新路径直接跳过。它只在账号目录缺外观时才读父键,而新路径没有父键,外观在建角事务里和账号目录一起提交。
 - **建角时的 id 复用探测和种子**:`probeMintedID` 照旧探 Redis 的父键和 `owner_epoch`,只读,`owner_epoch` 还在 Redis。`NewPlayerSeed` 开着也不会种父键:新路径没有种子原件,`cacheCommittedNewPlayer` 走不到。
 - **`HasHistoricalPlayers`**:新路径上也看 `player_store`。旧路径的已有库可能没有这张表,查它会让启动失败,所以按开关加。
@@ -271,6 +333,14 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 - **展示资料**:一个玩家的落点读不了只跳过他,不让整批失败。
 - **交易排空证据(10-30 评审)**:只有冻结发起之后提交的快照才算。提交时才知道结果,但「算不算」要按提交那一刻定:`FreezeRoleForTrade` 过了战斗检查才打标记,`SubmitPlayerSave` 提交时读标记,带进完成回调。封存时已经在途的那笔不算(否则排队的冻结存盘被拒时,交易带着更旧的存档继续);局中结算自己的存盘也不算(否则重放封存不再冻结,交易一直停在 FREEZING)。冻结存盘被拒时不发 AckDrain,交易停住,这是告警级事件(`DbPlayerStorePayloadRejected`),`admission_recover` 摘掉之后才能走完。
 
+### 5.8 单次存盘与认领的协程接续（2026-11-05）
+
+`RunSaveAttempt`、`RunClaimAttempt` 只表达一次异步提交及其结果处理，由 Scene 的持久任务作用域持有。`confirmed / uncertain / inflight / pending`、相同内容与相同序号重试、重新签名、退避和认领截止时间仍按 §5 执行，没有改成整笔业务的一条无限协程。回复在传输回调返回前复制为自有 protobuf；任务和定时器以弱 `Lifetime` 认领原 `PlayerStoreClient`，实例已销毁就丢弃。
+
+维护和正常关机先停瞬态任务，存盘与必要的认领继续参加原排空。只有最终 `BeforeTeardown` 的 `StopAll` 才结束本地等待：之后新 `Submit` 返回 `kStopped`，不登记新认领；原来未落定的快照保留到实例销毁，不消费晚结果、不触发 `Finish / Seed / Notify`，也不推进 `pending`。这不是远端写入撤销或失败的证明，`HasUnsettled` 此时仍为真是有意的保守语义。真实离线释放的在途记录仍按原完成路径归还。
+
+Java 的提交协议与可观察结果没有因本批变化；不要求复制 C++ 的协程控制流。任务线程及未来标准 `task` 迁移见[线程模型](scene-node-threading-model.md)和[队伍设计](team-system.md)。
+
 ## 6. 等待点替换
 
 | 等待点 | 今天 | 新路径 |
@@ -286,8 +356,8 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 | 结算 `RequestSqlConfirmedSettlementAck` | PING + 探测 SQL ACK | `RunWhenSettled` 落定后看快照,`ConfirmSnapshotSqlCommit` 核对快照后同步回 true,再销账放锁(§5.5)。探测代码随旧路径删除 |
 | 收件箱 `RequestSqlConfirmedAck` | 同上 | 同上 |
 | 停机 | 15s 预算,Kafka 回执 | 全员最终存盘;预算按压测调,到期未完成的记录告警 |
-| 账本读 `persisted_player_database.go`、`asset_sql_commit.go`、`asset_op_ledger_verified.go:83` | Redis 父快照、Redis 投影 | 强读 `player_store` 的 kAsset 行。漏了 `asset_op_ledger_verified.go`,放弃就停摆 |
-| 自动放弃判在线 | Redis 位置 | 一条语句同读 kind 0、2:`released=1` 才算不在线,不再判死活。判死分支删除(见下) |
+| 账本读 `persisted_player_database.go`、`asset_sql_commit.go`、`asset_op_ledger_verified.go:83` | Redis 父快照、Redis 投影 | 强读 `player_store` 的 kWallet 行(v3 之前是 kAsset)。漏了 `asset_op_ledger_verified.go`,放弃就停摆 |
+| 自动放弃判在线 | Redis 位置 | 一条语句同读写权行和 kWallet:`released=1` 才算不在线,不再判死活。判死分支删除(见下) |
 
 **判死放弃要改(阻塞 B6,不阻塞 B1)。** 今天的序列是:scene 应用了 seq,然后和 go/db 断开或进程暂停一小时以上 → etcd 判死 → 放弃并退款 → 恢复之后 E=Er、持有者相同,账本照常提交,一物两得。现有 `playerAbsent`(`abandon.go:557`)只认位置键不存在,判死实现只在 scene_manager(`ES:1080`),写权行只存 uuid,其他服务判不了。改法:放弃不再判死活;scene_manager 判死后调 data_service(§5.5),在同一个事务里抬 E、置 `released=1`,之后旧持有者的写被 `STALE_OWNER` 挡住。`released=1` 分支靠租约与 `LastSendMs` 保证安全。`PF:95` 的比较也改成比写权行。
 
@@ -318,14 +388,19 @@ FIFO 依赖要逐处拆掉:PING 快路径、A2′ 先于 GET、重连补发顺�
 
 - **判定表逐格单测**(§4 两张表)。
 - **真 TiDB 集成**:并发 `Save` 与 `LoadAndClaim` 交错;老持有者在认领后写被拒;请求超时后重试、旧请求晚到;同序号重放不写两次;部分脏行之后读回的整体一致;`release` 后同实例再写成功并清除 `released`,他实例认领后原实例再写被拒;E>Er 且持有者是自己时放行并抬 Er,持有者是别人时拒绝;nil payload、kind 为 0、kind 重复;表不存在时 `VerifySchema` 拒绝启动;世代倒退;并发两个实例认领。
-- **C++**:分组覆盖全部字段;片段拼接还原与整份序列化等价(含 map 确定性);**字段换组后库里两行各有一份,拼接不翻倍**;kLegacy1 单独解析;顶层未知字段拒存;`confirmed` 用库里原字节播种;探针不造成恒脏;在途覆盖不丢行;结果未知重试不换序号、重新签名;`STALE_OWNER` 后的未决行并入脏集;未落定时不能重新播种;有 `pending` 时不触发全局完成;快路径下线发空行 release;回调恰好一次。
+- **C++**:分组覆盖全部字段;片段拼接还原与整份序列化等价(含 map 确定性);**字段换组后库里两行各有一份,拼接不翻倍**;退役行(1、2、5)拒绝加载;顶层未知字段拒存;`confirmed` 用库里原字节播种;探针不造成恒脏;在途覆盖不丢行;结果未知重试不换序号、重新签名;`STALE_OWNER` 后的未决行并入脏集;未落定时不能重新播种;有 `pending` 时不触发全局完成;快路径下线发空行 release;回调恰好一次。
 - **故障注入**:存盘中途 `kill -9` scene;go/db 重启;TiDB 切主;交接回包丢失;停机排空被打断。
 - **回归**:L1–L4 一致性与混沌测试在新路径上重跑;文本契约测试(`currency_test.cpp`)同批改。
-- **容量**(AGENTS §6):写池门禁每笔 19~20 条非业务语句 [C],是本路径最大的已知容量问题,压测后决定怎么收(连接级设置只做一次、门禁合并语句等)。
+- **容量**(AGENTS §6):写池门禁每笔约 20 次非业务往返 [C],是本路径最大的已知容量问题,拆法见 §9 第 1 条;先加「每笔往返次数、分段耗时」指标拿基线,压测对比后再收。
 
 ## 9. 未决与风险
 
-1. **写资格门禁的开销**:每笔存盘约 22 条语句 [I],2000 万在线下不可接受,但这是 Codex 全球同服线的框架,先不动,压测拿数据后再改。
+1. **写资格门禁的开销**:每笔存盘约 22 条语句 [I],2000 万在线下不可接受,但这是 Codex 全球同服线的框架,先不动,压测拿数据后再改。2026-11-05 按代码逐条数过 [C](`go/shared/authoritysql`):
+   - **每次从池里取连接**:`database/sql` 复用连接前调 `guardedConn.ResetSession`(`driver.go`),它每次都调 `connector.pin`(`pool.go`):逐条发 3~4 条基础 `SET`(autocommit、隔离级别、sql_mode,可选锁等待)和 7 条 `tidbSettings`,共 10~11 次往返;再读 `CURRENT_USER(),DATABASE()`;写者池还要 `readRawMeta` 和 `verifyBootRegistration`(读 `writer_registry`、`writer_lifecycle_receipt` 两条)。mysql 档另加 `verifyMySQLConnection`。
+   - **每笔事务进门**:`runtimeGate.beforeBegin` 读 `route_meta`;`runtimeAttempt.enter` 锁一行 `writer_slot`(`SELECT_ONLY` 档 `FOR UPDATE`,`LOCK_TOUCH` 档多一条 `UPDATE`)、读 `writer_slot`、再读 `route_meta`、再读 `writer_registry`,共 4~5 次(`writer.go`)。
+   - 加上 BEGIN、业务 3 条、COMMIT,一笔存盘约 24 次往返,业务只占 3 次。读已提交下每条读语句还要各取一次时间戳(总体方案 §8.1 第 3 条)。按总体方案 §4.4 的推算口径(2000 万在线约每秒 17 万笔),每笔少十几次往返就是每秒少两三百万次 [I]。
+   - **收敛方向**(闸门语义不动:不停服搬库要靠它冻结;改动在 `authoritysql`,所有服务的写者池一起受益):①会话设置合成一条 `SET SESSION a=…, b=…`,只在新建物理连接时做,复用时不重设(业务代码不改会话变量,加契约测试钉住;mysql 档的只读核对合成一条 `SELECT` 保留);②`verifyBootRegistration` 只在新建连接时做,复用时靠每笔事务的 slot 状态和 `writer_registry` 判定;③每笔事务的几次读合成一两条,但锁 slot 必须先于读 meta(冻结要拿全部 slot 锁才能推进 epoch,这是闸门和冻结串行的依据)。目标每笔约 6 次往返:BEGIN、闸门 1~2、锁写权行、多行写入、COMMIT。
+   - **顺序**:先加指标(每笔存盘的往返次数、pin / gate / 业务 / 提交各段耗时,不带 player_id),按 AGENTS §6 拿基线;①是同语义的合并,风险最低,先做;②③改了判定时机,要过一轮正确性评审(冻结、退休、搬库并发下的交错)再落码,有对比表再宣称收益。
 2. **身份写入**:已定,见 §5.4。字段来源是 `AccountSimplePlayer`(`class_id`、`name`、`appearance_id`、`gender`),建角事务里已有。
 3. **C3 写方令牌**(`redis_client.h` 严格脚本 [C]):B4 核实后决定新路径不用。令牌防的是「加载到的数据比屏障记录的世代旧」,那是多跳链路上有一跳截断造成的;新路径只有一个来源,世代比本进程新在认领时就拒绝(`SCHEMA_TOO_NEW`),低世代的旧持有者先被代次挡住。旧路径删除时一并删除令牌。
 4. **go/db 一进程一 zone**:scene 连本 zone 的 go/db,访客的落点库走按需打开的小池(8/2 [C])。访客多时要调大,压测定。

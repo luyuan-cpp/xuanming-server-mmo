@@ -97,6 +97,16 @@ void DispatchGateKafkaCommand(const std::string& topic, const contracts::kafka::
             GateEventHandler::RedirectToGateEventHandler(event);
             return;
         }
+        case ContractsKafkaGateDrainMigrationEventEventId: {
+            contracts::kafka::GateDrainMigrationEvent event;
+            if (!event.ParseFromString(command.payload())) {
+                LOG_WARN << "GateCommand payload decode failed, topic=" << topic
+                         << ", event_id=" << command.event_id();
+                return;
+            }
+            GateEventHandler::GateDrainMigrationEventHandler(event);
+            return;
+        }
         case ContractsKafkaPushToPlayerEventEventId: {
             contracts::kafka::PushToPlayerEvent event;
             if (!event.ParseFromString(command.payload())) {
@@ -164,6 +174,10 @@ void DispatchGateKafkaCommand(const std::string& topic, const contracts::kafka::
         return;
     }
     case ContractsKafkaRedirectToGateEventEventId: {
+        RejectEmptyPayload(topic, command.event_id());
+        return;
+    }
+    case ContractsKafkaGateDrainMigrationEventEventId: {
         RejectEmptyPayload(topic, command.event_id());
         return;
     }

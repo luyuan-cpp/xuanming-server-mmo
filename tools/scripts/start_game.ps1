@@ -155,9 +155,15 @@ function Get-LocalKafkaContract {
     if ($values['TopicGeneration'] -cne [string]$values['AuditTopicGeneration']) {
         throw 'C++ AuditTopicGeneration 与 data_service Kafka.TopicGeneration 不一致，已中止主题预建。'
     }
-    # 正式 Compose 预建清单的审计规则当前固定；漂移时显式拒绝，避免给生产者建错主题。
-    foreach ($entry in @{TransactionLogTopic='transaction_log_topic';TransactionLogPartitions='6';SnapshotTopic='player_snapshot_topic';SnapshotPartitions='3';RetentionMs='2592000000'}.GetEnumerator()) {
+    # 正式 Compose 预建清单的审计主题名与保留期当前固定；漂移时显式拒绝，避免给生产者建错主题。
+    foreach ($entry in @{TransactionLogTopic='transaction_log_topic';SnapshotTopic='player_snapshot_topic';RetentionMs='2592000000'}.GetEnumerator()) {
         if ($values[$entry.Key] -cne $entry.Value) { throw "data_service Kafka.$($entry.Key) 与 deploy/docker-compose.yml 预建清单不一致，需先同步正式规则。" }
+    }
+    # 审计主题只许加分区（docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A）：Compose 预建至少 6 / 3 个，
+    # data_service 启动时按自己配置的分区数原地加，所以这里只要求配置是正整数，不要求等于预建清单。
+    foreach ($key in @('TransactionLogPartitions','SnapshotPartitions')) {
+        $number = 0L
+        if (-not [long]::TryParse($values[$key],[ref]$number) -or $number -le 0) { throw "data_service Kafka.$key 必须是正整数，已中止主题预建。" }
     }
     $generation = $values['Kafka.CommandTopicGeneration']
     $partitions = $values['Kafka.CommandTopicPartitions']
@@ -170,8 +176,11 @@ function Get-LocalKafkaContract {
             # 观战帧 topic 与 deploy/docker-compose.yml 预建清单一致:代号同命令 topic;广播的 16 分区等于 C++ kSpectateBroadcastTopicPartitions。
             @{Name="gate-spectate_g$generation";Partitions=$partitions;RetentionMs=600000},
             @{Name="spectate-bcast_g$generation";Partitions=16;RetentionMs=600000},
-            @{Name="transaction_log_topic_g$auditGeneration";Partitions=6;RetentionMs=2592000000},
-            @{Name="player_snapshot_topic_g$auditGeneration";Partitions=3;RetentionMs=2592000000}
+            # 世界频道广播(docs/design/chat-world-channel-fanout.md §4):代号同命令 topic,4 分区等于 C++ kChatWorldBroadcastTopicPartitions。
+            @{Name="chat-world-bcast_g$generation";Partitions=4;RetentionMs=600000},
+            # 审计主题 GrowOnly：分区数「不少于」即可，多出来的是 data_service 按配置原地加的。
+            @{Name="transaction_log_topic_g$auditGeneration";Partitions=6;RetentionMs=2592000000;GrowOnly=$true},
+            @{Name="player_snapshot_topic_g$auditGeneration";Partitions=3;RetentionMs=2592000000;GrowOnly=$true}
         )
     }
 }
@@ -181,7 +190,12 @@ function Assert-LocalKafkaTopic($Spec) {
     $metadata = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--describe','--topic',$topic) 180
     $header = [regex]::Match($metadata.Out,'(?m)^\s*Topic:\s+\S+.*?\bPartitionCount:\s*(\d+)\s+ReplicationFactor:\s*(\d+)')
     if ($metadata.Code -ne 0 -or -not $header.Success) { throw "无法读取 Kafka 主题 $topic 的完整元数据。" }
-    if ([long]$header.Groups[1].Value -ne $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
+    $partitionCount = [long]$header.Groups[1].Value
+    if ($Spec.GrowOnly) {
+        if ($partitionCount -lt $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
+            throw "Kafka 审计主题 $topic 分区或副本契约不符（应至少 $($Spec.Partitions) 分区、1 副本，实际 $partitionCount 分区）。审计主题只许加分区：运行 kafka-topic-init 原地加分区后重试。"
+        }
+    } elseif ($partitionCount -ne $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
         throw "Kafka 主题 $topic 分区或副本契约不符（应为 $($Spec.Partitions) 分区、1 副本）。保留现有主题，必须协调换代，禁止原地扩分区。"
     }
     $configs = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-configs.sh','--bootstrap-server','localhost:9092','--entity-type','topics','--entity-name',$topic,'--describe','--all') 180
@@ -489,8 +503,10 @@ try {
         Initialize-LocalKafkaTopics $kafkaContract $compose
         # 写者启动目录：建库建表、给每个实例建独立账号、发单次启动授权。授权启动即消费，所以每次启动都重新生成。
         # 只接受回环数据库；已在运行的实例不重发（go_services 会 skip 它们）。详见 lib/sql_boot_catalog_local.ps1。
-        # 玩家库白名单：全球 DS/DB 不从 Zone 推导，本机一区显式给 zone_1_db，调用方已设置时不覆盖。
-        if ([string]::IsNullOrWhiteSpace($env:DB_ALLOWED_DATABASES) -and [string]::IsNullOrWhiteSpace($env:MMORPG_DB_ALLOWED_DATABASES)) { $env:MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db' }
+        # 玩家库白名单：全球 DS/DB 不从 Zone 推导，调用方已设置时不覆盖。本机一区给两个库：zone_1_db 是 go/db 的本区主库，
+        # player_store_1000000_db 是 dev 地域(0)唯一的地域存档库，新号都落这里(login Placement Region 0 / StorageShards 1，
+        # docs/design/player-data-tidb-scaling-plan.md §7.2)。
+        if ([string]::IsNullOrWhiteSpace($env:DB_ALLOWED_DATABASES) -and [string]::IsNullOrWhiteSpace($env:MMORPG_DB_ALLOWED_DATABASES)) { $env:MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,player_store_1000000_db' }
         Invoke-Dev 'sql-boot-catalog' @('-Command','sql-boot-catalog-local','-GoServices',((@($services | Where-Object { $_ -notin $skippedServices }) + 'gateway') -join ','))
         $sqlBootRoot = [IO.Path]::GetFullPath((Join-Path $serverRoot 'run/secrets/sql-boot-local'))
         $sqlBootSummary = Get-Content -LiteralPath (Join-Path $sqlBootRoot 'last-run.json') -Raw | ConvertFrom-Json

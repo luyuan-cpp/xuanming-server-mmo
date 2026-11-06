@@ -55,6 +55,9 @@ type flowSteps struct {
 	storeOwners map[uint64]lockedPlayerStoreOwner
 	plan        *deadHolderPlan
 	drained     []*deadHolderPlan
+
+	// evidence 是 committedEvidence 的应答:player → 提交过的证据。没有的回空(没有证据,照常写墓碑)。
+	evidence map[uint64]string
 }
 
 func newFlowStore(maxRoles int) (*AccountDirectoryStore, *flowSteps) {
@@ -293,6 +296,13 @@ func (f *flowSteps) commitRole(_ context.Context, account string, role *base.Acc
 	f.owners[role.PlayerId] = &dspb.AccountRoleOwnership{Account: account, Role: proto.Clone(role).(*base.AccountSimplePlayer), OwnerRevision: 1}
 	f.versions[role.PlayerId] = 1
 	return nil
+}
+
+func (f *flowSteps) committedEvidence(_ context.Context, player uint64) (string, error) {
+	if err := f.step("committedEvidence"); err != nil {
+		return "", err
+	}
+	return f.evidence[player], nil
 }
 
 func (f *flowSteps) tombstoneMissingRole(_ context.Context, account string, ref roleRef) (bool, error) {
@@ -1020,6 +1030,80 @@ func TestReapRefTombstoneLosesToLateCreate(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, dropped)
 	require.Equal(t, refStateActive, steps.refs["owner"][11].State)
+}
+
+// 用例「判陈旧不给提交过的角色写墓碑」:角色行不在、ref 还是 PENDING 而且超过宽限,但角色有提交过的证据(多集群恢复点错开,
+// 玩家片早于提交),或者证据核不全:不写墓碑、不删 ref,回 errRefHeldForReview,留给核账工具或人工。证据读不到时这一拍什么都不写。
+func TestReapRefKeepsStaleCreateRefOfACommittedRole(t *testing.T) {
+	aged := roleRef{PlayerID: 11, State: refStatePending, HomeZone: 1, AgeMs: uint64(refPendingGrace.Milliseconds())}
+	for _, evidence := range []string{committedEvidenceNameBound, committedEvidenceStoreSaved, committedEvidenceNoRoute,
+		committedEvidenceStoreUnlisted, committedEvidenceNamesUnwired} {
+		t.Run(evidence, func(t *testing.T) {
+			s, steps := newFlowStore(5)
+			steps.evidence = map[uint64]string{11: evidence}
+			steps.putRef("owner", aged)
+			dropped, err := s.reapRef(context.Background(), "owner", steps.refs["owner"][11])
+			require.ErrorIs(t, err, errRefHeldForReview)
+			require.False(t, dropped)
+			require.Equal(t, refStatePending, steps.refs["owner"][11].State, "ref 留着")
+			require.Nil(t, steps.owners[11], "不写墓碑")
+			require.Zero(t, steps.count("tombstoneMissingRole"))
+		})
+	}
+	t.Run("证据读不到_这一拍不写", func(t *testing.T) {
+		s, steps := newFlowStore(5)
+		steps.putRef("owner", aged)
+		steps.fail["committedEvidence"] = []error{errFlow}
+		dropped, err := s.reapRef(context.Background(), "owner", steps.refs["owner"][11])
+		require.ErrorIs(t, err, errFlow)
+		require.False(t, dropped)
+		require.Nil(t, steps.owners[11])
+		require.Contains(t, steps.refs["owner"], uint64(11))
+	})
+	t.Run("没有证据_照常写墓碑删", func(t *testing.T) {
+		s, steps := newFlowStore(5)
+		steps.putRef("owner", aged)
+		dropped, err := s.reapRef(context.Background(), "owner", steps.refs["owner"][11])
+		require.NoError(t, err)
+		require.True(t, dropped)
+		require.Equal(t, "", steps.owners[11].Account)
+		require.Equal(t, []string{"committedEvidence", "tombstoneMissingRole"}, steps.only("committedEvidence", "tombstoneMissingRole"), "先找证据再写墓碑")
+	})
+}
+
+// 后台一轮里留下的 ref 计进 Held,不算失败,没有证据的照常清;账号满了要淘汰陈旧 ref 时,留下的那条不删,建角照实回满。
+func TestSweepAndEvictionHoldCommittedRoles(t *testing.T) {
+	ctx := context.Background()
+	old := uint64(refPendingGrace.Milliseconds())
+
+	s, steps := newFlowStore(5)
+	steps.evidence = map[uint64]string{2: committedEvidenceStoreSaved}
+	steps.putRef("held", roleRef{PlayerID: 2, State: refStatePending, HomeZone: 1, AgeMs: old})
+	steps.putRef("late", roleRef{PlayerID: 3, State: refStatePending, HomeZone: 1, AgeMs: old})
+	result, err := s.SweepStaleRefs(ctx, refPendingGrace, 64)
+	require.NoError(t, err)
+	require.Equal(t, SweepResult{Scanned: 2, Dropped: 1, Held: 1}, result)
+	require.Contains(t, steps.refs["held"], uint64(2))
+	require.Nil(t, steps.owners[2])
+	require.NotContains(t, steps.refs["late"], uint64(3))
+
+	s, steps = newFlowStore(1)
+	steps.evidence = map[uint64]string{21: committedEvidenceNameBound}
+	steps.putRef("owner", roleRef{PlayerID: 21, State: refStatePending, HomeZone: 1, AgeMs: old})
+	_, err = s.Create(ctx, "owner", steps.routed(11))
+	require.ErrorIs(t, err, accountdirectory.ErrFull, "留下的那条占着名额:照实回满,不当成故障")
+	require.Contains(t, steps.refs["owner"], uint64(21))
+	require.Nil(t, steps.owners[21])
+}
+
+// 只有建角写的初始行原样(写权行、资料行,代次和存盘序号都是初始值)才算没进过场;别的 kind、抬过的代次、推过的存盘序号都算进过场。
+func TestInitialRowHeadTellsPlayedRows(t *testing.T) {
+	epoch, seq := accountdirectory.InitialOwnerEpoch, accountdirectory.InitialSaveSeq
+	require.True(t, initialRowHead(playerStoreOwnerKind, epoch, seq))
+	require.True(t, initialRowHead(playerStoreProfileKind, epoch, seq))
+	require.False(t, initialRowHead(playerStoreOwnerKind, epoch+1, seq), "认领抬过代次")
+	require.False(t, initialRowHead(playerStoreProfileKind, epoch, seq+1), "存过盘")
+	require.False(t, initialRowHead(playerStoreCharacterKind, epoch, seq), "建角不写 kCharacter")
 }
 
 // 过户的 PENDING 要先读 listing、后读真相。过户提交落在这两次读的前面或中间,这条 ref 都不能删:

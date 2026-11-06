@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"match/internal/authority"
 	"match/internal/discovery"
 	"match/internal/metrics"
 	"match/internal/svc"
@@ -180,7 +181,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	for _, p := range prepared {
 		snapshots = append(snapshots, p.snapshot)
 	}
-	createdAtMs := nowMs()
+	createdAtMs := createOriginalCreatedAtMs(nowMs(), f.CreatedMs)
 	createReq := &battlepb.CreateBattleRequest{
 		BattleId:               battleId,
 		BattleConfigId:         f.ConfigId,
@@ -192,6 +193,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		TableFingerprint:       tableFingerprint,
 		ActivityContext:        activityContext,
 		SpectateVisibility:     spectateVisibilityFor(mode, activityContext),
+		RecordReplay:           recordReplayFor(svcCtx.Config.BattleReport.Enabled, mode),
 		RequiredPhysicalRegion: f.PhysicalRegion,
 		PlacementOperationId:   f.OperationId,
 		TargetInstanceId:       f.TargetInstanceId,
@@ -221,7 +223,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	canonical, merr := svcCtx.Authority.SaveSupportedIntent(ctx, f, payload, capability)
 	cancel()
 	if merr != nil {
-		return fail("intent_failed", 0)
+		return fail(intentFailureOutcome(merr), 0)
 	}
 	if merr = proto.Unmarshal(canonical, createReq); merr != nil {
 		return fail("intent_failed", 0)
@@ -276,6 +278,24 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	return true
 }
 
+// createOriginalCreatedAtMs 给 Create 原件取创建时刻:本机墙钟与成局时刻取大,原件创建时刻不早于成局时刻(2026-11-05 修复)。
+// 成局 created_ms 是 TiDB 时刻,本机墙钟可能落后;早于它的原件终局永远裁决不了,SaveSupportedIntent 会拒收、本局干净失败回队。
+// 取 TiDB 当前时刻也不能代替这个下限:多个 tidb-server 的时钟也不完全一致,下限只能由成局时刻自己给。
+// 这个值只作展示与观战排序,battle 不据它做任何判定;落库前锁内还会核它早于 deadline。
+func createOriginalCreatedAtMs(localNowMs, formationCreatedMs uint64) uint64 {
+	return max(localNowMs, formationCreatedMs)
+}
+
+// intentFailureOutcome 给 SaveSupportedIntent 的失败选 match_gather_total 的 outcome(2026-11-05 评审修正):
+// 原件落库前被判终局不可裁决(authority.ErrUnterminableOriginal,多半是 match 与 TiDB 的时钟偏差)单独计
+// original_unterminable,值班据它告警;落库事务本身的失败(TiDB 抖动、租约丢失)仍计 intent_failed,不触发那条告警。
+func intentFailureOutcome(err error) string {
+	if errors.Is(err, authority.ErrUnterminableOriginal) {
+		return "original_unterminable"
+	}
+	return "intent_failed"
+}
+
 // gatherTeamAssignment 给成局成员分队。PVP_TEAM 的分边在提交点已写进成局原件,不重新计算;其余模式按 teamAssignment。
 func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord, members []uint64) ([]uint32, error) {
 	mode := matchpb.MatchMode(f.Mode)
@@ -311,7 +331,7 @@ func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord
 }
 
 // preparePlayerFenced 定位玩家所在 scene 节点并调 PrepareBattle,返回校验过的响应
-// (快照非空;调用方另取 table_fingerprint)。返回的 endpoint 为空表示还没定位
+// (快照非空且属于这名玩家;调用方另取 table_fingerprint)。返回的 endpoint 为空表示还没定位
 // 到对端(位置缺失/节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
 // before 在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
 func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
@@ -354,6 +374,11 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 	}
 	if resp.GetSnapshot() == nil {
 		return endpoint, nil, fmt.Errorf("scene 返回空快照")
+	}
+	// 快照必须属于这名玩家(2026-11-05 评审修正):玩家号错或为 0 的快照组进 Create,原件名单就与成局成员对不上,
+	// COMPLETE 永远裁决不了。和空快照一样是 scene 协议异常,不定罪;落库前 SaveSupportedIntent 还会按同一名单判据再拦一次。
+	if got := resp.GetSnapshot().GetPlayerId(); got != playerId {
+		return endpoint, nil, fmt.Errorf("scene 返回的快照属于玩家 %d,不是备战玩家", got)
 	}
 	return endpoint, resp, nil
 }

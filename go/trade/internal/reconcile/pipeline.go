@@ -42,7 +42,7 @@ const (
 	loopInterval          = 2 * time.Second
 	loopBatch             = 100
 	loopWorkers           = 8
-	loopLease             = 10 * time.Second
+	loopLease             = 10 * time.Second // 人工终结工具经 LeaseDuration 读它,算「安静」间隔
 	loopOpBudget          = 2500 * time.Millisecond
 	loopBaseBackoff       = time.Second
 	loopMaxBackoff        = 60 * time.Second
@@ -68,6 +68,12 @@ const (
 	// 抢同一行(§4.19 seq.go 末段)。与 loopLease 同值。
 	commitDeliveryDelay = loopLease
 )
+
+// LeaseDuration 是重投循环每领一行持有的租约时长。人工终结工具(cmd/assetopfix)按它和 assetop.ManualQuietFloor
+// 取较大者算「安静」间隔:距最后一次可能的投递超过这个间隔,才能判一行「从未应用」。
+func LeaseDuration() time.Duration {
+	return loopLease
+}
 
 // TradeStreams 返回 trade 独占的两条资产流(不变量 I6:每条流只有一个服务分配 seq)。
 // 每次返回新切片,调用方改了也影响不到别人。
@@ -455,7 +461,8 @@ func validateDebitBundle(b *assetpb.AssetBundle) error {
 
 // ResolveManually 把一行卡死的 outbox 按人工判定落成终局(§4.38)。
 //
-// 调用方(管理入口)必须**先**按 scene 流水 `correlation_id = op_id` 判定过真实结局:
+// 调用方(管理入口)必须**先**按玩家已提交的账本判定过真实结局(assetop.JudgeManual;scene 流水
+// `correlation_id = op_id` 只是线索),并用读证据时的见证做条件写(AssetOpRepo.ResolveManuallyIfQuiet):
 // 本方法不查证据、不猜结论。状态合法性与 operator / reason 的长度由 assetop 校验。
 //
 // 返回 false 表示这一行已经不在 PENDING(被循环抢先终结,或已被人工终结过),

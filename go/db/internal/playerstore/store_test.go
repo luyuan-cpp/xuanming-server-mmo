@@ -50,8 +50,8 @@ func validSave() *storepb.SavePlayerRequest {
 		SchemaGen:  1,
 		InstanceId: instanceA,
 		Rows: []*storepb.PlayerStoreRow{
-			{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT, Payload: []byte("hot")},
-			{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET, Payload: nil},
+			{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER, Payload: []byte("hot")},
+			{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET, Payload: nil},
 		},
 	}
 }
@@ -79,8 +79,8 @@ func TestSave_RejectedBeforeTransaction(t *testing.T) {
 		{"单行超预算", func(r *storepb.SavePlayerRequest) { r.Rows[0].Payload = big }, storepb.SavePlayerResult_SAVE_PLAYER_TOO_LARGE},
 		{"合计超预算", func(r *storepb.SavePlayerRequest) {
 			r.Rows = []*storepb.PlayerStoreRow{
-				{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT, Payload: make([]byte, row)},
-				{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET, Payload: make([]byte, row)},
+				{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER, Payload: make([]byte, row)},
+				{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET, Payload: make([]byte, row)},
 				{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_GROWTH, Payload: make([]byte, row)},
 				{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE, Payload: []byte{1}},
 			}
@@ -296,8 +296,8 @@ func TestLoadAndClaim_ClaimsThenReadsInOneTransaction(t *testing.T) {
 			return nil, nil
 		case strings.Contains(query, "kind>0"):
 			return &dbtest.Rows{Columns: []string{"kind", "payload"}, Values: [][]driver.Value{
-				{int64(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET), []byte("asset")},
-				{int64(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT), []byte("hot")},
+				{int64(storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET), []byte("asset")},
+				{int64(storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER), []byte("hot")},
 			}}, nil
 		}
 		return nil, nil
@@ -313,7 +313,7 @@ func TestLoadAndClaim_ClaimsThenReadsInOneTransaction(t *testing.T) {
 		t.Fatalf("response = %+v", resp)
 	}
 	// 片段按 kind 排好序,调用方拼接的结果才确定。
-	if len(resp.GetRows()) != 2 || resp.GetRows()[0].GetKind() != storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT ||
+	if len(resp.GetRows()) != 2 || resp.GetRows()[0].GetKind() != storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER ||
 		string(resp.GetRows()[1].GetPayload()) != "asset" {
 		t.Fatalf("rows = %v", resp.GetRows())
 	}

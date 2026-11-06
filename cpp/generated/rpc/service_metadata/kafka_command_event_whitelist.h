@@ -25,6 +25,7 @@ constexpr bool IsGateCommandEvent(uint32_t eventId)
     case 38u: // ContractsKafkaBroadcastToPlayersEvent
     case 39u: // ContractsKafkaPushToPlayerEvent
     case 40u: // ContractsKafkaBroadcastToSceneEvent
+    case 52u: // ContractsKafkaGateDrainMigrationEvent
         return true;
     default: return false;
     }

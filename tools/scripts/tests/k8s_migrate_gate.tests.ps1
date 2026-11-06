@@ -61,6 +61,10 @@ function Reset-MigrateFixture {
     if ($script:ProductionFunctions.ContainsKey('Add-GoSvcEnvEntries')) {
         Restore-ProductionFunction 'Add-GoSvcEnvEntries'
     }
+    # 发布轨道(docs/design/release-track-gray-canary.md):Apply-OneGoSvc 每个服务都调它。用真函数、按 stable 跑:stable 不写 env,
+    # 清单原样返回,本套的断言不受影响;函数缺席或改名时 Apply-OneGoSvc 的用例报「命令未找到」变红。
+    Restore-ProductionFunction 'Add-GoSvcReleaseTrackEnv'
+    $script:ReleaseTrack = 'stable'
     $script:DeploymentContent = $null
     $script:MigrationContent = $null
     $script:CommandTopicContractError = $null
@@ -133,6 +137,8 @@ function Reset-MigrateFixture {
         ConfigFile = 'db.yaml'; ImageName = 'mmorpg-db'; Port = 6000
     }
     $script:SqlSchemaOnly = $false
+    # 写 SQL 的服务表(k8s_deploy.ps1 顶层的 $script:SqlWriterGoSvcs,AST 只抽函数,这里照抄一份):Apply-OneGoSvc 按它决定调不调下面的写者 boot 桩。
+    $script:SqlWriterGoSvcs = @('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player-inbox')
     # 本套只核迁移门禁，常驻三把密钥的注入由部署合同测试覆盖。
     Set-Item Function:script:Add-MatchAuthoritySecretEnv { param($ManifestContent) return $ManifestContent }
     # 写者启动授权和逻辑库同样不归本套：注入、名册核对在 k8s_deploy_contract、logical_db_deploy_contract。

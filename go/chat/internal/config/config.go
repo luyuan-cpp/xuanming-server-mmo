@@ -46,6 +46,14 @@ type Config struct {
 	// ActorVerifyTTLSeconds:身份校验结果的进程内缓存秒数,0 = 每次都校验。
 	// 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(authority/actor_verify.go)。
 	ActorVerifyTTLSeconds int `json:",default=30"`
+	// WorldHistoryCacheMs:世界频道近窗快照的最长使用时长(毫秒),0 = 每次拉取都直读 SQL。
+	// 世界频道全服一条流,直读时读量随在线人数增长;开着时每个副本每这么久至多读一次库。
+	// 代价:别的副本上刚发的消息最多晚这么久才出现在本副本的历史里(authority/world_window.go)。
+	WorldHistoryCacheMs int `json:",default=500"`
+	// Kafka:世界频道推送(svc/world_push.go)写 chat-world-bcast_g<N> 用的 broker 地址。Brokers 为空是合法配置:
+	// 不推,客户端只能靠拉历史看到新消息(本机不起 Kafka 时)。topic 代号读环境变量 KAFKA_COMMAND_TOPIC_GENERATION
+	// (与命令 topic 同源,shared/kafkacmd),由 start_game.ps1、docker 调试 compose 与 k8s_deploy.ps1 注入。
+	Kafka KafkaConf `json:",optional"`
 
 	// ChatRedis保留既有可丢缓存配置；正式Send/Pull只用SQL原件，不读写旧LIST或授权键。
 	ChatRedis redis.RedisConf `json:",optional"`
@@ -94,6 +102,11 @@ type Config struct {
 	KillSwitchPrefix string `json:",optional"`
 }
 
+// KafkaConf 只有 broker 列表,形状与 friend / guild 的 Kafka 段相同。
+type KafkaConf struct {
+	Brokers []string `json:",optional"`
+}
+
 // ListenHostPort 把 ListenOn 拆成 host 与端口号。用 net.SplitHostPort 以正确处理 "[::]:50700"。
 func (c *Config) ListenHostPort() (string, uint32, error) {
 	host, portStr, err := net.SplitHostPort(c.ListenOn)
@@ -130,6 +143,9 @@ func (c *Config) Validate() error {
 	}
 	if c.ActorVerifyTTLSeconds < 0 || c.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {
 		return fmt.Errorf("ActorVerifyTTLSeconds(%d)必须在 [0, %d] 内", c.ActorVerifyTTLSeconds, constants.MaxActorVerifyTTLSeconds)
+	}
+	if c.WorldHistoryCacheMs < 0 || c.WorldHistoryCacheMs > constants.MaxWorldHistoryCacheMs {
+		return fmt.Errorf("WorldHistoryCacheMs(%d)必须在 [0, %d] 内", c.WorldHistoryCacheMs, constants.MaxWorldHistoryCacheMs)
 	}
 	if c.ZoneId == 0 {
 		return errors.New("ZoneId 必须非 0(K8s 全局服务用命令行 / ConfigMap 注入的 CurrentZoneId)")

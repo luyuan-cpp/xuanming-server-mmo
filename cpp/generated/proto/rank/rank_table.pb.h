@@ -838,6 +838,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankScoreRecord final : public ::go
     kAchievedMsFieldNumber = 5,
     kSourceCursorFieldNumber = 6,
     kScoreVersionFieldNumber = 7,
+    kOrderKeyFieldNumber = 8,
   };
   // uint64 board_id = 1;
   void clear_board_id() ;
@@ -909,11 +910,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankScoreRecord final : public ::go
   void _internal_set_score_version(::uint64_t value);
 
   public:
+  // int64 order_key = 8;
+  void clear_order_key() ;
+  [[nodiscard]] ::int64_t order_key() const;
+  void set_order_key(::int64_t value);
+
+  private:
+  ::int64_t _internal_order_key() const;
+  void _internal_set_order_key(::int64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:rankpb.RankScoreRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<3, 8,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -949,6 +960,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankScoreRecord final : public ::go
     ::uint64_t achieved_ms_;
     ::uint64_t source_cursor_;
     ::uint64_t score_version_;
+    ::int64_t order_key_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1608,6 +1620,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankMailRewardRecord final : public
     kLeaseTokenFieldNumber = 10,
     kCreatedMsFieldNumber = 12,
     kUpdatedMsFieldNumber = 13,
+    kExpireMsFieldNumber = 14,
   };
   // bytes attachments = 5;
   void clear_attachments() ;
@@ -1744,11 +1757,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankMailRewardRecord final : public
   void _internal_set_updated_ms(::uint64_t value);
 
   public:
+  // uint64 expire_ms = 14;
+  void clear_expire_ms() ;
+  [[nodiscard]] ::uint64_t expire_ms() const;
+  void set_expire_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expire_ms() const;
+  void _internal_set_expire_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:rankpb.RankMailRewardRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1790,6 +1813,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankMailRewardRecord final : public
     ::uint64_t lease_token_;
     ::uint64_t created_ms_;
     ::uint64_t updated_ms_;
+    ::uint64_t expire_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2240,6 +2264,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
     kCreatedMsFieldNumber = 15,
     kSealedMsFieldNumber = 16,
     kDeletedMsFieldNumber = 17,
+    kEntriesFieldNumber = 18,
   };
   // string period = 5;
   void clear_period() ;
@@ -2426,11 +2451,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
   void _internal_set_deleted_ms(::uint64_t value);
 
   public:
+  // uint64 entries = 18;
+  void clear_entries() ;
+  [[nodiscard]] ::uint64_t entries() const;
+  void set_entries(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_entries() const;
+  void _internal_set_entries(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:rankpb.RankBoardRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
+      ::google::protobuf::internal::TcParseTable<5, 18,
                           0, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2476,6 +2511,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankBoardRecord final : public ::go
     ::uint64_t created_ms_;
     ::uint64_t sealed_ms_;
     ::uint64_t deleted_ms_;
+    ::uint64_t entries_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3026,6 +3062,30 @@ inline void RankBoardRecord::_internal_set_deleted_ms(::uint64_t value) {
   _impl_.deleted_ms_ = value;
 }
 
+// uint64 entries = 18;
+inline void RankBoardRecord::clear_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entries_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t RankBoardRecord::entries() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankBoardRecord.entries)
+  return _internal_entries();
+}
+inline void RankBoardRecord::set_entries(::uint64_t value) {
+  _internal_set_entries(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:rankpb.RankBoardRecord.entries)
+}
+inline ::uint64_t RankBoardRecord::_internal_entries() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entries_;
+}
+inline void RankBoardRecord::_internal_set_entries(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entries_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // RankScoreRecord
@@ -3196,6 +3256,30 @@ inline ::uint64_t RankScoreRecord::_internal_score_version() const {
 inline void RankScoreRecord::_internal_set_score_version(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.score_version_ = value;
+}
+
+// int64 order_key = 8;
+inline void RankScoreRecord::clear_order_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_key_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::int64_t RankScoreRecord::order_key() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankScoreRecord.order_key)
+  return _internal_order_key();
+}
+inline void RankScoreRecord::set_order_key(::int64_t value) {
+  _internal_set_order_key(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:rankpb.RankScoreRecord.order_key)
+}
+inline ::int64_t RankScoreRecord::_internal_order_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.order_key_;
+}
+inline void RankScoreRecord::_internal_set_order_key(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_key_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4148,6 +4232,30 @@ inline ::uint64_t RankMailRewardRecord::_internal_updated_ms() const {
 inline void RankMailRewardRecord::_internal_set_updated_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = value;
+}
+
+// uint64 expire_ms = 14;
+inline void RankMailRewardRecord::clear_expire_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expire_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t RankMailRewardRecord::expire_ms() const {
+  // @@protoc_insertion_point(field_get:rankpb.RankMailRewardRecord.expire_ms)
+  return _internal_expire_ms();
+}
+inline void RankMailRewardRecord::set_expire_ms(::uint64_t value) {
+  _internal_set_expire_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:rankpb.RankMailRewardRecord.expire_ms)
+}
+inline ::uint64_t RankMailRewardRecord::_internal_expire_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expire_ms_;
+}
+inline void RankMailRewardRecord::_internal_set_expire_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expire_ms_ = value;
 }
 
 // -------------------------------------------------------------------

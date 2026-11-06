@@ -295,3 +295,10 @@
 - 退役 REQUEST 方法的旧手写 handler 时,必须同一批先重跑 proto 生成(`message_body_handler.go` 是生成物,随之去掉该条),再编译 robot;只删文件不重生成会编不过(会话 6b6cd9 提醒)。
 - Codex 已生成 `robot/generated/rpc/` 类型化调用桩(如 `rpc.ClientPlayerFriend.AddFriend(c, req, timeout, done)` / `AddFriendSync(ctx, c, req, timeout)`)。现有场景用 `smokeCaller` / `gc.Call`,是否改用调用桩由后续决定,不影响正确性。
 - §12 双版本:本轮只改本仓 robot 冒烟工具及其注释与设计文档,不涉及客户端可见契约;Java 版 game-robot 是否要做同类迁移未核对,按约定不往 Java `PARITY.md` 加行。
+
+## 10. 2026-11-05 补记(R4 与收尾清理)
+
+- **R4 已落码**(设计 §7 R4,未编译):gate 上行白名单只收 REQUEST / ONE_WAY。对 robot 的影响:friend 第 6 步、mail 第 7 步、guild 第 9 步改为期望约 10s 超时(§2 表已更新);`sendDisconnectBestEffort` 与全部调用点、`robot/login_test.go` 已删除,断线通知只由 gate 在 TCP 关闭时合成。验证步骤见设计 §9 第 7 步。
+- **§9.4 第二条已由别的会话解决**:JoinQueue / WatchBattle / 整队开局现在都带业务幂等键 `request_id` 与地域探测的 `NetworkPlanId`(`robot/network_probe.go`,经 `smokeCaller`),robot 冒烟不再只能在 dev 档跑。
+- 11-05 再核:10-23 之后别的会话新加的 robot 代码(地域探测、带 `request_id` 的排队)都沿用 `smokeCaller` / `matchCall` / `callAll`,没有新增「按消息号等回包」的旧写法;剩余的 `SendRequest` 都属 D / E 类或单向消息。
+- A / B / C 三类迁移的编译与冒烟仍未执行,按 §2 与 §2.1 交 Codex;Codex 目前只验证过 `pkg` 的 `CallSyncThen`(PROGRESS 10-20 条)。

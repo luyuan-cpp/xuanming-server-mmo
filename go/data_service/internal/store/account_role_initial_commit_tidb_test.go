@@ -32,7 +32,6 @@ func requireInitialRowsForTest(t *testing.T, db *sql.DB, schema string, player u
 	t.Helper()
 	for _, kind := range []storepb.PlayerStoreKind{
 		storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER,
-		storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT,
 		storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE,
 	} {
 		row, ok := readStoreRowForTest(t, db, schema, player, kind)
@@ -112,7 +111,7 @@ func TestTiDBCreateRoleInitialRowCollisionLeavesNoRole(t *testing.T) {
 	role := &base.AccountSimplePlayer{PlayerId: 3102, ZoneId: 1}
 	require.NoError(t, installInitialRouteForTest(s, ctx, role))
 	_, err := db.Exec("INSERT INTO `"+schema+"`.player_store (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES (?,?,7,9,?,?,0,?)",
-		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT), persistschema.Gen, []byte{}, []byte{})
+		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER), persistschema.Gen, []byte{}, []byte{})
 	require.NoError(t, err)
 	out, err := s.CreateWithInitialCommit(ctx, "owner", role)
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
@@ -126,7 +125,7 @@ func TestTiDBCreateRoleInitialRowCollisionLeavesNoRole(t *testing.T) {
 		require.Zero(t, count, query)
 	}
 	requireSlotReturnedForTest(t, s, db, "owner", role.PlayerId)
-	row, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT)
+	row, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER)
 	require.True(t, ok)
 	require.Equal(t, []uint64{7, 9}, []uint64{row.epoch, row.seq}, "严格 INSERT 不得重写旧行")
 }
@@ -235,7 +234,7 @@ func TestTiDBInitialCommitProofNeedsInitialRowsAndNoHistoricalFloor(t *testing.T
 			case "unmarked":
 				_, err = db.Exec("UPDATE account_role SET initial_player_commit=0 WHERE player_id=3107")
 			case "saved-row":
-				_, err = db.Exec("UPDATE `"+schema+"`.player_store SET save_seq=2 WHERE player_id=3107 AND kind=?", int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT))
+				_, err = db.Exec("UPDATE `"+schema+"`.player_store SET save_seq=2 WHERE player_id=3107 AND kind=?", int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE))
 			case "historical-floor":
 				admissions := NewAccountRoleAdmissionStore(s)
 				_, err = admissions.Register(ctx, admissionTestRequest(3107, 1, 1))

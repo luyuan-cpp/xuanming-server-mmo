@@ -88,8 +88,9 @@ TEST_F(BattleSpectateRelay, UnconfiguredRouteFallsBackToCommandTopicDefaults) {
     EXPECT_EQ("spectate-bcast_g1", records_[1].topic);
 }
 
-// 广播:固定 16 分区,按 battle_id 定分区,不随命令 topic 的分区数变;同一帧刚发过中继时目标字段也要清掉,
-// 否则每台 gate 都会按目标过滤把广播帧丢掉。
+// 广播:固定 16 分区,按 battle_id 定分区,不随命令 topic 的分区数变;目标字段一律清掉,否则每台 gate 都会按目标过滤
+// 把广播帧丢掉。生产上同一帧不会既发中继又发广播(管理器按档位二选一),这里先发一次中继,是防出口复用同一个事件对象时
+// 把中继目标带进广播帧。
 TEST_F(BattleSpectateRelay, BroadcastRecordClearsTargetsAndPartitionsByBattle) {
     ConfigureCommandTopics(3, 8);
     auto frame = SampleFrame();

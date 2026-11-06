@@ -27,6 +27,10 @@ import (
 // 包装 ErrSpectatorBusy，沿用既有 errors.Is 判断。
 var errGlobalSpectatePending = fmt.Errorf("%w: 原观战操作尚未获得终局证明", authority.ErrSpectatorBusy)
 
+// errBattleInstanceUnconfirmed 标记注册表里确认不到成局指向的 battle 实例(没有登记,或登记歧义),L0 原件因此没有落库。
+// 不是服务端故障,也不关闭意图:同 request_id 稍后重试即可(见 prepareGlobalWatch 的 L0 分支)。
+var errBattleInstanceUnconfirmed = errors.New("观战目标的 battle 实例未在注册表中确认")
+
 // globalWatchVerdict 是全局观战一个出口回给客户端的结论。tip=0 表示准入成功；
 // fault 只标服务端故障（存储、传输、原件损坏），只有它打 Error 日志。
 type globalWatchVerdict struct {
@@ -70,6 +74,8 @@ func globalWatchErrVerdict(err error) globalWatchVerdict {
 		return closedWatchVerdict(constants.ErrAlreadyWatching)
 	case errors.Is(err, errGlobalSpectatePending):
 		return globalWatchVerdict{tip: constants.ErrInternal, outcome: "pending", msg: "观战原请求尚未确认，请复用原请求重试"}
+	case errors.Is(err, errBattleInstanceUnconfirmed):
+		return globalWatchVerdict{tip: constants.ErrInternal, outcome: "source_unconfirmed", msg: "观战目标暂不可用，请复用原请求重试"}
 	default:
 		return globalWatchVerdict{tip: constants.ErrInternal, outcome: "internal", msg: "观战原请求尚未确认，请稍后重试", fault: true}
 	}
@@ -213,6 +219,11 @@ func (l *WatchBattleLogic) prepareGlobalWatch(in *pb.WatchBattleRequest, player 
 	if tier != battlepb.ESpectateTier_SPECTATE_TIER_DIRECT {
 		return nil, l.admitAndCloseGlobalLobby(in, player, target, tier)
 	}
+	// L0 原件要拿到原实例的取消证明才能关。注册表里确认不到这个实例就不落:实例若已崩溃,玩家会被这份原件卡到成局截止
+	// (最长约 1 小时),排不了队也看不了别的战斗。意图不关,同 request_id 稍后重试(R2-GO 一般-2)。
+	if !battleInstanceRegistered(s, target.formation.GetTargetNodeId(), target.formation.GetTargetInstanceId()) {
+		return nil, globalWatchFailure(errBattleInstanceUnconfirmed)
+	}
 	// 公共显示名只来自角色资料，原登录账号不进入观众广播。
 	name := challengePublicName(l.ctx, s, player)
 	original, err := s.Authority.BeginSpectator(l.ctx, player, in, target.formation, &battlepb.AddObserverRequest{
@@ -241,16 +252,30 @@ type globalWatchTarget struct {
 }
 
 // locateGlobalWatch 核对目标成局与观众会话(首次 prepare 与 LOBBY 重放共用)。rejectTip≠0 是能证明的业务拒绝:
-// 不存在、成局未确认或已中止、私密局同落 16018(同一文案,不泄露存在性);会话不在线,或本请求所在会话
+// 不存在、成局未确认、终局已落定、原实例已被替换、私密局同落 16018(同一文案,不泄露存在性);会话不在线,或本请求所在会话
 // 已被顶号或重连替换(观众路由不再属于这次请求)落 16019。err 是读取故障或会话数据损坏,不算结论。
+// 判成不可观战的场按原因摘出观战索引(evictUnwatchableFormation):随机选场选中残留成员时,这个 request_id 会被永久关成 16018,
+// 不摘的话下一次随机还会选中它(R2-GO 一般-3)。
 func (l *WatchBattleLogic) locateGlobalWatch(battle, player uint64) (target globalWatchTarget, rejectTip uint32, err error) {
 	s := l.svcCtx
 	formation, err := s.Authority.Formation(l.ctx, battle)
-	if errors.Is(err, sql.ErrNoRows) || err == nil && !globalFormationWatchable(formation) {
+	if errors.Is(err, sql.ErrNoRows) {
+		// SQL 里没有这场:索引成员是残留;客户端传了不存在的 battle_id 时摘一次也无害。
+		removeSpectateBattle(s, battle)
 		return target, constants.ErrBattleNotWatchable, nil
 	}
 	if err != nil {
 		return target, 0, err
+	}
+	if !globalFormationWatchable(formation) {
+		evictUnwatchableFormation(s, formation)
+		return target, constants.ErrBattleNotWatchable, nil
+	}
+	// 同 node_id 已登记成别的实例:原实例连同房间已不在。在选档位之前判,L0 不为死实例落原件,L1 / L2 不签凭证;
+	// 只读内存注册表,不发 RPC(R2-GO 一般-2)。查不到不算已换(etcd 抖动),L0 另由 battleInstanceRegistered 把关。
+	if battleInstanceReplaced(s, formation.GetTargetNodeId(), formation.GetTargetInstanceId()) {
+		removeSpectateBattle(s, battle)
+		return target, constants.ErrBattleNotWatchable, nil
 	}
 	session, err := loadPlayerSession(s, player)
 	if err != nil {
@@ -371,6 +396,17 @@ func globalFormationWatchable(formation *pb.MatchFormationRecord) bool {
 		formationSpectatePublic(formation.GetCreateRequest())
 }
 
+// evictUnwatchableFormation 把 globalFormationWatchable 判为不可观战的一场按原因摘出观战索引,口径同列表的 watchableSummary:
+// 终局已落定(含 state 5)是残留,这场的观战数据一起删;开房成功的私密局只摘活跃集合成员;state 1–3 是开房途中的过渡态,不动。
+func evictUnwatchableFormation(s *svc.ServiceContext, formation *pb.MatchFormationRecord) {
+	switch {
+	case authority.FormationOutcomeDecided(formation):
+		removeSpectateBattle(s, formation.GetBattleId())
+	case formation.GetState() == 4 && !formationSpectatePublic(formation.GetCreateRequest()):
+		removeSpectateActiveMember(s, formation.GetBattleId())
+	}
+}
+
 // closeUnpreparedGlobalWatch 关闭尚未发出 Add 的意图并持久化关闭原因。先写的原因为准：首答回的就是
 // 意图上实际保存的原因，与同 request_id 重放一致。未准备原件没有选进原件的战斗，不回 battle_id。
 func (l *WatchBattleLogic) closeUnpreparedGlobalWatch(in *pb.WatchBattleRequest, player uint64, closeTip uint32) globalWatchResult {
@@ -442,7 +478,10 @@ func cancelGlobalSpectator(ctx context.Context, s *svc.ServiceContext, original 
 		return err
 	}
 	if !ok {
-		return errGlobalSpectatePending
+		// 推进到 3 只在当前行已是 5 时返回 false(op 与原件不符在 advanceSpectator 里报错):别的入口(另一个副本的后台恢复、
+		// 同一玩家的另一次请求)已经拿到证明关闭了这个 op,正是本函数要的结果。同 rejectGlobalSpectator 的口径;
+		// 回 pending 的话,后台恢复会给排空证明记一笔不清零的 Hold(R2-GO 一般-5)。
+		return nil
 	}
 	add := &battlepb.AddObserverRequest{}
 	if err = proto.Unmarshal(original.AddRequest, add); err != nil {
@@ -460,14 +499,9 @@ func cancelGlobalSpectator(ctx context.Context, s *svc.ServiceContext, original 
 		logx.Infof("[spectate] Closing global spectator original without cancel proof battle=%d player=%d reason=%s: %v", original.BattleId, original.PlayerId, reason, err)
 		ctx = closeCtx
 	}
-	ok, err = advanceGlobalSpectator(ctx, s, original, 5, expectedHead)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return errGlobalSpectatePending
-	}
-	return nil
+	// 推进到 5 不会返回 false:当前行已是 5 时 advanceSpectator 同样回 true。
+	_, err = advanceGlobalSpectator(ctx, s, original, 5, expectedHead)
+	return err
 }
 
 // removeOriginalObserver 沿原件向原实例发 RemoveObserver。返回 nil 才是取消证明(判据见 observerCancelProven)。
@@ -494,7 +528,8 @@ const spectatorUnprovenCloseBudget = 3 * time.Second
 
 // spectatorSourceGoneReason 判定观战原件指向的 battle 实例是否已不存在,返回 match_spectator_unproven_close_total 的 reason,
 // 空串 = 不能判定。任一条件成立即算:
-//   - 成局 state 5,或已过成局 deadline_ms + 终局提交宽限:房间必已被 battle 定时器收尾(authority.SpectatorFormationEnded);
+//   - 终局已持久落定(COMPLETE 或 ABORT;COMPLETE 之后成局仍是 state 4),或已过成局 deadline_ms + 终局提交宽限:
+//     房间必已收尾(authority.SpectatorFormationEnded);
 //   - 注册表里同 node_id 已是别的 uuid(battleInstanceReplaced,查不到不算)。
 //
 // 原实例不在了就永远拿不到取消证明:battle 对实例不符的 Remove 回空包,旧地址的 RPC 只会报错。不放宽的话,这名玩家的新观战、

@@ -30,6 +30,8 @@ func Tables() []proto.Message {
 		&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}, &pb.MatchRatingRecord{},
 		&pb.MatchRatingAppliedRecord{}, &pb.MatchRankSourceRecord{}, &pb.MatchRankOutboxRecord{},
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
+		&pb.MatchManualResolutionRecord{}, // 人工处置审计(2026-11-05,manual_abort.go)
+		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
 		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{},
 		&teampb.TeamApplicationIndexRecord{}, &teampb.TeamLaunchRoleRecord{},
@@ -39,9 +41,11 @@ func Tables() []proto.Message {
 // CheckCandidateIndexes 核对撮合与维护扫描依赖的普通索引。既有表缺索引时迁移器只给计划 / 警告，
 // 扫描不能带着全表排序接流，所以启动与迁移后都核一遍。
 // 机房投影表 match_ticket_region / team_launch_region 已随按池撮合退役（2026-11-05）；旧库里若还在是孤表，不再核对。
+// match_spectator_intent 的索引给已关闭意图的 7 天保留期清理用(PurgeClosedSpectatorIntents 按 (created_ms, 主键) 翻页):
+// 缺了它每轮清理都是全表扫描加排序,3 秒预算内跑不完,清理永远不前进(观战第二轮评审 R2-GO 一般-4)。
 func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 	rows, err := s.DB.QueryContext(ctx, `SELECT table_name,index_name,column_name FROM information_schema.statistics
-		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_join_intent','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator')
+		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_join_intent','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator','match_spectator_intent')
 		ORDER BY table_name,index_name,seq_in_index`)
 	if err != nil {
 		return err
@@ -70,6 +74,7 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		"match_direct_intent":        {"exit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low"},
 		"match_join_intent":          {"state,player_id,request_high,request_low"},
 		"match_spectator":            {"state,player_id", "updated_ms,player_id"},
+		"match_spectator_intent":     {"state,created_ms,player_id,request_high,request_low"},
 		"team_authority":             {"state,idle_expires_ms,team_id"},
 		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
 		"team_application_index":     {"applicant_id,expires_ms,team_id"},

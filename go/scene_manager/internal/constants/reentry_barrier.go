@@ -10,30 +10,41 @@ import (
 //
 // 核心不变量:**老节点最晚可能写入的时刻 < 新节点最早被允许接管的时刻**。
 //
+// 屏障现在挡的是"进度白丢",不是"双写":2026-10-31 起玩家存档只存 TiDB,迟到的老进程写由
+// 写权行挡住(新节点 LoadAndClaim 抬代次后,老进程回 STALE_OWNER / NOT_HOLDER,只丢不盖),
+// 正确性不依赖屏障时长。屏障让可能存在的有界疏散存盘先落完再改派,老进程的最后一笔进度才不会被拒掉。
+//
 // 为什么需要它:etcd 租约到期时,Go SceneManager 与 C++ scene 节点对同一个信号
 // **各自独立**反应,两条时间线之间没有任何互相等待:
 //
-//	T0          节点与 etcd 失联(进程仍在跑、仍在服务玩家、仍能写 Redis)
+//	T0          节点与 etcd 失联(进程仍在跑、仍在服务玩家、仍能存盘)
+//	T0+TTL/2    C++ 老节点的身份探针转为不确认(keepalive 应答超过半个租约没来),
+//	            此后每 5s 给所有可改的玩家补存一次(player_lifecycle.cpp 的 RunIdentityAtRiskSaves)
 //	T0+TTL      etcd 租约到期
 //	            ├─ etcd 发 DELETE → Go 立刻判死 → resolveScene / rebalance /
 //	            │  孤儿收尾 改写 scene:{id}:node 并让新节点 CreateScene
-//	            └─ C++ 老节点健康检查(每秒)发现租约过期 →
-//	               BeginEmergencyRelocateAll:抄会话 → SavePlayer → drain
-//	T0+TTL ~ +drain  老节点仍在写玩家最终态,而新节点已经 load 了更旧的快照
-//	                 → 同一玩家双写 / 回档
+//	            └─ C++ 老节点健康检查(每秒)发现租约过期 → 重新授予租约、重注册(node.cpp)。
+//	               重注册发现分配键已被别的进程占了,才走冲突关停:
+//	               BeginEmergencyRelocateAll:抄会话 → SavePlayer → drain(kDrainBudget 15s)
+//	T0+TTL ~ +drain  冲突关停时老节点还在写玩家最终态,新节点不能抢在它前面接手
 //
 // 所以 Go 在**看到 DELETE 之后**还必须再等 `C++ drain 预算 + 时钟余量`,才允许
 // 把场景/玩家改派到新节点。TTL 那一段在信号到达时已经花掉了,增量屏障只有
 // drain + skew 这一截。
 //
 // 硬崩溃(SIGKILL/OOM/段错误)不走优雅 drain,老节点直接不写了,屏障只是让
-// 自愈晚一个屏障时长 —— 代价有界且可自愈。真正危险的是「老节点还活着还能写
-// Redis,但 Go 已经判死改派」,那正是本屏障要挡住的分区情形。
+// 自愈晚一个屏障时长 —— 代价有界且可自愈。
+//
+// **和 etcd 单边失联时屏障挡不住老节点**(2026-11-05 更正):重注册发不出去,不会走到冲突关停,老节点也不疏散,
+// 一直服务到它的存盘被拒。那时保证不回档的是 go/db 的写权行:新节点认领时把代次抬上去,老节点之后的每一笔存盘
+// 都被判 STALE_OWNER、实体销毁,只丢不盖。丢的是老节点最后一次存盘之后的进度,T0+TTL/2 起的补存把它压到约 5s
+// (docs/design/data-consistency-guarantee-map-20261020.md §6)。
 //
 // 完整设计见 docs/design/scene-owner-reentry-barrier.md §3.2。
 // ---------------------------------------------------------------------------
 
-// CppNodeDrainBudget 是 C++ scene 节点丢租约后的紧急疏散 drain 预算。
+// CppNodeDrainBudget 是 C++ scene 节点冲突关停(重注册失败 kReRegistrationFailed,见 node.h 的
+// NodeIdConflictReason)时紧急疏散 drain 的有界预算。普通失租只重注册、不疏散。
 //
 // ⚠️ **跨语言硬依赖,改一边必须改另一边**:该值在 C++ 侧是硬编码常量
 // kDrainBudget(cpp/libs/engine/core/node/system/node/node.cpp,
@@ -42,7 +53,8 @@ import (
 //
 // 后果不对称,所以宁可镜像值偏大:
 //   - C++ 调大 drain 而这里没跟着调 → 屏障短于老节点实际停笔时刻,
-//     双写窗口重新打开,而且是**静默的**(没有任何日志会报这件事);
+//     新节点可能在老节点疏散存盘落完前接手,老节点的最后一笔进度被 TiDB 写权行拒掉而静默丢失
+//     (没有任何日志会报这件事)。迟到写覆盖不了新档,所以不是双写,只是丢进度;
 //   - 这里调大而 C++ 没动 → 只是改派多等几秒,可自愈。
 //
 // 治本做法是把 drain 预算提到 bin/etc/base_deploy_config.yaml,让 Go 与 C++

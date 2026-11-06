@@ -212,6 +212,18 @@ func TestRegisterInstance_ExistingMappingIsConflict(t *testing.T) {
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
 }
 
+// 上一个用这个号的场景还有没拆完的拆除任务:不登记,否则旧任务补发的 DestroyScene 会打到新场景上。
+func TestRegisterInstance_PendingTeardownIsConflict(t *testing.T) {
+	sc, mr := newIntegrationSvcCtx(t)
+	const sceneID uint64 = 89712
+	require.NoError(t, mr.Set(sceneTeardownJobKey(sceneID), "pending"))
+
+	require.Equal(t, registrationConflict, registerInstance(sc, testInstanceRegistration(sceneID)))
+	require.False(t, mr.Exists(sceneNodeKey(sceneID)))
+	require.False(t, mr.Exists(nodeSceneCountKey(claimTestZone, registrationTestNode)))
+	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
+}
+
 // 别的 token 的登记记录同样是冲突:同一个号已经被另一次登记用过(映射可能已随销毁删掉),这次一个键都不写。
 func TestRegisterWorldChannel_OtherTokenRecordIsConflict(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)

@@ -38,6 +38,9 @@ public:
     static void RemoveGem(entt::entity player,
         const ::RemoveGemRequest* request,
         ::RemoveGemResponse* response);
+    static void RetrieveTemporaryItems(entt::entity player,
+        const ::RetrieveTemporaryItemsRequest* request,
+        ::RetrieveTemporaryItemsResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -116,6 +119,15 @@ public:
             RemoveGem(player,
                 static_cast<const ::RemoveGemRequest*>(request),
                 static_cast<::RemoveGemResponse*>(response));
+			}
+            break;
+        case 8:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::RetrieveTemporaryItemsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            RetrieveTemporaryItems(player,
+                static_cast<const ::RetrieveTemporaryItemsRequest*>(request),
+                static_cast<::RetrieveTemporaryItemsResponse*>(response));
 			}
             break;
         default:

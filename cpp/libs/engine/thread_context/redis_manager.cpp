@@ -3,9 +3,11 @@
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
 
+#include <cctype>
 #include <chrono>
 #include <memory>
 #include <string_view>
+#include <thread>
 
 namespace
 {
@@ -101,6 +103,50 @@ namespace
 }
 
 thread_local RedisManager tlsRedis;
+thread_local RedisManager tlsSceneControlRedis;
+
+namespace
+{
+	// 主机名解析的重试预算,与 etcd 端点同口径(muduo_etcd_transport.cpp 的 kResolveAttempts / kResolveRetryInterval)。
+	constexpr int kRedisResolveAttempts = 10;
+	constexpr std::chrono::seconds kRedisResolveRetryInterval{1};
+}
+
+// 只在节点启动时调用(loop 尚未接流量,阻塞重试可接受),解析结果给本进程整个生命周期的重连用;
+// K8s Service 的 ClusterIP 在 Service 存续期间不变。
+// 解析失败时不能退回「把主机名当 IP 字面量」:那样之后每次重连都连向无效地址,资产唤醒、分线目录、神秘商人
+// 会一直降级到进程重启,而且只留一行 WARN(docs/design/infra-reconnect-overview.md §4 R9)。
+// 改为有限次重试,仍失败就致命退出,交给编排重启;cluster DNS 整体不可用时 etcd 端点解析同样会让进程退出。
+muduo::net::InetAddress ResolveRedisAddress(const std::string &host, uint16_t port)
+{
+	muduo::net::InetAddress address(port);
+	// If the host looks like an IP address, use it directly without DNS resolve
+	const bool isIpLiteral = !host.empty() && (std::isdigit(static_cast<unsigned char>(host[0])) || host.find(':') != std::string::npos);
+	if (isIpLiteral)
+	{
+		return muduo::net::InetAddress(host, port);
+	}
+	for (int attempt = 1; attempt <= kRedisResolveAttempts; ++attempt)
+	{
+		if (muduo::net::InetAddress::resolve(host, &address))
+		{
+			if (attempt > 1)
+			{
+				LOG_INFO << "Redis host '" << host << "' resolved after " << attempt << " attempts";
+			}
+			return address;
+		}
+		LOG_WARN << "DNS resolve failed for Redis host '" << host << "' (attempt " << attempt << "/"
+				 << kRedisResolveAttempts << ")";
+		if (attempt < kRedisResolveAttempts)
+		{
+			std::this_thread::sleep_for(kRedisResolveRetryInterval);
+		}
+	}
+	LOG_FATAL << "Cannot resolve Redis host '" << host << "' after " << kRedisResolveAttempts
+			  << " attempts; refusing to start with an unresolved Redis address";
+	return address;
+}
 
 RedisManager::~RedisManager()
 {

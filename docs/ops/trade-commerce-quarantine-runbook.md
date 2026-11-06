@@ -98,7 +98,7 @@ WHERE player_id IN (?, ?);
 
 - **不要手改** `trade_commerce.status` 或 `workflow_proto` 把合同拉回推进。版本条件、锁序和「补偿腿按角色名只建一次」的保证，都建立在引擎自己的写路径上。
 - **不要手改** `trade_asset_op` 行。seq、纪元和终局的不变量由资产通道维护。
-- **不要人工终结**隔离后仍 PENDING 的托管扣款，要等 Abort 定论。人工终结只用于资产通道 §4.38 列出的情形（UNKNOWN 等），而且必须凭 scene 流水的 correlation_id（等于 `op_id`），用下面 §4.2 的工具做。
+- **不要人工终结**隔离后仍 PENDING 的托管扣款，要等 Abort 定论。人工终结只用于资产通道 §4.38 列出的情形（UNKNOWN 等），用下面 §4.2 的工具做。证据只认玩家**已提交**的账本，工具自己读、自己限定能选的结局（判据与 guild 工具共用 `go/shared/assetop/manual_evidence.go`）。scene 流水的 correlation_id（等于 `op_id`）只是线索：2026-11-05 起流水在包含这笔改动的存盘提交之后才发，「流水里有」最多说明已提交；「流水里没有」不能证明从没应用（提交之后发送可能失败）。2026-11-05 之前的流水早于存盘提交，有流水的那笔也可能从没落库。账本判不了的行工具一律不终结，留在 PENDING 逐件核对。
 
 ### 4.2 Manual 合同
 
@@ -112,7 +112,19 @@ cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml list
 cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml resolve -op <op_id> -as applied -operator <名字> -reason <工单号和流水结论> -confirm <op_id> -txlog-checked
 ```
 
-只处理 PENDING、创建超过 30 分钟、反复 UNKNOWN（`attempts >= 10`）的行，`-force` 只跳过最后一条。结局只有 `applied`、`aborted`。不带 `-txlog-checked` 时只打印核对清单。写库要带写者身份（`authoritysql.LoadWriterConfig` 读的环境变量），和服务进程同一套；维护排空期间不要运行。终结之后合同下一轮推进按结局继续：`aborted` 走与 scene 判拒相同的补偿，实例扣款判 `applied` 时没有托管原件，合同隔离为 Manual。
+只处理 PENDING、创建超过 30 分钟、反复 UNKNOWN（`attempts >= 10`）的行，`-force` 只跳过最后一条，证据照查。结局只有 `applied`、`aborted`。不带 `-txlog-checked` 时只打印核对清单（含工具读到的证据）。
+
+工具按 trade 配置里的 `DataServiceRpc` 读这名玩家已提交的账本（2026-11-06 与 guild 工具统一判据，未编译），按 `assetop.JudgeManual` 下结论，写进 `list` 的 `evidence` 列和审计行的 `evidence=`：
+
+| 证据 | 能选的结局 |
+|---|---|
+| `applied`：账本记已应用（全额），收据是这一条请求 | 只许 `applied` |
+| `rejected`：账本记已拒绝（含中止占位），收据是这一条请求 | 只许 `aborted` |
+| `never_applied`：写权行已释放、账本没见过这个 seq，且这一行安静（此刻没人持租约，距最后一次可能的投递超过 30 分钟） | 只许 `aborted` |
+| `partial`：账本记部分发放，或行上 `last_reason` 是部分发放 | 都不许：逐件核对 |
+| `none`：账本判不了（滑出窗口、纪元不符、没有写权行）、收据不是这一条请求、还有 scene 持有这名玩家、行不安静 | 都不许：留在 PENDING，卡死行告警进入逐件核对 |
+
+终结用条件写：读证据时的 `lease_until_ms`、`last_send_ms` 必须没变，读完之后重投循环领过或发过这一行，本次作废（退出码 3），重跑重新取证。读不到账本（data_service 不可达）就不终结，稍后重跑。写库要带写者身份（`authoritysql.LoadWriterConfig` 读的环境变量），和服务进程同一套；维护排空期间不要运行。终结之后合同下一轮推进按结局继续：`aborted` 走与 scene 判拒相同的补偿，实例扣款判 `applied` 时没有托管原件，合同隔离为 Manual。
 
 转人工的合同用 `go/trade/cmd/commercefix` 处理（2026-11-05 写，未编译，未演练）。三种动作的语义和拒绝条件见设计 [§15.7](../design/jubaozhai-market.md)：
 

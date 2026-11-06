@@ -27,6 +27,7 @@ import (
 	"shared/playerredis"
 	"shared/safego"
 	"shared/scenenode"
+	"shared/workshard"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
@@ -116,6 +117,9 @@ type AssetChannel struct {
 	Commerce *commerce.Engine
 	Mall     *commerce.Mall
 	Rmb      *commerce.RmbConsignments
+	// Members 是合同推进按片分工的成员表(本 zone 注册的 stable trade 实例,缺口清单第 16 条);
+	// 只在跑全局后台的副本上读,Commerce.Owns 绑的就是它。nil 时 Commerce 不分工、推进全部片。
+	Members *workshard.Membership
 	// Wake 落地唤醒订阅(shared/assetopwake,设计 §5.3):订 SharedRedis 上的 assetop:wake,
 	// 把玩家落地交给 Pipeline.WakePlayer。AssetOp.Wake 显式关闭时为 nil(nil 接收者的 Start / Stop 安全)。
 	Wake *assetopwake.Subscriber
@@ -480,6 +484,15 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client, globalB
 			a.Pipeline.Run(loopCtx) // 阻塞到 loopCtx 结束、本轮 Tick 的 worker 全部落库完
 		})
 		if a.Commerce != nil {
+			if a.Members != nil {
+				// 成员表先于推进循环起:第一拍读到之前成员表为空,本副本推进全部片(保活优先),读到之后按片分工。
+				a.wg.Add(1)
+				safego.Go("trade.commerce.members", func() {
+					defer a.wg.Done()
+					defer a.holdPanic()
+					a.Members.Run(loopCtx, etcd)
+				})
+			}
 			a.wg.Add(1)
 			safego.Go("trade.commerce.reconcile", func() {
 				defer a.wg.Done()

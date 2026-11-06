@@ -7,8 +7,11 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"match/internal/metrics"
 	kafkapb "proto/contracts/kafka"
 	"shared/authoritysql"
+	"shared/drainproof"
+	"shared/kafkautil"
 	"testing"
 	"time"
 )
@@ -174,6 +177,48 @@ func TestGlobalResultStartupRequiresCompletionRecorderBeforeKafka(t *testing.T) 
 	config := ResultConsumerConfig{RequireDurability: true}
 	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, nil), "完整来源归档")
 	require.ErrorContains(t, StartResultConsumer(context.Background(), config, nil, recorder), "完整来源归档")
+	// lag 探针的关停 join 缺失同样在碰 Kafka 之前拒绝(没配 broker,走到 EnsureResultTopic 会报另一条错)。
+	config.GroupID = "match-rating"
+	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, recorder), "lag 探针")
+}
+
+// lag 探针纳入关停 join:起 goroutine 之前把退出信号交给 BindLagProbe;ctx 结束后探针退出、信号关闭(svc 的 StopAndReport 等的就是它)。
+// 登记被拒就不起探针。首轮探测在 30s 之后,用例在那之前结束 ctx,不连 Kafka;time.After 只是防挂死的护栏。
+func TestStartResultLagProbeIsJoinedAtShutdown(t *testing.T) {
+	var bound <-chan struct{}
+	cfg := ResultConsumerConfig{Brokers: []string{"127.0.0.1:1"}, Topic: "match-results", GroupID: "match-rating", BindLagProbe: func(done <-chan struct{}) error {
+		bound = done
+		return nil
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	require.NoError(t, startResultLagProbe(ctx, cfg))
+	require.NotNil(t, bound, "起探针之前必须登记退出信号")
+	select {
+	case <-bound:
+		t.Fatal("ctx 未结束, 探针不能先退出")
+	default:
+	}
+	cancel()
+	select {
+	case <-bound:
+	case <-time.After(10 * time.Second):
+		t.Fatal("ctx 结束后探针必须退出并关闭退出信号")
+	}
+	refused := cfg
+	refused.BindLagProbe = func(<-chan struct{}) error { return drainproof.ErrHold }
+	require.ErrorIs(t, startResultLagProbe(context.Background(), refused), drainproof.ErrHold)
+}
+
+// 探测成功的一轮把 CommitStall 写进 match_result_consumer_commit_stall_seconds(MatchResultConsumerLagging 按它判);
+// 探失败的一轮保留上一次的值(陈值由 MatchResultLagProbeBlind 点名)。
+func TestObserveResultLagWritesCommitStallAndKeepsItOnError(t *testing.T) {
+	target := kafkautil.GroupLagTarget{Group: "match-rating", Topic: "match-results", Partitions: 3}
+	observeResultLag(target, kafkautil.GroupLag{Lag: 4, CommitStall: 901 * time.Second}, nil)
+	require.Equal(t, 901.0, metrics.ResultConsumerCommitStallValue())
+	observeResultLag(target, kafkautil.GroupLag{}, errors.New("[16] Coordinator Not Available"))
+	require.Equal(t, 901.0, metrics.ResultConsumerCommitStallValue(), "探失败的一轮不改 gauge")
+	observeResultLag(target, kafkautil.GroupLag{Lag: 4}, nil)
+	require.Zero(t, metrics.ResultConsumerCommitStallValue(), "位点在前进")
 }
 
 func mustResultBytes(t *testing.T, event *kafkapb.BattleResultEvent) []byte {

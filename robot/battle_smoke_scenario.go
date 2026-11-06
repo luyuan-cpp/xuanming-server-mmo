@@ -110,7 +110,7 @@ func RunBattleSmoke(cfg *config.Config) {
 		stats = metrics.NewStats()
 	}
 
-	// bots 收集已登录的会话,fail 时统一优雅收尾(LeaveGame + Disconnect),
+	// bots 收集已登录的会话,fail 时统一优雅收尾(LeaveGame + 关连接,断线通知由 gate 在 TCP 关闭时合成),
 	// 避免残留 ONLINE 会话把下一次冒烟顶成 ReplaceLogin(见 main.go 注释)。
 	var bots []*battleSmokeBot
 	cleanup := func() {

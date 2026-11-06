@@ -13,7 +13,6 @@ import (
 	base "proto/common/base"
 	mailpb "proto/mail"
 	"shared/assetop"
-	"shared/domainhost"
 	table "shared/generated/pb/table"
 	"shared/rolefence"
 	"shared/roleidentity"
@@ -39,21 +38,15 @@ func New(repo *data.Repo, auth *serviceauth.Verifier, reminders ...Notifier) *Se
 	return s
 }
 
-// actor 捕获客户端请求的原角色归属。在线域原账号只认 gate 签名原件,不读 login Redis:
-// 解码出的会话与验签原件不符、未签名或缺账号都当作无效请求拒绝。
+// actor 取客户端请求的原角色。在线域原账号只认 gate 签名原件,不读 login Redis:入口准入(domainhost.Guard)
+// 已把验签原件里的原账号、原修订与角色捕获进 ctx,未签名或缺账号 / 修订的请求在入口就被拒。
+// 这里再核一次是业务层自己的一道,不依赖拦截器的装配顺序;返回的 ctx 带着原件,提交点按它复核。
 func (s *Server) actor(ctx context.Context) (context.Context, uint64, bool) {
-	session := domainhost.Session(ctx)
-	if session.GetPlayerId() == 0 || session.GetOwnerRevision() == 0 {
+	owned, ok := roleidentity.Original(ctx)
+	if !ok || owned.Role.GetPlayerId() == 0 {
 		return ctx, 0, false
 	}
-	bound, err := roleidentity.CaptureSession(ctx, session)
-	if err != nil {
-		return ctx, 0, false
-	}
-	return bound, session.PlayerId, true
-}
-func ClientMethods() map[string]bool {
-	return map[string]bool{mailpb.ClientPlayerMail_ListMails_FullMethodName: true, mailpb.ClientPlayerMail_ReadMail_FullMethodName: true, mailpb.ClientPlayerMail_ClaimMailAttachments_FullMethodName: true, mailpb.ClientPlayerMail_DeleteMails_FullMethodName: true, mailpb.ClientPlayerMail_ClearReadMails_FullMethodName: true}
+	return ctx, owned.Role.GetPlayerId(), true
 }
 func rejection(err error) *base.TipInfoMessage {
 	if err == nil {

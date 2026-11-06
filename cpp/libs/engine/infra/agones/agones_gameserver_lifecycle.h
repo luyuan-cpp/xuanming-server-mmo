@@ -98,9 +98,10 @@ namespace agones
 		// Health 心跳间隔。Agones Fleet 模板里的 health.periodSeconds 必须比这个大。
 		std::chrono::milliseconds healthInterval{ 2000 };
 
-		// sidecar 可能晚于游戏进程启动,Ready 需要有上限的退避重试。
-		// 30 次 * 最多 2s ≈ 最坏 1 分钟,超过就放弃并留在 Starting:
-		// 此时任何创建都会 fail-closed,而不是假装自己 Ready 了。
+		// sidecar 可能晚于游戏进程启动,Ready 按指数退避重试,退避封顶 readyMaxBackoff。
+		// readyMaxAttempts 是快速重试阶段的次数(30 次 * 最多 2s ≈ 1 分钟),用完之后**不放弃**:打一行 ERROR,
+		// 按 readyMaxBackoff 继续重试直到成功或 Stop()(docs/design/infra-reconnect-overview.md §4 R10)。
+		// 没成功之前状态一直是 Starting,任何创建都会 fail-closed,而不是假装自己 Ready 了。
 		int readyMaxAttempts{ 30 };
 		std::chrono::milliseconds readyInitialBackoff{ 200 };
 		std::chrono::milliseconds readyMaxBackoff{ 2000 };

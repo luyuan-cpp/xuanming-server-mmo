@@ -53,6 +53,9 @@ type GateCandidate struct {
 	MaxConnections uint32
 	// Stale:这台 gate 的注册记录已有三个上报周期没被重写,多半卡住了(见 node.WatchedNode.Stale)。
 	Stale bool
+	// Draining:运维标了排空(gate:<id>:draining,见 MarkDrainingGates)。排空中的 gate 仍在候选里,容量记账照数它上面的人;
+	// 挑 gate 时由 eligibleGates 分档,只有没有完全合格的 gate 时才会用到它。
+	Draining bool
 }
 
 // PickAndSignGateToken selects a gate from the candidate list (already
@@ -174,6 +177,23 @@ func (p *gatePicker) lighter(i, j int) bool {
 // to admit:{queueId}, return inline in AssignGateResponse, etc.). The
 // shape mirrors what AssignGateResponse expects.
 func SignGateToken(gate *GateCandidate, secret []byte, ttl time.Duration) (*AdmitToken, error) {
+	return signGateToken(gate, secret, ttl, 0)
+}
+
+// SignMigrationGateToken 给 gate 排空迁移签票(docs/design/gate-drain-session-migration.md §4.4)。
+//
+// 载荷与 SignGateToken 是同一份(同一个 signGateToken),只多绑一个持票人:
+//   - playerID 非 0(游戏中的连接):login EnterGame 只放这名玩家进游戏(持票人检查,cross-zone-scene-travel.md CZ-8);
+//   - playerID 为 0(停在选角界面的连接):等同一张普通 AssignGate 票据。
+//
+// target_zone_id 恒为 0,**不能**像跨 zone 重定向那样填本 zone:票据钉了本 zone,login 会发 ZoneId = 本 zone 的 EnterScene,
+// scene_manager 的 resumeSceneOf 就不生效,玩家被放到默认大世界(设计文档 §3 第 1 条)。
+func SignMigrationGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, playerID uint64) (*AdmitToken, error) {
+	return signGateToken(gate, secret, ttl, playerID)
+}
+
+// signGateToken 是两种票据共用的签发实现:payload 的形状只在这里定义一次。playerID 为 0 时不绑持票人。
+func signGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, playerID uint64) (*AdmitToken, error) {
 	if gate == nil {
 		return nil, fmt.Errorf("nil gate")
 	}
@@ -196,6 +216,7 @@ func SignGateToken(gate *GateCandidate, secret []byte, ttl time.Duration) (*Admi
 		ZoneId:          gate.ZoneID,
 		ExpireTimestamp: expireTS,
 		HmacSessionKey:  sessionKey,
+		PlayerId:        playerID,
 	}
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
@@ -284,24 +305,11 @@ func ParseAndVerifyQueueTokenMulti(secrets [][]byte, token string) (queueID stri
 		recordExpired(0, ExpireReasonBadSignature)
 		return "", 0, fmt.Errorf("queue token secret not configured")
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(token)
+	bodyBytes, sig, err := splitQueueToken(token)
 	if err != nil {
 		recordExpired(0, ExpireReasonBadSignature)
-		return "", 0, fmt.Errorf("decode queue token: %w", err)
+		return "", 0, err
 	}
-	dot := -1
-	for i := len(raw) - 1; i >= 0; i-- {
-		if raw[i] == '.' {
-			dot = i
-			break
-		}
-	}
-	if dot <= 0 || dot == len(raw)-1 {
-		recordExpired(0, ExpireReasonBadSignature)
-		return "", 0, fmt.Errorf("malformed queue token")
-	}
-	bodyBytes := raw[:dot]
-	sig := raw[dot+1:]
 	// 不短路:命中后继续把剩下的密钥算完,免得从耗时差反推出命中的是哪一把。
 	matched := false
 	for _, secret := range secrets {
@@ -330,4 +338,43 @@ func ParseAndVerifyQueueTokenMulti(secrets [][]byte, token string) (queueID stri
 		return "", 0, fmt.Errorf("queue token expired")
 	}
 	return body.QueueID, body.ZoneID, nil
+}
+
+// splitQueueToken 把排队令牌拆成 JSON 正文与签名:base64url(正文 | "." | hex(HMAC)),见 signQueueToken。只拆格式、
+// 不验签。令牌格式只在 signQueueToken 与这里两处出现:验签(ParseAndVerifyQueueTokenMulti)与 Lookup 取 queueId
+// (queueIDOfVerifiedToken)共用这一份拆法(2026-11-06 抽出,错误串与抽出前相同)。
+func splitQueueToken(token string) (bodyBytes, sig []byte, err error) {
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode queue token: %w", err)
+	}
+	dot := -1
+	for i := len(raw) - 1; i >= 0; i-- {
+		if raw[i] == '.' {
+			dot = i
+			break
+		}
+	}
+	if dot <= 0 || dot == len(raw)-1 {
+		return nil, nil, fmt.Errorf("malformed queue token")
+	}
+	return raw[:dot], raw[dot+1:], nil
+}
+
+// queueIDOfVerifiedToken 取排队令牌里的 queueId,不验签、不看过期(2026-11-06,只给 Queue.Lookup 用)。
+//
+// Lookup 的约定是令牌已由调用方经 ParseAndVerifyQueueTokenMulti 验过签;这里取出 queueId 只为拼 meta、放行槽的键,
+// 「这张令牌是不是这个条目的」仍由读状态脚本拿 token 索引核对:索引按令牌全文建、值是 queueId,只有 Enqueue 签出的
+// 原令牌有索引,改写过正文的令牌对不上,回 meta_gone。拆不开或正文里没有 queueId 时回 false,Lookup 同样按 meta_gone 处理
+// (与合并之前「GET token 索引落空」同一结果)。
+func queueIDOfVerifiedToken(token string) (string, bool) {
+	bodyBytes, _, err := splitQueueToken(token)
+	if err != nil {
+		return "", false
+	}
+	var body queueTokenBody
+	if err := json.Unmarshal(bodyBytes, &body); err != nil || body.QueueID == "" {
+		return "", false
+	}
+	return body.QueueID, true
 }

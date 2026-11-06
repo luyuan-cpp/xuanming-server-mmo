@@ -24,6 +24,73 @@ const (
 	DefaultGlobalStorageID uint32 = FirstNonZoneStorageID
 )
 
+// 地域存档库(docs/design/player-data-tidb-scaling-plan.md §7.2):每个地域固定 K 个存档逻辑库,和区无关。
+//
+//	storage_id = FirstNonZoneStorageID + 地域码 × RegionStorageStride + 片号(0..K-1)
+//
+// 库名照旧由 StoreDBName 派生为 player_store_{storage_id}_db,例如地域 1 的 7 号库是 player_store_1001007_db;
+// 地域 0(dev、test)的 0 号库正好是 DefaultGlobalStorageID。新角色建号时在本地域的 K 个库里按 player_id 取模选一个,
+// 写进目录 player_route.storage_id;之后读写只认目录,不再按公式推,所以以后整库搬集群、别名合服都不用改玩家记录。
+// K 上线后不能改(和目录分片数 Directory.LogicalShards 同一条规矩):改了取模结果就变,只影响之后建的号,但会让
+// 各库的玩家数从此不均。扩容靠把逻辑库整库搬到新集群(tools/dbmove)。
+const (
+	// RegionStorageStride 是每个地域占的编号数,也是 K 的上限:片号 0..999。
+	RegionStorageStride uint32 = 1000
+	// MaxRegionCode 与发号器计数器的 6 位地域码同一值域(总体方案 §6.1):0 只给 dev、test。
+	MaxRegionCode uint32 = 63
+)
+
+// RegionStorageID 返回地域 region 的第 shard 个存档库编号。
+func RegionStorageID(region, shard uint32) (uint32, error) {
+	if region > MaxRegionCode {
+		return 0, fmt.Errorf("placement: region %d is out of range 0..%d", region, MaxRegionCode)
+	}
+	if shard >= RegionStorageStride {
+		return 0, fmt.Errorf("placement: storage shard %d is out of range 0..%d", shard, RegionStorageStride-1)
+	}
+	return FirstNonZoneStorageID + region*RegionStorageStride + shard, nil
+}
+
+// ValidateRegionStorage 校验地域码与存档库数 K:K 在 1..RegionStorageStride 之间。
+func ValidateRegionStorage(region, shards uint32) error {
+	if region > MaxRegionCode {
+		return fmt.Errorf("placement: region %d is out of range 0..%d", region, MaxRegionCode)
+	}
+	if shards == 0 || shards > RegionStorageStride {
+		return fmt.Errorf("placement: storage shards %d is out of range 1..%d", shards, RegionStorageStride)
+	}
+	return nil
+}
+
+// RegionStorageIDForPlayer 给新角色选存档库:本地域 K 个库里按 player_id 取模。
+// player_id 是发号器打散过的值(总体方案 §6.1),取模后均匀;0 不是合法玩家号。
+func RegionStorageIDForPlayer(region, shards uint32, playerID uint64) (uint32, error) {
+	if err := ValidateRegionStorage(region, shards); err != nil {
+		return 0, err
+	}
+	if playerID == 0 {
+		return 0, fmt.Errorf("placement: player_id 0 has no storage")
+	}
+	return RegionStorageID(region, uint32(playerID%uint64(shards)))
+}
+
+// RegionStorageDBNames 按片号顺序列出地域 region 的 K 个存档库名,给部署和本机脚本生成库名白名单、建库清单用。
+func RegionStorageDBNames(region, shards uint32) ([]string, error) {
+	if err := ValidateRegionStorage(region, shards); err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, shards)
+	for shard := uint32(0); shard < shards; shard++ {
+		id, err := RegionStorageID(region, shard)
+		if err != nil {
+			return nil, err
+		}
+		name, _ := StoreDBName(id)
+		names = append(names, name)
+	}
+	return names, nil
+}
+
 // IsZoneStorage 判断 storageID 是否属于 zone 库家族。
 func IsZoneStorage(storageID uint32) bool {
 	return storageID >= 1 && storageID <= MaxZoneStorageID

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"match/internal/authority"
 	"match/internal/metrics"
 
 	kafkapb "proto/contracts/kafka"
@@ -45,6 +46,8 @@ type ResultConsumerConfig struct {
 	// RequireDurability 要求结果 topic 严格三副本、minISR>=2,拒绝现存单副本主题(config.ResultTopicRequiresDurability)。
 	// 只有 dev / test 档放行:本地 Kafka 通常单 broker。
 	RequireDurability bool
+	// BindLagProbe 登记 lag 探针 goroutine 的退出信号(goroutine 退出、关掉自己的 broker 连接后关闭),关停时由 svc 等它;必填。
+	BindLagProbe func(done <-chan struct{}) error
 }
 
 // ResultHandler 处理一条对局结果：error 表示入账未确认，保留原位点恢复。
@@ -73,10 +76,7 @@ func EnsureResultTopic(cfg ResultConsumerConfig) error {
 	if cfg.Topic == "" {
 		return fmt.Errorf("ResultTopic 不能为空")
 	}
-	partitions := cfg.Partitions
-	if partitions <= 0 {
-		partitions = 3
-	}
+	partitions := resultTopicPartitions(cfg)
 	// 启动时确保 topic 存在(照 login / db 的 kafkautil.EnsureTopics):分区数是
 	// 不可变契约,与 broker 现状不一致会直接报错,让部署问题在启动时暴露。
 	topic := kafkautil.TopicSpec{
@@ -104,6 +104,9 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 	if cfg.GroupID == "" {
 		return fmt.Errorf("ResultConsumerGroup 不能为空")
 	}
+	if cfg.BindLagProbe == nil {
+		return fmt.Errorf("结果消费者缺少 lag 探针的关停 join")
+	}
 	if err := EnsureResultTopic(cfg); err != nil {
 		return err
 	}
@@ -127,13 +130,15 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 		if err = cfg.BindOwner(owner); err != nil {
 			return err
 		}
+		// owner 遇再均衡与暂时失败不返回:handler 失败按有界退避原地重试同一条,代次结束时不提交、交还 Kafka 由新属主重投
+		// (入账有 SQL 收据幂等,r2-kc#1)。返回 error 只可能是 HOLD:不变量破坏、提交点越过保留期,或终止时仍有没结清的记录。
 		safego.Go("match.kafka.results", func() {
 			if err := owner.Run(ctx); err != nil {
 				cfg.RelayAdmission.Hold()
 				logx.Errorf("结果消费者 HOLD: %v", err)
 			}
 		})
-		return nil
+		return startResultLagProbe(ctx, cfg)
 	}
 
 	logx.Infof("[rating] Battle result consumer started topic=%s group=%s", cfg.Topic, cfg.GroupID)
@@ -171,7 +176,56 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 			delay = min(delay*2, 30*time.Second)
 		}
 	})
+	return startResultLagProbe(ctx, cfg)
+}
+
+// resultTopicPartitions 是结果 topic 的分区数契约(未配置取 3,与 battle 端一致)。
+func resultTopicPartitions(cfg ResultConsumerConfig) int32 {
+	if cfg.Partitions <= 0 {
+		return 3
+	}
+	return cfg.Partitions
+}
+
+// resultLagProbeInterval 是结果消费组 lag 探针的周期(与 data_service 的 Kafka.LagProbeIntervalMs 缺省相同)。
+const resultLagProbeInterval = 30 * time.Second
+
+// resultLagProbePoint 是探针 goroutine 与每一轮的 safego 点位名(直接成为 label,必须是常量)。
+const resultLagProbePoint = "match.kafka.result_lag_probe"
+
+// startResultLagProbe 起结果消费组的 lag 探针(r2-kc#1):只读 broker 上这个组的已提交位点与日志起止,写 match_result_consumer_*,
+// 告警见 deploy/k8s/match-result-consumer-alerts.yaml。它与消费本身无关:消费者停了、卡在一条消息上,它照样报积压 —— 这正是要发现的情形。
+// 只读、不碰提交,不进排空的在途集合;但关停时同样要等它退出、关掉自己的 broker 连接,不能从 join 里漏掉(同 data_service 的探针):
+// 起 goroutine 之前先把退出信号交给 cfg.BindLagProbe(StartResultConsumer 已核非空),登记失败就不起。随 ctx 结束退出。
+func startResultLagProbe(ctx context.Context, cfg ResultConsumerConfig) error {
+	metrics.PrimeResultConsumerLagProbe()
+	targets := []kafkautil.GroupLagTarget{{Group: cfg.GroupID, Topic: cfg.Topic, Partitions: resultTopicPartitions(cfg)}}
+	done := make(chan struct{})
+	if err := cfg.BindLagProbe(done); err != nil {
+		return fmt.Errorf("结果消费组 lag 探针登记关停 join 失败: %w", err)
+	}
+	safego.Go(resultLagProbePoint, func() {
+		defer close(done)
+		kafkautil.RunGroupLagProbe(ctx, cfg.Brokers, resultLagProbeInterval, resultLagProbePoint, targets, observeResultLag)
+	})
 	return nil
+}
+
+// observeResultLag 把一轮探测结果写进指标。失败时 gauge 保留上一次的值,只记失败计数与日志(陈值由 MatchResultLagProbeBlind 点名)。
+func observeResultLag(target kafkautil.GroupLagTarget, lag kafkautil.GroupLag, err error) {
+	if err != nil {
+		metrics.ObserveResultConsumerLagProbe(metrics.ResultLagProbeError)
+		logx.Errorf("[rating] result consumer lag probe failed group=%s topic=%s; lag gauges keep their last value: %v", target.Group, target.Topic, err)
+		return
+	}
+	metrics.SetResultConsumerLag(lag.Lag, lag.MaxPartitionLag, lag.RetentionGap)
+	metrics.SetResultConsumerCommitStall(lag.CommitStall)
+	metrics.ObserveResultConsumerLagProbe(metrics.ResultLagProbeOK)
+	if lag.RetentionGap > 0 {
+		// 结果已丢:保留期删掉了这个组还没提交到的对局结果(采样值,只是下界)。评分与结算来源归档都缺这些局。
+		logx.Errorf("[rating] BATTLE RESULTS LOST: %d message(s) of topic %s were deleted by retention before consumer group %s committed past them (lag=%d)",
+			lag.RetentionGap, target.Topic, target.Group, lag.Lag)
+	}
 }
 
 // runResultConsumer 拉取 → 反序列化 → handler(有限重试)→ 提交,直到 ctx 结束。
@@ -204,9 +258,11 @@ func runResultConsumer(ctx context.Context, reader resultReader, handle ResultHa
 func processResultRecord(ctx context.Context, msg kafkago.Message, handle ResultHandler, wait func(context.Context, time.Duration) bool, record ResultRecordHandler) error {
 	event := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, event); err != nil {
+		// 坏消息永远解不出来:原地重试只会让这个分区后续的评分与结算归档全部停住。与 data_service、guild 的消费者一致,
+		// 记录后跳过并提交(docs/design/infra-reconnect-overview.md §4 R11);按 decode_error 计数告警。
 		metrics.ObserveRatingUpdate("unknown", "decode_error")
-		logx.Errorf("结果原件解码失败 partition=%d offset=%d: %v", msg.Partition, msg.Offset, err)
-		return err
+		logx.Errorf("结果原件解码失败,跳过 partition=%d offset=%d: %v", msg.Partition, msg.Offset, err)
+		return nil
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(event.GetBattleId(), 10) {
 		logx.Errorf("结果 key 与 battle_id 不符 partition=%d offset=%d", msg.Partition, msg.Offset)
@@ -218,6 +274,13 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 			last = handle(ctx, event)
 		}
 		if last == nil {
+			return nil
+		}
+		if errors.Is(last, authority.ErrCompletionOriginalConflict) {
+			// 永久错误:同一局已归档的原件与这条不同,重试永远不会成功。已归档的那份原件照旧有效,这一条记录后跳过,
+			// 不卡住分区(§4 R11);按 original_conflict 计数告警,人工核对两份原件。
+			metrics.ObserveRatingUpdate(matchpb.MatchMode(event.GetMatchMode()).String(), "original_conflict")
+			logx.Errorf("结果原件与已归档的不一致,跳过 partition=%d offset=%d battle=%d: %v", msg.Partition, msg.Offset, event.GetBattleId(), last)
 			return nil
 		}
 		logx.Errorf("结果处理未确认 attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)

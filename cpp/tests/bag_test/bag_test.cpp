@@ -10,6 +10,7 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "modules/mission/comp/mission_comp.h"
@@ -1749,21 +1750,48 @@ TEST(BagProfileTest, AdmissionCanBeSwappedOnANonEmptyBag)
     EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
-// 只有临时格会挤掉存量物品。这条把取舍钉死:其余三个包**绝不**自动销毁玩家的东西。
-TEST(BagProfileTest, OnlyTheTemporaryBagEvicts)
+// 四个固定包**全部**满即拒,没有哪个会自动销毁玩家的东西(审计 cpp-economy#2,§6.6)。
+// 临时格 2026-11-05 之前配的是先进先出:满 200 件后新掉落会挤掉最早那件,而那件东西没有任何去处 —— 真丢。
+// 这条把取舍钉死:谁要给固定包换回会淘汰的策略,先得给被挤掉的东西一个去处,并改这条用例。
+TEST(BagProfileTest, NoFixedBagEvicts)
 {
     PlayerBagsComp comp;
 
-    EXPECT_NE(nullptr, dynamic_cast<const EvictOldestFirst *>(&comp.bags[kTemporary].Eviction()))
-        << "临时格是掉落溢出的缓冲,语义就是新的进来、旧的顶出去";
-
     for (const uint32_t bagType : {static_cast<uint32_t>(kInventory),
                                    static_cast<uint32_t>(kWarehouse),
-                                   static_cast<uint32_t>(kEquipment)})
+                                   static_cast<uint32_t>(kEquipment),
+                                   static_cast<uint32_t>(kTemporary)})
     {
         EXPECT_NE(nullptr, dynamic_cast<const RejectWhenFull *>(&comp.bags[bagType].Eviction()))
             << "bag_type=" << bagType << " 绝不该自动挤掉玩家的东西";
     }
+}
+
+// 临时格满了:经 BagService 的两个入包入口都在任何写入之前整批拒绝,存量一件不少、不出淘汰回执,
+// 失败的入账留在来源(战斗结算延后重试)。这是 cpp-economy#2 的直接回归:改动前这里会挤掉最早那件并返回成功。
+TEST(BagProfileTest, FullTemporaryBagRefusesNewItemsAndKeepsTheOldest)
+{
+    PlayerBagsComp comp;
+    Bag &temporary = comp.bags[kTemporary];
+    temporary.SetCapacityForRestore(2);
+    const Guid oldest = AddItemAndGetLastWritten(temporary, MakeItem(kNonStack1));
+    const Guid newer = AddItemAndGetLastWritten(temporary, MakeItem(kNonStack2));
+    ASSERT_TRUE(temporary.IsFull());
+    const auto slotsBefore = temporary.GridSlots();
+
+    std::vector<DestroyedInstance> evicted;
+    EXPECT_NE(kSuccess, temporary.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
+    EXPECT_TRUE(evicted.empty()) << "even with a receipt sink, nothing may be evicted";
+    EXPECT_NE(kSuccess, BagService::AddItem(entt::null, temporary, MakeItem(kNonStack2)));
+    ItemCountMap batch;
+    batch[kNonStack1] = 1;
+    EXPECT_NE(kSuccess, BagService::AddItems(entt::null, temporary, batch));
+
+    EXPECT_NE(nullptr, temporary.GetItemCompByGuid(oldest)) << "the oldest item is never pushed out";
+    EXPECT_NE(nullptr, temporary.GetItemCompByGuid(newer));
+    EXPECT_EQ(2u, temporary.OccupiedGridCount());
+    EXPECT_EQ(slotsBefore, temporary.GridSlots());
+    EXPECT_TRUE(temporary.IsLayerConsistent());
 }
 
 // ---------------------------------------------------------------------------
@@ -1798,11 +1826,12 @@ TEST(EvictionPolicyTest, DefaultBagRefusesInsteadOfEvicting)
     EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
-// 临时格:满了顶掉**最早进包的**那件,并把它回执出来给 BagService 落流水。
-TEST(EvictionPolicyTest, TemporaryBagEvictsOldestAndReportsIt)
+// 先进先出的包:满了顶掉**最早进包的**那件,并把它回执出来给 BagService 落流水。
+// (生产上已没有包这样配,见 FifoEvictingProfileForTest;这里钉的是淘汰轴的机制。)
+TEST(EvictionPolicyTest, FifoBagEvictsOldestAndReportsIt)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(3));
+    bag.SetProfile(FifoEvictingProfileForTest(3));
 
     const Guid first = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     const Guid second = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
@@ -1829,7 +1858,7 @@ TEST(EvictionPolicyTest, TemporaryBagEvictsOldestAndReportsIt)
 TEST(EvictionPolicyTest, EvictsNothingWhenItCannotFreeEnough)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
 
     // 要 3 个实例,只空 1 格、包里也只有 1 件可挤 —— 缺口填不上。
@@ -1865,7 +1894,7 @@ TEST(EvictionPolicyTest, NamedSlotsNeverEvictEvenWithAnEvictingPolicy)
 TEST(EvictionPolicyTest, CheckSpaceForStaysPureAndNeverEvicts)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(1));
+    bag.SetProfile(FifoEvictingProfileForTest(1));
     const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
 
     ItemCountMap want;
@@ -1885,7 +1914,7 @@ TEST(EvictionPolicyTest, CheckSpaceForStaysPureAndNeverEvicts)
 TEST(EvictionPolicyTest, BatchAddEvictsOldestThroughPublicEntry)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
     ASSERT_TRUE(bag.IsFull());
@@ -1906,7 +1935,7 @@ TEST(EvictionPolicyTest, BatchAddEvictsOldestThroughPublicEntry)
 TEST(EvictionPolicyTest, BatchAddPreservesExistingInstancesWhenItAlreadyFits)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(4));
+    bag.SetProfile(FifoEvictingProfileForTest(4));
     const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
 
     ItemCountMap batch;
@@ -1933,14 +1962,15 @@ TEST(EvictionPolicyTest, BatchAddPreservesExistingInstancesWhenItAlreadyFits)
 //
 // 修复前:缺口按**淘汰前**的规划算(并 1 进旧堆、剩 2 铺 1 个实例 → 缺 1 格),
 // 只挤 1 件 —— 恰恰是那个旧堆;重规划后需求变成 2 个实例、只腾出 1 格 → 放不下,
-// 返回失败,但旧堆已经销毁了。玩家净损失,而且这是临时格拾取同种材料的日常路径。
+// 返回失败,但旧堆已经销毁了。玩家净损失,而且这在当时是临时格拾取同种材料的日常路径
+// (临时格 2026-11-05 起不再淘汰,这条钉的是淘汰轴本身)。
 // 修复后:把牺牲者当作已不存在反复规划,算到不动点(需要挤 2 件)才真销毁。
 TEST(EvictionPolicyTest, EvictingTheMergeTargetStillLandsEverything)
 {
     ASSERT_EQ(2u, MaxStack(kStack9)) << "用例前提:kStack9 堆叠上限 2(Item.json)";
 
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     const Guid oldStack = AddItemAndGetLastWritten(bag, MakeItem(kStack9, 1)); // 最早,room 1
     const Guid other = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     ASSERT_TRUE(bag.IsFull());
@@ -1961,7 +1991,7 @@ TEST(EvictionPolicyTest, EvictingTheMergeTargetStillLandsEverything)
 TEST(EvictionPolicyTest, EvictingTheMergeTargetInABatchStillLandsEverything)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     AddItemAndGetLastWritten(bag, MakeItem(kStack9, 1));
     AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     ASSERT_TRUE(bag.IsFull());
@@ -1982,7 +2012,7 @@ TEST(EvictionPolicyTest, EvictingTheMergeTargetInABatchStillLandsEverything)
 TEST(EvictionPolicyTest, MergeTargetThatIsNotOldestSurvivesAndAbsorbs)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     const Guid stack = AddItemAndGetLastWritten(bag, MakeItem(kStack9, 1)); // room 1
     ASSERT_TRUE(bag.IsFull());
@@ -2004,7 +2034,7 @@ TEST(EvictionPolicyTest, MergeTargetThatIsNotOldestSurvivesAndAbsorbs)
 TEST(EvictionPolicyTest, PreassignedGuidCollisionRefusesBeforeEvicting)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     const Guid existing = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
     ASSERT_TRUE(bag.IsFull());
@@ -2053,7 +2083,7 @@ TEST(EvictionPolicyTest, ZeroCountEntryRefusesWholeBatchBeforeAnyWrite)
 TEST(EvictionPolicyTest, NoReceiptSinkMeansNoEviction)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(1));
+    bag.SetProfile(FifoEvictingProfileForTest(1));
     const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     ASSERT_TRUE(bag.IsFull());
 
@@ -2073,7 +2103,7 @@ TEST(EvictionPolicyTest, NoReceiptSinkMeansNoEviction)
 }
 
 // 编排层(BagService)必须经过候选提交而不是纯预测的 CheckSpaceFor ——
-// 否则临时格的先进先出在生产唯一入口上永远不生效。回执落流水那一步在
+// 否则配了先进先出的包在编排层永远不淘汰。回执落流水那一步在
 // TransactionLogSystem 里、单测没有可读侧,这里至少钉住"确实淘汰了、且 BagService
 // 的两条入包路径都能走完"。删掉 BagService 里的 LogEvictedInstances 调用这条用例
 // 不会红 —— 那是已知的覆盖上限,记在设计文档 §6.5.3。
@@ -2082,7 +2112,7 @@ TEST(EvictionPolicyTest, ServiceLevelAddEvictsThroughTheReservePath)
     GainBlockService::ClearAllGlobalBlocks(); // 前序 GainBlockServiceTest 可能留有全局封锁
 
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(1));
+    bag.SetProfile(FifoEvictingProfileForTest(1));
     const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     ASSERT_TRUE(bag.IsFull());
 
@@ -2113,7 +2143,7 @@ TEST(BagProfileTest, SetProfileOnANonEmptyBagChangesNothing)
     Bag bag; // Flat(kDefaultCapacity) + AcceptAll + RejectWhenFull
     ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
 
-    bag.SetProfile(BagProfile::Temporary(200));
+    bag.SetProfile(FifoEvictingProfileForTest(200));
 
     EXPECT_EQ(kDefaultCapacity, bag.Capacity()) << "布局没换";
     EXPECT_NE(nullptr, dynamic_cast<const RejectWhenFull *>(&bag.Eviction()))
@@ -2193,7 +2223,7 @@ TEST(AcquireSeqTest, InsertStampsMonotonicSequence)
 TEST(AcquireSeqTest, FifoFollowsSequenceNotGuid)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
 
     // guid 大 / 序号小 = 最早进包(跨服带回来的那件)
     bag.InsertItemForRestore(/*guid=*/900002, kNonStack1, 1, 0, /*acquireSeq=*/1);
@@ -2351,13 +2381,13 @@ TEST(BagProfileRegistryTest, FixedBagsCarryNoProfileId)
 // 此前这条改动零用例守着 —— 把 LogEvictedInstances 的调用全删掉,bag_test 仍全绿。
 // ---------------------------------------------------------------------------
 
-// 判据:**满了的临时格经 BagService 仍能入包**。
+// 判据:**满了的先进先出包经 BagService 仍能入包**(生产上已没有包这样配,钉的是编排层的回执路径)。
 // 这一条能区分编排层走的是候选提交(会腾位)还是纯预测的 CheckSpaceFor
 // —— 后者会抢在淘汰之前把整批拒掉,先进先出在编排层就永远不生效。
-TEST(BagServiceEvictionTest, ServiceLevelAddEvictsOnAFullTemporaryBag)
+TEST(BagServiceEvictionTest, ServiceLevelAddEvictsOnAFullFifoBag)
 {
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     const Guid newer = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
     ASSERT_TRUE(bag.IsFull());
@@ -2372,7 +2402,7 @@ TEST(BagServiceEvictionTest, ServiceLevelAddEvictsOnAFullTemporaryBag)
     ItemCountMap batch;
     batch[kNonStack2] = 1;
     EXPECT_EQ(kSuccess, BagService::AddItems(entt::null, bag, batch))
-        << "编排层必须提交完整候选,否则临时格的先进先出在批量路径上失效";
+        << "编排层必须提交完整候选,否则先进先出在批量路径上失效";
     EXPECT_EQ(nullptr, bag.GetItemCompByGuid(newer)) << "轮到它了";
     EXPECT_EQ(2u, bag.OccupiedGridCount());
     EXPECT_TRUE(bag.IsLayerConsistent());
@@ -3840,6 +3870,200 @@ TEST(GuidSegmentClientTest, RangesFromDifferentIssuerReplicasMayGoBackwards)
     EXPECT_EQ(1002u, stats.highWater);
 }
 
+// ── 整批预检之后的续段(RequestTopUp,审计 R2 r2-battle#3,2026-11-06)──────────────────────────
+//
+// 预取只在发号之后判阈值。整批入包的调用方先用 Available() 预检、不够就整批延后一个号都不发:
+// 「需要量 > 剩余 > 预取阈值、又没有下一段」时谁都不发号,预取永远不触发,这一批就永远等不来新段。
+
+// 回归主线:只读余量什么都不触发;RequestTopUp 立刻领一段(单飞),落下之后余量够了,号照常按序发。
+TEST(GuidSegmentClientTest, TopUpFetchesWhenABatchNeedsMoreThanIsLeftAboveThePrefetchThreshold)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100); // threshold = 10
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    ASSERT_EQ(50u, Drain(client, 50).size()); // 剩 50 > 阈值 10:不预取
+    ASSERT_EQ(1u, t.requests.size());
+
+    EXPECT_EQ(50u, client.Available()) << "整批要 60 个,只有 50 个";
+    EXPECT_EQ(1u, t.requests.size()) << "只读余量不会续段(修复前预检之后就停在这里)";
+
+    EXPECT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(60));
+    ASSERT_EQ(2u, t.requests.size()) << "没有下一段、没有在途、不在退避:立刻领一段";
+    EXPECT_EQ(100u, t.requests[1].step) << "按当前 step 领,与预取同一条路径";
+    EXPECT_TRUE(client.GetStats().topUpPending);
+    EXPECT_EQ(1u, client.GetStats().topUpFetches);
+
+    EXPECT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(60));
+    EXPECT_EQ(2u, t.requests.size()) << "单飞:在途时重复调用不多发";
+
+    client.OnResponse(0, 101, 201);
+    EXPECT_FALSE(client.GetStats().topUpPending) << "续的那一段落下即兑现";
+    EXPECT_EQ(150u, client.Available());
+    EXPECT_EQ(SegClient::TopUpOutcome::kEnough, client.RequestTopUp(60));
+    EXPECT_EQ(2u, t.requests.size());
+    const auto ids = Drain(client, 60);
+    ASSERT_EQ(60u, ids.size());
+    EXPECT_EQ(51u, ids.front()) << "先发完当前段";
+    EXPECT_EQ(110u, ids.back()) << "再切到续的那一段";
+}
+
+// 帮不上忙的情形如实回报,且一个请求都不发、一个号都不作废:未启用 / 已停机、余量已够、需要量大于 maxStep(终局)。
+// 评审修正(2026-11-06):原先「下一段已在手里还不够」回 kBuffersFull 让调用方一直等;现在那种情形腾出 buffer 续段
+// (TopUpAbandonsTheCurrentRemainderWhenBothBuffersCannotCoverTheBatch),只有一段最多给的号都不够时才是终局。
+TEST(GuidSegmentClientTest, TopUpReportsEnoughExceedsMaxStepOrUnavailableWithoutSending)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    EXPECT_EQ(SegClient::TopUpOutcome::kUnavailable, client.RequestTopUp(1)) << "未启用";
+    t.EnableOn(client, 100); // threshold = 10;minStep = maxStep = 100
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    EXPECT_EQ(SegClient::TopUpOutcome::kEnough, client.RequestTopUp(100));
+    ASSERT_EQ(91u, Drain(client, 91).size()); // 发到剩 10 时预取已发
+    ASSERT_EQ(2u, t.requests.size());
+    client.OnResponse(0, 101, 201); // 下一段在手里:合计 109
+
+    EXPECT_EQ(SegClient::TopUpOutcome::kExceedsMaxStep, client.RequestTopUp(500)) << "一段最多 100 个号:续段永远凑不齐 500";
+    EXPECT_EQ(2u, t.requests.size());
+    EXPECT_FALSE(client.GetStats().topUpPending) << "终局结论不记需求";
+    EXPECT_EQ(0u, client.GetStats().topUpAbandonedIds) << "终局结论不作废任何号";
+    EXPECT_EQ(109u, client.Available());
+
+    client.Shutdown();
+    EXPECT_EQ(SegClient::TopUpOutcome::kUnavailable, client.RequestTopUp(500)) << "停机之后不再领段";
+    EXPECT_EQ(2u, t.requests.size());
+    EXPECT_STREQ("exceeds_max_step", TopUpOutcomeName(SegClient::TopUpOutcome::kExceedsMaxStep));
+    EXPECT_STREQ("fetching", TopUpOutcomeName(SegClient::TopUpOutcome::kFetching));
+}
+
+// 续段失败进了退避:退避到期的重试照发,即使剩余还在预取阈值之上(修复前重试见剩余高于阈值就跳过,需求就又没人管了)。
+// 没有续段需求时,同样的重试照旧不发(LateResponseAfterTimeoutIsUsedAndSurplusIsDropped),预取时机不提前。
+// 重试与首发一样按抬高的 step 领(评审修正 2026-11-06)。
+TEST(GuidSegmentClientTest, TopUpThatFailedIsRetriedAfterBackoffEvenAboveThePrefetchThreshold)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100, 0.1, "item", 0, 1000); // threshold = 10;maxStep = 1000
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    ASSERT_EQ(50u, Drain(client, 50).size());
+    ASSERT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(160));
+    ASSERT_EQ(2u, t.requests.size());
+    EXPECT_EQ(160u, t.requests[1].step) << "续段那一次按这一批领";
+
+    client.OnResponse(7, 0, 0); // 这一次领段失败(服务端错误码):按退避排重试
+    EXPECT_TRUE(client.GetStats().retryPending);
+    EXPECT_TRUE(client.GetStats().topUpPending) << "失败不算兑现";
+    EXPECT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(160)) << "退避中:不另发,交给重试";
+    EXPECT_EQ(2u, t.requests.size());
+
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    ASSERT_EQ(3u, t.requests.size()) << "剩 50 仍在阈值之上,但有续段需求:重试照发";
+    EXPECT_EQ(160u, t.requests[2].step) << "重试也按抬高的 step 领";
+    client.OnResponse(0, 101, 261);
+    EXPECT_FALSE(client.GetStats().topUpPending);
+    EXPECT_EQ(0u, client.GetStats().topUpStep) << "需求兑现,抬高的 step 随之清掉";
+    EXPECT_EQ(210u, client.Available());
+}
+
+// 评审修正(2026-11-06):续段那一次按不小于这一批的 step 领(不超过 maxStep),落下的那一段单独就够这一批用。
+// 空闲节点的动态 step 会缩到 minStep,修复前续段照 step 领,一批比它大的入账永远凑不齐。动态 step 本身不变。
+TEST(GuidSegmentClientTest, TopUpRaisesTheStepToCoverTheWholeBatchWithoutChangingTheDynamicStep)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100, 0.1, "item", 0, 1000); // step 100,可在 [100, 1000] 内动态调整
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    ASSERT_EQ(50u, Drain(client, 50).size());
+
+    EXPECT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(400));
+    ASSERT_EQ(2u, t.requests.size());
+    EXPECT_EQ(400u, t.requests[1].step) << "按这一批领,不按当前 step(100)";
+    EXPECT_EQ(400u, client.GetStats().topUpStep);
+    EXPECT_EQ(100u, client.GetStats().currentStep) << "只抬这一次,动态 step 不动";
+
+    client.OnResponse(0, 101, 501);
+    EXPECT_EQ(450u, client.Available());
+    EXPECT_EQ(SegClient::TopUpOutcome::kEnough, client.RequestTopUp(400));
+    EXPECT_EQ(100u, client.GetStats().currentStep);
+    const auto ids = Drain(client, 400);
+    ASSERT_EQ(400u, ids.size());
+    EXPECT_EQ(51u, ids.front());
+    EXPECT_EQ(450u, ids.back());
+}
+
+// 评审修正(2026-11-06):两段都在手里还不够(空闲节点预取之后的常态:当前段剩不多、下一段是一整段)。腾出一个 buffer:
+// 当前段剩下的号作废(从未发出,不会撞号),下一段换成当前段,再按抬高的 step 领一段。修复前回 kBuffersFull,
+// 只能等别的发号把当前段用完,空闲节点上这一批永远 DEFER / RETRY。
+TEST(GuidSegmentClientTest, TopUpAbandonsTheCurrentRemainderWhenBothBuffersCannotCoverTheBatch)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100, 0.1, "item", 0, 1000);
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    ASSERT_EQ(91u, Drain(client, 91).size()); // 剩 10 时预取已发
+    ASSERT_EQ(2u, t.requests.size());
+    client.OnResponse(0, 101, 201); // 下一段在手里:合计 109
+    ASSERT_EQ(109u, client.Available());
+
+    EXPECT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(400));
+    EXPECT_EQ(9u, client.GetStats().topUpAbandonedIds) << "当前段剩下的 9 个号作废";
+    EXPECT_FALSE(client.GetStats().nextReady);
+    EXPECT_EQ(100u, client.Available()) << "下一段换成当前段";
+    ASSERT_EQ(3u, t.requests.size());
+    EXPECT_EQ(400u, t.requests[2].step);
+
+    client.OnResponse(0, 201, 601);
+    EXPECT_EQ(SegClient::TopUpOutcome::kEnough, client.RequestTopUp(400));
+    const auto ids = Drain(client, 400);
+    ASSERT_EQ(400u, ids.size());
+    EXPECT_EQ(101u, ids.front()) << "作废的 92..100 从未发出";
+    EXPECT_EQ(500u, ids.back());
+    EXPECT_EQ(91u + 400u, client.GetStats().issued);
+    EXPECT_EQ(3u, t.requests.size());
+}
+
+// 评审修正(2026-11-06):当前段刚发完、下一段已落下但还没换上来(换段平时只在下一次 TryNext 开头做),手里其实只有一段号。
+// 这一批多于一段时,RequestTopUp 先把下一段换上来再按抬高的 step 领一段,不作废任何号。修复前这里误报两段都满
+// (kBuffersFull)、一个请求都不发:空闲节点上没有别的发号把下一段顶上来,这一批就永远 DEFER / RETRY。
+TEST(GuidSegmentClientTest, TopUpPromotesTheWaitingSegmentWhenTheCurrentOneIsSpent)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100, 0.1, "item", 0, 1000); // threshold = 10;maxStep = 1000
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    ASSERT_EQ(91u, Drain(client, 91).size()); // 剩 10 时预取已发
+    ASSERT_EQ(2u, t.requests.size());
+    client.OnResponse(0, 101, 201);
+    t.nowSec = 20.0 * 60.0; // 这一段撑了 20 分钟才发完:介于翻倍与减半阈值之间,动态 step 不动
+    ASSERT_EQ(9u, Drain(client, 9).size()); // 当前段发完,下一段还没换上来
+    ASSERT_EQ(0u, client.GetStats().currentRemaining);
+    ASSERT_TRUE(client.GetStats().nextReady);
+    ASSERT_EQ(100u, client.Available());
+    ASSERT_EQ(100u, client.GetStats().currentStep);
+
+    EXPECT_EQ(SegClient::TopUpOutcome::kFetching, client.RequestTopUp(150)) << "只有一段号在手:换段之后续段";
+    ASSERT_EQ(3u, t.requests.size()) << "换上下一段之后立刻领一段";
+    EXPECT_EQ(150u, t.requests[2].step) << "按这一批领";
+    EXPECT_EQ(100u, client.GetStats().currentRemaining);
+    EXPECT_FALSE(client.GetStats().nextReady);
+    EXPECT_EQ(100u, client.Available()) << "换段不发号、不丢号";
+    EXPECT_EQ(0u, client.GetStats().topUpAbandonedIds) << "当前段已发完,没有要作废的号";
+
+    client.OnResponse(0, 201, 351);
+    EXPECT_EQ(SegClient::TopUpOutcome::kEnough, client.RequestTopUp(150));
+    const auto ids = Drain(client, 150);
+    ASSERT_EQ(150u, ids.size());
+    EXPECT_EQ(101u, ids.front()) << "换上来的那一段原样从头发";
+    EXPECT_EQ(250u, ids.back());
+    EXPECT_EQ(3u, t.requests.size());
+}
+
 TEST(GuidSourcePolicyTest, ItemKindDisabledFailsClosedToo)
 {
     // 配置里 Enabled=false 的形态:实例根本没启用。同样没有回退。
@@ -3969,10 +4193,10 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player); // 同上,单玩家物品获取封禁(player-inbox-service.md §2.2)
     tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(player); // 同上,经 mysql_database_table.pb.h 可见
     tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player); // 同上,近期战斗结果(battle-result-recovery.md)
+    tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player); // 同上,客户端请求幂等键账本(client-request-idempotency.md §5.3)
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);
-    tlsEcs.actorRegistry.emplace<PlayerDatabase1CarryComp>(player);
 
     EXPECT_EQ(0u, SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN)) << "没 snapshot_id 就跳过这条快照";
     auto s = snap.client().GetStats();
@@ -4124,7 +4348,7 @@ TEST_F(BagSegmentNotReadyTest, EvictionNeverHappensBeforeAPureCheckCanRefuse)
     ASSERT_FALSE((tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available() > 0)) << "本例夹具独立禁用发号源";
 
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2)); // 会淘汰的包
+    bag.SetProfile(FifoEvictingProfileForTest(2)); // 会淘汰的包
     // 用还原路径铺底:它不铸号,发号源没了之后仍然可用。
     bag.InsertItemForRestore(920001, kNonStack1, 1, 0);
     bag.InsertItemForRestore(920002, kNonStack2, 1, 1);
@@ -4158,7 +4382,7 @@ TEST_F(BagSegmentNotReadyTest, StackableSpillNeverEvictsWhenSegmentIsUnavailable
     const uint32_t maxStack10 = MaxStack(kStack10);
 
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(1));
+    bag.SetProfile(FifoEvictingProfileForTest(1));
     bag.InsertItemForRestore(930001, kStack10, maxStack10, 0); // 满堆,一个都并不进
     ASSERT_TRUE(bag.IsFull());
 
@@ -4175,7 +4399,7 @@ TEST_F(BagSegmentNotReadyTest, VectorBatchMintsOnlyWhatTheFinalPlanNeedsWhenSegm
     ASSERT_FALSE((tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available() > 0)) << "本例夹具独立禁用发号源";
 
     Bag bag;
-    bag.SetProfile(BagProfile::Temporary(2));
+    bag.SetProfile(FifoEvictingProfileForTest(2));
     bag.InsertItemForRestore(940001, kNonStack1, 1, 0);
     bag.InsertItemForRestore(940002, kNonStack2, 1, 1);
     ASSERT_TRUE(bag.IsFull());

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
+#include <iterator>
 #include <sstream>
 #include <utility>
 
@@ -12,7 +14,17 @@ namespace
     // 发不出去 / 续段失败的 ERROR 日志节流:退避封顶 5s 时每次都记就是 12 行/分钟,
     // 首次记一条,之后每 12 次(≈ 每分钟)记一条,足够看出"一直在失败"又不刷屏。
     constexpr uint32_t kFailureLogEveryN = 12;
+
+    constexpr const char *kTopUpOutcomeNames[] = {"enough", "fetching", "exceeds_max_step", "unavailable"};
+    static_assert(std::size(kTopUpOutcomeNames) == static_cast<std::size_t>(GuidSegmentClient::TopUpOutcome::kCount),
+                  "kTopUpOutcomeNames 与 TopUpOutcome 逐项对应");
 } // namespace
+
+const char *TopUpOutcomeName(const GuidSegmentClient::TopUpOutcome outcome)
+{
+    const auto index = static_cast<std::size_t>(outcome);
+    return index < std::size(kTopUpOutcomeNames) ? kTopUpOutcomeNames[index] : "?";
+}
 
 bool GuidSegmentClient::Enable(Options options, SendFn send, ScheduleFn schedule, ClockFn clock)
 {
@@ -112,6 +124,8 @@ void GuidSegmentClient::Shutdown()
     ++fetchSeq_;
     retryPending_ = false;
     inflight_ = false;
+    topUpPending_ = false; // 停机之后不再领段,续段需求无从满足
+    topUpStep_ = 0;
     retryTimer_.Cancel();
     fetchTimeoutTimer_.Cancel();
     LOG_INFO << "[idsegment] shutdown: no further segment fetches; " << Describe();
@@ -140,6 +154,10 @@ void GuidSegmentClient::Reset()
     stepChanges_ = 0;
     inflight_ = false;
     retryPending_ = false;
+    topUpPending_ = false;
+    topUpStep_ = 0;
+    topUpFetches_ = 0;
+    topUpAbandonedIds_ = 0;
     backoffSec_ = 0.5;
     highWater_ = 0;
     recent_ = {};
@@ -161,6 +179,54 @@ uint64_t GuidSegmentClient::Available() const
         return 0;
     }
     return cur_.Remaining() + (hasNext_ ? next_.Remaining() : 0);
+}
+
+GuidSegmentClient::TopUpOutcome GuidSegmentClient::RequestTopUp(const uint64_t needed)
+{
+    if (!enabled_ || stopped_)
+    {
+        return TopUpOutcome::kUnavailable;
+    }
+    if (Available() >= needed)
+    {
+        return TopUpOutcome::kEnough;
+    }
+    if (needed > options_.maxStep)
+    {
+        // 一段最多 maxStep 个号:只靠续段永远凑不齐(手里剩下的号会被别的入包用掉,不能指望)。终局结论:
+        // 不记需求、不发请求、不作废任何号,由调用方按自己的错误语义处置(评审修正 2026-11-06)。
+        return TopUpOutcome::kExceedsMaxStep;
+    }
+    if (hasNext_)
+    {
+        // 两段都在手里还不够(含当前段已发完、下一段还没换上来):腾出一个 buffer(评审修正 2026-11-06)。
+        // 当前段剩下的号作废:从未发出,发号器也不会再发,不会撞号;号段本来允许浪费。下一段换成当前段,
+        // 与 TryNext 开头换段同一步。不腾就只能等别的发号把当前段用完,空闲节点上这一批永远 DEFER / RETRY。
+        const uint64_t abandoned = cur_.Remaining();
+        if (abandoned > 0)
+        {
+            topUpAbandonedIds_ += abandoned;
+            LOG_WARN << "[idsegment] kind=" << options_.kindName << " top-up needs " << needed << " ids but both buffers hold "
+                     << Available() << "; abandoning " << abandoned << " unissued ids of the current range to make room "
+                     << Describe();
+        }
+        BecomeCurrent(next_);
+        next_ = Segment{};
+        hasNext_ = false;
+    }
+    // 记下需求,并把续段那一次的 step 抬到不小于这一批(上面已判 needed ≤ maxStep):落下的那一段单独就够这一批用,
+    // 不指望手里剩下的号。空闲节点的动态 step 会缩到 minStep,不抬的话一批比 minStep 大的入账永远凑不齐。
+    // 只抬这一次,动态 step(step_)不变。在途的那一次失败之后,退避到期的重试也按它领(OnRetryTimer → StartFetch)。
+    topUpPending_ = true;
+    topUpStep_ = std::max(topUpStep_, needed);
+    if (inflight_ || retryPending_)
+    {
+        return TopUpOutcome::kFetching;
+    }
+    ++topUpFetches_;
+    StartFetch("top_up");
+    // StartFetch 要么已在途,要么发不出去时已按退避排上重试;两种都由 topUpPending_ 接着管。
+    return TopUpOutcome::kFetching;
 }
 
 double GuidSegmentClient::NowSec() const
@@ -275,7 +341,10 @@ void GuidSegmentClient::StartFetch(const char *why)
     }
     ++fetchSeq_;
     inflight_ = true;
-    if (!send_(options_.bizTag, step_))
+    // 有续段需求时这一次按 max(step_, topUpStep_) 领(topUpStep_ ≤ maxStep,RequestTopUp 判过);动态 step 本身不动。
+    const auto requestStep =
+        static_cast<uint32_t>(topUpPending_ ? std::max<uint64_t>(step_, topUpStep_) : uint64_t{step_});
+    if (!send_(options_.bizTag, requestStep))
     {
         // 没有可用的 DataService 节点 / 共享通道忙:不必等超时,直接按退避重试。
         inflight_ = false;
@@ -285,7 +354,7 @@ void GuidSegmentClient::StartFetch(const char *why)
         return;
     }
     LOG_DEBUG << "[idsegment] fetch started kind=" << options_.kindName << " why=" << why << " seq=" << fetchSeq_
-              << " step=" << step_ << " " << Describe();
+              << " step=" << requestStep << " " << Describe();
     // 兜底:传输失败正常由 OnTransportFailure 先报回;完成通知永远不来时才靠它。
     Schedule(TimerKind::kFetchTimeout, options_.fetchTimeoutSec,
              [this, seq = fetchSeq_] { OnFetchTimeout(seq); });
@@ -350,12 +419,13 @@ void GuidSegmentClient::OnRetryTimer(uint64_t gen)
     }
     retryPending_ = false;
     // 退避期间晚到的响应可能已经把段补上了;只在"现在确实需要"时才重发,
-    // 否则会把预取时机提前到不该发的时候。
-    if (hasNext_ || cur_.Remaining() > cur_.prefetchThreshold)
+    // 否则会把预取时机提前到不该发的时候。有调用方经 RequestTopUp 要过号也算「现在确实需要」:
+    // 剩余还在阈值之上不代表够那一批用。
+    if (hasNext_ || (cur_.Remaining() > cur_.prefetchThreshold && !topUpPending_))
     {
         return;
     }
-    StartFetch("retry");
+    StartFetch(topUpPending_ ? "top_up_retry" : "retry");
 }
 
 void GuidSegmentClient::Schedule(TimerKind kind, double delaySec, std::function<void()> fn)
@@ -442,6 +512,10 @@ void GuidSegmentClient::OnResponse(uint32_t errorCode, uint64_t lo, uint64_t hi)
     ++recentCount_;
     consecutiveFailures_ = 0;
     backoffSec_ = options_.retryBackoffMinSec;
+    // 续段需求到此兑现(落下的这一段让余量变多;两段都满时更没有再领的余地)。还不够的调用方下一次预检会再提
+    // (落下的若是需求之前就在途的普通预取、比需求小,再提时腾出 buffer 按抬高的 step 重领)。
+    topUpPending_ = false;
+    topUpStep_ = 0;
 
     if (cur_.Remaining() == 0 && !hasNext_)
     {
@@ -487,6 +561,10 @@ GuidSegmentClient::Stats GuidSegmentClient::GetStats() const
     stats.backoffSec = backoffSec_;
     stats.currentStep = step_;
     stats.lastRangeLastedSec = lastRangeLastedSec_;
+    stats.topUpFetches = topUpFetches_;
+    stats.topUpPending = topUpPending_;
+    stats.topUpStep = topUpPending_ ? topUpStep_ : 0;
+    stats.topUpAbandonedIds = topUpAbandonedIds_;
     return stats;
 }
 
@@ -496,7 +574,8 @@ std::string GuidSegmentClient::Describe() const
     out << "(kind=" << options_.kindName << " enabled=" << enabled_ << " stopped=" << stopped_ << " step=" << step_
         << " cur=[" << cur_.pos << "," << cur_.hi << ")"
         << " next=" << (hasNext_ ? "[" + std::to_string(next_.pos) + "," + std::to_string(next_.hi) + ")" : "none")
-        << " inflight=" << inflight_ << " retry_pending=" << retryPending_ << " issued=" << issued_
+        << " inflight=" << inflight_ << " retry_pending=" << retryPending_ << " top_up_pending=" << topUpPending_
+        << " top_up_step=" << topUpStep_ << " top_up_abandoned=" << topUpAbandonedIds_ << " issued=" << issued_
         << " fetches=" << fetches_ << " errors=" << fetchErrors_ << " violations=" << rangeViolations_
         << " unavailable=" << unavailable_ << " high_water=" << highWater_ << ")";
     return out.str();

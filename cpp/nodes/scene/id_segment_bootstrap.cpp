@@ -1,4 +1,5 @@
 #include "id_segment_bootstrap.h"
+#include "id_segment_request_table.h"
 
 #include <array>
 #include <chrono>
@@ -28,12 +29,6 @@
 
 namespace
 {
-    // 兜底路径(正常情况下失败通知先于 fetchTimeout 到达,走不到这里):
-    // 一次请求被持有者按 fetchTimeout 判失败之后,响应可能还在路上。这段窗口里共享路径不发新请求,
-    // 让同一 biz_tag 的迟到应答先于新请求到达,避免旧段晚于新段交付而触发范围水位校验。
-    // 窗口结束后恢复发送时放弃旧请求的交付;完成回调仍按捕获的 requestSequence 精确认领,绝不会把它交给后来的请求。
-    constexpr double kLateResponseWindowSec = 10.0;
-
     // "没有 READY 的 DataService 节点"日志节流:退避封顶 5s 时每次都记就是 12 行/分钟。
     constexpr uint32_t kNoNodeLogEveryN = 12;
 
@@ -41,14 +36,6 @@ namespace
     {
         return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     }
-
-    struct OutstandingRequest
-    {
-        uint64_t seq{0};
-        GuidKind kind{GuidKind::kItem};
-        uint32_t step{0};
-        double sentAtSec{0};
-    };
 
     // 所有种类共用的 DataService 传输层。
     //
@@ -58,7 +45,11 @@ namespace
     class IdSegmentTransport
     {
     public:
-        void Init(muduo::net::EventLoop& loop) { tasks_.emplace(loop); }
+        void Init(muduo::net::EventLoop& loop)
+        {
+            stopped_ = false;
+            tasks_.emplace(loop);
+        }
         void Close() { if (tasks_) tasks_->Close(); }
         void Stop();
         bool Send(GuidKind kind, uint32_t step);
@@ -76,10 +67,8 @@ namespace
         void OnCompleted(uint64_t requestSequence, FetchResult result);
 
         std::optional<LoopTaskScope> tasks_;
-        std::optional<OutstandingRequest> inflight_;  // 共享路径上唯一的在途
-        std::optional<OutstandingRequest> abandoned_; // 超时后仍可能回来的那一次
-        double abandonedUntilSec_{0};
-        uint64_t nextSeq_{0};
+        id_segment_detail::RequestTable requests_;
+        bool stopped_ = false;
         uint64_t orphanResponses_{0};
         uint32_t noNodeFailures_{0};
     };
@@ -117,32 +106,22 @@ namespace
     {
         if (!tasks_ || !tasks_->IsAccepting()) return false;
         const double now = MonotonicNowSec();
-
-        if (inflight_)
+        using Admission = id_segment_detail::RequestTable::Admission;
+        const auto activeKind = requests_.InFlightKind();
+        const auto timeout = activeKind ? tlsGuidSegmentRegistry.Get(*activeKind).options().fetchTimeoutSec : 0.0;
+        const auto gate = requests_.BeforeSend(now, timeout);
+        if (gate.admission == Admission::kBusy) return false;
+        if (gate.admission == Admission::kOpenedLateWindow)
         {
-            const double timeout = tlsGuidSegmentRegistry.Get(inflight_->kind).options().fetchTimeoutSec;
-            if (now - inflight_->sentAtSec < timeout)
-            {
-                // 共享路径忙:调用方按退避重试(它自己的 sendUnavailable 计数会体现出来)。
-                return false;
-            }
-            // 在途的那一次已经(或马上会)被它的持有者按 fetchTimeout 判失败;响应也许还在路上。
-            abandoned_ = inflight_;
-            abandonedUntilSec_ = now + kLateResponseWindowSec;
-            inflight_.reset();
-            LOG_WARN << "[idsegment] request seq=" << abandoned_->seq << " kind=" << GuidKindName(abandoned_->kind)
+            LOG_WARN << "[idsegment] request seq=" << gate.affected->sequence << " kind=" << GuidKindName(gate.affected->kind)
                      << " unanswered for " << timeout << "s; holding the shared DataService path for "
-                     << kLateResponseWindowSec << "s so a late reply is still attributable";
+                     << id_segment_detail::RequestTable::kLateWindowSeconds << "s so a late reply is still attributable";
+            return false;
         }
-        if (abandoned_)
+        if (gate.admission == Admission::kExpiredLateWindow)
         {
-            if (now < abandonedUntilSec_)
-            {
-                return false;
-            }
-            LOG_WARN << "[idsegment] giving up on a late reply for seq=" << abandoned_->seq
-                     << " kind=" << GuidKindName(abandoned_->kind) << " (window elapsed); resuming sends";
-            abandoned_.reset();
+            LOG_WARN << "[idsegment] giving up on a late reply for seq=" << gate.affected->sequence
+                     << " kind=" << GuidKindName(gate.affected->kind) << " (window elapsed); resuming sends";
         }
 
         const entt::entity target = PickReadyDataServiceNode();
@@ -163,11 +142,10 @@ namespace
         ::data_service::AllocateIdSegmentRequest request;
         request.set_biz_tag(tlsGuidSegmentRegistry.Get(kind).options().bizTag);
         request.set_step(step);
-        const uint64_t requestSequence = ++nextSeq_;
-        inflight_ = OutstandingRequest{requestSequence, kind, step, now};
+        const uint64_t requestSequence = requests_.Reserve(kind, now);
         if (tasks_->Start(FetchAsync(*gNode->GetLoop(), target, std::move(request), requestSequence),
             "[idsegment] AllocateIdSegment")) return true;
-        inflight_.reset();
+        requests_.Take(requestSequence);
         return false;
     }
 
@@ -181,40 +159,31 @@ namespace
                 });
             return true; // 生成的 gRPC 客户端在本地拒绝时也交付完成。
         }, {GrpcCallOutcome{kGrpcStatusUnavailable, "idsegment fetch rejected"}, std::nullopt});
-        if (result) tlsIdSegmentTransport.OnCompleted(requestSequence, std::move(*result));
+        // 结果可能已由适配器认领，之后同一栈才停止传输并清表。
+        if (result && !tlsIdSegmentTransport.stopped_)
+            tlsIdSegmentTransport.OnCompleted(requestSequence, std::move(*result));
     }
 
     void IdSegmentTransport::Stop()
     {
         if (!tasks_) return;
+        stopped_ = true;
         tasks_->Stop();
         tasks_.reset();
-        inflight_.reset();
-        abandoned_.reset();
+        requests_.Clear();
     }
 
     void IdSegmentTransport::OnCompleted(uint64_t requestSequence, FetchResult result)
     {
-        GuidKind kind{};
-        bool abandoned = false;
-        if (inflight_ && inflight_->seq == requestSequence)
-        {
-            kind = inflight_->kind;
-            inflight_.reset();
-        }
-        else if (abandoned_ && abandoned_->seq == requestSequence)
-        {
-            kind = abandoned_->kind;
-            abandoned = true;
-            abandoned_.reset();
-        }
-        else
+        const auto completed = requests_.Take(requestSequence);
+        if (!completed)
         {
             ++orphanResponses_;
             LOG_WARN << "[idsegment] completion for unknown request seq=" << requestSequence
                      << " dropped; orphans=" << orphanResponses_;
             return;
         }
+        const auto kind = completed->kind;
 
         if (result.outcome.ok() && result.reply)
         {
@@ -224,7 +193,7 @@ namespace
 
         std::ostringstream why;
         why << "gRPC DataService.AllocateIdSegment code=" << result.outcome.code << " msg=" << result.outcome.message;
-        if (abandoned)
+        if (completed->late)
         {
             // 持有者早已按 fetchTimeout 判过失败;这次调用到此确定不会再有响应,共享路径不必再为它守迟到窗口。
             LOG_WARN << "[idsegment] abandoned request seq=" << requestSequence << " kind=" << GuidKindName(kind)

@@ -1211,3 +1211,25 @@ Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及�
 - C-1 只覆盖最近 32 局。
 - FIGHTING 冻结延长约 120s，从不结算的局里，玩家要多等这么久才能再排队。
 - 新指标还没有配告警规则。
+- **补记（同日）产出封禁口径**：v1 收件箱结算与资产通道、旧路径统一为只跳过被封的币种和掉落，其余效果照常 APPLIED，被封部分解封后不补发。改动：`player_battle.cpp` 新增 `IsSettlementCurrencyGainBlocked`、`DropBlockedGains`，修改 `CanCreditWholeBattleCurrency`、`ApplySettlementToEntity`，删除死代码 `CollectGainedItems`。测试改写 3 条、新增 3 条（文件末尾）；runbook 告警表同步。运行 `bag_test.exe --gtest_filter=PlayerBattleSettlement*:PlayerItemGainBlock*:BagServiceNewInstanceBound*`。FIGHTING 冻结在 Match 发件箱积压时仍可能早于结算解冻，这个残余窗口已交给「数据覆写审计 R2 交接」会话：到期先查 SQL 终局，已 COMPLETE 就有界续冻。
+
+### 2026-11-06 Codex：交接首轮验证停在 proto 缺失导入（未通过验收）
+
+- 收尾只读核对：`MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT = 3` 仍在，Match 的到期 ABORT 使用它且 format_version 为 0；runbook 的封禁行已改为跳过被封部分、不抵欠款、不补发、其余 APPLIED。3 条旧用例改写及文件末 3 条新用例均保留，未修改业务断言。
+- R2 后续已在当前工作区：新增 `MatchInternal.GetBattleTerminalDecision` 与最多 15 分钟续冻，尚未验证；不能再把本次验证范围当成只有旧版 deadline + 120s 行为。Java 仍按 `PARITY.md` 的 0.1.0-SNAPSHOT 待做状态，本轮未改 Java。
+- 实际执行：Windows amd64；命令进程内 `GOTOOLCHAIN=local`、`GOPROXY=off`。`pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-build` 退出 0；随后按 no-unity 正式配置执行 `proto-gen-run`，退出 1，未重试。
+- 首个错误：`proto/common/database/mysql_database_table.proto:183:3` 使用 `ClientRequestLedgerComp`，但未 import `proto/common/component/client_request_ledger_comp.proto`。定义文件已经存在，最小修复是在该数据库 proto 的 import 列表补一行 `import "proto/common/component/client_request_ledger_comp.proto";`。这是相邻客户端请求幂等改动的协议前置，不是本轮封禁测试断言失败；本轮尚未修改此源文件，按 AGENTS.md §10.2 保留现场、等待决策。
+- 生成在完整描述符阶段失败，部分暂存 proto 已更新，不能把当前输出视为完整同步。生成前备份的 27 个守护段文件，其守护段正文事后全部一致。267 个生成输入的前后哈希中，`proto/match/match_service.proto` 和 `proto/match/match_authority.proto` 发生变化，未据此声称输入固定或归因为本轮手写改动。
+- Go 三模块 build/vet/test、race、真 TiDB、C++ 整解编译与三个测试程序均未运行。真 TiDB 前置另已只读核对：现有本地 TiDB/PD/TiKV 全部停止，不能以普通测试的 SKIP 代替真库验收；端点格式应为 `127.0.0.1:<端口>`，本地一次性夹具环境由 `tools/scripts/sql_fixture_env.ps1` 装配。本轮未启动容器。
+- 证据目录：`C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/`，含 `01-proto-gen-build.log`、`02-proto-gen-run.log`、退出码、`result.json`、生成输入哈希、守护段副本及前后 git 状态。未提交、未推送；未发送跨聊天通知。
+
+### 2026-11-06 Codex：获准续验，协议生成通过，收件箱告警契约测试阻塞（未通过整体验收）
+
+- 负责人明确授权补 import、重新生成并继续 Go/C++ 验证；开始复核时 `mysql_database_table.proto:18` 已由其他会话补好该 import，本轮保留，没有重复修改源协议。
+- 当前源码的正式 `proto-gen-build` 和 no-unity `proto-gen-run` 均退出 0，mail/rank 后置登记与 robot vendor 钩子成功。B-5 枚举及 `MatchInternal_GetBattleTerminalDecision_FullMethodName`、`SendMatchInternalGetBattleTerminalDecision` 均已生成。
+- 守护段检查初次报告 gate 事件文件有变化；只读差异确认唯一变化是生成器新增 `GateDrainMigrationEventHandler` 空守护段。剔除这个新增空函数后全文与备份相同，原 27 个文件的既有守护段均保留。原检查结果和后续精确核对分别保存，未改写原件。生成输入中只有三份生成器管理台账变化：message_id、event_id、persist_schema_gen；日志记录了正式写入。
+- 已实际通过：`go/shared` 的 `go vet ./inboxcontract/`、`go test -json -count=1 ./inboxcontract/`（4 个顶层测试通过，0 失败、0 跳过）；`go/player_inbox` 的 `go build ./...`、`go vet ./...`。
+- `go/player_inbox` 的 `go test -json -count=1 ./...` 退出 1：171 个顶层测试通过（含子例 307 个 PASS 事件）、1 个失败、0 跳过。唯一失败 `internal/metrics.TestAlertRulesReferenceRegisteredMetrics`，`metrics_test.go:234` 报告告警文件含未注册的 `player_inbox_rules`。
+- 只读归因：`deploy/k8s/player-inbox-alerts.yaml:59` 的注释写了 `player_inbox_rules.h`；该文件第 19–21 行明确规定表达式、注释、描述中的 `player_inbox_*` 都必须是已注册指标，契约测试据此扫描全文。最小候选只把第 59 行 `(player_inbox_rules.h 的 kHaltedDomainRelogIntervalMs)` 改为 `(收件箱规则常量 kHaltedDomainRelogIntervalMs)`，保留告警表达式和全部断言。本轮未应用、未重试，按 AGENTS.md §10.2 等待决策。
+- Match 的 build/vet/test、race、真 TiDB，以及 C++ 整解构建和三个测试程序均未执行。额外只读前置核对：Windows 当前 CGO_ENABLED=0、缺 GCC/MinGW；现有 Linux 工具镜像只有 gccgo go1.18，不能执行项目要求的官方 Go 1.27.2 race。未安装工具或拉镜像。旧本地 TiDB/PD/TiKV 仍停止，未启动。C++ 已知观战 const 引用不匹配仍能静态看到，尚无本轮编译结果。
+- 证据目录：`C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/r2/`。01–07 编号日志及退出码、生成前快照、`generation-check-reviewed.json`、`player-inbox-test-summary.json` 保留。Java 0.1.0-SNAPSHOT 状态仍待做；未改 Java、未提交、未推送、未发送跨聊天通知。

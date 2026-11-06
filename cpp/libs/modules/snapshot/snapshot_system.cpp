@@ -56,13 +56,6 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
         return 0;
     }
 
-    std::string db1Blob;
-    if (!allData.player_database_1_data().SerializeToString(&db1Blob))
-    {
-        LOG_ERROR << "[SnapshotSystem] Failed to serialize player_database_1 for player " << playerId;
-        return 0;
-    }
-
     // ── Build snapshot entry ─────────────────────────────────────────────
     // snapshot_id 走 snapshot 种类的号段(docs/design/node-id-overhaul-plan-20260908.md §7.5 第 1 条):
     // 它只是 player_snapshot 表的主键 / 去重键,不需要时间序 —— 时间在 snapshot_time 列里。
@@ -87,7 +80,6 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
     entry.set_snapshot_time(nowSec);
     entry.set_trigger(trigger);
     entry.set_player_database_blob(std::move(dbBlob));
-    entry.set_player_database_1_blob(std::move(db1Blob));
     entry.set_schema_version(kSnapshotSchemaVersion);
     // 捕获时刻的 zone 由生产者盖章,消费者不许回查 Router(合服后 home_zone 会变)。
     // 取 GameConfig.zone_id 而非 GetZoneId():两者同源(node.cpp 用它填 NodeInfo.zone_id),

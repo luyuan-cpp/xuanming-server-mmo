@@ -376,14 +376,26 @@ func (n *Node) Close() error {
 	rpcKey := rpcPath(prefix, n.Info.ZoneId, n.Info.NodeType, n.Info.NodeId)
 	allocKey := allocationKey(prefix, n.Info.NodeType, n.Info.NodeId)
 
-	if _, err := n.client.Txn(context.Background()).
+	// 停机不能被 etcd 卡住:删键与撤销共用一个有界预算。
+	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	defer cancel()
+	// 只删本实例的键:失租后原 node_id 可能已被别的实例接管、本进程还没换号就停机,无条件删会把对方的发现键删掉,
+	// 而对方不 watch 自己的键,会一直不可见(docs/design/infra-reconnect-overview.md §4 R3,与 shared/noderegistry 同一做法)。
+	resp, err := n.client.Txn(ctx).
+		If(clientv3.Compare(clientv3.Value(allocKey), "=", n.Info.NodeUuid)).
 		Then(clientv3.OpDelete(rpcKey), clientv3.OpDelete(allocKey)).
-		Commit(); err != nil {
+		Commit()
+	if err != nil {
 		logx.Errorf("guild node close: delete keys failed: %v", err)
+	} else if !resp.Succeeded {
+		logx.Infof("guild node close: keys of node_id=%d no longer belong to this instance; left in place", n.Info.NodeId)
 	}
 
-	if _, err := n.client.Revoke(context.Background(), n.leaseID); err != nil {
+	if _, err := n.client.Revoke(ctx, n.leaseID); err != nil {
 		logx.Errorf("guild node close: revoke lease failed: %v", err)
 	}
 	return n.client.Close()
 }
+
+// closeTimeout 是 Close 里删键与撤销租约的总预算。
+const closeTimeout = 5 * time.Second

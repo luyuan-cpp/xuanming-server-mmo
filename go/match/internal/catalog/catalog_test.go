@@ -111,6 +111,36 @@ func TestBattleSeconds(t *testing.T) {
 	}
 }
 
+// 回合上限与引擎同一换算(turn_battle_constants.h:kRoundDurationMs=6000、kDefaultMaxRounds=300、
+// RoundsFromMilliseconds 向上取整):不截断到 MaxBattleSeconds,缺省与不在表里取 300。
+func TestRoundLimitMirrorsEngine(t *testing.T) {
+	if EngineRoundDurationMs != 6000 || EngineDefaultRoundLimit != 300 {
+		t.Fatal("与 cpp/libs/services/battle/constants/turn_battle_constants.h 的常量不一致")
+	}
+	rows := baseRows()
+	rows.Dungeons = append(rows.Dungeons,
+		DungeonRow{Id: 4, MaxTeamSize: 5, TimeLimitSeconds: 7, MonsterCount: 1},
+		DungeonRow{Id: 5, MaxTeamSize: 5, TimeLimitSeconds: 1, MonsterCount: 1})
+	c := mustNew(t, rows)
+	for config, want := range map[uint32]uint32{
+		1:  300,  // 1800 秒正好 300 回合
+		2:  300,  // time_limit 0 取引擎缺省
+		3:  1500, // 9000 秒:整场期限截到 3600 秒,回合上限不截
+		4:  2,    // 7 秒向上取整
+		5:  1,    // 最短 1 回合
+		0:  300,  // 切磋的模板 0 不在表里
+		42: 300,
+	} {
+		if got := c.RoundLimit(config); got != want {
+			t.Errorf("RoundLimit(%d)=%d want %d", config, got, want)
+		}
+	}
+	var nilCatalog *Catalog
+	if nilCatalog.RoundLimit(1) != EngineDefaultRoundLimit {
+		t.Fatal("nil 目录应取引擎缺省回合上限")
+	}
+}
+
 func TestZoneNode(t *testing.T) {
 	c := mustNew(t, baseRows())
 	if c.ZoneNode(5) != (scope.Node{Zone: 5, Group: 1}) || c.ZoneNode(500) != (scope.Node{Zone: 500}) {

@@ -321,6 +321,17 @@ Test-Case '契约字面量与 login / proto / 部署生成器的源头一致' {
     Assert-True -Condition ($interval.Success -and $deadline.Success) -Because 'GateDrainConf 的 default 标签必须还在'
     Assert-Equal -Expected $c.DefaultMonitorIntervalSeconds -Actual (ConvertFrom-GoDurationSeconds -Text $interval.Groups['d'].Value -Name 'Interval') -Because '缺省判定周期与 login 结构体一致'
     Assert-Equal -Expected $c.DefaultDeadlineSeconds -Actual (ConvertFrom-GoDurationSeconds -Text $deadline.Groups['d'].Value -Name 'Deadline') -Because '缺省期限与 login 结构体一致'
+    # 排空迁移的默认值只在 GateDrainMigrateConf 里找:config.go 里别的结构体也有 Enabled 字段。
+    $migrateConf = [regex]::Match($configGo, '(?s)type GateDrainMigrateConf struct \{(?<body>.*?)\n\}')
+    Assert-True -Condition $migrateConf.Success -Because 'GateDrainMigrateConf 必须还在'
+    $migrateBody = $migrateConf.Groups['body'].Value
+    $migrateEnabled = [regex]::Match($migrateBody, 'json:"Enabled,default=(?<d>[^"]+)"')
+    $migrateRate = [regex]::Match($migrateBody, 'json:"RatePerSecond,default=(?<d>[^"]+)"')
+    $migrateStart = [regex]::Match($migrateBody, 'json:"StartAfter,default=(?<d>[^"]+)"')
+    Assert-True -Condition ($migrateEnabled.Success -and $migrateRate.Success -and $migrateStart.Success) -Because 'GateDrainMigrateConf 的 default 标签必须还在'
+    Assert-Equal -Expected ([string]$c.DefaultMigrateEnabled).ToLowerInvariant() -Actual $migrateEnabled.Groups['d'].Value -Because '迁移缺省开关与 login 结构体一致'
+    Assert-Equal -Expected $c.DefaultMigrateRatePerSecond -Actual ([int]$migrateRate.Groups['d'].Value) -Because '缺省迁移速率与 login 结构体一致'
+    Assert-Equal -Expected $c.DefaultMigrateStartAfterSeconds -Actual (ConvertFrom-GoDurationSeconds -Text $migrateStart.Groups['d'].Value -Name 'StartAfter') -Because '缺省迁移起始延迟与 login 结构体一致'
     $nodeGo = Read-RepoText 'go/login/internal/logic/pkg/node/node.go'
     Assert-Match -Text $nodeGo -Pattern '"%s\.rpc"' -Because 'GetRpcPrefix 形状变了要同步 Get-GateEtcdPrefix'
     Assert-Match -Text $nodeGo -Pattern '"%s/zone/%d/node_type/%d/"' -Because 'BuildRpcPrefix 形状变了要同步 Get-GateEtcdPrefix'
@@ -339,10 +350,10 @@ Test-Case '契约字面量与 login / proto / 部署生成器的源头一致' {
 
 Test-Case '同 zone 候选口径与 login 源头一致(Select-GateDrainPeers 镜像的每一条)' {
     Reset-DrainFixture
-    $drainGo = Read-RepoText 'go/login/internal/logic/pkg/loginqueue/gatedrain.go'
-    Assert-Match -Text $drainGo -Pattern '(?s)if len\(kept\) == 0 \{.*?return candidates\s*\}' -Because 'login 在候选全部 draining 时忽略标记照常分配 —— 这正是脚本必须先确认还有别的候选的原因'
+    $gatepickGo = Read-RepoText 'go/shared/gatepick/eligibility.go'
+    Assert-Match -Text $gatepickGo -Pattern '(?s)case ex\.Draining\+ex\.Full > 0:\s*ex\.Fallback = FallbackReachable' -Because 'login 在候选全部 draining 时退到「连得上的」那一档照常分配 —— 这正是脚本必须先确认还有别的候选的原因'
     $svcGo = Read-RepoText 'go/login/internal/svc/servicecontext.go'
-    Assert-Match -Text $svcGo -Pattern 'FilterDrainingGates\(out, loginqueue\.DrainingGates\(ctx, rdb, out\)\)' -Because '排空过滤作用在 buildGateCandidates 的结果上'
+    Assert-Match -Text $svcGo -Pattern 'loginqueue\.MarkDrainingGates\(out, drain\.Draining\(ctx, zoneID, out\)\)' -Because '排空标记打在 buildGateCandidates 的结果上(只标记、不剔除,挑 gate 时分档)'
     Assert-Match -Text $svcGo -Pattern 'if n == nil \|\| n\.Endpoint == nil \{\s*continue' -Because '缺 endpoint 的记录不进候选'
     Assert-Match -Text $svcGo -Pattern 'if zoneID != 0 && n\.ZoneId != zoneID \{\s*continue' -Because '只算本 zone 的 gate'
     Assert-Match -Text $svcGo -Pattern 'clientendpoint\.Select\(\s*n\.GetClientEndpoint\(\)\.GetIp\(\), n\.GetClientEndpoint\(\)\.GetPort\(\),\s*n\.Endpoint\.Ip, n\.Endpoint\.Port, require\)' -Because '地址选择规则'
@@ -478,6 +489,21 @@ Test-Case 'login 配置:RequireClientEndpoint 缺省 false,true / false 大小�
     Assert-True -Condition (-not (ConvertFrom-LoginDrainConfig -Text ((New-LoginYaml) + "`nRequireClientEndpoint: false") -Source 'audit').RequireClientEndpoint) -Because 'podip 形态'
     $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text ((New-LoginYaml) + "`nRequireClientEndpoint: 1") -Source 'audit' }
     Assert-Match -Text $failure -Pattern 'RequireClientEndpoint' -Because '不认识的值不猜'
+}
+
+Test-Case 'login 配置:GateDrain.Migrate 缺省关闭,显式值按 login 口径换算,非法值拒绝,迁移说明按速率估算' {
+    Reset-DrainFixture
+    $defaults = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml) -Source 'audit'
+    Assert-Equal -Expected 'False|20|0' -Actual ("{0}|{1}|{2}" -f $defaults.MigrateEnabled, $defaults.MigrateRatePerSecond, $defaults.MigrateStartAfterSeconds) -Because '缺 Migrate 子块取 GateDrainMigrateConf 的默认值'
+    $block = "GateDrain:`n  Interval: 5s`n  Migrate:`n    Enabled: true`n    RatePerSecond: 50`n    StartAfter: 1500ms"
+    $login = ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock $block) -Source 'audit'
+    Assert-Equal -Expected 'True|50|2' -Actual ("{0}|{1}|{2}" -f $login.MigrateEnabled, $login.MigrateRatePerSecond, $login.MigrateStartAfterSeconds) -Because '显式值优先,StartAfter 不足 1s 向上取整(与 gateDrainMigratePolicy 同口径)'
+    $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "GateDrain:`n  Migrate:`n    Enabled: yes") -Source 'audit' }
+    Assert-Match -Text $failure -Pattern 'GateDrain.Migrate.Enabled' -Because '不认识的开关值不猜'
+    $failure = Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text (New-LoginYaml -GateDrainBlock "GateDrain:`n  Migrate:`n    RatePerSecond: -1") -Source 'audit' }
+    Assert-Match -Text $failure -Pattern 'GateDrain.Migrate.RatePerSecond' -Because '速率必须是非负整数'
+    Assert-Match -Text (Format-GateDrainMigrationLine -Login $login -Online 4500) -Pattern 'about 92s' -Because '起始 2s + 4500 人 / 每秒 50 人 = 92s'
+    Assert-Match -Text (Format-GateDrainMigrationLine -Login $defaults -Online 4500) -Pattern 'migration: off' -Because '缺省关闭:只等自然下线,到期删 Pod 会断开剩余玩家'
 }
 
 Test-Case 'login ConfigMap 从 zone namespace 读取,读取失败 fail-closed' {

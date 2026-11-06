@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
@@ -25,8 +26,8 @@ func recoverableOutcomeShape(f *pb.MatchFormationRecord) bool {
 }
 
 // ErrUnrecoverableFormation:成局满足到期恢复的候选形状(recoverableOutcomeShape),持久 Create 原件却与成局字段对不上
-// (supportedOutcomeOriginal 失败)。到期 ABORT 与 COMPLETE 都裁决不了它,票据永远停在 state 2/3/4,只能人工按
-// cross-zone-matchmaking.md §13.3 处置。用 errors.Is 判断(2026-10-30,评审 B-4)。
+// (supportedOutcomeOriginal 失败)。到期 ABORT 与 COMPLETE 都裁决不了它,票据永远停在 state 2/3/4,只能人工用
+// formationfix 处置(manual_abort.go,docs/ops/match-formation-manual-abort-runbook.md)。用 errors.Is 判断(2026-10-30,评审 B-4)。
 var ErrUnrecoverableFormation = errors.New("成局形状合格但持久Create原件与成局字段不符，到期终局无法裁决")
 
 // unrecoverableFormationOutcome 是这一类在 global_flow_total{stage="recover"} 下的 outcome 取值(低基数;battle_id 只进日志)。
@@ -36,7 +37,8 @@ const unrecoverableFormationOutcome = "original_mismatch"
 func reportUnrecoverableFormation(battleID uint64, cause error) {
 	metrics.ObserveGlobalFlow("recover", unrecoverableFormationOutcome)
 	logx.Errorf("global formation can never reach a terminal outcome battle_id=%d: %v; its tickets stay occupied, "+
-		"handle it per cross-zone-matchmaking.md 13.3 (never hand-edit match_formation / match_authority_ticket / match_battle_completion)",
+		"handle it with go/match/cmd/formationfix per docs/ops/match-formation-manual-abort-runbook.md "+
+		"(never hand-edit match_formation / match_authority_ticket / match_battle_completion)",
 		battleID, cause)
 }
 
@@ -73,24 +75,54 @@ func (s *Store) retireTerminalOutcomeSchedules(ctx context.Context) error {
 	return nil
 }
 
-// RecoverExpiredOutcomes 是普通PVE/PVP与活动共用的正式有界恢复入口。
-// 沿原state/retry_at_ms索引每批至多八局，只选尚无合法终局的v1资格形状。
-// 游标只用于调度；故障项仍推进，下轮重访，旧0/明确采用0保持UNKNOWN且不占候选页。
+// ExpiredOutcomeLanes 是到期终局恢复按 battle_id 取模分出的车道数(2026-11-05,吞吐随副本数扩展)。
+// 修复前每个副本每拍都从头扫同一页的 8 局、在同一把行锁上排队,后到的副本只读到既有 ABORT,整体吞吐与副本数无关
+// (battle 整批崩溃、上万局待作废时要几十分钟才放完票)。现在每个副本每拍扫一条车道,车道顺序每圈随机重排
+// (logic/global_outcome_recover.go),多个副本自然落在不同车道上,吞吐约为 副本数 × 每页上限 / 每拍。
+// 分车道只决定谁先访问哪一局,不授权任何写入:裁决仍在原 P→formation 锁内,终局主键保证每局只落一份决定。
+// battle_id 由发号器打散(AGENTS.md §7.1),取模分布均匀。车道数改了只影响调度,不影响正确性。
+const ExpiredOutcomeLanes uint64 = 16
+
+// ExpiredOutcomePageSize 是到期终局恢复一页的上限,与 2026-11-05 之前写死的 LIMIT 8 相同。
+const ExpiredOutcomePageSize = 8
+
+// ExpiredOutcomeCursor 是到期终局恢复一条车道里的翻页游标(按 retry_at_ms、battle_id 升序),只用于调度。
+// 零值表示从头扫;扫到末尾回零值。
+type ExpiredOutcomeCursor struct{ AfterRetryMs, AfterBattle uint64 }
+
+// RecoverExpiredOutcomes 是普通PVE/PVP与活动共用的全量恢复页:先退休旧版本 COMPLETE 留下的调度字段
+// (retireTerminalOutcomeSchedules),再不分车道(全部候选)扫一页。
+// 两条 SQL 都沿 (state,retry_at_ms) 走完在途的 state 4 行(Finish(true) 不改 retry_at_ms,开打中的局租约早已到期),
+// 成本与在途局数成正比、与积压多少无关,所以生产循环每圈(ExpiredOutcomeLanes 拍)只调它一次,每拍只跑便宜的车道页
+// (2026-11-05 评审修正:本批最初把退休放在车道页里、车道页不满还补一页全量页,积压为空时每副本每拍要全量扫四遍)。
 func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterBattle uint64) (uint64, uint64, error) {
 	if err := s.retireTerminalOutcomeSchedules(ctx); err != nil {
 		return afterRetryMs, afterBattle, err
 	}
+	next, err := s.RecoverExpiredOutcomeLane(ctx, 1, 0, ExpiredOutcomeCursor{AfterRetryMs: afterRetryMs, AfterBattle: afterBattle})
+	return next.AfterRetryMs, next.AfterBattle, err
+}
+
+// RecoverExpiredOutcomeLane 扫 battle_id % lanes == lane 这条车道的一页候选(lanes=1 即全部候选),逐局交给
+// RecoverExpiredOutcome 在锁内裁决。沿原state/retry_at_ms索引每页至多 ExpiredOutcomePageSize 局，只选尚无合法终局的v1资格形状。
+// 游标只用于调度；故障项仍推进，下轮重访，旧0/明确采用0保持UNKNOWN且不占候选页。返回本车道的新游标,扫到末尾回零值。
+// 不退休旧调度字段(那是全量扫描,只在 RecoverExpiredOutcomes 里做)。
+func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint64, cursor ExpiredOutcomeCursor) (ExpiredOutcomeCursor, error) {
+	if lanes == 0 || lane >= lanes {
+		return cursor, fmt.Errorf("到期终局恢复车道无效 lanes=%d lane=%d", lanes, lane)
+	}
 	stamp, err := s.Now(ctx)
 	if err != nil {
-		return afterRetryMs, afterBattle, err
+		return cursor, err
 	}
 	if stamp < terminalOutcomeGraceMs {
-		return 0, 0, nil
+		return ExpiredOutcomeCursor{}, nil
 	}
 	// 先减宽限再绑定SQL参数，避免deadline+grace的uint64溢出；锁内仍重新读SQL时钟。
-	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND f.deadline_ms>0 AND f.deadline_ms<=? AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+") ORDER BY f.retry_at_ms,f.battle_id LIMIT 8", stamp-terminalOutcomeGraceMs, afterRetryMs, afterRetryMs, afterBattle)
+	// 车道条件只读 battle_id(二级索引里本就带主键),在索引侧就能过滤,车道页的回表约为全量页的 1/lanes(由索引结构推算,未压测)。
+	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND f.deadline_ms>0 AND f.deadline_ms<=? AND f.battle_id%?=? AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+") ORDER BY f.retry_at_ms,f.battle_id LIMIT "+strconv.Itoa(ExpiredOutcomePageSize), stamp-terminalOutcomeGraceMs, lanes, lane, cursor.AfterRetryMs, cursor.AfterRetryMs, cursor.AfterBattle)
 	if err != nil {
-		return afterRetryMs, afterBattle, err
+		return cursor, err
 	}
 	type candidate struct{ retryMs, battle uint64 }
 	var formations []candidate
@@ -98,24 +130,24 @@ func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterB
 		var f candidate
 		if err := rows.Scan(&f.retryMs, &f.battle); err != nil {
 			rows.Close()
-			return afterRetryMs, afterBattle, err
+			return cursor, err
 		}
 		formations = append(formations, f)
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return afterRetryMs, afterBattle, err
+		return cursor, err
 	}
 	if len(formations) == 0 {
-		return 0, 0, nil
+		return ExpiredOutcomeCursor{}, nil
 	}
 	var failures []error
 	for _, f := range formations {
 		if err := ctx.Err(); err != nil {
-			return afterRetryMs, afterBattle, errors.Join(append(failures, err)...)
+			return cursor, errors.Join(append(failures, err)...)
 		}
-		afterRetryMs, afterBattle = f.retryMs, f.battle
+		cursor = ExpiredOutcomeCursor{AfterRetryMs: f.retryMs, AfterBattle: f.battle}
 		// 先用独立标量游标推进，再解析完整原件；损坏的一条不能把整页卡在同一位置。
 		original, err := s.Formation(ctx, f.battle)
 		if err == nil && original.RetryAtMs != f.retryMs {
@@ -128,7 +160,7 @@ func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterB
 			failures = append(failures, fmt.Errorf("到期成局恢复未确认 battle=%d: %w", f.battle, err))
 		}
 	}
-	return afterRetryMs, afterBattle, errors.Join(failures...)
+	return cursor, errors.Join(failures...)
 }
 
 // RecoverExpiredOutcome 不查询Battle、也不根据节点死亡猜终局。原发房前能力与完整
@@ -159,14 +191,7 @@ func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 		// 旧协议 / 能力证据不全:按设计保持 UNKNOWN(过截止的由巡检 CountStrandedExpiredFormations 计数)。
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
-	readExisting := func() (pb.BattleOutcomeDecision, bool, error) {
-		row, err := readTerminal(ctx, s.DB, observed.BattleId)
-		if err != nil || row == nil {
-			return 0, false, err
-		}
-		decision, err := replayTerminal(row, &pb.CommitBattleOutcomeRequest{BattleId: observed.BattleId, PlacementOperationId: observed.OperationId, TargetInstanceId: observed.TargetInstanceId, RawResultPayload: row.RawPayload})
-		return decision, true, err
-	}
+	readExisting := func() (pb.BattleOutcomeDecision, bool, error) { return s.committedTerminal(ctx, observed) }
 	if decision, exists, err := readExisting(); err != nil || exists {
 		return decision, err
 	}
@@ -198,13 +223,14 @@ func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 	if f.RetryAtMs > stamp || (f.State != 2 && f.State != 3 && f.State != 4) {
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
-	decision, err := s.abortTerminalTx(ctx, tx, f)
-	if err != nil || decision != pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
+	decision, written, err := s.abortTerminalTx(ctx, tx, f)
+	if err != nil || !written {
 		return decision, err
 	}
 	if err = tx.Commit(); err != nil {
 		return 0, fmt.Errorf("到期ABORT提交未知，必须复用原件重查: %w", err)
 	}
+	observeTerminalAbort(f.BattleId, terminalAbortDeadline)
 	return decision, nil
 }
 

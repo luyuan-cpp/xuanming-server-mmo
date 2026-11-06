@@ -110,7 +110,7 @@
 | `queue:zone:{z}` ZSET、`queue:meta:{qid}` HASH、`queue:token:{token}` | login Enqueue | login Lookup(每次轮询 ≥4–5 条命令) | 排队开启时最高频 | `QueueEntryTTL` 1h | Enqueue 用 MULTI 写三键 | `go/login/internal/logic/pkg/loginqueue/queue.go:138-142`、`:170-183`、`:226-284` |
 | `admit:{qid}`、`admitted:zset:zone:{z}` ZSET(成员逐个到期;2026-10-13 G4b-G 起,此前是 `admitted:zone:{z}` SET) | login 放行循环、快速通道 | login | 中 | `admit:{qid}` 为 `AdmitTTL` 60s;占位成员按分数到期,整键 TTL `AdmitTTL + 1min` 只做垃圾回收 | 放行 MULTI(`:465-469`);计数与快速通道是单键 Lua(`:495-498`、`:521-527`);取走后续期是单键 MULTI(`:387-389`) | 同上 |
 | `dispatcher:lock:login_queue` | login 选主 | login | 1/s | 30s | 单键 | `go/login/internal/config/config.go:244-258`;`go/login/etc/login.yaml:436`。键是全局的,L-01 缺陷相关 |
-| `gate:{id}:draining` / `gate:{id}:drained` | `k8s_gate_drain.ps1` 的多键 Lua;login 排空循环 | login AssignGate 一次 MGET(失败时放行);scene_manager 跨 zone 重定向 `drainingGateIDs` 一次 MGET(2026-10-18 起,失败时放行,经 scene_manager 自己的 Redis 连接读,只能读 DB 0) | 低 | 有 | MarkScript 同时碰本台的 draining、drained 和同 zone 其它候选的 draining | `tools/scripts/k8s_gate_drain.ps1:150-158`;`loginqueue/gatedrain.go:30`、`:47-81`;`gatedrain_monitor.go:37`、`:129-181` |
+| `gate:{id}:draining` / `gate:{id}:drained` | `k8s_gate_drain.ps1` 的多键 Lua;login 排空循环 | login AssignGate 一次 MGET(失败时放行)。**2026-11-05 改**(缺口清单第 31 条):login 选 gate 的各条路径按 zone 共用一份缓存 1 秒的结果(`loginqueue.DrainMarkCache`),每个 login 实例每个 zone 每秒至多一次 MGET,标记最多晚 1 秒生效;scene_manager 跨 zone 重定向 `drainingGateIDs` 一次 MGET(2026-10-18 起,失败时放行,经 scene_manager 自己的 Redis 连接读,只能读 DB 0) | 低 | 有 | MarkScript 同时碰本台的 draining、drained 和同 zone 其它候选的 draining | `tools/scripts/k8s_gate_drain.ps1:150-158`;`loginqueue/gatedrain.go:30`、`:47-81`;`gatedrain_monitor.go:37`、`:129-181` |
 
 > **(2026-10-18 更正,上表「A. 排队与准入」前两行;原文保留;未编译、未测试)** 登录排队改造后(详见 `login-queue-2026-05.md` §5 决策树后的 2026-10-18 更正):排队中的每次轮询 = GET token 索引 + GETDEL 放行槽 + 一次读状态脚本(EVALSHA,内含 HMGET / ZRANK / ZCARD,剩余 TTL 不足 `QueueEntryTTL` 时才续期),共 3 次往返;放行 = 每拍一次 ZRANGE + 每放行一人一次 EVALSHA(不再 ZPOPMIN);`queue:zone:{z}`、`queue:meta:{qid}`、`queue:token:{token}` 改为空闲 TTL,至多约 1.25×`QueueEntryTTL`。脚本里只访问同一实例的键,redis-queue 仍可单独拆出。
 
@@ -133,7 +133,7 @@
 
 | 键 | 写 / 读 | TTL | 证据 |
 |---|---|---|---|
-| `rl:zone:{z}`、`rl:ip:{ip}` | Bucket4j 做 CAS,每个请求碰 2 个桶 | 桶重填满的时间 + 1h | `AssignGateRateLimiter.java:150-154`;`RateLimitConfig.java:71-91`。默认关(`application.yaml:36-38`) |
+| `rl:zone:{z}`、`rl:ip:{ip}` | Bucket4j 做 CAS,每个请求碰 2 个桶。**2026-11-05 改**(缺口清单第 29 条):一段 Lua 同时判两个桶(Hash,`t` 余量 / `ms` 时刻),拒绝路径只读,两键须同实例 | 桶重填满的时间 + 1h。**2026-11-05 改**:放行后键在补满的那一刻过期(秒级),不另设闲置 TTL | `ratelimit/RedisRateLimitStore.java` 的 `ADMIT_SCRIPT`;`RateLimitConfig.java`。默认关(`application.yaml` 的 `gate.rate-limit.enabled`) |
 
 **C. 映射(data_service `MappingRedis`)**
 

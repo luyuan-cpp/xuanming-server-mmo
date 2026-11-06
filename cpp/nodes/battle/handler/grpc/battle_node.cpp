@@ -42,7 +42,8 @@ boost::cobalt::task<void> CreateBattleWithPermit(muduo::net::EventLoop& loop,
             return true;
         }, nullptr);
     // 所有者停止、许可拒绝和等候期间关闸均走原拒绝契约。
-    if (!permit || !*permit || !**permit || !AdmissionOpen(gate))
+    if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none ||
+        !*permit || !**permit || !AdmissionOpen(gate))
     {
         LOG_WARN << "CreateBattle rejected while awaiting allocation permission, battle_id=" << call->request().battle_id();
         call->Reject(NotAllocatable());

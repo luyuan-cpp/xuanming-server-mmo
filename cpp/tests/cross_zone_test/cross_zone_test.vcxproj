@@ -175,5 +175,14 @@
   <ItemGroup>
     <ClCompile Include="etcd_registration_wait_test.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="id_segment_transport_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="scene_ownership_reconcile_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="scene_placement_fence_test.cpp" />
+  </ItemGroup>
 </Project>
 

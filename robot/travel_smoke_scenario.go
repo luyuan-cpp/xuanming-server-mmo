@@ -325,8 +325,10 @@ func RunTravelSmoke(cfg *config.Config) {
 		if bot == nil {
 			return
 		}
-		// 死在搬迁途中(旧连接已关、重登失败)时这两条发不到任何 login,属预期:
-		// 残留靠 login 断线租约 / handoff 门自己过期,yaml 文件头写了"等一会儿再重跑"。
+		// 死在搬迁途中(旧连接已被 SwapConn 关掉、重登失败)时 LeaveGame 可能发不到任何 login,属预期。
+		// 断线通知只由 gate 在连接关闭时合成:旧连接已关过,对它再关一次不会再触发;若已在新 gate 上发出 Login
+		// (gate 置 loginStarted),下面关新连接时 gate 仍会合成一次带会话代次的断线通知发给 login。
+		// 未发出 Login 的连接没有通知,残留靠 login 断线租约 / handoff 门自己过期,yaml 文件头写了"等一会儿再重跑"。
 		_ = leaveGame(bot.gc, stats)
 		pkg.Clients.Unregister(bot.homePlayer, bot.gc)
 		gameobject.PlayerList.Delete(bot.homePlayer)

@@ -154,7 +154,7 @@ Keys worth a Grafana / redis-cli dashboard:
 |-----|---------|
 | `scene_nodes:zone:{zoneId}` | Live node IDs in the zone |
 | `scene_nodes:zone:{zoneId}:load` | ZSET, lowest score = most attractive |
-| `scene_manager:zones` | SET of zone ids(十进制)— 2026-10-16 起的 zone 登记集合,领导者清扫陈旧负载集与孤儿频道时靠它发现 zone(替代全库 SCAN);只加不减,唯一删除方是 `merge_zone -clear-source-hot-state`。计数读失败、又不在负载集里的节点以 `1e12` 的哨兵分加入负载集(选点排最后,下一拍读成功后纠正),`redis-cli` 里看到这个分数不是负载 |
+| `scene_manager:leader:lock:zone:<z>` | 本 zone 的选主锁(2026-11-05 起按 zone;原来全服一把 `scene_manager:leader:lock`,原来的 zone 登记集合 `scene_manager:zones` 同日删除,docs/design/control-plane-zone-scoping-20261105.md §4.2)。负载集里计数读失败、又不在负载集里的节点以 `1e12` 的哨兵分加入(选点排最后,下一拍读成功后纠正),`redis-cli` 里看到这个分数不是负载 |
 | `node:zone:{zoneId}:{nodeId}:members` | SET of player ids on that pod; `SCARD` = online players |
 | `node:zone:{zoneId}:{nodeId}:scene_node_type` | 0=world, 1=instance, 2=world-cross, 3=instance-cross |
 | `instance:{id}:members` | SET of player ids in that scene; `SCARD` = per-scene online players (subset of the above) |
@@ -320,41 +320,21 @@ SCAN 遍历的是整个共享库,开服规模(数十亿键,推算未实测)下�
 
 | 用途 | 旧做法 | 现做法 |
 |------|--------|--------|
-| 孤儿频道清理(`orphan_cleanup.go`) | `SCAN world_channels:zone:*` | 候选 zone = 登记集合 `scene_manager:zones` ∪ 有活节点的 zone;每个 zone 一条 `HKEYS world_channels:desired:zone:{z}`,字段里 confId 不在 World 表的组按 `(zone, confId)` 点名清理 |
-| 陈旧负载集成员清扫(`sweepStaleLoadSetMembers`) | `SCAN scene_nodes:zone:*:load` | 扫描范围 = etcd 快照里的 zone ∪ 登记集合 |
+| 孤儿频道清理(`orphan_cleanup.go`) | `SCAN world_channels:zone:*` | 只查本进程的 zone(`ZoneId`);一条 `HKEYS world_channels:desired:zone:{z}`,字段里 confId 不在 World 表的组按 `(zone, confId)` 点名清理 |
+| 陈旧负载集成员清扫(`sweepStaleLoadSetMembers`) | `SCAN scene_nodes:zone:*:load` | 只扫本进程的 zone,本 zone 一个节点都没有时照样扫 |
 
-- **登记集合 `scene_manager:zones`**(SET,成员是 zone 十进制):领导者每拍刷新负载分时先 `SADD` 本拍涉及的全部
-  zone,播种 / 写回频道期望数之前也会登记,每个副本启动时登记自己的 `ZoneId`。只加不减,唯一删除方是
-  `merge_zone -clear-source-hot-state` 的最后一步。登记失败只打 Error、不挡主流程,有活节点的 zone 每拍自愈
-  (契约见 `go/scene_manager/internal/logic/zone_registry.go` 文件头)。
-- **删除顺序**:期望数字段是新的发现索引,所以 `deleteOrphanChannel` 改为最后才删它;中途失败时下一次 fullSync
+- **2026-11-05 起按 zone 选主**(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):每个 scene_manager 进程只编排
+  配置的 `ZoneId`,选主锁是 `scene_manager:leader:lock:zone:<z>`。原来的 zone 登记集合 `scene_manager:zones` 删除:控制域按
+  zone 组分实例(`redis-ctl-g<N>`)之后,同组几个 zone 的键在同一个实例里、各自有领导者,从 Redis 发现 zone 会让一个 zone 的领导者
+  去清扫同组别的 zone 的活节点。现在不需要发现:本 zone 的领导者每拍都扫本 zone。
+- **删除顺序**:期望数字段是孤儿频道的发现索引,所以 `deleteOrphanChannel` 最后才删它;中途失败时下一次 fullSync
   还能重新发现这组孤儿,对已空的集合重跑是幂等的。
-- **覆盖不到的情形**(只会残留垃圾键,不影响路由):
-  1. `DesiredWorldChannelCount` 的 `HSETNX` 出错兜底路径建出来的「有频道集合、没有期望数字段」的组;
-  2. 升级前就已整体下线、负载集或期望数还留着残留、又从未登记过的 zone(旧版本不登记)。这类 zone 复活时会
-     重新进 etcd 快照,下一次 fullSync 照常清扫;一直不复活的,按下面的步骤一次性补登记。
+- **覆盖不到的情形**(只会残留垃圾键,不影响路由):`DesiredWorldChannelCount` 的 `HSETNX` 出错兜底路径建出来的
+  「有频道集合、没有期望数字段」的组(该兜底已改为回 error、本轮不补建)。
 - 反过来,「频道集合已空、期望数字段还在」的残留以前 SCAN 找不到,现在能清掉。
+- 生产代码里**不保留**任何全库 SCAN,也没有「打开就 SCAN」的配置开关。原来为旧环境准备的「一次性补登记」随登记集合删除;
+  项目未上线,长期环境按 AGENTS.md §6.2 清库后以新拓扑重新部署。
 
-**升级:一次性补登记(只对有历史数据的长期环境)**
-
-生产代码里**不保留**任何全库 SCAN,也没有「打开就 SCAN」的配置开关(忘关就是把小时级 SCAN 原样带回)。
-补登记由运维在首轮滚动升级完成后手工跑一次:
-
-- 生产在开服前上线这一版时没有历史数据,**不需要**;本机按 AGENTS.md §6.2 压测前会 FLUSHALL,也不需要;
-- dev / staging 等长期环境:对 scene_manager 配置里 `Redis` 段指向的那个实例与库执行下面的命令。
-  `--scan` 是游标扫描,但仍会遍历整个库,**只在维护窗口或低峰跑,不要在开服后的生产上跑**;它只做 `SADD`,
-  重复执行无害。
-
-```bash
-# 连接参数按环境替换;host / port / 库号以 scene_manager 配置的 Redis 段为准。
-R="redis-cli -h <host> -p <port> -n <db>"
-{ $R --scan --pattern 'scene_nodes:zone:*:load'      | sed -E 's/^scene_nodes:zone:([0-9]+):load$/\1/'
-  $R --scan --pattern 'world_channels:desired:zone:*' | sed -E 's/^world_channels:desired:zone:([0-9]+)$/\1/'
-} | grep -E '^[0-9]+$' | sort -un | while read -r z; do $R SADD scene_manager:zones "$z" >/dev/null; done
-$R SMEMBERS scene_manager:zones   # 核对:应包含上面扫出的全部 zone
-```
-
-回滚到旧二进制:旧代码不读登记集合,照旧 SCAN,行为完全回到原样;留下的 `scene_manager:zones` 无害,可以手工 `DEL`。
 设计与取舍见 `docs/design/scene-creation-architecture.md`「负载刷新与 zone 登记集合(2026-10-16)」。
 
 ## 7. Pre-packaged alerts
@@ -374,12 +354,12 @@ $R SMEMBERS scene_manager:zones   # 核对:应包含上面扫出的全部 zone
 | `SceneManagerNodeDetachWithoutDeathMark` | warning | 10 分钟内 `scene_manager_node_detach_deferred_total` 的 `outcome` 为 `expired` 或 `abandoned` 的计数有增加,不设 for、任一次即告警(2026-09-28 落码,未编译、未实测)。背景(GO-6):已判死的 scene 节点写不进 `death_at` 或摘不出负载集时,scene_manager 不再照样摘除,而是把它留在负载集里(按存活处理)、每 5s 重试。`expired` = 自首次尝试起满一个再入屏障(默认 20s)仍写不进 `death_at`,不带标记摘除 —— 这一步本身安全,但说明 Redis 在拒 SET;`abandoned` = 10 分钟仍摘不出负载集、放弃,死节点留在负载集里,`CreateScene` / `EnterScene` 可能被派到它上面,直到下一次 fullSync。健康时恒为 0。处置:查 Redis(内存与 maxmemory、慢日志、连接、go-zero 熔断),scene_manager 日志搜 `[ReentryBarrier][DeferDetach]`;`abandoned` 且 Redis 已恢复时可重启 scene_manager 领导者触发 fullSync 重扫。判读细节见 alerts 文件注释与 `docs/ops/cross-zone-failure-test-runbook.md` |
 | `SceneManagerDeadNodeReconcileAbandoned` | warning | 10 分钟内 `scene_manager_dead_node_reconcile_total` 的 `outcome` 为 `abandoned` 的计数有增加,不设 for、任一次即告警(11-02 首加,11-05 挪到 GO-6 那条旁边并改正;代码与规则未编译、未实测)。背景(R1,2026-10-30):死节点收尾任务在 Redis 里,任务表 `scene_manager:dead_node_reconcile` 加每节点的收尾范围 `node:zone:{z}:{n}:reconcile_scenes`。领导者每拍对屏障已过的任务逐个强制销毁孤儿实例,全部有结论才删死节点的 `scene_count` / `members` 并出队。`abandoned` = 本进程从第一次没做完起满 10 分钟仍有实例没结论,放弃:计数与任务删掉,没结论的实例留在反向索引 `node:zone:{z}:{n}:scenes` 里,之后只有同一 node_id 再次判死或空闲回收才会处理。健康时恒为 0。处置:查控制域 Redis,scene_manager 领导者日志搜 `[ReentryBarrier] Dead node cleanup still incomplete after`;Redis 恢复后按反向索引逐个核对 `scene:{id}:node`。判读细节见 alerts 文件注释与 `docs/ops/cross-zone-failure-test-runbook.md` §2.3 |
 | `SceneManagerDeadNodeReconcileStuck` | warning | `max by (zone_id) (scene_manager_dead_node_reconcile_pending) > 0` 持续 15 分钟(15 分钟 = 屏障 20s + 放弃期限 10 分钟 + 余量,调高 `SceneReentryBarrierSeconds` 时同步调高 for;代码与规则未编译、未实测)。健康时一条任务只活一个屏障加一拍,出错时 10 分钟内会走到 `abandoned`;连续 15 分钟非 0 = 有任务既没收完、也没走到放弃。常见原因:屏障一直挡着(读 `death_at` 失败按屏障未到处理,不计放弃期限;节点反复判死)、领导者频繁更换(放弃期限只在进程内计时)、收尾没在跑(`SceneManagerLoadRefreshStalled` 同时响)、放弃那一步的 Lua 也失败。查 `ZRANGE scene_manager:dead_node_reconcile 0 -1 WITHSCORES` 与 `scene_manager_reentry_barrier_blocked_total{site="dead_node_cleanup"}`。节点连环崩溃时也会响,先看 `SceneManagerSceneOrphanReconcileSpike` |
-| `SceneManagerGateRedirectFallback` | warning | 10 分钟内 `scene_manager_gate_redirect_fallback_total` 有增加(或新出现的序列已大于 0),不设 for、任一次即告警(2026-11-05 落码,代码与规则未编译、未实测)。背景:跨 zone 重定向挑 gate 之前剔除停写(注册记录的 ModRevision 在本进程 30s 以上没变)与满载(人数到自报 `max_connections` 的 90%)的 gate,目标 zone 的候选全部不合格时回落到全部 gate 照常挑,按 `zone_id`(目标 zone)与 `reason`(stale / full / mixed)计一次。健康时恒为 0。处置:stale / mixed 先看目标 zone 的 `LoginGatePickFallbackStale`(`deploy/k8s/login-alerts.yaml`,critical)是否同时在响,gate 全卡住或写不进 etcd 按那条处置;full 是目标 zone 容量不够。scene_manager 日志搜 `eligibleTargets: gates of zone`。判读见 `docs/design/gate-load-balancing-design.md`「满载与停写的 gate」 |
+| `SceneManagerGateRedirectFallback` | warning | 10 分钟内 `scene_manager_gate_redirect_fallback_total` 有增加(或新出现的序列已大于 0),不设 for、任一次即告警(2026-11-05 落码,代码与规则未编译、未实测)。背景:跨 zone 重定向挑 gate 时给候选分档(11-06 起排空也并入):完全合格的(没停写、没排空、没到自报 `max_connections` 的 90%)优先,没有时退到连得上的(排空中或到水位),全部停写(注册记录的 ModRevision 在本进程 30s 以上没变)才退到全部;每次退档按 `zone_id`(目标 zone)与 `reason`(stale / draining / full / mixed)计一次。健康时恒为 0。处置:stale 先看目标 zone 的 `LoginGatePickFallbackStale`(`deploy/k8s/login-alerts.yaml`,critical)是否同时在响,gate 全卡住或写不进 etcd 按那条处置;draining / full / mixed 对照那个 zone 的 `LoginGatePickFallbackDegraded`,是整区误标排空或目标 zone 容量不够。scene_manager 日志搜 `eligibleTargets: gates of zone`。判读见 `docs/design/gate-load-balancing-design.md`「满载与停写的 gate」 |
 | `SceneManagerSceneOrphanReconcileSpike` | warning | 单 zone 孤儿场景对账 `scene_manager_scene_orphans_reconciled_total` 超过 50 个/分钟、持续 5 分钟 —— 多半是某个 scene 节点 Pod 挂了(CrashLoopBackOff / OOMKilled);反复出现说明节点在抖。那些实例里的玩家已被断开,预期随后有一波重连 |
 | `SceneManagerLoadRefreshStalled` | warning | (2026-10-16 新增,阈值待压测基线)`sum(increase(scene_manager_load_refresh_total[2m])) == 0 or absent(...)` 持续 5 分钟 —— 没有领导者在刷新负载分(选主失败 / 全部副本 `LeaderEligible=false` / 领导者卡在 fullSync 重试循环)。查 `sum(scene_manager_is_leader)` 与领导者的 `[LoadReporter] full sync failed` 日志。滚动升级期间领导者若还是旧版本会误报,升级窗口内加 silence |
 | `SceneManagerNodeViewHeld` | critical | (2026-11-05 落码,代码与规则未编译、未实测)`max(scene_manager_node_view_holding) > 0` 持续 2 分钟。背景(决策清单 B1-1):fullSync 拿到的 etcd 快照为空,或某个 zone 已知节点(旧镜像 ∪ 领导者读到的负载集)不少于 4 个且缺席过半时,整轮作废、每 3s 重试,不换镜像、不清扫、不补频道;缺席数稳定 60s 才放行,变了从头计时,空快照永远不放行(`go/scene_manager/internal/logic/node_view_gate.go`)。压住期间 watch 与每拍刷新都停,压满 5 分钟 `SceneManagerLoadRefreshStalled` 也会亮,先按本条处置。查日志 `[LoadReporter] full sync failed: scene node view held by the liveness gate`(带 zone、held_empty / held_drop、已知数与缺席数);`etcdctl get SceneNodeService.rpc/ --prefix --keys-only` 的注册数与在跑的 scene Pod 数对照:注册少很多 = etcd 回档 / 重建 / 连错,修 etcd;一致 = 真的死了一大半节点,等它自动放行 |
-| `SceneManagerNodeViewReleased` | critical | (同上)15 分钟内 `scene_manager_node_view_released_total` 有增加,不设 for。闸门放行了一次骤降,缺席的节点从这一轮起按消失处理:写 death_at、摘负载集、屏障之后拆它们名下的实例、改派世界频道。节点确实死了不用处置;节点其实还活着(etcd 视图错了)要立刻修 etcd 并核对这些节点上的实例 —— 节点重新注册之后,已入队的死节点收尾仍会按判死时刻的快照销毁它名下的实例(`docs/handoff/server-gap-audit-20261101.md` 第 32 条,未修) |
-| `SceneManagerLoadRefreshFailing` | warning | (同上)10 分钟内 `outcome` 为 `read_failed` / `registry_failed` / `write_failed` 的刷新有增加,持续 10 分钟。`read_failed` 只记传输层失败(熔断拒绝 / 取连接 / 网络 / 超时),只按错误类型判、与批怎么切无关。查 Redis 与领导者 `[LoadRefresh]` 日志;个别键的回复错误或坏值(WRONGTYPE / 空串 / 非数字)不论批多大都只记 `partial`,不在本规则里,由下面的 `SceneManagerLoadRefreshNodeErrors` 盯 |
+| `SceneManagerNodeViewReleased` | critical | (同上)15 分钟内 `scene_manager_node_view_released_total` 有增加,不设 for。闸门放行了一次骤降,缺席的节点从这一轮起按消失处理:写 death_at、摘负载集、屏障之后拆它们名下的实例、改派世界频道。节点确实死了不用处置;节点其实还活着(etcd 视图错了)要立刻修 etcd。在再入屏障放行、收尾动手之前按原 node_id 重新注册的同一代进程,收尾任务会撤掉(`scene_manager_dead_node_reconcile_total{outcome="instance_back"}`);失联比屏障更久的节点,名下实例此前已被拆掉、世界频道已被改派,它重新注册后约 20 秒内自己把这些本地实体排空销毁(scene 节点的 `scene_ownership_releases_total` 增长,[scene-node-ownership-reconcile.md](../design/scene-node-ownership-reconcile.md)),不用逐个核对 |
+| `SceneManagerLoadRefreshFailing` | warning | (同上)10 分钟内 `outcome` 为 `read_failed` / `write_failed` 的刷新有增加,持续 10 分钟。`read_failed` 只记传输层失败(熔断拒绝 / 取连接 / 网络 / 超时),只按错误类型判、与批怎么切无关。查 Redis 与领导者 `[LoadRefresh]` 日志;个别键的回复错误或坏值(WRONGTYPE / 空串 / 非数字)不论批多大都只记 `partial`,不在本规则里,由下面的 `SceneManagerLoadRefreshNodeErrors` 盯 |
 | `SceneManagerLoadRefreshSlow` | warning | (同上)一拍刷新 p99 > 2s(拍长 5s)持续 15 分钟 —— Redis 慢,或全服节点数增长到单领导者扛不住(A1:按 zone 选主) |
 | `SceneManagerLoadRefreshNodeErrors` | warning | (同上)`sum(increase(scene_manager_load_refresh_node_errors_total[10m])) > 0` 持续 30 分钟 —— 有节点的计数持续读不到。这些节点保留旧分或一直挂着哨兵分(选点排最后,等于少了一份容量),每节点序列停在旧值(见 §4.2)。领导者日志 `[LoadRefresh] ... node counter reads failed` 的 `first` 给出 zone / node,用 `redis-cli TYPE` / `GET` 查 `node:zone:{z}:{node}:scene_count` 与 `player_count` |
 

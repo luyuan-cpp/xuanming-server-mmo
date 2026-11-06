@@ -1,5 +1,6 @@
 package com.game.mall;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -13,6 +14,10 @@ final class PaymentPolicy {
     record Fact(String kind, String orderId, String requestId, String transactionId, String paymentTransactionId,
         long amountMinor, String currency, long createdMs, int applied) {
         CommerceApi.Payment receipt() { return new CommerceApi.Payment(orderId, "mock", transactionId, amountMinor, currency); }
+        /** REFUND 原件对应的退款回执:被退的那笔是 paymentTransactionId,退款流水是 transactionId。 */
+        CommerceApi.Refund refundReceipt() {
+            return new CommerceApi.Refund(orderId, "mock", paymentTransactionId, transactionId, amountMinor, currency);
+        }
     }
 
     Fact find(String kind, String orderId, boolean lock) {
@@ -61,22 +66,26 @@ final class PaymentPolicy {
         }
     }
 
-    void refund(CommerceApi.Payment input) {
+    void refund(CommerceApi.Refund input) {
         props.requirePaymentChannel(input.channel());
-        var original = jdbc.query("SELECT channel,transaction_id,amount_minor,currency FROM commerce_payment_receipt WHERE order_sn=?",
-            (row, index) -> new CommerceApi.Payment(input.orderId(), row.getString(1), row.getString(2), row.getLong(3), row.getString(4)),
-            input.orderId());
-        if (original.size() != 1 || !original.getFirst().channel().equals(input.channel())) {
+        // 被退的那笔按交易键找;退款渠道是键的一部分,拿别的渠道报这笔付款的退款在这里就找不到原付款。
+        var original = jdbc.query("SELECT amount_minor,currency FROM commerce_payment_receipt WHERE channel=? AND transaction_id=?",
+            (row, index) -> new CommerceApi.Payment(input.orderId(), input.channel(), input.paymentTransactionId(), row.getLong(1), row.getString(2)),
+            ascii(input.channel()), ascii(input.paymentTransactionId()));
+        if (original.size() != 1) {
             throw new CommerceException(409, "退款渠道与原付款不符");
         }
         if ("mock".equals(input.channel())) {
+            // mock 只能付一笔(原件按订单唯一),所以被退的必须正是订单的 mock 付款原件。
             var payment = required("PAYMENT", input.orderId());
             var refund = required("REFUND", input.orderId());
-            if (!payment.receipt().equals(original.getFirst()) || !refund.receipt().equals(input)
+            if (!payment.receipt().equals(original.getFirst()) || !refund.refundReceipt().equals(input)
                 || !refund.paymentTransactionId().equals(payment.transactionId())
                 || refund.amountMinor() != payment.amountMinor() || !refund.currency().equals(payment.currency())) {
                 throw new CommerceException(409, "mock退款与原付款事实不符");
             }
         }
     }
+
+    private static byte[] ascii(String value) { return value.getBytes(StandardCharsets.US_ASCII); }
 }

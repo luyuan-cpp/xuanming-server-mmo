@@ -56,7 +56,7 @@ func TestAuthoritativePlayerIDNeverFallsBackToRequestBodyWhenSessionPresent(t *t
 	require.Zero(t, authoritativePlayerID(unboundSessionCtx(), victimPlayerID), "未绑角色的会话不得采用请求体")
 	require.Equal(t, ownPlayerID, authoritativePlayerID(boundSessionCtx(ownPlayerID), victimPlayerID), "会话与请求体不一致时以会话为准")
 	require.Equal(t, ownPlayerID, authoritativePlayerID(boundSessionCtx(ownPlayerID), 0))
-	// 不带会话头 = 内部调用,请求体照旧生效(MatchService 今天没有这类调用方,originalRoleInterceptor 会先拒)。
+	// 不带会话 = 内部调用,请求体照旧生效(生产里入口准入会先拒不带会话的 MatchService 请求)。
 	require.Equal(t, victimPlayerID, authoritativePlayerID(context.Background(), victimPlayerID))
 }
 

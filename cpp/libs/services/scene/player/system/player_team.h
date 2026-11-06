@@ -14,9 +14,12 @@
 //     队长进场 -> 对本节点上其他成员逐个"刷新并跟随",不再扇出(防循环)。
 //   - 入队即跟随(J-12 修订,team-system.md 文末「组队跟随 v1.1」V.2):组队服务的刷新信号只发给 TeamId 变了的人
 //     (新加入者 / 被移出者),收到后除了刷新 TeamId,非队长还会走一遍跟随。
-//   - 归队:队员与队长已在同一个场景实例时,若两人互相不在对方视野里、或相距超过 kTeamRegroupDistance,
-//     把队员瞬移到队长脚下(MovementSystem::TeleportWithinScene)。"走路时排成一列跟着队长"由客户端做
-//     (队员客户端沿队长轨迹自己走并照常上报移动),scene 只负责把人带到队长看得见的地方。
+//   - 归队:队员与队长已在同一个场景实例时 ——
+//       声明了跟随的队员(TeamFollowC2S{follow=true},新客户端):交给 TeamFollowSystem 由服务器驱动走位,
+//         站在队长走过的路上、离队长固定路程(docs/design/team-follow-server-trail.md);能走过去就走,
+//         看不见队长或离得太远就直接放进槽位;
+//       没声明的队员(旧客户端):若两人互相不在对方视野里、或相距超过 kTeamRegroupDistance,
+//         把队员瞬移到队长脚下(MovementSystem::TeleportWithinScene),"排成一列跟着走"由客户端自己做。
 //   - 战斗中(IsInBattle 或 battle:lock 存在)一律不跟随,冻结解除后由 PlayerBattleSystem 回调补一次。
 //
 // 线程模型:所有方法都必须在 scene 节点 loop 线程调用;hiredis 回调同样在 loop 线程执行。
@@ -78,6 +81,16 @@ public:
 	// PlayerBattleSystem 在确实摘掉 InBattleComp 之后回调:补一次战斗中被跳过的跟随检查。
 	static void OnBattleFreezeCleared(entt::entity player);
 
+	// 客户端 TeamFollowC2S:follow=true 声明跟随(归队)并走一遍刷新与跟随检查,
+	// follow=false 暂离(立刻停止服务器驱动)。调用点:player_movement_handler.cpp TeamFollow。
+	static void OnClientFollowRequest(entt::entity player, bool follow);
+
+	// 离线托管开始(开通了挂机的玩家下线,角色留在世界里):由服务器开启跟随,不等客户端声明(用户 2026-11-06 要求)。
+	// 不在队伍里什么都不做;已经接在队长身后只挂意图;否则挂意图并走一遍刷新与跟随检查,同场景里接到队长身后。
+	// 下线前点过「暂离」的,托管期间照样跟;重连后客户端按自己当前的选择重新声明(team-follow-server-trail.md §5)。
+	// 调用点:离线托管入口(挂机月卡玩家断线后不按 25 秒退出,待做,见 team-follow-server-trail.md §3.6)。
+	static void OnOfflineHostingStarted(entt::entity player);
+
 	// ---- AOI ----
 
 	// 玩家 TeamId 变化后修正队友 AOI 优先级(§F.4)。遍历 player 当前格及邻格的全部实体,
@@ -115,7 +128,8 @@ private:
 	// 队长在别的场景 -> 请求 SceneManager 切过去;已在同一场景 -> RegroupToLeader。
 	static void CheckFollowLeader(entt::entity player, uint64_t leaderId);
 
-	// 同一场景实例内的归队:按 ShouldRegroup 判定,需要时把 player 瞬移到队长脚下。
+	// 同一场景实例内的归队:声明了跟随的交给 TeamFollowSystem::TryAttach(服务器驱动走位);
+	// 否则按 ShouldRegroup 判定,需要时把 player 瞬移到队长脚下。
 	// 只由 CheckFollowLeader 在全部守卫通过后调用;队长实体不在本节点 / 不在同一场景 / 归属交接在途时不动。
 	static void RegroupToLeader(entt::entity player, uint64_t leaderId);
 };

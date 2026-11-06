@@ -27,6 +27,7 @@ import (
 	loginpb "proto/login"
 	"shared/generated/pb/table"
 	"shared/idsegment"
+	"shared/placement"
 	"shared/playername"
 )
 
@@ -282,8 +283,9 @@ func TestCreatePlayer_ReleasesLockOnHomeZoneFailure(t *testing.T) {
 	}
 }
 
-// registerHomeZone 恒带 storage_id(player-storage-placement.md §8.3):NewPlayerStorageId=0 → 本 login 的 Node.ZoneId;
-// 显式填了 → 原样透传。home_zone 在两种情形下都不变。
+// registerHomeZone 恒带 storage_id(player-storage-placement.md §8.3)。配了地域存档库:按 player_id 在本地域 K 个库里取模,
+// 和 login 所在区无关(总体方案 §7.2);过渡期没配:NewPlayerStorageId=0 → 本 login 的 Node.ZoneId,显式填了 → 原样透传。
+// home_zone 在所有情形下都不变。
 func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 	savedZone, savedPlacement := config.AppConfig.Node.ZoneId, config.AppConfig.Placement
 	t.Cleanup(func() {
@@ -292,10 +294,16 @@ func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 	})
 	config.AppConfig.Node.ZoneId = hzZoneID
 
+	regionStorage, err := placement.RegionStorageIDForPlayer(1, 64, hzPlayerID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := map[string]struct {
 		placement   config.PlacementConf
 		wantStorage uint32
 	}{
+		"region storage":            {placement: config.PlacementConf{Region: 1, StorageShards: 64}, wantStorage: regionStorage},
+		"dev region storage":        {placement: config.PlacementConf{Region: 0, StorageShards: 1}, wantStorage: placement.DefaultGlobalStorageID},
 		"storage 0 uses login zone": {placement: config.PlacementConf{}, wantStorage: hzZoneID},
 		"global storage 1000000":    {placement: config.PlacementConf{NewPlayerStorageId: 1000000}, wantStorage: 1000000},
 	}

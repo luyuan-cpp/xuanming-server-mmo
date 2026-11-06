@@ -554,6 +554,94 @@ void SendClientPlayerLoginRefreshTokenErased(entt::registry& registry, entt::ent
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::loginpb::RefreshTokenResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region ClientPlayerLoginRequestGateMigration
+namespace {
+void QueueLocalClientPlayerLoginRequestGateMigrationFailure(GrpcDone<::loginpb::GateMigrationResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerLoginRequestGateMigrationCall(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::GateMigrationRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::loginpb::GateMigrationResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerLogin.RequestGateMigration requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerLoginRequestGateMigrationGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerLoginRequestGateMigrationFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerLoginRequestGateMigrationFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::loginpb::GateMigrationResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerLogin.RequestGateMigration response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerLoginRequestGateMigration(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::GateMigrationRequest& request,
+                                            GrpcDone<::loginpb::GateMigrationResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerLoginRequestGateMigrationCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerLoginRequestGateMigrationErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerLogin.RequestGateMigration requires a done callback";
+    }
+    if (message.GetDescriptor() != ::loginpb::GateMigrationRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerLogin.RequestGateMigration: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::loginpb::GateMigrationRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerLogin.RequestGateMigration: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerLoginRequestGateMigrationCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::loginpb::GateMigrationResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region LoginPreGateAssignGate
 namespace {
 void QueueLocalLoginPreGateAssignGateFailure(GrpcDone<::loginpb::AssignGateResponse> done, uint32_t code, std::string message) {

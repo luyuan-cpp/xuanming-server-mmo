@@ -84,10 +84,12 @@ struct PlayerBagsComp
         bags[kInventory].SetProfile(BagProfile::Flat(kBagMaxCapacity));
         bags[kWarehouse].SetProfile(BagProfile::Flat(kWarehouseMaxCapacity));
         bags[kEquipment].SetProfile(BagProfile::Equipment(kEquipmentCapacity));
-        // 临时格是**唯一**会挤掉存量物品的包(先进先出)。它是掉落溢出的缓冲,
-        // 语义就是"新的进来、旧的顶出去",而不是"满了就捡不起来"。被挤掉的实例
-        // 由 BagService 落 LogItemDestroy,绝不无声消失。
-        bags[kTemporary].SetProfile(BagProfile::Temporary(kTempBagMaxCapacity));
+        // 临时格:主背包放不下的战斗掉落落在这里。满了**就拒**,不挤掉存量物品 ——
+        // 2026-11-05 之前它是先进先出,被挤掉的东西没有去处,等于真丢(审计 cpp-economy#2)。
+        // 现在新入账在任何副作用之前被拒、由来源保留(战斗结算整笔延后),
+        // 玩家经 RetrieveTemporaryItems 取回人物背包腾出位置后自动补发。
+        // 四个固定包因此全部是 RejectWhenFull:任何包都不会自动销毁玩家的东西。
+        bags[kTemporary].SetProfile(BagProfile::Flat(kTempBagMaxCapacity));
     }
 
     std::array<Bag, kBagTypeCount> bags{};

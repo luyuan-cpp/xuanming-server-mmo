@@ -233,7 +233,7 @@ message PlayerAttributeComp {
 | `AllocateAttributePoints` | **确认加点**:提交某池的"目标已分配值"(全量、幂等) |
 | `ResetAttributePoints` | 整池洗点,按表扣金币 |
 | `AutoAllocateAttributePoints` | 算推荐分配,**只算不落** |
-| `CreateAttributeScheme` / `SwitchAttributeScheme` / `RenameAttributeScheme` | 方案管理 |
+| `CreateAttributeScheme` / `SwitchAttributeScheme` / `RenameAttributeScheme` | 方案管理。新建要扣金币,请求带客户端幂等键 `client_request_id`(2026-11-05):同键同名的重发不再建、不再扣,回首次的方案号并标 `replayed`,见 [client-request-idempotency.md](client-request-idempotency.md) |
 | `NotifyAttributePanelChanged` | 服务器主动推面板(升级 / GM / 外部加成变化) |
 | `GmSetPlayerLevel` | GM 设等级(**仅 dev/test 可用**,见 §8 与 `cpp/nodes/gate/SECURITY.md` §3) |
 

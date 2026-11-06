@@ -9,6 +9,7 @@ import com.game.gateway.repository.ZoneConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +34,8 @@ import static org.mockito.Mockito.*;
  *
  * <p>只验控制器自己的承诺:create 走「只插不改」+ 回读、与请求逐列一致回 200、不一致回 409,且只对 1213 做有上限的
  * 整事务重试;create / update 的请求体必须给全每个业务字段,缺字段或取值越界回 400 且不碰库;update /
- * setMaintenance / setOpen 走按主键的单条 UPDATE、存在性由回读判定(不看行数)、绝不插入;delete 按删除行数回
+ * setMaintenance / setOpen 先按主键加锁点查判存在(不看行数、不靠回读),在才走按主键的单条 UPDATE 再回读,
+ * 不在回 404 且不写,绝不插入;delete 按删除行数回
  * 204 / 404;时间戳取自注入的时钟。「ODKU 在真库上不成环」由 {@code ZoneConfigUpsertLockOrderMySqlTest} 验,
  * 语句能否在 Spring Data 上执行、已存在的行是否真的一列不改由 {@code ZoneConfigRepositoryWiringTest} 验,这里替代不了。
  *
@@ -157,6 +159,7 @@ class AdminZoneControllerTest {
         Map<String, Object> complete = fields(null); // 请求体可以不带 zone_id,以路径为准
         complete.put("open_time", "2026-10-01T09:00:00");
         ZoneConfig stored = storedCopyOf(complete);
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
         when(repo.findById(ZONE)).thenReturn(Optional.of(stored));
 
         ResponseEntity<ZoneConfig> resp = controller.update(ZONE, body(complete));
@@ -230,17 +233,42 @@ class AdminZoneControllerTest {
     }
 
     @Test
-    void updateDecidesNotFoundByReadBackNotByRowCountAndNeverInserts() {
-        // 行数报 1(found rows)也不能当作存在:以同一事务里的回读为准。
+    void updateDecidesNotFoundByLockedLookupAndNeverWrites() {
+        // 存在性以 UPDATE 之前的加锁点查为准(mock 的点查缺省返回空列表 = 行不在):回 404,UPDATE 不执行,也绝不插入。
+        // 不看 UPDATE 的行数(found rows 下「值没变」也报 1);也不靠回读 —— RC 与 TiDB 下并发 create 能插在
+        // UPDATE 与回读之间,回读看见的那一行不是这次写的。这里让回读「看得见」一行,结论仍必须是 404。
         when(repo.updateSettings(eq(ZONE), any(), eq(NOW))).thenReturn(1);
-        when(repo.findById(ZONE)).thenReturn(Optional.empty());
+        when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "inserted concurrently")));
 
         assertEquals(HttpStatus.NOT_FOUND, controller.update(ZONE, body(fields(ZONE))).getStatusCode());
+        verify(repo).lockZoneIdForUpdate(ZONE);
+        verify(repo, never()).updateSettings(any(), any(), any());
         verify(repo, never()).insertIfAbsent(any(), any());
+        verify(repo, never()).findById(any());
+    }
+
+    @Test
+    void writesToExistingZoneLockTheRowBeforeWritingThenReadBack() {
+        // 先加锁点查、再写、再回读,三步在同一个事务里按这个顺序:锁住了才写,存在性才与隔离级别无关。
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
+        when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "z")));
+
+        assertEquals(HttpStatus.OK, controller.update(ZONE, body(fields(ZONE))).getStatusCode());
+        assertEquals(HttpStatus.OK, controller.setOpen(ZONE).getStatusCode());
+
+        InOrder order = inOrder(repo);
+        order.verify(repo).lockZoneIdForUpdate(ZONE);
+        order.verify(repo).updateSettings(eq(ZONE), any(), eq(NOW));
+        order.verify(repo).findById(ZONE);
+        order.verify(repo).lockZoneIdForUpdate(ZONE);
+        order.verify(repo).updateManualStatus(ZONE, 0, "", NOW);
+        order.verify(repo).findById(ZONE);
+        verifyNoMoreInteractions(repo);
     }
 
     @Test
     void setMaintenanceKeepsMessageWhenBodyOrMessageAbsent() {
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
         when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "z")));
 
         assertEquals(HttpStatus.OK, controller.setMaintenance(ZONE, null).getStatusCode());
@@ -252,6 +280,7 @@ class AdminZoneControllerTest {
 
     @Test
     void setMaintenanceWritesGivenMessage() {
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
         when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "z")));
 
         controller.setMaintenance(ZONE, new AdminZoneController.MaintenanceRequest("14:00 恢复"));
@@ -261,6 +290,7 @@ class AdminZoneControllerTest {
 
     @Test
     void setOpenClearsMessage() {
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
         when(repo.findById(ZONE)).thenReturn(Optional.of(zone(ZONE, "z")));
 
         assertEquals(HttpStatus.OK, controller.setOpen(ZONE).getStatusCode());
@@ -269,16 +299,19 @@ class AdminZoneControllerTest {
 
     @Test
     void manualStatusActionsReturnNotFoundWhenRowAbsent() {
-        when(repo.findById(ZONE)).thenReturn(Optional.empty());
-
+        // 加锁点查没命中(mock 缺省返回空列表):回 404,状态不写、也不插入。
         assertEquals(HttpStatus.NOT_FOUND, controller.setMaintenance(ZONE, null).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, controller.setOpen(ZONE).getStatusCode());
+        verify(repo, times(2)).lockZoneIdForUpdate(ZONE);
+        verify(repo, never()).updateManualStatus(anyLong(), anyInt(), any(), any());
         verify(repo, never()).insertIfAbsent(any(), any());
     }
 
     @Test
     void updatePathsDoNotRetryDeadlockClassifiedFailures() {
-        // update 路径只有一把锁、拿到后不再等,不可能是死锁牺牲者;万一底层报了,也原样抛出,不做重试。
+        // update 路径的第一把锁是加锁点查,之后的 UPDATE 改同一条已持锁的记录、不再等锁,不可能是死锁牺牲者;
+        // 万一底层报了,也原样抛出,不做重试。
+        when(repo.lockZoneIdForUpdate(ZONE)).thenReturn(List.of(ZONE));
         when(repo.updateManualStatus(anyLong(), anyInt(), any(), any())).thenThrow(deadlock());
 
         assertThrows(CannotAcquireLockException.class, () -> controller.setOpen(ZONE));

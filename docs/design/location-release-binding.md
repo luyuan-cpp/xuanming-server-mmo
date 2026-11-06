@@ -137,6 +137,7 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
    `save_barrier.handoff_fence` 原件的 CAS(见 cross-zone-scene-travel.md 文末两节)。本节点完全不持有时手里没有缓存的原 H,
    做法(`SendSessionEndedCredential`):
    - "完全不持有"另加两项:`RoleAdmissionSystem` 的入场登记在途(登记回包前 fence 上可能已是它刚写的 H)、有未落地的存盘。
+   - 现行 C++ 在同一 Scene EventLoop 中顺序读取资格、复核本地持有、发起空行 SQL 释放，再以读出的原件条件写凭证。只有 [直接存盘 §6](player-save-direct-commit.md#6-等待点替换)认可的释放结论才允许提交 CAS。排空期间任务继续推进。最终拆除只结束本地等待，读、释放和已提交的写仍由各自的实际回包归还在途计数。
    - 判定表判 `write` 之后 `HGET player:{id}:save_barrier handoff_fence` 读现任原件;回调(scene 线程)里**重采**判定,再按
      `release_fence::DecideCredentialQualification` 核对:仍完全不持有、原件 E == 期望 E、原件 S == 本进程实例(RoleAdmission
      登记时写入 S 的同一来源 `LocalInstanceId`)。合格才以**读到的原件**做 CAS(`handoff_sql_barrier::kCredentialMarkLua`:
@@ -153,7 +154,8 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
      `no_qualification`,这条 location 要等玩家下次登录落回本节点重新登记,或持有节点死亡(证据 2)。同号重启顶替(GO-3,
      `owner_replaced.go`)只认「资格原件的 E 等于 location 的 E」,这里原件是上一任的 E,不在其内(`cross-zone-scene-travel.md`
      §13.10 第 2 条残余 5);收口见 §17;*(2026-10-30 已按 §17 落码收口:请过持有节点释放、过了宽限仍拿不到释放证据,且资格原件
-     缺失或属于别的 E 时,scene_manager 原子推进 owner_epoch 并删 location,见 §17.9;未编译、未测试。)*
+     缺失或属于更早的代次时,scene_manager 原子推进 owner_epoch 并删 location,11-05 起推进之前先按 E−1 围存档写权行,见 §17.9;
+     未编译、未测试。)*
      (2) 凭证 CAS 帧滞留、而同节点新登记的 HGET 恰在它之前执行时,那次登记的 CAS 回 -2、本次登录失败重试;
      (3) 读失败不重试(同 R7),下一次 LeaveScene 重试 / 登录撞门再请。
 3. `playerList` 里留着无效句柄 → 不写凭证(表不一致,fail-closed)。

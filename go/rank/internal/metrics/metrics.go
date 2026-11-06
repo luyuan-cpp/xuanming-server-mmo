@@ -25,6 +25,8 @@ const (
 	RewardInvalid   = "invalid"
 	RewardBusy      = "busy"
 	RewardError     = "error"
+	// RewardAbandoned 本次明确拒收后奖励转放弃终态(已过期或尝试次数到顶),工作器不再投,需要人工核对重投。
+	RewardAbandoned = "abandoned"
 )
 
 type collectors struct {
@@ -44,7 +46,7 @@ func newCollectors() *collectors {
 		dispatch: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Subsystem: subsystem,
 			Name:      "reward_dispatch_total",
-			Help:      "持久奖励工作器最终结果；delivered必须同时收到邮件ID并确认SQL奖励终态提交。",
+			Help:      "持久奖励工作器最终结果；delivered必须同时收到邮件ID并确认SQL奖励终态提交；abandoned为明确拒收且已过期或次数到顶后转放弃终态。",
 		}, []string{"outcome"}),
 		scan: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Subsystem: subsystem,
@@ -75,7 +77,7 @@ func (c *collectors) register(reg prometheus.Registerer) {
 			c.write.WithLabelValues(op, outcome)
 		}
 	}
-	for _, outcome := range []string{RewardDelivered, RewardUnknown, RewardRejected, RewardInvalid, RewardBusy, RewardError} {
+	for _, outcome := range []string{RewardDelivered, RewardUnknown, RewardRejected, RewardInvalid, RewardBusy, RewardError, RewardAbandoned} {
 		c.dispatch.WithLabelValues(outcome)
 	}
 	c.scan.WithLabelValues("ok")
@@ -101,7 +103,7 @@ func ObserveWrite(operation, outcome string) bool { return current.observeWrite(
 
 func (c *collectors) observeDispatch(outcome string) bool {
 	switch outcome {
-	case RewardDelivered, RewardUnknown, RewardRejected, RewardInvalid, RewardBusy, RewardError:
+	case RewardDelivered, RewardUnknown, RewardRejected, RewardInvalid, RewardBusy, RewardError, RewardAbandoned:
 		c.dispatch.WithLabelValues(outcome).Inc()
 		return true
 	default:

@@ -33,6 +33,7 @@ import (
 	tradepb "proto/trade"
 	"shared/assetop"
 	"shared/rolefence"
+	"shared/workshard"
 	"trade/internal/data"
 
 	"github.com/stretchr/testify/require"
@@ -103,7 +104,7 @@ func fillPendingDebits(t *testing.T, e *Engine, player uint64, n int) {
 
 func dueIDs(t *testing.T, e *Engine) map[uint64]bool {
 	t.Helper()
-	rows, err := e.Repo.Due(context.Background(), e.now(), tickDueLimit)
+	rows, err := e.Repo.Due(context.Background(), e.now(), tickDueLimit, e.commerceShards())
 	require.NoError(t, err)
 	out := make(map[uint64]bool, len(rows))
 	for _, r := range rows {
@@ -999,7 +1000,9 @@ func TestRealDBTwoReplicasTickingTogetherCompensateOnce(t *testing.T) {
 		return w.Stage == "open" && r.BuyerPlayerId == 0
 	})
 	for _, id := range offers {
-		_, err := a.Repo.DB.Exec("UPDATE trade_commerce SET expires_ms=1 WHERE commerce_id=?", id)
+		// 截止改到过去,下次到期一并改到过去:在架寄售没变化时排到 expires_ms(schedule.go,缺口清单第 16 条),
+		// 只改截止时间不会让行重新到期。生产里截止和下次到期由同一次排期写入,不存在只改一个的情况。
+		_, err := a.Repo.DB.Exec("UPDATE trade_commerce SET expires_ms=1,updated_ms=1 WHERE commerce_id=?", id)
 		require.NoError(t, err)
 	}
 	untilAll("退回卖家已发出", func(_ *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
@@ -1015,5 +1018,60 @@ func TestRealDBTwoReplicasTickingTogetherCompensateOnce(t *testing.T) {
 		require.Equal(t, 1, opCount(t, a, sellers[i], 4), "退回卖家只建一次")
 		require.Equal(t, 1, opCount(t, a, buyers[i], 3), "被放弃的买家扣款 seq 不重发")
 		require.Zero(t, opCount(t, a, buyers[i], 4), "买家从未被扣,不收任何退款")
+	}
+}
+
+// 缺口清单第 16 条(docs/design/jubaozhai-market.md §15.8):在架寄售只等买家或到期。推进一轮没有变化就不重存,
+// 版本与 workflow 原样,下次到期排到挂单截止。修复前每轮都 Save,版本每秒加一,买家按刚读到的版本下单会撞乐观冲突,
+// 这些行还每轮排回队尾、挤占新成交。买家下单照常立刻到期。
+func TestRealDBIdleListingIsNotResavedEveryRound(t *testing.T) {
+	e := realDBEngine(t)
+	clock := newTestClock()
+	e.Now = clock.Now
+	offer := consignment(t, e, 131, "idle-listing-01")
+	tick(t, e)
+	settleLegs(t, e, 2)
+	tick(t, e)
+	listed, listedW := state(t, e, offer.CommerceId)
+	require.Equal(t, "open", listedW.Stage)
+
+	clock.Advance(time.Second)
+	tick(t, e)
+	idle, idleW := state(t, e, offer.CommerceId)
+	require.Equal(t, listed.Version, idle.Version, "没有变化不重存,不改版本")
+	require.True(t, proto.Equal(listedW, idleW), "workflow 原样")
+	require.Equal(t, listed.ExpiresMs, idle.UpdatedMs, "下次到期排到挂单截止")
+	require.False(t, dueIDs(t, e)[offer.CommerceId], "截止之前不再每轮空转")
+
+	tick(t, e)
+	again, _ := state(t, e, offer.CommerceId)
+	require.Equal(t, idle.UpdatedMs, again.UpdatedMs, "没到期的行不再被取到")
+	require.Equal(t, idle.Version, again.Version)
+
+	_, err := e.Mutate(context.Background(), 132, offer.CommerceId, "buy", "idle-listing-buy-01")
+	require.NoError(t, err, "后台空转不改版本,买家下单不撞乐观冲突")
+	bought, boughtW := state(t, e, offer.CommerceId)
+	require.Greater(t, bought.Version, idle.Version)
+	require.Equal(t, "pay", boughtW.Stage)
+	require.True(t, dueIDs(t, e)[offer.CommerceId], "玩家操作照常立刻到期")
+}
+
+// 缺口清单第 16 条:两个副本按片分工(commerce_id % 64),各自的 Due 只取自己负责的片,合起来不漏不重。
+// 分工只省重复劳动:两个副本万一同推一片,仍由合同行锁与版本条件保证只推进一次(上一例)。
+func TestRealDBDueSplitsByShardAcrossReplicas(t *testing.T) {
+	e := realDBEngine(t)
+	var ids []uint64
+	for p := uint64(141); p <= 156; p++ {
+		ids = append(ids, consignment(t, e, p, fmt.Sprintf("shard-offer-%d", p)).CommerceId)
+	}
+	members := []string{"replica-a", "replica-b"}
+	a, b := *e, *e
+	a.Owns = func(key string) bool { return workshard.Owns("replica-a", key, members) }
+	b.Owns = func(key string) bool { return workshard.Owns("replica-b", key, members) }
+	dueA, dueB := dueIDs(t, &a), dueIDs(t, &b)
+	for _, id := range ids {
+		owner := workshard.Owner(workshard.ShardKey(workCommerce, workshard.ShardOf(id)), members)
+		require.NotEqual(t, dueA[id], dueB[id], "合同 %d 恰好在一个副本的 Due 里", id)
+		require.Equal(t, owner == "replica-a", dueA[id], "合同 %d 归 %s", id, owner)
 	}
 }

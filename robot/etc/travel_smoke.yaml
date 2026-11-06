@@ -23,8 +23,9 @@
 #      rpc_event_registry 两边共用,只换 scene 的话 gate 不认 TravelToZone 的消息号,请求会被当非法包。
 #   3. Tip 表已导出(含 scene_error 段的 4 个 kZoneTravel* 码)。本冒烟不引用任何 tip 常量,但没导出时 scene 编不过。
 #   4. scene_manager 的 GateTokenSecret 非空(为空时 AssignGateForZone 直接报错,签不出重定向票据)。
-#      要验证生产口径,请把 scene_manager 的 AllowUnsafeCrossNodeHandoff 设为 false 再跑:
-#      此时放行完全依赖「源端存盘落地 → handoff 标记 → owner_epoch」两道门,而不是 dev 旁路。
+#      scene_manager 的 AllowUnsafeCrossNodeHandoff 本地缺省已是 false(生产口径,2026-11-05):放行完全依赖
+#      「源端存盘落地 → handoff 标记 → owner_epoch」两道门。旁路开着时同 zone 跨节点换图会卡在目标节点的认领上
+#      (同代次不同实例,go/db 回 NOT_HOLDER),不要再打开。
 #   5. 专用账号（默认 robot_9601，或 travel_smoke.account 显式指定）**首次在 home_zone 建角**(home zone 在建角时登记,之后不随登录区变化);
 #      在别的区登录建过角的账号,"回家不回档"的前提不成立。账号须使用 robot_ 前缀，并匹配本次 login 的开发账号白名单。
 #      例如白名单只有 robot_assetarrival_ 时，应显式配置 robot_assetarrival_travel_20261017，不放宽服务器白名单。

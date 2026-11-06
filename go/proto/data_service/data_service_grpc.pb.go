@@ -36,6 +36,7 @@ const (
 	DataService_CloseRoleAdmissions_FullMethodName           = "/data_service.DataService/CloseRoleAdmissions"
 	DataService_AckRoleTradeDrain_FullMethodName             = "/data_service.DataService/AckRoleTradeDrain"
 	DataService_ReleaseDeadPlayerStoreHolder_FullMethodName  = "/data_service.DataService/ReleaseDeadPlayerStoreHolder"
+	DataService_ReadPlayerStoreHolder_FullMethodName         = "/data_service.DataService/ReadPlayerStoreHolder"
 	DataService_RegisterPlayerZone_FullMethodName            = "/data_service.DataService/RegisterPlayerZone"
 	DataService_GetPlayerHomeZone_FullMethodName             = "/data_service.DataService/GetPlayerHomeZone"
 	DataService_BatchGetPlayerHomeZone_FullMethodName        = "/data_service.DataService/BatchGetPlayerHomeZone"
@@ -93,6 +94,9 @@ type DataServiceClient interface {
 	// 持有节点已判死:同一个事务里抬写权行的代次、清持有者、置 released=1,旧持有者恢复之后的写被挡住
 	// (docs/design/player-save-direct-commit.md §6)。只有 scene_manager 能调。
 	ReleaseDeadPlayerStoreHolder(ctx context.Context, in *ReleaseDeadPlayerStoreHolderRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// 判死释放的第一步:普通读写权行判持有者用的三列,scene_manager 拿去复核持有实例仍不在册,再按读到的值比较并写
+	// (ReleaseDeadPlayerStoreHolderRequest.seen,docs/design/player-save-direct-commit.md §5.5)。只有 scene_manager 能调。
+	ReadPlayerStoreHolder(ctx context.Context, in *ReadPlayerStoreHolderRequest, opts ...grpc.CallOption) (*ReadPlayerStoreHolderResponse, error)
 	// ── Player-zone mapping (registration / lookup) ───────────────
 	RegisterPlayerZone(ctx context.Context, in *RegisterPlayerZoneRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetPlayerHomeZone(ctx context.Context, in *GetPlayerHomeZoneRequest, opts ...grpc.CallOption) (*GetPlayerHomeZoneResponse, error)
@@ -122,6 +126,8 @@ type DataServiceClient interface {
 	// 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
 	// 设计见 docs/design/guild-phase2/03-names.md §3.1。
 	ReservePlayerName(ctx context.Context, in *ReservePlayerNameRequest, opts ...grpc.CallOption) (*ReservePlayerNameResponse, error)
+	// 只释放预留态的名字:不带 x-admin-token 时只认 login 签名的建角回滚,带合法 token 是运维清孤儿;
+	// 已绑定的名字一律拒绝,预留态的先在玩家片证明角色永远不会提交(§3.4a)。删角之后的释放不走这里。
 	ReleasePlayerName(ctx context.Context, in *ReleasePlayerNameRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	BatchGetPlayerName(ctx context.Context, in *BatchGetPlayerNameRequest, opts ...grpc.CallOption) (*BatchGetPlayerNameResponse, error)
 	// 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
@@ -301,6 +307,16 @@ func (c *dataServiceClient) ReleaseDeadPlayerStoreHolder(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, DataService_ReleaseDeadPlayerStoreHolder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) ReadPlayerStoreHolder(ctx context.Context, in *ReadPlayerStoreHolderRequest, opts ...grpc.CallOption) (*ReadPlayerStoreHolderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadPlayerStoreHolderResponse)
+	err := c.cc.Invoke(ctx, DataService_ReadPlayerStoreHolder_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -524,6 +540,9 @@ type DataServiceServer interface {
 	// 持有节点已判死:同一个事务里抬写权行的代次、清持有者、置 released=1,旧持有者恢复之后的写被挡住
 	// (docs/design/player-save-direct-commit.md §6)。只有 scene_manager 能调。
 	ReleaseDeadPlayerStoreHolder(context.Context, *ReleaseDeadPlayerStoreHolderRequest) (*emptypb.Empty, error)
+	// 判死释放的第一步:普通读写权行判持有者用的三列,scene_manager 拿去复核持有实例仍不在册,再按读到的值比较并写
+	// (ReleaseDeadPlayerStoreHolderRequest.seen,docs/design/player-save-direct-commit.md §5.5)。只有 scene_manager 能调。
+	ReadPlayerStoreHolder(context.Context, *ReadPlayerStoreHolderRequest) (*ReadPlayerStoreHolderResponse, error)
 	// ── Player-zone mapping (registration / lookup) ───────────────
 	RegisterPlayerZone(context.Context, *RegisterPlayerZoneRequest) (*emptypb.Empty, error)
 	GetPlayerHomeZone(context.Context, *GetPlayerHomeZoneRequest) (*GetPlayerHomeZoneResponse, error)
@@ -553,6 +572,8 @@ type DataServiceServer interface {
 	// 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
 	// 设计见 docs/design/guild-phase2/03-names.md §3.1。
 	ReservePlayerName(context.Context, *ReservePlayerNameRequest) (*ReservePlayerNameResponse, error)
+	// 只释放预留态的名字:不带 x-admin-token 时只认 login 签名的建角回滚,带合法 token 是运维清孤儿;
+	// 已绑定的名字一律拒绝,预留态的先在玩家片证明角色永远不会提交(§3.4a)。删角之后的释放不走这里。
 	ReleasePlayerName(context.Context, *ReleasePlayerNameRequest) (*emptypb.Empty, error)
 	BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error)
 	// 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
@@ -625,6 +646,9 @@ func (UnimplementedDataServiceServer) AckRoleTradeDrain(context.Context, *AckRol
 }
 func (UnimplementedDataServiceServer) ReleaseDeadPlayerStoreHolder(context.Context, *ReleaseDeadPlayerStoreHolderRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReleaseDeadPlayerStoreHolder not implemented")
+}
+func (UnimplementedDataServiceServer) ReadPlayerStoreHolder(context.Context, *ReadPlayerStoreHolderRequest) (*ReadPlayerStoreHolderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadPlayerStoreHolder not implemented")
 }
 func (UnimplementedDataServiceServer) RegisterPlayerZone(context.Context, *RegisterPlayerZoneRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RegisterPlayerZone not implemented")
@@ -985,6 +1009,24 @@ func _DataService_ReleaseDeadPlayerStoreHolder_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DataServiceServer).ReleaseDeadPlayerStoreHolder(ctx, req.(*ReleaseDeadPlayerStoreHolderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_ReadPlayerStoreHolder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadPlayerStoreHolderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).ReadPlayerStoreHolder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_ReadPlayerStoreHolder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).ReadPlayerStoreHolder(ctx, req.(*ReadPlayerStoreHolderRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1383,6 +1425,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReleaseDeadPlayerStoreHolder",
 			Handler:    _DataService_ReleaseDeadPlayerStoreHolder_Handler,
+		},
+		{
+			MethodName: "ReadPlayerStoreHolder",
+			Handler:    _DataService_ReadPlayerStoreHolder_Handler,
 		},
 		{
 			MethodName: "RegisterPlayerZone",

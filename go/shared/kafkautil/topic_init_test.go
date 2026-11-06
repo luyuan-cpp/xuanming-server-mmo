@@ -3,6 +3,7 @@ package kafkautil
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,9 @@ type topicAdminFake struct {
 	retention     map[string]sarama.IncrementalAlterConfigsEntry
 	alterCalls    int
 	sleeps        []time.Duration
+	// grown 记下每次 CreatePartitions 的 topic → 目标分区数;growErr 是它的返回值(2026-11-06)。
+	grown   map[string]int32
+	growErr error
 }
 
 func newTopicAdminFake(t *testing.T, replies ...topicMetadataReply) *topicAdminFake {
@@ -76,6 +80,20 @@ func (a *topicAdminFake) CreateTopic(name string, detail *sarama.TopicDetail, va
 	}
 	a.created[name] = *detail
 	return a.createErr
+}
+
+func (a *topicAdminFake) CreatePartitions(topic string, count int32, assignment [][]int32, validateOnly bool) error {
+	if validateOnly || assignment != nil {
+		a.t.Fatal("growing partitions must be a real request with broker-chosen replica placement")
+	}
+	if a.grown == nil {
+		a.grown = make(map[string]int32)
+	}
+	if _, again := a.grown[topic]; again {
+		a.t.Fatalf("partitions of %s were grown more than once", topic)
+	}
+	a.grown[topic] = count
+	return a.growErr
 }
 
 func (a *topicAdminFake) IncrementalAlterConfig(resource sarama.ConfigResourceType, name string, entries map[string]sarama.IncrementalAlterConfigsEntry, validateOnly bool) error {
@@ -151,6 +169,81 @@ func TestEnsureTopicsRejectsDelayedPartitionOrMarkerConflict(t *testing.T) {
 			}
 			if len(admin.created) != 1 || admin.retention != nil {
 				t.Fatal("conflicting metadata must not create a marker or alter retention")
+			}
+		})
+	}
+}
+
+// 只许加的 topic(2026-11-06,缺口清单第 15 条):broker 上分区少于配置就原地加到配置值,多于配置就接受;
+// 都不建不可变分区标记。严格 topic 的同一种分区差仍判 mismatch(见上一条),且绝不调用 CreatePartitions。
+func TestEnsureTopicsGrowablePartitions(t *testing.T) {
+	const topic = "transaction_log_topic_g1"
+	_, staleMarker := partitionContractMarker(topic, 6)
+	for _, tc := range []struct {
+		name      string
+		onBroker  int32
+		wantGrown map[string]int32
+	}{
+		{"fewer on broker grows in place", 6, map[string]int32{topic: 12}},
+		{"equal leaves it alone", 12, nil},
+		{"more on broker is kept", 20, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// 存量 topic 还挂着改动前的标记(6 分区),只许加的 topic 不再核它,也不建新的。
+			admin := newTopicAdminFake(t, topicMetadataReply{topics: map[string]sarama.TopicDetail{
+				topic: {NumPartitions: tc.onBroker}, staleMarker: {NumPartitions: 1},
+			}})
+			spec := TopicSpec{Name: topic, Partitions: 12, RetentionMs: 2592000000, AllowPartitionGrowth: true}
+			if err := ensureTopics(admin, []TopicSpec{spec}, 1, admin.clock, admin.sleep); err != nil {
+				t.Fatalf("growable topic with %d partitions on the broker must be accepted: %v", tc.onBroker, err)
+			}
+			if fmt.Sprint(admin.grown) != fmt.Sprint(tc.wantGrown) {
+				t.Fatalf("CreatePartitions calls = %v, want %v", admin.grown, tc.wantGrown)
+			}
+			if len(admin.created) != 0 {
+				t.Fatalf("a growable topic must not create a partition marker: %+v", admin.created)
+			}
+			if admin.retentionName != topic || admin.alterCalls != 1 {
+				t.Fatalf("retention must still be managed: name=%q calls=%d", admin.retentionName, admin.alterCalls)
+			}
+		})
+	}
+}
+
+// 两个副本同时去加:后到的被 Kafka 拒绝(分区数不大于当前值),重读元数据看到已经加够就当成功;
+// 仍然不够才回错误,且不往下改保留期。
+func TestEnsureTopicsGrowablePartitionsRace(t *testing.T) {
+	const topic = "player_snapshot_topic_g1"
+	spec := TopicSpec{Name: topic, Partitions: 8, RetentionMs: 2592000000, AllowPartitionGrowth: true}
+	for _, tc := range []struct {
+		name    string
+		reread  int32
+		wantErr bool
+	}{
+		{"another instance already grew it", 8, false},
+		{"still short after the failure", 3, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			admin := newTopicAdminFake(t,
+				topicMetadataReply{topics: map[string]sarama.TopicDetail{topic: {NumPartitions: 3}}},
+				topicMetadataReply{topics: map[string]sarama.TopicDetail{topic: {NumPartitions: tc.reread}}},
+			)
+			admin.growErr = sarama.ErrInvalidPartitions
+			err := ensureTopics(admin, []TopicSpec{spec}, 1, admin.clock, admin.sleep)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "grow topic") {
+					t.Fatalf("growth that did not happen must fail, got %v", err)
+				}
+				if admin.alterCalls != 0 {
+					t.Fatal("a failed growth must not go on to alter retention")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("growth done by another instance must be accepted: %v", err)
+			}
+			if admin.listCalls != 2 {
+				t.Fatalf("metadata must be re-read once after the rejected growth, calls=%d", admin.listCalls)
 			}
 		})
 	}

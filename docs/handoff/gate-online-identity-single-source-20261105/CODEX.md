@@ -103,3 +103,13 @@ match / trade / mail（子任务 A，trade 的错误归类由 Claude 复核后�
 - mail：`mail.go`、`internal/server/server.go`、`session_identity_test.go`、`rank_mail_chain_fixture_test.go`、`flow_integration_test.go`、`etc/mail.yaml`
 - 注意 1：`TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss` 用预编的 mail 夹具程序（环境变量 `RANK_MAIL_CHAIN_MAIL_EXE`），必须用本批源码重编；旧程序没有验签器，ListMails 会回 kInvalidParameter。父子进程共用 `callerauthtest.Key{}`。
 - 注意 2：中文键的 map 与表驱动结构是手工对齐的，请对全部改动文件跑 `gofmt -l`，有输出就 `gofmt -w` 后再测（只是格式）。
+
+部署脚本与文档（子任务 C，报告的连接总账旧值→新值见下）：
+
+- `tools/scripts/k8s_deploy.ps1`：`Get-RedisPoolMirror`、`Get-RedisPlayerPoolMirror`、`Get-RedisConnectionLedgerInputs`、`Get-RedisPlayerConnectionLedgerInputs`、`$script:PlayerRedisClientServices` 去掉六个服务的登录域池（chat 两份账都不再出现）；`New-PlayerRedisConfigYaml` 删 `-StandaloneAddr/-StandaloneDb/-StandalonePasswordEnv/-StandalonePassword`（`LoginRedis` 段只给 login）；guild / chat / match / friend / mail / trade 的 ConfigMap 不再渲染 `GlobalLoginSessions` / `LoginRedis`，trade 的 Rmb 段改为整段镜像（删 `$rmbHits -ne 2` 检查）；chat 形状校验只删这一项条件。
+- `tools/scripts/go_services.ps1`（删 `Get-LocalAccountDirectorySources`，chat / match 本机设置只核 SQL 字段）、`tools/scripts/lib/sql_boot_catalog_local.ps1`（`New-LocalSqlBootSettings` 删必填 `-LoginConfigPath`）、`tools/scripts/lib/sql_boot_catalog_docker.ps1`（调用处同步）、`tools/scripts/prepare_docker_debug.py`（删只为 match `LoginRedis.Addrs` 的单行序列 dumper）。
+- 测试：`tools/scripts/tests/` 下 `k8s_deploy_contract`、`redis_player_cluster_contract`、`lobby_authority_render`、`chat_authority_deploy`、`go_services_ports`、`go_services_local_mysql`、`sql_boot_catalog_local`、`docker_debug_sql_boot`。
+- 文档：`deploy/k8s/README.md`、`tools/scripts/README.md`。
+- 清单（Claude，11-06）：`deploy/k8s/manifests/go-svc/chat.yaml` 删 `LOGIN_REDIS_PASSWORD`、`match.yaml` 删 `MMORPG_LOGIN_REDIS_PASSWORD`（都是 optional Secret 引用，已无人读取，没有测试依赖其存在）。
+- Redis 连接总账（规划档 Z=4、R=2、所有 Go 服务 2 副本）：控制域全局 557→469、稳态 2269→2181、滚动余量 984→896、峰值 3303→3127；玩家域每主节点全局 312→224、稳态 1288→1200、滚动余量 554→466、峰值 1892→1716。差额即六个服务每副本的登录域池（match / friend / guild / trade / mail 各 8，chat 4）× 2 副本。合同测试的期望值按此重算。
+- 本地另需：`python -I -m py_compile tools/scripts/prepare_docker_debug.py`；相邻回归再跑 `logical_db_deploy_contract`、`k8s_gate_drain`、`go_services_stop`。

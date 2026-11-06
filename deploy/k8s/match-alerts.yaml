@@ -28,8 +28,10 @@ spec:
           annotations:
             summary: "没有任何 match 副本在撮合排队池"
             description: >-
-              全部副本负责的池数之和为 0。池归属按 etcd 里注册的 MatchNodeService 实例做最高随机权重哈希,
-              成员表为空或副本都没注册上时排队池没有写者,只剩单人档入队即开局。核 etcd 可用性与 match 的注册日志。
+              全部副本负责的池数之和为 0。池归属按 etcd 里注册的 MatchNodeService 实例做最高随机权重哈希:
+              成员表为空时每个副本都撮合全部池,不会触发本条;触发说明成员表非空、但没有一个副本在表里认出自己
+              (注册失败,或注册的实例 UUID 与本进程记的不一致),排队池没有写者,只剩单人档入队即开局。
+              核 match 的注册日志与 etcd 里 MatchNodeService 前缀下的键。
 
         - alert: MatchPoolRoundSlow
           expr: |

@@ -338,6 +338,11 @@ void GateEventHandler::RedirectToGateEventHandler(const contracts::kafka::Redire
              << " target=" << event.target_gate_ip() << ":" << event.target_gate_port();
 ///<<< END WRITING YOUR CODE
 }
+void GateEventHandler::GateDrainMigrationEventHandler(const contracts::kafka::GateDrainMigrationEvent& event)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+}
 void GateEventHandler::PushToPlayerEventHandler(const contracts::kafka::PushToPlayerEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE

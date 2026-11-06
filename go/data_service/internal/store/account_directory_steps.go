@@ -19,7 +19,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-// directorySteps 是建角、过户、读列表、判死编排用到的每一步。每个方法只碰一个逻辑库,一个方法最多一个事务。
+// directorySteps 是建角、过户、读列表、判死编排用到的每一步。每个方法只碰一个逻辑库,一个方法最多一个事务;
+// 例外只有只读的 committedEvidence,依次读几个库,不开事务。
 //
 // 编排(失败路径、重放、顺序)在 AccountDirectoryStore 和 AccountRoleTradeStore 里,这里只有 SQL。分开是为了能用内存替身把
 // 「每一步失败之后的结局和重放」跑一遍:那些组合要真库跑得一个个摆故障,而结局只取决于编排。
@@ -39,6 +40,9 @@ type directorySteps interface {
 	readOwners(ctx context.Context, players []uint64) (map[uint64]*dspb.AccountRoleOwnership, error)
 	readRoute(ctx context.Context, player uint64) (RouteRow, bool, error)
 	commitRole(ctx context.Context, account string, role *base.AccountSimplePlayer, raw []byte, storage uint32) error
+	// committedEvidence 在判陈旧写墓碑之前找这名角色提交过的证据(名字已绑定、存档库进过场或存过盘),核不全也回原因;
+	// 回非空就不写墓碑(reapRef)。会读名字片、存档库,不止玩家片。读失败回错误。
+	committedEvidence(ctx context.Context, player uint64) (string, error)
 	tombstoneMissingRole(ctx context.Context, account string, ref roleRef) (won bool, err error)
 	readListingState(ctx context.Context, player, listing uint64) (dspb.AccountRoleTradeState, bool, error)
 	readListing(ctx context.Context, player, listing uint64) (*dbpb.AccountRoleTrade, error)
@@ -93,12 +97,26 @@ func (st *sqlDirectorySteps) ensureAccount(ctx context.Context, account string) 
 	})
 }
 
+// 顺带读初始提交标记(initial_player_commit=1 是现行建角流程提交的:初始行先于角色行写进了存档库)。Lookup 经这里回给调用方,
+// 摘孤儿凭它拒绝给「只缺初始行」的角色写墓碑(docs/ops/mysql-backup-pitr-runbook.md §4.1a)。
 func (st *sqlDirectorySteps) readOwner(ctx context.Context, player uint64) (*dspb.AccountRoleOwnership, error) {
-	owned, err := scanOwnership(st.shards.forPlayer(player).QueryRowContext(ctx, "SELECT "+ownershipColumns+" FROM account_role WHERE player_id=?", player), player)
-	if errors.Is(err, accountdirectory.ErrMissing) {
+	var account string
+	var raw []byte
+	var rev, listing, prepare, initial uint64
+	err := st.shards.forPlayer(player).QueryRowContext(ctx, "SELECT "+ownershipColumns+",initial_player_commit FROM account_role WHERE player_id=?", player).
+		Scan(&account, &raw, &rev, &listing, &prepare, &initial)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
-	return owned, err
+	if err != nil {
+		return nil, err
+	}
+	owned, err := decodeOwnership(player, account, raw, rev, listing, prepare)
+	if err != nil {
+		return nil, err
+	}
+	owned.InitialPlayerCommit = initial == 1
+	return owned, nil
 }
 
 // readOwners 按玩家分片拆组批量读。没有行的 id 不出现在结果里。

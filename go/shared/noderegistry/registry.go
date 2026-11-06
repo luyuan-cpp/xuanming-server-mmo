@@ -208,7 +208,13 @@ var exitProcess = func() {
 
 // RpcPath 是 per-zone 服务发现 key(值 = protojson NodeInfo),与 C++ etcd_service 逐字一致。
 func RpcPath(prefix string, zoneId, nodeType, nodeId uint32) string {
-	return fmt.Sprintf("%s/zone/%d/node_type/%d/node_id/%d", prefix, zoneId, nodeType, nodeId)
+	return fmt.Sprintf("%snode_type/%d/node_id/%d", RpcZonePrefix(prefix, zoneId), nodeType, nodeId)
+}
+
+// RpcZonePrefix 是一个 zone 下全部 RpcPath 的公共前缀(以 "/" 结尾),给按 zone 列举同类实例用
+// (如 shared/workshard 的成员表)。结尾的 "/" 让 zone 1 不会匹配到 zone 10。
+func RpcZonePrefix(prefix string, zoneId uint32) string {
+	return fmt.Sprintf("%s/zone/%d/", prefix, zoneId)
 }
 
 // AllocationKey 是跨 zone 的全局占位 key(值 = nodeUUID)。路径里不带 zone:

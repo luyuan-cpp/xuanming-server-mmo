@@ -45,6 +45,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
+
+	"shared/etcdwatch"
 )
 
 // DefaultPrefix 是规则在 etcd 里的默认前缀。
@@ -94,6 +96,20 @@ func (c Config) resyncBackoff() time.Duration {
 		return defaultResyncBackoff
 	}
 	return c.ResyncBackoff
+}
+
+// minRecheckInterval 是定期复核间隔的下限,只防 StaleAfter 配得极小时把 etcd 打成忙循环。
+const minRecheckInterval = 100 * time.Millisecond
+
+// recheckInterval 是 watch 最多连续跑多久就回去全量读一次(watch.go)。快照的 syncedAt 只在真正读到 etcd 时刷新,
+// 所以取 StaleAfter 的三分之一:与 etcd 失联满 StaleAfter 才作废,在那之前至少还有两次全量读的机会。
+// StaleAfter 为负(永不作废)时只需要兜底对账,用 etcdwatch.ResyncInterval。
+func (c Config) recheckInterval() time.Duration {
+	after := c.staleAfter()
+	if after < 0 {
+		return etcdwatch.ResyncInterval
+	}
+	return max(after/3, minRecheckInterval)
 }
 
 // ruleSet 是一份**不可变**的规则快照。发布后绝不原地修改,

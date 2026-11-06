@@ -18,6 +18,8 @@
 #include "spatial/system/scene_spawn.h"
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途不收移动上报
 #include "player/comp/player_frozen_comp.h"         // PlayerFrozenComp:归属交接冻结期间不收移动上报
+#include "player/system/player_team.h"              // OnClientFollowRequest:客户端声明跟随 / 暂离
+#include "player/system/team_follow_system.h"       // IsDriven:组队跟随中由服务器驱动走位的队员不收移动上报
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -173,6 +175,12 @@ void SceneMovementClientPlayerHandler::MoveStart(entt::entity player,const ::Mov
 	{
 		return;
 	}
+	// 组队跟随中由服务器驱动走位(TeamFollowSystem):位置由队形写,客户端的上报是过期的
+	// (或客户端没按 TeamFollowStateS2C 停止上报),整条丢弃。三个移动 handler 同一口径。
+	if (TeamFollowSystem::IsDriven(player))
+	{
+		return;
+	}
 	// 服务器刚把他瞬移走、客户端还没落位:这条是按旧位置发的,整条丢弃(TeleportSettleComp)。
 	if (MovementSystem::ShouldDropReportAfterTeleport(player, request->start_location()))
 	{
@@ -190,6 +198,12 @@ void SceneMovementClientPlayerHandler::MoveStop(entt::entity player,const ::Move
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
+	// 组队跟随中由服务器驱动走位:速度也由队形写(停与走都以服务器为准),整条丢弃。
+	// 放在战斗分支之前:被驱动的队员在战斗中照样不能由客户端清速,TeamFollowSystem 暂停时自己清。
+	if (TeamFollowSystem::IsDriven(player))
+	{
+		return;
+	}
 	// 战斗在途同样不收;但"停"本身是安全的收敛动作,清零速度不会让玩家位移,
 	// 所以这里只跳过位置上报,仍然把速度清零(战斗结束后不至于带着旧速度继续飘)。
 	// 归属交接冻结中同理(交接未成解冻后,不至于带着冻结前的速度继续飘)。
@@ -222,6 +236,10 @@ void SceneMovementClientPlayerHandler::MoveSync(entt::entity player,const ::Move
 	if (tlsEcs.actorRegistry.any_of<InBattleComp, PlayerFrozenComp>(player))
 	{
 		return;  // 同 MoveStart:战斗在途 / 归属交接冻结中的位置上报一律丢弃
+	}
+	if (TeamFollowSystem::IsDriven(player))
+	{
+		return;  // 同 MoveStart:组队跟随中由服务器驱动走位
 	}
 	if (MovementSystem::ShouldDropReportAfterTeleport(player, request->location()))
 	{
@@ -270,6 +288,25 @@ void SceneMovementClientPlayerHandler::NotifyActorMoveList(entt::entity player,c
 }
 
 void SceneMovementClientPlayerHandler::NotifyTeleport(entt::entity player,const ::TeleportS2C* request,
+	::Empty* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneMovementClientPlayerHandler::TeamFollow(entt::entity player,const ::TeamFollowC2S* request,
+	::Empty* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	// 声明跟随(归队)/ 暂离。跟随:挂意图并走一遍跟随检查(读组队权威 → 同场景则接到队长身后);
+	// 暂离:立刻停止驱动。结果经 TeamFollowStateS2C 告知客户端(docs/design/team-follow-server-trail.md)。
+	PlayerTeamSystem::OnClientFollowRequest(player, request->follow());
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneMovementClientPlayerHandler::NotifyTeamFollowState(entt::entity player,const ::TeamFollowStateS2C* request,
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE

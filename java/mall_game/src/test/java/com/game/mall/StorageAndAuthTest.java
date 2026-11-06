@@ -10,6 +10,16 @@ class StorageAndAuthTest {
         try (var f = new CommerceFixture()) { f.jdbc.execute("DROP TABLE commerce_payment_receipt");f.jdbc.execute("CREATE TABLE commerce_payment_receipt(channel VARBINARY(32),transaction_id VARBINARY(128),order_sn VARCHAR(36),amount_minor BIGINT,currency VARCHAR(16))"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
         try (var f = new CommerceFixture()) { f.jdbc.execute("ALTER TABLE oms_order RENAME TO oms_order_binary_fixture");f.jdbc.execute("CREATE VIEW oms_order AS SELECT id,order_sn,buyer_id,CAST(request_id AS CHAR(128)) AS request_id,sku_id,quantity,pay_amount,currency,status,create_time_ms,payment_deadline_ms,payment_time_ms FROM oms_order_binary_fixture"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
     }
+    // 2026-11-05 之前布局的库(付款回执订单列 NOT NULL、没有重复付款表、退款两表按订单号)记不下已付订单的第二笔钱,必须拒启。
+    @Test void schemaGateRefusesLayoutsThatCannotRecordDuplicatePayments() throws Exception {
+        try (var f = new CommerceFixture()) { f.jdbc.execute("ALTER TABLE commerce_payment_receipt MODIFY COLUMN order_sn VARCHAR(36) NOT NULL"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
+        try (var f = new CommerceFixture()) { f.jdbc.execute("DROP TABLE commerce_duplicate_payment"); assertThrows(Exception.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
+        try (var f = new CommerceFixture()) {
+            f.jdbc.execute("DROP TABLE commerce_refund_receipt");
+            f.jdbc.execute("CREATE TABLE commerce_refund_receipt (order_sn VARCHAR(36) PRIMARY KEY,channel VARCHAR(32) NOT NULL,transaction_id VARCHAR(128) NOT NULL,amount_minor BIGINT NOT NULL,currency VARCHAR(16) NOT NULL,UNIQUE(channel,transaction_id))");
+            assertThrows(Exception.class, () -> SchemaVerifier.verify(f.jdbc, f.source));
+        }
+    }
     @Test void nonceIsPersistentAcrossInstancesAndIsCaseSensitive() {
         try (var f = new CommerceFixture()) {
             NonceStore first = new NonceStore(f.jdbc, f.props, f.manager); NonceStore second = new NonceStore(f.jdbc, f.props, f.manager); long now = System.currentTimeMillis();

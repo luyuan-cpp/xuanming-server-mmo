@@ -28,6 +28,8 @@
 
 ### 2.1 十秒短断线并不是旧连接续用
 
+> 2026-11-05 已改(未编译、未测试,待 Codex 验证):意外断线时 gate 改发 `ExitGame(reason = DISCONNECTED)`,scene 把角色停在原地保留 25 秒,窗口内同一角色的新会话直接接回这个实体并补完整入场基线,超时才按原路径存盘退出;主动登出、租约到期关假死连接仍立即退出。下面描述的是改之前的行为。见 [断线保留](player-connection-lost-hold.md)。Java 版待做。
+
 Gate 的 `HandleConnectionDisconnection` 立即代发 Scene `ExitGame`，清 Gate 会话及请求 lane，并通知 Login。Scene 收到退出后停止运动、离开场景/AOI，存盘收敛后销毁实体。旧 TCP 会话的输出队列不会转接给新 TCP 会话。[Gate 退出](../../cpp/nodes/gate/handler/rpc/client_session_handler.cpp#L473)、[断线入口](../../cpp/nodes/gate/handler/rpc/client_session_handler.cpp#L508)、[Scene 退出](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L3147)
 
 这里审计的是旧连接已经断开、建立新会话的路径。若只是网络暂时不通而原 TCP 连接仍存活，可能发生同连接的传输层重传；它不等于本节的应用层重连，也不能证明有业务消息恢复。
@@ -37,6 +39,8 @@ Login 给 locator 的 `DISCONNECTING` 状态申请默认 30 秒租约。重连�
 正常完成断线登记且采用默认租约时，十秒本身不足以让租约到期，通常仍是 `ShortReconnect`；旧记录额外失效/被清理等情况才可能走新登录。两者都会重新绑定/路由：Scene 有可复用实体就就地入场，否则从 Redis 异步加载玩家数据，不能假定仅换一下 socket。[复用与重载分支](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2631)
 
 ### 2.2 重连落点不保证原场景、原频道
+
+> 2026-11-05 已改(未编译、未测试,待 Codex 验证):没有任何去向的进场请求(只有 login 的 ShortReconnect / ReplaceLogin 这样发)在 location 记的场景还在时回到原场景,原场景已回收或解析不出来才回落默认大世界,并计 `enter_scene_rejected_total{reason="resume_scene_fallback"}`。下面描述的是改之前的行为。见 [断线保留](player-connection-lost-hold.md) §6。
 
 Login 重连/顶号请求给 SceneManager 的目标为 `ZoneId=0, SceneId=0`；SceneManager 从已有 location 恢复 zone，但没有据此恢复原 SceneId，随后选默认大世界地图和轻载频道。非默认地图、副本或多频道玩家可能改派，也可能遇到跨节点交接门禁。[Login 重连请求](../../go/login/internal/logic/clientplayerlogin/entergamelogic.go#L727)、[顶号请求](../../go/login/internal/logic/clientplayerlogin/entergamelogic.go#L1005)、[恢复 zone](../../go/scene_manager/internal/logic/enterscenelogic.go#L386)、[默认落点](../../go/scene_manager/internal/logic/enterscenelogic.go#L1415)
 
@@ -192,6 +196,7 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 ### 9.1 优先修复：新会话复用同场景实体，漏掉入场基线
 
 > 2026-11-01 已修(未编译、未测试,待 Codex 验证):`EnterScene` 发现会话变了且实体还在目标场景时,先离场再走完整入场;同一会话的重复路由仍然幂等。Java 版未核对,`PARITY.md` 已记待做。
+> 2026-11-06 修正(未编译):上面那次修复判「会话变了」比的是会话快照,而入口第 2 步已先把快照会话置无效,同一会话的重复路由实际也会先离场再入场,「仍然幂等」当时并不成立。现改为比实体的登录身份(会话号不同,或号相同而登录代次更新),判据与用例见 [断线保留](player-connection-lost-hold.md) §5 第 3 步。
 
 **条件**：旧实体尚在目标场景，例如旧 Gate→Scene 的 ExitGame 尚未到达/丢失，或在线顶号先于旧会话退出。`HandleEnterGameNode` 复用实体，`EnterScene` 将 snapshot 绑定到新 session；`HandleEnterScene` 却因 `oldScene==scene` 直接返回 true。入场通知与自身创建在这个 return 后面，因而都没有发出。后续 team/battle/landing 钩子也不补场景基线。[复用](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2631)、[新绑定](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2781)、[幂等早退](../../cpp/libs/services/scene/player/system/player_scene.cpp#L231)、[后续钩子](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2878)
 

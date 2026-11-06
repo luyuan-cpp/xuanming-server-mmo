@@ -1,6 +1,6 @@
 # Scene Node 线程归属、帧循环与停机
 
-> 线程与停机基线于 2026-10-23 核对。2026-11-05 补充队伍跟随协程的接入契约。
+> 线程与停机基线于 2026-10-23 核对。2026-11-05 补充队伍跟随及后续节点协程的接入契约。
 > gRPC 传输与排空细节以[gRPC 传输设计 §15](./grpc-muduo-transport.md)为准；
 > Redis 底层回调与释放见[Redis 生命周期设计](./redis-async-client-retry-fix.md)。
 
@@ -31,11 +31,11 @@ Scene 的任务所有者分为瞬态与持久排空两组。维护 P1、普通�
 
 etcd 注册、领段及创建许可由各自对象或节点作用域持有。etcd unary 每次调用有独立终态归属，旧阶段的迟到回复不能命中新阶段。号段超时后原有迟到认领窗口保留。Agones 继续调用现有异步许可接口，已存在的 worker 和队列投递规则不变，本批不增加线程或线程池。
 
-`SceneRuntimeContext` 持有 `SceneTaskScope`。队伍跟随和镜像创建后自动进场都在所属 Scene EventLoop 启动、恢复和停止。Cobalt 执行器的同线程 `dispatch` 内联，根任务的完成通知经 `queueInLoop` 回收。Boost 的 `execution_context` 提供执行器属性，实际工作由 muduo 驱动。
+`SceneRuntimeContext` 持有 `SceneTaskScope`。队伍跟随和镜像创建后自动进场都在所属 Scene EventLoop 启动、恢复和停止。Cobalt 执行器的同线程 `dispatch` 内联，根任务的完成通知经 `queueInLoop` 回收。Boost 的 `execution_context` 提供执行器属性，实际工作由 muduo 驱动。适配器的 Asio `blocking.possibly` 属性允许同栈执行当前工作，不表示等待异步结果；等待仍由协程挂起表达。
 
 等待回复期间协程挂起，Scene 可以执行其他排队工作。正常 Redis 和 gRPC 回包直接在原回调栈恢复。Redis 提交内即时拒绝或重入完成在 `command` 返回后交付。镜像沿用生成 gRPC 客户端的异步完成，连本地发送失败也按原规则排队交付。
 
-维护 P1、普通关机和身份冲突入口关闭任务准入并发出本地取消，拆除前再做幂等兜底。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。晚到的 Redis 和 gRPC 回包只持等待状态的弱引用。整个路径沿用已有线程，以及下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
+维护 P1、普通关机和身份冲突入口关闭瞬态任务准入并发出本地取消，持久任务在拆除前才停止。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。晚到的 Redis 和 gRPC 回包只持等待状态的弱引用。号段任务的 TLS 所有者还由 `SceneRuntimeContext` 析构兜底收掉，覆盖启动异常，先于局部 EventLoop 销毁。整个路径沿用已有线程，以及下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
 
 ## 2. 当前帧与派发预算
 
@@ -62,7 +62,7 @@ Running → ClosingIngress →（GrpcDraining 与 PersistenceDraining）→ Fina
 ```
 
 1. 停止并 join Kafka consumer，封住 Kafka 业务入站；producer 继续存活，供退出存盘使用。
-   执行关机前业务 hook，Scene 停止协程任务和 lifecycle，并让尚待许可的创建请求按拒绝路径收口。
+   执行关机前业务 hook，Scene 停止瞬态协程任务和 lifecycle，并让尚待许可的创建请求按拒绝路径收口；持久写入与归属释放继续参加原有排空。
 2. 调用 `BeginShutdown({2s, 1s, 1s}, onDrained)`，设置排空状态、排队撤监听，发送两阶段 GOAWAY。
    最终 GOAWAY 前的在途请求仍可能追加业务工作。到期后拒绝未开始的调用、结束已开始的调用；
    已提交的 DATA / trailers 仍须处理写窗口与背压，帧写完且所有流关闭后半关；排空到期路径的 closeGrace 从该到期时刻起算，
@@ -87,7 +87,7 @@ Running → ClosingIngress →（GrpcDraining 与 PersistenceDraining）→ Fina
    关闭 RPC0 在途调用并释放出站 MuduoGrpcChannelPtr，使失败完成先进入 loop 队列；
    再排队进入 teardown，不能直接拆业务状态。
 2. 执行 KafkaManager 的最终有界 flush（此调用不关闭或销毁 producer），再执行一次 BeforeTeardown 业务 hook。
-   Scene 在这里停止 DBTask Pump 并记录未落定事项；随后调用 `tlsRedis.Shutdown()`。
+   Scene 在这里停止全部本地协程等待及领段任务，记录未落定事项；随后调用 `tlsRedis.Shutdown()`。
 3. 释放 Hiredis 可能同步触发空 reply，业务客户端与回调捕获此时必须仍活着。
    本地 gRPC 完成尚未投递排尽时，让出一轮再检查；之后才清节点池、ECS 与日志资源。
 4. 最后以两跳 queueInLoop 排空 forceClose 和 connectDestroyed，再 quit。

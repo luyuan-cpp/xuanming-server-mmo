@@ -92,6 +92,16 @@ var (
 		Help:      "Messages deleted by topic retention before this consumer group consumed them (sum over partitions of log-start minus committed). > 0 means audit data is lost.",
 	}, []string{"consumer"})
 
+	// 消费组卡住的判据(DataServiceAuditConsumerStalled,r2-kc#1 评审跟进):某个分区上已提交位点停下之后又新到了消息、
+	// 而位点一直没再动,最久的那个分区停了多少秒(kafkautil.CommitStall,RequireArrivals)。探针按分区算,每个 consumer 一条序列,
+	// 不按分区出序列。只认新到的消息:reader 模式提交失败交还的已落库记录会在低流量分区上一直挂着积压,那不算卡住。
+	// 不由 PrimeKafkaConsumer 预置:探针没成功过,就不该有一个看着像「没卡住」的 0。每个实例报同一个组的值,告警取 max。
+	kafkaConsumerCommitStallSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "kafka_consumer_commit_stall_seconds",
+		Help:      "Longest time any partition has gone without its committed offset advancing although new messages arrived after it stopped, as seen by the lag probe (0 = no such partition).",
+	}, []string{"consumer"})
+
 	// auditRetentionDeletedRowsTotal、auditRetentionFailuresTotal:审计表清理(store.RunAuditRetention)。table 只有两个值。
 	auditRetentionDeletedRowsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
@@ -147,8 +157,9 @@ var (
 		Subsystem: subsystem,
 		Name:      "player_name_ops_total",
 		Help: "Player name registry outcomes by op (reserve|release|batch_get) and result " +
-			"(ok|already_owned|taken|invalid|conflict|outside_window|error). already_owned is the " +
-			"idempotent reserve retry: a rising rate means callers are retrying CreatePlayer.",
+			"(ok|already_owned|taken|invalid|conflict|outside_window|in_use|error). already_owned is the " +
+			"idempotent reserve retry: a rising rate means callers are retrying CreatePlayer. in_use is a " +
+			"refused release of a name that belongs to a committed role: any increase needs a look.",
 	}, []string{"op", "result"})
 
 	// 桶按"一次本地 SQL"的量级铺:1ms 是理想值,25ms 以内算健康,超过 250ms 说明
@@ -188,6 +199,16 @@ var (
 		Help:      "GetPlayerInboxLedger outcomes: found (row read, ledger returned) | absent (no owner row) | error (routing, Redis or corrupt blob).",
 	}, []string{"result"})
 
+	// ── 单玩家物品获取封禁:已落盘封禁表读取(docs/design/player-inbox-service.md §2.2)──
+	//
+	// 调用方是 go/player_inbox 的运维查询 GetItemGainBlocks,只有人工调用,量极小。
+	// result 集合与上面两本账本相同;error 非零看同一时刻 `[player-item-gain-block]` 的 ERROR 日志。
+	playerItemGainBlockReadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "player_item_gain_block_read_total",
+		Help:      "GetPlayerItemGainBlock outcomes: found (profile row read, block list returned) | absent (no owner row) | error (routing, store or corrupt row).",
+	}, []string{"result"})
+
 	// ── 玩家归属映射(player_route 只在全局库一份,docs/design/player-route-mapping-durability-proposal.md §15)──
 	//
 	// 两个 label 都是封闭集合,启动时由 PrimeRoute 全部预置为 0。**不要**把 player_id 加成 label(AGENTS.md §9),
@@ -210,6 +231,17 @@ var (
 		Help: "player_route SQL reads: path home|batch (per chunk), result ok (row read) | not_found (authoritative absence, home only) | " +
 			"error (the read failed; the RPC answers Unavailable).",
 	}, []string{"path", "result"})
+
+	// 后台判陈旧留下的建角 ref:角色行不在,但角色有提交过的证据(或者证据核不全),没写墓碑、没删
+	// (store.SweepResult.Held,docs/ops/mysql-backup-pitr-runbook.md §4.1a)。每一轮都会把还留着的再计一次,
+	// 所以速率非零就是有 ref 等人处理;逐条的 player_id 和证据在 `[account-role-ref]` 的 ERROR 日志里。没有 label。
+	roleRefTombstoneHeldTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "account_role_ref_tombstone_held_total",
+		Help: "Stale create refs the background sweep kept without a tombstone because the role row is missing but the role shows committed " +
+			"evidence (bound name, played player_store rows) or the evidence cannot be read in full. Counted again on every sweep while " +
+			"they stay; any increase needs a look (create_residual or by hand).",
+	})
 
 	registerOnce sync.Once
 )
@@ -266,7 +298,7 @@ func register() {
 		prometheus.MustRegister(
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			kafkaConsumerFlushSeconds, kafkaConsumerBatchRows, kafkaConsumerMessageBytes,
-			kafkaConsumerLagMessages, kafkaConsumerLagMaxPartitionMessages, kafkaConsumerRetentionGapMessages,
+			kafkaConsumerLagMessages, kafkaConsumerLagMaxPartitionMessages, kafkaConsumerRetentionGapMessages, kafkaConsumerCommitStallSeconds,
 			auditRetentionDeletedRowsTotal, auditRetentionFailuresTotal,
 			kafkaConsumerLagProbeTotal, kafkaConsumerIsolationTotal,
 			idSegmentAllocateTotal,
@@ -274,10 +306,20 @@ func register() {
 			playerNameOpsTotal, playerNameOpSeconds, playerNameCacheTotal,
 			assetOpLedgerReadTotal,
 			playerInboxLedgerReadTotal,
+			playerItemGainBlockReadTotal,
 			routeRegisterTotal,
 			routeReadTotal,
+			roleRefTombstoneHeldTotal,
 		)
 	})
+}
+
+// ObserveRoleRefTombstoneHeld 记一轮后台判陈旧留下(没写墓碑)的建角 ref 条数(store.SweepResult.Held)。
+func ObserveRoleRefTombstoneHeld(n int) {
+	register()
+	if n > 0 {
+		roleRefTombstoneHeldTotal.Add(float64(n))
+	}
 }
 
 // PrimeRoute 把 route_register_total(7 条)与 route_read_total(8 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
@@ -443,6 +485,12 @@ func SetKafkaConsumerLag(consumer string, lag, maxPartitionLag, gap int64) {
 	kafkaConsumerRetentionGapMessages.WithLabelValues(consumer).Set(float64(gap))
 }
 
+// SetKafkaConsumerCommitStall 写 lag 探针算出的停滞时长(kafkautil.CommitStall.Observe 的返回值)。
+func SetKafkaConsumerCommitStall(consumer string, stall time.Duration) {
+	register()
+	kafkaConsumerCommitStallSeconds.WithLabelValues(consumer).Set(stall.Seconds())
+}
+
 // ObserveKafkaConsumerLagProbe 记一次 lag 探测的结局(KafkaResultOK / KafkaResultError)。
 func ObserveKafkaConsumerLagProbe(consumer, result string) {
 	register()
@@ -509,6 +557,14 @@ func ObserveAssetOpLedgerRead(result string) {
 func ObservePlayerInboxLedgerRead(result string) {
 	register()
 	playerInboxLedgerReadTotal.WithLabelValues(result).Inc()
+}
+
+// ObservePlayerItemGainBlockRead 记一次 GetPlayerItemGainBlock 的结果。
+// result 是 "found" | "absent" | "error",取值集合由调用方(logic 的 itemGainBlockRead* 常量)封闭,
+// 本函数不做校验。**不要**把 player_id 加成 label(AGENTS.md §9),排障信息进日志。
+func ObservePlayerItemGainBlockRead(result string) {
+	register()
+	playerItemGainBlockReadTotal.WithLabelValues(result).Inc()
 }
 
 // ── Observe helpers ─────────────────────────────────────────────────

@@ -436,8 +436,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 - 榜单:投递途中榜分不保证全局顺序,只保证每人最终落在最新版本。
 - MySQL 档的 guild、trade、mail 路径,死锁从 0 变成偶发,靠重试吸收,回归里要量重试率。
 - 榜单 `StopRankSource`、`FreezeRankGeneration` 没有生产调用方:赛季首发不做(全球匹配设计 D7),要做赛季时再写「停写 → 投完 → 封榜」的编排。
-- (2026-11-01 更正:下一条与代码不符。只有排队拆了,其余控制域全服连一个主节点,见 [server-gap-audit-20261101.md](../server-gap-audit-20261101.md) 第 5 条。)
-- Redis 控制域(选线、场景索引、成员集合、排队)按 zone 组分实例,一个组内是单主,加机器不能扩这一组的写。登录域和玩家域已进 Cluster,加主节点就扩。控制域的实际压力要看压测。
+- Redis 控制域按 zone 组分实例,一个组内是单主,加机器不能扩这一组的写,组太热就拆组。排队 `redis-queue-g<N>` 10-24 拆出;scene_manager 的控制域(选线、场景索引、成员集合、世界频道、选主锁)`redis-ctl-g<N>` 2026-11-05 落码、未编译(11-01 核实时它还全服连一个主节点,见 [server-gap-audit-20261101.md](../server-gap-audit-20261101.md) 第 5 条;设计 [control-plane-zone-scoping-20261105.md](../../design/control-plane-zone-scoping-20261105.md))。登录域和玩家域已进 Cluster,加主节点就扩。控制域的实际压力要看压测。
 - 部署脚本只渲染登录域和玩家域共用一个集群,要拆开得再加参数。
 - 玩家域镜像摘要沿用 Java 版的 `redis:8.10.2@sha256:6f81e891…`。Docker Hub 上这个标签 10-22 重建过,要换就两版一起换。
 - 离场第二步失败、强制销毁之后才离场,都会留下成员,靠对账收敛(集群化文档 §5.10)。收敛前实例不销毁、选线躲着它,不影响数据。
@@ -1000,3 +999,15 @@ C++ 一律串行 `/m:1`;测试工程只链接预编好的库,先编库再跑测�
    - scene 设了 `MMORPG_METRICS_PORT` 时,`/metrics` 里有 `scene_player_save_stage_observations_total{stage="marshal"}`。
 
 失败时保留:msbuild 第一个 error、gtest 失败用例的断言原文,以及 `[SaveCost]` 的全部输出。
+
+### 补:接上分行会话的定时存盘推迟(2026-11-05,Claude)
+
+「玩家数据存储策略优化」会话加了 `SavePlayerPeriodic`:只有位置变了,定时存盘就推迟这一笔,兜底 300 秒。我这边配套改了:
+
+- `redis.cpp` 的周期回调改调 `SavePlayerPeriodic`。别的入口仍用 `SavePlayer`,不推迟。
+- `[DirtySave]` 行尾追加 `piggyback_deferred=N`。`stress_summarize.ps1` 多一列,老二进制的行打 `-`。
+- `stress_summarize.ps1` 的 P3 按新分行列七组:location、character、wallet、bag、growth、profile、legacy1。HOT、ASSET 已退役。
+- `test_stress_summarize.ps1`:夹具换成 LOCATION / CHARACTER;P3 断言改成七组;`[DirtySave]` 整行断言 `run/scene_1.log`,本机 `bin\logs\cpp_nodes` 里的真实日志不影响结论。
+- compare 段的次数现在包含推迟判断,多于存盘次数,`save_timing_stats.h` 已写明。
+
+Codex 在上面第 5 步之后加跑:`pwsh -File tools/scripts/test_stress_summarize.ps1`,通过标准是退出码 0、没有 FAIL 行。它会临时挪走 `run\logs\cpp_nodes` 下的 scene 日志,跑完放回。

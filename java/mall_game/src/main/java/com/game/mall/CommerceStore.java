@@ -8,6 +8,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.annotation.DependsOn;
@@ -20,7 +22,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Repository
 @DependsOn("commerceSchemaReady")
 public class CommerceStore {
+    private static final Logger LOG = LoggerFactory.getLogger(CommerceStore.class);
     static final long MAX_AMOUNT_MINOR = 9_000_000_000_000_000L;
+    /** 已付过的订单状态(待交付、已交付、退款中、已退款、人工):再来的付款不再绑定订单。 */
+    private static final Set<Integer> PAID_STATES = Set.of(1, 2, 5, 6, 7);
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final Clock clock;
@@ -233,15 +238,12 @@ public class CommerceStore {
                     throw new CommerceException(409, "支付金额或币种不匹配");
                 }
                 paymentPolicy.payment(in);
-                if (java.util.Set.of(1,2,5,6,7).contains(order.model().getStatus())) {
-                    Integer matches = jdbc.queryForObject("SELECT COUNT(*) FROM commerce_payment_receipt WHERE order_sn=? AND channel=? AND transaction_id=? AND amount_minor=? AND currency=?", Integer.class,
-                            in.orderId(), ascii(in.channel()), ascii(in.transactionId()), in.amountMinor(), in.currency());
-                    if (matches != null && matches == 1) { return view(order); }
-                    throw new CommerceException(409, "该订单已有不同支付回执");
-                }
+                if (PAID_STATES.contains(order.model().getStatus())) { return paidOrderPayment(order, in); }
                 if (order.model().getStatus() == 4) {
                     jdbc.update("INSERT INTO commerce_payment_receipt(channel,transaction_id,order_sn,amount_minor,currency) VALUES(?,?,?,?,?)",ascii(in.channel()),ascii(in.transactionId()),in.orderId(),in.amountMinor(),in.currency());
-                    jdbc.update("INSERT INTO commerce_refund_intent(order_sn,status) VALUES(?,'PENDING')",in.orderId());
+                    // 退款待办按要退的那笔付款(这笔迟到付款)的交易键建。
+                    jdbc.update("INSERT INTO commerce_refund_intent(channel,transaction_id,order_sn,source,status) VALUES(?,?,?,?,'PENDING')",
+                        ascii(in.channel()), ascii(in.transactionId()), in.orderId(), DeliveryStore.REFUND_CANCELLED_LATE);
                     jdbc.update("UPDATE oms_order SET status=5 WHERE order_sn=? AND status=4",in.orderId());order.model().setStatus(5);return view(order);
                 }
                 if (order.model().getStatus() != 0) { throw new CommerceException(409, "订单状态冲突"); }
@@ -264,6 +266,43 @@ public class CommerceStore {
             }));
         } catch (DuplicateKeyException conflict) { throw new CommerceException(409, "支付流水已用于其他订单"); }
     }
+
+    /**
+     * 已付过的订单又收到一笔付款(第一轮数据审计 §4 第 19 条)。这笔钱已经进了渠道:旧实现回 409 了事,既没有记录,
+     * 也没有退款路径,而 commerce_payment_receipt 对 order_sn 的唯一约束让它根本存不进来。现在:
+     * <ul>
+     *   <li>就是订单绑定的那笔,或已记成本单的重复付款:原样重放,幂等返回。</li>
+     *   <li>交易键已被别的订单用过(绑定或重复付款):409。一笔渠道交易只属于一张订单,这是适配器的错,不替它猜。</li>
+     *   <li>新的一笔:同一事务里写一行未绑定的付款回执(order_sn 为 NULL,与绑定的回执共用 (channel, transaction_id)
+     *       主键,由库保证一笔交易全局只记一次,并发的另一张订单撞键回 409)、一行重复付款记录、一条
+     *       DUPLICATE_PAYMENT 退款待办,与取消后迟到的付款走同一条退款待办路径;订单状态、库存、交付意图都不动。</li>
+     * </ul>
+     * 调用方已持有订单行锁,并已核对金额币种与渠道;同一订单的并发重放在行锁上排队,后到者看见先到者已提交的记录。
+     * 应答仍是订单视图(状态不变),退款由支付适配器经 /internal/refunds/poll 领取。
+     */
+    private CommerceApi.Order paidOrderPayment(Stored order, CommerceApi.Payment in) {
+        var known = jdbc.query("SELECT p.order_sn,d.order_sn,p.amount_minor,p.currency FROM commerce_payment_receipt p "
+                + "LEFT JOIN commerce_duplicate_payment d ON d.channel=p.channel AND d.transaction_id=p.transaction_id "
+                + "WHERE p.channel=? AND p.transaction_id=?",
+            (row, index) -> new KnownPayment(row.getString(1), row.getString(2), row.getLong(3), row.getString(4)),
+            ascii(in.channel()), ascii(in.transactionId()));
+        if (!known.isEmpty()) {
+            var prior = known.getFirst();
+            boolean thisOrder = in.orderId().equals(prior.boundOrder()) || in.orderId().equals(prior.duplicateOf());
+            if (thisOrder && prior.amountMinor() == in.amountMinor() && prior.currency().equals(in.currency())) { return view(order); }
+            throw new CommerceException(409, "支付流水已用于其他订单");
+        }
+        jdbc.update("INSERT INTO commerce_payment_receipt(channel,transaction_id,order_sn,amount_minor,currency) VALUES(?,?,NULL,?,?)",
+            ascii(in.channel()), ascii(in.transactionId()), in.amountMinor(), in.currency());
+        jdbc.update("INSERT INTO commerce_duplicate_payment(channel,transaction_id,order_sn,created_ms) VALUES(?,?,?,?)",
+            ascii(in.channel()), ascii(in.transactionId()), in.orderId(), clock.millis());
+        jdbc.update("INSERT INTO commerce_refund_intent(channel,transaction_id,order_sn,source,status) VALUES(?,?,?,?,'PENDING')",
+            ascii(in.channel()), ascii(in.transactionId()), in.orderId(), DeliveryStore.REFUND_DUPLICATE_PAYMENT);
+        LOG.warn("duplicate payment recorded and queued for refund: order={} channel={}", in.orderId(), in.channel());
+        return view(order);
+    }
+    /** 某个交易键已有的记录:boundOrder 是它绑定的订单(重复付款为 null),duplicateOf 是它作为重复付款冲的那张订单。 */
+    private record KnownPayment(String boundOrder, String duplicateOf, long amountMinor, String currency) {}
 
     private Stored byRequest(String buyer, String requestId) {
         List<Stored> rows = jdbc.query("SELECT * FROM oms_order WHERE buyer_id=? AND request_id=?", (rs, row) -> stored(rs), buyer, ascii(requestId));

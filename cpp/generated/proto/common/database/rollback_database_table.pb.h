@@ -7780,6 +7780,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_name final : public ::google
     kNameNormFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
     kCreatedMsFieldNumber = 4,
+    kBoundMsFieldNumber = 5,
   };
   // string name = 2;
   void clear_name() ;
@@ -7831,11 +7832,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_name final : public ::google
   void _internal_set_created_ms(::uint64_t value);
 
   public:
+  // uint64 bound_ms = 5;
+  void clear_bound_ms() ;
+  [[nodiscard]] ::uint64_t bound_ms() const;
+  void set_bound_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_bound_ms() const;
+  void _internal_set_bound_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:player_name)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 33,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7868,6 +7879,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_name final : public ::google
     ::google::protobuf::internal::ArenaStringPtr name_norm_;
     ::uint64_t player_id_;
     ::uint64_t created_ms_;
+    ::uint64_t bound_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -23005,6 +23017,30 @@ inline ::uint64_t player_name::_internal_created_ms() const {
 inline void player_name::_internal_set_created_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = value;
+}
+
+// uint64 bound_ms = 5;
+inline void player_name::clear_bound_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bound_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t player_name::bound_ms() const {
+  // @@protoc_insertion_point(field_get:player_name.bound_ms)
+  return _internal_bound_ms();
+}
+inline void player_name::set_bound_ms(::uint64_t value) {
+  _internal_set_bound_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:player_name.bound_ms)
+}
+inline ::uint64_t player_name::_internal_bound_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bound_ms_;
+}
+inline void player_name::_internal_set_bound_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bound_ms_ = value;
 }
 
 // -------------------------------------------------------------------

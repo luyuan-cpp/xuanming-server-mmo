@@ -41,12 +41,15 @@ func sceneRegistrationRecordKey(sceneID uint64) string {
 	return fmt.Sprintf("scene:%d:registration", sceneID)
 }
 
-// luaSceneRegistrationPrelude 是两段登记脚本共用的开头:查记录与映射,写一个场景都有的五样。
+// luaSceneRegistrationPrelude 是两段登记脚本共用的开头:查记录、映射与拆除任务,写一个场景都有的五样。
 //
 // KEYS[1] = scene:{id}:node,KEYS[2] = scene:{id}:zone,KEYS[3] = 节点 scene_count,KEYS[4] = 节点场景集合,
-// KEYS[5] = scene:{id}:agones_gs,KEYS[6] = scene:{id}:registration。
+// KEYS[5] = scene:{id}:agones_gs,KEYS[6] = scene:{id}:registration,KEYS[7] = scene:{id}:teardown。
 // ARGV[1] = sceneId,ARGV[2] = token,ARGV[3] = 记录存活秒数,ARGV[4] = 节点,ARGV[5] = zoneId,
 // ARGV[6] = 占用的 GameServer(空串表示不占名额)。
+//
+// 拆除任务还在(scene_teardown_job.go,上一个用这个号的场景没拆完)同样回 conflict:登记了的话,旧任务补发的
+// DestroyScene 会打到新场景上。号源不重号时不会发生,是纵深防御。
 const luaSceneRegistrationPrelude = `
 local prior = redis.call('GET', KEYS[6])
 if prior then
@@ -59,7 +62,7 @@ if prior then
     end
     return record.reply
 end
-if redis.call('EXISTS', KEYS[1]) == 1 then
+if redis.call('EXISTS', KEYS[1], KEYS[7]) > 0 then
     return {'conflict'}
 end
 redis.call('SET', KEYS[1], ARGV[4])
@@ -78,27 +81,27 @@ redis.call('SET', KEYS[6], cjson.encode({token = ARGV[2], reply = reply}), 'EX',
 return reply
 `
 
-// luaRegisterInstance 登记一个按需实例。KEYS[1..6]、ARGV[1..6] 见 luaSceneRegistrationPrelude。
+// luaRegisterInstance 登记一个按需实例。KEYS[1..7]、ARGV[1..6] 见 luaSceneRegistrationPrelude。
 //
-// KEYS[7] = zone 的 active instances 有序集合,KEYS[8] = scene:{id}:mirror,KEYS[9] = scene:{id}:source,
-// KEYS[10] = 镜像源的子集合 scene:{源}:mirrors(没有镜像源时不传)。
+// KEYS[8] = zone 的 active instances 有序集合,KEYS[9] = scene:{id}:mirror,KEYS[10] = scene:{id}:source,
+// KEYS[11] = 镜像源的子集合 scene:{源}:mirrors(没有镜像源时不传)。
 // ARGV[7] = 创建时刻 Unix 秒(空闲时钟起点),ARGV[8] = '1' 表示镜像,ARGV[9] = 镜像源 scene_id。
 const luaRegisterInstance = luaSceneRegistrationPrelude + `
-redis.call('ZADD', KEYS[7], ARGV[7], ARGV[1])
+redis.call('ZADD', KEYS[8], ARGV[7], ARGV[1])
 if ARGV[8] == '1' then
-    redis.call('SET', KEYS[8], '1')
+    redis.call('SET', KEYS[9], '1')
 end
-if KEYS[10] then
-    redis.call('SET', KEYS[9], ARGV[9])
-    redis.call('SADD', KEYS[10], ARGV[1])
+if KEYS[11] then
+    redis.call('SET', KEYS[10], ARGV[9])
+    redis.call('SADD', KEYS[11], ARGV[1])
 end
 ` + luaSceneRegistrationRecord
 
-// luaRegisterWorldChannel 登记一个世界频道。KEYS[1..6]、ARGV[1..6] 见 luaSceneRegistrationPrelude。
+// luaRegisterWorldChannel 登记一个世界频道。KEYS[1..7]、ARGV[1..6] 见 luaSceneRegistrationPrelude。
 //
-// KEYS[7] = 这个地图的频道集合。
+// KEYS[8] = 这个地图的频道集合。
 const luaRegisterWorldChannel = luaSceneRegistrationPrelude + `
-redis.call('SADD', KEYS[7], ARGV[1])
+redis.call('SADD', KEYS[8], ARGV[1])
 ` + luaSceneRegistrationRecord
 
 // luaAbortSceneRegistration 在登记结局未知时问清楚,并保证它之后不会再落地。
@@ -202,7 +205,7 @@ func registerWorldChannel(svcCtx *svc.ServiceContext, reg sceneRegistration, con
 	return runSceneRegistration(svcCtx, metrics.SceneRegistrationKindWorldChannel, reg, luaRegisterWorldChannel, keys)
 }
 
-// sceneRegistrationKeys 是登记脚本的 KEYS[1..6],顺序是脚本的契约。
+// sceneRegistrationKeys 是登记脚本的 KEYS[1..7],顺序是脚本的契约。
 func sceneRegistrationKeys(reg sceneRegistration) []string {
 	return []string{
 		sceneNodeKey(reg.SceneID),
@@ -211,6 +214,7 @@ func sceneRegistrationKeys(reg sceneRegistration) []string {
 		nodeScenesKey(reg.ZoneID, reg.NodeID),
 		sceneAgonesGsKey(reg.SceneID),
 		sceneRegistrationRecordKey(reg.SceneID),
+		sceneTeardownJobKey(reg.SceneID),
 	}
 }
 

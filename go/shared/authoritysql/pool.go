@@ -244,6 +244,11 @@ func DSNForSchema(dsn, schema string) (string, error) {
 	return parsed.FormatDSN(), nil
 }
 
+// connMaxIdle 是空闲连接最多留多久。要短于链路上中间设备断开空闲 TCP 的时间(云负载均衡常见 4~6 分钟,
+// IPVS 缺省 15 分钟):被静默丢弃的连接收不到 FIN,复用前的存活检查看不出来,第一条语句要等满读超时才失败,
+// 而且那时语句已经发出,结局未知(docs/design/infra-reconnect-overview.md §4 R2)。
+const connMaxIdle = 3 * time.Minute
+
 func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, maxOpen int, ioTimeout time.Duration, permission Permission, options []OpenOption) (*sql.DB, error) {
 	var opts openOptions
 	for _, option := range options {
@@ -289,6 +294,7 @@ func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, ma
 	db.SetMaxOpenConns(maxOpen)
 	db.SetMaxIdleConns(maxOpen)
 	db.SetConnMaxLifetime(15 * time.Minute)
+	db.SetConnMaxIdleTime(connMaxIdle)
 	ready := false
 	defer func() {
 		if !ready {

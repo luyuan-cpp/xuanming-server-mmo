@@ -40,6 +40,20 @@ type config struct {
 	domainhost.Config
 	MailRpc       zrpc.RpcClientConf `json:"MailRpc"`
 	MailSecretEnv string             `json:"MailSecretEnv"`
+
+	// MailMaxPersonalMailTtlDays 必须与 mail 的 Mail.MaxPersonalMailTtlDays 同值:rank 读不到邮件配置,只能显式写一份
+	// (两份源配置由 config_test.go 核对)。封榜写出的奖励邮件过期时刻 = 封榜 + min(30 天, 本值)。
+	MailMaxPersonalMailTtlDays uint32 `json:"MailMaxPersonalMailTtlDays"`
+}
+
+// Validate 在加载配置(conf.MustLoad)与 run 入口各核一次;奖励邮件有效期越出邮件允许的范围就拒启,
+// 不让封榜写出邮件必拒的过期时刻。
+func (c config) Validate() error {
+	if err := c.Config.Validate(); err != nil {
+		return err
+	}
+	_, err := data.RewardMailWindow(c.MailMaxPersonalMailTtlDays)
+	return err
 }
 
 var errManualSchema = errors.New("领域结构需人工处理")
@@ -181,6 +195,13 @@ func run(c config, migrate bool) (runErr error) {
 		}
 	}()
 	repo := data.New(db, ids.IDs["rank_board"].Next, ids.IDs["rank_settlement"].Next, ids.IDs["rank_reward"].Next, func(id uint32) bool { _, ok := tables.ItemTableManagerInstance.FindById(id); return ok })
+	rewardWindow, err := data.RewardMailWindow(c.MailMaxPersonalMailTtlDays)
+	if err != nil {
+		return err
+	}
+	if err = repo.ConfigureRewardMailWindow(rewardWindow); err != nil {
+		return err
+	}
 	handler := server.New(repo, auth, ids.Data)
 	mailRPC, err := zrpc.NewClient(c.MailRpc)
 	if err != nil {
@@ -293,7 +314,7 @@ func run(c config, migrate bool) (runErr error) {
 		defer release()
 		runErr = errors.Join(runErr, closeRelay(closeCtx))
 	}()
-	return domainhost.ServeWithReady(ctx, c.Config, base.ENodeType_RankNodeService, server.ClientMethods(), func(s *grpc.Server) {
+	return domainhost.ServeWithReady(ctx, c.Config, base.ENodeType_RankNodeService, func(s *grpc.Server) {
 		rankpb.RegisterClientPlayerRankServer(s, handler)
 		rankpb.RegisterRankAdminServer(s, handler)
 	}, func() { close(listening) }, root, relay, relayIngress)

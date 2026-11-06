@@ -8,6 +8,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"shared/etcdwatch"
 	"shared/safego"
 )
 
@@ -34,6 +35,7 @@ func (s *Switch) run(ctx context.Context, cli *clientv3.Client) {
 	prefix := s.cfg.prefix()
 	logx.Infof("[killswitch] Starting watch prefix=%s", prefix)
 
+	periodic := false
 	for {
 		rules, rev, err := s.fullSync(ctx, cli)
 		if err != nil {
@@ -41,6 +43,7 @@ func (s *Switch) run(ctx context.Context, cli *clientv3.Client) {
 			logx.Errorf("[killswitch] Full synchronization failed (requests remain allowed): %v", err)
 			// 失联期间快照按 StaleAfter 自然过期,这里不主动清 ——
 			// 网络抖一下不该把正在生效的止血阀松开。
+			periodic = false
 			select {
 			case <-ctx.Done():
 				return
@@ -49,15 +52,22 @@ func (s *Switch) run(ctx context.Context, cli *clientv3.Client) {
 			}
 		}
 
+		// syncedAt 只在真正读到 etcd 时刷新:这里的全量读成功,或者 watch 收到改变规则的事件。
 		s.setRules(rules, s.now())
-		logx.Infof("[killswitch] Full synchronization complete: %d rules, rev=%d", len(rules), rev)
+		if periodic {
+			logx.Debugf("[killswitch] Periodic resynchronization: %d rules, rev=%d", len(rules), rev)
+		} else {
+			logx.Infof("[killswitch] Full synchronization complete: %d rules, rev=%d", len(rules), rev)
+		}
 
-		s.watch(ctx, cli, rules, rev)
+		periodic = s.watch(ctx, cli, rules, rev)
 
 		if ctx.Err() != nil {
 			return
 		}
-		logx.Info("[killswitch] Watch interrupted; repeating full synchronization")
+		if !periodic {
+			logx.Info("[killswitch] Watch interrupted; repeating full synchronization")
+		}
 	}
 }
 
@@ -81,34 +91,34 @@ func (s *Switch) fullSync(ctx context.Context, cli *clientv3.Client) (map[string
 }
 
 // watch 从 rev+1 起消费事件,增量维护 rules 并整体发布新快照。
-// 返回即表示需要重新全量同步(或 ctx 已结束)。
-func (s *Switch) watch(ctx context.Context, cli *clientv3.Client, rules map[string]Rule, rev int64) {
+// 返回即表示需要重新全量同步(或 ctx 已结束);periodic 为真表示到了定期复核的点。
+//
+// 快照的 syncedAt 只在真正读到 etcd 时刷新。旧写法在 watch 通道开着时每 3s 无条件续一次,可是 etcd 整体连不上时
+// clientv3 在内部不停重连,通道并不关闭,结果 StaleAfter 永远不会触发(docs/design/infra-reconnect-overview.md §4 R12)。
+// 现在按 recheckInterval(StaleAfter 的三分之一)定期返回,让 run 重新全量读一次:连得上就续期,连不上就让快照
+// 按 StaleAfter 自然过期。watch 带 RequireLeader,返回前取消子 ctx(etcdwatch.Open)。
+func (s *Switch) watch(ctx context.Context, cli *clientv3.Client, rules map[string]Rule, rev int64) (periodic bool) {
 	prefix := s.cfg.prefix()
-	ch := cli.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(rev+1))
-
-	// 与 etcd 保持连接期间,快照的 syncedAt 需要持续续期,
-	// 否则 StaleAfter 会把一份其实是最新的快照判成过期。
-	renew := time.NewTicker(s.cfg.resyncBackoff())
-	defer renew.Stop()
+	ch, recheck, stop := etcdwatch.Open(ctx, cli, s.cfg.recheckInterval(), prefix, clientv3.WithPrefix(), clientv3.WithRev(rev+1))
+	defer stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
 
-		case <-renew.C:
-			// 只续期,不改内容。
-			s.setRules(rules, s.now())
+		case <-recheck:
+			return true
 
 		case resp, ok := <-ch:
 			if !ok {
 				logx.Info("[killswitch] Watch channel closed")
-				return
+				return false
 			}
 			if err := resp.Err(); err != nil {
 				incSyncFail()
 				logx.Errorf("[killswitch] Watch error (requests remain allowed): %v", err)
-				return
+				return false
 			}
 
 			if s.applyEvents(rules, resp.Events) {

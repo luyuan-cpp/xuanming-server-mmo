@@ -305,7 +305,7 @@ func TestNewServiceContextWiresDependencies(t *testing.T) {
 	if sc.Etcd != rec.etcd || sc.DB != rec.db || sc.CoreRedis != rec.rds || sc.PlayerRedis != rec.player || sc.dataServiceConn != rec.conn {
 		t.Fatal("ServiceContext 持有的连接不是入口建出来的那些")
 	}
-	if sc.Registry == nil || sc.Store == nil || sc.Ledgers == nil || sc.Loops == nil || sc.DataService == nil ||
+	if sc.Registry == nil || sc.Store == nil || sc.Ledgers == nil || sc.ItemGainBlocks == nil || sc.Loops == nil || sc.DataService == nil ||
 		sc.SceneNodes == nil || sc.Kafka == nil {
 		t.Fatalf("有依赖没装配: %+v", sc)
 	}
@@ -322,8 +322,20 @@ func TestNewServiceContextWiresDependencies(t *testing.T) {
 		t.Error("在线提醒器必须写同一个 Kafka writer、查同一份 scene 节点镜像")
 	}
 
-	if len(sc.background) != 2 || sc.background[0].name != "player_inbox.scenenode.watcher" || sc.background[1].name != "player_inbox.maintenance" {
-		t.Errorf("后台任务 = %+v, want 节点镜像 + 选主循环", sc.background)
+	if len(sc.background) != 3 || sc.background[0].name != "player_inbox.scenenode.watcher" || sc.background[1].name != "player_inbox.maintenance" ||
+		sc.background[2].name != "player_inbox.reconcile_owners" {
+		t.Errorf("后台任务 = %+v, want 节点镜像 + 后台循环 + 对账分片成员表", sc.background)
+	}
+	// 对账按分片分给 stable 副本:循环必须拿到成员表;注册之前本进程不认自己,成员表不就绪。
+	if sc.ReconcileOwners == nil || sc.Loops.ReconcileOwnership != sc.ReconcileOwners {
+		t.Error("定时对账必须绑定分片成员表")
+	}
+	if got := sc.selfNodeUUID(); got != "" {
+		t.Errorf("注册之前 node_uuid = %q, want 空", got)
+	}
+	sc.SetNodeUUID("uuid-self")
+	if got := sc.selfNodeUUID(); got != "uuid-self" {
+		t.Errorf("SetNodeUUID 之后 node_uuid = %q", got)
 	}
 	if sc.stopTimeout != loopsStopTimeout {
 		t.Errorf("stopTimeout = %v, want %v", sc.stopTimeout, loopsStopTimeout)

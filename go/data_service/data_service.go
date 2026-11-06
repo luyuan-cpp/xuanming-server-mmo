@@ -30,6 +30,7 @@ import (
 	"shared/dbplacement"
 	"shared/dirshard"
 	"shared/drainproof"
+	"shared/etcdwatch"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
@@ -757,6 +758,7 @@ func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc
 			TxLogRetentionBytes:    kc.TxLogRetentionBytes,
 			SnapshotRetentionBytes: kc.SnapshotRetentionBytes,
 			// kc 已在 main 里 Normalize + ValidateConsumers 过(越界拒启),这里只做单位换算。
+			TxLog: dskafka.TxLogConsumerConfig{MaxInflightFlushes: kc.TransactionLogMaxInflightFlushes},
 			Snapshot: dskafka.SnapshotConsumerConfig{
 				BatchMaxRows:       kc.SnapshotBatchMaxRows,
 				BatchMaxBytes:      kc.SnapshotBatchMaxBytes,
@@ -866,7 +868,8 @@ func newKillSwitchEtcdClient(cfg discov.EtcdConf) *clientv3.Client {
 		c.Password = cfg.Pass
 	}
 
-	cli, err := clientv3.New(c)
+	// keepalive:killswitch 的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	cli, err := clientv3.New(etcdwatch.WithKeepAlive(c))
 	if err != nil {
 		logx.Errorf("[killswitch] data_service failed to create etcd client; kill switch inactive (all requests allowed): %v", err)
 		return nil
@@ -893,7 +896,8 @@ func mustNewNodeRegistryEtcdClient(cfg discov.EtcdConf) *clientv3.Client {
 		c.Username = cfg.User
 		c.Password = cfg.Pass
 	}
-	cli, err := clientv3.New(c)
+	// keepalive:租约续约流遇到半开连接时尽快换成员重连,不至于续约静默停住、租约过期(etcdwatch 包注释)。
+	cli, err := clientv3.New(etcdwatch.WithKeepAlive(c))
 	if err != nil {
 		panic("data_service: failed to create etcd client for C++ convention registration: " + err.Error())
 	}
@@ -1108,6 +1112,7 @@ func dataServiceRelayMethods() map[string]bool {
 		"/data_service.DataService/CloseRoleAdmissions":           true,
 		"/data_service.DataService/AckRoleTradeDrain":             true,
 		"/data_service.DataService/ReleaseDeadPlayerStoreHolder":  true,
+		"/data_service.DataService/ReadPlayerStoreHolder":         true,
 		"/data_service.DataService/RegisterPlayerZone":            true,
 		"/data_service.DataService/GetPlayerRoute":                true,
 		"/data_service.DataService/GetPlayerHomeZone":             true,
@@ -1122,6 +1127,7 @@ func dataServiceRelayMethods() map[string]bool {
 		"/data_service.DataService/BatchGetPlayerDisplay":         true,
 		"/data_service.DataService/GetPlayerAssetOpLedger":        true,
 		"/data_service.DataService/GetPlayerInboxLedger":          true,
+		"/data_service.DataService/GetPlayerItemGainBlock":        true,
 	}
 }
 func dataServiceFaultClassifier() serverbase.Classifier {

@@ -19,10 +19,16 @@
     <ClCompile Include="bag_java_parity_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="bag_temporary_retrieve_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="player_equip_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="player_mystery_merchant_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="client_request_ledger_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="player_equip_attribute_test.cpp">
@@ -39,6 +45,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="player_battle_settlement_test.cpp" />
+    <ClCompile Include="battle_freeze_hold_test.cpp" />
     <ClCompile Include="player_mission_system_test.cpp" />
     <ClCompile Include="player_activity_schedule_test.cpp" />
     <ClCompile Include="player_activity_system_test.cpp" />
@@ -50,5 +57,10 @@
     <ClCompile Include="scene_spawn_test.cpp" />
     <ClCompile Include="player_save_cost_test.cpp" />
     <ClCompile Include="player_save_metrics_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="fifo_eviction_profile_for_test.h">
+      <Filter>Include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

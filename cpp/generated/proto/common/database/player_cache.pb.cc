@@ -48,10 +48,10 @@ constexpr PlayerAllData::ParseTableT_ PlayerAllData::InternalGenerateParseTable_
       0, // no _extensions_
       7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967169,  // skipmap
+      4294967173,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
-      5,  // num_aux_entries
+      5,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -66,52 +66,42 @@ constexpr PlayerAllData::ParseTableT_ PlayerAllData::InternalGenerateParseTable_
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.player_database_data_)}},
-      // .player_database_1 player_database_1_data = 3;
-      {::_pbi::TcParser::FastMtS1,
-       {26, 1, 1,
-        PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.player_database_1_data_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .BagAllData bag_data = 4 [(.OptionPersistUncarried) = true];
       {::_pbi::TcParser::FastMtS1,
-       {34, 2, 2,
+       {34, 1, 1,
         PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.bag_data_)}},
       // .QuestAllData quest_data = 5 [(.OptionPersistUncarried) = true];
       {::_pbi::TcParser::FastMtS1,
-       {42, 3, 3,
+       {42, 2, 2,
         PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.quest_data_)}},
       // .MailAllData mail_data = 6 [(.OptionPersistUncarried) = true];
       {::_pbi::TcParser::FastMtS1,
-       {50, 4, 4,
+       {50, 3, 3,
         PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.mail_data_)}},
       // uint64 last_save_seq = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerAllData, _impl_.last_save_seq_), 5>(),
-       {56, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerAllData, _impl_.last_save_seq_), 4>(),
+       {56, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.last_save_seq_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .player_database player_database_data = 2;
       {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.player_database_data_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // .player_database_1 player_database_1_data = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.player_database_1_data_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .BagAllData bag_data = 4 [(.OptionPersistUncarried) = true];
-      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.bag_data_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.bag_data_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .QuestAllData quest_data = 5 [(.OptionPersistUncarried) = true];
-      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.quest_data_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.quest_data_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .MailAllData mail_data = 6 [(.OptionPersistUncarried) = true];
-      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.mail_data_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.mail_data_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 last_save_seq = 7;
-      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.last_save_seq_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerAllData, _impl_.last_save_seq_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::player_database>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::player_database_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::player_database_1>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::player_database_1_globals_},
         #endif
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::BagAllData>()},
@@ -140,7 +130,6 @@ inline constexpr PlayerAllData::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         player_database_data_{nullptr},
-        player_database_1_data_{nullptr},
         bag_data_{nullptr},
         quest_data_{nullptr},
         mail_data_{nullptr},
@@ -247,9 +236,8 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerAllData, _impl_._has_bits_),
-        9, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerAllData, _impl_.player_database_data_),
-        PROTOBUF_FIELD_OFFSET(::PlayerAllData, _impl_.player_database_1_data_),
         PROTOBUF_FIELD_OFFSET(::PlayerAllData, _impl_.bag_data_),
         PROTOBUF_FIELD_OFFSET(::PlayerAllData, _impl_.quest_data_),
         PROTOBUF_FIELD_OFFSET(::PlayerAllData, _impl_.mail_data_),
@@ -259,7 +247,6 @@ const ::uint32_t
         2,
         3,
         4,
-        5,
 };
 
 static const ::_pbi::MigrationSchema
@@ -276,14 +263,14 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2fplayer_5fcache_
     "to\032\033proto/db/proto_option.proto\0320proto/c"
     "ommon/database/mysql_database_table.prot"
     "o\032/proto/common/database/bag_quest_mail_"
-    "data.proto\"\211\002\n\rPlayerAllData\022.\n\024player_d"
-    "atabase_data\030\002 \001(\0132\020.player_database\0222\n\026"
-    "player_database_1_data\030\003 \001(\0132\022.player_da"
-    "tabase_1\022$\n\010bag_data\030\004 \001(\0132\013.BagAllDataB"
-    "\005\300\376\244\002\001\022(\n\nquest_data\030\005 \001(\0132\r.QuestAllDat"
-    "aB\005\300\376\244\002\001\022&\n\tmail_data\030\006 \001(\0132\014.MailAllDat"
-    "aB\005\300\376\244\002\001\022\025\n\rlast_save_seq\030\007 \001(\004:\005\300\224\364\001\001B\021"
-    "Z\017common/databaseb\006proto3"
+    "data.proto\"\363\001\n\rPlayerAllData\022.\n\024player_d"
+    "atabase_data\030\002 \001(\0132\020.player_database\022$\n\010"
+    "bag_data\030\004 \001(\0132\013.BagAllDataB\005\300\376\244\002\001\022(\n\nqu"
+    "est_data\030\005 \001(\0132\r.QuestAllDataB\005\300\376\244\002\001\022&\n\t"
+    "mail_data\030\006 \001(\0132\014.MailAllDataB\005\300\376\244\002\001\022\025\n\r"
+    "last_save_seq\030\007 \001(\004:\005\300\224\364\001\001J\004\010\003\020\004R\026player"
+    "_database_1_dataB\021Z\017common/databaseb\006pro"
+    "to3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fdatabase_2fplayer_5fcache_2eproto_deps[3] = {
@@ -295,7 +282,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2fplayer_5fc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2fplayer_5fcache_2eproto = {
     false,
     false,
-    465,
+    443,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2fplayer_5fcache_2eproto,
     "proto/common/database/player_cache.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2fplayer_5fcache_2eproto_once,
@@ -315,25 +302,20 @@ void PlayerAllData::clear_player_database_data() {
   if (_impl_.player_database_data_ != nullptr) _impl_.player_database_data_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
-void PlayerAllData::clear_player_database_1_data() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.player_database_1_data_ != nullptr) _impl_.player_database_1_data_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
 void PlayerAllData::clear_bag_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.bag_data_ != nullptr) _impl_.bag_data_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 void PlayerAllData::clear_quest_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.quest_data_ != nullptr) _impl_.quest_data_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 void PlayerAllData::clear_mail_data() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.mail_data_ != nullptr) _impl_.mail_data_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 PlayerAllData::PlayerAllData(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -369,16 +351,13 @@ PlayerAllData::PlayerAllData(
   _impl_.player_database_data_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.player_database_data_)
                 : nullptr;
-  _impl_.player_database_1_data_ = (CheckHasBit(cached_has_bits, 0x00000002U))
-                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.player_database_1_data_)
-                : nullptr;
-  _impl_.bag_data_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.bag_data_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_data_)
                 : nullptr;
-  _impl_.quest_data_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+  _impl_.quest_data_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.quest_data_)
                 : nullptr;
-  _impl_.mail_data_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+  _impl_.mail_data_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.mail_data_)
                 : nullptr;
   _impl_.last_save_seq_ = from._impl_.last_save_seq_;
@@ -411,7 +390,6 @@ inline void PlayerAllData::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.player_database_data_;
-  delete this_._impl_.player_database_1_data_;
   delete this_._impl_.bag_data_;
   delete this_._impl_.quest_data_;
   delete this_._impl_.mail_data_;
@@ -452,24 +430,20 @@ PROTOBUF_NOINLINE void PlayerAllData::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(_impl_.player_database_data_ != nullptr);
       _impl_.player_database_data_->Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      ABSL_DCHECK(_impl_.player_database_1_data_ != nullptr);
-      _impl_.player_database_1_data_->Clear();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.bag_data_ != nullptr);
       _impl_.bag_data_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.quest_data_ != nullptr);
       _impl_.quest_data_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.mail_data_ != nullptr);
       _impl_.mail_data_->Clear();
     }
@@ -505,36 +479,29 @@ PROTOBUF_NOINLINE void PlayerAllData::Clear() {
         stream);
   }
 
-  // .player_database_1 player_database_1_data = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-        3, *this_._impl_.player_database_1_data_, this_._impl_.player_database_1_data_->GetCachedSize(), target,
-        stream);
-  }
-
   // .BagAllData bag_data = 4 [(.OptionPersistUncarried) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         4, *this_._impl_.bag_data_, this_._impl_.bag_data_->GetCachedSize(), target,
         stream);
   }
 
   // .QuestAllData quest_data = 5 [(.OptionPersistUncarried) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         5, *this_._impl_.quest_data_, this_._impl_.quest_data_->GetCachedSize(), target,
         stream);
   }
 
   // .MailAllData mail_data = 6 [(.OptionPersistUncarried) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         6, *this_._impl_.mail_data_, this_._impl_.mail_data_->GetCachedSize(), target,
         stream);
   }
 
   // uint64 last_save_seq = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_last_save_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -567,34 +534,29 @@ PROTOBUF_NOINLINE void PlayerAllData::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // .player_database player_database_data = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.player_database_data_);
     }
-    // .player_database_1 player_database_1_data = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.player_database_1_data_);
-    }
     // .BagAllData bag_data = 4 [(.OptionPersistUncarried) = true];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.bag_data_);
     }
     // .QuestAllData quest_data = 5 [(.OptionPersistUncarried) = true];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.quest_data_);
     }
     // .MailAllData mail_data = 6 [(.OptionPersistUncarried) = true];
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.mail_data_);
     }
     // uint64 last_save_seq = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_last_save_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_last_save_seq());
@@ -619,7 +581,7 @@ void PlayerAllData::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.player_database_data_ != nullptr);
       if (_this->_impl_.player_database_data_ == nullptr) {
@@ -629,14 +591,6 @@ void PlayerAllData::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      ABSL_DCHECK(from._impl_.player_database_1_data_ != nullptr);
-      if (_this->_impl_.player_database_1_data_ == nullptr) {
-        _this->_impl_.player_database_1_data_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.player_database_1_data_);
-      } else {
-        _this->_impl_.player_database_1_data_->MergeFrom(*from._impl_.player_database_1_data_);
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.bag_data_ != nullptr);
       if (_this->_impl_.bag_data_ == nullptr) {
         _this->_impl_.bag_data_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_data_);
@@ -644,7 +598,7 @@ void PlayerAllData::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.bag_data_->MergeFrom(*from._impl_.bag_data_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.quest_data_ != nullptr);
       if (_this->_impl_.quest_data_ == nullptr) {
         _this->_impl_.quest_data_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.quest_data_);
@@ -652,7 +606,7 @@ void PlayerAllData::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.quest_data_->MergeFrom(*from._impl_.quest_data_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(from._impl_.mail_data_ != nullptr);
       if (_this->_impl_.mail_data_ == nullptr) {
         _this->_impl_.mail_data_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.mail_data_);
@@ -660,7 +614,7 @@ void PlayerAllData::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.mail_data_->MergeFrom(*from._impl_.mail_data_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_last_save_seq() != 0) {
         _this->_impl_.last_save_seq_ = from._impl_.last_save_seq_;
       }

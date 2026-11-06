@@ -83,20 +83,6 @@ func (r *FriendRepo) roleReader(ctx context.Context, player uint64) (roleSQLRead
 	return tx, func() { _ = tx.Rollback() }, nil
 }
 
-// 受理预检覆盖 Redis 在线目录；关系写仍在最终事务重新持 P 复核原件。
-func (r *FriendRepo) CheckOriginalRole(ctx context.Context) error {
-	original, ok := roleidentity.Original(ctx)
-	if !ok || r.guard == nil {
-		return ErrOriginalRole
-	}
-	_, closeRead, err := r.roleReader(ctx, original.Role.GetPlayerId())
-	if err != nil {
-		return err
-	}
-	closeRead()
-	return nil
-}
-
 func (r *FriendRepo) ensureBoundCapacity(ctx context.Context, players ...uint64) error {
 	tx, err := r.beginWriteTx(ctx, players...)
 	if err != nil {

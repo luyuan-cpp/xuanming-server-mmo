@@ -201,16 +201,6 @@ func validateGuildTables(rule *tablepb.GuildRuleTable, levels []*tablepb.GuildLe
 // 统一成一个函数是为了让日后换时钟源(测试注入 / 对时)只改一处。
 func nowMs() uint64 { return uint64(time.Now().UnixMilli()) }
 
-// viewerOf:只有客户端来源的请求才有"请求者视角"。
-// 内部调用(GM、运维工具、其它服务)一律 0 —— 它们没有玩家身份,
-// 不该拿到只给本帮长老看的待审数(§12.4)。
-func viewerOf(who caller) uint64 {
-	if who.fromClient {
-		return who.playerID
-	}
-	return 0
-}
-
 // clientWrite 是新管理 / 申请 RPC 的统一入口。
 //
 // 只接受带 gate 会话的调用:这些请求体里**没有** player_id(协议刻意不放),
@@ -858,7 +848,7 @@ func (l *GuildLogic) bumpReviewed(res data.ReviewResult, applicant uint64) {
 
 // guildInfoFor = toProtoGuild + 只给本帮长老 / 帮主看的待审数。
 //
-// viewerID=0(内部调用)不算;不是本帮成员、或职位不到长老,一律留 0 ——
+// viewerID=0(没有请求者:只有 GetPlayerGuild 的匿名只读调用)不算;不是本帮成员、或职位不到长老,一律留 0 ——
 // 待审数是管理侧信息,任何人查一下就能看到"那个帮有多少人在申请"并不合适。
 // 计数直接读 MySQL 且**不进缓存**:它随每次申请 / 审批变化,缓存它等于让角标长期不准;
 // 失败只记日志、留 0,纯展示字段不值得让整次读失败。

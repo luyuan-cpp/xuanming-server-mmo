@@ -18,5 +18,8 @@
     <ClCompile Include="aoi_system_test.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="team_follow_formation_test.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

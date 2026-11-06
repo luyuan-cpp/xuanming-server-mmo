@@ -156,11 +156,11 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerItemGainBlockComp>(player); // 单玩家物品获取封禁(player-inbox-service.md §2.2)
     EmplaceIfAbsent<PlayerMysteryMerchantComp>(player);
     EmplaceIfAbsent<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
+    EmplaceIfAbsent<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
-    // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
+    // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
     EmplaceIfAbsent<PlayerDatabaseCarryComp>(player);
-    EmplaceIfAbsent<PlayerDatabase1CarryComp>(player);
 }
 
 
@@ -252,16 +252,14 @@ protected:
         EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Comp>(player)) << "存盘只读,不得补建缺失的组件";
         EXPECT_EQ(0u, saved.player_database_data().ByteSizeLong()) << "缺组件时一个字段都不写";
         EXPECT_FALSE(saved.has_player_database_data()) << "拒绝时不得创建空子消息";
-        EXPECT_FALSE(saved.has_player_database_1_data());
         EXPECT_FALSE(saved.has_bag_data());
         EXPECT_FALSE(saved.has_quest_data());
 
         // 调用者复用的输出可能已有上一份完整快照。拒绝不能改动其内容或 presence，
-        // 更不能只更新第一张表、留下混合了两个时刻的半份快照。
+        // 更不能只更新一部分、留下混合了两个时刻的半份快照。
         PlayerAllData previous;
         previous.mutable_player_database_data()->set_player_id(kPlayerId + 1);
         previous.mutable_player_database_data()->mutable_currency()->add_values(831);
-        previous.mutable_player_database_1_data()->set_player_id(kPlayerId + 2);
         previous.mutable_bag_data()->add_items()->set_item_uuid(kInventoryItemId);
         previous.mutable_quest_data()->set_scoped_state_present(true);
         const auto previousBytes = previous.SerializeAsString();
@@ -692,11 +690,12 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerItemGainBlockComp>("PlayerItemGainBlockComp");
     ExpectMarshalRefusedWithout<PlayerMysteryMerchantComp>("PlayerMysteryMerchantComp");
     ExpectMarshalRefusedWithout<PlayerBattleResultComp>("PlayerBattleResultComp");
+    // 幂等键账本缺失同样整份拒绝:补一本空账本落盘,等于让已经执行过的请求在重发时再执行一次。
+    ExpectMarshalRefusedWithout<ClientRequestLedgerComp>("ClientRequestLedgerComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
     ExpectMarshalRefusedWithout<PlayerCurrencyComp>("PlayerCurrencyComp");
-    // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。
+    // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。
     ExpectMarshalRefusedWithout<PlayerDatabaseCarryComp>("PlayerDatabaseCarryComp");
-    ExpectMarshalRefusedWithout<PlayerDatabase1CarryComp>("PlayerDatabase1CarryComp");
 }
 
 // F059 落到存盘入口:组件不全的玩家在脏比较与提交之前就被拒绝(返回 false = 没写盘),

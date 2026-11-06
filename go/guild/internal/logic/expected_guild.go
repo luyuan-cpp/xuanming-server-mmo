@@ -16,7 +16,8 @@ package logic
 //
 // 语义:
 //   - expected_guild_id = 0:旧客户端。行为与加字段之前完全相同(operatorGuild 定位帮会),只多计一次
-//     guild_manage_expected_guild_total{outcome="absent"}(只计客户端来源;内部调用本来就不带这个字段)。
+//     guild_manage_expected_guild_total{outcome="absent"}。五个方法都只受理客户端来源(无会话调用在身份闸就被拒,
+//     走不到这里),所以计数只衡量客户端。
 //   - expected_guild_id ≠ 0 且操作者此刻不在该帮(在别的帮、不在任何帮、该帮已解散):回 kGuildNotInGuild,不写、不推送、
 //     不 bump;回包有 guild 字段的三个方法附上操作者**当前**所在帮会的快照(不在任何帮则不填),客户端据此直接纠正界面。
 //     计 outcome="mismatch"。
@@ -85,9 +86,7 @@ var errExpectedGuildMismatch = errors.New("operator is no longer in the expected
 // 其余情况 guildID 就是事务要用的帮会。
 func (l *GuildLogic) bindExpectedGuild(ctx context.Context, who caller, expected uint64, method string) (uint64, *base.TipInfoMessage, error) {
 	if expected == 0 {
-		if who.fromClient {
-			expectedGuildObserved(method, expectedGuildOutcomeAbsent)
-		}
+		expectedGuildObserved(method, expectedGuildOutcomeAbsent)
 		return l.operatorGuild(ctx, who.playerID)
 	}
 	cached, err := l.repo.GetPlayerGuildID(ctx, who.playerID)

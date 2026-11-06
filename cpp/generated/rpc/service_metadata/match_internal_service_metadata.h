@@ -30,3 +30,15 @@ constexpr uint32_t MatchInternalReleaseTrialOccupancyIndex = 5;
 constexpr uint32_t MatchInternalGetBattleCompletionMessageId = 370;
 constexpr uint32_t MatchInternalGetBattleCompletionIndex = 6;
 #define MatchInternalGetBattleCompletionMethod  ::MatchInternal_Stub::descriptor()->method(6)
+
+constexpr uint32_t MatchInternalGetBattleTerminalDecisionMessageId = 376;
+constexpr uint32_t MatchInternalGetBattleTerminalDecisionIndex = 7;
+#define MatchInternalGetBattleTerminalDecisionMethod  ::MatchInternal_Stub::descriptor()->method(7)
+
+constexpr uint32_t MatchInternalListStrandedFormationsMessageId = 377;
+constexpr uint32_t MatchInternalListStrandedFormationsIndex = 8;
+#define MatchInternalListStrandedFormationsMethod  ::MatchInternal_Stub::descriptor()->method(8)
+
+constexpr uint32_t MatchInternalResolveStrandedFormationMessageId = 378;
+constexpr uint32_t MatchInternalResolveStrandedFormationIndex = 9;
+#define MatchInternalResolveStrandedFormationMethod  ::MatchInternal_Stub::descriptor()->method(9)

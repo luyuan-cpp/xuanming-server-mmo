@@ -31,8 +31,8 @@ package logic
 //     AnotherWriterFirst、SameTargetAdoptsPreCreatedEntity、ScriptFailure 的「CAS 之前已预建」断言跟着红。
 //   - 变异 C:删掉 reassignSceneOffDeadNode 开头的 world_channels 成员资格检查。InstanceAndMismatchedConf 红。
 //   - 变异 D:resolveScene 的 zone 守卫换回 GetSceneZone(读错 / 值损坏都当 0 放行)。CorruptZoneRecord 红。
-//   - 变异 F:删掉 luaReassignSceneNode 里 `#KEYS >= 7` 那段在役核对(2026-11-05 前是 `#KEYS >= 6`,KEYS[6] 让给了
-//     重发回执)。ChannelDrainedBeforeCommit 红。
+//   - 变异 F:删掉 luaReassignSceneNode 里 `#KEYS >= 8` 那段在役核对(2026-11-05 前是 `#KEYS >= 6`;KEYS[6] 让给了
+//     重发回执,KEYS[7] 让给了 2026-11-06 的放置代次高水位)。ChannelDrainedBeforeCommit 红。
 // BarrierPending 是行为守护,上面各种变异下都绿。
 
 import (
@@ -149,7 +149,7 @@ func (c *resolveDeadOwnerCase) requireStillOnDeadNode(t *testing.T) {
 // 修复前:无条件覆盖成 late,first 上的实体成了孤儿。
 func TestResolveScene_DeadOwner_AnotherWriterFirst_AdoptsItsOwner(t *testing.T) {
 	c := newResolveDeadOwnerCase(t, 89001)
-	require.True(t, reassignSceneNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeFirst))
+	require.True(t, reassignSceneNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeFirst, freshPlacementGeneration(t, c.sc, resolveCASZone)))
 
 	sid, nid, err := c.logic.reassignSceneOffDeadNode(c.sceneID, resolveCASConfID, resolveCASZone, resolveNodeDead)
 	require.NoError(t, err, "落空后重读到活的新属主,本次进场照常放行")
@@ -168,7 +168,7 @@ func TestResolveScene_DeadOwner_AnotherWriterFirst_AdoptsItsOwner(t *testing.T) 
 // 其实已执行,在本次看来也是这个现场)。属主就是 late:预建的实体正是属主的实体,直接采用,不回收,计数只记一次。
 func TestResolveScene_DeadOwner_SameTargetAdoptsPreCreatedEntity(t *testing.T) {
 	c := newResolveDeadOwnerCase(t, 89002)
-	require.True(t, reassignSceneNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeLate))
+	require.True(t, reassignSceneNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeLate, freshPlacementGeneration(t, c.sc, resolveCASZone)))
 
 	sid, nid, err := c.logic.reassignSceneOffDeadNode(c.sceneID, resolveCASConfID, resolveCASZone, resolveNodeDead)
 	require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestResolveScene_DeadOwner_ChannelDrainedBeforeCommitChangesNothing(t *test
 	_, err := c.mr.SRem(channelSet, strconv.FormatUint(c.sceneID, 10))
 	require.NoError(t, err)
 
-	require.False(t, reassignWorldChannelNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeLate, channelSet),
+	require.False(t, reassignWorldChannelNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeLate, channelSet, freshPlacementGeneration(t, c.sc, resolveCASZone)),
 		"频道已被排空摘出在役集合,改派必须落空")
 	c.requireStillOnDeadNode(t)
 	require.False(t, c.mr.Exists(nodeSceneCountKey(resolveCASZone, resolveNodeLate)), "落空的一方不得建出计数键")
@@ -293,7 +293,7 @@ func TestResolveScene_DeadOwner_ChannelDrainedBeforeCommitChangesNothing(t *test
 	// 对照:仍在役时,同一调用落地。
 	_, err = c.mr.SAdd(channelSet, strconv.FormatUint(c.sceneID, 10))
 	require.NoError(t, err)
-	require.True(t, reassignWorldChannelNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeLate, channelSet))
+	require.True(t, reassignWorldChannelNode(c.sc, resolveCASZone, c.sceneID, resolveNodeDead, resolveNodeLate, channelSet, freshPlacementGeneration(t, c.sc, resolveCASZone)))
 	c.requireOwnedOnlyBy(t, resolveNodeLate, resolveNodeFirst)
 }
 
@@ -356,7 +356,7 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	logic := NewEnterSceneLogic(context.Background(), sc)
 
 	// 落空,属主是 first:名额一个都不动。
-	require.True(t, reassignSceneNode(sc, resolveCASZone, lostScene, resolveNodeDead, resolveNodeFirst))
+	require.True(t, reassignSceneNode(sc, resolveCASZone, lostScene, resolveNodeDead, resolveNodeFirst, freshPlacementGeneration(t, sc, resolveCASZone)))
 	_, nid, err := logic.reassignSceneOffDeadNode(lostScene, resolveCASConfID, resolveCASZone, resolveNodeDead)
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeFirst, nid)
@@ -368,7 +368,7 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	require.Equal(t, "gs-dead", gs)
 
 	// 落空,属主恰是 late,先提交的写者没转名额:由这里补转。
-	require.True(t, reassignSceneNode(sc, resolveCASZone, adoptScene, resolveNodeDead, resolveNodeLate))
+	require.True(t, reassignSceneNode(sc, resolveCASZone, adoptScene, resolveNodeDead, resolveNodeLate, freshPlacementGeneration(t, sc, resolveCASZone)))
 	_, nid, err = logic.reassignSceneOffDeadNode(adoptScene, resolveCASConfID, resolveCASZone, resolveNodeDead)
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeLate, nid)

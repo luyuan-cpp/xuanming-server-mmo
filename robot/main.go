@@ -301,6 +301,15 @@ func main() {
 		return
 	}
 
+	// heartbeat-idle-smoke: gate 客户端心跳判死的端到端冒烟(C++ 仓 docs/design/gate-client-heartbeat.md)
+	// (登录、心跳有回包 → 停发心跳、连接保持打开 → 另开一条裸 TCP 核对 gate 在静默 30s 后关连接
+	//  → 同账号重登接回原场景里的同一个实体 → 旧连接没收到踢线推送,证明它在重登之前已被 gate 关掉)。
+	// 见 heartbeat_idle_smoke_scenario.go;前置条件写在 etc/heartbeat_idle_smoke.yaml 文件头。
+	if cfg.Mode == "heartbeat-idle-smoke" {
+		RunHeartbeatIdleSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {
@@ -445,7 +454,7 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	// 下一轮 EnterGame 不会被残留的 ONLINE 会话顶成 ReplaceLogin。客户端不得自己发 Disconnect:
 	// 它标了 CLIENT_RPC_SERVER_ONLY,不在 gate 上行白名单里,发上去只会被当非法包丢弃
 	// (docs/design/client-rpc-callback.md §7 R4)。残留会话的原始诊断见
-	// docs/design/stress-test-2026-05-http-login.md §四 #B-1。
+	// docs/stress/stress-test-2026-05-http-login.md #B-1(那是 gate 还不处理连接关闭时的口径)。
 	defer gc.Close()
 	stats.Connected()
 	defer stats.Disconnected()

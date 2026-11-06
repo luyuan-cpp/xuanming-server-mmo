@@ -10,6 +10,8 @@
 //   scene_travel_handoff_frozen_players        gauge,  此刻挂着 PlayerFrozenComp 的玩家数(G2)
 //   scene_travel_handoff_oldest_frozen_ms      gauge,  此刻冻结最久的那名玩家已冻结的毫秒,没有冻结为 0(G2)
 //   scene_owner_epoch_events_total{event}      counter,event 取 owner_epoch_stats::kFields 的 key
+//   scene_player_store_save_refused_total{result} counter,result 取 player_store_refused_stats::kCounterNames
+//                                              (存盘最终被确定性拒绝;发送前就被拒的超限存盘只在这里看得到)
 // 计数本身不变(relaxed 原子 + 30s 汇总日志),这里只是第二个读者,字段名与汇总行同一份字段表。
 //
 // 采集回调在 Node 的 EventLoop(即 scene 逻辑线程)上执行,读 tlsEcs 的冻结组件是安全的。

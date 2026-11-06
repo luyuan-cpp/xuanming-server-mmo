@@ -150,6 +150,28 @@ func buildKickPlayerCommand(gateID string, gateInstanceID string,
 	})
 }
 
+// buildGateDrainMigrationCommand 组装发给一台排空中 gate 的迁移许可(docs/design/gate-drain-session-migration.md §4.4)。
+//
+// 与 Bind / Kick 同样:业务字段整份序列化成 GateDrainMigrationEvent 放进 payload,寻址与三道 fail-closed 守卫走
+// buildGateCommandMessage。这条命令针对整台 gate、不针对哪个会话,信封的 SessionId / PlayerId 留 0;
+// 分区是显式指定的(node_id % P),留 0 不影响落点。
+// 每个 login 副本每拍都发,gate 侧按「收到即续期」处理,重复无害。
+func buildGateDrainMigrationCommand(gateID string, gateInstanceID string,
+	event *kafkapb.GateDrainMigrationEvent,
+) (gateCommandMessage, error) {
+	if event == nil {
+		return gateCommandMessage{}, fmt.Errorf("迁移许可事件不能为空")
+	}
+	eventPayload, err := proto.Marshal(event)
+	if err != nil {
+		return gateCommandMessage{}, fmt.Errorf("marshal GateDrainMigrationEvent (gate=%s): %w", gateID, err)
+	}
+	return buildGateCommandMessage("drain migration", gateID, gateInstanceID, &kafkapb.GateCommand{
+		EventId: uint32(game.ContractsKafkaGateDrainMigrationEventEventId),
+		Payload: eventPayload,
+	})
+}
+
 // buildPushTipCommand 组装"经 gate 给某个会话的客户端推一条 tip"的命令。
 //
 // 三层信封,由内到外:

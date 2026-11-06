@@ -826,7 +826,7 @@ type AssetOpResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Outcome AssetOpOutcome         `protobuf:"varint,1,opt,name=outcome,proto3,enum=AssetOpOutcome" json:"outcome,omitempty"`
 	Reason  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`    // asset_error 段码;无原因时 id=0
-	Durable bool                   `protobuf:"varint,3,opt,name=durable,proto3" json:"durable,omitempty"` // 该 seq 的结局已在"最后一次成功写入 Redis 的玩家数据"里
+	Durable bool                   `protobuf:"varint,3,opt,name=durable,proto3" json:"durable,omitempty"` // 该 seq 的结局已在"最后一次提交成功的玩家存档"里(go/db Save 的 TiDB 事务已提交)
 	Partial bool                   `protobuf:"varint,4,opt,name=partial,proto3" json:"partial,omitempty"` // APPLIED 但只发放了一部分(reason=kAssetPartialApplied);Go 不做对侧入账,转人工补偿
 	// ---- 聚宝斋 P2 追加字段从 5 起(帮会不使用)----
 	// 【P2 预留,v1 不填不读】交易库存快照。当前 scene 不填、Go 不读,解锁条件见

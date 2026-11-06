@@ -173,6 +173,22 @@ var (
 		Help:      "LeaveScene holder-release verdicts before deleting a player location (released|owner_dead|no_holder|legacy_epoch0|disabled|pending|pending_unproven|forced|revoked_unqualified).",
 	}, []string{"verdict"})
 
+	// deadHolderReleaseTotal 统计 LeaveScene 判出 owner_dead 之后、删 location 之前,释放判死持有者存档写权的结果
+	// (logic/dead_holder_release.go,docs/design/player-save-direct-commit.md §5.5)。result 取下面的 DeadHolderRelease* 常量:
+	//   released               比较并写成功,写权已释放
+	//   no_row / newer_owner   没有东西要释放:没有写权行 / 代次已比 location 新(新持有者认领过了)
+	//   holder_registered      持有实例在 etcd 在册,不释放。交接源仍在册时会长期停在这里(规格 §9 第 8 条已接受的残余),
+	//                          持续增长就按 LeaveScene 的 Info 日志 holder_release_pending 逐条看
+	//   row_changed            写权行在复核之后变了,不释放,下一次重试重读
+	//   registry_unavailable   etcd 复核做不成,不释放
+	//   error                  读写权行或比较并写失败(data_service 不可用等),持续非 0 要查
+	// 除 released / no_row / newer_owner 外都保留 location,由 player_locator 重试。只按 result 分,player_id 只进日志。
+	deadHolderReleaseTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "dead_holder_release_total",
+		Help:      "Player store claim releases for dead holders during LeaveScene, by result (released|no_row|newer_owner|holder_registered|row_changed|registry_unavailable|error).",
+	}, []string{"result"})
+
 	// enterHolderReleaseTotal 统计 EnterScene 同 zone 跨节点换手门以 18 拒绝之后,要不要替这次登录请持有节点释放
 	// (docs/design/location-release-binding.md §12)。verdict 取 internal/logic/enter_holder_release.go 的名表:
 	//   delivered / failed                        登录撞上未释放的持有者,已同步请它释放(持有节点应答 / RPC 失败或超时)
@@ -325,6 +341,10 @@ var (
 	//   marker_gone          凭标记铸造,回滚时所凭标记已不在(目标节点 A2′ 已消费令牌,或源 scene 已取证 /
 	//                        撤回):一个字节不动,保留本次落点。与 Kafka「报错但已投递」、源端提前取证的竞态
 	//                        同频,偶发属正常;无基线,暂不配告警。分辨两种来源的方法见 runbook
+	//   target_registered    不凭标记铸造(首次落点 / 第二条腿 / 死节点接管),回滚时交接资格原件已属于铸出的代次
+	//                        (目标节点已登记,Kafka「报错但已投递」):一个字节不动,保留本次落点。偶发属正常,不告警
+	//   fence_not_proof      不凭标记铸造,资格原件比铸出值新或写坏了(协议写者写不出,Redis 被回退 / 手工改过):
+	//                        一个字节不动;应恒 0,与 redis_error 同一条告警
 	//   superseded           位置或 epoch 已被并发请求推进,什么都没改(偶发 = 顶号等并发)
 	//   redis_error          go-redis 重试耗尽仍出错(或返回值无法解读):Redis 里可能留着本次落点。跨 zone
 	//                        第一条腿上源 scene 会重置客户端(tip + 踢线 34);同 zone 路由失败上玩家会挂在哑连接上
@@ -335,7 +355,7 @@ var (
 	enterSceneRollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rollback_total",
-		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|marker_gone|superseded|redis_error|plan_error). rolled_back = location restored; a minted owner_epoch moves forward one more step, never back.",
+		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|marker_gone|target_registered|fence_not_proof|superseded|redis_error|plan_error). rolled_back = location restored; a minted owner_epoch moves forward one more step, never back.",
 	}, []string{"outcome"})
 
 	// enterSceneMintReplayRecognizedTotal 统计铸造 owner_epoch 的 EVAL 被 go-redis 原样重发
@@ -458,14 +478,16 @@ var (
 
 	// deadNodeReconcileTotal:死节点收尾任务每一轮的结局(internal/logic/reentry_barrier.go「被屏障推迟的死节点收尾」)。
 	// outcome 取 DeadNodeReconcileOutcome* 常量:
-	//   completed  收尾范围已空,计数已删,任务出队(正常)
-	//   retry      这一轮有场景没结论(Redis 出错),任务留着,下一拍只重试剩下的
-	//   abandoned  本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在反向索引里
-	// retry / abandoned 健康时恒 0。只有领导者会发出。
+	//   completed      收尾范围已空,计数已删,任务出队(正常)
+	//   retry          这一轮有场景没结论(Redis 出错),任务留着,下一拍只重试剩下的
+	//   abandoned      本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在反向索引里
+	//   instance_back  判死的那一代进程(同一个 node_uuid)已按原 node_id 重新注册:它名下的实例都还活着,任务撤掉,
+	//                  一个场景都不拆、计数不删(节点失租后重新拿租约,etcd_service.cpp OnKeepAliveResponse)
+	// retry / abandoned 健康时恒 0;instance_back 只在节点失租又回来时出现。只有领导者会发出。
 	deadNodeReconcileTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "dead_node_reconcile_total",
-		Help:      "Dead scene node reconcile passes by outcome (completed|retry|abandoned).",
+		Help:      "Dead scene node reconcile passes by outcome (completed|retry|abandoned|instance_back).",
 	}, []string{"zone_id", "outcome"})
 
 	// sceneMemberReconcileMembersTotal:成员集合对账读过的成员(internal/logic/scene_member_reconcile.go),按结局分。
@@ -589,20 +611,40 @@ var (
 		Help:      "New scene registration script outcomes by kind (instance|world_channel) and outcome (registered|conflict|aborted|unknown).",
 	}, []string{"zone_id", "kind", "outcome"})
 
-	// gateRedirectExcludedTotal / gateRedirectFallbackTotal:跨 zone 重定向挑 gate 之前按 shared/gatepick.Eligible
-	// 剔除的 gate 与回落(internal/logic/gate_redirect.go eligibleTargets,2026-11-05)。zone_id 是目标 zone;
-	// reason 只取 gatepick.ReasonStale / ReasonFull / ReasonMixed(mixed 只出现在 fallback)。
-	// excluded{reason="stale"} 持续增长说明目标 zone 有 gate 卡住(按 ERROR 日志里的 node_id 去查);
-	// fallback 任何一次增长都值得告警:要么整个 zone 的 gate 都停写,要么准入放进来的人超过 gate 上限之和。
+	// sceneTeardownJobsTotal:拆除任务(internal/logic/scene_teardown_job.go)的结局。
+	//   completed  认领方当场做完、删掉了任务
+	//   recovered  认领方没做完,扫描接手做完 —— 进程退出、回包丢失、某一步失败过的次数
+	//   deferred   这一次有步骤没做成(或删任务结局未知),任务留给扫描;同一任务每重试失败一次记一次
+	// kind 是 instance | world_drain | world_orphan | rollback。
+	sceneTeardownJobsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "scene_teardown_jobs_total",
+		Help:      "Scene teardown jobs by kind (instance|world_drain|world_orphan|rollback) and outcome (completed|recovered|deferred).",
+	}, []string{"zone_id", "kind", "outcome"})
+
+	// sceneTeardownOldestPendingSeconds:本 zone 最老一条还没做完的拆除任务距认领的秒数,没有待办为 0。
+	// 只有领导者的扫描循环发布。持续高于几个租期(90s)说明某一步一直做不成,见告警 SceneManagerSceneTeardownStuck。
+	sceneTeardownOldestPendingSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "scene_teardown_oldest_pending_seconds",
+		Help:      "Age in seconds of the oldest unfinished scene teardown job in the zone (0 when none); published by the leader's sweep.",
+	}, []string{"zone_id"})
+
+	// gateRedirectExcludedTotal / gateRedirectFallbackTotal:跨 zone 重定向挑 gate 时按 shared/gatepick.Eligible 分档
+	// 剔除的 gate 与回落(internal/logic/gate_redirect.go eligibleTargets;2026-11-05 起,11-06 排空并入分档)。zone_id 是目标 zone;
+	// reason 只取 gatepick.Reason* 常量:excluded 取 stale / draining / full,fallback 取 stale / draining / full / mixed。
+	// excluded 只计结果里真被剔掉的:回落时被用上的那一档不计。excluded{reason="stale"} 持续增长说明目标 zone 有 gate 卡住
+	// (按 ERROR 日志里的 node_id 去查);fallback 任何一次增长都值得告警:stale = 全部停写,票多半落在卡住的 gate 上;
+	// draining / full / mixed = 没有完全合格的 gate,在连得上的里挑(整区标了排空、或准入放进来的人超过 gate 上限之和)。
 	gateRedirectExcludedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "gate_redirect_excluded_total",
-		Help:      "Gate candidates left out of a cross-zone redirect pick, by target zone and reason: 'stale' = the gate's etcd record kept the same ModRevision for three report periods as seen by this process (likely hung while its lease lives on); 'full' = player_count at 90% of the gate's self-reported max_connections. Counted once per redirect per excluded gate.",
+		Help:      "Gate candidates left out of a cross-zone redirect pick, by target zone and reason: 'stale' = the gate's etcd record kept the same ModRevision for three report periods as seen by this process (likely hung while its lease lives on); 'draining' = marked draining for a scale-in; 'full' = player_count at 90% of the gate's self-reported max_connections. Gates used by a fallback tier are not counted. Counted once per redirect per excluded gate.",
 	}, []string{"zone_id", "reason"})
 	gateRedirectFallbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "gate_redirect_fallback_total",
-		Help:      "Cross-zone redirects where every candidate gate of the target zone was stale or full, so the pick fell back to all of them, by target zone and reason (stale|full|mixed). Any increase is worth an alert.",
+		Help:      "Cross-zone redirects where no gate of the target zone was fully eligible, by target zone and reason: 'stale' = every gate is stale, so the pick fell back to all of them; 'draining' / 'full' / 'mixed' = the pick used the reachable gates, all of which are draining / at 90% of max_connections / either. Any increase is worth an alert.",
 	}, []string{"zone_id", "reason"})
 
 	// foreignZoneRegistryReadsTotal:判断别的 zone 的场景节点时对那个 zone 的 etcd 注册表的直读
@@ -695,11 +737,13 @@ func register() {
 			worldChannelDirectoryPublishTotal,
 			placementIdentityTotal,
 			leaveHolderReleaseTotal,
+			deadHolderReleaseTotal,
 			enterHolderReleaseTotal,
 			loadRefreshTotal, loadRefreshSeconds, loadRefreshNodeErrorsTotal,
 			mysteryMerchantScheduleTotal,
 			sceneMemberReconcileMembersTotal, sceneMemberReconcilePassesTotal,
 			sceneRegistrationTotal,
+			sceneTeardownJobsTotal, sceneTeardownOldestPendingSeconds,
 			nodeViewHolding, nodeViewReleasedTotal, // node_view.go
 			gateRedirectExcludedTotal, gateRedirectFallbackTotal,
 			foreignZoneRegistryReadsTotal, foreignZoneSkipsTotal,
@@ -713,6 +757,9 @@ func register() {
 		for _, result := range ownerEpochMintDurableResults {
 			ownerEpochMintDurableTotal.WithLabelValues(result).Add(0)
 			ownerEpochMintDurableSeconds.WithLabelValues(result)
+		}
+		for _, result := range deadHolderReleaseResults {
+			deadHolderReleaseTotal.WithLabelValues(result).Add(0)
 		}
 	})
 }
@@ -880,9 +927,10 @@ func ObserveSceneMemberReconcilePass() {
 }
 
 const (
-	DeadNodeReconcileOutcomeCompleted = "completed"
-	DeadNodeReconcileOutcomeRetry     = "retry"
-	DeadNodeReconcileOutcomeAbandoned = "abandoned"
+	DeadNodeReconcileOutcomeCompleted    = "completed"
+	DeadNodeReconcileOutcomeRetry        = "retry"
+	DeadNodeReconcileOutcomeAbandoned    = "abandoned"
+	DeadNodeReconcileOutcomeInstanceBack = "instance_back"
 )
 
 // ObserveDeadNodeReconcile 记一轮死节点收尾的结局,outcome 取 DeadNodeReconcileOutcome*。
@@ -1032,6 +1080,34 @@ func ObservePlacementIdentity(site, verdict string) {
 func ObserveLeaveHolderRelease(verdict string) {
 	register()
 	leaveHolderReleaseTotal.WithLabelValues(verdict).Inc()
+}
+
+// dead_holder_release_total 的 result 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	DeadHolderReleaseReleased            = "released"
+	DeadHolderReleaseNoRow               = "no_row"
+	DeadHolderReleaseNewerOwner          = "newer_owner"
+	DeadHolderReleaseHolderRegistered    = "holder_registered"
+	DeadHolderReleaseRowChanged          = "row_changed"
+	DeadHolderReleaseRegistryUnavailable = "registry_unavailable"
+	DeadHolderReleaseError               = "error"
+)
+
+// deadHolderReleaseResults 是注册时预置为 0 的全部 result,新增取值时同步加在这里。
+var deadHolderReleaseResults = [...]string{
+	DeadHolderReleaseReleased,
+	DeadHolderReleaseNoRow,
+	DeadHolderReleaseNewerOwner,
+	DeadHolderReleaseHolderRegistered,
+	DeadHolderReleaseRowChanged,
+	DeadHolderReleaseRegistryUnavailable,
+	DeadHolderReleaseError,
+}
+
+// ObserveDeadHolderRelease 记一次判死持有者写权释放的结果,见 deadHolderReleaseTotal。result 取 DeadHolderRelease* 常量。
+func ObserveDeadHolderRelease(result string) {
+	register()
+	deadHolderReleaseTotal.WithLabelValues(result).Inc()
 }
 
 // ObserveEnterHolderRelease 记一次 EnterScene 换手门拒绝之后的持有者释放判定或结果,见 enterHolderReleaseTotal。
@@ -1187,8 +1263,20 @@ func ObserveSceneRegistration(zoneID uint32, kind, outcome string) {
 	sceneRegistrationTotal.WithLabelValues(zone, kind, outcome).Inc()
 }
 
-// ObserveGateRedirectExcluded 记一次跨 zone 重定向挑 gate 时剔除的 gate 数,reason 取 gatepick.ReasonStale / ReasonFull,
-// 见 gateRedirectExcludedTotal。count 不大于 0 时不记。
+// ObserveSceneTeardownJob 记一次拆除任务的结局,取值见 sceneTeardownJobsTotal。
+func ObserveSceneTeardownJob(zoneID uint32, kind, outcome string) {
+	register()
+	sceneTeardownJobsTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), kind, outcome).Inc()
+}
+
+// SetSceneTeardownOldestPendingSeconds 发布本 zone 最老一条拆除任务的年龄,见 sceneTeardownOldestPendingSeconds。
+func SetSceneTeardownOldestPendingSeconds(zoneID uint32, seconds int64) {
+	register()
+	sceneTeardownOldestPendingSeconds.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10)).Set(float64(seconds))
+}
+
+// ObserveGateRedirectExcluded 记一次跨 zone 重定向挑 gate 时剔除的 gate 数,reason 取 gatepick.ReasonStale /
+// ReasonDraining / ReasonFull,见 gateRedirectExcludedTotal。count 不大于 0 时不记。
 func ObserveGateRedirectExcluded(zoneID uint32, reason string, count int) {
 	if count <= 0 {
 		return
@@ -1197,8 +1285,8 @@ func ObserveGateRedirectExcluded(zoneID uint32, reason string, count int) {
 	gateRedirectExcludedTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), reason).Add(float64(count))
 }
 
-// ObserveGateRedirectFallback 记一次目标 zone 的 gate 全部停写或满载、回落全集的跨 zone 重定向,
-// reason 取 gatepick.ReasonStale / ReasonFull / ReasonMixed,见 gateRedirectFallbackTotal。
+// ObserveGateRedirectFallback 记一次目标 zone 没有完全合格 gate、退到下一档的跨 zone 重定向,
+// reason 取 gatepick.Exclusion.FallbackReason()(stale / draining / full / mixed),见 gateRedirectFallbackTotal。
 func ObserveGateRedirectFallback(zoneID uint32, reason string) {
 	register()
 	gateRedirectFallbackTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), reason).Inc()

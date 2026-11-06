@@ -58,6 +58,7 @@
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/player_battle_result_comp.pb.h"
+#include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/item_base_comp.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
@@ -967,9 +968,9 @@ protected:
 		EmplaceIfAbsent<PlayerItemGainBlockComp>(entity); // 单玩家物品获取封禁(player-inbox-service.md §2.2)
 		EmplaceIfAbsent<PlayerMysteryMerchantComp>(entity);
 		EmplaceIfAbsent<PlayerBattleResultComp>(entity); // 近期战斗结果(battle-result-recovery.md)
-		// 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
+		EmplaceIfAbsent<ClientRequestLedgerComp>(entity); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
+		// 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
 		EmplaceIfAbsent<PlayerDatabaseCarryComp>(entity);
-		EmplaceIfAbsent<PlayerDatabase1CarryComp>(entity);
 	}
 
 	template <typename Comp>
@@ -2499,7 +2500,7 @@ TEST_F(PlayerEquipAttributeTest, EnhancingWornGearUpdatesTheSixAtOnceAndPushesTh
 	ASSERT_NO_FATAL_FAILURE(CalibrateProbe(probe, player));
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, /*expectedLevel=*/0, outcome));
 	EXPECT_TRUE(outcome.success);
 	EXPECT_EQ(1u, outcome.level);
 
@@ -2551,7 +2552,7 @@ TEST_F(PlayerEquipAttributeTest, EnhancingHealthGearKeepsTheHealthAndManaRatioIn
 	ASSERT_NO_FATAL_FAILURE(FundEnhance(player, 1));
 	ScriptEnhanceRolls(kRollAlwaysSucceeds);
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidClothes, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidClothes, /*expectedLevel=*/0, outcome));
 	ASSERT_TRUE(outcome.success);
 
 	const uint64_t newMaxHealth = Derived(player).max_health();
@@ -2585,7 +2586,7 @@ TEST_F(PlayerEquipAttributeTest, ForgingGearInTheInventoryChangesNothingUntilItI
 	ASSERT_NO_FATAL_FAILURE(CalibrateProbe(probe, player));
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, /*expectedLevel=*/0, outcome));
 	ASSERT_TRUE(outcome.success);
 	ASSERT_EQ(kSuccess, PlayerEquipSystem::InlayGem(player, kGuidWeapon, kSocketFirst, kGemAttack));
 
@@ -2631,7 +2632,7 @@ TEST_F(PlayerEquipAttributeTest, FailedEnhanceWithoutLevelLossLeavesTheSixHealth
 	ASSERT_NO_FATAL_FAILURE(CalibrateProbe(probe, player));
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, outcome))
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, /*expectedLevel=*/1, outcome))
 		<< "a failed roll is still a successful call";
 	EXPECT_FALSE(outcome.success);
 	EXPECT_EQ(1u, outcome.level);
@@ -2668,7 +2669,7 @@ TEST_F(PlayerEquipAttributeTest, FailedEnhanceThatDropsALevelLowersTheSixAndPush
 	ASSERT_NO_FATAL_FAILURE(CalibrateProbe(probe, player));
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, /*expectedLevel=*/1, outcome));
 	EXPECT_FALSE(outcome.success);
 	EXPECT_EQ(0u, outcome.level);
 
@@ -2948,7 +2949,7 @@ TEST_F(PlayerEquipAttributeTest, EnhancementAndGemsAreNeverWrittenToPersistedAtt
 	ASSERT_NO_FATAL_FAILURE(StockGem(player, kGemDefense));
 	ScriptEnhanceRolls(kRollAlwaysSucceeds);
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidClothes, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidClothes, /*expectedLevel=*/0, outcome));
 	ASSERT_TRUE(outcome.success);
 	ASSERT_EQ(kSuccess, PlayerEquipSystem::InlayGem(player, kGuidClothes, kSocketFirst, kGemDefense));
 
@@ -3082,7 +3083,7 @@ TEST_F(PlayerEquipAttributeTest, PanelBonusAndCombatLinesStayTheSameAfterEnhance
 	ASSERT_NO_FATAL_FAILURE(StockGem(player, kGemHealth, 1));
 	ScriptEnhanceRolls(kRollAlwaysSucceeds);
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidWeapon, /*expectedLevel=*/0, outcome));
 	ASSERT_TRUE(outcome.success);
 	ASSERT_EQ(kSuccess, PlayerEquipSystem::InlayGem(player, kGuidWeapon, kSocketFirst, kGemAttack));
 	ASSERT_EQ(kSuccess, PlayerEquipSystem::InlayGem(player, kGuidHat, kSocketFirst, kGemHealth));

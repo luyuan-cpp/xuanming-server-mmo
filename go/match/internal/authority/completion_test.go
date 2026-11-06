@@ -164,7 +164,10 @@ func TestTerminalPersonalSettlementLimitIsInboxProtoLimit(t *testing.T) {
 	}
 }
 
-func TestTerminalPureOriginalErrorsAreTypedBeforeAnySQL(t *testing.T) {
+// 2026-11-05 起原件校验失败后还会复读一次既有终局(原件永久不合格、但已有 ABORT 时要回 ABORT,见 CommitBattleOutcome),
+// 所以这里的库换成连不上的库:复读失败时,永久不合格的原件仍按原件冲突分类,不被读失败改判成「存储故障」。
+// 缺身份的请求查不到属于哪一局,零值 DB 也不碰。
+func TestTerminalPureOriginalErrorsStayTypedWhenStoreUnreachable(t *testing.T) {
 	for _, edit := range []func(*kafkapb.BattleResultEvent){
 		func(e *kafkapb.BattleResultEvent) { e.SettlementFormatVersion = 0; e.Settlements = nil },
 		func(e *kafkapb.BattleResultEvent) { e.Settlements[0].PlayerId = 0 },
@@ -175,12 +178,15 @@ func TestTerminalPureOriginalErrorsAreTypedBeforeAnySQL(t *testing.T) {
 	} {
 		event := completeResult()
 		edit(event)
-		// 零值DB没有连接能力；如校验后移到SQL/P锁之后，本例不能伪绿。
-		s := &Store{DB: new(sql.DB)}
+		s := &Store{DB: unreachableDB(t)}
 		req := &pb.CommitBattleOutcomeRequest{BattleId: 901, PlacementOperationId: "original", TargetInstanceId: "original", RawResultPayload: resultBytes(t, event)}
 		_, err := s.CommitBattleOutcome(context.Background(), req)
 		require.ErrorIs(t, err, ErrBattleOutcomeOriginal)
+		require.ErrorIs(t, err, errUnreachableStore, "确实去复读过既有终局")
 	}
+	s := &Store{DB: new(sql.DB)}
+	_, err := s.CommitBattleOutcome(context.Background(), &pb.CommitBattleOutcomeRequest{BattleId: 901, RawResultPayload: resultBytes(t, completeResult())})
+	require.ErrorIs(t, err, ErrBattleOutcomeOriginal, "缺 operation / 实例身份,不碰 SQL 直接拒绝")
 }
 
 func TestTerminalTiDBCompleteKeepsBothOutboxesAndReplayBytes(t *testing.T) {
@@ -219,8 +225,9 @@ func TestTerminalTiDBObservedZeroCannotBePromotedByLaterReply(t *testing.T) {
 	tx, locked, _, err := s.terminalFormation(ctx, f.BattleId)
 	require.NoError(t, err)
 	defer tx.Rollback()
-	d, err := s.abortTerminalTx(ctx, tx, locked)
+	d, written, err := s.abortTerminalTx(ctx, tx, locked)
 	require.NoError(t, err)
+	require.False(t, written)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, d, "能力1不能追认明确采用0为安全ABORT")
 }
 

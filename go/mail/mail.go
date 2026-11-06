@@ -441,7 +441,7 @@ func run(c config, migrate bool) (runErr error) {
 		defer release()
 		runErr = errors.Join(runErr, closeRelay(closeCtx))
 	}()
-	return domainhost.ServeWithReady(ctx, c.Config, base.ENodeType_MailNodeService, server.ClientMethods(), func(s *grpc.Server) {
+	return domainhost.ServeWithReady(ctx, c.Config, base.ENodeType_MailNodeService, func(s *grpc.Server) {
 		mailpb.RegisterClientPlayerMailServer(s, handler)
 		mailpb.RegisterMailAdminServer(s, handler)
 		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被 domainhost.Guard 挡住。

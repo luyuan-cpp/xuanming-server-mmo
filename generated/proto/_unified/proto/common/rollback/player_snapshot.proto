@@ -22,10 +22,12 @@ message PlayerSnapshotEntry
   uint64 snapshot_time = 3;        // Unix seconds when snapshot was taken
   SnapshotTrigger trigger = 4;
 
-  // Serialized player_database protobuf bytes (important data: currency, skills, etc.)
+  // Serialized player_database protobuf bytes:玩家持久数据的全部内容。
   bytes player_database_blob = 5;
-  // Serialized player_database_1 protobuf bytes (less important data)
-  bytes player_database_1_blob = 6;
+  // 6 是 player_database_1_blob,随 player_database_1 删除(docs/design/player-save-direct-commit.md §1.2)。
+  // 已落库的旧快照里它会解析成未知字段,不影响读取。
+  reserved 6;
+  reserved "player_database_1_blob";
 
   // Version tag — helps detect schema migration issues during restore.
   string schema_version = 7;

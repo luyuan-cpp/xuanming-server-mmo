@@ -29,7 +29,7 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 	require.NoError(t, s.EnsureGlobalPolicy(ctx, original))
 	var before []byte
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT contract_digest FROM match_global_policy WHERE policy_id=1").Scan(&before))
-	for _, mode := range []string{"wait", "hard", "secret", "ttl", "rating", "challenge", "scope-group", "scope-global", "team-cross-zone", "team-fill", "party-bonus"} {
+	for _, mode := range []string{"wait", "hard", "secret", "ttl", "rating", "challenge", "scope-group", "scope-global", "team-cross-zone", "team-fill", "party-bonus", "party-gap"} {
 		t.Run(mode, func(t *testing.T) {
 			copyStore := *s
 			changed := original
@@ -56,6 +56,8 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 				changed.GlobalMatch.ScopeGlobalAfterSeconds++
 			case "party-bonus":
 				changed.GlobalMatch.PartyRatingBonusPerMember++
+			case "party-gap":
+				changed.GlobalMatch.PartyRatingGapMax++
 			}
 			require.Error(t, copyStore.EnsureGlobalPolicy(ctx, changed))
 			var after []byte

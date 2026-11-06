@@ -13,11 +13,11 @@ import org.springframework.web.bind.annotation.*;
  * Two-layer admission control on {@code POST /api/assign-gate}:
  *
  * <ol>
- *   <li><b>{@link AssignGateRateLimiter} (Bucket4j):</b> first-line filter
+ *   <li><b>{@link AssignGateRateLimiter} (Redis token buckets):</b> first-line filter
  *       against retry storms and zone-wave throttling. Returns code=100
  *       with {@code queueSource="ratelimit"} when the caller should retry
- *       later — no real position information is available because Bucket4j
- *       is a token bucket, not an ordered queue.</li>
+ *       later — no real position information is available because the
+ *       limiter is a token bucket, not an ordered queue.</li>
  *   <li><b>go-zero login {@link AssignGateService}:</b> authoritative
  *       admission. Either signs a gate token immediately (capacity available)
  *       or enqueues the caller in the Redis ZSET-backed login queue. When
@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
  *       a real {@code queueRank}/{@code queueTotal} for the UI.</li>
  * </ol>
  *
- * <p>The two layers compose: Bucket4j keeps the gRPC fan-out cheap by
+ * <p>The two layers compose: the limiter keeps the gRPC fan-out cheap by
  * rejecting obvious abuse before it reaches login; the queue handles the
  * "everyone is legitimate but too many of them showed up at once" case
  * (open-server day, world-boss reset, etc.).

@@ -345,11 +345,12 @@ func (s *DataServiceServer) ResolveRecallOp(ctx context.Context, req *data_servi
 	if err := s.authorizeAdmin(ctx, "ResolveRecallOp"); err != nil {
 		return nil, err
 	}
-	resolved, code, err := logic.ResolveRecallOp(ctx, s.svcCtx, req.GetOpId(), req.GetFinalStatus(), req.GetOperator(), req.GetReason())
+	result, err := logic.ResolveRecallOp(ctx, s.svcCtx, req.GetOpId(), req.GetFinalStatus(), req.GetOperator(), req.GetReason())
 	if err != nil {
 		logx.Errorf("[BatchRecall] ResolveRecallOp failed: op_id=%d caller=%s: %v", req.GetOpId(), callerIdentity(ctx), err)
 	}
-	return &data_service.ResolveRecallOpResponse{ErrorCode: code, Resolved: resolved}, nil
+	return &data_service.ResolveRecallOpResponse{ErrorCode: result.ErrorCode, Resolved: result.Resolved,
+		Status: result.Status, Evidence: result.Evidence}, nil
 }
 
 // batchRecallResponse 把结果翻成响应。失败走带内码,原因只进日志。
@@ -373,6 +374,19 @@ func batchRecallResponse(ctx context.Context, rpcName string, resp *logic.BatchR
 			ErrorDetail:  r.ErrorDetail,
 		})
 	}
+	reviews := make([]*data_service.RecallReviewRow, 0, len(resp.NeedsReview))
+	for _, r := range resp.NeedsReview {
+		reviews = append(reviews, &data_service.RecallReviewRow{
+			PlayerId:      r.PlayerID,
+			TxId:          r.TxID,
+			CorrelationId: r.CorrelationID,
+			TxType:        r.TxType,
+			Amount:        r.Amount,
+			ItemUuid:      r.ItemUUID,
+			Timestamp:     r.Timestamp,
+			Reason:        r.Reason,
+		})
+	}
 	return &data_service.BatchRecallItemsResponse{
 		ErrorCode:       resp.ErrorCode,
 		TotalMatched:    resp.TotalMatched,
@@ -388,6 +402,7 @@ func batchRecallResponse(ctx context.Context, rpcName string, resp *logic.BatchR
 		AmountDebt:      resp.AmountDebt,
 		AmountShortfall: resp.AmountShortfall,
 		CancelledMs:     resp.CancelledMs,
+		NeedsReview:     reviews,
 	}
 }
 
@@ -486,9 +501,13 @@ func (s *DataServiceServer) ReservePlayerName(ctx context.Context, req *data_ser
 // ReleasePlayerName 条件释放:player_id 与归一化后的 name 都对上才删。
 //
 // 两条调用路径,靠 metadata 里有没有 x-admin-token 区分:
-//   - login 的建角补偿(没有 token):只能删 PlayerName.ReleaseWindow 之内的登记。
+//   - login 的建角补偿(没有 token):请求必须带 login 的调用证明(auth 字段,账号目录同一把密钥),
+//     证明不对一律 PermissionDenied,一条语句都不发。只能删 PlayerName.ReleaseWindow 之内的登记;
 //     窗外 → FailedPrecondition + ErrCodeAdminAuthRequired,提示去走运维路径。
 //   - 运维清孤儿(带 token):不限登记时间。
+//
+// 两条路径都只释放预留态,而且先在玩家片证明角色永远不会提交(logic.ReleasePlayerName,§3.4a):
+// 已绑定的名字、角色已提交的名字一律 FailedPrecondition + ErrCodePlayerNameInUse。已绑定的名字只有删角收尾能释放,不走这里。
 //
 // 【为什么"带了键就必须验过"而不是"验不过就降级成非 admin"】降级会把一次**鉴权失败**
 // 变成一次静默的普通释放:调用方以为自己在用运维权限清一条老记录,实际删掉的可能是
@@ -504,12 +523,35 @@ func (s *DataServiceServer) ReleasePlayerName(ctx context.Context, req *data_ser
 		admin = true
 		// 运维路径每次都留痕:这是唯一能删掉任意年龄登记的入口。
 		logx.Infof("[admin] %s authorized: player_id=%d %s", rpcName, req.GetPlayerId(), callerIdentity(ctx))
+	} else if err := s.admitCreateRollback(ctx, req); err != nil {
+		return nil, err
 	}
 
 	if err := logic.ReleasePlayerName(ctx, s.svcCtx, req.GetPlayerId(), req.GetName(), admin); err != nil {
 		return nil, playerNameStatus(ctx, rpcName, req.GetPlayerId(), err)
 	}
 	return &emptypb.Empty{}, nil
+}
+
+// nameReleaseCaller 是唯一能不带运维 token 释放名字的调用方:login 的建角回滚。
+const nameReleaseCaller = "login"
+
+// admitCreateRollback 核没带运维 token 的释放:只认 login 用账号目录密钥签的证明(同 admitDirectory 的口径,方法名进签名)。
+// 别的服务、没签名、时间戳超出 ±5 分钟或签完被改过的请求一律拒绝:名字一旦释放就可能立刻被别人占走,不可回滚。
+// 验证器没装配(账号目录密钥缺失)时回 Unavailable:不能因为验不了就放行。
+// 证明不防重放(serviceauth 没有一次性随机数,窗口内原样重发会被接受)。重放无害:释放只针对 login 已放弃的 id,
+// 是条件删除,第二次读不到行就回成功(logic.ReleasePlayerName 第 0 步),不再证明。
+func (s *DataServiceServer) admitCreateRollback(ctx context.Context, req *data_service.ReleasePlayerNameRequest) error {
+	if s.svcCtx.AccountDirectoryAuth == nil {
+		return status.Error(codes.Unavailable, "player name release caller verification is not configured")
+	}
+	caller, err := s.svcCtx.AccountDirectoryAuth.Verify(ctx, data_service.DataService_ReleasePlayerName_FullMethodName, req)
+	if err != nil || caller != nameReleaseCaller {
+		logx.Errorf("[player-name] ReleasePlayerName refused: no valid login caller proof and no admin token: player_id=%d %s",
+			req.GetPlayerId(), callerIdentity(ctx))
+		return status.Error(codes.PermissionDenied, "player name release requires the login caller proof")
+	}
+	return nil
 }
 
 // BatchGetPlayerName 批量查展示名。口径与 BatchGetPlayerHomeZone 一致:
@@ -554,6 +596,19 @@ func (s *DataServiceServer) GetPlayerInboxLedger(ctx context.Context, req *data_
 	return &data_service.GetPlayerInboxLedgerResponse{Found: found, Ledger: ledger}, nil
 }
 
+// GetPlayerItemGainBlock 读玩家**已落盘**的单玩家物品获取封禁表(docs/design/player-inbox-service.md §2.2),
+// 供 go/player_inbox 的运维查询 PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token)。
+//
+// 只读、不鉴权,与 GetPlayerInboxLedger 同级:内容只是物品配置号列表。读法、错误语义与形状都照 GetPlayerInboxLedger:
+// 没有 in-band error_code,契约就是 gRPC code;logic 返回的 error 已经是 status,这里只做搬运。
+func (s *DataServiceServer) GetPlayerItemGainBlock(ctx context.Context, req *data_service.GetPlayerItemGainBlockRequest) (*data_service.GetPlayerItemGainBlockResponse, error) {
+	block, found, err := logic.GetPlayerItemGainBlock(ctx, s.svcCtx, req.GetPlayerId())
+	if err != nil {
+		return nil, err
+	}
+	return &data_service.GetPlayerItemGainBlockResponse{Found: found, Block: block}, nil
+}
+
 // hasAdminTokenMetadata 只判"这次调用**声称**自己是运维调用",不做任何校验。
 // 校验一律交给 authorizeAdmin(常数时间比较 + 未配置即停用)。
 //
@@ -595,6 +650,13 @@ func playerNameStatus(ctx context.Context, rpcName string, playerID uint64, err 
 			"(use the admin path to clean up orphans) %s",
 			rpcName, playerID, adminTokenMetadataKey, callerIdentity(ctx))
 		return status.Errorf(codes.FailedPrecondition, "error_code=%d: %v", constants.ErrCodeAdminAuthRequired, err)
+
+	case errors.Is(err, logic.ErrPlayerNameBound), errors.Is(err, logic.ErrPlayerNameRoleCommitted):
+		// 名字属于建成的角色(§3.4a):调用方判错了建角结局,或者本不该来释放。确定没删(两边零变更),
+		// login 照常按释放失败记孤儿;这里补上调用方身份,事后追查靠这一条。
+		logx.Errorf("[player-name] %s refused: player_id=%d name belongs to a committed role %s: %v",
+			rpcName, playerID, callerIdentity(ctx), err)
+		return status.Errorf(codes.FailedPrecondition, "error_code=%d: %v", constants.ErrCodePlayerNameInUse, err)
 
 	case errors.Is(err, logic.ErrPlayerNameStoreUnavailable):
 		// store 没装配起来(建表失败 / 连不上全局库 / PlayerName 配置非法)。

@@ -194,9 +194,12 @@ rpc AssetCredit(AssetOpRequest) returns (AssetOpResponse) {}
   `AssetSnapshot`/`AssetItemInstance`/`AssetPetInstance`),但**至今零写者零读者**:scene 不填、Go 不读。
   占号只为避免将来抢号,**不等于"响应里已经有快照"**——空 message 与"本次没动任何库存"在 proto3 上
   不可区分,照着接线会静默走错分支。
-- **J-A2 持久化等级(P3 下单前必须定)**:`durable` 只保证该 seq 的结局进了"最后一次成功写入 Redis 的
-  玩家数据";Redis 丢数据回退 MySQL 时可能重复(04 文档 §S4 C5)。人民币寄售是否接受这个等级,
-  还是要加"MySQL 落库确认",P1/P2 只有种子数据与托管、还没到真金交付,所以可以推迟到 P3 开工前定。
+- **J-A2 持久化等级(已收口,2026-11-06 改写)**:`durable` 现在就是 TiDB 提交确认——该 seq 的结局进了
+  "最后一次提交成功的玩家存档"(go/db `Save` 回 COMMITTED / EQUAL,资产与资产账本在同一笔事务里提交),
+  不再有"只到 Redis、回退 MySQL 时重复"的等级(04 文档 C5 已随玩家存档移出 Redis 作废)。
+  剩下的同类风险只有整库按时间点恢复(PITR)到更早时刻:账本和资产一起回退,而 Go 侧可能已终结,会重复;
+  处置按 `docs/ops/mysql-backup-pitr-runbook.md` §4.1a(只回档存档库时,回档点之后已终局的资产结果要核账,
+  能全库回档就不单回存档库)。人民币寄售接入真金交付前,只需确认接受这一条 PITR 核账口径。
 - **J-A3 已解决**:`correlation_id` = `op_id`;按 guid 扣物与宝宝的字段形状见上。
 
 **J-A4 签名未覆盖 `item_uuids` / `pet_id`(硬前置,未做完不得启用 TRADE_* 流)**
@@ -326,7 +329,10 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
 4. **实名 / 防沉迷 / 未成年人消费限制**:`BuyerEligibility` 接入真实实现。
 5. **经营与支付合规**:人民币虚拟物品交易平台涉及的资质、运营主体与支付签约由业务/法务确认,工程侧不能替代。
 6. **风控**:同账号自买自卖拒绝;价格上下限;单账号在售数上限;新获得物品上架冷却(需要 `ItemEntry` 获得时间,P3 后);异常高频下单限速(gate 每消息号 3 次/秒是第一道)。
-7. **回档交互**:`single_player_rollback` "有合法交易流水的转移排除在恢复范围之外";所有托管/交付写 transaction_log,correlation_id = listing_id / order_id。
+7. **回档交互**(2026-11-05 按现状改写):GM 单人 / 整区 / 全服回档 RPC 已于 2026-10-30 删除,回档只剩 PITR([PITR 手册](../ops/mysql-backup-pitr-runbook.md) §4.0):默认整个地域的逻辑库回到同一时刻 T,T 之后的写全部丢弃。所以不存在「只回档一名玩家、按交易流水把合法转移排除在外」的路径,原先引用的 `single_player_rollback` 排除规则不适用。
+   - 交易库 `mmorpg_trade` 与玩家存档回到同一个 T,合同、订单与托管资产在 T 时刻一致,不需要按流水排除。
+   - 只回档其中一个库时两边对不上:T 之后已提交的合同与资产指令按 PITR 手册 §4.1a 的表人工核账,挂起的腿不能按旧主继续发资产。
+   - 托管与交付经资产通道写进 scene 的 transaction_log,`correlation_id` 是资产指令的 `op_id`(§6.4 J-A3:同一件商品的托管和回退是两条 op,按它各自定位 outbox 里唯一的一行),listing / order 记在 outbox 的 `ref_kind` / `ref_id`。这些流水是人工核账的线索,不是回档的排除依据。
 
 ## 13. 分期与验收
 
@@ -418,7 +424,7 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
   - `ABANDONED`、`REJECTED`、`ABORTED` 一律按「没扣到」处理，走与 scene 判拒同一条 `plan` 路径：退回另一方已托管的资产，寄售重新开放，竞价冻结失败即结案。
   - `APPLIED_PARTIAL` 照旧转人工。
   - 人工判 `APPLIED` 按已扣到处理。实例扣款被人工判 `APPLIED` 时没有托管原件：`ResolveManually` 不写 `escrow_snapshot`，自动路径缺原件根本不终结。`advance` 在记下结局时即用 `Transfer` 核对已扣出的托管转得动，转不动就隔离。这样不会先上架，等买家付了款才在发货时撞错。
-- 不误退：`ABANDONED` 只出现在 TRADE_DEBIT。[landing-recovery-sync-digest.md](landing-recovery-sync-digest.md) §6.3 的六条证据保证 scene 不可能再收到这条 seq，即「确实没扣」。人工终结的结论由操作人按 scene 流水 correlation_id 判定并留痕。
+- 不误退：`ABANDONED` 只出现在 TRADE_DEBIT。[landing-recovery-sync-digest.md](landing-recovery-sync-digest.md) §6.3 的六条证据保证 scene 不可能再收到这条 seq，即「确实没扣」。人工终结的结论只认玩家已提交的账本(`go/shared/assetop/manual_evidence.go` 的 `JudgeManual`,trade 与 guild 共用一份判据),scene 流水 correlation_id 只是线索;终结用带读证据时租约与发送时刻的条件写,并留痕(手册 `trade-commerce-quarantine-runbook.md` §4.2)。
 - 补偿只一次：
   - 腿的 `Outcome` 写进合同 workflow，与合同版本 CAS 同一事务提交；`Outcome != 0` 的腿不再读。
   - 补偿腿按角色名 `addLeg` 只建一次。
@@ -562,6 +568,51 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 - 单测 `go/trade/internal/commerce/manual_test.go`：转人工记录（含只记第一次、按字截断）、补发和补发链、恢复推进、整单退回及六种拒绝、单步上限、补记结局的五种拒绝、请求校验。
 - 命令行 `go/trade/cmd/commercefix/main_test.go`：退出码、默认只算计划、参数校验、show 列出每种动作能否处理。
 - 真库 `go/trade/internal/commerce/manual_db_test.go`（门控同 `tick_isolation_db_test.go`）：隔离后的寄售整单退回，计划不写库、执行留痕、重跑落空、引擎发号且只退一次、到账后按取消结案；没转人工和不存在的合同拒绝。
+
+### 15.8 2026-11-06 合同推进按片分工、没变化不重存（缺口清单第 16 条，未编译、未运行）
+
+**问题**（11-05 全链路水平扩展盘点，[缺口清单](../handoff/server-gap-audit-20261101.md)第 16 条）：
+
+- 每个 stable 副本每秒跑一次 `Engine.Tick`，都从全局 `Due` 取前 100 行。各副本读到的是同一个队头，只能在合同行锁上互撞，加副本吞吐不涨。收据 ACK 同理，每个副本各翻一遍全部待 ACK 的行。
+- `advance` 不论有没有推进都 `Save(updated_ms=现在)`。在架的寄售、在拍的拍品、等确认的角色交易、挂着的市场单一直停在推进状态里，每轮被重存一次，带来三个后果：
+  - 版本号每秒加一，玩家按旧版本提交的购买、取消会撞上乐观冲突；
+  - 这些行每轮都排回队尾，活跃合同越多，新成交排得越靠后；
+  - 每行每轮多一次整行写，包括 workflow。
+
+**改法**：
+
+1. **按片分工**（新包 `go/shared/workshard`）。片号是 `commerce_id % 64`，收据 ACK 用 `op_id % 64`。每片的负责副本在成员表上按最高随机权重哈希选。`Due` 和 `AckDue` 把「只取本副本负责的片」写进 SQL，放在 `LIMIT` 之前：一个副本积压的行占不住别的副本的名额。
+   - 成员表是 etcd 里本 zone 注册的 stable trade 实例（`TradeNodeService.rpc/zone/<z>/`），每 5 秒整表读一次。canary 副本不跑全局后台（[灰度设计](release-track-gray-canary.md) §2.5），也不进成员表，否则落在它名下的片没人推进。
+   - 成员表只按 zone 圈，因为同一个 zone 的 trade 副本连的是同一个库。将来如果不同 zone 共用一个库，最坏情况是各 zone 各推进一遍全部片，和改动前一样，不会有片没人做。
+   - 分工不承担正确性。推进、推迟、隔离仍以合同行锁和版本条件为准。成员表变化的几秒里，某一片可能两个副本都做（多几次冲突），也可能暂时没人做（下一拍补上）。
+   - 成员表为空时，本副本做全部片，保活优先。为空包括还没读到，以及连续 30 秒读不到 etcd。成员表不空、本副本不在其中（还没注册完）时，本副本什么都不做。规则与 match 的 `OwnsWork` 相同。
+   - trade 关机时先注销 etcd 再排空（`trade.go` 收尾顺序），副本退出后它名下的片 5 秒内（另加租约过期时间）就由别的副本接手。维护排空期间仍然注册着的副本，名下的片会停到它注销为止。维护排空是全服动作，这里不单独处理。
+2. **没变化不重存**。`advance` 在锁内读到合同和 workflow 后先各留一份副本，推进完用 `proto.Equal` 比较。两样都没变就不 `Save`，只在同一个事务里把 `updated_ms` 改成下次到期（`RescheduleTx`，不改版本）。下次到期由纯函数 `nextDueMs` 决定：
+   - **只等时间或玩家操作的**，排到截止时刻，最远 1 小时复查一次：
+     - 寄售 `open`、拍品 `lot_open`、角色交易 `confirm`，都没有在途腿：排到 `expires_ms`；
+     - 挂着、未全部成交的市场单 `market_open`，官方退款 `official_refund`：没有截止推进，只按 1 小时复查。
+   - **其余照旧，下次到期仍是现在**：有腿在途、市场母单等成交子单收尾、人民币寄售走到 `advance` 的资产段、没列出的 stage。和改动前一样每轮复查，只是不改版本、不重写 workflow。
+   - **为什么能这样排**：玩家操作（购买、取消、确认）、竞价刷新最高价、撮合成交、人工恢复都会 `Save` 这一行，`updated_ms` 写成现在，立刻到期。所以只等时间或玩家操作的合同不必每秒空转。撮合由新单那一方发起：单子第一次进入 `market_open` 的那一步，`step` 在推进之后就撮一次，同一本盘口由 guard 行锁串行，所以挂着的单不需要每秒重撮。
+   - **撮合失败**：`matchMarket` 失败时用 `Wake` 把这一行提前到现在（只提前不推后，不改版本），下一轮重撮，与改动前一样。
+   - **不改推进判定**：`plan` 仍按锁内读到的合同和数据库时刻推进。下次到期排早了只多空转一次，排晚了上限是 1 小时，与 `bidHeldMaxWait` 是同一个兜底。
+   - **并发**：玩家的 `Save` 带版本条件，`RescheduleTx` 不改版本，所以挡不住它。两者在同一把合同行锁上串行，玩家后提交时把 `updated_ms` 写回现在。所有事务都是 RC 隔离（`BuildDSN`、`WithTxRetry`）。别的事务在推进拿到合同行锁之前已提交的变化，推进读得到，会按「有变化」重存；拿到锁之后才来的写要等锁，在推进之后落地。两种情况下推进都不会把别人的唤醒覆盖掉。
+3. **按事件唤醒**：这一轮只做了撮合失败后的唤醒。另外两处没做：资产指令终结后唤醒合同，成交子单收尾后唤醒母单。它们对应的在途腿和等子单的母单仍然每轮复查，延迟与改动前相同。
+   - 做法：在资产指令终结的事务提交之后，对 `ref_kind=2` 的合同调 `Wake`。不能放在同一个事务里：合同推进的锁序是「合同行 → op 行」，终结在 op 行锁里再锁合同行就成环。做完之后，在途腿的复查可以放宽到 30 秒。
+   - `asset_op_repo.go` 的终结段这一轮有别的会话在改，所以留到下一步。
+
+**不在这一轮**：
+
+- 商城、人民币寄售两个循环轮询的是外部接口，不扫合同表。
+- friend 的 `sweep.go` 重复执行另记在[消除单节点总纲](no-single-node-horizontal-scaling-20261001.md) §9。
+- 同一个最高随机权重哈希现在有三份：match 的 `internal/poolowner`、player_inbox 的 `internal/shardowner` 和这里的 `shared/workshard`。以后收成 `shared/workshard` 一份。收拢时要带一个开关，因为成员表没就绪时的取舍不同：合同推进不能停，做全部片；对账可以跳过一轮。
+
+**回归测试**（都没有运行）：
+
+- 单测 `go/shared/workshard/workshard_test.go`：归属只取决于成员集合、增减一个成员只挪走它的片、SQL 条件的全有 / 全无 / 部分三种、注册解析跳过占位键 / 坏值 / canary / 未知轨道、成员表为空或过期时做全部片、不在表里时什么都不做。
+- 单测 `go/trade/internal/commerce/schedule_test.go`：各 stage 的下次到期，有腿在途一律立即复查，截止时刻与 1 小时兜底取早的那个，人民币寄售不改节奏。
+- 真库 `tick_isolation_db_test.go`（门控不变）新增两例：在架寄售推进一轮不改版本、下次到期排到截止，买家购买照常立刻到期且不撞版本；两个副本按片分工，Due 合起来不漏不重。原「两个副本同时推进只补偿一次」用 SQL 把截止改到过去时，同步把 `updated_ms` 改到过去：按到期时刻排期之后，只改截止时间不会让行重新到期，生产里截止和下次到期由同一个排期写入。
+
+**Java 版**：待做，记在 `PARITY.md`。
 
 ## 16. 人民币寄售的商城权威实现批次（2026-10-21，实施中）
 

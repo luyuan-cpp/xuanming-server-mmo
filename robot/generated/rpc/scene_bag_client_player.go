@@ -215,3 +215,26 @@ func (sceneBagClientPlayerRpc) decodeRemoveGem(reply *base.MessageContent, err e
 	}
 	return resp, nil
 }
+
+// RetrieveTemporaryItems 异步调用 SceneBagClientPlayer.RetrieveTemporaryItems(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) RetrieveTemporaryItems(c *pkg.GameClient, req *scene.RetrieveTemporaryItemsRequest, timeout time.Duration, done func(*scene.RetrieveTemporaryItemsResponse, error)) {
+	c.Call(game.SceneBagClientPlayerRetrieveTemporaryItemsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRetrieveTemporaryItems(reply, err))
+	})
+}
+
+// RetrieveTemporaryItemsSync 同步调用 SceneBagClientPlayer.RetrieveTemporaryItems(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) RetrieveTemporaryItemsSync(ctx context.Context, c *pkg.GameClient, req *scene.RetrieveTemporaryItemsRequest, timeout time.Duration) (*scene.RetrieveTemporaryItemsResponse, error) {
+	return r.decodeRetrieveTemporaryItems(c.CallSync(ctx, game.SceneBagClientPlayerRetrieveTemporaryItemsMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeRetrieveTemporaryItems(reply *base.MessageContent, err error) (*scene.RetrieveTemporaryItemsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.RetrieveTemporaryItemsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.RetrieveTemporaryItems reply: %w", err)
+	}
+	return resp, nil
+}

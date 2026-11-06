@@ -1,5 +1,10 @@
 # 背包:玩法规则的策略化分层 (2026-09-01)
 
+> **2026-11-05 变更(审计 cpp-economy#2,§6.6;未编译,待 Codex 验证):临时格不再先进先出。**
+> 满 200 件后挤掉最早那件 = 真丢(被挤掉的东西没有任何去处),现在满了就拒:入账在任何副作用之前被拒、
+> 由来源保留(战斗结算整笔延后);新增 `RetrieveTemporaryItems` 让玩家把临时格的东西取回人物背包。
+> 四个固定包从此全部是 `RejectWhenFull`,`EvictOldestFirst` 留在淘汰轴上、没有生产使用者。下面 2026-09 的状态说明保留为历史。
+>
 > **状态(2026-09-02):三个原始需求全部落码,P0/P1/P2 清零,未编译。**
 >
 > 用户最初问的三件事,现在都有完整实现与回归用例:
@@ -106,7 +111,7 @@
 |---|---|---|---|
 | **摆放** `IContainerLayout` | 放哪一格 | 有(写槽位) | ✅ 已有 |
 | **准入** `IAdmissionPolicy` | 这个包收不收这种东西 | **无**(纯谓词) | ✅ 接口 + `AcceptAll` 已落码;`AcceptByTag`(节日包)待第 5 步 |
-| **淘汰** `IEvictionPolicy` | 满了挤掉谁 | **有**(唯一一个) | ✅ 已落码:`RejectWhenFull`(三个包)+ `EvictOldestFirst`(临时格);FIFO 序仍是 guid 近似,见 §6.2 |
+| **淘汰** `IEvictionPolicy` | 满了挤掉谁 | **有**(唯一一个) | ✅ 已落码:`RejectWhenFull`(四个固定包,2026-11-05 起含临时格)+ `EvictOldestFirst`(保留在轴上,无生产使用者,§6.6);FIFO 序已是真入包序号,见 §6.2 |
 | **排序 / 整理** | 能不能重排、按什么排 | 有 | ✅ `SupportsCompaction()` + `CompactPolicy` |
 | **流出** `IWithdrawPolicy` | 能不能拿出去 / 移到别的包 | 无 | ❌ 缺 → 绑定 / 任务道具 / 活动期结束(第 7 步,等使用者) |
 | **过期** | 整包什么时候清 | 有 | ❌ 缺 |
@@ -369,7 +374,11 @@ grep -rn "\.AddItem\|AddItems" --include=*.cpp cpp/libs/services cpp/nodes
 (掉落拾取或邮件领取都行),让这套规则有第一个真实使用者。这与第 7 步的判据
 是同一条:**没有使用者的东西不要提前造。**
 
-### 6.2 临时背包 FIFO —— 已落码(排序依据仍是近似)
+### 6.2 临时背包 FIFO —— 已落码,2026-11-05 起临时格不再使用(机制保留在淘汰轴上)
+
+> 2026-11-05:临时格改为满即拒,理由与新协议见 §6.6。本节讲的 `EvictOldestFirst`、真入包序号、不动点规划、
+> 回执落流水都还在代码里(淘汰轴的契约,由 bag_test 用测试专用的 `FifoEvictingProfileForTest` 钉着),
+> 只是没有生产包再配它。下文「临时格用它」一类说法是 2026-09 的状态。
 
 #### (1) 挤掉的东西是玩家资产,不能无声消失
 
@@ -602,6 +611,133 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
    `cross_zone_test` 链接 `modules.lib` + `scene.lib`,`bag_marshal.obj` 里
    `entt::basic_storage<PlayerBagsComp>` 的实例化步长是旧的。§8.2 已改。
 
+### 6.6 临时格改为满即拒,新增取回协议(2026-11-05,审计 cpp-economy#2;未编译,待 Codex 验证)
+
+#### (1) 问题(复核成立)
+
+- 临时格只有一个入账来源:v1 战斗结算(`BagService::ConsumeInventoryAndGrant`)在人物背包放不下整批掉落时整批转投临时格。
+- 临时格配的是 `EvictOldestFirst`:满 200 件后新掉落会销毁最早进包的实例。销毁落了 `LogItemDestroy`,但东西本身没有任何去处,对玩家就是真丢。
+- 协议里没有「临时格 → 人物背包」的入口(`player_bag.proto` 的 `SceneBagClientPlayer` 只有读、整理、穿脱、强化镶嵌):进了临时格的东西玩家拿不出来,只能等它被挤掉。
+
+#### (2) 决定
+
+- **临时格满即拒**:`PlayerBagsComp` 给临时格装 `BagProfile::Flat(kTempBagMaxCapacity)`(与人物背包 / 仓库同一个工厂,只差容量);
+  删除 `BagProfile::Temporary`。四个固定包从此全部 `RejectWhenFull`,用例 `BagProfileTest.NoFixedBagEvicts` 钉住。
+- `EvictOldestFirst` 与 `Bag::PlanEviction` 的淘汰分支留在淘汰轴上,没有生产使用者;机制用例改用测试专用的
+  `cpp/tests/bag_test/fifo_eviction_profile_for_test.h`。要给哪个包重新配淘汰,先得给被挤掉的东西一个去处(例如改投邮件),否则就是丢数据。
+- **新增取回**:`SceneBagClientPlayer.RetrieveTemporaryItems`(method index 8,只追加在末尾),临时格 → 人物背包。
+- 不选「溢出改发邮件」:邮件附件走跨服务的资产通道(异步、有托管与重投),为一件已经在玩家名下的实例再造一次托管,
+  链路与故障面都比同节点、同步、两包候选的一次搬运大得多;「满了就让来源保留」已经做到不丢数据。
+
+#### (3) 入账来源逐个核对:都是任何副作用之前的干净拒绝
+
+| 来源 | 落哪个包 | 放不下时 | 来源怎么保留 |
+|---|---|---|---|
+| v1 战斗结算(收件箱 `ApplyInboxSettlement` → `ApplySettlementToEntity` → `ConsumeInventoryAndGrant`) | 人物背包;放不下整批转临时格 | 两包都放不下:整笔回容器的放不下码,两包候选丢弃,消耗与 `beforeCommit`(货币、身份复核)都没跑;打 `metric=bag_grant_overflow_rejected` WARN(按玩家限频,见下「日志节拍」) | `ApplySettlementToEntity` 返回 false → 收件箱整笔 DEFER,玩家在线时本地退避重试 |
+| 任务领奖 `PlayerMissionSystem::ClaimReward` | 只人物背包 | `BagService::AddItems` 候选提交被拒,一件不发 | 领取位在发奖成功之后才清,失败不消耗领取权 |
+| 活跃度领奖 `PlayerActivitySystem`(领奖入口) | 只人物背包 | 同上 | 领取记录在发奖成功之后才写 |
+| 资产通道(邮件附件、交易、聚宝斋过户;`ApplyCredit`) | 只人物背包 | `CheckSpaceFor`(含转入的完整实例)预检不过 → `RETRY + kAssetBagFull`,一件不动 | 来源按 RETRY 重投;邮件附件停在「正在到账」 |
+| 神秘商人购买 | 只人物背包 | `CheckSpaceFor` 预检 → `kMysteryMerchantBagFull`;发物排在扣钱之前,发物失败钱没动 | 玩家重新购买 |
+| 取下宝石 / GM 发物 | 只人物背包 | `kEquipGemBagFull` / 原样透传;取下是「先发物后抹宝石」 | 宝石留在装备上 |
+
+生产代码里写临时格的只有 `ConsumeInventoryAndGrant`(`kTemporary` 其余命中是存档往返与资产通道的扣除顺序)。
+
+#### (4) 取回协议
+
+```proto
+message RetrieveTemporaryItemsRequest { uint64 item_id = 1; bool take_all = 2; }  // 二选一
+message RetrieveTemporaryItemsResponse { TipInfoMessage error_message = 1; BagInfo bag = 2; BagInfo temporary = 3; }
+rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemporaryItemsResponse);
+```
+
+| 码(表里不带 `k`) | 文案 | 何时 |
+|---|---|---|
+| `InvalidParameter`(既有) | — | `item_id` 与 `take_all` 都给或都不给 |
+| `ServiceUnavailable` / `InvalidTableData`(既有) | — | 没有背包组件 / 两层不一致 |
+| `BagTemporaryRetrieveBusy`(新,bag_error) | 交接或传送途中,暂时不能从临时格取回(评审后战斗中放行,文案随之去掉「战斗中」) | 跨节点交接冻结(`PlayerFrozenComp`);战斗中**不**回这个码,见下「闸」 |
+| `BagTemporaryItemNotFound`(新) | 临时格里没有这件物品,请刷新后再试 | `item_id` 不在临时格(含「上次其实已取回」的重发) |
+| `BagTemporaryRetrieveBagFull`(新) | 背包空间不足,无法从临时格取回 | 人物背包放不下这一批 |
+
+四个新码都不是故障(`fault` 列留空);号由导表器在 `bag_error` 段发,任何手写文件里不出现数字。
+
+- **全或无,两包候选**(`Bag::MoveInstancesTo`):源包摘除、目标包并堆与落位全在两份候选上做完才同时发布;放不下两包都不动。
+  `take_all` 按入包先后处理。
+- **搬实例,不搬数量**:装备整份带走(guid、随机属性、强化等级、宝石原样,不掷属性);可叠加的先灌进人物背包同种的未满堆,
+  灌不完的余量仍用原来的 guid;带实例数据或更新版本字段的堆不并(`ItemStore::CanStack` 同一判据)。入包序号由人物背包重新盖章。
+- **不铸号、不过获得封禁闸、不计异常获得**:东西本来就是这名玩家的,进临时格那一次已经过闸、记过流水。
+- **流水**:只有整堆并入别的堆的原 guid 退役,落一条数量 0 的 `LogItemDestroy`(extra `{"source":"temporary-retrieve"}`),与整理同口径;
+  其余实例身份没变,流水本来就不记包位置,不写伪造的「销毁 + 获得」。
+- **幂等**:按 guid 取回的重发 → `kBagTemporaryItemNotFound`、两包不动;整格取回的重发 → 临时格已空,成功、什么都不动。
+- **闸**:交接冻结中拒绝,判在玩法入口(`PlayerBagSystem::RetrieveTemporary`);`BagService::RetrieveFromTemporary` 另判冻结兜底。
+  不改装备栏、不重算属性。
+- **战斗中放行**(2026-11-06 评审修正,初稿是战斗中也拒):两包都放不下而整笔延后的那一局,它的 `InBattleComp` 要等结算应用、
+  存档确认提交之后才由 `CompleteInboxSettlement` 摘掉,否则只有 reaper 在冻结到期(deadline + 2 分钟,续冻最多再 15 分钟)时摘。
+  战斗中也拒的话,玩家在这段时间里取不回、腾不出位置(整理、穿脱、资产通道在局中同样被拒),「取回腾位后补发」对正在等的
+  那一局恰恰不成立;熬到冻结被强制解开,还会打一条 `battle_freeze_hold_cap_reached`。放行是安全的:人物背包只进不出
+  (冻结清单「只增不减,方向安全」),战斗快照与结算扣消耗都只看人物背包,按持有夹紧时持有只会更多、不会少扣;临时格不参战;
+  人物背包里已有的实例一个都不退役(整理在局中拒,正是因为它会)。回归用例 `TemporaryRetrieveTest.RefusedWhileFrozenButAllowedInBattle`、
+  `PlayerBattleSettlementItemTest.InboxDeferredForFullBagsAppliesAfterARetrieveDuringTheBattle`。
+- **日志节拍**(2026-11-06):两包都满是玩家能造出来、能维持很久的状态,结算每次重试(封顶约 60 秒一次)都在走同一条拒绝。
+  - `Bag::AddItems` 放不下改为静默回 `kBagItemNotStacked`(以前是 ERROR + 调用栈,一次重试两条);故障分支照打 ERROR。
+    这是容器层的改动,其它入包入口(任务 / 活跃度领奖、GM 发物、取下宝石、资产通道)背包满时也不再有调用栈,
+    仍经 `BagService` 入口的 `RETURN_ON_ERROR` 打一条带错误码的 WARN。`CheckSpaceFor` 预检放不下仍是 ERROR + 调用栈,本批没动。
+  - `metric=bag_grant_overflow_rejected` 改由 `BagService` 按玩家限频:首次一条,之后每连续 `kGrantOverflowWarnEveryRejections`(8)次一条,
+    其余 DEBUG,都不带调用栈。连续次数是挂在玩家实体上的按需状态,整批发放成功即摘、实体重建从 0 数起;它只用于日志限频
+    和给收件箱的 DEFER 原因分类(见下「取回后唤醒」),不改变任何发放 / 结算结果。
+  - 收件箱 `Executor deferred` 的 WARN 同一节拍(首次、换了一条、每连续 8 次),限频只读本域已有的 `failStreak` / `deferReason`。
+  - 取 8 的理由同 `player_inbox_rules::kStuckWarnEveryFailures`:封顶后两条最多相隔约 8 分钟,落在 [10m] 日志窗口之内,每个卡住的
+    在线玩家每小时 7~9 行。按次数不按时间,确定、可测。用例 `GrantOverflowLogCadenceTest.*`,连续次数的增减由
+    `InboxDeferredForFullBagsAppliesAfterARetrieveDuringTheBattle` 钉住。
+- **取回后唤醒**(2026-11-06):真搬了东西之后,`PlayerBagSystem::RetrieveTemporary` 调 `PlayerInboxSystem::OnBagSpaceFreed`。
+  单件取回与全部取回都调;全部取回时临时格本来就空,什么都没搬,不调。
+  - 它与 `OnBattleFreezeCleared` 同形,只处理「执行器因背包放不下而 DEFER」的域:`deferReason == kExecutorDefer`,
+    且执行器带回的原因是 `kBagItemNotStacked`。处在 `kIdle` / `kApplying` 的域,把 `nextCheckMs` 提到现在,下一个 Tick 按原有规则续做。
+  - 原因怎么带回:`ApplyInboxSettlement` 看这一次调用里「连续放不下」的计数涨没涨,涨了就在 DEFER 的 `reason` 里带
+    `kBagItemNotStacked`。收件箱把它记在本域的 `executorDeferReason` 上,只给定向唤醒用。
+  - 不改任何判定:不清 `failStreak`(腾出的位置可能还不够,重试仍放不下时照常退避、日志节拍照常),不动 `recheckRequested`,
+    不在调用栈里同步续做,在途的那一轮不打断。别的域(前置闸、传输、执行器别的原因造成的延后)一律不碰。
+  - 用例:`PlayerBattleSettlementItemTest.InboxRetriesABagFullDeferOnTheNextTickAfterARetrieve`(时钟不动,下一拍就整笔应用,
+    GM 域的调度状态一点不动);`InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff`(执行器别的原因造成的延后,
+    取回之后仍等退避)。
+- **限流**:吃 MessageLimiter 默认档 3(约 1.5 次 / 秒),不另加行。
+
+#### (5) 客户端要做的(独立客户端仓,本批不改)
+
+- 背包界面加「临时格」页签(`GetBag(bag_type = 3)`,`can_sort = false`);每件物品一个「取回」(`item_id`),页签上一个「全部取回」(`take_all`)。
+- 成功:用响应里的 `bag`、`temporary` 两份全量整体覆盖人物背包与临时格的缓存。失败按码提示:
+  `BagTemporaryItemNotFound` → 重拉两个包;`BagTemporaryRetrieveBagFull` → 提示整理背包或改成一件一件取;`BagTemporaryRetrieveBusy` → 稍后再试。
+- 临时格占用 = `layout.slots` 条数 / `layout.capacity`。满了(建议 ≥ 90% 就提示)在背包与战斗结算界面显著提示:
+  「临时格已满,新的战斗奖励暂存,取回后自动补发」。
+- 传输失败(1003)不自动重发,只重拉两个包。新消息号由 proto-gen 发,客户端只引用生成常量;文案以导表产物为准。
+
+#### (6) 用例与验证
+
+- 容器 `BagMoveInstancesTest.*`、玩法入口与 handler `TemporaryRetrieveTest.*`(新文件 `cpp/tests/bag_test/bag_temporary_retrieve_test.cpp`,已登记 `bag_test.vcxproj` 与 `.filters`)。
+- 满即拒:`BagProfileTest.NoFixedBagEvicts`(由 `OnlyTheTemporaryBagEvicts` 反转)、`BagProfileTest.FullTemporaryBagRefusesNewItemsAndKeepsTheOldest`。
+- 结算回归:`PlayerBattleSettlementItemTest.InboxFullTemporaryBagIsNeverEvictedAndTheWholeSettlementDefers`、
+  `PreparedExchangeFullTemporaryBagRefusesTheWholeGrantWithoutEvicting`(改动前分别是 kApplied 与 kSuccess:最早那件被挤掉);
+  `InboxDeferredForFullBagsAppliesAfterARetrieveDuringTheBattle`(冻结还挂着时取回、重试即整笔应用;初稿下取回回 Busy;
+  同时钉住「连续放不下」计数:每次延后加一、整批发放成功归 0)。
+- 日志节拍:`GrantOverflowLogCadenceTest.WarnsOnTheFirstRejectionAndThenEveryEighth`(纯函数;日志本身单测读不到)。
+- 取回后唤醒:`InboxRetriesABagFullDeferOnTheNextTickAfterARetrieve`、`InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff`
+  (都在 `PlayerBattleSettlementItemTest`,走正式的收件箱状态机与执行器)。
+- 命令与通过标准见本批交付说明与 PROGRESS 当日条目(导表 → proto-gen-run(no-unity)→ MSBuild 串行 → bag_test / currency_test)。
+
+#### (7) 残余
+
+- 临时格满时战斗结算会一直延后:这一局的金币、任务进度、HP 都要等玩家取回腾位后才到账,收件箱后面的局按序也停在这里。
+  这是「不丢数据」的代价,靠客户端把「临时格已满」明明白白地告诉玩家;若要「腾不出位置也先发金币」,得拆整笔结算的原子性,另议。
+- 整格取回是全或无:人物背包差一格就整批拒,玩家要改成一件一件取。若要「能放多少放多少」,协议与回执要另设计。
+- 「两包都满就整笔延后」是**玩家可控**的延后:故意不腾位、熬到冻结到期(含续冻上限)被解开之后,资产通道的战斗闸
+  (只看 `InBattleComp`)放开,玩家能先把本局用掉的消耗品经邮件 / 交易转走,结算晚到时按持有夹紧 —— 「药白喝」的窗口
+  (`turn-battle-gap-closure.md` §11 续冻要堵的同一类),每局有界,`battle_inbox_shortfall_after_freeze_released` 能发现。
+  要堵得另议,例如本地有这一局「因空间不足而延后」的结算时冻结不随上限解开(那样腾不出位置的玩家会一直被冻住,
+  需要先有丢弃 / 改投邮件之类的出口),或资产通道对尚未结算那一局的战斗道具拒扣。
+- 只有临时格取回会唤醒收件箱(见上「取回后唤醒」)。整理、穿戴、强化扣材料等别的腾位方式不唤醒,延后的结算照常等退避
+  (封顶约 60 秒)再重试。
+- `EvictOldestFirst` 与 `PlanEviction` 的淘汰分支无生产使用者,是否删除另议(删除要连带改约 20 条机制用例)。
+- `player_battle.cpp` 战斗快照取道具那段注释仍说临时格「会 FIFO」,本批未改(该文件由别的会话持有),行为以本节为准。
+
 ## 7. 红线(别把已经挖开的缝焊回去)
 
 1. **布局层永远不许认识 `config_id`。** split 文档 §2.2 的唯一判据。准入规则要查表
@@ -675,10 +811,10 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 
 1. **具名槽布局下,放不下的批次现在在写入之前就被拒**(此前会写进去一部分再
    返回失败)。自由格布局逐字不变。
-2. **临时格(`kTemporary`)满了会挤掉最早进包的实例**,而不是拒绝入包。这是
-   本次唯一一条 gameplay 语义变更 —— 它正是"临时背包先进先出"这个需求本身。
-   被挤掉的实例逐条落 `LogItemDestroy`,不会无声消失。
-   其余三个包(人物背包 / 仓库 / 装备栏)行为不变:满了就拒。
+2. ~~**临时格(`kTemporary`)满了会挤掉最早进包的实例**,而不是拒绝入包。~~
+   2026-09-01 ~ 2026-11-05 的行为。被挤掉的实例虽然逐条落了 `LogItemDestroy`,东西本身没有任何去处 ——
+   对玩家就是真丢(审计 cpp-economy#2)。**2026-11-05 起临时格与另外三个包一样满了就拒**,
+   新入账在任何副作用之前被拒、由来源保留,玩家用 `RetrieveTemporaryItems` 取回腾位(§6.6)。
 
 错误码不变,线上协议与持久化格式不变,公开 API **只增不改**
 (新增的都是带默认值的可选参数与新方法)。

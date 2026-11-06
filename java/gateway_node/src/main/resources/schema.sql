@@ -1,5 +1,8 @@
 -- Zone Directory Service tables
 -- Run against the 'mmorpg' database
+-- 三张表显式写 COLLATE:只写 CHARSET 时,MySQL 取 utf8mb4 的缺省排序规则 utf8mb4_0900_ai_ci,TiDB 取 utf8mb4_bin,
+-- 两边的大小写与比较语义会不一样(docs/design/tidb-phase1-and-launch-readiness.md §4 第 10 项)。这里写的就是 MySQL 上
+-- 现在实际用的值,MySQL 档行为不变。deploy/mysql-init/gateway_tables.sql 里的同名三张表与这里保持一致。
 
 CREATE TABLE IF NOT EXISTS zone_config (
     zone_id        BIGINT PRIMARY KEY,
@@ -12,7 +15,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
     sort_order     INT DEFAULT 0,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS zone_whitelist (
     id         BIGINT PRIMARY KEY,
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS zone_whitelist (
     account_id BIGINT NOT NULL,
     note       VARCHAR(128) DEFAULT '',
     UNIQUE KEY uk_zone_account (zone_id, account_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS announcement (
     id         BIGINT PRIMARY KEY,
@@ -30,7 +33,7 @@ CREATE TABLE IF NOT EXISTS announcement (
     start_time DATETIME DEFAULT NULL,
     end_time   DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Seed default zone
 INSERT IGNORE INTO zone_config (zone_id, name, manual_status, capacity, recommended, sort_order)

@@ -15,7 +15,7 @@
 | G1 | guild 仍是全局服务(D-2),隔离做在数据与逻辑层 | 表里本来就有 `zone_id` 列、分区榜与合服搬迁;按 zone 部署会让合服变成跨进程搬数据 |
 | G2 | 客户端请求的 zone = data_service `player:zone:{id}` 归属映射(`GetPlayerHomeZone`),**不信请求体 `zone_id`** | 请求体是玩家自己选的;映射在建角时登记、合服时与公会行一起搬,是唯一真源。映射缺失 → `kGuildHomeZoneUnknown`(不猜);data_service 故障 → gRPC 错误,路由服回 `kServiceUnavailable` |
 | G3 | 身份取 gate 注入的 `x-session-detail-bin`;带会话但解不开 → `Unauthenticated`;**无会话 = 内部调用**,沿用请求体字段 | D-9「身份从会话取先于客户端可达」。路由服对缺会话的客户端消息直接拒绝,客户端无法靠"不带会话"绕过 |
-| G4 | 客户端来源只放行方法白名单(`internal/session.ClientMethods`),`UpdateGuildScore` 对客户端 `PermissionDenied` | `OptionIsClientProtocolService` 是服务级开关,内部方法会跟着进 gate 白名单与路由表;白名单默认拒绝,新 RPC 不登记就不会意外对外 |
+| G4 | 客户端调不到内部方法 `UpdateGuildScore`,两道防线:① gate 上行白名单 `IsClientMessageId` 只收客户端能发起的方法(REQUEST / ONE_WAY),`UpdateGuildScore`(`CLIENT_RPC_SERVER_ONLY`)与推送 `NotifyGuildChanged`(`CLIENT_RPC_PUSH`)都不在其中,客户端发上来 gate 计一次非法包(累计到阈值踢线)、不回包,请求到不了路由服与 guild;② guild 会话拦截器只放行方法白名单(`internal/session.ClientMethods`),带客户端会话调未登记的方法回 `PermissionDenied` | `OptionIsClientProtocolService` 是服务级开关,路由表仍按服务登记全部方法(含 `UpdateGuildScore`)。2026-11-05 起 gate 白名单改按方法方向收口(依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4);在此之前生成器只看服务级开关,内部方法与推送号也进了 gate 白名单,只靠会话拦截器挡。会话白名单默认拒绝,新 RPC 不登记就不会意外对外,作为第二道防线保留,经 gate 已走不到它,由单测守(§6 第 6 步) |
 | G5 | 可见性:`GetGuild` / `JoinGuild` 对别区帮会回 `kGuildNotFound`;`GetGuildRank` / `GetGuildRankByGuild` 强制本区,页长 ≤ 50;`GetPlayerGuild` 不过滤 | 别区与不存在同一答复,不泄露别区有哪些帮;自己的帮永远看得见 |
 | G6 | 入会的 zone 校验在 `AddMemberInZone` 事务内 `FOR UPDATE` 判 | 缓存 `guild:v2:{id}` 的 zone_id 在合服刚搬迁时可能是旧值;与满员判定同一把行锁 |
 | G7 | 帮名仍**全局唯一**(`uk_name`),重名 → `kGuildNameTaken` | 合服不必改名;`tools/merge_zone/guild_step.go` 的 `assertNoGuildNameCollision` 依赖这个前提 |
@@ -79,7 +79,7 @@ logic:  callerOf(ctx) 取会话 player_id → clientZone() 查 data_service 归�
 ## 6. 验证清单(按序;失败保留日志,定位并修复后再执行)
 
 1. **导表**:PATH 含 `protoc` 与 `protoc-gen-go`,运行 `python tools/data_table_exporter/run.py tools/data_table_exporter/exporter_config.yaml`。`dev.bat gen` 已包含导表与 proto 生成,若用它不必重复执行下一项。核对 `generated/code/proto/tip/guild_error_tip.proto` 中 14009–14012 四码、`go/shared/generated` 同步、MessageLimiter 中 9 个公会消息号。
-2. **proto-gen**:先确保生成器与源码一致,本轮在 `tools/proto_generator/protogen` 执行 `go build -o proto-gen.exe ./cmd`,再同步 `pbgen.exe`;从仓库根运行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`。核对 gate 的 `IsClientMessageId` 含 8/15/19/27/29/35/38/39/52/60,路由表 10 个 Guild RPC 均为 `ClientProtocol: true`。本轮生成时 `kMaxRpcMethodCount=196` 未变;只在生成确实改坏 `scene_node_service.cpp` 的 Agones 块时恢复该块,不要覆盖其他会话改动。
+2. **proto-gen**:先确保生成器与源码一致,本轮在 `tools/proto_generator/protogen` 执行 `go build -o proto-gen.exe ./cmd`,再同步 `pbgen.exe`;从仓库根运行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml`。核对 gate 的 `IsClientMessageId` 含 15/19/27/29/35/38/39/52/60 这 9 个客户端请求号、**不含** `UpdateGuildScore` 的 8;路由表 10 个 Guild RPC(含 `UpdateGuildScore`)均为 `ClientProtocol: true`。〔2026-11-05 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改:gate 上行白名单只收客户端能发起的方法(REQUEST / ONE_WAY),推送号(`CLIENT_RPC_PUSH`,如二期加的 `NotifyGuildChanged`)与仅服务端方法(`CLIENT_RPC_SERVER_ONLY`,即 `UpdateGuildScore`)都不在其中;路由表照旧按服务登记全部方法。R4 之前的生成器按服务判定,8 也在白名单里,09-14 那轮(§7)核对的是含 8 的旧号表。上面的号表是一期 10 个方法时的口径,二期起方法有增删,现行号以 `cpp/generated/rpc/service_metadata/guild_service_metadata.h` 为准。〕本轮生成时 `kMaxRpcMethodCount=196` 未变;只在生成确实改坏 `scene_node_service.cpp` 的 Agones 块时恢复该块,不要覆盖其他会话改动。
 3. **Go**:使用 Go 1.24.5 或更高版本(本轮缓存的 Go 1.26.5)。`go/guild` 下构建 `go build -o ../../bin/go_services/guild.exe .`,运行 `go vet ./...`。数据库测试须分别配置:
    - `GUILD_TEST_MYSQL_DSN`:指向一次性库,普通 `go test -count=1 -v ./...` 中的用例会 DROP 重建该库的 guild 两张表,绝不能指向开发或正式业务库。
    - `GUILD_IT_MYSQL_DSN`:带建库权限的测试连接;`go test -tags=integration -count=1 -v ./internal/data ./internal/logic` 才执行 `rank_zone_integration_test.go`,它自行创建并删除 `guild_it_<pid>_<序号>` 临时库。此命令也覆盖 `merge_fence_test.go`。检查没有 SKIP,不能把未连接数据库的绿灯算作集成通过。
@@ -89,8 +89,9 @@ logic:  callerOf(ctx) 取会话 player_id → clientZone() 查 data_service 归�
 5. **客户端**:`tools/gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo` → `tools/client_compile_check.ps1` → Unity EditMode `-testFilter MmorpgClient.Tests.EditMode.Tianyong.Guild`(30 条)。若正式 Unity 正在运行,在隔离副本上跑批处理,保留 XML 并核对相关源码与生成文件哈希。
 6. **双区冒烟**:预检 `robot_9201/9202/9203` 未被其他任务使用,并确认它们的角色归属分别是 1/1/2;首次创建会自动登记归属。gateway、两区的 db/login/player_locator/gate/scene 登录进场链需就绪,全局共享 client_rpc_router/data_service/scene_manager/guild。每区存档 schema 必须跟上当前 proto。两个 gate 都使用 `GATE_CLIENT_RPC_ROUTER=1` 并重启加载 MessageLimiter;router 模式 gate 不监听原 gRPC 端口,健康检查使用客户端 TCP 端口。核对 etcd 的 Guild NodeInfo 同时包含可拨通的 `endpoint` 和 `grpcEndpoint`,router 已发现该实例。从 `robot/` 执行 `.\robot.exe -c etc/guild_smoke.yaml`,验收必须同时满足:
    - 进程退出 0 且有 `GUILD_SMOKE_OK`;跨区隔离、全服重名、公告限制、伪造 PlayerId 均通过。
-   - step 9 收到 `kServiceUnavailable`,随后的查榜成功且积分仍为 0;超时、任意错误或业务成功回包不能算通过。
-   - 同一运行窗口的 router 日志明确记录 `/guildpb.GuildService/UpdateGuildScore` 的 `code=PermissionDenied`,并结合 `TestClientCannotCallInternalMethod` / `TestSessionGateWiredIntoUnaryChain` 确认白名单生效。信封不保留原始 gRPC code,仅靠机器人拒绝信封不能证明拒绝原因。
+   - step 9 发 `UpdateGuildScore` 必须等满约 10s 超时(机器人单次公会 RPC 预算 `guildSmokeRpcTimeout`)才算通过,随后的查榜成功且积分仍为 0。收到信封拒绝(哪怕 tip 是 `kServiceUnavailable`)说明 gate 不是按 R4 生成器重新生成后编出的版本;收到业务回包说明内部方法对客户端开放;两者都不能算通过。gate 须是 §6 第 2、4 步重新生成、重新编译后的二进制。
+   - 同一运行窗口的 router 与 guild 日志里**不应出现**这次 `/guildpb.GuildService/UpdateGuildScore` 请求;出现即说明请求越过了 gate。gate 白名单未命中这一支只打 DEBUG `Invalid or unauthorized message ID`,默认 `LogLevel: 2` 下看不到,不作通过标准(要看明细见 [client-rpc-callback.md](./client-rpc-callback.md) §9 第 7 步)。guild 会话拦截器(`internal/session.ClientMethods` 方法白名单)这道防线经 gate 已走不到,由单测 `TestClientCannotCallInternalMethod`(`go/guild/internal/session/session_test.go`)与 `TestSessionGateWiredIntoUnaryChain`(`go/guild/guild_test.go`)证明,随第 3 步的 `go test` 一起跑,两条都要 PASS。
+   - 〔2026-11-05 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改:`UpdateGuildScore` 标了 `CLIENT_RPC_SERVER_ONLY`,不进 gate 上行白名单,客户端发上来 gate 计一次非法包(累计到阈值才踢线,本步只发一次)、不回包。改前的判据是「收到 `kServiceUnavailable` 信封才算通过、超时不算,且 router 日志要有 `code=PermissionDenied`」—— 那时 gate 白名单按服务判定,这个号会被转给路由服,由 guild 会话拦截器拒绝;§7 记的 09-14 实跑就是按改前判据通过的。〕
    - `cross_zone: false` 仅验同区子集,不能替代双区验收。结束检查帮会/成员及榜单清理结果,保留测试账号,不清空共享 Redis/数据库。
 7. **手测**:游戏内按 G → 创建 → 另一个同区角色在排行加入 → 帮主改公告 → 成员刷新可见;别区排行看不到该帮。自动测试不替代界面手测或独立客户端打包。
 
@@ -110,10 +111,10 @@ logic:  callerOf(ctx) 取会话 player_id → clientZone() 查 data_service 归�
 | C++ | proto/table/core/rpc/gate-lib/gate 串行 Debug x64 成功,0 编译错误/警告;新 gate 已用于两区 | `cpp-summary.json`, `cpp-gate-artifact.json`, `cpp-*.log` |
 | 客户端 | 协议生成成功;离线检查 283 源文件、0 错误;隔离 Unity Guild EditMode 30/30,0 失败/跳过;六个相关文件哈希与正式源码一致 | `client-proto.log`, `client-compile.log`, `client-guild-editmode-results.xml`, `client-final-check.json` |
 | 双区机器人 | 09:46:32–09:46:38 EDT,退出 0,`GUILD_SMOKE_OK guild_id=101 zone_a=1 player_a=602 player_b=601 player_c=701`,`cross_zone=true` | `guild-smoke.log`, `guild-smoke.exitcode` |
-| 白名单证据 | 09:46:37 同一请求在 guild session 被拒,router 明确 `code=PermissionDenied method=/guildpb.GuildService/UpdateGuildScore`;机器人后验积分仍为 0 | `guild-smoke-security-evidence.log` |
+| 白名单证据 | 09:46:37 同一请求在 guild session 被拒,router 明确 `code=PermissionDenied method=/guildpb.GuildService/UpdateGuildScore`;机器人后验积分仍为 0。〔这是 R4 之前的口径:当时 gate 白名单按服务判定,请求经路由服到 guild 才被会话拦截器拒绝;R4(client-rpc-callback.md §7)之后同一步期望 gate 丢弃、超时,router 与 guild 日志里不应出现这次请求,判据见 §6 第 6 步〕 | `guild-smoke-security-evidence.log` |
 | 收尾数据 | 测试帮会已由场景解散;`guild` / `guild_member`、全局榜、1/2 区榜均为 0;测试账号保留 | `guild-smoke-postcheck.log` |
 
-本轮修复三处运行/测试问题:排行榜页起点的整数溢出;guild 注册遗漏 `grpcEndpoint` 导致路由服忽略实例;配置测试仍期待旧 metrics 9170(实际为 9220)。同时收紧冒烟第 9 步,不能用超时或任意错误宣称内部方法已拒绝;补清 DataServiceRpc 注释,明确 home-zone lookup 与发号开关独立。新启用的旧 etcd 类型复用测试原来让两个未定义枚举共用 `.rpc` 前缀,现只改夹具为各类型独立随机前缀,生产 allocator 行为未扩大修改。
+本轮修复三处运行/测试问题:排行榜页起点的整数溢出;guild 注册遗漏 `grpcEndpoint` 导致路由服忽略实例;配置测试仍期待旧 metrics 9170(实际为 9220)。同时收紧冒烟第 9 步,不能用超时或任意错误宣称内部方法已拒绝(这是 R4 之前的口径;R4 之后第 9 步反过来以 gate 丢弃、超时为通过标准,见 §6 第 6 步);补清 DataServiceRpc 注释,明确 home-zone lookup 与发号开关独立。新启用的旧 etcd 类型复用测试原来让两个未定义枚举共用 `.rpc` 前缀,现只改夹具为各类型独立随机前缀,生产 allocator 行为未扩大修改。
 
 两次完整冒烟失败均在修复后才重跑,原日志保留:
 

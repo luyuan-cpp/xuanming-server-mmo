@@ -36,6 +36,9 @@
     <ClCompile Include="handler\rpc\client_request_lane.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\rpc\client_heartbeat.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -84,6 +87,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\client_request_lane.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\client_heartbeat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\router_muduo_forward.h">

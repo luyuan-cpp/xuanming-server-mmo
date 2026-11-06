@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"database/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -73,9 +72,9 @@ func TestBattleOutcomeRPCRejectsWrongMethodCallerAndChangedOriginal(t *testing.T
 	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CommitBattleOutcome_FullMethodName, r, "battle", secret, uint64(time.Now().UnixMilli())))
 	_, err = CommitBattleOutcome(context.Background(), s, r)
 	require.Equal(t, codes.Unavailable, status.Code(err), "有效签名仍不能把无DB冒成成功")
-	s.Authority.DB = new(sql.DB)
+	s.Authority.DB = unreachableDB(t)
 	_, err = CommitBattleOutcome(context.Background(), s, r)
-	require.Equal(t, codes.FailedPrecondition, status.Code(err), "有效签名下的原PB语义错误在SQL前永久拒绝")
+	require.Equal(t, codes.FailedPrecondition, status.Code(err), "有效签名下的原PB语义错误永久拒绝;库不可读、查不到既有终局时也不改判")
 }
 
 // globalCandidate 造一张排队票。票必须带 home zone:范围树见到没有 zone 的成员一律不成组(scope.ErrInvalidNode)。

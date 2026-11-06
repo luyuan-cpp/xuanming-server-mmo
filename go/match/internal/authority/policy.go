@@ -30,6 +30,9 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 	// 计分组排（2026-11-05）：提交点按计分模式集合决定复不复核组内极差，按组队加成算整队的队伍分（requireRatedSpread），
 	// 各副本必须一致。车队差放宽步长是质量规则，不进指纹。
 	parts = append(parts, "rated-unit-spread/v1", ratingrule.FingerprintKey(), strconv.FormatUint(uint64(c.GlobalMatch.PartyRatingBonusPerMember), 10))
+	// 人数档真人 PVP 的组队限制（2026-11-05）：开战提交事务按它复核组队成员评分差（RequirePartyRatingGapTx）；
+	// v1 同时标记「每侧 5 人不收 4 人队」这条代码规则（team.CheckPvpPartySize），改规则要升版本号。
+	parts = append(parts, "pvp-party-rules/v1", strconv.FormatUint(uint64(c.GlobalMatch.PartyRatingGapMax), 10))
 	mac := hmac.New(sha256.New, s.Secret)
 	_, _ = mac.Write([]byte(strings.Join(parts, "\n")))
 	digest := mac.Sum(nil)

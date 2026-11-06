@@ -854,7 +854,7 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 | 越界包类型的携带记录不参与数量判定（中） | 只在将来新包类型参与资产扣出时触发 | 设计 §13 第 7 条评审清单加一条 |
 | `GetTotalItemCount` 改语义未改名（低） | 接受 | 注释已写明；约 100 处测试调用，改名另议 |
 | 按 guid 改写带新字段的装备实例（低） | 接受 | 列入 R5"仍未守" |
-| `ValidateDebitBundle` 只看可叠加、不看 `equip_kind`（低，既有行为） | 交负责人 | 14.4 |
+| `ValidateDebitBundle` 只看可叠加、不看 `equip_kind`（低，既有行为） | 交负责人 → 2026-11-05 按资产路径 fail-closed 收紧（§21） | 14.4 |
 | 收件箱入箱校验排在判重之前，Go 混副本时同请求可能不同结局（低） | 已被发布次序覆盖 | Go 全量之后才允许对新币种下处置 |
 
 ### 14.3 待 Codex 验证（照抄执行）
@@ -914,7 +914,7 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 - **战斗结算收件箱执行器**：载荷币种不认识时回 `kDefer`（`player_battle.cpp` 的 `CollectSettlementCurrencyGains` 失败分支），与 GM 执行器的 `kVersionSkew` 不一致；DEFER 在会话内只会空转。同一函数的 `>= kCurrencyMax` 判据也还没改调 `IsKnownCurrencyType`。该文件正被战斗结算的在途改动占用，没动，留给那项工作的负责人。
 - **交易 Go 侧三处币种字面量**（DRY，行为正确）：`commerce/engine.go` 与 `commerce/rmb.go` 的 `== 2`（绑定币禁售）、`svc/role_trade.go` 的 `c > 1`。改为引用 `currencytype.BindDiamond` / `isTradableCurrency`。
 - 设计 §13 第 10 条三项待拍板；R5 仍未守的场景见设计 §4.4 与 R5 行。
-- `ValidateDebitBundle` 只要求可叠加、不看 `equip_kind`：装备行被误配成可叠加时，交易按数量扣出会让装备属性无声丢失。这是既有行为，交负责人决定是否收紧。
+- ~~`ValidateDebitBundle` 只要求可叠加、不看 `equip_kind`：装备行被误配成可叠加时，交易按数量扣出会让装备属性无声丢失。这是既有行为，交负责人决定是否收紧。~~ 2026-11-05 已收紧，见 §21。
 - `asset-channel-alerts.yaml` 其余 `{app=...}` 选择器仍匹配不到流（既有问题，契约测试注释已记），本批新加的那条已按正确写法。
 - Java 版：取值表、Go 入口校验、版本错位结局、按数量扣除守卫、托管阶段撤单都待做。
 
@@ -1094,8 +1094,8 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 - 14.4 里其余待办照旧：
   - 交易 Go 侧三处币种字面量。`engine.go`、`rmb.go` 这两个文件当前有别的会话的改动，本批没动。
   - 设计 §13 第 10 条三项待拍板。
-  - `ValidateDebitBundle` 不看 `equip_kind`。
-  - `asset-channel-alerts.yaml` 其余 `{app=...}` 选择器。
+  - ~~`ValidateDebitBundle` 不看 `equip_kind`~~，11-05 已做，见 §21。
+  - ~~`asset-channel-alerts.yaml` 其余 `{app=...}` 选择器~~，11-05 已改，见 §21。
 - Java 版：封存门禁随 Java 的机制二一起做；战斗结算币种、收件箱停用补打都待做。
 
 **本节文件清单**（工作区，未提交）
@@ -1162,7 +1162,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 
 ## 19. 续：第 7 批补充：独立复核修正与存储分组门禁（2026-11-05，第 6 批会话，接 §17）
 
-> **状态**：已落码，未编译、未测试，在工作区未提交。§17 的 Codex 命令照旧执行，本节只列增量。
+> **状态**：已落码，未编译、未测试。§17 与本节的改动已被 `0f484db0d` 起的几个整仓提交收进去，都不是本会话提交的；只有下面「台账表头被并发生成改回」那一处修正写在这些提交之后，在工作区未提交。§17 的 Codex 命令照旧执行，本节只列增量。
 
 **独立复核**
 
@@ -1197,6 +1197,8 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 1. 第 1 步的 `proto-gen-run` 会改台账：给 `player_database` 的每个顶层字段行一次性补上 ` group=<n>`。这是预期差异，与生成产物一起提交；台账其余行与持久 schema 产物应无差异。
    - 如果报「存储分组由 X 改成了 Y」或「OptionPersistGroup 被删掉了」，说明补记之后又有人改了分组，按提示处理，不要改台账。
    - 补记之前不会有这类报错。
+   - **第 1 步必须用当前源码生成**：先 `proto-gen-build`，再 `proto-gen-run`。11-05 23:07 有人编了 `proto-gen.exe`，随后开始的一次生成在 23:11 结束时把整份台账写回。那次生成用的源码早于存储分组改动（23:09），所以台账表头少了 `group=` 那一行注释，`TestRepositoryLedgerIsCanonical` 会因此失败。本会话已把表头改回与 `ledger.go` 的 `ledgerHeader` 常量逐字一致，台账其余行没动。`dev_tools.ps1` 发现 exe 比生成器源码旧时会告警并改走 `go run`（`Get-ProtoGenBinaryStaleReason`），只要走脚本就不会再用旧 exe；直接调用 `proto-gen.exe` 不会经过这道检查。
+   - 第 1 步之后台账的预期差异只有 ` group=<n>` 的补记。如果表头又变了，说明生成用的仍是存储分组改动之前的二进制，停下来先重建，不要提交这份台账。
 2. 第 2 步的生成器单测在列表上新增：
    - `TestVerifyLedgerFileRequiresAnIntactSealAtTheMaxGeneration`；
    - 上面 4 条存储分组用例；
@@ -1207,12 +1209,118 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 
 **待办 / 风险（在 §17 之外新增）**
 
-- 生成器单测不在 CI 的 Go 模块扫描里（`go-modules-ci.yml` 只扫 `go/`、`robot/`），仓库台账的封存与分组核对只在跑生成器单测或生成时生效。纳入 CI 要先确认 protogen 模块在 CI 镜像里能构建，本批没改 CI。
+- ~~生成器单测不在 CI 的 Go 模块扫描里~~，11-05 已处理，见 §21。
 - 交易盘口：托管阶段的材料订单会被当成最优对手单，挡住同价位的撮合（复核的范围外观察，未核实到底）。`market.go` / `engine.go` 正被别的会话改，留给交易线负责人。
 
-**本节文件清单**（工作区，未提交，在 §17 清单之外新增或再改）
+**本节文件清单**（在 §17 清单之外新增或再改；除台账表头那一处外已进整仓提交）
 - 生成器：`tools/proto_generator/protogen/internal/persistschema/{schema.go,ledger.go,apply.go,generate.go,persistschema_test.go}`、`cmd/root.go`；
-- 台账：`proto/persist_schema_gen.txt`（又改了表头注释两行，与生成器常量一致）；
+- 台账：`proto/persist_schema_gen.txt`（表头注释与生成器常量一致。23:11 被并发生成改回旧表头，之后又改回来了，这一处在工作区未提交）；
 - 脚本：`tools/scripts/{dev_tools.ps1,release_preflight.ps1}`、`tools/scripts/tests/dev_tools_proto_gen_exit.tests.ps1`；
 - C++：`cpp/libs/services/scene/player/system/player_store_projection.cpp`（只加注释）；
 - 文档：`docs/design/{mixed-version-persist-field-protection.md,player-save-direct-commit.md}`、`docs/ops/release-checklist.md`、本文、`docs/PROGRESS.md`。
+
+## 20. 续：`LevelComp.level()` 直读白名单的契约测试（2026-11-05，补等级读点用例的会话，接 §18）
+
+> 本节只追加，不改上文。补的是 §13.4「契约测试没做」一条，以及 §18 残余里的同一项。这是只读源码的检查，**未运行**。
+
+- **测试**：新增 `tools/scripts/tests/test_cpp_level_comp_reads.py`，用 Python 标准库 `unittest`。与 `test_cpp_grpc_dependency_boundary.py` 同一类：只读源码，不编译，不连网。
+  - **扫描范围**：`cpp/libs`、`cpp/nodes` 下含 `LevelComp` 或 `level_component` 的 `.h` / `.hpp` / `.cpp` / `.cc`，跳过 build、generated 等目录。
+  - **读点识别**：
+    - `<LevelComp>(...)` 调用链或 `level_component()` 后面紧跟 `.level()` / `->level()`；
+    - 绑定到 `LevelComp` 的变量上的 `.level()` / `->level()`。绑定包括声明、if 初始化语句、函数形参，以及 `auto& x = *y` 这类别名；
+    - 注释、字符串、原始字符串、字符字面量先等长换成空白，行号不变。
+  - **判定**：
+    - 读点落在同一条语句里还没闭合的 `CappedLevel(` 之内（可以跨行），算经过换算；
+    - 否则必须在同一行带标记注释 `// 直读存储等级:<场合>`，场合与文件要对得上：加载器 / 存盘 → `player_database_loader.cpp`，GmSetLevel → `player_attribute.cpp`，管理端 dump → `scene_admin_handler.cpp`；
+    - 标记行上没有直读的，算陈旧标记，也报错。
+  - **用例**：`LevelReadDetectorTest` 用 13 条合成片段钉住识别规则；`RepositoryLevelReadContractTest` 两条，一条扫全仓，一条核对白名单文件还在。
+  - **不在守卫范围内**：结构化绑定、经函数返回的引用、宏。这几种靠评审，测试文件头写明了；发现漏网的写法时把它补进识别规则和自测用例。
+- **生产代码**：只加标记，行为不变。
+  - `player_database_loader.cpp`：超上限告警里的两次直读合并成一次 `const uint32_t storedLevel = levelComp.level();`，带「加载器」标记；
+  - `player_attribute.cpp` 的 `GmSetLevel`：取旧值那一行带「GmSetLevel」标记；
+  - 存盘（整份 `CopyFrom`）与管理端 dump（`ShortDebugString`）没有 `.level()` 调用，不需要标记；
+  - `player_level_rules.h` 文件头写明由这条契约测试守住。文件头里不写标记原文：它也在扫描范围内，写了会被当成陈旧标记。
+- **静态推演**（未运行）：按当前代码，经 `CappedLevel` 的读点有 9 处（战斗快照、技能伤害两处、回血、属性、装备、任务、宝宝、技能书），原样直读有 2 处，都已带标记。`pet->level()`、`capRow->level()` 这类别的类型的调用不受影响。
+- **提交状态**：截至写本节时，本会话 §16、§18 与本节的代码、测试改动，以及设计稿那一句，已被 `0f484db0d`、`6452b949d`、`571371972`、`f6fddb466` 几个整仓提交收进去，都不是本会话提交的。本节文字与对应的 PROGRESS 条目写在这之后。
+- **给 Codex**：在仓库根目录执行，Python 3.8 及以上，只用标准库：
+  ```
+  python tools/scripts/tests/test_cpp_level_comp_reads.py -v
+  ```
+  - 通过标准：退出 0，`LevelReadDetectorTest` 的 13 条与 `RepositoryLevelReadContractTest` 的 2 条都是 ok。
+  - 失败时保留完整输出：全仓那条会逐行列出 `文件:行号: 原因`。不要为了变绿去改识别规则或补标记；先判断是真违规还是误报，误报回报给 Claude。
+  - 这条与 §16、§18 的 C++ 用例互不依赖，可以先跑。
+- **Java 版（AGENTS §12）**：这条守卫只扫本仓 C++ 源码。Java 的等级读点随 §13.1 那一项一起对齐，到时按 Java 惯用方式补同类守卫，不另加 `PARITY.md` 行。
+
+## 21. 续：收尾小项：数量扣除拒装备行、C++ 日志查询选择器、台账单测进 CI（2026-11-05，第 6 批会话，接 §19）
+
+> **状态**：已落码，未编译、未测试，在工作区未提交。本节只追加，不改 §20。§14.4 表、§17 待办、§19 待办里对应的条目已划掉并指向本节。
+
+**1. 按数量扣出拒绝装备行**（§14.4 遗留，原「交负责人」）
+
+- **问题**：`ValidateDebitBundle` 只要求配置可叠加（`max_stack_size > 1`）。装备行被误配成可叠加时，交易会按数量扣出，再按数量发给对侧，强化、镶嵌、随机属性这些实例上的数据会无声丢失。
+- **做法**：`asset_op_system.cpp` 的 `ValidateDebitBundle` 遇到 `equip_kind ≠ 0` 的配置，按坏包处理：记终态 REJECTED，原因 `kAssetInvalidBundle`，日志 `why=quantity debit does not accept equipment configurations`。依据是资产路径默认 fail-closed（AGENTS §11.3）。
+  - 表数据正确时，装备行都是 `max_stack_size == 1`，原本就会被拒，所以行为不变。
+- **用例**：`cpp/tests/currency_test/asset_op_system_test.cpp` 的 `AssetOpSystemTest.QuantityDebitRejectsEquipmentEvenWhenMisconfiguredAsStackable`。配置 1 是装备，用例在内存里把它改成可叠加，结束时还原。
+- **没做**：导表期的「装备行不得可叠加」约束。导表器目前没有跨列约束；装备系统的各个入口（`player_equip.cpp`）本来就要求 `max_stack_size == 1`。
+- **Java 版**：已在 PARITY「通用资产通道 scene 侧」行的「Java 待做」里登记。
+
+**2. C++ 日志查询的流选择器**
+
+- **问题**：C++ 日志由每个 Pod 的 Alloy sidecar 读文件送 Loki，流标签里没有 `app`。以下值班查询都写成了 `{app=...}`，结果恒为空：
+  - `asset-channel-alerts.yaml`：battle 4 条、scene 1 条；
+  - `data-service-audit-alerts.yaml`：1 条。
+- **做法**：
+  - battle 改为 `{job="cpp_nodes", service="battle"}`。三种 battle 编排都挂同一个 sidecar，zone 是 `global`；`service` 取自日志文件名前缀（`NodeTypeToShortName`）。
+  - scene 改为 `{job="cpp_nodes", service="scene"}`。
+  - 同批改了 `docs/ops/audit-topic-generation-bump-runbook.md` 的两条值班查询，以及 `player-inbox-runbook.md` 的待同步清单。
+  - `docs/handoff/launch-readiness-20261013/spec_G2a.md` 里的旧写法属于历史交接，没改。
+- **契约测试**：`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「LogQL 契约」改为逐文件核对这三份告警文件。
+  - 选择器的抽取口径由 `count_over_time({...` 改为「后面紧跟 `|=` / `|~` 的 `{...}`」，这样才抽得到 data-service-audit 那条不在 `count_over_time` 里的查询。
+  - 各文件的条数下限：收件箱 9、资产通道 6、data-service-audit 1。
+  - 静态推演：用 Python 按同一正则抽取，三份文件分别抽到 9 / 6 / 1 条，只用到 `job`、`service` 两个标签，未运行 PowerShell。
+  - 这个测试文件里有别的会话未提交的改动（295 行、5480 行附近）。本节只替换了这一条用例，换行符保持 CRLF，PowerShell 静态解析 0 错误。
+
+**3. 台账包单测进 CI**
+
+- `.github/workflows/go-modules-ci.yml` 新增 job `persist-schema-ledger`，在 `tools/proto_generator/protogen` 下跑：
+  - `go vet ./internal/persistschema/...`
+  - `go test -count=1 ./internal/persistschema/...`
+- 结果计入「Go 门禁汇总」。PR 的 paths 过滤加上了 `tools/proto_generator/**`。
+- 整个生成器模块不进模块矩阵：它在 Linux 上的 build / test 没有实测过，按该 workflow「只收当前绿的」原则，先不收。
+- 本地只做了 YAML 静态解析，CI 上还没跑过。
+
+**4. 台账表头被并发生成改回**：见 §19「给 Codex 的增量」第 1 条。
+
+- 23:43 有人重编了 `proto-gen.exe`，23:47 用它重新生成。生成结果是表头与 `ledgerHeader` 常量一致，`player_database` 顶层活字段全部补上了 `group=`（20 行）。这正是 §19 写的预期差异。
+- 已退役的 `#10`、`#17`、`#18`、`#19` 没有 `group=`，这是对的：它们在 proto 里是 `reserved`。
+- 投影代码对没写 `OptionPersistGroup` 的活字段直接报错（`player_store_projection.cpp:97`），所以「从没有分组选项到加上分组选项」不会悄悄丢数据。
+
+**给 Codex**（接 §17 / §19 的命令，日志放 `build/verification/persist-batch7/`）
+
+1. **C++**：`asset_op_system.cpp` 在库里，`run_cpp_tests.ps1 -Build` 不会重编库。所以先按 §17 串行 `/m:1` 重编 `game.sln`，再执行：
+   ```
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter currency_test -LogDir build/verification/persist-batch7
+   ```
+   - 通过标准：`AssetOpSystemTest.QuantityDebitRejectsEquipmentEvenWhenMisconfiguredAsStackable` 在列且通过；`AssetOpSystemTest.*` 的其余用例照旧全绿。
+   - 前提：配表随工程部署。如果 `ItemTableAvailable()` 断言失败，先查配表目录，不要跳过用例。
+2. **契约测试**：
+   ```
+   pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+   ```
+   - 通过标准：「LogQL 契约:告警文件里 C++ 侧的固定查询…」这条通过。
+   - 失败时保留完整输出：断言会写明文件、选择器原文和多出来的标签。
+   - 这个文件有别的会话的改动，其他用例红了先判断归属。
+3. **CI**：`persist-schema-ledger` 只能推送之后在 GitHub 上看。本地用 §17 第 2 步的命令代替，那组命令覆盖了它。
+
+**本节文件清单**（工作区，未提交）
+
+- C++：`cpp/libs/services/scene/player/system/asset_op_system.cpp`、`cpp/tests/currency_test/asset_op_system_test.cpp`；
+- 告警：`deploy/k8s/{asset-channel-alerts.yaml,data-service-audit-alerts.yaml}`；
+- 测试：`tools/scripts/tests/k8s_deploy_contract.tests.ps1`（只改「LogQL 契约」一条）；
+- CI：`.github/workflows/go-modules-ci.yml`；
+- 文档：
+  - `docs/ops/{audit-topic-generation-bump-runbook.md,player-inbox-runbook.md}`；
+  - `docs/design/mixed-version-persist-field-protection.md`（§3.1 与 §13 第 11 条里关于 CI 的两句）；
+  - 本文（§14.4 表、§17 / §19 待办、§19 的状态与表头说明）；
+  - `docs/PROGRESS.md`；
+- Java 对账本：`D:\luyuan\xuanming-server-mmo\PARITY.md`「通用资产通道 scene 侧」行。

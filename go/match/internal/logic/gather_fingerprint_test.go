@@ -152,6 +152,15 @@ func TestPreparePlayerFencedClassifiesFailures(t *testing.T) {
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errPrepareRejected)
 
+	// 快照玩家号不是备战玩家(或为 0):同样是 scene 协议异常,不定罪;组进 Create 的话 COMPLETE 永远裁决不了(2026-11-05)。
+	for _, wrong := range []uint64{player + 1, 0} {
+		reply = &scenepb.PrepareBattleResponse{Snapshot: &battlepb.BattlePlayerSnapshot{PlayerId: wrong}, TableFingerprint: "fp"}
+		_, resp, err := prepare(nil)
+		require.Error(t, err, "快照玩家 %d", wrong)
+		require.NotErrorIs(t, err, errPrepareRejected)
+		require.Nil(t, resp, "不把别人的快照交给成局")
+	}
+
 	// 成功:期限与落点按参数下发。
 	requests = nil
 	reply = &scenepb.PrepareBattleResponse{Snapshot: &battlepb.BattlePlayerSnapshot{PlayerId: player}, TableFingerprint: "fp"}

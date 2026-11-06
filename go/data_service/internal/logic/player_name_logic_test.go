@@ -57,6 +57,14 @@ type fakePlayerNameStore struct {
 	releaseOutcome store.ReleaseOutcome
 	releaseErr     error
 
+	// 名字行的样子,NameRowState 按它作答。默认是「窗口内的预留态」(建角刚登记就回滚,释放的常态),
+	// logic 往下走证明和条件删除;删除的结局另由 releaseOutcome 给(模拟读完之后行又变了)。
+	rowStateCalls []playerNameReleaseCall // 只用 playerID、norm 两列
+	rowMissing    bool
+	rowCreatedMs  uint64 // 0 = 读的那一刻
+	rowBoundMs    uint64
+	rowStateErr   error
+
 	// names 是"库里已有的名字",BatchGet 按它作答;没有的 id 不出现在返回值里。
 	names    map[uint64]string
 	batchErr error
@@ -65,6 +73,32 @@ type fakePlayerNameStore struct {
 // 编译期钉住接口形状:装配层(svc.ServiceContext)换签名时,这一行先炸,
 // 而不是等到某个用例跑起来才发现 fake 与真 store 不是一回事。
 var _ svc.PlayerNameStore = (*fakePlayerNameStore)(nil)
+
+// fakeRoleSealer 是玩家片证明(svc.PlayerRoleSealer)的替身:记下被问了谁,按脚本回结论。
+// 「先证明、后删除」靠证明不放行时 store 一次都没被调来证明。
+type fakeRoleSealer struct {
+	seal  store.RoleSeal
+	err   error
+	calls []uint64
+}
+
+var _ svc.PlayerRoleSealer = (*fakeRoleSealer)(nil)
+
+func (f *fakeRoleSealer) SealUncommittedRole(_ context.Context, playerID uint64) (store.RoleSeal, error) {
+	f.calls = append(f.calls, playerID)
+	if f.err != nil {
+		return 0, f.err
+	}
+	return f.seal, nil
+}
+
+// sealerOf 取 newPlayerNameTestCtx 装上的证明替身。
+func sealerOf(t *testing.T, svcCtx *svc.ServiceContext) *fakeRoleSealer {
+	t.Helper()
+	sealer, ok := svcCtx.PlayerRoleSeals.(*fakeRoleSealer)
+	require.True(t, ok)
+	return sealer
+}
 
 func (f *fakePlayerNameStore) Close() error { return nil }
 
@@ -86,6 +120,21 @@ func (f *fakePlayerNameStore) Release(_ context.Context, playerID uint64, norm s
 		return 0, f.releaseErr
 	}
 	return f.releaseOutcome, nil
+}
+
+func (f *fakePlayerNameStore) NameRowState(_ context.Context, playerID uint64, norm string) (uint64, uint64, bool, error) {
+	f.rowStateCalls = append(f.rowStateCalls, playerNameReleaseCall{playerID: playerID, norm: norm})
+	if f.rowStateErr != nil {
+		return 0, 0, false, f.rowStateErr
+	}
+	if f.rowMissing {
+		return 0, 0, false, nil
+	}
+	created := f.rowCreatedMs
+	if created == 0 {
+		created = uint64(time.Now().UnixMilli())
+	}
+	return created, f.rowBoundMs, true, nil
 }
 
 func (f *fakePlayerNameStore) BatchGet(_ context.Context, ids []uint64) (map[uint64]string, error) {
@@ -137,8 +186,10 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 		releaseOutcome: store.ReleaseDeleted,
 		names:          map[uint64]string{},
 	}
+	// 证明默认是「封过了」:建角回滚的常态(没有角色行、有路由行,写了墓碑)。
+	sealer := &fakeRoleSealer{seal: store.RoleSealSealed}
 
-	return &svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake}, mr, fake
+	return &svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake, PlayerRoleSeals: sealer}, mr, fake
 }
 
 // playerNameOpsCount 从默认 registry 里 gather 一次,读出 ops_total 上某个
@@ -458,6 +509,123 @@ func TestReleasePlayerName_Outcomes(t *testing.T) {
 		assert.ErrorIs(t, ReleasePlayerName(context.Background(), svcCtx, 3006, "云中君", false),
 			ErrPlayerNameStoreUnavailable)
 	})
+}
+
+// ── Release:「预留 → 绑定」状态机(§3.4a)────────────────────────────
+
+// 用例「已绑定的名字不可被释放」的 logic 一半:store 回 ReleaseBound → ErrPlayerNameBound,建角回滚和运维两条路径都一样,
+// 缓存不动(拒绝必须零变更),指标记 in_use。
+func TestReleasePlayerName_BoundNameIsRefused(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		svcCtx, mr, fake := newPlayerNameTestCtx(t)
+		fake.releaseOutcome = store.ReleaseBound
+		require.NoError(t, mr.Set(routing.PlayerNameKey(3201), "云中君"))
+		before := playerNameOpsCount(t, playerNameOpRelease, playerNameResultInUse)
+
+		err := ReleasePlayerName(context.Background(), svcCtx, 3201, "云中君", admin)
+		assert.ErrorIsf(t, err, ErrPlayerNameBound, "admin=%v", admin)
+		assert.Truef(t, mr.Exists(routing.PlayerNameKey(3201)), "admin=%v:缓存不许动", admin)
+		assert.Equal(t, before+1, playerNameOpsCount(t, playerNameOpRelease, playerNameResultInUse))
+	}
+}
+
+// 用例「预留态在角色已提交后被拒绝释放」的 logic 一半:证明那一步说角色已提交 → ErrPlayerNameRoleCommitted,
+// 名字片一条写都不发(只读过一次名字行,store 的 Release 一次都不调)。运维路径同样拒绝:token 只放宽时间窗,不放宽状态。
+func TestReleasePlayerName_CommittedRoleIsRefusedBeforeTouchingTheName(t *testing.T) {
+	for _, admin := range []bool{false, true} {
+		svcCtx, mr, fake := newPlayerNameTestCtx(t)
+		sealerOf(t, svcCtx).seal = store.RoleSealCommitted
+		require.NoError(t, mr.Set(routing.PlayerNameKey(3202), "云中君"))
+
+		err := ReleasePlayerName(context.Background(), svcCtx, 3202, "云中君", admin)
+		assert.ErrorIsf(t, err, ErrPlayerNameRoleCommitted, "admin=%v", admin)
+		assert.Emptyf(t, fake.releaseCalls, "admin=%v:证明不放行就不碰名字行", admin)
+		assert.Equal(t, []uint64{3202}, sealerOf(t, svcCtx).calls)
+		assert.True(t, mr.Exists(routing.PlayerNameKey(3202)))
+	}
+}
+
+// 证明放行(墓碑、本次封堵、没有路由行)才删,而且问的就是要释放的那个 player_id。
+func TestReleasePlayerName_ProvenUncommittedThenDeletes(t *testing.T) {
+	for _, seal := range []store.RoleSeal{store.RoleSealRemoved, store.RoleSealSealed, store.RoleSealUnrouted} {
+		svcCtx, _, fake := newPlayerNameTestCtx(t)
+		sealerOf(t, svcCtx).seal = seal
+
+		require.NoErrorf(t, ReleasePlayerName(context.Background(), svcCtx, 3203, "云中君", false), "seal=%s", seal)
+		assert.Equal(t, []uint64{3203}, sealerOf(t, svcCtx).calls)
+		require.Lenf(t, fake.releaseCalls, 1, "seal=%s", seal)
+		assert.Equal(t, uint64(3203), fake.releaseCalls[0].playerID)
+	}
+}
+
+// 证明读不到(玩家片不可达、闸门冻结)或者根本没装配:fail-closed,不释放。宁可留一条孤儿名字,也不能一名两角。
+func TestReleasePlayerName_ProofUnavailableFailsClosed(t *testing.T) {
+	svcCtx, _, fake := newPlayerNameTestCtx(t)
+	sealerOf(t, svcCtx).err = errors.New("player shard frozen")
+	err := ReleasePlayerName(context.Background(), svcCtx, 3204, "云中君", false)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrPlayerNameRoleCommitted, "读不到不是「角色已提交」,映射成库故障让调用方记孤儿")
+	assert.Contains(t, err.Error(), "player shard frozen")
+	assert.Empty(t, fake.releaseCalls)
+
+	svcCtx, _, fake = newPlayerNameTestCtx(t)
+	svcCtx.PlayerRoleSeals = nil
+	assert.ErrorIs(t, ReleasePlayerName(context.Background(), svcCtx, 3205, "云中君", false), ErrPlayerNameStoreUnavailable)
+	assert.Empty(t, fake.releaseCalls)
+}
+
+// 名字不合规在证明之前就拒:那是纯计算,不该为一次参数错误去玩家片写墓碑。
+func TestReleasePlayerName_InvalidNameNeverReachesTheProof(t *testing.T) {
+	svcCtx, _, _ := newPlayerNameTestCtx(t)
+	assert.ErrorIs(t, ReleasePlayerName(context.Background(), svcCtx, 3206, "云中君!", false), store.ErrPlayerNameInvalidArgument)
+	assert.Empty(t, sealerOf(t, svcCtx).calls)
+}
+
+// 被拒或无事可做的释放两边零变更:名字行不在、已绑定、登记早于窗口,都在玩家片证明之前就回,证明一次都不调(它可能写墓碑,不可逆)。
+// 多集群恢复点错开时「名字已绑定、角色行不在」的角色可能真的建成了,先证明再拒绝就把它永远封死。读不到名字行同样 fail-closed。
+// 用例「被拒的释放不写墓碑」。
+func TestReleasePlayerName_RefusedOrNoOpReleaseNeverSeals(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		row     func(*fakePlayerNameStore)
+		admin   bool
+		wantErr error
+	}{
+		{"名字行不在_幂等成功", func(f *fakePlayerNameStore) { f.rowMissing = true }, false, nil},
+		{"已绑定_建角回滚拒绝", func(f *fakePlayerNameStore) { f.rowBoundMs = 1 }, false, ErrPlayerNameBound},
+		{"已绑定_运维也拒绝", func(f *fakePlayerNameStore) { f.rowBoundMs = 1 }, true, ErrPlayerNameBound},
+		{"登记早于窗口_拒绝", func(f *fakePlayerNameStore) { f.rowCreatedMs = 1 }, false, ErrPlayerNameReleaseOutsideWindow},
+		{"名字行读不到_fail_closed", func(f *fakePlayerNameStore) { f.rowStateErr = errors.New("name shard down") }, false, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svcCtx, mr, fake := newPlayerNameTestCtx(t)
+			tc.row(fake)
+			require.NoError(t, mr.Set(routing.PlayerNameKey(3207), "云中君"))
+
+			err := ReleasePlayerName(context.Background(), svcCtx, 3207, "云中君", tc.admin)
+			switch {
+			case fake.rowStateErr != nil:
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "name shard down")
+			case tc.wantErr == nil:
+				require.NoError(t, err)
+			default:
+				require.ErrorIs(t, err, tc.wantErr)
+			}
+			assert.Empty(t, sealerOf(t, svcCtx).calls, "证明一次都不调:墓碑不可逆")
+			assert.Empty(t, fake.releaseCalls, "名字行一条写都不发")
+			assert.True(t, mr.Exists(routing.PlayerNameKey(3207)), "缓存也不动")
+			require.Len(t, fake.rowStateCalls, 1)
+			assert.Equal(t, playerNameReleaseCall{playerID: 3207, norm: "云中君"}, fake.rowStateCalls[0])
+		})
+	}
+
+	// 运维不限时间:老登记照样走到证明和条件删除。
+	svcCtx, _, fake := newPlayerNameTestCtx(t)
+	fake.rowCreatedMs = 1
+	require.NoError(t, ReleasePlayerName(context.Background(), svcCtx, 3208, "云中君", true))
+	assert.Equal(t, []uint64{3208}, sealerOf(t, svcCtx).calls)
+	assert.Len(t, fake.releaseCalls, 1)
 }
 
 func TestReleasePlayerName_NameValidation(t *testing.T) {

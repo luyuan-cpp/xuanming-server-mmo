@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// 本文件是 inbox 包三个外部依赖接口的生产实现:玩家存在校验、围栏上界读取、已落盘账本读取。
+// 本文件是 inbox 包四个外部依赖接口的生产实现:玩家存在校验、围栏上界读取、已落盘账本读取、已落盘物品获取封禁表读取。
 // 放在装配层而不是 inbox:inbox 只认接口(DIP),单测与集成测试注入假实现。
 
 // unmappedErrText 是老版 data_service 对缺失映射返回 Unknown 时的消息片段;新版返回 NotFound,
@@ -119,4 +119,35 @@ func (d *DataServiceLedgers) ReadInboxLedger(ctx context.Context, playerID uint6
 		return ledger, true, nil
 	}
 	return &componentpb.PlayerInboxLedgerComp{}, true, nil
+}
+
+// DataServiceItemGainBlocks 用 data_service.GetPlayerItemGainBlock 实现 inbox.ItemGainBlockReader(设计 §2.2)。
+// 映射与 DataServiceLedgers 同口径:found=false → (nil, false, nil);found=true → 非 nil 封禁表(从未被封过时是空消息);
+// 任何 gRPC 错误(含尚未实现该 RPC 的旧版 data_service 的 Unimplemented)→ err。
+type DataServiceItemGainBlocks struct {
+	Client  dspb.DataServiceClient
+	Timeout time.Duration
+}
+
+// ReadItemGainBlock 实现 inbox.ItemGainBlockReader。
+func (d *DataServiceItemGainBlocks) ReadItemGainBlock(ctx context.Context, playerID uint64) (*componentpb.PlayerItemGainBlockComp, bool, error) {
+	if d == nil || d.Client == nil {
+		return nil, false, errNoDataServiceClient
+	}
+	if d.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, d.Timeout)
+		defer cancel()
+	}
+	resp, err := d.Client.GetPlayerItemGainBlock(ctx, &dspb.GetPlayerItemGainBlockRequest{PlayerId: playerID})
+	if err != nil {
+		return nil, false, fmt.Errorf("data_service.GetPlayerItemGainBlock player_id=%d: %w", playerID, err)
+	}
+	if !resp.GetFound() {
+		return nil, false, nil
+	}
+	if block := resp.GetBlock(); block != nil {
+		return block, true, nil
+	}
+	return &componentpb.PlayerItemGainBlockComp{}, true, nil
 }

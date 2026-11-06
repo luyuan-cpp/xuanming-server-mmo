@@ -546,7 +546,7 @@ func (s *petSmokeSession) autoAllocate(petId uint64) (map[uint32]uint32, error) 
 	return response.GetSuggested(), nil
 }
 
-// relogin 下线(LeaveGame + Disconnect)后用同一账号重新登录进场,返回新会话。
+// relogin 下线(LeaveGame + 关连接,断线通知由 gate 在 TCP 关闭时合成)后用同一账号重新登录进场,返回新会话。
 // 中间等 2s 让 scene 的异步存盘落到 db,否则重登可能读到旧档
 // (HandlePlayerAsyncSaved 会把过快的重登判成"重连取代登出")。
 func (s *petSmokeSession) relogin(cfg *config.Config) (*petSmokeSession, error) {

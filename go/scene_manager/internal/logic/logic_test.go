@@ -109,6 +109,7 @@ func newTestSvcCtx(t *testing.T, nodeID string) (*svc.ServiceContext, *miniredis
 	return &svc.ServiceContext{
 		Config:         c,
 		Redis:          rds,
+		CoreRedis:      rds, // 单测里控制域与核心是同一个实例(与开发环境一致)
 		PlayerRedis:    newTestPlayerRedis(t, mr),
 		RoleDirectory:  testRoleDirectory(1),
 		OwnerEpochMint: newFakeOwnerEpochMinter(rds),
@@ -481,6 +482,7 @@ func newTestSvcCtxWithWorldScenes(t *testing.T) (*svc.ServiceContext, *miniredis
 	return &svc.ServiceContext{
 		Config:         c,
 		Redis:          rds,
+		CoreRedis:      rds, // 单测里控制域与核心是同一个实例(与开发环境一致)
 		PlayerRedis:    newTestPlayerRedis(t, mr),
 		RoleDirectory:  testRoleDirectory(1),
 		OwnerEpochMint: newFakeOwnerEpochMinter(rds),
@@ -3080,6 +3082,11 @@ func TestCreateScene_Mirror_CrossZoneSourceFallsBack(t *testing.T) {
 	assert.Zero(t, resp.ErrorCode)
 	assert.Equal(t, "Y", resp.NodeId,
 		"cross-zone source must fall back to a node in the requesting zone, not co-locate on X")
+	// 控制域只读写本 zone(control-plane-zone-scoping-20261105.md §4.3):不把新镜像登记成别的 zone 场景的子镜像,
+	// 否则源所在 zone 的级联会动本 zone 的场景键。镜像标记照写,空闲回收按镜像的短超时收它。
+	assert.False(t, mr.Exists(sceneMirrorsKey(sourceId)), "别的 zone 的源不得多出子集合")
+	assert.False(t, mr.Exists(sceneSourceKey(resp.SceneId)), "新镜像不记别的 zone 的源")
+	assert.True(t, mr.Exists(sceneMirrorFlagKey(resp.SceneId)), "镜像标记照写")
 }
 
 // TestCreateScene_Mirror_SameZoneSourceColocates is the positive control —
@@ -3257,6 +3264,9 @@ func TestStress_EnterDestroyRace_NoOrphanMembers(t *testing.T) {
 		wg.Add(2)
 
 		// Re-create the scene each iteration so destroy has something to wipe.
+		// 上一次认领留下的拆除任务(这里没人做副作用、不会自己删)会挡住之后的认领,重建时一并删掉,
+		// 让每一拍都是真正的进场与销毁竞争。
+		sc.Redis.Del(sceneTeardownJobKey(sceneId))
 		sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneId), "10")
 
 		go func() {

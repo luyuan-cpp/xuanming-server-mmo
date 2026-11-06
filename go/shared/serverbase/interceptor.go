@@ -239,7 +239,7 @@ func publicationOutcomeUnknown(response any, err error) bool {
 //   - 包了一层的 gRPC 错误(fmt.Errorf("...: %w", rpcErr)):转发的是下游的结论,说不准这边写没写。所以这里只认错误本身就是 status。
 //
 // Aborted 在表里:语义是这次请求没有结局未知的写。目录的 accountdirectory.ErrNotCommitted(建角提交点之前失败)、ErrRetryLater(结局已知、同参数重放)回它,
-// friend 的身份检查(只读)也回它。handler 回这个码之前要能证明这一点,结局未知的提交不能走到这里。
+// guild 的入口归属预检(只读)也回它。handler 回这个码之前要能证明这一点,结局未知的提交不能走到这里。
 // ResourceExhausted 在表里:全仓只有目录的「账号角色数已满」回它,建角和过户都在提交点之前拒绝。别的 handler 不要拿它表示过载。
 func definiteRejection(err error) bool {
 	if err == errWriterFrozen || err == errNoWriteRetry {

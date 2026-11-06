@@ -45,7 +45,7 @@ const ownershipFaultPlayerDB = "zone_990017_db"
 
 const ownershipFaultKindOwner = uint32(pspb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)
 
-const ownershipFaultKindAsset = uint32(pspb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET)
+const ownershipFaultKindWallet = uint32(pspb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET) // 货币与账本所在的行(player-save-direct-commit.md §1.1)
 
 // 周期上限:超过它,测试截止覆盖不了「等一次真实周期存盘」,runner 与这里都拒绝。
 const ownershipFaultMaxIntervalSeconds = 120
@@ -521,7 +521,7 @@ func (r *ownershipFaultRig) lockAssetRow(t *testing.T, id uint64) (*sql.Tx, uint
 			t.Fatalf("lock transaction failed: %v", err)
 		}
 		var locked uint64
-		err = tx.QueryRowContext(holdCtx, ownershipFaultLockSQL, id, ownershipFaultKindAsset).Scan(&locked)
+		err = tx.QueryRowContext(holdCtx, ownershipFaultLockSQL, id, ownershipFaultKindWallet).Scan(&locked)
 		if err == nil && locked == id {
 			var holdTrx uint64
 			// TRX_ID 就是事务 start_ts,悲观 RC 下整笔事务不变。
@@ -585,10 +585,10 @@ func ownershipFaultKeyMatches(info string, id uint64) bool {
 	if json.Unmarshal([]byte(info), &decoded) != nil || decoded.DBName != ownershipFaultPlayerDB || decoded.TableName != "player_store" {
 		return false
 	}
-	if decoded.HandleValue == fmt.Sprintf("{%d, %d}", id, ownershipFaultKindAsset) {
+	if decoded.HandleValue == fmt.Sprintf("{%d, %d}", id, ownershipFaultKindWallet) {
 		return true
 	}
-	return len(decoded.IndexValues) == 2 && decoded.IndexValues[0] == strconv.FormatUint(id, 10) && decoded.IndexValues[1] == strconv.FormatUint(uint64(ownershipFaultKindAsset), 10)
+	return len(decoded.IndexValues) == 2 && decoded.IndexValues[0] == strconv.FormatUint(id, 10) && decoded.IndexValues[1] == strconv.FormatUint(uint64(ownershipFaultKindWallet), 10)
 }
 
 func (r *ownershipFaultRig) handoffMarked(t *testing.T, ctx context.Context, id uint64) bool {
@@ -691,7 +691,7 @@ func (r *ownershipFaultRig) readSQL(t *testing.T, id uint64) ownershipFaultSQL {
 			}
 			s.Epoch, s.Seq, s.Holder = epoch, seq, string(holder)
 			foundOwner = true
-		case ownershipFaultKindAsset:
+		case ownershipFaultKindWallet:
 			asset := &databasepb.PlayerDatabase{}
 			if err := proto.Unmarshal(payload, asset); err != nil {
 				t.Fatalf("asset row payload invalid: %v", err)

@@ -121,11 +121,13 @@ using PendingEnterMap = std::unordered_map<Guid, PlayerEnterContext>;
 struct EmergencyRelocateTicket;
 
 // 归属 / epoch 健康计数。与 dirty_save_stats 同一套写法(relaxed atomic,
-// 由 RedisSystem 的 30s 快照定时器打成一行 [OwnerEpoch] 日志,任一非 0 才打、级别 WARN),
-// 不接 Prometheus 的理由也相同。
+// 由 RedisSystem 的 30s 快照定时器打成一行 [OwnerEpoch] 日志,任一非 0 才打、级别 WARN);
+// 另由 player_ownership_metrics.cpp 导出为 scene_owner_epoch_events_total{event},两处共用下面的 kFields。
 //
-//   stale_owner_write_rejected  存盘被 Redis epoch CAS 拒绝的次数。压测期应恒 0
-//                               (cross-zone-scene-travel.md §6.3);非 0 = 曾出现双主。
+//   stale_owner_write_rejected  存盘被 TiDB 写权行拒绝(go/db 回 STALE_OWNER / NOT_HOLDER / UNCLAIMED,
+//                               HandlePlayerSaveRejected 判定本节点已被废黜)的次数。压测期应恒 0
+//                               (cross-zone-scene-travel.md §6.3);非 0 = 曾出现双主,本节点那份内存态作废。
+//                               玩家数据只存 TiDB 之前这里数的是 Redis epoch CAS 拒绝,含义相同。
 //   stale_owner_rejected_exiting stale_owner_write_rejected 中实体正在退出的那一部分:退出存盘从未落地就被拒、差额
 //                               随实体丢弃 = 回档的直接证据(docs/design/location-release-binding.md §3.7)。应恒 0。
 namespace owner_epoch_stats
@@ -181,7 +183,7 @@ namespace owner_epoch_stats
 } // namespace owner_epoch_stats
 
 // 混版本持久字段保护:go/db 覆盖世代校验的拒写计数(docs/design/mixed-version-persist-field-protection.md §5.2)。
-// 与 owner_epoch_stats 同一套写法(relaxed atomic、不接 Prometheus;C++ 节点没有 Prometheus 出口),由 core/system/redis.cpp
+// 与 owner_epoch_stats 同一套写法(relaxed atomic;这一项还没接 scene 的 Prometheus 出口,只有日志),由 core/system/redis.cpp
 // 每 30s 打成一行 [PersistSchema] 日志(有计数才打,级别 WARN)。逐次另有一条带 metric=persist_schema_regression 的日志
 // 供 LogQL 查询(deploy/k8s/README.md「玩家持久 schema 世代」小节)。正常应恒 0:
 //   regression_rejected  判定倒退、拒写的次数。该玩家本次在线进度不落盘。
@@ -207,6 +209,78 @@ namespace persist_schema_stats
 		return Snapshot{RegressionRejected().load(std::memory_order_relaxed)};
 	}
 } // namespace persist_schema_stats
+
+// 玩家存盘最终被确定性拒绝的计数(docs/design/player-save-direct-commit.md §4;第一轮数据审计 §4 第 2 条)。
+// 与 save_seq_stats 同一套写法(relaxed atomic):core/system/redis.cpp 每 30s 打成一行 [PlayerStoreRefused] 日志
+// (有计数才打,级别 WARN),player_ownership_metrics.cpp 导出 scene_player_store_save_refused_total{result};
+// 两处共用 kCounterNames。逐次另有一条带 metric=player_store_save_refused 的 ERROR 日志,玩家号只在那一行。
+//
+// 只数 HandlePlayerSaveRefused 收到的结局,也就是**最终**的拒绝:排队里还有更新的快照时,这一笔不是结论(OnPlayerStoreSaveDone
+// 的 lastSaveDecides),不计。写权拒绝(STALE_OWNER / NOT_HOLDER / UNCLAIMED)、OLDER_SEQ、SCHEMA_REGRESSED 各有自己的计数
+// (owner_epoch_stats、save_seq_stats、persist_schema_stats),不在这里。
+//
+// 为什么 go/db 的 db_player_store_requests_total 不够:超过传输上限的那一笔由 scene 在发送前拒掉
+// (player_store_client.cpp 按序列化大小预检,go/db 根本收不到)。被拒之后这名玩家每次存盘都会再被拒,退出时回到上一次提交,
+// 本次在线的进度全部丢失。NO_OWNER、SCHEMA_TOO_NEW 不会走到这里(PlayerStoreClient 按「没有提交、等它好了再试」重试,
+// go/db 的告警覆盖它们)。正常应恒 0,任一非 0 都要查:
+//   too_large  payload 超预算(scene 发送前预检与 go/db 判定合计)
+//   invalid    请求不合法(E、q、实例为空,kind 非法或重复),是 scene 侧的缺陷
+//   other      以上之外的结局:序号饱和(result 为 UNSPECIFIED,save_seq_stats 的 exhausted 同时计一次)、本版本不认识的枚举值
+namespace player_store_refused_stats
+{
+	enum class Counter : uint8_t
+	{
+		kTooLarge,
+		kInvalid,
+		kOther,
+
+		kCount
+	};
+
+	inline constexpr std::size_t kCounterCount = static_cast<std::size_t>(Counter::kCount);
+
+	inline constexpr const char *kCounterNames[] = {
+		"too_large",
+		"invalid",
+		"other",
+	};
+	static_assert(std::size(kCounterNames) == kCounterCount, "kCounterNames 必须与 Counter 一一对应");
+
+	inline std::atomic<uint64_t> &Slot(Counter counter)
+	{
+		static std::atomic<uint64_t> g_counters[kCounterCount]{};
+		return g_counters[static_cast<std::size_t>(counter)];
+	}
+
+	inline void Inc(Counter counter) { Slot(counter).fetch_add(1, std::memory_order_relaxed); }
+
+	struct Snapshot
+	{
+		std::array<uint64_t, kCounterCount> values{};
+
+		bool Any() const
+		{
+			for (const uint64_t value : values)
+			{
+				if (value != 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+	};
+
+	inline Snapshot Read()
+	{
+		Snapshot snapshot;
+		for (std::size_t i = 0; i < kCounterCount; ++i)
+		{
+			snapshot.values[i] = Slot(static_cast<Counter>(i)).load(std::memory_order_relaxed);
+		}
+		return snapshot;
+	}
+} // namespace player_store_refused_stats
 
 // 归属交接(跨 zone 传送 / 同 zone 跨节点换图)的成败计数。与 owner_epoch_stats 同一套写法
 // (relaxed atomic、不接 Prometheus),由 player_lifecycle.cpp 每 30s 打成一行 [TravelHandoff]
@@ -1178,9 +1252,9 @@ public:
 	// 与单测调用,now 显式传入(单调时钟,AGENTS §11.2 显式依赖)。不是 per-tick 路径:平时只有断线未归的几个实体。
 	static void ExpireConnectionLostHolds(connection_lost_hold::Clock::time_point now);
 
-	// EnterScene 第 0 步:新会话接回断线保留中的角色时摘掉 PlayerConnectionLostComp(判据 connection_lost_hold::IsResumedBy)。
-	// 不在保留中、或进场带的不是新会话时 no-op。公开只为单测能直接验证。
-	static void ResumeConnectionLostHold(entt::entity player, SessionId incomingSessionId);
+	// EnterScene 第 0 步:新的一次登录接回断线保留中的角色时摘掉 PlayerConnectionLostComp(判据 connection_lost_hold::IsResumedBy:
+	// 会话号与断开时不同,或号相同而登录代次更大)。不在保留中、或进场不是新的一次登录时 no-op。公开只为单测能直接验证。
+	static void ResumeConnectionLostHold(entt::entity player, SessionId incomingSessionId, uint64_t incomingLoginGeneration);
 
 	// 进场路由命中本节点上的旧实体(退出中的,或不在交接中的活实体)、且 owner_epoch 显示中间有别的持有者
 	// (player_exit::IsDeposedOnReentry)时,按"被废黜"不存盘销毁它并返回 true,调用方随后从盘上重载。
@@ -1497,7 +1571,7 @@ public:
 	// 失败分支按"handoff 标记的 SET 发没发出去"分两类(travel_freeze_cap::IsHandoffMarkSent):
 	//   * SET 发出之前(冻结已超过 35s 晚发窗口 / 无 epoch / Redis 断连 / 命令没发出去),以及 SET 收到 ERROR 应答
 	//     (确定没写,只处置同一代交接,见 HandleTravelMarkWriteRejected)→ 一律 AbortTravelHandoff 解冻回 tip,不悬挂;
-	//   * SET 之后在 RequestTravelEnterScene 里(SET 的 OK 晚于晚发窗口才到 / 无 gate 会话 / 无 scene_manager)→
+	//   * SET 之后在 PublishAndEnterTravel 里(SET 的 OK 晚于晚发窗口才到 / 无 gate 会话 / 无 scene_manager)→
 	//     一律 ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁),不解冻。
 	static void BeginTravelHandoff(Guid playerId);
 
@@ -1732,7 +1806,7 @@ private:
 	//     冻结上限的"标记未发出"分支(ExpireTravelFreeze);
 	//   * ResolveTravelOutcome 核实过的两类正向证据(判定表 B4 epoch 未变 / B5 采纳回滚回执),调用前都已把 markEpoch 清 0
 	//     (取证脚本已删掉本族标记,不再登记撤回)。
-	// RequestTravelEnterScene 已不再调用它(那里 SET 已 OK,走 ConcludeHandoffAfterMarkSent)。已无交接意图时幂等 no-op。
+	// PublishAndEnterTravel 已不再调用它(那里 SET 已 OK,走 ConcludeHandoffAfterMarkSent)。已无交接意图时幂等 no-op。
 	//   notifyFailure = true  → 回失败 tip 让客户端收起遮罩:跨 zone 传送未成 kZoneTravelTargetBusy,
 	//                           同 zone 换图未成 kEnterSceneFailed(按组件里的 targetZoneId 自己分);
 	//   notifyFailure = false → 静默解冻。只用于"同 zone 重发后落回了本节点":换图其实成功了,场景由
@@ -1816,7 +1890,7 @@ private:
 	// 为什么同 zone 也踢:此刻 epoch 状态未知(已放行且会话已改绑 / 已放行但路由丢了 / 没放行 / 铸造后又回滚),
 	//   后三种不踢就是一条哑连接,scene 又没有强制 gate 断开的 RPC;只有第一种会多踢一次,数据安全。
 	// 调用点(site 只进日志、并作 DestroyDeposedPlayer 的 reasonTag):冻结上限(ExpireTravelFreeze)、enter_scene 阶段
-	// 晚发闸、SET 之后发现没有 gate 会话、SET 之后发现没有 scene_manager(这三处都在 RequestTravelEnterScene)、
+	// 晚发闸、SET 之后发现没有 gate 会话、SET 之后发现没有 scene_manager(这三处都在 PublishAndEnterTravel)、
 	// 取证读到本次回执但交叉校验不成立(JudgeTravelOutcomeReply,判定表 B6)。
 	static bool ConcludeHandoffAfterMarkSent(Guid playerId, travel_freeze_cap::MarkSentSite site,
 											 travel_freeze_cap::Clock::time_point now);
@@ -1867,7 +1941,7 @@ private:
 												 const ::scene_manager::EnterSceneResponse& resp);
 
 	// EnterScene 应答看门狗:一次性定时器,到期时若同一代(requestedAtMs 相同)的交接仍在途,
-	// 带着挂载时给的证据与原因走 ResolveTravelOutcome。RequestTravelEnterScene 首次挂载传 kNoReply;
+	// 带着挂载时给的证据与原因走 ResolveTravelOutcome。PublishAndEnterTravel 首次挂载传 kNoReply;
 	// ResolveTravelOutcome 因 Redis 不可用重挂时传**当前**证据,不在重挂时翻成超时。
 	// 首次挂的看门狗不取消、总是先于重挂的到期:它带进去的 kNoReply 会被交接组件上记下的应答证据覆盖
 	// (travel_outcome::EffectiveEvidence),所以重挂那个随后多半是代际不符的 no-op,这是预期行为。

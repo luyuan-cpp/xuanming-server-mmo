@@ -198,8 +198,8 @@ uint32_t Bag::CheckSpaceFor(const ItemCountMap &itemsToAdd, std::size_t *instanc
 	// 能不能放下" —— 后者会销毁玩家的东西,不能藏在一个名字里带 Check 的函数里。
 	// 真入包路径(AddItems)走 PlanInstances + PlanEviction。
 	//
-	// 副作用:对会淘汰的包(临时格),这个函数会说"放不下",而实际 AddItems 能
-	// 成功。这是刻意的 —— 预测就该按不破坏现状回答。
+	// 副作用:对会淘汰的包(配了 EvictOldestFirst 的;2026-11-05 起没有生产包这样配,临时格也是满即拒),
+	// 这个函数会说"放不下",而实际 AddItems 能成功。这是刻意的 —— 预测就该按不破坏现状回答。
 	ItemCountMap instancesByConfig;
 	std::size_t instancesNeeded = 0;
 	RETURN_ON_ERROR(PlanInstances(itemsToAdd, &instancesByConfig, &instancesNeeded));
@@ -678,7 +678,11 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	std::size_t newInstanceCount = 0;
 	if (!PlanEviction(stackUnits, evictedOut != nullptr, victims, &newInstanceCount, &separateInstances))
 	{
-		return PrintStackAndReturnError(kBagItemNotStacked);
+		// 放不下(淘汰也腾不够)是玩家随手能造出来的常规拒绝:静默返回,怎么记由调用方决定 ——
+		// BagService 的入包入口经 RETURN_ON_ERROR 打 WARN;战斗结算两包都满时按玩家限频打 WARN(§6.6)。
+		// 以前这里打 ERROR + 调用栈,两包都满的玩家每次结算重试(最长约 60 秒一次)就刷两条。
+		// 真正的故障不靠这里:PlanEviction / PlanInstances / CanReserve 在各自的故障分支里打 ERROR。
+		return kBagItemNotStacked;
 	}
 
 	// 先铸齐最终规划所需的号，再执行初始化回调和任何玩家状态修改。预取/失效可在铸号中途发生。
@@ -1338,6 +1342,127 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 	}
 
 	AssertLayerConsistency();
+	return kSuccess;
+}
+
+// ── 包间批量搬运(同一玩家名下的两个包;全或无)──────────────────────────────
+// 契约见 bag_system.h。两个包都先复制成候选,全部改完才同时发布:任何一步失败只丢副本,
+// 不依赖反向恢复(与 AddItems 同一种提交方式)。所以下面每个失败分支都可以直接 return。
+
+uint32_t Bag::MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
+							  std::vector<DestroyedInstance> *absorbedOut)
+{
+	// ── 纯校验(只读两个包)──────────────────────────────────────────────
+	if (&target == this || guids.empty())
+	{
+		LOG_ERROR << "Bag::MoveInstancesTo: " << (guids.empty() ? "empty guid list" : "source and target are the same bag")
+			<< "; nothing moved. player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemInvalidParam);
+	}
+	std::unordered_set<Guid> listed;
+	for (const Guid guid : guids)
+	{
+		if (!listed.insert(guid).second)
+		{
+			LOG_ERROR << "Bag::MoveInstancesTo: guid " << guid << " is listed twice; nothing moved. player "
+				<< PlayerGuid();
+			return PrintStackAndReturnError(kBagAddItemInvalidParam);
+		}
+		if (!store_.Contains(guid))
+		{
+			return PrintStackAndReturnError(kBagDeleteItemFindGuid);
+		}
+		if (target.store_.Contains(guid))
+		{
+			LOG_ERROR << "Bag::MoveInstancesTo: guid " << guid << " already exists in the target bag; nothing moved. player "
+				<< PlayerGuid();
+			return PrintStackAndReturnError(kBagDeleteItemAlreadyHasGuid);
+		}
+	}
+
+	// ── 两个包都在候选上改 ──────────────────────────────────────────────
+	ItemStore sourceStore = store_;
+	ItemStore targetStore = target.store_;
+	auto sourceLayout = layout_->Clone();
+	auto targetLayout = target.layout_->Clone();
+	if (sourceLayout == nullptr || targetLayout == nullptr)
+	{
+		LOG_ERROR << "Bag::MoveInstancesTo: a layout could not be cloned into a candidate; nothing moved. player "
+			<< PlayerGuid();
+		assert(false && "布局无法创建事务候选");
+		return PrintStackAndReturnError(kInvalidTableData);
+	}
+
+	std::vector<DestroyedInstance> absorbed;
+	for (const Guid guid : guids)
+	{
+		// 上面已确认它在本包、且列表里不重复,所以候选里一定还在。整份拷出:equip 段与未知字段原样带走。
+		ItemComp piece = *sourceStore.Find(guid);
+		const uint32_t configId = piece.config_id();
+		LookupItemOrReturnError(configId);
+		const uint32_t maxStack = itemRow->max_stack_size();
+		if (maxStack == 0)
+		{
+			return PrintStackAndReturnError(kInvalidTableData);
+		}
+		// 扣到 0 的堆当场就释放,0 数量的实例只能是数据损坏;不可叠加实例恒为 1。都不当成一件东西搬(同 TakeInstance)。
+		if (piece.size() == 0 || (maxStack == 1 && piece.size() != 1))
+		{
+			LOG_ERROR << "Bag::MoveInstancesTo: guid " << guid << " (config " << configId << ") has size=" << piece.size()
+				<< " (max_stack_size=" << maxStack << "); refusing to move corrupted data. player " << PlayerGuid();
+			return PrintStackAndReturnError(kBagItemDeletionSizeMismatch);
+		}
+		if (!target.admission_->Accepts(configId))
+		{
+			LOG_ERROR << "Bag::MoveInstancesTo: the target bag does not admit config " << configId << " (guid " << guid
+				<< "); nothing moved. player " << PlayerGuid();
+			return PrintStackAndReturnError(kBagAddItemInvalidParam);
+		}
+		sourceStore.Erase(guid);
+		sourceLayout->Remove(guid);
+
+		// 可叠加的先灌进 target 的未满堆。灌不灌只看 CanStack(与入包同一判据):带实例数据 / 更新版本字段的
+		// 实例不并,remaining 原样。超过上限的脏堆照样只灌、不拆:余量原样搬过去,数量一个都不丢。
+		uint32_t remaining = piece.size();
+		if (maxStack > 1)
+		{
+			std::vector<ItemStore::StackFill> fills;
+			remaining = targetStore.PlanStackIntoExistingStacks(piece, maxStack, fills);
+			targetStore.ApplyStackFill(fills, nullptr);
+		}
+		if (remaining == 0)
+		{
+			absorbed.push_back({guid, configId, 0});
+			continue;
+		}
+		piece.set_size(remaining);
+		piece.set_acquire_seq(0); // 由 target 重新盖章:带着源包的序号进来会抬高 target 的水位
+		if (targetStore.Insert(std::move(piece)) == nullptr)
+		{
+			// 上面刚查过 target 没有这个 guid,候选里也只插入过本批的 guid(互不重复):走到这里是编程错误。
+			LOG_ERROR << "Bag::MoveInstancesTo: target store refused guid " << guid
+				<< " right after the duplicate check passed (programming error); nothing moved. player " << PlayerGuid();
+			assert(false && "搬运候选拒绝了已查重的 guid");
+			return PrintStackAndReturnError(kBagDeleteItemAlreadyHasGuid);
+		}
+		if (target.PlaceInstance(guid, configId, targetLayout.get()) == kInvalidSlot)
+		{
+			// 放不下(人物背包满了)是玩家随手能触发的常规拒绝,不打调用栈;两个候选一起丢掉,两包都没动。
+			return kBagAddItemBagFull;
+		}
+	}
+
+	// ── 发布:单一场景逻辑线程,中间没有回调;两个包的两层同时换成候选 ──────────
+	store_ = std::move(sourceStore);
+	layout_ = std::move(sourceLayout);
+	target.store_ = std::move(targetStore);
+	target.layout_ = std::move(targetLayout);
+	if (absorbedOut != nullptr)
+	{
+		absorbedOut->insert(absorbedOut->end(), absorbed.begin(), absorbed.end());
+	}
+	AssertLayerConsistency();
+	target.AssertLayerConsistency();
 	return kSuccess;
 }
 

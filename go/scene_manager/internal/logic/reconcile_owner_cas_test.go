@@ -13,10 +13,12 @@ package logic
 //
 // 修复前红的取法(修复前没有 destroyOrphanOfDeadNode,本文件编不过,所以按变异取红):
 //   - 变异 A:把 destroyOrphanOfDeadNode 末行传给 destroyInstanceInternal 的 deadNode 换成 ""。期望属主为空时
-//     脚本跳过比较,整条链路与修复前 reconcile 调的 destroyInstanceForce(..., "node_death") 等价。
+//     AtomicDestroyForce 先读属主、按读到的值认领(谁是属主都拆),整条链路与修复前 reconcile 调的
+//     destroyInstanceForce(..., "node_death") 等价。
 //     本文件 ReassignedAfterOwnerRead 红(失败信息含「收尾不得销毁」),其余四条绿;
 //     owner_read_interleave_test.go 的 ReconcileSkipsSceneReassignedAfterOwnerRead 也红。
-//   - 变异 B:恢复 A,删掉 luaAtomicDestroyInstanceForce 开头比较期望属主的 if ... end 三行。
+//   - 变异 B:恢复 A,删掉 scene_atomic.go luaSceneClaimOwnerCheck 里 `elseif nodeId ~= ARGV[6] then` 那个分支
+//     (两行,保留 end)。
 //     本文件 ReassignedAfterOwnerRead 与 ExpectedOwnerMismatch 两条红,其余三条绿;其中 NoExpectedOwner 与
 //     StillOwnedByDeadNode 守的是「不比对的 force 路径语义不变」与「属主仍是死节点时照常销毁」。
 //   - 变异 C:恢复 B,把 reconcileDeadNodeScenes 里的 destroyOrphanOfDeadNode(ctx, svcCtx, zoneId, sceneId,
@@ -107,7 +109,7 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	require.Equal(t, reconcileNodeDead, owner)
 
 	// 窗口里另一写者提交改派:属主、两侧反向索引与 scene_count 同批改到 live。
-	require.True(t, reassignSceneNode(c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead, reconcileNodeLive))
+	require.True(t, reassignSceneNode(c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead, reconcileNodeLive, freshPlacementGeneration(t, c.sc, reconcileCASZone)))
 	require.EqualValues(t, 1, readInt64(c.sc, nodeSceneCountKey(reconcileCASZone, reconcileNodeLive)))
 
 	ok, err := destroyOrphanOfDeadNode(ctx, c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead)
@@ -175,7 +177,7 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 	require.NoError(t, mr.Set(sceneNodeKey(reassigned), reconcileNodeLive))
 
 	for _, id := range []uint64{reassigned, unmapped} {
-		claim, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead)
+		claim, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead, "node_death")
 		require.NoError(t, err)
 		require.False(t, claim.Claimed)
 		require.Empty(t, claim.NodeID)
@@ -194,8 +196,8 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 	require.False(t, mr.Exists(sceneNodeKey(unmapped)), "不得替不存在的映射建键")
 }
 
-// 脚本层:期望属主为空串时不比对,与修复前同一语义 —— explicit / cascade / source_migrated / source_scaled_in
-// (都经 destroyInstanceForce)依赖它,属主是谁都照抹,返回抹除前的 (属主, 名额, 成员)。
+// 期望属主为空串时谁是属主都拆(AtomicDestroyForce 先读属主、按读到的值认领)—— explicit / cascade /
+// source_migrated / source_scaled_in(都经 destroyInstanceForce)依赖它,返回抹除前的 (属主, 名额, 成员)。
 func TestAtomicDestroyForce_NoExpectedOwnerWipesWhoeverOwnsIt(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID, bystander uint64 = 89505, 89506
@@ -207,7 +209,7 @@ func TestAtomicDestroyForce_NoExpectedOwnerWipesWhoeverOwnsIt(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	claim, err := AtomicDestroyForce(sc, reconcileCASZone, sceneID, "")
+	claim, err := AtomicDestroyForce(sc, reconcileCASZone, sceneID, "", "explicit")
 	require.NoError(t, err)
 	require.True(t, claim.Claimed)
 	require.Equal(t, reconcileNodeLive, claim.NodeID)

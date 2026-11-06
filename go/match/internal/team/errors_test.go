@@ -41,6 +41,8 @@ func tipCodes() map[string]uint32 {
 		"ErrSizeExceeded":        ErrSizeExceeded,
 		"ErrStateChanged":        ErrStateChanged,
 		"ErrInternal":            ErrInternal,
+		"ErrPvpPartySize":        ErrPvpPartySize,
+		"ErrRatingGapTooLarge":   ErrRatingGapTooLarge,
 	}
 }
 

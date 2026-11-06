@@ -290,7 +290,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSnapshotEntry final : public 
   // accessors -------------------------------------------------------
   enum : int {
     kPlayerDatabaseBlobFieldNumber = 5,
-    kPlayerDatabase1BlobFieldNumber = 6,
     kSchemaVersionFieldNumber = 7,
     kSnapshotIdFieldNumber = 1,
     kPlayerIdFieldNumber = 2,
@@ -312,21 +311,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSnapshotEntry final : public 
   const ::std::string& _internal_player_database_blob() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_player_database_blob(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_player_database_blob();
-
-  public:
-  // bytes player_database_1_blob = 6;
-  void clear_player_database_1_blob() ;
-  [[nodiscard]] const ::std::string& player_database_1_blob() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_player_database_1_blob(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_player_database_1_blob();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_player_database_1_blob();
-  void set_allocated_player_database_1_blob(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_player_database_1_blob() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_player_database_1_blob(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_player_database_1_blob();
 
   public:
   // string schema_version = 7;
@@ -408,7 +392,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSnapshotEntry final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 8,
                           0, 50,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -438,7 +422,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSnapshotEntry final : public 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr player_database_blob_;
-    ::google::protobuf::internal::ArenaStringPtr player_database_1_blob_;
     ::google::protobuf::internal::ArenaStringPtr schema_version_;
     ::uint64_t snapshot_id_;
     ::uint64_t player_id_;
@@ -921,7 +904,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSnapshotsResponse final : publi
 inline void PlayerSnapshotEntry::clear_snapshot_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.snapshot_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t PlayerSnapshotEntry::snapshot_id() const {
   // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.snapshot_id)
@@ -929,7 +912,7 @@ inline ::uint64_t PlayerSnapshotEntry::snapshot_id() const {
 }
 inline void PlayerSnapshotEntry::set_snapshot_id(::uint64_t value) {
   _internal_set_snapshot_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.snapshot_id)
 }
 inline ::uint64_t PlayerSnapshotEntry::_internal_snapshot_id() const {
@@ -945,7 +928,7 @@ inline void PlayerSnapshotEntry::_internal_set_snapshot_id(::uint64_t value) {
 inline void PlayerSnapshotEntry::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t PlayerSnapshotEntry::player_id() const {
   // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.player_id)
@@ -953,7 +936,7 @@ inline ::uint64_t PlayerSnapshotEntry::player_id() const {
 }
 inline void PlayerSnapshotEntry::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.player_id)
 }
 inline ::uint64_t PlayerSnapshotEntry::_internal_player_id() const {
@@ -969,7 +952,7 @@ inline void PlayerSnapshotEntry::_internal_set_player_id(::uint64_t value) {
 inline void PlayerSnapshotEntry::clear_snapshot_time() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.snapshot_time_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t PlayerSnapshotEntry::snapshot_time() const {
   // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.snapshot_time)
@@ -977,7 +960,7 @@ inline ::uint64_t PlayerSnapshotEntry::snapshot_time() const {
 }
 inline void PlayerSnapshotEntry::set_snapshot_time(::uint64_t value) {
   _internal_set_snapshot_time(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.snapshot_time)
 }
 inline ::uint64_t PlayerSnapshotEntry::_internal_snapshot_time() const {
@@ -993,7 +976,7 @@ inline void PlayerSnapshotEntry::_internal_set_snapshot_time(::uint64_t value) {
 inline void PlayerSnapshotEntry::clear_trigger() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trigger_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::SnapshotTrigger PlayerSnapshotEntry::trigger() const {
   // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.trigger)
@@ -1001,7 +984,7 @@ inline ::SnapshotTrigger PlayerSnapshotEntry::trigger() const {
 }
 inline void PlayerSnapshotEntry::set_trigger(::SnapshotTrigger value) {
   _internal_set_trigger(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.trigger)
 }
 inline ::SnapshotTrigger PlayerSnapshotEntry::_internal_trigger() const {
@@ -1077,75 +1060,11 @@ inline void PlayerSnapshotEntry::set_allocated_player_database_blob(::std::strin
   // @@protoc_insertion_point(field_set_allocated:PlayerSnapshotEntry.player_database_blob)
 }
 
-// bytes player_database_1_blob = 6;
-inline void PlayerSnapshotEntry::clear_player_database_1_blob() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_database_1_blob_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline const ::std::string& PlayerSnapshotEntry::player_database_1_blob() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.player_database_1_blob)
-  return _internal_player_database_1_blob();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void PlayerSnapshotEntry::set_player_database_1_blob(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  _impl_.player_database_1_blob_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.player_database_1_blob)
-}
-inline ::std::string* PROTOBUF_NONNULL PlayerSnapshotEntry::mutable_player_database_1_blob()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::std::string* _s = _internal_mutable_player_database_1_blob();
-  // @@protoc_insertion_point(field_mutable:PlayerSnapshotEntry.player_database_1_blob)
-  return _s;
-}
-inline const ::std::string& PlayerSnapshotEntry::_internal_player_database_1_blob() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_database_1_blob_.Get();
-}
-inline void PlayerSnapshotEntry::_internal_set_player_database_1_blob(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_database_1_blob_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL PlayerSnapshotEntry::_internal_mutable_player_database_1_blob() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.player_database_1_blob_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE PlayerSnapshotEntry::release_player_database_1_blob() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:PlayerSnapshotEntry.player_database_1_blob)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  auto* released = _impl_.player_database_1_blob_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.player_database_1_blob_.Set("", GetArena());
-  }
-  return released;
-}
-inline void PlayerSnapshotEntry::set_allocated_player_database_1_blob(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-  _impl_.player_database_1_blob_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.player_database_1_blob_.IsDefault()) {
-    _impl_.player_database_1_blob_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:PlayerSnapshotEntry.player_database_1_blob)
-}
-
 // string schema_version = 7;
 inline void PlayerSnapshotEntry::clear_schema_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.schema_version_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline const ::std::string& PlayerSnapshotEntry::schema_version() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1155,13 +1074,13 @@ inline const ::std::string& PlayerSnapshotEntry::schema_version() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerSnapshotEntry::set_schema_version(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.schema_version_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.schema_version)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerSnapshotEntry::mutable_schema_version()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_schema_version();
   // @@protoc_insertion_point(field_mutable:PlayerSnapshotEntry.schema_version)
   return _s;
@@ -1181,10 +1100,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerSnapshotEntry::_internal_mutable_sc
 inline ::std::string* PROTOBUF_NULLABLE PlayerSnapshotEntry::release_schema_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerSnapshotEntry.schema_version)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.schema_version_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.schema_version_.Set("", GetArena());
@@ -1194,9 +1113,9 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerSnapshotEntry::release_schema_vers
 inline void PlayerSnapshotEntry::set_allocated_schema_version(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.schema_version_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.schema_version_.IsDefault()) {
@@ -1209,7 +1128,7 @@ inline void PlayerSnapshotEntry::set_allocated_schema_version(::std::string* PRO
 inline void PlayerSnapshotEntry::clear_total_bytes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_bytes_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PlayerSnapshotEntry::total_bytes() const {
   // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.total_bytes)
@@ -1217,7 +1136,7 @@ inline ::uint64_t PlayerSnapshotEntry::total_bytes() const {
 }
 inline void PlayerSnapshotEntry::set_total_bytes(::uint64_t value) {
   _internal_set_total_bytes(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.total_bytes)
 }
 inline ::uint64_t PlayerSnapshotEntry::_internal_total_bytes() const {
@@ -1233,7 +1152,7 @@ inline void PlayerSnapshotEntry::_internal_set_total_bytes(::uint64_t value) {
 inline void PlayerSnapshotEntry::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t PlayerSnapshotEntry::zone_id() const {
   // @@protoc_insertion_point(field_get:PlayerSnapshotEntry.zone_id)
@@ -1241,7 +1160,7 @@ inline ::uint32_t PlayerSnapshotEntry::zone_id() const {
 }
 inline void PlayerSnapshotEntry::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:PlayerSnapshotEntry.zone_id)
 }
 inline ::uint32_t PlayerSnapshotEntry::_internal_zone_id() const {

@@ -3,7 +3,6 @@ package domainhost
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -19,19 +18,17 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
 	"shared/authoritysql"
 	"shared/callerauth"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
+	"shared/roleidentity"
 	"shared/serverbase"
 )
 
@@ -78,58 +75,45 @@ func (c Config) Secrets() (map[string]string, error) {
 	return result, nil
 }
 
-const SessionMetadata = "x-session-detail-bin"
-
-type sessionKey struct{}
-
-// Session返回入口捕获的原会话副本；写服务须把原修订带到同一SQL事务复核，不能只保留player_id。
+// Session 返回入口准入后的客户端会话副本(验签原件);没有会话(内部调用)时返回 nil。
+// 写服务须把原修订带到同一 SQL 事务复核,不能只保留 player_id;原角色归属已由入口准入捕获,roleidentity.Original 可取。
 func Session(ctx context.Context) *base.SessionDetails {
-	s, _ := ctx.Value(sessionKey{}).(*base.SessionDetails)
-	if s == nil {
-		return nil
-	}
-	return proto.Clone(s).(*base.SessionDetails)
+	session, _ := roleidentity.Session(ctx)
+	return session
 }
 
+// Player 返回客户端来源请求的 player_id;没有会话或会话里 player_id 为 0 时返回 false。
 func Player(ctx context.Context) (uint64, bool) {
-	s, _ := ctx.Value(sessionKey{}).(*base.SessionDetails)
-	return s.GetPlayerId(), s != nil && s.GetPlayerId() != 0
+	session, ok := roleidentity.Session(ctx)
+	return session.GetPlayerId(), ok && session.GetPlayerId() != 0
 }
 
-// 客户端只准入显式C2S白名单；带会话的内部控制/S2C调用直接拒绝。
-func Guard(clientMethods map[string]bool, budget time.Duration) grpc.UnaryServerInterceptor {
+// Guard 是领域进程的客户端入口:先套整请求预算,再走在线域共用的入口准入(roleidentity.EntryInterceptor,
+// 按生成的客户端方法集合)。客户端方法必须带 gate 签名的完整原身份;带会话调内部控制 / S2C 方法一律 PermissionDenied;
+// 不带会话的内部调用放行,由方法自己的调用方准入(serviceauth)负责。必须装在 callerauth.GateInterceptor 之后。
+func Guard(budget time.Duration) grpc.UnaryServerInterceptor {
+	entry, err := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if err != nil {
+		// 只会在判定函数为 nil 或匿名例外非法时出错,这里两者都是常量:出错即代码缺陷,不能带着它起服务。
+		panic(err)
+	}
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 		ctx, cancel := context.WithTimeout(ctx, budget)
 		defer cancel()
-		values := metadata.ValueFromIncomingContext(ctx, SessionMetadata)
-		if len(values) > 0 {
-			if len(values) != 1 || !clientMethods[info.FullMethod] {
-				return nil, status.Error(codes.PermissionDenied, "客户端无权调用该方法")
-			}
-			bytes, err := base64.StdEncoding.DecodeString(values[0])
-			if err != nil {
-				return nil, status.Error(codes.Unauthenticated, "会话不可解码")
-			}
-			session := &base.SessionDetails{}
-			if proto.Unmarshal(bytes, session) != nil || session.GetPlayerId() == 0 {
-				return nil, status.Error(codes.Unauthenticated, "会话无效")
-			}
-			ctx = context.WithValue(ctx, sessionKey{}, session)
-		}
-		return next(ctx, request)
+		return entry(ctx, request, info, next)
 	}
 }
 
 // Serve先监听再注册NodeInfo；返回前注销、关闭入口并有界等待在途处理。
-func Serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server), roots ...*drainproof.Session) error {
-	return serve(ctx, c, nodeType, clients, register, nil, roots...)
+func Serve(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), roots ...*drainproof.Session) error {
+	return serve(ctx, c, nodeType, register, nil, roots...)
 }
 
 // ServeWithReady 在真实监听和注册成功后通知同一生命周期 owner；通知不等于开放 SOURCE。
-func ServeWithReady(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) error {
-	return serve(ctx, c, nodeType, clients, register, listening, roots...)
+func ServeWithReady(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) error {
+	return serve(ctx, c, nodeType, register, listening, roots...)
 }
-func serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[string]bool, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) (runErr error) {
+func serve(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) (runErr error) {
 	if len(roots) < 1 || len(roots) > 3 || roots[0] == nil {
 		return errors.New("领域服务缺少显式根发行者门禁")
 	}
@@ -167,11 +151,11 @@ func serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 			go s.Stop()
 		} else {
 			register(s)
-			// 内部签名方法承接上游已接收工作；客户端白名单仍归本进程 SOURCE。
+			// 内部签名方法承接上游已接收工作；客户端方法(生成的客户端方法集合)仍归本进程 SOURCE。
 			for serviceName, serviceInfo := range s.GetServiceInfo() {
 				for _, method := range serviceInfo.Methods {
 					full := "/" + serviceName + "/" + method.Name
-					if !clients[full] {
+					if !clientrpc.Callable(full) {
 						relayMethods[full] = true
 					}
 				}
@@ -188,7 +172,7 @@ func serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 	}
 	framework.AddUnaryInterceptors(gateIdentity)
 	framework.AddOptions(grpc.MaxRecvMsgSize(4 << 20))
-	framework.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, relayMethods, ingress...), Guard(clients, time.Duration(c.Timeout-500)*time.Millisecond), traffic.UnaryServerInterceptor(), kill.UnaryServerInterceptor(), serverbase.UnaryInterceptor(serverbase.Options{}))
+	framework.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, relayMethods, ingress...), Guard(time.Duration(c.Timeout-500)*time.Millisecond), traffic.UnaryServerInterceptor(), kill.UnaryServerInterceptor(), serverbase.UnaryInterceptor(serverbase.Options{}))
 	done := make(chan error, 1)
 	go func() {
 		var failure error

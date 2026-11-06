@@ -42,9 +42,9 @@
 
    `DefaultCluster` 第一次部署时写进 etcd 的 `/mmorpg/db_placement_default`,之后配置不一致拒启:没有映射键的库都在这个集群上,不能靠改配置换。
 
-2. **控制工具也知道映射**:`writer_authority`、`maintenance_phase`、`debug_fetch`、`admission_recover` 的环境变量 `MMORPG_DB_PLACEMENT` 设成同形状的 JSON。`admission_recover` 没设时拒绝运行。K8s 上写者的 registrar init 已经带这个变量(login、gateway 除外,它们写区域 MySQL 上的 `mmorpg`,见 §9),其余工具手工设。没设时它们连连接串里的地址,库搬走之后就连错了。`merge_zone` 不读映射,库搬走之后 `MERGE_ZONE_ROUTE_DB_DSN` 要改成新地址;连错时写操作被冻结的闸门拒绝,但 `merge-zone-audit` 读到的是冻结时的数据。
+2. **控制工具也知道映射**:`writer_authority`、`maintenance_phase`、`debug_fetch`、`admission_recover`、`create_residual` 的环境变量 `MMORPG_DB_PLACEMENT` 设成同形状的 JSON。`admission_recover`、`create_residual` 没设时拒绝运行。K8s 上写者的 registrar init 已经带这个变量(login、gateway 除外,它们写区域 MySQL 上的 `mmorpg`,见 §9),其余工具手工设。没设时它们连连接串里的地址,库搬走之后就连错了。`merge_zone` 不读映射,库搬走之后 `MERGE_ZONE_ROUTE_DB_DSN` 要改成新地址;连错时写操作被冻结的闸门拒绝,但 `merge-zone-audit` 读到的是冻结时的数据。
 
-   **搬库期间(`prepare` 到 `cutover` 或 `rollback` 结束)禁用 `admission_recover`。** 它是人工修账的工具,不是注册过的写者,不走写者池的闸门,只靠自己在同事务里锁 `route_meta` 判 `writable`:冻结时拒绝。这条判定只保证不写冻结的库,不保证修账和切换的先后符合预期,所以这段时间不要用。
+   **搬库期间(`prepare` 到 `cutover` 或 `rollback` 结束)禁用 `admission_recover` 和 `create_residual -mode apply`。** 它们是人工修账的工具,不是注册过的写者,不走写者池的闸门,只靠自己在同事务里锁 `route_meta` 判 `writable`(`create_residual` 修名字时持着两个库的闸门行锁再写):冻结时拒绝。这条判定只保证不写冻结的库,不保证修账和切换的先后符合预期,所以这段时间不要用。
 
 3. **账号在目标集群提前建好,口令相同**:写者账号(`writer_registry` 里 ACTIVE 的 `sql_principal`,加上名册里的全部主体:滚动重启时新 Pod 用名册里下一个)、注册账号、schema 账号和维护账号。`plan` 逐个核账号存在,`cutover` 冻结之前再核一遍,再比一遍两侧的 `SHOW GRANTS`。连接串不换,换的只有地址。BR 和 `mysqldump` 都不带 `mysql.*`,账号和授权要自己建;授权是按表的,表要先存在,所以放在全量恢复之后(§4 第 3 步)。
 

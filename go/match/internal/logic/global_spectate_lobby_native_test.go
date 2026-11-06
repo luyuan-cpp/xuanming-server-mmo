@@ -229,6 +229,14 @@ func (f *globalLobbyFixture) addFormation(t *testing.T, battleId uint64) {
 	f.addFormationAt(t, battleId, nowMs(), lobbyFixtureDeadlineMs)
 }
 
+// addFormationOnNode 同 addFormation,只是成局的 target_node_id 换成 node(端点与实例仍是回环桩)。
+func (f *globalLobbyFixture) addFormationOnNode(t *testing.T, battleId uint64, node uint32) {
+	t.Helper()
+	f.addFormation(t, battleId)
+	_, err := f.db.Exec("UPDATE match_formation SET target_node_id=? WHERE battle_id=?", node, battleId)
+	require.NoError(t, err)
+}
+
 func (f *globalLobbyFixture) addFormationAt(t *testing.T, battleId, createdMs, deadlineMs uint64) {
 	t.Helper()
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(&battlepb.CreateBattleRequest{
@@ -691,6 +699,11 @@ func TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone(t *testing.T) {
 			_, err := f.db.Exec("UPDATE match_formation SET state=5 WHERE battle_id=?", battleId)
 			require.NoError(t, err)
 		}, metrics.SpectatorUnprovenCloseFormationEnded},
+		// COMPLETE 提交只把 retry_at_ms 写成 NoRetry(authority.terminalOutcomeNoRetryMs = 1<<63-1),state 仍是 4,期限也没到。
+		{"终局已提交", func(t *testing.T, battleId uint64) {
+			_, err := f.db.Exec("UPDATE match_formation SET retry_at_ms=? WHERE battle_id=?", uint64(1<<63-1), battleId)
+			require.NoError(t, err)
+		}, metrics.SpectatorUnprovenCloseFormationEnded},
 		{"已过期限加宽限", func(t *testing.T, battleId uint64) { f.setFormationDeadlineAgo(t, battleId, 61*time.Second) }, metrics.SpectatorUnprovenCloseFormationEnded},
 		{"同 node_id 已是别的实例", func(*testing.T, uint64) { f.registerBattleNode("replaced-instance") }, metrics.SpectatorUnprovenCloseInstanceReplaced},
 		{"期限已过但还在宽限内", func(t *testing.T, battleId uint64) { f.setFormationDeadlineAgo(t, battleId, 30*time.Second) }, ""},
@@ -710,7 +723,12 @@ func TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone(t *testing.T) {
 			return closeCapturedSpectatorExit(context.Background(), f.svcCtx, original)
 		}},
 		{"新观战", func(t *testing.T, player, otherBattle uint64, _ *pb.MatchSpectatorRecord) error {
-			f.addFormation(t, otherBattle)
+			// 新场落在节点 8:注册表把节点 7 登记成别的实例时,节点 7 上的场按原实例已不在拒绝(locateGlobalWatch);
+			// 注册表装配了就把节点 8 登记成桩的实例,L0 落原件前要正面确认实例在线(battleInstanceRegistered)。
+			f.addFormationOnNode(t, otherBattle, 8)
+			if f.svcCtx.BattleNodes != nil {
+				f.svcCtx.BattleNodes.Upsert(svc.BattleNodeRpcPrefix+"8", discovery.NodeEntry{NodeId: 8, NodeUuid: f.battle.instance, Endpoint: f.addr})
+			}
 			resp := f.watch(t, player, &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: otherBattle})
 			if tip := resp.GetErrorMessage().GetId(); tip != 0 {
 				return fmt.Errorf("新观战被拒 tip=%d", tip)
@@ -798,4 +816,131 @@ func TestGlobalWatchTiDBReplacedInstanceRejectedWithoutRPC(t *testing.T) {
 	requireBattleSpectateKeysGone(t, f.svcCtx, f.mr, battleId)
 	adds, removes, attaches, promotes := f.battle.counts()
 	require.Zero(t, adds+removes+attaches+promotes, "不增加 RPC")
+}
+
+// COMPLETE 之后成局仍是 state 4:按 battle_id 再来的观众既不落 L0 原件(实例随后退出时,原件要等到期限才能关),
+// 也不拿 L1 / L2 凭证;观战入口读到就把这场的观战数据摘掉(R2-GO 严重-1)。
+func TestGlobalWatchTiDBCompletedBattleNotWatchable(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const secret = "fixture-only-battle-terminal-signature-000000000"
+	verifier, err := serviceauth.New(map[string]string{"battle": secret})
+	require.NoError(t, err)
+	f.svcCtx.BattleOutcomeAuth, f.svcCtx.BattleOutcomeSecret = verifier, secret
+	const battleId, playerA, playerB, viewer = uint64(910027), uint64(84), uint64(85), uint64(86)
+	f.addViewer(t, playerA)
+	f.addViewer(t, playerB)
+	f.addViewer(t, viewer)
+	outcome, err := CommitBattleOutcome(context.Background(), f.svcCtx, f.addCompletableFormation(t, battleId, playerA, playerB, secret))
+	require.NoError(t, err)
+	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE, outcome.GetDecision())
+	idle, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, f.svcCtx.RelayAdmission.WaitIdle(idle))
+	// 终局清理之后又被写回的残留(Promote 在途时战斗结束等):观战入口不能指望终局清理,自己也要摘。
+	seedBattleSpectateKeys(t, f.svcCtx, f.mr, battleId)
+
+	request := &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId}
+	resp := f.watch(t, viewer, request)
+
+	require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+	require.Empty(t, resp.GetSpectateTicket())
+	require.Zero(t, f.spectatorRows(t, viewer), "不落观战原件")
+	f.requireIntentRow(t, viewer, request, 5, constants.ErrBattleNotWatchable, 0)
+	requireBattleSpectateKeysGone(t, f.svcCtx, f.mr, battleId)
+	adds, _, attaches, promotes := f.battle.counts()
+	require.Zero(t, adds+attaches+promotes, "不发 RPC")
+}
+
+// 同 node_id 已登记成别的实例:直连档不落原件、不发 Add,中继档的新 gate 不挂接,这场一并摘出观战索引(R2-GO 一般-2)。
+func TestGlobalWatchTiDBReplacedInstanceEvictsBeforeAnyRPC(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	for i, tier := range []battlepb.ESpectateTier{tierDirect, tierRelay} {
+		t.Run(tier.String(), func(t *testing.T) {
+			player, battleId := uint64(87+i), uint64(910028+i)
+			f.addFormation(t, battleId)
+			f.addViewer(t, player)
+			addSpectateActive(f.svcCtx, battleId, nowMs(), visPublic)
+			if tier != tierDirect {
+				raiseTier(t, f.svcCtx, battleId, tier)
+			}
+			f.registerBattleNode("replaced-instance")
+			t.Cleanup(func() { f.svcCtx.BattleNodes = nil })
+			adds, _, attaches, _ := f.battle.counts()
+
+			request := &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId}
+			resp := f.watch(t, player, request)
+
+			require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+			require.Zero(t, f.spectatorRows(t, player), "不为死实例落原件")
+			f.requireIntentRow(t, player, request, 5, constants.ErrBattleNotWatchable, 0)
+			requireBattleSpectateKeysGone(t, f.svcCtx, f.mr, battleId)
+			addsAfter, _, attachesAfter, _ := f.battle.counts()
+			require.Equal(t, adds, addsAfter, "不发 Add")
+			require.Equal(t, attaches, attachesAfter, "不挂接新 gate")
+		})
+	}
+}
+
+// 注册表装配了却查不到原实例(没有登记)时不落 L0 原件,意图也不关:实例登记之后,同 request_id 重试照常准入(R2-GO 一般-2)。
+func TestGlobalWatchTiDBUnregisteredInstanceBeginsNoOriginal(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const player, battleId = uint64(89), uint64(910030)
+	f.addFormation(t, battleId)
+	f.addViewer(t, player)
+	f.svcCtx.BattleNodes = discovery.NewNodeWatcher("battle", svc.BattleNodeRpcPrefix, nil, nil)
+	t.Cleanup(func() { f.svcCtx.BattleNodes = nil })
+	request := &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId}
+	before := metrics.WatchBattleValue("source_unconfirmed")
+
+	resp := f.watch(t, player, request)
+
+	require.Equal(t, constants.ErrInternal, resp.GetErrorMessage().GetId())
+	require.Zero(t, f.spectatorRows(t, player), "确认不到实例就不落原件")
+	require.Equal(t, uint32(1), f.intentState(t, player, request), "意图不关,同 request_id 可以重试")
+	adds, _, _, _ := f.battle.counts()
+	require.Zero(t, adds)
+	require.Equal(t, before+1, metrics.WatchBattleValue("source_unconfirmed"))
+
+	f.registerBattleNode(f.battle.instance)
+	require.Equal(t, deliveryDirect, f.watch(t, player, request).GetDelivery())
+}
+
+// 随机选场选中终局已落定的场:这次请求按不可观战结案,成员同时被摘掉;换一个 request_id 再随机,就没有可看的了(R2-GO 一般-3)。
+func TestGlobalWatchTiDBRandomPickOfClosedFormationEvictsMember(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const player, battleId = uint64(90), uint64(910031)
+	f.addFormation(t, battleId)
+	f.addViewer(t, player)
+	_, err := f.db.Exec("UPDATE match_formation SET state=5 WHERE battle_id=?", battleId)
+	require.NoError(t, err)
+	addSpectateActive(f.svcCtx, battleId, nowMs(), visPublic)
+
+	first := f.watch(t, player, &pb.WatchBattleRequest{RequestId: uuid.NewString()})
+
+	require.Equal(t, constants.ErrBattleNotWatchable, first.GetErrorMessage().GetId())
+	requireBattleSpectateKeysGone(t, f.svcCtx, f.mr, battleId)
+	second := f.watch(t, player, &pb.WatchBattleRequest{RequestId: uuid.NewString()})
+	require.Equal(t, constants.ErrNoWatchableBattle, second.GetErrorMessage().GetId())
+}
+
+// 原件已被别的入口拿证明关到 5,持旧快照的入口再取消:回 nil,不再发 Remove。多副本的后台恢复并发处理同一行就是这个时序,
+// 回 pending 会给排空证明记一笔不清零的 Hold(R2-GO 一般-5)。
+func TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const player, battleId = uint64(91), uint64(910032)
+	f.addFormation(t, battleId)
+	f.addViewer(t, player)
+	request := &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId}
+	require.Equal(t, deliveryDirect, f.watch(t, player, request).GetDelivery())
+	stale, err := f.svcCtx.Authority.SpectatorForActor(f.actor(t, player), player, request.RequestId)
+	require.NoError(t, err)
+	require.Equal(t, uint32(2), stale.GetState())
+
+	require.NoError(t, cancelGlobalSpectator(context.Background(), f.svcCtx, stale, ""))
+	require.Equal(t, uint32(5), f.intentState(t, player, request))
+	_, removes, _, _ := f.battle.counts()
+
+	require.NoError(t, cancelGlobalSpectator(context.Background(), f.svcCtx, stale, ""), "已证实关闭就是取消要的结果")
+	_, removesAfter, _, _ := f.battle.counts()
+	require.Equal(t, removes, removesAfter, "不再发 Remove")
 }

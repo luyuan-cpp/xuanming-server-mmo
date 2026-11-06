@@ -100,3 +100,21 @@ FIX-CPP / FIX-GO / FIX-JAVA 没有第二轮完整语义评审的记录，后续�
 ## 7. 实测（§11 P0 的遗留，决定阈值）
 
 帧大小、gate 单线程扇出上限还没有实测，`Spectate.BroadcastAutoGateThreshold`（默认 32）、`BroadcastMaxConcurrent`（默认 4）、软水位 256 KB、`kFanoutBatch` 512 都是保守默认值。这些是 C++/Go 配置与实现参数，不代表 Java 的频道容量。扇出上限必须在 Linux 上使用目标构建与部署参数实测；Windows 功能验证及已有 Linux Debug 冒烟均不能替代容量数据。压测按 AGENTS §6。
+
+## 8. 第二轮评审修正的验证（2026-11-05 新增，未编译）
+
+修正内容与逐条来源见设计文档 §15.10，评审原文是 `reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`。第 1–3 步照常跑，下面是本批新增或改了期望的部分。任一步失败即停，保留完整输出。
+
+1. **生成**：`proto/battle/battle_node.proto` 只改了注释，第 1 步照常重跑即可，生成物只有注释变化。
+2. **Go**（`go/match`）：
+   - `gofmt -l internal/authority/completion.go internal/authority/spectator.go internal/authority/schema.go internal/logic/global_spectator.go internal/logic/spectate.go internal/logic/listwatchablebattleslogic.go internal/logic/setspectatefeaturedlogic.go`，应无输出。
+   - `go build ./...`、`go vet ./internal/logic/... ./internal/authority/...`
+   - 单测：`go test ./internal/authority/... -run 'TestSpectatorFormationEnded|TestFormationOutcomeDecided' -count=1 -v`；`go test ./internal/logic/... -run 'TestGlobalFormationWatchable|TestListWatchableBattles|TestReleaseSpectateOnOutcome|TestLobby|TestSpectate' -count=1 -v`
+   - 真 TiDB（环境变量同第 2 步第 4 项，必须 0 SKIP）：`go test ./internal/logic/... -run 'TestGlobalWatchTiDB|TestGlobalSpectator|TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone|TestCommitBattleOutcomeTiDB' -count=1 -v`；`go test ./internal/authority/... -run 'TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex|TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema|TestSpectatorTiDB' -count=1 -v`
+   - 期望变化：`TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone` 多一个 case「终局已提交」（3 个入口），「新观战」入口的新场改落在节点 8。
+3. **C++**（MSBuild 一律 `/m:1 /nr:false /p:CL_MPCount=1`，`/p:Configuration=Debug /p:Platform=x64`，串行）：
+   - 公共头 `node_command_topic.h`（新增观战通道活性常量与静态断言）与 `session_identity_fence.h`（未绑定会话一律丢弃）都改了，测试工程链接预编好的库，必须先重编库再编测试：`cpp/libs/engine/core/core.vcxproj` → `cpp/libs/services/gate/gate.vcxproj` → `cpp/nodes/gate/gate.vcxproj` → `cpp/nodes/battle/battle.vcxproj` → `cpp/tests/routing_identity_test/routing_identity_test.vcxproj` → `cpp/tests/rpc_controller_test/rpc_controller_test.vcxproj` → `cpp/tests/kafka_command_test/kafka_command_test.vcxproj`。
+   - 运行：`build/cpp/tests/routing_identity_test.exe --gtest_filter=SpectateHub.*:SpectateTicket*:SpectateSessionIdentity.*:GateIdentityFence.*:KickFence.*:GatePush*`；`build/cpp/tests/rpc_controller_test.exe --gtest_filter=BattleObserverContract.*:BattleSpectateRelay.*`；全量再各跑一次 `pwsh tools/scripts/run_cpp_tests.ps1 -Filter routing_identity` 与 `-Filter rpc_controller`。
+   - 期望变化：`BattleObserverContract.ShutdownSendsNoEndFrameWhileOutcomeIsUndecided` 已删除，由 `ShutdownTellsEveryChannelTheSourceIsLostForRoomsStillInProgress`、`ShutdownClosesSpectateAdmission`、`ShutdownKeepsUndecidedOutcomeRoomsOnKeepaliveUntilTeardown`（独立子进程）取代；新增 `ChannelKeepaliveRepublishesStateAfterTheKeepaliveInterval`、`OutcomeWaitKeepaliveCarriesFrozenStateAndPromotedCompleteOnlyBroadcasts`；`AssignmentFailureRemovesOriginalOperationAndNewOperationRecovers` 多了重放断言。
+   - Linux 构建照现有流程编 gate 与 battle，确认 `node_command_topic.h` 的静态断言在两个平台都成立。
+4. **冒烟**：第 6 步的 L0 冒烟照常；LOBBY 冒烟（robot 支持 `SubscribeSpectate` 之后）再加两条断言：一场手动回合等满 25 s 的中继观战，gate 不在最后一回合前合成 `SOURCE_LOST`；停机一台 battle 时，中继与广播观众立刻收到 166 `SOURCE_LOST`，不等 30 s。

@@ -79,7 +79,7 @@ func TTLFor(enterGameChainBudget time.Duration) time.Duration {
 }
 
 // boundRecordTTL 是绑定了玩家、连接未关闭的记录的兜底寿命。绑定不靠它到期,只由 Leave / Close 解除;
-// 它只回收 gate 进程崩溃(Disconnect 没有发出)之后再没人会读的记录,让这类记录有界。
+// 它只回收 Disconnect 没送到(gate 进程崩溃、断线时 login 不可用)之后再没人会读的记录,让这类记录有界。
 // 这条连接上的栅栏操作(登录提交即登录态续期、进游戏入口、绑定)都把它续满。
 //
 // 残余:gate 连接没有寿命上限。一条连接在游戏里连续停满 boundRecordTTL、期间没有任何栅栏操作时,login 这一层会丢绑定;
@@ -180,17 +180,27 @@ func Close(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Dur
 // 记录可能在后台链绑定之前过期 —— 绑定读到 gen = 0 误判「期间已离开」;或过期后又来一次 LeaveGame,
 // HINCRBY 从空记录重建出 gen = 1 恰好等于入口的旧值,这次离开被漏掉。续期之后记录至少从入口起活一个 ttl,
 // 而 ttl = TTLFor(后台链总预算) 大于后台链本身。
+//
+// 续期按记录状态取寿命(ARGV = {ttl(ms), boundRecordTTL(ms)}):绑定了玩家且连接未关闭 → boundRecordTTL;其余 → ttl。
+// 绑定的记录不能续成 ttl:同一角色重进、被拒的换角都会走到这里,续成 ttl 就把绑定的寿命压回 ttl,到期后换角照样放行。
 var checkEnterGameScript = redis.NewScript(`
 redis.call('HSETNX', KEYS[1], 'gen', '0')
-redis.call('PEXPIRE', KEYS[1], ARGV[1])
 local v = redis.call('HMGET', KEYS[1], 'closed', 'gen', 'player')
+if v[3] and v[1] ~= '1' then
+  redis.call('PEXPIRE', KEYS[1], ARGV[2])
+else
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
 return {v[1] or '', v[2] or '0', v[3] or ''}
 `)
 
 // CheckEnterGame 是 EnterGame 入口的判定:连接已关闭、或已经绑定了别的角色就拒绝;否则返回当前的 gen,
-// 后台链绑定时用它识别「期间已离开游戏」。ttl 与其余操作同一个值(TTLFor 派生),入口会把记录续期到 ttl。
+// 后台链绑定时用它识别「期间已离开游戏」。ttl 与其余操作同一个值(TTLFor 派生):没绑定玩家的记录续期到 ttl,
+// 绑定了玩家的续满 boundRecordTTL(见包注释「寿命」)。
 func CheckEnterGame(ctx context.Context, rdb redis.UniversalClient, key Key, playerID uint64, ttl time.Duration) (Outcome, uint64, error) {
-	vals, err := checkEnterGameScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).StringSlice()
+	vals, err := checkEnterGameScript.Run(ctx, rdb, []string{key.redisKey()},
+		ttl.Milliseconds(), boundRecordTTL.Milliseconds(),
+	).StringSlice()
 	if err != nil {
 		return OutcomeOK, 0, err
 	}
@@ -214,6 +224,7 @@ func CheckEnterGame(ctx context.Context, rdb redis.UniversalClient, key Key, pla
 	return OutcomeOK, gen, nil
 }
 
+// ARGV = {入口记下的 gen, playerID, boundRecordTTL(ms)}。
 var bindPlayerScript = redis.NewScript(`
 local v = redis.call('HMGET', KEYS[1], 'closed', 'gen', 'player')
 if v[1] == '1' then
@@ -232,13 +243,14 @@ return 'ok'
 `)
 
 // BindPlayer 是后台链会话持久化成功之后、向 gate 发 BindSession 之前的绑定点:先查 closed 再写 player
-// (与 Close 构成双边握手)。返回 OutcomeOK 才算绑定成功;其余结果由调用方补偿:
+// (与 Close 构成双边握手)。绑定成功后记录续满 boundRecordTTL:绑定只由 Leave / Close 解除,不随在途操作的 ttl 到期
+// (包注释「寿命」),所以这里不收 ttl。返回 OutcomeOK 才算绑定成功;其余结果不写记录,由调用方补偿:
 //
 //	OutcomeClosed:连接已断开 → 补发断线租约(markPlayerSessionDisconnecting)后中止;
 //	OutcomeLeft / OutcomeOtherPlayer → 删除本次写入的会话(MarkOffline CAS)后中止。
-func BindPlayer(ctx context.Context, rdb redis.UniversalClient, key Key, playerID, expectGen uint64, ttl time.Duration) (Outcome, error) {
+func BindPlayer(ctx context.Context, rdb redis.UniversalClient, key Key, playerID, expectGen uint64) (Outcome, error) {
 	raw, err := bindPlayerScript.Run(ctx, rdb, []string{key.redisKey()},
-		strconv.FormatUint(expectGen, 10), strconv.FormatUint(playerID, 10), ttl.Milliseconds(),
+		strconv.FormatUint(expectGen, 10), strconv.FormatUint(playerID, 10), boundRecordTTL.Milliseconds(),
 	).Text()
 	if err != nil {
 		return OutcomeOK, err
@@ -278,7 +290,7 @@ return '0'
 `)
 
 // Leave 记一次离开游戏(gen + 1)并解除绑定,返回原先绑定的玩家(没有为 0)。LeaveGame 在清理会话之前调用;
-// 会话里的 player_id 为 0 时,用这里返回的玩家删除会话。
+// 会话里的 player_id 为 0 时,用这里返回的玩家删除会话。解除绑定后记录收回到 ttl:gen 只需活过还在途的后台链。
 func Leave(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Duration) (uint64, error) {
 	raw, err := leaveScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).Text()
 	if err != nil {

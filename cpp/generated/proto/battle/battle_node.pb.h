@@ -4728,6 +4728,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     kOutcomeProtocolVersionFieldNumber = 14,
     kAdmitBeforeMsFieldNumber = 13,
     kSpectateVisibilityFieldNumber = 15,
+    kRecordReplayFieldNumber = 16,
   };
   // repeated .BattlePlayerSnapshot players = 3;
   [[nodiscard]] int players_size()
@@ -4911,12 +4912,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
   void _internal_set_spectate_visibility(::eSpectateVisibility value);
 
   public:
+  // bool record_replay = 16;
+  void clear_record_replay() ;
+  [[nodiscard]] bool record_replay() const;
+  void set_record_replay(bool value);
+
+  private:
+  bool _internal_record_replay() const;
+  void _internal_set_record_replay(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateBattleRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          2, 93,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          2, 101,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4959,6 +4970,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     ::uint32_t outcome_protocol_version_;
     ::uint64_t admit_before_ms_;
     int spectate_visibility_;
+    bool record_replay_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6072,6 +6084,30 @@ inline ::eSpectateVisibility CreateBattleRequest::_internal_spectate_visibility(
 inline void CreateBattleRequest::_internal_set_spectate_visibility(::eSpectateVisibility value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spectate_visibility_ = value;
+}
+
+// bool record_replay = 16;
+inline void CreateBattleRequest::clear_record_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.record_replay_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline bool CreateBattleRequest::record_replay() const {
+  // @@protoc_insertion_point(field_get:CreateBattleRequest.record_replay)
+  return _internal_record_replay();
+}
+inline void CreateBattleRequest::set_record_replay(bool value) {
+  _internal_set_record_replay(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:CreateBattleRequest.record_replay)
+}
+inline bool CreateBattleRequest::_internal_record_replay() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.record_replay_;
+}
+inline void CreateBattleRequest::_internal_set_record_replay(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.record_replay_ = value;
 }
 
 // -------------------------------------------------------------------

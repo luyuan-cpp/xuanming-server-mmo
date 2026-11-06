@@ -117,6 +117,9 @@ func SetSession(ctx context.Context, plClient plpb.PlayerLocatorClient, session 
 // gateInstanceID 是发起断线的 gate 实例 uuid(SessionDetails.gate_instance_id,或入场链 state 里的同一个值)。
 // player_locator 在它与会话记录的实例号都非空且不等时,按旧实例迟到的上报忽略;空 = 不校验
 // (docs/design/scene-enter-chain-residuals.md §6)。
+//
+// 30s 也是 scene 断线保留的上界:C++ connection_lost_hold.h 的 kLoginReconnectLease 镜像这个值,并用 static_assert
+// 保证角色在原地只留 25s、在租约到期之前退出(docs/design/player-connection-lost-hold.md §7)。改这里必须同步改那边。
 func SetSessionDisconnecting(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64, sessionID uint32, gateInstanceID string) error {
 	_, err := plClient.SetDisconnecting(ctx, &plpb.SetDisconnectingRequest{
 		PlayerId:        playerID,

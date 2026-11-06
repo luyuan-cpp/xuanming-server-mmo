@@ -18,16 +18,20 @@ import (
 	"trade/internal/config"
 	"trade/internal/data"
 
+	base "proto/common/base"
 	dspb "proto/data_service"
 
 	"shared/assetop"
 	"shared/authoritysql"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/etcdwatch"
 	"shared/idsegment"
 	"shared/mergedzone"
+	"shared/noderegistry"
 	"shared/placement"
 	"shared/rolefence"
+	"shared/workshard"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
@@ -43,6 +47,12 @@ const ListingIDBizTag = "trade_listing"
 
 // RoleFenceCaller 是 trade 读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(RoleFenceCaller)。
 const RoleFenceCaller = "trade"
+
+// TradeNodeRpcPrefix 是 trade 实例在 etcd 的注册前缀("TradeNodeService.rpc"),由枚举名派生,不手写
+// (noderegistry 契约 §2)。注册(trade.go)与合同推进分工的成员表共用这一个定义。
+func TradeNodeRpcPrefix() string {
+	return base.ENodeType_name[int32(base.ENodeType_TradeNodeService)] + ".rpc"
+}
 
 const (
 	// etcdDialTimeout 与 chat 同值。
@@ -118,10 +128,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
 		panic("trade SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
 	}
-	etcdCli, err := clientv3.New(clientv3.Config{
+	// keepalive:场景节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: etcdDialTimeout,
-	})
+	}))
 	if err != nil {
 		panic("trade: failed to create etcd client: " + err.Error())
 	}
@@ -204,6 +215,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			panic(fmt.Errorf("交易角色护栏装配失败: %w", roleErr))
 		}
 		commerceEngine.Roles = roles
+		// 合同推进与收据 ACK 按片分工(缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8)。成员表只圈本 zone:
+		// 同一个 zone 的 trade 副本连同一个库。本副本的身份在 etcd 注册之后由 BindWorkMember 补上。
+		members := workshard.NewMembership(noderegistry.RpcZonePrefix(TradeNodeRpcPrefix(), c.ZoneId))
+		commerceEngine.Owns = members.Owns
+		assets.Members = members
 		assets.Commerce = commerceEngine
 		if c.Mall.URL != "" {
 			mall, err = commerce.NewMall(c.Mall.URL, os.Getenv(c.Mall.GatewaySecretEnv), os.Getenv(c.Mall.DeliverySecretEnv), commerceEngine)
@@ -275,6 +291,14 @@ func observeMergedZoneRefresh(err error) {
 // globalBackground 为 false 时(发布轨道 canary)只起节点镜像,见 AssetChannel.Start。
 func (sc *ServiceContext) StartAssetChannel(ctx context.Context, globalBackground bool) {
 	sc.Assets.Start(ctx, sc.Etcd, globalBackground)
+}
+
+// BindWorkMember 在 etcd 注册成功之后记下本副本的 node_uuid,合同推进从此按片分工(缺口清单第 16 条)。
+// 注册之前成员表若已有别的副本,本副本不负责任何片;通道没装配(AssetOp.Enabled=false)时是空操作。
+func (sc *ServiceContext) BindWorkMember(nodeUUID string) {
+	if sc.Assets != nil {
+		sc.Assets.Members.SetSelf(nodeUUID)
+	}
 }
 
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:

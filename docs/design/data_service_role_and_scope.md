@@ -60,7 +60,7 @@ Scene ── Kafka 流水/快照 ──▶ data_service ──▶ 全局 MySQL
 | `transaction_log` | `transaction_log_topic_g1` → `transaction_log` | 攒批(200 条 / 200ms)一条多行 `INSERT IGNORE`,**先插库后提交 offset** | 解不出 proto / `tx_id=0`:跳过并提交 | 有界重试后**停下不提交**(宁可积压不许丢),supervisor 60s 后从断点续消费 |
 | `player_snapshot` | `player_snapshot_topic_g1` → `player_snapshot` | 每分区一个 worker(分区内 FIFO、先落库后提交本分区最高 offset);默认逐条,`Kafka.SnapshotBatchMaxRows > 1` 时多行批量(预读 + 普通多行 INSERT,见本格后文)。按 `snapshot_guid` 去重(唯一键 `uk_snapshot_guid_nz`:逐条用 ODKU `id = LAST_INSERT_ID(id)` 回带 id;多行批量先普通读剔除已存在的 guid 与批内重复,剩下的按 guid 升序拼**普通**多行 INSERT,撞 1062 退回逐条 —— 不用多行 ODKU:它撞已存在行时留下自增主键末尾的间隙锁直到语句结束、rebalance 重叠时成环,给自增列赋值还会在批内重复时报 1869,均为 2026-10-16 真库复现,见事故文档 docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md §9.6;仅 MySQL 缺键兼容窗口退回逐行 `NOT EXISTS`，TiDB 缺键拒绝建池),落 `source=1` | 解不出 / `snapshot_id=0` / `player_id=0` / 超 MEDIUMBLOB:跳过并随本批提交 | 同上;批量失败先逐条兜底,兜底也插不进去的那一行让整个消费者停在那里(与逐条同结局) |
 
-生产者是 C++ scene(全局单 topic、裸 proto、key=player_id)。启动时 `kafkautil.EnsureTopics`(transaction_log 6 分区、snapshot 3 分区、保留 30 天;分区数是不可变契约)。Kafka 不可达**不拖死** data_service:第一次尝试就在后台 goroutine 里(EnsureTopics 对半死不活的 broker 要走完 sarama 30s 拨号 + 元数据重试,同步做会把 gRPC 启动和 Load/Save 一起按住),失败只记日志、每 30s 重试。指标:`kafka_consumer_up{consumer}`、`kafka_consumer_messages_total{consumer,outcome}`;两条 `kafka_consumer_up` 序列在第一次尝试**之前**就按 0 预注册,所以"消费者从来没起来"这个状态告警得到(不预注册的话那个 child series 根本不存在,`== 0` 的告警永远不触发,监控上和"服务没部署"长得一样)。
+生产者是 C++ scene(全局单 topic、裸 proto、key=player_id)。启动时 `kafkautil.EnsureTopics`(transaction_log 6 分区、snapshot 3 分区、保留 30 天;2026-11-06 起分区数只许加,broker 上少了原地加)。Kafka 不可达**不拖死** data_service:第一次尝试就在后台 goroutine 里(EnsureTopics 对半死不活的 broker 要走完 sarama 30s 拨号 + 元数据重试,同步做会把 gRPC 启动和 Load/Save 一起按住),失败只记日志、每 30s 重试。指标:`kafka_consumer_up{consumer}`、`kafka_consumer_messages_total{consumer,outcome}`;两条 `kafka_consumer_up` 序列在第一次尝试**之前**就按 0 预注册,所以"消费者从来没起来"这个状态告警得到(不预注册的话那个 child series 根本不存在,`== 0` 的告警永远不触发,监控上和"服务没部署"长得一样)。
 
 **G2a 快照审计管道扩容(2026-10-13,未经运行验证)**:`player_snapshot` 消费者改为「每分区一个 worker + 可配批量 + 实例级落库并发上限」,
 旋钮是 `Kafka.SnapshotBatchMaxRows` / `SnapshotBatchMaxBytes` / `SnapshotFlushIntervalMs` / `SnapshotMaxInflightFlushes`,**默认值 = 之前的逐条串行**
@@ -80,7 +80,7 @@ sarama 只读探针按 broker 视角报消费组 lag(全部分区合计与单分
 
 为什么连第一代也带后缀(与 go/db 的 `DbTaskTopicForGeneration` 在 `<=1` 时用裸名不同):broker 开着 `auto.create.topics.enable` 且 `num.partitions=1`(`deploy/docker-compose.yml` 的 `KAFKA_NUM_PARTITIONS=1`;k8s 清单没设,同样是默认 1),C++ 生产者一发消息就把**裸名字**的 topic 自动建成 1 分区。`EnsureTopics` 拿 6/3 的契约去比,只会永远返回 `partition contract mismatch`,两条消费者一条都起不来,唯一症状是每 30s 一条 Error 日志,而流水/快照全被保留期吃掉。带代号的名字与那两个自动建出来的裸 topic 互不相干。
 
-分区数要改 = `TopicGeneration` +1(换一批新 topic,老 topic 排空后删),**绝不**原地扩分区:扩分区会重映射 `key=player_id` 的哈希,同一玩家的流水顺序就断了。部署侧应当预建这两个 topic 并给足分区(6 / 3),不要依赖 broker 自动创建 —— k8s 上 Kafka pod 一重启就会按 1 分区重建自动创建的 topic,下一次 data-service 重启就永久卡住。
+加分区(2026-11-06 起)= 调大 `TransactionLogPartitions` / `SnapshotPartitions` 后滚动 data-service,`EnsureTopics`(`AllowPartitionGrowth`)原地加:两张表都按主键 / 唯一键去重,落库不依赖消息顺序,重映射 `key=player_id` 的哈希没有害处(见[审计流水链路的水平扩展](audit-pipeline-horizontal-scale-20261106.md) §2.A)。减分区才要 `TopicGeneration` +1(换一批新 topic,老 topic 排空后删)。部署侧仍应预建这两个 topic,不要依赖 broker 自动创建 —— 自动建出来的 topic 保留期继承 broker 默认值,预建脚本每次重新声明保留期。
 
 ### `player_snapshot.source` 列契约
 - `source=0`:GM / data_service 自己写入。`snapshot_type` 是 data_service 的 `SnapshotType`,`data` 是 JSON 字段图 `{fields: map[string][]byte}`,`snapshot_guid=0`。
@@ -129,7 +129,7 @@ IdSegment:
   BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, mail]   # 没配 = 这份默认清单;迁移 INSERT IGNORE 预建,绝不降位
 Kafka:
   Brokers: [127.0.0.1:9092]    # 留空 = 不消费(本地无 Kafka 合法)
-  TopicGeneration: 1           # 有效 topic 名 = <基名>_g<N>;改分区数就 +1,绝不原地扩分区
+  TopicGeneration: 1           # 有效 topic 名 = <基名>_g<N>;减分区才 +1,加分区直接改下面的 *Partitions(原地加)
   TransactionLogTopic: transaction_log_topic   # 基名 → 实际 transaction_log_topic_g1
   TransactionLogPartitions: 6
   TransactionLogConsumerGroup: data_service-transaction-log

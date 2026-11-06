@@ -76,6 +76,10 @@ SceneManagerRpc:
       - 127.0.0.1:2379
     Key: scenemanagerservice.rpc
   Timeout: 3000
+  # NonBlock: true —— 启动时不阻塞拨号。go-zero v1.9.2 的缺省是 false:scene_manager 3s 内连不上就让 player_locator 退出,
+  # 冷启动连锁 CrashLoop(docs/design/infra-reconnect-overview.md §1.6、§4 R5)。scene_manager 不可用期间,
+  # LeaseMonitor 的离场通知照样失败、保留清理任务重试。
+  NonBlock: true
 
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
 # 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。

@@ -165,9 +165,11 @@
     <ClCompile Include="bag_selection_order_test.cpp" />
     <ClCompile Include="player_store_client_test.cpp" />
     <ClCompile Include="bag_java_parity_test.cpp" />
+    <ClCompile Include="bag_temporary_retrieve_test.cpp" />
     <ClCompile Include="player_equip_test.cpp" />
     <ClCompile Include="player_equip_attribute_test.cpp" />
     <ClCompile Include="player_mystery_merchant_test.cpp" />
+    <ClCompile Include="client_request_ledger_test.cpp" />
     <ClCompile Include="player_feature_snapshot_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -181,6 +183,7 @@
     <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_pet_handler.cpp" />
   </ItemGroup>  <ItemGroup>
     <ClCompile Include="player_battle_settlement_test.cpp" />
+    <ClCompile Include="battle_freeze_hold_test.cpp" />
     <ClCompile Include="player_mission_system_test.cpp" />
     <ClCompile Include="player_activity_schedule_test.cpp" />
     <ClCompile Include="player_activity_system_test.cpp" />
@@ -192,5 +195,8 @@
     <ClCompile Include="scene_spawn_test.cpp" />
     <ClCompile Include="player_save_cost_test.cpp" />
     <ClCompile Include="player_save_metrics_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="fifo_eviction_profile_for_test.h" />
   </ItemGroup>
 </Project>

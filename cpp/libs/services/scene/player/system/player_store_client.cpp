@@ -266,6 +266,7 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
     {
         return SubmitResult::kNotSeeded;
     }
+    if (!SceneTaskScope::IsDurableAccepting()) return SubmitResult::kStopped;
     State &state = it->second;
     // 快照就是调用方此刻的内存,水位要在这时取:之后再发生的改动不在这份快照里。
     const uint64_t commitMark = options_.commitMark ? options_.commitMark() : 0;
@@ -372,6 +373,7 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
         const std::weak_ptr<Lifetime> original = lifetime_;
         options_.schedule(0.0, [original, playerId, attemptGen = ++state.attemptGen]()
         {
+            if (!SceneTaskScope::IsDurableAccepting()) return;
             auto* owner = ResolveOwner(original);
             if (owner == nullptr) return;
             const auto it = owner->states_.find(playerId);
@@ -388,6 +390,7 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
 
 void PlayerStoreClient::Attempt(Guid playerId, State &state)
 {
+    if (!SceneTaskScope::IsDurableAccepting()) return;
     const uint64_t attemptGen = ++state.attemptGen;
     (void)SceneTaskScope::TryStartDurable(RunSaveAttempt(lifetime_, playerId, attemptGen), "PlayerStoreSave");
 }
@@ -551,8 +554,8 @@ void PlayerStoreClient::NotifyCommittedThrough(Guid playerId, uint64_t commitMar
 
 void PlayerStoreClient::Advance(Guid playerId)
 {
-    // 循环:pending 可能没有变化,直接结束,而它的回调里又可能 Submit。
-    while (true)
+    // pending 可能没有变化，回调也可能再次 Submit 或关闭任务准入。
+    while (SceneTaskScope::IsDurableAccepting())
     {
         const auto it = states_.find(playerId);
         if (it == states_.end())
@@ -673,6 +676,7 @@ PlayerStoreClient::Clock::time_point PlayerStoreClient::Now() const
 
 void PlayerStoreClient::RequestClaim(Guid playerId)
 {
+    if (!SceneTaskScope::IsDurableAccepting()) return;
     const auto [it, inserted] = claims_.try_emplace(playerId);
     if (!inserted)
     {

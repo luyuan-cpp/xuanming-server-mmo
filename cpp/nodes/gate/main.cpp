@@ -13,6 +13,7 @@
 #include "node/system/etcd/etcd_transport.h"
 #include "handler/rpc/gate_service_handler.h"
 #include "handler/rpc/client_session_handler.h"
+#include "handler/rpc/client_heartbeat.h"
 #include "handler/rpc/client_request_lane.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "muduo_grpc/channel.h"
@@ -32,12 +33,15 @@
 #include "proto/contracts/kafka/gate_command.pb.h"
 #include "proto/common/base/message.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
+#include "handler/event/gate_event_handler.h"
 #include "handler/event/gate_kafka_command_router.h"
 #include "handler/event/scene_entry_dispatch.h"
+#include "rpc/service_metadata/chat_service_metadata.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
 #include "spectate/gate_spectate_client.h"
 #include "spectate/gate_spectate_ticket.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -213,6 +217,9 @@ namespace
         // 按弱引用找到它;在 Node 之后析构,这时 Kafka 消费已经停了。
         std::shared_ptr<gate_spectate::SpectateHub> spectateHub;
         TimerTaskComp spectateSweepTimer;
+        // 客户端连接的存活扫描:握手期限与空闲超时(handler/rpc/client_heartbeat.cpp,docs/design/gate-client-heartbeat.md §5.4)。
+        // 回调不捕获任何对象;必须主动扫:死掉的客户端不会再发任何东西来触发检查。没有到期的检查点时每轮只做一次堆顶比较。
+        TimerTaskComp clientLivenessSweepTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -294,6 +301,86 @@ namespace
         return node::kafka::RegisterKafkaCommandHandler<SpectateFrameEvent>(gateNode, broadcastOptions, onFrame);
     }
 
+    // 世界频道推送的每台 gate 转发预算(docs/design/chat-world-channel-fanout.md §4)。推送开销是「世界消息数 × 本机在线人数」,
+    // 全服聊天量一涨(刷屏、脚本),不设上限每台 gate 的下行就按平方增长。预算按 gate 计、不按会话计:本机所有会话收的是同一条
+    // 广播流,超出预算的那几条对本机所有会话一起不推,每台 gate 的推送开销只与本机在线人数成正比。不推的消息仍在 chat 的历史里,
+    // 客户端打开面板或重连时拉得到。每秒 10 条、突发 20 条是人读得完的量级,不是压测结论,压测后按下行带宽再定。
+    // 只在 gate 主循环上用:Kafka 回调经 queueInLoop 投递到主循环(KafkaManager::StartBackgroundPolling),不加锁。
+    class WorldChatPushBudget
+    {
+    public:
+        bool TryTake(std::chrono::steady_clock::time_point now)
+        {
+            if (!started_)
+            {
+                started_ = true;
+                last_ = now;
+            }
+            const double elapsedSeconds = std::chrono::duration<double>(now - last_).count();
+            last_ = now;
+            tokens_ = std::min(kBurst, tokens_ + elapsedSeconds * kPerSecond);
+            if (tokens_ < 1.0)
+            {
+                return false;
+            }
+            tokens_ -= 1.0;
+            return true;
+        }
+
+    private:
+        static constexpr double kPerSecond = 10.0;
+        static constexpr double kBurst = 20.0;
+        double tokens_ = kBurst;
+        std::chrono::steady_clock::time_point last_{};
+        bool started_ = false;
+    };
+
+    // 世界频道广播(docs/design/chat-world-channel-fanout.md §4):chat 每条世界消息只往 chat-world-bcast_g<N> 写一次,
+    // 每台 gate assign 全部分区,推给本机全部已绑定的会话。这个 topic 上只接 BroadcastToAllEvent(不是 GateCommand 信封,
+    // 踢人、重定向这类命令进不来),消息号也只认世界频道推送:别的消息号说明有生产者写错了 topic,丢弃并记 ERROR,
+    // 不让任何人借全服广播的通道下发任意客户端消息。推送是至多一次的通知,真相在 chat 的历史里。
+    bool RegisterChatWorldBroadcastConsumer(Node &gateNode)
+    {
+        // 与观战 L2 同理:维护受控启动只接受单分区的 manual consumer,全分区消费者硬注册会打死 gate。
+        // 这台 gate 上的玩家这段时间只能靠拉历史看到世界频道的新消息,不碰任何状态。
+        if (IsMaintenanceControlledBoot())
+        {
+            LOG_WARN << "Chat world broadcast consumer is not registered on a maintenance-controlled boot:"
+                     << " players on this gate see new world chat only by pulling history.";
+            return true;
+        }
+
+        using contracts::kafka::BroadcastToAllEvent;
+        auto options = node::kafka::BuildDefaultKafkaOptions(gateNode.GetNodeType());
+        options.commandTopicBase = node::kafka::kChatWorldBroadcastTopicBase;
+        options.assignAllPartitions = node::kafka::kChatWorldBroadcastTopicPartitions;
+        // 回调会被拷进 Kafka 回调表,预算与计数放在 shared_ptr 里让各份拷贝共用一份状态。
+        auto budget = std::make_shared<WorldChatPushBudget>();
+        auto overBudget = std::make_shared<uint64_t>(0);
+        const auto onBroadcast = [budget, overBudget](const std::string &topic, const BroadcastToAllEvent &event)
+        {
+            const uint32_t messageId = event.message_content().message_id();
+            if (messageId != ClientPlayerChatNotifyWorldChatMessageId)
+            {
+                LOG_ERROR << "Chat world broadcast dropped: message_id=" << messageId
+                          << " is not the world chat push, topic=" << topic;
+                return;
+            }
+            if (!budget->TryTake(std::chrono::steady_clock::now()))
+            {
+                // 刷屏时每条都会走到这里,采样:第一条必打,此后每 1024 条一行。
+                if (((*overBudget)++ & 0x3FF) == 0)
+                {
+                    LOG_WARN << "World chat push over the per-gate budget; not pushed (still in chat history), over_budget_total="
+                             << *overBudget;
+                }
+                return;
+            }
+            GateEventHandler::BroadcastToAllEventHandler(event);
+        };
+        return node::kafka::RegisterKafkaCommandHandler<BroadcastToAllEvent>(gateNode, options, onBroadcast);
+    }
+
     bool RegisterGateKafkaConsumers(Node &gateNode)
     {
         if (!node::kafka::RegisterKafkaCommandHandler<GateNodeHooks::KafkaCommandType>(
@@ -301,7 +388,11 @@ namespace
         {
             return false;
         }
-        return RegisterSpectateFrameConsumers(gateNode);
+        if (!RegisterSpectateFrameConsumers(gateNode))
+        {
+            return false;
+        }
+        return RegisterChatWorldBroadcastConsumer(gateNode);
     }
 
     // 所有节点类型上的 gRPC 通道都没有未完成的调用(关机排空用:断线通知发出并拿到结果之后,才允许清掉通道)。
@@ -469,8 +560,8 @@ int main(int argc, char *argv[])
                 node.SetBeforeShutdown(closeSource);
                 node.SetMaintenanceInboundRelay(); // 内部推送/路由是relay；客户端TCP根由closeSource关闭。
                 node.SetMaintenanceSourceClose(closeSource);
-                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); });
-                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); });
+                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
+                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
                 node.SetShutdownDrainComplete([closingSessions](Node &)
                                               {
                     const auto &sessions = tlsSessionManager.sessions();
@@ -544,6 +635,12 @@ int main(int argc, char *argv[])
                         // 观战空闲巡检与指标行:回调不捕获对象,hub 按弱引用找,没有了就是空操作(AGENTS.md §11.7)。
                         context.spectateSweepTimer.RunEvery(gate_spectate::kSweepIntervalSeconds, [] {
                             gate_spectate::SweepIdleNow();
+                        });
+                        // 客户端存活扫描:建连 10s 未验签、或验签后静默满 30s 的连接 forceClose,之后照常走断开回调
+                        // (docs/design/gate-client-heartbeat.md)。与上面几个扫描一样紧跟客户端回调装上:客户端连进来就有握手期限。
+                        // 维护关源与停机关源都先关掉全部客户端连接、等会话删完才停中继与拆除,所以这两处取消时已没有要扫的连接。
+                        context.clientLivenessSweepTimer.RunEvery(gate_client_heartbeat::kSweepIntervalSeconds, [] {
+                            gate_client_heartbeat::SweepLiveness(std::chrono::steady_clock::now());
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

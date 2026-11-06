@@ -73,6 +73,9 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		if size < uint32(len(snap.Record.Members)) || size > limit {
 			return s.matchReject(ctx, caller, ErrSizeExceeded, 0, &snap)
 		}
+		if code := CheckPvpPartySize(mode, size, uint32(len(snap.Record.Members))); code != 0 {
+			return s.matchReject(ctx, caller, code, 0, &snap)
+		}
 		if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && size > uint32(len(snap.Record.Members)) && s.svcCtx.Config.Team.FillQueueDisabled {
 			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
 		}
@@ -216,6 +219,16 @@ func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, cal
 	// LockMatch 已确认 roster 就是当前成员,这些路由行都在 CaptureTeamOriginals 里锁住了。
 	zones, err := s.authority.TeamHomeZonesTx(ctx, tx, roster)
 	if err != nil {
+		return nil, nil, err
+	}
+	// 人数档真人 PVP 的组队限制(设计文档开头第 9、10 条):按锁住的名单判,拒绝时整笔回滚,名册和开战锁都没动。
+	if code := CheckPvpPartySize(mode, size, uint32(len(roster))); code != 0 {
+		return &PinnedResult{Code: code}, nil, nil
+	}
+	if err = s.authority.RequirePartyRatingGapTx(ctx, tx, uint32(mode), roster); err != nil {
+		if errors.Is(err, authority.ErrPartyRatingGap) {
+			return &PinnedResult{Code: ErrRatingGapTooLarge}, nil, nil
+		}
 		return nil, nil, err
 	}
 	queued := mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM || size > uint32(len(roster))

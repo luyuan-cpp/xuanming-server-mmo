@@ -11,7 +11,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-// 本文件为隔离候选：未编译、未运行、未接入pool.go。
+// 本文件是权威 SQL 守卫的驱动层，pool.go 的 Open / PinCurrentSession / PinPlacedSession 都经它建连。
 // 生产writerGate必须使用正规生成的catalog proto；本批不造同义持久化struct。
 var (
 	ErrOutcomeUnknown    = errors.New("权威SQL执行结果未定，禁止自动重放")
@@ -430,15 +430,22 @@ func (c *guardedConn) ResetSession(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// 下面两处失败也一样:这次借出还没发任何业务语句,不存在结局未知,所以回 ErrBadConn,让 database/sql 关掉这条、
+	// 换下一条或新建(docs/design/infra-reconnect-overview.md §4 R2)。回别的错误时 database/sql 会把这条坏连接
+	// 照样交给业务(sql.go 的 conn() 只认 ErrBadConn),库重启、切主或链路断开空闲连接之后,池里每条失效连接都要
+	// 让一次业务调用失败,还会被记成结局未知、卡住排空。隔离标记照旧置位:这条连接无论如何不再发语句。
 	if resetter, ok := c.raw.(driver.SessionResetter); ok {
 		if err := resetter.ResetSession(ctx); err != nil {
+			// 驱动复用前的存活检查(go-sql-driver 的 CheckConnLiveness)发现服务端已关掉这条连接。
 			c.quarantined = true
-			return unknown("重置会话", err)
+			return driver.ErrBadConn
 		}
 	}
 	if err := c.session.pin(ctx, c.raw); err != nil {
+		// 重放会话变量或核验身份失败:连接已断,或所在实例已降成只读。新连接在建连时重新核验,
+		// 降级的实例在那里被拒,错误照常回给调用方。
 		c.quarantined = true
-		return unknown("重核强会话", err)
+		return driver.ErrBadConn
 	}
 	return nil
 }

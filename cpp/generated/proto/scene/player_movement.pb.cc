@@ -47,9 +47,316 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto, /* tracker*/ nullptr,},
         // ::TeleportS2C
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto, /* tracker*/ nullptr,},
+        // ::TeamFollowC2S
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto, /* tracker*/ nullptr,},
+        // ::TeamFollowStateS2C
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class TeamFollowStateS2C::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TeamFollowStateS2C>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_._has_bits_);
+};
+
+constexpr TeamFollowStateS2C::ParseTableT_ TeamFollowStateS2C::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::TeamFollowStateS2C>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .TeamFollowStopReason reason = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TeamFollowStateS2C, _impl_.reason_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.reason_)}},
+      // bool driven = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TeamFollowStateS2C, _impl_.driven_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.driven_)}},
+      // uint64 leader_entity = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TeamFollowStateS2C, _impl_.leader_entity_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.leader_entity_)}},
+      // uint32 slot = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TeamFollowStateS2C, _impl_.slot_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.slot_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool driven = 1;
+      {PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.driven_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 leader_entity = 2;
+      {PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.leader_entity_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 slot = 3;
+      {PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.slot_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .TeamFollowStopReason reason = 4;
+      {PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.reason_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr TeamFollowStateS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        leader_entity_{::uint64_t{0u}},
+        driven_{false},
+        slot_{0u},
+        reason_{static_cast< ::TeamFollowStopReason >(0)} {}
+
+template <typename>
+constexpr TeamFollowStateS2C::TeamFollowStateS2C(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TeamFollowStateS2C::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TeamFollowStateS2C(arena);
+}
+constexpr auto TeamFollowStateS2C::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(TeamFollowStateS2C), alignof(TeamFollowStateS2C));
+}
+constexpr auto TeamFollowStateS2C::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TeamFollowStateS2C::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TeamFollowStateS2C>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TeamFollowStateS2C::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TeamFollowStateS2C>(), &TeamFollowStateS2C::ByteSizeLong,
+              &TeamFollowStateS2C::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TeamFollowStateS2CGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TeamFollowStateS2CGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TeamFollowStateS2C_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TeamFollowStateS2C::InternalGenerateClassData_(
+            _default, &TeamFollowStateS2C_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TeamFollowStateS2C>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TeamFollowStateS2CGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TeamFollowStateS2C _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TeamFollowStateS2C>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TeamFollowStateS2CGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TeamFollowStateS2CGlobalsTypeInternal TeamFollowStateS2C_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TeamFollowStateS2C_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TeamFollowStateS2C_globals_.GetClassData();
+#else
+  return TeamFollowStateS2C_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class TeamFollowC2S::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TeamFollowC2S>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TeamFollowC2S, _impl_._has_bits_);
+};
+
+constexpr TeamFollowC2S::ParseTableT_ TeamFollowC2S::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TeamFollowC2S, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::TeamFollowC2S>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool follow = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TeamFollowC2S, _impl_.follow_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TeamFollowC2S, _impl_.follow_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool follow = 1;
+      {PROTOBUF_FIELD_OFFSET(TeamFollowC2S, _impl_.follow_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr TeamFollowC2S::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        follow_{false} {}
+
+template <typename>
+constexpr TeamFollowC2S::TeamFollowC2S(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TeamFollowC2S::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TeamFollowC2S(arena);
+}
+constexpr auto TeamFollowC2S::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(TeamFollowC2S), alignof(TeamFollowC2S));
+}
+constexpr auto TeamFollowC2S::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TeamFollowC2S::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TeamFollowC2S>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TeamFollowC2S::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TeamFollowC2S>(), &TeamFollowC2S::ByteSizeLong,
+              &TeamFollowC2S::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TeamFollowC2S, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[9],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TeamFollowC2SGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TeamFollowC2SGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TeamFollowC2S_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TeamFollowC2S::InternalGenerateClassData_(
+            _default, &TeamFollowC2S_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TeamFollowC2S>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TeamFollowC2SGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TeamFollowC2S _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TeamFollowC2S>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TeamFollowC2SGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TeamFollowC2SGlobalsTypeInternal TeamFollowC2S_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TeamFollowC2S_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TeamFollowC2S_globals_.GetClassData();
+#else
+  return TeamFollowC2S_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class TeleportRequestC2SResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<TeleportRequestC2SResponse>()._impl_._has_bits_);
@@ -1586,8 +1893,8 @@ const ::_pbi::ClassData* ActorMoveListS2C_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto[1];
 static const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL
     file_level_service_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto[1];
 const ::uint32_t
@@ -1684,6 +1991,22 @@ const ::uint32_t
         0,
         2,
         3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::TeamFollowC2S, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::TeamFollowC2S, _impl_.follow_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::TeamFollowStateS2C, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::TeamFollowStateS2C, _impl_.driven_),
+        PROTOBUF_FIELD_OFFSET(::TeamFollowStateS2C, _impl_.leader_entity_),
+        PROTOBUF_FIELD_OFFSET(::TeamFollowStateS2C, _impl_.slot_),
+        PROTOBUF_FIELD_OFFSET(::TeamFollowStateS2C, _impl_.reason_),
+        1,
+        0,
+        2,
+        3,
 };
 
 static const ::_pbi::MigrationSchema
@@ -1697,6 +2020,8 @@ static const ::_pbi::MigrationSchema
         {62, sizeof(::ActorMoveS2C)},
         {75, sizeof(::ActorMoveListS2C)},
         {80, sizeof(::TeleportS2C)},
+        {91, sizeof(::TeamFollowC2S)},
+        {96, sizeof(::TeamFollowStateS2C)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1709,6 +2034,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::ActorMoveS2C_globals_,
         &::ActorMoveListS2C_globals_,
         &::TeleportS2C_globals_,
+        &::TeamFollowC2S_globals_,
+        &::TeamFollowStateS2C_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5fmovement_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1741,19 +2068,34 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fmovement_2eproto[]
     "\r\"0\n\020ActorMoveListS2C\022\034\n\005moves\030\001 \003(\0132\r.A"
     "ctorMoveS2C\"_\n\013TeleportS2C\022\016\n\006entity\030\001 \001"
     "(\004\022\035\n\ttransform\030\002 \001(\0132\n.Transform\022\021\n\tinp"
-    "ut_seq\030\003 \001(\r\022\016\n\006reason\030\004 \001(\r2\257\003\n\031SceneMo"
-    "vementClientPlayer\022)\n\tMoveStart\022\r.MoveSt"
-    "artC2S\032\006.Empty\"\005\210\231\310\001\001\022\'\n\010MoveStop\022\014.Move"
-    "StopC2S\032\006.Empty\"\005\210\231\310\001\001\022\'\n\010MoveSync\022\014.Mov"
-    "eSyncC2S\032\006.Empty\"\005\210\231\310\001\001\022C\n\017TeleportReque"
-    "st\022\023.TeleportRequestC2S\032\033.TeleportReques"
-    "tC2SResponse\022+\n\rNotifyMoveAck\022\013.MoveAckS"
-    "2C\032\006.Empty\"\005\210\231\310\001\002\022/\n\017NotifyActorMove\022\r.A"
-    "ctorMoveS2C\032\006.Empty\"\005\210\231\310\001\002\0227\n\023NotifyActo"
-    "rMoveList\022\021.ActorMoveListS2C\032\006.Empty\"\005\210\231"
-    "\310\001\002\022-\n\016NotifyTeleport\022\014.TeleportS2C\032\006.Em"
-    "pty\"\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006"
-    "proto3"
+    "ut_seq\030\003 \001(\r\022\016\n\006reason\030\004 \001(\r\"\037\n\rTeamFoll"
+    "owC2S\022\016\n\006follow\030\001 \001(\010\"p\n\022TeamFollowState"
+    "S2C\022\016\n\006driven\030\001 \001(\010\022\025\n\rleader_entity\030\002 \001"
+    "(\004\022\014\n\004slot\030\003 \001(\r\022%\n\006reason\030\004 \001(\0162\025.TeamF"
+    "ollowStopReason*\342\002\n\024TeamFollowStopReason"
+    "\022\'\n#TEAM_FOLLOW_STOP_REASON_UNSPECIFIED\020"
+    "\000\022\'\n#TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW"
+    "\020\001\022(\n$TEAM_FOLLOW_STOP_REASON_TEAM_CHANG"
+    "ED\020\002\022*\n&TEAM_FOLLOW_STOP_REASON_LEADER_C"
+    "HANGED\020\003\022)\n%TEAM_FOLLOW_STOP_REASON_BECA"
+    "ME_LEADER\020\004\022)\n%TEAM_FOLLOW_STOP_REASON_S"
+    "CENE_CHANGED\020\005\022\'\n#TEAM_FOLLOW_STOP_REASO"
+    "N_LEADER_GONE\020\006\022#\n\037TEAM_FOLLOW_STOP_REAS"
+    "ON_LEAVING\020\0072\231\004\n\031SceneMovementClientPlay"
+    "er\022)\n\tMoveStart\022\r.MoveStartC2S\032\006.Empty\"\005"
+    "\210\231\310\001\001\022\'\n\010MoveStop\022\014.MoveStopC2S\032\006.Empty\""
+    "\005\210\231\310\001\001\022\'\n\010MoveSync\022\014.MoveSyncC2S\032\006.Empty"
+    "\"\005\210\231\310\001\001\022C\n\017TeleportRequest\022\023.TeleportReq"
+    "uestC2S\032\033.TeleportRequestC2SResponse\022+\n\r"
+    "NotifyMoveAck\022\013.MoveAckS2C\032\006.Empty\"\005\210\231\310\001"
+    "\002\022/\n\017NotifyActorMove\022\r.ActorMoveS2C\032\006.Em"
+    "pty\"\005\210\231\310\001\002\0227\n\023NotifyActorMoveList\022\021.Acto"
+    "rMoveListS2C\032\006.Empty\"\005\210\231\310\001\002\022-\n\016NotifyTel"
+    "eport\022\014.TeleportS2C\032\006.Empty\"\005\210\231\310\001\002\022+\n\nTe"
+    "amFollow\022\016.TeamFollowC2S\032\006.Empty\"\005\210\231\310\001\001\022"
+    ";\n\025NotifyTeamFollowState\022\023.TeamFollowSta"
+    "teS2C\032\006.Empty\"\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scen"
+    "e\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto_deps[4] = {
@@ -1766,19 +2108,26 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fmovement_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto = {
     false,
     false,
-    1646,
+    2256,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fmovement_2eproto,
     "proto/scene/player_movement.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto_deps,
     4,
-    9,
+    11,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fmovement_2eproto::offsets,
     file_level_enum_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto,
     file_level_service_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto,
 };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TeamFollowStopReason_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto);
+  return file_level_enum_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t TeamFollowStopReason_internal_data_[] = {
+    524288u, 0u, };
 // ===================================================================
 
 void MoveStartC2S::clear_start_location() {
@@ -4485,6 +4834,463 @@ void TeleportS2C::InternalSwap(TeleportS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 }
 // ===================================================================
 
+TeamFollowC2S::TeamFollowC2S(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TeamFollowC2S_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:TeamFollowC2S)
+}
+TeamFollowC2S::TeamFollowC2S(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TeamFollowC2S& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TeamFollowC2S_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE TeamFollowC2S::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void TeamFollowC2S::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.follow_ = {};
+}
+TeamFollowC2S::~TeamFollowC2S() {
+  // @@protoc_insertion_point(destructor:TeamFollowC2S)
+  SharedDtor(*this);
+}
+inline void TeamFollowC2S::SharedDtor(MessageLite& self) {
+  TeamFollowC2S& this_ = static_cast<TeamFollowC2S&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TeamFollowC2S_class_data_ =
+        TeamFollowC2S::InternalGenerateClassData_(TeamFollowC2S_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TeamFollowC2S::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TeamFollowC2S_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TeamFollowC2S_class_data_.tc_table);
+  return TeamFollowC2S_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TeamFollowC2S::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TeamFollowC2S_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TeamFollowC2S_globals_));
+  return TeamFollowC2S_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TeamFollowC2S::ParseTableT_
+    TeamFollowC2S::_table_ =
+        TeamFollowC2S::InternalGenerateParseTable_(TeamFollowC2S_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TeamFollowC2S::Clear() {
+// @@protoc_insertion_point(message_clear_start:TeamFollowC2S)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.follow_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TeamFollowC2S::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TeamFollowC2S& this_ = static_cast<const TeamFollowC2S&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TeamFollowC2S::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TeamFollowC2S& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:TeamFollowC2S)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool follow = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_follow() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_follow(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:TeamFollowC2S)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TeamFollowC2S::ByteSizeLong(const MessageLite& base) {
+  const TeamFollowC2S& this_ = static_cast<const TeamFollowC2S&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TeamFollowC2S::ByteSizeLong() const {
+  const TeamFollowC2S& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:TeamFollowC2S)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // bool follow = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_follow() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TeamFollowC2S::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TeamFollowC2S*>(&to_msg);
+  auto& from = static_cast<const TeamFollowC2S&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:TeamFollowC2S)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_follow() != 0) {
+      _this->_impl_.follow_ = from._impl_.follow_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TeamFollowC2S::CopyFrom(const TeamFollowC2S& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:TeamFollowC2S)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TeamFollowC2S::InternalSwap(TeamFollowC2S* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.follow_, other->_impl_.follow_);
+}
+
+::google::protobuf::Metadata TeamFollowC2S::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TeamFollowStateS2C::TeamFollowStateS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TeamFollowStateS2C_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:TeamFollowStateS2C)
+}
+TeamFollowStateS2C::TeamFollowStateS2C(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TeamFollowStateS2C& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TeamFollowStateS2C_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE TeamFollowStateS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void TeamFollowStateS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, leader_entity_),
+           0,
+           offsetof(Impl_, reason_) -
+               offsetof(Impl_, leader_entity_) +
+               sizeof(Impl_::reason_));
+}
+TeamFollowStateS2C::~TeamFollowStateS2C() {
+  // @@protoc_insertion_point(destructor:TeamFollowStateS2C)
+  SharedDtor(*this);
+}
+inline void TeamFollowStateS2C::SharedDtor(MessageLite& self) {
+  TeamFollowStateS2C& this_ = static_cast<TeamFollowStateS2C&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TeamFollowStateS2C_class_data_ =
+        TeamFollowStateS2C::InternalGenerateClassData_(TeamFollowStateS2C_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TeamFollowStateS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TeamFollowStateS2C_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TeamFollowStateS2C_class_data_.tc_table);
+  return TeamFollowStateS2C_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TeamFollowStateS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TeamFollowStateS2C_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TeamFollowStateS2C_globals_));
+  return TeamFollowStateS2C_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TeamFollowStateS2C::ParseTableT_
+    TeamFollowStateS2C::_table_ =
+        TeamFollowStateS2C::InternalGenerateParseTable_(TeamFollowStateS2C_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TeamFollowStateS2C::Clear() {
+// @@protoc_insertion_point(message_clear_start:TeamFollowStateS2C)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.leader_entity_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.reason_) -
+        reinterpret_cast<char*>(&_impl_.leader_entity_)) + sizeof(_impl_.reason_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TeamFollowStateS2C::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TeamFollowStateS2C& this_ = static_cast<const TeamFollowStateS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TeamFollowStateS2C::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TeamFollowStateS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:TeamFollowStateS2C)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool driven = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_driven() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_driven(), target);
+    }
+  }
+
+  // uint64 leader_entity = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_leader_entity() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_leader_entity(), target);
+    }
+  }
+
+  // uint32 slot = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_slot() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_slot(), target);
+    }
+  }
+
+  // .TeamFollowStopReason reason = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_reason() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          4, this_._internal_reason(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:TeamFollowStateS2C)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TeamFollowStateS2C::ByteSizeLong(const MessageLite& base) {
+  const TeamFollowStateS2C& this_ = static_cast<const TeamFollowStateS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TeamFollowStateS2C::ByteSizeLong() const {
+  const TeamFollowStateS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:TeamFollowStateS2C)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 leader_entity = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_leader_entity() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_leader_entity());
+      }
+    }
+    // bool driven = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_driven() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 slot = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_slot() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_slot());
+      }
+    }
+    // .TeamFollowStopReason reason = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_reason() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_reason());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TeamFollowStateS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TeamFollowStateS2C*>(&to_msg);
+  auto& from = static_cast<const TeamFollowStateS2C&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:TeamFollowStateS2C)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_leader_entity() != 0) {
+        _this->_impl_.leader_entity_ = from._impl_.leader_entity_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_driven() != 0) {
+        _this->_impl_.driven_ = from._impl_.driven_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_slot() != 0) {
+        _this->_impl_.slot_ = from._impl_.slot_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_reason() != 0) {
+        _this->_impl_.reason_ = from._impl_.reason_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TeamFollowStateS2C::CopyFrom(const TeamFollowStateS2C& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:TeamFollowStateS2C)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TeamFollowStateS2C::InternalSwap(TeamFollowStateS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.reason_)
+      + sizeof(TeamFollowStateS2C::_impl_.reason_)
+      - PROTOBUF_FIELD_OFFSET(TeamFollowStateS2C, _impl_.leader_entity_)>(
+          reinterpret_cast<char*>(&_impl_.leader_entity_),
+          reinterpret_cast<char*>(&other->_impl_.leader_entity_));
+}
+
+::google::protobuf::Metadata TeamFollowStateS2C::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL SceneMovementClientPlayer::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fmovement_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fplayer_5fmovement_2eproto[0];
@@ -4550,6 +5356,20 @@ void SceneMovementClientPlayer::NotifyTeleport(::google::protobuf::RpcController
   controller->SetFailed("Method NotifyTeleport() not implemented.");
   done->Run();
 }
+void SceneMovementClientPlayer::TeamFollow(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::TeamFollowC2S* PROTOBUF_NONNULL,
+                         ::Empty* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method TeamFollow() not implemented.");
+  done->Run();
+}
+void SceneMovementClientPlayer::NotifyTeamFollowState(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::TeamFollowStateS2C* PROTOBUF_NONNULL,
+                         ::Empty* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method NotifyTeamFollowState() not implemented.");
+  done->Run();
+}
 
 void SceneMovementClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -4590,6 +5410,14 @@ void SceneMovementClientPlayer::CallMethod(
       this->NotifyTeleport(controller, ::google::protobuf::DownCastMessage<::TeleportS2C>(request),
                    ::google::protobuf::DownCastMessage<::Empty>(response), done);
       break;
+    case 8:
+      this->TeamFollow(controller, ::google::protobuf::DownCastMessage<::TeamFollowC2S>(request),
+                   ::google::protobuf::DownCastMessage<::Empty>(response), done);
+      break;
+    case 9:
+      this->NotifyTeamFollowState(controller, ::google::protobuf::DownCastMessage<::TeamFollowStateS2C>(request),
+                   ::google::protobuf::DownCastMessage<::Empty>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -4617,6 +5445,10 @@ const ::google::protobuf::Message& SceneMovementClientPlayer::GetRequestPrototyp
       return ::ActorMoveListS2C::default_instance();
     case 7:
       return ::TeleportS2C::default_instance();
+    case 8:
+      return ::TeamFollowC2S::default_instance();
+    case 9:
+      return ::TeamFollowStateS2C::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -4644,6 +5476,10 @@ const ::google::protobuf::Message& SceneMovementClientPlayer::GetResponsePrototy
     case 6:
       return ::Empty::default_instance();
     case 7:
+      return ::Empty::default_instance();
+    case 8:
+      return ::Empty::default_instance();
+    case 9:
       return ::Empty::default_instance();
 
     default:
@@ -4720,6 +5556,20 @@ void SceneMovementClientPlayer_Stub::NotifyTeleport(
     const ::TeleportS2C* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(7), controller,
+                       request, response, done);
+}
+void SceneMovementClientPlayer_Stub::TeamFollow(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::TeamFollowC2S* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(8), controller,
+                       request, response, done);
+}
+void SceneMovementClientPlayer_Stub::NotifyTeamFollowState(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::TeamFollowStateS2C* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(9), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

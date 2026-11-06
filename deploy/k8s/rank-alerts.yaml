@@ -70,4 +70,19 @@ spec:
             severity: warning
           annotations:
             summary: "排行榜持久奖励附件无法解析"
-            description: "封榜奖励原件出现坏附件，工作器保留原意图并延后重试；核封榜来源与受控修复，不能跳奖或删除待办。"
+            description: "封榜奖励原件出现坏附件或缺写定的过期时刻，工作器不发信、在截止点（过期前 24 小时）之前保留原意图并延后重试，之后等到过期后再判，次数到顶或仍坏转放弃终态（另由 RankRewardAbandoned 告警）；核封榜来源与受控修复，不能跳奖或删除待办。"
+
+        # 放弃是终态：剩余可领时长不足 24 小时后工作器不再发件，过期后 1 小时用原请求判重探询，邮件仍明确拒收（确认没有这封信）才放弃；
+        # 或尝试次数到顶（只兜时钟或数据异常）。工作器不再投，行与载荷原样保留。
+        # 首次抓取前已增长时 increase 不可见；第二项覆盖进程启动后的固定窗口。
+        - alert: RankRewardAbandoned
+          expr: |
+            sum(increase(rank_reward_dispatch_total{outcome="abandoned"}[15m])) > 0
+            or
+            sum(rank_reward_dispatch_total{outcome="abandoned"} and on(instance) (time() - process_start_time_seconds) < 900) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "排行榜邮件奖励转为放弃终态"
+            description: "rank 日志 'mail reward abandoned' 给出 reward_id；查 status=3 的行，按 leaderboard-system.md「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」节先在邮件库按 sender_kind=3、request_id=reward_id 核对：已有同载荷的邮件即已到账，改回待投由工作器判重认领；载荷不同按冲突人工核对；没有邮件时，剩余可领不足 24 小时（通常如此）走 mailadmin 补偿，用新的请求号与过期时刻，否则处理原因后改回待投。"

@@ -996,6 +996,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsRequest fina
     kExpectedPriceFieldNumber = 4,
     kExpectedCurrencyTypeFieldNumber = 5,
     kExpectedItemConfigIdFieldNumber = 6,
+    kClientRequestIdFieldNumber = 8,
     kExpectedItemCountFieldNumber = 7,
   };
   // uint64 round_id = 1;
@@ -1058,6 +1059,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsRequest fina
   void _internal_set_expected_item_config_id(::uint32_t value);
 
   public:
+  // uint64 client_request_id = 8;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
   // uint32 expected_item_count = 7;
   void clear_expected_item_count() ;
   [[nodiscard]] ::uint32_t expected_item_count() const;
@@ -1072,7 +1083,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsRequest fina
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<3, 8,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1107,6 +1118,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsRequest fina
     ::uint64_t expected_price_;
     ::uint32_t expected_currency_type_;
     ::uint32_t expected_item_config_id_;
+    ::uint64_t client_request_id_;
     ::uint32_t expected_item_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2422,6 +2434,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsResponse fin
     kErrorMessageFieldNumber = 1,
     kInfoFieldNumber = 2,
     kBagFieldNumber = 3,
+    kReplayedFieldNumber = 4,
   };
   // .TipInfoMessage error_message = 1;
   [[nodiscard]] bool has_error_message()
@@ -2471,11 +2484,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsResponse fin
   ::BagInfo* PROTOBUF_NONNULL _internal_mutable_bag();
 
   public:
+  // bool replayed = 4;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BuyMysteryMerchantGoodsResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2507,6 +2530,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyMysteryMerchantGoodsResponse fin
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::MysteryMerchantInfo* PROTOBUF_NULLABLE info_;
     ::BagInfo* PROTOBUF_NULLABLE bag_;
+    bool replayed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4251,7 +4275,7 @@ inline void BuyMysteryMerchantGoodsRequest::_internal_set_expected_item_config_i
 inline void BuyMysteryMerchantGoodsRequest::clear_expected_item_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_item_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t BuyMysteryMerchantGoodsRequest::expected_item_count() const {
   // @@protoc_insertion_point(field_get:BuyMysteryMerchantGoodsRequest.expected_item_count)
@@ -4259,7 +4283,7 @@ inline ::uint32_t BuyMysteryMerchantGoodsRequest::expected_item_count() const {
 }
 inline void BuyMysteryMerchantGoodsRequest::set_expected_item_count(::uint32_t value) {
   _internal_set_expected_item_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BuyMysteryMerchantGoodsRequest.expected_item_count)
 }
 inline ::uint32_t BuyMysteryMerchantGoodsRequest::_internal_expected_item_count() const {
@@ -4269,6 +4293,30 @@ inline ::uint32_t BuyMysteryMerchantGoodsRequest::_internal_expected_item_count(
 inline void BuyMysteryMerchantGoodsRequest::_internal_set_expected_item_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_item_count_ = value;
+}
+
+// uint64 client_request_id = 8;
+inline void BuyMysteryMerchantGoodsRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t BuyMysteryMerchantGoodsRequest::client_request_id() const {
+  // @@protoc_insertion_point(field_get:BuyMysteryMerchantGoodsRequest.client_request_id)
+  return _internal_client_request_id();
+}
+inline void BuyMysteryMerchantGoodsRequest::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:BuyMysteryMerchantGoodsRequest.client_request_id)
+}
+inline ::uint64_t BuyMysteryMerchantGoodsRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void BuyMysteryMerchantGoodsRequest::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4557,6 +4605,30 @@ inline void BuyMysteryMerchantGoodsResponse::set_allocated_bag(::BagInfo* PROTOB
 
   _impl_.bag_ = reinterpret_cast<::BagInfo*>(value);
   // @@protoc_insertion_point(field_set_allocated:BuyMysteryMerchantGoodsResponse.bag)
+}
+
+// bool replayed = 4;
+inline void BuyMysteryMerchantGoodsResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool BuyMysteryMerchantGoodsResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:BuyMysteryMerchantGoodsResponse.replayed)
+  return _internal_replayed();
+}
+inline void BuyMysteryMerchantGoodsResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BuyMysteryMerchantGoodsResponse.replayed)
+}
+inline bool BuyMysteryMerchantGoodsResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void BuyMysteryMerchantGoodsResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
 }
 
 // -------------------------------------------------------------------

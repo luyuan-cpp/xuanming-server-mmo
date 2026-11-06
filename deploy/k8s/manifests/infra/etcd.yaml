@@ -100,24 +100,27 @@ spec:
                 labelSelector:
                   matchLabels:
                     app: etcd
-      # bitnami 镜像以 uid 1001 运行。云盘 / 本地盘挂上来的根目录是 root:root 0755,
-      # 不给 fsGroup 的话进程建不了数据目录,起手就 "permission denied"(emptyDir 时代
-      # 没这问题,因为 kubelet 建 emptyDir 是 0777)。
+      # 以非 root 的 uid 1001 运行(官方镜像不要求 root;沿用 bitnami 时代的 uid,已有 PVC 里的数据属主不变)。
+      # 云盘 / 本地盘挂上来的根目录是 root:root 0755,不给 fsGroup 的话进程建不了数据目录,起手就 "permission denied"。
       securityContext:
         runAsUser: 1001
         runAsNonRoot: true
         fsGroup: 1001
-      # 给 etcd 留出 WAL fsync / snapshot 的时间;bitnami 镜像收到 SIGTERM 会正常关闭。
+      # 给 etcd 留出 WAL fsync / snapshot 的时间;etcd 自己处理 SIGTERM(正常关闭,镜像里没有包装脚本)。
       terminationGracePeriodSeconds: 30
       containers:
         - name: etcd
-          # bitnami/etcd 的 tag 已全部下架(Docker Hub 拉取 404,2025-09 Bitnami 收编
-          # 到 bitnamilegacy 只读仓库)。bitnamilegacy/etcd 是同一套镜像的归档,
-          # ALLOW_NONE_AUTHENTICATION / ETCD_* 环境变量语义与数据目录 /bitnami/etcd/data
-          # 完全兼容;deploy/docker-compose.yml 已改同一镜像,这里保持口径一致。
-          # 钉 tag@摘要待 Codex 实测 M0 后与 etcd-maintenance.yaml、compose 同批改(docs/ops/etcd-maintenance-runbook.md §8)。
-          image: bitnamilegacy/etcd:latest
+          # etcd 官方镜像(etcd 发布流程推到 quay.io/coreos/etcd 与 gcr.io/etcd-development/etcd),按 tag@摘要钉死(P0-C 阶段 2,
+          # 2026-11-05)。以前的 bitnamilegacy/etcd:latest 是 Bitnami 停更后的归档,latest 停在 3.6.1(2025-07-02),不再有安全修复;
+          # 它的启动脚本会不会把 ETCD_* 交给 etcd 也一直没实测。官方镜像里只有 etcd / etcdctl / etcdutl 三个二进制(distroless,
+          # 没有 shell),ETCD_* 环境变量由 etcd 自己按同名命令行参数解析(etcd 文档「Configuration flags」)。
+          # 版本:3.6 线最新补丁。线上(bitnamilegacy latest)是 3.6.1,升到 3.6.16 是补丁升级,可逐个成员滚动;不选 3.5(3.6 写过的
+          # 数据目录不能靠换镜像退回 3.5),也暂不上 3.7(2026-07 才发布的新小版本)。Go 客户端 3.5.15 / 3.6.5 都兼容 3.6 服务端。
+          # 摘要取自 Quay API 的清单列表(manifest list)摘要;gcr.io 同一个 tag 的摘要不同,所以只从 quay.io 拉。
+          # 换版本要与 etcd-id-secondary.yaml、etcd-id-registry.yaml、两份 compose 同批改(etcd_maintenance_contract.tests.ps1 守住)。
+          image: quay.io/coreos/etcd:v3.6.16@sha256:a9c7cc12156f4b26ca41f0b57ba5b76c45037ff6c1e47ea3d68cb7908d48a965
           imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/etcd"]
           env:
             - name: POD_NAME
               valueFrom:
@@ -128,10 +131,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: ALLOW_NONE_AUTHENTICATION
-              value: "yes"
+            # 数据目录是 PVC 下的 data/ 子目录:已有 PVC 里的数据就在这个子目录(bitnami 时代挂在 /bitnami/etcd、目录是其下的 data/),
+            # 只换挂载点、不换子目录,滚动后成员以原身份、原数据回到集群。
             - name: ETCD_DATA_DIR
-              value: /bitnami/etcd/data
+              value: /var/lib/etcd/data
             - name: ETCD_LISTEN_CLIENT_URLS
               value: "http://0.0.0.0:2379"
             - name: ETCD_LISTEN_PEER_URLS
@@ -198,9 +201,9 @@ spec:
               cpu: 100m
               memory: 256Mi
           volumeMounts:
-            # 挂在 /bitnami/etcd(与 bitnami helm chart 一致),数据目录是其下的 data/。
+            # 挂在 /var/lib/etcd(etcd 的惯用位置,也是官方镜像的工作目录),数据目录是其下的 data/。
             - name: etcd-data
-              mountPath: /bitnami/etcd
+              mountPath: /var/lib/etcd
   # 每个成员一块盘。不写 storageClassName = 用集群默认 StorageClass(kind 的 local-path、
   # 云上的默认盘)。8Gi 对本项目的 key 量(节点注册、lease、发号水位、killswitch)是大冗余;
   # 真正要盯的是 etcd 自身 2GB 默认 quota 与 compaction,不是 PVC 大小。

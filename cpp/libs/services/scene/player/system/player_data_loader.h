@@ -6,17 +6,12 @@
 void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_database& message);
 [[nodiscard]] bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& message);
 
-void PlayerDatabase1MessageFieldsUnmarshal(entt::entity player, const player_database_1& message);
-[[nodiscard]] bool PlayerDatabase1MessageFieldsMarshal(entt::entity player, player_database_1& message);
-
 // 全部子表成功后才替换输出；返回 false 时原输出的内容、presence 和未知字段都保持原样。
 // 调用方仍须拒绝此次 Redis / DB / 快照写入，不得把拒绝当作已经落盘。
 [[nodiscard]] inline bool PlayerAllDataMessageFieldsMarshal(entt::entity player, PlayerAllData& message)
 {
     PlayerAllData candidate(message);
     if (!PlayerDatabaseMessageFieldsMarshal(player, *candidate.mutable_player_database_data()))
-        return false;
-    if (!PlayerDatabase1MessageFieldsMarshal(player, *candidate.mutable_player_database_1_data()))
         return false;
     // 兼容旧跨服/回滚读者；数据库记录中的两项是持久化事实源。
     candidate.mutable_bag_data()->CopyFrom(candidate.player_database_data().bag_component());
@@ -41,5 +36,4 @@ inline void PlayerAllDataMessageFieldsUnmarshal(entt::entity player, const Playe
         source = &upgraded;
     }
     PlayerDatabaseMessageFieldsUnmarshal(player, source->player_database_data());
-    PlayerDatabase1MessageFieldsUnmarshal(player, source->player_database_1_data());
 }

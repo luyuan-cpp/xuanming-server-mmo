@@ -19,6 +19,7 @@
 #include "player/system/save_seq.h"      // [SaveSeq] 汇总行
 #include "player/system/save_timing_stats.h"
 #include "thread_context/ecs_context.h"
+#include "thread_context/redis_manager.h"
 
 thread_local RedisSystem tlsRedisSystem;
 
@@ -129,31 +130,35 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 	}
 	LogPlayerRedisOptions(playerRedisOptions);
 
-	// 任一主节点完成握手(首次与重连)都会进来,这时表里的条目不一定落在这个节点上。补发是幂等的:撤回是条件写,
-	// A2′ 与核实只重发没有在途的条目。主节点很多时一次切主或网络恢复会连着进来很多次,所以限成每秒一轮,
-	// 没赶上的由 1s 定时器接着发,正确性不靠这里抢的这点时间。路由层回调前会拷一份函数对象,限速状态放在 shared_ptr 里才留得住。
-    tlsPlayerRedis.SetReconnectCallback([lastSweep = std::make_shared<std::chrono::steady_clock::time_point>()](const redis_cluster::NodeEndpoint& node)
-                                  {
-        const auto now = std::chrono::steady_clock::now();
-        if (now - *lastSweep < std::chrono::seconds(1))
-        {
-            return;
-        }
-        *lastSweep = now;
-        LOG_INFO << "Player Redis node " << node.ToString() << " ready, retrying pending handoff marks";
-        // 补发没确认的 handoff 标记撤回。撤回可能以空应答告终(只读副本 / 正在加载数据集,路由层预算耗尽),
-        // 所以正确性**不**靠它,靠的是 PlayerLifecycleSystem::IsSceneChangeBusy:撤回没确认之前**本节点**不替该玩家发 EnterScene。
-        // (这道闸管不到不经本节点的跨节点落点,例如玩家断线后重登落到别的节点;那条路在撤回确认前
-        // 仍只有标记 TTL 兜底,见 handoff_mark_withdraw.h 的契约说明。)
-        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/true);
-        // 断线期间失败、等重发的 A2′(载入前"先核归属再删"继承来的 handoff 标记)也立刻补发。闸门只认 A2′ 的应答(见 exit_release_mark.h)。
-        PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
-        // 疏散 / 排空改派的待确认表(relocate_confirm.h):断线期间没读到、在等重试的核实立刻重发(不绕过 settle 等待)。
-        // 核实读与随后的凭证补写走不重放的句柄,是为了补写不被推迟到任意时刻(R7);
-        // 正确性**不**靠命令顺序(2026-10-23,r2-lc#2):补写在 Lua 里原子复核 owner_epoch 与条目缓存的原 H
-        // (handoff_fence),之后的登记已换掉原件时返回 -2、不写。表空时直接返回。
-        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/true); });
+	// 刻意不挂重连回调(docs/design/infra-reconnect-overview.md §4 R14;负责人 2026-11-05 定:重连成功不做业务逻辑)。
+	// 这里原来在任一主节点握手完成时补发 handoff 撤回、A2′ 与改派核实,并且忽略各条目的重试间隔。补发本来就是幂等的,
+	// 正确性靠的是下面的 1s 定时器、各条目自己的重试间隔与截止:
+	//   - 撤回没确认之前本节点不替该玩家发 EnterScene(PlayerLifecycleSystem::IsSceneChangeBusy);
+	//   - A2′ 的闸门只认 A2′ 的应答(exit_release_mark.h);
+	//   - 改派核实的补写在 Lua 里原子复核 owner_epoch 与原 H(handoff_fence)。
+	// 去掉回调的代价只是:Redis 恢复后,条目要等到各自的下一次重试时刻才重发,而不是立刻抢发。
+	// 三个函数的 reconnected 参数在生产代码里已恒为 false,留待下次改 player_lifecycle 时一并删除。
     tlsPlayerRedis.Connect(loop, std::move(playerRedisOptions));
+
+	// 本 zone 的场景控制域(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 写在本 zone 所属组控制域实例
+	// 里的读模型(世界分线目录、神秘商人)。认证、重连与存活探测契约与 zoneredis 相同;配置缺省时与 zoneredis 是同一个实例。
+	// 库号只认 0,口径同 Node 连 zoneredis(跨运行时契约把库号钉在 0)。
+	{
+		const auto &sceneControl = tlsNodeConfigManager.GetGameConfig().scene_control_redis();
+		if (sceneControl.db() != 0)
+		{
+			LOG_FATAL << "[SceneControlRedis] refused to start: scene_control_redis.db=" << sceneControl.db()
+					  << " is not supported; every runtime shares Redis db 0";
+		}
+		const muduo::net::InetAddress sceneControlAddress =
+			ResolveRedisAddress(sceneControl.host(), static_cast<uint16_t>(sceneControl.port()));
+		// 只打开关,不打口令。
+		LOG_INFO << "Scene control Redis address: " << sceneControlAddress.toIpPort()
+				 << ", auth: " << (sceneControl.password().empty() ? "off" : "on");
+		RedisConnectOptions sceneControlOptions;
+		sceneControlOptions.password = sceneControl.password();
+		tlsSceneControlRedis.Connect(loop, sceneControlAddress, std::move(sceneControlOptions));
+	}
 
     // 协调用途的 Redis 写(继承标记清理、handoff 标记撤回、改派核实)的 1s 重试节拍。
     static constexpr double kRetryIntervalSec = 1.0;
@@ -219,7 +224,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         }
         // 归属健康计数单独一行、单独前缀,不动 [DirtySave] 的解析格式。
         // 各项在链路升级完成后都应恒 0;任一非 0 都是要查的信号(含义见 owner_epoch_stats)。
-        // owner_counter_behind(Redis 回退丢了铸造,zone-redis-regression-guard-20261022.md §4.4)追加在最后,不动前几项的顺序。
+        // 存盘重构(玩家数据只存 TiDB)之后只剩两项,Redis 存档路径的 home_zone_unknown / owner_epoch_unknown / owner_counter_behind 已随路径删除。
         const auto ownerStats = owner_epoch_stats::Read();
         if (ownerStats.Any())
         {
@@ -240,6 +245,22 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         if (schemaStats.Any())
         {
             LOG_WARN << "[PersistSchema] regression_rejected=" << schemaStats.regressionRejected;
+        }
+        // 存盘最终被确定性拒绝的计数(player_store_refused_stats;player-save-direct-commit.md §4)。单独一行、单独前缀,
+        // 不动上面几行的解析格式。key=value 平铺、进程启动以来的累计值;正常都应恒 0,任一非 0 才打,级别 WARN。
+        // 与 Prometheus 的 scene_player_store_save_refused_total{result} 共用 kCounterNames;玩家号只在逐次的 metric=player_store_save_refused 日志里。
+        const auto refusedStats = player_store_refused_stats::Read();
+        if (refusedStats.Any())
+        {
+            std::string line = "[PlayerStoreRefused]";
+            for (std::size_t i = 0; i < refusedStats.values.size(); ++i)
+            {
+                line += ' ';
+                line += player_store_refused_stats::kCounterNames[i];
+                line += '=';
+                line += std::to_string(refusedStats.values[i]);
+            }
+            LOG_WARN << line;
         }
         // 存盘序号发号器的异常计数(save_seq.h 的 save_seq_stats;db-write-fencing-mysql.md §7.2)。单独一行、单独前缀,
         // 不动上面几行的解析格式。key=value 平铺、进程启动以来的累计值;三项正常都应恒 0,任一非 0 才打,级别 WARN

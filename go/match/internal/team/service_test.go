@@ -488,6 +488,40 @@ func TestRegroupSignalsOnlyTheCallingMember(t *testing.T) {
 	h.requireSceneRefresh()
 }
 
+// ---- 服务器驱动组队跟随:队长换人时,留在队里的全员也收 scene 信号 ----
+
+func TestLeaderChangeRefreshesEveryRemainingMember(t *testing.T) {
+	h := newServiceHarness(t)
+	h.addPlayers(1, 2, 3)
+	l := newTeamLedger(t, allOnline(1, 2, 3))
+	h.service.publish(1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
+	h.service.publish(2, []*CommitResult{l.commit(ApplyOp(2, testZone))})
+	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 2, true))})
+	h.service.publish(3, []*CommitResult{l.commit(ApplyOp(3, testZone))})
+	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 3, true))})
+	h.takePushes()
+	h.takeScenes()
+
+	// 转让队长:没有人的 TeamId 变,但三个人都要重读(新队长停止被驱动、旧队长解散队形、其他人接到新队长身后)。
+	transfer := l.commit(TransferLeaderOp(1, 2))
+	require.True(t, transfer.Decision.LeaderChanged)
+	h.service.publish(1, []*CommitResult{transfer})
+	h.requireSceneRefresh(1, 2, 3)
+
+	// 队长离队:改选出新队长,留下的人和离队者都收信号。
+	leaderLeft := l.commit(LeaveOp(2))
+	require.True(t, leaderLeft.Decision.LeaderChanged)
+	require.Equal(t, uint64(1), leaderLeft.Decision.Record.GetLeaderId())
+	h.service.publish(2, []*CommitResult{leaderLeft})
+	h.requireSceneRefresh(1, 2, 3)
+
+	// 普通队员离队:队长没变,只有离队者收信号(与原来一致)。
+	memberLeft := l.commit(LeaveOp(3))
+	require.False(t, memberLeft.Decision.LeaderChanged)
+	h.service.publish(3, []*CommitResult{memberLeft})
+	h.requireSceneRefresh(3)
+}
+
 // 归队信号照常遵守 §F.3:请求者不在任何场景(没有位置记录)时不发,也不报错。
 func TestRegroupWithoutLocationSendsNothing(t *testing.T) {
 	h := newServiceHarness(t)

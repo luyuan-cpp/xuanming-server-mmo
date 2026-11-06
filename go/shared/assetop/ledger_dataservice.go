@@ -12,7 +12,7 @@ import (
 
 // DataServiceLedger 用 data_service.GetPlayerAssetOpLedger 实现 LedgerReader、SQLCommitLedgerReader 与 StoreLedgerReader
 // (docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.3,docs/design/player-save-direct-commit.md §6)。
-// RPC 只有一种读法:强读 player_store 的写权行和 kAsset 行,读到的就是 SQL 已提交的内容,几个方法只差返回形状。
+// RPC 只有一种读法:强读 player_store 的写权行和 kWallet 行,读到的就是 SQL 已提交的内容,几个方法只差返回形状。
 //
 // 放在 shared 而不是 guild:trade 的重投循环留着同一个空位(go/trade/internal/reconcile/pipeline.go
 // 只设了 Manual),两个服务各写一份迟早分叉。

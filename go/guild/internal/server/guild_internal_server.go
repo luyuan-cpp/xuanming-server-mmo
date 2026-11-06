@@ -8,8 +8,8 @@ package server
 // 先于任何 SQL):它没有业务规则要交给 logic,只有"这次查询能不能证明"这一个判断,而判断的依据(TerminalRetentionDays)
 // 是本服务的配置。拒绝一律走 gRPC status、不回 TipInfoMessage(内部 RPC 不占 tip 号段,07 §7.3.1 末条)。
 //
-// 准入(07 §7.4.4,用户拍板 Q1 = 方案 A):本服务**不加凭据**。session 拦截器是"白名单外一律拒",GuildInternal 的方法
-// 不登记进 session.ClientMethods,所以带会话 metadata 的客户端来源调用一律 PermissionDenied;不带会话的按内部调用放行,
+// 准入(07 §7.4.4,用户拍板 Q1 = 方案 A):本服务**不加凭据**。入口准入(roleidentity.EntryInterceptor)只对生成的客户端
+// 方法集合放行会话,GuildInternal 不是客户端协议服务,所以带会话 metadata 的客户端来源调用一律 PermissionDenied;不带会话的按内部调用放行,
 // 网络层隔离靠待补的 NetworkPolicy。拦截器链(guild.go buildUnaryInterceptors)对本 service 同样生效,含 killswitch 与整请求预算。
 //
 // 失败方向:这里的任何非 OK 答复,data_service 都按"问不到"拒绝回档(07 R2),所以本文件的每条异常分支都是 fail-closed;

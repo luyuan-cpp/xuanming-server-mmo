@@ -394,14 +394,13 @@ func validTx(txID uint64) *rollbackpb.TransactionLogEntry {
 
 func validSnap(guid uint64) *rollbackpb.PlayerSnapshotEntry {
 	return &rollbackpb.PlayerSnapshotEntry{
-		SnapshotId:           guid,
-		PlayerId:             100,
-		SnapshotTime:         1700000123,
-		Trigger:              rollbackpb.SnapshotTrigger_SNAPSHOT_LOGIN,
-		PlayerDatabaseBlob:   []byte("blob-a"),
-		PlayerDatabase_1Blob: []byte("blob-b"),
-		SchemaVersion:        "v1",
-		TotalBytes:           12,
-		ZoneId:               4,
+		SnapshotId:         guid,
+		PlayerId:           100,
+		SnapshotTime:       1700000123,
+		Trigger:            rollbackpb.SnapshotTrigger_SNAPSHOT_LOGIN,
+		PlayerDatabaseBlob: []byte("blob-a"),
+		SchemaVersion:      "v1",
+		TotalBytes:         12,
+		ZoneId:             4,
 	}
 }

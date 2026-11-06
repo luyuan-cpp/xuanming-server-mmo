@@ -51,6 +51,8 @@ SECRET_NAMES = (
 ROLE_FENCE_PARTICIPANT_HOSTS = {"guild": "guild", "trade": "trade", "mail": "mail", "match": "match", "player_inbox": "player-inbox", "friend": "friend"}
 # 与 C++ kSpectateBroadcastTopicPartitions（node_command_topic.h）相等；分区数是不可变契约，改数走换代号。
 SPECTATE_BROADCAST_PARTITIONS = 16
+# 世界频道广播 chat-world-bcast_g<N>：与 C++ kChatWorldBroadcastTopicPartitions、Go kafkacmd.ChatWorldBroadcastTopicPartitions 相等。
+CHAT_WORLD_BROADCAST_PARTITIONS = 4
 # 写者注册步骤（compose 的 sql-boot、<服务>-sql-boot）在容器里复用的脚本、角色模板和原件。按仓库相对路径复制：dot-source 和模板都按这个布局找。
 SQL_BOOT_SOURCES = (
     "tools/scripts/lib/sql_boot_catalog_docker.ps1",
@@ -153,13 +155,19 @@ def topic_script(base: dict, data: dict) -> str:
     if any(not isinstance(group, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", group) for group in groups):
         raise ValueError("源配置包含无效 Kafka 审计消费组")
     groups = list(dict.fromkeys(groups))
+    # 两个审计 topic 只许加分区、可以原地加(docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A):
+    # 落库按主键 / 唯一键去重、不依赖顺序。只核「不少于配置」,少了原地加;其余 topic 按分区寻址,分区数必须相等。
+    tx_topic = f"{audit['TransactionLogTopic']}_g{audit['TopicGeneration']}"
+    snapshot_topic = f"{audit['SnapshotTopic']}_g{audit['TopicGeneration']}"
+    growable_topics = {tx_topic, snapshot_topic}
     topics = [
         (f"gate-cmd_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 3600000),
         (f"scene-cmd_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 3600000),
         (f"gate-spectate_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 600000),
         (f"spectate-bcast_g{commands['CommandTopicGeneration']}", SPECTATE_BROADCAST_PARTITIONS, 600000),
-        (f"{audit['TransactionLogTopic']}_g{audit['TopicGeneration']}", audit["TransactionLogPartitions"], audit["RetentionMs"]),
-        (f"{audit['SnapshotTopic']}_g{audit['TopicGeneration']}", audit["SnapshotPartitions"], audit["RetentionMs"]),
+        (f"chat-world-bcast_g{commands['CommandTopicGeneration']}", CHAT_WORLD_BROADCAST_PARTITIONS, 600000),
+        (tx_topic, audit["TransactionLogPartitions"], audit["RetentionMs"]),
+        (snapshot_topic, audit["SnapshotPartitions"], audit["RetentionMs"]),
     ]
     script = r"""#!/bin/sh
 set -eu
@@ -203,7 +211,7 @@ if ! run_cli "$broker_deadline" /opt/kafka/bin/kafka-broker-api-versions.sh --bo
   fail_cli 'Kafka 就绪检查失败或超时'
 fi
 ensure_topic() {
-  topic="$1"; partitions="$2"; retention="$3"
+  topic="$1"; partitions="$2"; retention="$3"; grow="${4:-}"
   topic_deadline=$(($(now_seconds) + 60))
   if ! run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic "$topic" --partitions "$partitions" --replication-factor 1 --config "retention.ms=$retention"; then
     fail_cli "创建 topic 失败或超时: $topic"
@@ -212,6 +220,14 @@ ensure_topic() {
   while :; do
     if run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic "$topic"; then
       actual=$(sed -n 's/.*PartitionCount:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$cli_output")
+      if [ "$grow" = grow ]; then
+        case "$actual" in ''|*[!0-9]*) fail_cli "无法解析分区数: $topic";; esac
+        [ "$actual" -lt "$partitions" ] || break
+        # data_service 的 EnsureTopics 可能同时在加:alter 失败不退出,回到上面重读分区数,由本阶段截止时间兜底。
+        run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --alter --topic "$topic" --partitions "$partitions" || true
+        wait_metadata "$topic_deadline" "审计 topic 分区数在截止时间前仍少于配置: $topic expected>=$partitions actual=$actual"
+        continue
+      fi
       [ "$actual" = "$partitions" ] || fail_cli "分区契约不符: $topic expected=$partitions actual=$actual"
       break
     fi
@@ -237,7 +253,8 @@ ensure_topic() {
     for name, partitions, retention in topics:
         if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or int(partitions) <= 0 or int(retention) <= 0:
             raise ValueError("源配置包含无效 topic 契约")
-        script += f"ensure_topic '{name}' {int(partitions)} {int(retention)}\n"
+        grow = " grow" if name in growable_topics else ""
+        script += f"ensure_topic '{name}' {int(partitions)} {int(retention)}{grow}\n"
     script += r"""
 # 冷 broker 的 API/业务 topic 就绪不代表消费组协调器已装载。
 # DescribeGroup 经正常 FindCoordinator 让 broker 自行初始化内部偏移 topic；不加入组、不提交位点。
@@ -421,7 +438,9 @@ def main() -> None:
     # 常驻配置不留账号：写者每 boot 一个账号，由注册步骤写进私有卷里的运行配置（sql_boot_catalog_local.ps1 的 Get-LocalSqlBootConfigPatch）。
     db = configs["db"]
     db["ServerConfig"]["JsonPath"] = "/app/data/mysql_database_table_list.json"
-    db["ServerConfig"]["Database"].update(Backend="mysql", AllowedDatabases=["zone_1_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
+    # zone_1_db 是 go/db 的本区主库;player_store_1000000_db 是 dev 地域(0)唯一的地域存档库,新号都落这里
+    # (login Placement Region 0 / StorageShards 1,docs/design/player-data-tidb-scaling-plan.md §7.2)。与 compose 的 DB_ALLOWED_DATABASES 同一份。
+    db["ServerConfig"]["Database"].update(Backend="mysql", AllowedDatabases=["zone_1_db", "player_store_1000000_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
     for key in ("User", "Passwd"):
         db["ServerConfig"]["Database"].pop(key, None)
     data = configs["data_service"]

@@ -69,3 +69,8 @@ func (sceneMovementClientPlayerRpc) decodeTeleportRequest(reply *base.MessageCon
 	}
 	return resp, nil
 }
+
+// TeamFollow 单向发送 SceneMovementClientPlayer.TeamFollow(ONE_WAY):id = 0,不等回包。
+func (sceneMovementClientPlayerRpc) TeamFollow(c *pkg.GameClient, req *scene.TeamFollowC2S) error {
+	return c.SendRequest(game.SceneMovementClientPlayerTeamFollowMessageId, req)
+}

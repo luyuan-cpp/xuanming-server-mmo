@@ -978,10 +978,17 @@ func (x *AutoAllocateAttributePointsResponse) GetSuggested() map[uint32]uint32 {
 }
 
 type CreateAttributeSchemeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // 空 = 服务器按"方案N"命名
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // 空 = 服务器按"方案N"命名
+	// 客户端幂等键(docs/design/client-request-idempotency.md)。建方案要扣金币:玩家每点一次「新建」生成一个
+	// 非 0 的随机 64 位数,拿到明确结果(成功,或带 tip 的拒绝)之前的所有重发 —— 超时、断线重连、gate 回 1003、
+	// 回包没到时玩家又点了一次 —— 都带同一个键,name 原样不变。
+	// scene 按 (玩家, 键) 去重:同键同参数的重发不再建第二个、不再扣钱,回首次建出的 scheme_id 与当前面板并标 replayed;
+	// 同键换了 name 回 kInvalidParameter,不执行。0 = 旧客户端,不去重。
+	// 键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):下线重登、换节点、scene 重启之后照样认得。
+	ClientRequestId uint64 `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateAttributeSchemeRequest) Reset() {
@@ -1021,11 +1028,21 @@ func (x *CreateAttributeSchemeRequest) GetName() string {
 	return ""
 }
 
+func (x *CreateAttributeSchemeRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
 type CreateAttributeSchemeResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	Panel         *AttributePanelInfo    `protobuf:"bytes,2,opt,name=panel,proto3" json:"panel,omitempty"`
-	SchemeId      uint32                 `protobuf:"varint,3,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Panel        *AttributePanelInfo    `protobuf:"bytes,2,opt,name=panel,proto3" json:"panel,omitempty"`
+	SchemeId     uint32                 `protobuf:"varint,3,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`
+	// true = 这一次是重发(client_request_id 命中了已建好的那个方案):没有再建、没有再扣钱,
+	// scheme_id 是首次建出的方案号,panel 是此刻的面板。客户端按「首次已经建成」处理。
+	Replayed      bool `protobuf:"varint,4,opt,name=replayed,proto3" json:"replayed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1079,6 +1096,13 @@ func (x *CreateAttributeSchemeResponse) GetSchemeId() uint32 {
 		return x.SchemeId
 	}
 	return 0
+}
+
+func (x *CreateAttributeSchemeResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
 }
 
 // 切换方案:立即按目标方案重算二级属性(战斗中/冷却中拒绝)
@@ -1508,13 +1532,15 @@ const file_proto_scene_player_attribute_proto_rawDesc = "" +
 	"\tsuggested\x18\x03 \x03(\v23.AutoAllocateAttributePointsResponse.SuggestedEntryR\tsuggested\x1a<\n" +
 	"\x0eSuggestedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"2\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"^\n" +
 	"\x1cCreateAttributeSchemeRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"\x9d\x01\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\"\xb9\x01\n" +
 	"\x1dCreateAttributeSchemeResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
 	"\x05panel\x18\x02 \x01(\v2\x13.AttributePanelInfoR\x05panel\x12\x1b\n" +
-	"\tscheme_id\x18\x03 \x01(\rR\bschemeId\";\n" +
+	"\tscheme_id\x18\x03 \x01(\rR\bschemeId\x12\x1a\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\";\n" +
 	"\x1cSwitchAttributeSchemeRequest\x12\x1b\n" +
 	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\"\x80\x01\n" +
 	"\x1dSwitchAttributeSchemeResponse\x124\n" +

@@ -65,10 +65,10 @@ metadata:
   name: redis
   labels:
     app: redis
-  # 重启闸(P0-E 第 2 批,docs/handoff/global-singletons-p0-findings-20261014.md「P0-E」修复设计五·2):
-  # k8s_deploy.ps1 的 Apply-Infra 把下面 spec.template 段的摘要(Get-RedisPodTemplateDigest,去掉 YAML 注释与空行后算)
-  # 填进这条注解。它挂在 StatefulSet 自己的 metadata 上、不在 Pod 模板里,改它不会滚动 redis-0。下一次 infra-up 先读线上这条注解:
-  # 模板变了(= apply 会重启 redis-0)或线上没有注解,而命令行没给 -ConfirmRedisCoreRestart,就在任何写操作之前拒绝。
+  # Pod 模板文本摘要(P0-E 第 2 批引入):k8s_deploy.ps1 的 Apply-Infra 把下面 spec.template 段的摘要(Get-RedisPodTemplateDigest,
+  # 去掉 YAML 注释与空行后算)填进这条注解。它挂在 StatefulSet 自己的 metadata 上、不在 Pod 模板里,改它不会滚动 redis-0。
+  # 只作标记(看得出线上是哪一版清单 apply 的)。重启闸不读它:2026-11-05 起改为把这份 StatefulSet 交给 API server 做服务端预演,
+  # 预演后的 Pod 模板与线上不同(= apply 会重启 redis-0)而命令行没给 -ConfirmRedisCoreRestart,就在任何写操作之前拒绝。
   # 占位没替换就 apply 会被 Apply-Infra 的「未替换占位」检查拦下;不要手写真实摘要。
   annotations:
     mmorpg.io/redis-pod-template-digest: "__REDIS_POD_TEMPLATE_DIGEST__"

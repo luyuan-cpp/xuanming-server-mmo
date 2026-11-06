@@ -61,6 +61,16 @@ func (l *RedisLocker) TryLock(ctx context.Context, key string, ttl time.Duration
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		// 回「已存在」不一定是别人持有:控制域句柄的 MaxRetries 缺省 3,首发 SETNX 已经写入、回包丢了时,客户端会原样重发,
+		// 重发看到的正是自己这一次的值。不核对的话这把锁空占到 TTL 过期,TryLockWithRetry 每次换新值重试都失败,
+		// 选主也空着(docs/design/infra-reconnect-overview.md §4 R8,与 shared/leader 同一做法)。
+		// 写入发生在 sentAt 之后,acquiredAt 取 sentAt 仍是安全的起算点。核对失败按「别人持有」处理。
+		if cur, getErr := l.client.Get(ctx, key).Result(); getErr == nil && cur == lockValue {
+			logx.Infof("lock setnx key=%s was replayed after its first attempt won; the lock is ours", key)
+			ok = true
+		}
+	}
 
 	return &Lock{
 		Key:        key,

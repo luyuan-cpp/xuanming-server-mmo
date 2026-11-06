@@ -37,6 +37,8 @@ type fakeAdminStore struct {
 	lookupReq    *inboxpb.LookupPlayerInboxRequest
 	reconcileReq *inboxpb.ReconcilePlayerInboxRequest
 	ledgersSeen  inbox.LedgerReader
+	blocksID     uint64
+	blocksSeen   inbox.ItemGainBlockReader
 }
 
 func newFakeAdminStore() *fakeAdminStore { return &fakeAdminStore{sawDeadline: map[string]bool{}} }
@@ -96,10 +98,26 @@ func (f *fakeAdminStore) ReconcilePlayer(ctx context.Context, req *inboxpb.Recon
 	return &inboxpb.ReconcilePlayerInboxResponse{LedgerFound: true}, nil
 }
 
+func (f *fakeAdminStore) ItemGainBlocks(ctx context.Context, playerID uint64, blocks inbox.ItemGainBlockReader) (*inboxpb.GetPlayerItemGainBlocksResponse, error) {
+	f.note(ctx, "ItemGainBlocks")
+	f.blocksID, f.blocksSeen = playerID, blocks
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &inboxpb.GetPlayerItemGainBlocksResponse{PlayerId: playerID, Found: true, BlockedItemConfigIds: []uint32{30045}}, nil
+}
+
 // stubLedgers 用指针比较身份:核对存储层拿到的就是装配时传进来的那一个。
 type stubLedgers struct{ name string }
 
 func (*stubLedgers) ReadInboxLedger(context.Context, uint64) (*componentpb.PlayerInboxLedgerComp, bool, error) {
+	return nil, false, nil
+}
+
+// stubItemGainBlocks 同上,用指针比较身份。
+type stubItemGainBlocks struct{ name string }
+
+func (*stubItemGainBlocks) ReadItemGainBlock(context.Context, uint64) (*componentpb.PlayerItemGainBlockComp, bool, error) {
 	return nil, false, nil
 }
 
@@ -133,6 +151,7 @@ type adminFixture struct {
 	store    *fakeAdminStore
 	sanction *fakeSanctionStore
 	ledgers  inbox.LedgerReader
+	blocks   inbox.ItemGainBlockReader
 	audits   []*inboxpb.PlayerInboxAudit
 }
 
@@ -143,7 +162,8 @@ func newAdminFixture(t *testing.T) *adminFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &adminFixture{store: newFakeAdminStore(), sanction: &fakeSanctionStore{registry: reg}, ledgers: &stubLedgers{name: "assembly"}}
+	f := &adminFixture{store: newFakeAdminStore(), sanction: &fakeSanctionStore{registry: reg}, ledgers: &stubLedgers{name: "assembly"},
+		blocks: &stubItemGainBlocks{name: "assembly"}}
 	deps := logic.GmSanctionDeps{
 		Store: f.sanction,
 		Audit: func(_ context.Context, _ *sql.Tx, a *inboxpb.PlayerInboxAudit) error {
@@ -152,7 +172,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 		},
 		Now: func() time.Time { return time.UnixMilli(1_800_000_000_000) },
 	}
-	f.server = NewAdminServer(f.store, deps, f.ledgers, adminTestBudget)
+	f.server = NewAdminServer(f.store, deps, f.ledgers, f.blocks, adminTestBudget)
 	return f
 }
 
@@ -197,7 +217,13 @@ func TestAdminServerFoldsStoreFaultsInBand(t *testing.T) {
 	if err != nil || rec.GetErrorMessage().GetId() != constants.ErrStoreUnavailable {
 		t.Errorf("ReconcilePlayer = %+v, %v", rec, err)
 	}
-	for _, m := range []string{"Summary", "List", "Lookup", "Void", "ReconcilePlayer"} {
+	// 读存档或收件箱库失败:回包只带故障 tip 与回显的 player_id,不带任何封禁表 —— 空表会被读成「没封」。
+	blocks, err := f.server.GetItemGainBlocks(ctx, &inboxpb.GetPlayerItemGainBlocksRequest{PlayerId: 42})
+	if err != nil || blocks.GetErrorMessage().GetId() != constants.ErrStoreUnavailable || blocks.GetPlayerId() != 42 ||
+		blocks.GetFound() || len(blocks.GetBlockedItemConfigIds()) != 0 || len(blocks.GetPending()) != 0 {
+		t.Errorf("GetItemGainBlocks = %+v, %v", blocks, err)
+	}
+	for _, m := range []string{"Summary", "List", "Lookup", "Void", "ReconcilePlayer", "ItemGainBlocks"} {
 		if !f.store.sawDeadline[m] {
 			t.Errorf("%s 没有套整请求预算的截止时间", m)
 		}
@@ -285,6 +311,15 @@ func TestAdminServerPassesThroughAndWires(t *testing.T) {
 	}
 	if f.store.ledgersSeen != f.ledgers {
 		t.Error("ReconcilePlayer 必须把装配层的账本读取器交给存储层(运维对账与定时对账共用同一个)")
+	}
+
+	blocks, err := f.server.GetItemGainBlocks(ctx, &inboxpb.GetPlayerItemGainBlocksRequest{PlayerId: 42})
+	if err != nil || blocks.GetErrorMessage() != nil || !blocks.GetFound() || len(blocks.GetBlockedItemConfigIds()) != 1 ||
+		f.store.blocksID != 42 {
+		t.Errorf("GetItemGainBlocks = %+v, %v (store saw %d)", blocks, err, f.store.blocksID)
+	}
+	if f.store.blocksSeen != f.blocks {
+		t.Error("GetItemGainBlocks 必须把装配层的封禁表读取器交给存储层")
 	}
 }
 

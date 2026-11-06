@@ -1,33 +1,19 @@
 package kafka
 
 // player_snapshot 消费者的「按分区并发 + 可配批量」(G2a 快照审计管道扩容)。
-//
-//	kafka-go group Reader(每实例一个)
-//	        │ FetchMessage
-//	   dispatcher(Run 所在 goroutine):map[partition]*worker,懒创建
-//	        │
-//	   worker p0 / p1 / …   每个 worker:FIFO 通道 → 攒批 → flush(先落库、后提交本分区本批最高 offset)
-//	        │
-//	   sem(MaxInflightFlushes,实例级)→ SnapshotSink
-//
-// 不变量(「不丢」的全部依据):任何分区的任何一次提交 V,都满足「该分区 offset < V 的有效消息都已落库」。
-//   - 同一分区只由一个 worker 处理,通道 FIFO 是分区内顺序的唯一来源;批内行按 offset 序拼进一条语句;
-//   - 只在落库成功后提交、只提交已落库前缀;落库没成功(含 ctx 取消导致的安静退出)的批一律不提交;
-//   - 一批因 ctx 取消没提交之后,这个 worker 立刻退出,**绝不**再处理后面的消息 —— 后面的批一旦提交,
-//     就越过了没落库的这一批(run 循环顶部的 ctx 检查就是为它写的)。
+// 派发骨架、不变量与排空语义见 partition_workers.go(2026-11-06 抽出,流水消费者共用);这里只有快照自己的攒批与落库:
+//   - 批内行按 offset 序拼进一条语句;批量失败逐条兜底(isolate),停在插不进去的那一行、只提交它之前的前缀;
+//   - 落库名额是 SnapshotMySQL 池上的实例级信号量(Kafka.SnapshotMaxInflightFlushes)。
 // 默认配置(批 1 条、并发 1、不等待)下每条消息单独落库、单独提交,与 2026-10-12 之前语义等价。
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"data_service/internal/metrics"
 	"data_service/internal/store"
-
-	"shared/safego"
 
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -37,9 +23,9 @@ import (
 const snapshotWorkerPoint = "data_service.kafka.player_snapshot.partition"
 
 // errSnapshotWorkerAborted 是某个分区 worker panic 时 Run 返回的错误(safego 已记点位与栈)。
-var errSnapshotWorkerAborted = errors.New("player_snapshot partition worker aborted (panic); offsets of its in-flight batch NOT committed")
+var errSnapshotWorkerAborted = fmt.Errorf("player_snapshot partition worker aborted (panic); offsets of its in-flight batch NOT committed: %w", errPartitionWorkerAborted)
 
-// Run 阻塞消费直到 ctx 结束(返回 nil)或任一分区停下(返回 errors.Is(err, ErrConsumerStoppedOnDB)
+// Run 阻塞消费直到 ctx 结束 / 排空完成(返回 nil)或任一分区停下(返回 errors.Is(err, ErrConsumerStoppedOnDB)
 // 或 errSnapshotWorkerAborted;该分区停在最后一次成功提交处)。返回前一定等所有分区 worker 退出 ——
 // supervisor 随后才 Close reader,不会出现「reader 已关、worker 还在提交」。
 //
@@ -49,71 +35,13 @@ func (c *SnapshotConsumer) Run(ctx context.Context) error {
 	c.health.markRunning()
 	defer c.health.markStopped()
 
-	runCtx, cancelRun := context.WithCancel(ctx)
-	defer cancelRun()
-	stop := &runStop{cancel: cancelRun}
-	var wg sync.WaitGroup
-	// dispatcher panic 时也先取消并 join 分区 worker，再让 supervisor 关闭 reader。
-	defer func() { cancelRun(); wg.Wait() }()
-	workers := make(map[int]*snapshotPartitionWorker)
-	graceful := false
-
-	for runCtx.Err() == nil {
-		msg, err := c.reader.FetchMessage(runCtx)
-		if err != nil {
-			if errors.Is(err, errFetchDrained) {
-				graceful = true
-				break
-			}
-			if runCtx.Err() != nil {
-				break
-			}
-			logx.Errorf("[%s] fetch failed, retry in %s: %v", ConsumerSnapshot, c.cfg.FetchBackoff, err)
-			sleepCtx(runCtx, c.cfg.FetchBackoff)
-			continue
-		}
-		w := workers[msg.Partition]
-		if w == nil {
-			w = c.startWorker(runCtx, msg.Partition, &wg, stop)
-			workers[msg.Partition] = w
-		}
-		select {
-		case w.in <- msg:
-		case <-runCtx.Done():
-			// 某个分区已停(或进程关停):这条不投递、不提交,重建 / 重启后从断点重放。
-		}
-	}
-	if graceful {
-		for _, worker := range workers {
-			close(worker.in)
-		}
-	} else {
-		cancelRun()
-	}
-	wg.Wait()
-
-	if err := stop.firstErr(); err != nil && ctx.Err() == nil {
+	if err := runPartitionWorkers(ctx, ConsumerSnapshot, c.reader, c.cfg.FetchBackoff, c.startWorker); err != nil && ctx.Err() == nil {
 		c.health.markFailed(err)
 		return err
 	}
 	logx.Infof("[%s] consumer exiting on shutdown", ConsumerSnapshot)
 	return nil
 }
-
-// runStop 记第一次失败并取消整个 Run。err 在 wg.Wait 之后读:worker 的 fail 发生在它自己的 wg.Done 之前
-// (两个 defer 的注册顺序保证),wg.Wait 给出 happens-before。
-type runStop struct {
-	once   sync.Once
-	err    error
-	cancel context.CancelFunc
-}
-
-func (s *runStop) fail(err error) {
-	s.once.Do(func() { s.err = err })
-	s.cancel()
-}
-
-func (s *runStop) firstErr() error { return s.err }
 
 // snapshotPartitionWorker 处理一个分区。in 的容量 = BatchMaxRows,FIFO 是分区内顺序的唯一来源。
 type snapshotPartitionWorker struct {
@@ -122,25 +50,10 @@ type snapshotPartitionWorker struct {
 	in        chan kafkago.Message
 }
 
-func (c *SnapshotConsumer) startWorker(runCtx context.Context, partition int, wg *sync.WaitGroup, stop *runStop) *snapshotPartitionWorker {
+func (c *SnapshotConsumer) startWorker(runCtx context.Context, partition int, wg *sync.WaitGroup, stop *runStop) chan<- kafkago.Message {
 	w := &snapshotPartitionWorker{c: c, partition: partition, in: make(chan kafkago.Message, c.cfg.BatchMaxRows)}
-	wg.Add(1)
-	safego.Go(snapshotWorkerPoint, func() {
-		defer wg.Done()
-		completed := false
-		defer func() {
-			// panic 展开时也会先跑到这里(早于 safego 的 recover):不让一个死掉的分区在其它分区继续跑时静默停摆。
-			if !completed {
-				stop.fail(errSnapshotWorkerAborted)
-			}
-		}()
-		err := w.run(runCtx)
-		completed = true
-		if err != nil {
-			stop.fail(err)
-		}
-	})
-	return w
+	goPartitionWorker(runCtx, snapshotWorkerPoint, errSnapshotWorkerAborted, wg, stop, w.run)
+	return w.in
 }
 
 // snapshotBatch 是一个分区正在攒的一批。msgs 是要提交的全部消息(含被跳过的坏消息),

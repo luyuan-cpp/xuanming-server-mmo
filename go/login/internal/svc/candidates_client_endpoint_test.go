@@ -193,12 +193,18 @@ func newSvcTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 	return rdb, mr
 }
 
-// 顺序契约:先按客户端地址去重,再剔除 draining。
+// uncachedDrainMarks 是不缓存的排空标记查询:用例在两次调用之间打标记,要求下一次立即看到。
+// 生产路径按 zone 缓存 gateDrainMarkRefresh,缓存本身的用例在 loginqueue/gatedrain_cache_test.go。
+func uncachedDrainMarks(rdb *redis.Client) *loginqueue.DrainMarkCache {
+	return loginqueue.NewDrainMarkCache(rdb, 0, nil)
+}
+
+// 顺序契约:先按客户端地址去重,再打 draining 标记;排空中的 gate 只打标记、不剔除(2026-11-06 起)。
 // gate-1 重建后新记录 node 9 与陈旧记录 node 5 报同一个地址,运维按 node_id 把活着的 node 9 标了排空。
-// 顺序对:去重先淘汰 node 5,排空再剔掉 node 9,只剩 node 4。
-// 顺序反:排空先剔掉 node 9,node 5 失去竞争者留下来 —— 玩家被派到一台已不存在的 gate,
+// 顺序对:去重先淘汰 node 5,node 9 带着排空标记留在候选里(容量记账照数它上面的人,挑 gate 时由 eligibleGates 分档)。
+// 顺序反:先按标记剔掉 node 9,node 5 失去竞争者留下来 —— 玩家被派到一台已不存在的 gate,
 // 连上同地址的新 gate 被 token_gate_node_mismatch 拒绝。
-func TestCandidatesFromNodes_DedupeRunsBeforeDrainingFilter(t *testing.T) {
+func TestCandidatesFromNodes_DedupeRunsBeforeDrainingMark(t *testing.T) {
 	rdb, _ := newSvcTestRedis(t)
 	ctx := context.Background()
 
@@ -209,7 +215,7 @@ func TestCandidatesFromNodes_DedupeRunsBeforeDrainingFilter(t *testing.T) {
 	}
 
 	// 对照:没有排空标记时,去重已经淘汰了 node 5。
-	assertCandidates(t, candidatesFromNodes(ctx, rdb, watched(nodes...), 1, true), []loginqueue.GateCandidate{
+	assertCandidates(t, candidatesFromNodes(ctx, uncachedDrainMarks(rdb), watched(nodes...), 1, true), []loginqueue.GateCandidate{
 		{NodeID: 4, IP: "127.0.0.1", Port: 30000, PlayerCount: 7, ZoneID: 1},
 		{NodeID: 9, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
 	})
@@ -219,9 +225,10 @@ func TestCandidatesFromNodes_DedupeRunsBeforeDrainingFilter(t *testing.T) {
 	}
 	want := []loginqueue.GateCandidate{
 		{NodeID: 4, IP: "127.0.0.1", Port: 30000, PlayerCount: 7, ZoneID: 1},
+		{NodeID: 9, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1, Draining: true},
 	}
 	for _, require := range []bool{false, true} {
-		got := candidatesFromNodes(ctx, rdb, watched(nodes...), 1, require)
+		got := candidatesFromNodes(ctx, uncachedDrainMarks(rdb), watched(nodes...), 1, require)
 		for _, c := range got {
 			if c.NodeID == 5 {
 				t.Fatalf("require=%v: 陈旧记录 node 5 不得在同地址的新 gate 被排空后顶上来,got %+v", require, got)
@@ -231,8 +238,8 @@ func TestCandidatesFromNodes_DedupeRunsBeforeDrainingFilter(t *testing.T) {
 	}
 }
 
-// rdb 为 nil(队列关闭 / 早期初始化路径)时不做排空过滤,只剩选址与去重。
-func TestCandidatesFromNodes_NilRedisSkipsDrainingFilter(t *testing.T) {
+// 没有排空标记查询(nil,早期初始化路径)时不打排空标记,只剩选址与去重。
+func TestCandidatesFromNodes_NilRedisSkipsDrainingMark(t *testing.T) {
 	nodes := []*basepb.NodeInfo{
 		gateNode(5, 1, 100, "10.244.0.5", 50, clientAddr("127.0.0.1", 30001)),
 		gateNode(9, 1, 200, "10.244.0.9", 3, clientAddr("127.0.0.1", 30001)),

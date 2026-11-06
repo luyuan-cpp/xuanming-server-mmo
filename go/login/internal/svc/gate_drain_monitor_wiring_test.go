@@ -47,9 +47,9 @@ func TestGateDrainSnapshot_KeepsEveryRecordButNil(t *testing.T) {
 
 // 接线的一整轮:原始节点 → 快照 → EvaluateDrainingGates → Redis 标记。
 //
-// 被排空的 node 9 在 RequireClientEndpoint=true 下本来就不会进候选集(没自报客户端地址),
-// 而且它被标了 draining,CandidatesForZone 同样会把它剔掉 —— 这正是快照不能复用候选链的原因:
-// 复用了,正在排空的 gate 永远不被判定,drained 永远等不到。
+// 被排空的 node 9 在 RequireClientEndpoint=true 下本来就不会进候选集(没自报客户端地址)—— 这正是快照不能复用候选链的原因:
+// 候选链按挑 gate 的口径筛(选得出客户端地址、按地址去重),复用了,这类正在排空的 gate 永远不被判定,drained 永远等不到。
+// (2026-11-06 起候选链对排空中的 gate 只打 Draining 标记、不剔除;node 9 不在候选里是因为缺客户端地址。)
 func TestGateDrainMonitorWiring_OneRoundMarksDrainedGate(t *testing.T) {
 	rdb, mr := newSvcTestRedis(t)
 	ctx := context.Background()
@@ -68,7 +68,7 @@ func TestGateDrainMonitorWiring_OneRoundMarksDrainedGate(t *testing.T) {
 	}
 
 	// 对照:候选链里根本没有 node 9。
-	for _, c := range candidatesFromNodes(ctx, rdb, watched(nodes...), 1, true) {
+	for _, c := range candidatesFromNodes(ctx, uncachedDrainMarks(rdb), watched(nodes...), 1, true) {
 		if c.NodeID == 9 {
 			t.Fatalf("正在排空且缺客户端地址的 node 9 不应进候选集,got %+v", c)
 		}

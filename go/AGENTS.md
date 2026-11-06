@@ -52,4 +52,4 @@ cd go\db && go build ./cmd/data_stress ./cmd/verifier # build L2 stress tools
 - login、data_service、scene_manager 均采用 go-zero 服务装配并各自管理注册生命周期。
 - **Scene manager**: C++ scene nodes register in etcd; LoadReporter mirrors type/load into Redis. World channel moves use `RebalanceWorldChannelsForZone` (planner `PlanWorldChannelRebalance`). Before changing that path, run `cd go\scene_manager && go test ./internal/logic/ -run TestIntegration_ -count=1` and extend `integration_test.go` if you add new invariants.
 - **Player store** (`go/db`): 存盘服务,scene 直接提交 TiDB,不经 Redis 和 Kafka。契约见 `docs/design/player-save-direct-commit.md`。
-- When `.proto` changes, regenerate first, then rebuild affected Go services. The `PlayerStressTestProbe` sub-message lives in `proto/common/component/player_comp.proto` and is embedded in `player_database` + `player_database_1`.
+- When `.proto` changes, regenerate first, then rebuild affected Go services. The `PlayerStressTestProbe` sub-message lives in `proto/common/component/player_comp.proto` and is embedded in `player_database`(`player_database_1` 已于 2026-11-05 删除)。

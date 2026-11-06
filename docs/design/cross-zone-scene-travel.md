@@ -1805,7 +1805,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
 - 还没同步、不在本文里的:`scene-owner-reentry-barrier.md` §3.3 要补"owner_epoch 只经 INCR 前进,路由失败回滚也用 INCR",以及 CZ-3"节点不得自己读 Redis 取 epoch"的唯一例外(B5 采纳)及其三条前提。2026-10-01 核对时该文档里还没有这两处,2026-10-08 复核时仍然没有;代码注释(`player_ownership_comp.h` 文件头)已经引用了它。
 
 **设计残余**
-- **不凭标记的铸造做不到 fail-closed。** 首次落点、第二条腿、从等待落点再次重定向、死节点接管,这些铸造没有令牌可查。遇到"kafka-go 报错但 broker 实际已投递"时没有互斥手段:幽灵目标节点在回滚前可以过 A2′、建实体、做一次 CAS 存盘,它的 DBTask(N+1) 也可能先落库;回滚之后它的存盘被拒、自毁,它上面的进度丢失,MySQL 可能短暂领先 Redis(帮会 08 §8.4 已接受的同类残余)。由"账本只读 Redis"契约兜底。根治需要载入认领令牌,或让 C++ 在 CAS 成功后再发 DBTask,另案处理。
+- **不凭标记的铸造做不到 fail-closed**(2026-11-06 起已收口)。首次落点、第二条腿、从等待落点再次重定向、死节点接管,这些铸造没有交接标记可查。原先遇到"kafka-go 报错但 broker 实际已投递"时没有互斥手段:目标节点在回滚之前完成入场、认领了存档写权行,回滚照样 INCR 并删掉 location,它就成了没有 location 的现任;下一次换图 / 重登按首次落点铸新代次,新认领把它最后一次提交之后的进度围掉。现在拿目标节点自己的入场登记当令牌:C++ 入场先跑 `kRegisterFenceLua`(核对 owner_epoch == N+1,再写出 N+1 代的交接资格原件,`player:{id}:handoff_fence` 的 `handoff_fence` 字段),登记成功之后才 Activate、认领存档;原件的代次只升不降。回滚 Lua 在同一次原子执行里读这份原件:原件已属于 N+1 → 一个字节都不动、保留本次落点(`target_registered`,与 `marker_gone` 同一种终态);原件缺失或属于更早的代次 → 照常回滚,迟到的登记因 owner_epoch 已是 N+2 被拒(-1),目标节点认领不了 N+1;原件比 N+1 新或写坏了(协议写者写不出)→ 不当证据,不回滚并告警(`fence_not_proof`)。判据与无资格持有者撤销(`location-release-binding.md` §17)同口径。代码:`owner_epoch.go` `luaRollbackPlayerPlacement`;单测 `TestUnmarkedRollbackAndRegistrationAreMutuallyExclusive`(与 C++ 登记脚本的逐字副本一起跑)、`TestEnterScene_FirstPlacementRouteFailureKeepsPlacementWhenTargetAlreadyRegistered`、`TestRollbackPlayerPlacementJudgesUnmarkedMintByHandoffFence`。尚未编译,待 Codex 验证。
 - **新旧 scene_manager 混跑窗口里,三条伤害都还在。** 旧副本把 epoch SET 回旧值、不查令牌;新副本写出的转写标记旧副本也认。处置见定稿设计第 9 条。
 - **新增的损失面。** 不凭标记的铸造(例如首次落点)在路由失败时也会 INCR。受影响的是两类实体:"退出重存超限而被保留"的实体,以及活僵尸。它们以前在这种情况下仍然合法;现在下一次存盘会被 CAS 拒,或在再入时因"跳 ≥2"被丢弃(`IsDeposedOnReentry`),丢掉尚未收敛的那段差额。这是安全方向,没有复制。按规格的分析,压测期间 `stale_owner_write_rejected` 与 `exit_deposed_on_reentry` 不再保证恒为 0;§6 不变量 3 的"压测期恒 0"要读成"没有发生过路由失败回滚时恒 0",非 0 时先对照 scene_manager 的 `[RouteRollback]` 日志。
 - **gate 迟到改绑**(§13.3 L3):unpause 之后 kafka-go 可能补投那条已超时的路由,gate 把会话改绑到目标节点,目标节点的 A2′ 拒建实体;源端已凭回执采纳并解冻,但客户端的输入进的是目标节点,玩家"能看不能动",要重登。重登后回到源节点,数据无损。gate 没有 epoch 栅栏,是既有问题。
@@ -2014,7 +2014,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
   2. 副本重启后屏障从复核时刻重新起算,最多多等一个屏障;
   3. 旧实例失租超过屏障仍活着时,未落盘进度丢失(只丢不盖),同 handover-single-writer-v#1;
   4. 进程交易持有方(`account_role_admission` 里旧实例未关闭的入场世代)不在本项范围:登记新入场不受它影响,交易侧的处理归落地围栏线。
-  5. (2026-10-24 复核补)资格 E 小于当前 owner_epoch 的被顶替情形仍会卡住:例如跨节点交接已铸 E+1、location 改到目标节点,目标进程在登记资格之前崩溃、又被同号顶替。此时资格还是源进程的 `E|U7|F`,第 3 条不成立;即使放宽,源进程 U7 可能健在、仍在册,第 4 条也不成立。登录恰好落回该节点时新进程能按 E+1 登记(`kRegisterFenceLua` 允许更大的 E 盖过),挑到别的节点则一直 18,LeaveScene 也拿不到证据。改动前同样卡住,不是回归。根治要在落点 Lua 里原子比对资格原文、并用「location 节点的现任实例启动晚于 location 写入」作证据,或改 C++ 资格契约允许同号新实例补写凭证,两者都要单独评审。另一条收口线 `location-release-binding.md` §17(无资格持有者由权威方带围栏撤销,2026-10-24 设计、未落码)正好覆盖「原件 E ≠ location E」这一类,落码后本条改为指向那里(**2026-10-30 已落码、未编译:本条由 §17 收口,见 §17.9**);`location-release-binding.md` §3.3 残余(1)、§17.1 与 `release_fence.h` 里「等被顶替(GO-3)」的说法已按此订正。
+  5. (2026-10-24 复核补)资格 E 小于当前 owner_epoch 的被顶替情形仍会卡住:例如跨节点交接已铸 E+1、location 改到目标节点,目标进程在登记资格之前崩溃、又被同号顶替。此时资格还是源进程的 `E|U7|F`,第 3 条不成立;即使放宽,源进程 U7 可能健在、仍在册,第 4 条也不成立。登录恰好落回该节点时新进程能按 E+1 登记(`kRegisterFenceLua` 允许更大的 E 盖过),挑到别的节点则一直 18,LeaveScene 也拿不到证据。改动前同样卡住,不是回归。根治要在落点 Lua 里原子比对资格原文、并用「location 节点的现任实例启动晚于 location 写入」作证据,或改 C++ 资格契约允许同号新实例补写凭证,两者都要单独评审。另一条收口线 `location-release-binding.md` §17(无资格持有者由权威方带围栏撤销,2026-10-24 设计、未落码)正好覆盖「原件 E < location E」这一类,落码后本条改为指向那里(**2026-10-30 已落码、未编译:本条由 §17 收口,见 §17.9**);`location-release-binding.md` §3.3 残余(1)、§17.1 与 `release_fence.h` 里「等被顶替(GO-3)」的说法已按此订正。
   6. (既有,复核补登)节点号被复用而 DELETE 没被领导者处理(领导者缺位、scene_manager 整体重启)时,旧进程名下副本场景的收尾快照拿不到:(zone,node) 身份一直在册,不会入死节点收尾队列。根治要让场景记录宿主实例号,归死节点收尾线;GO-3 的实例差集只记时间,不改变场景收尾。
 
 **3. 34 来源栅栏(§12.5.6 残余 1、§13.2「上限到期一律踢线」)**
@@ -2307,6 +2307,10 @@ flowchart TB
 - etcd 负责各服务的注册发现，图中仅画 Router 与 SceneManager 两条代表线，其他节点的注册发现连接省略。普通跨区传送不调用 match / battle；战斗中禁止传送等准入规则见 CZ-6。
 
 ### 15.3 源端保存、SQL 屏障与改派
+
+C++ 源端在冻结快照取得成功的存盘结论后，由一条 Scene 协程发布本代 Redis 交接标记，再等待本次带关联号的 EnterScene。发布前沿用冻结晚发闸。只有标记明确写成，才复核原实体、冻结代次、原资格与当前 Gate 会话并提交进场。未接纳与结果未知仍分别走原撤销和取证规则。冻结看门狗、退出优先与新旧回包认领继续由交接状态机裁决。现行 TiDB 直接存盘步骤见 [直接存盘设计 §6](player-save-direct-commit.md#6-等待点替换)。
+
+疏散改派仍在销毁实体前登记票据和确认条目。写标记的一次尝试在 Scene 协程里顺序等待条件写与 EnterScene 的回包。标记结局只供日志，是否放行仍由 SceneManager 裁决。独立确认表继续处理超时、晚路由、核实和踢线。正常排空期间两条协程可继续推进。最终拆除时取消本地等待，已接纳的 Redis 命令仍由原回包归还在途计数。
 
 以下为成功主路径。SceneManager 的只读预检先于目标 Gate 准备；**先选 Gate 并签票据，再 CAS 提交等待落点，最后向 Kafka 投递重定向并等待 broker ACK**。准备票据不是位置提交点，更不是客户端已经换区。
 

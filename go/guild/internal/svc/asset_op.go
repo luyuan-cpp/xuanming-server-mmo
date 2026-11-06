@@ -344,7 +344,11 @@ func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
 // 投递发不出去(fail-closed),循环照跑但这些行都留在 PENDING。
 // 自动放弃不看节点镜像:写权行和账本都来自 data_service。要停掉放弃只能把 AssetOp.AbandonAfterDays 写 0。
 // 唤醒订阅最后起:它调的 Loop.WakePlayer 与 Tick 共用 Workers 预算,早起晚起都不改变任何正确性论证(设计 L-4)。
-func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
+//
+// globalBackground 为 false(发布轨道 canary,docs/design/release-track-gray-canary.md §2.5)时只起 scene 节点镜像:
+// 捐献、兑换、活动奖励提交后的同步投递(Loop.ProcessOne)要靠它定位 scene;outbox 重投、维护选主与唤醒订阅是全局作用域的后台,
+// 由 stable 副本承担,canary 同步投递没终结的行过了插行租约后由 stable 的重投循环接手。
+func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client, globalBackground bool) {
 	if p == nil {
 		return
 	}
@@ -357,7 +361,7 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
 	runCtx, cancel := context.WithCancel(ctx)
 	p.cancel = cancel
 
-	p.wg.Add(2)
+	p.wg.Add(1)
 	// wg.Done 放在 fn 自己的 defer 里:safego 兜住 panic 时 defer 照样执行,Stop 不会因为
 	// 一条 goroutine 炸掉而永远等下去。
 	safego.Go("guild.scene_node_watch", func() {
@@ -372,6 +376,11 @@ func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
 		}()
 		p.watcher.Run(runCtx, etcdCli)
 	})
+	if !globalBackground {
+		logx.Info("[guild] Asset channel on a canary replica: scene node mirror only; redelivery, maintenance and wake run on stable replicas")
+		return
+	}
+	p.wg.Add(1)
 	safego.Go("guild.asset_op_reconcile", func() {
 		defer p.wg.Done()
 		defer func() {

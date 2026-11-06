@@ -200,4 +200,9 @@ message GameConfig {
     }
 
     AuditSnapshotConfig audit_snapshot = 10;
+
+    // 本 zone 的场景控制域实例(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 把分线目录、神秘商人
+    // 等读模型写在本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),只有 scene 读它。yaml 键 scene_control_redis,
+    // 由 readGameConfig 手工解析;**整段缺失时取 zone_redis 的值**(开发环境两者是同一个实例)。db 只认 0。
+    ZoneRedisConfig scene_control_redis = 11;
 }

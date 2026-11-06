@@ -190,4 +190,21 @@ message ClientTokenVerifyRequest {
 message ClientTokenVerifyResponse {
   bool success = 1;
   string error = 2;       // non-empty on failure
+  // 应用层心跳参数(docs/design/gate-client-heartbeat.md),只在 success = true 时填。
+  // 0 = 这台 gate 不支持心跳(旧版本,或另一版服务器尚未实现):客户端不得发 ClientHeartbeatRequest,
+  // 旧 gate 收到不认识的消息类型会当非法帧强关连接。
+  uint32 heartbeat_interval_ms = 3;  // 客户端每隔这么久发一条 ClientHeartbeatRequest,不看别的流量
+  uint32 heartbeat_timeout_ms = 4;   // 发过心跳之后,gate 连续这么久收不到本连接任何一帧就关闭连接
+}
+
+// 客户端 → gate:应用层心跳(docs/design/gate-client-heartbeat.md)。与验签消息同层,按类型名派发:
+// 不经 ClientRequest、不占 message_id,gate 本地应答,不转发给任何后端。
+// 只在验签成功且 heartbeat_interval_ms > 0 之后发;验签之前发会被断开。
+message ClientHeartbeatRequest {
+  uint64 seq = 1;  // 客户端自选,gate 原样回显,用来配对回包与测往返时延
+}
+
+// gate → 客户端:每条被接受的 ClientHeartbeatRequest 立即回一条。超过频率上限的心跳不回。
+message ClientHeartbeatResponse {
+  uint64 seq = 1;  // 回显请求的 seq
 }

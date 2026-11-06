@@ -225,7 +225,8 @@ public:
 	//   定位装备(见上)                                        kEquipItemNotFound / kEquipNotEquipment
 	//   实例未初始化(打 WARN)                                 kEquipEnhanceUnavailable
 	//   强化未开放(MaxEnhanceLevel() == 0)                     kEquipEnhanceUnavailable
-	//   有效等级(存档值按表上限夹取)已到上限                   kEquipEnhanceMaxLevel
+	//   expectedLevel != 有效等级(存档值按表上限夹取)          kEquipEnhanceLevelChanged
+	//   有效等级已到上限                                        kEquipEnhanceMaxLevel
 	//   下一级的行查不到(打 ERROR)                             kEquipInternalError
 	//   下一级的行 success_rate == 0(必败的行不收费)           kEquipEnhanceUnavailable
 	//   要材料,但材料的 Item 行不存在或是装备(打 ERROR)       kEquipInternalError
@@ -245,8 +246,13 @@ public:
 	//   [PlayerEquip][ENHANCE_PARTIAL](金币已扣;没有货币退款原语,只留日志供人工对账);写等级时取不到实例
 	//   带标签 [PlayerEquip][INSTANCE_LOST]。正常情况下这三个分支都走不到。
 	//
-	// outcome 在函数开头被重置;只有返回 kSuccess 时有意义。强化不是幂等操作:调用方不得自动重试。
-	static uint32_t Enhance(entt::entity player, Guid itemId, EnhanceOutcome& outcome);
+	// expectedLevel 是客户端看到的强化等级(EnhanceEquipRequest.expected_level = BagItemInfo.enhance_level),与
+	// UpgradeSkill 的 expected_rank 同构的乐观比较:比的是**有效等级**(min(存档值, MaxEnhanceLevel()),就是快照里下发的那个数),
+	// 不是存档原值 —— 上限下调后客户端只看得到夹取后的等级。对不上整笔拒绝,不扣、不掷:结局未知之后重发的旧请求,
+	// 在上一次已经成功或掉过级时到这里就停(审计 r2-equip#1)。掷骰失败且不掉级时等级没变,重发仍会被当作新的一次受理,
+	// 所以调用方仍不得自动重试。
+	// outcome 在函数开头被重置;只有返回 kSuccess 时有意义。
+	static uint32_t Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome);
 
 	// 镶嵌:消耗人物背包里 1 颗 gemConfigId(按 config 扣,不指定哪一堆),记到装备实例的 socket 号孔上。
 	// 孔里已有宝石就拒绝,要先取下(不做「顶替并退回」)。

@@ -71,7 +71,7 @@ T3   A 解冻,继续发号;它的 last_time_ 和 B 的 now 是同一秒 → 同 
 
 改造后:
 - **发号永远不等 etcd**:水位是异步写,失败只记账。
-- **etcd 抖动不自杀**:lease 过期但槽没被别人挂走 → 重新挂 lease,继续;只有"槽被别人挂到了另一个 lease 上"(运维手动清理、或水位机制被绕过)才立即 fence。
+- **etcd 抖动不自杀**:lease 过期但槽没被别人挂走 → 重新挂 lease,继续;只有"槽被别人挂到了另一个 lease 上"(运维手动清理、或水位机制被绕过),或"槽 key 过期期间水位被别人写过"(3.4)才立即 fence。
 - **启动时 etcd 不通可以用本地缓存起**:本地文件存 `(kind, id, incarnation, lastWatermark, lastAckWall)`。若 `now − lastAckWall < F`,这个槽在协议上仍是我的(别人 Q 内不会申领,且 etcd 不通时别人也拿不到新号),直接用缓存 id 起,发号器地板设成 `max(now, lastWatermark)`,后台重试注册。这就是 Leaf 的 workerID 本地文件。
 - **诚实的边界**:C++ scene 没有 etcd 就没有服务发现,玩家进不来。弱依赖的价值主要在 Go 服务(login 建号、guild、match 不因 etcd 抖动停摆)和"不自杀"。号段模式(第 6 节)才真正把永久 ID 的发号从协调器上摘下来。
 - etcd 自身:改 3 副本 StatefulSet + PVC(独立小任务,不在本文范围内展开,但 Phase 1 前必须做)。
@@ -162,15 +162,20 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 
 - 持有者维护 `lastAck`(最近一次水位 Put 成功的**单调时钟**读数 + 同刻墙钟)。
 - `Generate()` 内部先判:`mono_now − lastAck > F` 或 `wall_now − lastAckWall > F` → 返回 fenced(两个时钟任一触发,防 VM 挂起时单调钟停走)。判定放进发号器本身而不是只靠后台 ticker,堵住"解冻后请求线程先于 ticker 发出第一个号"的竞争。
+  - 墙钟差必须用**去掉单调读数**的时刻计算。Go 的 `time.Now()` 同时带墙钟与单调读数,两个都带单调读数的 `Time` 相减只用单调读数,墙钟规则会悄悄退化成第二条单调规则;Linux 的 `CLOCK_MONOTONIC` 不含系统挂起时间,VM 挂起之后两条都不触发。`FenceClock` 在 Ack / SeedAck / Stale 读墙钟时一律 `Round(0)`(2026-11-05,第一轮数据审计 §4 第 20 条)。进程被 SIGSTOP / cgroup 冻结时单调钟照走,由单调规则挡。
+  - 冻结只在这里感知,后台循环**不做**"两拍墙钟间隔远大于周期 ⇒ 判冻结"的检测:它要等解冻后的下一拍才生效,请求线程可能已先发出号;用的又是同一个墙钟读数,看得见的冻结(超过 F)这里已拦下,看不见的(墙钟也没走)它同样看不见。短于 F 的冻结不必感知:Q > F 保证这段时间没人能申领这个槽,lease 若已过期,下一拍水位 Txn 的归属校验失败自然转入 reclaim。
 - `F = Q/2 = 2h`。下界推导:`Q ≥ 2 × (TTL_max 180s + 最大时钟偏差 + drain 预算 15s + 冻结感知延迟)`,4h 对所有项都是两个数量级余量。
-- lease 过期但 slots 没被别人挂走 → 重新 `Put slots/<i>`(If Value==uuid 或 CreateRev==0),**不 fence**。
-- slots 被挂到别的 lease / 被删 → 立即 fence(现有 watch 逻辑保留)。
+- lease 过期但 slots 没被别人挂走 → 重新挂上,**不 fence**。两种情形在**一笔**嵌套 Txn 里判定:
+  - key 还在、value 是自己(挂在旧 lease 上)→ 直接改挂新 lease;
+  - key 已过期(`CreateRev==0`)→ 只有**两把水位 key(`watermark/<i>`、`watermark_ms/<i>`)的 ModRevision 仍等于自己最后一次观测的值**才重新 Create。原因:key 过期后槽对别人就是空的,过了 Q 继任者可以合法申领并发号;继任者若此刻也恰好与 etcd 断开(它的 key 同样过期),它在自己的 F 内还会继续发号,这时重建就是同一个 worker id 两处发号,隔离期被重建绕过。任何发过号的持有者都先写过水位(闸只在水位写成功后 Ack,秒级或毫秒级任一),所以 revision 没动 = 没人用过;动了就分不清继任者已退出还是仍在发号,**永久 fence**,重启后走受隔离期保护的正常申领(2026-11-05,第一轮数据审计 §4 第 21 条)。代价:自己最后一笔水位写"已提交但没收到应答"时 revision 也对不上,同样 fence,只多一次重启。
+- slots 被挂到别的 uuid / 别的 lease → 立即 fence(watch 与 reclaim 的读校验);被删 → 按上一条重挂。
 - 排空预算从 TTL/3 = 20s 变成 F − 已过时间,不再紧张。
 
 ### 3.5 本地缓存(弱依赖)
 
 - 文件:`<数据目录>/snowflake-<kind>.json` = `{cluster, id, uuid, incarnation, lastWatermark, lastAckWall}`,每次水位写成功后原子更新(写临时文件 + rename)。
 - 启动:etcd 可达 → 正常申领(缓存只做日志关联);etcd 不可达 且 `now − lastAckWall < F` → 用缓存 id 起,`SetGuardTime(max(now, lastWatermark + lead))`,后台每 2s 重试注册,注册成功前 lastAck 不推进(所以最多再撑 F);超过 F 仍未注册 → fence。
+- 缓存另记落盘那一刻观测到的两把水位 key 的 ModRevision(`watermarkRev` / `watermarkMsRev`,Go 实现,2026-11-05 加)。etcd 回来时前任的 slots key 多半已随 lease 过期,重新注册走 3.4 的重建分支,靠它做 revision 比较。它只在既有落盘时机抄入、不额外写盘:优雅退出与故障期崩溃时是准的;稳态崩溃时落后于前任后来的写入,缺字段的旧文件读成 0 —— 两者都只会让重建 fence(多一次重启),不会放行。
 - etcd 不可达 且缓存过期 → 等 etcd(今天的行为)。
 
 ### 3.5.1 落码注记(2026-09-08,与上文设计的差异)
@@ -291,6 +296,7 @@ SELECT max_id, step FROM id_segment WHERE biz_tag = ?;
 1. **scene 彻底退出 snowflake 槽位协议。** item guid、tx_id、snapshot_id 三种全部走号段(biz_tag `item` / `txlog` / `snapshot`);tx_id 与 snapshot_id 的用途是去重键与主键,不需要时间序,时间在 `timestamp_sec` / `created_at` 列里。理由:10 万节点每秒 10 万次水位写 + 10 万次 lease 续约超出单个 etcd 一个数量级,任何"每节点一个 etcd 槽"的设计在这个规模都不成立;而号段对节点数不敏感。由此 C++ 侧的 `SnowflakeSlotClient`、`snowflake_slot_selection`、`snow_flake.h` 今日新增的集群/槽位常量与期限 fence、缓存文件、灰度双向兼容、`released` 标记**全部作废删除**,`snow_flake.h` / `snow_flake_manager.h` 回到改造前形态。`ItemIdSegment.FallbackToSnowflake` 随之删除(没有槽位就没有可回退的发号器,只保留 fail-closed)。
 2. **snowflake 槽位协议只服务 Go 的四种**(login-player、guild、scene-manager、match,合计几十个实例)。4096 槽对它们没有容量压力,现有"同主机优雅重启复用自己的槽"够用,**不再**追加按槽位的通用 released 标记。
 3. **一种 GUID 一个号段客户端实例。** C++ 改成通用 `GuidSegmentClient` + 按类型的注册表,启动时按配置实例化 item / txlog / snapshot,以后 pet、guild 等只加一行注册;各实例独立缓冲、预取、退避、指标,共享一条到 data_service 的 gRPC 连接,响应按请求编号分发。Go 侧 `idsegment.Client` 本来就是通用的,login/guild 各持一个实例。
+   **(2026-11-06 补)** 预取只在发号之后判阈值。整批入包的调用方先用 `Available()` 预检、不够就整批延后一个号都不发,「需要量 > 剩余 > 预取阈值、又没有下一段」时会永远等不来新段(审计 R2 r2-battle#3)。所以预检判出不足的调用方必须接着调 `RequestTopUp(needed)`:没有下一段、没有在途、不在退避就立刻领一段,在途 / 退避中则记下需求,退避到期的重试照发;下一段已在手里还不够回 `kBuffersFull`(批次大于双 buffer,要调 step)。战斗结算与资产通道两处预检都已接上,口径统一为 `BagService::MaxNewInstancesFor`(`turn-battle-gap-closure.md` §11.1)。
 4. **动态 step(Leaf 口径)。** 客户端记录每段消耗时长:不到 15 分钟用完则下次 step 翻倍,超过 30 分钟则减半,上下限各钉一个(item 默认 [1000, 1,000,000],初值 20,000)。每天重启一次时浪费 ≤ 2×step,2^55 在 10 万台每天重启下仍可撑两万年以上;此项只为把浪费压到最小,不是正确性需求。
 5. **不做的**:优雅关服把没用完的尾巴还给数据库(会破坏"每段必比上一段大"这条让客户端能整段拒收服务端错误的不变量);本地 json 缓存改 Redis(Redis 是另一个协调器,崩了数据就没了;缓存的唯一意义是 etcd 不通时还能起,只能靠本机磁盘);Go 侧缓存改为**故障期才写**(etcd 水位写失败时才把本进程高水位落盘,稳态零写盘)。
 6. **号段客户端不持久化游标**:一段在 `AllocateIdSegment` 提交时就已被数据库判定为用掉,进程崩溃只产生空洞不产生重号,这正是号段优于 snowflake 之处。
@@ -304,3 +310,10 @@ SELECT max_id, step FROM id_segment WHERE biz_tag = ?;
 3. 号段续段失败时是否允许回退 snowflake(6.4)。
 4. `transaction_log` / `player_snapshot` 定在全局库一处(2.0c 第 3 步),从 go/db 的 zone 库表清单里摘掉。
 5. etcd 改 3 副本 StatefulSet 是否本轮一起做。
+
+
+## 注册协程与每次请求的归属（2026-11-05）
+
+C++ `EtcdService::RegisterAsync` 在节点原 EventLoop 顺序完成租约、端口 CAS、节点分配 CAS、监听就绪和发现发布。`LoopTaskScope` 由服务实例持有；停止重注册和析构先停止本地任务，再拆传输。租约与事务调用现在各有独立完成接口，空结果表示未取得可信应答，沿用原 10 秒预算；CAS 冲突沿用原 1 秒退避。旧请求超时后的回包只能释放自身状态，不能被下一阶段或下一次请求认领。
+
+重注册仍使用原节点身份；结果未知时用同一个键及本次租约复核，不重分配身份。注册在维护预备态等监听就绪后才发布，失租时重新走原 CAS。每次 await 返回都复核停止，包含提交栈中先交付成功再停止的重入顺序。没有新增线程、同步等待或通用 etcd 协程 SDK；watch、keepalive 和 Gate 既有周期发布规则保持原状。Java 不需要复制这一内部控制流。

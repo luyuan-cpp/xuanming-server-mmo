@@ -160,6 +160,7 @@ int RunNodeMain(StartNodeFn&& startNode)
     // 兜底处理未经 Node::FinalizeShutdownInLoop() 就离开 loop 的入口;
     // 调用幂等,Hiredis Channel 必须在 EventLoop 析构前释放。
     tlsRedis.Shutdown();
+    tlsSceneControlRedis.Shutdown(); // 只有 scene 连过;其它节点是空操作
     tlsEcs.Clear();
     google::protobuf::ShutdownProtobufLibrary();
     return 0;

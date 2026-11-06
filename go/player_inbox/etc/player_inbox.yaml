@@ -95,7 +95,8 @@ Kafka:
     - 127.0.0.1:9092
   WriteTimeoutMs: 2000
 
-# data_service 客户端:玩家存在校验(GetPlayerHomeZone)与对账读已落盘账本(GetPlayerInboxLedger)。
+# data_service 客户端:玩家存在校验(GetPlayerHomeZone)、对账读已落盘账本(GetPlayerInboxLedger)、
+# 运维 GetItemGainBlocks 读已落盘物品获取封禁表(GetPlayerItemGainBlock)。
 # 写 Key: dataservice.rpc 不违反 D-13(data_service 按 zone 部署,先例 go/trade/etc/trade.yaml)。
 # -Zone N 时本行会被改写为 dataservice.rpc.zN;data_service 按 home_zone 路由读玩家 blob,行为等价。
 DataServiceRpc:

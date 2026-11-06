@@ -5,7 +5,7 @@
 // 走一次真实的 PlayerAllDataMessageFieldsUnmarshal → MarshalPlayerForPersist,再逐个核对。
 //
 // 新增持久字段 / 消息类型时:
-//   - 新类型从两张玩家表可达、又没进 BuildEveryPersistedType → 覆盖率断言失败,点名缺的类型;
+//   - 新类型从玩家表 player_database 可达、又没进 BuildEveryPersistedType → 覆盖率断言失败,点名缺的类型;
 //   - 新类型的装卸是「拆成运行时结构、存盘再逐字段拼回」→ 注入的字段丢失,点名丢在哪个类型;
 //     要么像 CurrencyDebt 那样随对象携带未知字段,要么在 proto 上标 OptionPersistFrozen / OptionPersistUncarried
 //     并按设计 §3.2 的规则走。
@@ -42,6 +42,7 @@
 #include "proto/common/database/player_cache.pb.h"
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "services/scene/player/system/asset_op_ledger.h"
+#include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/system/player_data_loader.h"
 #include "services/scene/player/system/player_inbox_rules.h"
@@ -193,7 +194,7 @@ void CollectProbes(const Message &message, std::vector<ProbeHit> &found)
     }
 }
 
-// 覆盖率的口径:从 PlayerAllData(冻结根,下面就是两张玩家表)沿可携带的边可达的每个注入目标类型。
+// 覆盖率的口径:从 PlayerAllData(冻结根,下面就是玩家表 player_database)沿可携带的边可达的每个注入目标类型。
 void CollectCarriedTypes(const Descriptor &type, std::set<std::string> &visited, std::set<std::string> &required)
 {
     std::string name(AsView(type.full_name()));
@@ -349,7 +350,7 @@ protected:
     // 覆盖全部持久组件的记录,每个可携带类型至少一个节点,且每个节点都撑得过加载期的校验与修补
     // (真实技能 / 宠物表 ID、自洽的资产账本与收件箱账本、合法的背包槽位)。
     // 新增持久组件时这里同步加一份数据 —— 漏了的话覆盖率断言会点名缺的类型。
-    PlayerAllData BuildEveryPersistedType(uint32_t mainSchemaGen, uint32_t secondSchemaGen)
+    PlayerAllData BuildEveryPersistedType(uint32_t schemaGen)
     {
         const auto &skills = SkillTableManager::Instance().FindAll();
         const auto &pets = PetTableManager::Instance().FindAll();
@@ -361,7 +362,7 @@ protected:
         PlayerAllData all;
         auto &db = *all.mutable_player_database_data();
         db.set_player_id(kPlayerId);
-        db.set_persist_schema_gen(mainSchemaGen);
+        db.set_persist_schema_gen(schemaGen);
 
         auto &transform = *db.mutable_transform();
         transform.mutable_location()->set_x(12.5);
@@ -566,23 +567,31 @@ protected:
         resultConsumed->set_item_table_id(3);
         resultConsumed->set_count(1);
 
-        auto &second = *all.mutable_player_database_1_data();
-        second.set_player_id(kPlayerId);
-        second.set_persist_schema_gen(secondSchemaGen);
+        // 客户端请求幂等键账本(client-request-idempotency.md §5.3):一条强化记录,覆盖两个可携带类型。
+        // 加载原样挂上、存盘原样拷回,不做整理(淘汰在下一次记账时做),所以每层的未知字段都要原样留下。
+        auto &clientRequests = *db.mutable_client_request_ledger();
+        clientRequests.set_next_seq(2);
+        auto *clientRequest = clientRequests.add_records();
+        clientRequest->set_key(0x1234'5678'9abc'def1ULL);
+        clientRequest->set_kind(static_cast<uint32_t>(ClientRequestKind::kEnhanceEquip));
+        clientRequest->set_fingerprint(std::string(kClientRequestFingerprintBytes, '\x3c'));
+        clientRequest->set_seq(1);
+        clientRequest->set_enhance_success(true);
+        clientRequest->set_enhance_level(3);
 
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())
             << player_inbox_rules::ValidateLedger(db.inbox_ledger());
+        EXPECT_TRUE(client_request_ledger::Validate(db.client_request_ledger()).empty())
+            << client_request_ledger::Validate(db.client_request_ledger());
         return all;
     }
 
-    // 戳的期望值:max(本二进制世代, 两表加载世代的最小值),0 按 1(设计 §3.3)。
-    static uint32_t ExpectedStamp(uint32_t mainSchemaGen, uint32_t secondSchemaGen)
+    // 戳的期望值:max(本二进制世代, 加载世代),0 按 1(设计 §3.3)。player_database_1 删除之前取两表加载世代的最小值。
+    static uint32_t ExpectedStamp(uint32_t schemaGen)
     {
-        const uint32_t loaded = std::min(player_persist::EffectiveSchemaGen(mainSchemaGen),
-                                         player_persist::EffectiveSchemaGen(secondSchemaGen));
-        return std::max(persist_schema::kPersistSchemaGen, loaded);
+        return std::max(persist_schema::kPersistSchemaGen, player_persist::EffectiveSchemaGen(schemaGen));
     }
 
     std::vector<entt::entity> players;
@@ -591,12 +600,11 @@ protected:
 // §4.3 步骤 1-4:每个可携带节点上的未知字段,经一次加载与存盘,原样留在同类型的节点上。
 TEST_F(PersistRoundTripTest, UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave)
 {
-    const uint32_t mainGen = persist_schema::kPersistSchemaGen + 3;
-    const uint32_t secondGen = persist_schema::kPersistSchemaGen + 2;
+    const uint32_t loadedGen = persist_schema::kPersistSchemaGen + 3;
 
     // 第一跳只为得到「加载期修补之后」的稳定形状;注入从这份基线出发,避免把加载修补误判成丢字段。
     PlayerAllData baseline;
-    ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(mainGen, secondGen), baseline));
+    ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(loadedGen), baseline));
 
     ProbeLedger ledger;
     PlayerAllData probed(baseline);
@@ -641,16 +649,14 @@ TEST_F(PersistRoundTripTest, UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave)
     std::sort(foundAgain.begin(), foundAgain.end());
     EXPECT_EQ(expected, foundAgain) << DescribeProbeDiff(expected, foundAgain);
 
-    const uint32_t stamp = ExpectedStamp(mainGen, secondGen);
-    EXPECT_EQ(stamp, resaved.player_database_data().persist_schema_gen());
-    EXPECT_EQ(stamp, resaved.player_database_1_data().persist_schema_gen());
+    EXPECT_EQ(ExpectedStamp(loadedGen), resaved.player_database_data().persist_schema_gen());
 }
 
-// 调用方复用同一份输出(上一次的落盘快照)时,两表顶层与欠款携带的未知字段是替换而不是追加,不会越存越多。
+// 调用方复用同一份输出(上一次的落盘快照)时,顶层与欠款携带的未知字段是替换而不是追加,不会越存越多。
 TEST_F(PersistRoundTripTest, MarshalIntoReusedOutputDoesNotDuplicateCarriedFields)
 {
     PlayerAllData baseline;
-    ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(0, 0), baseline));
+    ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(0), baseline));
     ProbeLedger ledger;
     InjectProbes(baseline, ledger);
     PlayerAllData fromNewerVersion;
@@ -670,55 +676,36 @@ TEST_F(PersistRoundTripTest, MarshalIntoReusedOutputDoesNotDuplicateCarriedField
     EXPECT_EQ(expected, found) << DescribeProbeDiff(expected, found);
 }
 
-// 盖戳:两表同值,取 max(本二进制世代, 两表加载世代的最小值);未盖戳(0)按 1。
-// 取最小值:一张表被截断过的事实不能被另一张表的高戳洗白。
-TEST_F(PersistRoundTripTest, BothTablesAreStampedWithMaxOfBinaryAndMinLoadedGeneration)
+// 盖戳:取 max(本二进制世代, 加载世代);未盖戳(0)按 1。
+// player_database_1 删除之前两表同值、取两表加载世代的最小值;现在只有一张表。
+TEST_F(PersistRoundTripTest, StampIsMaxOfBinaryAndLoadedGeneration)
 {
     const uint32_t k = persist_schema::kPersistSchemaGen;
-    const std::vector<std::pair<uint32_t, uint32_t>> cases = {
-        {0, 0},         // 机制上线前的记录 / 新号种子 → 本二进制世代
-        {k + 3, k + 2}, // 两表都比本二进制新 → 取较小的那个
-        {k + 3, 0},     // 副表未盖戳 → 按 1 参与取最小,主表的高戳不能把它洗白
-    };
-    for (const auto &[mainGen, secondGen] : cases)
+    for (const uint32_t loadedGen : {0u, 1u, k, k + 3})
     {
-        SCOPED_TRACE(testing::Message() << "main=" << mainGen << " second=" << secondGen);
+        SCOPED_TRACE(testing::Message() << "loaded=" << loadedGen);
         PlayerAllData saved;
-        ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(mainGen, secondGen), saved));
-        EXPECT_EQ(ExpectedStamp(mainGen, secondGen), saved.player_database_data().persist_schema_gen());
-        EXPECT_EQ(ExpectedStamp(mainGen, secondGen), saved.player_database_1_data().persist_schema_gen());
+        ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(loadedGen), saved));
+        EXPECT_EQ(ExpectedStamp(loadedGen), saved.player_database_data().persist_schema_gen());
         EXPECT_EQ(kPlayerId, saved.player_database_data().player_id());
-        EXPECT_EQ(kPlayerId, saved.player_database_1_data().player_id());
     }
-    // 显式钉住 {k+3, 0} 的结果,免得 ExpectedStamp 与被测实现一起写错。
-    EXPECT_EQ(k, ExpectedStamp(k + 3, 0));
-    EXPECT_EQ(k + 2, ExpectedStamp(k + 3, k + 2));
+    // 显式钉住结果,免得 ExpectedStamp 与被测实现一起写错。
+    EXPECT_EQ(k, ExpectedStamp(0)) << "机制上线前的记录 / 新号种子 → 本二进制世代";
+    EXPECT_EQ(k + 3, ExpectedStamp(k + 3)) << "比本二进制新的记录保留更高的戳";
 }
 
-// 两个 Carry 组件是持久数据类:缺了就整份拒存,不补空组件(补空等于把新版本写进来的整列抹掉)。
-TEST_F(PersistRoundTripTest, MarshalRefusesWhenEitherCarryComponentIsMissing)
+// Carry 组件是持久数据类:缺了就整份拒存,不补空组件(补空等于把新版本写进来的整列抹掉)。
+TEST_F(PersistRoundTripTest, MarshalRefusesWhenTheCarryComponentIsMissing)
 {
-    for (const bool dropMain : {true, false})
-    {
-        SCOPED_TRACE(dropMain ? "PlayerDatabaseCarryComp" : "PlayerDatabase1CarryComp");
-        const auto player = NewPlayer();
-        PlayerAllDataMessageFieldsUnmarshal(player, BuildEveryPersistedType(0, 0));
-        if (dropMain)
-        {
-            tlsEcs.actorRegistry.remove<PlayerDatabaseCarryComp>(player);
-        }
-        else
-        {
-            tlsEcs.actorRegistry.remove<PlayerDatabase1CarryComp>(player);
-        }
-        PlayerAllData previous;
-        previous.mutable_player_database_data()->set_player_id(kPlayerId + 1);
-        const auto previousBytes = previous.SerializeAsString();
-        EXPECT_FALSE(player_persist::MarshalPlayerForPersist(player, kPlayerId, previous));
-        EXPECT_EQ(previousBytes, previous.SerializeAsString()) << "拒绝必须保留原输出";
-        EXPECT_FALSE((tlsEcs.actorRegistry.all_of<PlayerDatabaseCarryComp, PlayerDatabase1CarryComp>(player)))
-            << "存盘只读,不得补建缺失的载体";
-    }
+    const auto player = NewPlayer();
+    PlayerAllDataMessageFieldsUnmarshal(player, BuildEveryPersistedType(0));
+    tlsEcs.actorRegistry.remove<PlayerDatabaseCarryComp>(player);
+    PlayerAllData previous;
+    previous.mutable_player_database_data()->set_player_id(kPlayerId + 1);
+    const auto previousBytes = previous.SerializeAsString();
+    EXPECT_FALSE(player_persist::MarshalPlayerForPersist(player, kPlayerId, previous));
+    EXPECT_EQ(previousBytes, previous.SerializeAsString()) << "拒绝必须保留原输出";
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerDatabaseCarryComp>(player)) << "存盘只读,不得补建缺失的载体";
 }
 
 // §12.1 持久值域:新版本写下、超出本版本值域的值,经两跳「加载 → 统一存盘入口」原样往返。
@@ -738,7 +725,7 @@ TEST_F(PersistRoundTripTest, ValueDomainsBeyondThisBuildSurviveLoadAndSave)
     constexpr uint32_t kUnknownPetDimensionId = 987655; // 同上,写在宝宝身上
 
     // 在共享夹具的一份拷贝上改,不动 BuildEveryPersistedType:其余用例测的是版本内认识这些值的正常路径。
-    PlayerAllData input = BuildEveryPersistedType(0, 0);
+    PlayerAllData input = BuildEveryPersistedType(0);
     auto &db = *input.mutable_player_database_data();
 
     // —— 职业与存储等级:新版本把上限提高到 kMaxLevel 以上之后升上去的等级 ——

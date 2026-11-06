@@ -93,30 +93,8 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- Rate limiting (Bucket4j + Redis via Lettuce; gateway already pulls Lettuce
-             through spring-boot-starter-data-redis, so no extra Redis client needed). -->
-        <dependency>
-            <groupId>com.bucket4j</groupId>
-            <artifactId>bucket4j-core</artifactId>
-            <version>8.10.1</version>
-        </dependency>
-        <dependency>
-            <groupId>com.bucket4j</groupId>
-            <artifactId>bucket4j-redis</artifactId>
-            <version>8.10.1</version>
-            <exclusions>
-                <!-- We only use the Lettuce backend; exclude the other transports
-                     so we don't drag Redisson + Jedis into the gateway. -->
-                <exclusion>
-                    <groupId>org.redisson</groupId>
-                    <artifactId>redisson</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>redis.clients</groupId>
-                    <artifactId>jedis</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+        <!-- 前置限流不再用 Bucket4j(2026-11-05,服务器缺口清单第 29 条):令牌桶改成一段 Redis Lua
+             (ratelimit/RedisRateLimitStore),经 spring-boot-starter-data-redis 带进来的 Lettuce 直接执行,不需要额外依赖。 -->
 
         <!-- gRPC client to go-zero login.rpc. Versions are aligned with the
              protobuf-java already on the classpath (3.25.x). -->

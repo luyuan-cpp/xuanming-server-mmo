@@ -1158,8 +1158,8 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 		Commit()
 	h.guardMu.Unlock()
 	if err != nil {
-		_, _ = h.cli.Revoke(context.Background(), lease.ID)
 		logx.Errorf("[snowflakealloc] reclaim (%s) txn failed (%s): %v; will retry", reason, h.LogFields(), err)
+		h.revokeUnusedLease(lease.ID)
 		return
 	}
 	// keyGone = key 当时已经不存在(我们的 lease 曾经过期)。两支各是一笔内层 Txn,
@@ -1167,9 +1167,9 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 	keyGone := txn.Succeeded
 	branch := txn.Responses[0].GetResponseTxn()
 	if keyGone && !branch.GetSucceeded() {
-		// 重建被拒:key 过期期间水位被别人写过(见函数注释)。新 lease 上什么都没挂,撤掉即可;
-		// 槽 key 留空,别人(包括仍在 F 内的 B)照常按自己的规则处理。
-		_, _ = h.cli.Revoke(context.Background(), lease.ID)
+		// 重建被拒:key 过期期间水位被别人写过(见函数注释)。先 fence 再撤新 lease(上面什么都没挂):
+		// 撤销要等 etcd 连接,断网时会卡住,不能让它推迟 fence 与日志。槽 key 留空,别人(包括仍在 F 内的 B)
+		// 照常按自己的规则处理。
 		var gotSecRev, gotMsRev int64
 		gotSecVal := "<absent>"
 		for i, r := range branch.GetResponses() {
@@ -1186,10 +1186,12 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 		h.onOwnershipLost(fmt.Sprintf("reclaim (%s): the slot key had expired and the watermark was written by "+
 			"someone else meanwhile (sec rev %d -> %d value %s, ms rev %d -> %d); another holder may still be "+
 			"minting with this worker id, refusing to recreate the slot", reason, secRev, gotSecRev, gotSecVal, msRev, gotMsRev))
+		h.revokeUnusedLease(lease.ID)
 		return
 	}
 	if !keyGone && !branch.GetSucceeded() {
-		_, _ = h.cli.Revoke(context.Background(), lease.ID)
+		// 新 lease 上什么都没挂,先读清楚归属、该 fence 就 fence,最后再撤(撤销可能卡在断网上,见 revokeUnusedLease)。
+		defer h.revokeUnusedLease(lease.ID)
 		g, gerr := h.cli.Get(ctx, h.sKey())
 		switch {
 		case gerr != nil:
@@ -1308,6 +1310,17 @@ func (h *Handle) rewatch(kaCtx context.Context, st *loopState) {
 		return
 	}
 	st.watch = h.cli.Watch(kaCtx, h.sKey(), clientv3.WithRev(resp.Header.Revision+1))
+}
+
+// revokeUnusedLease 撤掉 reclaim 新申请、最后没挂上任何 key 的 lease。有界(etcdOpTimeout):etcd 客户端默认等连接就绪才发请求,
+// 不设超时的话断网时会一直卡住,把排在它后面的 fence 和日志一起推迟。撤不掉也无妨:上面什么都没挂,到 TTL 自然过期。
+// 调用方先 fence / 记日志,再调它。
+func (h *Handle) revokeUnusedLease(lease clientv3.LeaseID) {
+	ctx, cancel := context.WithTimeout(context.Background(), etcdOpTimeout)
+	defer cancel()
+	if _, err := h.cli.Revoke(ctx, lease); err != nil {
+		logx.Infof("[snowflakealloc] revoking unused reclaim lease %x failed (%s): %v; it will expire by TTL", lease, h.LogFields(), err)
+	}
 }
 
 // onOwnershipLost 在"slots key 归属已经不是自己"时调用。lease 可能仍然活着、KeepAlive

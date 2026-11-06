@@ -67,8 +67,8 @@ func TestReassignSceneNode_StaleSecondWriterChangesNothing(t *testing.T) {
 	const sceneID uint64 = 88001
 	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, casNodeOld)
 
-	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst))
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeLate),
+	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst, freshPlacementGeneration(t, sc, reassignCASZone)))
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeLate, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"属主已不是 old,后到的改派必须落空")
 
 	owner, err := mr.Get(sceneNodeKey(sceneID))
@@ -85,8 +85,8 @@ func TestReassignSceneNode_EmptyOldNodeClaimsOnlyUnmappedScene(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 88002
 
-	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeFirst))
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeLate),
+	require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeFirst, freshPlacementGeneration(t, sc, reassignCASZone)))
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, "", casNodeLate, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"映射已被别的懒改派认领,空串期望不得命中")
 
 	owner, err := mr.Get(sceneNodeKey(sceneID))
@@ -107,7 +107,7 @@ func TestReassignSceneNode_UnincrementableCounterLeavesOwnershipUntouched(t *tes
 	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, casNodeOld)
 	require.NoError(t, mr.Set(nodeSceneCountKey(reassignCASZone, casNodeFirst), "not-a-number"))
 
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst),
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, casNodeOld, casNodeFirst, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"新节点计数键无法 INCR 时,改派必须整体失败")
 
 	owner, err := mr.Get(sceneNodeKey(sceneID))

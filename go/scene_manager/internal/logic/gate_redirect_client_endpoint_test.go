@@ -15,6 +15,7 @@ import (
 
 	commonpb "proto/common/base"
 	"shared/clientendpoint"
+	"shared/gatepick"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -318,18 +319,21 @@ func TestSignRedirectToGate_SkipsDrainingGate(t *testing.T) {
 	assert.Equal(t, uint32(1), got, "排空中的 gate 不接新玩家")
 }
 
-// 整个 zone 都被标了排空:忽略标记照常重定向(与 login 的 FilterDrainingGates 同语义),不让玩家无处可去。
+// 整个 zone 都被标了排空:退到「连得上的」那一档照常重定向(gatepick 分档,与 login 同一份规则),
+// 计一次 fallback{reason="draining"},不让玩家无处可去。
 func TestSignRedirectToGate_AllDrainingIgnoresMarks(t *testing.T) {
 	busy := testGateNode(1, 100, 80, testEndpoint("10.0.0.1", 18000), testEndpoint("127.0.0.1", 30000))
 	idle := testGateNode(2, 100, 5, testEndpoint("10.0.0.2", 18000), testEndpoint("127.0.0.1", 30001))
+	before := redirectCount(t, redirectFallbackMetric, gatepick.ReasonDraining)
 
 	got := redirectGateID(t, []*commonpb.NodeInfo{busy, idle}, map[uint32]bool{1: true, 2: true}, firstDraws)
 
 	assert.Equal(t, uint32(2), got)
+	assert.Equal(t, 1.0, redirectCount(t, redirectFallbackMetric, gatepick.ReasonDraining)-before)
 }
 
-// 排空过滤在按地址去重之后:排空标记打在活着的新 gate 上,先过滤会让同地址的陈旧影子顶上来;
-// 去重后只剩新 gate,它被标排空、又是唯一候选,于是按「全部排空」原样保留,票据仍绑新 gate。
+// 排空分档在按地址去重之后:排空标记打在活着的新 gate 上,先按标记剔除会让同地址的陈旧影子顶上来;
+// 去重后只剩新 gate,它被标排空、又是唯一候选,于是退到「连得上的」那一档留下,票据仍绑新 gate。
 func TestSignRedirectToGate_DrainFilterRunsAfterDedupe(t *testing.T) {
 	stale := testGateNode(1, 100, 0, testEndpoint("10.0.0.1", 18000), testEndpoint("127.0.0.1", 30000))
 	fresh := testGateNode(3, 200, 40, testEndpoint("10.0.0.9", 18000), testEndpoint("127.0.0.1", 30000))

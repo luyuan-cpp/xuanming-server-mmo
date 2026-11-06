@@ -110,11 +110,11 @@ func save(t *testing.T, ctx context.Context, store *Store, player, epoch, seq ui
 }
 
 func hot(payload string) *storepb.PlayerStoreRow {
-	return &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT, Payload: []byte(payload)}
+	return &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER, Payload: []byte(payload)}
 }
 
 func asset(payload string) *storepb.PlayerStoreRow {
-	return &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET, Payload: []byte(payload)}
+	return &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET, Payload: []byte(payload)}
 }
 
 func wantSave(t *testing.T, got, want storepb.SavePlayerResult) {
@@ -183,8 +183,8 @@ func TestIT_ClaimSaveAndReadBack(t *testing.T) {
 	wantSave(t, save(t, ctx, store, 7, 100, 2, instanceA, false, hot("h2")), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
 	again := claim(t, ctx, store, 7, 100, instanceA)
 	wantClaim(t, again, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED)
-	if payloadOf(again.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT) != "h2" ||
-		payloadOf(again.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET) != "a1" {
+	if payloadOf(again.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != "h2" ||
+		payloadOf(again.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET) != "a1" {
 		t.Fatalf("rows = %v", again.GetRows())
 	}
 	if again.GetSaveSeq() != 2 {
@@ -200,7 +200,7 @@ func TestIT_OldHolderRejectedAfterClaim(t *testing.T) {
 	wantSave(t, save(t, ctx, store, 7, 100, 1, instanceA, false, hot("from-a")), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
 	taken := claim(t, ctx, store, 7, 200, instanceB)
 	wantClaim(t, taken, storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED)
-	if payloadOf(taken.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT) != "from-a" {
+	if payloadOf(taken.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != "from-a" {
 		t.Fatalf("rows = %v", taken.GetRows())
 	}
 	wantSave(t, save(t, ctx, store, 7, 100, 2, instanceA, false, hot("late")), storepb.SavePlayerResult_SAVE_PLAYER_STALE_OWNER)
@@ -208,7 +208,7 @@ func TestIT_OldHolderRejectedAfterClaim(t *testing.T) {
 	wantSave(t, save(t, ctx, store, 7, 300, 2, instanceA, false, hot("late")), storepb.SavePlayerResult_SAVE_PLAYER_UNCLAIMED)
 	wantSave(t, save(t, ctx, store, 7, 200, 2, instanceA, false, hot("late")), storepb.SavePlayerResult_SAVE_PLAYER_NOT_HOLDER)
 	final := claim(t, ctx, store, 7, 200, instanceB)
-	if payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT) != "from-a" {
+	if payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != "from-a" {
 		t.Fatalf("rejected writes must not land: %v", final.GetRows())
 	}
 }
@@ -223,7 +223,7 @@ func TestIT_RetryAndLateRequest(t *testing.T) {
 	wantSave(t, save(t, ctx, store, 7, 100, 6, instanceA, false, hot("v6")), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
 	wantSave(t, save(t, ctx, store, 7, 100, 5, instanceA, false, hot("v5")), storepb.SavePlayerResult_SAVE_PLAYER_OLDER_SEQ)
 	final := claim(t, ctx, store, 7, 100, instanceA)
-	if payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT) != "v6" {
+	if payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != "v6" {
 		t.Fatalf("rows = %v", final.GetRows())
 	}
 }
@@ -300,10 +300,10 @@ func TestIT_EmptyPayload(t *testing.T) {
 	store, db, ctx := itStore(t)
 	seedOwner(t, ctx, db, 7)
 	claim(t, ctx, store, 7, 100, instanceA)
-	row := &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT}
+	row := &storepb.PlayerStoreRow{Kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER}
 	wantSave(t, save(t, ctx, store, 7, 100, 1, instanceA, false, row), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
 	final := claim(t, ctx, store, 7, 100, instanceA)
-	if payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT) != "" {
+	if payloadOf(final.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != "" {
 		t.Fatalf("rows = %v", final.GetRows())
 	}
 }
@@ -379,8 +379,8 @@ func TestIT_ConcurrentSavesAndTakeover(t *testing.T) {
 	if taken.GetSaveSeq() != last {
 		t.Fatalf("claim read seq %d, but the old holder's last commit was %d", taken.GetSaveSeq(), last)
 	}
-	if want := fmt.Sprintf("q%d", last); last > 0 && payloadOf(taken.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT) != want {
-		t.Fatalf("claim read %q, want %q", payloadOf(taken.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT), want)
+	if want := fmt.Sprintf("q%d", last); last > 0 && payloadOf(taken.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER) != want {
+		t.Fatalf("claim read %q, want %q", payloadOf(taken.GetRows(), storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER), want)
 	}
 }
 

@@ -93,6 +93,7 @@ type Paths struct {
 	EventIdFile                   string `yaml:"event_id_file"`
 	RobotMessageIdFile            string `yaml:"robot_message_id_file"`
 	ClientRpcRouterRouteTableFile string `yaml:"client_rpc_router_route_table_file"`
+	ClientCallableMethodsFile     string `yaml:"client_callable_methods_file"` // 在线服务入口准入用的客户端可发起方法集合
 	RobotProtoImportPath          string `yaml:"robot_proto_import_path"`
 	ServiceCppFile                string `yaml:"service_cpp_file"`
 	ServiceHeaderFile             string `yaml:"service_header_file"`

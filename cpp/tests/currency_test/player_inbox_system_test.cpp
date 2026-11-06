@@ -388,7 +388,7 @@ namespace
 		return CurrencySystem::IsCurrencyBlocked(player, kCurrencyGold);
 	}
 
-	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次成功写入 Redis 的玩家数据"。
+	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次提交成功的玩家存档"(生产里是 go/db Save 回 COMMITTED / EQUAL 之后换上的快照)。
 	// 测试在这里扮演 HandlePlayerAsyncSaved,所以由它建快照组件(生产里也只有存盘回调建它)。
 	void CompleteFakeSave(entt::entity player)
 	{
@@ -400,8 +400,6 @@ namespace
 		if (const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player)) first->mutable_currency()->CopyFrom(*currency);
 		if (const auto* attributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player))
 			first->mutable_derived_attributes_component()->CopyFrom(*attributes);
-		auto *second = persisted.mutable_player_database_1_data();
-		second->set_player_id(kTestPlayerId);
 		persisted.set_last_save_seq(seq);
 		persisted.mutable_player_database_data()->mutable_inbox_ledger()->CopyFrom(
 			tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
@@ -676,7 +674,7 @@ TEST_F(PlayerInboxSystemTest, SnapshotCommitCheckRejectsMismatchedRows)
 {
 	CompleteFakeSave(player_);
 	PlayerAllData wrong = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
-	wrong.mutable_player_database_1_data()->set_player_id(wrong.player_database_1_data().player_id() + 1);
+	wrong.mutable_player_database_data()->set_player_id(wrong.player_database_data().player_id() + 1);
 	tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).Replace(wrong);
 	EXPECT_FALSE(RoleAdmissionSystem::IsSnapshotCommitted(player_,
 		*tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot));

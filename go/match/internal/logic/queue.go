@@ -11,15 +11,14 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// authoritativePlayerID 取权威 player_id:客户端直达协议(gate gRPC)时以
-// x-session-detail-bin 里的身份为准,请求体里的 player_id 仅供不带会话头的内部调用使用
-// (照 login 的 session metadata 模式)。带了 session 但与请求体不一致时记日志。
+// authoritativePlayerID 取权威 player_id:有会话(入口准入放进 ctx 的验签原件)时以会话身份为准,
+// 没有会话时才用请求体里的 player_id。带了会话但与请求体不一致时记日志。
 //
-// 带了会话头就只认会话头:会话未绑角色(player_id = 0)时原样返回 0,由调用方按「缺少玩家身份」拒绝,
+// 带了会话就只认会话:会话未绑角色(player_id = 0)时原样返回 0,由调用方按「缺少玩家身份」拒绝,
 // 绝不回落到请求体 —— 否则未绑角色的会话在请求体里填别人的 player_id,就能替别人取消排队、查排队状态、
-// 发起或应答切磋、观战(client-request-ordering.md §7.2 第 9 条)。生产链上 originalRoleInterceptor 已先拒掉
-// 不带会话、或会话 player_id / owner_revision 为 0 的 MatchService 请求;这里是业务层自己的一道,
-// 不依赖拦截器的装配顺序。
+// 发起或应答切磋、观战(client-request-ordering.md §7.2 第 9 条)。生产链上入口准入(roleidentity.EntryInterceptor)
+// 已先拒掉不带会话、或会话缺角色 / 原修订 / 账号的 MatchService 请求,所以「没有会话」在生产里到不了这里;
+// 这里是业务层自己的一道,不依赖拦截器的装配顺序。
 func authoritativePlayerID(ctx context.Context, reqPlayerId uint64) uint64 {
 	detail, ok := ctxkeys.GetSessionDetails(ctx)
 	if !ok {

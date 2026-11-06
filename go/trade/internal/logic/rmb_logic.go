@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	base "proto/common/base"
 	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"shared/roleidentity"
@@ -14,15 +13,16 @@ import (
 	"trade/internal/session"
 )
 
+// RmbIdentityResolver 用 ctx 里 gate 签名的验签原件核角色目录;第二个参数是要核的目标角色(0 = 本角色)。
 type RmbIdentityResolver interface {
-	Resolve(context.Context, *base.SessionDetails, uint64) (*dspb.AccountRoleOwnership, error)
+	Resolve(context.Context, uint64) (*dspb.AccountRoleOwnership, error)
 }
 
 func (l *JubaozhaiLogic) actorIdentity() (*dspb.AccountRoleOwnership, error) {
 	if l.deps.RmbIdentity == nil {
 		return nil, errors.New("原登录会话账号权威未装配")
 	}
-	return l.deps.RmbIdentity.Resolve(l.ctx, session.Details(l.ctx), 0)
+	return l.deps.RmbIdentity.Resolve(l.ctx, 0)
 }
 
 func (l *JubaozhaiLogic) rmbIdentity(target uint64) (*dspb.AccountRoleOwnership, error) {
@@ -32,7 +32,7 @@ func (l *JubaozhaiLogic) rmbIdentity(target uint64) (*dspb.AccountRoleOwnership,
 	if _, ok := session.ClientPlayerID(l.ctx); !ok {
 		return nil, commerce.ErrInvalid
 	}
-	actor, err := l.deps.RmbIdentity.Resolve(l.ctx, session.Details(l.ctx), 0)
+	actor, err := l.deps.RmbIdentity.Resolve(l.ctx, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (l *JubaozhaiLogic) rmbIdentity(target uint64) (*dspb.AccountRoleOwnership,
 	if target == 0 || target == actor.Role.PlayerId {
 		return actor, nil
 	}
-	return l.deps.RmbIdentity.Resolve(l.ctx, session.Details(l.ctx), target)
+	return l.deps.RmbIdentity.Resolve(l.ctx, target)
 }
 func (l *JubaozhaiLogic) CreateRmbConsignment(in *tradepb.CreateRmbConsignmentRequest) (*tradepb.RmbConsignmentResponse, error) {
 	l, cancel := l.withRequestBudget()

@@ -1,4 +1,5 @@
 #include "client_session_handler.h"
+#include "client_heartbeat.h"
 #include "client_request_lane.h"
 #include "login_admission.h"
 #include "rpc_reply_bridge.h"
@@ -300,6 +301,10 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 
 	messageDispatcher.registerMessageCallback<ClientTokenVerifyRequest>(
 		std::bind(&GateClientSessionHandler::DispatchTokenVerify, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
+	// 应用层心跳(docs/design/gate-client-heartbeat.md):与验签同层,按类型名派发,gate 本地应答,不经 ClientRequest。
+	// 自由函数,不绑 this;状态在 client_heartbeat.cpp 的 thread_local 里。
+	messageDispatcher.registerMessageCallback<ClientHeartbeatRequest>(&gate_client_heartbeat::OnHeartbeatRequest);
 
 	nodeRemovedSubscription_ = tlsEcs.dispatcher.sink<OnNodeRemoveEvent>().connect<&GateClientSessionHandler::OnNodeRemoveEventHandler>(*this);
 }
@@ -835,7 +840,13 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 		session.verified = true;
 	}
 
-	tlsSessionManager.sessions().emplace(sessionId, std::move(session));
+	const auto sessionEntry = tlsSessionManager.sessions().emplace(sessionId, std::move(session)).first;
+	// 握手期限(docs/design/gate-client-heartbeat.md §5.1):建连 10s 内必须验签,判据是距建连的时长,不看期间有没有发字节。
+	// dev 免验签的会话上面已置 verified,不用登记。
+	if (!sessionEntry->second.verified)
+	{
+		gate_client_heartbeat::ExpectHandshake(sessionId, sessionEntry->second, std::chrono::steady_clock::now());
+	}
 
 	// 所有新连接此刻都还没绑定玩家,数量完全由公网流量决定;逐连接 INFO 会让
 	// connect-close 攻击在不触碰并发上限的情况下无限放大日志。每 1024 条采样。
@@ -1099,6 +1110,8 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	}
 
 	auto &session = sessionIt->second;
+	// 任何一帧都说明客户端还活着,随后被拒的也算(docs/design/gate-client-heartbeat.md §5.2)。没发过心跳的连接不读时钟。
+	gate_client_heartbeat::NoteInboundFrame(session);
 
 	// Reject all game messages until the client passes token verification.
 	// 唯一会跳过令牌校验的情形:gate_token_secret 为空**且** GATE_RUN_MODE 是
@@ -1120,7 +1133,10 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	// 这是一条不需要任何凭证就能打的日志放大 DoS。
 	// SessionInfo::illegalPacketCount 的注释本来就把 "unknown messageId" 和
 	// "unauthenticated send" 列为应当计数的情形,这里只是把它真正接上。
-	if (request->message_id() >= gRpcMethodRegistry.size() || !IsClientMessageId(request->message_id()))
+	// 只能由 gate 合成的号(Disconnect,login_admission.h IsGateSynthesizedOnly)在这里单独拒绝,处置与未授权号相同,
+	// 不依赖生成的白名单是否已经把它摘掉。
+	if (request->message_id() >= gRpcMethodRegistry.size() || !IsClientMessageId(request->message_id()) ||
+		gate_login_admission::IsGateSynthesizedOnly(request->message_id()))
 	{
 		LOG_DEBUG << "Invalid or unauthorized message ID: " << request->message_id()
 				  << ", session_id: " << sessionId;
@@ -1223,8 +1239,22 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	// 客户端 EnterGame:同一个收包点记下"LeaveGame 之后已再次请求进场"。在这之前到达 gate 的 Bind / 路由只可能属于 LeaveGame
 	// 之前那条登录链(login 只在处理 EnterGame 时发 Bind),一律丢弃;按收包顺序记,路由模式下 lane 里排在 LeaveGame 之前的
 	// EnterGame 不会被误当成新的一次(第二轮审计 r2-gate#1,location-release-binding.md §3.5)。
+	// 记之前先过换角闸(login_admission.h EnterGameRoleSwitchRejectTip,纵深防御):会话已绑定角色、没 LeaveGame 就要进另一个
+	// 角色时不转发,回带请求 id 的信封(与 login 拒绝换角同码),不计非法包、不断连。与 LeaveGame 的重置同一个收包点,按收包顺序生效。
 	else if (request->message_id() == ClientPlayerLoginEnterGameMessageId)
 	{
+		if (const uint32_t rejectTip = gate_login_admission::EnterGameRoleSwitchRejectTip(session, request->body()); rejectTip != 0)
+		{
+			static uint64_t roleSwitchRejectedCount = 0;
+			if ((roleSwitchRejectedCount++ & 0x3FF) == 0)
+			{
+				LOG_WARN << "EnterGame rejected: session is already bound to a role (sampled)"
+						 << " latest_session_id=" << sessionId << " latest_tip=" << rejectTip
+						 << " rejected_total=" << roleSwitchRejectedCount;
+			}
+			gate_lane::SendEnvelope(session, request->id(), request->message_id(), rejectTip);
+			return;
+		}
 		gate_scene_entry::OnClientEnterGame(sessionId, session);
 	}
 
@@ -1261,6 +1291,7 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	}
 
 	auto &session = sessionIt->second;
+	gate_client_heartbeat::NoteInboundFrame(session);
 
 	auto sendReply = [&](bool success, const std::string &error)
 	{
@@ -1268,6 +1299,10 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 		resp.set_success(success);
 		if (!error.empty())
 			resp.set_error(error);
+		// 验签成功:回包通告心跳参数,并从这一刻起按空闲超时判死这条连接(含已验证会话重发验签、dev 免验签两条成功路径,
+		// 重复调用不重复登记)。docs/design/gate-client-heartbeat.md §5.1。
+		if (success)
+			gate_client_heartbeat::OnTokenVerified(sessionId, session, resp, std::chrono::steady_clock::now());
 		protobufCodec.send(conn, resp);
 	};
 	auto rejectAndClose = [&](const char *reason, const std::string &clientError)

@@ -13,10 +13,14 @@ package main
 //   2. 拒绝码(只测能确定造出来的,每条之后重新读两个包、要求原样不变):
 //      嵌强化石 → kEquipGemNotGem;嵌 7 号孔 → kEquipGemSocketInvalid;0 号孔嵌防御宝石 → kEquipGemTypeMismatch;
 //      0 号孔嵌从不发放的 2103 → kEquipGemNotOwned;取空孔 → kEquipGemSocketEmpty;
+//      EnhanceEquip(expected_level ≠ 当前等级)→ kEquipEnhanceLevelChanged(审计 r2-equip#1 的乐观比较);
 //      EnhanceEquip(0)、InlayGem(gem_config_id = 0)→ kInvalidParameter;
 //   3. 强化两次 —— 先在背包里、穿上后再来一次。对账一律以**强化前那份快照**里的 enhance_next 为准:
 //      金币差 = cost_gold、材料差 = material_count、成功则等级 +1、失败则 max(0, 等级 − fail_level_loss);
 //      success_rate = 10000 必须成功,其余两种结果都接受(强化失败不是错误,见 §5 不变量 10)。
+//      每次请求的 expected_level 都取发请求前那份快照里的 enhance_level。背包里那一次之后再按强化前的等级
+//      原样重发一次(模拟结局未知后的重发):等级变了就必须回 kEquipEnhanceLevelChanged、两个包不变;
+//      等级没变(失败且不掉级)时那是一次合法的新强化,这一条跳过;
 //      穿着且等级变了:服务器推属性面板,物伤 / 法伤恰好各变了基础属性行的差值;等级没变:面板不变;
 //   4. 镶嵌:0 号孔嵌 2101 → 该孔 gem_config_id = 2101 且带 attr、背包里 2101 少 1、面板物伤 / 法伤各 + 宝石值;
 //      同一个孔再嵌 → kEquipGemSocketOccupied,两个包不变;
@@ -95,14 +99,15 @@ const equipForgeGrantMaxCount uint64 = 99
 // 本期新增的 tip。一律读导表器生成的枚举,**不写字面量**(AGENTS.md §7 不变量 5);
 // 复用的码(kInvalidParameter / kEquipNotEquipped / kEquipBagFull / kEquipGrantInvalid)用 equip_smoke_scenario.go 里那一份。
 var (
-	equipForgeTipEnhanceMaxLevel   = uint32(tiptable.EquipError_kEquipEnhanceMaxLevel)
-	equipForgeTipGemNotGem         = uint32(tiptable.EquipError_kEquipGemNotGem)
-	equipForgeTipGemNotOwned       = uint32(tiptable.EquipError_kEquipGemNotOwned)
-	equipForgeTipGemSocketInvalid  = uint32(tiptable.EquipError_kEquipGemSocketInvalid)
-	equipForgeTipGemSocketOccupied = uint32(tiptable.EquipError_kEquipGemSocketOccupied)
-	equipForgeTipGemSocketEmpty    = uint32(tiptable.EquipError_kEquipGemSocketEmpty)
-	equipForgeTipGemTypeMismatch   = uint32(tiptable.EquipError_kEquipGemTypeMismatch)
-	equipForgeTipGemBagFull        = uint32(tiptable.EquipError_kEquipGemBagFull)
+	equipForgeTipEnhanceLevelChanged = uint32(tiptable.EquipError_kEquipEnhanceLevelChanged)
+	equipForgeTipEnhanceMaxLevel     = uint32(tiptable.EquipError_kEquipEnhanceMaxLevel)
+	equipForgeTipGemNotGem           = uint32(tiptable.EquipError_kEquipGemNotGem)
+	equipForgeTipGemNotOwned         = uint32(tiptable.EquipError_kEquipGemNotOwned)
+	equipForgeTipGemSocketInvalid    = uint32(tiptable.EquipError_kEquipGemSocketInvalid)
+	equipForgeTipGemSocketOccupied   = uint32(tiptable.EquipError_kEquipGemSocketOccupied)
+	equipForgeTipGemSocketEmpty      = uint32(tiptable.EquipError_kEquipGemSocketEmpty)
+	equipForgeTipGemTypeMismatch     = uint32(tiptable.EquipError_kEquipGemTypeMismatch)
+	equipForgeTipGemBagFull          = uint32(tiptable.EquipError_kEquipGemBagFull)
 )
 
 // equipForgeBags 是同一时刻的人物背包 + 装备栏两份全量快照。
@@ -319,9 +324,14 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 		{"reject-socket-empty", "RemoveGem(空孔)", equipForgeTipGemSocketEmpty, func() (equipForgeChange, error) {
 			return equipForgeRemove(session, targetId, equipForgeSocketAttack)
 		}},
+		// expected_level 与服务器的有效等级对不上(旧请求重发 / 快照过期):整笔拒绝,金币、材料、等级都不动。
+		// 判在「强化开放」之后、满级 / 金币 / 材料之前,所以这一条不必先补金币与材料。
+		{"reject-enhance-stale-level", "EnhanceEquip(expected_level 对不上)", equipForgeTipEnhanceLevelChanged, func() (equipForgeChange, error) {
+			return equipForgeEnhance(session, targetId, startLevel+1)
+		}},
 		// 下面两条是 handler 守护段的参数粗检(§4.4),到不了 PlayerEquipSystem
 		{"reject-enhance-zero", "EnhanceEquip(item_id=0)", tipInvalidParameter, func() (equipForgeChange, error) {
-			return equipForgeEnhance(session, 0)
+			return equipForgeEnhance(session, 0, 0)
 		}},
 		{"reject-inlay-zero-gem", "InlayGem(gem_config_id=0)", tipInvalidParameter, func() (equipForgeChange, error) {
 			return equipForgeInlay(session, targetId, equipForgeSocketAttack, 0)
@@ -346,7 +356,10 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	if bags, err = equipForgeFund(session, bags, targetId); err != nil {
 		fail("enhance-bag-fund", "%v", err)
 	}
-	forged, err := equipForgeEnhance(session, targetId)
+	// expected_level 填强化前那份快照里的等级(EnhanceEquipRequest 的乐观比较)
+	beforeEnhance, _ := bags.item(targetId)
+	levelBefore := beforeEnhance.GetEnhanceLevel()
+	forged, err := equipForgeEnhance(session, targetId, levelBefore)
 	if err != nil {
 		fail("enhance-bag", "%v", err)
 	}
@@ -365,11 +378,29 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	if err := session.expectBagsUnchanged(after.inventory, after.equipment); err != nil {
 		fail("enhance-bag-snapshot", "强化响应里的快照与随后 GetBag 读到的不一致: %v", err)
 	}
+	// 结局未知之后的重发(审计 r2-equip#1):按强化前的等级原样再发一次。等级变了(成功,或失败掉了级)就必须
+	// 回 kEquipEnhanceLevelChanged、两个包原样 —— 不再扣一次、不再掷一次、不再掉一次级。
+	// 等级没变(失败且不掉级)时它与玩家再点一次无法区分,是一次合法的新强化,这一条跳过。
+	replayChecked := forged.level != levelBefore
+	if replayChecked {
+		replay, err := equipForgeEnhance(session, targetId, levelBefore)
+		if err != nil {
+			fail("enhance-bag-replay", "%v", err)
+		}
+		if replay.tip != equipForgeTipEnhanceLevelChanged {
+			fail("enhance-bag-replay", "按强化前的等级 +%d 重发应回 %s,实际 tip=%s(0 = 又被受理了一次:重发会重复扣费、重复掉级)",
+				levelBefore, equipTipText(equipForgeTipEnhanceLevelChanged), equipTipText(replay.tip))
+		}
+		if err := session.expectBagsUnchanged(after.inventory, after.equipment); err != nil {
+			fail("enhance-bag-replay-unchanged", "重发被拒之后: %v", err)
+		}
+	}
 	bags = after
 	bagOutcome := equipForgeOutcomeText(forged.success)
 	bagLevel := forged.level
 	zap.L().Info("[equip-forge-smoke] step 3a: enhanced in bag",
-		zap.String("outcome", bagOutcome), zap.Uint32("level_before", startLevel), zap.Uint32("level_after", bagLevel),
+		zap.String("outcome", bagOutcome), zap.Uint32("level_before", levelBefore), zap.Uint32("level_after", bagLevel),
+		zap.Bool("replay_rejected", replayChecked),
 		zap.Uint64("gold_left", equipForgeGold(bags.inventory)),
 		zap.String("base_attrs", equipLinesText(target.GetBaseAttrs())))
 
@@ -399,7 +430,8 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 	if target.GetEnhanceNext() == nil {
 		// 3a 恰好把目标推到了上限(每十几轮才遇到一次):没有下一级可强化。这一轮改验 kEquipEnhanceMaxLevel ——
 		// 平时机器人造不出这个状态(强化不可逆、没有删物手段),碰上了就别浪费。
-		forged, err = equipForgeEnhance(session, targetId)
+		// expected_level 填对(= 当前等级),乐观比较放行之后才轮到满级判定。
+		forged, err = equipForgeEnhance(session, targetId, target.GetEnhanceLevel())
 		if err != nil {
 			fail("enhance-worn-max", "%v", err)
 		}
@@ -415,7 +447,7 @@ func RunEquipForgeSmoke(cfg *config.Config) {
 		if bags, err = equipForgeFund(session, bags, targetId); err != nil {
 			fail("enhance-worn-fund", "%v", err)
 		}
-		forged, err = equipForgeEnhance(session, targetId)
+		forged, err = equipForgeEnhance(session, targetId, target.GetEnhanceLevel())
 		if err != nil {
 			fail("enhance-worn", "%v", err)
 		}
@@ -639,8 +671,11 @@ func equipForgeRequest(s *equipSmokeSession, messageId uint32, request proto.Mes
 	return change, nil
 }
 
-func equipForgeEnhance(s *equipSmokeSession, itemId uint64) (equipForgeChange, error) {
-	return equipForgeRequest(s, game.SceneBagClientPlayerEnhanceEquipMessageId, &scene.EnhanceEquipRequest{ItemId: itemId})
+// expectedLevel = 发请求前那份快照里目标的 enhance_level(EnhanceEquipRequest.expected_level):服务器拿它与有效等级
+// 做乐观比较,对不上回 kEquipEnhanceLevelChanged、什么都不动。
+func equipForgeEnhance(s *equipSmokeSession, itemId uint64, expectedLevel uint32) (equipForgeChange, error) {
+	return equipForgeRequest(s, game.SceneBagClientPlayerEnhanceEquipMessageId,
+		&scene.EnhanceEquipRequest{ItemId: itemId, ExpectedLevel: expectedLevel})
 }
 
 func equipForgeInlay(s *equipSmokeSession, itemId uint64, socket, gemConfigId uint32) (equipForgeChange, error) {

@@ -421,9 +421,9 @@ net.ipv4.tcp_keepalive_probes = 3
 
 - [ ] redis FLUSHDB(测试库)+ 真实库做 `BGSAVE` 备份
 - [ ] kafka topic 提前创建:`gate-0` ~ `gate-{N}` partition=8,retention 5min
-- [ ] etcd 空间:CronJob `etcd-compact` 最近一次成功、`etcdctl alarm list` 为空、各成员 DB SIZE 低于配额一半
-      (命令见 [etcd-maintenance-runbook.md](etcd-maintenance-runbook.md) §4.3、§5.1)。需要 defrag 时按该手册 §5 在更早的低峰窗口逐成员做,
-      不要压在开服前 1 小时
+- [ ] etcd 空间:`deploy/k8s/etcd-alerts.yaml` 的告警都没响(无主、配额 80% / 95%、碎片过半)、`etcdctl alarm list` 为空、各成员 DB SIZE
+      低于配额一半(命令见 [etcd-maintenance-runbook.md](etcd-maintenance-runbook.md) §4.1、§5.1;压缩是 etcd 内置的,没有 CronJob 可看)。
+      需要 defrag 时按该手册 §5 在更早的低峰窗口逐成员做,不要压在开服前 1 小时
 - [ ] Gateway 配置波次 schedule:
   ```yaml
   gate.rate-limit.wave:
@@ -501,9 +501,9 @@ kubectl rollout undo deploy/login -n mmorpg
 
 #### F.B-1: dev 重启 robot 后 player_locator session 残留 ONLINE
 
-- **状态:** 治标 (E) + 治本 (G) 都已合
-- **治标:** robot main `defer sendDisconnectBestEffort(gc)` 主动通知 login.Disconnect (commit `0f4712996` 之后)
+- **状态:** 治本 (G) 已合;治标 (E) 已于 2026-11-05 撤除(依据 [client-rpc-callback.md](../design/client-rpc-callback.md) §7 R4:`Disconnect` 标了 `CLIENT_RPC_SERVER_ONLY`,只能由 gate 在客户端连接关闭时合成,带会话代次;客户端发上来 gate 按非法包丢弃、不回包。撤除未编译,待 Codex 验证)。现在只剩下面治本这一层,robot 只需关连接。
 - **治本:** cpp gate `HandleConnectionDisconnection` 把 `SessionInfo.playerId` 填进 `SessionDetails`,login `markPlayerSessionDisconnecting` 真的能跑(本轮 commit)
+- R4 之前的做法(已撤除,不要加回):robot main `defer sendDisconnectBestEffort(gc)` 主动发 login.Disconnect(commit `0f4712996` 之后)。函数、全部调用点与 `robot/login_test.go` 已删;R4 之后照这样加回,每个 robot 只会在 gate 多计一次非法包,不会多一层兜底。dev 重跑 robot 后再见残留 ONLINE,查 gate 的连接关闭处理(`client_session_handler.cpp` 的 `shouldNotifyLogin`)与 login 侧,不要查 robot。
 - **生产影响:** 玩家正常 TCP 断会触发 OS-level RST → gate 同样路径,本来就走治本逻辑,所以**生产无症状**;dev 重跑机器人时遇到
 
 **定向补救(2026-10-18 增补):单个玩家的会话卡在 ONLINE**

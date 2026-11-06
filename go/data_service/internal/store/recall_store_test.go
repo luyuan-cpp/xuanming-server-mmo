@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	assetpb "proto/common/asset"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func recallOpForTest() assetop.Op {
@@ -49,10 +51,65 @@ func TestRecallFinalize_AbandonIsNotAFinalStatus(t *testing.T) {
 	require.ErrorContains(t, err, "not allowed")
 }
 
-func TestRecallResolveManually_FullAppliedIsRefused(t *testing.T) {
+func TestRecallResolveManuallyIfQuiet_FullAppliedIsRefused(t *testing.T) {
 	s := &RecallStore{}
-	_, err := s.ResolveManually(context.Background(), assetop.ManualResolution{OpID: 1, Final: assetop.StatusApplied, Operator: "tester"}, 1)
+	_, err := s.ResolveManuallyIfQuiet(context.Background(), assetop.ManualResolution{OpID: 1, Final: assetop.StatusApplied, Operator: "tester"}, assetop.QuietWitness{}, 1)
 	require.ErrorIs(t, err, ErrRecallFinalInvalid)
+}
+
+// recallOpScan 按 recallOpColumns 的列序回一行假数据,给 scanRecallOp 用。
+type recallOpScan []any
+
+func (r recallOpScan) Scan(dest ...any) error {
+	if len(dest) != len(r) {
+		return fmt.Errorf("scan %d columns, row has %d", len(dest), len(r))
+	}
+	for i, d := range dest {
+		switch p := d.(type) {
+		case *uint64:
+			*p = r[i].(uint64)
+		case *uint32:
+			*p = r[i].(uint32)
+		case *[]byte:
+			*p = r[i].([]byte)
+		default:
+			return fmt.Errorf("column %d: unexpected destination %T", i, d)
+		}
+	}
+	return nil
+}
+
+// Claim 下发与人工终结读证据经同一个 scanRecallOp 还原请求:correlation_id 是 op_id,流号、纪元、载荷原样取列值。
+// 载荷解不开不算读失败,填 OpErr,由调用方决定(Claim 推迟成毒行,人工终结按证据不足)。
+func TestScanRecallOp_RebuildsTheDeliveredRequest(t *testing.T) {
+	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(recallOpForTest().Bundle)
+	require.NoError(t, err)
+	row := func(raw []byte) recallOpScan {
+		return recallOpScan{uint64(9), uint32(assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL), uint64(3), uint64(1700), RecallTxType, raw,
+			uint32(4), uint64(0), uint32(27004), uint64(1000), uint64(2000), recallStatusPending, uint64(3000)}
+	}
+
+	state, err := scanRecallOp(row(payload), 77)
+	require.NoError(t, err)
+	require.NoError(t, state.OpErr)
+	assert.True(t, state.IsPending())
+	assert.Equal(t, uint64(3000), state.LeaseUntilMs)
+	op := state.Op
+	assert.Equal(t, uint64(77), op.OpID)
+	assert.Equal(t, uint64(77), op.CorrelationID, "scene 流水与收据都按 op_id 对到这一行")
+	assert.Equal(t, assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL, op.Stream)
+	assert.Equal(t, []uint64{9, 3, 1700}, []uint64{op.PlayerID, op.Seq, op.StreamEpoch})
+	assert.Equal(t, RecallTxType, op.TxType)
+	assert.Equal(t, []uint64{1000, 2000}, []uint64{op.CreatedMs, op.LastSendMs})
+	assert.Equal(t, uint32(27004), op.LastReason)
+	assert.Zero(t, op.LeaseToken, "令牌只属于领取方")
+	assert.True(t, proto.Equal(recallOpForTest().Bundle, op.Bundle))
+
+	state, err = scanRecallOp(row([]byte{0xff, 0xff}), 77)
+	require.NoError(t, err, "载荷解不开不是读失败")
+	require.Error(t, state.OpErr)
+	assert.Nil(t, state.Op.Bundle)
+	assert.Equal(t, uint64(3), state.Op.Seq, "其余列照常扣出,人工终结还要拿它们判")
 }
 
 func TestRecallManualFinal_OnlyTakesOutcomesThatClaimNothing(t *testing.T) {

@@ -15,6 +15,10 @@ public final class CommerceApi {
                           @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{1,128}") String transactionId,
                           @Positive long amountMinor,
                           @NotBlank @Pattern(regexp="[A-Z][A-Z0-9_]{2,15}") String currency) {}
+    // 渠道退款回执,同样只来自可信适配器。一张订单可能有多笔要退(订单绑定的那笔与重复付款),所以必须指明退的是哪一笔:
+    // paymentTransactionId 是退款待办列出的那笔付款的交易号,transactionId 是渠道给这次退款的流水号;渠道两者共用。
+    public record Refund(String orderId, String channel, String paymentTransactionId, String transactionId,
+                         long amountMinor, String currency) {}
     public record Order(String orderId, String buyerId, long skuId, int quantity, long amountMinor,
                         String currency, String state, long paymentDeadlineMs) {}
     // 仅供已认证的 payment 角色查原订单；金额与归属均由服务器原记录返回。

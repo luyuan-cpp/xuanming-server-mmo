@@ -144,11 +144,12 @@ spec:
 
         # --- 负载分刷新(scene_manager_load_refresh_*,2026-10-16)-----------
         # 负载分、类型镜像与每节点序列只由领导者按 zone 批量刷新(go/scene_manager/internal/logic/
-        # load_refresh.go),跟随者不刷新。load_refresh_total{outcome} 每拍(5s)由领导者记一次;六个 outcome
+        # load_refresh.go),跟随者不刷新。load_refresh_total{outcome} 每拍(5s)由领导者记一次;五个 outcome
         # 在每个副本注册指标时预置为 0,所以「没人在刷」表现为 increase == 0,而不是序列消失。
         # outcome:ok / partial(个别键读不到:WRONGTYPE、空串、非数字,保留旧分)/ read_failed(读批遇到传输层
-        # 失败:熔断拒绝 / 取连接 / 网络 / 超时;只按错误类型判,与批怎么切无关)/ registry_failed
-        # (scene_manager:zones 登记失败)/ write_failed(写批失败)/ lost_leadership(刷新途中降级)。
+        # 失败:熔断拒绝 / 取连接 / 网络 / 超时;只按错误类型判,与批怎么切无关)/ write_failed(写批失败)/
+        # lost_leadership(刷新途中降级)。registry_failed 2026-11-05 随 zone 登记集合删除(按 zone 选主,
+        # docs/design/control-plane-zone-scoping-20261105.md §4.3)。
         # 四条的阈值与 for 都是起步值,待压测基线(AGENTS §6);代码未编译、未实测。
         - alert: SceneManagerLoadRefreshStalled
           expr: |
@@ -167,7 +168,7 @@ spec:
               影响:负载分与类型镜像停在最后一次的值,选点按旧分;每节点看板整片变空;同一条 goroutine 上的
               死节点清扫、推迟摘除多半一起停。absent 分支 = 没有任何 scene_manager 导出本指标(没抓到 /metrics,
               或全部是 2026-10-16 之前的旧版本)。
-              处置:先查 sum(scene_manager_is_leader)(应恒为 1);再看领导者日志里的
+              处置:先查 sum by (namespace) (scene_manager_is_leader)(每个 zone 应恒为 1:2026-11-05 起按 zone 选主);再看领导者日志里的
               "[LoadReporter] full sync failed" / "watch interrupted" / "resync requested",以及 etcd 与选主锁所在
               Redis 的健康。滚动升级期间领导者若仍是旧版本(不导出本指标),本告警会误报,升级窗口内对它加 silence。
             runbook_url: docs/ops/scene-node-role-split.md
@@ -208,23 +209,24 @@ spec:
             summary: "scene_manager 存活集闸门放行:某个 zone 一半以上的节点被当成消失处理"
             description: |
               日志 "[LoadReporter] node view gate released for zone N" 带已知数与缺席数。按上一条的 etcdctl 与 kubectl 对照核实。
-              节点确实死了:不用处置,看 scene_manager_dead_node_reconcile_pending 回落。节点其实还活着:立刻修 etcd,
-              然后逐个核对这些节点上的实例场景 —— 已知缺口:节点重新注册之后,已经入队的死节点收尾仍会按判死时刻的快照
-              销毁它名下的实例,DestroyScene 打到活节点上(docs/handoff/server-gap-audit-20261101.md 第 32 条,未修)。
+              节点确实死了:不用处置,看 scene_manager_dead_node_reconcile_pending 回落。节点其实还活着:立刻修 etcd。
+              节点失租后会按原 node_id 重新注册;在再入屏障放行、收尾动手之前回来的,收尾任务认得出是同一代进程、会撤掉
+              (scene_manager_dead_node_reconcile_total{outcome="instance_back"})。失联比屏障更久的节点,名下实例此前
+              已被拆掉、世界频道已被改派;它重新注册后约 20 秒内自己把这些本地实体排空销毁(scene 节点的
+              scene_ownership_releases_total 增长,docs/design/scene-node-ownership-reconcile.md),不用逐个核对。
             runbook_url: docs/ops/scene-node-role-split.md
 
         - alert: SceneManagerLoadRefreshFailing
           expr: |
-            sum(increase(scene_manager_load_refresh_total{outcome=~"read_failed|registry_failed|write_failed"}[10m])) > 0
+            sum(increase(scene_manager_load_refresh_total{outcome=~"read_failed|write_failed"}[10m])) > 0
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: "scene_manager 负载分刷新持续失败(outcome=read_failed / registry_failed / write_failed)"
+            summary: "scene_manager 负载分刷新持续失败(outcome=read_failed / write_failed)"
             description: |
               read_failed:计数读批遇到传输层失败(go-zero 熔断拒绝 / 取连接 / 网络 / 超时),受影响的节点保留旧分,
-              不在负载集里的以「最后才被选中」的哨兵分加入。registry_failed:登记集合 scene_manager:zones 写失败,
-              负载集照常写,但这一拍新出现的 zone 没登记,它若随后整体下线,fullSync 的清扫与孤儿清理会漏掉它。
+              不在负载集里的以「最后才被选中」的哨兵分加入。
               write_failed:类型镜像 SET 或负载集 ZADD 失败,分数没更新(这些 zone 的每节点序列本拍不更新),新注册的
               节点可能进不了负载集(会被当作已死,改派仍受再入屏障约束)。
               partial(个别键的回复错误 / 坏值,不论批大小、节点多少)不在本规则里,由
@@ -552,6 +554,11 @@ spec:
         #                                      已取证 / 撤回):一个字节不动、保留本次落点。属于 Kafka「报错
         #                                      但已投递」/ 源端提前取证的正常竞态;无基线,本批不配规则,
         #                                      有基线后再加比例告警。分辨方法见 runbook;
+        #   target_registered                  不凭标记铸造(首次落点 / 第二条腿 / 死节点接管),回滚时交接资格
+        #                                      原件已属于铸出的代次(目标节点已登记):一个字节不动、保留本次落点。
+        #                                      与 marker_gone 同一种正常竞态,不告警;
+        #   fence_not_proof                    不凭标记铸造,资格原件比铸出值新或写坏了(Redis 被回退 / 手工改过):
+        #                                      一个字节不动;应恒 0,并入下面这条规则;
         #   superseded                         被并发请求推进,偶发属正常并发,不告警;
         #   redis_error                        go-redis 重试耗尽仍出错,**不告警就没有别的信号**:
         #                                      Redis 里可能留着本次落点(epoch 已推进),而 Kafka 同时也坏了;
@@ -562,7 +569,7 @@ spec:
         # 不带 zone_id;哪个 zone 要看是哪个 scene_manager 实例报的。代码从未编译、未实测,无基线。
         - alert: SceneManagerEnterSceneRollbackRedisError
           expr: |
-            sum(increase(scene_manager_enter_scene_rollback_total{outcome=~"redis_error|plan_error"}[10m])) > 0
+            sum(increase(scene_manager_enter_scene_rollback_total{outcome=~"redis_error|plan_error|fence_not_proof"}[10m])) > 0
           labels:
             severity: warning
           annotations:
@@ -583,6 +590,10 @@ spec:
               搜 "[RouteRollback] outcome=redis_error" 拿到 player 与 epoch,必要时按 location 人工核对。
               outcome=plan_error 同样触发本规则:回滚计划构造失败(按构造不可达)、没有回滚,终态同上;出现即代码
               缺陷,日志搜 "[RouteRollback] outcome=plan_error",保留现场交开发。
+              outcome=fence_not_proof 也触发本规则:不凭标记铸造的回滚读到比铸出值新、或写坏了的交接资格原件
+              (player:{id}:handoff_fence 的 handoff_fence 字段),没有回滚,location 停在本次落点。协议写者写不出这种
+              原件,说明玩家域 Redis 被回退或手工改过;日志搜 "[RouteRollback] outcome=fence_not_proof" 拿到 player,
+              对照该玩家的 owner_epoch 与资格原件人工核对,保留现场交开发。
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
 
         # --- 死节点推迟摘除(scene_manager_node_detach_deferred_total,GO-6)------
@@ -683,7 +694,7 @@ spec:
               什么时候入的队;SMEMBERS node:zone:{z}:{n}:reconcile_scenes 看还剩哪些场景;
               GET node:zone:{z}:{n}:death_at 看屏障起点。
               再按指标分辨原因:scene_manager_reentry_barrier_blocked_total{site="dead_node_cleanup"} 在涨,
-              说明屏障一直挡着(读 death_at 失败,或节点反复判死);sum(scene_manager_is_leader) 变化频繁,
+              说明屏障一直挡着(读 death_at 失败,或节点反复判死);本 zone 的 sum by (namespace) (scene_manager_is_leader) 变化频繁,
               说明领导者在换;SceneManagerLoadRefreshStalled 同时响,说明收尾没在跑。
               领导者日志搜 "[ReentryBarrier] Dead node cleanup" 与 "dead_node_cleanup: previous owner just declared dead"。
             runbook_url: docs/ops/cross-zone-failure-test-runbook.md
@@ -872,13 +883,36 @@ spec:
               不存在而 GameServer 的 rooms 计数偏高,就是这一份没还。
             runbook_url: docs/design/scene-creation-architecture.md
 
+        # --- 场景拆除任务(scene_manager_scene_teardown_*,go/scene_manager/internal/logic/scene_teardown_job.go)---
+        # 销毁认领在提交的同一步写下拆除任务,镜像级联、C++ DestroyScene、Agones 归还等副作用做完才删;认领方没做完的
+        # (进程退出、回包丢失、某一步失败)由本 zone 的领导者每 15s 扫一次、认领超过 90s 的接手重做。
+        # oldest_pending_seconds 只由领导者发布,跟随者恒 0,所以取 max。正常时任务当场做完,最多偶尔在一两个租期内补完;
+        # 持续 10 分钟以上说明某一步一直做不成。代码未编译、未实测。
+        - alert: SceneManagerSceneTeardownStuck
+          expr: |
+            max by (zone_id) (scene_manager_scene_teardown_oldest_pending_seconds) > 600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "zone {{ $labels.zone_id }} 最老的场景拆除任务已经 {{ $value }} 秒没做完"
+            description: |
+              有场景已被认领销毁(Redis 里的映射与计数已改),但认领之后的副作用一直没做完:节点上可能留着没有映射的实体、
+              Agones 名额没还、源频道的镜像子集合挂着死 id。scene_manager 日志搜 "[SceneTeardown]",行里有 scene_id、kind、
+              reason 和没做成的那一步;ZRANGE scene_teardown:zone:<z>:pending 0 -1 WITHSCORES 列出待办,
+              HGETALL scene:<id>:teardown 看快照。常见原因:属主节点在负载集里但 DestroyScene 一直发不出去(看那个节点的 gRPC
+              连接),或控制域 Redis 持续报错。kind 不认识的任务(滚动升级窗口里新版本写下的)也会留在这里,等旧版本副本退完。
+              scene_manager_scene_teardown_jobs_total{outcome="deferred"} 的增速是每次重试失败的次数。
+            runbook_url: docs/design/scene-creation-architecture.md
+
     # --- 跨 zone 重定向挑 gate(scene_manager_gate_redirect_*,internal/logic/gate_redirect.go 的 eligibleTargets)---
-    # 2026-11-05 起,跨 zone 重定向挑 gate 之前剔除停写与满载的 gate(规则在 go/shared/gatepick,与 login 共用),目标 zone 的
-    # 候选全部不合格时回落全集照常挑,只计 fallback。zone_id 是目标 zone;reason 取 gatepick.Reason* 常量 stale / full / mixed。
+    # 2026-11-05 起,跨 zone 重定向挑 gate 时给候选分档(规则在 go/shared/gatepick,与 login 共用;11-06 排空并入分档):
+    # 完全合格的(没停写、没排空、没到水位)优先,没有时退到连得上的(排空中或到水位),全部停写才退到全部,退档只计 fallback。
+    # zone_id 是目标 zone;reason 取 gatepick.Reason* 常量:stale = 退到全部;draining / full / mixed = 退到连得上的。
     # 健康时恒 0,任一次即告警(for: 0m)。计数在第一次计数时才建出序列、没有预置 0 值,increase() 看不到第一次跳变,所以带
     # 第二支 `unless … offset 10m`(新序列),写法同 player-placement-alerts.yaml 的 DbPlacementStoreRejected。
     # severity 用 warning:目标 zone 的 gate 全部停写时,那个 zone 的 login 告警 LoginGatePickFallbackStale(login-alerts.yaml)
-    # 会以 critical 响;这一条说明跨区传送也落在了卡住或满载的 gate 上,不重复呼人。
+    # 会以 critical 响;其余原因对应那个 zone 的 LoginGatePickFallbackDegraded。这一条说明跨区传送也落在了这些 gate 上,不重复呼人。
     # 停写只靠本进程读过的历史判(gatepick.RevisionTracker),第一次重定向到某个 zone 时判不出,这一支只会漏报、不会误报。
     # 指标名与 reason 取值由 tools/scripts/tests/gate_pick_alerts_contract.tests.ps1 从源码核对。代码与规则未编译、未实测。
     - name: scene-manager.gate-redirect
@@ -896,12 +930,12 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "跨 zone 重定向到 zone {{ $labels.zone_id }} 时 gate 全部不合格({{ $labels.reason }}),已回落到全部 gate"
+            summary: "跨 zone 重定向到 zone {{ $labels.zone_id }} 时没有完全合格的 gate({{ $labels.reason }}),已退到下一档"
             description: >-
-              过去 10 分钟约 {{ $value | printf "%.0f" }} 次跨 zone 重定向发现目标 zone 的 gate 没有一台能接新玩家:
-              reason=stale 是全部停写(注册记录的 ModRevision 在本 scene_manager 进程里 30s 以上没变),full 是全部到自报
-              max_connections 的 90%,mixed 是两种都有。回落之后照常签票,传送过去的玩家多半连不上或被 gate 拒连。
-              stale / mixed:先看目标 zone 的 LoginGatePickFallbackStale 是否同时在响(gate 全卡住,或 gate 写不进 etcd),按那条处置;
-              scene_manager 日志搜 "eligibleTargets: gates of zone",行里有停写的 node_id。full:目标 zone 容量不够,
-              对照那个 zone 的 LoginGatePickFallbackFull 与 gate 副本数。被剔除的台次看 scene_manager_gate_redirect_excluded_total。
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次跨 zone 重定向发现目标 zone 没有一台 gate 既没停写、没排空,又没到自报
+              max_connections 的 90%。reason=stale:全部停写(注册记录的 ModRevision 在本 scene_manager 进程里 30s 以上没变),
+              退到全部之后照常签票,传送过去的玩家多半连不上;先看目标 zone 的 LoginGatePickFallbackStale 是否同时在响(gate 全卡住,
+              或 gate 写不进 etcd),按那条处置,scene_manager 日志搜 "eligibleTargets: gates of zone",行里有停写的 node_id。
+              reason=draining / full / mixed:票签给了连得上的 gate,但它们全在排空 / 全到水位 / 两种都有;对照那个 zone 的
+              LoginGatePickFallbackDegraded 与 gate 副本数、排空标记。被剔除的台次看 scene_manager_gate_redirect_excluded_total。
             runbook_url: docs/design/gate-load-balancing-design.md

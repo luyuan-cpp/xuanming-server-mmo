@@ -175,32 +175,60 @@ type ShardTally struct {
 	Complete bool
 }
 
-// ReconcileRecent 是定时对账作业的一轮(只在领导者上跑,设计 §9.3):
+// ReconcileShards 是定时对账作业的一轮(设计 §9.3)。每个 stable 副本只对账自己负责的分片(归属见
+// internal/shardowner),调用方把这些分片按本轮的起点轮转好,作为 order 传进来:
 //
-//  1. 从 startShard 起环形扫描 64 个分片(下一轮的起点由调用方按墙钟轮转,见 reconcileStartStride),逐片按键集翻页
-//     读 sinceMs 之后由消费方终结的行,直到扫满 64 片或触到上限。触到上限计 player_inbox_reconcile_truncated_total
+//  1. 按 order 的顺序扫描这些分片(下一轮的起点由调用方按墙钟轮转,见 reconcileStartStride),逐片按键集翻页
+//     读 sinceMs 之后由消费方终结的行,直到扫完或触到上限。触到上限计 player_inbox_reconcile_truncated_total
 //     并打 ERROR,写明停在哪片、剩几片没扫到。
 //  2. 按玩家以有界并发(reconcileLedgerReadConcurrency 路)读已落盘账本。
 //  3. 逐个玩家按 ledgerMismatches 判定(与 ReconcilePlayer 同一个谓词,比水位也比环),每处不一致写一行
 //     带 player_id 的 ERROR(player_id 只进日志);同时按分片记读数(ReconcileRoundResult.Shards)。
 //
-// 返回本轮结果;ctx 结束(超时 / 易主 / 关停)时返回已判定部分与 ctx.Err()。不改任何状态。
-func (s *Store) ReconcileRecent(ctx context.Context, sinceMs uint64, startShard uint32, ledgers LedgerReader) (ReconcileRoundResult, error) {
+// order 里的分片必须在 [0, 64) 内且不重复,否则直接返回错误、一行不读。
+// 返回本轮结果;ctx 结束(超时 / 关停)时返回已判定部分与 ctx.Err()。不改任何状态。
+func (s *Store) ReconcileShards(ctx context.Context, sinceMs uint64, order []uint32, ledgers LedgerReader) (ReconcileRoundResult, error) {
 	if ledgers == nil {
-		return ReconcileRoundResult{}, fmt.Errorf("inbox: ReconcileRecent has no ledger reader")
+		return ReconcileRoundResult{}, fmt.Errorf("inbox: ReconcileShards has no ledger reader")
 	}
 	read := func(ctx context.Context, shard uint32, before *FinalizedRef, limit int) ([]FinalizedRef, error) {
 		return s.RecentlyFinalized(ctx, shard, sinceMs, before, limit)
 	}
-	return reconcileRecent(ctx, startShard, defaultReconcileLimits, read, ledgers)
+	return reconcileShards(ctx, order, defaultReconcileLimits, read, ledgers)
 }
 
-// reconcileRecent 是 ReconcileRecent 去掉库之后的部分:分片读取经 read 注入,单测用内存假实现。
-func reconcileRecent(ctx context.Context, startShard uint32, limits reconcileLimits, read finalizedPageReader,
+// ringOrder 是从 start 起环形排满 64 片的扫描顺序((start+i) % 64)。本副本负责全部分片时就是这个顺序。
+func ringOrder(start uint32) []uint32 {
+	order := make([]uint32, ShardCount)
+	for i := range order {
+		order[i] = (start + uint32(i)) % ShardCount
+	}
+	return order
+}
+
+// checkShardOrder 要求 order 里的分片都在 [0, 64) 内且不重复:越界会读错分片,重复会把同一片读两遍、读数记两次。
+func checkShardOrder(order []uint32) error {
+	var seen [ShardCount]bool
+	for _, shard := range order {
+		if shard >= ShardCount {
+			return fmt.Errorf("inbox: reconcile shard %d out of range [0, %d)", shard, ShardCount)
+		}
+		if seen[shard] {
+			return fmt.Errorf("inbox: reconcile shard %d listed twice", shard)
+		}
+		seen[shard] = true
+	}
+	return nil
+}
+
+// reconcileShards 是 ReconcileShards 去掉库之后的部分:分片读取经 read 注入,单测用内存假实现。
+func reconcileShards(ctx context.Context, order []uint32, limits reconcileLimits, read finalizedPageReader,
 	ledgers LedgerReader) (ReconcileRoundResult, error) {
 	log := logx.WithContext(ctx)
-	startShard %= ShardCount
-	scan, err := collectFinalized(ctx, startShard, limits, read)
+	if err := checkShardOrder(order); err != nil {
+		return ReconcileRoundResult{}, err
+	}
+	scan, err := collectFinalized(ctx, order, limits, read)
 	res := ReconcileRoundResult{PlayersPlanned: len(scan.players)}
 	if err != nil {
 		return res, err
@@ -208,15 +236,15 @@ func reconcileRecent(ctx context.Context, startShard uint32, limits reconcileLim
 	if scan.truncated() {
 		res.Truncated = true
 		metrics.IncReconcileTruncated()
-		// 覆盖保证(评审 R1):每轮至少读完从起点起的 reconcileStartStride 片,起点每轮前移这么多片,
+		// 覆盖保证(评审 R1):每轮至少读完从起点起的 reconcileStartStride 片,起点每轮在本副本负责的分片里前移这么多片,
 		// 所以截断持续时每片至多隔 reconcileFullCycleRounds 轮读完一次;被单片上限截掉的是一片里最老的行,
 		// 只要这一片持续有更新的行顶着,它们就一直核对不到。
-		log.Errorf("[player_inbox] Reconcile round truncated (start_shard=%d, scanned %d/%d shards): %s; "+
+		log.Errorf("[player_inbox] Reconcile round truncated (start_shard=%d, scanned %d/%d owned shards): %s; "+
 			"the start shard advances %d shards per interval, so while this persists each shard is fully read at least once "+
 			"every %d rounds (shards not reached keep their previous gauge readings until then), but rows cut by the "+
 			"per-shard limit (oldest first) stay unchecked while newer rows keep filling that shard; "+
-			"shorten ReconcileWindowHours or raise the limits",
-			startShard, scan.scanned, ShardCount, scan.truncationSummary(limits), reconcileStartStride, reconcileFullCycleRounds)
+			"shorten ReconcileWindowHours, raise the limits, or add replicas (each replica reconciles only its own shards)",
+			order[0], scan.scanned, len(order), scan.truncationSummary(limits), reconcileStartStride, reconcileFullCycleRounds)
 	}
 
 	reads := readLedgersBounded(ctx, ledgers, scan.players, limits.readConcurrency)
@@ -275,8 +303,8 @@ type finalizedScan struct {
 	players []uint64
 	// shardOf 是每名玩家的行是从哪一片读出来的(按读出时的分片记,不按 player_id 重算)。
 	shardOf map[uint64]uint32
-	// start 是起始分片;第 i 个读过的分片是 (start + i) % 64。
-	start uint32
+	// order 是本轮的扫描顺序;读过的是它的前 scanned 片。
+	order []uint32
 	// scanned 是读过的分片数(含玩家数到上限时只读了一部分的那一片)。
 	scanned int
 	// capped 是读满单片上限、仍有剩余的分片,按扫描顺序。
@@ -288,8 +316,8 @@ type finalizedScan struct {
 
 func (s finalizedScan) truncated() bool { return len(s.capped) > 0 || s.playerCapHit }
 
-// unreached 是本轮一行都没读到的分片数。
-func (s finalizedScan) unreached() int { return ShardCount - s.scanned }
+// unreached 是本轮该扫、却一行都没读到的分片数。
+func (s finalizedScan) unreached() int { return len(s.order) - s.scanned }
 
 // shardTallies 按扫描顺序给出本轮读过的每一片的初始读数(不一致数 0),以及分片 → 下标。
 // 收集阶段就截断了的分片(读满单片上限仍有剩余、玩家数触顶时停下的那一片)从一开始就不 Complete;
@@ -301,8 +329,7 @@ func (s finalizedScan) shardTallies() ([]ShardTally, map[uint32]int) {
 	}
 	out := make([]ShardTally, 0, s.scanned)
 	index := make(map[uint32]int, s.scanned)
-	for i := 0; i < s.scanned; i++ {
-		shard := (s.start + uint32(i)) % ShardCount
+	for _, shard := range s.order[:s.scanned] {
 		stopped := s.playerCapHit && shard == s.stoppedShard
 		index[shard] = len(out)
 		out = append(out, ShardTally{Shard: shard, Complete: !capped[shard] && !stopped})
@@ -324,22 +351,21 @@ func (s finalizedScan) truncationSummary(limits reconcileLimits) string {
 	return strings.Join(parts, "; ")
 }
 
-// collectFinalized 从 startShard 起环形扫描全部分片((startShard+i) % 64),收集待核对的行(评审 M5):
+// collectFinalized 按 order 的顺序扫描分片,收集待核对的行(评审 M5):
 //   - 每片按键集翻页,一页至多 limits.pageSize 行;一片至多 limits.perShard 行,读满后探一行确认还有剩余才算截断
 //     (恰好读满不算),然后继续下一片;
 //   - 新出现的玩家超过 limits.maxPlayers 时整轮停在当前分片(已收进来的玩家照常核对)。
 //
-// 覆盖下界(评审 R1):一片至多收 limits.perShard 名新玩家,所以从起点起的前 limits.maxPlayers / limits.perShard 片
+// 覆盖下界(评审 R1):一片至多收 limits.perShard 名新玩家,所以 order 的前 limits.maxPlayers / limits.perShard 片
 // 一定读完 —— 玩家数最早也只能在下一片触顶。生产取默认上限时这就是 reconcileStartStride。
 //
 // 读失败或 ctx 结束返回 error,此时收集结果不完整,调用方不得拿去判定「无差异」。
-func collectFinalized(ctx context.Context, startShard uint32, limits reconcileLimits, read finalizedPageReader) (finalizedScan, error) {
-	scan := finalizedScan{byPlayer: map[uint64][]FinalizedRef{}, shardOf: map[uint64]uint32{}, start: startShard}
-	for i := uint32(0); i < ShardCount; i++ {
+func collectFinalized(ctx context.Context, order []uint32, limits reconcileLimits, read finalizedPageReader) (finalizedScan, error) {
+	scan := finalizedScan{byPlayer: map[uint64][]FinalizedRef{}, shardOf: map[uint64]uint32{}, order: order}
+	for _, shard := range order {
 		if err := ctx.Err(); err != nil {
 			return scan, err
 		}
-		shard := (startShard + i) % ShardCount
 		scan.scanned++
 		capHit, err := scan.collectShard(ctx, shard, limits, read)
 		if err != nil {

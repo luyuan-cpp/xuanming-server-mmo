@@ -22,16 +22,17 @@ import (
 	"chat/internal/constants"
 	"chat/internal/lifecycle"
 	"chat/internal/server"
-	"chat/internal/session"
 	"chat/internal/svc"
 
 	chatpb "proto/chat"
 	base "proto/common/base"
 
 	"shared/buildinfo"
+	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
+	"shared/roleidentity"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
 
@@ -199,7 +200,11 @@ func runChat(c config.Config) (runErr error) {
 	if authErr != nil {
 		return authErr
 	}
-	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root), gateIdentity}, buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor())...)...)
+	onlineEntry, entryErr := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if entryErr != nil {
+		return entryErr
+	}
+	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root), gateIdentity}, buildUnaryInterceptors(ks, onlineEntry)...)...)
 
 	// 先启动gRPC再注册。保存真实Server用于主动排空,Start错误经通道交回主线程,
 	// 让监听失败、注册失败和收到启动期信号都能清理已创建的资源。
@@ -301,13 +306,9 @@ func runChat(c config.Config) (runErr error) {
 // 返回的切片顺序**就是执行顺序**:go-zero 原样交给 grpc.ChainUnaryInterceptor,第一个是最外层。
 // 抽成函数是为了让链本身可测(chat_test.go)——"哪次重构顺手把 killswitch 那行删了"
 // 是最容易发生、又最难被发现的回归:开关平时没有任何可观测行为。
-func buildUnaryInterceptors(ks *killswitch.Switch, original ...grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
-	identity := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
-		if len(original) == 1 && original[0] != nil {
-			return original[0](ctx, req, info, next)
-		}
-		return next(ctx, req) // 独立链顺序夹具；生产显式传入，SQL入口本身仍缺原件即拒绝。
-	}
+//
+// onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),由装配层传入,不得为 nil。
+func buildUnaryInterceptors(ks *killswitch.Switch, onlineEntry grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
 	return []grpc.UnaryServerInterceptor{
 		// ① 流量统计最外层:被热关停短路的请求也要被统计到,否则"关停后 QPS 归零"
 		//    会被误读成客户端不再调用了。
@@ -316,11 +317,10 @@ func buildUnaryInterceptors(ks *killswitch.Switch, original ...grpc.UnaryServerI
 		// ② 热关停紧跟其后,尽早短路:命中后会话解码、in-band 定性、Redis 访问统统不做。
 		ks.UnaryServerInterceptor(),
 
-		// ③ 会话解码:x-session-detail-bin → ctx。放在 killswitch 之后,被关停的请求不白解码;
-		//    放在 serverbase 之前,handler 一定能拿到会话。坏头 / 缺头放行,由逻辑层回 kInvalidParameter。
-		func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
-			return session.UnaryServerInterceptor()(ctx, req, info, func(bound context.Context, body any) (any, error) { return identity(bound, body, info, next) })
-		},
+		// ③ 入口准入:客户端方法必须带 gate 签名的完整原身份,验签原件放进 ctx、原角色归属捕获进 ctx;
+		//    缺会话或身份不全一律 PermissionDenied(docs/design/gate-online-identity.md §9.2)。
+		//    放在 killswitch 之后,被关停的请求不白做准入;放在 serverbase 之前,handler 一定能拿到会话。
+		onlineEntry,
 
 		// ④ in-band 故障定性:handler 一律 `return resp, nil`,gRPC status 恒 OK,
 		//    这层把 TipInfoMessage.id 读出来按 Tip.xlsx 的 fault 列定性计数(kServiceUnavailable = 故障告警,

@@ -13,6 +13,7 @@ import (
 
 	base "proto/common/base"
 
+	"shared/etcdwatch"
 	"shared/safego"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -101,10 +102,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic("client_rpc_router 配置非法: " + err.Error())
 	}
-	etcdCli, err := clientv3.New(clientv3.Config{
+	// keepalive:节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
-	})
+	}))
 	if err != nil {
 		panic("failed to create etcd client: " + err.Error())
 	}

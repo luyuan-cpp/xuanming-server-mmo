@@ -35,6 +35,8 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"shared/etcdwatch"
 )
 
 // nodeRegistrationJSON 对应 etcd 里 protojson 序列化的 NodeInfo
@@ -118,9 +120,13 @@ func (w *Watcher) Run(ctx context.Context, etcd *clientv3.Client) {
 				continue
 			}
 		}
-		w.watch(ctx, etcd, rev)
+		periodic := w.watch(ctx, etcd, rev)
 		if ctx.Err() != nil {
 			return
+		}
+		if periodic {
+			logx.Debugf("[scenenode:%s] Periodic resynchronization", w.name)
+			continue
 		}
 		logx.Infof("[scenenode:%s] Watch interrupted; synchronizing again", w.name)
 	}
@@ -171,23 +177,29 @@ func (w *Watcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int64, e
 	return resp.Header.Revision, nil
 }
 
-func (w *Watcher) watch(ctx context.Context, etcd *clientv3.Client, rev int64) {
-	watchCh := etcd.Watch(ctx, w.prefix,
+// watch 从 rev+1 起消费事件,返回即表示需要重新全量同步。periodic 为真表示是到了定期对账的点
+// (etcdwatch.ResyncInterval),不是 watch 出了问题。watch 带 RequireLeader,返回前取消子 ctx
+// (docs/design/infra-reconnect-overview.md §4 R1)。
+func (w *Watcher) watch(ctx context.Context, etcd *clientv3.Client, rev int64) (periodic bool) {
+	watchCh, resync, stop := etcdwatch.Open(ctx, etcd, etcdwatch.ResyncInterval, w.prefix,
 		clientv3.WithPrefix(),
 		clientv3.WithRev(rev+1),
 	)
+	defer stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
+		case <-resync:
+			return true
 		case watchResp, ok := <-watchCh:
 			if !ok {
 				logx.Infof("[scenenode:%s] Watch channel closed", w.name)
-				return
+				return false
 			}
 			if watchResp.Err() != nil {
 				logx.Errorf("[scenenode:%s] Watch error: %v", w.name, watchResp.Err())
-				return
+				return false
 			}
 			for _, ev := range watchResp.Events {
 				w.handleEvent(ev)

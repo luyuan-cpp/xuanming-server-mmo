@@ -767,7 +767,8 @@ type PlayerSnapshot struct {
 	// 不改主键:rollback_audit_log.snapshot_id_used 引用的是 id,换主键等于篡改历史审计。
 	SnapshotGuid uint64 `protobuf:"varint,9,opt,name=snapshot_guid,json=snapshotGuid,proto3" json:"snapshot_guid,omitempty"`
 	// 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
-	//       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
+	//       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 原字节,内含 player_database 的 proto blob;
+	//           2026-11-05 之前还有一个 player_database_1 blob,字段已 reserved)。
 	// 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
 	Source        uint32 `protobuf:"varint,10,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1993,7 +1994,12 @@ type PlayerName struct {
 	// 登记时刻 Unix 毫秒(data_service 进程时钟)。ReleasePlayerName 的无 token 分支
 	// 只删落在 PlayerName.ReleaseWindow 内的行(login 建角失败的补偿),
 	// 超窗的孤儿行只能由运维带 x-admin-token 清 —— 没有这一列就没法区分两者。
-	CreatedMs     uint64 `protobuf:"varint,4,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	CreatedMs uint64 `protobuf:"varint,4,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	// 绑定时刻 Unix 毫秒(data_service 进程时钟);0 = 预留态。名字行是「预留 → 绑定」状态机
+	// (docs/design/guild-phase2/03-names.md §3.4a):ReservePlayerName 写下的是预留态,player_id 是候选角色;
+	// 建角在玩家片提交 account_role 之后,data_service 先复核角色确已提交,再把它置为已绑定。
+	// 已绑定的名字 ReleasePlayerName 一律拒绝,只有删角写完墓碑之后由 data_service 释放。
+	BoundMs       uint64 `protobuf:"varint,5,opt,name=bound_ms,json=boundMs,proto3" json:"bound_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2052,6 +2058,13 @@ func (x *PlayerName) GetNameNorm() string {
 func (x *PlayerName) GetCreatedMs() uint64 {
 	if x != nil {
 		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *PlayerName) GetBoundMs() uint64 {
+	if x != nil {
+		return x.BoundMs
 	}
 	return 0
 }
@@ -6763,13 +6776,14 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	" \x01(\rR\fitemsSkipped\x12/\n" +
 	"\x13currencies_restored\x18\v \x01(\rR\x12currenciesRestored\x12-\n" +
 	"\x12currencies_skipped\x18\f \x01(\rR\x11currenciesSkipped\x12\x1b\n" +
-	"\tdiff_json\x18\r \x01(\tR\bdiffJson:.\x8a\x92\xf4\x01\x0erollback_audit\x92\x92\xf4\x01\baudit_idڒ\xf4\x01\tplayer_id\"\xa9\x01\n" +
+	"\tdiff_json\x18\r \x01(\tR\bdiffJson:.\x8a\x92\xf4\x01\x0erollback_audit\x92\x92\xf4\x01\baudit_idڒ\xf4\x01\tplayer_id\"\xc4\x01\n" +
 	"\vplayer_name\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
 	"\tname_norm\x18\x03 \x01(\tR\bnameNorm\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\x04 \x01(\x04R\tcreatedMs:-\x8a\x92\xf4\x01\vplayer_name\x92\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x96\x01\n" +
+	"created_ms\x18\x04 \x01(\x04R\tcreatedMs\x12\x19\n" +
+	"\bbound_ms\x18\x05 \x01(\x04R\aboundMs:-\x8a\x92\xf4\x01\vplayer_name\x92\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x96\x01\n" +
 	"\x11player_name_owner\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tname_norm\x18\x02 \x01(\tR\bnameNorm\x12\x12\n" +

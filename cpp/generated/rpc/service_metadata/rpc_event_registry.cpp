@@ -141,6 +141,7 @@ namespace data_service{void SendDataServiceRegisterRoleAdmissionErased(entt::reg
 namespace data_service{void SendDataServiceCloseRoleAdmissionsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAckRoleTradeDrainErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReleaseDeadPlayerStoreHolderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceReadPlayerStoreHolderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceRegisterPlayerZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerHomeZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchGetPlayerHomeZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -214,6 +215,7 @@ namespace loginpb{void SendClientPlayerLoginEnterGameErased(entt::registry& , en
 namespace loginpb{void SendClientPlayerLoginLeaveGameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginDisconnectErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginRefreshTokenErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendClientPlayerLoginRequestGateMigrationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginPreGateAssignGateErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginPreGateQueryQueueStatusErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginAdminRemovePlayersFromAccountsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -235,6 +237,9 @@ namespace match{void SendMatchInternalSetSpectateFeaturedErased(entt::registry& 
 namespace match{void SendMatchInternalAcquireTrialOccupancyErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalReleaseTrialOccupancyErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalGetBattleCompletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalGetBattleTerminalDecisionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalListStrandedFormationsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalResolveStrandedFormationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetNetworkProbePlanErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCommitNetworkProbeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceJoinQueueErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -247,6 +252,8 @@ namespace match{void SendMatchServiceNotifyChallengeResultErased(entt::registry&
 namespace match{void SendMatchServiceWatchBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceRequestBattleTicketErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceListWatchableBattlesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceListBattleReportsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetBattleReportErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxFetchItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAckItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxEnqueueBattleSettlementErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -343,7 +350,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 373,
+static_assert(kMaxRpcMethodCount == 383,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -558,6 +565,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::ReleaseDeadPlayerStoreHolderRequest>(),
         std::make_unique<::google::protobuf::Empty>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceReleaseDeadPlayerStoreHolderErased, "/data_service.DataService/ReleaseDeadPlayerStoreHolder"};
+    gRpcMethodRegistry[DataServiceReadPlayerStoreHolderMessageId] = RpcMethodMeta{
+        "DataService", "ReadPlayerStoreHolder",
+        std::make_unique<::data_service::ReadPlayerStoreHolderRequest>(),
+        std::make_unique<::data_service::ReadPlayerStoreHolderResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceReadPlayerStoreHolderErased, "/data_service.DataService/ReadPlayerStoreHolder"};
     gRpcMethodRegistry[DataServiceRegisterPlayerZoneMessageId] = RpcMethodMeta{
         "DataService", "RegisterPlayerZone",
         std::make_unique<::data_service::RegisterPlayerZoneRequest>(),
@@ -991,6 +1003,11 @@ void InitMessageInfo()
         std::make_unique<::loginpb::RefreshTokenRequest>(),
         std::make_unique<::loginpb::RefreshTokenResponse>(),
         1, common::base::eNodeType::LoginNodeService, loginpb::SendClientPlayerLoginRefreshTokenErased, "/loginpb.ClientPlayerLogin/RefreshToken"};
+    gRpcMethodRegistry[ClientPlayerLoginRequestGateMigrationMessageId] = RpcMethodMeta{
+        "ClientPlayerLogin", "RequestGateMigration",
+        std::make_unique<::loginpb::GateMigrationRequest>(),
+        std::make_unique<::loginpb::GateMigrationResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendClientPlayerLoginRequestGateMigrationErased, "/loginpb.ClientPlayerLogin/RequestGateMigration"};
 
     // --- LoginPreGate ---
     gRpcMethodRegistry[LoginPreGateAssignGateMessageId] = RpcMethodMeta{
@@ -1106,6 +1123,21 @@ void InitMessageInfo()
         std::make_unique<::match::GetBattleCompletionRequest>(),
         std::make_unique<::match::GetBattleCompletionResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalGetBattleCompletionErased, "/match.MatchInternal/GetBattleCompletion"};
+    gRpcMethodRegistry[MatchInternalGetBattleTerminalDecisionMessageId] = RpcMethodMeta{
+        "MatchInternal", "GetBattleTerminalDecision",
+        std::make_unique<::match::GetBattleTerminalDecisionRequest>(),
+        std::make_unique<::match::GetBattleTerminalDecisionResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalGetBattleTerminalDecisionErased, "/match.MatchInternal/GetBattleTerminalDecision"};
+    gRpcMethodRegistry[MatchInternalListStrandedFormationsMessageId] = RpcMethodMeta{
+        "MatchInternal", "ListStrandedFormations",
+        std::make_unique<::match::ListStrandedFormationsRequest>(),
+        std::make_unique<::match::ListStrandedFormationsResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalListStrandedFormationsErased, "/match.MatchInternal/ListStrandedFormations"};
+    gRpcMethodRegistry[MatchInternalResolveStrandedFormationMessageId] = RpcMethodMeta{
+        "MatchInternal", "ResolveStrandedFormation",
+        std::make_unique<::match::ResolveStrandedFormationRequest>(),
+        std::make_unique<::match::ResolveStrandedFormationResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalResolveStrandedFormationErased, "/match.MatchInternal/ResolveStrandedFormation"};
 
     // --- MatchService ---
     gRpcMethodRegistry[MatchServiceGetNetworkProbePlanMessageId] = RpcMethodMeta{
@@ -1168,6 +1200,16 @@ void InitMessageInfo()
         std::make_unique<::match::ListWatchableBattlesRequest>(),
         std::make_unique<::match::ListWatchableBattlesResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListWatchableBattlesErased, "/match.MatchService/ListWatchableBattles"};
+    gRpcMethodRegistry[MatchServiceListBattleReportsMessageId] = RpcMethodMeta{
+        "MatchService", "ListBattleReports",
+        std::make_unique<::match::ListBattleReportsRequest>(),
+        std::make_unique<::match::ListBattleReportsResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListBattleReportsErased, "/match.MatchService/ListBattleReports"};
+    gRpcMethodRegistry[MatchServiceGetBattleReportMessageId] = RpcMethodMeta{
+        "MatchService", "GetBattleReport",
+        std::make_unique<::match::GetBattleReportRequest>(),
+        std::make_unique<::match::GetBattleReportResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetBattleReportErased, "/match.MatchService/GetBattleReport"};
 
     // --- PlayerInbox ---
     gRpcMethodRegistry[PlayerInboxFetchItemsMessageId] = RpcMethodMeta{
@@ -1428,6 +1470,11 @@ void InitMessageInfo()
         std::make_unique<::RemoveGemRequest>(),
         std::make_unique<::RemoveGemResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerRetrieveTemporaryItemsMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "RetrieveTemporaryItems",
+        std::make_unique<::RetrieveTemporaryItemsRequest>(),
+        std::make_unique<::RetrieveTemporaryItemsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneBattleResultClientPlayer ---
     gRpcMethodRegistry[SceneBattleResultClientPlayerGetRecentBattleResultsMessageId] = RpcMethodMeta{
@@ -1536,6 +1583,16 @@ void InitMessageInfo()
     gRpcMethodRegistry[SceneMovementClientPlayerNotifyTeleportMessageId] = RpcMethodMeta{
         "SceneMovementClientPlayer", "NotifyTeleport",
         std::make_unique<::TeleportS2C>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneMovementClientPlayerTeamFollowMessageId] = RpcMethodMeta{
+        "SceneMovementClientPlayer", "TeamFollow",
+        std::make_unique<::TeamFollowC2S>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneMovementClientPlayerNotifyTeamFollowStateMessageId] = RpcMethodMeta{
+        "SceneMovementClientPlayer", "NotifyTeamFollowState",
+        std::make_unique<::TeamFollowStateS2C>(),
         std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
 
@@ -2205,6 +2262,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceWatchBattleMessageId:
 	case MatchServiceRequestBattleTicketMessageId:
 	case MatchServiceListWatchableBattlesMessageId:
+	case MatchServiceListBattleReportsMessageId:
+	case MatchServiceGetBattleReportMessageId:
 	case ClientPlayerRankGetRankPageMessageId:
 	case ClientPlayerRankGetRankAroundMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
@@ -2225,6 +2284,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerEnhanceEquipMessageId:
 	case SceneBagClientPlayerInlayGemMessageId:
 	case SceneBagClientPlayerRemoveGemMessageId:
+	case SceneBagClientPlayerRetrieveTemporaryItemsMessageId:
 	case SceneBattleResultClientPlayerGetRecentBattleResultsMessageId:
 	case SceneBattleResultClientPlayerAckBattleResultsMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:
@@ -2239,6 +2299,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneMovementClientPlayerMoveStopMessageId:
 	case SceneMovementClientPlayerMoveSyncMessageId:
 	case SceneMovementClientPlayerTeleportRequestMessageId:
+	case SceneMovementClientPlayerTeamFollowMessageId:
 	case SceneMysteryMerchantClientPlayerGetMysteryMerchantInfoMessageId:
 	case SceneMysteryMerchantClientPlayerBuyMysteryMerchantGoodsMessageId:
 	case ScenePetClientPlayerGetPetListMessageId:

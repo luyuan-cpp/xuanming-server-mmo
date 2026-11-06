@@ -35,6 +35,10 @@ const (
 	// SafePointAgonesReconcile 是 Agones rooms 计数与 Redis 映射的周期比对。
 	SafePointAgonesReconcile = "scene_manager.agones_reconcile"
 
+	// SafePointSceneTeardownSweep 是拆除任务的周期扫描(scene_teardown_job.go)。
+	// 它停摆的表现是认领方没做完的副作用一直没人补:节点上留着没有映射的实体,Agones 名额不还。
+	SafePointSceneTeardownSweep = "scene_manager.scene_teardown_sweep"
+
 	// SafePointReleasePlayer 是跨节点交接时对老节点的异步 ReleasePlayer
 	// (含重试链)。它是**每次调用起一条**的短命 goroutine,不是常驻循环。
 	SafePointReleasePlayer = "scene_manager.release_player"

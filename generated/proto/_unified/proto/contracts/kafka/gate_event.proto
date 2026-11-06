@@ -93,6 +93,20 @@ message RedirectToGateEvent {
   int64  token_deadline = 7;   // unix seconds
 }
 
+// login 发给正在排空的 gate:按给定速率把本 gate 上已登录的连接迁到同 zone 的其他 gate
+// (docs/design/gate-drain-session-migration.md §4.3、§4.4)。
+// 每个 login 副本在排空判定的每一拍都重发一次(电平触发,gate 侧幂等);gate 在 lease_ms 内没收到新的一条就停。
+// 经 GateCommand.payload 下发,信封字段照填;target_instance_id 必填(AGENTS.md §7.2)。
+message GateDrainMigrationEvent {
+  option (OptionKafkaIngress) = true;
+  // gate:{id}:draining 的值(标记时刻,Unix 秒)。只用于日志与区分不同的排空轮次,不参与判定。
+  int64  drain_marked_at = 1;
+  // 每秒最多发起多少个迁移请求;0 = 停止迁移。
+  uint32 rate_per_second = 2;
+  // 迁移许可的有效时长,从 gate 收到本条起按 gate 自己的单调时钟计。
+  uint32 lease_ms = 3;
+}
+
 // Go service pushes a single message to a player's client via Gate.
 // Flow: Go service -> Kafka gate-{gate_id} -> Gate -> client TCP
 message PushToPlayerEvent {

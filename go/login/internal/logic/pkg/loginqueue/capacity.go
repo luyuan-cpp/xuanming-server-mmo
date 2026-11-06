@@ -31,8 +31,10 @@ import (
 // concrete implementation in svc wires GateWatcher + ZoneCapacityOverride
 // + the queue's in-flight placeholder count.
 type CapacityProvider interface {
-	// CandidatesForZone returns all healthy gates serving zoneID, in
-	// arbitrary order. PickGate / gatePicker choose by load.
+	// CandidatesForZone returns every gate serving zoneID (deduplicated by
+	// client address), in arbitrary order. Gates marked draining stay in the
+	// list with GateCandidate.Draining set (2026-11-06): FreeSlots counts
+	// their players; PickGate / gatePicker tier them via eligibleGates.
 	// 生产实现(svc 的 gateWatcherCapacityProvider)读 gate 目录的进程内 list-watch 镜像,镜像不新鲜时
 	// 回落一次 etcd 前缀读(2026-10-18 起;此前每次都直读 etcd),再加一次排空标记 MGET:
 	// dispatcher 每个非空拍只调一次;快速通道每次 AssignGate 调一到两次(FreeSlots、签票各一次);

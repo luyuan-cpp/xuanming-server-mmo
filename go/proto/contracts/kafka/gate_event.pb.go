@@ -608,6 +608,73 @@ func (x *RedirectToGateEvent) GetTokenDeadline() int64 {
 	return 0
 }
 
+// login 发给正在排空的 gate:按给定速率把本 gate 上已登录的连接迁到同 zone 的其他 gate
+// (docs/design/gate-drain-session-migration.md §4.3、§4.4)。
+// 每个 login 副本在排空判定的每一拍都重发一次(电平触发,gate 侧幂等);gate 在 lease_ms 内没收到新的一条就停。
+// 经 GateCommand.payload 下发,信封字段照填;target_instance_id 必填(AGENTS.md §7.2)。
+type GateDrainMigrationEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// gate:{id}:draining 的值(标记时刻,Unix 秒)。只用于日志与区分不同的排空轮次,不参与判定。
+	DrainMarkedAt int64 `protobuf:"varint,1,opt,name=drain_marked_at,json=drainMarkedAt,proto3" json:"drain_marked_at,omitempty"`
+	// 每秒最多发起多少个迁移请求;0 = 停止迁移。
+	RatePerSecond uint32 `protobuf:"varint,2,opt,name=rate_per_second,json=ratePerSecond,proto3" json:"rate_per_second,omitempty"`
+	// 迁移许可的有效时长,从 gate 收到本条起按 gate 自己的单调时钟计。
+	LeaseMs       uint32 `protobuf:"varint,3,opt,name=lease_ms,json=leaseMs,proto3" json:"lease_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GateDrainMigrationEvent) Reset() {
+	*x = GateDrainMigrationEvent{}
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GateDrainMigrationEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GateDrainMigrationEvent) ProtoMessage() {}
+
+func (x *GateDrainMigrationEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GateDrainMigrationEvent.ProtoReflect.Descriptor instead.
+func (*GateDrainMigrationEvent) Descriptor() ([]byte, []int) {
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GateDrainMigrationEvent) GetDrainMarkedAt() int64 {
+	if x != nil {
+		return x.DrainMarkedAt
+	}
+	return 0
+}
+
+func (x *GateDrainMigrationEvent) GetRatePerSecond() uint32 {
+	if x != nil {
+		return x.RatePerSecond
+	}
+	return 0
+}
+
+func (x *GateDrainMigrationEvent) GetLeaseMs() uint32 {
+	if x != nil {
+		return x.LeaseMs
+	}
+	return 0
+}
+
 // Go service pushes a single message to a player's client via Gate.
 // Flow: Go service -> Kafka gate-{gate_id} -> Gate -> client TCP
 type PushToPlayerEvent struct {
@@ -627,7 +694,7 @@ type PushToPlayerEvent struct {
 
 func (x *PushToPlayerEvent) Reset() {
 	*x = PushToPlayerEvent{}
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[6]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -639,7 +706,7 @@ func (x *PushToPlayerEvent) String() string {
 func (*PushToPlayerEvent) ProtoMessage() {}
 
 func (x *PushToPlayerEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[6]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -652,7 +719,7 @@ func (x *PushToPlayerEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushToPlayerEvent.ProtoReflect.Descriptor instead.
 func (*PushToPlayerEvent) Descriptor() ([]byte, []int) {
-	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{6}
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PushToPlayerEvent) GetSessionId() uint32 {
@@ -697,7 +764,7 @@ type BroadcastToPlayersEvent struct {
 
 func (x *BroadcastToPlayersEvent) Reset() {
 	*x = BroadcastToPlayersEvent{}
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[7]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -709,7 +776,7 @@ func (x *BroadcastToPlayersEvent) String() string {
 func (*BroadcastToPlayersEvent) ProtoMessage() {}
 
 func (x *BroadcastToPlayersEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[7]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,7 +789,7 @@ func (x *BroadcastToPlayersEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastToPlayersEvent.ProtoReflect.Descriptor instead.
 func (*BroadcastToPlayersEvent) Descriptor() ([]byte, []int) {
-	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{7}
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BroadcastToPlayersEvent) GetSessionList() []uint32 {
@@ -773,7 +840,7 @@ type BroadcastToSceneEvent struct {
 
 func (x *BroadcastToSceneEvent) Reset() {
 	*x = BroadcastToSceneEvent{}
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[8]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -785,7 +852,7 @@ func (x *BroadcastToSceneEvent) String() string {
 func (*BroadcastToSceneEvent) ProtoMessage() {}
 
 func (x *BroadcastToSceneEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[8]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -798,7 +865,7 @@ func (x *BroadcastToSceneEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastToSceneEvent.ProtoReflect.Descriptor instead.
 func (*BroadcastToSceneEvent) Descriptor() ([]byte, []int) {
-	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{8}
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *BroadcastToSceneEvent) GetSceneId() uint64 {
@@ -826,7 +893,7 @@ type BroadcastToAllEvent struct {
 
 func (x *BroadcastToAllEvent) Reset() {
 	*x = BroadcastToAllEvent{}
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[9]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -838,7 +905,7 @@ func (x *BroadcastToAllEvent) String() string {
 func (*BroadcastToAllEvent) ProtoMessage() {}
 
 func (x *BroadcastToAllEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[9]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -851,7 +918,7 @@ func (x *BroadcastToAllEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastToAllEvent.ProtoReflect.Descriptor instead.
 func (*BroadcastToAllEvent) Descriptor() ([]byte, []int) {
-	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{9}
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BroadcastToAllEvent) GetMessageContent() *base.MessageContent {
@@ -892,7 +959,7 @@ type SpectateFrameEvent struct {
 
 func (x *SpectateFrameEvent) Reset() {
 	*x = SpectateFrameEvent{}
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[10]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +971,7 @@ func (x *SpectateFrameEvent) String() string {
 func (*SpectateFrameEvent) ProtoMessage() {}
 
 func (x *SpectateFrameEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[10]
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +984,7 @@ func (x *SpectateFrameEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpectateFrameEvent.ProtoReflect.Descriptor instead.
 func (*SpectateFrameEvent) Descriptor() ([]byte, []int) {
-	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{10}
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SpectateFrameEvent) GetBattleId() uint64 {
@@ -1030,7 +1097,11 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\x10target_gate_port\x18\x04 \x01(\rR\x0etargetGatePort\x12#\n" +
 	"\rtoken_payload\x18\x05 \x01(\fR\ftokenPayload\x12'\n" +
 	"\x0ftoken_signature\x18\x06 \x01(\fR\x0etokenSignature\x12%\n" +
-	"\x0etoken_deadline\x18\a \x01(\x03R\rtokenDeadline:\x05\x88\xe6\xd5\x02\x01\"\x90\x01\n" +
+	"\x0etoken_deadline\x18\a \x01(\x03R\rtokenDeadline:\x05\x88\xe6\xd5\x02\x01\"\x8b\x01\n" +
+	"\x17GateDrainMigrationEvent\x12&\n" +
+	"\x0fdrain_marked_at\x18\x01 \x01(\x03R\rdrainMarkedAt\x12&\n" +
+	"\x0frate_per_second\x18\x02 \x01(\rR\rratePerSecond\x12\x19\n" +
+	"\blease_ms\x18\x03 \x01(\rR\aleaseMs:\x05\x88\xe6\xd5\x02\x01\"\x90\x01\n" +
 	"\x11PushToPlayerEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x128\n" +
@@ -1078,7 +1149,7 @@ func file_proto_contracts_kafka_gate_event_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_contracts_kafka_gate_event_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_contracts_kafka_gate_event_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_contracts_kafka_gate_event_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_contracts_kafka_gate_event_proto_goTypes = []any{
 	(ESpectateFrameKind)(0),         // 0: contracts.kafka.eSpectateFrameKind
 	(*RoutePlayerEvent)(nil),        // 1: contracts.kafka.RoutePlayerEvent
@@ -1087,18 +1158,19 @@ var file_proto_contracts_kafka_gate_event_proto_goTypes = []any{
 	(*PlayerLeaseExpiredEvent)(nil), // 4: contracts.kafka.PlayerLeaseExpiredEvent
 	(*BindSessionEvent)(nil),        // 5: contracts.kafka.BindSessionEvent
 	(*RedirectToGateEvent)(nil),     // 6: contracts.kafka.RedirectToGateEvent
-	(*PushToPlayerEvent)(nil),       // 7: contracts.kafka.PushToPlayerEvent
-	(*BroadcastToPlayersEvent)(nil), // 8: contracts.kafka.BroadcastToPlayersEvent
-	(*BroadcastToSceneEvent)(nil),   // 9: contracts.kafka.BroadcastToSceneEvent
-	(*BroadcastToAllEvent)(nil),     // 10: contracts.kafka.BroadcastToAllEvent
-	(*SpectateFrameEvent)(nil),      // 11: contracts.kafka.SpectateFrameEvent
-	(*base.MessageContent)(nil),     // 12: MessageContent
+	(*GateDrainMigrationEvent)(nil), // 7: contracts.kafka.GateDrainMigrationEvent
+	(*PushToPlayerEvent)(nil),       // 8: contracts.kafka.PushToPlayerEvent
+	(*BroadcastToPlayersEvent)(nil), // 9: contracts.kafka.BroadcastToPlayersEvent
+	(*BroadcastToSceneEvent)(nil),   // 10: contracts.kafka.BroadcastToSceneEvent
+	(*BroadcastToAllEvent)(nil),     // 11: contracts.kafka.BroadcastToAllEvent
+	(*SpectateFrameEvent)(nil),      // 12: contracts.kafka.SpectateFrameEvent
+	(*base.MessageContent)(nil),     // 13: MessageContent
 }
 var file_proto_contracts_kafka_gate_event_proto_depIdxs = []int32{
-	12, // 0: contracts.kafka.PushToPlayerEvent.message_content:type_name -> MessageContent
-	12, // 1: contracts.kafka.BroadcastToPlayersEvent.message_content:type_name -> MessageContent
-	12, // 2: contracts.kafka.BroadcastToSceneEvent.message_content:type_name -> MessageContent
-	12, // 3: contracts.kafka.BroadcastToAllEvent.message_content:type_name -> MessageContent
+	13, // 0: contracts.kafka.PushToPlayerEvent.message_content:type_name -> MessageContent
+	13, // 1: contracts.kafka.BroadcastToPlayersEvent.message_content:type_name -> MessageContent
+	13, // 2: contracts.kafka.BroadcastToSceneEvent.message_content:type_name -> MessageContent
+	13, // 3: contracts.kafka.BroadcastToAllEvent.message_content:type_name -> MessageContent
 	0,  // 4: contracts.kafka.SpectateFrameEvent.kind:type_name -> contracts.kafka.eSpectateFrameKind
 	5,  // [5:5] is the sub-list for method output_type
 	5,  // [5:5] is the sub-list for method input_type
@@ -1118,7 +1190,7 @@ func file_proto_contracts_kafka_gate_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_contracts_kafka_gate_event_proto_rawDesc), len(file_proto_contracts_kafka_gate_event_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

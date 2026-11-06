@@ -60,9 +60,10 @@ func ClearGateDraining(ctx context.Context, rdb *redis.Client, nodeID uint32) er
 // DrainingGates 批量查询候选集里哪些 gate 正在排空。
 //
 // 一次 MGET 问完而不是逐个查:分配是登录热路径,N 次串行 Redis 往返会直接
-// 体现在登录延迟上(压测口径见 CLAUDE.md §6)。
+// 体现在登录延迟上(压测口径见 CLAUDE.md §6)。选 gate 的热路径不直接调它,经 DrainMarkCache
+// 按 zone 缓存一次结果(2026-11-05,缺口清单第 31 条),同一 zone 每个刷新周期只查一次。
 //
-// 查询失败时返回 nil(视作"没人在排空")而不是报错:见 FilterDrainingGates
+// 查询失败时返回 nil(视作"没人在排空")而不是报错:见 MarkDrainingGates
 // 的注释,这条路径的失败方向必须是**放行**。
 func DrainingGates(ctx context.Context, rdb *redis.Client, candidates []GateCandidate) map[uint32]bool {
 	if rdb == nil || len(candidates) == 0 {
@@ -89,30 +90,23 @@ func DrainingGates(ctx context.Context, rdb *redis.Client, candidates []GateCand
 	return draining
 }
 
-// FilterDrainingGates 从候选集里剔除正在排空的 gate。
+// MarkDrainingGates 就地给候选打排空标记(GateCandidate.Draining),不剔除。
 //
-// **全部都在排空时返回原集合**,不返回空。
+// 排空中的 gate 留在候选集里有两个原因(2026-11-06 起;此前这里直接剔除):
+//   - 容量记账(FreeSlots)要数到它上面还在线的人。剔掉之后区级准入少算在线,排空期间会多放人进来;
+//   - 挑哪台由 eligibleGates 一次分档决定(规则在 shared/gatepick.Eligible):有完全合格的 gate 时不会挑到它;
+//     没有时它排在停写的 gate 前面 —— 它连得上,停写的多半连不上。整个 zone 都标了排空时照样能登录,
+//     比拒绝所有登录好(这多半是误操作,玩家稍后随排空流程改派),回落计入 login_gate_pick_fallback_total{reason="draining"}。
 //
-// 这一条是刻意的:那意味着运维把整个 zone 的 gate 都标了排空。此时拒绝所有
-// 登录,比把玩家分到一台待缩容的 gate 更糟 —— 后者只是稍后会被改派,前者是
-// 直接进不去游戏。同时打 ERROR 让这个明显的误操作可见。
-func FilterDrainingGates(candidates []GateCandidate, draining map[uint32]bool) []GateCandidate {
-	if len(draining) == 0 || len(candidates) == 0 {
-		return candidates
+// draining 为空时什么都不做;查询失败时 DrainingGates 返回 nil,等于没人在排空(放行)。
+// candidates 必须是调用方自己的切片(buildGateCandidates 每次新建),本函数会改它的元素。
+func MarkDrainingGates(candidates []GateCandidate, draining map[uint32]bool) {
+	if len(draining) == 0 {
+		return
 	}
-
-	kept := make([]GateCandidate, 0, len(candidates))
-	for _, c := range candidates {
-		if !draining[c.NodeID] {
-			kept = append(kept, c)
+	for i := range candidates {
+		if draining[candidates[i].NodeID] {
+			candidates[i].Draining = true
 		}
 	}
-
-	if len(kept) == 0 {
-		logx.Errorf("[GateDrain] every gate candidate (%d) is marked draining; ignoring the "+
-			"marks so players can still log in — check whether a scale-in marked the whole "+
-			"zone by mistake", len(candidates))
-		return candidates
-	}
-	return kept
 }

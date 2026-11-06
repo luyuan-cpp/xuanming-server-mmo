@@ -148,7 +148,7 @@ func TestRankMailChainFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	rpc := grpc.NewServer(grpc.UnaryInterceptor(domainhost.Guard(server.ClientMethods(), 3*time.Second)))
+	rpc := grpc.NewServer(grpc.UnaryInterceptor(domainhost.Guard(3 * time.Second)))
 	rankpb.RegisterRankAdminServer(rpc, server.New(repo, auth, nil))
 	serveDone := make(chan struct{})
 	var serveErr error

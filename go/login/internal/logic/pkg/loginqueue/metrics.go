@@ -114,7 +114,7 @@ var (
 	//     因为令牌与条目同为 1h),也含 meta 类型损坏、meta 的 zone 与令牌不符;zone 一律取自令牌(此前 token 索引
 	//     不在时记 unknown;令牌里的 zone 为 0 时仍记 unknown)。
 	//   - "ttl" 只表示排队令牌超过 24h 的绝对过期(loginqueue.queueTokenMaxAge)。
-	//   - "queue_gone":meta 在、没有 admitted_at、又不在队列(来源见 Queue.lookupStateScript:整个 zone 空闲超过
+	//   - "queue_gone":meta 在、没有 admitted_at、又不在队列(来源见 Queue.lookupScript:整个 zone 空闲超过
 	//     QueueEntryTTL 后队列键先到期、人工 ZREM / DEL 队列键、排队开着时混跑新旧版)。持续非零说明有人在排队开着时
 	//     混跑新旧版,或手工动了队列键。与其它原因一样不预置标签(go-zero 指标开关打开前写的样本会被丢弃),面板用
 	//     `or vector(0)`。
@@ -160,7 +160,7 @@ const (
 	// ExpireReasonAdmitWindowPassed:放行槽已被取走或已过期之后再查(见 Queue.Lookup)。
 	ExpireReasonAdmitWindowPassed = "admit_window_passed"
 
-	// ExpireReasonQueueGone:meta 在、没有 admitted_at、又不在队列(2026-10-18 起,见 Queue.Lookup 与 lookupStateScript)。
+	// ExpireReasonQueueGone:meta 在、没有 admitted_at、又不在队列(2026-10-18 起,见 Queue.Lookup 与 lookupScript)。
 	// 此前这种形状回「排队中、名次 0」的在途窗口。
 	ExpireReasonQueueGone = "queue_gone"
 )

@@ -1,6 +1,7 @@
 #include "bag_service.h"
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <tuple>
 #include <type_traits>
@@ -10,6 +11,7 @@
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/macros/return_define.h"
 #include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetInvalidBundle — 按 guid 扣出的错误码
+#include "table/proto/tip/bag_error_tip.pb.h"   // kBagItemNotStacked — 两包都放不下(结算日志限频)
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/item_table.h"
 
@@ -133,7 +135,7 @@ uint32_t BagService::AddItem(
 	// 不能再回读发号器的"上一个号"—— 同一个发号器还在铸 tx_id / snapshot_id,
 	// 而且并堆 / 沿用预设 guid 的路径根本不铸号,残值属于上一件物品。
 	std::vector<Guid> writtenGuids;
-	// evicted:临时格满了时被先进先出挤掉的实例(其余包恒为空)。
+	// evicted:配了淘汰策略的包为腾位挤掉的实例(2026-11-05 起四个固定包都满即拒,生产路径恒为空)。
 	std::vector<DestroyedInstance> evicted;
 	// 三个服务入口都向同一候选提交传入装备初始化回调。
 	auto result = bag.AddItem(param, &writtenGuids, &evicted, InstalledItemInstanceInitializer());
@@ -220,6 +222,40 @@ namespace
     private:
         const IEvictionPolicy& source_;
     };
+
+    // 两包都放不下而整批被拒的连续次数(按需状态,docs/design/ecs-component-access-rules.md):
+    //   * 只在本文件读写;不入库、不跨进程,随实体销毁(重登 / 换节点之后从 0 数起);
+    //   * 唯一创建入口 NoteGrantOverflowRejected(第一次因两包都放不下而整批拒绝时);这名玩家的下一笔
+    //     整批发放成功时摘掉,下一段卡住又从「首次」打起;
+    //   * 只用于 metric=bag_grant_overflow_rejected 限频,以及战斗结算执行器给收件箱的 DEFER 原因分类(这一次调用里它涨了
+    //     = 两包都放不下,PlayerBattleSystem::ApplyInboxSettlement),不改变任何发放 / 结算结果。
+    //     状态挂在玩家实体上,没有进程内跨玩家的状态。
+    struct GrantOverflowRejectStreakComp
+    {
+        uint32_t rejections{0};
+    };
+
+    // 两包都放不下(Bag::AddItems 静默回 kBagItemNotStacked)时记一次:按 BagService::IsGrantOverflowWarnDue 的节拍打 WARN,
+    // 其余打 DEBUG。不带调用栈:这是玩家自己能造出来、能维持很久的状态,不是故障。
+    void NoteGrantOverflowRejected(entt::entity player, uint64_t playerId, uint64_t correlationId, const Bag& temporary)
+    {
+        auto& streak = tlsEcs.actorRegistry.get_or_emplace<GrantOverflowRejectStreakComp>(player);
+        if (streak.rejections < std::numeric_limits<uint32_t>::max()) ++streak.rejections;
+        if (BagService::IsGrantOverflowWarnDue(streak.rejections))
+        {
+            LOG_WARN << "metric=bag_grant_overflow_rejected player_id=" << playerId << " correlation_id=" << correlationId
+                     << " consecutive_rejections=" << streak.rejections
+                     << " temporary_used=" << temporary.OccupiedGridCount() << "/" << temporary.Capacity()
+                     << ";the inventory and the temporary bag both refused the whole grant (temporary bag never evicts), nothing applied;"
+                     << " logged on the first rejection and then every " << BagService::kGrantOverflowWarnEveryRejections
+                     << " consecutive rejections";
+        }
+        else
+        {
+            LOG_DEBUG << "[BagService] grant refused again, both bags still full: player_id=" << playerId
+                      << " correlation_id=" << correlationId << " consecutive_rejections=" << streak.rejections;
+        }
+    }
 }
 
 uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
@@ -297,6 +333,12 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
             if (!sameSource()) return kInvalidParameter;
             evicted.clear(); written.clear();
             result = nextTemporary.AddItems(gained, &evicted, &written, InstalledItemInstanceInitializer());
+            // 临时格满了不淘汰(2026-11-05 起,审计 cpp-economy#2):整笔在任何副作用之前拒绝,候选一起丢掉,
+            // 消耗、beforeCommit(货币)与两个包都没动;来源保留(战斗结算整笔延后,玩家取回腾位后重试即应用)。
+            // 两包都放不下是玩家能造出来的状态,按玩家限频打 WARN(首次,之后每 kGrantOverflowWarnEveryRejections 次);
+            // 其余失败码是故障,Bag::AddItems 里已按 ERROR 打过,这里不再记。
+            if (result == kBagItemNotStacked)
+                NoteGrantOverflowRejected(playerEntity, playerId, correlationId, temporary);
         }
         if (result != kSuccess) return result;
         if (written.size() != gained.size()) return kInvalidParameter;
@@ -320,7 +362,17 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
         LogItemsCreated(playerEntity, written[i], config, count, TX_ITEM_AWARD, correlationId, extra);
         AnomalyDetector::RecordItemGain(playerEntity, config, count);
     }
+    // 这一笔整批发放成功:「连续放不下」到此为止,下一段卡住重新从首次打 WARN(GrantOverflowRejectStreakComp 的说明)。
+    if (tlsEcs.actorRegistry.any_of<GrantOverflowRejectStreakComp>(playerEntity))
+        tlsEcs.actorRegistry.remove<GrantOverflowRejectStreakComp>(playerEntity);
     return kSuccess;
+}
+
+uint32_t BagService::ConsecutiveGrantOverflowRejections(entt::entity playerEntity)
+{
+    if (!tlsEcs.actorRegistry.valid(playerEntity)) return 0;
+    const auto* streak = tlsEcs.actorRegistry.try_get<GrantOverflowRejectStreakComp>(playerEntity);
+    return streak != nullptr ? streak->rejections : 0;
 }
 
 uint64_t BagService::MaxNewInstancesFor(const ItemCountMap &itemsToAdd)
@@ -663,4 +715,50 @@ uint32_t BagService::SortByPlayerRequest(
 	// 编排(冻结检查 + 退役实例写流水)全在 MergeAndCompact 里,这里只负责
 	// 把"这是玩家的显式意图"这件事翻译成 policy,不重复任何逻辑。
 	return MergeAndCompact(playerEntity, bag, CompactPolicy::kMergeAndReorder, changedOut);
+}
+
+uint32_t BagService::RetrieveFromTemporary(
+	entt::entity playerEntity,
+	const std::vector<Guid> &guids)
+{
+	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
+	// 搬运改的是两个要随存盘落盘的包。归属交接在途时动它,放行后源端实体不存盘销毁,这次搬运就白做了;
+	// 理由同 MergeAndCompact。玩法入口已先判过、回了玩家看得懂的码,这里是本函数不依赖调用方的那一道。
+	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	{
+		LOG_WARN << "BagService::RetrieveFromTemporary rejected: player frozen for cross-zone migration. player_id="
+				 << tlsEcs.GetPlayerId(playerEntity);
+		return PrintStackAndReturnError(kInvalidParameter);
+	}
+	auto *bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+	if (bags == nullptr)
+	{
+		LOG_ERROR << "BagService::RetrieveFromTemporary: player has no bags component. player_id="
+				  << tlsEcs.GetPlayerId(playerEntity);
+		return PrintStackAndReturnError(kInvalidParameter);
+	}
+	Bag &temporary = bags->bags[kTemporary];
+	Bag &inventory = bags->bags[kInventory];
+	if (!temporary.IsLayerConsistent() || !inventory.IsLayerConsistent())
+	{
+		LOG_ERROR << "BagService::RetrieveFromTemporary: bag layers are inconsistent; nothing moved. player_id="
+				  << tlsEcs.GetPlayerId(playerEntity);
+		return PrintStackAndReturnError(kInvalidParameter);
+	}
+
+	// ── 两包候选上全或无地搬,失败两包都不动、不落任何流水 ────────────────
+	std::vector<DestroyedInstance> absorbed;
+	RETURN_ON_ERROR(temporary.MoveInstancesTo(inventory, guids, &absorbed));
+
+	// ── 提交之后:只有整堆并进别的堆的原 guid 退役,落数量 0 的销毁流水(整理同口径) ──
+	// 其余实例的身份没变,只是换了个包:流水本来就不记包位置,不写一对伪造的「销毁 + 获得」。
+	for (const auto &item : absorbed)
+	{
+		TransactionLogSystem::LogItemDestroy(playerEntity, item.guid, item.configId, item.size, 0,
+											 "{\"source\":\"temporary-retrieve\"}");
+	}
+	LOG_INFO << "BagService::RetrieveFromTemporary: moved " << guids.size() << " instance(s) from the temporary bag"
+			 << " into the inventory, " << absorbed.size() << " merged into existing stacks. player_id="
+			 << tlsEcs.GetPlayerId(playerEntity);
+	return kSuccess;
 }

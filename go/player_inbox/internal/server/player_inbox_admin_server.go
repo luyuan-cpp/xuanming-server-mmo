@@ -19,6 +19,7 @@ type AdminStore interface {
 	List(ctx context.Context, req *inboxpb.ListPlayerInboxItemsRequest) (*inboxpb.ListPlayerInboxItemsResponse, error)
 	Lookup(ctx context.Context, req *inboxpb.LookupPlayerInboxRequest) (*inboxpb.LookupPlayerInboxResponse, error)
 	ReconcilePlayer(ctx context.Context, req *inboxpb.ReconcilePlayerInboxRequest, ledgers inbox.LedgerReader) (*inboxpb.ReconcilePlayerInboxResponse, error)
+	ItemGainBlocks(ctx context.Context, playerID uint64, blocks inbox.ItemGainBlockReader) (*inboxpb.GetPlayerItemGainBlocksResponse, error)
 }
 
 // AdminServer 实现 inboxpb.PlayerInboxAdminServer。口令由 AdminAuthInterceptor 在进入这里之前校验。
@@ -27,12 +28,15 @@ type AdminServer struct {
 	store    AdminStore
 	sanction logic.GmSanctionDeps
 	ledgers  inbox.LedgerReader
+	blocks   inbox.ItemGainBlockReader
 	budget   time.Duration
 }
 
-// NewAdminServer。sanction 是 GM 处置的依赖;ledgers 是读已落盘账本的适配器(对账与 VoidItem 强制模式共用)。
-func NewAdminServer(store AdminStore, sanction logic.GmSanctionDeps, ledgers inbox.LedgerReader, budget time.Duration) *AdminServer {
-	return &AdminServer{store: store, sanction: sanction, ledgers: ledgers, budget: budget}
+// NewAdminServer。sanction 是 GM 处置的依赖;ledgers 是读已落盘账本的适配器(对账与 VoidItem 强制模式共用);
+// blocks 是读已落盘物品获取封禁表的适配器(GetItemGainBlocks)。
+func NewAdminServer(store AdminStore, sanction logic.GmSanctionDeps, ledgers inbox.LedgerReader, blocks inbox.ItemGainBlockReader,
+	budget time.Duration) *AdminServer {
+	return &AdminServer{store: store, sanction: sanction, ledgers: ledgers, blocks: blocks, budget: budget}
 }
 
 // GmSanctionPlayer GM 处置入箱(幂等,设计 §6.1)。
@@ -118,6 +122,20 @@ func (s *AdminServer) ReconcilePlayer(ctx context.Context, in *inboxpb.Reconcile
 		logx.WithContext(ctx).Errorf("[player_inbox] ReconcilePlayer failed player=%d domain=%d %s: %v",
 			in.GetPlayerId(), in.GetDomain(), callerIdentity(ctx), err)
 		return &inboxpb.ReconcilePlayerInboxResponse{ErrorMessage: storeUnavailable()}, nil
+	}
+	return resp, nil
+}
+
+// GetItemGainBlocks 查一名玩家的单玩家物品获取封禁:已落盘的本人封禁表,加上还没生效的封禁 / 解封单(设计 §2.2)。只读。
+// 读收件箱库或已落盘存档失败都 in-band 回 kPlayerInboxStoreUnavailable(可重试),gRPC 层不报错。
+func (s *AdminServer) GetItemGainBlocks(ctx context.Context, in *inboxpb.GetPlayerItemGainBlocksRequest) (*inboxpb.GetPlayerItemGainBlocksResponse, error) {
+	ctx, cancel := withBudget(ctx, s.budget)
+	defer cancel()
+	resp, err := s.store.ItemGainBlocks(ctx, in.GetPlayerId(), s.blocks)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("[player_inbox] GetItemGainBlocks failed player=%d %s: %v",
+			in.GetPlayerId(), callerIdentity(ctx), err)
+		return &inboxpb.GetPlayerItemGainBlocksResponse{ErrorMessage: storeUnavailable(), PlayerId: in.GetPlayerId()}, nil
 	}
 	return resp, nil
 }

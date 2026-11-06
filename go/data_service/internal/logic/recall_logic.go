@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -14,6 +16,7 @@ import (
 	"data_service/internal/svc"
 
 	assetpb "proto/common/asset"
+	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/assetop"
 	"shared/currencytype"
@@ -77,12 +80,29 @@ type BatchRecallResp struct {
 	AmountDebt      uint64
 	AmountShortfall uint64
 	CancelledMs     uint64
+	// NeedsReview 只有预览回:没进自动回收、要人工核对的流水,按 (玩家, tx_id) 排序。
+	NeedsReview []RecallReviewResult
+}
+
+// RecallReviewResult 是一条待人工核对的流水。Amount 是这条流水记的收益,不是要扣的数:它没有已提交的证据。
+type RecallReviewResult struct {
+	PlayerID      uint64
+	TxID          uint64
+	CorrelationID uint64
+	TxType        uint32
+	Amount        uint64
+	ItemUUID      uint64
+	Timestamp     uint64
+	Reason        dspb.RecallReviewReason
 }
 
 const (
 	batchRecallQueryLimit uint32 = 10000
 	// maxRecallPlayers 是一次请求的玩家名单上限:每名玩家一次流水查询。再多请按时间窗走不带名单的查询。
+	// 算计划时要核已提交账本的玩家(候选里带指令号的收益玩家)也按它封顶:每人一次账本读、一次同指令流水查询。
 	maxRecallPlayers = 1000
+	// maxRecallSourceRows 是一批的同指令流水(含时间窗外的重投流水)上限:冻结时它们在一个事务里写进 gm_recall_source。
+	maxRecallSourceRows = int(batchRecallQueryLimit)
 	// recallOperatorMaxRunes、recallReasonMaxRunes 和人工终结同口径:操作人 64 字,理由 191 字。
 	recallOperatorMaxRunes = 64
 	recallReasonMaxRunes   = 191
@@ -172,11 +192,12 @@ func BatchRecallItems(ctx context.Context, svcCtx *svc.ServiceContext, req *Batc
 		return rejectTruncatedRecall(ctx, svcCtx, req, candidateTotal, len(allRows))
 	}
 
-	consumed, err := svcCtx.Recall.ConsumedSources(ctx, recallSourceTxIDs(filter, allRows))
-	if err != nil {
-		return &BatchRecallResp{ErrorCode: constants.ErrCodeSnapshotDBError}, fmt.Errorf("read consumed recall sources: %w", err)
+	// 流水只是线索:计划的证据是玩家已提交的资产账本(recall_plan.go 文件头)。
+	in, err := loadRecallInputs(ctx, svcCtx, filter, allRows)
+	var plan *recallPlan
+	if err == nil {
+		plan, err = buildRecallPlan(filter, in)
 	}
-	plan, err := buildRecallPlan(filter, allRows, consumed)
 	if errors.Is(err, errRecallPlanTooLarge) {
 		logx.Errorf("[BatchRecall] plan rejected: %v", err)
 		return rejectRecallPlan(ctx, svcCtx, req, candidateTotal, constants.ErrCodeResultTruncated, "PLAN_TOO_LARGE")
@@ -186,17 +207,18 @@ func BatchRecallItems(ctx context.Context, svcCtx *svc.ServiceContext, req *Batc
 	}
 
 	if req.DryRun {
-		logx.Infof("[BatchRecall] dry_run complete: candidates=%d eligible=%d ops=%d", candidateTotal, plan.SourceRows, len(plan.Ops))
+		logx.Infof("[BatchRecall] dry_run complete: candidates=%d eligible=%d ops=%d needs_review=%d",
+			candidateTotal, plan.SourceRows, len(plan.Ops), len(plan.Reviews))
 		return previewRecallResp(candidateTotal, plan), nil
 	}
 	if plan.DigestHex() != req.ExpectedPlanDigest {
-		// 人审过的不是这份计划。流水晚到、别的批次消费过、过滤条件变了都会走到这里:重新预览。
+		// 人审过的不是这份计划。流水晚到、别的批次消费过、已提交账本的证据变了、过滤条件变了都会走到这里:重新预览。
 		logx.Errorf("[BatchRecall] REJECTED: plan changed since review request_id=%d expected=%s actual=%s operator=%s",
 			req.RequestID, req.ExpectedPlanDigest, plan.DigestHex(), req.Operator)
 		return rejectRecallPlan(ctx, svcCtx, req, candidateTotal, constants.ErrCodeRecallPlanChanged, "PLAN_CHANGED")
 	}
 	if len(plan.Ops) == 0 {
-		// 人审过的就是空计划:都不是收益,或者都已经回收过。不写批次,也不回 0:0 说的是这批全额回收了,这里什么都没动。
+		// 人审过的就是空计划:都不是收益、都已经回收过,或者都待人工核对。不写批次,也不回 0:0 说的是这批全额回收了,这里什么都没动。
 		return &BatchRecallResp{ErrorCode: constants.ErrCodeRecallNothingToRecall, TotalMatched: clampUint32(candidateTotal), PlanDigest: plan.DigestHex(), RequestID: req.RequestID}, nil
 	}
 	return freezeRecallPlan(ctx, svcCtx, req, plan)
@@ -266,6 +288,54 @@ func queryRecallCandidates(ctx context.Context, svcCtx *svc.ServiceContext, req 
 	return allRows, candidateTotal, truncated, nil
 }
 
+// loadRecallInputs 取齐算计划要的证据:候选里每名带指令号的收益玩家读一次已提交的资产账本(player_store,
+// 和 GetPlayerAssetOpLedger 同一种读法),按这些指令号查一次不限时间窗的同指令流水,最后按 tx_id 查哪些已被回收过。
+//
+// 任何一次读失败整批失败(fail-closed):少一份证据,算出来的就不是人审的那份计划。这些读都不加锁;
+// 执行时重算一遍、和预览比摘要,中间证据变了就回 PLAN_CHANGED。
+func loadRecallInputs(ctx context.Context, svcCtx *svc.ServiceContext, filter recallFilter, rows []*store.TransactionLogRow) (recallInputs, error) {
+	in := recallInputs{Rows: rows, Ledgers: make(map[uint64]PlayerStoreLedger)}
+	byPlayer := recallInstructionIDs(filter, rows)
+	if len(byPlayer) > maxRecallPlayers {
+		return in, fmt.Errorf("%w: %d players need a committed ledger read, limit %d", errRecallPlanTooLarge, len(byPlayer), maxRecallPlayers)
+	}
+	players := make([]uint64, 0, len(byPlayer))
+	for playerID := range byPlayer {
+		players = append(players, playerID)
+	}
+	slices.Sort(players)
+	for _, playerID := range players {
+		ledger, err := GetPlayerStoreLedger(ctx, svcCtx, playerID)
+		if err != nil {
+			return in, fmt.Errorf("read committed asset ledger for player %d: %w", playerID, err)
+		}
+		in.Ledgers[playerID] = ledger
+		// 不带时间窗和 tx_type:同一条指令重投再应用时,多出来的那条流水可能落在窗外,要和窗内的一起消费。
+		siblings, total, err := svcCtx.TxLogStore.QueryLog(ctx, &store.TransactionLogQuery{
+			PlayerID:       playerID,
+			CorrelationIDs: byPlayer[playerID],
+			ItemConfigID:   filter.ItemConfigID,
+			CurrencyType:   filter.CurrencyType,
+			ExactCurrency:  filter.Kind == dspb.RecallKind_RECALL_KIND_CURRENCY,
+			Limit:          batchRecallQueryLimit,
+		})
+		if err != nil {
+			return in, fmt.Errorf("query instruction rows for player %d: %w", playerID, err)
+		}
+		if uint64(total) != uint64(len(siblings)) || len(in.Siblings)+len(siblings) > maxRecallSourceRows {
+			return in, fmt.Errorf("%w: instruction rows exceed %d", errRecallPlanTooLarge, maxRecallSourceRows)
+		}
+		in.Siblings = append(in.Siblings, siblings...)
+	}
+	txIDs := append(recallSourceTxIDs(filter, rows), recallSourceTxIDs(filter, in.Siblings)...)
+	consumed, err := svcCtx.Recall.ConsumedSources(ctx, txIDs)
+	if err != nil {
+		return in, fmt.Errorf("read consumed recall sources: %w", err)
+	}
+	in.Consumed = consumed
+	return in, nil
+}
+
 // rejectTruncatedRecall:不允许把分页误报成完整集合,更不允许对不完整集合执行回收。
 func rejectTruncatedRecall(ctx context.Context, svcCtx *svc.ServiceContext, req *BatchRecallReq, candidateTotal uint64, returned int) (*BatchRecallResp, error) {
 	resp := &BatchRecallResp{
@@ -328,9 +398,19 @@ func previewRecallResp(candidateTotal uint64, plan *recallPlan) *BatchRecallResp
 		PlanDigest:      plan.DigestHex(),
 		AmountRequested: plan.AmountRequested,
 		Results:         make([]RecallResult, 0, len(plan.Ops)),
+		NeedsReview:     make([]RecallReviewResult, 0, len(plan.Reviews)),
 	}
 	for _, op := range plan.Ops {
 		resp.Results = append(resp.Results, RecallResult{PlayerID: op.PlayerID, ItemConfigID: op.ItemConfigID, CurrencyType: op.CurrencyType, Amount: op.Requested})
+	}
+	for _, review := range plan.Reviews {
+		row := review.Row
+		amount := uint64(row.ItemQuantity)
+		if row.ItemConfigID == 0 {
+			amount = uint64(row.CurrencyDelta) // 进得了待核对的都是收益行,货币 delta 恒为正
+		}
+		resp.NeedsReview = append(resp.NeedsReview, RecallReviewResult{PlayerID: row.ToPlayer, TxID: row.TxID, CorrelationID: row.CorrelationID,
+			TxType: row.TxType, Amount: amount, ItemUUID: row.ItemUUID, Timestamp: row.Timestamp, Reason: review.Reason})
 	}
 	return resp
 }
@@ -494,23 +574,162 @@ func CancelRecallBatch(ctx context.Context, svcCtx *svc.ServiceContext, requestI
 	return GetRecallBatch(ctx, svcCtx, requestID)
 }
 
-// ResolveRecallOp 人工终结一行卡死的指令。判定依据是 scene 流水的 correlation_id,这里不查证据。
-func ResolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string) (bool, uint32, error) {
+// ── ResolveRecallOp ────────────────────────────────────────────
+//
+// 人工终结一行卡死的回收指令(scene 反复回 UNKNOWN,或一直投不出去)。原来只凭运维查流水选结局,接口不查证据;
+// 选 REJECTED / ABORTED 时 settle 会把这一行的流水从 gm_recall_source 放回去,scene 其实扣过的话下一批会再扣一遍。
+//
+// 证据只认这名玩家已提交的资产账本,判据与 trade、guild 的 assetopfix 同一份(assetop.JudgeManual);流水只是线索:
+// 提交之后发送失败、提交成功而回包丢失时崩溃,已提交的扣除都可能没有流水。放行按回收自己的结局对表(recallManualAllows)。
+
+// RecallResolveResult 是一次人工终结的回答。
+type RecallResolveResult struct {
+	ErrorCode uint32
+	// Resolved:本次终结了这一行。
+	Resolved bool
+	// Status 是这一行的 GmRecallOpStatus:终结了是新状态;行不是 PENDING 时是读到的现状;其余是读证据时的 PENDING。
+	Status uint32
+	// Evidence 是证据说明(recallEvidenceOf),读过已提交账本才有。
+	Evidence string
+}
+
+// recallManualStatuses 是 ResolveRecallOp 收的三种 final_status(store.RecallManualFinal 的定义域),给证据说明列可选项用。
+var recallManualStatuses = [...]uint32{
+	uint32(dbpb.GmRecallOpStatus_GM_RECALL_OP_REJECTED),
+	uint32(dbpb.GmRecallOpStatus_GM_RECALL_OP_ABORTED),
+	uint32(dbpb.GmRecallOpStatus_GM_RECALL_OP_PARTIAL),
+}
+
+// recallManualAllows 是回收的人工结局对表。与 trade、guild 的 ManualVerdict.Allows 不同,理由如下:
+//   - rejected(账本已拒绝,收据是这一条请求):REJECTED 或 ABORTED。scene 判了拒,资产没动,两种都把来源放回去;
+//   - never_applied(写权行已释放、账本没见过、行安静):只能 ABORTED。scene 没见过这个 seq,拒绝不是它的判定;
+//     读完之后没人领过、发过,由终结的见证保证;
+//   - applied、partial(账本已应用或部分应用):一律不收。这种行由重投循环按收据里的回收明细(requested / taken /
+//     debt / shortfall)终结;人工没有明细,settle 只能把整行记成缺口,taken、debt 都会记错;
+//   - none(账本判不了):只能 PARTIAL。回收的 PARTIAL 不放回来源:scene 其实扣过,来源仍是已消费,下一批不会再扣;
+//     没扣过,只是少回收一次。trade、guild 判不了时一律不终结,因为它们的 applied 要入账、aborted 要退款,
+//     判错任一边都多给或少给玩家,没有只往一个方向错的关单;回收错了只会少扣,所以给一个保守关单。
+func recallManualAllows(v assetop.ManualVerdict, final assetop.Status) bool {
+	switch v {
+	case assetop.ManualVerdictRejected:
+		return final == assetop.StatusRejected || final == assetop.StatusAborted
+	case assetop.ManualVerdictNeverApplied:
+		return final == assetop.StatusAborted
+	case assetop.ManualVerdictNone:
+		return final == assetop.StatusAppliedPartial
+	default:
+		return false
+	}
+}
+
+// recallEvidenceOf 是回给调用方、写进审计行的证据说明:先写回收这条证据下能收哪些 final_status(recall_accepts),
+// 再接共享的那一句(assetop.DescribeManualEvidence,与 assetopfix 同一份文案)。共享句里的 "allowed=-as" 是两个
+// assetopfix 工具的 -as 选项,ResolveRecallOp 能收什么以 recall_accepts 为准。
+func recallEvidenceOf(v assetop.ManualVerdict, detail string) string {
+	accepts := make([]string, 0, len(recallManualStatuses))
+	for _, status := range recallManualStatuses {
+		if final, ok := store.RecallManualFinal(status); ok && recallManualAllows(v, final) {
+			accepts = append(accepts, store.RecallStatusLabel(status))
+		}
+	}
+	label := strings.Join(accepts, "|")
+	if label == "" {
+		label = "none (the redelivery loop finalizes it from the receipt's recall line)"
+	}
+	return fmt.Sprintf("recall_accepts=%s; %s", label, assetop.DescribeManualEvidence(v, detail))
+}
+
+// ResolveRecallOp 人工终结一行卡死的回收指令。步骤:
+//  1. 读这一行。只收 PENDING:已终结的、还没派发的(PLANNED,用 CancelRecallBatch)回现状,什么都不改。
+//     请求与 Claim 下发的同一套还原(store.RecallStore.ReadOpState),载荷解不开按证据不足;
+//  2. 读这名玩家已提交的账本(GetPlayerStoreLedger,写权行与账本同一次读)。读失败不终结,回故障码;
+//  3. 判证据(assetop.JudgeManual,安静间隔 assetop.ManualQuietGap(svc.RecallLeaseDuration())),按 recallManualAllows 放行;
+//  4. 带读行时的租约与发送时刻终结(store.RecallStore.ResolveManuallyIfQuiet,与重投循环同一个 settle)。
+//     读证据之后这一行被领过、发过或已终结,终结落空,回 ErrCodeRecallOpChanged,重新调用即重新读证据。
+func ResolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string) (RecallResolveResult, error) {
+	return resolveRecallOp(ctx, svcCtx, opID, final, operator, reason, time.Now)
+}
+
+// resolveRecallOp 是 ResolveRecallOp 的实现,时钟显式传入:判「安静」与终结时刻用同一个。
+func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string, now func() time.Time) (RecallResolveResult, error) {
 	if opID == 0 || !validRecallText(operator, recallOperatorMaxRunes) || !validRecallText(reason, recallReasonMaxRunes) {
-		return false, constants.ErrCodeInvalidRequest, nil
+		return RecallResolveResult{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
 	if svcCtx == nil || svcCtx.Recall == nil {
-		return false, constants.ErrCodeSnapshotDBError, nil
+		return RecallResolveResult{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
 	}
 	status, ok := store.RecallManualFinal(final)
 	if !ok {
-		return false, constants.ErrCodeInvalidRequest, nil
+		return RecallResolveResult{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
-	resolved, err := assetop.ResolveManually(ctx, svcCtx.Recall, assetop.ManualResolution{OpID: opID, Final: status, Operator: operator, Reason: reason}, nil, nil)
+	row, err := svcCtx.Recall.ReadOpState(ctx, opID)
+	if errors.Is(err, store.ErrRecallOpNotFound) {
+		return RecallResolveResult{ErrorCode: constants.ErrCodeRecallNotFound}, nil
+	}
 	if err != nil {
-		return false, constants.ErrCodeSnapshotDBError, err
+		return RecallResolveResult{ErrorCode: constants.ErrCodeSnapshotDBError}, fmt.Errorf("read recall op %d: %w", opID, err)
 	}
-	return resolved, constants.ErrCodeOK, nil
+	if !row.IsPending() {
+		logx.Infof("[BatchRecall] manual resolve skipped: op_id=%d is %s, not pending", opID, store.RecallStatusLabel(row.Status))
+		return RecallResolveResult{ErrorCode: constants.ErrCodeOK, Status: row.Status}, nil
+	}
+
+	nowMs := uint64(now().UnixMilli())
+	// 账本在行之后读:「没见过」和「已释放」是同一次读的事实,读完之后的变化由终结的见证兜住。
+	ledger, err := GetPlayerStoreLedger(ctx, svcCtx, row.Op.PlayerID)
+	if err != nil {
+		return RecallResolveResult{ErrorCode: constants.ErrCodeSnapshotDBError, Status: row.Status},
+			fmt.Errorf("read committed asset ledger of player %d for recall op %d: %w", row.Op.PlayerID, opID, err)
+	}
+	// Op 里的 LastReason、LastSendMs 就是行上的这两列(ReadOpState 同一次扫出)。
+	manual := assetop.ManualRow{Op: row.Op, LastReason: row.Op.LastReason, LeaseUntilMs: row.LeaseUntilMs, LastSendMs: row.Op.LastSendMs}
+	verdict, detail := judgeRecallOp(row, manual, ledger, nowMs)
+	result := RecallResolveResult{Status: row.Status, Evidence: recallEvidenceOf(verdict, detail)}
+	if !recallManualAllows(verdict, status) {
+		result.ErrorCode = constants.ErrCodeRecallEvidenceRefused
+		auditRecallManual(row, final, operator, reason, verdict, result)
+		return result, nil
+	}
+
+	resolved, err := assetop.ResolveManually(ctx, recallQuietResolver{recall: svcCtx.Recall, witness: manual.Witness()},
+		assetop.ManualResolution{OpID: opID, Final: status, Operator: operator, Reason: reason}, nil, now)
+	switch {
+	case err != nil:
+		result.ErrorCode = constants.ErrCodeSnapshotDBError
+	case !resolved:
+		result.ErrorCode = constants.ErrCodeRecallOpChanged
+	default:
+		result.ErrorCode, result.Resolved, result.Status = constants.ErrCodeOK, true, final
+	}
+	auditRecallManual(row, final, operator, reason, verdict, result)
+	return result, err
+}
+
+// judgeRecallOp 拿已提交账本判这一行(assetop.JudgeManual)。还原不出请求(载荷解不开)就核不了收据,按证据不足处理。
+func judgeRecallOp(row store.RecallOpState, manual assetop.ManualRow, ledger PlayerStoreLedger, nowMs uint64) (assetop.ManualVerdict, string) {
+	if row.OpErr != nil {
+		return assetop.ManualVerdictNone, fmt.Sprintf("cannot rebuild the request to check its receipt: %v", row.OpErr)
+	}
+	snapshot := assetop.StoreLedger{Found: ledger.Found, Released: ledger.Released, Ledger: ledger.Ledger}
+	return assetop.JudgeManual(snapshot, manual, nowMs, assetop.ManualQuietGap(svc.RecallLeaseDuration()))
+}
+
+// recallQuietResolver 把 assetop.ResolveManually 接到带见证的结算上(同 trade、guild 的 assetopfix):
+// 入参校验与成功日志走包级函数,落库只认读证据时的租约与发送时刻。
+type recallQuietResolver struct {
+	recall  svc.RecallStore
+	witness assetop.QuietWitness
+}
+
+func (q recallQuietResolver) ResolveManually(ctx context.Context, r assetop.ManualResolution, nowMs uint64) (bool, error) {
+	return q.recall.ResolveManuallyIfQuiet(ctx, r, q.witness, nowMs)
+}
+
+// auditRecallManual 打人工终结的审计行:放行、拒绝、落空都打(ERROR 级,确保进日志检索),带操作人、证据结论与来源。
+// 操作人和理由按 %q 打:带换行就能伪造出第二条审计行。
+func auditRecallManual(row store.RecallOpState, final uint32, operator, reason string, verdict assetop.ManualVerdict, result RecallResolveResult) {
+	logx.Errorf("[RecallOpManual] operator=%q op_id=%d player_id=%d seq=%d final=%s reason=%q evidence=%s evidence_source=player_store resolved=%v error_code=%d",
+		operator, row.Op.OpID, row.Op.PlayerID, row.Op.Seq, store.RecallStatusLabel(final), reason, verdict, result.Resolved, result.ErrorCode)
 }
 
 // ── QueryTransactionLog ────────────────────────────────────────

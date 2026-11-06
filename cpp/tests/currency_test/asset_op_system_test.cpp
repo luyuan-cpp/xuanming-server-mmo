@@ -60,7 +60,7 @@ int64_t FakeNowMs()
 	return g_fakeNowMs;
 }
 
-// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次成功写入 Redis 的玩家数据"。
+// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次提交成功的玩家存档"(生产里是 go/db Save 回 COMMITTED / EQUAL 之后换上的快照)。
 void CaptureLedgerSnapshot(entt::entity player)
 {
 	PlayerAllData persisted;
@@ -179,7 +179,8 @@ protected:
 		PlayerAssetOpSystem::SetAddCurrencyFnForTest(nullptr);
 	}
 
-	// 给 item 号段塞一段够用的号:Credit 的 guid 余量预检要求 Available() >= Σcount。
+	// 给 item 号段塞一段够用的号:Credit 的 guid 余量预检要求 Available() >= BagService::MaxNewInstancesFor
+	// (2026-11-06 起与战斗结算同口径,原为 Σcount;续段用例见 bag_test 的 AssetOpCreditGuidTopUpTest)。
 	static void ArmItemSegment()
 	{
 		auto& segment = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
@@ -201,7 +202,7 @@ protected:
 		tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player_);
 	}
 
-	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次成功写入 Redis 的玩家数据"。
+	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次提交成功的玩家存档"(生产里是 go/db Save 回 COMMITTED / EQUAL 之后换上的快照)。
 	void CompleteFakeSave() { CaptureLedgerSnapshot(player_); }
 
 	const AssetOpStreamLedger* Ledger(AssetOpStream stream) const
@@ -1416,6 +1417,38 @@ TEST_F(AssetOpSystemTest, QuantityDebitOfStacksCarryingNewerVersionFieldsRetries
 	PlayerAssetOpSystem::Debit(quantityDebit(2, 6), insufficient);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, insufficient.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), insufficient.reason().id());
+}
+
+// 装备行被误配成可叠加时,按数量扣出也要拒(2026-11-05,交接 §14.4 遗留):强化、镶嵌、随机属性都在实例上,
+// 按数量扣出再按数量发给对侧会把它们无声丢掉。这是确定性失败:记终态拒绝,装备原样留在背包里。
+TEST_F(AssetOpSystemTest, QuantityDebitRejectsEquipmentEvenWhenMisconfiguredAsStackable)
+{
+	constexpr uint32_t kEquipmentConfig = 1;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	auto* row = const_cast<ItemTable*>(ItemTableManager::Instance().FindByIdSilent(kEquipmentConfig).first);
+	ASSERT_NE(nullptr, row);
+	ASSERT_NE(0u, row->equip_kind()) << "配置 1 是装备,是本用例的前置";
+	GiveBags();
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ItemComp gear;
+	gear.set_item_id(950199041); gear.set_config_id(kEquipmentConfig); gear.set_size(1);
+	inventory.RestoreItems({{gear, 0}});
+	// 放进背包之后再改表:模拟误配,用例结束时还原,别把改动留给后面的用例。
+	struct RestoreMaxStack { ItemTable& row; uint32_t old; ~RestoreMaxStack() { row.set_max_stack_size(old); } } restore{*row, row->max_stack_size()};
+	row->set_max_stack_size(5);
+
+	::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 1, TX_TRADE);
+	request.clear_bundle();
+	auto* item = request.mutable_bundle()->add_items();
+	item->set_config_id(kEquipmentConfig);
+	item->set_count(1);
+	SignForTest("debit", request, "trade");
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(request, response);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome()) << "确定性失败要记终态,不能让对侧无限重投";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), response.reason().id());
+	ASSERT_NE(nullptr, inventory.GetItemCompByGuid(gear.item_id())) << "装备原样留在背包里";
+	EXPECT_EQ(1u, inventory.GetItemCompByGuid(gear.item_id())->size());
 }
 
 // 同一个包里既有错位的数量项、又有与版本无关的坏项(托管一个不在背包里的 guid):坏项在任何版本上都不会成功,

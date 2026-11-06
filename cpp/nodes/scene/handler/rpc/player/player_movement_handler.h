@@ -38,6 +38,12 @@ public:
     static void NotifyTeleport(entt::entity player,
         const ::TeleportS2C* request,
         ::Empty* response);
+    static void TeamFollow(entt::entity player,
+        const ::TeamFollowC2S* request,
+        ::Empty* response);
+    static void NotifyTeamFollowState(entt::entity player,
+        const ::TeamFollowStateS2C* request,
+        ::Empty* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -101,6 +107,20 @@ public:
 			{
             NotifyTeleport(player,
                 static_cast<const ::TeleportS2C*>(request),
+                static_cast<::Empty*>(response));
+			}
+            break;
+        case 8:
+			{
+            TeamFollow(player,
+                static_cast<const ::TeamFollowC2S*>(request),
+                static_cast<::Empty*>(response));
+			}
+            break;
+        case 9:
+			{
+            NotifyTeamFollowState(player,
+                static_cast<const ::TeamFollowStateS2C*>(request),
                 static_cast<::Empty*>(response));
 			}
             break;

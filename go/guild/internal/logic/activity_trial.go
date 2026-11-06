@@ -716,7 +716,7 @@ func (l *GuildLogic) startTrialBattle(ctx context.Context, d *ActivityDeps, lobb
 		}
 		lobby = &lobbyCopy
 	}
-	battleID, end := callTrialMatch(ctx, d, lobby, row.GetDungeonId(), battle)
+	battleID, end := startTrialAtMatch(ctx, d, lobby, row.GetDungeonId(), battle)
 	if end.failed() {
 		return data.TrialBattleKey{}, end, nil
 	}
@@ -724,18 +724,34 @@ func (l *GuildLogic) startTrialBattle(ctx context.Context, d *ActivityDeps, lobb
 	return battle, trialEnd{}, nil
 }
 
+// startTrialAtMatch 调 match 开战(callTrialMatch)。没开成而 match 的答复是确定的(startSettled)时,这次 Start 已不在途,
+// 把永久原件交给恢复器马上检查(expediteTrialLaunchCheck):SQL 大厅有 launch 原件就结束不了(endPendingLobby 拒绝),
+// 名单上的人要等恢复器凭取消墓碑释放;不提前的话每一次业务拒绝都要多挂约 35s(开局截止 + 宽限,2026-11-05 修复,r2-guild#1 复审)。
+// 结局未知的失败不提前:Start 可能仍在 match 处理中,提前取消会把合法的 Start 拒成「服务繁忙」。
+func startTrialAtMatch(ctx context.Context, d *ActivityDeps, lobby *data.TrialLobby, dungeonID uint32, battle data.TrialBattleKey) (uint64, trialEnd) {
+	battleID, end, startSettled := callTrialMatch(ctx, d, lobby, dungeonID, battle)
+	if end.failed() && startSettled {
+		expediteTrialLaunchCheck(ctx, d, battle.LaunchRequestID)
+	}
+	return battleID, end
+}
+
 // callTrialMatch 按剩余预算调 MatchInternal.StartActivityBattle,并把一切失败映射成房间的结束原因(纪律 1):
 //   - 预算不足(不调)、gRPC 错误、超时、match 回 INTERNAL 或不认识的拒绝码、回成功却没给 battle_id → kGuildTrialServiceBusy;
 //   - MEMBER_OFFLINE / MEMBER_IN_BATTLE / MEMBER_NOT_READY → kGuildTrialTeamInvalid [offline | in_battle | not_ready, 当事人];
 //   - INVALID_ARGUMENT → kGuildTrialTeamInvalid [invalid, 0],并打 ERROR(请求是 guild 拼的,走到这里是 guild 的缺陷)。
 //
+// startSettled 报告这次 Start 是否已不在途:根本没发(预算不足),或 match 同步作了答(成功,或回了任一拒绝码,含 INTERNAL ——
+// match 已处理完这次请求,它自己的提交结果未知时取消会读到同一份意图)。调用返回错误(传输错误、超时等)与「回成功却没给
+// battle_id」不算:match 那边可能还在处理,或已开局而 guild 不知道。startSettled 只用于调度恢复器,不参与任何释放判定。
+//
 // 超时可能已开战：SQL大厅保留LAUNCHING和原launch，恢复只查询/取消同一Start原件。
-func callTrialMatch(ctx context.Context, d *ActivityDeps, lobby *data.TrialLobby, dungeonID uint32, battle data.TrialBattleKey) (uint64, trialEnd) {
+func callTrialMatch(ctx context.Context, d *ActivityDeps, lobby *data.TrialLobby, dungeonID uint32, battle data.TrialBattleKey) (battleID uint64, end trialEnd, startSettled bool) {
 	budget, ok := matchBudgetFor(ctx, d.MatchBudget)
 	if !ok {
 		logx.Infof("[GuildTrial] launch skipped, remaining budget %v too small to call match (guild %d lobby %d)",
 			budget, lobby.GuildID, lobby.LobbyID)
-		return 0, trialServiceBusy()
+		return 0, trialServiceBusy(), true
 	}
 	callCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
@@ -756,30 +772,30 @@ func callTrialMatch(ctx context.Context, d *ActivityDeps, lobby *data.TrialLobby
 	if err != nil {
 		logx.Errorf("[GuildTrial] match StartActivityBattle failed, lobby ends as service busy (guild %d lobby %d): %v",
 			lobby.GuildID, lobby.LobbyID, err)
-		return 0, trialServiceBusy()
+		return 0, trialServiceBusy(), false
 	}
 	offender := resp.GetOffenderPlayerId()
 	switch resp.GetReject() {
 	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_NONE:
 		if resp.GetBattleId() == 0 {
 			logx.Errorf("[GuildTrial] match accepted the battle but returned battle_id 0 (guild %d lobby %d)", lobby.GuildID, lobby.LobbyID)
-			return 0, trialServiceBusy()
+			return 0, trialServiceBusy(), false
 		}
-		return resp.GetBattleId(), trialEnd{}
+		return resp.GetBattleId(), trialEnd{}, true
 	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE:
-		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonOffline, offender)}
+		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonOffline, offender)}, true
 	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE:
-		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonInBattle, offender)}
+		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonInBattle, offender)}, true
 	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY:
-		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonNotReady, offender)}
+		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonNotReady, offender)}, true
 	case matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT:
 		logx.Errorf("[GuildTrial] match rejected the request as invalid, this is a guild defect (guild %d lobby %d activity %d dungeon %d roster %v)",
 			lobby.GuildID, lobby.LobbyID, battle.ActivityID, dungeonID, lobby.Roster)
-		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonInvalid, 0)}
+		return 0, trialEnd{tipID: constants.ErrTrialTeamInvalid, params: trialTeamInvalidParams(trialReasonInvalid, 0)}, true
 	default:
 		logx.Errorf("[GuildTrial] match rejected the battle with %v, lobby ends as service busy (guild %d lobby %d)",
 			resp.GetReject(), lobby.GuildID, lobby.LobbyID)
-		return 0, trialServiceBusy()
+		return 0, trialServiceBusy(), true
 	}
 }
 

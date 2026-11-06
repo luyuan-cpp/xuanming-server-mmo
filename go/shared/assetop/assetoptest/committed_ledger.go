@@ -14,7 +14,7 @@ import (
 	"shared/assetop"
 )
 
-// CommittedLedger 是已提交账本(player_store 的 kAsset 行)的替身,实现 assetop.LedgerReader 与
+// CommittedLedger 是已提交账本(player_store 的 kWallet 行)的替身,实现 assetop.LedgerReader 与
 // assetop.SQLCommitLedgerReader。假 scene 回已落盘结局时调 Commit,把结局连同请求身份记下来;Loop 终结前核对的
 // 就是这一份,和生产里 scene 把资产与账本同一事务提交之后读到的一样。
 //

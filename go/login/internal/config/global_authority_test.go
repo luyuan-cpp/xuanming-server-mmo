@@ -10,6 +10,7 @@ import (
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/service"
 	"shared/accountdirectory"
+	"shared/placement"
 )
 
 func globalLoginConfigForTest() Config {
@@ -105,8 +106,21 @@ func TestGlobalLoginYamlPinsFormalHome(t *testing.T) {
 	if err := c.ValidateGlobalAuthority(globalDirectoryTestEnv); err != nil {
 		t.Fatal(err)
 	}
-	if c.Placement.NewPlayerStorageId != 0 || c.Placement.StorageIDForNewPlayer(c.Node.ZoneId) != c.Node.ZoneId {
-		t.Fatal("正规默认必须全球钉落点，storage0仅取已配置Node.ZoneId")
+	// 存档库和区脱钩(总体方案 §7.2):样例配置按地域存档库落点,不再跟着 Node.ZoneId 走。
+	if err := c.Placement.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Placement.UsesRegionStorage() || c.Placement.NewPlayerStorageId != 0 {
+		t.Fatalf("样例 login.yaml 必须按地域存档库落点(Placement.StorageShards>0、不写 NewPlayerStorageId): %+v", c.Placement)
+	}
+	const samplePlayer = uint64(1<<40 + 12345)
+	got, err := c.Placement.StorageIDForNewPlayer(samplePlayer, c.Node.ZoneId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := placement.RegionStorageIDForPlayer(c.Placement.Region, c.Placement.StorageShards, samplePlayer)
+	if err != nil || got != want {
+		t.Fatalf("StorageIDForNewPlayer = (%d,%v), want %d", got, err, want)
 	}
 }
 

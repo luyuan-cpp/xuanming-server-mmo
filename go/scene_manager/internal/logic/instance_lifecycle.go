@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -196,11 +195,13 @@ func destroyInstanceForce(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 // 计数,玩家刚进的场景被拆掉。2026-10-22 修复时这样的写者是 resolveScene 的死节点自愈;10-23 起它只重建
 // 世界频道、不再改派实例,实例眼下没有这类写者,比对作为纵深防御保留(将来任何改派实例的写者都受它保护)。
 //
-// 返回 (true, nil):销毁执行了,副作用(级联、计数、Agones 归还)也已执行,且只由本次执行。
+// 返回 (true, nil):认领到了。场景状态已删、死节点的计数与反向索引已在同一步改好;级联、Agones 归还等其余副作用
+// 由拆除任务保证做完,而且只做一次(scene_teardown_job.go)。
 // 返回 (false, nil):属主已不是 deadNode(读完之后被改派,或映射已被别的路径删掉),一个键都没动。
 // 映射不存在时不当作可认领:删映射的那条路径负责其余清理,这里再抹会与它双还 Agones 名额。
-// 返回 (false, err):Redis 出错(结论未知),或 deadNode 为空(什么都没做);两种都已记日志。
-// deadNode 为空时拒绝而不是照常销毁:空串在脚本里表示「不比对」,会退化成修复前的无条件销毁。
+// 返回 (false, err):Redis 出错(结论未知),或 deadNode 为空(什么都没做);两种都已记日志。认领脚本其实已执行时,
+// 拆除任务在待办里,由扫描做完副作用;再次收尾时认领落空,按 stale 计。
+// deadNode 为空时拒绝而不是照常销毁:空串表示「谁是属主都拆」,会退化成修复前的无条件销毁。
 func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, deadNode string) (bool, error) {
 	if deadNode == "" {
 		err := fmt.Errorf("destroyOrphanOfDeadNode: empty dead node for scene %d (zone %d)", sceneId, zoneId)
@@ -210,23 +211,24 @@ func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	return destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, true, deadNode, "node_death")
 }
 
-// destroyInstanceInternal 返回本次是否真的执行了销毁(认领成功并跑完副作用)。false 且 err 为 nil 时
-// 什么都没做:非 force 时场景里来了人;force 时场景已被别的进程抹掉,或属主已不是 expectedOwner。
-// 非 force 认领到一个映射已不在的残留时也回 true:active 集合里的条目摘掉了,agones_gs 还在就归还。
+// destroyInstanceInternal 返回本次是否认领到了这次销毁。认领在脚本里一步提交:删场景的状态键、扣属主的 scene_count、
+// 摘属主的反向索引、写拆除任务。之后的副作用由拆除任务保证做完(runInstanceTeardown;这次没做完的由扫描补,见
+// scene_teardown_job.go)。所以认领到就回 true,不论副作用这一拍是否做完:销毁已经发生,调用方不该再重试。
+// false 且 err 为 nil 时什么都没做:非 force 时场景里来了人,或属主在读与认领之间变了;force 时场景已被别的认领拿走,
+// 或属主已不是 expectedOwner。非 force 认领到一个映射已不在的残留时也回 true:active 集合里的条目摘掉了,
+// agones_gs 还在就归还。
 //
-// force=false:luaAtomicDestroyInstance 按人数 CAS 认领,有人就放弃(空闲回收,经 destroyInstance)。
-// force=true:luaAtomicDestroyInstanceForce 不看人数。expectedOwner 为空时不比对属主(explicit /
-// cascade / source_migrated / source_scaled_in 经 destroyInstanceForce);非空时
-// 只抹属主仍为它的场景(node_death,经 destroyOrphanOfDeadNode)。expectedOwner 只对 force 生效。
+// force=false:luaAtomicDestroyInstance,有人就放弃(空闲回收,经 destroyInstance)。
+// force=true:luaAtomicDestroyInstanceForce 不看人数。expectedOwner 为空时谁是属主都拆(explicit / cascade /
+// source_migrated / source_scaled_in 经 destroyInstanceForce);非空时只拆属主仍为它的场景(node_death,经
+// destroyOrphanOfDeadNode)。expectedOwner 只对 force 生效。
 //
 // reason ∈ idle | explicit | cascade | node_death | source_migrated | source_scaled_in,作为
-// scene_manager_instance_destroyed_total 的 label。
+// scene_manager_instance_destroyed_total 与 Agones 归还的 reason。
 //
 // 调用方一律经上面三个包装进来,不要直接传 force / expectedOwner(两个相邻的 string 参数写反也能编过)。
 // 镜像级联(cascadeDestroyMirrors)也经 destroyInstanceForce 递归进来。
 func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, force bool, expectedOwner, reason string) (bool, error) {
-	sceneIdStr := fmt.Sprintf("%d", sceneId)
-
 	// 镜像子集合 scene:{id}:mirrors 是**提交前必须读到**的(2026-10-22/23):它决定级联范围,销毁脚本不碰它,
 	// 提交之后才发现读不到就没有补救了。提交后仍以重读为准,预读只在重读失败时充当快照(见 cascadeDestroyMirrors)。
 	// 读不到就本轮不销毁、什么都不改,回 (false, err)。各调用方的后果:
@@ -239,10 +241,8 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	//     (reentry_barrier.go「被屏障推迟的死节点收尾」的「有界重试」,2026-10-30)。
 	// 预读在原子脚本之前、只读不写,期望属主的比对语义不变。
 	//
-	// 属主、agones_gs、成员、镜像源、镜像标记都不在这里预读,一律取认领应答(2026-11-05):本进程接手一次
-	// 结局未知的认领时(evalSceneClaim),回放的是第一次执行时的快照,而这些键那时已经删了,这里再读只会读到空。
-	// 以前镜像源在这里预读,接手时读空,镜像不从源的子集合里摘掉,源的 channelHasMirrors 恒真、永远缩不了容。
-	// 脚本里的读与删同一步,不存在「提交了却不知道镜像源」的窗口,所以镜像源也不再需要提交前单独读一次。
+	// 属主、agones_gs、成员、镜像源、镜像标记都不在这里预读,一律取认领应答:扫描接手一个没做完的任务时
+	// 这些键早已删了,只有认领时的快照可用。脚本里的读与删同一步,不存在「提交了却不知道镜像源」的窗口。
 	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteInstanceDestroy, fmt.Sprintf("mirror set of scene %d", sceneId), err)
@@ -255,11 +255,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	// force 路径原来是"快照读 + 七连 DEL",快照与删除之间没有原子性,并发的销毁(空闲回收的非 force 脚本、
 	// explicit / 级联 / 死节点收尾的 force 脚本,或领导者降级窗口里的新旧领导者)会各自拿到非空快照,把节点
 	// scene_count 双减、Agones 名额双还。改成 Lua 原子认领:读与删同脚本,只有第一个认领成功的执行副作用,
-	// 其余静默退出。
-	//
-	// 是否认领只看 Claimed(2026-11-05):两个脚本共用认领记录,本进程接手时回放的可能是另一个脚本的快照。
-	// 空闲回收清扫残留、世界频道 absent 认领成功时属主都为空,以前 force 分支按「属主为空 = 落空」判,
-	// 接手到这种快照就跳过归还,名额永久不还。
+	// 其余静默退出。是否认领只看 Claimed:空闲回收清扫残留时认领成功而属主为空。
 	var claim sceneClaim
 	if !force {
 		claim, err = AtomicDestroyIfIdle(svcCtx, zoneId, sceneId)
@@ -267,101 +263,91 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 			logx.Errorf("[InstanceLifecycle] AtomicDestroy failed for scene %d: %v", sceneId, err)
 			return false, err
 		}
-		if !claim.Claimed {
-			// 场景里来了人。脚本已经重置了空闲时钟,下一拍公平地重判。
-			return false, nil
-		}
 	} else {
-		claim, err = AtomicDestroyForce(svcCtx, zoneId, sceneId, expectedOwner)
+		claim, err = AtomicDestroyForce(svcCtx, zoneId, sceneId, expectedOwner, reason)
 		if err != nil {
 			logx.Errorf("[InstanceLifecycle] AtomicDestroyForce failed for scene %d: %v", sceneId, err)
 			return false, err
 		}
-		if !claim.Claimed {
-			// 别的进程已抢先抹掉并负责了级联/计数/归还 —— 本次是重复销毁;
-			// 或者带了期望属主而属主已不是它 —— 场景归别人了,一个键都没动。
-			return false, nil
-		}
 	}
-	// 属主为空:认领的是映射已经不在的残留(空闲回收清扫,或接手到的 absent 快照)。不发 C++ 销毁、不动节点
-	// 计数,其余照做:级联、从源的子集合摘掉自己、归还 agones_gs。
-	nodeId := claim.NodeID
-	// Agones 模式:这个 Scene 占用的是哪个 GameServer 的房间名额。非 Agones 模式下为空,后续归还是 no-op。
-	agonesGs := claim.AgonesGs
-	// 场景里剩的成员,要从节点集合里摘掉。空闲认领时 SCARD 已确认是 0,接手到 force 的快照时可能不是。
-	residualMembers := claim.Members
-	sourceId, _ := strconv.ParseUint(claim.Source, 10, 64)
-	kind := "instance"
-	if claim.MirrorFlag == "1" {
-		kind = "mirror"
+	if claim.Foreign {
+		// 场景登记在别的 zone:它的键只由那个 zone 的 scene_manager 读写,认领脚本一个键都没动。不该发生(各条销毁
+		// 路径只从本 zone 的索引里找场景,显式 DestroyScene 在入口拒绝别的 zone),回错误让它显形。
+		err := fmt.Errorf("%w: scene %d, destroy requested for zone %d", errSceneInOtherZone, sceneId, zoneId)
+		logx.Errorf("[InstanceLifecycle] %v; nothing changed", err)
+		return false, err
+	}
+	if !claim.Claimed {
+		// 空闲回收:场景里来了人(脚本已经重置了空闲时钟),或属主在读与认领之间变了,下一拍公平地重判。
+		// force:别的认领已经拿走了它(级联 / 计数 / 归还归那次),或者带了期望属主而属主已不是它 —— 场景归别人了,
+		// 一个键都没动。
+		return false, nil
 	}
 
-	// Cascade destroy: any mirror whose source is this scene has to die with
-	// its source.
-	//
-	// 这一段原来放在 AtomicDestroyIfIdle **之前**,理由写的是"原子脚本会把
-	// scene:{id}:mirrors 抹掉,所以必须先读"。这个前提是错的:脚本的 KEYS 里
-	// 是 scene:{id}:mirror(是不是镜像的**标志位**),不是 scene:{id}:mirrors
-	// (镜像**子集合**),见 scene_atomic.go:245-252。脚本从不碰子集合。
-	//
-	// 而放在前面的代价是实打实的:CAS 会在"检查到销毁之间有玩家进场"时放弃销毁
-	// (destroyed=false 直接 return),但那时所有镜像已经被 force 销毁、
-	// mirrors 索引也已经被 Del —— 源场景活下来了,它的镜像却全没了,而且
-	// 因为索引也没了,再也没有任何路径能发现这些镜像曾经存在。镜像里的玩家
-	// 就此成为孤儿。挪到确认销毁之后,放弃销毁时镜像原样保留。
-	cascadeDestroyMirrors(ctx, svcCtx, zoneId, sceneId, preMirrorChildren, "cascade")
-
-	// Notify C++ node to destroy the ECS scene entity (skip if node is
-	// already dead — the entity died with the process).
-	if nodeId != "" && IsNodeAlive(svcCtx, zoneId, nodeId) {
-		if err := RequestNodeDestroyScene(ctx, svcCtx, zoneId, nodeId, sceneId); err != nil {
-			logx.Errorf("[InstanceLifecycle] Failed to call DestroyScene on node %s for scene %d: %v", nodeId, sceneId, err)
-		}
-	}
-
-	// Unlink reverse indexes. Both SREMs are best-effort: the node-death
-	// reconciliation loop double-checks scene:{id}:node before destroying
-	// again, so a stale entry in node:zone:{zoneId}:{nodeId}:scenes is harmless.
-	if nodeId != "" {
-		svcCtx.Redis.Srem(nodeScenesKey(zoneId, nodeId), sceneIdStr)
-	}
-	if sourceId > 0 {
-		svcCtx.Redis.Srem(sceneMirrorsKey(sourceId), sceneIdStr)
-	}
-
-	// Decrement node counters.
-	if nodeId != "" {
-		sceneCountKey := nodeSceneCountKey(zoneId, nodeId)
-		svcCtx.Redis.Incrby(sceneCountKey, -1)
-
-		removeResidualSceneMembers(svcCtx, sceneId, zoneId, nodeId, residualMembers)
-	}
-
-	// 归还 Agones 房间名额。
-	//
-	// 走到这里说明认领成功了,所以名额只会被还一次:agones_gs 和映射在认领脚本里
-	// 一起删掉,之后的销毁拿不到它,回包丢失重发的只是同一份快照。
-	//
-	// 节点已经死了的情况同样要还:GameServer 对象可能还在(Agones 还没判
-	// Unhealthy),它身上的 rooms 计数不减就会一直占着容量。ReleaseRoom 对
-	// "GameServer 已消失" 返回成功,所以这里无脑调用是安全的。
-	if agonesGs != "" {
-		ReleaseAgonesRoomForScene(ctx, svcCtx, sceneId, agonesGs, reason)
-	}
-
-	metrics.ObserveInstanceDestroyed(zoneId, kind, reason)
+	// 认领已提交,剩下的副作用记在拆除任务里:这里当场做,没做完的(进程退出、某一步失败)由扫描补。
+	job := sceneTeardownJob{ZoneID: zoneId, SceneID: sceneId, Kind: teardownKindInstance, Reason: reason, Claim: claim}
+	completeSceneTeardown(ctx, svcCtx, job, preMirrorChildren, false)
 	return true, nil
 }
 
+// runInstanceTeardown 是副本 / 镜像认领之后的副作用(拆除任务 teardownKindInstance),认领方与扫描共用,可以重跑:
+// 镜像级联、C++ DestroyScene、从镜像源的子集合摘掉自己、摘剩余成员、还 Agones 名额。属主的 scene_count 与反向索引
+// 已经在认领脚本里改好。preMirrorChildren 是认领前预读的镜像子集合,只在提交后重读失败时充当快照;扫描接手时为 nil。
+//
+// 属主为空:认领的是映射已经不在的残留(空闲回收清扫)。不发 C++ 销毁、不摘成员,其余照做。
+//
+// 回错误:有步骤这次没做成(级联没做完、C++ DestroyScene 发不出去、从源的子集合摘自己失败、拿归还名额这一步结局未知),
+// 任务留给扫描重做;做成了的步骤重跑不会重复生效。
+func runInstanceTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sceneTeardownJob, preMirrorChildren []string) error {
+	zoneId, sceneId, claim := job.ZoneID, job.SceneID, job.Claim
+	var deferred []string
+
+	// Cascade destroy: any mirror whose source is this scene has to die with its source.
+	//
+	// 级联只在认领成功之后做:脚本从不碰子集合 scene:{id}:mirrors(KEYS 里的 scene:{id}:mirror 是「是不是镜像」的
+	// 标志位),放在认领之前的话,空闲 CAS 放弃时镜像已经全被 force 销毁、索引也已删,源活下来了,镜像里的玩家成孤儿。
+	if !cascadeDestroyMirrors(ctx, svcCtx, zoneId, sceneId, preMirrorChildren, "cascade") {
+		deferred = append(deferred, "mirror cascade")
+	}
+
+	// Notify C++ node to destroy the ECS scene entity (skip if node is already dead — the entity died with the
+	// process). 重发是安全的:C++ 找不到这个 scene_id 的实体只打一条 WARN。
+	nodeId := claim.NodeID
+	if nodeId != "" && IsNodeAlive(svcCtx, zoneId, nodeId) {
+		if err := RequestNodeDestroyScene(ctx, svcCtx, zoneId, nodeId, sceneId); err != nil {
+			logx.Errorf("[InstanceLifecycle] Failed to call DestroyScene on node %s for scene %d: %v", nodeId, sceneId, err)
+			deferred = append(deferred, "DestroyScene on node "+nodeId)
+		}
+	}
+
+	// 从镜像源的子集合摘掉自己。漏摘会让源的 channelHasMirrors 恒真,那个频道永远缩不了容,所以失败要重做。
+	if err := unlinkFromSourceMirrors(svcCtx, zoneId, sceneId, claim.Source); err != nil {
+		deferred = append(deferred, "unlink from the source's mirror set")
+	}
+
+	// 场景里剩的成员,从节点集合里摘掉;单个成员失败由成员对账收掉(scene_member_reconcile.go)。
+	if nodeId != "" {
+		removeResidualSceneMembers(svcCtx, sceneId, zoneId, nodeId, claim.Members)
+	}
+
+	// 归还 Agones 房间名额,一个任务至多一次(releaseTeardownRoom)。节点已经死了的情况同样要还:GameServer 对象可能
+	// 还在(Agones 还没判 Unhealthy),它身上的 rooms 计数不减就会一直占着容量。ReleaseRoom 对 "GameServer 已消失"
+	// 返回成功。
+	if err := releaseTeardownRoom(ctx, svcCtx, job); err != nil {
+		deferred = append(deferred, "take the Agones release step")
+	}
+	return teardownDeferred(deferred)
+}
+
 // cascadeDestroyMirrors 在源场景的销毁**已经提交**之后,强制销毁以它为源的全部镜像,再删掉它的子集合索引
-// scene:{sceneId}:mirrors。reason 是子镜像销毁的指标 label(cascade / source_scaled_in)。
+// scene:{sceneId}:mirrors。reason 是子镜像销毁的指标 label(cascade / source_scaled_in)。返回是否全部做完、删掉了索引。
 //
 // 子集合以提交后的重读为准:预读与提交之间可能又有镜像挂上来。重读失败时(2026-10-22)销毁已经不能
 // 撤回,于是按调用方提交前预读的快照 preRead 级联,并且**不删**索引 —— 预读之后才挂上的镜像只有这个
 // 索引还记得。任一子镜像销毁回 error(读不到它的状态,本轮没销毁)时同样不删索引。
-// 保留下来的子镜像各自空闲后由空闲销毁收走,销毁时会把自己从这个集合 SREM 掉
-// (见 destroyInstanceInternal 末尾按镜像源 SREM),集合空了 Redis 自动回收键。
-func cascadeDestroyMirrors(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, preRead []string, reason string) {
+// 不删索引时回 false,调用方的拆除任务留给扫描重做:重做时重读子集合,只剩还没销毁的那些。子镜像在那之前空闲了
+// 也会被空闲销毁收走,销毁时把自己从这个集合 SREM 掉,集合空了 Redis 自动回收键。
+func cascadeDestroyMirrors(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, preRead []string, reason string) bool {
 	children, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
 	keepIndex := err != nil
 	if err != nil {
@@ -375,33 +361,37 @@ func cascadeDestroyMirrors(ctx context.Context, svcCtx *svc.ServiceContext, zone
 		if parseErr != nil || childId == sceneId {
 			continue
 		}
-		// Mirrors usually live in the same zone as their source but read
-		// scene:{child}:zone to be safe — cross-zone mirroring is uncommon
-		// but we don't want cascade to silently skip ZREM from the wrong
-		// active set. 读不到就不猜:按错的 zone 销毁会从别的 zone 的索引与计数里扣。
-		childZoneStr, zoneErr := svcCtx.Redis.Get(sceneZoneKey(childId))
+		// 只拆本 zone 的子镜像(docs/design/control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的
+		// scene_manager 读写)。子镜像登记在别的 zone 时不拆:它的映射、active 集合、节点计数都是那个 zone 的键,由那个
+		// zone 的空闲回收收走;这里的子集合是本 zone 的键,随下面的 DEL 一起删,不再列着它。新建镜像时源在别的 zone
+		// 就不登记成子镜像(createInstance),这里给更早登记的数据兜底;认领脚本还会在同一步再比一次 zone。
+		// 读不到它的 zone 就不猜:本轮不拆、保留索引,拆除任务留着重做。
+		childZone, zoneErr := lookupSceneZone(svcCtx, childId)
 		if zoneErr != nil {
 			noteReadUnknown(zoneId, readUnknownSiteMirrorCascade,
 				fmt.Sprintf("zone of mirror %d (source %d), keeping it and the index", childId, sceneId), zoneErr)
 			keepIndex = true
 			continue
 		}
-		childZone, _ := strconv.ParseUint(childZoneStr, 10, 32)
-		if childZone == 0 {
-			childZone = uint64(zoneId)
+		if childZone != 0 && childZone != zoneId {
+			logx.Infof("[InstanceLifecycle] Mirror %d of scene %d is registered in zone %d, not %d; leaving it to that zone",
+				childId, sceneId, childZone, zoneId)
+			continue
 		}
 		logx.Infof("[InstanceLifecycle] Cascade-destroying mirror %d (source %d, reason %s)", childId, sceneId, reason)
 		// Force-destroy: the source is going away, "still has players"
 		// doesn't rescue the mirror.
-		if _, destroyErr := destroyInstanceForce(ctx, svcCtx, uint32(childZone), childId, reason); destroyErr != nil {
+		if _, destroyErr := destroyInstanceForce(ctx, svcCtx, zoneId, childId, reason); destroyErr != nil {
 			keepIndex = true
 		}
 	}
 	// Drop the mirrors index for this scene now that its children are gone.
 	// 子集合没读到、或有子镜像本轮没销毁时不删,理由见上。
-	if !keepIndex {
-		svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
+	if keepIndex {
+		return false
 	}
+	svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
+	return true
 }
 
 // lookupSceneNode resolves the node currently hosting a scene, returning ""

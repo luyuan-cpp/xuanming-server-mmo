@@ -1,6 +1,7 @@
 # Bag → BagService SRP Refactor (2026-03-26)
 
 > 2026-10-15：`PlayerItemBlockList` 与 `blockList` 参数已按 C004 删除，下文为 2026-03-26 历史。
+> 2026-11-05：单玩家物品获取封禁以新形状实现，不是 `BagService` 的参数：状态是持久组件 `PlayerItemGainBlockComp`（`player_database.item_gain_block`，由收件箱 GM 域写），`BagService` 各入包入口内部调统一判定 `GainBlockService::IsItemGainBlocked`（全服 + 本人，命中回 `kAssetBlocked`）。见 [player-inbox-service.md](player-inbox-service.md) §2.2。
 
 ## Problem
 `Bag` class had too many responsibilities — it was a container but also handled:

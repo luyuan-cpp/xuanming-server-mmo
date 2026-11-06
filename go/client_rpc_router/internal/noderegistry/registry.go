@@ -358,13 +358,20 @@ func (nr *NodeRegistration) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, err := nr.client.Txn(ctx).
+	// 删除带条件 Value(allocKey)==本实例 uuid,与 shared/noderegistry 的 Close 同一做法:失租后原 node_id 可能已被
+	// 别的实例接管、本进程还没换号就停机,无条件删会把对方的发现键删掉,而对方不 watch 自己的键,会一直不可见
+	// (docs/design/infra-reconnect-overview.md §4 R3)。
+	resp, err := nr.client.Txn(ctx).
+		If(clientv3.Compare(clientv3.Value(nr.allocKey), "=", nr.Info.NodeUuid)).
 		Then(
 			clientv3.OpDelete(nr.rpcKey),
 			clientv3.OpDelete(nr.allocKey),
 		).
-		Commit(); err != nil {
+		Commit()
+	if err != nil {
 		logx.Errorf("[NodeRegistry] failed to delete keys: %v", err)
+	} else if !resp.Succeeded {
+		logx.Infof("[NodeRegistry] keys of node_id=%d no longer belong to this instance; left in place", nr.Info.NodeId)
 	}
 	if _, err := nr.client.Revoke(ctx, nr.leaseID); err != nil {
 		logx.Errorf("[NodeRegistry] failed to revoke lease: %v", err)

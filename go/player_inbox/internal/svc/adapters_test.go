@@ -28,6 +28,9 @@ type fakeDataService struct {
 	homeZoneErr error
 	ledger      *dspb.GetPlayerInboxLedgerResponse
 	ledgerErr   error
+	block       *dspb.GetPlayerItemGainBlockResponse
+	blockErr    error
+	blockIn     *dspb.GetPlayerItemGainBlockRequest
 
 	admissionIn    *dspb.VerifyRoleAdmissionRequest
 	admissionValid bool
@@ -48,6 +51,11 @@ func (f *fakeDataService) GetPlayerHomeZone(context.Context, *dspb.GetPlayerHome
 
 func (f *fakeDataService) GetPlayerInboxLedger(context.Context, *dspb.GetPlayerInboxLedgerRequest, ...grpc.CallOption) (*dspb.GetPlayerInboxLedgerResponse, error) {
 	return f.ledger, f.ledgerErr
+}
+
+func (f *fakeDataService) GetPlayerItemGainBlock(_ context.Context, in *dspb.GetPlayerItemGainBlockRequest, _ ...grpc.CallOption) (*dspb.GetPlayerItemGainBlockResponse, error) {
+	f.blockIn = in
+	return f.block, f.blockErr
 }
 
 // TestDataServicePlayers 钉住玩家存在校验的映射(设计 §6.2 第 2 步):映射缺失 = 不存在;查询失败 = 故障(fail-closed)。
@@ -96,6 +104,34 @@ func TestDataServiceLedgers(t *testing.T) {
 	l = &DataServiceLedgers{Client: &fakeDataService{ledgerErr: status.Error(codes.Unimplemented, "old data_service")}}
 	if _, _, err := l.ReadInboxLedger(context.Background(), 1); status.Code(errors.Unwrap(err)) != codes.Unimplemented {
 		t.Errorf("gRPC 错误必须原样(可取 code)返回,got %v", err)
+	}
+}
+
+// TestDataServiceItemGainBlocks 钉住物品获取封禁表读取的映射(与 DataServiceLedgers 同口径,设计 §2.2)。
+func TestDataServiceItemGainBlocks(t *testing.T) {
+	ds := &fakeDataService{block: &dspb.GetPlayerItemGainBlockResponse{Found: false}}
+	b := &DataServiceItemGainBlocks{Client: ds}
+	if block, found, err := b.ReadItemGainBlock(context.Background(), 42); err != nil || found || block != nil {
+		t.Errorf("found=false → (nil, false, nil),got (%v, %v, %v)", block, found, err)
+	}
+	if ds.blockIn.GetPlayerId() != 42 {
+		t.Errorf("请求的 player_id = %d, want 42", ds.blockIn.GetPlayerId())
+	}
+	b = &DataServiceItemGainBlocks{Client: &fakeDataService{block: &dspb.GetPlayerItemGainBlockResponse{Found: true}}}
+	if block, found, err := b.ReadItemGainBlock(context.Background(), 42); err != nil || !found || block == nil {
+		t.Errorf("found=true 且封禁表缺席 → 空表,got (%v, %v, %v)", block, found, err)
+	}
+	want := &componentpb.PlayerItemGainBlockComp{ItemConfigIds: []uint32{30045}}
+	b = &DataServiceItemGainBlocks{Client: &fakeDataService{block: &dspb.GetPlayerItemGainBlockResponse{Found: true, Block: want}}}
+	if block, found, err := b.ReadItemGainBlock(context.Background(), 42); err != nil || !found || block != want {
+		t.Errorf("found=true → 原封禁表,got (%v, %v, %v)", block, found, err)
+	}
+	b = &DataServiceItemGainBlocks{Client: &fakeDataService{blockErr: status.Error(codes.Unimplemented, "old data_service")}}
+	if _, _, err := b.ReadItemGainBlock(context.Background(), 42); status.Code(errors.Unwrap(err)) != codes.Unimplemented {
+		t.Errorf("gRPC 错误必须原样(可取 code)返回,got %v", err)
+	}
+	if _, _, err := (&DataServiceItemGainBlocks{}).ReadItemGainBlock(context.Background(), 42); err == nil {
+		t.Error("没装配 data_service 客户端必须报错,不能回「没有存档」")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -24,8 +25,9 @@ type fakeMaintenance struct {
 	gaugeScans     int
 	gaugeNow       []uint64
 	gaugeCuts      []GaugeCutoffs
-	reconcileArg   []uint64 // sinceMs
-	reconcileStart []uint32 // startShard
+	reconcileArg   []uint64   // sinceMs
+	reconcileStart []uint32   // 每轮扫描顺序的第一片
+	reconcileOrder [][]uint32 // 每轮的扫描顺序
 	reconcileRes   ReconcileRoundResult
 	reconcileErr   error
 	due            map[uint32][]NotifyDue
@@ -67,14 +69,25 @@ func (f *fakeMaintenance) ScanGauges(_ context.Context, nowMs uint64, cut GaugeC
 	return metrics.ScanGauges{OpenItems: 3}, nil
 }
 
-func (f *fakeMaintenance) ReconcileRecent(_ context.Context, sinceMs uint64, startShard uint32, _ LedgerReader) (ReconcileRoundResult, error) {
+func (f *fakeMaintenance) ReconcileShards(_ context.Context, sinceMs uint64, order []uint32, _ LedgerReader) (ReconcileRoundResult, error) {
 	f.calls.Add(1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.reconcileArg = append(f.reconcileArg, sinceMs)
-	f.reconcileStart = append(f.reconcileStart, startShard)
+	if len(order) > 0 {
+		f.reconcileStart = append(f.reconcileStart, order[0])
+	}
+	f.reconcileOrder = append(f.reconcileOrder, append([]uint32(nil), order...))
 	return f.reconcileRes, f.reconcileErr
 }
+
+// fakeOwnership 是固定的分片归属。
+type fakeOwnership struct {
+	shards []uint32
+	ready  bool
+}
+
+func (f fakeOwnership) OwnedShards() ([]uint32, bool) { return f.shards, f.ready }
 
 type nopLedgers struct{}
 
@@ -95,11 +108,14 @@ func testLoopConfig() LoopConfig {
 
 func fixedNow() time.Time { return time.UnixMilli(int64(testNowMs)) }
 
-// TestLoopsNeverRunWithoutLeadership:选主没当选,任何后台操作都不执行(设计 §6.3、§10:只在领导者上跑)。
+// TestLoopsNeverRunWithoutLeadership:选主没当选,清理、补发、gauge 都不执行(设计 §6.3、§10:只在领导者上跑)。
+// 对账不归领导者(按分片分给每个副本,见 TestReconcileRunsWithoutLeadershipAndStopsWithRun),这里关掉它。
 func TestLoopsNeverRunWithoutLeadership(t *testing.T) {
 	store := &fakeMaintenance{}
 	follower := func(ctx context.Context, _ func(context.Context)) { <-ctx.Done() } // 永远当跟随者
-	l, err := NewLoops(store, nopLedgers{}, testLoopConfig(), follower, fixedNow)
+	cfg := testLoopConfig()
+	cfg.ReconcileInterval = 0
+	l, err := NewLoops(store, nopLedgers{}, cfg, follower, fixedNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +130,8 @@ func TestLoopsNeverRunWithoutLeadership(t *testing.T) {
 	}
 }
 
-// TestLoopsRunWhileLeaderAndStopOnLoss:当选后各循环都跑;任期结束 whileLeader 等全部轮次退出才返回。
+// TestLoopsRunWhileLeaderAndStopOnLoss:当选后清理、补发、gauge 都跑;任期结束 whileLeader 等全部轮次退出才返回。
+// 对账不随领导权起停,这里关掉它,免得把它的轮次算成「卸任后仍在执行」。
 func TestLoopsRunWhileLeaderAndStopOnLoss(t *testing.T) {
 	store := &fakeMaintenance{}
 	leaderCtx, loseLeadership := context.WithCancel(context.Background())
@@ -124,7 +141,9 @@ func TestLoopsRunWhileLeaderAndStopOnLoss(t *testing.T) {
 		close(returned)
 		<-ctx.Done()
 	}
-	l, err := NewLoops(store, nopLedgers{}, testLoopConfig(), campaign, fixedNow)
+	cfg := testLoopConfig()
+	cfg.ReconcileInterval = 0
+	l, err := NewLoops(store, nopLedgers{}, cfg, campaign, fixedNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +154,7 @@ func TestLoopsRunWhileLeaderAndStopOnLoss(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		store.mu.Lock()
-		ok := len(store.sweeps) > 0 && len(store.dueScans) > 0 && store.gaugeScans > 0 && len(store.reconcileArg) > 0
+		ok := len(store.sweeps) > 0 && len(store.dueScans) > 0 && store.gaugeScans > 0
 		store.mu.Unlock()
 		if ok {
 			break
@@ -452,6 +471,118 @@ func TestReconcileRoundFeedsTally(t *testing.T) {
 	l.reconcileRound(canceled, tally)
 	if tally.byShard[3] != 1 {
 		t.Fatalf("取消的轮次不应改 tally: %v", tally.byShard)
+	}
+}
+
+// TestReconcileRunsWithoutLeadershipAndStopsWithRun:对账不看领导权 —— 永远当跟随者的副本也按自己负责的分片对账,
+// 清理、补发、gauge 照旧一次都不跑;Run 的 ctx 结束后对账循环退出,Run 返回之后不再有后台操作。
+func TestReconcileRunsWithoutLeadershipAndStopsWithRun(t *testing.T) {
+	store := &fakeMaintenance{}
+	follower := func(ctx context.Context, _ func(context.Context)) { <-ctx.Done() } // 永远当跟随者
+	l, err := NewLoops(store, nopLedgers{}, testLoopConfig(), follower, fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.ReconcileOwnership = fakeOwnership{shards: []uint32{2, 40}, ready: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { l.Run(ctx); close(done) }()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		store.mu.Lock()
+		rounds := len(store.reconcileOrder)
+		store.mu.Unlock()
+		if rounds > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("跟随者 5s 内没有跑过对账")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ctx 结束后 Run 没有返回")
+	}
+	after := store.calls.Load()
+	time.Sleep(20 * time.Millisecond)
+	if store.calls.Load() != after {
+		t.Fatal("Run 返回之后仍有后台操作在执行")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.sweeps) != 0 || len(store.dueScans) != 0 || store.gaugeScans != 0 {
+		t.Fatalf("跟随者跑了领导者的循环: sweeps=%d dueScans=%d gauges=%d",
+			len(store.sweeps), len(store.dueScans), store.gaugeScans)
+	}
+	for _, order := range store.reconcileOrder {
+		if len(order) != 2 || !slices.Contains(order, 2) || !slices.Contains(order, 40) {
+			t.Fatalf("对账读了 %v, want 只读本副本负责的 2、40", order)
+		}
+	}
+}
+
+// TestReconcileRoundReadsOnlyOwnedShardsRotated:一轮只读本副本负责的分片,起点按墙钟在这些分片里轮转;
+// 成员表没就绪、或此刻不负责任何分片时,整轮一片都不读。
+func TestReconcileRoundReadsOnlyOwnedShardsRotated(t *testing.T) {
+	store := &fakeMaintenance{}
+	cfg := testLoopConfig()
+	cfg.ReconcileInterval = time.Hour
+	l, err := NewLoops(store, nopLedgers{}, cfg, func(context.Context, func(context.Context)) {}, fixedNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned := []uint32{3, 9, 20, 41, 60}
+	l.ReconcileOwnership = fakeOwnership{shards: owned, ready: true}
+	l.reconcileRound(context.Background(), &reconcileTally{})
+	start := reconcileStartIndex(testNowMs, cfg.ReconcileInterval, len(owned))
+	want := append(append([]uint32(nil), owned[start:]...), owned[:start]...)
+	if len(store.reconcileOrder) != 1 || !slices.Equal(store.reconcileOrder[0], want) {
+		t.Fatalf("扫描顺序 = %v, want %v", store.reconcileOrder, want)
+	}
+
+	l.ReconcileOwnership = fakeOwnership{ready: false}
+	l.reconcileRound(context.Background(), &reconcileTally{})
+	l.ReconcileOwnership = fakeOwnership{ready: true}
+	l.reconcileRound(context.Background(), &reconcileTally{})
+	if len(store.reconcileOrder) != 1 {
+		t.Fatalf("没就绪或不负责任何分片时不该读,实际又读了 %d 轮", len(store.reconcileOrder)-1)
+	}
+}
+
+// TestReconcileStartIndexWithAllShardsMatchesStartShard:负责全部 64 片时,轮转后的第一片就是 reconcileStartShard,
+// 与分片之前单领导者的起点逐轮相同。
+func TestReconcileStartIndexWithAllShardsMatchesStartShard(t *testing.T) {
+	interval := time.Hour
+	ms := uint64(interval.Milliseconds())
+	for k := uint64(0); k < 3*ShardCount; k++ {
+		nowMs := testNowMs + k*ms
+		order := rotateShards(ringOrder(0), reconcileStartIndex(nowMs, interval, ShardCount))
+		if len(order) != ShardCount || order[0] != reconcileStartShard(nowMs, interval) {
+			t.Fatalf("k=%d: first shard %d, want %d", k, order[0], reconcileStartShard(nowMs, interval))
+		}
+	}
+	if got := rotateShards(nil, 3); len(got) != 0 {
+		t.Fatalf("rotateShards(nil) = %v", got)
+	}
+}
+
+// TestReconcileTallyRetain:分片改归别的副本时清掉它的读数(读数归新负责的副本),仍负责的分片读数保留。
+func TestReconcileTallyRetain(t *testing.T) {
+	var tally reconcileTally
+	tally.apply([]ShardTally{{Shard: 1, Inconsistent: 2, Complete: true}, {Shard: 5, Inconsistent: 3, Complete: true}})
+	if got := tally.retain([]uint32{5, 9}); got != 3 {
+		t.Fatalf("retain = %d, want 3(分片 1 已不归本副本)", got)
+	}
+	if tally.byShard[1] != 0 || tally.byShard[5] != 3 {
+		t.Fatalf("tally = %v", tally.byShard)
+	}
+	if got := tally.retain(nil); got != 0 {
+		t.Fatalf("不负责任何分片时 = %d, want 0", got)
 	}
 }
 

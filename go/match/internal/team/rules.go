@@ -183,6 +183,10 @@ type Decision struct {
 
 	// LeaderOfflineTransferred 本次惰性转让了队长(§D.7)。
 	LeaderOfflineTransferred bool
+	// LeaderChanged 提交前后队长不是同一个人(转让、队长离队后改选、惰性转让),且队伍没有解散。
+	// 留在队里的成员 TeamId 不变,原本不收 scene 信号;服务器驱动的组队跟随按队长建队形
+	// (docs/design/team-follow-server-trail.md),所以 publish 据此给留下的全员也发一次。
+	LeaderChanged bool
 	// Disbanded 本次解散(显式解散,或最后一人离队 / 被修复移出)。
 	Disbanded bool
 	// RevokedInvitees 因解散而失效的未过期邀请的被邀请人(推 NotifyTeamEvent INVITE_REVOKED)。
@@ -730,6 +734,7 @@ func (c *ruleCtx) finish(orig *teampb.TeamRecord) Decision {
 		sortMembers(c.rec.Members)
 		d.Record = c.rec
 		newMembers = memberSet(c.rec)
+		d.LeaderChanged = orig.GetLeaderId() != 0 && orig.GetLeaderId() != c.rec.GetLeaderId()
 	}
 	for _, id := range MemberIds(c.rec) {
 		if oldMembers[id] {

@@ -120,11 +120,20 @@ func (n *Node) Close() error {
 	// Delete both atomically: the per-zone info key (consumed by service
 	// discovery watchers) and the global allocation key (guards uniqueness
 	// across zones). Falling back to lease revocation handles either-or.
-	if _, err := n.Client.Txn(context.Background()).
+	// 只删本实例的键:失租后原 node_id 可能已被别的实例接管、本进程还没退出就停机,无条件删会把对方的发现键删掉,
+	// 而对方不 watch 自己的键,会一直不可见(docs/design/infra-reconnect-overview.md §4 R3,与 shared/noderegistry 同一做法)。
+	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	defer cancel()
+	resp, err := n.Client.Txn(ctx).
+		If(clientv3.Compare(clientv3.Value(allocKey), "=", n.Info.NodeUuid)).
 		Then(clientv3.OpDelete(infoKey), clientv3.OpDelete(allocKey)).
-		Commit(); err != nil {
+		Commit()
+	if err != nil {
 		logx.Errorf("Failed to delete node keys from etcd: %v", err)
 		return fmt.Errorf("failed to delete node keys: %v", err)
+	}
+	if !resp.Succeeded {
+		logx.Infof("Node keys of node_id=%d no longer belong to this instance; left in place", n.Info.NodeId)
 	}
 
 	// Revoke the lease — defense in depth: even if the deletes above are
@@ -137,6 +146,9 @@ func (n *Node) Close() error {
 
 	return nil
 }
+
+// closeTimeout 是 Close 里删键的预算:停机不能被 etcd 卡住。
+const closeTimeout = 5 * time.Second
 
 // KeepAlive starts a cancellable keep-alive loop.
 func (n *Node) KeepAlive() error {

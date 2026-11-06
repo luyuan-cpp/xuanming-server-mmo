@@ -977,9 +977,32 @@ scene 不需要任何改动:活动奖励不走 scene 结算,scene 照常发 PVE 
 **2026-10-23 更正(第二轮审计 r2-guild#1;本表写于 launch 占用引入之前)**:全球形态下 R1、R2 的「巡检器 3600s 后判 EXPIRED」已不是终局。2026-10-21 起开战前先持久 `guild_trial_launch` 原件与参与者 ACTIVE 占用(本文末「私有历练大厅的全服 SQL 权威」),而 EXPIRED 允许迟到结果,不能清占位。现在的口径:
 
 - 全球局一律走终局协议 v1(cross-zone-matchmaking.md §13.6「2026-10-23 修复」):battle 打完先把含全员个人结算的原件交 match `CommitBattleOutcome`,match 一个 SQL 事务写 COMPLETE 与两个发件箱,活动结果由 match 发件箱补发,battle 不再写 `battle:activity_result:*` 记录,R3–R6 只剩旧协议意义。
-- R1(战斗中 battle 崩溃、或停机 `AbortAllRooms` 作废)与 R2 的出口:match 在权威截止(不晚于成局后 300s)之后与 COMPLETE 争同一主键,原子提交 SQL ABORT(formation 4→5、原票置 4);帮会 launch 恢复器每 10s 重放原 Start 的签名取消,拿到 formation=5 / ABORT 回执后,`FinishCancelledTrialLaunch` 同事务终结 launch、参与者与大厅占位,对局行记 SETTLED/LOSS。截止前的 formation=4、RPC 超时、EXPIRED、帮会解散都不释放。释放规则只在 `data.TrialCancelReceiptIsTerminal` 一处。
+- R1(战斗中 battle 崩溃、或停机 `AbortAllRooms` 作废)与 R2 的出口:match 在权威截止(不晚于成局后 300s)之后与 COMPLETE 争同一主键,原子提交 SQL ABORT(formation 4→5、原票置 4);帮会 launch 恢复器按每条原件的检查时刻(见下方「2026-11-05 修复」,开局窗口过后才开始、按退避拉长)重放原 Start 的签名取消,拿到 formation=5 / ABORT 回执后,`FinishCancelledTrialLaunch` 同事务终结 launch、参与者与大厅占位(大厅 ENDED 带结束原因),帮会还在时对局行记 SETTLED/LOSS。截止前的 formation=4、RPC 超时、EXPIRED、帮会解散都不释放。释放规则只在 `data.TrialCancelReceiptIsTerminal` 一处。
 - 停机前一刻已打完、还没拿到 SQL 决定的局,battle 在停机排空窗口内再提交一轮(有界 15s),拿到 COMPLETE 即照常结算;没拿到的按 R1 处理。
 - 巡检 3600s 判 EXPIRED 保留为 guild 本地标记,不碰 launch;到那时仍占用,说明 match 不可达或成局停在 UNKNOWN,保持占用是 fail-closed。
+
+**2026-11-05 修复(r2-guild#1 评审:launch 恢复器的调度、坏行、解散与作废出口)**。修复前恢复器有四个问题:每个副本每 10s 从头扫全部 state 1/2 的原件,刚 Prepare、Start 还在路上的原件也立刻重放取消 —— match 先写下取消墓碑(或关掉直连待办),随后到达的合法 Start 被拒成「服务繁忙」,副本越多越常见;页里一行解不开就整页报错、游标不前进,它后面的原件永远轮不到;帮会已解散而战斗还在进行时,登记对局回 `ErrGuildGone`,每轮报错并 Hold 排空证明,拖住所有帮会;作废释放写 LOSS 的语句绕开对局行闸门,大厅写成 ENDED 却没有结束原因、也不推送。现在的做法(`data/trial_launch_repo.go`「恢复器的到期认领」、`logic/trial_launch.go`):
+
+- **检查时刻 + 单行认领**。`guild_trial_launch` 加两列 `next_check_ms`(SQL 时钟毫秒)、`check_attempts`,索引 `(state, next_check_ms)`。Prepare 写首次检查时刻 = max(大厅 `launch_deadline_ms`, Prepare 提交时刻) + `data.TrialRecoveryGrace`(30s,与占用租约余量 `trialOccupancyMargin` 同值)。许可只在开局窗口里用:末人同意的那次请求在同一份请求预算(Timeout−500ms)里 Prepare、发 Start,单次 Start ≤ 2s,窗口 5s;再过 30s,实时路径一定已经放弃这次 Start,取消不会与它竞争。宽限只为「Start 结局未知」而留:实时路径拿到 match 的确定答复而没开成时立即把检查提前到现在(见下方「复审修复」第 1 条)。恢复器只取 `state IN(1,2) AND next_check_ms <= SQL 现在` 的行,逐行用读到的检查时刻做自动提交的 CAS,改成「SQL 现在 + 退避间隔」并 `check_attempts+1`;CAS 成功的副本才重放这一条的取消。时间一律取 SQL 时钟,不用各副本墙钟。
+- **吞吐随副本数增长、截止前少空转**。多副本认领不同的行,同一条同一时刻只有一个副本在查;一轮 5s 预算内一页页认领,不再每轮封顶 20 条。每页只认领剩余预算查得完的条数(按单条上限 2s 算,封顶 20 条),每条开查之前再核一次剩余预算(见「复审修复」第 2 条)。间隔第 n 次认领为 10s×2ⁿ、封顶 2 分钟,加至多 1/5 抖动:成局中途失败、发房前中止的局头几次检查就拿到终态;开局成功的局在 match 截止(备战租约 + 模板战斗时长)之前不可能 ABORT,检查从「每副本每 10s 一次」降到「全体副本合计至多每 2 分钟一次」。代价:ABORT 提交之后最多再晚约 2.4 分钟释放。认领只决定谁、何时去查,不参与正确性:释放仍只凭权威回执,重放幂等,两个副本万一同时查同一条也只释放一次。state=2 与 state=1 同一调度,登记对局不改检查时刻。
+- **坏行跳过**。解不开的行(摘要不符、名单越界、状态与 battle_id 矛盾)同样被认领、推到 2 分钟后,request_id 单独报出,打 ERROR、计 `guild_trial_launch_recovery_total{result="undecodable"}`,不算失败、不 Hold;行原样保留等人工处理(核对与人工终结见 §6.35a 场景五),它后面的原件照常轮到。
+- **帮会已解散**。非终态回执下登记对局或推进大厅回 `ErrGuildGone` 时按「没有可登记的东西」处理(与实时路径 `recordTrialLaunched` 同一口径),返回成功、不 Hold;占用只等权威终态(结算 / 标毒的帮会已解散分支,或截止后的 SQL ABORT)。
+- **作废出口**。写 LOSS 改走与结算、标毒、巡检同一个写入口(`settleCancelledTrialBattle` = `readTrialGate` + `writeTrialBattleState`):核 guild_id(别帮的行拒绝、不释放)、拒绝已 SETTLED 的行,STARTED / EXPIRED → SETTLED/LOSS,缺行补一行 SETTLED/LOSS;帮会已解散时不碰对局行,解散后留下的 EXPIRED 历史行保持原样。大厅 ENDED 写结束原因 `trialCancelledLobbyEndTip`,提交后给名单推一次 ACTIVITY_CHANGED(与 `launchTrial` 结尾一致)。结束原因暂用已有的 `kGuildTrialServiceBusy`;开局后战斗作废的专用码待 Tip.xlsx 发号(`kGuildTrialBattleAborted`),发号后只改这一个常量。
+- **运维**。`guild_trial_launch_recovery_total{result}`:`released` / `waiting` / `error` / `undecodable`,另有不按原件计的 `claim_error`(一次到期扫描或认领失败)。`undecodable` 增长说明有原件行坏了,处置见 §6.35a 场景五;`error` 持续增长说明 match 取消入口不可达或回执矛盾;`claim_error` 持续增长说明 guild 库不可用。
+- **残余**。① 退避不知道 match 的真实截止:开局成功的长局在截止前仍有少量检查(1 小时的局全体副本合计约 30 次),ABORT 之后最多晚一个封顶间隔才释放。要按截止精确调度,需 match 在取消回执里带「最早可提交 ABORT 的时刻」(`CancelActivityBattleResponse` 追加字段 + match `direct_cancel.go` 填写,两个时钟都是 SQL 时钟),本批只改 guild,未做。② `schemamigrate` 对已有表只补列、不补普通索引:已建过 `guild_trial_launch` 的开发库要么清库重建(项目未上线,可清),要么手工补 `(state, next_check_ms)` 索引,否则到期扫描退化为扫全部在途行。存量行 `next_check_ms=0` 视为立即到期,同样清库即可。③ 首次检查要等「开局截止 + 30s」的只剩 Start 结局未知的局 —— match 调用返回传输错误或超时、回成功却没给 battle_id —— 以及 guild 在 Prepare 与 Start 之间崩溃、Prepare 提交结果未知、提前检查那一条写失败的局:它们的占用与大厅 LAUNCHING 要挂约 35~45s(开局截止后 30s,再加至多一个恢复循环间隔)才释放,修复前约 10s,这是不与在途 Start 竞争的代价。match 同步拒绝(离线、在战斗中、未就绪、请求非法、INTERNAL 等任一拒绝码)和预算不足根本没发 Start 的局不在此列,至多一个恢复循环间隔(默认 10s)就释放(「复审修复」第 1 条)。
+
+**2026-11-05 复审修复(r2-guild#1 复审:开局失败的释放时延、轮预算尾部、认领失败、宽限守卫)**。上面的初版调度让所有原件一律等「开局截止 + 30s」,而最常见的开局失败 —— match 同步回业务拒绝 —— 走 `endTrialLobby → endPendingLobby` 时看到 launch 原件就回 `ErrWriteConflict`,大厅停在 LAUNCHING,`requireTrialEntryFree` 拒绝名单上所有人建房或同意,要等约 35~45s 才由恢复器释放(修复前不超过约 10s)。同批复核还发现三处:多页认领后最后一条的取消 RPC 会被轮预算截断成「结局未知」并 Hold(粘性,直到重启);认领本身失败什么都没发出,却也返回错误并 Hold;宽限是否盖住开局预算没有机械守卫(旧断言两边是同一个常量)。现在:
+
+1. **确定答复立即到期**(`logic/activity_trial.go` 的 `startTrialAtMatch`、`data.ActivityRepo.ExpediteTrialLaunchCheck`)。`callTrialMatch` 多报一个 `startSettled`:根本没发 Start(预算不足),或 match 同步作答(成功,或任一拒绝码,含 INTERNAL —— match 已处理完这次请求,它自己的提交结果未知时取消会读到同一份意图)。没开成且 `startSettled` 时,实时路径用独立预算(不继承请求的取消)执行一条自动提交的 `UPDATE guild_trial_launch SET next_check_ms=<SQL 现在> WHERE request_id=? AND state=1 AND battle_id=0 AND check_attempts=0 AND next_check_ms><SQL 现在>`,下一轮任一副本就认领、重放签名取消、凭零 battle 的取消墓碑释放。调用返回传输错误或超时、回成功却没给 battle_id 时 match 那边可能还在处理,不提前。这条写只改调度、不参与释放判定:判断错了(match 回拒绝却其实开了局)取消回执也不是终态,原件照常按退避等结果,不丢数据;写失败只打日志,退回宽限。它只对从未认领的 state1 原件生效、只往前提,重复调用与已登记 / 已终结的原件影响 0 行。
+2. **轮预算尾部不制造「结局未知」**(`logic/trial_launch.go` 的 `round`)。每页只认领剩余预算查得完的条数(`trialLaunchChecksWithin`:剩余预算 / 单条上限 2s,封顶 20),每条开查之前再核一次,不够一条就结束本轮,什么都没发出,不算失败;开查之后这一条用自己的 2s 上限,不被轮预算截断。因认领本身耗时而认领了没查的原件多计一次认领、等下一次检查时刻(间隔长一档),不还原调度 —— 有了前一道核对,这种情形只在认领语句本身很慢时出现。
+3. **认领失败不 Hold**。到期扫描或 CAS 出错时,出错之前已认领的部分照常查,其余没发出任何东西:只打 ERROR、计 `guild_trial_launch_recovery_total{result="claim_error"}`,返回值不并入它。`round` 返回非 nil 只剩一种含义:有原件的取消或释放结局未知。
+4. **宽限的机械守卫**。`trialRecoveryGrace` 改为导出的 `data.TrialRecoveryGrace`,logic 单测断言它大于开局窗口 + `config.MaxRpcTimeoutMs` + `config.MaxMatchRpcTimeoutMs` + 10s(各 tidb-server 本地时钟差与 match 提交晚于传播截止的余量),任何一项调大到盖不住就变红。
+5. **生产装配可测**。恢复器的装配收进 `newTrialLaunchRecovery`(`StartTrialBackground` 调它),单测经它跑一轮,漏装释放后推送就变红。
+6. **运维**。坏行的核对与人工终结见 §6.35a 场景五,告警规则补进同节「部署与告警」。
+
+残余(复审):① 业务拒绝的具体原因(如某人离线)只回给最后同意的那个人;有 launch 原件时实时路径写不了大厅的结束原因,释放时大厅写的是 `trialCancelledLobbyEndTip`(暂为 `kGuildTrialServiceBusy`),名单里其他人看到的是「服务繁忙」。要显示原因,需在 launch 行上持久化实时路径的结束原因、释放时写回大厅,未做。② 同一原因,有 launch 原件时 `endTrialLobby` 每次都失败并打一条 ERROR「大厅未结束…保留原launch/占位等待终局证明」,这条在业务拒绝时属预期,不代表故障,排障时不要按它告警。③ Prepare 返回错误(含 guild 库抖动导致的提交结果未知)时实时路径不提前检查:这时 Start 没有发出,提前本身是安全的,但这是库故障路径、库多半也写不进这一条,没做,原件按宽限处理。
+
+回归:`data/trial_launch_claim_test.go`(首次检查时刻、退避与抖动,纯函数)、`data/trial_launch_claim_tidb_test.go`(窗口内认领不到、到期只被认领一次、state=2 同一调度、终结后不再认领、坏行跳过;复审追加:提前检查只让从未认领的 state1 原件立即到期且只往前提、CAS 拿过期观察值或原件已终结时影响 0 行)、`data/trial_launch_abort_tidb_test.go`(EXPIRED / 发房前中止 / 别帮对局行 / 解散后 EXPIRED 历史行、大厅结束原因;复审追加:从未登记的发房前中止补写 SETTLED/LOSS)、`data/activity_repo_static_test.go`(复审追加:两条调度写只改调度列、带状态复核)、`logic/trial_launch_recovery_test.go`(只查认领到的原件、坏行不挡后面、解散不报错、释放后推送、一轮多页;复审追加:业务拒绝与预算不足提前检查而结局未知与开局成功不提前、认领失败不报错、剩余预算不够一条就不认领、页大小按预算截断、宽限盖住开局预算、生产装配释放后推送)。未编译、未运行,待 Codex 带 `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` 验证。
 
 <!-- s6_activities_part7.md -->
 
@@ -1546,6 +1569,7 @@ COMMIT;
 | `guild_trial_result_overdue` | gauge |
 | `guild_trial_owed_total{result}`、`guild_trial_owed_rows` | counter、gauge |
 | `guild_trial_register_fail_total` | 无标签 |
+| `guild_trial_launch_recovery_total{result}` | 2026-11-05 起:launch 恢复器逐条原件一次检查的去向,`released` / `waiting` / `error` / `undecodable`;另有不按原件计的 `claim_error`(一次到期扫描或认领失败,没发出任何取消)(见 §6.21「2026-11-05 修复」「复审修复」) |
 
 > **2026-10-08 落码修正(B6b-srv2;`logic/activity_metrics.go`)**:指标用 go-zero `core/metric` 注册(不是 promauto),名字与正文相同,取值有增补。label 全部是写死的有限集合,不含 player_id / guild_id / activity_id。
 >
@@ -1696,6 +1720,58 @@ SELECT op_id, kind, attempts, last_outcome, last_reason, FROM_UNIXTIME(created_m
 ```
 未决指令本身卡住(scene 一直回 UNKNOWN)时按 92-handoff §12.8 的 `assetopfix` 处理;指令终结后窗口腾出空位,待入队行会被自动转走。**不要手工删 `guild_trial_reward_owed` 的行**:删了这份物品就真的没了。
 
+### 场景五:launch 原件解不开(`guild_trial_launch_recovery_total{result="undecodable"}` 增长)
+
+(2026-11-05 补,r2-guild#1 复审。**未演练**,首次使用前先在本地环境走一遍。)
+
+**含义**:`guild_trial_launch` 里有一行在途原件(state 1/2)解不开 —— 摘要与原件字节对不上、名单越界或重复、账号非法、state 与 battle_id 矛盾(`data.decodeTrialLaunch`)。只可能来自手工误改、数据损坏,或日后收紧解码规则留下的历史行。恢复器每 2 分钟认领它一次,打一条 ERROR `[GuildTrial] launch original <id> is undecodable, skipped and kept for manual repair; its occupancy stays held` 并计数,不 Hold 排空、不挡别的原件(§6.21「2026-11-05 修复」)。**但这一行自己永远出不去**:重放签名取消要原件原字节,结算、标毒也核不上原件。
+
+**影响面**:这一行名单上的角色在人工处理之前不能建历练房、不能同意邀请(`requireTrialEntryFree` 认 `guild_trial_launch_role` 的 ACTIVE 行),大厅停在 LAUNCHING / LAUNCHED。别的帮会、别的角色不受影响。match 侧的战斗入口占用有租约,到期自己放开,不用处理。
+
+**核对**(只读,guild 库;`<request_id>` 取自 ERROR 日志,大厅号与它相同):
+
+```sql
+-- 1. 坏行本身。state 1 开局中 / 2 已登记对局;记下 battle_id。
+SELECT request_id, battle_id, state, LENGTH(original_proto) AS original_bytes, HEX(request_digest) AS digest,
+       FROM_UNIXTIME(created_ms / 1000) AS created_at, check_attempts, FROM_UNIXTIME(next_check_ms / 1000) AS next_check_at
+  FROM guild_trial_launch WHERE request_id = <request_id>;
+-- 2. 被它占着的角色。原件解不开时以这张表为名单;state 1 = ACTIVE。
+SELECT player_id, account, owner_revision, state FROM guild_trial_launch_role WHERE request_id = <request_id>;
+-- 3. 大厅与占位。大厅 state 1 待同意 / 2 开局中 / 3 已开局 / 4 已结束;记下 guild_id。
+SELECT lobby_id, guild_id, state, battle_id, FROM_UNIXTIME(launch_deadline_ms / 1000) AS launch_deadline
+  FROM guild_trial_lobby WHERE lobby_id = <request_id>;
+SELECT player_id, lobby_id FROM guild_trial_lobby_slot WHERE lobby_id = <request_id>;
+-- 4. battle_id ≠ 0 时这一局在 guild 的对局行:1 进行中 / 2 已结算 / 3 已判过期。
+SELECT state, settle_result FROM guild_trial_battle WHERE battle_id = <battle_id>;
+```
+
+**确认 match 侧已终局**(只读 match 库;按 cross-zone-matchmaking.md §13.3,任何 match 表都不手改):
+
+```sql
+-- 活动开局意图:kind 2 = 活动,owner_id = 帮会,request_low = request_id。cancelled = 1 是取消墓碑;battle_id 是成局的局号。
+SELECT battle_id, cancelled FROM match_direct_intent WHERE kind = 2 AND owner_id = <guild_id> AND request_high = 0 AND request_low = <request_id>;
+-- 成局的局:formation state 5 = 已安全中止;completion decision 1 = COMPLETE / 2 = ABORT。
+SELECT state FROM match_formation WHERE battle_id = <battle_id>;
+SELECT decision, result_published FROM match_battle_completion WHERE battle_id = <battle_id>;
+```
+
+只有两种情形可以人工终结:没有意图行,或 `cancelled = 1` 且 `battle_id = 0`(从未成局);formation `state = 5` 且 completion 没有行或 `decision = 2`(作废)。`decision = 1`(COMPLETE)的局有结果、要发奖:**不要终结**,先和开发一起按下面「人工补发」处理结果,再终结占用。意图在、`cancelled = 0`、formation 还在 1~4:战斗还没终局,等。match 侧也卡在 UNKNOWN 时,先走 match 侧的处置(cross-zone-matchmaking.md §13.3;带审计的释放工具另批落地),等它给出终局再回来。
+
+**人工终结**(guild 库,一个事务;动手前把上面几条查询的结果记进工单)。语句顺序与代码的锁序一致(占位 → launch → 角色);报死锁就整段重跑:
+
+```sql
+BEGIN;
+UPDATE guild_trial_lobby_slot SET lobby_id = 0 WHERE lobby_id = <request_id>;
+UPDATE guild_trial_launch SET state = 3, updated_ms = <now_ms> WHERE request_id = <request_id> AND state IN (1, 2);  -- 必须影响 1 行,否则 ROLLBACK
+UPDATE guild_trial_launch_role SET state = 2 WHERE request_id = <request_id> AND state = 1;
+COMMIT;
+```
+
+- **不要动 `guild_trial_lobby` 那一行**:`state` 列与 `view_proto` 里的状态必须一致,只改一边整行就读不出来(`lobbyView` 拒绝)。占位清掉之后这一行谁也找不到,停在 LAUNCHING / LAUNCHED 不影响任何人。
+- **不要删坏行**:state 3 之后恢复器不再认领它(只认领 state 1/2),`undecodable` 计数随之停涨;原字节留作排查证据。
+- 对局行(第 4 条)若还是进行中,不用手改:巡检器到时判 EXPIRED。
+- 事后核对:第 2 条全是 state 2;名单上的人能再建房;两分钟内 `undecodable` 不再增长。
+
 ### 人工补发
 
 **现状:v1 没有补发工具,这是一条欠账。** 下面是补发时必须遵守的口径,动手的人是开发,不是运维手写 SQL。
@@ -1732,6 +1808,8 @@ SELECT op_id, kind, attempts, last_outcome, last_reason, FROM_UNIXTIME(created_m
   - `max(guild_trial_result_overdue)` 超过阈值持续 10 分钟。§6.33 写的阈值是 0,但"没打成"的局也会让它大于 0(见场景三),上线后按实际的开战失败率定阈值;
   - `max(guild_trial_owed_rows)` 持续上升超过 1 小时;
   - `increase(guild_trial_register_fail_total[10m]) > 0`;
+  - `increase(guild_trial_launch_recovery_total{result="undecodable"}[10m]) > 0`(有 launch 原件行坏了,名单上的人被占着,处置见场景五;2026-11-05 补);
+  - `increase(guild_trial_launch_recovery_total{result="claim_error"}[10m]) > 0` 持续 10 分钟(恢复器认领不了到期原件,开局失败与作废的局都释放不了,先查 guild 库;2026-11-05 补);
   - 消费组 `guild-trial` 的 lag 持续大于 0;
   - `increase(safego_panic_total{point=~"guild\\.kafka\\.trial_results.*|guild\\.trial_.*"}[10m]) > 0`。
 

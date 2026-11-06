@@ -40,7 +40,7 @@ const (
 	tickAckLimit = 100
 	// 单行子预算从 Tick 父 ctx 的截止时刻推出来(rowBudgetFor;svc 每轮只给合同推进 3s,见 svc.AssetChannel.Start)。
 	// 以前固定 5s,比整轮预算还长:两者同时到期,卡住的那一行连推迟都来不及做,下一秒又排在 Due 队头吃满整轮(2026-10-22)。
-	//   - tickAckReserve:Due 循环给本轮收据 ACK 留的时间。活跃合同每轮都会被 advance 重新 Save,Due 几乎总能取满,
+	//   - tickAckReserve:Due 循环给本轮收据 ACK 留的时间。有腿在途的合同每轮都到期(schedule.go),积压时 Due 能取满,
 	//     不留的话预算全被合同推进吃掉,scene 端托管原件的 ACK 一直轮不到;
 	//   - tickDeferBudget:一行失败后推迟 / 隔离它的预算(deferCommerce 自带这段超时)。子预算先扣掉它,
 	//     所以卡住的行一定先撞上自己的子预算,父 ctx 还剩这一段把它推迟;
@@ -266,14 +266,27 @@ func (e *Engine) step(ctx context.Context, r *tradepb.TradeCommerceRecord) error
 		return fmt.Errorf("推进交易合同: %w", err)
 	}
 	if r.Kind == 4 && r.Side != 0 {
-		// advance 已提交:这一行的版本已变、updated_ms 已写成现在(排到了队尾)。拿 Due 读到的旧版本去推迟或隔离
-		// 必然落空,所以撮合失败不交给 deferCommerce,只单独计数、记日志,下一轮照常重撮(2026-10-22)。
+		// advance 已提交:这一行要么已重存(版本已变、updated_ms 写成现在),要么没有变化、下次到期已排远
+		// (挂着的市场单,缺口清单第 16 条)。拿 Due 读到的旧版本去推迟或隔离都不对,所以撮合失败不交给
+		// deferCommerce(2026-10-22),只单独计数、记日志,再把这一行提前到现在,下一轮照常重撮。
 		// 对手单自己坏了的情况 matchMarket 会把对手单移出盘口,不算这里的失败。
 		if err := e.matchMarket(ctx, r.CommerceId); err != nil {
 			recordMatchFailure(r.CommerceId, err)
+			e.wakeForRematch(ctx, r.CommerceId)
 		}
 	}
 	return nil
+}
+
+// wakeForRematch 把撮合失败的 taker 提前到现在到期,下一轮重撮(与改动前每轮都重撮的节奏相同)。
+// 用自己的一小段预算:撮合可能正是因为本行子预算耗尽才失败的。唤醒失败只记日志,这一行最晚在排好的下次到期
+// (至多 idleRecheck)重撮,不丢。
+func (e *Engine) wakeForRematch(ctx context.Context, id uint64) {
+	wakeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tickDeferBudget)
+	defer cancel()
+	if err := e.Repo.Wake(wakeCtx, id, e.now()); err != nil {
+		logx.Errorf("[Commerce] Could not wake market taker for the next round, it rematches at its scheduled time taker_id=%d: %v", id, err)
+	}
 }
 
 // recordMatchFailure 记下一次 taker 撮合失败。乐观冲突(对手方在预读之后变了)是多副本的正常现象,只记 INFO。
@@ -459,7 +472,7 @@ func (e *Engine) ackReceipts(ctx context.Context) error {
 	if e.Applier == nil || e.Ledger == nil {
 		return nil
 	}
-	ops, err := e.Repo.AckDue(ctx, e.ackAfterOpID, tickAckLimit)
+	ops, err := e.Repo.AckDue(ctx, e.ackAfterOpID, tickAckLimit, e.receiptShards())
 	if err != nil {
 		return noWrite(err)
 	}

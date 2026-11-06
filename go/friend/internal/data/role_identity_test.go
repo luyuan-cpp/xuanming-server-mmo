@@ -21,7 +21,6 @@ func TestOriginalRoleNeverFallsBackToUnconfiguredSystemRepo(t *testing.T) {
 	_, err = repo.GetFriendList(ctx, 22)
 	require.ErrorIs(t, err, ErrOriginalRole)
 	require.ErrorIs(t, repo.Unblock(ctx, 22, 11), ErrOriginalRole)
-	require.ErrorIs(t, repo.CheckOriginalRole(ctx), ErrOriginalRole, "没装护栏时预检不能放行")
 	repo.ConfigureRoleFence(rolefence.NewGuard(nil, nil))
 	_, err = repo.GetFriendList(context.Background(), 22)
 	require.ErrorIs(t, err, ErrOriginalRole)

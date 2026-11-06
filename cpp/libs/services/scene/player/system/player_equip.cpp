@@ -35,6 +35,7 @@
 #include "table/code/equipgemsocket_table.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
+#include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/equip_error_tip.pb.h"
@@ -1151,7 +1152,7 @@ uint32_t PlayerEquipSystem::GmGrantItem(entt::entity player, uint32_t configId, 
 // 写入口:强化 / 镶嵌 / 取下(二期 §4.3;步骤号对应设计文档里三张步骤表)
 // ---------------------------------------------------------------------------
 
-uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, EnhanceOutcome& outcome) {
+uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome) {
 	outcome = EnhanceOutcome{};
 	// 1. 统一前置
 	if (const auto err = CheckWritable(player); err != kSuccess) {
@@ -1182,6 +1183,13 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, EnhanceOut
 	}
 	// 4. 存档等级按表上限夹取(策划下调上限后,超出的那几级不洗存档、也不许再往上强化)
 	const uint32_t currentLevel = std::min<uint32_t>(located.item->get().equip().enhance_level(), maxLevel);
+	// 4a. 乐观比较(审计 r2-equip#1,与 UpgradeSkill 的 expected_rank 同构):比有效等级 —— 快照里下发给客户端的就是它。
+	//     对不上 = 旧请求的重发(上一次已经成功或掉过级),或客户端快照过期:整笔拒绝,不扣、不掷。
+	if (expectedLevel != currentLevel) {
+		LOG_INFO << "[PlayerEquip] Enhance refused, expected_level is stale: player_id=" << tlsEcs.GetPlayerId(player)
+				 << " guid=" << itemId << " expected_level=" << expectedLevel << " current_level=" << currentLevel;
+		return kEquipEnhanceLevelChanged;
+	}
 	if (currentLevel >= maxLevel) {
 		return kEquipEnhanceMaxLevel;
 	}
@@ -1469,6 +1477,13 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 	const auto addErr = BagService::AddItems(player, inventory, refund, TX_EQUIP_GEM_REMOVE, itemId, extra);
 	if (addErr == kBagItemNotStacked || addErr == kBagAddItemBagFull) {
 		return kEquipGemBagFull;  // 同种宝石的堆都满了、又没有空格
+	}
+	if (addErr == kAssetBlocked) {
+		// 获得封禁(全服封禁或本人被 GM 封禁该宝石):业务拒绝,不是故障。宝石留在装备上不会丢,
+		// 解封后照常取下;客户端按 27005 显示「该资产当前被禁止获取」。
+		LOG_WARN << "[PlayerEquip] 取下被拒,宝石的获得被封禁,宝石仍在装备上: player_id=" << tlsEcs.GetPlayerId(player)
+				 << " guid=" << itemId << " config=" << configId << " socket=" << socket << " gem_config=" << gemConfigId;
+		return kAssetBlocked;
 	}
 	if (addErr != kSuccess) {
 		LOG_ERROR << "[PlayerEquip] 取下失败(退回宝石),宝石仍在装备上: player_id=" << tlsEcs.GetPlayerId(player)

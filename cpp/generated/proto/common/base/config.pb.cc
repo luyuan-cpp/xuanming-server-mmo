@@ -1681,12 +1681,12 @@ constexpr GameConfig::ParseTableT_ GameConfig::InternalGenerateParseTable_(const
     {
       PROTOBUF_FIELD_OFFSET(GameConfig, _impl_._has_bits_),
       0, // no _extensions_
-      10, 24,  // max_field_number, fast_idx_mask
+      11, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966332,  // skipmap
+      4294965308,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
-      4,  // num_aux_entries
+      7,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1700,13 +1700,20 @@ constexpr GameConfig::ParseTableT_ GameConfig::InternalGenerateParseTable_(const
        {66, 1, 1,
         PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.player_inbox_)}},
       // uint32 scene_node_type = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameConfig, _impl_.scene_node_type_), 4>(),
-       {8, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameConfig, _impl_.scene_node_type_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.scene_node_type_)}},
       // uint32 zone_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameConfig, _impl_.zone_id_), 5>(),
-       {16, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameConfig, _impl_.zone_id_), 6>(),
+       {16, 6, 0,
         PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.zone_id_)}},
+      // .GameConfig.ZoneRedisConfig scene_control_redis = 11;
+      {::_pbi::TcParser::FastMtS1,
+       {90, 4, 4,
+        PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.scene_control_redis_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .GameConfig.ZoneRedisConfig zone_redis = 7;
       {::_pbi::TcParser::FastMtS1,
        {58, 0, 0,
@@ -1715,9 +1722,9 @@ constexpr GameConfig::ParseTableT_ GameConfig::InternalGenerateParseTable_(const
       65535, 65535
     }}, {{
       // uint32 scene_node_type = 1;
-      {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.scene_node_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.scene_node_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 zone_id = 2;
-      {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.zone_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.zone_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .GameConfig.ZoneRedisConfig zone_redis = 7;
       {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.zone_redis_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .GameConfig.PlayerInboxConfig player_inbox = 8;
@@ -1726,6 +1733,8 @@ constexpr GameConfig::ParseTableT_ GameConfig::InternalGenerateParseTable_(const
       {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.player_redis_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .GameConfig.AuditSnapshotConfig audit_snapshot = 10;
       {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.audit_snapshot_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .GameConfig.ZoneRedisConfig scene_control_redis = 11;
+      {PROTOBUF_FIELD_OFFSET(GameConfig, _impl_.scene_control_redis_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1748,6 +1757,11 @@ constexpr GameConfig::ParseTableT_ GameConfig::InternalGenerateParseTable_(const
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::GameConfig_AuditSnapshotConfig_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::GameConfig_ZoneRedisConfig>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::GameConfig_ZoneRedisConfig_globals_},
+        #endif
     }},
     {{
     }},
@@ -1763,6 +1777,7 @@ inline constexpr GameConfig::Impl_::Impl_(
         player_inbox_{nullptr},
         player_redis_{nullptr},
         audit_snapshot_{nullptr},
+        scene_control_redis_{nullptr},
         scene_node_type_{0u},
         zone_id_{0u} {}
 
@@ -2360,19 +2375,21 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.scene_node_type_),
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.zone_id_),
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.zone_redis_),
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.player_inbox_),
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.player_redis_),
         PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.audit_snapshot_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::GameConfig, _impl_.scene_control_redis_),
         5,
+        6,
         0,
         1,
         2,
         3,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
@@ -2438,28 +2455,30 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto[] AB
     "\t\022\022\n\ncluster_id\030\022 \001(\r\022$\n\nid_segment\030\023 \001("
     "\0132\020.IdSegmentConfig\022\036\n\026audit_topic_gener"
     "ation\030\024 \001(\r\022&\n\013grpc_client\030\025 \001(\0132\021.GrpcC"
-    "lientConfig\"\312\004\n\nGameConfig\022\027\n\017scene_node"
+    "lientConfig\"\204\005\n\nGameConfig\022\027\n\017scene_node"
     "_type\030\001 \001(\r\022\017\n\007zone_id\030\002 \001(\r\022/\n\nzone_red"
     "is\030\007 \001(\0132\033.GameConfig.ZoneRedisConfig\0223\n"
     "\014player_inbox\030\010 \001(\0132\035.GameConfig.PlayerI"
     "nboxConfig\0223\n\014player_redis\030\t \001(\0132\035.GameC"
     "onfig.PlayerRedisConfig\0227\n\016audit_snapsho"
     "t\030\n \001(\0132\037.GameConfig.AuditSnapshotConfig"
-    "\032K\n\017ZoneRedisConfig\022\014\n\004host\030\003 \001(\t\022\014\n\004por"
-    "t\030\004 \001(\r\022\020\n\010password\030\005 \001(\t\022\n\n\002db\030\006 \001(\r\032M\n"
-    "\021PlayerInboxConfig\022\030\n\020consumer_enabled\030\001"
-    " \001(\010\022\036\n\026periodic_fetch_minutes\030\002 \001(\r\032B\n\021"
-    "PlayerRedisConfig\022\014\n\004mode\030\001 \001(\t\022\r\n\005seeds"
-    "\030\002 \003(\t\022\020\n\010password\030\003 \001(\t\032^\n\023AuditSnapsho"
-    "tConfig\022\025\n\rlogin_enabled\030\001 \001(\010\022\026\n\016logout"
-    "_enabled\030\002 \001(\010\022\030\n\020sample_per_mille\030\003 \001(\r"
-    "B\rZ\013common/baseb\006proto3"
+    "\0228\n\023scene_control_redis\030\013 \001(\0132\033.GameConf"
+    "ig.ZoneRedisConfig\032K\n\017ZoneRedisConfig\022\014\n"
+    "\004host\030\003 \001(\t\022\014\n\004port\030\004 \001(\r\022\020\n\010password\030\005 "
+    "\001(\t\022\n\n\002db\030\006 \001(\r\032M\n\021PlayerInboxConfig\022\030\n\020"
+    "consumer_enabled\030\001 \001(\010\022\036\n\026periodic_fetch"
+    "_minutes\030\002 \001(\r\032B\n\021PlayerRedisConfig\022\014\n\004m"
+    "ode\030\001 \001(\t\022\r\n\005seeds\030\002 \003(\t\022\020\n\010password\030\003 \001"
+    "(\t\032^\n\023AuditSnapshotConfig\022\025\n\rlogin_enabl"
+    "ed\030\001 \001(\010\022\026\n\016logout_enabled\030\002 \001(\010\022\030\n\020samp"
+    "le_per_mille\030\003 \001(\rB\rZ\013common/baseb\006proto"
+    "3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto = {
     false,
     false,
-    1863,
+    1921,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto,
     "proto/common/base/config.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto_once,
@@ -5947,6 +5966,9 @@ GameConfig::GameConfig(
   _impl_.audit_snapshot_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.audit_snapshot_)
                 : nullptr;
+  _impl_.scene_control_redis_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.scene_control_redis_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, scene_node_type_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -5986,6 +6008,7 @@ inline void GameConfig::SharedDtor(MessageLite& self) {
   delete this_._impl_.player_inbox_;
   delete this_._impl_.player_redis_;
   delete this_._impl_.audit_snapshot_;
+  delete this_._impl_.scene_control_redis_;
   this_._impl_.~Impl_();
 }
 
@@ -6023,7 +6046,7 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(_impl_.zone_redis_ != nullptr);
       _impl_.zone_redis_->Clear();
@@ -6040,8 +6063,12 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
       ABSL_DCHECK(_impl_.audit_snapshot_ != nullptr);
       _impl_.audit_snapshot_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.scene_control_redis_ != nullptr);
+      _impl_.scene_control_redis_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000030U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000060U)) {
     ::memset(&_impl_.scene_node_type_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.zone_id_) -
         reinterpret_cast<char*>(&_impl_.scene_node_type_)) + sizeof(_impl_.zone_id_));
@@ -6070,7 +6097,7 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 scene_node_type = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_scene_node_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -6079,7 +6106,7 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
   }
 
   // uint32 zone_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -6115,6 +6142,13 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
         stream);
   }
 
+  // .GameConfig.ZoneRedisConfig scene_control_redis = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        11, *this_._impl_.scene_control_redis_, this_._impl_.scene_control_redis_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6140,7 +6174,7 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // .GameConfig.ZoneRedisConfig zone_redis = 7;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -6161,15 +6195,20 @@ PROTOBUF_NOINLINE void GameConfig::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.audit_snapshot_);
     }
-    // uint32 scene_node_type = 1;
+    // .GameConfig.ZoneRedisConfig scene_control_redis = 11;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.scene_control_redis_);
+    }
+    // uint32 scene_node_type = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_scene_node_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_scene_node_type());
       }
     }
     // uint32 zone_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
@@ -6194,7 +6233,7 @@ void GameConfig::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.zone_redis_ != nullptr);
       if (_this->_impl_.zone_redis_ == nullptr) {
@@ -6228,11 +6267,19 @@ void GameConfig::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.scene_control_redis_ != nullptr);
+      if (_this->_impl_.scene_control_redis_ == nullptr) {
+        _this->_impl_.scene_control_redis_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.scene_control_redis_);
+      } else {
+        _this->_impl_.scene_control_redis_->MergeFrom(*from._impl_.scene_control_redis_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_scene_node_type() != 0) {
         _this->_impl_.scene_node_type_ = from._impl_.scene_node_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_zone_id() != 0) {
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }

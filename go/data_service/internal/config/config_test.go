@@ -634,6 +634,10 @@ Kafka:
 					got.SnapshotBatchMaxRows, got.SnapshotBatchMaxBytes, got.SnapshotFlushIntervalMs,
 					got.SnapshotMaxInflightFlushes, got.LagProbeIntervalMs, DefaultSnapshotBatchMaxBytes)
 			}
+			// 流水消费者(2026-11-06 按分区并行落库):没配 = 本实例同时只落一批,与改动前一条循环串行落库相同。
+			if got.TransactionLogMaxInflightFlushes != 1 {
+				t.Fatalf("TransactionLogMaxInflightFlushes default drifted: got %d, want 1", got.TransactionLogMaxInflightFlushes)
+			}
 			// 快照池按 yaml 默认 5(缺段时 0 → 按 5 算)都必须合法。
 			for _, pool := range []int{0, 5} {
 				if err := got.ValidateConsumers(pool); err != nil {
@@ -671,6 +675,12 @@ func TestKafkaConsumerKnobsValidate(t *testing.T) {
 		{"inflight=2 @pool1", 1, func(k *KafkaConfig) { k.SnapshotMaxInflightFlushes = 2 }, false},
 		{"inflight=4 @pool0(按 5)", 0, func(k *KafkaConfig) { k.SnapshotMaxInflightFlushes = 4 }, true},
 		{"inflight=5 @pool0(按 5)", 0, func(k *KafkaConfig) { k.SnapshotMaxInflightFlushes = 5 }, false},
+		// 流水池与快照池同一份 SnapshotMySQL 配置,上限同一个算法(池 − 1,留一条给 GM 流水查询 / 召回)。
+		{"txlog inflight=-1", 5, func(k *KafkaConfig) { k.TransactionLogMaxInflightFlushes = -1 }, false},
+		{"txlog inflight=5 @pool5", 5, func(k *KafkaConfig) { k.TransactionLogMaxInflightFlushes = 5 }, false},
+		{"txlog inflight=4 @pool5", 5, func(k *KafkaConfig) { k.TransactionLogMaxInflightFlushes = 4 }, true},
+		{"txlog inflight=2 @pool1", 1, func(k *KafkaConfig) { k.TransactionLogMaxInflightFlushes = 2 }, false},
+		{"txlog inflight=4 @pool0(按 5)", 0, func(k *KafkaConfig) { k.TransactionLogMaxInflightFlushes = 4 }, true},
 		{"lag=1", 5, func(k *KafkaConfig) { k.LagProbeIntervalMs = 1 }, false},
 		{"lag=4999", 5, func(k *KafkaConfig) { k.LagProbeIntervalMs = 4999 }, false},
 		{"lag=600001", 5, func(k *KafkaConfig) { k.LagProbeIntervalMs = 600001 }, false},

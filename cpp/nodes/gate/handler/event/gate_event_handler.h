@@ -10,6 +10,7 @@ public:
     static void PlayerLeaseExpiredEventHandler(const contracts::kafka::PlayerLeaseExpiredEvent& event);
     static void BindSessionEventHandler(const contracts::kafka::BindSessionEvent& event);
     static void RedirectToGateEventHandler(const contracts::kafka::RedirectToGateEvent& event);
+    static void GateDrainMigrationEventHandler(const contracts::kafka::GateDrainMigrationEvent& event);
     static void PushToPlayerEventHandler(const contracts::kafka::PushToPlayerEvent& event);
     static void BroadcastToPlayersEventHandler(const contracts::kafka::BroadcastToPlayersEvent& event);
     static void BroadcastToSceneEventHandler(const contracts::kafka::BroadcastToSceneEvent& event);

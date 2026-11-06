@@ -15,7 +15,6 @@ namespace player_store_rows
     {
         using google::protobuf::FieldDescriptor;
 
-        constexpr auto kLegacyIndex = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_LEGACY1);
         constexpr auto kOwnerIndex = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_OWNER);
 
         bool IsKnownKind(std::size_t kind)
@@ -98,8 +97,8 @@ namespace player_store_rows
                     return table;
                 }
                 const auto group = static_cast<std::size_t>(options.GetExtension(OptionPersistGroup));
-                // 0 是元数据;其余必须是现存的数据行。kLegacy1 是另一个消息,player_database 的字段不能标到它。
-                if (group != kOwnerIndex && (!IsKnownKind(group) || group == kLegacyIndex))
+                // 0 是元数据;其余必须是现存的数据行,退役号(1、2、5)和不存在的号都拒绝。
+                if (group != kOwnerIndex && !IsKnownKind(group))
                 {
                     table.error = "player_database." + std::string(field->name()) + " has an invalid OptionPersistGroup " +
                                   std::to_string(group) + " (retired or unknown kind)";
@@ -151,7 +150,7 @@ namespace player_store_rows
         return error.empty();
     }
 
-    bool ProjectPlayer(player_database &db, const player_database_1 &db1, KindBytes &out, std::string &error)
+    bool ProjectPlayer(player_database &db, KindBytes &out, std::string &error)
     {
         const GroupTable &groups = Groups();
         if (!groups.error.empty())
@@ -169,7 +168,7 @@ namespace player_store_rows
         for (std::size_t kind = 0; kind < kKindCount; ++kind)
         {
             // 写权行、退役空位恒为空串:out 可能是复用的数组,不清掉会留下上一次的内容。
-            if (!IsDataKind(kind) || kind == kLegacyIndex)
+            if (!IsDataKind(kind))
             {
                 out[kind].clear();
                 continue;
@@ -184,16 +183,11 @@ namespace player_store_rows
                 return false;
             }
         }
-        if (!SerializeDeterministic(db1, out[kLegacyIndex]))
-        {
-            error = "failed to serialize player_database_1";
-            return false;
-        }
         return true;
     }
 
     bool AssemblePlayer(const google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> &rows,
-                        player_database &db, player_database_1 &db1, std::string &error)
+                        player_database &db, std::string &error)
     {
         const GroupTable &groups = Groups();
         if (!groups.error.empty())
@@ -204,16 +198,7 @@ namespace player_store_rows
         for (const auto &row : rows)
         {
             const auto kind = static_cast<std::size_t>(row.kind());
-            if (kind == kLegacyIndex)
-            {
-                if (!db1.ParseFromString(row.payload()))
-                {
-                    error = "failed to parse player_database_1";
-                    return false;
-                }
-                continue;
-            }
-            // 写权行不随数据返回;退役号(旧分行布局的 1、2)和本版本不认识的号都整份拒绝:
+            // 写权行不随数据返回;退役号(旧布局的 1、2、5)和本版本不认识的号都整份拒绝:
             // 按现在的分行去解读别的布局写的行,不属于本行的字段会被清掉,等于静默丢数据。
             if (!IsDataKind(kind))
             {

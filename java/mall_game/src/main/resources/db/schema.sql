@@ -50,13 +50,26 @@ CREATE TABLE IF NOT EXISTS commerce_official_owner (
   buyer_owner_revision VARBINARY(20) NOT NULL,
   INDEX idx_official_owner(buyer_account,buyer_owner_revision,order_sn)
 );
+-- 商城收到的每一笔付款都在这里占一行，(channel, transaction_id) 全局唯一。order_sn 是这笔付款绑定的订单，一单至多绑定一笔；
+-- 为 NULL 表示已付订单又收到的另一笔，没有绑定任何订单，归属与退款见 commerce_duplicate_payment / commerce_refund_intent。
 CREATE TABLE IF NOT EXISTS commerce_payment_receipt (
   channel VARBINARY(32) NOT NULL,
   transaction_id VARBINARY(128) NOT NULL,
-  order_sn VARCHAR(36) NOT NULL,
+  order_sn VARCHAR(36) NULL,
   amount_minor BIGINT NOT NULL,
   currency VARCHAR(16) NOT NULL,
   PRIMARY KEY (channel, transaction_id), UNIQUE (order_sn)
+);
+-- 已付订单的重复付款(2026-11-05，第一轮数据审计 §4 第 19 条)：只记它冲的是哪张订单，金额币种在上表那一行；
+-- 退款走 commerce_refund_intent(source=DUPLICATE_PAYMENT)，订单、库存与交付都不动。
+CREATE TABLE IF NOT EXISTS commerce_duplicate_payment (
+  channel VARBINARY(32) NOT NULL,
+  transaction_id VARBINARY(128) NOT NULL,
+  order_sn VARCHAR(36) NOT NULL,
+  created_ms BIGINT NOT NULL,
+  PRIMARY KEY (channel, transaction_id),
+  INDEX idx_commerce_duplicate_order (order_sn),
+  CHECK (created_ms >= 0)
 );
 CREATE TABLE IF NOT EXISTS commerce_delivery_intent (
   order_sn VARCHAR(36) PRIMARY KEY,
@@ -79,9 +92,29 @@ CREATE TABLE IF NOT EXISTS commerce_request_nonce (
 CREATE TABLE IF NOT EXISTS commerce_sku_grant (sku_id BIGINT PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,title VARCHAR(128) NOT NULL,CHECK (item_config_id>0),CHECK (count_per_unit>0 AND count_per_unit<=4096));
 CREATE TABLE IF NOT EXISTS commerce_order_grant (order_sn VARCHAR(36) PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,title VARCHAR(128) NOT NULL);
 CREATE TABLE IF NOT EXISTS commerce_delivery_receipt (order_sn VARCHAR(36) PRIMARY KEY,trade_order_id VARCHAR(20) NOT NULL,state VARCHAR(24) NOT NULL,proof VARCHAR(64) NOT NULL);
-CREATE TABLE IF NOT EXISTS commerce_refund_intent (order_sn VARCHAR(36) PRIMARY KEY,status VARCHAR(24) NOT NULL,channel VARCHAR(32) NULL,transaction_id VARCHAR(128) NULL,INDEX idx_commerce_refund_pending(status,order_sn));
-
-CREATE TABLE IF NOT EXISTS commerce_refund_receipt (order_sn VARCHAR(36) PRIMARY KEY,channel VARCHAR(32) NOT NULL,transaction_id VARCHAR(128) NOT NULL,amount_minor BIGINT NOT NULL,currency VARCHAR(16) NOT NULL,UNIQUE(channel,transaction_id));
+-- 退款待办与退款回执按被退的那笔付款 (channel, transaction_id) 识别(2026-11-05 起；之前按 order_sn，一单只能退一笔)：
+-- 一张订单可以同时有订单本身的退款和重复付款的退款。source 决定退款回执是否推进订单：CANCELLED_LATE(取消后迟到的付款)
+-- 与 DELIVERY_REJECTED(交付被拒)退的是订单绑定的那笔，回执把订单 5→6；DUPLICATE_PAYMENT 只终结自己的待办，不碰订单。
+CREATE TABLE IF NOT EXISTS commerce_refund_intent (
+  channel VARBINARY(32) NOT NULL,
+  transaction_id VARBINARY(128) NOT NULL,
+  order_sn VARCHAR(36) NOT NULL,
+  source VARCHAR(24) NOT NULL,
+  status VARCHAR(24) NOT NULL,
+  PRIMARY KEY (channel, transaction_id),
+  INDEX idx_commerce_refund_pending (status, order_sn),
+  CHECK (source IN ('CANCELLED_LATE','DELIVERY_REJECTED','DUPLICATE_PAYMENT')), CHECK (status IN ('PENDING','REFUNDED'))
+);
+-- payment_transaction_id 是被退的那笔付款，transaction_id 是渠道的退款流水；一笔付款只认一条退款流水。
+CREATE TABLE IF NOT EXISTS commerce_refund_receipt (
+  channel VARBINARY(32) NOT NULL,
+  payment_transaction_id VARBINARY(128) NOT NULL,
+  transaction_id VARBINARY(128) NOT NULL,
+  order_sn VARCHAR(36) NOT NULL,
+  amount_minor BIGINT NOT NULL,
+  currency VARCHAR(16) NOT NULL,
+  PRIMARY KEY (channel, payment_transaction_id), UNIQUE (channel, transaction_id)
+);
 -- 管理幂等日志与SKU修改同事务，pending标记不应出现在已提交的成功命令中。
 CREATE TABLE IF NOT EXISTS commerce_admin_command (
   actor VARBINARY(64) NOT NULL,

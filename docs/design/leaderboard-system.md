@@ -1,5 +1,7 @@
 # 排行榜(leaderboard / rank)v1 设计
 
+> **2026-11-05 评分与评分榜按模式分开(R5,未编译)**:评分按 `(player_id, mode)` 存,每个计分模式一张榜:`board_type` 1 = 1V1(沿用原来那张榜的键)、2 = 5V5、3 = PVP_TEAM,其余键固定为 GLOBAL、period `all`、第 1 代;投榜来源与 outbox 按 `(epoch, mode, shard)` 分,封榜按模式停写。计分局回合打满按平局不再读 `RatingDrawRoundCap*`(已删),先看个人原件里 0 队是否全灭。rank 服务没有改动。下文「一个全服榜、不分模式」「按模式分榜拆不出两份分」与 `RatingDrawRoundCapFor` 的描述只作历史保留,现行口径见 [global-match-hierarchical-pools.md](global-match-hierarchical-pools.md) §8。
+
 > **2026-10-30**:`match-rating-snapshot` topic、`PlayerRatingSnapshotEvent`、`RatingSnapshot*` 配置、`-MatchRatingSnapshotPublish` 都已删除。评分只在全球权威库(`match_rating`、`match_rating_applied`),写榜走 `match_rank_source` 和 `go/match/internal/authority/rank_publisher.go`。下文 §2.4、§5.4 等关于这个 topic 的内容只作历史保留。
 
 > **2026-10-19 主干合并口径**：现役为 SQL 权威的通用榜代次、封榜、快照及邮件奖励链，配置入口为 `go/rank/etc/rank.yaml`（DSNEnv、RequireTiDB、MaxOpenConns、MailRpc、Producers）。R2/R2b 的 Redis/Kafka 消费榜、redis-rank 和消费类告警保留为历史设计，不能与现役同时作为写者启用。全局服务登记、端口、冗余部署和失败可观测性继续保留。
@@ -7,6 +9,8 @@
 > **2026-10-31 移除成员是这一代内的终局**:`RemoveRankEntry` 删 `rank_score` 的行,同一事务写一条墓碑 `rank_removed_entry`。`Submit` 整代读一次墓碑,跳过被移除的实体,这一批照样推进游标。原来只删行会把 `score_version` 一起丢掉,其他片迟到的旧批次能把人带回榜上。换代之后不受影响。
 
 > **2026-10-21 SQL 可观测性接缝**：`rank_write_total{operation,outcome}` 在 Open/Submit/Freeze/Remove/Delete 外层返回后记录确认提交、原回执重放、业务拒绝与错误；事务内尝试与回滚不计成功，提交未知只计 error。奖励工作器的 `rank_reward_dispatch_total{outcome}` 仅在邮件 ID 和奖励终态 SQL 提交都确认时记 delivered；未知结果保留原奖励恢复。`rank_reward_scan_total{outcome}` 与 `rank_reward_due_delay_seconds` 沿现有 `(status,next_attempt_ms)` 索引的有界 DueRewards 查询读取首行，不增全表计数；首次成功查询前无延迟样本，失败保旧，真实空结果才清零。延迟覆盖已到期且未持租约的奖励，活租约到期后恢复可见。`deploy/k8s/rank-alerts.yaml` 已按此现役语义替换历史 Redis 消费/榜大小告警；仍实际发出的 match 快照发布指标保留独立告警。标签仅封闭 operation/outcome，不含玩家、榜或请求 ID。源码与回归已准备，实际编译、真库及告警合同验证由本轮主控执行。
+
+> **2026-11-05 奖励邮件过期写定与放弃终态(未编译)**:过期时刻在封榜事务里写进 `rank_mail_reward.expire_ms` = 封榜 + min(30 天, `MailMaxPersonalMailTtlDays`),不再由工作器按 `created_ms + 30 天` 现算;新增状态 3 = 放弃(终态)、`rank_reward_dispatch_total{outcome="abandoned"}` 与 `RankRewardAbandoned` 告警;明确拒收按 1 分钟起、1 小时封顶退避,到过期(或只在时钟、数据异常时才可能先到的第 50000 次)转放弃,结果未知不转终态。规则、发布检查与人工重投语句见下文「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」小节(在「2026-10-17 来源至奖励邮件的整链验收」之后)。
 
 
 > **本文只是设计,未落码、未编译。** 本文不改任何 proto / yaml / 配表 / 代码;文中出现的文件改动全部是"将来那一批要改什么"的清单。
@@ -642,6 +646,43 @@ Go使用mail、rank实际仓储和服务的独立gRPC测试进程，由match的�
 
 验收到奖励邮件持久可见为止；附件领取仍走scene资产与SQL证据链，不能把生成奖励邮件等同于资产到账。Go独立进程是装配生产RPC/仓储及Worker.Tick的测试夹具，并非完整成品main、注册中心、真实gate或战斗Kafka全进程链；该整链的奖励样本为货币，未覆盖物品奖励全链。客户端沿用既有协议及UI，本批无契约变化且未新跑Unity；个人到账SQL收据、归属与父快照围栏、跨区真实故障和容量不由本节替代。
 
+### 2026-11-05 奖励邮件过期写定、放弃终态与人工重投(已落码,未编译,需先重新生成协议)
+
+**问题**(第二轮数据审计 r2-mail#2、一致性核对 social-global#2):工作器按 `created_ms + 30 天` 现算过期时刻,与邮件可配的 `Mail.MaxPersonalMailTtlDays` 不联动,调小有效期时奖励被判非法、按分钟级无上限重投;收件箱一直满到过期,奖励永远停在待投,没有终态,重投也没有次数上限(AGENTS §11.3)。
+
+**改法**:
+
+- 过期时刻在封榜事务里写定:`rank_mail_reward.expire_ms`(`proto/rank/rank_table.proto` 新列)= 封榜时刻 + min(30 天, `MailMaxPersonalMailTtlDays` 天)。每次重投原样带上,请求号是 reward_id、标题正文是常量,载荷摘要不变,封榜后改配置不影响已写的行。邮件按「过期 − 发件时刻 ≤ 有效期」校验,发件不早于封榜,所以两边配置同值就不会被判超长。
+- rank 读不到邮件配置:`go/rank/etc/rank.yaml` 显式写 `MailMaxPersonalMailTtlDays`(必填),与 `go/mail/etc/mail.yaml` 的 `Mail.MaxPersonalMailTtlDays` 同值。加载配置与启动入口按邮件的允许范围 1~365 校验,越界拒启;`go/rank/config_test.go` 核对两份源配置相等(K8s 两份 ConfigMap 由这两份源配置生成,不改这两个键)。
+- **发布检查**:改邮件有效期时两边同批改。调小有效期后,已封榜且剩余窗口长于新有效期的奖励会被邮件判参数非法,按下面的拒收规则重投,窗口缩进新有效期后照常投出。
+- 状态 `status`:1 待投、2 已投、3 放弃(终态,取值在 `go/rank/internal/data/rewards.go`)。去向由 `go/rank/internal/reward/policy.go` 的 `nextStep` 与 `sendDeferredTo` 决定:
+  - **截止点**(2026-11-06 评审跟进):发件时剩余可领时长不得少于 `data.MinRewardMailClaimWindow` = 24 小时(一个日常登录周期,每天上线一次的玩家也来得及领);截止点 = 过期时刻 − 24 小时,截止点那一刻(含)还能发。原来只靠邮件拒收 `expire_ms <= now`,过期前几分钟那一投会生成一封马上过期、玩家领不到的邮件,却被记成已投,奖励静默丢失。
+  - **过了截止点不发件,也不直接放弃**:之前的尝试可能已经写了邮件(结果未知;或上一个领租约的副本发出请求后崩溃,行上不留痕迹),行上又记不下上一次是不是结果未知,当场放弃会让人工补发重复发奖。所以一律推迟到**过期后 1 小时的判重探询**(推迟不计尝试次数):用原请求再发一次,过期以后邮件对同一请求只会回原邮件(判重先于一切校验;那封信发出时剩余不少于 24 小时,记已投)或明确拒收(邮件确认没有这封信,转放弃),不会新建。晚 1 小时是为了盖住 rank 与邮件两边的时钟偏差;奖励此时已不可领,晚一点探询不影响结局。
+  - 投到(含判重回原邮件)→ 已投。
+  - 结果未知(传输失败、没有回包、成功码却没有 mail_id、邮件回故障码或码表外的码)→ 留在待投,1 秒起翻倍、60 秒封顶,下次尝试落在截止点与探询之间的挪到探询时刻;**不因过期或次数转终态**:邮件可能已提交,放弃会把可能已到账的奖励记成没发;探询时邮件对同一请求只会回原邮件或明确拒收,重投必然收敛。
+  - 明确拒收(tip 码表的业务拒绝:收件箱满、参数非法含已过期、同请求号不同载荷等)→ 过期后的探询被拒,或本次已是第 50000 次(`MaxAttempts`,计全部尝试),转放弃;截止点之前 1 分钟起翻倍、1 小时封顶,下次尝试不晚于截止点;截止点之后的拒收(截止点那一刻发出的一投)推迟到探询。上限必须大于发件期内可能的最多次数:29 天发件期里即使全程按结果未知最快的节奏(60 秒一次)重投也只有约 41765 次,所以上限只在时钟或数据异常时才会先于截止点到达(2026-11-06 评审修正:原为 2000,邮件结果未知连续约 33 小时后的第一次拒收就会把还能领几十天的奖励提前放弃;回归 `TestAttemptCapNeverPreemptsExpiryWithinRewardWindow`)。
+  - 封榜原件损坏(附件解不开、缺 `expire_ms`)→ 不发信,按明确拒收处理;缺 `expire_ms` 没有可投窗口,直接放弃。
+  - 于是「放弃」只有两种来历:过期后的探询被邮件确认没有这封信,或次数到顶。
+- 窗口下限:可投窗口不短于 2 天(截止点之前至少留出与最短可领时长等长的发件期),`MailMaxPersonalMailTtlDays` 配成 1 时 `RewardMailWindow` 拒启。
+- 观测:`rank_reward_dispatch_total{outcome="abandoned"}` 预建 0 值序列;`deploy/k8s/rank-alerts.yaml` 新增 `RankRewardAbandoned`(warning,出现即报);日志 `[rank] mail reward abandoned, needs manual follow-up: reward_id=… last_outcome=…`。截止点之后推迟不发件计 `outcome="rejected"`,日志 `[rank] mail reward has less than the minimum claim window left, not sending; duplicate check after expiry: reward_id=… check_at_ms=…`(错误级,比放弃早约 25 小时)。
+- 回归:`policy_test.go` 的 `TestSendDeferredToBlocksOnlyBetweenCutoffAndExpiryCheck`、`TestNextStepBoundsRejectionRetriesByExpiryAndAttempts`;`worker_test.go` 的 `TestWorkerNeverSendsWithLessThanMinimumClaimWindowLeft`、`TestWorkerDefersRowFoundPastCutoffUntilExpiryCheck`、`TestWorkerRetriesBoxFullWithBackoffUntilExpiryThenAbandons`(业务时钟手拨,不读墙钟)。
+
+**人工处理**(运维;2026-11-06 改,原步骤按「未过期 / 已过期」分,没有先核对邮件是否已存在):
+
+1. 查放弃的行:`SELECT reward_id,settlement_id,player_id,attempts,expire_ms,updated_ms FROM rank_mail_reward WHERE status=3`;原因看同 reward_id 那条 abandoned 日志的 `last_outcome`。
+2. **先在邮件库核对这个请求号有没有邮件**:`SELECT mail_id,owner_player_id,request_hash,expire_ms FROM mail_message WHERE sender_kind=3 AND request_id=<reward_id>`。邮件行过 `expire_ms + RetentionDays` 会被清理,核对要在清理之前做。经过期后探询才放弃的行按设计这里没有;次数到顶放弃的,或探询与在途请求交错的极端情形,可能已有。
+   - 有一行、收件人是这名玩家:奖励其实已经到账。执行第 3 步改回待投,工作器用原 reward_id、原载荷重投,邮件判重回原邮件,记为已投(过了截止点的,等过期后探询时认领)。**不要另发补偿**。
+   - 有一行但收件人或载荷对不上(重投会回 `kMailRequestConflict`,即同请求号不同载荷):不要改回待投(只会再次放弃),人工核对那封邮件的来源与附件,上报负责人。
+   - 没有:剩余可领时长(`expire_ms` 减当前毫秒)不少于 24 小时的(只会是次数到顶),先处理原因(如收件箱满)再执行第 3 步;不足 24 小时的(通常如此)原意图投不出了,走第 4 步补偿。
+3. 改回待投:`UPDATE rank_mail_reward SET status=1,attempts=0,next_attempt_ms=0,lease_until_ms=0 WHERE reward_id=? AND status=3`。载荷与写定的过期时刻都不动,邮件按 (sender_kind, request_id) 判重、核全文摘要,不会重复发;剩余不足 24 小时的,工作器照样不发件,等过期后探询。这条语句与 `go/rank/internal/data/repo_integration_test.go` 的 `requeueAbandonedRewardSQL` 一字不差,由 `TestTiDBRewardIntentFixesMailExpireAndAbandonIsTerminal` 覆盖。
+4. 补偿:`mailadmin personal` 带附件,显式给**新的** `-request-id` 与 `-expire-ms`(不复用 reward_id;mailadmin 的 sender_kind 是 1,与 rank 的 3 判重互不相干,所以第 2 步是防重复发的唯一闸门),补偿的请求号记进工单,放弃的行保持 status=3 作为记录。补偿命令结果未知时按 mailadmin 打印的重试命令原样重跑。
+
+**残余**:结果未知不设终态,邮件长期不可达时待投奖励按 60 秒一次重投,靠 `RankRewardDispatchFailing` / `RankRewardOverdue` 发现;rank 停摆超过过期后 `RetentionDays` 才探询时,邮件行可能已被清理,判重查不到,已到账的也会记成放弃,第 2 步同样查不到,需要按邮件 sweep 日志核对;人工处理暂为文档化 SQL,没有 RankAdmin 接口或 CLI。
+
+**Java 版**:`game-rank` 的 `RankRewardWorker` 仍按 `created + 30 天` 发、任何未投到的结果 2 秒后重投,没有终态和次数上限,也没有最短可领时长(过期前最后一投同样会生成领不到的邮件,2026-11-06 只读核对),待做;Java 邮件有效期写死 30 天,过期联动的问题在 Java 不存在。
+
+**验证**(交 Codex):与本文末「2026-11-05 名次读写走索引」节同一次 `proto-gen-run`,然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`;真库设 `MAIL_RANK_TEST_TIDB` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`。
+
 > 以下 R2b 记录保留旧 Redis/Kafka 榜的运维设计与验证历史；现役运行时为上面的 SQL 权威榜、封榜及邮件奖励链，不重新启用第二个评分写者。
 
 ## 12. 落码记录(2026-10-16,Claude;Go 未编译、未跑任何 Go 测试)
@@ -807,3 +848,27 @@ go/match、go/rank、robot 的 build / vet / test 全过;CI 收回 go/rank)之�
 5. K8s:按 `deploy/k8s/README.md`「排行榜 rank」的上线顺序 —— 先 `-MatchRatingSnapshotPublish 0` 部署 rank 与 redis-rank,两个 Pod Ready 后再用 `1` 重跑 `infra-up`。
 
 失败时保留:脚本测试全文;robot 冒烟日志里 `RANK_SMOKE_FAIL` 那一行与 rank / match 的日志。
+
+## 2026-11-05 名次读写走索引(服务器缺口清单第 17、18 条;已落码,未编译,需先重新生成协议)
+
+**问题**(全链路水平扩展盘点):`GetRankPage` / `GetRankAround` 每次都对全榜 `ROW_NUMBER() OVER` + `COUNT`,开销随榜长线性增长、全压在库上;降序榜的名次顺序是「score DESC, achieved_ms ASC」混合方向,原索引 `(board_id,generation,score,achieved_ms,entity_id)` 用不上,封榜取前 N 也是整榜排序。写入一侧,`Submit` 在榜行锁里对每个实体一读一写,一批 128 个实体两百多次往返,同一张榜的写入吞吐被往返时延封顶。
+
+**改法**(`go/rank/internal/data`,表结构 `proto/rank/rank_table.proto`):
+
+- `rank_score.order_key`:升序榜 = score,降序榜 = `^score`(按位取反 = `-score-1`,单调递减、覆盖整个 int64 不溢出)。名次索引改为 `(board_id,generation,order_key,achieved_ms,entity_id)`,两种榜同一方向。只由 `data.orderKey` 写,与 score 同一条语句。
+- `rank_board.entries`:本代现有实体数。`Submit` 新增实体时加、`Remove` 删到一行时减,都在榜行锁里与分数同事务;删到一行而计数已是 0 时整笔回滚(数据被绕过服务改过,fail-closed)。
+- 读:页、总数、本人在同一个可重复读事务里取(不设 READ ONLY:写者闸门进事务要改写 writer_slot 行)。总数取 `entries`;这一页顺着索引 `LIMIT / OFFSET`;本人名次 = 1 + 索引上严格排在他前面的行数(三段 OR 的范围计数);附近名次从本人位置倒着、顺着各扫 radius 行,名次由本人名次推出。
+- 写:`Submit` 整批一次 `IN (…)` 读、一次多行 `INSERT … ON DUPLICATE KEY UPDATE` 写,合并规则(版本、SET_IF_HIGHER、INCREMENT 溢出、achieved_ms)原样搬到内存里逐个算。
+- 封榜取前 N 顺着同一索引。
+
+**不变**:客户端契约(消息、字段、tip 码)不变;名次仍精确、连续、不并列(L-9),页码钳制与空榜口径同前;同榜写入仍由榜行锁串行,正确性论证不变。
+
+**残余**:
+
+1. 同一张榜的写入仍串行,只是每批的持锁时间从两百多次往返降到常数次。要并行,下一步是按 `(board, generation, source_shard)` 拆游标行:`Submit` 只锁自己那一片;某片第一次写入时在榜行锁里建行;`Freeze` 与 `Remove` 先锁榜行、再按片号升序锁全部片行,保证与在途批次互斥。实体并发插入的竞态要用「已有行 FOR UPDATE、新行普通 INSERT,撞 1062 就整笔重试」处理。本轮没做,等压测证明单榜写入真的不够再做。
+2. 本人名次的计数开销随名次增长:排在百万名之后的玩家每次查询都要数过前面的索引项。要么加几秒的进程内缓存,要么超过前 N 名改显示「N+」;后者改客户端语义,要负责人定、两版同批改。
+3. `OFFSET` 翻到很深的页同样随页码增长;客户端只翻前几页时不是问题。
+
+**Java 版**:`game-rank` 的 `RankStore` 有同样问题,已在 Java 仓 `PARITY.md` 登记待做(2026-11-05「排行榜读写按名次索引走」)。
+
+**验证**(交 Codex,仓库根):先 `proto-gen-build`(生成器有变化或没有工具时)、再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`;然后 `cd go/rank && go build ./... && go vet ./... && go test ./...`,真库回归设 `MAIL_RANK_TEST_TIDB=127.0.0.1:<端口>` 跑 `go test ./internal/data/ -run 'TestTiDB' -count=1`(新用例 `TestTiDBRankReadsMatchBruteForceOrder` 与原有 6 条都要绿)。

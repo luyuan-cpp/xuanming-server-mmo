@@ -64,7 +64,7 @@ gate:
   token-ttl-seconds: 300
   discovery-timeout-ms: 5000
   rate-limit:
-    # Master switch — leave OFF until ops verifies the Bucket4j wiring against staging Redis.
+    # Master switch — leave OFF until ops verifies the token-bucket Lua (RedisRateLimitStore) against staging Redis.
     enabled: false
     zone-default-rps: 500
     zone-default-burst: 1000

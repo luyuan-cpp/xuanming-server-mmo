@@ -277,7 +277,7 @@ func TestCollectFinalizedRotatesFromStartShard(t *testing.T) {
 	m := &memShards{rows: map[uint32][]FinalizedRef{
 		62: shardRefs(62, 1), 63: shardRefs(63, 1), 0: shardRefs(0, 1), 1: shardRefs(1, 1),
 	}}
-	scan, err := collectFinalized(context.Background(), 62, defaultReconcileLimits, m.read)
+	scan, err := collectFinalized(context.Background(), ringOrder(62), defaultReconcileLimits, m.read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,6 +299,51 @@ func TestCollectFinalizedRotatesFromStartShard(t *testing.T) {
 	}
 }
 
+// TestCollectFinalizedScansOnlyGivenShards:多副本分片对账时,一个副本只扫自己负责的分片,按给定顺序,
+// 别的分片一次都不读;没触到上限时「未读到」按本轮该扫的片数算,不按 64 算。
+func TestCollectFinalizedScansOnlyGivenShards(t *testing.T) {
+	m := &memShards{rows: map[uint32][]FinalizedRef{
+		3: shardRefs(3, 1), 7: shardRefs(7, 1), 9: shardRefs(9, 1),
+	}}
+	scan, err := collectFinalized(context.Background(), []uint32{9, 3}, defaultReconcileLimits, m.read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order := m.firstReadOrder(); len(order) != 2 || order[0] != 9 || order[1] != 3 {
+		t.Fatalf("扫描顺序 = %v, want [9 3](分片 7 不归本副本,不该读)", order)
+	}
+	want := []uint64{playerOf(9, 1), playerOf(3, 1)}
+	if len(scan.players) != len(want) || scan.players[0] != want[0] || scan.players[1] != want[1] {
+		t.Fatalf("players = %v, want %v", scan.players, want)
+	}
+	if scan.truncated() || scan.scanned != 2 || scan.unreached() != 0 {
+		t.Fatalf("truncated=%v scanned=%d unreached=%d, want false/2/0", scan.truncated(), scan.scanned, scan.unreached())
+	}
+	tallies, _ := scan.shardTallies()
+	if len(tallies) != 2 || tallies[0].Shard != 9 || tallies[1].Shard != 3 || !tallies[0].Complete || !tallies[1].Complete {
+		t.Fatalf("tallies = %+v, want 9、3 两片都读完", tallies)
+	}
+}
+
+// TestReconcileShardsRejectsBadOrder:分片越界或重复时一行不读就报错 —— 越界读错分片,重复会把一片的读数记两次。
+func TestReconcileShardsRejectsBadOrder(t *testing.T) {
+	for _, order := range [][]uint32{{ShardCount}, {1, 2, 1}} {
+		m := &memShards{}
+		if _, err := reconcileShards(context.Background(), order, defaultReconcileLimits, m.read, nopLedgers{}); err == nil {
+			t.Errorf("order %v: want error", order)
+		}
+		if len(m.calls) != 0 {
+			t.Errorf("order %v: read %d pages before rejecting", order, len(m.calls))
+		}
+	}
+	// 本副本不负责任何分片:空序列合法,一行不读、结果为空。
+	m := &memShards{}
+	res, err := reconcileShards(context.Background(), nil, defaultReconcileLimits, m.read, nopLedgers{})
+	if err != nil || len(m.calls) != 0 || res.PlayersPlanned != 0 || len(res.Shards) != 0 || res.Truncated {
+		t.Fatalf("empty order: res=%+v err=%v calls=%d", res, err, len(m.calls))
+	}
+}
+
 // TestCollectFinalizedPerShardCap:单片按键集翻页,读满上限后探一行确认还有剩余才算截断(先核对最新的),
 // 然后继续扫下一片;恰好读满上限的分片不算截断。
 func TestCollectFinalizedPerShardCap(t *testing.T) {
@@ -307,7 +352,7 @@ func TestCollectFinalizedPerShardCap(t *testing.T) {
 		5: shardRefs(5, 1, 2, 3, 4), // 4 行:超出上限 3
 		6: shardRefs(6, 1, 2, 3),    // 恰好 3 行
 	}}
-	scan, err := collectFinalized(context.Background(), 5, limits, m.read)
+	scan, err := collectFinalized(context.Background(), ringOrder(5), limits, m.read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +397,7 @@ func TestCollectFinalizedPlayerCap(t *testing.T) {
 	rows[0][2].Seq, rows[0][2].UpdatedMs = 9, testNowMs-5 // 玩家 1 的第二行,更旧
 	limits := reconcileLimits{pageSize: 10, perShard: 10, maxPlayers: 3, readConcurrency: 1}
 
-	scan, err := collectFinalized(context.Background(), 0, limits, (&memShards{rows: rows}).read)
+	scan, err := collectFinalized(context.Background(), ringOrder(0), limits, (&memShards{rows: rows}).read)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +413,7 @@ func TestCollectFinalizedPlayerCap(t *testing.T) {
 	}
 
 	limits.maxPlayers = 5
-	scan, err = collectFinalized(context.Background(), 0, limits, (&memShards{rows: rows}).read)
+	scan, err = collectFinalized(context.Background(), ringOrder(0), limits, (&memShards{rows: rows}).read)
 	if err != nil || scan.truncated() || len(scan.players) != 5 || scan.scanned != ShardCount {
 		t.Fatalf("恰好数到上限不算截断: truncated=%v players=%v scanned=%d err=%v",
 			scan.truncated(), scan.players, scan.scanned, err)
@@ -378,13 +423,13 @@ func TestCollectFinalizedPlayerCap(t *testing.T) {
 // TestCollectFinalizedErrors:读失败与 ctx 结束都返回 error(收集结果不完整,不得拿去判「无差异」)。
 func TestCollectFinalizedErrors(t *testing.T) {
 	boom := errors.New("db down")
-	if _, err := collectFinalized(context.Background(), 0, defaultReconcileLimits, (&memShards{err: boom}).read); !errors.Is(err, boom) {
+	if _, err := collectFinalized(context.Background(), ringOrder(0), defaultReconcileLimits, (&memShards{err: boom}).read); !errors.Is(err, boom) {
 		t.Fatalf("读失败: err = %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	m := &memShards{}
-	if _, err := collectFinalized(ctx, 0, defaultReconcileLimits, m.read); !errors.Is(err, context.Canceled) || len(m.calls) != 0 {
+	if _, err := collectFinalized(ctx, ringOrder(0), defaultReconcileLimits, m.read); !errors.Is(err, context.Canceled) || len(m.calls) != 0 {
 		t.Fatalf("ctx 已结束: err = %v calls = %d", err, len(m.calls))
 	}
 }
@@ -520,7 +565,7 @@ func TestReconcileRecentRound(t *testing.T) {
 		},
 		errs: map[uint64]error{playerOf(4, 1): errors.New("data_service down")},
 	}
-	res, err := reconcileRecent(context.Background(), 0, defaultReconcileLimits, m.read, ledgers)
+	res, err := reconcileShards(context.Background(), ringOrder(0), defaultReconcileLimits, m.read, ledgers)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +588,7 @@ func TestReconcileRecentRound(t *testing.T) {
 	}
 
 	limits := reconcileLimits{pageSize: 1, perShard: 1, maxPlayers: 100, readConcurrency: 2}
-	res, err = reconcileRecent(context.Background(), 0, limits, m.read, ledgers)
+	res, err = reconcileShards(context.Background(), ringOrder(0), limits, m.read, ledgers)
 	if err != nil || !res.Truncated || res.Inconsistent != 0 {
 		t.Fatalf("分片 1 只核对最新的 20(一致),截掉了 10: res=%+v err=%v", res, err)
 	}
@@ -553,7 +598,7 @@ func TestReconcileRecentRound(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if res, err := reconcileRecent(ctx, 0, defaultReconcileLimits, m.read, ledgers); !errors.Is(err, context.Canceled) ||
+	if res, err := reconcileShards(ctx, ringOrder(0), defaultReconcileLimits, m.read, ledgers); !errors.Is(err, context.Canceled) ||
 		res.PlayersChecked != 0 || res.Inconsistent != 0 || len(res.Shards) != 0 {
 		t.Fatalf("ctx 已结束: res=%+v err=%v", res, err)
 	}
@@ -575,7 +620,7 @@ func TestReconcileRecentStoppedShardIsPartial(t *testing.T) {
 		}
 	}
 	limits := reconcileLimits{pageSize: 10, perShard: 10, maxPlayers: 3, readConcurrency: 2}
-	res, err := reconcileRecent(context.Background(), 10, limits, m.read, ledgers)
+	res, err := reconcileShards(context.Background(), ringOrder(10), limits, m.read, ledgers)
 	if err != nil || !res.Truncated || res.PlayersChecked != 3 || res.Inconsistent != 0 {
 		t.Fatalf("res = %+v err=%v", res, err)
 	}
@@ -602,7 +647,7 @@ func TestCollectFinalizedReadsStridePrefix(t *testing.T) {
 		}
 		rows[shard] = shardRefs(shard, players...)
 	}
-	scan, err := collectFinalized(context.Background(), start, defaultReconcileLimits, (&memShards{rows: rows}).read)
+	scan, err := collectFinalized(context.Background(), ringOrder(start), defaultReconcileLimits, (&memShards{rows: rows}).read)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -128,6 +128,9 @@ type Engine struct {
 	Now     func() time.Time
 	Roles   RoleLocker
 	Rmb     *RmbConsignments
+	// Owns 判本副本是否负责一片后台工作(合同推进、收据 ACK,见 schedule.go)。装配层启动时写一次(生产是
+	// svc 的 workshard.Membership.Owns),之后只读;nil(单测、单副本)= 全部片归本副本,行为与分工前相同。
+	Owns func(key string) bool
 
 	// ackAfterOpID 是收据 ACK 的翻页游标(见 ackReceipts),只归驱动 Tick 的那一个 goroutine。
 	ackAfterOpID uint64
@@ -800,6 +803,8 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 		if err != nil {
 			return corrupt(err)
 		}
+		// 锁内读到的原样:推进完拿它判这一步有没有任何变化,没变化就不重存(缺口清单第 16 条,见 schedule.go)。
+		lockedRecord, lockedWorkflow := proto.Clone(r), proto.Clone(w)
 		if r.SellerPlayerId != old.SellerPlayerId || r.BuyerPlayerId != old.BuyerPlayerId {
 			// Due 之后有人买下 / 换了参与者:角色锁是按旧参与者拿的,不能在这把锁下推进。下一轮按新行重来。
 			return staleObservation()
@@ -915,6 +920,11 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 				return err
 			}
 		}
+		if proto.Equal(r, lockedRecord) && proto.Equal(w, lockedWorkflow) {
+			// 一点没变(在架寄售、在拍拍品、等确认、挂着的市场单,或腿还在途):不重存、不改版本,只排下次到期。
+			// 合同与 workflow 都在锁内比较,别的写者在拿锁之前提交的变化这里读得到,之后的要等这把锁。
+			return e.Repo.RescheduleTx(ctx, tx, r.CommerceId, r.Version, nextDueMs(r, w, e.now()))
+		}
 		return e.Repo.Save(ctx, tx, r, w, e.now())
 	})
 }
@@ -933,7 +943,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 // 只有 Due / AckDue 查询本身失败(存储级)、收据 ACK 依赖失败,或整轮被取消(关停)时才返回错误;取消时不推迟任何行。
 // 调用方按 OutcomeKnown 决定要不要打排空 Hold。
 func (e *Engine) Tick(ctx context.Context) error {
-	rows, err := e.Repo.Due(ctx, e.now(), tickDueLimit)
+	rows, err := e.Repo.Due(ctx, e.now(), tickDueLimit, e.commerceShards())
 	if err != nil {
 		return noWrite(err)
 	}

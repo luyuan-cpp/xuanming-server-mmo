@@ -897,6 +897,10 @@ func TestReleaseSpectateOnOutcomeSkipsWhenDraining(t *testing.T) {
 	svcCtx.RelayAdmission.CloseAdmission()
 
 	releaseSpectateOnOutcome(svcCtx, battleId)
+	// 先等在途任务排空再断言:清理任务是异步的,排空时若照样发了出去,不等的话它多半在断言之后才跑,用例就测不出来。
+	idle, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, svcCtx.RelayAdmission.WaitIdle(idle))
 
 	require.True(t, mr.Exists(spectateTierKey(battleId)))
 }

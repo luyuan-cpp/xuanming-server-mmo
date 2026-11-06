@@ -34,3 +34,11 @@ constexpr uint32_t SceneMovementClientPlayerNotifyActorMoveListIndex = 6;
 constexpr uint32_t SceneMovementClientPlayerNotifyTeleportMessageId = 130;
 constexpr uint32_t SceneMovementClientPlayerNotifyTeleportIndex = 7;
 #define SceneMovementClientPlayerNotifyTeleportMethod  ::SceneMovementClientPlayer_Stub::descriptor()->method(7)
+
+constexpr uint32_t SceneMovementClientPlayerTeamFollowMessageId = 381;
+constexpr uint32_t SceneMovementClientPlayerTeamFollowIndex = 8;
+#define SceneMovementClientPlayerTeamFollowMethod  ::SceneMovementClientPlayer_Stub::descriptor()->method(8)
+
+constexpr uint32_t SceneMovementClientPlayerNotifyTeamFollowStateMessageId = 382;
+constexpr uint32_t SceneMovementClientPlayerNotifyTeamFollowStateIndex = 9;
+#define SceneMovementClientPlayerNotifyTeamFollowStateMethod  ::SceneMovementClientPlayer_Stub::descriptor()->method(9)

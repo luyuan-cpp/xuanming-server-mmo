@@ -1,6 +1,6 @@
 # 开服登录削峰与排队入口
 
-> 更新：2026-10-23，按当前源码与部署脚本收口，替代原方案中的骨架、重复更正与实施清单。
+> 更新：2026-10-23，按当前源码与部署脚本收口，替代原方案中的骨架、重复更正与实施清单。2026-11-05：令牌桶改为一段 Redis Lua（§二、§六、§七、§11.6）。
 > Gateway 限流已有实现；login 真排队已有代码，但 K8s 合入门禁仍关闭。本文只做静态核对，不构成专项运行或容量验收。
 > 本文 §11.5 是源码引用的持票轮询契约，保留编号；业务排队算法以[登录排队设计](./login-queue-2026-05.md)为准。
 
@@ -19,11 +19,17 @@ Gateway 不自行挑 gate、签票或验证排队令牌。完整流程见[第三
 
 实现为 [AssignGateRateLimiter](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/AssignGateRateLimiter.java)：
 
-1. 限流关闭或无 ProxyManager 时直接放行。
+1. 限流关闭（没有令牌桶存储）时直接放行。
 2. 检查开服波次；未开放时返回重试提示。
-3. 消耗 zone 桶；`zone_id=0` 跳过，正数使用 `rl:zone:<zone>`。
-4. 消耗 IP 桶，使用 `rl:ip:<ip>`。
-5. 检查进程内账号冷却，键为 `<scope>:<account>@<ip>`。
+3. IP 桶 `rl:ip:<ip>` 与 zone 桶 `rl:zone:<zone>` 一次原子地判（`zone_id=0` 只判 IP 桶）：IP 桶不足一个令牌 → 429 IP_RATE_LIMIT，两个桶都不扣；
+   zone 桶不足 → 重试提示，retry_after 为 zone 桶补到一个令牌要等的毫秒，IP 令牌也不扣；都够 → 各扣一个。
+4. 检查进程内账号冷却，键为 `<scope>:<account>@<ip>`。
+
+2026-11-05 起（[服务器缺口清单](../handoff/server-gap-audit-20261101.md)第 29 条）两个桶由一段 Redis Lua 判定
+（[RedisRateLimitStore](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/RedisRateLimitStore.java)），替代 Bucket4j 的 CAS 后端：
+zone 桶是全区请求共用的热键，CAS 版副本越多冲突越多，重试超时即放行，开服洪峰最容易漏；Lua 由 Redis 单线程执行，没有冲突与重试，一次检查一个往返。
+顺序同时改为先 IP 后 zone（了结 §11.7 R13 与 §11.4 J1），与独立 Java 版一致。桶是 Hash（`t` = 千分之一令牌为单位的余量，`ms` = 对应的 Redis 时刻），
+键不存在 = 满桶；拒绝路径只读不写，放行后键在补满的那一刻过期。两个键在同一段 Lua 里，要求在同一个 Redis 实例上（现状是本 zone 组的 redis-queue 单实例）。
 
 两个 HTTP 入口共享 zone / IP 桶；冷却 scope 分别为 `login`、`assign`，避免正常的连续调用互相冷却。
 冷却使用本机 Map 的 get / put，每个 Gateway 副本各一份，是尽力过滤重试，不能称严格账号串行化或 Redis 账号锁。
@@ -76,8 +82,10 @@ HTTP JSON 使用 snake_case，字段以 [LoginResponse](../../java/gateway_node/
 
 依赖版本以 [pom.xml](../../java/gateway_node/pom.xml) 为准，已存在的实现包括
 [RateLimitConfig](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitConfig.java)、
-[RateLimitProperties](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitProperties.java)
-及限流器、波次与 IP 解析测试，不再按原稿重复添加骨架。
+[RateLimitProperties](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitProperties.java)、
+[RateLimitStore](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitStore.java) /
+[RedisRateLimitStore](../../java/gateway_node/src/main/java/com/game/gateway/ratelimit/RedisRateLimitStore.java)（令牌桶 Lua）
+及限流器、令牌桶、波次与 IP 解析测试，不再按原稿重复添加骨架。限流打开时 rps / burst 必须为正，否则 gateway 拒启。
 
 ### 5.2 配置事实源
 
@@ -103,21 +111,26 @@ Ingress / LB 后必须准确配置 trusted-proxies，否则玩家可能全部落
 
 ## 六、可观测性
 
-当前桶后端故障记录 `rate-limit fail-open` WARN。原稿列出的五个 `gate_assign_*` 专项 Prometheus 指标没有对应实现，
-不能当作现役面板或告警来源；Actuator 依赖也不能证明这些业务指标已经注册。
+2026-11-05 起 Gateway 有两项限流计数，经管理端口的 `/actuator/prometheus` 暴露：
+`gateway_rate_limit_decisions_total{outcome}`（pass / wave_queue / zone_queue / ip_deny / cooldown_deny，每次判定记一个）与
+`gateway_rate_limit_fail_open_total{reason}`（store_error = 这次碰 Redis 出错，bypass = 熔断期间没碰 Redis 就放过两个桶）。标签只有固定的几个值。
+桶后端故障另记 `rate-limit fail-open` WARN，熔断期间不再逐请求打印。原稿列出的五个 `gate_assign_*` 专项指标仍没有对应实现，不能当作现役面板或告警来源。
 
 login 自身已有 metrics 与 K8s 9101 抓取入口，robot 有排队统计，详见[排队判读手册](../ops/login-queue-stress-runbook.md)；
-它们不等于 Gateway 的限流计数。后续应补限流通过／拒绝／后端放行、桶争用与延迟观测，标签保持低基数。
+它们不等于 Gateway 的限流计数。桶操作的延迟分布还没有观测。
 
 ## 七、后端故障与放行代价
 
-桶操作抛 RuntimeException 时，限流器 WARN 后直接放行，账号冷却也跳过；前面已消耗的令牌不退还。
-这是当前可用性取舍，代价是 Redis 故障或热键争用时失去部分削峰保护。
+令牌桶存储抛 RuntimeException 时，限流器放过两个桶（fail-open），并熔断 5 秒：期间不再访问 Redis，直接放过两个桶；
+到期只放一个请求去探（半开），探通即恢复限流，探测失败再熔断一段。进程内账号冷却不依赖 Redis，fail-open 期间照判。
+这是可用性取舍，代价是 Redis 故障时失去两个桶的削峰保护；热键争用不再导致放行（单段 Lua 没有 CAS 冲突）。
+超时的那次 EVALSHA 若其实已在 Redis 上执行，就多扣了一个令牌（偏严，可接受）。
 
-专用 Lettuce 连接配置单命令 300ms、单桶操作总预算 500ms、未完成请求队列上限 1024，断线时拒绝命令排队。
-一次检查可能分别操作 zone 与 IP 两个桶；这些配置不能解释为整个 HTTP 请求的严格截止时间。
+专用 Lettuce 连接配置单命令 300ms、未完成请求队列上限 1024，断线时拒绝命令排队。一次检查只有一条 EVALSHA；
+Redis 重启或脚本缓存被清后第一次遇到 NOSCRIPT，再带全文 EVAL 一次。这些配置不能解释为整个 HTTP 请求的严格截止时间。
+Redis 卡死时，只有熔断前已在途的请求与每轮的那一个探测请求各多等约 300ms，其余请求不碰 Redis；连接半开时要等内核判死连接后
+Lettuce 才重连，在那之前每轮探测都超时、限流持续 fail-open。
 启动期仍需建立 Redis 连接，失败可导致 Gateway 拒启；没有“Redis 故障时总能正常启动”的保证。
-本仓没有该路径的熔断器，持续高流量下即使有命令超时，仍有请求线程饱和风险。
 
 ## 八、与登录一致性及真排队的关系
 
@@ -135,7 +148,7 @@ Gateway 的 ratelimit 重试不创建同等状态。正常持票查询必须遵�
 
 | 范围 | 状态 |
 |---|---|
-| Bucket4j、controller 接线、波次、IP 解析、冷却、超时及队列上限 | 已有实现与回归测试源码。 |
+| 令牌桶 Lua（2026-11-05 替代 Bucket4j）、熔断、限流计数、controller 接线、波次、IP 解析、冷却、超时及队列上限 | 已有实现与回归测试源码；令牌桶 Lua 与熔断 2026-11-05 落码，未编译、未测试，待 Codex 验证（含对真实 Redis 7.2 / 8.x 的用例）。 |
 | K8s Gateway 按档位启用、配置指纹 | 已有部署实现。 |
 | login 真排队 | 已有实现；K8s 合入门禁仍关闭，不能由旧矩阵推断可启用。 |
 | 专项指标、真实故障放行行为、阈值与尖峰容量 | 按对应验收记录判断；本文静态核对不补充运行通过结论。 |
@@ -186,7 +199,7 @@ login 仍先受门禁限制，不能据此声称下次部署会自动开启排�
 
 J0 已实现：带 queue_token 的 assign-gate 仍受波次、zone / IP 桶约束，只跳过账号冷却。
 J2 已实现：冷却键含端点 scope、未认证账号标识与客户端 IP，避免跨端点互挡，缩小替别人触发冷却的范围。
-J1 未做：先扣 zone 再判 IP 的顺序不变，风险见 R13。冷却本身不提供原子互斥。
+J1 已做（2026-11-05，随令牌桶 Lua 一起）：先判 IP 再判 zone，两个桶一次原子判定，zone 桶空时 IP 令牌不扣，见 §二。冷却本身不提供原子互斥。
 
 ### 11.5 客户端退避要求
 
@@ -215,9 +228,9 @@ robot 无票分支保留既有差异：100 不加抖动，429 直接交外层；
 
 ### 11.6 运行期改阈值
 
-当前代码通过 BucketProxy 的配置 supplier 建桶，没有显式替换已有桶配置。按源码与既有记录推断，
-仅滚动 Gateway 不保证持续活跃的旧桶采用新阈值，须真实 Redis 专项核对。
-现行运维流程见部署手册；清桶会重新获得满额 burst，必须核对当前流量与维护窗口，本次不执行。
+2026-11-05 起 rps / burst 每次随调用传进令牌桶 Lua，桶里只存余量与时刻：滚动 Gateway 后已有的桶立即按新阈值计算（余量按新 burst 封顶），
+不需要清桶（用例 `RedisRateLimitStoreIntegrationTest.newThresholds_applyToExistingBucketImmediately`）。
+只有从 Bucket4j 版本升级时要清一次 `rl:zone:*` / `rl:ip:*`：旧键是 STRING，新脚本按 Hash 读会报 WRONGTYPE 而放行，步骤见部署手册。
 
 ### 11.7 已知风险
 
@@ -225,11 +238,12 @@ robot 无票分支保留既有差异：100 不加抖动，429 直接交外层；
 |---|---|
 | R1 | HTTP 速率不直接保护 EnterGame 下游；按预加载、DB、Kafka 与场景入场实际吞吐确定阈值。 |
 | R2 | NAT / CGNAT 共用 IP 桶，robot 把无票 429 当错误；基线与开启限流的结果要分别说明，不能混算容量。 |
-| R13 | 先扣 zone 后判 IP；已被 IP 拒绝的流量也可消耗 zone 额度。原取舍保留，改顺序须另行实现与验证。 |
+| R13 | （2026-11-05 已了结）原先先扣 zone 后判 IP，已被 IP 拒绝的流量也会消耗 zone 额度；现为两个桶一次原子判定、先 IP 后 zone，见 §二。 |
 | R14 | IP、任意正数 zone 桶及排队状态可能增长，限流先于 zone 合法性校验；共享 Redis 当前没有由此设计给出的硬容量保证。 |
 | R16 | 状态轮询不经前置限流，仍与共享 Redis 的其它业务争用。旧约 2.5Q ops/s 不再作为现行模型；区分客户端往返与 Lua 内部命令，按真实查询与队列规模测量。 |
 
-另需核对桶热键 CAS、启动期 Redis 依赖、后端故障放行、指标缺口、配置指纹、排队密钥轮换与各 zone 在线存量。
+另需核对 zone 桶热键的 Redis 负载（每次检查一条 EVALSHA，洪峰时 ops/s ≈ 到达请求速率，含被拒的请求）、启动期 Redis 依赖、后端故障放行、
+配置指纹、排队密钥轮换与各 zone 在线存量。
 阈值与 Redis 拆分的专项任务见[发布就绪规格](../handoff/launch-readiness-20261013/spec_G4b.md)和部署手册；
 本文不据已有源码宣称这些验收完成。
 

@@ -149,7 +149,7 @@ services:
       - SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.MySQLDialect
       - SPRING_JPA_PROPERTIES_HIBERNATE_BOOT_ALLOW_JDBC_METADATA_ACCESS=false
       # Limiter OFF by default — flip the four to non-empty values to
-      # test Bucket4j wire-up against containerized Redis.
+      # test the rate-limit token-bucket Lua against containerized Redis.
       - GATE_RATE_LIMIT_ENABLED=false
     extra_hosts:
       - "host.docker.internal:host-gateway"

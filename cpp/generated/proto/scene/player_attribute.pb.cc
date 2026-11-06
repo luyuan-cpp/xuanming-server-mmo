@@ -984,11 +984,11 @@ constexpr CreateAttributeSchemeRequest::ParseTableT_ CreateAttributeSchemeReques
     {
       PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeRequest, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -998,6 +998,10 @@ constexpr CreateAttributeSchemeRequest::ParseTableT_ CreateAttributeSchemeReques
       ::_pbi::TcParser::GetTable<::CreateAttributeSchemeRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateAttributeSchemeRequest, _impl_.client_request_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeRequest, _impl_.client_request_id_)}},
       // string name = 1;
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -1007,6 +1011,8 @@ constexpr CreateAttributeSchemeRequest::ParseTableT_ CreateAttributeSchemeReques
     }}, {{
       // string name = 1;
       {PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeRequest, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1024,7 +1030,8 @@ inline constexpr CreateAttributeSchemeRequest::Impl_::Impl_(
       : _cached_size_{0},
         name_(
             &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()) {}
+            ::_pbi::ConstantInitialized()),
+        client_request_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr CreateAttributeSchemeRequest::CreateAttributeSchemeRequest(::_pbi::ConstantInitialized,
@@ -3635,11 +3642,11 @@ constexpr CreateAttributeSchemeResponse::ParseTableT_ CreateAttributeSchemeRespo
     {
       PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -3649,7 +3656,10 @@ constexpr CreateAttributeSchemeResponse::ParseTableT_ CreateAttributeSchemeRespo
       ::_pbi::TcParser::GetTable<::CreateAttributeSchemeResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool replayed = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CreateAttributeSchemeResponse, _impl_.replayed_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.replayed_)}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 0, 0,
@@ -3671,6 +3681,8 @@ constexpr CreateAttributeSchemeResponse::ParseTableT_ CreateAttributeSchemeRespo
       {PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.panel_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 scheme_id = 3;
       {PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.scheme_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool replayed = 4;
+      {PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3696,7 +3708,8 @@ inline constexpr CreateAttributeSchemeResponse::Impl_::Impl_(
       : _cached_size_{0},
         error_message_{nullptr},
         panel_{nullptr},
-        scheme_id_{0u} {}
+        scheme_id_{0u},
+        replayed_{false} {}
 
 template <typename>
 constexpr CreateAttributeSchemeResponse::CreateAttributeSchemeResponse(::_pbi::ConstantInitialized,
@@ -4269,18 +4282,22 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeRequest, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeRequest, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeRequest, _impl_.client_request_id_),
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeResponse, _impl_.panel_),
         PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeResponse, _impl_.scheme_id_),
+        PROTOBUF_FIELD_OFFSET(::CreateAttributeSchemeResponse, _impl_.replayed_),
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SwitchAttributeSchemeRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -4345,14 +4362,14 @@ static const ::_pbi::MigrationSchema
         {148, sizeof(::AutoAllocateAttributePointsResponse_SuggestedEntry_DoNotUse)},
         {155, sizeof(::AutoAllocateAttributePointsResponse)},
         {164, sizeof(::CreateAttributeSchemeRequest)},
-        {169, sizeof(::CreateAttributeSchemeResponse)},
-        {178, sizeof(::SwitchAttributeSchemeRequest)},
-        {183, sizeof(::SwitchAttributeSchemeResponse)},
-        {190, sizeof(::RenameAttributeSchemeRequest)},
-        {197, sizeof(::RenameAttributeSchemeResponse)},
-        {204, sizeof(::AttributePanelChangedS2C)},
-        {209, sizeof(::GmSetPlayerLevelRequest)},
-        {214, sizeof(::GmSetPlayerLevelResponse)},
+        {171, sizeof(::CreateAttributeSchemeResponse)},
+        {182, sizeof(::SwitchAttributeSchemeRequest)},
+        {187, sizeof(::SwitchAttributeSchemeResponse)},
+        {194, sizeof(::RenameAttributeSchemeRequest)},
+        {201, sizeof(::RenameAttributeSchemeResponse)},
+        {208, sizeof(::AttributePanelChangedS2C)},
+        {213, sizeof(::GmSetPlayerLevelRequest)},
+        {218, sizeof(::GmSetPlayerLevelResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4433,46 +4450,47 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fattribute_2eproto[
     "nfoMessage\022\017\n\007pool_id\030\002 \001(\r\022F\n\tsuggested"
     "\030\003 \003(\01323.AutoAllocateAttributePointsResp"
     "onse.SuggestedEntry\0320\n\016SuggestedEntry\022\013\n"
-    "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\",\n\034CreateA"
-    "ttributeSchemeRequest\022\014\n\004name\030\001 \001(\t\"~\n\035C"
-    "reateAttributeSchemeResponse\022&\n\rerror_me"
-    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005panel\030\002 "
-    "\001(\0132\023.AttributePanelInfo\022\021\n\tscheme_id\030\003 "
-    "\001(\r\"1\n\034SwitchAttributeSchemeRequest\022\021\n\ts"
-    "cheme_id\030\001 \001(\r\"k\n\035SwitchAttributeSchemeR"
-    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\022\"\n\005panel\030\002 \001(\0132\023.AttributePanelI"
-    "nfo\"\?\n\034RenameAttributeSchemeRequest\022\021\n\ts"
-    "cheme_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\"k\n\035RenameAt"
-    "tributeSchemeResponse\022&\n\rerror_message\030\001"
-    " \001(\0132\017.TipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.A"
-    "ttributePanelInfo\">\n\030AttributePanelChang"
-    "edS2C\022\"\n\005panel\030\001 \001(\0132\023.AttributePanelInf"
-    "o\"(\n\027GmSetPlayerLevelRequest\022\r\n\005level\030\001 "
-    "\001(\r\"f\n\030GmSetPlayerLevelResponse\022&\n\rerror"
-    "_message\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005panel"
-    "\030\002 \001(\0132\023.AttributePanelInfo2\253\006\n\032SceneAtt"
-    "ributeClientPlayer\022J\n\021GetAttributePanel\022"
-    "\031.GetAttributePanelRequest\032\032.GetAttribut"
-    "ePanelResponse\022\\\n\027AllocateAttributePoint"
-    "s\022\037.AllocateAttributePointsRequest\032 .All"
-    "ocateAttributePointsResponse\022S\n\024ResetAtt"
-    "ributePoints\022\034.ResetAttributePointsReque"
-    "st\032\035.ResetAttributePointsResponse\022h\n\033Aut"
-    "oAllocateAttributePoints\022#.AutoAllocateA"
-    "ttributePointsRequest\032$.AutoAllocateAttr"
-    "ibutePointsResponse\022V\n\025CreateAttributeSc"
-    "heme\022\035.CreateAttributeSchemeRequest\032\036.Cr"
-    "eateAttributeSchemeResponse\022V\n\025SwitchAtt"
-    "ributeScheme\022\035.SwitchAttributeSchemeRequ"
-    "est\032\036.SwitchAttributeSchemeResponse\022V\n\025R"
-    "enameAttributeScheme\022\035.RenameAttributeSc"
-    "hemeRequest\032\036.RenameAttributeSchemeRespo"
-    "nse\022G\n\033NotifyAttributePanelChanged\022\031.Att"
-    "ributePanelChangedS2C\032\006.Empty\"\005\210\231\310\001\002\022G\n\020"
-    "GmSetPlayerLevel\022\030.GmSetPlayerLevelReque"
-    "st\032\031.GmSetPlayerLevelResponse\032\n\200\250\303\001\001\210\250\303\001"
-    "\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"G\n\034CreateA"
+    "ttributeSchemeRequest\022\014\n\004name\030\001 \001(\t\022\031\n\021c"
+    "lient_request_id\030\002 \001(\004\"\220\001\n\035CreateAttribu"
+    "teSchemeResponse\022&\n\rerror_message\030\001 \001(\0132"
+    "\017.TipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.Attrib"
+    "utePanelInfo\022\021\n\tscheme_id\030\003 \001(\r\022\020\n\010repla"
+    "yed\030\004 \001(\010\"1\n\034SwitchAttributeSchemeReques"
+    "t\022\021\n\tscheme_id\030\001 \001(\r\"k\n\035SwitchAttributeS"
+    "chemeResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
+    "ipInfoMessage\022\"\n\005panel\030\002 \001(\0132\023.Attribute"
+    "PanelInfo\"\?\n\034RenameAttributeSchemeReques"
+    "t\022\021\n\tscheme_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\"k\n\035Re"
+    "nameAttributeSchemeResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005panel\030\002 \001"
+    "(\0132\023.AttributePanelInfo\">\n\030AttributePane"
+    "lChangedS2C\022\"\n\005panel\030\001 \001(\0132\023.AttributePa"
+    "nelInfo\"(\n\027GmSetPlayerLevelRequest\022\r\n\005le"
+    "vel\030\001 \001(\r\"f\n\030GmSetPlayerLevelResponse\022&\n"
+    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\"\n"
+    "\005panel\030\002 \001(\0132\023.AttributePanelInfo2\253\006\n\032Sc"
+    "eneAttributeClientPlayer\022J\n\021GetAttribute"
+    "Panel\022\031.GetAttributePanelRequest\032\032.GetAt"
+    "tributePanelResponse\022\\\n\027AllocateAttribut"
+    "ePoints\022\037.AllocateAttributePointsRequest"
+    "\032 .AllocateAttributePointsResponse\022S\n\024Re"
+    "setAttributePoints\022\034.ResetAttributePoint"
+    "sRequest\032\035.ResetAttributePointsResponse\022"
+    "h\n\033AutoAllocateAttributePoints\022#.AutoAll"
+    "ocateAttributePointsRequest\032$.AutoAlloca"
+    "teAttributePointsResponse\022V\n\025CreateAttri"
+    "buteScheme\022\035.CreateAttributeSchemeReques"
+    "t\032\036.CreateAttributeSchemeResponse\022V\n\025Swi"
+    "tchAttributeScheme\022\035.SwitchAttributeSche"
+    "meRequest\032\036.SwitchAttributeSchemeRespons"
+    "e\022V\n\025RenameAttributeScheme\022\035.RenameAttri"
+    "buteSchemeRequest\032\036.RenameAttributeSchem"
+    "eResponse\022G\n\033NotifyAttributePanelChanged"
+    "\022\031.AttributePanelChangedS2C\032\006.Empty\"\005\210\231\310"
+    "\001\002\022G\n\020GmSetPlayerLevel\022\030.GmSetPlayerLeve"
+    "lRequest\032\031.GmSetPlayerLevelResponse\032\n\200\250\303"
+    "\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_deps[3] = {
@@ -4484,7 +4502,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fattribute_2ep
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto = {
     false,
     false,
-    3545,
+    3591,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fattribute_2eproto,
     "proto/scene/player_attribute.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fattribute_2eproto_once,
@@ -8640,6 +8658,7 @@ CreateAttributeSchemeRequest::CreateAttributeSchemeRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.client_request_id_ = from._impl_.client_request_id_;
 
   // @@protoc_insertion_point(copy_constructor:CreateAttributeSchemeRequest)
 }
@@ -8651,6 +8670,7 @@ PROTOBUF_NDEBUG_INLINE CreateAttributeSchemeRequest::Impl_::Impl_(
 
 inline void CreateAttributeSchemeRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.client_request_id_ = {};
 }
 CreateAttributeSchemeRequest::~CreateAttributeSchemeRequest() {
   // @@protoc_insertion_point(destructor:CreateAttributeSchemeRequest)
@@ -8704,6 +8724,7 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.name_.ClearNonDefaultToEmpty();
   }
+  _impl_.client_request_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -8737,6 +8758,15 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeRequest::Clear() {
     }
   }
 
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -8760,13 +8790,21 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // string name = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_name());
+      }
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
       }
     }
   }
@@ -8787,12 +8825,19 @@ void CreateAttributeSchemeRequest::MergeImpl(::google::protobuf::MessageLite& to
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!from._internal_name().empty()) {
-      _this->_internal_set_name(from._internal_name());
-    } else {
-      if (_this->_impl_.name_.IsDefault()) {
-        _this->_internal_set_name("");
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
       }
     }
   }
@@ -8816,6 +8861,7 @@ void CreateAttributeSchemeRequest::InternalSwap(CreateAttributeSchemeRequest* PR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  swap(_impl_.client_request_id_, other->_impl_.client_request_id_);
 }
 
 ::google::protobuf::Metadata CreateAttributeSchemeRequest::GetMetadata() const {
@@ -8865,7 +8911,13 @@ CreateAttributeSchemeResponse::CreateAttributeSchemeResponse(
   _impl_.panel_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.panel_)
                 : nullptr;
-  _impl_.scheme_id_ = from._impl_.scheme_id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, scheme_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, scheme_id_),
+           offsetof(Impl_, replayed_) -
+               offsetof(Impl_, scheme_id_) +
+               sizeof(Impl_::replayed_));
 
   // @@protoc_insertion_point(copy_constructor:CreateAttributeSchemeResponse)
 }
@@ -8879,9 +8931,9 @@ inline void CreateAttributeSchemeResponse::SharedCtor(::_pb::Arena* PROTOBUF_NUL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, scheme_id_) -
+           offsetof(Impl_, replayed_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::scheme_id_));
+               sizeof(Impl_::replayed_));
 }
 CreateAttributeSchemeResponse::~CreateAttributeSchemeResponse() {
   // @@protoc_insertion_point(destructor:CreateAttributeSchemeResponse)
@@ -8943,7 +8995,11 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeResponse::Clear() {
       _impl_.panel_->Clear();
     }
   }
-  _impl_.scheme_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+    ::memset(&_impl_.scheme_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.replayed_) -
+        reinterpret_cast<char*>(&_impl_.scheme_id_)) + sizeof(_impl_.replayed_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -8990,6 +9046,15 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeResponse::Clear() {
     }
   }
 
+  // bool replayed = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_replayed(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -9015,7 +9080,7 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // .TipInfoMessage error_message = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -9031,6 +9096,12 @@ PROTOBUF_NOINLINE void CreateAttributeSchemeResponse::Clear() {
       if (this_._internal_scheme_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_scheme_id());
+      }
+    }
+    // bool replayed = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -9052,7 +9123,7 @@ void CreateAttributeSchemeResponse::MergeImpl(::google::protobuf::MessageLite& t
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.error_message_ != nullptr);
       if (_this->_impl_.error_message_ == nullptr) {
@@ -9074,6 +9145,11 @@ void CreateAttributeSchemeResponse::MergeImpl(::google::protobuf::MessageLite& t
         _this->_impl_.scheme_id_ = from._impl_.scheme_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -9093,8 +9169,8 @@ void CreateAttributeSchemeResponse::InternalSwap(CreateAttributeSchemeResponse* 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.scheme_id_)
-      + sizeof(CreateAttributeSchemeResponse::_impl_.scheme_id_)
+      PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.replayed_)
+      + sizeof(CreateAttributeSchemeResponse::_impl_.replayed_)
       - PROTOBUF_FIELD_OFFSET(CreateAttributeSchemeResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));

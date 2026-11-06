@@ -657,14 +657,14 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'P2 Player store claim' -Sn
     -Pattern '^\s*t18m_db\s+\|(\s+n/a){3}\s+\|\s+n/a\s+\|(\s+n/a){5}\s+\|(\s+n/a){3}\s*$' `
     -Reason "a db without any claim series must print n/a, not 0"
 
-# P3 行大小:七组(2026-11-05 新分行),每组 n avg p99,单位字节。
-Assert-HeaderMatches -Lines $outputLines -Pattern 'location_n\s+location_avg\s+location_p99\s+\|\s+character_n\s+character_avg\s+character_p99\s+\|.*legacy1_p99\s*$' `
-    -Reason "P3 Player store row bytes table must list the seven kinds"
+# P3 行大小:六组(2026-11-05 新分行,LEGACY1 随 player_database_1 删除),每组 n avg p99,单位字节。
+Assert-HeaderMatches -Lines $outputLines -Pattern 'location_n\s+location_avg\s+location_p99\s+\|\s+character_n\s+character_avg\s+character_p99\s+\|.*profile_p99\s*$' `
+    -Reason "P3 Player store row bytes table must list the six kinds"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P3 Player store row bytes' -SnapshotName 't20m_db' `
-    -Pattern '^\s*t20m_db\s+\|\s+100\s+128\s+253\s+\|\s+10\s+300\s+n/a(\s+\|(\s+n/a){3}){5}\s*$' `
+    -Pattern '^\s*t20m_db\s+\|\s+100\s+128\s+253\s+\|\s+10\s+300\s+n/a(\s+\|(\s+n/a){3}){4}\s*$' `
     -Reason "per-kind n / avg bytes / interpolated p99; no buckets print p99 n/a; missing kinds print n/a"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P3 Player store row bytes' -SnapshotName 't18m_db' `
-    -Pattern '^\s*t18m_db(\s+\|(\s+n/a){3}){7}\s*$' `
+    -Pattern '^\s*t18m_db(\s+\|(\s+n/a){3}){6}\s*$' `
     -Reason "a db without committed rows must print n/a"
 
 # P4 连接池与落点。

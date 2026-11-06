@@ -96,6 +96,53 @@ func TestEnterScene_ZeroZoneReconnectReturnsToPreviousScene(t *testing.T) {
 	assert.Equal(t, "0", sceneCountText(sc, channelID), "没有去挑默认频道,也就没有预占")
 }
 
+// 原场景是正在回收的频道(scene:{id}:draining 在,映射还在):不回去 —— 排空自己会把人改派到默认大世界,
+// 回进去只会再被搬一次。直接落到默认大世界在役的频道;两条线同在节点 10 上,走同节点换图、不铸造。
+func TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	sc.HomeZone = &fakeHomeZoneClient{zone: testZoneId}
+
+	const (
+		playerID    = uint64(6303)
+		drainingID  = uint64(7405)
+		defaultConf = uint64(3309)
+		activeID    = uint64(7406)
+	)
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
+	mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", activeID))
+	seedSceneOnNode(mr, testZoneId, activeID, "10", "0")
+	// 回收中的线:已从在役集合摘到回收中集合,映射还在,等人走空。
+	seedSceneOnNode(mr, testZoneId, drainingID, "10", "1")
+	mr.SAdd(worldDrainingSetKey(testZoneId, defaultConf), fmt.Sprintf("%d", drainingID))
+	require.NoError(t, mr.Set(sceneDrainingKey(drainingID), "1"))
+	seedNodeMembers(mr, testZoneId, "10", 1)
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, drainingID, "10", testZoneId))
+	adoptSceneMember(mr, drainingID, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		t.Error("location 就在 gate zone:不应触发跨区重定向")
+		return nil, errors.New("unexpected redirect")
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode, resp.ErrorMessage)
+
+	require.Len(t, *captured, 1)
+	event := decodeRoutePlayerEvent(t, (*captured)[0])
+	assert.Equal(t, activeID, event.SceneId, "回收中的线不回去,按排空的去向落到在役频道")
+	assert.Equal(t, uint32(10), event.TargetNodeId)
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, activeID, loc.SceneId)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同节点换图不铸造")
+}
+
 // 原场景已经回收(scene→node 映射没了):回落默认大世界,与加回原场景之前相同。频道与 location 同在节点 10 上,
 // 走的是同节点换图:不铸造,location 改到频道,路由带频道。
 func TestEnterScene_ZeroZoneReconnectFallsBackWhenPreviousSceneIsGone(t *testing.T) {

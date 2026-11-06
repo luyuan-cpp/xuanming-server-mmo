@@ -57,17 +57,80 @@ func TestCreateGuild_ClientIdentityAndZoneComeFromServer(t *testing.T) {
 	assert.Equal(t, uint64(42), homeZones.lastPlayer, "身份必须取会话,不能取请求体里伪造的 999")
 }
 
-// 内部调用不查归属 zone。repo 为 nil:越过这一步走到仓储就 panic,这里只钉「不查」。
-func TestInternalCreateGuildSkipsHomeZoneLookup(t *testing.T) {
-	homeZones := &fakeHomeZones{zone: 2}
-	l := NewGuildLogic(nil, nil, nil, homeZones)
+// 旧客户端写方法不再接受无会话调用(docs/design/gate-online-identity.md §7.5):以前它们按「内部调用」
+// 用请求体里的 player_id 执行,能连上 guild 端口的进程不需要 gate 签名就能替任意玩家建帮、退帮、解散、改公告。
+// repo 与发号器都传 nil:越过身份闸走到归属查询或仓储就会 panic,这里要求在那之前就被 PermissionDenied。
+func TestLegacyWritesWithoutSessionAreRefused(t *testing.T) {
+	for name, call := range map[string]func(l *GuildLogic) error{
+		"CreateGuild": func(l *GuildLogic) error {
+			_, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
+			return err
+		},
+		"LeaveGuild": func(l *GuildLogic) error {
+			_, err := l.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{PlayerId: 1001})
+			return err
+		},
+		"DisbandGuild": func(l *GuildLogic) error {
+			_, err := l.DisbandGuild(context.Background(), &pb.DisbandGuildRequest{PlayerId: 1001})
+			return err
+		},
+		"SetAnnouncement": func(l *GuildLogic) error {
+			_, err := l.SetAnnouncement(context.Background(), &pb.SetAnnouncementRequest{PlayerId: 1001, GuildId: 1, Announcement: "冒名公告"})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			homeZones := &fakeHomeZones{zone: 2}
+			l := NewGuildLogic(nil, nil, nil, homeZones)
+			var err error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("无会话的写请求越过了身份闸,走到了仓储: %v", r)
+					}
+				}()
+				err = call(l)
+			}()
+			assert.Equal(t, codes.PermissionDenied, status.Code(err), "无会话的写请求必须拒绝,不能按请求体身份执行")
+			assert.Zero(t, homeZones.calls, "身份闸在归属查询之前")
+		})
+	}
+}
 
-	func() {
-		defer func() { _ = recover() }()
-		_, _ = l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
-	}()
-
-	assert.Zero(t, homeZones.calls, "内部调用不查归属 zone")
+// 三个旧读方法同样不再受理无会话调用(docs/design/gate-online-identity.md §9.6):以前它们不查归属区,
+// 沿用请求体里的 zone_id(全服榜 zone_id=0、页长不夹),现在与四个写方法一样在身份闸拒绝。
+// repo 传 nil:越过身份闸走到仓储就会 panic,这里要求在那之前、也在归属查询之前就被 PermissionDenied。
+func TestLegacyReadsWithoutSessionAreRefused(t *testing.T) {
+	for name, call := range map[string]func(l *GuildLogic) error{
+		"GetGuild": func(l *GuildLogic) error {
+			_, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: 1})
+			return err
+		},
+		"GetGuildRank": func(l *GuildLogic) error {
+			_, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{ZoneId: 0, PageSize: 500})
+			return err
+		},
+		"GetGuildRankByGuild": func(l *GuildLogic) error {
+			_, err := l.GetGuildRankByGuild(context.Background(), &pb.GetGuildRankByGuildRequest{GuildId: 1, ZoneId: 7})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			homeZones := &fakeHomeZones{zone: 2}
+			l := NewGuildLogic(nil, nil, nil, homeZones)
+			var err error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("无会话的读请求越过了身份闸,走到了仓储: %v", r)
+					}
+				}()
+				err = call(l)
+			}()
+			assert.Equal(t, codes.PermissionDenied, status.Code(err), "无会话的读请求必须拒绝,不能按请求体里的 zone_id 读")
+			assert.Zero(t, homeZones.calls, "身份闸在归属查询之前")
+		})
+	}
 }
 
 func TestClientRequestWithoutHomeZoneMappingIsRefused(t *testing.T) {
@@ -166,6 +229,7 @@ func newCacheOnlyRepo(t *testing.T) (*data.GuildRepo, *miniredis.Miniredis) {
 }
 
 // seedGuild 按 data 包的键契约(guild_repo.go 的 guildKey / guildRankKey / zoneRankKey)写缓存与两张榜。
+// 逻辑层已经不读全服榜(guildRankKey),仍写进去当对照:请求体里的 zone_id=0 若被采信,读到的就是这张榜。
 func seedGuild(t *testing.T, mr *miniredis.Miniredis, guild data.GuildData, score float64) {
 	t.Helper()
 	payload, err := json.Marshal(guild)
@@ -193,11 +257,11 @@ func TestGetGuildRank_ClientSeesOnlyHomeZone(t *testing.T) {
 	assert.Equal(t, uint32(1), resp.GetTotalCount())
 	assert.Equal(t, constants.MaxRankPageSize, resp.GetPageSize())
 
-	// 内部调用保留全服榜与原页长。
+	// 不带会话的调用不再「保留全服榜与原页长」:业务层自己拒绝,不按请求体的 zone_id / page_size 读榜。
+	// 全服榜里两个帮都在,放行的话这里会读到七区帮。
 	internal, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{ZoneId: 0, PageSize: 500})
-	require.NoError(t, err)
-	assert.Len(t, internal.GetEntries(), 2)
-	assert.Equal(t, uint32(500), internal.GetPageSize())
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Nil(t, internal, "被拒的请求不带任何榜单条目")
 }
 
 func TestGetGuild_OtherZoneLooksNonexistentToClient(t *testing.T) {

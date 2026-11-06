@@ -93,7 +93,44 @@ message TeleportS2C {
   uint64 entity = 1;                 // 被传送角色的不透明 actor 网络号，通常为接收者自身。
   Transform transform = 2;
   uint32 input_seq = 3;              // discard predictions up to and including this seq
-  uint32 reason = 4;                 // 0=server_correction, 1=portal, 2=skill, 3=admin, 4=respawn
+  uint32 reason = 4;                 // 0=server_correction, 1=portal, 2=skill, 3=admin, 4=respawn, 5=team_regroup(组队归队 / 放进跟随槽位)
+}
+
+// ---- 组队跟随:服务器驱动走位(docs/design/team-follow-server-trail.md) ----
+//
+// 队员不自己寻路:服务器把队员放在"队长走过的路"上、离队长固定路程的地方,每 tick 推进,
+// 队员的位置照常经 ActorMoveS2C 广播。只有客户端声明了跟随的队员才由服务器驱动;
+// 从不发 TeamFollowC2S 的旧客户端保持原来的客户端跟随,行为不变。
+
+// 队员客户端声明自己跟随队长(归队)或暂离。重复发送是幂等的。
+// 客户端在以下时机发 follow=true(自己是队员且没有暂离时):入队之后、每次进入场景(含重连)之后、
+// 队伍视图里队长换人之后、玩家点"归队"时;玩家点"暂离"时发 follow=false。
+// 是否真的开始驱动以 TeamFollowStateS2C 为准(队长不在同一场景节点、战斗中等情况下不会驱动)。
+message TeamFollowC2S {
+  bool follow = 1;                   // true=跟随(归队),false=暂离
+}
+
+// 服务器停止驱动的原因。
+enum TeamFollowStopReason {
+  TEAM_FOLLOW_STOP_REASON_UNSPECIFIED = 0;     // 没有停止(driven=true 时恒为它)
+  TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW = 1;     // 客户端暂离
+  TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED = 2;    // 离队 / 被踢 / 解散 / 换了队伍
+  TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED = 3;  // 队长换人;服务器随后会把自己接到新队长身后
+  TEAM_FOLLOW_STOP_REASON_BECAME_LEADER = 4;   // 自己成了队长
+  TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED = 5;   // 自己或队长离开了这个场景
+  TEAM_FOLLOW_STOP_REASON_LEADER_GONE = 6;     // 队长下线、退出或离开本节点
+  TEAM_FOLLOW_STOP_REASON_LEAVING = 7;         // 自己正在离开本节点(交接 / 退出)
+}
+
+// 服务器告知队员自己的客户端:此刻是否正被服务器驱动走位。只发给该队员本人。
+// driven=true 期间:客户端不按输入驱动本地角色,也不上报 MoveStart / MoveSync / MoveStop(服务器整条丢弃);
+// 本地角色按发给自己的 ActorMoveS2C(entity 为自己)与 TeleportS2C 显示,平滑方式与远端角色相同。
+// driven=false:恢复本地控制,从当前显示位置继续上报。
+message TeamFollowStateS2C {
+  bool driven = 1;
+  uint64 leader_entity = 2;          // 队长的不透明 actor 网络号;driven=false 时为 0
+  uint32 slot = 3;                   // 在队伍里排第几(1 起,紧跟队长的是 1);driven=false 时为 0
+  TeamFollowStopReason reason = 4;   // driven=false 时为停止原因
 }
 
 // ---- Service ----------------------------------------------------------------
@@ -113,4 +150,8 @@ service SceneMovementClientPlayer {
   rpc NotifyActorMove     (ActorMoveS2C)     returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc NotifyActorMoveList (ActorMoveListS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc NotifyTeleport      (TeleportS2C)      returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // 组队跟随(新增方法只追加在末尾:方法下标与已分配的消息号都不动)
+  rpc TeamFollow            (TeamFollowC2S)      returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_ONE_WAY; }
+  rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }

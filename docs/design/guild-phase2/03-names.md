@@ -33,10 +33,10 @@ message ReservePlayerNameRequest  { uint64 player_id = 1; string name = 2; }
 // result:0 成功(含同 player_id 同名幂等重试)、1 已被别人占用、2 不合规(含敏感词)。
 // owner_player_id:仅 result=1 时填占用者 id;只给 login 判定"丢响应后的重试",login 不下发客户端。
 message ReservePlayerNameResponse { uint32 result = 1; uint64 owner_player_id = 2; }
-// 条件删除:player_id 与 name 归一化后的 name_norm 都匹配才删。
-// 不带 x-admin-token:只删 created_ms 在 PlayerName.ReleaseWindow 内的行(login 建角补偿);
+// 条件删除:player_id 与 name 归一化后的 name_norm 都匹配才删,而且只删预留态(3.4a)。
+// 不带 x-admin-token:auth 必须是 login 的签名,只删 created_ms 在 PlayerName.ReleaseWindow 内的行(login 建角补偿);
 // 带合法 x-admin-token:不限登记时间(运维按日志清孤儿)。
-message ReleasePlayerNameRequest  { uint64 player_id = 1; string name = 2; }
+message ReleasePlayerNameRequest  { uint64 player_id = 1; string name = 2; common.base.ServiceCallAuth auth = 3; }
 message BatchGetPlayerNameRequest { repeated uint64 player_ids = 1; }   // ≤ 500 个
 // 缺席的 id(未登记 / 已释放)不出现在 map 里,不是错误(同 BatchGetPlayerHomeZone 口径)。
 message BatchGetPlayerNameResponse { map<uint64, string> names = 1; }
@@ -60,8 +60,11 @@ gRPC status 映射(照 `RegisterPlayerZone` 的 `error_code=<n>: ...` 写法):
 | store 为 nil / SQL 错 | `Unavailable`,`error_code=25` |
 | Release 的 name 归一化后为空或非法 | `InvalidArgument`,`error_code=14` |
 | Release metadata 里带了 x-admin-token 但校验失败 | 原样返回 `s.authorizeAdmin(ctx, "ReleasePlayerName")` 的错误(dataserviceserver.go:163 起) |
+| Release 没带 token,`auth` 不是 login 的有效签名(3.4a) | `PermissionDenied`,ERROR 日志带调用方;验证器没装配回 `Unavailable` |
 | Release 行不存在 | OK(幂等) |
 | Release 行存在但早于窗口且无 token | `FailedPrecondition`,`error_code=23`(复用 `ErrCodeAdminAuthRequired`),WARN 日志 |
+| Release 名字已绑定,或预留态但角色已提交(3.4a,带不带 token 都一样) | `FailedPrecondition`,`error_code=38`(`ErrCodePlayerNameInUse`),ERROR 日志 |
+| Release 证明角色未提交时读不到玩家片 | `Unavailable`,`error_code=25` |
 | BatchGet 超 500 个 | `InvalidArgument`,`error_code=14` |
 | BatchGet 有未命中且 SQL 失败 | `Unavailable`,`error_code=25`(不回部分结果) |
 
@@ -164,14 +167,57 @@ return fmt.Errorf("player_name reserve: exhausted 3 attempts")
 
 **服务端不做"ctx 已超时就补偿删除"**:login 对超时会以同 `(player_id, name)` 重试一次(第 4 部分),重试可能在补偿 DELETE 之前拿到 AlreadyOwned=成功,随后补偿把在役角色的名字删掉。补偿统一由 login 的两次条件 Release 负责(3.7)。
 
-**Release**:
+**Release**(2026-11-06 按「预留 → 绑定」改写,见 3.4a):
 ```
-DELETE FROM player_name WHERE player_id = ? AND name_norm = ? AND created_ms >= ?
+DELETE player_name FROM player_name FORCE INDEX (PRIMARY)
+ WHERE player_id = ? AND name_norm = ? AND created_ms >= ? AND bound_ms = 0
 affected=1 → Deleted
-affected=0 且 minCreatedMs=0 → Absent
-affected=0 且 minCreatedMs>0 → SELECT 1 FROM player_name WHERE player_id=? AND name_norm=? → 有 OutsideWindow / 无 Absent
+affected=0 → SELECT created_ms, bound_ms FROM player_name WHERE player_id=? AND name_norm=?
+             无 → Absent;bound_ms≠0 → Bound(拒绝,不限时间也一样);created_ms 早于下界 → OutsideWindow;
+             都不是 → 行是 DELETE 之后才提交的,重删(最多 3 轮)
 ```
-**BatchGet**:`SELECT player_id, name FROM player_name WHERE player_id IN (?, …)`,入参由 logic 去重、去 0、≤500。
+Deleted、Absent 之后按名字删 owner 行;Bound、OutsideWindow 两边都不动。
+**BatchGet**:按玩家分片读 `player_name_owner`(分片之后的口径见 horizontal-scale-logical-db.md §5.5),入参由 logic 去重、去 0、≤500。
+
+## 3.4a 名字行「预留 → 绑定」状态机(2026-11-06,未编译,待 Codex 验证)
+
+**缺口**(数据一致性保证图 §6.2 第 10 条):原来 `ReleasePlayerName` 不带 token 时只靠「登记不满 10 分钟」这一道时间窗,不核调用方;名字行也不和建角提交绑定。login 一旦判错建角结局(比如提交之后又走了回滚),或者内网别的进程调了它,就能释放一个已被建成的角色用着的名字,别的账号随即能登记同名:一名两角,v1 没有改名,没有事后修复。
+
+**名字行两个状态**,`player_name.bound_ms`:0 = 预留态(`player_id` 是候选角色),非 0 = 已绑定(绑定时刻)。
+
+| 时刻 | 在哪 | 做什么 | 失败 |
+|---|---|---|---|
+| ① 登记 | 名字片 | `ReservePlayerName` 写预留态(Reserve 不写 `bound_ms`,靠 `DEFAULT 0`) | 不变,见 3.4、3.11 |
+| ⑤ 提交 | 玩家片 | `commitRole` 严格插入 `account_role`,提交点不变 | 不变 |
+| ⑤ 之后 | 先玩家片读,再名字片写 | 目录 `bindRoleNameBestEffort`:重读角色行,确认在役、名字就是这个,再 `PlayerNameStore.Bind`:一条 `UPDATE … SET bound_ms=? WHERE name_norm=? AND player_id=? AND bound_ms=0`。名字行不在(被误释放、恢复点错开)就按原名走 Reserve 重新登记,下一轮再绑;名字在别人名下回 Taken,什么都不写 | 不改建角结局(角色已提交)。名字停在预留态,仍受下面的证明保护;同一建角的重放(预读那条路)或 `cmd/create_residual -repair name`(`name_unbound`)补上 |
+| 删角 | 玩家片 → 名字片 | `finishRemoval` 写墓碑,`account_role_removal` 那一行**留着**;收尾 `settleRemovedRole` 先核角色行确是墓碑,再按墓碑里的原名 `ReleaseRemoved`(不看状态、不看登记时刻),最后删小表那一行 | 名字片不可达时小表那一行留着,后台 `ResumeRemovals` 读到墓碑接着放。没放之前名字留在已删的角色名下,别人登记不了,不会一名两角 |
+
+**释放预留态**(`ReleasePlayerName`,logic 编排,顺序固定):
+
+1. **核调用方**(server):不带 `x-admin-token` 时,请求的 `auth` 必须是 login 用账号目录密钥(`MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN`)签的证明,方法名、`player_id`、名字都进签名;别的服务、没签名、签完被改过、时间戳超出 ±5 分钟一律 `PermissionDenied`,一条语句都不发。带 token 的是运维清孤儿,照旧 `authorizeAdmin`。证明只有 `serviceauth` 的 ±5 分钟时效,**不防重放**:没有一次性随机数,窗口内原样重发会被接受。重放无害:释放只针对 login 已经放弃的 id,是条件删除;第二次读不到这一行就直接回成功,不再证明,也不会碰别人后来登记的同名行。
+2. **先读名字行**(名字片,`PlayerNameStore.NameRowState`,一致性读):没有这一行 → 幂等成功;已绑定 → `ErrPlayerNameBound`;登记早于窗口 → 窗外拒绝。这三种都在证明之前回,两边零变更:证明可能写墓碑、不可逆,被拒或无事可做的释放不能留下它。多集群恢复点错开时「名字已绑定、角色行不在」的角色可能真的建成了(玩家片恢复点早于提交),先证明再拒绝会把它永远封死。(2026-11-06 独立评审补的一步。)
+3. **证明角色永远不会提交**(目录 `SealUncommittedRole`,玩家片一个事务,先锁路由行、再锁角色行,和 `commitRole` 同一个锁序,两者在路由行上串行):在役 → 拒绝(`ErrPlayerNameRoleCommitted`);墓碑 → 已证明;没有角色行、有带归属区的路由行 → 写墓碑(原件只带 player_id 和归属区,和后台判陈旧写的一样),迟到的建角在提交点撞上它被拒;没有路由行 → 此刻提交不了,不写墓碑(写不出合法的护栏状态,见残余)。证明读不到(库不可达、闸门冻结)回错误,不释放。
+4. **只删预留态**(名字片,上面的 Release):已绑定 → `ErrPlayerNameBound`。第 2 步之后行的变化由这条 DELETE 的 `bound_ms = 0` 与窗口条件原子复核:写过墓碑的角色提交不了,也就绑定不了。
+
+2~4 步的「已绑定」「角色已提交」都映射成 `FailedPrecondition` + `ErrCodePlayerNameInUse`(38),指标 `result="in_use"`,ERROR 日志带调用方身份;login 照常按「释放失败」记孤儿。时间窗保留,只是降为纵深防御。
+
+墓碑不可逆:证明写过之后这个 `player_id` 再也建不了角。所以只能由放弃了这个 id 的一方来调:login 回滚之后玩家重试会铸新 id;运维清孤儿也只针对已放弃的 id。证明在前、删除在后:反过来的话删完名字之后在途的建角还能提交。
+
+**和建角各步的先后**(login `createplayerlogic.go` 的编号):⑥b 发号 → ⑥c 登记(预留)→ ⑥d 登记路由 → ⑦ 目录建角(ref PENDING → 初始行 → **提交点** → **绑定** → ref ACTIVE)。login 回滚释放名字的几处都在提交点之前或确定没提交:登记结局未知、截止之后放弃、路由登记失败、锁丢失、目录回 `ErrNotCommitted` / `ErrFull` / `ErrConflict` / `ErrInvalid`。⑥d 之前回滚时没有路由行,证明不写墓碑;之后回滚时写墓碑。目录回结局未知时 login 不释放,记孤儿(不变)。
+
+**核账**:`cmd/create_residual` 以角色行为准,新增 `name_unbound`(名字在本角色名下但还是预留态),`-repair name` 修:和名字缺失同一步(重新登记 + 置绑定),名字副本缺的一并补上。
+
+**残余**:
+
+- 证明遇到「没有角色行也没有路由行」时不写墓碑。之后要提交,得先为这个已放弃的 id 登记路由再发建角,login 回滚之后不会再碰这个 id;真发生了,提交之后的绑定发现名字行不在会按原名补登记,名字在那之前被别人占了就是一名两角,由核账报 `name_taken`。
+- 玩家片冻结(搬库、维护闸门)或不可达时,证明那一步写不了墓碑,建角回滚的释放失败,名字留成孤儿(login 照常记孤儿日志和计数);解冻之后运维按日志带 token 释放。以前这条释放只碰名字片,冻结玩家片时也能放掉,现在宁可留孤儿也不放一个证明不了的名字。
+- 删角之后放掉的名字在 Redis 名字缓存里最多留 `CacheTTL`(24 小时):只是已删角色的展示名,唯一性只看库。
+- 名字片恢复点早于删角释放(多集群 PITR):名字行还绑在已删的角色名下,小表那一行已经删了,没有自动重试。不会一名两角,只是这个名字暂时没人能用;核账工具目前只扫活角色,要靠人按 player_id 核对。
+- 绑定和删角释放的失败只有 ERROR 日志,没有单独的指标。
+
+代码:`go/data_service/internal/store/player_name_store.go`(Bind、NameRowState、Release、ReleaseRemoved)、`account_role_name.go`(绑定、证明、删角释放)、`account_role_removal.go`(收尾)、`logic/player_name_logic.go`、`server/dataserviceserver.go`(核调用方);login `pkg/playernamereg`(`NewSigned` 签名)。
+
+**Java 版**(2026-11-06 只读核对 `D:\luyuan\xuanming-server-mmo`):不适用。Java 的名字唯一键 `uk_player_name_key` 建在角色表 `player` 上,`PlayerStore.createPlayerWithinCap` 在同一个事务里锁账号行、插角色行(名字随角色行一起插),没有独立的名字登记表,也没有释放名字的接口和删角流程,一名两角在结构上到不了。`PARITY.md` 不登记。
 
 ## 3.5 缓存:新文件 `go/data_service/internal/routing/player_name_cache.go`
 
@@ -253,11 +299,13 @@ PlayerName:
 |---|---|---|
 | INSERT 已提交、写缓存前崩 | 缓存缺 | BatchGet 回源回填 |
 | INSERT 已发出、login 超时 | 结果未知 | login 同名重试一次(幂等);仍未知 → 立即条件 Release + 约 10s 后再发一次(防"Release 先于在途 INSERT 提交")|
-| login 在延迟 Release 前崩溃 / 两次 Release 都失败 | 名字被不存在的角色占住(孤儿) | ERROR 日志带 player_id、name + `login_create_player_name_orphan_total`;运维带 x-admin-token 调 `ReleasePlayerName{player_id,name}` |
+| login 在延迟 Release 前崩溃 / 两次 Release 都失败 | 名字被不存在的角色占住(孤儿) | ERROR 日志带 player_id、name + `login_create_player_name_orphan_total`;运维带 x-admin-token 调 `ReleasePlayerName{player_id,name}`(同样只删预留态,先在玩家片证明角色永远不会提交,3.4a) |
+| 角色已提交、提交之后的绑定没做完 | 名字停在预留态 | 仍受保护:释放之前的证明读到在役角色就拒绝。同一建角重放或 `create_residual -repair name` 补绑(3.4a) |
+| 删角墓碑已提交、释放名字失败 | 名字留在已删的角色名下,别人登记不了 | `account_role_removal` 那一行留着,后台 `ResumeRemovals` 接着放(3.4a) |
 | DELETE 已提交、DEL 缓存失败 | 已释放 id 在缓存里仍有名 ≤24h | 该 id 不在任何账号 / 帮会,展示面不可见;唯一性只看库 |
 | 全局库不可用 | 建角全部拒绝;读侧名字降级为空 | 与发号器、home zone 同档 fail-closed |
 
-不做自动孤儿清扫:没有权威的"角色存在"信号(账号 blob 在 Redis 12h 过期,`player_to_account` 写失败不阻断建角),自动按它们释放会拿走在役角色的名字。
+不做自动孤儿清扫。2026-11-06 起「角色存在」有了权威信号(玩家片的 `account_role`,释放之前的证明就读它,3.4a),自动清扫在技术上可以做了:逐条预留态的老登记去玩家片证明再删。目前没做,孤儿仍按日志由运维带 token 释放。
 
 <!-- s3_names_part3.md -->
 
@@ -623,7 +671,7 @@ go run ./cmd/migrate -f ..\..\run\etc\go_services\z2_db.yaml -command up
   - `tools/merge_zone/player_rows.go` 改为**按列名显式拷贝**:`copyPlayerRows`(:203)逐表循环里、调 `copyOneTable`(:276)之前,用现成的 `tableColumns(ctx, db, schema, table)`(:383)分别取 src / dst 列,`copyOneTable` 增参数 `cols []string`;新纯函数 `buildCopyColumns(src, dst []string) ([]string, error)`:两边列名集合不等 → 报错 `column set mismatch %s: only_in_src=%v only_in_dst=%v`(合服中止);相等则按 dst 顺序返回。语句改 `INSERT INTO dst (c1,…) SELECT c1,… FROM src WHERE player_id IN (…)`(列名反引号包裹)。列序漂移从"静默串档"变成"列名对齐、照常拷贝",列集合不一致变成"明确失败"。删掉 :285-287 "列顺序必然一致"注释。`deletePlayerRows` 已按列名 `d.col <=> s.col` 比较(:329-335),不改。
   - `audit_resources.go:433-440` `auditPlayerNameConflicts`:`Name: "player.name (global)"`、`UniqueScope: "global"`、`Severity: "info"`、`Notes: "名字在 data_service 全局库 player_name 全服唯一,合服无冲突、不改名;force_rename 管线保持未启用。"`。`force_rename_required` 与 `player_force_rename:{id}` 不动。
 - **回档**:profile_component 随旧 player_database 回到旧值(同名或空,空的下次入场补齐,3.12)。注册表不回档、不释放。`reportOrphanCandidates`(rollback_logic.go:444)只报告,不改。
-- **摘角色**:`remove_players_from_accounts.go` **本期不释放名字**。它的输入常是回档孤儿"候选"名单(rollback_logic.go:444-465 明言含普通老玩家),账号 blob 过期时 `removePlayersFromAccount` 返回 0、反向映射却照删;释放名字不可逆,不能挂在这条路上。需要释放时运维按 player_id + 名字带 x-admin-token 调 `ReleasePlayerName`(3.1)。
+- **摘角色**(2026-11-06 改):`remove_players_from_accounts.go` 自己仍不碰名字;名字由 data_service 的删角收尾在墓碑提交之后释放(3.4a):先在玩家片核角色行确是墓碑,再删名字行。输入里即使混进在役角色的 id,目录的删角会拒绝它(有存档、有未结束的业务),走不到墓碑也就走不到释放。原来「本期不释放名字」的理由是当时判不了角色在不在,删角收尾核的是墓碑本身,这条理由不再成立。已绑定的名字 `ReleasePlayerName` 一律拒绝,运维不再按日志带 token 去释放删掉的角色的名字。
 - **不改** `DeletePlayerData(delete_zone_mapping=true)`,列未决。
 - **聚宝斋角色交易**:`jubaozhai-market.md` §6.3 `TransferPlayer` 为目标账号构造 `AccountSimplePlayer` 时必须带上 `name`(从源记录拷,源记录为空则 `BatchGetPlayerName`),写入 §3.25 由聚宝斋会话合入。
 
@@ -963,7 +1011,7 @@ cd E:\work\mmorpg-client; git status --short Assets/Scripts/Game Assets/Scripts/
 9. **运维配置**:data_service yaml 新 `PlayerName` 段(连接池 20/5、ReleaseWindow 10m、缓存 24h、负缓存 60s);`go/login/etc/login.yaml` `Locker.AccountLockTTL` 10 → 20,并以 Lua 围栏写账号 blob。都是部署参数,不进 xlsx。
 10. **B3a 超 30 文件**:拆 B3a-1(29)/ B3a-2(23)(3.18)。B3a-1 上线必须带 zone 库 `cmd/migrate` 加列步骤(3.15a),契约批次表未提。
 11. **B3a-2 捎带 merge_zone 按列名拷贝**(`copyOneTable` 不再 `SELECT *`):不属于名字功能本身,但本批是第一个在 `player_database` 加 BLOB 列的批次,不修则列序漂移会静默串档。
-12. **摘角色不释放名字**:`RemovePlayersFromAccounts` 输入含回档孤儿"候选"(可能是在役老玩家),释放不可逆,本期不接;运维按日志带 token 调 `ReleasePlayerName`。
+12. **摘角色不释放名字**(2026-11-06 起作废,见 3.16、3.4a):名字改由 data_service 的删角收尾在墓碑之后释放,`RemovePlayersFromAccounts` 本身仍不碰名字。
 13. **聚宝斋 `TransferPlayer`**(`jubaozhai-market.md` §6.3):给目标账号构造 `AccountSimplePlayer` 时必须带 `name`(源记录为空则 `BatchGetPlayerName`)。由聚宝斋会话合入其文档与实现,本节只登记约束。
 14. guild 名字解析器用 `SetPlayerNameResolver` 注入,不改 `NewGuildLogic` 参数表(避免改 18 处测试调用)。
 15. 文档不计入手改文件数,随契约 §6 文档批次提交:`docs/design/guild-phase2.md` §3(本节)、`docs/ops/merge-zone-runbook.md` §4.4(删"项目没有昵称",改"名字全局唯一,合服无冲突";前置检查加 `profile_component` 列与列集合一致)、`docs/design/team-system.md` §G.2(名字来源 `BatchGetPlayerName`,组队会话合入)、`data/AGENTS.md` 表清单。
@@ -971,7 +1019,7 @@ cd E:\work\mmorpg-client; git status --short Assets/Scripts/Game Assets/Scripts/
 ## 3.26 未决(需用户 / 他节拍板)
 
 - **敏感词词表来源**(E1),以及帮会名是否复用 `playername.DefaultSensitive`。
-- **自动孤儿清扫**:当前没有权威的"角色存在"信号(账号 blob 在 Redis 12h 过期后 `GetOrInitUserAccount` 静默重建为空;`player_to_account` 写失败不阻断建角),自动清扫会误删在役角色的名字。v1 只做日志 + 指标 + 带 token 手工 Release;账号数据有持久真源后再议。
+- **自动孤儿清扫**:2026-11-06 起「角色存在」的权威信号是玩家片的 `account_role`,释放预留态之前的证明(3.4a)就读它、必要时写墓碑,所以清扫可以安全地逐条做:按 `bound_ms=0` 且登记够老的名字行,逐个去玩家片证明再删(按片沿主键分页扫;不能为它加二级索引,名字表上的二级键会把根治掉的那条死锁环带回来,见 schema.go 的 playerNameBootstrapDDL)。目前没做,v1 仍是日志 + 指标 + 带 token 手工 Release,要不要做待定。
 - **按名字查人** `FindPlayerByName{name}`(走 `name_norm` 唯一键、需 x-admin-token):GM / 客服 / 日后"按名字加好友"会要,v1 不做。
 - `DeletePlayerData(delete_zone_mapping=true)` 是否应释放名字(需先确认合服清理源区是否调用它)。
 - 扩展 B 及以后汉字(U+20000+)何时开放:先核客户端 TMP 字体覆盖,再同时改 Go / C# 区间表与向量文件。

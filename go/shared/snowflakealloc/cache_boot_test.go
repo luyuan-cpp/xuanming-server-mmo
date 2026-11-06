@@ -496,6 +496,52 @@ func TestCacheWrite_RecoveryStopsWriting(t *testing.T) {
 	}
 }
 
+// 第一轮数据审计 §4 第 21 条:缓存启动后,前任的槽 key 多半已随 lease 过期,reclaim 要凭落盘的
+// 水位 revision 证明"这段时间没人写过水位"才肯重建 key。revision 每次水位写都在变,落盘时必须
+// 抄入那一刻最新的观测(不是首写时的),且不能为它额外写盘(稳态零写盘不变)。
+func TestCacheWrite_PersistsTheLatestWatermarkRevisions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.json")
+	now := time.Unix(1_800_000_000, 0)
+	writes := countCacheWrites(t)
+	h := cacheHandle(t, path, &now, nil)
+
+	h.guardRev, h.msRev = 1000, 2000
+	ack(h) // 身份落盘
+	if got := mustReadCache(t, path); got.WatermarkRev != 1000 || got.WatermarkMsRev != 2000 {
+		t.Fatalf("首写必须带上当时的水位 revision: %+v", got)
+	}
+
+	now = now.Add(time.Second)
+	h.guardRev, h.msRev = 1010, 2020 // 稳态又写了一拍水位
+	ack(h)
+	if writes.Load() != 1 {
+		t.Fatalf("revision 变化不得额外写盘: writes=%d (want 1)", writes.Load())
+	}
+	h.Close()
+	if got := mustReadCache(t, path); got.WatermarkRev != 1010 || got.WatermarkMsRev != 2020 {
+		t.Fatalf("Close() 落盘必须带最新观测到的水位 revision: %+v", got)
+	}
+}
+
+// 缓存启动必须把落盘的水位 revision 接回 Handle:etcd 回来时重建槽 key 的比较就靠它。
+// 接不上(恒为 0)时,只要水位 key 存在,重建一律被判成"别人写过"而 fence。
+func TestBootFromCache_RestoresTheWatermarkRevisions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snowflake-boot.json")
+	rec := writeBootCache(t, path, time.Minute)
+	rec.WatermarkRev, rec.WatermarkMsRev = 777, 888
+	if err := writeCacheFile(path, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	h := bootFromCache(t, unreachableClient(t), path)
+	h.guardMu.Lock()
+	gotSec, gotMs := h.guardRev, h.msRev
+	h.guardMu.Unlock()
+	if gotSec != 777 || gotMs != 888 {
+		t.Fatalf("缓存里的水位 revision 没接上: sec=%d ms=%d (want 777 / 888)", gotSec, gotMs)
+	}
+}
+
 // degraded 在 guardMu 下读故障模式标志(后台循环在另一个 goroutine 里改它)。
 func degraded(h *Handle) bool {
 	h.guardMu.Lock()

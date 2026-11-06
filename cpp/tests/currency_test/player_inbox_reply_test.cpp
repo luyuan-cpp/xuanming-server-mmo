@@ -225,7 +225,6 @@ protected:
 		auto payload = std::make_shared<PlayerAllData>();
 		payload->set_last_save_seq(1);
 		payload->mutable_player_database_data()->set_player_id(kPlayerId);
-		payload->mutable_player_database_1_data()->set_player_id(kPlayerId);
 		payload->mutable_player_database_data()->mutable_inbox_ledger()->CopyFrom(
 			tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_));
 		auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player_, payload, 1, 1);

@@ -47,6 +47,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/player_lifecycle.h" // IsSceneChangeBusy / RequestSceneChange:普通 EnterScene 的发送侧闸与唯一发送入口
+#include "player/system/team_follow_system.h" // 同场景归队:声明了跟随的队员交给服务器驱动走位
 #include "spatial/comp/scene_node_scene_comp.h" // AoiListComp:归队前判断队员与队长是否互相可见
 #include "spatial/system/movement.h"            // TeleportWithinScene:归队瞬移
 
@@ -238,6 +239,8 @@ namespace
 	// 会话仍然活着才允许请求 SceneManager(照 player_lifecycle.cpp HandlePlayerAsyncSaved 的判法):
 	// 断线宽限期内仍绑在旧 session 上的实体,拿旧 gate_session_id 去切场景会改写离线玩家的
 	// location,还会产生一次无效的 gate 路由。
+	// 只管两件要客户端在场的事:跨场景跟随(发 EnterScene)、旧客户端的归队瞬移。同场景里由服务器驱动的跟随
+	// 不看它 —— 离线队员也照样被带着走(team-follow-server-trail.md §3.6)。
 	bool HasLiveSession(entt::entity player, uint64_t playerId)
 	{
 		if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
@@ -272,11 +275,8 @@ namespace
 			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
 			return false;
 		}
-		if (!HasLiveSession(player, playerId))
-		{
-			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId;
-			return false;
-		}
+		// 不看会话:离线队员(断线保留,以后的离线托管)在同一场景里照样接到队长身后、被服务器驱动。
+		// 要客户端在场的两条路径各自再判 HasLiveSession:跨场景的 EnterScene、旧客户端的归队瞬移。
 		return true;
 	}
 
@@ -373,6 +373,44 @@ void PlayerTeamSystem::OnBattleFreezeCleared(entt::entity player)
 	RefreshAndFollow(player);
 }
 
+void PlayerTeamSystem::OnClientFollowRequest(entt::entity player, bool follow)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return;
+	}
+	LOG_INFO << "[PlayerTeam] metric=team_follow_intent follow=" << follow << " player_id=" << GuidOf(player);
+	TeamFollowSystem::SetFollowIntent(player, follow);
+	if (!follow)
+	{
+		return;
+	}
+	// 声明跟随之后照常走一遍刷新与跟随检查(读组队权威、战斗锁与队长位置):队长在本节点别的场景就换过去,
+	// 同一场景就由 RegroupToLeader 交给 TeamFollowSystem 接到队长身后。不另开捷径,守卫只有这一套。
+	RefreshAndFollow(player);
+}
+
+void PlayerTeamSystem::OnOfflineHostingStarted(entt::entity player)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return;
+	}
+	const auto* team = tlsEcs.actorRegistry.try_get<TeamId>(player);
+	if (team == nullptr || team->team_id() == 0)
+	{
+		return; // 不在队伍里:没有可跟的人,也不为他发一次读
+	}
+	LOG_INFO << "[PlayerTeam] metric=team_follow_intent follow=1 source=offline_hosting player_id=" << GuidOf(player);
+	TeamFollowSystem::SetFollowIntent(player, true);
+	if (TeamFollowSystem::IsDriven(player))
+	{
+		return; // 已经接在队长身后:托管期间照常被带着走
+	}
+	// 与客户端声明跟随同一条检查链;同场景接上不看会话,离线的人也能接上(§3.6)。
+	RefreshAndFollow(player);
+}
+
 void PlayerTeamSystem::RefreshAndFollow(entt::entity player)
 {
 	RefreshMembership(player, FollowMode::kFollowLeader);
@@ -424,6 +462,15 @@ void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
                 && previous->team_id() != reply->team_id()) return;
             ApplyMembership(player, reply->team_id(), reply->membership_epoch());
             tlsEcs.actorRegistry.emplace_or_replace<TeamSnapshotVersion>(player, reply->membership_epoch(), reply->version());
+            // 服务器驱动跟随(TeamFollowSystem)要的两件事,与 mode 无关:名次(入队序号)、自己是不是队长。
+            // 队长换人时组队服务给全员发刷新信号,新队长在这里停止被驱动,旧队长在这里解散队形。
+            if (reply->team_id() != 0) {
+                for (const auto& item : record.members()) {
+                    if (item.player_id() == playerId) TeamFollowSystem::RememberJoinSeq(player, item.join_seq());
+                }
+                if (record.leader_id() == playerId) TeamFollowSystem::OnBecameLeader(player);
+                else TeamFollowSystem::OnNotLeader(player);
+            }
             if (mode == FollowMode::kRefreshOnly || reply->team_id() == 0) return;
             if (record.leader_id() != playerId) {
                 CheckFollowLeader(player, record.leader_id());
@@ -462,6 +509,8 @@ void PlayerTeamSystem::ApplyMembership(entt::entity player, uint64_t teamId, uin
 		LOG_INFO << "[PlayerTeam] TeamId changed: player_id=" << GuidOf(player) << " old_team_id=" << oldTeamId
 				 << " new_team_id=" << teamId << " epoch=" << epoch;
 		RefreshTeammateAoi(player);
+		// 离队 / 被踢 / 解散 / 换队:作为队员停止被驱动,作为队长解散队形。
+		TeamFollowSystem::OnTeamChanged(player);
 	}
 }
 
@@ -549,6 +598,15 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 		co_return;
 	}
 
+	// 换场景要经 SceneManager 改 location 与 gate 路由:离线队员没有活会话,不能拿旧会话去切(见 HasLiveSession)。
+	// 离线队员因此留在原场景,队长回到这个场景时由扇出重新接上。以后做离线托管时,要在这里换成不带 gate 的
+	// 换场景请求(scene_manager 已接受 GateId 为空的 EnterScene,缺的是 scene 侧的落位),见 team-follow-server-trail.md §3.6。
+	if (!HasLiveSession(player, playerId))
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId
+				 << " leader_scene_id=" << leaderSceneId;
+		co_return;
+	}
 	const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
 	if (session == nullptr)
 	{
@@ -645,7 +703,15 @@ void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)
 	const double dx = transform->location().x() - leaderTransform->location().x();
 	const double dy = transform->location().y() - leaderTransform->location().y();
 	const double distance = std::sqrt(dx * dx + dy * dy);
-	if (!ShouldRegroup(distance, mutuallyVisible))
+	// 声明了跟随的队员(新客户端)由服务器驱动走位:互相可见且不远就走到队尾,否则直接放进槽位。
+	// 不看会话 —— 离线的队员照样接上、照样被带着走。
+	// 没声明的(旧客户端)TryAttach 返回 false,照下面的旧规则瞬移到队长脚下、由客户端自己排队。
+	if (TeamFollowSystem::TryAttach(player, leader, !ShouldRegroup(distance, mutuallyVisible)))
+	{
+		return;
+	}
+	// 旧规则的瞬移只对在线的人有意义(排队靠他自己的客户端);离线的不动,与以前跳过离线队员一致。
+	if (!HasLiveSession(player, playerId) || !ShouldRegroup(distance, mutuallyVisible))
 	{
 		return;
 	}

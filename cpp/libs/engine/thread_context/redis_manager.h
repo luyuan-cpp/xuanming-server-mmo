@@ -173,6 +173,18 @@ private:
 	std::shared_ptr<LifetimeToken> lifetimeToken_;           // 见 LifetimeToken;未 Connect 或已 Shutdown 时为空
 };
 
-// 控制域句柄(世界分线目录、神秘商人、PUBLISH assetop:wake)。每个 C++ 节点一条连接。
+// 核心共享实例句柄(game_config.yaml 的 zoneredis):PUBLISH assetop:wake 等全局用途,订阅者 guild、trade 只连核心。
+// 每个 C++ 节点一条连接。
 // 玩家域键(带 {player_id} 的键)走 tlsPlayerRedis,声明在 infra/storage/redis_cluster/redis_cluster_client.h。
 extern thread_local RedisManager tlsRedis;
+
+// 本 zone 的场景控制域句柄(game_config.yaml 的 scene_control_redis,docs/design/control-plane-zone-scoping-20261105.md §4.5):
+// scene_manager 写进本 zone 所属组控制域实例(redis-ctl-g<N>)的读模型 —— 世界分线目录、神秘商人。只有 scene 在
+// RedisSystem::Initialize 里建连;gate、battle 不连,这里恒未连接(GetZoneRedis() 为空,调用点按「Redis 不可用」处理)。
+// 配置缺省时与 zoneredis 指向同一个实例(开发环境不用改)。
+extern thread_local RedisManager tlsSceneControlRedis;
+
+// 把配置里的 Redis 主机名与端口解析成地址:看起来像 IP 字面量就直接用,否则 DNS 解析,失败按 1s 间隔重试,
+// 10 次仍失败就致命退出(与 etcd 端点同口径;不再按字面量处理,见 docs/design/infra-reconnect-overview.md §4 R9)。
+// 只在节点启动阶段调用(会阻塞)。两条控制面连接共用,不各写一份。
+muduo::net::InetAddress ResolveRedisAddress(const std::string &host, uint16_t port);

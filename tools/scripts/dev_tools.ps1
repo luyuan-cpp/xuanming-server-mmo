@@ -308,7 +308,11 @@
     [string]$SqlWriterReaperImage = "",
     # 全局号源登记处(k8s_deploy.ps1 同名参数,docs/ops/id-issuer-runbook.md §1)。留空 / 不给不转发,档位规则只在 k8s_deploy.ps1。
     [string]$IdRegistryEtcd = "",
-    [switch]$HostIdRegistry
+    [switch]$HostIdRegistry,
+    # 控制域实例 redis-ctl-g<N>(缺口第 5 条),透传给 k8s_deploy.ps1 同名参数:-RedisCtlMaxMemory 非空才传,-ConfirmRedisCtlSwitch 被指定才传。
+    # 追加在末尾:本脚本没有显式 Position,改变声明顺序会改变位置参数绑定。
+    [string]$RedisCtlMaxMemory = "",
+    [switch]$ConfirmRedisCtlSwitch
 )
 
 $ErrorActionPreference = "Stop"
@@ -816,6 +820,9 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
     if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
     if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
+    # 控制域实例 redis-ctl-g<N>(缺口第 5 条)同一口径:容量非空才传,确认开关只在被指定时传;闸只在 k8s_deploy.ps1(Assert-RedisCtlPreflight)。
+    if (-not [string]::IsNullOrWhiteSpace($RedisCtlMaxMemory)) { $args.RedisCtlMaxMemory = $RedisCtlMaxMemory }
+    if ($ConfirmRedisCtlSwitch) { $args.ConfirmRedisCtlSwitch = $true }
     # k8s-redis-wipe 的确认,同一口径。准入(namespace 规则 + 确认)只在 k8s_deploy.ps1 的 Invoke-RedisWipe 判。
     if ($ConfirmWipeAllRedis) { $args.ConfirmWipeAllRedis = $true }
     # 玩家域 Redis Cluster:非 0 / 非空才传。档位规则与变更闸只在 k8s_deploy.ps1(Assert-RedisPlayerPreflight)。
@@ -1054,6 +1061,9 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
     if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
     if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
+    # 控制域实例 redis-ctl-g<N>(缺口第 5 条)同一口径:容量非空才传,确认开关只在被指定时传;闸只在 k8s_deploy.ps1(Assert-RedisCtlPreflight)。
+    if (-not [string]::IsNullOrWhiteSpace($RedisCtlMaxMemory)) { $args.RedisCtlMaxMemory = $RedisCtlMaxMemory }
+    if ($ConfirmRedisCtlSwitch) { $args.ConfirmRedisCtlSwitch = $true }
     # 玩家域 Redis Cluster 同一口径:scene 的 player_redis 由它决定,staging / prod 发版必须给主节点数。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }

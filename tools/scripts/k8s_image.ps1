@@ -138,7 +138,11 @@ param(
     [ValidateRange(0, 2)]
     [int]$PlayerRedisReplicasPerMaster = 0,
     [string]$PlayerRedisMaxMemory = "",
-    [string]$PlayerRedisStorage = ""
+    [string]$PlayerRedisStorage = "",
+    # 控制域实例 redis-ctl-g<N>(缺口第 5 条),透传给 k8s_deploy.ps1 同名参数:容量非空才传,确认开关被指定才传。
+    # 追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [string]$RedisCtlMaxMemory = "",
+    [switch]$ConfirmRedisCtlSwitch
 )
 
 $ErrorActionPreference = "Stop"
@@ -463,6 +467,9 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
     if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
     if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
+    # 控制域实例 redis-ctl-g<N>(缺口第 5 条)同一口径:容量非空才传,确认开关只在被指定时传;闸只在 k8s_deploy.ps1(Assert-RedisCtlPreflight)。
+    if (-not [string]::IsNullOrWhiteSpace($RedisCtlMaxMemory)) { $args.RedisCtlMaxMemory = $RedisCtlMaxMemory }
+    if ($ConfirmRedisCtlSwitch) { $args.ConfirmRedisCtlSwitch = $true }
     # 玩家域 Redis Cluster:非 0 / 非空才传。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }

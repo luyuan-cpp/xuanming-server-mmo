@@ -280,8 +280,6 @@ protected:
             }
         }
 
-        auto &second = *all.mutable_player_database_1_data();
-        second.set_player_id(playerId);
         return all;
     }
 
@@ -319,8 +317,7 @@ TEST_F(PlayerSaveCostTest, ReportsStageCostsForThreeTiers)
         const auto projectMicros = Measure(iterations, [&]
         {
             player_store_rows::KindBytes out;
-            projectOk = player_store_rows::ProjectPlayer(*marshaled.mutable_player_database_data(),
-                                                         marshaled.player_database_1_data(), out, error) && projectOk;
+            projectOk = player_store_rows::ProjectPlayer(*marshaled.mutable_player_database_data(), out, error) && projectOk;
             rows.swap(out);
         });
         ASSERT_TRUE(projectOk) << error;
@@ -345,9 +342,7 @@ TEST_F(PlayerSaveCostTest, ReportsStageCostsForThreeTiers)
         auto *location = moved.mutable_player_database_data()->mutable_transform()->mutable_location();
         location->set_x(location->x() + 1.0);
         player_store_rows::KindBytes movedRows;
-        ASSERT_TRUE(player_store_rows::ProjectPlayer(*moved.mutable_player_database_data(), moved.player_database_1_data(),
-                                                     movedRows, error))
-            << error;
+        ASSERT_TRUE(player_store_rows::ProjectPlayer(*moved.mutable_player_database_data(), movedRows, error)) << error;
         EXPECT_EQ(ChangedRowCount(movedRows, confirmed), 1) << "只改位置,应该只有位置所在的那一行变化";
 
         Report(tier.name, "marshal", marshalMicros);

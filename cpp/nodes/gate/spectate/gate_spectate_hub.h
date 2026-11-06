@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "engine/core/type_define/type_define.h"
+#include "node/system/node/node_command_topic.h"
 
 class MessageContent;
 class SpectateTicketPayload;
@@ -88,10 +89,11 @@ namespace gate_spectate
 	{
 		// 一次 2 万人的扇出若不分批,会卡住这台 gate 上所有会话的收发、定时器和 RPC 回包(§7)。
 		std::size_t fanoutBatch{512};
-		// 必须大于手动行动窗口 6s 加结果提交等待(§5.3)。
-		std::chrono::seconds idleTimeout{30};
+		// 源站失联判定与期限宽限。battle 对开了通道的房间每 kSpectateChannelKeepalive 至少出一帧(心跳),所以这里与回合节奏、
+		// 结果提交等待无关;契约与静态断言在 node_command_topic.h,两端共用一份,不要在这里另写数字。
+		std::chrono::seconds idleTimeout{node::kafka::kSpectateSourceIdleTimeout};
 		std::chrono::seconds endedRetention{600};
-		uint64_t deadlineGraceMs{60'000};
+		uint64_t deadlineGraceMs{node::kafka::kSpectateDeadlineGraceMs};
 		std::chrono::seconds metricInterval{30};
 	};
 

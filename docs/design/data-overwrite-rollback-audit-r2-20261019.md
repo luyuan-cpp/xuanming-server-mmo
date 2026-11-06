@@ -210,7 +210,7 @@
 | 9 | 会话栅栏的 player 绑定随 TTL 过期，同一连接可绑第二个角色 | 成立 | TTL 6 分钟、没有续期；gate 也不挡 |
 | 10 | 收件箱 Ack 以 Redis 落盘为依据 | 成立 | 已登记（`player-inbox-service.md:1125-1129`），并入一致性核对的 Redis 回退一族 |
 | 11 | 已打完的战斗被全球匹配恢复误判为未建成，票据回队 | 成立 | QueryBattleCreation 没有 FINISHED 状态；按 r2-match#1，上线配置下缺省可达 |
-| 12 | 评级来源停写后结果消费卡死 | 成立 | 停写后整个 match-results 消费者被堵；StopRankSource 目前无调用方 |
+| 12 | 评级来源停写后结果消费卡死 | 成立 | 停写后整个 match-results 消费者被堵；StopRankSource 目前无调用方。2026-11-06 已落码（未编译）：停写之后的新局评分照记、不进榜、计数，不再报错，见 `global-match-hierarchical-pools.md` §8 R5 |
 | 13 | 合服 P3 只取一次积压快照 | 成立 | 另补 r2-low#2（P3 覆盖校验用 describe 时刻的 LAG） |
 | 14 | `-skip-player-rows` 不校验落点 | 成立 | 三重人为声明，最高 low |
 | 15 | 撤销时榜单 ZADD 导致分数回退 | 部分成立 | 按 runbook 撤销范围（dst 未开服）不可达；GM 改分或违规开服后撤销可达 |

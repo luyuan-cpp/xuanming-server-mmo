@@ -179,7 +179,9 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
   friend 的 `DescribeTransportError` 沿用这个解析方式(前缀 + TryParse + 与 `(uint)common_error.Kxxx` 比较,不写 1008 / 1003 字面量),但要给限频单独的文案。这个解析只覆盖信封级;限频有两条到达路径,friend 都要处理:
   1. **gate 限流器**:`cpp/nodes/gate/handler/rpc/client_message_processor.cpp` 的 `CheckMessageLimit` 被拒时回**信封级** `KRateLimitExceeded` → 客户端表现为 `onError("server tip=<该码>")`。⚠ **同一函数里每次被拒还会计入该会话的非法包计数(`IllegalPacketCounter::RegisterAndShouldKill`),到阈值 gate 直接 `forceClose`。所以被限频后不得自动重试。**
   2. **friend 服务自己的每分钟配额**(仅 `AddFriend`)回**响应体** 1008(`go/friend/internal/constants/constants.go` 的 `ErrRateLimited`)。
-- 其他会出现的 common 码:1005 `kInvalidParameter`;1003 `kServiceUnavailable`(服务端存储故障,以及路由服把一切 gRPC 错误翻成的信封码 —— 客户端调 `NotifyFriendEvent` 被拒也是它)。
+- 其他会出现的 common 码:1005 `kInvalidParameter`;1003 `kServiceUnavailable`(服务端存储故障,以及路由服把一切 gRPC 错误翻成的信封码)。
+  - 客户端调 `NotifyFriendEvent` **不会有任何回包**,既没有 1003 也没有别的码。它是推送号(`CLIENT_RPC_PUSH`),gate 的上行白名单 `IsClientMessageId` 只收客户端能发起的方法(REQUEST / ONE_WAY),这个号发上来按非法包丢弃:计一次非法包,累计到阈值 gate 直接断线;请求到不了路由服和 friend,`Call` 只会等到超时。所以客户端不得上行任何推送号(§7 第 1 条)。
+  - 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4(2026-11-05 已落码,未编译,待 Codex 重新生成 gate 白名单并验证;Java 版待做)。R4 之前 gate 按服务放行,这个号会被转给 friend、由会话拦截器拒绝,客户端拿到的是信封 1003;现在拦在 gate,原因是推送号本来就不该有上行语义,不该让业务服替 gate 兜底。
 - friend 段的码:客户端代码按 `friend_error` 枚举名引用,编号由导表器发,客户端不关心具体数字。下表的数字只供服务端对照,客户端不得抄。(2026-09-20 客户端基线 d2b165a → 120e2d8 后更正)
 
 | 码 | 枚举名 | 表里的文案 |
@@ -367,7 +369,7 @@ friend 仍按本规格挂进 GameClient 构造函数,理由是首拉不依赖 UI
 
 ## 7. 不要做的事
 
-1. **不要调用 `NotifyFriendEvent`。** 它的消息号只许出现在 `RegisterNotify` 的第一个参数里,不许传给 `Call` / `SendOneWay`。它和 C2S 同 service,服务端在会话拦截器的方法白名单里刻意排除了它(否则客户端可以伪造好友事件),调了只会拿到信封码 1003。
+1. **不要调用 `NotifyFriendEvent`,客户端不得上行任何推送号。** 它的消息号只许出现在 `RegisterNotify` 的第一个参数里,不许传给 `Call` / `SendOneWay`。它和 C2S 同 service,但标的是 `CLIENT_RPC_PUSH`,不在 gate 的上行白名单里:发上来**不会有任何回包**,gate 计一次非法包,累计到阈值直接断线,请求到不了路由服和 friend。friend 会话拦截器的方法白名单也刻意排除了它(否则客户端可以伪造好友事件),这是第二道防线,由 `go/friend/internal/session/session_test.go` 的 `TestClientCannotCallNotifyFriendEvent` 守住。(2026-11-05 依 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改,已落码,未编译,待 Codex 重新生成并验证;R4 之前 gate 按服务放行,调了会拿到信封码 1003)
 2. **不要调用 `HandlerRegistry.Register`,也不要写 `*.user.cs` partial** —— 会静默盖掉 `GameClient` 手写的 `RedirectToGate` / `NotifyEnterScene` 处理器。
 3. **不要在请求里带自己的 player_id**,也不要用客户端推断"我是谁"。
 4. **不要本地推算列表**(点了同意就把行挪到好友页、点了删除就删行)。只认拉回来的快照。

@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <string>
+#include <utility>
 
 #include <hiredis/hiredis.h>
 #include <muduo/base/Logging.h>
@@ -21,6 +22,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
 #include <modules/scene/comp/scene_comp.h>
+#include "player/system/client_request_ledger.h"
 #include "player/system/mystery_merchant_rules.h"
 #include "player/system/player_feature_snapshot.h"
 #include "player/system/player_lifecycle.h"
@@ -61,7 +63,7 @@ constexpr double kRefreshIntervalSec = 5.0;
 constexpr uint32_t kDefaultInteractRange = 8;
 constexpr uint32_t kMaxInteractRange = 100;
 
-// 本节点缓存的那份记录。只属于 scene 的 EventLoop 线程:与 tlsEcs / tlsRedis 同一个所有权口径,用 thread_local 持有。
+// 本节点缓存的那份记录。只属于 scene 的 EventLoop 线程:与 tlsEcs / tlsSceneControlRedis 同一个所有权口径,用 thread_local 持有。
 // 它不是组件 —— 不挂在任何实体上,也就不受实体销毁、registry 清理的影响。
 struct MysteryMerchantCache
 {
@@ -276,8 +278,8 @@ void ApplyState(const ::MysteryMerchantState *incoming, uint64_t nowMs)
 
 	// 同一份记录每 5 秒会被读到一次:公告过的不再发。相等之外还挡「更小」:键被清掉(过期 / 手工删除)之后
 	// 读回一份更早的记录时,不把早就公告过的那一轮再播一遍。
-	// 例外是 scene_manager 强制覆盖出的、版本更小的**新**一轮(改了出现间隔):它的出现时刻早于已公告的那一轮,
-	// 这里不补公告,玩家靠角标与进场查询得知 —— 改间隔是运维操作,不值得为它放宽去重。
+	// 例外是 scene_manager 强制覆盖出的、版本更小的**新**一轮(旧记录损坏时):这里不补公告,玩家靠角标与进场查询得知
+	// —— 那是故障恢复,不值得为它放宽去重。改了出现间隔不会出现这种记录:新间隔下的第一轮轮次号更大(r2-mm#1)。
 	if (version <= cache.announcedVersion)
 	{
 		return;
@@ -342,9 +344,10 @@ void OnStateReply(const redisReply *reply, uint64_t nowMs)
 }
 
 // 发起一次异步读。Redis 没连上时直接跳过(保留旧缓存),下一拍再试。
+// 读模型在本 zone 的场景控制域实例里(scene_manager 写,docs/design/control-plane-zone-scoping-20261105.md §4.5)。
 void RequestRefresh()
 {
-	auto &redis = tlsRedis.GetZoneRedis();
+	auto &redis = tlsSceneControlRedis.GetZoneRedis();
 	if (!redis || !redis->connected())
 	{
 		return;
@@ -496,17 +499,60 @@ void PlayerMysteryMerchantSystem::FillInfo(entt::entity player, uint64_t nowMs, 
 	}
 }
 
+namespace
+{
+// 购买成功(含幂等重放)的组应答:最新货架 + 人物背包全量。走到这里购买已经生效,出任何问题都不回滚。
+void FillSuccessReply(entt::entity player, uint64_t nowMs, ::BuyMysteryMerchantGoodsResponse &response)
+{
+	PlayerMysteryMerchantSystem::FillInfo(player, nowMs, *response.mutable_info());
+	if (const auto snapshotErr = PlayerBagSystem::BuildSnapshot(player, kInventory, *response.mutable_bag());
+		snapshotErr != kSuccess)
+	{
+		// 背包快照建不出来不改变「买到了」这个事实:应答里不带背包,客户端发现缺失会自己重新拉一次。
+		response.clear_bag();
+		LOG_ERROR << "[MysteryMerchant] Purchase succeeded but the bag snapshot failed; replying without the bag: " << ActorLog(player)
+				  << " err=" << snapshotErr;
+	}
+}
+} // namespace
+
 uint32_t PlayerMysteryMerchantSystem::Buy(entt::entity player, const ::BuyMysteryMerchantGoodsRequest &request,
 										  uint64_t nowMs, ::BuyMysteryMerchantGoodsResponse &response)
 {
 	response.clear_info();
 	response.clear_bag();
+	response.clear_replayed();
 
 	// ── 第一段:只读预检。这一段里任何一处 return 都保证「什么都没改」 ──────────────────
 
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		return kEntityIsNull;
+	}
+	// 客户端幂等键(docs/design/client-request-idempotency.md):查账排在下面所有预检之前。
+	// 首次已经成交的话,冻结、战斗、轮次、距离、限购、余额这些状态可能都变了,重放再过一遍预检会被拒掉,
+	// 客户端就以为那一笔没成。命中 = 不再买第二份,按当前货架与背包回包并标 replayed;
+	// 同键换了参数 = 客户端把旧键用在了新操作上,拒绝且不执行。0 = 旧客户端,不去重。
+	const uint64_t clientRequestId = request.client_request_id();
+	std::string fingerprint;
+	if (clientRequestId != 0)
+	{
+		fingerprint = ClientRequestFingerprint(request);
+		ClientRequestResult first;
+		switch (client_request_dedup::Check(player, clientRequestId, ClientRequestKind::kBuyMysteryMerchantGoods,
+											fingerprint, first))
+		{
+		case ClientRequestVerdict::kReplay:
+			response.set_replayed(true);
+			FillSuccessReply(player, nowMs, response);
+			return kSuccess;
+		case ClientRequestVerdict::kMismatch:
+			return kInvalidParameter;
+		case ClientRequestVerdict::kUnavailable:
+			return kServiceUnavailable; // 账本缺失或已判坏:分不清是不是重发,不执行(fail-closed)
+		default:
+			break;
+		}
 	}
 	// 冻结 / 战斗两道闸与装备穿脱同口径(player_equip.cpp CheckWritable);冻结用的判定函数与
 	// BagService / CurrencySystem 内部用的是同一个,所以这里放行的请求不会在后面被它们以「冻结」拒绝。
@@ -661,22 +707,19 @@ uint32_t PlayerMysteryMerchantSystem::Buy(entt::entity player, const ::BuyMyster
 		return kMysteryMerchantInternalError;
 	}
 
+	// 成交了才记键,与发物、扣钱、记名额在同一次同步调用里,中间不让出 EventLoop。
+	// 上面 [UNPAID_GRANT] 那一支不记:它本来就转人工处理,重发会按新的一次购买再判(受限购约束)。
+	client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kBuyMysteryMerchantGoods,
+								   std::move(fingerprint), ClientRequestResult{});
+
 	LOG_INFO << "[MysteryMerchant] Purchase succeeded: " << ActorLog(player) << " round_id=" << state.round_id()
 			 << " goods_id=" << goods.goodsId << " count=" << request.count() << " unit_price=" << goods.price
 			 << " discount_percent=" << goods.discountPercent << " cost=" << totalCost
 			 << " currency_type=" << static_cast<uint32_t>(goods.currencyType) << " item_config_id=" << goods.itemConfigId
-			 << " item_total=" << totalItems;
+			 << " item_total=" << totalItems << " client_request_id=" << clientRequestId;
 
 	// ── 第三段:组应答。购买已经生效,这里出任何问题都不回滚 ──────────────────────────
-	FillInfo(player, nowMs, *response.mutable_info());
-	if (const auto snapshotErr = PlayerBagSystem::BuildSnapshot(player, kInventory, *response.mutable_bag());
-		snapshotErr != kSuccess)
-	{
-		// 背包快照建不出来不改变「买到了」这个事实:应答里不带背包,客户端发现缺失会自己重新拉一次。
-		response.clear_bag();
-		LOG_ERROR << "[MysteryMerchant] Purchase succeeded but the bag snapshot failed; replying without the bag: " << ActorLog(player)
-				  << " err=" << snapshotErr;
-	}
+	FillSuccessReply(player, nowMs, response);
 	return kSuccess;
 }
 

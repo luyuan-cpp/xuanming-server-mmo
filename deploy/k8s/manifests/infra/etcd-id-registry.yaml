@@ -83,6 +83,11 @@ spec:
     metadata:
       labels:
         app: etcd-id-registry
+      # 与 etcd.yaml 同一套抓取注解:deploy/k8s/etcd-alerts.yaml 的无主、空间告警同样覆盖登记处(它不可用时各地域新块预留失败)。
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2379"
+        prometheus.io/path: "/metrics"
     spec:
       # 尽量散到不同节点,也尽量别和本集群两套发号 etcd 的成员挤在一起。
       affinity:
@@ -113,9 +118,11 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: etcd
-          # 与 etcd.yaml 同一镜像,钉版本要一起改(docs/ops/etcd-maintenance-runbook.md「阶段 2」)。
-          image: bitnamilegacy/etcd:latest
+          # 与 etcd.yaml 同一个官方镜像、同一个摘要(理由见那份文件),换版本要几份清单与 compose 同批改
+          # (etcd_maintenance_contract.tests.ps1 守住)。官方镜像没有 shell,ETCD_* 由 etcd 自己解析。
+          image: quay.io/coreos/etcd:v3.6.16@sha256:a9c7cc12156f4b26ca41f0b57ba5b76c45037ff6c1e47ea3d68cb7908d48a965
           imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/etcd"]
           env:
             - name: POD_NAME
               valueFrom:
@@ -125,10 +132,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: ALLOW_NONE_AUTHENTICATION
-              value: "yes"
+            # PVC 下的 data/ 子目录(同 etcd.yaml)。
             - name: ETCD_DATA_DIR
-              value: /bitnami/etcd/data
+              value: /var/lib/etcd/data
             - name: ETCD_LISTEN_CLIENT_URLS
               value: "http://0.0.0.0:2379"
             - name: ETCD_LISTEN_PEER_URLS
@@ -177,7 +183,7 @@ spec:
               memory: 128Mi
           volumeMounts:
             - name: etcd-data
-              mountPath: /bitnami/etcd
+              mountPath: /var/lib/etcd
   volumeClaimTemplates:
     - metadata:
         name: etcd-data

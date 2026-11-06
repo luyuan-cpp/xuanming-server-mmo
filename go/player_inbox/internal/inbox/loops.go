@@ -19,13 +19,19 @@ import (
 
 // 后台循环(设计 §6.3、§9.1、§9.3、§9.4、§10):清理、提醒补发、扫描型 gauge、对账。
 //
-// **只在领导者上跑**:领导者由 go/shared/leader 选举(核心 Redis 上的 player_inbox:maintenance:leader)。
+// 清理、补发、扫描型 gauge **只在领导者上跑**:领导者由 go/shared/leader 选举(核心 Redis 上的
+// player_inbox:maintenance:leader)。它们的活只随异常增长(正常时近乎为零),单领导者加快速接任就够。
 //   - 清理只删终态行、逐行 autocommit、不持流行锁;领导者切换期间重叠执行无害(删除幂等)。
 //   - 补发的每一步都是 next_seq CAS,重叠执行最多多发一次提醒。
 //   - gauge 只由领导者产出,卸任时归零,避免 max() 聚合里留着卸任副本的旧值。
-//   - 对账只读;不一致行数是领导者产出的 gauge,重叠期间两个副本各报一份,告警取 max(),不影响结论。
-//     当选后第一轮对账只等 1–5 分钟(随机错开),不等满一个间隔;之后按间隔跑,起始分片按墙钟轮转(评审 M5 / L4),
-//     每轮前移 reconcileStartStride 片;gauge 是本任期各分片最近一次读数之和(reconcileTally,评审 R1)。
+//
+// 对账**按分片分给每个 stable 副本**(2026-11-06,docs/design/no-single-node-horizontal-scaling-20261001.md §9):
+// 它的活随业务量增长,只在领导者上跑时加副本扩不了吞吐。每个副本只对账自己负责的分片(ReconcileOwnership,
+// HRW 归属见 internal/shardowner),各有一份每轮预算。
+//   - 对账只读;成员表短暂不一致时两个副本可能同时读同一片、或一片这一轮没人读,都不影响结论。
+//   - 不一致行数是每个副本按自己负责的分片产出的 gauge,告警取 max() > 0。
+//   - 启动后第一轮对账只等 1–5 分钟(随机错开),不等满一个间隔;之后按间隔跑,起点按墙钟在本副本负责的分片里轮转
+//     (评审 M5 / L4),每轮前移 reconcileStartStride 片;gauge 是本副本负责的各分片最近一次读数之和(reconcileTally,评审 R1)。
 //
 // 关停(设计 §10):先取消循环与选举,有界等待它们退出,再由装配层关连接池 —— Run 返回即全部轮次已结束。
 
@@ -85,7 +91,13 @@ type MaintenanceStore interface {
 	// ResendNotify 补发一条;ctx 是本轮的 ctx,单次提醒的预算由实现自己加(没落定时的推迟不能被提醒耗尽的预算拖累)。
 	ResendNotify(ctx context.Context, d NotifyDue) NotifyResult
 	ScanGauges(ctx context.Context, nowMs uint64, cut GaugeCutoffs) (metrics.ScanGauges, error)
-	ReconcileRecent(ctx context.Context, sinceMs uint64, startShard uint32, ledgers LedgerReader) (ReconcileRoundResult, error)
+	ReconcileShards(ctx context.Context, sinceMs uint64, order []uint32, ledgers LedgerReader) (ReconcileRoundResult, error)
+}
+
+// ShardOwnership 给出本副本此刻负责对账的分片(升序,值在 [0, 64) 内)。ready 为 false:成员表还没同步好,
+// 或本进程还没注册,本轮不对账。生产为 *shardowner.Tracker。
+type ShardOwnership interface {
+	OwnedShards() (shards []uint32, ready bool)
 }
 
 // Loops 持有后台循环的依赖。构造后只读。
@@ -93,12 +105,15 @@ type Loops struct {
 	// 启动前显式绑定；清理是 SOURCE，通知与对账承接历史工作归 RELAY。
 	RootAdmission  *drainproof.Session
 	RelayAdmission *drainproof.Session
-	store          MaintenanceStore
-	ledgers        LedgerReader
-	cfg            LoopConfig
-	campaign       Campaign
-	now            func() time.Time
-	jitter         func(time.Duration) time.Duration
+	// ReconcileOwnership 在 Run 之前绑定。nil = 本副本负责全部分片,只用于单副本部署与单测;
+	// 多副本部署时必须绑定,否则每个副本都会对账全部分片(只读,结论不错,但读量随副本数翻倍)。
+	ReconcileOwnership ShardOwnership
+	store              MaintenanceStore
+	ledgers            LedgerReader
+	cfg                LoopConfig
+	campaign           Campaign
+	now                func() time.Time
+	jitter             func(time.Duration) time.Duration
 }
 
 // NewLoops 校验参数并构造。ledgers 可为 nil:此时不跑对账(只在 ReconcileInterval > 0 时要求非 nil)。
@@ -137,30 +152,34 @@ func randomJitter(n time.Duration) time.Duration {
 	return mathrand.N(n)
 }
 
-// Run 阻塞运行候选者循环直到 ctx 结束;当选后起各循环,丢失领导权或 ctx 结束即等全部轮次退出。
+// Run 阻塞运行直到 ctx 结束:对账循环在每个副本上按分片归属跑(不看领导权);候选者循环当选后起清理、补发、
+// gauge 三个循环,丢失领导权即等它们退出。ctx 结束后等全部轮次退出才返回。
 func (l *Loops) Run(ctx context.Context) {
+	var wg sync.WaitGroup
+	if l.cfg.ReconcileInterval > 0 {
+		first := reconcileFirstDelay(l.cfg.ReconcileInterval, l.jitter)
+		logx.Infof("[player_inbox] First reconcile round in %v, then every %v (only the shards this replica owns)",
+			first, l.cfg.ReconcileInterval)
+		tally := &reconcileTally{} // 本副本的分片读数,只由对账这一个 goroutine 读写
+		everyAfter(ctx, &wg, "player_inbox.reconcile", first, l.cfg.ReconcileInterval,
+			func(rctx context.Context) { l.reconcileRound(rctx, tally) })
+	}
 	l.campaign(ctx, l.whileLeader)
+	wg.Wait()
+	metrics.ResetReconcileInconsistent()
 }
 
-// whileLeader 在任期内跑各循环;lctx 取消(丢锁 / 关停)后等它们全部退出再返回,
+// whileLeader 在任期内跑清理、补发、gauge;lctx 取消(丢锁 / 关停)后等它们全部退出再返回,
 // 这样选主器释放锁、装配层关库时不会有在途轮次。
 func (l *Loops) whileLeader(lctx context.Context) {
-	logx.Info("[player_inbox] Maintenance leader acquired: sweep / notify resend / gauges / reconcile run on this replica")
+	logx.Info("[player_inbox] Maintenance leader acquired: sweep / notify resend / gauges run on this replica")
 	var wg sync.WaitGroup
 	every(lctx, &wg, "player_inbox.sweep", l.cfg.SweepInterval, l.sweepRound)
 	every(lctx, &wg, "player_inbox.notify_resend", l.cfg.NotifyInterval, l.notifyRound)
 	every(lctx, &wg, "player_inbox.gauges", l.cfg.GaugeInterval, l.gaugeRound)
-	if l.cfg.ReconcileInterval > 0 {
-		first := reconcileFirstDelay(l.cfg.ReconcileInterval, l.jitter)
-		logx.Infof("[player_inbox] First reconcile round in %v, then every %v", first, l.cfg.ReconcileInterval)
-		tally := &reconcileTally{} // 本任期的分片读数,只由对账这一个 goroutine 读写
-		everyAfter(lctx, &wg, "player_inbox.reconcile", first, l.cfg.ReconcileInterval,
-			func(ctx context.Context) { l.reconcileRound(ctx, tally) })
-	}
 	<-lctx.Done()
 	wg.Wait()
 	metrics.ResetScanGauges()
-	metrics.ResetReconcileInconsistent()
 	logx.Info("[player_inbox] Maintenance leader released; loops stopped")
 }
 
@@ -204,29 +223,54 @@ func everyAfter(ctx context.Context, wg *sync.WaitGroup, point string, first, in
 	})
 }
 
-// reconcileFirstDelay 是当选后第一轮对账前的等待:reconcileFirstDelayMin + jitter([0, spread)),不超过一个间隔。
+// reconcileFirstDelay 是启动后第一轮对账前的等待:reconcileFirstDelayMin + jitter([0, spread)),不超过一个间隔。
 // jitter 的返回值钳到 [0, spread],注入的随机源越界也不会让首轮提前或拖过 5 分钟。
 func reconcileFirstDelay(interval time.Duration, jitter func(time.Duration) time.Duration) time.Duration {
 	j := min(max(jitter(reconcileFirstDelaySpread), 0), reconcileFirstDelaySpread)
 	return min(reconcileFirstDelayMin+j, interval)
 }
 
-// reconcileStartShard 是一轮对账的起始分片:墙钟落在第 k = nowMs / intervalMs 个间隔,起点 = k × stride % 64
-// (stride = reconcileStartStride,评审 M5 / R1)。不依赖内存状态:易主后新领导者从同一个位置接着轮转。
+// reconcileStartIndex 是一轮对账在本副本负责的 n 个分片里的起点下标:墙钟落在第 k = nowMs / intervalMs 个间隔,
+// 起点 = k × stride % n(stride = reconcileStartStride,评审 M5 / R1)。不依赖内存状态:重启或分片换主后,
+// 负责的副本从同一个位置接着轮转。
 //
 // 为什么步长是 stride 而不是 1:每轮至少读完从起点起的 stride 片(collectFinalized 的覆盖下界),起点每轮前移
-// stride 片,相邻轮次的必读段首尾相接,连续 reconcileFullCycleRounds 轮覆盖全部 64 片 —— 不论截断多严重。
+// stride 片,相邻轮次的必读段首尾相接,连续 ⌈n / stride⌉ ≤ reconcileFullCycleRounds 轮覆盖全部 n 片 —— 不论截断多严重。
 // 步长 1 时截断持续的那段时间里,一轮只读到 [start, start+c),窗口内 W 轮总共只碰得到 c+W−1 片。
-func reconcileStartShard(nowMs uint64, interval time.Duration) uint32 {
+func reconcileStartIndex(nowMs uint64, interval time.Duration, n int) int {
 	intervalMs := interval.Milliseconds()
-	if intervalMs <= 0 {
+	if intervalMs <= 0 || n <= 0 {
 		return 0
 	}
-	k := (nowMs / uint64(intervalMs)) % ShardCount // 先取模:k × stride 不会溢出
-	return uint32((k * reconcileStartStride) % ShardCount)
+	k := (nowMs / uint64(intervalMs)) % uint64(n) // 先取模:k × stride 不会溢出
+	return int((k * reconcileStartStride) % uint64(n))
 }
 
-// reconcileTally 是一个任期内各分片最近一次对账读数(评审 R1),player_inbox_reconcile_inconsistent_rows 取它们的和。
+// reconcileStartShard 是本副本负责全部 64 片时的起始分片,即 reconcileStartIndex(nowMs, interval, 64)。
+func reconcileStartShard(nowMs uint64, interval time.Duration) uint32 {
+	return uint32(reconcileStartIndex(nowMs, interval, ShardCount))
+}
+
+// rotateShards 把 owned 从下标 start 起轮转成本轮的扫描顺序;返回新切片,不改 owned。
+func rotateShards(owned []uint32, start int) []uint32 {
+	if len(owned) == 0 {
+		return nil
+	}
+	start %= len(owned)
+	order := make([]uint32, 0, len(owned))
+	order = append(order, owned[start:]...)
+	return append(order, owned[:start]...)
+}
+
+// reconcileOwnedShards 返回本副本此刻负责的分片。没有绑定 ReconcileOwnership 时负责全部 64 片。
+func (l *Loops) reconcileOwnedShards() ([]uint32, bool) {
+	if l.ReconcileOwnership == nil {
+		return ringOrder(0), true
+	}
+	return l.ReconcileOwnership.OwnedShards()
+}
+
+// reconcileTally 是本副本负责的各分片最近一次对账读数(评审 R1),player_inbox_reconcile_inconsistent_rows 取它们的和。
 //
 // 截断的轮次只覆盖从起点起的一部分分片。只拿「本轮」读数写 gauge 的话,不一致的行一旦落在本轮没读完的分片里,
 // 读数就掉回 0、critical 告警跟着消失,而那一行还在窗口里、问题并没有处理。所以按分片记:
@@ -235,10 +279,27 @@ func reconcileStartShard(nowMs uint64, interval time.Duration) uint32 {
 //   - 本轮没读到的分片保留旧读数。
 //
 // 截断持续时每片至多隔 reconcileFullCycleRounds 轮读完一次,所以各片读数至多滞后这么多轮。
-// 任期开始时全为 0(新领导者在头几轮读到之前是偏低的下界;卸任时 whileLeader 把 gauge 归零)。
-// 只由本任期的对账 goroutine 读写(everyAfter 串行跑各轮),不加锁。
+// 进程启动、或一片刚改归本副本时它的读数为 0(头几轮读到之前是偏低的下界);一片改归别的副本时 retain 把它清掉,
+// 读数归新负责的副本。对账循环退出时 gauge 归零(Run)。
+// 只由对账 goroutine 读写(everyAfter 串行跑各轮),不加锁。
 type reconcileTally struct {
 	byShard [ShardCount]int
+}
+
+// retain 清掉本副本已经不负责的分片读数,返回剩下的读数之和。
+func (t *reconcileTally) retain(owned []uint32) int {
+	var keep [ShardCount]bool
+	for _, shard := range owned {
+		keep[shard%ShardCount] = true
+	}
+	total := 0
+	for shard := range t.byShard {
+		if !keep[shard] {
+			t.byShard[shard] = 0
+		}
+		total += t.byShard[shard]
+	}
+	return total
 }
 
 // apply 记入一轮的分片读数,返回全部分片读数之和。
@@ -386,9 +447,10 @@ func (l *Loops) gaugeRound(ctx context.Context) {
 	metrics.SetScanGauges(g)
 }
 
-// reconcileRound 跑一轮定时对账(设计 §9.3):窗口 [now − ReconcileWindow, now],起始分片按墙钟轮转;
-// 记 reconcile_rounds_total{result},把本轮的分片读数记进 tally,再以各片读数之和刷新不一致行数 gauge。
-// 收集阶段就失败的轮次没有分片读数,gauge 保持原值。tally 属于当前任期(whileLeader 建)。
+// reconcileRound 跑一轮定时对账(设计 §9.3):只对账本副本负责的分片,窗口 [now − ReconcileWindow, now],
+// 起点按墙钟在这些分片里轮转;记 reconcile_rounds_total{result},把本轮的分片读数记进 tally,再以本副本负责的
+// 各片读数之和刷新不一致行数 gauge。成员表还没就绪时整轮跳过、gauge 保持原值;收集阶段就失败的轮次没有分片读数,
+// gauge 同样保持原值。tally 属于本副本的对账循环(Run 建)。
 func (l *Loops) reconcileRound(ctx context.Context, tally *reconcileTally) {
 	if l.RelayAdmission != nil {
 		finish, err := l.RelayAdmission.Enter()
@@ -403,17 +465,28 @@ func (l *Loops) reconcileRound(ctx context.Context, tally *reconcileTally) {
 			}
 		}()
 	}
+	owned, ready := l.reconcileOwnedShards()
+	if !ready {
+		return // 成员表还没同步好或本进程还没注册:不知道该读哪几片,本轮不读
+	}
+	metrics.SetReconcileOwnedShards(len(owned))
+	retained := tally.retain(owned)
+	if len(owned) == 0 {
+		metrics.SetReconcileInconsistent(retained) // 本副本此刻不负责任何分片(canary,或还没出现在成员表里)
+		return
+	}
 	nowMs := l.nowMs()
 	window := uint64(l.cfg.ReconcileWindow.Milliseconds())
 	since := uint64(0)
 	if nowMs > window {
 		since = nowMs - window
 	}
-	start := reconcileStartShard(nowMs, l.cfg.ReconcileInterval)
-	res, err := l.store.ReconcileRecent(ctx, since, start, l.ledgers)
+	order := rotateShards(owned, reconcileStartIndex(nowMs, l.cfg.ReconcileInterval, len(owned)))
+	start := order[0]
+	res, err := l.store.ReconcileShards(ctx, since, order, l.ledgers)
 	result := reconcileRoundResult(ctx, err)
 	if result == "" {
-		return // 领导权丢失 / 关停:不计数、不刷新 gauge(卸任时 whileLeader 会把它归零)
+		return // 关停:不计数、不刷新 gauge(对账循环退出时 Run 会把它归零)
 	}
 	metrics.ObserveReconcileRound(result)
 	metrics.SetReconcileInconsistent(tally.apply(res.Shards))

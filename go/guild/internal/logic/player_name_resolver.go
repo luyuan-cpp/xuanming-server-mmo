@@ -47,10 +47,10 @@ const DefaultPlayerNameLookupTimeout = 800 * time.Millisecond
 // playerNameBatchLimit 与 data_service 的 store.PlayerNameBatchLimit 同值(契约 §3.1)。
 // 两个 module 不互相 import,所以各留一份;data_service 对超限请求回 InvalidArgument 而不是截断。
 //
-// 客户端路径到不了这个数:单帮成员 ≤ constants.MaxGuildMembersCap(100),客户端一页榜单 ≤
-// constants.MaxRankPageSize(50),待审名单 ≤ GuildRule 校验上限 500。唯一可能超限的是内部调用的
-// GetGuildRank(页长不夹)。真超了就只查前 500 个并记 ERROR —— 后面的人名字留空,
-// 好过整批被 data_service 拒掉、所有人都没名字。
+// 现有路径都到不了这个数:单帮成员 ≤ constants.MaxGuildMembersCap(100),一页榜单 ≤
+// constants.MaxRankPageSize(50),待审名单 ≤ GuildRule 校验上限 500。以前唯一可能超限的是无会话调用的
+// GetGuildRank(页长不夹),2026-11-06 那条分支已删,榜单一律夹页长。截断只是兜底:真超了就只查前 500 个并记 ERROR ——
+// 后面的人名字留空,好过整批被 data_service 拒掉、所有人都没名字。
 const playerNameBatchLimit = 500
 
 // guildPlayerNameLookupFailedTotal 计"整次批量取名失败"的次数(不是按 id 计)。

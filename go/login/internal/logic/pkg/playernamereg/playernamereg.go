@@ -27,6 +27,7 @@ import (
 	pbtable "shared/generated/pb/table"
 	gametable "shared/generated/table"
 	"shared/playername"
+	"shared/serviceauth"
 )
 
 // ErrUnavailable 表示名字登记客户端没有接线(IdSegment 关闭且没配 DataServiceRpc 时 login
@@ -71,11 +72,28 @@ type ReserveResult struct {
 // 超时由调用方通过 ctx 给:本包不套默认超时,见包注释。
 type Client struct {
 	ds dspb.DataServiceClient
+	// signReleases 为真时 Release 用 callerSecret 签名(NewSigned);为假只出现在 New 构造的单测替身上,
+	// 不签名,真 data_service 会以 PermissionDenied 拒绝。
+	signReleases bool
+	// callerSecret 是 login 对 data_service 的调用密钥(accountdirectory.SecretEnv,账号目录同一把)。
+	// data_service 只认 login 签过的建角回滚释放(03-names.md §3.4a)。
+	callerSecret string
 }
 
+// releaseCaller 是 Release 签名里的调用方,data_service 只认这一个。
+const releaseCaller = "login"
+
 // New 构造 Client。ds 允许为 nil(未配置 DataServiceRpc),此时所有方法返回 ErrUnavailable。
+// Release 不签名,只给单测替身用;生产装配用 NewSigned。
 func New(ds dspb.DataServiceClient) *Client {
 	return &Client{ds: ds}
+}
+
+// NewSigned 构造带调用证明的 Client:Release 用 callerSecret 以 login 的身份签名。
+// 密钥由装配层从环境读(login 起服时已校验它存在且够长,见 config 的全球 Login 校验);
+// 密钥为空或不够长时 Release 一个 RPC 都不发,回 ErrUnavailable,不会退化成不签名。
+func NewSigned(ds dspb.DataServiceClient, callerSecret string) *Client {
+	return &Client{ds: ds, signReleases: true, callerSecret: callerSecret}
 }
 
 // Reserve 为 playerID 登记 name(调用方应已用 playername.Normalize 归一化并校验过)。
@@ -99,11 +117,22 @@ func (c *Client) Reserve(ctx context.Context, playerID uint64, name string) (Res
 // Release 条件释放:data_service 只在 player_id 与 name 归一化后的 name_norm 都对上时才删,
 // 而且不带 x-admin-token 时只删 ReleaseWindow 内的登记 —— 所以它只能用于**建角补偿**,
 // 清不掉历史孤儿(那是运维带 token 的路径)。删不到行不是错误(幂等)。
+//
+// data_service 只释放预留态的名字,而且先在玩家片证明这个 player_id 的角色永远不会提交(必要时写墓碑,
+// 这个 id 从此不能再建角):调用方只在放弃了这个 player_id 时调。名字属于建成的角色时回 FailedPrecondition。
+// 签名失败(密钥不合格)回 ErrUnavailable:一个 RPC 都没发,名字没有释放。
+// 每次调用现签,证明只在 ±5 分钟内有效,不防重放(没有一次性随机数);重放无害,见 03-names.md §3.4a 第 1 步。
 func (c *Client) Release(ctx context.Context, playerID uint64, name string) error {
 	if c == nil || c.ds == nil {
 		return ErrUnavailable
 	}
-	_, err := c.ds.ReleasePlayerName(ctx, &dspb.ReleasePlayerNameRequest{PlayerId: playerID, Name: name})
+	in := &dspb.ReleasePlayerNameRequest{PlayerId: playerID, Name: name}
+	if c.signReleases {
+		if err := serviceauth.Sign(dspb.DataService_ReleasePlayerName_FullMethodName, in, releaseCaller, c.callerSecret, uint64(time.Now().UnixMilli())); err != nil {
+			return fmt.Errorf("%w: sign the release request: %v", ErrUnavailable, err)
+		}
+	}
+	_, err := c.ds.ReleasePlayerName(ctx, in)
 	return err
 }
 

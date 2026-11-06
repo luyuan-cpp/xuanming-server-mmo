@@ -792,6 +792,7 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/player_battle_result_comp.pb.h"
+#include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"         // UnregisterPlayer
 #include "proto/common/component/player_network_comp.pb.h" // PlayerSessionSnapshotComp
 #include "type_alias/player_session_type_alias.h"          // SessionMap
@@ -963,14 +964,12 @@ TEST(ExitPersistPayload, ProbeFieldsAreIgnoredBusinessFieldsAreNot)
 {
     PlayerAllData current;
     current.mutable_player_database_data()->set_player_id(7);
-    current.mutable_player_database_1_data()->set_player_id(7);
     current.mutable_player_database_data()->mutable_level_component()->set_level(10);
 
     PlayerAllData landed = current;
     auto* probe = landed.mutable_player_database_data()->mutable_stress_test_probe();
     probe->set_test_seq(42);
     probe->set_test_sig(std::string(16, '\x5a'));
-    landed.mutable_player_database_1_data()->mutable_stress_test_probe()->set_test_seq(43);
     EXPECT_TRUE(player_exit::IsPersistedPayloadCurrent(landed, current))
         << "压测探针只打在写盘的那份上,不剔除的话 STRESS_TEST_PROBE 构建退出永不收敛";
 
@@ -1015,11 +1014,11 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<PlayerItemGainBlockComp>(player); // 单玩家物品获取封禁(player-inbox-service.md §2.2)
     registry.emplace<PlayerMysteryMerchantComp>(player);
     registry.emplace<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
+    registry.emplace<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
     registry.emplace<CurrencyComp>(player);
     registry.emplace<PlayerCurrencyComp>(player);
-    // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
+    // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
     registry.emplace<PlayerDatabaseCarryComp>(player);
-    registry.emplace<PlayerDatabase1CarryComp>(player);
 }
 
 // 构造一个"退出存盘在途"的玩家:当前绑定 currentSession(已写进 SessionMap、映射到本玩家)、
@@ -1052,7 +1051,6 @@ PlayerAllData IdentifiedPlayerLoadData(Guid playerId)
 {
     PlayerAllData data;
     data.mutable_player_database_data()->set_player_id(playerId);
-    data.mutable_player_database_1_data()->set_player_id(playerId);
     return data;
 }
 
@@ -1084,7 +1082,6 @@ TEST(ExitPersistEcs, LandedPayloadWithProbeStillConverges)
     PlayerAllData landed;
     ASSERT_TRUE(MarshalAsSaved(player, landed));
     landed.mutable_player_database_data()->mutable_stress_test_probe()->set_test_seq(1);
-    landed.mutable_player_database_1_data()->mutable_stress_test_probe()->set_test_seq(1);
 
     PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
 
@@ -1427,6 +1424,8 @@ TEST(ExitPersistEcs, StaleEpochRejectOnOnlinePlayerKeepsEntity)
 // 纯判定 + ECS 级接缝。宿主里没有 EventLoop:关键进度存盘与到期扫描定时器都不挂(RequestKeyProgressSave /
 // EnsureConnectionLostHoldTimer 没有 loop 时直接返回),到期由用例直接调 ExpireConnectionLostHolds 并注入时间。
 // 会走到真实退出的用例先 MarkPersisted,让退出存盘走快路径(宿主里没有 Redis,真写盘会解引用空指针)。
+// 已在目标场景的再入场(同一次登录的重复路由幂等、新会话接回先离场再入场)要场景 + 邻居 AOI 夹具,
+// 用例 ConnectionLostHoldReentry.* 放在 SceneEntryPermissionTest 之后。
 
 namespace clh = connection_lost_hold;
 
@@ -1480,10 +1479,25 @@ TEST(ConnectionLostHold, RepeatedNoticeKeepsHoldingAlthoughTheSessionWasDropped)
 
 TEST(ConnectionLostHold, OnlyANewBoundSessionResumes)
 {
-    EXPECT_TRUE(clh::IsResumedBy(kNewerSession, kSessionAtExit));
-    EXPECT_FALSE(clh::IsResumedBy(kSessionAtExit, kSessionAtExit)) << "断开的那条会话不算接回";
-    EXPECT_FALSE(clh::IsResumedBy(0, kSessionAtExit)) << "没有会话的进场不算接回";
-    EXPECT_FALSE(clh::IsResumedBy(kInvalidSessionId, kSessionAtExit));
+    // 两边都不带登录代次(0):只按会话号判。
+    EXPECT_TRUE(clh::IsResumedBy(kNewerSession, 0, kSessionAtExit, 0));
+    EXPECT_FALSE(clh::IsResumedBy(kSessionAtExit, 0, kSessionAtExit, 0)) << "断开的那条会话不算接回";
+    EXPECT_FALSE(clh::IsResumedBy(0, 0, kSessionAtExit, 0)) << "没有会话的进场不算接回";
+    EXPECT_FALSE(clh::IsResumedBy(kInvalidSessionId, 0, kSessionAtExit, 0));
+}
+
+// gate 以同一 node_id 重启后会话序号从头发:同号的进场要按登录代次分辨是不是新的一次登录。
+TEST(ConnectionLostHold, SameSessionNumberResumesOnlyWithNewerLogin)
+{
+    constexpr uint64_t kLost = 1760400000100; // 断开的那次登录的代次(毫秒时间量级,只比大小)
+    EXPECT_TRUE(clh::IsResumedBy(kSessionAtExit, kLost + 1, kSessionAtExit, kLost)) << "同号的新登录(代次更大)算接回";
+    EXPECT_FALSE(clh::IsResumedBy(kSessionAtExit, kLost, kSessionAtExit, kLost)) << "断开的那次登录迟到的进场不算";
+    EXPECT_FALSE(clh::IsResumedBy(kSessionAtExit, kLost - 1, kSessionAtExit, kLost));
+    EXPECT_FALSE(clh::IsResumedBy(kSessionAtExit, 0, kSessionAtExit, kLost)) << "请求没带代次,比不出新旧,同号不算";
+    EXPECT_TRUE(clh::IsResumedBy(kSessionAtExit, kLost, kSessionAtExit, 0)) << "断开时没有登录代次:带代次的同号进场是更新的登录";
+    EXPECT_TRUE(clh::IsResumedBy(kNewerSession, 0, kSessionAtExit, kLost)) << "换了号一律算接回,不看代次";
+    EXPECT_FALSE(clh::IsResumedBy(kInvalidSessionId, kLost + 1, kSessionAtExit, kLost)) << "没有会话的进场不算接回";
+    EXPECT_FALSE(clh::IsResumedBy(0, kLost + 1, 0, kLost)) << "会话 0 不是会话";
 }
 
 TEST(ConnectionLostHold, NamesMatchEnums)
@@ -1542,12 +1556,13 @@ TEST(ConnectionLostHoldEcs, OnlyANewSessionResumesTheHold)
     PlayerLifecycleSystem::HandleClientConnectionLost(player);
     ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
 
-    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kSessionAtExit);
+    // MakeOnlinePlayer 不挂登录身份,断开时记下的代次是 0;这里的进场也都不带代次,只按会话号判。
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kSessionAtExit, /*incomingLoginGeneration=*/0);
     EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "断开的那条会话不算接回";
-    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kInvalidSessionId);
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kInvalidSessionId, /*incomingLoginGeneration=*/0);
     EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "没有会话的进场不算接回";
 
-    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kNewerSession);
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kNewerSession, /*incomingLoginGeneration=*/0);
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
 
     PlayerLifecycleSystem::ExpireConnectionLostHolds(clh::Clock::now() + clh::kHoldWindow);
@@ -1786,8 +1801,7 @@ bool SeedCurrentPlayerStore(entt::entity player)
     if (!MarshalAsSaved(player, data)) return false;
     player_store_rows::KindBytes rows;
     std::string error;
-    if (!player_store_rows::ProjectPlayer(*data.mutable_player_database_data(),
-            data.player_database_1_data(), rows, error)) return false;
+    if (!player_store_rows::ProjectPlayer(*data.mutable_player_database_data(), rows, error)) return false;
     return PlayerLifecycleSystem::PlayerStore().Seed(kExitPlayerId, 1, owner->epoch, 1, std::move(rows));
 }
 
@@ -1813,12 +1827,12 @@ entt::entity MakeClaimedPlayer()
     EXPECT_TRUE(MarshalAsSaved(player, data));
     player_store_rows::KindBytes rows;
     std::string error;
-    EXPECT_TRUE(player_store_rows::ProjectPlayer(*data.mutable_player_database_data(), data.player_database_1_data(), rows, error)) << error;
+    EXPECT_TRUE(player_store_rows::ProjectPlayer(*data.mutable_player_database_data(), rows, error)) << error;
     EXPECT_TRUE(PlayerLifecycleSystem::PlayerStore().Seed(kExitPlayerId, 1, kDirectEpoch, kClaimedSeq, std::move(rows)));
     return player;
 }
 
-// 改一个 kHot 里的字段,让下一笔有脏行。
+// 改一个 kCharacter 里的字段(等级),让下一笔有脏行;不改位置,定时存盘不会把它推迟。
 void TouchHotRow(entt::entity player)
 {
     auto& level = tlsEcs.actorRegistry.get<LevelComp>(player);
@@ -2159,6 +2173,34 @@ TEST(PlayerStoreDirectEcs, RefusedSaveOnOnlinePlayerKeepsTheEntityAndWritesAgain
     EXPECT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_GT(f.sent.front().request.rows_size(), 0);
+}
+
+// 最终被拒的存盘按结局计数(player_store_refused_stats,player_lifecycle.h;第一轮数据审计 §4 第 2 条:超限之后这名玩家
+// 每次存盘都被拒、退出回到上一次提交,要看得见)。排队里还有更新的快照时,那一笔不是结论,不计;最后一笔被拒才计,且只计它的结局。
+TEST(PlayerStoreDirectEcs, FinalRefusalIsCountedByResultButARefusalWithQueuedSnapshotIsNot)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    const auto count = [](player_store_refused_stats::Counter counter) {
+        return player_store_refused_stats::Read().values[static_cast<std::size_t>(counter)];
+    };
+    const uint64_t tooLargeBefore = count(player_store_refused_stats::Counter::kTooLarge);
+    const uint64_t invalidBefore = count(player_store_refused_stats::Counter::kInvalid);
+
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
+    ASSERT_EQ(1u, f.sent.size()) << "第二份快照排队";
+
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    EXPECT_EQ(count(player_store_refused_stats::Counter::kTooLarge), tooLargeBefore) << "还有排队的快照,这一笔不是结论";
+    ASSERT_EQ(1u, f.sent.size()) << "排队那笔接着发";
+
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    EXPECT_EQ(count(player_store_refused_stats::Counter::kTooLarge), tooLargeBefore + 1);
+    EXPECT_EQ(count(player_store_refused_stats::Counter::kInvalid), invalidBefore);
+    EXPECT_TRUE(tlsEcs.actorRegistry.valid(player)) << "在线玩家只是这一笔作废";
 }
 
 // NO_OWNER 这一笔没有提交:保留实体,同序号重试,不当成拒绝。
@@ -2715,7 +2757,7 @@ TEST(PlayerStoreDirectEcs, ClaimFillsTheMetadataBackIntoTheLoad)
     claimed.set_save_seq(77);
     claimed.set_schema_gen(persist_schema::kPersistSchemaGen);
     auto* row = claimed.add_rows();
-    row->set_kind(playerstore::PLAYER_STORE_KIND_HOT);
+    row->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);  // 等级所在的行(player-save-direct-commit.md §1.1)
     row->set_payload(hot.SerializeAsString());
     f.ReplyClaim(claimed);
 
@@ -2724,10 +2766,8 @@ TEST(PlayerStoreDirectEcs, ClaimFillsTheMetadataBackIntoTheLoad)
     ASSERT_NE(pending.at(kReleasePlayerId).inheritClear.stashedLoad, nullptr);
     const auto& load = *pending.at(kReleasePlayerId).inheritClear.stashedLoad;
     EXPECT_EQ(kReleasePlayerId, load.player_database_data().player_id());
-    EXPECT_EQ(kReleasePlayerId, load.player_database_1_data().player_id());
     EXPECT_EQ(77u, load.last_save_seq());
     EXPECT_EQ(persist_schema::kPersistSchemaGen, load.player_database_data().persist_schema_gen());
-    EXPECT_EQ(persist_schema::kPersistSchemaGen, load.player_database_1_data().persist_schema_gen());
     EXPECT_EQ(9u, load.player_database_data().level_component().level());
 
     EXPECT_NE(PlayerStoreClient::SubmitResult::kNotSeeded,
@@ -6641,6 +6681,145 @@ TEST_F(SceneEntryPermissionTest, LifecycleRejectsBeforeSessionOwnershipAndExitSi
         << "权威落点预检被拒,不能提前取消旧镜像";
 }
 
+// ── 断线保留 × 已在目标场景的再入场(docs/design/player-connection-lost-hold.md §5)──────────────────────────────────
+// EnterScene 第 3 步要分清「同一次登录的重复路由」(幂等)与「换了客户端」(先离场、再完整入场)。判据比的是实体此前放行过的
+// 登录身份(见 EnterScene 第 1 步的注释):入口第 2 步与断线保留都会先把快照会话置无效,2026-11-06 之前拿快照比,同一会话的
+// 重复路由也恒判「换了」,已在场的角色被拆掉重进。断线保留的纯判定与其余 ECS 用例在 ConnectionLostHold* 一节。
+// 复用 SceneEntryPermissionTest 的夹具:玩家站在源场景里、挂着 Hex,邻居 watcher 的 AoiList 看得见他。宿主里没有 gate,收不到
+// 入场通知,可观察的是离场:LeaveCurrentScene 摘 SceneEntityComp 与 Hex,把他移出邻居的 AoiList 与格子;随后 HandleEnterScene
+// 的完整入场(发入场通知与自身创建)只补回 SceneEntityComp,Hex 留给下一拍 AOI 按新连接重建。已在目标场景的实体不先离场,
+// HandleEnterScene 就只走幂等早退,所以「没离场」即「没重发入场通知」。
+namespace
+{
+constexpr uint64_t kReentryLoginGeneration = 1760400000100; // 实体当前这次登录的代次(毫秒时间量级,只比大小)
+
+class ConnectionLostHoldReentry : public SceneEntryPermissionTest
+{
+protected:
+    void SetUp() override
+    {
+        // 待入场表与改派待确认表是 thread_local,不随 tlsEcs 清:先排空,入口栅栏只看得到实体这一处身份。
+        ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+        ASSERT_NO_FATAL_FAILURE(SceneEntryPermissionTest::SetUp());
+        // 生产里走过 EnterScene 第 1 步的实体都带登录身份;夹具的 MakeOnlinePlayer 不挂,这里补上。
+        auto& identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+        identity.sessionId = kSessionAtExit;
+        identity.loginGeneration = kReentryLoginGeneration;
+    }
+
+    // 一条派回源场景的进场路由,走复用实体那条路(HandleEnterGameNode 第 4 步)。owner_epoch 不填:本节不测归属。
+    static PlayerLifecycleSystem::EnterGameNodeOutcome EnterSource(SessionId session, uint64_t generation,
+                                                                   uint32_t enterGsType)
+    {
+        PlayerEnterContext context;
+        context.enterInfo.set_scene_id(kRelocateSourceScene);
+        context.enterInfo.set_session_id(session);
+        context.enterInfo.set_enter_gs_type(enterGsType);
+        context.loginGeneration = generation;
+        SetFixtureAdmission(context);
+        return PlayerLifecycleSystem::HandleEnterGameNode(kExitPlayerId, context);
+    }
+
+    // 先离场、再完整入场之后(下一拍 AOI 之前):重新绑回源场景,旧连接的格子与邻居观察关系都已清掉。
+    void ExpectLeftAndReenteredSource()
+    {
+        ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+        const auto* sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+        ASSERT_NE(nullptr, sceneComp);
+        EXPECT_EQ(source, sceneComp->sceneEntity) << "完整入场重新绑回源场景";
+        EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Hex>(player)) << "先离场:旧连接的 AOI 状态清掉,下一拍按新连接重建";
+        const auto* interests = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+        ASSERT_NE(nullptr, interests);
+        EXPECT_FALSE(interests->Contains(player)) << "邻居先看到他离开,下一拍 AOI 再看到他进来";
+        const auto* grids = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(source);
+        ASSERT_NE(nullptr, grids);
+        for (const auto& [id, grid] : *grids) EXPECT_FALSE(grid.entities.contains(player));
+    }
+};
+} // namespace
+
+TEST_F(ConnectionLostHoldReentry, SameLoginRepeatRouteStaysInScene)
+{
+    // gate 对同一会话再转发一次进场,落点就是玩家所在的场景:进场欠账的补发、BindSession 晚到按最近一次路由的补发、
+    // owner_epoch / 归属修订变了的 0 型转发。代次 0 = 上游没带代次。入口第 2 步照旧先把快照会话置无效,但这仍是同一次
+    // 登录:不离场、不重发入场通知,邻居也不会看到他先销毁再创建(disconnect-reconnect-audit-20261020.md §9.1)。
+    struct Route
+    {
+        uint64_t generation;
+        uint32_t enterGsType;
+    };
+    const Route routes[] = {
+        {kReentryLoginGeneration, static_cast<uint32_t>(LOGIN_NONE)},
+        {kReentryLoginGeneration, static_cast<uint32_t>(LOGIN_RECONNECT)},
+        {0, static_cast<uint32_t>(LOGIN_NONE)},
+    };
+    for (const Route& route : routes)
+    {
+        SCOPED_TRACE(testing::Message() << "generation=" << route.generation << " enter_gs_type=" << route.enterGsType);
+        EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+                  EnterSource(kSessionAtExit, route.generation, route.enterGsType));
+        ASSERT_NO_FATAL_FAILURE(ExpectStillInSource());
+        ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kSessionAtExit, kReentryLoginGeneration));
+    }
+}
+
+TEST_F(ConnectionLostHoldReentry, NewSessionResumesHeldPlayerWithFullEntry)
+{
+    // 断线保留:角色留在原地,仍在场景与邻居视野里;快照会话已摘掉,登录身份不动。
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    ASSERT_NO_FATAL_FAILURE(ExpectStillInSource());
+    ASSERT_EQ(kInvalidSessionId, tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(player).gate_session_id());
+
+    // 租约内重连:login 判 ShortReconnect,scene_manager 派回原场景(同落点)。新会话接回同一个实体,先离场、再完整入场,
+    // 新客户端拿到入场通知、自身创建与当前邻居。
+    constexpr uint64_t kReconnectGeneration = kReentryLoginGeneration + 1;
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              EnterSource(kNewerSession, kReconnectGeneration, LOGIN_RECONNECT));
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "新会话接回,保留结束";
+    ASSERT_NO_FATAL_FAILURE(ExpectLeftAndReenteredSource());
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kNewerSession, kReconnectGeneration));
+    EXPECT_EQ(0u, SessionMap().count(kSessionAtExit));
+}
+
+TEST_F(ConnectionLostHoldReentry, ReusedSessionNumberWithNewerLoginGetsFullEntry)
+{
+    // gate 以同一 node_id 重启后会话序号从头发,新登录恰好拿回实体手里的旧号。栅栏按「同一会话一律放行」放它进来
+    // (scene-enter-session-fence.md §5.2),但它的代次更大,是一个没有入场基线的新客户端:照样先离场、再完整入场。
+    constexpr uint64_t kNewLoginGeneration = kReentryLoginGeneration + 1;
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              EnterSource(kSessionAtExit, kNewLoginGeneration, LOGIN_REPLACE));
+
+    ASSERT_NO_FATAL_FAILURE(ExpectLeftAndReenteredSource());
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kSessionAtExit, kNewLoginGeneration));
+}
+
+TEST_F(ConnectionLostHoldReentry, ReusedSessionNumberWithNewerLoginResumesHold)
+{
+    // gate 停机先让角色进保留,随后以同一 node_id 起来、会话序号从头发,新登录恰好拿回断开的那个号。号相同、代次更大:
+    // 是新的一次登录,摘掉保留,先离场、再完整入场;保留窗口过后也不会再把正在玩的玩家按断线退出。
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    {
+        const auto* held = tlsEcs.actorRegistry.try_get<PlayerConnectionLostComp>(player);
+        ASSERT_NE(nullptr, held);
+        EXPECT_EQ(kSessionAtExit, held->sessionId);
+        EXPECT_EQ(kReentryLoginGeneration, held->loginGeneration) << "记下断开的那次登录的代次(取登录身份)";
+    }
+
+    constexpr uint64_t kNewLoginGeneration = kReentryLoginGeneration + 1;
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              EnterSource(kSessionAtExit, kNewLoginGeneration, LOGIN_RECONNECT));
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "同号的新登录也算接回,保留结束";
+    ASSERT_NO_FATAL_FAILURE(ExpectLeftAndReenteredSource());
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kSessionAtExit, kNewLoginGeneration));
+
+    PlayerLifecycleSystem::ExpireConnectionLostHolds(clh::Clock::now() + clh::kHoldWindow);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "接回之后不再到期退出";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+}
+
 namespace
 {
 class SceneLifecycleTest : public testing::Test
@@ -8046,9 +8225,16 @@ protected:
 
     void RunPending()
     {
-        loop.queueInLoop([&loop = loop] { loop.queueInLoop([&loop] { loop.quit(); }); });
+        const auto drained = std::make_shared<bool>(false);
+        const auto watchdog = loop.runAfter(2.0, [&loop = loop] { loop.quit(); });
+        loop.queueInLoop([&loop = loop, drained]
+        {
+            loop.queueInLoop([&loop, drained] { *drained = true; loop.quit(); });
+        });
         loop.wakeup();
         loop.loop();
+        loop.cancel(watchdog);
+        EXPECT_TRUE(*drained) << "测试 loop 未完成两轮清理";
     }
 
     void ReplyFence()

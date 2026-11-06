@@ -72,16 +72,24 @@ var (
 	})
 
 	// reconcileInconsistentRows 取代了原来的 reconcile_mismatch_total 计数器(评审 L11):同一处不一致只要还在
-	// 24h 窗口里,每轮都会再被发现一次,累加进计数器会让 critical 告警挂满约 25 小时。它是「当前」读数,只由领导者产出。
-	// 读数 = 本任期各分片最近一次对账读数之和(inbox.reconcileTally,评审 R1):截断的轮次只覆盖一部分分片,
-	// 没读到的分片沿用上次读数,所以不一致的行不会因为它的分片本轮没轮到就从 gauge 里消失。
+	// 24h 窗口里,每轮都会再被发现一次,累加进计数器会让 critical 告警挂满约 25 小时。它是「当前」读数。
+	// 2026-11-06 起每个 stable 副本只对账自己负责的分片(internal/shardowner),读数 = 本副本负责的各分片最近一次
+	// 对账读数之和(inbox.reconcileTally,评审 R1):截断的轮次只覆盖一部分分片,没读到的分片沿用上次读数,
+	// 所以不一致的行不会因为它的分片本轮没轮到就从 gauge 里消失;分片改归别的副本时,本副本把它的读数清掉。
 	reconcileInconsistentRows = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: namespace, Name: "reconcile_inconsistent_rows",
 		Help: "Consumer-finalized rows in the reconcile window whose outcome the persisted ledger does not hold " +
 			"(beyond the watermark, missing from the recent ring, or a different item/outcome at that seq): " +
-			"sum over the 64 shards of each shard's latest reading in this leader's term (truncated rounds keep the readings " +
-			"of shards they did not reach; partially checked shards never go down). Leader-only; aggregate with max(). " +
-			"A level, not an event count. Critical.",
+			"sum over the shards this replica owns of each shard's latest reading (truncated rounds keep the readings " +
+			"of shards they did not reach; partially checked shards never go down). Per replica; any replica above 0 " +
+			"is a finding, so alert on max() > 0. A level, not an event count. Critical.",
+	})
+
+	// reconcileOwnedShards 是本副本此刻负责对账的分片数。全部 stable 副本加起来应为 64;成员表短暂不一致时会多或少几片。
+	reconcileOwnedShards = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace, Name: "reconcile_owned_shards",
+		Help: "Reconcile shards (of 64) owned by this replica under rendezvous hashing over the stable replicas " +
+			"registered in etcd. Summed over replicas it should be 64; canary replicas own none.",
 	})
 
 	reconcileTruncatedTotal = prometheus.NewCounter(prometheus.CounterOpts{
@@ -207,11 +215,17 @@ func ObserveReconcileRound(result string) { reconcileRoundsTotal.WithLabelValues
 // IncReconcileTruncated 记一轮没有覆盖完整个窗口的对账。
 func IncReconcileTruncated() { reconcileTruncatedTotal.Inc() }
 
-// SetReconcileInconsistent 写入领导者当前的不一致行数(各分片最近一次读数之和,critical 告警按 max() 取它)。
+// SetReconcileInconsistent 写入本副本当前的不一致行数(本副本负责的各分片最近一次读数之和,critical 告警按 max() > 0 取它)。
 func SetReconcileInconsistent(n int) { reconcileInconsistentRows.Set(float64(max(n, 0))) }
 
-// ResetReconcileInconsistent 在卸任时把本副本的不一致行数归零,理由同 ResetScanGauges。
-func ResetReconcileInconsistent() { reconcileInconsistentRows.Set(0) }
+// ResetReconcileInconsistent 在对账循环退出时把本副本的不一致行数与负责的分片数归零。
+func ResetReconcileInconsistent() {
+	reconcileInconsistentRows.Set(0)
+	reconcileOwnedShards.Set(0)
+}
+
+// SetReconcileOwnedShards 写入本副本此刻负责对账的分片数。
+func SetReconcileOwnedShards(n int) { reconcileOwnedShards.Set(float64(max(n, 0))) }
 
 // AddSweepDeleted 记清理删掉的行数。
 func AddSweepDeleted(n int) {
@@ -261,7 +275,7 @@ func Register(db *sql.DB) {
 		prometheus.MustRegister(
 			enqueueTotal, fetchTotal, ackTotal, voidTotal, notifyTotal,
 			cursorAheadTotal, fenceRegressedTotal, epochAheadTotal,
-			reconcileInconsistentRows, reconcileTruncatedTotal, reconcileRoundsTotal, reconcileReadTotal,
+			reconcileInconsistentRows, reconcileOwnedShards, reconcileTruncatedTotal, reconcileRoundsTotal, reconcileReadTotal,
 			sweepDeletedTotal, fetchScannedRows,
 			deliveredUnacked, deliveredUnackedStale, deliveredUnackedOldestSeconds, openItems, oldestOpenAgeSeconds,
 			maxDeliveryCount, notifyBacklog, battleProducerReady,

@@ -33,7 +33,7 @@ import java.util.concurrent.TimeoutException;
  * which live in go-zero login. The Java side is now a transport shim:
  *
  * <ul>
- *   <li>Bucket4j / wave / IP rate-limiting still runs on the controller
+ *   <li>Token-bucket / wave / IP rate-limiting still runs on the controller
  *       (first-line filter against retry storms — keeps the gRPC fanout
  *       cheap).</li>
  *   <li>Anything past the rate limiter goes straight to go-zero and the

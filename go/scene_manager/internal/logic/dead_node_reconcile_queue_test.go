@@ -155,7 +155,7 @@ func TestDeadNodeReconcile_DropsMalformedTask(t *testing.T) {
 	tasks, err := mr.ZMembers(deadNodeReconcileTasksKey(testZoneId))
 	if !errors.Is(err, miniredis.ErrKeyNotFound) {
 		require.NoError(t, err)
-		assert.Empty(t, tasks, "解析不了的成员、别的 zone 的成员都必须被摘掉
+		assert.Empty(t, tasks, "解析不了的成员、别的 zone 的成员都必须被摘掉")
 	}
 	c.requireCleanedUp(t, "别的任务照常处理")
 }

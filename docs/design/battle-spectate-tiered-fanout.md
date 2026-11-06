@@ -124,10 +124,10 @@ D68 规定战斗帧不走 gate：`battle_push_policy.h:21-27,42-48` 把 158 / 16
 | 会话断开 | gate 在会话销毁时把它从 SpectateHub 删除 |
 | 排队 / 开战互斥（D11） | L0 维持现状：全局模式在同一事务里 `CaptureSpectatorExitsTx` + `RequireNoSpectators`。L1 / L2 按 Q1 的选择处理，默认是软互斥（§9） |
 | 战斗结束 | battle 在所有通道上发 END 帧；gate 扇出 166 后删除条目，保留 10 分钟墓碑，墓碑期内迟到的订阅直接回 166 |
-| battle 崩溃 | 不会有 END 帧。gate 条目空闲超过 `T_idle`（默认 30s，必须大于手动行动窗口 6s 加结果提交等待），或超过信封里的 `deadline_ms + 宽限`，就在本地发 166（`SOURCE_LOST`）并删除 |
+| battle 崩溃 | 不会有 END 帧。battle 对开了通道的房间每 10s 至少出一帧（回合帧，或心跳 STATE，§15.4）；gate 条目超过 `T_idle`（30s）收不到任何帧，或超过信封里的 `deadline_ms + 宽限`，就在本地发 166（`SOURCE_LOST`）并删除。心跳让 `T_idle` 与手动行动窗口（现 25s，`kActionTimeoutMs`）、结果提交等待解耦：草案曾要求「`T_idle` 大于 6s 窗口加提交等待」，窗口改成 25s 之后这条约束只剩约 5s 余量，最后一回合拖满再赶上一次提交重试，gate 就会抢在真实终局之前收尾（第二轮评审 R2-BATTLE 一般-1）。两个数在 `node_command_topic.h` 共用一份，并有静态断言 |
 | gate 重启 | 本机订阅表丢失；发给旧实例的 L1 帧被 `target_instance_id` 过滤掉（`node_kafka_command_filter.h:126,135`）。客户端大厅重连后如果还在观战界面，用原 request_id 重发 WatchBattle（幂等），拿新令牌重新订阅 |
 | match 重启 | 不受影响：订阅在 gate，L1 的 gate 集合在 battle 内存和 Redis 里 |
-| battle 停机 | 正在等结果回执的房间，停机时不发 SpectateEnd（`:1926-1927`）。这很可能是有意的：不想发一个和真实结果矛盾的 ABORTED。中继观众靠 `T_idle` 退出，L0 观众只会收到 FIN（§10 第 7 条） |
+| battle 停机 | 先关观战准入：此后新观众、新挂的 gate 与升档一律回 `kServiceUnavailable`（房间已冻结，接进来也看不到下一帧）。还在打的房间（没有待提交终局）此后不会再有任何一帧，向全部观众（L0 直连与中继 / 广播通道）发 166 `SOURCE_LOST` 并清退；不发 ABORTED，作废只由 match 的持久 ABORT 宣布，`SOURCE_LOST` 不声称任何结果。有待提交终局的房间不发：排空窗口内拿到决定照常发真 END，心跳持续到拆除前（`StopSqlOutcomes`），之后由 gate 按 `T_idle` 收尾。2026-11-05 第二轮评审定，两版同口径（Java 原先推 ABORTED，改为待做，见 §15.10） |
 
 ## 6. 契约草案
 
@@ -203,7 +203,7 @@ Java 版现在的观战与 C++ 同形：上限 20、满员回 1008、只走直�
 
 ## 8. 容量估算（量级，未实测）
 
-假设 `F ≈ 3KB`，每 2 秒一回合（这是全自动局的下限；手动局的行动窗口是 6 秒，`turn_battle_constants.h:16,36-50`）。全服规模取容量文档的数字：`N_g ≈ 1000~4444`，每台 gate 4.5k~20k 人；K8s 现在每个 zone 2 台 gate。
+假设 `F ≈ 3KB`，每 2 秒一回合（这是全自动局的下限；手动局的行动窗口是 25 秒，`turn_battle_constants.h` 的 `kActionTimeoutMs`）。慢回合与等结果回执期间，开了通道的房间每 10 秒补一帧心跳 STATE（§15.4），产出不超过每通道 0.1 帧/秒。全服规模取容量文档的数字：`N_g ≈ 1000~4444`，每台 gate 4.5k~20k 人；K8s 现在每个 zone 2 台 gate。
 
 | 场景 | battle | Kafka | gate | match |
 |---|---|---|---|---|
@@ -413,17 +413,19 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 ### 15.4 battle（C++ 与 Java 同语义）
 
 - **房间状态**：`relayGates`（gate_node_id → gate_instance_id，同 node_id 新实例覆盖旧实例），`spectateBroadcast`（bool，只升不降）。
-- **AttachRelayGate**：依次校验 `target_instance_id` 等于本实例、房间存在（否则 `kEntityIsNull`）、房间公开（否则 `kInvalidParameter`）。已是广播档则直接回 `broadcast = true`，不挂 gate；否则挂上 gate，只给这台 gate 补发一帧 STATE（当前快照编码成 161，`observer_count = 0`），回实例与期限。操作幂等。
+- **AttachRelayGate**：依次校验 `target_instance_id` 等于本实例、房间存在（否则 `kEntityIsNull`）、节点未停机排空（否则 `kServiceUnavailable`）、房间公开（否则 `kInvalidParameter`）。已是广播档则直接回 `broadcast = true`，不挂 gate；否则挂上 gate，只给这台 gate 补发一帧 STATE（当前快照编码成 161，`observer_count = 0`），回实例与期限。操作幂等。
 - **PromoteSpectateBroadcast**：校验同上；置广播档，往广播 topic 发一帧 STATE；幂等。
-- **每回合**（`BroadcastTurnResult`）：观众版 158 编码一次。L0 直连照旧；广播档往广播 topic 发 1 条；否则给每台中继 gate 各发 1 条。
-- **结束 / 作废**：发 END（编码好的 166）：未升档时发给每台中继 gate；已升档时**只发广播 topic**（与最后一回合 TURN 同分区保序；两条 topic 之间没有顺序，中继 END 可能越过广播 TURN，观众就看不到最后一回合）。节点停机且结果未落定的房间不发 END（与 L0 同口径，见 §5.3），中继观众靠 gate 的空闲超时收尾。
+- **每回合**（`BroadcastTurnResult`）：观众版 158 编码一次。L0 直连照旧；广播档往广播 topic 发 1 条；否则给每台中继 gate 各发 1 条（`PublishToAllSpectateChannels`，TURN、END 与心跳共用这一个出口）。
+- **心跳**（2026-11-05 第二轮评审补）：开了通道的房间，距上一次往全部通道发帧满 `kSpectateChannelKeepalive`（10 s），就按当前档位补发一帧 STATE；等结果回执期间这一帧是冻结的可见状态，不提前泄露终局。过了 `deadline_ms + kSpectateDeadlineGraceMs`、发过 END、房间删除或拆除前（`StopSqlOutcomes`）就停。gate 的失联判定 `T_idle` 因此与回合节奏、结果提交等待无关；两个数与期限宽限都在 `node_command_topic.h`，静态断言 `T_idle ≥ 3 × 心跳间隔`。
+- **结束 / 作废**：发 END（编码好的 166）：未升档时发给每台中继 gate；已升档时**只发广播 topic**（与最后一回合 TURN 同分区保序；两条 topic 之间没有顺序，中继 END 可能越过广播 TURN，观众就看不到最后一回合）。
+- **停机**（`AbortAllRooms`，2026-11-05 第二轮评审定）：先关观战准入，此后 AddObserver、AttachRelayGate、PromoteSpectateBroadcast 一律回 `kServiceUnavailable`（已登记观众的幂等重放照常放行）。还在打的房间（没有待提交终局）向全部观众发 166 `SOURCE_LOST` 并清退；不发 ABORTED（作废只由 match 的持久 ABORT 宣布）。有待提交终局的房间不发 END，排空窗口内拿到决定照常发真 END，心跳持续到拆除前，之后由 gate 的空闲超时收尾（§5.3）。
 - 帧的 `round_index` 取 `TurnResultS2C.round_index`；STATE 取快照的 `round_index`；END 取最后一回合的 `round_index`。
 
 ### 15.5 gate（`SpectateHub`，C++；Java 同语义）
 
-- **表**：`battle_id → Entry{battle_instance_id, 订阅会话集, 最新状态帧缓存, last_round, last_frame_steady, deadline_ms, ended}`，另有 `session_id → battle_id`。全部在主 loop 上；只存 session_id，发送时查会话表并 `lock()` weak 连接（§11.7）。
+- **表**：`battle_id → Entry{battle_instance_id, 订阅会话集, 最新状态帧缓存, lastTurnRound, cachedStateRound, last_frame_steady, deadline_ms, phase}`（两条水位见下面「收帧」），另有 `session_id → battle_id`。全部在主 loop 上；只存 session_id，发送时查会话表并 `lock()` weak 连接（§11.7）。
 - **SubscribeSpectate**：
-  - 先验签，再核对 `payload.player_id == 会话 playerId`、`battle_id` 一致、按 gate 墙钟未过 `expire_at_ms`；任一不符回 `MatchSpectateTicketInvalid`。
+  - 先验签，再核对 `payload.player_id` 等于会话此刻经认证绑定的角色、`battle_id` 一致、按 gate 墙钟未过 `expire_at_ms`；任一不符回 `MatchSpectateTicketInvalid`。会话身份取 `SpectateIdentityOf`：`authenticatedAccount` 只由被接受的 Bind 写入、LeaveGame 时清空，只有路由写进来的角色不算。LeaveGame 之后会话还留着旧角色号，只看 `playerId` 的话，拿旧角色凭证订上的帧在换角之后仍会发给这个会话（第二轮评审 R2-GATE 一般-1）。
   - 会话已订别的场时先退订旧场。
   - 条目里的实例与凭证不同时，以凭证为准，清掉缓存。
   - 有缓存就立刻下发 161：缓存本身是 161 原样发；缓存是 158 就取其 `state` 合成 161，只在订阅时解析一次。
@@ -438,7 +440,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
   - 每次最多发 `kFanoutBatch = 512` 个会话，剩下的 `queueInLoop` 续发，闭包只捕获 weak。
   - TURN 到达时，上一帧还没发完的会话直接改发新帧，名单从上一轮停下的位置接着发（否则过载时表尾会话被持续饿死）；**END 不合并**：等在途的最后一回合发完再开始扇出 166，因为 166 不带状态，抢占了就看不到最后一回合。
   - 会话输出缓冲超过 256 KB 就跳过这一帧并计数，不等 2 MB 被强关。
-- **空闲巡检**（定时器只绑 weak）：有订阅者的条目超过 `T_idle = 30 s` 无帧，或超过 `deadline_ms + 60 s`，就给订阅者合成 166（`SOURCE_LOST`）并删除条目。
+- **空闲巡检**（定时器只绑 weak）：有订阅者的条目超过 `T_idle = 30 s` 无帧，或超过 `deadline_ms + 60 s`，就给订阅者合成 166（`SOURCE_LOST`）并删除条目。battle 每 10 s 至少出一帧心跳（§15.4），所以 `T_idle` 只在源站真的停了时触发；两个数与 battle 共用 `node_command_topic.h` 里的常量，`HubLimits` 不另写数字。
 - **指标**：每 30 s 一行 `metric=gate_spectate`，字段为订阅会话数、条目数、扇出帧数、软水位跳帧、合并跳帧、凭证拒绝、源站失联收尾。不带 battle_id，也不带 player_id。
 
 ### 15.6 match（Go；Java 同语义）
@@ -475,7 +477,13 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
   - L1 / L2 观众照常走 `SpectatorIntent`（请求头幂等与顶替旧请求），但不调 `BeginSpectator`、不锁 formation、不写 `match_spectator` 占用行，直接以 `delivery = LOBBY` 结案。
   - L0 满员转 L1 的那次请求，同样以 `delivery = LOBBY` 结案，不写 16021。
   - 重放结案为 LOBBY 的意图时，重新做幂等的 L1 / L2 准入，并签新凭证。
-  - 清退玩家旧的 L0 观战，复用现有的取消流程。
+  - 清退玩家旧的 L0 观战，复用现有的取消流程。取消时原件已被别的入口（另一个副本的后台恢复、同一玩家的另一次请求）关到 5，就算取消完成，不回 pending。
+- **选场与终局**（2026-11-05 第二轮评审修正，§15.10）：
+  - 可观战 = 成局 state 4、终局还没落定、建房原件冻结的可见性为 PUBLIC。终局落定 = state 5，或 state 4 且 `retry_at_ms` 为 NoRetry（COMPLETE 之后成局仍是 4，见 `authority.FormationOutcomeDecided`）；`BeginSpectator` 在成局行锁内复核同一判据，预检代替不了它。
+  - `locateGlobalWatch`（首次准入与 LOBBY 重放共用）判为不可观战时按原因摘索引：成局不存在或终局已落定删本场全部观战键，私密局只摘活跃集合成员，开房途中的 state 1–3 不动。注册表里同 node_id 已是别的实例时同样摘掉并回 16018，在选档位之前判，不发 RPC。
+  - L0 落原件之前要求注册表正面确认原实例在线（唯一一条登记、uuid 相同）；确认不到就不落原件、不关意图，回 16004（`outcome = source_unconfirmed`），同 request_id 稍后重试。关原件时「查不到不算已换」，两个方向都偏安全。
+  - 观战列表逐条读成局时用请求 ctx，客户端取消后立即停止。
+  - 启动核对（`CheckCandidateIndexes`）包含意图清理用的索引 `state,created_ms,player_id,request_high,request_low`。
 - **运营入口**：
   - `MatchInternal` 新增内部 RPC `SetSpectateFeatured{battle_id, featured}`，只认公开局；置位时立即尝试升 L2。
   - 观战列表带 `featured`，赛事局排在前面。
@@ -504,13 +512,13 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 | P2 | 15.6 升 L2 与配额、featured、广播 topic 消费 | 已落码并完成评审修正；广播与配额专项待验 |
 | Java | B + 本地模式原操作 + P0 剩余 → P1 / P2 | 全部已落盘；票据/频道/Hub 部分单测有证据，真 Redis 与整批专项待验 |
 
-FIX-CPP / FIX-GO / FIX-JAVA 交付后的第二轮完整语义评审尚无记录；2026-11-05 的文件一致性核对不替代该评审。
+FIX-CPP / FIX-GO 的第二轮完整语义评审已于 2026-11-05 完成（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`），发现的问题已按 §15.10 修正，未编译，待 Codex 验证。FIX-JAVA 的第二轮评审与同类修正登记为 Java 待做（Java `PARITY.md`）。
 
 ### 15.9 评审后的定稿决策（2026-10-30，负责人授权按标准做法定）
 
 三轮语义评审（`docs/handoff/spectate-tiered-fanout-20261030/reports/review-*.md`）之后定下，与前文冲突时以本节为准：
 
-- **观战原件的关闭放宽**：原先只有拿到 battle 的取消证明才能把 `match_spectator` 推到 state 5，battle 实例崩溃后这些玩家再也排不了队。现在拿不到证明时，满足任一条件就关闭：成局 `state == 5`；已过成局 `deadline_ms` + `terminalOutcomeGraceMs`；注册表里同 node_id 已是别的 uuid（查不到不算）。依据：观众对战斗状态零写权，Add 带 `target_instance_id`，新实例不接纳旧 op，放宽不碰资产，最坏是僵尸实例多发几帧。
+- **观战原件的关闭放宽**：原先只有拿到 battle 的取消证明才能把 `match_spectator` 推到 state 5，battle 实例崩溃后这些玩家再也排不了队。现在拿不到证明时，满足任一条件就关闭：成局终局已落定（`state == 5`，或 COMPLETE 之后的 state 4 + `retry_at_ms` 为 NoRetry，§15.10）；已过成局 `deadline_ms` + `terminalOutcomeGraceMs`；注册表里同 node_id 已是别的 uuid（查不到不算）。依据：观众对战斗状态零写权，Add 带 `target_instance_id`，新实例不接纳旧 op，放宽不碰资产，最坏是僵尸实例多发几帧。
 - **观战 Redis 键的 TTL**：全局模式按最长战斗期限算（模板时长最长 1 小时），不再是 `BattleMaxDurationSeconds + 60`；否则档位和赛事局标记 6 分钟就失效，L2 配额上限也会失守。
 - **结束即释放**：`CommitBattleOutcome` 拿到结论后尽力摘掉本场的活跃索引、L2 配额、赛事局索引和档位键；另有全局模式的低频清理循环兜底。
 - **L2 配额账**：`AttachRelayGate` 回 `broadcast = true` 时补记配额（超额也记）；Promote 失败退还前先复读档位，已是 BROADCAST 不退；升档 RPC 前加 3 秒短租约，battle 过载时不被观众请求放大。
@@ -525,3 +533,29 @@ FIX-CPP / FIX-GO / FIX-JAVA 交付后的第二轮完整语义评审尚无记录�
 - 墓碑表满时整个节点拒绝观战（有界，30 秒内自清）。
 - 恢复循环对已崩溃实例的 RPC 失败仍会 `HoldRelay`，这类 match 副本的排空证明要人工处理（`go/shared/drainproof`，属于节点生命周期设计）。
 - Go 全局路径的 16018 记指标时不细分原因。
+
+### 15.10 第二轮评审修正（2026-11-05，负责人授权按标准做法定）
+
+FIX-CPP / FIX-GO 交付之后的第二轮语义评审（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`）共 12 条发现：严重 1 条，一般 11 条，没有阻断。修正前三份报告逐条核实过代码；修正批的其余条目都已修对，后来的改写（删除 Go 本地模式、删观战记录键）没有弄丢修正项。下表全部已落码，**未编译、未运行，待 Codex 验证**。
+
+| 来源 | 问题 | 修法 | 回归用例 |
+|---|---|---|---|
+| R2-GO 严重-1 | COMPLETE 之后成局仍是 state 4，无证明关闭的判据只认 5：实例随后退出时，L0 观众被卡到期限 + 60 s；按 battle_id 再来的新观众照样落 L0 原件 | 新增 `authority.FormationOutcomeDecided`（state 5，或 4 + NoRetry），接进 `SpectatorFormationEnded`、`globalFormationWatchable`、`loadSpectateBattle`，并在 `BeginSpectator` 的成局行锁内复核 | `TestSpectatorFormationEnded`（3 个新 case）、`TestFormationOutcomeDecided`、`TestGlobalFormationWatchable`、`TestListWatchableBattlesEvictsCompletedBattle`、原生 `TestGlobalWatchTiDBCompletedBattleNotWatchable`、`TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone` 新 case「终局已提交」 |
+| R2-GO 一般-2 | 实例已换的核对只在 L1 / L2 准入末尾：L0 与新 gate 的 L1 在死场上反复建原件、不剔索引；实例崩溃且 node_id 没复用时新观众被卡约 1 小时 | 替换判定前移到 `locateGlobalWatch`（摘索引、回 16018、不发 RPC）；L0 落原件前要求注册表正面确认原实例，确认不到回 16004、不关意图 | 原生 `TestGlobalWatchTiDBReplacedInstanceEvictsBeforeAnyRPC`、`TestGlobalWatchTiDBUnregisteredInstanceBeginsNoOriginal`；`TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone` 的「新观战」入口把新场移到节点 8 |
+| R2-GO 一般-3 | 随机选场选中已结束的场：请求永久关成 16018，成员不摘，下次还会选中 | `locateGlobalWatch` 判为不可观战时按原因摘索引（`evictUnwatchableFormation`，与列表同口径） | 原生 `TestGlobalWatchTiDBRandomPickOfClosedFormationEvictsMember` |
+| R2-GO 一般-4 | 启动核对不查意图清理索引：旧库迁移只补列，G7 清理退化成每分钟全表扫描、永不前进 | `CheckCandidateIndexes` 加上 `match_spectator_intent` 的清理索引 | 原生 `TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex` |
+| R2-GO 一般-5 | `cancelGlobalSpectator` 把「原件已被别的入口关到 5」当 pending：多副本恢复并发时记一笔不清零的 Hold | 第一次推进返回 false 即视为已完成 | 原生 `TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone` |
+| R2-GO 一般-6 | 观战列表逐条读成局，用的是 `context.Background()`：客户端取消后仍跑完，占权威库连接 | `loadSpectateBattle` 接请求 ctx，列表循环每条先查 ctx | `TestListWatchableBattlesStopsWhenRequestCancelled` |
+| R2-GO 测试 | `TestReleaseSpectateOnOutcomeSkipsWhenDraining` 断言紧跟异步发射，测不出排空时仍发任务 | 断言前 `WaitIdle` | 原用例 |
+| R2-BATTLE 一般-1（R2-GATE 观察同） | 等 SQL 决定期间不出观战帧：手动窗口 25 s 拖满再赶上提交重试，gate 30 s 空闲收尾抢在最后一回合与真实终局之前 | 通道心跳（§15.4），常量与静态断言收进 `node_command_topic.h`，gate `HubLimits` 引用同一份 | `ChannelKeepaliveRepublishesStateAfterTheKeepaliveInterval`、`OutcomeWaitKeepaliveCarriesFrozenStateAndPromotedCompleteOnlyBroadcasts` |
+| R2-BATTLE 一般-2 | 停机 / 维护排空后冻结的房间仍接纳 AddObserver、Attach、Promote：新观众拿到用不上的票，Promote 白占 L2 配额 | `AbortAllRooms` 关观战准入，三处入口回 `kServiceUnavailable` | `ShutdownClosesSpectateAdmission` |
+| R2-BATTLE 拍板项 | 停机时还在打的房间，Java 推 166 ABORTED、C++ 什么都不发，两版客户端可见行为不一致 | 定为两版都发 166 `SOURCE_LOST` 并清退观众；不发 ABORTED（作废只由 match 的持久 ABORT 宣布）；有待提交终局的房间不发，心跳持续到拆除前。Java 改 reason 登记为待做 | `ShutdownTellsEveryChannelTheSourceIsLostForRoomsStillInProgress`、`ShutdownKeepsUndecidedOutcomeRoomsOnKeepaliveUntilTeardown`（取代 `ShutdownSendsNoEndFrameWhileOutcomeIsUndecided`） |
+| R2-BATTLE 测试 | 签票失败后同 op 重放回 `kServiceUnavailable` 没有用例；升档后的 COMPLETE 路径没有用例 | 补断言与用例 | `AssignmentFailureRemovesOriginalOperationAndNewOperationRecovers`（加重放断言）、`OutcomeWaitKeepaliveCarriesFrozenStateAndPromotedCompleteOnlyBroadcasts` |
+| R2-GATE 一般-1 | LeaveGame 之后会话留着旧角色号：拿旧角色凭证订上的帧在换角之后继续发给这个会话 | 订阅身份改为 `SpectateIdentityOf`（只认被接受的 Bind 写入的认证绑定） | `SpectateSessionIdentity.LeaveGameClearsTheIdentityUntilTheNextBind`、`RouteOnlyPlayerIsNotASubscriber`（走真实 Bind 与 LeaveGame 重置） |
+| R2-GATE 一般-2 | 身份栅栏 `ClassifyPush(kInvalidGuid, kInvalidGuid)` 判成投递，踢线同值判踢（当前没有生产者发这个值，纵深缺口） | 未绑定会话除显式 0 之外一律丢弃，判定先于相等比较 | `GateIdentityFence.InvalidGuidTargetNeverMatchesAnUnboundSession` |
+
+**没有改、仍是残余**：
+- 评审观察到的测试接线缺口（gate 的 `OnClientLeaveGame` 摘订阅那一行、8 处 `gate_push::Deliver*` 转调、采样接线、Go `matcher.go` 里维护循环的启动那一行）仍靠 Codex 的 grep 核对与 robot LOBBY 冒烟，没有单测。
+- 维护流程启动的 gate 不注册 L2 消费者，只靠部署把 `BroadcastMaxConcurrent` 置 0（§15.7），脚本没有机械守卫。
+- 随机选场选中残留成员时，这一次请求仍以 16018 结案（不自动换一场），成员已被摘掉，下一次不会再选中。
+- **Java**：FIX-JAVA 没有第二轮评审；上表在 Java 侧对应的检查与修正（停机发 `SOURCE_LOST`、等决定期间的心跳、停机关观战准入、COMPLETE 之后不可观战、LeaveGame 后的订阅身份）全部登记为 Java 待做，见 Java `PARITY.md`。

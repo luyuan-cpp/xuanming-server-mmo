@@ -64,6 +64,7 @@
 	                                    [-LogPrunerCommand ''] [-GrpcServerMaxPollers 0(已退役,取值被忽略)]
 	                                    [-SidecarContainerYaml ''] [-SidecarVolumeYaml ''] [-SidecarConfigHash '']
 	                                    [-PodAnnotations $null] [-OpenFileLimitMode ''(B0-4 豁免开关,留空不写)]
+	                                    [-SecretEnv @()(经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey })]
 	    New-GateStatefulSetYaml         -PodCommon -Plan -RpcPort -StartCommand -ConfigMapName -GateRouterMode
 	                                    [-TerminationGracePeriodSeconds 30]
 	    New-GateOrdinalServicesYaml     -Plan [-ExternalTrafficPolicy Local]              → gate-<i> 用 --- 连接
@@ -642,6 +643,8 @@ function Resolve-BattleFleetHealth {
 	业务日志卷名固定 node-logs:与 New-NodeDeploymentYaml 以及 sidecar 片段里的 $script:CppLogVolumeName 同名。
 	-PodAnnotations 是其余的 Pod 模板注解(k8s_deploy.ps1 经它传 zone Redis 口令指纹,见该脚本 Get-CppZoneRedisAuthAnnotations),
 	与 sidecar 配置指纹写进同一个 annotations: 段(Get-ClientEntryPodAnnotationBlock)。
+	-SecretEnv 是经 Secret 注入的附加 env(k8s_deploy.ps1 经它传 zone Redis 口令 ZONE_REDIS_PASSWORD,见该脚本
+	Get-CppZoneRedisSecretEnvEntries),三个生成器都经 Get-ClientEntryNodeBaseEnv 接在公共 env 之后、一律 optional: false。
 #>
 function New-ClientEntryPodCommon {
 	param(
@@ -669,12 +672,34 @@ function New-ClientEntryPodCommon {
 		[ValidateRange(0, 65535)][int]$MetricsPort = 0,
 		# 发布轨道(k8s_deploy.ps1 -ReleaseTrack)。留空或 stable = 不写 env(C++ 不设即 stable),生成物与不传时逐字相同;
 		# canary 写 MMORPG_RELEASE_TRACK=canary。只收小写,在渲染时(Get-ClientEntryNodeBaseEnv)校验。
-		[AllowEmptyString()][string]$ReleaseTrack = ''
+		[AllowEmptyString()][string]$ReleaseTrack = '',
+		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
+		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
+		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @()
 	)
 
 	$given = @($SidecarContainerYaml, $SidecarVolumeYaml, $SidecarConfigHash | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 	if ($given.Count -ne 0 -and $given.Count -ne 3) {
 		throw "New-ClientEntryPodCommon: -SidecarContainerYaml / -SidecarVolumeYaml / -SidecarConfigHash 必须同时给或同时留空。"
+	}
+	# 拷一份(同 PodAnnotations),并在打包时校验:手拼的 PodCommon 没有这个成员 = 不加,渲染端不再重复校验。
+	$secretEnvCopy = @()
+	$secretEnvNames = @{}
+	foreach ($entry in @($SecretEnv | Where-Object { $null -ne $_ })) {
+		$name = [string](Get-ClientEntryMember -Object $entry -Path @('Name'))
+		$secretName = [string](Get-ClientEntryMember -Object $entry -Path @('SecretName'))
+		$secretKey = [string](Get-ClientEntryMember -Object $entry -Path @('SecretKey'))
+		if ($name -cnotmatch '^[A-Z_][A-Z0-9_]*$') {
+			throw "New-ClientEntryPodCommon: -SecretEnv 的名字必须是大写环境变量名(字母、数字、下划线),实际 '$name'。"
+		}
+		if ([string]::IsNullOrWhiteSpace($secretName) -or [string]::IsNullOrWhiteSpace($secretKey)) {
+			throw "New-ClientEntryPodCommon: -SecretEnv 的 $name 必须同时给 SecretName 与 SecretKey。"
+		}
+		if ($secretEnvNames.ContainsKey($name)) {
+			throw "New-ClientEntryPodCommon: -SecretEnv 里 $name 出现了不止一次。"
+		}
+		$secretEnvNames[$name] = $true
+		$secretEnvCopy += @{ Name = $name; SecretName = $secretName; SecretKey = $secretKey }
 	}
 	if ($LogPrunerCommand.Contains('"')) {
 		throw "New-ClientEntryPodCommon: -LogPrunerCommand 不得含双引号(它要进 YAML 流式标量)。"
@@ -700,6 +725,7 @@ function New-ClientEntryPodCommon {
 		OpenFileLimitMode    = $OpenFileLimitMode
 		MetricsPort          = $MetricsPort
 		ReleaseTrack         = $ReleaseTrack
+		SecretEnv            = $secretEnvCopy
 	}
 }
 
@@ -737,7 +763,7 @@ function Get-ClientEntryEnvYaml {
 	return ($lines -join "`n")
 }
 
-# C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT)、发号槽缓存目录。
+# C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT)、发号槽缓存目录;末尾接 PodCommon.SecretEnv(zone Redis 口令等)。
 # GRPC_SERVER_MAX_POLLERS 已退役(grpc-muduo-transport.md §15.11),不再注入。
 # 与 New-NodeDeploymentYaml 同口径,只是不写 D92 禁用的第二个端口变量(RPC_PORT 优先,行为不变)。
 function Get-ClientEntryNodeBaseEnv {
@@ -776,6 +802,11 @@ function Get-ClientEntryNodeBaseEnv {
 		if ($releaseTrack -ceq 'canary') {
 			$entries += @{ Name = $contract.ReleaseTrackEnv; Value = $releaseTrack }
 		}
+	}
+	# 经 Secret 注入的附加 env(PodCommon.SecretEnv,New-ClientEntryPodCommon 打包时已校验):缺成员或空列表 = 不写。
+	foreach ($secretEntry in @(Get-ClientEntryMember -Object $PodCommon -Path @('SecretEnv'))) {
+		if ($null -eq $secretEntry) { continue }
+		$entries += @{ Name = [string]$secretEntry.Name; SecretName = [string]$secretEntry.SecretName; SecretKey = [string]$secretEntry.SecretKey }
 	}
 	return ,$entries
 }

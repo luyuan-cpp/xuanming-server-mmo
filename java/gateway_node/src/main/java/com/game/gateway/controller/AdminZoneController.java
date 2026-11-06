@@ -23,7 +23,8 @@ import java.util.function.Supplier;
  *
  * <h2>写路径(2026-09-21 死锁审计 #18 同类项)</h2>
  * 每个写接口都是「一条按主键的写语句 + 同一事务内的非锁定回读」,只锁一条主键记录,取锁论证见
- * {@link ZoneConfigRepository}。旧写法走 JPA 的 {@code save()}(merge → 普通 INSERT)会在主键重复检查上
+ * {@link ZoneConfigRepository}。update 与改维护状态在写之前先按主键加锁判存在(2026-11-05,mmorpg 迁 TiDB),
+ * 理由见 {@link #update}。旧写法走 JPA 的 {@code save()}(merge → 普通 INSERT)会在主键重复检查上
  * S→X 互等,且 findById + save 在行被删的窗口里会把区服重新 INSERT 回来;现在都没有了。
  *
  * <h2>完整资源语义(2026-11-05,第一轮数据审计 §4 第 18 条)</h2>
@@ -113,34 +114,26 @@ public class AdminZoneController {
      * 以请求体<b>整行替换</b>已存在区服的业务列(完整资源语义:每个业务字段都必须给,见 {@link ZoneSettingsRequest#problem}),
      * 区服不存在回 404,<b>绝不插入</b>。请求体带 zoneId 时必须与路径一致。
      *
-     * <p>存在性由同一事务里的回读判定,不看 UPDATE 的行数:Connector/J 默认报 found rows,但连接参数一旦改成
-     * useAffectedRows=true,「值没变」的 UPDATE 会报 0 行,拿行数判 404 就错了。
+     * <p>存在性由同一事务里、UPDATE 之前的<b>加锁点查</b>判定({@link ZoneConfigRepository#lockZoneIdForUpdate}),
+     * 不看 UPDATE 的行数:Connector/J 默认报 found rows,但连接参数一旦改成 useAffectedRows=true,「值没变」的
+     * UPDATE 会报 0 行,拿行数判 404 就错了。
      *
-     * <h3>回读与 UPDATE 结论一致的前提:REPEATABLE READ,且事务里没有更早的一致性读</h3>
-     * 两个方向的论证不对称,写清楚才能在换隔离级别时看出破在哪:
+     * <h3>为什么先加锁点查(2026-11-05,mmorpg 迁 TiDB)</h3>
      * <ul>
-     *   <li><b>行在 → 200</b>:UPDATE 拿到该主键记录的 X 并持到提交,并发的 delete 删不掉它,回读必然看得见。
-     *       这一条与隔离级别无关,RC 下同样成立。</li>
-     *   <li><b>行不在 → 404</b>:<b>只在 RR 下成立</b>,靠的是间隙锁。RR 下 UPDATE 在聚簇索引上定位到该键之后的
-     *       第一条记录,取的是 next-key 锁 —— 含该键所在的那段间隙,并发 INSERT 的插入意向锁被挡住;手册说的
-     *       「唯一索引等值查找只锁记录、不锁前面的间隙」是<b>命中</b>时的优化,没命中就没有记录可锁,间隙锁留下。
-     *       RC 明确关掉了这一层:手册 innodb-transaction-isolation-levels「READ COMMITTED」原话是,
-     *       对加锁读 / UPDATE / DELETE「InnoDB locks only index records, not the gaps before them」,
-     *       间隙锁只留给外键检查与唯一键重复检查。于是 RC 下并发 create 能在 UPDATE 与回读之间插入并提交,
-     *       而 RC 的一致性读每条语句都取新读视图,回读会看见那一行 —— 「UPDATE 一行没改,却回 200」。</li>
+     *   <li><b>行在 → 200</b>:点查拿到该主键记录的 X 并持到提交,并发的 delete 删不掉它;随后的 UPDATE 改的就是这一行,
+     *       回读必然看得见本事务的修改。</li>
+     *   <li><b>行不在 → 404</b>:直接回 404,不执行 UPDATE。并发 create 即便紧接着插进来,本次请求也是在「区服还不存在」
+     *       的那一刻做的判定,没有修改任何东西,回 404 是对的。</li>
      * </ul>
-     * 本服务没有在 datasource / @Transactional 上覆盖隔离级别,用的是 MySQL 8 的服务端默认 RR
-     * (application.yaml 的 spring.datasource.url 里没有 sessionVariables=transaction_isolation=...)。
-     * 要改成 RC(例如为迁 TiDB 统一口径,见 docs/design/global-data-layer-tidb-decision.md),这里必须一起改成
-     * <b>加锁</b>回读(SELECT ... FOR UPDATE)或「按主键 FOR UPDATE 判存在 → 再 UPDATE」,不能只换隔离级别。
-     * TiDB 没有间隙锁,同一条论证在 TiDB 上本来就不成立,迁库时这段必须重做。
+     * 两条都不依赖隔离级别,MySQL 的 RR、RC 与 TiDB(悲观事务、RC)上同样成立。之前的写法是「先 UPDATE、再非锁定
+     * 回读」,「行不在 → 404」只在 MySQL 的 RR 下成立:靠 UPDATE 没命中时留下的间隙锁挡住并发插入。RC 关掉了这层
+     * 间隙锁,TiDB 本来就没有,于是并发 create 能插在 UPDATE 与回读之间,出现「UPDATE 一行没改,却回 200」。
      *
-     * <p>另一半前提是语句顺序:RR 的一致性读视图在事务的<b>第一次一致性读</b>时建立。现在这个事务里 UPDATE 在前、
-     * 回读在后,所以读视图建立在 UPDATE 之后,回读看得到 UPDATE 自己的效果和它之前已提交的一切。若日后在
-     * UPDATE 前面插一句一致性读,读视图就会提前到那一刻,「UPDATE 改到了一行、回读却看不见」的组合就出现了 ——
-     * 这个事务里不要在 UPDATE 之前加读。
+     * <p>回读看得到本事务的 UPDATE:加锁点查不建立一致性读视图;RR 下读视图建立在 UPDATE 之后的回读那一刻,
+     * RC 与 TiDB 每条语句取新视图,三种情形都看得见自己的修改。
      *
-     * <p>不重试:事务里只有这一条加锁语句,它等锁时手里什么都没有、拿到锁之后不再等,不可能成为死锁牺牲者。
+     * <p>不重试:事务里第一把锁是加锁点查,它等锁时手里什么都没有;拿到之后 UPDATE 改同一条已持锁的记录,不再等锁,
+     * 不可能成为死锁牺牲者。
      *
      * <p>有意变化:缺任一业务字段、取值越界、请求体 zoneId 与路径不一致都回 400 且不碰库(2026-11-05,第一轮数据审计
      * §4 第 18 条:之前只查 name,只想改名的 PUT 会把 manualStatus 等字段写成实体初值,维护中的区服被改成 OPEN);
@@ -154,10 +147,7 @@ public class AdminZoneController {
         }
         ZoneConfig values = body.toZoneConfig(zoneId);
         LocalDateTime at = now.get();
-        return okOrNotFound(tx.execute(status -> {
-            zoneConfigRepo.updateSettings(zoneId, values, at);
-            return zoneConfigRepo.findById(zoneId);
-        }));
+        return okOrNotFound(writeExistingZone(zoneId, () -> zoneConfigRepo.updateSettings(zoneId, values, at)));
     }
 
     /**
@@ -175,7 +165,10 @@ public class AdminZoneController {
     /**
      * Quick action: set a zone to maintenance.
      * POST /admin/zones/1/maintenance
-     * Body: { "maintenanceMsg": "Estimated recovery at 14:00" }
+     * Body: { "maintenance_msg": "Estimated recovery at 14:00" }
+     *
+     * <p>JSON 键是 snake_case(application.yaml 的 {@code spring.jackson.property-naming-strategy: SNAKE_CASE})。
+     * 写成驼峰 {@code maintenanceMsg} 会被 Jackson 静默忽略,等于没给文案、保留原文案。
      *
      * <p>只改 manual_status 与(请求里给了的)维护文案;没给文案则保留原文案。旧写法 findById + save 会把其余列
      * 用读到的旧快照整行写回,与并发的 update 交错时丢失对方的修改;现在其余列不动。存在性判定与不重试的理由同
@@ -201,10 +194,22 @@ public class AdminZoneController {
 
     private ResponseEntity<ZoneConfig> setManualStatus(Long zoneId, ManualZoneStatus status, String maintenanceMsg) {
         LocalDateTime at = now.get();
-        return okOrNotFound(tx.execute(txStatus -> {
-            zoneConfigRepo.updateManualStatus(zoneId, status.getCode(), maintenanceMsg, at);
+        return okOrNotFound(writeExistingZone(zoneId,
+                () -> zoneConfigRepo.updateManualStatus(zoneId, status.getCode(), maintenanceMsg, at)));
+    }
+
+    /**
+     * 改一个已存在的区服:同一事务里先按主键加锁判存在,在才执行 {@code write} 并回读;不在返回空(调用方回 404),
+     * {@code write} 不执行。论证见 {@link #update}。
+     */
+    private Optional<ZoneConfig> writeExistingZone(Long zoneId, Runnable write) {
+        return tx.execute(txStatus -> {
+            if (zoneConfigRepo.lockZoneIdForUpdate(zoneId).isEmpty()) {
+                return Optional.empty();
+            }
+            write.run();
             return zoneConfigRepo.findById(zoneId);
-        }));
+        });
     }
 
     private static ResponseEntity<ZoneConfig> okOrNotFound(Optional<ZoneConfig> zone) {

@@ -152,7 +152,7 @@ func TestTxLogConsumer_RealStore_ReplayAfterCommitIsNoop(t *testing.T) {
 	assert.Equal(t, int64(3), db.Count(t, "transaction_log", ""))
 
 	// 重放同三条(新 offset)+ 一条新的,外加一条坏消息:坏消息只提交不入库,
-	// 重放被 IGNORE,只有 tx 4 新增;这批 5 条按时间驱动落库。
+	// 重放被 IGNORE,只有 tx 4 新增;前三条凑满一批,坏消息与 tx 4 按时间驱动落库。
 	reader.push(
 		txMsg(t, 0, 3, validTx(1)), txMsg(t, 0, 4, validTx(2)), txMsg(t, 0, 5, validTx(3)),
 		badMsg(0, 6),

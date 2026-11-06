@@ -12,6 +12,7 @@
 
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "services/scene/player/system/bag_marshal.h"
@@ -127,7 +128,7 @@ protected:
 
     void FillEvictingBag(Bag &bag)
     {
-        bag.SetProfile(BagProfile::Temporary(2));
+        bag.SetProfile(FifoEvictingProfileForTest(2));
         bag.InsertItemForRestore(kOldStack, 10, maxStack - 1, 0, 1);
         bag.InsertItemForRestore(kOldOther, 3, 1, 1, 2);
     }

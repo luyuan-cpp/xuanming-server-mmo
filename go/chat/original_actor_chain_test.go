@@ -15,11 +15,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestOriginalChatActorIsCapturedAfterWireSessionDecode(t *testing.T) {
+// 整条链走完:handler 取到的会话就是 gate 签名的验签原件,原角色归属已捕获,提交点可复核。
+func TestOriginalChatActorIsCapturedByOnlineEntry(t *testing.T) {
 	detail := callerauthtest.OnlineSession("original-account", 11, 7)
-	// 真签名并过验签拦截器:ctx 同时带交给本服务解码的会话 metadata 与 gate 签名原件。
 	ctx := callerauthtest.Incoming(t, chatpb.ClientPlayerChat_SendChat_FullMethodName, detail)
-	chain := buildUnaryInterceptors(killswitch.New(killswitch.Config{}), session.OriginalIdentityInterceptor())
+	chain := buildUnaryInterceptors(killswitch.New(killswitch.Config{}), chatEntry(t))
 	called := false
 	handler := chainUnary(chain, &grpc.UnaryServerInfo{FullMethod: chatpb.ClientPlayerChat_SendChat_FullMethodName}, func(ctx context.Context, _ any) (any, error) {
 		called = true

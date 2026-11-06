@@ -289,10 +289,17 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 	// 不释放的话 released 一直是 0,这名玩家的待放弃资产操作永远卡着。
 	// 代次用 location 记的这一代,不用 release.epoch:那是之后才读的 owner_epoch 键,这期间另一路 EnterScene 可能已经接手、铸了新代次
 	// (判死看的还是旧 location),拿它释放会把刚接手的新持有者围掉。location 没记代次时不释放:下一次认领照样抬代次把旧持有者挡住。
+	// 释放前向 etcd 复核持有实例仍不在册,按读到的写权行比较并写(dead_holder_release.go)。
 	if release.verdict == leaveReleaseOwnerDead && l.svcCtx.PlayerStoreHolders != nil && currentLoc.GetOwnerEpoch() != 0 {
-		if err := l.svcCtx.PlayerStoreHolders.ReleaseDeadPlayerStoreHolder(l.ctx, in.PlayerId, currentLoc.GetOwnerEpoch()); err != nil {
-			l.Logger.Errorf("Player %d leave scene %d: releasing the dead holder's player store claim failed, returning error for retry: %v",
-				in.PlayerId, in.SceneId, err)
+		if err := releaseDeadPlayerStoreHolder(l.ctx, l.svcCtx, in.PlayerId, currentLoc.GetOwnerEpoch()); err != nil {
+			// 持有实例在册 / 写权行已变是正常等待,每次重试都会再来一遍,记 Info(按 dead_holder_release_total 看量);其余才是故障。
+			if deadHolderReleaseKeepsLocation(err) {
+				l.Logger.Infof("Player %d leave scene %d: the dead holder's player store claim cannot be released yet, keeping the location for retry: %v",
+					in.PlayerId, in.SceneId, err)
+			} else {
+				l.Logger.Errorf("Player %d leave scene %d: releasing the dead holder's player store claim failed, returning error for retry: %v",
+					in.PlayerId, in.SceneId, err)
+			}
 			return nil, err
 		}
 	}

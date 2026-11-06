@@ -19,12 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClientPlayerLogin_Login_FullMethodName        = "/loginpb.ClientPlayerLogin/Login"
-	ClientPlayerLogin_CreatePlayer_FullMethodName = "/loginpb.ClientPlayerLogin/CreatePlayer"
-	ClientPlayerLogin_EnterGame_FullMethodName    = "/loginpb.ClientPlayerLogin/EnterGame"
-	ClientPlayerLogin_LeaveGame_FullMethodName    = "/loginpb.ClientPlayerLogin/LeaveGame"
-	ClientPlayerLogin_Disconnect_FullMethodName   = "/loginpb.ClientPlayerLogin/Disconnect"
-	ClientPlayerLogin_RefreshToken_FullMethodName = "/loginpb.ClientPlayerLogin/RefreshToken"
+	ClientPlayerLogin_Login_FullMethodName                = "/loginpb.ClientPlayerLogin/Login"
+	ClientPlayerLogin_CreatePlayer_FullMethodName         = "/loginpb.ClientPlayerLogin/CreatePlayer"
+	ClientPlayerLogin_EnterGame_FullMethodName            = "/loginpb.ClientPlayerLogin/EnterGame"
+	ClientPlayerLogin_LeaveGame_FullMethodName            = "/loginpb.ClientPlayerLogin/LeaveGame"
+	ClientPlayerLogin_Disconnect_FullMethodName           = "/loginpb.ClientPlayerLogin/Disconnect"
+	ClientPlayerLogin_RefreshToken_FullMethodName         = "/loginpb.ClientPlayerLogin/RefreshToken"
+	ClientPlayerLogin_RequestGateMigration_FullMethodName = "/loginpb.ClientPlayerLogin/RequestGateMigration"
 )
 
 // ClientPlayerLoginClient is the client API for ClientPlayerLogin service.
@@ -37,6 +38,9 @@ type ClientPlayerLoginClient interface {
 	LeaveGame(ctx context.Context, in *LeaveGameRequest, opts ...grpc.CallOption) (*LoginEmptyResponse, error)
 	Disconnect(ctx context.Context, in *LoginNodeDisconnectRequest, opts ...grpc.CallOption) (*LoginEmptyResponse, error)
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
+	// gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
+	// (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
+	RequestGateMigration(ctx context.Context, in *GateMigrationRequest, opts ...grpc.CallOption) (*GateMigrationResponse, error)
 }
 
 type clientPlayerLoginClient struct {
@@ -107,6 +111,16 @@ func (c *clientPlayerLoginClient) RefreshToken(ctx context.Context, in *RefreshT
 	return out, nil
 }
 
+func (c *clientPlayerLoginClient) RequestGateMigration(ctx context.Context, in *GateMigrationRequest, opts ...grpc.CallOption) (*GateMigrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GateMigrationResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerLogin_RequestGateMigration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerLoginServer is the server API for ClientPlayerLogin service.
 // All implementations must embed UnimplementedClientPlayerLoginServer
 // for forward compatibility.
@@ -117,6 +131,9 @@ type ClientPlayerLoginServer interface {
 	LeaveGame(context.Context, *LeaveGameRequest) (*LoginEmptyResponse, error)
 	Disconnect(context.Context, *LoginNodeDisconnectRequest) (*LoginEmptyResponse, error)
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
+	// gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
+	// (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
+	RequestGateMigration(context.Context, *GateMigrationRequest) (*GateMigrationResponse, error)
 	mustEmbedUnimplementedClientPlayerLoginServer()
 }
 
@@ -144,6 +161,9 @@ func (UnimplementedClientPlayerLoginServer) Disconnect(context.Context, *LoginNo
 }
 func (UnimplementedClientPlayerLoginServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshToken not implemented")
+}
+func (UnimplementedClientPlayerLoginServer) RequestGateMigration(context.Context, *GateMigrationRequest) (*GateMigrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestGateMigration not implemented")
 }
 func (UnimplementedClientPlayerLoginServer) mustEmbedUnimplementedClientPlayerLoginServer() {}
 func (UnimplementedClientPlayerLoginServer) testEmbeddedByValue()                           {}
@@ -274,6 +294,24 @@ func _ClientPlayerLogin_RefreshToken_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerLogin_RequestGateMigration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GateMigrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerLoginServer).RequestGateMigration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerLogin_RequestGateMigration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerLoginServer).RequestGateMigration(ctx, req.(*GateMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerLogin_ServiceDesc is the grpc.ServiceDesc for ClientPlayerLogin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -304,6 +342,10 @@ var ClientPlayerLogin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshToken",
 			Handler:    _ClientPlayerLogin_RefreshToken_Handler,
+		},
+		{
+			MethodName: "RequestGateMigration",
+			Handler:    _ClientPlayerLogin_RequestGateMigration_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -479,7 +521,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LoginAdminClient interface {
 	// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
-	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字不释放:按日志带 token 调 ReleasePlayerName。
+	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
+	// (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
 	RemovePlayersFromAccounts(ctx context.Context, in *RemovePlayersFromAccountsRequest, opts ...grpc.CallOption) (*RemovePlayersFromAccountsResponse, error)
 }
 
@@ -506,7 +549,8 @@ func (c *loginAdminClient) RemovePlayersFromAccounts(ctx context.Context, in *Re
 // for forward compatibility.
 type LoginAdminServer interface {
 	// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
-	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字不释放:按日志带 token 调 ReleasePlayerName。
+	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
+	// (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
 	RemovePlayersFromAccounts(context.Context, *RemovePlayersFromAccountsRequest) (*RemovePlayersFromAccountsResponse, error)
 	mustEmbedUnimplementedLoginAdminServer()
 }

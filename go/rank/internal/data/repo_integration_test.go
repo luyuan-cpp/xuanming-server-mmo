@@ -470,3 +470,80 @@ func TestTiDBRankIndependentPoolsReplayConflictFreezeAndRewardFence(t *testing.T
 	require.NoError(t, err)
 	require.Empty(t, ids)
 }
+
+// requeueAbandonedRewardSQL 与 docs/design/leaderboard-system.md「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」节的人工重投语句一字不差:
+// 只把放弃改回待投、清零次数,载荷与写定的过期时刻都不动,重投仍命中邮件侧同一请求。
+const requeueAbandonedRewardSQL = "UPDATE rank_mail_reward SET status=1,attempts=0,next_attempt_ms=0,lease_until_ms=0 WHERE reward_id=? AND status=3"
+
+// 封榜把奖励邮件过期时刻写定为 封榜时刻 + 可投窗口,之后改配置不影响已写的行;
+// 放弃是终态:扫不到、领不到、旧租约与迟到的落结果都写不进;按文档语句人工重投后载荷不变。
+func TestTiDBRewardIntentFixesMailExpireAndAbandonIsTerminal(t *testing.T) {
+	ctx, db, next := rankFixture(t)
+	r := New(db, next, next, next, func(uint32) bool { return true })
+	const sealedMs = uint64(5000000)
+	// 固定业务时钟,不靠真实等待。
+	r.now = func() time.Time { return time.UnixMilli(int64(sealedMs)) }
+	window := 7 * 24 * time.Hour
+	require.NoError(t, r.ConfigureRewardMailWindow(window))
+	board := testOpen(t, ctx, r)
+	_, err := r.Submit(ctx, "match", &rankpb.SubmitRankScoresRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, SourceCursor: 1, RequestId: 10, Mode: rankpb.RankSubmitMode_RANK_SUBMIT_SET, Entries: []*rankpb.RankScoreInput{{EntityId: 7, Score: 100, AchievedMs: 1}}})
+	require.NoError(t, err)
+	_, err = r.Freeze(ctx, "match", &rankpb.FreezeRankGenerationRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, ExpectedSourceCursor: 1, RequestId: 20, TopN: 1, Rewards: []*rankpb.RankRewardTier{{FirstRank: 1, LastRank: 1, Attachments: &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{CurrencyType: 0, Amount: 10}}}}}})
+	require.NoError(t, err)
+	var rewardID, created, expire uint64
+	var status uint32
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT reward_id,created_ms,expire_ms,status FROM rank_mail_reward").Scan(&rewardID, &created, &expire, &status))
+	require.Equal(t, sealedMs, created)
+	require.Equal(t, sealedMs+uint64(window.Milliseconds()), expire, "过期时刻 = 封榜时刻 + 可投窗口")
+	require.Equal(t, RewardPending, status)
+	require.NoError(t, r.ConfigureRewardMailWindow(3*24*time.Hour))
+	claimed, ok, err := r.ClaimReward(ctx, rewardID, sealedMs+1, sealedMs+100, 41)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, expire, claimed.ExpireMs, "领租约带出写定的过期时刻,封榜后改配置不影响")
+	stale := proto.Clone(claimed).(*rankpb.RankMailRewardRecord)
+	stale.LeaseToken = 40
+	// 推迟(剩余可领时长不足时不发件):放掉租约、改下次尝试时刻,不计尝试次数;同样只认本租约。
+	require.ErrorIs(t, r.DeferReward(ctx, stale, sealedMs+500, sealedMs+2), ErrConflict, "不持本租约不能推迟")
+	require.NoError(t, r.DeferReward(ctx, claimed, sealedMs+500, sealedMs+2))
+	var attempts uint32
+	var lease, nextAttempt uint64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT status,attempts,lease_until_ms,next_attempt_ms FROM rank_mail_reward WHERE reward_id=?", rewardID).Scan(&status, &attempts, &lease, &nextAttempt))
+	require.Equal(t, RewardPending, status)
+	require.Zero(t, attempts, "推迟没有发件,不计尝试次数")
+	require.Zero(t, lease)
+	require.EqualValues(t, sealedMs+500, nextAttempt)
+	early, err := r.DueRewards(ctx, sealedMs+499, 10)
+	require.NoError(t, err)
+	require.Empty(t, early, "推迟到的时刻之前扫不到")
+	claimed, ok, err = r.ClaimReward(ctx, rewardID, sealedMs+500, sealedMs+600, 44)
+	require.NoError(t, err)
+	require.True(t, ok, "推迟放掉了租约,到点可以再领")
+	require.ErrorIs(t, r.AbandonReward(ctx, stale, sealedMs+2), ErrConflict, "不持本租约不能改终态")
+	require.NoError(t, r.AbandonReward(ctx, claimed, sealedMs+3))
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT status,attempts,lease_until_ms FROM rank_mail_reward WHERE reward_id=?", rewardID).Scan(&status, &attempts, &lease))
+	require.Equal(t, RewardAbandoned, status)
+	require.EqualValues(t, 1, attempts)
+	require.Zero(t, lease)
+	ids, err := r.DueRewards(ctx, expire+1, 10)
+	require.NoError(t, err)
+	require.Empty(t, ids, "放弃是终态,工作器不再扫到")
+	_, ok, err = r.ClaimReward(ctx, rewardID, sealedMs+200, sealedMs+300, 42)
+	require.NoError(t, err)
+	require.False(t, ok, "放弃的奖励不能再领租约")
+	require.ErrorIs(t, r.SettleReward(ctx, claimed, 0, sealedMs+4, sealedMs+4), ErrConflict, "终态之后迟到的落结果必须拒绝")
+	result, err := db.ExecContext(ctx, requeueAbandonedRewardSQL, rewardID)
+	require.NoError(t, err)
+	affected, err := result.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 1, affected)
+	ids, err = r.DueRewards(ctx, sealedMs+5, 10)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{rewardID}, ids, "人工重投后回到待投")
+	again, ok, err := r.ClaimReward(ctx, rewardID, sealedMs+6, sealedMs+100, 43)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, expire, again.ExpireMs, "重投不改写定的过期时刻")
+	require.Equal(t, claimed.Attachments, again.Attachments)
+	require.Zero(t, again.Attempts)
+}

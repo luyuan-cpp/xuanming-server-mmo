@@ -300,9 +300,10 @@ func TestMySQLResetSessionRecheckAfterDemotion(t *testing.T) {
 		t.Fatalf("主库复用连接应通过: %v valid=%v", err, c.IsValid())
 	}
 	// 主从切换:同一条池内连接所在实例被降成只读。回池复用前必须发现,不能继续拿它做权威读写。
+	// 这时还没发业务语句,回 ErrBadConn 让 database/sql 换连接;新连接在建连时核验,降级的实例在那里被拒。
 	server.readOnly = "1"
-	if err := c.ResetSession(context.Background()); !errors.Is(err, ErrOutcomeUnknown) || c.IsValid() {
-		t.Fatalf("降级后必须隔离这条连接: %v valid=%v", err, c.IsValid())
+	if err := c.ResetSession(context.Background()); !errors.Is(err, driver.ErrBadConn) || c.IsValid() {
+		t.Fatalf("降级后必须隔离这条连接并回ErrBadConn: %v valid=%v", err, c.IsValid())
 	}
 }
 

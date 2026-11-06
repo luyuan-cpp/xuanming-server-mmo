@@ -137,7 +137,7 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 
 | # | 缺口 | 证据 |
 | --- | --- | --- |
-| G1 | **未认证连接零死线、零收割器** | 全 gate 只有一个定时器：`main.cpp:134` 声明、`main.cpp:315` 每 10s 上报 player_count。`SessionInfo`（`session_info_comp.h`）**整个结构体没有任何时间戳字段**——今天就算想写 sweeper 也没有判据数据。`setKeepAlive` 在 `cpp/` 下零命中 |
+| G1 | **未认证连接零死线、零收割器**(2026-11-06 死线已落码,未编译;独立预算未做,见 P0-2) | 全 gate 只有一个定时器：`main.cpp:134` 声明、`main.cpp:315` 每 10s 上报 player_count。`SessionInfo`（`session_info_comp.h`）**整个结构体没有任何时间戳字段**——今天就算想写 sweeper 也没有判据数据。`setKeepAlive` 在 `cpp/` 下零命中 |
 | G2 | **闸门位置比注释声称的晚**：拒绝发生时 `TcpConnection`、两个 1KB Buffer、`connections_` map 节点、`epoll_ctl ADD` 已全部完成 | `TcpServer.cc newConnection` 先于我们的回调执行；`Buffer.h:45-46`（`kCheapPrepend=8`+`kInitialSize=1024`） |
 | G3 | **只有总量、没有速率**。每秒建 5000 条又立刻关的攻击者永远碰不到 `:468` 那条闸 | `client_message_processor.cpp:468` 是唯一判据 |
 | G4 | **`RLIMIT_NOFILE` 全链路无人设**：镜像没设、k8s 没有该 API 字段、进程从不 `setrlimit`。containerd 依赖 systemd v240+ 隐式默认 **soft=1024**——真正生效的上限很可能是 ~1000 而不是 20000，**`GateMaxConnections` 那条分支是够不着的死代码** | `Dockerfile.runtime`/`Dockerfile.cpp` 无 ulimit；`cpp/` 下 `setrlimit` 仅命中 Windows shim |
@@ -241,29 +241,36 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P0-2 · 未认证连接：独立预算 + 死线 + LRU 淘汰（对应 G1，堵 SECURITY.md 自认的洞）
 
-这是**投入产出比最高**的一条，约 20 行，**不需要动 third_party**。
+分两半:死线已落码(2026-11-06,未编译,待 Codex 验证);独立预算、LRU 淘汰、按概率早拒还没做。
 
-1. `SessionInfo` 加 `muduo::Timestamp connectedAt` 与 `muduo::net::TimerId preAuthTimer`。
-2. `HandleConnectionEstablished` 在现有总量闸之后，再加一道 `preAuthCount >= kPreAuthMax`
-   （取 `GateMaxConnections` 的 5-10%）。
-3. `auto tid = conn->getLoop()->runAfter(kPreAuthTimeoutSec, makeWeakCallback(conn, &TcpConnection::forceClose));`
-4. token 校验通过时 `loop->cancel(tid)`、`--preAuthCount`、置 `authenticated`。
+**死线(已落码)。** 随客户端心跳一起做,设计见 [gate-client-heartbeat.md](gate-client-heartbeat.md) §5.1、§5.4:
 
-**四个必须照做的细节，任何一个漏了这道防线就白做：**
+- `HandleConnectionEstablished` 插入会话之后登记一个握手检查点:建连 + 10s 到期时仍未验签就 `forceClose`,
+  之后照常走断开回调(没验签的会话没有角色,断开回调只删会话)。dev 免验签的会话建连即已验证,不登记。
+- 判据是「距建连的时长 + 尚未验签」,不是「距上次活动的时长」。按最后活动时间算,攻击者每隔几秒发一个字节
+  就永久续命,这是这道防线被静默绕过的头号方式。
+- 与原方案的两处不同,理由记在这里(AGENTS §11 偏离须记录):
+  1. **不用每连接一个 `runAfter` 定时器**,改用 gate 全局一个小根堆(`client_liveness.h` 的 `LivenessSweeper`),
+     1 秒一次的扫描取出到期的检查点,按 `(session_id, 会话代次)` 核对会话还在、仍未验签才关。
+     定时器回调不绑任何连接,也就不存在「强持有连接续命」「`forceCloseWithDelay` 取消不掉」这两个坑;
+     验签成功、会话关闭都不用取消什么,到期时自然丢弃。同一个堆也承载验签之后的空闲超时。
+     本端 loop 卡过 2 秒以上时这一轮不关(验签请求可能还在接收缓冲里没读),下一轮再判。
+  2. **期限取 10 秒,不是 1–3 秒。** 验签确实是同步的,但移动网络上首个数据段丢一两次(初始重传 1 秒、再 2 秒)
+     就会超过 3 秒;10 秒与 battle 直连的握手期限(`battle_client_edge.h` `kHandshakeTimeoutSec`)同值。
+     Java gate 现为 30 秒,已登记对齐到 10 秒。
+- 计数与日志:`[ClientHeartbeat] summary` 的 `handshake_timeouts`;拒绝日志按 1024 采样。
 
-- ⚠️ **必须用 `makeWeakCallback`**（`muduo/base/WeakCallback.h`，`forceCloseWithDelay` 内部就是这么用的）。
-  直接绑 `TcpConnectionPtr` 会让定时器**强持有连接、续命到超时那一刻**，连对端主动断开都清不掉——正好帮了攻击者。
-- ⚠️ **不能用现成的 `conn->forceCloseWithDelay(seconds)`**：它**不返回 TimerId**，认证成功后取消不掉，
-  会把每条正常连接也在 N 秒后杀掉。
-- ⚠️ **收割判据必须是「距 connect 的时长 + 尚未认证」，绝不能是「距上次活动的时长」**。
-  按最后活动时间算，攻击者每 N 秒发 1 个字节就永久续命——这是这道防线被静默绕过的**头号方式**。
-- ⚠️ **`preAuthCount` 必须用 RAII guard，不能手写 `++`/`--`**。现有代码已有 capacity 拒、
-  `node_id=0` 拒、prod 空密钥拒等多个早退分支，漏一次就永久泄漏一个槽位且无超时兜底
-  （Go `netutil.LimitListener` 的经典坑）。
-- 超时值：gate 的 token 校验是同步的，**1-3 秒足够，别配到分钟级**。
-- 满池时不要一刀切：按 sshd `MaxStartups` 的 random early drop 按概率拒（§6.7），
-  否则攻击者只要稳定占住阈值，合法玩家成功率就是 0。
-- 再叠一层 **LRU 淘汰最老的未认证连接**——把「新玩家被挡在外面」换成「攻击者的老连接先死」。
+**独立预算 + LRU + 按概率早拒(未做)。** 有了死线,占槽的未验签连接每条最多活 10 秒,但持续高速建连仍能把槽位占满。
+原方案的要点不变:
+
+- `HandleConnectionEstablished` 在现有总量闸之后再加一道 `preAuthCount >= kPreAuthMax`(取 `GateMaxConnections` 的 5–10%)。
+- ⚠️ **`preAuthCount` 必须用 RAII guard,不能手写 `++` / `--`**。现有代码已有 capacity 拒、`node_id=0` 拒、prod 空密钥拒等
+  多个早退分支,漏一次就永久泄漏一个槽位(Go `netutil.LimitListener` 的经典坑)。
+- 满池时不要一刀切:按 sshd `MaxStartups` 的 random early drop 按概率拒(§6.7),否则攻击者只要稳定占住阈值,合法玩家成功率就是 0。
+- 再叠一层 **LRU 淘汰最老的未认证连接**,把「新玩家被挡在外面」换成「攻击者的老连接先死」。
+- 新增前置:预算大小要按重连风暴实测。gate 重启或网络抖动后,成千上万个客户端同时重连,它们都短暂处于未验签状态;
+  预算定小了会把正在握手的合法客户端淘汰掉,而断线保留(`player-connection-lost-hold.md`)恰恰依赖这些客户端能马上重连回来。
+  所以这一半要带压测一起做。
 
 ### P0-3 · 修 LogLevel（对应 G5）
 

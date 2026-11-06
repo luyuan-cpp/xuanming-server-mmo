@@ -14,7 +14,9 @@ import (
 	"time"
 
 	base "proto/common/base"
+	"shared/etcdwatch"
 	"shared/nodeinfo"
+	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -37,6 +39,8 @@ type NodeEntry struct {
 	// Admission 是节点自报的可分配状态(NodeInfo.admission,R6):只有 battle 填,其它节点恒为 UNSPECIFIED。
 	// 只是选点提示(battleplace 排除 CLOSED),建房能否成功仍由 battle 的准入判定。
 	Admission base.NodeAdmission
+	// Track 是节点的发布轨道(NodeInfo.release_track,解析时已校验)。
+	Track releasetrack.Track
 }
 
 // NodeWatcher 对一个 etcd 前缀做 list-watch,维护 key -> NodeEntry 镜像。
@@ -47,6 +51,17 @@ type NodeWatcher struct {
 	nodes    map[string]NodeEntry
 	onCount  func(kind string, count int) // 镜像规模变化上报(指标)
 	onRemove func(entry NodeEntry)        // 节点消失回调(清连接缓存)
+	// stableOnly 为真时 canary 节点不进镜像,见 StableOnly。
+	stableOnly bool
+}
+
+// StableOnly 让镜像只收 stable 节点(docs/design/release-track-gray-canary.md §2.5),返回 w 以便接在构造之后。
+// match 对 battle、match、player_inbox 的调用都是服务间调用,匹配池归属也只能落在 stable 上:
+// 若把 canary 的 MatchNodeService 算进 HRW 成员表,落到它名下的池 stable 既不撮合也不恢复,这些池就停了。
+// 在解析时就丢掉,所以快照、随机选点和按节点号查找都看不到 canary。scene 按 zone 选,不用它。必须在 Run 之前调用。
+func (w *NodeWatcher) StableOnly() *NodeWatcher {
+	w.stableOnly = true
+	return w
 }
 
 // NewNodeWatcher 构造 watcher;onCount / onRemove 可为 nil。
@@ -74,9 +89,13 @@ func (w *NodeWatcher) Run(ctx context.Context, etcd *clientv3.Client) {
 				continue
 			}
 		}
-		w.watch(ctx, etcd, rev)
+		periodic := w.watch(ctx, etcd, rev)
 		if ctx.Err() != nil {
 			return
+		}
+		if periodic {
+			logx.Debugf("[NodeWatcher:%s] Periodic resynchronization", w.name)
+			continue
 		}
 		logx.Infof("[NodeWatcher:%s] Watch interrupted; synchronizing again", w.name)
 	}
@@ -120,23 +139,29 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 	return resp.Header.Revision, nil
 }
 
-func (w *NodeWatcher) watch(ctx context.Context, etcd *clientv3.Client, rev int64) {
-	watchCh := etcd.Watch(ctx, w.prefix,
+// watch 从 rev+1 起消费事件,返回即表示需要重新全量同步。periodic 为真表示是到了定期对账的点
+// (etcdwatch.ResyncInterval),不是 watch 出了问题。watch 带 RequireLeader,返回前取消子 ctx
+// (docs/design/infra-reconnect-overview.md §4 R1)。
+func (w *NodeWatcher) watch(ctx context.Context, etcd *clientv3.Client, rev int64) (periodic bool) {
+	watchCh, resync, stop := etcdwatch.Open(ctx, etcd, etcdwatch.ResyncInterval, w.prefix,
 		clientv3.WithPrefix(),
 		clientv3.WithRev(rev+1),
 	)
+	defer stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
+		case <-resync:
+			return true
 		case watchResp, ok := <-watchCh:
 			if !ok {
 				logx.Infof("[NodeWatcher:%s] Watch channel closed", w.name)
-				return
+				return false
 			}
 			if watchResp.Err() != nil {
 				logx.Errorf("[NodeWatcher:%s] Watch error: %v", w.name, watchResp.Err())
-				return
+				return false
 			}
 			for _, ev := range watchResp.Events {
 				w.handleEvent(ev)
@@ -214,6 +239,16 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 			w.name, key, reg.GetZoneId(), reg.GetNodeId())
 		return NodeEntry{}, false
 	}
+	track, err := releasetrack.Parse(reg.GetReleaseTrack())
+	if err != nil {
+		// 认不出的轨道既不能当 stable 也不能当 canary,整条跳过。
+		logx.Errorf("[NodeWatcher:%s] Node has an unknown release track; ignoring: key=%s zone=%d node=%d: %v",
+			w.name, key, reg.GetZoneId(), reg.GetNodeId(), err)
+		return NodeEntry{}, false
+	}
+	if w.stableOnly && track.IsCanary() {
+		return NodeEntry{}, false
+	}
 	return NodeEntry{
 		NodeId:         reg.GetNodeId(),
 		ZoneId:         reg.GetZoneId(),
@@ -223,6 +258,7 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 		ClientPort:     reg.GetClientEndpoint().GetPort(),
 		Endpoint:       fmt.Sprintf("%s:%d", grpcEndpoint.GetIp(), grpcEndpoint.GetPort()),
 		Admission:      reg.GetAdmission(),
+		Track:          track,
 	}, true
 }
 

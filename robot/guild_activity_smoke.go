@@ -916,7 +916,7 @@ func actCheckSelf(bot *guildSmokeBot, fail econFail, step string, funds, total, 
 	}
 }
 
-// actLogout 让一个机器人下线:LeaveGame + Disconnect + 关连接,与各场景收尾时的做法一致。
+// actLogout 让一个机器人下线:LeaveGame + 关连接(断线通知由 gate 在 TCP 关闭时合成),与各场景收尾时的做法一致。
 func actLogout(bot *guildSmokeBot) {
 	_ = leaveGame(bot.gc, bot.stats)
 	gameobject.PlayerList.Delete(bot.gc.PlayerId)

@@ -392,6 +392,72 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 	})
 }
 
+// 资格互斥(数据一致性保障地图 §6.2 第 7 条):不凭标记的铸造没有交接标记可查,目标节点 B 的入场登记
+// (kRegisterFenceLua,登记成功之后才认领存档)与 scene_manager 的回滚是同一 Redis 上的两段原子 Lua,只能先后
+// 执行。登记在先 → 回滚回 4、一个字节都不动,B 是有 location 的现任;回滚在先 → epoch 已前进,登记回 -1,
+// B 认领不了铸出的那一代。两种先后都不会留下「没有 location 的现任」。
+func TestUnmarkedRollbackAndRegistrationAreMutuallyExclusive(t *testing.T) {
+	log := NewEnterSceneLogic(context.Background(), &svc.ServiceContext{}).Logger
+
+	// setup 摆出「没有任何 location,首次落点在节点 20(目标 B)铸出 1」,返回落点与回滚计划(bump、不凭标记)。
+	setup := func(t *testing.T, playerID uint64) (*svc.ServiceContext, *miniredis.Miniredis, placedLocation, routeRollbackPlan) {
+		t.Helper()
+		sc, mr := newTestSvcCtxWithWorldScenes(t)
+		placed, err := placePlayerLocation(sc, playerID, 7390, "20", testZoneId, placementGuard{observedEpoch: 0, mint: true})
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), placed.epoch)
+		plan, err := planRouteRollback(nil, "", testZoneId, placed, "", false)
+		require.NoError(t, err)
+		require.Equal(t, rollbackModeBump, plan.mode)
+		require.Empty(t, plan.requiredMarker)
+		return sc, mr, placed, plan
+	}
+	// register 以 N 执行一次 C++ 的入场登记(逐字副本),返回结果码:1 = 登记成功,-1 = owner_epoch 不是 N。
+	register := func(t *testing.T, sc *svc.ServiceContext, playerID uint64, n uint64) string {
+		t.Helper()
+		owner := strconv.FormatUint(n, 10)
+		fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", playerID)
+		held := owner + "|destination|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
+		prior, _ := sc.Redis.Hget(fenceKey, "handoff_fence")
+		keys := []string{ownerepoch.OwnerEpochKey(playerID), fenceKey, ownerepoch.HandoffKey(playerID)}
+		result, err := sc.Redis.Eval(cppLuaRegisterFence, keys, owner, held, prior)
+		require.NoError(t, err)
+		return fmt.Sprint(result)
+	}
+
+	t.Run("registration_first_keeps_the_placement", func(t *testing.T) {
+		const playerID = uint64(6391)
+		sc, _, placed, plan := setup(t, playerID)
+
+		// B 收到「报错但已投递」的路由,在回滚之前登记成功(之后它会以 1 认领存档)。
+		require.Equal(t, "1", register(t, sc, playerID, 1))
+
+		registeredBefore := enterSceneRollbackCount(t, rollbackOutcomeTargetRegistered)
+		restored, echo := rollbackPlayerPlacement(sc, log, playerID, placed, plan)
+		assert.False(t, restored, "B 已在 1 下登记:回滚一个字节都不动")
+		assert.Zero(t, echo, "没回滚就不回显")
+		assert.Equal(t, registeredBefore+1, enterSceneRollbackCount(t, rollbackOutcomeTargetRegistered))
+		assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "归属留在 B")
+		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		assert.Equal(t, placed.raw, raw, "location 仍指向 B:之后的换图 / 重登按 B 是持有者走换手门")
+	})
+
+	t.Run("rollback_first_makes_registration_refuse", func(t *testing.T) {
+		const playerID = uint64(6392)
+		sc, mr, placed, plan := setup(t, playerID)
+
+		restored, echo := rollbackPlayerPlacement(sc, log, playerID, placed, plan)
+		require.True(t, restored)
+		require.Equal(t, uint64(2), echo)
+
+		// 迟到投递的路由让 B 登记(N = 1):owner_epoch 已是 2,登记回 -1,B 不 Activate、认领不了 1。
+		assert.Equal(t, "-1", register(t, sc, playerID, 1))
+		assert.False(t, mr.Exists(fmt.Sprintf("player:{%d}:handoff_fence", playerID)), "登记被拒:一个原件都没写")
+		assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "本次之前没有 location:回滚 = DEL")
+		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	})
+}
+
 // 源端原子取证(§12.8 3.1):只删本次交接这一族标记(原标记与回滚转写出来的那份),别人的不碰;
 // 同一段脚本里读到的 location 带着与本次标记原文逐字节相同的回滚回执。
 func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {

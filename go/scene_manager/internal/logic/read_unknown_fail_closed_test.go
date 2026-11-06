@@ -313,7 +313,8 @@ func TestInitWorldScenes_EnsureLoopOwnerReadErrorSkipsChannel(t *testing.T) {
 
 	createsBefore := sharedFakeSceneNode.createCalls.Load()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteWorldInit)
-	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(channels[0]), times: 1})
+	// 补发循环用一条 MGET 读属主与放置代次(2026-11-06),MGET 的第一个键就是属主键。
+	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "MGET", key: sceneNodeKey(channels[0]), times: 1})
 	initWorldScenesForZone(ctx, sc, testZoneId, confIDs, true)
 	require.EqualValues(t, 1, fired.Load())
 	assert.Equal(t, createsBefore, sharedFakeSceneNode.createCalls.Load(), "读不到属主就不知道该发给谁")

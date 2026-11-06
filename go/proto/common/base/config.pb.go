@@ -621,8 +621,12 @@ type GameConfig struct {
 	PlayerInbox   *GameConfig_PlayerInboxConfig   `protobuf:"bytes,8,opt,name=player_inbox,json=playerInbox,proto3" json:"player_inbox,omitempty"`
 	PlayerRedis   *GameConfig_PlayerRedisConfig   `protobuf:"bytes,9,opt,name=player_redis,json=playerRedis,proto3" json:"player_redis,omitempty"`
 	AuditSnapshot *GameConfig_AuditSnapshotConfig `protobuf:"bytes,10,opt,name=audit_snapshot,json=auditSnapshot,proto3" json:"audit_snapshot,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 本 zone 的场景控制域实例(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene_manager 把分线目录、神秘商人
+	// 等读模型写在本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),只有 scene 读它。yaml 键 scene_control_redis,
+	// 由 readGameConfig 手工解析;**整段缺失时取 zone_redis 的值**(开发环境两者是同一个实例)。db 只认 0。
+	SceneControlRedis *GameConfig_ZoneRedisConfig `protobuf:"bytes,11,opt,name=scene_control_redis,json=sceneControlRedis,proto3" json:"scene_control_redis,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GameConfig) Reset() {
@@ -693,6 +697,13 @@ func (x *GameConfig) GetPlayerRedis() *GameConfig_PlayerRedisConfig {
 func (x *GameConfig) GetAuditSnapshot() *GameConfig_AuditSnapshotConfig {
 	if x != nil {
 		return x.AuditSnapshot
+	}
+	return nil
+}
+
+func (x *GameConfig) GetSceneControlRedis() *GameConfig_ZoneRedisConfig {
+	if x != nil {
+		return x.SceneControlRedis
 	}
 	return nil
 }
@@ -1007,7 +1018,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
 	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\x122\n" +
 	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
-	"grpcClient\"\x9b\x06\n" +
+	"grpcClient\"\xe8\x06\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +
@@ -1017,7 +1028,8 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\fplayer_inbox\x18\b \x01(\v2\x1d.GameConfig.PlayerInboxConfigR\vplayerInbox\x12@\n" +
 	"\fplayer_redis\x18\t \x01(\v2\x1d.GameConfig.PlayerRedisConfigR\vplayerRedis\x12F\n" +
 	"\x0eaudit_snapshot\x18\n" +
-	" \x01(\v2\x1f.GameConfig.AuditSnapshotConfigR\rauditSnapshot\x1ae\n" +
+	" \x01(\v2\x1f.GameConfig.AuditSnapshotConfigR\rauditSnapshot\x12K\n" +
+	"\x13scene_control_redis\x18\v \x01(\v2\x1b.GameConfig.ZoneRedisConfigR\x11sceneControlRedis\x1ae\n" +
 	"\x0fZoneRedisConfig\x12\x12\n" +
 	"\x04host\x18\x03 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x04 \x01(\rR\x04port\x12\x1a\n" +
@@ -1073,11 +1085,12 @@ var file_proto_common_base_config_proto_depIdxs = []int32{
 	9,  // 7: GameConfig.player_inbox:type_name -> GameConfig.PlayerInboxConfig
 	10, // 8: GameConfig.player_redis:type_name -> GameConfig.PlayerRedisConfig
 	11, // 9: GameConfig.audit_snapshot:type_name -> GameConfig.AuditSnapshotConfig
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	8,  // 10: GameConfig.scene_control_redis:type_name -> GameConfig.ZoneRedisConfig
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_config_proto_init() }

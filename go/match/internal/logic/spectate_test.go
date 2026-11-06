@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"testing"
 
+	"match/internal/authority"
 	"match/internal/svc"
 
 	battlepb "proto/battle"
@@ -34,9 +35,10 @@ func stubSpectateFormations(t *testing.T) *fakeSpectateFormations {
 	}
 	f := &fakeSpectateFormations{owner: t, formations: map[uint64]*matchpb.MatchFormationRecord{}}
 	prevLoad, prevTarget, prevCurrent := loadSpectateBattleFn, spectateTargetFn, currentSpectateFormations
-	loadSpectateBattleFn = func(_ *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
+	loadSpectateBattleFn = func(_ context.Context, _ *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
 		formation := f.formations[battleId]
-		if formation == nil {
+		// 与生产 loadSpectateBattle 同一过滤:成局不存在或终局已落定都读不到记录。
+		if formation == nil || authority.FormationOutcomeDecided(formation) {
 			return nil, nil
 		}
 		return spectateRecordFromFormation(formation)
@@ -272,6 +274,46 @@ func TestListWatchableBattlesHidesPrivateMember(t *testing.T) {
 	members, err := mr.ZMembers(spectateBattlesActiveKey)
 	require.NoError(t, err)
 	require.Equal(t, []string{strconv.FormatUint(public, 10)}, members, "私密成员被摘掉")
+}
+
+// COMPLETE 之后成局仍是 state 4:读到终局已落定的场不列出,这场的观战数据一并摘掉(R2-GO 严重-1)。
+func TestListWatchableBattlesEvictsCompletedBattle(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	const live, completed = uint64(880297), uint64(880298)
+	registerBattle(t, svcCtx, live, nowMs()-2000, "在打")
+	registerBattle(t, svcCtx, completed, nowMs()-1000, "已完赛")
+	stubSpectateFormations(t).formations[completed].RetryAtMs = 1<<63 - 1 // authority 的 NoRetry:COMPLETE 已提交
+
+	resp, err := NewListWatchableBattlesLogic(context.Background(), svcCtx).
+		ListWatchableBattles(&matchpb.ListWatchableBattlesRequest{})
+	require.NoError(t, err)
+	require.Len(t, resp.GetBattles(), 1)
+	require.Equal(t, live, resp.GetBattles()[0].GetBattleId())
+	require.Equal(t, 1, activeIndexSize(t, svcCtx), "已完赛的成员被摘掉")
+}
+
+// 列表逐条读一次权威库:客户端断开(请求 ctx 取消)之后就停,剩下的不再读(R2-GO 一般-6)。
+func TestListWatchableBattlesStopsWhenRequestCancelled(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	base := nowMs()
+	for i := uint64(0); i < 3; i++ {
+		registerBattle(t, svcCtx, 880300+i, base-i)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stub := loadSpectateBattleFn
+	reads := 0
+	loadSpectateBattleFn = func(c context.Context, s *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
+		reads++
+		cancel() // 读第一条的时候客户端断开
+		return stub(c, s, battleId)
+	}
+	t.Cleanup(func() { loadSpectateBattleFn = stub })
+
+	_, err := NewListWatchableBattlesLogic(ctx, svcCtx).ListWatchableBattles(&matchpb.ListWatchableBattlesRequest{})
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, reads, "取消之后不再读成局")
 }
 
 // ---- 取消证明 ----

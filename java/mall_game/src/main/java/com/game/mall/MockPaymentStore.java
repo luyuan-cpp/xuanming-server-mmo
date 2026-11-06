@@ -31,7 +31,7 @@ public final class MockPaymentStore {
     private static final String REFUND_SCAN = "FROM commerce_payment_receipt p JOIN commerce_mock_transaction m "
         + "ON m.order_sn=p.order_sn AND m.kind='PAYMENT' AND m.transaction_id=p.transaction_id "
         + "AND m.amount_minor=p.amount_minor AND m.currency=p.currency WHERE p.channel=? AND "
-        + "(EXISTS(SELECT 1 FROM commerce_refund_intent r WHERE r.order_sn=m.order_sn AND r.status='PENDING') "
+        + "(EXISTS(SELECT 1 FROM commerce_refund_intent r WHERE r.channel=p.channel AND r.transaction_id=p.transaction_id AND r.status='PENDING') "
         + "OR EXISTS(SELECT 1 FROM commerce_mock_transaction f WHERE f.kind='REFUND' AND f.order_sn=m.order_sn AND f.applied=0))";
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager manager;
@@ -117,15 +117,17 @@ public final class MockPaymentStore {
                 if (!prior.paymentTransactionId().equals(payment.transactionId())) { throw new CommerceException(503, "mock退款原付款绑定损坏"); }
                 return prior;
             }
+            // 退款待办按被退付款的交易键识别;mock 只退订单绑定的那笔 mock 付款。
             if (frozen.state() != 5 || jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM commerce_refund_intent WHERE order_sn=? AND status='PENDING'", Integer.class, orderId) != 1) {
+                    "SELECT COUNT(*) FROM commerce_refund_intent WHERE channel=? AND transaction_id=? AND status='PENDING'", Integer.class,
+                    ascii("mock"), ascii(payment.transactionId())) != 1) {
                 throw new CommerceException(409, "原订单不在待退款状态");
             }
             insert(new PaymentPolicy.Fact("REFUND", orderId, "refund_" + orderId.replace("-", ""),
                 "mock-refund-" + UUID.randomUUID(), payment.transactionId(), payment.amountMinor(), payment.currency(), clock.millis(), 0));
             return policy.required("REFUND", orderId);
         });
-        transaction(budget, () -> { deliveries.refunded(fact.receipt()); return Boolean.TRUE; });
+        transaction(budget, () -> { deliveries.refunded(fact.refundReceipt()); return Boolean.TRUE; });
         markApplied(fact, budget);
     }
 

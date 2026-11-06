@@ -31,10 +31,13 @@ type Repo struct {
 	boardIDs, settlementIDs, rewardIDs NextID
 	now                                func() time.Time
 	itemExists                         func(uint32) bool
+
+	// rewardMailWindow 是封榜到奖励邮件过期的时长,封榜时写进 rank_mail_reward.expire_ms(见 RewardMailWindow)。
+	rewardMailWindow time.Duration
 }
 
 func New(db *sql.DB, boardIDs, settlementIDs, rewardIDs NextID, itemExists func(uint32) bool) *Repo {
-	return &Repo{db: db, boardIDs: boardIDs, settlementIDs: settlementIDs, rewardIDs: rewardIDs, now: time.Now, itemExists: itemExists}
+	return &Repo{db: db, boardIDs: boardIDs, settlementIDs: settlementIDs, rewardIDs: rewardIDs, now: time.Now, itemExists: itemExists, rewardMailWindow: MaxRewardMailWindow}
 }
 
 const boardColumns = "board_id,board_type,scope,scope_id,period,generation,producer,source_epoch,committed_cursor,ascending,state,settlement_id,open_request_id,open_request_hash,created_ms,sealed_ms,deleted_ms,entries"
@@ -349,7 +352,9 @@ func (r *Repo) Freeze(ctx context.Context, caller string, in *rankpb.FreezeRankG
 					if err != nil {
 						return err
 					}
-					if _, err := tx.ExecContext(ctx, "INSERT INTO rank_mail_reward (reward_id,settlement_id,player_id,`rank`,attachments,status,mail_id,next_attempt_ms,lease_until_ms,lease_token,attempts,created_ms,updated_ms) VALUES (?,?,?,?,?,1,0,?,0,0,0,?,?)", ids[index], settlement, winner.EntityId, winner.Rank, payload, now, now, now); err != nil {
+					// 过期时刻在这里写定,之后每次重投原样带上:改配置、换副本、重启都不改变载荷摘要。
+					expire := now + uint64(r.rewardMailWindow.Milliseconds())
+					if _, err := tx.ExecContext(ctx, "INSERT INTO rank_mail_reward (reward_id,settlement_id,player_id,`rank`,attachments,status,mail_id,next_attempt_ms,lease_until_ms,lease_token,attempts,created_ms,updated_ms,expire_ms) VALUES (?,?,?,?,?,?,0,?,0,0,0,?,?,?)", ids[index], settlement, winner.EntityId, winner.Rank, payload, RewardPending, now, now, now, expire); err != nil {
 						return err
 					}
 				}

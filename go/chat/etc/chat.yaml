@@ -19,6 +19,17 @@ DataServiceRpc:
 # 身份校验结果的进程内缓存秒数,发送和拉取不再每条都打 RPC。0 = 每次都校验。
 # 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(聊天不是资产)。
 ActorVerifyTTLSeconds: 30
+# 世界频道近窗快照的最长使用时长(毫秒),上限 5000。0 = 每次拉取都直读 SQL。
+# 世界频道全服一条流:开着时每个副本每这么久至多读一次库,读量与在线人数无关。
+# 代价:别的副本上刚发的消息最多晚这么久才出现在历史里;本副本自己的提交立刻可见。
+# 设计见 docs/design/chat-world-channel-fanout.md §3。
+WorldHistoryCacheMs: 500
+# 世界频道推送(同一设计 §4):世界频道每条首次提交后往 chat-world-bcast_g<N> 写一条,每台 gate 推给本机在线玩家。
+# Brokers 为空 = 不推,客户端只能靠拉历史看到新消息。topic 代号读环境变量 KAFKA_COMMAND_TOPIC_GENERATION
+# (与命令 topic 同源),start_game.ps1、docker 调试 compose 与 k8s_deploy.ps1 都会注入。
+Kafka:
+  Brokers:
+    - "localhost:9092"
 
 # zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000:
 # chat 要先于路由服超时把 in-band 结果回去,否则"写入已生效 + 客户端看到失败"会诱发重发。

@@ -95,12 +95,29 @@ func TestMetricLabelsRejectUnboundedValues(t *testing.T) {
 		case "rank_write_total":
 			want = 20
 		case "rank_reward_dispatch_total":
-			want = 6
+			want = 7
 		case "rank_reward_scan_total":
 			want = 2
 		}
 		if len(family.Metric) != want {
 			t.Fatalf("%s出现意外series: %d want%d", family.GetName(), len(family.Metric), want)
 		}
+	}
+}
+
+// 放弃终态是封闭结果之一:注册即有 0 值序列,告警的 increase 窗口才看得到进程启动后的第一次增长。
+func TestDispatchAbandonedIsPreRegisteredClosedOutcome(t *testing.T) {
+	c := newCollectors()
+	registry := prometheus.NewRegistry()
+	c.register(registry)
+	labels := map[string]string{"outcome": RewardAbandoned}
+	if value, exists := gatheredValue(t, registry, "rank_reward_dispatch_total", labels); !exists || value != 0 {
+		t.Fatalf("abandoned 应预建 0 值序列: %v/%v", value, exists)
+	}
+	if !c.observeDispatch(RewardAbandoned) {
+		t.Fatal("abandoned 是封闭结果, 不得被拒")
+	}
+	if value, _ := gatheredValue(t, registry, "rank_reward_dispatch_total", labels); value != 1 {
+		t.Fatalf("abandoned 应计 1 次: %v", value)
 	}
 }

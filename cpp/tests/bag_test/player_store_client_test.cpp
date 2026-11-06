@@ -577,6 +577,11 @@ namespace
         google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
         for (std::size_t kind = 1; kind < player_store_rows::kKindCount; ++kind)
         {
+            // 退役号(1、2、5)的空位不是行:库里不会有,送进 AssemblePlayer 会按旧布局整份拒绝。
+            if (!player_store_rows::IsDataKind(kind))
+            {
+                continue;
+            }
             auto *row = rows.Add();
             row->set_kind(static_cast<playerstore::PlayerStoreKind>(kind));
             row->set_payload(bytes[kind]);
@@ -595,16 +600,13 @@ TEST(PlayerStoreProjectionTest, ProjectThenAssembleRestoresTheMessage)
 {
     player_database db = SamplePlayer();
     const std::string before = db.SerializeAsString();
-    player_database_1 db1;
-    db1.set_player_id(7);
     player_store_rows::KindBytes bytes;
     std::string error;
-    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, db1, bytes, error)) << error;
+    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, bytes, error)) << error;
     EXPECT_EQ(before, db.SerializeAsString()) << "投影之后消息要恢复原样";
 
     player_database restored;
-    player_database_1 restored1;
-    ASSERT_TRUE(player_store_rows::AssemblePlayer(ToRows(bytes), restored, restored1, error)) << error;
+    ASSERT_TRUE(player_store_rows::AssemblePlayer(ToRows(bytes), restored, error)) << error;
     EXPECT_EQ(30u, restored.level_component().level());
     ASSERT_EQ(1, restored.currency().values_size());
     EXPECT_EQ(1000u, restored.currency().values(0));
@@ -616,12 +618,11 @@ TEST(PlayerStoreProjectionTest, ProjectThenAssembleRestoresTheMessage)
 TEST(PlayerStoreProjectionTest, ProjectionIsDeterministic)
 {
     player_database db = SamplePlayer();
-    player_database_1 db1;
     player_store_rows::KindBytes first;
     player_store_rows::KindBytes second;
     std::string error;
-    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, db1, first, error)) << error;
-    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, db1, second, error)) << error;
+    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, first, error)) << error;
+    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, second, error)) << error;
     EXPECT_EQ(first, second);
 }
 
@@ -644,9 +645,8 @@ TEST(PlayerStoreProjectionTest, FieldInTwoRowsIsNotMergedTwice)
     asset->set_payload(inAsset.SerializeAsString());
 
     player_database restored;
-    player_database_1 restored1;
     std::string error;
-    ASSERT_TRUE(player_store_rows::AssemblePlayer(rows, restored, restored1, error)) << error;
+    ASSERT_TRUE(player_store_rows::AssemblePlayer(rows, restored, error)) << error;
     EXPECT_EQ(1, restored.currency().values_size()) << "repeated 字段不能翻倍";
     EXPECT_EQ(30u, restored.level_component().level());
 }
@@ -656,10 +656,9 @@ TEST(PlayerStoreProjectionTest, UnknownFieldsAreRejected)
 {
     player_database db;
     db.GetReflection()->MutableUnknownFields(&db)->AddVarint(9999, 1);
-    player_database_1 db1;
     player_store_rows::KindBytes bytes;
     std::string error;
-    EXPECT_FALSE(player_store_rows::ProjectPlayer(db, db1, bytes, error));
+    EXPECT_FALSE(player_store_rows::ProjectPlayer(db, bytes, error));
     EXPECT_FALSE(error.empty());
 
     google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
@@ -667,8 +666,7 @@ TEST(PlayerStoreProjectionTest, UnknownFieldsAreRejected)
     row->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);
     row->set_payload(db.SerializeAsString());
     player_database restored;
-    player_database_1 restored1;
-    EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, restored1, error));
+    EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, error));
 }
 
 TEST(PlayerStoreProjectionTest, UnknownKindIsRejected)
@@ -676,9 +674,8 @@ TEST(PlayerStoreProjectionTest, UnknownKindIsRejected)
     google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
     rows.Add()->set_kind(static_cast<playerstore::PlayerStoreKind>(99));
     player_database restored;
-    player_database_1 restored1;
     std::string error;
-    EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, restored1, error));
+    EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, error));
 }
 
 // 提交结果带着这一笔的代次和序号,落盘快照要用它们判断能不能跳过存盘。
@@ -893,6 +890,11 @@ TEST(PlayerStoreClientTest, FinalStopKeepsAcceptedSaveAndClaimUnsettled)
     EXPECT_TRUE(client.HasPendingClaim(kPlayer + 1));
     EXPECT_FALSE(saved);
     EXPECT_TRUE(f.claimed.empty());
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kStopped, client.Submit(kPlayer, Rows("never queued"), {}, {}));
+    client.RequestClaim(kPlayer + 2);
+    EXPECT_FALSE(client.HasPendingClaim(kPlayer + 2));
+    EXPECT_TRUE(f.sent.empty());
+    EXPECT_TRUE(f.sentClaims.empty());
 }
 
 TEST(PlayerStoreClientTest, InlineReplyIsDeliveredAfterSendReturns)
@@ -916,6 +918,32 @@ TEST(PlayerStoreClientTest, InlineReplyIsDeliveredAfterSendReturns)
         }));
     EXPECT_TRUE(saved);
     EXPECT_FALSE(client.HasUnsettled(kPlayer));
+}
+
+TEST(PlayerStoreClientTest, LateSaveReplyCannotCompleteTheNextAttempt)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("old")));
+    unsigned completed = 0;
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted,
+        client.Submit(kPlayer, Rows("new"), {}, [&](const PlayerStoreClient::SaveResult&) { ++completed; }));
+    ASSERT_EQ(1u, f.sent.size());
+    const auto obsolete = f.sent.front().done;
+    const auto seq = f.sent.front().request.save_seq();
+    f.ReplyUnknown();
+    f.FireTimers();
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(seq, f.sent.front().request.save_seq());
+
+    playerstore::SavePlayerResponse late;
+    late.set_result(playerstore::SAVE_PLAYER_COMMITTED);
+    obsolete(true, &late);
+    EXPECT_TRUE(client.HasUnsettled(kPlayer));
+    EXPECT_EQ(0u, completed);
+    f.Reply(playerstore::SAVE_PLAYER_EQUAL, kEpoch, seq);
+    EXPECT_FALSE(client.HasUnsettled(kPlayer));
+    EXPECT_EQ(1u, completed);
 }
 
 TEST(PlayerStoreClientTest, ClaimSeedsConfirmedWithRawBytes)
@@ -1281,13 +1309,15 @@ TEST(PlayerStoreProjectionTest, EveryDataKindDeclaresASavePolicy)
     EXPECT_FALSE(player_store_rows::IsDataKind(0)) << "写权行";
     EXPECT_FALSE(player_store_rows::IsDataKind(1)) << "退役的 HOT";
     EXPECT_FALSE(player_store_rows::IsDataKind(2)) << "退役的 ASSET";
+    EXPECT_FALSE(player_store_rows::IsDataKind(5)) << "退役的 LEGACY1(player_database_1)";
     EXPECT_FALSE(player_store_rows::IsDataKind(player_store_rows::kKindCount));
     for (const auto kind : {playerstore::PLAYER_STORE_KIND_GROWTH, playerstore::PLAYER_STORE_KIND_PROFILE,
-                            playerstore::PLAYER_STORE_KIND_LEGACY1, playerstore::PLAYER_STORE_KIND_CHARACTER,
+                            playerstore::PLAYER_STORE_KIND_CHARACTER,
                             playerstore::PLAYER_STORE_KIND_WALLET, playerstore::PLAYER_STORE_KIND_BAG})
     {
-        EXPECT_TRUE(player_store_rows::IsDataKind(kind)) << kind;
-        EXPECT_EQ(PERSIST_ROW_SAVE_PERIODIC, player_store_rows::RowSavePolicy(kind)) << kind;
+        const auto index = static_cast<std::size_t>(kind);
+        EXPECT_TRUE(player_store_rows::IsDataKind(index)) << index;
+        EXPECT_EQ(PERSIST_ROW_SAVE_PERIODIC, player_store_rows::RowSavePolicy(index)) << index;
     }
     EXPECT_TRUE(player_store_rows::IsDataKind(kLocation));
     EXPECT_EQ(PERSIST_ROW_SAVE_PIGGYBACK, player_store_rows::RowSavePolicy(kLocation));
@@ -1298,13 +1328,12 @@ TEST(PlayerStoreProjectionTest, LocationRowHoldsOnlyTheTransform)
 {
     player_database db;
     db.mutable_transform()->mutable_location()->set_x(1.5);
-    player_database_1 db1;
     player_store_rows::KindBytes bytes;
     std::string error;
-    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, db1, bytes, error)) << error;
+    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, bytes, error)) << error;
     for (std::size_t kind = 1; kind < player_store_rows::kKindCount; ++kind)
     {
-        if (kind == kLocation || kind == static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_LEGACY1))
+        if (kind == kLocation)
         {
             continue;
         }
@@ -1319,19 +1348,18 @@ TEST(PlayerStoreProjectionTest, LocationRowHoldsOnlyTheTransform)
     EXPECT_EQ("transform", std::string(present.front()->name()));
 }
 
-// 旧分行布局写的行(HOT=1、ASSET=2)按现在的分行解读会丢字段,整份拒绝。
+// 旧布局写的行(HOT=1、ASSET=2、LEGACY1=5)按现在的分行解读会丢字段,整份拒绝。
 TEST(PlayerStoreProjectionTest, RetiredKindIsRejected)
 {
-    for (const int retired : {1, 2})
+    for (const int retired : {1, 2, 5})
     {
         google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
         auto *row = rows.Add();
         row->set_kind(static_cast<playerstore::PlayerStoreKind>(retired));
         row->set_payload(SamplePlayer().SerializeAsString());
         player_database restored;
-        player_database_1 restored1;
         std::string error;
-        EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, restored1, error)) << retired;
+        EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, error)) << retired;
         EXPECT_FALSE(error.empty());
     }
 }

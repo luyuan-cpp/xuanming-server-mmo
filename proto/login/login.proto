@@ -113,6 +113,35 @@ message RefreshTokenResponse
   int64 refresh_token_expire = 5;    // Unix seconds when new refresh_token expires
 }
 
+// gate 排空时为本连接要一张去同 zone 另一台 gate 的票据(docs/design/gate-drain-session-migration.md §4.4)。
+// 只有 gate 合成,客户端不得发起。身份全在 gate 签名的 SessionDetails 里:游戏中的连接带 player_id,
+// 停在选角界面的连接 player_id 为 0。
+message GateMigrationRequest
+{
+}
+
+// 签票结果。首值 0 按失败处理(proto3 enum 首值必须是 0)。
+enum GateMigrationResult
+{
+  GATE_MIGRATION_RESULT_UNSPECIFIED = 0;
+  GATE_MIGRATION_RESULT_OK = 1;            // 已签票,下面五个字段有效
+  GATE_MIGRATION_RESULT_NOT_DRAINING = 2;  // 调用方 gate 不是本 zone 正在排空的 gate:gate 停止本轮迁移
+  GATE_MIGRATION_RESULT_NO_TARGET = 3;     // 同 zone 没有合格的目标 gate(不回落):这个连接留在原地,稍后再试
+  GATE_MIGRATION_RESULT_DISABLED = 4;      // login 上 GateDrain.Migrate.Enabled 为 false:gate 停止本轮迁移
+}
+
+// 字段与 RedirectToGateEvent 同名同型:gate 用同一段代码推 msg 124。
+// 票据 GateTokenPayload 的 target_zone_id 恒为 0:到达时的 EnterGame 走租约内重连,scene_manager 派回原场景。
+message GateMigrationResponse
+{
+  GateMigrationResult result = 1;
+  string target_gate_ip = 2;    // 目标 gate 的客户端可达地址(clientendpoint.Select 的结果)
+  uint32 target_gate_port = 3;
+  bytes  token_payload = 4;     // 序列化的 GateTokenPayload
+  bytes  token_signature = 5;   // HMAC-SHA256 签名(小写 hex)
+  int64  token_deadline = 6;    // 票据到期时刻,Unix 秒
+}
+
 service ClientPlayerLogin  {
   option (OptionIsClientProtocolService) = true;
 
@@ -122,6 +151,9 @@ service ClientPlayerLogin  {
   rpc LeaveGame (LeaveGameRequest) returns (LoginEmptyResponse);
   rpc Disconnect (LoginNodeDisconnectRequest) returns (LoginEmptyResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
   rpc RefreshToken (RefreshTokenRequest) returns (RefreshTokenResponse);
+  // gate 排空时为本连接签迁移票据。与 Disconnect 一样只有 gate 合成,客户端发这个号要被 gate 按非法包拒收
+  // (gate 侧 login_admission.h IsGateSynthesizedOnly,随迁移的 gate 批次加入)。
+  rpc RequestGateMigration (GateMigrationRequest) returns (GateMigrationResponse) { option (OptionClientRpcKind) = CLIENT_RPC_SERVER_ONLY; }
 }
 
 // ── Pre-connection RPCs (called before connecting to Gate) ──────
@@ -234,6 +266,7 @@ message RemovePlayersFromAccountsResponse {
 
 service LoginAdmin {
   // 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
-  // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字不释放:按日志带 token 调 ReleasePlayerName。
+  // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
+  // (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
   rpc RemovePlayersFromAccounts (RemovePlayersFromAccountsRequest) returns (RemovePlayersFromAccountsResponse);
 }

@@ -91,10 +91,8 @@ type PlayerSnapshotEntry struct {
 	PlayerId     uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	SnapshotTime uint64                 `protobuf:"varint,3,opt,name=snapshot_time,json=snapshotTime,proto3" json:"snapshot_time,omitempty"` // Unix seconds when snapshot was taken
 	Trigger      SnapshotTrigger        `protobuf:"varint,4,opt,name=trigger,proto3,enum=SnapshotTrigger" json:"trigger,omitempty"`
-	// Serialized player_database protobuf bytes (important data: currency, skills, etc.)
+	// Serialized player_database protobuf bytes:玩家持久数据的全部内容。
 	PlayerDatabaseBlob []byte `protobuf:"bytes,5,opt,name=player_database_blob,json=playerDatabaseBlob,proto3" json:"player_database_blob,omitempty"`
-	// Serialized player_database_1 protobuf bytes (less important data)
-	PlayerDatabase_1Blob []byte `protobuf:"bytes,6,opt,name=player_database_1_blob,json=playerDatabase1Blob,proto3" json:"player_database_1_blob,omitempty"`
 	// Version tag — helps detect schema migration issues during restore.
 	SchemaVersion string `protobuf:"bytes,7,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
 	// Snapshot size in bytes (for monitoring / retention policies).
@@ -169,13 +167,6 @@ func (x *PlayerSnapshotEntry) GetTrigger() SnapshotTrigger {
 func (x *PlayerSnapshotEntry) GetPlayerDatabaseBlob() []byte {
 	if x != nil {
 		return x.PlayerDatabaseBlob
-	}
-	return nil
-}
-
-func (x *PlayerSnapshotEntry) GetPlayerDatabase_1Blob() []byte {
-	if x != nil {
-		return x.PlayerDatabase_1Blob
 	}
 	return nil
 }
@@ -317,19 +308,18 @@ var File_proto_common_rollback_player_snapshot_proto protoreflect.FileDescriptor
 
 const file_proto_common_rollback_player_snapshot_proto_rawDesc = "" +
 	"\n" +
-	"+proto/common/rollback/player_snapshot.proto\"\xec\x02\n" +
+	"+proto/common/rollback/player_snapshot.proto\"\xd5\x02\n" +
 	"\x13PlayerSnapshotEntry\x12\x1f\n" +
 	"\vsnapshot_id\x18\x01 \x01(\x04R\n" +
 	"snapshotId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12#\n" +
 	"\rsnapshot_time\x18\x03 \x01(\x04R\fsnapshotTime\x12*\n" +
 	"\atrigger\x18\x04 \x01(\x0e2\x10.SnapshotTriggerR\atrigger\x120\n" +
-	"\x14player_database_blob\x18\x05 \x01(\fR\x12playerDatabaseBlob\x123\n" +
-	"\x16player_database_1_blob\x18\x06 \x01(\fR\x13playerDatabase1Blob\x12%\n" +
+	"\x14player_database_blob\x18\x05 \x01(\fR\x12playerDatabaseBlob\x12%\n" +
 	"\x0eschema_version\x18\a \x01(\tR\rschemaVersion\x12\x1f\n" +
 	"\vtotal_bytes\x18\b \x01(\x04R\n" +
 	"totalBytes\x12\x17\n" +
-	"\azone_id\x18\t \x01(\rR\x06zoneId\"\x83\x01\n" +
+	"\azone_id\x18\t \x01(\rR\x06zoneIdJ\x04\b\x06\x10\aR\x16player_database_1_blob\"\x83\x01\n" +
 	"\x14ListSnapshotsRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +

@@ -97,7 +97,8 @@ const (
 	HomeZoneLookupTimeout = 1500 * time.Millisecond
 	// OwnerEpochReadTimeout:一次核心 Redis GET player:{id}:owner_epoch 的上限。
 	OwnerEpochReadTimeout = 500 * time.Millisecond
-	// LedgerReadTimeout:对账读一次已落盘账本(data_service.GetPlayerInboxLedger)的上限。
+	// LedgerReadTimeout:读一次已落盘存档的上限:对账读账本(data_service.GetPlayerInboxLedger),
+	// 运维 GetItemGainBlocks 读物品获取封禁表(data_service.GetPlayerItemGainBlock)。
 	LedgerReadTimeout = 2 * time.Second
 	// StoreOpTimeout:后台循环里单条 MySQL 语句的上限(请求路径用整请求预算)。
 	StoreOpTimeout = 2 * time.Second

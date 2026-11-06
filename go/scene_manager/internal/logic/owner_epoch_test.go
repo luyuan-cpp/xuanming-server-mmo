@@ -23,6 +23,7 @@ import (
 	game "scene_manager/generated/pb/game"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
+	"shared/handofffence"
 	"shared/ownerepoch"
 	"shared/redisslot"
 )
@@ -370,6 +371,7 @@ func TestPlanRouteRollback(t *testing.T) {
 // classifyRollbackReply:回滚 Lua 返回值 → 结论。未知值不混进 superseded;bump 才回显 epoch。
 func TestClassifyRollbackReply(t *testing.T) {
 	bump := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 3}
+	bumpWithMarker := routeRollbackPlan{mode: rollbackModeBump, epochAfter: 3, requiredMarker: "2:1757000000000"}
 	keep := routeRollbackPlan{mode: rollbackModeKeep, epochAfter: 1}
 	cases := []struct {
 		name   string
@@ -384,7 +386,13 @@ func TestClassifyRollbackReply(t *testing.T) {
 		{"marker_gone", 3, bump, rollbackVerdict{outcome: rollbackOutcomeMarkerGone}},
 		{"superseded", 0, bump, rollbackVerdict{outcome: rollbackOutcomeSuperseded}},
 		{"minus_one_is_unknown", -1, bump, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
-		{"four_is_unknown", 4, bump, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		{"unmarked_bump_target_registered", 4, bump, rollbackVerdict{outcome: rollbackOutcomeTargetRegistered}},
+		{"unmarked_bump_fence_not_proof", 5, bump, rollbackVerdict{outcome: rollbackOutcomeFenceNotProof}},
+		// 4 / 5 只由不凭标记的 bump 分支返回;别的计划收到它们是约定漂移,按结果未知处理(会告警)。
+		{"marked_bump_four_is_unknown", 4, bumpWithMarker, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		{"marked_bump_five_is_unknown", 5, bumpWithMarker, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		{"keep_four_is_unknown", 4, keep, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
+		{"six_is_unknown", 6, bump, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
 		{"keep_rolled_back", 1, keep, rollbackVerdict{outcome: rollbackOutcomeRolledBack, restored: true}},
 		{"keep_never_replays", 2, keep, rollbackVerdict{outcome: rollbackOutcomeRedisError}},
 	}
@@ -761,6 +769,109 @@ func TestEnterScene_RouteFailureKeepsPlacementWhenMarkerAlreadyConsumed(t *testi
 	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "5", targetCount, "落点保留:目标场景的预占不退")
 	assert.Equal(t, "2", oldCount, "落点保留:旧场景的扣减不还")
+}
+
+// 不凭标记的首次落点铸出 E 后推路由报错,但路由其实已投递,目标节点 B 抢在回滚之前跑完了入场登记(资格原件
+// 属于 E,B 随后才认领存档)。回滚必须一个字节都不动(target_registered):epoch 留在 E、location 仍指向 B,
+// 目标场景的预占不退 —— 它们正对应 B 手里的这名玩家。以前这里照样 INCR 并删 location,B 成了没有 location
+// 的现任,下一次换图 / 重登按首次落点铸新代次,把 B 最后一次提交之后的进度围掉(数据一致性保障地图 §6.2 第 7 条)。
+func TestEnterScene_FirstPlacementRouteFailureKeepsPlacementWhenTargetAlreadyRegistered(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const (
+		playerID = uint64(6236)
+		targetID = uint64(7336)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+	var routedEpoch uint64
+	sc.Kafka = &countingKafkaWriter{
+		err: errors.New("write timeout"),
+		onWrite: func(msgs []kafka.Message) {
+			// B 收到路由、跑完 kRegisterFenceLua:写出路由事件所带那一代的持有资格。
+			require.NotEmpty(t, msgs)
+			routedEpoch = decodeRoutePlayerEvent(t, msgs[0]).OwnerEpoch
+			seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(routedEpoch, replacedNewInstance, handofffence.HandoffFenceHeld))
+		},
+	}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+	registeredBefore := enterSceneRollbackCount(t, rollbackOutcomeTargetRegistered)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Zero(t, resp.OwnerEpochAfterRollback, "没回滚:应答不对 epoch 做断言")
+	require.NotZero(t, routedEpoch, "路由事件必须带铸出的代次")
+
+	assert.Equal(t, fmt.Sprint(routedEpoch), ownerEpochRaw(t, sc, playerID), "epoch 留在 B 登记的那一代")
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc, "location 不删:B 是有 location 的现任")
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, routedEpoch, loc.OwnerEpoch)
+	assert.Equal(t, registeredBefore+1, enterSceneRollbackCount(t, rollbackOutcomeTargetRegistered))
+	assert.Equal(t, "1", sceneCountText(sc, targetID), "落点保留:目标场景的预占不退")
+}
+
+// 不凭标记的回滚按交接资格原件判定能不能回滚:原件缺失或属于更早的代次 = 没有任何进程在铸出值下登记过,照常回滚;
+// 属于铸出值(持有 / 登记已撤销都算)= 目标节点登记过,不回滚;比铸出值新或写坏了 = 协议写者写不出的形态,
+// 不当证据,一个字节都不写(fence_not_proof),由告警转人工核对。
+func TestRollbackPlayerPlacementJudgesUnmarkedMintByHandoffFence(t *testing.T) {
+	log := NewEnterSceneLogic(context.Background(), &svc.ServiceContext{}).Logger
+	cases := []struct {
+		name         string
+		fence        func(minted uint64) string // 返回 "" = 不写原件
+		wantRestored bool
+		wantOutcome  string
+	}{
+		{"no_fence_rolls_back", func(uint64) string { return "" }, true, rollbackOutcomeRolledBack},
+		{"older_fence_rolls_back", func(minted uint64) string {
+			return holderFenceForTest(minted-1, replacedOldInstance, handofffence.HandoffFenceFrozen)
+		}, true, rollbackOutcomeRolledBack},
+		{"held_at_minted_epoch_keeps_placement", func(minted uint64) string {
+			return holderFenceForTest(minted, replacedNewInstance, handofffence.HandoffFenceHeld)
+		}, false, rollbackOutcomeTargetRegistered},
+		{"revoked_at_minted_epoch_keeps_placement", func(minted uint64) string {
+			return holderFenceForTest(minted, replacedNewInstance, handofffence.HandoffFenceRevoked)
+		}, false, rollbackOutcomeTargetRegistered},
+		{"fence_ahead_is_not_proof", func(minted uint64) string {
+			return holderFenceForTest(minted+5, replacedNewInstance, handofffence.HandoffFenceHeld)
+		}, false, rollbackOutcomeFenceNotProof},
+		{"malformed_fence_is_not_proof", func(uint64) string { return "not-a-fence" }, false, rollbackOutcomeFenceNotProof},
+	}
+	for i, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			playerID := uint64(6240 + i)
+			require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "4"))
+			placed, err := placePlayerLocation(sc, playerID, 7340, "10", testZoneId, placementGuard{observedEpoch: 4, mint: true})
+			require.NoError(t, err)
+			require.Greater(t, placed.epoch, uint64(4))
+			if raw := c.fence(placed.epoch); raw != "" {
+				seedHandoffFenceForTest(t, mr, playerID, raw)
+			}
+			plan, err := planRouteRollback(nil, "", testZoneId, placed, "", false)
+			require.NoError(t, err)
+			require.Equal(t, rollbackModeBump, plan.mode)
+			outcomeBefore := enterSceneRollbackCount(t, c.wantOutcome)
+
+			restored, echo := rollbackPlayerPlacement(sc, log, playerID, placed, plan)
+			assert.Equal(t, c.wantRestored, restored)
+			assert.Equal(t, outcomeBefore+1, enterSceneRollbackCount(t, c.wantOutcome))
+			raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+			if c.wantRestored {
+				assert.Equal(t, placed.epoch+1, echo)
+				assert.Equal(t, fmt.Sprint(placed.epoch+1), ownerEpochRaw(t, sc, playerID))
+				assert.Empty(t, raw, "本次之前没有 location:回滚 = DEL")
+			} else {
+				assert.Zero(t, echo, "没回滚就不回显")
+				assert.Equal(t, fmt.Sprint(placed.epoch), ownerEpochRaw(t, sc, playerID), "没回滚:epoch 不动")
+				assert.Equal(t, placed.raw, raw, "没回滚:location 仍是本次落点")
+			}
+		})
+	}
 }
 
 // 跨 zone 第一条腿凭标记铸出 2(等待落点)后推重定向失败,但回滚之前源 scene 已撤回标记(退出优先,或源端

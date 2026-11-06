@@ -1,0 +1,40 @@
+syntax = "proto3";
+option go_package = "login/proto/common/component";
+
+// 客户端请求幂等键账本(scene 侧玩家实体组件,**落库**)。设计文档:docs/design/client-request-idempotency.md。
+//
+// 客户端每发起一次扣资源的操作(强化、神秘商人购买、新建加点方案……)生成一个 client_request_id,
+// 这一次操作的所有重发都带同一个键。scene 按 (玩家, 键) 去重:执行成功后在这里记一条;
+// 之后同键同参数的请求不再执行,回首次结果并标 replayed;同键换了参数拒绝。
+//
+// 为什么落在玩家存档里(负责人 2026-11-06 定,取代 11-05 的「只放内存」):
+//   - 它必须与 currency / bag_component 同在 player_database、同一次存盘提交(与 asset_op_ledger
+//     是同一条不变量 I3):效果和记录要么一起在盘上,要么一起没有。只放内存的话,崩溃时可能出现
+//     「效果已随上次存盘落库、记录却丢了」,重启后带原键的重发会再执行一次。
+//   - 下线重登、跨节点迁移、回档时记录跟着存档走,不会因为换了实体就忘掉。
+//
+// 大小有界:每名玩家最多 32 条(client_request_ledger::kCapacity),满了淘汰 seq 最小的那条。
+// 只有带键的请求执行成功才会写这里,所以它只随货币一起变,不会让存盘多写一行(放 WALLET 组)。
+
+message ClientRequestRecord {
+  uint64 key = 1;          // 客户端生成的幂等键,非 0
+  // 请求种类(C++ ClientRequestKind 的值)。值随存档落盘,**不可重排、不可复用**;删掉的种类留空号。
+  // 存 uint32 而不是 proto 枚举:本版本不认识的种类(新版本写进来的)要原样携带,不能被解析成 0。
+  uint32 kind = 2;
+  // 参数指纹:请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。
+  // 算法随存档落盘,是契约,不能改;同一个键的重发指纹不同 = 客户端把旧键用在了新操作上。
+  bytes fingerprint = 3;
+  // 账本内单调递增的序号(从 1 起),只用来挑最旧的那条淘汰。records 的下标不承载顺序(AGENTS §11.6)。
+  uint64 seq = 4;
+  // ── 首次结果里,重放要回、却从当前状态推不出来的部分。只对注释里的种类有意义,其余保持默认值 ──
+  bool enhance_success = 5;      // 强化:那一次掷骰成没成
+  uint32 enhance_level = 6;      // 强化:那一次之后的等级
+  uint32 created_scheme_id = 7;  // 新建加点方案:那一次建出来的方案号
+}
+
+message ClientRequestLedgerComp {
+  // 条目之间无序,按 key 找;同一个 key 至多一条。
+  repeated ClientRequestRecord records = 1;
+  // 下一条的 seq。0 = 从没记过(旧存档没有这个字段),按 1 处理。
+  uint64 next_seq = 2;
+}

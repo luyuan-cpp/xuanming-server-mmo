@@ -1,5 +1,7 @@
 -- Zone Directory Service tables (gateway_node)
 -- Applied automatically by docker-compose mysql-init
+-- 三张业务表显式写 COLLATE,理由与取值同 java/gateway_node/src/main/resources/schema.sql 文件头:MySQL 档行为不变,
+-- 换到 TiDB 时比较语义也一致。
 
 USE mmorpg;
 
@@ -14,7 +16,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
     sort_order     INT DEFAULT 0,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS zone_whitelist (
     id         BIGINT PRIMARY KEY,
@@ -22,7 +24,7 @@ CREATE TABLE IF NOT EXISTS zone_whitelist (
     account_id BIGINT NOT NULL,
     note       VARCHAR(128) DEFAULT '',
     UNIQUE KEY uk_zone_account (zone_id, account_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS announcement (
     id         BIGINT PRIMARY KEY,
@@ -32,7 +34,7 @@ CREATE TABLE IF NOT EXISTS announcement (
     start_time DATETIME DEFAULT NULL,
     end_time   DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Seed default zone
 INSERT IGNORE INTO zone_config (zone_id, name, manual_status, capacity, recommended, sort_order)

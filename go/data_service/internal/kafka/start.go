@@ -43,6 +43,8 @@ type StartConfig struct {
 	// 0 取默认 60s;负数 = 永不自动恢复(只能重启进程)。
 	ResumeAfter time.Duration
 
+	// TxLog 是 transaction_log 消费者的攒批 / 并发参数;零值 = 每分区 200 行或 200ms 一批、本实例同时只落一批。
+	TxLog TxLogConsumerConfig
 	// Snapshot 是 player_snapshot 消费者的批量 / 并发参数(G2a);零值 = 逐条串行(2026-10-12 之前的行为)。
 	Snapshot SnapshotConsumerConfig
 	// LagProbeInterval 是消费组 lag / 保留期丢失量探针的周期;<= 0 = 不探。
@@ -72,7 +74,7 @@ type Consumers struct {
 	TxLog    *Health
 	Snapshot *Health
 
-	// wg 覆盖两条 supervisor goroutine 的整个生命周期(含关停时的 flushOnShutdown)。
+	// wg 覆盖两条 supervisor goroutine 的整个生命周期(含排空时各分区 worker 落最后一批)。
 	wg          sync.WaitGroup
 	owner       *ConsumerOwner
 	cancelProbe context.CancelFunc
@@ -82,8 +84,8 @@ type Consumers struct {
 
 // Wait 等两条消费者 goroutine 都退出,最多等 timeout;返回是否等到。
 //
-// 存在的理由是关停顺序:txlog 的 flushOnShutdown 会用一条独立的 5s ctx 去插最后一批,
-// 而 main 若同时把 store 的连接池关掉，那次 flush 必然拿到 "sql: database is closed"。
+// 存在的理由是关停顺序:排空时两条消费者的各分区 worker 都要把手里最后一批落库、提交,
+// 而 main 若同时把 store 的连接池关掉，那次落库必然拿到 "sql: database is closed"。
 // Wait 只提供等待结果；超时不构成排空证明，main 必须保留仍被 owner 使用的 SQL 池。
 func (c *Consumers) waitDone() <-chan struct{} {
 	c.waitOnce.Do(func() { c.done = make(chan struct{}); go func() { c.wg.Wait(); close(c.done) }() })
@@ -120,7 +122,7 @@ func (c *Consumers) StopAndReport(ctx context.Context) ([]byte, error) {
 	return c.owner.SettledDigest(ctx)
 }
 
-// Start 确保两个 topic 存在(分区数是不可变契约)后,各起一条消费 goroutine,立即返回。
+// Start 确保两个 topic 存在(分区数只许加,少了原地加,见 TopicSpec.AllowPartitionGrowth)后,各起一条消费 goroutine,立即返回。
 // EnsureTopics 是唯一的启动失败点(sarama admin 连不上 broker);reader 本身不拨号,
 // broker 后来才可达也能正常开始消费。调用方对返回的 error 只该做"记日志 + 稍后重试",
 // 绝不能让它拖死 data_service。
@@ -147,10 +149,14 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 		cfg.ResumeAfter = defaultResumeAfter
 	}
 
+	// 两个审计 topic 只许加分区、可以原地加(2026-11-06,缺口清单第 15 条):落库不依赖分区内顺序(流水按 tx_id
+	// 主键 INSERT IGNORE,快照按 guid 唯一键去重),加分区只改 key 到分区的映射。配置调大分区数、滚动 data_service,
+	// 第一个起来的副本就把 topic 加到配置值,之后再加副本才有分区可领。见 docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A。
 	if err := kafkautil.EnsureTopics(cfg.Brokers, []kafkautil.TopicSpec{
-		{Name: cfg.TxLogTopic, Partitions: cfg.TxLogPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.TxLogRetentionBytes},
+		{Name: cfg.TxLogTopic, Partitions: cfg.TxLogPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.TxLogRetentionBytes,
+			AllowPartitionGrowth: true},
 		{Name: cfg.SnapshotTopic, Partitions: cfg.SnapshotPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.SnapshotRetentionBytes,
-			MaxMessageBytes: snapshotTopicMaxMessageBytes},
+			MaxMessageBytes: snapshotTopicMaxMessageBytes, AllowPartitionGrowth: true},
 	}); err != nil {
 		return nil, fmt.Errorf("ensure kafka topics: %w", err)
 	}
@@ -178,12 +184,11 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 					cancel()
 					return nil, nil, err
 				}
-				reader = &ownedReader{reader: group, owner: cfg.Owner, txlog: true}
+				reader = &ownedReader{reader: group, owner: cfg.Owner}
 				reader.startGroup(ctx, group)
 				cfg.Owner.bindReader(ConsumerTxLog, cfg.TxLogGroup, cfg.TxLogTopic, group)
 			}
-			reader.stopRun = cancel
-			c := NewTxLogConsumer(TxLogConsumerConfig{}, reader, &ownedTxLogSink{owner: cfg.Owner, sink: txSink})
+			c := NewTxLogConsumer(cfg.TxLog, reader, &ownedTxLogSink{owner: cfg.Owner, sink: txSink})
 			c.health = consumers.TxLog
 			return &ownedRunner{runner: c, ctx: businessCtx, cancel: cancel}, reader, nil
 		}, cfg.Owner)
@@ -203,7 +208,6 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 				reader.startGroup(ctx, group)
 				cfg.Owner.bindReader(ConsumerSnapshot, cfg.SnapshotGroup, cfg.SnapshotTopic, group)
 			}
-			reader.stopRun = cancel
 			c := NewSnapshotConsumer(cfg.Snapshot, reader, &ownedSnapshotSink{owner: cfg.Owner, sink: snapSink})
 			c.health = consumers.Snapshot
 			return &ownedRunner{runner: c, ctx: businessCtx, cancel: cancel}, reader, nil
@@ -224,10 +228,12 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 	}
 
 	// 生效的批量参数打出来:排障时要先确认这个实例到底是逐条还是批量(零值已按 withDefaults 的口径解释)。
+	tx := cfg.TxLog
+	tx.withDefaults()
 	snap := cfg.Snapshot
 	snap.withDefaults()
-	logx.Infof("[kafka] consumers started: %s(topic=%s group=%s p=%d) %s(topic=%s group=%s p=%d batch_rows=%d batch_bytes=%d flush_interval=%s inflight=%d) lag_probe=%s brokers=%v",
-		ConsumerTxLog, cfg.TxLogTopic, cfg.TxLogGroup, cfg.TxLogPartitions,
+	logx.Infof("[kafka] consumers started: %s(topic=%s group=%s p=%d batch_rows=%d flush_interval=%s inflight=%d) %s(topic=%s group=%s p=%d batch_rows=%d batch_bytes=%d flush_interval=%s inflight=%d) lag_probe=%s brokers=%v",
+		ConsumerTxLog, cfg.TxLogTopic, cfg.TxLogGroup, cfg.TxLogPartitions, tx.BatchSize, tx.FlushInterval, tx.MaxInflightFlushes,
 		ConsumerSnapshot, cfg.SnapshotTopic, cfg.SnapshotGroup, cfg.SnapshotPartitions,
 		snap.BatchMaxRows, snap.BatchMaxBytes, snap.FlushInterval, snap.MaxInflightFlushes,
 		cfg.LagProbeInterval, cfg.Brokers)
@@ -279,7 +285,7 @@ func superviseOwned(ctx context.Context, name string, resumeAfter time.Duration,
 		}
 		activeReader = reader
 		err := runAndClose(ctx, name, c, reader)
-		if owner != nil && errors.Is(err, errSnapshotWorkerAborted) {
+		if owner != nil && errors.Is(err, errPartitionWorkerAborted) {
 			owner.hold(err)
 		}
 		if ctx.Err() != nil || err == nil || owner != nil && owner.Draining() {

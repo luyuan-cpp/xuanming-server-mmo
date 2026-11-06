@@ -95,6 +95,18 @@ TEST(GateIdentityFence, DropsPushToASessionThatHasNoBoundPlayerYet)
 			  gate_session_fence::PushVerdict::kDrop);
 }
 
+// 目标恰好是 kInvalidGuid 时也不能与未绑定会话「相等」:未绑定会话除显式 0 之外一律丢弃,踢线同口径不踢
+// (观战第二轮评审 R2-GATE 一般-2)。
+TEST(GateIdentityFence, InvalidGuidTargetNeverMatchesAnUnboundSession)
+{
+	EXPECT_EQ(gate_session_fence::ClassifyPush(kUnbound, kUnbound),
+			  gate_session_fence::PushVerdict::kDrop);
+	EXPECT_EQ(gate_session_fence::ClassifyPush(0, kUnbound),
+			  gate_session_fence::PushVerdict::kDrop);
+	EXPECT_EQ(gate_session_fence::ClassifyKick(kUnbound, 0, kUnbound, 0),
+			  gate_session_fence::KickVerdict::kSkipOtherPlayer);
+}
+
 // 灰度兼容位:老发送方不带 player_id(0)必须放行,否则升级顺序一反就是全服推送静默消失。
 // 但它与"校验通过"必须可区分,调用方据此只打一行 INFO 观测迁移进度。
 TEST(GateIdentityFence, LegacySenderWithoutPlayerIdIsDeliveredButFlaggedUnfenced)

@@ -52,7 +52,7 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 		// —— 正是 migrateSchemaOn 对预建表做的漂移检查的对象。VARCHAR / utf8mb4_bin /
 		// UNIQUE(name_norm) 这些形状断言在 player_name_store_integration_test.go。
 		store.PlayerNameTableName: {
-			"player_id", "name", "name_norm", "created_ms",
+			"player_id", "name", "name_norm", "created_ms", "bound_ms",
 		},
 	}
 	for table, cols := range wantColumns {

@@ -10,6 +10,7 @@
 #include "handler/grpc/scene_node_service.h"
 #include "core/config/config.h"
 #include "world/world.h"
+#include "world/scene_ownership_reconciler.h"
 #include "core/system/redis.h"
 #include "core/system/scene_task_scope.h"
 #include "frame/manager/frame_time.h"
@@ -48,6 +49,8 @@ namespace
         SceneNodeGrpcImpl grpcService;
         PlayerTeamFollowScope teamFollow;
         SceneTaskScope tasks;
+        // 场景归属对账(缺口清单第 33 条):在 SetAfterStart 里 Start,三条停机路径与 Node 析构之后各 Stop 一次。
+        SceneOwnershipReconciler ownershipReconciler;
         std::unordered_set<Guid> shutdownPlayerIds;
         std::size_t lastPendingPlayerSaves = std::numeric_limits<std::size_t>::max();
         std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
@@ -59,6 +62,8 @@ namespace
         bool relocateBacklogLogged = false;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop), teamFollow(loop), tasks(loop) {}
+        // 启动途中抛异常也必须在局部 EventLoop 销毁前收掉 TLS 中的任务所有者。
+        ~SceneRuntimeContext() { StopGuidSegmentTransport(); }
     };
 
     struct SceneNodeHooks
@@ -109,9 +114,12 @@ int main(int argc, char *argv[])
         // PlayerStoreNodeService:玩家存盘的 LoadAndClaim / SavePlayer(go/db,按 zone 发现;
         // docs/design/player-save-direct-commit.md §5.2)。
         // TeamNodeService:队伍成员权威读取由 Match 同端口提供，只在需要刷新队伍时使用。
+        // MatchNodeService:FIGHTING 冻结到期时只读查这一局的 SQL 终局(MatchInternal.GetBattleTerminalDecision,
+        // 全局池,不限当前 zone;docs/design/turn-battle-gap-closure.md §11)。只在 reaper 判出冻结到期时调用。
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
-                                                PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService },
+                                                PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
+                                                MatchNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
@@ -132,6 +140,8 @@ int main(int argc, char *argv[])
         RegisterPlayerOwnershipMetrics();
         // 存盘分段耗时与存盘尝试计数(player_save_metrics.h),同一个出口。
         RegisterPlayerSaveMetrics();
+        // 场景归属对账的计数(scene_ownership_reconciler.h),同一个出口。
+        RegisterSceneOwnershipMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);
@@ -176,6 +186,9 @@ int main(int argc, char *argv[])
 			// P1 保留持久收件箱 relay；普通停机与 P3 才取消此计时器。
 			PlayerBattleSystem::StopReaper();
 			PlayerMysteryMerchantSystem::Stop();
+			// 停机期间不再按归属排空:玩家正按停机原因存盘退出。也必须早于 Node 析构里的兜底 drain 循环,
+			// 那之后探针捕获的 node 不再可用。
+			context->ownershipReconciler.Stop();
 			tlsRedisSystem.BeginShutdown();
 
             auto view = tlsEcs.actorRegistry.view<Player>();
@@ -246,7 +259,7 @@ int main(int argc, char *argv[])
 			const bool kafkaDrained = n.GetKafkaManager().FlushProducer(std::chrono::milliseconds(0));
 			const std::size_t pendingKafkaMessages = n.GetKafkaManager().PendingProducerMessages();
 			// 断线释放标记(A1′)的条件写在途数(R6):实体销毁之后才发、回调才归零,不等它的话 loop 一退
-			// 回调就再也不会来。受 Node drain 看门狗约束(Redis 卡住时不会无限等)。
+			// 回调就再也不会来。受 Node drain 看门狗约束(Redis 或 go/db 卡住时不会无限等)。
 			const std::size_t exitReleaseMarks = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
 			// 疏散 / 排空改派的待确认表(relocate_confirm.h)里还没有结论的改派数。停机前的单场景排空会留下条目:
 			// scene_manager 的拒绝应答、核实读的应答都还在路上,不等它们的话 loop 一退,被拒的玩家就挂在没有实体的
@@ -303,6 +316,7 @@ int main(int argc, char *argv[])
                                    context->grpcService.CloseCreationAdmission();
                                    StopGuidSegmentTransport();
                                    context->playerInboxTimer.Cancel();
+                                   context->ownershipReconciler.Stop();
                                    PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
                                });
 
@@ -312,18 +326,20 @@ int main(int argc, char *argv[])
         // 否则他们的会话指着一具尸体,只能等自己发现掉线再重登。
         //
         // 顺序由 PlayerLifecycleSystem 保证:抄会话 -> 存盘 -> 存盘落地后才发改派请求。
-        // 反过来做的话,新节点会从 Redis 读到存盘前的旧数据(回档)。
+        // 反过来做的话,新节点认领时会从 TiDB 读到存盘前的旧数据(回档)。
         node.SetOnConflictShutdown([&context](Node &, NodeIdConflictReason)
                                    {
             context->tasks.Stop();
             context->grpcService.CloseCreationAdmission();
+            // 整节点疏散接管全部玩家,不再按单个场景的归属排空。
+            context->ownershipReconciler.Stop();
             // 先停 Agones lifecycle worker(理由同 exitAllPlayers 里的注释),
             // 再动玩家数据。Stop() 幂等。
             agones::GameServerLifecycle::Instance().Stop();
             PlayerLifecycleSystem::BeginEmergencyRelocateAll(); });
 
         // 有界 drain:存盘全部落地、改派全部派发完才退出。
-        // 到期兜底(Redis / SceneManager 卡住时)由 Node 的看门狗负责,不会无限等。
+        // 到期兜底(go/db / SceneManager 卡住时)由 Node 的看门狗负责,不会无限等。
         node.SetConflictDrainComplete([](Node &)
                                       { return PlayerLifecycleSystem::IsEmergencyRelocateDrained(); });
 
@@ -384,6 +400,12 @@ int main(int argc, char *argv[])
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());
+            // 场景归属对账(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md):etcd 身份确认有效时每 10s
+            // 经场景控制域读本地各场景的 scene:{id}:node,不再指向本节点的实体排空后销毁 —— 与 etcd 单边失联超过屏障
+            // 才回来时,scene_manager 已把它们改派或拆掉。身份探针与 A1′ 同一个;捕获的 node 由三条停机路径的 Stop 在
+            // 它析构之前解开。node_id 到这里已是终值。不进 DependencyGate:它只读控制域 Redis,不依赖 SceneManager 连接。
+            context->ownershipReconciler.Start([&n]()
+                { return n.GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh(); });
 
             // 号段首段是启动硬依赖:每个启用的种类领到第一段 [lo, hi) 之前不放玩家进来 ——
             // 拾取 / 交易流水 / 快照都要铸永久 guid,没段时一律 fail-closed(kInvalidGuid),
@@ -412,12 +434,15 @@ int main(int argc, char *argv[])
 
 		// Node 已析构:身份探针捕获的引用从此悬空,立即清掉(之后不再跑 loop,A1′ 也不会再被调用)。
 		PlayerLifecycleSystem::SetNodeIdentityProbe({});
+		// 同理丢掉对账器的探针(正常路径已在停机钩子里 Stop 过,这里是幂等兜底)。
+		context->ownershipReconciler.Stop();
 
 		// Node 正常 finalizer 已先 free Hiredis;这里是幂等兜底。
 		context->tasks.StopAll();
 		context->grpcService.CloseCreationAdmission();
 		StopGuidSegmentTransport();
 		tlsRedis.Shutdown();
+		tlsSceneControlRedis.Shutdown();
 		tlsPlayerRedis.Shutdown();
 		tlsRedisSystem.Shutdown();
 

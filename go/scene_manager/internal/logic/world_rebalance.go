@@ -199,9 +199,10 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 						continue
 					}
 				}
-				// 再入屏障:老节点刚判死时,它还在 emergency relocate drain 里
-				// SavePlayer(C++ kDrainBudget)。此刻迁频道 = 新节点
-				// CreateScene 并接管归属,与老节点的最终存盘互相覆盖。
+				// 再入屏障:老节点刚判死时,若它是重注册失败走了冲突关停,仍在有界
+				// (C++ kDrainBudget 15s)疏散里 SavePlayer。此刻迁频道 = 新节点
+				// CreateScene 并接管归属,老节点的最终存盘会被 TiDB 写权行拒掉而丢进度
+				// (迟到写不会覆盖新档,正确性由写权行兜底)。
 				// 屏障未到就本轮不排进迁移计划,下一拍(事件或周期 tick)再来。
 				// 放在计划阶段而不是执行阶段,是为了连那次白跑的 CreateScene RPC
 				// 都省掉;migrateWorldChannel 里的 reassignSceneNode 还有第二道
@@ -235,6 +236,8 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 // migrateWorldChannel performs the create-swap-destroy dance for a single
 // channel. Steps:
 //
+//  0. 分配这次迁移的放置代次(docs/design/world-channel-placement-generation.md):下面的建场景、CAS、拆老实体、
+//     落空回收都带它,节点据此认出晚到的旧请求。分配失败就不迁,什么都没发。
 //  1. CreateScene on target node (C++ is idempotent by sceneId).
 //  2. Rewrite scene:{sid}:node in Redis. Any EnterScene that races this
 //     write sees either oldNode (still valid, scene still exists) or
@@ -245,6 +248,7 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 //  4. Best-effort DestroyScene on the old node. A failure here is logged
 //     but not fatal: the old scene will be cleaned up on the next node
 //     restart or by the lifecycle manager's stale-scene sweep.
+//     带本次的代次:频道之后若又迁回老节点(更新的代次),晚到的这次拆除会被节点当成过期的忽略。
 //  5. Cascade-destroy any mirrors that were co-located with this channel
 //     on the OLD node. The whole point of mirror co-location is reusing
 //     the source's resident world data; once the source moves, mirrors
@@ -262,7 +266,13 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 		return false
 	}
 
-	if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, newNode, uint32(confId), sceneId); err != nil {
+	generation, err := allocatePlacementGeneration(svcCtx, zoneId)
+	if err != nil {
+		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: not migrating to %s (%s): %v",
+			zoneId, confId, sceneId, newNode, reason, err)
+		return false
+	}
+	if _, err := RequestNodeCreateSceneAtGeneration(ctx, svcCtx, zoneId, newNode, uint32(confId), sceneId, generation); err != nil {
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: CreateScene on new node %s failed (%s): %v",
 			zoneId, confId, sceneId, newNode, reason, err)
 		return false
@@ -276,7 +286,7 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	dependentMirrors, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("mirror set of scene %d before migrating it to %s", sceneId, newNode), err)
-		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode)
+		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation)
 		return false
 	}
 
@@ -284,16 +294,17 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// (node-death reconciliation 靠它找到迁走的频道)与两侧 scene_count 在
 	// 一个脚本里一起改,返回 true 就是全部落地,不用再回读核对。
 	//
-	// 返回 false 有两类竞态,都意味着本次迁移作废:
+	// 返回 false 有三类竞态,都意味着本次迁移作废:
 	//   - 计划阶段到这里隔了一次 CreateScene RPC,老节点的死亡时刻可能刚写进
 	//     Redis,第二道屏障判定拦下;
 	//   - 计划是陈旧的:本进程不持 zone 锁,任意副本上的 initWorldScenesForZone
-	//     或 EnterScene 的懒改派可能已经把频道派到别的节点。
-	// 两种情况下 newNode 上刚建的实体都没有归属,回收掉;名额与计数都没动。
-	if !reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode) {
-		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: ownership not updated (reentry barrier, owner changed concurrently, or Redis failure); migration invalidated",
+	//     或 EnterScene 的懒改派可能已经把频道派到别的节点;
+	//   - 代次过期:别的写者在本次分配代次之后、提交之前,以更新的代次回收过这个频道的预建实体。
+	// 这些情况下 newNode 上刚建的实体都没有归属,按本次的代次回收掉;名额与计数都没动。
+	if !reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode, generation) {
+		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: ownership not updated (reentry barrier, owner changed concurrently, stale placement generation, or Redis failure); migration invalidated",
 			zoneId, confId, sceneId)
-		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode)
+		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation)
 		return false
 	}
 
@@ -307,7 +318,7 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// is already gone — nothing to clean up — or when oldNode appears dead
 	// to avoid long RPC timeouts during the urgent path.
 	if oldNode != "" && IsNodeAlive(svcCtx, zoneId, oldNode) {
-		if err := RequestNodeDestroyScene(ctx, svcCtx, zoneId, oldNode, sceneId); err != nil {
+		if err := RequestNodeDestroySceneAtGeneration(ctx, svcCtx, zoneId, oldNode, sceneId, generation); err != nil {
 			logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: DestroyScene on old node %s failed (%s, ignored): %v",
 				zoneId, confId, sceneId, oldNode, reason, err)
 		}
@@ -320,38 +331,35 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	return true
 }
 
-// destroyUnownedMigrationTarget 回收一次作废迁移在 newNode 上预建的场景实体(尽力而为)。
+// destroyUnownedMigrationTarget 回收一次作废迁移在 newNode 上按放置代次 generation 预建的场景实体(尽力而为)。
+// rebalance、懒改派与 init 的死节点改派共用。
 //
-// 先重读归属,**确认** newNode 不是当前属主才发 DestroyScene:
+// **确认** newNode 不是当前属主才拆,确认在回收脚本里做(reclaimUnownedWorldChannelEntity):
 //   - 并发的另一个写者可能恰好也把频道派到了 newNode。CreateScene 按 scene_id 幂等,
 //     newNode 上那个实体就是它的活场景,销毁就是把在用频道拆掉;
-//   - reassignSceneNode 在 Redis 出错时返回 false,但脚本可能已经执行;重读失败
-//     就无从确认,宁可留一个空实体,也不冒拆掉活场景的险。
+//   - reassignSceneNode 结论未知时(问结局也出错)返回 false,但脚本可能已经执行;比对读到属主就是 newNode
+//     就保留。比对本身出错就无从确认,宁可留一个空实体,也不冒拆掉活场景的险。
 //
-// 残余窗口:重读之后、DestroyScene 到达之前,若别的写者恰好把归属改到 newNode 并先完成
-// CreateScene,这次销毁会拆掉它的实体。窗口只有一次 RPC 长,且可自愈:fullSync 每轮
-// initWorldScenesForZone 都对全部频道补发 CreateScene。
+// 比对之后、DestroyScene 到达之前,别的写者把归属改到 newNode 也拆不到它的实体:回收脚本先把代次高水位抬到 generation,
+// 那次改派的代次一定更新,节点把这次拆除当成过期的忽略(docs/design/world-channel-placement-generation.md)。
 func destroyUnownedMigrationTarget(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32,
-	confId, sceneId uint64, newNode string) {
+	confId, sceneId uint64, newNode string, generation uint64) {
 
-	owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
-	if err != nil {
-		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: cannot re-read owner (%v); leaving the entity pre-created on %s",
-			zoneId, confId, sceneId, err, newNode)
-		return
-	}
-	if owner == newNode {
+	reclaim, err := reclaimUnownedWorldChannelEntity(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation)
+	switch {
+	case err != nil:
+		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: could not check the owner before reclaiming the entity on %s; left in place: %v",
+			zoneId, confId, sceneId, newNode, err)
+	case reclaim.Kept:
 		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: another writer already moved it to %s; keeping that entity",
 			zoneId, confId, sceneId, newNode)
-		return
+	case reclaim.DestroyErr != nil:
+		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: reclaiming the unowned entity on %s failed (owner=%q): %v",
+			zoneId, confId, sceneId, newNode, reclaim.Owner, reclaim.DestroyErr)
+	default:
+		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: reclaimed unowned entity on %s at placement generation %d (owner=%q)",
+			zoneId, confId, sceneId, newNode, generation, reclaim.Owner)
 	}
-	if err := RequestNodeDestroyScene(ctx, svcCtx, zoneId, newNode, sceneId); err != nil {
-		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: DestroyScene of unowned entity on %s failed (owner=%q): %v",
-			zoneId, confId, sceneId, newNode, owner, err)
-		return
-	}
-	logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: destroyed unowned entity on %s (owner=%q)",
-		zoneId, confId, sceneId, newNode, owner)
 }
 
 // cascadeMirrorsOnSourceMigration force-destroys mirrors that were co-located
@@ -360,9 +368,9 @@ func destroyUnownedMigrationTarget(ctx context.Context, svcCtx *svc.ServiceConte
 // node-scene counters all stay in sync. reason="source_migrated" so
 // dashboards can distinguish this from idle / explicit / cascade-on-destroy.
 //
-// Mirrors whose recorded zone differs from the source's zone are still
-// destroyed in their own zone (a cross-zone mirror is a misuse of the
-// optimization, but we don't want cascade to silently no-op on it).
+// 只拆本 zone 的镜像(docs/design/control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的
+// scene_manager 读写)。镜像登记在别的 zone 时不拆,由那个 zone 的空闲回收收走,只从源的子集合(本 zone 的键)里摘掉;
+// 新建镜像时源在别的 zone 就不登记成子镜像(createInstance),这里给更早登记的数据兜底。
 func cascadeMirrorsOnSourceMigration(ctx context.Context, svcCtx *svc.ServiceContext,
 	zoneId uint32, sourceSceneId uint64, mirrorIds []string, oldNode, newNode string) {
 
@@ -381,20 +389,22 @@ func cascadeMirrorsOnSourceMigration(ctx context.Context, svcCtx *svc.ServiceCon
 		if err != nil || mid == sourceSceneId {
 			continue
 		}
-		// 读不到镜像的 zone 就不猜:按错的 zone 销毁会从别的 zone 的索引与计数里扣。
-		zoneStr, zoneErr := svcCtx.Redis.Get(sceneZoneKey(mid))
+		// 读不到镜像的 zone 就不猜:本轮不拆,留在索引里。
+		mirrorZone, zoneErr := lookupSceneZone(svcCtx, mid)
 		if zoneErr != nil {
 			noteReadUnknown(zoneId, readUnknownSiteMirrorCascade,
 				fmt.Sprintf("zone of mirror %d (source %d migrated), keeping it and its index entry", mid, sourceSceneId), zoneErr)
 			continue
 		}
-		mirrorZone := zoneId
-		if z, parseErr := strconv.ParseUint(zoneStr, 10, 32); parseErr == nil && z != 0 {
-			mirrorZone = uint32(z)
+		if mirrorZone != 0 && mirrorZone != zoneId {
+			logx.Infof("[Rebalance] mirror %d of source %d is registered in zone %d, not %d; unlinking it and leaving it to that zone",
+				mid, sourceSceneId, mirrorZone, zoneId)
+			handled = append(handled, m)
+			continue
 		}
 		logx.Infof("[Rebalance] cascading mirror %d (source %d migrated %s -> %s) in zone %d",
-			mid, sourceSceneId, oldNode, newNode, mirrorZone)
-		if _, destroyErr := destroyInstanceForce(ctx, svcCtx, mirrorZone, mid, "source_migrated"); destroyErr != nil {
+			mid, sourceSceneId, oldNode, newNode, zoneId)
+		if _, destroyErr := destroyInstanceForce(ctx, svcCtx, zoneId, mid, "source_migrated"); destroyErr != nil {
 			logx.Errorf("[Rebalance] mirror %d of source %d was not destroyed this round; keeping its index entry: %v",
 				mid, sourceSceneId, destroyErr)
 			continue

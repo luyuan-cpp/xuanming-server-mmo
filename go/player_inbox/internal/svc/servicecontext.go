@@ -9,21 +9,26 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"player_inbox/generated/pb/game"
 	"player_inbox/internal/config"
 	"player_inbox/internal/constants"
 	"player_inbox/internal/inbox"
+	"player_inbox/internal/shardowner"
 
+	base "proto/common/base"
 	dspb "proto/data_service"
 
 	"shared/authoritysql"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/etcdwatch"
 	"shared/kafkacmd"
 	"shared/leader"
 	"shared/playerredis"
+	"shared/releasetrack"
 	"shared/rolefence"
 	"shared/safego"
 	"shared/scenenode"
@@ -94,7 +99,14 @@ type ServiceContext struct {
 	Store    *inbox.Store
 	// Ledgers 是对账读已落盘账本的适配器(运维 ReconcilePlayer 与定时对账共用)。
 	Ledgers inbox.LedgerReader
-	Loops   *inbox.Loops
+	// ItemGainBlocks 是运维 GetItemGainBlocks 读已落盘物品获取封禁表的适配器(设计 §2.2)。
+	ItemGainBlocks inbox.ItemGainBlockReader
+	Loops          *inbox.Loops
+	// ReconcileOwners 是定时对账的分片归属(本服务 stable 副本的成员表);对账关掉时为 nil。
+	ReconcileOwners *shardowner.Tracker
+
+	// nodeUUID 是本进程在 etcd 注册用的 node_uuid,入口注册成功后经 SetNodeUUID 写入;之前为空,本副本不负责任何对账分片。
+	nodeUUID atomic.Value // string
 
 	// dataServiceConn 是 DataService 底下的 gRPC 连接，须晚于真实 RELAY 前沿闭合才能关闭。
 	dataServiceConn *grpc.ClientConn
@@ -140,7 +152,8 @@ type externalDeps struct {
 func productionDeps() externalDeps {
 	return externalDeps{
 		openEtcd: func(hosts []string) (*clientv3.Client, error) {
-			return clientv3.New(clientv3.Config{Endpoints: hosts, DialTimeout: etcdDialTimeout})
+			// keepalive:场景节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+			return clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{Endpoints: hosts, DialTimeout: etcdDialTimeout}))
 		},
 		openMySQL:        OpenMySQL,
 		checkRoleFence:   rolefence.VerifySchema,
@@ -353,9 +366,11 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 	}
 	sc.Store.RelayAdmission = relay
 	sc.Ledgers = &DataServiceLedgers{Client: sc.DataService, Timeout: constants.LedgerReadTimeout}
+	sc.ItemGainBlocks = &DataServiceItemGainBlocks{Client: sc.DataService, Timeout: constants.LedgerReadTimeout}
 
 	elector := leader.New(leader.NewGoRedisStore(sc.CoreRedis), MaintenanceLeaderKey, leader.Options{ID: leaderID()})
-	sc.Loops, err = inbox.NewLoops(sc.Store, sc.Ledgers, loopConfigFrom(c.PlayerInbox), elector.Run, time.Now)
+	loopCfg := loopConfigFrom(c.PlayerInbox)
+	sc.Loops, err = inbox.NewLoops(sc.Store, sc.Ledgers, loopCfg, elector.Run, time.Now)
 	if err != nil {
 		return nil, fmt.Errorf("player_inbox: build maintenance loops: %w", err)
 	}
@@ -364,6 +379,21 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 	sc.background = []backgroundTask{
 		{name: "player_inbox.scenenode.watcher", run: func(ctx context.Context) { sc.SceneNodes.Run(ctx, sc.Etcd) }},
 		{name: "player_inbox.maintenance", run: sc.Loops.Run},
+	}
+	// 定时对账按分片分给 stable 副本(docs/design/no-single-node-horizontal-scaling-20261001.md §9):成员表来自本服务在
+	// etcd 的注册,本进程的 node_uuid 由入口注册成功后经 SetNodeUUID 写入,在那之前本副本不负责任何分片。
+	if loopCfg.ReconcileInterval > 0 {
+		track, err := releasetrack.FromEnv()
+		if err != nil {
+			return nil, fmt.Errorf("player_inbox: release track: %w", err)
+		}
+		prefix := base.ENodeType_name[int32(base.ENodeType_PlayerInboxNodeService)] + ".rpc/"
+		sc.ReconcileOwners, err = shardowner.NewTracker(sc.Etcd, prefix, sc.selfNodeUUID, track)
+		if err != nil {
+			return nil, fmt.Errorf("player_inbox: build reconcile shard owners: %w", err)
+		}
+		sc.Loops.ReconcileOwnership = sc.ReconcileOwners
+		sc.background = append(sc.background, backgroundTask{name: "player_inbox.reconcile_owners", run: sc.ReconcileOwners.Run})
 	}
 
 	logx.Infof("[player_inbox] Enqueue allowlist: %d type(s) enabled %v (empty = all disabled, design §3.3)",
@@ -422,6 +452,16 @@ func leaderID() string {
 
 // Start 起后台任务:scene 节点镜像与后台循环(选主 → 任期内跑循环)。ctx 取消即退出。
 // 重复调用只生效一次;Stop 之后再 Start 不起任何任务。
+// SetNodeUUID 记下本进程在 etcd 注册用的 node_uuid。入口在注册成功后调用一次;换 node_id 重注册时 uuid 不变
+// (shared/noderegistry),不需要再调。在那之前对账分片成员表不认自己,本副本不负责任何分片。
+func (sc *ServiceContext) SetNodeUUID(uuid string) { sc.nodeUUID.Store(uuid) }
+
+// selfNodeUUID 返回 SetNodeUUID 记下的 node_uuid,还没记时为空串。
+func (sc *ServiceContext) selfNodeUUID() string {
+	uuid, _ := sc.nodeUUID.Load().(string)
+	return uuid
+}
+
 func (sc *ServiceContext) Start(ctx context.Context) {
 	sc.startOnce.Do(func() {
 		sc.mu.Lock()

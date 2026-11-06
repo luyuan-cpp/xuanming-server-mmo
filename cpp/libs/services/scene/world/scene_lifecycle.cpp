@@ -6,6 +6,8 @@
 #include "proto/scene/scene.pb.h"
 #include "proto/scene/scene_info.pb.h"
 #include "thread_context/ecs_context.h"
+#include "world/scene_ownership_reconciler.h"
+#include "world/scene_placement_fence.h"
 
 const SceneInfoComp& SceneLifecycle::CreateScene(const CreateSceneRequest& request)
 {
@@ -56,4 +58,17 @@ std::size_t SceneLifecycle::DestroyScene(SceneEntity scene)
     agones::GameServerLifecycle::Instance().OnUnitDestroyed(entt::to_integral(scene));
     tlsEcs.sceneRegistry.destroy(scene);
     return 0;
+}
+
+const SceneInfoComp& SceneLifecycle::ReuseExistingScene(SceneEntity scene)
+{
+    scene_ownership::RestartCheck(scene);
+    return tlsEcs.sceneRegistry.get<SceneInfoComp>(scene);
+}
+
+ScenePlacementFence& SceneLifecycle::PlacementFence()
+{
+    // 与 tlsEcs 同一个线程归属:只有节点主 EventLoop 线程建、拆场景。
+    thread_local ScenePlacementFence fence;
+    return fence;
 }

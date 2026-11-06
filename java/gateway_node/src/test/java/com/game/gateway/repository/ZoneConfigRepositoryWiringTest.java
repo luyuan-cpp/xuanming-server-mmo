@@ -11,12 +11,14 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -129,6 +131,17 @@ class ZoneConfigRepositoryWiringTest {
         assertEquals(1, repo.deleteByZoneId(ZONE));
         assertTrue(repo.findById(ZONE).isEmpty());
         assertEquals(0, repo.deleteByZoneId(ZONE), "删不存在的区服是 0 行,不报错");
+    }
+
+    @Test
+    void lockZoneIdForUpdateFindsOnlyExistingRowAndRequiresCallerTransaction() {
+        repo.insertIfAbsent(zone(ZONE, "z", 0, 5000, "", null, false, 0), T1);
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+
+        assertEquals(List.of(ZONE), tx.execute(status -> repo.lockZoneIdForUpdate(ZONE)), "行在:返回它的主键");
+        assertTrue(tx.execute(status -> repo.lockZoneIdForUpdate(ABSENT_ZONE)).isEmpty(), "行不在:空列表");
+        // 自动提交下加锁读读完就放锁,判了也白判;没有调用方事务必须直接报错,不能悄悄执行。
+        assertThrows(IllegalTransactionStateException.class, () -> repo.lockZoneIdForUpdate(ZONE));
     }
 
     @Test

@@ -92,14 +92,20 @@ message RankMailRewardRecord {
   uint64 player_id = 3;
   uint64 rank = 4;
   bytes attachments = 5;
+  // 1 = 待投;2 = 已投(mail_id 非 0);3 = 放弃(终态:邮件明确拒收且已过期或尝试次数到顶,工作器不再投,
+  // 行原样保留供人工核对重投,见 docs/design/leaderboard-system.md「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」节)。
+  // 取值定义在 go/rank/internal/data/rewards.go。
   uint32 status = 6;
   uint64 mail_id = 7;
   uint64 next_attempt_ms = 8;
   uint64 lease_until_ms = 9;
   uint64 lease_token = 10;
-  uint32 attempts = 11;
+  uint32 attempts = 11; // 已完成的投递尝试次数,含结果未知。
   uint64 created_ms = 12;
   uint64 updated_ms = 13;
+  // 奖励邮件的过期时刻,封榜时写定为 封榜时刻 + min(30 天, 邮件个人邮件最大有效期)。每次重投原样带上,
+  // 载荷摘要因此不变;邮件在过期之后对同一请求只会回原邮件或明确拒收,不会再新建。
+  uint64 expire_ms = 14;
 }
 message RankMutationRecord {
   option (OptionTableName) = "rank_mutation";

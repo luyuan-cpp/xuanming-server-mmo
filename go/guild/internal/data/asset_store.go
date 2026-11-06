@@ -235,6 +235,9 @@ const (
 		" SET `status` = ?, `resolved_by` = ?, `resolve_reason` = ?, `lease_until_ms` = 0," +
 		" `next_attempt_ms` = ?, `updated_ms` = ?" +
 		" WHERE `op_id` = ? AND `status` = ?"
+	// assetopfix 的人工终结(ResolveManuallyIfQuiet):在上一条之外,要求租约与发送时刻仍是读证据时的值。
+	// 任何领取都会改 lease_until_ms(sqlClaimAssetOp),发过请求的重排会推进 last_send_ms:读证据之后只要有人领过、发过,就落空。
+	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ?"
 	// 自动放弃(assetop.Abandoner.Abandon,设计 §6.3 条件 6):以 (op_id, PENDING, lease_token) 为条件终结为 ABANDONED。
 	// 比 Finalize / 人工终结多带令牌:放弃只在"持租约期间没人能发请求"时才成立,租约中途被接管(令牌对不上)必须落空。
 	// 与人工终结一样不置 durable(不是 scene 确认的结局)、不改 last_outcome / last_reason(保留最后一次真实答复作证据)、
@@ -521,11 +524,11 @@ func (s *GuildAssetStore) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, 
 		// 刚 CAS 成功又查不到:只可能是被并发删了(清理只删终态行),按故障返回。
 		return assetop.Op{}, false, fmt.Errorf("claim %s %d: row vanished after claim", guildAssetOpTable, opID)
 	}
-	// 回读的行必须仍是"我刚领到的未决行",否则不下发。Claim 的 CAS 与这次回读是两条语句,中间可能被人工终结
-	// (assetopfix 的 CAS 只看 status、不换令牌):对一条已被判成 ABORTED 的捐献再发一次扣款,scene 若仍接受,
-	// 就是钱扣了、次数却已退回、资金也不再记 —— 丢玩家的钱。令牌不同 = 租约已被别的副本接管(只可能是租约配得比
-	// 处理还短),同样不归我处理。这只收窄窗口、不消灭它(回读之后仍可能被终结):兜底仍是 Finalize 的 status CAS
-	// 与 assetopfix 的前置条件(只终结 scene 回 UNKNOWN、以后也不会再应用的行)。
+	// 回读的行必须仍是"我刚领到的未决行",否则不下发。Claim 的 CAS 与这次回读是两条语句,中间可能被人工终结:
+	// 对一条已被判成 ABORTED 的捐献再发一次扣款,scene 若仍接受,就是钱扣了、次数却已退回、资金也不再记 —— 丢玩家的钱。
+	// 令牌不同 = 租约已被别的副本接管(只可能是租约配得比处理还短),同样不归我处理。这只收窄窗口、不消灭它;
+	// 兜底是 Finalize 的 status CAS,以及 assetopfix 的安静 CAS(ResolveManuallyIfQuiet):本次 CAS 改了 lease_until_ms,
+	// 人工终结带着读证据时的 lease_until_ms / last_send_ms 做条件,领过之后它必然落空。
 	// 放在解 payload 之前:已终结的坏包行不该再被当成毒行推迟、计一次 decode 错误。
 	if rec.GetStatus() != pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING || rec.GetLeaseToken() != token {
 		return assetop.Op{}, false, nil
@@ -539,26 +542,11 @@ func (s *GuildAssetStore) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, 
 		s.markPoison(ctx, opID, token, nowMs, poisonUntilMs)
 		return assetop.Op{}, false, fmt.Errorf("%w: op_id=%d: %v", assetop.ErrPoisonRow, opID, decodeErr)
 	}
-	return assetop.Op{
-		OpID:        rec.GetOpId(),
-		PlayerID:    rec.GetPlayerId(),
-		Stream:      assetpb.AssetOpStream(rec.GetStream()),
-		Seq:         rec.GetSeq(),
-		StreamEpoch: rec.GetStreamEpoch(),
-		// correlation_id 取 op_id:人工对账按 scene 流水的 correlation_id 定位唯一一行指令;
-		// 必须与同步首投时 logic 填的值一致,否则重投会换一个 correlation。
-		CorrelationID: rec.GetOpId(),
-		TxType:        rec.GetTxType(),
-		Bundle:        bundle,
-		Attempts:      rec.GetAttempts(),
-		DeadlineMs:    rec.GetDeadlineMs(),
-		LeaseToken:    token,
-		LastReason:    rec.GetLastReason(),
-		// 只有自动放弃读这两项(abandon.go 条件 1 的复核与条件 4)。LastSendMs 是上面那条 CAS 刚写下的值:
-		// 已折进上一个租约、存量 0 已懒初始化,所以领到的行上它恒非 0(created_ms 为 0 的坏行除外,放弃路径按 0 跳过)。
-		CreatedMs:  rec.GetCreatedMs(),
-		LastSendMs: rec.GetLastSendMs(),
-	}, true, nil
+	// 形状与 assetopfix 核收据用的同一份(assetOpOf)。LastSendMs 是上面那条 CAS 刚写下的值:已折进上一个租约、
+	// 存量 0 已懒初始化,所以领到的行上它恒非 0(created_ms 为 0 的坏行除外,放弃路径按 0 跳过)。
+	op := assetOpOf(assetOpRowFrom(rec), bundle)
+	op.LeaseToken = token
+	return op, true, nil
 }
 
 // markPoison 把毒行推迟到 poisonUntilMs,last_outcome 记"结局未知"。只清租约、不动 last_send_ms(LastSendMs 契约第 4 条:
@@ -673,20 +661,44 @@ func (s *GuildAssetStore) Finalize(ctx context.Context, op assetop.Op, status as
 		int32(final), uint32(res.Outcome), res.Reason, reasonTip, nowMs, nowMs, op.OpID, PendingStatus())
 }
 
-// ResolveManually 是人工终结通道(assetopfix)。assetop.ResolveManually 会先做通用入参校验;这里在碰库之前
+// ResolveManually 是 assetop.ManualResolver 的人工终结通道。assetop.ResolveManually 会先做通用入参校验;这里在碰库之前
 // 再兜两件本表自己的事:映射不出终态库值,以及审计两列超出列契约(validateManualAudit)。
 // 与 Finalize 共用同一把 `status = PENDING` 的 CAS 与同一份对侧账:人工与循环同时下手只有一个赢家;
-// 对侧账若各写一份,迟早出现"只改了一边"的分叉。
+// 对侧账若各写一份,迟早出现"只改了一边"的分叉。assetopfix 走更严的 ResolveManuallyIfQuiet。
 func (s *GuildAssetStore) ResolveManually(ctx context.Context, r assetop.ManualResolution, nowMs uint64) (bool, error) {
-	final := StatusToRecord(r.Final)
-	if !isTerminalRecord(final) {
-		return false, fmt.Errorf("manual resolve %s %d: status %s is not terminal", guildAssetOpTable, r.OpID, r.Final)
-	}
-	if err := validateManualAudit(r); err != nil {
-		return false, fmt.Errorf("manual resolve %s %d: %w", guildAssetOpTable, r.OpID, err)
+	final, err := manualFinalRecord(r)
+	if err != nil {
+		return false, err
 	}
 	return s.terminate(ctx, r.OpID, r.Final, nowMs, "manual resolve", sqlResolveAssetOp,
 		int32(final), r.Operator, r.Reason, nowMs, nowMs, r.OpID, PendingStatus())
+}
+
+// ResolveManuallyIfQuiet 同 ResolveManually(同一份对侧账),另要求行上的 lease_until_ms / last_send_ms 仍是 witness
+// (assetop.QuietWitness:assetopfix 读证据时这一行的租约与发送时刻,trade 工具用同一个类型)。读证据之后只要有人领过这一行
+// (领取必改 lease_until_ms)或发过请求(重排推进 last_send_ms),CAS 就落空,读到的证据作废,要重新核对。
+// 「写权行已释放、已提交账本没见过」只说明读的那一刻没应用;没有这一条,读完之后玩家恰好上线、唤醒投递,
+// scene 应用了而这边判了 aborted,就是一物两得。
+// 落空回 (false, nil):行已不是 PENDING,或读证据之后有人领过它。
+func (s *GuildAssetStore) ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {
+	final, err := manualFinalRecord(r)
+	if err != nil {
+		return false, err
+	}
+	return s.terminate(ctx, r.OpID, r.Final, nowMs, "manual resolve", sqlResolveAssetOpQuiet,
+		int32(final), r.Operator, r.Reason, nowMs, nowMs, r.OpID, PendingStatus(), witness.LeaseUntilMs, witness.LastSendMs)
+}
+
+// manualFinalRecord 是两种人工终结在碰库之前共同的校验:能映射成终态库值,审计两列不超列契约。
+func manualFinalRecord(r assetop.ManualResolution) (pb.GuildAssetOpStatus, error) {
+	final := StatusToRecord(r.Final)
+	if !isTerminalRecord(final) {
+		return final, fmt.Errorf("manual resolve %s %d: status %s is not terminal", guildAssetOpTable, r.OpID, r.Final)
+	}
+	if err := validateManualAudit(r); err != nil {
+		return final, fmt.Errorf("manual resolve %s %d: %w", guildAssetOpTable, r.OpID, err)
+	}
+	return final, nil
 }
 
 // resolved_by / resolve_reason 的长度上限,即 guild_db.proto 字段 27 / 28 注释里的列契约。

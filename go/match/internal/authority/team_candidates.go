@@ -11,8 +11,12 @@ import (
 
 type TeamLaunchCursor struct{ EnqueuedMs, ActorId, RequestHigh, RequestLow uint64 }
 
+// TeamLaunchesAfter 按排队序翻一页某状态的整队,给队伍维护循环用。只取本副本负责的片(片号 = 发起者 actor_id,
+// 见 work_owner.go):加副本就分摊维护事务,不再每个副本对每支整队各开一个锁全员票的事务。
 func (s *Store) TeamLaunchesAfter(ctx context.Context, state uint32, after TeamLaunchCursor) ([]*teampb.TeamLaunchRecord, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT "+teamLaunchColumns+" FROM team_launch WHERE state=? AND (enqueued_ms,actor_id,request_high,request_low)>(?,?,?,?) ORDER BY enqueued_ms,actor_id,request_high,request_low LIMIT 32", state, after.EnqueuedMs, after.ActorId, after.RequestHigh, after.RequestLow)
+	owned, shardArgs := s.WorkShardFilter(workTeamLaunch, "actor_id")
+	args := append([]any{state, after.EnqueuedMs, after.ActorId, after.RequestHigh, after.RequestLow}, shardArgs...)
+	rows, err := s.DB.QueryContext(ctx, "SELECT "+teamLaunchColumns+" FROM team_launch WHERE state=? AND (enqueued_ms,actor_id,request_high,request_low)>(?,?,?,?) AND "+owned+" ORDER BY enqueued_ms,actor_id,request_high,request_low LIMIT 32", args...)
 	if err != nil {
 		return nil, err
 	}

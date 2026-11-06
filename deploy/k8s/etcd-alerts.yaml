@@ -1,0 +1,138 @@
+# Prometheus alert rules for the etcd clusters(主 etcd、发号器的 etcd-id-secondary、全局登记处 etcd-id-registry)。
+#
+# 来源:P0-C 阶段 2(2026-11-05,docs/ops/etcd-maintenance-runbook.md)。压缩改由 etcd 内置的自动压缩完成、压缩 CronJob 退役之后,
+#       「空间快满 / 已经 NOSPACE」只能从 etcd 自己的 /metrics 看出来,这份规则顶替 CronJob 以前「有告警就让 Job 失败」的那点可见性。
+#       规则照 etcd 官方 mixin(etcd 仓库 contrib/mixin)的同名告警写,阈值沿用上游;只去掉了 job 过滤(本仓库按 Pod 注解抓取,job 名由抓取配置定),
+#       另加一条 80% 的空间预警(上游只有 95%)。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 redis-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/etcd-alerts.yaml
+#
+# Scrape prerequisites:
+#   - 三套 etcd 的 Pod 模板都带 prometheus.io/scrape|port|path 注解(端口 2379,etcd 的指标在 client 端口上);
+#     还需要按注解抓取的配置或一个指向该端口的 PodMonitor,否则下面全部规则没有数据:空表达式不报错,和「一切正常」长得一样。
+#   - namespace、pod 两个 label 由抓取配置附加。告警只用这两个 label(低基数);pod 名的前缀(etcd- / etcd-id-secondary- /
+#     etcd-id-registry-)区分是哪一套。
+#
+# 指标名按 etcd 官方 mixin 与 v3.6 的指标写(etcd_server_has_leader、etcd_server_leader_changes_seen_total、etcd_server_proposals_failed_total、
+# etcd_mvcc_db_total_size_in_bytes、etcd_mvcc_db_total_size_in_use_in_bytes、etcd_server_quota_backend_bytes、
+# etcd_disk_wal_fsync_duration_seconds、etcd_disk_backend_commit_duration_seconds),还没有对着运行中的 etcd 核对:
+# 部署后用 `kubectl get --raw /api/v1/namespaces/<infra>/pods/etcd-0:2379/proxy/metrics` 逐个核对,对不上就改这里 ——
+# 指标名写错的规则不报错,只是永远不响。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: etcd-alerts
+  labels:
+    app: etcd-alerts
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: etcd
+      interval: 30s
+      rules:
+        # 成员看不到 leader:这个成员上的写全部失败。三个成员同时响 = 整套失去 quorum(节点注册、租约、发号水位全停)。
+        - alert: EtcdNoLeader
+          expr: |
+            etcd_server_has_leader == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 没有 leader"
+            description: "该成员 1 分钟以上看不到 leader,经它的写全部失败。先看同一套的三个成员是否都在、彼此能否连通(各自 headless Service 的 2380 端口);同时有 NOSPACE 告警时按 docs/ops/etcd-maintenance-runbook.md §7 处置。"
+
+        # 空间预警(本仓库加的一档):库文件到配额的 80%。这时还来得及在低峰窗口按 runbook §5 逐成员 defrag,或查清是谁在暴涨。
+        - alert: EtcdDatabaseQuotaHighUsage
+          expr: |
+            (last_over_time(etcd_mvcc_db_total_size_in_bytes[5m]) / last_over_time(etcd_server_quota_backend_bytes[5m])) * 100 > 80
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 库文件已到配额的 {{ $value | humanize }}%"
+            description: "库文件(etcd_mvcc_db_total_size_in_bytes)超过配额的 80% 已 10 分钟。先看 EtcdDatabaseHighFragmentationRatio 是否同时在响(是:按 runbook §5 逐成员 defrag);不是,就是在用的数据真的变多了,查写入方。"
+
+        # 上游 etcdDatabaseQuotaLowSpace:到 95% 很快就会 NOSPACE(新注册、失租重注册、水位 Txn 全部失败)。
+        - alert: EtcdDatabaseQuotaLowSpace
+          expr: |
+            (last_over_time(etcd_mvcc_db_total_size_in_bytes[5m]) / last_over_time(etcd_server_quota_backend_bytes[5m])) * 100 > 95
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 库文件已到配额的 {{ $value | humanize }}%"
+            description: "库文件超过配额的 95%:写满即触发 NOSPACE 告警,之后一切写入失败。已经 NOSPACE 时按 docs/ops/etcd-maintenance-runbook.md §7 处置(压缩 → 逐成员 defrag → 人工确认后 alarm disarm)。"
+
+        # 上游 etcdExcessiveDatabaseGrowth:按近 4 小时的增速,4 小时内会写满配额。
+        - alert: EtcdExcessiveDatabaseGrowth
+          expr: |
+            predict_linear(etcd_mvcc_db_total_size_in_bytes[4h], 4*60*60) > etcd_server_quota_backend_bytes
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 按当前增速 4 小时内写满配额"
+            description: "近 4 小时库文件增长过快。自动压缩只回收历史版本,不回收在用的键:查是否有写入方在批量写新键或失租重注册风暴。"
+
+        # 上游 etcdDatabaseHighFragmentationRatio:在用的数据不到库文件的一半(压缩回收的空间要 defrag 才还给文件系统)。
+        - alert: EtcdDatabaseHighFragmentationRatio
+          expr: |
+            (last_over_time(etcd_mvcc_db_total_size_in_use_in_bytes[5m]) / last_over_time(etcd_mvcc_db_total_size_in_bytes[5m])) < 0.5
+            and
+            etcd_mvcc_db_total_size_in_use_in_bytes > 104857600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 碎片超过一半"
+            description: "在用的数据不到库文件的 50%:库文件按大小计配额,碎片同样会把配额顶满。按 docs/ops/etcd-maintenance-runbook.md §5 在低峰窗口逐成员 defrag(一次一个,leader 最后做)。"
+
+        # 上游 etcdHighNumberOfLeaderChanges:15 分钟内换主 4 次以上。每次换主客户端都要重连、租约续约可能抖动。
+        - alert: EtcdHighNumberOfLeaderChanges
+          expr: |
+            increase(etcd_server_leader_changes_seen_total[15m]) >= 4
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 15 分钟内换主 {{ $value | humanize }} 次"
+            description: "频繁换主多半是磁盘慢(看 EtcdHighFsyncDurations)、成员间网络抖动或 CPU 被抢。"
+
+        # 上游 etcdHighNumberOfFailedProposals。
+        - alert: EtcdHighNumberOfFailedProposals
+          expr: |
+            rate(etcd_server_proposals_failed_total[15m]) > 5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 提案失败过多"
+            description: "近 15 分钟每秒失败提案超过 5 个,通常伴随换主或失去 quorum。"
+
+        # 上游 etcdHighFsyncDurations / etcdHighCommitDurations:磁盘慢是换主与租约误过期的头号原因。
+        - alert: EtcdHighFsyncDurations
+          expr: |
+            histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} WAL fsync p99 {{ $value | humanizeDuration }}"
+            description: "WAL fsync 的 p99 超过 500ms。换更快的盘(SSD)或把 etcd 调度到不与重 IO 负载共盘的节点。"
+
+        - alert: EtcdHighCommitDurations
+          expr: |
+            histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m])) > 0.25
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "etcd {{ $labels.namespace }}/{{ $labels.pod }} 后端提交 p99 {{ $value | humanizeDuration }}"
+            description: "后端提交的 p99 超过 250ms,与 EtcdHighFsyncDurations 同因。"

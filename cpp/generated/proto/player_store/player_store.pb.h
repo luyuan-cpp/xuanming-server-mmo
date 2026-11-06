@@ -123,7 +123,6 @@ enum PlayerStoreKind : int {
   PLAYER_STORE_KIND_OWNER = 0,
   PLAYER_STORE_KIND_GROWTH = 3,
   PLAYER_STORE_KIND_PROFILE = 4,
-  PLAYER_STORE_KIND_LEGACY1 = 5,
   PLAYER_STORE_KIND_CHARACTER = 6,
   PLAYER_STORE_KIND_WALLET = 7,
   PLAYER_STORE_KIND_BAG = 8,
@@ -140,7 +139,7 @@ inline constexpr PlayerStoreKind PlayerStoreKind_MIN =
 inline constexpr PlayerStoreKind PlayerStoreKind_MAX =
     static_cast<PlayerStoreKind>(9);
 [[nodiscard]] inline bool PlayerStoreKind_IsValid(int value) {
-  return 0 <= value && value <= 9 && ((1017u >> value) & 1) != 0;
+  return 0 <= value && value <= 9 && ((985u >> value) & 1) != 0;
 }
 inline constexpr int PlayerStoreKind_ARRAYSIZE = 9 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL

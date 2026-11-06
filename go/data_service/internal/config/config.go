@@ -459,11 +459,14 @@ func (c Config) ShouldAutoMigrate() bool {
 	return c.Schema.AutoMigrate == nil || *c.Schema.AutoMigrate
 }
 
-// KafkaConfig 两条落库消费者的参数。分区数是不可变契约(kafkautil.EnsureTopics
-// 会拒绝与 broker 现状不一致的值):transaction_log 6、snapshot 3。要改只能离线换代
+// KafkaConfig 两条落库消费者的参数。分区数 transaction_log 6、snapshot 3 起步;(2026-11-06 起)两个审计 topic
+// **只许加、可以原地加**:调大 TransactionLogPartitions / SnapshotPartitions、滚动 data_service,EnsureTopics 就把
+// broker 上的分区加到配置值(kafkautil.TopicSpec.AllowPartitionGrowth,落库不依赖分区内顺序,
+// docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A)。**减**分区仍只能离线换代
 // (TopicGeneration +1,停写 → 排空 → 三方同改),步骤见 docs/ops/audit-topic-generation-bump-runbook.md。
 //
-// 末尾五个键(Snapshot* 与 LagProbeIntervalMs,G2a)是 player_snapshot 消费者的批量 / 并发旋钮与 lag 探针。
+// 末尾六个键是两条消费者的批量 / 并发旋钮与 lag 探针:Snapshot* 与 LagProbeIntervalMs(G2a),
+// TransactionLogMaxInflightFlushes(2026-11-06,流水按分区并行落库)。
 // 它们没有 default 标签、零值 = "没配",由 Normalize 填默认、ValidateConsumers 拒绝越界值 ——
 // 理由同 RouteStoreConfig:go-zero 不下钻一个未出现的 optional 结构,default 标签在整段 Kafka 缺失时一个都不回填。
 type KafkaConfig struct {
@@ -479,8 +482,9 @@ type KafkaConfig struct {
 	// Error 日志 —— 流水/快照全被保留期吃掉。带代号的名字与自动建出来的那两个裸名
 	// topic 互不相干,第一次就能按契约建出 6/3 分区。
 	//
-	// 分区数要改 = 把这个数 +1(换一批新 topic、老 topic 排空后删),**绝不**原地扩分区:
-	// 扩分区会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了。
+	// (2026-11-06 更正)加分区不再要换代:落库不依赖同一玩家的消息顺序(流水 tx_id 主键 + INSERT IGNORE,
+	// 快照 guid 唯一键),调大下面两个分区数即可原地加(见 KafkaConfig 类型注释)。broker 上被自动建成 1 分区的
+	// 同名 topic 也会被加到配置值,不再永远 mismatch。只有**减**分区要把这个数 +1(换一批新 topic、老 topic 排空后删)。
 	TopicGeneration uint32 `json:",default=1"`
 
 	// TransactionLogTopic 是**基名**;实际使用的名字是 EffectiveTransactionLogTopic()。
@@ -517,6 +521,11 @@ type KafkaConfig struct {
 	// SnapshotMaxInflightFlushes:本实例同时落库的分区数上限(信号量),[1, max(1, SnapshotMySQL.MaxOpenConn−1)];0 = 没配 = 1。
 	// 上限留一条连接:快照池同时服务 GM 快照 / 回档读,积压时不能被消费者占满;本旋钮也不新增任何 MySQL 连接。
 	SnapshotMaxInflightFlushes int `json:",optional"`
+	// TransactionLogMaxInflightFlushes:transaction_log 消费者本实例同时落库的分区数上限(信号量,2026-11-06),
+	// [1, max(1, SnapshotMySQL.MaxOpenConn−1)];0 = 没配 = 1(同一时刻只有一条 INSERT,与改动前一条循环串行落库相同)。
+	// 每个分区各攒各的批(200 行或 200ms),调大它一个副本才能同时写分到的几个分区;流水池与快照池同一份
+	// SnapshotMySQL 配置、各自独立,上限同样留一条连接给 GM 流水查询 / 召回。本旋钮不新增 MySQL 连接。
+	TransactionLogMaxInflightFlushes int `json:",optional"`
 	// LagProbeIntervalMs:消费组 lag / 保留期丢失量探针的周期,0 = 关,否则 [MinLagProbeIntervalMs, MaxLagProbeIntervalMs]。
 	// 只读 broker 元数据、不碰消费与落库;关掉时积压 / 保留期告警全部是哑的。
 	LagProbeIntervalMs int `json:",optional"`
@@ -543,7 +552,8 @@ const (
 	snapshotPoolFallbackMaxOpen = 5
 )
 
-// Normalize 返回一份把 G2a 五个键的"没配"(零值)换成默认值的副本;已有键(TopicGeneration 等)的语义不在这里动。
+// Normalize 返回一份把消费者旋钮(G2a 五个键与 TransactionLogMaxInflightFlushes)的"没配"(零值)换成默认值的副本;
+// 已有键(TopicGeneration 等)的语义不在这里动。
 // 负数不纠正,交给 ValidateConsumers 拒绝(同 RouteStoreConfig.Normalize)。
 func (k KafkaConfig) Normalize() KafkaConfig {
 	if k.SnapshotBatchMaxRows == 0 {
@@ -555,11 +565,15 @@ func (k KafkaConfig) Normalize() KafkaConfig {
 	if k.SnapshotMaxInflightFlushes == 0 {
 		k.SnapshotMaxInflightFlushes = 1
 	}
+	if k.TransactionLogMaxInflightFlushes == 0 {
+		k.TransactionLogMaxInflightFlushes = 1
+	}
 	// SnapshotFlushIntervalMs / LagProbeIntervalMs 的零值本身就是合法语义(不等待 / 不探),不改。
 	return k
 }
 
-// ValidateConsumers 检查(通常是 Normalize 之后的)G2a 五个键。snapshotPoolMaxOpen 传 SnapshotMySQL.MaxOpenConn
+// ValidateConsumers 检查(通常是 Normalize 之后的)消费者旋钮(G2a 五个键与 TransactionLogMaxInflightFlushes)。
+// snapshotPoolMaxOpen 传 SnapshotMySQL.MaxOpenConn
 // (<= 0 时按快照池的实际回落值 5 算)。任何一项越界都返回 error,与 Brokers 是否为空无关:
 // 一份"开 Kafka 才炸"的配置不该等到开的那一刻才被发现(同 RouteStoreConfig.Validate)。
 func (k KafkaConfig) ValidateConsumers(snapshotPoolMaxOpen int) error {
@@ -581,6 +595,11 @@ func (k KafkaConfig) ValidateConsumers(snapshotPoolMaxOpen int) error {
 	if k.SnapshotMaxInflightFlushes < 1 || k.SnapshotMaxInflightFlushes > maxInflight {
 		return fmt.Errorf("Kafka.SnapshotMaxInflightFlushes must be in [1, %d] (SnapshotMySQL pool %d minus one connection kept for GM snapshot / rollback reads), got %d",
 			maxInflight, pool, k.SnapshotMaxInflightFlushes)
+	}
+	// 流水池与快照池由同一份 SnapshotMySQL 配置各开一个(store.NewTransactionLogStore / NewSnapshotStore),上限同一个算法。
+	if k.TransactionLogMaxInflightFlushes < 1 || k.TransactionLogMaxInflightFlushes > maxInflight {
+		return fmt.Errorf("Kafka.TransactionLogMaxInflightFlushes must be in [1, %d] (transaction_log pool %d minus one connection kept for GM queries / recall), got %d",
+			maxInflight, pool, k.TransactionLogMaxInflightFlushes)
 	}
 	if k.LagProbeIntervalMs != 0 && (k.LagProbeIntervalMs < MinLagProbeIntervalMs || k.LagProbeIntervalMs > MaxLagProbeIntervalMs) {
 		return fmt.Errorf("Kafka.LagProbeIntervalMs must be 0 (off) or in [%d, %d], got %d",

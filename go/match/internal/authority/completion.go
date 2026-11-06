@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	battlepb "proto/battle"
@@ -34,6 +35,10 @@ const terminalOutcomeGraceMs uint64 = 60 * 1000
 
 // 只标记原请求或永久原件冲突；SQL/传输错误及提交未知不能据错误文本推成永久拒绝。
 var ErrBattleOutcomeOriginal = errors.New("战斗终局原件冲突")
+
+// ErrCompletionOriginalConflict:同一 battle_id 已归档的完整结算来源与这次的原字节不同。永久错误:原件已在库里,
+// 重试永远不会成功。消费方据此记录后跳过,不能原地重试卡住整个分区(docs/design/infra-reconnect-overview.md §4 R11)。
+var ErrCompletionOriginalConflict = errors.New("同对局完整结算来源原字节冲突")
 
 func terminalAbortDue(deadline, stamp uint64) bool {
 	return deadline != 0 && stamp >= deadline && stamp-deadline >= terminalOutcomeGraceMs
@@ -89,7 +94,7 @@ func (s *Store) ArchiveCompletion(ctx context.Context, event *kafkapb.BattleResu
 			return err
 		}
 		if version != event.SettlementFormatVersion || !bytes.Equal(previous, raw) || !bytes.Equal(previousDigest, digest[:]) {
-			return errors.New("同对局完整结算来源原字节冲突")
+			return ErrCompletionOriginalConflict
 		}
 		// 新RPC终局的第一次真实Kafka观察单独落实际位点，不伪造其原始来源种类。
 		if _, err = tx.ExecContext(ctx, "UPDATE match_battle_completion SET source_topic=?,source_partition=?,source_offset=? WHERE battle_id=? AND source_topic=''", topic, partition, offset, event.BattleId); err != nil {
@@ -202,15 +207,143 @@ func completionHasUnknown(m protoreflect.Message) bool {
 	return found
 }
 
+// supportedOutcomeOriginal 是截止 ABORT 与 COMPLETE 共读的原件判据(身份、版本、时刻):先核成局行上的能力证据
+// (originalCapabilityCheck),再解码持久 Create 逐项核对(decodeOutcomeOriginal)。错误里带第一项不通过的原因码。
+// 2026-11-05 起逐项判据拆成上面两个函数,人工处置工具(manual_abort.go)读同一份规则报告「哪一项不通过」;
+// 放行与拒绝的条件、两类错误的分界与拆分前逐字相同。
 func supportedOutcomeOriginal(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRequest, error) {
-	if f == nil || f.OutcomeProtocolVersion != 1 || f.PreflightSupportedVersion != 1 || f.TargetInstanceId == "" || f.PreflightInstanceId != f.TargetInstanceId || (f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion != 1) || (!f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion != 0) {
-		return nil, errors.New("旧局或原能力证据不完整，终局保持UNKNOWN")
+	if check := originalCapabilityCheck(f); check != "" {
+		return nil, fmt.Errorf("旧局或原能力证据不完整，终局保持UNKNOWN(%s)", check)
 	}
-	r := &battlepb.CreateBattleRequest{}
-	if proto.Unmarshal(f.CreateRequest, r) != nil || r.OutcomeProtocolVersion != 1 || r.BattleId != f.BattleId || r.PlacementOperationId != f.OperationId || r.TargetInstanceId != f.TargetInstanceId || r.BattleConfigId != f.ConfigId || r.MatchMode != f.Mode || r.DeadlineMs == 0 || r.DeadlineMs != f.DeadlineMs || r.CreatedAtMs < f.CreatedMs || r.DeadlineMs <= r.CreatedAtMs || len(r.Players) != len(f.Members) {
-		return nil, errors.New("持久创建原件与终局身份冲突")
+	r, check := decodeOutcomeOriginal(f)
+	if check != "" {
+		return nil, fmt.Errorf("持久创建原件与终局身份冲突(%s)", check)
 	}
 	return r, nil
+}
+
+// originalCapabilityCheck 核成局行上的协议版本与发房前能力证据,返回第一项不通过的原因码(ASCII,低基数),全部通过回空串。
+func originalCapabilityCheck(f *pb.MatchFormationRecord) string {
+	switch {
+	case f == nil:
+		return "formation_missing"
+	case f.OutcomeProtocolVersion != 1:
+		return "outcome_protocol"
+	case f.PreflightSupportedVersion != 1:
+		return "preflight_version"
+	case f.TargetInstanceId == "":
+		return "target_instance_missing"
+	case f.PreflightInstanceId != f.TargetInstanceId:
+		return "preflight_instance_mismatch"
+	case f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion != 1:
+		return "adopted_legacy" // battle 明确回执采用了旧协议
+	case !f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion != 0:
+		return "adopted_invalid"
+	}
+	return ""
+}
+
+// decodeOutcomeOriginal 解码持久 Create 原件并逐项与成局行核对,返回原件(解码失败为 nil)与第一项不通过的原因码
+// (全部通过回空串)。只看原件正文,不看能力证据;核对项不通过时也返回已解码的原件,人工处置要用它的截止与准入期限。
+func decodeOutcomeOriginal(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRequest, string) {
+	if f == nil {
+		return nil, "formation_missing"
+	}
+	r := &battlepb.CreateBattleRequest{}
+	if proto.Unmarshal(f.CreateRequest, r) != nil {
+		return nil, "create_undecodable"
+	}
+	switch {
+	case r.OutcomeProtocolVersion != 1:
+		return r, "create_protocol"
+	case r.BattleId != f.BattleId:
+		return r, "battle_id_mismatch"
+	case r.PlacementOperationId != f.OperationId:
+		return r, "operation_mismatch"
+	case r.TargetInstanceId != f.TargetInstanceId:
+		return r, "target_instance_mismatch"
+	case r.BattleConfigId != f.ConfigId:
+		return r, "config_mismatch"
+	case r.MatchMode != f.Mode:
+		return r, "mode_mismatch"
+	case r.DeadlineMs == 0:
+		return r, "deadline_missing"
+	case r.DeadlineMs != f.DeadlineMs:
+		return r, "deadline_mismatch"
+	case r.CreatedAtMs < f.CreatedMs:
+		return r, "created_before_formation"
+	case r.DeadlineMs <= r.CreatedAtMs:
+		return r, "created_after_deadline"
+	case len(r.Players) != len(f.Members):
+		return r, "players_count_mismatch"
+	}
+	return r, ""
+}
+
+// originalMemberTeams 核对 Create 原件的参战名单与成局成员是同一个集合:r.Players 无空号、无重复,与 f.Members 一一对应
+// (f.Members 自身也不得重复)。返回 玩家→队号,COMPLETE 据它核个人结算的成员与队伍。
+// 截止 ABORT 不读它:释放按 f.Members 走,不依赖原件名单,名单不符的原件照样能被作废。
+func originalMemberTeams(f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) (map[uint64]uint32, error) {
+	teams := make(map[uint64]uint32, len(r.Players))
+	for _, p := range r.Players {
+		if p == nil || p.PlayerId == 0 {
+			return nil, errors.New("创建成员为空")
+		}
+		if _, exists := teams[p.PlayerId]; exists {
+			return nil, errors.New("创建成员重复")
+		}
+		teams[p.PlayerId] = p.TeamIndex
+	}
+	if len(f.Members) != len(teams) {
+		return nil, errors.New("创建成员与原成局成员人数不符")
+	}
+	seen := make(map[uint64]bool, len(f.Members))
+	for _, m := range f.Members {
+		if _, ok := teams[m.PlayerId]; !ok || seen[m.PlayerId] {
+			return nil, errors.New("终局缺原成局成员")
+		}
+		seen[m.PlayerId] = true
+	}
+	return teams, nil
+}
+
+// completableOriginal 是「这份持久原件能被 COMPLETE 裁决」只看原件的全部判据:supportedOutcomeOriginal(身份、版本、时刻,
+// 截止 ABORT 也读它)加 originalMemberTeams(参战名单)。validateTerminalResult 与落库前的 validateSupportedIntent 都只调它,
+// 判据只写这一处;以后给 COMPLETE 加只看原件的检查,就加在这里(2026-11-05 修复)。
+func completableOriginal(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRequest, map[uint64]uint32, error) {
+	r, err := supportedOutcomeOriginal(f)
+	if err != nil {
+		return nil, nil, err
+	}
+	teams, err := originalMemberTeams(f, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	return r, teams, nil
+}
+
+// ErrUnterminableOriginal:这份 v1 Create 原件一旦持久,COMPLETE 就裁决不了它(completableOriginal 不过;其中身份、版本、
+// 时刻不过时到期 ABORT 也裁决不了),全员只能白打一局或永久卡住,所以拒绝落库、也不发 Create;gather 按发房前失败
+// 干净收尾、全员回队,并单独计 match_gather_total{outcome="original_unterminable"}(2026-11-05 修复)。用 errors.Is 判断。
+var ErrUnterminableOriginal = errors.New("Create原件落库后终局无法裁决，拒绝持久")
+
+// validateSupportedIntent 在 saveIntent 的 formation 行锁内、落库之前调用:用锁内原行加上即将写入的四个字段
+// (create_request、outcome_protocol_version、preflight_supported_version、preflight_instance_id)拼出落库后的成局行,
+// 跑一遍 COMPLETE 只看原件的全部判据 completableOriginal(它包含截止 ABORT 读的 supportedOutcomeOriginal)。
+// 凡是持久了的 v1 原件,COMPLETE 与 ABORT 就都裁决得了,落库之后终局失败只可能来自 battle 回的结果本身;
+// 不合格的原件不落库,也就不会发出一份「能开打、却永远收不了尾」或「打完只能作废」的 Create。
+// 修复前的触发:成局 created_ms 取 TiDB 时刻,原件 CreatedAtMs 取 match 本机墙钟,本机慢于 TiDB 时 r.CreatedAtMs < f.CreatedMs,
+// 原件照常落库、battle 照常开打,之后 COMPLETE 与 ABORT 都永久失败,全员票与帮会占用永不释放。
+// 名单不符(scene 回的快照玩家号错或为 0)时修复前同样照常落库开打,每次 COMPLETE 都被拒,只能截止后作废。
+func validateSupportedIntent(f *pb.MatchFormationRecord, request []byte, instance string) error {
+	candidate := proto.Clone(f).(*pb.MatchFormationRecord)
+	candidate.CreateRequest = request
+	candidate.OutcomeProtocolVersion, candidate.PreflightSupportedVersion, candidate.PreflightInstanceId = 1, 1, instance
+	if _, _, err := completableOriginal(candidate); err != nil {
+		logx.Errorf("global formation create original rejected before persist: no terminal path could ever adjudicate it (check clock skew between match and TiDB, or a prepare snapshot whose player does not match the formation) battle_id=%d: %v", f.GetBattleId(), err)
+		return fmt.Errorf("%w: %v", ErrUnterminableOriginal, err)
+	}
+	return nil
 }
 
 func validateTerminalPayload(event *kafkapb.BattleResultEvent, raw []byte) error {
@@ -267,27 +400,16 @@ func validateTerminalResult(f *pb.MatchFormationRecord, event *kafkapb.BattleRes
 	if err := validateTerminalPayload(event, raw); err != nil {
 		return err
 	}
-	r, err := supportedOutcomeOriginal(f)
+	r, members, err := completableOriginal(f)
 	if err != nil {
 		return err
 	}
-	if event.BattleId != r.BattleId || event.BattleConfigId != r.BattleConfigId || event.MatchMode != r.MatchMode || event.FinishedAtMs < r.CreatedAtMs || !proto.Equal(event.ActivityContext, r.ActivityContext) {
-		return errors.New("终局配置、活动或原时间不符")
-	}
-	members := map[uint64]uint32{}
-	for _, p := range r.Players {
-		if p == nil || p.PlayerId == 0 {
-			return errors.New("创建成员为空")
-		}
-		if _, exists := members[p.PlayerId]; exists {
-			return errors.New("创建成员重复")
-		}
-		members[p.PlayerId] = p.TeamIndex
-	}
-	for _, m := range f.Members {
-		if _, ok := members[m.PlayerId]; !ok {
-			return errors.New("终局缺原成局成员")
-		}
+	// 结束时刻只要求非 0,不与原件 CreatedAtMs 比先后(2026-11-05 修复):FinishedAtMs 取 battle 主机时钟,CreatedAtMs 取
+	// match 侧时刻,两台主机比先后,battle 时钟稍慢时几秒就分出胜负的局(逃跑、秒杀)会被永久拒收、截止后整局作废。
+	// 它只给 scene 的近期战绩与帮会补登记作展示时刻、给帮会结算延迟作指标,不参与任何裁决;终局属于哪一局由
+	// placement_operation_id + target_instance_id 与持久原件逐项核对,不靠时间先后。帮会侧同样只要求非 0。
+	if event.BattleId != r.BattleId || event.BattleConfigId != r.BattleConfigId || event.MatchMode != r.MatchMode || event.FinishedAtMs == 0 || !proto.Equal(event.ActivityContext, r.ActivityContext) {
+		return errors.New("终局配置、活动不符或缺结束时刻")
 	}
 	if len(event.Settlements) != len(members) {
 		return errors.New("终局个人原件全集与持久创建成员不符")
@@ -385,48 +507,92 @@ func replayTerminal(r *pb.MatchBattleCompletionRecord, req *pb.CommitBattleOutco
 	return r.Decision, nil
 }
 
+// decodeTerminalRequest 做不碰 SQL 的终局原件校验(大小、未知字段、解码、完整已知语义与 Inbox 上限)。
+// 返回的错误都已包成 ErrBattleOutcomeOriginal:这些毛病与库里状态无关,重放同一份原件结果不变。
+func decodeTerminalRequest(req *pb.CommitBattleOutcomeRequest) (*kafkapb.BattleResultEvent, error) {
+	if len(req.RawResultPayload) == 0 || len(req.RawResultPayload) > maxCompletionBytes || completionHasUnknown(req.ProtoReflect()) {
+		return nil, fmt.Errorf("%w: 终局请求原件不完整", ErrBattleOutcomeOriginal)
+	}
+	event := &kafkapb.BattleResultEvent{}
+	if err := proto.Unmarshal(req.RawResultPayload, event); err != nil {
+		return nil, fmt.Errorf("%w: 终局原字节不能解码", ErrBattleOutcomeOriginal)
+	}
+	if err := validateTerminalPayload(event, req.RawResultPayload); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
+	}
+	return event, nil
+}
+
 // CommitBattleOutcome 在任何个人副作用前持久唯一决定和两个outbox。Commit未知绝不返回成功。
+//
+// 2026-11-05 修复:先复读既有终局,再判原件冲突。另一副本可能刚在截止后提交了 ABORT(同一事务把票置 4、formation 置 5);
+// 原件即使永久不合格(个人结算超 Inbox 上限、版本错位带未知字段),battle 也要拿到这份 ABORT 才能收尾删房,
+// 不能永远收到 FailedPrecondition、把房间占到 30 小时本地清理。既有 COMPLETE 照旧逐字节比对,不会因此放过别的原件。
 func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOutcomeRequest) (pb.BattleOutcomeDecision, error) {
 	if s == nil || s.DB == nil {
 		return 0, errors.New("终局权威未装配")
 	}
-	if req == nil || req.BattleId == 0 || req.PlacementOperationId == "" || req.TargetInstanceId == "" || len(req.RawResultPayload) == 0 || len(req.RawResultPayload) > maxCompletionBytes || completionHasUnknown(req.ProtoReflect()) {
+	// 身份不全就查不到属于哪一局,不碰 SQL,直接按原件冲突拒绝。
+	if req == nil || req.BattleId == 0 || req.PlacementOperationId == "" || req.TargetInstanceId == "" {
 		return 0, fmt.Errorf("%w: 终局请求原件不完整", ErrBattleOutcomeOriginal)
 	}
-	event := &kafkapb.BattleResultEvent{}
-	if err := proto.Unmarshal(req.RawResultPayload, event); err != nil {
-		return 0, fmt.Errorf("%w: 终局原字节不能解码", ErrBattleOutcomeOriginal)
-	}
-	if err := validateTerminalPayload(event, req.RawResultPayload); err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
-	}
+	event, originalErr := decodeTerminalRequest(req)
 	old, err := readTerminal(ctx, s.DB, req.BattleId)
 	if err != nil {
+		if originalErr != nil {
+			// 原件本身永久不合格,与库是否可读无关;仍按原件冲突分类,读失败的原因一并带上。
+			return 0, errors.Join(originalErr, err)
+		}
 		return 0, err
 	}
 	if old != nil && old.Decision != 0 {
-		return replayTerminal(old, req)
+		decision, replayErr := replayTerminal(old, req)
+		if replayErr == nil && decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE {
+			// 只核对、只记录,不影响回执(battle_report.go)。
+			checkBattleReportReplay(ctx, s.DB, req)
+		}
+		return decision, replayErr
 	}
+	if originalErr != nil {
+		return 0, originalErr
+	}
+	return s.commitBattleOutcomeLocked(ctx, req, event)
+}
+
+// commitBattleOutcomeLocked 是 COMPLETE 的锁内提交点:原 P→formation→原票加锁,锁内先复读终局,再核原件,最后同一事务写
+// COMPLETE、全员个人来源、formation 4 与票 2→3。锁外复读没看到终局、进锁之前另一副本刚提交 ABORT 的竞态落在这里,
+// 单独成函数后可以确定性复现(测试跳过锁外复读直接调它)。
+func (s *Store) commitBattleOutcomeLocked(ctx context.Context, req *pb.CommitBattleOutcomeRequest, event *kafkapb.BattleResultEvent) (pb.BattleOutcomeDecision, error) {
 	tx, f, roles, err := s.terminalFormation(ctx, req.BattleId)
 	if err != nil {
+		// 另一入口可能刚提交了终局:截止 ABORT 在同一事务里把原票置 4(这里读到 ErrOriginalPlayer),任何提交都会让锁内
+		// 成局与锁外观察不一致。有终局就回放;没有才按原错误处理,原票失效才是原件冲突。
+		old, readErr := readTerminal(ctx, s.DB, req.BattleId)
+		if readErr != nil {
+			return 0, errors.Join(err, readErr)
+		}
+		if old != nil && old.Decision != 0 {
+			return replayTerminal(old, req)
+		}
 		if errors.Is(err, ErrOriginalPlayer) {
 			return 0, fmt.Errorf("%w: 原成员或归属失效", ErrBattleOutcomeOriginal)
 		}
 		return 0, err
 	}
 	defer tx.Rollback()
-	if f.OperationId != req.PlacementOperationId || f.TargetInstanceId != req.TargetInstanceId || f.State == 5 {
-		return 0, fmt.Errorf("%w: 终局原操作、实例或成局状态不符", ErrBattleOutcomeOriginal)
-	}
-	if err = validateTerminalResult(f, event, req.RawResultPayload); err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
-	}
-	old, err = readTerminal(ctx, tx, f.BattleId)
+	// 锁内也先复读终局:已有决定就按它回放(state 5 的局回 ABORT),不走下面的冲突判定。
+	old, err := readTerminal(ctx, tx, f.BattleId)
 	if err != nil {
 		return 0, err
 	}
 	if old != nil {
 		return replayTerminal(old, req)
+	}
+	if f.OperationId != req.PlacementOperationId || f.TargetInstanceId != req.TargetInstanceId || f.State == 5 {
+		return 0, fmt.Errorf("%w: 终局原操作、实例或成局状态不符", ErrBattleOutcomeOriginal)
+	}
+	if err = validateTerminalResult(f, event, req.RawResultPayload); err != nil {
+		return 0, fmt.Errorf("%w: %v", ErrBattleOutcomeOriginal, err)
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {
@@ -453,6 +619,11 @@ func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOut
 			return 0, err
 		}
 	}
+	// 战报回放(battle-report-replay.md BR-4):与终局同一事务写;回放外壳不合格只丢回放,SQL 错误照常整笔回滚。
+	reportWrite, err := writeBattleReportTx(ctx, tx, f, event, req.GetReplay(), stamp)
+	if err != nil {
+		return 0, err
+	}
 	// Create回执可能丢失；COMPLETE本身是采用新协议的持久证据，但不伪造adopted回执字段。
 	if _, err = tx.ExecContext(ctx, "UPDATE match_formation SET state=4,retry_at_ms=? WHERE battle_id=?", terminalOutcomeNoRetryMs, f.BattleId); err != nil {
 		return 0, err
@@ -465,48 +636,42 @@ func (s *Store) CommitBattleOutcome(ctx context.Context, req *pb.CommitBattleOut
 	if err = tx.Commit(); err != nil {
 		return 0, fmt.Errorf("终局提交未知，必须重放原字节: %w", err)
 	}
+	reportWrite.observe()
 	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE, nil
 }
 
-// abortTerminalTx 只给已持全部原P与formation锁的取消入口使用；绝不调用运行时猜终局。
-func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord) (pb.BattleOutcomeDecision, error) {
+// abortTerminalTx 是截止裁决,只给已持全部原P与formation锁的入口(到期恢复、帮会取消)使用；绝不调用运行时猜终局。
+// 已有终局回它的决定(written=false);过了截止加宽限才在本事务里经 commitAbortTx 写 ABORT(written=true),
+// 由调用方提交,提交成功后计数。
+func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord) (decision pb.BattleOutcomeDecision, written bool, err error) {
 	old, err := readTerminal(ctx, tx, f.BattleId)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	if old != nil {
-		return old.Decision, nil
+		return old.Decision, false, nil
 	}
 	r, err := supportedOutcomeOriginal(f)
 	if err != nil {
-		return 0, nil
+		return 0, false, nil
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	if !terminalAbortDue(r.DeadlineMs, stamp) {
-		return 0, nil
+		return 0, false, nil
 	}
 	// 旧恢复流程可能先将运行时ABORTED收为state5；它自身不是终局证明。
 	// 仍须本函数前面的原cap/version/UUID/body与deadline全部成立，才能补SQL ABORT。
 	if f.State != 2 && f.State != 3 && f.State != 4 && f.State != 5 {
-		return 0, nil
+		return 0, false, nil
 	}
 	// 截止裁决的 ABORT 没有 Battle 原字节：format_version=0、来源记为 MATCH_DEADLINE_ABORT，不冒充 BATTLE_RPC。
-	_, err = tx.ExecContext(ctx, "INSERT INTO match_battle_completion(battle_id,raw_payload,payload_digest,format_version,archived_ms,source_topic,source_partition,source_offset,decision,source_kind,placement_operation_id,target_instance_id,outcome_protocol_version,result_published,next_retry_ms) VALUES(?,?,?,0,?,'',0,0,?,?,?,?,1,1,0)", f.BattleId, []byte{}, []byte{}, stamp, uint32(pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT), uint32(pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT), f.OperationId, f.TargetInstanceId)
-	if err != nil {
-		return 0, err
+	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT); err != nil {
+		return 0, false, err
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE match_formation SET state=5 WHERE battle_id=?", f.BattleId); err != nil {
-		return 0, err
-	}
-	for _, m := range f.Members {
-		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=? AND ticket=? AND formation_id=? AND state IN(2,3)", m.PlayerId, m.Ticket, f.BattleId); err != nil {
-			return 0, err
-		}
-	}
-	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, nil
+	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, true, nil
 }
 
 // PublishBattleOutcomesOnce 按默认参数(DefaultOutcomeOutboxOptions:结果 8 行、首投 4 行、等待 4 行、逐行串行,

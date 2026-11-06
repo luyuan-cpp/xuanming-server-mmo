@@ -37,8 +37,9 @@ const (
 	// 与首个请求不同。不得重放旧路由/redirect，也不得覆盖正在执行的 owner。
 	ErrEnterSceneIdempotencyConflict uint32 = 16
 	// ErrSceneReentryBarrier: 场景当前映射的节点刚被判死,但再入屏障(见
-	// reentry_barrier.go)还没走完 —— 老节点可能仍在 emergency relocate drain
-	// 里 SavePlayer。此刻改派会造成同一玩家双写/回档,所以本次请求
+	// reentry_barrier.go)还没走完 —— 老节点可能仍在冲突关停的有界疏散
+	// 里 SavePlayer。此刻改派会让它的最后一笔进度被写权行拒掉而丢失
+	// (迟到写覆盖不了新档,由 TiDB 写权行兜底),所以本次请求
 	// **一个字节都不改**地拒绝,由上游带着同样的 scene_conf_id 退避重试。
 	// 这是可重试的瞬时拒绝,不是故障。
 	ErrSceneReentryBarrier uint32 = 17

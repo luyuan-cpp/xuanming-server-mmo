@@ -1262,7 +1262,7 @@ func TestLookup_PollAfterConsume_ReturnsExpired(t *testing.T) {
 // (iii) meta 在、没有 admitted_at、又不在队列(2026-10-18 改写,原 TestLookup_InFlightPop_StillQueueingRankZero)。
 // 原用例把这个形状当成「dispatcher 已 ZPOPMIN、放行还没落地」的在途窗口,要求回「排队中、名次 0」。现在放行脚本把移出
 // 队列与写 admitted_at 放在同一段里,在途窗口不复存在;这个形状只来自整个 zone 空闲后队列键先到期、人工 ZREM / DEL,
-// 或排队开着时混跑旧版 leader(见 lookupStateScript),回 EXPIRED(queue_gone),让客户端重排。手工只 ZREM 成员造出它。
+// 或排队开着时混跑旧版 leader(见 lookupScript),回 EXPIRED(queue_gone),让客户端重排。手工只 ZREM 成员造出它。
 // 不签票,也不给 meta 续期(PTTL 仍等于入队时的 E)。
 // (2026-10-18 补注)上一句的「PTTL 仍等于 E」测不出续期:不拨钟时 PTTL 恰为 E,严格的 ttl < E 本来就不触发。
 // 改为 ZREM 之后先把 miniredis 拨 1s,让 meta 与 token 索引的 PTTL 落到续期阈值 E 以下,再断言两者仍是 E-1s。
@@ -1297,17 +1297,12 @@ func TestLookup_MetaPresentNotQueuedNotAdmitted_ReturnsQueueGone(t *testing.T) {
 	mustKeyPTTL(t, rdb, tokenIndexKey(res.QueueToken), q.entryTTL-time.Second, "queue_gone must not renew the token index")
 }
 
-// (iv) 竞态:第一次 GETDEL 落空之后、读 meta 之前,dispatcher 的 MULTI 才落地。用注入点在这两步之间跑一次
-// 真实的 PopAdmit(ZPOPMIN + 写放行槽、admitted_at 与占位的 MULTI)。Lookup 看到 admitted_at,再取一次:
-// 回 ADMITTED、只签一次票,占位改为「取走时刻 + handoffGrace」。
-// 修复前红(注入点照样放进旧代码):读 meta 只拿 zone_id,ZRANK 落空回「排队中、名次 0」。只加 admitted_at
-// 判定、不做二次 GETDEL 的写法也红:把一个刚放行、还没取走的条目判成 EXPIRED,放行槽白白等到 AdmitTTL。
-// (2026-10-15 更正)上文两处「MULTI」现为 admitEntryScript 一段脚本(放行槽、admitted_at、占位同时可见);
-// 模拟的时序与断言不变。
-// (2026-10-18 更正)「ZPOPMIN + 写放行槽……的 MULTI」改读「ZRANGE + 放行脚本」;「读 meta 之前」「读 meta 只拿 zone_id」
-// 改读「读状态脚本(lookupStateScript)之前」——注入点现在位于第一次 GETDEL 落空之后、读状态脚本之前。断言不变,
-// 钉住读状态脚本看到 admitted_at 时仍做二次 GETDEL。
-func TestLookup_AdmitLandsBetweenGetDelAndMetaRead_Admits(t *testing.T) {
+/// (iv) 放行落在两次轮询之间(2026-11-06 改写,原 TestLookup_AdmitLandsBetweenGetDelAndMetaRead_Admits)。lookupScript 在同一段里
+// 核对令牌、取放行槽、读 admitted_at,放行脚本在同一段里写 admitted_at 与放行槽,两者互斥原子;原用例模拟的「第一次 GETDEL
+// 落空之后放行才落地」的窗口不复存在,注入点 afterAdmitMiss 随之删除。这里钉住合并之后的两条性质:
+//   - 刚放行、还没取走的条目,下一次轮询在一段脚本里取到放行槽:ADMITTED、只签一次票,占位改为「取走时刻 + handoffGrace」;
+//   - 取走不再单发 GETDEL(拆回三次往返的写法红在 getdel 计数上)。
+func TestLookup_AdmitBetweenPolls_TakenInOneScript(t *testing.T) {
 	q, rdb, clk := newClockedQueue(t)
 	ctx := context.Background()
 
@@ -1315,16 +1310,19 @@ func TestLookup_AdmitLandsBetweenGetDelAndMetaRead_Admits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
-	hookCalls := 0
-	q.afterAdmitMiss = func(queueID string) {
-		hookCalls++
-		if queueID != res.QueueID {
-			t.Fatalf("afterAdmitMiss(%q), want %q", queueID, res.QueueID)
-		}
-		if n, err := q.PopAdmit(ctx, 1, 1, pickZone1Gate); err != nil || n != 1 {
-			t.Fatalf("popadmit inside the window = (%d, %v), want (1, nil)", n, err)
-		}
+	if st, err := q.Lookup(ctx, res.QueueToken, 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {
+		t.Fatalf("lookup before admit = (%+v, %v), want QUEUEING", st, err)
 	}
+	if n, err := q.PopAdmit(ctx, 1, 1, pickZone1Gate); err != nil || n != 1 {
+		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
+	}
+	getdels := 0
+	rdb.AddHook(cmdHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
+		if cmd.Name() == "getdel" {
+			getdels++
+		}
+		return next(ctx, cmd)
+	}})
 	signs := 0
 	countingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
 		signs++
@@ -1335,11 +1333,11 @@ func TestLookup_AdmitLandsBetweenGetDelAndMetaRead_Admits(t *testing.T) {
 	if err != nil || st.Status != StatusAdmitted || st.Admit == nil || st.Admit.IP != "10.0.0.1" {
 		t.Fatalf("lookup = (%+v, %v), want ADMITTED with the gate picked at admit time", st, err)
 	}
-	if hookCalls != 1 {
-		t.Fatalf("afterAdmitMiss ran %d times, want 1: the race window was not exercised", hookCalls)
-	}
 	if signs != 1 {
 		t.Fatalf("signFn ran %d times, want exactly 1", signs)
+	}
+	if getdels != 0 {
+		t.Fatalf("lookup sent %d standalone GETDEL commands, want 0: the admit slot is taken inside lookupScript", getdels)
 	}
 	if n, err := rdb.Exists(ctx, admitKey(res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v after lookup, want taken", n, err)
@@ -1351,7 +1349,94 @@ func TestLookup_AdmitLandsBetweenGetDelAndMetaRead_Admits(t *testing.T) {
 	}
 }
 
-// PopAdmit 在 meta 里记下 admitted_at(包注释 Redis 布局:Lookup 据此区分「放行窗口已过」与「在途窗口」),
+// 排队中的一次轮询只有一次 Redis 往返(2026-11-06,缺口清单第 14 条)。先轮询一次让脚本进 Redis 的脚本缓存(进程内首次
+// EVALSHA 撞 NOSCRIPT 会多一次 EVAL 回退),再数第二次轮询发了哪些命令。
+// 拆回「GET token 索引 + GETDEL + 读状态脚本」的写法红在这里(3 条)。
+func TestLookup_QueueingPollIsOneRoundTrip(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	res, err := q.Enqueue(ctx, 1, "alice", "dev1")
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if st, err := q.Lookup(ctx, res.QueueToken, 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {
+		t.Fatalf("warm-up lookup = (%+v, %v), want QUEUEING", st, err)
+	}
+	var sent []string
+	rdb.AddHook(cmdHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
+		sent = append(sent, cmd.Name())
+		return next(ctx, cmd)
+	}})
+
+	st, err := q.Lookup(ctx, res.QueueToken, 1, signMustNotRun(t))
+	if err != nil || st.Status != StatusQueueing || st.Rank != 0 || st.Total != 1 {
+		t.Fatalf("lookup = (%+v, %v), want QUEUEING rank 0 of 1", st, err)
+	}
+	if !slices.Equal(sent, []string{"evalsha"}) {
+		t.Fatalf("a queueing poll sent %v, want exactly one EVALSHA", sent)
+	}
+}
+
+// 令牌正文里的 queueId 被改成别人的(Lookup 不验签,验签在调用方):token 索引按令牌全文建,改过的令牌没有索引,回
+// EXPIRED(meta_gone),别人的放行槽原样留着、不被取走,本人的令牌照常取到。去掉 lookupScript 第一段令牌核对的写法红在
+// 这里(会按令牌里的 queueId 取走 bob 的放行槽)。改成只看索引在不在(EXISTS)仍是绿的:改过的令牌本来就没有索引,
+// 比对索引值是纵深防御,见 lookupScript 注释。
+func TestLookup_TokenWithForeignQueueID_DoesNotTakeOthersAdmit(t *testing.T) {
+	gzprom.Enable() // 见 TestLookup_AdmitSlotExpiredUnclaimed_ReturnsExpired
+	q, rdb, _ := newClockedQueue(t)
+	ctx := context.Background()
+
+	alice, err := q.Enqueue(ctx, 1, "alice", "dev1")
+	if err != nil {
+		t.Fatalf("enqueue alice: %v", err)
+	}
+	bob, err := q.Enqueue(ctx, 1, "bob", "dev2")
+	if err != nil {
+		t.Fatalf("enqueue bob: %v", err)
+	}
+	if n, err := q.PopAdmit(ctx, 1, 2, pickZone1Gate); err != nil || n != 2 {
+		t.Fatalf("popadmit = (%d, %v), want (2, nil)", n, err)
+	}
+	forged := retargetQueueToken(t, alice.QueueToken, bob.QueueID)
+
+	before := expiredTotalValue(t, "1", ExpireReasonMetaGone)
+	st, err := q.Lookup(ctx, forged, 1, signMustNotRun(t))
+	if err != nil || st.Status != StatusExpired {
+		t.Fatalf("lookup with a retargeted token = (%+v, %v), want EXPIRED", st, err)
+	}
+	if got := expiredTotalValue(t, "1", ExpireReasonMetaGone) - before; got != 1 {
+		t.Fatalf(`login_queue_expired_total{zone="1",reason="meta_gone"} grew by %v, want 1`, got)
+	}
+	if n, err := rdb.Exists(ctx, admitKey(bob.QueueID)).Result(); err != nil || n != 1 {
+		t.Fatalf("bob's admit slot exists=%d err=%v, want it untouched for bob's own token", n, err)
+	}
+	if st, err := q.Lookup(ctx, bob.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
+		t.Fatalf("bob's own lookup = (%+v, %v), want ADMITTED", st, err)
+	}
+}
+
+// retargetQueueToken 把排队令牌正文里的 queueId 换成 queueID,签名原样带着(已经对不上;Lookup 不验签)。
+func retargetQueueToken(t *testing.T, token, queueID string) string {
+	t.Helper()
+	bodyBytes, sig, err := splitQueueToken(token)
+	if err != nil {
+		t.Fatalf("split queue token: %v", err)
+	}
+	var body queueTokenBody
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		t.Fatalf("unmarshal queue token: %v", err)
+	}
+	body.QueueID = queueID
+	forged, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal queue token: %v", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(append(append(forged, '.'), sig...))
+}
+
+/ PopAdmit 在 meta 里记下 admitted_at(包注释 Redis 布局:Lookup 据此区分「放行窗口已过」与「在途窗口」),
 // 且不动 meta 的 TTL:仍按入队时的 QueueEntryTTL 到期。miniredis 的 TTL 只在 FastForward 里递减,入队后先拨
 // waited,meta 剩 entryTTL-waited;写 admitted_at 时被抹掉(-1)、被续期(回到 entryTTL)、被缩短都在等式处红。
 // 不拨时间的区间断言 (0, entryTTL] 分不出「保持」与「续期到 entryTTL」。
@@ -1620,8 +1705,11 @@ func lookupQueueingRanks(t *testing.T, q *Queue, tokens []string, wantTotal uint
 	return ranks
 }
 
-// cmdHook 是通用的单发命令拦截钩子(2026-10-18):process 拿到每条单发命令与下一环,自己决定转发还是直接回错误。
-// 直接回错误时必须 cmd.SetErr(err) 并返回 err(见 failCmd),调用方的 Cmd 才看得到这个错误。MULTI / pipeline 不经过它。
+// cmdHook 是通用的命令拦截钩子(2026-10-18):process 拿到每条命令与下一环,自己决定转发还是直接回错误。
+// 直接回错误时必须 cmd.SetErr(err) 并返回 err(见 failCmd),调用方的 Cmd 才看得到这个错误。
+// (2026-11-06)PopAdmit 探路之后的放行脚本在 pipeline 里发,pipeline 里的命令也逐条交给 process:process 调 next 的
+// 照常发出(整块一次发),直接回错误的不发、就地失败。process 里调 next 只是登记「要发」,返回时命令还没执行,
+// 要看结果的钩子只能拦单发命令。MULTI(TxPipeline,首条是 multi)整块原样转发,不逐条拦截。
 type cmdHook struct {
 	process func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error
 }
@@ -1633,7 +1721,28 @@ func (h cmdHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 }
 
 func (h cmdHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return next
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		if len(cmds) > 0 && cmds[0].Name() == "multi" {
+			return next(ctx, cmds)
+		}
+		forward := make([]redis.Cmder, 0, len(cmds))
+		var firstErr error
+		for _, cmd := range cmds {
+			err := h.process(ctx, cmd, func(_ context.Context, c redis.Cmder) error {
+				forward = append(forward, c)
+				return nil
+			})
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		if len(forward) > 0 {
+			if err := next(ctx, forward); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
+	}
 }
 
 // admitScriptKey 识别放行脚本:EVAL / EVALSHA 且第一个键(args[3],放行脚本的 KEYS[1] 是放行槽)以 admit: 开头,
@@ -2307,6 +2416,124 @@ func TestPopAdmit_AdmitScriptReplayedAfterConsume_DoesNotReissue(t *testing.T) {
 	}
 	if signs != 1 {
 		t.Fatalf("signFn ran %d times, want exactly 1", signs)
+	}
+}
+
+// admitTraffic 数放行脚本是怎么发出去的(2026-11-06):单发的条数,以及每个 pipeline 里有几条。只计数,不拦截。
+type admitTraffic struct {
+	single    int
+	pipelines []int
+}
+
+func (a *admitTraffic) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (a *admitTraffic) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if _, ok := admitScriptKey(cmd); ok {
+			a.single++
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func (a *admitTraffic) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		admits := 0
+		for _, cmd := range cmds {
+			if _, ok := admitScriptKey(cmd); ok {
+				admits++
+			}
+		}
+		if admits > 0 {
+			a.pipelines = append(a.pipelines, admits)
+		}
+		return next(ctx, cmds)
+	}
+}
+
+// enqueueN 往 zone 1 排 n 个账号,返回按队列顺序(ZRANGE)排好的 queueId。
+func enqueueN(t *testing.T, q *Queue, rdb *redis.Client, n int) []string {
+	t.Helper()
+	ctx := context.Background()
+	for i := range n {
+		if _, err := q.Enqueue(ctx, 1, fmt.Sprintf("user-%d", i), "dev"); err != nil {
+			t.Fatalf("enqueue #%d: %v", i, err)
+		}
+	}
+	order, err := rdb.ZRange(ctx, zoneZSetKey(1), 0, -1).Result()
+	if err != nil || len(order) != n {
+		t.Fatalf("queue order = %d members err=%v, want %d", len(order), err, n)
+	}
+	return order
+}
+
+// 放行按块流水线发(2026-11-06,缺口清单第 14 条):第一条单发探路,之后每块至多 popAdmitPipelineChunk 条放进一个 pipeline。
+// 1 + 128 + 128 + 43 条 = 1 条单发 + 三个 pipeline;全部放行、队列清空、每人一个在途占位。
+// 逐条单发的写法红在 pipeline 数上,不探路直接整批分块的写法红在单发数上。先 SCRIPT LOAD,免得探路那条撞 NOSCRIPT 多一次 EVAL。
+func TestPopAdmit_ProbeThenPipelinedChunks(t *testing.T) {
+	q, rdb, _ := newClockedQueue(t)
+	ctx := context.Background()
+	const total = 1 + 2*popAdmitPipelineChunk + 43
+	enqueueN(t, q, rdb, total)
+	if err := admitEntryScript.Load(ctx, rdb).Err(); err != nil {
+		t.Fatalf("script load: %v", err)
+	}
+	traffic := &admitTraffic{}
+	rdb.AddHook(traffic)
+
+	if n, err := q.PopAdmit(ctx, 1, total, pickZone1Gate); err != nil || n != total {
+		t.Fatalf("popadmit = (%d, %v), want (%d, nil)", n, err, total)
+	}
+	if traffic.single != 1 {
+		t.Fatalf("admit scripts sent alone = %d, want 1 (the probe)", traffic.single)
+	}
+	if want := []int{popAdmitPipelineChunk, popAdmitPipelineChunk, 43}; !slices.Equal(traffic.pipelines, want) {
+		t.Fatalf("admit scripts per pipeline = %v, want %v", traffic.pipelines, want)
+	}
+	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
+		t.Fatalf("queue length = %d err=%v, want 0", n, err)
+	}
+	mustAdmittedCount(t, q, total, "every admitted entry holds a placeholder")
+}
+
+// 一块里有一条脚本出错(2026-11-06):同块其余各条照常执行并计数,出错那条原样留在队列,后面的块不再发,错误带上首个出错的
+// queueId、已放行数、出错数与未尝试数。1 条探路 + 一整块 + 10 条,让第一块里的一条出错:放行 1 + 127 条,剩出错那条与未尝试的 10 条。
+// 把「出错即停」做进块内(同块出错之后的条目当没执行)或者不停批(后面的块照发)的写法都红在这里。
+func TestPopAdmit_ChunkErrorStopsAfterTheChunk(t *testing.T) {
+	q, rdb, _ := newClockedQueue(t)
+	ctx := context.Background()
+	const untried = 10
+	order := enqueueN(t, q, rdb, 1+popAdmitPipelineChunk+untried)
+	failing := order[6] // 第一块(队列下标 1..128)里的一条
+	rdb.AddHook(cmdHook{process: func(ctx context.Context, cmd redis.Cmder, next redis.ProcessHook) error {
+		if key, ok := admitScriptKey(cmd); ok && key == admitKey(failing) {
+			return failCmd(cmd, errors.New("ERR injected"))
+		}
+		return next(ctx, cmd)
+	}})
+
+	n, err := q.PopAdmit(ctx, 1, len(order), pickZone1Gate)
+	const wantAdmitted = popAdmitPipelineChunk // 探路 1 条 + 第一块 128 条里的 127 条
+	if n != wantAdmitted || err == nil {
+		t.Fatalf("popadmit = (%d, %v), want (%d, an error)", n, err, wantAdmitted)
+	}
+	for _, part := range []string{
+		"ERR injected", "queueId=" + failing, fmt.Sprintf("admitted=%d", wantAdmitted), "failed=1", fmt.Sprintf("untried=%d", untried),
+	} {
+		if !strings.Contains(err.Error(), part) {
+			t.Fatalf("popadmit error %q, want it to mention %q", err, part)
+		}
+	}
+	left, err := rdb.ZRange(ctx, zoneZSetKey(1), 0, -1).Result()
+	if err != nil {
+		t.Fatalf("zrange after the failing chunk: %v", err)
+	}
+	want := append([]string{failing}, order[1+popAdmitPipelineChunk:]...)
+	if !slices.Equal(left, want) {
+		t.Fatalf("queue after the failing chunk = %v, want the failed entry followed by the untried ones %v", left, want)
+	}
+	if has, err := rdb.HExists(ctx, metaKey(failing), metaFieldAdmittedAt).Result(); err != nil || has {
+		t.Fatalf("meta of the failed entry has %s=%v err=%v, want absent (its script never ran)", metaFieldAdmittedAt, has, err)
 	}
 }
 

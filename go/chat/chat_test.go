@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
@@ -16,8 +15,11 @@ import (
 	chatpb "proto/chat"
 	base "proto/common/base"
 
+	"shared/callerauth/callerauthtest"
+	"shared/generated/clientrpc"
 	"shared/generated/tip"
 	"shared/killswitch"
+	"shared/roleidentity"
 	"shared/serverbase"
 
 	"github.com/zeromicro/go-zero/core/logx/logtest"
@@ -25,7 +27,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // chainUnary 按 gRPC 的语义把一组一元拦截器串成一个 handler:切片里第一个是最外层。
@@ -46,24 +47,29 @@ func chainUnary(
 	return next
 }
 
-// incomingSessionContext 模拟路由服透传过来的 x-session-detail-bin(base64(SessionDetails))。
-func incomingSessionContext(t *testing.T, playerId uint64) context.Context {
+// incomingSessionContext 模拟 gate 发来、已过验签拦截器的客户端请求:会话带完整原身份,签名绑定 method。
+func incomingSessionContext(t *testing.T, method string, playerId uint64) context.Context {
 	t.Helper()
-	bin, err := proto.Marshal(&base.SessionDetails{PlayerId: playerId})
-	if err != nil {
-		t.Fatalf("序列化 SessionDetails 失败: %v", err)
-	}
-	md := metadata.Pairs(session.MetadataKey, base64.StdEncoding.EncodeToString(bin))
-	return metadata.NewIncomingContext(context.Background(), md)
+	return callerauthtest.Incoming(t, method, callerauthtest.OnlineSession("chat-account", playerId, 7))
 }
 
-// TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → session → serverbase。
+// chatEntry 是 chat.go 装配的同一个入口准入。
+func chatEntry(t *testing.T) grpc.UnaryServerInterceptor {
+	t.Helper()
+	entry, err := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if err != nil {
+		t.Fatalf("入口准入装配失败: %v", err)
+	}
+	return entry
+}
+
+// TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → 入口准入 → serverbase。
 //
 // 函数值不能比较,拿符号名判定又会被跨包内联改名打败,所以按**可观测行为**逐个探测:
-// 对每个位置单独调用那一个拦截器,handler 返回一个带 fault 码的响应,并带上合法会话头 +
+// 对每个位置单独调用那一个拦截器,handler 返回一个带 fault 码的响应,并带上已验签的完整会话 +
 // 命中的关停规则。于是:
 //   - killswitch:唯一不调 handler、回 Unavailable 的;
-//   - session:唯一让 handler 从 ctx 取到会话的;
+//   - 入口准入(session):唯一让 handler 从 ctx 取到会话的;
 //   - serverbase:唯一把 fault 码打成 rpc_inband_fault 日志的;
 //   - grpcstats:未开启采集时完全透明(以上三件事都不做)—— 剩下的那个位置就是它。
 func TestBuildUnaryInterceptorsOrder(t *testing.T) {
@@ -71,9 +77,9 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		strings.TrimPrefix(chatpb.ClientPlayerChat_SendChat_FullMethodName, "/"): {Deny: true, Reason: "单测:顺序探针"},
 	})
-	chain := buildUnaryInterceptors(ks)
+	chain := buildUnaryInterceptors(ks, chatEntry(t))
 	if len(chain) != 4 {
-		t.Fatalf("拦截器链长度应为 4(grpcstats/killswitch/session/serverbase),实际 %d", len(chain))
+		t.Fatalf("拦截器链长度应为 4(grpcstats/killswitch/入口准入/serverbase),实际 %d", len(chain))
 	}
 
 	type observed struct {
@@ -99,7 +105,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 		t.Run(w.name, func(t *testing.T) {
 			logs := logtest.NewCollector(t)
 			var got observed
-			_, err := chain[i](incomingSessionContext(t, 42), &chatpb.SendChatRequest{}, info,
+			_, err := chain[i](incomingSessionContext(t, chatpb.ClientPlayerChat_SendChat_FullMethodName, 42), &chatpb.SendChatRequest{}, info,
 				func(ctx context.Context, req any) (any, error) {
 					got.handlerCalled = true
 					_, got.sawSession = session.GetSessionDetails(ctx)
@@ -127,7 +133,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		blocked: {Deny: true, Reason: "单测:聊天刷屏"},
 	})
-	chain := buildUnaryInterceptors(ks)
+	chain := buildUnaryInterceptors(ks, chatEntry(t))
 
 	t.Run("命中规则的方法被短路", func(t *testing.T) {
 		handlerCalled := false
@@ -137,7 +143,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			return &chatpb.SendChatResponse{}, nil
 		})
 
-		resp, err := h(incomingSessionContext(t, 42), &chatpb.SendChatRequest{})
+		resp, err := h(incomingSessionContext(t, chatpb.ClientPlayerChat_SendChat_FullMethodName, 42), &chatpb.SendChatRequest{})
 		if handlerCalled {
 			t.Fatal("handler 被调用了:killswitch 没有挂上拦截器链(或不在 handler 上游)")
 		}
@@ -163,7 +169,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			}
 			return &chatpb.PullChatHistoryResponse{}, nil
 		})
-		if _, err := h(incomingSessionContext(t, 42), &chatpb.PullChatHistoryRequest{}); err != nil {
+		if _, err := h(incomingSessionContext(t, chatpb.ClientPlayerChat_PullChatHistory_FullMethodName, 42), &chatpb.PullChatHistoryRequest{}); err != nil {
 			t.Fatalf("未命中规则的方法不该报错: %v", err)
 		}
 		if !handlerCalled {
@@ -179,11 +185,11 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: chatpb.ClientPlayerChat_SendChat_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(ks), info, func(ctx context.Context, req any) (any, error) {
+	h := chainUnary(buildUnaryInterceptors(ks, chatEntry(t)), info, func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return &chatpb.SendChatResponse{}, nil
 	})
-	if _, err := h(incomingSessionContext(t, 42), &chatpb.SendChatRequest{}); err != nil {
+	if _, err := h(incomingSessionContext(t, chatpb.ClientPlayerChat_SendChat_FullMethodName, 42), &chatpb.SendChatRequest{}); err != nil {
 		t.Fatalf("无规则时必须放行: %v", err)
 	}
 	if !handlerCalled {
@@ -191,44 +197,44 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 	}
 }
 
-// TestSessionInterceptorFailOpen:缺头 / 坏头放行不拒(由逻辑层回 kInvalidParameter),合法头解出会话。
-func TestSessionInterceptorFailOpen(t *testing.T) {
-	logtest.Discard(t) // 坏头会打 Error 日志,这里只关心行为
+// TestOnlineEntryFailsClosed:聊天的客户端方法缺会话、会话未验签或身份不全一律拒绝,不进 handler;
+// 已验签的完整会话放行并放进 ctx(docs/design/gate-online-identity.md §9.2)。
+func TestOnlineEntryFailsClosed(t *testing.T) {
+	logtest.Discard(t) // 拒绝路径会打 Error 日志,这里只关心行为
 
-	interceptor := session.UnaryServerInterceptor()
+	entry := chatEntry(t)
 	info := &grpc.UnaryServerInfo{FullMethod: chatpb.ClientPlayerChat_SendChat_FullMethodName}
+	complete := callerauthtest.OnlineSession("chat-account", 1001, 7)
+	left := &base.SessionDetails{SessionId: 7, PlayerId: 1001, GateInstanceId: "gate-a", SessionIncarnation: 19}
 
 	cases := []struct {
 		name       string
 		ctx        context.Context
-		wantPlayer uint64 // 0 = 期望 ctx 里没有会话
+		wantCode   codes.Code
+		wantPlayer uint64 // 0 = 期望被拒
 	}{
-		{"无 metadata", context.Background(), 0},
-		{"有 metadata 但缺会话头", metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-other", "1")), 0},
-		{"base64 坏", metadata.NewIncomingContext(context.Background(), metadata.Pairs(session.MetadataKey, "%%%不是base64")), 0},
-		{"proto 坏", metadata.NewIncomingContext(context.Background(),
-			metadata.Pairs(session.MetadataKey, base64.StdEncoding.EncodeToString([]byte{0xff, 0xff, 0xff}))), 0},
-		{"合法会话头", incomingSessionContext(t, 1001), 1001},
+		{"无 metadata", context.Background(), codes.PermissionDenied, 0},
+		{"有 metadata 但缺会话头", metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-other", "1")), codes.PermissionDenied, 0},
+		{"未验签的自报会话", callerauthtest.Unverified(t, complete), codes.Unauthenticated, 0},
+		{"离场后的会话(账号与修订已清空)", callerauthtest.Incoming(t, info.FullMethod, left), codes.PermissionDenied, 0},
+		{"已验签的完整会话", callerauthtest.Incoming(t, info.FullMethod, complete), codes.OK, 1001},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			handlerCalled := false
-			_, err := interceptor(tc.ctx, &chatpb.SendChatRequest{}, info, func(ctx context.Context, req any) (any, error) {
+			_, err := entry(tc.ctx, &chatpb.SendChatRequest{}, info, func(ctx context.Context, req any) (any, error) {
 				handlerCalled = true
 				detail, ok := session.GetSessionDetails(ctx)
-				if tc.wantPlayer == 0 && ok {
-					t.Errorf("不该解出会话,得到 %+v", detail)
-				}
-				if tc.wantPlayer != 0 && (!ok || detail.GetPlayerId() != tc.wantPlayer) {
-					t.Errorf("应解出 player=%d,得到 ok=%v detail=%+v", tc.wantPlayer, ok, detail)
+				if !ok || detail.GetPlayerId() != tc.wantPlayer {
+					t.Errorf("应取到 player=%d,得到 ok=%v detail=%+v", tc.wantPlayer, ok, detail)
 				}
 				return &chatpb.SendChatResponse{}, nil
 			})
-			if err != nil {
-				t.Fatalf("会话拦截器不许拒绝请求: %v", err)
+			if got := status.Code(err); got != tc.wantCode {
+				t.Fatalf("期望 %v,得到 %v", tc.wantCode, err)
 			}
-			if !handlerCalled {
-				t.Fatal("会话拦截器必须放行到 handler")
+			if handlerCalled != (tc.wantPlayer != 0) {
+				t.Fatalf("handler 调用 = %v,期望 %v", handlerCalled, tc.wantPlayer != 0)
 			}
 		})
 	}

@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>This endpoint deliberately bypasses {@code AssignGateRateLimiter}: the
  * caller is already in the queue (already throttled by definition), and the
  * only thing rate-limiting their polls would do is delay rank updates,
- * which is a UX regression with no security upside. Bucket4j stays in front
+ * which is a UX regression with no security upside. The limiter stays in front
  * of /assign-gate where it actually filters new entrants.
  */
 @RestController

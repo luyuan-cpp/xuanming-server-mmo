@@ -10,6 +10,7 @@ import (
 	"shared/authoritysql"
 	"shared/drainproof"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,6 +77,7 @@ type roleRefsFake struct {
 	calls     int
 	olderThan time.Duration
 	limit     int
+	result    store.SweepResult
 	err       error
 	panics    bool
 }
@@ -86,7 +88,32 @@ func (f *roleRefsFake) SweepStaleRefs(_ context.Context, olderThan time.Duration
 	if f.panics {
 		panic("test")
 	}
-	return store.SweepResult{}, f.err
+	return f.result, f.err
+}
+
+// roleRefHeldCount 读 account_role_ref_tombstone_held_total 的当前值;还没注册时是 0。计数是进程级累加的,用例只比增量。
+func roleRefHeldCount(t *testing.T) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		if mf.GetName() == "data_service_account_role_ref_tombstone_held_total" && len(mf.GetMetric()) == 1 {
+			return mf.GetMetric()[0].GetCounter().GetValue()
+		}
+	}
+	return 0
+}
+
+// 一轮里留下没写墓碑的建角 ref(角色行不在,但角色提交过)计进低基数计数,出错的一轮也照记;逐条明细在 store 的 ERROR 日志里。
+func TestSweepStaleRoleRefsCountsHeldRefs(t *testing.T) {
+	before := roleRefHeldCount(t)
+	s := &ServiceContext{RelayAdmission: drainproof.New(), RoleRefs: &roleRefsFake{result: store.SweepResult{Scanned: 3, Dropped: 1, Held: 2}}}
+	s.sweepStaleRoleRefs(context.Background())
+	require.Equal(t, before+2, roleRefHeldCount(t))
+
+	s.RoleRefs = &roleRefsFake{result: store.SweepResult{Scanned: 1, Held: 1}, err: errors.New("one ref failed")}
+	s.sweepStaleRoleRefs(context.Background())
+	require.Equal(t, before+3, roleRefHeldCount(t))
 }
 
 func TestSweepStaleRoleRefsGoesThroughRelayGate(t *testing.T) {

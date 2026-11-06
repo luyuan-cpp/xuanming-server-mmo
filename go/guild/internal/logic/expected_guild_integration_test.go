@@ -29,6 +29,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"guild/internal/constants"
 	pb "proto/guild"
@@ -261,7 +263,7 @@ func egAssertRejected(t *testing.T, env *economyFlowEnv, c expectedGuildCase, co
 // ── 用例 ──────────────────────────────────────────────────────
 
 // TestExpectedGuildZeroKeepsLegacyBehavior:旧客户端(expected_guild_id = 0)按服务端此刻查到的本人帮会执行,结果与加字段之前相同,
-// 每次计一次 absent;内部调用(无会话,只有离帮 / 解散开放)不计。
+// 每次计一次 absent;无会话调用在身份闸就被拒,走不到计数。
 func TestExpectedGuildZeroKeepsLegacyBehavior(t *testing.T) {
 	for _, c := range expectedGuildCases() {
 		t.Run(c.method, func(t *testing.T) {
@@ -278,17 +280,18 @@ func TestExpectedGuildZeroKeepsLegacyBehavior(t *testing.T) {
 		})
 	}
 
-	t.Run("内部调用不计数", func(t *testing.T) {
+	// 无会话的退帮以前按请求体身份执行(docs/design/gate-online-identity.md §7.5),现在被身份闸拒绝:
+	// 成员行原样保留,也不计 absent(那只衡量客户端来源)。
+	t.Run("无会话调用被拒且不计数", func(t *testing.T) {
 		env := newExpectedGuildEnv(t, constants.RoleMember)
 		counts := watchExpectedGuild(t)
 
-		resp, err := env.logic.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{PlayerId: egActor})
+		_, err := env.logic.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{PlayerId: egActor})
 
-		require.NoError(t, err)
-		require.Nil(t, resp.GetErrorMessage())
+		require.Equal(t, codes.PermissionDenied, status.Code(err))
 		_, found := egMemberRole(t, env.db, egGuild, egActor)
-		assert.False(t, found)
-		assert.Zero(t, counts.total(), "absent 只衡量客户端来源:内部调用本来就不带这个字段")
+		assert.True(t, found, "被拒的退帮不能删成员行")
+		assert.Zero(t, counts.total(), "absent 只衡量客户端来源")
 	})
 }
 

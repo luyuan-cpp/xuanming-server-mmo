@@ -45,7 +45,7 @@
           when | n avg p99 | claimed | stale not_hold no_owner invalid too_new | unknown unavail denied
 
       [P3 Player store row bytes(db_player_store_row_bytes,已提交的行):每组 n / 均值 / p99,单位字节]
-          when | hot_* | asset_* | growth_* | profile_* | legacy1_*
+          when | location_* | character_* | wallet_* | bag_* | growth_* | profile_*
 
       [P4 DB pools and placement(mmorpg_sql_pool_*、db_placement_*、db_store_cooldown_stores)]
           when | sql_in_use sql_wait sql_wait_s | open_stores open_err cooldown
@@ -626,8 +626,8 @@ $playerStoreClaimColumns = [ordered]@{
 }
 # $playerStoreRowKinds:db_player_store_row_bytes 的 kind(PlayerStoreKind 枚举名,写权行不带 payload,不在这里)→ 列名前缀。
 # 2026-11-05 起按新分行(player-save-direct-commit.md §1.1):HOT、ASSET 退役(reserved 1、2),go/db 不会再报这两个标签;
-# LEGACY1 等删 player_database_1 时去掉。
-$playerStoreRowKinds = [ordered]@{ location = 'PLAYER_STORE_KIND_LOCATION'; character = 'PLAYER_STORE_KIND_CHARACTER'; wallet = 'PLAYER_STORE_KIND_WALLET'; bag = 'PLAYER_STORE_KIND_BAG'; growth = 'PLAYER_STORE_KIND_GROWTH'; profile = 'PLAYER_STORE_KIND_PROFILE'; legacy1 = 'PLAYER_STORE_KIND_LEGACY1' }
+# LEGACY1(5)随 player_database_1 一起删除(§1.2),同样不会再出现。
+$playerStoreRowKinds = [ordered]@{ location = 'PLAYER_STORE_KIND_LOCATION'; character = 'PLAYER_STORE_KIND_CHARACTER'; wallet = 'PLAYER_STORE_KIND_WALLET'; bag = 'PLAYER_STORE_KIND_BAG'; growth = 'PLAYER_STORE_KIND_GROWTH'; profile = 'PLAYER_STORE_KIND_PROFILE' }
 # $matchPoolClaimOutcomes:match_pool_claim_total / match_immediate_claim_total 的 outcome,同 go/match/internal/metrics/pool.go
 #   的 PoolClaim* 常量、按该文件的顺序(钉名测试 go/match/internal/metrics/pool_names_stress_test.go);
 #   $matchPoolClaimColumns 是 G1 的列名,与之同序。
@@ -1258,6 +1258,66 @@ if ($rpcChannelLatest.Count -gt 0) {
     }
     Write-Host "  (after a same-zone cutover timeout / late_reply / legacy_id0_reply should stay 0)"
     Write-Host "  (link_idle_closed / link_idle_deferred stay 0 unless a node link went silent for 15s or the local loop stalled)"
+}
+
+# ----- 2bd. gate 客户端连接存活(cpp gate 日志的 [ClientHeartbeat] summary):握手期限、心跳、空闲超时 ----
+#
+# client_heartbeat.cpp 每 30s 检查一次、累计计数有变化才打一行 `[ClientHeartbeat] summary k=v ...`(docs/design/gate-client-heartbeat.md §7),
+# 计数是进程级、单调累计的,每个日志文件取最后一行。字段名是与 LogSummaryIfDue 之间的契约,改名要两边一起改。
+# 目录与上一段相同。一行都没有时保持沉默:老版本 gate 没有这行;没有任何连接验签、发心跳或超时时计数不变,也不打。
+# 每条验签成功的连接计一次 tracked;robot 自 2026-11-06 起验签成功后就发心跳(robot/pkg/heartbeat.go),压测时 answered / tracked
+# 应随机器人数增长。
+
+$clientHeartbeatFields = @('answered', 'excess', 'before_verify', 'tracked', 'idle_closed', 'handshake_timeouts', 'deferred', 'pending_checks')
+$clientHeartbeatLatest = [ordered]@{}
+foreach ($dir in @((Join-Path $RepoRoot "bin\logs\cpp_nodes"), $cppLogDir)) {
+    if (-not (Test-Path $dir)) { continue }
+    foreach ($log in @(Get-ChildItem -Path $dir -Filter 'gate*.log' -ErrorAction SilentlyContinue)) {
+        # 与上面同理:节点进程运行中持有写句柄,必须以 FileShare.ReadWrite 打开。
+        $fs = $null
+        $sr = $null
+        $last = $null
+        try {
+            $fs = [System.IO.FileStream]::new(
+                $log.FullName,
+                [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::Read,
+                [System.IO.FileShare]::ReadWrite)
+            $sr = [System.IO.StreamReader]::new($fs)
+            while (-not $sr.EndOfStream) {
+                $line = $sr.ReadLine()
+                $idx = $line.IndexOf('[ClientHeartbeat] summary ')
+                if ($idx -ge 0) { $last = $line.Substring($idx + '[ClientHeartbeat] summary '.Length) }
+            }
+        } finally {
+            if ($sr) { $sr.Dispose() }
+            if ($fs) { $fs.Dispose() }
+        }
+        if ($null -ne $last) {
+            $values = @{}
+            foreach ($pair in ($last -split '\s+')) {
+                if ($pair -match '^(?<k>[a-z0-9_]+)=(?<v>\d+)$') { $values[$matches['k']] = [int64]$matches['v'] }
+            }
+            $clientHeartbeatLatest["$($log.Directory.Name)/$($log.Name)"] = $values
+        }
+    }
+}
+
+if ($clientHeartbeatLatest.Count -gt 0) {
+    Write-Host ""
+    Write-Host "=== Gate client heartbeat (cpp gate LOG_INFO [ClientHeartbeat] summary, cumulative) ===" -ForegroundColor Yellow
+    Write-Host ""
+    foreach ($entry in $clientHeartbeatLatest.GetEnumerator()) {
+        $cells = foreach ($field in $clientHeartbeatFields) {
+            $v = if ($entry.Value.ContainsKey($field)) { $entry.Value[$field] } else { 'n/a' }
+            "$field=$v"
+        }
+        Write-Host ("  {0}" -f $entry.Key)
+        Write-Host ("    {0}" -f ($cells -join ' '))
+    }
+    Write-Host "  (excess / before_verify / deferred stay 0 for well-behaved clients and a healthy gate loop;"
+    Write-Host "   idle_closed counts verified clients that went silent for 30s, handshake_timeouts connections not verified within 10s;"
+    Write-Host "   pending_checks is a gauge)"
 }
 
 # ----- 2c. 存盘接口(go/db 的 PlayerStore gRPC,*_db 快照,:9160) ----------

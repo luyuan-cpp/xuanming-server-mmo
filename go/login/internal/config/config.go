@@ -9,6 +9,7 @@ import (
 
 	"shared/accountdirectory"
 	"shared/idsegment"
+	"shared/placement"
 	"shared/playerredis"
 	"shared/serviceauth"
 )
@@ -109,7 +110,9 @@ type Config struct {
 	// 进游戏重定向关(见 HomeZoneConf 各字段)。
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
 
-	// Placement 决定新角色的存档落点(docs/design/player-storage-placement.md §8.3)。整块可缺省:落在本 login 所在 zone。
+	// Placement 决定新角色的存档落点:本地域的 StorageShards 个存档库里按 player_id 取模选一个
+	// (docs/design/player-data-tidb-scaling-plan.md §7.2)。整块缺省是过渡期的旧语义(落在本 login 所在 zone 的库),
+	// 启动时打 ERROR;批次 A17b 起缺省拒绝启动。
 	Placement PlacementConf `json:"Placement,optional"`
 
 	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
@@ -152,23 +155,77 @@ type GateDrainConf struct {
 	// 与脚本的等待上限(-WaitTimeoutSeconds,默认 1800s):期限不早于 TTL 时 draining 先过期,
 	// 这台 gate 重新接客,drained 永远等不到。调小脚本的 TTL 时同步调小这里。
 	Deadline time.Duration `json:"Deadline,default=25m"`
+	// Migrate 是排空时把在线连接主动迁到同 zone 其他 gate 的参数(docs/design/gate-drain-session-migration.md)。
+	// 同样不标 optional、每个字段都带 default:整块缺失时取默认值,即迁移关闭,行为与没有这项功能时相同。
+	Migrate GateDrainMigrateConf `json:"Migrate"`
 }
 
-// PlacementConf 决定新角色的存档落点(docs/design/player-storage-placement.md §8.3)。
-// 建角恒在同一次 RegisterPlayerZone 里写落点:go/db 对没有落点的角色一律拒绝认领。
+// GateDrainMigrateConf 是排空迁移的参数。只配在 login 这一处:gate 从 login 每拍下发的 GateDrainMigrationEvent 里拿速率与租期,
+// 不另配(设计文档 §4.6)。
+type GateDrainMigrateConf struct {
+	// Enabled:排空判定是否给排空中的 gate 发迁移许可,以及 RequestGateMigration 是否签票。
+	// 第一批默认关(设计文档 §12 第 1 条):客户端「成功进场后跳数清零」改完、一轮 robot 集成跑过之后再改成默认开。
+	// 置 false 之后,最多一个许可租期(3 × Interval)所有 gate 停止迁移;之后到达的签票请求回 DISABLED。
+	Enabled bool `json:"Enabled,default=false"`
+	// RatePerSecond:每台排空中的 gate 每秒最多发起的迁移数。每迁一个人的负载等于一次普通短重连
+	// (Login + EnterGame + scene 换会话入场);默认 20 按容量模型一台 gate 约 4500 人、约 4 分钟迁完,以压测为准再调。
+	// 0 等同关闭(gate 收到 rate=0 立即停)。
+	RatePerSecond uint32 `json:"RatePerSecond,default=20"`
+	// StartAfter:标记 draining 之后等多久才开始迁移,留给玩家自然下线。0 = 立即开始。
+	StartAfter time.Duration `json:"StartAfter,default=0s"`
+}
+
+// PlacementConf 决定新角色的存档落点(docs/design/player-data-tidb-scaling-plan.md §7.2)。
+// 建角恒在同一次 RegisterPlayerZone 里写落点:go/db 对没有落点的角色一律拒绝认领。落点写进目录之后只认目录,
+// 这里的配置只影响以后新建的号。
+//
+// 存档库和区脱钩:区(home_zone)是玩法分组、会别名合服;存档库是物理落点、会整库搬集群,两者不再互相推导。
+// 每个地域固定 StorageShards 个存档库 player_store_{1000000 + Region×1000 + 片号}_db,新号按 player_id 取模选库
+// (placement.RegionStorageIDForPlayer)。
 type PlacementConf struct {
-	// NewPlayerStorageId 是新角色钉到的落点库编号(§4.2):0 = 本 login 所在 zone(Node.ZoneId);
-	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db。
+	// Region 是地域码,与 data_service 发号器的地域码(Issuer.Region)同值;0 只给 dev、test。
+	Region uint32 `json:"Region,optional"`
+	// StorageShards 是本地域的存档库数 K(1..1000)。上线后不能改:改了只影响之后建的号,各库玩家数从此不均。
+	// 0 = 过渡期的旧语义(下面的 NewPlayerStorageId),启动时打 ERROR;批次 A17b 起 0 拒绝启动。
+	StorageShards uint32 `json:"StorageShards,optional"`
+	// NewPlayerStorageId 是脱钩之前的落点配置,只在 StorageShards 为 0 时生效:0 = 本 login 所在 zone(Node.ZoneId);
+	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db。批次 A17b 删除。
 	NewPlayerStorageId uint32 `json:"NewPlayerStorageId,optional"`
 }
 
-// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
-// loginZone 为本 login 的 Node.ZoneId,NewPlayerStorageId 为 0 时用它,与「建角 home = login 所在 zone」的约定一致。
-func (c PlacementConf) StorageIDForNewPlayer(loginZone uint32) uint32 {
-	if c.NewPlayerStorageId != 0 {
-		return c.NewPlayerStorageId
+// Validate 在启动时核对地域码与存档库数;不合法就拒绝启动,不建出落到错误库的角色。
+func (c PlacementConf) Validate() error {
+	if c.StorageShards == 0 {
+		if c.Region != 0 {
+			return fmt.Errorf("Placement.Region=%d is set but Placement.StorageShards is 0: region storage needs both", c.Region)
+		}
+		return nil
 	}
-	return loginZone
+	if c.NewPlayerStorageId != 0 {
+		return fmt.Errorf("Placement.NewPlayerStorageId=%d conflicts with Placement.StorageShards=%d: remove NewPlayerStorageId",
+			c.NewPlayerStorageId, c.StorageShards)
+	}
+	return placement.ValidateRegionStorage(c.Region, c.StorageShards)
+}
+
+// UsesRegionStorage 报告新角色是否按地域存档库落点(StorageShards 已配)。
+func (c PlacementConf) UsesRegionStorage() bool {
+	return c.StorageShards != 0
+}
+
+// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
+// 配了 StorageShards:本地域的 K 个存档库里按 player_id 取模。没配(过渡期):NewPlayerStorageId,为 0 时用 loginZone。
+func (c PlacementConf) StorageIDForNewPlayer(playerID uint64, loginZone uint32) (uint32, error) {
+	if c.UsesRegionStorage() {
+		return placement.RegionStorageIDForPlayer(c.Region, c.StorageShards, playerID)
+	}
+	if c.NewPlayerStorageId != 0 {
+		return c.NewPlayerStorageId, nil
+	}
+	if loginZone == 0 {
+		return 0, fmt.Errorf("no storage for new players: Placement.StorageShards is 0 and Node.ZoneId is 0")
+	}
+	return loginZone, nil
 }
 
 // 没写 Addrs、Node.RedisClient 也没写对应项时,玩家域与登录域连接的口径:go-redis 对单实例的缺省值

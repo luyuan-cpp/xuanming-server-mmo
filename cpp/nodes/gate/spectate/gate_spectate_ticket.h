@@ -13,7 +13,9 @@
 #include <string>
 #include <string_view>
 
+#include "engine/core/type_define/type_define.h"
 #include "proto/gate/gate_spectate_ticket.pb.h"
+#include "services/gate/session/comp/session_info_comp.h"
 
 namespace gate_spectate
 {
@@ -24,7 +26,7 @@ namespace gate_spectate
 		kMalformedTicket,     // SpectateTicket 外层解析失败
 		kBadSignature,        // HMAC 对不上(篡改,或签发方用了别的密钥)
 		kMalformedPayload,    // 验签通过但载荷解析失败,或缺 battle_id / player_id / battle_instance_id
-		kPlayerMismatch,      // 凭证不属于本会话的玩家(凭证不能转让),或会话还没绑定玩家
+		kPlayerMismatch,      // 凭证不属于本会话的玩家(凭证不能转让),或会话此刻没有经认证绑定的玩家(含 LeaveGame 之后)
 		kBattleMismatch,      // 凭证不是这一场的
 		kExpired,             // 按 gate 墙钟已过 expire_at_ms
 	};
@@ -40,10 +42,23 @@ namespace gate_spectate
 		bool ok() const { return verdict == TicketVerdict::kOk; }
 	};
 
-	// sessionPlayerId:会话当前绑定的玩家;0 = 尚未绑定,一律拒绝(调用方负责把 kInvalidGuid 归一成 0)。
+	// sessionPlayerId:会话此刻的订阅身份,取 SpectateIdentityOf;0 = 没有经认证绑定的玩家,一律拒绝。
 	// expire_at_ms == nowWallMs 视为已过期(与 gate 登录令牌、battle 票据同口径)。
 	TicketCheck VerifySpectateTicket(std::string_view secret, const std::string &ticketBytes, uint64_t sessionPlayerId,
 									 uint64_t requestBattleId, uint64_t nowWallMs);
+
+	// 订阅凭证认的会话身份:会话此刻经认证绑定的角色,没有就回 0。
+	// 只看 playerId 不够:LeaveGame 之后会话还留着旧角色号,只清掉认证绑定(gate_scene_route::ResetSceneRoute),之后换角的
+	// Bind 也不摘订阅;这段时间拿旧角色凭证订上的帧会一直发给已经换了角色的会话,凭证就被转让了(观战第二轮评审 R2-GATE 一般-1)。
+	// authenticatedAccount 只由被接受的 Bind 写入(gate_authenticated_session::Bind),LeaveGame 时清空,路由 lane 认的也是它。
+	inline uint64_t SpectateIdentityOf(const SessionInfo &session)
+	{
+		if (session.authenticatedAccount.empty() || session.playerId == kInvalidGuid)
+		{
+			return 0;
+		}
+		return session.playerId;
+	}
 
 	// ── 密钥强度(启动门禁,§15.7,口径同 battle 的 ClassifySecretStrength)────────────────────────
 

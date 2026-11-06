@@ -34,3 +34,7 @@ constexpr uint32_t SceneBagClientPlayerInlayGemIndex = 6;
 constexpr uint32_t SceneBagClientPlayerRemoveGemMessageId = 252;
 constexpr uint32_t SceneBagClientPlayerRemoveGemIndex = 7;
 #define SceneBagClientPlayerRemoveGemMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(7)
+
+constexpr uint32_t SceneBagClientPlayerRetrieveTemporaryItemsMessageId = 374;
+constexpr uint32_t SceneBagClientPlayerRetrieveTemporaryItemsIndex = 8;
+#define SceneBagClientPlayerRetrieveTemporaryItemsMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(8)

@@ -18,6 +18,12 @@ GlobalMatch:
   # 等满 20 秒可全服。提交点规则,进全局策略指纹,改动须停全部副本后受控调整。初值待按真实等待分布定标。
   ScopeGroupAfterSeconds: 10
   ScopeGlobalAfterSeconds: 20
+  # 人数档真人 PVP 计分组排(同一设计文档开头一节):整队的队伍分 = 成员平均分 + 每多一人加 PartyRatingBonusPerMember 分;
+  # 整队开战时成员评分差超过 PartyRatingGapMax 分就拒绝(0 = 不限)。这两项是提交点规则,进全局策略指纹,改动须停全部副本
+  # 后受控调整。PremadeGapStepSeconds 是车队差的放宽步长(0 = 不限),质量规则,不进指纹。三个初值都待按真实数据定标。
+  PartyRatingBonusPerMember: 25
+  PartyRatingGapMax: 500
+  PremadeGapStepSeconds: 10
   # 每副本同时备战的成局上限、按池读单排票的页大小。
   GatherSlots: 256
   PoolPageSize: 512
@@ -46,6 +52,7 @@ Middlewares:
       - /match.MatchInternal/CommitBattleOutcome
       - /match.MatchInternal/CancelActivityBattle
       - /match.MatchInternal/SetSpectateFeatured
+      - /match.MatchInternal/GetBattleTerminalDecision
 Etcd:
   Hosts:
     - 127.0.0.1:2379
@@ -147,12 +154,8 @@ RatingToleranceMax: 1000
 # 终态兜底:锚点已等 ≥ 该秒数时容差 = ∞(纯等待序),分差再大也必配;分差超过
 # RatingToleranceMax 的两人不会永久饥饿。0 / 漏配按默认 90。
 RatingToleranceMaxWaitSeconds: 90
-# 回合打满按平局:C++ 引擎回合打满一律判 SIDE_B_WIN(PVE 规则),PVP 照胜负结算会让
-# 锚点 / 高分方系统性扣分;total_rounds ≥ 该值的胜负结果按 0.5 结算。默认 300 =
-# C++ kDefaultMaxRounds;0 关闭。配了 DungeonTable.time_limit 的配置按下面的 map 覆盖。
-RatingDrawRoundCap: 300
-# RatingDrawRoundCapByConfigId:
-#   "1": 300
+# 计分局「回合打满按平局」没有配置项(原 RatingDrawRoundCap* 已删):看结果个人原件里 0 队是否全灭,
+# 旧版结果按 Dungeon.time_limit 换算的回合上限判(docs/design/global-match-hierarchical-pools.md §8)。
 
 # ---- 组队(docs/design/team-system.md;team 模块与 MatchService 同进程、同端口)----
 # AllowCrossZone:是否允许不同 home zone 的玩家同队。默认 false:申请 / 审批 / 邀请 / 接受邀请

@@ -94,6 +94,7 @@ set(SOURCE_FILES
     player/system/asset_op_auth.cpp
     player/system/asset_op_ledger.cpp
     player/system/asset_op_system.cpp
+    player/system/client_request_ledger.cpp
     player/system/player_inbox_rules.cpp
     player/system/player_inbox_registry.cpp
     player/system/gm_sanction_inbox_executor.cpp

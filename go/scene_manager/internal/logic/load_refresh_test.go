@@ -23,7 +23,7 @@ import (
 // allLoadRefreshOutcomesForTest 是 load_refresh_total 的全部 outcome。
 var allLoadRefreshOutcomesForTest = []string{
 	metrics.LoadRefreshOutcomeOK, metrics.LoadRefreshOutcomePartial, metrics.LoadRefreshOutcomeReadFailed,
-	metrics.LoadRefreshOutcomeRegistryFailed, metrics.LoadRefreshOutcomeWriteFailed, metrics.LoadRefreshOutcomeLostLeadership,
+	metrics.LoadRefreshOutcomeWriteFailed, metrics.LoadRefreshOutcomeLostLeadership,
 }
 
 // loadRefreshTicksForTest 是 load_refresh_total 各 outcome 之和,即领导者记过的刷新拍数。
@@ -149,7 +149,7 @@ func TestPipelineHitTransportError(t *testing.T) {
 	}
 }
 
-// 多种情况同时出现时只记一个 outcome;告警口径的三种排在前面。
+// 多种情况同时出现时只记一个 outcome;告警口径的两种排在前面。
 func TestLoadRefreshReportOutcomePriority(t *testing.T) {
 	cases := []struct {
 		report loadRefreshReport
@@ -158,8 +158,7 @@ func TestLoadRefreshReportOutcomePriority(t *testing.T) {
 		{loadRefreshReport{}, metrics.LoadRefreshOutcomeOK},
 		{loadRefreshReport{nodeReadErrors: 1}, metrics.LoadRefreshOutcomePartial},
 		{loadRefreshReport{nodeReadErrors: 1, lostLeadership: true}, metrics.LoadRefreshOutcomeLostLeadership},
-		{loadRefreshReport{lostLeadership: true, registryFailed: true}, metrics.LoadRefreshOutcomeRegistryFailed},
-		{loadRefreshReport{registryFailed: true, readTransportFailed: true, nodeReadErrors: 3}, metrics.LoadRefreshOutcomeReadFailed},
+		{loadRefreshReport{lostLeadership: true, readTransportFailed: true, nodeReadErrors: 3}, metrics.LoadRefreshOutcomeReadFailed},
 		{loadRefreshReport{readTransportFailed: true, writeFailed: true}, metrics.LoadRefreshOutcomeWriteFailed},
 	}
 	for _, c := range cases {
@@ -382,81 +381,33 @@ func TestUpdateNodeLoad_DoesNotCountAsRefreshTick(t *testing.T) {
 	assert.Equal(t, ticksBefore, loadRefreshTicksForTest(t), "单节点刷新不计入 load_refresh_total")
 }
 
-// ── 登记集合读不到时的退化 ──────────────────────────────────────────────
-
-// 清扫退回只扫快照里的 zone:照常补 death_at、摘除陈旧成员,返回 true;快照外、只在登记集合里的 zone
-// 这一轮扫不到,留给下一次 fullSync。
-func TestSweepStaleLoadSetMembers_RegistryReadFailureSweepsSnapshotZones(t *testing.T) {
-	sc, mr := newLoadRefreshScopeCtx(t)
-	_, err := mr.ZAdd(nodeLoadKey(91), 0, "9101")
-	require.NoError(t, err)
-	_, err = mr.ZAdd(nodeLoadKey(94), 0, "9401")
-	require.NoError(t, err)
-	_, err = mr.SAdd(zoneRegistryKeyForTest, "91", "94")
-	require.NoError(t, err)
-	installRedisCommandRecorderForTest(t, mr, func(cmd string, args []string) string {
-		if cmd == "SMEMBERS" && len(args) > 0 && args[0] == zoneRegistryKeyForTest {
-			return "ERR injected registry read failure"
-		}
-		return ""
-	})
-	seen := map[uint32]map[string]struct{}{91: {}}
-
-	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{91}, nil))))
-
-	assert.True(t, mr.Exists(nodeDeathAtKey(91, "9101")), "快照 zone 的陈旧成员照常先补记死亡时刻")
-	assert.NotContains(t, loadSetMembersForTest(t, mr, 91), "9101")
-	assert.Contains(t, loadSetMembersForTest(t, mr, 94), "9401", "登记集合读不到时,快照外的 zone 这一轮不扫")
-}
-
-// 孤儿清理退回只查有活节点的 zone,照常清掉其中的孤儿组;只在登记集合里的 zone 这一轮查不到。
-func TestCleanupOrphanWorldChannels_RegistryReadFailureFallsBackToActiveZones(t *testing.T) {
+// 本 zone 的 HKEYS 失败:这一轮跳过,保留发现索引,下一轮重试照常清掉。
+func TestCleanupOrphanWorldChannels_HkeysFailureSkipsThisRound(t *testing.T) {
 	clearKnownNodesForTest()
 	t.Cleanup(clearKnownNodesForTest)
 	resetNodeDeathQueuesForTest(t)
 	sc, mr := newAutoscaleCtx(t)
-	const activeZone, registeredOnlyZone, deadConf = uint32(92), uint32(94), uint64(779) // 779 不在 World 表里
-	registerKnownNodeForTest(t, "SceneNodeService.rpc/orphan-9200", activeZone, "9200")
-	rebuildActiveZones()
-	seedChannels(t, sc, activeZone, deadConf, map[uint64]int64{9201: 0})
-	seedChannels(t, sc, registeredOnlyZone, deadConf, map[uint64]int64{9401: 0})
+	const zone, deadConf = uint32(88), uint64(780) // 780 不在 World 表里
+	sc.Config.ZoneId = zone
+	// seedChannels 经 setDesiredWorldChannelCount 写期望数字段。
+	seedChannels(t, sc, zone, deadConf, map[uint64]int64{8801: 0})
+	failedKey := worldDesiredChannelsKey(zone)
+	var failHkeys atomic.Bool
+	failHkeys.Store(true)
 	installRedisCommandRecorderForTest(t, mr, func(cmd string, args []string) string {
-		if cmd == "SMEMBERS" && len(args) > 0 && args[0] == zoneRegistryKeyForTest {
-			return "ERR injected registry read failure"
-		}
-		return ""
-	})
-
-	assert.Equal(t, 1, CleanupOrphanWorldChannels(context.Background(), sc))
-
-	assert.False(t, mr.Exists(worldChannelsKey(activeZone, deadConf)), "有活节点的 zone 照常清")
-	assert.Equal(t, "", mr.HGet(worldDesiredChannelsKey(activeZone), "779"))
-	assert.True(t, mr.Exists(worldChannelsKey(registeredOnlyZone, deadConf)), "只在登记集合里的 zone 这一轮查不到")
-}
-
-// 某个 zone 的 HKEYS 失败只跳过这个 zone(保留它的发现索引,下一轮重试),别的 zone 的孤儿组照常清。
-func TestCleanupOrphanWorldChannels_HkeysFailureSkipsOnlyThatZone(t *testing.T) {
-	clearKnownNodesForTest()
-	t.Cleanup(clearKnownNodesForTest)
-	resetNodeDeathQueuesForTest(t)
-	sc, mr := newAutoscaleCtx(t)
-	const failingZone, okZone, deadConf = uint32(88), uint32(89), uint64(780) // 780 不在 World 表里
-	// seedChannels 经 setDesiredWorldChannelCount 写期望数字段,并把两个 zone 登记进登记集合。
-	seedChannels(t, sc, failingZone, deadConf, map[uint64]int64{8801: 0})
-	seedChannels(t, sc, okZone, deadConf, map[uint64]int64{8901: 0})
-	failedKey := worldDesiredChannelsKey(failingZone)
-	installRedisCommandRecorderForTest(t, mr, func(cmd string, args []string) string {
-		if cmd == "HKEYS" && len(args) > 0 && args[0] == failedKey {
+		if cmd == "HKEYS" && len(args) > 0 && args[0] == failedKey && failHkeys.Load() {
 			return "ERR injected hkeys failure"
 		}
 		return ""
 	})
 
-	assert.Equal(t, 1, CleanupOrphanWorldChannels(context.Background(), sc))
+	assert.Equal(t, 0, CleanupOrphanWorldChannels(context.Background(), sc))
+	assert.True(t, mr.Exists(worldChannelsKey(zone, deadConf)), "HKEYS 失败这一轮跳过")
+	assert.Equal(t, "1", mr.HGet(failedKey, "780"), "跳过时保留发现索引,下一轮还能找到")
 
-	assert.True(t, mr.Exists(worldChannelsKey(failingZone, deadConf)), "HKEYS 失败的 zone 这一轮跳过")
-	assert.Equal(t, "1", mr.HGet(failedKey, "780"), "跳过的 zone 保留发现索引,下一轮还能找到")
-	assert.False(t, mr.Exists(worldChannelsKey(okZone, deadConf)), "别的 zone 照常清")
+	failHkeys.Store(false)
+	assert.Equal(t, 1, CleanupOrphanWorldChannels(context.Background(), sc))
+	assert.False(t, mr.Exists(worldChannelsKey(zone, deadConf)))
 }
 
 // 每个 outcome 在注册时预置为 0:increase() 才看得到第一次跳变,「刷新停摆」告警才能区分「没人在刷」与「指标不存在」。

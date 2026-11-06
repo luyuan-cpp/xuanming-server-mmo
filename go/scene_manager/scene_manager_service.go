@@ -85,7 +85,7 @@ func main() {
 	metrics.Start(c.MetricsListenAddr)
 
 	// 选主:变更类后台循环(补频道 / rebalance / 死节点孤儿清理 / 空闲副本
-	// 销毁 / 自动扩缩容 / Agones 对账)全局只允许一个副本执行;RPC 数据面与
+	// 销毁 / 自动扩缩容 / Agones 对账)每个 zone 只允许一个副本执行(锁按 zone,本进程只编排 ZoneId);RPC 数据面与
 	// etcd watch 内存镜像每个副本照常跑。这是 scene_manager 去单点的关键:
 	// 之前 k8s 只能用 replicas:1 + Recreate 兜"无选主的单写者循环"的口子,
 	// 现在选主抽到了 shared/leader,副本数已放开(见 scene-manager.yaml)。
@@ -167,6 +167,10 @@ func main() {
 	// Start instance lifecycle manager (auto-destroys idle instances).
 	safego.Go(logic.SafePointInstanceLifecycle, func() { logic.StartInstanceLifecycleManager(ctx, svcCtx) })
 
+	// 拆除任务扫描:认领之后没做完的副作用(进程退出、回包丢失、某一步失败)由本 zone 的领导者补做
+	// (internal/logic/scene_teardown_job.go)。只有领导者真正扫描,必须排在选主接线之后。
+	safego.Go(logic.SafePointSceneTeardownSweep, func() { logic.StartSceneTeardownSweeper(ctx, svcCtx) })
+
 	// 大世界频道按人数自动扩缩容(默认关闭)。
 	logic.StartWorldAutoscaler(ctx, svcCtx)
 
@@ -224,7 +228,7 @@ func main() {
 	fmt.Println("=============================================================")
 	fmt.Printf("  Listen:      %s\n", c.ListenOn)
 	fmt.Printf("  Mode:        %s\n", c.Mode)
-	fmt.Printf("  multi-zone:  true (zone-agnostic)\n")
+	fmt.Printf("  zone:        %d (leader lock %s; watches and orchestrates this zone only)\n", c.ZoneId, leaderLockKey)
 	fmt.Printf("  main scenes: %d (from World.json)\n", len(table.WorldTableManagerInstance.FindAll()))
 	if len(c.Etcd.Hosts) > 0 {
 		fmt.Printf("  etcd:        %v\n", c.Etcd.Hosts)

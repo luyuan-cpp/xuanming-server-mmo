@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"net"
@@ -22,7 +21,6 @@ import (
 	"match/internal/config"
 	"match/internal/metrics"
 	"match/internal/noderegistry"
-	"match/internal/pkg/ctxkeys"
 	"match/internal/server"
 	"match/internal/svc"
 	"match/internal/team"
@@ -38,26 +36,26 @@ import (
 	teampb "proto/team"
 
 	"shared/buildinfo"
+	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	sharedregistry "shared/noderegistry"
+	"shared/releasetrack"
 	"shared/rolefence"
+	"shared/roleidentity"
 	"shared/serverbase"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/netx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 var configFile = flag.String("f", "etc/match_service.yaml", "the config file")
@@ -106,6 +104,13 @@ func main() {
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, authority.Migrate))
 	}
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理路由服转来的客户端请求,不跑全局作用域的后台:
+	// 排名发布、终局发件箱、结果消费组、team 的 SQL 维护、观战恢复、撮合与恢复循环,也不登记为匹配池成员。取值非法就拒启。
+	// 前提:线上 stable 已经是「match 镜像只收 stable」的版本(discovery.NodeWatcher.StableOnly),否则落到 canary 名下的池会停摆。
+	releaseTrack, trackErr := releasetrack.FromEnv()
+	logx.Must(trackErr)
+	logx.Must(validateReleaseTrackRegistration(releaseTrack, c.Etcd))
+	globalBackground := releaseTrack.RunsGlobalBackgroundWork()
 	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 	if err != nil {
 		panic(err)
@@ -114,7 +119,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root, relay)
+	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root, relay, globalBackground)
 	// guild 调 MatchInternal 的独立证明；未配置时保持nil并在RPC入口拒绝，绝不降级为无签名。
 	if secret := strings.TrimSpace(os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")); secret != "" {
 		verifier, err := serviceauth.New(map[string]string{"guild": secret})
@@ -131,7 +136,7 @@ func main() {
 	}
 	defer func() { root.CloseAdmission(); cancel() }()
 	resultConfig := matchkafka.ResultConsumerConfig{
-		RelayAdmission: relay, BindOwner: svcCtx.BindConsumerOwner,
+		RelayAdmission: relay, BindOwner: svcCtx.BindConsumerOwner, BindLagProbe: svcCtx.BindResultLagProbe,
 		Brokers: c.Kafka.Brokers, Topic: c.ResultTopic,
 		GroupID: c.ResultConsumerGroup, Partitions: c.ResultTopicPartitions,
 		RequireDurability: c.ResultTopicRequiresDurability(),
@@ -161,15 +166,21 @@ func main() {
 
 	// 结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
 	// 启动接线先于matcher与RPC注册；来源归档必须同步装配成功。
-	if err := matchkafka.StartResultConsumer(ctx, resultConfig, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
-		if !c.RatingEnabled {
-			return nil
+	// 消费组 match-rating 是全局作用域,canary 副本不加入(发布轨道设计 §2.5),全部结果由 stable 归档与计分。
+	startResultConsumer := func() error {
+		return matchkafka.StartResultConsumer(ctx, resultConfig, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
+			if !c.RatingEnabled {
+				return nil
+			}
+			_, err := matchlogic.ApplyBattleResult(svcCtx, event)
+			return err
+		}, svcCtx.Authority.ArchiveCompletion)
+	}
+	if globalBackground {
+		if err := startResultConsumer(); err != nil {
+			cancel()
+			panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
 		}
-		_, err := matchlogic.ApplyBattleResult(svcCtx, event)
-		return err
-	}, svcCtx.Authority.ArchiveCompletion); err != nil {
-		cancel()
-		panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
 	}
 
 	// 组队(team-system.md §A.3,port-decisions D-2 / feasibility D7):与 match 同进程、同一个
@@ -196,15 +207,21 @@ func main() {
 		svcCtx.Stop()
 		os.Exit(1)
 	}
-	teamService.StartSQLMaintenance(ctx)
-	matchlogic.StartGlobalSpectatorRecovery(ctx, svcCtx)
-	// 完整结果归档与队伍反向端口均就绪后才开放成局。全球模式下单排、整队与 PVP 都由同一个按池撮合循环负责。
-	matchlogic.StartMatcherLoop(ctx, svcCtx)
+	if globalBackground {
+		teamService.StartSQLMaintenance(ctx)
+		matchlogic.StartGlobalSpectatorRecovery(ctx, svcCtx)
+		// 完整结果归档与队伍反向端口均就绪后才开放成局。全球模式下单排、整队与 PVP 都由同一个按池撮合循环负责。
+		matchlogic.StartMatcherLoop(ctx, svcCtx)
+	} else {
+		// canary 副本:撮合、恢复、巡检、观战与 team 维护都由 stable 承担;备战槽属于数据面,RPC 提交的成局要用,单独建。
+		matchlogic.InitGatherSlots(svcCtx)
+		logx.Infof("[match] release_track=%s: matcher, recovery, team maintenance and result consumer disabled (canary serves client RPCs only)", releaseTrack)
+	}
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		matchpb.RegisterMatchServiceServer(grpcServer, server.NewMatchServiceServer(svcCtx))
-		// 内部服务(帮会同道历练开局,guild-phase2 §6.18.3):只给 go/guild 调;
-		// 客户端来源由 sessionInterceptor 拒绝(PermissionDenied)。
+		// 内部服务(帮会同道历练开局,guild-phase2 §6.18.3):只给 go/guild 调,调用方验 serviceauth;
+		// 带会话的客户端来源由入口准入 onlineEntry 拒绝(PermissionDenied)。
 		matchpb.RegisterMatchInternalServer(grpcServer, server.NewMatchInternalServer(svcCtx))
 		teampb.RegisterClientPlayerTeamServer(grpcServer, team.NewServer(teamService))
 		teampb.RegisterTeamAuthorityServer(grpcServer, teamAuthority)
@@ -214,13 +231,18 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
-	// 拦截器链作用于同一 server 上的全部 service(MatchService、MatchInternal 与 ClientPlayerTeam),顺序不变:
-	// sessionInterceptor 最外层先挡"带会话调 MatchInternal.*"(PermissionDenied),再把 x-session-detail-bin
-	// 解进 ctx(team 的调用者身份只从这里取,缺失即 fail-closed 回 4001);grpcstats 在内层计流量。
+	// 拦截器链作用于同一 server 上的全部 service(MatchService、MatchInternal、ClientPlayerTeam、TeamAuthority、
+	// RoleFenceParticipant),顺序不变:gateIdentity 先验 gate 签名;onlineEntry 按生成的客户端方法集合准入
+	// (docs/design/gate-online-identity.md §9.2):客户端方法必须带完整原身份,验签原件放进 ctx、原角色归属捕获进 ctx
+	// (team 的调用者身份只从这里取),带会话调内部方法一律 PermissionDenied;grpcstats 在内层计流量。
 	// zrpc 顶层 Timeout 保持 5000:改小会截断 WatchBattle 同步链;team 在每个方法入口自设 3500ms 预算(§A.3 第 7 条)。
 	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
 	if authErr != nil {
 		panic(authErr)
+	}
+	onlineEntry, entryErr := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if entryErr != nil {
+		panic(entryErr)
 	}
 	s.AddUnaryInterceptors(
 		gateIdentity,
@@ -231,9 +253,10 @@ func main() {
 			// guild 收尾已开始的历练:放开占用、读终局。新占用(Acquire)和护栏冻结属于新工作,走 SOURCE。
 			matchpb.MatchInternal_ReleaseTrialOccupancy_FullMethodName: true,
 			matchpb.MatchInternal_GetBattleCompletion_FullMethodName:   true,
+			// scene 收尾已开始的对局:冻结到期时只读查 SQL 终局(不是新工作,排空期间照常应答)。
+			matchpb.MatchInternal_GetBattleTerminalDecision_FullMethodName: true,
 		}, svcCtx.RelayIngress),
-		sessionInterceptor,
-		originalRoleInterceptor,
+		onlineEntry,
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 		serverbase.WriterFrozenInterceptor(),
 	)
@@ -262,7 +285,10 @@ func main() {
 		os.Exit(1)
 	}
 	// 注册成功后才参与池归属:成员表来自 etcd 里的 MatchNodeService 注册,本实例用同一个 NodeUuid。
-	svcCtx.SetPoolMember(regs.match.Info.NodeUuid)
+	// canary 副本不参与(发布轨道设计 §2.5):stable 的成员表本来就不收 canary(MatchNodes.StableOnly),它也不起撮合循环。
+	if globalBackground {
+		svcCtx.SetPoolMember(regs.match.Info.NodeUuid)
+	}
 
 	controlCtx, cancelControl := context.WithCancel(context.Background())
 	controlDone := make(chan struct{})
@@ -270,8 +296,15 @@ func main() {
 		defer close(controlDone)
 		prepared := func(prepareCtx context.Context) (*serverbase.PreparedPublication, error) {
 			bound := svcCtx.DrainRuntime
+			if bound == nil || root.Pending() != 0 {
+				return nil, drainproof.ErrHold
+			}
+			// canary 副本不加入结果消费组(上面 globalBackground 一段),没有 ConsumerOwner 可等,按无消费者发布。
+			if !globalBackground {
+				return &serverbase.PreparedPublication{NoConsumers: true}, nil
+			}
 			owner := svcCtx.ConsumerOwner
-			if bound == nil || root.Pending() != 0 || owner == nil {
+			if owner == nil {
 				return nil, drainproof.ErrHold
 			}
 			expected, err := owner.ExpectedPartitions(bound)
@@ -341,6 +374,25 @@ func main() {
 func validateMigrationFlags(migrateOnly, allowModify bool) error {
 	if allowModify && !migrateOnly {
 		return fmt.Errorf("-allow-modify只能与-migrate同时使用，常驻进程不执行DDL")
+	}
+	return nil
+}
+
+// canaryRegistrationKeySuffix:canary 副本登记 go-zero 服务键要带的后缀。guild 按 stable 的键(配置里的 matchservice.rpc)
+// 发现 match 做内部调用;go-zero 按「键 + /」前缀发现,canary 登记在 <stable 键>.canary 下,guild 就发现不到它
+// (内部调用只走 stable,docs/design/release-track-gray-canary.md §2.5)。
+const canaryRegistrationKeySuffix = ".canary"
+
+// validateReleaseTrackRegistration:canary 副本登记了 go-zero 服务键(Etcd.Hosts 非空)时,键必须以 .canary 结尾,否则拒启。
+// 键来自 canary 自己的运行配置(boot 目录的 <ns>/match-canary 条目),配错的后果是 guild 的历练开战与占用落到新版本上,
+// 而且全程没有任何报错。stable 和不登记 go-zero 键的进程不受影响。
+func validateReleaseTrackRegistration(track releasetrack.Track, etcd discov.EtcdConf) error {
+	if !track.IsCanary() || len(etcd.Hosts) == 0 {
+		return nil
+	}
+	if !strings.HasSuffix(etcd.Key, canaryRegistrationKeySuffix) {
+		return fmt.Errorf("release track canary: go-zero registration key %q must end with %q, otherwise guild's internal calls would reach the canary (release-track-gray-canary.md section 2.5)",
+			etcd.Key, canaryRegistrationKeySuffix)
 	}
 	return nil
 }
@@ -459,51 +511,6 @@ func nodeInfoValueBuilder(nodeType base.ENodeType, zoneId uint32, host string, p
 		}
 		return protojson.Marshal(info)
 	}
-}
-
-// sessionMetadataKey 是 gate 写入、路由服透传的会话元数据键,值 = base64(proto SessionDetails)。
-const sessionMetadataKey = "x-session-detail-bin"
-
-// matchInternalMethodPrefix 是 MatchInternal 全部方法的 FullMethod 前缀("/match.MatchInternal/"),
-// 由生成的 ServiceDesc 派生,不手写服务名。
-var matchInternalMethodPrefix = "/" + matchpb.MatchInternal_ServiceDesc.ServiceName + "/"
-
-// sessionInterceptor 解出 gate 附带的 x-session-detail-bin(base64 protobuf
-// SessionDetails)放进 ctx —— 客户端直达协议的权威 player_id 从这里取,
-// 请求体里的 player_id 仅供内部调用(照 login 的 SessionInterceptor 模式;
-// match 不修改会话,无需回写响应 header)。ClientPlayerTeam 的请求体里没有 player_id,
-// 解不出会话时 team 直接回 4001(team-system.md §D.2)。
-//
-// MatchInternal 是内部服务(guild-phase2 §6.18.3,照 trade 的 TradeAdmin):带会话 metadata 即客户端来源,
-// 不论能否解码一律 PermissionDenied、不进 handler;无会话 = 内部调用(guild 直连)放行。
-// v1 只靠这一条 + 部署层 NetworkPolicy 收口,调用方不验签(契约偏差 13)。
-func sessionInterceptor(
-	ctx context.Context,
-	req any,
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (any, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok && strings.HasPrefix(info.FullMethod, matchInternalMethodPrefix) && len(md.Get(sessionMetadataKey)) > 0 {
-		logx.WithContext(ctx).Errorf("[match] Rejecting internal method %s invoked with a session", info.FullMethod)
-		return nil, status.Errorf(codes.PermissionDenied, "%s is not callable by clients", info.FullMethod)
-	}
-	if ok {
-		if vals, exists := md[sessionMetadataKey]; exists && len(vals) > 0 {
-			bin, err := base64.StdEncoding.DecodeString(vals[0])
-			if err != nil {
-				logx.Errorf("[match] Failed to decode session metadata base64: %v", err)
-			} else {
-				var detail base.SessionDetails
-				if err := proto.Unmarshal(bin, &detail); err != nil {
-					logx.Errorf("[match] Failed to deserialize SessionDetails: %v", err)
-				} else {
-					ctx = ctxkeys.WithSessionDetails(ctx, &detail)
-				}
-			}
-		}
-	}
-	return handler(ctx, req)
 }
 
 // parseListenOn splits "host:port" into its components.

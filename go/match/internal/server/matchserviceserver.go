@@ -91,3 +91,15 @@ func (s *MatchServiceServer) RequestBattleTicket(ctx context.Context, in *battle
 	l := logic.NewRequestBattleTicketLogic(ctx, s.svcCtx)
 	return l.RequestBattleTicket(in)
 }
+
+// ListBattleReports 本人最近的 PVP 战报列表(客户端协议;docs/design/battle-report-replay.md §7.3)。
+func (s *MatchServiceServer) ListBattleReports(ctx context.Context, in *matchpb.ListBattleReportsRequest) (*matchpb.ListBattleReportsResponse, error) {
+	l := logic.NewBattleReportLogic(ctx, s.svcCtx)
+	return l.ListBattleReports(in)
+}
+
+// GetBattleReport 取一局的回放正文(客户端协议;只许本人列表里有这一局的玩家取)。
+func (s *MatchServiceServer) GetBattleReport(ctx context.Context, in *matchpb.GetBattleReportRequest) (*matchpb.GetBattleReportResponse, error) {
+	l := logic.NewBattleReportLogic(ctx, s.svcCtx)
+	return l.GetBattleReport(in)
+}

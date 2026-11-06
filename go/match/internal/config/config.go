@@ -140,6 +140,18 @@ type Config struct {
 	// Spectate:观战 L1 中继、L2 全服广播与观战凭证。与 Team 一样不标 optional:整段缺席时 go-zero 按空块
 	// 递归填各字段的 default(开关关闭,其余取默认值),标了 optional 反而不会填 default。
 	Spectate SpectateConf
+
+	// ---- 战报回放(docs/design/battle-report-replay.md)----
+
+	// BattleReport:战报回放开关。与 Team 一样不标 optional,整段缺席时按 default 打开。
+	BattleReport BattleReportConf
+}
+
+// BattleReportConf 战报回放配置(battle-report-replay.md §7.1)。
+type BattleReportConf struct {
+	// Enabled:全局开关。关掉后新成局一律不录(建房原件 record_replay 为 false),已存的战报照常能列、能看。
+	// 只在 gather 建房时读一次并随原件冻结,已建房的局不受开关变化影响;各副本可以不同,不进策略指纹。
+	Enabled bool `json:",default=true"`
 }
 
 type GlobalMatchConf struct {
@@ -166,6 +178,9 @@ type GlobalMatchConf struct {
 	// PremadeGapStepSeconds:两侧最大车队人数之差(车队差)的放宽步长。车队差不超过 1 立即可成;更大的差要
 	// 吃亏一侧每个单位都等够(能接受的差 = 1 + 等待 / 步长)。0 = 不限车队差。质量规则,提交点不复核,不进指纹。
 	PremadeGapStepSeconds uint32 `json:",default=10"`
+	// PartyRatingGapMax:计分模式整队开战时,队员在本模式的评分最高与最低之差的上限(评分点),超过就拒绝开战
+	// (TeamRatingGapTooLarge)。0 = 不限。开战提交事务里判,是提交点规则,进全局策略指纹。缺省 500,待定标。
+	PartyRatingGapMax uint32 `json:",default=500"`
 	// GatherSlots:每个副本同时进行的成局备战(PrepareBattle + CreateBattle)上限。池写者先占槽再提交成局,
 	// 占不到槽本轮就不再提交,票留在队列里。不是提交点规则,不进策略指纹。
 	GatherSlots int `json:",default=256"`
@@ -176,7 +191,20 @@ type GlobalMatchConf struct {
 	// OutcomeOutbox:终局发件箱(整局结果发 Kafka、个人结算入 Inbox)的投递节拍、每轮批量与并发(2026-10-30,评审 B-6)。
 	// 不是提交点规则,不进策略指纹,各副本可以不同;越界在装配时拒启(authority.OutcomeOutboxOptions.Normalized)。
 	OutcomeOutbox OutcomeOutboxConf `json:",optional"`
+	// ManualResolutionSecretEnv:人工处置工具 formationfix 调 MatchInternal.ListStrandedFormations / ResolveStrandedFormation 的
+	// serviceauth 密钥所在的环境变量名(调用方 ManualResolutionCaller,不与观战运营的 ops 共用)。空 = 入口关闭,一律 PermissionDenied;
+	// 指名的变量缺失或去空白后不足 32 字节同样关闭并打 ERROR,不拒启。只在处置事故时开启(docs/ops/match-formation-manual-abort-runbook.md)。
+	// 不是提交点规则,不进策略指纹。
+	ManualResolutionSecretEnv string `json:",optional"`
+	// ManualResolutionEnvironment:本部署的环境名(例如 prod-global、staging-global),1~64 个 ASCII 字母、数字或 . _ -(2026-11-05)。
+	// formationfix 的 list / show 回它作 target,abort 的 -expect-target 必须与它逐字相等。上一项非空(入口开启)时必填,缺了或不合规
+	// 同样关闭入口并打 ERROR,不拒启。不用库地址作 target:库名固定 mmorpg_match,各环境的 Host 常是同一个 Service DNS,拦不住连错环境。
+	// 不是提交点规则,不进策略指纹。
+	ManualResolutionEnvironment string `json:",optional"`
 }
+
+// ManualResolutionCaller 是 MatchInternal.ListStrandedFormations / ResolveStrandedFormation 唯一接受的 serviceauth 调用方(2026-11-05)。
+const ManualResolutionCaller = "ops-formation"
 
 // OutcomeOutboxConf 是终局发件箱的投递参数。默认值与 2026-10-30 之前写死的行为一致;0 / 漏配按默认。
 type OutcomeOutboxConf struct {
@@ -219,6 +247,11 @@ func (g GlobalMatchConf) PartyBonusCenti() int64 {
 // PremadeGapStepMs 返回车队差放宽步长(毫秒);0 = 不限车队差。
 func (g GlobalMatchConf) PremadeGapStepMs() uint64 {
 	return uint64(g.PremadeGapStepSeconds) * 1000
+}
+
+// PartyRatingGapCenti 返回组队成员评分差上限(×100);0 = 不限。直接构造 Config 的单测里是 0。
+func (g GlobalMatchConf) PartyRatingGapCenti() int64 {
+	return int64(g.PartyRatingGapMax) * 100
 }
 
 // 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,

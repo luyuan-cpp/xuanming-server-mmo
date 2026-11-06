@@ -529,7 +529,8 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 		auto lease = co_await etcd_registration::AwaitReply<etcdserverpb::LeaseGrantResponse>(loop, timer,
 			kResponseBudgetSeconds, registrationIo_.requestLease);
 		timer.Cancel();
-		if (!lease) co_return;
+		// 提交时可能先完成、再重入停止。收到成功也要复核本地注册仍可推进。
+		if (registrationStopped_ || !lease) co_return;
 		if (restartRegistration_) continue;
 		if (!*lease)
 		{
@@ -558,7 +559,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 			{
 				LOG_ERROR << "RPC port allocation failed; nothing published to etcd, retrying in 1s";
 				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
-				if (!waited || !*waited) co_return;
+				if (registrationStopped_ || !waited || !*waited) co_return;
 				continue;
 			}
 			if (stage == Stage::kAllocation && !reRegistering && !retryUnknown) registrationIo_.selectNodeId();
@@ -571,7 +572,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 					completion = std::move(done);
 					return true;
 				}, false);
-				if (!ready) co_return;
+				if (registrationStopped_ || !ready) co_return;
 				if (!*ready || restartRegistration_) break;
 			}
 
@@ -581,7 +582,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 					claim(stage, reRegistering, retryUnknown, std::move(done));
 				});
 			timer.Cancel();
-			if (!reply) co_return;
+			if (registrationStopped_ || !reply) co_return;
 			if (restartRegistration_) break;
 			if (!*reply)
 			{
@@ -604,7 +605,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 				if (stage == Stage::kAllocation) registrationIo_.recordLostNodeId();
 				LOG_WARN << "etcd registration CAS rejected for " << key << "; retrying in 1s";
 				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
-				if (!waited || !*waited) co_return;
+				if (registrationStopped_ || !waited || !*waited) co_return;
 				continue;
 			}
 

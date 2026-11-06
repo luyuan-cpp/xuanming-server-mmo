@@ -212,6 +212,7 @@ type ConsumerOwner struct {
 	committed      map[partitionPosition]int64
 	acceptedCount  uint64
 	settledCount   uint64
+	releasedCount  uint64 // 消费组 owner 提交失败、交还 Kafka 重投的已接纳消息（r2-kc#1），见 release
 	closedReaders  uint64
 	readerEvidence [][]byte
 	readers        map[string]configuredReader
@@ -347,6 +348,26 @@ func (o *ConsumerOwner) commit(msgs []kafkago.Message) {
 	}
 }
 
+// release 结束消费组 owner 已交还 Kafka 重投的那些位置的票据（只按精确 T/P/O，不按前缀）：它们没有提交，
+// 本 boot 对它们已没有在途副作用（落库已返回、幂等），之后由同分区更高位点的提交覆盖或下一代次重投（r2-kc#1）。
+// 不计入 settled；之后同 T/P/O 再交付会新建票据。
+func (o *ConsumerOwner) release(msgs []kafkago.Message) {
+	var finished []func()
+	o.mu.Lock()
+	for _, msg := range msgs {
+		key := messagePosition{partitionPosition: partitionPosition{topic: msg.Topic, partition: msg.Partition}, offset: msg.Offset}
+		if callback := o.accepted[key]; callback != nil {
+			finished = append(finished, callback)
+			o.releasedCount++
+			delete(o.accepted, key)
+		}
+	}
+	o.mu.Unlock()
+	for _, finish := range finished {
+		finish()
+	}
+}
+
 // SettledDigest 只证明本 owner 实际接收消息的 SQL/提交前沿；不作为 P8 分区分配就绪证明。
 func (o *ConsumerOwner) SettledDigest(ctx context.Context) ([]byte, error) {
 	if err := o.ingress.Wait(ctx); err != nil {
@@ -372,7 +393,7 @@ func (o *ConsumerOwner) SettledDigest(ctx context.Context) ([]byte, error) {
 	})
 	h := sha256.New()
 	var value [8]byte
-	for _, count := range []uint64{o.acceptedCount, o.settledCount, o.closedReaders} {
+	for _, count := range []uint64{o.acceptedCount, o.settledCount, o.releasedCount, o.closedReaders} {
 		binary.BigEndian.PutUint64(value[:], count)
 		h.Write(value[:])
 	}
@@ -493,8 +514,6 @@ func (r *ownedRunner) Run(context.Context) error { defer r.cancel(); return r.ru
 type ownedReader struct {
 	reader    MessageReader
 	owner     *ConsumerOwner
-	txlog     bool
-	stopRun   context.CancelFunc
 	pending   atomic.Int64
 	closeOnce sync.Once
 	closeErr  error
@@ -504,22 +523,11 @@ type ownedReader struct {
 	groupErr  error
 }
 
-func (r *ownedReader) drainFetch(ctx context.Context) (kafkago.Message, error) {
-	if !r.txlog {
-		return kafkago.Message{}, errFetchDrained
-	}
-	if r.pending.Load() == 0 {
-		r.stopRun()
-		return kafkago.Message{}, context.Canceled
-	}
-	// 现有 TxLogConsumer 的批截止到点后会走原 flush；不取消它手里的 SQL/offset 上下文。
-	if _, ok := ctx.Deadline(); !ok {
-		r.owner.hold(errors.New("txlog 已接受但未提交的批已离开原处理栈"))
-		r.stopRun()
-		return kafkago.Message{}, drainproof.ErrHold
-	}
-	<-ctx.Done()
-	return kafkago.Message{}, ctx.Err()
+// drainFetch 是排空开始之后的 FetchMessage:不再拉新消息,返回 errFetchDrained。两条审计消费者都按分区派发
+// (partition_workers.go),收到它就关掉各分区通道,worker 把已接收的消息落完、提交后退出,原 SQL / offset 上下文不取消。
+// 2026-11-06 起流水与快照走同一条路径:以前流水是一条循环,这里要等它的批截止再停,那套特判随之删掉。
+func (r *ownedReader) drainFetch() (kafkago.Message, error) {
+	return kafkago.Message{}, errFetchDrained
 }
 
 func (r *ownedReader) FetchMessage(ctx context.Context) (kafkago.Message, error) {
@@ -531,7 +539,7 @@ func (r *ownedReader) FetchMessage(ctx context.Context) (kafkago.Message, error)
 	}()
 	finishFetch, err := r.owner.ingress.Enter()
 	if err != nil {
-		return r.drainFetch(ctx)
+		return r.drainFetch()
 	}
 	defer finishFetch()
 	fetchCtx, cancel := context.WithCancel(ctx)
@@ -541,7 +549,7 @@ func (r *ownedReader) FetchMessage(ctx context.Context) (kafkago.Message, error)
 	cancel()
 	if err != nil {
 		if r.owner.Draining() {
-			return r.drainFetch(ctx)
+			return r.drainFetch()
 		}
 		return msg, err
 	}
@@ -571,6 +579,14 @@ func (r *ownedReader) CommitMessages(ctx context.Context, msgs ...kafkago.Messag
 	}
 	defer cancel()
 	err := r.reader.CommitMessages(commitCtx, msgs...)
+	var released *kafkautil.UncommittedError
+	if errors.As(err, &released) {
+		// 消费组 owner 仍在运行、只是这批没提交上（再均衡 / 提交被拒，r2-kc#1）：它已把这些位置交还 Kafka 重投。
+		// 不是未知结局，不 hold、不排空兄弟消费者；只把它们从在途集合与票据里摘掉，返回错误由调用方记日志后继续消费。
+		r.forget(released.Released)
+		r.owner.release(released.Released)
+		return err
+	}
 	if err != nil {
 		r.owner.hold(err)
 		return err
@@ -587,6 +603,16 @@ func (r *ownedReader) CommitMessages(ctx context.Context, msgs ...kafkago.Messag
 	r.owner.commit(msgs)
 	return nil
 }
+
+// forget 把消费组 owner 交还重投的精确位置从在途集合里摘掉：finishAttempt 不能再把它们当本代次已交付票据上报。
+func (r *ownedReader) forget(msgs []kafkago.Message) {
+	r.activeMu.Lock()
+	defer r.activeMu.Unlock()
+	for _, message := range msgs {
+		delete(r.active, messagePosition{partitionPosition: partitionPosition{topic: message.Topic, partition: message.Partition}, offset: message.Offset})
+	}
+}
+
 func (r *ownedReader) Close() error {
 	r.closeOnce.Do(func() {
 		var raw []byte

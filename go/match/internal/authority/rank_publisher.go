@@ -129,7 +129,9 @@ func (s *Store) readRankShards(ctx context.Context) ([]rankShardProgress, error)
 }
 
 // PublishRankOnce 投一轮:每个计分模式一张榜(rankBoardTypes),每片按自己的游标顺序投到本模式的榜;
-// 片之间、模式之间没有先后(版本防旧值覆盖,见 ApplyRating)。
+// 片之间、模式之间没有先后(版本防旧值覆盖,见 ApplyRating)。每个副本只投自己负责的 (模式, 来源片)
+// (work_owner.go 的 rankWorkKey):加副本就分摊投榜,不再每个副本把全部片各投一遍;两个副本偶尔同投一片也安全,
+// rank 按 (榜, 片, 游标) 幂等,本地游标只前进不后退。
 // 一片失败、或一个模式的榜这一轮绑不上,都不拦别的片和别的模式,下一轮从原游标接着投;返回遇到的第一个错误。
 func (s *Store) PublishRankOnce(ctx context.Context, client rankpb.RankAdminClient, secret string) error {
 	shards, e := s.readRankShards(ctx)
@@ -157,7 +159,7 @@ func (s *Store) PublishRankOnce(ctx context.Context, client rankpb.RankAdminClie
 			break
 		}
 		board := boards[p.mode]
-		if board == 0 {
+		if board == 0 || !s.ownsWork(rankWorkKey(p.mode, p.shard)) {
 			continue
 		}
 		if e = s.publishRankShard(ctx, client, secret, board, p); e != nil {

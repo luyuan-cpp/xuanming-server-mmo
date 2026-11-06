@@ -313,8 +313,33 @@ func TestNewAssetPipelineRejectsIncompleteDeps(t *testing.T) {
 func TestNilAssetPipelineIsSafe(t *testing.T) {
 	var p *AssetPipeline
 	p.AttachMaintenanceLeader(nil, "")
-	p.Start(context.Background(), nil)
+	p.Start(context.Background(), nil, true)
 	p.Stop()
+}
+
+// canary 副本(globalBackground=false)只起 scene 节点镜像;Stop 同样要等它退出才返回,重复 Stop 无害。
+func TestAssetPipelineCanaryStartsMirrorOnlyAndStops(t *testing.T) {
+	t.Setenv(AssetOpSecretEnv, strings.Repeat("s", assetop.MinSecretLen))
+	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	defer func() { _ = rdb.Close() }()
+
+	p, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, rdb, stubAssetStore{})
+	if err != nil {
+		t.Fatalf("NewAssetPipeline: %v", err)
+	}
+	p.Start(context.Background(), nil, false)
+
+	done := make(chan struct{})
+	go func() {
+		p.Stop()
+		p.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("canary 的 Stop 5s 内没有返回:节点镜像 goroutine 没有随取消退出")
+	}
 }
 
 // TestAssetPipelineStopWaitsAndIsIdempotent:Stop 必须等两个 goroutine 退出才返回(guild.go 靠它
@@ -332,8 +357,8 @@ func TestAssetPipelineStopWaitsAndIsIdempotent(t *testing.T) {
 	if p.Loop == nil {
 		t.Fatal("Loop 必须已构造(logic 的同步投递要用它)")
 	}
-	p.Start(context.Background(), nil)
-	p.Start(context.Background(), nil) // 重复 Start 只生效一次
+	p.Start(context.Background(), nil, true)
+	p.Start(context.Background(), nil, true) // 重复 Start 只生效一次
 
 	done := make(chan struct{})
 	go func() {
@@ -346,7 +371,7 @@ func TestAssetPipelineStopWaitsAndIsIdempotent(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Stop 5s 内没有返回:后台 goroutine 没有随取消退出")
 	}
-	p.Start(context.Background(), nil) // Stop 之后再 Start 是空操作,不能在已 Wait 过的 WaitGroup 上 Add
+	p.Start(context.Background(), nil, true) // Stop 之后再 Start 是空操作,不能在已 Wait 过的 WaitGroup 上 Add
 }
 
 // hasMaintenanceElector 在 mu 下读选主器是否装上:Start 之后后台 goroutine 已在跑,读字段也走与写同一把锁。
@@ -387,7 +412,7 @@ func TestAttachMaintenanceLeaderBranches(t *testing.T) {
 
 	t.Run("Start 之后与 Stop 之后调用被忽略", func(t *testing.T) {
 		p := newPipeline(t, y06Defaults())
-		p.Start(context.Background(), nil)
+		p.Start(context.Background(), nil, true)
 		p.AttachMaintenanceLeader(rdb, "node-a")
 		if hasMaintenanceElector(p) {
 			t.Fatal("Start 之后再装选主器就是与后台 goroutine 的数据竞争,必须忽略")

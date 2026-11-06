@@ -112,10 +112,11 @@ TEST(ClientGmGateTest, BagServiceExposesGmGrantItemAndItIsGated)
 	ASSERT_NE(nullptr, method) << "SceneBagClientPlayer.GmGrantItem is missing: run proto-gen first";
 	EXPECT_TRUE(scene_gm_guard::IsClientGmMethodName(std::string(method->name())));
 	// 同一个 service 上的正常 RPC 不能被闸门误伤。
-	// 后三个是装备二期的强化 / 镶嵌 / 取下(docs/design/equipment-enhance-inlay.md §3.3):它们是玩家
-	// 日常操作,名字不许以 Gm 开头 —— 被判成 GM 指令的话,默认的 prod 模式下会被整个拦掉。
-	for (const char *name :
-		 {"GetBag", "SortBag", "EquipItem", "UnequipItem", "EnhanceEquip", "InlayGem", "RemoveGem"})
+	// 强化 / 镶嵌 / 取下是装备二期(docs/design/equipment-enhance-inlay.md §3.3),RetrieveTemporaryItems 是
+	// 临时格取回(docs/design/bag-rule-policy-layering.md §6.6):它们是玩家日常操作,名字不许以 Gm 开头 ——
+	// 被判成 GM 指令的话,默认的 prod 模式下会被整个拦掉。
+	for (const char *name : {"GetBag", "SortBag", "EquipItem", "UnequipItem", "EnhanceEquip", "InlayGem", "RemoveGem",
+							 "RetrieveTemporaryItems"})
 	{
 		const auto *normal = SceneBagClientPlayer::descriptor()->FindMethodByName(name);
 		ASSERT_NE(nullptr, normal) << "SceneBagClientPlayer." << name << " is missing: run proto-gen first";

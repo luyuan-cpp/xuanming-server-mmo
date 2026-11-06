@@ -30,6 +30,13 @@ type TopicSpec struct {
 	// 严格耐久消息必须显式指定至少三副本，并强制 minISR>=2、禁用非同步副本选主。
 	// 启动只配置并核验，不自动重分配已有副本；旧服务默认不启用。
 	RequireDurability bool
+	// AllowPartitionGrowth 把分区数从「不可变契约」放宽为「只许加、可以原地加」(2026-11-06,缺口清单第 15 条):
+	// broker 上分区少于 Partitions 时原地加到 Partitions;多于 Partitions 时接受(Kafka 不能减分区,多出来的
+	// 照样被消费组分走);不建、也不核不可变分区标记。
+	// **只给消费端不依赖分区内顺序的 topic 打开**(目前只有 data_service 的两个审计 topic:流水按 tx_id 主键
+	// INSERT IGNORE、快照按 guid 唯一键去重,见 docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A)。
+	// 扩分区会改变 key 到分区的映射,db、login 这类靠按玩家有序的 topic 绝不能打开。
+	AllowPartitionGrowth bool
 }
 
 const (
@@ -78,6 +85,7 @@ func parseReplicationFactor(raw string) int16 {
 type topicAdmin interface {
 	ListTopics() (map[string]sarama.TopicDetail, error)
 	CreateTopic(string, *sarama.TopicDetail, bool) error
+	CreatePartitions(topic string, count int32, assignment [][]int32, validateOnly bool) error
 	IncrementalAlterConfig(sarama.ConfigResourceType, string, map[string]sarama.IncrementalAlterConfigsEntry, bool) error
 }
 
@@ -86,6 +94,7 @@ type topicAdmin interface {
 // place: changing the partition count remaps keyed messages and breaks the
 // per-player ordering cursor used by db service. A planned expansion must use a
 // new topic generation after the old topic and retry queues are fully drained.
+// (2026-11-06)例外:TopicSpec.AllowPartitionGrowth 打开的 topic 只许加分区、可以原地加,见该字段注释。
 func EnsureTopics(brokers []string, specs []TopicSpec) error {
 	cfg := sarama.NewConfig()
 	cfg.Version = sarama.V3_0_0_0
@@ -173,7 +182,11 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 		if !exists {
 			return fmt.Errorf("kafka topic %s is still absent after create", spec.Name)
 		}
-		if detail.NumPartitions != spec.Partitions {
+		if spec.AllowPartitionGrowth {
+			if err := growPartitions(admin, spec, detail.NumPartitions); err != nil {
+				return err
+			}
+		} else if detail.NumPartitions != spec.Partitions {
 			return fmt.Errorf("kafka topic %s partition contract mismatch: broker=%d config=%d; in-place expansion is forbidden, drain the old topic/retry queues and switch both login+db to a new TopicGeneration",
 				spec.Name, detail.NumPartitions, spec.Partitions)
 		}
@@ -199,9 +212,9 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 		}
 
 		markerPrefix, expectedMarker := partitionContractMarker(spec.Name, spec.Partitions)
-		markerExists := false
+		markerExists := spec.AllowPartitionGrowth // 只许加的 topic 没有不可变分区标记,整段跳过
 		for topicName := range existing {
-			if !strings.HasPrefix(topicName, markerPrefix) {
+			if spec.AllowPartitionGrowth || !strings.HasPrefix(topicName, markerPrefix) {
 				continue
 			}
 			if topicName != expectedMarker {
@@ -268,6 +281,36 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 		}
 	}
 
+	return nil
+}
+
+// growPartitions 给 AllowPartitionGrowth 的 topic 把分区数补到配置值(2026-11-06)。current 是 broker 上的现值。
+//   - 已不少于配置:什么都不做;多于配置时记一行 Info(Kafka 不能减分区,多出来的分区照样被消费组分走)。
+//   - 少于配置:原地 CreatePartitions 加到配置值。
+//
+// 多个副本同时启动会各自去加,后到的那个被 Kafka 以 INVALID_PARTITIONS(分区数不大于当前值)拒绝;所以加失败之后
+// 重读一次元数据,已经不少于配置就当成功,仍少于配置才回错误(调用方 EnsureTopics 的错误由 data_service 稍后重试)。
+func growPartitions(admin topicAdmin, spec TopicSpec, current int32) error {
+	if current >= spec.Partitions {
+		if current > spec.Partitions {
+			logx.Infof("kafka topic %s has %d partitions, more than the configured %d; keeping them (partitions only grow)",
+				spec.Name, current, spec.Partitions)
+		}
+		return nil
+	}
+	if err := admin.CreatePartitions(spec.Name, spec.Partitions, nil, false); err != nil {
+		topics, listErr := admin.ListTopics()
+		if listErr != nil {
+			return fmt.Errorf("kafka grow topic %s partitions %d -> %d: %w (re-reading metadata also failed: %v)",
+				spec.Name, current, spec.Partitions, err, listErr)
+		}
+		if detail, ok := topics[spec.Name]; !ok || detail.NumPartitions < spec.Partitions {
+			return fmt.Errorf("kafka grow topic %s partitions %d -> %d: %w", spec.Name, current, spec.Partitions, err)
+		}
+		logx.Infof("kafka topic %s already has >= %d partitions (grown by another instance)", spec.Name, spec.Partitions)
+		return nil
+	}
+	logx.Infof("kafka topic %s partitions grown in place: %d -> %d", spec.Name, current, spec.Partitions)
 	return nil
 }
 

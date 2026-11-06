@@ -244,8 +244,10 @@ class MockPaymentStoreTest {
             rejects(503, () -> f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "mock", "mock-pay-" + order.orderId(), 100, "CNY")));
             worker(f).pay(new MockPaymentApi.Pay(order.orderId(), "forged-mock-request"));
             delivery(f).receipt(new DeliveryApi.Receipt(order.orderId(), "123", "REFUND_PENDING", "b".repeat(64)));
-            rejects(503, () -> delivery(f).refunded(new CommerceApi.Payment(order.orderId(), "mock", "mock-refund-" + order.orderId(), 100, "CNY")));
-            rejects(409, () -> delivery(f).refunded(new CommerceApi.Payment(order.orderId(), "test", "foreign-refund", 100, "CNY")));
+            String paid = new PaymentPolicy(f.jdbc, f.props).required("PAYMENT", order.orderId()).transactionId();
+            rejects(503, () -> delivery(f).refunded(new CommerceApi.Refund(order.orderId(), "mock", paid, "mock-refund-" + order.orderId(), 100, "CNY")));
+            // 退款待办按被退付款的交易键识别:别的渠道报同一笔 mock 付款的退款,连待办都对不上。
+            rejects(404, () -> delivery(f).refunded(new CommerceApi.Refund(order.orderId(), "test", paid, "foreign-refund", 100, "CNY")));
             assertEquals(0, f.count("commerce_refund_receipt"));
             assertEquals(1, worker(f).reconcile().succeeded());
         }
@@ -301,10 +303,12 @@ class MockPaymentStoreTest {
             f.sku(1, 5, 125);
             var order = f.store.create("1", new CommerceApi.CreateOrder("mock-migration-order", 1, 2, "测试账号", "1"));
             var grant = f.jdbc.queryForMap("SELECT * FROM commerce_order_grant WHERE order_sn=?", order.orderId());
-            // 本例尚无退款数据，退回V3形状；不操作任何既有共享库。
+            // 本例尚无退款数据，退回V3形状；不操作任何既有共享库。退款待办取2026-11-05起按交易键识别的列形状，
+            // 只去掉V4补的扫描索引：本例验的是V4的DDL，更早的按订单号布局已不再就地升级(见 java/README.md)。
             f.jdbc.execute("DROP TABLE commerce_mock_transaction");
             f.jdbc.execute("DROP TABLE commerce_refund_intent");
-            f.jdbc.execute("CREATE TABLE commerce_refund_intent(order_sn VARCHAR(36) PRIMARY KEY,status VARCHAR(24) NOT NULL,channel VARCHAR(32) NULL,transaction_id VARCHAR(128) NULL)");
+            f.jdbc.execute("CREATE TABLE commerce_refund_intent(channel VARBINARY(32) NOT NULL,transaction_id VARBINARY(128) NOT NULL,"
+                + "order_sn VARCHAR(36) NOT NULL,source VARCHAR(24) NOT NULL,status VARCHAR(24) NOT NULL,PRIMARY KEY(channel,transaction_id))");
             assertThrows(Exception.class, () -> SchemaVerifier.verify(f.jdbc, f.source));
             f.migrate("db/migration/V4__mock_payment.sql");
             SchemaVerifier.verify(f.jdbc, f.source);

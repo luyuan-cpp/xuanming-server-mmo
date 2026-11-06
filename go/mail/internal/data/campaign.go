@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	mailpb "proto/mail"
 )
 
@@ -153,25 +154,18 @@ func (r *Repo) Import(ctx context.Context, caller string, in *mailpb.ImportMailR
 		if c.State != 1 {
 			return ErrConflict
 		}
+		// 已导入人数取各片行 recipient_count 之和(片数量级,不超过 ExpectedShardCount),不再对收件人表全量 COUNT:
+		// 那样每导一片都要数一遍此前全部收件人,导完整份名单的开销随名单长度平方增长(缺口清单第 27 条)。
+		// 片行与它的收件人行同事务写入,这个和恒等于已导入的收件人数;活动行锁把同一活动的导入串行了,读到的就是提交点的值。
 		var imported uint64
-		if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_campaign_recipient WHERE sender_kind=? AND campaign_id=? AND manifest_generation=?", in.SenderKind, in.CampaignId, in.ManifestGeneration).Scan(&imported); e != nil {
+		if e = tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(recipient_count),0) FROM mail_campaign_shard WHERE sender_kind=? AND campaign_id=? AND manifest_generation=?", in.SenderKind, in.CampaignId, in.ManifestGeneration).Scan(&imported); e != nil {
 			return e
 		}
 		if imported+uint64(len(ids)) > c.ExpectedRecipientCount {
 			return ErrInvalid
 		}
-		for _, id := range ids {
-			var previous uint32
-			e = tx.QueryRowContext(ctx, "SELECT shard_index FROM mail_campaign_recipient WHERE sender_kind=? AND campaign_id=? AND manifest_generation=? AND player_id=?", in.SenderKind, in.CampaignId, in.ManifestGeneration, id).Scan(&previous)
-			if e == nil {
-				return ErrConflict
-			}
-			if !errors.Is(e, sql.ErrNoRows) {
-				return e
-			}
-			if _, e = tx.ExecContext(ctx, "INSERT INTO mail_campaign_recipient (sender_kind,campaign_id,manifest_generation,player_id,shard_index) VALUES (?,?,?,?,?)", in.SenderKind, in.CampaignId, in.ManifestGeneration, id, in.ShardIndex); e != nil {
-				return e
-			}
+		if e = insertCampaignRecipients(ctx, tx, in, ids); e != nil {
+			return e
 		}
 		_, e = tx.ExecContext(ctx, "INSERT INTO mail_campaign_shard (sender_kind,campaign_id,manifest_generation,shard_index,shard_hash,recipient_count) VALUES (?,?,?,?,?,?)", in.SenderKind, in.CampaignId, in.ManifestGeneration, in.ShardIndex, hash, len(ids))
 		result.ImportedCount = uint64(len(ids))
@@ -179,6 +173,29 @@ func (r *Repo) Import(ctx context.Context, caller string, in *mailpb.ImportMailR
 	})
 	return result, err
 }
+// insertCampaignRecipients 用一条多行 INSERT 写入一片收件人(一片至多 1000 人,ShardHash 已去重)。收件人主键含 player_id:
+// 任何一人已在别的片里,整条语句以 1062 失败、什么都不写,调用方整笔回滚 —— 与以前逐人先查后插「有人重复就整片冲突」同口径,
+// 往返从每片 2×人数 次降到 1 次(缺口清单第 27 条)。调用方持活动行锁。
+func insertCampaignRecipients(ctx context.Context, tx *sql.Tx, in *mailpb.ImportMailRecipientsRequest, ids []uint64) error {
+	const columns = 5
+	args := make([]any, 0, len(ids)*columns)
+	var b strings.Builder
+	b.WriteString("INSERT INTO mail_campaign_recipient (sender_kind,campaign_id,manifest_generation,player_id,shard_index) VALUES ")
+	for i, id := range ids {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString("(?,?,?,?,?)")
+		args = append(args, in.SenderKind, in.CampaignId, in.ManifestGeneration, id, in.ShardIndex)
+	}
+	_, err := tx.ExecContext(ctx, b.String(), args...)
+	var duplicate *mysql.MySQLError
+	if errors.As(err, &duplicate) && duplicate.Number == 1062 {
+		return ErrConflict
+	}
+	return err
+}
+
 func (r *Repo) Seal(ctx context.Context, caller string, in *mailpb.SealMailCampaignRequest) (*mailpb.SendMailResponse, error) {
 	if in == nil || in.SenderKind != SenderKind(caller) || in.CampaignId == 0 || in.ManifestGeneration == 0 {
 		return nil, ErrInvalid

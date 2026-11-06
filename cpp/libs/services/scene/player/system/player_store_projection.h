@@ -16,7 +16,7 @@
 // 启动时校验,漏标拒绝启动,不会静默丢数据。
 namespace player_store_rows
 {
-    // 数组下标就是 PlayerStoreKind 的值。下标 0(写权行)和退役的 1、2 不用,恒为空串,永远不算脏。
+    // 数组下标就是 PlayerStoreKind 的值。下标 0(写权行)和退役的 1、2、5 不用,恒为空串,永远不算脏。
     inline constexpr std::size_t kKindCount = 10;
     static_assert(kKindCount == static_cast<std::size_t>(playerstore::PlayerStoreKind_ARRAYSIZE));
 
@@ -34,12 +34,12 @@ namespace player_store_rows
 
     // 投影全部 kind,确定性序列化。db 在调用期间被短暂改动(字段交换到临时消息再换回来,不拷贝内容),
     // 返回时恢复原样。顶层有未知字段就拒绝:新二进制写的字段被旧二进制丢掉,比拒写更糟。
-    bool ProjectPlayer(player_database &db, const player_database_1 &db1, KindBytes &out, std::string &error);
+    bool ProjectPlayer(player_database &db, KindBytes &out, std::string &error);
 
     // 把片段拼回去。逐行解析、清除不属于本 kind 的字段再合并,所以字段换行之后库里两行各有一份也不会
-    // 合并出双份。kLegacy1 单独解析:它是另一个消息,字段号有重叠,不能参与拼接。
-    // 未知或退役的 kind(旧分行布局留下的 1、2 行)整份拒绝:那是另一种布局写的,按现在的分行解读会丢字段。
+    // 合并出双份。
+    // 未知或退役的 kind(旧布局留下的 1、2、5 行)整份拒绝:那是另一种布局写的,按现在的分行解读会丢字段。
     // 顶层有更新版本才有的字段就失败(认领时已按世代拒绝,这里是纵深防御);已退役字段的残留直接丢掉。
     bool AssemblePlayer(const google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> &rows,
-                        player_database &db, player_database_1 &db1, std::string &error);
+                        player_database &db, std::string &error);
 }

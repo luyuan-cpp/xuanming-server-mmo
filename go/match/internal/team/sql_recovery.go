@@ -146,7 +146,10 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 }
 
 func (s *Service) expireSQLTeams(ctx context.Context, afterExpiry, afterTeam uint64) (uint64, uint64) {
-	rows, err := s.svcCtx.Authority.DB.QueryContext(ctx, "SELECT team_id,idle_expires_ms FROM team_authority WHERE state=1 AND idle_expires_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND (idle_expires_ms>? OR (idle_expires_ms=? AND team_id>?)) ORDER BY idle_expires_ms,team_id LIMIT 16", afterExpiry, afterExpiry, afterTeam)
+	// 只扫本副本负责的片(片号 = team_id,authority/work_owner.go):加副本就分摊,不再每个副本扫同一批到期队伍。
+	owned, shardArgs := s.svcCtx.Authority.TeamIdleWorkFilter()
+	args := append([]any{afterExpiry, afterExpiry, afterTeam}, shardArgs...)
+	rows, err := s.svcCtx.Authority.DB.QueryContext(ctx, "SELECT team_id,idle_expires_ms FROM team_authority WHERE state=1 AND idle_expires_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND (idle_expires_ms>? OR (idle_expires_ms=? AND team_id>?)) AND "+owned+" ORDER BY idle_expires_ms,team_id LIMIT 16", args...)
 	if err != nil {
 		return afterExpiry, afterTeam
 	}

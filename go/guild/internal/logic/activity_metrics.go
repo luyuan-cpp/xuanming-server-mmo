@@ -145,6 +145,16 @@ const (
 // trialOwedRowsGaugeCap:待入队积压 gauge 的计数上限(06 §6.32:超过只报上限,不为一个指标做全表扫描)。
 const trialOwedRowsGaugeCap = 10000
 
+// guild_trial_launch_recovery_total 的 result 取值:launch 恢复器每认领一条原件、查一次的去向(2026-11-05 修复,r2-guild#1 评审)。
+const (
+	trialLaunchReleased    = "released"    // 拿到权威终态回执,同事务释放了 launch、参与者与大厅占位
+	trialLaunchWaiting     = "waiting"     // 还没有终态(成局中、开局成功截止前、帮会已解散等结果),按退避等下一次检查
+	trialLaunchFailed      = "error"       // 取消 RPC 失败、回执矛盾或写库失败,按退避重试
+	trialLaunchUndecodable = "undecodable" // 原件行解不开,跳过、留给人工;持续增长要告警
+	// trialLaunchClaimFailed 不是逐条原件的去向:一次到期扫描或认领 CAS 失败(TiDB 故障),本副本没向 match 发出任何取消,本轮结束。
+	trialLaunchClaimFailed = "claim_error"
+)
+
 var (
 	guildTrialResultTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 		Namespace: "guild",
@@ -192,6 +202,16 @@ var (
 		Subsystem: "trial",
 		Name:      "register_fail_total",
 		Help:      "开战成功后登记对局行失败的次数。不影响发奖(结算会补登记),但这一局在结果到达之前巡检器看不见它。",
+	})
+
+	guildTrialLaunchRecoveryTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: "guild",
+		Subsystem: "trial",
+		Name:      "launch_recovery_total",
+		Help: "历练 launch 恢复器逐条原件一次检查的去向。released(权威终态,已释放占用)/ waiting(尚无终态,按退避再查)/" +
+			"error(RPC 或写库失败,按退避重试)/ undecodable(原件行解不开,已跳过,需人工处理);" +
+			"另有 claim_error:一次到期扫描或认领失败,没发出任何取消,本轮结束。",
+		Labels: []string{"result"},
 	})
 )
 

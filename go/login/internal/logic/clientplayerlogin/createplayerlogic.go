@@ -636,9 +636,15 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 //
 // 落点(docs/design/player-storage-placement.md §8.3):同一次 RPC 带上 storage_id,由 data_service 和归属
 // 写进 player_route 的同一行。钉落点失败与登记失败是同一次写,自然同样 fail-closed。
+// 存档库按地域选、和区无关(总体方案 §7.2):zone 只决定 home_zone,storage_id 由 player_id 在本地域 K 个库里取模。
 func (l *CreatePlayerLogic) registerHomeZone(account string, playerID uint64) *login_proto_common.TipInfoMessage {
 	zone := config.AppConfig.Node.ZoneId
-	storageID := config.AppConfig.Placement.StorageIDForNewPlayer(zone)
+	storageID, err := config.AppConfig.Placement.StorageIDForNewPlayer(playerID, zone)
+	if err != nil {
+		logx.Errorf("Refusing to create player: no storage for the new player (account=%s player_id=%d zone=%d): %v",
+			account, playerID, zone, err)
+		return &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
+	}
 	if err := l.svcCtx.HomeZone.RegisterPlayerZone(l.ctx, playerID, zone, storageID); err != nil {
 		logx.Errorf("Refusing to create player: player_route registration failed "+
 			"(account=%s player_id=%d zone=%d storage_id=%d): %v", account, playerID, zone, storageID, err)

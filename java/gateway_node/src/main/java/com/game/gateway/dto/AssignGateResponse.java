@@ -8,7 +8,7 @@ public class AssignGateResponse {
      * Top-level HTTP-shape code (preserves backwards compatibility with the
      * pre-queue rate-limit path):
      *   0    = OK (gateIp/gatePort/token* populated)
-     *   100  = QUEUEING from Bucket4j rate-limit OR from go-zero login real queue.
+     *   100  = QUEUEING from the gateway rate-limit OR from go-zero login real queue.
      *          Disambiguate via {@link #queueSource}: "ratelimit" vs "login".
      *          When source=login, {@link #queueToken}/{@link #queueRank}/
      *          {@link #queueTotal} carry the authoritative position; when
@@ -30,10 +30,10 @@ public class AssignGateResponse {
     private Long queuePos;
 
     // ── Real-queue fields (populated when go-zero login returns status=1) ──
-    // Distinguishes "you are in the authoritative login queue" from "Bucket4j
-    // says retry later". Clients SHOULD show the queue UI (rank/total) when
+    // Distinguishes "you are in the authoritative login queue" from "the
+    // rate limiter says retry later". Clients SHOULD show the queue UI (rank/total) when
     // queueSource="login"; for queueSource="ratelimit" a generic "please wait"
-    // is enough since Bucket4j has no real position.
+    // is enough since the rate limiter has no real position.
     private String queueSource;  // "login" | "ratelimit" | null
     private String queueToken;   // opaque, pass to /api/queue-status
     private Long queueRank;      // 0-based; 0 = "you are next"

@@ -56,6 +56,8 @@
 #include "services/scene/player/system/player_inbox_registry.h"
 #include "services/scene/player/system/player_inbox_rules.h"
 #include "services/scene/player/system/player_inbox_system.h"
+#include "services/scene/player/system/player_feature_snapshot.h" // PlayerBagSystem::RetrieveTemporary:延后结算靠取回腾位
+#include "services/scene/player/comp/player_inbox_runtime_comp.h" // 取回后定向唤醒:断言别的域的状态一点没动
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/player_inbox/player_inbox.pb.h"
 #include "network/node_utils.h"
@@ -64,6 +66,7 @@
 #include "modules/mission/mission_events.h"
 #include "services/scene/battle/system/battle_lock_rules.h"
 #include "services/scene/battle/system/player_battle.h"
+#include "services/scene/battle/system/battle_freeze_hold_rules.h" // 夹具注入的终局查询回答(TerminalAnswer)
 // 本人近期战斗结果(docs/design/battle-result-recovery.md):持久组件、列表规则与客户端协议。
 #include "proto/common/component/player_battle_result_comp.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
@@ -138,6 +141,14 @@ bool RecordLockRelease(uint64_t playerId, uint64_t battleId, std::function<void(
     return true;
 }
 
+// FIGHTING 冻结到期时的 SQL 终局查询(PlayerBattleSystem::SetBattleTerminalQueryForTest,2026-11-06):本文件的夹具
+// 不连 match,这些局也没有 SQL 原件,一律当场回「没有可裁决原件」(NO_ORIGINAL)—— 到期照常解冻,与续冻上线之前的
+// 到期收尾相同。续冻本身(COMPLETE 未应用、有原件的 NONE、上限、查询失败、资产通道 RETRY)由 battle_freeze_hold_test.cpp 盯住。
+bool AnswerNoTerminalYet(uint64_t, std::function<void(battle_freeze_hold::TerminalAnswer)> done) {
+    done(battle_freeze_hold::TerminalAnswer::kNoOriginal);
+    return true;
+}
+
 // 组队跟随唤醒的注入(PlayerBattleSystem::SetFollowWakeFnForTest):记下被唤醒的实体,以及那一刻已经发出的删锁命令数
 // (跟随链读 battle:lock fail-closed,删锁命令必须先于它进 hiredis 管道)。
 std::vector<entt::entity> gFollowWakes;
@@ -157,7 +168,7 @@ redisReply IntegerReply(long long value) {
 
 // 锁脚本观察点(PlayerBattleSystem::SetLockScriptObserverForTest)的记录:不连 Redis 也能盯住「这一次会发什么」。
 // 记录只能放在文件级;单测线程独占,ScopedLockScriptRecorder 进出各清一次,不跨用例残留。
-// 单测线程没有 EventLoop、也没有 Redis:不注入重试调度器时,没问到之后的重试链当场放弃(battle_lock_write_gave_up),
+// 夹具在当前测试线程建立 loop 和任务作用域，不连接 Redis；默认拒绝重试调度，未取得应答时当场放弃，
 // 续期在首发前登记的在途链随之摘除,所以每一次首发都会回调一次,不会被去重挡掉。
 // 要驱动重试链(去重、门禁放弃)的用例再叠一层 ScopedLockRetryCapture(见下)。
 struct LockScriptCall {
@@ -393,6 +404,7 @@ protected:
         gLockReleasesAtFollowWake.clear();
         PlayerBattleSystem::SetBattleLockReleaseSenderForTest(&RecordLockRelease);
         PlayerBattleSystem::SetFollowWakeFnForTest(&RecordFollowWake);
+        PlayerBattleSystem::SetBattleTerminalQueryForTest(&AnswerNoTerminalYet);
     }
     // 背包候选与收件箱状态机按 player_id 现取实体(tlsEcs.GetPlayer)。重建实体后必须重新登记。
     void RegisterPlayer() {
@@ -402,6 +414,7 @@ protected:
     void TearDown() override {
         PlayerBattleSystem::SetBattleLockReleaseSenderForTest(nullptr);
         PlayerBattleSystem::SetFollowWakeFnForTest(nullptr);
+        PlayerBattleSystem::SetBattleTerminalQueryForTest(nullptr);
         gLockReleases.clear();
         gFollowWakes.clear();
         gLockReleasesAtFollowWake.clear();
@@ -435,7 +448,6 @@ protected:
         auto* first = persisted.mutable_player_database_data();
         first->set_player_id(playerId);
         first->mutable_inbox_ledger()->CopyFrom(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
-        persisted.mutable_player_database_1_data()->set_player_id(playerId);
         persisted.set_last_save_seq(++saveSeq);
         const auto source = std::make_shared<const PlayerAllData>(persisted);
         const auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, 7, saveSeq);
@@ -1525,7 +1537,7 @@ TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAnd
     first->mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get<CurrencyComp>(player));
     first->mutable_derived_attributes_component()->CopyFrom(tlsEcs.actorRegistry.get<BaseAttributesComp>(player));
     first->mutable_inbox_ledger()->CopyFrom(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
-    persisted.mutable_player_database_1_data()->set_player_id(playerId); persisted.set_last_save_seq(++saveSeq);
+    persisted.set_last_save_seq(++saveSeq);
     const auto source = std::make_shared<const PlayerAllData>(persisted);
     const auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, 7, saveSeq);
     ASSERT_TRUE(static_cast<bool>(committed)); committed();
@@ -1656,6 +1668,165 @@ TEST_F(PlayerBattleSettlementItemTest, InboxFullBagsKeepConsumptionGoldHealthAnd
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(0u, KillProgress());
     EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+}
+
+// 审计 cpp-economy#2(2026-11-05):临时格满了不再先进先出挤掉旧物。主包与临时格都放不下整批掉落时整笔延后:
+// 消耗、金币、气血、击杀都不动,临时格里原有的那件也还在 —— 改动前它会被挤掉,这一局随即记成已应用。
+// 来源(收件箱条目)保留,玩家从临时格取回、腾出位置后,下一次重试即应用。
+TEST_F(PlayerBattleSettlementItemTest, InboxFullTemporaryBagIsNeverEvictedAndTheWholeSettlementDefers)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    constexpr Guid kOldestTemporaryItem = 9100001;
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(1);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    Temporary().InsertItemForRestore(kOldestTemporaryItem, kSettlementNonStackItem, 1, 0, 1);
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 1);
+    const auto items = ItemBytes();
+    const auto slots = Inventory().GridSlots();
+    const auto temporarySlots = Temporary().GridSlots();
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_NE(nullptr, Temporary().GetItemCompByGuid(kOldestTemporaryItem)) << "the oldest temporary item is never pushed out";
+    EXPECT_EQ(1u, Temporary().OccupiedGridCount());
+    EXPECT_EQ(temporarySlots, Temporary().GridSlots());
+    EXPECT_EQ(items, ItemBytes());
+    EXPECT_EQ(slots, Inventory().GridSlots());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_EQ(0, Results().entries_size()) << "a deferred settlement records no recent result";
+}
+
+// 评审修正(2026-11-06):两包都放不下而延后的那一局,这一局的冻结(InBattleComp)要等结算应用并确认提交之后才摘。
+// 取回若在战斗中也拒,玩家在冻结到期之前腾不出位置,这一局就一直补不上。放行之后:冻结还挂着时取回一件,
+// 临时格腾出两格,下一次重试整笔应用 —— 消耗、金币、击杀、掉落都到账,取回的那件原样在人物背包。
+// 顺带钉住日志限频用的「连续放不下」计数:每次延后加一,整批发放成功归 0(BagService::ConsecutiveGrantOverflowRejections)。
+TEST_F(PlayerBattleSettlementItemTest, InboxDeferredForFullBagsAppliesAfterARetrieveDuringTheBattle)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    constexpr Guid kParkedTemporaryItem = 9300003; // 在两个号段之外:不会与本例铸出的号撞上
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(settlement.battle_id());
+    Inventory().SetCapacityForRestore(2); Temporary().SetCapacityForRestore(2);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));                              // 人物背包 1/2
+    Temporary().InsertItemForRestore(kParkedTemporaryItem, kSettlementNonStackItem, 1, 0, 1); // 临时格 1/2
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 2);              // 要两格:哪个包都放不下
+    ASSERT_EQ(0u, BagService::ConsecutiveGrantOverflowRejections(player));
+    ASSERT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    ASSERT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    // 日志节拍的计数(§6.6「日志节拍」):每次重试都放不下就加一,只给 WARN 限频,不改任何判定。
+    EXPECT_EQ(1u, BagService::ConsecutiveGrantOverflowRejections(player));
+    ASSERT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(2u, BagService::ConsecutiveGrantOverflowRejections(player));
+
+    ASSERT_EQ(kSuccess, PlayerBagSystem::RetrieveTemporary(player, kParkedTemporaryItem, false))
+        << "the battle freeze must not block the retrieve the deferred settlement is waiting for";
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, BagService::ConsecutiveGrantOverflowRejections(player)) << "a successful grant ends the streak";
+    EXPECT_NE(nullptr, Inventory().GetItemCompByGuid(kParkedTemporaryItem)) << "the retrieved item stays in the inventory";
+    EXPECT_EQ(2u, Temporary().GetTotalItemCount(kSettlementNonStackItem)) << "both drops landed in the freed temporary bag";
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "the consumption was applied once";
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+}
+
+// 收件箱一个域此刻的调度状态:取回之后的定向唤醒(PlayerInboxSystem::OnBagSpaceFreed)不许碰的那几样。
+struct InboxDomainSchedule {
+    uint32_t domain{0};
+    uint64_t nextCheckMs{0};
+    PlayerInboxDeferReason deferReason{PlayerInboxDeferReason::kNone};
+    PlayerInboxPhase phase{PlayerInboxPhase::kIdle};
+    uint32_t failStreak{0};
+    bool operator==(const InboxDomainSchedule&) const = default;
+};
+
+std::vector<InboxDomainSchedule> InboxSchedulesExcept(entt::entity player, uint32_t skippedDomain) {
+    std::vector<InboxDomainSchedule> schedules;
+    for (const auto& state : tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player).domains)
+        if (state.domain != skippedDomain)
+            schedules.push_back({state.domain, state.nextCheckMs, state.deferReason, state.phase, state.failStreak});
+    return schedules;
+}
+
+// 评审修正(2026-11-06):两包都满而整笔延后之后,取回成功经 PlayerInboxSystem::OnBagSpaceFreed 把这一域的下一次尝试
+// 提到现在 —— 时钟不动、下一拍就整笔应用,不用等退避;没因背包放不下而延后的域(GM 处置域,局中被前置闸延后)一点不动。
+// 走的是正式的收件箱状态机与执行器,只替换时钟、传输与存盘回执(ScopedCompositionInbox)。
+TEST_F(PlayerBattleSettlementItemTest, InboxRetriesABagFullDeferOnTheNextTickAfterARetrieve)
+{
+    ScopedCompositionInbox inbox;
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    constexpr Guid kParkedTemporaryItem = 9300004; // 在两个号段之外
+    Inventory().SetCapacityForRestore(2); Temporary().SetCapacityForRestore(2);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));                              // 人物背包 1/2
+    Temporary().InsertItemForRestore(kParkedTemporaryItem, kSettlementNonStackItem, 1, 0, 1); // 临时格 1/2
+    SetConsumed(kSettlementStackItem, 1); SetGained(kSettlementNonStackItem, 2);              // 要两格:哪个包都放不下
+
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    ASSERT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "both bags are full: the whole settlement waits";
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "without a retrieve it waits for the backoff";
+    const auto othersBefore = InboxSchedulesExcept(player, kCompositionBattleDomain);
+    ASSERT_FALSE(othersBefore.empty()) << "the GM sanction domain is consumed as well";
+
+    ASSERT_EQ(kSuccess, PlayerBagSystem::RetrieveTemporary(player, kParkedTemporaryItem, false));
+    EXPECT_EQ(othersBefore, InboxSchedulesExcept(player, kCompositionBattleDomain))
+        << "a domain that was not deferred for bag space is left alone";
+    PlayerInboxSystem::Tick(); // 时钟没动:同一时刻的下一拍
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "applied on the next tick, without waiting for the backoff";
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(2u, Temporary().GetTotalItemCount(kSettlementNonStackItem)) << "both drops landed in the freed temporary bag";
+    EXPECT_EQ(1u, gCompositionInboxFetches.size()) << "the local copy was retried, nothing was fetched again";
+    EXPECT_EQ(othersBefore, InboxSchedulesExcept(player, kCompositionBattleDomain));
+}
+
+// 只提前「因背包放不下」的延后:执行器为别的原因延后(这里是近期战斗结果组件缺失,在任何改动之前延后)时,
+// 取回成功也不动它的退避 —— 原因已经消失,也要等退避到点才重试。
+TEST_F(PlayerBattleSettlementItemTest, InboxBagSpaceFreedLeavesOtherExecutorDefersOnTheirBackoff)
+{
+    ScopedCompositionInbox inbox;
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    constexpr Guid kParkedTemporaryItem = 9300005;
+    Temporary().InsertItemForRestore(kParkedTemporaryItem, kSettlementNonStackItem, 1, 0, 1); // 有东西可取回
+    tlsEcs.actorRegistry.remove<PlayerBattleResultComp>(player); // 执行器在任何改动之前延后,原因与背包无关
+
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    ASSERT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "deferred before any effect";
+    ASSERT_EQ(0u, BagService::ConsecutiveGrantOverflowRejections(player)) << "not a bag-space deferral";
+    tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player); // 原因已经消失,但退避还没到
+
+    ASSERT_EQ(kSuccess, PlayerBagSystem::RetrieveTemporary(player, kParkedTemporaryItem, false));
+    PlayerInboxSystem::Tick();
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "a deferral for another reason keeps its backoff";
+
+    gCompositionInboxNowMs += player_inbox_rules::kBackoffMaxMs + 1;
+    PlayerInboxSystem::Tick();
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "retried once the backoff is due";
 }
 
 TEST_F(PlayerBattleSettlementItemTest, InboxCommittedConsumptionSurvivesBattleUsableHotReloadAndPreservesOtherInstances)
@@ -1826,6 +1997,33 @@ TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeCommitsConsumptionAndWhol
     EXPECT_TRUE(Inventory().IsLayerConsistent()); EXPECT_TRUE(Temporary().IsLayerConsistent());
 }
 
+// 同一条回归落在 BagService 一层(审计 cpp-economy#2):临时格满了不淘汰,整笔拒绝发生在 beforeCommit(货币)之前 ——
+// 回调一次都没跑,两个包逐字节不变,临时格里最早那件还在,也没有写任何流水。
+TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeFullTemporaryBagRefusesTheWholeGrantWithoutEvicting)
+{
+    ScopedPreparedExchangeSegments segments;
+    ASSERT_TRUE(segments.Install());
+    constexpr Guid kOldestTemporaryItem = 9100002;
+    Inventory().SetCapacityForRestore(1); Temporary().SetCapacityForRestore(1);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    Temporary().InsertItemForRestore(kOldestTemporaryItem, kSettlementNonStackItem, 1, 0, 1);
+    const auto items = ItemBytes();
+    const auto temporarySlots = Temporary().GridSlots();
+    const auto txBefore = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available();
+    int credits = 0;
+    EXPECT_NE(kSuccess, BagService::ConsumeInventoryAndGrant(player,
+        {{kSettlementStackItem, 1}}, {{kSettlementDropItem, 1}}, 7006, "prepared-test", [&] {
+            ++credits; return CurrencySystem::AddCurrency(player, kCurrencyGold, 5);
+        }));
+    EXPECT_EQ(0, credits) << "the currency callback only runs after every bag step has succeeded";
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(items, ItemBytes());
+    EXPECT_NE(nullptr, Temporary().GetItemCompByGuid(kOldestTemporaryItem)) << "never evicted";
+    EXPECT_EQ(1u, Temporary().OccupiedGridCount());
+    EXPECT_EQ(temporarySlots, Temporary().GridSlots());
+    EXPECT_EQ(txBefore, tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Available()) << "no transaction log was written";
+}
+
 TEST_F(PlayerBattleSettlementItemTest, PreparedExchangeExternalCreditRefusalPublishesNoBagOrLogs)
 {
     ScopedPreparedExchangeSegments segments;
@@ -1923,6 +2121,46 @@ TEST_F(PlayerBattleSettlementItemTest, ExactItemGuidCapacityCoversTemporaryFallb
     EXPECT_EQ(2u, Temporary().GetTotalItemCount(kSettlementDropItem));
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
     EXPECT_EQ(tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available(), 0u);
+}
+
+// 领段请求只计数、不自动回包的 item 号段(r2-battle#3 用例):Warm 的首段请求随即落下 [lo, hi)。
+int gSettlementSegmentFetches = 0;
+bool ArmCountingItemSegment(uint64_t lo, uint64_t hi) {
+    auto& client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+    client.Reset();
+    GuidSegmentClient::Options options;
+    options.mixIds = false;
+    options.kindName = "item";
+    options.initialStep = 100000;
+    gSettlementSegmentFetches = 0;
+    if (!client.Enable(options, [](const std::string&, uint32_t) { ++gSettlementSegmentFetches; return true; },
+        [](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; })) return false;
+    client.Warm();
+    client.OnResponse(0, lo, hi);
+    return client.IsReady();
+}
+
+// 审计 R2 r2-battle#3(2026-11-06):「需要量 > 剩余 > 预取阈值、又没有下一段」。预检整笔 DEFER、一个号都不发,
+// 而预取只在发号之后判阈值 —— 改动前没有人续段,这笔结算永远 DEFER,玩家的票停在 state 3。
+// 现在预检判出不足就请号段客户端续一段(单飞),续的那一段落下之后的重试照常应用一次。
+TEST_F(PlayerBattleSettlementItemTest, ItemGuidShortageAboveThePrefetchThresholdRequestsATopUp) {
+    ScopedItemSegmentBaseline restoreBaseline;
+    SetGained(kSettlementNonStackItem, 3);  // 3 件不可叠加 = 3 个新实例
+    ASSERT_TRUE(ArmCountingItemSegment(99700000, 99700002));  // 剩 2 个号;预取阈值 ceil(0.1 × 2) = 1,剩余在阈值之上
+    ASSERT_EQ(1, gSettlementSegmentFetches) << "前置:只有 Warm 的那一次领段";
+
+    EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement)) << "号不够:整笔 DEFER";
+    EXPECT_EQ(2, gSettlementSegmentFetches) << "预检判出不足就续段";
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(2, gSettlementSegmentFetches) << "单飞:续段在途时重试不再多发";
+
+    tlsGuidSegmentRegistry.Get(GuidKind::kItem).OnResponse(0, 99800000, 99900000);  // 续的那一段落下
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementNonStackItem), 3u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    EXPECT_EQ(KillProgress(), 2u);
 }
 
 // 上界口径:不可叠加按件计,可叠加按满堆向上取整;查不到配置行的项按 0 计
@@ -2458,7 +2696,8 @@ TEST_F(PlayerBattleSettlementTest, BattleLockWriteRetryChainStopsAtMaxAttempts) 
     EXPECT_EQ(LockScriptCount("write_lock"), size_t{battle_lock::kLockWriteMaxAttempts});
 }
 
-// 首次确认:PREPARING -> FIGHTING,续期按事件期限的冻结到期时刻算 TTL,ctx 落 FIGHTING 供登录重建。
+// 首次确认:PREPARING -> FIGHTING,续期按事件期限的冻结最晚到期时刻(含续冻上限,FreezeHoldDeadlineMs,2026-11-06)
+// 算 TTL,ctx 落 FIGHTING 供登录重建。
 TEST_F(PlayerBattleSettlementTest, FirstConfirmUpgradesToFightingAndRenewsFromFreezeExpiry) {
     ScopedLockScriptRecorder recorder;
     auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
@@ -2482,9 +2721,9 @@ TEST_F(PlayerBattleSettlementTest, FirstConfirmUpgradesToFightingAndRenewsFromFr
     const LockScriptCall renewal = gLockScriptCalls.front();
     EXPECT_EQ(renewal.op, "renew_lock");
     EXPECT_EQ(renewal.ctxPayload, current.SerializeAsString());
-    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, event.deadline_ms(), 0);
-    EXPECT_GE(renewal.ttlSec, (expiresAtMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
-    EXPECT_LE(renewal.ttlSec, (expiresAtMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    const uint64_t lockUntilMs = PlayerBattleSystem::FreezeHoldDeadlineMs(event.deadline_ms());
+    EXPECT_GE(renewal.ttlSec, (lockUntilMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_LE(renewal.ttlSec, (lockUntilMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
 }
 
 // 已 FIGHTING 的重复确认(Kafka 重投 / battle 开局后 180 秒内每 10 秒的周期补发):不再升级、不改期限
@@ -2517,10 +2756,10 @@ TEST_F(PlayerBattleSettlementTest, RepeatedConfirmRenewsLockOnceFromComponentSta
     EXPECT_EQ(renewal.op, "renew_lock");
     EXPECT_EQ(renewal.playerId, playerId);
     EXPECT_EQ(renewal.battleId, settlement.battle_id());
-    // TTL = (组件期限的冻结到期时刻 - 发送时刻) / 1000 + kLockExtraTtlSec。
-    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, deadlineMs, 0);
-    EXPECT_GE(renewal.ttlSec, (expiresAtMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
-    EXPECT_LE(renewal.ttlSec, (expiresAtMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    // TTL = (组件期限的冻结最晚到期时刻 - 发送时刻) / 1000 + kLockExtraTtlSec(最晚到期含续冻上限,FreezeHoldDeadlineMs)。
+    const uint64_t lockUntilMs = PlayerBattleSystem::FreezeHoldDeadlineMs(deadlineMs);
+    EXPECT_GE(renewal.ttlSec, (lockUntilMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_LE(renewal.ttlSec, (lockUntilMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
     // ctx 就是组件此刻的序列化:解回来是这一局的 FIGHTING 与组件期限。
     EXPECT_EQ(renewal.ctxPayload, current->SerializeAsString());
 
@@ -2944,6 +3183,7 @@ TEST_F(PlayerBattleSettlementTest, CoroutineLockIntegerIsFinalAndDuplicateReplyC
 // (PreparedExchangeGainBlockRejectsBeforeConsumptionOrCredit)。单人封禁与全服封禁走同一个判定,单人金币封禁见
 // InboxGoldBlockSkipsOnlyGoldAndAppliesTheRest。
 // ============================================================================
+#include "proto/common/component/player_item_gain_block_comp.pb.h"  // PlayerItemGainBlockComp:单人物品获得封禁
 
 namespace {
 
@@ -3046,6 +3286,31 @@ TEST_F(PlayerBattleSettlementItemTest, InboxGlobalItemBlockSkipsOnlyTheBlockedDr
     ASSERT_EQ(1, recorded.items_gained_size()) << "近期结果只记实际入包的掉落";
     EXPECT_EQ(kSettlementDropItem, recorded.items_gained(0).item_table_id());
     EXPECT_EQ(2u, recorded.items_gained(0).count());
+}
+
+// 本人被 GM 封禁获得某物品(PlayerItemGainBlockComp):与全服封禁走同一个判定 GainBlockService::IsItemGainBlocked,
+// 同样只剔除这一项。剔除若只看全服集合,被单人封禁的掉落仍会让 ConsumeInventoryAndGrant 整批回 kAssetBlocked、整笔无限 DEFER。
+TEST_F(PlayerBattleSettlementItemTest, InboxPlayerItemBlockSkipsOnlyTheBlockedDropAndAppliesTheRest)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player); // 持久组件,生产里由加载创建
+    ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, kSettlementNonStackItem));
+    ASSERT_FALSE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, kSettlementNonStackItem))
+        << "前置:只有单人封禁";
+    SetGained(kSettlementNonStackItem, 1); // 本人被封
+    SetGained(kSettlementDropItem, 2);     // 未封
+
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementNonStackItem)) << "被封的掉落不发";
+    EXPECT_EQ(0u, Temporary().GetTotalItemCount(kSettlementNonStackItem)) << "也不改投临时格";
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementDropItem)) << "未封的掉落照常入包";
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_TRUE(GainBlockService::IsPlayerItemGainBlocked(player, kSettlementNonStackItem)) << "结算不改封禁状态";
+    ASSERT_EQ(1, Results().entries_size()) << "已应用的局照常记近期结果";
+    ASSERT_EQ(1, Results().entries(0).items_gained_size()) << "近期结果只记实际入包的掉落";
+    EXPECT_EQ(kSettlementDropItem, Results().entries(0).items_gained(0).item_table_id());
 }
 
 }  // namespace

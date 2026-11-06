@@ -164,7 +164,8 @@ Test-Case "data-service ConfigMap 的 Kafka 关键值 == go/data_service/etc/dat
 
     $keys = @(
         'TopicGeneration', 'TransactionLogPartitions', 'SnapshotPartitions', 'RetentionMs',
-        'SnapshotBatchMaxRows', 'SnapshotBatchMaxBytes', 'SnapshotFlushIntervalMs', 'SnapshotMaxInflightFlushes', 'LagProbeIntervalMs'
+        'SnapshotBatchMaxRows', 'SnapshotBatchMaxBytes', 'SnapshotFlushIntervalMs', 'SnapshotMaxInflightFlushes', 'LagProbeIntervalMs',
+        'TransactionLogMaxInflightFlushes'
     )
     foreach ($k in $keys) {
         $expected = Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath "Kafka.$k"
@@ -292,6 +293,176 @@ Test-Case "zone 内 go-svc Deployment 统一注入控制面命令 topic 契约,�
         # topic 副本数同样统一注入:dev 档是单 broker,所以是 1(多 broker 的取值见下面「Kafka 拓扑」一节)。
         Assert-Match -Text $block -Pattern '- name: KAFKA_TOPIC_REPLICATION_FACTOR\s+value: "1"' -Because "$name 建 topic 的副本数必须与 broker 数同源,不能各服务各写各的"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: KAFKA_TOPIC_REPLICATION_FACTOR').Count) -Because '只能注入一份'
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 发布轨道 -ReleaseTrack(docs/design/release-track-gray-canary.md §2.1、§2.2、§2.5)
+# ─────────────────────────────────────────────────────────────────
+
+Test-Case '发布轨道:缺省 stable 不写 MMORPG_RELEASE_TRACK,生成物与引入参数之前逐字相同' {
+    # 进程不设即 stable(Go shared/releasetrack、C++ release_track.h),stable 一律不写:已有 zone 不会因为引入参数而滚动。
+    Assert-NotMatch -Text $devOut -Pattern 'MMORPG_RELEASE_TRACK' -Because 'stable 是缺省,Deployment 模板与 Go 服务都不应写出发布轨道 env'
+    Assert-NotMatch -Text $agonesOut -Pattern 'MMORPG_RELEASE_TRACK' -Because 'Agones Fleet 模板同样不应写出'
+}
+
+$releaseTrackCanaryEnv = '- name: MMORPG_RELEASE_TRACK\s+value: "canary"'
+$canaryZoneRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-ReleaseTrack', 'canary'))
+
+Test-Case '发布轨道:zone-up -ReleaseTrack canary 给 gate / scene 与 zone 内 Go 服务写 canary,data-service、player-locator 不重新下发' {
+    Assert-Equal -Expected 0 -Actual $canaryZoneRun.ExitCode -Because "金丝雀 zone 的 DryRun 必须成功。输出: $($canaryZoneRun.Output)"
+    foreach ($name in @('gate', 'scene')) {
+        $block = Select-CppWorkloadBlock -Output $canaryZoneRun.Output -Kind 'Deployment' -Name $name -Label "canary $name"
+        Assert-Match -Text $block -Pattern $releaseTrackCanaryEnv -Because "$name 是 zone 内工作负载,金丝雀 zone 里必须是 canary"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: MMORPG_RELEASE_TRACK').Count) -Because "$name 只能写一份"
+    }
+    foreach ($name in @('login', 'scene-manager', 'db')) {
+        $block = @(Get-ManifestBlocks -Output $canaryZoneRun.Output | Where-Object {
+            $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch "(?m)^  name: $([regex]::Escape($name))\s*$"
+        }) | Select-Object -First 1
+        Assert-True -Condition ($null -ne $block) -Because "金丝雀 zone 的 DryRun 输出里应当有 $name 的 Deployment"
+        Assert-Match -Text $block -Pattern $releaseTrackCanaryEnv -Because "$name 跟着 zone 的轨道走"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: MMORPG_RELEASE_TRACK').Count) -Because "$name 只能注入一份"
+    }
+    foreach ($name in @('data-service', 'player-locator')) {
+        $blocks = @(Get-ManifestBlocks -Output $canaryZoneRun.Output | Where-Object {
+            $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch "(?m)^  name: $([regex]::Escape($name))\s*$"
+        })
+        Assert-Equal -Expected 0 -Actual $blocks.Count -Because "$name 的后台是全局作用域,金丝雀 zone 不重新下发,线上 stable 那份照跑(设计文档 §2.5)"
+        Assert-Match -Text $canaryZoneRun.Output -Pattern "\[keep-stable\] $([regex]::Escape($name)) " -Because "跳过 $name 要在输出里写明"
+    }
+}
+
+Test-Case '发布轨道:金丝雀 zone 的 Agones Fleet 与 external gate StatefulSet 同样写 canary' {
+    $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-ReleaseTrack', 'canary', '-SkipGoSvc', '-SkipJavaSvc', '-SceneOrchestrator', 'agones',
+        '-ClientEntryMode', 'external', '-GateServiceType', 'NodePort', '-GateNodePortBase', '30000', '-ClientPublicHost', '127.0.0.1'))
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "金丝雀 zone(Agones + external)的 DryRun 必须成功。输出: $($run.Output)"
+    $fleet = Select-CppWorkloadBlock -Output $run.Output -Kind 'Fleet' -Name 'scene' -Label 'canary scene Fleet'
+    Assert-Match -Text $fleet -Pattern $releaseTrackCanaryEnv -Because 'scene Fleet 走本脚本自己的模板,同样要写 canary'
+    $gate = Select-CppWorkloadBlock -Output $run.Output -Kind 'StatefulSet' -Name 'gate' -Label 'canary gate StatefulSet'
+    Assert-Match -Text $gate -Pattern $releaseTrackCanaryEnv -Because 'external gate 走 lib 的生成器(PodCommon.ReleaseTrack),同样要写 canary'
+}
+
+Test-Case '发布轨道:canary 只能用于 zone-up,取值区分大小写' {
+    $zoneArgsWithoutCommand = @($BaseArgs | Select-Object -Skip 2)
+    foreach ($command in @('infra-up', 'all-up')) {
+        $run = Invoke-DeployDryRun -Arguments (@('-Command', $command) + $zoneArgsWithoutCommand + @('-SkipGoSvc', '-SkipJavaSvc', '-ReleaseTrack', 'canary'))
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "$command 带 -ReleaseTrack canary 必须拒绝:金丝雀以 zone 为单位"
+        Assert-Match -Text $run.Output -Pattern '只能用于 zone-up' -Because "$command 的拒绝原因要写明"
+    }
+    $upper = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-ReleaseTrack', 'Canary'))
+    Assert-True -Condition ($upper.ExitCode -ne 0) -Because '进程只认小写 canary,参数不能放过大写'
+}
+
+# 全局服务的金丝雀副本(-CanaryServices,发布轨道设计 §2.4、§2.5,§7 批 2b)。本文件后面的 $BattleInfraArgs 还没定义,这里自带一份同形参数。
+$canaryInfraNamespace = 'contract-canary-infra'
+$canaryInfraArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-InfraNamespace', $canaryInfraNamespace,
+    '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab', '-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
+$canaryInfraEnv = @{ MMORPG_BATTLE_TOKEN_SECRET = 'contract-battle-ticket-0123456789abcdef012345'; MMORPG_GATE_TOKEN_SECRET = 'contract-gate-ticket-0123456789abcdef012345' }
+
+# 带 <ns>/chat-canary 条目的 boot 目录跑一次 DryRun。目录照 Invoke-DeployDryRun 的夹具,给 infra namespace 里写 SQL 的全局服务各一条;
+# 另加 chat-canary:三个 Secret 名与稳定版都不同、副本 1,用来证明金丝雀副本按自己的条目注入,不借稳定版那份。
+function Invoke-CanaryCatalogDryRun {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+    $root = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-canary-catalog-' + [Guid]::NewGuid().ToString('N'))
+    $null = [IO.Directory]::CreateDirectory($root)
+    try {
+        $rosterPath = Join-Path $root 'roster.json'
+        $rosterEntry = '{"requests":[{"authoritySchema":"fixture_db","protectedSchemas":["fixture_db"]}]}'
+        [IO.File]::WriteAllText($rosterPath, ('{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[' + ((@($rosterEntry) * 12) -join ',') + ']}'), [Text.UTF8Encoding]::new($false))
+        $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $pinned = @{ registrarImage = ('fixture.invalid/registrar@sha256:' + ('a' * 64)); physicalAuthoritySha256 = ('b' * 64); rosterFile = $rosterPath; rosterSha256 = $rosterSha }
+        $catalog = @{}
+        foreach ($svc in @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')) {
+            $catalog["$canaryInfraNamespace/$svc"] = $pinned + @{ requestSecret = 'fixture-request'; registrarSecret = 'fixture-registrar'; runtimeConfigSecret = 'fixture-runtime'
+                replicas = 2; schemaConfigSecret = 'fixture-schema-config'; schemaPermissionSecret = 'fixture-schema-permission' }
+        }
+        $catalog["$canaryInfraNamespace/chat-canary"] = $pinned + @{ requestSecret = 'chat-canary-request'; registrarSecret = 'chat-canary-registrar'
+            runtimeConfigSecret = 'chat-canary-runtime'; replicas = 1 }
+        $catalogPath = Join-Path $root 'catalog.json'
+        [IO.File]::WriteAllText($catalogPath, ($catalog | ConvertTo-Json -Depth 8 -Compress), [Text.UTF8Encoding]::new($false))
+        return Invoke-DeployDryRun -Arguments $Arguments -Env ($canaryInfraEnv + @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogPath })
+    }
+    finally {
+        Remove-Item -LiteralPath $root -Recurse -Force
+    }
+}
+
+# 一个 Deployment 名对应的那份 manifest 块(块里可能还有同服务的 Service、PDB)。
+function Select-CanaryTestDeployment {
+    param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Name)
+    return @(Get-ManifestBlocks -Output $Output | Where-Object {
+        $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch "(?m)^  name: $([regex]::Escape($Name))\s*$"
+    })
+}
+
+$canaryGlobalRun = Invoke-CanaryCatalogDryRun -Arguments ($canaryInfraArgs + @('-CanaryServices', 'client-rpc-router,chat', '-CanaryGoSvcTag', 'fedcba987654'))
+
+Test-Case '发布轨道:infra-up -CanaryServices 给全局服务起 <svc>-canary,换镜像、换 app 标签、写 canary,稳定版不变' {
+    Assert-Equal -Expected 0 -Actual $canaryGlobalRun.ExitCode -Because "带金丝雀副本的 infra-up DryRun 必须成功。输出: $($canaryGlobalRun.Output)"
+    foreach ($svc in @('client-rpc-router', 'chat')) {
+        $canary = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name "$svc-canary")
+        Assert-Equal -Expected 1 -Actual $canary.Count -Because "应当恰好渲染一份 $svc-canary"
+        Assert-Match -Text $canary[0] -Pattern "image: registry\.invalid/test/mmorpg-$([regex]::Escape($svc)):fedcba987654" -Because "$svc-canary 跑 -CanaryGoSvcTag 的镜像"
+        Assert-Match -Text $canary[0] -Pattern $releaseTrackCanaryEnv -Because "$svc-canary 必须写 MMORPG_RELEASE_TRACK=canary"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($canary[0], 'name: MMORPG_RELEASE_TRACK').Count) -Because "$svc-canary 只能写一份发布轨道 env"
+        Assert-Match -Text $canary[0] -Pattern '(?m)^  replicas: 1\s*$' -Because '副本数取 -CanaryReplicas(缺省 1)'
+        Assert-True -Condition ([regex]::Matches($canary[0], "\bapp:[ \t]*$([regex]::Escape($svc))-canary\b").Count -ge 2) -Because "selector 与 Pod 模板都要换成 app: $svc-canary"
+        Assert-NotMatch -Text $canary[0] -Pattern "(?m)\bapp:[ \t]*$([regex]::Escape($svc))[ \t]*(\r?$|[,}])" -Because "$svc-canary 不能带稳定版的 app 标签,否则稳定版 Service 会选中它"
+        Assert-NotMatch -Text $canary[0] -Pattern '(?m)^kind:[ \t]*(Service|PodDisruptionBudget)[ \t]*$' -Because 'Service、PDB 归稳定版,金丝雀副本只 apply 自己的 Deployment'
+        $stable = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name $svc)
+        Assert-Equal -Expected 1 -Actual $stable.Count -Because "$svc 的稳定版照常渲染"
+        Assert-NotMatch -Text $stable[0] -Pattern 'MMORPG_RELEASE_TRACK|-canary\b' -Because "$svc 的稳定版不写发布轨道 env,也不引用金丝雀的任何东西"
+    }
+}
+
+Test-Case '发布轨道:写 SQL 的服务的金丝雀副本用 <ns>/<svc>-canary 自己的 boot 条目,不借稳定版的 Secret 与名册' {
+    $canary = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name 'chat-canary')
+    Assert-Equal -Expected 1 -Actual $canary.Count -Because '应当恰好渲染一份 chat-canary'
+    foreach ($secret in @('chat-canary-request', 'chat-canary-registrar', 'chat-canary-runtime')) {
+        Assert-Match -Text $canary[0] -Pattern ([regex]::Escape($secret)) -Because "chat-canary 要用自己条目里的 Secret $secret"
+    }
+    Assert-NotMatch -Text $canary[0] -Pattern 'fixture-(request|registrar|runtime)\b' -Because '两个 Deployment 共用一份名册会领到同一条 boot,金丝雀不能借稳定版的条目'
+    Assert-Match -Text $canary[0] -Pattern '(?m)^\s+mmorpg\.io/sql-writer: "true"\s*$' -Because '金丝雀写者 Pod 同样要带回收 CronJob 认的 label'
+}
+
+Test-Case '发布轨道:可金丝雀却没列出的服务,删掉以前留下的 <svc>-canary(不粘滞)' {
+    foreach ($svc in @('friend', 'guild', 'mail', 'match', 'rank', 'trade')) {
+        Assert-Match -Text $canaryGlobalRun.Output -Pattern "kubectl delete deployment $([regex]::Escape($svc))-canary -n $canaryInfraNamespace --ignore-not-found" -Because "$svc 没列在 -CanaryServices 里,要删掉旧的 $svc-canary"
+    }
+    foreach ($svc in @('client-rpc-router', 'chat')) {
+        Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern "kubectl delete deployment $([regex]::Escape($svc))-canary\b" -Because "$svc 这次列出了,不能删"
+    }
+    Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern 'player-inbox-canary' -Because 'player-inbox 不提供金丝雀,不起也不删'
+}
+
+Test-Case '发布轨道:金丝雀写者缺 <ns>/<svc>-canary 条目或副本数对不上,在任何写操作之前拒绝' {
+    # 缺条目:Invoke-DeployDryRun 自带的夹具只有稳定版条目。
+    $missing = Invoke-DeployDryRun -Arguments ($canaryInfraArgs + @('-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654')) -Env $canaryInfraEnv
+    Assert-True -Condition ($missing.ExitCode -ne 0) -Because 'chat-canary 没有 boot 目录条目,必须拒绝部署'
+    Assert-Match -Text $missing.Output -Pattern '部署实例缺少预固定per-boot计划及独立Secret' -Because '拒绝原因是 boot 目录缺条目'
+    Assert-Equal -Expected 0 -Actual @(Get-ManifestBlocks -Output $missing.Output).Count -Because '缺条目要在写路径入口拦下,不能先 apply 基础设施与稳定版'
+    # 副本数对不上:条目是 1 副本,本次要 2 个。
+    $mismatch = Invoke-CanaryCatalogDryRun -Arguments ($canaryInfraArgs + @('-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654', '-CanaryReplicas', '2'))
+    Assert-True -Condition ($mismatch.ExitCode -ne 0) -Because '条目副本数与 -CanaryReplicas 不同,必须拒绝'
+    Assert-Match -Text $mismatch.Output -Pattern 'chat-canary 的 replicas 是 1,本次 -CanaryReplicas 是 2' -Because '拒绝原因要写明两边的副本数'
+    Assert-Equal -Expected 0 -Actual @(Get-ManifestBlocks -Output $mismatch.Output).Count -Because '副本数对不上同样在写操作之前拒绝'
+}
+
+Test-Case '发布轨道:-CanaryServices 只用于部署全局 Go 服务的 infra-up,只收已接好的服务,要带 -CanaryGoSvcTag,不能与 -NetworkPolicies on 同用' {
+    $cases = @(
+        @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'player-inbox', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '还不能起金丝雀副本'; Why = 'player-inbox 没有客户端路由,不提供金丝雀' }
+        @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'chat')); Pattern = '需要 -CanaryGoSvcTag'; Why = '金丝雀副本不能沿用稳定版的 tag' }
+        @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'chat,chat', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '有重复的服务'; Why = '重复的服务要拒绝' }
+        @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654', '-NetworkPolicies', 'on')); Pattern = '不能与 -NetworkPolicies on 同用'; Why = '准入名单还没给 <svc>-canary 打通' }
+        @{ Args = ($canaryInfraArgs + @('-SkipGoSvc', '-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '需要本次部署全局 Go 服务'; Why = '不部署全局 Go 服务时金丝雀副本不起也不删,参数等于没生效' }
+        @{ Args = ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '只能用于 infra-up'; Why = '全局服务的金丝雀副本部署在 infra namespace' }
+    )
+    foreach ($case in $cases) {
+        $run = Invoke-DeployDryRun -Arguments $case.Args -Env $canaryInfraEnv
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "必须拒绝:$($case.Why)"
+        Assert-Match -Text $run.Output -Pattern $case.Pattern -Because "拒绝原因要写明:$($case.Why)"
+        Assert-Equal -Expected 0 -Actual @(Get-ManifestBlocks -Output $run.Output).Count -Because "参数错误要在任何写操作之前拒绝:$($case.Why)"
     }
 }
 
@@ -1232,15 +1403,17 @@ Test-Case "login 的 go-zero Mode:dev 档必须写且 == go/login/etc/login.yaml
 }
 
 # ─────────────────────────────────────────────────────────────────
-# 3a. C++ 节点的 zone Redis 口令(P0-A 第二批,方案 A)
+# 3a. C++ 节点的 zone Redis 口令(2026-11-05 起经 Secret 下发,取代 P0-A 第二批的方案 A)
 # ─────────────────────────────────────────────────────────────────
-# 设计:docs/handoff/global-singletons-p0-findings-20261014.md「P0-A」修复设计第 6、7 条与 8(c)。口令明文进 node-config /
-# battle-node-config 的 game_config.yaml(zoneredis.password);挂 /app/bin/etc 的 C++ 工作负载 Pod 模板带只哈希口令的指纹注解
-# mmorpg.io/zone-redis-auth-hash(C++ 只在启动时读配置,口令一变要靠它滚动)。dev 不注入口令时两者都与改动前逐字相同。
+# 设计:docs/handoff/handoff-global-singletons-p0-20261015.md §8。node-config / battle-node-config 的 game_config.yaml 里
+# zoneredis.password 与 scene_control_redis.password 固定写空串;C++ 工作负载用 secretKeyRef 从本 namespace 的 Secret redis-auth
+# 拿 ZONE_REDIS_PASSWORD(scene 另拿 SCENE_CONTROL_REDIS_PASSWORD),Pod 模板带只哈希口令的指纹注解 mmorpg.io/zone-redis-auth-hash
+# (环境变量只在容器启动时读,只改 Secret 不会滚动,口令一变要靠它)。dev 不注入口令时三者都与引入之前逐字相同。
 # 复用 $prodRun / $devOut / $agonesOut,另起 4 个 DryRun 子进程:换口令、external gate + Agones scene(dev 档注入口令)与两个负向;
-# battle 的两个在下文 battle 段($battleInfraRun 之后)。生成期保护与指纹函数按 AST 抽出来直接调用(同上文 deadline 守卫)。
+# battle 的两个在下文 battle 段($battleInfraRun 之后)。生成期保护、指纹与 env 函数按 AST 抽出来直接调用(同上文 deadline 守卫)。
 # 断言一律不回显口令值(比较用 -ceq / Contains,不用会把文本打进失败信息的 Assert-Equal / Assert-Match)。
-$zoneRedisFunctionNames = @('Assert-RedisPasswordYamlSafe', 'Get-CppZoneRedisPassword', 'Get-CppZoneRedisAuthAnnotations', 'Get-InjectedSecretFingerprint')
+$zoneRedisFunctionNames = @('Assert-RedisPasswordYamlSafe', 'Get-CppZoneRedisPassword', 'Get-CppZoneRedisAuthAnnotations', 'Get-InjectedSecretFingerprint',
+    'Get-CppZoneRedisSecretEnvEntries', 'Get-CppZoneRedisEnvLines', 'Sync-RedisAuthSecret')
 foreach ($zoneRedisFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($zoneRedisFunctionNames -contains $zoneRedisFnAst.Name) {
         Set-Item -Path "Function:script:$($zoneRedisFnAst.Name)" -Value $zoneRedisFnAst.Body.GetScriptBlock()
@@ -1250,6 +1423,62 @@ foreach ($zoneRedisFnName in $zoneRedisFunctionNames) {
     if (-not (Test-Path "Function:$zoneRedisFnName")) { throw "k8s_deploy.ps1 缺少函数 $zoneRedisFnName(zone Redis 口令的生成期保护 / 指纹被删了?后续断言无意义)" }
 }
 $ZoneRedisAuthHashKey = 'mmorpg.io/zone-redis-auth-hash'
+
+# k8s_deploy.ps1 里 `$script:<名字> = '<字面量>'` 的值(按 AST 读,不在测试里抄一遍)。找不到、或右边不是单个字符串字面量即 throw。
+function Get-ZoneRedisScriptVar {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    $assigns = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq "`$script:$Name" }, $true))
+    if ($assigns.Count -ne 1) { throw "k8s_deploy.ps1 里 `$script:$Name 应恰好赋值 1 次,实际 $($assigns.Count) 次" }
+    $value = $assigns[0].Right.Find({ param($a) $a -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true)
+    if ($null -eq $value) { throw "`$script:$Name 的右边不是字符串字面量" }
+    return $value.Value
+}
+# 口令 Secret 的名字 / 键与 C++ 认的两个环境变量名。被抽出来的函数按 $script: 读它们,这里一次装好(都是常量,不用复位)。
+$ZoneRedisSecretVars = [ordered]@{}
+foreach ($zoneRedisVarName in @('RedisAuthSecretName', 'RedisAuthSecretKey', 'ZoneRedisPasswordEnv', 'SceneControlRedisPasswordEnv')) {
+    $ZoneRedisSecretVars[$zoneRedisVarName] = Get-ZoneRedisScriptVar -Name $zoneRedisVarName
+    Set-Variable -Name $zoneRedisVarName -Value $ZoneRedisSecretVars[$zoneRedisVarName] -Scope Script
+}
+# C++ 工作负载里 zone Redis 口令环境变量期望的 secretKeyRef(本 namespace 的 Secret redis-auth,不写 optional: true)。
+$ZoneRedisSecretRef = '{0}/{1}/optional=false' -f $ZoneRedisSecretVars.RedisAuthSecretName, $ZoneRedisSecretVars.RedisAuthSecretKey
+$ZoneRedisEnvNames = @($ZoneRedisSecretVars.ZoneRedisPasswordEnv, $ZoneRedisSecretVars.SceneControlRedisPasswordEnv)
+
+# 工作负载块里经 secretKeyRef 注入的 env:名字 → 'Secret 名/键/optional=<值>'。两种写法都认:本脚本模板的流式
+# `secretKeyRef: {name: X, key: Y, optional: false}`,与 lib 模板(Get-ClientEntryEnvYaml)的块式(name / key / optional 各一行)。
+# 同一个名字出现多次时只记第一次(别的密钥可能在两个容器里各有一份);zone Redis 那两个名字是否重复由 Assert-ZoneRedisEnvRefs 按行数核。
+function Get-SecretEnvRefs {
+    param([Parameter(Mandatory = $true)][string]$Block)
+    $text = $Block -replace "`r`n", "`n"
+    $refs = [ordered]@{}
+    $flow = '(?m)^[ ]*- name: (?<n>[A-Z0-9_]+)[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef: \{name: (?<s>[^,}\s]+), key: (?<k>[^,}\s]+), optional: (?<o>true|false)\}[ ]*$'
+    $blockStyle = '(?m)^[ ]*- name: (?<n>[A-Z0-9_]+)[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef:[ ]*\n[ ]+name: (?<s>\S+)[ ]*\n[ ]+key: (?<k>\S+)[ ]*\n[ ]+optional: (?<o>true|false)[ ]*$'
+    foreach ($pattern in @($flow, $blockStyle)) {
+        foreach ($m in [regex]::Matches($text, $pattern)) {
+            $name = $m.Groups['n'].Value
+            if ($refs.Contains($name)) { continue }
+            $refs[$name] = '{0}/{1}/optional={2}' -f $m.Groups['s'].Value, $m.Groups['k'].Value, $m.Groups['o'].Value
+        }
+    }
+    return $refs
+}
+
+# 断言一个 C++ 工作负载块里 zone Redis 口令环境变量恰好是 -Expected 这几个(按出现顺序),每个都引用本 namespace 的 Secret redis-auth。
+function Assert-ZoneRedisEnvRefs {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Expected,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $refs = Get-SecretEnvRefs -Block $Block
+    $actual = @($refs.Keys | Where-Object { $ZoneRedisEnvNames -contains $_ })
+    Assert-Equal -Expected ($Expected -join ',') -Actual ($actual -join ',') -Because "${Label}:zone Redis 口令环境变量(scene 另有控制域那一个;gate / battle 不连控制域)"
+    foreach ($envName in $Expected) {
+        Assert-Equal -Expected $ZoneRedisSecretRef -Actual $refs[$envName] -Because "${Label}:$envName 必须 secretKeyRef 到本 namespace 的 Secret redis-auth,且不写 optional: true(缺 Secret 要卡在 CreateContainerConfigError,不能带空口令起来)"
+    }
+    foreach ($envName in $ZoneRedisEnvNames) {
+        Assert-Equal -Expected ([int]($Expected -contains $envName)) -Actual ([regex]::Matches($Block, "(?m)^[ ]*- name: $envName[ ]*\r?$").Count) -Because "${Label}:$envName 不能写成 value 明文,也不能重复"
+    }
+}
 
 # 期望的指纹:只用口令算(调抽出来的 Get-CppZoneRedisAuthAnnotations)。DryRun 里各工作负载的指纹等于它,就说明指纹输入只有口令,
 # 与 node-config 的其余内容无关 —— 哈希整份 node-config 会让 P0-B 这类无关改动也滚动 gate(踢人)与 battle(作废在打的局)。
@@ -1335,7 +1564,7 @@ Test-Case 'zone Redis 口令生成期保护:未解析 / 非 dev 档为空 / 含�
             @{ Why = '制表符'; Value = "contract-zr`tpw-0001" }
         )) {
             $script:RedisPassword = $bad.Value
-            # 两个入口:Get-CppZoneRedisPassword(生成 node-config 时)与 Assert-RedisPasswordYamlSafe(Initialize-InjectedSecrets 里、任何写操作之前)。
+            # 两个入口:Get-CppZoneRedisPassword(渲染 C++ 工作负载时)与 Assert-RedisPasswordYamlSafe(Initialize-InjectedSecrets 里、任何写操作之前)。
             foreach ($probe in @(
                 @{ Name = 'Get-CppZoneRedisPassword'; Call = { Get-CppZoneRedisPassword | Out-Null } }
                 @{ Name = 'Assert-RedisPasswordYamlSafe'; Call = { Assert-RedisPasswordYamlSafe -Password $script:RedisPassword } }
@@ -1348,11 +1577,37 @@ Test-Case 'zone Redis 口令生成期保护:未解析 / 非 dev 档为空 / 含�
             }
         }
 
+        # 渲染 env 的两个函数同样先过这道保护:未解析、非 dev 档为空都在生成期 throw,不会渲染出缺口令的工作负载。
+        $ReleaseProfile = 'prod'
+        foreach ($probe in @(
+            @{ Name = 'Get-CppZoneRedisSecretEnvEntries'; Call = { Get-CppZoneRedisSecretEnvEntries -SceneControl | Out-Null } }
+            @{ Name = 'Get-CppZoneRedisEnvLines'; Call = { Get-CppZoneRedisEnvLines -Indent '  ' | Out-Null } }
+        )) {
+            foreach ($state in @(@{ Value = $null; Pattern = 'zone Redis 口令未解析' }, @{ Value = ''; Pattern = 'ReleaseProfile=prod 要求 zone Redis 口令非空' })) {
+                $script:RedisPassword = $state.Value
+                $message = ''
+                try { & $probe.Call } catch { $message = $_.Exception.Message }
+                Assert-Match -Text $message -Pattern ([regex]::Escape($state.Pattern)) -Because "$($probe.Name):口令未解析或非 dev 档为空时必须 throw,不能渲染出不带口令的 C++ 工作负载"
+            }
+        }
+
         $ReleaseProfile = 'dev'
         $script:RedisPassword = ''
-        Assert-Equal -Expected '' -Actual (Get-CppZoneRedisPassword) -Because 'dev 档未注入:写空串,C++ 不发 AUTH,与改动前相同'
+        Assert-Equal -Expected '' -Actual (Get-CppZoneRedisPassword) -Because 'dev 档未注入:返回空串,C++ 不发 AUTH,与改动前相同'
         Assert-Equal -Expected 0 -Actual (Get-CppZoneRedisAuthAnnotations).Count -Because 'dev 档无口令:不写指纹注解,Pod 模板与改动前逐字相同'
+        Assert-Equal -Expected 0 -Actual @(Get-CppZoneRedisSecretEnvEntries -SceneControl).Count -Because 'dev 档无口令:不注入口令环境变量(Redis 不开 requirepass,也就不引用 Secret)'
+        Assert-Equal -Expected 0 -Actual @(Get-CppZoneRedisEnvLines -Indent '  ' -SceneControl).Count -Because 'dev 档无口令:模板里一行都不多'
         $script:RedisPassword = 'contract-zr-pw-0001'
+        $entries = @(Get-CppZoneRedisSecretEnvEntries)
+        Assert-Equal -Expected $ZoneRedisSecretVars.ZoneRedisPasswordEnv -Actual (@($entries | ForEach-Object { $_.Name }) -join ',') -Because '不带 -SceneControl(gate / battle):只有 zoneredis 那一个'
+        $entries = @(Get-CppZoneRedisSecretEnvEntries -SceneControl)
+        Assert-Equal -Expected ($ZoneRedisEnvNames -join ',') -Actual (@($entries | ForEach-Object { $_.Name }) -join ',') -Because '-SceneControl(scene):zoneredis 在前,控制域在后'
+        foreach ($entry in $entries) {
+            Assert-Equal -Expected ('{0}/{1}' -f $ZoneRedisSecretVars.RedisAuthSecretName, $ZoneRedisSecretVars.RedisAuthSecretKey) -Actual ('{0}/{1}' -f $entry.SecretName, $entry.SecretKey) -Because "$($entry.Name) 必须引用 Secret redis-auth 的 password 键(与 Redis 服务端同一份)"
+        }
+        $lines = (@(Get-CppZoneRedisEnvLines -Indent '      ' -SceneControl) -join "`n")
+        Assert-Equal -Expected ($ZoneRedisEnvNames -join ',') -Actual (@((Get-SecretEnvRefs -Block $lines).Keys) -join ',') -Because '渲染出的 env 行能被按 secretKeyRef 解析回两个名字'
+        Assert-True -Condition (-not $lines.Contains($script:RedisPassword)) -Because 'env 行只引用 Secret,不出现口令明文'
         $first = Get-CppZoneRedisAuthAnnotations
         Assert-Equal -Expected $ZoneRedisAuthHashKey -Actual (@($first.Keys) -join ',') -Because 'dev 档注入了口令同样要写指纹(dev 非空即采用,C++ 会发 AUTH)'
         Assert-Match -Text ([string]$first[$ZoneRedisAuthHashKey]) -Pattern '^[0-9a-f]{12}$' -Because '指纹是 12 位小写十六进制(Get-InjectedSecretFingerprint)'
@@ -1364,18 +1619,71 @@ Test-Case 'zone Redis 口令生成期保护:未解析 / 非 dev 档为空 / 含�
     }
 }
 
-Test-Case 'zone Redis 口令(prod):node-config 的 zoneredis.password == MMORPG_REDIS_PASSWORD;gate / scene 带只哈希口令的指纹,与 sidecar 注解同在一个 annotations 段' {
+Test-Case 'zone Redis 口令(prod):node-config 的两处口令都是空串;gate / scene 经本 namespace 的 Secret redis-auth 注入口令环境变量(scene 另有控制域那一个),带只哈希口令的指纹' {
     Assert-Equal -Expected 0 -Actual $prodRun.ExitCode -Because "prod 基线 DryRun 应当成功。输出: $($prodRun.Output)"
-    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'node-config')
-    $password = Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password'
-    Assert-True -Condition ($password -ceq $ProdEnv.MMORPG_REDIS_PASSWORD) -Because 'C++ 的 zone Redis 口令必须来自 MMORPG_REDIS_PASSWORD(与 Go 服务 / gateway 的 ConfigMap 同一个值)'
+    $nodeConfig = Select-ManifestByName -Output $prodRun.Output -Name 'node-config'
+    $flat = ConvertTo-FlatManifest -Block $nodeConfig
+    Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -Because '口令不进 ConfigMap:C++ 经 ZONE_REDIS_PASSWORD 拿值(config.cpp 用环境变量覆盖 yaml)'
+    Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.scene_control_redis.password') -Because '控制域口令同样不进 ConfigMap(SCENE_CONTROL_REDIS_PASSWORD;config.cpp 对这一段不继承 zoneredis 的口令)'
+    Assert-True -Condition (-not $nodeConfig.Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because 'node-config 里不得出现口令明文'
     Assert-Equal -Expected '0' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.db') -Because 'C++ 不发 SELECT,库号钉在 0(跨运行时契约)'
     $expected = Get-ExpectedZoneRedisAuthHash -Password $ProdEnv.MMORPG_REDIS_PASSWORD
-    foreach ($name in @('gate', 'scene')) {
+    foreach ($case in @(
+        @{ Name = 'gate'; Env = @($ZoneRedisSecretVars.ZoneRedisPasswordEnv) }
+        @{ Name = 'scene'; Env = $ZoneRedisEnvNames }
+    )) {
+        $name = $case.Name
         $block = Select-CppWorkloadBlock -Output $prodRun.Output -Kind 'Deployment' -Name $name -Label "prod $name"
         Assert-Equal -Expected $expected -Actual (Get-ZoneRedisAuthHash -Block $block -Label "prod $name") -Because "${name}:指纹必须只由口令决定(期望值只用口令算出)"
         Assert-Match -Text $block -Pattern '(?m)^      annotations:[ ]*\r?\n        mmorpg\.io/cpp-log-sidecar-config-hash: "[0-9a-f]{12}"[ ]*\r?\n        mmorpg\.io/zone-redis-auth-hash: "[0-9a-f]{12}"[ ]*\r?\n(?:        mmorpg\.io/player-redis-config-hash: "[0-9a-f]{12}"[ ]*\r?\n)?(?:        prometheus\.io/(?:scrape|port|path): "[^"]*"[ ]*\r?\n){3}      labels:' -Because "${name}:两条注解必须同在 Pod 模板的一个 annotations 段(sidecar 在前,scene 另有玩家域配置指纹);重复的 annotations: 键各解析器行为不一"
-        Assert-True -Condition (-not $block.Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because "${name}:工作负载里只有指纹,不出现口令明文"
+        Assert-ZoneRedisEnvRefs -Block $block -Expected $case.Env -Label "prod $name"
+        Assert-True -Condition (-not $block.Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because "${name}:工作负载里只有 Secret 引用与指纹,不出现口令明文"
+    }
+    # 本 namespace 的 Secret 副本:DryRun 只打一行隐去值的意图,而且先于 C++ 工作负载(secretKeyRef 不是 optional)。
+    $secretLine = [regex]::Match($prodRun.Output, '(?m)^\[dry-run\] kubectl apply -n mmorpg-zone-contract-test -f -   # Secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
+    Assert-True -Condition $secretLine.Success -Because 'zone-up 要在本 zone namespace 建 Secret redis-auth 的副本(Sync-RedisAuthSecret),DryRun 只打隐去值的一行'
+    $gateAt = [regex]::Match($prodRun.Output, '(?m)^kind: Deployment[ ]*\r?\nmetadata:[ ]*\r?\n  name: gate[ ]*\r?$')
+    Assert-True -Condition ($gateAt.Success -and $secretLine.Index -lt $gateAt.Index) -Because 'Secret 必须先于 gate / scene 落地,否则 Pod 停在 CreateContainerConfigError'
+}
+
+Test-Case 'zone Redis 口令契约:脚本里的 Secret 名 / 键与环境变量名 == C++ config.cpp 认的环境变量、== Redis 服务端清单引用的 Secret' {
+    $configCpp = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'cpp/libs/engine/config/config.cpp') -Raw -Encoding utf8
+    foreach ($envName in $ZoneRedisEnvNames) {
+        Assert-Match -Text $configCpp -Pattern ('GetNonEmptyEnv\("' + [regex]::Escape($envName) + '"\)') -Because "C++ 必须认 $envName,否则 K8s 注入的口令没人读、C++ 拿着 yaml 里的空串不发 AUTH,全线 NOAUTH"
+    }
+    $redisYaml = (Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis.yaml') -Raw -Encoding utf8) -replace "`r`n", "`n"
+    $serverRef = '(?m)^[ ]+- name: REDIS_PASSWORD[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef:[ ]*\n[ ]+name: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + '[ ]*\n[ ]+key: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '[ ]*$'
+    Assert-Match -Text $redisYaml -Pattern $serverRef -Because 'Redis 服务端的 --requirepass 与 C++ 的 ZONE_REDIS_PASSWORD 必须出自同一个 Secret 的同一个键'
+}
+
+Test-Case 'Sync-RedisAuthSecret:口令非空 → Apply-InjectedSecret 建 redis-auth(键 password,不回显值);空串 → 删残留;未解析 → throw,不当成「没口令」去删' {
+    # 被抽出的函数按动态作用域找命令:这里的两个替身只记调用,不起 kubectl。
+    $calls = [System.Collections.Generic.List[string]]::new()
+    function Invoke-Kubectl { param([string[]]$Args, [switch]$AllowFailure) $calls.Add('kubectl ' + ($Args -join ' ')) }
+    function Apply-InjectedSecret {
+        param([string]$Namespace, [string]$Name, [string]$Key, [string]$Value, [string]$AppLabel)
+        $calls.Add("secret ns=$Namespace name=$Name key=$Key app=$AppLabel value-length=$($Value.Length)")
+        $script:SyncedRedisPassword = $Value
+    }
+    try {
+        $script:RedisPassword = $null
+        $message = ''
+        try { Sync-RedisAuthSecret -Namespace 'contract-ns' } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern '共享 Redis 口令未解析' -Because '没跑 Initialize-InjectedSecrets 时不能把「没解析」当成「没口令」去删 Secret'
+        Assert-Equal -Expected 0 -Actual $calls.Count -Because '未解析时什么都不做'
+
+        $script:RedisPassword = ''
+        Sync-RedisAuthSecret -Namespace 'contract-ns'
+        Assert-Equal -Expected ("kubectl delete secret {0} -n contract-ns --ignore-not-found" -f $ZoneRedisSecretVars.RedisAuthSecretName) -Actual ($calls -join ' | ') -Because 'dev 无口令:删掉残留,服务端以无口令启动、C++ 也不引用它'
+
+        $calls.Clear()
+        $script:RedisPassword = 'contract-sync-redis-pw-07'
+        Sync-RedisAuthSecret -Namespace 'contract-ns'
+        Assert-Equal -Expected ("secret ns=contract-ns name={0} key={1} app=redis value-length={2}" -f $ZoneRedisSecretVars.RedisAuthSecretName, $ZoneRedisSecretVars.RedisAuthSecretKey, $script:RedisPassword.Length) -Actual ($calls -join ' | ') -Because '口令非空:经 Apply-InjectedSecret 建或更新(DryRun 只打隐去值的一行),不删'
+        Assert-True -Condition ($script:SyncedRedisPassword -ceq $script:RedisPassword) -Because 'Secret 里写的就是注入的口令'
+    }
+    finally {
+        Remove-Variable -Name RedisPassword, SyncedRedisPassword -Scope Script -ErrorAction SilentlyContinue
     }
 }
 
@@ -1395,7 +1703,7 @@ Test-Case 'C++ Prometheus 出口(-CppMetricsPort 缺省 9400):gate / scene 的 D
     }
 }
 
-Test-Case 'zone Redis 口令(dev 基线,不注入):node-config 写空串,C++ 工作负载不带指纹,注解段与改动前逐字相同' {
+Test-Case 'zone Redis 口令(dev 基线,不注入):node-config 写空串,C++ 工作负载不带指纹也不引用 Secret,注解段与改动前逐字相同,残留 Secret 被删' {
     # 跑测进程不设 MMORPG_REDIS_PASSWORD(CI 与本机约定同全文件的 dev 基线);设了的话下面会红,而不是静默放过。
     foreach ($case in @(@{ Label = 'dev Deployment'; Output = $devOut }, @{ Label = 'dev Agones'; Output = $agonesOut })) {
         $block = Select-ManifestByName -Output $case.Output -Name 'node-config'
@@ -1406,6 +1714,10 @@ Test-Case 'zone Redis 口令(dev 基线,不注入):node-config 写空串,C++ 工
         Assert-Equal -Expected '6379' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.port') -Because "$($case.Label):zone Redis 端口保持 6379"
         Assert-Equal -Expected '0' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.db') -Because "$($case.Label):C++ 不发 SELECT,库号仍为 0"
         Assert-NotMatch -Text $case.Output -Pattern 'zone-redis-auth-hash' -Because "$($case.Label):口令为空不写指纹注解"
+        foreach ($envName in $ZoneRedisEnvNames) {
+            Assert-NotMatch -Text $case.Output -Pattern ([regex]::Escape("name: $envName")) -Because "$($case.Label):口令为空时不注入 $envName(Redis 不开 requirepass,C++ 也不该引用一个被删掉的 Secret)"
+        }
+        Assert-Match -Text $case.Output -Pattern ('(?m)^\[dry-run\] kubectl delete secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' -n mmorpg-zone-contract-test --ignore-not-found\s*$') -Because "$($case.Label):不粘滞:以前带口令部署过留下的 Secret 副本要删掉"
     }
     $gate = Select-CppWorkloadBlock -Output $devOut -Kind 'Deployment' -Name 'gate' -Label 'dev gate'
     Assert-Match -Text $gate -Pattern '(?m)^    metadata:[ ]*\r?\n      annotations:[ ]*\r?\n        mmorpg\.io/cpp-log-sidecar-config-hash: "[0-9a-f]{12}"[ ]*\r?\n(?:        prometheus\.io/(?:scrape|port|path): "[^"]*"[ ]*\r?\n){3}      labels:[ ]*\r?\n        app: gate[ ]*\r?$' -Because 'Deployment 模板的注解段改由 New-CppPodAnnotationBlock 渲染,dev 无口令时只有 sidecar 一条指纹,其后是 -CppMetricsPort 的三条抓取注解'
@@ -1413,10 +1725,13 @@ Test-Case 'zone Redis 口令(dev 基线,不注入):node-config 写空串,C++ 工
     Assert-Match -Text $fleet -Pattern '(?m)^        metadata:[ ]*\r?\n          annotations:[ ]*\r?\n            mmorpg\.io/cpp-log-sidecar-config-hash: "[0-9a-f]{12}"[ ]*\r?\n(?:            prometheus\.io/(?:scrape|port|path): "[^"]*"[ ]*\r?\n){3}          labels:[ ]*\r?\n            app: scene[ ]*\r?$' -Because 'Fleet 模板同上(Pod 模板 metadata 子键在第 10 列)'
 }
 
-Test-Case 'zone Redis 口令换了,gate / scene 的指纹跟着变(换口令自动滚动),sidecar 指纹不变,node-config 写新值' {
+Test-Case 'zone Redis 口令换了,gate / scene 的指纹跟着变(只改 Secret 也会滚动),sidecar 指纹不变,node-config 逐字不变' {
     Assert-Equal -Expected 0 -Actual $zoneRedisRotRun.ExitCode -Because "只换 Redis 口令的 prod DryRun 应当成功。输出: $($zoneRedisRotRun.Output)"
-    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $zoneRedisRotRun.Output -Name 'node-config')
-    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -ceq $ZoneRedisRotatedPassword) -Because 'node-config 里必须是换过的新口令(与指纹同一份输入)'
+    $rotatedConfig = Select-ManifestByName -Output $zoneRedisRotRun.Output -Name 'node-config'
+    $flat = ConvertTo-FlatManifest -Block $rotatedConfig
+    Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -Because '换口令不改 ConfigMap:新口令只在 Secret 里'
+    Assert-True -Condition (-not $rotatedConfig.Contains($ZoneRedisRotatedPassword)) -Because 'node-config 里不得出现新口令明文'
+    Assert-True -Condition (($rotatedConfig -replace "`r`n", "`n") -ceq ((Select-ManifestByName -Output $prodRun.Output -Name 'node-config') -replace "`r`n", "`n")) -Because '只换口令时 node-config 与换之前逐字相同:滚动只能来自 Pod 模板上的指纹'
     $expected = Get-ExpectedZoneRedisAuthHash -Password $ZoneRedisRotatedPassword
     foreach ($name in @('gate', 'scene')) {
         $rotatedBlock = Select-CppWorkloadBlock -Output $zoneRedisRotRun.Output -Kind 'Deployment' -Name $name -Label "换口令 $name"
@@ -1424,22 +1739,29 @@ Test-Case 'zone Redis 口令换了,gate / scene 的指纹跟着变(换口令自�
         $rotated = Get-ZoneRedisAuthHash -Block $rotatedBlock -Label "换口令 $name"
         $baseline = Get-ZoneRedisAuthHash -Block $baselineBlock -Label "prod $name"
         Assert-Equal -Expected $expected -Actual $rotated -Because "${name}:换口令后的指纹必须是新口令算出的值"
-        Assert-True -Condition ($rotated -ne $baseline) -Because "${name}:口令变了指纹必须变(两者都是 $baseline),否则只改 ConfigMap 不会滚动,C++ 一直拿旧口令"
+        Assert-True -Condition ($rotated -ne $baseline) -Because "${name}:口令变了指纹必须变(两者都是 $baseline),否则只改 Secret 不会滚动,C++ 一直拿旧口令"
         $sidecarPattern = 'mmorpg\.io/cpp-log-sidecar-config-hash: "(?<h>[0-9a-f]{12})"'
         Assert-Equal -Expected ([regex]::Match($baselineBlock, $sidecarPattern).Groups['h'].Value) -Actual ([regex]::Match($rotatedBlock, $sidecarPattern).Groups['h'].Value) -Because "${name}:sidecar 配置没变,它的指纹不该跟着口令变(两条注解各管各的输入)"
     }
 }
 
-Test-Case 'zone Redis 口令(dev 档注入):external gate StatefulSet 与 Agones scene Fleet 同样带指纹,node-config 写注入值' {
+Test-Case 'zone Redis 口令(dev 档注入):external gate StatefulSet(lib 模板)与 Agones scene Fleet 同样经 Secret 注入、带指纹,node-config 仍是空串' {
     Assert-Equal -Expected 0 -Actual $zoneRedisEntryRun.ExitCode -Because "external + Agones 的 dev DryRun 应当成功。输出: $($zoneRedisEntryRun.Output)"
-    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $zoneRedisEntryRun.Output -Name 'node-config')
-    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -ceq $ZoneRedisDevPassword) -Because 'dev 档注入了口令就写进 node-config(dev 非空即采用)'
+    $nodeConfig = Select-ManifestByName -Output $zoneRedisEntryRun.Output -Name 'node-config'
+    $flat = ConvertTo-FlatManifest -Block $nodeConfig
+    Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -Because 'dev 档注入了口令同样只进 Secret,不进 node-config'
+    Assert-True -Condition (-not $nodeConfig.Contains($ZoneRedisDevPassword)) -Because 'node-config 里不得出现口令明文'
     $expected = Get-ExpectedZoneRedisAuthHash -Password $ZoneRedisDevPassword
-    foreach ($target in @(@{ Kind = 'StatefulSet'; Name = 'gate' }, @{ Kind = 'Fleet'; Name = 'scene' })) {
+    foreach ($target in @(
+        @{ Kind = 'StatefulSet'; Name = 'gate'; Env = @($ZoneRedisSecretVars.ZoneRedisPasswordEnv) }
+        @{ Kind = 'Fleet'; Name = 'scene'; Env = $ZoneRedisEnvNames }
+    )) {
         $label = "dev 注入 $($target.Kind)/$($target.Name)"
         $block = Select-CppWorkloadBlock -Output $zoneRedisEntryRun.Output -Kind $target.Kind -Name $target.Name -Label $label
         Assert-Equal -Expected $expected -Actual (Get-ZoneRedisAuthHash -Block $block -Label $label) -Because "${label}:lib 模板与本脚本模板必须写同一个指纹"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, '(?m)^[ ]+annotations:[ ]*\r?$').Count) -Because "${label}:一个 Pod 模板只能有一个 annotations: 段"
+        Assert-ZoneRedisEnvRefs -Block $block -Expected $target.Env -Label $label
+        Assert-True -Condition (-not $block.Contains($ZoneRedisDevPassword)) -Because "${label}:工作负载里不出现口令明文"
     }
 }
 
@@ -2276,15 +2598,17 @@ Test-Case 'battle 部署保留 POD_IP 和独立 TCP/gRPC 端口，exec 传递退
     Assert-Match -Text $block -Pattern 'readinessProbe:\s+tcpSocket:\s+port: 50000' -Because 'C++ 尚无 grpc.health.v1，必须使用可实现的 TCP 探针'
     Assert-NotMatch -Text $block -Pattern 'GATE_CLIENT_RPC_ROUTER|BATTLE_RUN_MODE' -Because '不能误注 gate 模式或关闭 battle 默认 prod 启动门禁'
 }
-# P0-A 第二批:battle 读 battle-node-config 的 zoneredis.password(与 zone 的 node-config 同一个生成器)。带口令的 infra-up 另起两个 DryRun:
-# 默认 Deployment 形态(New-NodeDeploymentYaml)与 Agones Fleet 形态(lib New-BattleFleetYaml);口令按 dev 档注入(dev 非空即采用)。
+# battle 的 zone Redis 口令:battle-node-config(与 zone 的 node-config 同一个生成器)里写空串,battle 经 infra namespace 的 Secret redis-auth
+# 拿 ZONE_REDIS_PASSWORD(与 Redis 服务端同一份)。带口令的 infra-up 另起两个 DryRun:默认 Deployment 形态(New-NodeDeploymentYaml)与
+# Agones Fleet 形态(lib New-BattleFleetYaml,经 PodCommon.SecretEnv);口令按 dev 档注入(dev 非空即采用)。
 # battle 工作负载在 Apply-Infra 开头、密钥解析之后渲染:若又挪回 Initialize-InjectedSecrets 之前,Get-CppZoneRedisPassword 对「未解析」
-# fail-closed,这两个 DryRun 会直接失败。工具函数(Select-CppWorkloadBlock / Get-ZoneRedisAuthHash / Get-ExpectedZoneRedisAuthHash)见上文 3a 节。
+# fail-closed,这两个 DryRun 会直接失败。工具函数(Select-CppWorkloadBlock / Get-ZoneRedisAuthHash / Get-ExpectedZoneRedisAuthHash /
+# Assert-ZoneRedisEnvRefs)见上文 3a 节。
 $BattleZoneRedisPassword = 'contract-test-battle-zone-redis-06'
 $battleZoneRedisEnv = $BattleTestEnv + @{ MMORPG_REDIS_PASSWORD = $BattleZoneRedisPassword }
 $battleZoneRedisRun = Invoke-DeployDryRun -Arguments $BattleInfraArgs -Env $battleZoneRedisEnv
 $battleZoneRedisFleetRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-BattleOrchestrator', 'agones', '-ClientEntryMode', 'external', '-ClientPublicHost', '127.0.0.1')) -Env $battleZoneRedisEnv
-Test-Case 'battle:带口令的 infra-up 里 battle-node-config 的 zoneredis.password == 注入值,battle(Deployment / Agones Fleet)带口令指纹;不注入时空串且无指纹' {
+Test-Case 'battle:带口令的 infra-up 里 battle-node-config 写空串,battle(Deployment / Agones Fleet)经 Secret redis-auth 拿 ZONE_REDIS_PASSWORD、带口令指纹,整份输出不出现口令;不注入时无引用无指纹' {
     $expected = Get-ExpectedZoneRedisAuthHash -Password $BattleZoneRedisPassword
     foreach ($case in @(
         @{ Label = 'battle Deployment'; Run = $battleZoneRedisRun; Kind = 'Deployment' }
@@ -2292,15 +2616,22 @@ Test-Case 'battle:带口令的 infra-up 里 battle-node-config 的 zoneredis.pas
     )) {
         Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label):带口令的 infra-up DryRun 应当成功(battle 工作负载渲染排在密钥解析之后)。输出: $($case.Run.Output)"
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Run.Output -Name 'battle-node-config')
-        Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -ceq $BattleZoneRedisPassword) -Because "$($case.Label):battle-node-config 的口令必须是注入值(与服务端 Secret redis-auth 同源)"
+        Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.game_config.yaml.zoneredis.password') -Because "$($case.Label):口令不进 battle-node-config,只在 Secret redis-auth 里"
         $block = Select-CppWorkloadBlock -Output $case.Run.Output -Kind $case.Kind -Name 'battle' -Label $case.Label
-        Assert-Equal -Expected $expected -Actual (Get-ZoneRedisAuthHash -Block $block -Label $case.Label) -Because "$($case.Label):Pod 模板必须带只由口令决定的指纹(换口令才会滚动 battle;C++ 只在启动时读配置)"
-        Assert-True -Condition (-not $block.Contains($BattleZoneRedisPassword)) -Because "$($case.Label):工作负载里只有指纹,不出现口令明文"
+        Assert-Equal -Expected $expected -Actual (Get-ZoneRedisAuthHash -Block $block -Label $case.Label) -Because "$($case.Label):Pod 模板必须带只由口令决定的指纹(只改 Secret 才会滚动 battle;环境变量只在启动时读)"
+        Assert-ZoneRedisEnvRefs -Block $block -Expected @($ZoneRedisSecretVars.ZoneRedisPasswordEnv) -Label $case.Label
+        # -SkipGoSvc / -SkipJavaSvc:这两次 infra-up 里再没有别的组件会写口令明文,整份 DryRun 输出都不该有它
+        # (以前 infra 的 Secret redis-auth 用 here-string 直接 apply,DryRun 会把口令打进输出)。
+        Assert-True -Condition (-not $case.Run.Output.Contains($BattleZoneRedisPassword)) -Because "$($case.Label):DryRun 输出里不得出现口令明文"
+        $secretLine = [regex]::Match($case.Run.Output, '(?m)^\[dry-run\] kubectl apply -n contract-battle-infra -f -   # Secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
+        $workloadAt = [regex]::Match($case.Run.Output, '(?m)^kind: ' + [regex]::Escape($case.Kind) + '[ ]*\r?\nmetadata:[ ]*\r?\n  name: battle[ ]*\r?$')
+        Assert-True -Condition ($secretLine.Success -and $workloadAt.Success -and $secretLine.Index -lt $workloadAt.Index) -Because "$($case.Label):infra 的 Secret redis-auth 先于 battle 落地(secretKeyRef 不是 optional),DryRun 只打隐去值的一行"
     }
     Assert-Equal -Expected 0 -Actual $battleInfraRun.ExitCode -Because '对照:不注入口令的 battle 基线 DryRun 必须成功'
     $baseFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config')
     Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $baseFlat -KeyPath 'data.game_config.yaml.zoneredis.password') -Because '对照:dev 不注入口令时 battle-node-config 写空串,battle 不发 AUTH,与改动前相同'
     Assert-NotMatch -Text $battleInfraRun.Output -Pattern 'zone-redis-auth-hash' -Because '对照:口令为空时 battle 不写指纹注解,Pod 模板与改动前逐字相同'
+    Assert-NotMatch -Text $battleInfraRun.Output -Pattern ([regex]::Escape("name: $($ZoneRedisSecretVars.ZoneRedisPasswordEnv)")) -Because '对照:口令为空时 battle 不引用 Secret redis-auth(它被删掉了)'
 }
 Test-Case 'gate 就绪探针只探唯一的监听口 18000,不探不存在的 gRPC 口,也不加会杀容器的探针' {
     $block = Select-ManifestByName -Output $devOut -Name 'gate'
@@ -2750,10 +3081,10 @@ Test-Case '玩家收件箱写前门禁:Read-PlayerInboxGateLiveFacts 按本次�
     }
 }
 
-Test-Case 'LogQL 契约:player-inbox-alerts.yaml 的 scene 侧固定查询只用 C++ 日志 sidecar 真会打的流标签,统一写 {job="cpp_nodes", service="scene"}' {
+Test-Case 'LogQL 契约:告警文件里 C++ 侧的固定查询只用 C++ 日志 sidecar 真会打的流标签,统一写 {job="cpp_nodes", service="<节点>"}' {
     # C++ 业务日志只落文件,由 sidecar(Get-CppLogSidecarConfigAlloy)读文件送 Loki;流标签只有 external_labels、stage.labels、
-    # stage.static_labels 三处给出的那些。用了别的标签(以前是 app=~"scene.*")的选择器匹配不到任何流,查询恒为空,值班会误判「没有问题」。
-    # 只核对收件箱的告警文件;asset-channel-alerts.yaml / data-service-audit-alerts.yaml 有同样的 {app=...} 写法,改好之后加进来。
+    # stage.static_labels 三处给出的那些。用了别的标签(以前是 app=~"scene.*"、app="battle")的选择器匹配不到任何流,查询恒为空,值班会误判「没有问题」。
+    # 核对写了 C++ 侧固定查询的三份告警文件;asset-channel / data-service-audit 两份的 {app=...} 写法 2026-11-05 改正后纳入。
     $sidecar = Select-ManifestByName -Output $devOut -Name 'cpp-log-sidecar'
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($sidecar)) -Because '前提:zone-up DryRun 输出里有 sidecar 的 Alloy 配置'
     $labels = New-Object System.Collections.Generic.HashSet[string]
@@ -2767,15 +3098,24 @@ Test-Case 'LogQL 契约:player-inbox-alerts.yaml 的 scene 侧固定查询只用
     }
     Assert-True -Condition (-not $labels.Contains('app')) -Because 'sidecar 不打 app 标签;以后真加了它,本用例的前提就要重看'
 
-    $alerts = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/player-inbox-alerts.yaml') -Raw
-    $selectors = @([regex]::Matches($alerts, 'count_over_time\(\s*\{(?<sel>[^{}]*)\}'))
-    Assert-True -Condition ($selectors.Count -ge 9) -Because "告警文件头的 scene 侧固定查询至少 9 条(实际 $($selectors.Count));少了说明写法变了、本用例抽不到"
-    foreach ($selector in $selectors) {
-        $text = $selector.Groups['sel'].Value
-        foreach ($m in [regex]::Matches($text, '(?<k>[A-Za-z_][A-Za-z0-9_]*)\s*(?:=~|!~|!=|=)')) {
-            Assert-True -Condition ($labels.Contains($m.Groups['k'].Value)) -Because "LogQL 选择器 {$text} 用了 sidecar 不打的标签 $($m.Groups['k'].Value)(sidecar 只有:$(@($labels) -join ', '))"
+    # 固定查询一律带行过滤,所以选择器 = 后面紧跟 |= / |~ 的 {...}。PromQL 不用 |,文件头说明里举的反例后面也不跟 |,都不会被抽到。
+    # MinSelectors 是各文件当前的条数:少了说明写法变了、本用例抽不到,先查是不是漏核。
+    $alertFiles = @(
+        @{ Path = 'deploy/k8s/player-inbox-alerts.yaml'; MinSelectors = 9; Prefix = '^job="cpp_nodes", service="scene"' },
+        @{ Path = 'deploy/k8s/asset-channel-alerts.yaml'; MinSelectors = 6; Prefix = '^job="cpp_nodes", service="(scene|battle)"' },
+        @{ Path = 'deploy/k8s/data-service-audit-alerts.yaml'; MinSelectors = 1; Prefix = '^job="cpp_nodes", service="scene"' }
+    )
+    foreach ($file in $alertFiles) {
+        $alerts = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) $file.Path) -Raw
+        $selectors = @([regex]::Matches($alerts, '\{(?<sel>[^{}]*)\}\s*\|[=~]'))
+        Assert-True -Condition ($selectors.Count -ge $file.MinSelectors) -Because "$($file.Path) 的 C++ 侧固定查询至少 $($file.MinSelectors) 条(实际 $($selectors.Count));少了说明写法变了、本用例抽不到"
+        foreach ($selector in $selectors) {
+            $text = $selector.Groups['sel'].Value
+            foreach ($m in [regex]::Matches($text, '(?<k>[A-Za-z_][A-Za-z0-9_]*)\s*(?:=~|!~|!=|=)')) {
+                Assert-True -Condition ($labels.Contains($m.Groups['k'].Value)) -Because "$($file.Path):LogQL 选择器 {$text} 用了 sidecar 不打的标签 $($m.Groups['k'].Value)(sidecar 只有:$(@($labels) -join ', '))"
+            }
+            Assert-Match -Text $text -Pattern $file.Prefix -Because "$($file.Path):C++ 侧选择器统一以 job=`"cpp_nodes`", service=`"<节点>`" 开头(实际 {$text})"
         }
-        Assert-Match -Text $text -Pattern '^job="cpp_nodes", service="scene"' -Because "scene 侧选择器统一以 job=`"cpp_nodes`", service=`"scene`" 开头(实际 {$text})"
     }
 }
 
@@ -3035,17 +3375,24 @@ Test-Case '负向:-KafkaBrokers 2 在任何清单生成之前被拒' {
     Assert-NotMatch -Text $run.Output -Pattern 'BEGIN MANIFEST' -Because '参数非法时不能已经开始输出清单'
 }
 
-# etcd MVCC 压缩(P0-C 阶段 1b,docs/ops/etcd-maintenance-runbook.md):infra-up 必须把 etcd-maintenance.yaml 一起下发,
-# 否则新环境漏 apply 就回到「历史只增不减、写满配额即 NOSPACE」。清单自身的形态与取值在 etcd_maintenance_contract.tests.ps1(静态,不跑部署脚本)。
-Test-Case 'infra-up 产物里有 etcd-compact CronJob:namespace 占位已替换,标签不会被 etcd 的 selector 选中' {
+# etcd MVCC 压缩(P0-C 阶段 2,docs/ops/etcd-maintenance-runbook.md §4):压缩只靠 etcd.yaml 里 etcd 内置的自动压缩,阶段 1 的 CronJob etcd-compact
+# 2026-11-05 退役。infra-up 不能再下发它,还要删掉以前 apply 过的残留。清单自身的形态与取值在 etcd_maintenance_contract.tests.ps1(静态,不跑部署脚本)。
+Test-Case 'infra-up 不再下发 etcd-compact,并在 apply etcd.yaml 之前删掉残留的 CronJob 与脚本 ConfigMap;etcd 用钉死的官方镜像' {
     Assert-Equal -Expected 0 -Actual $battleInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($battleInfraRun.Output)"
-    $block = Select-ManifestByName -Output $battleInfraRun.Output -Name 'etcd-compact'
-    Assert-True -Condition ($null -ne $block) -Because 'Apply-Infra 的 $infraManifests 必须带 etcd-maintenance.yaml'
-    Assert-Match -Text $block -Pattern '(?m-i)^kind: CronJob\s*$' -Because 'etcd-compact 是 CronJob'
-    Assert-Match -Text $block -Pattern 'http://etcd-0\.etcd-headless\.contract-battle-infra\.svc\.cluster\.local:2379' -Because '端点 FQDN 里的 __INFRA_NAMESPACE__ 必须替换成 -InfraNamespace(与 etcd.yaml 的广播地址同一条替换)'
-    # (?-i):占位是全大写,理由同上面 -KafkaBrokers 3 用例。
-    Assert-NotMatch -Text $block -Pattern '(?-i)__[A-Z][A-Z0-9_]*__' -Because '占位必须全部替换'
-    Assert-NotMatch -Text $block -Pattern '(?m)^\s*app:\s*"?etcd"?\s*$' -Because 'app: etcd 会被 etcd 的 Service / PDB / StatefulSet 的 selector 选中'
+    Assert-True -Condition ($null -eq (Select-ManifestByName -Output $battleInfraRun.Output -Name 'etcd-compact')) -Because '退役的 CronJob 不能再出现在 apply 的产物里'
+    Assert-NotMatch -Text $battleInfraRun.Output -Pattern '(?m)^kind:\s*CronJob\s*$' -Because 'infra-up 不下发任何 CronJob(etcd-compact 是唯一的一个)'
+    $out = $battleInfraRun.Output
+    $cleanupAt = @(
+        $out.IndexOf('[dry-run] kubectl delete cronjob etcd-compact -n contract-battle-infra --ignore-not-found'),
+        $out.IndexOf('[dry-run] kubectl delete configmap etcd-maintenance-scripts -n contract-battle-infra --ignore-not-found')
+    )
+    Assert-True -Condition ($cleanupAt[0] -ge 0 -and $cleanupAt[1] -ge 0) -Because '以前 apply 过的 CronJob 与它的脚本 ConfigMap 要删掉(--ignore-not-found,没有就是空操作)'
+    $etcdStsAt = [regex]::Match($out, '(?m)^kind: StatefulSet[ ]*\r?\nmetadata:[ ]*\r?\n  name: etcd[ ]*\r?$')
+    Assert-True -Condition ($etcdStsAt.Success -and $cleanupAt[0] -lt $etcdStsAt.Index -and $cleanupAt[1] -lt $etcdStsAt.Index) -Because '残留在 apply etcd.yaml 之前就删掉(在 etcd.yaml 那一支里)'
+    # Select-ManifestByName 按名字取第一块会拿到 Service etcd;这里从 StatefulSet 的头截到下一份文档。
+    $etcdStsEnd = $out.IndexOf("`n---", $etcdStsAt.Index)
+    $etcdSts = if ($etcdStsEnd -gt $etcdStsAt.Index) { $out.Substring($etcdStsAt.Index, $etcdStsEnd - $etcdStsAt.Index) } else { $out.Substring($etcdStsAt.Index) }
+    Assert-Match -Text $etcdSts -Pattern '(?m)^\s*image:\s*quay\.io/coreos/etcd:v3\.\d+\.\d+@sha256:[0-9a-f]{64}\s*$' -Because 'etcd 用官方镜像并按 tag@摘要钉死(取值与五处一致由 etcd_maintenance_contract.tests.ps1 守住)'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -3605,7 +3952,10 @@ $redisLedgerFunctionNames = @(
     'Get-RedisPlayerPoolMirror',
     'Get-RedisPodTemplateDigest', 'Get-RedisCoreRestartVerdict', 'Assert-RedisCoreRestartConfirmed', 'Get-LiveRedisCoreTemplateDigest',
     # 没有 sts 与旧 Deployment 时再查孤儿 redis-<n> Pod(2026-10-19,半截的 1 → 3 切换不再被当成全新集群)。
-    'Get-LiveRedisOrphanPodOrdinals'
+    'Get-LiveRedisOrphanPodOrdinals',
+    # 重启闸按服务端预演判定(2026-11-05):取 sts 文档、预演、规范化比较 spec.template。
+    'Get-RedisStatefulSetDocument', 'ConvertTo-CanonicalJsonText', 'Get-RedisStatefulSetTemplateElement', 'Compare-RedisPodTemplateJson',
+    'Invoke-RedisStatefulSetServerDryRun'
 )
 foreach ($redisLedgerFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($redisLedgerFunctionNames -contains $redisLedgerFnAst.Name) {
@@ -4009,54 +4359,191 @@ Test-Case '重启闸纯判定:线上不存在 → absent(放行),只剩旧 Deplo
     Assert-Equal -Expected 'unchanged' -Actual (Get-RedisCoreRestartVerdict -LiveExists $true -LiveDigest 'abcdef0123456789' -DesiredDigest 'abcdef0123456789' -OrphanPodCount 3) -Because '有 sts 时孤儿计数不参与判定'
 }
 
-Test-Case '负向:重启闸要确认时 throw,错误写明「apply 会重启 redis-0,全服登录中断并重放 AOF」并点名 -ConfirmRedisCoreRestart;给了开关只告警放行;DryRun 不查集群' {
-    # Assert-RedisCoreRestartConfirmed 按动态作用域读 $DryRun / $InfraNamespace / $ConfirmRedisCoreRestart,读集群那一步
-    # (Get-LiveRedisCoreTemplateDigest)在这里给替身:返回 $stubLive,并记查询次数。不起 kubectl。
+# 假的 StatefulSet redis JSON(kubectl get / apply --dry-run=server -o json 的形状,只留比较用得到的字段)。
+# -Image 决定 Pod 模板;-StsAnnotation 是 sts 自己 metadata 上的文本摘要注解(不在 Pod 模板里);-TemplateAnnotations 进 Pod 模板;
+# -Shuffle 产出同一个对象的另一种写法:键顺序全反、带缩进(kubectl 两次输出的排版不必逐字相同,比较不能依赖它)。
+function New-RedisStsJson {
+    param(
+        [string]$Image = 'redis:7.2',
+        [string]$StsAnnotation = 'abcdef0123456789',
+        [System.Collections.IDictionary]$TemplateAnnotations = $null,
+        [switch]$Shuffle
+    )
+    if ($Shuffle) {
+        $templateMetadata = [ordered]@{ labels = [ordered]@{ app = 'redis' } }
+        if ($null -ne $TemplateAnnotations) { $templateMetadata = [ordered]@{ labels = [ordered]@{ app = 'redis' }; annotations = $TemplateAnnotations } }
+        $container = [ordered]@{ ports = @([ordered]@{ protocol = 'TCP'; containerPort = 6379 }); image = $Image; name = 'redis' }
+        $template = [ordered]@{ spec = [ordered]@{ terminationGracePeriodSeconds = 30; containers = @($container) }; metadata = $templateMetadata }
+        $object = [ordered]@{ spec = [ordered]@{ template = $template; replicas = 1 }; metadata = [ordered]@{ annotations = [ordered]@{ 'mmorpg.io/redis-pod-template-digest' = $StsAnnotation }; name = 'redis' }; kind = 'StatefulSet'; apiVersion = 'apps/v1' }
+        return ($object | ConvertTo-Json -Depth 20)
+    }
+    $templateMetadata = [ordered]@{ labels = [ordered]@{ app = 'redis' } }
+    if ($null -ne $TemplateAnnotations) { $templateMetadata = [ordered]@{ annotations = $TemplateAnnotations; labels = [ordered]@{ app = 'redis' } } }
+    $container = [ordered]@{ name = 'redis'; image = $Image; ports = @([ordered]@{ containerPort = 6379; protocol = 'TCP' }) }
+    $template = [ordered]@{ metadata = $templateMetadata; spec = [ordered]@{ containers = @($container); terminationGracePeriodSeconds = 30 } }
+    $object = [ordered]@{ apiVersion = 'apps/v1'; kind = 'StatefulSet'; metadata = [ordered]@{ name = 'redis'; annotations = [ordered]@{ 'mmorpg.io/redis-pod-template-digest' = $StsAnnotation } }; spec = [ordered]@{ replicas = 1; template = $template } }
+    return ($object | ConvertTo-Json -Depth 20 -Compress)
+}
+
+Test-Case '重启闸比较(Compare-RedisPodTemplateJson,纯函数):键顺序与排版不同算相同;改镜像 / 改模板注解算不同并点出键;sts 自己的注解不参与;两边都有 restartedAt 算相同;前提不成立一律 throw' {
+    $base = New-RedisStsJson
+    $same = Compare-RedisPodTemplateJson -LiveJson $base -DesiredJson (New-RedisStsJson -Shuffle)
+    Assert-True -Condition (-not $same.Changed) -Because '同一个对象换个键顺序、换个缩进,Pod 模板没变'
+    Assert-Equal -Expected $same.LiveDigest -Actual $same.DesiredDigest -Because '规范化之后两边的摘要相同'
+    Assert-Match -Text $same.LiveDigest -Pattern '^[0-9a-f]{16}$' -Because '模板摘要是 16 位小写十六进制'
+    Assert-Equal -Expected 0 -Actual @($same.ChangedPaths).Count -Because '没变就没有变化的键'
+
+    $image = Compare-RedisPodTemplateJson -LiveJson $base -DesiredJson (New-RedisStsJson -Image 'redis:7.4' -Shuffle)
+    Assert-True -Condition $image.Changed -Because '改镜像就是改 Pod 模板(会滚动)'
+    Assert-Equal -Expected 'spec.containers' -Actual (@($image.ChangedPaths) -join ',') -Because '变化点到 spec 下的键'
+    Assert-True -Condition ($image.LiveDigest -ne $image.DesiredDigest) -Because '变了摘要就不同'
+
+    $annotated = Compare-RedisPodTemplateJson -LiveJson $base -DesiredJson (New-RedisStsJson -TemplateAnnotations ([ordered]@{ 'example.io/x' = '1' }))
+    Assert-Equal -Expected 'metadata.annotations' -Actual (@($annotated.ChangedPaths) -join ',') -Because 'Pod 模板上的注解也是模板的一部分(改了会滚动)'
+
+    $stsOnly = Compare-RedisPodTemplateJson -LiveJson $base -DesiredJson (New-RedisStsJson -StsAnnotation '0000000000000000')
+    Assert-True -Condition (-not $stsOnly.Changed) -Because 'sts 自己 metadata 上的注解(文本摘要)不在 Pod 模板里,改它不滚动'
+
+    $restarted = [ordered]@{ 'kubectl.kubernetes.io/restartedAt' = '2026-11-05T10:00:00+08:00' }
+    $both = Compare-RedisPodTemplateJson -LiveJson (New-RedisStsJson -TemplateAnnotations $restarted) -DesiredJson (New-RedisStsJson -TemplateAnnotations $restarted -Shuffle)
+    Assert-True -Condition (-not $both.Changed) -Because 'rollout restart 写的 restartedAt 不在清单里,三方合并保留它,预演结果与线上都有,不算变化'
+
+    foreach ($bad in @(
+        @{ Why = '不是 JSON'; Live = 'not json'; Pattern = '不是合法的 JSON' }
+        @{ Why = '不是 StatefulSet'; Live = '{"kind":"Deployment","metadata":{"name":"redis"},"spec":{"template":{}}}'; Pattern = '不是 StatefulSet redis' }
+        @{ Why = '名字不对'; Live = '{"kind":"StatefulSet","metadata":{"name":"redis-queue-g0"},"spec":{"template":{}}}'; Pattern = '不是 StatefulSet redis' }
+        @{ Why = '没有 spec.template'; Live = '{"kind":"StatefulSet","metadata":{"name":"redis"},"spec":{"replicas":1}}'; Pattern = '没有 spec\.template' }
+    )) {
+        $message = ''
+        try { Compare-RedisPodTemplateJson -LiveJson $bad.Live -DesiredJson $base | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern $bad.Pattern -Because "$($bad.Why):比较的前提不成立就不能判「没变」"
+        $message = ''
+        try { Compare-RedisPodTemplateJson -LiveJson $base -DesiredJson $bad.Live | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern $bad.Pattern -Because "$($bad.Why)(预演结果一侧):同样 throw"
+    }
+}
+
+Test-Case '重启闸预演(Invoke-RedisStatefulSetServerDryRun):与真 apply 同一种客户端 apply,加 --dry-run=server -o json;kubectl 失败或无输出一律 throw;临时文件用完即删' {
+    function Build-KubectlBaseArgs { return , @('--context', 'contract-ctx') }
+    $kubectlCalls = [System.Collections.Generic.List[string]]::new()
+    $seen = @{ File = ''; Content = '' }
+    function kubectl {
+        $kubectlCalls.Add($args -join ' ')
+        $fileAt = [array]::IndexOf([string[]]$args, '-f')
+        if ($fileAt -ge 0) { $seen.File = [string]$args[$fileAt + 1]; $seen.Content = Get-Content -LiteralPath $seen.File -Raw }
+        $global:LASTEXITCODE = [int]$fake.Exit
+        return $fake.Out
+    }
+    try {
+        $yaml = "apiVersion: apps/v1`nkind: StatefulSet`nmetadata:`n`tname: redis`n"
+        $fake = @{ Exit = 0; Out = (New-RedisStsJson) }
+        $text = Invoke-RedisStatefulSetServerDryRun -Namespace 'contract-ns' -StatefulSetYaml $yaml
+        Assert-Equal -Expected (New-RedisStsJson) -Actual $text -Because '返回预演结果的 JSON 原文'
+        Assert-Equal -Expected 1 -Actual $kubectlCalls.Count -Because '只调用一次 kubectl'
+        Assert-Match -Text $kubectlCalls[0] -Pattern '^--context contract-ctx apply -n contract-ns --dry-run=server -o json -f .+$' -Because '与真 apply 同一种客户端 apply(同 namespace、同 kubeconfig 参数),只多 --dry-run=server -o json'
+        Assert-True -Condition ($seen.Content -ceq ($yaml -replace "`t", '    ')) -Because '提交的就是调用方给的那份 sts(制表符换成 4 个空格,同 Invoke-KubectlWithInputFile)'
+        Assert-True -Condition (-not (Test-Path -LiteralPath $seen.File)) -Because '临时文件用完即删'
+
+        foreach ($fail in @(@{ Why = 'kubectl 失败'; Exit = 1; Out = '' }, @{ Why = '退出码 0 但没有输出'; Exit = 0; Out = '' })) {
+            $fake = @{ Exit = $fail.Exit; Out = $fail.Out }
+            $message = ''
+            try { Invoke-RedisStatefulSetServerDryRun -Namespace 'contract-ns' -StatefulSetYaml $yaml | Out-Null } catch { $message = $_.Exception.Message }
+            Assert-Match -Text $message -Pattern '服务端预演\(kubectl apply --dry-run=server\)失败' -Because "$($fail.Why):不知道会不会重启就不放行(fail-closed)"
+            Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because "$($fail.Why):预演在 Apply-Infra 的任何写操作之前"
+            Assert-True -Condition (-not (Test-Path -LiteralPath $seen.File)) -Because "$($fail.Why):失败时临时文件同样删掉"
+        }
+    }
+    finally {
+        $global:LASTEXITCODE = 0
+    }
+}
+
+Test-Case '负向:重启闸按服务端预演判定:Pod 模板与线上不同就 throw(两边摘要、变化的键、「apply 会重启 redis-0,全服登录中断并重放 AOF」、-ConfirmRedisCoreRestart);相同放行(线上没有摘要注解也一样);给了开关只告警放行;DryRun 不查集群' {
+    # Assert-RedisCoreRestartConfirmed 按动态作用域读 $DryRun / $InfraNamespace / $ConfirmRedisCoreRestart。读集群的两步在这里给替身:
+    # Get-LiveRedisCoreTemplateDigest 返回 $stubLive,Invoke-RedisStatefulSetServerDryRun 返回 $stubDesired,各记调用次数。不起 kubectl。
     $InfraNamespace = 'contract-redis-gate'
     $desired = 'abcdef0123456789'
+    $stsYaml = "apiVersion: apps/v1`nkind: StatefulSet`nmetadata:`n  name: redis`n"
     $queries = [ref]0
+    $dryRuns = [ref]0
     function Get-LiveRedisCoreTemplateDigest {
         param([string]$Namespace)
         if ($DryRun) { throw 'DryRun 下不该查集群' }
         $queries.Value = $queries.Value + 1
         return $stubLive
     }
+    function Invoke-RedisStatefulSetServerDryRun {
+        param([string]$Namespace, [string]$StatefulSetYaml)
+        if ($DryRun) { throw 'DryRun 下不该预演' }
+        if ($StatefulSetYaml -cne $stsYaml -or $Namespace -cne $InfraNamespace) { throw '预演提交的必须是调用方给的那份 sts、infra namespace' }
+        $dryRuns.Value = $dryRuns.Value + 1
+        return $stubDesired
+    }
 
     $DryRun = $false
     $ConfirmRedisCoreRestart = $false
+    $liveJson = New-RedisStsJson -Image 'redis:7.2'
     foreach ($case in @(
-        @{ Why = '摘要不同'; Live = [pscustomobject]@{ Exists = $true; Digest = '0000000000000000' }; ShowsLive = '0000000000000000' }
-        @{ Why = '线上没有注解'; Live = [pscustomobject]@{ Exists = $true; Digest = '' }; ShowsLive = '<none>' }
+        @{ Why = '清单改了镜像'; Live = $liveJson; Desired = (New-RedisStsJson -Image 'redis:7.4') }
+        # 线上被 kubectl set image 带外改过、清单没动:注解仍等于本次文本摘要(以前判 unchanged 放行),预演结果已被改回清单值。
+        @{ Why = '带外改过镜像'; Live = (New-RedisStsJson -Image 'redis:7.2-hotfix'); Desired = $liveJson }
     )) {
-        $stubLive = $case.Live
+        $stubLive = [pscustomobject]@{ Exists = $true; Digest = $desired; Json = $case.Live; LegacyDeployment = $false }
+        $stubDesired = $case.Desired
         $message = ''
-        try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired } catch { $message = $_.Exception.Message }
+        try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml $stsYaml } catch { $message = $_.Exception.Message }
         Assert-Match -Text $message -Pattern 'apply 会重启 redis-0,全服登录中断并重放 AOF' -Because "$($case.Why):拒绝文本必须说清后果"
         Assert-Match -Text $message -Pattern '-ConfirmRedisCoreRestart' -Because "$($case.Why):拒绝文本必须点名确认开关"
         Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because "$($case.Why):闸在 Apply-Infra 的任何写操作之前"
         Assert-Match -Text $message -Pattern ([regex]::Escape("namespace=$InfraNamespace")) -Because "$($case.Why):拒绝文本必须点名 namespace"
-        Assert-Match -Text $message -Pattern ([regex]::Escape($desired) + '[^\n]*' + [regex]::Escape($case.ShowsLive)) -Because "$($case.Why):拒绝文本必须给出本次与线上两个摘要"
+        Assert-Match -Text $message -Pattern '变化在 spec\.containers' -Because "$($case.Why):拒绝文本要点出变化落在哪些键上"
+        $comparison = Compare-RedisPodTemplateJson -LiveJson $case.Live -DesiredJson $case.Desired
+        Assert-Match -Text $message -Pattern ([regex]::Escape($comparison.DesiredDigest) + '[^\n]*' + [regex]::Escape($comparison.LiveDigest)) -Because "$($case.Why):拒绝文本给出预演与线上两边的模板摘要(服务端算的,不是注解)"
     }
 
-    # 给了开关:放行,只打 [RedisCoreRestart]Confirmed 告警。
+    # 不需要确认的两种:预演后模板与线上相同(线上没有摘要注解、键顺序不同也一样),以及全新集群(不预演)。
+    $stubLive = [pscustomobject]@{ Exists = $true; Digest = ''; Json = $liveJson; LegacyDeployment = $false }
+    $stubDesired = New-RedisStsJson -Image 'redis:7.2' -StsAnnotation $desired -Shuffle
+    $passed = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml $stsYaml 6>&1 | Out-String)
+    Assert-Match -Text $passed -Pattern 'Redis restart gate: server-side dry-run shows the redis pod template unchanged' -Because '模板真没变就放行;线上没有摘要注解(P0-E 之前部署的)不再一律要求确认'
+    $stubLive = [pscustomobject]@{ Exists = $false; Digest = ''; Json = ''; LegacyDeployment = $false; OrphanPods = @() }
+    $passed = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml $stsYaml 6>&1 | Out-String)
+    Assert-Match -Text $passed -Pattern '\(first deployment\)' -Because '全新集群(未上线前的首次部署)放行,不需要 -ConfirmRedisCoreRestart'
+
+    # 给了开关:放行,只打 [RedisCoreRestart]Confirmed 告警(带变化的键)。
     $ConfirmRedisCoreRestart = $true
-    $stubLive = [pscustomobject]@{ Exists = $true; Digest = '0000000000000000' }
-    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired 3>&1 | Out-String)
-    Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:' -Because '给了 -ConfirmRedisCoreRestart 时放行,但要留一条告警说明这次会重启 redis-0'
+    $stubLive = [pscustomobject]@{ Exists = $true; Digest = $desired; Json = $liveJson; LegacyDeployment = $false }
+    $stubDesired = New-RedisStsJson -Image 'redis:7.4'
+    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml $stsYaml 3>&1 | Out-String)
+    Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*spec\.containers' -Because '给了 -ConfirmRedisCoreRestart 时放行,但要留一条告警说明这次会重启 redis-0、变化在哪'
+    Assert-Equal -Expected 5 -Actual $queries.Value -Because '非 DryRun 下每次过闸都读一次线上现状(两次拒绝 + 一次相同 + 一次全新集群 + 一次带开关放行)'
+    Assert-Equal -Expected 4 -Actual $dryRuns.Value -Because '只有线上 sts 在时才预演(全新集群那一次不预演)'
 
-    # 不需要确认的两种:没给开关也放行。
-    $ConfirmRedisCoreRestart = $false
-    foreach ($stub in @([pscustomobject]@{ Exists = $true; Digest = $desired }, [pscustomobject]@{ Exists = $false; Digest = '' })) {
-        $stubLive = $stub
-        Assert-RedisCoreRestartConfirmed -DesiredDigest $desired
-    }
-    Assert-Equal -Expected 5 -Actual $queries.Value -Because '非 DryRun 下每次过闸都要读一次线上现状(两次拒绝 + 一次带开关放行 + 两次无需确认)'
-
-    # DryRun 不查集群:替身在 DryRun 下被调用就 throw,这里必须平安返回、查询次数不变。
+    # DryRun 不查集群也不预演:替身在 DryRun 下被调用就 throw,这里必须平安返回、次数不变。
     $DryRun = $true
-    $stubLive = [pscustomobject]@{ Exists = $true; Digest = '0000000000000000' }
-    Assert-RedisCoreRestartConfirmed -DesiredDigest $desired
+    Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml $stsYaml
     Assert-Equal -Expected 5 -Actual $queries.Value -Because 'DryRun 不连集群,重启闸只打一行说明'
+    Assert-Equal -Expected 4 -Actual $dryRuns.Value -Because 'DryRun 不做服务端预演'
+}
+
+Test-Case '重启闸 -StatefulSetRecreated(1 → 3):不做预演,直接按重启要求确认,拒绝文本里线上摘要写 <recreate>;给了开关只告警放行' {
+    $InfraNamespace = 'contract-redis-gate-upgrade'
+    $DryRun = $false
+    $stubLive = [pscustomobject]@{ Exists = $true; Digest = 'abcdef0123456789'; Json = (New-RedisStsJson); LegacyDeployment = $false }
+    function Get-LiveRedisCoreTemplateDigest { param([string]$Namespace) return $stubLive }
+    function Invoke-RedisStatefulSetServerDryRun { throw '1 → 3 时不该预演:线上单实例 sts 的 podManagementPolicy 创建后不可改,预演必然被拒' }
+
+    $ConfirmRedisCoreRestart = $false
+    $message = ''
+    try { Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' -StatefulSetYaml 'kind: StatefulSet' -StatefulSetRecreated } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern '<recreate>' -Because '线上一侧没有可比的模板,拒绝文本写明是重建'
+    Assert-Match -Text $message -Pattern '1 → 3 切换会先删再建 StatefulSet' -Because '拒绝文本说明为什么不做预演'
+    Assert-Match -Text $message -Pattern 'apply 会重启 redis-0,全服登录中断并重放 AOF' -Because '1 → 3 是 redis-0 带着全服重启'
+    Assert-Match -Text $message -Pattern '-ConfirmRedisCoreRestart' -Because '拒绝文本必须点名确认开关'
+
+    $ConfirmRedisCoreRestart = $true
+    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' -StatefulSetYaml 'kind: StatefulSet' -StatefulSetRecreated 3>&1 | Out-String)
+    Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*<recreate>' -Because '给了开关放行,告警写明是重建'
 }
 
 Test-Case '负向:线上只剩旧 Deployment redis(2026-09-19 之前的形态)时重启闸拒绝,写明停机切换、数据不迁移并点名 -ConfirmRedisCoreRestart;给了开关只告警放行' {
@@ -4066,12 +4553,13 @@ Test-Case '负向:线上只剩旧 Deployment redis(2026-09-19 之前的形态)�
     $DryRun = $false
     function Get-LiveRedisCoreTemplateDigest {
         param([string]$Namespace)
-        return [pscustomobject]@{ Exists = $false; Digest = ''; LegacyDeployment = $true }
+        return [pscustomobject]@{ Exists = $false; Digest = ''; Json = ''; LegacyDeployment = $true }
     }
+    function Invoke-RedisStatefulSetServerDryRun { throw '线上没有 sts/redis 时没有可比的对象,不该预演' }
 
     $ConfirmRedisCoreRestart = $false
     $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired } catch { $message = $_.Exception.Message }
+    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' } catch { $message = $_.Exception.Message }
     Assert-Match -Text $message -Pattern '还有旧的 deployment/redis' -Because '拒绝文本必须点明线上是旧 Deployment,不是「摘要不同」'
     Assert-Match -Text $message -Pattern '不迁移' -Because '切 StatefulSet 时 emptyDir 里的数据不迁移,拒绝文本必须说清'
     Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because '闸在 Apply-Infra 的任何写操作(含 delete deployment redis)之前'
@@ -4079,7 +4567,7 @@ Test-Case '负向:线上只剩旧 Deployment redis(2026-09-19 之前的形态)�
     Assert-Match -Text $message -Pattern ([regex]::Escape("namespace=$InfraNamespace")) -Because '拒绝文本必须点名 namespace'
 
     $ConfirmRedisCoreRestart = $true
-    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired 3>&1 | Out-String)
+    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' 3>&1 | Out-String)
     Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*legacy deployment/redis' -Because '给了开关放行,但要留一条告警说明这次会删旧 Deployment'
 }
 
@@ -4149,6 +4637,7 @@ Test-Case '重启闸读线上(Get-LiveRedisCoreTemplateDigest):kubectl 失败一
         $live = Get-LiveRedisCoreTemplateDigest -Namespace 'contract-ns'
         Assert-True -Condition ($live.Exists -and -not $live.LegacyDeployment) -Because '有 sts/redis 时存在、不是旧形态'
         Assert-Equal -Expected $digest -Actual $live.Digest -Because '摘要取自 sts 自己 metadata 上的注解'
+        Assert-True -Condition ($live.Json -ceq $stsJson) -Because '线上 sts 的完整 JSON 原样交给重启闸,与服务端预演结果比较 spec.template'
         Assert-Equal -Expected 1 -Actual $kubectlCalls.Count -Because '有 sts 时不必再查 Deployment'
     }
     finally {
@@ -4550,44 +5039,47 @@ Test-Case '孤儿 redis Pod 推算线上副本数:0..n-1 连续 → n;缺号 →
 
 Test-Case '重启闸 orphan-pods:没有 sts 与旧 Deployment 但孤儿 redis Pod 仍在服务时拒绝、点名 Pod 与 -ConfirmRedisCoreRestart;给了开关只告警放行' {
     $InfraNamespace = 'contract-redis-gate-orphan'
-    $stubLive = [pscustomobject]@{ Exists = $false; Digest = ''; LegacyDeployment = $false; OrphanPods = @(0) }
+    $stubLive = [pscustomobject]@{ Exists = $false; Digest = ''; Json = ''; LegacyDeployment = $false; OrphanPods = @(0) }
     function Get-LiveRedisCoreTemplateDigest {
         param([string]$Namespace)
         return $stubLive
     }
+    function Invoke-RedisStatefulSetServerDryRun { throw '线上没有 sts/redis 时没有可比的对象,不该预演' }
     $DryRun = $false
     $ConfirmRedisCoreRestart = $false
     $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' } catch { $message = $_.Exception.Message }
+    try { Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' -StatefulSetYaml 'kind: StatefulSet' } catch { $message = $_.Exception.Message }
     Assert-Match -Text $message -Pattern 'Pod redis-0 仍在服务' -Because '拒绝文本要点名孤儿 Pod'
     Assert-Match -Text $message -Pattern '-ConfirmRedisCoreRestart' -Because '拒绝文本必须点名确认开关'
     Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because '闸在 Apply-Infra 的任何写操作之前'
     $ConfirmRedisCoreRestart = $true
-    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' 3>&1 | Out-String)
+    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' -StatefulSetYaml 'kind: StatefulSet' 3>&1 | Out-String)
     Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*orphan pods redis-0' -Because '给了开关放行,告警写明收养孤儿 Pod'
 }
 
 Test-Case '重启闸 -RollingHandover(线上与本次都是高可用):拒绝文本写「逐个滚动重启 3 个 redis Pod」并点名 -ConfirmRedisCoreRestart;给了开关只告警放行;不传时仍是单实例文本' {
     $InfraNamespace = 'contract-redis-gate-ha'
     $desired = 'abcdef0123456789'
-    $stubLive = [pscustomobject]@{ Exists = $true; Digest = '0000000000000000' }
+    $stubLive = [pscustomobject]@{ Exists = $true; Digest = $desired; Json = (New-RedisStsJson -Image 'redis:7.2'); LegacyDeployment = $false }
     function Get-LiveRedisCoreTemplateDigest {
         param([string]$Namespace)
         return $stubLive
     }
+    # 预演结果换了镜像:高可用形态下 = 逐个滚动 3 个 redis Pod。
+    function Invoke-RedisStatefulSetServerDryRun { param([string]$Namespace, [string]$StatefulSetYaml) return (New-RedisStsJson -Image 'redis:7.4') }
     $DryRun = $false
     $ConfirmRedisCoreRestart = $false
     $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -RollingHandover } catch { $message = $_.Exception.Message }
+    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' -RollingHandover } catch { $message = $_.Exception.Message }
     Assert-Match -Text $message -Pattern '逐个滚动重启 3 个 redis Pod' -Because '高可用形态下模板变化 = 逐个滚动,每个先交接主,不是「重启 redis-0、重放 AOF」'
     Assert-NotMatch -Text $message -Pattern '重放 AOF' -Because '高可用形态的拒绝文本不能沿用单实例的后果描述'
     Assert-Match -Text $message -Pattern '-ConfirmRedisCoreRestart' -Because '拒绝文本必须点名确认开关'
     Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because '闸在 Apply-Infra 的任何写操作之前'
     $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired } catch { $message = $_.Exception.Message }
+    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' } catch { $message = $_.Exception.Message }
     Assert-Match -Text $message -Pattern 'apply 会重启 redis-0,全服登录中断并重放 AOF' -Because '不传 -RollingHandover(单实例、1 → 3 切换)仍是 redis-0 带着全服重启'
     $ConfirmRedisCoreRestart = $true
-    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -RollingHandover 3>&1 | Out-String)
+    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' -RollingHandover 3>&1 | Out-String)
     Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*rolls the 3 redis pods one at a time' -Because '给了开关放行,告警写明是逐个滚动'
 }
 
@@ -4608,6 +5100,11 @@ Test-Case 'Apply-Infra 的共享 Redis 顺序(AST):拓扑变更闸 → 高可用
     Assert-True -Condition ($topologyGate.Extent.StartOffset -lt $sentinelSafe.Extent.StartOffset -and $sentinelSafe.Extent.StartOffset -lt $restartGate.Extent.StartOffset -and $haLimits.Extent.StartOffset -lt $restartGate.Extent.StartOffset) -Because '拓扑变更闸、口令字符集、连接上限不等式都要先于重启闸'
     Assert-True -Condition ($restartGate.Extent.StartOffset -lt $ensureNs.Extent.StartOffset) -Because '三道检查都要先于第一个写操作(Ensure-Namespace)'
     Assert-Match -Text $restartGate.Extent.Text -Pattern '-RollingHandover:\(\$redisTopology\.HighAvailability -and \$redisTopologyVerdict -eq ''unchanged''\)' -Because '只有线上与本次都是高可用时才换成滚动交接的说法;1 → 3 仍是 redis-0 重启'
+    Assert-Match -Text $restartGate.Extent.Text -Pattern '-StatefulSetRecreated:\(\$redisTopologyVerdict -eq ''upgrade''\)' -Because '1 → 3 要先删再建 StatefulSet,拿线上对象预演必然被拒,闸直接按重启处理'
+    Assert-Match -Text $restartGate.Extent.Text -Pattern '-StatefulSetYaml \$redisStatefulSetForGate\b' -Because '预演提交的 sts 是专门取出的那一份'
+    $gateDoc = @($applyInfra.Body.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$redisStatefulSetForGate' }, $true))
+    Assert-Equal -Expected 1 -Actual $gateDoc.Count -Because '预演用的 sts 只取一次'
+    Assert-Match -Text $gateDoc[0].Right.Extent.Text -Pattern '^Get-RedisStatefulSetDocument -ManifestContent \$redisManifestRendered\.Replace\(\$script:RedisPodTemplateDigestPlaceholder, \$redisPodTemplateDigest\)$' -Because '预演的是循环里真正 apply 的同一份内容(同一次读盘,摘要占位已换成同一个值)'
     $orphan = @($commands | Where-Object { $_.GetCommandName() -eq 'Invoke-Kubectl' -and $_.Extent.Text -match '--cascade=orphan' })
     Assert-Equal -Expected 1 -Actual $orphan.Count -Because 'Apply-Infra 里只有一处 orphan 删除'
     $guarded = $false
@@ -5015,6 +5512,50 @@ Test-Case '本地预建清单与 K8s 同一份观战 topic 契约:deploy/docker-
     }
 }
 
+# 世界频道广播 topic(docs/design/chat-world-channel-fanout.md §4):chat 写、每台 gate assign 全部分区读。
+# 基名与分区数的真源是 C++ 常量(go/shared/kafkacmd 的对拍用例另守 Go 那一份),部署侧四处预建必须同一契约,
+# 少建或分区数不对时 gate 起不来或推送静默全丢。
+$ChatWorldBroadcastPartitions = [regex]::Match($SpectateTopicHeader, 'kChatWorldBroadcastTopicPartitions\s*=\s*(\d+)\s*;').Groups[1].Value
+
+Test-Case '世界频道广播 topic:基名与分区数以 C++ 常量为准,kafka-topic-init 与本地三份预建清单同一契约' {
+    Assert-Match -Text $SpectateTopicHeader -Pattern 'kChatWorldBroadcastTopicBase\s*=\s*"chat-world-bcast"' -Because 'gate 按它拼 topic 名,部署侧预建的是 chat-world-bcast_g<N>'
+    Assert-Equal -Expected '4' -Actual $ChatWorldBroadcastPartitions -Because '分区数是不可变契约,改数走换代号,并同步 Apply-KafkaTopicInitJob、compose、start_game、docker 调试栈与 go/shared/kafkacmd'
+    $generation = Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicGeneration'
+    $job = Select-ManifestByName -Output $battleInfraRun.Output -Name 'kafka-topic-init'
+    Assert-True -Condition ($null -ne $job) -Because 'infra-up 产物里应当有 kafka-topic-init'
+    Assert-Match -Text $job -Pattern "name: CHAT_WORLD_BROADCAST_TOPIC\s+value: `"chat-world-bcast_g$generation`"" -Because '代号与命令 topic 同源,否则 chat 写进 gate 不读的 topic'
+    Assert-Match -Text $job -Pattern "name: CHAT_WORLD_BROADCAST_PARTITIONS\s+value: `"$ChatWorldBroadcastPartitions`"" -Because '预建分区数必须等于 C++ 常量:gate 按它 assign 全部分区'
+    Assert-Match -Text $job -Pattern 'ensure_topic "\$CHAT_WORLD_BROADCAST_TOPIC" "\$CHAT_WORLD_BROADCAST_PARTITIONS" 600000' -Because '保留 10 分钟:gate 从分区末尾读,漏掉的推送由客户端拉历史补'
+    $repo = Get-RepoRoot
+    $compose = [IO.File]::ReadAllText((Join-Path $repo 'deploy/docker-compose.yml'))
+    foreach ($line in @(
+        ('create_topic "chat-world-bcast_g$$cg" {0} "retention.ms=600000"' -f $ChatWorldBroadcastPartitions)
+        ('assert_partitions "chat-world-bcast_g$$cg" {0}' -f $ChatWorldBroadcastPartitions)
+        'ensure_retention "chat-world-bcast_g$$cg" 600000'
+    )) {
+        Assert-True -Condition $compose.Contains($line) -Because "deploy/docker-compose.yml 的 kafka-topic-init 应当有这一行:$line"
+    }
+    $startGame = [IO.File]::ReadAllText((Join-Path $repo 'tools/scripts/start_game.ps1'))
+    $spec = '@{{Name="chat-world-bcast_g$generation";Partitions={0};RetentionMs=600000}}' -f $ChatWorldBroadcastPartitions
+    Assert-True -Condition $startGame.Contains($spec) -Because "start_game.ps1 启动前核对的主题清单应当有:$spec"
+    $dockerDebug = [IO.File]::ReadAllText((Join-Path $repo 'tools/scripts/prepare_docker_debug.py'))
+    foreach ($text in @(
+        '(f"chat-world-bcast_g{commands[''CommandTopicGeneration'']}", CHAT_WORLD_BROADCAST_PARTITIONS, 600000)'
+        "CHAT_WORLD_BROADCAST_PARTITIONS = $ChatWorldBroadcastPartitions"
+    )) {
+        Assert-True -Condition $dockerDebug.Contains($text) -Because "prepare_docker_debug.py 应当有:$text"
+    }
+}
+
+Test-Case 'chat ConfigMap:带世界频道推送的 Kafka brokers,WorldHistoryCacheMs 逐字镜像服务 yaml' {
+    Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
+    $chatConfig = Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-chat-config'
+    Assert-True -Condition ($null -ne $chatConfig) -Because 'infra-up 产物里应当有 go-svc-chat-config'
+    Assert-Match -Text $chatConfig -Pattern 'Kafka:\s+Brokers:\s+- "kafka\.[a-z0-9-]+:9092"' -Because '没有 brokers 时 chat 不推,玩家只能靠拉历史看到世界频道的新消息'
+    $cacheMs = Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'WorldHistoryCacheMs'
+    Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldHistoryCacheMs: {0}\s*$" -f [regex]::Escape($cacheMs)) -Because '世界频道快照时长与服务 yaml 同一个值'
+}
+
 Test-Case '本机 dev 值:bin/etc 的 SpectateTokenSecret == match 的 Spectate.TicketSecret,形状合格,与 gate / battle 令牌的 dev 值都不同;OpsCallerSecret 形状合格且不复用' {
     $cppYaml = 'bin/etc/base_deploy_config.yaml'
     $matchYaml = 'go/match/etc/match_service.yaml'
@@ -5362,6 +5903,110 @@ Test-Case 'match-alerts.yaml:PrometheusRule 形状;规则引用的 match_* 指�
     }
 }
 
+Test-Case 'match-result-consumer-alerts.yaml:PrometheusRule 形状;规则名单钉死;引用的 match_* 指标都由 go/match/internal/metrics 注册;丢结果为 critical(r2-kc#1)' {
+    $repo = Get-RepoRoot
+    $alerts = [IO.File]::ReadAllText((Join-Path $repo 'deploy/k8s/match-result-consumer-alerts.yaml')) -replace "`r`n", "`n"
+    Assert-Match -Text $alerts -Pattern '(?m)^kind:[ ]*PrometheusRule[ ]*$' -Because '必须是 PrometheusRule(与 match-alerts.yaml 同一安装方式)'
+    $metricsDir = Join-Path $repo 'go/match/internal/metrics'
+    $sources = @(Get-ChildItem -LiteralPath $metricsDir -Filter '*.go' | Where-Object { $_.Name -notlike '*_test.go' } | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
+    $registered = @([regex]::Matches($sources, 'Name:\s*"(?<n>[a-z0-9_]+)"') | ForEach-Object { 'match_' + $_.Groups['n'].Value })
+    $referenced = @([regex]::Matches($alerts, '\bmatch_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-True -Condition ($referenced.Count -ge 1) -Because '告警必须实际引用 match 指标'
+    foreach ($name in $referenced) {
+        Assert-True -Condition ($registered -contains $name) -Because "告警指标 $name 必须由 go/match/internal/metrics 注册"
+    }
+    $names = @([regex]::Matches($alerts, '(?m)^\s+- alert: (?<n>\S+)\s*$') | ForEach-Object { $_.Groups['n'].Value })
+    Assert-Equal -Expected 'MatchResultConsumerLagging,MatchResultConsumerRetentionGap,MatchResultLagProbeBlind' -Actual ($names -join ',') -Because '规则名单钉死(积压不归零 / 保留期删掉未消费结果 / 探针失明)'
+    foreach ($field in @('for:', 'severity:', 'summary:', 'description:')) {
+        Assert-Equal -Expected $names.Count -Actual ([regex]::Matches($alerts, ('(?m)^\s+{0}' -f [regex]::Escape($field))).Count) -Because "每条规则都要有 $field"
+    }
+    $gap = [regex]::Match($alerts, '(?ms)^\s+- alert: MatchResultConsumerRetentionGap\s*\n(?<body>.*?)(?=^\s+- alert: |\z)')
+    Assert-True -Condition $gap.Success -Because '丢结果规则必须存在'
+    Assert-Match -Text $gap.Groups['body'].Value -Pattern '(?m)^\s+severity:\s*critical\s*$' -Because '保留期删掉未消费的对局结果 = 结果已丢,必须呼叫'
+    # 积压不前进(2026-11-06 评审跟进):按「有积压的分区上已提交位点多久没动」判,不再按积压条数。
+    $lagging = [regex]::Match($alerts, '(?ms)^\s+- alert: MatchResultConsumerLagging\s*\n(?<body>.*?)(?=^\s+- alert: |\z)')
+    Assert-True -Condition $lagging.Success -Because '积压不前进规则必须存在'
+    $laggingExpr = [regex]::Match($lagging.Groups['body'].Value, '(?ms)^\s+expr: \|\s*\n(?<e>.*?)^\s+for:').Groups['e'].Value
+    Assert-Match -Text $laggingExpr -Pattern 'max\(match_result_consumer_commit_stall_seconds\) >= 900' -Because '高负载下逐条提交的消费者积压几乎从不为 0 而位点一直在前进,只能按位点停了多久判;按分区算,单个分区卡住也报'
+    Assert-NotMatch -Text $laggingExpr -Pattern 'lag_messages' -Because '「合计积压 > 0 持续 15m」在高负载下误报,已废弃'
+    $consumerGo = [IO.File]::ReadAllText((Join-Path $repo 'go/match/internal/kafka/result_consumer.go'))
+    Assert-Match -Text $consumerGo -Pattern 'metrics\.SetResultConsumerCommitStall\(lag\.CommitStall\)' -Because '探针每轮成功都要把停滞时长写进告警引用的 gauge'
+    Assert-Match -Text $consumerGo -Pattern 'cfg\.BindLagProbe\(done\)' -Because '探针 goroutine 要纳入关停 join(StopAndReport 等它退出)'
+}
+
+Test-Case 'data-service-audit-alerts.yaml:消费组卡住按「位点停下后新到的消息 15 分钟没被提交」判;停滞时长 gauge 由 go/data_service/internal/metrics 注册,探针按 reader 模式口径写(r2-kc#1 评审跟进)' {
+    $repo = Get-RepoRoot
+    $alerts = [IO.File]::ReadAllText((Join-Path $repo 'deploy/k8s/data-service-audit-alerts.yaml')) -replace "`r`n", "`n"
+    $stalled = [regex]::Match($alerts, '(?ms)^\s+- alert: DataServiceAuditConsumerStalled\s*\n(?<body>.*?)(?=^\s+- alert: |\z)')
+    Assert-True -Condition $stalled.Success -Because '消费组卡住规则必须存在'
+    $expr = [regex]::Match($stalled.Groups['body'].Value, '(?ms)^\s+expr: \|\s*\n(?<e>.*?)^\s+for:').Groups['e'].Value
+    Assert-Match -Text $expr -Pattern 'max by \(consumer\) \(data_service_kafka_consumer_commit_stall_seconds\) >= 900' -Because '按分区上新到的消息多久没被提交判'
+    Assert-Match -Text $expr -Pattern 'max by \(consumer\) \(data_service_kafka_consumer_up\) == 1' -Because '只抓活着但不前进;反复停机由 DataServiceAuditConsumerStopped 报'
+    Assert-NotMatch -Text $expr -Pattern 'messages_total|lag_messages' -Because 'reader 模式提交失败交还的已落库记录会让低流量 topic 长期挂着积压、零处理,按积压或处理计数判都会误报'
+    $metricsGo = [IO.File]::ReadAllText((Join-Path $repo 'go/data_service/internal/metrics/metrics.go'))
+    Assert-Match -Text $metricsGo -Pattern 'Name:\s*"kafka_consumer_commit_stall_seconds"' -Because '告警引用的停滞时长 gauge 必须由 data_service 注册'
+    $probeGo = [IO.File]::ReadAllText((Join-Path $repo 'go/data_service/internal/kafka/lag_probe.go'))
+    Assert-Match -Text $probeGo -Pattern 'CommitStall\{RequireArrivals: true\}' -Because '探针必须只认位点停下之后新到的消息(reader 模式口径)'
+}
+
+Test-Case 'match-outcome-outbox-alerts.yaml:PrometheusRule 形状;规则名单钉死;只看个人结算首投(kind=first)最老一行的年龄;阈值与 scene 冻结常量同源(r2-v1#1 残余窗口)' {
+    $repo = Get-RepoRoot
+    $alerts = [IO.File]::ReadAllText((Join-Path $repo 'deploy/k8s/match-outcome-outbox-alerts.yaml')) -replace "`r`n", "`n"
+    Assert-Match -Text $alerts -Pattern '(?m)^kind:[ ]*PrometheusRule[ ]*$' -Because '必须是 PrometheusRule(与 match-alerts.yaml 同一安装方式)'
+    $metricsDir = Join-Path $repo 'go/match/internal/metrics'
+    $sources = @(Get-ChildItem -LiteralPath $metricsDir -Filter '*.go' | Where-Object { $_.Name -notlike '*_test.go' } | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
+    $registered = @([regex]::Matches($sources, 'Name:\s*"(?<n>[a-z0-9_]+)"') | ForEach-Object { 'match_' + $_.Groups['n'].Value })
+    $referenced = @([regex]::Matches($alerts, '\bmatch_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-True -Condition ($referenced -contains 'match_outcome_outbox_oldest_pending_age_seconds') -Because '告警按最老待投年龄判'
+    foreach ($name in $referenced) {
+        Assert-True -Condition ($registered -contains $name) -Because "告警指标 $name 必须由 go/match/internal/metrics 注册"
+    }
+    # kind 只认首投:waiting 里有长期离线的玩家,年龄不代表积压。取值必须是 outcome_outbox.go 的封闭集合。
+    $kinds = @([regex]::Matches($alerts, '\bkind="(?<k>[a-z_]+)"') | ForEach-Object { $_.Groups['k'].Value } | Sort-Object -Unique)
+    Assert-Equal -Expected 'first' -Actual ($kinds -join ',') -Because '两条规则都只看还没进收件箱的个人结算(kind=first)'
+    $outboxGo = [IO.File]::ReadAllText((Join-Path $repo 'go/match/internal/authority/outcome_outbox.go'))
+    Assert-Match -Text $outboxGo -Pattern '(?m)^\s*OutboxKindFirst\s*=\s*"first"' -Because 'kind=first 必须是 authority.OutboxKindFirst(改名后告警静默失效)'
+    $names = @([regex]::Matches($alerts, '(?m)^\s+- alert: (?<n>\S+)\s*$') | ForEach-Object { $_.Groups['n'].Value })
+    Assert-Equal -Expected 'MatchSettlementInboxLagging,MatchSettlementInboxStalled' -Actual ($names -join ',') -Because '规则名单钉死(首投落后于投递余量 / 逼近续冻上限)'
+    foreach ($field in @('for:', 'severity:', 'summary:', 'description:')) {
+        Assert-Equal -Expected $names.Count -Actual ([regex]::Matches($alerts, ('(?m)^\s+{0}' -f [regex]::Escape($field))).Count) -Because "每条规则都要有 $field"
+    }
+    # 阈值与 scene 的冻结常量同源(turn-battle-gap-closure.md §11.2):冻结到期 = 截止 + 终局宽限 + 投递余量,
+    # 续冻上限 = 到期后 kFreezeHoldCapMs。改了 scene 的常量,这里会逼着同步改告警阈值。
+    $header = [IO.File]::ReadAllText((Join-Path $repo 'cpp/libs/services/scene/battle/system/player_battle.h'))
+    $constantSeconds = {
+        param([string]$Name)
+        $m = [regex]::Match($header, ('static constexpr uint64_t {0} = (?<e>\d+ULL(?:\s*\*\s*\d+ULL)*);' -f [regex]::Escape($Name)))
+        Assert-True -Condition $m.Success -Because "夹具前提:能从 player_battle.h 读到 $Name(形如 15ULL * 60ULL * 1000ULL)"
+        $ms = [uint64]1
+        foreach ($factor in ($m.Groups['e'].Value -split '\*')) { $ms = [uint64]($ms * [uint64]($factor.Trim() -replace 'ULL$', '')) }
+        [uint64]($ms / 1000)
+    }
+    $deliveryMarginSec = & $constantSeconds 'kInboxSettlementDeliveryMarginMs'
+    $holdCapSec = & $constantSeconds 'kFreezeHoldCapMs'
+    $ruleOf = {
+        param([string]$Name)
+        $rule = [regex]::Match($alerts, ('(?ms)^\s+- alert: {0}\s*\n(?<body>.*?)(?=^\s+- alert: |\z)' -f [regex]::Escape($Name)))
+        Assert-True -Condition $rule.Success -Because "$Name 必须存在"
+        $rule.Groups['body'].Value
+    }
+    $thresholdOf = {
+        param([string]$Body, [string]$Name)
+        $m = [regex]::Match($Body, '(?m)^\s+max\(match_outcome_outbox_oldest_pending_age_seconds\{kind="first"\}\) > (?<t>\d+)\s*$')
+        Assert-True -Condition $m.Success -Because "$Name 的表达式必须是 max(最老首投年龄) > 秒数:所有副本读同一份 SQL,某副本读失败留下的陈值只会让 max 偏保守"
+        [uint64]$m.Groups['t'].Value
+    }
+    $lagging = & $ruleOf 'MatchSettlementInboxLagging'
+    Assert-Match -Text $lagging -Pattern '(?m)^\s+severity:\s*warning\s*$' -Because '首投落后、玩家开始续冻是 warning(结算一到自动解冻)'
+    $laggingSec = & $thresholdOf $lagging 'MatchSettlementInboxLagging'
+    Assert-True -Condition ($laggingSec -le $deliveryMarginSec) -Because "warning 阈值 $laggingSec 秒不能超过收件箱投递余量 $deliveryMarginSec 秒:再晚,打满时限的局到期时结算还没到,scene 已经开始续冻"
+    $stalled = & $ruleOf 'MatchSettlementInboxStalled'
+    Assert-Match -Text $stalled -Pattern '(?m)^\s+severity:\s*critical\s*$' -Because '逼近续冻上限必须呼叫:到上限之后才到的结算按持有量夹紧消耗'
+    $stalledSec = & $thresholdOf $stalled 'MatchSettlementInboxStalled'
+    Assert-True -Condition ($stalledSec -gt $laggingSec) -Because 'critical 阈值必须高于 warning'
+    Assert-True -Condition (($stalledSec + 600) -le $holdCapSec) -Because "critical 阈值 $stalledSec 秒离续冻上限 $holdCapSec 秒至少要留 10 分钟(告警链路约 3 分钟 + 改参数滚动或扩副本约 5 分钟 + 排空)"
+}
+
 Test-Case 'rank SQL指标与告警同源:确认提交与回放分开，奖励真实延迟及失败保旧，无Redis消费者真相' {
     $repo = Get-RepoRoot
     $alerts = [IO.File]::ReadAllText((Join-Path $repo 'deploy/k8s/rank-alerts.yaml')) -replace "`r`n", "`n"
@@ -5422,6 +6067,16 @@ Test-Case 'rank SQL指标与告警同源:确认提交与回放分开，奖励真
     }
     Assert-Match -Text $invalid.Expr -Pattern 'and on\(instance\) \(time\(\) - process_start_time_seconds\) < 900' -Because '覆盖进程首次抓取前已增长'
     Assert-Match -Text $rankMetricsGo -Pattern 'dueDelay: prometheus.NewGaugeVec' -Because '首次成功扫描前不能发布伪造的0'
+    # 放弃终态(2026-11-05):明确拒收且已过期或次数到顶,工作器不再投,出现一次就要人工核对重投。
+    $abandoned = & $rule 'RankRewardAbandoned'
+    Assert-Equal -Expected '0m' -Actual $abandoned.For -Because '奖励转放弃终态一次即需人工处理'
+    $abandonedParts = @($abandoned.Expr -split '(?m)^[ \t]+or[ \t]*$' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    Assert-Equal -Expected 2 -Actual $abandonedParts.Count -Because '放弃同样覆盖increase与首次抓取前增长两个窗口'
+    foreach ($part in $abandonedParts) {
+        Assert-Match -Text $part -Pattern ('rank_reward_dispatch_total\{{outcome="{0}"\}}' -f [regex]::Escape((& $outcomeOf 'RewardAbandoned'))) -Because '两个窗口均只能选择abandoned'
+    }
+    Assert-Match -Text $abandoned.Expr -Pattern 'and on\(instance\) \(time\(\) - process_start_time_seconds\) < 900' -Because '覆盖进程首次抓取前已增长'
+    Assert-NotMatch -Text $dispatch.Expr -Pattern 'abandoned' -Because '终态单独告警,不混进持续投递失败'
     Assert-NotMatch -Text $alerts -Pattern 'rating_snapshot|RatingSnapshot' -Because '评分快照已退役,榜的写入走全球权威库'
 }
 
@@ -7303,6 +7958,25 @@ Test-Case '存盘告警 player-store-alerts.yaml:PrometheusRule 形状、每条�
         $body = & $ruleOf $check.Rule
         Assert-Match -Text $body -Pattern $check.Pattern -Because "$($check.Rule) 的选择器"
         Assert-Match -Text $body -Pattern ('(?m)^            severity:[ ]*' + $check.Severity + '[ ]*$') -Because "$($check.Rule) 的级别是 $($check.Severity)"
+    }
+    # scene 侧那一条(第一轮数据审计 §4 第 2 条:超过传输上限的存盘 scene 发送前就拒掉,go/db 看不见):
+    # 指标名由 scene 的 Prometheus 采集器注册,result 取值只能是 player_store_refused_stats::kCounterNames,改名会让告警静默失效。
+    $sceneRule = & $ruleOf 'ScenePlayerStoreSaveRefused'
+    Assert-Match -Text $sceneRule -Pattern 'increase\(scene_player_store_save_refused_total\[' -Because 'ScenePlayerStoreSaveRefused 选 scene 的拒存计数'
+    Assert-Match -Text $sceneRule -Pattern '(?m)^            severity:[ ]*critical[ ]*$' -Because 'ScenePlayerStoreSaveRefused 是 critical(这名玩家的进度在丢)'
+    $sceneCollector = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'cpp/libs/services/scene/player/system/player_ownership_metrics.cpp'))
+    Assert-Match -Text $sceneCollector -Pattern 'BeginFamily\("scene_player_store_save_refused_total"' -Because 'scene_player_store_save_refused_total 必须由 player_ownership_metrics.cpp 注册(名字逐字一致)'
+    $lifecycleHeader = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'cpp/libs/services/scene/player/system/player_lifecycle.h'))
+    $refusedNames = [regex]::Match($lifecycleHeader, '(?s)namespace player_store_refused_stats.*?kCounterNames\[\]\s*=\s*\{(?<b>[^}]*)\}')
+    Assert-True -Condition $refusedNames.Success -Because '夹具前提:能从 player_lifecycle.h 读到 player_store_refused_stats::kCounterNames'
+    $sceneResults = @([regex]::Matches($refusedNames.Groups['b'].Value, '"(?<v>[a-z_]+)"') | ForEach-Object { $_.Groups['v'].Value })
+    Assert-True -Condition ($sceneResults -ccontains 'too_large') -Because '夹具前提:kCounterNames 里有 too_large'
+    foreach ($m in [regex]::Matches($exprs, 'scene_player_store_save_refused_total\{(?<sel>[^}]*)\}')) {
+        foreach ($r in [regex]::Matches($m.Groups['sel'].Value, '\bresult\s*(?:=~|=)\s*"(?<v>[^"]*)"')) {
+            foreach ($literal in ($r.Groups['v'].Value -split '\|')) {
+                Assert-True -Condition ($sceneResults -ccontains $literal) -Because "scene 的 result 取值 $literal 必须是 player_store_refused_stats::kCounterNames 之一"
+            }
+        }
     }
     # 序列要预建,否则「从无到 1」的第一次 increase 抓不到。预建写在 go/db 启动路径上。
     Assert-Match -Text ([IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/db/internal/playerstore/server.go'))) -Pattern 'metrics\.PrimePlayerStore\(' -Because 'NewServer 要预建 db_player_store_requests_total 的全部取值'

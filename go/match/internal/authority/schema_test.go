@@ -96,3 +96,21 @@ func TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema(t *testing.T
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_name='match_global_policy'", database).Scan(&remaining))
 	require.Zero(t, remaining, "运行检查不得偷偷补DDL")
 }
+
+// 旧库迁移只补列、不补普通索引:观战意图清理用的索引缺了,启动核对必须拒绝接流,
+// 不能带着每分钟一次的全表扫描上线(观战第二轮评审 R2-GO 一般-4)。
+func TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex(t *testing.T) {
+	s := testStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	require.NoError(t, s.CheckCandidateIndexes(ctx))
+	var index string
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT index_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='match_spectator_intent' AND seq_in_index=1 AND column_name='state' LIMIT 1").Scan(&index))
+	_, err := s.DB.ExecContext(ctx, fmt.Sprintf("DROP INDEX `%s` ON match_spectator_intent", index))
+	require.NoError(t, err)
+
+	err = s.CheckCandidateIndexes(ctx)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "match_spectator_intent")
+}

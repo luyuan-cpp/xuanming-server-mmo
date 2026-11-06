@@ -94,4 +94,7 @@ const (
 	// match 只签发凭证,这个码由 gate 在 SubscribeSpectate 验签失败时回客户端;写在这里是让 match 段的全量护栏
 	// (errors_test.go)也覆盖它。
 	ErrSpectateTicketInvalid = uint32(table.MatchError_kMatchSpectateTicketInvalid)
+	// ErrBattleReportNotFound:取战报回放时,这一局不在本人的战报列表里(不存在、已被挤出或不是参战者),
+	// 或者这一局没存回放正文。几种情况统一回这一个码,不暴露别人的对局是否存在(battle-report-replay.md BR-9)。
+	ErrBattleReportNotFound = uint32(table.MatchError_kMatchBattleReportNotFound)
 )

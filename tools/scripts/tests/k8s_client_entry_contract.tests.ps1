@@ -630,6 +630,45 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
     }
 }
 
+Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共 env 之后,三个生成器都写;不给或空列表时逐字不变;名字非法、缺键、重名在打包时 throw' {
+    # k8s_deploy.ps1 经 -SecretEnv 传 zone Redis 口令 ZONE_REDIS_PASSWORD(Get-CppZoneRedisSecretEnvEntries):口令只在 Secret redis-auth 里,
+    # 不进 battle-node-config / node-config。optional: false 让 Secret 缺失的 Pod 停在 CreateContainerConfigError,不带空口令起来。
+    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; SnowflakeCacheDir = '/app/snowflake-cache'; LogVolumeSizeLimit = '2Gi' }
+    $secretEnv = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'redis-auth'; SecretKey = 'password' })
+    $plain = New-ClientEntryPodCommon @commonArgs
+    $emptySecret = New-ClientEntryPodCommon @commonArgs -SecretEnv @()
+    $withSecret = New-ClientEntryPodCommon @commonArgs -SecretEnv $secretEnv
+    # 拷贝语义:打包之后再改调用方的列表,不影响已打包的 PodCommon。
+    $secretEnv[0]['SecretName'] = 'changed-after-pack'
+    $renderers = @(
+        @{ Name = 'gate StatefulSet'; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' } }
+        @{ Name = 'battle Fleet'; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
+        @{ Name = 'battle hostPort'; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
+    )
+    $refPattern = '(?m)^(?<ind>[ ]+)- name: ZONE_REDIS_PASSWORD\n\k<ind>  valueFrom:\n\k<ind>    secretKeyRef:\n\k<ind>      name: redis-auth\n\k<ind>      key: password\n\k<ind>      optional: false$'
+    foreach ($r in $renderers) {
+        $plainDoc = ConvertTo-LfText (& $r.Render $plain)
+        $emptyDoc = ConvertTo-LfText (& $r.Render $emptySecret)
+        $secretDoc = ConvertTo-LfText (& $r.Render $withSecret)
+        Assert-True -Condition ($plainDoc -ceq $emptyDoc) -Because "$($r.Name):空列表与不传逐字相同(dev 无口令时生成物不变)"
+        Assert-NotMatch -Text $plainDoc -Pattern 'ZONE_REDIS_PASSWORD' -Because "$($r.Name):不传时不写"
+        Assert-Match -Text $secretDoc -Pattern $refPattern -Because "$($r.Name):渲染成 secretKeyRef,且 optional: false"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($secretDoc, '(?m)^[ ]+- name: ZONE_REDIS_PASSWORD$').Count) -Because "$($r.Name):只写一份"
+        Assert-True -Condition ($secretDoc.IndexOf('- name: SNOWFLAKE_CACHE_DIR') -ge 0 -and $secretDoc.IndexOf('- name: SNOWFLAKE_CACHE_DIR') -lt $secretDoc.IndexOf('- name: ZONE_REDIS_PASSWORD')) -Because "$($r.Name):接在公共 env 之后(排在前面的 env 才能被 `$(VAR) 引用,它不被任何 env 引用,放最后不影响展开)"
+        Assert-NotMatch -Text $secretDoc -Pattern 'changed-after-pack' -Because "$($r.Name):打包时拷一份,之后改调用方的列表不影响"
+    }
+
+    foreach ($bad in @(
+        @{ Why = '名字不是大写环境变量名'; Env = @(@{ Name = 'zone-redis'; SecretName = 'redis-auth'; SecretKey = 'password' }); Pattern = '大写环境变量名' }
+        @{ Why = '缺 SecretKey'; Env = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'redis-auth'; SecretKey = '' }); Pattern = '同时给 SecretName 与 SecretKey' }
+        @{ Why = '重名'; Env = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'a'; SecretKey = 'k' }, @{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'b'; SecretKey = 'k' }); Pattern = '不止一次' }
+    )) {
+        $err = $null
+        try { New-ClientEntryPodCommon @commonArgs -SecretEnv $bad.Env | Out-Null } catch { $err = $_.Exception.Message }
+        Assert-Match -Text $err -Pattern $bad.Pattern -Because "$($bad.Why):打包时就 throw,不渲染出坏的 env"
+    }
+}
+
 Test-Case '库:gateway Ingress 只路由 /api(Prefix),{zone} 生成期渲染,TLS 可选;/admin 与 /actuator 不出集群' {
     $ing = ConvertTo-LfText (New-GatewayIngressYaml -IngressHost 'play.{zone}.example.com' -ZoneName 'z1' -TlsSecret 'gw-tls')
     Assert-Match -Text $ing -Pattern '(?m)^apiVersion: networking\.k8s\.io/v1$' -Because 'Ingress v1'
@@ -1812,7 +1851,7 @@ function Invoke-Wrapper {
 $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHostTemplate', 'GateNodePortBase', 'GateExternalTrafficPolicy', 'BattleOrchestrator',
     'RequireClientEndpoint', 'AllowDisruptiveSwitch')
 # 共享 Redis 按用途拆实例(G4a 第 1a 批)三条包装链都透传的键(非 auto / 非空 / 被指定时才传,见各包装函数)。
-$RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueMaxMemory')
+$RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueMaxMemory', 'RedisCtlMaxMemory', 'ConfirmRedisCtlSwitch')
 # 玩家域 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage')
 # 逻辑库只走 dev_tools → k8s_deploy(给了才传):k8s_image.ps1 不部署 Go 服务,用不到它们。不粘滞:漏传 = staging / prod 被拒。

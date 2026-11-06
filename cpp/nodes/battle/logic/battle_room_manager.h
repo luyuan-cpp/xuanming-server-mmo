@@ -16,6 +16,7 @@
 #include <unordered_map>
 
 #include "muduo/net/TcpConnection.h"
+#include "core/network/grpc_client_call.h"
 #include "time/comp/timer_task_comp.h"
 
 #include "battle_room_table.h"
@@ -24,6 +25,7 @@
 // 回合引擎(cpp/libs/services/battle,纯逻辑库,API 见设计文档 §5.1)
 #include "system/turn_battle_engine.h"
 #include "system/result_commit.h"
+#include "system/battle_replay_recorder.h"
 
 #include "proto/battle/battle_data.pb.h"
 #include "proto/battle/battle_node.pb.h"
@@ -32,6 +34,7 @@
 #include "proto/common/base/session.pb.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/contracts/kafka/match_event.pb.h"
+#include "proto/match/match_internal.pb.h"
 
 // 回合制战斗房间管理器(设计文档 §5.2)。
 //
@@ -78,7 +81,8 @@ class BattleClientEdge;
 
 class BattleRoomManager
 {
-    // 单测直接驱动「Match 回了持久决定」并清房,不启动 match(房间按生产合同只由 Match 的决定收尾,DestroyBattle 删不掉)。
+    // 单测直接驱动「Match 回了持久决定」并清房,不启动 match(房间按生产合同只由 Match 的决定收尾,DestroyBattle 删不掉);
+    // 停机补提交的用例另经它换终局发送口(sqlOutcomeRoute_)、改小每拍上限(sqlOutcomeSendsPerPump_)。
     friend class BattleRoomManagerTestAccess;
 
 public:
@@ -201,7 +205,10 @@ public:
     // 下面两个接口的前置校验相同,顺序是契约,任何一项不过都没有副作用,回包只带 error_message:
     //   1. target_instance_id 不是本实例 = kInvalidParameter;
     //   2. 房间不存在 = kEntityIsNull(match 据此懒剔除观战索引,别换 tip);
-    //   3. 房间不公开 = kInvalidParameter(可见性闸,与 AddObserver 同口径:未填与 PRIVATE 一样拒)。
+    //   3. 节点已停机排空(AbortAllRooms 之后)= kServiceUnavailable:房间已冻结、不再出帧,与 AddObserver 同口径;
+    //   4. 房间不公开 = kInvalidParameter(可见性闸,与 AddObserver 同口径:未填与 PRIVATE 一样拒)。
+    // 开了通道的房间,距上一次往全部通道发帧满 node::kafka::kSpectateChannelKeepalive 就补一帧 STATE(心跳,PumpSpectateKeepalive),
+    // gate 据此区分「回合还没结算 / 在等结果回执」与「源站失联」。
     // 通过后回包带本实例 UUID 与房间作废期限,match 写进观战凭证:gate 据前者丢僵尸帧,据后者在等不到终局帧时兜底收尾。
     // 补发的 STATE 帧是观众版当前快照(与 L0 首帧同源;observer_count = 0,gate 不知道全服人数),等结果回执期间是冻结的
     // 可见状态,不提前泄露终局。帧没发出去不影响回包(只计数,见 battle_spectate_relay.h),下一回合的帧自愈。
@@ -250,10 +257,15 @@ public:
                              const ::SetAutoBattleRequest &request,
                              ::SetAutoBattleResponse &response);
 
-    // 停机收尾,供 SetBeforeShutdown 调用:停掉房间定时器、关闭房间直连,不铸造任何终局(观众不收 SpectateEnd:
-    // 此刻发 ABORTED 可能与 Match 的真实决定矛盾,中继观众靠 gate 的空闲超时收尾)。
+    // 停机收尾,供 SetBeforeShutdown 与维护流程的 source 关闭调用:先关观战准入(此后新观众、新中继 gate 与升档一律回
+    // kServiceUnavailable),再停掉房间定时器、关闭房间直连,不铸造任何终局。
+    // 观众(2026-11-05 第二轮评审定):还在打的房间(没有待提交终局)此后不会再有任何一帧,向全部观众(L0 直连与中继 / 广播通道)
+    // 发 166 SOURCE_LOST 并清退观众。不发 ABORTED:作废只能由 Match 的持久 ABORT 宣布(OnSqlOutcomeAbort),SOURCE_LOST
+    // 只说观战源已不可用,不声称任何结果。有待提交终局的房间不发:排空窗口内拿到决定照常发真 END,心跳继续到 StopSqlOutcomes,
+    // 之后拿不到决定的由 gate 按空闲超时收尾。
     // 已算出、还没拿到 SQL 决定的终局不在这里作废,而是立即再提交一轮(2026-10-23 修复,审计 r2-battle#2,
-    // turnbattle::NeedsShutdownOutcomeFlush),由 SqlOutcomesFlushed / StopSqlOutcomes 在停机排空窗口内收口;
+    // turnbattle::NeedsShutdownOutcomeFlush),由 SqlOutcomesFlushed / StopSqlOutcomes 在停机排空窗口内收口
+    // (窗口内补提交不受每拍上限约束,没拿到决定就下一拍重发,在途那次也不等发送时记下的 5s,见 outcomeShutdownFlush_);
     // 还在打的房间没有终局可交,按作废处理,match 在权威截止后原子判 ABORT,全员作废。
     // 房间保留在表里直到拿到决定或 manager 销毁,不回 Ready(终局未知的房间不能算已移除)。
     // 调用方必须在同一个 loop 任务里先关建房准入闸(BattleNodeImpl::CloseAdmission):gRPC 排空
@@ -274,9 +286,12 @@ public:
     // 预算到了 Node 照常收尾。没有待提交终局的停机(常态)立即为真。
     bool SqlOutcomesFlushed() const;
 
-    // 拆除前钩子(main.cpp 的 Node::SetBeforeTeardown):装终局的停止闸(此后到达的回复只打日志、不产生任何副作用),
-    // 停掉重试定时器,并把仍没落定的终局逐局打 metric=battle_sql_outcome_unflushed_at_shutdown。此刻出站通道已关、
-    // 在途调用的失败回调已跑完。原来停止闸在 AbortAllRooms 里装,排空窗口内拿不到任何终局(2026-10-23 修复)。
+    // 拆除前钩子(main.cpp 的 Node::SetBeforeTeardown,维护流程是 SetMaintenanceRelayStop):装终局的停止闸(此后到达的回复
+    // 只打日志、不产生任何副作用),停掉重试定时器,并把仍没落定的终局逐局打 metric=battle_sql_outcome_unflushed_at_shutdown。
+    // 停止闸之后仍可能有在途调用的失败回调到达(node.cpp 的 FinalizeTeardownInLoop 先调本钩子,之后才等
+    // GrpcClientLocalCompletionsDrained),由 outcomeStopping_ 吞掉,不产生副作用;本钩子之后不要再加有副作用的终局逻辑
+    // (2026-11-05 更正,原注释称此刻失败回调已跑完,不成立)。原来停止闸在 AbortAllRooms 里装,排空窗口内拿不到任何终局(2026-10-23 修复)。
+    // 观战心跳一并停掉:之后再也拿不到决定,不能再替这些房间续命,让 gate 按空闲超时收尾。
     void StopSqlOutcomes();
 
     // ---- 滞留房间提醒 ----
@@ -363,6 +378,11 @@ private:
         std::optional<::TurnResultS2C> pendingFinalTurn;
         std::optional<::BattleStateS2C> pendingVisibleState;
         ::eSpectateEndReason pendingSpectateReason = ::SPECTATE_END_BATTLE_FINISHED;
+        // 战报回放录制器(docs/design/battle-report-replay.md §6):CreateBattleRequest.record_replay 为真才创建,
+        // 终局冻结之后清空。不录的房间没有任何额外开销。
+        std::optional<turnbattle::BattleReplayRecorder> replay;
+        // 与终局原件一起冻结的回放外壳,首次提交与每次重放逐字节相同;空 = 本局不录,或录制被丢弃(不影响终局)。
+        std::optional<::BattleReplayEnvelope> outcomeReplay;
         turnbattle::TurnBattleEngine engine;
         // player_id → 路由信息副本(快照携带,battle 不查 etcd 定位对端)。
         // 有序容器:广播与结算的遍历顺序稳定,日志/回放可复现。
@@ -452,8 +472,28 @@ private:
     // 原件无效时置 outcomeExhausted:终局保持未知,房间滞留,由 match 在权威截止后裁决。
     void BeginResultCommit(BattleRoom&, ::eBattleOutcome, ::eSpectateEndReason,
                            std::optional<::TurnResultS2C>, ::BattleStateS2C);
+    // 终局请求原件(不含签名)。冻结时算摘要与每次重放发送都只用它拼:新字段只在这一处加,
+    // 两处拼法不一致会让摘要永远对不上、终局永远发不出去(battle-report-replay.md §6.2)。
+    static ::match::CommitBattleOutcomeRequest BuildOutcomeRequest(const BattleRoom& room);
+    // 战报录制:拷一份观众版帧(RedactStateForViewer(state, 0))交给录制器;不录的房间直接返回。
+    void RecordReplayRound(BattleRoom& room, const ::TurnResultS2C& result) const;
     static bool TerminalPending(const BattleRoom& room) { return room.outcomePending; }
+    // 逐局重放待提交终局(sqlOutcomeTimer_ 每秒一拍;BeginResultCommit / AbortAllRooms 也立即调一次)。
+    // 每拍先按冻结时长推进全部房间的重放阶段(越界 / 放弃,与能不能发无关),再发这一拍到期的局:READY 的 match 副本
+    // 只挑一次,至多发 sqlOutcomeSendsPerPump_ 局、最早到期的先发(停机排空窗口内不设上限)。
+    // 只有真正发出 CommitBattleOutcome 才推后下次尝试;缺密钥、此刻没有 READY 的 match 通道、签不出都不算一次尝试,
+    // 下一拍再试(2026-11-05 修复;每拍只挑一次与上限是同日第二轮评审补的)。
     void PumpSqlOutcomes();
+    // 终局提交的发送口:挑出此刻 READY 的 match 副本,返回发送函数,每次调用随机发往其中一个;没有 READY 通道时返回空函数
+    // (这一拍发不出去)。返回的函数只在本次泵内调用、不留存(生产实现引用本线程的 match 注册表)。done 恰好调用一次,与生成的
+    // gRPC 客户端同契约;SendSqlOutcome 在发送之前就记好在途状态,所以 done 即使在发送栈内同步调用也不会错。
+    using SqlOutcomeSend = std::function<void(const ::match::CommitBattleOutcomeRequest &,
+                                              GrpcDone<::match::CommitBattleOutcomeResponse>)>;
+    SqlOutcomeSend PickSqlOutcomeSend();
+    // 签名并经 sendOutcome 发出一局的终局原件(同一原件,摘要不符不发),发出之前记在途与下次尝试时刻:停机排空窗口内
+    // 要补提交的局下一拍即可重发,其余按 SqlOutcomeRetryInterval 推后。没走到发出时房间状态不变。
+    void SendSqlOutcome(BattleRoom &room, const SqlOutcomeSend &sendOutcome, std::string_view secret,
+                        std::chrono::steady_clock::time_point now);
     // Match 回了持久决定之后的收尾(PumpSqlOutcomes 的回复回调调用)。调用之后 room 引用可能已悬空。
     // COMPLETE:FinishBattle 通过才删房,不通过时房间保留、继续重放。ABORT:观众收 ABORTED + ONGOING,不生成任何个人效果。
     void OnSqlOutcomeComplete(BattleRoom &room);
@@ -500,7 +540,7 @@ private:
 
     // 收尾/作废统一出口:同一帧 SpectateEndS2C 只序列化一次,先发给中继 gate 或广播(PublishSpectateEnd),再经直连推给
     // 全部观众(PushSpectatorFrame)并逐个 RetireObserver(封墓碑、出名单、关直连),最后取消观众席定时器(此后任何广播都
-    // 不会再打到观众)。调用方不调本函数的路径(停机时结果未落定的房间)三个通道一起不发,中继观众靠 gate 的空闲超时收尾。
+    // 不会再打到观众)。调用方不调本函数的路径(停机时还有待提交终局的房间)三个通道一起不发,心跳停掉之后由 gate 的空闲超时收尾。
     void NotifySpectateEndAndClose(BattleRoom &room, ::eSpectateEndReason reason,
                                    ::eBattleOutcome outcome);
 
@@ -519,14 +559,29 @@ private:
     // 否则这一回合的结算帧会被当成重复丢掉。
     ::contracts::kafka::SpectateFrameEvent BuildSpectateStateFrame(const BattleRoom &room) const;
 
-    // 每回合一帧 TURN:已升广播只发广播 1 条;否则每台中继 gate 各 1 条。两者都没有时什么都不做。
+    // 每回合一帧 TURN,走 PublishToAllSpectateChannels。两种通道都没有时什么都不做。
     void PublishSpectateTurn(const BattleRoom &room, uint32_t roundIndex, const ::MessageContent &envelope);
 
-    // 终局帧 END,通道与 TURN 相同:已升广播只发广播 1 条(升档之前挂的 gate 也不再发);否则每台中继 gate 各 1 条。
-    // 升档后不能再发中继:两条 topic 之间没有顺序,中继 END 越过广播上的最后一回合 TURN 时,gate 收尾后把那一帧丢掉。
+    // 终局帧 END,通道与 TURN 相同(PublishToAllSpectateChannels),发完本场移出心跳名单。
     // 代价:广播上的 END 丢了,这些 gate 上的观众要等空闲超时收尾(与最后一回合之前丢帧同一条兜底)。
     // round_index 取引擎当前回合(最后一回合)。
     void PublishSpectateEnd(const BattleRoom &room, const ::MessageContent &envelope);
+
+    // 往本场全部观战通道发一帧:已升广播只发广播 1 条(升档之前挂的 gate 也不再单发);否则每台中继 gate 各 1 条。
+    // 升档后不能再发中继:两条 topic 之间没有顺序,中继帧越过广播上的帧时 gate 会把后者丢掉(最后一回合 TURN 被 END 越过,
+    // 观众就看不到最后一回合)。本场在心跳名单里时把名单上的时刻刷成 at:心跳从最近一次全通道发帧起算。
+    void PublishToAllSpectateChannels(const BattleRoom &room, const ::contracts::kafka::SpectateFrameEvent &frame,
+                                      std::chrono::steady_clock::time_point at);
+
+    // 本场开出通道时(中继 gate 挂接 / 升广播)登记进心跳名单(已在名单里不动时刻),并保证心跳定时器在跑。
+    // lastFrameAt = 刚补发的 STATE 送达全部通道的时刻:首台 gate 挂接时它就是全部通道。
+    void TrackSpectateChannels(const BattleRoom &room, std::chrono::steady_clock::time_point lastFrameAt);
+
+    // 观战通道心跳(spectateKeepaliveTimer_ 每秒一拍;用例直接传时刻):心跳名单上的房间距上一次全通道发帧满
+    // node::kafka::kSpectateChannelKeepalive,就补发一帧 BuildSpectateStateFrame(等结果回执期间是冻结的可见状态,不泄露终局)。
+    // 房间不在了,或过了 deadline_ms + node::kafka::kSpectateDeadlineGraceMs(gate 已按期限收尾),就移出名单。
+    // now 是单调时刻(比间隔);nowMs 是墙钟(只比期限,与 gate 比的是同一个 deadline_ms)。名单空了就停定时器。
+    void PumpSpectateKeepalive(std::chrono::steady_clock::time_point now, uint64_t nowMs);
 
     // 观众出房的唯一收口(补签失败 / RemoveObserver / StopWatchBattle / 收尾作废 / 席位回收):
     // 封闭该观众当前观战操作的墓碑(原准入截止已过即删,否则置 cancelled,挡住同 op 迟到的 Add),
@@ -618,6 +673,12 @@ private:
     size_t observerSeatQuota_ = kMaxObserversPerRoom;
     // 观战中继 / 广播的出口;默认走真实 Kafka 生产者(SetSpectateFrameSink 可换)。
     battle_spectate_relay::SpectateFramePublisher spectateFramePublisher_;
+    // 心跳名单:开了中继或广播通道、还没发 END 的房间 → 上一次往全部通道发帧的单调时刻。
+    // 增:TrackSpectateChannels;刷新:PublishToAllSpectateChannels;删:发 END、EraseRoom、过期限、StopSqlOutcomes。
+    std::map<uint64_t, std::chrono::steady_clock::time_point> spectateChannelFrameAt_;
+    TimerTaskComp spectateKeepaliveTimer_;
+    // AbortAllRooms 置位,此后不再接纳新观众、新中继 gate 与升档(停机排空期间房间已冻结,不会再出帧)。只升不降:进程随后退出。
+    bool spectateAdmissionClosed_ = false;
 
     // 房间表:增删与生命周期回调(SetRoomLifecycleHooks)绑死在 RoomTable 里,本类只经
     // EmplaceRoom / EraseRoom 调它的 Emplace / Erase,其余路径只读(FindRoom / AbortAllRooms 抄 id)。
@@ -633,9 +694,22 @@ private:
     std::multimap<uint64_t, SpectatorKey> spectatorDeadlines_;
     void PruneSpectatorOperations(uint64_t now);
     bool outcomeStopping_ = false;
+    // 停机排空窗口:AbortAllRooms 置位,只升不降(进程随后退出)。窗口内终局补提交不受每拍上限约束,要补提交的局
+    // 没拿到决定就下一拍重发(PumpSqlOutcomes / SendSqlOutcome)。
+    bool outcomeShutdownFlush_ = false;
     bool outcomeKeyUnavailableLogged_ = false;
     std::set<uint64_t> sqlOutcomeRooms_;
     TimerTaskComp sqlOutcomeTimer_;
+    // 终局重放每拍至多发出的局数(停机排空窗口外)。常态下每拍到期的只有刚冻结的几局,碰不到上限;它只在 match 全部
+    // 不可达之后恢复时起作用,把积压摊到多拍上(积压 2000 局约 30 拍)。取值是估算,没有压测数据,match 提交吞吐有实测后再调。
+    // BeginResultCommit 也会立即泵一拍,所以恢复期每个 battle 副本每秒至多发 64 ×(1 + 每秒新打完的局数)局。
+    static constexpr std::size_t kSqlOutcomeSendsPerPump = 64;
+    static_assert(kSqlOutcomeSendsPerPump > 0, "每拍至少要能发一局,否则积压永远发不出去");
+    // 生产恒为 kSqlOutcomeSendsPerPump;只有单测经 BattleRoomManagerTestAccess 改小,不用造几十间房就能测上限。
+    std::size_t sqlOutcomeSendsPerPump_ = kSqlOutcomeSendsPerPump;
+    // PickSqlOutcomeSend 的替身:空 = 生产实现(按 READY 的 match 通道随机挑)。只有单测经 BattleRoomManagerTestAccess 换,
+    // 用来模拟「通道没就绪 / 已就绪」、捕获请求并按需回放回复,不起 match。
+    std::function<SqlOutcomeSend()> sqlOutcomeRoute_;
     // 滞留房间提醒(EnsureStuckRoomReporter);装填后常驻。
     TimerTaskComp stuckRoomReportTimer_;
 

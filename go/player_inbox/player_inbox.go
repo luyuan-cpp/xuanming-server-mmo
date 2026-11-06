@@ -246,7 +246,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	serverReady := make(chan struct{})
 	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		inboxpb.RegisterPlayerInboxServer(grpcServer, server.NewPlayerInboxServer(svcCtx.Store, budget, consumerVerifier, matchProducer))
-		inboxpb.RegisterPlayerInboxAdminServer(grpcServer, server.NewAdminServer(svcCtx.Store, sanction, svcCtx.Ledgers, budget))
+		inboxpb.RegisterPlayerInboxAdminServer(grpcServer, server.NewAdminServer(svcCtx.Store, sanction, svcCtx.Ledgers, svcCtx.ItemGainBlocks, budget))
 		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权。
 		rfpb.RegisterRoleFenceParticipantServer(grpcServer, participant)
 		if config.IsRelaxedMode(c.Mode) {
@@ -315,6 +315,8 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	// 定时对账的分片成员表靠 node_uuid 认出自己;在这之前本副本不负责任何对账分片(svc.ServiceContext.SetNodeUUID)。
+	svcCtx.SetNodeUUID(nr.NodeUUID)
 
 	controlCtx, cancelControl := context.WithCancel(ctx)
 	controlDone := make(chan struct{})

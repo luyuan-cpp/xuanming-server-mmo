@@ -34,6 +34,14 @@ import (
 //
 // 护栏 Prepare 读 gm_recall_op 不加锁,见 PendingForRole。派发和终结都不反着拿,成不了环。
 // 派发不碰批次行:一批上万行时批次行不是派发的瓶颈,计数只在终局时动。
+//
+// 人工终结只有一条写路径 ResolveManuallyIfQuiet:和重投循环的 Finalize 走同一个 settle(批次计数、来源放回、结束审计),
+// 另带读证据时的 lease_until_ms、last_send_ms,settle 持行锁比对,读完之后有人领过、发过就不终结。证据由调用方
+// (logic.ResolveRecallOp)读已提交账本判定,这里不判。
+//
+// needs_review 指令交人工处置的登记(RegisterReviewHandled)也写 gm_recall_source:op_id = 0(没有回收指令),request_id 是
+// 同一事务写的审计行号,操作人和理由在那一行审计里。settle 按 op_id 放回、取消按批次的 op_id 放回,都碰不到 op_id = 0 的行,
+// 所以人工登记的流水永远算已消费,以后的批次和预览都把那条指令剔除。登记只写这一张表和审计表,不碰批次行与 op 行。
 
 const (
 	recallStatusPending   = uint32(dbpb.GmRecallOpStatus_GM_RECALL_OP_PENDING)
@@ -58,6 +66,10 @@ const (
 	recallInsertChunk = 200
 	// recallSourceChunk 是按 tx_id 查已消费流水时一条 IN 的长度。
 	recallSourceChunk = 500
+	// recallManualSourceOpID 是人工处置登记的流水在 gm_recall_source.op_id 上的取值:没有回收指令。回收指令的 op_id 由发号器发,恒非 0。
+	recallManualSourceOpID uint64 = 0
+	// maxRecallReviewHandledSources 是一次人工处置登记的流水上限,和一批的同指令流水上限同值。
+	maxRecallReviewHandledSources = 10000
 
 	// mysqlErrTiDBWriteConflict 9007:TiDB 乐观写冲突。迁库之后它是最常见的一类,不判等于不重试。
 	mysqlErrTiDBWriteConflict = 9007
@@ -70,6 +82,8 @@ var (
 	ErrRecallSourceConsumed = errors.New("recall source transaction already consumed")
 	// ErrRecallBatchNotFound:没有这个 request_id。
 	ErrRecallBatchNotFound = errors.New("recall batch not found")
+	// ErrRecallOpNotFound:没有这个 op_id。
+	ErrRecallOpNotFound = errors.New("recall op not found")
 	// ErrRecallFinalInvalid:人工终结只收拒绝、中止、部分。全额结果只能来自 scene 的明细。
 	ErrRecallFinalInvalid = errors.New("recall manual final status not allowed")
 
@@ -151,6 +165,29 @@ func (o *RecallOpRow) IsApplied() bool { return o.Status == recallStatusApplied 
 
 // IsPartial 报告应用到一半内部出错。Taken 只是确认过的下限,实际扣除要按流水核对。
 func (o *RecallOpRow) IsPartial() bool { return o.Status == recallStatusPartial }
+
+// RecallOpState 是按 recallOpColumns 读出的一行:还原出的请求,加上行上的状态与租约。
+// Claim 下发与人工终结读证据(ReadOpState)都经 scanRecallOp 得到它,两边看到的是同一份请求。
+type RecallOpState struct {
+	// Status 是 GmRecallOpStatus。
+	Status uint32
+	// Op 是这一行在资产通道里的请求:correlation_id = op_id,载荷是冻结计划时写下的 AssetBundle。行上的 last_reason、
+	// last_send_ms、created_ms、attempts、deadline_ms 也在里面,是同一次扫出的列值;LeaseToken 只属于领取方,这里为 0。
+	Op assetop.Op
+	// OpErr 非 nil:载荷解不开,Op.Bundle 为 nil。Claim 把这一行当毒行推迟;人工终结核不了收据,按证据不足处理。
+	OpErr error
+	// LeaseUntilMs 是读行这一刻的租约到期时刻:判「此刻有没有人持租约」与人工终结的见证都要它。
+	LeaseUntilMs uint64
+	// LeaseToken 是读行这一刻行上的领取令牌(lease_token 列),0 = 没人领过。Op.LeaseToken 不填它:那是领取方自己的令牌。
+	// Claim 回读拿它核对这一行是不是自己刚领到的(heldBy)。终结不清这一列,所以光看令牌不够,还要看 status。
+	LeaseToken uint64
+}
+
+// IsPending 报告这一行已分配 seq、还在投递。只有它能被领取,也只有它能人工终结。
+func (s RecallOpState) IsPending() bool { return s.Status == recallStatusPending }
+
+// heldBy 报告这一行是不是持 token 的领取方手里的未决行:还是 PENDING,令牌也还是它的。Claim 回读之后只下发这样的行。
+func (s RecallOpState) heldBy(token uint64) bool { return s.IsPending() && s.LeaseToken == token }
 
 // RecallPlanned 是等待派发的一行。
 type RecallPlanned struct {
@@ -255,6 +292,116 @@ func (s *RecallStore) ConsumedSources(ctx context.Context, txIDs []uint64) (map[
 		}
 	}
 	return consumed, nil
+}
+
+// RecallSourceState 是一组流水在 gm_recall_source 里的登记情况。
+type RecallSourceState struct {
+	// Manual:其中有流水登记为交人工处置(op_id = 0)。
+	Manual bool
+	// Batch:其中有流水已被回收批次消费(op_id ≠ 0)。
+	Batch bool
+}
+
+// recallSourceQueryer 是 *sql.DB 与 *sql.Tx 共有的读接口:登记前在事务外看一次,登记时在事务里再看一次。
+type recallSourceQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// SourceState 读一组流水的登记情况。普通读,不加锁:登记时在事务里再读一次,并发由 gm_recall_source 的主键兜住。
+func (s *RecallStore) SourceState(ctx context.Context, txIDs []uint64) (RecallSourceState, error) {
+	return recallSourceStateOf(ctx, s.db, txIDs)
+}
+
+func recallSourceStateOf(ctx context.Context, q recallSourceQueryer, txIDs []uint64) (RecallSourceState, error) {
+	var state RecallSourceState
+	for start := 0; start < len(txIDs); start += recallSourceChunk {
+		end := min(start+recallSourceChunk, len(txIDs))
+		args := make([]any, 0, end-start)
+		for _, id := range txIDs[start:end] {
+			args = append(args, id)
+		}
+		rows, err := q.QueryContext(ctx, "SELECT op_id FROM gm_recall_source WHERE tx_id IN ("+placeholders(len(args))+")", args...)
+		if err != nil {
+			return RecallSourceState{}, err
+		}
+		for rows.Next() {
+			var opID uint64
+			if err := rows.Scan(&opID); err != nil {
+				rows.Close()
+				return RecallSourceState{}, err
+			}
+			if opID == recallManualSourceOpID {
+				state.Manual = true
+			} else {
+				state.Batch = true
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return RecallSourceState{}, err
+		}
+	}
+	return state, nil
+}
+
+// RecallReviewHandled 是一次「needs_review 指令交人工处置」的登记:这名玩家、这条指令此刻的全部流水(已按回收的资产过滤)。
+type RecallReviewHandled struct {
+	PlayerID      uint64
+	CorrelationID uint64
+	TxIDs         []uint64
+	Operator      string
+	Reason        string
+	// Detail 进审计行:资产、原因码、对端地址,由调用方拼好。
+	Detail string
+}
+
+// RegisterReviewHandled 把一条 needs_review 指令登记为交人工处置:它的全部流水在一个事务里按已消费写进 gm_recall_source
+// (op_id = 0,request_id = 同一事务里写的审计行号),外加一行审计(操作人、理由、指令)。和冻结计划写同一个主键,以后的批次
+// 和预览都把这条指令剔除;人工登记的流水没有放回路径。这条指令确实在 needs_review 里,由调用方(logic.RegisterRecallReviewHandled)
+// 按计划的同一份代码核过,这里只管原子写入。
+//
+// 回 (true, nil):本次登记。(false, nil):其中已有流水登记为交人工处置,幂等,什么都没写。
+// ErrRecallSourceConsumed:其中有流水已被回收批次消费,或并发写撞了主键;事务已回滚,调用方用 SourceState 重读分辨。
+func (s *RecallStore) RegisterReviewHandled(ctx context.Context, h RecallReviewHandled, nowMs uint64) (bool, error) {
+	if h.PlayerID == 0 || h.CorrelationID == 0 || len(h.TxIDs) == 0 || len(h.TxIDs) > maxRecallReviewHandledSources || h.Operator == "" {
+		return false, fmt.Errorf("recall review handled: invalid registration player_id=%d correlation_id=%d sources=%d",
+			h.PlayerID, h.CorrelationID, len(h.TxIDs))
+	}
+	auditID, err := nextRowID(ctx, s.auditIDs)
+	if err != nil {
+		return false, fmt.Errorf("mint recall audit row id: %w", err)
+	}
+	registered := false
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		registered = false
+		state, err := recallSourceStateOf(ctx, tx, h.TxIDs)
+		if err != nil {
+			return err
+		}
+		switch {
+		case state.Batch:
+			return ErrRecallSourceConsumed
+		case state.Manual:
+			return nil
+		}
+		// 与冻结计划同一种写法:没有回收指令,op_id 记 0;request_id 记本次审计行号,事后按它找到操作人和理由。
+		sources := []*RecallOpPlan{{OpID: recallManualSourceOpID, PlayerID: h.PlayerID, SourceTxIDs: h.TxIDs}}
+		if err := insertRecallSources(ctx, tx, auditID, sources, nowMs); err != nil {
+			if isDuplicateKey(err) {
+				return ErrRecallSourceConsumed
+			}
+			return err
+		}
+		reason := fmt.Sprintf("batch_recall REVIEW_HANDLED player=%d correlation=%d sources=%d %s: %s",
+			h.PlayerID, h.CorrelationID, len(h.TxIDs), h.Detail, h.Reason)
+		if err := insertRecallAudit(ctx, tx, auditID, 0, 0, 0, reason, h.Operator, nowMs); err != nil {
+			return err
+		}
+		registered = true
+		return nil
+	})
+	return registered, err
 }
 
 func placeholders(n int) string {
@@ -455,8 +602,11 @@ func (s *RecallStore) Dispatch(ctx context.Context, op RecallPlanned, nowMs uint
 			if err != nil {
 				return err
 			}
-			res, err := tx.ExecContext(ctx, "UPDATE gm_recall_op SET status=?,seq=?,stream_epoch=?,next_attempt_ms=?,updated_ms=? WHERE op_id=? AND status=?",
-				recallStatusPending, alloc.Seq, alloc.Epoch, nowMs, nowMs, op.OpID, recallStatusPlanned)
+			// last_send_ms 在这里初始化(go/shared/assetop/abandon.go 文件头 last_send_ms 契约第 1 条):PLANNED 的行从没发过,
+			// 进 PENDING 之后才会被领取、投递,所以此刻的 nowMs 不小于任何一次真实发送。不写的话它一直是 0(「Store 没维护」),
+			// 从没投出去的行永远判不了安静:人工终结只能关成 PARTIAL(少回收),自动放弃也永远跳过它。
+			res, err := tx.ExecContext(ctx, "UPDATE gm_recall_op SET status=?,seq=?,stream_epoch=?,next_attempt_ms=?,updated_ms=?,last_send_ms=GREATEST(last_send_ms,?) WHERE op_id=? AND status=?",
+				recallStatusPending, alloc.Seq, alloc.Epoch, nowMs, nowMs, nowMs, op.OpID, recallStatusPlanned)
 			if err != nil {
 				return err
 			}
@@ -518,10 +668,12 @@ type recallSettlement struct {
 	reason     uint32
 	resolvedBy string
 	resolution string
+	// witness 只有人工终结带:读证据那一刻行上的 lease_until_ms、last_send_ms。持行锁时对不上就不终结。
+	witness *assetop.QuietWitness
 }
 
 // settle 在调用方事务里走一行的终局:批次行 → op 行 → 改 op → 改批次,减到 0 写结束审计。回这一行是否本次终结。
-// 行已经不在 from 状态时什么都不改,回 false:这是「一次且仅一次」的最后一道闸。
+// 行已经不在 from 状态时什么都不改,回 false:这是「一次且仅一次」的最后一道闸。人工终结另比见证,对不上同样回 false。
 func (s *RecallStore) settle(ctx context.Context, tx *sql.Tx, st recallSettlement, auditID, nowMs uint64) (bool, error) {
 	var requestID uint64
 	if err := tx.QueryRowContext(ctx, "SELECT request_id FROM gm_recall_op WHERE op_id=?", st.opID).Scan(&requestID); err != nil {
@@ -532,11 +684,19 @@ func (s *RecallStore) settle(ctx context.Context, tx *sql.Tx, st recallSettlemen
 		return false, err
 	}
 	var status uint32
-	var requested uint64
-	if err := tx.QueryRowContext(ctx, "SELECT status,requested FROM gm_recall_op WHERE op_id=? FOR UPDATE", st.opID).Scan(&status, &requested); err != nil {
+	var requested, leaseUntilMs, lastSendMs uint64
+	if err := tx.QueryRowContext(ctx, "SELECT status,requested,lease_until_ms,last_send_ms FROM gm_recall_op WHERE op_id=? FOR UPDATE", st.opID).
+		Scan(&status, &requested, &leaseUntilMs, &lastSendMs); err != nil {
 		return false, err
 	}
 	if status != st.from {
+		return false, nil
+	}
+	// 人工终结的证据是按读行那一刻下的。读完之后有人领过这一行(领取必改 lease_until_ms)或发出过请求(重排推进
+	// last_send_ms),那一次投递可能已经让 scene 扣了,证据作废,不终结,调用方重新读证据。和 status 在同一把行锁下比,
+	// 与领取、重排、终结串行。只领没发(玩家不在线,本地 NOT_HERE 重排)会把租约清回 0、不动 last_send_ms,
+	// 读证据时租约就是 0 的话比对照样通过:那一次没有请求发出去,证据不受影响(last_send_ms 契约见 assetop/abandon.go 文件头)。
+	if st.witness != nil && (leaseUntilMs != st.witness.LeaseUntilMs || lastSendMs != st.witness.LastSendMs) {
 		return false, nil
 	}
 
@@ -704,6 +864,30 @@ func (s *RecallStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 	return ids, nil
 }
 
+// recallOpColumns 是还原一行请求要读的列,scanRecallOp 按这个列序扫。Claim 与 ReadOpState 共用。
+const recallOpColumns = "player_id,stream,seq,stream_epoch,tx_type,payload,attempts,deadline_ms,last_reason,created_ms,last_send_ms,status,lease_until_ms,lease_token"
+
+// scanRecallOp 按 recallOpColumns 扫一行,还原成资产通道里的请求。correlation_id 取 op_id:scene 流水与收据都按它对到这一行;
+// tx_type 与载荷原样取冻结计划时写下的值,收据摘要才与首投逐字节一致。载荷解不开不算读失败:填 OpErr,由调用方决定怎么处理。
+func scanRecallOp(row interface{ Scan(...any) error }, opID uint64) (RecallOpState, error) {
+	state := RecallOpState{Op: assetop.Op{OpID: opID, CorrelationID: opID}}
+	op := &state.Op
+	var payload []byte
+	var stream uint32
+	if err := row.Scan(&op.PlayerID, &stream, &op.Seq, &op.StreamEpoch, &op.TxType, &payload, &op.Attempts, &op.DeadlineMs,
+		&op.LastReason, &op.CreatedMs, &op.LastSendMs, &state.Status, &state.LeaseUntilMs, &state.LeaseToken); err != nil {
+		return RecallOpState{}, err
+	}
+	op.Stream = assetpb.AssetOpStream(stream)
+	bundle := &assetpb.AssetBundle{}
+	if err := proto.Unmarshal(payload, bundle); err != nil {
+		state.OpErr = fmt.Errorf("recall op %d: decode payload: %w", opID, err)
+		return state, nil
+	}
+	op.Bundle = bundle
+	return state, nil
+}
+
 // Claim 见 assetop.Store。
 func (s *RecallStore) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, poisonUntilMs, token uint64) (assetop.Op, bool, error) {
 	res, err := s.db.ExecContext(ctx, "UPDATE gm_recall_op SET last_send_ms=GREATEST(last_send_ms,lease_until_ms),lease_until_ms=?,lease_token=? WHERE op_id=? AND status=? AND lease_until_ms<?",
@@ -715,24 +899,51 @@ func (s *RecallStore) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, pois
 	if err != nil || affected == 0 {
 		return assetop.Op{}, false, err
 	}
-	op := assetop.Op{OpID: opID, CorrelationID: opID, LeaseToken: token}
-	var payload []byte
-	var stream uint32
-	err = s.db.QueryRowContext(ctx, "SELECT player_id,stream,seq,stream_epoch,tx_type,payload,attempts,deadline_ms,last_reason,created_ms,last_send_ms FROM gm_recall_op WHERE op_id=?", opID).
-		Scan(&op.PlayerID, &stream, &op.Seq, &op.StreamEpoch, &op.TxType, &payload, &op.Attempts, &op.DeadlineMs, &op.LastReason, &op.CreatedMs, &op.LastSendMs)
+	return s.claimedOp(ctx, opID, poisonUntilMs, token)
+}
+
+// claimedOp 是 Claim 在领取 CAS 之后的那一半:回读这一行,还原成要下发的请求。
+//
+// 回读的行必须仍是「我刚领到的未决行」(PENDING,令牌是自己的),否则不下发,写法同 guild 的 GuildAssetStore.Claim。
+// 领取的 CAS 与这次回读是两条语句,中间可能被人工终结(ResolveRecallOp 的 settle 不换令牌),也可能被别的副本接管:
+// 对已终结的行再投一次,结局写不回来,scene 还会再见到这个 seq。核对放在解载荷之前:已终结的坏包行不该再被当成毒行推迟。
+func (s *RecallStore) claimedOp(ctx context.Context, opID, poisonUntilMs, token uint64) (assetop.Op, bool, error) {
+	state, err := scanRecallOp(s.db.QueryRowContext(ctx, "SELECT "+recallOpColumns+" FROM gm_recall_op WHERE op_id=?", opID), opID)
 	if err != nil {
 		return assetop.Op{}, false, err
 	}
-	op.Stream = assetpb.AssetOpStream(stream)
-	bundle := &assetpb.AssetBundle{}
-	if proto.Unmarshal(payload, bundle) != nil {
-		if _, err := s.db.ExecContext(ctx, "UPDATE gm_recall_op SET last_outcome=0,next_attempt_ms=?,lease_until_ms=0 WHERE op_id=? AND lease_token=?", poisonUntilMs, opID, token); err != nil {
+	if !state.heldBy(token) {
+		return assetop.Op{}, false, nil
+	}
+	if state.OpErr != nil {
+		if err := s.deferPoison(ctx, opID, token, poisonUntilMs); err != nil {
 			return assetop.Op{}, false, err
 		}
 		return assetop.Op{}, false, assetop.ErrPoisonRow
 	}
-	op.Bundle = bundle
+	op := state.Op
+	op.LeaseToken = token
 	return op, true, nil
+}
+
+// deferPoison 把载荷解不开的一行推迟到 poisonUntilMs,last_outcome 记结局未知。只清租约,不动 last_send_ms
+// (last_send_ms 契约第 4 条:解码在发送之前,这次租约内没有请求)。条件带本次令牌与 status = PENDING:回读之后这一行
+// 若已被人工终结(令牌没换),推迟落空,终态行的 last_outcome、next_attempt_ms 不被改写。
+func (s *RecallStore) deferPoison(ctx context.Context, opID, token, poisonUntilMs uint64) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE gm_recall_op SET last_outcome=0,next_attempt_ms=?,lease_until_ms=0 WHERE op_id=? AND lease_token=? AND status=?",
+		poisonUntilMs, opID, token, recallStatusPending)
+	return err
+}
+
+// ReadOpState 读人工终结要核的一行:状态、与 Claim 下发同一套还原出的请求、判「安静」与终结见证要的租约和发送时刻。
+// 普通读,不加锁:证据按这一刻的行下,终结时 ResolveManuallyIfQuiet 在结算事务里持行锁再比一次租约与发送时刻。
+// 没有这一行回 ErrRecallOpNotFound。
+func (s *RecallStore) ReadOpState(ctx context.Context, opID uint64) (RecallOpState, error) {
+	state, err := scanRecallOp(s.db.QueryRowContext(ctx, "SELECT "+recallOpColumns+" FROM gm_recall_op WHERE op_id=?", opID), opID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RecallOpState{}, ErrRecallOpNotFound
+	}
+	return state, err
 }
 
 // Reschedule 见 assetop.Store。
@@ -824,9 +1035,13 @@ func (s *RecallStore) ListPendingByPlayer(ctx context.Context, playerID uint64, 
 	return ids, rows.Err()
 }
 
-// ResolveManually 见 assetop.ManualResolver。只收拒绝、中止、部分:全额结果只能来自 scene 的明细。
-func (s *RecallStore) ResolveManually(ctx context.Context, r assetop.ManualResolution, nowMs uint64) (bool, error) {
-	st := recallSettlement{opID: r.OpID, from: recallStatusPending, resolvedBy: r.Operator, resolution: r.Reason}
+// ResolveManuallyIfQuiet 是人工终结唯一的写路径(调用方 logic.ResolveRecallOp 先按已提交账本判过证据)。
+// 只收拒绝、中止、部分:全额结果只能来自 scene 的明细。和 Finalize 走同一个 settle,另要求行上的 lease_until_ms、
+// last_send_ms 仍是 witness(读证据时的值)。回 false、什么都不改:行已不是 PENDING,或读证据之后有人领过、发过它。
+//
+// 没有不带见证的人工终结:回收不给 assetop.Loop 挂 Manual,不核证据的口子不留。
+func (s *RecallStore) ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {
+	st := recallSettlement{opID: r.OpID, from: recallStatusPending, resolvedBy: r.Operator, resolution: r.Reason, witness: &witness}
 	switch r.Final {
 	case assetop.StatusRejected:
 		st.to = recallStatusRejected

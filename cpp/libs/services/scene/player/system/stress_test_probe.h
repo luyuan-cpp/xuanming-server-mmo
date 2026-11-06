@@ -42,5 +42,4 @@ namespace stresstest_probe
     // freshly-allocated test_seq and matching test_sig. No-op when
     // IsEnabled() is false, so it's cheap to call unconditionally.
     void StampPlayerDatabase(player_database &row);
-    void StampPlayerDatabase1(player_database_1 &row);
 }

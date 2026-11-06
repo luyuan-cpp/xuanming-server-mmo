@@ -675,7 +675,7 @@ func orderingSmokeConnect(cfg *config.Config, account string, playerID uint64, s
 	return bot, nil
 }
 
-// orderingSmokeCloseBot 收尾一条组内连接:离开游戏、提示 login 断线、注销 Player、关连接(与 guild / friend 冒烟的 cleanup 同序)。
+// orderingSmokeCloseBot 收尾一条组内连接:离开游戏、注销 Player、关连接(断线通知由 gate 在 TCP 关闭时合成;与 guild / friend 冒烟的 cleanup 同序)。
 func orderingSmokeCloseBot(bot *orderingSmokeBot) {
 	_ = leaveGame(bot.gc, bot.stats)
 	gameobject.PlayerList.Delete(bot.gc.PlayerId)

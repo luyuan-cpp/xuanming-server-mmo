@@ -221,14 +221,17 @@ message MatchPreparedEndpoint {
   string endpoint = 2;
 }
 
+// 评分按 (玩家, 计分模式) 分开存(docs/design/global-match-hierarchical-pools.md §8):每个计分模式一条评分轨道,
+// 各自的分、各自的局数,打 1V1 不动 5V5 的分。只有计分模式(ratingrule.Rated)有行;PVP_TEAM 各档每侧人数共用一行。
 message MatchRatingRecord {
   option (OptionTableName) = "match_rating";
-  option (OptionPrimaryKey) = "player_id";
+  option (OptionPrimaryKey) = "player_id,mode";
   uint64 player_id = 1;
   int64 rating_centi = 2;
-  uint64 games = 3;
+  uint64 games = 3; // 本模式打过的计分局数;投榜批次的 score_version = 入账后的 games(这名玩家在本模式第几局)
   uint64 updated_ms = 4;
   uint64 score_changed_ms = 5; // 分数最后一次变化的时刻,进批次的 achieved_ms。榜上同分决胜用它,不看批次到达顺序
+  uint32 mode = 6; // MatchMode 数值,计分模式之一
 }
 message MatchRatingAppliedRecord {
   option (OptionTableName) = "match_rating_applied";
@@ -237,26 +240,30 @@ message MatchRatingAppliedRecord {
   bytes payload_digest = 2;
   uint64 applied_ms = 3;
 }
-// 评级投榜来源,按对局 id 拆片(shard = battle_id % 64,片数建表后不可改):每局只锁自己那一片。
-// 停写标记与最终游标和本片的评分事务争同一行锁；停写逐片取锁，不依赖墙钟猜最后一批。
+// 评级投榜来源,按 (计分模式, 对局 id) 拆片:每个计分模式一张榜、自己的 64 片(shard = battle_id % 64,片数建表后不可改),
+// 每局只锁本模式的那一片;游标按 (epoch, mode, shard) 各自从 1 连续。榜按模式分开是因为批次的 score_version 是
+// 「这名玩家在本模式第几局」,两种模式混在一张榜上会互相当成新旧版本(global-match-hierarchical-pools.md §8)。
+// 停写标记与最终游标和本片的评分事务争同一行锁；停写按模式逐片取锁，不依赖墙钟猜最后一批。
 message MatchRankSourceRecord {
   option (OptionTableName) = "match_rank_source";
-  option (OptionPrimaryKey) = "source_epoch,shard";
+  option (OptionPrimaryKey) = "source_epoch,mode,shard";
   uint64 source_epoch = 1;
   uint64 produced_cursor = 2;
   uint64 committed_cursor = 3;
-  uint64 board_id = 4;
+  uint64 board_id = 4; // 本模式那张榜(rank 的 board_id);同一模式各片必须相同
   bool stopped = 5;
   uint32 shard = 6;
+  uint32 mode = 7; // MatchMode 数值,计分模式之一
 }
 message MatchRankOutboxRecord {
   option (OptionTableName) = "match_rank_outbox";
-  option (OptionPrimaryKey) = "source_epoch,shard,source_cursor";
+  option (OptionPrimaryKey) = "source_epoch,mode,shard,source_cursor";
   uint64 source_epoch = 1;
   uint64 source_cursor = 2;
   uint64 request_id = 3;
   bytes entries = 4; // 确定性序列化 SubmitRankScoresRequest（未签名）；重投只重签 auth。
   uint32 shard = 5;
+  uint32 mode = 6; // MatchMode 数值,与来源行一致
 }
 
 enum MatchBattleCompletionSourceKind {
@@ -266,6 +273,13 @@ enum MatchBattleCompletionSourceKind {
   // Match 在权威截止加终局提交宽限之后自己写的 ABORT：没有任何 Battle 原字节，该行 format_version 为 0。
   // 审计据此区分「Battle 提交的终局」与「Match 截止裁决」，不能再把 ABORT 行误读成 BATTLE_RPC 来源。
   MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT = 3;
+  // Match 在截止之前提前写的 ABORT（2026-11-05）：原件准入期限加时钟余量已过，原执行实例对原操作立了拒收墓碑并回
+  // ABORTED，证明这份 Create 没建、以后也不会再建。同样没有 Battle 原字节，format_version 为 0。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT = 4;
+  // 运维经人工处置工具写的 ABORT（2026-11-05，go/match/cmd/formationfix，docs/ops/match-formation-manual-abort-runbook.md）：
+  // 只给过了截止加宽限、没有任何终局行、持久 Create 原件过不了终局核对的成局；同一事务另写一行 match_manual_resolution 审计。
+  // 同样没有 Battle 原字节，format_version 为 0。
+  MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT = 5;
 }
 
 // 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。
@@ -307,4 +321,52 @@ message MatchBattleSettlementSourceRecord {
   uint32 inbox_state = 10;
   uint32 dispatch_state = 11; // 0旧归档、1待入箱/核原收据、2已确认APPLIED。
   uint64 next_retry_ms = 12;
+}
+
+// 人工处置永久 UNKNOWN 全球成局的审计（2026-11-05，docs/ops/match-formation-manual-abort-runbook.md）。
+// 与 ABORT（match_battle_completion.source_kind=MANUAL_ABORT）同一事务写入，主键 battle_id 保证一局只人工处置一次。
+// 只增不改，不参与任何运行期判定；常驻账号只需 DML。
+message MatchManualResolutionRecord {
+  option (OptionTableName) = "match_manual_resolution";
+  option (OptionPrimaryKey) = "battle_id";
+  uint64 battle_id = 1;
+  StrandedFormationMode action = 2;           // 现只有 ABORT
+  StrandedFormationClass formation_class = 3; // 处置时这一局属于哪一类永久 UNKNOWN
+  string failed_check = 4;                    // 第一项不通过的原件核对（ASCII 原因码）
+  string operator_name = 5;                   // ≤64 字节，不含控制字符
+  string reason = 6;                          // ≤191 字节：工单号与核对结论
+  uint64 resolved_ms = 7;                     // TiDB 时刻
+  string formation_digest_before = 8;         // 处置前成局行确定性序列化的 SHA-256（hex），即操作员核对过的 expect_digest
+  bytes formation_before = 9;                 // 处置前成局行 MatchFormationRecord 的确定性序列化
+  // 处置前全员原票。列里存只含本字段的本消息的确定性序列化（与 match_formation.members 同一做法）
+  repeated MatchAuthorityTicketRecord tickets_before = 10;
+  uint64 effective_deadline_ms = 11;          // max(成局截止, 原件截止, 原件准入期限)
+  string replica_instance = 12;               // 执行这次处置的 match 副本（主机名）
+}
+
+// 战报回放正文(docs/design/battle-report-replay.md)。与 match_battle_completion 同一事务写,只写 COMPLETE 的局。
+// ref_count = 还在列出这一局的 match_player_battle_report 行数;列表行被挤出时同一事务减一,减到 0 删掉本行。
+// 只有终局事务改本表,读路径只读。
+message MatchBattleReportRecord {
+  option (OptionTableName) = "match_battle_report";
+  option (OptionPrimaryKey) = "battle_id";
+  uint64 battle_id = 1;
+  uint64 created_ms = 2;        // match 库时间 now(tx)
+  uint32 match_mode = 3;        // 运维统计用,读路径不看
+  uint32 battle_config_id = 4;  // 同上
+  bytes envelope = 5;           // 确定性序列化的 BattleReplayEnvelope(player_battle.proto)
+  bytes envelope_digest = 6;    // sha256(envelope),重放核对用
+  uint32 ref_count = 7;
+}
+
+// 每名玩家最近 100 场 PVP 战报的列表(battle-report-replay.md BR-10)。与终局同一事务写入;
+// 同一事务里删掉超出 100 条的最旧行,并给对应正文的 ref_count 减一。玩家同一时刻只有一场战斗,所以一名玩家的行
+// 只被他自己那一局的终局事务改。
+message MatchPlayerBattleReportRecord {
+  option (OptionTableName) = "match_player_battle_report";
+  option (OptionPrimaryKey) = "player_id,created_ms,battle_id";
+  uint64 player_id = 1;
+  uint64 created_ms = 2;  // match 库时间 now(tx);列表按它倒序,同一时刻按 battle_id 倒序
+  uint64 battle_id = 3;
+  bytes summary = 4;      // 确定性序列化的 BattleReportSummary(match_service.proto)
 }

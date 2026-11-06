@@ -17,6 +17,7 @@ import (
 
 	"shared/placement"
 	"shared/playername"
+	"shared/serviceauth"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
@@ -513,6 +514,12 @@ func (f *fakePlayerNameStore) Release(_ context.Context, _ uint64, _ string, min
 	return f.releaseOutcome, nil
 }
 
+// NameRowState 恒回「刚登记的预留态」:这一层只测 status 映射,删除的结局由 releaseOutcome 给。
+// 释放之前先读名字行的那一步在 logic 单测里(TestReleasePlayerName_RefusedOrNoOpReleaseNeverSeals)。
+func (f *fakePlayerNameStore) NameRowState(context.Context, uint64, string) (uint64, uint64, bool, error) {
+	return uint64(time.Now().UnixMilli()), 0, true, nil
+}
+
 func (f *fakePlayerNameStore) BatchGet(_ context.Context, ids []uint64) (map[uint64]string, error) {
 	f.batchCalls++
 	f.lastBatchIds = append([]uint64(nil), ids...)
@@ -528,8 +535,18 @@ func (f *fakePlayerNameStore) BatchGet(_ context.Context, ids []uint64) (map[uin
 	return out, nil
 }
 
-// newPlayerNameTestServer 装名字缓存(指向 miniredis)+ 假 store,配置走**规范化后的默认值**
-// —— 与线上一致的 10m / 24h / 60s,这样窗口断言用的是真正的默认窗口。
+// fakeRoleSealer 是玩家片证明的替身:server 这一层只关心它的结论怎么翻成 status。
+type fakeRoleSealer struct{ seal store.RoleSeal }
+
+func (f *fakeRoleSealer) SealUncommittedRole(context.Context, uint64) (store.RoleSeal, error) {
+	return f.seal, nil
+}
+
+// testLoginSecret 是单测里 login 的调用密钥(serviceauth 要求至少 32 字节)。
+const testLoginSecret = "test-login-directory-secret-0123456789"
+
+// newPlayerNameTestServer 装名字缓存(指向 miniredis)+ 假 store + 账号目录同一套 login 调用验证器 + 证明替身,
+// 配置走**规范化后的默认值** —— 与线上一致的 10m / 24h / 60s,这样窗口断言用的是真正的默认窗口。
 func newPlayerNameTestServer(t *testing.T, tweak func(*config.Config)) (*DataServiceServer, *fakePlayerNameStore) {
 	t.Helper()
 	mr := miniredis.RunT(t)
@@ -546,7 +563,18 @@ func newPlayerNameTestServer(t *testing.T, tweak func(*config.Config)) (*DataSer
 		releaseOutcome: store.ReleaseDeleted,
 		names:          map[uint64]string{},
 	}
-	return NewDataServiceServer(&svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake}), fake
+	auth, err := serviceauth.New(map[string]string{"login": testLoginSecret})
+	require.NoError(t, err)
+	return NewDataServiceServer(&svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake,
+		AccountDirectoryAuth: auth, PlayerRoleSeals: &fakeRoleSealer{seal: store.RoleSealSealed}}), fake
+}
+
+// rollbackRelease 造一条 login 签过名的建角回滚释放(与 login 的 playernamereg.NewSigned 同一个签法)。
+func rollbackRelease(t *testing.T, playerID uint64, name string) *data_service.ReleasePlayerNameRequest {
+	t.Helper()
+	req := &data_service.ReleasePlayerNameRequest{PlayerId: playerID, Name: name}
+	require.NoError(t, serviceauth.Sign(data_service.DataService_ReleasePlayerName_FullMethodName, req, "login", testLoginSecret, uint64(time.Now().UnixMilli())))
+	return req
 }
 
 // ── Reserve ────────────────────────────────────────────────────
@@ -700,9 +728,7 @@ func TestReleasePlayerName_WithoutTokenPassesWindowFloor(t *testing.T) {
 	s, fake := newPlayerNameTestServer(t, nil)
 
 	before := time.Now()
-	_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
-		PlayerId: 2001, Name: "云中君",
-	})
+	_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2001, "云中君"))
 	require.NoError(t, err)
 	require.Equal(t, 1, fake.releaseCalls)
 	assert.NotZero(t, fake.lastMinCreatedMs, "无 token 的释放绝不能传 0(那是不限时间)")
@@ -758,9 +784,7 @@ func TestReleasePlayerName_AbsentIsIdempotentSuccess(t *testing.T) {
 	s, fake := newPlayerNameTestServer(t, nil)
 	fake.releaseOutcome = store.ReleaseAbsent
 
-	_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
-		PlayerId: 2005, Name: "云中君",
-	})
+	_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2005, "云中君"))
 	require.NoError(t, err)
 }
 
@@ -770,9 +794,7 @@ func TestReleasePlayerName_OutsideWindowIsFailedPrecondition(t *testing.T) {
 	s, fake := newPlayerNameTestServer(t, nil)
 	fake.releaseOutcome = store.ReleaseOutsideWindow
 
-	_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
-		PlayerId: 2006, Name: "云中君",
-	})
+	_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2006, "云中君"))
 	require.Error(t, err)
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.FailedPrecondition, st.Code())
@@ -782,15 +804,79 @@ func TestReleasePlayerName_OutsideWindowIsFailedPrecondition(t *testing.T) {
 func TestReleasePlayerName_InvalidNameIsInvalidArgument(t *testing.T) {
 	for _, raw := range []string{"", "   ", "名字!"} {
 		s, fake := newPlayerNameTestServer(t, nil)
-		_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
-			PlayerId: 2007, Name: raw,
-		})
+		_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2007, raw))
 		require.Error(t, err, "raw=%q", raw)
 		st, _ := status.FromError(err)
 		assert.Equal(t, codes.InvalidArgument, st.Code(), "raw=%q", raw)
 		assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeInvalidRequest))
 		assert.Equal(t, 0, fake.releaseCalls, "归一化后为空/非法的名字不该进库")
 	}
+}
+
+// 没带运维 token 的释放只认 login 的调用证明:没签名、别的服务签的、签完被改过、验证器没装配,都不碰库。
+// 用例「核调用方服务身份」。
+func TestReleasePlayerName_RollbackRequiresTheLoginCallerProof(t *testing.T) {
+	t.Run("没签名", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{PlayerId: 2101, Name: "云中君"})
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		assert.Equal(t, 0, fake.releaseCalls, "身份不对必须零变更")
+	})
+	t.Run("别的服务签的", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		req := &data_service.ReleasePlayerNameRequest{PlayerId: 2102, Name: "云中君"}
+		require.NoError(t, serviceauth.Sign(data_service.DataService_ReleasePlayerName_FullMethodName, req, "guild", testLoginSecret, uint64(time.Now().UnixMilli())))
+		_, err := s.ReleasePlayerName(context.Background(), req)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		assert.Equal(t, 0, fake.releaseCalls)
+	})
+	t.Run("签的是别的方法", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		req := &data_service.ReleasePlayerNameRequest{PlayerId: 2103, Name: "云中君"}
+		require.NoError(t, serviceauth.Sign(data_service.DataService_ReservePlayerName_FullMethodName, req, "login", testLoginSecret, uint64(time.Now().UnixMilli())))
+		_, err := s.ReleasePlayerName(context.Background(), req)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		assert.Equal(t, 0, fake.releaseCalls)
+	})
+	t.Run("签完被改了玩家", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		req := rollbackRelease(t, 2104, "云中君")
+		req.PlayerId = 2105
+		_, err := s.ReleasePlayerName(context.Background(), req)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		assert.Equal(t, 0, fake.releaseCalls)
+	})
+	t.Run("验证器没装配_不放行", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		s.svcCtx.AccountDirectoryAuth = nil
+		_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2106, "云中君"))
+		assert.Equal(t, codes.Unavailable, status.Code(err))
+		assert.Equal(t, 0, fake.releaseCalls)
+	})
+}
+
+// 名字属于建成的角色:已绑定(store 回 ReleaseBound),或者还是预留态但角色已提交(证明回 Committed),
+// 都是 FailedPrecondition + ErrCodePlayerNameInUse。login 照常按释放失败记孤儿。
+func TestReleasePlayerName_NameOfCommittedRoleIsFailedPrecondition(t *testing.T) {
+	t.Run("已绑定", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		fake.releaseOutcome = store.ReleaseBound
+		_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2201, "云中君"))
+		assertStatusCode(t, err, codes.FailedPrecondition, constants.ErrCodePlayerNameInUse)
+	})
+	t.Run("已绑定_运维 token 也一样", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, func(c *config.Config) { c.AdminToken = testAdminToken })
+		fake.releaseOutcome = store.ReleaseBound
+		_, err := s.ReleasePlayerName(adminCtx(testAdminToken), &data_service.ReleasePlayerNameRequest{PlayerId: 2202, Name: "云中君"})
+		assertStatusCode(t, err, codes.FailedPrecondition, constants.ErrCodePlayerNameInUse)
+	})
+	t.Run("预留态但角色已提交", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil)
+		s.svcCtx.PlayerRoleSeals = &fakeRoleSealer{seal: store.RoleSealCommitted}
+		_, err := s.ReleasePlayerName(context.Background(), rollbackRelease(t, 2203, "云中君"))
+		assertStatusCode(t, err, codes.FailedPrecondition, constants.ErrCodePlayerNameInUse)
+		assert.Equal(t, 0, fake.releaseCalls, "证明不放行就不碰名字行")
+	})
 }
 
 // ── BatchGet ───────────────────────────────────────────────────

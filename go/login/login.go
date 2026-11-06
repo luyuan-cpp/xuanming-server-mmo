@@ -87,6 +87,10 @@ func main() {
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
 		panic(fmt.Errorf("全球Login配置拒绝启动: %w", err))
 	}
+	// 新角色的存档库(总体方案 §7.2):地域码、存档库数不合法就拒绝启动,不建出落到错误库的角色。
+	if err := config.AppConfig.Placement.Validate(); err != nil {
+		panic(fmt.Errorf("Placement 配置拒绝启动: %w", err))
+	}
 
 	// 密钥门禁必须跑在**任何外部连接之前**(Kafka / Redis / etcd 都在下面)。
 	// 生产模式下密钥为空、等于占位串、短于 32 字节、或不同用途复用同一把,

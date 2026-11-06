@@ -63,6 +63,30 @@ void SendMatchInternalGetBattleCompletion(entt::registry& registry, entt::entity
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendMatchInternalGetBattleCompletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region MatchInternalGetBattleTerminalDecision
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchInternalGetBattleTerminalDecisionGrpcPath = "/match.MatchInternal/GetBattleTerminalDecision";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchInternalGetBattleTerminalDecision(entt::registry& registry, entt::entity nodeEntity, const ::match::GetBattleTerminalDecisionRequest& request, GrpcDone<::match::GetBattleTerminalDecisionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchInternalGetBattleTerminalDecisionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchInternalListStrandedFormations
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchInternalListStrandedFormationsGrpcPath = "/match.MatchInternal/ListStrandedFormations";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchInternalListStrandedFormations(entt::registry& registry, entt::entity nodeEntity, const ::match::ListStrandedFormationsRequest& request, GrpcDone<::match::ListStrandedFormationsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchInternalListStrandedFormationsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchInternalResolveStrandedFormation
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchInternalResolveStrandedFormationGrpcPath = "/match.MatchInternal/ResolveStrandedFormation";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchInternalResolveStrandedFormation(entt::registry& registry, entt::entity nodeEntity, const ::match::ResolveStrandedFormationRequest& request, GrpcDone<::match::ResolveStrandedFormationResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchInternalResolveStrandedFormationErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetMatchInternalCallDeadline(std::chrono::milliseconds deadline);
 

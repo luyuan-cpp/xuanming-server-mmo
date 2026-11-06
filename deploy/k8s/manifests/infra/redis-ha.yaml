@@ -687,9 +687,10 @@ metadata:
   name: redis
   labels:
     app: redis
-  # 重启闸(P0-E,与 redis.yaml 同一条注解):k8s_deploy.ps1 的 Apply-Infra 把下面 spec.template 段的摘要填进来,
-  # 下一次 infra-up 读回比较 —— 模板变了(= 滚动重启全部 redis Pod)而没给 -ConfirmRedisCoreRestart 就在任何写操作之前拒绝。
-  # 高可用形态下滚动重启基本无损(停机钩子先交接主),但仍是一次需要知情的变更。不要手写真实摘要。
+  # 与 redis.yaml 同一条注解:k8s_deploy.ps1 的 Apply-Infra 把下面 spec.template 段的文本摘要填进来,只作标记(看得出线上是哪一版清单)。
+  # 重启闸(P0-E)不读它:2026-11-05 起改为把这份 StatefulSet 交给 API server 做服务端预演,Pod 模板与线上不同(= 滚动重启全部 redis Pod)
+  # 而没给 -ConfirmRedisCoreRestart 就在任何写操作之前拒绝。高可用形态下滚动重启基本无损(停机钩子先交接主),但仍是一次需要知情的变更。
+  # 不要手写真实摘要。
   annotations:
     mmorpg.io/redis-pod-template-digest: "__REDIS_POD_TEMPLATE_DIGEST__"
 spec:

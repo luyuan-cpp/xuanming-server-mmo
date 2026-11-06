@@ -20,6 +20,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -55,6 +56,10 @@ type ServiceContext struct {
 	DrainRuntime  *drainproof.Runtime
 	stopErr       error
 	stopOnce      sync.Once
+
+	// WorldPush 是世界频道推送(world_push.go);Kafka.Brokers 为空时为 nil,不推。kafkaWriter 是它要在停机时关闭的连接。
+	WorldPush   WorldPusher
+	kafkaWriter *kafkago.Writer
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -91,6 +96,12 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 
 	chatRds, sharedRds, target := NewRedisHandles(c)
+	worldPush, kafkaWriter := newWorldPublisher(c)
+	var pusher WorldPusher
+	if worldPush != nil {
+		// 不把 nil 的 *worldPublisher 装进接口:那样 WorldPush != nil,PublishWorld 会去调一个空实现。
+		pusher = worldPush
+	}
 	return &ServiceContext{
 		Authority: store, AuthorityDB: db, directoryConn: directoryConn,
 		WriterConfig: writer, RootAdmission: root,
@@ -99,6 +110,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		SharedRedis:     sharedRds,
 		ChatRedisTarget: target,
 		Etcd:            etcdCli,
+		WorldPush:       pusher,
+		kafkaWriter:     kafkaWriter,
 	}
 }
 
@@ -131,7 +144,8 @@ func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
 	return nil
 }
 
-// 聊天只从同步 RPC 写 SQL；没有 Kafka/Redis 发布 worker。P1 等待该集合后即可封同一 SQL boot。
+// 聊天只从同步 RPC 写 SQL；没有 Kafka/Redis 发布 worker。世界频道推送在同一次同步 RPC 里、提交之后写 Kafka(world_push.go),
+// 同样计在 RootAdmission 里。P1 等待该集合后即可封同一 SQL boot。
 func (sc *ServiceContext) CloseSource(ctx context.Context) error {
 	sc.RootAdmission.CloseAdmission()
 	if err := sc.RootAdmission.Wait(ctx); err != nil {
@@ -164,6 +178,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 		}
 		if sc.Etcd != nil {
 			sc.stopErr = errors.Join(sc.stopErr, sc.Etcd.Close())
+		}
+		if sc.kafkaWriter != nil {
+			sc.stopErr = errors.Join(sc.stopErr, sc.kafkaWriter.Close())
 		}
 	})
 	return sc.stopErr
@@ -252,7 +269,8 @@ func StartMetrics(addr string) func() {
 		return func() {}
 	}
 	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(sendTotal, pullTotal)
+		prometheus.MustRegister(sendTotal, pullTotal, worldPushTotal)
+		prometheus.MustRegister(authority.MetricCollectors()...)
 	})
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())

@@ -1053,37 +1053,37 @@ const char descriptor_table_protodef_proto_2fplayer_5fstore_2fplayer_5fstore_2ep
     "\0162\037.playerstore.LoadAndClaimResult\022\022\n\nst"
     "orage_id\030\002 \001(\r\022\023\n\013owner_epoch\030\003 \001(\004\022\020\n\010s"
     "ave_seq\030\004 \001(\004\022\022\n\nschema_gen\030\005 \001(\r\022)\n\004row"
-    "s\030\006 \003(\0132\033.playerstore.PlayerStoreRow*\361\002\n"
+    "s\030\006 \003(\0132\033.playerstore.PlayerStoreRow*\354\002\n"
     "\017PlayerStoreKind\022\033\n\027PLAYER_STORE_KIND_OW"
     "NER\020\000\022#\n\030PLAYER_STORE_KIND_GROWTH\020\003\032\005\200\346\325"
     "\002\001\022$\n\031PLAYER_STORE_KIND_PROFILE\020\004\032\005\200\346\325\002\001"
-    "\022$\n\031PLAYER_STORE_KIND_LEGACY1\020\005\032\005\200\346\325\002\001\022&"
-    "\n\033PLAYER_STORE_KIND_CHARACTER\020\006\032\005\200\346\325\002\001\022#"
-    "\n\030PLAYER_STORE_KIND_WALLET\020\007\032\005\200\346\325\002\001\022 \n\025P"
-    "LAYER_STORE_KIND_BAG\020\010\032\005\200\346\325\002\001\022%\n\032PLAYER_"
-    "STORE_KIND_LOCATION\020\t\032\005\200\346\325\002\002\"\004\010\001\020\001\"\004\010\002\020\002"
-    "*\025PLAYER_STORE_KIND_HOT*\027PLAYER_STORE_KI"
-    "ND_ASSET*\347\002\n\020SavePlayerResult\022\"\n\036SAVE_PL"
-    "AYER_RESULT_UNSPECIFIED\020\000\022\031\n\025SAVE_PLAYER"
-    "_COMMITTED\020\001\022\025\n\021SAVE_PLAYER_EQUAL\020\002\022\030\n\024S"
-    "AVE_PLAYER_NO_OWNER\020\003\022\027\n\023SAVE_PLAYER_INV"
-    "ALID\020\004\022\033\n\027SAVE_PLAYER_STALE_OWNER\020\005\022\032\n\026S"
-    "AVE_PLAYER_NOT_HOLDER\020\006\022\031\n\025SAVE_PLAYER_U"
-    "NCLAIMED\020\007\022\031\n\025SAVE_PLAYER_OLDER_SEQ\020\010\022 \n"
-    "\034SAVE_PLAYER_SCHEMA_REGRESSED\020\t\022\036\n\032SAVE_"
-    "PLAYER_SCHEMA_TOO_NEW\020\n\022\031\n\025SAVE_PLAYER_T"
-    "OO_LARGE\020\013*\362\001\n\022LoadAndClaimResult\022%\n!LOA"
-    "D_AND_CLAIM_RESULT_UNSPECIFIED\020\000\022\032\n\026LOAD"
-    "_AND_CLAIM_CLAIMED\020\001\022\033\n\027LOAD_AND_CLAIM_N"
-    "O_OWNER\020\002\022\032\n\026LOAD_AND_CLAIM_INVALID\020\003\022\036\n"
-    "\032LOAD_AND_CLAIM_STALE_OWNER\020\004\022\035\n\031LOAD_AN"
-    "D_CLAIM_NOT_HOLDER\020\005\022!\n\035LOAD_AND_CLAIM_S"
-    "CHEMA_TOO_NEW\020\0062\265\001\n\013PlayerStore\022U\n\014LoadA"
-    "ndClaim\022 .playerstore.LoadAndClaimReques"
-    "t\032!.playerstore.LoadAndClaimResponse\"\000\022O"
-    "\n\nSavePlayer\022\036.playerstore.SavePlayerReq"
-    "uest\032\037.playerstore.SavePlayerResponse\"\000B"
-    "\036Z\031player_store/player_store\200\001\000b\006proto3"
+    "\022&\n\033PLAYER_STORE_KIND_CHARACTER\020\006\032\005\200\346\325\002\001"
+    "\022#\n\030PLAYER_STORE_KIND_WALLET\020\007\032\005\200\346\325\002\001\022 \n"
+    "\025PLAYER_STORE_KIND_BAG\020\010\032\005\200\346\325\002\001\022%\n\032PLAYE"
+    "R_STORE_KIND_LOCATION\020\t\032\005\200\346\325\002\002\"\004\010\001\020\001\"\004\010\002"
+    "\020\002\"\004\010\005\020\005*\025PLAYER_STORE_KIND_HOT*\027PLAYER_"
+    "STORE_KIND_ASSET*\031PLAYER_STORE_KIND_LEGA"
+    "CY1*\347\002\n\020SavePlayerResult\022\"\n\036SAVE_PLAYER_"
+    "RESULT_UNSPECIFIED\020\000\022\031\n\025SAVE_PLAYER_COMM"
+    "ITTED\020\001\022\025\n\021SAVE_PLAYER_EQUAL\020\002\022\030\n\024SAVE_P"
+    "LAYER_NO_OWNER\020\003\022\027\n\023SAVE_PLAYER_INVALID\020"
+    "\004\022\033\n\027SAVE_PLAYER_STALE_OWNER\020\005\022\032\n\026SAVE_P"
+    "LAYER_NOT_HOLDER\020\006\022\031\n\025SAVE_PLAYER_UNCLAI"
+    "MED\020\007\022\031\n\025SAVE_PLAYER_OLDER_SEQ\020\010\022 \n\034SAVE"
+    "_PLAYER_SCHEMA_REGRESSED\020\t\022\036\n\032SAVE_PLAYE"
+    "R_SCHEMA_TOO_NEW\020\n\022\031\n\025SAVE_PLAYER_TOO_LA"
+    "RGE\020\013*\362\001\n\022LoadAndClaimResult\022%\n!LOAD_AND"
+    "_CLAIM_RESULT_UNSPECIFIED\020\000\022\032\n\026LOAD_AND_"
+    "CLAIM_CLAIMED\020\001\022\033\n\027LOAD_AND_CLAIM_NO_OWN"
+    "ER\020\002\022\032\n\026LOAD_AND_CLAIM_INVALID\020\003\022\036\n\032LOAD"
+    "_AND_CLAIM_STALE_OWNER\020\004\022\035\n\031LOAD_AND_CLA"
+    "IM_NOT_HOLDER\020\005\022!\n\035LOAD_AND_CLAIM_SCHEMA"
+    "_TOO_NEW\020\0062\265\001\n\013PlayerStore\022U\n\014LoadAndCla"
+    "im\022 .playerstore.LoadAndClaimRequest\032!.p"
+    "layerstore.LoadAndClaimResponse\"\000\022O\n\nSav"
+    "ePlayer\022\036.playerstore.SavePlayerRequest\032"
+    "\037.playerstore.SavePlayerResponse\"\000B\036Z\031pl"
+    "ayer_store/player_store\200\001\000b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps[2] = {
@@ -1094,7 +1094,7 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstor
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto = {
     false,
     false,
-    2119,
+    2114,
     descriptor_table_protodef_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto,
     "proto/player_store/player_store.proto",
     &descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_once,
@@ -1114,7 +1114,7 @@ PlayerStoreKind_descriptor() {
   return file_level_enum_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerStoreKind_internal_data_[] = {
-    65536u, 32u, 508u, };
+    65536u, 32u, 492u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 SavePlayerResult_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto);

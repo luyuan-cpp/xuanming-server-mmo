@@ -6,6 +6,7 @@
 
 class CreateSceneRequest;
 class SceneInfoComp;
+class ScenePlacementFence;
 
 class SceneLifecycle
 {
@@ -18,4 +19,16 @@ public:
     // 返回发起排空后仍保留的场景绑定数，非零时禁止销毁；无效句柄幂等返回零。
     // 改派票据数不能代替绑定数，断线或身份不完整的居民同样必须先解绑。
     [[nodiscard]] static std::size_t DestroyScene(SceneEntity scene);
+
+    // CreateScene 按 scene_id 命中本节点已有实体时调用(两个 CreateScene 入口的去重分支),scene 必须有效且挂着
+    // SceneInfoComp(FindSceneById 的结果)。scene_manager 改派世界频道是「先建后改」:先 CreateScene、返回后再 CAS
+    // scene:{id}:node,命中已有实体可能正是一次迁回本节点的预建,映射还没改过来。这里把该实体的归属核对从头算起
+    // (SceneOwnershipReconciler 的宽限期,docs/design/scene-node-ownership-reconcile.md),预建与 CAS 之间它不会被
+    // 当成「不归本节点」拆掉。返回已有实体的 SceneInfoComp 供回包,借用规则同 CreateScene。
+    [[nodiscard]] static const SceneInfoComp& ReuseExistingScene(SceneEntity scene);
+
+    // 本线程(节点 EventLoop)的放置代次栅栏(world/scene_placement_fence.h,docs/design/world-channel-placement-generation.md)。
+    // 两个 CreateScene 入口在按 scene_id 去重之前、两个 DestroyScene 入口在查找实体之前判定:过期的建场景回空应答,
+    // 过期的拆场景忽略。节点自己的归属对账器直接调 DestroyScene,不经这里。
+    [[nodiscard]] static ScenePlacementFence& PlacementFence();
 };

@@ -13,6 +13,7 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/etcdwatch"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -116,8 +117,8 @@ func isKnownNodeIdentityAmbiguous(zoneID uint32, nodeID string) bool {
 //
 // 为什么 Redis 里已经有 death_at 还要再记一份进程本地的:death_at 只有 leader 写。
 // leader 缺位的窗口里节点丢了租约,没有人写 death_at,而「没有 death_at」在
-// CanReclaimDeadNode 里的语义是放行 —— 跟随者若据此接管玩家,正好撞上老进程 15s 的
-// 紧急疏散存盘(PUT 分支提前 clearNodeDeath 也是同一类缺口;markNodeDeath 的 Setex 失败
+// CanReclaimDeadNode 里的语义是放行 —— 跟随者若据此接管玩家,正好撞上老进程冲突关停
+// (仅重注册失败时才有,有界 15s)的疏散存盘,老进程最后一笔进度会被写权行拒掉而丢失(PUT 分支提前 clearNodeDeath 也是同一类缺口;markNodeDeath 的 Setex 失败
 // 已不再摘负载集,见 retryDeferredNodeDetaches)。
 // 本地这一份不依赖任何人写 Redis:只要本副本看到了它消失,屏障就从那一刻起算。
 // 本副本没看到(进程在那之后才启动)时没有记录,退回只看 Redis 的 death_at。
@@ -303,9 +304,9 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 //	  东西,只是让新玩家不再被派到它上面,越早越好。两者的先后**不可交换**,
 //	  理由见函数体内第一段注释。
 //
-//	**推迟做** —— 孤儿实例场景的强制销毁与节点计数清理。C++ 老节点丢租约后
-//	  还有 kDrainBudget(15s)的 emergency relocate,期间仍在 SavePlayer;
-//	  此刻销毁它名下的场景映射,等于在老节点停笔前就把归属改了。收尾任务与摘负载集
+//	**推迟做** —— 孤儿实例场景的强制销毁与节点计数清理。C++ 老节点只在重注册失败时
+//	  才走冲突关停(有界 kDrainBudget 15s,存盘并改派玩家),期间仍在 SavePlayer;
+//	  此刻销毁它名下的场景映射,等于在老节点停笔前就把归属改了,它的最后一笔进度会被写权行拒掉。收尾任务与摘负载集
 //	  同一次 Lua 写进 Redis,由(任何一任)领导者的 drainPendingDeadNodeReconciles 在屏障
 //	  走完后执行(reentry_barrier.go「被屏障推迟的死节点收尾」)。
 //
@@ -319,9 +320,10 @@ func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	// death_at,而后者「键不存在」的语义是**放行**。所以只要 Zrem 先执行,
 	// 在 death_at 写进去之前的那几个 Redis 往返里,并发的 EnterScene 看到的
 	// 组合就是「节点已死(不在负载集)」+「没有 death_at ⇒ 屏障已过」——
-	// 玩家会在老节点 15s emergency drain 还没跑完时就被改派到新节点,
-	// 正是这道屏障要防的双写/回档(docs/design/scene-owner-reentry-barrier.md §2)。
-	// 窗口虽窄,但开服浪涌下 EnterScene 的频率足以撞上,且后果是玩家数据回档。
+	// 玩家会在老节点冲突关停的疏散(重注册失败时才有,有界 15s)还没跑完时就被改派到新节点,
+	// 老节点的最后一笔进度被 TiDB 写权行拒掉而丢失,这正是这道屏障要避免的
+	// (docs/design/scene-owner-reentry-barrier.md §2)。屏障只管进度少丢,迟到写的正确性由写权行兜底。
+	// 窗口虽窄,但开服浪涌下 EnterScene 的频率足以撞上,后果是玩家丢一段进度。
 	//
 	// 反过来的失败模式是安全的:标记写成功而进程随即崩在 Zrem 之前,节点仍留在
 	// 负载集里 ⇒ IsNodeAlive 为真,本来就不会触发改派;屏障多压一个 TTL 也只是
@@ -655,10 +657,14 @@ func StartLoadReporter(ctx context.Context, svcCtx *svc.ServiceContext) {
 		}
 		knownNodesSynced.Store(true)
 
-		watchAndRefresh(ctx, svcCtx, rev)
+		periodic := watchAndRefresh(ctx, svcCtx, rev)
 
 		if ctx.Err() != nil {
 			return
+		}
+		if periodic {
+			logx.Debug("[LoadReporter] periodic resync")
+			continue
 		}
 		logx.Info("[LoadReporter] watch interrupted, re-syncing")
 	}
@@ -772,7 +778,7 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 	if leaderView && isLeader() {
 		// 中途失去领导权:降级即停,新领导者的 resync fullSync 会重扫同一批(与旧写法一致,
 		// 后面的 drain / init / rebalance / 孤儿清理本轮都不做)。
-		if !sweepStaleLoadSetMembers(svcCtx, seenByZone, loadSets) {
+		if !sweepStaleLoadSetMembers(svcCtx, seenByZone, loadSets, lastInstancesByIdentity(prevKnown)) {
 			return revision, nil
 		}
 
@@ -827,7 +833,12 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 // 与旧写法的差异:这条路径现在会调
 // ForgetNode(nodeID, zone, 0) —— 本进程不认识这个节点,删不存在的序列是 no-op;同身份的活节点
 // 也不在清扫范围里。
-func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]map[string]struct{}, loadSets map[uint32][]string) bool {
+//
+// lastInstances 是旧镜像里每个 (zone,node) 的 node_uuid(lastInstancesByIdentity),给收尾任务记下判死的是哪一代
+// (reentry_barrier.go R1-I5):那一代失租后按原 node_id 重新注册时,任务认得出它、撤掉而不是拆它的活实例。
+// 旧镜像里没有的节点(进程刚启动、或镜像建好之前就消失了)记为不知道,照旧收尾。传 nil 等于全都不知道。
+func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]map[string]struct{}, loadSets map[uint32][]string,
+	lastInstances map[uint32]map[string]string) bool {
 	for _, zoneId := range zoneKeysOf(loadSets) {
 		// seen 对快照外的 zone 是 nil map —— 该 zone 所有条目都视为 stale。
 		seen := seenByZone[zoneId]
@@ -850,10 +861,30 @@ func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]
 			// 范围清空后与出队一起删(理由见 finishDeadNodeReconcile)。
 			staleEntry := nodeEntry{nodeID: member}
 			staleEntry.reg.ZoneId = zoneId
+			staleEntry.reg.NodeUuid = lastInstances[zoneId][member]
 			removeNodeFromRedis(svcCtx, staleEntry)
 		}
 	}
 	return true
+}
+
+// lastInstancesByIdentity 从一份镜像里取每个 (zone,node) 的 node_uuid。同一身份挂着两个不同 node_uuid 的注册时
+// 记为空串(不知道判死的是哪一代,R1-I5 宁可照旧收尾也不认错人);没有 node_uuid 的旧版本注册同样是空串。
+func lastInstancesByIdentity(mirror map[string]nodeEntry) map[uint32]map[string]string {
+	out := make(map[uint32]map[string]string)
+	for _, entry := range mirror {
+		zone := out[entry.reg.ZoneId]
+		if zone == nil {
+			zone = make(map[string]string)
+			out[entry.reg.ZoneId] = zone
+		}
+		if prev, seen := zone[entry.nodeID]; seen && prev != entry.reg.NodeUuid {
+			zone[entry.nodeID] = ""
+			continue
+		}
+		zone[entry.nodeID] = entry.reg.NodeUuid
+	}
+	return out
 }
 
 // watchAndRefresh starts an etcd Watch from the given revision, a periodic
@@ -862,17 +893,21 @@ func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]
 // tick catches drift that events alone can miss (hot channels that drained
 // after the last join/leave event) and acts as a self-healing safety net
 // when etcd watch misses an update during a network blip.
-func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64) {
+//
+// 返回 periodic=true 表示到了定期对账的点(etcdwatch.ResyncInterval),不是 watch 出了问题。
+func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64) (periodic bool) {
 	// clientv3 要求 watch 不再使用时取消它的 ctx。本函数会因 resync / watch 出错 / 通道关闭返回,若直接拿长寿命的服务 ctx
-	// 建 watch,每返回一次就留下一条 watch 子流(客户端一条 goroutine 加无界缓冲,服务端一个 watcher)。用随本函数返回而
-	// 取消的子 ctx 建;handleWatchEvent 里的补频道 / rebalance 仍用服务 ctx,不受影响。
-	watchCtx, cancelWatch := context.WithCancel(ctx)
-	defer cancelWatch()
-	watchCh := svcCtx.Etcd.Watch(watchCtx, sceneNodeZonePrefix(svcCtx.Config.ZoneId),
+	// 建 watch,每返回一次就留下一条 watch 子流(客户端一条 goroutine 加无界缓冲,服务端一个 watcher)。etcdwatch.Open 用随本函数
+	// 返回而取消的子 ctx 建;handleWatchEvent 里的补频道 / rebalance 仍用服务 ctx,不受影响。
+	// 防 watch 静默停住(docs/design/infra-reconnect-overview.md §4 R1):子 ctx 带 RequireLeader,所连 etcd 成员失去 leader 时
+	// 流会报错;etcd 客户端开了 keepalive(svc.ServiceContext);每 etcdwatch.ResyncInterval 回外层重跑一次 fullSync。
+	// fullSync 本来就是可重复执行的全量对账(存活集闸门 + 幂等的领导者动作),定期跑与 watch 中断后跑是同一件事。
+	watchCh, resync, stopWatch := etcdwatch.Open(ctx, svcCtx.Etcd, etcdwatch.ResyncInterval, sceneNodeZonePrefix(svcCtx.Config.ZoneId),
 		clientv3.WithPrefix(),
 		clientv3.WithRev(rev+1),
 		clientv3.WithPrevKV(),
 	)
+	defer stopWatch()
 
 	loadTicker := time.NewTicker(LoadReportInterval)
 	defer loadTicker.Stop()
@@ -883,15 +918,17 @@ func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64)
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
+		case <-resync:
+			return true
 		case watchResp, ok := <-watchCh:
 			if !ok {
 				logx.Info("[LoadReporter] watch channel closed")
-				return
+				return false
 			}
 			if watchResp.Err() != nil {
 				logx.Errorf("[LoadReporter] watch error: %v", watchResp.Err())
-				return
+				return false
 			}
 			for _, ev := range watchResp.Events {
 				handleWatchEvent(ctx, svcCtx, ev)
@@ -912,7 +949,7 @@ func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64)
 			// 而不是等下一次 watch 中断。另一个来源是推迟摘除放弃时(retryDeferredNodeDetaches 的
 			// abandoned 分支),要 fullSync 的陈旧清扫把还留在负载集里的死节点重新推迟。
 			logx.Info("[LoadReporter] resync requested (leadership change or abandoned deferred detach)")
-			return
+			return false
 		}
 	}
 }
@@ -1163,10 +1200,10 @@ func GetBestNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32)
 // 为什么未知按「存活」:本函数的返回值驱动的是场景改派(enterscenelogic
 // resolveScene / world_rebalance)、场景销毁(destroyscenelogic)与孤儿清理
 // (orphan_cleanup)。判「死」是**破坏性**的一侧——它会改写 scene:{id}:node
-// 并让新节点 CreateScene。而 C++ 老节点在丢租约后还有 15s 的 emergency
-// relocate drain(node.cpp kDrainBudget),期间仍在 SavePlayer。
+// 并让新节点 CreateScene。而 C++ 老节点丢租约后只重注册、不停写;重注册失败时才走
+// 冲突关停,有界(node.cpp kDrainBudget 15s)地存盘并改派玩家。
 // 一次 Redis 抖动若被当成「节点已死」,就会在老节点还在存盘时把玩家改派到
-// 新节点,造成同一玩家双写 / 回档。
+// 新节点:老节点的写被 TiDB 写权行拒掉(只丢不盖),但这段进度白丢,还会白白踢掉在线玩家。
 //
 // 反过来,未知按「存活」的代价只是本轮不改派 / 不清理:若节点真的死了,下一轮
 // (Redis 恢复后)会正确判死并自愈;若只是 Redis 抖动,则什么都没发生 —— 这是

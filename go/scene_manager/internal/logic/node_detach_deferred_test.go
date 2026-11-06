@@ -584,7 +584,8 @@ func TestHandleWatchPut_ZoneFlipRetiresOldZoneIdentity(t *testing.T) {
 	})
 }
 
-// fullSync 的陈旧清扫与 watch DELETE 走同一条摘除路径:写不进就推迟,不 ZREM。
+// fullSync 的陈旧清扫与 watch DELETE 走同一条摘除路径:写不进就推迟,不 ZREM。清扫只扫本 zone:同组别的 zone 的负载集
+// 在同一个实例里,由那个 zone 的领导者扫(docs/design/control-plane-zone-scoping-20261105.md §4.3)。
 func TestSweepStaleLoadSetMembers_DefersInsteadOfZremOnDeathMarkFailure(t *testing.T) {
 	const otherZone = uint32(3)
 	sc, mr, faults := newNodeDetachTestCtx(t)
@@ -594,32 +595,28 @@ func TestSweepStaleLoadSetMembers_DefersInsteadOfZremOnDeathMarkFailure(t *testi
 			require.NoError(t, err)
 		}
 	}
-	// 生产路径先登记 zone 再写负载集(zone_registry.go);这里直接 ZADD 绕过了登记,手工补上,
-	// 快照外的 otherZone 才在清扫范围里。
-	_, err := mr.SAdd("scene_manager:zones", "1", "3")
-	require.NoError(t, err)
 	seen := map[uint32]map[string]struct{}{testZoneId: {"20": {}}}
 	faults.failDeathAt.Store(true)
 
-	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{testZoneId}, nil))))
+	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc)), nil))
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "20")
-	assert.Contains(t, loadSetMembersForTest(t, mr, otherZone), "30", "快照外的 zone 同样按推迟处理")
+	assert.Contains(t, loadSetMembersForTest(t, mr, otherZone), "30")
 	assert.True(t, isNodeDetachDeferred(testZoneId, "10"))
-	assert.True(t, isNodeDetachDeferred(otherZone, "30"))
+	assert.False(t, isNodeDetachDeferred(otherZone, "30"), "别的 zone 不在本进程的清扫范围里")
 	assert.False(t, isNodeDetachDeferred(testZoneId, "20"))
 	assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "20")), "快照里的活节点不能被碰")
 
 	faults.failDeathAt.Store(false)
-	assert.Equal(t, 2, retryDeferredNodeDetaches(sc))
+	assert.Equal(t, 1, retryDeferredNodeDetaches(sc))
 	assert.True(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")))
-	assert.True(t, mr.Exists(nodeDeathAtKey(otherZone, "30")))
+	assert.False(t, mr.Exists(nodeDeathAtKey(otherZone, "30")), "别的 zone 的节点不得被本进程判死")
 	assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
-	assert.NotContains(t, loadSetMembersForTest(t, mr, otherZone), "30")
+	assert.Contains(t, loadSetMembersForTest(t, mr, otherZone), "30")
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "20")
 
 	t.Cleanup(SetLeaderCheckForTest(func() bool { return false }))
-	assert.False(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{testZoneId}, nil))),
+	assert.False(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc)), nil),
 		"中途失去领导权必须报告给调用方")
 	assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "20")))
 }
@@ -668,7 +665,7 @@ func TestReassignSceneNode_BlockedWhileDeathMarkDeferred(t *testing.T) {
 	require.NoError(t, mr.Set(sceneNodeKey(9001), "10"))
 	blockedBefore := barrierBlockedCountForTest(t, testZoneId, barrierSiteReassign)
 
-	assert.False(t, reassignSceneNode(sc, testZoneId, 9001, "10", "20"))
+	assert.False(t, reassignSceneNode(sc, testZoneId, 9001, "10", "20", freshPlacementGeneration(t, sc, testZoneId)))
 	owner, err := mr.Get(sceneNodeKey(9001))
 	require.NoError(t, err)
 	assert.Equal(t, "10", owner)

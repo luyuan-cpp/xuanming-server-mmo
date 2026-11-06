@@ -43,11 +43,15 @@ import (
 	rfpb "proto/role_fence"
 	"schemamigrate"
 	"shared/buildinfo"
+	"shared/etcdwatch"
+	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/idsegment"
 	"shared/kafkautil"
 	"shared/killswitch"
+	"shared/releasetrack"
 	"shared/rolefence"
+	"shared/roleidentity"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
@@ -55,6 +59,11 @@ import (
 )
 
 var configFile = flag.String("f", "etc/guild.yaml", "config file path")
+
+// guildAnonymousReads 是不带会话也受理的客户端方法(入口准入的匿名只读例外)。只能放只读方法:
+// mail 领附件时经 GuildRPCDirectory 读玩家当前所在帮(go/mail/internal/data/guild_directory.go),按内部调用走。
+// 写方法不带会话一律拒绝(docs/design/gate-online-identity.md §7.5)。
+var guildAnonymousReads = []string{pb.GuildService_GetPlayerGuild_FullMethodName}
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
@@ -102,6 +111,12 @@ func main() {
 	if err := ensureTrialResultTopic(config.AppConfig, kafkautil.EnsureTopics); err != nil {
 		logx.Must(fmt.Errorf("guild global result topic durability: %w", err))
 	}
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理路由服转来的客户端请求,不跑全局作用域的后台:
+	// 启动重建榜单、资产 outbox 重投 / 维护选主 / 唤醒 / 终态清理、历练的后台循环与结果消费组。取值非法就拒启。
+	// scene 节点镜像照起:捐献、兑换、活动奖励提交后的同步投递要靠它定位 scene。
+	releaseTrack, trackErr := releasetrack.FromEnv()
+	logx.Must(trackErr)
+	globalBackground := releaseTrack.RunsGlobalBackgroundWork()
 
 	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 	if err != nil {
@@ -230,10 +245,11 @@ func main() {
 	//
 	// kind="guild" 与其他服务不同,槽池互相隔离;ClusterId 由运维按集群设定(默认 0)。
 	// LegacyPrefix="/guild" 让 cluster 0 在滚动升级期仍读旧布局的水位 / 活 id(发布一版后可删)。
-	etcdCli, err := clientv3.New(clientv3.Config{
+	// 这个客户端同时给 killswitch 与场景节点镜像做 watch;keepalive 让 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   config.AppConfig.Registry.Etcd.Hosts,
 		DialTimeout: config.AppConfig.Registry.Etcd.DialTimeout,
-	})
+	}))
 	if err != nil {
 		logx.Must(fmt.Errorf("snowflake etcd client: %w", err))
 	}
@@ -287,8 +303,13 @@ func main() {
 
 	// repo 已在建表之后创建。
 	// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。
-	if err := repo.RebuildRanks(context.Background()); err != nil {
-		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
+	// canary 副本不重建:重建持维护锁整表删了再写,作用于全部玩家的榜单,由 stable 副本承担(发布轨道设计 §2.5)。
+	if globalBackground {
+		if err := repo.RebuildRanks(context.Background()); err != nil {
+			panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
+		}
+	} else {
+		logx.Infof("[guild] release_track=%s: skip startup rank rebuild (stable replicas own it)", releaseTrack)
 	}
 	onlineResolver := logic.NewOnlineStatusResolver(svcCtx.PlayerRedis)
 
@@ -505,7 +526,7 @@ func main() {
 		defer close(serverRegistered)
 		pb.RegisterGuildServiceServer(grpcServer, server.NewGuildServer(guildLogic))
 		// 帮会内部服务(B5d-2a,docs/design/guild-phase2/07-rollback-fail-closed.md §7.4.4):data_service 回档前检查用的只读 RPC。
-		// 方法不进 session.ClientMethods,客户端来源一律 PermissionDenied;拦截器链对它同样生效。
+		// GuildInternal 不标客户端协议,不在生成的客户端方法集合里,客户端来源由入口准入一律 PermissionDenied。
 		// assetStore 在上面无条件建好(logx.Must 兜底),与通道开关无关:回档检查读的是历史终态行,通道关着也要答得出来。
 		// 保留期是"可证明窗口"的下界,用 svc.RollbackProofRetention 取:配了值时与清理用的换算相同;
 		// AssetOp 整段缺失(通道关闭的合法形态,字段是 0)时回落到默认值 —— 原样传 0 会让这个 RPC 恒回 Unavailable,
@@ -528,8 +549,12 @@ func main() {
 	if authErr != nil {
 		panic(authErr)
 	}
+	onlineEntry, entryErr := roleidentity.EntryInterceptor(clientrpc.Callable, guildAnonymousReads...)
+	if entryErr != nil {
+		panic(entryErr)
+	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(repo.CheckOriginalRole, func(err error) bool {
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), onlineEntry, session.OriginalIdentityInterceptor(repo.CheckOriginalRole, func(err error) bool {
 		return errors.Is(err, data.ErrWriteConflict) || errors.Is(err, rolefence.ErrRoleNotFound)
 	}))...)
 	defer s.Stop()
@@ -544,10 +569,12 @@ func main() {
 	// 行留在 PENDING、下一轮再投一次;watcher 撞上已 Close 的 etcd 客户端同理。
 	// 两个 stop 都会**等** goroutine 真正退出才返回;写在 s.Stop 之前执行还让它们的停机日志不被 logx.Close 吞掉。
 	if assetPipe != nil {
-		assetPipe.Start(context.Background(), etcdCli)
+		// canary 副本只起 scene 节点镜像(globalBackground=false,见 AssetPipeline.Start)。
+		assetPipe.Start(context.Background(), etcdCli, globalBackground)
 		defer assetPipe.Stop()
 	}
-	if config.AppConfig.AssetOp.CleanupEnabled {
+	// 终态清理是全局作用域的后台,canary 副本不起(发布轨道设计 §2.5)。
+	if config.AppConfig.AssetOp.CleanupEnabled && globalBackground {
 		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp), root)
 		if err := svcCtx.BindSourceStop(func(ctx context.Context) error {
 			done := make(chan struct{})
@@ -574,27 +601,35 @@ func main() {
 	//      使用者要先停;又都早于 svcCtx.Stop(关 MySQL / Redis)。每个 stop 都会等 goroutine 真正退出才返回 ——
 	//      正在进行的结算事务随 ctx 取消回滚,那条消息的位点没有提交,重启后重放,由幂等闸门兜住。
 	//
-	// 后台两个循环**无条件跑**(不看历练此刻开没开,理由见上面的活动依赖装配)。它们没有外部开关,
-	// 起不来只可能是装配错误,所以拒启。
-	stopTrialBackground, err := guildLogic.StartTrialBackground(logic.TrialBackgroundConf{
-		RelayAdmission: relay,
-		OwedInterval:   config.AppConfig.Activity.OwedLoopInterval(),
-		SweepInterval:  config.AppConfig.Activity.TrialSweepInterval(),
-		ResultOverdue:  config.AppConfig.Activity.TrialResultOverdue(),
-		Abandon:        config.AppConfig.Activity.TrialAbandon(),
-		// 巡检租约的持有者标识:节点 uuid 每个进程实例唯一,排障时看 guild:trial:sweep:lease 的值就知道是谁在扫。
-		Owner: n.Info.NodeUuid,
-	})
-	if err != nil {
-		logx.Must(fmt.Errorf("guild trial background loops: %w", err))
+	// 后台两个循环在 stable 副本上**无条件跑**(不看历练此刻开没开,理由见上面的活动依赖装配)。它们没有外部开关,
+	// 起不来只可能是装配错误,所以拒启。canary 副本不起(发布轨道设计 §2.5):合服榜折叠、大厅过期、开局恢复、
+	// 待入队物品转指令和巡检结算都作用于全部玩家,由 stable 承担;canary 会话开的局同样由它们推进。
+	stopTrialBackground := func() {}
+	if globalBackground {
+		var err error
+		stopTrialBackground, err = guildLogic.StartTrialBackground(logic.TrialBackgroundConf{
+			RelayAdmission: relay,
+			OwedInterval:   config.AppConfig.Activity.OwedLoopInterval(),
+			SweepInterval:  config.AppConfig.Activity.TrialSweepInterval(),
+			ResultOverdue:  config.AppConfig.Activity.TrialResultOverdue(),
+			Abandon:        config.AppConfig.Activity.TrialAbandon(),
+			// 巡检租约的持有者标识:节点 uuid 每个进程实例唯一,排障时看 guild:trial:sweep:lease 的值就知道是谁在扫。
+			Owner: n.Info.NodeUuid,
+		})
+		if err != nil {
+			logx.Must(fmt.Errorf("guild trial background loops: %w", err))
+		}
+		defer stopTrialBackground()
+	} else {
+		logx.Infof("[guild] release_track=%s: trial background loops and result consumer disabled (canary serves client RPCs only)", releaseTrack)
 	}
-	defer stopTrialBackground()
 
 	// 结果消费者只看"结果消费是否打开"(TrialResultActive),**不看 MatchRpc 配没配**:运维删掉 MatchRpc 来关历练时,
 	// 关之前已经开打的对局仍要结算。全局模式已在注册前严格核验topic；
 	// 仅显式本地旧MySQL模式保留首次连接失败后后台每30s恢复的兼容行为。
+	// 消费组 guild-trial 是全局作用域,canary 副本不加入(发布轨道设计 §2.5)。
 	stopTrialResults := func() {}
-	if trialResultActive {
+	if trialResultActive && globalBackground {
 		var err error
 		stopTrialResults, err = startTrialResultConsumerWithOwner(config.AppConfig, guildLogic, relay, svcCtx.BindConsumerOwner)
 		if err != nil {
@@ -681,7 +716,8 @@ func main() {
 			if root.Pending() != 0 {
 				return nil, drainproof.ErrHold
 			}
-			if trialResultActive {
+			// canary 副本不加入结果消费组(上面 globalBackground 一段),没有 ConsumerOwner 可等,按无消费者发布。
+			if trialResultActive && globalBackground {
 				owner := svcCtx.ConsumerOwner
 				if owner == nil {
 					return nil, drainproof.ErrHold
@@ -895,7 +931,10 @@ func logTrialClosedReason(c config.Config, matchConfigured bool) {
 // main() 没法在单测里跑起来,而"哪次重构顺手把 killswitch 那行删了"是最容易发生、
 // 又最难被发现的回归:开关删掉之后一切照常工作,只有真出事那天才发现止血阀是假的。
 // 见 guild_test.go。
-func buildUnaryInterceptors(ks *killswitch.Switch, budget time.Duration, identity ...grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
+//
+// onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),由装配层传入,不得为 nil;
+// identity 是追加在最内层的原角色归属预检(session.OriginalIdentityInterceptor)。
+func buildUnaryInterceptors(ks *killswitch.Switch, budget time.Duration, onlineEntry grpc.UnaryServerInterceptor, identity ...grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
 	chain := []grpc.UnaryServerInterceptor{
 		// ① 流量统计放最外层:被热关停短路掉的请求也必须被统计到。
 		//    否则"关停生效后这个方法的 QPS 归零"会被误读成客户端不再调用了。
@@ -909,11 +948,11 @@ func buildUnaryInterceptors(ks *killswitch.Switch, budget time.Duration, identit
 		//    它们的账记在 killswitch_blocked_total{method} 上。
 		ks.UnaryServerInterceptor(),
 
-		// ③ 会话与方法准入(internal/session):客户端来源的身份只认 gate 注入的会话,
-		//    内部方法(UpdateGuildScore)对客户端一律 PermissionDenied。放在热关停之后:
-		//    被关停的方法不必解码会话;放在 serverbase 之前:被拒绝的调用没进业务链路,
-		//    不该计入 rpc_duration_seconds(grpcstats 仍统计到它们)。
-		session.UnaryServerInterceptor(session.ClientMethods),
+		// ③ 入口准入(docs/design/gate-online-identity.md §9.2):客户端方法必须带 gate 签名的完整原身份,
+		//    不带会话只放行登记的只读例外(GetPlayerGuild);内部方法(UpdateGuildScore、GuildInternal、
+		//    RoleFenceParticipant)带会话一律 PermissionDenied。放在热关停之后:被关停的方法不必做准入;
+		//    放在 serverbase 之前:被拒绝的调用没进业务链路,不该计入 rpc_duration_seconds(grpcstats 仍统计到它们)。
+		onlineEntry,
 
 		// ④ in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
 		//    响应体的 TipInfoMessage —— gRPC status 恒 OK,go-zero 自带的指标拦截器会把

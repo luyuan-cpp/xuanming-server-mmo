@@ -1,21 +1,26 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    etcd MVCC 历史压缩(P0-C)的静态契约:CronJob 清单、compose 与 StatefulSet 的压缩 / 配额 env、探针和抓取注解。
+    etcd 镜像、MVCC 压缩与空间维护(P0-C)的静态契约:三套 etcd 清单与两份 compose 的镜像、启动方式、数据目录、压缩 / 配额取值,
+    退役的压缩 CronJob 不再下发,告警规则与「官方镜像没有 shell」的使用约束。
 
 .DESCRIPTION
     只读仓库里的静态文件:不调用 k8s_deploy.ps1,不访问集群、容器或网络。
-    「infra-up 的 DryRun 产物里有 etcd-compact」(阶段 1b)要跑部署脚本,放在 k8s_deploy_contract.tests.ps1 的 Kafka 清单用例之后。
+    「infra-up 的 DryRun 产物不再有 etcd-compact、会删残留」要跑部署脚本,放在 k8s_deploy_contract.tests.ps1。
 
-    守住的东西:
-      - CronJob 的形态:名字、调度只用 */N 分钟、不叠跑、不重试、失败留痕、Job 有小于调度间隔的 activeDeadlineSeconds(防卡死的 Job 让 Forbid
-        永久跳过后续调度)、标签不能是 app: etcd、占位只用 __INFRA_NAMESPACE__;
-      - 压缩脚本:目标来自线性一致读,不做 defrag、不解除告警,查告警不经管道(否则查询失败等于「没有告警」);
-      - 取值:KEEP_REVISIONS 与 compose 的 ETCD_AUTO_COMPACTION_RETENTION 同值,配额满足「配额 × 2 + 1Gi ≤ PVC」;
-      - 镜像:清单、etcd.yaml、compose 三处逐字相同,钉版本只能三处同批改;
-      - 阶段 2:StatefulSet 的 env 与 compose 相等,抓取注解在,探针排除 NOSPACE。镜像的 tag@摘要待 Codex 实测 M0 后三处同批钉。
+    守住的东西(2026-11-05 起,P0-C 阶段 2 收尾):
+      - 镜像:主 etcd、发号器两套、两份 compose 是同一个官方镜像引用,按 quay.io/coreos/etcd:v<版本>@sha256:<64 位> 钉死;
+        任何生效内容里不再有 bitnami 或 :latest。换版本只能五处同批改;
+      - 启动:官方镜像是 distroless,StatefulSet 显式 command: ["/usr/local/bin/etcd"],ETCD_* 由 etcd 自己解析;不用 bitnami 专用的
+        ALLOW_NONE_AUTHENTICATION;数据目录在挂载点之下;非 root 运行;
+      - 取值:主 etcd 与两份 compose 的压缩模式、保留量、配额相同;三套 StatefulSet 都满足「配额 × 2 + 1Gi ≤ PVC」;
+      - 主 etcd 的抓取注解与排除 NOSPACE 的探针在;发号器两套也带抓取注解(告警覆盖);
+      - 压缩 CronJob etcd-compact 退役:清单删除,Apply-Infra 不再 apply 它并删掉集群里的残留;
+      - deploy/k8s/etcd-alerts.yaml 有无主与空间告警;
+      - 官方镜像没有 shell:脚本与运维手册里 exec 进 etcd 的命令一律直接跑 etcdctl。
 
-    设计与取值:docs/handoff/global-singletons-p0-findings-20261014.md「## P0-C」;运维:docs/ops/etcd-maintenance-runbook.md。
+    设计与取值:docs/handoff/global-singletons-p0-findings-20261014.md「## P0-C」、交接 handoff-global-singletons-p0-20261015.md §8;
+    运维:docs/ops/etcd-maintenance-runbook.md。
 
 .EXAMPLE
     pwsh -NoProfile -File tools/scripts/tests/etcd_maintenance_contract.tests.ps1
@@ -26,53 +31,33 @@ $ErrorActionPreference = 'Stop'
 
 # 路径一律正斜杠 + Join-Path:CI 在 ubuntu 上跑(.github/workflows/deploy-config-tests.yml)。
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
-$script:MaintenancePath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/etcd-maintenance.yaml'
-$script:EtcdPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/etcd.yaml'
+$script:InfraDir = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra'
+$script:EtcdPath = Join-Path $script:InfraDir 'etcd.yaml'
+$script:StatefulSetPaths = [ordered]@{
+    'etcd'              = $script:EtcdPath
+    'etcd-id-secondary' = (Join-Path $script:InfraDir 'etcd-id-secondary.yaml')
+    'etcd-id-registry'  = (Join-Path $script:InfraDir 'etcd-id-registry.yaml')
+}
+$script:MaintenancePath = Join-Path $script:InfraDir 'etcd-maintenance.yaml'
 $script:ComposePath = Join-Path $script:RepoRoot 'deploy/docker-compose.yml'
+$script:DebugComposePath = Join-Path $script:RepoRoot 'deploy/debug/compose.game.yml'
+$script:AlertsPath = Join-Path $script:RepoRoot 'deploy/k8s/etcd-alerts.yaml'
+$script:DeployPath = Join-Path $script:RepoRoot 'tools/scripts/k8s_deploy.ps1'
+$script:RunbookPath = Join-Path $script:RepoRoot 'docs/ops/etcd-maintenance-runbook.md'
+# 官方镜像引用的形状:quay.io/coreos/etcd:v<主>.<次>.<补丁>@sha256:<64 位小写十六进制>。
+$script:PinnedImagePattern = '^quay\.io/coreos/etcd:v3\.\d+\.\d+@sha256:[0-9a-f]{64}$'
 
-# 读文件放在各用例里调用:文件缺失时每条用例各自报红(修复前跑这份测试应当逐条点名缺什么),而不是整个脚本中断。
+# 读文件放在各用例里调用:文件缺失时每条用例各自报红,而不是整个脚本中断。
 function Read-RepoText {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { throw "找不到 $Path" }
     return ([IO.File]::ReadAllText($Path) -replace "`r`n", "`n")
 }
 
-# 去掉整行注释(YAML 注释与脚本注释都是去掉缩进后以 # 开头),只对真正生效的内容断言。
+# 去掉整行注释(去掉缩进后以 # 开头),只对真正生效的内容断言。
 function Get-NonCommentText {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
     return ((($Text -split "`n") | Where-Object { -not $_.TrimStart().StartsWith('#') }) -join "`n")
-}
-
-# 取 `<Key>: |` 字面块的正文(去掉公共缩进)。runbook 与验证步骤从清单里取脚本原文也是这个写法。
-function Get-BlockScalar {
-    param(
-        [Parameter(Mandatory = $true)][string]$Text,
-        [Parameter(Mandatory = $true)][string]$Key
-    )
-    $lines = $Text -split "`n"
-    $start = -1
-    $indent = 0
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        $m = [regex]::Match($lines[$i], '^(\s*)' + [regex]::Escape($Key) + ':\s*\|\s*$')
-        if ($m.Success) {
-            $start = $i + 1
-            $indent = $m.Groups[1].Value.Length
-            break
-        }
-    }
-    if ($start -lt 0) { throw "找不到字面块 ${Key}: |" }
-
-    $body = [System.Collections.Generic.List[string]]::new()
-    for ($i = $start; $i -lt $lines.Count; $i++) {
-        $l = $lines[$i]
-        if ($l.Trim().Length -eq 0) { $body.Add(''); continue }
-        if (($l.Length - $l.TrimStart().Length) -le $indent) { break }
-        $body.Add($l)
-    }
-    $nonEmpty = @($body | Where-Object { $_.Length -gt 0 })
-    if ($nonEmpty.Count -eq 0) { throw "字面块 $Key 是空的" }
-    $min = ($nonEmpty | ForEach-Object { $_.Length - $_.TrimStart().Length } | Measure-Object -Minimum).Minimum
-    return ((($body | ForEach-Object { if ($_.Length -ge $min) { $_.Substring($min) } else { '' } }) -join "`n").TrimEnd() + "`n")
 }
 
 # 取 compose 里某个服务的块:从 `  <服务名>:` 到下一个缩进 ≤ 2 的非注释行(下一个服务或顶层的 volumes:)。
@@ -111,119 +96,163 @@ function Get-SingleCapture {
     return $ms[0].Groups[1].Value
 }
 
-function Get-ComposeEtcdEnv {
-    param([Parameter(Mandatory = $true)][string]$Name)
-    $block = Get-NonCommentText (Get-ComposeServiceBlock -Text (Read-RepoText $script:ComposePath) -Service 'etcd')
-    return Get-SingleCapture -Text $block -Pattern ('(?m)^\s*-\s*' + [regex]::Escape($Name) + '=(\S*)\s*(?:#.*)?$') -What "compose etcd 服务的 $Name"
+# StatefulSet 里某个 env 的值(`- name: X` 下一行 `value: "..."`)。
+function Get-StatefulSetEnv {
+    param([Parameter(Mandatory = $true)][string]$Text, [Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][string]$Label)
+    return Get-SingleCapture -Text $Text -Pattern ('name:\s*' + [regex]::Escape($Name) + '\s*\n\s*value:\s*"?([^"\s]*)"?') -What "$Label 的 $Name"
 }
 
-function Get-KeepRevisions {
-    $text = Get-NonCommentText (Read-RepoText $script:MaintenancePath)
-    return Get-SingleCapture -Text $text -Pattern 'name:\s*KEEP_REVISIONS\s*\n\s*value:\s*"?([^"\s]*)"?' -What 'etcd-maintenance.yaml 的 KEEP_REVISIONS'
+# compose 服务块里某个 env 的值,两种写法都认:列表 `- NAME=value` 与映射 `NAME: value`。
+function Get-ComposeEnv {
+    param([Parameter(Mandatory = $true)][string]$Block, [Parameter(Mandatory = $true)][string]$Name, [Parameter(Mandatory = $true)][string]$Label)
+    $escaped = [regex]::Escape($Name)
+    $pattern = '(?m)^\s*(?:-\s*' + $escaped + '=(\S*)|' + $escaped + ':\s*"?([^"\s#]*)"?)\s*(?:#.*)?$'
+    $ms = [regex]::Matches($Block, $pattern)
+    if ($ms.Count -ne 1) { throw "$Label 的 $Name 应当恰好出现 1 次,实际 $($ms.Count) 次" }
+    $m = $ms[0]
+    if ($m.Groups[1].Success) { return $m.Groups[1].Value }
+    return $m.Groups[2].Value
 }
 
-Write-Host "== etcd MVCC 压缩契约(P0-C)=="
-
-Test-Case 'etcd-maintenance.yaml 只含 ConfigMap 与 CronJob,不会改到 StatefulSet etcd 的模板' {
-    $text = Get-NonCommentText (Read-RepoText $script:MaintenancePath)
-    $kinds = @([regex]::Matches($text, '(?m)^kind:\s*(\S+)\s*$') | ForEach-Object { $_.Groups[1].Value } | Sort-Object)
-    Assert-Equal -Expected 'ConfigMap,CronJob' -Actual ($kinds -join ',') -Because '维护清单只有这两种对象,etcd 本身的改动都在 etcd.yaml'
+function Get-ComposeEtcdBlock {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return Get-NonCommentText (Get-ComposeServiceBlock -Text (Read-RepoText $Path) -Service 'etcd')
 }
 
-Test-Case 'CronJob etcd-compact:不叠跑、同一轮不重试、Pod 不重启、失败记录保留' {
-    $text = Get-NonCommentText (Read-RepoText $script:MaintenancePath)
-    Assert-Match -Text $text -Pattern 'kind:\s*CronJob\s*\nmetadata:\s*\n\s+name:\s*etcd-compact\s*\n' -Because 'CronJob 名固定为 etcd-compact(runbook 的手工触发命令、infra-status 与契约测试都按这个名字找)'
-    # 调度只认「每 N 分钟」(*/N * * * *)这一种写法:下面 activeDeadlineSeconds 的上界由 N 推出,别的写法算不出间隔,一律判红。
-    $everyMinutes = [int](Get-SingleCapture -Text $text -Pattern '(?m)^\s*schedule:\s*"\*/([1-9][0-9]*) \* \* \* \*"\s*$' -What 'CronJob 的 schedule(*/N * * * *)')
-    Assert-Match -Text $text -Pattern '(?m)^\s*concurrencyPolicy:\s*Forbid\s*$' -Because '首次在涨大的库上压缩可能跑得久,不能两轮叠在一起'
-    Assert-Match -Text $text -Pattern '(?m)^\s*backoffLimit:\s*0\s*$' -Because '失败要可见:同一轮不重试,下一轮调度就是重试'
-    Assert-Match -Text $text -Pattern '(?m)^\s*restartPolicy:\s*Never\s*$' -Because 'Pod 原地重启会把失败藏进 RESTARTS 计数'
-    $failedHistory = [int](Get-SingleCapture -Text $text -Pattern '(?m)^\s*failedJobsHistoryLimit:\s*(\d+)\s*$' -What 'failedJobsHistoryLimit')
-    Assert-True -Condition ($failedHistory -ge 1) -Because "failedJobsHistoryLimit 至少 1,失败的 Job 及其日志才留得下来(实际 $failedHistory)"
-    # activeDeadlineSeconds 是 Forbid 下唯一防「一个卡住的 Job 永久挡住后续调度」的东西:Pod 卡在拉镜像(latest + IfNotPresent,
-    # 调度到没有镜像的节点)时 Job 一直 Active,Forbid 跳过之后每一轮,也不产生 Failed 记录,压缩就此停摆。
-    # 它必须小于调度间隔(上面 schedule 的 N 分钟),否则一个跑满时限的 Job 仍会吞掉下一轮。
-    $intervalSeconds = $everyMinutes * 60
-    $activeDeadline = [int](Get-SingleCapture -Text $text -Pattern '(?m)^\s*activeDeadlineSeconds:\s*(\d+)\s*$' -What 'Job 的 activeDeadlineSeconds')
-    Assert-True -Condition ($activeDeadline -gt 0 -and $activeDeadline -lt $intervalSeconds) -Because "activeDeadlineSeconds 必须在 (0, 调度间隔 ${intervalSeconds}s) 内,让卡住的 Job 在下一轮调度之前以 Failed 结束(实际 $activeDeadline)"
-    # startingDeadlineSeconds 管的是控制器停摆时错过的调度点(不补跑),不是上面那种卡死的兜底;缺了它控制器恢复后可能报错过太多调度而停调度。
-    Assert-Match -Text $text -Pattern '(?m)^\s*startingDeadlineSeconds:\s*\d+\s*$' -Because '控制器停摆后错过的调度点直接跳过,不补跑'
-}
+Write-Host "== etcd 镜像与压缩契约(P0-C)=="
 
-Test-Case '标签一律 app: etcd-maintenance,绝不能是 app: etcd' {
-    $text = Get-NonCommentText (Read-RepoText $script:MaintenancePath)
-    $values = @([regex]::Matches($text, '(?m)^\s*app:\s*"?([^"\s#]+)"?') | ForEach-Object { $_.Groups[1].Value })
-    Assert-True -Condition ($values.Count -ge 3) -Because "ConfigMap、CronJob、Pod 模板都要打标签(实际找到 $($values.Count) 个 app: 标签)"
-    foreach ($v in $values) {
-        Assert-Equal -Expected 'etcd-maintenance' -Actual $v -Because 'app: etcd 会被 etcd 的 Service / PDB / StatefulSet 的 selector 选中(etcd.yaml),本 Pod 不监听 2379,进了 Service 就是黑洞'
+Test-Case '镜像:三套 etcd 清单与两份 compose 是同一个官方镜像引用,按 tag@摘要钉死;生效内容里不再有 bitnami 与 :latest' {
+    $images = [ordered]@{}
+    foreach ($name in $script:StatefulSetPaths.Keys) {
+        $images[$name] = Get-SingleCapture -Text (Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])) -Pattern '(?m)^\s*image:\s*(\S+)\s*$' -What "$name 的 image"
     }
-    # (?-i):断言助手默认不分大小写,不关掉的话 jobTemplate: 里的 Template: 也会被当成 Pod 模板。
-    Assert-Match -Text $text -Pattern '(?m-i)^\s+template:\s*\n\s*metadata:\s*\n\s*labels:\s*\n\s*app:\s*etcd-maintenance\s*$' -Because 'Pod 模板本身的标签才是 selector 会看的那一个'
+    $images['compose'] = Get-SingleCapture -Text (Get-ComposeEtcdBlock -Path $script:ComposePath) -Pattern '(?m)^\s*image:\s*(\S+)\s*$' -What 'compose etcd 服务的 image'
+    # 调试栈允许用 ETCD_IMAGE 覆盖,缺省值必须是同一个引用。
+    $images['debug-compose'] = Get-SingleCapture -Text (Get-ComposeEtcdBlock -Path $script:DebugComposePath) -Pattern '(?m)^\s*image:\s*\$\{ETCD_IMAGE:-([^}\s]+)\}\s*$' -What '调试 compose etcd 服务的 image 缺省值'
+    $reference = $images['etcd']
+    Assert-Match -Text $reference -Pattern $script:PinnedImagePattern -Because "必须是官方镜像并按 tag@摘要钉死(quay.io/coreos/etcd:v<版本>@sha256:<64 位>),实际 '$reference'"
+    foreach ($where in $images.Keys) {
+        Assert-Equal -Expected $reference -Actual $images[$where] -Because "$where 必须与主 etcd 同一个镜像引用:换版本只能五处同批改,两个仓库(quay / gcr)同一 tag 的摘要也不同,不能混用"
+    }
+    foreach ($path in @($script:StatefulSetPaths.Values) + @($script:ComposePath, $script:DebugComposePath)) {
+        $code = if ($path -like '*compose*') { Get-ComposeEtcdBlock -Path $path } else { Get-NonCommentText (Read-RepoText $path) }
+        Assert-NotMatch -Text $code -Pattern 'bitnami' -Because "$([IO.Path]::GetFileName($path)):bitnamilegacy 是停更的归档镜像,路径与开关也不该再出现在生效内容里"
+        Assert-NotMatch -Text $code -Pattern ':latest\b' -Because "$([IO.Path]::GetFileName($path)):浮动 tag 不可复现,也拿不到摘要"
+    }
 }
 
-Test-Case '占位只用 __INFRA_NAMESPACE__,端点逐个列出 etcd.yaml 的全部成员' {
-    $text = Read-RepoText $script:MaintenancePath
-    # Matches 默认区分大小写:占位是全大写,注释里也算(Apply-Infra 的 fail-closed 检查扫的是整份文本)。
-    $placeholders = @([regex]::Matches($text, '__[A-Z][A-Z0-9_]*__') | ForEach-Object { $_.Value } | Sort-Object -Unique)
-    Assert-Equal -Expected '__INFRA_NAMESPACE__' -Actual ($placeholders -join ',') -Because 'Apply-Infra 对通用清单只替换 __INFRA_NAMESPACE__,别的占位会被它的 fail-closed 检查拦下,infra-up 整体失败'
-
-    $replicas = [int](Get-SingleCapture -Text (Get-NonCommentText (Read-RepoText $script:EtcdPath)) -Pattern '(?m)^  replicas:\s*(\d+)\s*$' -What 'etcd.yaml 的 StatefulSet replicas')
-    $endpoints = Get-SingleCapture -Text (Get-NonCommentText $text) -Pattern 'name:\s*ETCDCTL_ENDPOINTS\s*\n\s*value:\s*"([^"]*)"' -What 'ETCDCTL_ENDPOINTS'
-    $expected = @(0..($replicas - 1) | ForEach-Object { "http://etcd-$_.etcd-headless.__INFRA_NAMESPACE__.svc.cluster.local:2379" }) -join ','
-    Assert-Equal -Expected $expected -Actual $endpoints -Because 'endpoint status 要覆盖全部成员;成员地址与 etcd.yaml 的广播地址同形(headless DNS + 同一个 namespace 占位)'
+Test-Case '启动:三套 StatefulSet 显式以 etcd 二进制启动、不用 bitnami 专用开关、数据目录在挂载点之下、非 root 运行' {
+    foreach ($name in $script:StatefulSetPaths.Keys) {
+        $code = Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($code, '(?m)^\s*command:\s*\["/usr/local/bin/etcd"\]\s*$').Count) -Because "${name}:官方镜像是 distroless,显式写出启动的二进制,ETCD_* 由 etcd 自己按同名参数解析"
+        Assert-NotMatch -Text $code -Pattern 'ALLOW_NONE_AUTHENTICATION' -Because "${name}:那是 bitnami 启动脚本的开关,etcd 本身不认,留着只会让人以为它有作用"
+        $mount = Get-SingleCapture -Text $code -Pattern '(?m)^\s*mountPath:\s*(\S+)\s*$' -What "$name 的数据卷挂载点"
+        Assert-Equal -Expected '/var/lib/etcd' -Actual $mount -Because "${name}:etcd 的惯用位置,也是官方镜像的工作目录"
+        $dataDir = Get-StatefulSetEnv -Text $code -Name 'ETCD_DATA_DIR' -Label $name
+        Assert-Equal -Expected '/var/lib/etcd/data' -Actual $dataDir -Because "${name}:数据目录是 PVC 下的 data/ 子目录(与 bitnami 时代的布局相同,已有 PVC 里的数据照用)"
+        Assert-Match -Text $code -Pattern '(?m)^\s*runAsNonRoot:\s*true\s*$' -Because "${name}:etcd 不需要 root"
+        Assert-Match -Text $code -Pattern '(?m)^\s*fsGroup:\s*1001\s*$' -Because "${name}:云盘 / 本地盘挂上来是 root:root 0755,不给 fsGroup 进程建不了数据目录"
+    }
 }
 
-Test-Case '压缩脚本:目标来自线性一致读;不做 defrag、不解除告警;查告警不经管道' {
-    $scriptText = Get-BlockScalar -Text (Read-RepoText $script:MaintenancePath) -Key 'compact.sh'
-    $code = Get-NonCommentText $scriptText
-    Assert-Match -Text $code -Pattern '\$\{KEEP_REVISIONS:\?' -Because '没给保留量就失败,不能按 0 处理把历史全压掉'
-    Assert-Match -Text $code -Pattern 'etcdctl get [^\n]*--consistency=l' -Because '压缩目标只能来自线性一致读'
-    Assert-Match -Text $code -Pattern 'etcdctl compact ' -Because '脚本的本职是压缩'
-    Assert-Match -Text $code -Pattern 'etcdctl alarm list' -Because '有活动告警(多半是 NOSPACE)时要以非 0 退出,让 Job 失败可见'
-    Assert-NotMatch -Text $code -Pattern '(?m)alarm list[^\n]*(?<!\|)\|(?!\|)' -Because '告警查询接管道时,查询失败会被当成「没有告警」(fail-open)'
-    Assert-NotMatch -Text $code -Pattern 'defrag' -Because 'defrag 会阻塞所在成员,只走 runbook 的手工逐成员流程'
-    Assert-NotMatch -Text $code -Pattern 'alarm\s+disarm' -Because '解除告警必须由人确认空间已腾出之后再做,自动解除会让告警反复触发而无人知道'
-    # 整份清单(含 CronJob 的 command)也不得出现 defrag。
-    Assert-NotMatch -Text (Get-NonCommentText (Read-RepoText $script:MaintenancePath)) -Pattern 'defrag' -Because '清单里任何生效内容都不得做 defrag'
+Test-Case 'compose:数据目录就是命名卷的挂载点;调试栈的健康检查直接跑 etcdctl' {
+    foreach ($case in @(@{ Label = 'compose'; Path = $script:ComposePath }, @{ Label = '调试 compose'; Path = $script:DebugComposePath })) {
+        $block = Get-ComposeEtcdBlock -Path $case.Path
+        $mount = Get-SingleCapture -Text $block -Pattern '(?m)^\s*-\s*etcd-data:(\S+?)\s*(?:#.*)?$' -What "$($case.Label) 的 etcd-data 挂载点"
+        Assert-Equal -Expected $mount -Actual (Get-ComposeEnv -Block $block -Name 'ETCD_DATA_DIR' -Label $case.Label) -Because "$($case.Label):命名卷的根就是数据目录(bitnami 时代的布局),换挂载点不换布局,已有数据照用"
+    }
+    $debug = Get-ComposeEtcdBlock -Path $script:DebugComposePath
+    Assert-Match -Text $debug -Pattern '(?m)^\s*test:\s*\[CMD,\s*/usr/local/bin/etcdctl,' -Because '官方镜像没有 shell,健康检查只能用 exec 形式直接跑 etcdctl'
 }
 
-Test-Case 'KEEP_REVISIONS 是不小于 100000 的整数,且与 compose 的 ETCD_AUTO_COMPACTION_RETENTION 同值;compose 按 revision 模式' {
-    $keep = Get-KeepRevisions
-    Assert-Match -Text $keep -Pattern '^[1-9][0-9]*$' -Because "KEEP_REVISIONS 必须是不带前导 0 的正整数(实际 '$keep')"
-    Assert-True -Condition ([long]$keep -ge 100000) -Because "保留量太小时 watch 的历史窗口只剩几秒到几分钟(实际 $keep;取值与时间窗见 runbook)"
-    Assert-Equal -Expected 'revision' -Actual (Get-ComposeEtcdEnv -Name 'ETCD_AUTO_COMPACTION_MODE') -Because 'compose 的自动压缩必须按 revision 保留,与 CronJob 的语义一致(periodic 模式的单位是时间,数字含义完全不同)'
-    Assert-Equal -Expected $keep -Actual (Get-ComposeEtcdEnv -Name 'ETCD_AUTO_COMPACTION_RETENTION') -Because 'compose 与 K8s CronJob 用同一个保留量'
-}
-
-Test-Case 'compose 的配额是正整数,且满足「配额 × 2 + 1Gi ≤ etcd.yaml 的 PVC」' {
-    $quotaText = Get-ComposeEtcdEnv -Name 'ETCD_QUOTA_BACKEND_BYTES'
-    Assert-Match -Text $quotaText -Pattern '^[1-9][0-9]*$' -Because "ETCD_QUOTA_BACKEND_BYTES 必须是字节数的正整数(实际 '$quotaText')"
-    $quota = [long]$quotaText
-    $pvcGi = [long](Get-SingleCapture -Text (Get-NonCommentText (Read-RepoText $script:EtcdPath)) -Pattern '(?m)^\s*storage:\s*(\d+)Gi\s*$' -What 'etcd.yaml 的 PVC storage')
-    $gi = [long]1024 * 1024 * 1024
-    Assert-True -Condition (($quota * 2 + $gi) -le ($pvcGi * $gi)) -Because "defrag 期间需要临时空间:配额 $quota × 2 + 1Gi 必须 ≤ PVC ${pvcGi}Gi(PVC 的 volumeClaimTemplates 不能在线改)"
-}
-
-Test-Case 'etcd 镜像:etcd-maintenance.yaml、etcd.yaml、compose 三处逐字相同' {
-    $maintenanceImage = Get-SingleCapture -Text (Get-NonCommentText (Read-RepoText $script:MaintenancePath)) -Pattern '(?m)^\s*image:\s*(\S+)\s*$' -What 'etcd-maintenance.yaml 的 image'
-    $etcdImage = Get-SingleCapture -Text (Get-NonCommentText (Read-RepoText $script:EtcdPath)) -Pattern '(?m)^\s*image:\s*(\S+)\s*$' -What 'etcd.yaml 的 image'
-    $composeImage = Get-SingleCapture -Text (Get-NonCommentText (Get-ComposeServiceBlock -Text (Read-RepoText $script:ComposePath) -Service 'etcd')) -Pattern '(?m)^\s*image:\s*(\S+)\s*$' -What 'compose etcd 服务的 image'
-    Assert-Equal -Expected $etcdImage -Actual $maintenanceImage -Because 'CronJob 的 etcdctl 与服务端同一个镜像;钉 tag@摘要只能与 etcd.yaml 同批改(待 Codex 实测 M0)'
-    Assert-Equal -Expected $etcdImage -Actual $composeImage -Because '本机 / 预发与 K8s 跑同一个 etcd 镜像;钉版本三处同批改'
-}
-
-Test-Case '阶段 2:StatefulSet 的压缩与配额 env 与 compose 相等,抓取注解在,探针排除 NOSPACE' {
-    $code = Get-NonCommentText (Read-RepoText $script:EtcdPath)
+Test-Case '取值:主 etcd 与两份 compose 的压缩模式、保留量、配额相同;保留量是不小于 100000 的整数;三套 StatefulSet 都满足「配额 × 2 + 1Gi ≤ PVC」' {
+    $etcd = Get-NonCommentText (Read-RepoText $script:EtcdPath)
     foreach ($name in 'ETCD_AUTO_COMPACTION_MODE', 'ETCD_AUTO_COMPACTION_RETENTION', 'ETCD_QUOTA_BACKEND_BYTES') {
-        $value = Get-SingleCapture -Text $code -Pattern ('name:\s*' + [regex]::Escape($name) + '\s*\n\s*value:\s*"?([^"\s]*)"?') -What "etcd.yaml 的 $name"
-        Assert-Equal -Expected (Get-ComposeEtcdEnv -Name $name) -Actual $value -Because 'K8s 与 compose 用同一组压缩和配额取值'
+        $expected = Get-StatefulSetEnv -Text $etcd -Name $name -Label 'etcd.yaml'
+        foreach ($case in @(@{ Label = 'compose'; Path = $script:ComposePath }, @{ Label = '调试 compose'; Path = $script:DebugComposePath })) {
+            Assert-Equal -Expected $expected -Actual (Get-ComposeEnv -Block (Get-ComposeEtcdBlock -Path $case.Path) -Name $name -Label $case.Label) -Because "$($case.Label) 与 K8s 主 etcd 用同一组压缩和配额取值($name)"
+        }
     }
-    Assert-Match -Text $code -Pattern 'prometheus\.io/scrape:\s*"true"' -Because '告警要靠 etcd 自己的 /metrics(runbook §8 步骤 1)'
-    Assert-Match -Text $code -Pattern 'prometheus\.io/port:\s*"2379"' -Because 'etcd 的指标在 client 端口上'
+    Assert-Equal -Expected 'revision' -Actual (Get-StatefulSetEnv -Text $etcd -Name 'ETCD_AUTO_COMPACTION_MODE' -Label 'etcd.yaml') -Because '按 revision 保留(periodic 模式的单位是时间,数字含义完全不同)'
+    $keep = Get-StatefulSetEnv -Text $etcd -Name 'ETCD_AUTO_COMPACTION_RETENTION' -Label 'etcd.yaml'
+    Assert-Match -Text $keep -Pattern '^[1-9][0-9]*$' -Because "保留量必须是不带前导 0 的正整数(实际 '$keep')"
+    Assert-True -Condition ([long]$keep -ge 100000) -Because "保留量太小时 watch 的历史窗口只剩几秒到几分钟(实际 $keep;取值与时间窗见 runbook §3.1)"
+
+    $gi = [long]1024 * 1024 * 1024
+    foreach ($name in $script:StatefulSetPaths.Keys) {
+        $code = Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])
+        Assert-Equal -Expected 'revision' -Actual (Get-StatefulSetEnv -Text $code -Name 'ETCD_AUTO_COMPACTION_MODE' -Label $name) -Because "${name}:自动压缩是唯一的压缩手段(没有 CronJob 了),必须开"
+        $quotaText = Get-StatefulSetEnv -Text $code -Name 'ETCD_QUOTA_BACKEND_BYTES' -Label $name
+        Assert-Match -Text $quotaText -Pattern '^[1-9][0-9]*$' -Because "${name}:ETCD_QUOTA_BACKEND_BYTES 必须是字节数的正整数(实际 '$quotaText')"
+        $pvcGi = [long](Get-SingleCapture -Text $code -Pattern '(?m)^\s*storage:\s*(\d+)Gi\s*$' -What "$name 的 PVC storage")
+        Assert-True -Condition (([long]$quotaText * 2 + $gi) -le ($pvcGi * $gi)) -Because "${name}:defrag 期间需要临时空间:配额 $quotaText × 2 + 1Gi 必须 ≤ PVC ${pvcGi}Gi(volumeClaimTemplates 不能在线改)"
+    }
+}
+
+Test-Case '可观测:三套都带抓取注解;主 etcd 的探针排除 NOSPACE' {
+    foreach ($name in $script:StatefulSetPaths.Keys) {
+        $code = Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])
+        Assert-Match -Text $code -Pattern 'prometheus\.io/scrape:\s*"true"' -Because "${name}:空间与无主告警要靠 etcd 自己的 /metrics(deploy/k8s/etcd-alerts.yaml)"
+        Assert-Match -Text $code -Pattern 'prometheus\.io/port:\s*"2379"' -Because "${name}:etcd 的指标在 client 端口上"
+    }
+    $code = Get-NonCommentText (Read-RepoText $script:EtcdPath)
     $readinessPath = Get-SingleCapture -Text $code -Pattern 'readinessProbe:\s*\n\s*httpGet:\s*\n\s*path:\s*(\S+)' -What 'etcd.yaml 的 readinessProbe path'
     $livenessPath = Get-SingleCapture -Text $code -Pattern 'livenessProbe:\s*\n\s*httpGet:\s*\n\s*path:\s*(\S+)' -What 'etcd.yaml 的 livenessProbe path'
     Assert-Equal -Expected '/health?exclude=NOSPACE' -Actual $readinessPath -Because 'NOSPACE 告警时不把成员全摘掉(runbook §2 / §7)'
     Assert-Equal -Expected '/health?exclude=NOSPACE&serializable=true' -Actual $livenessPath -Because 'NOSPACE 告警时不把三个成员一起反复重启(runbook §2 / §7)'
+}
+
+Test-Case '压缩 CronJob 已退役:清单删除;Apply-Infra 不再 apply 它,在 etcd.yaml 那一支删掉集群里的残留' {
+    Assert-True -Condition (-not (Test-Path -LiteralPath $script:MaintenancePath)) -Because 'etcd-maintenance.yaml 已退役(官方镜像没有 shell,内置压缩做同一件事),不能再出现'
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:DeployPath, [ref]$null, [ref]$null)
+    $applyInfra = $ast.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-Infra' }, $true)
+    Assert-True -Condition ($null -ne $applyInfra) -Because '夹具前提:k8s_deploy.ps1 里有 Apply-Infra'
+    $listAssign = @($applyInfra.Body.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$infraManifests' -and $a.Operator -eq 'Equals' }, $true))
+    Assert-Equal -Expected 1 -Actual $listAssign.Count -Because '夹具前提:$infraManifests 恰好初始化一次'
+    Assert-NotMatch -Text $listAssign[0].Right.Extent.Text -Pattern 'etcd-maintenance' -Because '$infraManifests 不能再带退役的清单'
+    Assert-Match -Text $listAssign[0].Right.Extent.Text -Pattern '"etcd\.yaml"' -Because '主 etcd 照常下发'
+
+    $etcdBranch = @($applyInfra.Body.FindAll({ param($a) $a -is [System.Management.Automation.Language.IfStatementAst] -and $a.Clauses[0].Item1.Extent.Text -eq '$manifest -eq "etcd.yaml"' }, $true))
+    Assert-Equal -Expected 1 -Actual $etcdBranch.Count -Because '夹具前提:循环里有 etcd.yaml 那一支'
+    $branchText = $etcdBranch[0].Clauses[0].Item2.Extent.Text
+    foreach ($target in @('"cronjob", "etcd-compact"', '"configmap", "etcd-maintenance-scripts"')) {
+        Assert-Match -Text $branchText -Pattern ('Invoke-Kubectl -Args @\("delete", ' + [regex]::Escape($target) + ', "-n", \$InfraNamespace, "--ignore-not-found"\)') -Because "以前 apply 过的 $target 要删掉(--ignore-not-found:没有就是空操作),否则旧 CronJob 每 5 分钟拉一次不再钉版本的旧镜像"
+    }
+}
+
+Test-Case 'etcd-alerts.yaml:PrometheusRule,有无主、空间(80% / 95%)、增长过快与碎片告警,只用低基数 label' {
+    $code = Get-NonCommentText (Read-RepoText $script:AlertsPath)
+    Assert-Match -Text $code -Pattern '(?m)^kind:\s*PrometheusRule\s*$' -Because '与仓库里其他告警文件同一种安装方式'
+    foreach ($rule in @(
+        @{ Alert = 'EtcdNoLeader'; Expr = 'etcd_server_has_leader\s*==\s*0'; Severity = 'critical' }
+        @{ Alert = 'EtcdDatabaseQuotaHighUsage'; Expr = 'etcd_mvcc_db_total_size_in_bytes[^\n]*etcd_server_quota_backend_bytes[^\n]*>\s*80'; Severity = 'warning' }
+        @{ Alert = 'EtcdDatabaseQuotaLowSpace'; Expr = 'etcd_mvcc_db_total_size_in_bytes[^\n]*etcd_server_quota_backend_bytes[^\n]*>\s*95'; Severity = 'critical' }
+        @{ Alert = 'EtcdExcessiveDatabaseGrowth'; Expr = 'predict_linear\(etcd_mvcc_db_total_size_in_bytes'; Severity = 'warning' }
+        @{ Alert = 'EtcdDatabaseHighFragmentationRatio'; Expr = 'etcd_mvcc_db_total_size_in_use_in_bytes'; Severity = 'warning' }
+    )) {
+        $m = [regex]::Match($code, '(?s)- alert:\s*' + [regex]::Escape($rule.Alert) + '\s*\n(.*?)(?=\n\s*- alert:|\z)')
+        Assert-True -Condition $m.Success -Because "要有告警 $($rule.Alert)(没有 CronJob 之后,空间问题只能从 etcd 自己的指标看出来)"
+        Assert-Match -Text $m.Groups[1].Value -Pattern $rule.Expr -Because "$($rule.Alert) 的表达式"
+        Assert-Match -Text $m.Groups[1].Value -Pattern ('severity:\s*' + $rule.Severity) -Because "$($rule.Alert) 的级别"
+    }
+    Assert-NotMatch -Text $code -Pattern 'player_id' -Because '告警不得用玩家维度做 label(高基数)'
+}
+
+Test-Case '官方镜像没有 shell:脚本、部署说明与运维手册里 exec 进 etcd 的命令一律直接跑 etcdctl,不开 sh / bash' {
+    $files = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'tools/scripts') -Filter '*.ps1' -File | ForEach-Object { $_.FullName })
+    $files += @($script:RunbookPath, (Join-Path $script:RepoRoot 'deploy/k8s/README.md'))
+    foreach ($path in $files) {
+        $lines = (Read-RepoText $path) -split "`n"
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            $line = $lines[$i]
+            if ($line.TrimStart().StartsWith('#')) { continue }
+            # 只看「exec 进 etcd」的那种行:kubectl / docker 的 exec,目标是 etcd 的 Pod、Service 或 compose 容器。
+            if ($line -notmatch '\bexec\b' -or $line -notmatch "(?:\betcd(?:-id-(?:secondary|registry))?-\d\b|svc/etcd\b|['""]etcd['""]|\bexec\s+(?:-\S+\s+)*etcd\b)") { continue }
+            # 三种写法都算开 shell:kubectl 的 `-- sh`、docker 的 `exec [选项] etcd sh`、参数数组里的 `'etcd','sh'`。
+            $shellPattern = "(?:--\s+|['""],\s*|\bexec\s+(?:-\S+\s+)*etcd(?:-\S+)?\s+)['""]?(?:/bin/)?(?:sh|bash)['""]?(?=\s|,|\)|$)"
+            Assert-NotMatch -Text $line -Pattern $shellPattern -Because "$([IO.Path]::GetFileName($path)):$($i + 1) exec 进 etcd 开了 shell,官方镜像(distroless)里没有:$($line.Trim())"
+        }
+    }
 }
 
 exit (Complete-TestRun -SuiteName 'etcd_maintenance_contract')

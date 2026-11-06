@@ -229,8 +229,8 @@ using player_mutability::IsPlayerMutable;
 
 // ── durable 判定(§4.6)─────────────────────────────────────────────────────
 
-// 只看"确实落盘的字节":PlayerLastPersistedSnapshotComp.snapshot 是
-// HandlePlayerAsyncSaved 回调里写入的、刚写进 Redis 的整份 PlayerAllData。
+// 只看"确实提交的字节":PlayerLastPersistedSnapshotComp.snapshot 是 go/db 的 Save 回 COMMITTED / EQUAL
+// (这一笔 player_store 的 TiDB 事务已提交)之后,由 HandlePlayerAsyncSaved 或 OnPlayerStoreSaveDone 换上的整份 PlayerAllData。
 // 某 seq 的结局出现在这份快照的账本里 = durable。不另建"已持久化水位",不存在两份真相。
 bool IsAssetOpDurable(entt::entity player, const AssetOpRequest& request, bool expectApplied)
 {
@@ -445,6 +445,10 @@ bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 		const auto* row = ItemTableManager::Instance().FindByIdSilent(item.config_id()).first;
 		if (item.count() == 0 || item.count() > 4096 || row == nullptr || row->max_stack_size() <= 1 || !configs.insert(item.config_id()).second)
 		{ why = "quantity debit requires distinct stackable configurations"; return false; }
+		// 装备行被误配成可叠加时也不按数量扣:强化、镶嵌、随机属性都在实例上,按数量扣出、再按数量发给对侧,
+		// 这些属性会无声丢失。装备只按 guid 转移(item_uuids)。确定性失败,记终态拒绝(AGENTS §11.3 资产路径 fail-closed)。
+		if (row->equip_kind() != 0)
+		{ why = "quantity debit does not accept equipment configurations"; return false; }
 	}
 	for (auto guid : bundle.item_uuids()) if (guid == 0 || !guids.insert(guid).second) { why = "duplicate or zero instance"; return false; }
 	return true;
@@ -1057,22 +1061,42 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 		}
 	}
 
-	// (b) 物品 guid 号段余量预检。Σcount 是新实例数的上界(每堆至少 1 个),只会偏严。
-	// 号段发不出号时 BagService 会整批拒,失败面前移到这里就不会先扣号再半途而废。
+	// (b) 物品 guid 号段余量预检。号段发不出号时 BagService 会整批拒,失败面前移到这里就不会先扣号再半途而废。
+	// 需要量与战斗结算同一口径:BagService::MaxNewInstancesFor(不可叠加按件、可叠加按满堆向上取整;能并进已有堆只会更少,
+	// 是上界)。原先按 Σcount 算:一批可叠加物会被当成逐件铸号,批量一大(上限 4096)就超过号段双 buffer 的容量,永远 RETRY。
+	// 判出不足就请号段客户端续一段(RequestTopUp,审计 R2 r2-battle#3):预取只在发号之后判阈值,这里回 RETRY、一个号都不发,
+	// 「需要量 > 剩余 > 预取阈值、又没有下一段」时没人续段。续段那一次按不小于需要量的 step 领(不超过 MaxStep),新段落下之后,
+	// Go 侧按退避重投即可通过。
+	// 需要量大于 IdSegments 的 MaxStep(kExceedsMaxStep,评审修正 2026-11-06):一段最多 MaxStep 个号,只靠续段永远凑不齐,
+	// 回 RETRY 就是让 Go 永远重投。按资产通道「确定性失败记终局拒绝」的口径(同第 8 步包校验)记 REJECTED + kAssetInvalidBundle:
+	// 结局随存档固定,同一 seq 重投只读回放;Go 侧(shared/assetop Decide → FinalStatus)按 REJECTED 终结并做对侧账:帮会按
+	// 05-economy 处置表退次数、退帮贡、退限购,邮件把附件退回可领,交易记 REJECTED 终态。上游要发就拆成更小的批次重新下单。
+	// 生产 MaxStep 1,000,000 远大于单笔上限 4096 件,只有配置写错才会走到这里。
 	ItemCountMap itemsToAdd;
-	uint64_t guidsNeeded = 0;
 	for (const auto& item : bundle.items())
 	{
-		itemsToAdd[item.config_id()] = item.count();
-		guidsNeeded += item.count();
+		itemsToAdd[item.config_id()] = item.count(); // config_id 已由 ValidateCreditBundle 判过互不重复
 	}
 	if (!itemsToAdd.empty())
 	{
-		const uint64_t available = tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available();
+		auto& segment = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+		const uint64_t guidsNeeded = BagService::MaxNewInstancesFor(itemsToAdd);
+		const uint64_t available = segment.Available();
 		if (available < guidsNeeded)
 		{
+			const auto topUp = segment.RequestTopUp(guidsNeeded);
+			if (topUp == GuidSegmentClient::TopUpOutcome::kExceedsMaxStep)
+			{
+				LOG_ERROR << "[AssetOp] metric=asset_credit_exceeds_guid_segment_max_step player_id=" << request.player_id()
+						  << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq()
+						  << " needed=" << guidsNeeded << " max_step=" << segment.options().maxStep
+						  << ";credit needs more new item instances than one guid segment can ever hold, rejected as an invalid bundle";
+				RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+				return;
+			}
 			LOG_WARN << "[AssetOp] Insufficient item guid segment capacity;grant deferred player_id=" << request.player_id()
-					 << " seq=" << request.seq() << " needed=" << guidsNeeded << " available=" << available;
+					 << " seq=" << request.seq() << " needed=" << guidsNeeded << " available=" << available
+					 << " top_up=" << TopUpOutcomeName(topUp);
 			Answer(response, ASSET_OP_OUTCOME_RETRY, 0);
 			return;
 		}

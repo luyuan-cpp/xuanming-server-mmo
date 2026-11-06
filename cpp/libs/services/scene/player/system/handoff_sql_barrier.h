@@ -12,7 +12,8 @@
 #include <boost/uuid/uuid_io.hpp>
 
 
-// 归属只在冻结快照双 SQL ACK 齐备后切换。登记下限和 H/F/R 资格是永久字段，
+// 归属只在冻结快照的存盘明确提交之后切换：go/db 的 Save 回 COMMITTED / EQUAL，即这一笔 player_store 的 TiDB 事务已提交
+// （docs/design/player-save-direct-commit.md §6；以前判的是两表 SQL ACK，随旧存盘路径删除）。登记下限和 H/F/R 资格是永久字段，
 // 发布以同一 Lua 的 H→F 与 SET 提交；未知应答只重放原候选，不以标记 TTL 推断撤销。
 namespace handoff_sql_barrier
 {

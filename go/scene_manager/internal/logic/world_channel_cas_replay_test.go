@@ -145,9 +145,9 @@ func TestReassignSceneNode_ResendAfterLostReplyKeepsAppliedVerdict(t *testing.T)
 			channelSetKey := worldChannelsKey(reassignCASZone, 621)
 			reassign := func(sc *svc.ServiceContext, oldNode, newNode string) bool {
 				if tc.inService {
-					return reassignWorldChannelNode(sc, reassignCASZone, tc.sceneID, oldNode, newNode, channelSetKey)
+					return reassignWorldChannelNode(sc, reassignCASZone, tc.sceneID, oldNode, newNode, channelSetKey, freshPlacementGeneration(t, sc, reassignCASZone))
 				}
-				return reassignSceneNode(sc, reassignCASZone, tc.sceneID, oldNode, newNode)
+				return reassignSceneNode(sc, reassignCASZone, tc.sceneID, oldNode, newNode, freshPlacementGeneration(t, sc, reassignCASZone))
 			}
 			seedSceneOwnedBy(t, mr, reassignCASZone, tc.sceneID, replayNodeOld)
 			if tc.inService {
@@ -211,7 +211,7 @@ func TestReassignSceneNode_ReplyLostConfirmedByReceipt(t *testing.T) {
 		const sceneID uint64 = 87204
 		seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, replayNodeOld)
 
-		require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew),
+		require.True(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew, freshPlacementGeneration(t, sc, reassignCASZone)),
 			"回包丢了但回执确认已落地,必须按已改派返回")
 		require.True(t, hook.fired.Load(), "前提:改派的 EVAL 执行了、应答被换成错误")
 
@@ -229,7 +229,7 @@ func TestReassignSceneNode_ReplyLostConfirmedByReceipt(t *testing.T) {
 		const sceneID uint64 = 87205
 		seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, replayNodeOther)
 
-		require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew),
+		require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew, freshPlacementGeneration(t, sc, reassignCASZone)),
 			"脚本落空时没有本次的回执,不能凭空当成已落地")
 		require.True(t, hook.fired.Load())
 		owner, err := mr.Get(sceneNodeKey(sceneID))
@@ -251,7 +251,7 @@ func TestReassignSceneNode_LateEvalAfterResolveChangesNothing(t *testing.T) {
 	const sceneID uint64 = 87207
 	seedSceneOwnedBy(t, mr, reassignCASZone, sceneID, replayNodeOld)
 
-	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew),
+	require.False(t, reassignSceneNode(sc, reassignCASZone, sceneID, replayNodeOld, replayNodeNew, freshPlacementGeneration(t, sc, reassignCASZone)),
 		"EVAL 没执行:问结局时作废,按落空返回")
 	require.EqualValues(t, reassignOwnerChanged, toInt64(hook.deliverLate(t, sc)), "作废之后才到的 EVAL 必须落空")
 

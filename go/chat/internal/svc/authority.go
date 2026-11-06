@@ -89,7 +89,7 @@ func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate b
 		}
 		return db, nil, nil
 	}
-	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds})
+	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds, WorldHistoryCacheMs: c.WorldHistoryCacheMs})
 	if err != nil {
 		db.Close()
 		return nil, nil, err

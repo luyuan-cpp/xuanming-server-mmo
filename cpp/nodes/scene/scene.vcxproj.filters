@@ -55,4 +55,7 @@
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="id_segment_request_table.h" />
+  </ItemGroup>
 </Project>

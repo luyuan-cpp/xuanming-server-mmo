@@ -114,7 +114,7 @@ func RunChatSmoke(cfg *config.Config) {
 		zoneA, zoneB = cfg.ChatSmoke.ZoneA, cfg.ChatSmoke.ZoneB
 	}
 
-	// bots 收集已登录的会话,fail 时统一优雅收尾(同 attribute-smoke:LeaveGame + Disconnect,
+	// bots 收集已登录的会话,fail 时统一优雅收尾(同 attribute-smoke:LeaveGame + 关连接,断线通知由 gate 在 TCP 关闭时合成,
 	// 避免残留 ONLINE 会话把下一次冒烟顶成 ReplaceLogin)。
 	var bots []*chatSmokeBot
 	cleanup := func() {
@@ -336,7 +336,7 @@ func chatSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (*
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), chatSmokeSceneReadyTimeout)
 	defer waitCancel()
 	if err := bot.player.WaitSceneReady(waitCtx); err != nil {
-		// 已 EnterGame 成功,补一个 Disconnect 再关连接,避免残留 ONLINE 会话顶掉下一次冒烟
+		// 已 EnterGame 成功,关连接即可:断线通知由 gate 在 TCP 关闭时合成(带会话代次),避免残留 ONLINE 会话顶掉下一次冒烟
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()
 		return nil, fmt.Errorf("wait scene ready: %w", err)

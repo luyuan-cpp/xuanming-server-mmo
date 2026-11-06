@@ -58,7 +58,11 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 	staleBefore := spectateStaleBeforeMs()
 	battles := make([]*matchpb.BattleWatchSummary, 0, len(pairs))
 	listed := make(map[uint64]bool)
+	// 每条都要读一次权威库:请求已取消或超时就停,剩下的读只会白占连接池(撮合与观战原件事务共用它)。
 	for _, battleId := range l.featuredBattleIds(limit) {
+		if err := l.ctx.Err(); err != nil {
+			return nil, err
+		}
 		if summary := l.watchableSummary(battleId); summary != nil {
 			summary.Featured = true
 			battles = append(battles, summary)
@@ -68,6 +72,9 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 	for _, pair := range pairs {
 		if uint32(len(battles)) >= limit {
 			break
+		}
+		if err := l.ctx.Err(); err != nil {
+			return nil, err
 		}
 		battleId, err := strconv.ParseUint(pair.Key, 10, 64)
 		if err != nil {
@@ -114,10 +121,10 @@ func (l *ListWatchableBattlesLogic) featuredBattleIds(limit uint32) []uint64 {
 	return ids
 }
 
-// watchableSummary 读一场的摘要;不能列出时返回 nil,并按原因清理索引:成局不存在或已中止即残留,这场的观战数据一起删;
+// watchableSummary 读一场的摘要;不能列出时返回 nil,并按原因清理索引:成局不存在或终局已落定即残留,这场的观战数据一起删;
 // 私密局只摘活跃集合成员;读失败(SQL 抖动 / 原件损坏)跳过本条,不剔除,下次可能恢复。
 func (l *ListWatchableBattlesLogic) watchableSummary(battleId uint64) *matchpb.BattleWatchSummary {
-	record, err := loadSpectateBattleFn(l.svcCtx, battleId)
+	record, err := loadSpectateBattleFn(l.ctx, l.svcCtx, battleId)
 	if err != nil {
 		l.Errorf("[spectate] Failed to read spectator record battle=%d: %v", battleId, err)
 		return nil

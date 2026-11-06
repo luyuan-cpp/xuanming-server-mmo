@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * 普通请求头。旧实现无条件采信它并取最左元素,而最左元素恰恰是客户端自己填的那一段
  * —— 于是每个请求带一个随机 XFF 就能让 {@link AssignGateRateLimiter} 每次都命中一个
  * 全新的空桶,IP 维度限流(ip-rps/ip-burst)对任何会改 header 的客户端等于不存在;
- * 同时把 Bucket4j 的 {@code rl:ip:*} key 空间变成攻击者可控的无限集合。
+ * 同时把令牌桶的 {@code rl:ip:*} key 空间变成攻击者可控的无限集合。
  * 旧方法的 javadoc 声称"只在 server.forward-headers-strategy=native 时才采信",
  * 但代码从不查这个设置,配置里也没有该项 —— 契约与实现脱节。
  *

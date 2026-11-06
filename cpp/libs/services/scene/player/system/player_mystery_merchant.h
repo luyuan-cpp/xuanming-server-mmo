@@ -50,6 +50,11 @@ public:
 	//
 	// 成功时 response.info 是最新货架(已购数已更新),response.bag 是人物背包全量;
 	// 失败时 response 的这两项保持为空。
+	//
+	// 幂等(docs/design/client-request-idempotency.md):request.client_request_id 非 0 时,同一名玩家的同一个键
+	// 至多成交一次。同键同参数的重发不再执行,回 kSuccess + 当前货架与背包 + replayed = true;
+	// 同键换了参数回 kInvalidParameter,不执行;这名玩家的账本缺失或已判坏回 kServiceUnavailable,不执行。
+	// 账本随玩家存档落盘(player_database.client_request_ledger),与钱、货、限购记录同一次提交。
 	static uint32_t Buy(entt::entity player, const ::BuyMysteryMerchantGoodsRequest &request, uint64_t nowMs,
 						::BuyMysteryMerchantGoodsResponse &response);
 

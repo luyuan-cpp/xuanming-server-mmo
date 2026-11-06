@@ -13,19 +13,38 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 	mailpb "proto/mail"
+	rankpb "proto/rank"
 	"rank/internal/data"
 	"rank/internal/metrics"
 	"shared/serviceauth"
 )
 
+// Store 是工作器对奖励表的全部依赖。生产装配 *data.Repo,单测用内存替身走同一接口。
+type Store interface {
+	DueRewards(ctx context.Context, now uint64, limit int) ([]uint64, error)
+	ClaimReward(ctx context.Context, id, now, until, token uint64) (*rankpb.RankMailRewardRecord, bool, error)
+	SettleReward(ctx context.Context, p *rankpb.RankMailRewardRecord, mailID, next, now uint64) error
+	AbandonReward(ctx context.Context, p *rankpb.RankMailRewardRecord, now uint64) error
+	// DeferReward 不发件、不计尝试次数,只把下次尝试推迟到 next(剩余可领时长不足时用)。
+	DeferReward(ctx context.Context, p *rankpb.RankMailRewardRecord, next, now uint64) error
+}
+
+var _ Store = (*data.Repo)(nil)
+
 type Worker struct {
 	// Relay 由进程在启动 worker 前注入，同步RPC返回不能代替邮件终局。
 	Relay  *drainproof.Session
-	Repo   *data.Repo
+	Repo   Store
 	Mail   mailpb.MailAdminClient
 	Secret string
 	Now    func() time.Time
 }
+
+// 标题与正文进载荷摘要:改了它们,已提交但回包丢失的首投在重投时会被邮件判成同请求号不同载荷。
+const (
+	rewardMailTitle = "排行榜结算奖励"
+	rewardMailBody  = "本期排行榜奖励已结算，请领取附件。"
+)
 
 func (w *Worker) now() time.Time {
 	if w.Now != nil {
@@ -109,42 +128,61 @@ func (w *Worker) process(ctx context.Context, id uint64) (err error) {
 		return err
 	}
 	outcome = metrics.RewardUnknown
-	atts := &mailpb.MailAttachments{}
-	if err = proto.Unmarshal(p.Attachments, atts); err != nil {
-		outcome = metrics.RewardInvalid
-		return w.Repo.SettleReward(ctx, p, 0, now+3600000, now)
+	// record 按 nextStep 落本次结果;转放弃终态时改记 abandoned 并打错误日志——不会再自动投,要人工核对处理。
+	record := func(result attempt, mailID, stamp uint64) error {
+		status, next := nextStep(result, p.Attempts, stamp, p.ExpireMs)
+		if status != data.RewardAbandoned {
+			return w.Repo.SettleReward(ctx, p, mailID, next, stamp)
+		}
+		if err := w.Repo.AbandonReward(ctx, p, stamp); err != nil {
+			return err
+		}
+		logx.Errorf("[rank] mail reward abandoned, needs manual follow-up: reward_id=%d settlement_id=%d attempts=%d expire_ms=%d last_outcome=%s",
+			p.RewardId, p.SettlementId, p.Attempts+1, p.ExpireMs, outcome)
+		outcome = metrics.RewardAbandoned
+		return nil
 	}
-	// 到期时间从封榜时固定，所有重投载荷完全相同；不能每次now+TTL制造幂等冲突。
-	request := &mailpb.SendMailRequest{SenderKind: 3, RequestId: p.RewardId, RecipientPlayerId: p.PlayerId, Title: "排行榜结算奖励", Body: "本期排行榜奖励已结算，请领取附件。", Attachments: atts, ExpireMs: p.CreatedMs + 30*86400000}
+	atts := &mailpb.MailAttachments{}
+	if proto.Unmarshal(p.Attachments, atts) != nil || p.ExpireMs == 0 {
+		// 封榜原件损坏(附件解不开,或没有写定的过期时刻):不发件,按明确拒收处理——
+		// 截止点之前按拒收退避等受控修复,之后推迟到探询时刻再判,次数到顶或探询时仍坏转放弃终态。
+		outcome = metrics.RewardInvalid
+		return record(attemptRejected, 0, now)
+	}
+	// 剩余可领时长不足 data.MinRewardMailClaimWindow(24 小时):不发件——这时发出的邮件玩家多半领不到,却会被记成已投。也不转终态:之前的尝试可能已经写了邮件
+	// (结果未知,或上一个领租约的副本发出后崩溃),推迟到过期后的判重探询再定(policy.go 的 sendDeferredTo)。不计尝试次数。
+	if probeMs, deferred := sendDeferredTo(now, p.ExpireMs); deferred {
+		outcome = metrics.RewardRejected
+		if err = w.Repo.DeferReward(ctx, p, probeMs, now); err != nil {
+			return err
+		}
+		logx.Errorf("[rank] mail reward has less than the minimum claim window left, not sending; duplicate check after expiry: reward_id=%d settlement_id=%d attempts=%d expire_ms=%d check_at_ms=%d",
+			p.RewardId, p.SettlementId, p.Attempts, p.ExpireMs, probeMs)
+		return nil
+	}
+	// 载荷每次重投完全相同:请求号是 reward_id,过期时刻是封榜时写定的 expire_ms,标题正文是常量。
+	request := &mailpb.SendMailRequest{SenderKind: 3, RequestId: p.RewardId, RecipientPlayerId: p.PlayerId, Title: rewardMailTitle, Body: rewardMailBody, Attachments: atts, ExpireMs: p.ExpireMs}
 	if err = serviceauth.Sign(mailpb.MailAdmin_SendPersonalMail_FullMethodName, request, "rank", w.Secret, now); err != nil {
 		return err
 	}
 	call, stop := context.WithTimeout(ctx, 1500*time.Millisecond)
 	response, callErr := w.Mail.SendPersonalMail(call, request)
 	stop()
+	result := classify(response, callErr)
 	mailID := uint64(0)
-	if callErr == nil && response.GetErrorMessage().GetId() == 0 {
+	switch result {
+	case attemptDelivered:
+		outcome = metrics.RewardDelivered
 		mailID = response.GetMailId()
-	}
-	switch {
-	case callErr != nil || response == nil || (response.GetErrorMessage().GetId() == 0 && mailID == 0):
+	case attemptRejected:
+		outcome = metrics.RewardRejected
+	default:
+		outcome = metrics.RewardUnknown
+		// 结果未知:传输失败、成功码却没有 mail_id、邮件回故障码(serverbase.TipVerdict 判 fault)。三种都可能已经写了邮件,
+		// 排空证明不能据同步返回宣称终局,一律挂起(邮件服务注释引的规格 §3.6:回故障 tip 即 Hold)。
 		if w.Relay != nil {
 			w.Relay.Hold()
 		}
-		outcome = metrics.RewardUnknown
-	case mailID != 0:
-		outcome = metrics.RewardDelivered
-	default:
-		outcome = metrics.RewardRejected
 	}
-	attempts := p.Attempts
-	if attempts > 6 {
-		attempts = 6
-	}
-	delay := uint64(1000) << attempts
-	if delay > 60000 {
-		delay = 60000
-	}
-	stamp := uint64(w.now().UnixMilli())
-	return w.Repo.SettleReward(ctx, p, mailID, stamp+delay, stamp)
+	return record(result, mailID, uint64(w.now().UnixMilli()))
 }

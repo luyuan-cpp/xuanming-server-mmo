@@ -36,6 +36,7 @@
 #include "proto/common/base/node.pb.h"          // PlayerInboxNodeService
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/player_inbox/player_inbox.pb.h"
+#include "table/proto/tip/bag_error_tip.pb.h"    // kBagItemNotStacked:执行器因背包放不下而 DEFER(OnBagSpaceFreed)
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
@@ -973,7 +974,7 @@ namespace
 				else if (result.kind == PlayerInboxExecKind::kVersionSkew)
 				{
 					// 版本错位:与未知类型同口径 —— 停在这一条、不记账、不确认这一条,停用该域,已定前缀照常确认。
-					// 不走下面 DEFER 的本地续做:这类错位会在会话内消失(例如那笔带新字段的欠款被还清删除),
+					// 不走下面 DEFER 的本地续做:这类错位可能在会话内消失(例如那笔带新字段的欠款被删除;自动扣还不会删它),
 					// 按本地旧副本续做看不到服务端之后挂的 VOID,会把已作废的处置执行掉并报 APPLIED(评审 L1)。
 					// 这一行留在服务端 PENDING,实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉:已作废就记 SKIPPED,落到新版本节点就正常执行。
 					// 告警走 Halt 打的 metric=inbox_halted reason=version_skew;这一行只补条目上下文。
@@ -990,15 +991,33 @@ namespace
 					// DEFER:严格顺序,停在这一条;已处理的前缀从本地缓存里摘掉,剩下的按退避续做,不重新 Fetch。
 					// 已定的前缀留在 ackQueue,等整批做完一起确认。续做时仍先过前置闸:闸不过就丢掉剩下的本地副本,
 					// 先确认前缀再重拉(DropPendingForRefetch,评审 L1)。
-					LOG_WARN << "[PlayerInbox] Executor deferred player_id=" << playerId << " domain=" << state.domain
-							 << " seq=" << seq << " type=" << player_inbox_registry::TypeName(msgType)
-							 << " reason=" << result.reason;
+					// 同一段连续延后只在首次(延后原因刚变成执行器 DEFER)、换了一条(这一轮先定了前缀才停下)和每
+					// kStuckWarnEveryFailures 次连续失败时打 WARN,其余 DEBUG(2026-11-06)。执行器 DEFER 的原因可能是玩家自己
+					// 造出来、能维持很久的状态(人物背包与临时格都满,bag-rule-policy-layering.md §6.6),每次重试都打 WARN
+					// 会按退避节拍(封顶 60 秒)刷屏。节拍沿用卡住告警的推导:封顶之后两条 WARN 最多相隔约 8 分钟,落在 [10m]
+					// 日志窗口之内,按 player_id 搜日志总查得到。限频只读本域已有的 failStreak / deferReason,不另建状态。
+					const uint32_t streak =
+						state.failStreak < std::numeric_limits<uint32_t>::max() ? state.failStreak + 1 : state.failStreak;
+					if (state.deferReason != PlayerInboxDeferReason::kExecutorDefer || consumed > 0 ||
+						player_inbox_rules::IsStuckWarnDue(streak))
+					{
+						LOG_WARN << "[PlayerInbox] Executor deferred player_id=" << playerId << " domain=" << state.domain
+								 << " seq=" << seq << " type=" << player_inbox_registry::TypeName(msgType)
+								 << " reason=" << result.reason << " streak=" << streak;
+					}
+					else
+					{
+						LOG_DEBUG << "[PlayerInbox] Executor deferred again player_id=" << playerId << " domain=" << state.domain
+								  << " seq=" << seq << " reason=" << result.reason << " streak=" << streak;
+					}
 					state.pendingItems.erase(state.pendingItems.begin(),
 											 state.pendingItems.begin() + static_cast<std::ptrdiff_t>(consumed));
 					if (recorded)
 					{
 						RequestPersist(player, playerId, state, nowMs);
 					}
+					// 执行器带回的原因记在本域上,只给定向唤醒用(OnBagSpaceFreed 只挑背包放不下的域),不改退避与判定。
+					state.executorDeferReason = result.reason;
 					Defer(state, playerId, PlayerInboxDeferReason::kExecutorDefer, nowMs);
 					return;
 				}
@@ -1270,6 +1289,38 @@ void PlayerInboxSystem::OnBattleFreezeCleared(entt::entity player)
 			// 立即重查:不合并、不去抖(协调项 C1)。不加这一行,战斗结束后最多要再等 60 秒的退避。
 			state.failStreak = 0;
 			state.nextCheckMs = nowMs;
+		}
+	}
+}
+
+void PlayerInboxSystem::OnBagSpaceFreed(entt::entity player)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return;
+	}
+	auto *runtime = tlsEcs.actorRegistry.try_get<PlayerInboxRuntimeComp>(player);
+	if (runtime == nullptr)
+	{
+		return;
+	}
+	const uint64_t nowMs = gNowMsFn();
+	for (auto &state : runtime->domains)
+	{
+		// 只认「执行器因背包放不下而 DEFER」:其余延后(前置闸、传输、执行器的其它原因)照原有退避,不提前。
+		if (state.halted || state.deferReason != PlayerInboxDeferReason::kExecutorDefer ||
+			state.executorDeferReason != static_cast<uint32_t>(kBagItemNotStacked))
+		{
+			continue;
+		}
+		if (state.phase == PlayerInboxPhase::kIdle || state.phase == PlayerInboxPhase::kApplying)
+		{
+			// 与 OnBattleFreezeCleared 同形,但只把下一次尝试提到现在,不改任何判定:不清 failStreak(腾出的位置
+			// 可能还不够,重试仍放不下时照常退避、日志节拍照常),不动 recheckRequested,也不在这里同步续做 ——
+			// 正在走的那一轮不打断,由下一个 Tick 按原有规则续做。同一拍里被调多次也只多出这一次尝试。
+			state.nextCheckMs = nowMs;
+			LOG_DEBUG << "[PlayerInbox] bag space freed, retrying the deferred entry on the next tick player_id="
+					  << GuidOf(player) << " domain=" << state.domain << " streak=" << state.failStreak;
 		}
 	}
 }

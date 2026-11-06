@@ -72,6 +72,7 @@ public:
         kAlreadyPersisted, // 没有变化也不需要释放,SaveDone 不会被调用
         kNotSeeded,        // 没有播种过,SaveDone 不会被调用
         kSeqExhausted,     // 序号饱和,这一笔没有发出去,SaveDone 不会被调用
+        kStopped,          // Scene 已关闭持久任务准入，这份快照没有入队。
     };
 
     // ok=false 表示结果未知。response 只在回调期间有效。

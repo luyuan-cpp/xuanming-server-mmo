@@ -29,6 +29,7 @@
 #include "modules/bag/bag_system.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/bag/item_store.h"
+#include "fifo_eviction_profile_for_test.h" // 先进先出的测试包(生产已无包淘汰,§6.6)
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/common/component/item_base_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
@@ -539,11 +540,11 @@ TEST_F(BagInstanceDataTest, PutInstanceStillAsksAdmission)
 	EXPECT_TRUE(festival.IsLayerConsistent());
 }
 
-// 搬运绝不为了腾位销毁东西 —— 哪怕目标是配了先进先出淘汰的临时格。
+// 搬运绝不为了腾位销毁东西 —— 哪怕目标包配了先进先出淘汰(临时格以前就是这样配的)。
 TEST_F(BagInstanceDataTest, PutInstanceNeverEvictsEvenOnAnEvictingBag)
 {
 	Bag temporary;
-	temporary.SetProfile(BagProfile::Temporary(1));
+	temporary.SetProfile(FifoEvictingProfileForTest(1));
 	temporary.RestoreItems({{MakeInstance(kGuidA, kEquipA), 0}});
 	const BagState before = Capture(temporary);
 

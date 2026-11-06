@@ -84,7 +84,8 @@ message player_snapshot
   // 不改主键:rollback_audit_log.snapshot_id_used 引用的是 id,换主键等于篡改历史审计。
   uint64 snapshot_guid = 9;
   // 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
-  //       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
+  //       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 原字节,内含 player_database 的 proto blob;
+  //           2026-11-05 之前还有一个 player_database_1 blob,字段已 reserved)。
   // 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
   uint32 source = 10;
 }
@@ -346,6 +347,11 @@ message player_name
   // 只删落在 PlayerName.ReleaseWindow 内的行(login 建角失败的补偿),
   // 超窗的孤儿行只能由运维带 x-admin-token 清 —— 没有这一列就没法区分两者。
   uint64 created_ms = 4;
+  // 绑定时刻 Unix 毫秒(data_service 进程时钟);0 = 预留态。名字行是「预留 → 绑定」状态机
+  // (docs/design/guild-phase2/03-names.md §3.4a):ReservePlayerName 写下的是预留态,player_id 是候选角色;
+  // 建角在玩家片提交 account_role 之后,data_service 先复核角色确已提交,再把它置为已绑定。
+  // 已绑定的名字 ReleasePlayerName 一律拒绝,只有删角写完墓碑之后由 data_service 释放。
+  uint64 bound_ms   = 5;
 }
 
 // 玩家分片上「这个角色登记的名字」。BatchGetPlayerName 读它,不用扫全部名字分片;

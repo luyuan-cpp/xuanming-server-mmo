@@ -15,6 +15,7 @@ public:
     LoopTaskScope& operator=(const LoopTaskScope&) = delete;
 
     [[nodiscard]] bool IsAccepting() const;
+    // name 必须有静态存储期，异步完成时用于错误日志。
     [[nodiscard]] bool Start(boost::cobalt::task<void> task, const char* name);
     // 只封住准入，已有任务继续推进。持久写入仍由原业务账本判断排空。
     void Close();

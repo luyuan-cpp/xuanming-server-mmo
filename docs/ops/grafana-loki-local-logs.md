@@ -126,6 +126,10 @@ v1.10.0 记录的位置等于文件大小,解析结果和 v1.19.2 逐条一致�
   - `Build Info` 这类多行消息只有第一行带时间戳,后续行会并回同一条。
   - 级别:muduo 只输出 TRACE / DEBUG / INFO / WARN / ERROR / FATAL 六种。`LOG_SYSERR` 实际按 ERROR 输出;
     errno 不为 0 时,会在级别之后、正文之前插入 `<错误描述> (errno=N) `,行尾仍是 ` - 文件:行号`。
+  - **行尾上下文后缀(2026-11-06 起,未编译验证):** 当前线程有 trace 或玩家时,` - 文件:行号` 之后多一段
+    `[ctx trace_id=<32 位> span_id=<16 位> player_id=<id>]`,缺哪样就省哪样,两样都没有就不加
+    (见 [distributed-tracing.md](../design/distributed-tracing.md) §5.1)。Alloy 只按行首解析,不受影响;
+    把这几个值提成结构化元数据是该设计 §10.1 的第 7 批,在那之前用行内搜索:`{job="cpp_nodes"} |= "trace_id=<32 位>"`。
   - **重要:stdout 写进文件时是 4096 字节整块缓冲,最新的日志会长时间看不到。** 细节和应对见 §5 排障表第一行。
 - **stderr** 里有三种非 muduo 的行,Alloy 都已分别识别:
   - gRPC / abseil:`E0913 07:40:56.694940   52672 chttp2_transport.cc:1425] ... GOAWAY ... too_many_pings`。

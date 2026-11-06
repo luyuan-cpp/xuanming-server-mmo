@@ -7,10 +7,17 @@ import (
 	"match/internal/svc"
 )
 
+// InitGatherSlots 建本副本的备战槽(GlobalMatch.GatherSlots)。它属于数据面:RespondChallenge、整队开战、帮会历练开局等
+// RPC 提交成局后要占槽异步备战,槽为 nil 时会在 RPC 里同步跑最长约 110 秒的备战、超过调用超时。
+// StartMatcherLoop 会调它;不起撮合循环的 canary 副本(发布轨道设计 §2.5)要单独调。
+func InitGatherSlots(svcCtx *svc.ServiceContext) {
+	svcCtx.GlobalGatherSlots = make(chan struct{}, svcCtx.Config.GlobalMatch.GatherSlotCount())
+}
+
 // StartMatcherLoop 启动匹配的全部后台循环。多副本安全:撮合按池归属分工(poolowner),提交点在 SQL 事务里复核,
 // 恢复靠工作租约与行锁;循环本身不持任何 Redis 锁。
 func StartMatcherLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
-	svcCtx.GlobalGatherSlots = make(chan struct{}, svcCtx.Config.GlobalMatch.GatherSlotCount())
+	InitGatherSlots(svcCtx)
 	readyCursor := &globalReadyCursor{}
 	svcCtx.StartRelayLoop(ctx, "match.global.ready.scan", 500*time.Millisecond, func(ctx context.Context) { readyCursor.round(ctx, svcCtx) })
 	// 到期终局恢复自成一个循环(2026-10-30,global_outcome_recover.go):翻页游标是这个循环的局部状态,只有它读写;

@@ -2519,6 +2519,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
     kPlayerInboxFieldNumber = 8,
     kPlayerRedisFieldNumber = 9,
     kAuditSnapshotFieldNumber = 10,
+    kSceneControlRedisFieldNumber = 11,
     kSceneNodeTypeFieldNumber = 1,
     kZoneIdFieldNumber = 2,
   };
@@ -2586,6 +2587,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
   ::GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL _internal_mutable_audit_snapshot();
 
   public:
+  // .GameConfig.ZoneRedisConfig scene_control_redis = 11;
+  [[nodiscard]] bool has_scene_control_redis()
+      const;
+  void clear_scene_control_redis() ;
+  [[nodiscard]] const ::GameConfig_ZoneRedisConfig& scene_control_redis() const;
+  [[nodiscard]] ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE release_scene_control_redis();
+  ::GameConfig_ZoneRedisConfig* PROTOBUF_NONNULL mutable_scene_control_redis();
+  void set_allocated_scene_control_redis(::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_scene_control_redis(::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE value);
+  ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE unsafe_arena_release_scene_control_redis();
+
+  private:
+  const ::GameConfig_ZoneRedisConfig& _internal_scene_control_redis() const;
+  ::GameConfig_ZoneRedisConfig* PROTOBUF_NONNULL _internal_mutable_scene_control_redis();
+
+  public:
   // uint32 scene_node_type = 1;
   void clear_scene_node_type() ;
   [[nodiscard]] ::uint32_t scene_node_type() const;
@@ -2610,8 +2627,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 6,
-                          4, 0,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          5, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2643,6 +2660,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
     ::GameConfig_PlayerInboxConfig* PROTOBUF_NULLABLE player_inbox_;
     ::GameConfig_PlayerRedisConfig* PROTOBUF_NULLABLE player_redis_;
     ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE audit_snapshot_;
+    ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE scene_control_redis_;
     ::uint32_t scene_node_type_;
     ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -5635,7 +5653,7 @@ inline void GameConfig_AuditSnapshotConfig::_internal_set_sample_per_mille(::uin
 inline void GameConfig::clear_scene_node_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_node_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t GameConfig::scene_node_type() const {
   // @@protoc_insertion_point(field_get:GameConfig.scene_node_type)
@@ -5643,7 +5661,7 @@ inline ::uint32_t GameConfig::scene_node_type() const {
 }
 inline void GameConfig::set_scene_node_type(::uint32_t value) {
   _internal_set_scene_node_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:GameConfig.scene_node_type)
 }
 inline ::uint32_t GameConfig::_internal_scene_node_type() const {
@@ -5659,7 +5677,7 @@ inline void GameConfig::_internal_set_scene_node_type(::uint32_t value) {
 inline void GameConfig::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t GameConfig::zone_id() const {
   // @@protoc_insertion_point(field_get:GameConfig.zone_id)
@@ -5667,7 +5685,7 @@ inline ::uint32_t GameConfig::zone_id() const {
 }
 inline void GameConfig::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:GameConfig.zone_id)
 }
 inline ::uint32_t GameConfig::_internal_zone_id() const {
@@ -6069,6 +6087,104 @@ inline void GameConfig::set_allocated_audit_snapshot(::GameConfig_AuditSnapshotC
 
   _impl_.audit_snapshot_ = reinterpret_cast<::GameConfig_AuditSnapshotConfig*>(value);
   // @@protoc_insertion_point(field_set_allocated:GameConfig.audit_snapshot)
+}
+
+// .GameConfig.ZoneRedisConfig scene_control_redis = 11;
+inline bool GameConfig::has_scene_control_redis() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.scene_control_redis_ != nullptr);
+  return value;
+}
+inline void GameConfig::clear_scene_control_redis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.scene_control_redis_ != nullptr) _impl_.scene_control_redis_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::GameConfig_ZoneRedisConfig& GameConfig::_internal_scene_control_redis() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::GameConfig_ZoneRedisConfig* p = _impl_.scene_control_redis_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GameConfig_ZoneRedisConfig>(&::GameConfig_ZoneRedisConfig_globals_);
+}
+inline const ::GameConfig_ZoneRedisConfig& GameConfig::scene_control_redis() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GameConfig.scene_control_redis)
+  return _internal_scene_control_redis();
+}
+inline void GameConfig::unsafe_arena_set_allocated_scene_control_redis(
+    ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.scene_control_redis_);
+  }
+  _impl_.scene_control_redis_ = reinterpret_cast<::GameConfig_ZoneRedisConfig*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GameConfig.scene_control_redis)
+}
+inline ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE GameConfig::release_scene_control_redis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::GameConfig_ZoneRedisConfig* released = _impl_.scene_control_redis_;
+  _impl_.scene_control_redis_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE GameConfig::unsafe_arena_release_scene_control_redis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GameConfig.scene_control_redis)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::GameConfig_ZoneRedisConfig* temp = _impl_.scene_control_redis_;
+  _impl_.scene_control_redis_ = nullptr;
+  return temp;
+}
+inline ::GameConfig_ZoneRedisConfig* PROTOBUF_NONNULL GameConfig::_internal_mutable_scene_control_redis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.scene_control_redis_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::GameConfig_ZoneRedisConfig>(GetArena());
+    _impl_.scene_control_redis_ = reinterpret_cast<::GameConfig_ZoneRedisConfig*>(p);
+  }
+  return _impl_.scene_control_redis_;
+}
+inline ::GameConfig_ZoneRedisConfig* PROTOBUF_NONNULL GameConfig::mutable_scene_control_redis()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::GameConfig_ZoneRedisConfig* _msg = _internal_mutable_scene_control_redis();
+  // @@protoc_insertion_point(field_mutable:GameConfig.scene_control_redis)
+  return _msg;
+}
+inline void GameConfig::set_allocated_scene_control_redis(::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.scene_control_redis_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.scene_control_redis_ = reinterpret_cast<::GameConfig_ZoneRedisConfig*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GameConfig.scene_control_redis)
 }
 
 #ifdef __GNUC__

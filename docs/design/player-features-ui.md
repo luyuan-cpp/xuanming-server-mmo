@@ -28,7 +28,9 @@
 - `BagItemInfo` 只描述实例，含 64 位 item_id、config_id、数量及显示元信息。
 - `BagLayoutInfo` 包含 bag_type、capacity、slots；slot 记录显式的 0 起槽号与 item_id，不依赖 repeated 的顺序。UI 的七列分页只是显示方式，不改服务器槽号。
 - 四类固定包当前为 FlatLayout / FixedSlotLayout，权威占位函数恒 1×1。通过 `Bag::GetItemFootprintByGuid` 只读查询，由桥层决定形状；未来多格包还需协议布局类型和列数，本接口不假装已支持。
-- bag_type 为 0 人物背包、1 仓库、2 装备栏、3 临时格；整理仅允许 0/1，不能重排穿戴槽或改变临时格淘汰顺序。
+- bag_type 为 0 人物背包、1 仓库、2 装备栏、3 临时格；整理仅允许 0/1，不能重排穿戴槽，也不整理临时格。
+  临时格 2026-11-05 起满了就拒、不再先进先出淘汰；里面的东西经 `RetrieveTemporaryItems`（取回一件或全部，全或无）回到人物背包，
+  界面与错误码见 [bag-rule-policy-layering.md](bag-rule-policy-layering.md) §6.6。
 - GetBag 不创建缺失组件、不合堆、不整理。玩家无组件时返回 kServiceUnavailable，不能伪装成容量为 0 的成功空包。
 - SortBag 调用 `BagService::SortByPlayerRequest`，继承跨服冻结检查与被合并实例的销毁流水。重试已整理好的包返回 changed=false。读写均在 scene EventLoop 上，不跨线程留表指针或组件引用。
 - CurrencyComp.Values 延用 0 金币、1 钻石、2 绑定钻石，全部为 uint64；与背包同帧复制。

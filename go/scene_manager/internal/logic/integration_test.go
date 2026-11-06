@@ -61,6 +61,9 @@ type fakeSceneNode struct {
 	lastCreateConf   atomic.Uint64
 	lastCreateScene  atomic.Uint64
 	lastDestroyScene atomic.Uint64
+	// 最近一次建场景 / 拆场景带的放置代次(docs/design/world-channel-placement-generation.md)。
+	lastCreateGeneration  atomic.Uint64
+	lastDestroyGeneration atomic.Uint64
 
 	// createShouldFail, if non-nil, makes CreateScene return it. Used by
 	// the "new node misbehaving" test to prove the redis mapping stays on
@@ -106,6 +109,7 @@ func (f *fakeSceneNode) CreateScene(_ context.Context, req *scenepb.CreateSceneR
 	f.createCalls.Add(1)
 	f.lastCreateConf.Store(uint64(req.ConfigId))
 	f.lastCreateScene.Store(req.SceneId)
+	f.lastCreateGeneration.Store(req.PlacementGeneration)
 	if f.createShouldFail != nil {
 		return nil, f.createShouldFail
 	}
@@ -120,6 +124,7 @@ func (f *fakeSceneNode) CreateScene(_ context.Context, req *scenepb.CreateSceneR
 func (f *fakeSceneNode) DestroyScene(_ context.Context, req *scenepb.DestroySceneRequest) (*basepb.Empty, error) {
 	f.destroyCalls.Add(1)
 	f.lastDestroyScene.Store(req.SceneId)
+	f.lastDestroyGeneration.Store(req.PlacementGeneration)
 	return &basepb.Empty{}, nil
 }
 
@@ -236,6 +241,7 @@ func newIntegrationSvcCtxWithRedisOptions(t *testing.T, opts ...redis.Option) (*
 	return &svc.ServiceContext{
 		Config:         c,
 		Redis:          rds,
+		CoreRedis:      rds, // 单测里控制域与核心是同一个实例(与开发环境一致)
 		PlayerRedis:    newTestPlayerRedis(t, mr),
 		RoleDirectory:  testRoleDirectory(1),
 		OwnerEpochMint: newFakeOwnerEpochMinter(rds),
@@ -280,7 +286,6 @@ func registerWorldNodeFromHarness(t *testing.T, sc *svc.ServiceContext, zoneId u
 	knownNodesMu.Unlock()
 
 	updateNodeLoad(sc, entry)
-	rebuildActiveZones()
 }
 
 // killNode marks a previously-registered node as gone: drop from the load
@@ -300,7 +305,6 @@ func killNode(sc *svc.ServiceContext, zoneId uint32, nodeID string) {
 		}
 	}
 	knownNodesMu.Unlock()
-	rebuildActiveZones()
 	RemoveNodeConn(zoneId, nodeID)
 }
 
@@ -311,7 +315,6 @@ func clearKnownNodesForTest() {
 	knownNodesMu.Lock()
 	knownNodes = make(map[string]nodeEntry)
 	knownNodesMu.Unlock()
-	rebuildActiveZones()
 }
 
 // findSceneIdHashingTo searches sceneIds 1..limit for the first one that
@@ -369,9 +372,9 @@ func TestSceneNodeConnectionCacheIsScopedByZoneAndNodeID(t *testing.T) {
 	})
 	t.Cleanup(restoreDialer)
 
-	_, err := RequestNodeCreateScene(context.Background(), sc, 1, "10", 1001, 9001)
+	_, err := RequestNodeCreateSceneWithOptions(context.Background(), sc, 1, "10", 1001, 9001, 0, nil)
 	require.NoError(t, err)
-	_, err = RequestNodeCreateScene(context.Background(), sc, 2, "10", 2001, 9002)
+	_, err = RequestNodeCreateSceneWithOptions(context.Background(), sc, 2, "10", 2001, 9002, 0, nil)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, zone1Node10.fake.createCalls.Load())
 	require.EqualValues(t, 1, zone2Node10.fake.createCalls.Load(),
@@ -411,7 +414,7 @@ func TestCachedConnectionRejectsLaterDuplicateZoneNodeIdentity(t *testing.T) {
 	installBufconnDialer(t, h)
 	registerWorldNodeFromHarness(t, sc, 1, h)
 
-	_, err := RequestNodeCreateScene(context.Background(), sc, 1, "10", 1001, 9001)
+	_, err := RequestNodeCreateSceneWithOptions(context.Background(), sc, 1, "10", 1001, 9001, 0, nil)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, h.fake.createCalls.Load())
 
@@ -424,7 +427,7 @@ func TestCachedConnectionRejectsLaterDuplicateZoneNodeIdentity(t *testing.T) {
 	knownNodes["SceneNodeService.rpc/duplicate"] = duplicate
 	knownNodesMu.Unlock()
 
-	_, err = RequestNodeCreateScene(context.Background(), sc, 1, "10", 1001, 9002)
+	_, err = RequestNodeCreateSceneWithOptions(context.Background(), sc, 1, "10", 1001, 9002, 0, nil)
 	require.Error(t, err, "既有 cache 命中不得掩盖后来出现的重复身份")
 	require.EqualValues(t, 1, h.fake.createCalls.Load(), "歧义身份不得收到第二次 RPC")
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"shared/authoritysql"
 	"shared/drainproof"
+	"shared/etcdwatch"
 	"shared/safego"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,7 @@ import (
 	"match/internal/discovery"
 	matchkafka "match/internal/kafka"
 	"match/internal/metrics"
+	"match/internal/poolowner"
 	"match/internal/scope"
 
 	dspb "proto/data_service"
@@ -143,6 +145,9 @@ type ServiceContext struct {
 	stopOnce            sync.Once
 	rankPublisherCancel context.CancelFunc
 	rankPublisherDone   chan struct{}
+	// resultLagProbeDone 在结果消费组 lag 探针 goroutine 退出(已关掉自己的 broker 连接)时关闭;探针跟着 stopBackground 的 ctx 退出,
+	// StopAndReport 停后台之后等它。canary 副本不起结果消费者,保持 nil。
+	resultLagProbeDone <-chan struct{}
 	// partyTeam 整队排队里 logic 反过来问 / 通知 team 域的端口(见 PartyTeamPort),
 	// 装配时由 SetPartyTeam 注入。用 atomic:matcher 循环比组队服务先启动。
 	partyTeam atomic.Pointer[partyTeamHolder]
@@ -185,6 +190,18 @@ func (s *ServiceContext) PoolMember() string {
 	return ""
 }
 
+// OwnsWork 报告本实例是否负责 key 这份后台工作:撮合池(catalog.OwnerKey)、成局恢复片、整队维护片、投榜片
+// (authority/work_owner.go)。全部用同一条规则:在 etcd 注册的 match 实例上做最高随机权重哈希(internal/poolowner)。
+// 它只管分工,正确性在各自的 SQL 提交点。成员表为空(watch 还没同步,或 etcd 一直起不来)时全部副本都做,保活优先;
+// 成员表非空、但本实例不在其中(尚未注册或已注销)时什么都不负责,交给表里的副本。
+func (s *ServiceContext) OwnsWork(key string) bool {
+	members := s.PoolMembers()
+	if len(members) == 0 {
+		return true
+	}
+	return poolowner.Owns(s.PoolMember(), key, members)
+}
+
 // PoolMembers 返回当前注册在 etcd 的全部 match 实例 UUID(按池归属的成员表)。未装配 watcher 时为空。
 func (s *ServiceContext) PoolMembers() []string {
 	if s.MatchNodes == nil {
@@ -214,17 +231,20 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err != nil {
 		panic(err)
 	}
-	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
+	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New(), true)
 }
 
-func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
+// globalBackground 为 false(发布轨道 canary,docs/design/release-track-gray-canary.md §2.5)时不起排名发布与终局发件箱;
+// 其余装配(收件箱节点镜像、权威库、合服映射等数据面)照旧。match_service 按 releasetrack.FromEnv 传入,NewServiceContext 固定 stable。
+func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session, globalBackground bool) *ServiceContext {
 	if root == nil || relay == nil || root == relay {
 		panic("匹配真实角色门禁未装配")
 	}
-	etcdCli, err := clientv3.New(clientv3.Config{
+	// keepalive:节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
-	})
+	}))
 	if err != nil {
 		panic("failed to create etcd client: " + err.Error())
 	}
@@ -275,10 +295,12 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.SceneNodes = discovery.NewNodeWatcher("scene", SceneNodeRpcPrefix,
 		metrics.SetDiscoveredNodes,
 		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
+	// battle、match、player_inbox 的镜像只收 stable(发布轨道设计 §2.5,见 NodeWatcher.StableOnly):
+	// 放战斗与调收件箱都是服务间调用;匹配池的 HRW 成员表若算进 canary,落到它名下的池会停摆。scene 按 zone 选,不过滤。
 	sc.BattleNodes = discovery.NewNodeWatcher("battle", BattleNodeRpcPrefix,
 		metrics.SetDiscoveredNodes,
-		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
-	sc.MatchNodes = discovery.NewNodeWatcher("match", MatchNodeRpcPrefix, metrics.SetDiscoveredNodes, nil)
+		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).StableOnly()
+	sc.MatchNodes = discovery.NewNodeWatcher("match", MatchNodeRpcPrefix, metrics.SetDiscoveredNodes, nil).StableOnly()
 	sc.Placement = battleplace.New()
 
 	// 模板目录读表失败或校验不过直接拒绝启动:不带着坏表开放任何匹配入口。
@@ -325,6 +347,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		sc.Stop()
 		panic(fmt.Errorf("全球匹配范围规则无效: %w", err))
 	}
+	// 成局恢复、整队维护、闲置队伍到期、投榜按片分工,与撮合池同一条归属规则(OwnsWork)。
+	store.BindWorkOwner(sc.OwnsWork)
 	// 角色归属锁本库的护栏副本,自愈、事务外的读和入场校验走 data_service(docs/design/horizontal-scale-logical-db.md §3)。
 	if err := sc.configureRoleFence(ctx, store); err != nil {
 		sc.Stop()
@@ -369,7 +393,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic("全球终局必须配置独立Battle/Match入箱签名密钥")
 	}
 	sc.BattleOutcomeAuth, sc.BattleOutcomeSecret = outcomeVerifier, outcomeSecret
-	inboxNodes := discovery.NewNodeWatcher("player_inbox", PlayerInboxRpcPrefix, nil, func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
+	inboxNodes := discovery.NewNodeWatcher("player_inbox", PlayerInboxRpcPrefix, nil, func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).StableOnly()
 	sc.resultPublisher = &kafka.Writer{Completion: func(_ []kafka.Message, err error) { sc.HoldRelay(err) }, Addr: kafka.TCP(c.Kafka.Brokers...), Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll, Async: false, MaxAttempts: 1, WriteTimeout: 2 * time.Second, AllowAutoTopicCreation: false}
 	resolveInbox := func(ctx context.Context) (inboxpb.PlayerInboxClient, error) {
 		if err := ctx.Err(); err != nil {
@@ -392,13 +416,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)
 	}
 	var publishers sync.WaitGroup
-	publishers.Add(3)
-	go func() {
+	runRankPublisher := func() {
 		defer publishers.Done()
 		authority.RunRankPublisher(pubctx, store, c.GlobalMatch.RankEndpoint, secret, relay)
-	}()
-	go func() { defer publishers.Done(); inboxNodes.Run(pubctx, etcdCli) }()
-	go func() {
+	}
+	runOutcomeOutbox := func() {
 		defer publishers.Done()
 		ticker := time.NewTicker(c.GlobalMatch.OutcomeOutboxInterval())
 		defer ticker.Stop()
@@ -435,7 +457,17 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			case <-ticker.C:
 			}
 		}
-	}()
+	}
+	// 收件箱节点镜像是数据面(JoinQueue、GetQueueStatus 经 RefreshBattleSettlement 要找收件箱),canary 也起。
+	// 排名发布与终局发件箱是全局作用域的后台,只在 stable 起(发布轨道设计 §2.5),canary 写下的终局由 stable 投出。
+	// 按实际起的数量 Add:rankPublisherDone 要在它们都退出后关闭,少算会让 StopAndReport 等到超时变成 HOLD。
+	publishers.Add(1)
+	go func() { defer publishers.Done(); inboxNodes.Run(pubctx, etcdCli) }()
+	if globalBackground {
+		publishers.Add(2)
+		go runRankPublisher()
+		go runOutcomeOutbox()
+	}
 	go func() { publishers.Wait(); close(sc.rankPublisherDone) }()
 
 	return sc
@@ -566,6 +598,16 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	if sc.rankPublisherDone != nil {
 		select {
 		case <-sc.rankPublisherDone:
+		case <-ctx.Done():
+			sc.RelayAdmission.Hold()
+			return errors.Join(drainproof.ErrHold, ctx.Err())
+		}
+	}
+	// 结果消费组 lag 探针随上面 stopBackground 取消的 ctx 退出;等它真正退出、关掉自己的 broker 连接。
+	// 探针只读,但这里等不到就说不清后台是否都停了,与上面的等待同样按 HOLD 报(sarama 每次调用 5s 超时,一轮有界)。
+	if sc.resultLagProbeDone != nil {
+		select {
+		case <-sc.resultLagProbeDone:
 		case <-ctx.Done():
 			sc.RelayAdmission.Hold()
 			return errors.Join(drainproof.ErrHold, ctx.Err())
@@ -763,5 +805,17 @@ func (sc *ServiceContext) BindConsumerOwner(owner *kafkautil.BoundConsumerGroup)
 		return drainproof.ErrHold
 	}
 	sc.ConsumerOwner = owner
+	return nil
+}
+
+// BindResultLagProbe 登记结果消费组 lag 探针的退出信号(kafka.StartResultConsumer 起探针 goroutine 之前调用),只能登记一次。
+// 探针只读、不进排空的在途集合,但关停时同样要等它退出,不能从 join 里漏掉(同 data_service 的探针)。
+func (sc *ServiceContext) BindResultLagProbe(done <-chan struct{}) error {
+	sc.lifecycleMu.Lock()
+	defer sc.lifecycleMu.Unlock()
+	if done == nil || sc.resultLagProbeDone != nil || sc.resourcesClosed {
+		return drainproof.ErrHold
+	}
+	sc.resultLagProbeDone = done
 	return nil
 }

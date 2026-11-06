@@ -105,7 +105,8 @@ type Config struct {
 	// Kafka:在线提醒写 scene-cmd_g<N>(kafkacmd 寻址)。只是提醒,丢了由落地拉取与在线兜底补上。
 	Kafka KafkaConf `json:"Kafka"`
 
-	// DataServiceRpc:玩家存在校验(GetPlayerHomeZone)与对账读已落盘账本(GetPlayerInboxLedger)。
+	// DataServiceRpc:玩家存在校验(GetPlayerHomeZone)、对账读已落盘账本(GetPlayerInboxLedger)、
+	// 运维 GetItemGainBlocks 读已落盘物品获取封禁表(GetPlayerItemGainBlock)。
 	// 写 Key: dataservice.rpc 不违反 D-13(data_service 按 zone 部署,先例 go/trade/etc/trade.yaml)。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc"`
 

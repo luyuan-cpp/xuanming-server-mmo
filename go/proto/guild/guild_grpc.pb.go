@@ -55,9 +55,13 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
-// 身份与 zone 一律由服务端决定:请求体里的 player_id / zone_id 只对内部调用(无会话)生效。
-// 本开关是服务级的,UpdateGuildScore 也会进 gate 白名单与路由表;
-// 它对客户端的拒绝在 go/guild/internal/session 的方法白名单里(port-decisions D-9)。
+// 身份与 zone 一律由服务端决定:请求体里的 player_id 只对不带会话的只读 GetPlayerGuild(mail 领附件读所在帮)生效,
+// 写方法一律只认会话、不带会话即拒绝(docs/design/gate-online-identity.md §7.5);zone_id 只认服务端归属。
+// 本开关是服务级的,整个服务都登记在路由表;gate 上行白名单按方法方向收号,只收 REQUEST / ONE_WAY
+// (docs/design/client-rpc-callback.md §7 R4)。UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,仍登记在路由表,
+// 但不进 gate 上行白名单,客户端发上来在 gate 按非法包丢弃(计一次非法包、不回包,到不了路由服与 guild);
+// 推送号(NotifyGuildChanged 等 CLIENT_RPC_PUSH)同理。
+// guild 的入口准入按生成的客户端方法集合(shared/generated/clientrpc,与 gate 上行白名单同源)是第二道防线。
 type GuildServiceClient interface {
 	CreateGuild(ctx context.Context, in *CreateGuildRequest, opts ...grpc.CallOption) (*CreateGuildResponse, error)
 	GetGuild(ctx context.Context, in *GetGuildRequest, opts ...grpc.CallOption) (*GetGuildResponse, error)
@@ -76,20 +80,21 @@ type GuildServiceClient interface {
 	ListGuildApplications(ctx context.Context, in *ListGuildApplicationsRequest, opts ...grpc.CallOption) (*ListGuildApplicationsResponse, error)
 	ReviewGuildApplication(ctx context.Context, in *ReviewGuildApplicationRequest, opts ...grpc.CallOption) (*ReviewGuildApplicationResponse, error)
 	// 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
-	// **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+	// 标了 CLIENT_RPC_PUSH:不进 gate 上行白名单,客户端经 gate 发这个 id 按非法包丢弃(client-rpc-callback.md §7 R4);
+	// 也不在生成的客户端方法集合里,即使到了 guild 也会被入口准入 PermissionDenied(第二道防线)。
 	NotifyGuildChanged(ctx context.Context, in *GuildChangedS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	// Ranking
 	UpdateGuildScore(ctx context.Context, in *UpdateGuildScoreRequest, opts ...grpc.CallOption) (*UpdateGuildScoreResponse, error)
 	GetGuildRank(ctx context.Context, in *GetGuildRankRequest, opts ...grpc.CallOption) (*GetGuildRankResponse, error)
 	GetGuildRankByGuild(ctx context.Context, in *GetGuildRankByGuildRequest, opts ...grpc.CallOption) (*GetGuildRankByGuildResponse, error)
-	// 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+	// 帮会经济(B5)。五个都是客户端方法(在生成的客户端方法集合里);
 	// 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
 	GetGuildDonateOptions(ctx context.Context, in *GetGuildDonateOptionsRequest, opts ...grpc.CallOption) (*GetGuildDonateOptionsResponse, error)
 	DonateToGuild(ctx context.Context, in *DonateToGuildRequest, opts ...grpc.CallOption) (*DonateToGuildResponse, error)
 	UpgradeGuild(ctx context.Context, in *UpgradeGuildRequest, opts ...grpc.CallOption) (*UpgradeGuildResponse, error)
 	GetGuildShop(ctx context.Context, in *GetGuildShopRequest, opts ...grpc.CallOption) (*GetGuildShopResponse, error)
 	BuyGuildShopGoods(ctx context.Context, in *BuyGuildShopGoodsRequest, opts ...grpc.CallOption) (*BuyGuildShopGoodsResponse, error)
-	// 帮会活动(B6a 一次加齐五个)。都是客户端方法,进 go/guild session.ClientMethods;身份一律取会话。
+	// 帮会活动(B6a 一次加齐五个)。都是客户端方法(在生成的客户端方法集合里);身份一律取会话。
 	// 历练两个在 B6b 落地前固定回 kGuildActivityNotOpen(占好消息号,B6b 不再动协议与白名单)。
 	GetGuildActivities(ctx context.Context, in *GetGuildActivitiesRequest, opts ...grpc.CallOption) (*GetGuildActivitiesResponse, error)
 	LightGuildLantern(ctx context.Context, in *LightGuildLanternRequest, opts ...grpc.CallOption) (*LightGuildLanternResponse, error)
@@ -391,9 +396,13 @@ func (c *guildServiceClient) RespondGuildTrialInvite(ctx context.Context, in *Re
 // for forward compatibility.
 //
 // 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
-// 身份与 zone 一律由服务端决定:请求体里的 player_id / zone_id 只对内部调用(无会话)生效。
-// 本开关是服务级的,UpdateGuildScore 也会进 gate 白名单与路由表;
-// 它对客户端的拒绝在 go/guild/internal/session 的方法白名单里(port-decisions D-9)。
+// 身份与 zone 一律由服务端决定:请求体里的 player_id 只对不带会话的只读 GetPlayerGuild(mail 领附件读所在帮)生效,
+// 写方法一律只认会话、不带会话即拒绝(docs/design/gate-online-identity.md §7.5);zone_id 只认服务端归属。
+// 本开关是服务级的,整个服务都登记在路由表;gate 上行白名单按方法方向收号,只收 REQUEST / ONE_WAY
+// (docs/design/client-rpc-callback.md §7 R4)。UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,仍登记在路由表,
+// 但不进 gate 上行白名单,客户端发上来在 gate 按非法包丢弃(计一次非法包、不回包,到不了路由服与 guild);
+// 推送号(NotifyGuildChanged 等 CLIENT_RPC_PUSH)同理。
+// guild 的入口准入按生成的客户端方法集合(shared/generated/clientrpc,与 gate 上行白名单同源)是第二道防线。
 type GuildServiceServer interface {
 	CreateGuild(context.Context, *CreateGuildRequest) (*CreateGuildResponse, error)
 	GetGuild(context.Context, *GetGuildRequest) (*GetGuildResponse, error)
@@ -412,20 +421,21 @@ type GuildServiceServer interface {
 	ListGuildApplications(context.Context, *ListGuildApplicationsRequest) (*ListGuildApplicationsResponse, error)
 	ReviewGuildApplication(context.Context, *ReviewGuildApplicationRequest) (*ReviewGuildApplicationResponse, error)
 	// 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
-	// **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+	// 标了 CLIENT_RPC_PUSH:不进 gate 上行白名单,客户端经 gate 发这个 id 按非法包丢弃(client-rpc-callback.md §7 R4);
+	// 也不在生成的客户端方法集合里,即使到了 guild 也会被入口准入 PermissionDenied(第二道防线)。
 	NotifyGuildChanged(context.Context, *GuildChangedS2C) (*base.Empty, error)
 	// Ranking
 	UpdateGuildScore(context.Context, *UpdateGuildScoreRequest) (*UpdateGuildScoreResponse, error)
 	GetGuildRank(context.Context, *GetGuildRankRequest) (*GetGuildRankResponse, error)
 	GetGuildRankByGuild(context.Context, *GetGuildRankByGuildRequest) (*GetGuildRankByGuildResponse, error)
-	// 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+	// 帮会经济(B5)。五个都是客户端方法(在生成的客户端方法集合里);
 	// 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
 	GetGuildDonateOptions(context.Context, *GetGuildDonateOptionsRequest) (*GetGuildDonateOptionsResponse, error)
 	DonateToGuild(context.Context, *DonateToGuildRequest) (*DonateToGuildResponse, error)
 	UpgradeGuild(context.Context, *UpgradeGuildRequest) (*UpgradeGuildResponse, error)
 	GetGuildShop(context.Context, *GetGuildShopRequest) (*GetGuildShopResponse, error)
 	BuyGuildShopGoods(context.Context, *BuyGuildShopGoodsRequest) (*BuyGuildShopGoodsResponse, error)
-	// 帮会活动(B6a 一次加齐五个)。都是客户端方法,进 go/guild session.ClientMethods;身份一律取会话。
+	// 帮会活动(B6a 一次加齐五个)。都是客户端方法(在生成的客户端方法集合里);身份一律取会话。
 	// 历练两个在 B6b 落地前固定回 kGuildActivityNotOpen(占好消息号,B6b 不再动协议与白名单)。
 	GetGuildActivities(context.Context, *GetGuildActivitiesRequest) (*GetGuildActivitiesResponse, error)
 	LightGuildLantern(context.Context, *LightGuildLanternRequest) (*LightGuildLanternResponse, error)

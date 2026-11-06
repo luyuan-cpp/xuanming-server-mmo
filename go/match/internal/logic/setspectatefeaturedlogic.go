@@ -43,7 +43,7 @@ func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeature
 		return &pb.SetSpectateFeaturedResponse{Reject: pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_DENIED}, nil
 	}
 
-	record, err := loadSpectateBattleFn(l.svcCtx, battleId)
+	record, err := loadSpectateBattleFn(l.ctx, l.svcCtx, battleId)
 	if err != nil {
 		return l.internalReject("读观战记录", battleId, err), nil
 	}

@@ -46,7 +46,8 @@ spec:
       interval: 30s
       rules:
         # 落点库名不在 db 的库名白名单里,也没被 Placement.AllowStoreFamilies 放行:落到这个库的玩家存盘和认领都回 Unavailable。
-        # 错的多半是配置(白名单 / AllowStoreFamilies=false)或指错的库(login 的 NewPlayerStorageId)。
+        # 错的多半是配置(白名单 / AllowStoreFamilies=false)或指错的库(login 的 Placement.Region / StorageShards 算出来的地域存档库
+        # 不在白名单里;过渡期没配 StorageShards 时是 NewPlayerStorageId,player-data-tidb-scaling-plan.md §7.2)。
         - alert: DbPlacementStoreRejected
           expr: |
             sum by (namespace) (increase(db_placement_store_open_total{result="rejected"}[10m])) > 0
@@ -64,7 +65,8 @@ spec:
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次按需打开落点库被拒(rejected,每个冷却期最多计一次)。落到这个库的玩家:
               存盘由 scene 退避重试,进度只在 scene 内存里(库能打开之前不要重启这些 scene,停机时没落定的玩家会丢掉最后一次提交之后的进度);认领重试 30 秒后进场失败。
               go/db 日志 `[placement] store rejected` 行给出 storage id 与当前白名单。核对:db 配置的库名白名单与 Placement.AllowStoreFamilies;
-              login 的 NewPlayerStorageId 是否指向一个 go/db 打不开的库(设计 §13 禁止项)。修好配置并滚动 db 之后,scene 的重试自动落库。
+              login 的 Placement.Region / StorageShards 算出的地域存档库(过渡期是 NewPlayerStorageId)是否在白名单里、库是否已建
+              (设计 §13 禁止项,总体方案 §7.2)。修好配置并滚动 db 之后,scene 的重试自动落库。
             runbook_url: docs/design/player-storage-placement.md
 
         # 落点库打开失败(Ping 不通、schema 闸不过、库不存在 —— go/db 按需打开只 Ping + 只读 schema 闸,从不建库)。

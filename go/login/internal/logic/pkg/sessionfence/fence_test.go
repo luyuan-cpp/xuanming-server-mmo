@@ -96,7 +96,7 @@ func TestHandshakeCloseBeforeBind(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, bound, "关闭时还没有绑定任何玩家")
 
-	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeClosed, outcome, "关闭在前,绑定必须看到 closed")
 }
@@ -107,14 +107,15 @@ func TestHandshakeBindBeforeClose(t *testing.T) {
 	rdb, mr := newTestRedis(t)
 	_, gen, err := CheckEnterGame(ctx, rdb, testKey, 1001, testTTL)
 	require.NoError(t, err)
-	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
-	require.Equal(t, testTTL, mr.TTL(testKey.redisKey()))
+	require.Equal(t, boundRecordTTL, mr.TTL(testKey.redisKey()), "绑定之后记录不随在途操作的 ttl 到期")
 
 	bound, err := Close(ctx, rdb, testKey, testTTL)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1001), bound, "绑定在前,关闭必须读到玩家")
+	require.Equal(t, testTTL, mr.TTL(testKey.redisKey()), "关闭之后记录收回到 ttl")
 
 	outcome, err = Recheck(ctx, rdb, testKey, gen)
 	require.NoError(t, err)
@@ -132,7 +133,7 @@ func TestLeaveDuringEnterChainAbortsBind(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, bound)
 
-	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeLeft, outcome)
 
@@ -146,7 +147,7 @@ func TestLeaveUnbindsAndReturnsBoundPlayer(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	_, gen, err := CheckEnterGame(ctx, rdb, testKey, 1001, testTTL)
 	require.NoError(t, err)
-	_, err = BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	_, err = BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 
 	bound, err := Leave(ctx, rdb, testKey, testTTL)
@@ -158,7 +159,7 @@ func TestLeaveUnbindsAndReturnsBoundPlayer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
 	require.Equal(t, gen+1, gen2)
-	outcome, err = BindPlayer(ctx, rdb, testKey, 1002, gen2, testTTL)
+	outcome, err = BindPlayer(ctx, rdb, testKey, 1002, gen2)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
 }
@@ -172,10 +173,10 @@ func TestSecondRoleOnSameConnectionIsRejected(t *testing.T) {
 	_, gen2, err := CheckEnterGame(ctx, rdb, testKey, 1002, testTTL)
 	require.NoError(t, err)
 
-	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen1, testTTL)
+	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen1)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
-	outcome, err = BindPlayer(ctx, rdb, testKey, 1002, gen2, testTTL)
+	outcome, err = BindPlayer(ctx, rdb, testKey, 1002, gen2)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOtherPlayer, outcome)
 
@@ -193,7 +194,7 @@ func TestRebindSamePlayerIsIdempotent(t *testing.T) {
 	_, gen, err := CheckEnterGame(ctx, rdb, testKey, 1001, testTTL)
 	require.NoError(t, err)
 	for i := 0; i < 2; i++ {
-		outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+		outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen)
 		require.NoError(t, err)
 		require.Equal(t, OutcomeOK, outcome)
 	}
@@ -215,7 +216,7 @@ func TestCheckEnterGameRefreshesRecordSoBindSeesEntryGen(t *testing.T) {
 	require.Equal(t, testTTL, mr.TTL(testKey.redisKey()), "入口必须把记录续期到 ttl")
 
 	mr.FastForward(5 * time.Second) // 不续期的话,记录此时已过期
-	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
 }
@@ -235,7 +236,7 @@ func TestLeaveAfterOriginalExpiryIsStillDetected(t *testing.T) {
 	_, err = Leave(ctx, rdb, testKey, testTTL)
 	require.NoError(t, err)
 
-	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	outcome, err := BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeLeft, outcome)
 }
@@ -266,7 +267,7 @@ func TestEveryFenceScriptPassesTheClusterGuard(t *testing.T) {
 	outcome, gen, err := CheckEnterGame(ctx, rdb, testKey, 1001, testTTL)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
-	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen)
 	require.NoError(t, err)
 	require.Equal(t, OutcomeOK, outcome)
 	outcome, err = Recheck(ctx, rdb, testKey, gen)

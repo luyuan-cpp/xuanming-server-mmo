@@ -12,6 +12,7 @@ import (
 	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/handofffence"
 	"shared/ownerepoch"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -272,6 +273,9 @@ return 1
 //	KEYS[1] = player:{id}:location
 //	KEYS[2] = player:{id}:owner_epoch
 //	KEYS[3] = player:{id}:handoff
+//	KEYS[4] = player:{id}:location_revision(§16 位置修订侧车,随 location 一起退回)
+//	KEYS[5] = player:{id}:location_revision_floor(只比不写)
+//	KEYS[6] = player:{id}:handoff_fence(只读 handoff_fence 字段;不凭标记的 bump 必须给)
 //	ARGV[1] = 本次写入的 location 精确字节(当前值必须仍是它)
 //	ARGV[2] = 回滚后的 location 字节;空串 = 本次之前没有 location,DEL
 //	ARGV[3] = 本次落点写进 location 的 epoch(当前值必须仍是它;键不存在按 "0")
@@ -280,6 +284,7 @@ return 1
 //	ARGV[5] = 本次铸造所凭的 handoff 标记原文;空串 = 不凭标记
 //	ARGV[6] = 转写后的标记 "{N+2}:{原标记冒号后的原文}";空串 = 不转写(不凭标记 / keep)
 //	ARGV[7] = 转写标记的 TTL 秒数(ownerepoch.HandoffTTL)
+//	ARGV[8..10] = 本次落点核过的修订地板 / 本次写下的侧车原文 / 回滚后要恢复的侧车原文(location_revision.go)
 //
 // ARGV[2] 由调用方预先算好(planRouteRollback):bump 时恢复出的 location 已带 owner_epoch = N+2 与
 // rollback_receipt = ARGV[5];keep 时是旧 location 的原字节。
@@ -290,6 +295,8 @@ return 1
 //	1            keep 已回滚;
 //	2            bump 已经回滚过(go-redis 重发,见下「重放识别」);
 //	3            凭标记铸造,但所凭标记已不是那一份:**一个字节都不动**,保留本次落点;
+//	4            不凭标记铸造,但交接资格原件已属于 N+1(目标节点已在 N+1 下登记):**一个字节都不动**,保留本次落点;
+//	5            不凭标记铸造,资格原件比 N+1 新或写坏了(协议写者写不出,数据被动过):不当证据,**一个字节都不动**;
 //	0            location 或 epoch 已被并发请求推进,什么都没改(否则会覆盖后来者刚提交的归属)。
 //
 // 为什么 epoch 不退回旧值(旧写法把键 SET 回 N,两条已确认伤害):
@@ -306,7 +313,22 @@ return 1
 // 的原子 Lua,只能先后执行:A2′ 在先 → 标记已删,这里回 3、归属留在 B,源端读到 (N+1, 指向 B) 销毁自己;
 // 这里在先 → epoch 已是 N+2,A2′ 回 -1,B 拒建实体、认领不了 N+1。「报错但已投递」不再造成双持有
 // 与回档。同一条也收住「回滚晚于源端取证」:源端原子删掉本族标记之后,迟到的回滚只能回 3。
-// 不凭标记的铸造(首次落点、第二条腿、死节点接管)没有令牌可查,这一支做不到互斥(§12.8 第十三节残余)。
+//
+// 为什么不凭标记的回滚要先看交接资格原件(伤害 4,没有 location 的现任):首次落点、第二条腿、死节点接管
+// 没有交接标记可查。目标节点 B 在建实体、认领存档之前,先跑入场登记(C++ handoff_sql_barrier.h
+// kRegisterFenceLua):核对 owner_epoch == N+1,再把 N+1 代的资格原件写进 handoff_fence(role_admission_system.cpp
+// 登记成功才 Activate → 认领)。原件的代次只升不降(登记拒更小的代次,交接采纳只会抬高,冻结 / 撤销 / 释放 /
+// 取证这些写者都按 sameholder 保持代次不变)。所以这里与登记同样只能先后执行:
+// 登记在先 → 原件已属于 N+1,这里回 4、归属留在 B(location 仍指向 B,之后的
+// 换图 / 重登按 B 是持有者走换手门);这里在先 → epoch 已是 N+2,登记回 -1,B 认领不了 N+1。
+// 以前不看原件,登记在先时回滚照样 INCR 并删掉 location:B 拿着 N+1 认领了写权行、却没有 location,
+// 下一次换图 / 重登按首次落点铸新代次,B 最后一次提交之后的进度被新认领围掉(§12.8 第十三节残余,已收口)。
+// 判据与无资格持有者撤销(unqualified_holder_revoke.go decideUnqualifiedRevoke)同口径:原件缺失或代次 < N+1
+// 才算「没有任何进程在 N+1 下登记过」;原件写坏或比 N+1 新(协议写者写不出,只能是 Redis 被回退 / 手工改过)
+// 时不当证据,回 5,一个字节都不写(fail-closed:证明不了就不做可能造出无 location 现任的那一步),由告警转人工
+// 核对。原件按 C++ 的 fence() 解析(luaCppHandoffFenceHelpers),与登记脚本同一口径。
+// 凭标记的回滚不需要这一步:登记成功会在同一段 Lua 里删掉标记,标记原样还在就说明写下它之后没有任何
+// 登记成功过,令牌已经互斥。
 //
 // 回执与转写 —— 源端怎么知道自己被回滚了:
 //   - 回执 = 所凭标记原文,写在恢复出的 location 里(PlayerLocation.rollback_receipt),与 INCR 同一段
@@ -333,7 +355,7 @@ return 1
 // 相同(UpdateTime 秒级,多副本间还有时钟偏差),证明不了是本请求所为,误报会让调用方多还一次人数。
 //
 // tonumber 比较:epoch 远小于 2^53,双精度下精确;cur 被写坏(非数字)时得 nil,比较为假,回 0。
-const luaRollbackPlayerPlacement = `
+const luaRollbackPlayerPlacement = luaCppHandoffFenceHelpers + `
 if ARGV[8] ~= nil and ARGV[8] ~= '' then
     if redis.call('GET',KEYS[5]) ~= ARGV[8] then return 0 end
     local tag = redis.call('GET',KEYS[4]) or ''
@@ -347,6 +369,25 @@ end
 if loc == ARGV[1] and cur == ARGV[3] then
     if ARGV[5] ~= "" and redis.call("GET", KEYS[3]) ~= ARGV[5] then
         return 3
+    end
+    if ARGV[4] == "bump" and ARGV[5] == "" then
+        if KEYS[6] == nil or not uint(ARGV[3]) then
+            return redis.error_reply("ROUTE_ROLLBACK fence shape")
+        end
+        local raw = redis.call("HGET", KEYS[6], "handoff_fence")
+        if raw ~= false then
+            local held = fence(raw)
+            if not held then
+                return 5
+            end
+            local order = cmp(held.e, ARGV[3])
+            if order == 0 then
+                return 4
+            end
+            if order > 0 then
+                return 5
+            end
+        end
     end
     local after = 0
     if ARGV[4] == "bump" then
@@ -382,6 +423,9 @@ return 0
 //	rolled_back / already_rolled_back / superseded / redis_error  见 rollbackPlayerPlacement;
 //	marker_gone  凭标记铸造的回滚发现所凭标记已不是那一份(目标节点 A2′ 已消费令牌、源端已取证或撤回),
 //	             一个字节都没动,本次落点保留;
+//	target_registered 不凭标记铸造的回滚发现目标节点已在本次铸出的代次下登记(Kafka 报错但已投递),
+//	             一个字节都没动,本次落点保留;
+//	fence_not_proof 不凭标记铸造的回滚读到比本次铸出值新、或写坏了的交接资格原件,不当证据,一个字节都没动;
 //	plan_error   回滚计划构造失败(planRouteRollback,按构造不可达),没有回滚。
 const (
 	rollbackOutcomeRolledBack        = "rolled_back"
@@ -389,6 +433,8 @@ const (
 	rollbackOutcomeSuperseded        = "superseded"
 	rollbackOutcomeRedisError        = "redis_error"
 	rollbackOutcomeMarkerGone        = "marker_gone"
+	rollbackOutcomeTargetRegistered  = "target_registered"
+	rollbackOutcomeFenceNotProof     = "fence_not_proof"
 	rollbackOutcomePlanError         = "plan_error"
 )
 
@@ -589,6 +635,8 @@ type rollbackVerdict struct {
 //	1     rolled_back;bump 计划收到 1 记 drift
 //	2     bump → already_rolled_back,回显 epochAfter;keep 按构造不可能 → 与未知值同归 redis_error
 //	3     marker_gone,没回滚
+//	4     不凭标记的 bump → target_registered,没回滚;其余计划按构造不可能 → redis_error
+//	5     不凭标记的 bump → fence_not_proof,没回滚;其余计划按构造不可能 → redis_error
 //	0     superseded,没回滚
 //	其余  redis_error(结果未知),没回滚 —— 不混进 superseded,那会把约定漂移藏成「并发推进」
 func classifyRollbackReply(signed int64, plan routeRollbackPlan) rollbackVerdict {
@@ -605,6 +653,10 @@ func classifyRollbackReply(signed int64, plan routeRollbackPlan) rollbackVerdict
 		return rollbackVerdict{outcome: rollbackOutcomeAlreadyRolledBack, restored: true, echo: plan.epochAfter}
 	case signed == 3:
 		return rollbackVerdict{outcome: rollbackOutcomeMarkerGone}
+	case signed == 4 && bump && plan.requiredMarker == "":
+		return rollbackVerdict{outcome: rollbackOutcomeTargetRegistered}
+	case signed == 5 && bump && plan.requiredMarker == "":
+		return rollbackVerdict{outcome: rollbackOutcomeFenceNotProof}
 	case signed == 0:
 		return rollbackVerdict{outcome: rollbackOutcomeSuperseded}
 	default:
@@ -629,7 +681,7 @@ func rollbackPlacementAfterPushFailure(svcCtx *svc.ServiceContext, log logx.Logg
 
 // rollbackPlacementKeys 是 luaRollbackPlayerPlacement 的 KEYS,全部在玩家自己的 slot 上(scene_keys_contract_test.go)。
 func rollbackPlacementKeys(playerID uint64) []string {
-	return []string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID), locationRevisionKey(playerID), locationRevisionFloorKey(playerID)}
+	return []string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID), locationRevisionKey(playerID), locationRevisionFloorKey(playerID), handofffence.Key(playerID)}
 }
 
 // rollbackPlayerPlacement 按计划执行回滚 Lua(location 退回、铸造过的 epoch 再前进一格、凭标记时写回执并
@@ -638,8 +690,15 @@ func rollbackPlacementKeys(playerID uint64) []string {
 //	rolled_back          本次执行完成了回滚                                → true;bump 回显 epochAfter
 //	already_rolled_back  go-redis 重发时首发已经回滚过(见 Lua)             → true(人数照还,否则漏还);回显 epochAfter
 //	marker_gone          凭标记铸造,所凭标记已不是那一份,什么都没动       → false
+//	target_registered    不凭标记铸造,目标节点已在铸出值下登记,什么都没动 → false
+//	fence_not_proof      不凭标记铸造,资格原件比铸出值新或写坏,什么都没动 → false
 //	superseded           位置或 epoch 已被并发请求推进,什么都没动          → false
 //	redis_error          Redis 出错(玩家域句柄不自动重发),或返回值无法解读  → false
+//
+// target_registered 与 marker_gone 是同一种终态:路由其实已投递,目标节点在当前代下持有玩家,location 正指向它,
+// 人数也正对应它;调用方照回 ErrKafkaRoute(可重试),之后的重试 / 重登按「location 指向目标节点」走既有路径
+// (同落点重连、原场景接回,或换到别处时过换手门)。
+// fence_not_proof 时 location 留在本次落点上,资格原件要人工核对(runbook),与 plan_error 一样告警。
 //
 // restored 决定调用方要不要把人数也退回去;echo 只进 ErrKafkaRoute 应答供日志排障,**绝不是采纳凭证**。
 // 每种结果计一次 scene_manager_enter_scene_rollback_total{outcome},日志统一前缀 [RouteRollback]。
@@ -702,6 +761,12 @@ func rollbackPlayerPlacement(svcCtx *svc.ServiceContext, log logx.Logger, player
 		// go-zero logx 没有 WARN 级,用 Error 级让它在日志台上与 Kafka 失败那一行排在一起。
 		log.Errorf("[RouteRollback] outcome=%s required handoff marker gone (target consumed token, or source scene confirmed / withdrew it); retaining arrival without player-count decrement: player=%d epoch=%d required_marker=%q",
 			rollbackOutcomeMarkerGone, playerID, placed.epoch, plan.requiredMarker)
+	case rollbackOutcomeTargetRegistered:
+		log.Errorf("[RouteRollback] outcome=%s target scene already registered under the minted epoch (route was delivered despite the Kafka error); retaining arrival without player-count decrement: player=%d epoch=%d",
+			rollbackOutcomeTargetRegistered, playerID, placed.epoch)
+	case rollbackOutcomeFenceNotProof:
+		log.Errorf("[RouteRollback] outcome=%s handoff_fence is ahead of the minted epoch or malformed (data inconsistency); not rolling back, arrival remains in Redis: player=%d epoch=%d",
+			rollbackOutcomeFenceNotProof, playerID, placed.epoch)
 	case rollbackOutcomeSuperseded:
 		log.Errorf("[RouteRollback] outcome=%s concurrent request advanced player location or epoch; skipping stale-state overwrite and player-count rollback: player=%d mode=%s epoch=%d",
 			rollbackOutcomeSuperseded, playerID, plan.mode, placed.epoch)

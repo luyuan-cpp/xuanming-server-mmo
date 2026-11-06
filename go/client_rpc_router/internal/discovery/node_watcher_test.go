@@ -170,3 +170,38 @@ func TestDiffRemovedCoversEndpointChange(t *testing.T) {
 	require.True(t, endpoints["127.0.0.1:1002"], "换了 endpoint 的旧连接要回收")
 	require.False(t, endpoints["127.0.0.1:1003"], "没变的不回收")
 }
+
+// 选点读的是镜像变更时重建的只读索引(缺口清单第 28 条):同一个 key 改 zone、改轨道、被删除之后,
+// 下一次选点必须立刻看到新状态,不能留着旧索引里的条目。
+func TestPickIndexFollowsEveryMirrorChange(t *testing.T) {
+	w := NewNodeWatcher("LoginNodeService", "LoginNodeService.rpc/", nil, nil)
+	key := "LoginNodeService.rpc/zone/1/node_type/5/node_id/1"
+	w.Upsert(key, NodeEntry{NodeId: 1, ZoneId: 1, Endpoint: "login-a", Track: releasetrack.Canary})
+
+	entry, ok := w.PickRandomInZone(1)
+	require.True(t, ok)
+	require.Equal(t, "login-a", entry.Endpoint)
+	entry, ok = w.PickRandomForTrack(releasetrack.Canary)
+	require.True(t, ok, "canary 会话应选到唯一的 canary 实例")
+	require.Equal(t, "login-a", entry.Endpoint)
+	_, ok = w.PickRandomForTrack(releasetrack.Stable)
+	require.False(t, ok, "stable 会话永远不进 canary")
+
+	// 同一个 key 改到 zone 2、改回 stable:旧 zone、旧轨道上都不能再选到它。
+	w.Upsert(key, NodeEntry{NodeId: 1, ZoneId: 2, Endpoint: "login-a", Track: releasetrack.Stable})
+	_, ok = w.PickRandomInZone(1)
+	require.False(t, ok, "改 zone 之后旧 zone 不能再选到它")
+	entry, ok = w.PickRandomInZone(2)
+	require.True(t, ok)
+	require.Equal(t, "login-a", entry.Endpoint)
+	entry, ok = w.PickRandomForTrack(releasetrack.Canary)
+	require.True(t, ok, "没有 canary 实例时 canary 会话退回 stable")
+	require.Equal(t, "login-a", entry.Endpoint)
+
+	w.handleEvent(&clientv3.Event{Type: clientv3.EventTypeDelete, Kv: &mvccpb.KeyValue{Key: []byte(key)}})
+	_, ok = w.PickRandomInZone(2)
+	require.False(t, ok, "删除之后不能再选到它")
+	_, ok = w.PickRandomForTrack(releasetrack.Stable)
+	require.False(t, ok, "删除之后不能再选到它")
+	require.Equal(t, 0, w.Count())
+}

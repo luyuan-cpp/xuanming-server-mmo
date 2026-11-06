@@ -17,6 +17,9 @@ const MaxHistoryPullLimit = 200
 // MaxActorVerifyTTLSeconds 是身份校验缓存的配置上限:它就是旧会话在角色过户后还能说话的时长,配太大等于没校验。
 const MaxActorVerifyTTLSeconds = 3600
 
+// MaxWorldHistoryCacheMs 是世界频道近窗快照的配置上限:它就是别的副本上新消息最晚多久才出现在历史里。
+const MaxWorldHistoryCacheMs = 5000
+
 const (
 	// ErrInvalidParameter:取不到会话(缺 / 坏 x-session-detail-bin)、请求体缺 message、
 	// PRIVATE 缺对端或对端是自己、频道枚举值未知、request_id 超长。

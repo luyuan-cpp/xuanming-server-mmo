@@ -191,6 +191,9 @@ func TestGlobalFormationWatchable(t *testing.T) {
 		want      bool
 	}{
 		{"已开房的公开局", &pb.MatchFormationRecord{State: 4, CreateRequest: public}, true},
+		// COMPLETE 之后成局仍是 state 4,只有 retry_at_ms 变成 authority 的 NoRetry(1<<63-1):终局已落定,不再接纳观众。
+		{"COMPLETE已提交的公开局", &pb.MatchFormationRecord{State: 4, RetryAtMs: 1<<63 - 1, CreateRequest: public}, false},
+		{"工作租约在身的公开局", &pb.MatchFormationRecord{State: 4, RetryAtMs: 120000, CreateRequest: public}, true},
 		{"已开房的私密局", &pb.MatchFormationRecord{State: 4, CreateRequest: createRequest(visPrivate)}, false},
 		{"已开房但原件未填可见性", &pb.MatchFormationRecord{State: 4,
 			CreateRequest: createRequest(battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_UNSPECIFIED)}, false},

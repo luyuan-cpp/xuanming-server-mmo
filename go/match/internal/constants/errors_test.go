@@ -38,6 +38,7 @@ func tipCodes() map[string]uint32 {
 		"ErrSpectateOffline":        ErrSpectateOffline,
 		"ErrSpectateFull":           ErrSpectateFull,
 		"ErrSpectateTicketInvalid":  ErrSpectateTicketInvalid,
+		"ErrBattleReportNotFound":   ErrBattleReportNotFound,
 	}
 }
 

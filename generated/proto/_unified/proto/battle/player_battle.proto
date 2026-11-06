@@ -212,3 +212,46 @@ service BattleClientPlayer {
   // ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
   rpc NotifyBattleAssigned (BattleAssignedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }
+
+// ==== 战报回放(docs/design/battle-report-replay.md)====
+// 只追加消息、不加 RPC,不影响 BattleClientPlayer 的发号。battle 负责录制与压缩,
+// match 负责存取(MatchService.ListBattleReports / GetBattleReport)。
+
+// 回放正文的编码(枚举首值必须 0)
+enum eBattleReplayCodec {
+  BATTLE_REPLAY_CODEC_NONE = 0;  // 未压缩。v1 不产出,留给「match 解压后下发」
+  BATTLE_REPLAY_CODEC_GZIP = 1;  // RFC 1952。v1 只产出这一种
+}
+
+// 战斗怎么结束的
+enum eBattleReplayEndReason {
+  BATTLE_REPLAY_END_UNSPECIFIED = 0;
+  BATTLE_REPLAY_END_FINISHED = 1;       // 引擎分出胜负(含回合打满判负、全员逃跑)
+  BATTLE_REPLAY_END_DEADLINE_DRAW = 2;  // 整场期限到,battle 节点强制判平;最后没有回合帧,看 final_state
+}
+
+// 解码后的回放正文。所有帧都是观众视角,与 NotifySpectate* 下发的逐字段相同:
+// 不带任何人的冷却、道具余量和装备概率。
+message BattleReplay {
+  uint64 battle_id = 1;
+  uint32 match_mode = 2;               // CreateBattleRequest.match_mode
+  uint32 battle_config_id = 3;
+  uint64 started_at_ms = 4;            // CreateBattleRequest.created_at_ms(Unix 毫秒)
+  uint64 finished_at_ms = 5;           // 与 BattleResultEvent.finished_at_ms 同值
+  eBattleOutcome outcome = 6;
+  eBattleReplayEndReason end_reason = 7;
+  uint32 total_rounds = 8;             // 引擎结算过的回合数(BattleResultEvent.total_rounds)
+  string table_fingerprint = 9;        // 录制节点的战斗配表指纹
+  BattleStateS2C start_state = 10;     // 开战状态(action_deadline_ms 为 0,pending_actor_ids 为空)
+  repeated TurnResultS2C rounds = 11;  // 按回合序;每帧带结算后的全量状态,可以从任一回合开始播
+  BattleStateS2C final_state = 12;     // 只在 DEADLINE_DRAW 时填:强制结束那一刻的状态
+  bool truncated = 13;                 // 超过录制上限,rounds 只录到截断前
+}
+
+// 回放的外壳:battle → match 提交、match 存库、match → 客户端下发都用它。
+message BattleReplayEnvelope {
+  uint32 format_version = 1;  // BattleReplay 的格式版本,v1 = 1;客户端不认识就提示升级
+  eBattleReplayCodec codec = 2;
+  uint32 raw_bytes = 3;       // 解码后 BattleReplay 的字节数;解压出来超过它或超过 1 MiB 就判坏
+  bytes payload = 4;          // codec 编码后的 BattleReplay
+}

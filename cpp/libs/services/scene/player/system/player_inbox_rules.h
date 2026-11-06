@@ -159,7 +159,8 @@ namespace player_inbox_rules
 	};
 	const char *DurabilityName(Durability durability);
 
-	// persisted 是最后一次**确实写进 Redis** 的那份账本(PlayerLastPersistedSnapshotComp)。
+	// persisted 是最后一次**确认提交**的那份账本(PlayerLastPersistedSnapshotComp):go/db 的 Save 回 COMMITTED / EQUAL,
+	// 这一笔 player_store 的 TiDB 事务已经提交。
 	//   APPLIED / REJECTED / SKIPPED:快照里该域 decided_through ≥ seq,且环里同一 seq 的 outcome、reason、
 	//                                 request_id、msg_type 都与内存一致;
 	//   UNKNOWN:只要快照里该域 decided_through ≥ seq 就算落盘,**不要求**环里有这一条 ——

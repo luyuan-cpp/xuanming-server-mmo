@@ -24,6 +24,7 @@
 // 本头文件**只放纯函数**:不 include 配置、日志、protobuf,任何测试工程都能直接包。
 // 读配置的那层在 node_command_route.h。
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -104,5 +105,26 @@ inline int32_t SpectateBroadcastPartitionForBattle(uint64_t battleId)
 {
     return static_cast<int32_t>(battleId % kSpectateBroadcastTopicPartitions);
 }
+
+// 世界频道广播:`chat-world-bcast_g<N>`(docs/design/chat-world-channel-fanout.md §4),代号与命令 topic 同源,
+// 固定 4 分区,每台 gate assign 全部分区。唯一生产者是 Go chat(按发送者 player_id 哈希选分区),载荷是
+// BroadcastToAllEvent,gate 只转发世界频道推送那一个消息号。基名与分区数和 go/shared/kafkacmd 的
+// ChatWorldBroadcastTopicBase / ChatWorldBroadcastTopicPartitions 逐字相同(Go 侧测试读本文件对拍);
+// 分区数是不可变契约,要改就换代号。
+inline constexpr const char* kChatWorldBroadcastTopicBase = "chat-world-bcast";
+inline constexpr uint32_t kChatWorldBroadcastTopicPartitions = 4;
+
+// 观战通道的活性契约(battle-spectate-tiered-fanout.md §15.4 / §15.5),生产端 battle 与消费端 gate 共用这一份:
+//   - battle 对开了中继或广播通道的房间,距上一次往全部通道发帧满 kSpectateChannelKeepalive,就补发一帧当前的 STATE(心跳);
+//     等结果回执期间这一帧是冻结的可见状态,不提前泄露终局;
+//   - gate 有订阅者的条目超过 kSpectateSourceIdleTimeout 收不到任何帧,判源站失联,合成 166 SOURCE_LOST 收尾;
+//   - 过了帧里的 deadline_ms + kSpectateDeadlineGraceMs,gate 按期限收尾,battle 的心跳也到此为止。
+// 心跳与回合节奏、结果提交等待无关:手动行动窗口(现 25s)或提交重试变长,都不会让 gate 在最后一回合与终局之前误判失联
+// (观战第二轮评审 R2-BATTLE 一般-1)。两者之比给 Kafka 投递延迟留余量:超时之内至少能连丢两帧心跳。
+inline constexpr std::chrono::seconds kSpectateChannelKeepalive{10};
+inline constexpr std::chrono::seconds kSpectateSourceIdleTimeout{30};
+static_assert(kSpectateChannelKeepalive * 3 <= kSpectateSourceIdleTimeout,
+              "gate must tolerate two lost keepalive frames before declaring the spectate source lost");
+inline constexpr uint64_t kSpectateDeadlineGraceMs = 60'000;
 
 } // namespace node::kafka

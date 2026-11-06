@@ -2,62 +2,49 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <random>
 #include <string>
 #include <string_view>
 
-// Distributed-tracing primitives — W3C Trace Context shape (todo.md #152).
+// W3C Trace Context 原语(docs/design/distributed-tracing.md §3.1、§5.7)。
 //
-// Goal of this slice: give every node a way to allocate a trace_id /
-// span_id and pass it across the wire WITHOUT picking an OpenTelemetry
-// SDK / Jaeger / Zipkin backend yet. The right backend decision lives at
-// the deployment level (does ops want self-hosted Tempo? SaaS Honeycomb?
-// per-zone Jaeger?) — see docs/design/distributed-tracing.md for the
-// slice plan.
+// 提供:128 位 trace_id 与 64 位 span_id 的生成;`traceparent` 头 `00-{32 位 trace_id}-{16 位 span_id}-{2 位 flags}`
+// 的解析与序列化;新根与子 span 的构造。只有头文件,不依赖 protobuf 和日志;线程局部的「当前上下文」
+// 在 thread_context/trace_context_tls.h。
 //
-// What this header provides:
-//   - 128-bit trace_id + 64-bit span_id generation matching the W3C
-//     trace-id layout (lowercase hex, no separator).
-//   - Parser / serializer for the `traceparent` HTTP header format
-//     `00-{trace_id}-{span_id}-{flags}` so cross-service propagation is
-//     wire-compatible with every existing observability vendor when
-//     slice B picks one.
-//   - Header-only, no protobuf dependency, no logging dependency. Safe
-//     to drop into login (Go via cgo wrapper), gate (C++), scene (C++),
-//     and even into the Java gateway via a one-page Java translation.
-//
-// What this header does NOT provide:
-//   - Span lifecycle (start/end timing, parent/child tree). Those live
-//     in the SDK that slice B picks.
-//   - Sampling decisions. The `flags` byte holds the sampled bit per W3C
-//     but the choice of "do we sample this trace" is policy.
-//   - Wire propagation through Kafka / gRPC metadata. The shape is
-//     here; the actual interceptors land in slice C (gRPC) / slice D
-//     (Kafka headers).
-//
-// Why W3C trace-id, not a project-local id format:
-//   - Direct compatibility with every OpenTelemetry exporter. Any
-//     deployment that runs an OTel collector can adopt this slice
-//     unchanged.
-//   - 128-bit trace_id avoids global collision concerns at our scale
-//     forever (~3.4e38 IDs, vs ~1.8e19 for 64-bit — meaningful when a
-//     campaign generates billions of traces per day).
-//   - Hex lowercase no-separator format is parser-friendly across all
-//     stacks (Go / Java / cpp all have one-liners for both directions).
+// 为什么用 W3C 格式而不是自定义格式:Go(go-zero)、Java(Micrometer)和任何 OpenTelemetry 采集器都直接认,
+// 三种语言之间不需要转换;128 位 trace_id 在任何规模下都不必考虑碰撞。
 
 namespace tracing {
 
-// 16 raw bytes = 32 lowercase hex chars on the wire. Fits the W3C
-// trace-id field as `[0-9a-f]{32}`.
+inline constexpr size_t kTraceIdBytes = 16;
+inline constexpr size_t kSpanIdBytes = 8;
+inline constexpr size_t kTraceIdHexChars = kTraceIdBytes * 2;
+inline constexpr size_t kSpanIdHexChars = kSpanIdBytes * 2;
+// "00-" + trace_id + "-" + span_id + "-" + flags
+inline constexpr size_t kTraceparentChars = 3 + kTraceIdHexChars + 1 + kSpanIdHexChars + 1 + 2;
+
+// 把 count 个字节写成 2*count 个小写十六进制字符,不写 '\0'。查半字节表而不是逐字节 snprintf:
+// 日志后缀与 traceparent 序列化都在热路径上。
+inline void WriteLowerHex(const uint8_t* bytes, size_t count, char* out)
+{
+    constexpr char kDigits[] = "0123456789abcdef";
+    for (size_t i = 0; i < count; ++i) {
+        out[i * 2] = kDigits[bytes[i] >> 4];
+        out[i * 2 + 1] = kDigits[bytes[i] & 0x0F];
+    }
+}
+
+// 16 字节 = 线上 32 个小写十六进制字符(W3C trace-id)。全零是非法值。
 struct TraceId {
-    std::array<uint8_t, 16> bytes{};
+    std::array<uint8_t, kTraceIdBytes> bytes{};
 
     bool IsValid() const
     {
-        for (auto b : bytes) {
+        for (const auto b : bytes) {
             if (b != 0) return true;
         }
         return false;
@@ -65,23 +52,19 @@ struct TraceId {
 
     std::string ToHex() const
     {
-        char buf[33];
-        for (size_t i = 0; i < 16; ++i) {
-            std::snprintf(&buf[i * 2], 3, "%02x", bytes[i]);
-        }
-        buf[32] = '\0';
-        return std::string(buf, 32);
+        std::string hex(kTraceIdHexChars, '\0');
+        WriteLowerHex(bytes.data(), bytes.size(), hex.data());
+        return hex;
     }
 };
 
-// 8 raw bytes = 16 lowercase hex chars. Fits the W3C parent-id field as
-// `[0-9a-f]{16}`.
+// 8 字节 = 线上 16 个小写十六进制字符(W3C parent-id)。全零是非法值。
 struct SpanId {
-    std::array<uint8_t, 8> bytes{};
+    std::array<uint8_t, kSpanIdBytes> bytes{};
 
     bool IsValid() const
     {
-        for (auto b : bytes) {
+        for (const auto b : bytes) {
             if (b != 0) return true;
         }
         return false;
@@ -89,20 +72,14 @@ struct SpanId {
 
     std::string ToHex() const
     {
-        char buf[17];
-        for (size_t i = 0; i < 8; ++i) {
-            std::snprintf(&buf[i * 2], 3, "%02x", bytes[i]);
-        }
-        buf[16] = '\0';
-        return std::string(buf, 16);
+        std::string hex(kSpanIdHexChars, '\0');
+        WriteLowerHex(bytes.data(), bytes.size(), hex.data());
+        return hex;
     }
 };
 
-// Generator — uses a thread-local PRNG seeded once per thread from the
-// system clock + thread id. We don't use crypto/rand here (the trace-id
-// only needs to be globally unique, not unpredictable to an attacker;
-// see W3C trace-context security considerations). Cheap to call on
-// every incoming RPC.
+// 线程局部 PRNG,每个线程用时钟与 TLS 地址播种一次。trace-id 只要求全局唯一、不要求不可预测
+// (W3C 安全考量一节),所以不用加密随机数;每次入站请求都调用,不能有系统调用。
 inline TraceId NewTraceId()
 {
     thread_local std::mt19937_64 rng(
@@ -131,68 +108,73 @@ inline SpanId NewSpanId()
     return id;
 }
 
-// W3C traceparent header: `00-{trace_id}-{span_id}-{flags}`
-//   - version `00` fixed (W3C says future versions are unforced extension)
-//   - flags `01` = sampled, `00` = not sampled. Default to `01` here so
-//     the rollout actually produces traces; sampling policy belongs in
-//     slice B's collector config, not at the recorder.
+// flags 只用最低位 sampled。新根默认采样(01):本期不导出 span,flags 只是标记;
+// 真正的取舍放在采集器的尾部采样(设计 §3.4)。
 struct TraceContext {
     TraceId trace_id;
     SpanId span_id;
     uint8_t flags{0x01};
 
+    // 只写 sampled 位,其余 flag 位按 W3C level 1 写 0。
     std::string ToTraceparent() const
     {
-        return "00-" + trace_id.ToHex() + "-" + span_id.ToHex() +
-               (flags & 0x01 ? "-01" : "-00");
+        std::string header(kTraceparentChars, '-');
+        header[0] = '0';
+        header[1] = '0';
+        WriteLowerHex(trace_id.bytes.data(), kTraceIdBytes, header.data() + 3);
+        WriteLowerHex(span_id.bytes.data(), kSpanIdBytes, header.data() + 4 + kTraceIdHexChars);
+        header[kTraceparentChars - 2] = '0';
+        header[kTraceparentChars - 1] = (flags & 0x01) ? '1' : '0';
+        return header;
     }
 
     bool IsValid() const { return trace_id.IsValid() && span_id.IsValid(); }
 };
 
-// Hex char → 0..15. -1 on invalid.
-inline int HexDigit(char c)
+// 小写十六进制字符 → 0..15;其他字符(包括大写)→ -1。W3C 规定含大写的 traceparent 必须忽略。
+inline int LowerHexDigitValue(char c)
 {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
     return -1;
 }
 
-inline bool ParseHexBytes(std::string_view src, uint8_t* dst, size_t count)
+inline bool ParseLowerHex(std::string_view src, uint8_t* dst, size_t count)
 {
     if (src.size() != count * 2) return false;
     for (size_t i = 0; i < count; ++i) {
-        const int hi = HexDigit(src[i * 2]);
-        const int lo = HexDigit(src[i * 2 + 1]);
+        const int hi = LowerHexDigitValue(src[i * 2]);
+        const int lo = LowerHexDigitValue(src[i * 2 + 1]);
         if (hi < 0 || lo < 0) return false;
         dst[i] = static_cast<uint8_t>((hi << 4) | lo);
     }
     return true;
 }
 
-// Parse a `traceparent` header into TraceContext. Returns true on
-// success; on failure, ctx may be partially mutated — callers should
-// either treat failure as "start a fresh trace" or reject the request.
+// 解析 `traceparent`。只认版本 00、正好 55 个字符、小写十六进制、trace_id 与 span_id 都非零;
+// 成功才写 ctx,失败时 ctx 保持原样。调用方把失败当作「没有上下文」去开新根,
+// 绝不能据此拒绝或丢弃请求(设计 §3.3)。
 inline bool ParseTraceparent(std::string_view header, TraceContext& ctx)
 {
-    // Expected: 00-{32 hex}-{16 hex}-{2 hex}  → exactly 55 chars
-    if (header.size() != 55) return false;
-    if (header.substr(0, 2) != "00") return false;
-    if (header[2] != '-' || header[35] != '-' || header[52] != '-') return false;
+    constexpr size_t kSpanStart = 4 + kTraceIdHexChars;
+    constexpr size_t kFlagsStart = kSpanStart + kSpanIdHexChars + 1;
+    if (header.size() != kTraceparentChars) return false;
+    if (header[0] != '0' || header[1] != '0') return false;
+    if (header[2] != '-' || header[kSpanStart - 1] != '-' || header[kFlagsStart - 1] != '-') return false;
 
-    if (!ParseHexBytes(header.substr(3, 32), ctx.trace_id.bytes.data(), 16)) return false;
-    if (!ParseHexBytes(header.substr(36, 16), ctx.span_id.bytes.data(), 8)) return false;
-    const int flagHi = HexDigit(header[53]);
-    const int flagLo = HexDigit(header[54]);
-    if (flagHi < 0 || flagLo < 0) return false;
-    ctx.flags = static_cast<uint8_t>((flagHi << 4) | flagLo);
+    TraceContext parsed;
+    uint8_t flags = 0;
+    if (!ParseLowerHex(header.substr(3, kTraceIdHexChars), parsed.trace_id.bytes.data(), kTraceIdBytes)) return false;
+    if (!ParseLowerHex(header.substr(kSpanStart, kSpanIdHexChars), parsed.span_id.bytes.data(), kSpanIdBytes)) return false;
+    if (!ParseLowerHex(header.substr(kFlagsStart, 2), &flags, 1)) return false;
+    if (!parsed.IsValid()) return false;
 
-    return ctx.IsValid();
+    parsed.flags = flags;
+    ctx = parsed;
+    return true;
 }
 
-// Convenience: fresh root context. Use at every "we received a request
-// with no traceparent and we are the trace origin" site.
+// 新根:本进程是这条 trace 的起点(入口没有收到合法上下文)。
 inline TraceContext NewRoot()
 {
     TraceContext c;
@@ -202,7 +184,7 @@ inline TraceContext NewRoot()
     return c;
 }
 
-// Convenience: child span under the same trace, fresh span_id.
+// 同一 trace 下的子 span:沿用 trace_id 与 flags,换一个新的 span_id。
 inline TraceContext ChildSpan(const TraceContext& parent)
 {
     TraceContext c;

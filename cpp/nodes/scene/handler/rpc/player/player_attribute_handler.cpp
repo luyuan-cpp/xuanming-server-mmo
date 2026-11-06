@@ -3,7 +3,10 @@
 
 ///<<< BEGIN WRITING YOUR CODE
 #include <map>
+#include <string>
+#include <utility>
 
+#include "player/system/client_request_ledger.h"
 #include "player/system/player_attribute.h"
 #include "player_gm_guard.h" // P0-a:GM 客户端指令的 scene 侧第二道锁
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -102,11 +105,49 @@ void SceneAttributeClientPlayerHandler::CreateAttributeScheme(entt::entity playe
 	::CreateAttributeSchemeResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	uint32_t schemeId = 0;
-	if (const auto err = PlayerAttributeSystem::CreateScheme(player, request->name(), schemeId); err != kSuccess)
+	// 客户端幂等键(docs/design/client-request-idempotency.md):建方案要扣金币,没有去重时连点或重发会多建一个、多扣一次。
+	// 查账排在 CreateScheme 的一切校验之前:首次建成之后方案数可能已到上限、余额可能不够了,重放再判会被拒掉。
+	const uint64_t clientRequestId = request->client_request_id();
+	std::string fingerprint;
+	ClientRequestResult first;
+	auto verdict = ClientRequestVerdict::kNew;
+	if (clientRequestId != 0)
 	{
-		response->mutable_error_message()->set_id(err);
+		fingerprint = ClientRequestFingerprint(*request);
+		verdict = client_request_dedup::Check(player, clientRequestId, ClientRequestKind::kCreateAttributeScheme,
+											  fingerprint, first);
+	}
+	if (verdict == ClientRequestVerdict::kMismatch)
+	{
+		// 同一个键换了 name:客户端把旧键用在了新操作上,拒绝且不执行。
+		response->mutable_error_message()->set_id(kInvalidParameter);
 		return;
+	}
+	if (verdict == ClientRequestVerdict::kUnavailable)
+	{
+		// 这名玩家的幂等键账本缺失或已判坏:分不清是不是重发,不执行(fail-closed)。
+		response->mutable_error_message()->set_id(kServiceUnavailable);
+		return;
+	}
+	uint32_t schemeId = 0;
+	if (verdict == ClientRequestVerdict::kReplay)
+	{
+		// 首次已经建好:不再建、不再扣,回首次的方案号与当前面板。
+		schemeId = first.createdSchemeId;
+		response->set_replayed(true);
+	}
+	else
+	{
+		if (const auto err = PlayerAttributeSystem::CreateScheme(player, request->name(), schemeId); err != kSuccess)
+		{
+			response->mutable_error_message()->set_id(err);
+			return;
+		}
+		// 建成了才记键。下面面板组不出来也照样算建成:方案已经建了、钱已经扣了。
+		ClientRequestResult result;
+		result.createdSchemeId = schemeId;
+		client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kCreateAttributeScheme,
+									   std::move(fingerprint), result);
 	}
 	response->set_scheme_id(schemeId);
 	if (const auto err = PlayerAttributeSystem::BuildPanel(player, *response->mutable_panel()); err != kSuccess)

@@ -2,7 +2,7 @@
 
 缺口清单 [server-gap-audit-20261101.md](../handoff/server-gap-audit-20261101.md) 第 4、5 条的设计与落码记录。容量依据是 [容量模型](capacity-model-hok-scale.md) §2.2 与 A1;排队实例的先例是 [G4a 设计稿](shared-redis-split-by-purpose.md) §25.3 第 10、18 条。
 
-状态:设计已定,分批落码,**都没有编译、没有测试**,验证命令见 §8。Java 版只在 PARITY 记待做(§9)。
+状态:设计已定,第 4a、4b、4c、5a、5b、5c 批 2026-11-05 已落码,**都没有编译、没有测试**,验证命令见 §8。Java 版只在 PARITY 记待做(§9)。
 
 ## 1. 结论
 
@@ -68,7 +68,7 @@
 
 - 选主锁 `scene_manager:leader:lock:zone:<z>`,`z` 是配置的 `ZoneId`,锁在 z 所属控制域实例上。`LeaderLockKey` 配置项删除(只有一处读取,没有任何配置写它):锁名由 zone 决定,配置写错就会让两个 zone 抢一把锁,或一个 zone 没人编排。
 - 一个进程只编排一个 zone。领导者的全部循环(补频道、rebalance、死节点清扫与收尾、空闲回收、自动扩缩容、分线目录、神秘商人、成员对账、孤儿频道清理、Agones 对账)只处理 `ZoneId`。`GetActiveZones()` 改名为 `orchestratedZones(svcCtx)`,恒返回 `[ZoneId]`;本 zone 一个节点都没有时照样扫,能清掉最后一个节点死后留下的负载集与孤儿实例,原来靠 zone 登记集合补的那个口子随之消失。
-- watch 与全量同步的前缀改为 `SceneNodeService.rpc/zone/<ZoneId>/`,`knownNodes` 只有本 zone。存活集闸门 `checkNodeView` 归第 9 条会话,它按 zone 计算,收窄后不用改。
+- watch 与全量同步的前缀改为 `SceneNodeService.rpc/zone/<ZoneId>/`,`knownNodes` 只有本 zone;快照或 watch 里自称别的 zone 的注册按部署错配丢弃(watch PUT 按删除收尾)。存活集闸门(第 9 条,`node_view_gate.go` 的 `sceneNodeViewGate.check`)按 zone 计算,读基线与清扫的 zone 范围 `nodeViewZones(svcCtx)` 恒为本 zone。
 - 每节点的 Prometheus 序列只有本 zone 的领导者导出;`nodes_by_role` 只发本 zone。
 - 数据面:一个进程只收本 zone 的请求(C++、login、player_locator 都只连本 zone)。请求可能涉及别的 zone:跨 zone 重定向的目标,或玩家位置落在别的 zone。这些情况按 §3.5、§4.3 处理。
 
@@ -146,6 +146,9 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
    - 成员集合的增减(`addSceneMember` / `removeSceneMember` / `removeScenePlayer`):别的 zone 一律不动,只记 `scene_manager_foreign_zone_skip_total{site}`。成员集合是派生索引,权威是玩家域的 location;别的 zone 留下的陈旧成员由那个 zone 的成员对账在 2 分钟宽限后摘掉(`scene_member_reconcile.go`,redis-player-store-cluster.md §5.10)。没摘过的成员,回滚时也不需要加回。
    - `removeScenePlayer` 只给场景号、不给 zone 时(LeaveScene 的两处清理),先读本组的 `scene:<id>:zone`:读不到,或者不是本 zone,就不动。
    - 别的 zone 的节点判活见 §3.5,不读那个 zone 的负载集和 death_at。
+   - 建镜像时源场景记录在别的 zone(`scene:{源}:zone` 不是本 zone,或读失败):不按源去重,也不把新镜像登记成源的子镜像(不写 `scene:{源}:mirrors` 与 `scene:{镜像}:source`)。新镜像照样带镜像标记、按镜像的短超时空闲回收,只是源销毁时不级联到它。源没有 zone 记录(不在本组实例里)时照旧登记:那份子集合在本组实例里,只有本 zone 读写,随镜像销毁摘掉。(2026-11-06,「场景销毁认领」会话报的漏口。)
+   - CreateScene 与 EnterScene 一样,请求的 zone 不是本进程的 zone 就在任何写入之前拒绝。
+   - 销毁路径(2026-11-06,「场景销毁认领」会话):认领脚本在同一步比对 `scene:{id}:zone`,不是认领方的 zone(或记录损坏)就回 `foreign`、一个键都不动;镜像级联与源迁移级联跳过登记在别的 zone 的子镜像,留给那个 zone 的空闲回收;镜像拆除时只从本 zone 或本实例里没有 zone 记录的源的子集合摘自己;显式 DestroyScene 的 `zone_id` 不是本进程的 zone 就在任何读写之前拒绝,没填按本进程的 zone。详见 scene-creation-architecture.md「销毁只改本 zone 的键」。
 3. 同组的键在同一个实例上,读得到也不读:组的划分是部署细节,行为不能随组的划分而变。
 
 为什么不会丢数据、不破坏一致性:
@@ -182,13 +185,14 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 ### 4.6 K8s
 
 - **实例**:infra-up 对 zones 配置里出现过的每个组 apply 一份 `redis-ctl-g<N>`,模板与排队实例相同。实例名、maxmemory 由参数决定,形态与核心同一套 `-RedisReplicas` 规则。**不受 `-RedisSplit` 控制**:控制域实例从首次部署起就是这个形态,不做迁移、不做灰度。
-- **容量**:`-RedisCtlMaxMemory`,dev 档缺省 128mb;release 档必须显式给,理由同排队实例:noeviction,写满拒写,不替运维猜容量。初值建议每组 1gb,待压测复核。
+- **容量**:`-RedisCtlMaxMemory`,dev 档缺省 128mb,release 档缺省 1gb(G4a §25.3 第 19 条给排队实例定的每组初值,待压测复核)。与排队实例「release 档必须显式给」不同:控制域实例不受开关控制、每次 infra 部署都 apply,缺省就拒会让每次 release 部署都多带一个参数;压测定下容量之后改缺省。noeviction,写满拒写。
 - **scene-manager ConfigMap**:`Redis.Host` 改为 `redis-ctl-g<N>.<infra>:6379`,新增 `CoreRedis` 段指向核心;`Etcd.Key` 加 zone 后缀。
 - **C++ node-config**:scene 的 `scene_control_redis.host` 写本 zone 组的实例。
 - **切换闸**:非 DryRun 的 zone 写路径读线上 scene-manager ConfigMap 的 `Redis.Host`。线上存在且与本次渲染不同,就拒绝,除非带 `-ConfirmRedisCtlSwitch`。切过去之后新实例是空的,本 zone 的场景路由要从零重建:先停本 zone 的 scene 节点再切。上线前的环境数据可以清空,带确认开关即可。
 - **连接账**:scene-manager 的控制域连接从核心那一行移到 `redis-ctl-g<N>` 一行,并加上每个 scene 进程一条 `scene_control_redis` 连接。
 - **清库与状态**:`k8s-redis-wipe` 逐个 FLUSHALL 控制域实例并核对 DBSIZE;`redis-split-status` 列出每个 zone 指向的控制域实例。
-- **告警**:运维文本里「`sum(scene_manager_is_leader)` 应恒为 1」改为「每个 zone 恒为 1」。
+- **告警**:运维文本里「`sum(scene_manager_is_leader)` 应恒为 1」改为「每个 zone 恒为 1」;负载刷新的 `registry_failed` 随 zone 登记集合删除。
+- **包装脚本**:`dev_tools.ps1`、`k8s_image.ps1` 透传 `-RedisCtlMaxMemory` 与 `-ConfirmRedisCtlSwitch`(追加在参数表末尾,不改位置参数绑定)。
 
 ## 5. 被否决或推迟的做法
 
@@ -206,6 +210,10 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 5. 跨 zone 重定向挑 gate 仍是每次直读 etcd(第 7 条会话加了停写过滤),不在本设计范围。
 6. 全局池服务(data_service、match、battle、client-rpc-router、player_inbox、team)仍是全服 watch。它们实例少、键很少变,读量随 N_cpp 线性增长,不是平方项。
 7. scene_manager 的进场去重键 `enter_scene:dedup:` 不在控制域,本设计没有动它。
+8. Redis 连接总账没有为 `redis-ctl-g<N>` 单列一行:scene-manager 的控制域连接仍记在核心那一行(多算核心、少算控制域),每个 scene 进程多出的一条 `scene_control_redis` 连接也没计入。控制域实例 `MAXCLIENTS` 10000,同组 zone 的 scene-manager 池加 scene 进程数远低于它,但要在压测前补上。
+9. `redis-split-status` 不列控制域实例;`redis-wipe` 已覆盖 `redis-ctl-g<N>`。
+10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:zone:<S>`(不以 `node:zone:` 开头,不在合服按前缀清的范围里),要由合服流程显式删掉;`tools/merge_zone` 没有改。
+11. 顺带发现:K8s 的 player-locator ConfigMap 没有 `SceneManagerRpc` 段(本机 `player_locator.yaml` 有),断线租约到期时的 LeaveScene 在 K8s 上可能发不出去。不在本设计范围,未核实影响,另行处理。
 
 ## 7. 分批与文件
 
@@ -218,7 +226,17 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 | 5b | C++ scene 控制域句柄 | `config.proto`、`config.cpp`、`game_config.yaml`、scene 启动、`player_scene.cpp`、`player_mystery_merchant.cpp` |
 | 5c | K8s 控制域实例、ConfigMap、切换闸、连接账、清库与状态 | `k8s_deploy.ps1`、`redis-purpose(-ha).yaml` 头注释、`tests/k8s_redis_split_contract.tests.ps1`、`deploy/k8s/README.md` |
 
-各批的落码状态与 Codex 命令记在 §8 与 `docs/PROGRESS.md` 2026-11-05「控制面按 zone 化」条目。
+各批的落码状态与 Codex 命令记在 §8 与 `docs/PROGRESS.md` 2026-11-05「控制面按 zone 化与控制域 Redis 按 zone 组分实例」条目。
+
+实际改动(2026-11-05,未编译):
+
+- 4a:`node_util.{h,cpp}`(SceneManager 归入 zone-scoped、`DiscoveryPrefixFor`)、新 `discovery/discovery_resync_policy.h`、`service_discovery_manager.{h,cpp}`(`EffectiveDiscoveryPrefixes`、60s±20% 兜底)、`etcd_service.{h,cpp}`(取消后按前缀退避重拉、流重建用收窄后的前缀)、`core.vcxproj(.filters)`、新用例 `cpp/tests/cross_zone_test/discovery_zone_scope_test.cpp`。
+- 4b:`scene_manager_service.go`(`logic.LeaderLockKey(c.ZoneId)`)、`config.go`(删 `LeaderLockKey`、`ZoneId` 语义)、`leader_gate.go`、新 `orchestrated_zones.go`、新 `foreign_zone_registry.go`、`load_reporter.go`、`node_view_gate.go`(`nodeViewZones`)、`enterscenelogic.go`(别的 zone 的持有者判定、跨 zone 地图预检、路由不变量 `wrong_zone`)、`owner_replaced.go`、`scene_node_client.go`、`agones_reconcile.go` / `mystery_merchant.go` / `world_channel_directory.go` / `world_rebalance_debug.go` / `world_autoscale.go` / `instance_lifecycle.go` / `reentry_barrier.go` 的循环 zone 范围、删 `zone_registry.go`、`load_refresh.go`、`orphan_cleanup.go`、`scene_member_reconcile.go`、`metrics.go`(删 `registry_failed`,加两个计数器)。
+- 4c:`k8s_deploy.ps1` 的 scene-manager 服务端与 login 客户端 `Etcd.Key` 加 `.z<zone>`。
+- 5a:`config.go` / `svc/servicecontext.go` 的 `CoreRedis`、`gate_redirect.go` 排空标记改读 `CoreRedis`、`reentry_barrier.go` 任务表按 zone、`scene_membership.go` 的别 zone 守卫、`etc/scene_manager_service.yaml`。
+- 5b:`config.proto` 的 `scene_control_redis = 11`、`config.cpp`、`redis_manager.{h,cpp}`(`tlsSceneControlRedis`、`ResolveRedisAddress`)、`node.cpp` / `node_entry.h` / `scene/main.cpp` 的关停、`scene/core/system/redis.cpp` 建连、`player_scene.cpp`、`player_mystery_merchant.cpp`、`bin/etc/game_config.yaml`。
+- 5c:`k8s_deploy.ps1`(`-RedisCtlMaxMemory`、`-ConfirmRedisCtlSwitch`、控制域实例段、scene-manager ConfigMap 的 `Redis` / `CoreRedis`、node-config 的 `scene_control_redis`、`redis-wipe` 覆盖)、`dev_tools.ps1`、`k8s_image.ps1`、`scene-manager-alerts.yaml`、`docs/ops/scene-node-role-split.md`、新契约测试 `tools/scripts/tests/k8s_redis_ctl_contract.tests.ps1`、`k8s_client_entry_contract.tests.ps1` 的透传键。
+- 测试迁移:Go 单测的 svcCtx 设 `ZoneId = testZoneId` 并装别的 zone 的替身(`installTestZoneFakes`);模拟 zone 2 gate 的用例把进程设成 zone 2;依赖 zone 登记集合的用例改写为「只处理本 zone」。新用例:`foreign_zone_registry_test.go`、`control_zone_keys_contract_test.go`。
 
 ## 8. 交给 Codex 的验证
 
@@ -227,14 +245,16 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 1. **协议生成**(第 5b 批改了 `config.proto`):
    `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`
 2. **Go**:
-   - `cd go/scene_manager && go vet ./... && go test ./internal/logic/... ./internal/config/... ./internal/svc/... .`
-   - 通过标准:全部通过;新用例 `TestForeignOwnerDead*`、`TestForeignZoneGone*`、`TestOrchestratedZonesIsOwnZoneOnly`、`TestLeaderLockKeyPerZone`、`TestDeadNodeReconcileTasksKeyPerZone`、`TestOwnsControlZoneSkipsForeignMembership`、`TestTravelMapPrecheckUsesEtcd*`、`TestControlZoneKeysContract` 都在列表里且通过。
+   - `cd go/scene_manager && go vet ./... && go test ./... -count=1`
+   - 通过标准:全部通过;新用例 `TestForeignOwnerDead*`、`TestForeignZoneGone*`、`TestForeignRegisteredInstance*`、`TestOrchestratedZonesIsOwnZoneOnly`、`TestLeaderLockKeyPerZone`、`TestSceneNodeZonePrefixDoesNotMatchOtherZones`、`TestOwnsControlZoneSkipsForeignMembership`、`TestTravelMapPrecheckUsesEtcd*`、`TestControlZoneKeysContract*`、`TestSweepStaleLoadSetMembers_OnlyOwnZoneNoScan`、`TestCleanupOrphanWorldChannels_OwnZoneOnlyWithoutScan`、`TestDeadNodeReconcile_DropsMalformedTask`(含别的 zone 的成员)都在列表里且通过。
+   - 失败时保留 `go test -v` 的失败用例输出;本批改了约 60 个用例的夹具(进程 zone、别的 zone 替身),先看失败是不是夹具没跟上。
 3. **C++**:先编库,再编测试(库改了不重编,测试会链接旧的 lib):
    - `msbuild cpp/libs/engine/engine.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`
    - `msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`
    - `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`
-   - 通过标准:`node_discovery_prefix_test` 全绿,既有 etcd / 发现用例不回归。
-4. **部署脚本契约**:`pwsh -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,全部通过。
+   - 测试工程:`msbuild cpp/tests/cross_zone_test/cross_zone_test.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`,运行 `--gtest_filter=DiscoveryZoneScopeTest.*`。
+   - 通过标准:`DiscoveryZoneScopeTest.*` 全绿,既有 etcd / 发现 / 跨 zone 用例不回归。
+4. **部署脚本契约**:`pwsh -File tools/scripts/tests/k8s_redis_ctl_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`pwsh -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`,全部通过。
 5. **冒烟**(kind,dev 档,两个 zone 同组):`pwsh -File tools/scripts/k8s_deploy.ps1 -Command all-up -RedisSplit queue -ConfirmRedisCtlSwitch`,然后:
    - `kubectl get sts -n <infra> | grep redis-ctl-g0` 就绪;
    - 两个 zone 各自 `scene_manager_is_leader` 之和为 1;

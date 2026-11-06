@@ -51,15 +51,14 @@ const (
 // 存盘每次新拼,顶层新字段无处持久化。新数据一律加进两张表消息。bag_data / quest_data 是由数据库记录
 // 重算的兼容副本,mail_data 没有写入方,三者标 OptionPersistUncarried。
 type PlayerAllData struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	PlayerDatabaseData   *PlayerDatabase        `protobuf:"bytes,2,opt,name=player_database_data,json=playerDatabaseData,proto3" json:"player_database_data,omitempty"`
-	PlayerDatabase_1Data *PlayerDatabase_1      `protobuf:"bytes,3,opt,name=player_database_1_data,json=playerDatabase1Data,proto3" json:"player_database_1_data,omitempty"`
-	BagData              *BagAllData            `protobuf:"bytes,4,opt,name=bag_data,json=bagData,proto3" json:"bag_data,omitempty"`
-	QuestData            *QuestAllData          `protobuf:"bytes,5,opt,name=quest_data,json=questData,proto3" json:"quest_data,omitempty"`
-	MailData             *MailAllData           `protobuf:"bytes,6,opt,name=mail_data,json=mailData,proto3" json:"mail_data,omitempty"`
-	LastSaveSeq          uint64                 `protobuf:"varint,7,opt,name=last_save_seq,json=lastSaveSeq,proto3" json:"last_save_seq,omitempty"` // 存盘发号水位，跨重接和跨场景继承，不承载业务数据
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	PlayerDatabaseData *PlayerDatabase        `protobuf:"bytes,2,opt,name=player_database_data,json=playerDatabaseData,proto3" json:"player_database_data,omitempty"`
+	BagData            *BagAllData            `protobuf:"bytes,4,opt,name=bag_data,json=bagData,proto3" json:"bag_data,omitempty"`
+	QuestData          *QuestAllData          `protobuf:"bytes,5,opt,name=quest_data,json=questData,proto3" json:"quest_data,omitempty"`
+	MailData           *MailAllData           `protobuf:"bytes,6,opt,name=mail_data,json=mailData,proto3" json:"mail_data,omitempty"`
+	LastSaveSeq        uint64                 `protobuf:"varint,7,opt,name=last_save_seq,json=lastSaveSeq,proto3" json:"last_save_seq,omitempty"` // 存盘发号水位，跨重接和跨场景继承，不承载业务数据
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PlayerAllData) Reset() {
@@ -99,13 +98,6 @@ func (x *PlayerAllData) GetPlayerDatabaseData() *PlayerDatabase {
 	return nil
 }
 
-func (x *PlayerAllData) GetPlayerDatabase_1Data() *PlayerDatabase_1 {
-	if x != nil {
-		return x.PlayerDatabase_1Data
-	}
-	return nil
-}
-
 func (x *PlayerAllData) GetBagData() *BagAllData {
 	if x != nil {
 		return x.BagData
@@ -138,15 +130,14 @@ var File_proto_common_database_player_cache_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_player_cache_proto_rawDesc = "" +
 	"\n" +
-	"(proto/common/database/player_cache.proto\x1a\x1bproto/db/proto_option.proto\x1a0proto/common/database/mysql_database_table.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xdd\x02\n" +
+	"(proto/common/database/player_cache.proto\x1a\x1bproto/db/proto_option.proto\x1a0proto/common/database/mysql_database_table.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb2\x02\n" +
 	"\rPlayerAllData\x12B\n" +
-	"\x14player_database_data\x18\x02 \x01(\v2\x10.player_databaseR\x12playerDatabaseData\x12G\n" +
-	"\x16player_database_1_data\x18\x03 \x01(\v2\x12.player_database_1R\x13playerDatabase1Data\x12-\n" +
+	"\x14player_database_data\x18\x02 \x01(\v2\x10.player_databaseR\x12playerDatabaseData\x12-\n" +
 	"\bbag_data\x18\x04 \x01(\v2\v.BagAllDataB\x05\xc0\xfe\xa4\x02\x01R\abagData\x123\n" +
 	"\n" +
 	"quest_data\x18\x05 \x01(\v2\r.QuestAllDataB\x05\xc0\xfe\xa4\x02\x01R\tquestData\x120\n" +
 	"\tmail_data\x18\x06 \x01(\v2\f.MailAllDataB\x05\xc0\xfe\xa4\x02\x01R\bmailData\x12\"\n" +
-	"\rlast_save_seq\x18\a \x01(\x04R\vlastSaveSeq:\x05\xc0\x94\xf4\x01\x01B\x17Z\x15proto/common/databaseb\x06proto3"
+	"\rlast_save_seq\x18\a \x01(\x04R\vlastSaveSeq:\x05\xc0\x94\xf4\x01\x01J\x04\b\x03\x10\x04R\x16player_database_1_dataB\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_player_cache_proto_rawDescOnce sync.Once
@@ -162,24 +153,22 @@ func file_proto_common_database_player_cache_proto_rawDescGZIP() []byte {
 
 var file_proto_common_database_player_cache_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_proto_common_database_player_cache_proto_goTypes = []any{
-	(*PlayerAllData)(nil),    // 0: PlayerAllData
-	(*PlayerDatabase)(nil),   // 1: player_database
-	(*PlayerDatabase_1)(nil), // 2: player_database_1
-	(*BagAllData)(nil),       // 3: BagAllData
-	(*QuestAllData)(nil),     // 4: QuestAllData
-	(*MailAllData)(nil),      // 5: MailAllData
+	(*PlayerAllData)(nil),  // 0: PlayerAllData
+	(*PlayerDatabase)(nil), // 1: player_database
+	(*BagAllData)(nil),     // 2: BagAllData
+	(*QuestAllData)(nil),   // 3: QuestAllData
+	(*MailAllData)(nil),    // 4: MailAllData
 }
 var file_proto_common_database_player_cache_proto_depIdxs = []int32{
 	1, // 0: PlayerAllData.player_database_data:type_name -> player_database
-	2, // 1: PlayerAllData.player_database_1_data:type_name -> player_database_1
-	3, // 2: PlayerAllData.bag_data:type_name -> BagAllData
-	4, // 3: PlayerAllData.quest_data:type_name -> QuestAllData
-	5, // 4: PlayerAllData.mail_data:type_name -> MailAllData
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	2, // 1: PlayerAllData.bag_data:type_name -> BagAllData
+	3, // 2: PlayerAllData.quest_data:type_name -> QuestAllData
+	4, // 3: PlayerAllData.mail_data:type_name -> MailAllData
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_player_cache_proto_init() }

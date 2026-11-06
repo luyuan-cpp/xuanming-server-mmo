@@ -593,7 +593,7 @@ func openEquipSmokeSession(cfg *config.Config, stats *metrics.Stats) (*equipSmok
 	return &equipSmokeSession{gc: gc, player: player, stats: stats, lastSent: make(map[uint32]time.Time)}, nil
 }
 
-// close 下线(LeaveGame + Disconnect)并关连接。nil 安全、可重复调:失败路径上 cleanup 可能在 relogin
+// close 下线(LeaveGame)并关连接,断线通知由 gate 在 TCP 关闭时合成。nil 安全、可重复调:失败路径上 cleanup 可能在 relogin
 // 已经关过旧会话之后再调一次。
 func (s *equipSmokeSession) close() {
 	if s == nil || s.gc == nil {

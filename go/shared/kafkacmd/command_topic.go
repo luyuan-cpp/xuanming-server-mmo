@@ -182,6 +182,21 @@ func SceneCommandTopic() string {
 	return CommandTopicName(SceneCommandTopicBase, CommandContract().Generation)
 }
 
+// 世界频道广播 topic `chat-world-bcast_g<N>`(docs/design/chat-world-channel-fanout.md §4):代号与命令 topic 同源,
+// 固定分区数,每台 gate assign 全部分区(与观战 L2 广播 spectate-bcast 同一写法)。chat 是唯一生产者,
+// key = 发送者 player_id 走 Hash,同一个人的消息有序;分区落在哪个都对,gate 全读。
+// 基名与分区数和 C++ node_command_topic.h 的 kChatWorldBroadcastTopicBase / kChatWorldBroadcastTopicPartitions
+// 逐字相同(chat_world_topic_test.go 读 C++ 头文件对拍),部署侧按这个分区数预建。分区数是不可变契约,要改就换代号。
+const (
+	ChatWorldBroadcastTopicBase             = "chat-world-bcast"
+	ChatWorldBroadcastTopicPartitions int32 = 4
+)
+
+// ChatWorldBroadcastTopic 是当前代号下的世界频道广播 topic 名。
+func ChatWorldBroadcastTopic() string {
+	return CommandTopicName(ChatWorldBroadcastTopicBase, CommandContract().Generation)
+}
+
 // GateCommandPartition / SceneCommandPartition 按当前契约算分区号。
 func GateCommandPartition(nodeID uint64) int {
 	return CommandPartitionForNode(nodeID, CommandContract().Partitions)

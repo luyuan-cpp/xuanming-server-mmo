@@ -6,6 +6,10 @@ package logic
 // 夹具沿用 client_zone_test.go 的 newCacheOnlyRepo / seedGuild:帮会预先放进 miniredis 缓存,
 // 读路径不碰 MySQL(db 为 nil,误触即 panic)。resolver 用 WithPlayerNames 注入(Y-02)。
 //
+// 读 RPC 只受理客户端来源:请求以 clientCtx(namesTestViewer) 发起,归属区由 fakeHomeZones 答 2 区(测试帮都建在 2 区)。
+// 请求者是本区的旁观者,不在任何测试帮里;待审数只给本帮长老 / 帮主现算(guildInfoFor,那一步读 MySQL),
+// 旁观者不算,所以不需要待审数替身,读路径仍只有归属区替身 + 缓存 + 取名。
+//
 // 每个填充点都钉两件事:名字填对了;**一次请求只发一次批量查询**。后者是性能契约 ——
 // 在循环里逐个查,功能测试照样全绿,只有这里的 calls 断言能抓住。
 
@@ -41,6 +45,7 @@ const (
 	namesTestMemberB  = uint64(1002) // 早于名字功能建的角色:没有名字
 	namesTestLeaderC  = uint64(1003) // 另一个帮的帮主,有名字
 	namesTestLeaderD  = uint64(1004) // 别区帮会的帮主
+	namesTestViewer   = uint64(1005) // 2 区的旁观者:不在任何测试帮里,读 RPC 都以他的会话发起
 	namesTestGuildOne = uint64(501)
 	namesTestGuildTwo = uint64(502)
 	namesTestGuildFar = uint64(701) // 在 zone 7
@@ -76,10 +81,10 @@ func TestGetGuild_FillsMemberAndLeaderNames(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 10)
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, WithPlayerNames(names))
 
-	// 内部调用(无会话):不查归属 zone,也不算待审数,读路径只剩缓存 + 取名。
-	resp, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
+	// 客户端来源、旁观者视角:不算待审数,读路径只剩归属区替身 + 缓存 + 取名。
+	resp, err := l.GetGuild(clientCtx(namesTestViewer), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
 
 	require.NoError(t, err)
 	guild := resp.GetGuild()
@@ -101,9 +106,9 @@ func TestGetGuild_LeaderMissingFromMembersStillNamed(t *testing.T) {
 	guild.Members = []data.MemberData{{PlayerID: namesTestMemberB, Role: constants.RoleMember}}
 	seedGuild(t, mr, guild, 10)
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, WithPlayerNames(names))
 
-	resp, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
+	resp, err := l.GetGuild(clientCtx(namesTestViewer), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
 
 	require.NoError(t, err)
 	assert.Equal(t, "云中君", resp.GetGuild().GetLeaderName())
@@ -118,9 +123,9 @@ func TestGetGuildRank_ResolvesLeaderNamesInOneBatch(t *testing.T) {
 		namesTestLeaderA: "云中君",
 		namesTestLeaderC: "青莲客",
 	}}
-	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, WithPlayerNames(names))
 
-	resp, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{ZoneId: 2})
+	resp, err := l.GetGuildRank(clientCtx(namesTestViewer), &pb.GetGuildRankRequest{})
 
 	require.NoError(t, err)
 	require.Len(t, resp.GetEntries(), 2)
@@ -139,9 +144,9 @@ func TestGetGuildRankByGuild_FillsLeaderName(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 20)
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, WithPlayerNames(names))
 
-	resp, err := l.GetGuildRankByGuild(context.Background(), &pb.GetGuildRankByGuildRequest{GuildId: namesTestGuildOne, ZoneId: 2})
+	resp, err := l.GetGuildRankByGuild(clientCtx(namesTestViewer), &pb.GetGuildRankByGuildRequest{GuildId: namesTestGuildOne})
 
 	require.NoError(t, err)
 	assert.Equal(t, "云中君", resp.GetEntry().GetLeaderName())
@@ -217,8 +222,8 @@ func TestNamesStayEmptyWithoutResolver(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			repo, mr := newCacheOnlyRepo(t)
 			seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 10)
-			l := NewGuildLogic(repo, nil, nil, nil, opts...)
-			ctx := context.Background()
+			l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, opts...)
+			ctx := clientCtx(namesTestViewer)
 
 			require.NotPanics(t, func() {
 				got, err := l.GetGuild(ctx, &pb.GetGuildRequest{GuildId: namesTestGuildOne})
@@ -229,12 +234,12 @@ func TestNamesStayEmptyWithoutResolver(t *testing.T) {
 					assert.Empty(t, m.GetName())
 				}
 
-				rank, err := l.GetGuildRank(ctx, &pb.GetGuildRankRequest{ZoneId: 2})
+				rank, err := l.GetGuildRank(ctx, &pb.GetGuildRankRequest{})
 				require.NoError(t, err)
 				require.Len(t, rank.GetEntries(), 1)
 				assert.Empty(t, rank.GetEntries()[0].GetLeaderName())
 
-				byGuild, err := l.GetGuildRankByGuild(ctx, &pb.GetGuildRankByGuildRequest{GuildId: namesTestGuildOne, ZoneId: 2})
+				byGuild, err := l.GetGuildRankByGuild(ctx, &pb.GetGuildRankByGuildRequest{GuildId: namesTestGuildOne})
 				require.NoError(t, err)
 				assert.Empty(t, byGuild.GetEntry().GetLeaderName())
 
@@ -264,10 +269,10 @@ func TestGetGuild_NameLookupFailureDoesNotFailTheRead(t *testing.T) {
 			repo, mr := newCacheOnlyRepo(t)
 			seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 10)
 			// 短超时只为让慢响应用例尽快结束;时序由 resolver 自己的超时驱动,用例里没有 sleep。
-			l := NewGuildLogic(repo, nil, nil, nil,
+			l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2},
 				WithPlayerNames(NewDataServicePlayerNames(client, 20*time.Millisecond)))
 
-			resp, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
+			resp, err := l.GetGuild(clientCtx(namesTestViewer), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
 
 			require.NoError(t, err)
 			require.Zero(t, resp.GetErrorMessage().GetId(), "取名失败不得变成业务拒绝")

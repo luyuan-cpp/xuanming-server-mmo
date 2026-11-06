@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"data_service/internal/config"
+	"data_service/internal/metrics"
 	"data_service/internal/rolefencecoord"
 	"data_service/internal/store"
 	base "proto/common/base"
@@ -217,8 +218,10 @@ func (s *ServiceContext) sweepStaleRoleRefs(ctx context.Context) {
 		if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
 			s.RelayAdmission.Hold()
 		}
+		// 留下没写墓碑的建角 ref(角色行不在,但角色提交过):逐条的 ERROR 已在 store 里记过,这里只计数。出错的一轮也照记。
+		metrics.ObserveRoleRefTombstoneHeld(result.Held)
 		if err != nil && ctx.Err() == nil {
-			logx.Errorf("[account-role-ref] sweep: scanned=%d dropped=%d failed=%d err=%v", result.Scanned, result.Dropped, result.Failed, err)
+			logx.Errorf("[account-role-ref] sweep: scanned=%d dropped=%d failed=%d held=%d err=%v", result.Scanned, result.Dropped, result.Failed, result.Held, err)
 			return
 		}
 		if result.Dropped != 0 {

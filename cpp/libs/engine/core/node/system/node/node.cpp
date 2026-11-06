@@ -8,6 +8,7 @@
 #include "google/protobuf/util/message_differencer.h"
 #include "log/constants/log_constants.h"
 #include "log/system/console_log.h"
+#include "muduo/base/LogStream.h"
 #include "muduo/base/TimeZone.h"
 #include "network/process_info.h"
 #include "network/rpc_session.h"
@@ -23,6 +24,7 @@
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "time/system/time.h"
 #include "core/utils/debug/stacktrace_system.h"
+#include "core/tracing/log_context_suffix.h"
 #include "build_info/build_info.h"
 #include "error_reporter/error_reporter.h"
 #include "network/node_utils.h"
@@ -42,10 +44,12 @@
 #include "node/system/node/release_track.h"
 #include "engine/config/node_log_level.h"
 #include "thread_context/node_context_manager.h"
+#include "thread_context/trace_context_tls.h"
 #include "muduo_grpc/address.h"
 #include "muduo_grpc/method_table.h"
 #include "muduo_grpc/server.h"
 #include <node_config_manager.h>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cassert>
@@ -55,6 +59,7 @@
 #include <cstdlib>
 #include <limits>
 #include <optional>
+#include <string_view>
 #ifdef __linux__
 #include <sys/resource.h>
 #endif
@@ -1132,21 +1137,8 @@ void Node::InitRpcServer()
 		FatalStartupConfig("zone Redis", "zoneredis.db=" + std::to_string(zoneRedisConfig.db()) +
 											  " is not supported; every runtime shares Redis db 0");
 	}
-	const auto &redisHost = zoneRedisConfig.host();
-	const auto redisPort = static_cast<uint16_t>(zoneRedisConfig.port());
-	muduo::net::InetAddress zoneRedisAddress(redisPort);
-
-	// If the host looks like an IP address, use it directly without DNS resolve
-	bool isIpLiteral = !redisHost.empty() && (std::isdigit(static_cast<unsigned char>(redisHost[0])) || redisHost.find(':') != std::string::npos);
-	if (isIpLiteral)
-	{
-		zoneRedisAddress = muduo::net::InetAddress(redisHost, redisPort);
-	}
-	else if (!muduo::net::InetAddress::resolve(redisHost, &zoneRedisAddress))
-	{
-		LOG_WARN << "DNS resolve failed for Redis host '" << redisHost << "', treating as literal IP";
-		zoneRedisAddress = muduo::net::InetAddress(redisHost, redisPort);
-	}
+	const muduo::net::InetAddress zoneRedisAddress =
+		ResolveRedisAddress(zoneRedisConfig.host(), static_cast<uint16_t>(zoneRedisConfig.port()));
 	LOG_INFO << "Zone Redis address: " << zoneRedisAddress.toIpPort();
 	// 只打开关,不打口令。口令来自 game_config.yaml 的 zoneredis.password,可被环境变量 ZONE_REDIS_PASSWORD 覆盖。
 	LOG_INFO << "Zone Redis auth: " << (zoneRedisConfig.password().empty() ? "off" : "on");
@@ -1856,6 +1848,7 @@ void Node::ReleaseLocalOwnersInLoop()
     localOwnerReleaseStarted_ = true;
     hiredis::Hiredis::ProcessMaintenance()->Close();
     tlsRedis.Shutdown();
+    tlsSceneControlRedis.Shutdown(); // 只有 scene 连过场景控制域;其它节点这里是空操作
     tlsPlayerRedis.Shutdown(); // 只有 scene 连过玩家域;其它节点这里是空操作
     // TcpServer 析构不能发生在 I/O 分发栈；所有 TCP owner 都在原 loop 释放，随后两跳覆盖 forceClose/connectDestroyed。
     eventLoop.queueInLoop([this] {
@@ -2176,6 +2169,22 @@ void Node::RegisterHandlers()
 
 void Node::AsyncOutput(const char *msg, int len)
 {
+	// 当前线程有日志上下文(trace / 玩家)时,行尾补 [ctx ...](docs/design/distributed-tracing.md §5.1)。
+	// muduo 的 Logger 在调用线程上同步调本函数,所以读得到调用方的线程局部上下文。
+	// 必须拼好整行再一次 append:AsyncLogging::append 每次调用单独加锁,分两次写会和别的线程的行交错。
+	// 缓冲按 muduo 单行上限加最长后缀预留,不在堆上分配;放不下时 AppendLogContextSuffix 返回 0,原样输出。
+	// 这里不能打日志:会递归回到本函数。
+	thread_local std::array<char, static_cast<size_t>(muduo::detail::kSmallBuffer) + tracing::kMaxLogContextSuffixBytes>
+		lineWithContext;
+	const tracing::LogContextFields context{tracing::CurrentTraceHex(), tracing::CurrentPlayerId()};
+	if (const size_t rewritten = tracing::AppendLogContextSuffix(std::string_view(msg, static_cast<size_t>(len)), context,
+																	 lineWithContext.data(), lineWithContext.size());
+		rewritten > 0)
+	{
+		msg = lineWithContext.data();
+		len = static_cast<int>(rewritten);
+	}
+
 	Node *activeNode = gNodeAtomic.load(std::memory_order_acquire);
 	if (activeNode != nullptr)
 	{

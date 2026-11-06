@@ -782,15 +782,28 @@ DELETE FROM guild_daily_counter WHERE period_key BETWEEN 100000 AND ?weekCutoff 
 
 ## 5.23 运维工具 `go/guild/cmd/assetopfix/main.go`
 
-用途:scene 回 UNKNOWN(`kBehindWindow` 或信封非法,S4 §4.9 第 1、4 步)时,Loop 会走 Alert,每 60s 重排一次,永不终结;该玩家累计 16 行后,新兑换、活动奖励和退款全部被 `GuildAssetPending` 挡住。UNKNOWN 的行,scene **以后也不会再应用**(窗口已过或信封非法),唯一的疑问是"以前是否已经应用过",所以人工查清流水后终结是安全的。
+用途:scene 回 UNKNOWN(`kBehindWindow` 或信封非法,S4 §4.9 第 1、4 步)时,Loop 会走 Alert,每 60s 重排一次,永不终结;该玩家累计 16 行后,新兑换、活动奖励和退款全部被 `GuildAssetPending` 挡住。UNKNOWN 的行,scene **以后也不会再应用**(窗口已过或信封非法),唯一的疑问是"以前是否已经应用过"。
 
-- `assetopfix -f etc/guild.yaml list [-min-age-min 60] [-limit 50]`:`SELECT op_id, player_id, stream, seq, kind, attempts, last_outcome, last_reason, created_ms FROM guild_asset_op WHERE status = ?P AND created_ms < ? ORDER BY created_ms LIMIT ?`。
+**证据只认已提交账本(2026-11-06 订正,第一轮数据审计 §4 第 7 条的下游后果)。** 原来的清单让值班凭"交易流水里有这条 correlation_id"判 applied,`-force` 还能终结任何超过 30 分钟的 PENDING 行。流水在内存改动时就发出、早于存盘提交,Kafka 发送失败只打日志:有流水不等于落了盘(崩溃重载、确定性拒存时那次改动从没落盘),没流水也不等于没应用。现在工具先经 `data_service.GetPlayerAssetOpLedger` 读这名玩家已提交的资产账本(`player_store`,写权行和账本同一次读),再调共享判据 `assetop.JudgeManual`(`go/shared/assetop/manual_evidence.go`,2026-11-06 起与 trade 的 assetopfix 同一份,本工具只把行转成 `assetop.ManualRow`):位图分类与自动终结同一套(`assetop.ClassifySeq`),有结局时还要收据是这一条请求(`assetop.CommittedOutcomeOf`);请求按 `Claim` 下发的原样还原(`AssetOpRow.AssetOp`),还原不出就核不了收据,按 `none` 处理:
+
+| 证据(`evidence`) | 含义 | 能选的结局 |
+|---|---|---|
+| `applied` | 账本记已应用(全额),收据与这一行的请求逐字节一致 | 只能 `-as applied` |
+| `rejected` | 账本记已拒绝(含中止占位),收据一致 | 只能 `-as aborted` |
+| `never_applied` | 写权行已释放、账本没见过这个 seq,且这一行安静:现在没人持租约,距最后一次可能的发送(`max(last_send_ms, lease_until_ms)`)超过 `max(30 分钟, LeaseMs)` | 只能 `-as aborted` |
+| `partial` | 账本记只发放了一部分(或行上带粘性的部分发放码) | 都不行,逐件核对 |
+| `none` | 账本说不清:没有写权行、滑出窗口、纪元对不上、跳号、收据不是这一条请求、玩家还被某个 scene 持有、刚投递过、载荷还原不出请求 | 都不行 |
+
+终结的 CAS 带着读行时的 `lease_until_ms` / `last_send_ms` 做条件(`GuildAssetStore.ResolveManuallyIfQuiet`):读证据之后只要有人领过这一行(领取必改 `lease_until_ms`)或发过请求,CAS 就落空,退出码 3,重跑重新读证据。没有这一条,`never_applied` 读完之后玩家恰好上线、唤醒投递,scene 应用了而这边判了 aborted,就是一物两得。工具没配 `DataServiceRpc` 就拒绝执行。
+
+- `assetopfix -f etc/guild.yaml list [-min-age-min 60] [-limit 50]`:`SELECT op_id, player_id, stream, seq, kind, attempts, last_outcome, last_reason, created_ms FROM guild_asset_op WHERE status = ?P AND created_ms < ? ORDER BY created_ms LIMIT ?`;每名玩家读一次已提交账本,多出 `evidence`、`allowed`(证据支持的唯一 `-as`)两列,`resolvable` 合并行级前置与证据。读不到账本的行记 `evidence=error`,命令以 1 退出。
 - `assetopfix -f etc/guild.yaml resolve -op <op_id> -as applied|aborted -operator <名字> -confirm <op_id> -txlog-checked`:
-  1. 读行,必须同时满足:PENDING;`created_ms` 早于 30 分钟前;`last_outcome == UNKNOWN(0) && attempts ≥ 10`。任一不满足即拒绝(带 `-force` 才跳过第三条)。
-  2. `-confirm` 必须等于 `-op`;缺 `-txlog-checked` 就打印核对清单后退出:在 Loki 查 `[AssetOp] … corr=<op_id>`,并在交易流水里查 correlation_id=op_id。查到已应用 → `-as applied`;确认从未应用 → `-as aborted`。
-  3. DONATE_REFUND 禁止 `-as aborted`:应先用 GM 发放补偿,再 `-as applied`。
-  4. 构造 `assetop.Result{Outcome: APPLIED 或 REJECTED, Reason: 0, Durable: true}`,状态为 APPLIED 或 ABORTED,调用同一个 `GuildAssetStore.Finalize`(`OnFinalized` 为 nil;号段客户端用 `svc.NewAssetOpIDSegment(conf)` 构造,DONATE 已离帮时要用它插退款指令)。CAS 返回 false 时打印"已被自动终结"。
-  5. 审计:`logx.Errorf("[AssetOpManual] operator=%s op_id=%d player_id=%d stream=%d seq=%d kind=%d as=%s")`,ERROR 级确保进 Loki;同时要求操作者把输出贴到运维工单。
+  1. 读行,必须同时满足:PENDING;`created_ms` 早于 30 分钟前;`last_outcome == UNKNOWN(0) && attempts ≥ 10`。任一不满足即拒绝(带 `-force` 才跳过第三条;**证据一条也不跳过**)。
+  2. 读已提交账本,所选结局不在上表「能选的结局」里即拒绝(退出码 2),输出证据与来源;读不到账本退出码 1。
+  3. `-confirm` 必须等于 `-op`;缺 `-txlog-checked` 就打印核对清单后退出:确认 scene 可达、Loki 里循环仍在报 UNKNOWN(`[AssetOp] … corr=<op_id>`)。交易流水里 correlation_id=op_id 的行只作线索,不作结论。
+  4. DONATE_REFUND 禁止 `-as aborted`:应先用 GM 发放补偿,再 `-as applied`。
+  5. 走包级 `assetop.ResolveManually`(入参校验),落库经 `GuildAssetStore.ResolveManuallyIfQuiet`:与 `Finalize` 同一份对侧账、同一把 `status = PENDING` CAS,另带读行时的租约与发送时刻;不置 `durable`、不改 `last_outcome`(`OnFinalized` 为 nil)。CAS 返回 false 时打印"已不是 PENDING,或读证据之后被领过",退出码 3。
+  6. 审计:`logx.Error("[AssetOpManual] operator=%s op_id=%d player_id=%d stream=%d seq=%d kind=%d as=%s reason=%q evidence=%s evidence_source=player_store finalized=%v force=%v")`,ERROR 级确保进 Loki;同时要求操作者把输出贴到运维工单。
 
 告警(写进 `docs/design/guild-phase2.md` 运维节):`increase(assetop_unknown_total{service="guild"}[10m]) > 0` 报警;`assetop_pending_oldest_age_seconds{service="guild",stream="2"} > 86400` 提示。stream 1 不设年龄告警:离线玩家的过期捐献会一直 PENDING,直到上线后才中止,属于正常情况。
 

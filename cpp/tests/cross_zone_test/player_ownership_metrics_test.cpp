@@ -127,3 +127,34 @@ TEST(PlayerOwnershipMetrics, ReportsCurrentlyFrozenPlayers)
 	const auto after = RenderAll();
 	EXPECT_EQ(SampleValue(after, "scene_travel_handoff_frozen_players"), frozenBefore);
 }
+
+// 存盘最终被拒的计数(player_store_refused_stats):kCounterNames 同时是 [PlayerStoreRefused] 汇总行的 key 与指标的 result 标签,
+// 告警(deploy/k8s/player-store-alerts.yaml 的 ScenePlayerStoreSaveRefused)按名字选取,改名会让告警静默失效,所以钉死;
+// 每个 result 都导出一条样本(0 也导出,increase 才抓得到第一次),Inc 之后对应那一条加一。
+TEST(PlayerOwnershipMetrics, PlayerStoreRefusedResultsArePinnedAndExported)
+{
+	const std::vector<std::string_view> expected = {"too_large", "invalid", "other"};
+	std::vector<std::string_view> names;
+	for (const char *name : player_store_refused_stats::kCounterNames)
+	{
+		names.emplace_back(name);
+	}
+	EXPECT_EQ(names, expected);
+
+	const auto before = RenderAll();
+	EXPECT_NE(before.find("# TYPE scene_player_store_save_refused_total counter\n"), std::string::npos);
+	for (const auto name : expected)
+	{
+		const std::string series = std::string("scene_player_store_save_refused_total{result=\"") + std::string(name) + "\"}";
+		EXPECT_NE(SampleValue(before, series), UINT64_MAX) << name;
+	}
+
+	const std::string tooLarge = "scene_player_store_save_refused_total{result=\"too_large\"}";
+	const std::string invalid = "scene_player_store_save_refused_total{result=\"invalid\"}";
+	const uint64_t tooLargeBefore = SampleValue(before, tooLarge);
+	const uint64_t invalidBefore = SampleValue(before, invalid);
+	player_store_refused_stats::Inc(player_store_refused_stats::Counter::kTooLarge);
+	const auto after = RenderAll();
+	EXPECT_EQ(SampleValue(after, tooLarge), tooLargeBefore + 1);
+	EXPECT_EQ(SampleValue(after, invalid), invalidBefore);
+}

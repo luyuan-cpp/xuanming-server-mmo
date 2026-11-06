@@ -97,7 +97,7 @@
 | owner_epoch 围栏 | scene 的 owner_epoch、Redis 条件写与 go/db epoch 守卫已有；它们不能等同 MySQL 提交时的行内围栏 | [归属屏障](scene-owner-reentry-barrier.md)、[存盘围栏](guild-phase2/08-save-owner-fence.md)、[go/db 守卫](../../go/db/internal/kafka/key_ordered_consumer.go) |
 | 消息分级 | 社交推送一次，回源拉权威列表；交接中的技能伤害按时效契约丢弃 | [好友推送设计](friend-port-20260918.md)、[跨区传送](cross-zone-scene-travel.md) |
 
-**持久确认的实际边界**：资产通道 `durable` 指最后一次成功写入 Redis 的玩家数据包含账本结局，不代表已经得到 MySQL 行内条件写的保护，也不单凭这个字段证明 Redis 在任意故障下零损失。
+**持久确认的实际边界**（2026-11-06 按现行机制改写）：资产通道 `durable` 指账本结局已进入最后一次提交成功的玩家存档，即 go/db `Save` 的 TiDB 事务已提交（玩家存档只存 TiDB，写权由 TiDB 写权行判定）。它不防整库按时间点恢复（PITR）到更早时刻：账本与资产一起回退而 Go 侧可能已终结，处置见 [PITR 手册](../ops/mysql-backup-pitr-runbook.md) §4.1a。
 
 ### 5.1 原文六项缺口与本次核对
 

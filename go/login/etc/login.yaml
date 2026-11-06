@@ -172,12 +172,16 @@ Timeouts:
   TaskManagerCleanInterval: 5s # Task manager cleanup interval
   TaskBatchExpireTime: 10s # Task batch expiration time
 # PlayerLocator gRPC client (discovered via etcd)
+# NonBlock: true —— 启动时不阻塞拨号。go-zero v1.9.2 的缺省是 false:对端 3s 内连不上,MustNewClient 就让 login 退出,
+# 服务之间互相等就成了冷启动的连锁 CrashLoop(docs/design/infra-reconnect-overview.md §1.6、§4 R5)。
+# 不是降级:player_locator 不可用期间,依赖它的调用照样按 Timeout 失败。
 PlayerLocatorRpc:
   Etcd:
     Hosts:
       - 127.0.0.1:2379
     Key: playerlocator.rpc
   Timeout: 5000
+  NonBlock: true
   Middlewares:
     Breaker: false
 
@@ -192,6 +196,8 @@ SceneManagerRpc:
   # 服务端随后却可能已放行(结果未知)。与 C++ deadline ≥ Timeout + 2000 同一条规则(cross-zone-scene-travel.md §13.5);
   # 由 tools/scripts/tests/k8s_deploy_contract.tests.ps1 守着,K8s ConfigMap 从这里镜像。
   Timeout: 10000
+  # NonBlock: true —— 理由同 PlayerLocatorRpc:scene_manager 没起不能让 login 起不来。
+  NonBlock: true
   Middlewares:
     Breaker: false
 
@@ -256,15 +262,18 @@ HomeZone:
   RegisterTimeout: 3s
 
 # ─────────────────────────────────────────────────────────────────────────
-# 建角钉存储落点(docs/design/player-storage-placement.md §8.3 / §13)
+# 建角钉存储落点(docs/design/player-data-tidb-scaling-plan.md §7.2;player-storage-placement.md §8.3)
 #
 # CreatePlayer 在同一次 RegisterPlayerZone 里把归属和落点写进 player_route 的同一行。
-# NewPlayerStorageId:新号钉到哪个落点库;0 = 本 login 所在 zone(Node.ZoneId);
-#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db。
+# 存档库和区脱钩:每个地域固定 StorageShards 个存档库 player_store_{1000000 + Region×1000 + 片号}_db,
+# 新号按 player_id % StorageShards 选库,和 login 所在的区无关。
+#   Region:地域码,与 data_service 发号器的 Issuer.Region 同值;0 只给 dev、test。
+#   StorageShards:本地域的存档库数 K(1..1000),上线后不能改。本机、docker 调试栈用 1(player_store_1000000_db)。
 # 启动还需独立MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN环境凭据，沿serviceauth正规格式校验，不记录其值。
-#   启动日志 "[placement] new_player_storage_id=..." 是核对依据。
+#   启动日志 "[placement] new players go to region ..." 是核对依据。
 Placement:
-  NewPlayerStorageId: 0
+  Region: 0
+  StorageShards: 1
 
 # ─────────────────────────────────────────────────────────────────────────
 # HMAC 密钥治理(见 internal/config/secrets.go 包注释)
@@ -536,3 +545,9 @@ GateDrain:
   Interval: 5s            # 判定周期;0 = 关闭(排空脚本只能等到超时)
   DrainedBelowPlayers: 0  # 在线 <= 它即判定排空
   Deadline: 25m           # 从标 draining 起等这么久还剩人也判定可缩容(打 ERROR);0 = 只认人走干净
+  # 排空时把在线连接按限速迁到同 zone 其他 gate(msg 124 + 租约内重连回原场景,
+  # docs/design/gate-drain-session-migration.md)。子块可缺省,缺省即下面这组值。
+  Migrate:
+    Enabled: false        # 第一批默认关;客户端「成功进场后跳数清零」与 robot 集成跑过之后再开
+    RatePerSecond: 20     # 每台排空中的 gate 每秒最多发起的迁移数;0 等同关闭
+    StartAfter: 0s        # 标记 draining 之后多久开始迁移,留给玩家自然下线

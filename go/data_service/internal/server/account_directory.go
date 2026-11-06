@@ -138,20 +138,51 @@ func (s *DataServiceServer) BatchGetPlayerDisplay(ctx context.Context, in *dspb.
 	return &dspb.BatchGetPlayerDisplayResponse{Players: players}, nil
 }
 
-// ReleaseDeadPlayerStoreHolder 见 store.AccountDirectoryStore.ReleaseDeadPlayerStoreHolder。只有 scene_manager 能调,
-// 新路径没打开时回 Unavailable:scene_manager 那边同样按开关调,走到这里说明两边配置不一致,不能假装释放了。
+// ReleaseDeadPlayerStoreHolder 见 store.AccountDirectoryStore.ReleaseDeadPlayerStoreHolder 与 ReleaseDeadPlayerStoreHolderIfUnchanged。
+// 只有 scene_manager 能调,新路径没打开时回 Unavailable:scene_manager 那边同样按开关调,走到这里说明两边配置不一致,不能假装释放了。
+// 带 seen(LeaveScene 判死释放)时按读到的写权行比较并写,读之后有人认领过回 FailedPrecondition,调用方保留 location 重试;
+// 不带 seen 只按代次判(无资格撤销之后的补释放)。
 func (s *DataServiceServer) ReleaseDeadPlayerStoreHolder(ctx context.Context, in *dspb.ReleaseDeadPlayerStoreHolderRequest) (*emptypb.Empty, error) {
-	if s.svcCtx.PlayerStoreHolders == nil || s.svcCtx.SceneManagerDirectoryAuth == nil {
-		return nil, status.Error(codes.Unavailable, "玩家存盘写权释放未就绪")
+	if err := s.admitPlayerStoreHolders(ctx, "ReleaseDeadPlayerStoreHolder", in); err != nil {
+		return nil, err
 	}
-	caller, err := s.svcCtx.SceneManagerDirectoryAuth.Verify(ctx, accountdirectory.MethodPrefix+"ReleaseDeadPlayerStoreHolder", in)
-	if err != nil || caller != "scene_manager" {
-		return nil, status.Error(codes.PermissionDenied, "caller denied")
+	var err error
+	if seen := in.GetSeen(); seen != nil {
+		err = s.svcCtx.PlayerStoreHolders.ReleaseDeadPlayerStoreHolderIfUnchanged(ctx, in.GetPlayerId(), in.GetOwnerEpoch(), seen)
+	} else {
+		err = s.svcCtx.PlayerStoreHolders.ReleaseDeadPlayerStoreHolder(ctx, in.GetPlayerId(), in.GetOwnerEpoch())
 	}
-	if err := s.svcCtx.PlayerStoreHolders.ReleaseDeadPlayerStoreHolder(ctx, in.GetPlayerId(), in.GetOwnerEpoch()); err != nil {
+	if errors.Is(err, accountdirectory.ErrConflict) {
+		return nil, status.Error(codes.FailedPrecondition, "player store holder row changed since it was read; re-read and re-check before releasing")
+	}
+	if err != nil {
 		return nil, directoryError(err)
 	}
 	return &emptypb.Empty{}, nil
+}
+
+// ReadPlayerStoreHolder 见 store.AccountDirectoryStore.ReadPlayerStoreHolder:判死释放的第一步。鉴权与开关口径同 ReleaseDeadPlayerStoreHolder。
+func (s *DataServiceServer) ReadPlayerStoreHolder(ctx context.Context, in *dspb.ReadPlayerStoreHolderRequest) (*dspb.ReadPlayerStoreHolderResponse, error) {
+	if err := s.admitPlayerStoreHolders(ctx, "ReadPlayerStoreHolder", in); err != nil {
+		return nil, err
+	}
+	holder, err := s.svcCtx.PlayerStoreHolders.ReadPlayerStoreHolder(ctx, in.GetPlayerId())
+	if err != nil {
+		return nil, directoryError(err)
+	}
+	return &dspb.ReadPlayerStoreHolderResponse{Found: holder != nil, Holder: holder}, nil
+}
+
+// admitPlayerStoreHolders:写权释放的两个 RPC 只认 scene_manager 的签名(释放会把持有者踢掉);新路径没打开时回 Unavailable。
+func (s *DataServiceServer) admitPlayerStoreHolders(ctx context.Context, method string, req proto.Message) error {
+	if s.svcCtx.PlayerStoreHolders == nil || s.svcCtx.SceneManagerDirectoryAuth == nil {
+		return status.Error(codes.Unavailable, "玩家存盘写权释放未就绪")
+	}
+	caller, err := s.svcCtx.SceneManagerDirectoryAuth.Verify(ctx, accountdirectory.MethodPrefix+method, req)
+	if err != nil || caller != "scene_manager" {
+		return status.Error(codes.PermissionDenied, "caller denied")
+	}
+	return nil
 }
 
 func (s *DataServiceServer) RepairAccountRole(ctx context.Context, in *dspb.RepairAccountRoleRequest) (_ *dspb.AccountDirectoryResponse, err error) {

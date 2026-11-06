@@ -176,8 +176,9 @@ inline uint64_t StateVersion(const ::MysteryMerchantState &state)
 //
 // 只有「手里那一轮还没结束」时才丢弃版本更旧的:这道保护防的是 Redis 主从切换丢了最近的写、
 // 读回同一轮更早的落位 —— 那时退回去会让同一轮出现两条线。
-// 手里那一轮已经结束,它就没有保护价值了,读到什么都采纳。这个出口不能省:scene_manager 在出现间隔被改过、
-// 或旧记录损坏时会强制覆盖出一份版本号更小的记录,没有出口的话本节点会永久拒收它,只能重启。
+// 手里那一轮已经结束,它就没有保护价值了,读到什么都采纳。这个出口不能省:scene_manager 在旧记录损坏时会强制覆盖出
+// 一份版本号更小的记录,没有出口的话本节点会永久拒收它,只能重启。改了出现间隔不会走到这里:scene_manager 让旧的
+// 那一轮卖完,新间隔下只写轮次号比它大的一轮(mystery_merchant.go scheduleMysteryMerchant,第二轮审计 r2-mm#1)。
 inline bool ShouldDiscardAsStale(const ::MysteryMerchantState &incoming, const ::MysteryMerchantState &cached,
 								 uint64_t nowMs)
 {

@@ -317,8 +317,11 @@ func mustNewDomainRedis(ctx context.Context, name string, c playerredis.Config) 
 // fail-closed 拒绝(见 createplayerlogic.go 6a'),运维必须在起服日志里就看到,而不是等
 // 玩家来报「建不了角」。只报 ERROR 不 panic,与 home zone 接线缺失同一档:登录、进游戏
 // 不依赖这张表,不该因为它把整个 login 拉下来。
+//
+// 建角回滚的释放要带 login 的调用证明(data_service 只认它,03-names.md §3.4a),密钥和账号目录客户端是同一把,
+// 起服时已经校验过(config 的全球 Login 校验)。
 func (s *ServiceContext) initPlayerNames() {
-	s.PlayerNames = playernamereg.New(s.DataServiceClient)
+	s.PlayerNames = playernamereg.NewSigned(s.DataServiceClient, os.Getenv(accountdirectory.SecretEnv))
 	rules, spec, attempts, err := playernamereg.Rules()
 	if err != nil {
 		logx.Errorf("[player-name] RoleNameRule config invalid: CreatePlayer will be REJECTED until the table is fixed: %v", err)
@@ -375,7 +378,7 @@ func (s *ServiceContext) QueueCapacityProvider() loginqueue.CapacityProvider {
 }
 
 // gateWatcherCapacityProvider adapts NodeWatcher to the loginqueue.CapacityProvider
-// interface. 这里只产出本 zone 的候选集(按 zone 过滤、去重、剔除排空中的 gate,见 candidatesFromNodes),
+// interface. 这里只产出本 zone 的候选集(按 zone 过滤、去重、给排空中的 gate 打标记,见 candidatesFromNodes),
 // 不排序、不挑 gate。挑 gate 有两条规则,都在 loginqueue:快速通道经 PickAndSignGateToken → PickGate
 // 在一份候选上随机抽两台、取人数少的那台;dispatcher 每个非空拍取一次候选,由 newBatchPickFn 在这一份上
 // 逐条挑并记账(负载 = PlayerCount + 本拍已分给它的人数,取最少,同数取 NodeID 最小)。
@@ -383,9 +386,10 @@ func (s *ServiceContext) QueueCapacityProvider() loginqueue.CapacityProvider {
 type gateWatcherCapacityProvider struct {
 	watcher *node.NodeWatcher
 	caps    map[string]uint32 // zone_id (decimal string) → capacity ceiling
-	// rdb 用来查 gate 排空标记。缩容前被标记 draining 的 gate 不再接新玩家。
-	// nil 时跳过过滤(队列关闭 / 早期初始化路径)。
-	rdb *redis.Client
+	// drain 查 gate 排空标记:缩容前被标记 draining 的 gate 不再接新玩家(候选里打 Draining 标记,挑 gate 时分档)。
+	// 按 zone 缓存 gateDrainMarkRefresh(缺口清单第 31 条),选 gate 的各条路径不再每次各打一次 MGET。
+	// 它的 Redis 为 nil 时不打标记(早期初始化路径)。
+	drain *loginqueue.DrainMarkCache
 	// requireClientEndpoint 取自配置 RequireClientEndpoint:true 时没自报客户端地址的 gate
 	// 不进候选集(见 buildGateCandidates)。启动期定值,运行中不变。
 	requireClientEndpoint bool
@@ -396,27 +400,34 @@ func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zon
 	if err != nil {
 		return nil, err
 	}
-	return candidatesFromNodes(ctx, g.rdb, nodes, zoneID, g.requireClientEndpoint), nil
+	return candidatesFromNodes(ctx, g.drain, nodes, zoneID, g.requireClientEndpoint), nil
 }
 
 // candidatesFromNodes 是 CandidatesForZone 取完节点之后的全部逻辑。单独拆出来,是为了让
-// 「先去重、后排空过滤」这条顺序有单测守住:CandidatesForZone 依赖具体的 etcd NodeWatcher,测不到。
+// 「先去重、后打排空标记」这条顺序有单测守住:CandidatesForZone 依赖具体的 etcd NodeWatcher,测不到。
 //
-// 选客户端地址 + 按地址去重必须在排空过滤之前:排空标记按 node_id 打在活着的那台上,
-// 若先排空过滤,它被剔掉后,同地址上旧 node_id 的陈旧影子(没被标记)会顶上来被选中,
+// 选客户端地址 + 按地址去重必须在读排空标记之前:排空标记按 node_id 打在活着的那台上,
+// 若先按标记剔除,它被剔掉后,同地址上旧 node_id 的陈旧影子(没被标记)会顶上来被选中,
 // 玩家连过去照样被新 gate 以 token_gate_node_mismatch 拒绝。
 //
-// 剔除正在排空的 gate 放在这里而不是 PickGate 里,是因为这是**所有** gate 选择路径的唯一收口
-// (队列 dispatcher 与非队列快路径都经过它),而 PickGate 是个纯函数、拿不到 Redis。
-// rdb 为 nil 时跳过排空过滤。失败方向是放行不是拦截,全部被标记时也会放行 —— 见 FilterDrainingGates。
-func candidatesFromNodes(ctx context.Context, rdb *redis.Client, nodes []node.WatchedNode,
+// 排空标记在这里读,是因为这是**所有** gate 选择路径的唯一收口(队列 dispatcher、非队列快路径、排队取走复核都经过它),
+// 而 PickGate 是个纯函数、拿不到 Redis。这里只打标记(GateCandidate.Draining)、不剔除(2026-11-06 起):
+// 容量记账(FreeSlots)要数到排空 gate 上还在线的人;挑哪台由 eligibleGates 分档,见 loginqueue.MarkDrainingGates。
+// drain 为 nil(或它的 Redis 为 nil)时不打标记。失败方向是放行不是拦截。排空标记最多晚 gateDrainMarkRefresh 生效,
+// 见 loginqueue.DrainMarkCache。
+func candidatesFromNodes(ctx context.Context, drain *loginqueue.DrainMarkCache, nodes []node.WatchedNode,
 	zoneID uint32, require bool) []loginqueue.GateCandidate {
 	out := buildGateCandidates(nodes, zoneID, require)
-	if rdb != nil {
-		out = loginqueue.FilterDrainingGates(out, loginqueue.DrainingGates(ctx, rdb, out))
+	if drain != nil {
+		loginqueue.MarkDrainingGates(out, drain.Draining(ctx, zoneID, out))
 	}
 	return out
 }
+
+// gateDrainMarkRefresh 是排空标记缓存的时长(2026-11-05,缺口清单第 31 条):每个 login 实例每个 zone 每秒至多
+// 查一次 gate:<id>:draining。排空是分钟级的计划内动作,晚 1 秒生效无关紧要;调大会让缩容前多分进来几秒的玩家
+// (他们之后照常随排空流程改派),调小则回到每次都查。
+const gateDrainMarkRefresh = time.Second
 
 func (g *gateWatcherCapacityProvider) ZoneCapacity(zoneID uint32) uint32 {
 	return loginqueue.ZoneCapacityFromMap(g.caps, zoneID)
@@ -439,9 +450,9 @@ type gateChoice struct {
 //     客户端地址:它们只下发给客户端,签票不绑地址(GateTokenPayload 只带 node_id / zone_id);
 //  3. 按选中的地址 DedupeNewest,同一地址只留 launch_time 最大者,见 clientendpoint.DedupeNewest。
 //
-// 排空过滤不在这里,由调用方在本函数**之后**做(见 CandidatesForZone)。
+// 排空标记不在这里打,由调用方在本函数**之后**打(见 candidatesFromNodes)。
 // 停写(WatchedNode.Stale)与自报上限(NodeInfo.max_connections)只原样透传进候选,这里不过滤:
-// 容量记账(FreeSlots)要数到每台 gate 上的人,过滤在 loginqueue 挑 gate 时做(eligibleGates)。
+// 容量记账(FreeSlots)要数到每台 gate 上的人,分档在 loginqueue 挑 gate 时做(eligibleGates)。
 // 输出保持 nodes 的相对顺序;最终挑哪台由 loginqueue.PickGate 按负载决定,与顺序无关。
 func buildGateCandidates(nodes []node.WatchedNode, zoneID uint32, require bool) []loginqueue.GateCandidate {
 	choices := make([]gateChoice, 0, len(nodes))
@@ -537,7 +548,7 @@ func (s *ServiceContext) initLoginQueue() {
 	s.queueCapProvider = &gateWatcherCapacityProvider{
 		watcher:               s.GateWatcher,
 		caps:                  cfg.ZoneCapacityOverride,
-		rdb:                   s.RedisClient,
+		drain:                 loginqueue.NewDrainMarkCache(s.RedisClient, gateDrainMarkRefresh, nil),
 		requireClientEndpoint: config.AppConfig.RequireClientEndpoint,
 	}
 	logx.Infof("[GateSelect] RequireClientEndpoint=%v (true: gates without clientEndpoint are never handed to clients)",
@@ -645,6 +656,10 @@ func (s *ServiceContext) startGateDrainMonitor() {
 	s.gateDrainStop = cancel
 	// 只在本owner管理ticker/退出；业务判定仍复用唯一EvaluateDrainingGates。
 	snapshot, policy := newGateDrainSnapshotFunc(s.GateWatcher.FetchAllNodes), gateDrainPolicy(cfg)
+	// 排空迁移的许可与排空判定同一拍、同一份快照(gate_migration.go,docs/design/gate-drain-session-migration.md §4.4)。
+	migratePolicy := gateDrainMigratePolicy(cfg)
+	logx.Infof("[GateDrain] migration: enabled=%v rate=%d/s start_after=%ds lease=%dms",
+		migratePolicy.Enabled, migratePolicy.RatePerSecond, migratePolicy.StartAfterSeconds, migratePolicy.LeaseMs)
 	s.background.Add(1)
 	safego.Go("login.gate_drain_monitor", func() {
 		defer s.background.Done()
@@ -662,6 +677,7 @@ func (s *ServiceContext) startGateDrainMonitor() {
 						return
 					}
 					loginqueue.EvaluateDrainingGates(ctx, s.RedisClient, gates, policy, time.Now().Unix())
+					s.sendDrainMigrationLeases(ctx, gates, migratePolicy)
 				})
 			}
 		}
@@ -691,7 +707,8 @@ func gateDrainSnapshot(nodes []*login_proto.NodeInfo) []loginqueue.GateOnline {
 		if n == nil {
 			continue
 		}
-		out = append(out, loginqueue.GateOnline{NodeID: n.NodeId, PlayerCount: n.PlayerCount})
+		// 实例 uuid 只给排空迁移的许可定向用(gate_migration.go);排空判定本身按 node_id。
+		out = append(out, loginqueue.GateOnline{NodeID: n.NodeId, PlayerCount: n.PlayerCount, InstanceID: n.NodeUuid})
 	}
 	return out
 }

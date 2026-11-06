@@ -567,11 +567,11 @@ constexpr BuyMysteryMerchantGoodsRequest::ParseTableT_ BuyMysteryMerchantGoodsRe
     {
       PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -581,7 +581,10 @@ constexpr BuyMysteryMerchantGoodsRequest::ParseTableT_ BuyMysteryMerchantGoodsRe
       ::_pbi::TcParser::GetTable<::BuyMysteryMerchantGoodsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 client_request_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyMysteryMerchantGoodsRequest, _impl_.client_request_id_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.client_request_id_)}},
       // uint64 round_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyMysteryMerchantGoodsRequest, _impl_.round_id_), 0>(),
        {8, 0, 0,
@@ -607,8 +610,8 @@ constexpr BuyMysteryMerchantGoodsRequest::ParseTableT_ BuyMysteryMerchantGoodsRe
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_config_id_)}},
       // uint32 expected_item_count = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_count_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_count_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_count_)}},
     }}, {{
       65535, 65535
@@ -626,7 +629,9 @@ constexpr BuyMysteryMerchantGoodsRequest::ParseTableT_ BuyMysteryMerchantGoodsRe
       // uint32 expected_item_config_id = 6;
       {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_config_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 expected_item_count = 7;
-      {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_count_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.expected_item_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 client_request_id = 8;
+      {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -645,6 +650,7 @@ inline constexpr BuyMysteryMerchantGoodsRequest::Impl_::Impl_(
         expected_price_{::uint64_t{0u}},
         expected_currency_type_{0u},
         expected_item_config_id_{0u},
+        client_request_id_{::uint64_t{0u}},
         expected_item_count_{0u} {}
 
 template <typename>
@@ -1543,11 +1549,11 @@ constexpr BuyMysteryMerchantGoodsResponse::ParseTableT_ BuyMysteryMerchantGoodsR
     {
       PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1557,7 +1563,10 @@ constexpr BuyMysteryMerchantGoodsResponse::ParseTableT_ BuyMysteryMerchantGoodsR
       ::_pbi::TcParser::GetTable<::BuyMysteryMerchantGoodsResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool replayed = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BuyMysteryMerchantGoodsResponse, _impl_.replayed_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.replayed_)}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 0, 0,
@@ -1579,6 +1588,8 @@ constexpr BuyMysteryMerchantGoodsResponse::ParseTableT_ BuyMysteryMerchantGoodsR
       {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.info_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .BagInfo bag = 3;
       {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.bag_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool replayed = 4;
+      {PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1609,7 +1620,8 @@ inline constexpr BuyMysteryMerchantGoodsResponse::Impl_::Impl_(
       : _cached_size_{0},
         error_message_{nullptr},
         info_{nullptr},
-        bag_{nullptr} {}
+        bag_{nullptr},
+        replayed_{false} {}
 
 template <typename>
 constexpr BuyMysteryMerchantGoodsResponse::BuyMysteryMerchantGoodsResponse(::_pbi::ConstantInitialized,
@@ -1812,7 +1824,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.round_id_),
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.goods_id_),
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.count_),
@@ -1820,22 +1832,26 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.expected_currency_type_),
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.expected_item_config_id_),
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.expected_item_count_),
+        PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsRequest, _impl_.client_request_id_),
         0,
         1,
         2,
         3,
         4,
         5,
+        7,
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsResponse, _impl_.info_),
         PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsResponse, _impl_.bag_),
+        PROTOBUF_FIELD_OFFSET(::BuyMysteryMerchantGoodsResponse, _impl_.replayed_),
         0,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::MysteryMerchantNotify, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1852,8 +1868,8 @@ static const ::_pbi::MigrationSchema
         {92, sizeof(::GetMysteryMerchantInfoRequest)},
         {93, sizeof(::GetMysteryMerchantInfoResponse)},
         {100, sizeof(::BuyMysteryMerchantGoodsRequest)},
-        {117, sizeof(::BuyMysteryMerchantGoodsResponse)},
-        {126, sizeof(::MysteryMerchantNotify)},
+        {119, sizeof(::BuyMysteryMerchantGoodsResponse)},
+        {130, sizeof(::MysteryMerchantNotify)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1902,25 +1918,26 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fmystery_5fmerchant
     "GetMysteryMerchantInfoRequest\"l\n\036GetMyst"
     "eryMerchantInfoResponse\022&\n\rerror_message"
     "\030\001 \001(\0132\017.TipInfoMessage\022\"\n\004info\030\002 \001(\0132\024."
-    "MysteryMerchantInfo\"\311\001\n\036BuyMysteryMercha"
+    "MysteryMerchantInfo\"\344\001\n\036BuyMysteryMercha"
     "ntGoodsRequest\022\020\n\010round_id\030\001 \001(\004\022\020\n\010good"
     "s_id\030\002 \001(\r\022\r\n\005count\030\003 \001(\r\022\026\n\016expected_pr"
     "ice\030\004 \001(\004\022\036\n\026expected_currency_type\030\005 \001("
     "\r\022\037\n\027expected_item_config_id\030\006 \001(\r\022\033\n\023ex"
-    "pected_item_count\030\007 \001(\r\"\204\001\n\037BuyMysteryMe"
-    "rchantGoodsResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022\"\n\004info\030\002 \001(\0132\024.Myst"
-    "eryMerchantInfo\022\025\n\003bag\030\003 \001(\0132\010.BagInfo\";"
-    "\n\025MysteryMerchantNotify\022\"\n\004info\030\001 \001(\0132\024."
-    "MysteryMerchantInfo2\247\002\n SceneMysteryMerc"
-    "hantClientPlayer\022Y\n\026GetMysteryMerchantIn"
-    "fo\022\036.GetMysteryMerchantInfoRequest\032\037.Get"
-    "MysteryMerchantInfoResponse\022\\\n\027BuyMyster"
-    "yMerchantGoods\022\037.BuyMysteryMerchantGoods"
-    "Request\032 .BuyMysteryMerchantGoodsRespons"
-    "e\022>\n\025NotifyMysteryMerchant\022\026.MysteryMerc"
-    "hantNotify\032\006.Empty\"\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303\001\001B\016Z"
-    "\005scene\200\001\001\230\324a\003b\006proto3"
+    "pected_item_count\030\007 \001(\r\022\031\n\021client_reques"
+    "t_id\030\010 \001(\004\"\226\001\n\037BuyMysteryMerchantGoodsRe"
+    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
+    "essage\022\"\n\004info\030\002 \001(\0132\024.MysteryMerchantIn"
+    "fo\022\025\n\003bag\030\003 \001(\0132\010.BagInfo\022\020\n\010replayed\030\004 "
+    "\001(\010\";\n\025MysteryMerchantNotify\022\"\n\004info\030\001 \001"
+    "(\0132\024.MysteryMerchantInfo2\247\002\n SceneMyster"
+    "yMerchantClientPlayer\022Y\n\026GetMysteryMerch"
+    "antInfo\022\036.GetMysteryMerchantInfoRequest\032"
+    "\037.GetMysteryMerchantInfoResponse\022\\\n\027BuyM"
+    "ysteryMerchantGoods\022\037.BuyMysteryMerchant"
+    "GoodsRequest\032 .BuyMysteryMerchantGoodsRe"
+    "sponse\022>\n\025NotifyMysteryMerchant\022\026.Myster"
+    "yMerchantNotify\032\006.Empty\"\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303"
+    "\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fmystery_5fmerchant_2eproto_deps[5] = {
@@ -1934,7 +1951,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fmystery_5fmer
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fmystery_5fmerchant_2eproto = {
     false,
     false,
-    2061,
+    2106,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fmystery_5fmerchant_2eproto,
     "proto/scene/player_mystery_merchant.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fmystery_5fmerchant_2eproto_once,
@@ -4134,7 +4151,7 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.round_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.expected_item_count_) -
         reinterpret_cast<char*>(&_impl_.round_id_)) + sizeof(_impl_.expected_item_count_));
@@ -4217,11 +4234,20 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsRequest::Clear() {
   }
 
   // uint32 expected_item_count = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_expected_item_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           7, this_._internal_expected_item_count(), target);
+    }
+  }
+
+  // uint64 client_request_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_client_request_id(), target);
     }
   }
 
@@ -4250,7 +4276,7 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // uint64 round_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_round_id() != 0) {
@@ -4293,8 +4319,15 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsRequest::Clear() {
             this_._internal_expected_item_config_id());
       }
     }
-    // uint32 expected_item_count = 7;
+    // uint64 client_request_id = 8;
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint32 expected_item_count = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_expected_item_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_expected_item_count());
@@ -4318,7 +4351,7 @@ void BuyMysteryMerchantGoodsRequest::MergeImpl(::google::protobuf::MessageLite& 
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_round_id() != 0) {
         _this->_impl_.round_id_ = from._impl_.round_id_;
@@ -4350,6 +4383,11 @@ void BuyMysteryMerchantGoodsRequest::MergeImpl(::google::protobuf::MessageLite& 
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_expected_item_count() != 0) {
         _this->_impl_.expected_item_count_ = from._impl_.expected_item_count_;
       }
@@ -4435,6 +4473,7 @@ BuyMysteryMerchantGoodsResponse::BuyMysteryMerchantGoodsResponse(
   _impl_.bag_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_)
                 : nullptr;
+  _impl_.replayed_ = from._impl_.replayed_;
 
   // @@protoc_insertion_point(copy_constructor:BuyMysteryMerchantGoodsResponse)
 }
@@ -4448,9 +4487,9 @@ inline void BuyMysteryMerchantGoodsResponse::SharedCtor(::_pb::Arena* PROTOBUF_N
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, bag_) -
+           offsetof(Impl_, replayed_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::bag_));
+               sizeof(Impl_::replayed_));
 }
 BuyMysteryMerchantGoodsResponse::~BuyMysteryMerchantGoodsResponse() {
   // @@protoc_insertion_point(destructor:BuyMysteryMerchantGoodsResponse)
@@ -4517,6 +4556,7 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsResponse::Clear() {
       _impl_.bag_->Clear();
     }
   }
+  _impl_.replayed_ = false;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4561,6 +4601,15 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsResponse::Clear() {
         stream);
   }
 
+  // bool replayed = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_replayed(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4586,7 +4635,7 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // .TipInfoMessage error_message = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -4601,6 +4650,12 @@ PROTOBUF_NOINLINE void BuyMysteryMerchantGoodsResponse::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.bag_);
+    }
+    // bool replayed = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -4621,7 +4676,7 @@ void BuyMysteryMerchantGoodsResponse::MergeImpl(::google::protobuf::MessageLite&
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.error_message_ != nullptr);
       if (_this->_impl_.error_message_ == nullptr) {
@@ -4646,6 +4701,11 @@ void BuyMysteryMerchantGoodsResponse::MergeImpl(::google::protobuf::MessageLite&
         _this->_impl_.bag_->MergeFrom(*from._impl_.bag_);
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -4665,8 +4725,8 @@ void BuyMysteryMerchantGoodsResponse::InternalSwap(BuyMysteryMerchantGoodsRespon
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.bag_)
-      + sizeof(BuyMysteryMerchantGoodsResponse::_impl_.bag_)
+      PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.replayed_)
+      + sizeof(BuyMysteryMerchantGoodsResponse::_impl_.replayed_)
       - PROTOBUF_FIELD_OFFSET(BuyMysteryMerchantGoodsResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));

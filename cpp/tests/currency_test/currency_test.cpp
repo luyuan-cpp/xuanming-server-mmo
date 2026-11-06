@@ -526,11 +526,10 @@ TEST(CurrencyTest, PlayerLoadRejectsMissingOrForeignSubTableIdentitySourceContra
     const auto end = source.find("\nvoid PlayerLifecycleSystem::HandlePlayerAsyncSaved(", start);
     ASSERT_NE(std::string::npos, end);
     const auto load = source.substr(start, end - start);
-    const auto reject = load.find("if (playerId == kInvalidGuid || message.player_database_data().player_id() != playerId ||");
+    // 2026-11-05 起只有一张子表 player_database(player_database_1 已删除,player-save-direct-commit.md §1.2)。
+    const auto reject = load.find("if (playerId == kInvalidGuid || message.player_database_data().player_id() != playerId)");
     ASSERT_NE(std::string::npos, reject);
-    const auto secondIdentity = load.find("message.player_database_1_data().player_id() != playerId", reject);
-    ASSERT_NE(std::string::npos, secondIdentity);
-    const auto fail = load.find("HandlePlayerAsyncLoadFailed(playerId, PlayerLoadFailureReason::kStoreError);", secondIdentity);
+    const auto fail = load.find("HandlePlayerAsyncLoadFailed(playerId, PlayerLoadFailureReason::kStoreError);", reject);
     ASSERT_NE(std::string::npos, fail);
     const auto gate = load.find("exit_release_mark::DecideInheritGate(");
     const auto consume = load.find("PlayerEnterContext ctx = std::move(pendingIt->second);");
@@ -544,7 +543,7 @@ TEST(CurrencyTest, PlayerLoadRejectsMissingOrForeignSubTableIdentitySourceContra
     EXPECT_EQ(std::string::npos, load.find("set_player_id("));
     EXPECT_EQ(std::string::npos, load.find("patchedMessage"));
     EXPECT_EQ(std::string::npos, load.find("registration_timestamp()"))
-        << "合法新号双 ID 已由种子提供,首次注册仍由 InitPlayerFromAllData 统一处理";
+        << "合法新号的 ID 已由认领拼回时填好,首次注册仍由 InitPlayerFromAllData 统一处理";
 }
 
 TEST(CurrencyTest, TravelHandoffMarkRequiresAtomicSqlBarrierSourceContract)

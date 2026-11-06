@@ -130,3 +130,29 @@ func TestTransactionLogStore_TimestampSecAndZoneLand(t *testing.T) {
 		t.Logf("transaction_log table proto has no zone_id field; TransactionLogEntry.zone_id is dropped until proto/common/database/rollback_database_table.proto gains it")
 	}
 }
+
+// GM 回收按指令号补查同指令流水:CorrelationIDs 只要这些指令号,不带时间窗时窗外的也要查到。
+func TestTransactionLogStore_QueryLogByCorrelationIDs(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	ts := newTxLogStore(t, db)
+	ctx := context.Background()
+
+	rows := []*store.TransactionLogRow{txRow(1), txRow(2), txRow(3), txRow(4)}
+	rows[0].CorrelationID, rows[1].CorrelationID, rows[2].CorrelationID, rows[3].CorrelationID = 801, 801, 802, 803
+	_, err := ts.InsertBatchIgnore(ctx, rows)
+	require.NoError(t, err)
+
+	got, total, err := ts.QueryLog(ctx, &store.TransactionLogQuery{PlayerID: 200, CorrelationIDs: []uint64{801, 803}, Limit: 100})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(3), total)
+	ids := make([]uint64, 0, len(got))
+	for _, row := range got {
+		ids = append(ids, row.TxID)
+	}
+	assert.ElementsMatch(t, []uint64{1, 2, 4}, ids)
+
+	got, total, err = ts.QueryLog(ctx, &store.TransactionLogQuery{PlayerID: 200, CorrelationIDs: []uint64{804}})
+	require.NoError(t, err)
+	assert.Zero(t, total)
+	assert.Empty(t, got)
+}

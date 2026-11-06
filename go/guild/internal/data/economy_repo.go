@@ -44,6 +44,8 @@ import (
 	"slices"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	assetpb "proto/common/asset"
 	rollbackpb "proto/common/rollback"
 	pb "proto/guild"
@@ -210,6 +212,45 @@ type AssetOpRow struct {
 	ReasonTipID, LastOutcome, LastReason uint32
 	CreatedMs, UpdatedMs                 uint64
 	Payload                              []byte
+	// TxType 进收据摘要:assetopfix 核已提交账本里的收据是不是这一条请求时,要按首投时的原样重算请求。
+	TxType uint32
+	// LeaseUntilMs、LastSendMs 是人工终结的「安静」证据(assetop.QuietWitness):现在有没有人持租约、最后一次可能的发送在什么时候。
+	LeaseUntilMs, LastSendMs uint64
+}
+
+// AssetOp 把这一行还原成资产通道里的请求形状(与 Claim 下发的同一份,assetOpOf)。载荷解不开就回错误:
+// 收据核不了,人工终结不能当它对得上。
+func (r AssetOpRow) AssetOp() (assetop.Op, error) {
+	bundle := &assetpb.AssetBundle{}
+	if len(r.Payload) == 0 {
+		return assetop.Op{}, fmt.Errorf("guild asset op %d: empty payload", r.OpID)
+	}
+	if err := proto.Unmarshal(r.Payload, bundle); err != nil {
+		return assetop.Op{}, fmt.Errorf("guild asset op %d: decode payload: %w", r.OpID, err)
+	}
+	return assetOpOf(r, bundle), nil
+}
+
+// assetOpOf 是一行指令在资产通道里的形状。Claim 下发与 assetopfix 核收据都用它:correlation_id、tx_type、载荷必须与
+// 首投时 logic 填的一致,否则重投会换一个 correlation,scene 的收据摘要也对不上。LeaseToken 由领取方自己填。
+func assetOpOf(r AssetOpRow, bundle *assetpb.AssetBundle) assetop.Op {
+	return assetop.Op{
+		OpID:        r.OpID,
+		PlayerID:    r.PlayerID,
+		Stream:      r.Stream,
+		Seq:         r.Seq,
+		StreamEpoch: r.StreamEpoch,
+		// correlation_id 取 op_id:scene 流水与收据都按它对到唯一一行指令。
+		CorrelationID: r.OpID,
+		TxType:        r.TxType,
+		Bundle:        bundle,
+		Attempts:      r.Attempts,
+		DeadlineMs:    r.DeadlineMs,
+		LastReason:    r.LastReason,
+		// 只有自动放弃读这两项(abandon.go 条件 1 的复核与条件 4)。
+		CreatedMs:  r.CreatedMs,
+		LastSendMs: r.LastSendMs,
+	}
 }
 
 // rowScanner 是 *sql.Row 与 *sql.Rows 的公共扫描接口。
@@ -290,6 +331,9 @@ func assetOpRowFrom(rec *pb.GuildAssetOpRecord) AssetOpRow {
 		CreatedMs:         rec.GetCreatedMs(),
 		UpdatedMs:         rec.GetUpdatedMs(),
 		Payload:           rec.GetPayload(),
+		TxType:            rec.GetTxType(),
+		LeaseUntilMs:      rec.GetLeaseUntilMs(),
+		LastSendMs:        rec.GetLastSendMs(),
 	}
 }
 

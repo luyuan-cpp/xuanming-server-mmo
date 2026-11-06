@@ -485,6 +485,10 @@ const (
 		" SET `status` = ?, `resolved_by` = ?, `resolve_reason` = ?, `lease_until_ms` = 0," +
 		" `next_attempt_ms` = ?, `updated_ms` = ?" +
 		" WHERE `op_id` = ? AND `status` = ?"
+	// assetopfix 的人工终结(ResolveManuallyIfQuiet):在上一条之外,要求租约与发送时刻仍是读证据时的值。
+	// 任何领取都会改 lease_until_ms(sqlClaimAssetOp),发过请求的重排会推进 last_send_ms:读证据之后只要有人领过、发过,就落空。
+	// 与 guild 的 sqlResolveAssetOpQuiet 同形。
+	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ?"
 )
 
 // ListDue 非加锁一致性读,只取主键,走 (status, next_attempt_ms) 索引。
@@ -595,11 +599,22 @@ func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, pois
 	if err != nil {
 		return assetop.Op{}, false, err
 	}
+	op, err := OpFromRecord(rec, token)
+	if err != nil {
+		r.markPoison(ctx, opID, token, nowMs, poisonUntilMs)
+		return assetop.Op{}, false, fmt.Errorf("%w: op_id=%d: %v", assetop.ErrPoisonRow, opID, err)
+	}
+	return op, true, nil
+}
+
+// OpFromRecord 把一行 trade_asset_op 还原成发给 scene 的请求。重投循环领行(Claim)和人工终结工具核收据身份
+// (go/trade/cmd/assetopfix)都用它:两边必须还原出逐字节相同的请求,否则收据摘要对不上。
+// leaseToken 只进 Op.LeaseToken,不参与请求身份;工具传 0。payload 解不开回错误,调用方按毒行处理。
+func OpFromRecord(rec *tradepb.TradeAssetOpRecord, leaseToken uint64) (assetop.Op, error) {
 	bundle := &assetpb.AssetBundle{}
 	if len(rec.GetPayload()) > 0 {
 		if err := proto.Unmarshal(rec.GetPayload(), bundle); err != nil {
-			r.markPoison(ctx, opID, token, nowMs, poisonUntilMs)
-			return assetop.Op{}, false, fmt.Errorf("%w: op_id=%d: %v", assetop.ErrPoisonRow, opID, err)
+			return assetop.Op{}, err
 		}
 	}
 	return assetop.Op{
@@ -617,11 +632,11 @@ func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, pois
 		Bundle:        bundle,
 		Attempts:      rec.GetAttempts(),
 		DeadlineMs:    rec.GetDeadlineMs(),
-		LeaseToken:    token,
+		LeaseToken:    leaseToken,
 		LastReason:    rec.GetLastReason(),
 		CreatedMs:     rec.GetCreatedMs(),
 		LastSendMs:    rec.GetLastSendMs(),
-	}, true, nil
+	}, nil
 }
 
 // markPoison 把解不开 payload 的行推迟到 poisonUntilMs,并记下"最近一次结局未知"。
@@ -721,8 +736,9 @@ func (r *AssetOpRepo) Finalize(ctx context.Context, op assetop.Op, status asseto
 }
 
 // ResolveManually 是 §4.38 的人工终结通道:把一行卡死的 outbox 按人工判定直接落成终局,
-// 并留下操作人与依据。它**不查证据、不猜结论** —— 调用方(管理入口)已经按 scene 流水的
-// correlation_id = op_id 判定过,本方法只负责落库 + 留痕 + 与自动路径同一把 CAS。
+// 并留下操作人与依据。它**不查证据、不猜结论** —— 调用方(管理入口)已经按玩家已提交的账本判定过
+// (assetop.JudgeManual;scene 流水 correlation_id = op_id 只是线索),本方法只负责落库 + 留痕 + 与自动路径同一把 CAS。
+// 人工终结工具走带见证的 ResolveManuallyIfQuiet,不走这一条。
 //
 // 与 Finalize 完全同形:同一个事务、先主键点锁(sqlLockAssetOp)、同一条 `status = PENDING` 的 CAS、
 // RowsAffected == 1 才算本次终结并做对侧账。两条路径共用这个条件,人工与循环同时下手也只会有一个赢家;
@@ -733,6 +749,19 @@ func (r *AssetOpRepo) Finalize(ctx context.Context, op assetop.Op, status asseto
 // 交易合同推进只看 status(CommerceRepo.LegResult,2026-10-20),人工终结的腿照常推进合同:
 // REJECTED / ABORTED 走与 scene 判拒同一条补偿;实例扣款判 APPLIED 时本行没有托管原件,合同隔离为人工,不自动上架或发货。
 func (r *AssetOpRepo) ResolveManually(ctx context.Context, m assetop.ManualResolution, nowMs uint64) (bool, error) {
+	return r.resolveManually(ctx, m, nowMs, sqlResolveAssetOp)
+}
+
+// ResolveManuallyIfQuiet 同 ResolveManually(同一份对侧账),另要求行上的 lease_until_ms / last_send_ms 仍是 witness。
+// 落空回 (false, nil):行已不是 PENDING,或读证据之后有人领过、发过它。人工终结工具只走这一条
+// (assetop.JudgeManual 的结论是按读证据那一刻的行下的,中间被领过就作废)。
+func (r *AssetOpRepo) ResolveManuallyIfQuiet(ctx context.Context, m assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {
+	return r.resolveManually(ctx, m, nowMs, sqlResolveAssetOpQuiet, witness.LeaseUntilMs, witness.LastSendMs)
+}
+
+// resolveManually 是两种人工终结的同一个事务体。query 是 sqlResolveAssetOp 或它加了见证条件的版本,
+// extraArgs 是追加条件的参数(按 query 末尾的顺序)。
+func (r *AssetOpRepo) resolveManually(ctx context.Context, m assetop.ManualResolution, nowMs uint64, query string, extraArgs ...any) (bool, error) {
 	// 状态合法性、操作人与理由的长度由 assetop.Loop.ResolveManually 在进来之前校验;
 	// 这里兜住本表自己的那一份:映射不出库值(落成 UNSPECIFIED 会让客服查不到结局)、PENDING,
 	// 以及 ABANDONED —— 放弃只能由自动放弃在全部证据成立时产生,人工判定"放弃"应按证据选 ABORTED
@@ -741,6 +770,7 @@ func (r *AssetOpRepo) ResolveManually(ctx context.Context, m assetop.ManualResol
 	if !isFinalizableRecord(final) {
 		return false, fmt.Errorf("manual resolve %s %d: 终结状态非法 (%s)", AssetOpTableName, m.OpID, m.Final)
 	}
+	args := append([]any{int32(final), m.Operator, m.Reason, nowMs, nowMs, m.OpID, PendingStatus()}, extraArgs...)
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
 	resolved := false
@@ -753,8 +783,7 @@ func (r *AssetOpRepo) ResolveManually(ctx context.Context, m assetop.ManualResol
 		if !found {
 			return nil // 行不存在或已被清理:与 CAS 落空同义,不做对侧账
 		}
-		result, err := tx.ExecContext(ctx, sqlResolveAssetOp,
-			int32(final), m.Operator, m.Reason, nowMs, nowMs, m.OpID, PendingStatus())
+		result, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("manual resolve %s %d: %w", AssetOpTableName, m.OpID, err)
 		}

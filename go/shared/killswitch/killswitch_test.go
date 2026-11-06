@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"shared/etcdwatch"
 )
 
 const testMethod = "/login.LoginService/Login"
@@ -362,6 +364,23 @@ func TestConfigDefaults(t *testing.T) {
 	if custom.prefix() != "/x/" || custom.staleAfter() != time.Second ||
 		custom.resyncBackoff() != 2*time.Second {
 		t.Error("自定义配置没有被采纳")
+	}
+}
+
+// 定期复核间隔必须明显短于 StaleAfter:syncedAt 只在真正读到 etcd 时刷新,复核太稀会把连得好好的快照判成过期
+// (docs/design/infra-reconnect-overview.md §4 R12)。
+func TestRecheckIntervalIsAFractionOfStaleAfter(t *testing.T) {
+	if got := (Config{}).recheckInterval(); got != defaultStaleAfter/3 {
+		t.Errorf("缺省 recheckInterval() = %v, 期望 %v", got, defaultStaleAfter/3)
+	}
+	if got := (Config{StaleAfter: 30 * time.Second}).recheckInterval(); got != 10*time.Second {
+		t.Errorf("StaleAfter=30s 时 recheckInterval() = %v, 期望 10s", got)
+	}
+	if got := (Config{StaleAfter: time.Millisecond}).recheckInterval(); got != minRecheckInterval {
+		t.Errorf("StaleAfter 极小时 recheckInterval() = %v, 期望下限 %v", got, minRecheckInterval)
+	}
+	if got := (Config{StaleAfter: -1}).recheckInterval(); got != etcdwatch.ResyncInterval {
+		t.Errorf("永不作废时 recheckInterval() = %v, 期望兜底对账间隔 %v", got, etcdwatch.ResyncInterval)
 	}
 }
 

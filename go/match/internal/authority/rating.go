@@ -10,6 +10,7 @@ import (
 	"math"
 	"sort"
 
+	"match/internal/metrics"
 	"match/internal/ratingrule"
 
 	"github.com/go-sql-driver/mysql"
@@ -78,6 +79,10 @@ func rankSourceShard(battle uint64) uint32 { return uint32(battle % rankSourceSh
 // mode 是这局的计分模式(结果里的 match_mode):评分行、来源片、outbox 都按它分开,不同模式的对局互不锁对方的行。
 // 锁序：本局applied行→本模式本片来源行→(player_id升序, mode)评分行。结果未知重放同battle/digest，不会再加一局。
 // 重复判定在停写检查之前:已入账的局停写之后迟到重放,照样回「重复」,不会卡住结果消费。
+// 本模式的投榜来源停写(StopRankSource,封榜中)之后的新局:评分照记、入账标记照写,只是这局不进榜——不写 outbox、
+// 不推进来源游标,StopRankSource 返回的封榜批次总数不变;回 applied=true,另计 match_rating_unpublished_total。
+// 不报错:结果消费是所有模式共用的一条流,报错会让它重试到 HOLD,把别的模式、别的局一起卡住。
+// 评分是玩家的实力轨道,榜只是它的快照;封榜不吞掉已经打完的计分局。
 //
 // 来源按对局拆片之后,全局只剩每片自己的顺序,跨片的批次可能乱序到榜。批次里是绝对分(SET),所以每个实体带
 // score_version = 这名玩家在本模式第几局:它在 (玩家, 模式) 行锁下递增,与本模式分数的先后完全一致,
@@ -128,9 +133,6 @@ func (s *Store) ApplyRating(ctx context.Context, battle uint64, payload proto.Me
 	if e = tx.QueryRowContext(ctx, "SELECT produced_cursor,stopped FROM match_rank_source WHERE source_epoch=1 AND mode=? AND shard=? FOR UPDATE", mode, shard).Scan(&cursor, &stopped); e != nil {
 		return false, e
 	}
-	if stopped {
-		return false, errors.New("评级代次已停写，必须显式协调后开启新代")
-	}
 	members := append(append([]uint64{}, teamA...), teamB...)
 	sort.Slice(members, func(i, j int) bool { return members[i] < members[j] })
 	ratings := map[uint64]int64{}
@@ -180,24 +182,31 @@ func (s *Store) ApplyRating(ctx context.Context, battle uint64, payload proto.Me
 		}
 		batch.Entries = append(batch.Entries, &rankpb.RankScoreInput{EntityId: pid, Score: next, AchievedMs: achieved, ScoreVersion: games[pid] + 1})
 	}
-	body, e := proto.MarshalOptions{Deterministic: true}.Marshal(batch)
-	if e != nil {
-		return false, e
-	}
-	if _, e = tx.ExecContext(ctx, "INSERT INTO match_rank_outbox(source_epoch,mode,shard,source_cursor,request_id,entries) VALUES(1,?,?,?,?,?)", mode, shard, cursor+1, battle, body); e != nil {
-		return false, e
-	}
-	if _, e = tx.ExecContext(ctx, "UPDATE match_rank_source SET produced_cursor=? WHERE source_epoch=1 AND mode=? AND shard=?", cursor+1, mode, shard); e != nil {
-		return false, e
+	if !stopped {
+		// 本模式本片的下一个投榜批次与评分同事务写进 outbox,来源游标连续推进。
+		var body []byte
+		if body, e = (proto.MarshalOptions{Deterministic: true}).Marshal(batch); e != nil {
+			return false, e
+		}
+		if _, e = tx.ExecContext(ctx, "INSERT INTO match_rank_outbox(source_epoch,mode,shard,source_cursor,request_id,entries) VALUES(1,?,?,?,?,?)", mode, shard, cursor+1, battle, body); e != nil {
+			return false, e
+		}
+		if _, e = tx.ExecContext(ctx, "UPDATE match_rank_source SET produced_cursor=? WHERE source_epoch=1 AND mode=? AND shard=?", cursor+1, mode, shard); e != nil {
+			return false, e
+		}
 	}
 	if e = tx.Commit(); e != nil {
 		return false, fmt.Errorf("评级提交结果未知，按原局重放: %w", e)
+	}
+	if stopped {
+		metrics.ObserveRatingUnpublished(pb.MatchMode(mode).String())
 	}
 	return true, nil
 }
 
 // StopRankSource 停写一个计分模式的投榜来源:按片号升序逐片与评级争来源行锁,全部标记停写;返回值是本模式各片
 // 真实最终游标之和,就是本模式那张榜上该有的批次总数(封榜的 expected_source_cursor),不能用时间猜测。
+// 停写只停投榜:之后的局评分照记、不进榜(见 ApplyRating),游标不再前进,所以这个总数之后不变。
 // 封榜按模式:每个计分模式一张榜、各自封榜,停写也就按模式停。要停全部计分模式,对每个计分模式各调一次,
 // 先后不限、彼此独立:没有跨模式的原子要求,一个模式停了不影响别的模式继续入账与投榜。
 // 还没打过对局的片也要建出来并标记,否则之后第一局会在这一片建出没停写的来源行。

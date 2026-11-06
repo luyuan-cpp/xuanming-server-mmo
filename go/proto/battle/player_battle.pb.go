@@ -131,6 +131,103 @@ func (EBattleTicketRole) EnumDescriptor() ([]byte, []int) {
 	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{1}
 }
 
+// 回放正文的编码(枚举首值必须 0)
+type EBattleReplayCodec int32
+
+const (
+	EBattleReplayCodec_BATTLE_REPLAY_CODEC_NONE EBattleReplayCodec = 0 // 未压缩。v1 不产出,留给「match 解压后下发」
+	EBattleReplayCodec_BATTLE_REPLAY_CODEC_GZIP EBattleReplayCodec = 1 // RFC 1952。v1 只产出这一种
+)
+
+// Enum value maps for EBattleReplayCodec.
+var (
+	EBattleReplayCodec_name = map[int32]string{
+		0: "BATTLE_REPLAY_CODEC_NONE",
+		1: "BATTLE_REPLAY_CODEC_GZIP",
+	}
+	EBattleReplayCodec_value = map[string]int32{
+		"BATTLE_REPLAY_CODEC_NONE": 0,
+		"BATTLE_REPLAY_CODEC_GZIP": 1,
+	}
+)
+
+func (x EBattleReplayCodec) Enum() *EBattleReplayCodec {
+	p := new(EBattleReplayCodec)
+	*p = x
+	return p
+}
+
+func (x EBattleReplayCodec) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EBattleReplayCodec) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_battle_player_battle_proto_enumTypes[2].Descriptor()
+}
+
+func (EBattleReplayCodec) Type() protoreflect.EnumType {
+	return &file_proto_battle_player_battle_proto_enumTypes[2]
+}
+
+func (x EBattleReplayCodec) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EBattleReplayCodec.Descriptor instead.
+func (EBattleReplayCodec) EnumDescriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{2}
+}
+
+// 战斗怎么结束的
+type EBattleReplayEndReason int32
+
+const (
+	EBattleReplayEndReason_BATTLE_REPLAY_END_UNSPECIFIED   EBattleReplayEndReason = 0
+	EBattleReplayEndReason_BATTLE_REPLAY_END_FINISHED      EBattleReplayEndReason = 1 // 引擎分出胜负(含回合打满判负、全员逃跑)
+	EBattleReplayEndReason_BATTLE_REPLAY_END_DEADLINE_DRAW EBattleReplayEndReason = 2 // 整场期限到,battle 节点强制判平;最后没有回合帧,看 final_state
+)
+
+// Enum value maps for EBattleReplayEndReason.
+var (
+	EBattleReplayEndReason_name = map[int32]string{
+		0: "BATTLE_REPLAY_END_UNSPECIFIED",
+		1: "BATTLE_REPLAY_END_FINISHED",
+		2: "BATTLE_REPLAY_END_DEADLINE_DRAW",
+	}
+	EBattleReplayEndReason_value = map[string]int32{
+		"BATTLE_REPLAY_END_UNSPECIFIED":   0,
+		"BATTLE_REPLAY_END_FINISHED":      1,
+		"BATTLE_REPLAY_END_DEADLINE_DRAW": 2,
+	}
+)
+
+func (x EBattleReplayEndReason) Enum() *EBattleReplayEndReason {
+	p := new(EBattleReplayEndReason)
+	*p = x
+	return p
+}
+
+func (x EBattleReplayEndReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EBattleReplayEndReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_battle_player_battle_proto_enumTypes[3].Descriptor()
+}
+
+func (EBattleReplayEndReason) Type() protoreflect.EnumType {
+	return &file_proto_battle_player_battle_proto_enumTypes[3]
+}
+
+func (x EBattleReplayEndReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EBattleReplayEndReason.Descriptor instead.
+func (EBattleReplayEndReason) EnumDescriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{3}
+}
+
 // ---- 战斗全量状态(开战下发 / 回合后同步 / 重连补拉,v1 全量同步免客户端预测) ----
 type BattleStateS2C struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -1313,6 +1410,217 @@ func (x *RequestBattleTicketResponse) GetAssignment() *BattleAssignedS2C {
 	return nil
 }
 
+// 解码后的回放正文。所有帧都是观众视角,与 NotifySpectate* 下发的逐字段相同:
+// 不带任何人的冷却、道具余量和装备概率。
+type BattleReplay struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	MatchMode        uint32                 `protobuf:"varint,2,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"` // CreateBattleRequest.match_mode
+	BattleConfigId   uint32                 `protobuf:"varint,3,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	StartedAtMs      uint64                 `protobuf:"varint,4,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`    // CreateBattleRequest.created_at_ms(Unix 毫秒)
+	FinishedAtMs     uint64                 `protobuf:"varint,5,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"` // 与 BattleResultEvent.finished_at_ms 同值
+	Outcome          EBattleOutcome         `protobuf:"varint,6,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
+	EndReason        EBattleReplayEndReason `protobuf:"varint,7,opt,name=end_reason,json=endReason,proto3,enum=EBattleReplayEndReason" json:"end_reason,omitempty"`
+	TotalRounds      uint32                 `protobuf:"varint,8,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`               // 引擎结算过的回合数(BattleResultEvent.total_rounds)
+	TableFingerprint string                 `protobuf:"bytes,9,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // 录制节点的战斗配表指纹
+	StartState       *BattleStateS2C        `protobuf:"bytes,10,opt,name=start_state,json=startState,proto3" json:"start_state,omitempty"`                  // 开战状态(action_deadline_ms 为 0,pending_actor_ids 为空)
+	Rounds           []*TurnResultS2C       `protobuf:"bytes,11,rep,name=rounds,proto3" json:"rounds,omitempty"`                                            // 按回合序;每帧带结算后的全量状态,可以从任一回合开始播
+	FinalState       *BattleStateS2C        `protobuf:"bytes,12,opt,name=final_state,json=finalState,proto3" json:"final_state,omitempty"`                  // 只在 DEADLINE_DRAW 时填:强制结束那一刻的状态
+	Truncated        bool                   `protobuf:"varint,13,opt,name=truncated,proto3" json:"truncated,omitempty"`                                     // 超过录制上限,rounds 只录到截断前
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *BattleReplay) Reset() {
+	*x = BattleReplay{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleReplay) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleReplay) ProtoMessage() {}
+
+func (x *BattleReplay) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleReplay.ProtoReflect.Descriptor instead.
+func (*BattleReplay) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *BattleReplay) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *BattleReplay) GetMatchMode() uint32 {
+	if x != nil {
+		return x.MatchMode
+	}
+	return 0
+}
+
+func (x *BattleReplay) GetBattleConfigId() uint32 {
+	if x != nil {
+		return x.BattleConfigId
+	}
+	return 0
+}
+
+func (x *BattleReplay) GetStartedAtMs() uint64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *BattleReplay) GetFinishedAtMs() uint64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+func (x *BattleReplay) GetOutcome() EBattleOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return EBattleOutcome_BATTLE_OUTCOME_ONGOING
+}
+
+func (x *BattleReplay) GetEndReason() EBattleReplayEndReason {
+	if x != nil {
+		return x.EndReason
+	}
+	return EBattleReplayEndReason_BATTLE_REPLAY_END_UNSPECIFIED
+}
+
+func (x *BattleReplay) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *BattleReplay) GetTableFingerprint() string {
+	if x != nil {
+		return x.TableFingerprint
+	}
+	return ""
+}
+
+func (x *BattleReplay) GetStartState() *BattleStateS2C {
+	if x != nil {
+		return x.StartState
+	}
+	return nil
+}
+
+func (x *BattleReplay) GetRounds() []*TurnResultS2C {
+	if x != nil {
+		return x.Rounds
+	}
+	return nil
+}
+
+func (x *BattleReplay) GetFinalState() *BattleStateS2C {
+	if x != nil {
+		return x.FinalState
+	}
+	return nil
+}
+
+func (x *BattleReplay) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+// 回放的外壳:battle → match 提交、match 存库、match → 客户端下发都用它。
+type BattleReplayEnvelope struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FormatVersion uint32                 `protobuf:"varint,1,opt,name=format_version,json=formatVersion,proto3" json:"format_version,omitempty"` // BattleReplay 的格式版本,v1 = 1;客户端不认识就提示升级
+	Codec         EBattleReplayCodec     `protobuf:"varint,2,opt,name=codec,proto3,enum=EBattleReplayCodec" json:"codec,omitempty"`
+	RawBytes      uint32                 `protobuf:"varint,3,opt,name=raw_bytes,json=rawBytes,proto3" json:"raw_bytes,omitempty"` // 解码后 BattleReplay 的字节数;解压出来超过它或超过 1 MiB 就判坏
+	Payload       []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`                    // codec 编码后的 BattleReplay
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BattleReplayEnvelope) Reset() {
+	*x = BattleReplayEnvelope{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleReplayEnvelope) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleReplayEnvelope) ProtoMessage() {}
+
+func (x *BattleReplayEnvelope) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleReplayEnvelope.ProtoReflect.Descriptor instead.
+func (*BattleReplayEnvelope) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *BattleReplayEnvelope) GetFormatVersion() uint32 {
+	if x != nil {
+		return x.FormatVersion
+	}
+	return 0
+}
+
+func (x *BattleReplayEnvelope) GetCodec() EBattleReplayCodec {
+	if x != nil {
+		return x.Codec
+	}
+	return EBattleReplayCodec_BATTLE_REPLAY_CODEC_NONE
+}
+
+func (x *BattleReplayEnvelope) GetRawBytes() uint32 {
+	if x != nil {
+		return x.RawBytes
+	}
+	return 0
+}
+
+func (x *BattleReplayEnvelope) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
 var File_proto_battle_player_battle_proto protoreflect.FileDescriptor
 
 const file_proto_battle_player_battle_proto_rawDesc = "" +
@@ -1400,7 +1708,31 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x122\n" +
 	"\n" +
 	"assignment\x18\x02 \x01(\v2\x12.BattleAssignedS2CR\n" +
-	"assignment*\xa6\x01\n" +
+	"assignment\"\x9b\x04\n" +
+	"\fBattleReplay\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
+	"\n" +
+	"match_mode\x18\x02 \x01(\rR\tmatchMode\x12(\n" +
+	"\x10battle_config_id\x18\x03 \x01(\rR\x0ebattleConfigId\x12\"\n" +
+	"\rstarted_at_ms\x18\x04 \x01(\x04R\vstartedAtMs\x12$\n" +
+	"\x0efinished_at_ms\x18\x05 \x01(\x04R\ffinishedAtMs\x12)\n" +
+	"\aoutcome\x18\x06 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x126\n" +
+	"\n" +
+	"end_reason\x18\a \x01(\x0e2\x17.eBattleReplayEndReasonR\tendReason\x12!\n" +
+	"\ftotal_rounds\x18\b \x01(\rR\vtotalRounds\x12+\n" +
+	"\x11table_fingerprint\x18\t \x01(\tR\x10tableFingerprint\x120\n" +
+	"\vstart_state\x18\n" +
+	" \x01(\v2\x0f.BattleStateS2CR\n" +
+	"startState\x12&\n" +
+	"\x06rounds\x18\v \x03(\v2\x0e.TurnResultS2CR\x06rounds\x120\n" +
+	"\vfinal_state\x18\f \x01(\v2\x0f.BattleStateS2CR\n" +
+	"finalState\x12\x1c\n" +
+	"\ttruncated\x18\r \x01(\bR\ttruncated\"\x9f\x01\n" +
+	"\x14BattleReplayEnvelope\x12%\n" +
+	"\x0eformat_version\x18\x01 \x01(\rR\rformatVersion\x12)\n" +
+	"\x05codec\x18\x02 \x01(\x0e2\x13.eBattleReplayCodecR\x05codec\x12\x1b\n" +
+	"\traw_bytes\x18\x03 \x01(\rR\brawBytes\x12\x18\n" +
+	"\apayload\x18\x04 \x01(\fR\apayload*\xa6\x01\n" +
 	"\x12eSpectateEndReason\x12\x15\n" +
 	"\x11SPECTATE_END_NONE\x10\x00\x12 \n" +
 	"\x1cSPECTATE_END_BATTLE_FINISHED\x10\x01\x12\x1f\n" +
@@ -1410,7 +1742,14 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x11eBattleTicketRole\x12\x1b\n" +
 	"\x17BATTLE_TICKET_ROLE_NONE\x10\x00\x12\"\n" +
 	"\x1eBATTLE_TICKET_ROLE_PARTICIPANT\x10\x01\x12\x1f\n" +
-	"\x1bBATTLE_TICKET_ROLE_OBSERVER\x10\x022\xe5\x05\n" +
+	"\x1bBATTLE_TICKET_ROLE_OBSERVER\x10\x02*P\n" +
+	"\x12eBattleReplayCodec\x12\x1c\n" +
+	"\x18BATTLE_REPLAY_CODEC_NONE\x10\x00\x12\x1c\n" +
+	"\x18BATTLE_REPLAY_CODEC_GZIP\x10\x01*\x80\x01\n" +
+	"\x16eBattleReplayEndReason\x12!\n" +
+	"\x1dBATTLE_REPLAY_END_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aBATTLE_REPLAY_END_FINISHED\x10\x01\x12#\n" +
+	"\x1fBATTLE_REPLAY_END_DEADLINE_DRAW\x10\x022\xe5\x05\n" +
 	"\x12BattleClientPlayer\x12M\n" +
 	"\x12SubmitBattleAction\x12\x1a.SubmitBattleActionRequest\x1a\x1b.SubmitBattleActionResponse\x129\n" +
 	"\x0eGetBattleState\x12\x16.GetBattleStateRequest\x1a\x0f.BattleStateS2C\x123\n" +
@@ -1437,89 +1776,99 @@ func file_proto_battle_player_battle_proto_rawDescGZIP() []byte {
 	return file_proto_battle_player_battle_proto_rawDescData
 }
 
-var file_proto_battle_player_battle_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_battle_player_battle_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_proto_battle_player_battle_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_battle_player_battle_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_proto_battle_player_battle_proto_goTypes = []any{
 	(ESpectateEndReason)(0),             // 0: eSpectateEndReason
 	(EBattleTicketRole)(0),              // 1: eBattleTicketRole
-	(*BattleStateS2C)(nil),              // 2: BattleStateS2C
-	(*BattleStartS2C)(nil),              // 3: BattleStartS2C
-	(*TurnResultS2C)(nil),               // 4: TurnResultS2C
-	(*BattleEndS2C)(nil),                // 5: BattleEndS2C
-	(*BattleReconnectS2C)(nil),          // 6: BattleReconnectS2C
-	(*SpectateStateS2C)(nil),            // 7: SpectateStateS2C
-	(*SpectateEndS2C)(nil),              // 8: SpectateEndS2C
-	(*SubmitBattleActionRequest)(nil),   // 9: SubmitBattleActionRequest
-	(*SubmitBattleActionResponse)(nil),  // 10: SubmitBattleActionResponse
-	(*GetBattleStateRequest)(nil),       // 11: GetBattleStateRequest
-	(*StopWatchBattleRequest)(nil),      // 12: StopWatchBattleRequest
-	(*StopWatchBattleResponse)(nil),     // 13: StopWatchBattleResponse
-	(*SetAutoBattleRequest)(nil),        // 14: SetAutoBattleRequest
-	(*SetAutoBattleResponse)(nil),       // 15: SetAutoBattleResponse
-	(*BattleTicketPayload)(nil),         // 16: BattleTicketPayload
-	(*BattleTokenVerifyRequest)(nil),    // 17: BattleTokenVerifyRequest
-	(*BattleTokenVerifyResponse)(nil),   // 18: BattleTokenVerifyResponse
-	(*BattleAssignedS2C)(nil),           // 19: BattleAssignedS2C
-	(*RequestBattleTicketRequest)(nil),  // 20: RequestBattleTicketRequest
-	(*RequestBattleTicketResponse)(nil), // 21: RequestBattleTicketResponse
-	(*BattleActorState)(nil),            // 22: BattleActorState
-	(EBattleOutcome)(0),                 // 23: eBattleOutcome
-	(*BattleItemEntry)(nil),             // 24: BattleItemEntry
-	(*BattleEventItem)(nil),             // 25: BattleEventItem
-	(*BattleSettlementData)(nil),        // 26: BattleSettlementData
-	(*BattleAction)(nil),                // 27: BattleAction
-	(*base.TipInfoMessage)(nil),         // 28: TipInfoMessage
-	(*base.Empty)(nil),                  // 29: Empty
+	(EBattleReplayCodec)(0),             // 2: eBattleReplayCodec
+	(EBattleReplayEndReason)(0),         // 3: eBattleReplayEndReason
+	(*BattleStateS2C)(nil),              // 4: BattleStateS2C
+	(*BattleStartS2C)(nil),              // 5: BattleStartS2C
+	(*TurnResultS2C)(nil),               // 6: TurnResultS2C
+	(*BattleEndS2C)(nil),                // 7: BattleEndS2C
+	(*BattleReconnectS2C)(nil),          // 8: BattleReconnectS2C
+	(*SpectateStateS2C)(nil),            // 9: SpectateStateS2C
+	(*SpectateEndS2C)(nil),              // 10: SpectateEndS2C
+	(*SubmitBattleActionRequest)(nil),   // 11: SubmitBattleActionRequest
+	(*SubmitBattleActionResponse)(nil),  // 12: SubmitBattleActionResponse
+	(*GetBattleStateRequest)(nil),       // 13: GetBattleStateRequest
+	(*StopWatchBattleRequest)(nil),      // 14: StopWatchBattleRequest
+	(*StopWatchBattleResponse)(nil),     // 15: StopWatchBattleResponse
+	(*SetAutoBattleRequest)(nil),        // 16: SetAutoBattleRequest
+	(*SetAutoBattleResponse)(nil),       // 17: SetAutoBattleResponse
+	(*BattleTicketPayload)(nil),         // 18: BattleTicketPayload
+	(*BattleTokenVerifyRequest)(nil),    // 19: BattleTokenVerifyRequest
+	(*BattleTokenVerifyResponse)(nil),   // 20: BattleTokenVerifyResponse
+	(*BattleAssignedS2C)(nil),           // 21: BattleAssignedS2C
+	(*RequestBattleTicketRequest)(nil),  // 22: RequestBattleTicketRequest
+	(*RequestBattleTicketResponse)(nil), // 23: RequestBattleTicketResponse
+	(*BattleReplay)(nil),                // 24: BattleReplay
+	(*BattleReplayEnvelope)(nil),        // 25: BattleReplayEnvelope
+	(*BattleActorState)(nil),            // 26: BattleActorState
+	(EBattleOutcome)(0),                 // 27: eBattleOutcome
+	(*BattleItemEntry)(nil),             // 28: BattleItemEntry
+	(*BattleEventItem)(nil),             // 29: BattleEventItem
+	(*BattleSettlementData)(nil),        // 30: BattleSettlementData
+	(*BattleAction)(nil),                // 31: BattleAction
+	(*base.TipInfoMessage)(nil),         // 32: TipInfoMessage
+	(*base.Empty)(nil),                  // 33: Empty
 }
 var file_proto_battle_player_battle_proto_depIdxs = []int32{
-	22, // 0: BattleStateS2C.actors:type_name -> BattleActorState
-	23, // 1: BattleStateS2C.outcome:type_name -> eBattleOutcome
-	24, // 2: BattleStateS2C.self_items:type_name -> BattleItemEntry
-	2,  // 3: BattleStartS2C.state:type_name -> BattleStateS2C
-	25, // 4: TurnResultS2C.events:type_name -> BattleEventItem
-	2,  // 5: TurnResultS2C.state:type_name -> BattleStateS2C
-	23, // 6: BattleEndS2C.outcome:type_name -> eBattleOutcome
-	26, // 7: BattleEndS2C.settlement:type_name -> BattleSettlementData
-	2,  // 8: SpectateStateS2C.state:type_name -> BattleStateS2C
-	23, // 9: SpectateEndS2C.outcome:type_name -> eBattleOutcome
+	26, // 0: BattleStateS2C.actors:type_name -> BattleActorState
+	27, // 1: BattleStateS2C.outcome:type_name -> eBattleOutcome
+	28, // 2: BattleStateS2C.self_items:type_name -> BattleItemEntry
+	4,  // 3: BattleStartS2C.state:type_name -> BattleStateS2C
+	29, // 4: TurnResultS2C.events:type_name -> BattleEventItem
+	4,  // 5: TurnResultS2C.state:type_name -> BattleStateS2C
+	27, // 6: BattleEndS2C.outcome:type_name -> eBattleOutcome
+	30, // 7: BattleEndS2C.settlement:type_name -> BattleSettlementData
+	4,  // 8: SpectateStateS2C.state:type_name -> BattleStateS2C
+	27, // 9: SpectateEndS2C.outcome:type_name -> eBattleOutcome
 	0,  // 10: SpectateEndS2C.reason:type_name -> eSpectateEndReason
-	27, // 11: SubmitBattleActionRequest.action:type_name -> BattleAction
-	28, // 12: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
-	28, // 13: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
-	28, // 14: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
+	31, // 11: SubmitBattleActionRequest.action:type_name -> BattleAction
+	32, // 12: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
+	32, // 13: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
+	32, // 14: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
 	1,  // 15: BattleTicketPayload.role:type_name -> eBattleTicketRole
 	1,  // 16: BattleAssignedS2C.role:type_name -> eBattleTicketRole
-	28, // 17: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
-	19, // 18: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
-	9,  // 19: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
-	11, // 20: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
-	3,  // 21: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
-	4,  // 22: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
-	5,  // 23: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
-	6,  // 24: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
-	12, // 25: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
-	14, // 26: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
-	7,  // 27: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
-	4,  // 28: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
-	8,  // 29: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
-	19, // 30: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
-	10, // 31: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
-	2,  // 32: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
-	29, // 33: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
-	29, // 34: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
-	29, // 35: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
-	29, // 36: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
-	13, // 37: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
-	15, // 38: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
-	29, // 39: BattleClientPlayer.NotifySpectateState:output_type -> Empty
-	29, // 40: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
-	29, // 41: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
-	29, // 42: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
-	31, // [31:43] is the sub-list for method output_type
-	19, // [19:31] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	32, // 17: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	21, // 18: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	27, // 19: BattleReplay.outcome:type_name -> eBattleOutcome
+	3,  // 20: BattleReplay.end_reason:type_name -> eBattleReplayEndReason
+	4,  // 21: BattleReplay.start_state:type_name -> BattleStateS2C
+	6,  // 22: BattleReplay.rounds:type_name -> TurnResultS2C
+	4,  // 23: BattleReplay.final_state:type_name -> BattleStateS2C
+	2,  // 24: BattleReplayEnvelope.codec:type_name -> eBattleReplayCodec
+	11, // 25: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
+	13, // 26: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
+	5,  // 27: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
+	6,  // 28: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
+	7,  // 29: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
+	8,  // 30: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
+	14, // 31: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
+	16, // 32: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
+	9,  // 33: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
+	6,  // 34: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
+	10, // 35: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
+	21, // 36: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
+	12, // 37: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
+	4,  // 38: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
+	33, // 39: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
+	33, // 40: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
+	33, // 41: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
+	33, // 42: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
+	15, // 43: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
+	17, // 44: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
+	33, // 45: BattleClientPlayer.NotifySpectateState:output_type -> Empty
+	33, // 46: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
+	33, // 47: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
+	33, // 48: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
+	37, // [37:49] is the sub-list for method output_type
+	25, // [25:37] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_player_battle_proto_init() }
@@ -1533,8 +1882,8 @@ func file_proto_battle_player_battle_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_player_battle_proto_rawDesc), len(file_proto_battle_player_battle_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   20,
+			NumEnums:      4,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -9,7 +9,7 @@
 | 位置 | 内容 | 新鲜度 |
 |---|---|---|
 | scene 进程内存(ECS) | 在线玩家的真实最新态 | 只能等玩家下线、最终存盘后再拉 |
-| 落点库 `player_store` | 写权行(kind 0:代次、序号、世代、持有者)和 5 个数据行(kHot、kAsset、kGrowth、kProfile、kLegacy1) | 周期存盘最多落后内存约 300 秒;资产操作和关键事件立存 |
+| 落点库 `player_store` | 写权行(kind 0:代次、序号、世代、持有者)和 6 个数据行(kLocation、kCharacter、kWallet、kBag、kGrowth、kProfile;2026-11-05 起分行,2026-11-06 删掉 kLegacy1,见[存盘规格 §1.1、§1.2](../design/player-save-direct-commit.md)) | 定时存盘最多落后内存约 60 秒,位置最多约 300 秒(只顺带写);资产操作和关键事件立存 |
 | 目录 `player_route`(玩家所在的片) | 归属区、落点 | 强一致,没有缓存副本 |
 | 目录 `account_role`(玩家所在的片) | 角色归属的账号 | 强一致 |
 | 流水库 `player_snapshot` | 登录、登出时拍的快照 | 历史对比用 |

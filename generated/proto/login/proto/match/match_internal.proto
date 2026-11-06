@@ -3,6 +3,7 @@ package match;
 
 import "proto/db/proto_option.proto";
 import "proto/battle/battle_data.proto";
+import "proto/battle/player_battle.proto";
 import "proto/common/base/service_call_auth.proto";
 
 option go_package = "login/proto/match";
@@ -82,6 +83,10 @@ message CommitBattleOutcomeRequest {
   string target_instance_id = 3;
   bytes raw_result_payload = 4;
   common.base.ServiceCallAuth auth = 5;
+  // 战报回放(battle-report-replay.md BR-4)。空 = 本局不录,或录制被丢弃;不影响终局。
+  // 与 raw_result_payload 一起冻结:重放时逐字节相同,摘要与签名都覆盖它。
+  // 不放进 raw_result_payload:那份原件会经发件箱进 Kafka,有 960 KiB 上限。
+  BattleReplayEnvelope replay = 6;
 }
 message CommitBattleOutcomeResponse {
   BattleOutcomeDecision decision = 1;
@@ -162,6 +167,147 @@ message GetBattleCompletionResponse {
   bytes raw_payload = 3;  // 只有 COMPLETE 才有
 }
 
+// scene 的 FIGHTING 冻结到期时查这一局的 SQL 终局(2026-11-06,数据覆写审计 R2 r2-v1#1 残余窗口;
+// docs/design/turn-battle-gap-closure.md §11)。COMPLETE 不受截止约束,Match 发件箱积压时结算可能晚于冻结到期才到:
+// scene 据此判断是续冻(COMPLETE 而本地还没应用 / 有原件而终局还没落定 / 查不到)还是照常解冻(ABORT / 这一局没有可裁决的原件)。
+// 只读 match_battle_completion(终局唯一权威),不读发件箱投影,积压时发件箱同样查不到;不加锁、不写任何行。
+// 调用方只有 scene:serviceauth 调用方 "scene",与 TeamAuthority.ReadMembership 同一把场景密钥
+// (MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE)。不复用 GetBattleCompletion:那条只放行 guild、回包不签名、还带最多 960KiB 的原字节。
+message GetBattleTerminalDecisionRequest {
+  uint64 battle_id = 1;  // 非 0
+  common.base.ServiceCallAuth auth = 2;
+}
+// 回包签名与 CommitBattleOutcome 同一套:Match 以调用方 "match"、方法 + "/reply" 签整份回包(清空 auth 之后),
+// request_digest 绑定本次请求原件;scene 验不过一律按「未知」处理。
+// 读失败不回 gRPC 错误,带内 retry = true:只读查询没有结局未知,回 Unavailable 会被发布准入记成未知结局、拖住排空证明。
+message GetBattleTerminalDecisionResponse {
+  // UNKNOWN = SQL 里这一局还没有终局决定(没有终局行,或只有 Kafka 归档、尚无决定),即 NONE;是不是终局证据看 terminal_expected。
+  BattleOutcomeDecision decision = 1;
+  bool retry = 2;             // true = 这一次没读成(或读到非法持久值),decision 无意义,调用方按「未知」处理
+  string request_digest = 3;  // 清空请求 auth 之后的请求摘要
+  common.base.ServiceCallAuth auth = 4;
+  // 只在 decision 为 UNKNOWN 时有意义。true = 这一局有可裁决的 v1 Create 原件(截止 ABORT 读的同一判据):终局迟早会落定,
+  // UNKNOWN 只说明还没落定 —— match 不可用,或截止 + 宽限之后的 ABORT 补写滞后 —— COMPLETE 仍可能先落库,不是终局证据;
+  // false = 没有成局行,或原件不可裁决(终局协议 0、旧局、坏形状):COMPLETE 永远落不了库,这一局不会有任何结算。
+  bool terminal_expected = 5;
+}
+
+// ---- 永久 UNKNOWN 全球成局的人工处置(2026-11-05,cross-zone-matchmaking.md §13.3,手册 docs/ops/match-formation-manual-abort-runbook.md)----
+// 事故出口,替代不了自动路径:只处置「TiDB 时刻已过截止加终局宽限、没有任何终局行、持久 Create 原件过不了终局核对、
+// 工作租约已到期」的成局;原件合格的局归到期恢复 / 帮会取消自动裁决,这里一律拒绝。
+// 调用方只有运维工具 go/match/cmd/formationfix:serviceauth 调用方 "ops-formation",密钥来自 GlobalMatch.ManualResolutionSecretEnv
+// 指名的环境变量,不与观战运营的 "ops" 共用;没配(缺省)就关闭,一律 PermissionDenied。带会话调用一律 PermissionDenied。
+// ABORT 与截止裁决走同一个事务入口(authority.commitAbortTx),同一事务写审计行 match_manual_resolution;
+// 帮会历练局之后由 guild 恢复器重放取消读到这份 ABORT,按 formation=5 / ABORT 释放。
+// 结论走响应里的 verdict;gRPC 错误只用于 PermissionDenied、InvalidArgument,以及 ABORT 提交结果未知(Unavailable,先 SHOW 重查)。
+
+enum StrandedFormationClass {
+  STRANDED_FORMATION_CLASS_UNSPECIFIED = 0;
+  // 原件合格:到期恢复 / 帮会取消会自动裁决,人工不得抢
+  STRANDED_FORMATION_CLASS_AUTO = 1;
+  // 到期恢复候选形状合格,持久 Create 正文与成局字段不符(到期恢复每次访问计 original_mismatch)
+  STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH = 2;
+  // 形状不合格:协议版本或能力证据缺失、预检实例与目标不符、采用回执非法(含 battle 明确采用旧协议),不进到期恢复候选
+  STRANDED_FORMATION_CLASS_SHAPE_INVALID = 3;
+}
+
+enum StrandedFormationMode {
+  STRANDED_FORMATION_MODE_UNSPECIFIED = 0;
+  STRANDED_FORMATION_MODE_SHOW = 1;     // 锁外只读核对:不加锁、不写
+  STRANDED_FORMATION_MODE_DRY_RUN = 2;  // 与 ABORT 同一锁序、同一判据复核后整段回滚
+  STRANDED_FORMATION_MODE_ABORT = 3;    // 复核通过后写 ABORT 与审计行
+}
+
+enum StrandedFormationVerdict {
+  STRANDED_FORMATION_VERDICT_UNSPECIFIED = 0;
+  STRANDED_FORMATION_VERDICT_ELIGIBLE = 1;   // 可处置(SHOW / DRY_RUN 未写);ABORT 时表示已提交
+  STRANDED_FORMATION_VERDICT_REFUSED = 2;    // 前置条件不满足,原因码见 formation.refusal(或 refusal);未改动
+  STRANDED_FORMATION_VERDICT_CHANGED = 3;    // 锁内成局摘要与 expect_digest 不符;未改动,重新 SHOW
+  STRANDED_FORMATION_VERDICT_RESOLVED = 4;   // 已有终局决定(ABORT / COMPLETE);未改动
+  STRANDED_FORMATION_VERDICT_NOT_FOUND = 5;  // 没有这一局
+  STRANDED_FORMATION_VERDICT_RETRY = 6;      // 读库失败,或写入在提交之前失败(事务已回滚、未改动);稍后重试
+}
+
+message StrandedFormationTicket {
+  uint64 player_id = 1;
+  uint32 state = 2;           // 1 排队、2 已成局、3 结果未知或待结算、4 结束
+  uint64 formation_id = 3;    // 票当前指向的成局;不等于本局说明这名玩家已换轮
+  uint64 owner_revision = 4;  // 原身份修订;账号本身不外发
+}
+
+// 一局成局的人工处置核对结果。只是展示投影:match_internal.proto 被 match_authority.proto 引用,不能反向引用成局表消息。
+message StrandedFormation {
+  uint64 battle_id = 1;
+  uint32 state = 2;
+  string operation_id = 3;
+  string target_instance_id = 4;
+  string preflight_instance_id = 5;
+  uint32 match_mode = 6;
+  uint32 config_id = 7;
+  uint32 member_count = 8;
+  bool activity = 9;                          // 帮会活动成局(activity_context 非空)
+  uint64 created_ms = 10;
+  uint64 deadline_ms = 11;
+  uint64 retry_at_ms = 12;
+  uint32 outcome_protocol_version = 13;
+  uint32 preflight_supported_version = 14;
+  uint32 adopted_outcome_protocol_version = 15;
+  bool adopted_outcome_observed = 16;
+  uint32 create_request_bytes = 17;
+  bool create_decodable = 18;                 // false 时下面四个原件字段为 0
+  uint64 create_created_at_ms = 19;
+  uint64 create_deadline_ms = 20;
+  uint64 create_admit_before_ms = 21;
+  uint32 create_player_count = 22;
+  StrandedFormationClass formation_class = 23;
+  string failed_check = 24;                   // 第一项不通过的原件核对(ASCII 原因码);AUTO 时为空
+  // max(成局截止, 原件截止, 原件准入期限);人工 ABORT 要求 TiDB 时刻过了它加 60 秒终局宽限
+  uint64 effective_deadline_ms = 25;
+  bool has_terminal_row = 26;                 // match_battle_completion 里已有这一局的行(终局或只有归档)
+  BattleOutcomeDecision terminal_decision = 27;
+  uint32 terminal_source_kind = 28;           // MatchBattleCompletionSourceKind 的数值(该枚举在 match_authority.proto)
+  string digest = 29;                         // 成局行确定性序列化的 SHA-256(hex);DRY_RUN / ABORT 的 expect_digest 填它
+  string refusal = 30;                        // 不可处置的原因码(ASCII);空 = 可处置
+  repeated StrandedFormationTicket tickets = 31; // 只有 ResolveStrandedFormation 填
+}
+
+// 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
+// 沿 (state,retry_at_ms) 索引按 (retry_at_ms, battle_id) 升序翻页,与到期恢复同一顺序。
+message ListStrandedFormationsRequest {
+  uint64 after_retry_at_ms = 1;  // 游标;两者都为 0 从头开始
+  uint64 after_battle_id = 2;
+  uint32 limit = 3;              // 1..100
+  common.base.ServiceCallAuth auth = 4;
+}
+message ListStrandedFormationsResponse {
+  bool retry = 1;                // true = 这一次没读成,其余字段无意义
+  repeated StrandedFormation formations = 2;
+  uint64 next_retry_at_ms = 3;   // 两者都为 0 = 已到末尾
+  uint64 next_battle_id = 4;
+  uint64 now_ms = 5;             // TiDB 时刻
+  string target = 6;             // 服务端 GlobalMatch 的 Host/Database
+}
+
+message ResolveStrandedFormationRequest {
+  uint64 battle_id = 1;          // 非 0
+  StrandedFormationMode mode = 2;
+  // 下面四项 DRY_RUN / ABORT 必填;SHOW 忽略
+  string expect_digest = 3;      // SHOW 回的 formation.digest
+  string expect_target = 4;      // SHOW 回的 target,与服务端逐字相等,防止连错环境
+  string operator_name = 5;      // ≤64 字节,不含控制字符
+  string reason = 6;             // ≤191 字节,不含控制字符:工单号与核对结论
+  common.base.ServiceCallAuth auth = 7;
+}
+message ResolveStrandedFormationResponse {
+  StrandedFormationVerdict verdict = 1;
+  StrandedFormation formation = 2;  // 处置前的核对结果;NOT_FOUND / RETRY 时可能为空
+  uint64 now_ms = 3;                // TiDB 时刻
+  string target = 4;                // 服务端 GlobalMatch 的 Host/Database
+  string replica = 5;               // 处理本次调用的 match 副本(主机名)
+  string refusal = 6;               // REFUSED 时的原因码(与 formation.refusal 相同;target_mismatch 时没有 formation)
+  string audit_line = 7;            // DRY_RUN / ABORT:服务端打进日志的同一行 [FormationManual],贴进工单
+}
+
 service MatchInternal {
   rpc StartActivityBattle(StartActivityBattleRequest) returns (StartActivityBattleResponse);
   rpc CancelActivityBattle(CancelActivityBattleRequest) returns (CancelActivityBattleResponse);
@@ -170,4 +316,8 @@ service MatchInternal {
   rpc AcquireTrialOccupancy(AcquireTrialOccupancyRequest) returns (AcquireTrialOccupancyResponse);
   rpc ReleaseTrialOccupancy(ReleaseTrialOccupancyRequest) returns (ReleaseTrialOccupancyResponse);
   rpc GetBattleCompletion(GetBattleCompletionRequest) returns (GetBattleCompletionResponse);
+  rpc GetBattleTerminalDecision(GetBattleTerminalDecisionRequest) returns (GetBattleTerminalDecisionResponse);
+  // 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
+  rpc ListStrandedFormations(ListStrandedFormationsRequest) returns (ListStrandedFormationsResponse);
+  rpc ResolveStrandedFormation(ResolveStrandedFormationRequest) returns (ResolveStrandedFormationResponse);
 }

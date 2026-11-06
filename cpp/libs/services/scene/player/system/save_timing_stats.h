@@ -15,7 +15,8 @@
 // 分段:
 //   marshal       ECS → PlayerAllData(MarshalPlayerForSave),每次存盘尝试一次
 //   project       按行投影并确定性序列化(player_store_rows::ProjectPlayer)
-//   compare       逐行和上一次确认提交的字节比较(PlayerStoreClient::DirtyKinds);排队的快照在真正发出时才比
+//   compare       逐行和上一次确认提交的字节比较(PlayerStoreClient::DirtyKinds);排队的快照在真正发出时才比。
+//                 定时存盘的推迟判断(DeferPeriodicSave)也是一次比较,同样计入;没推迟时 Start 再比一次,所以次数多于存盘次数
 //   submit        交给存盘客户端:比较、组请求、发出;已有在途存盘时只是记下这份快照
 //   periodic_tick 周期存盘定时器的单次回调:这一秒轮到的全部玩家,含遍历在线表
 //

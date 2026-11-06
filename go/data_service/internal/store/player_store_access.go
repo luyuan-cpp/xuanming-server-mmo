@@ -18,7 +18,7 @@ import (
 )
 
 // player_store 的访问(docs/design/player-save-direct-commit.md §6)。
-// 存盘本身在 go/db;data_service 只做建角初始行、账本只读、交易冻结证据、判死释放,按 player_route 选库,走存档库连接池。
+// 存盘本身在 go/db;data_service 只做建角初始行、账本与物品获取封禁表只读、交易冻结证据、判死释放,按 player_route 选库,走存档库连接池。
 
 const (
 	playerStoreOwnerKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)
@@ -45,6 +45,20 @@ type PlayerAssetRow struct {
 	// Player 只有钱包行的字段(货币、资产通道账本、收件箱账本、限购)和 player_id;没有钱包行时只有 player_id。
 	// 背包在另一行(kBag),这里读不到:账本读不需要它。
 	Player *dbpb.PlayerDatabase
+}
+
+// PlayerProfileRow 是写权行和资料行(kProfile)的一次一致读。
+type PlayerProfileRow struct {
+	// Player 只有资料行的字段(职业、名字副本、外观、性别、近期战斗结果、物品获取封禁等)和 player_id;
+	// 没有资料行时只有 player_id。
+	Player *dbpb.PlayerDatabase
+}
+
+// playerStoreOwnerState 是一致读从写权行带出的三列。
+type playerStoreOwnerState struct {
+	epoch    uint64
+	saveSeq  uint64
+	released bool
 }
 
 // playerStoreReadLimit 是账本和展示资料读最多占的连接数:不超过池的一半。
@@ -85,60 +99,81 @@ func (s *AccountDirectoryStore) playerStorage(ctx context.Context, playerID uint
 // ReadPlayerStoreAsset 强读写权行和钱包行。两行出自同一条语句:判「不在线」和判「账本未见」看的是同一个时刻。
 // 返回 (nil, nil) = 没有写权行或路由(角色不存在或未建完)。读不到回错误,不能当成没有:调用方拿它判账本有没有见过一笔资产。
 func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, playerID uint64) (*PlayerAssetRow, error) {
+	owner, player, err := s.readOwnerAndRow(ctx, playerID, playerStoreWalletKind, "账本行")
+	if err != nil || owner == nil {
+		return nil, err
+	}
+	return &PlayerAssetRow{OwnerEpoch: owner.epoch, SaveSeq: owner.saveSeq, Released: owner.released, Player: player}, nil
+}
+
+// ReadPlayerStoreProfile 强读写权行和资料行,两行出自同一条语句。返回约定同 ReadPlayerStoreAsset:
+// (nil, nil) = 没有写权行或路由;读不到回错误,不能当成没有 —— 运维查物品获取封禁表时会把「没有」读成「没封」。
+func (s *AccountDirectoryStore) ReadPlayerStoreProfile(ctx context.Context, playerID uint64) (*PlayerProfileRow, error) {
+	owner, player, err := s.readOwnerAndRow(ctx, playerID, playerStoreProfileKind, "资料行")
+	if err != nil || owner == nil {
+		return nil, err
+	}
+	return &PlayerProfileRow{Player: player}, nil
+}
+
+// readOwnerAndRow 在一条语句里强读写权行和一个数据行(kind),数据行解析成只含那一行字段的 PlayerDatabase。
+// 返回 (nil, nil, nil) = 没有写权行或路由;写权行在、数据行不在时 player 只有 player_id。
+// 只读,不加锁;占一个读名额(acquirePlayerStoreRead)。what 只进错误文案。
+func (s *AccountDirectoryStore) readOwnerAndRow(ctx context.Context, playerID uint64, kind int32, what string) (*playerStoreOwnerState, *dbpb.PlayerDatabase, error) {
 	if s == nil || playerID == 0 {
-		return nil, accountdirectory.ErrInvalid
+		return nil, nil, accountdirectory.ErrInvalid
 	}
 	release, err := s.acquirePlayerStoreRead(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer release()
 	storage, err := s.playerStorage(ctx, playerID)
 	if err != nil {
 		if errors.Is(err, accountdirectory.ErrMissing) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	db, _, err := s.stores.DB(ctx, storage)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	rows, err := db.QueryContext(ctx, "SELECT kind,owner_epoch,save_seq,released,payload FROM player_store WHERE player_id=? AND kind IN (?,?)",
-		playerID, playerStoreOwnerKind, playerStoreWalletKind)
+		playerID, playerStoreOwnerKind, kind)
 	if err != nil {
-		return nil, fmt.Errorf("读玩家账本行: %w", err)
+		return nil, nil, fmt.Errorf("读玩家%s: %w", what, err)
 	}
 	defer rows.Close()
-	var result *PlayerAssetRow
-	var assetPayload []byte
+	var owner *playerStoreOwnerState
+	var payload []byte
 	for rows.Next() {
-		var kind int32
+		var rowKind int32
 		var epoch, seq uint64
 		var released uint32
-		var payload []byte
-		if err := rows.Scan(&kind, &epoch, &seq, &released, &payload); err != nil {
-			return nil, fmt.Errorf("读玩家账本行: %w", err)
+		var data []byte
+		if err := rows.Scan(&rowKind, &epoch, &seq, &released, &data); err != nil {
+			return nil, nil, fmt.Errorf("读玩家%s: %w", what, err)
 		}
-		switch kind {
+		switch rowKind {
 		case playerStoreOwnerKind:
-			result = &PlayerAssetRow{OwnerEpoch: epoch, SaveSeq: seq, Released: released != 0}
-		case playerStoreWalletKind:
-			assetPayload = payload
+			owner = &playerStoreOwnerState{epoch: epoch, saveSeq: seq, released: released != 0}
+		case kind:
+			payload = data
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("读玩家账本行: %w", err)
+		return nil, nil, fmt.Errorf("读玩家%s: %w", what, err)
 	}
-	if result == nil {
-		return nil, nil
+	if owner == nil {
+		return nil, nil, nil
 	}
-	result.Player = &dbpb.PlayerDatabase{}
-	if err := proto.Unmarshal(assetPayload, result.Player); err != nil {
-		return nil, fmt.Errorf("解析玩家账本行 player_id=%d: %w", playerID, err)
+	player := &dbpb.PlayerDatabase{}
+	if err := proto.Unmarshal(payload, player); err != nil {
+		return nil, nil, fmt.Errorf("解析玩家%s player_id=%d: %w", what, playerID, err)
 	}
-	result.Player.PlayerId = playerID
-	return result, nil
+	player.PlayerId = playerID
+	return owner, player, nil
 }
 
 // ReadPlayerDisplays 批量读展示资料,来自 kCharacter(等级)和 kProfile(职业、名字、外观、性别)两行。按玩家分片读路由,按落点分组读存档库。
@@ -263,8 +298,10 @@ func readPlayerDisplaysIn(ctx context.Context, db *sql.DB, players []uint64) (ma
 	return out, nil
 }
 
-// ReleaseDeadPlayerStoreHolder 在持有节点判死后释放写权:存档库的一个事务里抬代次、清持有者、置 released=1。
+// ReleaseDeadPlayerStoreHolder 只按代次释放写权:存档库的一个事务里抬代次、清持有者、置 released=1。
 // 旧持有者恢复之后的写因 E<Er 被挡住,所以放弃、退款之后不会再有账本提交(规格 §6「判死放弃要改」)。
+// LeaveScene 判死释放不走这里,走 ReleaseDeadPlayerStoreHolderIfUnchanged(还要比持有者与 claim_seq);
+// 这里只剩无资格撤销之后的补释放(scene_manager unqualified_holder_revoke.go),那条路自己用 Redis 围栏挡住了旧持有者。
 //
 // ownerEpoch 是判死时 location 这一代。库里已经比它新说明新的持有者认领过了,不动。只增、幂等:重试时库里已是 ownerEpoch+1。
 // 没有写权行不算错:没有东西要释放。目录里没有要记的东西,所以这里没有第二步。

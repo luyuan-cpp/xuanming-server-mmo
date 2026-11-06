@@ -8,12 +8,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	dspb "proto/data_service"
 	pbtable "shared/generated/pb/table"
 	gametable "shared/generated/table"
 	"shared/playername"
+	"shared/serviceauth"
 )
 
 // fakeNameService 只实现三个名字 RPC;其余方法由内嵌的 nil 接口兜底(调到即 panic,
@@ -117,6 +119,46 @@ func TestClient_ReleaseSendsIdAndName(t *testing.T) {
 	fake.err = errors.New("down")
 	if err := c.Release(context.Background(), 42, "云中君"); err == nil {
 		t.Fatal("Release swallowed the RPC error")
+	}
+}
+
+// 生产装配(NewSigned)的 Release 带 login 的调用证明:data_service 用账号目录同一套验证器核得过,
+// 方法名、player_id、名字都进了签名(改了任何一个都核不过)。密钥不合格时一个 RPC 都不发,回 ErrUnavailable。
+func TestClient_ReleaseSignsAsLogin(t *testing.T) {
+	const secret = "test-login-directory-secret-0123456789"
+	verifier, err := serviceauth.New(map[string]string{"login": secret})
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+	fake := &fakeNameService{}
+	if err := NewSigned(fake, secret).Release(context.Background(), 42, "云中君"); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if len(fake.releaseReqs) != 1 {
+		t.Fatalf("release requests = %d, want 1", len(fake.releaseReqs))
+	}
+	sent := fake.releaseReqs[0]
+	caller, err := verifier.Verify(context.Background(), dspb.DataService_ReleasePlayerName_FullMethodName, sent)
+	if err != nil || caller != "login" {
+		t.Fatalf("data_service would refuse this release: caller=%q err=%v", caller, err)
+	}
+	if _, err := verifier.Verify(context.Background(), dspb.DataService_ReservePlayerName_FullMethodName, sent); err == nil {
+		t.Fatal("the proof must be bound to the ReleasePlayerName method")
+	}
+	tampered := proto.Clone(sent).(*dspb.ReleasePlayerNameRequest)
+	tampered.PlayerId = 43
+	if _, err := verifier.Verify(context.Background(), dspb.DataService_ReleasePlayerName_FullMethodName, tampered); err == nil {
+		t.Fatal("the proof must cover player_id")
+	}
+
+	for _, bad := range []string{"", "too-short"} {
+		short := &fakeNameService{}
+		if err := NewSigned(short, bad).Release(context.Background(), 42, "云中君"); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("Release with secret %q = %v, want ErrUnavailable", bad, err)
+		}
+		if len(short.releaseReqs) != 0 {
+			t.Fatalf("secret %q: an unsigned release must not be sent", bad)
+		}
 	}
 }
 

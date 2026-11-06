@@ -1984,8 +1984,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
     kRequestIdFieldNumber = 1,
     kBattleIdFieldNumber = 2,
     kCreatedMsFieldNumber = 6,
-    kUpdatedMsFieldNumber = 7,
     kStateFieldNumber = 3,
+    kCheckAttemptsFieldNumber = 10,
+    kUpdatedMsFieldNumber = 7,
+    kNextCheckMsFieldNumber = 9,
   };
   // bytes original_proto = 4;
   void clear_original_proto() ;
@@ -2062,16 +2064,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
   void _internal_set_created_ms(::uint64_t value);
 
   public:
-  // uint64 updated_ms = 7;
-  void clear_updated_ms() ;
-  [[nodiscard]] ::uint64_t updated_ms() const;
-  void set_updated_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_updated_ms() const;
-  void _internal_set_updated_ms(::uint64_t value);
-
-  public:
   // uint32 state = 3;
   void clear_state() ;
   [[nodiscard]] ::uint32_t state() const;
@@ -2082,11 +2074,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
   void _internal_set_state(::uint32_t value);
 
   public:
+  // uint32 check_attempts = 10;
+  void clear_check_attempts() ;
+  [[nodiscard]] ::uint32_t check_attempts() const;
+  void set_check_attempts(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_check_attempts() const;
+  void _internal_set_check_attempts(::uint32_t value);
+
+  public:
+  // uint64 updated_ms = 7;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // uint64 next_check_ms = 9;
+  void clear_next_check_ms() ;
+  [[nodiscard]] ::uint64_t next_check_ms() const;
+  void set_next_check_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_check_ms() const;
+  void _internal_set_next_check_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:guildpb.GuildTrialLaunchRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2121,8 +2143,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLaunchRecord final : publ
     ::uint64_t request_id_;
     ::uint64_t battle_id_;
     ::uint64_t created_ms_;
-    ::uint64_t updated_ms_;
     ::uint32_t state_;
+    ::uint32_t check_attempts_;
+    ::uint64_t updated_ms_;
+    ::uint64_t next_check_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -9719,7 +9743,7 @@ inline void GuildTrialLaunchRecord::_internal_set_battle_id(::uint64_t value) {
 inline void GuildTrialLaunchRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t GuildTrialLaunchRecord::state() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.state)
@@ -9727,7 +9751,7 @@ inline ::uint32_t GuildTrialLaunchRecord::state() const {
 }
 inline void GuildTrialLaunchRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.state)
 }
 inline ::uint32_t GuildTrialLaunchRecord::_internal_state() const {
@@ -9895,7 +9919,7 @@ inline void GuildTrialLaunchRecord::_internal_set_created_ms(::uint64_t value) {
 inline void GuildTrialLaunchRecord::clear_updated_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t GuildTrialLaunchRecord::updated_ms() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.updated_ms)
@@ -9903,7 +9927,7 @@ inline ::uint64_t GuildTrialLaunchRecord::updated_ms() const {
 }
 inline void GuildTrialLaunchRecord::set_updated_ms(::uint64_t value) {
   _internal_set_updated_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.updated_ms)
 }
 inline ::uint64_t GuildTrialLaunchRecord::_internal_updated_ms() const {
@@ -9977,6 +10001,54 @@ inline void GuildTrialLaunchRecord::set_allocated_cancel_receipt(::std::string* 
     _impl_.cancel_receipt_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:guildpb.GuildTrialLaunchRecord.cancel_receipt)
+}
+
+// uint64 next_check_ms = 9;
+inline void GuildTrialLaunchRecord::clear_next_check_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_check_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t GuildTrialLaunchRecord::next_check_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.next_check_ms)
+  return _internal_next_check_ms();
+}
+inline void GuildTrialLaunchRecord::set_next_check_ms(::uint64_t value) {
+  _internal_set_next_check_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.next_check_ms)
+}
+inline ::uint64_t GuildTrialLaunchRecord::_internal_next_check_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_check_ms_;
+}
+inline void GuildTrialLaunchRecord::_internal_set_next_check_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_check_ms_ = value;
+}
+
+// uint32 check_attempts = 10;
+inline void GuildTrialLaunchRecord::clear_check_attempts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.check_attempts_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GuildTrialLaunchRecord::check_attempts() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildTrialLaunchRecord.check_attempts)
+  return _internal_check_attempts();
+}
+inline void GuildTrialLaunchRecord::set_check_attempts(::uint32_t value) {
+  _internal_set_check_attempts(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildTrialLaunchRecord.check_attempts)
+}
+inline ::uint32_t GuildTrialLaunchRecord::_internal_check_attempts() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.check_attempts_;
+}
+inline void GuildTrialLaunchRecord::_internal_set_check_attempts(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.check_attempts_ = value;
 }
 
 // -------------------------------------------------------------------

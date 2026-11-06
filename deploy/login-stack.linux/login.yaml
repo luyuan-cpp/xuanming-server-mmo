@@ -134,14 +134,17 @@ IdSegment:
   Step: 100
 
 # ─────────────────────────────────────────────────────────────────────────
-# 建角钉存储落点(docs/design/player-storage-placement.md §8.3 / §13)
+# 建角钉存储落点(docs/design/player-data-tidb-scaling-plan.md §7.2;player-storage-placement.md §8.3)
 #
 # CreatePlayer 在同一次 RegisterPlayerZone 里把归属和落点写进 player_route 的同一行。
-# NewPlayerStorageId:新号钉到哪个落点库;0 = 本 login 所在 zone(Node.ZoneId);
-#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db。
-#   启动日志 "[placement] new_player_storage_id=..." 是核对依据。
+# 存档库和区脱钩:每个地域固定 StorageShards 个存档库 player_store_{1000000 + Region×1000 + 片号}_db,
+# 新号按 player_id % StorageShards 选库,和 login 所在的区无关。
+#   Region:地域码,与 data_service 发号器的 Issuer.Region 同值;0 只给 dev、test。
+#   StorageShards:本地域的存档库数 K(1..1000),上线后不能改。
+#   启动日志 "[placement] new players go to region ..." 是核对依据。
 Placement:
-  NewPlayerStorageId: 0
+  Region: 0
+  StorageShards: 1
 
 GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
 TableDir: "/app/data"

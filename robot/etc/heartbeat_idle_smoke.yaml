@@ -1,0 +1,42 @@
+# heartbeat-idle-smoke 配置:gate 客户端心跳判死的端到端冒烟
+# (C++ 仓 docs/design/gate-client-heartbeat.md;断线保留见 docs/design/player-connection-lost-hold.md;
+#  场景实现见 robot/heartbeat_idle_smoke_scenario.go)
+#
+# 流程:H1 robot_9951 登录进场,核对验签回包通告了心跳(间隔 10000ms、判死 30000ms)、第一条心跳有回包,
+#          记下所在场景与自己的 actor 号
+#       → H2 停发心跳,连接保持打开、一帧都不发
+#       → H3 趁等待时另开一条裸 TCP:只验签、发一条心跳、收到回包后静默,gate 必须在这条心跳之后 29.5–35 秒内关掉它
+#       → H4 等到 H2 起静默满 34 秒(判死阈值 30 秒 + 余量)
+#       → H5 同账号新连接重登:落回原场景,actor 号不变(断线保留接回的是同一个实体)
+#       → H6 旧连接没收到踢线推送 34(它在重登之前已被 gate 关掉,login 走的是短重连,不是顶号)
+#
+# 前置(缺一条就会失败,原因写进 HEARTBEAT_IDLE_SMOKE_FAIL 的 reason):
+#   1. gate 是带客户端心跳的版本(C++ 仓 2026-11-06 起)。Java 版 gate 尚未实现,不通告心跳,H1-advert 失败。
+#   2. gate 签发票据:本地 bin/etc/base_deploy_config.yaml 与 login 都配了 GateTokenSecret。空密钥 dev 直通时
+#      robot 不验签,拿不到心跳参数,H1 失败。
+#   3. scene 带断线保留(player-connection-lost-hold.md)。没有的话 H5 的 actor 号会变。
+#   4. robot_9951 没有别的进程同时在登,也不在任何队伍里。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。
+#   5. 从 robot/ 目录运行(table_dir 是相对路径)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/heartbeat_idle_smoke.yaml
+# 退出码 0 = 全过(日志有 HEARTBEAT_IDLE_SMOKE_OK player_id=… scene_id=… entity=… wire_close_ms=… 一行);
+# 退出码 1 = 任一步失败(HEARTBEAT_IDLE_SMOKE_FAIL step=… reason=…)。每步通过另有一行 [heartbeat-idle-smoke] PASS step=…。
+# 跑一次约 45 秒。服务端日志应能对上:
+#   gate:[ClientHeartbeat] idle timeout, forcing close: session_id=…, player_id=<H1 的 player_id>, …
+#         (H3 的裸连接没有绑定角色,对应的是采样行 idle timeout on unbound sessions,gate 进程内第一次必打);
+#   scene:[ConnectionLostHold] holding player … 与 resumed by a new session。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 目标 zone
+robot_count: 1 # 语义占位:本模式的账号固定为 robot_9951
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9951
+password: "123456"
+skill_ids: [] # 本模式不放技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "heartbeat-idle-smoke"
+
+auth_type: "password"

@@ -166,9 +166,4 @@ namespace stresstest_probe
         // Must match the proto's full message name for verifier alignment.
         StampImpl(row, "player_database");
     }
-
-    void StampPlayerDatabase1(player_database_1 &row)
-    {
-        StampImpl(row, "player_database_1");
-    }
 }

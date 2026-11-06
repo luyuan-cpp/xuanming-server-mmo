@@ -257,7 +257,7 @@ func prepareAssetArrivalEquipment(ctx context.Context, session *equipSmokeSessio
 		if err := ctx.Err(); err != nil {
 			return 0, err
 		}
-		change, err := equipForgeEnhance(session, target.GetItemId())
+		change, err := equipForgeEnhance(session, target.GetItemId(), target.GetEnhanceLevel())
 		if err != nil || change.tip != 0 || !change.success || change.level == 0 {
 			return 0, fmt.Errorf("正式首次强化未成功: tip=%d err=%v", change.tip, err)
 		}

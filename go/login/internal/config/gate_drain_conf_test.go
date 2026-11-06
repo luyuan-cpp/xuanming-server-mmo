@@ -18,6 +18,14 @@ var wantGateDrainDefaults = GateDrainConf{
 	Interval:            5 * time.Second,
 	DrainedBelowPlayers: 0,
 	Deadline:            25 * time.Minute,
+	Migrate:             wantGateDrainMigrateDefaults,
+}
+
+// 迁移默认关(docs/design/gate-drain-session-migration.md §12 第 1 条);速率与起始延迟取设计文档的建议值。
+var wantGateDrainMigrateDefaults = GateDrainMigrateConf{
+	Enabled:       false,
+	RatePerSecond: 20,
+	StartAfter:    0,
 }
 
 // Config.GateDrain 的 tag 不能带 optional:go-zero 对整块缺失的 optional 结构体不填内层 default。
@@ -58,6 +66,37 @@ func TestGateDrainPartialBlockFillsDefaults(t *testing.T) {
 	want.Deadline = 0
 	if p.GateDrain != want {
 		t.Fatalf("GateDrain on a partial block = %+v, want %+v", p.GateDrain, want)
+	}
+}
+
+// Migrate 子块与外层同一规矩:不标 optional,外层写了、子块没写时整块取默认值;子块只写一部分时其余取默认值。
+// 不这样的话,运维只写一行 Enabled: true 会得到 RatePerSecond = 0,迁移开了却一个人都不迁。
+func TestGateDrainMigrateBlockDefaults(t *testing.T) {
+	f, ok := reflect.TypeOf(GateDrainConf{}).FieldByName("Migrate")
+	if !ok {
+		t.Fatal("GateDrainConf.Migrate is missing")
+	}
+	if got := f.Tag.Get("json"); got != "Migrate" {
+		t.Fatalf("GateDrainConf.Migrate json tag = %q, want %q (optional would zero the whole block when it is absent)",
+			got, "Migrate")
+	}
+
+	var p gateDrainProbe
+	if err := conf.LoadFromYamlBytes([]byte("GateDrain:\n  Interval: 5s\n"), &p); err != nil {
+		t.Fatalf("load GateDrain block without Migrate: %v", err)
+	}
+	if p.GateDrain.Migrate != wantGateDrainMigrateDefaults {
+		t.Fatalf("Migrate on a missing sub-block = %+v, want %+v", p.GateDrain.Migrate, wantGateDrainMigrateDefaults)
+	}
+
+	var q gateDrainProbe
+	if err := conf.LoadFromYamlBytes([]byte("GateDrain:\n  Migrate:\n    Enabled: true\n"), &q); err != nil {
+		t.Fatalf("load partial Migrate block: %v", err)
+	}
+	want := wantGateDrainMigrateDefaults
+	want.Enabled = true
+	if q.GateDrain.Migrate != want {
+		t.Fatalf("Migrate on a partial sub-block = %+v, want %+v", q.GateDrain.Migrate, want)
 	}
 }
 

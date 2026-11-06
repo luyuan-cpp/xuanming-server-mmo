@@ -88,3 +88,34 @@ func TestAuthorityTiDBQueueRatingSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, rating, "非计分模式不读评分")
 }
+
+// 组队成员评分差上限（party_rating.go，设计文档开头第 10 条）：上限为 0、非计分模式、单人队都不读库。
+func TestRequirePartyRatingGapSkipsWithoutReading(t *testing.T) {
+	ctx := context.Background()
+	pvp := uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)
+	party := []uint64{1, 2}
+	require.NoError(t, (&Store{}).RequirePartyRatingGapTx(ctx, nil, pvp, party), "上限为 0 不限")
+	capped := &Store{Config: config.GlobalMatchConf{PartyRatingGapMax: 500}}
+	require.NoError(t, capped.RequirePartyRatingGapTx(ctx, nil, uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), party), "PVE 组队不看评分")
+	require.NoError(t, capped.RequirePartyRatingGapTx(ctx, nil, pvp, []uint64{1}), "单人队没有分差")
+}
+
+func TestAuthorityTiDBPartyRatingGap(t *testing.T) {
+	s := testStore(t)
+	s.Config.PartyRatingGapMax = 500
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pvp := uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)
+	_, err := s.DB.ExecContext(ctx, "INSERT INTO match_rating(player_id,mode,rating_centi,games,updated_ms,score_changed_ms) VALUES(?,?,?,?,?,?),(?,?,?,?,?,?),(?,?,?,?,?,?)",
+		82001, pvp, 120_000, 3, 1, 1, 82002, pvp, 170_000, 3, 1, 1, 82003, pvp, 180_000, 3, 1, 1)
+	require.NoError(t, err)
+	tx, err := s.DB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	require.NoError(t, s.RequirePartyRatingGapTx(ctx, tx, pvp, []uint64{82001, 82002}), "差 500 恰好等于上限，可以开战")
+	require.ErrorIs(t, s.RequirePartyRatingGapTx(ctx, tx, pvp, []uint64{82002, 82001, 82003}), ErrPartyRatingGap, "差 600 超过上限")
+	require.NoError(t, s.RequirePartyRatingGapTx(ctx, tx, pvp, []uint64{82001, 82009}), "没有评分记录按 1500，差 300")
+	require.NoError(t, s.RequirePartyRatingGapTx(ctx, tx, uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), []uint64{82001, 82003}), "非计分模式不限")
+	s.Config.PartyRatingGapMax = 0
+	require.NoError(t, s.RequirePartyRatingGapTx(ctx, tx, pvp, []uint64{82001, 82003}), "上限为 0 不限")
+}

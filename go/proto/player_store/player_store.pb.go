@@ -33,8 +33,9 @@ const (
 // 分行只按「大小 × 变化频率 × 是否一起变」分,是性能决定;一致性由「一次存盘的所有脏行同事务、同一个整笔序号」保证,
 // 与分行无关(规格 §1.1)。所以 I3 这类「必须同一次提交」的不变量不要求同一行。
 //
-// 1、2 是 2026-11-05 退役的 HOT、ASSET:字段拆到了 CHARACTER、WALLET、BAG、LOCATION、PROFILE。退役号不复用,
-// 旧库残留的 1、2 行按未知 kind 拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
+// 1、2 是 2026-11-05 退役的 HOT、ASSET:字段拆到了 CHARACTER、WALLET、BAG、LOCATION、PROFILE。
+// 5 是随 player_database_1 一起删掉的 LEGACY1(规格 §1.2)。退役号不复用,
+// 旧库残留的 1、2、5 行按未知 kind 拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
 // 新加一行取下一个空闲号,不回填空号。
 type PlayerStoreKind int32
 
@@ -44,8 +45,6 @@ const (
 	PlayerStoreKind_PLAYER_STORE_KIND_GROWTH PlayerStoreKind = 3
 	// 职业、注册时间、名字副本、外观、性别、近期战斗结果、物品获取封禁、压测探针。都很小,大多建角后不变
 	PlayerStoreKind_PLAYER_STORE_KIND_PROFILE PlayerStoreKind = 4
-	// player_database_1 整个消息,随 player_database_1 一起删除(规格 §1.1「第二批」)
-	PlayerStoreKind_PLAYER_STORE_KIND_LEGACY1 PlayerStoreKind = 5
 	// 等级、基础属性与当前血蓝。小,战斗和升级时变
 	PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER PlayerStoreKind = 6
 	// 货币、资产通道账本、收件箱账本、神秘商人限购。小,任何经济行为都会改它
@@ -62,7 +61,6 @@ var (
 		0: "PLAYER_STORE_KIND_OWNER",
 		3: "PLAYER_STORE_KIND_GROWTH",
 		4: "PLAYER_STORE_KIND_PROFILE",
-		5: "PLAYER_STORE_KIND_LEGACY1",
 		6: "PLAYER_STORE_KIND_CHARACTER",
 		7: "PLAYER_STORE_KIND_WALLET",
 		8: "PLAYER_STORE_KIND_BAG",
@@ -72,7 +70,6 @@ var (
 		"PLAYER_STORE_KIND_OWNER":     0,
 		"PLAYER_STORE_KIND_GROWTH":    3,
 		"PLAYER_STORE_KIND_PROFILE":   4,
-		"PLAYER_STORE_KIND_LEGACY1":   5,
 		"PLAYER_STORE_KIND_CHARACTER": 6,
 		"PLAYER_STORE_KIND_WALLET":    7,
 		"PLAYER_STORE_KIND_BAG":       8,
@@ -669,16 +666,15 @@ const file_proto_player_store_player_store_proto_rawDesc = "" +
 	"\bsave_seq\x18\x04 \x01(\x04R\asaveSeq\x12\x1d\n" +
 	"\n" +
 	"schema_gen\x18\x05 \x01(\rR\tschemaGen\x12/\n" +
-	"\x04rows\x18\x06 \x03(\v2\x1b.playerstore.PlayerStoreRowR\x04rows*\xf1\x02\n" +
+	"\x04rows\x18\x06 \x03(\v2\x1b.playerstore.PlayerStoreRowR\x04rows*\xec\x02\n" +
 	"\x0fPlayerStoreKind\x12\x1b\n" +
 	"\x17PLAYER_STORE_KIND_OWNER\x10\x00\x12#\n" +
 	"\x18PLAYER_STORE_KIND_GROWTH\x10\x03\x1a\x05\x80\xe6\xd5\x02\x01\x12$\n" +
-	"\x19PLAYER_STORE_KIND_PROFILE\x10\x04\x1a\x05\x80\xe6\xd5\x02\x01\x12$\n" +
-	"\x19PLAYER_STORE_KIND_LEGACY1\x10\x05\x1a\x05\x80\xe6\xd5\x02\x01\x12&\n" +
+	"\x19PLAYER_STORE_KIND_PROFILE\x10\x04\x1a\x05\x80\xe6\xd5\x02\x01\x12&\n" +
 	"\x1bPLAYER_STORE_KIND_CHARACTER\x10\x06\x1a\x05\x80\xe6\xd5\x02\x01\x12#\n" +
 	"\x18PLAYER_STORE_KIND_WALLET\x10\a\x1a\x05\x80\xe6\xd5\x02\x01\x12 \n" +
 	"\x15PLAYER_STORE_KIND_BAG\x10\b\x1a\x05\x80\xe6\xd5\x02\x01\x12%\n" +
-	"\x1aPLAYER_STORE_KIND_LOCATION\x10\t\x1a\x05\x80\xe6\xd5\x02\x02\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02*\x15PLAYER_STORE_KIND_HOT*\x17PLAYER_STORE_KIND_ASSET*\xe7\x02\n" +
+	"\x1aPLAYER_STORE_KIND_LOCATION\x10\t\x1a\x05\x80\xe6\xd5\x02\x02\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02\"\x04\b\x05\x10\x05*\x15PLAYER_STORE_KIND_HOT*\x17PLAYER_STORE_KIND_ASSET*\x19PLAYER_STORE_KIND_LEGACY1*\xe7\x02\n" +
 	"\x10SavePlayerResult\x12\"\n" +
 	"\x1eSAVE_PLAYER_RESULT_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SAVE_PLAYER_COMMITTED\x10\x01\x12\x15\n" +

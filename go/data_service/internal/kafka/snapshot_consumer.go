@@ -153,24 +153,9 @@ func (c *SnapshotConsumer) decode(msg kafkago.Message) (*store.SnapshotRow, bool
 	}, true
 }
 
-// runAttempt 跑一次 DB 尝试:取落库名额 → op → 归还(defer:sink panic 时也归还)→ 记单次尝试耗时。
-// 取名额期间 ctx 结束(关停 / 兄弟分区停机)直接返回 ctx 的原因,不碰库、不计耗时。
-// 耗时只算拿到名额之后这一段:名额排队与重试退避都不算,flush_seconds 慢才等于库慢。
+// runAttempt 在本实例的快照落库名额下跑一次 DB 尝试,口径见 runFlushAttempt。
 func (c *SnapshotConsumer) runAttempt(ctx context.Context, op func() error) error {
-	select {
-	case c.sem <- struct{}{}:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	defer func() { <-c.sem }()
-	if err := ctx.Err(); err != nil {
-		// 名额与 ctx.Done 同时就绪时 select 随机选,选中名额也不能再去碰库。
-		return err
-	}
-	start := time.Now()
-	err := op()
-	observeFlushAttempt(ctx, ConsumerSnapshot, start, err)
-	return err
+	return runFlushAttempt(ctx, c.sem, ConsumerSnapshot, op)
 }
 
 // insertWithRetry 单行落库 + 有界重试(DBMaxAttempts 次、间隔 DBRetryBackoff),与 2026-10-12 之前逐条消费的容错逐字相同。

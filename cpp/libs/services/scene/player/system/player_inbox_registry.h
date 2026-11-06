@@ -27,8 +27,8 @@ enum class PlayerInboxExecKind : uint8_t
 	// 版本错位:本二进制不能安全执行这一条(例如要并进带着本版本不认识字段的欠款)。与未知类型同口径:
 	// 停用本域、不记账、不确认这一条,已定前缀照常确认;本实体不再按本地副本续做,停用对本实体一直有效,
 	// 实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉。
-	// 不能用 kDefer:那条路按本地旧副本续做、看不到服务端之后挂的 VOID,而这类错位会在会话内消失
-	// (例如那笔欠款被还清删除),续做就会把一条已作废的处置执行掉并报 APPLIED(设计 §7.5 评审 L1)。
+	// 不能用 kDefer:那条路按本地旧副本续做、看不到服务端之后挂的 VOID,而这类错位可能在会话内消失
+	// (例如那笔欠款被删除;自动扣还按冻结处理,不会把它还清删除),续做就会把一条已作废的处置执行掉并报 APPLIED(设计 §7.5 评审 L1)。
 	kVersionSkew,
 	kCount
 };
@@ -36,7 +36,10 @@ enum class PlayerInboxExecKind : uint8_t
 struct PlayerInboxExecResult
 {
 	PlayerInboxExecKind kind{PlayerInboxExecKind::kDefer};
-	uint32_t reason{0}; // kRejected 时为 tip id;kDefer / kVersionSkew 时只进日志;kApplied 时为 0
+	// kRejected 时为 tip id;kVersionSkew 时只进日志;kApplied 时为 0。
+	// kDefer 时进日志,并记在本域状态上(PlayerInboxDomainState::executorDeferReason),只给定向唤醒用、不改退避与判定:
+	// 带 kBagItemNotStacked = 背包放不下,玩家腾位后 PlayerInboxSystem::OnBagSpaceFreed 把这一域的下一次尝试提前(2026-11-06)。
+	uint32_t reason{0};
 };
 
 // 执行器契约:

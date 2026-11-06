@@ -1,12 +1,12 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    挑 gate 回落告警的契约测试(缺口清单第 7 条,2026-11-05)。
+    挑 gate 回落告警的契约测试(缺口清单第 7 条,2026-11-05;11-06 排空并入分档)。
 
 .DESCRIPTION
-    login 的三处挑 gate 与 scene_manager 的跨 zone 重定向在候选全部停写或满载时回落全集、只计 fallback,
-    这两个计数的告警在 deploy/k8s/login-alerts.yaml(login.gate-pick 组)与 deploy/k8s/scene-manager-alerts.yaml
-    (scene-manager.gate-redirect 组)。这里钉的都是「写错了不报错、只会永远不响」的东西:
+    login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:没有完全合格的 gate 时退到连得上的(排空中或到水位),
+    全部停写才退到全部,退档只计 fallback、不拒绝。这两个计数的告警在 deploy/k8s/login-alerts.yaml(login.gate-pick 组)
+    与 deploy/k8s/scene-manager-alerts.yaml(scene-manager.gate-redirect 组)。这里钉的都是「写错了不报错、只会永远不响」的东西:
       - 规则引用的指标名必须由代码注册(go-zero 的 Namespace / Subsystem / Name 三段,scene_manager 的 subsystem + Name);
       - reason 取值必须是 go/shared/gatepick/eligibility.go 的 Reason* 常量,login 两条规则合起来覆盖全部取值;
       - 两个计数都不预置 0 值序列,每条规则都要带「新序列」分支(unless … offset),否则第一次回落 increase() 看不见;
@@ -78,8 +78,8 @@ $script:SceneManagerAlerts = Read-RepoText -RelativePath 'deploy/k8s/scene-manag
 $script:GatepickSource = Read-RepoText -RelativePath 'go/shared/gatepick/eligibility.go'
 $script:Reasons = @([regex]::Matches($script:GatepickSource, '(?m)^\s*Reason[A-Za-z]+\s*=\s*"(?<v>[a-z]+)"') | ForEach-Object { $_.Groups['v'].Value } | Sort-Object -Unique)
 
-Test-Case '夹具:gatepick 的 Reason* 常量是 full / mixed / stale' {
-    Assert-Equal -Expected 'full,mixed,stale' -Actual ($script:Reasons -join ',') -Because 'reason 取值的权威来源;增删取值要同步两份告警与本用例'
+Test-Case '夹具:gatepick 的 Reason* 常量是 draining / full / mixed / stale' {
+    Assert-Equal -Expected 'draining,full,mixed,stale' -Actual ($script:Reasons -join ',') -Because 'reason 取值的权威来源;增删取值要同步两份告警与本用例'
 }
 
 Test-Case 'login-alerts.yaml:PrometheusRule 形状,login.gate-pick 组恰好两条规则,severity / summary / description / for / 新序列分支齐全' {
@@ -89,7 +89,7 @@ Test-Case 'login-alerts.yaml:PrometheusRule 形状,login.gate-pick 组恰好两�
     $group = Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.gate-pick'
     Assert-Match -Text $group -Pattern '(?m)^      interval:[ ]*30s[ ]*$' -Because '评估间隔'
     $rules = Get-AlertRules -GroupText $group
-    Assert-Equal -Expected 'LoginGatePickFallbackFull,LoginGatePickFallbackStale' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+    Assert-Equal -Expected 'LoginGatePickFallbackDegraded,LoginGatePickFallbackStale' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
     foreach ($rule in $rules) {
         $severity = if ($rule.Name -eq 'LoginGatePickFallbackStale') { 'critical' } else { 'warning' }
         Assert-RuleShape -Rule $rule -Severity $severity
@@ -152,7 +152,7 @@ Test-Case 'scene-manager-alerts.yaml:scene-manager.gate-redirect 组的 SceneMan
 }
 
 Test-Case '三条回落告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
-    $names = @('LoginGatePickFallbackStale', 'LoginGatePickFallbackFull', 'SceneManagerGateRedirectFallback')
+    $names = @('LoginGatePickFallbackStale', 'LoginGatePickFallbackDegraded', 'SceneManagerGateRedirectFallback')
     $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
             ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
         } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })

@@ -25,7 +25,7 @@
 |---|---|---|---|
 | `mmorpg_global`(K=1)或 `mmorpg_global_00..K-1` | data_service | 按玩家、账号、名字哈希,见 §5 | 角色目录、路由、入场登记、过户收据、名字、账号目录 |
 | `mmorpg_global_ledger` | data_service | 不分片 | `transaction_log`、`player_snapshot`、`rollback_audit_log`。写入量大,不和目录抢闸门和连接。GM 回收的 `gm_recall_*` 和护栏副本 `role_fence` 也在这里 |
-| `player_store_<id>_db`、`zone_<n>_db` | go/db(写)、data_service(建角初始行、证明与判死,各自连接池) | `storage_id` | `player_store` |
+| `player_store_<id>_db`、`zone_<n>_db` | go/db(写)、data_service(建角初始行、证明与判死,各自连接池) | `storage_id`。2026-11-05 定改为每地域固定 K 个(初值 64),`storage_id = 1000000 + 地域码 × 1000 + 片号`,和区脱钩、`zone_<n>_db` 退役([总体方案 §7.2](./player-data-tidb-scaling-plan.md),未落码) | `player_store` |
 | `mmorpg_guild`、`mmorpg_match`、`mmorpg_trade`、`mmorpg_mail`、`mmorpg_friend`、`mmorpg_player_inbox`、`mmorpg_chat`、`mmorpg_rank` | 同名服务 | 不分片,以后按业务键拆 | 业务表、`role_fence`、闸门表 |
 | R的Mall逻辑库（本机计划显式命名） | `java/mall_game` | 全区共用，不按zone拆 | 商城订单、支付/退款/寄售原件与本库写者闸门；只经RPC/HTTP访问其他服务 |
 | R的Gateway逻辑库（缺省`mmorpg`，隔离联验可显式命名） | `java/gateway_node` | 全区共用，不按zone拆 | 区目录、公告、白名单与本库写者闸门 |
@@ -43,6 +43,8 @@
 **机械约束**:新增契约测试 `go/shared/crossdb_contract_test.go`(或同等位置),扫描非测试 Go 源码,出现 `` `"+<schema 变量>+"`. `` 形式的跨库 SQL 就失败。白名单只有数据迁移工具。
 
 ## 2. 写者闸门:每个逻辑库一份
+
+> 开销(2026-11-05 按代码数过):一笔事务约 20 次非业务往返,连接复用时的会话重设占一半,收敛方向与顺序见[存盘规格 §9 第 1 条](./player-save-direct-commit.md)。本节的语义(锁 slot 先于读 meta、冻结拿全部 slot 锁)是收敛时不能动的部分。
 
 现在的闸门把 `writer_slot`、`route_meta`、`writer_registry`、`writer_lifecycle_receipt` 放在全局库,每笔事务都要锁全局库一行,所以所有服务绑死在一个集群上。
 
@@ -306,7 +308,7 @@ message GetRoleFenceStateResponse { bool found = 1; RoleFenceState state = 2; bo
 | 带内业务拒绝 | 确定 | tip 表、服务私有码表 |
 | 带内故障码、码表之外的码 | 未知,Hold | 同上 |
 | `NotFound`、`InvalidArgument`、`FailedPrecondition`、`AlreadyExists`、`PermissionDenied`、`Unauthenticated`、`OutOfRange` | 确定 | 服务端明确没有写入,下面逐个核过 |
-| `Aborted` | 确定 | 这次请求没有结局未知的写。目录的 `ErrNotCommitted`(§5.3)、`ErrRetryLater`(下面)、friend 的身份检查(只读)回它。handler 回它之前要能证明这一点 |
+| `Aborted` | 确定 | 这次请求没有结局未知的写。目录的 `ErrNotCommitted`(§5.3)、`ErrRetryLater`(下面)、guild 的入口归属预检(只读)回它。handler 回它之前要能证明这一点 |
 | `ResourceExhausted` | 确定 | 全仓只有目录的「账号角色数已满」回它,建角和过户都在提交点之前拒绝。别的 handler 不要拿它表示过载 |
 | 闸门冻结(`errWriterFrozen`,内层拦截器确认这次请求没有结局未知的 SQL 才回它) | 确定 | 冻结的闸门上没有写入;之前提交成功的写结局已知 |
 | 自愈读不到目录(`errNoWriteRetry`,同样由内层拦截器确认) | 确定 | 事务已回滚,见 §3.3。映射成非故障 tip 的不改写 |
@@ -319,7 +321,7 @@ message GetRoleFenceStateResponse { bool found = 1; RoleFenceState state = 2; bo
 
 **全仓核对结论**(2026-10-31,data_service、trade、guild、friend、chat、match、player_inbox、mail、rank,这些是挂发布准入的全部服务)。问题是有没有 handler 在事务已提交或结局未知时回上面判成确定的码:
 
-- **拦截器和入口校验**:会话、鉴权、身份(guild、friend 的 `OriginalIdentityInterceptor`,match 的 `originalRoleInterceptor`,`domainhost.Guard`,`RoleFenceParticipant.admit`,mail、rank 的 `caller`)都在 handler 写之前,一个字都没写。friend 的身份检查只有角色确实变了(`ErrOriginalRole`)才回 `PermissionDenied`,闸门冻结、目录读不到、库故障回 `Aborted` 让客户端重试:这一层在 serverbase 外面,冻结不会被拦截器改写,回 `Unavailable` 又会被外层打成 Hold。
+- **拦截器和入口校验**:会话、鉴权、身份(在线域共用的入口准入 `roleidentity.EntryInterceptor`,guild 的入口归属预检 `OriginalIdentityInterceptor`,`domainhost.Guard`,`RoleFenceParticipant.admit`,mail、rank 的 `caller`)都在 handler 写之前,一个字都没写。入口准入只回 `PermissionDenied` / `Unauthenticated`。guild 的预检只有角色确实变了才回 `PermissionDenied`,闸门冻结、目录读不到、库故障回 `Aborted` 让客户端重试:这一层在 serverbase 外面,冻结不会被拦截器改写,回 `Unavailable` 又会被外层打成 Hold。friend 入口 2026-11-06 起不再预检([gate 在线身份](gate-online-identity.md) §9.3):角色变了、目录读不到由业务事务带内回 `ErrRoleNotVerified`,闸门冻结由业务链里的 serverbase 改写成确定没写的可重试状态。
 - **friend、chat、trade、mail、rank**:业务结论全部带内回,gRPC 错误只有上一条那些,加 trade `SeedListing` 在入口拒绝。
 - **guild**:`PermissionDenied` 都在写之前(`clientWrite`、`activityPrelude`、`economyCaller`)。`ListAppliedAssetOpsSince` 只读。转发的下游错误是包了一层的,算未知。调 match 的结果全部映射成带内结论。
 - **player_inbox**:`FailedPrecondition`(`ErrBattleSettlementOriginal`)出在 `validateBattleOriginal` 或玩家事务里,事务回滚;同局内容冲突时读到已有条目,没有写。
@@ -478,7 +480,7 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 
 1. 账号分片事务:锁 `account_directory` 行;核上限;写 ref(PENDING)。已有这条 ref 不占新名额。
 2. 存档库事务:写初始行(`player_store`),`ON DUPLICATE KEY` 不改已有行,事务内读回比较:已有行不是建角写的那几行回 `ErrConflict`,事务回滚,不覆盖。目录没提交时没人读得到,失败只留下孤儿行,重放时读回相同就过。
-3. 玩家分片事务:核路由行(含 `storage_id` 等于第 2 步写的库);严格插入 `account_role`。**这是提交点。**
+3. 玩家分片事务:核路由行(含 `storage_id` 等于第 2 步写的库);严格插入 `account_role`。**这是提交点。** 提交之后在名字片把名字行从预留置为已绑定(先重读角色行复核,见 §5.5),失败不改结局。
 4. 账号分片:ref 改 ACTIVE。失败无害,列表按真相过滤,后台会补。
 
 | 失败在 | 留下什么 | 结局 |
@@ -500,7 +502,9 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 
 和同事务相比变了的:建角失败之后 `account_directory` 行已经提交,不回退,目录行本来就只增不删。结局未知时 PENDING ref 也留着,在清掉之前占一个名额。
 
-名字在建角之前已由 `ReservePlayerName` 占住,流程不变。
+名字在建角之前已由 `ReservePlayerName` 占住(预留态),提交之后绑定;login 收到 `ErrNotCommitted` 释放名字时,data_service 先在玩家片证明这名角色永远不会提交(必要时写墓碑),再删预留态的名字行(§5.5)。
+
+**多集群时间点恢复之后的半截建角(2026-11-05,未编译)。** 这几步分在不同的库,库又可能分在不同集群;各集群各自恢复到同一个 T 时实际恢复点错开,提交点(第 3 步)在 T 之前、前面某一步所在的库却恢复到了那一步之前,就留下三种半截:ref 缺失(角色从列表消失)、名字缺失(名字能被别人再登记)、初始行缺失(进不了场)。data_service 的 `cmd/create_residual` 以角色行为准按玩家片分页核账,默认只报告,显式选种类才修:补 ACTIVE ref、按原名重新登记、重写初始行;名字已归别人时只报告不覆盖。判据、修复的原子范围和操作步骤见 [PITR 手册](../ops/mysql-backup-pitr-runbook.md) §4.1a,实现在 `go/data_service/internal/store/create_residual.go`。
 
 ### 5.4 过户
 
@@ -543,7 +547,12 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 | 第 2 步发现 owner 行没了 | 并发释放删的,回错误 |
 | 同参数重放 | 每步幂等,`AlreadyOwned` |
 
-**`ReleasePlayerName`**:先条件删名字行(`Deleted`、`Absent`、`OutsideWindow` 的判定不变),`OutsideWindow` 两边都不动,其余接着按名字删 owner 行。删 owner 行失败回错误,重放时名字行已不在,走 `Absent` 接着删。
+**名字行「预留 → 绑定」**(2026-11-06,未编译;状态机全文见 [名字设计](guild-phase2/03-names.md) §3.4a):`player_name.bound_ms` 0 = 预留,非 0 = 已绑定。名字片和玩家片没有跨片事务,按下面的先后串起来,每步只写一个逻辑库、各自幂等:
+
+- **绑定**:建角第 3 步提交之后,目录先在玩家片重读角色行(在役、名字就是这个),再在名字片 `UPDATE … SET bound_ms=? WHERE name_norm=? AND player_id=? AND bound_ms=0`。名字行不在就按原名重新登记再绑。失败不改建角结局,名字停在预留态,同一建角重放或 `cmd/create_residual`(`name_unbound`)补上。
+- **删角释放**:墓碑提交之后先核角色行确是墓碑,再按墓碑里的原名删名字行(不看状态),最后删 `account_role_removal` 那一行。那一行在墓碑事务里留着,收尾没做完后台 `ResumeRemovals` 接着做。
+
+**`ReleasePlayerName`**(只释放预留态):不带 token 时先核 login 的调用证明;再在名字片读一次名字行,没有这一行、已绑定、登记早于窗口都在证明之前就回,两边零变更(证明可能写墓碑,不可逆);有窗口内的预留态才在玩家片的一个事务里证明角色永远不会提交:先锁路由行、再锁角色行(和提交点同一个锁序),在役拒绝,墓碑放行,没有角色行而有路由行就写墓碑挡住迟到的建角,没有路由行不写;然后条件删名字行(`Deleted`、`Absent`、`OutsideWindow` 的判定不变,另加 `bound_ms = 0`,已绑定回 `Bound`),`OutsideWindow`、`Bound` 两边都不动,其余接着按名字删 owner 行。删 owner 行失败回错误,重放时名字行已不在,走 `Absent` 接着删。
 
 **两边不一致时以 `player_name` 为准**,判定归属的路径(`Reserve`)都读它。`BatchGet` 不回名字分片核对:不一致只发生在建角失败的角色上(释放没清完 owner 行),没有人读它们的名字。
 

@@ -13,7 +13,8 @@
 //     (docs/design/battle-result-recovery.md);
 //   - OnPlayerEnterScene:登录/重连后置钩子(按锁重建冻结,再给战斗中换会话的客户端推重连提示);
 //   - reaper:低频扫描 InBattleComp,PREPARING 看 prepare_deadline_ms、FIGHTING 看 FreezeExpiresAtMs,
-//     过期即作废解冻(§3.2 补偿矩阵)。
+//     过期即作废解冻(§3.2 补偿矩阵);FIGHTING 到期先向 match 查这一局的 SQL 终局,COMPLETE 而本地还没应用 /
+//     有可裁决原件而终局还没落定 / 查不到就有界续冻(FreezeHoldDeadlineMs,turn-battle-gap-closure.md §11)。
 //
 // 冻结语义:InBattleComp 存在 = 玩家有一场战斗在途,拒绝再次备战/切场景/跨 zone 迁移;
 // 摘除条件 = 结算已随存档提交 / match 取消(仅 PREPARING)/ reaper 超时作废,是玩家再次进战斗的唯一放行条件。
@@ -51,6 +52,12 @@ namespace battle_lock
 {
 	enum class LockRebuildDecision : uint8_t;
 	enum class ReplyShape : uint8_t;
+}
+// 定义在 battle_freeze_hold_rules.h(冻结到期时 match 对 SQL 终局的回答、续冻事件);底层类型必须与定义一致。
+namespace battle_freeze_hold
+{
+	enum class TerminalAnswer : uint8_t;
+	enum class FreezeHoldEvent : uint8_t;
 }
 
 // 消息定义在 proto/scene/scene.proto(无 package → 全局命名空间),
@@ -108,7 +115,7 @@ public:
 	// battle --Kafka--> scene:CreateBattle 成功确认(battle 侧开局后一段时间内周期补发,幂等)。
 	// 在线且 InBattleComp.battle_id 匹配且 state==PREPARING -> state=FIGHTING、
 	// deadline_ms=event.deadline_ms、battle:lock 条件续期 + ctx 覆写(值==battle_id 才延长到
-	// 冻结到期时刻 - now + 60s,只延长不缩短,冻结到期见 FreezeExpiresAtMs);
+	// 冻结最晚到期时刻 - now + 60s,只延长不缩短;FIGHTING 的最晚到期含续冻上限,见 FreezeHoldDeadlineMs);
 	// 已 FIGHTING -> 状态与期限不动,按组件上的期限再做一次条件续期(补上首次续期的丢失);
 	// battle_id 不匹配 -> 幂等忽略;
 	// 在线但无 InBattleComp(备战到期被摘 / 登录重建未命中)-> 锁值==battle_id 则重建 FIGHTING 冻结;
@@ -128,8 +135,10 @@ public:
 
 	// reaper:30s 低频定时器,扫描 InBattleComp:PREPARING 按 prepare_deadline_ms 过期只摘组件、
 	// 锁保留到 TTL(prepare_deadline+60s)自然过期给迟到确认留重建余量;FIGHTING 按 FreezeExpiresAtMs
-	// (deadline_ms + 终局提交宽限 + 收件箱投递余量)过期摘组件 + 条件删锁;最后重跑登录复查(RunLoginRechecks)。
-	// 结构化日志 metric=battle_prepare_expired / battle_freeze_expired。
+	// (deadline_ms + 终局提交宽限 + 收件箱投递余量)到期后先查 SQL 终局:ABORT / 没有可裁决原件摘组件 + 条件删锁,
+	// COMPLETE 而本地还没应用 / 有原件而终局还没落定 / 查不到就续冻到下一拍(有总上限 kFreezeHoldCapMs);
+	// 最后重跑登录复查(RunLoginRechecks)。
+	// 结构化日志 metric=battle_prepare_expired / battle_freeze_expired / battle_freeze_held / battle_freeze_hold_cap_reached。
 	// 不进 20FPS 帧循环;在 main.cpp 里随节点启动注册、随节点停止注销。
 	static void StartReaper(muduo::net::EventLoop* loop);
 	static void StopReaper();
@@ -167,6 +176,62 @@ public:
 		return deadlineMs > UINT64_MAX - kWindowMs ? UINT64_MAX : deadlineMs + kWindowMs;
 	}
 
+	// ── 冻结到期之后的续冻(2026-11-06,数据覆写审计 R2 r2-v1#1 残余窗口;turn-battle-gap-closure.md §11)──────
+	// COMPLETE 不受截止约束,上面的宽限 + 余量盖不住 Match 发件箱积压(每 2 秒一轮、每副本每轮首投 4 行,失败等租约到期
+	// 才重投)和收件箱拉取退避。FIGHTING 冻结到期时 reaper 先查这一局的 SQL 终局(battle_terminal_query.h):
+	// COMPLETE 而本地还没应用、有可裁决原件而终局还没落定(NONE)、或者查不到,就续冻一拍,锁跟着续;
+	// ABORT、或这一局没有可裁决的 SQL 原件(永远不会有结算),照常解冻。判定表在 battle_freeze_hold_rules.h。
+	//
+	// 续冻总上限:最多续到 FreezeExpiresAtMs + kFreezeHoldCapMs。取 15 分钟:盖住 Match 个人结算两到三轮失败重投
+	// (退避封顶 5 分钟,go/match/internal/authority/completion.go 的 pendingSettlementDelayMs)加收件箱拉取退避
+	// (封顶 60 秒,player_inbox_rules::kBackoffMaxMs)。结算真的到不了(收件箱永久拒收、Match 长期不可达)时不能无限冻人:
+	// 越过上限按现行规则解冻,并打 metric=battle_freeze_hold_cap_reached(ERROR)。
+	static constexpr uint64_t kFreezeHoldCapMs = 15ULL * 60ULL * 1000ULL;
+	// FIGHTING 冻结最晚可能的到期时刻 = FreezeExpiresAtMs(FIGHTING) + kFreezeHoldCapMs,上溢饱和;deadline 为 0 返回 0
+	// (没有期限,reaper 不判到期)。续冻判上限按它;FIGHTING 锁的 TTL 从确认开局起就按它算(到期之前下线、到期之后
+	// 才重登也能按锁重建冻结)。纯函数。
+	static constexpr uint64_t FreezeHoldDeadlineMs(uint64_t deadlineMs)
+	{
+		const uint64_t expiresAtMs = FreezeExpiresAtMs(/*preparing=*/false, deadlineMs, 0);
+		if (expiresAtMs == 0)
+		{
+			return 0;
+		}
+		return expiresAtMs > UINT64_MAX - kFreezeHoldCapMs ? UINT64_MAX : expiresAtMs + kFreezeHoldCapMs;
+	}
+	// 按锁重建冻结而 ctx 缺失(或不可信)时,由锁剩余 TTL(秒,Redis TTL 的读数)反推 FIGHTING 的 deadline_ms。纯函数。
+	// 锁 TTL 按 FreezeHoldDeadlineMs + kLockExtraTtlSec 写(FightingLockTtlSecFor),所以锁到期 = deadline + 终局宽限
+	// + 投递余量 + 续冻上限 + 锁余量(评审修正 2026-11-06;原先直接取「现在 + TTL」,首次查询晚约 18 分钟):
+	//  - 剩余 TTL 大于「续冻上限 + 锁余量」:这把锁一定是 FIGHTING 的、原到期时刻还在后面(备战期的锁 TTL 只有备战期限
+	//    + 60 秒,备战期限受 match 工作租约约束,远短于 15 分钟)。扣掉四项,FreezeExpiresAtMs(结果) 落在原来的到期时刻;
+	//    再加 kLockTtlRoundingSlackMs 盖住写锁时 EX 的秒级下取整(≤ 1 秒)与 TTL 读数的四舍五入(≤ 0.5 秒),只会偏晚。
+	//  - 剩余 TTL 不超过它:分不清是备战期的锁还是续冻中的 FIGHTING 锁,照旧取「现在 + TTL」,宁可多冻。按 FIGHTING
+	//    精确反推会把备战期的锁当场判到期,而备战期 match 还没落 v1 原件,查询回「没有可裁决原件」就会解冻、删锁,
+	//    这一局随后照常开打时冻结与锁都已不在。
+	//  - TTL 不是正数(-1 没有过期 / -2 已不在 / 读数缺失)按 0 计,结果是 nowMs:reaper 一定有非 0 的到期时刻。
+	static constexpr uint64_t kLockTtlRoundingSlackMs = 1500;
+	static constexpr uint64_t InferFightingDeadlineFromLockTtlMs(uint64_t nowMs, int64_t lockTtlSec)
+	{
+		const uint64_t ttlMs = lockTtlSec > 0 ? static_cast<uint64_t>(lockTtlSec) * 1000ULL : 0;
+		const uint64_t lockExpiresAtMs = nowMs > UINT64_MAX - ttlMs ? UINT64_MAX : nowMs + ttlMs;
+		constexpr uint64_t kLockAfterFreezeExpiryMs = kFreezeHoldCapMs + uint64_t{kLockExtraTtlSec} * 1000ULL;
+		if (ttlMs <= kLockAfterFreezeExpiryMs)
+		{
+			return lockExpiresAtMs;
+		}
+		constexpr uint64_t kLockAfterDeadlineMs =
+			kTerminalOutcomeGraceMs + kInboxSettlementDeliveryMarginMs + kLockAfterFreezeExpiryMs;
+		const uint64_t deadlineMs = lockExpiresAtMs > kLockAfterDeadlineMs ? lockExpiresAtMs - kLockAfterDeadlineMs : 0;
+		return deadlineMs + kLockTtlRoundingSlackMs;
+	}
+	// 冻结到期时向 match 查 SQL 终局的单次调用期限(毫秒)。match 的 zrpc 服务端 Timeout 是 4000,按「上游比下游宽 2000」取 6000。
+	// 查询在途超过「一拍 + 这个期限」(按单调钟量)就当作丢失(player_battle.cpp 的 kTerminalQueryLostAfterMs)。
+	// 越过续冻上限的那一拍直接解冻,不再查询、也不等在途的查询,所以任何路径(含查询丢失)的解冻都不晚于越过上限后的
+	// 第一拍,早于按 FreezeHoldDeadlineMs + kLockExtraTtlSec 写的锁过期(player_battle.cpp 里 static_assert)。
+	static constexpr uint32_t kTerminalQueryDeadlineMs = 6000;
+	// 续冻事件的进程内累计次数(进程启动以来,不清零;relaxed 原子)。只读;单测与排障用,告警看同名结构化日志。
+	static uint64_t FreezeHoldEventCount(battle_freeze_hold::FreezeHoldEvent event);
+
 	// 条件删锁命令的发送注入点。生产恒为空:走 tlsPlayerRedis 发条件删锁脚本。
 	// 单测注入后,删锁在判 Redis 可用之前优先交给它:返回 true = 已接管,回包由调用方经 onReply 回灌 —— 进的是与生产
 	// 同一个具名回包处理函数(锁确实删掉时的跟随唤醒);返回 false = 没发出去,onReply 不会被调。
@@ -196,13 +261,26 @@ public:
     // 与生产 Lua 发送同一接缝。返回 REDIS_OK 才承诺回调，回复仅在回调期间借用。
     using LockScriptSender = int (*)(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)>);
     static void SetLockScriptSenderForTest(LockScriptSender fn);
-	// battle:lock 的 EX 在冻结到期时刻(FreezeExpiresAtMs:PREPARING 是备战期限,FIGHTING 是 deadline + 宽限 + 余量)
-	// 之上的余量(秒):锁必须活得比 InBattleComp 久,避免"组件还在、锁先没了"让 match 放进第二场,
-	// 也保证宽限期内重登仍能按锁重建冻结。
+	// FIGHTING 冻结到期时向 match 只读查这一局 SQL 终局的发送注入点(单测用)。生产恒为 battle_terminal_query::Send
+	// (MatchInternal.GetBattleTerminalDecision,场景密钥签名,回包验签,期限 kTerminalQueryDeadlineMs)。
+	// 返回 true = 已发出:done 之后在本线程恰好调用一次;返回 false = 没发出去,done 不会被调,调用方按「未知」处理。
+	// 生产实现从不在本次调用栈内同步调用 done;注入实现可以同步调,调用方两种都接得住。
+	// 传 nullptr 恢复生产实现。生产代码不调用这个 setter。
+	using BattleTerminalQueryFn = bool (*)(uint64_t battleId, std::function<void(battle_freeze_hold::TerminalAnswer)> done);
+	static void SetBattleTerminalQueryForTest(BattleTerminalQueryFn fn);
+	// 终局查询「在途多久算丢失」用的单调钟(毫秒,原点任意,只取差值)注入点(单测用)。生产恒为 steady_clock。
+	// 墙钟只用于跨进程的截止时刻(deadline、续冻上限);在途时长是进程内耗时,按单调钟量,墙钟回拨 / 跳变不影响判丢失。
+	// 传 nullptr 恢复生产实现。生产代码不调用这个 setter。
+	using TerminalQueryClockFn = uint64_t (*)();
+	static void SetTerminalQueryClockForTest(TerminalQueryClockFn fn);
+	// battle:lock 的 EX 在冻结最晚到期时刻(PREPARING 是备战期限 FreezeExpiresAtMs;FIGHTING 是 deadline + 宽限 + 余量 +
+	// 续冻上限 FreezeHoldDeadlineMs)之上的余量(秒):锁必须活得比 InBattleComp 久,避免"组件还在、锁先没了"让 match
+	// 放进第二场,也保证宽限期、续冻期内(含到期之前下线、到期之后才重登)仍能按锁重建冻结。
 	static constexpr uint32_t kLockExtraTtlSec = 60;
 
 private:
 	friend class PlayerBattleSettlementTestAccess; // 内存测试共用应用入口，无网络测试钩子
+	friend class PlayerBattleFreezeHoldTestAccess; // 冻结到期续冻的单测(cpp/tests/bag_test/battle_freeze_hold_test.cpp)
 	// 组 BattlePlayerSnapshot(属性/等级/技能/参战 buff/道具副本/路由信息/配表指纹)。
 	// 失败时把拒绝原因写进 errorTipId 并返回 false(缺基础属性组件/缺会话快照)。
 	static bool BuildBattleSnapshot(entt::entity player, ::BattlePlayerSnapshot& snapshot, uint32_t& errorTipId);
@@ -236,9 +314,25 @@ private:
 	static void ReleaseExpiredFightingFreeze(entt::entity player, uint64_t playerId, uint64_t battleId);
 
 	// reaper 第一遍:按 FreezeExpiresAtMs 收集 nowMs 时已到期的冻结,PREPARING 只摘组件(锁留到 TTL),
-	// FIGHTING 走 ReleaseExpiredFightingFreeze。nowMs 由调用方给(reaper 取 TimeSystem::NowMillisecondsUTC),
-	// 抽出来只为单测能用显式时刻驱动;只由 reaper 调用。
+	// FIGHTING 交给 ResolveExpiredFightingFreeze(先查 SQL 终局再决定续冻还是解冻)。nowMs 由调用方给
+	// (reaper 取 TimeSystem::NowMillisecondsUTC),抽出来只为单测能用显式时刻驱动;只由 reaper 调用。
 	static void ReapExpiredFreezes(uint64_t nowMs);
+
+	// FIGHTING 冻结已到期(nowMs 严格大于 FreezeExpiresAtMs)时的处置入口,只由 ReapExpiredFreezes 调用:
+	//  - 这一局的结算在本实体已有终局(收件箱战斗域最近结局环里有它:APPLIED / REJECTED / SKIPPED)→ 照常解冻,不查;
+	//  - 已越过续冻上限(nowMs > FreezeHoldDeadlineMs)→ 告警后照常解冻,不查、也不等在途的查询;
+	//  - 同一局已有查询在途 → 这一拍什么都不做;按单调钟在途超过一拍加一次调用期限仍没回 → 当作丢失,按「未知」判;
+	//  - 否则发一次 SQL 终局查询(注入点 BattleTerminalQueryFn),回答交给 OnExpiredFightingTerminalAnswer;
+	//    没发出去当场按「未知」判。
+	// 判上限一律用发出查询的这一拍的 nowMs(墙钟,与 deadline 同一时钟;回答晚到几秒不影响按上限判)。
+	static void ResolveExpiredFightingFreeze(entt::entity player, uint64_t playerId, uint64_t battleId, uint64_t nowMs);
+	// 终局回答到达后的处置(battle_freeze_hold::DecideExpiredFighting):按 player_id 现取实体,这一局的 FIGHTING 冻结
+	// 还在才动手 —— 照常解冻走 ReleaseExpiredFightingFreeze;续冻保留冻结并把锁续到 FreezeHoldDeadlineMs + kLockExtraTtlSec;
+	// 越过上限打 metric=battle_freeze_hold_cap_reached 再照常解冻。实体已不在 / 冻结已被结算摘掉 / 已是别的局时什么都不做。
+	static void OnExpiredFightingTerminalAnswer(uint64_t playerId, uint64_t battleId,
+												battle_freeze_hold::TerminalAnswer answer, uint64_t nowMs);
+	// 这一局的 SQL 终局查询是否在途(只读;单测与排障用)。
+	static bool IsTerminalQueryInFlight(uint64_t playerId, uint64_t battleId);
 
 	// reaper 第二遍:Redis 可用时,对记入登录复查的玩家逐个摘标记并重新读锁;
 	// Redis 不可用时标记保留。退出中(UnregisterPlayer)的实体摘标记不重跑,留给下次进场;

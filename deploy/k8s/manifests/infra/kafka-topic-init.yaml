@@ -12,13 +12,15 @@
 #      代号与命令 topic 同源。gate-spectate 与 gate 命令 topic 同一分区契约(partition = gate node_id % P);
 #      spectate-bcast 固定 16 分区(partition = battle_id % 16),每台 gate assign 全部分区,
 #      分区数与 C++ 常量 kSpectateBroadcastTopicPartitions(node_command_topic.h)相等,改数走换代号。
+#   4) 世界频道广播 topic chat-world-bcast_g<N>(docs/design/chat-world-channel-fanout.md §4),代号与命令 topic 同源,
+#      固定 4 分区(chat 按发送者 player_id 哈希选分区),每台 gate assign 全部分区;分区数与 C++ 常量
+#      kChatWorldBroadcastTopicPartitions、Go 常量 kafkacmd.ChatWorldBroadcastTopicPartitions 相等,改数走换代号。
 #
 # 为什么要由部署侧建:kafka.yaml 的 broker 开着 auto.create.topics.enable 且 num.partitions=1,
-# C++ scene 一发消息就会把 topic 自动建成 1 分区;而 data_service 的 kafkautil.EnsureTopics
-# 拿契约(transaction_log 6 / snapshot 3)去比只会永远报 "partition contract mismatch",
-# 两条落库消费者一条都起不来,唯一症状是每 30s 一条 Error 日志。所以 topic 必须在
-# 任何 scene 起来之前按契约建好:k8s_deploy.ps1 Apply-Infra 在五个 infra manifest 之后、
-# 任何 zone 之前 apply 本 Job(Apply-KafkaTopicInitJob),-WaitReady 会等它 Complete。
+# 节点一发消息就会把 topic 自动建成 1 分区;按分区寻址的命令 / 观战 / 世界频道 topic 少一个分区
+# 就有一批节点永远收不到。所以 topic 必须在任何 zone 起来之前按契约建好:k8s_deploy.ps1 Apply-Infra
+# 在五个 infra manifest 之后、任何 zone 之前 apply 本 Job(Apply-KafkaTopicInitJob),-WaitReady 会等它 Complete。
+# 审计 topic 是例外:被抢先建成 1 分区也能由本 Job(或 data_service 启动时的 EnsureTopics)原地加上去,见下。
 #
 # 本文件里所有双下划线包裹的大写占位(env 里那六个)由 Apply-KafkaTopicInitJob 在 apply 前替换,
 # 值全部来自 go/data_service/etc/data_service.yaml(与 data-service ConfigMap 同源),这里不写任何数字
@@ -28,8 +30,11 @@
 #   KAFKA_AUDIT_TX_PARTITIONS Kafka.TransactionLogPartitions
 #   KAFKA_AUDIT_SNAPSHOT_*    同上,取 Kafka.SnapshotTopic / Kafka.SnapshotPartitions
 #   KAFKA_AUDIT_RETENTION_MS  Kafka.RetentionMs
-# 改分区数 = Kafka.TopicGeneration +1(换一批新 topic,老的排空后删),绝不原地扩分区:
-# 扩分区会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了。
+# 审计 topic 只许加分区、可以原地加(docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A):
+# 两张审计表都按主键 / 唯一键去重,落库不依赖消息顺序,重映射 key=player_id 的哈希没有害处。
+# 调大 Kafka.TransactionLogPartitions / SnapshotPartitions 后重跑本 Job(或滚动 data_service)即可;
+# broker 上多于配置照收(Kafka 不能减分区)。减分区仍走 Kafka.TopicGeneration +1(换一批新 topic,老的排空后删)。
+# 其余 topic 按分区寻址,分区数照旧是不可变契约。
 #
 # 保留期的规则(routing-identity-audit-20260908.md R11):**任何消费者可能落后的 topic,
 # 保留期必须 > 消费者可能落后的最长时间,并留足余量,而且必须显式声明、不许继承 broker 默认值。**
@@ -39,7 +44,7 @@
 # 观战帧 topic 是这条规则的例外,同样显式声明:gate 都 assign + startAtEnd、不提交位点,帧过时即作废,没有回放,
 # 落后的 gate 丢的只是几帧画面,下一帧就追上(丢的不是 BindSession 这类命令)。所以广播档只留 10 分钟,中继档 1 小时同 gate-cmd。
 #
-# 幂等:--if-not-exists 建 topic,再 --describe 核对 PartitionCount,不符即失败(不假装成功);
+# 幂等:--if-not-exists 建 topic,再 --describe 核对 PartitionCount,不符即失败(不假装成功;审计 topic 少了先加再核);
 # retention.ms 每次都重新声明 + 回读核对。脚本每次都先 delete 再 apply 本 Job:template 不可变,
 # 而且必须能重跑 —— Kafka 换成 StatefulSet+PVC 之后(R06)普通重启不再丢 topic,但第一次
 # 从旧 emptyDir Deployment 切过来、`infra-down` 删过 namespace(PVC 一起没)、或有人手工删过
@@ -99,6 +104,11 @@ spec:
               value: "__KAFKA_SPECTATE_BROADCAST_TOPIC__"
             - name: SPECTATE_BROADCAST_PARTITIONS
               value: "__KAFKA_SPECTATE_BROADCAST_PARTITIONS__"
+            # 世界频道广播 topic(docs/design/chat-world-channel-fanout.md §4),名字同样按命令 topic 的代号拼,分区数单独注入。
+            - name: CHAT_WORLD_BROADCAST_TOPIC
+              value: "__KAFKA_CHAT_WORLD_BROADCAST_TOPIC__"
+            - name: CHAT_WORLD_BROADCAST_PARTITIONS
+              value: "__KAFKA_CHAT_WORLD_BROADCAST_PARTITIONS__"
             # topic 副本数:单 broker 是 1,多 broker 是 3(由 Apply-KafkaTopicInitJob 按 -KafkaBrokers 注入,
             # 与 kafka.yaml 的 broker 默认值、注入给 Go 服务的 KAFKA_TOPIC_REPLICATION_FACTOR 同源)。
             - name: REPLICATION_FACTOR
@@ -123,9 +133,10 @@ spec:
                 echo "ERROR: kafka broker $BOOTSTRAP not reachable after 5 minutes" >&2
                 exit 1
               fi
-              # ensure_topic <name> <partitions> [retention_ms]
+              # ensure_topic <name> <partitions> [retention_ms] [grow]
               # --if-not-exists 会原样保留已存在的 topic(包括被生产者抢先自动建成 1 分区的),
               # 所以建完必须 --describe 核对 PartitionCount。
+              # 第四个参数写 grow 的(只有两个审计 topic)只要求「不少于」:少了就 --alter 原地加到配置值,多了照收。
               #
               # retention.ms 分两步,因为 --config 只在**新建那一刻**生效:
               # 一个已经存在的 topic(被 auto-create 抢先建出来的、或上一代 Job 用别的值建的)
@@ -155,11 +166,27 @@ spec:
                 fi
                 _desc=$($KT --bootstrap-server "$BOOTSTRAP" --describe --topic "$1")
                 got=$(echo "$_desc" | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
-                if [ "$got" != "$2" ]; then
+                if [ "$4" = grow ] && [ -n "$got" ] && [ "$got" -lt "$2" ]; then
+                  # data_service 的 EnsureTopics 可能同时在加(它报「已有 N 个分区」),所以失败不退出,以下面的回读为准。
+                  if $KT --bootstrap-server "$BOOTSTRAP" --alter --topic "$1" --partitions "$2"; then
+                    echo "grown: $1 partitions $got -> $2"
+                  else
+                    echo "alter $1 --partitions $2 failed, re-reading the partition count"
+                  fi
+                  _desc=$($KT --bootstrap-server "$BOOTSTRAP" --describe --topic "$1")
+                  got=$(echo "$_desc" | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
+                fi
+                if [ "$4" = grow ]; then
+                  if [ -z "$got" ] || [ "$got" -lt "$2" ]; then
+                    echo "ERROR: audit topic $1 has PartitionCount=${got:-?}, fewer than the configured $2" >&2
+                    echo "       (Kafka.TransactionLogPartitions / SnapshotPartitions in go/data_service/etc/data_service.yaml)." >&2
+                    exit 1
+                  fi
+                elif [ "$got" != "$2" ]; then
                   echo "ERROR: topic $1 has PartitionCount=${got:-?} but the contract is $2." >&2
-                  echo "       Audit-topic contracts are defined in go/data_service/etc/data_service.yaml;" >&2
                   echo "       Command-topic contracts are defined by Kafka.CommandTopicPartitions in bin/etc/base_deploy_config.yaml (also used by gate-spectate)." >&2
                   echo "       spectate-bcast partitions are kSpectateBroadcastTopicPartitions in node_command_topic.h." >&2
+                  echo "       chat-world-bcast partitions are kChatWorldBroadcastTopicPartitions in node_command_topic.h." >&2
                   echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
                   echo "       If a producer auto-created this topic before this Job ran, delete the topic and re-run: k8s_deploy.ps1 -Command infra-kafka-topics" >&2
                   exit 1
@@ -188,10 +215,11 @@ spec:
                   echo "       Retention must be declared per topic, never inherited from the broker default." >&2
                   exit 1
                 fi
-                echo "ok: $1 partitions=$2 replication-factor=$gotrf retention.ms=$_ret"
+                echo "ok: $1 partitions=$got replication-factor=$gotrf retention.ms=$_ret"
               }
-              ensure_topic "$TX_TOPIC" "$TX_PARTITIONS"
-              ensure_topic "$SNAPSHOT_TOPIC" "$SNAPSHOT_PARTITIONS"
+              # 审计 topic:只许加分区(文件头「审计 topic 只许加分区」一节),保留期取 RETENTION_MS。
+              ensure_topic "$TX_TOPIC" "$TX_PARTITIONS" "" grow
+              ensure_topic "$SNAPSHOT_TOPIC" "$SNAPSHOT_PARTITIONS" "" grow
               # 控制面命令 topic 保留 1 小时就够:消费者每次启动都 assign 到分区末尾
               # (KafkaPartitionAssignPolicy::startAtEnd),没有任何人会回放历史 ——
               # 发给某个进程的命令不可能早于这个进程的启动时刻(target_instance_id 是
@@ -201,7 +229,9 @@ spec:
               # 观战帧 topic:中继保留 1 小时同 gate-cmd,广播只留 10 分钟(理由见文件头保留期一节)。
               ensure_topic "$GATE_SPECTATE_TOPIC" "$COMMAND_PARTITIONS" 600000
               ensure_topic "$SPECTATE_BROADCAST_TOPIC" "$SPECTATE_BROADCAST_PARTITIONS" 600000
-              echo "kafka topic bootstrap done (audit + control-plane commands + spectate frames)"
+              # 世界频道推送:gate 启动时从分区末尾读,不回放历史(漏掉的由客户端拉历史补),同样只留 10 分钟。
+              ensure_topic "$CHAT_WORLD_BROADCAST_TOPIC" "$CHAT_WORLD_BROADCAST_PARTITIONS" 600000
+              echo "kafka topic bootstrap done (audit + control-plane commands + spectate frames + world chat)"
           resources:
             requests:
               cpu: 100m

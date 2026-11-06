@@ -76,6 +76,22 @@ namespace
 			writer.Sample({{"event", field.key}}, stats.*field.value);
 		}
 	}
+
+	// 存盘最终被确定性拒绝(player_store_refused_stats)。被拒的玩家之后每次存盘都会再被拒、退出时回到上一次提交;
+	// 超过传输上限的那一笔 scene 发送前就拒掉,go/db 的 db_player_store_requests_total 看不到,只有这里有。
+	void CollectPlayerStoreRefused(prometheus_text::Writer &writer)
+	{
+		const auto stats = player_store_refused_stats::Read();
+		writer.BeginFamily("scene_player_store_save_refused_total",
+						   "Player saves finally refused by a deterministic player store verdict on this scene node since process start, "
+						   "by result (same keys as the [PlayerStoreRefused] summary log line); every one should stay 0. "
+						   "too_large includes saves refused locally before sending.",
+						   prometheus_text::MetricType::kCounter);
+		for (std::size_t i = 0; i < stats.values.size(); ++i)
+		{
+			writer.Sample({{"result", player_store_refused_stats::kCounterNames[i]}}, stats.values[i]);
+		}
+	}
 } // namespace
 
 void RegisterPlayerOwnershipMetrics()
@@ -88,5 +104,9 @@ void RegisterPlayerOwnershipMetrics()
 	if (!registry.Register("scene_owner_epoch", &CollectOwnerEpoch))
 	{
 		LOG_ERROR << "[Metrics] collector scene_owner_epoch is already registered";
+	}
+	if (!registry.Register("scene_player_store_refused", &CollectPlayerStoreRefused))
+	{
+		LOG_ERROR << "[Metrics] collector scene_player_store_refused is already registered";
 	}
 }

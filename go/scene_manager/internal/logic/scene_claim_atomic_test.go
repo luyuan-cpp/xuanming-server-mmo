@@ -10,6 +10,8 @@ import (
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+
+	"scene_manager/internal/svc"
 )
 
 // 写路径非原子残余的回归(docs/PROGRESS.md 2026-10-23 的 R3、R5,以及排空的两步移动)。
@@ -43,47 +45,54 @@ func (h *lostReplyEvalHook) ProcessHook(next redis.ProcessHook) redis.ProcessHoo
 	}
 }
 
-// seedClaimScene 铺一个有属主、有名额、在 active 集合里的实例。
+// seedClaimScene 铺一个有属主、有名额、在 active 集合里的实例,登记在 claimTestZone。
 func seedClaimScene(t *testing.T, mr *miniredis.Miniredis, sceneID uint64, node, gs string, members int) {
 	t.Helper()
+	seedClaimSceneInZone(t, mr, claimTestZone, sceneID, node, gs, members)
+}
+
+// seedClaimSceneInZone 同 seedClaimScene,实例登记在 zone(scene:{id}:zone 与 active 集合都按它写)。
+func seedClaimSceneInZone(t *testing.T, mr *miniredis.Miniredis, zone uint32, sceneID uint64, node, gs string, members int) {
+	t.Helper()
 	require.NoError(t, mr.Set(sceneNodeKey(sceneID), node))
-	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(claimTestZone), 10)))
+	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(zone), 10)))
 	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), gs))
 	seedSceneMembers(mr, sceneID, members)
-	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
+	_, err := mr.ZAdd(activeInstancesKey(zone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 }
 
-// force 认领已执行、Eval 回错:旧代码下一次认领读不到映射,按「已被别人销毁」跳过全部副作用。
-// 现在同一进程的下一次认领带原 token,拿回当时的快照,再下一次才落空。
-func TestSceneClaim_ForceReplyLostNextAttemptGetsSnapshot(t *testing.T) {
+// requireTeardownPending 断言场景的拆除任务是否还在待办里(任务键与待办集合两边一致)。
+func requireTeardownPending(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, want bool) {
+	t.Helper()
+	require.Equal(t, want, mr.Exists(sceneTeardownJobKey(sceneID)), "拆除任务键")
+	_, err := mr.ZScore(sceneTeardownPendingKey(zoneID), strconv.FormatUint(sceneID, 10))
+	require.Equal(t, want, err == nil, "待办集合成员")
+}
+
+// force 认领已执行、Eval 回错:调用方拿到错误。旧代码(2026-11-01 之前)下一次认领读不到映射,按「已被别人销毁」
+// 跳过全部副作用,它们永久丢失。现在认领的同一步写下了拆除任务:之后的认领一律落空,副作用由扫描在租期之后做完
+// (scene_teardown_job_test.go)。
+func TestSceneClaim_ForceReplyLostLeavesTheTeardownJob(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	const sceneID uint64 = 89601
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 2)
 
-	_, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	_, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.Error(t, err)
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.False(t, mr.Exists(sceneNodeKey(sceneID)), "脚本已执行")
+	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
 
-	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.NoError(t, err)
-	require.True(t, claim.Claimed)
-	require.Equal(t, "node-a", claim.NodeID)
-	require.Equal(t, "gs-a", claim.AgonesGs)
-	require.Len(t, claim.Members, 2)
-
-	claim, err = AtomicDestroyForce(sc, claimTestZone, sceneID, "")
-	require.NoError(t, err)
-	require.False(t, claim.Claimed, "快照只交付一次")
-	require.Empty(t, claim.NodeID)
-	require.Empty(t, claim.AgonesGs)
-	require.Empty(t, claim.Members)
+	require.False(t, claim.Claimed, "已被认领过,后来的认领落空")
+	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
 }
 
-// 空闲回收同理。旧代码把重发当成「有人进场」,重新 ZADD 并丢掉 agones_gs,实例成永久僵尸。
-func TestSceneClaim_IdleReplyLostNextAttemptGetsSnapshot(t *testing.T) {
+// 空闲回收同理。旧代码(2026-11-01 之前)把重发当成「有人进场」,重新 ZADD 并丢掉 agones_gs,实例成永久僵尸。
+func TestSceneClaim_IdleReplyLostLeavesTheTeardownJob(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstance}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	const sceneID uint64 = 89602
@@ -92,37 +101,48 @@ func TestSceneClaim_IdleReplyLostNextAttemptGetsSnapshot(t *testing.T) {
 	_, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
 	require.Error(t, err)
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
-
-	claim, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
-	require.NoError(t, err)
-	require.True(t, claim.Claimed)
-	require.Equal(t, "node-a", claim.NodeID)
-	require.Equal(t, "gs-a", claim.AgonesGs)
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
+	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
+	require.Equal(t, "gs-a", mustTeardownSnapshot(t, sc, sceneID).Claim.AgonesGs, "名额记在任务里")
 }
 
-// go-redis 内部重发:同一 token 原样返回当时的快照,一个键都不再动。
+// mustTeardownSnapshot 读出场景的拆除任务,任务必须在。
+func mustTeardownSnapshot(t *testing.T, sc *svc.ServiceContext, sceneID uint64) sceneTeardownJob {
+	t.Helper()
+	job, ok, err := loadSceneTeardownJob(sc, claimTestZone, sceneID)
+	require.NoError(t, err)
+	require.True(t, ok, "场景 %d 的拆除任务必须在", sceneID)
+	return job
+}
+
+// go-redis 内部重发:同一 token 原样返回当时的快照,一个键都不再动;别的 token 落空。任务不带 TTL:做完才删。
 func TestSceneClaim_SameTokenReplaysAndOtherTokenDoesNot(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 89603
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 3)
-	keys := sceneClaimKeys(claimTestZone, sceneID)
+	require.NoError(t, mr.Set(nodeSceneCountKey(claimTestZone, "node-a"), "2"))
+	req := sceneTeardownRequest{
+		ZoneID: claimTestZone, SceneID: sceneID, Kind: teardownKindInstance, Reason: "explicit",
+		ExpectedOwner: "node-a", CountOwner: true,
+	}
 
-	first, err := evalSceneClaimWithToken(sc, sceneID, "token-1", luaAtomicDestroyInstanceForce, keys, "")
+	first, err := evalSceneClaimWithToken(sc, luaAtomicDestroyInstanceForce, req, "token-1")
 	require.NoError(t, err)
 	require.True(t, first.Claimed)
 	require.Len(t, first.Members, 3)
+	require.Equal(t, "1", mustGet(t, mr, nodeSceneCountKey(claimTestZone, "node-a")), "认领在同一步扣属主的计数")
 
-	again, err := evalSceneClaimWithToken(sc, sceneID, "token-1", luaAtomicDestroyInstanceForce, keys, "")
+	again, err := evalSceneClaimWithToken(sc, luaAtomicDestroyInstanceForce, req, "token-1")
 	require.NoError(t, err)
 	require.Equal(t, first, again)
+	require.Equal(t, "1", mustGet(t, mr, nodeSceneCountKey(claimTestZone, "node-a")), "重发不得再扣一次")
 
-	other, err := evalSceneClaimWithToken(sc, sceneID, "token-2", luaAtomicDestroyInstanceForce, keys, "")
+	other, err := evalSceneClaimWithToken(sc, luaAtomicDestroyInstanceForce, req, "token-2")
 	require.NoError(t, err)
 	require.False(t, other.Claimed, "别的认领不得拿到快照")
 
-	ttl := mr.TTL(sceneClaimRecordKey(sceneID))
-	require.Positive(t, ttl, "认领记录要带 TTL")
+	require.Zero(t, mr.TTL(sceneTeardownJobKey(sceneID)), "拆除任务不带 TTL,做完副作用才删")
+	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
 }
 
 // 映射缺失不是有人进场:旧代码 ZADD 回 active 集合并丢掉 agones_gs。现在摘掉条目、交回 gs,之后不再出现。
@@ -185,11 +205,12 @@ func TestAtomicDestroyForce_NoOwnerDoesNotClaimUnmappedScene(t *testing.T) {
 	const sceneID uint64 = 89607
 	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-x"))
 
-	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "", "explicit")
 	require.NoError(t, err)
 	require.False(t, claim.Claimed)
 	require.Empty(t, claim.AgonesGs)
 	require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
+	requireTeardownPending(t, mr, claimTestZone, sceneID, false)
 }
 
 // 回滚一步抹掉全部状态,计数只减一次。旧代码逐条 DEL、不查错,重发时计数再减一次。
@@ -211,16 +232,19 @@ func TestRollbackInstanceAllocation_WipesEverythingOnce(t *testing.T) {
 	_, err = mr.SAdd(sceneMirrorsKey(source), member, strconv.FormatUint(sibling, 10))
 	require.NoError(t, err)
 
-	keys := append(sceneClaimKeys(claimTestZone, sceneID),
-		nodeScenesKey(claimTestZone, node), nodeSceneCountKey(claimTestZone, node), sceneMirrorsKey(source))
-	first, err := evalSceneClaimWithToken(sc, sceneID, "token-1", luaRollbackInstanceAllocation, keys, node)
+	// 与 atomicRollbackInstanceAllocation 的请求相同,只是 token 固定,好验证重发。
+	req := sceneTeardownRequest{
+		ZoneID: claimTestZone, SceneID: sceneID, Kind: teardownKindRollback, Reason: "create_rpc_failed",
+		ExpectedOwner: node, CountOwner: true,
+	}
+	first, err := evalSceneClaimWithToken(sc, luaAtomicDestroyInstanceForce, req, "token-1")
 	require.NoError(t, err)
 	require.True(t, first.Claimed)
 	require.Equal(t, "gs-a", first.AgonesGs)
 	require.Equal(t, strconv.FormatUint(source, 10), first.Source)
 	require.Equal(t, "1", first.MirrorFlag)
 
-	again, err := evalSceneClaimWithToken(sc, sceneID, "token-1", luaRollbackInstanceAllocation, keys, node)
+	again, err := evalSceneClaimWithToken(sc, luaAtomicDestroyInstanceForce, req, "token-1")
 	require.NoError(t, err)
 	require.Equal(t, first, again, "重发回原快照")
 
@@ -233,6 +257,10 @@ func TestRollbackInstanceAllocation_WipesEverythingOnce(t *testing.T) {
 	nodeScenes, err := mr.Members(nodeScenesKey(claimTestZone, node))
 	require.NoError(t, err)
 	require.Equal(t, []string{"other-scene"}, nodeScenes)
+
+	// 镜像源的子集合由回滚的副作用按快照里的镜像源摘(源在别的 zone 时登记没写 scene:{id}:source,快照里就没有)。
+	job := sceneTeardownJob{ZoneID: claimTestZone, SceneID: sceneID, Kind: teardownKindRollback, Reason: "create_rpc_failed", Claim: first}
+	require.NoError(t, runRollbackTeardown(context.Background(), sc, job))
 	mirrors, err := mr.Members(sceneMirrorsKey(source))
 	require.NoError(t, err)
 	require.Equal(t, []string{strconv.FormatUint(sibling, 10)}, mirrors)
@@ -245,7 +273,7 @@ func TestRollbackInstanceAllocation_OwnerChangedTouchesNothing(t *testing.T) {
 	seedClaimScene(t, mr, sceneID, "node-new", "gs-a", 1)
 	require.NoError(t, mr.Set(nodeSceneCountKey(claimTestZone, "node-old"), "3"))
 
-	claim, err := atomicRollbackInstanceAllocation(sc, claimTestZone, sceneID, "node-old", 0)
+	claim, err := atomicRollbackInstanceAllocation(sc, claimTestZone, sceneID, "node-old")
 	require.NoError(t, err)
 	require.False(t, claim.Claimed)
 	require.Equal(t, "node-new", mustGet(t, mr, sceneNodeKey(sceneID)))
@@ -306,109 +334,4 @@ func TestBeginDrain_ScriptFailureLeavesChannelRouted(t *testing.T) {
 	require.Empty(t, draining)
 	require.False(t, mr.Exists(sceneDrainingKey(102)))
 	require.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
-}
-
-// 以下三条守「本进程接手结局未知的认领」(evalSceneClaim)在 destroyInstanceInternal 里的副作用:接手的一方与
-// 第一次执行的不是同一个脚本,回放的快照仍要照常做完。旧代码在同一输入下的表现写在各用例注释里;修复前本文件
-// 编不过(AtomicDestroyForce 改了返回值),取红按 docs/PROGRESS.md 2026-11-05「销毁认领接手」条目的三个变异。
-// 三条都经 destroyInstanceInternal 进,hook 按脚本原文挑第一次 EVAL。
-
-// force 认领已执行、回包丢失;同一场景下一次认领来自空闲回收,回放 force 的快照(带 2 个剩余成员)。
-// 旧代码:空闲分支只取属主和 gs,成员丢掉,节点成员集合里那 2 人永远摘不掉,节点人数永久偏高。
-func TestDestroyInstance_TakesOverLostForceClaimAndUnlinksMembers(t *testing.T) {
-	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
-	ctx := context.Background()
-	const sceneID uint64 = 89612
-	const node = "node-a"
-	seedClaimScene(t, mr, sceneID, node, "gs-a", 2)
-	seedNodeMembers(mr, claimTestZone, node, 2)
-	require.NoError(t, mr.Set(nodeSceneCountKey(claimTestZone, node), "1"))
-
-	destroyed, err := destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
-	require.True(t, hook.fired.Load(), "注入必须真的发生")
-	require.Error(t, err)
-	require.False(t, destroyed)
-	require.True(t, mr.Exists(nodeMembersKey(claimTestZone, node)), "前提:回包丢失时副作用一样都没做")
-
-	destroyed, err = destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle")
-	require.NoError(t, err)
-	require.True(t, destroyed, "接手到 force 的快照,照常做完副作用")
-	require.False(t, mr.Exists(nodeMembersKey(claimTestZone, node)), "快照里的剩余成员要从节点集合摘掉")
-	require.Equal(t, "0", mustGet(t, mr, nodeSceneCountKey(claimTestZone, node)))
-}
-
-// 空闲回收清扫一个映射已不在的残留(带 agones_gs),回包丢失;下一次认领来自显式 DestroyScene,回放清扫的快照。
-// 清扫成功时属主为空。旧代码:force 分支按「属主为空 = 落空」判,回 false,名额永久不还(token 已被拿走,原路径
-// 再试只会落空)。
-func TestDestroyInstanceForce_TakesOverLostResidueSweepAndReleasesRoom(t *testing.T) {
-	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstance}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
-	ctx := context.Background()
-	alloc := newFakeAllocator(&fakeGameServer{name: "gs-left", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4})
-	withAgones(t, sc, alloc, true)
-	const sceneID uint64 = 89613
-	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-left"))
-	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
-	require.NoError(t, err)
-
-	destroyed, err := destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle")
-	require.True(t, hook.fired.Load(), "注入必须真的发生")
-	require.Error(t, err)
-	require.False(t, destroyed)
-	require.False(t, mr.Exists(sceneAgonesGsKey(sceneID)), "前提:清扫已执行")
-	_, releases, _ := alloc.stats()
-	require.Zero(t, releases, "前提:回包丢失时名额还没还")
-
-	destroyed, err = destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
-	require.NoError(t, err)
-	require.True(t, destroyed, "接手到清扫的快照,属主为空也算认领成功")
-	_, releases, _ = alloc.stats()
-	require.Equal(t, 1, releases, "残留的名额还且只还一次")
-	require.EqualValues(t, 0, alloc.roomsOf("gs-left"))
-
-	destroyed, err = destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
-	require.NoError(t, err)
-	require.False(t, destroyed, "快照只交付一次")
-	_, releases, _ = alloc.stats()
-	require.Equal(t, 1, releases)
-}
-
-// 镜像的 force 认领回包丢失;空闲回收接手时 scene:{id}:source 与镜像标记早已删掉。
-// 旧代码:接手前预读镜像源读到空,镜像不从源的子集合里摘掉,源的 channelHasMirrors 恒真;指标 kind 记成 instance。
-func TestDestroyInstance_TakesOverLostMirrorClaimAndUnlinksFromSource(t *testing.T) {
-	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
-	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
-	ctx := context.Background()
-	const (
-		mirror  uint64 = 89614
-		source  uint64 = 89615
-		sibling uint64 = 89616
-	)
-	mirrorStr := strconv.FormatUint(mirror, 10)
-	siblingStr := strconv.FormatUint(sibling, 10)
-	seedClaimScene(t, mr, mirror, "node-a", "", 0)
-	require.NoError(t, mr.Set(sceneMirrorFlagKey(mirror), "1"))
-	require.NoError(t, mr.Set(sceneSourceKey(mirror), strconv.FormatUint(source, 10)))
-	_, err := mr.SAdd(sceneMirrorsKey(source), mirrorStr, siblingStr)
-	require.NoError(t, err)
-	mirrorDestroys := func() float64 {
-		return counterValueForTest(t, "scene_manager_instance_destroyed_total", map[string]string{
-			"zone_id": strconv.FormatUint(uint64(claimTestZone), 10), "kind": "mirror", "reason": "idle",
-		})
-	}
-	before := mirrorDestroys()
-
-	_, err = destroyInstanceForce(ctx, sc, claimTestZone, mirror, "explicit")
-	require.True(t, hook.fired.Load(), "注入必须真的发生")
-	require.Error(t, err)
-	require.False(t, mr.Exists(sceneSourceKey(mirror)), "前提:脚本已执行,镜像源键已删")
-
-	destroyed, err := destroyInstanceInternal(ctx, sc, claimTestZone, mirror, false, "", "idle")
-	require.NoError(t, err)
-	require.True(t, destroyed)
-	members, err := mr.Members(sceneMirrorsKey(source))
-	require.NoError(t, err)
-	require.Equal(t, []string{siblingStr}, members, "镜像源取自认领快照,镜像要从源的子集合里摘掉")
-	require.Equal(t, before+1, mirrorDestroys(), "kind 取自认领快照")
 }

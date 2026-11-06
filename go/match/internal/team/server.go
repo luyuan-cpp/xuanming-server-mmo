@@ -15,7 +15,7 @@ import (
 
 // ClientPlayerTeam 的 gRPC 入口(设计文档 docs/design/team-system.md §A.3、§D.2)。
 //
-// 与 match 其余 service 共用同一个 zrpc server 与 sessionInterceptor(match_service.go),
+// 与 match 其余 service 共用同一个 zrpc server 与入口准入(match_service.go 装配的 roleidentity.EntryInterceptor),
 // 本层只做三件事:自设请求预算、从 session 取身份(fail-closed)、记 team_rpc_total;业务全部委托 Service。
 
 // teamRPCBudget 每个方法入口自设的请求预算(J-14 方案 a):赶在路由服 ForwardTimeoutMs=5000 之前把
@@ -62,7 +62,7 @@ func NewServer(service *Service) *Server {
 	return &Server{service: service}
 }
 
-// callerOf 从 sessionInterceptor 放进 ctx 的 SessionDetails 取调用者。
+// callerOf 从入口准入放进 ctx 的 SessionDetails(验签原件)取调用者。
 // 缺 session 或 player_id=0 一律拒绝:team 请求体里没有 player_id,也就没有"退回请求体"的路径(§D.2)。
 func callerOf(ctx context.Context) (uint64, bool) {
 	detail, ok := ctxkeys.GetSessionDetails(ctx)

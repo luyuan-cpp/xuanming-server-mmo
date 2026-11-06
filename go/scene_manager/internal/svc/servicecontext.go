@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dspb "proto/data_service"
+	"shared/etcdwatch"
 	"shared/gatepick"
 	"shared/generated/table"
 	"shared/kafkacmd"
@@ -45,8 +46,11 @@ type HomeZoneClient interface {
 type ServiceContext struct {
 	Config config.Config
 	// Redis 是控制域句柄:场景路由(scene:*、node:zone:*)、成员集合(instance:*:members、node:zone:*:members)、
-	// 世界频道、选主锁。这个域不分片,键一律不带 hash tag。
+	// 世界频道、选主锁。这个域不分片,键一律不带 hash tag。部署上是本 zone 所属组的控制域实例(redis-ctl-g<N>),
+	// 只读写本 zone(Config.ZoneId)的键(docs/design/control-plane-zone-scoping-20261105.md §4.3)。
 	Redis *redis.Redis
+	// CoreRedis 是核心共享实例,只读 gate 排空标记(Config.CoreRedis;没配时与 Redis 是同一个对象)。
+	CoreRedis *redis.Redis
 	// PlayerRedis 是玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):location、位置修订、离场等待、切线冷却、
 	// 进场去重、owner_epoch、handoff、handoff_fence。键一律带 {player_id},发送前经守卫核对。
 	// 一段脚本不能跨这两个域,离场与摘成员是两步(docs/design/redis-player-store-cluster.md §5.10)。
@@ -60,12 +64,13 @@ type ServiceContext struct {
 	RoleDirectory RoleDirectory
 	// PlayerStoreHolders:持有节点判死后释放写权。生产恒非 nil(与 RoleDirectory 同一个客户端)。
 	PlayerStoreHolders PlayerStoreHolderReleaser
+	// PlayerStoreDeadHolders:LeaveScene 判死释放的「读写权行 → 比较并写」两步(logic.releaseDeadPlayerStoreHolder)。
+	// 生产恒非 nil(同一个客户端);PlayerStoreHolders 非 nil 而它为 nil 时判死释放 fail-closed。
+	PlayerStoreDeadHolders PlayerStoreDeadHolderFence
 	// OwnerEpochMint 是铸造 owner_epoch 的执行面(墙钟地板 + 铸造 EVAL 与 WAITAOF 同一条连接,owner_epoch_mint.go)。
 	// 生产恒非 nil;logic 遇到 nil 一律拒绝铸造(fail-closed),不退回 Redis 字段上的无确认路径。
 	OwnerEpochMint OwnerEpochMinter
 	SceneIDGen     *snowflake.Node
-	// SceneClaimTokens 记结局未知的场景认领(scene_id -> token),零值可用,见 logic.evalSceneClaim。
-	SceneClaimTokens sync.Map
 	// RedirectGateRevisions 记跨 zone 重定向每次直读到的 gate 注册记录版本,判 gate 停写用(logic.AssignGateForZone),零值可用。
 	RedirectGateRevisions gatepick.RevisionTracker
 	snowflakeHd      *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
@@ -96,10 +101,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("scene_manager 配置非法: " + err.Error())
 	}
 	logx.Infof("[scene_manager] player redis %s", playerRedisConf.Describe())
-	etcdCli, err := clientv3.New(clientv3.Config{
+	// keepalive:发现所连 etcd 成员掉电留下的半开连接,LoadReporter 的 watch 不会静默停住(etcdwatch 包注释)。
+	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
-	})
+	}))
 	if err != nil {
 		panic("failed to create etcd client: " + err.Error())
 	}
@@ -138,9 +144,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	logx.Infof("[scene_manager] snowflake %s worker_id=%d (node=%s)", hd.LogFields(), hd.WorkerID, nodeName)
 
+	controlRedis := redis.MustNewRedis(c.Redis.RedisConf)
+	coreRedis := controlRedis
+	if coreConf := c.EffectiveCoreRedis(); coreConf.Host != c.Redis.Host {
+		coreRedis = redis.MustNewRedis(coreConf)
+	}
+	logx.Infof("[scene_manager] control redis %s (zone %d), core redis %s", c.Redis.Host, c.ZoneId, c.EffectiveCoreRedis().Host)
 	sc := &ServiceContext{
 		Config:      c,
-		Redis:       redis.MustNewRedis(c.Redis.RedisConf),
+		Redis:       controlRedis,
+		CoreRedis:   coreRedis,
 		PlayerRedis: playerRedis,
 		Etcd:        etcdCli,
 		// Handle.NewNode 会注入前任高水位作地板(见 snowflakealloc),
@@ -190,6 +203,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	directory := &roleDirectoryClient{rpc: rpc, secret: roleSecret}
 	sc.RoleDirectory = directory
 	sc.PlayerStoreHolders = directory
+	sc.PlayerStoreDeadHolders = directory
 	return sc
 }
 

@@ -35,7 +35,6 @@ import (
 	"trade/internal/lifecycle"
 	"trade/internal/logic"
 	"trade/internal/server"
-	"trade/internal/session"
 	"trade/internal/svc"
 
 	base "proto/common/base"
@@ -45,10 +44,12 @@ import (
 	"schemamigrate"
 
 	"shared/buildinfo"
+	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/releasetrack"
+	"shared/roleidentity"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
 
@@ -312,8 +313,12 @@ func runTrade(c config.Config) (runErr error) {
 	if authErr != nil {
 		return authErr
 	}
+	onlineEntry, entryErr := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if entryErr != nil {
+		return entryErr
+	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, onlineEntry)...)
 
 	// **先起 gRPC,再注册**(契约 §2)。Start 在监听失败时 panic:recover 成错误交回主线程,
 	// 走同一条收尾后以非 0 退出(进程拉起方 / K8s 仍可见),不带着已创建的资源直接崩。
@@ -343,8 +348,8 @@ func runTrade(c config.Config) (runErr error) {
 	regCtx, regCancel := context.WithTimeout(ctx, registerTimeout)
 	nr, err := noderegistry.RegisterAfterListening(regCtx, svcCtx.Etcd, dialAddress(listenHost, port), listenProbeTimeout,
 		noderegistry.Spec{
-			// Prefix 由枚举名派生,不手写(契约 §2):"TradeNodeService.rpc"。
-			Prefix:     base.ENodeType_name[int32(nodeType)] + ".rpc",
+			// Prefix 由枚举名派生,不手写(契约 §2):"TradeNodeService.rpc"。合同推进分工的成员表读同一个前缀。
+			Prefix:     svc.TradeNodeRpcPrefix(),
 			NodeType:   uint32(nodeType),
 			ZoneId:     c.ZoneId,
 			LeaseTTL:   c.LeaseTTL,
@@ -365,6 +370,8 @@ func runTrade(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	// 注册拿到 node_uuid 之后合同推进才按片分工;之前成员表里若已有别的副本,本副本不推进任何片。
+	svcCtx.BindWorkMember(nr.NodeUUID)
 
 	controlCtx, cancelControl := context.WithCancel(ctx)
 	controlDone := make(chan struct{})
@@ -452,7 +459,8 @@ func exitRequested(ctx context.Context) bool {
 
 // buildUnaryInterceptors 组装本服务的一元拦截器链。返回的切片顺序**就是执行顺序**(第一个是最外层)。
 // 抽成函数是为了让链本身可测(trade_test.go),理由同 chat / guild。
-func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor {
+// onlineEntry 是在线域共用的入口准入(roleidentity.EntryInterceptor),由装配层传入,不得为 nil。
+func buildUnaryInterceptors(ks *killswitch.Switch, onlineEntry grpc.UnaryServerInterceptor) []grpc.UnaryServerInterceptor {
 	return []grpc.UnaryServerInterceptor{
 		// ① 流量统计最外层:被热关停短路、被会话准入拒绝的请求也要被统计到。
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
@@ -460,10 +468,10 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 		// ② 热关停紧跟其后,尽早短路:命中后会话解码、in-band 定性、MySQL / data_service 访问统统不做。
 		ks.UnaryServerInterceptor(),
 
-		// ③ 会话与方法准入(guild 式,P1-4):无会话 = 内部调用放行;坏会话 → Unauthenticated;
-		//    带会话调白名单外方法(TradeAdmin.*)→ PermissionDenied。放在 serverbase 之前:
-		//    被拒绝的调用没进业务链路,不计入业务耗时。
-		session.UnaryServerInterceptor(session.ClientMethods),
+		// ③ 入口准入(docs/design/gate-online-identity.md §9.2):客户端方法必须带 gate 签名的完整原身份;
+		//    带会话调非客户端方法(TradeAdmin.*、RoleFenceParticipant.*)→ PermissionDenied;会话未验签 → Unauthenticated;
+		//    不带会话的内部调用放行。放在 serverbase 之前:被拒绝的调用没进业务链路,不计入业务耗时。
+		onlineEntry,
 
 		// ④ in-band 故障定性:handler 一律 `return resp, nil`,这层读 TipInfoMessage.id 按 Tip.xlsx 的
 		//    fault 列定性(kServiceUnavailable = 故障告警,其余 = 业务拒绝)。紧贴 handler。

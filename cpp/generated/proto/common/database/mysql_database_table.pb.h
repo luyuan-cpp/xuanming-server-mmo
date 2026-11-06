@@ -44,6 +44,7 @@
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
+#include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -91,14 +92,6 @@ extern player_databaseGlobalsTypeInternal player_database_globals_;
 extern const ::google::protobuf::internal::ClassDataFull player_database_class_data_;
 #else
 extern const player_databaseGlobalsTypeInternal player_database_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-class player_database_1;
-struct player_database_1GlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern player_database_1GlobalsTypeInternal player_database_1_globals_;
-extern const ::google::protobuf::internal::ClassDataFull player_database_1_class_data_;
-#else
-extern const player_database_1GlobalsTypeInternal player_database_1_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class player_store;
 struct player_storeGlobalsTypeInternal;
@@ -1633,237 +1626,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_share_database final : publ
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database_1 final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:player_database_1) */ {
- public:
-  inline player_database_1() : player_database_1(nullptr) {}
-  ~player_database_1() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(player_database_1* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(player_database_1));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr player_database_1(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline player_database_1(const player_database_1& from) : player_database_1(nullptr, from) {}
-  inline player_database_1(player_database_1&& from) noexcept : player_database_1(nullptr, ::std::move(from)) {}
-  inline player_database_1& operator=(const player_database_1& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline player_database_1& operator=(player_database_1&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const player_database_1& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<player_database_1>(&player_database_1_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 9;
-  friend void swap(player_database_1& a, player_database_1& b) { a.Swap(&b); }
-  inline void Swap(player_database_1* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(player_database_1* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] player_database_1* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<player_database_1>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const player_database_1& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const player_database_1& from) { player_database_1::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(player_database_1* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "player_database_1"; }
-
-  explicit player_database_1(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  player_database_1(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const player_database_1& from);
-  player_database_1(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, player_database_1&& from) noexcept
-      : player_database_1(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kStressTestProbeFieldNumber = 2,
-    kPlayerIdFieldNumber = 1,
-    kPersistSchemaGenFieldNumber = 5,
-  };
-  // .PlayerStressTestProbe stress_test_probe = 2 [(.OptionPersistUncarried) = true];
-  [[nodiscard]] bool has_stress_test_probe()
-      const;
-  void clear_stress_test_probe() ;
-  [[nodiscard]] const ::PlayerStressTestProbe& stress_test_probe() const;
-  [[nodiscard]] ::PlayerStressTestProbe* PROTOBUF_NULLABLE release_stress_test_probe();
-  ::PlayerStressTestProbe* PROTOBUF_NONNULL mutable_stress_test_probe();
-  void set_allocated_stress_test_probe(::PlayerStressTestProbe* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_stress_test_probe(::PlayerStressTestProbe* PROTOBUF_NULLABLE value);
-  ::PlayerStressTestProbe* PROTOBUF_NULLABLE unsafe_arena_release_stress_test_probe();
-
-  private:
-  const ::PlayerStressTestProbe& _internal_stress_test_probe() const;
-  ::PlayerStressTestProbe* PROTOBUF_NONNULL _internal_mutable_stress_test_probe();
-
-  public:
-  // uint64 player_id = 1;
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
-  // uint32 persist_schema_gen = 5;
-  void clear_persist_schema_gen() ;
-  [[nodiscard]] ::uint32_t persist_schema_gen() const;
-  void set_persist_schema_gen(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_persist_schema_gen() const;
-  void _internal_set_persist_schema_gen(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:player_database_1)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 3,
-                          1, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const player_database_1& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::PlayerStressTestProbe* PROTOBUF_NULLABLE stress_test_probe_;
-    ::uint64_t player_id_;
-    ::uint32_t persist_schema_gen_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED user_accounts final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:user_accounts) */ {
  public:
@@ -2490,6 +2252,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kMysteryMerchantFieldNumber = 22,
     kBattleResultsFieldNumber = 23,
     kItemGainBlockFieldNumber = 24,
+    kClientRequestLedgerFieldNumber = 25,
     kPlayerIdFieldNumber = 1,
     kPersistSchemaGenFieldNumber = 21,
   };
@@ -2781,6 +2544,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerItemGainBlockComp* PROTOBUF_NONNULL _internal_mutable_item_gain_block();
 
   public:
+  // .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
+  [[nodiscard]] bool has_client_request_ledger()
+      const;
+  void clear_client_request_ledger() ;
+  [[nodiscard]] const ::ClientRequestLedgerComp& client_request_ledger() const;
+  [[nodiscard]] ::ClientRequestLedgerComp* PROTOBUF_NULLABLE release_client_request_ledger();
+  ::ClientRequestLedgerComp* PROTOBUF_NONNULL mutable_client_request_ledger();
+  void set_allocated_client_request_ledger(::ClientRequestLedgerComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_client_request_ledger(::ClientRequestLedgerComp* PROTOBUF_NULLABLE value);
+  ::ClientRequestLedgerComp* PROTOBUF_NULLABLE unsafe_arena_release_client_request_ledger();
+
+  private:
+  const ::ClientRequestLedgerComp& _internal_client_request_ledger() const;
+  ::ClientRequestLedgerComp* PROTOBUF_NONNULL _internal_mutable_client_request_ledger();
+
+  public:
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2805,8 +2584,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 20,
-                          18, 0,
+      ::google::protobuf::internal::TcParseTable<5, 21,
+                          19, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2852,6 +2631,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::PlayerMysteryMerchantComp* PROTOBUF_NULLABLE mystery_merchant_;
     ::PlayerBattleResultComp* PROTOBUF_NULLABLE battle_results_;
     ::PlayerItemGainBlockComp* PROTOBUF_NULLABLE item_gain_block_;
+    ::ClientRequestLedgerComp* PROTOBUF_NULLABLE client_request_ledger_;
     ::uint64_t player_id_;
     ::uint32_t persist_schema_gen_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3870,7 +3650,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -3878,7 +3658,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -5289,7 +5069,7 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
 inline void player_database::clear_persist_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t player_database::persist_schema_gen() const {
   // @@protoc_insertion_point(field_get:player_database.persist_schema_gen)
@@ -5297,7 +5077,7 @@ inline ::uint32_t player_database::persist_schema_gen() const {
 }
 inline void player_database::set_persist_schema_gen(::uint32_t value) {
   _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:player_database.persist_schema_gen)
 }
 inline ::uint32_t player_database::_internal_persist_schema_gen() const {
@@ -5586,6 +5366,99 @@ inline void player_database::set_allocated_item_gain_block(::PlayerItemGainBlock
 
   _impl_.item_gain_block_ = reinterpret_cast<::PlayerItemGainBlockComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.item_gain_block)
+}
+
+// .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
+inline bool player_database::has_client_request_ledger() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00040000U);
+  PROTOBUF_ASSUME(!value || _impl_.client_request_ledger_ != nullptr);
+  return value;
+}
+inline const ::ClientRequestLedgerComp& player_database::_internal_client_request_ledger() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::ClientRequestLedgerComp* p = _impl_.client_request_ledger_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::ClientRequestLedgerComp>(&::ClientRequestLedgerComp_globals_);
+}
+inline const ::ClientRequestLedgerComp& player_database::client_request_ledger() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.client_request_ledger)
+  return _internal_client_request_ledger();
+}
+inline void player_database::unsafe_arena_set_allocated_client_request_ledger(
+    ::ClientRequestLedgerComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.client_request_ledger_);
+  }
+  _impl_.client_request_ledger_ = reinterpret_cast<::ClientRequestLedgerComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.client_request_ledger)
+}
+inline ::ClientRequestLedgerComp* PROTOBUF_NULLABLE player_database::release_client_request_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ::ClientRequestLedgerComp* released = _impl_.client_request_ledger_;
+  _impl_.client_request_ledger_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::ClientRequestLedgerComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_client_request_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.client_request_ledger)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ::ClientRequestLedgerComp* temp = _impl_.client_request_ledger_;
+  _impl_.client_request_ledger_ = nullptr;
+  return temp;
+}
+inline ::ClientRequestLedgerComp* PROTOBUF_NONNULL player_database::_internal_mutable_client_request_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.client_request_ledger_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::ClientRequestLedgerComp>(GetArena());
+    _impl_.client_request_ledger_ = reinterpret_cast<::ClientRequestLedgerComp*>(p);
+  }
+  return _impl_.client_request_ledger_;
+}
+inline ::ClientRequestLedgerComp* PROTOBUF_NONNULL player_database::mutable_client_request_ledger()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ::ClientRequestLedgerComp* _msg = _internal_mutable_client_request_ledger();
+  // @@protoc_insertion_point(field_mutable:player_database.client_request_ledger)
+  return _msg;
+}
+inline void player_database::set_allocated_client_request_ledger(::ClientRequestLedgerComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.client_request_ledger_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  }
+
+  _impl_.client_request_ledger_ = reinterpret_cast<::ClientRequestLedgerComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.client_request_ledger)
 }
 
 // -------------------------------------------------------------------
@@ -5886,151 +5759,6 @@ inline ::uint64_t player_store::_internal_claim_seq() const {
 inline void player_store::_internal_set_claim_seq(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claim_seq_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// player_database_1
-
-// uint64 player_id = 1;
-inline void player_database_1::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t player_database_1::player_id() const {
-  // @@protoc_insertion_point(field_get:player_database_1.player_id)
-  return _internal_player_id();
-}
-inline void player_database_1::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:player_database_1.player_id)
-}
-inline ::uint64_t player_database_1::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void player_database_1::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
-// .PlayerStressTestProbe stress_test_probe = 2 [(.OptionPersistUncarried) = true];
-inline bool player_database_1::has_stress_test_probe() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
-  PROTOBUF_ASSUME(!value || _impl_.stress_test_probe_ != nullptr);
-  return value;
-}
-inline const ::PlayerStressTestProbe& player_database_1::_internal_stress_test_probe() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::PlayerStressTestProbe* p = _impl_.stress_test_probe_;
-  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerStressTestProbe>(&::PlayerStressTestProbe_globals_);
-}
-inline const ::PlayerStressTestProbe& player_database_1::stress_test_probe() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:player_database_1.stress_test_probe)
-  return _internal_stress_test_probe();
-}
-inline void player_database_1::unsafe_arena_set_allocated_stress_test_probe(
-    ::PlayerStressTestProbe* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.stress_test_probe_);
-  }
-  _impl_.stress_test_probe_ = reinterpret_cast<::PlayerStressTestProbe*>(value);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database_1.stress_test_probe)
-}
-inline ::PlayerStressTestProbe* PROTOBUF_NULLABLE player_database_1::release_stress_test_probe() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::PlayerStressTestProbe* released = _impl_.stress_test_probe_;
-  _impl_.stress_test_probe_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::PlayerStressTestProbe* PROTOBUF_NULLABLE player_database_1::unsafe_arena_release_stress_test_probe() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:player_database_1.stress_test_probe)
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::PlayerStressTestProbe* temp = _impl_.stress_test_probe_;
-  _impl_.stress_test_probe_ = nullptr;
-  return temp;
-}
-inline ::PlayerStressTestProbe* PROTOBUF_NONNULL player_database_1::_internal_mutable_stress_test_probe() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.stress_test_probe_ == nullptr) {
-    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerStressTestProbe>(GetArena());
-    _impl_.stress_test_probe_ = reinterpret_cast<::PlayerStressTestProbe*>(p);
-  }
-  return _impl_.stress_test_probe_;
-}
-inline ::PlayerStressTestProbe* PROTOBUF_NONNULL player_database_1::mutable_stress_test_probe()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::PlayerStressTestProbe* _msg = _internal_mutable_stress_test_probe();
-  // @@protoc_insertion_point(field_mutable:player_database_1.stress_test_probe)
-  return _msg;
-}
-inline void player_database_1::set_allocated_stress_test_probe(::PlayerStressTestProbe* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.stress_test_probe_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-
-  _impl_.stress_test_probe_ = reinterpret_cast<::PlayerStressTestProbe*>(value);
-  // @@protoc_insertion_point(field_set_allocated:player_database_1.stress_test_probe)
-}
-
-// uint32 persist_schema_gen = 5;
-inline void player_database_1::clear_persist_schema_gen() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint32_t player_database_1::persist_schema_gen() const {
-  // @@protoc_insertion_point(field_get:player_database_1.persist_schema_gen)
-  return _internal_persist_schema_gen();
-}
-inline void player_database_1::set_persist_schema_gen(::uint32_t value) {
-  _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:player_database_1.persist_schema_gen)
-}
-inline ::uint32_t player_database_1::_internal_persist_schema_gen() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.persist_schema_gen_;
-}
-inline void player_database_1::_internal_set_persist_schema_gen(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.persist_schema_gen_ = value;
 }
 
 #ifdef __GNUC__

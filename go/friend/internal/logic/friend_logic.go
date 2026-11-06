@@ -146,10 +146,9 @@ type SessionStore interface {
 // 保留 SvcCtx 整体而不是只拷需要的几个字段:推送要 KafkaWriter / GateCommandBuilder,
 // 频控要 FriendRedis,预算要 Config —— 拆开只会让每加一处依赖就改一次 main 的装配。
 type Deps struct {
-	CheckOriginalRole func(context.Context) error
-	SvcCtx            *svc.ServiceContext
-	Repo              FriendStore
-	Sessions          SessionStore
+	SvcCtx   *svc.ServiceContext
+	Repo     FriendStore
+	Sessions SessionStore
 	// Sweeps 只被后台清理循环用(sweep.go),与请求路径无关,所以单独一个字段:
 	// 假 store 测请求路径时不必连带实现清理方法。
 	Sweeps SweepStore
@@ -194,9 +193,8 @@ func NewDeps(svcCtx *svc.ServiceContext) *Deps {
 	}
 	repo.ConfigureRoleFence(rolefence.NewGuard(svcCtx.DB, roleStates))
 	return &Deps{
-		CheckOriginalRole: repo.CheckOriginalRole,
-		SvcCtx:            svcCtx,
-		Repo:              repo,
+		SvcCtx: svcCtx,
+		Repo:   repo,
 		// 在线状态必须走 PlayerRedis:player:session:{id} 是 player_locator 写的跨运行时
 		// 契约 key,FriendRedis 可能是另一套实例,读不到它。
 		// 一次 MGET 的 key 数按 ListReadHardLimit 分批,上限与列表读同源。

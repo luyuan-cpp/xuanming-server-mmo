@@ -40,24 +40,32 @@ namespace gate_session_fence
 	// sessionBoundPlayerId:gate 本地会话当前绑定的玩家(SessionInfo::playerId)。
 	//   BindSession 之前是 kInvalidGuid(UINT64_MAX);会话存在但尚未绑定玩家。
 	// targetPlayerId:消息里携带的目标玩家(0 = 发送方没带)。
+	// 会话尚未绑定玩家时 SessionInfo::playerId 的默认值(即 kInvalidGuid;本头文件零依赖,不引 type_define.h)。
+	inline constexpr uint64_t kUnboundSessionPlayerId = UINT64_MAX;
+
 	inline PushVerdict ClassifyPush(uint64_t sessionBoundPlayerId, uint64_t targetPlayerId)
 	{
 		if (targetPlayerId == 0)
 		{
 			return PushVerdict::kDeliverUnfenced;
 		}
-		if (sessionBoundPlayerId == targetPlayerId)
-		{
-			return PushVerdict::kDeliver;
-		}
-		// 会话尚未绑定玩家(kInvalidGuid / 0)同样丢弃,不留"未绑定就放行"的口子 ——
+		// 会话尚未绑定玩家(kInvalidGuid / 0)一律丢弃,不留"未绑定就放行"的口子 ——
 		// 那正是 R13 的失败形态本身:gate 重启后继任者把 session 5 发给一条刚连上、
 		// 还没登录的新连接,而 scene 仍在用旧 session 5 推 A 的结算。放行等于把战斗
-		// 结算写进一个陌生人的 socket。
+		// 结算写进一个陌生人的 socket。必须先于下面的相等比较:目标恰好也是 UINT64_MAX 时两边相等,
+		// 会被判成 kDeliver(观战第二轮评审 R2-GATE 一般-2;现有生产者都不发这个值,这是纵深防御)。
 		//
 		// 正常时序下要推给未绑定会话的只有一种:Bind 之前的登录失败提示。它以 player_id = 0 显式走
 		// 兼容位(上面的 kDeliverUnfenced),走不到这里,见 login gate_command.go。其余生产者不会碰上未绑定会话:
 		// scene 只给已进场景的玩家推送,而进场景必然晚于 gate 侧 BindSession 落地。
+		if (sessionBoundPlayerId == kUnboundSessionPlayerId || sessionBoundPlayerId == 0)
+		{
+			return PushVerdict::kDrop;
+		}
+		if (sessionBoundPlayerId == targetPlayerId)
+		{
+			return PushVerdict::kDeliver;
+		}
 		return PushVerdict::kDrop;
 	}
 

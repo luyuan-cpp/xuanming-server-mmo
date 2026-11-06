@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	pb "proto/guild"
@@ -66,17 +67,57 @@ func readTrialLaunchOccupancy(t *testing.T, ctx context.Context, db *sql.DB, req
 	return out
 }
 
+// readTrialBattleRow 读对局行的 state / settle_result;found=false = 没有这一行。
+func readTrialBattleRow(t *testing.T, ctx context.Context, db *sql.DB, battleID uint64) (state, result uint32, found bool) {
+	t.Helper()
+	err := db.QueryRowContext(ctx, "SELECT state,settle_result FROM guild_trial_battle WHERE battle_id=?", battleID).Scan(&state, &result)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, false
+	}
+	require.NoError(t, err)
+	return state, result, true
+}
+
+// 2026-11-05 修复（r2-guild#1 评审第 4、5 条）在原用例上追加：
+//   - 作废写 LOSS 走与结算 / 标毒 / 巡检同一个带状态与 guild_id 闸门的写入口:巡检已判 EXPIRED 的行同样收成 SETTLED/LOSS;
+//     对局行登记在别的帮名下时拒绝、什么都不释放;帮会已解散时不碰对局行(解散后留下的 EXPIRED 历史行保持原样);
+//   - 发房前中止回执(formation=5、TerminalDecision=UNKNOWN、带 battle)配已登记的 STARTED 行同样释放并记 LOSS;
+//   - 大厅 ENDED 带结束原因 trialCancelledLobbyEndTip,客户端不再停在 LAUNCHED 而不知原因。
+//
+// 2026-11-05 复审追加「从未登记」:实时路径没登记对局(Start 回包丢失或超时),launch 停在 state1、没有对局行,
+// 回执是带 battle 的发房前中止 —— 作废写入口补一行 SETTLED/LOSS(改回裸 UPDATE 时这一行不会出现,用例变红)。
 func TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort(t *testing.T) {
-	for _, disband := range []bool{false, true} {
-		name := "帮会在"
-		if disband {
-			name = "帮会已解散"
-		}
-		t.Run(name, func(t *testing.T) {
+	const requestID, battleID = 381, 900
+	sqlAbort := &matchpb.CancelActivityBattleResponse{BattleId: battleID, FormationState: 5,
+		TerminalDecision: matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, RequestDigest: "fixture-verifier-covered-separately"}
+	preCreateAbort := &matchpb.CancelActivityBattleResponse{BattleId: battleID, FormationState: 5, RequestDigest: "fixture-verifier-covered-separately"}
+	settled, loss := uint32(pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_SETTLED), uint32(pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_LOSS)
+	expiredState := uint32(pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_EXPIRED)
+	cases := []struct {
+		name         string
+		unregistered bool // 实时路径没登记对局:launch 停在 state1,没有对局行
+		expire       bool // 巡检先把对局行判成 EXPIRED
+		disband      bool
+		receipt      *matchpb.CancelActivityBattleResponse
+		// 释放之后对局行的期望:found=false = 没有这一行
+		wantFound          bool
+		wantState, wantRes uint32
+	}{
+		{name: "帮会在", receipt: sqlAbort, wantFound: true, wantState: settled, wantRes: loss},
+		{name: "帮会在_巡检已判EXPIRED", expire: true, receipt: sqlAbort, wantFound: true, wantState: settled, wantRes: loss},
+		{name: "帮会在_发房前中止", receipt: preCreateAbort, wantFound: true, wantState: settled, wantRes: loss},
+		// 缺行补一行 SETTLED/LOSS,成为这一局的终态闸门(迟到的结果事件按重复处理,不会再发奖)。
+		{name: "帮会在_从未登记_发房前中止", unregistered: true, receipt: preCreateAbort, wantFound: true, wantState: settled, wantRes: loss},
+		// 解散同事务删了在途(STARTED)对局行,作废不补造。
+		{name: "帮会已解散", disband: true, receipt: sqlAbort},
+		// 解散只删 STARTED 行,EXPIRED 行作为历史留下;此后没有任何路径再写它,作废也不改。
+		{name: "帮会已解散_巡检已判EXPIRED", expire: true, disband: true, receipt: sqlAbort, wantFound: true, wantState: expiredState},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
 			ctx, db, repo, activities := guildRoleTiDB(t)
 			seedLobbyOwners(t, ctx, db)
 			actor := lobbyActor(t, ctx, 11, "seller", 1)
-			const requestID, battleID = 381, 900
 			store := consentedSQLLobby(t, actor, repo, requestID, 44, 3, 11, 22)
 			lobby, err := store.Load(ctx, requestID)
 			require.NoError(t, err)
@@ -87,14 +128,28 @@ func TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort(t *testing.T) {
 			prepared, err := activities.PrepareTrialLaunch(actor, requestID, battle, 1, roster, testNowMs)
 			require.NoError(t, err)
 			// 开局成功：match 编队 Finish(true) 到 formation=4，guild 登记对局，launch 进 state2。
-			require.NoError(t, activities.RegisterTrialBattle(ctx, battle, testNowMs))
-			if disband {
+			wantLaunchState, wantLaunchBattle := uint32(2), uint64(battleID)
+			if c.unregistered {
+				wantLaunchState, wantLaunchBattle = 1, 0
+			} else {
+				require.NoError(t, activities.RegisterTrialBattle(ctx, battle, testNowMs))
+			}
+			if c.expire {
+				expired, err := activities.ExpireTrialBattle(ctx, battleID, 44, testNowMs+1)
+				require.NoError(t, err)
+				require.True(t, expired)
+			}
+			if c.disband {
 				_, err = repo.DisbandGuild(actor, 44, 11, testNowMs+1)
 				require.NoError(t, err)
 			}
 			started := readTrialLaunchOccupancy(t, ctx, db, requestID)
-			require.EqualValues(t, 2, started.launchState)
-			require.EqualValues(t, battleID, started.launchBattle)
+			require.EqualValues(t, wantLaunchState, started.launchState)
+			require.EqualValues(t, wantLaunchBattle, started.launchBattle)
+			if c.unregistered {
+				_, _, found := readTrialBattleRow(t, ctx, db, battleID)
+				require.False(t, found, "前置:实时路径没登记,没有对局行")
+			}
 			require.Equal(t, 2, started.activeRoles)
 			require.Equal(t, 2, started.lobbySlots)
 
@@ -109,10 +164,18 @@ func TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort(t *testing.T) {
 				require.Equal(t, started, readTrialLaunchOccupancy(t, ctx, db, requestID), "非终态回执不改任何行 receipt #%d", i)
 			}
 
-			// 截止后 match 原子提交 SQL ABORT（formation 4→5、原票置 4），签回执：launch、两名参与者与大厅占位同一事务释放。
-			abort := &matchpb.CancelActivityBattleResponse{BattleId: battleID, FormationState: 5,
-				TerminalDecision: matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, RequestDigest: "fixture-verifier-covered-separately"}
-			require.NoError(t, activities.FinishCancelledTrialLaunch(ctx, prepared, abort, testNowMs+3))
+			// 对局行登记在别的帮名下(只可能是数据被改坏):作废写入口的 guild_id 闸门拒绝,一个占用也不放。
+			if !c.disband && !c.unregistered {
+				_, err = db.ExecContext(ctx, "UPDATE guild_trial_battle SET guild_id=45 WHERE battle_id=?", battleID)
+				require.NoError(t, err)
+				require.ErrorIs(t, activities.FinishCancelledTrialLaunch(ctx, prepared, c.receipt, testNowMs+2), errTrialForeignGuild)
+				require.Equal(t, started, readTrialLaunchOccupancy(t, ctx, db, requestID), "别帮的对局行不改写,也不释放")
+				_, err = db.ExecContext(ctx, "UPDATE guild_trial_battle SET guild_id=44 WHERE battle_id=?", battleID)
+				require.NoError(t, err)
+			}
+
+			// 截止后 match 原子提交 SQL ABORT（formation 4→5、原票置 4）或发房前中止，签回执：launch、两名参与者与大厅占位同一事务释放。
+			require.NoError(t, activities.FinishCancelledTrialLaunch(ctx, prepared, c.receipt, testNowMs+3))
 			released := readTrialLaunchOccupancy(t, ctx, db, requestID)
 			require.EqualValues(t, 3, released.launchState)
 			require.EqualValues(t, battleID, released.launchBattle)
@@ -121,21 +184,21 @@ func TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort(t *testing.T) {
 			require.Zero(t, released.lobbySlots)
 			saved := &matchpb.CancelActivityBattleResponse{}
 			require.NoError(t, proto.Unmarshal(released.cancelReceipt, saved))
-			require.True(t, proto.Equal(abort, saved), "终局证明与释放同事务落库")
-			if disband {
-				var rows int
-				require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_battle WHERE battle_id=?", battleID).Scan(&rows))
-				require.Zero(t, rows, "解散同事务删了在途对局行，作废不补造")
-			} else {
-				var state, result uint32
-				require.NoError(t, db.QueryRowContext(ctx, "SELECT state,settle_result FROM guild_trial_battle WHERE battle_id=?", battleID).Scan(&state, &result))
-				require.EqualValues(t, pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_SETTLED, state)
-				require.EqualValues(t, pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_LOSS, result)
-			}
+			require.True(t, proto.Equal(c.receipt, saved), "终局证明与释放同事务落库")
+			state, result, found := readTrialBattleRow(t, ctx, db, battleID)
+			require.Equal(t, c.wantFound, found)
+			require.Equal(t, c.wantState, state)
+			require.Equal(t, c.wantRes, result)
+			ended, err := store.Load(ctx, requestID)
+			require.NoError(t, err)
+			require.Equal(t, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_ENDED, ended.State)
+			require.Equal(t, trialCancelledLobbyEndTip, ended.EndTipID, "作废的大厅带结束原因")
 
 			// 多副本拿到同一份回执、或提交结果未知后重放：只释放一次，不再改任何行。
-			require.NoError(t, activities.FinishCancelledTrialLaunch(ctx, prepared, abort, testNowMs+4))
+			require.NoError(t, activities.FinishCancelledTrialLaunch(ctx, prepared, c.receipt, testNowMs+4))
 			require.Equal(t, released, readTrialLaunchOccupancy(t, ctx, db, requestID))
+			againState, againResult, againFound := readTrialBattleRow(t, ctx, db, battleID)
+			require.Equal(t, []any{found, state, result}, []any{againFound, againState, againResult})
 		})
 	}
 }

@@ -57,7 +57,7 @@ param(
     [string]$RunDir = '',       # reused by 'summarize'; auto-created by 'run'/'all'
 
     # mysql tables to truncate in zone_<N>_db (same set as currency_crash_window.ps1).
-    # 玩家存档只在 player_store;player_database / player_database_1 只是内存形状,不建表,写进来 TRUNCATE 会在第一条就中断。
+    # 玩家存档只在 player_store;player_database 只是内存形状,不建表(player_database_1 已于 2026-11-05 删除),写进来 TRUNCATE 会在第一条就中断。
     [string[]]$MySqlTables = @(
         'player_store','player_centre_database',
         'user_accounts','account_share_database'

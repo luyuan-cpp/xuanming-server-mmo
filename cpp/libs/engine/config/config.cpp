@@ -392,6 +392,44 @@ bool readGameConfig(const std::string &filename, GameConfig &gameConfig)
 		return false;
 	}
 
+	// 本 zone 的场景控制域 Redis(docs/design/control-plane-zone-scoping-20261105.md §4.5):scene 读 scene_manager 写的读模型。
+	// 整段缺失时取上面的 zoneredis(此刻已含 ZONE_REDIS_PASSWORD 覆盖),开发环境不用改配置;写了这一段就是另一个实例,
+	// host 必填,口令只认显式值与 SCENE_CONTROL_REDIS_PASSWORD,不继承 zoneredis 的。只有 scene 连它,gate、battle 读到也不用。
+	{
+		auto *sceneControl = gameConfig.mutable_scene_control_redis();
+		sceneControl->Clear();
+		if (const YAML::Node node = root["scene_control_redis"]; node)
+		{
+			if (!node["host"])
+			{
+				const std::string reason = "scene_control_redis.host is required when the section is present in " + filename + "; refusing to start";
+				std::fprintf(stderr, "FATAL scene_control_redis config: %s\n", reason.c_str());
+				std::fflush(stderr);
+				LOG_FATAL << "readGameConfig: " << reason;
+				return false; // LOG_FATAL 已 abort;这一行只为控制流明确
+			}
+			sceneControl->set_host(node["host"].as<std::string>());
+			sceneControl->set_port(node["port"] ? node["port"].as<uint32_t>() : 6379u);
+			if (node["password"])
+			{
+				sceneControl->set_password(node["password"].as<std::string>());
+			}
+			if (node["db"])
+			{
+				sceneControl->set_db(node["db"].as<uint32_t>());
+			}
+		}
+		else
+		{
+			sceneControl->CopyFrom(gameConfig.zone_redis());
+		}
+		if (const char *envPassword = GetNonEmptyEnv("SCENE_CONTROL_REDIS_PASSWORD"))
+		{
+			sceneControl->set_password(envPassword);
+			LOG_INFO << "SCENE_CONTROL_REDIS_PASSWORD env override applied (value hidden)";
+		}
+	}
+
 	// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)。整段或单键缺失时显式取默认:
 	// mode = standalone;standalone 又没写 seeds 时地址与口令都沿用上面的 zoneredis(此刻已含 ZONE_REDIS_PASSWORD 覆盖),开发环境不用改配置。
 	// 写了 seeds 就是另一个实例,口令只认显式值,不继承。

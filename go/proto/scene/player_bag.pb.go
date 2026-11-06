@@ -1325,11 +1325,28 @@ func (x *GmGrantItemResponse) GetBag() *BagInfo {
 
 // 强化:装备可以在人物背包里,也可以穿在身上(仓库 / 临时格里的不行)。消耗金币与材料,**成败都扣**。
 // 只要请求被受理(error_message 为空)就回两个包的全量,客户端整体覆盖 —— 掷骰没过的那一次也一样。
+//
+// expected_level 是乐观比较(与 UpgradeSkillRequest.expected_rank 同构,docs/design/equipment-enhance-inlay.md §4.3):
+// 客户端填它此刻显示的强化等级,即这件装备 BagItemInfo.enhance_level(已按表上限夹取,0 级也要填 0)。
+// 与服务器当前的有效等级不一致就整笔拒绝(kEquipEnhanceLevelChanged):不扣金币、不扣材料、不掷骰。
+// 于是结局未知(1003)之后重发的旧请求,在上一次已经成功或掉过级时不会再扣一次、再掉一次级。
+// 掷骰失败且不掉级时等级没变,同一个 expected_level 仍会被当作新的一次强化受理 ——
+// 这一种由 client_request_id 兜住:带同一个键的重发命中首次结果,不再扣、不再掷。
+// 不带键(0)的旧客户端收到 1003 仍不得自动重发,先 GetBag 刷新,由玩家看过结果再决定点不点。
 type EnhanceEquipRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ExpectedLevel uint32                 `protobuf:"varint,2,opt,name=expected_level,json=expectedLevel,proto3" json:"expected_level,omitempty"`
+	// 客户端幂等键(docs/design/client-request-idempotency.md)。玩家每点一次「强化」生成一个非 0 的随机 64 位数;
+	// 这一次强化拿到明确结果(受理,或带 tip 的拒绝)之前的所有重发 —— 超时、断线重连、gate 回 1003、
+	// 回包没到时玩家又点了同一件 —— 都带同一个键,item_id、expected_level 原样不变。
+	// scene 按 (玩家, 键) 去重,查账排在 expected_level 比较之前:同键同参数的重发不再扣、不再掷,
+	// 回首次的 success / enhance_level 与当前两份快照并标 replayed;同键换了参数回 kInvalidParameter,不执行。
+	// 0 = 旧客户端,不去重。键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):
+	// 下线重登、换节点、scene 重启之后照样认得;被挤出账本的旧键再来按新的一次强化处理,仍有 expected_level 兜底。
+	ClientRequestId uint64 `protobuf:"varint,3,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *EnhanceEquipRequest) Reset() {
@@ -1369,6 +1386,20 @@ func (x *EnhanceEquipRequest) GetItemId() uint64 {
 	return 0
 }
 
+func (x *EnhanceEquipRequest) GetExpectedLevel() uint32 {
+	if x != nil {
+		return x.ExpectedLevel
+	}
+	return 0
+}
+
+func (x *EnhanceEquipRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
 type EnhanceEquipResponse struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
@@ -1376,8 +1407,11 @@ type EnhanceEquipResponse struct {
 	Equipment    *BagInfo               `protobuf:"bytes,3,opt,name=equipment,proto3" json:"equipment,omitempty"` // 装备栏全量
 	// 本次强化是否成功。**失败不是错误**:掷骰没过时 error_message 为空、两份快照照常带回
 	// (金币与材料已扣,客户端有 tip 就会保留旧快照,所以不能走 tip)。
-	Success       bool   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
-	EnhanceLevel  uint32 `protobuf:"varint,5,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"` // 操作后的强化等级
+	Success      bool   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
+	EnhanceLevel uint32 `protobuf:"varint,5,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"` // 操作后的强化等级
+	// true = 这一次是重发(client_request_id 命中了已受理的那一次):没有再扣、没有再掷;
+	// success / enhance_level 是首次的结果,bag / equipment 是此刻的状态。客户端按首次那一次的结果展示。
+	Replayed      bool `protobuf:"varint,6,opt,name=replayed,proto3" json:"replayed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1445,6 +1479,13 @@ func (x *EnhanceEquipResponse) GetEnhanceLevel() uint32 {
 		return x.EnhanceLevel
 	}
 	return 0
+}
+
+func (x *EnhanceEquipResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
 }
 
 // 镶嵌:把人物背包里的一颗宝石嵌进装备的指定孔位。按宝石的 config 消耗 1 颗(不指定哪一堆);
@@ -1682,6 +1723,128 @@ func (x *RemoveGemResponse) GetEquipment() *BagInfo {
 	return nil
 }
 
+// 从临时格取回到人物背包(docs/design/bag-rule-policy-layering.md §6.6)。
+// 临时格只装「主背包放不下的战斗掉落」,满了**不再挤掉旧物**:新到的掉落整笔留在来源(战斗结算延后重试),
+// 玩家用这个请求把东西取回人物背包、腾出位置之后自动补发。
+//
+// 二选一:item_id != 0 取回这一件(一堆);take_all = true 取回临时格里的全部。两者都给或都不给 = kInvalidParameter。
+// 全或无:人物背包放不下这一批就整批拒绝(kBagTemporaryRetrieveBagFull),两个包都不动(可以改成一件一件取)。
+// 搬的是实例本身:装备的 guid、随机属性、强化等级、宝石原样带走;可叠加物品先并进人物背包同种物品的未满堆,并剩的仍是原来那一堆。
+// 传送途中拒绝(kBagTemporaryRetrieveBusy);战斗中放行(人物背包只进不出,整笔延后的那一局正要靠取回腾位才补得上)。
+// item_id 不在临时格里 = kBagTemporaryItemNotFound
+// (「上一次其实已经取回、回包丢了」的重发也是这个码,两个包都不动,刷新即可);take_all 时临时格是空的 = 成功、什么都不动。
+type RetrieveTemporaryItemsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	TakeAll       bool                   `protobuf:"varint,2,opt,name=take_all,json=takeAll,proto3" json:"take_all,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetrieveTemporaryItemsRequest) Reset() {
+	*x = RetrieveTemporaryItemsRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetrieveTemporaryItemsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetrieveTemporaryItemsRequest) ProtoMessage() {}
+
+func (x *RetrieveTemporaryItemsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetrieveTemporaryItemsRequest.ProtoReflect.Descriptor instead.
+func (*RetrieveTemporaryItemsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RetrieveTemporaryItemsRequest) GetItemId() uint64 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *RetrieveTemporaryItemsRequest) GetTakeAll() bool {
+	if x != nil {
+		return x.TakeAll
+	}
+	return false
+}
+
+type RetrieveTemporaryItemsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Bag           *BagInfo               `protobuf:"bytes,2,opt,name=bag,proto3" json:"bag,omitempty"`             // 人物背包全量
+	Temporary     *BagInfo               `protobuf:"bytes,3,opt,name=temporary,proto3" json:"temporary,omitempty"` // 临时格全量
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetrieveTemporaryItemsResponse) Reset() {
+	*x = RetrieveTemporaryItemsResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetrieveTemporaryItemsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetrieveTemporaryItemsResponse) ProtoMessage() {}
+
+func (x *RetrieveTemporaryItemsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetrieveTemporaryItemsResponse.ProtoReflect.Descriptor instead.
+func (*RetrieveTemporaryItemsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RetrieveTemporaryItemsResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RetrieveTemporaryItemsResponse) GetBag() *BagInfo {
+	if x != nil {
+		return x.Bag
+	}
+	return nil
+}
+
+func (x *RetrieveTemporaryItemsResponse) GetTemporary() *BagInfo {
+	if x != nil {
+		return x.Temporary
+	}
+	return nil
+}
+
 var File_proto_scene_player_bag_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_bag_proto_rawDesc = "" +
@@ -1793,15 +1956,18 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x05count\x18\x02 \x01(\rR\x05count\"g\n" +
 	"\x13GmGrantItemResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
-	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\".\n" +
+	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\"\x81\x01\n" +
 	"\x13EnhanceEquipRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\"\xcf\x01\n" +
+	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12%\n" +
+	"\x0eexpected_level\x18\x02 \x01(\rR\rexpectedLevel\x12*\n" +
+	"\x11client_request_id\x18\x03 \x01(\x04R\x0fclientRequestId\"\xeb\x01\n" +
 	"\x14EnhanceEquipResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
 	"\tequipment\x18\x03 \x01(\v2\b.BagInfoR\tequipment\x12\x18\n" +
 	"\asuccess\x18\x04 \x01(\bR\asuccess\x12#\n" +
-	"\renhance_level\x18\x05 \x01(\rR\fenhanceLevel\"f\n" +
+	"\renhance_level\x18\x05 \x01(\rR\fenhanceLevel\x12\x1a\n" +
+	"\breplayed\x18\x06 \x01(\bR\breplayed\"f\n" +
 	"\x0fInlayGemRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x16\n" +
 	"\x06socket\x18\x02 \x01(\rR\x06socket\x12\"\n" +
@@ -1816,7 +1982,14 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x11RemoveGemResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
-	"\tequipment\x18\x03 \x01(\v2\b.BagInfoR\tequipment2\xc5\x03\n" +
+	"\tequipment\x18\x03 \x01(\v2\b.BagInfoR\tequipment\"S\n" +
+	"\x1dRetrieveTemporaryItemsRequest\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x19\n" +
+	"\btake_all\x18\x02 \x01(\bR\atakeAll\"\x9a\x01\n" +
+	"\x1eRetrieveTemporaryItemsResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
+	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
+	"\ttemporary\x18\x03 \x01(\v2\b.BagInfoR\ttemporary2\xa0\x04\n" +
 	"\x14SceneBagClientPlayer\x12)\n" +
 	"\x06GetBag\x12\x0e.GetBagRequest\x1a\x0f.GetBagResponse\x12,\n" +
 	"\aSortBag\x12\x0f.SortBagRequest\x1a\x10.SortBagResponse\x122\n" +
@@ -1825,7 +1998,8 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\vGmGrantItem\x12\x13.GmGrantItemRequest\x1a\x14.GmGrantItemResponse\x12;\n" +
 	"\fEnhanceEquip\x12\x14.EnhanceEquipRequest\x1a\x15.EnhanceEquipResponse\x12/\n" +
 	"\bInlayGem\x12\x10.InlayGemRequest\x1a\x11.InlayGemResponse\x122\n" +
-	"\tRemoveGem\x12\x11.RemoveGemRequest\x1a\x12.RemoveGemResponse\x1a\n" +
+	"\tRemoveGem\x12\x11.RemoveGemRequest\x1a\x12.RemoveGemResponse\x12Y\n" +
+	"\x16RetrieveTemporaryItems\x12\x1e.RetrieveTemporaryItemsRequest\x1a\x1f.RetrieveTemporaryItemsResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -1840,34 +2014,36 @@ func file_proto_scene_player_bag_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_bag_proto_rawDescData
 }
 
-var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_proto_scene_player_bag_proto_goTypes = []any{
-	(*EquipAttrLineInfo)(nil),      // 0: EquipAttrLineInfo
-	(*EquipSlotInfo)(nil),          // 1: EquipSlotInfo
-	(*EquipGemSocketInfo)(nil),     // 2: EquipGemSocketInfo
-	(*EquipEnhancePreview)(nil),    // 3: EquipEnhancePreview
-	(*BagItemInfo)(nil),            // 4: BagItemInfo
-	(*BagSlotInfo)(nil),            // 5: BagSlotInfo
-	(*BagLayoutInfo)(nil),          // 6: BagLayoutInfo
-	(*BagInfo)(nil),                // 7: BagInfo
-	(*GetBagRequest)(nil),          // 8: GetBagRequest
-	(*GetBagResponse)(nil),         // 9: GetBagResponse
-	(*SortBagRequest)(nil),         // 10: SortBagRequest
-	(*SortBagResponse)(nil),        // 11: SortBagResponse
-	(*EquipItemRequest)(nil),       // 12: EquipItemRequest
-	(*EquipItemResponse)(nil),      // 13: EquipItemResponse
-	(*UnequipItemRequest)(nil),     // 14: UnequipItemRequest
-	(*UnequipItemResponse)(nil),    // 15: UnequipItemResponse
-	(*GmGrantItemRequest)(nil),     // 16: GmGrantItemRequest
-	(*GmGrantItemResponse)(nil),    // 17: GmGrantItemResponse
-	(*EnhanceEquipRequest)(nil),    // 18: EnhanceEquipRequest
-	(*EnhanceEquipResponse)(nil),   // 19: EnhanceEquipResponse
-	(*InlayGemRequest)(nil),        // 20: InlayGemRequest
-	(*InlayGemResponse)(nil),       // 21: InlayGemResponse
-	(*RemoveGemRequest)(nil),       // 22: RemoveGemRequest
-	(*RemoveGemResponse)(nil),      // 23: RemoveGemResponse
-	(*component.CurrencyComp)(nil), // 24: CurrencyComp
-	(*base.TipInfoMessage)(nil),    // 25: TipInfoMessage
+	(*EquipAttrLineInfo)(nil),              // 0: EquipAttrLineInfo
+	(*EquipSlotInfo)(nil),                  // 1: EquipSlotInfo
+	(*EquipGemSocketInfo)(nil),             // 2: EquipGemSocketInfo
+	(*EquipEnhancePreview)(nil),            // 3: EquipEnhancePreview
+	(*BagItemInfo)(nil),                    // 4: BagItemInfo
+	(*BagSlotInfo)(nil),                    // 5: BagSlotInfo
+	(*BagLayoutInfo)(nil),                  // 6: BagLayoutInfo
+	(*BagInfo)(nil),                        // 7: BagInfo
+	(*GetBagRequest)(nil),                  // 8: GetBagRequest
+	(*GetBagResponse)(nil),                 // 9: GetBagResponse
+	(*SortBagRequest)(nil),                 // 10: SortBagRequest
+	(*SortBagResponse)(nil),                // 11: SortBagResponse
+	(*EquipItemRequest)(nil),               // 12: EquipItemRequest
+	(*EquipItemResponse)(nil),              // 13: EquipItemResponse
+	(*UnequipItemRequest)(nil),             // 14: UnequipItemRequest
+	(*UnequipItemResponse)(nil),            // 15: UnequipItemResponse
+	(*GmGrantItemRequest)(nil),             // 16: GmGrantItemRequest
+	(*GmGrantItemResponse)(nil),            // 17: GmGrantItemResponse
+	(*EnhanceEquipRequest)(nil),            // 18: EnhanceEquipRequest
+	(*EnhanceEquipResponse)(nil),           // 19: EnhanceEquipResponse
+	(*InlayGemRequest)(nil),                // 20: InlayGemRequest
+	(*InlayGemResponse)(nil),               // 21: InlayGemResponse
+	(*RemoveGemRequest)(nil),               // 22: RemoveGemRequest
+	(*RemoveGemResponse)(nil),              // 23: RemoveGemResponse
+	(*RetrieveTemporaryItemsRequest)(nil),  // 24: RetrieveTemporaryItemsRequest
+	(*RetrieveTemporaryItemsResponse)(nil), // 25: RetrieveTemporaryItemsResponse
+	(*component.CurrencyComp)(nil),         // 26: CurrencyComp
+	(*base.TipInfoMessage)(nil),            // 27: TipInfoMessage
 }
 var file_proto_scene_player_bag_proto_depIdxs = []int32{
 	0,  // 0: EquipGemSocketInfo.attr:type_name -> EquipAttrLineInfo
@@ -1880,49 +2056,54 @@ var file_proto_scene_player_bag_proto_depIdxs = []int32{
 	1,  // 7: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
 	4,  // 8: BagInfo.items:type_name -> BagItemInfo
 	6,  // 9: BagInfo.layout:type_name -> BagLayoutInfo
-	24, // 10: BagInfo.currency:type_name -> CurrencyComp
-	25, // 11: GetBagResponse.error_message:type_name -> TipInfoMessage
+	26, // 10: BagInfo.currency:type_name -> CurrencyComp
+	27, // 11: GetBagResponse.error_message:type_name -> TipInfoMessage
 	7,  // 12: GetBagResponse.bag:type_name -> BagInfo
-	25, // 13: SortBagResponse.error_message:type_name -> TipInfoMessage
+	27, // 13: SortBagResponse.error_message:type_name -> TipInfoMessage
 	7,  // 14: SortBagResponse.bag:type_name -> BagInfo
-	25, // 15: EquipItemResponse.error_message:type_name -> TipInfoMessage
+	27, // 15: EquipItemResponse.error_message:type_name -> TipInfoMessage
 	7,  // 16: EquipItemResponse.bag:type_name -> BagInfo
 	7,  // 17: EquipItemResponse.equipment:type_name -> BagInfo
-	25, // 18: UnequipItemResponse.error_message:type_name -> TipInfoMessage
+	27, // 18: UnequipItemResponse.error_message:type_name -> TipInfoMessage
 	7,  // 19: UnequipItemResponse.bag:type_name -> BagInfo
 	7,  // 20: UnequipItemResponse.equipment:type_name -> BagInfo
-	25, // 21: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
+	27, // 21: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
 	7,  // 22: GmGrantItemResponse.bag:type_name -> BagInfo
-	25, // 23: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
+	27, // 23: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
 	7,  // 24: EnhanceEquipResponse.bag:type_name -> BagInfo
 	7,  // 25: EnhanceEquipResponse.equipment:type_name -> BagInfo
-	25, // 26: InlayGemResponse.error_message:type_name -> TipInfoMessage
+	27, // 26: InlayGemResponse.error_message:type_name -> TipInfoMessage
 	7,  // 27: InlayGemResponse.bag:type_name -> BagInfo
 	7,  // 28: InlayGemResponse.equipment:type_name -> BagInfo
-	25, // 29: RemoveGemResponse.error_message:type_name -> TipInfoMessage
+	27, // 29: RemoveGemResponse.error_message:type_name -> TipInfoMessage
 	7,  // 30: RemoveGemResponse.bag:type_name -> BagInfo
 	7,  // 31: RemoveGemResponse.equipment:type_name -> BagInfo
-	8,  // 32: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
-	10, // 33: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
-	12, // 34: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
-	14, // 35: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
-	16, // 36: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
-	18, // 37: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
-	20, // 38: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
-	22, // 39: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
-	9,  // 40: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
-	11, // 41: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
-	13, // 42: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
-	15, // 43: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
-	17, // 44: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
-	19, // 45: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
-	21, // 46: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
-	23, // 47: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
-	40, // [40:48] is the sub-list for method output_type
-	32, // [32:40] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	27, // 32: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
+	7,  // 33: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
+	7,  // 34: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
+	8,  // 35: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
+	10, // 36: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
+	12, // 37: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
+	14, // 38: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
+	16, // 39: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
+	18, // 40: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
+	20, // 41: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
+	22, // 42: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
+	24, // 43: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
+	9,  // 44: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
+	11, // 45: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
+	13, // 46: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
+	15, // 47: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
+	17, // 48: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
+	19, // 49: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
+	21, // 50: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
+	23, // 51: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
+	25, // 52: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
+	44, // [44:53] is the sub-list for method output_type
+	35, // [35:44] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_bag_proto_init() }
@@ -1936,7 +2117,7 @@ func file_proto_scene_player_bag_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_bag_proto_rawDesc), len(file_proto_scene_player_bag_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

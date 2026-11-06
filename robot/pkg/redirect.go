@@ -187,6 +187,24 @@ func followRedirectLocked(gc *GameClient, target RedirectTarget, fn ReloginFunc)
 	return nil
 }
 
+// NoteSceneEntered 记一次成功进场(收到 NotifyEnterScene),把跟随重定向的跳数清零。
+//
+// 熔断防的是重定向来回弹:配错的归属映射会让登录期重定向在 EnterGame 时就把人弹走,来回弹的过程中不会成功进场,
+// 所以进场之后清零不削弱它。进场之后再收到的 124 是新的一次换 gate(gate 排空迁移、跨 zone 传送),不能和之前的跳数
+// 累计:一个 zone 的 gate 逐台换完,同一个玩家可能被迁不止 MaxRedirectHops 次,累计下去第 4 次就会被拒
+// (docs/design/gate-drain-session-migration.md §7.3)。
+//
+// 调用方是 NotifyEnterScene 的消息处理器,跑在 RecvLoop 上。FollowRedirect 握着 redirectMu 期间到达的推送都被暂存、
+// 放开锁之后才补投(见 FollowRedirect 末尾),所以这里取锁不会自锁。
+func (gc *GameClient) NoteSceneEntered() {
+	if gc == nil {
+		return
+	}
+	gc.redirectMu.Lock()
+	gc.redirectHops = 0
+	gc.redirectMu.Unlock()
+}
+
 // RedirectHops 返回本会话已跟随的重定向次数(测试与日志用)。
 func (gc *GameClient) RedirectHops() int {
 	gc.redirectMu.Lock()

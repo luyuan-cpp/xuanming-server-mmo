@@ -43,7 +43,9 @@ java -jar target/mall-game-0.1.0-SNAPSHOT.jar
 
 `POST /api/orders`、`GET /api/orders/{orderId}`、`POST /api/orders/{orderId}/cancel` 只接受可信网关代会话主体发起的签名请求；`POST /internal/payments` 使用独立支付调用方密钥，付款控制器再次复核角色。canonical v1 在 `HmacAuthentication`，包含角色、完整 uint64 十进制主体、时间、nonce、方法、完整原始 URI 和正文 SHA-256；部署 context-path/servlet-path 时仍须签入全部前缀，角色按 servlet 内业务路径判定。同业务重试保留 requestId、重新生成 nonce。这里的网关调用方和真实支付适配器尚未接线，签名接口通过测试不代表玩家已经能购买。
 
-所有实例须指向同一逻辑 TiDB 权威库；不同区域不建独立可成交副本。价格以最小单位整数保存，当前订单上限见 `CommerceStore.MAX_AMOUNT_MINOR`，不是上游的元单位 decimal。每买家缺省最多 5 条未付单（可配 1–100），支付窗口 15 分钟；未核实渠道关单前不自动释放预占。取消后迟到的支付回执返回冲突，必须由支付适配器持久保管并退款/对账；这一适配器未完成，当前不得开放真钱。已付单只记可靠交付意图；持久资产结果与完成/退款处理仍待接通。
+所有实例须指向同一逻辑 TiDB 权威库；不同区域不建独立可成交副本。价格以最小单位整数保存，当前订单上限见 `CommerceStore.MAX_AMOUNT_MINOR`，不是上游的元单位 decimal。每买家缺省最多 5 条未付单（可配 1–100），支付窗口 15 分钟；未核实渠道关单前不自动释放预占。收到的每笔付款都按 `(channel, transaction_id)` 在 `commerce_payment_receipt` 记一行，一笔交易全局只记一次：取消后迟到的付款绑定原单并转 `REFUND_PENDING`；已付订单又收到的另一笔不绑定订单（`order_sn` 为 NULL），另记 `commerce_duplicate_payment`，订单、库存与交付都不动（2026-11-05，第一轮数据审计 §4 第 19 条）。两者都生成按被退付款交易键识别的退款待办（`commerce_refund_intent.source` 为 `CANCELLED_LATE` / `DELIVERY_REJECTED` / `DUPLICATE_PAYMENT`），`/internal/refunds/poll` 每条列出要退的那一笔；`/internal/refunds/receipt` 必须带 `paymentTransactionId` 指明退的是哪一笔，只有订单本身的退款把订单推进到 `REFUNDED`。金额或币种不符的付款仍回 409，由支付适配器保管对账。真实渠道适配器未完成，当前不得开放真钱。已付单只记可靠交付意图；持久资产结果仍待接通。
+
+2026-11-05 起退款两表改键、付款回执的订单列可空，之前安装的开发库不能就地升级（没有 V6 迁移），`SchemaVerifier` 会拒启，须按上文用 `schema.sql` 重装独立商城库（项目未上线，库里只有测试数据）。
 
 真实 TiDB 集成只接受本机 `4000` 端口，不接受已有库名；每例新建随机测试库，结束后只清理自己的库。测试凭证从 `COMMERCE_IT_TIDB_USER` / `COMMERCE_IT_TIDB_PASSWORD` 读取，不放进命令行：
 

@@ -611,8 +611,15 @@ type BuyMysteryMerchantGoodsRequest struct {
 	ExpectedCurrencyType uint32 `protobuf:"varint,5,opt,name=expected_currency_type,json=expectedCurrencyType,proto3" json:"expected_currency_type,omitempty"`   // 结算货币
 	ExpectedItemConfigId uint32 `protobuf:"varint,6,opt,name=expected_item_config_id,json=expectedItemConfigId,proto3" json:"expected_item_config_id,omitempty"` // 买到的物品
 	ExpectedItemCount    uint32 `protobuf:"varint,7,opt,name=expected_item_count,json=expectedItemCount,proto3" json:"expected_item_count,omitempty"`            // 每份含几个
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 客户端幂等键(docs/design/client-request-idempotency.md)。玩家每点一次「购买」生成一个非 0 的随机 64 位数;
+	// 这一次购买拿到明确结果(成功,或带 tip 的拒绝)之前的所有重发 —— 超时、断线重连、gate 回 1003、
+	// 回包没到时玩家又点了同一件同样的份数 —— 都带同一个键,其余字段原样不变。
+	// scene 按 (玩家, 键) 去重:同键同参数的重发不再买第二份,回当前货架与背包并标 replayed;同键换了参数
+	// (另一件、另一个份数、另一轮或另一份报价)回 kInvalidParameter,不执行。0 = 旧客户端,不去重。
+	// 键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):下线重登、换节点、scene 重启之后照样认得。
+	ClientRequestId uint64 `protobuf:"varint,8,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *BuyMysteryMerchantGoodsRequest) Reset() {
@@ -694,12 +701,22 @@ func (x *BuyMysteryMerchantGoodsRequest) GetExpectedItemCount() uint32 {
 	return 0
 }
 
+func (x *BuyMysteryMerchantGoodsRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
 type BuyMysteryMerchantGoodsResponse struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	// 以下两项仅成功时下发,客户端整体覆盖本地缓存。
-	Info          *MysteryMerchantInfo `protobuf:"bytes,2,opt,name=info,proto3" json:"info,omitempty"` // 最新货架(已购数已更新)
-	Bag           *BagInfo             `protobuf:"bytes,3,opt,name=bag,proto3" json:"bag,omitempty"`   // 人物背包全量(含货币余额)
+	Info *MysteryMerchantInfo `protobuf:"bytes,2,opt,name=info,proto3" json:"info,omitempty"` // 最新货架(已购数已更新)
+	Bag  *BagInfo             `protobuf:"bytes,3,opt,name=bag,proto3" json:"bag,omitempty"`   // 人物背包全量(含货币余额)
+	// true = 这一次是重发(client_request_id 命中了已成交的那一笔):没有再买,info / bag 是此刻的状态。
+	// 客户端按「首次那一笔已经成交」处理,不要再提示失败。
+	Replayed      bool `protobuf:"varint,4,opt,name=replayed,proto3" json:"replayed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -753,6 +770,13 @@ func (x *BuyMysteryMerchantGoodsResponse) GetBag() *BagInfo {
 		return x.Bag
 	}
 	return nil
+}
+
+func (x *BuyMysteryMerchantGoodsResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
 }
 
 // 出现公告:新的一轮开始、或同一轮内商人换了线时,scene 节点向本节点的全部在线玩家各推一次。
@@ -863,7 +887,7 @@ const file_proto_scene_player_mystery_merchant_proto_rawDesc = "" +
 	"\x1dGetMysteryMerchantInfoRequest\"\x80\x01\n" +
 	"\x1eGetMysteryMerchantInfoResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12(\n" +
-	"\x04info\x18\x02 \x01(\v2\x14.MysteryMerchantInfoR\x04info\"\xb0\x02\n" +
+	"\x04info\x18\x02 \x01(\v2\x14.MysteryMerchantInfoR\x04info\"\xdc\x02\n" +
 	"\x1eBuyMysteryMerchantGoodsRequest\x12\x19\n" +
 	"\bround_id\x18\x01 \x01(\x04R\aroundId\x12\x19\n" +
 	"\bgoods_id\x18\x02 \x01(\rR\agoodsId\x12\x14\n" +
@@ -871,11 +895,13 @@ const file_proto_scene_player_mystery_merchant_proto_rawDesc = "" +
 	"\x0eexpected_price\x18\x04 \x01(\x04R\rexpectedPrice\x124\n" +
 	"\x16expected_currency_type\x18\x05 \x01(\rR\x14expectedCurrencyType\x125\n" +
 	"\x17expected_item_config_id\x18\x06 \x01(\rR\x14expectedItemConfigId\x12.\n" +
-	"\x13expected_item_count\x18\a \x01(\rR\x11expectedItemCount\"\x9d\x01\n" +
+	"\x13expected_item_count\x18\a \x01(\rR\x11expectedItemCount\x12*\n" +
+	"\x11client_request_id\x18\b \x01(\x04R\x0fclientRequestId\"\xb9\x01\n" +
 	"\x1fBuyMysteryMerchantGoodsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12(\n" +
 	"\x04info\x18\x02 \x01(\v2\x14.MysteryMerchantInfoR\x04info\x12\x1a\n" +
-	"\x03bag\x18\x03 \x01(\v2\b.BagInfoR\x03bag\"A\n" +
+	"\x03bag\x18\x03 \x01(\v2\b.BagInfoR\x03bag\x12\x1a\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\"A\n" +
 	"\x15MysteryMerchantNotify\x12(\n" +
 	"\x04info\x18\x01 \x01(\v2\x14.MysteryMerchantInfoR\x04info2\xa7\x02\n" +
 	" SceneMysteryMerchantClientPlayer\x12Y\n" +

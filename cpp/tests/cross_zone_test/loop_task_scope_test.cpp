@@ -35,6 +35,56 @@ void Drain(muduo::net::EventLoop& loop)
     loop.loop();
 }
 
+struct Permit
+{
+    int& releases;
+    ~Permit() { ++releases; }
+};
+using PermitReply = std::function<void(std::unique_ptr<Permit>)>;
+
+boost::cobalt::task<void> UsePermit(muduo::net::EventLoop& loop,
+    std::function<bool(PermitReply)> submit, int& actions)
+{
+    auto result = co_await loop_async::AwaitCallback<std::unique_ptr<Permit>>(loop, std::move(submit), nullptr);
+    if (!result || !*result ||
+        (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none) co_return;
+    ++actions;
+}
+
+TEST(LoopTaskScope, StoppedOwnerReleasesLateMoveOnlyPermitWithoutBusiness)
+{
+    muduo::net::EventLoop loop;
+    PermitReply reply;
+    int actions = 0, releases = 0;
+    {
+        LoopTaskScope tasks(loop);
+        ASSERT_TRUE(tasks.Start(UsePermit(loop, [&](PermitReply done) {
+            reply = std::move(done);
+            return true;
+        }, actions), "许可停止"));
+        tasks.Stop();
+    }
+    reply(std::unique_ptr<Permit>(new Permit{releases}));
+    EXPECT_EQ(actions, 0);
+    EXPECT_EQ(releases, 1);
+    Drain(loop);
+}
+
+TEST(LoopTaskScope, ReentrantStopAfterPermitResultPreventsBusinessAndReleasesPermit)
+{
+    muduo::net::EventLoop loop;
+    LoopTaskScope tasks(loop);
+    int actions = 0, releases = 0;
+    ASSERT_TRUE(tasks.Start(UsePermit(loop, [&](PermitReply done) {
+        done(std::unique_ptr<Permit>(new Permit{releases}));
+        tasks.Stop();
+        return true;
+    }, actions), "许可重入停止"));
+    EXPECT_EQ(actions, 0);
+    EXPECT_EQ(releases, 1);
+    Drain(loop);
+}
+
 TEST(LoopTaskScope, HeldReplyAllowsLoopProgressAndInlineSameThreadResumption)
 {
     muduo::net::EventLoop loop;

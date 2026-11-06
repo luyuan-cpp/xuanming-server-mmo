@@ -89,6 +89,9 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 		outcome = svc.OutcomeDuplicate
 	}
 	svc.ObserveSend(label, outcome)
+	// 世界频道首次提交:推给全部在线玩家(docs/design/chat-world-channel-fanout.md §4)。提交已经生效,
+	// 推送只是通知,失败只记日志与指标,应答照常成功;重放的 result.Message 为 nil,不推第二次。
+	l.svcCtx.PublishWorld(l.ctx, result.Message)
 	return &chatpb.SendChatResponse{}, nil
 }
 

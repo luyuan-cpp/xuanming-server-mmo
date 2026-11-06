@@ -137,7 +137,7 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(fixtureGateIdentity(), domainhost.Guard(server.ClientMethods(), 3*time.Second)))
+	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(fixtureGateIdentity(), domainhost.Guard(3*time.Second)))
 	mailpb.RegisterMailAdminServer(rpc, handler)
 	mailpb.RegisterClientPlayerMailServer(rpc, handler)
 	go func() { _ = rpc.Serve(listener) }()

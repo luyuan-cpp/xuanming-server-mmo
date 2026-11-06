@@ -71,6 +71,10 @@
   go-redis 重发同一个 EVAL 时原样回「已落地」,不会把结论翻成「落空 / 已记账」。重发也都没拿到应答、Eval 最终回错时,
   调用方用同一个 token 跑 `luaResolveCasReceipt` 问清结局:落地了照常做后续;没落地就同时写下作废标记,那次 EVAL
   之后才到也一个键不动,调用方可以放心回收预建实体、还掉刚占的名额。问也出错才按结论未知处理(2026-11-05)。
+  每次换节点还带一个放置代次(2026-11-06,[world-channel-placement-generation.md](world-channel-placement-generation.md)):
+  CAS 要求代次比频道的高水位 `scene:{id}:placement_gen` 新,回收预建实体先把高水位抬到那次尝试的代次再按它拆,
+  scene 节点忽略比自己见过的建场景更旧的拆场景。收尾的拆除任务删高水位;排空期间每拍的 DestroyScene 与拆除任务里的
+  DestroyScene 是退役拆除,不带代次(0),节点无条件执行。
 
 ### 1.4 防抖
 

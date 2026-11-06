@@ -45,6 +45,8 @@ type Store struct {
 	// ratingCurve 是组内评分极差的容差曲线，EnsureGlobalPolicy 与 TeamConfig 一起装配（同一份策略指纹准入），
 	// 之后只读；未装配（单测）时是零值，按 ratingrule.Curve 的默认值算（见 rated_spread.go）。
 	ratingCurve ratingrule.Curve
+	// workOwner 是后台工作按片分工的归属判定，BindWorkOwner 启动时写一次，之后只读；nil（单测）= 全部归本副本（见 work_owner.go）。
+	workOwner func(key string) bool
 }
 
 const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision"
@@ -982,9 +984,13 @@ func (s *Store) Prepared(ctx context.Context, work *pb.MatchFormationRecord, pid
 func (s *Store) Formation(ctx context.Context, id uint64) (*pb.MatchFormationRecord, error) {
 	return scanFormation(s.DB.QueryRowContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE battle_id=?", id))
 }
+
+// Pending 读本副本负责的、到期待推进的成局（片号 = battle_id，见 work_owner.go）。按片过滤放在 LIMIT 之前：
+// 一个副本备战槽满了、手里积压的成局留在队头，也占不住别的副本的名额。推进的互斥仍靠 AcquireWork 的工作租约。
 func (s *Store) Pending(ctx context.Context) ([]*pb.MatchFormationRecord, error) {
+	owned, shardArgs := s.WorkShardFilter(workFormationRecovery, "battle_id")
 	// 过截止的 v1 原件只归到期终局恢复；留在这里既领不到租约，还会占住前 32 个名额挡住后面的成局。
-	r, e := s.DB.QueryContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE state IN(1,2,3) AND retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND NOT "+expiredOutcomeSQL+" ORDER BY retry_at_ms LIMIT 32")
+	r, e := s.DB.QueryContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE state IN(1,2,3) AND retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND NOT "+expiredOutcomeSQL+" AND "+owned+" ORDER BY retry_at_ms LIMIT 32", shardArgs...)
 	if e != nil {
 		return nil, e
 	}
@@ -1031,6 +1037,10 @@ func (s *Store) saveIntent(ctx context.Context, work *pb.MatchFormationRecord, r
 		version, supported, instance := uint32(0), uint32(0), ""
 		if capability != nil {
 			version, supported, instance = 1, 1, capability.TargetInstanceId
+			// 2026-11-05 修复:落库前在锁内跑 COMPLETE 只看原件的全部判据(含截止 ABORT 读的那部分),不合格就不持久、不发 Create(validateSupportedIntent)。
+			if e = validateSupportedIntent(f, request, instance); e != nil {
+				return nil, e
+			}
 		}
 		if _, e = tx.ExecContext(ctx, "UPDATE match_formation SET state=2,create_request=?,outcome_protocol_version=?,preflight_supported_version=?,preflight_instance_id=? WHERE battle_id=?", request, version, supported, instance, f.BattleId); e != nil {
 			return nil, e

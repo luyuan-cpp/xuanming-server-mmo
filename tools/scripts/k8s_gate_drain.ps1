@@ -126,6 +126,11 @@ function Get-GateDrainContract {
         # login ConfigMap 不写 GateDrain 块,集群上生效的就是这两个值。
         DefaultMonitorIntervalSeconds = 5
         DefaultDeadlineSeconds        = 1500
+        # 同一文件 GateDrainMigrateConf 的 default 标签(排空迁移,docs/design/gate-drain-session-migration.md)。
+        # 本脚本只据此打印与估算迁移时长,不改变排空流程与预算校验。
+        DefaultMigrateEnabled           = $false
+        DefaultMigrateRatePerSecond     = 20
+        DefaultMigrateStartAfterSeconds = 0
         # 轮询:一轮 = 至多 CallTimeoutSeconds 的查询 + PollIntervalSeconds 的睡眠。
         PollIntervalSeconds           = 5
         CallTimeoutSeconds            = 10
@@ -366,6 +371,29 @@ function ConvertFrom-LoginDrainConfig {
     elseif (-not [string]::IsNullOrEmpty($requireText) -and $requireText -ine 'false') {
         throw "$Source 的 RequireClientEndpoint='$requireText' 不是 true / false"
     }
+    # 排空迁移 GateDrain.Migrate.{Enabled,RatePerSecond,StartAfter},缺键取结构体 default。只用于打印与估算。
+    $migrateEnabled = [bool]$contract.DefaultMigrateEnabled
+    $migrateEnabledText = ([string]$scalars['GateDrain.Migrate.Enabled']).Trim()
+    if ($migrateEnabledText -ieq 'true') { $migrateEnabled = $true }
+    elseif ($migrateEnabledText -ieq 'false') { $migrateEnabled = $false }
+    elseif (-not [string]::IsNullOrEmpty($migrateEnabledText)) {
+        throw "$Source 的 GateDrain.Migrate.Enabled='$migrateEnabledText' 不是 true / false"
+    }
+    $migrateRate = [long]$contract.DefaultMigrateRatePerSecond
+    $migrateRateText = [string]$scalars['GateDrain.Migrate.RatePerSecond']
+    if (-not [string]::IsNullOrWhiteSpace($migrateRateText)) {
+        if ($migrateRateText -notmatch '^\d{1,10}$' -or [uint64]$migrateRateText -gt [uint32]::MaxValue) {
+            throw "$Source 的 GateDrain.Migrate.RatePerSecond='$migrateRateText' 非法"
+        }
+        $migrateRate = [long]$migrateRateText
+    }
+    $migrateStartAfter = [long]$contract.DefaultMigrateStartAfterSeconds
+    $migrateStartText = [string]$scalars['GateDrain.Migrate.StartAfter']
+    if (-not [string]::IsNullOrWhiteSpace($migrateStartText)) {
+        $startParsed = ConvertFrom-GoDurationSeconds -Text $migrateStartText -Name "$Source GateDrain.Migrate.StartAfter"
+        # 与 login 的 gateDrainMigratePolicy 同口径:正数向上取整到秒,<=0 一律 0(立即开始)。
+        $migrateStartAfter = if ($startParsed -gt 0) { [long][Math]::Ceiling($startParsed) } else { [long]0 }
+    }
 
     return [pscustomobject]@{
         Source                 = $Source
@@ -377,7 +405,28 @@ function ConvertFrom-LoginDrainConfig {
         MonitorIntervalSeconds = $intervalSeconds
         DeadlineSeconds        = $deadlineSeconds
         DrainedBelowPlayers    = $drainedBelow
+        MigrateEnabled           = $migrateEnabled
+        MigrateRatePerSecond     = $migrateRate
+        MigrateStartAfterSeconds = $migrateStartAfter
     }
+}
+
+# 排空迁移的一行说明(docs/design/gate-drain-session-migration.md):login 开了迁移时,排空中的 gate 按限速把已登录的
+# 连接经 msg 124 迁到同 zone 其他 gate,通常远早于 Deadline 就会 drained。纯函数,只估算、只打印,不改变流程与预算校验。
+function Format-GateDrainMigrationLine {
+    param(
+        [Parameter(Mandatory = $true)]$Login,
+        [Parameter(Mandatory = $true)][long]$Online
+    )
+    if (-not $Login.MigrateEnabled -or $Login.MigrateRatePerSecond -le 0) {
+        return ("[gate-drain] migration: off (GateDrain.Migrate.Enabled={0} RatePerSecond={1}); players leave on their own, " +
+            "and whoever is still online at the deadline is disconnected when the Pod is deleted") -f `
+            $Login.MigrateEnabled, $Login.MigrateRatePerSecond
+    }
+    $estimateSeconds = $Login.MigrateStartAfterSeconds + [long][Math]::Ceiling($Online / [double]$Login.MigrateRatePerSecond)
+    return ("[gate-drain] migration: on, {0}/s starting {1}s after the mark; {2} online now -> about {3}s to move them " +
+        "(login refreshes the lease every GateDrain.Interval; the gate redirects logged-in connections with msg 124)") -f `
+        $Login.MigrateRatePerSecond, $Login.MigrateStartAfterSeconds, $Online, $estimateSeconds
 }
 
 # 读 zone namespace 里 login 的 ConfigMap。它是 login 进程实际加载的配置,
@@ -612,7 +661,7 @@ function Get-GateClientFacingAddress {
 
 # 本 zone 里除目标之外、login 会下发的 gate(候选集口径同 login 的 buildGateCandidates:选地址 →
 # 按地址去重、只留 launch_time 最大者,见 shared/clientendpoint.DedupeNewest)。一台都没有就拒绝:
-# login 的 FilterDrainingGates 在候选全部 draining 时忽略标记照常分配,标了挡不住新玩家,之后带
+# login 挑 gate 在候选全部 draining 时退到「连得上的」那一档照常分配(shared/gatepick.Eligible),标了挡不住新玩家,之后带
 # -DeletePod 删 Pod 会断掉排空期间新分进来的全部玩家。与目标同地址的记录(目标的陈旧影子)不算。
 # 这里只看 etcd;「其它候选是不是也在排空」由标记脚本在写入时原子判定(见 MarkScript)。
 function Select-GateDrainPeers {
@@ -1203,6 +1252,7 @@ function Invoke-GateDrain {
     $peerIds = [uint32[]]@($peers | ForEach-Object { $_.NodeId })
     Write-Host ("[gate-drain] {0} podIP={1} uid={2} -> node_id={3} uuid={4} online(etcd-reported)={5}; other candidate node_id values in this zone={6}" -f `
             $pod.Name, $pod.PodIp, $pod.Uid, $record.NodeId, $record.Uuid, $record.PlayerCount, ($peerIds -join ','))
+    Write-Host (Format-GateDrainMigrationLine -Login $login -Online ([long]$record.PlayerCount))
 
     if ($DryRun) {
         Write-GateDrainDryRunPlan -Login $login -Pod $pod -Record $record -PeerNodeIds $peerIds -DrainTtlSeconds $DrainTtlSeconds `

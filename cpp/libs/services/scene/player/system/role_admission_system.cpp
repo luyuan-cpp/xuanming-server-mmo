@@ -607,7 +607,7 @@ std::function<void()> RoleAdmissionSystem::CaptureSnapshotCommit(entt::entity pl
     if (playerId == 0 || tlsEcs.GetPlayer(playerId) != player || !identity || identity->scene_instance_id().empty()
         || owner == nullptr || owner->epoch != epoch || admission == nullptr
         || admission->generation != identity->generation() || admission->ownerRevision != identity->owner_revision()
-        || source->player_database_data().player_id() != playerId || source->player_database_1_data().player_id() != playerId) return {};
+        || source->player_database_data().player_id() != playerId) return {};
     const auto expectedIdentity = identity->SerializeAsString();
     const std::weak_ptr<RoleAdmissionState> original = state;
     const std::weak_ptr<const PlayerAllData> originalSource = source;
@@ -634,12 +634,11 @@ bool RoleAdmissionSystem::IsSnapshotCommitted(entt::entity player, const PlayerA
     const auto* admission = tlsEcs.actorRegistry.try_get<PlayerRoleAdmissionComp>(player);
     const auto identity = ConfirmedIdentity(playerId);
     const auto& first = snapshot.player_database_data();
-    const auto& second = snapshot.player_database_1_data();
     const uint64_t epoch = stored ? stored->committed_owner_epoch : 0, seq = stored ? stored->committed_save_seq : 0;
     return stored != nullptr && stored->snapshot.get() == &snapshot && owner != nullptr && admission != nullptr
         && identity && identity->player_id() == playerId && !identity->scene_instance_id().empty()
         && admission->generation == identity->generation() && admission->ownerRevision == identity->owner_revision()
-        && first.player_id() == playerId && second.player_id() == playerId && epoch != 0 && seq != 0
+        && first.player_id() == playerId && epoch != 0 && seq != 0
         && owner->epoch == epoch;
 }
 bool RoleAdmissionSystem::Seal(const common::base::RoleTradeSeal& seal) {

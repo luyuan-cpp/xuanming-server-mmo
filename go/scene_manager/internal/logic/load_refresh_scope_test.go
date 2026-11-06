@@ -1,17 +1,15 @@
 package logic
 
-// 负载分刷新与 zone 登记集合的行为用例(2026-10-16,load_refresh.go / zone_registry.go)。
+// 负载分刷新、清扫与孤儿清理的行为用例(2026-10-16,load_refresh.go;2026-11-05 zone 登记集合删除后按「只处理本 zone」改写,
+// docs/design/control-plane-zone-scoping-20261105.md §4.3)。
 //
-// 本文件**只用基线提交 a105c3efd 已有的符号**(登记集合一律写字面量 "scene_manager:zones",outcome
-// 一律写字面量),这样可以单独拷进基线 worktree 跑红:每条用例都应在基线上失败。用到新符号的用例放在
-// load_refresh_test.go / zone_registry_test.go。
+// outcome 一律写字面量。用到较新符号的用例放在 load_refresh_test.go。
 //
 // 钉住的行为:
 //   - 跟随者一条 Redis 命令都不发,nodes_by_role 只发布本 zone,不导出每节点序列;降级后序列消失;
-//   - 领导者每拍刷新全部 zone、重建负载集成员,并登记 zone;每个 zone 的分数写入不逐节点发 ZADD;
+//   - 领导者每拍刷新镜像里的节点、重建负载集成员;每个 zone 的分数写入不逐节点发 ZADD;不再写 zone 登记集合;
 //   - 计数读失败(命令报错 / 值是空串)不按 0 写:成员保留旧分,非成员以「最后才被选中」的分数加入;
-//   - 登记写失败不挡负载集写入,也不扣成员资格;
-//   - 清扫与孤儿清理按登记集合发现 zone,一条 SCAN 都不发;期望数字段最后删。
+//   - 清扫与孤儿清理只处理本进程的 zone(同组别的 zone 在同一个实例里也不碰),一条 SCAN 都不发;期望数字段最后删。
 //
 // 节点 / zone 用 9xx 段:每节点 gauge 与 outcome 计数器在默认 Prometheus 注册表里是包级全局的,
 // 9xx 不与其它用例的序列混淆;计数器只比较前后差值。用例不 sleep、不比较时间。
@@ -34,7 +32,8 @@ import (
 	"scene_manager/internal/svc"
 )
 
-const zoneRegistryKeyForTest = "scene_manager:zones"
+// removedZoneRegistryKeyForTest 是 2026-11-05 删除的 zone 登记集合;用例只断言它不再被写。
+const removedZoneRegistryKeyForTest = "scene_manager:zones"
 
 // redisCommandRecorderForTest 按到达顺序记下 miniredis 收到的业务命令,形如 "GET node:zone:1:910:scene_count"
 // (命令名 + 第一个参数)。
@@ -167,15 +166,6 @@ func loadRefreshOutcomeCountForTest(t *testing.T, outcome string) float64 {
 	return counterValueForTest(t, "scene_manager_load_refresh_total", map[string]string{"outcome": outcome})
 }
 
-func isZoneRegisteredForTest(t *testing.T, mr *miniredis.Miniredis, zone string) bool {
-	t.Helper()
-	ok, err := mr.SIsMember(zoneRegistryKeyForTest, zone)
-	if err != nil {
-		return false // 键不存在
-	}
-	return ok
-}
-
 // ── 跟随者 ────────────────────────────────────────────────────────────────
 
 // 跟随者每拍刷新与 watch PUT 的单节点刷新都不碰 Redis:以前它每个节点每拍发 2 个 GET,只为发每节点指标。
@@ -250,7 +240,7 @@ func TestRefreshLoadScores_LeaderDemotionDropsNodeSeries(t *testing.T) {
 
 // ── 领导者 ────────────────────────────────────────────────────────────────
 
-// 领导者每拍刷新全部 zone,并把 Redis 丢掉的成员加回负载集(自愈);同时登记这些 zone。
+// 领导者每拍刷新镜像里的全部节点,并把 Redis 丢掉的成员加回负载集(自愈)。
 func TestRefreshLoadScores_LeaderRefreshesEveryZoneAndHealsMembership(t *testing.T) {
 	sc, mr := newLoadRefreshScopeCtx(t)
 	registerKnownNodeForTest(t, "SceneNodeService.rpc/scope-940", 1, "940")
@@ -268,8 +258,7 @@ func TestRefreshLoadScores_LeaderRefreshesEveryZoneAndHealsMembership(t *testing
 	assert.Equal(t, 1.0, score)
 	assert.True(t, mr.Exists(nodeSceneNodeTypeKey(1, "940")), "类型镜像")
 	assert.True(t, mr.Exists(nodeSceneNodeTypeKey(2, "950")))
-	assert.True(t, isZoneRegisteredForTest(t, mr, "1"), "有活节点的 zone 每拍登记")
-	assert.True(t, isZoneRegisteredForTest(t, mr, "2"))
+	assert.False(t, mr.Exists(removedZoneRegistryKeyForTest), "zone 登记集合已删除,刷新不再写它")
 }
 
 // 写入按 zone 合并:每个 zone 的分数不逐节点发 ZADD,读也不超过每节点两条 GET。
@@ -289,7 +278,7 @@ func TestRefreshLoadScores_LeaderBatchesScoreWritesPerZone(t *testing.T) {
 
 	assert.LessOrEqual(t, rec.count("ZADD", ""), len(nodes), "每个 zone 至多一条 ZADD")
 	assert.LessOrEqual(t, rec.count("GET", "")+rec.count("SCARD", ""), 2*6, "每个节点至多两条读(场景数 GET + 成员 SCARD)")
-	assert.GreaterOrEqual(t, rec.count("SADD", zoneRegistryKeyForTest), 1, "zone 要登记")
+	assert.Zero(t, rec.count("SADD", removedZoneRegistryKeyForTest), "zone 登记集合已删除")
 	for zone, ids := range nodes {
 		for _, id := range ids {
 			score, ok := loadScoreForTest(t, mr, zone, id)
@@ -382,42 +371,14 @@ func TestRefreshLoadScores_NonMemberReadFailureJoinsLast(t *testing.T) {
 	assert.Equal(t, "963", best, "选点不能先挑负载未知的节点")
 }
 
-// 登记集合写失败:负载集照常写,已有成员更新分数,新节点照常加入(不扣成员资格,不改成 ZADD XX)。
-func TestRefreshLoadScores_RegistryWriteFailureStillWritesLoadSet(t *testing.T) {
+// ── 清扫与孤儿清理:只处理本 zone,不 SCAN ──────────────────────────────────
+
+// 本 zone 一个节点都没有(最后一个节点在无领导窗口里死掉)照样扫;同组别的 zone 的负载集在同一个实例里也不碰。
+func TestSweepStaleLoadSetMembers_OnlyOwnZoneNoScan(t *testing.T) {
 	sc, mr := newLoadRefreshScopeCtx(t)
-	registerKnownNodeForTest(t, "SceneNodeService.rpc/scope-970", 1, "970")
-	registerKnownNodeForTest(t, "SceneNodeService.rpc/scope-971", 1, "971")
-	_, err := mr.ZAdd(nodeLoadKey(1), 100, "970")
+	_, err := mr.ZAdd(nodeLoadKey(testZoneId), 0, "9301")
 	require.NoError(t, err)
-	seedNodeCountersForTest(t, mr, 1, "970", "3", "")
-	seedNodeCountersForTest(t, mr, 1, "971", "1", "")
-	installRedisCommandRecorderForTest(t, mr, func(cmd string, args []string) string {
-		if cmd == "SADD" && len(args) > 0 && args[0] == zoneRegistryKeyForTest {
-			return "ERR injected registry write failure"
-		}
-		return ""
-	})
-	registryFailedBefore := loadRefreshOutcomeCountForTest(t, "registry_failed")
-
-	refreshLoadScores(sc)
-
-	score, ok := loadScoreForTest(t, mr, 1, "970")
-	require.True(t, ok)
-	assert.Equal(t, 3.0, score)
-	score, ok = loadScoreForTest(t, mr, 1, "971")
-	require.True(t, ok, "登记失败不得挡住新节点进负载集")
-	assert.Equal(t, 1.0, score)
-	assert.Equal(t, registryFailedBefore+1, loadRefreshOutcomeCountForTest(t, "registry_failed"))
-}
-
-// ── 清扫与孤儿清理:按登记集合发现,不 SCAN ────────────────────────────────
-
-// 快照外的 zone(最后一个节点在无领导窗口里死掉)靠登记集合发现,一条 SCAN 都不发。
-func TestSweepStaleLoadSetMembers_UsesZoneRegistryNotScan(t *testing.T) {
-	sc, mr := newLoadRefreshScopeCtx(t)
-	_, err := mr.ZAdd(nodeLoadKey(93), 0, "9301")
-	require.NoError(t, err)
-	_, err = mr.SAdd(zoneRegistryKeyForTest, "93")
+	_, err = mr.ZAdd(nodeLoadKey(93), 0, "9302")
 	require.NoError(t, err)
 	rec := installRedisCommandRecorderForTest(t, mr, func(cmd string, _ []string) string {
 		if cmd == "SCAN" {
@@ -425,17 +386,20 @@ func TestSweepStaleLoadSetMembers_UsesZoneRegistryNotScan(t *testing.T) {
 		}
 		return ""
 	})
-	seen := map[uint32]map[string]struct{}{1: {}}
+	seen := map[uint32]map[string]struct{}{}
 
-	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{1}, nil))))
+	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc)), nil))
 
-	assert.True(t, mr.Exists(nodeDeathAtKey(93, "9301")), "快照外 zone 的陈旧成员要先补记死亡时刻")
-	assert.NotContains(t, loadSetMembersForTest(t, mr, 93), "9301")
+	assert.True(t, mr.Exists(nodeDeathAtKey(testZoneId, "9301")), "本 zone 的陈旧成员要先补记死亡时刻")
+	assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "9301")
+	assert.Contains(t, loadSetMembersForTest(t, mr, 93), "9302", "别的 zone 由它自己的领导者清扫")
+	assert.False(t, mr.Exists(nodeDeathAtKey(93, "9302")))
 	assert.Zero(t, rec.count("SCAN", ""), "不得全库 SCAN")
+	assert.Zero(t, rec.count("SMEMBERS", ""), "不读已删除的 zone 登记集合")
 }
 
-// 孤儿频道组靠「登记集合 → 期望数 Hash 的字段」发现,一条 SCAN 都不发。
-func TestCleanupOrphanWorldChannels_DiscoversViaRegistryWithoutScan(t *testing.T) {
+// 孤儿频道组靠本 zone 期望数 Hash 的字段发现,一条 SCAN 都不发;同组别的 zone 的孤儿组不碰。
+func TestCleanupOrphanWorldChannels_OwnZoneOnlyWithoutScan(t *testing.T) {
 	clearKnownNodesForTest()
 	t.Cleanup(clearKnownNodesForTest)
 	resetNodeDeathQueuesForTest(t)
@@ -446,13 +410,17 @@ func TestCleanupOrphanWorldChannels_DiscoversViaRegistryWithoutScan(t *testing.T
 		}
 		return ""
 	})
-	const zone, deadConf = uint32(95), uint64(777) // deadConf 不在 World 表里(newAutoscaleCtx 只登记了 autoscaleTestConfID)
+	const zone, otherZone, deadConf = uint32(95), uint32(99), uint64(777) // deadConf 不在 World 表里(newAutoscaleCtx 只登记了 autoscaleTestConfID)
+	// 本进程是 zone 95 的 scene_manager。
+	sc.Config.ZoneId = zone
 	seedChannels(t, sc, zone, deadConf, map[uint64]int64{9501: 0})
+	seedChannels(t, sc, otherZone, deadConf, map[uint64]int64{9901: 0})
 
 	assert.Equal(t, 1, CleanupOrphanWorldChannels(context.Background(), sc))
 
 	assert.False(t, mr.Exists(worldChannelsKey(zone, deadConf)))
 	assert.Equal(t, "", mr.HGet(worldDesiredChannelsKey(zone), "777"), "期望数字段一并删除")
+	assert.True(t, mr.Exists(worldChannelsKey(otherZone, deadConf)), "别的 zone 的孤儿组由它自己的领导者清")
 	assert.Zero(t, rec.count("SCAN", ""), "不得全库 SCAN")
 }
 
@@ -463,6 +431,7 @@ func TestDeleteOrphanChannel_KeepsDesiredFieldUntilSetDeleted(t *testing.T) {
 	resetNodeDeathQueuesForTest(t)
 	sc, mr := newAutoscaleCtx(t)
 	const zone, deadConf = uint32(96), uint64(778)
+	sc.Config.ZoneId = zone
 	setKey := worldChannelsKey(zone, deadConf)
 	var failSetDel atomic.Bool
 	failSetDel.Store(true)
@@ -483,17 +452,15 @@ func TestDeleteOrphanChannel_KeepsDesiredFieldUntilSetDeleted(t *testing.T) {
 	assert.Equal(t, "", mr.HGet(worldDesiredChannelsKey(zone), "778"))
 }
 
-// 播种 / 写回期望频道数之前登记 zone;命中已有字段的热路径不多发 SADD。
-func TestDesiredWorldChannelCount_SeedRegistersZone(t *testing.T) {
+// 播种 / 写回期望频道数不再登记 zone(登记集合 2026-11-05 删除)。
+func TestDesiredWorldChannelCount_DoesNotWriteRemovedZoneRegistry(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	const conf = uint64(1)
-
-	mustDesiredWorldChannelCount(t, sc, 97, conf)
-	setDesiredWorldChannelCount(sc, 98, conf, 2)
-	assert.True(t, isZoneRegisteredForTest(t, mr, "97"), "播种分支登记 zone")
-	assert.True(t, isZoneRegisteredForTest(t, mr, "98"), "写回分支登记 zone")
-
 	rec := installRedisCommandRecorderForTest(t, mr, nil)
-	assert.Equal(t, 1, mustDesiredWorldChannelCount(t, sc, 97, conf))
-	assert.Zero(t, rec.count("SADD", ""), "命中已有字段时不登记")
+
+	mustDesiredWorldChannelCount(t, sc, testZoneId, conf)
+	setDesiredWorldChannelCount(sc, testZoneId, conf, 2)
+	assert.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, conf))
+	assert.Zero(t, rec.count("SADD", ""), "不写 zone 登记集合")
+	assert.False(t, mr.Exists(removedZoneRegistryKeyForTest))
 }

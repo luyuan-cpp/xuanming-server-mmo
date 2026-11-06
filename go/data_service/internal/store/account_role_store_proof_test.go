@@ -71,10 +71,10 @@ func TestDecideFrozenEvidence(t *testing.T) {
 		return &dbpb.AccountRoleTrade{ListingId: 101, PlayerId: 11, SellerOwnerRevision: 1, RequiredOwnerEpoch: epoch, RequiredSaveSeq: seq}
 	}
 	freshRows := func() []playerStoreProofRow {
-		return []playerStoreProofRow{proofRow(playerStoreOwnerKind, initial, initialSeq, ""), proofRow(playerStoreHotKind, initial, initialSeq, "hot")}
+		return []playerStoreProofRow{proofRow(playerStoreOwnerKind, initial, initialSeq, ""), proofRow(playerStoreProfileKind, initial, initialSeq, "hot")}
 	}
 	savedRows := func(epoch, seq uint64) []playerStoreProofRow {
-		return []playerStoreProofRow{proofRow(playerStoreOwnerKind, epoch, seq, ""), proofRow(playerStoreHotKind, epoch, seq, "hot")}
+		return []playerStoreProofRow{proofRow(playerStoreOwnerKind, epoch, seq, ""), proofRow(playerStoreProfileKind, epoch, seq, "hot")}
 	}
 
 	t.Run("从没进过场_初始提交", func(t *testing.T) {

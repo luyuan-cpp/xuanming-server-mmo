@@ -33,6 +33,23 @@ func (s *ServiceContext) initHomeZoneResolver() {
 		"role_list_timeout=%s enter_timeout=%s register_timeout=%s",
 		!hz.RefreshRoleListDisabled, hz.RedirectOnEnterEnabled,
 		s.HomeZone.RoleListTimeout, s.HomeZone.EnterTimeout, s.HomeZone.RegisterTimeout)
-	// 新角色落点的实际取值打一行,这行是运维核对的依据。
-	logx.Infof("[placement] new_player_storage_id=%d", config.AppConfig.Placement.StorageIDForNewPlayer(config.AppConfig.Node.ZoneId))
+	// 新角色落点的规则打一行,这行是运维核对的依据(总体方案 §7.2)。
+	p := config.AppConfig.Placement
+	if p.UsesRegionStorage() {
+		logx.Infof("[placement] new players go to region %d storage shards 0..%d (player_store_%d.._db, by player_id %% %d)",
+			p.Region, p.StorageShards-1, 1000000+p.Region*1000, p.StorageShards)
+		return
+	}
+	// 过渡期:存档库还跟着区走。A17b 起这里拒绝启动,部署要配 Placement.Region / StorageShards。
+	logx.Errorf("[placement] Placement.StorageShards is not set: new players still go to the zone database "+
+		"(new_player_storage_id=%d). Storage is meant to be decoupled from zones (player-data-tidb-scaling-plan.md §7.2)",
+		legacyNewPlayerStorageID(p, config.AppConfig.Node.ZoneId))
+}
+
+// legacyNewPlayerStorageID 只给上面的过渡期日志用:旧语义不依赖 player_id。
+func legacyNewPlayerStorageID(p config.PlacementConf, zone uint32) uint32 {
+	if p.NewPlayerStorageId != 0 {
+		return p.NewPlayerStorageId
+	}
+	return zone
 }

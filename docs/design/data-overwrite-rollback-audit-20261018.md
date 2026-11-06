@@ -181,7 +181,7 @@
 | data-service#2 | 全局库重建或回档后号段从 1 重新种，item/txlog/snapshot 会重发已用号 | 已登记的运维事件；player 号有 login 探测兜底 |
 | data-service#3 | 落点映射只存在 mapping Redis，丢失后会写错库 | 已登记、修复在途；受害面窄 |
 | login-session-route#2 | 账号角色目录只在核心 Redis，丢键后角色从账号消失 | 已登记；需要 Redis 丢数据；角色数据仍在库里 |
-| cpp-economy#2 | 主背包满时掉落进临时格，临时格没有取出接口，满 200 个后按 FIFO 淘汰 | 实例仍随存档持久化，补一个搬运 RPC 即可找回；"没有取出接口"是新发现 |
+| cpp-economy#2 | 主背包满时掉落进临时格，临时格没有取出接口，满 200 个后按 FIFO 淘汰 | 实例仍随存档持久化，补一个搬运 RPC 即可找回；"没有取出接口"是新发现。**2026-11-05 已修（Claude，未编译，待 Codex 验证）**：临时格改为满即拒（不再淘汰，入账在副作用之前被拒、由来源保留），新增 `RetrieveTemporaryItems` 取回一件或全部，见 [bag-rule-policy-layering.md](bag-rule-policy-layering.md) §6.6 |
 | ops-tools-java#0 | copy 模式在开服后撤销合服，会静默回档到合服时刻 | 非默认的 copy 模式，且需要违反 runbook §10.2；dst 上的行不删除 |
 | ops-tools-java#1 | 灾难级 PITR 只回退 zone 库，全局库不回退，会造成复制或白亏 | 负责人已接受的代价（zone_data_rollback.md 2026-10-18 修订）；当前 `-Apply` 不可执行。建议在 inventory 阶段输出跨库资产操作清单 |
 
@@ -192,6 +192,7 @@
 - **C++ 存盘与加载**
   - `SanitizeSkillList` 在加载时按当前技能表永久删除玩家技能（`player_skill.cpp:104`，两个区域独立报告）。
   - 父快照提交前不检查行大小，DBTask 被永久拒绝后玩家被登录预检锁死（`player_lifecycle.cpp:3292`）。
+    - **重判与修复（2026-11-06，Claude；未编译、未测试，待 Codex 验证）**：DBTask 与登录预检随存盘重构删除，原问题不再成立。新路径上重现为：存档超预算（单行 1 MiB / 单笔 3 MiB，go/db 判 `TOO_LARGE`；超过 4 MiB 传输上限的那一笔，scene 发送前就拒掉）之后，这名玩家每次存盘都被拒，退出时回到上一次提交。go/db 一侧已有 `DbPlayerStorePayloadRejected`，scene 本地拒掉的那一笔 go/db 收不到，以前只有一条 ERROR 日志。本次补了 scene 侧的拒存计数 `player_store_refused_stats`（`too_large` / `invalid` / `other`），有三处出口：30s 汇总行 `[PlayerStoreRefused]`、Prometheus `scene_player_store_save_refused_total{result}`、critical 告警 `ScenePlayerStoreSaveRefused`（`deploy/k8s/player-store-alerts.yaml`，契约测试钉住指标名与取值）。只计最终的拒绝；排队里还有更新快照时那一笔不计。超预算本身的根治（按 kind 分行后看实测再分）不在本条，`player-save-direct-commit.md` §4 已写明「压测看到某一行顶到上限再分」。
   - 严格提交屏障取消了 owner 缺键补种，Redis 丢数据后在线玩家会被判废黜，scene-owner-reentry-barrier.md §6.2 描述已过时（`redis_client.h:153`）。
   - 存盘不保留未知字段，scene 回退到旧镜像时会抹掉新字段（`player_data_loader.h:16`）。
 - **C++ 资产**
@@ -201,6 +202,7 @@
 - **login**
   - 账号 blob 有两个写者不走建角锁（`entergamelogic.go:256`）。
   - 会话栅栏的 player 绑定随 TTL 过期，之后同一连接可以绑第二个角色（`sessionfence/fence.go:158`）。
+    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Codex 验证）**：绑定只由 Leave / Close 解除，已绑定的记录改用一周兜底寿命（只回收 Disconnect 没送到的记录），绑定、进游戏入口、登录提交（登录态续期）都把它续满，入口续期不再把绑定压回 6 分钟；gate 加纵深防御：会话已绑定角色、没 LeaveGame 就进另一个角色时在收包处回 kLoginInProgress 信封，不转发。同批顺带：客户端自己发的 Disconnect（58）在 gate 入口按未授权号拒绝。规则与残余见 [client-request-ordering.md](client-request-ordering.md) §6.2「TTL」。Java 版已有等价（绑定存在 gate 连接的 SessionContext，已绑定的会话 EnterGame 一律 2028；客户端发的 58 在 Java login 只记日志），不登记 PARITY。
 - **资产服务**
   - 收件箱 Ack 以 Redis 落盘为依据，Redis 丢尾后 GM 处置静默丢失（`store_consume.go:308`）。
 - **匹配**
@@ -216,7 +218,10 @@
   - 商城第二笔支付回执被拒，且不生成退款（`CommerceStore.java:126`）。
 - **身份原语**
   - FenceClock 在生产上退化为单调钟（`fenceclock.go:102`，文档称已修但仍有问题）。
+    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Codex 验证）**：墙钟在 Ack / SeedAck / Stale 读入时一律 `Round(0)` 去掉单调读数；补用真实 `time.Now` 构造的回归用例 `TestFenceClock_RealWallClockAnchorCarriesNoMonotonicReading`。附带评估：后台循环不加"两拍墙钟间隔过大"的冻结检测，理由见 [node-id-overhaul-plan-20260908.md](node-id-overhaul-plan-20260908.md) §3.4。当前只影响 scene_manager 的 scene_id。
   - reclaim 在 slots 键过期时绕过隔离期（`allocator.go:1113`）。
+    - **修复（2026-11-05，Claude，复核成立；未编译、未测试，待 Codex 验证）**：重建分支与 `CreateRev==0` 同一笔 Txn 比较两把水位 key 的 ModRevision 与本进程最后观测值，不等即不重建、永久 fence；本地缓存加记水位 revision，供缓存启动后重新注册。用例 `TestReclaim_RefusesToRecreateASlotAnotherHolderUsedWhileWeWereAway`、`TestReclaim_RecreatesTheSlotWhenOnlyOurOwnWatermarksAreThere`（原 F5 用例按新语义改写）及两条缓存单测。规则见同一设计稿 §3.4 / §3.5。
+    - Java 版（两条合看）：没有水位 / 隔离期 / 重建协议，第 21 条不适用；但 `NodeIdLease.isValid()` 只看 `System.nanoTime`（Linux 上同样不含挂起时间），VM 挂起超过 TTL 后恢复的那一刻仍判有效，与第 20 条同类，Java 待做（本轮只读核对，未改 Java 仓、未登记 PARITY）。
   - login 的毫秒水位前推量 2000ms 不满足契约（`login.go:51`，只在关闭号段时可达）。
 
 ## 5. 修复优先级建议

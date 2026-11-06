@@ -259,6 +259,18 @@ func battleInstanceReplaced(svcCtx *svc.ServiceContext, node uint32, instance st
 	return err == nil && entry.NodeUuid != "" && entry.NodeUuid != instance
 }
 
+// battleInstanceRegistered 判定注册表里这个 node_id 正是这个实例(唯一一条登记、uuid 相同)。只读内存镜像,不发 RPC。
+// 与 battleInstanceReplaced 方向相反:开一份要靠取消证明才能关的 L0 原件之前,要正面确认实例还在,查不到就不开;
+// 关原件时只有确认已换才放宽,查不到不算。两个方向都偏安全。etcd 断开时镜像保留最后一次的登记,不会误判成查不到。
+// 注册表没有装配(只在单测里;生产 NewServiceContext 必装,建局选点也只从它选)时不判,当作已确认。
+func battleInstanceRegistered(svcCtx *svc.ServiceContext, node uint32, instance string) bool {
+	if svcCtx.BattleNodes == nil {
+		return true
+	}
+	entry, err := svcCtx.BattleNodes.EntryOfNode(node)
+	return err == nil && entry.NodeUuid != "" && entry.NodeUuid == instance
+}
+
 // cleanupExpiredSpectateIndex 清理观战索引里 score 早于 TTL 窗口的残留成员
 // (ZSET 成员没有 TTL,只能靠懒剔除 + 这里的定期兜底)。O(log N + M) 轻量,多实例重复执行幂等,
 // 由 startGlobalSpectateMaintenance 的低频循环执行。

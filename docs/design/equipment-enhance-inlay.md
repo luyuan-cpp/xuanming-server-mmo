@@ -1,5 +1,8 @@
 # 装备强化与镶嵌(装备属性系统二期)
 
+> 2026-11-05 变更(审计 r2-equip#1,未编译,待 Codex 验证):`EnhanceEquipRequest` 加 `expected_level = 2`,服务器做乐观比较,
+> 对不上回新码 `EquipEnhanceLevelChanged`、不扣不掷 —— 结局未知(1003)后的重发不再重复扣费、重复掉级。见 §2.5、§3.3、§4.3 第 4a 步、§5 第 12 条、§6.1、§8。
+>
 > 落地日期：2026-10-09 / 10；2026-10-13 已整合主干、正式导表与全量 proto-gen，C++ 编译、C++ / Go 单测、起栈冒烟（一期 + 二期两遍）均有当日运行证据，见 §11。
 > 2026-10-15 的文档更新与本次合并保留这些历史证据；它们不代表当前合并后的 RPC / ECS 等改动已复验。后续验证见 §9，首次实现阶段的记录见 §10.8。
 > 前置:[equipment-attributes.md](equipment-attributes.md)(一期:随机属性 + 穿脱 + 战斗类属性)。本文只写二期新增的部分,
@@ -174,6 +177,7 @@ schema `data/schema/equipgemsocket_table.proto`(`message EquipGemSocketTable`,sh
 | `EquipGemSocketEmpty` | 该孔位没有宝石 | |
 | `EquipGemTypeMismatch` | 宝石类型与孔位不符 | |
 | `EquipGemBagFull` | 背包已满,无法取下宝石 | |
+| `EquipEnhanceLevelChanged`(2026-11-05 追加在组尾) | 装备强化等级已变化,请刷新后再试 | |
 
 号由导表器发(发号规则是「已发号按名保留,新名字按表内出现顺序取本段最小空位」,所以**行序就是号序**,预期 28011–28021;
 **任何手写文件里都不许出现这些数字**)。一期的 `EquipItemNotFound` / `EquipNotEquipment` / `EquipInBattle` / `EquipFrozen` /
@@ -274,7 +278,10 @@ BagItemInfo 追加:
   EquipAttrLineInfo gem_attr = 19;               // 宝石物品:这颗宝石提供的属性(不是宝石、或属性行不可用时不带)。tier / cap / seq 恒 0
   uint32 enhance_bonus_permyriad = 20;           // 装备:当前有效等级的基础属性总加成(万分比);0 级为 0,满级也写
 
-message EnhanceEquipRequest { uint64 item_id = 1; }
+message EnhanceEquipRequest {
+  uint64 item_id = 1;
+  uint32 expected_level = 2; // 2026-11-05:客户端看到的强化等级(BagItemInfo.enhance_level,已按上限夹取);对不上整笔拒绝
+}
 message EnhanceEquipResponse {
   TipInfoMessage error_message = 1;
   BagInfo bag = 2;           // 人物背包全量(金币、材料变化)
@@ -295,6 +302,11 @@ service SceneBagClientPlayer 末尾追加(顺序不可变,CallMethod 按 method 
 
 - 三个响应的 `bag = 2`、`equipment = 3` 与 `EquipItemResponse` 同号同名,handler 复用 `ReplyInventoryAndEquipment` 模板。
 - 强化的概率失败**不走 tip**:客户端有 tip 就保留旧快照,而失败时材料已扣,必须带回新快照。
+- `expected_level`(2026-11-05,审计 r2-equip#1)是与 `UpgradeSkillRequest.expected_rank` 同构的乐观比较:比的是**有效等级**
+  (存档值按表上限夹取,就是快照下发的 `enhance_level`),0 级也要填 0、不是通配。对不上 → `kEquipEnhanceLevelChanged`,
+  不扣金币、不扣材料、不掷骰。它挡住的是「上一次已经成功或掉过级之后的重发」;掷骰失败且不掉级时等级没变,
+  同一个 `expected_level` 与玩家再点一次无法区分,照常受理 —— 所以不带幂等键的客户端收到 1003 仍不得自动重发(§6.1)。
+  2026-11-06 起请求另带 `client_request_id`(字段 3),同一个键的重发由服务端按键去重、回首次结果,见 [client-request-idempotency.md](client-request-idempotency.md)。
 - 镶嵌按宝石的 `config_id` 消耗 1 颗(不指定哪一堆):背包层没有「从指定那一堆扣 k 个并写流水」的入口,也不需要。
 - 方法名不以 `Gm` 开头(scene 按前缀拦 GM 指令);请求体无 repeated、无有符号整型(scene 的请求体检查);响应类型名不含 `Empty`。
 - **消息号由 proto-gen 发。robot / 客户端 / 测试 / 限流补丁等任何手写文件里都不许出现这三个方法的数字消息号,只引用生成常量**(见 §9)。
@@ -366,7 +378,8 @@ GemFit CheckGemFit(const std::vector<GemSocketRule>& sockets, const std::vector<
 ```cpp
 struct EnhanceOutcome { bool success{false}; uint32_t level{0}; };
 
-static uint32_t Enhance(entt::entity player, Guid itemId, EnhanceOutcome& outcome);
+// 2026-11-05:加 expectedLevel(请求的 expected_level,审计 r2-equip#1),见下表第 4a 步。
+static uint32_t Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome);
 static uint32_t InlayGem(entt::entity player, Guid itemId, uint32_t socket, uint32_t gemConfigId);
 static uint32_t RemoveGem(entt::entity player, Guid itemId, uint32_t socket);
 static uint32_t MaxEnhanceLevel();          // EquipEnhance 表从 1 起连续的最大 id;表空 = 0
@@ -394,7 +407,9 @@ static void SetRandomSourceForTest(std::function<uint64_t(uint64_t)> rand);
 | 1 | `CheckWritable` | `kEntityIsNull` / `kEquipFrozen` / `kEquipInBattle` |
 | 2 | `LocateEquipment`;未初始化 | 见上;`kEquipEnhanceUnavailable` |
 | 3 | `max = MaxEnhanceLevel()`;`max == 0` | `kEquipEnhanceUnavailable` |
-| 4 | `cur = min(实例.enhance_level, max)`;`cur >= max` | `kEquipEnhanceMaxLevel` |
+| 4 | `cur = min(实例.enhance_level, max)` | — |
+| 4a | `expectedLevel != cur`(乐观比较,2026-11-05;比有效等级,即快照下发的值;打 INFO) | `kEquipEnhanceLevelChanged` |
+| 4b | `cur >= max` | `kEquipEnhanceMaxLevel` |
 | 5 | 取 `EquipEnhance` 第 `cur + 1` 行(缺行打 ERROR);`success_rate == 0`(必败的行不收费) | `kEquipInternalError`;`kEquipEnhanceUnavailable` |
 | 6 | 要材料(`material_id != 0 && material_count > 0`)时:材料的 Item 行必须存在且 `equip_kind == 0`(否则打 ERROR —— 按 config 扣会把装备当材料销毁) | `kEquipInternalError` |
 | 7 | 要材料时 `inventory.CheckQuantities({{material_id, material_count}})`:确定不足;只有算上带更新版本字段的材料才够(版本错位,打 `metric=persist_version_skew where=equip_enhance` WARN,先于金币判定,非终态,升级后可重试) | `kEquipEnhanceMaterialNotEnough`;`kFeatureUnavailable` |
@@ -436,7 +451,7 @@ static void SetRandomSourceForTest(std::function<uint64_t(uint64_t)> rand);
 | 3 | 实例的 `gems`(原始记录)里找 `socket`,取第一条 `gem_config_id != 0` 的;没有(含未初始化的实例) | `kEquipGemSocketEmpty` |
 | 3a | 宝石的 Item 行不存在,或被配成了装备(打 ERROR;前者发放必败,后者退回去会铸出一件掷了属性的装备实例) | `kEquipInternalError`(宝石仍在装备上) |
 | 4 | 静默预检:`inventory.IsSpaceInsufficient(1)` 且没有哪一堆同种宝石还塞得下(同 config、不带 `equip` 段、`size < max_stack_size`,判据同容器层的并堆) | `kEquipGemBagFull` |
-| 5 | `BagService::AddItems(player, inventory, blockList, {{gemConfig, 1}}, TX_EQUIP_GEM_REMOVE, itemId, extra)`。**先发物,成功后才抹宝石**(照 `PlayerMissionSystem::ClaimReward`) | `kBagItemNotStacked` / `kBagAddItemBagFull` → `kEquipGemBagFull`;其余 → 打 ERROR,`kEquipInternalError`(宝石仍在装备上) |
+| 5 | `BagService::AddItems(player, inventory, {{gemConfig, 1}}, TX_EQUIP_GEM_REMOVE, itemId, extra)`(2026-10-15 起没有 `blockList` 参数,封禁由 `AddItems` 内部的 `GainBlockService::IsItemGainBlocked` 判)。**先发物,成功后才抹宝石**(照 `PlayerMissionSystem::ClaimReward`) | `kBagItemNotStacked` / `kBagAddItemBagFull` → `kEquipGemBagFull`;`kAssetBlocked`(全服封禁或本人被 GM 封禁该宝石,打 WARN)→ 原样返回 27005,宝石仍在装备上,解封后照常取下;其余 → 打 ERROR,`kEquipInternalError`(宝石仍在装备上) |
 | 6 | **重新**取实例指针(第 5 步是一次 Insert),从 `gems` 里删掉该 `socket` 的**全部**条目;除退回的那一条之外每删一条打一条 ERROR(socket + gem_config_id:那是脏数据里的重复 / 空壳记录,被无偿清掉了) | 取不到:打 `[PlayerEquip][INSTANCE_LOST]` ERROR,`kEquipInternalError` |
 | 7 | 装备穿着 → `OnEquipmentChanged`;取下的那颗当时不计入加成的话补一条 `LOG_WARN`(提交成功之后才打);`LOG_INFO`;`return kSuccess` | — |
 
@@ -503,7 +518,8 @@ std::vector<ResolvedGem> ResolveGemsNow(const ItemComp& item, const ItemTable& r
 
 三个新方法照 `EquipItem` / `UnequipItem`:参数粗检 → 调 `PlayerEquipSystem` → 失败直接写本次 `response->mutable_error_message()->set_id(...)` → 成功 `ReplyInventoryAndEquipment`。
 
-- `EnhanceEquip`:`item_id == 0` → `kInvalidParameter`;成功后另写 `success` 与 `enhance_level`。
+- `EnhanceEquip`:`item_id == 0` → `kInvalidParameter`;`expected_level` 原样交给 `Enhance`(0 是合法值,不在这里判);
+  成功后另写 `success` 与 `enhance_level`。
 - `InlayGem`:`item_id == 0 || gem_config_id == 0` → `kInvalidParameter`(`socket` 可以是 0)。
 - `RemoveGem`:`item_id == 0` → `kInvalidParameter`。
 
@@ -531,6 +547,9 @@ std::vector<ResolvedGem> ResolveGemsNow(const ItemComp& item, const ItemTable& r
 9. 被扣的材料 / 宝石 config 必须不是装备:按 config 抽数量不看 `has_equip()`,会把装备实例当材料销毁。表校验报、写入口挡,两道都要有。
 10. 强化的概率失败是成功的响应(无 tip,带两份快照,`success = false`)。
 11. 导表后的同批重编要求同一期 §5 不变量 8、9(Item 表加了 13 行,战斗指纹会变;三张新表只在 scene 读,不进指纹)。
+12. 强化带乐观等级比较(2026-11-05,审计 r2-equip#1):`expected_level` 与有效等级不一致整笔拒绝,判在一切扣费与掷骰之前。
+    上一次已成功或已掉级之后的重发因此不会再扣、再掷、再掉级;失败且不掉级之后的重发仍是一次新的强化(等级没变,无从区分),
+    由客户端「1003 不自动重发、先刷新」兜住。要做到连这一种也挡住,得在实例上加一个每次尝试都递增的持久计数并让请求带它,本期不做。
 
 ## 6. 客户端契约（Unity 数据层与纯逻辑）
 
@@ -545,7 +564,7 @@ public Func<long> NowMs { get; set; }                       // 发包间隔用�
 public BagInfo CharacterBag => _bags[CharacterBagType];     // 人物背包(Bag 是「当前查看的那一类」,可能是仓库)
 public EquipEnhanceOutcome? LastEnhanceOutcome { get; private set; }
 public event Action<EquipEnhanceOutcome> OnEnhanceResult;
-public void EnhanceEquip(ulong itemId);
+public void EnhanceEquip(ulong itemId);   // 2026-11-05:发包时从两份快照里读这件装备的 EnhanceLevel 填 expected_level
 public void InlayGem(ulong itemId, uint socket, uint gemConfigId);
 public void RemoveGem(ulong itemId, uint socket);
 ```
@@ -564,12 +583,17 @@ public void RemoveGem(ulong itemId, uint socket);
   目标不在人物背包与装备栏两份快照里;强化时已满级(`EnhanceMaxLevel > 0 && EnhanceLevel >= EnhanceMaxLevel`)或未开放(`EnhanceMaxLevel == 0`);
   镶嵌时目标孔不存在 / 已占用(`GemConfigId != 0`);取下时目标孔为空;镶嵌时人物背包里该宝石数量为 0。
   金币 / 材料不足**不在本地拦**(快照可能偏旧,拦了会把人锁死),只给模型置灰用。两份快照任一缺失时不做本地拒绝,直接发包。
-- 回包整体覆盖两份快照;业务 tip 先看响应体;传输失败绝不自动重发(强化不是幂等操作),只重拉快照。
+- 回包整体覆盖两份快照;业务 tip 先看响应体。传输失败时:请求带了 `client_request_id`、连接没变、结果不明(`rpc timeout` 或信封 1003)
+  而且还没重发过,就原样重发一次(同一个键,服务端按键去重,2026-11-06,见 [client-request-idempotency.md](client-request-idempotency.md) 与
+  交接 `docs/handoff/client-request-idempotency-unity-20261106.md`);其余情况一律只重拉快照、不自动重发。
+- **2026-11-05 起强化请求必须带 `expected_level`**(审计 r2-equip#1):填发包那一刻人物背包 / 装备栏快照里这件装备的 `EnhanceLevel`
+  (0 级填 0)。服务器回 `KEquipEnhanceLevelChanged` = 本地快照过期或这是一次旧请求的重发:**一律重拉两份快照**,不提示「失败」,
+  让玩家看过新等级再决定点不点;它与幂等键一起才挡得住重复扣费:失败且不掉级时等级不变,只靠它分不出重发,这一种由同一个 `client_request_id` 的去重兜住。
 - 失败后是否重拉(`IsRuleRejection` 扩充;判据不变:「服务器没动过状态,且本地快照没有被证明过期」才不重拉):
 
   | 不重拉 | 重拉两份快照 |
   |---|---|
-  | `KEquipGemTypeMismatch`、`KEquipGemBagFull`,以及既有的 `KEquipNotEquipment` / `KEquipInBattle` / `KEquipFrozen` / 限流 | `KEquipGemNotOwned`、`KEquipGemSocketOccupied`、`KEquipGemSocketEmpty`、`KEquipGemSocketInvalid`、`KEquipGemNotGem`、`KEquipEnhanceMaxLevel`,以及既有的 `KEquipItemNotFound` / `KEquipInternalError` / 未收录的码 |
+  | `KEquipGemTypeMismatch`、`KEquipGemBagFull`,以及既有的 `KEquipNotEquipment` / `KEquipInBattle` / `KEquipFrozen` / 限流 | `KEquipGemNotOwned`、`KEquipGemSocketOccupied`、`KEquipGemSocketEmpty`、`KEquipGemSocketInvalid`、`KEquipGemNotGem`、`KEquipEnhanceMaxLevel`、`KEquipEnhanceLevelChanged`(2026-11-05),以及既有的 `KEquipItemNotFound` / `KEquipInternalError` / 未收录的码 |
   | `KEquipEnhanceMaterialNotEnough` / `KEquipEnhanceGoldNotEnough`:服务器给的码 == 发包那一刻 `EquipBagModel.CheckEnhance` 的结论(本来就知道缺这一样)→ 不重拉 | 同两个码:本地以为够,或以为缺的是另一样 → 快照过期,重拉 |
   | `KEquipEnhanceUnavailable`:本地快照本来就没有下一级预览(`CheckEnhance` 得 `Unavailable`:实例未初始化,或下一级是必败的行 —— 服务器不给预览、也照样拒)→ 不重拉 | 同一个码:本地带着预览、以为能强化 → 快照过期,重拉 |
 
@@ -646,11 +670,14 @@ public void RemoveGem(ulong itemId, uint socket);
 1. 显示:目标带 `enhance_max_level == 12`、`gem_sockets` 两个孔(类型 1 / 0、名称非空)、`enhance_next.next_level == enhance_level + 1`;
    背包里的 2101 带 `gem_type == 1` 与 `gem_attr`。
 2. 拒绝码(只测能确定造出来的,每条之后断言两份快照不变):`GemNotGem`(`gem_config_id = 2001`)、`GemSocketInvalid`(`socket = 7`)、
-   `GemTypeMismatch`(0 号孔嵌 2201)、`GemNotOwned`(0 号孔嵌从不发放的 2103)、`GemSocketEmpty`;`EnhanceEquip(0)` / `InlayGem(…, 0)` 的参数错误。
+   `GemTypeMismatch`(0 号孔嵌 2201)、`GemNotOwned`(0 号孔嵌从不发放的 2103)、`GemSocketEmpty`;
+   `EnhanceLevelChanged`(`expected_level` = 当前等级 + 1,2026-11-05);`EnhanceEquip(0)` / `InlayGem(…, 0)` 的参数错误。
 3. 强化(在背包里强化一次、穿上后再强化一次):对账**以强化前那份快照里的 `enhance_next` 为准** —— 金币差 = `cost_gold`
    (读 `bag.currency.values[0]`)、材料差 = `material_count`、成功则等级 +1、失败则 `max(0, level − fail_level_loss)`;
    `success_rate == 10000` 时必须成功,其余两种结果都接受。基础属性断言 `value − enhance_bonus == 表值`、
    `enhance_bonus == 表值 × enhance_bonus_permyriad / 10000`(向下取整)。只有「目标穿在身上且等级变了」才等属性面板推送。
+   每次请求的 `expected_level` 取强化前那份快照的 `enhance_level`。背包里那一次之后按强化前的等级原样重发一次(模拟 1003 后的重发):
+   等级变了就必须回 `EnhanceLevelChanged`、两份快照不变;等级没变(失败且不掉级)时跳过这一条(它是一次合法的新强化)。
 4. 镶嵌:0 号孔嵌 2101 → 该孔 `gem_config_id == 2101` 且带 `attr`、背包里 2101 少 1;再嵌同孔 → `GemSocketOccupied`;穿着时面板物伤 / 法伤各 + 宝石值。
 5. 重登:强化等级与宝石都在。
 6. 取下:该孔变空、2101 回到原数量、面板回到镶嵌前。`EQUIP_FORGE_SMOKE_OK`。
@@ -663,14 +690,17 @@ public void RemoveGem(ulong itemId, uint socket);
 
 - 洗练 / 宝石合成 / 打孔 / 强化保护未做(§1.3)。
 - 强化石与宝石没有任何产出途径(掉落 / 任务 / 商店都没配),目前只能 GM 发物;装备本身同样(一期遗留)。
-- 流水不带实例数据:强化等级与宝石无法从流水还原。按 guid 扣出(`RemoveItemsByGuid`,寄售托管将来靠它)、临时格淘汰、还原落位失败的丢弃
-  三条路径都只留 guid / config / size —— 二期之后它们丢的是 +N 与宝石;接寄售托管之前必须让扣出回执带整份 `ItemComp`。
+- 流水不带实例数据:强化等级与宝石无法从流水还原。按 guid 扣出(`RemoveItemsByGuid`,寄售托管将来靠它)、还原落位失败的丢弃
+  两条路径都只留 guid / config / size —— 二期之后它们丢的是 +N 与宝石;接寄售托管之前必须让扣出回执带整份 `ItemComp`。
+  (原先还有第三条「临时格淘汰」:2026-11-05 起临时格满即拒、不再淘汰,这条路径已不存在,见 `bag-rule-policy-layering.md` §6.6。)
 - 宝石的 `item_uuid` 血缘在镶嵌处断开(销毁 G1、取下铸出 G2),两条流水靠「装备 guid + 宝石 config + extra 里的 socket」配对。
 - 没有货币退款原语:强化第 11 步(扣材料)若在金币已扣之后失败,只留 `[ENHANCE_PARTIAL]` 日志供人工对账。正常路径走不到。
-- 强化不是幂等操作:客户端超时后玩家再点一次会再扣一次。客户端的约定是传输失败只重拉快照、不自动重发。
+- 强化不是幂等操作。2026-11-05 起请求带 `expected_level`(§5 第 12 条):上一次已成功或已掉级之后的重发会被拒、不再扣费;
+  失败且不掉级之后的重发等级没变,服务器分不出它与玩家再点一次,仍会再扣一次。客户端的约定不变:传输失败只重拉快照、不自动重发。
+  要连这一种也挡住,得给实例加「每次尝试都递增」的持久计数(持久结构变更,本期不做)。
 - 取下免费且走正式发放入口:同一种宝石 10 分钟内取下第 51 次起,每次都会产生一条 item 类异常获得告警(`AnomalyDetector` 默认阈值
   50 次 / 600 秒,无冷却);「嵌 → 取」循环的流水量只受限流与客户端发包间隔约束。要根治就给取下加成本(表列)。
-- 宝石 config 被 GM 封禁时取下会失败(`AddItems` 过发放封禁闸,回 `kInvalidParameter`),对玩家表现为 `kEquipInternalError`,且每次点击各打一条 WARN + ERROR。
+- 宝石 config 被封禁时取下会失败:全服封禁,或 2026-11-05 起这名玩家被 GM 单独封禁获得这种宝石(`player-inbox-service.md` §2.2)。`AddItems` 过发放封禁闸,回 `kAssetBlocked`(此前全服封禁回 `kInvalidParameter`),取下入口把它当作背包满以外的失败,对玩家表现为 `kEquipInternalError`,宝石留在装备上,每次点击各打一条 WARN + ERROR。取下走的是正式发放入口,所以单人封禁同样拦它:宝石不丢,解封之后照常取得下来。
 - 「战斗中禁写」只认 `InBattleComp`:一期 §8 记的重登 / 离线结算窗口同样适用于强化与镶嵌;登录时 Redis 未就绪的话,窗口持续到下次进场。
   核过没有资产复制路径(强化石 / 宝石不是战斗道具,由表校验守着;金币与背包同一条记录落盘)。仍计划在 `PlayerBattleSystem::IsInBattle` 一处收口。
 - 入包边界整份信任 `equip` 段(一期 §8):消费侧已对强化等级夹取、对宝石现查并限制遍历条数,但做邮件回流 / 寄售之前仍须在玩法层补入包校验。

@@ -5,7 +5,7 @@
 > 设计与落码记录的权威出处是 [`cross-zone-scene-travel.md`](../design/cross-zone-scene-travel.md)(本轮内容在 §12);本文只讲"现在是什么状态、接下来做什么、别踩什么"。
 >
 > **2026-11-05 现状(一屏版,先读这段)**。它取代下面 10-24 的同名一屏版。本轮只核对现状、补一条测试、清一个生成残留、改文档,没有跑任何构建或测试。
-> **Codex 2026-11-05 验证回执**：`gofmt -l internal/logic/owner_replaced_crosslang_test.go` 无输出、退出 0；`go vet ./internal/logic/` 退出 1，阻塞在 `gate_redirect.go:258` 的 `NodeInfo.GetMaxConnections` 未定义。另一会话已在 `proto/common/base/common.proto` 加 `max_connections = 13`，Go 绑定尚未重生成；其同日交接明确要求先生成协议。本次指定跨语言测试与 scene_manager 全量测试均未执行，不能记为通过。按 AGENTS.md §10.2 停在失败处，未重试、未改生成物；需先完成协议生成，再按下列清单继续。完整日志与运行环境见 PROGRESS 同日「跨 zone GO-3 验证被协议生成前置阻塞」条目。
+> **Codex 2026-11-05 续验回执**：负责人已授权完整协议生成。`proto-gen-build` 及两轮 `proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml` 均退出 0，旧 `GetMaxConnections` 阻塞已解除；第二轮用于同步第一轮结束后其他会话新增的神秘商人字段。生成后第一轮 `go vet ./internal/logic/` 因 `AtomicDestroyForce` 调用少参退出 1，核对时该调用已由其他会话补齐；第二轮 vet 仍退出 1，当前阻塞为 `scene_member_reconcile_test.go:35` 引用已删除的 `sceneManagerZonesKey`（控制面按 zone 拆分的测试夹具未同步）。指定跨语言测试与 scene_manager 全量测试均未执行，不能记为通过；需同步该夹具后再运行下列清单。旧格式检查已通过。生成保留了守护段及并行会话的新逻辑，未访问客户端、未提交、未执行 C++ 构建。完整证据见 PROGRESS 同日「跨 zone 完整协议生成续验：生成成功，scene_manager 测试夹具仍阻塞」条目。
 > - **服务器代码:本线已做完。** 剩下的是 Codex 验证、压测基线和客户端项;残余 5 已有代码,在另一会话收尾。
 > - **各项现状**:
 >   - GO-3 同号重启接管:`go/scene_manager/internal/logic/owner_replaced.go`。资格解析包 10-30 由 `go/shared/savebarrier` 改名为 `go/shared/handofffence`,资格存在 `player:{P}:handoff_fence` hash 的 `handoff_fence` 字段,别的会话改名时已同步改了本线代码。Codex 11-01 第二轮的 `go test ./...`(`go/scene_manager`)退出 0,之后的改动没有再验证。11-05 给 `owner_replaced_crosslang_test.go` 补了第 4 条跨语言钉子(C++ 节点号占位键的前缀与值):这两样一变,etcd 复核会恒读空,镜像滞后时会接管活着的持有者。

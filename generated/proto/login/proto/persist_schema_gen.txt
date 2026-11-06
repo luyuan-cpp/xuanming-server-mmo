@@ -2,7 +2,8 @@
 # 设计:docs/design/mixed-version-persist-field-protection.md §3。
 # state=bootstrap:引导期,新增字段并入世代 1;引导期结束时由负责人改为 state=active,此后每次出现新增字段的
 #   生成运行追加一个新世代。只在主干发号:发布分支需要新持久字段时,先合主干拿号,再原样 cherry-pick 本文件的行。
-# 字段行:<世代>=<消息全名>#<字段号> <标签> <类型> <字段名>[ oneof=<oneof 名>]
+# 字段行:<世代>=<消息全名>#<字段号> <标签> <类型> <字段名>[ oneof=<oneof 名>][ group=<存储分组>]
+#   group= 只出现在玩家表顶层字段上,记 OptionPersistGroup;记下之后不得再改(换组按 R4 走 expand / contract)。
 # 退役行:retired=<消息全名>#<字段号>(字段已删除并写了 reserved;字段号永不复用)
 # 封存行:sealed=<世代>:<行数>:<sha256>,发布前由 dev_tools.ps1 -Command persist-schema-seal 追加。世代 ≤ 它的
 #   字段行此后不得增删:引导期还在加字段、合并带进同一世代的行,都会让生成失败(设计 §3.1「封存」)。
@@ -181,27 +182,27 @@ state=bootstrap
 1=Vector3#1 optional double x
 1=Vector3#2 optional double y
 1=Vector3#3 optional double z
-1=player_database#1 optional uint64 player_id
-1=player_database#2 optional Transform transform
-1=player_database#3 optional PlayerUint64Comp uint64_pb_component
-1=player_database#4 optional PlayerSkillListComp skill_list
-1=player_database#5 optional PlayerUint32Comp uint32_pb_component
-1=player_database#6 optional BaseAttributesComp derived_attributes_component
-1=player_database#7 optional LevelComp level_component
-1=player_database#8 optional CurrencyComp currency
-1=player_database#9 optional PlayerStressTestProbe stress_test_probe
+1=player_database#1 optional uint64 player_id group=0
+1=player_database#2 optional Transform transform group=9
+1=player_database#3 optional PlayerUint64Comp uint64_pb_component group=4
+1=player_database#4 optional PlayerSkillListComp skill_list group=3
+1=player_database#5 optional PlayerUint32Comp uint32_pb_component group=4
+1=player_database#6 optional BaseAttributesComp derived_attributes_component group=6
+1=player_database#7 optional LevelComp level_component group=6
+1=player_database#8 optional CurrencyComp currency group=7
+1=player_database#9 optional PlayerStressTestProbe stress_test_probe group=4
 1=player_database#10 optional PlayerMergeStateComp merge_state
-1=player_database#11 optional PlayerAttributeComp attribute_component
-1=player_database#12 optional PlayerPetComp pet_component
-1=player_database#13 optional BagAllData bag_component
-1=player_database#14 optional QuestAllData mission_component
-1=player_database#15 optional PlayerProfileComp profile_component
-1=player_database#16 optional PlayerAssetOpLedgerComp asset_op_ledger
+1=player_database#11 optional PlayerAttributeComp attribute_component group=3
+1=player_database#12 optional PlayerPetComp pet_component group=3
+1=player_database#13 optional BagAllData bag_component group=8
+1=player_database#14 optional QuestAllData mission_component group=3
+1=player_database#15 optional PlayerProfileComp profile_component group=4
+1=player_database#16 optional PlayerAssetOpLedgerComp asset_op_ledger group=7
 1=player_database#17 optional BattleSettlementLedgerComp settlement_ledger
 1=player_database#18 optional uint64 fence_owner_epoch
 1=player_database#19 optional uint64 fence_save_seq
-1=player_database#20 optional PlayerInboxLedgerComp inbox_ledger
-1=player_database#21 optional uint32 persist_schema_gen
+1=player_database#20 optional PlayerInboxLedgerComp inbox_ledger group=7
+1=player_database#21 optional uint32 persist_schema_gen group=0
 1=player_database_1#1 optional uint64 player_id
 1=player_database_1#2 optional PlayerStressTestProbe stress_test_probe
 1=player_database_1#3 optional uint64 fence_owner_epoch
@@ -211,7 +212,7 @@ state=bootstrap
 1=MysteryMerchantPurchase#2 optional uint32 count
 1=PlayerMysteryMerchantComp#1 optional uint64 round_id
 1=PlayerMysteryMerchantComp#2 repeated MysteryMerchantPurchase purchases
-1=player_database#22 optional PlayerMysteryMerchantComp mystery_merchant
+1=player_database#22 optional PlayerMysteryMerchantComp mystery_merchant group=7
 1=PlayerSkillComp#3 optional uint32 rank
 1=MissionListComp#5 optional PlayerActivityLedger activity_ledger
 1=PlayerActivityClaimRecord#1 optional uint32 rule_id
@@ -236,6 +237,31 @@ state=bootstrap
 1=AssetRecallLine#5 optional uint64 debt
 1=AssetRecallLine#6 optional uint64 shortfall
 1=AssetSnapshot#4 repeated AssetRecallLine recall_lines
+1=PlayerBattleResult#1 optional uint64 result_seq
+1=PlayerBattleResult#2 optional uint64 battle_id
+1=PlayerBattleResult#3 optional uint32 outcome
+1=PlayerBattleResult#4 optional uint32 team_index
+1=PlayerBattleResult#5 optional bool is_dead
+1=PlayerBattleResult#6 optional bool fled
+1=PlayerBattleResult#7 optional uint32 total_rounds
+1=PlayerBattleResult#8 optional uint64 finished_at_ms
+1=PlayerBattleResult#9 optional uint64 settled_at_ms
+1=PlayerBattleResult#10 repeated PlayerBattleResultCurrency currencies
+1=PlayerBattleResult#11 repeated PlayerBattleResultItem items_gained
+1=PlayerBattleResult#12 repeated PlayerBattleResultItem items_consumed
+1=PlayerBattleResult#13 optional bool lines_truncated
+1=PlayerBattleResult#14 optional bool seen
+1=PlayerBattleResult#15 optional uint32 match_mode
+1=PlayerBattleResult#16 optional uint32 battle_config_id
+1=PlayerBattleResultComp#1 optional uint64 last_result_seq
+1=PlayerBattleResultComp#2 repeated PlayerBattleResult entries
+1=PlayerBattleResultCurrency#1 optional uint32 currency_type
+1=PlayerBattleResultCurrency#2 optional uint64 amount
+1=PlayerBattleResultItem#1 optional uint32 item_table_id
+1=PlayerBattleResultItem#2 optional uint64 count
+1=PlayerItemGainBlockComp#1 repeated uint32 item_config_ids
+1=player_database#23 optional PlayerBattleResultComp battle_results group=4
+1=player_database#24 optional PlayerItemGainBlockComp item_gain_block group=4
 
 retired=player_database#10
 retired=player_database#17

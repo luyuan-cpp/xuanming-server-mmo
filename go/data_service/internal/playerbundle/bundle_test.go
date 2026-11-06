@@ -12,7 +12,7 @@ import (
 	storepb "proto/player_store"
 )
 
-const assetKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET)
+const assetKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET) // 货币与账本所在的行
 
 func assetPayload(t *testing.T) []byte {
 	t.Helper()
@@ -27,7 +27,7 @@ func TestDecodeRowRendersPayloadAndKeepsBytes(t *testing.T) {
 	payload := assetPayload(t)
 	row := Row{Kind: assetKind, Payload: payload}
 	row.Decode()
-	if row.KindName != "PLAYER_STORE_KIND_ASSET" || row.DecodeNote != "" {
+	if row.KindName != "PLAYER_STORE_KIND_WALLET" || row.DecodeNote != "" {
 		t.Fatalf("decode: %+v", row)
 	}
 	if !strings.Contains(string(row.Decoded), "42") {

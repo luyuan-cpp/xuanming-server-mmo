@@ -56,7 +56,7 @@
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_halted" [10m]) > 0
 #             (MISMATCH / NOT_DELIVERED / SKIP_NOT_REQUESTED 后该玩家该域停用,§7.7;与下面的 PlayerInboxAckAnomaly 对照。
 #              停用对当前实体一直有效:停用那一刻打一条 ERROR,之后每 5 分钟补打一条带 relog=1 的 WARN
-#              (player_inbox_rules.h 的 kHaltedDomainRelogIntervalMs),所以玩家在线期间告警一直亮着,实体销毁后才熄灭。
+#              (kHaltedDomainRelogIntervalMs),所以玩家在线期间告警一直亮着,实体销毁后才熄灭。
 #              reason=version_skew 是混版本窗口里 scene 版本不够新,按 runbook §5.2 A′ 处理,不要作废)
 #   critical: count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_replay_mismatch" [10m]) > 0(IB-9 回放核对失败)
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_ack_anomaly" [10m]) > 0
@@ -181,9 +181,10 @@ spec:
         # 定时对账(领导者,默认每小时一轮,§9.3):由消费方终结的行,已落盘账本里没有它的结局 —— 水位没到这个 seq、
         # 环覆盖范围内查无此 seq,或环里同 seq 记的是另一条 / 另一个结局(回档 / Redis 丢数据,评审 M6)。
         # 「仍 PENDING、账本已处理」只有单人复核 ReconcilePlayer 看得到,定时对账不比它。
-        # reconcile_inconsistent_rows 是「当前不一致行数」gauge(评审 L11,取代原来的计数器):本任期 64 个分片各自
-        # 最近一次读数之和,只由领导者产出,所以用 max()。max_over_time[2h] 跨过易主空档:卸任时旧领导者把它归零,
-        # 新领导者当选后 1–5 分钟才跑第一轮。
+        # reconcile_inconsistent_rows 是「当前不一致行数」gauge(评审 L11,取代原来的计数器)。2026-11-06 起对账按分片
+        # 分给每个 stable 副本(docs/design/player-inbox-service.md §9.3「分片归属」),每个副本报自己负责的各分片最近一次
+        # 读数之和;任何一个副本大于 0 都是发现,所以用 max() > 0。max_over_time[2h] 跨过换主空档:一片改归别的副本时
+        # 旧副本清掉它的读数,新副本最迟一个间隔后读到;进程重启后 1–5 分钟才跑第一轮。
         - alert: PlayerInboxReconcileMismatch
           expr: |
             max(max_over_time(player_inbox_reconcile_inconsistent_rows[2h])) > 0
@@ -339,7 +340,8 @@ spec:
     - name: player-inbox.reconcile
       interval: 5m
       rules:
-        # 对账存活:对账开着,3 个间隔内却一轮成功的都没有(没有领导者、轮次一直失败或超时)。
+        # 对账存活:对账开着,3 个间隔内却一轮成功的都没有(各副本的分片成员表一直没就绪、轮次一直失败或超时)。
+        # 2026-11-06 起每个 stable 副本按自己负责的分片各跑各的轮次,sum() 照旧成立。
         # 窗口 3h = 3 × PlayerInbox.ReconcileIntervalMinutes(go/player_inbox/etc/player_inbox.yaml 为 60,K8s ConfigMap 原样镜像);
         # 改了间隔要同步改这里的 [3h]。
         # ReconcileIntervalMinutes = 0 表示关掉对账,规则读不到配置:rounds_total 的三条序列照样预置为 0、一直不涨,

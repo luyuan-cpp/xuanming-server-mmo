@@ -22,10 +22,12 @@
 // 与同一所有者内部搬运(Bag::TakeInstance / PutInstance、MergeAndCompact)不经过本类的入包入口,不受封禁影响。
 //
 // 2026-09-01 起还多一件:**为腾位而被挤掉的实例要落 LogItemDestroy**。
-// 临时格(kTemporary)配的是先进先出淘汰策略,满了会销毁最早进包的实例;
 // `item_uuid` 是外挂回收的关联键,不留痕追溯链就在这一步断掉。Bag 是纯容器
 // 不写流水,所以它把退役清单**回执**上来,由这里落 —— 形状与 MergeAndCompact
 // 那条路完全一致。批量入包走 Bag::AddItems 的候选提交；CheckSpaceFor 只做无淘汰预测。
+// 2026-11-05 起四个固定包都是满即拒(临时格原先的先进先出会真丢东西,审计 cpp-economy#2),
+// 生产路径上淘汰回执恒为空;回执这条路留给配了淘汰策略的包。临时格满了 = 新入账在任何副作用之前被拒,
+// 玩家经 RetrieveFromTemporary 取回人物背包腾位(docs/design/bag-rule-policy-layering.md §6.6)。
 //
 // Bag itself is a pure container (grid / slot / stack management only).
 class BagService
@@ -70,12 +72,32 @@ public:
     // 完成全部空间、发号、初始化与禁发检查；任何失败不改玩家包、不记流水。允许烧掉未提交的ID。
     // 获得封禁(全服 + 本人)在扣消耗与建候选之前判,任一项命中整笔回 kAssetBlocked;临时格兜底只用于
     // 主包放不下,封禁不会走到它。提交前(beforeCommit 之前)再复核一次。
+    // 临时格也放不下(满了不淘汰,2026-11-05 起)→ 整笔回容器的「放不下」码,两个包、消耗与 beforeCommit 都没动;
+    // 调用方(战斗结算)按延后处理,玩家从临时格取回腾位后下一次重试即应用。
     // beforeCommit只给同帧外层的另一份零失败后置效果（当前为货币）：失败必须零副作用；不得yield、
     // 抛异常或修改背包。它返回成功之后，只做不抛出的两层swap及流水发布，不再有业务失败分支。
     // 策略只在本同步调用内借用原只读对象；返回时不保留任何连接、实体或策略引用。
     static uint32_t ConsumeInventoryAndGrant(entt::entity playerEntity,
         const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
         const std::string& extra, const std::function<uint32_t()>& beforeCommit = {});
+
+    // 两包都放不下而整批被拒时 metric=bag_grant_overflow_rejected 的 WARN 节拍:首次打一条,之后每连续这么多次再打一条,
+    // 其余 DEBUG,都不带调用栈(玩家能造出来、能维持很久的状态,不是故障)。连续次数挂在玩家实体上,整批发放成功即归 0。
+    // 取 8:唯一调用方是战斗结算,经收件箱按 1s→60s 退避重试,封顶后两次拒绝最多隔约 60 秒,两条 WARN 最多相隔约 8 分钟,
+    // 每个卡住的在线玩家每小时 7~9 行;仓库的 scene 日志查询与告警按 [10m] 窗口写(推导同
+    // player_inbox_rules::kStuckWarnEveryFailures),还卡着的玩家在任意 10 分钟窗口里都查得到一行。
+    // 按次数而不按时间:确定、可测,不依赖时钟。
+    static constexpr uint32_t kGrantOverflowWarnEveryRejections = 8;
+    // consecutiveRejections 为 1(首次)或 kGrantOverflowWarnEveryRejections 的正整数倍时为真。纯函数。
+    static constexpr bool IsGrantOverflowWarnDue(uint32_t consecutiveRejections)
+    {
+        return consecutiveRejections == 1 ||
+               (consecutiveRejections != 0 && consecutiveRejections % kGrantOverflowWarnEveryRejections == 0);
+    }
+    // 只读:这名玩家此刻连续几次「两包都放不下而整批被拒」(下一笔整批发放成功后归 0,实体重建后从 0 数起)。
+    // 不创建组件,不改变任何发放结果。战斗结算执行器用调用前后的差判断这一次是不是两包都放不下(给收件箱的 DEFER 原因,
+    // 供 PlayerInboxSystem::OnBagSpaceFreed 定向唤醒);其余是单测与排障用。
+    static uint32_t ConsecutiveGrantOverflowRejections(entt::entity playerEntity);
 
 	// 上面这个按数量入包的重载,一次调用最多新铸多少个实例身份(item guid)。
 	// 调用方在不可重复的副作用之前,拿它与 tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available()
@@ -272,4 +294,24 @@ public:
 		entt::entity playerEntity,
 		Bag &bag,
 		bool *changedOut = nullptr);
+
+	// 玩家把临时格里的东西取回人物背包(docs/design/bag-rule-policy-layering.md §6.6):
+	//   frozen check → Bag::MoveInstancesTo(临时格 → 人物背包,两包候选、全或无)→ 整堆并入的原 guid 落流水
+	//
+	// 这是同一玩家名下两个包之间的搬运,不是获得也不是消耗:
+	//   * 不过获得封禁闸、不计异常获得、不写获得流水 —— 东西本来就是这名玩家的,进临时格那一次已经过闸、记过流水;
+	//   * 不铸号、不掷属性:实例原样搬(装备的 guid 与 equip 段不变),可叠加的先并进人物背包的未满堆,余量保留原 guid;
+	//   * 只有「整堆都并进别的堆」的原 guid 退役,按整理的口径落一条数量 0 的 LogItemDestroy(数量没有消失,
+	//     只是这个 item_uuid 的追溯链到此为止),extra 标明来源 —— 与 MergeAndCompact 同一形状。
+	// **不判战斗**(D48 红线:局中闸只放入口层)。玩法入口 PlayerBagSystem::RetrieveTemporary 对取回也刻意放行战斗中:
+	// 人物背包只进不出,而整笔延后的那一局要靠取回腾位才补得上(那里有完整理由)。
+	//
+	// guids 按给定顺序处理:非空、互不重复、都在临时格里(由 Bag::MoveInstancesTo 把关)。
+	// 返回:
+	//   * 跨 zone 冻结期 / 玩家没有 PlayerBagsComp / 任一包两层不一致 -> kInvalidParameter(两包不动)
+	//   * 其余原样透传 Bag::MoveInstancesTo:kBagAddItemBagFull = 人物背包放不下这一批(两包不动);
+	//     kBagDeleteItemFindGuid = 有一件不在临时格;等等
+	static uint32_t RetrieveFromTemporary(
+		entt::entity playerEntity,
+		const std::vector<Guid> &guids);
 };

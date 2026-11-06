@@ -530,7 +530,7 @@ func (b *syncSmokeBot) waitSceneReady() error {
 	return nil
 }
 
-// close 尽力收尾一个会话:LeaveGame + 断线通知 + 摘掉登记 + 关连接。连接可能已断(重连失败、搬迁途中失败),失败一律忽略。
+// close 尽力收尾一个会话:LeaveGame + 摘掉登记 + 关连接(断线通知由 gate 在 TCP 关闭时合成)。连接可能已断(重连失败、搬迁途中失败),失败一律忽略。
 func (b *syncSmokeBot) close() {
 	_ = leaveGame(b.gc, b.stats)
 	pkg.Clients.Unregister(b.homePlayer, b.gc)

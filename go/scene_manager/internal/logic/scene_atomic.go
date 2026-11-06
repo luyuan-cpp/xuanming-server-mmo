@@ -115,167 +115,136 @@ local newCount = redis.call('SCARD', bestMembersKey)
 return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 `
 
-// sceneClaimRecordTTLSeconds 是认领记录的存活时间。只要长过一次「连接中断 + 调用方下一拍重来」:
-// 过期之后重来的认领读不到快照,按「已被别人销毁」跳过副作用,只有 Agones 对账告警能发现。
+// sceneClaimRecordTTLSeconds 是改派与名额转移回执(world_init.go、agones_binding.go)的存活时间,长过一次「连接中断 +
+// 调用方下一拍重来」。销毁认领不用它:认领的快照记在拆除任务里,副作用做完才删(scene_teardown_job.go)。
 const sceneClaimRecordTTLSeconds = 600
 
-// luaSceneClaimPrelude 是认领脚本共用的开头,解决「已执行、回包丢失」(R5):go-redis 对读超时 / EOF 会原样重发
-// EVAL,重发时映射已经没了,认领落空,调用方按「已被别人销毁」跳过级联、C++ DestroyScene、SREM、计数、
-// Agones 归还,这些副作用永久丢失。
+// 销毁认领脚本有两段:空闲回收用 luaAtomicDestroyInstance,其余拆除一律用 luaAtomicDestroyInstanceForce。
+// 两段都由下面几块拼成,拆除任务的整体说明见 scene_teardown_job.go。
 //
-// KEYS[8] 是认领记录,ARGV[2] 是本次认领的 token,ARGV[3] 是记录的存活秒数。同一 token 的记录在,说明脚本已经
-// 执行过:什么都不再动,原样返回当时的快照。认领落空和 busy 不写记录,它们什么都没改,重发时重新判定就是对的。
-// 记录里的 token 不是当前这个时,说明是另一次认领留下的,照常往下走。
+// KEYS(由 sceneTeardownRequest.keys 拼,顺序是脚本的契约):
+//   - [1..9] sceneClaimKeys:场景的状态键、zone 的 active 集合、拆除任务 scene:{id}:teardown、本 zone 的待办集合;
+//   - [10..11] 期望属主的场景集合与 scene_count,只在期望属主非空时传;
+//   - 其后:要在同一步把场景摘掉的集合(世界频道的频道集合 / 排空集合)。
+//
+// ARGV:
+//   - [1] sceneId(十进制,ZREM / SREM 的成员);[2] 本次认领的 token;[3] 当前 Unix 秒;
+//   - [4] 拆除任务种类;[5] reason;[6] 期望属主,空串表示映射必须已不存在;[7] '1' 表示同一步扣属主的 scene_count;
+//   - [8] 认领方的 zone(十进制),也就是 KEYS 里 active 集合、待办与属主键所属的 zone。
+//
+// 应答由 parseSceneClaimReply 解:{状态, 属主, agones_gs, 镜像源, 镜像标记, 成员...}。状态是 'claimed'、
+// 'stale'(期望落空,一个键都没动)、'pending'(这个场景的上一次拆除还没做完,一个键都没动)、'foreign'
+// (场景登记在别的 zone,一个键都没动)或 'busy'(场景里有人,只有空闲回收脚本会回)。
+
+// luaSceneClaimPrelude 是认领脚本的开头,先看拆除任务:
+//   - 同一 token 的任务在:脚本已经执行过,这次是 go-redis 读超时 / EOF 之后的原样重发(R5)。原样返回当时的快照,
+//     一个键都不再动。否则重发看到映射已删,回 'stale',调用方以为别人销毁了而跳过全部副作用。
+//   - 别的 token 的任务在:这个场景已被另一次认领拿走、副作用还没做完,回 'pending'、一个键都不动。同一个 scene_id
+//     被重新登记时(号源出错)也挡在这里,旧任务做完之前新场景不会被认领。
 const luaSceneClaimPrelude = `
-local prior = redis.call('GET', KEYS[8])
-if prior then
-    local record = cjson.decode(prior)
-    if record.token == ARGV[2] then
-        return record.reply
+local pendingToken = redis.call('HGET', KEYS[8], 'token')
+if pendingToken then
+    if pendingToken == ARGV[2] then
+        return cjson.decode(redis.call('HGET', KEYS[8], 'reply'))
     end
-end
-local function recordClaim(reply)
-    redis.call('SET', KEYS[8], cjson.encode({token = ARGV[2], reply = reply}), 'EX', ARGV[3])
-    return reply
+    return {'pending', '', '', '', ''}
 end
 `
 
-// 三段认领脚本的应答格式相同,由 parseSceneClaimReply 解:{状态, nodeId, agonesGs, 镜像源, 镜像标记, 成员...}。
-// 状态是 'claimed'、'stale'(比对落空,一个键都没动)或 'busy'(场景里有人,只有空闲回收脚本会回)。
-// 格式统一是因为 SceneClaimTokens 按场景记 token:空闲回收和 force 都可能接手同一个结局未知的认领,
-// 接手的一方拿到的快照要能照常做完副作用。
-//
-// 镜像源与镜像标记也必须在脚本里读、随快照返回(2026-11-05):接手发生在第一次执行之后,那时
-// scene:{id}:source 与 scene:{id}:mirror 已经删了,调用方再读只会读到空,镜像不从源的子集合里摘掉,
-// 源频道的 channelHasMirrors 恒真、永远缩不了容。
-
-// luaAtomicDestroyInstance 是空闲回收的认领脚本:
-//  1. 场景里有人:把空闲时钟重置成 ARGV[4],一个键都不删,回 'busy'。重置放在脚本里,并发销毁之后不会把
-//     已经摘掉的实例重新加回 active 集合(ZADD XX),那会留下永久僵尸;
-//  2. 没人:读出属主和 agones_gs,抹掉场景的全部键,回 'claimed'。
-//
-// 映射已经不在时同样回 'claimed',NodeID 为空:这是 active 集合里的残留,要摘掉,不能当成有人进场再加回去,
-// agones_gs 还在就交给调用方归还。
-//
-// KEYS[1..8] 见 sceneClaimKeys。
-// ARGV[1] = sceneId,ARGV[2..3] 见 luaSceneClaimPrelude,ARGV[4] = 当前 Unix 秒。
-//
-// scene:{id}:agones_gs 必须和其余 scene 状态在**同一个脚本里**删除,
-// 并且它的值要在删之前读出来返回给调用方:
-//   - 不一起删 -> 留下悬空映射,下次同 id 复用时会把计数减到别人头上
-//   - 不返回   -> 删完就再也不知道该向哪个 GameServer 归还 rooms 名额
-//
-// Note: we do NOT touch node:zone:{zoneId}:{nodeId}:scenes inside the script because we
-// don't know the node id until after we read it (and the key name is
-// dynamic). The caller does that SREM outside, which is fine: the
-// reconciliation loop double-checks scene:{id}:node before destroying so
-// a stale node-scenes set entry is harmless.
-const luaAtomicDestroyInstance = luaSceneClaimPrelude + `
-if redis.call('SCARD', KEYS[2]) > 0 then
-    redis.call('ZADD', KEYS[3], 'XX', ARGV[4], ARGV[1])
-    return {'busy', '', '', '', ''}
+// luaSceneClaimZoneCheck 守 zone 归属(docs/design/control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由
+// zone z 的 scene_manager 读写):场景登记的 zone(scene:{id}:zone,登记脚本写)不是认领方的 zone(ARGV[8])就回
+// 'foreign'、一个键都不动。同组几个 zone 共用一个控制域实例,别的 zone 的场景键在这里读得到、也删得掉,删了却会按
+// 本 zone 的 active 集合、待办和节点计数去记账。没有 zone 记录(登记之前的旧数据)时不拦。
+// 放在认领的同一步里比,调用方事先的判断(级联先读子镜像的 zone)只是少一次无用的 EVAL,挡不住所有调用方。
+const luaSceneClaimZoneCheck = `
+local sceneZone = redis.call('GET', KEYS[6])
+if sceneZone and sceneZone ~= ARGV[8] then
+    return {'foreign', '', '', '', ''}
 end
-local nodeId = redis.call('GET', KEYS[1])
-local agonesGs = redis.call('GET', KEYS[7])
-local source = redis.call('GET', KEYS[5])
-local mirror = redis.call('GET', KEYS[4])
-redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
-redis.call('ZREM', KEYS[3], ARGV[1])
-return recordClaim({'claimed', nodeId or '', agonesGs or '', source or '', mirror or ''})
 `
 
-// luaAtomicDestroyInstanceForce 是 luaAtomicDestroyInstance 的 force 版:不做人数守卫,认领以映射存在为前提;
-// 回 'claimed' 时带抹除前的 nodeId、agonesGs、镜像源、镜像标记和成员。读与 DEL 在同一脚本里原子执行,
-// 并发的销毁(空闲回收的非 force 脚本、explicit / 级联 / 收尾的 force 脚本,或领导者降级
-// 窗口里的新旧领导者)只有第一个能认领 —— 计数减法 / Agones 名额归还 / 镜像级联
-// 这些副作用因此恰好执行一次,不双减计数、不双还名额。
-// 成员交回给调用方,由它从节点集合里摘掉(节点键要等读到属主才知道,不在脚本里现拼)。
+// luaSceneClaimOwnerCheck 比对期望属主(R3:认领以映射等于期望为前提)。ARGV[6] 非空时 scene:{id}:node 必须等于它,
+// 空串时映射必须已不存在。后者只有两个调用方:空闲回收清扫 active 集合里映射已不在的残留,世界频道收尾在先读到
+// 映射不存在之后拆残留(atomicTeardownScene)。不符就一个键都不动。
 //
-// KEYS[1..8] 见 sceneClaimKeys。
-// ARGV[1] = sceneId,ARGV[2..3] 见 luaSceneClaimPrelude。
-// ARGV[4] = 期望属主;空串表示不比对(explicit / source_migrated / source_scaled_in 经
-// destroyInstanceForce,以及镜像级联,语义同前)。空闲回收走的是 luaAtomicDestroyInstance,不经这里。
-// 非空时只有 scene:{id}:node 仍等于它才抹,否则一个键都不动,回 'stale'。
-// 死节点收尾靠它(2026-10-22):收尾读到「属主是死节点」之后,只要有写者用 reassignSceneNode 把实例
-// 改派到活节点并 CreateScene,不比对的话这里会把新属主的场景抹掉、向新节点发 DestroyScene、扣新节点的
-// 计数。比较必须和删除在同一个脚本里,收尾自己的读挡不住这个窗口。(修复时这样的写者是 resolveScene 的
-// 死节点自愈;10-23 起它只重建世界频道,比对作为纵深防御保留,见 destroyOrphanOfDeadNode。)
-// 映射不存在时一律不动:删映射的路径(并发销毁,或 luaRollbackInstanceAllocation)在同一步里抹了全部键并负责
-// 其余清理,这里再认领会双还名额。
-//
-// 另有两个可选参数,只由 atomicTeardownScene(排空收尾、孤儿清理,都是世界频道)使用,AtomicDestroyForce 不传:
-//   - ARGV[5] = 'absent':调用方先前读到映射不存在,要求此刻仍不存在;期间被写入了属主就一个键都不动。
-//     这是映射不存在时唯一能认领的模式,认领时 NodeID 为空,用来收掉频道集合里的残留。
-//   - KEYS[9..]:在删映射的同一步把成员 ARGV[1] 从这些集合里摘掉(频道集合 / 排空集合)。
-const luaAtomicDestroyInstanceForce = luaSceneClaimPrelude + `
+// 死节点收尾靠它(2026-10-22):收尾读到「属主是死节点」之后,只要有写者用 reassignSceneNode 把实例改派到活节点并
+// CreateScene,不比对的话这里会把新属主的场景抹掉、向新节点发 DestroyScene、扣新节点的计数。比较必须和删除在同一个
+// 脚本里,收尾自己的读挡不住这个窗口。所有调用方都带期望属主,属主的反向索引与 scene_count 因此能在同一步里改
+// (键由调用方按期望属主拼好放进 KEYS[10..11],脚本不从数据拼键)。
+const luaSceneClaimOwnerCheck = `
 local nodeId = redis.call('GET', KEYS[1])
-if ARGV[4] ~= '' and nodeId ~= ARGV[4] then
-    return {'stale', '', '', '', ''}
-end
-if ARGV[5] == 'absent' then
+if ARGV[6] == '' then
     if nodeId then
         return {'stale', '', '', '', ''}
     end
-elseif not nodeId then
+    nodeId = ''
+elseif nodeId ~= ARGV[6] then
     return {'stale', '', '', '', ''}
 end
-local agonesGs = redis.call('GET', KEYS[7])
-local source = redis.call('GET', KEYS[5])
-local mirror = redis.call('GET', KEYS[4])
+`
+
+// luaSceneClaimIdleGuard 只在空闲回收脚本里:场景里有人就把空闲时钟重置成 ARGV[3]、一个键都不删,回 'busy'。
+// 重置放在脚本里并用 ZADD XX:并发销毁已经把实例摘出 active 集合时不会把它加回去,那会留下永久僵尸。
+const luaSceneClaimIdleGuard = `
+if redis.call('SCARD', KEYS[2]) > 0 then
+    redis.call('ZADD', KEYS[3], 'XX', ARGV[3], ARGV[1])
+    return {'busy', '', '', '', ''}
+end
+`
+
+// luaSceneClaimCommit 提交认领:读快照、删场景的全部状态键、改属主的反向索引与计数、摘集合、写拆除任务,
+// 全在同一步里。读都在写之前:脚本中途报错时 Redis 不回滚已经执行的写。
+//
+// scene:{id}:agones_gs 必须和其余场景状态一起删,值要在删之前读出来:不一起删会留下悬空映射,下次同 id 复用时把计数
+// 减到别人头上;不读出来就再也不知道该向哪个 GameServer 归还名额。镜像源与镜像标记同理:事后再读只会读到空,
+// 镜像不从源的子集合里摘掉,源频道的 channelHasMirrors 恒真、永远缩不了容。
+//
+// scene_count 只在 > 0 时才减:计数键可能已被死节点收尾整个删掉,DECR 会把它重建成 -1,被复用同一 node_id 的
+// 新进程继承(同 luaReassignSceneNode 对老节点的处理)。
+const luaSceneClaimCommit = `
+local agonesGs = redis.call('GET', KEYS[7]) or ''
+local source = redis.call('GET', KEYS[5]) or ''
+local mirror = redis.call('GET', KEYS[4]) or ''
 local members = redis.call('SMEMBERS', KEYS[2])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
-for i = 9, #KEYS do
+local unlistFrom = 10
+if nodeId ~= '' then
+    redis.call('SREM', KEYS[10], ARGV[1])
+    if ARGV[7] == '1' then
+        local count = tonumber(redis.call('GET', KEYS[11]) or '0') or 0
+        if count > 0 then
+            redis.call('DECR', KEYS[11])
+        end
+    end
+    unlistFrom = 12
+end
+for i = unlistFrom, #KEYS do
     redis.call('SREM', KEYS[i], ARGV[1])
 end
-local out = {'claimed', nodeId or '', agonesGs or '', source or '', mirror or ''}
+local reply = {'claimed', nodeId, agonesGs, source, mirror}
 for i = 1, #members do
-    out[i + 5] = members[i]
+    reply[i + 5] = members[i]
 end
-return recordClaim(out)
+redis.call('HSET', KEYS[8], 'token', ARGV[2], 'kind', ARGV[4], 'reason', ARGV[5], 'claimed_at', ARGV[3],
+    'reply', cjson.encode(reply))
+redis.call('ZADD', KEYS[9], ARGV[3], ARGV[1])
+return reply
 `
 
-// luaRollbackInstanceAllocation 撤销一次失败的实例创建,R3 的修法:原来逐条 DEL、不查错,中途中断会留下
-// 「映射没了、其它键还在」的残留。只有映射仍指向这次分配的节点才认领,否则回 'stale'、一个键都不动:
-// 期间被销毁或改派了,收尾归那条路径。
-//
-// 与销毁脚本不同,节点反向索引、计数和镜像源的子集合都在脚本里摘:这次分配的节点已知,没有理由留到脚本外。
-//
-// KEYS[1..8] 见 sceneClaimKeys,KEYS[9] = 节点场景集合,KEYS[10] = 节点 scene_count,
-// KEYS[11] = 镜像源的子集合(不是镜像时不传)。
-// ARGV[1] = sceneId,ARGV[2..3] 见 luaSceneClaimPrelude,ARGV[4] = 这次分配的节点。
-const luaRollbackInstanceAllocation = luaSceneClaimPrelude + `
-if redis.call('GET', KEYS[1]) ~= ARGV[4] then
-    return {'stale', '', '', '', ''}
-end
-local agonesGs = redis.call('GET', KEYS[7])
-local source = redis.call('GET', KEYS[5])
-local mirror = redis.call('GET', KEYS[4])
-redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
-redis.call('ZREM', KEYS[3], ARGV[1])
-redis.call('SREM', KEYS[9], ARGV[1])
-redis.call('DECR', KEYS[10])
-if KEYS[11] then
-    redis.call('SREM', KEYS[11], ARGV[1])
-end
-return recordClaim({'claimed', ARGV[4], agonesGs or '', source or '', mirror or ''})
-`
+// luaAtomicDestroyInstance 是空闲回收的认领脚本:有人就不拆、只重置空闲时钟,没人才拆。
+const luaAtomicDestroyInstance = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimOwnerCheck +
+	luaSceneClaimIdleGuard + luaSceneClaimCommit
 
-// AtomicDestroyForce 原子认领并抹掉一个场景的全部 Redis 键(不看人数),返回抹除前的快照。
-// Claimed=false 说明别的进程已抢先抹掉,或属主已不是 expectedOwner —— 调用方必须跳过一切副作用
-// (计数、归还、级联、RPC)。
-//
-// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才抹;不等(含映射已不存在)时什么都不动。
-// 空串表示不比对,但映射必须还在。
-//
-// 是否认领只看 Claimed,不看 NodeID 是否为空(2026-11-05):本进程接手结局未知的认领时(见 evalSceneClaim),
-// 回放的可能是空闲回收清扫残留或世界频道 absent 认领的快照,那两种认领成功时 NodeID 都为空。
-func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (sceneClaim, error) {
-	return evalSceneClaim(svcCtx, sceneId, luaAtomicDestroyInstanceForce, sceneClaimKeys(zoneId, sceneId), expectedOwner)
-}
+// luaAtomicDestroyInstanceForce 是其余拆除的认领脚本,不看人数,只看期望属主。调用方:显式 DestroyScene、镜像级联、
+// 死节点收尾、源迁移 / 缩容时的镜像级联(都经 AtomicDestroyForce),世界频道的排空收尾与孤儿清理(atomicTeardownScene),
+// 建实例失败的回滚(atomicRollbackInstanceAllocation)。
+const luaAtomicDestroyInstanceForce = luaSceneClaimPrelude + luaSceneClaimZoneCheck + luaSceneClaimOwnerCheck + luaSceneClaimCommit
 
-// sceneClaimKeys 是认领脚本的 KEYS[1..8]:一个场景在 Redis 里的全部状态键、zone 的 active instances 集合
-// (ZREM 用)和认领记录。顺序是脚本的契约。
+// errSceneInOtherZone 表示要拆的场景登记在别的 zone:它的键只由那个 zone 的 scene_manager 读写,这里一个键都没动。
+var errSceneInOtherZone = errors.New("scene is registered in another zone")
+
+// sceneClaimKeys 是认领脚本的 KEYS[1..9],见 luaSceneClaimPrelude 之前的说明。
 func sceneClaimKeys(zoneId uint32, sceneId uint64) []string {
 	return []string{
 		sceneNodeKey(sceneId),
@@ -285,26 +254,57 @@ func sceneClaimKeys(zoneId uint32, sceneId uint64) []string {
 		sceneSourceKey(sceneId),
 		sceneZoneKey(sceneId),
 		sceneAgonesGsKey(sceneId),
-		sceneClaimRecordKey(sceneId),
+		sceneTeardownJobKey(sceneId),
+		sceneTeardownPendingKey(zoneId),
 	}
 }
 
-// sceneClaim 是认领脚本的应答。Claimed=false 时其余字段都为空:比对落空,或场景里有人(Busy)。
-// Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在)。调用方的副作用一律以这些值为准,
-// 不用认领前自己读的:接手回放时那些键早已删掉。
+// sceneTeardownRequest 是一次拆除认领的参数。
+type sceneTeardownRequest struct {
+	ZoneID  uint32
+	SceneID uint64
+	// Kind 是拆除任务的种类(teardownKind*),决定认领之后做哪些副作用。
+	Kind string
+	// Reason 是 Agones 归还与 instance_destroyed_total 的 reason。
+	Reason string
+	// ExpectedOwner 是认领时 scene:{id}:node 必须等于的值;空串表示映射必须已不存在(清扫残留)。
+	ExpectedOwner string
+	// CountOwner 为 true 时在同一步扣期望属主的 scene_count(只在 > 0 时减)。
+	CountOwner bool
+	// UnlistKeys 是要在同一步把场景摘掉的集合。
+	UnlistKeys []string
+}
+
+// keys 按 luaSceneClaimPrelude 之前写的布局拼出脚本的 KEYS。
+func (r sceneTeardownRequest) keys() []string {
+	keys := sceneClaimKeys(r.ZoneID, r.SceneID)
+	if r.ExpectedOwner != "" {
+		keys = append(keys, nodeScenesKey(r.ZoneID, r.ExpectedOwner), nodeSceneCountKey(r.ZoneID, r.ExpectedOwner))
+	}
+	return append(keys, r.UnlistKeys...)
+}
+
+// sceneClaim 是认领脚本的应答。Claimed=false 时其余字段都为空:期望落空,场景里有人(Busy),这个场景的上一次拆除
+// 还没做完(Pending,任务做完之前谁都认领不到),或场景登记在别的 zone(Foreign)。
+// Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在),认领之后的副作用一律以它们为准。
 // Source 是镜像源 scene_id 的十进制(不是镜像时为空),MirrorFlag 是 scene:{id}:mirror 的值("1" 表示镜像)。
-// Members 是场景里剩的成员,要由调用方从节点集合里摘掉(removeResidualSceneMembers)。
+// Members 是场景里剩的成员,要由副作用从节点集合里摘掉(removeResidualSceneMembers)。
+// Token 是这次认领的 token,也是拆除任务的身份,只在 Claimed 时有值。
 type sceneClaim struct {
 	Claimed    bool
 	Busy       bool
+	Pending    bool
+	Foreign    bool
 	NodeID     string
 	AgonesGs   string
 	Source     string
 	MirrorFlag string
 	Members    []string
+	Token      string
 }
 
-// parseSceneClaimReply 解认领脚本的应答,格式见 luaSceneClaimPrelude 之后的说明。
+// parseSceneClaimReply 解认领脚本的应答,格式见 luaSceneClaimPrelude 之前的说明。raw 是 Eval 的返回值,
+// 或拆除任务里存的快照解出来的 []string(loadSceneTeardownJob)。
 func parseSceneClaimReply(raw any) sceneClaim {
 	parts := toSlice(raw)
 	if len(parts) < 5 {
@@ -313,6 +313,10 @@ func parseSceneClaimReply(raw any) sceneClaim {
 	switch toString(parts[0]) {
 	case "busy":
 		return sceneClaim{Busy: true}
+	case "pending":
+		return sceneClaim{Pending: true}
+	case "foreign":
+		return sceneClaim{Foreign: true}
 	case "claimed":
 		members := make([]string, 0, len(parts)-5)
 		for _, member := range parts[5:] {
@@ -330,64 +334,86 @@ func parseSceneClaimReply(raw any) sceneClaim {
 	return sceneClaim{}
 }
 
-// evalSceneClaim 跑一段销毁认领脚本,保证结局未知的认领能被接手。
+// evalSceneClaim 用一个新 token 跑一段销毁认领脚本。
 //
-// go-redis 内部重发带的是同一个 token,脚本自己就幂等。内部重试也用完、Eval 回了错时,脚本可能已经执行:
-// 这里把 token 记下,这个进程下一次认领同一场景时带上它,才取得回当时的快照。不记的话副作用还是丢。
-// LoadAndDelete 保证并发的两次认领不会拿到同一个 token,否则两边都做一遍副作用。
-//
-// 只能接手本进程的认领:进程在认领之后崩溃,副作用仍然丢(残余 R1,靠对账和告警兜底)。
-func evalSceneClaim(svcCtx *svc.ServiceContext, sceneId uint64, script string, keys []string, extraArgs ...any) (sceneClaim, error) {
-	token := uuid.NewString()
-	if pending, ok := svcCtx.SceneClaimTokens.LoadAndDelete(sceneId); ok {
-		token = pending.(string)
-	}
-	claim, err := evalSceneClaimWithToken(svcCtx, sceneId, token, script, keys, extraArgs...)
-	if err != nil {
-		svcCtx.SceneClaimTokens.Store(sceneId, token)
-	}
-	return claim, err
+// go-redis 的内部重发带的是同一组参数,脚本按 token 认出自己、原样返回快照(luaSceneClaimPrelude)。重试也用完、
+// Eval 回了错时结局未知:脚本若已执行,拆除任务已经在待办里,由扫描在租期之后做完副作用(scene_teardown_job.go),
+// 调用方按「这次没认领到」处理即可,不用记住 token 去接手。
+func evalSceneClaim(svcCtx *svc.ServiceContext, script string, req sceneTeardownRequest) (sceneClaim, error) {
+	return evalSceneClaimWithToken(svcCtx, script, req, uuid.NewString())
 }
 
-func evalSceneClaimWithToken(svcCtx *svc.ServiceContext, sceneId uint64, token, script string, keys []string, extraArgs ...any) (sceneClaim, error) {
-	args := append([]any{strconv.FormatUint(sceneId, 10), token, sceneClaimRecordTTLSeconds}, extraArgs...)
-	raw, err := svcCtx.Redis.Eval(script, keys, args...)
+func evalSceneClaimWithToken(svcCtx *svc.ServiceContext, script string, req sceneTeardownRequest, token string) (sceneClaim, error) {
+	countOwner := "0"
+	if req.CountOwner {
+		countOwner = "1"
+	}
+	raw, err := svcCtx.Redis.Eval(script, req.keys(),
+		strconv.FormatUint(req.SceneID, 10), token, time.Now().Unix(), req.Kind, req.Reason, req.ExpectedOwner, countOwner,
+		strconv.FormatUint(uint64(req.ZoneID), 10))
 	if err != nil {
 		return sceneClaim{}, err
 	}
-	return parseSceneClaimReply(raw), nil
+	claim := parseSceneClaimReply(raw)
+	if claim.Claimed {
+		claim.Token = token
+	}
+	return claim, nil
 }
 
-// atomicRollbackInstanceAllocation 原子撤销一次失败的实例创建,见 luaRollbackInstanceAllocation。
+// sceneClaimOwnerAttempts 是「谁是属主都拆」的认领最多读几次属主,见 AtomicDestroyForce。
+const sceneClaimOwnerAttempts = 3
+
+// AtomicDestroyForce 原子认领一个副本 / 镜像的拆除(不看人数),认领时在同一步扣属主的 scene_count、摘属主的
+// 反向索引,并写下拆除任务。reason 是 explicit / cascade / node_death / source_migrated / source_scaled_in。
 //
-// token 不进 SceneClaimTokens:这段脚本自己摘了计数和反向索引,销毁路径接手它的快照会再减一次。
-// 回错时结局未知,但两种结局都能收敛:脚本没执行,实例还在 active 集合里,空闲回收按映射销毁并归还名额;
-// 脚本执行了,其余状态已经干净,只有调用方手里的名额没还,由 Agones 对账告警发现。
-func atomicRollbackInstanceAllocation(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, nodeId string, sourceSceneId uint64) (sceneClaim, error) {
-	keys := append(sceneClaimKeys(zoneId, sceneId), nodeScenesKey(zoneId, nodeId), nodeSceneCountKey(zoneId, nodeId))
-	if sourceSceneId > 0 {
-		keys = append(keys, sceneMirrorsKey(sourceSceneId))
+// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才拆(死节点收尾);不等(含映射已不存在)一个键都不动。
+// 空串表示谁是属主都拆:先读属主、按读到的值认领;读完之后被改派就重读,至多读 sceneClaimOwnerAttempts 次。
+// 映射已不存在时不认领 —— 映射没了、别的键还在的残留只由空闲回收清扫(R3)。上一次拆除还没做完(Pending)、
+// 场景登记在别的 zone(Foreign)时也不重读,原样返回。
+//
+// 是否认领只看 Claimed:未认领时调用方必须跳过一切副作用。
+func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner, reason string) (sceneClaim, error) {
+	req := sceneTeardownRequest{ZoneID: zoneId, SceneID: sceneId, Kind: teardownKindInstance, Reason: reason, CountOwner: true}
+	if expectedOwner != "" {
+		req.ExpectedOwner = expectedOwner
+		return evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, req)
 	}
-	return evalSceneClaimWithToken(svcCtx, sceneId, uuid.NewString(), luaRollbackInstanceAllocation, keys, nodeId)
+	for attempt := 0; attempt < sceneClaimOwnerAttempts; attempt++ {
+		owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+		if err != nil {
+			return sceneClaim{}, err
+		}
+		if owner == "" {
+			return sceneClaim{}, nil
+		}
+		req.ExpectedOwner = owner
+		claim, err := evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, req)
+		if err != nil || claim.Claimed || claim.Pending || claim.Foreign {
+			return claim, err
+		}
+	}
+	return sceneClaim{}, fmt.Errorf("scene %d: owner changed between the read and the claim %d times in a row", sceneId, sceneClaimOwnerAttempts)
 }
 
-// atomicTeardownScene 原子认领并抹掉一个世界频道的场景键,并在同一步里把它从 unlistKeys 这些集合里摘掉
-// (成员为十进制 sceneId,用于频道集合 / 排空集合)。给按「先读后拆」两步走的收尾路径用:排空收尾、孤儿清理。
-//
-// 与 AtomicDestroyForce 的区别(2026-10-23):
-//   - expectedOwner 为空串表示「先前读到映射不存在,现在必须仍不存在」,而不是「不比对」:两步之间若有
-//     写者(懒改派等)给它写了属主,一个键都不动。否则会把新属主的映射抹掉,而调用方按空属主做副作用,
-//     新节点上的实体与计数都没人收。
-//   - 集合摘除与删映射同一步:不会出现「集合里还列着、映射已删」的中间态 —— 那个状态会被任意副本上的
-//     懒改派当成陈旧频道复活。
-//   - 返回 Claimed,区分「比对落空」与「认领成功但各键本来就空」。
-func atomicTeardownScene(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string, unlistKeys ...string) (sceneClaim, error) {
-	keys := append(sceneClaimKeys(zoneId, sceneId), unlistKeys...)
-	ownerMode := ""
-	if expectedOwner == "" {
-		ownerMode = "absent"
-	}
-	return evalSceneClaim(svcCtx, sceneId, luaAtomicDestroyInstanceForce, keys, expectedOwner, ownerMode)
+// atomicRollbackInstanceAllocation 原子撤销一次失败的实例创建(R3:原来逐条 DEL、不查错,中途中断会留下「映射没了、
+// 其它键还在」的残留)。只有映射仍指向这次分配的节点才认领,否则一个键都不动:期间被销毁或改派了,收尾归那条路径。
+// 节点反向索引与 scene_count 在同一步里改。镜像源的子集合按快照里的镜像源摘(runRollbackTeardown),不按请求里的
+// SourceSceneId:源在别的 zone 时登记不写 scene:{id}:source,也不进源的子集合,快照与登记天然一致。
+func atomicRollbackInstanceAllocation(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, nodeId string) (sceneClaim, error) {
+	return evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, sceneTeardownRequest{
+		ZoneID: zoneId, SceneID: sceneId, Kind: teardownKindRollback, Reason: "create_rpc_failed",
+		ExpectedOwner: nodeId, CountOwner: true,
+	})
+}
+
+// atomicTeardownScene 原子认领一个世界频道的拆除,给按「先读后拆」两步走的收尾路径用:排空收尾、孤儿清理。
+//   - req.ExpectedOwner 是先前读到的属主。空串表示先前读到映射不存在、现在必须仍不存在:两步之间若有写者(懒改派等)
+//     给它写了属主,一个键都不动。否则会把新属主的映射抹掉,而调用方按空属主做副作用,新节点上的实体与计数都没人收。
+//   - req.UnlistKeys 是频道集合 / 排空集合:集合摘除与删映射同一步,不会出现「集合里还列着、映射已删」的中间态 ——
+//     那个状态会被任意副本上的懒改派当成陈旧频道复活。
+func atomicTeardownScene(svcCtx *svc.ServiceContext, req sceneTeardownRequest) (sceneClaim, error) {
+	return evalSceneClaim(svcCtx, luaAtomicDestroyInstanceForce, req)
 }
 
 // AtomicAddSceneMemberIfSceneExists 是 EnterScene 指定场景时的预占:只有 scene:{id}:node 还在才把玩家加进成员集合,
@@ -476,13 +502,20 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 	return winner.SceneID, winner.NodeID, count, nil
 }
 
-// AtomicDestroyIfIdle is the race-safe replacement for the multi-step
-// Redis cleanup in destroyInstance. 场景里有人时回 Busy,除重置空闲时钟外什么都不动;
-// 否则抹掉场景的全部键,回 Claimed,NodeID 是场景所在节点(映射已经不在时为空),
-// AgonesGs 是它占用的 GameServer(非 Agones 模式下为空)。AgonesGs 和场景状态在同一个
-// 脚本里被读出并删除,调用方拿它去精确归还 rooms 名额 —— 先删后读会永久丢失回滚依据。
+// AtomicDestroyIfIdle 是空闲回收的认领。场景里有人时回 Busy,除重置空闲时钟外什么都不动;否则拆掉场景、写下拆除
+// 任务,回 Claimed,同一步扣属主的 scene_count。
+//
+// 属主先读一次,按读到的值认领。映射已经不在时按「必须仍不在」认领,收掉 active 集合里的残留:NodeID 为空,
+// agones_gs 还在就由副作用归还,不当成有人进场再加回去。属主在读与认领之间变了就回未认领,下一拍重判。
 func AtomicDestroyIfIdle(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (sceneClaim, error) {
-	return evalSceneClaim(svcCtx, sceneId, luaAtomicDestroyInstance, sceneClaimKeys(zoneId, sceneId), time.Now().Unix())
+	owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+	if err != nil {
+		return sceneClaim{}, err
+	}
+	return evalSceneClaim(svcCtx, luaAtomicDestroyInstance, sceneTeardownRequest{
+		ZoneID: zoneId, SceneID: sceneId, Kind: teardownKindInstance, Reason: "idle",
+		ExpectedOwner: owner, CountOwner: true,
+	})
 }
 
 // toInt64 converts the untyped return of Redis.Eval to int64.

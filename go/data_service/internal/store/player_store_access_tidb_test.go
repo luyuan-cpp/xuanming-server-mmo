@@ -69,16 +69,15 @@ func TestTiDBCreateRoleWritesPlayerStoreRows(t *testing.T) {
 	require.EqualValues(t, 1, owner.released, "新角色没有持有者")
 	require.Empty(t, owner.holder)
 
-	hotRow, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT)
-	require.True(t, ok)
-	var hot databasepb.PlayerDatabase
-	require.NoError(t, proto.Unmarshal(hotRow.payload, &hot))
-	require.EqualValues(t, 3, hot.GetUint32PbComponent().GetClass())
+	// 新分行(player-save-direct-commit.md §1.1):职业和名字、外观、性别都在 kProfile;建角不写别的数据行。
+	_, ok = readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER)
+	require.False(t, ok, "等级行要等首次存盘")
 
 	profileRow, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE)
 	require.True(t, ok)
 	var profile databasepb.PlayerDatabase
 	require.NoError(t, proto.Unmarshal(profileRow.payload, &profile))
+	require.EqualValues(t, 3, profile.GetUint32PbComponent().GetClass())
 	require.Equal(t, "新路径", profile.GetProfileComponent().GetName())
 	require.Equal(t, "look", profile.GetProfileComponent().GetAppearanceId())
 	require.EqualValues(t, 2, profile.GetProfileComponent().GetGender())
@@ -105,7 +104,7 @@ func TestTiDBReadPlayerStoreAsset(t *testing.T) {
 	require.NotNil(t, row)
 	require.True(t, row.Released)
 	require.EqualValues(t, role.PlayerId, row.Player.GetPlayerId())
-	require.Nil(t, row.Player.GetAssetOpLedger(), "没有 kAsset 行:账本为空")
+	require.Nil(t, row.Player.GetAssetOpLedger(), "没有 kWallet 行:账本为空")
 
 	// 没有路由 / 没有写权行:不是错误。
 	row, err = s.ReadPlayerStoreAsset(ctx, 987654321)
@@ -118,7 +117,7 @@ func TestTiDBReadPlayerStoreAsset(t *testing.T) {
 	_, err = db.Exec("UPDATE `"+schema+"`.`player_store` SET owner_epoch=7,save_seq=9,released=0,holder_instance=? WHERE player_id=? AND kind=0", []byte("instance-a"), role.PlayerId)
 	require.NoError(t, err)
 	_, err = db.Exec("INSERT INTO `"+schema+"`.`player_store` (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES (?,?,7,9,?,?,0,?)",
-		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET), persistschema.Gen, []byte{}, asset)
+		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET), persistschema.Gen, []byte{}, asset)
 	require.NoError(t, err)
 	row, err = s.ReadPlayerStoreAsset(ctx, role.PlayerId)
 	require.NoError(t, err)
@@ -127,6 +126,36 @@ func TestTiDBReadPlayerStoreAsset(t *testing.T) {
 	require.EqualValues(t, 9, row.SaveSeq)
 	require.NotNil(t, row.Player.GetAssetOpLedger())
 	require.EqualValues(t, role.PlayerId, row.Player.GetPlayerId())
+}
+
+// 物品获取封禁表在资料行(GetPlayerItemGainBlock 的存档一侧):建角之后有写权行、封禁表为空;
+// 资料行写进封禁表之后原样读出;没有路由不是错误。
+func TestTiDBReadPlayerStoreProfile(t *testing.T) {
+	s, db := accountDirectoryTiDB(t)
+	_, schema := initialPlayerSchemaForTest(t, s)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	role := directRoleForTest(t, s, ctx, 3208)
+
+	row, err := s.ReadPlayerStoreProfile(ctx, role.PlayerId)
+	require.NoError(t, err)
+	require.NotNil(t, row)
+	require.EqualValues(t, role.PlayerId, row.Player.GetPlayerId())
+	require.Empty(t, row.Player.GetItemGainBlock().GetItemConfigIds(), "从未被封过")
+
+	row, err = s.ReadPlayerStoreProfile(ctx, 987654321)
+	require.NoError(t, err)
+	require.Nil(t, row)
+
+	profile, err := proto.Marshal(&databasepb.PlayerDatabase{ItemGainBlock: &componentpb.PlayerItemGainBlockComp{ItemConfigIds: []uint32{30045, 30046}}})
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO `"+schema+"`.`player_store` (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES (?,?,0,0,?,?,1,?)"+
+		" ON DUPLICATE KEY UPDATE payload=VALUES(payload)",
+		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE), persistschema.Gen, []byte{}, profile)
+	require.NoError(t, err)
+	row, err = s.ReadPlayerStoreProfile(ctx, role.PlayerId)
+	require.NoError(t, err)
+	require.Equal(t, []uint32{30045, 30046}, row.Player.GetItemGainBlock().GetItemConfigIds())
 }
 
 func TestTiDBReleaseDeadPlayerStoreHolder(t *testing.T) {
@@ -260,20 +289,19 @@ func TestTiDBReadPlayerDisplays(t *testing.T) {
 	require.EqualValues(t, 3, display.GetClassId())
 	require.Zero(t, display.GetLevel(), "还没存过盘")
 
-	// 存过盘之后等级跟着 kHot 行走。
-	hot, err := proto.Marshal(&databasepb.PlayerDatabase{
-		LevelComponent:    &componentpb.LevelComp{Level: 42},
-		Uint32PbComponent: &componentpb.PlayerUint32Comp{Class: 3},
-	})
+	// 存过盘之后等级跟着 kCharacter 行走,职业仍从 kProfile 读。
+	character, err := proto.Marshal(&databasepb.PlayerDatabase{LevelComponent: &componentpb.LevelComp{Level: 42}})
 	require.NoError(t, err)
-	_, err = db.Exec("UPDATE `"+schema+"`.`player_store` SET payload=? WHERE player_id=? AND kind=?", hot, role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT))
+	_, err = db.Exec("INSERT INTO `"+schema+"`.`player_store` (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES (?,?,1,2,?,?,0,?)",
+		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER), persistschema.Gen, []byte{}, character)
 	require.NoError(t, err)
 	displays, err = s.ReadPlayerDisplays(ctx, []uint64{role.PlayerId})
 	require.NoError(t, err)
 	require.EqualValues(t, 42, displays[role.PlayerId].GetLevel())
+	require.EqualValues(t, 3, displays[role.PlayerId].GetClassId())
 
 	// 一行坏了只跳过那一行,不拖垮整批。
-	_, err = db.Exec("UPDATE `"+schema+"`.`player_store` SET payload=? WHERE player_id=? AND kind=?", []byte{0xff, 0xff}, role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT))
+	_, err = db.Exec("UPDATE `"+schema+"`.`player_store` SET payload=? WHERE player_id=? AND kind=?", []byte{0xff, 0xff}, role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER))
 	require.NoError(t, err)
 	displays, err = s.ReadPlayerDisplays(ctx, []uint64{role.PlayerId})
 	require.NoError(t, err)

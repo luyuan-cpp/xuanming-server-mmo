@@ -51,6 +51,7 @@
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -61,6 +62,7 @@
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/equip_attribute_rules.h"
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
@@ -79,6 +81,7 @@
 #include "table/code/equipgemsocket_table.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
+#include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/equip_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -2493,7 +2496,7 @@ TEST_F(PlayerEquipTest, EnhanceRaisesTheLevelByOneOnSuccess)
 	UseDice({0}); // 0 小于任何合法的成功率:必成
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_TRUE(outcome.success);
 	EXPECT_EQ(1u, outcome.level);
@@ -2516,7 +2519,7 @@ TEST_F(PlayerEquipTest, EnhanceUsesTheRowOfTheNextLevel)
 	UseDice({0});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/1, outcome));
 
 	EXPECT_EQ(2u, outcome.level);
 	EXPECT_EQ(0u, Gold()) << "exactly the cost of the +2 row was charged";
@@ -2532,7 +2535,7 @@ TEST_F(PlayerEquipTest, EnhanceChargesExactlyTheGoldAndMaterialOfTheRow)
 	UseDice({0});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_EQ(7u, Gold());
 	EXPECT_EQ(2u, CountOf(kEnhanceStone));
@@ -2551,7 +2554,7 @@ TEST_F(PlayerEquipTest, EnhanceReclaimsTheMaterialStackItEmptied)
 	UseDice({0});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_EQ(0u, CountOf(kEnhanceStone));
 	EXPECT_EQ(nullptr, Inventory().GetItemCompByGuid(kGuidStone)) << "the emptied stack is gone";
@@ -2575,7 +2578,7 @@ TEST_F(PlayerEquipTest, EnhanceInTheInventoryDoesNotRecalculateAttributes)
 	ASSERT_FALSE(AttributesWereRecalculated());
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_FALSE(AttributesWereRecalculated());
 }
@@ -2590,7 +2593,7 @@ TEST_F(PlayerEquipTest, EnhanceOnWornEquipmentRecalculatesAttributes)
 	ASSERT_FALSE(AttributesWereRecalculated());
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_TRUE(AttributesWereRecalculated());
 	EXPECT_EQ(kWeaponSlot, Equipment().GetItemPosByGuid(kGuidA));
@@ -2609,7 +2612,7 @@ TEST_F(PlayerEquipTest, EnhanceRollsExactlyOnceAndSucceedsBelowTheRate)
 	const ScriptedDice &rolls = UseDice({4999});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_TRUE(outcome.success) << "4999 is below a rate of 5000";
 	EXPECT_EQ(1u, outcome.level);
@@ -2631,7 +2634,7 @@ TEST_F(PlayerEquipTest, EnhanceFailureStillChargesAndKeepsTheLevel)
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
 	outcome.success = true; // 一进函数就该被重置
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
 
 	EXPECT_FALSE(outcome.success) << "a roll equal to the rate is a miss";
 	EXPECT_EQ(3u, outcome.level);
@@ -2654,7 +2657,7 @@ TEST_F(PlayerEquipTest, EnhanceFailureDropsTheLevelByFailLevelLoss)
 	UseDice({9999});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
 
 	EXPECT_FALSE(outcome.success);
 	EXPECT_EQ(1u, outcome.level);
@@ -2675,7 +2678,7 @@ TEST_F(PlayerEquipTest, EnhanceFailureNeverDropsTheLevelBelowZero)
 	UseDice({9999});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/1, outcome));
 
 	EXPECT_FALSE(outcome.success);
 	EXPECT_EQ(0u, outcome.level);
@@ -2697,7 +2700,7 @@ TEST_F(PlayerEquipTest, EnhanceFailureWithoutLevelLossOnWornEquipmentDoesNotReca
 	ASSERT_FALSE(AttributesWereRecalculated());
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
 
 	EXPECT_FALSE(outcome.success);
 	EXPECT_FALSE(AttributesWereRecalculated());
@@ -2716,7 +2719,7 @@ TEST_F(PlayerEquipTest, EnhanceFailureWithLevelLossOnWornEquipmentRecalculates)
 	ASSERT_FALSE(AttributesWereRecalculated());
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
 
 	EXPECT_EQ(2u, outcome.level);
 	EXPECT_TRUE(AttributesWereRecalculated());
@@ -2734,7 +2737,7 @@ TEST_F(PlayerEquipTest, EnhanceRowsWithoutCostsNeedNeitherGoldNorMaterial)
 	UseDice({0});
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 
 	EXPECT_TRUE(outcome.success);
 	EXPECT_EQ(1u, outcome.level);
@@ -2759,7 +2762,7 @@ TEST_F(PlayerEquipTest, EnhanceIsUnavailableWhileTheEnhanceTableIsEmpty)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -2772,7 +2775,7 @@ TEST_F(PlayerEquipTest, EnhanceIsRefusedAtTheMaximumLevel)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/maxLevel, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -2786,7 +2789,8 @@ TEST_F(PlayerEquipTest, EnhanceTreatsAStoredLevelAboveTheCapAsTheCap)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	// 客户端看到的是夹取后的 +2(乐观比较的口径,EnhanceComparesTheExpectedLevelWithTheCappedLevelTheClientSees)。
+	EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/2, outcome));
 	ExpectForgeUnchanged(before);
 	const ItemComp *stored = Inventory().GetItemCompByGuid(kGuidA);
 	ASSERT_NE(nullptr, stored);
@@ -2807,12 +2811,12 @@ TEST_F(PlayerEquipTest, EnhanceIsRefusedWithoutEnoughMaterial)
 	const BagState warehouseBefore = Capture(Warehouse());
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceMaterialNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceMaterialNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 	EXPECT_EQ(warehouseBefore, Capture(Warehouse()));
 
 	SetGold(0);
-	EXPECT_EQ(kEquipEnhanceMaterialNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceMaterialNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 }
 
 // 一堆带着更新版本字段(新版本给物品加的属性,本版本不认识)的可叠加物品。按 config 计数和扣数量时它不算普通单位
@@ -2841,7 +2845,7 @@ TEST_F(PlayerEquipTest, EnhanceWithMaterialOnlyEnoughCountingNewerVersionStacksI
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kFeatureUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kFeatureUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -2855,7 +2859,7 @@ TEST_F(PlayerEquipTest, EnhanceIsRefusedWithoutEnoughGold)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceGoldNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceGoldNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -2873,7 +2877,7 @@ TEST_F(PlayerEquipTest, EnhanceTreatsAnUnpayableGoldCostAsNotEnoughGold)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceGoldNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceGoldNotEnough, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -2889,12 +2893,12 @@ TEST_F(PlayerEquipTest, EnhanceRejectsItemsThatAreNotEquipment)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidA, outcome)) << "not equipment";
-	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidB, outcome))
+	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome)) << "not equipment";
+	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidB, /*expectedLevel=*/0, outcome))
 		<< "a stack is not equipment";
-	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidStone, outcome))
+	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidStone, /*expectedLevel=*/0, outcome))
 		<< "the material itself is not equipment";
-	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidC, outcome))
+	EXPECT_EQ(kEquipNotEquipment, PlayerEquipSystem::Enhance(player, kGuidC, /*expectedLevel=*/0, outcome))
 		<< "equipment misconfigured as stackable";
 	ExpectForgeUnchanged(before);
 }
@@ -2910,10 +2914,10 @@ TEST_F(PlayerEquipTest, EnhanceCannotFindItemsOutsideTheInventoryAndEquipment)
 	const BagState warehouseBefore = Capture(Warehouse());
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, kGuidMissing, outcome));
-	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, 0, outcome));
-	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, kInvalidGuid, outcome));
-	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, kGuidC, outcome))
+	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, kGuidMissing, /*expectedLevel=*/0, outcome));
+	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, 0, /*expectedLevel=*/0, outcome));
+	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, kInvalidGuid, /*expectedLevel=*/0, outcome));
+	EXPECT_EQ(kEquipItemNotFound, PlayerEquipSystem::Enhance(player, kGuidC, /*expectedLevel=*/0, outcome))
 		<< "equipment in the warehouse cannot be enhanced";
 	ExpectForgeUnchanged(before);
 	EXPECT_EQ(warehouseBefore, Capture(Warehouse()));
@@ -2929,17 +2933,17 @@ TEST_F(PlayerEquipTest, EnhanceIsRefusedWhileFrozenOrInBattle)
 	PlayerEquipSystem::EnhanceOutcome outcome;
 
 	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
-	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	// 两个状态同时在:先报冻结(与穿脱同一个判定顺序)。
 	tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(4242);
-	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
-	EXPECT_EQ(kEquipInBattle, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipInBattle, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 	EXPECT_TRUE(rolls.Requested().empty()) << "a refused enhance never rolls";
 
 	tlsEcs.actorRegistry.remove<InBattleComp>(player);
-	EXPECT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	EXPECT_TRUE(outcome.success);
 }
 
@@ -2953,7 +2957,7 @@ TEST_F(PlayerEquipTest, EnhanceIsUnavailableForUninitialisedInstances)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 	const ItemComp *stored = Inventory().GetItemCompByGuid(kGuidA);
 	ASSERT_NE(nullptr, stored);
@@ -2970,7 +2974,7 @@ TEST_F(PlayerEquipTest, EnhanceIsUnavailableWhenTheNextLevelCanNeverSucceed)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipEnhanceUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipEnhanceUnavailable, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -2989,7 +2993,7 @@ TEST_F(PlayerEquipTest, EnhanceFailsClosedWhenTheMaterialIsEquipment)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -3005,7 +3009,7 @@ TEST_F(PlayerEquipTest, EnhanceFailsClosedWhenTheMaterialIsTheTargetItself)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -3020,7 +3024,7 @@ TEST_F(PlayerEquipTest, EnhanceFailsClosedWhenTheMaterialRowIsMissing)
 	const ForgeState before = CaptureForge();
 
 	PlayerEquipSystem::EnhanceOutcome outcome;
-	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(player, kGuidA, outcome));
+	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
 	ExpectForgeUnchanged(before);
 }
 
@@ -3030,7 +3034,7 @@ TEST_F(PlayerEquipTest, ForgeEntriesRejectInvalidEntitiesAndPlayersWithoutBags)
 	PlayerEquipSystem::EnhanceOutcome outcome;
 	outcome.success = true;
 	outcome.level = 9;
-	EXPECT_EQ(kEntityIsNull, PlayerEquipSystem::Enhance(entt::null, kGuidA, outcome));
+	EXPECT_EQ(kEntityIsNull, PlayerEquipSystem::Enhance(entt::null, kGuidA, /*expectedLevel=*/0, outcome));
 	EXPECT_FALSE(outcome.success) << "the outcome is reset even when the call is refused";
 	EXPECT_EQ(0u, outcome.level);
 	EXPECT_EQ(kEntityIsNull,
@@ -3039,7 +3043,7 @@ TEST_F(PlayerEquipTest, ForgeEntriesRejectInvalidEntitiesAndPlayersWithoutBags)
 
 	const auto bagless = tlsEcs.actorRegistry.create();
 	players.push_back(bagless);
-	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(bagless, kGuidA, outcome));
+	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(bagless, kGuidA, /*expectedLevel=*/0, outcome));
 	EXPECT_EQ(kEquipInternalError,
 			  PlayerEquipSystem::InlayGem(bagless, kGuidA, kWeaponAttackSocket, kAttackGem));
 	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::RemoveGem(bagless, kGuidA, kWeaponAttackSocket));
@@ -3047,6 +3051,129 @@ TEST_F(PlayerEquipTest, ForgeEntriesRejectInvalidEntitiesAndPlayersWithoutBags)
 		<< "a write entry must not create the bags as a side effect";
 	EXPECT_EQ(nullptr, tlsEcs.actorRegistry.try_get<CurrencyComp>(bagless))
 		<< "nor the currency component";
+}
+
+// ── 二期:强化的乐观比较(审计 r2-equip#1)──────────────────────────────────────
+//
+// gate→scene 超时回 1003(结局未知)后客户端重发,以前会再扣一次金币与材料、再掷一次,失败掉级时连掉两级。
+// 现在请求带客户端看到的等级(expected_level),与服务器的有效等级对不上就整笔拒绝:不扣、不掷、不改实例。
+
+// 快照过期 / 填错:比当前高、比当前低、填 0 都拒;金币、两个包、实例都不动,也不掷骰。
+TEST_F(PlayerEquipTest, EnhanceRefusesAStaleExpectedLevelWithoutChargingOrRolling)
+{
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1, /*enhanceLevel=*/3), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(4));
+	const ScriptedDice &rolls = UseDice({});
+	const ForgeState before = CaptureForge();
+
+	PlayerEquipSystem::EnhanceOutcome outcome;
+	outcome.success = true;
+	outcome.level = 9;
+	EXPECT_EQ(kEquipEnhanceLevelChanged, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/2, outcome));
+	EXPECT_FALSE(outcome.success) << "the outcome is reset even when the call is refused";
+	EXPECT_EQ(0u, outcome.level);
+	EXPECT_EQ(kEquipEnhanceLevelChanged, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/4, outcome));
+	EXPECT_EQ(kEquipEnhanceLevelChanged, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome))
+		<< "0 is a real level, not a wildcard";
+	ExpectForgeUnchanged(before);
+	EXPECT_TRUE(rolls.Requested().empty()) << "a refused enhance never rolls";
+}
+
+// 成功之后原样重发(上一次的回包丢了):等级已经是 +1,旧请求填的 +0 对不上,不会再扣一次、再掷一次。
+// 金币与材料都多备了一份:重发要是被受理,是付得起的,会真的再扣一次。
+TEST_F(PlayerEquipTest, EnhanceReplayAfterASuccessIsRefusedAndChargesOnlyOnce)
+{
+	const auto *row = EnhanceRowOrNull(1);
+	ASSERT_NE(nullptr, row) << kExportFirst;
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(1, /*spareGold=*/row->cost_gold(), /*spareMaterial=*/row->material_count()));
+	const ScriptedDice &rolls = UseDice({0}); // 只够掷一次:重发若被受理就会多掷一次,记一条失败
+
+	PlayerEquipSystem::EnhanceOutcome outcome;
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
+	ASSERT_TRUE(outcome.success);
+	ASSERT_EQ(1u, outcome.level);
+	const ForgeState afterFirst = CaptureForge();
+
+	EXPECT_EQ(kEquipEnhanceLevelChanged, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/0, outcome));
+	ExpectForgeUnchanged(afterFirst);
+	EXPECT_EQ(row->cost_gold(), Gold()) << "the gold was charged exactly once";
+	if (row->material_id() != 0)
+	{
+		EXPECT_EQ(uint64_t{row->material_count()}, CountOf(row->material_id())) << "the material was charged exactly once";
+	}
+	EXPECT_EQ(1u, rolls.Requested().size()) << "rolled exactly once";
+	const ItemComp *stored = Inventory().GetItemCompByGuid(kGuidA);
+	ASSERT_NE(nullptr, stored);
+	EXPECT_EQ(1u, stored->equip().enhance_level());
+}
+
+// 失败掉级之后原样重发:等级已经从 +3 掉到 +1,旧请求填的 +3 对不上 —— 只掉一次级,也只扣一次。
+TEST_F(PlayerEquipTest, EnhanceReplayAfterALevelLossIsRefusedAndDropsOnlyOnce)
+{
+	auto &row = Editable(EnhanceRowOrNull(4));
+	row.set_success_rate(5000);
+	row.set_fail_level_loss(2);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1, /*enhanceLevel=*/3), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(4, /*spareGold=*/row.cost_gold(), /*spareMaterial=*/row.material_count()));
+	const ScriptedDice &rolls = UseDice({9999});
+
+	PlayerEquipSystem::EnhanceOutcome outcome;
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
+	ASSERT_FALSE(outcome.success);
+	ASSERT_EQ(1u, outcome.level);
+	const ForgeState afterFirst = CaptureForge();
+
+	EXPECT_EQ(kEquipEnhanceLevelChanged, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
+	ExpectForgeUnchanged(afterFirst);
+	EXPECT_EQ(1u, rolls.Requested().size());
+	const ItemComp *stored = Inventory().GetItemCompByGuid(kGuidA);
+	ASSERT_NE(nullptr, stored);
+	EXPECT_EQ(1u, stored->equip().enhance_level()) << "dropped once, not twice";
+}
+
+// 失败且不掉级时等级没变:同一个 expected_level 与「玩家看完结果又点了一次」无法区分,照常受理、照常扣。
+// 这是协议注释里写明的边界(客户端收到 1003 不自动重发,先刷新);钉住它,免得有人以为这条比较挡得住所有重发。
+TEST_F(PlayerEquipTest, EnhanceWithTheSameLevelAfterAFailureWithoutLossIsANewAttempt)
+{
+	auto &row = Editable(EnhanceRowOrNull(4));
+	row.set_success_rate(5000);
+	row.set_fail_level_loss(0);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1, /*enhanceLevel=*/3), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(4, /*spareGold=*/row.cost_gold(), /*spareMaterial=*/row.material_count()));
+	const ScriptedDice &rolls = UseDice({9999, 0});
+
+	PlayerEquipSystem::EnhanceOutcome outcome;
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
+	EXPECT_FALSE(outcome.success);
+	EXPECT_EQ(3u, outcome.level);
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome));
+	EXPECT_TRUE(outcome.success);
+	EXPECT_EQ(4u, outcome.level);
+	EXPECT_EQ(2u, rolls.Requested().size());
+	EXPECT_EQ(0u, Gold()) << "both attempts were charged";
+}
+
+// 比的是有效等级(存档值按表上限夹取),也就是快照下发给客户端的 enhance_level:上限下调到 +2 之后,
+// 存档里的 +3 在客户端看是 +2。填 +2 才过得了比较(随后按满级拒);填存档原值 +3 反而对不上。
+TEST_F(PlayerEquipTest, EnhanceComparesTheExpectedLevelWithTheCappedLevelTheClientSees)
+{
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1, /*enhanceLevel=*/3), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(4));
+	UseDice({});
+	TruncateEnhanceTable(2); // 上限下调到 +2
+	BagInfo shown;
+	ASSERT_EQ(kSuccess, PlayerBagSystem::BuildSnapshot(player, kInventory, shown));
+	const BagItemInfo *item = FindItem(shown.items(), kGuidA);
+	ASSERT_NE(nullptr, item);
+	ASSERT_EQ(2u, item->enhance_level()) << "the client is shown the capped level";
+	const ForgeState before = CaptureForge();
+
+	PlayerEquipSystem::EnhanceOutcome outcome;
+	EXPECT_EQ(kEquipEnhanceLevelChanged, PlayerEquipSystem::Enhance(player, kGuidA, /*expectedLevel=*/3, outcome))
+		<< "the stored value is not what the client was shown";
+	EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kGuidA, item->enhance_level(), outcome));
+	ExpectForgeUnchanged(before);
 }
 
 // ── 二期:镶嵌 ───────────────────────────────────────────────────────────────
@@ -3409,6 +3536,25 @@ TEST_F(PlayerEquipTest, RemoveGemClearsOnlyTheRequestedSocket)
 	EXPECT_EQ(0u, CountOf(kDefenseGem)) << "the other socket keeps its gem";
 }
 
+// 本人被 GM 封禁获得这种宝石:取下是业务拒绝,回 27005(kAssetBlocked),宝石留在装备上不丢;解封后照常取下。
+TEST_F(PlayerEquipTest, RemoveGemOfAGainBannedGemIsRefusedAndKeepsTheGem)
+{
+	ItemComp weapon = MakeRolledInstance(kGuidA, kWeaponL1);
+	AddGem(weapon, kWeaponAttackSocket, kAttackGem);
+	Inventory().RestoreItems({{weapon, 5}});
+	tlsEcs.actorRegistry.emplace_or_replace<PlayerItemGainBlockComp>(player);
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, kAttackGem));
+
+	EXPECT_EQ(kAssetBlocked, PlayerEquipSystem::RemoveGem(player, kGuidA, kWeaponAttackSocket));
+
+	ASSERT_NO_FATAL_FAILURE(ExpectStoredInstance(Inventory(), weapon));
+	EXPECT_EQ(0u, CountOf(kAttackGem));
+
+	ASSERT_EQ(kSuccess, GainBlockService::UnblockPlayerItemGain(player, kAttackGem));
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::RemoveGem(player, kGuidA, kWeaponAttackSocket));
+	EXPECT_EQ(1u, CountOf(kAttackGem));
+}
+
 // 镶上再取下:装备回到镶嵌之前的样子(逐字节),宝石数量也回到原数。
 TEST_F(PlayerEquipTest, InlayThenRemoveRestoresTheInstanceAndTheGemCount)
 {
@@ -3727,8 +3873,8 @@ TEST_F(PlayerEquipTest, RemoveGemKeepsTheGemWhenItsItemRowIsGone)
 	ExpectForgeUnchanged(before);
 }
 
-// 这种宝石被 GM 封禁了发放:取下走的是正式发放入口,会被封禁闸拒掉。对玩家是「操作失败」,
-// 宝石留在装备上;解封之后照常取得下来。
+// 这种宝石被全服封禁时，取下走正式发放入口，返回 kAssetBlocked（27005）。
+// 宝石留在装备上，解封后可照常取下。
 TEST_F(PlayerEquipTest, RemoveGemKeepsTheGemWhileItsGrantIsBlocked)
 {
 	ItemComp weapon = MakeRolledInstance(kGuidA, kWeaponL1);
@@ -3737,7 +3883,7 @@ TEST_F(PlayerEquipTest, RemoveGemKeepsTheGemWhileItsGrantIsBlocked)
 	ScopedGlobalItemBlock blocked(kAttackGem);
 	const ForgeState before = CaptureForge();
 
-	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::RemoveGem(player, kGuidA, kWeaponAttackSocket));
+	EXPECT_EQ(kAssetBlocked, PlayerEquipSystem::RemoveGem(player, kGuidA, kWeaponAttackSocket));
 	ExpectForgeUnchanged(before);
 
 	blocked.Unblock();
@@ -4402,6 +4548,7 @@ TEST_F(PlayerEquipTest, NewBagMethodsAreAppendedAfterTheExistingOnes)
 	const auto *enhance = BagMethod("EnhanceEquip");
 	const auto *inlay = BagMethod("InlayGem");
 	const auto *removeGem = BagMethod("RemoveGem");
+	const auto *retrieve = BagMethod("RetrieveTemporaryItems"); // 临时格取回(2026-11-05),index 8
 	ASSERT_NE(nullptr, getBag);
 	ASSERT_NE(nullptr, sortBag);
 	ASSERT_NE(nullptr, equip) << kProtoGenFirst;
@@ -4410,6 +4557,7 @@ TEST_F(PlayerEquipTest, NewBagMethodsAreAppendedAfterTheExistingOnes)
 	ASSERT_NE(nullptr, enhance) << kProtoGenFirst;
 	ASSERT_NE(nullptr, inlay) << kProtoGenFirst;
 	ASSERT_NE(nullptr, removeGem) << kProtoGenFirst;
+	ASSERT_NE(nullptr, retrieve) << kProtoGenFirst;
 	EXPECT_EQ(0, getBag->index());
 	EXPECT_EQ(1, sortBag->index());
 	EXPECT_EQ(2, equip->index());
@@ -4418,6 +4566,7 @@ TEST_F(PlayerEquipTest, NewBagMethodsAreAppendedAfterTheExistingOnes)
 	EXPECT_EQ(5, enhance->index());
 	EXPECT_EQ(6, inlay->index());
 	EXPECT_EQ(7, removeGem->index());
+	EXPECT_EQ(8, retrieve->index());
 }
 
 TEST_F(PlayerEquipTest, EquipHandlerReturnsBothBagsAndDoesNotLeakTips)
@@ -4609,6 +4758,7 @@ TEST_F(PlayerEquipTest, EnhanceHandlerReportsAFailedRollAsASuccessfulResponse)
 
 	EnhanceEquipRequest request;
 	request.set_item_id(kGuidA);
+	request.set_expected_level(3); // 客户端看到的就是 +3
 	EnhanceEquipResponse response;
 	handler.CallMethod(method, player, &request, &response);
 
@@ -4624,6 +4774,39 @@ TEST_F(PlayerEquipTest, EnhanceHandlerReportsAFailedRollAsASuccessfulResponse)
 	const BagItemInfo *worn = FindItem(response.equipment().items(), kGuidA);
 	ASSERT_NE(nullptr, worn);
 	EXPECT_EQ(3u, worn->enhance_level());
+}
+
+// expected_level 原样交给编排层(审计 r2-equip#1):对不上就回 kEquipEnhanceLevelChanged,不带半份快照、
+// 不带结果字段,也不扣不掷;填对了才受理。
+TEST_F(PlayerEquipTest, EnhanceHandlerPassesTheExpectedLevelThrough)
+{
+	const auto *method = BagMethod("EnhanceEquip");
+	ASSERT_NE(nullptr, method) << kProtoGenFirst;
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1, /*enhanceLevel=*/2), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(3));
+	const ScriptedDice &rolls = UseDice({0});
+	const ForgeState before = CaptureForge();
+
+	EnhanceEquipRequest request;
+	request.set_item_id(kGuidA);
+	request.set_expected_level(1); // 客户端快照过期:它以为还是 +1
+	EnhanceEquipResponse response;
+	handler.CallMethod(method, player, &request, &response);
+	EXPECT_EQ(kEquipEnhanceLevelChanged, response.error_message().id());
+	EXPECT_FALSE(response.has_bag());
+	EXPECT_FALSE(response.has_equipment());
+	EXPECT_FALSE(response.success());
+	EXPECT_EQ(0u, response.enhance_level());
+	ExpectForgeUnchanged(before);
+	EXPECT_TRUE(rolls.Requested().empty());
+
+	request.set_expected_level(2);
+	response.Clear();
+	handler.CallMethod(method, player, &request, &response);
+	EXPECT_EQ(0u, response.error_message().id());
+	ASSERT_TRUE(response.has_bag());
+	EXPECT_TRUE(response.success());
+	EXPECT_EQ(3u, response.enhance_level());
 }
 
 TEST_F(PlayerEquipTest, InlayGemHandlerReturnsBothBagsAndDoesNotLeakTips)
@@ -4714,6 +4897,165 @@ TEST_F(PlayerEquipTest, RemoveGemHandlerReturnsBothBagsAndDoesNotLeakTips)
 	ASSERT_EQ(2, worn->gem_sockets_size());
 	EXPECT_EQ(0u, worn->gem_sockets(0).gem_config_id());
 	EXPECT_FALSE(worn->gem_sockets(0).has_attr());
+}
+
+// ── 客户端幂等键(docs/design/client-request-idempotency.md)───────────────────────
+// 走 handler:查账在 handler 里,排在 PlayerEquipSystem::Enhance(含 expected_level 比较)之前。
+
+constexpr uint64_t kEnhanceClientKey = 0x5eed'0000'0e1a'0001ULL;
+
+// 幂等键账本是持久数据,生产里由加载无条件挂上;本夹具的玩家不带它,带键的用例自己挂。
+ClientRequestLedgerComp &AttachClientRequestLedger(entt::entity who)
+{
+	return tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(who);
+}
+
+EnhanceEquipRequest KeyedEnhance(Guid itemId, uint32_t expectedLevel, uint64_t key)
+{
+	EnhanceEquipRequest request;
+	request.set_item_id(itemId);
+	request.set_expected_level(expectedLevel);
+	request.set_client_request_id(key);
+	return request;
+}
+
+// 掷骰失败且不掉级时等级没变:乐观比较挡不住同一个请求的重发(见 EnhanceWithTheSameLevelAfterAFailureWithoutLossIsANewAttempt)。
+// 带上幂等键之后,重发命中首次那一次:不再扣、不再掷,回首次的成败与等级。
+TEST_F(PlayerEquipTest, EnhanceResendWithTheSameClientKeyAfterAFailureWithoutLossIsReplayed)
+{
+	const auto *method = BagMethod("EnhanceEquip");
+	ASSERT_NE(nullptr, method) << kProtoGenFirst;
+	AttachClientRequestLedger(player);
+	auto &row = Editable(EnhanceRowOrNull(4));
+	row.set_success_rate(5000);
+	row.set_fail_level_loss(0);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1, /*enhanceLevel=*/3), 0}});
+	// 金币与材料多备了一份:重发要是被当成新的一次,是付得起的,会真的再扣一次。
+	ASSERT_NE(nullptr, StockForEnhance(4, /*spareGold=*/row.cost_gold(), /*spareMaterial=*/row.material_count()));
+	const ScriptedDice &rolls = UseDice({9999}); // 只够掷一次:重发若被执行就会多掷一次,记一条失败
+
+	const EnhanceEquipRequest request = KeyedEnhance(kGuidA, /*expectedLevel=*/3, kEnhanceClientKey);
+	EnhanceEquipResponse first;
+	handler.CallMethod(method, player, &request, &first);
+	ASSERT_EQ(0u, first.error_message().id());
+	EXPECT_FALSE(first.success());
+	EXPECT_EQ(3u, first.enhance_level());
+	EXPECT_FALSE(first.replayed());
+	const ForgeState afterFirst = CaptureForge();
+
+	EnhanceEquipResponse second;
+	handler.CallMethod(method, player, &request, &second);
+	EXPECT_EQ(0u, second.error_message().id());
+	EXPECT_TRUE(second.replayed());
+	EXPECT_FALSE(second.success()) << "the replay reports the first roll";
+	EXPECT_EQ(3u, second.enhance_level());
+	EXPECT_TRUE(second.has_bag());
+	EXPECT_TRUE(second.has_equipment());
+	ExpectForgeUnchanged(afterFirst);
+	EXPECT_EQ(1u, rolls.Requested().size()) << "rolled exactly once";
+}
+
+// 首次成功之后等级已经变成 +1,重发带的还是 expected_level 0:查账在比较之前,所以拿到的是首次结果,
+// 不是 kEquipEnhanceLevelChanged。不带键的同一个请求照旧由乐观比较挡住。
+TEST_F(PlayerEquipTest, EnhanceResendWithTheSameClientKeyAfterASuccessIsReplayedBeforeTheLevelCheck)
+{
+	const auto *method = BagMethod("EnhanceEquip");
+	ASSERT_NE(nullptr, method) << kProtoGenFirst;
+	AttachClientRequestLedger(player);
+	const auto *row = EnhanceRowOrNull(1);
+	ASSERT_NE(nullptr, row) << kExportFirst;
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(1, /*spareGold=*/row->cost_gold(), /*spareMaterial=*/row->material_count()));
+	const ScriptedDice &rolls = UseDice({0});
+
+	EnhanceEquipRequest request = KeyedEnhance(kGuidA, /*expectedLevel=*/0, kEnhanceClientKey);
+	EnhanceEquipResponse first;
+	handler.CallMethod(method, player, &request, &first);
+	ASSERT_EQ(0u, first.error_message().id());
+	ASSERT_TRUE(first.success());
+	ASSERT_EQ(1u, first.enhance_level());
+	const ForgeState afterFirst = CaptureForge();
+
+	EnhanceEquipResponse second;
+	handler.CallMethod(method, player, &request, &second);
+	EXPECT_EQ(0u, second.error_message().id()) << "not kEquipEnhanceLevelChanged: the ledger answers first";
+	EXPECT_TRUE(second.replayed());
+	EXPECT_TRUE(second.success());
+	EXPECT_EQ(1u, second.enhance_level());
+	ExpectForgeUnchanged(afterFirst);
+
+	request.set_client_request_id(0);
+	EnhanceEquipResponse keyless;
+	handler.CallMethod(method, player, &request, &keyless);
+	EXPECT_EQ(kEquipEnhanceLevelChanged, keyless.error_message().id());
+	EXPECT_FALSE(keyless.replayed());
+	ExpectForgeUnchanged(afterFirst);
+	EXPECT_EQ(1u, rolls.Requested().size());
+}
+
+// 客户端缺陷:把上一次的键用在另一件装备上,或者用在同一件的下一次强化上(期望等级已经是新等级、本来是合法的新操作)。
+// 都按「换了参数」拒绝,不扣、不掷 —— 而不是悄悄当成重放、让玩家这一下点了没反应。
+TEST_F(PlayerEquipTest, EnhanceWithAClientKeyReusedForAnotherOperationIsRefused)
+{
+	const auto *method = BagMethod("EnhanceEquip");
+	ASSERT_NE(nullptr, method) << kProtoGenFirst;
+	AttachClientRequestLedger(player);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}, {MakeRolledInstance(kGuidB, kWeaponL1), 1}});
+	const auto *row = EnhanceRowOrNull(1);
+	ASSERT_NE(nullptr, row) << kExportFirst;
+	ASSERT_NE(nullptr, StockForEnhance(1, /*spareGold=*/row->cost_gold() * 2, /*spareMaterial=*/row->material_count() * 2));
+	const ScriptedDice &rolls = UseDice({0});
+
+	EnhanceEquipResponse first;
+	const EnhanceEquipRequest original = KeyedEnhance(kGuidA, /*expectedLevel=*/0, kEnhanceClientKey);
+	handler.CallMethod(method, player, &original, &first);
+	ASSERT_EQ(0u, first.error_message().id());
+	ASSERT_EQ(1u, first.enhance_level());
+	const ForgeState afterFirst = CaptureForge();
+
+	for (const auto &reused : {KeyedEnhance(kGuidB, /*expectedLevel=*/0, kEnhanceClientKey),
+							   KeyedEnhance(kGuidA, /*expectedLevel=*/1, kEnhanceClientKey)})
+	{
+		EnhanceEquipResponse response;
+		handler.CallMethod(method, player, &reused, &response);
+		EXPECT_EQ(kInvalidParameter, response.error_message().id()) << "item=" << reused.item_id()
+																	<< " expected_level=" << reused.expected_level();
+		EXPECT_FALSE(response.replayed());
+		EXPECT_FALSE(response.has_bag());
+		EXPECT_FALSE(response.has_equipment());
+		ExpectForgeUnchanged(afterFirst);
+	}
+	EXPECT_EQ(1u, rolls.Requested().size()) << "no extra roll";
+}
+
+// 被拒的强化没有副作用,不记键:补够金币之后带同一个键重发,是第一次真正执行,不是重放。
+TEST_F(PlayerEquipTest, EnhanceRefusedForGoldDoesNotRememberTheClientKey)
+{
+	const auto *method = BagMethod("EnhanceEquip");
+	ASSERT_NE(nullptr, method) << kProtoGenFirst;
+	AttachClientRequestLedger(player);
+	const auto *row = EnhanceRowOrNull(1);
+	ASSERT_NE(nullptr, row) << kExportFirst;
+	ASSERT_GT(row->cost_gold(), 0u) << "EquipEnhance row 1 must cost gold for this case to mean anything";
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	ASSERT_NE(nullptr, StockForEnhance(1));
+	const ScriptedDice &rolls = UseDice({0});
+	SetGold(row->cost_gold() - 1);
+
+	const EnhanceEquipRequest request = KeyedEnhance(kGuidA, /*expectedLevel=*/0, kEnhanceClientKey);
+	EnhanceEquipResponse refused;
+	handler.CallMethod(method, player, &request, &refused);
+	EXPECT_EQ(kEquipEnhanceGoldNotEnough, refused.error_message().id());
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).records_size()) << "a rejection leaves no record";
+	EXPECT_TRUE(rolls.Requested().empty());
+
+	SetGold(row->cost_gold());
+	EnhanceEquipResponse retried;
+	handler.CallMethod(method, player, &request, &retried);
+	EXPECT_EQ(0u, retried.error_message().id());
+	EXPECT_FALSE(retried.replayed()) << "the earlier rejection had no effect, so this is the first execution";
+	EXPECT_EQ(1u, retried.enhance_level());
+	EXPECT_EQ(1u, rolls.Requested().size());
 }
 
 } // namespace

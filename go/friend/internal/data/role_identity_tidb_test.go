@@ -96,18 +96,17 @@ func TestTiDBFriendOriginalRole_AllClientReadsAndWritesRejectTransferABAFrozen(t
 	}{{"next", 8, 0}, {"original", 9, 0}, {"original", 7, 81}} {
 		directory.push(t, ctx, repo.db, 22, change.account, change.revision, change.token)
 		for name, operation := range map[string]func() error{
-			"add":       func() error { _, err := repo.CreateRequest(original, 22, 11, AddFriendLimits{}); return err },
-			"accept":    func() error { _, err := repo.AcceptRequest(original, 123, 22, 10); return err },
-			"reject":    func() error { _, err := repo.RejectRequest(original, 123, 22); return err },
-			"remove":    func() error { _, err := repo.RemoveFriend(original, 22, 11); return err },
-			"block":     func() error { _, err := repo.Block(original, 22, 11, 10); return err },
-			"unblock":   func() error { return repo.Unblock(original, 22, 11) },
-			"friends":   func() error { _, err := repo.GetFriendList(original, 22); return err },
-			"pending":   func() error { _, err := repo.GetPendingRequests(original, 22); return err },
-			"blocks":    func() error { _, err := repo.ListBlocks(original, 22); return err },
-			"mutual":    func() error { _, err := repo.RecommendByMutual(original, 22, nil, 10); return err },
-			"random":    func() error { _, err := repo.RecommendRandom(original, 22, nil, 10); return err },
-			"directory": func() error { return repo.CheckOriginalRole(original) },
+			"add":     func() error { _, err := repo.CreateRequest(original, 22, 11, AddFriendLimits{}); return err },
+			"accept":  func() error { _, err := repo.AcceptRequest(original, 123, 22, 10); return err },
+			"reject":  func() error { _, err := repo.RejectRequest(original, 123, 22); return err },
+			"remove":  func() error { _, err := repo.RemoveFriend(original, 22, 11); return err },
+			"block":   func() error { _, err := repo.Block(original, 22, 11, 10); return err },
+			"unblock": func() error { return repo.Unblock(original, 22, 11) },
+			"friends": func() error { _, err := repo.GetFriendList(original, 22); return err },
+			"pending": func() error { _, err := repo.GetPendingRequests(original, 22); return err },
+			"blocks":  func() error { _, err := repo.ListBlocks(original, 22); return err },
+			"mutual":  func() error { _, err := repo.RecommendByMutual(original, 22, nil, 10); return err },
+			"random":  func() error { _, err := repo.RecommendRandom(original, 22, nil, 10); return err },
 		} {
 			require.ErrorIs(t, operation(), ErrOriginalRole, name)
 		}

@@ -7,10 +7,28 @@
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
 | 1. AOI 单向关注 | 服务端已落码，待 Codex 验证 | 实现与验证命令见[设计文档](../design/aoi-directed-interest.md)「实现」 |
-| 2. 单玩家物品封禁 | 进行中 | 见下方第 2 节 |
+| 2. 单玩家物品封禁 | 服务端已落码，待 Codex 先跑协议生成再验证 | 判定唯一入口 `GainBlockService::IsItemGainBlocked`；封禁表 `PlayerItemGainBlockComp` 存档字段 24（PROFILE 行），与收件箱账本同一次存盘、同一事务提交；GM 类型 5 / 6 与载荷 `GmItemGainPayload`。2026-11-06 补 GM 查询 `PlayerInboxAdmin.GetItemGainBlocks`（data_service 新增只读 `GetPlayerItemGainBlock`），同样未编译。设计与运维见 [player-inbox-service.md](../design/player-inbox-service.md) §2.2、[player-inbox-runbook.md](../ops/player-inbox-runbook.md) §4.1 |
 | 3. 异常收益窗口重置 | 服务端已落码，待 Codex 验证 | `AnomalyDetector::ClearPlayer` 与 `anomaly_detector_test.cpp` 四个新用例；跑 `currency_test` |
 
 Java 版三项均登记为 `PARITY.md`「Java 待做」，本轮不写 Java 代码。
+
+需要负责人知道的口径（已写进对应设计文档）：
+
+- 战斗结算遇到被封的掉落是**剔除该项、其余照发**，这一局不补发；其余入口（背包三个入包函数、消耗换取、资产转入、商店）是**整批拒绝**。前者由战斗线定，避免整笔结算因一件掉落卡住。
+- BagService 全服封禁的拒绝码由 `kInvalidParameter`（带调用栈）改为 `kAssetBlocked`（27005），任务、活跃度、GM 发物、取下宝石等入口的客户端可见码随之变化，Java 版要同批改。
+- 取下宝石时宝石被封：宝石留在装备上，回 27005，解封后照常取下。
+- `player_inbox.yaml` 默认 `EnqueueTypes` 不含任何 GM 类型（与货币封禁现状一致），要用 GM 处置需改部署配置。
+- ~~没有「查询某玩家物品封禁表」的 GM 接口~~ 2026-11-06 已补（负责人要求做完）：`PlayerInboxAdmin.GetItemGainBlocks` 回已落盘的本人封禁表与还没生效的封禁 / 解封单，先读收件箱、后读存档，保证一条单至少出现在其中一边；不含全服封禁。见设计 §2.2「运维查询」。
+
+### Codex 验证顺序（三项合并）
+
+在仓库根目录 `D:\luyuan\xuanming-server-mmo-cpp` 用 PowerShell 执行；工作区有多条线的未提交改动，先 `git status` 记现场，不清理别人的改动。
+
+1. 协议生成：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`（生成器源码有变化或无工具时先跑 `-Command proto-gen-build`）。通过标准：`player_item_gain_block_comp.pb.{h,cc,go}` 存在并登记进 `proto.vcxproj`、`.filters`、`CMakeLists.txt`；`player_inbox.pb.h` 有类型 5、6 与 `PlayerInboxMessageType_ARRAYSIZE = 7`；`proto/persist_schema_gen.txt` 有 `PlayerItemGainBlockComp#1` 与 `player_database#24` 两行；`go/proto/data_service/data_service{,_grpc}.pb.go` 有 `GetPlayerItemGainBlock`，`go/proto/player_inbox/player_inbox_admin{,_grpc}.pb.go` 有 `GetItemGainBlocks` 与 `PlayerItemGainSanctionPending`；重跑后除别人的改动外无新差异。
+2. C++ 编译，Debug|x64，`MSBuild <proj> /m:1 /p:Configuration=Debug /p:Platform=x64 /nologo /v:minimal`，按序：`cpp/generated/proto/proto.vcxproj` → `cpp/libs/modules/modules.vcxproj` → `cpp/libs/services/scene/scene.vcxproj` → `cpp/tests/currency_test/currency_test.vcxproj` → `cpp/tests/bag_test/bag_test.vcxproj` → `cpp/tests/cross_zone_test/cross_zone_test.vcxproj` → `cpp/tests/aoi_test/aoi_test.vcxproj` → `cpp/tests/aoi_delivery_test/aoi_delivery_test.vcxproj` → `cpp/tests/buff_test/buff_test.vcxproj` → `cpp/tests/skill_test/skill_test.vcxproj` → `cpp/nodes/scene/scene.vcxproj`。库必须先于测试编（测试链接预编好的 lib）。通过标准 0 error。
+3. C++ 测试：`pwsh tools/scripts/run_cpp_tests.ps1 -Filter <工程> -LogDir build/verification/cpp-tests`，依次跑 `currency_test`、`bag_test`、`cross_zone_test`、`aoi_test`、`aoi_delivery_test`、`buff_test`、`skill_test`，全部用例通过。资产通道的三个物品用例要求 `bin/etc` 的物品表可读，读不到算环境问题，要报告。
+4. Go：在 `go/player_inbox` 下跑 `gofmt -l .`（无输出）、`go vet ./...`、`go test ./... -count=1`；集成测试用自起的一次性 MySQL/TiDB（库名 `player_inbox_it`，不要借 `codex-*` 容器），设 `PLAYER_INBOX_TEST_MYSQL_DSN` 与 `PLAYER_INBOX_REQUIRE_MYSQL_TESTS=1` 后跑 `go test -tags integration ./internal/inbox/... -count=1 -v`，`TestIntegrationItemGainSanctionsShareTheGmStreamInOrder` 与 `TestIntegrationItemGainBlocksListsPendingItemSanctions` 必须 PASS，SKIP 不算；Access denied 时改 `go test -c` 编出再跑。在 `go/shared` 下跑 `go vet ./inboxcontract/...` 与 `go test ./inboxcontract/... -count=1`。在 `go/data_service` 下跑 `gofmt -l ./internal ./data_service.go`（无输出）、`go vet ./...`、`go test ./internal/logic/... ./internal/server/... ./internal/store/... -count=1`，新增 `TestGetPlayerItemGainBlock_*` 五个与 `TestReadPlayerStoreProfile*` 三个必须 PASS；有专用 TiDB 时 `TestTiDBReadPlayerStoreProfile` 也要 PASS（未配置时 SKIP，按环境缺失报告）。player_inbox 的新单测是 `TestItemGainSanctionDomainIsTheGmDomain`、`TestItemGainBlocksRejectsBeforeTouchingStores`、`TestItemGainPendingViews`、`TestDataServiceItemGainBlocks`，以及 `TestAdminServerFoldsStoreFaultsInBand` / `TestAdminServerPassesThroughAndWires` 里新增的断言。
+5. 失败时保留 MSBuild 错误摘要（文件、行号、错误码）、gtest 失败用例名与断言输出、`go test -v` 完整输出，回报后等待决策，不要自行改断言或跳过用例。
 
 ## 1. 补完整 AOI 通用单向关注
 

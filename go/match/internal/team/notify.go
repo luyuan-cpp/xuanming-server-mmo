@@ -83,6 +83,11 @@ func (s *Service) publish(caller uint64, commits []*CommitResult) {
 			// tid 发生变化的人:新加入者与移出者(解散时移出者即全员,§F.3)。
 			refresh = append(refresh, c.Decision.Joined...)
 			refresh = append(refresh, c.Decision.Left...)
+			// 队长换人:留下的人 tid 没变,但 scene 上的跟随队形按队长建(team-follow-server-trail.md),
+			// 新队长要停止被驱动、其他人要接到新队长身后,所以留下的全员也重读一次。
+			if c.Decision.LeaderChanged {
+				refresh = append(refresh, c.Decision.Kept...)
+			}
 		}
 		for _, pid := range uniqueIds(refresh) {
 			s.refreshScene(ctx, pid)

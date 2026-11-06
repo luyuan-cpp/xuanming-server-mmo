@@ -34,8 +34,8 @@ C++ `cpp/libs/engine/core/utils/id/snow_flake.h` 与 Go `go/shared/snowflake/sno
 
 1. **选号**:候选 = 未被占 且 `now − watermark ≥ Q`(Q = 4h);取 watermark 最小者(从没用过的优先),并列取最小 slot。不再"最小空闲位"。
 2. **水位**:持有者每秒写 `max(墙钟, 逻辑高水位) + 2s`,单调不回退;申领时第一笔与 slots key 同一 txn 落地;启动地板 `SetGuardTime(max(now, watermark))` 并等真实时钟越过。
-3. **自 fence**:距上次水位写成功超过 F = 2h(单调钟或墙钟任一)→ `Generate()` 拒发;水位再写成功即恢复(Go)/ 永久 fence 仅在 `slots/<slot>` 被别的 uuid 持有时。
-4. **lease 只做活性**:lease 过期但槽没被别人挂走 → 重挂,不 fence、不退出。
+3. **自 fence**:距上次水位写成功超过 F = 2h(单调钟或墙钟任一;墙钟按去掉单调读数的时刻相减,否则 VM 挂起后不触发)→ `Generate()` 拒发;水位再写成功即恢复(Go)/ 永久 fence 仅在 `slots/<slot>` 被别的 uuid 持有,或槽 key 过期期间水位被别人写过时(见第 4 条)。
+4. **lease 只做活性**:lease 过期但槽没被别人挂走 → 重挂,不 fence、不退出。槽 key 已过期时,只有两把水位 key 的 ModRevision 仍是自己最后一次观测的值才重新 Create(与 `CreateRev==0` 同一笔 Txn);对不上说明失联期间有人用过这个槽,永久 fence,重启后走受隔离期保护的申领。细节见设计稿 §3.4。
 5. **弱依赖**:Go 服务 etcd 不可达且本地缓存(`SnowflakeCacheDir`)未过 F 时可用缓存槽起;C++ 只用缓存抬地板与关联日志(发现仍需 etcd)。
 
 路由用的 `NodeInfo.node_id`(`<Svc>.rpc/allocated/node_type/T/node_id/N` + `/zone/Z/...`)与发号槽位**无关**,只做 Kafka topic 名、gate 会话反查、`SessionDetails.gate_node_id`;gate session_id 与 scene buff/skill 的临时复合 id 仍用它。
@@ -52,3 +52,10 @@ player_id / guild_id / item guid 从 `data_service.AllocateIdSegment(biz_tag, st
 ## Cross-ID-kind isolation
 
 不同 kind 的槽池相互独立,所以 guild_id / scene_id / battle_id 可能数值相同;一种 ID 只能由一种 kind 铸,不能混进同一个键空间。跨 kind 全局唯一的需求今天不存在。
+
+
+## Scene 领段预取的单次协程（2026-11-05）
+
+本节只涉及已迁移到 DataService 号段的永久 ID 客户端，不改变本文其余 ID 位布局规则。`IdSegmentTransport` 将一次 AllocateIdSegment 请求放入原 Scene EventLoop 的任务作用域，回复复制为自有值。`GuidSegmentClient` 的双缓冲、预取阈值、退避与超时继续负责分配策略；请求认领表保留跨种类单飞和原 10 秒迟到窗口，旧序号不能被新种类的请求认领。
+
+普通停机先 `CloseGuidSegmentTransport` 禁止新增，再关闭原客户端预取；已发请求仍可在退出存盘期间交付。最终拆除调用 `StopGuidSegmentTransport`，取消本地续跑并清空认领表，晚回复不再交付。`SceneRuntimeContext` 析构覆盖启动异常时的停止，保证任务所有者先于局部 EventLoop 释放。没有新增线程、阻塞等待或分配重试层。Java 发号契约和可观察行为不变。

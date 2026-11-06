@@ -20,7 +20,9 @@
 # 例外:某个实例探针失败时它的 gauge 保留上一次的值(陈值),照样参与 max —— 由按实例触发的 DataServiceAuditLagProbeBlind 点名。
 #
 # C++ 生产端的发送失败(快照超过约 1MB 在 produce() 本地被拒、broker 不可达)不在 Prometheus:scene 没有指标端点。
-# 值班固定查询(Loki):{app="scene"} |= "[SnapshotSystem] Kafka send failed"。
+# 值班固定查询(Loki):{job="cpp_nodes", service="scene"} |= "[SnapshotSystem] Kafka send failed"。
+# C++ 日志流没有 app 标签,写成 {app="scene"} 恒为空;选择器写法见 player-inbox-alerts.yaml,
+# 契约测试 k8s_deploy_contract.tests.ps1「LogQL 契约」核对这一条。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -141,6 +143,34 @@ spec:
             description: >-
               流水消费者落后。流水单条很小,删除线远比快照远,但同样会被每分区 retention.bytes 删。
               查 data_service 日志 `[transaction_log] STOPPED:` 与 flush_seconds{consumer="transaction_log"}。
+
+        # 消费组卡住(r2-kc#1;2026-11-06 评审跟进改判据):某个分区上组内已提交位点停下之后又新到了消息,而位点 15 分钟没再前进,
+        # 且至少一个实例的消费循环报 up。上面两条积压规则按删除线定阈值,流量低时积压很久到不了线;本条专抓「活着但不前进」。
+        # data_service_kafka_consumer_commit_stall_seconds 由 lag 探针跨轮按分区算(kafkautil.CommitStall,RequireArrivals):
+        # 位点一动、或积压清零即从头计。只认「新到的消息没被提交」:reader 模式提交失败时把已落库的记录交还 Kafka、本代次内不再重投,
+        # 低流量 topic 上这几条会一直挂着积压(数据其实已落库),直到同分区来了新消息被一并提交或下一代次重投 ——
+        # 旧判据「有积压 + 15 分钟零处理」在这段时间里误报,而改成「有积压 + 位点不动」同样会误报,所以要求有新消息到达。
+        # 代价:一个分区上一条新消息都不来时卡住看不见(积压不再增长;保留期删数据另由 DataServiceAuditRetentionGap 兜)。
+        # 按分区算:多实例里只有一个实例卡住、其余照常前进时也会响(旧判据只抓整组停摆)。
+        # 消费组 owner(go/shared/kafkautil 的 BoundConsumerGroup)遇再均衡与暂时失败不停:代次还在就原地重试,代次结束就交还重投;
+        # 它真 HOLD 时 data_service 主循环收到 owner 错误后退出进程、由编排重启。所以本条多半是:
+        # 协调者长期不可达(一直等不到代次)、分区 leader 长期不可读、批处理卡在同一批上,或落库成功而提交一直失败。
+        # 消费循环反复 STOPPED 时 up 来回翻,for 5m 被打断,由 DataServiceAuditConsumerStopped 报。
+        - alert: DataServiceAuditConsumerStalled
+          expr: |
+            max by (consumer) (data_service_kafka_consumer_commit_stall_seconds) >= 900
+            and on (consumer)
+            max by (consumer) (data_service_kafka_consumer_up) == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.consumer }} 有分区新到的消息 {{ $value | humanizeDuration }} 没被提交,消费循环却在跑"
+            description: >-
+              某个分区上组内已提交位点停下之后又来了新消息,位点一直没再前进,而消费循环报 up:消费者活着但不前进。
+              查 data_service 日志 `[kafka-bound]` 行(等不到代次 / 打开分区或拉取失败的原因与重试间隔)与 `[kafka-go]` 行;
+              指标 kafka_bound_consumer_retry_total 按 stage 看卡在哪一步(join / open / fetch / commit)。
+              Kafka 侧故障修好后消费者自动追上,不需要重启。积压期间盯住 DataServiceAuditRetentionGap。
 
         # 探针失明(按实例):某个实例 15 分钟内一次都没探成、且有失败:它的 lag / lag_max_partition / retention_gap 是陈值
         # (探测失败时 gauge 保留上一次的值),而陈值照样参与上面几条告警的 max;所有实例都如此时积压类告警全部不可信。

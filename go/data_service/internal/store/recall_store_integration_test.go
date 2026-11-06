@@ -114,6 +114,14 @@ func (f *recallFixture) claim(t *testing.T, plan *store.RecallOpPlan) assetop.Op
 	return op
 }
 
+// witness 读一行此刻的租约与发送时刻,当作人工终结读证据时的见证(logic.ResolveRecallOp 的第一步)。
+func (f *recallFixture) witness(t *testing.T, opID uint64) assetop.QuietWitness {
+	t.Helper()
+	state, err := f.store.ReadOpState(f.ctx, opID)
+	require.NoError(t, err)
+	return assetop.QuietWitness{LeaseUntilMs: state.LeaseUntilMs, LastSendMs: state.Op.LastSendMs}
+}
+
 func appliedResult(line *assetpb.AssetRecallLine) assetop.Result {
 	return assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true, SQLCommitted: true,
 		Snapshot: &assetpb.AssetSnapshot{RecallLines: []*assetpb.AssetRecallLine{line}}}
@@ -361,8 +369,10 @@ func TestRecallStore_SourcesAreReleasedOnlyWhenNothingWasRecalled(t *testing.T) 
 	assert.False(t, consumed(ops[1]), "scene 判拒,资产没动")
 
 	partial := f.claim(t, ops[2])
-	_, err = f.store.ResolveManually(f.ctx, assetop.ManualResolution{OpID: partial.OpID, Final: assetop.StatusAppliedPartial, Operator: "tester", Reason: "可能扣过"}, 6000)
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: partial.OpID, Final: assetop.StatusAppliedPartial, Operator: "tester", Reason: "账本判不了"},
+		f.witness(t, partial.OpID), 6000)
 	require.NoError(t, err)
+	require.True(t, resolved)
 	assert.True(t, consumed(ops[2]), "可能已经扣过,再回收就是重复")
 
 	delete(f.roles, 904)
@@ -408,16 +418,126 @@ func TestRecallStore_PendingForRoleBlocksUntilSettled(t *testing.T) {
 	assert.Empty(t, blocker())
 }
 
-// 人工终结只改还在 PENDING 的行,结果留痕。
-func TestRecallStore_ResolveManually(t *testing.T) {
+// 人工终结只改还在 PENDING 的行,一次且仅一次,结果留痕。
+func TestRecallStore_ResolveManuallyIfQuiet(t *testing.T) {
 	f := newRecallFixture(t)
 	ops := f.createBatch(t, 1, 5, 901)
 	f.claim(t, ops[0])
-	resolved, err := f.store.ResolveManually(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAborted, Operator: "tester", Reason: "流水里没有这笔"}, 6000)
+	witness := f.witness(t, ops[0].OpID)
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAborted, Operator: "tester", Reason: "账本已拒绝"}, witness, 6000)
 	require.NoError(t, err)
 	assert.True(t, resolved)
-	resolved, err = f.store.ResolveManually(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAborted, Operator: "tester", Reason: "重复"}, 6000)
+	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAborted, Operator: "tester", Reason: "重复"}, witness, 6000)
 	require.NoError(t, err)
 	assert.False(t, resolved)
 	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op", "op_id = ? AND resolved_by = 'tester'", ops[0].OpID))
+}
+
+// 读证据之后重投循环又领了这一行:见证对不上,终结落空,批次计数与来源都不动;按新读的值再来才终结。
+func TestRecallStore_ResolveManuallyIfQuiet_MissesAfterAClaim(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	f.claim(t, ops[0])
+	// 玩家不在线,没发出请求:租约清回 0,last_send_ms 不动。
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: ops[0].OpID, LeaseToken: 77}, 3500,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, 3100))
+	witness := f.witness(t, ops[0].OpID)
+
+	_, claimed, err := f.store.Claim(f.ctx, ops[0].OpID, 4000, 5000, 6000, 78)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	manual := assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAborted, Operator: "tester", Reason: "账本已拒绝"}
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, witness, 6000)
+	require.NoError(t, err)
+	assert.False(t, resolved, "读证据之后有人领过,证据作废")
+	assert.Equal(t, recallPending, f.opStatus(t, 1)[ops[0].OpID])
+	assert.Zero(t, f.db.Count(t, "gm_recall_op", "op_id = ? AND resolved_by = 'tester'", ops[0].OpID))
+	batch, err := f.store.ReadBatch(f.ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1), batch.OpenOps, "落空不动批次计数")
+	consumed, err := f.store.ConsumedSources(f.ctx, ops[0].SourceTxIDs)
+	require.NoError(t, err)
+	assert.True(t, consumed[ops[0].SourceTxIDs[0]], "落空不放回来源")
+
+	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, manual, f.witness(t, ops[0].OpID), 7000)
+	require.NoError(t, err)
+	assert.True(t, resolved, "见证与库里一致才终结")
+	assert.Equal(t, recallAborted, f.opStatus(t, 1)[ops[0].OpID])
+	consumed, err = f.store.ConsumedSources(f.ctx, ops[0].SourceTxIDs)
+	require.NoError(t, err)
+	assert.False(t, consumed[ops[0].SourceTxIDs[0]], "确定没回收到东西,来源放回去")
+	batch, err = f.store.ReadBatch(f.ctx, 1)
+	require.NoError(t, err)
+	assert.True(t, batch.Finished())
+}
+
+// 领取、发出请求、正常重排之后租约又回到 0:只比租约看不出来,last_send_ms 被推进了,照样落空。
+func TestRecallStore_ResolveManuallyIfQuiet_MissesAfterASend(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	f.claim(t, ops[0])
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: ops[0].OpID, LeaseToken: 77}, 3500,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, 3100))
+	witness := f.witness(t, ops[0].OpID)
+
+	_, claimed, err := f.store.Claim(f.ctx, ops[0].OpID, 4000, 5000, 6000, 78)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	// 这一次真的发出去了,scene 回 UNKNOWN:重排把租约清回 0,把 last_send_ms 推到这一轮的开始时刻。
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: ops[0].OpID, LeaseToken: 78}, 9000,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN}, 4100))
+	after := f.witness(t, ops[0].OpID)
+	require.Equal(t, witness.LeaseUntilMs, after.LeaseUntilMs, "租约又回到读证据时的值")
+	require.NotEqual(t, witness.LastSendMs, after.LastSendMs)
+
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAppliedPartial,
+		Operator: "tester", Reason: "账本判不了"}, witness, 6000)
+	require.NoError(t, err)
+	assert.False(t, resolved, "读证据之后发过请求,证据作废")
+	assert.Equal(t, recallPending, f.opStatus(t, 1)[ops[0].OpID])
+}
+
+// 人工终结读证据看到的请求,就是 Claim 下发的那一份(同一个 scanRecallOp),收据身份才对得上。没有这一行回 ErrRecallOpNotFound。
+func TestRecallStore_ReadOpStateIsTheClaimedRequest(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	planned, err := f.store.ReadOpState(f.ctx, ops[0].OpID)
+	require.NoError(t, err)
+	assert.False(t, planned.IsPending(), "PLANNED 还没有 seq,不能人工终结")
+
+	claimed := f.claim(t, ops[0])
+	state, err := f.store.ReadOpState(f.ctx, ops[0].OpID)
+	require.NoError(t, err)
+	require.NoError(t, state.OpErr)
+	assert.True(t, state.IsPending())
+	assert.Equal(t, uint64(4000), state.LeaseUntilMs, "租约是 claim 写下的")
+	assert.True(t, proto.Equal(claimed.Bundle, state.Op.Bundle))
+	claimed.Bundle, claimed.LeaseToken, state.Op.Bundle = nil, 0, nil
+	assert.Equal(t, claimed, state.Op)
+
+	_, err = f.store.ReadOpState(f.ctx, 999_999)
+	require.ErrorIs(t, err, store.ErrRecallOpNotFound)
+}
+
+// 派发(PLANNED → PENDING)写 last_send_ms 初值(go/shared/assetop/abandon.go 文件头 last_send_ms 契约第 1 条)。
+// 原来这一列从派发到第一次真实投递都是 0,从没投出去过的行(玩家一直不在线)永远判不了安静:人工终结只能关成 PARTIAL(少回收),
+// 自动放弃也永远跳过它。现在派发时刻就是初值,过了安全间隔、没人持租约就判得了安静。
+func TestRecallStore_DispatchInitializesLastSendMs(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	result, err := f.store.Dispatch(f.ctx, store.RecallPlanned{OpID: ops[0].OpID, PlayerID: ops[0].PlayerID}, 2000)
+	require.NoError(t, err)
+	require.Equal(t, store.RecallDispatched, result)
+
+	state, err := f.store.ReadOpState(f.ctx, ops[0].OpID)
+	require.NoError(t, err)
+	require.True(t, state.IsPending())
+	assert.Equal(t, uint64(2000), state.Op.LastSendMs, "派发时刻就是初值,不再是 0")
+
+	gapMs := uint64(assetop.ManualQuietFloor / time.Millisecond)
+	quiet, why := assetop.RowQuiet(state.Op.LastSendMs, state.LeaseUntilMs, 2000+gapMs+1, assetop.ManualQuietFloor)
+	assert.True(t, quiet, "从没投出去、过了安全间隔、没人持租约:应判安静(%s)", why)
+	quiet, _ = assetop.RowQuiet(state.Op.LastSendMs, state.LeaseUntilMs, 2000+gapMs-1, assetop.ManualQuietFloor)
+	assert.False(t, quiet, "离派发不足安全间隔:仍不安静")
 }

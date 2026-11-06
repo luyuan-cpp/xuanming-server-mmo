@@ -103,6 +103,12 @@ type GameClient struct {
 	// 测试替身注入点,nil 走生产实现:transmit 代替 muduo 发送,afterFunc 代替 time.AfterFunc。
 	transmit  func(*muduo.Client, *base.ClientRequest)
 	afterFunc func(time.Duration, func()) (stop func() bool)
+
+	// 应用层心跳(heartbeat.go):验签成功后按 gate 通告的间隔发 ClientHeartbeatRequest。
+	hb heartbeat
+	// 心跳的测试替身注入点,nil 走生产实现:heartbeatSend 代替 muduo 发送,heartbeatAfter 代替 time.After。
+	heartbeatSend  func(*muduo.Client, *base.ClientHeartbeatRequest)
+	heartbeatAfter func(time.Duration) <-chan time.Time
 }
 
 // conn 取当前连接快照。所有用到内部 muduo 客户端的地方都必须走它:
@@ -452,6 +458,10 @@ func (gc *GameClient) RecvOne() (*base.MessageContent, error) {
 		if err != nil {
 			return nil, err
 		}
+		// 心跳从验签成功起就在发,登录握手途中会夹着 gate 的心跳回包:认领后继续读。
+		if gc.takeHeartbeatReply(msg) {
+			continue
+		}
 		m, ok := msg.(*base.MessageContent)
 		if !ok {
 			return nil, fmt.Errorf("unexpected message type: %T", msg)
@@ -510,6 +520,10 @@ func (gc *GameClient) VerifyGateToken(payload, signature []byte) error {
 	c.Send(req)
 
 	msg, err := c.Recv()
+	// 同一条连接上再次验签时,上一次验签起的心跳可能还有回包在路上:认领后接着读。
+	for err == nil && gc.takeHeartbeatReply(msg) {
+		msg, err = c.Recv()
+	}
 	if err != nil {
 		return fmt.Errorf("recv token verify response: %w", err)
 	}
@@ -519,6 +533,8 @@ func (gc *GameClient) VerifyGateToken(payload, signature []byte) error {
 		if !m.Success {
 			return fmt.Errorf("gate token rejected: %s", m.Error)
 		}
+		// gate 通告了心跳就从这一刻开始发(heartbeat.go);旧 gate 不通告,不发。
+		gc.onGateVerified(c, m)
 		return nil
 	default:
 		return fmt.Errorf("unexpected response type for token verify: %T", msg)
@@ -582,6 +598,9 @@ func (gc *GameClient) RecvLoop(onMessage func(*GameClient, *base.MessageContent)
 		switch m := msg.(type) {
 		case *base.MessageContent:
 			gc.deliver(onMessage, m)
+		case *base.ClientHeartbeatResponse:
+			// gate 的心跳回包(heartbeat.go):只计数,不交给业务分发。
+			gc.takeHeartbeatReply(m)
 		default:
 			zap.L().Warn("unexpected message type", zap.String("type", fmt.Sprintf("%T", msg)))
 		}
@@ -612,7 +631,9 @@ func (gc *GameClient) ReplayDeferred() {
 //
 // 在途 Call 先以 ErrRPCDisconnected 完成,之后的 Call 一律 ErrRPCNotSent(Close 是终态)。
 // 先失败调用再关连接:vendored muduo 的 Close 要等拨号 goroutine 退出,黑洞地址下可能阻塞到拨号的 OS 超时。
+// 心跳最先停,之后不再往这条连接发,也不再起(heartbeat.go)。
 func (gc *GameClient) Close() {
+	gc.stopHeartbeat()
 	gc.failAllCalls(ErrRPCDisconnected)
 	if c := gc.conn(); c != nil {
 		c.Close()

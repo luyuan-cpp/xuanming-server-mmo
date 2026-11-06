@@ -22,6 +22,9 @@ const accountRoleRemovalDDL = "CREATE TABLE IF NOT EXISTS account_role_removal (
 // 多名角色逐个走,不再是一个事务:中途失败时前面的已经删了,原请求重放幂等。这时不能回确定性的拒绝,一律回 ErrRetryLater(规格 §3.6)。
 // 有挂起回 ErrConflict,令牌已清。参与者不可达回 ErrRetryLater,令牌留着,重放或后台 ResumeRemovals 接着做:写过的只有第 1 步,提交已确认,没有结局未知。
 // 准备令牌不挡入场:墓碑事务持角色行锁再核一次登记全部关闭,投票期间进了场就放弃,回 ErrConflict。
+//
+// 墓碑提交之后的收尾(settleRemovedRole):释放这名角色登记的名字,再删小表那一行。收尾失败不改删角的结局(墓碑已提交),
+// 小表那一行留着,重放或后台读到墓碑接着收尾(docs/design/guild-phase2/03-names.md §3.4a)。
 func (s *AccountDirectoryStore) Remove(ctx context.Context, account string, roles []*dspb.AccountRoleVersion) error {
 	if len(roles) == 0 || len(roles) > 100 || !accountdirectory.ValidAccount(account) {
 		return accountdirectory.ErrInvalid
@@ -69,6 +72,7 @@ func (s *AccountDirectoryStore) removeRole(ctx context.Context, account string, 
 		}
 		// 墓碑已经提交,ref 现在能证明陈旧。失败无害:读路径会过滤,上限判定和后台都会再清。
 		s.reapOwnRef(ctx, account, player)
+		s.settleRemovedRole(ctx, player)
 		return nil
 	case rolefence.PrepareBlocked:
 		return s.abortRemoval(ctx, state)
@@ -126,8 +130,9 @@ func (s *AccountDirectoryStore) beginRemoval(ctx context.Context, account string
 		return nil, err
 	}
 	if gone {
-		// 重放:上一次写完墓碑之后没来得及清 ref。
+		// 重放或后台接着做:上一次写完墓碑之后没来得及清 ref、释放名字、删小表那一行。
 		s.reapOwnRef(ctx, account, player)
+		s.settleRemovedRole(ctx, player)
 	}
 	return state, nil
 }
@@ -154,8 +159,9 @@ func lockRemoving(ctx context.Context, tx *sql.Tx, state *rfpb.RoleFenceState) e
 	return nil
 }
 
-// finishRemoval 全部参与者通过之后写墓碑、删小表。保留墓碑与单调修订号:删除后这个 player_id 不能再建角,旧登录链也不能通过 ABA 重获修改权。
+// finishRemoval 全部参与者通过之后写墓碑。保留墓碑与单调修订号:删除后这个 player_id 不能再建角,旧登录链也不能通过 ABA 重获修改权。
 // 准备令牌不挡入场,这里持角色行锁再核一次登记全部关闭:和 Register 串行,墓碑之后修订号变了,旧世代再也登记不进来。
+// 小表那一行这里不删:它是墓碑之后收尾(释放名字)的待办,收尾做完才删(settleRemovedRole),没做完后台按它接着做。
 func (s *AccountDirectoryStore) finishRemoval(ctx context.Context, state *rfpb.RoleFenceState) error {
 	var tombstone *rfpb.RoleFenceState
 	err := s.playerTx(ctx, state.PlayerId, func(tx *sql.Tx) error {
@@ -166,9 +172,6 @@ func (s *AccountDirectoryStore) finishRemoval(ctx context.Context, state *rfpb.R
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, "UPDATE account_role SET account='',owner_revision=owner_revision+1,trade_listing_id=0,prepare_token=0,fence_version=fence_version+1,updated_ms="+dbNowMsSQL+" WHERE player_id=?", state.PlayerId); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM account_role_removal WHERE player_id=?", state.PlayerId); err != nil {
 			return err
 		}
 		var err error

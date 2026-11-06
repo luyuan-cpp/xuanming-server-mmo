@@ -473,14 +473,16 @@ int main(int argc, char *argv[])
             //      排在后面的建房在守护段第 1 道闸或许可回调里的复核时必被拒
             //      (UNAVAILABLE battle_not_allocatable,match 换节点),与 lifecycle 当时的状态无关;
             //      房间不再增加;
-            //   1) 所有房间停定时器、关直连,不铸造任何终局(观众不收 SpectateEnd,scene 侧 reaper 按冻结到期解冻,
-            //      设计文档 §3.2)。已算出、还没拿到 SQL 决定的终局立即再提交一轮,还在打的房间由 match 在权威截止后判 ABORT;
+            //   1) 所有房间停定时器、关直连,不铸造任何终局(scene 侧 reaper 按冻结到期解冻,设计文档 §3.2)。
+            //      观众:还在打的房间发 166 SOURCE_LOST 并清退(不发 ABORTED,作废只由 match 的持久 ABORT 宣布);
+            //      有待提交终局的房间不发,排空窗口内拿到决定再照常发 END(2026-11-05 更正,原文「观众不收 SpectateEnd」已过时)。
+            //      已算出、还没拿到 SQL 决定的终局立即再提交一轮,还在打的房间由 match 在权威截止后判 ABORT;
             //      房间留在表里,拿到决定才删,不回 Ready;
             //   2) 断开全部客户端直连;
             //   3) 停 Agones lifecycle worker 并 join(Stop 幂等)。
             //      Stop 经取消令牌中止在途的 allocate / health 等,
             //      不等满超时,通常毫秒级、最坏约 1s(libcurl 空闲期进度回调粒度;grpc-muduo-transport.md §15.16)。
-            //      Stop 同时把还在等许可的 CreateBattle 以「拒绝」投进 loop 队列(本任务之后执行,回 battle_not_allocatable)。
+            //      关闸时作用域已在当前 loop 拒绝本地等待；Stop 之后投回的许可只释放 RAII，不重复处理调用。
             //      刻意**不**调 /shutdown:SIGTERM 通常就是 Agones 删 Pod 发来的,再回敬 /shutdown 是递归删除。
             // 框架随后进入 gRPC 排空(全部在 loop 内:停听、两段 GOAWAY、已收完的调用照常派发,约 3s 硬上限;
             // docs/design/grpc-muduo-transport.md §15.10),并 flush Kafka producer。
@@ -517,7 +519,8 @@ int main(int argc, char *argv[])
             // 单例寿命覆盖 loop,回调不捕获任何对象。
             node.SetShutdownDrainComplete([&context](Node &)
                                           { return (!context.clientEdge || context.clientEdge->ConnectionCount() == 0) && BattleRoomManager::Instance().SqlOutcomesFlushed(); });
-            // 拆除前钩子:出站通道已关、在途调用的失败回调已跑完。此后到达的回复不能有任何副作用,所以停止闸在这里才装,
+            // 拆除前钩子:出站通道已关,但停止闸之后仍可能有在途调用的失败回调到达(FinalizeTeardownInLoop 先调本钩子、后等
+            // 本地完成排空),由 outcomeStopping_ 吞掉,不产生副作用(2026-11-05 更正)。停止闸在这里才装,
             // 并把排空预算内仍没落定的终局逐局打进日志(match 在权威截止后判 ABORT)。
             node.SetBeforeTeardown([](Node &)
                                    { BattleRoomManager::Instance().StopSqlOutcomes(); });

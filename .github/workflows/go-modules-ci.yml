@@ -32,7 +32,10 @@ on:
       - "go/**"
       - "robot/**"
       # proto/ 是 Go 侧生成物的源契约，改了它必然波及 go/proto 及全部下游
+      # （持久 schema 台账 proto/persist_schema_gen.txt 也在这里，见下面 persist-schema-ledger）
       - "proto/**"
+      # 生成器源码：只有 persist-schema-ledger 一个 job 关心，但 paths 过滤是整个 workflow 的
+      - "tools/proto_generator/**"
       - ".github/workflows/go-modules-ci.yml"
   # 手动触发：新增/移出排除清单后可以立刻复检，不用推空提交。
   workflow_dispatch:
@@ -207,6 +210,34 @@ jobs:
         # scene_manager/shared 各有一份）默认不参与，它们要真 etcd/Kafka。
         run: go test -count=1 ./...
 
+  # ── 阶段 2b：持久 schema 台账门禁 ─────────────────────────────────────────
+  # 生成器 tools/proto_generator/protogen 不在 go/ 与 robot/ 下，上面的自动发现扫不到它。
+  # 这里只跑台账所在的包：仓库台账必须是规范格式、已封存的世代不得增删字段行、玩家表顶层字段的
+  # 存储分组不得改，这些核对都在 persistschema 包的单测里（TestRepositoryLedgerIsCanonical 读的就是
+  # 仓库里的台账；混版本持久字段保护设计 §3.1，交接 mixed-version-persist-handoff-20261019.md §17 / §19）。
+  # 不把整个生成器模块收进上面的矩阵：它的 build / test 没在 Linux 上实测过，按本文件「只收当前绿的」
+  # 原则，要收回整模块先实测、再改 discover 的 find 路径。
+  persist-schema-ledger:
+    name: 持久 schema 台账（protogen/internal/persistschema）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/proto_generator/protogen/go.mod
+          cache-dependency-path: tools/proto_generator/protogen/go.sum
+
+      - name: go vet ./internal/persistschema/...
+        working-directory: tools/proto_generator/protogen
+        run: go vet ./internal/persistschema/...
+
+      - name: go test -count=1 ./internal/persistschema/...
+        working-directory: tools/proto_generator/protogen
+        run: go test -count=1 ./internal/persistschema/...
+
   # ── 阶段 3：观察窗口——排除清单里的模块跑但不判红 ──────────────────────
   # 让"什么时候能把某个模块收回门禁"这件事有数据，而不是靠人记。
   excluded-watch:
@@ -243,7 +274,7 @@ jobs:
   # 卡住。取舍：现在留着 paths 省 runner 时间，代价是它只能当参考检查。
   gate:
     name: Go 门禁汇总
-    needs: [discover, build-test]
+    needs: [discover, build-test, persist-schema-ledger]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -254,9 +285,10 @@ jobs:
           set -euo pipefail
           d='${{ needs.discover.result }}'
           b='${{ needs.build-test.result }}'
-          echo "discover=$d build-test=$b"
-          if [ "$d" != "success" ] || [ "$b" != "success" ]; then
-            echo "::error::Go module checks failed (discover=$d build-test=$b)"
+          p='${{ needs.persist-schema-ledger.result }}'
+          echo "discover=$d build-test=$b persist-schema-ledger=$p"
+          if [ "$d" != "success" ] || [ "$b" != "success" ] || [ "$p" != "success" ]; then
+            echo "::error::Go module checks failed (discover=$d build-test=$b persist-schema-ledger=$p)"
             exit 1
           fi
-          echo "All ${{ needs.discover.outputs.count }} Go modules passed build + test"
+          echo "All ${{ needs.discover.outputs.count }} Go modules passed build + test; persist schema ledger checks passed"

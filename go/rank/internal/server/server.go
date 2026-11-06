@@ -62,9 +62,6 @@ func (s *Server) enrich(ctx context.Context, entries []*rankpb.RankEntry, self *
 	}
 	return nil
 }
-func ClientMethods() map[string]bool {
-	return map[string]bool{rankpb.ClientPlayerRank_GetRankPage_FullMethodName: true, rankpb.ClientPlayerRank_GetRankAround_FullMethodName: true}
-}
 func rejection(err error) *base.TipInfoMessage {
 	if err == nil {
 		return nil

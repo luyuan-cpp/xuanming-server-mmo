@@ -146,8 +146,12 @@ func tipErr(id uint32, msg string) *base.TipInfoMessage {
 // 帮名仍全局唯一(uk_guild,按 name_norm):合服时两区的帮会直接归到同一个最终区,不需要改名。
 // 公会行记的是建帮时的原始区,合服不改写它,同区比较一律经 repo 解析到最终区(GuildRepo.SameZone)。
 //
-// 内部调用(无会话:GM、运维工具、其它服务)沿用请求体字段,行为与接入客户端之前一致。
-// B2 新增的管理 / 申请 RPC **不开**内部调用口(协议里没有 player_id 字段),见 clientWrite。
+// 不带会话的内部调用只剩只读的 GetPlayerGuild(mail 领附件经 GuildRPCDirectory 读所在帮,入口准入把它登记为
+// 匿名只读例外),沿用请求体里的 player_id。其余方法一律只认会话:CreateGuild / LeaveGuild / DisbandGuild /
+// SetAnnouncement 以前也按请求体身份执行无会话调用,任何能连上本服务端口的进程都能不经 gate 签名替任意玩家写
+// (docs/design/gate-online-identity.md §7.5);GetGuild / GetGuildRank / GetGuildRankByGuild 以前对无会话调用不查归属区
+// (沿用请求体 zone_id、全服榜 zone_id=0、页长不夹)。这七个方法现由 requireClientSession 拒绝无会话调用;
+// B2 起的管理 / 申请 RPC 见 clientWrite。
 
 type caller struct {
 	playerID   uint64
@@ -163,6 +167,15 @@ func callerOf(ctx context.Context, bodyPlayerID uint64) caller {
 		logx.Errorf("[guild] Request player_id=%d differs from session identity %d; using session identity", bodyPlayerID, playerID)
 	}
 	return caller{playerID: playerID, fromClient: true}
+}
+
+// requireClientSession 是旧客户端方法(四个写、三个读)的身份闸:没有会话就拒绝,绝不按请求体里的 player_id / zone_id 执行。
+// 生产链上入口准入(roleidentity.EntryInterceptor)已先拒掉这类调用;这里是业务层自己的一道,不依赖拦截器的装配。
+func requireClientSession(who caller) error {
+	if who.fromClient {
+		return nil
+	}
+	return status.Error(codes.PermissionDenied, "guild request requires a client session")
 }
 
 // clientZone 返回客户端来源请求所属的 zone。tip 非 nil = 业务拒绝;err 非 nil = 故障。
@@ -182,9 +195,10 @@ func (l *GuildLogic) clientZone(ctx context.Context, playerID uint64) (uint32, *
 	return zoneID, nil, nil
 }
 
-// visibleIn:zoneID 为 0 表示不按 zone 过滤(内部调用)。两边都解析到最终区再比。
+// visibleIn:帮会对归属区为 zoneID 的请求者是否可见。两边都解析到最终区再比。
+// zoneID 只来自 clientZone(成功时恒非 0);以前「0 = 不按 zone 过滤」的内部调用口径已随无会话分支一起删除。
 func (l *GuildLogic) visibleIn(guild *data.GuildData, zoneID uint32) bool {
-	return zoneID == 0 || l.repo.SameZone(guild.ZoneID, zoneID)
+	return l.repo.SameZone(guild.ZoneID, zoneID)
 }
 
 // normalizeGuildName 去掉首尾空白后校验帮名。帮名进全局唯一索引并展示给所有人,
@@ -209,20 +223,20 @@ func normalizeGuildName(raw string) (string, bool) {
 
 func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest) (*pb.CreateGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
 	name, ok := normalizeGuildName(req.Name)
 	if !ok {
 		return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNameInvalid, "invalid guild name")}, nil
 	}
-	zoneID := req.ZoneId
-	if who.fromClient {
-		homeZone, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
-		}
-		zoneID = homeZone
+	// 只能在自己的归属区建帮:zone 取 data_service 的归属,请求体里的 zone_id 不信。
+	zoneID, tip, err := l.clientZone(ctx, who.playerID)
+	if err != nil {
+		return nil, err
+	}
+	if tip != nil {
+		return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
 	}
 
 	// 成员上限读 GuildLevel 第 1 级(默认 30)。读表放在铸号之前:
@@ -302,7 +316,7 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 	// 所以 GUILD_APPLICATION 也变了。那些申请所在帮会的审批人待审数同样变了,但事务不回这组人
 	// (改 data 层不在本批范围),由他们打开帮会界面时的拉取覆盖。
 	l.bumpSync([]uint64{who.playerID}, scenepb.SyncDomain_SYNC_DOMAIN_GUILD, scenepb.SyncDomain_SYNC_DOMAIN_GUILD_APPLICATION)
-	return &pb.CreateGuildResponse{Guild: l.guildInfoFor(ctx, guild, viewerOf(who))}, nil
+	return &pb.CreateGuildResponse{Guild: l.guildInfoFor(ctx, guild, who.playerID)}, nil
 }
 
 // mintGuildID 是建帮的发号步骤。单独抽出来只为可测:CreateGuild 其余每一步都要 MySQL。
@@ -324,18 +338,19 @@ func (l *GuildLogic) mintGuildID(ctx context.Context, playerID uint64) (uint64, 
 	return id, nil
 }
 
+// GetGuild:只看得见请求者归属区的帮会。只受理客户端来源,无会话调用由 requireClientSession 拒绝
+// (docs/design/gate-online-identity.md §9.6)。
 func (l *GuildLogic) GetGuild(ctx context.Context, req *pb.GetGuildRequest) (*pb.GetGuildResponse, error) {
 	who := callerOf(ctx, 0)
-	visibleZone := uint32(0)
-	if who.fromClient {
-		zoneID, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.GetGuildResponse{ErrorMessage: tip}, nil
-		}
-		visibleZone = zoneID
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
+	zoneID, tip, err := l.clientZone(ctx, who.playerID)
+	if err != nil {
+		return nil, err
+	}
+	if tip != nil {
+		return &pb.GetGuildResponse{ErrorMessage: tip}, nil
 	}
 
 	guild, err := l.repo.GetGuild(ctx, req.GuildId)
@@ -343,10 +358,10 @@ func (l *GuildLogic) GetGuild(ctx context.Context, req *pb.GetGuildRequest) (*pb
 		return nil, err
 	}
 	// 别区的帮会与不存在的帮会同一答复,不向客户端透露"它在别的区"。
-	if guild == nil || !l.visibleIn(guild, visibleZone) {
+	if guild == nil || !l.visibleIn(guild, zoneID) {
 		return &pb.GetGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
 	}
-	return &pb.GetGuildResponse{Guild: l.guildInfoFor(ctx, guild, viewerOf(who))}, nil
+	return &pb.GetGuildResponse{Guild: l.guildInfoFor(ctx, guild, who.playerID)}, nil
 }
 
 // GetPlayerGuild 不按 zone 过滤:玩家自己的帮会永远看得见(合服之后人和帮都解析到同一个最终区)。
@@ -410,14 +425,13 @@ func (l *GuildLogic) GetPlayerGuild(ctx context.Context, req *pb.GetPlayerGuildR
 // expected_guild_id 非 0 时只退该帮,不在该帮回 kGuildNotInGuild(expected_guild.go)。
 func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) (*pb.LeaveGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
-	if who.fromClient {
-		_, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.LeaveGuildResponse{ErrorMessage: tip}, nil
-		}
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
+	if _, tip, err := l.clientZone(ctx, who.playerID); err != nil {
+		return nil, err
+	} else if tip != nil {
+		return &pb.LeaveGuildResponse{ErrorMessage: tip}, nil
 	}
 
 	expected := req.GetExpectedGuildId()
@@ -462,14 +476,13 @@ func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) 
 // expected_guild_id 非 0 时只解散该帮,不在该帮回 kGuildNotInGuild(expected_guild.go)。
 func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildRequest) (*pb.DisbandGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
-	if who.fromClient {
-		_, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.DisbandGuildResponse{ErrorMessage: tip}, nil
-		}
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
+	if _, tip, err := l.clientZone(ctx, who.playerID); err != nil {
+		return nil, err
+	} else if tip != nil {
+		return &pb.DisbandGuildResponse{ErrorMessage: tip}, nil
 	}
 
 	expected := req.GetExpectedGuildId()
@@ -522,17 +535,16 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 
 func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncementRequest) (*pb.SetAnnouncementResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
 	if len(req.Announcement) > constants.MaxAnnouncementBytes {
 		return &pb.SetAnnouncementResponse{ErrorMessage: tipErr(constants.ErrAnnouncementTooLong, "announcement too long")}, nil
 	}
-	if who.fromClient {
-		_, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
-		}
+	if _, tip, err := l.clientZone(ctx, who.playerID); err != nil {
+		return nil, err
+	} else if tip != nil {
+		return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
 	}
 
 	// 权限必须在 MySQL 更新事务内按权威 membership.role 复核；Redis GuildData
@@ -552,12 +564,12 @@ func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncemen
 		membersExcept(snapshot, who.playerID))
 	// 快照含操作者本人(他是 officer / leader 才过得了事务),全体即 bump 集合。
 	l.bumpSync(membersPlus(snapshot), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)
-	return &pb.SetAnnouncementResponse{Guild: l.guildInfoFor(ctx, snapshot, viewerOf(who))}, nil
+	return &pb.SetAnnouncementResponse{Guild: l.guildInfoFor(ctx, snapshot, who.playerID)}, nil
 }
 
 // ── 排行榜 ─────────────────────────────────────────────────────
 
-// UpdateGuildScore 只对内部调用开放(session.ClientMethods 不含它)。
+// UpdateGuildScore 只对内部调用开放(标了 CLIENT_RPC_SERVER_ONLY,不在生成的客户端方法集合里,带会话调它在入口即被拒)。
 func (l *GuildLogic) UpdateGuildScore(ctx context.Context, req *pb.UpdateGuildScoreRequest) (*pb.UpdateGuildScoreResponse, error) {
 	guild, err := l.repo.GetGuild(ctx, req.GuildId)
 	if err != nil {
@@ -591,28 +603,28 @@ func (l *GuildLogic) UpdateGuildScore(ctx context.Context, req *pb.UpdateGuildSc
 	return &pb.UpdateGuildScoreResponse{}, nil
 }
 
-// GetGuildRank:客户端只看本区榜(zone_id 以归属 zone 覆盖,全服榜 zone_id=0 只对内部调用开放),
-// 单页条数夹到 MaxRankPageSize。
+// GetGuildRank:只看请求者归属区的榜,zone 取归属区(请求体里的 zone_id 不信),单页条数夹到 MaxRankPageSize。
+// 只受理客户端来源(同 GetGuild)。运维要全服榜须另设带 serviceauth 的内部 RPC,不在这里给无会话调用开口子。
 func (l *GuildLogic) GetGuildRank(ctx context.Context, req *pb.GetGuildRankRequest) (*pb.GetGuildRankResponse, error) {
-	zoneID := req.ZoneId
+	who := callerOf(ctx, 0)
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
+	zoneID, tip, err := l.clientZone(ctx, who.playerID)
+	if err != nil {
+		return nil, err
+	}
+	if tip != nil {
+		return &pb.GetGuildRankResponse{ErrorMessage: tip}, nil
+	}
 	pageSize := req.PageSize
 	if pageSize == 0 {
 		pageSize = 20
 	}
+	pageSize = min(pageSize, constants.MaxRankPageSize)
 	page := req.Page
 	if page == 0 {
 		page = 1
-	}
-	if who := callerOf(ctx, 0); who.fromClient {
-		homeZone, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.GetGuildRankResponse{ErrorMessage: tip}, nil
-		}
-		zoneID = homeZone
-		pageSize = min(pageSize, constants.MaxRankPageSize)
 	}
 
 	entries, total, err := l.repo.GetGuildRankPage(ctx, zoneID, page, pageSize)
@@ -633,18 +645,19 @@ func (l *GuildLogic) GetGuildRank(ctx context.Context, req *pb.GetGuildRankReque
 	}, nil
 }
 
-// GetGuildRankByGuild:客户端查的是本区榜上的名次;别区的帮会在本区榜上不存在,答复"未上榜"。
+// GetGuildRankByGuild:查的是请求者归属区榜上的名次,zone 取归属区(请求体里的 zone_id 不信);
+// 别区的帮会在本区榜上不存在,答复"未上榜"。只受理客户端来源(同 GetGuild)。
 func (l *GuildLogic) GetGuildRankByGuild(ctx context.Context, req *pb.GetGuildRankByGuildRequest) (*pb.GetGuildRankByGuildResponse, error) {
-	zoneID := req.ZoneId
-	if who := callerOf(ctx, 0); who.fromClient {
-		homeZone, tip, err := l.clientZone(ctx, who.playerID)
-		if err != nil {
-			return nil, err
-		}
-		if tip != nil {
-			return &pb.GetGuildRankByGuildResponse{ErrorMessage: tip}, nil
-		}
-		zoneID = homeZone
+	who := callerOf(ctx, 0)
+	if err := requireClientSession(who); err != nil {
+		return nil, err
+	}
+	zoneID, tip, err := l.clientZone(ctx, who.playerID)
+	if err != nil {
+		return nil, err
+	}
+	if tip != nil {
+		return &pb.GetGuildRankByGuildResponse{ErrorMessage: tip}, nil
 	}
 
 	entry, err := l.repo.GetGuildRank(ctx, req.GuildId, zoneID)

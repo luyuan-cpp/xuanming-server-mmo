@@ -84,7 +84,7 @@ Client ── POST ───►│ /api/assign-gate                             
 > **(2026-10-15 更正,上图 AssignGate 第 4 步;原文保留)** 第 4 步「FreeSlots>0 且队列空 → 直接签 gate token」漏了占位:签票之前先调 `TryReserveFastPathSlot`(`go/login/internal/logic/loginpregate/assigngatelogic.go:110-129`;脚本与函数见 `go/login/internal/logic/pkg/loginqueue/queue.go:563-593`),一段 Lua 先清掉 `admitted:zset:zone:{z}` 里已到期的成员,未到期成员数 < `budget`(= `capacity − online`,注意不是 `free`)才写入成员 `fast:<uuid>`、分数 = 现在 + 交票宽限 20s(`defaultHandoffGrace`),并按「只增不减」续整键 TTL;返回 1 才签票。占不到(名额被并发请求占满)或脚本出错(Redis 抖动,fail-closed)都改走第 5 步入队,不签票。这个占位不撤,20s 后按分数自然到期,期间与排队路径的在途占位一起计入 `FreeSlots` 的 `admitted_inflight`,所以快速通道同样受容量约束,不是旁路。第 3 步(`Queue.Enabled=false`)与第 2 步(重连豁免)才是真正「直接签票」,不读不写任何排队键。占位的生命周期见 §5「在途占位的生命周期」表的「快速通道占位」一行。
 
 > **(2026-10-18 更正,上图 Dispatcher 框、AssignGate 第 1 步与键表;原文保留;已落码,未编译、未测试,待 Codex 验证)**
-> - Dispatcher 框「ZPOPMIN free 个 → 签 gate token → SET admit:{queueId}」改读:`ZRANGE` 读出前 `batch` 个候选(只读,条目仍在队列)→ 逐条挑 gate → 逐条 `EVALSHA admitEntryScript`。脚本先判成员仍在队列,再在同一段里写 meta 的 `admitted_at`、放行槽与在途占位,最后 `ZREM` 成员。gate 票仍在取走时才签。
+> - Dispatcher 框「ZPOPMIN free 个 → 签 gate token → SET admit:{queueId}」改读:`ZRANGE` 读出前 `batch` 个候选(只读,条目仍在队列)→ 逐条挑 gate → 每条一段 `admitEntryScript`(2026-11-06 起第一条单发探路,之后每块至多 128 条放进一个 pipeline,见下文「一、出队」)。脚本先判成员仍在队列,再在同一段里写 meta 的 `admitted_at`、放行槽与在途占位,最后 `ZREM` 成员。gate 票仍在取走时才签。
 > - AssignGate 第 1 步与 QueryQueueStatus 的「验签 + Lookup」:`Lookup` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账。
 > - 键表 `queue:meta:{queueId}` 与 `queue:token:{token}` 的「TTL=1h」改读**空闲 TTL**:入队时设 `QueueEntryTTL`;之后每次排队中的查询,剩余 TTL 不足 `QueueEntryTTL` 时续到 1.25 倍。所以条目空闲(自最后一次成功的排队中查询或入队起算)至少 `QueueEntryTTL`、至多 1.25 倍才过期;放行之后不再续期。
 > - `queue:zone:{zoneId}` 同样会被续期;入队对它改为 `EXPIRE NX` + `EXPIRE GT`,TTL 只增不减。
@@ -207,16 +207,19 @@ service LoginPreGate {
 >
 > **一、出队(`PopAdmit`)**
 >
-> - **怎么出队。** 不再 `ZPOPMIN`。先 `ZRANGE queue:zone:{z} 0 n-1` 读出候选(只读,条目仍在队列),逐条挑 gate,再逐条跑 `admitEntryScript`(`EVALSHA`,遇 `NOSCRIPT` 回退 `EVAL`)。脚本的 KEYS 在放行槽、meta、在途占位之外多了队列键,只返回整数:
+> - **怎么出队。** 不再 `ZPOPMIN`。先 `ZRANGE queue:zone:{z} 0 n-1` 读出候选(只读,条目仍在队列),逐条挑 gate,再对每条跑一段 `admitEntryScript`。脚本的 KEYS 在放行槽、meta、在途占位之外多了队列键,只返回整数:
 >   - GONE(1):成员已不在队列(另一副本或重叠 leader 已放行或已清理),什么都不写,不计数。
 >   - META_GONE(2):meta 不在或不是 hash,`ZREM` 成员,不写放行、不占名额、不计数。判据从「不存在」扩为「不是 hash」,类型损坏的 meta 不再是卡死整个 zone 的毒丸。
 >   - ALREADY(3):成员仍在队列,但 meta 已有 `admitted_at`。只可能是上一次非写满原因造成的部分写入,`ZREM`,不计数。
 >   - WRITTEN(4):依次 `HSET admitted_at`、`SET admit:{queueId} PX AdmitTTL`、`ZADD` 在途占位(剩余 `PTTL` < W 才 `PEXPIRE W`)、`ZREM` 成员,计数。
 >   - REPLAYED(5):成员已不在队列,且 `admitted_at` 恰等于本次的放行时刻,说明 go-redis 重发了已执行成功的同一条命令。什么都不写,计数。
-> - **停批规则。** 只有与条目无关的错误才让本批在第一个出错处停下,剩余条目原样留在队列:脚本出错(写满、连接 / 超时、占位键或队列键 `WRONGTYPE`),以及调用方 ctx 取消(在下一次跑脚本之前检查)。以下情况只跳过该条:挑 gate 失败、`pickFn` 回 `(nil, nil)`、Marshal 失败;条目从未离开队列,分数不变,下一拍再试。meta 不在或类型损坏、空 member,由脚本就地 `ZREM`,不停批。
-> - **返回契约与日志。** `PopAdmit` 返回 (已放行数, err),err 非空时已放行数照样有效。dispatcher 先 `recordAdmit` 再判错误,ctx 未取消时每拍至多打一行 `ERROR [loginqueue] PopAdmit zone=<z> err=…`;err 里带 `queueId`、`admitted`、`skipped`、`untried`,或 `zrange: …`。另有每批至多一行 `INFO [loginqueue] PopAdmit entries not admitted zone=<z> metaGone=<n> alreadyAdmitted=<n> gone=<n>`。10-15 版的两行 `PopAdmit dropped entries after zpopmin …`(`reason=write_failed` 的 ERROR 与 `reason=meta_gone` 的 INFO)已删除。
-> - **不丢条目。** 任何 Redis 错误、写满、取消、进程退出之后,条目要么仍在队列,要么已放行可取。上面 10-15 补注末段列出的「仍会停在名次 0」的路径全部消除。`popAdmitWriteBudget`(`WithoutCancel` 写入预算),以及 `pickFn` 出错时以分数 0 回填的 `ZADD`,随之删除。代价是 Stop 最多多等一条在途命令的 `ReadTimeout`:客户端没开 `ContextTimeoutEnabled`,而取消之后 go-redis 的重试退避直接返回,不再重发。
-> - **结果不确定时。** go-redis 重试用尽的读超时之后,条目要么已写成并移出(客户端可取),要么仍在队列,下一拍不会重复放行。写成的那条不计数,只影响指标。
+> - **按块发(2026-11-06 起,缺口清单第 14 条)。** 此前每条等回包再发下一条,放行速率约等于 1 / Redis 往返,开服时一拍要放的上万人得跑十几秒。现在第一条单发探路(`EVALSHA`,遇 `NOSCRIPT` 回退 `EVAL`),之后每块至多 `popAdmitPipelineChunk`(128)条放进一个 pipeline、一块一次往返(块内每条发 `EVAL` 全文:pipeline 里的 `EVALSHA` 撞上 `NOSCRIPT` 要等整块回来才知道,那几条还得另发)。各条仍是独立的一段脚本、各自原子,下面的分支与写满语义逐条不变。
+>   - 探路的理由:写满、占位键或队列键 `WRONGTYPE`、连不上这类持续性错误只在第一条上出一次,本批随即停下,与逐条执行时一样只尝试一条;`WRONGTYPE` 造成的部分写入(占位键被改坏类型时 `HSET` 与 `SET` 已写、`ZADD` 报错,见 `admitEntryScript` 注释 (d))也最多一条。
+>   - 块大小 128:一条放行脚本十来条命令、约十几微秒,一块约 2ms,单次占住 Redis 的时间仍短;一块的请求约 128 × 1KB。没有压测基线,压测后可调。
+> - **停批规则。** 只有与条目无关的错误才让本批停下:一块里有脚本出错(写满、连接 / 超时、占位键或队列键 `WRONGTYPE`)就在这一块之后停下,后面的块不再发、原样留在队列;同一块里出错条目之外的各条照样执行了(成功的已放行、计数,出错的原样留在队列)。调用方 ctx 取消在发下一块之前检查。以下情况只跳过该条:挑 gate 失败、`pickFn` 回 `(nil, nil)`、Marshal 失败;条目从未离开队列,分数不变,下一拍再试。meta 不在或类型损坏、空 member,由脚本就地 `ZREM`,不停批。
+> - **返回契约与日志。** `PopAdmit` 返回 (已放行数, err),err 非空时已放行数照样有效。dispatcher 先 `recordAdmit` 再判错误,ctx 未取消时每拍至多打一行 `ERROR [loginqueue] PopAdmit zone=<z> err=…`;err 里带首个出错的 `queueId`、`admitted`、`skipped`、`failed`(本块出错条数)、`untried`(后面没发的条数),或 `zrange: …`。另有每批至多一行 `INFO [loginqueue] PopAdmit entries not admitted zone=<z> metaGone=<n> alreadyAdmitted=<n> gone=<n>`。10-15 版的两行 `PopAdmit dropped entries after zpopmin …`(`reason=write_failed` 的 ERROR 与 `reason=meta_gone` 的 INFO)已删除。
+> - **不丢条目。** 任何 Redis 错误、写满、取消、进程退出之后,条目要么仍在队列,要么已放行可取。上面 10-15 补注末段列出的「仍会停在名次 0」的路径全部消除。`popAdmitWriteBudget`(`WithoutCancel` 写入预算),以及 `pickFn` 出错时以分数 0 回填的 `ZADD`,随之删除。代价是 Stop 最多多等一块在途 pipeline 的 `ReadTimeout`:客户端没开 `ContextTimeoutEnabled`,而取消之后 go-redis 的重试退避直接返回,不再重发。
+> - **结果不确定时。** go-redis 重试用尽的读超时之后(一块的结果都不确定),条目要么已写成并移出(客户端可取),要么仍在队列,下一拍不会重复放行。写成的那些不计数,只影响指标。go-redis 对整块重发时,已执行过的那些走 REPLAYED、照常计数。
 > - **重叠 leader / 多副本。** 两边可能 `ZRANGE` 到同一批,脚本第一步 `ZSCORE` 保证每条只写一次,后到的拿到 GONE。在途上界仍 ≤ 2×(capacity − online)。
 > - **快速通道插队窗口消失。** 在本批每条都原子地「移出 + 写占位」之前,快速通道看到的队列不会变空(§14 第 7 条)。
 > - **写满时 fail-closed(maxmemory + noeviction)。**
@@ -230,22 +233,23 @@ service LoginPreGate {
 > **二、查询(`Lookup`)**
 >
 > - **签名。** 改为 `Lookup(ctx, token, zoneID, signFn)`。`zoneID` 必须取自已验签的排队令牌(`ParseAndVerifyQueueTokenMulti` 的第二个返回值),0 视为损坏。仓内的调用方只有 assign-gate 重入、queue-status 两个 handler 与测试。
-> - **判定顺序。**
->   1. TTL 不合法(`ValidateTTLs`):回错误,不碰 Redis。这是纵深防御,挡住绕过起服装配直接 `New` 的调用方,免得续期写出 `PEXPIRE 0` 当场删键。
->   2. zone 为 0:EXPIRED(`meta_gone`),不碰 Redis。
->   3. `GET queue:token:{token}` 不在:EXPIRED(`meta_gone`)。空闲超过 `QueueEntryTTL` 的条目走这里。
->   4. `GETDEL admit:{queueId}` 取到:现签 gate 票,ADMITTED(不变)。
->   5. 没取到:跑一次 `lookupStateScript`,KEYS 是 meta、`queue:zone:{令牌里的 zone}` 与 token 索引。
+> - **判定顺序(2026-11-06 起全在一段 `lookupScript` 里,一次往返;缺口清单第 14 条)。** 此前是 `GET queue:token:{token}`、`GETDEL admit:{queueId}`、再跑读状态脚本 `lookupStateScript` 三次往返,读状态脚本看到 `admitted_at` 时还要再 `GETDEL` 一次。
+>   1. TTL 不合法(`ValidateTTLs`)或 `signFn` 为 nil:回错误,不碰 Redis。前者是纵深防御,挡住绕过起服装配直接 `New` 的调用方,免得续期写出 `PEXPIRE 0` 当场删键。
+>   2. zone 为 0,或令牌拆不出 queueId:EXPIRED(`meta_gone`),不碰 Redis。queueId 从令牌正文取(`queueIDOfVerifiedToken`,与验签共用 `splitQueueToken` 的拆法),此前是 `GET` token 索引读出来的。
+>   3. 跑一次 `lookupScript`,KEYS 是 meta、`queue:zone:{令牌里的 zone}`、token 索引与放行槽:
+>      - `GET` token 索引不在,或值不是这个 queueId:EXPIRED(`meta_gone`)。空闲超过 `QueueEntryTTL` 的条目走这里。索引按令牌全文建、值是 queueId,只有 `Enqueue` 签出的原令牌有索引,所以改写过正文的令牌取不到别人的放行槽(Lookup 本身不验签,验签在调用方)。
+>      - `GETDEL admit:{queueId}` 取到:现签 gate 票,ADMITTED(签票之后读 meta、改占位各一次往返,每个条目只有这一次)。
+>      - meta 不在或不是 hash、meta 的 `zone_id` 与令牌不符:EXPIRED(`meta_gone`)。
+>      - meta 有 `admitted_at` 而放行槽不在:EXPIRED(`admit_window_passed`)。放行脚本在同一段里写 `admitted_at` 与放行槽,本脚本在同一段里读两者,不会是「放行还没落地」,不再需要第二次 `GETDEL`(此前为它准备的测试注入点 `afterAdmitMiss` 已删)。
 >      - 仍在队列:QUEUEING,带名次与总数,按需续空闲 TTL。
->      - meta 有 `admitted_at`:再 `GETDEL` 一次,保留对「第一次 `GETDEL` 落空之后放行才落地」的覆盖。取到回 ADMITTED,否则 EXPIRED(`admit_window_passed`)。
->      - meta 在、没有 `admitted_at`、又不在队列:EXPIRED(**`queue_gone`**,新原因)。
->      - token 索引恰在两步之间到期、meta 不在或不是 hash、meta 的 `zone_id` 与令牌不符:EXPIRED(`meta_gone`)。
+>      - meta 在、没有 `admitted_at`、又不在队列:EXPIRED(**`queue_gone`**)。
 > - **在途窗口消失。** 「出队」与「写 `admitted_at`」在放行脚本的同一段里,读状态脚本与放行脚本互斥原子。所以旧的在途窗口(已 `ZPOPMIN`、还没写放行,回名次 0)不复存在,「HMGET 时还没放行、ZRANK 时已放行」的交错也随之消失。上面 10-15 更正中「没有 `admitted_at`:ZRANK 落空回名次 0」一条改读 `queue_gone`。
 > - **`queue_gone` 的来源。** 纯新版下只有三个:
 >   1. 整个 zone 空闲 ≥ `QueueEntryTTL` 之后,队列键先于某条 meta 过期。该条目空闲 ∈ [E, 1.25E],本来就该 EXPIRED,只是原因标签不同。
 >   2. 人工 `ZREM` 成员或 `DEL queue:zone:<z>`(§15)。
 >   3. 排队开着时混跑旧版 leader:旧版已 `ZPOPMIN`、还没写放行的条目。发布约束禁止这种情况,见下文第四部分。
-> - **往返数。** 排队中一次轮询 = `GET` + `GETDEL` + 一次 `EVALSHA`,此前是 `GET` + `GETDEL` + `HMGET` + `ZRANK` + `ZCARD`(5 → 3)。进程内首次调用会多一次 `NOSCRIPT` 回退。轮询从纯读变为「偶尔带写」(见下文第三部分的续期)。
+> - **往返数。** 排队中一次轮询 = 一次 `EVALSHA`(2026-11-06 起;10-18 版是 `GET` + `GETDEL` + 一次 `EVALSHA`,再之前是 `GET` + `GETDEL` + `HMGET` + `ZRANK` + `ZCARD`,5 → 3 → 1)。进程内首次调用会多一次 `NOSCRIPT` 回退。轮询从纯读变为「偶尔带写」(见下文第三部分的续期);脚本里的写只有 `GETDEL` 与 `PEXPIRE`,都不是 DENYOOM 命令,写满时轮询照常。Redis 侧每次轮询执行的命令数与此前大致相同,省下的是网络往返与命令解析;排队 10 万人时单台 Redis 是否扛得住仍要压测看(`stress_summarize` 的 R1 / R2)。
+> - **混跑。** 本次不改键名、键值格式与脚本之外的任何语义,新旧版本的 login 混跑时互不影响(旧版仍走三次往返,读写的是同一批键)。
 > - **zone 标签。** `login_queue_expired_total` 的 zone 标签一律取令牌里的 zone;此前 token 索引不在时记 `unknown`。
 >
 > **三、空闲 TTL 与令牌**(下文记 E = `QueueEntryTTL`)
@@ -413,10 +417,10 @@ for each queueId in members:
 > batch = min(free, ZCARD)
 > members = ZRANGE queue:zone:{zoneId} 0 batch-1   // 只读,条目仍在队列
 > picker = 本拍的挑 gate 器(candidates)
-> for each queueId in members:
->     slot = picker.pick()                    // 失败或无 gate:跳过该条,它从未离开队列、分数不变
+> entries = [ (queueId, picker.pick()) for each queueId in members ]   // 挑失败或无 gate:跳过该条,它从未离开队列、分数不变
+> for each chunk in [entries[0:1], 之后每 128 条一块]:   // 2026-11-06 起:第一条单发探路,之后一块一个 pipeline、一次往返
 >     if ctx 已取消: return (已放行数, ctx.Err())    // 剩余条目原样留在队列
->     EVALSHA admitEntryScript:               // 一段脚本,只返回整数
+>     对块里每条跑 admitEntryScript(单发 EVALSHA / pipeline 里 EVAL):   // 一段脚本,只返回整数,每条各自原子
 >       if queueId 不在 queue:zone:{zoneId}:
 >           admitted_at == 本次放行时刻 ? REPLAYED(计数) : GONE
 >       if TYPE meta != hash: ZREM → META_GONE
@@ -426,7 +430,7 @@ for each queueId in members:
 >       ZADD admitted:zset:zone:{zoneId} <now_ms + AdmitTTL> queueId
 >       if PTTL < W: PEXPIRE W
 >       ZREM queue:zone:{zoneId} queueId → WRITTEN(计数)
->     脚本出错: return (已放行数, err)       // 停批,剩余条目原样留在队列
+>     块里有脚本出错: return (已放行数, err)   // 同块其余各条已照常执行;后面的块不发,原样留在队列
 > 有跳过的条目: return (已放行数, 首个跳过原因)
 > // dispatchOnce:先 recordAdmit(已放行数),err 非空且 ctx 未取消时打一行 ERROR
 > ```
@@ -723,6 +727,12 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
      - **效果。** 持续轮询的人不会因为等满 `QueueEntryTTL` 被弹回队尾(`TestLookup_ContinuousPollingOutlivesEntryTTL`:轮询 2h 仍在排队并被放行)。空闲超过 `QueueEntryTTL`(至多 1.25 倍)的条目回 EXPIRED,原因记 `meta_gone`(此前通常记 `ttl`);`ttl` 只在令牌超过 24h 时出现。
      - **孤儿条目。** 不再轮询的条目,轮到时由放行脚本的 META_GONE 分支 `ZREM`。
      - **Java 版。** 上文「需同步改令牌过期语义,Java 版对齐」:本仓库已改,Java 版待做(由主会话在 `PARITY.md` 登记)。
+10. **放行速率约等于 1 / Redis 往返,轮询每次三次往返**(2026-11-05 全链路水平扩展盘点第 14 条)。**2026-11-06 已落码,未编译、未测试,待 Codex 验证**,做法见 §5 决策树后 2026-10-18 更正里「一、出队」的「按块发」与「二、查询」的判定顺序:
+   - 放行:第一条单发探路,之后每块至多 128 条放进一个 pipeline,一块一次往返;每条仍是独立的一段 `admitEntryScript`,写满与部分写入的语义逐条不变。
+   - 轮询:token 核对、取放行槽、读状态与续期合成一段 `lookupScript`,排队中一次轮询从三次往返降到一次。
+   - 排队实例按 zone 组分开:G4a 第 1a 批已有(`k8s_deploy.ps1 -RedisSplit queue`,每组一个 `redis-queue-g<N>`),首次上线显式带上(`shared-redis-split-by-purpose.md` §25.3),本条没有改部署脚本。
+   - **没做**:盘点修法方向里的「名次改用入队序号差加进程内缓存」。它把客户端看到的名次从精确值改成上界(中途离队的人仍被算在前面),也改了空闲续期的触发方式,只为省 Redis CPU;按「性能靠实测」,等压测证明单台 redis-queue 扛不住 10 万人排队的轮询再做。轮询合并之后 Redis 侧每次执行的命令数与此前大致相同,省下的是往返与命令解析。
+   - Java 版:已有等价,不加 `PARITY.md` 行。game-gateway 的 `LoginQueue` 放行是一段 Lua(`DISPATCH`)放一批,查询是一段 Lua(`LOOKUP`)一次往返(Java 仓 `game-gateway/.../queue/LoginQueue.java`)。
 
 ---
 

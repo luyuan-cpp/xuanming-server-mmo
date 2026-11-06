@@ -36,6 +36,8 @@ type AccountDirectoryStore struct {
 	fences   FenceCoordinator // 过户和删角的两阶段,nil 时都拒绝。见 ConfigureFenceCoordinator
 	cfg      MySQLConfig
 	stores   *PlayerStorePools // 按 storage_id 的存档库连接池,见 ConfigurePlayerStores
+	// names 是名字登记表:建角提交之后绑定名字、删角写完墓碑之后释放名字(account_role_name.go)。nil 时两步都不做,见 ConfigurePlayerNames。
+	names roleNameRegistry
 	// 读路径发现的陈旧 ref,等后台清。
 	staleRefs chan staleRefKey
 	// 账本和展示资料读的名额,见 acquirePlayerStoreRead。
@@ -245,7 +247,7 @@ func decodeOwnership(id uint64, account string, raw []byte, rev, listing, prepar
 	return &dspb.AccountRoleOwnership{Account: account, Role: role, OwnerRevision: rev, TradeListingId: listing, PrepareToken: prepare}, nil
 }
 
-// Lookup 强读玩家所在分片。墓碑算不存在。
+// Lookup 强读玩家所在分片。墓碑算不存在。InitialPlayerCommit 照实回:摘孤儿凭它分辨「现行建角流程建的、只缺初始行」(该修,不该删)。
 //
 // 入场和归属判定只看 trade_listing_id。准备令牌还在投票,撤销了角色就回来了,不出目录:调用方看到的是这名角色没有冻结,
 // 玩家照常进场。这时进场的实例在转 FREEZING 的事务里按同一把行锁快照进 holder,此后 Register 才被挡,规格 §3.5。
@@ -290,13 +292,14 @@ func (s *AccountDirectoryStore) CreateWithInitialCommit(ctx context.Context, acc
 //  1. 账号分片事务:锁目录行,核上限,写 ref(PENDING)。
 //  2. 存档库:写初始行。目录没提交时没人读得到,失败只留下孤儿行。
 //  3. 玩家分片事务:核路由行,严格插入 account_role。这是提交点。
+//     提交之后在名字片把名字行从预留置为已绑定(bindRoleNameBestEffort,先复核角色确已提交)。失败不改结局,重放或核账补上。
 //  4. 账号分片:ref 改 ACTIVE。失败无害。
 //
 // 第 3 步之前的失败都回 ErrNotCommitted,第 3 步 BEGIN 就被拒绝也算:这次调用没有写角色行,这次写的 ref 当场删掉,立刻退还名额。
 // 第 3 步之后的失败才是结局未知,login 按 player_id 强读消歧。两者不能混:login 收到 ErrNotCommitted 就释放名字。
 //
 // 第 3 步之后重放走预读那条路,不再碰存档:玩家可能已经存过盘。
-// 同账号同角色的重放只读回列表;归属不同、已挂寄售或已删除(墓碑)一律冲突,删除后的角色不能复活。
+// 同账号同角色的重放补绑名字、补第 4 步,读回列表;归属不同、已挂寄售或已删除(墓碑)一律冲突,删除后的角色不能复活。
 func (s *AccountDirectoryStore) createRoleWithInitialRows(ctx context.Context, account string, role *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
 	if !validRole(role) || !accountdirectory.ValidAccount(account) {
 		return nil, accountdirectory.ErrInvalid
@@ -313,6 +316,7 @@ func (s *AccountDirectoryStore) createRoleWithInitialRows(ctx context.Context, a
 		if err := checkCreateReplay(old, account, role); err != nil {
 			return nil, err
 		}
+		s.bindRoleNameBestEffort(ctx, role)
 		s.activateRefBestEffort(ctx, account, role.PlayerId)
 		return s.readRoleList(ctx, account)
 	}
@@ -342,6 +346,7 @@ func (s *AccountDirectoryStore) createRoleWithInitialRows(ctx context.Context, a
 		}
 		return nil, err
 	}
+	s.bindRoleNameBestEffort(ctx, role)
 	s.activateRefBestEffort(ctx, account, role.PlayerId)
 	return s.readRoleList(ctx, account)
 }

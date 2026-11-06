@@ -56,6 +56,7 @@ zone_id: 0
 | `sync-smoke` | 落地恢复的按域版本摘要:登录取摘要、好友申请只让对应域 +1、短重连后摘要原样延续、实体就绪前发请求不致崩溃(跨区落地腿可选,缺省关) |
 | `merchant-smoke` | 神秘商人:查到他在哪条线、切过去、走到旁边、购买、限购与各种拒绝(商人不在场时打印 SKIP,不算失败) |
 | `mall-arrival-smoke` | 官方商品到账(D-17):下单(同号重发幂等)→ 错金额付款被商城拒 → dev 模拟渠道付款 → 等订单已发货 → 背包正好多出应得数量、不重复发、重登仍在(`etc/mall_arrival_smoke.yaml`;要先起 java/mall_game 并跑 `etc/mall_arrival_smoke_seed.sql`,见该文件头) |
+| `heartbeat-idle-smoke` | gate 客户端心跳判死:停发心跳后 gate 在 30s 内关连接(另用一条裸 TCP 量时刻),同账号重登接回断线保留里的同一个实体、旧连接没被顶号踢(`etc/heartbeat_idle_smoke.yaml`,约 45 秒) |
 | `currency-crash-snapshot` | 货币崩溃窗口验证用的单次登录快照 |
 
 每种模式在 `etc/` 下都有对应的配置样例。

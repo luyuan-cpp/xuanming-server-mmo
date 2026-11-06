@@ -24,8 +24,8 @@ import (
 // 名单来自 guild 邀请房间里全员已同意的成员;原 lobby_id 是 request_id,意图、全员占用与成局在同一 SQL 事务提交
 // (direct_intent.go),活动上下文随成局原件持久化,建房时原样透传给 battle。
 //
-// 唯一合法调用方是 go/guild,请求带 guild 的签名;客户端来源(带会话 metadata)在 match_service.go 的 sessionInterceptor
-// 就被 PermissionDenied,本文件入口再防一道(拦截器链被改坏时仍 fail-closed)。
+// 唯一合法调用方是 go/guild,请求带 guild 的签名;客户端来源(带会话 metadata)在 match_service.go 装配的入口准入
+// (roleidentity.EntryInterceptor)就被 PermissionDenied,本文件入口再防一道(拦截器链被改坏时仍 fail-closed)。
 
 // activityTicketReadBudget 预检读一名成员票据的预算(含已结算票的按需释放),不超过调用方给的请求 ctx。
 const activityTicketReadBudget = 3 * time.Second

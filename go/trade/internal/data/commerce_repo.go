@@ -9,6 +9,7 @@ import (
 	assetpb "proto/common/asset"
 	tradepb "proto/trade"
 	"shared/assetop"
+	"shared/workshard"
 	"strconv"
 	"strings"
 )
@@ -116,6 +117,28 @@ func (r *CommerceRepo) Defer(ctx context.Context, id, version, untilMs uint64) (
 	})
 	return deferred, err
 }
+
+// RescheduleTx 只把合同的下次到期改成 dueMs,不改版本、不重写 workflow。给推进一步之后合同没有任何变化时用
+// (commerce.Engine.advance,缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8)。
+//
+// 调用方必须已在 tx 里主键点锁了这一行(Lock),所以版本条件必然命中;影响 0 行只说明 updated_ms 本来就是这个值。
+// 不改版本是有意的:后台的一次空转不是业务变化,玩家按刚读到的版本提交的购买、取消不该因此撞乐观冲突;
+// 它们的 Save 在同一行锁上排在后面,照常提交并把 updated_ms 写回现在(立即到期)。
+func (r *CommerceRepo) RescheduleTx(ctx context.Context, tx *sql.Tx, id, version, dueMs uint64) error {
+	_, err := tx.ExecContext(ctx, "UPDATE trade_commerce SET updated_ms=? WHERE commerce_id=? AND version=?", dueMs, id, version)
+	return err
+}
+
+// Wake 把仍在推进中的合同的下次到期提前到 atMs:只提前、不推后,不改版本。给「别处的事件让这条合同可以往前走」用,
+// 现在是撮合失败后下一轮重撮(commerce.Engine.step)。
+//
+// 自动提交的单条主键点改,只锁这一行,不在任何别的事务里,所以与合同推进的锁序不成环。行已不在推进状态
+// (结案、转人工)或本来就更早到期时影响 0 行,不是错误。
+func (r *CommerceRepo) Wake(ctx context.Context, id, atMs uint64) error {
+	_, err := r.DB.ExecContext(ctx, "UPDATE trade_commerce SET updated_ms=? WHERE commerce_id=? AND updated_ms>? AND status IN ("+dueStatuses+")", atMs, id, atMs)
+	return err
+}
+
 func (r *CommerceRepo) Tx(ctx context.Context, body func(*sql.Tx) error) error {
 	return assetop.WithTxRetry(ctx, r.DB, 2, IsRetryableTxError, body)
 }
@@ -161,9 +184,17 @@ func (r *CommerceRepo) List(ctx context.Context, player uint64, after CommerceCu
 // 每轮都排在队头,堆满 limit 之后全服合同停摆(2026-10-20,第一轮审计 §2.5 go-asset-services#0)。
 // updated_ms 不进客户端视图(logic.orderView / marketView / lotView 都不映射它),改它不动任何对外契约。
 // 各副本按本机时钟算 nowMs,时钟偏差 δ 只会让行晚到期至多 δ,不会漏行。
-func (r *CommerceRepo) Due(ctx context.Context, nowMs uint64, limit int) ([]*tradepb.TradeCommerceRecord, error) {
-	return r.Query(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE status IN (1,3,4,6,8) AND updated_ms<=? ORDER BY updated_ms,commerce_id LIMIT ?", nowMs, limit)
+//
+// owned 把行限定在本副本负责的片里(commerce_id % 64,缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8),
+// 放在 LIMIT 之前:各副本只取自己的片,不再读同一个队头在行锁上互撞。零值不过滤。
+func (r *CommerceRepo) Due(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]*tradepb.TradeCommerceRecord, error) {
+	args := append([]any{nowMs}, owned.Args()...)
+	return r.Query(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE status IN ("+dueStatuses+") AND updated_ms<=? AND "+owned.SQL()+" ORDER BY updated_ms,commerce_id LIMIT ?", append(args, limit)...)
 }
+
+// dueStatuses 是还在推进中的合同状态(Waiting、Escrowing、Delivering、CancelPending,以及官方退款与人民币寄售用的 8)。
+// Due 与 Wake 共用,不能各写一份:Wake 只唤醒 Due 会取的行。
+const dueStatuses = "1,3,4,6,8"
 // ListManual 列转人工的合同(status=10),最早转人工的在前,给人工恢复工具用。走 (status, updated_ms) 索引:
 // 转人工之后 updated_ms 不再变,直到人工处理。
 func (r *CommerceRepo) ListManual(ctx context.Context, limit int) ([]*tradepb.TradeCommerceRecord, error) {
@@ -256,8 +287,10 @@ func Workflow(v *tradepb.TradeCommerceRecord) (*tradepb.TradeCommerceWorkflow, e
 // 按 op_id 翻页(op_id > afterOpID):离线卖家的 ACK 一直 done=false,只从表头取会让它们永远占住名额(2026-10-20)。
 // payload 解不开的行照样按序返回、Bundle 为 nil,由调用方跳过并告警:以前整页报错返回,翻页游标停在它前面,
 // 一行坏数据让全服收据 ACK 停摆(2026-10-20,第一轮审计 §2.5 go-asset-services#0)。解得开的行 Bundle 一律非 nil。
-func (r *CommerceRepo) AckDue(ctx context.Context, afterOpID uint64, limit int) ([]assetop.Op, error) {
-	rows, err := r.DB.QueryContext(ctx, "SELECT op_id,player_id,stream,stream_epoch,seq,tx_type,payload FROM trade_asset_op WHERE receipt_ack_pending=1 AND status=2 AND durable=1 AND op_id>? ORDER BY op_id LIMIT ?", afterOpID, limit)
+// owned 把行限定在本副本负责的片里(op_id % 64,缺口清单第 16 条),放在 LIMIT 之前;零值不过滤。
+func (r *CommerceRepo) AckDue(ctx context.Context, afterOpID uint64, limit int, owned workshard.Filter) ([]assetop.Op, error) {
+	args := append([]any{afterOpID}, owned.Args()...)
+	rows, err := r.DB.QueryContext(ctx, "SELECT op_id,player_id,stream,stream_epoch,seq,tx_type,payload FROM trade_asset_op WHERE receipt_ack_pending=1 AND status=2 AND durable=1 AND op_id>? AND "+owned.SQL()+" ORDER BY op_id LIMIT ?", append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,6 @@
 #include "battle_room_manager.h"
 
+#include <algorithm>
 #include <limits>
 #include <cstdlib>
 #include <chrono>
@@ -410,6 +411,8 @@ BattleRoomManager::BattleRoom *BattleRoomManager::EmplaceRoom(std::unique_ptr<Ba
 
 void BattleRoomManager::EraseRoom(const uint64_t battleId)
 {
+    // 房间没了就不再替它出心跳(删房不经 END 的路径,如 SQL 终局长期拿不到决定的本地放弃,由 gate 按空闲超时收尾)
+    spectateChannelFrameAt_.erase(battleId);
     // 先移除后回调(房间表保证):最后一个房间移除后 Agones 才能回 Ready,顺序反了会在房间还在时放出容量
     rooms_.Erase(battleId);
 }
@@ -596,6 +599,17 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     start.mutable_state()->set_battle_id(battleId);
     // 引擎无时钟,行动截止由节点按房间 timer 回填
     start.mutable_state()->set_action_deadline_ms(roomPtr->actionDeadlineMs);
+
+    // 战报回放(battle-report-replay.md BR-8):原件让录才录;开战状态用观众版,与观众收到的逐字段相同。
+    if (request.record_replay())
+    {
+        ::BattleStateS2C spectatorStart = start.state();
+        RedactStateForViewer(spectatorStart, 0);
+        roomPtr->replay.emplace(
+            turnbattle::BattleReplayHeader{battleId, request.match_mode(), request.battle_config_id(), request.created_at_ms(),
+                                           turnbattle::BattleTableFingerprint::Current()},
+            spectatorStart);
+    }
 
     for (const auto &[playerId, routing] : roomPtr->routingByPlayer)
     {
@@ -962,6 +976,16 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
+    // 停机排空之后不再接纳新观众(AbortAllRooms 置位):房间定时器已停、直连面不再接新连接,接进来的观众永远等不到下一帧,
+    // match 还会为它开一份要等实例消失才关得掉的原件。回 kServiceUnavailable(与签不出票同码:match 落 16018、不剔索引);
+    // 墓碑沿用上面已封闭的状态,首次拒绝码照常记下。已登记观众的幂等重放在上面照常放行(观战第二轮评审 R2-BATTLE 一般-2)。
+    if (spectateAdmissionClosed_)
+    {
+        LOG_INFO << "AddObserver rejected: node is shutting down, battle_id=" << battleId << " observer=" << observerId;
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+
     // 可见性第二道闸(battle-spectate-tiered-fanout.md §10 第 6 条):match 已按同一份冻结的可见性拦过一道,
     // battle 再拦一次,match 漏判或绕过 match 的 Add 都进不了私密局。默认拒绝:只放行 PUBLIC,未填与 PRIVATE
     // 一样拒。回 kInvalidParameter:房间还在,不能回 kEntityIsNull(match 会懒剔除观战索引);也不是满员
@@ -1225,6 +1249,8 @@ void BattleRoomManager::ResolveRound(const uint64_t battleId)
     {
         result.add_action_order(actorId);
     }
+    // 战报回放:每一回合都录,包括分出胜负的最后一回合(它等 COMPLETE 之后才公布,战报本来也只在 COMPLETE 之后可见)。
+    RecordReplayRound(*room, result);
 
     // 分出胜负:最后一回合帧连同终局一起等 Match 的持久决定,不提前公布。
     if (outcome != ::BATTLE_OUTCOME_ONGOING)
@@ -1256,6 +1282,14 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
              << " outcome=" << ::eBattleOutcome_Name(outcome);
 
     room->roundTimer.Cancel();
+    // 战报回放:强制判平没有最后一回合帧,记下这一刻的状态(观众版)与结束原因。
+    if (room->replay)
+    {
+        auto finalState = room->engine.BuildStateSnapshot();
+        finalState.set_battle_id(battleId);
+        RedactStateForViewer(finalState, 0);
+        room->replay->MarkDeadlineDraw(finalState);
+    }
     // 观众侧 deadline 强制收尾归 ABORTED(player_battle.proto 枚举注释口径);
     // outcome 带上强制盖章结果,观众端可与参战者的平局结算对齐展示
     BeginResultCommit(*room, outcome, ::SPECTATE_END_BATTLE_ABORTED,
@@ -1318,6 +1352,32 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
     return event;
 }
 
+::match::CommitBattleOutcomeRequest BattleRoomManager::BuildOutcomeRequest(const BattleRoom &room)
+{
+    ::match::CommitBattleOutcomeRequest request;
+    request.set_battle_id(room.battleId);
+    request.set_placement_operation_id(room.placementOperation);
+    request.set_target_instance_id(room.targetInstance);
+    request.set_raw_result_payload(room.outcomePayload);
+    if (room.outcomeReplay)
+    {
+        *request.mutable_replay() = *room.outcomeReplay;
+    }
+    return request;
+}
+
+void BattleRoomManager::RecordReplayRound(BattleRoom &room, const ::TurnResultS2C &result) const
+{
+    if (!room.replay)
+    {
+        return;
+    }
+    // 与观众收到的同一份脱敏(BroadcastTurnResult 的观众版):不带任何人的冷却、道具余量与装备概率。
+    ::TurnResultS2C spectate = result;
+    RedactStateForViewer(*spectate.mutable_state(), 0);
+    room.replay->AddRound(spectate);
+}
+
 void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutcome outcome,
     const ::eSpectateEndReason reason, std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore)
 {
@@ -1339,9 +1399,15 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
         EnsureStuckRoomReporter();
         return;
     }
-    match::CommitBattleOutcomeRequest original;
-    original.set_battle_id(room.battleId); original.set_placement_operation_id(room.placementOperation);
-    original.set_target_instance_id(room.targetInstance); original.set_raw_result_payload(room.outcomePayload);
+    // 战报回放与终局原件一起冻结,只算一次:重放时逐字节相同,摘要与签名都覆盖它(battle-report-replay.md BR-4)。
+    // 冻结失败(压缩失败、超上限)只让这一局没有回放,终局照常提交。
+    if (room.replay)
+    {
+        room.outcomeReplay = room.replay->Freeze(room.pendingResult.outcome(), room.pendingResult.total_rounds(),
+                                                 room.pendingResult.finished_at_ms());
+        room.replay.reset();
+    }
+    const auto original = BuildOutcomeRequest(room);
     room.outcomeRequestDigest = service_call_auth::Digest(original);
     if (room.outcomeRequestDigest.empty()) { room.outcomeExhausted = true; EnsureStuckRoomReporter(); return; }
     sqlOutcomeRooms_.insert(room.battleId);
@@ -1354,8 +1420,11 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
 void BattleRoomManager::PumpSqlOutcomes()
 {
     if (outcomeStopping_) return;
-    constexpr std::string_view method = "/match.MatchInternal/CommitBattleOutcome";
     const auto now = std::chrono::steady_clock::now();
+    // 第一遍:按冻结时长推进每局的重放阶段,收集这一拍到期(不在途、已到下次尝试时刻)的房间。放弃 / 越界只看时长,
+    // 与此刻能不能发无关,所以每拍都要走完这一遍:要是没有 READY 通道就整轮跳过,match 长期不可达时房间永远走不到放弃
+    // 那一步(2026-11-05 第二轮评审)。按 (下次尝试时刻, battle_id) 记下,第二遍超出每拍上限时最早到期的先发。
+    std::vector<std::pair<std::chrono::steady_clock::time_point, uint64_t>> due;
     const std::vector<uint64_t> ids(sqlOutcomeRooms_.begin(), sqlOutcomeRooms_.end());
     for (const auto battleId : ids) {
         auto* room = FindRoom(battleId);
@@ -1381,55 +1450,102 @@ void BattleRoomManager::PumpSqlOutcomes()
             EnsureStuckRoomReporter();
         }
         if (room->outcomeInFlight || now < room->nextOutcomeAttempt) continue;
-        room->nextOutcomeAttempt = now + turnbattle::SqlOutcomeRetryInterval(room->outcomeExhausted);
-        const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
-        if (!OutcomeSigningKeyReady(secret ? secret : "") || room->targetInstance.empty() || room->placementOperation.empty()) continue;
-        auto& registry = tlsNodeContextManager.GetRegistry(common::base::MatchNodeService);
-        std::vector<entt::entity> ready;
-        // 沿Inbox相同的READY候选随机选择；跨Match副本仍只重放同一SQL原件，不固定首个实例。
-        for (const auto node : registry.view<NodeInfo, MuduoGrpcChannelPtr>()) {
-            const auto& channel = registry.get<MuduoGrpcChannelPtr>(node);
-            if (channel && channel->GetState(true) == muduo_grpc::ConnectivityState::kReady) ready.push_back(node);
-        }
-        if (ready.empty() || room->outcomeAttempt == std::numeric_limits<uint64_t>::max()) continue;
-        const auto target = ready[tlsRandom.Rand<std::size_t>(0, ready.size() - 1)];
-        match::CommitBattleOutcomeRequest request;
-        request.set_battle_id(battleId); request.set_placement_operation_id(room->placementOperation);
-        request.set_target_instance_id(room->targetInstance); request.set_raw_result_payload(room->outcomePayload);
-        if (service_call_auth::Digest(request) != room->outcomeRequestDigest ||
-            !service_call_auth::Sign(method, request, *request.mutable_auth(), "battle", secret, TimeSystem::NowMillisecondsUTC())) continue;
-        const auto attempt = ++room->outcomeAttempt;
-        const auto op = room->placementOperation, instance = room->targetInstance, digest = room->outcomeRequestDigest;
-        room->outcomeInFlight = true;
-        match::SendMatchInternalCommitBattleOutcome(registry, target, request,
-            [weak = WeakSelf(), battleId, attempt, op, instance, digest](const GrpcCallOutcome& outcome,
-                const match::CommitBattleOutcomeResponse* reply) {
-                const auto self = weak.lock();
-                if (!self) return;
-                if (self->outcomeStopping_) {
-                    LOG_INFO << "event=battle_outcome_reply_after_stop battle_id=" << battleId
-                             << " attempt=" << attempt << " code=" << outcome.code
-                             << " reply_present=" << (reply != nullptr)
-                             << " digest_matches=" << (reply && reply->request_digest() == digest);
-                    return;
-                }
-                auto* current = self->FindRoom(battleId);
-                if (!current || !current->outcomePending || current->outcomeAttempt != attempt ||
-                    current->placementOperation != op || current->targetInstance != instance ||
-                    current->outcomeRequestDigest != digest) return;
-                current->outcomeInFlight = false;
-                const char* key = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
-                if (!outcome.ok() || !reply || !key || reply->request_digest() != digest ||
-                    !service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome/reply", *reply,
-                        reply->auth(), "match", key, TimeSystem::NowMillisecondsUTC())) return;
-                if (reply->decision() == match::BATTLE_OUTCOME_DECISION_COMPLETE) {
-                    self->OnSqlOutcomeComplete(*current);
-                } else if (reply->decision() == match::BATTLE_OUTCOME_DECISION_ABORT) {
-                    self->OnSqlOutcomeAbort(*current);
-                } // UNKNOWN只重放同件。
-            });
+        due.emplace_back(room->nextOutcomeAttempt, battleId);
     }
     if (sqlOutcomeRooms_.empty()) sqlOutcomeTimer_.Cancel();
+    if (due.empty()) return;
+
+    // 第二遍:发。缺密钥、此刻没有 READY 的 match 通道都不算一次尝试、不推后,下一拍(1s)再试;只有真正发出才推后
+    // (2026-11-05 修复,r2-battle#2 评审)。原来一进来就推后 5s:停机补提交时 match 通道恰好还在 CONNECTING
+    // (GetState(true) 才刚触发连接),几百毫秒后就绪也要白等 5s,15s 排空预算里只够发 1~2 次。
+    // READY 的 match 副本每拍只挑一次,每局再从中随机选一个(第二轮评审:原来每局各扫一遍 match 注册表)。
+    const char* rawSecret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+    const std::string_view secret = rawSecret ? rawSecret : "";
+    if (!OutcomeSigningKeyReady(secret)) return;
+    const auto sendOutcome = PickSqlOutcomeSend();
+    if (!sendOutcome) return;
+    // 每拍至多发 sqlOutcomeSendsPerPump_ 局,最早到期的先发(从没发过的到期时刻是初值,排最前),其余留到下一拍
+    // (第二轮评审补)。不设上限时,match 全部不可达期间积下的终局会在恢复后第一拍一起发出,多个 battle 副本同时打向
+    // 刚恢复的 match;发出的局各按发送时刻推后,之后的重放也就错开在不同的拍上。
+    // 停机排空窗口内不设上限:预算内拿不到决定的局会在截止后整局作废,突发只来自正在停机的副本。
+    if (!outcomeShutdownFlush_ && due.size() > sqlOutcomeSendsPerPump_) {
+        const auto keep = due.begin() + static_cast<std::ptrdiff_t>(sqlOutcomeSendsPerPump_);
+        std::partial_sort(due.begin(), keep, due.end());
+        due.erase(keep, due.end());
+    }
+    for (const auto& entry : due) {
+        // 按 id 重查:前面一局的回复即使在发送栈内到达,删掉的也只是那一局自己。
+        if (auto* room = FindRoom(entry.second); room != nullptr) SendSqlOutcome(*room, sendOutcome, secret, now);
+    }
+}
+
+void BattleRoomManager::SendSqlOutcome(BattleRoom &room, const SqlOutcomeSend &sendOutcome, const std::string_view secret,
+                                       const std::chrono::steady_clock::time_point now)
+{
+    constexpr std::string_view method = "/match.MatchInternal/CommitBattleOutcome";
+    // 下面任何一步没走到真正发出(原件缺字段、次数用尽、签不出),都不推后下次尝试(见 PumpSqlOutcomes)。
+    if (room.targetInstance.empty() || room.placementOperation.empty()) return;
+    if (room.outcomeAttempt == std::numeric_limits<uint64_t>::max()) return;
+    const auto battleId = room.battleId;
+    auto request = BuildOutcomeRequest(room);
+    if (service_call_auth::Digest(request) != room.outcomeRequestDigest ||
+        !service_call_auth::Sign(method, request, *request.mutable_auth(), "battle", secret, TimeSystem::NowMillisecondsUTC())) return;
+    const auto attempt = ++room.outcomeAttempt;
+    const auto op = room.placementOperation, instance = room.targetInstance, digest = room.outcomeRequestDigest;
+    // 在途状态与下次尝试时刻都在发送之前记好;发送之后不再碰 room,回复只按 battle_id 重查房间。
+    room.outcomeInFlight = true;
+    // 停机排空窗口内要补提交的局不推后(2026-11-05 第二轮评审补):在途闸挡住重复发送,这次没拿到决定(失败或 UNKNOWN)
+    // 就在下一拍换一个 READY 副本重发,每局每秒至多一次,有界于 Node 的排空预算。match 副本滚动重启时回 GOAWAY /
+    // UNAVAILABLE 很快,按 5s 推后会在 15s 预算里白等。窗口外按 SqlOutcomeRetryInterval 推后。
+    const bool shutdownFlush = outcomeShutdownFlush_ &&
+        turnbattle::NeedsShutdownOutcomeFlush(room.outcomePending, room.outcomeComplete, room.outcomeExhausted);
+    room.nextOutcomeAttempt = shutdownFlush ? now : now + turnbattle::SqlOutcomeRetryInterval(room.outcomeExhausted);
+    sendOutcome(request,
+        [weak = WeakSelf(), battleId, attempt, op, instance, digest](const GrpcCallOutcome& outcome,
+            const match::CommitBattleOutcomeResponse* reply) {
+            const auto self = weak.lock();
+            if (!self) return;
+            if (self->outcomeStopping_) {
+                LOG_INFO << "event=battle_outcome_reply_after_stop battle_id=" << battleId
+                         << " attempt=" << attempt << " code=" << outcome.code
+                         << " reply_present=" << (reply != nullptr)
+                         << " digest_matches=" << (reply && reply->request_digest() == digest);
+                return;
+            }
+            auto* current = self->FindRoom(battleId);
+            if (!current || !current->outcomePending || current->outcomeAttempt != attempt ||
+                current->placementOperation != op || current->targetInstance != instance ||
+                current->outcomeRequestDigest != digest) return;
+            current->outcomeInFlight = false;
+            const char* key = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+            if (!outcome.ok() || !reply || !key || reply->request_digest() != digest ||
+                !service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome/reply", *reply,
+                    reply->auth(), "match", key, TimeSystem::NowMillisecondsUTC())) return;
+            if (reply->decision() == match::BATTLE_OUTCOME_DECISION_COMPLETE) {
+                self->OnSqlOutcomeComplete(*current);
+            } else if (reply->decision() == match::BATTLE_OUTCOME_DECISION_ABORT) {
+                self->OnSqlOutcomeAbort(*current);
+            } // UNKNOWN只重放同件。
+        });
+}
+
+BattleRoomManager::SqlOutcomeSend BattleRoomManager::PickSqlOutcomeSend()
+{
+    if (sqlOutcomeRoute_) return sqlOutcomeRoute_();
+    auto& registry = tlsNodeContextManager.GetRegistry(common::base::MatchNodeService);
+    std::vector<entt::entity> ready;
+    // GetState(true) 顺带让 IDLE 通道开始连接:这一拍没有 READY 的,下一拍通常就有了。
+    for (const auto node : registry.view<NodeInfo, MuduoGrpcChannelPtr>()) {
+        const auto& channel = registry.get<MuduoGrpcChannelPtr>(node);
+        if (channel && channel->GetState(true) == muduo_grpc::ConnectivityState::kReady) ready.push_back(node);
+    }
+    if (ready.empty()) return {};
+    // 沿Inbox相同的READY候选随机选择:每局各自随机选一个副本,跨Match副本仍只重放同一SQL原件,不固定首个实例。
+    return [&registry, ready = std::move(ready)](const match::CommitBattleOutcomeRequest& request,
+                                                 GrpcDone<match::CommitBattleOutcomeResponse> done) {
+        const auto target = ready[tlsRandom.Rand<std::size_t>(0, ready.size() - 1)];
+        match::SendMatchInternalCommitBattleOutcome(registry, target, request, std::move(done));
+    };
 }
 
 void BattleRoomManager::OnSqlOutcomeComplete(BattleRoom &room)
@@ -1753,11 +1869,17 @@ void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
 
 void BattleRoomManager::AbortAllRooms(const std::string &reason)
 {
+    // 观战准入先关:下面冻结的房间此后不会再出帧,排空期间到达的 AddObserver / Attach / Promote 一律回 kServiceUnavailable
+    spectateAdmissionClosed_ = true;
     // 终局在这里不停(2026-10-23 修复,审计 r2-battle#2):已经算出、还没拿到 SQL 决定的终局,在停机排空窗口内立即再提交,
     // main.cpp 的 SetShutdownDrainComplete(SqlOutcomesFlushed)等它们拿到 COMPLETE / ABORT,有界于 Node 的排空预算;
     // 停止闸到拆除前钩子(StopSqlOutcomes)才装。原来这里直接装停止闸、清空待提交集合:除了恰好在途的那一次,
     // 停机前一刻打完的局再没有机会提交,只能等 match 截止后判 ABORT,全员白打一局。
-    // 不打断在途的那一次:它的回复(或 DefaultCallDeadline 到期的失败)回来之后照常按 5s 节奏续发。
+    // 从这里起是停机排空窗口(outcomeShutdownFlush_,只升不降):补提交不受每拍上限约束,没拿到决定就下一拍重发
+    // (SendSqlOutcome)。不打断在途的那一次,但它的下次尝试时刻也清零(2026-11-05 第二轮评审补):它是窗口之前按 5s
+    // 推后发出的,若很快失败(match 副本滚动重启回 GOAWAY / UNAVAILABLE),原来要等满 5s,现在回调清掉在途之后下一拍就换
+    // 一个 READY 副本重发;在途闸照旧挡住重复发送。
+    outcomeShutdownFlush_ = true;
     std::size_t flushing = 0;
     for (const auto battleId : sqlOutcomeRooms_)
     {
@@ -1765,7 +1887,7 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
         if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
                                                                       room->outcomeExhausted))
             continue;
-        if (!room->outcomeInFlight) room->nextOutcomeAttempt = {};
+        room->nextOutcomeAttempt = {};
         ++flushing;
     }
     LOG_INFO << "event=battle_outcome_shutdown_flush pending=" << flushing << " reason=" << reason;
@@ -1790,6 +1912,13 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
         // 原loop关闭后在途回包可能失败；保留房间直到manager销毁，不再发布任何终局。
         // 2026-10-23:上面补提交的房间若在排空窗口内拿到 COMPLETE / ABORT,由回复处理照常收尾删房(lifecycle 已在
         // Stop 之后,删房只记账、不回 Ready);还在打的房间没有终局可交,按作废处理,match 在权威截止后判 ABORT。
+        // 观众:还在打的房间此后不会再有任何一帧,告诉全部观众源站已停(166 SOURCE_LOST)并清退,同一帧编码一次发给
+        // L0 直连与中继 / 广播通道。不发 ABORTED:作废只能由 Match 的持久 ABORT 宣布;SOURCE_LOST 不声称任何结果。
+        // 有待提交终局的房间不发:排空窗口内拿到决定照常发真 END(2026-11-05 第二轮评审定,两版同口径)。
+        if (!room->outcomePending)
+        {
+            NotifySpectateEndAndClose(*room, ::SPECTATE_END_SOURCE_LOST, ::BATTLE_OUTCOME_ONGOING);
+        }
         CloseDirectConnections(*room, reason.c_str());
     }
 }
@@ -1826,6 +1955,9 @@ void BattleRoomManager::StopSqlOutcomes()
     }
     sqlOutcomeTimer_.Cancel();
     sqlOutcomeRooms_.clear();
+    // 之后再也拿不到决定,不能再替这些房间续命:心跳一停,gate 按空闲超时收尾(合成 166 SOURCE_LOST)
+    spectateKeepaliveTimer_.Cancel();
+    spectateChannelFrameAt_.clear();
 }
 
 // ---- 客户端直连(设计文档 §18,D23-D28;下行出口 turn-based §22 D68) ----
@@ -2330,6 +2462,14 @@ BattleRoomManager::BattleRoom *BattleRoomManager::FindSpectateChannelRoom(const 
         rejectTip = kEntityIsNull;
         return nullptr;
     }
+    // 停机排空之后房间已冻结,不再出帧:新挂的 gate 只会拿到一帧冻结画面再等空闲超时,升档还会白占一份全服配额。
+    // 房间其实还在,不能回 kEntityIsNull(与 AddObserver 同口径,R2-BATTLE 一般-2)
+    if (spectateAdmissionClosed_)
+    {
+        LOG_INFO << "spectate channel request rejected: node is shutting down, battle_id=" << battleId;
+        rejectTip = kServiceUnavailable;
+        return nullptr;
+    }
     // 可见性闸(同 AddObserver 第二道闸):只放行 PUBLIC,未填与 PRIVATE 一样拒。房间其实还在,不能回 kEntityIsNull
     if (room->spectateVisibility != ::SPECTATE_VISIBILITY_PUBLIC)
     {
@@ -2378,6 +2518,8 @@ void BattleRoomManager::HandleAttachRelayGate(const ::AttachRelayGateRequest &re
     // 只给这台 gate 补发关键帧:它从这一刻才开始读本场,其它 gate 已有缓存
     auto frame = BuildSpectateStateFrame(*room);
     spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+    // 首台 gate 挂上时它就是全部通道,刚补的 STATE 算一次全通道发帧;之后的挂接不刷新心跳时刻(别的 gate 没收到这一帧)
+    TrackSpectateChannels(*room, std::chrono::steady_clock::now());
     LOG_INFO << "AttachRelayGate succeeded: battle_id=" << battleId << " gate_node_id=" << gateNodeId
              << " gate_instance_id=" << gateInstanceId << " relay_gates=" << room->relayGates.size();
 }
@@ -2401,8 +2543,10 @@ void BattleRoomManager::HandlePromoteSpectateBroadcast(const ::PromoteSpectateBr
         return;
     }
     room->spectateBroadcast = true;
-    auto frame = BuildSpectateStateFrame(*room);
-    spectateFramePublisher_.PublishToBroadcast(frame);
+    // 升档之后全部通道就是广播 topic:这一帧 STATE 每台 gate 都读得到,心跳从这里起算
+    const auto now = std::chrono::steady_clock::now();
+    TrackSpectateChannels(*room, now);
+    PublishToAllSpectateChannels(*room, BuildSpectateStateFrame(*room), now);
     LOG_INFO << "PromoteSpectateBroadcast succeeded: battle_id=" << battleId
              << " relay_gates=" << room->relayGates.size();
 }
@@ -2441,8 +2585,34 @@ void BattleRoomManager::PublishSpectateTurn(const BattleRoom &room, const uint32
     {
         return;
     }
-    auto frame = NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_TURN, roundIndex, envelope);
-    // 升档之后只发广播:每台 gate 都在读它,再逐台中继只会让 battle 的产出继续随 gate 数增长(§3 档位规则)
+    PublishToAllSpectateChannels(room, NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_TURN, roundIndex, envelope),
+                                 std::chrono::steady_clock::now());
+}
+
+void BattleRoomManager::PublishSpectateEnd(const BattleRoom &room, const ::MessageContent &envelope)
+{
+    if (!room.spectateBroadcast && room.relayGates.empty())
+    {
+        return;
+    }
+    PublishToAllSpectateChannels(room,
+                                 NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_END,
+                                                  room.engine.BuildStateSnapshot().round_index(), envelope),
+                                 std::chrono::steady_clock::now());
+    // END 之后 gate 已收尾,不再替本场出心跳
+    spectateChannelFrameAt_.erase(room.battleId);
+}
+
+void BattleRoomManager::PublishToAllSpectateChannels(const BattleRoom &room,
+                                                     const ::contracts::kafka::SpectateFrameEvent &frame,
+                                                     const std::chrono::steady_clock::time_point at)
+{
+    if (const auto tracked = spectateChannelFrameAt_.find(room.battleId); tracked != spectateChannelFrameAt_.end())
+    {
+        tracked->second = at;
+    }
+    // 升档之后只发广播:每台 gate 都在读它,再逐台中继只会让 battle 的产出继续随 gate 数增长(§3 档位规则);
+    // 也只有这样 TURN 与 END 才同分区保序,中继 END 不会越过广播上的最后一回合 TURN。
     if (room.spectateBroadcast)
     {
         spectateFramePublisher_.PublishToBroadcast(frame);
@@ -2454,23 +2624,52 @@ void BattleRoomManager::PublishSpectateTurn(const BattleRoom &room, const uint32
     }
 }
 
-void BattleRoomManager::PublishSpectateEnd(const BattleRoom &room, const ::MessageContent &envelope)
+void BattleRoomManager::TrackSpectateChannels(const BattleRoom &room, const std::chrono::steady_clock::time_point lastFrameAt)
 {
-    if (!room.spectateBroadcast && room.relayGates.empty())
+    spectateChannelFrameAt_.try_emplace(room.battleId, lastFrameAt);
+    if (spectateKeepaliveTimer_.IsActive())
     {
         return;
     }
-    auto frame = NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_END, room.engine.BuildStateSnapshot().round_index(),
-                                  envelope);
-    // 升档之后只发广播:与最后一回合的 TURN 同分区保序。再发给升档前挂的 gate 的话,两条 topic 之间没有顺序,
-    // 中继 END 可能先到,gate 收尾后把随后到的广播 TURN 丢掉,观众看不到最后一回合。
-    if (room.spectateBroadcast)
+    // 每秒一拍,心跳的实际间隔在 [kSpectateChannelKeepalive, +1s) 之间,离 gate 的失联超时还远(node_command_topic.h 的静态断言)
+    spectateKeepaliveTimer_.RunEvery(1.0, [weak = WeakSelf()] {
+        if (const auto self = weak.lock())
+        {
+            self->PumpSpectateKeepalive(std::chrono::steady_clock::now(), TimeSystem::NowMillisecondsUTC());
+        }
+    });
+}
+
+void BattleRoomManager::PumpSpectateKeepalive(const std::chrono::steady_clock::time_point now, const uint64_t nowMs)
+{
+    // 先挑出到点的房间再发:发帧会刷新名单上的时刻,边遍历边改容易看错
+    std::vector<uint64_t> due;
+    for (auto it = spectateChannelFrameAt_.begin(); it != spectateChannelFrameAt_.end();)
     {
-        spectateFramePublisher_.PublishToBroadcast(frame);
-        return;
+        const auto *room = FindRoom(it->first);
+        // 过了期限宽限,gate 已按 deadline_ms 收尾,再发只会在 gate 上建没人订阅的条目
+        if (room == nullptr || (room->deadlineMs != 0 && nowMs >= room->deadlineMs + node::kafka::kSpectateDeadlineGraceMs))
+        {
+            it = spectateChannelFrameAt_.erase(it);
+            continue;
+        }
+        if (now - it->second >= node::kafka::kSpectateChannelKeepalive)
+        {
+            due.push_back(it->first);
+        }
+        ++it;
     }
-    for (const auto &[gateNodeId, gateInstanceId] : room.relayGates)
+    for (const auto battleId : due)
     {
-        spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+        if (const auto *room = FindRoom(battleId); room != nullptr)
+        {
+            // 心跳就是一帧当前的 STATE:等结果回执期间取冻结的可见状态(BuildSpectatorState),不提前泄露终局;
+            // gate 只拿它刷新空闲计时与缓存,已在看的会话不收,还没收到过状态的会话借它补上首帧 161
+            PublishToAllSpectateChannels(*room, BuildSpectateStateFrame(*room), now);
+        }
+    }
+    if (spectateChannelFrameAt_.empty())
+    {
+        spectateKeepaliveTimer_.Cancel();
     }
 }

@@ -145,7 +145,7 @@ message AssetSnapshot {
 message AssetOpResponse {
   AssetOpOutcome outcome = 1;
   TipInfoMessage reason = 2;  // asset_error 段码;无原因时 id=0
-  bool durable = 3;           // 该 seq 的结局已在"最后一次成功写入 Redis 的玩家数据"里
+  bool durable = 3;           // 该 seq 的结局已在"最后一次提交成功的玩家存档"里(go/db Save 的 TiDB 事务已提交)
   bool partial = 4;           // APPLIED 但只发放了一部分(reason=kAssetPartialApplied);Go 不做对侧入账,转人工补偿
   // ---- 聚宝斋 P2 追加字段从 5 起(帮会不使用)----
   // 【P2 预留,v1 不填不读】交易库存快照。当前 scene 不填、Go 不读,解锁条件见

@@ -11,6 +11,7 @@
 #include "spatial/system/movement.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/afk.h"
+#include "player/system/team_follow_system.h"
 #include "proto/common/component/frame_comp.pb.h"
 #include "core/system/id_generator.h"
 #include "node/system/node/node.h"
@@ -61,6 +62,9 @@ void World::Update()
 
             AoiSystem::Update(fixedDeltaTime);
             MovementSystem::Update(fixedDeltaTime);
+            // 组队跟随在 Movement 之后:读的是队长本 tick 的最终位置;队员的新位置与队长一样
+            // 在下一 tick 的 AoiSystem::Update 里进格。
+            TeamFollowSystem::Update(fixedDeltaTime);
             BuffSystem::Update(fixedDeltaTime);
 
             // Attribute calculation must run last (depends on state changes above)

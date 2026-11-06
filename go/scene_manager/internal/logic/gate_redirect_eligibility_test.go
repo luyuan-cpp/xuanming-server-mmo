@@ -1,11 +1,11 @@
 package logic
 
-// 跨 zone 重定向剔除停写与满载的 gate(2026-11-05,缺口清单第 7 条残余):
-//   - 纯函数 signRedirectToGate:停写(marks.stale)与满载(NodeInfo.max_connections 的 90%)的 gate 不被选中,
-//     全部不合格时回落;与排空过滤的先后顺序和 login 的 CandidatesForZone + PickGate 一致;
-//   - staleGateIDs:同一条记录的 ModRevision 在本进程持续超过 gatepick.StaleAfter 才判停写,判定按 node_id 交给过滤;
+// 跨 zone 重定向挑 gate 的分档(2026-11-05 缺口清单第 7 条残余;11-06 排空并入同一次分档):
+//   - 纯函数 signRedirectToGate:完全合格的(没排空、没停写、没到自报上限的 90%)优先;没有时退到连得上的
+//     (排空中或到水位,但没停写),全部停写才退到全部;与 login 的 CandidatesForZone + PickGate 同一份规则;
+//   - staleGateIDs:同一条记录的 ModRevision 在本进程持续超过 gatepick.StaleAfter 才判停写,判定按 node_id 交给分档;
 //   - 时限契约:健康 gate 的停写时长上界(一个上报周期 + 直读超时)小于 gatepick.StaleAfter。
-// 剔除与回落的规则本身(水位整数边界、回落原因)在 shared/gatepick 的单测里。
+// 分档规则本身(水位整数边界、各档回落原因)在 shared/gatepick 的单测里。
 
 import (
 	"fmt"
@@ -69,28 +69,51 @@ func TestSignRedirectToGate_SkipsFullGate(t *testing.T) {
 		"没声明上限的 gate 不按上限判")
 }
 
-// 目标 zone 的 gate 全部停写或满载:回落全集照常重定向、按人数挑,并计一次 fallback(与 login 同语义,不让玩家无处可去)。
-func TestSignRedirectToGate_AllStaleOrFullFallsBack(t *testing.T) {
-	hung := cappedGateNode(1, 80, 0, 30000)
-	full := cappedGateNode(2, 50, 50, 30001)
-	before := redirectCount(t, redirectFallbackMetric, gatepick.ReasonMixed)
-
-	got := redirectGateIDMarked(t, []*commonpb.NodeInfo{hung, full}, gateMarks{stale: map[uint32]bool{1: true}}, firstDraws)
-
-	assert.Equal(t, uint32(2), got, "回落之后按人数挑")
-	assert.Equal(t, 1.0, redirectCount(t, redirectFallbackMetric, gatepick.ReasonMixed)-before)
-}
-
-// 排空过滤先于停写 / 满载过滤,与 login 的 CandidatesForZone(排空)+ PickGate(eligibleGates)同序:
-// 不在排空的 gate 全部停写时,停写那层在它们之间回落,不回到排空中的 gate。
-func TestSignRedirectToGate_DrainFilterRunsBeforeEligibility(t *testing.T) {
-	draining := cappedGateNode(1, 10, 0, 30000)
-	hung := cappedGateNode(2, 40, 0, 30001)
+// 回归(2026-11-06):没排空的 gate 全部停写、只有排空中的健康时,票签给排空中的那台,不签给卡住的。
+// 分层回落时排空那层先剔掉 1 号,停写那层只能在卡住的 2 号里回落:票签出去源实体就销毁了,玩家连不上只能断线重登。
+func TestSignRedirectToGate_HealthyDrainingGateBeatsStale(t *testing.T) {
+	draining := cappedGateNode(1, 40, 0, 30000)
+	hung := cappedGateNode(2, 0, 0, 30001)
+	fellBack := redirectCount(t, redirectFallbackMetric, gatepick.ReasonDraining)
+	excludedStale := redirectCount(t, redirectExcludedMetric, gatepick.ReasonStale)
 
 	got := redirectGateIDMarked(t, []*commonpb.NodeInfo{draining, hung},
 		gateMarks{draining: map[uint32]bool{1: true}, stale: map[uint32]bool{2: true}}, firstDraws)
 
-	assert.Equal(t, uint32(2), got)
+	assert.Equal(t, uint32(1), got, "连得上的排空中 gate 胜过卡住的 gate")
+	assert.Equal(t, 1.0, redirectCount(t, redirectFallbackMetric, gatepick.ReasonDraining)-fellBack)
+	assert.Equal(t, 1.0, redirectCount(t, redirectExcludedMetric, gatepick.ReasonStale)-excludedStale)
+}
+
+// 没有完全合格的 gate 但有连得上的:在连得上的里按人数挑,停写的照样剔掉,回落原因按连得上的那些算(这里是 full)。
+func TestSignRedirectToGate_StaleAndFullUsesReachableGate(t *testing.T) {
+	hung := cappedGateNode(1, 0, 0, 30000)
+	full := cappedGateNode(2, 50, 50, 30001)
+	fellBack := redirectCount(t, redirectFallbackMetric, gatepick.ReasonFull)
+	excludedStale := redirectCount(t, redirectExcludedMetric, gatepick.ReasonStale)
+
+	got := redirectGateIDMarked(t, []*commonpb.NodeInfo{hung, full}, gateMarks{stale: map[uint32]bool{1: true}}, firstDraws)
+
+	assert.Equal(t, uint32(2), got, "到水位的 gate 还连得上,卡住的连不上")
+	assert.Equal(t, 1.0, redirectCount(t, redirectFallbackMetric, gatepick.ReasonFull)-fellBack)
+	assert.Equal(t, 1.0, redirectCount(t, redirectExcludedMetric, gatepick.ReasonStale)-excludedStale)
+}
+
+// 目标 zone 的 gate 全部停写:退到全部照常重定向、按人数挑(与 login 同语义,不让玩家无处可去),
+// 计一次 fallback{reason="stale"};被用上的 gate 不计 excluded。
+func TestSignRedirectToGate_AllStaleFallsBackToAll(t *testing.T) {
+	busy := cappedGateNode(1, 80, 0, 30000)
+	idle := cappedGateNode(2, 5, 0, 30001)
+	fellBack := redirectCount(t, redirectFallbackMetric, gatepick.ReasonStale)
+	excludedStale := redirectCount(t, redirectExcludedMetric, gatepick.ReasonStale)
+
+	got := redirectGateIDMarked(t, []*commonpb.NodeInfo{busy, idle},
+		gateMarks{stale: map[uint32]bool{1: true, 2: true}}, firstDraws)
+
+	assert.Equal(t, uint32(2), got, "退到全部之后按人数挑")
+	assert.Equal(t, 1.0, redirectCount(t, redirectFallbackMetric, gatepick.ReasonStale)-fellBack)
+	assert.Equal(t, 0.0, redirectCount(t, redirectExcludedMetric, gatepick.ReasonStale)-excludedStale,
+		"退到全部时一台都没剔")
 }
 
 // staleGateIDs:第一次读没有历史不判;同一个 ModRevision 持续超过 StaleAfter 才判,判定按 node_id 交出;恢复重写后下一次读就不判。

@@ -126,12 +126,22 @@ message AutoAllocateAttributePointsResponse {
 
 message CreateAttributeSchemeRequest {
   string name = 1;   // 空 = 服务器按"方案N"命名
+  // 客户端幂等键(docs/design/client-request-idempotency.md)。建方案要扣金币:玩家每点一次「新建」生成一个
+  // 非 0 的随机 64 位数,拿到明确结果(成功,或带 tip 的拒绝)之前的所有重发 —— 超时、断线重连、gate 回 1003、
+  // 回包没到时玩家又点了一次 —— 都带同一个键,name 原样不变。
+  // scene 按 (玩家, 键) 去重:同键同参数的重发不再建第二个、不再扣钱,回首次建出的 scheme_id 与当前面板并标 replayed;
+  // 同键换了 name 回 kInvalidParameter,不执行。0 = 旧客户端,不去重。
+  // 键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):下线重登、换节点、scene 重启之后照样认得。
+  uint64 client_request_id = 2;
 }
 
 message CreateAttributeSchemeResponse {
   TipInfoMessage error_message = 1;
   AttributePanelInfo panel = 2;
   uint32 scheme_id = 3;
+  // true = 这一次是重发(client_request_id 命中了已建好的那个方案):没有再建、没有再扣钱,
+  // scheme_id 是首次建出的方案号,panel 是此刻的面板。客户端按「首次已经建成」处理。
+  bool replayed = 4;
 }
 
 // 切换方案:立即按目标方案重算二级属性(战斗中/冷却中拒绝)

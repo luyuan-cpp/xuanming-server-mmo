@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -27,9 +28,13 @@
 #include "node/system/node/node_util.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
+#include "player/comp/team_follow_comp.h"
+#include "player/system/connection_lost_hold.h"
 #include "player/system/enter_fence.h"
 #include "player/system/player_team.h"
 #include "player/system/player_team_follow_scope.h"
+#include "player/system/team_follow_system.h"
+#include "proto/common/component/team_comp.pb.h"
 #include "core/system/scene_task_scope.h"
 #include "player/system/role_admission_system.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -67,6 +72,7 @@ constexpr uint32_t kSceneNodeId = 12;
 constexpr uint32_t kOriginalGateId = 5;
 constexpr uint32_t kCurrentGateId = 6;
 constexpr double kLeaderX = 20.0;
+constexpr uint64_t kTeamId = 950200100;
 
 SessionId SessionOnGate(uint32_t gateId)
 {
@@ -558,5 +564,146 @@ TEST_F(PlayerTeamFollowTest, StopReenteredBeforeInlineReplyPreventsSecondGet)
     EXPECT_EQ(redis_.keys.size(), 1u);
     EXPECT_TRUE(redis_.pending.empty());
     ExpectNoRegroup(player_);
+}
+
+// ---- 服务器驱动跟随:离线的队员也跟(docs/design/team-follow-server-trail.md §3.6) ----
+
+void JoinTeam(entt::entity player)
+{
+    auto& team = tlsEcs.actorRegistry.emplace_or_replace<TeamId>(player);
+    team.set_team_id(kTeamId);
+    team.set_membership_epoch(1);
+}
+
+TEST_F(PlayerTeamFollowTest, OfflineMemberWhoDeclaredFollowIsAttachedInTheSameScene)
+{
+    JoinTeam(player_);
+    JoinTeam(tlsEcs.GetPlayer(kLeaderId));
+    TeamFollowSystem::SetFollowIntent(player_, true);
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    SessionMap().erase(SessionOnGate(kOriginalGateId)); // 断线:同场景里的服务器驱动跟随不看会话
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(player_)) << "离线也要接到队长身后";
+    // 离队长 20,超过归队阈值,直接放进槽位;轨迹刚建、只有队长一个点,槽位就在队长脚下。
+    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
+}
+
+TEST_F(PlayerTeamFollowTest, OfflineMemberDoesNotAskSceneManagerToChangeScene)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    JoinTeam(player_);
+    TeamFollowSystem::SetFollowIntent(player_, true);
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    SessionMap().erase(SessionOnGate(kOriginalGateId));
+    // 队长在别的场景:换场景要经 SceneManager 改 gate 路由,离线的人没有活会话,不发。
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player_));
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(player_));
+    ExpectNoRegroup(player_);
+}
+
+// ECS 层:直接驱动 TeamFollowSystem::Update,不经 Redis / RPC。
+class TeamFollowDriveTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        tlsEcs.Clear();
+        scene_ = tlsEcs.sceneRegistry.create();
+        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene_).set_scene_id(kCurrentSceneId);
+        leader_ = MakeMember(kLeaderId, 0.0, 1);
+        follower_ = MakeMember(kPlayerId, -1.0, 2);
+        TeamFollowSystem::SetFollowIntent(follower_, true);
+        ASSERT_TRUE(TeamFollowSystem::TryAttach(follower_, leader_, /*walkAllowed=*/true));
+    }
+
+    void TearDown() override
+    {
+        tlsEcs.Clear();
+    }
+
+    entt::entity MakeMember(uint64_t id, double x, uint32_t joinSeq)
+    {
+        auto& registry = tlsEcs.actorRegistry;
+        const auto player = registry.create();
+        registry.emplace<PlayerGuidComp>(player, id);
+        registry.emplace<SceneEntityComp>(player, scene_);
+        registry.emplace<Transform>(player).mutable_location()->set_x(x);
+        JoinTeam(player);
+        TeamFollowSystem::RememberJoinSeq(player, joinSeq);
+        tlsEcs.playerList.emplace(id, player);
+        return player;
+    }
+
+    // 队长沿 +x 以每 tick 0.45(9 米/秒)走到 toX,每步跑一次跟随系统。
+    void WalkLeader(double toX)
+    {
+        auto& location = *tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location();
+        while (location.x() < toX - 1e-9)
+        {
+            location.set_x(std::min(toX, location.x() + 0.45));
+            TeamFollowSystem::Update(0.05);
+        }
+    }
+
+    void Stand(int ticks)
+    {
+        for (int i = 0; i < ticks; ++i)
+        {
+            TeamFollowSystem::Update(0.05);
+        }
+    }
+
+    static double X(entt::entity player)
+    {
+        return tlsEcs.actorRegistry.get<Transform>(player).location().x();
+    }
+
+    SceneEntity scene_{entt::null};
+    entt::entity leader_{entt::null};
+    entt::entity follower_{entt::null};
+};
+
+TEST_F(TeamFollowDriveTest, OfflineFollowerKeepsWalkingBehindTheLeader)
+{
+    tlsEcs.actorRegistry.emplace<PlayerConnectionLostComp>(follower_); // 下线进断线保留:不影响服务器驱动
+    WalkLeader(9.0);
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_));
+    EXPECT_NEAR(X(follower_), 9.0 - kTeamFollowSpacing, 1e-6) << "离线的队员照样跟在队长身后一个间距";
+}
+
+TEST_F(TeamFollowDriveTest, FollowerInBattleWaitsAndCatchesUpAfterwards)
+{
+    tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
+    WalkLeader(5.0);
+    EXPECT_DOUBLE_EQ(X(follower_), -1.0) << "战斗中原地不动";
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "名次照留,不摘驱动";
+
+    tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
+    Stand(30);
+    EXPECT_NEAR(X(follower_), 5.0 - kTeamFollowSpacing, 1e-6) << "战斗结束后沿路赶回自己的槽位";
+}
+
+TEST_F(TeamFollowDriveTest, LeavingFollowStopsDrivingAtOnce)
+{
+    WalkLeader(3.0);
+    TeamFollowSystem::SetFollowIntent(follower_, false);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
+    ASSERT_NE(velocity, nullptr);
+    EXPECT_DOUBLE_EQ(velocity->x(), 0.0) << "停止驱动时清零速度,MovementSystem 不会按队形最后写的速度继续积分";
+
+    const double stoppedAt = X(follower_);
+    WalkLeader(6.0);
+    EXPECT_DOUBLE_EQ(X(follower_), stoppedAt) << "暂离之后不再被带着走";
+}
+
+TEST_F(TeamFollowDriveTest, LeaderLeavingTheTeamReleasesTheFollowerOnTheNextTick)
+{
+    WalkLeader(2.0);
+    tlsEcs.actorRegistry.get<TeamId>(leader_).set_team_id(0);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_));
 }
 } // namespace

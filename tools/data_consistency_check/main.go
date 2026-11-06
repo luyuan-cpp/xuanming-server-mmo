@@ -1,13 +1,17 @@
 // data_consistency_check — periodic scanner for zone cross-reference invariants.
 //
 // Why this exists:
-//   Server merge (tools/merge_zone/) rewrites home_zone for every player
-//   in the source zone. If even one referencing record gets missed —
-//   stale guild_member.zone hint, mail attachment with frozen guild_id,
-//   chat-history row pointing into a vanished zone — the inconsistency
-//   silently survives in the DB until a player triggers it weeks later
-//   ("my friend is gone", "my mail can't be opened"). At that point
-//   triage takes hours.
+//   Server merge is an alias merge, online, no downtime (tools/merge_zone/,
+//   docs/ops/merge-zone-runbook.md): it writes exactly one row
+//   "source zone -> target zone" into the global DB table zone_merged_into
+//   and rewrites no player, route or business row; readers resolve the
+//   recorded zone to its final zone at read time (undo = delete that row).
+//   The risk is therefore not a missed rewrite but a reader that compares
+//   zones without resolving the alias — stale guild_member.zone hint,
+//   mail attachment with frozen guild_id, chat-history row pointing into
+//   a zone that no longer exists (or never did) — which silently splits a
+//   group until a player triggers it weeks later ("my friend is gone",
+//   "my mail can't be opened"). At that point triage takes hours.
 //
 //   This tool runs the inverse query family: given the current zone
 //   topology in the global route table, find rows in MySQL that point to a
@@ -325,23 +329,28 @@ func sortedKeys(m map[uint32]struct{}) []uint32 {
 }
 
 // ── checkers ───────────────────────────────────────────────────────
-// Pattern: each checker is best-effort. If the underlying table
-// doesn't exist (some Go services aren't deployed yet), we return
-// info / "table not present" rather than failing the whole run.
+// guild、friend、mail 三条检查的口径(这三个服务在某个环境里可能没部署):句柄缺失、表读不了、第一条查询就失败
+// → warn「NOT CHECKED」,检查没开始;读到一半失败(逐行 Scan、迭代出错、按 id 回源失败)→ fail「CHECK FAILED」,
+// 已数到的部分不完整,不报(guild 例外一处:死区已确定、只是行数没数全时仍报 block,行数标为下界)。
+// 两种都不折算成「干净」或孤儿:「没查」和「查了是干净的」在报告里必须长得不一样。
 
-// checkGuildZoneFK — every guild.zone_id should be a live zone.
+// checkGuildZoneFK — 每个 guild.zone_id 都应是 knownZones 里的区。
 //
-// After merge, the source zone's guild rows have been UPDATEd to dst.
-// If even one row was missed (e.g. a dry-run aborted partway), we'll
-// see guild.zone_id pointing to a zone no longer in the live set.
-// That guild's members will lose access to it. Block-severity.
+// 合服是别名合服(docs/ops/merge-zone-runbook.md §1):只在全局库 zone_merged_into 写一行映射,不改 guild 行。
+// guild.zone_id 记的是建帮时归属读到的区,合服之后不改写,读方比较前两边都解析到最终区。knownZones 缺省取
+// player_route.home_zone 出现过的值,它同样不随合服改写,所以已合走的源区仍在里面,源区的帮会不会误报;
+// 显式给 -live-zones 时,已合走的源区也要列上。合服目标区若自己从没建过角色,合服之后建的帮会记的是目标区,
+// 推断的集合里没有它,也会误报,这种部署同样显式给 -live-zones。
+// 缺省推断时,zone_id 不在集合里就说明它不是任何玩家的归属区(写错的值,或那个区的玩家都已不存在):
+// 入帮申请与审批、帮会活动页这些按区比较的入口都对不上它。报 block。
 func checkGuildZoneFK(ctx context.Context, cfg runConfig) CheckResult {
 	r := CheckResult{Name: "guild.zone_id"}
 	guildTable := cfg.guildSchema + ".guild"
 	var total int64
 	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+guildTable).Scan(&total); err != nil {
-		r.Severity = "info"
-		r.SampleNotes = guildTable + " not present"
+		// 2026-11-05 之前报 info「not present」:读不到表与「没有公会」在报告里分不出来(第二轮审计 r2-dcc#1)。
+		r.Severity = "warn"
+		r.SampleNotes = fmt.Sprintf("NOT CHECKED: %s unreadable: %v (created by go/schemamigrate: guild -f etc/guild.yaml -migrate)", guildTable, err)
 		return r
 	}
 	r.TotalCount = total
@@ -349,40 +358,64 @@ func checkGuildZoneFK(ctx context.Context, cfg runConfig) CheckResult {
 	rows, err := cfg.db.QueryContext(ctx, "SELECT DISTINCT zone_id FROM "+guildTable)
 	if err != nil {
 		r.Severity = "warn"
-		r.SampleNotes = fmt.Sprintf("query failed: %v", err)
+		r.SampleNotes = fmt.Sprintf("NOT CHECKED: distinct zone_id query failed: %v", err)
 		return r
 	}
 	defer rows.Close()
 
 	var dead []uint32
+	scanned := 0
 	for rows.Next() {
 		var z uint32
 		if err := rows.Scan(&z); err != nil {
-			continue
+			// 2026-11-05 之前 continue:扫不出的值既不算活区也不算死区,结论看似完整(r2-dcc#1)。
+			return guildCheckFailed(r, fmt.Sprintf("scan zone_id after %d distinct values: %v", scanned, err))
 		}
+		scanned++
 		if _, ok := cfg.knownZones[z]; !ok {
 			dead = append(dead, z)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return guildCheckFailed(r, fmt.Sprintf("distinct zone_id iteration after %d values: %v", scanned, err))
 	}
 	if len(dead) == 0 {
 		r.Severity = "info"
 		r.SampleNotes = "all guild rows reference live zones"
 		return r
 	}
-	// Count rows per dead zone to give the exact bad count.
+	// 逐个死区数行数。死区已经确定,结论就是 block;某个区数不出来时 BadCount 只是下界,在说明里写明,不冒充精确值。
+	var uncounted []string
 	for _, z := range dead {
 		var n int64
-		_ = cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+guildTable+" WHERE zone_id = ?", z).Scan(&n)
+		if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+guildTable+" WHERE zone_id = ?", z).Scan(&n); err != nil {
+			uncounted = append(uncounted, fmt.Sprintf("zone %d: %v", z, err))
+			continue
+		}
 		r.BadCount += n
 	}
 	r.Severity = "block"
-	r.SampleNotes = fmt.Sprintf("%d guilds reference dead zones %v — likely missed merge_zone step or partial rollback", r.BadCount, dead)
+	r.SampleNotes = fmt.Sprintf("%d guilds reference zones %v outside the live zone set (player_route home zones, or -live-zones)", r.BadCount, dead)
+	if len(uncounted) > 0 {
+		r.SampleNotes += "; guild count is a lower bound, not counted for " + strings.Join(uncounted, ", ")
+	}
+	return r
+}
+
+// guildCheckFailed 把帮会检查判为 fail:读到一半,已看到的死区不完整,死区与行数都不报。
+func guildCheckFailed(r CheckResult, why string) CheckResult {
+	r.Severity = "fail"
+	r.BadCount = 0
+	r.SampleNotes = "CHECK FAILED (dead zones not counted): " + why
 	return r
 }
 
 // checkGuildRankZoneOrphans — guild_rank:zone:{id} ZSETs that point at
-// dead zones. After merge_zone's mergeRankingZSET, the source-zone ZSET
-// is deleted; if it survives, the merge step crashed mid-way.
+// zones that are not in knownZones. 合服是别名合服,不改写玩家与路由行:已合走的源区仍在
+// player_route.home_zone 的取值里(显式 -live-zones 时要自己列上),所以源区的榜键不会在这里
+// 报孤儿;guild 服务会把源区的榜周期折叠进最终区并删掉旧键(merge-zone-runbook.md §4,
+// 默认一个折叠周期 10 秒)。这里报的是 knownZones 之外的区留下的榜键,
+// 即从未存在过的区,或折叠/重建出错后残留的键。
 func checkGuildRankZoneOrphans(ctx context.Context, cfg runConfig) CheckResult {
 	r := CheckResult{Name: "guild_rank:zone:*"}
 	var cur uint64

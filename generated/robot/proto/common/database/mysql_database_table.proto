@@ -15,6 +15,7 @@ import "proto/common/component/player_comp.proto";
 import "proto/common/component/player_skill_comp.proto";
 import "proto/common/component/currency_comp.proto";
 import "proto/common/component/player_item_gain_block_comp.proto";
+import "proto/common/component/client_request_ledger_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
 
 // ------------------- User basic info table -------------------
@@ -155,7 +156,7 @@ message player_database
   // 覆盖世代(docs/design/mixed-version-persist-field-protection.md §3.3):这份记录里该世代及以前定义的字段,值都是真实的。
   // 由 scene 存盘时盖章 max(本二进制世代, 加载世代);go/db 据此判定超前延后 / 倒退拒写(§6.2)。
   // 0 = 未盖戳(机制上线前写入或 login 新号种子),所有比较先按 1 处理。世代号由 proto 生成器按
-  // proto/persist_schema_gen.txt 发放,不要手写数字。与 player_database_1 的同名字段同值。
+  // proto/persist_schema_gen.txt 发放,不要手写数字。
   // 按加列纪律取 20 之后的下一个空闲号 21,声明在末尾、不留空洞。
   uint32 persist_schema_gen = 21 [(OptionPersistGroup) = 0];
   // 神秘商人的个人限购记录(docs/design/mystery-merchant.md §5.3)。与上面几本账本同一条不变量 I3:
@@ -174,6 +175,13 @@ message player_database
   // 加载时无条件挂组件、存盘时缺组件整份拒存(持久数据,ecs-component-access-rules.md)。
   // 取下一个空闲号 24;下一个新字段从 25 起。
   PlayerItemGainBlockComp item_gain_block = 24 [(OptionPersistGroup) = 4];  // PROFILE
+  // 客户端请求幂等键账本(docs/design/client-request-idempotency.md §5.3):强化、神秘商人购买、新建加点方案
+  // 执行成功后记一条「键 -> 参数指纹 + 首次结果」,同键重发只回首次结果。与上面几本账本同一条不变量 I3:
+  // 必须与 currency / bag_component 同一次存盘提交 —— 「效果落了、记录没落」会让带原键的重发再执行一次。
+  // 放 WALLET 组:带键的操作都会改货币,这一行本来就要写,不会让存盘多写一行。
+  // 加载时无条件挂组件、校验不过挂失效标签(带键请求一律 fail-closed),存盘缺它整份拒存(持久数据)。
+  // 取下一个空闲号 25;下一个新字段从 26 起。
+  ClientRequestLedgerComp client_request_ledger = 25 [(OptionPersistGroup) = 7];  // WALLET
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:
@@ -196,18 +204,9 @@ message player_store
   uint64 claim_seq = 9;        // 只写权行用:每次认领加 1。同实例同代次重新认领时 (owner_epoch, holder_instance) 不变,判死靠它比得出来
 }
 
-// 同 player_database:只是内存形状,不建表。
-message player_database_1
-{
-  option (OptionIsPlayerDatabase) = true;
-  uint64 player_id = 1;
-  // 同 player_database.stress_test_probe:每次写盘重新打探针,标 OptionPersistUncarried。
-  PlayerStressTestProbe stress_test_probe = 2 [(OptionPersistUncarried) = true];
-  // 3 / 4 是旧存盘围栏,已删除。
-  reserved 3, 4;
-  // 覆盖世代,语义同 player_database 的 21 号;两张表盖同一个值。下一个新字段从 6 起。
-  uint32 persist_schema_gen = 5;
-}
+// player_database_1 已于 2026-11-05 删除(docs/design/player-save-direct-commit.md §1.2):它只剩 player_id、压测探针、
+// 覆盖世代,后两个 player_database 里都有。玩家持久数据只有 player_database 一个消息;不要再按「重要 / 不重要」开第二张子表,
+// 存储位置由 OptionPersistGroup 选行。持久 schema 台账里它的字段行按「类型已不可达」保留,不复用。
 
 // player_snapshot / rollback_audit_log 已移到 rollback_database_table.proto:导表器按本文件的 message 成员生成 zone 库建表清单(generated/data/mysql_database_table_list.json),而这两张表只该存在于全局库(data_service)一处。
 

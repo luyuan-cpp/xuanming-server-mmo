@@ -64,11 +64,6 @@ func activeInstancesKey(zoneID uint32) string {
 	return fmt.Sprintf(ActiveInstancesKeyFmt, zoneID)
 }
 
-// sceneClaimRecordKey 是认领脚本的重发幂等记录,见 luaSceneClaimPrelude。
-func sceneClaimRecordKey(sceneID uint64) string {
-	return fmt.Sprintf("scene:%d:claim", sceneID)
-}
-
 func sceneNodeKey(sceneID uint64) string {
 	return fmt.Sprintf(SceneNodeKeyFmt, sceneID)
 }
@@ -90,6 +85,17 @@ func NewCreateSceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 // CreateScene routes to world or instance creation based on scene type.
 // If scene_type is unset, it auto-detects from the World table.
 func (l *CreateSceneLogic) CreateScene(in *scene_manager.CreateSceneRequest) (*scene_manager.CreateSceneResponse, error) {
+	// 路由不变量(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):scene 只连本 zone 的 scene_manager,
+	// 请求的 zone 恒是本进程的 zone。不是的话是调用方连错了实例,不能替别的 zone 登记场景(那是别的 zone 的控制域键)。
+	// 在任何写入之前拒绝;zone_id = 0(调用方没填)不在这里拒,后面按原有口径处理。
+	if in.ZoneId != 0 && in.ZoneId != l.svcCtx.Config.ZoneId {
+		l.Logger.Errorf("[CreateScene] request for zone %d reached the scene_manager of zone %d; rejected without any write",
+			in.ZoneId, l.svcCtx.Config.ZoneId)
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    constants.ErrNoAvailableNode,
+			ErrorMessage: fmt.Sprintf("zone %d is served by its own scene_manager (this process serves zone %d)", in.ZoneId, l.svcCtx.Config.ZoneId),
+		}, nil
+	}
 	sceneType := l.resolveSceneType(in)
 
 	switch sceneType {
@@ -202,6 +208,21 @@ func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneReq
 //     one. Off by default because the typical mirror use case is per-player
 //     phasing where independent copies are intentional.
 func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) (*scene_manager.CreateSceneResponse, error) {
+	// 镜像源记录在别的 zone(control-plane-zone-scoping-20261105.md §4.3):同组时它的键和本 zone 在同一个实例里,但只归那个
+	// zone 读写 —— 不按它去重(去重会读、还可能 SREM 它的子集合),也不把新镜像登记成它的子镜像(luaRegisterInstance 会 SADD
+	// scene:{源}:mirrors,源所在 zone 的级联随后就会动本 zone 的场景键)。新镜像照样带镜像标记、按 MirrorIdleTimeoutSeconds
+	// 空闲回收,只是源销毁时不级联到它;共置由 resolveMirrorSourceNode 的 zone_mismatch 照旧回落。
+	// scene:{源}:zone 读失败按别的 zone 处理(拿不准就不碰);没有记录(源不在本组实例里)时照旧:子集合落在本组实例里,
+	// 只有本 zone 读写,随镜像销毁摘掉。
+	foreignSource := false
+	if in.SourceSceneId > 0 {
+		srcZone, err := lookupSceneZone(l.svcCtx, in.SourceSceneId)
+		foreignSource = err != nil || (srcZone != 0 && srcZone != in.ZoneId)
+		if foreignSource {
+			l.Logger.Infof("[Instance] mirror source scene %d is not in zone %d (zone=%d err=%v); not linking the new mirror to it",
+				in.SourceSceneId, in.ZoneId, srcZone, err)
+		}
+	}
 	if in.SourceSceneId > 0 {
 		// Only enforce source-existence when the source IS the template
 		// (no MirrorConfigId provided). Otherwise the source is just a
@@ -221,7 +242,7 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 			}
 		}
 
-		if l.svcCtx.Config.MirrorDedupBySource {
+		if l.svcCtx.Config.MirrorDedupBySource && !foreignSource {
 			if existingId, ok := l.findExistingMirror(in.SourceSceneId); ok {
 				nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(existingId))
 				switch {
@@ -290,6 +311,9 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		CreatedAt:         time.Now().Unix(),
 		Mirror:            in.MirrorConfigId > 0 || in.SourceSceneId > 0,
 		SourceSceneID:     in.SourceSceneId,
+	}
+	if foreignSource {
+		reg.SourceSceneID = 0 // 不登记成别的 zone 场景的子镜像(见函数开头)
 	}
 	if placement != nil {
 		reg.AgonesGs = placement.GameServerName
@@ -421,29 +445,59 @@ func (l *CreateSceneLogic) acquireRoomOnSpecificNode(nodeID string, zoneID uint3
 // 只撤销"本次未交付"的写:Redis 里这个 scene 的全部状态 + 节点计数 +
 // 反向索引 + Agones 房间名额。不碰任何已经交付给玩家的东西。
 //
-// Redis 状态由一段脚本原子撤销,认领到了才还名额。回错或认领落空都不还:
-// 场景的 agones_gs 还在 Redis 里时由接手的销毁路径归还,这里再还就是双还。
+// Redis 状态由一段脚本原子撤销(atomicRollbackInstanceAllocation),同一步写下拆除任务;认领到了才做其余副作用
+// (runRollbackTeardown):向节点补一次 DestroyScene,按登记时记下的 agones_gs 还名额。回错或认领落空都不还:
+// 脚本已执行时拆除任务在待办里,由扫描做完;没执行时场景还在,由空闲回收或别的销毁路径按 agones_gs 归还,
+// 这里再还就是双还。
 func (l *CreateSceneLogic) rollbackInstanceAllocation(
 	sceneId uint64,
 	targetNode string,
 	in *scene_manager.CreateSceneRequest,
 	placement *agonesPlacement,
 ) {
-	claim, err := atomicRollbackInstanceAllocation(l.svcCtx, in.ZoneId, sceneId, targetNode, in.SourceSceneId)
+	claim, err := atomicRollbackInstanceAllocation(l.svcCtx, in.ZoneId, sceneId, targetNode)
 	if err != nil {
-		l.Logger.Errorf("[Instance] rollback of scene %d on node %s failed, outcome unknown (left to the idle reclaim): %v", sceneId, targetNode, err)
+		l.Logger.Errorf("[Instance] rollback of scene %d on node %s failed, outcome unknown (left to the idle reclaim or the teardown sweep): %v",
+			sceneId, targetNode, err)
 		return
 	}
 	if !claim.Claimed {
 		l.Logger.Infof("[Instance] rollback of scene %d skipped: it no longer belongs to this allocation on node %s", sceneId, targetNode)
 		return
 	}
-
-	if placement != nil {
-		ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "create_rpc_failed")
+	// 登记脚本与映射同一步写 agones_gs(scene_registration.go),两者不该不同;不同说明登记之后有人改写过它。
+	// 按记下的那个还:它才是 Redis 里这个场景占用的名额。
+	if placement != nil && claim.AgonesGs != placement.GameServerName {
+		l.Logger.Errorf("[Instance] rollback of scene %d: recorded GameServer %q differs from the one reserved for it (%q); releasing the recorded one",
+			sceneId, claim.AgonesGs, placement.GameServerName)
 	}
 
+	job := sceneTeardownJob{ZoneID: in.ZoneId, SceneID: sceneId, Kind: teardownKindRollback, Reason: "create_rpc_failed", Claim: claim}
+	completeSceneTeardown(l.ctx, l.svcCtx, job, nil, false)
 	l.Logger.Infof("[Instance] rolled back scene %d on node %s (no phantom scene left behind)", sceneId, targetNode)
+}
+
+// runRollbackTeardown 是建实例回滚认领之后的副作用(拆除任务 teardownKindRollback),认领方与扫描共用,可以重跑。
+// 节点计数与反向索引已在回滚脚本里改好。
+//   - 向这次分配的节点补发 DestroyScene:CreateScene 回错不等于节点上没建(超时的那次可能已经建好),不补就留下
+//     没有 Redis 状态的实体。节点已死时跳过,实体随进程没了。
+//   - 从镜像源的子集合摘掉自己:源取快照里登记时写下的 scene:{id}:source(源在别的 zone 时登记没写,这里也就不碰)。
+//   - 按登记时记下的 agones_gs 还名额,一个任务至多一次。
+func runRollbackTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sceneTeardownJob) error {
+	var deferred []string
+	if node := job.Claim.NodeID; node != "" && IsNodeAlive(svcCtx, job.ZoneID, node) {
+		if err := RequestNodeDestroyScene(ctx, svcCtx, job.ZoneID, node, job.SceneID); err != nil {
+			logx.Errorf("[Instance] rollback of scene %d: DestroyScene on node %s failed: %v", job.SceneID, node, err)
+			deferred = append(deferred, "DestroyScene on node "+node)
+		}
+	}
+	if err := unlinkFromSourceMirrors(svcCtx, job.ZoneID, job.SceneID, job.Claim.Source); err != nil {
+		deferred = append(deferred, "unlink from the source's mirror set")
+	}
+	if err := releaseTeardownRoom(ctx, svcCtx, job); err != nil {
+		deferred = append(deferred, "take the Agones release step")
+	}
+	return teardownDeferred(deferred)
 }
 
 // pickInstanceNode decides which scene node should host a new instance.

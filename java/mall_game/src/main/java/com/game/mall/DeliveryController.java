@@ -32,8 +32,9 @@ public final class DeliveryController {
         payment(request);
         return store.refunds();
     }
+    // 回执必须带 paymentTransactionId(被退的是哪一笔):一张订单可能同时有本单付款和重复付款两笔待退。
     @PostMapping("/internal/refunds/receipt")
-    public void refunded(HttpServletRequest request, @RequestBody CommerceApi.Payment input) {
+    public void refunded(HttpServletRequest request, @RequestBody CommerceApi.Refund input) {
         payment(request);
         store.refunded(input);
     }

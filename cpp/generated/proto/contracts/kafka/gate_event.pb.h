@@ -92,6 +92,14 @@ extern const ::google::protobuf::internal::ClassDataFull BroadcastToSceneEvent_c
 #else
 extern const BroadcastToSceneEventGlobalsTypeInternal BroadcastToSceneEvent_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GateDrainMigrationEvent;
+struct GateDrainMigrationEventGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GateDrainMigrationEventGlobalsTypeInternal GateDrainMigrationEvent_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GateDrainMigrationEvent_class_data_;
+#else
+extern const GateDrainMigrationEventGlobalsTypeInternal GateDrainMigrationEvent_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class KickPlayerEvent;
 struct KickPlayerEventGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -266,7 +274,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateFrameEvent final : public :
   [[nodiscard]] static const SpectateFrameEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SpectateFrameEvent>(&SpectateFrameEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(SpectateFrameEvent& a, SpectateFrameEvent& b) { a.Swap(&b); }
   inline void Swap(SpectateFrameEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1831,6 +1839,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickPlayerEvent final : public ::go
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateDrainMigrationEvent final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:contracts.kafka.GateDrainMigrationEvent) */ {
+ public:
+  inline GateDrainMigrationEvent() : GateDrainMigrationEvent(nullptr) {}
+  ~GateDrainMigrationEvent() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GateDrainMigrationEvent* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GateDrainMigrationEvent));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GateDrainMigrationEvent(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GateDrainMigrationEvent(const GateDrainMigrationEvent& from) : GateDrainMigrationEvent(nullptr, from) {}
+  inline GateDrainMigrationEvent(GateDrainMigrationEvent&& from) noexcept : GateDrainMigrationEvent(nullptr, ::std::move(from)) {}
+  inline GateDrainMigrationEvent& operator=(const GateDrainMigrationEvent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GateDrainMigrationEvent& operator=(GateDrainMigrationEvent&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GateDrainMigrationEvent& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GateDrainMigrationEvent>(&GateDrainMigrationEvent_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(GateDrainMigrationEvent& a, GateDrainMigrationEvent& b) { a.Swap(&b); }
+  inline void Swap(GateDrainMigrationEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GateDrainMigrationEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GateDrainMigrationEvent* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GateDrainMigrationEvent>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GateDrainMigrationEvent& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GateDrainMigrationEvent& from) { GateDrainMigrationEvent::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GateDrainMigrationEvent* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "contracts.kafka.GateDrainMigrationEvent"; }
+
+  explicit GateDrainMigrationEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GateDrainMigrationEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GateDrainMigrationEvent& from);
+  GateDrainMigrationEvent(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GateDrainMigrationEvent&& from) noexcept
+      : GateDrainMigrationEvent(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDrainMarkedAtFieldNumber = 1,
+    kRatePerSecondFieldNumber = 2,
+    kLeaseMsFieldNumber = 3,
+  };
+  // int64 drain_marked_at = 1;
+  void clear_drain_marked_at() ;
+  [[nodiscard]] ::int64_t drain_marked_at() const;
+  void set_drain_marked_at(::int64_t value);
+
+  private:
+  ::int64_t _internal_drain_marked_at() const;
+  void _internal_set_drain_marked_at(::int64_t value);
+
+  public:
+  // uint32 rate_per_second = 2;
+  void clear_rate_per_second() ;
+  [[nodiscard]] ::uint32_t rate_per_second() const;
+  void set_rate_per_second(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rate_per_second() const;
+  void _internal_set_rate_per_second(::uint32_t value);
+
+  public:
+  // uint32 lease_ms = 3;
+  void clear_lease_ms() ;
+  [[nodiscard]] ::uint32_t lease_ms() const;
+  void set_lease_ms(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_lease_ms() const;
+  void _internal_set_lease_ms(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:contracts.kafka.GateDrainMigrationEvent)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GateDrainMigrationEvent& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::int64_t drain_marked_at_;
+    ::uint32_t rate_per_second_;
+    ::uint32_t lease_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindSessionEvent final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:contracts.kafka.BindSessionEvent) */ {
  public:
@@ -2177,7 +2410,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushToPlayerEvent final : public ::
   [[nodiscard]] static const PushToPlayerEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PushToPlayerEvent>(&PushToPlayerEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(PushToPlayerEvent& a, PushToPlayerEvent& b) { a.Swap(&b); }
   inline void Swap(PushToPlayerEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2408,7 +2641,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToSceneEvent final : publi
   [[nodiscard]] static const BroadcastToSceneEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BroadcastToSceneEvent>(&BroadcastToSceneEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(BroadcastToSceneEvent& a, BroadcastToSceneEvent& b) { a.Swap(&b); }
   inline void Swap(BroadcastToSceneEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2627,7 +2860,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersEvent final : pub
   [[nodiscard]] static const BroadcastToPlayersEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BroadcastToPlayersEvent>(&BroadcastToPlayersEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(BroadcastToPlayersEvent& a, BroadcastToPlayersEvent& b) { a.Swap(&b); }
   inline void Swap(BroadcastToPlayersEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2909,7 +3142,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToAllEvent final : public 
   [[nodiscard]] static const BroadcastToAllEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BroadcastToAllEvent>(&BroadcastToAllEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(BroadcastToAllEvent& a, BroadcastToAllEvent& b) { a.Swap(&b); }
   inline void Swap(BroadcastToAllEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4317,6 +4550,82 @@ inline ::int64_t RedirectToGateEvent::_internal_token_deadline() const {
 inline void RedirectToGateEvent::_internal_set_token_deadline(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.token_deadline_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GateDrainMigrationEvent
+
+// int64 drain_marked_at = 1;
+inline void GateDrainMigrationEvent::clear_drain_marked_at() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drain_marked_at_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::int64_t GateDrainMigrationEvent::drain_marked_at() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.GateDrainMigrationEvent.drain_marked_at)
+  return _internal_drain_marked_at();
+}
+inline void GateDrainMigrationEvent::set_drain_marked_at(::int64_t value) {
+  _internal_set_drain_marked_at(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.GateDrainMigrationEvent.drain_marked_at)
+}
+inline ::int64_t GateDrainMigrationEvent::_internal_drain_marked_at() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.drain_marked_at_;
+}
+inline void GateDrainMigrationEvent::_internal_set_drain_marked_at(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drain_marked_at_ = value;
+}
+
+// uint32 rate_per_second = 2;
+inline void GateDrainMigrationEvent::clear_rate_per_second() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rate_per_second_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t GateDrainMigrationEvent::rate_per_second() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.GateDrainMigrationEvent.rate_per_second)
+  return _internal_rate_per_second();
+}
+inline void GateDrainMigrationEvent::set_rate_per_second(::uint32_t value) {
+  _internal_set_rate_per_second(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.GateDrainMigrationEvent.rate_per_second)
+}
+inline ::uint32_t GateDrainMigrationEvent::_internal_rate_per_second() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rate_per_second_;
+}
+inline void GateDrainMigrationEvent::_internal_set_rate_per_second(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rate_per_second_ = value;
+}
+
+// uint32 lease_ms = 3;
+inline void GateDrainMigrationEvent::clear_lease_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_ms_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t GateDrainMigrationEvent::lease_ms() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.GateDrainMigrationEvent.lease_ms)
+  return _internal_lease_ms();
+}
+inline void GateDrainMigrationEvent::set_lease_ms(::uint32_t value) {
+  _internal_set_lease_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.GateDrainMigrationEvent.lease_ms)
+}
+inline ::uint32_t GateDrainMigrationEvent::_internal_lease_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_ms_;
+}
+inline void GateDrainMigrationEvent::_internal_set_lease_ms(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_ms_ = value;
 }
 
 // -------------------------------------------------------------------

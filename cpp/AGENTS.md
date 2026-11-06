@@ -25,7 +25,7 @@ cpp/
 | Scene gameplay/domain | `libs/services/scene/` | actor/player/world/frame/team/etc. |
 | Player save pipeline | `libs/services/scene/player/system/player_lifecycle.cpp` | `SavePlayerToRedis`: marshals → stamps probe → Redis cache → Kafka |
 | Data-consistency stress probe | `libs/services/scene/player/system/stress_test_probe.{h,cpp}` | Gated by `STRESS_TEST_PROBE=1` env var. Go mirror: `go/db/internal/stresstest/probe.go` |
-| Scene node role config | `libs/engine/config/config.cpp` `readGameConfig` | Honours `SCENE_NODE_TYPE` / `ZONE_ID` / `GAME_CONFIG_PATH` / `ZONE_REDIS_PASSWORD` env overrides (the last one is the zone Redis AUTH password; never logged) |
+| Scene node role config | `libs/engine/config/config.cpp` `readGameConfig` | Honours `SCENE_NODE_TYPE` / `ZONE_ID` / `GAME_CONFIG_PATH` / `ZONE_REDIS_PASSWORD` / `SCENE_CONTROL_REDIS_PASSWORD` / `PLAYER_REDIS_PASSWORD` env overrides (the last three are Redis AUTH passwords, never logged; on K8s they come from Secrets via `secretKeyRef`, the node ConfigMap carries empty passwords) |
 | Agones lifecycle (high-density) | `libs/engine/infra/agones/` | One `agones::GameServerLifecycle` shared by scene and battle (a scene or a battle room is one "unit"). Ready/Allocated state machine + unit counting. HTTP only on the lifecycle worker thread, never on the EventLoop. Design: `docs/design/agones-scene-node-high-density.md` |
 | Static analysis rule | `.clang-tidy` | Custom `myplugin-no-member-pointer` check only |
 
@@ -73,7 +73,7 @@ clang-tidy <file.cpp> --config-file=cpp\.clang-tidy
 - Tests are native binaries/projects under `cpp/tests/`; run the relevant target rather than assuming a single root test runner.
 - **Stress test probe** (`libs/services/scene/player/system/stress_test_probe.{h,cpp}`):
   - Off by default; enabled by `STRESS_TEST_PROBE=1` environment variable (cached at process start via `IsEnabled()`).
-  - `StampPlayerDatabase` / `StampPlayerDatabase1` are called from `SavePlayerToRedis` in `player_lifecycle.cpp`, immediately before `Save()` serializes the proto eagerly. Moving the stamp after Save() would silently break it.
+  - 只有 `StampPlayerDatabase`(`player_database_1` 和 `StampPlayerDatabase1` 已于 2026-11-05 删除)。它经 `player_lifecycle.cpp` 的 `MakePlayerStoreOptions` 装进 `PlayerStoreClient::Options::stampProfile`:比脏之后、确定要写这一笔时才打在 kProfile 行的字节上,比脏不看探针(否则玩家恒脏)。不要挪到比脏之前。
   - `NextSeq` uses `max(prior+1, now_us)` to guarantee strict monotonicity across Scene restarts without persistence. The `now_us` floor is epoch microseconds.
   - `ComputeSig` implements dual-seeded FNV-1a-64 (128-bit total). It MUST produce byte-identical output to `go/db/internal/stresstest/probe.go:ComputeSig`. Golden vectors in `go/db/internal/stresstest/probe_test.go` lock the algorithm; if you change either side, update both AND both tests.
   - Added to `scene.vcxproj`, `scene.vcxproj.filters`, and `CMakeLists.txt`. Linux builds auto-pick it up via `vcxproj2cmake.py`.

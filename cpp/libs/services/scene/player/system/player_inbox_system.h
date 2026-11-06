@@ -14,6 +14,8 @@
 //                           找不到实体 / 实体还没落地就丢弃,下次落地会拉。
 //   * OnBattleFreezeCleared PlayerBattleSystem 摘 InBattleComp 的唯一入口里一行调用。之前因战斗延后的,立即重查
 //                           (不合并、不去抖)。
+//   * OnBagSpaceFreed       PlayerBagSystem::RetrieveTemporary 取回成功后一行调用(2026-11-06)。只把「执行器因背包
+//                           放不下而 DEFER」的域的下一次尝试提到现在,不改任何判定(bag-rule-policy-layering.md §6.6)。
 //   * Tick                  scene main 每秒调一次:到期的检查(单个 tick ≤ 200 次)、在线有界兜底、等落盘与补确认、
 //                           在途超时。节点级停用(注册表自检失败 metric=inbox_registry_broken、配置开关关着
 //                           metric=inbox_consumer_disabled)每 kNodeStuckRelogIntervalMs 补打一行,与有没有在线玩家无关。
@@ -72,6 +74,11 @@ public:
 	// ── 触发入口 ──
 	static void OnPlayerLanded(entt::entity player);
 	static void OnBattleFreezeCleared(entt::entity player);
+	// 玩家腾出了背包空间(今天只有临时格取回成功)。只处理执行器因背包放不下而 DEFER 的域 —— deferReason == kExecutorDefer
+	// 且执行器带回的原因是 kBagItemNotStacked(PlayerInboxDomainState::executorDeferReason):处在 kIdle / kApplying 的把
+	// nextCheckMs 提到现在,下一个 Tick 就按原有规则重试。不改任何判定:不清 failStreak(重试仍放不下时照常退避),不动
+	// recheckRequested,不在调用栈里同步续做,在途的那一轮不打断;其它域一律不碰。无效实体 / 没有运行时组件时直接返回,不创建组件。
+	static void OnBagSpaceFreed(entt::entity player);
 	static void OnNotifyEvent(uint64_t playerId, uint32_t domain);
 	static void Tick();
 

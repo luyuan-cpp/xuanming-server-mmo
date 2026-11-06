@@ -58,6 +58,8 @@ func runGenerationPipeline(runner *ExecutionRunner) {
 		{Name: "internal.GenerateServiceConstants", Run: internal.GenerateServiceConstants},
 		{Name: "internal.WriteGoMessageId", Run: internal.WriteGoMessageId},
 		{Name: "internal.WriteGoRouteTable", Run: internal.WriteGoRouteTable},
+		// 在线服务入口拦截器用的客户端可发起方法集合(docs/design/gate-online-identity.md §9.2);依赖已分配的消息号。
+		{Name: "internal.WriteGoClientCallableMethods", Run: internal.WriteGoClientCallableMethods},
 		{Name: "internal.WriteGoEventId", Run: internal.WriteGoEventId},
 		{Name: "goGen.LoadAllDescriptors", Run: goGen.LoadAllDescriptors},
 		{Name: "cppGenOption.BuildOption", Run: adaptSimpleTask(cppGenOption.BuildOption)},

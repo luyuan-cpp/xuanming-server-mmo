@@ -618,7 +618,7 @@ type TradeAssetOpRecord struct {
 	CreatedMs     uint64                 `protobuf:"varint,20,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
 	UpdatedMs     uint64                 `protobuf:"varint,21,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
 	// 人工终结留痕(§4.38)。UNKNOWN 每 60s 重排、玩家长期离线的行不会自己走到终局,
-	// 只能由管理入口按 scene 流水(correlation_id = op_id)判定后落库;不留痕就等于
+	// 只能由管理入口按玩家已提交的账本判定后落库(assetop.JudgeManual;scene 流水 correlation_id = op_id 只是线索);不留痕就等于
 	// 谁都能把一行资产指令改成"已发放"而查不到是谁改的。
 	// 本批只提供存储与 assetop.ManualResolver 实现,管理 RPC 与鉴权见交付说明。
 	// string 列按 D-14 §2 建成 MEDIUMTEXT,长度由 assetop.Loop.ResolveManually 校验

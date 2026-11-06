@@ -108,7 +108,7 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	owed := &owedRewardLoop{d: d}
-	launches := &trialLaunchRecovery{d: d}
+	launches := newTrialLaunchRecovery(l)
 	var lobbyCursor uint64 // 仅本循环访问；失败也推进，防离线大厅占住队头。
 	var unpreparedCursor uint64
 	var wg sync.WaitGroup

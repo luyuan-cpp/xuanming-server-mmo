@@ -90,7 +90,7 @@ func TestSupervise_ResumesAfterDBFailureAndHealthRecovers(t *testing.T) {
 }
 
 // TestConsumersWait 锁死关停顺序用的等待点:main 必须能在关连接池之前有界地等消费者退出,
-// 否则 txlog 的 flushOnShutdown 只会拿到一个已经关掉的池(等于从来没写过)。
+// 否则排空时各分区 worker 落最后一批只会拿到一个已经关掉的池(等于从来没写过)。
 func TestConsumersWait(t *testing.T) {
 	var nilConsumers *Consumers
 	assert.True(t, nilConsumers.Wait(time.Millisecond), "never-started consumers must not block shutdown")

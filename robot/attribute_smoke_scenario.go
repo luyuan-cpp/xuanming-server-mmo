@@ -510,7 +510,7 @@ func (s *attributeSmokeSession) callTolerant(messageId uint32, request proto.Mes
 	return requestAttributePanel(s.caller, messageId, request, response, allowedTips...)
 }
 
-// relogin 下线(LeaveGame + Disconnect)后用同一账号重新登录进场,返回新会话。
+// relogin 下线(LeaveGame + 关连接,断线通知由 gate 在 TCP 关闭时合成)后用同一账号重新登录进场,返回新会话。
 // 中间等 2s 让 scene 的异步存盘落到 db,否则重登可能读到旧档(HandlePlayerAsyncSaved 会把
 // 过快的重登判成"重连取代登出")。
 func (s *attributeSmokeSession) relogin(cfg *config.Config) (*attributeSmokeSession, error) {

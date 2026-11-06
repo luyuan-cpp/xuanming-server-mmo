@@ -77,18 +77,10 @@ func ResetNodeConnCacheForTest() {
 	}
 }
 
-// RequestNodeCreateScene dials the C++ scene node identified by nodeId and calls
-// CreateScene to instantiate the ECS scene entity.
+// RequestNodeCreateSceneWithOptions dials the C++ scene node identified by nodeId and calls
+// CreateScene to instantiate the ECS scene entity, forwarding mirror_config_id and creator_ids.
 // sceneId is the Go-allocated unique ID; C++ uses it for per-scene idempotency.
-// If the node is unreachable, the error is returned but Redis state is already committed.
-func RequestNodeCreateScene(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, configId uint32, sceneId uint64) (*scenepb.CreateSceneResponse, error) {
-	return RequestNodeCreateSceneWithOptions(ctx, svcCtx, zoneId, nodeId, configId, sceneId, 0, nil)
-}
-
-// RequestNodeCreateSceneWithOptions is the full-featured variant that also
-// forwards mirror_config_id and creator_ids to the C++ SceneNode. The basic
-// RequestNodeCreateScene remains for world-scene paths that never carry mirror
-// or creator metadata.
+// 副本与镜像用:不带放置代次,它们不换节点。世界频道一律走 RequestNodeCreateSceneAtGeneration。
 func RequestNodeCreateSceneWithOptions(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
@@ -99,7 +91,29 @@ func RequestNodeCreateSceneWithOptions(
 	mirrorConfigId uint32,
 	creatorIds []uint64,
 ) (*scenepb.CreateSceneResponse, error) {
-	if sceneId == 0 {
+	return createSceneOnNode(ctx, svcCtx, zoneId, nodeId, &scenepb.CreateSceneRequest{
+		ConfigId:       configId,
+		SceneId:        sceneId,
+		MirrorConfigId: mirrorConfigId,
+		CreatorIds:     creatorIds,
+	})
+}
+
+// RequestNodeCreateSceneAtGeneration 是世界频道用的建场景,带放置代次(docs/design/world-channel-placement-generation.md):
+// 换节点时是这次尝试分到的代次,init 向属主补建时是频道当前的代次。节点已按 >= 这个代次拆过这个场景时回空应答,
+// 这里按建场景失败返回。
+func RequestNodeCreateSceneAtGeneration(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string,
+	configId uint32, sceneId, placementGeneration uint64) (*scenepb.CreateSceneResponse, error) {
+	return createSceneOnNode(ctx, svcCtx, zoneId, nodeId, &scenepb.CreateSceneRequest{
+		ConfigId:            configId,
+		SceneId:             sceneId,
+		PlacementGeneration: placementGeneration,
+	})
+}
+
+func createSceneOnNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string,
+	req *scenepb.CreateSceneRequest) (*scenepb.CreateSceneResponse, error) {
+	if req.SceneId == 0 {
 		return nil, fmt.Errorf("CreateScene refused: scene id must be nonzero")
 	}
 	conn, err := getOrDialNode(ctx, svcCtx, zoneId, nodeId)
@@ -108,20 +122,15 @@ func RequestNodeCreateSceneWithOptions(
 	}
 
 	client := scenenodepb.NewSceneNodeGrpcClient(conn)
-	resp, err := client.CreateScene(ctx, &scenepb.CreateSceneRequest{
-		ConfigId:       configId,
-		SceneId:        sceneId,
-		MirrorConfigId: mirrorConfigId,
-		CreatorIds:     creatorIds,
-	})
+	resp, err := client.CreateScene(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("CreateScene RPC to node %s: %w", nodeId, err)
 	}
-	// RPC 的 OK 只代表传输完成;C++ 创建入口仍可能因参数或分配许可拒绝而留下空应答。
+	// RPC 的 OK 只代表传输完成;C++ 创建入口仍可能因参数、分配许可或放置代次过期拒绝而留下空应答。
 	// 在发布/切换场景归属之前确认实际创建的是本次请求的实例,失败沿调用方原有补偿收尾。
-	if resp == nil || resp.SceneInfo == nil || resp.SceneInfo.SceneId != sceneId {
-		return nil, fmt.Errorf("CreateScene node %s did not confirm requested scene %d (received %d)",
-			nodeId, sceneId, resp.GetSceneInfo().GetSceneId())
+	if resp == nil || resp.SceneInfo == nil || resp.SceneInfo.SceneId != req.SceneId {
+		return nil, fmt.Errorf("CreateScene node %s did not confirm requested scene %d at placement generation %d (received %d)",
+			nodeId, req.SceneId, req.PlacementGeneration, resp.GetSceneInfo().GetSceneId())
 	}
 
 	return resp, nil
@@ -129,14 +138,31 @@ func RequestNodeCreateSceneWithOptions(
 
 // RequestNodeDestroyScene dials the C++ scene node and calls DestroyScene
 // to remove the ECS scene entity.
+// 不带放置代次:副本、镜像的销毁与世界频道的退役拆除(排空、孤儿清理),节点无条件执行。
 func RequestNodeDestroyScene(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, sceneId uint64) error {
+	return destroySceneOnNode(ctx, svcCtx, zoneId, nodeId, &scenepb.DestroySceneRequest{SceneId: sceneId})
+}
+
+// RequestNodeDestroySceneAtGeneration 拆掉世界频道在 nodeId 上按不新于 placementGeneration 的代次建出的实体:回收一次落空
+// 改派预建的实体,或 rebalance 迁走之后拆老节点。节点已按更新的代次建过这个场景(之后有过一次合法的放置)时忽略这次拆除、
+// 照常回 OK,所以 nil 不代表实体一定被拆了。
+func RequestNodeDestroySceneAtGeneration(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string,
+	sceneId, placementGeneration uint64) error {
+	return destroySceneOnNode(ctx, svcCtx, zoneId, nodeId, &scenepb.DestroySceneRequest{
+		SceneId:             sceneId,
+		PlacementGeneration: placementGeneration,
+	})
+}
+
+func destroySceneOnNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string,
+	req *scenepb.DestroySceneRequest) error {
 	conn, err := getOrDialNode(ctx, svcCtx, zoneId, nodeId)
 	if err != nil {
 		return fmt.Errorf("dial scene node %s: %w", nodeId, err)
 	}
 
 	client := scenenodepb.NewSceneNodeGrpcClient(conn)
-	if _, err := client.DestroyScene(ctx, &scenepb.DestroySceneRequest{SceneId: sceneId}); err != nil {
+	if _, err := client.DestroyScene(ctx, req); err != nil {
 		return fmt.Errorf("DestroyScene RPC to node %s: %w", nodeId, err)
 	}
 
@@ -256,10 +282,12 @@ func resolveNodeEndpoint(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	}
 
 	// Slow path: query etcd directly (covers race at startup before first fullSync).
+	// 只读那个 zone 的前缀(docs/design/control-plane-zone-scoping-20261105.md §3.4):原来拉全服 SceneNodeService.rpc/,
+	// 读量随全服场景节点数增长。
 	if svcCtx.Etcd == nil {
 		return "", fmt.Errorf("scene node %s not in registry and etcd client unavailable", nodeId)
 	}
-	prefix := "SceneNodeService.rpc/"
+	prefix := sceneNodeZonePrefix(zoneId)
 	resp, err := svcCtx.Etcd.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
 		return "", fmt.Errorf("etcd get %s: %w", prefix, err)

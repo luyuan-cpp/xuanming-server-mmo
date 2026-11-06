@@ -9,11 +9,15 @@ import (
 	"errors"
 	"fmt"
 	kafkago "github.com/segmentio/kafka-go"
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"io"
+	"math/rand/v2"
 	"path/filepath"
 	pb "proto/common/database"
 	"shared/drainproof"
+	"shared/safego"
 	"sort"
 	"strconv"
 	"sync"
@@ -39,6 +43,24 @@ type GroupLag struct {
 	RetentionGap int64
 	// Uncommitted 是还没提交过 offset 的分区数(新组 / 新一代 topic 刚建)。
 	Uncommitted int
+	// CommitStall 是有积压的分区里,已提交位点最久多长时间没动(CommitStall.Observe)。要跨轮记状态,
+	// 只由 RunGroupLagProbe 填;单次探测(Probe / ProbeOffsets)恒为 0。
+	CommitStall time.Duration
+}
+
+// PartitionOffsets 是一个分区在一次探测里读到的位点。Committed = -1 表示这个组在该分区没提交过(消费者从 Start 读起)。
+// 只供进程内按分区判停滞(CommitStall),调用方不按分区出指标。
+type PartitionOffsets struct {
+	Partition             int32
+	Committed, Start, End int64
+}
+
+// Backlog 是这个组在该分区上还没提交到的条数,口径同 GroupLag.Lag 里该分区那一项(committed 越过 End 记 0)。
+func (p PartitionOffsets) Backlog() int64 {
+	if from := max(p.Committed, p.Start); p.End > from {
+		return p.End - from
+	}
+	return 0
 }
 
 // CommittedOffsetsReader 是读一个组已提交位点要的唯一调用;sarama.ClusterAdmin 满足它。
@@ -97,8 +119,15 @@ func CommittedOffsets(r CommittedOffsetsReader, group, topic string, partitions 
 // 任何一处读失败、响应顶层 Err(OffsetFetch v2+)或某分区 block 缺失 / 带错,都返回 error;
 // committed > end(topic 被删了重建过)时该分区 lag 记 0,并返回 error 让调用方看见,不静默当 0。
 func computeGroupLag(r groupOffsetReader, group, topic string, partitions int32) (GroupLag, error) {
+	lag, _, err := computeGroupOffsets(r, group, topic, partitions)
+	return lag, err
+}
+
+// computeGroupOffsets 同 computeGroupLag,另按分区号升序返回各分区读到的位点(CommitStall 按分区判停滞要用)。
+// 返回 error 时位点不可用。
+func computeGroupOffsets(r groupOffsetReader, group, topic string, partitions int32) (GroupLag, []PartitionOffsets, error) {
 	if partitions <= 0 {
-		return GroupLag{}, fmt.Errorf("kafka lag probe: topic %s has invalid partition count %d", topic, partitions)
+		return GroupLag{}, nil, fmt.Errorf("kafka lag probe: topic %s has invalid partition count %d", topic, partitions)
 	}
 	ids := make([]int32, partitions)
 	for i := range ids {
@@ -108,7 +137,7 @@ func computeGroupLag(r groupOffsetReader, group, topic string, partitions int32)
 	// 先读 committed(见上面的读取顺序说明);错误语义与文本由 CommittedOffsets 统一给出,这里只补前缀。
 	committedByPartition, err := CommittedOffsets(r, group, topic, ids)
 	if err != nil {
-		return GroupLag{}, fmt.Errorf("kafka lag probe: %w", err)
+		return GroupLag{}, nil, fmt.Errorf("kafka lag probe: %w", err)
 	}
 	committed := make([]int64, partitions)
 	for i, p := range ids {
@@ -117,18 +146,20 @@ func computeGroupLag(r groupOffsetReader, group, topic string, partitions int32)
 
 	var (
 		out      GroupLag
+		offsets  = make([]PartitionOffsets, 0, partitions)
 		mismatch error
 	)
 	for i, p := range ids {
 		end, err := r.GetOffset(topic, p, sarama.OffsetNewest)
 		if err != nil {
-			return GroupLag{}, fmt.Errorf("kafka lag probe: end offset of %s[%d]: %w", topic, p, err)
+			return GroupLag{}, nil, fmt.Errorf("kafka lag probe: end offset of %s[%d]: %w", topic, p, err)
 		}
 		start, err := r.GetOffset(topic, p, sarama.OffsetOldest)
 		if err != nil {
-			return GroupLag{}, fmt.Errorf("kafka lag probe: start offset of %s[%d]: %w", topic, p, err)
+			return GroupLag{}, nil, fmt.Errorf("kafka lag probe: start offset of %s[%d]: %w", topic, p, err)
 		}
 		c := committed[i]
+		offsets = append(offsets, PartitionOffsets{Partition: p, Committed: c, Start: start, End: end})
 		if c < 0 {
 			// 没提交过(Kafka 回 -1):消费者从日志起点开始读。
 			out.Uncommitted++
@@ -152,7 +183,7 @@ func computeGroupLag(r groupOffsetReader, group, topic string, partitions int32)
 			out.MaxPartitionLag = max(out.MaxPartitionLag, end-from)
 		}
 	}
-	return out, mismatch
+	return out, offsets, mismatch
 }
 
 // groupLagProbeNetTimeout:探针的拨号 / 读 / 写超时。sarama 调用不收 ctx,默认 30s 的超时会让一轮探测在 broker
@@ -223,6 +254,11 @@ func (p *GroupLagProber) ListConsumerGroupOffsets(group string, topicPartitions 
 // Probe 算一个组在一个 topic 上的积压,见 computeGroupLag。
 func (p *GroupLagProber) Probe(group, topic string, partitions int32) (GroupLag, error) {
 	return computeGroupLag(p, group, topic, partitions)
+}
+
+// ProbeOffsets 同 Probe,另返回各分区读到的位点(见 computeGroupOffsets),喂给 CommitStall。
+func (p *GroupLagProber) ProbeOffsets(group, topic string, partitions int32) (GroupLag, []PartitionOffsets, error) {
+	return computeGroupOffsets(p, group, topic, partitions)
 }
 
 // Close 关 admin(连同它底下的 client)。
@@ -815,6 +851,7 @@ func (p *GroupLagProber) DrainManualConsumers(ctx context.Context, expected []*p
 
 // BoundConsumerGroupConfig 把组代次与分区 reader 的所有权集中在一个实际消费 owner。
 // HandlerTimeout 只约束已接纳处理，不继承 StopFetching 的取消；回调必须返回真实持久结局。
+// 回调（与 reader 模式的批处理落库）必须幂等：暂时失败或代次结束时 owner 不提交，同一条会被原地重调或由下一代次重投。
 type BoundConsumerGroupConfig struct {
 	Group          kafkago.ConsumerGroupConfig
 	Reader         kafkago.ReaderConfig
@@ -829,12 +866,35 @@ type boundPartition struct {
 	accepted  uint64
 	settled   uint64
 	replayed  uint64
-	reader    *kafkago.Reader
-	pending   map[int64]*boundDelivery
+	// released 是没有提交、交还 Kafka 重投的已接纳记录：owner 仍在运行，但代次已结束或提交被拒。
+	released uint64
+	reader   boundPartitionReader
+	pending  map[int64]*boundDelivery
+	// groupCommitted：initial 是组内已提交位点（assignment.Offset >= 0）；false = 这个组在该分区从没提交过，initial 只是日志起点。
+	groupCommitted bool
+}
+
+// boundGroupClient 是 owner 对消费组的全部要求；*kafkago.ConsumerGroup 满足它。单测换成替身，不连真实 Kafka。
+type boundGroupClient interface {
+	Next(context.Context) (*kafkago.Generation, error)
+	Close() error
+}
+
+// boundPartitionReader 是分区 worker 对分区 reader 的全部要求；*kafkago.Reader 满足它。
+type boundPartitionReader interface {
+	FetchMessage(context.Context) (kafkago.Message, error)
+	Close() error
 }
 
 // BoundConsumerGroup 只在 Generation.CommitOffsets 成功后推进本地前沿。
 // 一个 Generation.Start 回调拥有全部分区 worker；单分区退出不能提前结束其他分区的提交代次。
+//
+// 一个 owner 跨越本进程的全部代次（r2-kc#1，设计见 docs/design/db-write-fencing-mysql.md
+// 「Kafka 消费组 owner 的再均衡与暂时失败」）：
+//   - 再均衡、入组失败、分区打开或拉取失败、回调失败、提交失败都不结束 owner。代次还在就有界指数退避后原地重试同一条；
+//     代次已结束就不提交、把这条交还 Kafka（released），由下一代次的属主（可能还是本 owner）从组内已提交位点重投。
+//   - 只有 owner 终止（控制面 StopFetching 或 Run 的 ctx 结束）后仍结不了的已接纳记录，以及不变量破坏、提交点越过保留范围
+//     这类不能自愈的情形，才 fail：记 HOLD 并永久停止取新。排空收据 CloseAndReport 的判据不变：每条已接纳记录都要有确定结局。
 type BoundConsumerGroup struct {
 	config            BoundConsumerGroupConfig
 	relay             *drainproof.Session
@@ -859,6 +919,18 @@ type BoundConsumerGroup struct {
 	changed           chan struct{}
 	stop              chan struct{}
 	done              chan struct{}
+	// runContext 是 Run 的 owner 生命周期：StopFetching 或调用方 ctx 结束即取消，见 terminating。
+	runContext context.Context
+	// compacted / replayCompacted 汇总滚出窗口的旧原件，见 appendHistoryLocked / appendResolvedReplayLocked。
+	compacted       boundHistoryCompaction
+	replayCompacted boundReplayCompaction
+
+	// 以下是与 Kafka 及时间的接缝：生产取 NewBoundConsumerGroup 装配的实现，单测换成替身（不连 Kafka、不依赖墙钟）。
+	newGroup        func(kafkago.ConsumerGroupConfig) (boundGroupClient, error)
+	startGeneration func(*kafkago.Generation, func(context.Context))
+	openReader      func(context.Context, string, kafkago.PartitionAssignment) (boundPartitionReader, int64, error)
+	// sleep 可中断地等待 d（生产实现带抖动）；ctx 结束返回 false。
+	sleep func(context.Context, time.Duration) bool
 }
 
 func NewBoundConsumerGroup(config BoundConsumerGroupConfig, relay *drainproof.Session, handler func(context.Context, kafkago.Message) error) (*BoundConsumerGroup, error) {
@@ -896,9 +968,21 @@ func NewBoundConsumerGroup(config BoundConsumerGroupConfig, relay *drainproof.Se
 	if err := check.Validate(); err != nil {
 		return nil, err
 	}
-	return &BoundConsumerGroup{config: config, relay: relay, handler: handler, commitOffsets: func(generation *kafkago.Generation, offsets map[string]map[int]int64) error {
+	owner := &BoundConsumerGroup{config: config, relay: relay, handler: handler, commitOffsets: func(generation *kafkago.Generation, offsets map[string]map[int]int64) error {
 		return generation.CommitOffsets(offsets)
-	}, changed: make(chan struct{}), stop: make(chan struct{}), done: make(chan struct{}), replay: map[string]*boundDelivery{}}, nil
+	}, changed: make(chan struct{}), stop: make(chan struct{}), done: make(chan struct{}), replay: map[string]*boundDelivery{}}
+	owner.newGroup = func(groupConfig kafkago.ConsumerGroupConfig) (boundGroupClient, error) {
+		group, err := kafkago.NewConsumerGroup(groupConfig)
+		if err != nil {
+			return nil, err
+		}
+		return group, nil
+	}
+	owner.startGeneration = func(generation *kafkago.Generation, run func(context.Context)) { generation.Start(run) }
+	owner.openReader = owner.dialPartitionReader
+	owner.sleep = sleepWithJitter
+	primeBoundConsumerMetrics(config.Group.ID)
+	return owner, nil
 }
 
 func boundPartitionKey(topic string, partition int) string {
@@ -914,7 +998,63 @@ func (c *BoundConsumerGroup) fail(err error) {
 	c.signalLocked()
 	c.mu.Unlock()
 	c.relay.Hold()
+	observeBoundHold(c.config.Group.ID)
 }
+
+// terminating 报告 owner 是否已终止：控制面调了 StopFetching，或 Run 的 ctx 已结束。
+// 终止之后不会再有重试或下一代次重投，结不了的已接纳记录只能计 HOLD（排空语义）。
+func (c *BoundConsumerGroup) terminating() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.stopping || c.runContext != nil && c.runContext.Err() != nil
+}
+
+// boundOutcome 是一条已接纳记录的结局。
+type boundOutcome uint8
+
+const (
+	boundSettled  boundOutcome = iota + 1 // 已以本代次提交
+	boundReleased                         // 未提交，已交还 Kafka 重投（owner 仍在运行）
+	boundHeld                             // 结局未知，已 HOLD 并停止取新
+)
+
+// 暂时失败的原地重试退避：1s 起、逐次翻倍、封顶 30s；生产等待带抖动（sleepWithJitter），避免多副本同拍重试。
+const (
+	boundRetryDelayMin = time.Second
+	boundRetryDelayMax = 30 * time.Second
+)
+
+// nextBoundRetryDelay 给出下一次退避时长；prev 为 0 表示第一次失败。
+func nextBoundRetryDelay(prev time.Duration) time.Duration {
+	if prev <= 0 {
+		return boundRetryDelayMin
+	}
+	return min(prev*2, boundRetryDelayMax)
+}
+
+// sleepWithJitter 可中断地等待 [d/2, d] 内的随机时长；ctx 结束返回 false。
+func sleepWithJitter(ctx context.Context, d time.Duration) bool {
+	if half := d / 2; half > 0 {
+		d = half + rand.N(half+1)
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// boundHandlerPanicPoint 是回调 panic 的 safego 点位名（直接成为 safego_panic_total 的 label，必须是常量）。
+const boundHandlerPanicPoint = "kafkautil.bound_consumer.handle"
+
+var errBoundHandlerPanicked = errors.New("Kafka 已接纳记录的处理回调 panic（栈见 goroutine_panic 日志），本次未结清")
+
+// errBoundAssignmentOutOfRange：组内已提交位点早于日志起点（保留期已删掉未消费的消息）或晚于日志终点（topic 重建 / 日志截断）。
+// 不是暂时失败：继续读等于静默跳过或读错数据，只能 HOLD 等人工处理。
+var errBoundAssignmentOutOfRange = errors.New("Kafka assignment 提交点未知或已越过保留范围")
 
 // StopFetching 永久停止本 owner 取新；已拿到的记录仍要处理、提交并 join。
 func (c *BoundConsumerGroup) StopFetching() {
@@ -955,12 +1095,15 @@ func (c *BoundConsumerGroup) Run(ctx context.Context) (resultErr error) {
 		close(c.done)
 		c.mu.Unlock()
 	}()
-	group, err := kafkago.NewConsumerGroup(c.config.Group)
+	group, err := c.newGroup(c.config.Group)
 	if err != nil {
 		c.fail(err)
 		return err
 	}
 	fetchContext, cancel := context.WithCancel(ctx)
+	c.mu.Lock()
+	c.runContext = fetchContext
+	c.mu.Unlock()
 	watchDone := make(chan struct{})
 	go func() {
 		defer close(watchDone)
@@ -983,6 +1126,9 @@ func (c *BoundConsumerGroup) Run(ctx context.Context) (resultErr error) {
 		resultErr = errors.Join(resultErr, c.failure)
 		c.mu.Unlock()
 	}()
+	// 入组失败（协调者不可达、join / sync / 读位点失败、RebalanceInProgress）都是暂时的：kafka-go 的组循环自己带
+	// JoinGroupBackoff 重新入组，这里只计数、记日志并有界退避后再等下一代次，不结束 owner（r2-kc#1）。
+	var joinDelay time.Duration
 	for {
 		generation, err := group.Next(fetchContext)
 		if err != nil {
@@ -992,21 +1138,56 @@ func (c *BoundConsumerGroup) Run(ctx context.Context) (resultErr error) {
 				c.mu.Unlock()
 				return held
 			}
-			c.fail(err)
-			return err
+			if errors.Is(err, kafkago.ErrGroupClosed) {
+				// 组只在本函数退出时关；提前关闭说明所有权被破坏，不能再假装在消费。
+				c.fail(err)
+				return err
+			}
+			joinDelay = nextBoundRetryDelay(joinDelay)
+			observeBoundRetry(c.config.Group.ID, boundStageJoin)
+			logx.Errorf("[kafka-bound] group=%s: waiting for the next generation failed; consumer keeps running, retry in about %v: %v",
+				c.config.Group.ID, joinDelay, err)
+			c.sleep(fetchContext, joinDelay)
+			continue
 		}
+		joinDelay = 0
 		generations.Add(1)
-		generation.Start(func(generationContext context.Context) {
+		c.startGeneration(generation, func(generationContext context.Context) {
 			defer generations.Done()
 			c.runGeneration(fetchContext, generationContext, generation)
 		})
 	}
 }
 
-func (c *BoundConsumerGroup) openPartition(ctx context.Context, topic string, assigned kafkago.PartitionAssignment) (*boundPartition, error) {
-	if assigned.ID < 0 {
-		return nil, errors.New("Kafka assignment 分区为负")
+// openPartition 打开本代次分到的一个分区。暂时失败（leader 不可达、读水位失败）有界退避后重试，直到成功、代次结束或
+// owner 终止（后两种返回 nil，没有已接纳记录，不用 HOLD）；提交点越过保留范围不是暂时的，fail 并停止取新。
+func (c *BoundConsumerGroup) openPartition(ctx context.Context, topic string, assigned kafkago.PartitionAssignment) *boundPartition {
+	var delay time.Duration
+	for {
+		reader, offset, err := c.openReader(ctx, topic, assigned)
+		if err == nil {
+			return &boundPartition{topic: topic, partition: assigned.ID, initial: offset, committed: offset, groupCommitted: assigned.Offset >= 0, reader: reader, pending: map[int64]*boundDelivery{}}
+		}
+		if ctx.Err() != nil {
+			return nil
+		}
+		if errors.Is(err, errBoundAssignmentOutOfRange) {
+			c.fail(err)
+			c.StopFetching()
+			return nil
+		}
+		delay = nextBoundRetryDelay(delay)
+		observeBoundRetry(c.config.Group.ID, boundStageOpen)
+		logx.Errorf("[kafka-bound] group=%s topic=%s partition=%d: opening the assigned partition failed; retry in about %v: %v",
+			c.config.Group.ID, topic, assigned.ID, delay, err)
+		if !c.sleep(ctx, delay) {
+			return nil
+		}
 	}
+}
+
+// dialPartitionReader 是 openReader 的生产实现：向 leader 读日志起止，核对组内已提交位点仍在保留范围内，再建分区 reader。
+func (c *BoundConsumerGroup) dialPartitionReader(ctx context.Context, topic string, assigned kafkago.PartitionAssignment) (boundPartitionReader, int64, error) {
 	dialer := c.config.Reader.Dialer
 	if dialer == nil {
 		dialer = kafkago.DefaultDialer
@@ -1025,7 +1206,7 @@ func (c *BoundConsumerGroup) openPartition(ctx context.Context, topic string, as
 		}
 	}
 	if err != nil || connection == nil {
-		return nil, errors.Join(errors.New("Kafka 分区 leader 不可读"), err)
+		return nil, 0, errors.Join(errors.New("Kafka 分区 leader 不可读"), err)
 	}
 	deadline, _ := budget.Deadline()
 	err = connection.SetDeadline(deadline)
@@ -1035,27 +1216,28 @@ func (c *BoundConsumerGroup) openPartition(ctx context.Context, topic string, as
 	}
 	err = errors.Join(err, connection.Close())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	offset := assigned.Offset
 	if offset == kafkago.FirstOffset {
 		offset = earliest
 	}
 	if offset < earliest || offset > end || earliest < 0 {
-		return nil, errors.New("Kafka assignment 提交点未知或已越过保留范围")
+		return nil, 0, fmt.Errorf("%w: %s[%d] offset=%d earliest=%d end=%d", errBoundAssignmentOutOfRange, topic, assigned.ID, offset, earliest, end)
 	}
 	config := c.config.Reader
 	config.Topic = topic
 	config.Partition = assigned.ID
 	reader := kafkago.NewReader(config)
 	if err = reader.SetOffset(offset); err != nil {
-		return nil, errors.Join(err, reader.Close())
+		return nil, 0, errors.Join(err, reader.Close())
 	}
-	return &boundPartition{topic: topic, partition: assigned.ID, initial: offset, committed: offset, reader: reader, pending: map[int64]*boundDelivery{}}, nil
+	return reader, offset, nil
 }
 
-func (c *BoundConsumerGroup) runGeneration(parent, generationContext context.Context, generation *kafkago.Generation) {
-	fetchContext, cancel := context.WithCancel(parent)
+// runGeneration 拥有一个代次的全部分区 worker；owner 是 Run 的生命周期（StopFetching 或 ctx 结束即取消）。
+func (c *BoundConsumerGroup) runGeneration(owner, generationContext context.Context, generation *kafkago.Generation) {
+	fetchContext, cancel := context.WithCancel(owner)
 	watcherDone := make(chan struct{})
 	go func() {
 		defer close(watcherDone)
@@ -1070,10 +1252,7 @@ func (c *BoundConsumerGroup) runGeneration(parent, generationContext context.Con
 	defer func() {
 		c.mu.Lock()
 		if c.generation == generation {
-			c.history = append(c.history, c.observationLocked("SQL_DRAIN_KAFKA_GENERATION_CLOSED_V1"))
-			if len(c.history) > 1024 {
-				c.failure = errors.Join(c.failure, drainproof.ErrHold)
-			}
+			c.appendHistoryLocked(c.observationLocked("SQL_DRAIN_KAFKA_GENERATION_CLOSED_V1"))
 		}
 		c.initialized = false
 		c.signalLocked()
@@ -1086,19 +1265,19 @@ func (c *BoundConsumerGroup) runGeneration(parent, generationContext context.Con
 	}()
 	for topic, assigned := range generation.Assignments {
 		for _, assignment := range assigned {
-			partition, err := c.openPartition(fetchContext, topic, assignment)
-			if err != nil {
-				if fetchContext.Err() == nil {
-					c.fail(err)
-					c.StopFetching()
-				}
+			key := boundPartitionKey(topic, assignment.ID)
+			if assignment.ID < 0 {
+				c.fail(errors.New("Kafka assignment 分区为负"))
+				c.StopFetching()
 				return
 			}
-			key := boundPartitionKey(topic, assignment.ID)
 			if _, exists := partitions[key]; exists {
 				c.fail(errors.New("Kafka 实际 assignment 重复"))
 				c.StopFetching()
-				_ = partition.reader.Close()
+				return
+			}
+			partition := c.openPartition(fetchContext, topic, assignment)
+			if partition == nil {
 				return
 			}
 			partitions[key] = partition
@@ -1110,8 +1289,20 @@ func (c *BoundConsumerGroup) runGeneration(parent, generationContext context.Con
 	c.generationCancel = cancel
 	c.partitions = partitions
 	c.initialized = true
+	resolved, lost := c.resolveReplayPassedLocked(generation)
 	c.signalLocked()
 	c.mu.Unlock()
+	if lost != nil {
+		// 先记 HOLD 再结束丢失票据，排空方不会在两步之间看到「没有在途、也没有未知」。
+		c.fail(lost)
+		c.StopFetching()
+	}
+	for _, finish := range resolved {
+		finish()
+	}
+	if lost != nil {
+		return
+	}
 	var workers sync.WaitGroup
 	for _, partition := range partitions {
 		workers.Add(1)
@@ -1137,15 +1328,30 @@ func (c *BoundConsumerGroup) consumePartition(fetchContext, generationContext co
 			c.StopFetching()
 		}
 	}()
+	var fetchDelay time.Duration
 	for {
 		message, err := partition.reader.FetchMessage(fetchContext)
 		if err != nil {
-			if fetchContext.Err() == nil {
-				c.fail(err)
-				c.StopFetching()
+			if fetchContext.Err() != nil {
+				return
 			}
-			return
+			if errors.Is(err, io.EOF) {
+				// reader 只在本代次全部 worker 返回之后才关；worker 还在却读到 EOF，说明所有权被破坏。
+				c.fail(errors.New("Kafka 分区 reader 在 worker 退出前被关闭"))
+				c.StopFetching()
+				return
+			}
+			// 分区 reader 在后台自己重连 leader，这里报出的是它这一轮的失败：退避后接着取，不结束 owner。
+			fetchDelay = nextBoundRetryDelay(fetchDelay)
+			observeBoundRetry(c.config.Group.ID, boundStageFetch)
+			logx.Errorf("[kafka-bound] group=%s topic=%s partition=%d: fetch failed; retry in about %v: %v",
+				c.config.Group.ID, partition.topic, partition.partition, fetchDelay, err)
+			if !c.sleep(fetchContext, fetchDelay) {
+				return
+			}
+			continue
 		}
+		fetchDelay = 0
 		if c.manual {
 			delivery := &boundDelivery{generation: generation, partition: partition, message: message}
 			select {
@@ -1155,7 +1361,11 @@ func (c *BoundConsumerGroup) consumePartition(fetchContext, generationContext co
 			}
 			continue
 		}
-		// Fetch 已返回即归本 owner；与 StopFetching 竞争时也不能丢弃已拿到的记录。
+		// 代次已结束时拿到的记录不接纳：它不属于下一代次的本 owner，组内已提交位点之后会重投给新属主。
+		// 只是 StopFetching 而代次仍在时照常接纳——Fetch 已返回即归本 owner，与停止竞争时也不能丢弃已拿到的记录。
+		if generationContext.Err() != nil {
+			return
+		}
 		finish, err := c.relay.Enter()
 		if err != nil {
 			c.fail(err)
@@ -1165,43 +1375,110 @@ func (c *BoundConsumerGroup) consumePartition(fetchContext, generationContext co
 		c.mu.Lock()
 		partition.accepted++
 		c.mu.Unlock()
-		err = func() (resultErr error) {
+		outcome := func() (outcome boundOutcome) {
+			// 先记 HOLD 再结束票据（defer 逆序），排空方不会在两步之间看到「没有在途、也没有未知」。
 			defer finish()
 			defer func() {
 				if recovered := recover(); recovered != nil {
-					resultErr = errors.New("Kafka 已接纳 handler panic，结局未知")
+					c.fail(errors.New("Kafka 已接纳记录结清过程 panic，结局未知"))
+					c.StopFetching()
+					outcome = boundHeld
 				}
 			}()
-			if message.Topic != partition.topic || message.Partition != partition.partition || message.Offset < partition.committed {
-				return errors.New("Kafka reader 返回分区或 offset 与代次不符")
-			}
-			work, cancel := context.WithTimeout(context.WithoutCancel(fetchContext), c.config.HandlerTimeout)
-			defer cancel()
-			if err := c.handler(work, message); err != nil {
-				return err
-			}
-			if err := work.Err(); err != nil {
-				return err
-			}
-			if generationContext.Err() != nil {
-				return errors.New("Kafka handler 返回前代次已失效，提交结局未知")
-			}
-			if err := c.commitOffsets(generation, map[string]map[int]int64{partition.topic: {partition.partition: message.Offset + 1}}); err != nil {
-				return err
-			}
-			c.mu.Lock()
-			partition.committed = message.Offset + 1
-			partition.settled++
-			c.signalLocked()
-			c.mu.Unlock()
-			return nil
+			return c.settleAccepted(fetchContext, generation, partition, message)
 		}()
-		if err != nil {
-			c.fail(err)
-			c.StopFetching()
+		if outcome != boundSettled {
 			return
 		}
 	}
+}
+
+// settleAccepted 把一条已接纳记录推进到确定结局（r2-kc#1）：
+//   - boundSettled：回调成功且以本代次提交成功。代次的 ctx 已结束也照常提交：eager 再均衡准备期 broker 仍接受旧代次的提交，
+//     本代次的协调者连接要等全部 Start 回调返回才关；真被拒（IllegalGeneration、UnknownMemberId 等）就按下一条处理。
+//   - boundReleased：没结清，owner 仍在运行而本代次已不再消费。不提交，交还 Kafka，由下一代次的属主从组内已提交位点重投。
+//   - boundHeld：owner 已终止仍没结清，或记录与代次不符。fail（HOLD）并停止取新。
+//
+// 代次还在、owner 也没终止时，失败（回调返回错误、超过 HandlerTimeout、panic，或提交失败）按有界指数退避原地重试同一条；
+// 回调成功过就只重试提交，不再重复调用。退避被代次结束或 owner 终止打断时不再调用回调（新属主可能已在处理同一条）。
+// 重试不设次数上限（对 AGENTS §11.3 的有意偏离）：跳过这一条等于丢结果，停下就是 r2-kc#1 本身；每次调用有 HandlerTimeout，
+// 退避封顶 30s 且带抖动，分区卡住由 lag 告警发现。
+func (c *BoundConsumerGroup) settleAccepted(fetchContext context.Context, generation *kafkago.Generation, partition *boundPartition, message kafkago.Message) boundOutcome {
+	if message.Topic != partition.topic || message.Partition != partition.partition || message.Offset < partition.committed {
+		c.fail(errors.New("Kafka reader 返回分区或 offset 与代次不符"))
+		c.StopFetching()
+		return boundHeld
+	}
+	offsets := map[string]map[int]int64{partition.topic: {partition.partition: message.Offset + 1}}
+	handled := false
+	var delay time.Duration
+	for {
+		var cause error
+		stage := boundStageHandle
+		if !handled {
+			if cause = c.invokeHandler(fetchContext, message); cause == nil {
+				handled = true
+			}
+		}
+		if handled {
+			stage = boundStageCommit
+			if cause = c.commitOffsets(generation, offsets); cause == nil {
+				c.mu.Lock()
+				partition.committed = message.Offset + 1
+				partition.settled++
+				c.signalLocked()
+				c.mu.Unlock()
+				return boundSettled
+			}
+		}
+		if outcome, done := c.unsettled(fetchContext, partition, message, cause); done {
+			return outcome
+		}
+		delay = nextBoundRetryDelay(delay)
+		observeBoundRetry(c.config.Group.ID, stage)
+		logx.Errorf("[kafka-bound] group=%s topic=%s partition=%d offset=%d: %s failed; offset not committed, retrying the same record in about %v: %v",
+			c.config.Group.ID, partition.topic, partition.partition, message.Offset, stage, delay, cause)
+		if !c.sleep(fetchContext, delay) && !handled {
+			outcome, _ := c.unsettled(fetchContext, partition, message, cause)
+			return outcome
+		}
+	}
+}
+
+// unsettled 判定一条没结清的已接纳记录：owner 终止 → HOLD；本代次已不再消费（fetchContext 结束：代次结束）→ 交还重投；
+// 否则 done=false，由调用方退避重试。fetchContext 结束而 owner 未终止时一定是本代次结束，所以 done 恒为 true。
+func (c *BoundConsumerGroup) unsettled(fetchContext context.Context, partition *boundPartition, message kafkago.Message, cause error) (boundOutcome, bool) {
+	if c.terminating() {
+		c.fail(fmt.Errorf("Kafka owner 已终止，%s[%d]@%d 没有提交，结局未知: %w", partition.topic, partition.partition, message.Offset, cause))
+		c.StopFetching()
+		return boundHeld, true
+	}
+	if fetchContext.Err() != nil {
+		c.mu.Lock()
+		partition.released++
+		c.signalLocked()
+		c.mu.Unlock()
+		observeBoundReleased(c.config.Group.ID, 1)
+		logx.Errorf("[kafka-bound] group=%s topic=%s partition=%d offset=%d: generation ended before the record was committed; returned to Kafka for redelivery: %v",
+			c.config.Group.ID, partition.topic, partition.partition, message.Offset, cause)
+		return boundReleased, true
+	}
+	return 0, false
+}
+
+// invokeHandler 调一次回调：单次 HandlerTimeout，不继承代次结束、StopFetching 与 Run ctx 的取消（进行中的事务不被打断）。
+// panic 由 safego 记栈与计数后折成本次失败，与回调返回错误同样处理（不提交，按结局判定）。
+func (c *BoundConsumerGroup) invokeHandler(fetchContext context.Context, message kafkago.Message) error {
+	work, cancel := context.WithTimeout(context.WithoutCancel(fetchContext), c.config.HandlerTimeout)
+	defer cancel()
+	var err error
+	if !safego.Run(boundHandlerPanicPoint, func() { err = c.handler(work, message) }) {
+		return errBoundHandlerPanicked
+	}
+	if err != nil {
+		return err
+	}
+	return work.Err()
 }
 
 // CloseAndReport 只在全部实际 worker 返回、reader 和 consumer group 关闭后给出原件。
@@ -1218,23 +1495,80 @@ func (c *BoundConsumerGroup) CloseAndReport(ctx context.Context) ([]byte, error)
 	if !c.complete || c.failure != nil {
 		return nil, errors.Join(drainproof.ErrHold, c.failure)
 	}
+	// 每条已接纳记录都要有确定结局：本 owner 提交（Settled）、确定未提交后交同 owner 重放（Replayed），
+	// 或 owner 仍在运行时交还 Kafka 由下一代次重投（Released）。owner 终止后结不了的记录已经 fail，走不到这里。
 	for _, generation := range c.history {
 		for _, partition := range generation.Partitions {
-			if partition.Accepted != partition.Settled+partition.Replayed {
+			if partition.Accepted != partition.Settled+partition.Replayed+partition.Released {
 				return nil, drainproof.ErrHold
 			}
 		}
+	}
+	if compacted := c.compacted; compacted.Accepted != compacted.Settled+compacted.Replayed+compacted.Released {
+		return nil, drainproof.ErrHold
 	}
 	if len(c.replay) != 0 {
 		return nil, drainproof.ErrHold
 	}
 	return json.Marshal(struct {
-		Schema         string
-		Group          string
-		Started        bool
-		Generations    []*boundGroupObservation
-		ResolvedReplay []boundReplayObservation
-	}{"SQL_DRAIN_KAFKA_OWNER_CLOSED_V1", c.config.Group.ID, c.started, c.history, c.resolvedReplay})
+		Schema          string
+		Group           string
+		Started         bool
+		Generations     []*boundGroupObservation
+		ResolvedReplay  []boundReplayObservation
+		Compacted       boundHistoryCompaction
+		CompactedReplay boundReplayCompaction
+	}{"SQL_DRAIN_KAFKA_OWNER_CLOSED_V1", c.config.Group.ID, c.started, c.history, c.resolvedReplay, c.compacted, c.replayCompacted})
+}
+
+// boundHistoryWindow 是逐代保留原件的代次数；更早的代次滚出窗口、折叠进 compacted（只累加计数）。
+// owner 跨越本进程的全部再均衡（r2-kc#1），不能再用「代次数超限即 HOLD」来限内存。
+const boundHistoryWindow = 1024
+
+// boundHistoryCompaction 汇总滚出窗口的已关闭代次。
+type boundHistoryCompaction struct {
+	Generations     uint64
+	FirstGeneration int32
+	LastGeneration  int32
+	Accepted        uint64
+	Settled         uint64
+	Replayed        uint64
+	Released        uint64
+}
+
+// fold 把一个已关闭代次累加进汇总；该代次有分区结局不平时返回 false，由调用方 HOLD，不把不平藏进合计。
+func (s *boundHistoryCompaction) fold(observation *boundGroupObservation) bool {
+	if s.Generations == 0 {
+		s.FirstGeneration = observation.Generation
+	}
+	s.Generations++
+	s.LastGeneration = observation.Generation
+	balanced := true
+	for _, partition := range observation.Partitions {
+		s.Accepted += partition.Accepted
+		s.Settled += partition.Settled
+		s.Replayed += partition.Replayed
+		s.Released += partition.Released
+		if partition.Accepted != partition.Settled+partition.Replayed+partition.Released {
+			balanced = false
+		}
+	}
+	return balanced
+}
+
+// appendHistoryLocked 记一个已关闭代次的原件；窗口满时最老的一代折叠进 compacted。调用方持有 c.mu。
+func (c *BoundConsumerGroup) appendHistoryLocked(observation *boundGroupObservation) {
+	if len(c.history) >= boundHistoryWindow {
+		oldest := c.history[0]
+		copy(c.history, c.history[1:])
+		c.history = c.history[:len(c.history)-1]
+		if !c.compacted.fold(oldest) {
+			// 锁序与 FetchMessage 相同（c.mu → relay）。
+			c.failure = errors.Join(c.failure, drainproof.ErrHold, errors.New("Kafka 滚出窗口的代次原件结局不平"))
+			c.relay.Hold()
+		}
+	}
+	c.history = append(c.history, observation)
 }
 
 // 以下原件只记录 Kafka API 实际返回值；分区的历史身份与 floor 仍引用唯一正式 proto。
@@ -1246,6 +1580,7 @@ type boundPartitionObservation struct {
 	Accepted  uint64
 	Settled   uint64
 	Replayed  uint64
+	Released  uint64
 }
 type boundGroupObservation struct {
 	Schema     string
@@ -1263,7 +1598,7 @@ func (c *BoundConsumerGroup) observationLocked(schema string) *boundGroupObserva
 		report.Member = c.generation.MemberID
 	}
 	for _, partition := range c.partitions {
-		report.Partitions = append(report.Partitions, boundPartitionObservation{Topic: partition.topic, Partition: partition.partition, Initial: partition.initial, Committed: partition.committed, Accepted: partition.accepted, Settled: partition.settled, Replayed: partition.replayed})
+		report.Partitions = append(report.Partitions, boundPartitionObservation{Topic: partition.topic, Partition: partition.partition, Initial: partition.initial, Committed: partition.committed, Accepted: partition.accepted, Settled: partition.settled, Replayed: partition.replayed, Released: partition.released})
 	}
 	sort.Slice(report.Partitions, func(i, j int) bool {
 		a, b := report.Partitions[i], report.Partitions[j]
@@ -1560,7 +1895,8 @@ type boundDelivery struct {
 }
 
 // NewBoundMessageReader 与 handler 模式共享一个 ConsumerGroup；供原有批 SQL owner 保留批处理。
-// 调用方仍须只调用一次 Run。FetchMessage 返回才接纳，CommitMessages 表示该分区已持久前缀。
+// 调用方仍须只调用一次 Run。FetchMessage 返回才接纳，CommitMessages 表示该分区已持久前缀；
+// 它返回 *UncommittedError 时这批已交还 Kafka 重投（owner 仍在运行），调用方摘掉在途记录、继续消费，不当成未知结局。
 func NewBoundMessageReader(config BoundConsumerGroupConfig, relay *drainproof.Session) (*BoundConsumerGroup, error) {
 	// reader 模式的 SQL/事务预算由现有批处理 owner 负责；此值不改变其事务语义。
 	if config.HandlerTimeout == 0 {
@@ -1659,6 +1995,11 @@ func (c *BoundConsumerGroup) FetchMessage(ctx context.Context) (kafkago.Message,
 
 // CommitMessages 只推进本代次实际交付且已被批 SQL owner 确认的前缀。
 // 最高 offset 隐含该分区此前交付的所有记录已持久；错误/超时不能被后续提交洗成成功。
+//
+// 代次的 ctx 已结束（再均衡）也照常用这个代次提交（r2-kc#1）：本代次要等这些已交付记录结清才关（waitDelivered），
+// 协调者连接仍在，eager 再均衡准备期 broker 仍接受旧代次的提交。提交成功就是确定结局，调用方 ctx 到点不改写它。
+// 有界重试后仍失败时：owner 已终止 → HOLD 并停止取新（排空语义不变）；否则这次覆盖的已交付记录不提交、交还 Kafka，
+// 返回 *UncommittedError（落库幂等，调用方只记日志、继续消费；同分区更高位点的提交或下一代次重投会补上）。
 func (c *BoundConsumerGroup) CommitMessages(ctx context.Context, messages ...kafkago.Message) error {
 	if !c.manual || len(messages) == 0 {
 		return drainproof.ErrHold
@@ -1672,7 +2013,8 @@ func (c *BoundConsumerGroup) CommitMessages(ctx context.Context, messages ...kaf
 	}
 	c.mu.Lock()
 	generation := c.generation
-	if generation == nil || c.generationContext == nil || c.generationContext.Err() != nil || c.failure != nil {
+	generationContext := c.generationContext
+	if generation == nil || generationContext == nil || c.failure != nil {
 		c.mu.Unlock()
 		c.fail(drainproof.ErrHold)
 		c.StopFetching()
@@ -1707,17 +2049,16 @@ func (c *BoundConsumerGroup) CommitMessages(ctx context.Context, messages ...kaf
 		}
 	}
 	c.mu.Unlock()
-	err := c.commitOffsets(generation, offsets)
-	if err == nil {
-		err = ctx.Err()
-	}
-	if err != nil {
-		c.fail(err)
-		c.StopFetching()
-		return err
+	if err := c.commitWithRetry(ctx, generationContext, generation, offsets); err != nil {
+		if c.terminating() {
+			c.fail(err)
+			c.StopFetching()
+			return err
+		}
+		return c.releaseUncommitted(generation, offsets, err)
 	}
 	c.mu.Lock()
-	if c.generation != generation || c.generationContext.Err() != nil {
+	if c.generation != generation {
 		c.mu.Unlock()
 		c.fail(drainproof.ErrHold)
 		c.StopFetching()
@@ -1735,7 +2076,7 @@ func (c *BoundConsumerGroup) CommitMessages(ctx context.Context, messages ...kaf
 					delete(partition.pending, offset)
 					partition.settled++
 					if delivery.replayed {
-						c.resolvedReplay = append(c.resolvedReplay, boundReplayObservation{Topic: topic, Partition: id, Offset: offset, FirstGeneration: delivery.originGeneration, CommittedGeneration: generation.ID, PayloadDigest: delivery.payloadDigest[:]})
+						c.appendResolvedReplayLocked(boundReplayObservation{Topic: topic, Partition: id, Offset: offset, FirstGeneration: delivery.originGeneration, CommittedGeneration: generation.ID, PayloadDigest: delivery.payloadDigest[:], Resolution: boundReplayCommitted})
 					}
 					finished = append(finished, delivery.finish)
 				}
@@ -1748,6 +2089,167 @@ func (c *BoundConsumerGroup) CommitMessages(ctx context.Context, messages ...kaf
 		finish()
 	}
 	return nil
+}
+
+// 批提交的有界重试：含第一次共 boundCommitAttempts 次，间隔 boundCommitRetryDelay 起翻倍（持 commitMu，所以要短）。
+// 只在代次仍在时重试：代次已结束的提交被拒不会因重试变好。
+const (
+	boundCommitAttempts   = 3
+	boundCommitRetryDelay = 200 * time.Millisecond
+)
+
+func (c *BoundConsumerGroup) commitWithRetry(ctx, generationContext context.Context, generation *kafkago.Generation, offsets map[string]map[int]int64) error {
+	delay := boundCommitRetryDelay
+	for attempt := 1; ; attempt++ {
+		err := c.commitOffsets(generation, offsets)
+		if err == nil || attempt == boundCommitAttempts || generationContext.Err() != nil || c.terminating() {
+			return err
+		}
+		observeBoundRetry(c.config.Group.ID, boundStageCommit)
+		logx.Errorf("[kafka-bound] group=%s generation=%d: commit failed (attempt %d/%d); retry in about %v: %v",
+			c.config.Group.ID, generation.ID, attempt, boundCommitAttempts, delay, err)
+		if !c.sleep(ctx, delay) {
+			return err
+		}
+		delay *= 2
+	}
+}
+
+// ErrUncommitted 表示一批已交付记录没有提交、已交还 Kafka 重投：owner 仍在运行时提交失败（常见于再均衡）。
+// 落库幂等的调用方只记日志、继续消费；不能把它当成落库失败，也不能据此 HOLD（r2-kc#1）。
+var ErrUncommitted = errors.New("Kafka 已交付记录没有提交，已交还重投")
+
+// UncommittedError 列出被交还的记录（只含 T/P/O，按 T/P/O 排序）。errors.Is(err, ErrUncommitted) 与 errors.Is(err, 原因) 都成立。
+type UncommittedError struct {
+	Released []kafkago.Message
+	Cause    error
+}
+
+func (e *UncommittedError) Error() string {
+	return fmt.Sprintf("%v（%d 条）: %v", ErrUncommitted, len(e.Released), e.Cause)
+}
+
+func (e *UncommittedError) Unwrap() []error { return []error{ErrUncommitted, e.Cause} }
+
+// releaseUncommitted 把一次失败提交覆盖的已交付记录交还 Kafka（owner 仍在运行）：不推进本地前沿，结束这些记录的票据，计入 released。
+// 之后同分区更高位点的提交会一并覆盖它们（提交是前缀语义，落库已成功），或下一代次从组内已提交位点重投（落库幂等）。
+func (c *BoundConsumerGroup) releaseUncommitted(generation *kafkago.Generation, offsets map[string]map[int]int64, cause error) error {
+	released := &UncommittedError{Cause: cause}
+	var finished []func()
+	c.mu.Lock()
+	if c.generation != generation {
+		c.mu.Unlock()
+		c.fail(errors.Join(drainproof.ErrHold, cause))
+		c.StopFetching()
+		return drainproof.ErrHold
+	}
+	for topic, partitions := range offsets {
+		for id, next := range partitions {
+			partition := c.partitions[boundPartitionKey(topic, id)]
+			if partition == nil {
+				continue
+			}
+			for offset, delivery := range partition.pending {
+				if offset < next && delivery.generation == generation {
+					delete(partition.pending, offset)
+					partition.released++
+					released.Released = append(released.Released, kafkago.Message{Topic: topic, Partition: id, Offset: offset})
+					finished = append(finished, delivery.finish)
+				}
+			}
+		}
+	}
+	c.signalLocked()
+	c.mu.Unlock()
+	for _, finish := range finished {
+		finish()
+	}
+	sort.Slice(released.Released, func(i, j int) bool {
+		a, b := released.Released[i], released.Released[j]
+		if a.Topic != b.Topic {
+			return a.Topic < b.Topic
+		}
+		if a.Partition != b.Partition {
+			return a.Partition < b.Partition
+		}
+		return a.Offset < b.Offset
+	})
+	observeBoundReleased(c.config.Group.ID, len(released.Released))
+	logx.Errorf("[kafka-bound] group=%s generation=%d: commit failed; %d delivered record(s) returned to Kafka uncommitted for redelivery (consumer keeps running): %v",
+		c.config.Group.ID, generation.ID, len(released.Released), cause)
+	return released
+}
+
+// 确定性恢复票据的结清方式。
+const (
+	boundReplayCommitted          = "COMMITTED"            // 原 T/P/O 重新交付给本 owner 并以新代次提交
+	boundReplayGroupCommittedPast = "GROUP_COMMITTED_PAST" // 分区回到本 owner 时组内已提交位点已越过它
+)
+
+// boundReplayWindow 是逐条保留的已结清恢复票据原件数；更早的滚出窗口，折叠进 replayCompacted（计数 + 链式摘要）。
+const boundReplayWindow = 16384
+
+// boundReplayCompaction 汇总滚出窗口的已结清恢复票据：Digest = SHA-256(前一 Digest ‖ 条目定长编码)。
+type boundReplayCompaction struct {
+	Count  uint64
+	Digest []byte
+}
+
+func (s *boundReplayCompaction) fold(observation boundReplayObservation) {
+	hash := sha256.New()
+	var value [8]byte
+	write := func(raw []byte) {
+		binary.BigEndian.PutUint64(value[:], uint64(len(raw)))
+		hash.Write(value[:])
+		hash.Write(raw)
+	}
+	write(s.Digest)
+	write([]byte(observation.Topic))
+	for _, n := range []int64{int64(observation.Partition), observation.Offset, int64(observation.FirstGeneration), int64(observation.CommittedGeneration)} {
+		binary.BigEndian.PutUint64(value[:], uint64(n))
+		hash.Write(value[:])
+	}
+	write(observation.PayloadDigest)
+	write([]byte(observation.Resolution))
+	s.Digest = hash.Sum(nil)
+	s.Count++
+}
+
+// appendResolvedReplayLocked 记一条已结清的恢复票据原件；窗口满时最老的一条折叠进 replayCompacted。调用方持有 c.mu。
+func (c *BoundConsumerGroup) appendResolvedReplayLocked(observation boundReplayObservation) {
+	if len(c.resolvedReplay) >= boundReplayWindow {
+		c.replayCompacted.fold(c.resolvedReplay[0])
+		copy(c.resolvedReplay, c.resolvedReplay[1:])
+		c.resolvedReplay = c.resolvedReplay[:len(c.resolvedReplay)-1]
+	}
+	c.resolvedReplay = append(c.resolvedReplay, observation)
+}
+
+// errBoundReplayLost：确定性恢复票据所在分区回到本 owner 时，组在该分区从没提交过，日志起点却已越过票据——
+// 这条没被任何属主提交就被保留期删掉了。按 GROUP_COMMITTED_PAST 结清等于把丢失记成已处理，只能 HOLD。
+var errBoundReplayLost = errors.New("Kafka 确定性恢复票据没有任何提交就被保留期删掉")
+
+// resolveReplayPassedLocked 结清组内已提交位点越过的确定性恢复票据：本代次分到的分区从 initial 起读，早于它的票据已由组内某个属主提交
+// （位点只在处理之后才推进），不会再交付给本 owner。不结清，它会永久悬着，之后同分区更高位点的提交还会被
+// 「越过尚未恢复的已交付前缀」拒绝。分区不在本代次的票据原样保留（排空时仍 HOLD，见设计稿残余）。
+// 只有 initial 确是组内已提交位点（groupCommitted）才能这样结清；组在该分区从没提交过时 initial 只是日志起点，
+// 越过票据说明它没被处理就被保留期删掉：不记结清，返回 lost，由调用方先 HOLD 再结束票据（同 waitDelivered 的失败分支）。
+// 调用方持有 c.mu，且 c.partitions 已是本代次；返回要在锁外调用的票据结束函数。
+func (c *BoundConsumerGroup) resolveReplayPassedLocked(generation *kafkago.Generation) (finished []func(), lost error) {
+	for key, delivery := range c.replay {
+		partition := c.partitions[boundPartitionKey(delivery.message.Topic, delivery.message.Partition)]
+		if partition == nil || delivery.message.Offset >= partition.initial {
+			continue
+		}
+		delete(c.replay, key)
+		finished = append(finished, delivery.finish)
+		if !partition.groupCommitted {
+			lost = errors.Join(lost, fmt.Errorf("%w: %s[%d]@%d，组在该分区没有已提交位点，日志起点已是 %d", errBoundReplayLost, delivery.message.Topic, delivery.message.Partition, delivery.message.Offset, partition.initial))
+			continue
+		}
+		c.appendResolvedReplayLocked(boundReplayObservation{Topic: delivery.message.Topic, Partition: delivery.message.Partition, Offset: delivery.message.Offset, FirstGeneration: delivery.originGeneration, CommittedGeneration: generation.ID, PayloadDigest: delivery.payloadDigest[:], Resolution: boundReplayGroupCommittedPast})
+	}
+	return finished, lost
 }
 
 func (c *BoundConsumerGroup) waitDelivered(_ context.Context, _ *kafkago.Generation, partitions map[string]*boundPartition) {
@@ -1869,6 +2371,8 @@ type boundReplayObservation struct {
 	FirstGeneration     int32
 	CommittedGeneration int32
 	PayloadDigest       []byte
+	// Resolution 取 boundReplayCommitted / boundReplayGroupCommittedPast。
+	Resolution string
 }
 
 func boundDeliveryKey(message kafkago.Message) string {
@@ -1933,7 +2437,8 @@ func (c *BoundConsumerGroup) ReportProcessingFailure(ctx context.Context, outcom
 		c.StopFetching()
 		return drainproof.ErrHold
 	}
-	if len(c.replay)+len(selected) > 16384 || len(c.resolvedReplay) > 16384 {
+	// 只限尚未结清的票据；已结清的原件是滚动窗口（appendResolvedReplayLocked），长寿 owner 不会因此 HOLD。
+	if len(c.replay)+len(selected) > 16384 {
 		c.mu.Unlock()
 		c.fail(errors.New("Kafka 确定性恢复票据超过固定预算"))
 		c.StopFetching()

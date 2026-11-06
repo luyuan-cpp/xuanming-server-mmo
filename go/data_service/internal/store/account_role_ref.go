@@ -25,7 +25,8 @@ import (
 // 证明按 ref 的状态分三种,都只在读完 ref 之后读真相:
 //   - ACTIVE:只有提交点之后才会变成 ACTIVE。真相不是这个账号 = 已经易主或删除。
 //   - PENDING 且 tx_id 是 0(建角):角色行已存在且不是这个账号,严格插入不会再成功。没有角色行时,超过 refPendingGrace 才写一条墓碑
-//     挡住迟到的建角,然后才算陈旧。
+//     挡住迟到的建角,然后才算陈旧。写墓碑之前先找这名角色「提交过」的证据(committedEvidence):多集群恢复点错开时角色行可能
+//     丢了,名字片、存档库却留着它建成之后的痕迹。有证据、或者证据读不全就不写墓碑也不删,只报告(墓碑不可逆)。
 //   - PENDING 且 tx_id 非 0(过户):提交要求 listing 是 FROZEN,而 FROZEN 只会走到 TRANSFERRED 或 CANCELLED。
 //     listing 到了这两个终态、真相又不是这个账号,这笔过户就不会再提交。还在 FROZEN 不算陈旧。
 //     这一种要先读 listing、后读真相,见 reapRef。
@@ -109,12 +110,15 @@ func (s *AccountDirectoryStore) reserveRefWithEviction(ctx context.Context, acco
 	return accountdirectory.ErrFull
 }
 
-// reapRefs 对一组 ref 逐个判陈旧并删除,回删掉的条数。一条失败不影响别的。
+// reapRefs 对一组 ref 逐个判陈旧并删除,回删掉的条数。一条失败不影响别的。留给人看的(errRefHeldForReview)算没删、不算失败。
 func (s *AccountDirectoryStore) reapRefs(ctx context.Context, account string, refs []roleRef) (int, error) {
 	dropped := 0
 	var failure error
 	for _, ref := range refs {
 		ok, err := s.reapRef(ctx, account, ref)
+		if errors.Is(err, errRefHeldForReview) {
+			continue
+		}
 		if err != nil {
 			failure = errors.Join(failure, err)
 			continue
@@ -171,6 +175,16 @@ func (s *AccountDirectoryStore) reapRef(ctx context.Context, account string, ref
 		if ref.AgeMs < uint64(refPendingGrace.Milliseconds()) {
 			return false, nil
 		}
+		// 墓碑不可逆,写之前先找这名角色提交过的证据。读不到证据回错误:这一拍不写,下一拍再试(fail-closed)。
+		evidence, err := s.steps.committedEvidence(ctx, ref.PlayerID)
+		if err != nil {
+			return false, err
+		}
+		if evidence != "" {
+			logx.Errorf("[account-role-ref] stale create ref kept without a tombstone: the role row is missing but the role shows committed evidence "+
+				"(player shard restored to before the commit?); check it with create_residual or by hand: player=%d evidence=%s", ref.PlayerID, evidence)
+			return false, errRefHeldForReview
+		}
 		won, err := s.steps.tombstoneMissingRole(ctx, account, ref)
 		if err != nil {
 			return false, err
@@ -189,7 +203,7 @@ func (s *AccountDirectoryStore) reapOwnRef(ctx context.Context, account string, 
 	if err == nil && ref != nil {
 		_, err = s.reapRef(ctx, account, *ref)
 	}
-	if err != nil {
+	if err != nil && !errors.Is(err, errRefHeldForReview) {
 		logx.Errorf("[account-role-ref] reap failed, the background sweep retries: player=%d: %v", player, err)
 	}
 }
@@ -205,10 +219,14 @@ func (s *AccountDirectoryStore) releaseOwnRef(ctx context.Context, account strin
 	}
 }
 
-// SweepResult 是一轮后台清理的结果。
+// SweepResult 是一轮后台清理的结果。Held 是角色行不在、却有提交过的证据(或证据读不全)的建角 ref:没写墓碑、没删,
+// 已经各记了一条 ERROR,调用方按它计数告警。这些 ref 每一轮都会再被扫到、再计一次,直到有人处理。
 type SweepResult struct {
-	Scanned, Dropped, Failed int
+	Scanned, Dropped, Failed, Held int
 }
+
+// errRefHeldForReview 只在本包内流转:这条建角 ref 的角色行不在,但角色有提交过的证据,不写墓碑、不删,留给核账工具或人工处理。
+var errRefHeldForReview = errors.New("stale create ref kept for review: the role shows committed evidence")
 
 // SweepStaleRefs 清陈旧 ref:读路径发现的,加上超过 olderThan 还是 PENDING 的。流程和上限判定用的是同一个证明,多副本同时跑靠 nonce 互斥。
 func (s *AccountDirectoryStore) SweepStaleRefs(ctx context.Context, olderThan time.Duration, limit int) (SweepResult, error) {
@@ -218,6 +236,8 @@ func (s *AccountDirectoryStore) SweepStaleRefs(ctx context.Context, olderThan ti
 		out.Scanned++
 		dropped, err := s.reapRef(ctx, account, ref)
 		switch {
+		case errors.Is(err, errRefHeldForReview):
+			out.Held++
 		case err != nil:
 			out.Failed++
 			failure = errors.Join(failure, err)
@@ -427,6 +447,86 @@ func scanAccountRefs(rows *sql.Rows) ([]roleRef, error) {
 		out = append(out, ref)
 	}
 	return out, rows.Err()
+}
+
+// 建角 ref 判陈旧、写墓碑之前找的「提交过」的证据(committedEvidence 的回值),固定的英文词,进日志。口径同
+// docs/ops/mysql-backup-pitr-runbook.md §4.1a 的反方向残留。「ref 已是 ACTIVE」那一条不在这里:判陈旧只给 PENDING 写墓碑,
+// ACTIVE 而没有角色行本来就只报告不动;同一名角色在别的账号上的 ref 要按 player_id 扫全部账号片才查得到,不做。
+const (
+	// committedEvidenceNameBound 名字行在这名角色名下而且已绑定:绑定只在提交点之后做。
+	committedEvidenceNameBound = "name_bound"
+	// committedEvidenceStoreSaved 存档库里有不是初始行原样的行(initialRowHead):进过场或存过盘。
+	committedEvidenceStoreSaved = "store_saved"
+	// 下面三种是证据核不全,同样不写墓碑:写 ref 之前必有带落点的路由行,缺了是玩家片恢复点更早或者库被人动过,找不到存档库;
+	// 落点不在本进程的存档库名单里;名字登记表没接上(生产恒接,缺了 main 拒启)。
+	committedEvidenceNoRoute       = "no_route"
+	committedEvidenceStoreUnlisted = "storage_not_listed"
+	committedEvidenceNamesUnwired  = "name_registry_unavailable"
+)
+
+// committedEvidence 见 directorySteps。依次读路由行(玩家片)、存档库这名玩家的行头、名字副本(玩家片)和名字行(名字片),
+// 都是 data_service 自己的库,一致读、不取锁。回第一条找到的证据;任何一步读失败回错误。
+func (st *sqlDirectorySteps) committedEvidence(ctx context.Context, player uint64) (string, error) {
+	route, found, err := st.readRoute(ctx, player)
+	if err != nil {
+		return "", err
+	}
+	if !found || !route.HasPlacement() {
+		return committedEvidenceNoRoute, nil
+	}
+	if !st.storageAllowed(route.StorageID) {
+		return committedEvidenceStoreUnlisted, nil
+	}
+	db, _, err := st.directory.stores.DB(ctx, route.StorageID)
+	if err != nil {
+		return "", err
+	}
+	played, err := storeShowsPlay(ctx, db, player)
+	if err != nil {
+		return "", err
+	}
+	if played {
+		return committedEvidenceStoreSaved, nil
+	}
+	if st.directory.names == nil {
+		return committedEvidenceNamesUnwired, nil
+	}
+	bound, err := st.directory.names.BoundTo(ctx, player)
+	if err != nil {
+		return "", err
+	}
+	if bound {
+		return committedEvidenceNameBound, nil
+	}
+	return "", nil
+}
+
+// storeShowsPlay 读这名玩家在存档库里的行头,判它进没进过场、存没存过盘。一行都没有、只有建角写的初始行原样,都回 false。
+func storeShowsPlay(ctx context.Context, q directoryQuery, player uint64) (bool, error) {
+	rows, err := q.QueryContext(ctx, "SELECT kind,owner_epoch,save_seq FROM player_store WHERE player_id=?", player)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	played := false
+	for rows.Next() {
+		var kind int32
+		var ownerEpoch, saveSeq uint64
+		if err := rows.Scan(&kind, &ownerEpoch, &saveSeq); err != nil {
+			return false, err
+		}
+		if !initialRowHead(kind, ownerEpoch, saveSeq) {
+			played = true
+		}
+	}
+	return played, rows.Err()
+}
+
+// initialRowHead 报告这一行是不是建角写的初始行原样:写权行或资料行,代次和存盘序号都还是初始值(initialPlayerStoreRows)。
+// 认领会抬写权行的代次,存盘会推存盘序号、写别的 kind,所以不是原样的行就是进过场或存过盘。
+func initialRowHead(kind int32, ownerEpoch, saveSeq uint64) bool {
+	return (kind == playerStoreOwnerKind || kind == playerStoreProfileKind) &&
+		ownerEpoch == accountdirectory.InitialOwnerEpoch && saveSeq == accountdirectory.InitialSaveSeq
 }
 
 // tombstoneMissingRole 在玩家分片的事务里:角色行还没有就写墓碑,迟到的建角从此撞上已有行被拒。回 won 表示这个账号的建角已经先提交了。

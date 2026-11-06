@@ -251,6 +251,36 @@ func TestFollowRedirect_FailsBeforeTouchingConnection(t *testing.T) {
 		}
 	})
 
+	// 成功进场之后跳数清零:同一个玩家被 gate 排空迁移多次,每次都已进场,不该累计到熔断
+	// (docs/design/gate-drain-session-migration.md §7.3)。清零之后熔断判定照常放行,失败落到下一道(目标不可达)。
+	t.Run("hop limit resets after a scene entry", func(t *testing.T) {
+		calls := withRelogin(t, nil)
+		gc, err := NewGameClient(oldIP, oldPort)
+		if err != nil {
+			t.Fatalf("new client: %v", err)
+		}
+		defer gc.Close()
+		gc.redirectHops = MaxRedirectHops
+		gc.NoteSceneEntered()
+		if hops := gc.RedirectHops(); hops != 0 {
+			t.Fatalf("hops after a scene entry = %d, want 0", hops)
+		}
+		deadIP, deadPort := closedAddr(t)
+		err = FollowRedirect(gc, RedirectTarget{IP: deadIP, Port: deadPort, Payload: []byte("p")})
+		if err == nil || strings.Contains(err.Error(), "hop limit") {
+			t.Fatalf("err = %v, want the hop check to pass and the probe to fail", err)
+		}
+		if hops := gc.RedirectHops(); hops != 1 {
+			t.Fatalf("hops after one more redirect = %d, want 1", hops)
+		}
+		assertStillOn(t, gc, oldIP, oldPort)
+		if *calls != 0 {
+			t.Fatalf("relogin ran %d time(s) on an unreachable target", *calls)
+		}
+		var nilClient *GameClient
+		nilClient.NoteSceneEntered() // nil 接收者不 panic
+	})
+
 	t.Run("unreachable target", func(t *testing.T) {
 		calls := withRelogin(t, nil)
 		gc, err := NewGameClient(oldIP, oldPort)

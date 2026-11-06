@@ -23,6 +23,7 @@
     <ClCompile Include="network\codec\codec.cpp" />
     <ClCompile Include="network\rpc_channel.cpp" />
     <ClCompile Include="network\rpc_channel_stats.cpp" />
+    <ClCompile Include="tracing\log_context_suffix.cpp" />
     <ClCompile Include="metrics\prometheus_text.cpp" />
     <ClCompile Include="metrics\metrics_registry.cpp" />
     <ClCompile Include="metrics\metrics_http_exporter.cpp" />
@@ -81,6 +82,8 @@
     <ClInclude Include="network\codec\dispatcher.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
+    <ClInclude Include="tracing\log_context_suffix.h" />
+    <ClInclude Include="tracing\trace_context.h" />
     <ClInclude Include="metrics\prometheus_text.h" />
     <ClInclude Include="metrics\metrics_registry.h" />
     <ClInclude Include="metrics\metrics_http_exporter.h" />

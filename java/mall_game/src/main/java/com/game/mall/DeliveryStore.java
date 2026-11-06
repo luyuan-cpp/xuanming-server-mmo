@@ -1,5 +1,6 @@
 package com.game.mall;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -135,54 +136,95 @@ public final class DeliveryStore {
             if (in.state().equals("MANUAL"))
                 jdbc.update("UPDATE oms_order SET status=7 WHERE order_sn=? AND status=1", in.orderId());
             if (in.state().equals("REFUND_PENDING")) {
-                jdbc.update("INSERT INTO commerce_refund_intent(order_sn,status) VALUES(?,'PENDING')", in.orderId());
+                // 交付被拒:退的是订单绑定的那笔付款,退款待办按它的交易键建(一张订单可能另有重复付款的待办)。
+                int intents = jdbc.update("INSERT INTO commerce_refund_intent(channel,transaction_id,order_sn,source,status) "
+                    + "SELECT channel,transaction_id,order_sn,'" + REFUND_DELIVERY_REJECTED + "','PENDING' "
+                    + "FROM commerce_payment_receipt WHERE order_sn=?", in.orderId());
+                if (intents != 1) { throw new CommerceException(503, "交付退款缺订单付款回执"); }
                 jdbc.update("UPDATE oms_order SET status=5 WHERE order_sn=? AND status=1", in.orderId());
             }
         });
     }
+
+    /**
+     * 退款待办的来源(commerce_refund_intent.source)。前两种退的是订单绑定的那笔付款,退款回执把订单 5→6;
+     * 重复付款退的是没有绑定订单的另一笔,回执不碰订单(第一轮数据审计 §4 第 19 条)。
+     */
+    static final String REFUND_CANCELLED_LATE = "CANCELLED_LATE";
+    static final String REFUND_DELIVERY_REJECTED = "DELIVERY_REJECTED";
+    static final String REFUND_DUPLICATE_PAYMENT = "DUPLICATE_PAYMENT";
+
+    /**
+     * 待退款的付款,每条是要退的那一笔:交易键取待办自己的,金额币种取那笔付款回执。重复付款的回执没有绑定订单
+     * (order_sn 为 NULL),订单号取待办上的。
+     */
     public List<CommerceApi.Payment> refunds() {
         return jdbc.query("SELECT r.order_sn,p.channel,p.transaction_id,p.amount_minor,p.currency FROM "
-                + "commerce_refund_intent r JOIN commerce_payment_receipt p ON p.order_sn=r.order_sn WHERE "
-                + "r.status='PENDING' ORDER BY r.order_sn LIMIT 100",
+                + "commerce_refund_intent r JOIN commerce_payment_receipt p ON p.channel=r.channel AND p.transaction_id=r.transaction_id "
+                + "WHERE r.status='PENDING' ORDER BY r.order_sn,r.channel,r.transaction_id LIMIT 100",
             (r, n)
                 -> new CommerceApi.Payment(
                     r.getString(1), r.getString(2), r.getString(3), r.getLong(4), r.getString(5)));
     }
-    public void refunded(CommerceApi.Payment in) {
-        if (in == null || in.orderId() == null || in.channel() == null || in.transactionId() == null
-            || !in.channel().matches("[a-z][a-z0-9_-]{1,31}") || !in.transactionId().matches("[A-Za-z0-9_-]{1,128}"))
+
+    /**
+     * 渠道报告某一笔付款已退款。按被退付款的交易键 (channel, paymentTransactionId) 定位退款待办并幂等:
+     * 同一笔付款只认一条退款流水,重放同一条回 200,换一条回 409。只有订单本身的退款(CANCELLED_LATE /
+     * DELIVERY_REJECTED)把订单 5→6;重复付款的退款只终结它自己的待办,订单和订单绑定的那笔付款都不动。
+     */
+    public void refunded(CommerceApi.Refund in) {
+        if (in == null || in.orderId() == null || !in.orderId().matches(PaymentPolicy.ORDER)
+            || in.channel() == null || !in.channel().matches("[a-z][a-z0-9_-]{1,31}")
+            || in.paymentTransactionId() == null || !in.paymentTransactionId().matches("[A-Za-z0-9_-]{1,128}")
+            || in.transactionId() == null || !in.transactionId().matches("[A-Za-z0-9_-]{1,128}"))
             throw new CommerceException(400, "退款回执非法");
         tx.executeWithoutResult(status -> {
-            // 与mock原件保持唯一键索引→订单记录的锁序；JOIN可能先锁记录再等索引而成环。
+            // 锁序与付款、取消、交付回执相同:先单表按唯一键锁原 OMS 订单行(唯一键索引→订单记录,与mock原件同序;
+            // JOIN可能先锁记录再等索引而成环),再按主键锁这笔付款的退款待办。
             var lockedOrder = jdbc.queryForList("SELECT status FROM oms_order WHERE order_sn=? FOR UPDATE",
                 in.orderId());
             if (lockedOrder.size() != 1)
                 throw new CommerceException(404, "退款订单不存在");
-            var original = jdbc.queryForList(
-                "SELECT amount_minor,currency FROM commerce_payment_receipt WHERE order_sn=?", in.orderId());
+            var intents = jdbc.queryForList("SELECT order_sn,source,status FROM commerce_refund_intent "
+                + "WHERE channel=? AND transaction_id=? FOR UPDATE", ascii(in.channel()), ascii(in.paymentTransactionId()));
+            if (intents.size() != 1 || !in.orderId().equals(intents.getFirst().get("order_sn")))
+                throw new CommerceException(404, "退款待办不存在");
+            var intent = intents.getFirst();
+            var original = jdbc.queryForList("SELECT order_sn,amount_minor,currency FROM commerce_payment_receipt "
+                + "WHERE channel=? AND transaction_id=?", ascii(in.channel()), ascii(in.paymentTransactionId()));
             if (original.size() != 1)
-                throw new CommerceException(404, "退款订单不存在");
+                throw new CommerceException(503, "退款待办缺原付款回执");
             var row = original.getFirst();
             if (((Number) row.get("amount_minor")).longValue() != in.amountMinor()
                 || !row.get("currency").equals(in.currency()))
                 throw new CommerceException(409, "退款金额币种不符");
+            // 订单本身的退款 ⇔ 退的是订单绑定的那笔;重复付款从不绑定订单。两者对不上说明存储已损坏,拒绝而不是猜。
+            boolean ordersOwnPayment = !REFUND_DUPLICATE_PAYMENT.equals(intent.get("source"));
+            if (ordersOwnPayment != in.orderId().equals(row.get("order_sn")))
+                throw new CommerceException(503, "退款待办来源与付款绑定不一致");
             paymentPolicy.refund(in);
-            var prior = jdbc.queryForList(
-                "SELECT channel,transaction_id FROM commerce_refund_receipt WHERE order_sn=?", in.orderId());
+            var prior = jdbc.queryForList("SELECT transaction_id FROM commerce_refund_receipt "
+                + "WHERE channel=? AND payment_transaction_id=?", String.class, ascii(in.channel()), ascii(in.paymentTransactionId()));
             if (!prior.isEmpty()) {
-                if (!in.channel().equals(prior.getFirst().get("channel"))
-                    || !in.transactionId().equals(prior.getFirst().get("transaction_id")))
+                if (!in.transactionId().equals(prior.getFirst()))
                     throw new CommerceException(409, "退款流水冲突");
                 return;
             }
-            if (((Number) lockedOrder.getFirst().get("status")).intValue() != 5)
+            if (!"PENDING".equals(intent.get("status")))
+                throw new CommerceException(503, "退款待办已终结但缺退款回执");
+            if (ordersOwnPayment && ((Number) lockedOrder.getFirst().get("status")).intValue() != 5)
                 throw new CommerceException(409, "订单不在退款中");
-            jdbc.update("INSERT INTO commerce_refund_receipt(order_sn,channel,transaction_id,amount_minor,currency) "
-                    + "VALUES(?,?,?,?,?)",
-                in.orderId(), in.channel(), in.transactionId(), in.amountMinor(), in.currency());
-            jdbc.update("UPDATE commerce_refund_intent SET status='REFUNDED' WHERE order_sn=? AND status='PENDING'",
-                in.orderId());
-            jdbc.update("UPDATE oms_order SET status=6 WHERE order_sn=? AND status=5", in.orderId());
+            jdbc.update("INSERT INTO commerce_refund_receipt(channel,payment_transaction_id,transaction_id,order_sn,amount_minor,currency) "
+                    + "VALUES(?,?,?,?,?,?)",
+                ascii(in.channel()), ascii(in.paymentTransactionId()), ascii(in.transactionId()), in.orderId(),
+                in.amountMinor(), in.currency());
+            if (jdbc.update("UPDATE commerce_refund_intent SET status='REFUNDED' WHERE channel=? AND transaction_id=? AND status='PENDING'",
+                    ascii(in.channel()), ascii(in.paymentTransactionId())) != 1)
+                throw new CommerceException(409, "退款待办状态冲突");
+            if (ordersOwnPayment && jdbc.update("UPDATE oms_order SET status=6 WHERE order_sn=? AND status=5", in.orderId()) != 1)
+                throw new CommerceException(409, "订单状态冲突");
         });
     }
+
+    private static byte[] ascii(String value) { return value.getBytes(StandardCharsets.US_ASCII); }
 }

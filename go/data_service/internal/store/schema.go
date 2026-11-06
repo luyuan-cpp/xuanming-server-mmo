@@ -116,11 +116,16 @@ const PlayerNameOwnerTableName = "player_name_owner"
 //
 // 改了 rollback_database_table.proto 里的 message player_name,就必须同步改这里,
 // 否则启动期的 assertColumnsPresent 会直接拒绝迁移(这正是它存在的意义)。
+//
+// bound_ms 是「预留 → 绑定」状态机(PlayerNameStore.Bind,docs/design/guild-phase2/03-names.md §3.4a):
+// 0 = 预留态,Reserve 不写这一列,靠 DEFAULT 0 落成预留。2026-11-06 加列;项目未上线,不给旧库补列,
+// 旧库重建(CREATE TABLE IF NOT EXISTS 不改已有表,NewPlayerNameStore 核到缺列拒绝建 store)。
 const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 	"  `player_id` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:1',\n" +
 	"  `name` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'pb:2',\n" +
 	"  `name_norm` VARCHAR(191) NOT NULL COMMENT 'pb:3',\n" +
 	"  `created_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
+	"  `bound_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:5',\n" +
 	"  PRIMARY KEY (`name_norm`) /*T![clustered_index] NONCLUSTERED */\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" +
 	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='player_name';"

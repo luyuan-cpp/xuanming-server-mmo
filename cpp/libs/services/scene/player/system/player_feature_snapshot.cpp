@@ -19,9 +19,12 @@
 #include "table/code/condition_table.h"
 #include "table/code/item_table.h"
 #include "table/code/mission_table.h"
+#include "table/proto/tip/bag_error_tip.pb.h"     // kBagTemporary* / kBagAddItemBagFull:临时格取回
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/mission_error_tip.pb.h"
 #include "services/scene/player/system/player_equip.h"
+#include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen:临时格取回的交接冻结闸
+#include "services/scene/player/system/player_inbox_system.h" // OnBagSpaceFreed:取回之后提前重试延后的结算
 #include "services/scene/player/system/player_mission.h"
 #include "services/scene/player/system/player_activity_schedule.h"
 #include "services/scene/player/system/player_activity.h"
@@ -181,6 +184,48 @@ uint32_t PlayerBagSystem::Sort(entt::entity player, uint32_t bagType, BagInfo& o
     const uint32_t result = BagService::SortByPlayerRequest(player, bag, &changed);
     if (result != kSuccess) return result;
     return BuildSnapshot(player, bagType, out);
+}
+
+uint32_t PlayerBagSystem::RetrieveTemporary(entt::entity player, uint64_t itemId, bool takeAll)
+{
+    if (!tlsEcs.actorRegistry.valid(player)) return kThisEntityIsInvalid;
+    // 纯参数校验先于状态校验:两样都给或都不给永远不可能成功,不该被报成「稍后再试」。
+    if ((itemId != 0) == takeAll) return kInvalidParameter;
+    auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
+    if (bags == nullptr) return kServiceUnavailable;
+    const auto& temporary = bags->bags[kTemporary];
+    if (!temporary.IsLayerConsistent() || !bags->bags[kInventory].IsLayerConsistent()) return kInvalidTableData;
+    // 只拦交接冻结:冻结中改了也不会存盘(BagService 那一道只是兜底)。
+    // **战斗中放行**(2026-11-06 评审修正):两包都放不下而整笔延后的那一局,InBattleComp 要等结算应用并确认提交之后
+    // 才摘(CompleteInboxSettlement)。战斗中也拒的话,玩家在冻结到期之前取不回、腾不出位置,延后的结算就一直补不上。
+    // 放行是安全的:人物背包只进不出(冻结清单「只增不减,方向安全」),战斗快照与结算扣消耗都只看人物背包,
+    // 结算按持有夹紧时持有只会更多、不会少扣;临时格不参战;人物背包里已有的实例一个都不退役(整理在局中拒,正因为它会)。
+    if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+        return kBagTemporaryRetrieveBusy;
+
+    std::vector<Guid> guids;
+    if (takeAll)
+    {
+        // 按入包先后(ItemStore::ForEach 的实例序):全或无,顺序只决定落在哪几格、先灌哪一堆,结果确定。
+        temporary.ForEachItem([&guids](Guid guid, const ItemComp&) { guids.push_back(guid); });
+        if (guids.empty()) return kSuccess; // 重发的「全部取回」在第一次已经成功时落到这里:什么都不动
+    }
+    else
+    {
+        // 「上一次其实已经取回、回包丢了」的重发也落在这里:东西已经在人物背包,两个包都不动。
+        if (!temporary.ContainsGuid(itemId)) return kBagTemporaryItemNotFound;
+        guids.push_back(itemId);
+    }
+    const uint32_t result = BagService::RetrieveFromTemporary(player, guids);
+    if (result == kSuccess)
+    {
+        // 临时格腾出了位置:因两包都放不下而延后的收件箱条目(战斗结算)下一个 Tick 就重试,不用等退避(§6.6)。
+        // 只是把下一次尝试提前,不改任何判定;单件取回与全部取回都走到这里(全部取回时临时格本来就空的,上面已提前返回)。
+        PlayerInboxSystem::OnBagSpaceFreed(player);
+        return kSuccess;
+    }
+    // 人物背包放不下是玩家随手能触发的常规拒绝:换成这个入口自己的码,客户端提示腾位或改成一件一件取。
+    return result == kBagAddItemBagFull ? uint32_t{kBagTemporaryRetrieveBagFull} : result;
 }
 
 uint32_t PlayerMissionReadSystem::BuildList(entt::entity player, GetMissionListResponse& out)

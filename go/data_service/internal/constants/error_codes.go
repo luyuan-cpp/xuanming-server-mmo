@@ -21,7 +21,7 @@ const (
 	ErrCodeRecallPlanChanged uint32 = 32
 	// ErrCodeRecallDisabled:Recall.Enabled 没开,或资产通道的依赖没装配起来。只有预览可用,零变更。
 	ErrCodeRecallDisabled uint32 = 33
-	// ErrCodeRecallNotFound:没有这个 request_id。
+	// ErrCodeRecallNotFound:没有这个 request_id;ResolveRecallOp 里是没有这个 op_id。
 	ErrCodeRecallNotFound uint32 = 34
 	// ErrCodeRecallPending:计划已冻结,还有行没有结局。不代表事故已处置。
 	ErrCodeRecallPending uint32 = 35
@@ -30,6 +30,12 @@ const (
 	// ErrCodeRecallNothingToRecall:这个条件下没有可回收的流水,都不是收益或都已经回收过。零变更,不写批次。
 	// 不回 0:0 说的是这批全额回收了,这里什么都没动。
 	ErrCodeRecallNothingToRecall uint32 = 37
+	// ErrCodeRecallEvidenceRefused:ResolveRecallOp 选的结局不被已提交账本的证据支持(对表见 logic.recallManualAllows)。
+	// 零变更;响应的 evidence 写明结论、来源、原因和这条证据下能收的结局。号取 39:38 已给 ErrCodePlayerNameInUse。
+	ErrCodeRecallEvidenceRefused uint32 = 39
+	// ErrCodeRecallOpChanged:ResolveRecallOp 读证据之后,这一行被重投循环领过、发过请求或已终结,带见证的结算落空。
+	// 零变更;重新调用即重新读证据。
+	ErrCodeRecallOpChanged uint32 = 40
 
 	// ErrCodeResultTruncated 表示筛选命中数超过本次能安全返回/处理的上限。
 	// 返回该码时本次操作必须为零变更，调用方应缩小时间或玩家范围后重试。
@@ -104,6 +110,12 @@ const (
 	// 与 ErrCodePlayerNameDBError 分开:那个是"库坏了,重试可能好";这个是数据已经
 	// 互相矛盾,重试一万次都是同一个答案。
 	ErrCodePlayerNameConflict uint32 = 26
+
+	// ErrCodePlayerNameInUse:ReleasePlayerName 要释放的名字属于建成的角色 —— 名字行已绑定,或者还是预留态但玩家片上
+	// 这名角色已经提交(docs/design/guild-phase2/03-names.md §3.4a)。确定没删,两边零变更;带不带运维 token 都一样,
+	// 已绑定的名字只有删角收尾能释放。出现即说明调用方判错了建角结局或者本不该来释放,ERROR 日志带调用方身份。
+	// 号取 38:27、28、29 曾是回档的三个码(已删,号不复用),30~37 已占。
+	ErrCodePlayerNameInUse uint32 = 38
 
 	// ── 玩家归属映射(docs/design/player-route-mapping-durability-proposal.md §15)────────
 

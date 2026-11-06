@@ -44,8 +44,11 @@ type TransactionLogQuery struct {
 	CurrencyType uint32   // 0 = no filter
 	// ExactCurrency:只要这个币种的货币流水,CurrencyType 为 0 也按银两过滤。币种 0 就是银两,上面的 0 = 不过滤表达不了它。
 	ExactCurrency bool
-	Limit         uint32 // default 100
-	Offset        uint64
+	// CorrelationIDs 非空时只要这些指令号的流水(correlation_id IN ...);空 = 不过滤。
+	// GM 回收用它取一条指令不限时间窗的全部流水:同一条指令重投再应用时,第二条流水可能落在时间窗外。
+	CorrelationIDs []uint64
+	Limit          uint32 // default 100
+	Offset         uint64
 }
 
 // txLogHasZoneColumn:表结构真源是 proto(rollback_database_table.proto 的 transaction_log),
@@ -54,7 +57,8 @@ type TransactionLogQuery struct {
 // 加列 —— 那正是本次收口要消灭的漂移源。
 var txLogHasZoneColumn = (&dbpb.TransactionLog{}).ProtoReflect().Descriptor().Fields().ByName("zone_id") != nil
 
-// txLogInsertColumns 是 InsertBatchIgnore 的列序;与 rowValues 一一对应。
+// txLogInsertColumns 是 InsertBatchIgnore 的列序;与那里的实参一一对应。
+// shard 恒在最后(AuditShard(tx_id),audit_shard.go):表 proto 2026-11-06 起有这一列,缺列的库插入即报错,不静默丢。
 var txLogInsertColumns = func() []string {
 	cols := []string{
 		"tx_id", "timestamp_sec", "tx_type", "from_player", "to_player",
@@ -65,7 +69,7 @@ var txLogInsertColumns = func() []string {
 	if txLogHasZoneColumn {
 		cols = append(cols, "zone_id")
 	}
-	return cols
+	return append(cols, "shard")
 }()
 
 // TransactionLogStore provides query access to the transaction_log table.
@@ -104,11 +108,11 @@ func (s *TransactionLogStore) Close() error {
 
 // InsertBatchIgnore 一条多行 `INSERT IGNORE` 落一批流水,返回真正插入的行数。
 // tx_id 是主键,重放同一批(消费者提交 offset 前崩溃)只会被 IGNORE,天然幂等。
-// 200 行 × 15 列 = 3000 个占位符,远低于 MySQL 65535 的上限,不分块。
+// 200 行 × 16 列 = 3200 个占位符,远低于 MySQL 65535 的上限,不分块。
 //
-// 行按 tx_id 升序拼(txLogRowsInLockOrder),不按调用方的到达序。消费者的一批是跨分区混拼的,rebalance 重叠时
-// 旧属主手里没落的半批会被新属主从已提交 offset 重读,两边对同一组行的分区交错顺序不同:各自先插了对方后面要碰的
-// 那一行,主键查重对未提交记录请求 S,REC_NOT_GAP 互等 → 1213(RC 下同样成立,与间隙锁无关)。
+// 行按 tx_id 升序拼(txLogRowsInLockOrder),不按调用方的到达序。两条语句碰到同一组行时(rebalance 重叠:旧属主手里
+// 没落的半批被新属主从已提交 offset 重读;2026-11-06 起同一实例的几个分区也会同时落库),到达序不同就会各自先插了
+// 对方后面要碰的那一行,主键查重对未提交记录请求 S,REC_NOT_GAP 互等 → 1213(RC 下同样成立,与间隙锁无关)。
 // 2026-10-16 真库实测(MySQL 26.7.0,两条 200 行语句同时放行):到达序全重叠 4/10、半重叠 3/10 成环,
 // 两边都按 tx_id 升序 0/10。tx_id 不是自增列、流水没有插入序语义,排序不改变任何结果。
 func (s *TransactionLogStore) InsertBatchIgnore(ctx context.Context, rows []*TransactionLogRow) (int64, error) {
@@ -138,6 +142,7 @@ func (s *TransactionLogStore) InsertBatchIgnore(ctx context.Context, rows []*Tra
 		if txLogHasZoneColumn {
 			args = append(args, r.ZoneID)
 		}
+		args = append(args, AuditShard(r.TxID))
 	}
 
 	res, err := s.db.ExecContext(ctx, sb.String(), args...)
@@ -172,8 +177,13 @@ func (s *TransactionLogStore) QueryLog(ctx context.Context, q *TransactionLogQue
 	var args []interface{}
 
 	if q.PlayerID > 0 {
+		// 按玩家走 (from_player, timestamp_sec) / (to_player, timestamp_sec):玩家号打散,不需要分桶,也不带分桶谓词,
+		// 免得优化器改走按段扫的时间索引。
 		conditions = append(conditions, "(from_player = ? OR to_player = ?)")
 		args = append(args, q.PlayerID, q.PlayerID)
+	} else {
+		// 没有玩家条件时按时间 / tx_type / item_config_id 扫:这些索引在时间列前有 shard(audit_shard.go)。
+		conditions = append(conditions, auditShardInSQL)
 	}
 	if q.TimeStart > 0 {
 		conditions = append(conditions, "timestamp_sec >= ?")
@@ -190,6 +200,14 @@ func (s *TransactionLogStore) QueryLog(ctx context.Context, q *TransactionLogQue
 			args = append(args, t)
 		}
 		conditions = append(conditions, "tx_type IN ("+strings.Join(placeholders, ",")+")")
+	}
+	if len(q.CorrelationIDs) > 0 {
+		placeholders := make([]string, len(q.CorrelationIDs))
+		for i, id := range q.CorrelationIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		conditions = append(conditions, "correlation_id IN ("+strings.Join(placeholders, ",")+")")
 	}
 	if q.ItemConfigID > 0 {
 		conditions = append(conditions, "item_config_id = ?")

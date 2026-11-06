@@ -114,7 +114,7 @@
 
 ### 2.4 幂等:调用方幂等键 `(sender_kind, request_id)`
 
-- 请求体必须带 `uint32 sender_kind`(枚举:`OPS_TOOL = 1`、`ROBOT = 2`,M2 加 `RANK_SETTLE` 等)与 `uint64 request_id`(**非 0**,调用方生成;CLI 用密码学随机数,rank 之类用可重算的确定值)。
+- 请求体必须带 `uint32 sender_kind`(枚举:`OPS_TOOL = 1`、`ROBOT = 2`,M2 加 `RANK_SETTLE` 等)与 `uint64 request_id`(**非 0**,调用方生成;CLI 只在不带附件时缺省用密码学随机数,带附件必须显式给 `-request-id` 与 `-expire-ms`(2026-11-05,见文末同日小节),rank 用 reward_id)。
 - 落地为表上的**唯一键**(D-14 每表至多一个,这里正好用掉):
   - `mail_personal`:`UNIQUE (sender_kind, request_id, owner_player_id)` —— 带上收件人,于是 rank 可以用"一次结算一个 request_id"给 N 个人各发一封,而每个 (结算, 玩家) 恰好一封;
   - `mail_system`:`UNIQUE (sender_kind, request_id)`。
@@ -867,7 +867,7 @@ Tip.xlsx 把预留注释行换成组头 `//mail_error base=17000 width=1000`(**`
 | ⑤ | 空库 `-migrate` + 常驻启动 | 退出 0、恰好 4 表、主键全整数、唯一键恰 2 个(`uk_mail_personal` / `uk_mail_system`);**再跑一次 0 条语句**;删掉一条普通索引后启动:**按 §11 第 11 条的拍板结果** —— 拒启则被拒,WARN 则启动成功但日志恰有该索引名的 WARN(两种写法都能红);横幅恰有 `  MAIL SERVICE STARTED SUCCESSFULLY`、mysql 目标不含密码、`mail_admin=enabled/disabled` 与令牌状态一致、`sweep mode=report_only`;`:9240/metrics` 上 §2.5 / §4.5 / §4.6 的指标都有预建 0 值序列;`RetentionDays: 0` 的 yaml 被 `Validate` 拒启;etcd 值里 `endpoint` 与 `grpcEndpoint` 都填;Ctrl+C 先注销再排空、<24s | "再跑一次 0 条语句"若在同一进程内复用缓存,证明不了幂等 —— 两次独立进程 |
 | ⑥ | 令牌四态 | 不设 / 31 字节 / 错值 / 对值 → 前三者 `PermissionDenied`,日志**不出现令牌值** | 只测"对值成功"证明不了 fail-closed |
 | ⑥b | **Mode=pro 四态**(M-9 是 M1 唯一的防资产损失闸门) | pro + 附件 → `MailAttachmentNotOpen`,表中无新行、**号段无消耗**;pro + `sender_kind=ROBOT` → `kInvalidParameter`;dev + 附件 → 成功且 `claim_state=1`;pro + 无附件 `OPS_TOOL` → 成功 | 只在 dev 跑冒烟,pro 分支零覆盖 —— 必须单独起一个 `Mode: pro` 的进程或用 config 注入的单测 |
-| ⑦ | 两区 robot `mail-smoke`(两区 gate 都 `GATE_CLIENT_RPC_ROUTER=1`、`mmorpg_mail` 已建;**必须经 `start_game.ps1` 起栈或先手工导出令牌**,否则 `MailAdmin` 停用、冒烟拿到 `PermissionDenied`) | 输出一行 `MAIL_SMOKE_OK …`。逐步:CLI / robot 发一封系统 + 一封无附件定向 + **一封带 1 条货币附件的定向(dev)**;两区玩家都能在 `ListMails` 看到系统邮件,只有收件人看到定向邮件;带附件那封在 `ListMails` 里 `claim_state=UNCLAIMED`、`claimable_count=1`;定向邮件推送在 10s 内到达(**弱断言**:丢了不算失败,但要打印是否收到);`ReadMail` 后 `unread_count` 减 1;另一玩家 `ReadMail` 别人的定向邮件回 `MailNotFound`;`ClaimMailAttachments` 回 `MailClaimNotOpen`,**再 `ListMails` 该封仍是 `UNCLAIMED`**;`DeleteMails` 带附件那封 → 出现在 `protected_mail_ids`、`deleted_count=0`;`DeleteMails` 无附件那封删两次都成功,且之后 `ListMails` 看不到;**D-9 反向断言**:客户端发 `NotifyMailEvent` 与 `MailAdmin` 的消息号拿不到业务回包,**并在同窗口 mail 日志里看到拒绝记录**(信封不保留原始 gRPC code,只看机器人失败不能证明原因)。〔2026-10-16 M1d 更正,以 §12.3 偏差第 1、7 条为准:`start_game.ps1` 与 `dev-start-zones` 起栈都会给 mail 注入令牌,跑 robot 的 shell 按 `robot/etc/mail_smoke.yaml` 前置 6 自己取同一把;`claimable_count` 断言为 ≥ 1;`unread_count` 按两次列表之间的过期 / 新到逐封核账;另加「系统邮件按人删」与「系统邮件同键重放」两条〕 | **冒烟数据集覆盖不到的断言**:冒烟里系统邮件只有 1 封,"有效集 LIMIT 截断"与"跨两表合并分页"在它上面恒绿 —— 这两条只能靠 ④ 的集成测试(构造 >page_size 的混合数据) |
+| ⑦ | 两区 robot `mail-smoke`(两区 gate 都 `GATE_CLIENT_RPC_ROUTER=1`、`mmorpg_mail` 已建;**必须经 `start_game.ps1` 起栈或先手工导出令牌**,否则 `MailAdmin` 停用、冒烟拿到 `PermissionDenied`) | 输出一行 `MAIL_SMOKE_OK …`。逐步:CLI / robot 发一封系统 + 一封无附件定向 + **一封带 1 条货币附件的定向(dev)**;两区玩家都能在 `ListMails` 看到系统邮件,只有收件人看到定向邮件;带附件那封在 `ListMails` 里 `claim_state=UNCLAIMED`、`claimable_count=1`;定向邮件推送在 10s 内到达(**弱断言**:丢了不算失败,但要打印是否收到);`ReadMail` 后 `unread_count` 减 1;另一玩家 `ReadMail` 别人的定向邮件回 `MailNotFound`;`ClaimMailAttachments` 回 `MailClaimNotOpen`,**再 `ListMails` 该封仍是 `UNCLAIMED`**;`DeleteMails` 带附件那封 → 出现在 `protected_mail_ids`、`deleted_count=0`;`DeleteMails` 无附件那封删两次都成功,且之后 `ListMails` 看不到;**D-9 反向断言**(冒烟第 7 步,由不收定向邮件的旁观者发):客户端经 gate 发 `NotifyMailChanged`(推送,`CLIENT_RPC_PUSH`;本文早期稿写作 `NotifyMailEvent`,以 `proto/mail/mail.proto` 现名为准)与两个 `MailAdmin` 消息号(`SendPersonalMail` / `SendSystemMail`),三次都必须等满约 10s 超时(`mailSmokeRpcTimeout`,合计约 30s)才算通过,期间不回包、也不收到伪推送;`NotifyMailChanged` 收到信封拒绝说明 gate 不是按 R4 生成器重新生成后编出的版本;两个 `MailAdmin` 号收到信封拒绝与 R4 是否重新生成无关,说明 `MailAdmin` 被放进了客户端白名单(查 `proto/mail/mail_admin.proto` 的 `service MailAdmin` 是否被标了 `OptionIsClientProtocolService`、生成器的服务分类是否回归,重跑 proto-gen 解决不了);收到业务回包说明该方法对客户端开放;以上都判失败;同一运行窗口的路由服与 mail 日志里**不应出现**这三次请求。mail 会话拦截器(`go/mail/internal/server` 的 `ClientMethods` 方法白名单,经 `domainhost.Guard` 挂链)这道防线经 gate 已走不到,由 `go/mail/flow_integration_test.go` 的 `TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection` 证明(带客户端会话调 `NotifyMailChanged` 与 `MailAdmin.SendPersonalMail` 都回 `PermissionDenied`);它要 `MAIL_RANK_TEST_TIDB` 指向本任务独占的 TiDB,未设时 SKIP,设 `MAIL_RANK_REQUIRE_TESTS=1` 让缺配置变 FAIL。mail 目前没有不依赖真库的同类会话单测。〔2026-11-05 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改:gate 上行白名单 `IsClientMessageId` 只收客户端能发起的方法(REQUEST / ONE_WAY),推送号发上来 gate 计一次非法包(累计到阈值踢线,本步每个号只发一次)、不回包,请求到不了路由服与 mail;`MailAdmin` 不是客户端协议服务,R4 前后都不在白名单里。改前的判据是「拿不到业务回包,并在同窗口 mail 日志里看到拒绝记录」—— 那时推送号会经路由服到 mail,由会话拦截器拒绝。〕〔2026-10-16 M1d 更正,以 §12.3 偏差第 1、7 条为准:`start_game.ps1` 与 `dev-start-zones` 起栈都会给 mail 注入令牌,跑 robot 的 shell 按 `robot/etc/mail_smoke.yaml` 前置 6 自己取同一把;`claimable_count` 断言为 ≥ 1;`unread_count` 按两次列表之间的过期 / 新到逐封核账;另加「系统邮件按人删」与「系统邮件同键重放」两条〕 | **冒烟数据集覆盖不到的断言**:冒烟里系统邮件只有 1 封,"有效集 LIMIT 截断"与"跨两表合并分页"在它上面恒绿 —— 这两条只能靠 ④ 的集成测试(构造 >page_size 的混合数据) |
 | ⑧ | 过期 sweep | API 造不出已过期的信(发件要求 `sent_ms < expire_ms`),所以**用 SQL 直接 INSERT 两行**:A `expire_ms = now − (RetentionDays+1) 天`、B `expire_ms = now − 1 天`,**`RetentionDays` 保持默认 7 不变**(不放开 0)。`report_only` 下 A、B 都在,`mail_sweep_candidate_rows` = 1,`mail_sweep_last_run_unixtime` 前进;切 `delete` 后只删 A、B 保留;`data_consistency_check` 孤儿数为 0 | 三种结果(都在 / 只删 A / 都删)必须可区分;`cutoff ≤ 0` 分支"什么都不做"会让"没删"看起来像"report_only 生效" —— 看日志里的模式与 cutoff 值 |
 | ⑨ | K8s(kind) | 按 §9.5 的顺序:data_service `-migrate` 后 `id_segment` 有 `mail` 行 → `mail-migrate` Job Complete 后 Deployment 才 apply;ConfigMap 里 `Etcd.Key: ""`、`Mode: pro`(staging/prod 档)、`Redis`、`DataServiceRpc`、`IgnoreContentMethods`、Sweep 四键都存在;未注入令牌时横幅恰为 `mail_admin=disabled`,**不期望能发信**;Pod 不 CrashLoop;**不期望**推送到达(g1/g2 存量缺口,§4.5);K8s 上 gate 默认直连,**玩家不可达是设计内的**(D-12)〔2026-09-29 更正原因:K8s gate 默认已是路由模式 `"1"`(D75);玩家仍不可达,原因改为 mail 尚未登记进 K8s 部署(无 `$GoSvcCatalogue` 条目、无 manifest / migrate Job),本行 ⑨ 须等部署登记补齐后才可执行〕〔2026-10-16:部署登记随「M1d 启用」提交补齐(§12.3)〕 | 把"K8s 上推送没到 / 玩家到不了"当 mail 的缺陷去修 |
 
@@ -1132,8 +1132,9 @@ try { go test -p 1 -count=1 -v ./internal/data/ ./internal/logic/ } finally { Po
    推送写进没人消费的旧主题。K8s 侧由 `Add-GoSvcCommandTopicEnv` 统一注入,manifest 不写(迁移门禁测试的命令 topic 循环已加 mail)。
 6. **manifest 加 `RollingUpdate maxSurge 1 / maxUnavailable 0`**(照 guild,与总账「滚动多 1 个实例」的前提一致);CPU limit 500m(Redis 总账按 GOMAXPROCS = 2 计)。
 7. **robot**:路径是 `robot/config/config.go`(§9 写的 `robot/config.go` 不对);账号 `robot_9811`(收件人,首次在 zone_b 建角)/ `robot_9812`(旁观者,zone_a);
-   比 §10 ⑦ 多一条「系统邮件同键重放 → duplicated=true、id 相同」;令牌从环境变量读、拨号前查长度、不打印值;`NotifyMailEvent` 的反向断言由旁观者发
-   (收件人发会把迟到的真推送误判成信封回包);两个 MailAdmin 消息号经 gate 各发一次、期望超时。
+   比 §10 ⑦ 多一条「系统邮件同键重放 → duplicated=true、id 相同」;令牌从环境变量读、拨号前查长度、不打印值;推送号(现名 `NotifyMailChanged`)的反向断言由旁观者发
+   (收件人发会把迟到的真推送误判成这次请求的回包);它与两个 MailAdmin 消息号经 gate 各发一次,都期望超时
+   (2026-11-05 起推送号也不在 gate 上行白名单里,依据 client-rpc-callback.md §7 R4;在此之前推送号期望的是信封拒绝)。
    与 §10 ⑦ 的其余差异:`claimable_count` 断言为 ≥ 1(15 分钟内重跑会累积删不掉的带附件信);`unread_count` 不死板断言「恰好少 1」——
    先断言被读那封自己的已读位 false → true,再按两次列表之间过期 / 新到的信逐封核账(两次都单页时是精确等式,多页时只能断言「没少扣」);
    多一条「系统邮件按人删:收件人删后自己看不到、旁观者仍看得到」,顺带让收件人邮箱每轮只累积 1 封;跨区断言用当前连着的 gate 地址
@@ -1186,8 +1187,12 @@ yaml、第 6 步在仓库根 `go run` 不了独立模块、staging / prod 分支
    - 起栈前先编出 `bin/go_services/mail.exe` 与 C++ 节点(`start-exe` 缺 exe 只打一行 Skipping 警告,不报错)。
    zone 1 的 mail 日志横幅恰有 `  MAIL SERVICE STARTED SUCCESSFULLY` 与 `mail_admin=enabled`。
    另开一个 shell(不要在起栈的 shell 里取令牌,见偏差第 1 条):`cd robot; . ..\tools\scripts\lib\mail_admin_dev_token.ps1; Initialize-MailAdminDevToken | Out-Null;
-   .\robot.exe -c etc/mail_smoke.yaml`(robot.exe 是第 4 步 `-o robot.exe` 产出的那个),期望一行 `MAIL_SMOKE_OK …`(§10 ⑦),
-   同一时间窗口 mail 日志里有会话层拒绝 `/mailpb.ClientPlayerMail/NotifyMailEvent` 的记录。
+   .\robot.exe -c etc/mail_smoke.yaml`(robot.exe 是第 4 步 `-o robot.exe` 产出的那个),期望一行 `MAIL_SMOKE_OK …`(§10 ⑦);
+   第 7 步的三次请求各等满约 10s 超时(合计约 30s),同一时间窗口路由服与 mail 日志里**不应出现**这三次请求,gate 须是按 R4 生成器重新生成后编出的版本。
+   判据分两种:`NotifyMailChanged` 收到信封 → gate 未按 R4 重新生成;`MailAdmin` 号收到信封 → `MailAdmin` 被放进了客户端白名单
+   (查 `proto/mail/mail_admin.proto` 是否被标 `OptionIsClientProtocolService`、生成器分类是否回归),与 R4 重新生成无关
+   (2026-11-05 依据 client-rpc-callback.md §7 R4 改:改前这里要求 mail 日志里有会话层拒绝 `/mailpb.ClientPlayerMail/NotifyMailEvent` 的记录,R4 之后推送号在 gate 就被丢弃,走不到 mail;
+   会话拦截器这道防线改由 §10 ⑦ 写的 `TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection` 证明)。
    **跨区推送以 OK 行里的 `push_received=true` 为准**(推送是弱断言,丢了冒烟照样 OK):为 false 时先查 mail 的命令主题代号 / 分区数是否与
    `bin/etc/base_deploy_config.yaml` 的 `CommandTopicGeneration` / `CommandTopicPartitions` 一致。
 6. §10 ⑧ 的 sweep 验证;孤儿检查(该工具是独立模块,在仓库根 `go run ./tools/...` 会报找不到 go.mod):
@@ -1293,3 +1298,15 @@ Java `java-mail-notify-sql-redis.log`邮件9/9真实TiDB加Redis测试通过、0
 列表、已读、删除、清理和领取的业务事务先锁全局目录角色行 P，核原账号、修订和未冻结状态，再执行邮箱守卫、状态、seq 与 op 的原事务；列表使用事务快照。补建邮箱守卫也位于 P 后，不能在预检查之外先写库。仓储校验入口玩家与已捕获原会话玩家一致；旧会话即使命中领取幂等记录仍须先拒绝。后台可信发件与资产收据处理不伪造玩家原会话。
 
 Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送入现有串行调度，`MailStore.forActor` 通过现有 `AuthorityJdbc.forActor` 在实际事务首锁 P；默认旧 long 回调适配仍供其它未迁入口使用。两版均补过户、账号 ABA、冻结及旧领取重放零副作用回归源码。本节不沿用 10 月 16 日或 17 日证据证明新围栏，当前尚未完成本轮编译、真库或双区验收。
+
+### 2026-11-05 mailadmin 带附件必须钉死请求号与过期时刻(第二轮数据审计 r2-mail#1;已落码,未编译)
+
+以前 `go/mail/cmd/mailadmin` 不带 `-request-id` 时每次随机生成请求号、不带 `-expire-ms` 时按当前时间算过期时刻,失败提示却是「保留原请求重试」:结果未知后原样重跑同一条命令会换成新键,带附件的个人邮件重复发放。现行规则:
+
+- 带附件(`-currency` / `-item`,或 `-file` 里的 attachments)时必须显式给 `-request-id` 与 `-expire-ms`(或写进 `-file`),否则在签名、拨号之前拒绝(退出码 2),提示里附一组可复制的建议值;`-expire-days` 不能代替 `-expire-ms`。
+- `-file` 会整体替换请求:命令行显式给的请求号、过期时刻补进文件请求,文件里已有不同的值即拒绝。
+- 结果未知(传输失败,或邮件回故障码、码表外的码)时打印完整重试命令,退出码 1:保留调用方显式给的参数,钉死本次实际发出的 `-request-id`、`-expire-ms`,去掉 `-expire-days`,按 POSIX sh 加引号。原样重跑只会拿回原邮件(判重先于一切依赖当前时间的校验)。不带附件的纯文本邮件仍可缺省生成两项,重跑同样以打印的命令为准。只有 tip 码表里的业务拒绝(退出码 3)是确定结果,不打印重试命令。
+- 回包码按 `serverbase.TipVerdict` 定性,与 rank 奖励工作器同一口径(2026-11-06 评审跟进):码表外的码(不落在任何段里,或高于本二进制已分配上界,即对端码表比本工具新)以前被当成确定拒收、不打印重试命令,运维会换请求号重发、多发一份附件,现在按结果未知处理;`kSuccess` 与 0 同为成功。
+- 回归:`go/mail/cmd/mailadmin/main_test.go`(本机随机端口的 MailAdmin 替身,不依赖真库;断言只比对替身实收的请求,不依赖当前时间的取值),含 `TestUnrecognizedTipCodeIsUnknownLikeFault`、`TestSuccessTipCodeIsDelivered`。
+
+`Mail.MaxPersonalMailTtlDays` 与排行榜奖励联动:`go/rank/etc/rank.yaml` 的 `MailMaxPersonalMailTtlDays` 必须同值,改有效期两边同批改,见 [leaderboard-system.md](leaderboard-system.md)「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」。Java 版没有运维发件 CLI,r2-mail#1 不适用。

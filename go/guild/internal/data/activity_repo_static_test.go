@@ -353,6 +353,20 @@ func TestActivityStatementsShape(t *testing.T) {
 		assert.NotContains(t, upper, "IGNORE", "%s:%s", name, query)
 	}
 
+	// 恢复器调度的两条自动提交写(2026-11-05):主键等值、只改调度列、带状态复核。它们只决定谁、何时去查,
+	// 一旦顺手改到 state / battle_id 就参与了释放判定,这里钉住。
+	for name, query := range map[string]string{
+		"sqlClaimTrialLaunch":         sqlClaimTrialLaunch,
+		"sqlExpediteTrialLaunchCheck": sqlExpediteTrialLaunchCheck,
+	} {
+		assert.True(t, strings.HasPrefix(query, "UPDATE guild_trial_launch SET next_check_ms="), "%s:%s", name, query)
+		assert.Contains(t, query, " WHERE request_id=? AND state", "%s:%s", name, query)
+		setClause, _, _ := strings.Cut(query, " WHERE ")
+		assert.NotContains(t, setClause, "state=", "%s 不许改状态:%s", name, query)
+		assert.NotContains(t, setClause, "battle_id", "%s 不许改 battle_id:%s", name, query)
+	}
+	assert.Contains(t, sqlExpediteTrialLaunchCheck, "check_attempts=0", "提前检查只对从未认领的原件生效")
+
 	// 普通读:不许带任何锁定子句。
 	for name, query := range map[string]string{
 		"sqlSelectActivityProgress":            sqlSelectActivityProgress,
@@ -369,6 +383,8 @@ func TestActivityStatementsShape(t *testing.T) {
 		"sqlSelectOwedRewardsPage":             sqlSelectOwedRewardsPage,
 		"sqlCountOwedRewardsByActivity":        sqlCountOwedRewardsByActivity,
 		"sqlCountOwedRewardsCapped":            sqlCountOwedRewardsCapped,
+		// 2026-11-05:恢复器的到期扫描是普通读,认领靠事后的单行 CAS(sqlClaimTrialLaunch),不持任何锁去调 match。
+		"sqlSelectDueTrialLaunches": sqlSelectDueTrialLaunches,
 	} {
 		upper := strings.ToUpper(query)
 		for _, locking := range []string{"FOR UPDATE", "FOR SHARE", "LOCK IN SHARE MODE"} {
@@ -429,6 +445,9 @@ func TestActivityLockOrderInSource(t *testing.T) {
 		{"activity_repo.go", "RegisterTrialBattle", []string{"lockTrialGuild", "readTrialGate", "writeTrialBattleState"}},
 		{"activity_repo.go", "MarkTrialBattlePoison", []string{"lockTrialGuild", "readTrialGate", "writeTrialBattleState"}},
 		{"activity_repo.go", "ExpireTrialBattle", []string{"lockTrialGuild", "readTrialGate", "writeTrialBattleState"}},
+		// 作废释放(2026-11-05,r2-guild#1 评审第 4 条):P→G→大厅/slot→launch→role→T,T 只经与上面同一个闸门写入口。
+		{"trial_launch_repo.go", "FinishCancelledTrialLaunch", []string{"lockTrialGuild", "lockTrialLobbyForLaunch", "verifyTrialOwners", "settleCancelledTrialBattle"}},
+		{"trial_launch_repo.go", "settleCancelledTrialBattle", []string{"readTrialGate", "writeTrialBattleState"}},
 
 		// 待入队转换:Q(AllocateSeq)→ 插 O → 点删 W;诊断计数在事务之外、排在最后。
 		{"activity_repo.go", "ConvertOwedReward", []string{"AllocateSeq", "insertAssetOp", "sqlDeleteOwedReward", "sqlBumpOwedRewardAttempts"}},

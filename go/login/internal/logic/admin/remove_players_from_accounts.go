@@ -75,8 +75,10 @@ func validText(text string, maxBytes int) bool {
 // 判定和删除都走目录,不再碰 Redis。一名一名走:目录的删角是逐名两阶段提交,整组提交时中途失败已经删了前面几名,算不清谁成了。
 //
 // 墓碑不可逆,所以证明不了是孤儿的一律 NOT_ORPHAN:手滑输错 id 不能把在役角色删掉。有存档的不是孤儿;路由缺失时存档查不到,
-// 也证明不了(路由和角色行同片,缺了只可能是库被人动过)。没读到存档状态回 RETRY,不当成没有存档。
-// 名字不释放:输入里可能有在役角色的 id,释放不可逆,运维按日志带 token 调 ReleasePlayerName(guild-phase2/03-names.md)。
+// 也证明不了(路由和角色行同片,缺了只可能是库被人动过)。现行建角流程提交的角色(Lookup 回初始提交标记)只缺初始行也不是孤儿,
+// 是多集群恢复点错开留下的建角残留,走 data_service 的 cmd/create_residual 修。没读到存档状态回 RETRY,不当成没有存档。
+// 名字这里不碰:墓碑提交之后由 data_service 的删角收尾释放(核过角色行确是墓碑才删,guild-phase2/03-names.md §3.4a),
+// 在役角色的名字到不了那一步。
 //
 // 重跑幂等:删过的回 NOT_FOUND。鉴权在拦截器(x-admin-token),本函数不判。
 func RemovePlayersFromAccounts(ctx context.Context, sc *svc.ServiceContext, req *RemovePlayersFromAccountsReq) (*RemovePlayersFromAccountsResp, error) {
@@ -143,6 +145,14 @@ func removeOrphan(ctx context.Context, sc *svc.ServiceContext, req *RemovePlayer
 		}
 		logx.WithContext(ctx).Errorf("[LoginAdmin] orphan route check failed: player=%d: %v", player, err)
 		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_RETRY
+	}
+	// 现行建角先把初始行写进存档库,再提交目录(初始提交标记)。这样的角色没有写权行,只可能是存档库的恢复点早于写初始行那一步
+	// (多集群各自恢复到同一个 T 时恢复点错开,docs/ops/mysql-backup-pitr-runbook.md §4.1a):角色是真的建成了,该补初始行。
+	// 墓碑不可逆,这里一律拒绝,交给 data_service 的 cmd/create_residual 重写初始行。
+	if owned.GetInitialPlayerCommit() {
+		logx.WithContext(ctx).Errorf("[LoginAdmin] role was committed by the current create flow and only lacks its initial player_store rows; "+
+			"refusing to tombstone it, repair it with data_service cmd/create_residual instead: player=%d", player)
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_ORPHAN
 	}
 	if req.DryRun {
 		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_REMOVED

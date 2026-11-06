@@ -70,7 +70,8 @@ var assetOpSecretEnvPattern = regexp.MustCompile(`^` + regexp.QuoteMeta(AssetOpS
 type Config struct {
 	zrpc.RpcServerConf
 
-	// ZoneId:只影响 etcd 注册路径 <Prefix>/zone/<z>/...。必填且拒 0(契约 §2);
+	// ZoneId:只影响 etcd 注册路径 <Prefix>/zone/<z>/...(合同推进按片分工的成员表读的也是这一段路径,
+	// 见 svc.NewServiceContextWithAdmission)。必填且拒 0(契约 §2);
 	// 刻意不给 default:漏配就在 Validate 里 fail-fast,而不是悄悄注册进 zone 1。
 	// 业务代码禁止读它做分支(契约 §0),市场分区一律来自 data_service 的 home_zone。
 	ZoneId uint32 `json:",optional"`

@@ -674,8 +674,13 @@ namespace agones
 	void GameServerLifecycle::RunInitialReady()
 	{
 		auto backoff = options_.readyInitialBackoff;
+		// 快速重试用完之后每隔这么多次失败才打一行 ERROR,免得 sidecar 长时间不就绪时每个退避间隔刷一行。
+		constexpr int kSlowRetryLogEvery = 30;
 
-		for (int attempt = 1; attempt <= options_.readyMaxAttempts; ++attempt)
+		// 快速重试用完之后不放弃(docs/design/infra-reconnect-overview.md §4 R10):sidecar 晚于约 1 分钟才就绪时,
+		// 放弃就让实例永远停在 Starting、永远不可分配。此后按 readyMaxBackoff 一直重试,直到成功或 Stop();
+		// 期间状态仍是 Starting,任何创建照旧 fail-closed,不会假装 Ready。
+		for (int attempt = 1;; ++attempt)
 		{
 			{
 				std::lock_guard<std::mutex> lock(mutex_);
@@ -703,9 +708,19 @@ namespace agones
 				return;
 			}
 
-			LOG_WARN << "[Agones] POST /ready attempt " << attempt << "/" << options_.readyMaxAttempts
-					 << " failed (status=" << response.statusCode << " error=" << response.error
-					 << "), retrying in " << backoff.count() << "ms";
+			if (attempt < options_.readyMaxAttempts)
+			{
+				LOG_WARN << "[Agones] POST /ready attempt " << attempt << "/" << options_.readyMaxAttempts
+						 << " failed (status=" << response.statusCode << " error=" << response.error
+						 << "), retrying in " << backoff.count() << "ms";
+			}
+			else if (attempt == options_.readyMaxAttempts || attempt % kSlowRetryLogEvery == 0)
+			{
+				LOG_ERROR << "[Agones] POST /ready still failing after " << attempt << " attempts (status="
+						  << response.statusCode << " error=" << response.error
+						  << "); staying in Starting, unit creation keeps failing closed, retrying every "
+						  << options_.readyMaxBackoff.count() << "ms";
+			}
 
 			if (!SleepInterruptible(backoff))
 			{
@@ -713,11 +728,6 @@ namespace agones
 			}
 			backoff = std::min(backoff * 2, options_.readyMaxBackoff);
 		}
-
-		// 放弃。刻意留在 Starting 而不是假装 Ready —— 这样所有创建
-		// 都会 fail-closed,而不是让玩家进到一个 Agones 不认识的进程里。
-		LOG_ERROR << "[Agones] gave up on POST /ready after " << options_.readyMaxAttempts
-				  << " attempts; unit creation will keep failing closed";
 	}
 
 	void GameServerLifecycle::DoAllocate(bool nonBlockingRetryExpected)
@@ -959,7 +969,7 @@ namespace agones
 		RunInitialReady();
 
 		// 排空启用时,进入主循环之前先同步读一次标签。容器重启后 GameServer 对象上的标签还在;
-		// 而 RunInitialReady 最长约 1 分钟,期间调用方挂起的 allocate 请求在主循环里优先级高于
+		// 而 RunInitialReady 要一直重试到 sidecar 认下 /ready 为止,期间调用方挂起的 allocate 请求在主循环里优先级高于
 		// 排空轮询 —— 不先读这一次,就会先 /allocate、接下单元,再发现自己在排空。
 		// 这一次读取失败时按"保持上一次判定"处理(初值为未排空),由下一轮轮询纠正;不改成
 		// "判定未知即拒绝许可":GET /gameserver 的形状一旦与预期不符,实例就永远接不了单元。

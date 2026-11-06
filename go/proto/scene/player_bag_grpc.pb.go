@@ -19,14 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneBagClientPlayer_GetBag_FullMethodName       = "/SceneBagClientPlayer/GetBag"
-	SceneBagClientPlayer_SortBag_FullMethodName      = "/SceneBagClientPlayer/SortBag"
-	SceneBagClientPlayer_EquipItem_FullMethodName    = "/SceneBagClientPlayer/EquipItem"
-	SceneBagClientPlayer_UnequipItem_FullMethodName  = "/SceneBagClientPlayer/UnequipItem"
-	SceneBagClientPlayer_GmGrantItem_FullMethodName  = "/SceneBagClientPlayer/GmGrantItem"
-	SceneBagClientPlayer_EnhanceEquip_FullMethodName = "/SceneBagClientPlayer/EnhanceEquip"
-	SceneBagClientPlayer_InlayGem_FullMethodName     = "/SceneBagClientPlayer/InlayGem"
-	SceneBagClientPlayer_RemoveGem_FullMethodName    = "/SceneBagClientPlayer/RemoveGem"
+	SceneBagClientPlayer_GetBag_FullMethodName                 = "/SceneBagClientPlayer/GetBag"
+	SceneBagClientPlayer_SortBag_FullMethodName                = "/SceneBagClientPlayer/SortBag"
+	SceneBagClientPlayer_EquipItem_FullMethodName              = "/SceneBagClientPlayer/EquipItem"
+	SceneBagClientPlayer_UnequipItem_FullMethodName            = "/SceneBagClientPlayer/UnequipItem"
+	SceneBagClientPlayer_GmGrantItem_FullMethodName            = "/SceneBagClientPlayer/GmGrantItem"
+	SceneBagClientPlayer_EnhanceEquip_FullMethodName           = "/SceneBagClientPlayer/EnhanceEquip"
+	SceneBagClientPlayer_InlayGem_FullMethodName               = "/SceneBagClientPlayer/InlayGem"
+	SceneBagClientPlayer_RemoveGem_FullMethodName              = "/SceneBagClientPlayer/RemoveGem"
+	SceneBagClientPlayer_RetrieveTemporaryItems_FullMethodName = "/SceneBagClientPlayer/RetrieveTemporaryItems"
 )
 
 // SceneBagClientPlayerClient is the client API for SceneBagClientPlayer service.
@@ -48,6 +49,8 @@ type SceneBagClientPlayerClient interface {
 	EnhanceEquip(ctx context.Context, in *EnhanceEquipRequest, opts ...grpc.CallOption) (*EnhanceEquipResponse, error)
 	InlayGem(ctx context.Context, in *InlayGemRequest, opts ...grpc.CallOption) (*InlayGemResponse, error)
 	RemoveGem(ctx context.Context, in *RemoveGemRequest, opts ...grpc.CallOption) (*RemoveGemResponse, error)
+	// 临时格 → 人物背包(玩家显式操作,method index 8)。传送途中拒绝、战斗中放行;不改装备栏,不重算属性。
+	RetrieveTemporaryItems(ctx context.Context, in *RetrieveTemporaryItemsRequest, opts ...grpc.CallOption) (*RetrieveTemporaryItemsResponse, error)
 }
 
 type sceneBagClientPlayerClient struct {
@@ -138,6 +141,16 @@ func (c *sceneBagClientPlayerClient) RemoveGem(ctx context.Context, in *RemoveGe
 	return out, nil
 }
 
+func (c *sceneBagClientPlayerClient) RetrieveTemporaryItems(ctx context.Context, in *RetrieveTemporaryItemsRequest, opts ...grpc.CallOption) (*RetrieveTemporaryItemsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetrieveTemporaryItemsResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_RetrieveTemporaryItems_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneBagClientPlayerServer is the server API for SceneBagClientPlayer service.
 // All implementations must embed UnimplementedSceneBagClientPlayerServer
 // for forward compatibility.
@@ -157,6 +170,8 @@ type SceneBagClientPlayerServer interface {
 	EnhanceEquip(context.Context, *EnhanceEquipRequest) (*EnhanceEquipResponse, error)
 	InlayGem(context.Context, *InlayGemRequest) (*InlayGemResponse, error)
 	RemoveGem(context.Context, *RemoveGemRequest) (*RemoveGemResponse, error)
+	// 临时格 → 人物背包(玩家显式操作,method index 8)。传送途中拒绝、战斗中放行;不改装备栏,不重算属性。
+	RetrieveTemporaryItems(context.Context, *RetrieveTemporaryItemsRequest) (*RetrieveTemporaryItemsResponse, error)
 	mustEmbedUnimplementedSceneBagClientPlayerServer()
 }
 
@@ -190,6 +205,9 @@ func (UnimplementedSceneBagClientPlayerServer) InlayGem(context.Context, *InlayG
 }
 func (UnimplementedSceneBagClientPlayerServer) RemoveGem(context.Context, *RemoveGemRequest) (*RemoveGemResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveGem not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) RetrieveTemporaryItems(context.Context, *RetrieveTemporaryItemsRequest) (*RetrieveTemporaryItemsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetrieveTemporaryItems not implemented")
 }
 func (UnimplementedSceneBagClientPlayerServer) mustEmbedUnimplementedSceneBagClientPlayerServer() {}
 func (UnimplementedSceneBagClientPlayerServer) testEmbeddedByValue()                              {}
@@ -356,6 +374,24 @@ func _SceneBagClientPlayer_RemoveGem_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneBagClientPlayer_RetrieveTemporaryItems_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetrieveTemporaryItemsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).RetrieveTemporaryItems(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_RetrieveTemporaryItems_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).RetrieveTemporaryItems(ctx, req.(*RetrieveTemporaryItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneBagClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneBagClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -394,6 +430,10 @@ var SceneBagClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveGem",
 			Handler:    _SceneBagClientPlayer_RemoveGem_Handler,
+		},
+		{
+			MethodName: "RetrieveTemporaryItems",
+			Handler:    _SceneBagClientPlayer_RetrieveTemporaryItems_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

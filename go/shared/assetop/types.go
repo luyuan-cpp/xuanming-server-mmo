@@ -174,7 +174,8 @@ type Result struct {
 	Outcome assetpb.AssetOpOutcome
 	// Reason 是 asset_error 段的 tip 码;无原因时为 0。
 	Reason uint32
-	// Durable 表示该 seq 的结局已经在「最后一次成功写入 Redis 的玩家数据」里。
+	// Durable 表示该 seq 的结局已经在「最后一次提交成功的玩家存档」里(scene 的 go/db Save 回 COMMITTED / EQUAL,
+	// 即 TiDB 事务已提交之后)。
 	// 只有它为真,终结才是安全的(不变量 I4)。
 	Durable bool
 	// SQLCommitted 仅由已提交 SQL 账本核验路径赋值，scene 的回包不能设置它。

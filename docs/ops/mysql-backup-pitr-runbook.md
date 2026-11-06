@@ -127,7 +127,7 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
   -- sh -c 'ls -lh /backup/dump /backup/binlog'
 ```
 
-### 3.2 手动触发备份(合服 / 灾难前)
+### 3.2 手动触发备份(搬库、改表结构等高风险操作前 / 灾难前)
 
 ```bash
 kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
@@ -279,7 +279,52 @@ TRUNCATE TABLE role_fence;
 
 **只回档存档库(`zone_<n>_db`、`player_store_<id>_db`)。** 写权行的代次倒退不用处理,玩家下次认领时代次比库里新。但回档点之后已经提交的资产结果(收件箱、公会、交易的资产指令)在发起方那边已经终局,存档里却没有了,这批玩家要核账。所以能全库一起回就不要只回存档库。
 
-全库一起回档(§4.0)时目录和参与者是同一时刻,版本一致,不用做上面这些。
+全库一起回档(§4.0)时目录和参与者是同一时刻,版本一致,不用做上面这些。逻辑库分在多个集群时例外,见下一段。
+
+**多集群各自恢复到 T 之后:建角核账(2026-11-05,未演练)。** 每个集群各恢复一次(§4.1b 末段),实际恢复点前后错开。一次建角跨四类库分步写:名字片登记名字 → 玩家片登记路由 → 账号片写 PENDING ref → 存档库写初始行 → 玩家片插 `account_role`(提交点,和路由行同事务核对)→ ref 改 ACTIVE。贴着 T 建的角,`account_role` 在,前面某一步所在的库却恢复到了那一步之前,就留下半截。以 `account_role` 为准(提交点在,前面几步当时都做过),逐名核下面四项(名字未绑定是 2026-11-06 加的,名字行「预留 → 绑定」见 [名字设计](../design/guild-phase2/03-names.md) §3.4a):
+
+| 残留 | 哪个库早了 | 后果 | 判据 | 处理 |
+|---|---|---|---|---|
+| ref 缺失 | 账号片早于写 ref | 角色列表只按 ref 读,角色从账号里消失,存档还在。它不占名额,账号可能又建满了 | 按 `account_role.account` 到账号片查 `account_role_ref(account, player_id)` | 补一条 ACTIVE ref,和建角最后一步同一条语句,行在且挂着别的过户时不覆盖。补完超过角色上限的照补,输出标 `over_role_cap`;到 ref 硬上限(100)的拒绝 |
+| 名字缺失 | 名字片早于登记名字 | 别的账号能再登记同一个名字,一名两角 | 用 `account_role` 里的名字算判重键,到名字片查 `player_name` | 没人登记:按原名重新登记并置为已绑定,和建角同一套登记,幂等。已经登记在别的角色名下:**只报告,两边都不动**,输出占用者、占用者是不是活角色、按「建角早者留名」(路由行 `created_at_ms`)该谁留名。v1 没有改名,也没有强制改名标记可打,由人裁决 |
+| 名字未绑定(`name_unbound`) | 名字片早于建角提交之后的绑定,或者那一步当时就失败了 | 名字仍受保护(释放预留态之前要在玩家片证明角色从未提交,它提交了),但没有「只有删角能释放」那一道 | 名字行在本角色名下,`bound_ms=0` | 置为已绑定,和建角提交之后同一步;名字副本缺的一并补上(和名字缺失同属 `-repair name`) |
+| 初始存档行缺失 | 存档库早于写初始行 | go/db 认领回 `NO_OWNER`,永远进不了场;建角重放不碰存档 | 按 `player_route.storage_id` 到存档库查 `player_store(player_id, kind=0)` | 这名角色在存档库一行都没有、`initial_player_commit=1`(现行建角流程建的)、`owner_revision=1`(没过过户)、没挂交易或删角:重写建角时那几行初始行。有别的行只缺写权行、旧角色、过过户的、挂着令牌的只报告 |
+
+反方向(`account_role` 不在,名字、路由、ref、初始行在)不在这张表,工具也不报。多集群恢复时它有两种来历,**先分清再动**(2026-11-06 评审补):
+
+- 建成了,只是玩家片恢复点早于建角提交。有任何一条已提交的证据就是这种:账号片的 ref 是 ACTIVE(`state=2`,提交点之后才写)、名字行已绑定(`bound_ms≠0`)、存档库有存过盘的行(`save_seq` 大于初始值,或者有初始行以外的 kind)。这时**不要**释放名字,也不要让后台判陈旧碰它:两者都会在玩家片写墓碑,墓碑不可逆,角色再也补不回来。先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单交负责人定。名字行已绑定时 `ReleasePlayerName` 在证明之前就以 `error_code=38` 拒绝,不写墓碑。
+- 没有任何已提交的证据,是 login 当时就放弃了的建角:PENDING ref 由后台判陈旧,初始行没人读得到,名字留着(预留态),按日志带 token 调 `ReleasePlayerName` 释放:它先在玩家片证明这名角色永远不会提交(有路由行就写墓碑),再删预留态的名字行。
+
+后台判陈旧对「角色行不在、ref 还是 PENDING、超过 5 分钟」的 ref 会直接写墓碑,data_service 一起服就开始扫。所以分清反方向残留、以及下面第 1~3 步的 plan 和 apply,都要在起服之前做完;第 4 步里要调 `ReleasePlayerName`、要等 `ResumeRemovals` 的那几项在起服之后做。
+
+工具是 data_service 的 `cmd/create_residual`,只连 data_service 自己的库(目录各片、名字表、存档库)。维护身份直连,不过写者闸门:每笔写在事务里先锁本库闸门行,冻结的库那一项拒绝(搬库期间不要 apply,见 [搬库手册](db-move-runbook.md) §2)。按玩家片分页扫,只做一致读,不锁表。默认只报告;修复要 `-mode apply` 加 `-repair` 选种类,每项修之前重读角色行复核,变了就拒绝,可以重放。
+
+步骤。第 1~3 步在 §4.0 第 4 步核完闸门之后、第 6 步起服之前做(工具直连库,不依赖服务;起服之后后台判陈旧会给反方向残留写墓碑,见上一段),第 4 步起服之后、第 7 步开流量之前做完。单集群恢复也跑一遍 plan,确认是 0:
+
+1. 环境同 `admission_recover`:`MMORPG_SQL_BACKEND`、维护身份 `MMORPG_SQL_OPERATOR_PRINCIPAL`、库映射 `MMORPG_DB_PLACEMENT`(没有映射拒绝运行)。DSN 放进 `CREATE_RESIDUAL_DSN`,库名写目录基名(`SnapshotMySQL.DBName`)。
+2. plan:
+
+   ```bash
+   # 工作目录 go/data_service。K>1 时可以每片一个进程并行:加 -shard 0 … -shard K-1。
+   go run ./cmd/create_residual -schema mmorpg_global -logical-shards <K> -storage-ids <全部 storage_id,逗号分隔> -max-roles <AccountDirectory.MaxPlayersPerAccount>
+   ```
+
+   每项一行 `finding shard=… player=… kind=… result=…`,每片一行 `shard … next_after=… done=…`,最后一行 `summary`。`-storage-ids` 要列全,落点不在里面的报 `storage_not_listed`,没核。中途出错时按提示带 `-shard <片> -after <next_after>` 接着扫。
+3. apply,三类一起修(也可以只列其中几类):
+
+   ```bash
+   go run ./cmd/create_residual -mode apply -repair ref,name,initial_rows -schema mmorpg_global -logical-shards <K> -storage-ids <同上> -max-roles <同上>
+   ```
+
+4. 再跑一遍 plan,退出码 0 才算干净。剩下的按 `reason` 处理:
+   - `name_held_by_other`:`holder_live=false` 是占用者没有活角色。它的登记是预留态的孤儿时,带 token 调 `ReleasePlayerName` 释放之后重跑 apply。占用者是已删的角色、登记已绑定时 `ReleasePlayerName` 回 `error_code=38` 拒绝:看占用者那一片的 `account_role_removal` 里还有没有它那一行,有就等后台删角收尾(data_service 的 `ResumeRemovals`,每分钟一轮,接着做开始超过 5 分钟的那几行)放掉,没有(名字片恢复点早于删角释放)就人工核对后由 DBA 按 `(player_id, name_norm)` 删,再重跑 apply。`holder_live=true` 是一名两角,`keeper` 是该留名的一方(0 是判不出),两边都不动,记工单交负责人定。
+   - `transferred_role`:建角之后过过户,存档库丢的不只是初始行。先看存档库所在集群能不能恢复到更靠近 T 的点,再按过户收据和商城订单处理,不要直接重写初始行。
+   - `legacy_role`、`partial_store_rows`、`no_route_or_placement`、`corrupt_role_row`、`name_rules_changed`、`player_holds_other_name`、`ref_hard_cap`:人工核对。`role_busy` 等交易或删角走完再跑。
+   - 同一个存档库报出大量 `initial_rows_missing`,说明这个集群的恢复点明显早于别的集群,先考虑把它重新恢复得更靠近 T,再跑 apply。
+   - `role_changed`、`writer_gate_frozen`、`store_changed`,以及 `result=failed`:重跑 plan 再看。
+5. 补回的名字,data_service 名字负缓存(`PlayerName.NegativeCacheTTL`,默认 60 秒)过期之前按玩家查名字可能还是空。
+
+**这些残留不要用摘孤儿删。** `LoginAdmin.RemovePlayersFromAccounts` 对 `initial_player_commit=1` 的角色(`LookupAccountRole` 回这个标记)一律回 `NOT_ORPHAN`,日志提示走本工具:墓碑不可逆,这些角色是真的建成了。
 
 ### 4.1b TiDB 档:BR 时间点恢复(2026-10-31,未演练)
 
@@ -340,18 +385,15 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 
 ## 5. 与其他流程的衔接
 
-### 5.1 合服前(server_merge_design.md §5.1)
+### 5.1 合服(别名合服,不停服)
 
-**强制**:在 `k8s-zone-down` source/target 之后,手动触发一次备份,再开始合服:
+合服只在全局库 `zone_merged_into` 写一行「源区 → 目标区」,不动玩家行、路由行,也不改写公会、聚宝斋等业务数据;按区比较和查询都在读的时候解析。撤销只删这一行(见[不停服合服手册](merge-zone-runbook.md) §1、§6;方案见 [player-data-tidb-scaling-plan.md](../design/player-data-tidb-scaling-plan.md) §7.1)。所以:
 
-```bash
-BACKUP_JOB="mysql-backup-pre-merge-$(date +%s)"
-kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
-  create job --from=cronjob/mysql-backup "$BACKUP_JOB"
-# 等 Job 完成
-kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
-  wait --for=condition=complete --timeout=2h "job/$BACKUP_JOB"
-```
+- **不要** `k8s-zone-down` 源区或目标区。合服不停服、不踢人;停 zone 反而会把在线玩家全部踢下线。
+- **不需要**专门的合服前备份。合服的回退手段是撤销映射,不是从备份恢复。例行备份照常按 §3.1 检查。
+- 同一个维护窗口里还要做别的数据操作(搬库 `tools/dbmove`、改表结构等)时,按那项操作自己的手册,在它之前手动备份(§3.2)。
+
+旧口径(2026-10-30 之前)是「先 zone-down 源区和目标区,再手动备份,再合服」。那时合服是改写式的:逐个改玩家归属、拷玩家行,中途出错只能靠备份回退,所以必须先停写再备份。别名合服不改任何一行玩家数据,这两步都不再需要。
 
 ### 5.2 不再有单 zone 回档
 
@@ -393,6 +435,7 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 - **2026-10-30**:玩家存档只在 `player_store`,§4.1 第 7c 步和 §4.2 的两张表抽取随旧路径删除。仅修订手册,未演练。
 - **2026-10-31**:加 §4.1a,单库回档和角色护栏:参与者库回档清空 `role_fence`,目录回档抬 `fence_version`,过户和回档的关系。仅修订手册,未演练。
 - **2026-10-31 补充**:加 §4.0 整体做法和 §4.1b TiDB 档;§4.1 第 7b 步去掉已失效的发号水位(发号器已搬到 etcd);单 zone 回档脚本退役,§5.2 随之改写。仅修订手册,未演练。
+- **2026-11-05**:文末 10-20 r2-mz#1 那段改写为「合服撤销之后的恢复」:copy 合服与 `-allow-home-fallback` 已删,别名合服撤销后没有要重建的东西。仅修订手册。
 
 > **2026-10-30:本节以下到文末全部作废,只作历史保留。** 玩家存档已不在 Redis,恢复之后不需要重建存盘屏障,也没有 outbox 要裁决。工具 `save_barrier_restore` 已改名 `go/db/cmd/maintenance_phase`,只剩 `-authority-phase`,下文的 `-mode` 都不存在了。恢复玩家数据只需要按 §4 恢复 `player_store`,放流前清掉 Redis 里的 `location`、`handoff` 这些协调键或等 scene_manager 判死,玩家下次认领时代次比库里新,按正常流程进场。
 
@@ -432,7 +475,13 @@ go run ./cmd/save_barrier_restore -mode apply -schema zone_17_db -zone 17 `
 
 整批成功后，先以受控测试号验证缺父键登录确实强读到同版两行、资产收据与 SQL 一致，再按发布单恢复写者、维护入口及删除本次维护标记。工具不会自动开放流量；本地隔离工具验证不代表完整 PITR、跨洲灾备或目标容量验收。2026-10-18 的 Linux 真 TiDB/Redis 四项集成与同包单元共 38 项通过、零跳过，原始收据见 `build/barrierrestore-linux-20261018-030237-63a67b/final-proof.json`；高位自增分配器边界与真实旧写者复活仍未覆盖。
 
-**2026-10-20 补充（r2-mz#1，未编译、未测试，待 Codex 验证）**：上面「显式稳定 placement」的限制新增一个显式例外。plan 加 `-allow-home-fallback` 后，**没有落点记录**、home 恰为 `-zone`、`-schema` 就是该区 zone 库的玩家，按 go/db 的有效落点（记录 ?? home）恢复。copy 合服撤销后的玩家天然是这种形态，流程见 [merge-zone-runbook.md](merge-zone-runbook.md) §10.1「屏障重建」。开关写进计划、计入 SHA-256，apply 与 guard 拒收它；落点记录仍不存在在写屏障的同一段 Lua 里原子复核；落点键存在（含空串）、home≠zone 等其余拒绝条件不变。
+**合服撤销之后的恢复（2026-11-05 按现状改写，原为 2026-10-20 r2-mz#1 补充）**：10-20 曾给 plan 加过 `-allow-home-fallback`，专门恢复 copy 合服撤销之后「没有落点记录、home 已改回源区、行在源区 zone 库」的玩家，配合旧合服手册 §10.1 的「屏障重建」。这条例外和它针对的形态都已不存在，也没有替代开关：
+
+- 合服改成了别名合服（[不停服合服手册](merge-zone-runbook.md) §1）：只在全局库 `zone_merged_into` 写一行「源区 → 目标区」，不拷玩家行，不改 `player_route` 的 `home_zone` 和 `storage_id`；撤销只删这一行（同手册 §6）。撤销之后玩家的归属、落点和存档都和合服之前一样，没有要重建的东西。
+- 玩家存档只在 `player_store`，`player:{id}:save_barrier` 已删除，恢复之后不用从 SQL 重建屏障（见上方 2026-10-30 说明）。
+- 工具已改名 `go/db/cmd/maintenance_phase`，`-allow-home-fallback` 和全部 `-mode` 都已删除。
+
+合过服的环境（撤没撤销都一样）要回档，做法和没合过服的相同：整体回档按 §4.0，`zone_merged_into` 在目录第 0 片，随目录回到同一个 T；只修一个库按 §4.1a。旧的「屏障重建」步骤只留在[停服版旧手册](../archive/merge-zone-runbook-stop-the-world.md) §10.1 作历史，不要照做。
 
 ### 2026-10-18 第二批：db_first、独立映射和全局落点（实现后须核本批验证收据）
 

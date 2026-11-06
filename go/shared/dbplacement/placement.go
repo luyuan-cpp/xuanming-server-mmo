@@ -18,6 +18,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"shared/authoritysql"
+	"shared/etcdwatch"
 )
 
 // KeyPrefix 是映射键的前缀,后面接逻辑库名。
@@ -208,7 +209,8 @@ const etcdDialTimeout = 5 * time.Second
 
 // Dial 建 etcd 客户端。工具和 Watcher 共用。
 func Dial(cfg Config) (*clientv3.Client, error) {
-	return clientv3.New(clientv3.Config{Endpoints: cfg.EtcdHosts, DialTimeout: etcdDialTimeout})
+	// keepalive:映射 watch 已带 RequireLeader 与周期全量,再补上半开连接的探测(etcdwatch 包注释)。
+	return clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{Endpoints: cfg.EtcdHosts, DialTimeout: etcdDialTimeout}))
 }
 
 // Record 是读到的映射键。ModRevision 为 0 表示键不存在,这时 Placement 是零值。

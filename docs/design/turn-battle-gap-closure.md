@@ -139,7 +139,8 @@
 - **G9 的首投延迟**:结算首投仍打开局时的 scene 节点,玩家换节点重登后要等 battle 侧下一轮探测(≤10s)才入账。R07 的 12 轮 ×10s 耗尽后靠登录钩子兜底。本轮判定为可接受,不改码。
 - **buff 剩余时长仍按表全量换算**:控制类已剔除,剩下的都是周期效果类,影响有界。要精确剩余时长得给 `BuffComp` 加到期时间字段。
 - **脱敏挡不住推算**:`TurnResultS2C.events` 带 `skill_table_id` / `buff_table_id`,对手查表仍可推算冷却与 buff 时长;`pending_actor_ids` 与 `is_auto` 也暴露"谁已出手/谁挂机"。本轮只堵"直接读"。
-- **`items_gained` 全部落在主背包或临时格**:没有邮件兜底(全仓无 mail 模块)。临时格是 FIFO 淘汰的溢出缓冲,极端情况下会挤掉更早的掉落。
+- **`items_gained` 全部落在主背包或临时格**:没有邮件兜底。临时格 2026-11-05 起满了就拒、不再 FIFO 挤掉更早的掉落:两处都放不下时整笔结算延后,
+  玩家用 `RetrieveTemporaryItems` 把临时格的东西取回人物背包腾位后自动补发(`bag-rule-policy-layering.md` §6.6)。
 - **掉落数据只填了 1、2 号怪**:其余 14 只怪的 `drop` 留空,等策划。
 - **战斗期间 buff 只出不进**:新 buff(含存量 buff 的子 buff 派生)被丢弃,而 `BuffSystem::Update`
   仍在给存量 buff 计时到期。要完全对称还得给 tick 也加 `exclude<InBattleComp>`,本轮判定为可接受
@@ -486,3 +487,171 @@ Java 版:`PARITY.md`「战斗锁不再是销账证据」一行已更正(Java 待
 每次重发前重新取得玩家和战斗状态，等待期间只留 ID、自有上下文与回复。离线续期沿用首发上下文，在线续期重算期限。续期去重表仍存在，由任务局部 RAII 在成功、放弃、停止时统一摘除。同场景后续跟随、冻结与收件箱结算规则不变。
 
 任务由 Scene 瞬态作用域持有，维护或停机时停止继续写锁，迟到回复和定时器不再恢复业务。取消不撤回已发送 Lua，也不影响锁的现有 TTL。Java 写锁失败即拒绝备战、C++ 同步备战后异步补写的既有差异仍在，本次不改变可观察业务行为。
+
+## 11. 2026-11-06 号段预检续段;FIGHTING 冻结到期先查 SQL 终局(已落码,未编译,待 Codex 验证)
+
+来源:数据覆写审计 R2 的 r2-battle#3 与 r2-v1#1 残余窗口(`data-overwrite-rollback-audit-r2-20261019.md`)。两条都按当前代码复核成立。
+
+### 11.1 号段预检只读余量,不足时没人续段(r2-battle#3)
+
+**根因。** `GuidSegmentClient` 只在发号之后判预取阈值(`TryNext` → `MaybePrefetch`),两段都空时才因发号失败触发续段。
+战斗结算(`player_battle.cpp` 的 `HasItemGuidsForDrops`)和资产通道入账(`asset_op_system.cpp` 的 `ApplyCredit` 第 (b) 步)
+先用 `Available()` 整批预检,不够就整笔 DEFER / RETRY、一个号都不发。「需要量 > 剩余 > 预取阈值、又没有下一段」时谁都不发号,
+预取永远不触发:v1 结算一直 DEFER,玩家的票停在 state 3,进不了匹配也不能过户。资产通道还按 Σcount 算需要量,
+一批可叠加物被当成逐件铸号,上限 4096 件时可以超过双 buffer 的容量,永远 RETRY。
+
+**修法。**
+
+| 位置 | 改动 |
+|---|---|
+| `cpp/libs/modules/id_segment/guid_segment_client.{h,cpp}` | 新增 `RequestTopUp(needed)`:够了回 `kEnough`;未启用 / 停机回 `kUnavailable`;当前段已发完而下一段已落下时先把下一段换成当前段(与 `TryNext` 开头同一步,不发号;评审修正:不换会把「只有一段在手」误报成两段都满,多于一段的批次在空闲节点上永远等不来第二段);当前段没发完、下一段也已在手里回 `kBuffersFull`(批次大于双 buffer,续段帮不上忙);否则记下需求,没有在途、不在退避就立刻领一段(与预取同一条单飞路径),回 `kFetching`。需求在下一次校验通过的段落下时清掉。退避到期的重试见到需求照发,不再因为「剩余高于阈值」跳过。`Stats` 加 `topUpFetches` / `topUpPending` |
+| `player_battle.cpp` `HasItemGuidsForDrops` | 判出不足先 `RequestTopUp` 再整笔 DEFER;`kBuffersFull` / `kUnavailable` 打 ERROR(要人看 IdSegments 的 step) |
+| `asset_op_system.cpp` `ApplyCredit` (b) | 需要量改用 `BagService::MaxNewInstancesFor`(与战斗结算同口径),判出不足先 `RequestTopUp` 再回 RETRY |
+
+**代价。** 有需求时会比阈值预取早领一段(号段本来允许浪费,一段最多 `maxStep` 个号);`kBuffersFull` 只能靠调大 step 解决。
+
+### 11.2 FIGHTING 冻结到期先查 SQL 终局(r2-v1#1 残余窗口)
+
+**根因。** 冻结到期 = 截止 + 60s 终局宽限 + 60s 投递余量(`FreezeExpiresAtMs`,2026-10-30)。但 COMPLETE 不受截止约束,
+match 的宽限只推迟 ABORT(`completion.go` 的 `terminalOutcomeGraceMs`);发件箱每 2 秒一轮、每副本每轮首投 4 行,失败等租约到期才重投,
+收件箱拉取还有退避。积压时结算可能晚于截止 + 120s 才到。那时已解冻,资产通道的战斗闸只看 `InBattleComp`,
+消耗按当时持有量夹紧 —— 交易或帮会资产通道开启时可逐局刷「药白喝」。
+
+**修法。** reaper 判出 FIGHTING 到期(`nowMs > FreezeExpiresAtMs`)后不再直接解冻,交给 `ResolveExpiredFightingFreeze`:
+
+1. 这一局的结算已在本实体应用过(收件箱战斗域最近结局环里有它,`HasRecentAppliedBattleSettlement`)→ 照常解冻,不查。
+   典型场景:结算提交之后删锁没落地,玩家重登按锁重建了冻结。
+2. 同一局已有查询在途 → 这一拍不动。在途超过一拍加一次调用期限(36 秒)仍没回 → 当作丢失(`metric=battle_terminal_query_lost`),按未知处置。
+3. 否则向 match 发一次只读查询 `MatchInternal.GetBattleTerminalDecision`,按 `battle_freeze_hold_rules.h` 的判定表处置:
+
+| SQL 终局 | 处置 |
+|---|---|
+| ABORT | 照常解冻:记作废局 → 条件删锁 → 摘冻结(`metric=battle_freeze_expired terminal=ABORT`) |
+| NONE,且这一局没有可裁决的 SQL 原件(match 回 `terminal_expected=false`) | 照常解冻(`terminal=NO_ORIGINAL`):COMPLETE 永远落不了库,不能被 NONE 拖满上限 |
+| NONE,但有可裁决的 v1 原件(`terminal_expected=true`) | 按「结果未知」续冻一拍,锁跟着续(`metric=battle_freeze_held terminal=PENDING`) |
+| COMPLETE(本地还没应用) | 续冻一拍,锁跟着续(`metric=battle_freeze_held terminal=COMPLETE`) |
+| 未知:没发出去 / 传输失败 / 回包验签不过 / match 带内 retry / 取值不认识 | 同样续冻一拍(`metric=battle_freeze_held terminal=UNKNOWN`) |
+| 续冻到 `FreezeHoldDeadlineMs` = FreezeExpiresAtMs + 15 分钟之后仍是 COMPLETE、PENDING 或未知 | 告警 `metric=battle_freeze_hold_cap_reached`(ERROR)后照常解冻 |
+
+**NONE 为什么分两种(2026-11-06 负责人定)。** 冻结到期 = 截止 + 60s 宽限 + 60s 余量,晚于 match 补写 ABORT 的时刻(截止 + 60s,
+`ready_recovery` 的到期恢复)。有原件的局到期还是 NONE,只说明 ABORT 还没写成(match 不可用或恢复任务滞后),而 COMPLETE 不判截止、
+仍可能先落库,所以 NONE 不是终局证据,按未知续冻;「解冻之后 COMPLETE 才落库」因此只剩续冻上限之后的一段,归入有告警的那条残余。
+没有可裁决原件的局另当别论:COMPLETE 与截止 ABORT 两条写终局的路径都要求原件可裁决(`authority.TerminalOutcomeExpected`,
+与 `supportedOutcomeOriginal` 同一判据),这种局永远不会有结算。核实结果:match 现在总是装配 SQL 成局权威(没有本地模式),
+所有备战都来自 match 的 gather,新成局只经 `SaveSupportedIntent` 落 v1 原件;没有可裁决原件的只剩上线前的协议 0 旧成局、
+battle 明确采用旧协议的成局、原件坏形状的成局,以及锁值对不上任何成局行的情形。它们也会走到这次查询,由 match 回
+`terminal_expected=false`,scene 照常解冻。
+
+**续冻上限 15 分钟**(`PlayerBattleSystem::kFreezeHoldCapMs`):盖住 match 个人结算两到三轮失败重投(退避封顶 5 分钟,`pendingSettlementDelayMs`)
+加收件箱拉取退避(封顶 60 秒)。结算真的到不了时(收件箱永久拒收、match 长期不可达)不能无限冻人。
+
+**锁 TTL 从开局起就覆盖续冻上限(2026-11-06 负责人定)。** `FightingLockTtlSecFor` 一律按 FreezeHoldDeadlineMs + 60s 算,
+不分到期之前还是续冻之中:开局确认、续冻一拍、重登或迟到确认按锁重建时的复核都走它。玩家在冻结到期之前下线、超过到期点才重登,
+锁还在,登录按锁重建冻结,到期处理照常查终局;match 也不会提前放下一场。代价:结算一直不来的局,锁最多多留约 15 分钟,
+这段时间 match 按 `battle:lock` 拒绝排队,有界;正常结算、取消、到期解冻都照旧按条件删锁,不受影响。
+越过上限之后那一拍发出的查询在途期间,锁不会先过期:一拍 30s 加调用期限 6s 小于 60s 余量(`static_assert`)。
+
+**新 RPC `MatchInternal.GetBattleTerminalDecision`**(`proto/match/match_internal.proto` 只追加;`go/match/internal/logic/battle_terminal_decision.go`):
+
+- 只读 `match_battle_completion`(终局唯一权威,与 `readTerminal` 同一条 SQL),还没有决定时再读成局行判原件可不可裁决
+  (`authority.Store.BattleTerminalState`,回包 `terminal_expected`);不读发件箱投影,不加锁、不写任何行;
+- 鉴权与回包签名沿用 `CommitBattleOutcome`:请求由固定调用方 `scene` 签,用场景密钥 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`
+  (与 `TeamAuthority.ReadMembership` 同一把,match 已装配,部署不加新密钥;签名带方法名,两条方法之间不能互相重放);
+  回包由 `match` 以方法 + `/reply` 签,`request_digest` 绑定请求原件;
+- 读失败、非法持久值带内 `retry = true`,不回 gRPC 错误:只读查询没有结局未知,回 `Unavailable` 会被 `PublicationAdmission`
+  记成未知结局、拖住排空证明。拒绝只用 `PermissionDenied` / `InvalidArgument`(确定拒绝);
+- 列入 `PublicationAdmission` 的 RELAY 方法(收尾已开始的对局,排空期间照常应答),请求体不进 zrpc 日志;
+- 不复用 `GetBattleCompletion`:那条只放行 guild、回包不签名,还带最多 960KiB 的原字节。
+
+scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 match 节点(scene 的 `CanConnectNodeTypeList` 加了全局池的
+`MatchNodeService`),单次期限 `kTerminalQueryDeadlineMs` = 6000;回包归一化 `ClassifyReply` 与单测走同一个函数。
+
+**不变量。**
+
+1. 只有「本地已应用」「ABORT」「没有可裁决原件」「越过上限」四种情形解冻 FIGHTING 冻结;COMPLETE 未应用、有原件的 NONE 与未知都续冻,
+   资产通道在续冻期间回 RETRY。FIGHTING 锁活到续冻上限 + 60s,冻结活着的时候锁一定在。
+2. 续冻有界:判定时刻用发出查询那一拍的时刻,上限锚定在本局 deadline 上,与重登、换节点无关;丢一次回调不会把玩家永远冻住。
+3. 回答到达时按 player_id 现取实体,这一局的冻结还在才动手;「是不是 FIGHTING」与 reaper、`LockTtlSecOf` 同一口径(不是 PREPARING 就按 FIGHTING,
+   state 缺失的组件也算;评审修正:只认 FIGHTING 会让这种冻结每拍都查、回答被丢、永远解不了冻);回调只捕获 id 与时刻,不捕获实体句柄(AGENTS §11.7)。
+4. 查询只读,多副本并发安全:任一 match 副本读同一份 SQL;每个玩家的冻结只由持有它的 scene 节点处置(单写者)。
+
+**指标。** scene 进程内计数 `PlayerBattleSystem::FreezeHoldEventCount`(held_complete / held_pending / held_unknown / cap_reached / query_lost),
+告警走同名结构化日志。值班固定查询(Loki,写法同 `deploy/k8s/asset-channel-alerts.yaml` 的说明):
+
+- warning:`count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_freeze_hold_cap_reached" [10m]) > 0`
+  —— 续冻到上限结算仍没到,按 battle_id 查 match 的 `match_battle_settlement_source` 与收件箱条目;
+- warning:`count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_terminal_query_unknown" [10m]) > 20`
+  —— scene 查不到 match 终局(密钥、发现或 match 不可用),续冻会一直拖到上限。
+
+上面两条在 scene 一侧,都是结算已经晚了才报。积压源头在 match 的终局发件箱,另有两条 Prometheus 规则
+`deploy/k8s/match-outcome-outbox-alerts.yaml`(2026-11-06),在玩家到续冻上限之前报出。两条都看
+`max(match_outcome_outbox_oldest_pending_age_seconds{kind="first"})`,即最老一条还没进收件箱的个人结算从 COMPLETE 提交起等了多久。
+这个读数每个 match 副本每分钟读一次 SQL。
+
+| 规则 | 条件 | 阈值依据 |
+|---|---|---|
+| `MatchSettlementInboxLagging`(warning) | > 60s,持续 2m | 等于收件箱投递余量 `kInboxSettlementDeliveryMarginMs`。打满时限的局截止后才 COMPLETE,冻结在截止后 120s 到期,收件箱拉取退避封顶 60s,所以首投要在提交后 60s 内完成;再晚,到期时就开始续冻 |
+| `MatchSettlementInboxStalled`(critical) | > 300s,持续 1m | 打满时限的局约在 COMPLETE 之后 16 分钟到续冻上限(`kFreezeHoldCapMs` 15 分钟,从冻结到期算)。本条约在落后 6~8 分钟时触发,给改参数滚动或扩副本留出约 8~10 分钟 |
+
+契约测试 `k8s_deploy_contract.tests.ps1` 的 match-outcome-outbox-alerts 用例从 `player_battle.h` 读这两个常量,要求两个阈值都满足:
+
+- warning 阈值不超过投递余量;
+- critical 阈值离续冻上限至少 10 分钟。
+
+所以改 scene 的续冻上限或投递余量时,告警阈值必须同步改,否则契约测试会红。
+
+为什么只看 `kind="first"`:已入箱、等应用的 `waiting` 里有长期离线的玩家,年龄不代表积压。
+
+已知局限:
+
+- 某个副本读 SQL 失败时,它的 gauge 保留上一次读数,max 会偏高(宁可多报)。
+- match 整体不可抓取时这两条不报,由抓取存活告警兜底。
+- COMPLETE 本身晚到的局(截止 + 60s 之后才落库),玩家续冻的时间主要花在 COMPLETE 之前。发件箱年龄从 COMPLETE 才开始算,
+  这两条规则反映不出这段时间,只能看 scene 一侧的 `battle_freeze_held` 日志。
+
+处置步骤见 [player-inbox-runbook.md](../ops/player-inbox-runbook.md) §6.1「Match 个人结算首投积压」。积压源头的默认吞吐是每副本每轮(2 秒)首投 4 行、逐行串行。
+这组默认值是 2026-10-30 之前写死的行为,还没有压测数据支撑调整,这批没改。
+
+**残余与代价。**
+
+- **越过上限之后**照现行规则解冻:COMPLETE 未应用、有原件的 NONE、未知三种都在这里收口,结算(或 match 恢复之后才落库的 COMPLETE)
+  再晚到仍按持有量夹紧,有告警 `battle_freeze_hold_cap_reached`。match 侧 COMPLETE 不判截止这一点不动,不在本批。
+- **锁多留。** 结算一直不来的局,FIGHTING 锁比改动前多留约 15 分钟,match 这段时间拒绝这名玩家排队;删锁没落地时同理。有界。
+- **离线超过续冻上限才重登**:锁已过期,不再重建冻结;这时结算若仍没到,与上一条同属越过上限的残余。
+- **开销。** 每个续冻中的玩家每 30 秒一次主键只读查询,正常运行为 0。
+- 告警只到「值班固定查询」这一层:上面两条 LogQL(`battle_freeze_hold_cap_reached`、`battle_terminal_query_unknown`)已写进
+  `deploy/k8s/asset-channel-alerts.yaml` 头注释的固定查询清单,但 scene 的这两个信号只在结构化日志里,Loki ruler 还没接线(上线批 BK8s),
+  接线之前不会自动告警。match 一侧的发件箱积压已有 PromQL 规则(`deploy/k8s/match-outcome-outbox-alerts.yaml`,见上面「指标」段)。
+
+### 11.3 用例与验证(全部未执行,待 Codex)
+
+- `cpp/tests/bag_test/bag_test.cpp`:`GuidSegmentClientTest.TopUpFetchesWhenABatchNeedsMoreThanIsLeftAboveThePrefetchThreshold`、
+  `TopUpReportsEnoughFullOrUnavailableWithoutSending`、`TopUpThatFailedIsRetriedAfterBackoffEvenAboveThePrefetchThreshold`、
+  `TopUpPromotesTheWaitingSegmentWhenTheCurrentOneIsSpent`(评审补);
+- `cpp/tests/bag_test/player_battle_settlement_test.cpp`:`PlayerBattleSettlementItemTest.ItemGuidShortageAboveThePrefetchThresholdRequestsATopUp`;
+  夹具注入终局查询一律回 NO_ORIGINAL(这些局没有 SQL 原件),原有的到期用例照旧成立;`FirstConfirmUpgradesToFightingAndRenewsFromFreezeExpiry`
+  与 `RepeatedConfirmRenewsLockOnceFromComponentStateWithoutChangingIt` 的 TTL 断言改按 FreezeHoldDeadlineMs;
+- `cpp/tests/bag_test/battle_freeze_hold_test.cpp`(新):`BattleFreezeHoldRules.DecisionTableAndHoldDeadline`、
+  `BattleFreezeHoldTest.*` 11 条(COMPLETE 未应用续冻、到上限解冻计数、查询失败续冻一拍、ABORT 照常解冻、有原件的 NONE 续冻、
+  没有 SQL 原件的局到期照常解冻、开局确认的锁活过续冻上限(到期后重登可重建)、续冻期间资产通道 RETRY、本地已应用不查、迟到回答不动、
+  丢失按未知),评审补 `StatelessFreezeIsResolvedLikeFightingAndStaysBounded` 共 12 条;`BattleTerminalQueryReply.ClassifiesOnlySignedRepliesBoundToTheRequest`、
+  `AssetOpCreditGuidTopUpTest.*` 2 条;
+- `go/match/internal/logic/battle_terminal_decision_test.go`(新)4 个用例;`go/match/internal/authority/terminal_read_test.go`(新):
+  `TestTerminalOutcomeExpectedOnlyForAdjudicableOriginals`(纯判据)、`TestTerminalTiDBBattleTerminalStateTellsPendingFromNoOriginal`(真 TiDB)。
+
+验证顺序(仓库根,串行,失败不重试):
+
+1. 协议生成(`match_internal.proto` 新增一条 RPC 两条消息):`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`(生成器有变化或尚无工具时),
+   再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+   通过标准:`cpp/generated/grpc_client/match/match_internal_grpc_client.h` 出现 `SendMatchInternalGetBattleTerminalDecision`,
+   `go/proto/match` 出现 `MatchInternal_GetBattleTerminalDecision_FullMethodName`。
+2. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`:0 个 `error C` / `LNK`;改了 scene 库与 id_segment 库,先编库再跑测试。
+3. `build\cpp\tests\bag_test.exe --gtest_filter=GuidSegmentClientTest.*:GuidSegmentRegistryTest.*:BattleFreezeHold*:BattleTerminalQueryReply.*:AssetOpCreditGuidTopUpTest.*:PlayerBattleSettlement*:BagServiceNewInstanceBound.*` 全绿,再跑一次完整 `bag_test.exe`;
+   `currency_test.exe --gtest_filter=AssetOpSystemTest.*:AssetOpRecallTest.*` 不回归。
+4. `cd go/match && go build ./... && go vet ./internal/logic/ ./internal/server/ ./internal/authority/ && go test -count=1 ./internal/logic/ -run 'TestGetBattleTerminalDecision|TestNewBattleTerminalDecisionQuery'`,
+   `go test -count=1 ./internal/authority/ -run 'TestTerminalOutcomeExpectedOnlyForAdjudicableOriginals'`;
+   真 TiDB:`MATCH_IT_TIDB=<端口> MATCH_IT_REQUIRE_TIDB=1 go test -count=1 ./internal/authority/ -run 'TestTerminalTiDBBattleTerminalState'`(不得跳过);
+   最后 `go test -count=1 ./...`。
+
+Java 版要做的点(AGENTS §12,本批未改 Java):Java 没有号段客户端(物品 guid 用雪花租约),r2-battle#3 不适用;
+冻结到期查终局与只读终局 RPC 两边都要做 —— Java 的 reaper 到期读 Redis 里的个人结算记录、读不到就判废,match 也没有只读终局 RPC。

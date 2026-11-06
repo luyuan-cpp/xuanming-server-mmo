@@ -79,16 +79,32 @@ type IdSegmentStore interface {
 //   - Release 只吃 norm;minCreatedMs=0 表示不限登记时间(仅限已过 admin 鉴权的路径)。
 //   - BatchGet 返回**展示名**,缺席的 id 不出现在 map 里(不是错误),超过
 //     store.PlayerNameBatchLimit 个 id 必须报错而不是截断。
+//   - Release 只删预留态的行,已绑定的回 store.ReleaseBound;「角色永远不会提交」的证明不在这里,
+//     调用方先调 PlayerRoleSealer(§3.4a)。
+//   - NameRowState 只读 (player_id, name_norm) 那一行的 created_ms / bound_ms,found=false 是没有这一行:
+//     释放之前先用它判有没有可删的预留态,没有就不去证明(证明可能写墓碑,不可逆)。
 type PlayerNameStore interface {
 	Close() error
 	Reserve(ctx context.Context, playerID uint64, name, norm string, nowMs uint64) (store.ReserveOutcome, uint64, error)
 	Release(ctx context.Context, playerID uint64, norm string, minCreatedMs uint64) (store.ReleaseOutcome, error)
+	NameRowState(ctx context.Context, playerID uint64, norm string) (createdMs, boundMs uint64, found bool, err error)
 	BatchGet(ctx context.Context, playerIDs []uint64) (map[uint64]string, error)
 }
 
-// PlayerStoreAssetReader 读 player_store 的写权行和 kAsset 行。*store.AccountDirectoryStore 满足它。
+// PlayerRoleSealer 在释放预留态的名字之前,在玩家片证明这名角色永远不会提交(必要时写墓碑)。
+// *store.AccountDirectoryStore 满足它;语义见 store.AccountDirectoryStore.SealUncommittedRole。
+type PlayerRoleSealer interface {
+	SealUncommittedRole(ctx context.Context, playerID uint64) (store.RoleSeal, error)
+}
+
+// PlayerStoreAssetReader 读 player_store 的写权行和 kWallet 行。*store.AccountDirectoryStore 满足它。
 type PlayerStoreAssetReader interface {
 	ReadPlayerStoreAsset(ctx context.Context, playerID uint64) (*store.PlayerAssetRow, error)
+}
+
+// PlayerStoreProfileReader 读 player_store 的写权行和 kProfile 行(物品获取封禁表在这一行)。*store.AccountDirectoryStore 满足它。
+type PlayerStoreProfileReader interface {
+	ReadPlayerStoreProfile(ctx context.Context, playerID uint64) (*store.PlayerProfileRow, error)
 }
 
 // PlayerStoreDisplayReader 读玩家展示资料。*store.AccountDirectoryStore 满足它。
@@ -97,8 +113,14 @@ type PlayerStoreDisplayReader interface {
 }
 
 // PlayerStoreHolderReleaser 在持有节点判死后释放写权。*store.AccountDirectoryStore 满足它。
+// LeaveScene 判死释放走后两个方法(读 → scene_manager 复核持有实例 → 比较并写,store/player_store_dead_holder.go);
+// 只按代次的 ReleaseDeadPlayerStoreHolder 留给无资格撤销之后的补释放。
 type PlayerStoreHolderReleaser interface {
 	ReleaseDeadPlayerStoreHolder(ctx context.Context, playerID, ownerEpoch uint64) error
+	// ReadPlayerStoreHolder 普通读写权行判持有者用的三列;没有路由或写权行回 (nil, nil)。
+	ReadPlayerStoreHolder(ctx context.Context, playerID uint64) (*dspb.PlayerStoreHolder, error)
+	// ReleaseDeadPlayerStoreHolderIfUnchanged 写权行还是 seen 才释放;读之后有人认领过回 accountdirectory.ErrConflict。
+	ReleaseDeadPlayerStoreHolderIfUnchanged(ctx context.Context, playerID, ownerEpoch uint64, seen *dspb.PlayerStoreHolder) error
 }
 
 // PlayerRouteStore 是玩家归属 / 落点映射的持久层(docs/design/player-route-mapping-durability-proposal.md §15)。
@@ -151,6 +173,8 @@ type ServiceContext struct {
 	IdSegmentStore         IdSegmentStore
 	rowIDSegments          []*idsegment.Client // player_snapshot、rollback_audit_log 的行号来源,Close 时关
 	PlayerNameStore        PlayerNameStore     // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
+	// PlayerRoleSeals 是释放预留态名字之前的证明(账号目录)。目录没装配起来时为 nil,ReleasePlayerName 一律 fail-closed。
+	PlayerRoleSeals PlayerRoleSealer
 	// Recall 是 GM 批量回收的 outbox。RecallReady 只有资产通道装配起来才为真,为假时执行回 ErrCodeRecallDisabled。
 	Recall      RecallStore
 	RecallReady bool
@@ -158,8 +182,10 @@ type ServiceContext struct {
 	recall      *RecallChannel
 	recallStore *store.RecallStore
 
-	// PlayerStoreAssets、PlayerStoreHolders、PlayerStoreDisplays 在账号目录装配不起来时为 nil,对应的读回 Unavailable。
+	// PlayerStoreAssets、PlayerStoreProfiles、PlayerStoreHolders、PlayerStoreDisplays 在账号目录装配不起来时为 nil,
+	// 对应的读回 Unavailable。
 	PlayerStoreAssets   PlayerStoreAssetReader
+	PlayerStoreProfiles PlayerStoreProfileReader
 	PlayerStoreHolders  PlayerStoreHolderReleaser
 	PlayerStoreDisplays PlayerStoreDisplayReader
 	// PlayerRouteStore 是 player_route 的读写(已经注入进 Router,这里只为 Close 与 MissingStores 留一份引用)。
@@ -320,6 +346,8 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		idSegmentStore      IdSegmentStore
 		rowIDSegments       []*idsegment.Client
 		playerNameStore     PlayerNameStore
+		// nameRegistry 是同一个名字 store 的具体类型:账号目录建角绑定名字、删角释放名字要它(ConfigurePlayerNames)。
+		nameRegistry *store.PlayerNameStore
 	)
 	// 发号器不依赖 MySQL。这里只校验配置、不连 etcd:etcd 暂时不可达时进程照常起,
 	// 只有真要预留新块的那次领段才会失败,恢复后自动好。
@@ -363,6 +391,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 				logx.Errorf("[ServiceContext] player name store init failed (CreatePlayer disabled): %v", err)
 			} else if names != nil {
 				playerNameStore = names
+				nameRegistry = names
 				logx.Infof("[ServiceContext] player name registry ready: release_window=%v cache_ttl=%v negative_cache_ttl=%v",
 					c.PlayerName.ReleaseWindow, c.PlayerName.CacheTTL, c.PlayerName.NegativeCacheTTL)
 			}
@@ -440,8 +469,13 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		s.AccountDirectory = directory
 		s.accountDirectoryCloser = directory
 		s.PlayerStoreAssets = directory
+		s.PlayerStoreProfiles = directory
 		s.PlayerStoreHolders = directory
 		s.PlayerStoreDisplays = directory
+		// 名字行「预留 → 绑定」(docs/design/guild-phase2/03-names.md §3.4a):目录建角提交之后绑定、删角之后释放,
+		// ReleasePlayerName 释放预留态之前由目录证明角色永远不会提交。两边用同一份 mysqlCfg 开,是同一组目录逻辑库。
+		directory.ConfigurePlayerNames(nameRegistry)
+		s.PlayerRoleSeals = directory
 		var verifier store.RoleFreezeVerifier
 		if c.AccountDirectory.RoleTradeSQLProof.Enabled {
 			if v, err := store.NewSQLRoleFreezeVerifier(directory, c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {

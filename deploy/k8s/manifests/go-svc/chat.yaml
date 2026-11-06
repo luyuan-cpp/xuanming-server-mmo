@@ -107,9 +107,7 @@ spec:
               value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
             # 两个DSN必须同GlobalAuthorityTiDBHost事务域、库名mmorpg_chat；不同账号分别承担运行与DDL。
             # 值由运维在外部Secret预置，脚本不回显或写入ConfigMap。
-            - name: LOGIN_REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef: {name: redis-auth, key: password, optional: true}
+            # chat 不连 login 的 Redis:在线原账号只认 gate 签名的会话原件(docs/design/gate-online-identity.md)。
             # 发送方身份走 data_service 的 GetRoleFenceState;chat 只读,不是参与者,只要这一把。缺了拒绝启动。
             - name: MMORPG_ROLE_FENCE_SECRET_CHAT
               valueFrom:

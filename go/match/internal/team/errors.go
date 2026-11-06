@@ -64,4 +64,11 @@ const (
 	ErrStateChanged = uint32(table.TeamError_kTeamStateChanged)
 	// ErrInternal:SQL、Redis、data_service、发号故障(表中 fault=1)。
 	ErrInternal = uint32(table.TeamError_kTeamInternal)
+
+	// ---- 人数档真人 PVP 的组队限制(2026-11-05,docs/design/global-match-hierarchical-pools.md 开头第 9、10 条) ----
+
+	// ErrPvpPartySize:每侧 5 人的 PVP_TEAM 不收 4 人队(CheckPvpPartySize)。
+	ErrPvpPartySize = uint32(table.TeamError_kTeamPvpPartySizeNotAllowed)
+	// ErrRatingGapTooLarge:计分模式开战时,队员在本模式的评分最高与最低之差超过 GlobalMatch.PartyRatingGapMax。
+	ErrRatingGapTooLarge = uint32(table.TeamError_kTeamRatingGapTooLarge)
 )

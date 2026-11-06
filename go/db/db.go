@@ -20,6 +20,7 @@ import (
 	"shared/authoritysql"
 	"shared/buildinfo"
 	"shared/drainproof"
+	"shared/etcdwatch"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/serverbase"
@@ -325,7 +326,8 @@ func newKillSwitchEtcdClient(cfg discov.EtcdConf) *clientv3.Client {
 		c.Password = cfg.Pass
 	}
 
-	cli, err := clientv3.New(c)
+	// keepalive:killswitch 的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
+	cli, err := clientv3.New(etcdwatch.WithKeepAlive(c))
 	if err != nil {
 		logx.Errorf("[killswitch] db failed to create etcd client; kill switch inactive (all requests allowed): %v", err)
 		return nil

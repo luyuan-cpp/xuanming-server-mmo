@@ -703,13 +703,14 @@ func TestWriterDriverSessionOptionalInterfacesPreservePolicy(t *testing.T) {
 	}
 }
 
-func TestWriterDriverResetFailurePoisonsWithoutBadConnReplay(t *testing.T) {
+// 复用前重置失败:这次借出还没发语句,回 ErrBadConn 让 database/sql 换连接(不是结局未知);这条连接本身照旧隔离。
+func TestWriterDriverResetFailureDiscardsConnectionWithBadConn(t *testing.T) {
 	w := &writerFakeWire{}
 	c := writerFixture(w)
 	c.raw = writerOptionalConn{writerFakeWire: w, valid: true, resetErr: driver.ErrBadConn}
 	err := c.ResetSession(context.Background())
-	if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, driver.ErrBadConn) || c.IsValid() {
-		t.Fatalf("reset失败不可回池: %v", err)
+	if !errors.Is(err, driver.ErrBadConn) || errors.Is(err, ErrOutcomeUnknown) || c.IsValid() {
+		t.Fatalf("reset失败要回ErrBadConn且不可回池: %v", err)
 	}
 	if _, err = c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil); err != errGuardClosed || w.execs != 0 {
 		t.Fatal("poison后仍发SQL")

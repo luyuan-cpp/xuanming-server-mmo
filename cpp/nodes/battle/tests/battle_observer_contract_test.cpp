@@ -15,14 +15,17 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "client/battle_client_edge.h"
+#include "core/security/service_call_auth.h"
 #include "data/table_battle_data_provider.h"
 #include "logic/battle_room_manager.h"
 #include "logic/battle_spectate_relay.h"
+#include "system/battle_replay_recorder.h"
 #include "muduo/net/Buffer.h"
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/InetAddress.h"
@@ -31,10 +34,12 @@
 #include "muduo/net/TcpServer.h"
 #include "network/codec/codec.h"
 #include "node/system/node/node.h"
+#include "node/system/node/node_command_topic.h"
 #include "node_config_manager.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/base/node.pb.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
+#include "proto/match/match_internal.pb.h"
 #include "proto/match/match_service.pb.h"
 #include "rpc/service_metadata/player_battle_service_metadata.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -69,13 +74,49 @@ public:
         if (auto* room = manager.FindRoom(battleId); room != nullptr) manager.OnSqlOutcomeAbort(*room);
     }
     // 清掉全部房间与节点级定时器:管理器是进程级单例,房间(连同观众)不能漏到后面的用例,定时器不能挂在已析构的 loop 上。
-    // 只能在 loop 线程、loop 析构之前调用。
+    // 停机关掉的观战准入也复位(AbortAllRooms 只升不降,生产上进程随后退出)。只能在 loop 线程、loop 析构之前调用。
     static void EraseAllRooms() {
         auto& manager = BattleRoomManager::Instance();
         for (const auto battleId : manager.rooms_.Ids()) manager.EraseRoom(battleId);
         manager.sqlOutcomeRooms_.clear();
         manager.sqlOutcomeTimer_.Cancel();
         manager.stuckRoomReportTimer_.Cancel();
+        manager.spectateChannelFrameAt_.clear();
+        manager.spectateKeepaliveTimer_.Cancel();
+        manager.spectateAdmissionClosed_ = false;
+        manager.outcomeShutdownFlush_ = false;
+        manager.sqlOutcomeRoute_ = nullptr;
+        manager.sqlOutcomeSendsPerPump_ = BattleRoomManager::kSqlOutcomeSendsPerPump;
+    }
+    // 观战通道心跳的一拍,时刻由用例给(生产由每秒一拍的定时器传真实时刻)。
+    static void PumpSpectateKeepalive(const std::chrono::steady_clock::time_point now, const uint64_t nowMs) {
+        BattleRoomManager::Instance().PumpSpectateKeepalive(now, nowMs);
+    }
+
+    // ---- 终局提交(停机补提交用例)----
+    using SqlOutcomeSend = BattleRoomManager::SqlOutcomeSend;
+    // 换掉终局发送口(PickSqlOutcomeSend):route 返回空函数 = 此刻没有 READY 的 match 通道。nullptr = 复位成生产实现。
+    static void RouteSqlOutcomes(std::function<SqlOutcomeSend()> route) {
+        BattleRoomManager::Instance().sqlOutcomeRoute_ = std::move(route);
+    }
+    // 终局重放泵的一拍(生产由 sqlOutcomeTimer_ 每秒一拍)。
+    static void PumpSqlOutcomes() { BattleRoomManager::Instance().PumpSqlOutcomes(); }
+    // 整场期限到期(生产由 battleTimer 触发):强制判平,开始提交终局。
+    static void ForceDeadline(const uint64_t battleId) { BattleRoomManager::Instance().OnBattleDeadline(battleId); }
+    // 把每拍上限改小(生产恒为 kSqlOutcomeSendsPerPump),不用造几十间房就能测上限;EraseAllRooms 复位。
+    static void LimitSqlOutcomeSendsPerPump(const std::size_t sends) {
+        BattleRoomManager::Instance().sqlOutcomeSendsPerPump_ = sends;
+    }
+    struct OutcomeRetry {
+        uint64_t attempts = 0;  // 已真正发出的次数
+        bool inFlight = false;
+        std::chrono::steady_clock::time_point nextAttempt{};
+    };
+    // 房间的终局重放状态;房间不存在返回空。
+    static std::optional<OutcomeRetry> OutcomeRetryOf(const uint64_t battleId) {
+        const auto* room = BattleRoomManager::Instance().FindRoom(battleId);
+        if (room == nullptr) return std::nullopt;
+        return OutcomeRetry{room->outcomeAttempt, room->outcomeInFlight, room->nextOutcomeAttempt};
     }
 };
 
@@ -103,6 +144,21 @@ constexpr char kOtherGateInstance[] = "other-relay-gate-instance";
 constexpr char kDefaultRelayTopic[] = "gate-spectate_g1";
 constexpr char kDefaultBroadcastTopic[] = "spectate-bcast_g1";
 std::atomic<uint64_t> nextBattleId{590000};
+// 夹具注入的终局签名密钥(MMORPG_MATCH_OUTCOME_SECRET_BATTLE):battle 用它签提交、验 match 的回复,用例用它签 match 的回复。
+constexpr char kOutcomeSecret[] = "12345678901234567890123456789012";
+
+// 终局发送口的替身(BattleRoomManagerTestAccess::RouteSqlOutcomes):ready=false 模拟 match 通道都没就绪
+// (PumpSqlOutcomes 挑不到通道),ready=true 时收下请求与 done,由用例决定何时、以什么回复完成。
+// picks 记 PumpSqlOutcomes 来挑通道的次数(有到期的局时每拍一次),sent 记真正发出的请求。
+struct FakeMatchOutcomeRoute {
+    struct Sent {
+        match::CommitBattleOutcomeRequest request;
+        GrpcDone<match::CommitBattleOutcomeResponse> done;
+    };
+    bool ready = false;
+    int picks = 0;
+    std::vector<Sent> sent;
+};
 
 // 观战帧的 Kafka 消息体就是 SpectateFrameEvent(不套信封)。
 contracts::kafka::SpectateFrameEvent ParseFrame(const battle_spectate_relay::FrameRecord& record) {
@@ -462,14 +518,75 @@ protected:
         return request;
     }
 
-    QueryBattleCreationResponse CreationState() const {
+    QueryBattleCreationResponse CreationState() const { return CreationStateOf(battleId_); }
+
+    // 按夹具原件的放置操作查任一 battle_id 的建房状态;instance 换成别的 UUID 模拟 match 问的是已被替换的旧实例。
+    QueryBattleCreationResponse CreationStateOf(const uint64_t battleId, const std::string& instance = kInstance) const {
         QueryBattleCreationRequest query;
-        query.set_battle_id(battleId_);
+        query.set_battle_id(battleId);
         query.set_placement_operation_id(kPlacement);
-        query.set_target_instance_id(kInstance);
+        query.set_target_instance_id(instance);
         QueryBattleCreationResponse state;
         manager().HandleQueryBattleCreation(query, state);
         return state;
+    }
+
+    // 夹具房间按 1 点气血建:第一回合(DriveOneRound)就分出胜负,终局冻结、开始提交 match。
+    void CreateDecidedOnFirstRound() { ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound(battleId_)); }
+    // 同上,另建一间(battle_id 由用例给),TearDown 统一清掉。
+    void CreateDecidedOnFirstRound(const uint64_t battleId) {
+        auto creation = OriginalCreation();
+        creation.set_battle_id(battleId);
+        for (auto& player : *creation.mutable_players()) {
+            player.set_max_health(1);
+            player.mutable_base_attributes()->set_health(1);
+        }
+        CreateBattleResponse created;
+        manager().HandleCreateBattle(creation, created);
+        ASSERT_EQ(0u, created.error_message().id());
+    }
+
+    // 终局发送口换成 outcomeRoute_(TearDown 经 EraseAllRooms 复位成生产实现)。
+    void RouteOutcomesToFake() {
+        BattleRoomManagerTestAccess::RouteSqlOutcomes([this]() -> BattleRoomManagerTestAccess::SqlOutcomeSend {
+            ++outcomeRoute_.picks;
+            if (!outcomeRoute_.ready) return {};
+            return [this](const match::CommitBattleOutcomeRequest& request,
+                          GrpcDone<match::CommitBattleOutcomeResponse> done) {
+                outcomeRoute_.sent.push_back({request, std::move(done)});
+            };
+        });
+    }
+
+    // 以 match 的签名回复完成第 index 次捕获的提交:与生产同一方法名、调用方与密钥,request_digest 绑定那次请求。
+    void ReplyToOutcome(const size_t index, const match::BattleOutcomeDecision decision) {
+        ASSERT_LT(index, outcomeRoute_.sent.size());
+        const auto request = outcomeRoute_.sent[index].request;
+        const auto done = outcomeRoute_.sent[index].done;
+        match::CommitBattleOutcomeResponse reply;
+        reply.set_decision(decision);
+        reply.set_request_digest(service_call_auth::Digest(request));
+        ASSERT_TRUE(service_call_auth::Sign("/match.MatchInternal/CommitBattleOutcome/reply", reply, *reply.mutable_auth(),
+                                            "match", kOutcomeSecret, TimeSystem::NowMillisecondsUTC()));
+        done(GrpcCallOutcome{}, &reply);
+    }
+
+    // 第 index 次捕获的提交以传输失败收尾(match 副本滚动重启回 UNAVAILABLE),没有回复体。
+    void FailOutcome(const size_t index) {
+        ASSERT_LT(index, outcomeRoute_.sent.size());
+        const auto done = outcomeRoute_.sent[index].done;
+        GrpcCallOutcome unavailable;
+        unavailable.code = kGrpcStatusUnavailable;
+        unavailable.message = "unit: match replica restarting";
+        done(unavailable, nullptr);
+    }
+
+    // 某局最近一次捕获的提交在 sent 里的下标;没有返回 sent.size()。
+    size_t LatestOutcomeOf(const uint64_t battleId) const {
+        for (size_t index = outcomeRoute_.sent.size(); index > 0; --index) {
+            if (outcomeRoute_.sent[index - 1].request.battle_id() == battleId) return index - 1;
+        }
+        return outcomeRoute_.sent.size();
     }
 
     void Create() {
@@ -635,7 +752,7 @@ protected:
     ObserverFixtureEnvironment global_{"GLOBAL_MATCH_ENABLED", "true"};
     ObserverFixtureEnvironment region_{"PHYSICAL_REGION", "1"};
     // 建房要求终局签名密钥就绪;测密钥门的用例在自己的作用域里换值。
-    ObserverFixtureEnvironment outcomeKey_{"MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012"};
+    ObserverFixtureEnvironment outcomeKey_{"MMORPG_MATCH_OUTCOME_SECRET_BATTLE", kOutcomeSecret};
     NodeConfigManager savedGlobal_;
     NodeConfigManager savedThread_;
     std::unique_ptr<muduo::net::EventLoop> loop_;
@@ -647,6 +764,8 @@ protected:
     // 观战帧出口捕获到的记录,以及出口对它们的回答(false = 模拟没进生产者队列)。
     std::vector<battle_spectate_relay::FrameRecord> spectateFrames_;
     bool spectateSinkAccepts_ = true;
+    // 停机补提交用例的终局发送口替身(RouteOutcomesToFake 装上才生效)。
+    FakeMatchOutcomeRoute outcomeRoute_;
 };
 
 TEST_F(BattleObserverContract, AssignmentFailureRemovesOriginalOperationAndNewOperationRecovers) {
@@ -664,6 +783,9 @@ TEST_F(BattleObserverContract, AssignmentFailureRemovesOriginalOperationAndNewOp
     manager().HandleAddObserver(first, failed);
     node_->MutableNodeInfo() = originalNode_;
     ASSERT_EQ(static_cast<uint32_t>(::kServiceUnavailable), failed.error_message().id());
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(first));
+    // 同 op、同请求的重放回首次拒绝码:签票地址已恢复也不重新判定(墓碑已封闭),match 拿到的结论与第一次相同。
+    EXPECT_EQ(static_cast<uint32_t>(::kServiceUnavailable), AddError(first));
     EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(first));
 
     // 不靠Remove补偿掩盖Add失败分支；新op必须已经可以接管空槽并补签。
@@ -1025,7 +1147,9 @@ TEST_F(BattleObserverContract, CreateRejectsAnythingOtherThanOutcomeProtocolV1) 
 }
 
 // 房间只由 Match 的持久决定收尾:房间还在时 DestroyBattle 什么都不做(不发 END、不删房);
-// 从未建成的原操作立墓碑,同 battle_id 迟到的 CreateBattle 被拒。
+// 从未建成的原操作立墓碑,同 battle_id 迟到的 CreateBattle 被拒(准入期限还没过也拒),查询回 ABORTED;
+// 问的若是别的实例 UUID(进程已重启 / 实例被替换)回空包 = UNKNOWN。match 的「可证明不会建房提前 ABORT」
+// (cross-zone-matchmaking.md §13.3「2026-11-05 修复」第 7 条)依赖这三条,2026-11-05 补断言。
 TEST_F(BattleObserverContract, DestroyNeverEndsALiveRoomAndTombstonesAnAbsentOne) {
     ASSERT_NO_FATAL_FAILURE(Create());
     ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
@@ -1037,12 +1161,32 @@ TEST_F(BattleObserverContract, DestroyNeverEndsALiveRoomAndTombstonesAnAbsentOne
 
     const auto absentBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
     Destroy(absentBattle);
+    EXPECT_EQ(BATTLE_CREATION_ABORTED, CreationStateOf(absentBattle).state()) << "无房间的原操作立拒收墓碑";
     auto late = OriginalCreation();
     late.set_battle_id(absentBattle);
+    late.set_admit_before_ms(originalNowMs_ + 24ull * 3600 * 1000);  // 准入期限远未到:拒收只能来自墓碑
     CreateBattleResponse refused;
     manager().HandleCreateBattle(late, refused);
     EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
     EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(absentBattle, kRelayGate, kGateInstance).error_message().id());
+    EXPECT_EQ(BATTLE_CREATION_ABORTED, CreationStateOf(absentBattle).state()) << "被拒的 Create 不改墓碑";
+    EXPECT_EQ(BATTLE_CREATION_UNKNOWN, CreationStateOf(absentBattle, "ffffffff-4208-482e-b187-a28a98ca2b54").state())
+        << "实例不符回空包";
+}
+
+// 准入期限按处理那一刻的本机时钟判:过了 admit_before_ms 才处理到的 Create(排队、等分配许可或网络迟到)一律拒收、
+// 不建房、不留创建记录(查询仍回 ABSENT)。match 提前 ABORT 的证据链依赖这一条(同上 §13.3 第 7 条)。
+// 分配许可回来之后才调本入口的接线在 handler/grpc/battle_node.cpp(CreateBattleWithPermit → Proceed),不在本用例范围。
+TEST_F(BattleObserverContract, CreateProcessedAfterAdmissionDeadlineIsRefusedWithoutRoom) {
+    auto late = OriginalCreation();
+    late.set_admit_before_ms(1);  // 远早于本机此刻,与真实时钟的走动无关
+    CreateBattleResponse refused;
+    manager().HandleCreateBattle(late, refused);
+    EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
+    EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+    EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
+    EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(battleId_, kRelayGate, kGateInstance).error_message().id())
+        << "没有建房";
 }
 
 // Match 持久 COMPLETE:此刻才公布最后一回合与终局,观众收 BATTLE_FINISHED + 真实胜负,房间随即删除。
@@ -1077,6 +1221,224 @@ TEST_F(BattleObserverContract, CompleteDecisionPublishesFinalTurnThenEndAndErase
     EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(battleId_, kRelayGate, kGateInstance).error_message().id())
         << "房间已删";
     EXPECT_FALSE(BattleRoomManagerTestAccess::Complete(battleId_));
+}
+
+// ---- 终局提交的重放节奏与停机补提交(cross-zone-matchmaking.md §13.6「2026-10-23 修复」,2026-11-05 补行为回归)----
+// 终局发送口换成 outcomeRoute_,match 的回复由用例以同一密钥签出后回放;时刻断言只比先后,不等真实时间。
+
+// 只有真正发出 CommitBattleOutcome 才推后下次尝试(2026-11-05 修复,r2-battle#2 评审):match 通道还没就绪不算一次尝试,
+// 下一拍照常再挑通道,一就绪就发出;发出之后才推后 SqlOutcomeRetryInterval,在途期间不重发,也不挑通道。
+// 停机排空窗口外,失败回调只清在途,不提前重发(不会每拍重复发送)。
+// 修复前没发出去也推后 5s:停机补提交时通道恰好在 CONNECTING,就要白等 5s。
+TEST_F(BattleObserverContract, OutcomeRetryIsNotDeferredWhileNoMatchChannelIsReady) {
+    RouteOutcomesToFake();
+    ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    ASSERT_EQ(1, outcomeRoute_.picks) << "打完立即尝试一次";
+    ASSERT_TRUE(outcomeRoute_.sent.empty());
+    auto retry = BattleRoomManagerTestAccess::OutcomeRetryOf(battleId_);
+    ASSERT_TRUE(retry.has_value());
+    EXPECT_EQ(0u, retry->attempts);
+    EXPECT_FALSE(retry->inFlight);
+    EXPECT_EQ(std::chrono::steady_clock::time_point{}, retry->nextAttempt) << "没发出去,不推后";
+
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    EXPECT_EQ(2, outcomeRoute_.picks) << "下一拍照常再挑通道";
+    EXPECT_TRUE(outcomeRoute_.sent.empty());
+
+    outcomeRoute_.ready = true;
+    const auto beforeSend = std::chrono::steady_clock::now();
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    ASSERT_EQ(1u, outcomeRoute_.sent.size()) << "通道一就绪就发出";
+    EXPECT_EQ(battleId_, outcomeRoute_.sent[0].request.battle_id());
+    EXPECT_EQ(kPlacement, outcomeRoute_.sent[0].request.placement_operation_id());
+    EXPECT_EQ(kInstance, outcomeRoute_.sent[0].request.target_instance_id());
+    retry = BattleRoomManagerTestAccess::OutcomeRetryOf(battleId_);
+    ASSERT_TRUE(retry.has_value());
+    EXPECT_EQ(1u, retry->attempts);
+    EXPECT_TRUE(retry->inFlight);
+    EXPECT_GE(retry->nextAttempt, beforeSend + turnbattle::kSqlOutcomeRetryInterval) << "发出之后才推后";
+
+    const auto picksWhileInFlight = outcomeRoute_.picks;
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    EXPECT_EQ(1u, outcomeRoute_.sent.size()) << "在途期间不重发";
+    EXPECT_EQ(picksWhileInFlight, outcomeRoute_.picks) << "没有到期的局就不挑通道(不扫 match 注册表)";
+
+    ASSERT_NO_FATAL_FAILURE(FailOutcome(0));
+    retry = BattleRoomManagerTestAccess::OutcomeRetryOf(battleId_);
+    ASSERT_TRUE(retry.has_value());
+    EXPECT_FALSE(retry->inFlight) << "失败回调清掉在途";
+    EXPECT_EQ(1u, retry->attempts);
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    EXPECT_EQ(1u, outcomeRoute_.sent.size()) << "排空窗口外失败之后仍按发送时记下的 5s 推后,不每拍重发";
+}
+
+// 停机时已分出胜负、终局在等 Match 决定的房间:停机那一刻 match 通道还没就绪(刚滚动重启,还在 CONNECTING),
+// 通道一就绪,下一拍就补发,不等 5s;排空谓词(SqlOutcomesFlushed)在拿到决定之前为假、房间留在表里;Match 回 COMPLETE
+// 后照常收尾删房,房间移除回调(main.cpp 接到 Agones OnUnitDestroyed)恰好一次,排空谓词转真。同节点还在打的房间不阻塞
+// 排空、不发提交,留到进程退出(查询仍回 PRESENT)。修复前 AbortAllRooms 那一拍没发出去也推后 5s,就绪后的下一拍发不出。
+// 生命周期回调捕获本用例的局部计数,放在独立子进程里。
+TEST_F(BattleObserverContract, ShutdownFlushHoldsDrainUntilFrozenOutcomeIsDecided) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        std::map<uint64_t, int> removed;
+        manager().SetRoomLifecycleHooks({nullptr, [&removed](const uint64_t battleId) { ++removed[battleId]; }});
+        RouteOutcomesToFake();  // 打完那一刻 match 通道还没就绪,终局没发出去
+        ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
+        const auto ongoing = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+        ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(ongoing, ::SPECTATE_VISIBILITY_PUBLIC));
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        ASSERT_TRUE(outcomeRoute_.sent.empty());
+        EXPECT_FALSE(manager().SqlOutcomesFlushed()) << "终局已冻结、还没拿到决定";
+
+        manager().AbortAllRooms("unit_shutdown");
+        EXPECT_TRUE(outcomeRoute_.sent.empty()) << "停机那一刻通道还没就绪";
+        EXPECT_FALSE(manager().SqlOutcomesFlushed());
+
+        outcomeRoute_.ready = true;
+        BattleRoomManagerTestAccess::PumpSqlOutcomes();
+        ASSERT_EQ(1u, outcomeRoute_.sent.size()) << "通道一就绪,下一拍就补发(不等 5s),只发已冻结终局的那一局";
+        EXPECT_EQ(battleId_, outcomeRoute_.sent[0].request.battle_id());
+        EXPECT_FALSE(manager().SqlOutcomesFlushed());
+        EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state()) << "拿到决定之前房间留在表里";
+        EXPECT_TRUE(removed.empty());
+
+        ASSERT_NO_FATAL_FAILURE(ReplyToOutcome(0, match::BATTLE_OUTCOME_DECISION_COMPLETE));
+        EXPECT_TRUE(manager().SqlOutcomesFlushed());
+        EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state()) << "COMPLETE 收尾删房";
+        EXPECT_EQ(1, removed[battleId_]);
+        EXPECT_EQ(0u, removed.count(ongoing)) << "还在打的房间不删";
+        EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationStateOf(ongoing).state());
+        EXPECT_EQ(1u, outcomeRoute_.sent.size());
+    }));
+}
+
+// 停机时没有已冻结的终局(房间都还在打):排空谓词立即为真,不为补提交多等,也不挑通道、不发提交;
+// 房间留在表里(查询仍回 PRESENT),由 Match 在权威截止后判 ABORT。
+// 守的是排空谓词只看已冻结的终局:要是改成按房间表判(例如「房间都拿到决定才算排空」),这里会变红。
+// 不挑通道、不发提交两条只是记录现状(还在打的房间本来就不进待提交集合)。
+TEST_F(BattleObserverContract, ShutdownWithOnlyOngoingRoomsIsDrainedImmediately) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    RouteOutcomesToFake();
+    outcomeRoute_.ready = true;
+    manager().AbortAllRooms("unit_shutdown");
+    EXPECT_TRUE(manager().SqlOutcomesFlushed());
+    EXPECT_EQ(0, outcomeRoute_.picks);
+    EXPECT_TRUE(outcomeRoute_.sent.empty());
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+}
+
+// 拆除前钩子(StopSqlOutcomes)之后:泵不再挑通道、不再发请求;停止闸之前发出、之后才回来的回复只打日志,
+// 不删房、不发终局帧、不触发移除回调(停止闸之后仍可能有在途调用的回调到达,由 outcomeStopping_ 吞掉)。
+// 最后一段在停止闸之后再冻结一局,把「泵的停止闸」与「待提交集合已被清空」分开:那一局进了待提交集合,泵仍不发。
+// 停止闸只升不降,放在独立子进程里。
+TEST_F(BattleObserverContract, StoppedOutcomesSendNothingAndLateRepliesHaveNoEffect) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        std::map<uint64_t, int> removed;
+        manager().SetRoomLifecycleHooks({nullptr, [&removed](const uint64_t battleId) { ++removed[battleId]; }});
+        RouteOutcomesToFake();
+        outcomeRoute_.ready = true;
+        ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
+        ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        ASSERT_EQ(1u, outcomeRoute_.sent.size()) << "打完立即提交一次";
+        manager().AbortAllRooms("unit_shutdown");
+        EXPECT_EQ(1u, outcomeRoute_.sent.size()) << "在途的那次不打断、不重发";
+        (void)TakeFrames();
+
+        manager().StopSqlOutcomes();
+        const auto picksAtStop = outcomeRoute_.picks;
+        BattleRoomManagerTestAccess::PumpSqlOutcomes();
+        EXPECT_EQ(picksAtStop, outcomeRoute_.picks) << "停止闸之后不再挑通道";
+        EXPECT_EQ(1u, outcomeRoute_.sent.size()) << "也不再发请求";
+        EXPECT_TRUE(manager().SqlOutcomesFlushed()) << "待提交集合已清空";
+
+        ASSERT_NO_FATAL_FAILURE(ReplyToOutcome(0, match::BATTLE_OUTCOME_DECISION_COMPLETE));
+        EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state()) << "停止闸之后到达的 COMPLETE 不收尾";
+        EXPECT_TRUE(removed.empty());
+        EXPECT_TRUE(TakeFrames().empty()) << "也不发终局帧";
+
+        // 生产上停止闸之后房间定时器都已停,不会再冻结终局;这里直接驱动一局,只为让待提交集合非空。
+        const auto decidedAfterStop = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+        ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound(decidedAfterStop));
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(decidedAfterStop));
+        BattleRoomManagerTestAccess::PumpSqlOutcomes();
+        EXPECT_EQ(picksAtStop, outcomeRoute_.picks) << "待提交集合不空,停止闸照样拦住泵";
+        EXPECT_EQ(1u, outcomeRoute_.sent.size());
+    }));
+}
+
+// 恢复时的积压按每拍上限摊开(2026-11-05 第二轮评审补):match 全部不可达期间积下的终局,通道恢复后每拍至多发
+// sqlOutcomeSendsPerPump_ 局(这里改成 1),其余留到下一拍,每一局都轮得到;全部在途之后不再挑通道。
+// 修复前恢复后的第一拍把积压一起发出,多个 battle 副本同时打向刚恢复的 match。
+TEST_F(BattleObserverContract, OutcomeBacklogAfterRecoveryIsSpreadAcrossPumps) {
+    BattleRoomManagerTestAccess::LimitSqlOutcomeSendsPerPump(1);
+    RouteOutcomesToFake();  // match 不可达:打完的局都发不出去
+    const std::vector<uint64_t> decided{battleId_, nextBattleId.fetch_add(1, std::memory_order_relaxed),
+                                        nextBattleId.fetch_add(1, std::memory_order_relaxed)};
+    for (const auto battleId : decided) {
+        ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound(battleId));
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId));
+    }
+    ASSERT_TRUE(outcomeRoute_.sent.empty());
+
+    outcomeRoute_.ready = true;
+    std::set<uint64_t> sentBattles;
+    for (size_t pump = 1; pump <= decided.size(); ++pump) {
+        BattleRoomManagerTestAccess::PumpSqlOutcomes();
+        ASSERT_EQ(pump, outcomeRoute_.sent.size()) << "每拍只发一局,pump=" << pump;
+        sentBattles.insert(outcomeRoute_.sent.back().request.battle_id());
+    }
+    EXPECT_EQ(std::set<uint64_t>(decided.begin(), decided.end()), sentBattles) << "积压的每一局都轮到了";
+
+    const auto picksWhenAllInFlight = outcomeRoute_.picks;
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    EXPECT_EQ(decided.size(), outcomeRoute_.sent.size());
+    EXPECT_EQ(picksWhenAllInFlight, outcomeRoute_.picks) << "没有到期的局就不挑通道";
+}
+
+// 停机排空窗口内(2026-11-05 第二轮评审补):补提交不受每拍上限约束,一拍发完;窗口之前按 5s 推后发出的在途那次,
+// 很快失败(match 副本滚动重启回 UNAVAILABLE)之后下一拍就重发,不等满 5s;窗口内每次失败都是下一拍重发,
+// 在途期间不重发。修复前在途那次失败后要等到发送时记下的 5s 之后,15s 排空预算里白等。
+TEST_F(BattleObserverContract, ShutdownFlushIsUncappedAndResendsAFailedAttemptOnTheNextPump) {
+    BattleRoomManagerTestAccess::LimitSqlOutcomeSendsPerPump(1);
+    RouteOutcomesToFake();
+    outcomeRoute_.ready = true;
+    ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    ASSERT_EQ(1u, outcomeRoute_.sent.size()) << "停机之前发出、在途";
+
+    outcomeRoute_.ready = false;  // 另两局打完时 match 不可达
+    const std::vector<uint64_t> unsent{nextBattleId.fetch_add(1, std::memory_order_relaxed),
+                                       nextBattleId.fetch_add(1, std::memory_order_relaxed)};
+    for (const auto battleId : unsent) {
+        ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound(battleId));
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId));
+    }
+    ASSERT_EQ(1u, outcomeRoute_.sent.size());
+
+    outcomeRoute_.ready = true;
+    manager().AbortAllRooms("unit_shutdown");
+    ASSERT_EQ(3u, outcomeRoute_.sent.size()) << "排空窗口内不设每拍上限,没发出去的两局一拍发完";
+    EXPECT_EQ(std::set<uint64_t>(unsent.begin(), unsent.end()),
+              (std::set<uint64_t>{outcomeRoute_.sent[1].request.battle_id(), outcomeRoute_.sent[2].request.battle_id()}));
+
+    ASSERT_NO_FATAL_FAILURE(FailOutcome(0));  // 窗口之前发出的那次很快失败
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    ASSERT_EQ(4u, outcomeRoute_.sent.size()) << "下一拍就重发,不等发送时记下的 5s";
+    EXPECT_EQ(battleId_, outcomeRoute_.sent[3].request.battle_id());
+
+    ASSERT_NO_FATAL_FAILURE(FailOutcome(3));
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    ASSERT_EQ(5u, outcomeRoute_.sent.size()) << "窗口内每次失败都是下一拍重发";
+    EXPECT_EQ(battleId_, outcomeRoute_.sent[4].request.battle_id());
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    EXPECT_EQ(5u, outcomeRoute_.sent.size()) << "在途期间不重发";
+
+    for (const auto battleId : {battleId_, unsent[0], unsent[1]}) {
+        ASSERT_NO_FATAL_FAILURE(ReplyToOutcome(LatestOutcomeOf(battleId), match::BATTLE_OUTCOME_DECISION_COMPLETE));
+    }
+    EXPECT_TRUE(manager().SqlOutcomesFlushed()) << "三局都拿到决定";
+    EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
 }
 
 // 查询能力来自本节点此刻可签名状态；空/短/仅空白密钥均不能宣告v1。
@@ -1461,16 +1823,183 @@ TEST_F(BattleObserverContract, RefusedSpectateFramesNeitherFailAttachNorBlockRou
     EXPECT_EQ(ParseFrame(refused[0]).round_index() + 1, ParseFrame(healed[0]).round_index());
 }
 
-// 停机口径与 L0 相同(§5.3):不发 END(不能发一个可能与 Match 真实决定矛盾的 ABORTED),中继观众靠 gate 的
-// 空闲超时收尾;房间留在表里等决定。
-TEST_F(BattleObserverContract, ShutdownSendsNoEndFrameWhileOutcomeIsUndecided) {
+// 停机时还在打的房间此后不会再有任何一帧:每条通道各收一帧 166 SOURCE_LOST(升过档的只走广播),outcome 未知,
+// L0 观众随之清退(取消证明照常给)。不发 ABORTED:作废只能由 Match 的持久 ABORT 宣布。房间留在表里等 Match 判决,
+// 心跳随 END 停掉(2026-11-05 第二轮评审定,两版同口径)。
+TEST_F(BattleObserverContract, ShutdownTellsEveryChannelTheSourceIsLostForRoomsStillInProgress) {
     ASSERT_NO_FATAL_FAILURE(Create());
+    const auto observer = Original(kFirstOperation);
+    ASSERT_EQ(0u, AddError(observer));
     ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    const auto promotedBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(promotedBattle, ::SPECTATE_VISIBILITY_PUBLIC));
+    ASSERT_EQ(0u, Promote(promotedBattle).error_message().id());
     (void)TakeFrames();
 
     manager().AbortAllRooms("unit_shutdown");
+
+    const auto frames = TakeFrames();
+    ASSERT_EQ(2u, frames.size());
+    std::map<uint64_t, battle_spectate_relay::FrameRecord> byBattle;
+    for (const auto& record : frames) {
+        const auto frame = ParseFrame(record);
+        byBattle.emplace(frame.battle_id(), record);
+        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, frame.kind());
+        const auto end = ParseClientFrame<SpectateEndS2C>(frame, BattleClientPlayerNotifySpectateEndMessageId);
+        EXPECT_EQ(::SPECTATE_END_SOURCE_LOST, end.reason());
+        EXPECT_EQ(::BATTLE_OUTCOME_ONGOING, end.outcome());
+    }
+    ASSERT_EQ(1u, byBattle.count(battleId_));
+    ASSERT_EQ(1u, byBattle.count(promotedBattle));
+    ExpectRelayRecord(byBattle.at(battleId_), battleId_, kRelayGate, kGateInstance);
+    ExpectBroadcastRecord(byBattle.at(promotedBattle), promotedBattle);
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(observer)) << "L0 观众随 END 清退";
+    EXPECT_TRUE(Remove(observer).cancelled());
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state()) << "房间留在表里等 Match 判决";
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(std::chrono::steady_clock::now() + std::chrono::hours(1),
+                                                       TimeSystem::NowMillisecondsUTC());
+    EXPECT_TRUE(TakeFrames().empty()) << "END 之后不再出心跳";
+}
+
+// 停机排空之后房间已冻结:新观众、新挂的 gate 与升档一律回 kServiceUnavailable,不登记、不发帧;同 op 重放回首次拒绝码;
+// 取消证明照常给(match 关原件要它);房间不存在仍回 kEntityIsNull,match 据此懒剔除索引(R2-BATTLE 一般-2)。
+TEST_F(BattleObserverContract, ShutdownClosesSpectateAdmission) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    manager().AbortAllRooms("unit_shutdown");
+    (void)TakeFrames();
+
+    const auto late = Original(kFirstOperation);
+    EXPECT_EQ(static_cast<uint32_t>(::kServiceUnavailable), AddError(late));
+    EXPECT_EQ(static_cast<uint32_t>(::kServiceUnavailable), AddError(late)) << "同 op 重放回首次拒绝码";
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(late));
+    EXPECT_TRUE(Remove(late).cancelled());
+    EXPECT_EQ(static_cast<uint32_t>(::kServiceUnavailable),
+              Attach(battleId_, kOtherRelayGate, kOtherGateInstance).error_message().id());
+    EXPECT_EQ(static_cast<uint32_t>(::kServiceUnavailable), Promote(battleId_).error_message().id());
     EXPECT_TRUE(TakeFrames().empty());
-    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+    const auto absent = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(absent, kRelayGate, kGateInstance).error_message().id());
+}
+
+// 停机时已算出终局、还在等 Match 决定的房间不发 END:排空窗口内拿到决定就照常发真结局,所以心跳继续;
+// 拆除前(StopSqlOutcomes)之后再也拿不到决定,心跳停掉,gate 按空闲超时收尾。StopSqlOutcomes 留下的停止闸
+// 只升不降,放在独立子进程里,不影响后面的用例。
+TEST_F(BattleObserverContract, ShutdownKeepsUndecidedOutcomeRoomsOnKeepaliveUntilTeardown) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        auto creation = OriginalCreation();
+        for (auto& player : *creation.mutable_players()) {
+            player.set_max_health(1);
+            player.mutable_base_attributes()->set_health(1);
+        }
+        CreateBattleResponse created;
+        manager().HandleCreateBattle(creation, created);
+        ASSERT_EQ(0u, created.error_message().id());
+        ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        (void)TakeFrames();
+
+        manager().AbortAllRooms("unit_shutdown");
+        EXPECT_TRUE(TakeFrames().empty()) << "终局还在等决定,不能抢先收尾";
+        const auto later = std::chrono::steady_clock::now() + node::kafka::kSpectateChannelKeepalive;
+        BattleRoomManagerTestAccess::PumpSpectateKeepalive(later, TimeSystem::NowMillisecondsUTC());
+        const auto frames = TakeFrames();
+        ASSERT_EQ(1u, frames.size());
+        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, ParseFrame(frames[0]).kind());
+
+        manager().StopSqlOutcomes();
+        BattleRoomManagerTestAccess::PumpSpectateKeepalive(later + node::kafka::kSpectateChannelKeepalive,
+                                                           TimeSystem::NowMillisecondsUTC());
+        EXPECT_TRUE(TakeFrames().empty()) << "拆除之后不再续命";
+    }));
+}
+
+// 开了通道的房间距上一次全通道发帧满心跳间隔就补一帧 STATE:手动回合等满 25 s、或在等结果回执时,gate 都不会误判源站失联。
+// 回合帧刷新心跳起点;过了作废期限 + gate 的期限宽限就不再发(gate 已按期限收尾),本场移出名单(R2-BATTLE 一般-1)。
+TEST_F(BattleObserverContract, ChannelKeepaliveRepublishesStateAfterTheKeepaliveInterval) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto beforeAttach = std::chrono::steady_clock::now();
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    const auto afterAttach = std::chrono::steady_clock::now();
+    (void)TakeFrames();
+    const auto keepalive = node::kafka::kSpectateChannelKeepalive;
+    const auto nowMs = TimeSystem::NowMillisecondsUTC();
+
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(beforeAttach + keepalive - std::chrono::milliseconds(1), nowMs);
+    EXPECT_TRUE(TakeFrames().empty()) << "间隔还没到";
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterAttach + keepalive, nowMs);
+    auto frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kGateInstance);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, ParseFrame(frames[0]).kind());
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterAttach + keepalive, nowMs);
+    EXPECT_TRUE(TakeFrames().empty()) << "刚发过心跳";
+
+    const auto beforeTurn = std::chrono::steady_clock::now();
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    const auto afterTurn = std::chrono::steady_clock::now();
+    ASSERT_EQ(1u, TakeFrames().size());
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(beforeTurn + keepalive - std::chrono::milliseconds(1), nowMs);
+    EXPECT_TRUE(TakeFrames().empty()) << "回合帧刷新了心跳起点";
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterTurn + keepalive, nowMs);
+    EXPECT_EQ(1u, TakeFrames().size());
+
+    const auto pastDeadline = originalNowMs_ + 180000 + node::kafka::kSpectateDeadlineGraceMs;
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterTurn + 10 * keepalive, pastDeadline);
+    EXPECT_TRUE(TakeFrames().empty()) << "过了期限宽限,gate 已按期限收尾";
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterTurn + 20 * keepalive, nowMs);
+    EXPECT_TRUE(TakeFrames().empty()) << "移出名单后不会再发";
+}
+
+// 等结果回执期间(最后一回合已结算,TURN 与 END 等 Match 决定)心跳照常:帧是冻结的可见状态,不泄露终局;升档之后只走广播;
+// 拿到 COMPLETE 时最后一回合的 TURN 先于 END,且都只走广播;房间删掉之后不再出心跳(R2-BATTLE 一般-1 与测试缺口)。
+TEST_F(BattleObserverContract, OutcomeWaitKeepaliveCarriesFrozenStateAndPromotedCompleteOnlyBroadcasts) {
+    auto creation = OriginalCreation();
+    for (auto& player : *creation.mutable_players()) {
+        player.set_max_health(1);
+        player.mutable_base_attributes()->set_health(1);
+    }
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    const auto afterAttach = std::chrono::steady_clock::now();
+    (void)TakeFrames();
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    ASSERT_TRUE(TakeFrames().empty()) << "拿到决定之前不公布最后一回合";
+    const auto keepalive = node::kafka::kSpectateChannelKeepalive;
+    const auto nowMs = TimeSystem::NowMillisecondsUTC();
+
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterAttach + keepalive, nowMs);
+    auto frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kGateInstance);
+    const auto heartbeat = ParseFrame(frames[0]);
+    ASSERT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, heartbeat.kind());
+    const auto frozen = ParseClientFrame<SpectateStateS2C>(heartbeat, BattleClientPlayerNotifySpectateStateMessageId);
+    EXPECT_EQ(::BATTLE_OUTCOME_ONGOING, frozen.state().outcome());
+    EXPECT_EQ(2, frozen.state().actors_size());
+    for (const auto& actor : frozen.state().actors()) EXPECT_FALSE(actor.is_dead());
+
+    ASSERT_EQ(0u, Promote(battleId_).error_message().id());
+    const auto afterPromote = std::chrono::steady_clock::now();
+    frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectBroadcastRecord(frames[0], battleId_);
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterPromote + keepalive, nowMs);
+    frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size()) << "升档之后心跳只走广播";
+    ExpectBroadcastRecord(frames[0], battleId_);
+
+    ASSERT_TRUE(BattleRoomManagerTestAccess::Complete(battleId_));
+    frames = TakeFrames();
+    ASSERT_EQ(2u, frames.size());
+    ExpectBroadcastRecord(frames[0], battleId_);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_TURN, ParseFrame(frames[0]).kind());
+    ExpectBroadcastRecord(frames[1], battleId_);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, ParseFrame(frames[1]).kind());
+    BattleRoomManagerTestAccess::PumpSpectateKeepalive(afterPromote + 10 * keepalive, nowMs);
+    EXPECT_TRUE(TakeFrames().empty()) << "房间已删,不再出心跳";
 }
 
 // 等结果回执期间,终局已算出但还没拿到决定:最后一回合的 TURN 不提前发,新挂的 gate 收到的 STATE 是冻结的可见状态,
@@ -1512,5 +2041,81 @@ TEST_F(BattleObserverContract, ClientEdgeEffectiveMaxConnectionsFallsBackToHardC
     EXPECT_EQ(BattleClientEdge::kHardMaxConnections, edge->EffectiveMaxConnections());
     gNodeConfigManager.GetBaseDeployConfig().set_battle_max_connections(84);
     EXPECT_EQ(84u, edge->EffectiveMaxConnections());
+}
+
+// 解出终局请求里的回放正文(gzip → BattleReplay)。
+::BattleReplay DecodeSentReplay(const match::CommitBattleOutcomeRequest& request) {
+    ::BattleReplay replay;
+    EXPECT_TRUE(request.has_replay());
+    EXPECT_EQ(::BATTLE_REPLAY_CODEC_GZIP, request.replay().codec());
+    const auto raw = turnbattle::GzipDecompress(request.replay().payload(), turnbattle::kMaxBattleReplayRawBytes);
+    EXPECT_TRUE(raw.has_value());
+    if (raw) {
+        EXPECT_EQ(request.replay().raw_bytes(), raw->size());
+        EXPECT_TRUE(replay.ParseFromString(*raw));
+    }
+    return replay;
+}
+
+// 战报回放(docs/design/battle-report-replay.md §6.2):原件让录才录,分出胜负的最后一回合也录进去,录的是观众版帧。
+// 终局请求能发出去,就说明它与冻结时算的摘要一致:SendSqlOutcome 先比摘要再发,首次与重放都经 BuildOutcomeRequest 拼。
+TEST_F(BattleObserverContract, ReplayRecordedOnlyWhenRequestedAndSentWithOutcome) {
+    RouteOutcomesToFake();
+    outcomeRoute_.ready = true;
+    ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    ASSERT_EQ(1u, outcomeRoute_.sent.size());
+    EXPECT_FALSE(outcomeRoute_.sent[0].request.has_replay()) << "原件没让录,终局请求不带回放";
+
+    const auto recorded = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    auto creation = OriginalCreation();
+    creation.set_battle_id(recorded);
+    creation.set_record_replay(true);
+    for (auto& player : *creation.mutable_players()) {
+        player.set_max_health(1);
+        player.mutable_base_attributes()->set_health(1);
+    }
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(recorded));
+    ASSERT_EQ(2u, outcomeRoute_.sent.size());
+    const auto& request = outcomeRoute_.sent[1].request;
+    EXPECT_EQ(recorded, request.battle_id());
+    const auto replay = DecodeSentReplay(request);
+    EXPECT_EQ(recorded, replay.battle_id());
+    EXPECT_EQ(static_cast<uint32_t>(::match::MATCH_MODE_1V1), replay.match_mode());
+    EXPECT_EQ(2, replay.start_state().actors_size());
+    EXPECT_EQ(0u, replay.start_state().action_deadline_ms());
+    ASSERT_EQ(1, replay.rounds_size()) << "分出胜负的最后一回合也录";
+    EXPECT_EQ(::BATTLE_REPLAY_END_FINISHED, replay.end_reason());
+    EXPECT_NE(::BATTLE_OUTCOME_ONGOING, replay.outcome());
+    EXPECT_FALSE(replay.truncated());
+    const auto& state = replay.rounds(0).state();
+    EXPECT_EQ(0, state.self_items_size()) << "观众版:不带道具余量";
+    for (const auto& actor : state.actors()) {
+        EXPECT_EQ(0, actor.skill_cooldown_rounds_size()) << "观众版:不带冷却";
+        EXPECT_FALSE(actor.has_combat()) << "观众版:不带装备概率";
+    }
+}
+
+// 整场期限到、强制判平:没有最后一回合帧,战报记 DEADLINE_DRAW 与强制结束那一刻的状态。
+TEST_F(BattleObserverContract, ReplayDeadlineDrawRecordsFinalState) {
+    RouteOutcomesToFake();
+    outcomeRoute_.ready = true;
+    auto creation = OriginalCreation();
+    creation.set_record_replay(true);
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+    BattleRoomManagerTestAccess::ForceDeadline(battleId_);
+    ASSERT_EQ(1u, outcomeRoute_.sent.size());
+    const auto replay = DecodeSentReplay(outcomeRoute_.sent[0].request);
+    EXPECT_EQ(::BATTLE_REPLAY_END_DEADLINE_DRAW, replay.end_reason());
+    EXPECT_EQ(::BATTLE_OUTCOME_DRAW, replay.outcome());
+    EXPECT_EQ(0, replay.rounds_size());
+    ASSERT_TRUE(replay.has_final_state());
+    EXPECT_EQ(2, replay.final_state().actors_size());
+    EXPECT_EQ(0u, replay.final_state().action_deadline_ms());
 }
 } // namespace

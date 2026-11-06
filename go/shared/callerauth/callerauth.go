@@ -2,8 +2,8 @@
 //
 // 使用方:login 自己的适配器(go/login/internal/logic/pkg/callerauth),以及在线域
 // chat / friend / guild / trade / match / mail / rank 经 GateInterceptor 装配的同一验签器。
-// 在线域的原账号只认验签原件里的 authenticated_account(shared/roleidentity.SessionAccount),
-// 不读登录 Redis。整条链路见 docs/design/gate-online-identity.md。
+// 在线域的原账号只认验签原件里的 authenticated_account(shared/roleidentity 的入口准入 EntryInterceptor
+// 与 SessionOwnership 只读验签原件),不读登录 Redis。整条链路见 docs/design/gate-online-identity.md。
 //
 // # 修的是什么洞
 //

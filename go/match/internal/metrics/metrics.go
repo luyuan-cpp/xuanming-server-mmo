@@ -42,7 +42,7 @@ var (
 	gatherTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "gather_total",
-		Help:      "Gather pipeline runs by mode and outcome (success|no_battle_node|no_location|prepare_failed|fingerprint_mismatch|create_failed|create_failed_room_alive|not_allocatable|index_failed|internal).",
+		Help:      "Gather pipeline runs by mode and outcome (success|no_battle_node|no_location|prepare_failed|fingerprint_mismatch|create_failed|create_failed_room_alive|not_allocatable|outcome_capability_missing|intent_failed|original_unterminable|index_failed|internal).",
 	}, []string{"mode", "outcome"})
 
 	// tableFingerprintMismatch 记录 gather 收齐快照后配表指纹不一致(含部分为空)
@@ -151,6 +151,14 @@ var (
 		Help:      "Rated battles whose side-B win was settled as a draw because the engine's round limit, not a wipe, decided it, by mode and basis (survivors|round_limit).",
 	}, []string{"mode", "basis"})
 
+	// ratingUnpublished 评分已入账、但本模式的投榜来源已停写(StopRankSource,封榜中)的局数:评分照记,这局不进榜。
+	// 只在提交成功后计;平时恒为 0,有增量说明有人停了投榜来源、新代次还没开。
+	ratingUnpublished = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "rating_unpublished_total",
+		Help:      "Rated battles applied to ratings while the mode's rank source was stopped, so they were not published to the leaderboard, by mode.",
+	}, []string{"mode"})
+
 	// ---- 活动开局(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.18.3)----
 
 	// activityBattleTotal MatchInternal.StartActivityBattle 的同步出口,每个请求恰好记一个:
@@ -256,6 +264,7 @@ func register() {
 			requestBattleTicketTotal,
 			ratingUpdateTotal,
 			ratingRoundCapDraw,
+			ratingUnpublished,
 			activityBattleTotal,
 			teamRPCTotal,
 			teamCommitRetryTotal,
@@ -265,13 +274,20 @@ func register() {
 			teamCrossZoneAllowed,
 			teamFillQueueDisabled,
 		)
-		prometheus.MustRegister(poolCollectors()...)    // 按池撮合(pool.go)
-		prometheus.MustRegister(outcomeCollectors()...) // 全球终局恢复与终局发件箱(outcome.go)
+		prometheus.MustRegister(poolCollectors()...)           // 按池撮合(pool.go)
+		prometheus.MustRegister(outcomeCollectors()...)        // 全球终局恢复与终局发件箱(outcome.go)
+		prometheus.MustRegister(resultConsumerCollectors()...) // 对局结果消费组积压(result_consumer.go)
+		prometheus.MustRegister(battleReportCollectors()...)   // 战报回放(battle_report.go)
 	})
 }
 
 func ObserveGlobalFlow(stage, outcome string) { globalFlowTotal.WithLabelValues(stage, outcome).Inc() }
 func ObserveProbeRTT(ms uint32)               { probeRTT.Observe(float64(ms)) }
+
+// GlobalFlowValue 读回某 (stage, outcome) 的全球流程计数(单测断言用)。
+func GlobalFlowValue(stage, outcome string) float64 {
+	return counterVecValue(globalFlowTotal, stage, outcome)
+}
 
 // PrimeMergedZoneRefresh 预置两条序列为 0:否则「从未出错」和「指标不存在」在告警规则里长得一样。
 func PrimeMergedZoneRefresh() {
@@ -292,6 +308,20 @@ func MergedZoneRefreshValue(result string) float64 {
 // ObserveRatingRoundCapDraw 记录一局回合打满被改按平局结算;basis 取 survivors / round_limit。
 func ObserveRatingRoundCapDraw(mode, basis string) {
 	ratingRoundCapDraw.WithLabelValues(mode, basis).Inc()
+}
+
+// ObserveRatingUnpublished 记录一局评分已入账、因本模式投榜来源停写而没有进榜。
+func ObserveRatingUnpublished(mode string) {
+	ratingUnpublished.WithLabelValues(mode).Inc()
+}
+
+// RatingUnpublishedValue 读回某模式的停写未进榜计数(单测断言用)。
+func RatingUnpublishedValue(mode string) float64 {
+	var m dto.Metric
+	if err := ratingUnpublished.WithLabelValues(mode).Write(&m); err != nil {
+		return 0
+	}
+	return m.GetCounter().GetValue()
 }
 
 // RatingRoundCapDrawValue 读回某 (mode, basis) 的回合打满改平局计数(单测断言用)。

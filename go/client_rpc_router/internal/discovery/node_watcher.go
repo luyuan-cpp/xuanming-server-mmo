@@ -15,8 +15,10 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"shared/etcdwatch"
 	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -65,17 +67,55 @@ type NodeWatcher struct {
 	nodes    map[string]NodeEntry
 	onCount  func(kind string, count int) // 镜像规模变化上报(指标)
 	onRemove func(entry NodeEntry)        // 节点消失回调(清连接缓存)
+
+	// index 是选点用的只读索引,镜像每变一次就在 mu 写锁里整体重建、原子替换(见 rebuildIndexLocked)。
+	// 节点上下线才变,选点是每个请求一次:以前每个请求都在读锁里把全服镜像拷一遍再过滤,开销随全服实例数增长
+	// (缺口清单第 28 条);现在选点无锁读这份索引,O(1)。
+	index atomic.Pointer[pickIndex]
+}
+
+// pickIndex 是某一时刻镜像的选点视图,建好之后不再修改。
+type pickIndex struct {
+	byZone map[uint32][]NodeEntry
+	// trackGroups 每条发布轨道至多一组、且只放非空组。按轨道选点仍交给 releasetrack.Select 判断
+	// (「canary 没有实例才退回 stable」由它在组之间决定),规则只有那一份,两条轨道不并进同一个列表。
+	trackGroups []trackGroup
+}
+
+type trackGroup struct {
+	track   releasetrack.Track
+	entries []NodeEntry
+}
+
+func buildPickIndex(nodes map[string]NodeEntry) *pickIndex {
+	index := &pickIndex{byZone: make(map[uint32][]NodeEntry)}
+	byTrack := make(map[releasetrack.Track][]NodeEntry)
+	for _, entry := range nodes {
+		index.byZone[entry.ZoneId] = append(index.byZone[entry.ZoneId], entry)
+		byTrack[entry.Track] = append(byTrack[entry.Track], entry)
+	}
+	for track, entries := range byTrack {
+		index.trackGroups = append(index.trackGroups, trackGroup{track: track, entries: entries})
+	}
+	return index
+}
+
+// rebuildIndexLocked 按当前镜像重建选点索引。调用方持 mu 写锁:索引的替换顺序与镜像的修改顺序一致。
+func (w *NodeWatcher) rebuildIndexLocked() {
+	w.index.Store(buildPickIndex(w.nodes))
 }
 
 // NewNodeWatcher 构造 watcher;onCount / onRemove 可为 nil。
 func NewNodeWatcher(name, prefix string, onCount func(string, int), onRemove func(NodeEntry)) *NodeWatcher {
-	return &NodeWatcher{
+	w := &NodeWatcher{
 		name:     name,
 		prefix:   prefix,
 		nodes:    make(map[string]NodeEntry),
 		onCount:  onCount,
 		onRemove: onRemove,
 	}
+	w.rebuildIndexLocked() // 还没被共享,不用加锁;保证 index 永不为 nil
+	return w
 }
 
 // Name 返回 watcher 名(节点类型名)。
@@ -95,9 +135,13 @@ func (w *NodeWatcher) Run(ctx context.Context, etcd *clientv3.Client) {
 				continue
 			}
 		}
-		w.watch(ctx, etcd, rev)
+		periodic := w.watch(ctx, etcd, rev)
 		if ctx.Err() != nil {
 			return
+		}
+		if periodic {
+			logx.Debugf("[NodeWatcher:%s] Periodic resynchronization", w.name)
+			continue
 		}
 		logx.Infof("[NodeWatcher:%s] Watch interrupted; synchronizing again", w.name)
 	}
@@ -122,6 +166,7 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 	w.mu.Lock()
 	prev := w.nodes
 	w.nodes = next
+	w.rebuildIndexLocked()
 	count := len(next)
 	w.mu.Unlock()
 
@@ -138,23 +183,29 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 	return resp.Header.Revision, nil
 }
 
-func (w *NodeWatcher) watch(ctx context.Context, etcd *clientv3.Client, rev int64) {
-	watchCh := etcd.Watch(ctx, w.prefix,
+// watch 从 rev+1 起消费事件,返回即表示需要重新全量同步。periodic 为真表示是到了定期对账的点
+// (etcdwatch.ResyncInterval),不是 watch 出了问题。watch 带 RequireLeader,返回前取消子 ctx
+// (docs/design/infra-reconnect-overview.md §4 R1)。
+func (w *NodeWatcher) watch(ctx context.Context, etcd *clientv3.Client, rev int64) (periodic bool) {
+	watchCh, resync, stop := etcdwatch.Open(ctx, etcd, etcdwatch.ResyncInterval, w.prefix,
 		clientv3.WithPrefix(),
 		clientv3.WithRev(rev+1),
 	)
+	defer stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return false
+		case <-resync:
+			return true
 		case watchResp, ok := <-watchCh:
 			if !ok {
 				logx.Infof("[NodeWatcher:%s] Watch channel closed", w.name)
-				return
+				return false
 			}
 			if watchResp.Err() != nil {
 				logx.Errorf("[NodeWatcher:%s] Watch error: %v", w.name, watchResp.Err())
-				return
+				return false
 			}
 			for _, ev := range watchResp.Events {
 				w.handleEvent(ev)
@@ -177,6 +228,7 @@ func (w *NodeWatcher) handleEvent(ev *clientv3.Event) {
 		entry, existed := w.nodes[key]
 		if existed {
 			delete(w.nodes, key)
+			w.rebuildIndexLocked()
 		}
 		count := len(w.nodes)
 		w.mu.Unlock()
@@ -199,6 +251,9 @@ func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
 	w.mu.Lock()
 	prev, existed := w.nodes[key]
 	w.nodes[key] = entry
+	if !existed || prev != entry {
+		w.rebuildIndexLocked()
+	}
 	count := len(w.nodes)
 	w.mu.Unlock()
 	// 重启后 endpoint 可能变了,旧连接必须废弃。
@@ -266,33 +321,23 @@ func (w *NodeWatcher) reportCount(count int) {
 // PickRandomForTrack 是全局池节点类型的选法:先按会话的发布轨道留下可用的实例
 // (releasetrack.Select:canary 会话有 canary 就只用 canary、没有退回 stable;stable 会话只用 stable),
 // 再在其中均匀随机取一个(负载感知不在本期)。没有可用实例返回 false。
+// Select 在轨道组之间判断(每条轨道至多一组、组都非空),所以「退回」的语义与按实例过滤时完全相同。
 func (w *NodeWatcher) PickRandomForTrack(session releasetrack.Track) (NodeEntry, bool) {
-	w.mu.RLock()
-	all := make([]NodeEntry, 0, len(w.nodes))
-	for _, entry := range w.nodes {
-		all = append(all, entry)
-	}
-	w.mu.RUnlock()
-
-	candidates := releasetrack.Select(session, all, func(entry NodeEntry) releasetrack.Track { return entry.Track })
-	if len(candidates) == 0 {
+	chosen := releasetrack.Select(session, w.index.Load().trackGroups, func(group trackGroup) releasetrack.Track { return group.track })
+	if len(chosen) == 0 {
 		return NodeEntry{}, false
 	}
-	return candidates[rand.Intn(len(candidates))], true
+	return pickRandom(chosen[0].entries)
 }
 
 // PickRandomInZone 只在 zone_id 相同的节点里随机取一个(zone-scoped 节点类型
-// 的选法,设计决策 D33:login 只服务本 zone,跨 zone 打过去会话对不上)。
+// 的选法,设计决策 D33:login 只服务本 zone,跨 zone 打过去会话对不上)。不看发布轨道。
 // 该 zone 没有实例返回 false —— 不回退到其它 zone。
 func (w *NodeWatcher) PickRandomInZone(zoneId uint32) (NodeEntry, bool) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	candidates := make([]NodeEntry, 0, len(w.nodes))
-	for _, entry := range w.nodes {
-		if entry.ZoneId == zoneId {
-			candidates = append(candidates, entry)
-		}
-	}
+	return pickRandom(w.index.Load().byZone[zoneId])
+}
+
+func pickRandom(candidates []NodeEntry) (NodeEntry, bool) {
 	if len(candidates) == 0 {
 		return NodeEntry{}, false
 	}

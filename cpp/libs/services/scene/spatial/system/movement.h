@@ -43,8 +43,10 @@ public:
     // 与我是否看得见对方无关;网格范围外的显式关注者同样收到。隐身期间没有侦测授权的观察者不在名单里。
     // 调用时机:服务器接受一条移动上报之后,服务器自己把速度清零的时刻(撞墙、战斗 / 冻结中的停步、
     // 离场前停步)—— 后一类不广播的话,观察者会按最后一次上报的速度一直外推下去 —— 以及同场景瞬移之后。
-    // 没有观察者或没有 Transform 时直接返回。只读组件、不增删组件,可以在 view 遍历中调用。
-    static void BroadcastMove(entt::entity entity);
+    // includeSelf:同时发给 entity 自己的客户端(组队跟随中由服务器驱动走位的队员,本人的位置也以这条为准,
+    // 见 TeamFollowSystem);普通移动的本人以自己的预测为准,不发。
+    // 没有接收者或没有 Transform 时直接返回。只读组件、不增删组件,可以在 view 遍历中调用。
+    static void BroadcastMove(entt::entity entity, bool includeSelf = false);
 
     // 把实体瞬移到**同一场景内**的另一点(服务器权威)。调用方保证 location 是该场景导航上的合法点。
     //   1. 写 Transform、清零 Velocity(否则 Update 会从新位置按瞬移前的速度继续积分);
@@ -61,6 +63,11 @@ public:
     // 瞬移之前发出的,调用方必须整条丢弃(位置与速度都不应用)。没有在等待落位时恒为 false。
     // 判定为已落位 / 已超时的同时摘掉 TeleportSettleComp。
     static bool ShouldDropReportAfterTeleport(entt::entity entity, const Location& reported);
+
+    // 放弃等待瞬移落位(摘 TeleportSettleComp,没有时什么都不做)。
+    // 调用方:TeamFollowSystem 停止驱动队员时 —— 驱动期间客户端上报全被丢弃、位置由服务器写,
+    // 恢复上报时应以当前位置为准,而不是去比对驱动之前那次瞬移的目标点。
+    static void CancelTeleportSettle(entt::entity entity);
 
     // ---- 纯函数(无 I/O、无 ECS,头文件内联,供 cpp/tests/aoi_test 直接单测)----
     static TeleportReportVerdict JudgeReportAfterTeleport(double horizontalDistanceToTarget, uint64_t nowMs,

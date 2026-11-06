@@ -97,9 +97,9 @@ namespace gate_spectate
 				return;
 			}
 
-			const bool boundToPlayer = session.playerId != kInvalidGuid && session.playerId != 0;
+			// 只认会话此刻经认证绑定的角色:LeaveGame 之后、新角色 Bind 之前订不上(SpectateIdentityOf)
 			const TicketCheck check = VerifySpectateTicket(tlsInstalled.tokenSecret, body.spectate_ticket(),
-														   boundToPlayer ? session.playerId : 0, body.battle_id(), NowWallMs());
+														   SpectateIdentityOf(session), body.battle_id(), NowWallMs());
 			if (!check.ok())
 			{
 				hub->NoteTicketRejected();

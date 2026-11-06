@@ -379,7 +379,7 @@ message GuildTrialLaunchOriginal {
 message GuildTrialLaunchRecord {
   option(OptionTableName) = "guild_trial_launch";
   option(OptionPrimaryKey) = "request_id";
-  option(OptionIndex) = "state,updated_ms;battle_id";
+  option(OptionIndex) = "state,updated_ms;battle_id;state,next_check_ms";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -391,6 +391,9 @@ message GuildTrialLaunchRecord {
   uint64 created_ms = 6;
   uint64 updated_ms = 7;
   bytes cancel_receipt = 8;             // 提交时已核签且绑定原请求的CancelActivityBattleResponse原字节
+  // 恢复器调度(2026-11-05,r2-guild#1 评审;go/guild/internal/data/trial_launch_repo.go「恢复器的到期认领」)。只决定何时、由哪个副本去查,不参与释放判定。
+  uint64 next_check_ms = 9;             // 下一次检查时刻(SQL 时钟毫秒):新原件 = max(开局截止, Prepare 提交) + 30s;每次认领改成 SQL 现在 + 退避间隔
+  uint32 check_attempts = 10;           // 认领次数(只增不减),决定退避间隔
 }
 
 // 原件的可索引投影；与launch同事务写入/终结，防止角色过户漏过尚未发奖的对局。

@@ -19,6 +19,9 @@ MailRpc:
   Endpoints: [127.0.0.1:50900]
   Timeout: 1800
 MailSecretEnv: MAIL_PRODUCER_SECRET_RANK
+# 必须与 go/mail/etc/mail.yaml 的 Mail.MaxPersonalMailTtlDays 同值(rank 读不到邮件配置;config_test.go 核对两份)。
+# 封榜写出的奖励邮件过期时刻 = 封榜 + min(30 天, 本值),写定后不随配置变化;越出 2~365 拒启(发件时至少剩 24 小时可领,1 天发不出)。改邮件有效期时两边同批改。
+MailMaxPersonalMailTtlDays: 30
 Producers:
   match: RANK_PRODUCER_SECRET_MATCH
   admin: RANK_PRODUCER_SECRET_ADMIN

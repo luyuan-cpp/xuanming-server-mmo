@@ -108,8 +108,9 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
 - **重放前核对映射**:同一 token 重放「已登记」之前,先核对映射仍指向这次的节点。登记落地之后、重发或作废查询到达之前,
   场景可能已被销毁或改派(死节点收尾等);这时回 conflict,调用方不再向节点发 CreateScene,否则节点上留下一个没有
   Redis 状态的实体。
-- **冲突**:新铸的号已有映射或别的 token 的记录,一个键都不写,回 conflict,建实例回 `ErrDuplicateScene`。conflict 也可能
-  是登记落地后场景已被销毁或改派,名额已由销毁方还过或随场景转走,所以 conflict 同样不还名额。
+- **冲突**:新铸的号已有映射、别的 token 的记录,或上一个用这个号的场景还有没拆完的拆除任务(`scene:{id}:teardown`,
+  登记了的话旧任务补发的 DestroyScene 会打到新场景上),一个键都不写,回 conflict,建实例回 `ErrDuplicateScene`。
+  conflict 也可能是登记落地后场景已被销毁或改派,名额已由销毁方还过或随场景转走,所以 conflict 同样不还名额。
 - **指标**:`scene_manager_scene_registration_total{zone_id,kind,outcome}`,kind 为 `instance` / `world_channel`,
   outcome 为 `registered` / `conflict` / `aborted` / `unknown`。conflict 出现一次就该查发号器。
 - **仍是多步的**:Agones 预占在登记之前。进程在预占之后、登记之前崩溃,名额不还,由 Agones 对账告警暴露;
@@ -262,7 +263,10 @@ pickInstanceNode(in):
 - Zone isolation: if `scene:{sourceSceneId}:zone` differs from the request's
   `zone_id`, co-location is refused (reason=`zone_mismatch`). Allowing it would
   land the mirror on the source's zone node, which the requesting zone's
-  reconciliation loop can't see — orphan on every restart.
+  reconciliation loop can't see — orphan on every restart. Such a mirror is
+  also not linked to the foreign source (no `scene:{id}:source`, no entry in the
+  source's mirror set), and no destroy path touches another zone's scene
+  (Destroy Flow, 销毁只改本 zone 的键).
 - Source-node death: if `scene:{sourceSceneId}:node` maps to a node absent from
   `scene_nodes:zone:{zoneId}:load`, `IsNodeAlive` returns false and the mirror
   falls back.
@@ -375,55 +379,113 @@ mirror lifecycle from the gameplay side:
 > RPC 画在原子认领之前;实际级联在认领成功之后,空闲 CAS 放弃时镜像原样保留。
 
 ```
-destroyInstanceInternal(scene_id)
+destroyInstanceInternal(zone, scene_id)
   ← destroyInstance (idle) / destroyInstanceForce (explicit DestroyScene RPC,
     source_migrated, source_scaled_in) / destroyOrphanOfDeadNode (node_death)
+  (explicit DestroyScene: zone_id 0 → this process's zone; any other zone → rejected before any read or write)
 │
 ├─ pre-read SMEMBERS scene:{id}:mirrors  (read error → return err, nothing changed)
-├─ [atomic claim] EVAL luaAtomicDestroyInstance (idle: SCARD instance:{id}:members > 0 → reset idle
-│                 clock with ZADD XX, return busy)
-│                 or luaAtomicDestroyInstanceForce (others; requires scene:{id}:node to exist;
-│                 node_death passes the dead node as expected owner, aborts if it differs)
-│    ├─ same token already recorded in scene:{id}:claim → return the recorded snapshot, touch nothing
-│    ├─ GET node, agones_gs, source, mirror (+ SMEMBERS members for force)  ← the only snapshot used
+├─ read the owner GET scene:{id}:node (idle, and force without an expected owner) — node_death passes the
+│  dead node instead; the claim is made against that expected owner
+├─ [atomic claim] EVAL luaAtomicDestroyInstance (idle) or luaAtomicDestroyInstanceForce (everything else)
+│    ├─ a teardown job scene:{id}:teardown exists: same token → return its snapshot (go-redis resend),
+│    │  other token → 'pending', touch nothing
+│    ├─ scene:{id}:zone present and ≠ the claimer's zone (ARGV[8]) → 'foreign', touch nothing;
+│    │  the caller returns errSceneInOtherZone (see 销毁只改本 zone 的键 below)
+│    ├─ scene:{id}:node must equal the expected owner ('' = must be gone) → else 'stale', touch nothing
+│    ├─ [idle only] SCARD instance:{id}:members > 0 → reset the idle clock with ZADD XX, return 'busy'
+│    ├─ GET agones_gs, source, mirror + SMEMBERS members   ← the only snapshot the side effects use
 │    ├─ DEL scene:{id}:{node, mirror, source, zone, agones_gs}, instance:{id}:members
 │    │  + ZREM instances:zone:{zoneId}:active
-│    └─ SET scene:{id}:claim {token, reply} EX 600
-│    not claimed (busy / stale) → return, no side effects at all
-│    EVAL error → token kept in ServiceContext.SceneClaimTokens for this process's next claim of the scene
-├─ [cascade] cascadeDestroyMirrors: re-read scene:{id}:mirrors (pre-read on error) → destroyInstanceForce(child, cascade)
-│            then DEL scene:{id}:mirrors unless a child failed or the re-read failed
-├─ RequestNodeDestroyScene → gRPC → C++ Scene.DestroyScene(scene_id)   (only if owner alive)
-├─ SREM node:zone:{zoneId}:{nodeId}:scenes
-├─ [if mirror] SREM scene:{sourceId}:mirrors
-├─ INCRBY node:zone:{zoneId}:{nodeId}:scene_count -1 + SREM residual members from node:zone:{zoneId}:{nodeId}:members
-└─ ReleaseAgonesRoomForScene (if agones_gs was set)
+│    ├─ owner known: SREM node:zone:{zoneId}:{nodeId}:scenes, DECR its scene_count (only while > 0)
+│    └─ HSET scene:{id}:teardown {token, kind, reason, claimed_at, reply} + ZADD scene_teardown:zone:{z}:pending
+│    not claimed (busy / stale / pending / foreign) → return, no side effects at all
+├─ runInstanceTeardown (the job; re-runnable, the sweep runs the same code if this one does not finish)
+│    ├─ [cascade] cascadeDestroyMirrors: re-read scene:{id}:mirrors (pre-read on error) → for each child,
+│    │            GET scene:{child}:zone: another zone → skip (left to that zone); unreadable/corrupt → keep the
+│    │            index; else destroyInstanceForce(zone, child, cascade).
+│    │            Then DEL scene:{id}:mirrors unless a child failed or a read failed (then the job stays)
+│    ├─ RequestNodeDestroyScene → gRPC → C++ Scene.DestroyScene(scene_id)   (only if owner alive; failure keeps the job)
+│    ├─ [if mirror] unlinkFromSourceMirrors: SREM scene:{sourceId}:mirrors, only if the source is in this zone
+│    │            (or has no zone record here); source in another zone → leave its key; zone unreadable → the job stays
+│    ├─ SREM residual members from node:zone:{zoneId}:{nodeId}:members
+│    └─ take the job's Agones step once, then ReleaseAgonesRoomForScene (if agones_gs was set)
+└─ finish: DEL scene:{id}:teardown + ZREM pending (token must match), then count instance_destroyed_total
 ```
 
 Everything after the claim uses only the claim's snapshot (owner, agones_gs, source, mirror flag,
 residual members); the script reads them before it deletes. An empty owner with a successful claim
-means the scene's mapping was already gone (the idle sweep cleaning up a residue, or a replayed
-`absent` teardown snapshot): no C++ RPC and no node counters, but the cascade, the source's
-mirror-set SREM and the Agones release still run.
+means the scene's mapping was already gone (the idle sweep cleaning up a residue): no C++ RPC and
+no node counters, but the cascade, the source's mirror-set SREM and the Agones release still run.
 
-#### 认领记录与接手(R3/R5,2026-11-01;接手缺口 2026-11-05)
+#### 拆除任务(R3/R5 收尾,2026-11-05)
 
-- **为什么要记录**:go-redis 对读超时 / EOF 会原样重发 EVAL。第一次已经执行、回包丢了,重发时映射已经没了,
-  认领落空,调用方按「已被别人销毁」跳过级联、C++ 销毁、反向索引、计数和名额归还。
-- **记录**:三段认领脚本(空闲、force、建实例回滚)共用开头 `luaSceneClaimPrelude`。认领成功时写
-  `scene:{id}:claim = {token, reply}`(TTL 600s);同 token 再来就原样返回 reply,一个键都不再动。
-  busy / stale 不写记录,重发时重新判定。新场景登记(`scene_registration.go`)也写这个键,格式相同,只比 token。
-- **应答格式**:`{状态, 属主, agones_gs, 镜像源, 镜像标记, 成员...}`,三段脚本相同。
-- **接手**:go-redis 的重试也用完、Eval 回错时,`evalSceneClaim` 把 token 存进 `ServiceContext.SceneClaimTokens`,
-  本进程下一次认领同一场景(不论走哪条销毁路径)带上它,取回当时的快照并做完副作用。
-  回滚脚本自己改了计数与反向索引,它的 token 不交给别的路径接手。
-- **接手的三条约束**(2026-11-05 补,缺一条就有副作用丢在接手时):
-  - 是否认领只看 `Claimed`,不看属主是否为空:接手到的可能是空闲清扫残留或世界频道 absent 认领的快照,属主为空;
-  - 剩余成员两条分支都要摘:空闲认领自己不会有成员,接手到 force 的快照时会有;
-  - 镜像源与镜像标记必须由脚本读出、随快照返回:接手时这两个键早已删掉,调用方再读只会读到空,
-    镜像不从源的子集合里摘掉,源的 `channelHasMirrors` 恒真、永远缩不了容。
-- **仍然丢的**:进程在认领之后、副作用之前崩溃,或者接手之前进程换了(领导者切换),副作用照样丢,只有 Agones 对账告警能发现。
-  根治是持久化的副作用发件箱:认领脚本同一步入队,任一领导者补做。目前没有做。
+- **问题**:认领脚本删掉场景之后,镜像级联、C++ DestroyScene、从镜像源的子集合摘掉自己、摘剩余成员、还 Agones 名额
+  这些副作用以前只在认领方的内存里。认领方在这之间退出(崩溃,或滚动发布取消了空闲回收的 ctx)、或者认领的回包丢了
+  (go-redis 重试耗尽后回错,调用方以为没认领到),副作用就永远没人做:节点上留下没有映射的实体,源频道的子集合挂着死 id,
+  Agones 的 rooms 多占一份。最常见的情形是认领之后马上退出,这时 scene_count 与 rooms 同时多 1,两数一样,Agones 对账
+  (`agones_reconcile.go`,只比这两个数)看不出来。
+- **做法(事务性发件箱)**:三条认领路径(空闲回收、force、建实例回滚)共用 `luaSceneClaimCommit`,在提交的同一步写
+  拆除任务 `scene:{id}:teardown`(hash,不带 TTL:token、种类、reason、认领时刻、快照),并把场景放进本 zone 的待办
+  `scene_teardown:zone:{z}:pending`(有序集合,分数是认领时刻)。认领提交了,任务就一定在。
+  - 认领方当场按任务做副作用,全部做完才删任务(`completeSceneTeardown`)。
+  - 没做完的留在待办里:本 zone 的领导者每 15s 扫一次,认领超过 90s(租期)的任务按同一份做法重做(`sweepSceneTeardownJobs`)。
+    租期要长过认领方最慢的正常路径:go-redis 一次 EVAL 的内部重发最坏约 33s,显式 DestroyScene 的副作用预算 10s。
+  - 种类决定做哪些副作用:`instance`(destroyInstanceInternal 的所有原因)、`world_drain`(排空收尾)、
+    `world_orphan`(孤儿频道清理)、`rollback`(建实例失败的回滚;顺带向节点补一次 DestroyScene,CreateScene 回错
+    不等于节点上没建)。不认识的种类不做也不删,留给认识它的版本。
+- **为什么副作用可以重跑**:级联(子镜像各自认领)、C++ DestroyScene(找不到实体只打 WARN)、SREM、DEL、摘成员本来就幂等。
+  不幂等的两样:
+  - scene_count:在认领脚本里按期望属主扣(只在 > 0 时减),不留到脚本外,扫描晚做也不会扣到复用同一 node_id 的
+    新进程头上。世界频道只扣活属主(活不活在认领前判),死属主的计数键由死节点收尾整个删。
+  - Agones 名额:任务上原子置位后才调 K8s,一个任务至多还一次(`luaTakeTeardownRoom`,同一次调用的重发仍认得出自己)。
+    置位之后、调用之前进程退出,这份名额不还 —— 这时 scene_count 已经减了,两数对不上,Agones 对账会告警。
+    选「至多一次」而不是「至少一次」:后者在置位丢失时还两次,把容量算少、让 FleetAutoscaler 超卖;与
+    TransferAgonesRoomForScene 结局未知时「两边都不还」同一取舍。
+- **重发与并发**:同 token 的任务在 = 这次是 go-redis 的原样重发,原样返回快照、一个键都不动(R5)。别的 token 的任务在 =
+  上一次拆除还没做完,一律回 `pending`:谁都认领不到,同一个 scene_id 被重新登记(号源出错)也挡在这里,直到旧任务做完。
+  认领方慢过了租期、与扫描同时做时,两边重跑的都是幂等步骤,名额与删任务各只发生一次。
+- **11-01 的进程内接手(`ServiceContext.SceneClaimTokens`)已删**:Eval 回错时调用方按「这次没认领到」处理即可,
+  任务在就由扫描补;接手只能救本进程、而且依赖「下一次认领同一场景」,场景摘出各个索引之后通常没有下一次。
+  它暴露过的三处问题(按属主是否为空判认领、空闲分支丢剩余成员、镜像源在认领前预读)的规则仍然成立:是否认领只看
+  `Claimed`;剩余成员与镜像源、镜像标记都取快照。
+- **观测**:`scene_manager_scene_teardown_jobs_total{zone_id, kind, outcome=completed|recovered|deferred}`;
+  `scene_manager_scene_teardown_oldest_pending_seconds{zone_id}`(只有领导者发布,跟随者归零),告警
+  `SceneManagerSceneTeardownStuck`(> 600s 持续 10 分钟)。日志前缀 `[SceneTeardown]`。
+- **仍不保证的**:Agones 至多一次留下的那份名额(由对账告警暴露,不自动收);C++ 节点在 DestroyScene 之后才处理完
+  一个在途的 CreateScene(回滚的那次补发早到),实体仍会留下,要 C++ 侧的墓碑才能收。
+
+#### 销毁只改本 zone 的键(2026-11-06)
+
+- **不变量**:zone z 的控制域键只由 zone z 的 scene_manager 读写(`docs/design/control-plane-zone-scoping-20261105.md`
+  §3.3、§4.3)。同组几个 zone 共用一个控制域 Redis,别的 zone 的场景键在这里读得到、也删得掉,所以这条只能靠代码守。
+- **问题**:销毁路径以前有四处会改到别的 zone 的场景:
+  - 镜像级联(`cascadeDestroyMirrors`)与源迁移级联(`cascadeMirrorsOnSourceMigration`)读子镜像的 `scene:{child}:zone`,
+    再**按子镜像自己的 zone** 去 force 销毁:别的 zone 的映射、active 条目、节点计数都被本 zone 的进程删掉、扣掉。
+    zone 记录损坏时还会被解析成 0、退回按源的 zone 销毁。
+  - 镜像拆除时从源的子集合里摘自己,不看源在哪个 zone。
+  - 显式 DestroyScene 把请求里的 `zone_id` 原样往下传:别的 zone 的场景照拆;`zone_id` 没填时按 zone 0 认领,
+    active 条目与节点计数记到 zone 0 的键上(真实 zone 的 active 条目摘不掉,只能等空闲回收清残留)。
+  - 认领脚本本身不看场景登记在哪个 zone,上面任何一处传错 zone 都会照常提交。
+- **做法**:
+  - **认领脚本在同一步比 zone**(`luaSceneClaimZoneCheck`,空闲 / force / 回滚 / 世界频道收尾共用):`scene:{id}:zone`
+    存在且不等于认领方的 zone 就回 `foreign`、一个键都不动,调用方回 `errSceneInOtherZone`(不当成「已被别人销毁」吞掉)。
+    zone 记录损坏(不是十进制数)同样回 `foreign`。没有 zone 记录时不拦:登记脚本总会写它,只有认领之后才会没有。
+    放在脚本里比,是因为调用方事先的判断挡不住所有调用方,只有和删除同一步的比较才算数。
+  - **级联只拆本 zone 的子镜像**:子镜像登记在别的 zone 时跳过,不发 EVAL,也不替它写拆除任务;它留给自己的 zone 的
+    空闲回收收走(镜像的空闲超时本来就短,见 Mirror vs. instance idle timeouts)。源的子集合是本 zone 的键,照常整键删除
+    (级联)或摘掉这一项(源迁移)。读不到 / 解析不了子镜像的 zone 时不猜:本轮不拆、保留索引,拆除任务留着重做。
+  - **从源的子集合摘自己**(`unlinkFromSourceMirrors`,三种拆除任务共用):源登记在本 zone,或本实例里没有源的 zone 记录
+    (源已销毁、zone 记录随销毁删掉,或源在别的组的实例里)时 SREM。没有 zone 记录时这份子集合同样只有本 zone 写:新镜像
+    只挂在本 zone 或不在本组实例里的源下(`createInstance`,control-plane-zone-scoping §4.3;源登记在同组别的 zone 时
+    不写 `scene:{id}:source`、不进源的子集合)。源登记在别的 zone 时不碰它的键;源的 zone 记录读不到或损坏时回错误,
+    拆除任务留着重做。
+  - **显式 DestroyScene**:`zone_id` 没填按本进程的 zone;填了别的 zone 时在任何读写之前拒绝,与 CreateScene / EnterScene
+    同一条路由不变量。请求填本 zone 而场景登记在别的 zone 时由认领脚本拦下。
+- **代价**:按 11-05 之前的规则登记过的跨 zone 镜像(当时允许挂在别的 zone 的源下)在源销毁时不再被级联,活到它自己
+  zone 的空闲超时为止。项目尚未上线、没有存量数据,首次上线时不会有这类镜像。
+- **回归**:`teardown_zone_scope_test.go`(认领三条路径与 zone 记录损坏、销毁入口回错误、两种级联留下别的 zone 的镜像、
+  摘源子集合按源的 zone、显式 DestroyScene 的入口检查与 zone_id 缺省)。
 
 ### Destroy-while-entering race (fixed 2026-04-23)
 
@@ -487,7 +549,8 @@ destroy script wipes it alongside the rest of the scene-scoped keys.
 
 When a scene with mirrors is destroyed (explicit RPC or lifecycle), we
 `SMEMBERS scene:{id}:mirrors` only after the atomic claim succeeds and
-force-destroy every child; if the idle CAS aborts, the mirrors are left
+force-destroy every child registered in the same zone (a child registered in
+another zone is left to that zone, see 销毁只改本 zone 的键); if the idle CAS aborts, the mirrors are left
 untouched (the destroy scripts never touch that set). This prevents mirrors from living on a dead source (their
 NPCs reference the source's spawn data; leaving them behind means
 nothing can enter them and their state ticks uselessly until idle
@@ -520,8 +583,9 @@ deferred, GO-6, and nothing is written). The task lives in Redis:
 
 | Key | Type | Content |
 |-----|------|---------|
-| `scene_manager:dead_node_reconcile` | ZSET | member `{zoneId}/{nodeId}`, score = first enqueue time (Unix ms, ordering/logs only; `ZADD NX`) |
+| `scene_manager:dead_node_reconcile:zone:{zoneId}` | ZSET | member `{zoneId}/{nodeId}`, score = first enqueue time (Unix ms, ordering/logs only; `ZADD NX`)。每个 zone 一张(`control-plane-zone-scoping-20261105.md` §4.2) |
 | `node:zone:{zoneId}:{nodeId}:reconcile_scenes` | SET | the reconcile scope: `SUNIONSTORE`d from `node:zone:{zoneId}:{nodeId}:scenes` at death time (or the snapshot GO-6 captured at first deferral); members are removed as they get a verdict |
+| `node:zone:{zoneId}:{nodeId}:reconcile_instance` | STRING | 判死的那一代进程的 `node_uuid`(2026-11-05,R1-I5)。入队脚本写:watch DELETE 的条目带着它,fullSync 清扫从本副本旧镜像补上;不知道是哪一代时删掉这个键。与收尾范围同生同灭 |
 
 Invariants (comment block in `reentry_barrier.go`, 「被屏障推迟的死节点收尾」):
 
@@ -539,6 +603,18 @@ Invariants (comment block in `reentry_barrier.go`, 「被屏障推迟的死节�
   a follower (and zeroes the pending gauge it had published), and a
   mid-sweep demotion writes nothing back. A newly elected leader picks the
   remaining scope up from Redis in its fullSync leader branch.
+- **R1-I5**(2026-11-05,缺口清单第 32 条)判死的那一代又在注册表里时,任务在拆任何场景之前撤掉,计数不删。
+  C++ 节点 keepalive 回 TTL=0 或本地租约超时后只是重新拿租约、按原 node_id 重新注册(`etcd_service.cpp`
+  `OnKeepAliveResponse`),进程与实例都还在;以前重新注册的 PUT 清掉 `death_at`,屏障随即放行,下一拍就按判死时刻的
+  快照拆掉活实例、向它发 DestroyScene。drain 在判屏障**之前**看镜像:这个 (zone,node) 注册着的某个 `node_uuid` 等于
+  `reconcile_instance` 里记的那一代,就用 `luaCancelDeadNodeReconcileForLiveInstance` 删任务、收尾范围与记录
+  (`dead_node_reconcile_total{outcome="instance_back"}`)。换了一代进程(`node_uuid` 不同)、或不知道判死的是哪一代时
+  照旧收尾。记的是最近一次判死的那一代:更早的一代不可能再回来(新一代占了分配键,旧一代重注册的 CAS 必然失败)。
+  两次判死之间换过代、回来的是后一代时,前一代的孤儿实例随任务一起撤掉不拆,宁可留孤儿也不拆活实例。撤销脚本报错时
+  这一拍不收。`luaFinishDeadNodeReconcile` 同时加了守卫:任务已不在表里就一个键都不动,免得领导者重叠时拿着旧列表的
+  一方删掉回来那一代的计数。只覆盖「在屏障放行、drain 动手之前回来」的情形:失联超过屏障再回来的节点,实例此前已被拆掉、
+  世界频道已被改派,由 scene 节点自己按期望状态对账:读到 `scene:{id}:node` 不再是本节点就排空并销毁本地实体
+  ([scene-node-ownership-reconcile.md](scene-node-ownership-reconcile.md),缺口清单第 33 条,2026-11-06 落码,未编译)。
 
 `reentry_barrier.go::drainPendingDeadNodeReconciles` runs on every 5s
 loadTicker and in fullSync's leader branch. For each task whose barrier
@@ -606,7 +682,9 @@ Regression: `TestReconcileDeadNode_{DestroysOrphanInstances,PreservesWorldChanne
 `TestOwnerReadInterleave_{ReconcileSkipsSceneReassignedAfterOwnerRead,ExplicitDestroyFollowsOwnerAtClaimTime}`,
 `TestDeadNodeReconcileTakeover_{NewLeaderFinishesTaskQueuedInBarrierWindow,FollowerLeavesCountersAndTaskAlone,FailedSceneRetriedNextTick,LeadershipLostMidSweepRestTakenOver}`
 (`dead_node_reconcile_takeover_test.go`, red on the pre-fix commit),
-`TestDeadNodeReconcile_{AbandonsAfterGiveUpDeadline,ScopeIsDeathTimeSnapshot,DropsMalformedTask}`.
+`TestDeadNodeReconcile_{AbandonsAfterGiveUpDeadline,ScopeIsDeathTimeSnapshot,DropsMalformedTask}`,
+`TestDeadNodeReregister_*`(`dead_node_reregister_test.go`,R1-I5:同一代回来撤任务、换代照常收尾、不知道是哪一代照常收尾、
+清扫从旧镜像补实例号、迟到的结束不删计数)。
 
 ### Observability (Prometheus)
 
@@ -1092,7 +1170,7 @@ MetricsListenAddr: ":9150"
 | File | Purpose |
 |------|---------|
 | `go/scene_manager/internal/logic/createscenelogic.go` | CreateScene routing: main world vs instance |
-| `go/scene_manager/internal/logic/world_init.go` | Startup init of persistent world scenes。2026-11-05 起属主已死的频道由 `moveWorldChannelOffDeadNode` 改派:重读属主并过再入屏障 → 先在活节点 CreateScene → `reassignWorldChannelNode`(属主 CAS + 在役核对)→ 转名额,落空回收预建实体;提交一半与懒改派共用 `commitPreCreatedWorldChannel`。以前是 CAS 之后才建,CAS 与 CreateScene 之间被按新属主拆除(排空收尾等)时会在新节点留下没有 Redis 状态的幽灵实体,见 PROGRESS 2026-11-05「世界频道改派提交后与排空收尾」 |
+| `go/scene_manager/internal/logic/world_init.go` | Startup init of persistent world scenes。2026-11-05 起属主已死的频道由 `moveWorldChannelOffDeadNode` 改派:重读属主并过再入屏障 → 先在活节点 CreateScene → `reassignWorldChannelNode`(属主 CAS + 在役核对)→ 转名额,落空回收预建实体;提交一半与懒改派共用 `commitPreCreatedWorldChannel`。以前是 CAS 之后才建,CAS 与 CreateScene 之间被按新属主拆除(排空收尾等)时会在新节点留下没有 Redis 状态的幽灵实体,见 PROGRESS 2026-11-05「世界频道改派提交后与排空收尾」。2026-11-06 起世界频道每次换节点带放置代次([world-channel-placement-generation.md](world-channel-placement-generation.md)):四个改派者(rebalance、懒改派、init、resolveScene 死节点自愈)先 `allocatePlacementGeneration`,建场景、CAS(要求比高水位 `scene:{id}:placement_gen` 新)、拆老实体都带它;落空后回收预建实体一律经 `reclaimUnownedWorldChannelEntity`(比对属主并抬高水位,再按那次的代次 DestroyScene);init 补建用 MGET 读属主与高水位,带高水位建。scene 节点忽略比自己见过的建场景更旧的拆场景,晚到多久的回收都拆不到之后合法放过来的实体 |
 | `go/scene_manager/internal/logic/instance_lifecycle.go` | Auto-destroy idle instances + player count helpers. Per-type timeout (mirror vs. regular) via `resolveMirrorTimeout` + `scene:{id}:mirror` flag. Also: atomic CAS destroy, cascade to mirrors, node-death owner-CAS force path (`destroyOrphanOfDeadNode`) |
 | `go/scene_manager/internal/logic/scene_atomic.go` | Redis Lua scripts for the race-safe enter / destroy CAS paths |
 | `go/scene_manager/internal/logic/scene_node_client.go` | gRPC client cache + RequestNodeCreateScene/DestroyScene |

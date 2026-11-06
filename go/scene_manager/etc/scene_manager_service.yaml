@@ -16,10 +16,19 @@ Etcd:
   Hosts:
     - 127.0.0.1:2379
   Key: scenemanagerservice.rpc
+# 控制域实例(docs/design/control-plane-zone-scoping-20261105.md §4.2):本 zone 的场景路由、成员集合、世界频道、选主锁
+# (scene_manager:leader:lock:zone:<ZoneId>)、死节点收尾任务。K8s 上是本 zone 所属组的 redis-ctl-g<N>(组号 = zones 配置的
+# redisQueueGroup),同组几个 zone 共用一个实例;本进程只读写 ZoneId 这一个 zone 的键。
 Redis:
   Host: 127.0.0.1:6379
   Type: node
   Key: scenemanagerservice
+
+# 核心共享实例:只读 gate 排空标记 gate:<id>:draining|drained。不写 = 与上面的控制域实例是同一个(开发环境如此)。
+# K8s 上指向核心 redis.<infra>,由 k8s_deploy.ps1 渲染。
+# CoreRedis:
+#   Host: 127.0.0.1:6379
+#   Type: node
 
 # 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、切线冷却、进场去重、
 # owner_epoch、handoff、handoff_fence。上面的 Redis 段只剩控制域(场景路由、成员集合、选主锁),一段脚本不跨这两个域。
@@ -31,7 +40,8 @@ Redis:
 PlayerRedis:
   PoolSizePerNode: 20
 
-# Zone ID for C++ convention etcd registration (Scene nodes discover SceneManager by this).
+# 本进程服务、编排的 zone(control-plane-zone-scoping-20261105.md §3.3):按 C++ 约定注册到 SceneManagerNodeService.rpc/zone/<ZoneId>/,
+# 本 zone 的 scene / gate 只连这里;选主锁按 zone;只 watch 本 zone 的场景节点。每个有 scene / gate 的 zone 至少部署一个。
 ZoneId: 1
 
 # Etcd lease TTL (seconds) for node registration keepalive.
@@ -75,16 +85,14 @@ OwnerEpochMint:
 # (cross-zone-scene-travel.md §10.2 R6;理由见 enterscenelogic.go requireHandoffCommitted)。
 # 生产必须 false:依赖标记 + epoch 两道换手门(docs/design/cross-zone-scene-travel.md CZ-4),
 # 打开等于允许新节点读到源节点尚未落盘的状态(回档)。
-# 本地 dev 仍设 true:4 个 scene 节点 + 世界频道按 hash 散列后,切场景大概率跨节点。
-# 标记链路在 C++ 侧已经接通(player_lifecycle.cpp:收到 18 → StartTravelHandoff 冻结 + 存盘
-# → BeginTravelHandoff 写标记 → 重发,cross-zone-scene-travel.md §11.2),robot
-# SceneSwitch/CurrencyCrashWindow 原则上不再依赖本旁路;但那条链路**尚未编译、未跑过任何测试**,
-# 在同 zone 双 scene 节点 + false 的换图验收(同文档 §11 验证清单)通过之前,这里先不改取值。
-# 注意旁路开着时同 zone 跨节点换图**拿不到 18**,C++ 的标记链路根本不会被触发(它是被拒之后
-# 才交接的);只有跨 zone 传送先写标记再请求,scene_manager「先看标记、后看旁路」,仍走安全路径。
-# 所以 true 下的 robot 全绿不能证明标记链路可用。
-# 压测正确性验证 / 双 zone 传送验收 / cross-zone-failure-test-runbook 必须改回 false。
-AllowUnsafeCrossNodeHandoff: true
+# 2026-11-05 本地也改成 false(生产口径)。旁路放行时**不铸造** epoch,目标节点拿着和源节点同一个代次去认领;
+# 玩家存档改成 player_store 写权行之后,go/db 对「同代次、持有者是别的实例」的认领一律回 NOT_HOLDER
+# (go/db/internal/playerstore/decide.go 的 decideClaim),源节点释放之后持有者也还是它,所以开着旁路时
+# 同 zone 跨节点换图根本进不了目标节点,玩家要等被派回源节点或源节点重启才进得来。
+# 标记链路(player_lifecycle.cpp:收到 18 → StartTravelHandoff 冻结 + 存盘 → BeginTravelHandoff 写标记 → 重发,
+# cross-zone-scene-travel.md §11.2)是唯一能用的路径,本地和生产走同一条。C++ 侧的 SCENE_DEV_UNSAFE_CROSS_NODE_HANDOFF
+# 缺省关,和这里一致,不要再打开(两端都开也一样卡在认领上)。
+AllowUnsafeCrossNodeHandoff: false
 
 # LeaveScene等待诊断预算(秒)。UNKNOWN即使等满仍保留原location，绝不以超时替代释放证明。
 # 负数/旧开发开关不能降低删除门槛，见docs/design/location-release-binding.md §15。

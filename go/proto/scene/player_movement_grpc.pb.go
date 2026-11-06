@@ -20,14 +20,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneMovementClientPlayer_MoveStart_FullMethodName           = "/SceneMovementClientPlayer/MoveStart"
-	SceneMovementClientPlayer_MoveStop_FullMethodName            = "/SceneMovementClientPlayer/MoveStop"
-	SceneMovementClientPlayer_MoveSync_FullMethodName            = "/SceneMovementClientPlayer/MoveSync"
-	SceneMovementClientPlayer_TeleportRequest_FullMethodName     = "/SceneMovementClientPlayer/TeleportRequest"
-	SceneMovementClientPlayer_NotifyMoveAck_FullMethodName       = "/SceneMovementClientPlayer/NotifyMoveAck"
-	SceneMovementClientPlayer_NotifyActorMove_FullMethodName     = "/SceneMovementClientPlayer/NotifyActorMove"
-	SceneMovementClientPlayer_NotifyActorMoveList_FullMethodName = "/SceneMovementClientPlayer/NotifyActorMoveList"
-	SceneMovementClientPlayer_NotifyTeleport_FullMethodName      = "/SceneMovementClientPlayer/NotifyTeleport"
+	SceneMovementClientPlayer_MoveStart_FullMethodName             = "/SceneMovementClientPlayer/MoveStart"
+	SceneMovementClientPlayer_MoveStop_FullMethodName              = "/SceneMovementClientPlayer/MoveStop"
+	SceneMovementClientPlayer_MoveSync_FullMethodName              = "/SceneMovementClientPlayer/MoveSync"
+	SceneMovementClientPlayer_TeleportRequest_FullMethodName       = "/SceneMovementClientPlayer/TeleportRequest"
+	SceneMovementClientPlayer_NotifyMoveAck_FullMethodName         = "/SceneMovementClientPlayer/NotifyMoveAck"
+	SceneMovementClientPlayer_NotifyActorMove_FullMethodName       = "/SceneMovementClientPlayer/NotifyActorMove"
+	SceneMovementClientPlayer_NotifyActorMoveList_FullMethodName   = "/SceneMovementClientPlayer/NotifyActorMoveList"
+	SceneMovementClientPlayer_NotifyTeleport_FullMethodName        = "/SceneMovementClientPlayer/NotifyTeleport"
+	SceneMovementClientPlayer_TeamFollow_FullMethodName            = "/SceneMovementClientPlayer/TeamFollow"
+	SceneMovementClientPlayer_NotifyTeamFollowState_FullMethodName = "/SceneMovementClientPlayer/NotifyTeamFollowState"
 )
 
 // SceneMovementClientPlayerClient is the client API for SceneMovementClientPlayer service.
@@ -44,6 +46,9 @@ type SceneMovementClientPlayerClient interface {
 	NotifyActorMove(ctx context.Context, in *ActorMoveS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyActorMoveList(ctx context.Context, in *ActorMoveListS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyTeleport(ctx context.Context, in *TeleportS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// 组队跟随(新增方法只追加在末尾:方法下标与已分配的消息号都不动)
+	TeamFollow(ctx context.Context, in *TeamFollowC2S, opts ...grpc.CallOption) (*base.Empty, error)
+	NotifyTeamFollowState(ctx context.Context, in *TeamFollowStateS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type sceneMovementClientPlayerClient struct {
@@ -134,6 +139,26 @@ func (c *sceneMovementClientPlayerClient) NotifyTeleport(ctx context.Context, in
 	return out, nil
 }
 
+func (c *sceneMovementClientPlayerClient) TeamFollow(ctx context.Context, in *TeamFollowC2S, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, SceneMovementClientPlayer_TeamFollow_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneMovementClientPlayerClient) NotifyTeamFollowState(ctx context.Context, in *TeamFollowStateS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, SceneMovementClientPlayer_NotifyTeamFollowState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneMovementClientPlayerServer is the server API for SceneMovementClientPlayer service.
 // All implementations must embed UnimplementedSceneMovementClientPlayerServer
 // for forward compatibility.
@@ -148,6 +173,9 @@ type SceneMovementClientPlayerServer interface {
 	NotifyActorMove(context.Context, *ActorMoveS2C) (*base.Empty, error)
 	NotifyActorMoveList(context.Context, *ActorMoveListS2C) (*base.Empty, error)
 	NotifyTeleport(context.Context, *TeleportS2C) (*base.Empty, error)
+	// 组队跟随(新增方法只追加在末尾:方法下标与已分配的消息号都不动)
+	TeamFollow(context.Context, *TeamFollowC2S) (*base.Empty, error)
+	NotifyTeamFollowState(context.Context, *TeamFollowStateS2C) (*base.Empty, error)
 	mustEmbedUnimplementedSceneMovementClientPlayerServer()
 }
 
@@ -181,6 +209,12 @@ func (UnimplementedSceneMovementClientPlayerServer) NotifyActorMoveList(context.
 }
 func (UnimplementedSceneMovementClientPlayerServer) NotifyTeleport(context.Context, *TeleportS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyTeleport not implemented")
+}
+func (UnimplementedSceneMovementClientPlayerServer) TeamFollow(context.Context, *TeamFollowC2S) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method TeamFollow not implemented")
+}
+func (UnimplementedSceneMovementClientPlayerServer) NotifyTeamFollowState(context.Context, *TeamFollowStateS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyTeamFollowState not implemented")
 }
 func (UnimplementedSceneMovementClientPlayerServer) mustEmbedUnimplementedSceneMovementClientPlayerServer() {
 }
@@ -348,6 +382,42 @@ func _SceneMovementClientPlayer_NotifyTeleport_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneMovementClientPlayer_TeamFollow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamFollowC2S)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneMovementClientPlayerServer).TeamFollow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneMovementClientPlayer_TeamFollow_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneMovementClientPlayerServer).TeamFollow(ctx, req.(*TeamFollowC2S))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneMovementClientPlayer_NotifyTeamFollowState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeamFollowStateS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneMovementClientPlayerServer).NotifyTeamFollowState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneMovementClientPlayer_NotifyTeamFollowState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneMovementClientPlayerServer).NotifyTeamFollowState(ctx, req.(*TeamFollowStateS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneMovementClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneMovementClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -386,6 +456,14 @@ var SceneMovementClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyTeleport",
 			Handler:    _SceneMovementClientPlayer_NotifyTeleport_Handler,
+		},
+		{
+			MethodName: "TeamFollow",
+			Handler:    _SceneMovementClientPlayer_TeamFollow_Handler,
+		},
+		{
+			MethodName: "NotifyTeamFollowState",
+			Handler:    _SceneMovementClientPlayer_NotifyTeamFollowState_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

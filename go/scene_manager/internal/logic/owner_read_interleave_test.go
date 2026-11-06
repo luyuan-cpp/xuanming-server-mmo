@@ -13,17 +13,22 @@ package logic
 // 交错用 go-redis hook 注入(redis.WithHook,见 newIntegrationSvcCtxWithRedisOptions),在下面两个时刻中先到的
 // 那一个同步提交一次 reassignSceneNode,只注入一次:
 //   - 调用方第一次 GET scene:{id}:node 拿到结果之后:收尾的快速过滤就是这一读,注入点即「读完属主、销毁之前」;
-//   - 调用方发出以 scene:{id}:node 为 KEYS[1] 的 EVAL 之前:2026-11-05 起 destroyInstanceInternal 在认领前不再读属主
-//     (一律取认领应答),显式 DestroyScene 的第一次触碰就是认领脚本,注入点是「认领之前」。
+//   - 调用方发出以 scene:{id}:node 为 KEYS[1] 的 EVAL 之前:认领脚本自己读属主的路径,注入点是「认领之前」。
+//     显式 DestroyScene 走 AtomicDestroyForce(期望属主为空):先 GET 属主、按读到的值认领,读完被改派就重读
+//     (2026-11-05),所以它的注入点是那次 GET 之后。
 // 两条用例都从生产入口进(reconcileDeadNodeScenes、DestroySceneLogic.DestroyScene)。
 //
 // 修复前红的取法(本文件依赖 10-31 起的成员集合辅助函数,拷不回修复前的提交,按变异取红):
-//   - ReconcileSkipsSceneReassignedAfterOwnerRead:按 reconcile_owner_cas_test.go 文件头的变异 C,把收尾里的
-//     destroyOrphanOfDeadNode 换回修复前的 destroyInstanceForce(..., "node_death")。失败信息含「收尾不得向新属主发
+//   - ReconcileSkipsSceneReassignedAfterOwnerRead:reconcile_owner_cas_test.go 文件头的变异 B(认领不再比对属主)或
+//     变异 C(收尾换回修复前的 destroyInstanceForce(..., "node_death"))都让它红,失败信息含「收尾不得向新属主发
 //     DestroyScene」。
-//   - ExplicitDestroyFollowsOwnerAtClaimTime:变异 E,模拟修复前「副作用用自己快照读到的属主」。在 destroyInstanceInternal
-//     认领之前加 `snapshotOwner, _ := svcCtx.Redis.Get(sceneNodeKey(sceneId))`,并把 `nodeId := claim.NodeID` 换成
-//     `nodeId := snapshotOwner`。失败信息含「DestroyScene 必须发给认领时的属主 B」。
+//   - ExplicitDestroyFollowsOwnerAtClaimTime 有两种取法,守的是 AtomicDestroyForce「先读属主、按读到的值认领、读完被改派
+//     就重读」的两半:
+//     - 变异 F(不重读):AtomicDestroyForce 期望属主为空的分支里,把循环体末尾的
+//       `if err != nil || claim.Claimed || claim.Pending { return claim, err }` 换成无条件 `return claim, err`。
+//       第一次按 A 认领落空就返回,场景没拆。失败信息含「DestroyScene 必须发给认领时的属主 B」。
+//     - 变异 B(不比对):认领照拆 B 的映射,计数与反向索引却按读到的 A 改,即修复前「副作用按快照属主记账」。
+//       失败信息含「不得留在 8985 的反向索引里」。
 
 import (
 	"context"
@@ -162,7 +167,7 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 	require.True(t, allowed)
 
 	hook.arm(func() {
-		require.True(t, reassignSceneNode(sc, interleaveZone, sceneID, interleaveNodeDead, interleaveNodeLive),
+		require.True(t, reassignSceneNode(sc, interleaveZone, sceneID, interleaveNodeDead, interleaveNodeLive, freshPlacementGeneration(t, sc, interleaveZone)),
 			"注入的改派必须提交成功")
 	})
 	entry := nodeEntry{nodeID: interleaveNodeDead}
@@ -200,7 +205,7 @@ func TestOwnerReadInterleave_ExplicitDestroyFollowsOwnerAtClaimTime(t *testing.T
 	require.NoError(t, sc.Redis.Set(nodeSceneCountKey(interleaveZone, interleaveNodeA), "1"))
 
 	hook.arm(func() {
-		require.True(t, reassignSceneNode(sc, interleaveZone, sceneID, interleaveNodeA, interleaveNodeB),
+		require.True(t, reassignSceneNode(sc, interleaveZone, sceneID, interleaveNodeA, interleaveNodeB, freshPlacementGeneration(t, sc, interleaveZone)),
 			"注入的改派必须提交成功")
 	})
 	_, err = NewDestroySceneLogic(context.Background(), sc).DestroyScene(&scene_manager.DestroySceneRequest{

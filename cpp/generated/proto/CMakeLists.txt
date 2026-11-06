@@ -165,6 +165,7 @@ set(SOURCE_FILES
     common/component/player_battle_result_comp.pb.cc
     common/component/player_item_gain_block_comp.pb.cc
     scene/player_battle_result.pb.cc
+    common/component/client_request_ledger_comp.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

@@ -178,6 +178,39 @@ func TestRemovePlayersFromAccounts_MissingRouteIsNotProofOfOrphan(t *testing.T) 
 	}
 }
 
+// 现行建角流程提交的角色(初始提交标记)先写初始行再提交目录:目录有它、路由在、只缺写权行,只可能是存档库的恢复点早于写初始行。
+// 角色是真的建成了,该用 data_service 的 create_residual 重写初始行,不是孤儿。预览和执行都拒绝,不进删角流程;没有标记的旧角色照旧。
+func TestRemovePlayersFromAccounts_InitialCommitRoleMissingStoreRowsIsRepairNotOrphan(t *testing.T) {
+	committed := adminOwned("acct", 1, 3, "甲")
+	committed.InitialPlayerCommit = true
+	for _, dryRun := range []bool{true, false} {
+		directory := &adminDirectoryFake{roles: map[uint64]*dspb.AccountRoleOwnership{
+			1: proto.Clone(committed).(*dspb.AccountRoleOwnership),
+			2: adminOwned("acct", 2, 4, "乙"),
+		}}
+		probe := &storeProbeFake{}
+		sc := &svc.ServiceContext{AccountDirectory: directory, DataServiceClient: probe}
+		req := adminRequest(1, 2)
+		req.DryRun = dryRun
+		out, err := RemovePlayersFromAccounts(context.Background(), sc, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outcomes := outcomesOf(out)
+		if outcomes[1] != loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_ORPHAN || outcomes[2] != loginpb.RemovePlayerOutcome_REMOVE_PLAYER_REMOVED {
+			t.Fatalf("dry_run=%t: 只缺初始行的已提交角色不是孤儿,旧角色照旧判: %v", dryRun, outcomes)
+		}
+		for _, version := range directory.removes["acct"] {
+			if version.PlayerId == 1 {
+				t.Fatalf("dry_run=%t: 已提交角色不能进删角流程: %v", dryRun, directory.removes)
+			}
+		}
+		if directory.roles[1] == nil || !reflect.DeepEqual(probe.probes, []uint64{1, 2}) {
+			t.Fatalf("dry_run=%t: 先照常核存档和路由再拒: roles=%v probes=%v", dryRun, directory.roles, probe.probes)
+		}
+	}
+}
+
 // 存档读不到不能当成没有存档:这是最容易把在役角色删掉的一条路。
 func TestRemovePlayersFromAccounts_StoreCheckFailureIsRetryNotOrphan(t *testing.T) {
 	directory := &adminDirectoryFake{roles: map[uint64]*dspb.AccountRoleOwnership{1: adminOwned("acct", 1, 3, "甲")}}

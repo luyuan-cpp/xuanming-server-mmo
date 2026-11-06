@@ -147,17 +147,17 @@ Redis 维护撤销与 SQL 提交不宣称跨存储 ACID：任一阶段失败保�
 
 Java 版按自己的 SQL owner 与最终存盘模型实现。旧 OPEN 只有准入、没有最终快照载荷；现有七天清理的安全依据是同 P／route 锁内的持久更高 E 与最终状态条件，七天本身只是保留期。新工具只退休已固定 listing 的指定旧 OPEN，并持久保存恢复原件；PENDING、未知状态、Match／Inbox／资产待投不进入退休集合，不伪造 EXACT_APPLIED。更高 E 已入场时要求原 SCENE_ACK 与实际 SQL APPLIED；更高 E 仅 claim、尚未 load 时，要求该 E 的最终准入实际缺席及非 NULL 原存档，计划固定剩余旧 OPEN 集合、数量和最后一条语义，仅最后一条退休时复用正式封闭形成真实 SQL_NO_ADMISSION。load 与冻结以同 P 决定先后，不能借无准入分支替已经入场的实体造 ACK。两版必须分别验证真实崩溃后阻断、合法恢复、旧写者迟到拒绝、B5 反例、未确认 pending 拒绝、并发 Cancel／Register／过户、提交未知及原件重放。
 
-## 摘孤儿角色(2026-11-01,未编译,待 Codex 验证)
+## 摘孤儿角色(2026-11-01,2026-11-05 改判据,未编译,待 Codex 验证)
 
-`LoginAdmin.RemovePlayersFromAccounts` 保留并接线。原来的调用方是单 zone 回档,那条路已经退役,但这个入口还得留:
+`LoginAdmin.RemovePlayersFromAccounts` 保留并接线。原来的调用方是单 zone 回档,那条路已经退役。它是目录删角流程(`RemoveAccountRoles`)唯一的生产入口,删掉之后那套两阶段就没有调用方了。
 
-- 它是目录删角流程(`RemoveAccountRoles`)唯一的生产入口。删掉之后那套两阶段就没有调用方了。
-- 孤儿还会出现。目录和存档分库之后,整个地域恢复到一个时间点时,各库的恢复点有差距,目录里可能留下存档没有的角色。这种角色进不了场,白占账号的角色名额,没有别的办法清。
+多集群各自恢复到同一个 T 时恢复点错开,目录里会留下存档库没有初始行的角色(存档库早于建角写初始行那一步)。这种角色是真的建成了:建角先写初始行再提交目录,提交点在 T 之前。11-01 的方案把它当孤儿删,墓碑不可逆,玩家的角色就没了,名字也释放不掉。现在改成修:data_service 的 `cmd/create_residual` 重写建角时那几行初始行,同一个工具还补回缺失的 ref 和名字登记(判据和步骤见 [PITR 手册](../ops/mysql-backup-pitr-runbook.md) §4.1a,实现见 `go/data_service/internal/store/create_residual.go`)。摘孤儿只剩旧角色(早于初始行流程、`initial_player_commit=0`)可删。
 
-**孤儿的判定**:目录有归属,路由还在,`player_store` 没有写权行。建角先写存档再提交目录,所以正常角色一定有这一行。墓碑不可逆,所以:
+**孤儿的判定**:目录有归属,路由还在,`player_store` 没有写权行,而且角色不是现行建角流程提交的。墓碑不可逆,所以:
 
 - 有写权行的一律回 `NOT_ORPHAN`,输错 id 删不掉在役角色。
-- 路由缺失也回 `NOT_ORPHAN`:账本读这时同样回没有存档,但路由没了说明不了存档也没了。路由和目录的角色行同片,地域恢复留下的孤儿路由还在,缺了只可能是库被人动过,要人看。路由行在、落点列为空的情况这里分不出来(`GetPlayerHomeZone` 只看 `home_zone`),建角恒写落点,go/db 也不认领这种角色。
+- 路由缺失也回 `NOT_ORPHAN`:账本读这时同样回没有存档,但路由没了说明不了存档也没了。路由和目录的角色行同片同事务提交,缺了只可能是库被人动过,要人看。路由行在、落点列为空的情况这里分不出来(`GetPlayerHomeZone` 只看 `home_zone`),建角恒写落点,go/db 也不认领这种角色。
+- `LookupAccountRole` 回 `initial_player_commit=true`(现行建角流程提交的)也回 `NOT_ORPHAN`,日志提示走 `create_residual`:它只缺初始行,该修不该删。标记由 data_service 读 `account_role.initial_player_commit` 回填,是 `AccountRoleOwnership` 的第 6 个字段。
 - 存档状态读不到回 `RETRY`,不当成没有存档。
 - `dry_run` 只核对,不写。
 
@@ -165,7 +165,7 @@ Java 版按自己的 SQL owner 与最终存盘模型实现。旧 OPEN 只有准�
 
 **预算**:一次 RPC 的预算是 login 的全局 `Timeout`(4 秒)。摘一名的下游调用限在 3 秒内,剩余不够 3.5 秒就不开始下一名,没做的回 `RETRY`,已摘的名单能回到调用方,同参数重跑。不用 `MethodTimeouts` 放宽:login 在路由服的预算链里,部署门禁不许有方法级超时(`Assert-RouterForwardBudget`)。名单长的要多跑几次,这个入口只给运维用,接受。
 
-**不释放名字**:输入里可能有在役角色的 id,释放不可逆。要释放按日志带 token 调 `ReleasePlayerName`(`guild-phase2/03-names.md`)。
+**名字跟着墓碑释放**(2026-11-06 改,未编译):这个入口本身不碰名字。目录写完墓碑之后的收尾在玩家片核过角色行确是墓碑,再删这名角色登记的名字(不看预留还是已绑定);输入里在役角色的 id 走不到这一步,不会误放。收尾失败时 `account_role_removal` 那一行留着,后台 `ResumeRemovals` 接着放。`ReleasePlayerName` 对已绑定的名字一律拒绝,不再是删角之后释放名字的入口。状态机见 `guild-phase2/03-names.md` §3.4a。
 
 **鉴权**:`x-admin-token`,值是环境变量 `MMORPG_LOGIN_ADMIN_TOKEN`(Secret `domain-service-secrets` 的 `login-admin-token`),至少 16 字节。没配就停用。login 的 gRPC 端口对外接受未鉴权调用,身份闸门只校验带了身份声明的调用,所以 `LoginAdmin` 单独加一道拦截器,所有方法都过。操作人、理由、对端地址只进日志,目录的删角没有审计表。
 

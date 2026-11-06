@@ -47,8 +47,6 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::player_store
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
-        // ::player_database_1
-        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -1075,163 +1073,6 @@ const ::_pbi::ClassData* account_share_database_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class player_database_1::_Internal {
- public:
-  using HasBits = decltype(::std::declval<player_database_1>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(player_database_1, _impl_._has_bits_);
-};
-
-constexpr player_database_1::ParseTableT_ player_database_1::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(player_database_1, _impl_._has_bits_),
-      0, // no _extensions_
-      5, 8,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967276,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
-      1,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::player_database_1>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // .PlayerStressTestProbe stress_test_probe = 2 [(.OptionPersistUncarried) = true];
-      {::_pbi::TcParser::FastMtS1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.stress_test_probe_)}},
-      // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database_1, _impl_.player_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.player_id_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // .PlayerStressTestProbe stress_test_probe = 2 [(.OptionPersistUncarried) = true];
-      {PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.stress_test_probe_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // uint32 persist_schema_gen = 5;
-      {PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::PlayerStressTestProbe>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::PlayerStressTestProbe_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr player_database_1::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        stress_test_probe_{nullptr},
-        player_id_{::uint64_t{0u}},
-        persist_schema_gen_{0u} {}
-
-template <typename>
-constexpr player_database_1::player_database_1(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL player_database_1::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) player_database_1(arena);
-}
-constexpr auto player_database_1::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(player_database_1), alignof(player_database_1));
-}
-constexpr auto player_database_1::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &player_database_1::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<player_database_1>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &player_database_1::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<player_database_1>(), &player_database_1::ByteSizeLong,
-              &player_database_1::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(player_database_1, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct player_database_1GlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr player_database_1GlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 player_database_1_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(player_database_1::InternalGenerateClassData_(
-            _default, &player_database_1_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<player_database_1>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~player_database_1GlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) player_database_1 _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<player_database_1>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(player_database_1GlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST player_database_1GlobalsTypeInternal player_database_1_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* player_database_1_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return player_database_1_globals_.GetClassData();
-#else
-  return player_database_1_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 class user_accounts::_Internal {
  public:
   using HasBits = decltype(::std::declval<user_accounts>()._impl_._has_bits_);
@@ -1568,12 +1409,12 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(player_database, _impl_._has_bits_),
       0, // no _extensions_
-      24, 248,  // max_field_number, fast_idx_mask
+      25, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4278649344,  // skipmap
+      4261872128,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      20,  // num_field_entries
-      18,  // num_aux_entries
+      21,  // num_field_entries
+      19,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1584,8 +1425,8 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database, _impl_.player_id_), 18>(),
-       {8, 18, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database, _impl_.player_id_), 19>(),
+       {8, 19, 0,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_)}},
       // .Transform transform = 2 [(.OptionPersistGroup) = 9];
       {::_pbi::TcParser::FastMtS1,
@@ -1653,7 +1494,7 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.inbox_ledger_)}},
       // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
       {::_pbi::TcParser::FastV32S2,
-       {424, 19, 0,
+       {424, 20, 0,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_)}},
       // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
       {::_pbi::TcParser::FastMtS2,
@@ -1667,7 +1508,10 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       {::_pbi::TcParser::FastMtS2,
        {450, 17, 17,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.item_gain_block_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
+      {::_pbi::TcParser::FastMtS2,
+       {458, 18, 18,
+        PROTOBUF_FIELD_OFFSET(player_database, _impl_.client_request_ledger_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1678,7 +1522,7 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .Transform transform = 2 [(.OptionPersistGroup) = 9];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.transform_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerUint64Comp uint64_pb_component = 3 [(.OptionPersistGroup) = 4];
@@ -1710,13 +1554,15 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       // .PlayerInboxLedgerComp inbox_ledger = 20 [(.OptionPersistGroup) = 7];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.inbox_ledger_), _Internal::kHasBitsOffset + 14, 14, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.mystery_merchant_), _Internal::kHasBitsOffset + 15, 15, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerBattleResultComp battle_results = 23 [(.OptionPersistGroup) = 4];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.battle_results_), _Internal::kHasBitsOffset + 16, 16, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerItemGainBlockComp item_gain_block = 24 [(.OptionPersistGroup) = 4];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.item_gain_block_), _Internal::kHasBitsOffset + 17, 17, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.client_request_ledger_), _Internal::kHasBitsOffset + 18, 18, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1809,6 +1655,11 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PlayerItemGainBlockComp_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::ClientRequestLedgerComp>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::ClientRequestLedgerComp_globals_},
+        #endif
     }},
     {{
     }},
@@ -1838,6 +1689,7 @@ inline constexpr player_database::Impl_::Impl_(
         mystery_merchant_{nullptr},
         battle_results_{nullptr},
         item_gain_block_{nullptr},
+        client_request_ledger_{nullptr},
         player_id_{::uint64_t{0u}},
         persist_schema_gen_{0u} {}
 
@@ -2005,7 +1857,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_._has_bits_),
-        23, // hasbit index offset
+        24, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.transform_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.uint64_pb_component_),
@@ -2026,7 +1878,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.mystery_merchant_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.battle_results_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.item_gain_block_),
-        18,
+        PROTOBUF_FIELD_OFFSET(::player_database, _impl_.client_request_ledger_),
+        19,
         0,
         1,
         2,
@@ -2042,10 +1895,11 @@ const ::uint32_t
         12,
         13,
         14,
-        19,
+        20,
         15,
         16,
         17,
+        18,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_store, _impl_._has_bits_),
         12, // hasbit index offset
@@ -2067,15 +1921,6 @@ const ::uint32_t
         8,
         1,
         7,
-        0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::player_database_1, _impl_._has_bits_),
-        6, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::player_database_1, _impl_.player_id_),
-        PROTOBUF_FIELD_OFFSET(::player_database_1, _impl_.stress_test_probe_),
-        PROTOBUF_FIELD_OFFSET(::player_database_1, _impl_.persist_schema_gen_),
-        1,
-        0,
-        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -2088,8 +1933,7 @@ static const ::_pbi::MigrationSchema
         {51, sizeof(::account_share_database)},
         {56, sizeof(::player_centre_database)},
         {63, sizeof(::player_database)},
-        {106, sizeof(::player_store)},
-        {127, sizeof(::player_database_1)},
+        {108, sizeof(::player_store)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2102,7 +1946,6 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::player_centre_database_globals_,
         &::player_database_globals_,
         &::player_store_globals_,
-        &::player_database_1_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -2123,73 +1966,73 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabas
     "mp.proto\032.proto/common/component/player_"
     "skill_comp.proto\032*proto/common/component"
     "/currency_comp.proto\0328proto/common/compo"
-    "nent/player_item_gain_block_comp.proto\032/"
-    "proto/common/database/bag_quest_mail_dat"
-    "a.proto\"\204\001\n\004user\022\n\n\002id\030\001 \001(\004\022\024\n\014display_"
-    "name\030\002 \001(\t\022\020\n\010is_guest\030\003 \001(\010\022\023\n\013create_t"
-    "ime\030\004 \001(\004\022\022\n\nlast_login\030\005 \001(\004:\037\212\222\364\001\004user"
-    "\222\222\364\001\002id\332\222\364\001\nlast_login\"\230\001\n\nuser_oauth\022\017\n"
-    "\007user_id\030\001 \001(\004\022\020\n\010provider\030\002 \001(\t\022\023\n\013prov"
-    "ider_id\030\003 \001(\t\022\023\n\013create_time\030\004 \001(\004:=\212\222\364\001"
-    "\nuser_oauth\222\222\364\001\020user_id,provider\342\222\364\001\024pro"
-    "vider,provider_id\"h\n\nuser_phone\022\017\n\007user_"
-    "id\030\001 \001(\004\022\r\n\005phone\030\002 \001(\t\022\023\n\013create_time\030\003"
-    " \001(\004:%\212\222\364\001\nuser_phone\222\222\364\001\007user_id\342\222\364\001\005ph"
-    "one\"c\n\ruser_password\022\017\n\007user_id\030\001 \001(\004\022\014\n"
-    "\004hash\030\002 \001(\t\022\023\n\013create_time\030\003 \001(\004:\036\212\222\364\001\ru"
-    "ser_password\222\222\364\001\007user_id\"\204\001\n\ruser_accoun"
-    "ts\022\017\n\007account\030\001 \001(\t\022\020\n\010password\030\002 \001(\t\0220\n"
-    "\016simple_players\030\003 \001(\0132\030.AccountSimplePla"
-    "yerList:\036\212\222\364\001\ruser_accounts\222\222\364\001\007account\""
-    "R\n\026account_share_database\022\017\n\007account\030\001 \001"
-    "(\t:\'\212\222\364\001\026account_share_database\222\222\364\001\007acco"
-    "unt\"\240\001\n\026player_centre_database\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022+\n\nscene_info\030\002 \001(\0132\027.PlayerSc"
-    "eneContextComp:F\212\222\364\001\026player_centre_datab"
-    "ase\222\222\364\001\tplayer_id\262\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001"
-    "\004\270\223\364\001\004\"\237\010\n\017player_database\022\030\n\tplayer_id\030"
-    "\001 \001(\004B\005\310\376\244\002\000\022$\n\ttransform\030\002 \001(\0132\n.Transf"
-    "ormB\005\310\376\244\002\t\0225\n\023uint64_pb_component\030\003 \001(\0132"
-    "\021.PlayerUint64CompB\005\310\376\244\002\004\022/\n\nskill_list\030"
-    "\004 \001(\0132\024.PlayerSkillListCompB\005\310\376\244\002\003\0225\n\023ui"
-    "nt32_pb_component\030\005 \001(\0132\021.PlayerUint32Co"
-    "mpB\005\310\376\244\002\004\022@\n\034derived_attributes_componen"
-    "t\030\006 \001(\0132\023.BaseAttributesCompB\005\310\376\244\002\006\022*\n\017l"
-    "evel_component\030\007 \001(\0132\n.LevelCompB\005\310\376\244\002\006\022"
-    "&\n\010currency\030\010 \001(\0132\r.CurrencyCompB\005\310\376\244\002\007\022"
-    "=\n\021stress_test_probe\030\t \001(\0132\026.PlayerStres"
-    "sTestProbeB\n\300\376\244\002\001\310\376\244\002\004\0228\n\023attribute_comp"
-    "onent\030\013 \001(\0132\024.PlayerAttributeCompB\005\310\376\244\002\003"
-    "\022,\n\rpet_component\030\014 \001(\0132\016.PlayerPetCompB"
-    "\005\310\376\244\002\003\022)\n\rbag_component\030\r \001(\0132\013.BagAllDa"
-    "taB\005\310\376\244\002\010\022/\n\021mission_component\030\016 \001(\0132\r.Q"
-    "uestAllDataB\005\310\376\244\002\003\0224\n\021profile_component\030"
-    "\017 \001(\0132\022.PlayerProfileCompB\005\310\376\244\002\004\0228\n\017asse"
-    "t_op_ledger\030\020 \001(\0132\030.PlayerAssetOpLedgerC"
-    "ompB\005\310\376\244\002\007\0223\n\014inbox_ledger\030\024 \001(\0132\026.Playe"
-    "rInboxLedgerCompB\005\310\376\244\002\007\022!\n\022persist_schem"
-    "a_gen\030\025 \001(\rB\005\310\376\244\002\000\022;\n\020mystery_merchant\030\026"
-    " \001(\0132\032.PlayerMysteryMerchantCompB\005\310\376\244\002\007\022"
-    "6\n\016battle_results\030\027 \001(\0132\027.PlayerBattleRe"
-    "sultCompB\005\310\376\244\002\004\0228\n\017item_gain_block\030\030 \001(\013"
-    "2\030.PlayerItemGainBlockCompB\005\310\376\244\002\004:\005\350\222\364\001\001"
-    "J\004\010\n\020\013J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024\"\337\001\n\014player_stor"
-    "e\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013ow"
-    "ner_epoch\030\003 \001(\004\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nsch"
-    "ema_gen\030\005 \001(\r\022\027\n\017holder_instance\030\006 \001(\014\022\020"
-    "\n\010released\030\007 \001(\r\022\017\n\007payload\030\010 \001(\014\022\021\n\tcla"
-    "im_seq\030\t \001(\004:$\212\222\364\001\014player_store\222\222\364\001\016play"
-    "er_id,kind\"\217\001\n\021player_database_1\022\021\n\tplay"
-    "er_id\030\001 \001(\004\0228\n\021stress_test_probe\030\002 \001(\0132\026"
-    ".PlayerStressTestProbeB\005\300\376\244\002\001\022\032\n\022persist"
-    "_schema_gen\030\005 \001(\r:\005\350\222\364\001\001J\004\010\003\020\004J\004\010\004\020\005B\021Z\017"
-    "common/databaseb\006proto3"
+    "nent/player_item_gain_block_comp.proto\0327"
+    "proto/common/component/client_request_le"
+    "dger_comp.proto\032/proto/common/database/b"
+    "ag_quest_mail_data.proto\"\204\001\n\004user\022\n\n\002id\030"
+    "\001 \001(\004\022\024\n\014display_name\030\002 \001(\t\022\020\n\010is_guest\030"
+    "\003 \001(\010\022\023\n\013create_time\030\004 \001(\004\022\022\n\nlast_login"
+    "\030\005 \001(\004:\037\212\222\364\001\004user\222\222\364\001\002id\332\222\364\001\nlast_login\""
+    "\230\001\n\nuser_oauth\022\017\n\007user_id\030\001 \001(\004\022\020\n\010provi"
+    "der\030\002 \001(\t\022\023\n\013provider_id\030\003 \001(\t\022\023\n\013create"
+    "_time\030\004 \001(\004:=\212\222\364\001\nuser_oauth\222\222\364\001\020user_id"
+    ",provider\342\222\364\001\024provider,provider_id\"h\n\nus"
+    "er_phone\022\017\n\007user_id\030\001 \001(\004\022\r\n\005phone\030\002 \001(\t"
+    "\022\023\n\013create_time\030\003 \001(\004:%\212\222\364\001\nuser_phone\222\222"
+    "\364\001\007user_id\342\222\364\001\005phone\"c\n\ruser_password\022\017\n"
+    "\007user_id\030\001 \001(\004\022\014\n\004hash\030\002 \001(\t\022\023\n\013create_t"
+    "ime\030\003 \001(\004:\036\212\222\364\001\ruser_password\222\222\364\001\007user_i"
+    "d\"\204\001\n\ruser_accounts\022\017\n\007account\030\001 \001(\t\022\020\n\010"
+    "password\030\002 \001(\t\0220\n\016simple_players\030\003 \001(\0132\030"
+    ".AccountSimplePlayerList:\036\212\222\364\001\ruser_acco"
+    "unts\222\222\364\001\007account\"R\n\026account_share_databa"
+    "se\022\017\n\007account\030\001 \001(\t:\'\212\222\364\001\026account_share_"
+    "database\222\222\364\001\007account\"\240\001\n\026player_centre_d"
+    "atabase\022\021\n\tplayer_id\030\001 \001(\004\022+\n\nscene_info"
+    "\030\002 \001(\0132\027.PlayerSceneContextComp:F\212\222\364\001\026pl"
+    "ayer_centre_database\222\222\364\001\tplayer_id\262\222\364\001\tp"
+    "layer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\337\010\n\017player_datab"
+    "ase\022\030\n\tplayer_id\030\001 \001(\004B\005\310\376\244\002\000\022$\n\ttransfo"
+    "rm\030\002 \001(\0132\n.TransformB\005\310\376\244\002\t\0225\n\023uint64_pb"
+    "_component\030\003 \001(\0132\021.PlayerUint64CompB\005\310\376\244"
+    "\002\004\022/\n\nskill_list\030\004 \001(\0132\024.PlayerSkillList"
+    "CompB\005\310\376\244\002\003\0225\n\023uint32_pb_component\030\005 \001(\013"
+    "2\021.PlayerUint32CompB\005\310\376\244\002\004\022@\n\034derived_at"
+    "tributes_component\030\006 \001(\0132\023.BaseAttribute"
+    "sCompB\005\310\376\244\002\006\022*\n\017level_component\030\007 \001(\0132\n."
+    "LevelCompB\005\310\376\244\002\006\022&\n\010currency\030\010 \001(\0132\r.Cur"
+    "rencyCompB\005\310\376\244\002\007\022=\n\021stress_test_probe\030\t "
+    "\001(\0132\026.PlayerStressTestProbeB\n\300\376\244\002\001\310\376\244\002\004\022"
+    "8\n\023attribute_component\030\013 \001(\0132\024.PlayerAtt"
+    "ributeCompB\005\310\376\244\002\003\022,\n\rpet_component\030\014 \001(\013"
+    "2\016.PlayerPetCompB\005\310\376\244\002\003\022)\n\rbag_component"
+    "\030\r \001(\0132\013.BagAllDataB\005\310\376\244\002\010\022/\n\021mission_co"
+    "mponent\030\016 \001(\0132\r.QuestAllDataB\005\310\376\244\002\003\0224\n\021p"
+    "rofile_component\030\017 \001(\0132\022.PlayerProfileCo"
+    "mpB\005\310\376\244\002\004\0228\n\017asset_op_ledger\030\020 \001(\0132\030.Pla"
+    "yerAssetOpLedgerCompB\005\310\376\244\002\007\0223\n\014inbox_led"
+    "ger\030\024 \001(\0132\026.PlayerInboxLedgerCompB\005\310\376\244\002\007"
+    "\022!\n\022persist_schema_gen\030\025 \001(\rB\005\310\376\244\002\000\022;\n\020m"
+    "ystery_merchant\030\026 \001(\0132\032.PlayerMysteryMer"
+    "chantCompB\005\310\376\244\002\007\0226\n\016battle_results\030\027 \001(\013"
+    "2\027.PlayerBattleResultCompB\005\310\376\244\002\004\0228\n\017item"
+    "_gain_block\030\030 \001(\0132\030.PlayerItemGainBlockC"
+    "ompB\005\310\376\244\002\004\022>\n\025client_request_ledger\030\031 \001("
+    "\0132\030.ClientRequestLedgerCompB\005\310\376\244\002\007:\005\350\222\364\001"
+    "\001J\004\010\n\020\013J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024\"\337\001\n\014player_sto"
+    "re\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013o"
+    "wner_epoch\030\003 \001(\004\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nsc"
+    "hema_gen\030\005 \001(\r\022\027\n\017holder_instance\030\006 \001(\014\022"
+    "\020\n\010released\030\007 \001(\r\022\017\n\007payload\030\010 \001(\014\022\021\n\tcl"
+    "aim_seq\030\t \001(\004:$\212\222\364\001\014player_store\222\222\364\001\016pla"
+    "yer_id,kindB\021Z\017common/databaseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps[15] = {
+    descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps[16] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fasset_5fop_5fledger_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fcurrency_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fattribute_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto,
@@ -2207,13 +2050,13 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fda
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto = {
     false,
     false,
-    3103,
+    3078,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto,
     "proto/common/database/mysql_database_table.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_once,
     descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps,
-    15,
-    10,
+    16,
+    9,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto::offsets,
@@ -4275,6 +4118,11 @@ void player_database::clear_item_gain_block() {
   if (_impl_.item_gain_block_ != nullptr) _impl_.item_gain_block_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
+void player_database::clear_client_request_ledger() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.client_request_ledger_ != nullptr) _impl_.client_request_ledger_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
 player_database::player_database(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, player_database_get_class_data()) {
@@ -4360,6 +4208,9 @@ player_database::player_database(
   _impl_.item_gain_block_ = (CheckHasBit(cached_has_bits, 0x00020000U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.item_gain_block_)
                 : nullptr;
+  _impl_.client_request_ledger_ = (CheckHasBit(cached_has_bits, 0x00040000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.client_request_ledger_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -4413,6 +4264,7 @@ inline void player_database::SharedDtor(MessageLite& self) {
   delete this_._impl_.mystery_merchant_;
   delete this_._impl_.battle_results_;
   delete this_._impl_.item_gain_block_;
+  delete this_._impl_.client_request_ledger_;
   this_._impl_.~Impl_();
 }
 
@@ -4518,7 +4370,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       _impl_.mystery_merchant_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       ABSL_DCHECK(_impl_.battle_results_ != nullptr);
       _impl_.battle_results_->Clear();
@@ -4527,8 +4379,12 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       ABSL_DCHECK(_impl_.item_gain_block_ != nullptr);
       _impl_.item_gain_block_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      ABSL_DCHECK(_impl_.client_request_ledger_ != nullptr);
+      _impl_.client_request_ledger_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000c0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00180000U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.persist_schema_gen_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.persist_schema_gen_));
@@ -4557,7 +4413,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4671,7 +4527,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
   }
 
   // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_persist_schema_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4697,6 +4553,13 @@ PROTOBUF_NOINLINE void player_database::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         24, *this_._impl_.item_gain_block_, this_._impl_.item_gain_block_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        25, *this_._impl_.client_request_ledger_, this_._impl_.client_request_ledger_->GetCachedSize(), target,
         stream);
   }
 
@@ -4809,7 +4672,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.mystery_merchant_);
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
     // .PlayerBattleResultComp battle_results = 23 [(.OptionPersistGroup) = 4];
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       total_size += 2 +
@@ -4820,15 +4683,20 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.item_gain_block_);
     }
-    // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
+    // .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
     if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.client_request_ledger_);
+    }
+    // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_persist_schema_gen() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_persist_schema_gen());
@@ -4985,7 +4853,7 @@ void player_database::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       ABSL_DCHECK(from._impl_.battle_results_ != nullptr);
       if (_this->_impl_.battle_results_ == nullptr) {
@@ -5003,11 +4871,19 @@ void player_database::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      ABSL_DCHECK(from._impl_.client_request_ledger_ != nullptr);
+      if (_this->_impl_.client_request_ledger_ == nullptr) {
+        _this->_impl_.client_request_ledger_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.client_request_ledger_);
+      } else {
+        _this->_impl_.client_request_ledger_->MergeFrom(*from._impl_.client_request_ledger_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_persist_schema_gen() != 0) {
         _this->_impl_.persist_schema_gen_ = from._impl_.persist_schema_gen_;
       }
@@ -5461,289 +5337,6 @@ void player_store::InternalSwap(player_store* PROTOBUF_RESTRICT PROTOBUF_NONNULL
 }
 
 ::google::protobuf::Metadata player_store::GetMetadata() const {
-  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
-}
-// ===================================================================
-
-void player_database_1::clear_stress_test_probe() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.stress_test_probe_ != nullptr) _impl_.stress_test_probe_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-player_database_1::player_database_1(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, player_database_1_get_class_data()) {
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:player_database_1)
-}
-PROTOBUF_NDEBUG_INLINE player_database_1::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::player_database_1& from_msg)
-      : _has_bits_{from._has_bits_},
-        _cached_size_{0} {}
-
-player_database_1::player_database_1(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const player_database_1& from)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, player_database_1_get_class_data()) {
-
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  player_database_1* const _this = this;
-  (void)_this;
-  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.stress_test_probe_ = (CheckHasBit(cached_has_bits, 0x00000001U))
-                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.stress_test_probe_)
-                : nullptr;
-  ::memcpy(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           reinterpret_cast<const char*>(&from._impl_) +
-               offsetof(Impl_, player_id_),
-           offsetof(Impl_, persist_schema_gen_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::persist_schema_gen_));
-
-  // @@protoc_insertion_point(copy_constructor:player_database_1)
-}
-PROTOBUF_NDEBUG_INLINE player_database_1::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
-
-inline void player_database_1::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, stress_test_probe_),
-           0,
-           offsetof(Impl_, persist_schema_gen_) -
-               offsetof(Impl_, stress_test_probe_) +
-               sizeof(Impl_::persist_schema_gen_));
-}
-player_database_1::~player_database_1() {
-  // @@protoc_insertion_point(destructor:player_database_1)
-  SharedDtor(*this);
-}
-inline void player_database_1::SharedDtor(MessageLite& self) {
-  player_database_1& this_ = static_cast<player_database_1&>(self);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  delete this_._impl_.stress_test_probe_;
-  this_._impl_.~Impl_();
-}
-
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull player_database_1_class_data_ =
-        player_database_1::InternalGenerateClassData_(player_database_1_globals_._default);
-
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-player_database_1::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&player_database_1_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(player_database_1_class_data_.tc_table);
-  return player_database_1_class_data_.base();
-}
-#else
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-player_database_1::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&player_database_1_globals_);
-  ::google::protobuf::internal::PrefetchToLocalCache(
-      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&player_database_1_globals_));
-  return player_database_1_globals_.GetClassData();
-}
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const player_database_1::ParseTableT_
-    player_database_1::_table_ =
-        player_database_1::InternalGenerateParseTable_(player_database_1_class_data_.base());
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_NOINLINE void player_database_1::Clear() {
-// @@protoc_insertion_point(message_clear_start:player_database_1)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.stress_test_probe_ != nullptr);
-    _impl_.stress_test_probe_->Clear();
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.persist_schema_gen_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.persist_schema_gen_));
-  }
-  _impl_._has_bits_.Clear();
-  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL player_database_1::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const player_database_1& this_ = static_cast<const player_database_1&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL player_database_1::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const player_database_1& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(serialize_to_array_start:player_database_1)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
-  // .PlayerStressTestProbe stress_test_probe = 2 [(.OptionPersistUncarried) = true];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-        2, *this_._impl_.stress_test_probe_, this_._impl_.stress_test_probe_->GetCachedSize(), target,
-        stream);
-  }
-
-  // uint32 persist_schema_gen = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_persist_schema_gen() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          5, this_._internal_persist_schema_gen(), target);
-    }
-  }
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target =
-        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:player_database_1)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t player_database_1::ByteSizeLong(const MessageLite& base) {
-  const player_database_1& this_ = static_cast<const player_database_1&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t player_database_1::ByteSizeLong() const {
-  const player_database_1& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:player_database_1)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void)cached_has_bits;
-
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    // .PlayerStressTestProbe stress_test_probe = 2 [(.OptionPersistUncarried) = true];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.stress_test_probe_);
-    }
-    // uint64 player_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
-    // uint32 persist_schema_gen = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_persist_schema_gen() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_persist_schema_gen());
-      }
-    }
-  }
-  return this_.MaybeComputeUnknownFieldsSize(total_size,
-                                             &this_._impl_._cached_size_);
-}
-
-void player_database_1::MergeImpl(::google::protobuf::MessageLite& to_msg,
-                      const ::google::protobuf::MessageLite& from_msg) {
-   auto* const _this = static_cast<player_database_1*>(&to_msg);
-  auto& from = static_cast<const player_database_1&>(from_msg);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    from.CheckHasBitConsistency();
-  }
-  ::google::protobuf::Arena* arena = _this->GetArena();
-  // @@protoc_insertion_point(class_specific_merge_from_start:player_database_1)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      ABSL_DCHECK(from._impl_.stress_test_probe_ != nullptr);
-      if (_this->_impl_.stress_test_probe_ == nullptr) {
-        _this->_impl_.stress_test_probe_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.stress_test_probe_);
-      } else {
-        _this->_impl_.stress_test_probe_->MergeFrom(*from._impl_.stress_test_probe_);
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_persist_schema_gen() != 0) {
-        _this->_impl_.persist_schema_gen_ = from._impl_.persist_schema_gen_;
-      }
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-
-void player_database_1::CopyFrom(const player_database_1& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:player_database_1)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-
-void player_database_1::InternalSwap(player_database_1* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.persist_schema_gen_)
-      + sizeof(player_database_1::_impl_.persist_schema_gen_)
-      - PROTOBUF_FIELD_OFFSET(player_database_1, _impl_.stress_test_probe_)>(
-          reinterpret_cast<char*>(&_impl_.stress_test_probe_),
-          reinterpret_cast<char*>(&other->_impl_.stress_test_probe_));
-}
-
-::google::protobuf::Metadata player_database_1::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

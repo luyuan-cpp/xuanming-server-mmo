@@ -183,7 +183,7 @@ func TestDisconnect_ZeroPlayerIdUsesFenceBoundPlayer(t *testing.T) {
 	ctx := fenceWiringCtx(0)
 	_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
 	require.NoError(t, err)
-	outcome, err := sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen, sessionFenceTTL)
+	outcome, err := sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen)
 	require.NoError(t, err)
 	require.Equal(t, sessionfence.OutcomeOK, outcome)
 
@@ -202,7 +202,7 @@ func TestLeaveGame_ZeroPlayerIdUsesFenceBoundPlayer(t *testing.T) {
 	ctx := fenceWiringCtx(0)
 	_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
 	require.NoError(t, err)
-	_, err = sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen, sessionFenceTTL)
+	_, err = sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen)
 	require.NoError(t, err)
 	locator.current = &plpb.PlayerSession{SessionId: fenceWiringSessionID, SessionVersion: 5}
 
@@ -224,13 +224,13 @@ func bindNewRoleAfterLeave(t *testing.T, ctx context.Context, rdb *redis.Client)
 	t.Helper()
 	_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringStalePlayerID, sessionFenceTTL)
 	require.NoError(t, err)
-	_, err = sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringStalePlayerID, gen, sessionFenceTTL)
+	_, err = sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringStalePlayerID, gen)
 	require.NoError(t, err)
 	_, err = sessionfence.Leave(ctx, rdb, fenceWiringKey, sessionFenceTTL)
 	require.NoError(t, err)
 	_, gen, err = sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
 	require.NoError(t, err)
-	outcome, err := sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen, sessionFenceTTL)
+	outcome, err := sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen)
 	require.NoError(t, err)
 	require.Equal(t, sessionfence.OutcomeOK, outcome)
 	return gen
@@ -347,7 +347,7 @@ func TestLeaveGame_CrossInstanceReportLeftToLocator(t *testing.T) {
 	ctx := fenceWiringCtx(0)
 	_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
 	require.NoError(t, err)
-	_, err = sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen, sessionFenceTTL)
+	_, err = sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen)
 	require.NoError(t, err)
 	locator.current = &plpb.PlayerSession{SessionId: fenceWiringSessionID, SessionVersion: 5, GateInstanceId: "gate-uuid-newer"}
 

@@ -1247,11 +1247,16 @@ func (x *ClientTokenVerifyRequest) GetSignature() []byte {
 
 // Gate responds after verifying the token.
 type ClientTokenVerifyResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // non-empty on failure
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Success bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error   string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"` // non-empty on failure
+	// 应用层心跳参数(docs/design/gate-client-heartbeat.md),只在 success = true 时填。
+	// 0 = 这台 gate 不支持心跳(旧版本,或另一版服务器尚未实现):客户端不得发 ClientHeartbeatRequest,
+	// 旧 gate 收到不认识的消息类型会当非法帧强关连接。
+	HeartbeatIntervalMs uint32 `protobuf:"varint,3,opt,name=heartbeat_interval_ms,json=heartbeatIntervalMs,proto3" json:"heartbeat_interval_ms,omitempty"` // 客户端每隔这么久发一条 ClientHeartbeatRequest,不看别的流量
+	HeartbeatTimeoutMs  uint32 `protobuf:"varint,4,opt,name=heartbeat_timeout_ms,json=heartbeatTimeoutMs,proto3" json:"heartbeat_timeout_ms,omitempty"`    // 发过心跳之后,gate 连续这么久收不到本连接任何一帧就关闭连接
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *ClientTokenVerifyResponse) Reset() {
@@ -1296,6 +1301,112 @@ func (x *ClientTokenVerifyResponse) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ClientTokenVerifyResponse) GetHeartbeatIntervalMs() uint32 {
+	if x != nil {
+		return x.HeartbeatIntervalMs
+	}
+	return 0
+}
+
+func (x *ClientTokenVerifyResponse) GetHeartbeatTimeoutMs() uint32 {
+	if x != nil {
+		return x.HeartbeatTimeoutMs
+	}
+	return 0
+}
+
+// 客户端 → gate:应用层心跳(docs/design/gate-client-heartbeat.md)。与验签消息同层,按类型名派发:
+// 不经 ClientRequest、不占 message_id,gate 本地应答,不转发给任何后端。
+// 只在验签成功且 heartbeat_interval_ms > 0 之后发;验签之前发会被断开。
+type ClientHeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"` // 客户端自选,gate 原样回显,用来配对回包与测往返时延
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientHeartbeatRequest) Reset() {
+	*x = ClientHeartbeatRequest{}
+	mi := &file_proto_common_base_message_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientHeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientHeartbeatRequest) ProtoMessage() {}
+
+func (x *ClientHeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_message_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientHeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*ClientHeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_message_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ClientHeartbeatRequest) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+// gate → 客户端:每条被接受的 ClientHeartbeatRequest 立即回一条。超过频率上限的心跳不回。
+type ClientHeartbeatResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"` // 回显请求的 seq
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientHeartbeatResponse) Reset() {
+	*x = ClientHeartbeatResponse{}
+	mi := &file_proto_common_base_message_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientHeartbeatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientHeartbeatResponse) ProtoMessage() {}
+
+func (x *ClientHeartbeatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_message_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientHeartbeatResponse.ProtoReflect.Descriptor instead.
+func (*ClientHeartbeatResponse) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_message_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ClientHeartbeatResponse) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
 }
 
 var File_proto_common_base_message_proto protoreflect.FileDescriptor
@@ -1386,10 +1497,16 @@ const file_proto_common_base_message_proto_rawDesc = "" +
 	"\x0etarget_zone_id\x18\x06 \x01(\rR\ftargetZoneId\"R\n" +
 	"\x18ClientTokenVerifyRequest\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"K\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xb1\x01\n" +
 	"\x19ClientTokenVerifyResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05errorB\x13Z\x11proto/common/baseb\x06proto3"
+	"\x05error\x18\x02 \x01(\tR\x05error\x122\n" +
+	"\x15heartbeat_interval_ms\x18\x03 \x01(\rR\x13heartbeatIntervalMs\x120\n" +
+	"\x14heartbeat_timeout_ms\x18\x04 \x01(\rR\x12heartbeatTimeoutMs\"*\n" +
+	"\x16ClientHeartbeatRequest\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\"+\n" +
+	"\x17ClientHeartbeatResponse\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seqB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_message_proto_rawDescOnce sync.Once
@@ -1403,7 +1520,7 @@ func file_proto_common_base_message_proto_rawDescGZIP() []byte {
 	return file_proto_common_base_message_proto_rawDescData
 }
 
-var file_proto_common_base_message_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_proto_common_base_message_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_proto_common_base_message_proto_goTypes = []any{
 	(*MessageContent)(nil),                  // 0: MessageContent
 	(*NodeMessageHeader)(nil),               // 1: NodeMessageHeader
@@ -1427,30 +1544,32 @@ var file_proto_common_base_message_proto_goTypes = []any{
 	(*GateTokenPayload)(nil),                // 19: GateTokenPayload
 	(*ClientTokenVerifyRequest)(nil),        // 20: ClientTokenVerifyRequest
 	(*ClientTokenVerifyResponse)(nil),       // 21: ClientTokenVerifyResponse
-	(*TipInfoMessage)(nil),                  // 22: TipInfoMessage
-	(*NodeInfo)(nil),                        // 23: NodeInfo
-	(*SessionDetails)(nil),                  // 24: SessionDetails
-	(*NetworkAddress)(nil),                  // 25: NetworkAddress
+	(*ClientHeartbeatRequest)(nil),          // 22: ClientHeartbeatRequest
+	(*ClientHeartbeatResponse)(nil),         // 23: ClientHeartbeatResponse
+	(*TipInfoMessage)(nil),                  // 24: TipInfoMessage
+	(*NodeInfo)(nil),                        // 25: NodeInfo
+	(*SessionDetails)(nil),                  // 26: SessionDetails
+	(*NetworkAddress)(nil),                  // 27: NetworkAddress
 }
 var file_proto_common_base_message_proto_depIdxs = []int32{
-	22, // 0: MessageContent.error_message:type_name -> TipInfoMessage
+	24, // 0: MessageContent.error_message:type_name -> TipInfoMessage
 	0,  // 1: NodeRouteMessageRequest.message_content:type_name -> MessageContent
 	1,  // 2: NodeRouteMessageRequest.header:type_name -> NodeMessageHeader
 	0,  // 3: PlayerNodeServiceRequest.message_content:type_name -> MessageContent
 	3,  // 4: PlayerNodeServiceRequest.header:type_name -> PlayerInfoExternal
 	0,  // 5: PlayerMessageResponse.message_content:type_name -> MessageContent
 	3,  // 6: PlayerMessageResponse.header:type_name -> PlayerInfoExternal
-	23, // 7: NodeRoutingMessageBody.node_info:type_name -> NodeInfo
-	24, // 8: RegisterGateNodeSessionResponse.session_info:type_name -> SessionDetails
-	24, // 9: GateSessionDisconnectRequest.session_info:type_name -> SessionDetails
-	25, // 10: RegisterGameNodeRequest.rpc_client:type_name -> NetworkAddress
-	25, // 11: RegisterGameNodeRequest.rpc_server:type_name -> NetworkAddress
-	25, // 12: RegisterGateNodeRequest.rpc_client:type_name -> NetworkAddress
+	25, // 7: NodeRoutingMessageBody.node_info:type_name -> NodeInfo
+	26, // 8: RegisterGateNodeSessionResponse.session_info:type_name -> SessionDetails
+	26, // 9: GateSessionDisconnectRequest.session_info:type_name -> SessionDetails
+	27, // 10: RegisterGameNodeRequest.rpc_client:type_name -> NetworkAddress
+	27, // 11: RegisterGameNodeRequest.rpc_server:type_name -> NetworkAddress
+	27, // 12: RegisterGateNodeRequest.rpc_client:type_name -> NetworkAddress
 	12, // 13: ProtoFieldCheckerTestPB.sub_message:type_name -> ProtoFieldCheckerTestSubPB
 	15, // 14: MyProtoMessage.nested_message:type_name -> MyNestedMessage
-	23, // 15: NodeHandshakeRequest.self_node:type_name -> NodeInfo
-	22, // 16: NodeHandshakeResponse.error_message:type_name -> TipInfoMessage
-	23, // 17: NodeHandshakeResponse.peer_node:type_name -> NodeInfo
+	25, // 15: NodeHandshakeRequest.self_node:type_name -> NodeInfo
+	24, // 16: NodeHandshakeResponse.error_message:type_name -> TipInfoMessage
+	25, // 17: NodeHandshakeResponse.peer_node:type_name -> NodeInfo
 	18, // [18:18] is the sub-list for method output_type
 	18, // [18:18] is the sub-list for method input_type
 	18, // [18:18] is the sub-list for extension type_name
@@ -1472,7 +1591,7 @@ func file_proto_common_base_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_base_message_proto_rawDesc), len(file_proto_common_base_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

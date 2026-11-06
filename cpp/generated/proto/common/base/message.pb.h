@@ -56,6 +56,22 @@ struct TableStruct_proto_2fcommon_2fbase_2fmessage_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto;
 }  // extern "C"
+class ClientHeartbeatRequest;
+struct ClientHeartbeatRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClientHeartbeatRequestGlobalsTypeInternal ClientHeartbeatRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClientHeartbeatRequest_class_data_;
+#else
+extern const ClientHeartbeatRequestGlobalsTypeInternal ClientHeartbeatRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClientHeartbeatResponse;
+struct ClientHeartbeatResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClientHeartbeatResponseGlobalsTypeInternal ClientHeartbeatResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClientHeartbeatResponse_class_data_;
+#else
+extern const ClientHeartbeatResponseGlobalsTypeInternal ClientHeartbeatResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ClientRequest;
 struct ClientRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1717,6 +1733,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientTokenVerifyResponse final : p
   enum : int {
     kErrorFieldNumber = 2,
     kSuccessFieldNumber = 1,
+    kHeartbeatIntervalMsFieldNumber = 3,
+    kHeartbeatTimeoutMsFieldNumber = 4,
   };
   // string error = 2;
   void clear_error() ;
@@ -1743,11 +1761,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientTokenVerifyResponse final : p
   void _internal_set_success(bool value);
 
   public:
+  // uint32 heartbeat_interval_ms = 3;
+  void clear_heartbeat_interval_ms() ;
+  [[nodiscard]] ::uint32_t heartbeat_interval_ms() const;
+  void set_heartbeat_interval_ms(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_heartbeat_interval_ms() const;
+  void _internal_set_heartbeat_interval_ms(::uint32_t value);
+
+  public:
+  // uint32 heartbeat_timeout_ms = 4;
+  void clear_heartbeat_timeout_ms() ;
+  [[nodiscard]] ::uint32_t heartbeat_timeout_ms() const;
+  void set_heartbeat_timeout_ms(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_heartbeat_timeout_ms() const;
+  void _internal_set_heartbeat_timeout_ms(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientTokenVerifyResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 39,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1778,6 +1816,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientTokenVerifyResponse final : p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr error_;
     bool success_;
+    ::uint32_t heartbeat_interval_ms_;
+    ::uint32_t heartbeat_timeout_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2265,6 +2305,408 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequest final : public ::goog
     ::google::protobuf::internal::ArenaStringPtr body_;
     ::uint64_t id_;
     ::uint32_t message_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fmessage_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientHeartbeatResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClientHeartbeatResponse) */ {
+ public:
+  inline ClientHeartbeatResponse() : ClientHeartbeatResponse(nullptr) {}
+  ~ClientHeartbeatResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClientHeartbeatResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClientHeartbeatResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClientHeartbeatResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClientHeartbeatResponse(const ClientHeartbeatResponse& from) : ClientHeartbeatResponse(nullptr, from) {}
+  inline ClientHeartbeatResponse(ClientHeartbeatResponse&& from) noexcept : ClientHeartbeatResponse(nullptr, ::std::move(from)) {}
+  inline ClientHeartbeatResponse& operator=(const ClientHeartbeatResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClientHeartbeatResponse& operator=(ClientHeartbeatResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClientHeartbeatResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClientHeartbeatResponse>(&ClientHeartbeatResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(ClientHeartbeatResponse& a, ClientHeartbeatResponse& b) { a.Swap(&b); }
+  inline void Swap(ClientHeartbeatResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClientHeartbeatResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClientHeartbeatResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClientHeartbeatResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClientHeartbeatResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClientHeartbeatResponse& from) { ClientHeartbeatResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClientHeartbeatResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClientHeartbeatResponse"; }
+
+  explicit ClientHeartbeatResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClientHeartbeatResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClientHeartbeatResponse& from);
+  ClientHeartbeatResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClientHeartbeatResponse&& from) noexcept
+      : ClientHeartbeatResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeqFieldNumber = 1,
+  };
+  // uint64 seq = 1;
+  void clear_seq() ;
+  [[nodiscard]] ::uint64_t seq() const;
+  void set_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seq() const;
+  void _internal_set_seq(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClientHeartbeatResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClientHeartbeatResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t seq_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fmessage_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientHeartbeatRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClientHeartbeatRequest) */ {
+ public:
+  inline ClientHeartbeatRequest() : ClientHeartbeatRequest(nullptr) {}
+  ~ClientHeartbeatRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClientHeartbeatRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClientHeartbeatRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClientHeartbeatRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClientHeartbeatRequest(const ClientHeartbeatRequest& from) : ClientHeartbeatRequest(nullptr, from) {}
+  inline ClientHeartbeatRequest(ClientHeartbeatRequest&& from) noexcept : ClientHeartbeatRequest(nullptr, ::std::move(from)) {}
+  inline ClientHeartbeatRequest& operator=(const ClientHeartbeatRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClientHeartbeatRequest& operator=(ClientHeartbeatRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClientHeartbeatRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClientHeartbeatRequest>(&ClientHeartbeatRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(ClientHeartbeatRequest& a, ClientHeartbeatRequest& b) { a.Swap(&b); }
+  inline void Swap(ClientHeartbeatRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClientHeartbeatRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClientHeartbeatRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClientHeartbeatRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClientHeartbeatRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClientHeartbeatRequest& from) { ClientHeartbeatRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClientHeartbeatRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClientHeartbeatRequest"; }
+
+  explicit ClientHeartbeatRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClientHeartbeatRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClientHeartbeatRequest& from);
+  ClientHeartbeatRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClientHeartbeatRequest&& from) noexcept
+      : ClientHeartbeatRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeqFieldNumber = 1,
+  };
+  // uint64 seq = 1;
+  void clear_seq() ;
+  [[nodiscard]] ::uint64_t seq() const;
+  void set_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seq() const;
+  void _internal_set_seq(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClientHeartbeatRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClientHeartbeatRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t seq_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8504,6 +8946,110 @@ inline void ClientTokenVerifyResponse::set_allocated_error(::std::string* PROTOB
     _impl_.error_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:ClientTokenVerifyResponse.error)
+}
+
+// uint32 heartbeat_interval_ms = 3;
+inline void ClientTokenVerifyResponse::clear_heartbeat_interval_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_interval_ms_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ClientTokenVerifyResponse::heartbeat_interval_ms() const {
+  // @@protoc_insertion_point(field_get:ClientTokenVerifyResponse.heartbeat_interval_ms)
+  return _internal_heartbeat_interval_ms();
+}
+inline void ClientTokenVerifyResponse::set_heartbeat_interval_ms(::uint32_t value) {
+  _internal_set_heartbeat_interval_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ClientTokenVerifyResponse.heartbeat_interval_ms)
+}
+inline ::uint32_t ClientTokenVerifyResponse::_internal_heartbeat_interval_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.heartbeat_interval_ms_;
+}
+inline void ClientTokenVerifyResponse::_internal_set_heartbeat_interval_ms(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_interval_ms_ = value;
+}
+
+// uint32 heartbeat_timeout_ms = 4;
+inline void ClientTokenVerifyResponse::clear_heartbeat_timeout_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_timeout_ms_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ClientTokenVerifyResponse::heartbeat_timeout_ms() const {
+  // @@protoc_insertion_point(field_get:ClientTokenVerifyResponse.heartbeat_timeout_ms)
+  return _internal_heartbeat_timeout_ms();
+}
+inline void ClientTokenVerifyResponse::set_heartbeat_timeout_ms(::uint32_t value) {
+  _internal_set_heartbeat_timeout_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ClientTokenVerifyResponse.heartbeat_timeout_ms)
+}
+inline ::uint32_t ClientTokenVerifyResponse::_internal_heartbeat_timeout_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.heartbeat_timeout_ms_;
+}
+inline void ClientTokenVerifyResponse::_internal_set_heartbeat_timeout_ms(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heartbeat_timeout_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClientHeartbeatRequest
+
+// uint64 seq = 1;
+inline void ClientHeartbeatRequest::clear_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ClientHeartbeatRequest::seq() const {
+  // @@protoc_insertion_point(field_get:ClientHeartbeatRequest.seq)
+  return _internal_seq();
+}
+inline void ClientHeartbeatRequest::set_seq(::uint64_t value) {
+  _internal_set_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ClientHeartbeatRequest.seq)
+}
+inline ::uint64_t ClientHeartbeatRequest::_internal_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seq_;
+}
+inline void ClientHeartbeatRequest::_internal_set_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClientHeartbeatResponse
+
+// uint64 seq = 1;
+inline void ClientHeartbeatResponse::clear_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ClientHeartbeatResponse::seq() const {
+  // @@protoc_insertion_point(field_get:ClientHeartbeatResponse.seq)
+  return _internal_seq();
+}
+inline void ClientHeartbeatResponse::set_seq(::uint64_t value) {
+  _internal_set_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ClientHeartbeatResponse.seq)
+}
+inline ::uint64_t ClientHeartbeatResponse::_internal_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seq_;
+}
+inline void ClientHeartbeatResponse::_internal_set_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = value;
 }
 
 #ifdef __GNUC__

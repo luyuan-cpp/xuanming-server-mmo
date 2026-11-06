@@ -8,8 +8,22 @@ import (
 
 	"shared/playerredis"
 
+	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
+
+// EffectiveCoreRedis 返回读 gate 排空标记的核心实例配置:写了 CoreRedis.Host 就用它(Type 缺省 node),
+// 否则就是 Redis 段那一个实例(开发环境控制域与核心是同一个)。
+func (c *Config) EffectiveCoreRedis() redis.RedisConf {
+	if c.CoreRedis.Host == "" {
+		return c.Redis.RedisConf
+	}
+	core := c.CoreRedis
+	if core.Type == "" {
+		core.Type = redis.NodeType
+	}
+	return core
+}
 
 type Config struct {
 	zrpc.RpcServerConf
@@ -179,6 +193,12 @@ type Config struct {
 	// 一段脚本不能跨这两个域。读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
 
+	// CoreRedis: 核心共享实例(docs/design/control-plane-zone-scoping-20261105.md §4.2)。scene_manager 只在这里读 gate 排空标记
+	// gate:<id>:draining|drained(G4a §25.3 的 10-23 订正:排空标记留在核心,运维脚本与 login 都读那一份)。
+	// 上面嵌入的 Redis 段是本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),两者在部署上是不同实例。
+	// 没写 Host 时指向 Redis 段那一个实例:开发环境两者是同一个,不用改。读取走 EffectiveCoreRedis()。
+	CoreRedis redis.RedisConf `json:",optional"`
+
 	// SceneMemberReconcile: 成员集合对账的节奏与预算(logic/scene_member_reconcile.go)。整块可缺省。
 	SceneMemberReconcile SceneMemberReconcileConfig `json:",optional"`
 
@@ -271,7 +291,7 @@ type Config struct {
 	// CleanupOrphanChannelsOnStartup: when true (default), SceneManager
 	// scans Redis on fullSync for world_channels:* sets whose confId is
 	// not in World.json and deletes them.
-	// (2026-10-16 起不再 SCAN:候选 zone 取 zone 登记集合 scene_manager:zones ∪ 有活节点的 zone,
+	// (2026-10-16 起不再 SCAN;2026-11-05 起只查本进程的 ZoneId,同组别的 zone 由它自己的领导者清,
 	// 候选 (zone, confId) 取 world_channels:desired:zone:{z} 的字段,全部是点查;覆盖范围见
 	// internal/logic/orphan_cleanup.go 文件头。) This removes drift left by
 	// designers dropping a map from the table without a clean tear-down.

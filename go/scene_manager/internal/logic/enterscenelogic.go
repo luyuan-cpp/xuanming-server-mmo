@@ -564,6 +564,17 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//     相同;resolveSceneForEnter 对指定 scene_id 不做预占,失败时没有需要成对释放的人数。再入屏障未到不回落,
 	//     照旧回可重试的 ErrSceneReentryBarrier:回落也只会撞上死节点的换手门(18),等屏障过了按死节点接管才对。
 	resumeSceneID := resumeSceneOf(in, sceneConfID, currentLoc, awaitingPlacement, currentZoneID, targetZoneId)
+	if resumeSceneID != 0 {
+		// 原场景是正在回收的频道(缩容摘线时写的 scene:{id}:draining):排空自己会把人改派到默认大世界
+		// (sweepDrainingWorldChannels 每拍对还有人的频道发 DestroyScene),回进去只会再被搬一次,直接按排空的去向走。
+		// 标记读不到同样回落:回落就是加回原场景之前的行为,不会更糟。只多一次 EXISTS,只在短重连 / 顶号上发生。
+		if draining, drainErr := l.svcCtx.Redis.Exists(sceneDrainingKey(resumeSceneID)); drainErr != nil || draining {
+			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonResumeSceneFallback)
+			l.Logger.Infof("[Reconnect] Previous scene is draining or its draining mark is unreadable; using default world: player=%d zone=%d scene=%d draining=%v err=%v",
+				in.PlayerId, targetZoneId, resumeSceneID, draining, drainErr)
+			resumeSceneID = 0
+		}
+	}
 	requestedSceneID := in.SceneId
 	if resumeSceneID != 0 {
 		requestedSceneID = resumeSceneID
@@ -1065,16 +1076,19 @@ func (l *EnterSceneLogic) commitSceneMember(playerID, sceneID uint64, zoneID uin
 // 为什么可以据此免掉 handoff 标记(CZ-4 第二道门):那道门守护的是「可能仍在写这名玩家
 // 的旧持有者」。节点死了就没有这个对象;而「看上去死了其实没死」的僵尸由另外两层兜住 ——
 //
-//   - 再入屏障(scene-owner-reentry-barrier.md §3.2):节点从 etcd 消失后 C++ 老进程还有
-//     kDrainBudget(15s)的紧急疏散在存盘,屏障(默认 20s)盖过这段窗口;屏障未到本函数
-//     返回 false,请求照旧被换手门以可重试的 18 暂拒。
-//   - 写权行(docs/design/player-save-direct-commit.md §4):放行后的落点一定铸造新 epoch(此时 currentLoc
-//     已被当作不存在,走首次落点的 mint=true),新持有者认领时把代次抬上去,僵尸手里的旧 epoch
-//     之后每一次存盘都被 go/db 判 STALE_OWNER 并自毁。屏障靠时间、epoch
-//     不靠时间,两层同时在位才敢放行 —— 这正是阶段 1 落完之后才补这条的原因。
+//   - 再入屏障(scene-owner-reentry-barrier.md §3.2):节点从 etcd 消失后要等满屏障(默认 20s)才放行,
+//     屏障未到本函数返回 false,请求照旧被换手门以可重试的 18 暂拒。屏障只是时间余量,证明不了老进程已停写:
+//     C++ 失租时不疏散、不停写,只拿新租约按原 node_id 重注册(C++ node.h 的 NodeIdConflictReason),
+//     进程暂停或只断了 etcd 的老进程过了屏障仍可能带着旧 epoch 存盘;kDrainBudget(15s)的紧急疏散
+//     只在身份冲突时才跑(重注册 CAS 失败,或 Watch 发现 node_id 已被别的进程持有)。
+//   - 写权行(docs/design/player-save-direct-commit.md §4):放行的安全性靠这一层。放行后的落点一定铸造新 epoch
+//     (此时 currentLoc 已被当作不存在,走首次落点的 mint=true),新持有者认领时在 TiDB 事务里把代次抬上去,
+//     僵尸手里的旧 epoch 之后每一次存盘都被 go/db 判 STALE_OWNER 并自毁。它不靠时间,屏障只是让这种交错少发生;
+//     两层同时在位才放行 —— 这正是阶段 1 落完之后才补这条的原因。
 //
-// 代价(崩溃固有,与本函数无关):死节点没来得及落盘的那段进度丢失,新节点读到的是上一次
-// 周期存盘。
+// 代价:死节点没来得及提交的那段进度丢失,新节点读到的是最后一次提交。只断了 etcd、过了屏障仍活着的老进程,
+// 最后一次提交之后的进度同样丢失,只丢不盖;它在身份不确认期间每 5 秒给玩家补存一次(C++ player_lifecycle.cpp 的
+// RunIdentityAtRiskSaves),丢失上限约 5 秒(data-consistency-guarantee-map-20261020.md §6.2 第 4 条)。
 //
 // 「死亡」要的是**正面证据**,不是「看不到它」:节点必须已经从 etcd 注册表里消失
 // (租约到期 / 主动注销,见 isNodeGoneFromRegistry)。只看 Redis 负载集不够 —— 负载集的
@@ -1147,9 +1161,11 @@ func (l *EnterSceneLogic) playerLocationOwnerDead(loc *scene_manager.PlayerLocat
 //  4. IsNodeAlive(zone, node) 为 false —— 与 3 冗余,但它内部把 Redis 抖动
 //     当作存活,正好补上 3 与本调用之间的状态变化窗口。
 //  5. 再入屏障已过(node:zone:{z}:{n}:death_at 不存在或已超过屏障时长)——
-//     节点刚从 etcd 消失时 C++ 老进程还有 kDrainBudget 的 emergency relocate
-//     在 SavePlayer;这段时间内它虽已不在负载集,却仍在写。屏障就是
-//     为这段窗口设的,这里不能绕过它。
+//     节点刚从 etcd 消失时,老进程可能仍在写:C++ 只有在重注册失败(kReRegistrationFailed)
+//     时才走冲突关停,有界(kDrainBudget 15s)地存盘并改派玩家,其余失租只重注册、不停写。
+//     屏障给这段写让出时间,免得新节点刚接手、老进程的最后一笔进度就被写权行拒掉而白丢;
+//     它不是正确性依赖 —— 迟到的老进程写由 TiDB 写权行挡住(新节点 LoadAndClaim 抬代次后,
+//     老进程回 STALE_OWNER / NOT_HOLDER)。这里不绕过它,是为了少丢进度。
 //
 // 有持有节点的位置,1 蕴含该节点不在注册表、也不可能身份歧义,1–5 合起来不弱于
 // playerLocationOwnerDead 的全部条件:这里放行的,单节点判死也一定放行。两者分开只为口径 ——
@@ -1165,7 +1181,7 @@ func (l *EnterSceneLogic) playerLocationOwnerGone(loc *scene_manager.PlayerLocat
 	if !ownsControlZone(l.svcCtx, zoneID) {
 		// 别的 zone(合服下线的源区就是这个形态,它的控制域实例可能已经撤掉):只看 etcd 里那个 zone 是否一个场景节点都没有,
 		// 且本副本第一次看到它空已满一个再入屏障。不读它的负载集与 death_at(§3.5、§4.3);zone 级首次观察只会晚于其中任一
-		// 节点的消失,屏障同样覆盖持有节点的紧急疏散窗口。
+		// 节点的消失,屏障同样让出持有节点冲突关停(有界疏散存盘)的那段时间。
 		return foreignZoneGone(l.ctx, l.svcCtx, zoneID, barrierSiteStaleLocation)
 	}
 	if !isZoneGoneFromRegistry(zoneID) {
@@ -1372,8 +1388,8 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 //
 // location 回退,epoch 只进不退(理由见 luaRollbackPlayerPlacement):铸造过的再 INCR 一格;没铸造的落点与
 // 同节点 epoch 0 的铸造(keepMintedEpoch)只退 location。requiredMarker 是本次铸造所凭的交接标记原文。
-// 返回 (restored, echo):restored 为 false(marker_gone / superseded / redis_error / plan_error)时人数一个都
-// 不动 —— 本次落点仍在 Redis 里,目标场景的预占与旧场景的扣减正对应它;echo 由调用方填进
+// 返回 (restored, echo):restored 为 false(marker_gone / target_registered / fence_not_proof / superseded /
+// redis_error / plan_error)时人数一个都不动 —— 本次落点仍在 Redis 里,目标场景的预占与旧场景的扣减正对应它;echo 由调用方填进
 // EnterSceneResponse.owner_epoch_after_rollback。
 func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
 	oldZoneID uint32, placed placedLocation, requiredMarker string, keepMintedEpoch bool,
@@ -1556,10 +1572,12 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 		return 0, "", fmt.Errorf("scene %d is on dead node %s and is not a channel of world map %d in zone %d; only world channels are rebuilt elsewhere, instances are destroyed by the dead-node reconcile",
 			sceneId, deadNode, sceneConfId, zoneId)
 	}
-	// 再入屏障:节点刚从 etcd 消失不代表它已经停笔。C++ 老节点丢租约后
-	// 还有 kDrainBudget(15s)的 emergency relocate,期间仍在
-	// SavePlayer。此刻改写 scene:{id}:node 并让新节点
-	// CreateScene + load,就是同一玩家双写 / 回档。
+	// 再入屏障:节点刚从 etcd 消失不代表它已经停笔。C++ 老节点只在重注册失败
+	// (kReRegistrationFailed)时才走冲突关停,有界(kDrainBudget 15s)地存盘并改派玩家;
+	// 其余失租只重注册、不停写。屏障让这段写先落完,新节点再
+	// CreateScene + load,免得老进程的最后一笔进度被写权行拒掉而白丢。
+	// 它挡的是"交错造成的进度丢失",不是双写正确性:迟到的老进程写由 TiDB 写权行挡住
+	// (新节点认领抬代次后回 STALE_OWNER / NOT_HOLDER,只丢不盖)。
 	// 屏障没走完时**一个字节都不改**,返回可重试错误让上游带着同样的
 	// scene_conf_id 退避重试。见 docs/design/scene-owner-reentry-barrier.md §3.2。
 	if reentryBarrierBlocks(l.svcCtx, zoneId, deadNode, barrierSiteResolveScene) {
@@ -1571,52 +1589,70 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 	if err != nil {
 		return 0, "", fmt.Errorf("scene %d mapped to dead node %s and no live world-hosting node: %w", sceneId, deadNode, err)
 	}
-	// 先建实体,挂请求 ctx。任何失败(节点拒绝、请求被截断、超时)都在改归属之前返回,归属一个字节
-	// 都没改。截断与超时的结论未知:节点可能已经建出实体,这份实体不回收 —— 下一次改派多半仍挑它,
-	// 按 scene_id 幂等复用;与 migrateWorldChannel 建场景失败时的取舍相同。
-	if _, err := RequestNodeCreateScene(l.ctx, l.svcCtx, zoneId, newNodeId, uint32(sceneConfId), sceneId); err != nil {
+	// 先分配这次放置的代次,再带着它建实体,挂请求 ctx(docs/design/world-channel-placement-generation.md)。
+	// 任何失败(计数器出错、节点拒绝、请求被截断、超时)都在改归属之前返回,归属一个字节都没改。截断与超时的
+	// 结论未知:节点可能已经建出实体,这份实体不回收 —— 下一次改派多半仍挑它,按 scene_id 幂等复用;与
+	// migrateWorldChannel 建场景失败时的取舍相同。
+	generation, err := allocatePlacementGeneration(l.svcCtx, zoneId)
+	if err != nil {
+		return 0, "", fmt.Errorf("scene %d on dead node %s, ownership unchanged: %w", sceneId, deadNode, err)
+	}
+	if _, err := RequestNodeCreateSceneAtGeneration(l.ctx, l.svcCtx, zoneId, newNodeId, uint32(sceneConfId), sceneId, generation); err != nil {
 		return 0, "", fmt.Errorf("scene %d on dead node %s: CreateScene on %s failed, ownership unchanged: %w", sceneId, deadNode, newNodeId, err)
 	}
-	if !reassignWorldChannelNode(l.svcCtx, zoneId, sceneId, deadNode, newNodeId, worldChannelsKey(zoneId, sceneConfId)) {
-		return l.adoptOwnerAfterLostReassign(sceneId, zoneId, deadNode, newNodeId)
+	if !reassignWorldChannelNode(l.svcCtx, zoneId, sceneId, deadNode, newNodeId, worldChannelsKey(zoneId, sceneConfId), generation) {
+		return l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation)
 	}
 	l.Logger.Infof("resolveScene: world channel %d was on dead node %s, reassigned to %s", sceneId, deadNode, newNodeId)
 	l.transferAgonesRoomAfterReassign(sceneId, zoneId, newNodeId)
 	return sceneId, newNodeId, nil
 }
 
-// adoptOwnerAfterLostReassign 处理 reassignSceneOffDeadNode 的 CAS 落空。此时 triedNode 上已经预建了实体;
-// reassignWorldChannelNode 本次什么都没写,Redis 出错除外(脚本可能已执行,结论未知)。重读一次属主再定,不再改派。
+// adoptOwnerAfterLostReassign 处理 reassignSceneOffDeadNode 的 CAS 落空。此时 triedNode 上已经按放置代次 generation
+// 预建了实体;reassignWorldChannelNode 本次什么都没写,Redis 出错除外(脚本可能已执行,结论未知)。按这次的代次跑一次
+// 回收(reclaimUnownedWorldChannelEntity,限时 deadNodeReassignFollowUpTimeout,不挂请求 ctx):在一个脚本里比对属主、
+// 抬代次高水位,属主不是 triedNode 才拆预建的实体。比对时读到的属主就是重读结果,据此定应答,不再改派。
 //
 // 不为落空另开错误码:落空的常见原因是别的写者刚做完同一件事,答案已经在 Redis 里,
 // 让玩家重试一圈拿到的也是这一次重读的结果。
 //
-//   - 重读失败:不知道预建的实体是不是现任属主的,不回收(同 destroyUnownedMigrationTarget),回错误。
+//   - 比对失败:不知道预建的实体是不是现任属主的,不回收(同 destroyUnownedMigrationTarget),回错误。
 //   - 属主就是 triedNode:预建的实体正是现任属主的实体 —— 别的写者挑了同一个节点,或者 Redis 报错而本次脚本
-//     其实已执行。直接采用。名额转移照做:它对同一个目标幂等(见 TransferAgonesRoomForScene),
-//     而后一种情况、以及不转名额的写者先提交的情况,都只能靠这里转。
+//     其实已执行。直接采用(高水位已抬到 generation,之后迁出时的拆除拆得到这份实体)。名额转移照做:它对同一个
+//     目标幂等(见 TransferAgonesRoomForScene),而后一种情况、以及不转名额的写者先提交的情况,都只能靠这里转。
 //
-// 其余情况属主都不是 triedNode,预建的实体没有归属,先回收,再按属主定结果:
+// 其余情况属主都不是 triedNode,预建的实体没有归属,已按 generation 回收(拆除失败只记日志:留下的空实体没有映射
+// 指向它,不影响路由),再按属主定结果:
 //
 //   - 属主是活节点:别的写者已接手,直接用它。
-//   - 属主仍是 deadNode:不是被抢,是没改成 —— 第二道屏障拦下、频道在提交前被缩容排空摘出在役集合,
+//   - 属主仍是 deadNode:不是被抢,是没改成 —— 第二道屏障拦下、频道在提交前被缩容排空摘出在役集合、代次过期,
 //     或计数键损坏。屏障此刻仍未到就回可重试的 ErrReentryBarrierPending,否则按失败拒绝。
 //   - 映射没了:场景已被销毁,与入口处「查无此场景」同一处理。
 //   - 属主身份歧义或也不活:拒绝,不连环改派;下一次请求按当时的属主重新判定。
-func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId uint64, zoneId uint32, deadNode, triedNode string) (uint64, string, error) {
-	owner, err := l.svcCtx.Redis.Get(sceneNodeKey(sceneId))
+func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint64, zoneId uint32, deadNode, triedNode string,
+	generation uint64) (uint64, string, error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
+	reclaim, err := reclaimUnownedWorldChannelEntity(ctx, l.svcCtx, zoneId, sceneConfId, sceneId, triedNode, generation)
+	cancel()
 	if err != nil {
-		return 0, "", fmt.Errorf("scene %d: reassign off dead node %s to %s has an unknown outcome and the owner re-read failed; the entity pre-created on %s is left in place: %w",
+		return 0, "", fmt.Errorf("scene %d: reassign off dead node %s to %s has an unknown outcome and the owner check failed; the entity pre-created on %s is left in place: %w",
 			sceneId, deadNode, triedNode, triedNode, err)
 	}
-	if owner == triedNode {
+	owner := reclaim.Owner
+	if reclaim.Kept {
 		l.Logger.Infof("resolveScene: scene %d reassign %s -> %s lost the CAS, but %s already owns it; adopting the pre-created entity",
 			sceneId, deadNode, triedNode, triedNode)
 		l.transferAgonesRoomAfterReassign(sceneId, zoneId, triedNode)
 		return sceneId, owner, nil
 	}
 
-	l.destroyUnownedPreCreatedScene(sceneId, zoneId, triedNode, owner)
+	if reclaim.DestroyErr != nil {
+		l.Logger.Errorf("resolveScene: reclaiming unowned pre-created scene %d on %s failed (owner=%q): %v",
+			sceneId, triedNode, owner, reclaim.DestroyErr)
+	} else {
+		l.Logger.Infof("resolveScene: reclaimed unowned pre-created scene %d on %s at placement generation %d (owner=%q)",
+			sceneId, triedNode, generation, owner)
+	}
 	switch {
 	case owner == "":
 		return 0, "", fmt.Errorf("scene %d does not exist (destroyed while being reassigned off dead node %s)", sceneId, deadNode)
@@ -1626,7 +1662,7 @@ func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId uint64, zoneId uin
 			return 0, "", fmt.Errorf("scene %d 的属主节点 %s 刚判死,再入屏障未到: %w",
 				sceneId, deadNode, ErrReentryBarrierPending)
 		}
-		return 0, "", fmt.Errorf("scene %d: reassign off dead node %s to %s did not apply (channel left service, or script error); ownership unchanged",
+		return 0, "", fmt.Errorf("scene %d: reassign off dead node %s to %s did not apply (channel left service, stale placement generation, or script error); ownership unchanged",
 			sceneId, deadNode, triedNode)
 	case isKnownNodeIdentityAmbiguous(zoneId, owner):
 		return 0, "", fmt.Errorf("scene %d maps to ambiguous node identity zone=%d node=%s", sceneId, zoneId, owner)
@@ -1635,25 +1671,6 @@ func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId uint64, zoneId uin
 	}
 	l.Logger.Infof("resolveScene: scene %d reassign %s -> %s lost the CAS; current owner %s adopted", sceneId, deadNode, triedNode, owner)
 	return sceneId, owner, nil
-}
-
-// destroyUnownedPreCreatedScene 回收 CAS 落空后 triedNode 上预建的实体。owner 是刚重读到的属主,
-// 调用方已确认它不是 triedNode。尽力而为:失败只打日志,留下的空实体没有映射指向它,不影响路由。
-//
-// 残余窗口与 destroyUnownedMigrationTarget 相同:重读之后、DestroyScene 到达之前,若别的写者(rebalance、
-// initWorldScenesForZone、懒改派、另一个副本上的 EnterScene)恰好把归属改到 triedNode,且它的 CreateScene
-// 先到(按 scene_id 幂等,复用的正是这份实体),这次销毁会把它拆掉,留下「属主活着、节点上没有实体」。
-// 这不会被周期修复:要等下一次 initWorldScenesForZone 被触发(fullSync、节点上线、慢路径建频道、扩容),
-// 它向全部频道的属主补发 CreateScene 时才补回。
-func (l *EnterSceneLogic) destroyUnownedPreCreatedScene(sceneId uint64, zoneId uint32, triedNode, owner string) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
-	defer cancel()
-	if err := RequestNodeDestroyScene(ctx, l.svcCtx, zoneId, triedNode, sceneId); err != nil {
-		l.Logger.Errorf("resolveScene: DestroyScene of unowned pre-created scene %d on %s failed (owner=%q): %v",
-			sceneId, triedNode, owner, err)
-		return
-	}
-	l.Logger.Infof("resolveScene: destroyed unowned pre-created scene %d on %s (owner=%q)", sceneId, triedNode, owner)
 }
 
 // transferAgonesRoomAfterReassign 在归属已经落到 newNode 之后,把 Agones 名额转过去。名额只是容量记账,

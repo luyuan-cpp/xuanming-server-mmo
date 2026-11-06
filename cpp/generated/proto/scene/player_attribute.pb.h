@@ -1666,6 +1666,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateAttributeSchemeRequest final 
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 1,
+    kClientRequestIdFieldNumber = 2,
   };
   // string name = 1;
   void clear_name() ;
@@ -1682,11 +1683,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateAttributeSchemeRequest final 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateAttributeSchemeRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1716,6 +1727,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateAttributeSchemeRequest final 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint64_t client_request_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5182,6 +5194,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateAttributeSchemeResponse final
     kErrorMessageFieldNumber = 1,
     kPanelFieldNumber = 2,
     kSchemeIdFieldNumber = 3,
+    kReplayedFieldNumber = 4,
   };
   // .TipInfoMessage error_message = 1;
   [[nodiscard]] bool has_error_message()
@@ -5225,11 +5238,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateAttributeSchemeResponse final
   void _internal_set_scheme_id(::uint32_t value);
 
   public:
+  // bool replayed = 4;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateAttributeSchemeResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5261,6 +5284,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateAttributeSchemeResponse final
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::AttributePanelInfo* PROTOBUF_NULLABLE panel_;
     ::uint32_t scheme_id_;
+    bool replayed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8196,6 +8220,30 @@ inline void CreateAttributeSchemeRequest::set_allocated_name(::std::string* PROT
   // @@protoc_insertion_point(field_set_allocated:CreateAttributeSchemeRequest.name)
 }
 
+// uint64 client_request_id = 2;
+inline void CreateAttributeSchemeRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t CreateAttributeSchemeRequest::client_request_id() const {
+  // @@protoc_insertion_point(field_get:CreateAttributeSchemeRequest.client_request_id)
+  return _internal_client_request_id();
+}
+inline void CreateAttributeSchemeRequest::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:CreateAttributeSchemeRequest.client_request_id)
+}
+inline ::uint64_t CreateAttributeSchemeRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void CreateAttributeSchemeRequest::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // CreateAttributeSchemeResponse
@@ -8413,6 +8461,30 @@ inline ::uint32_t CreateAttributeSchemeResponse::_internal_scheme_id() const {
 inline void CreateAttributeSchemeResponse::_internal_set_scheme_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scheme_id_ = value;
+}
+
+// bool replayed = 4;
+inline void CreateAttributeSchemeResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool CreateAttributeSchemeResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:CreateAttributeSchemeResponse.replayed)
+  return _internal_replayed();
+}
+inline void CreateAttributeSchemeResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:CreateAttributeSchemeResponse.replayed)
+}
+inline bool CreateAttributeSchemeResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void CreateAttributeSchemeResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
 }
 
 // -------------------------------------------------------------------

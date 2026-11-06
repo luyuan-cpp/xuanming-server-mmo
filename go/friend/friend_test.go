@@ -8,7 +8,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"friend/internal/config"
 	"friend/internal/constants"
@@ -20,8 +19,11 @@ import (
 
 	"schemamigrate"
 
+	"shared/callerauth"
 	"shared/callerauth/callerauthtest"
+	"shared/generated/clientrpc"
 	"shared/killswitch"
+	"shared/roleidentity"
 	"shared/serverbase"
 
 	"github.com/zeromicro/go-zero/core/logx/logtest"
@@ -61,9 +63,14 @@ func incomingSessionContext(t *testing.T, fullMethod string, playerId uint64) co
 	return callerauthtest.Incoming(t, fullMethod, callerauthtest.OnlineSession("original", playerId, 7))
 }
 
-func testOriginalIdentityGuard() grpc.UnaryServerInterceptor {
-	// 纯拦截器测试显式提供 SQL 检查替身，真库身份由 data 用例证明。
-	return session.OriginalIdentityInterceptor(time.Second, func(context.Context) error { return nil })
+// friendEntry 是 friend.go 装配的同一个入口准入。
+func friendEntry(t *testing.T) grpc.UnaryServerInterceptor {
+	t.Helper()
+	entry, err := roleidentity.EntryInterceptor(clientrpc.Callable)
+	if err != nil {
+		t.Fatalf("入口准入装配失败: %v", err)
+	}
+	return entry
 }
 
 // TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → session → serverbase。
@@ -83,7 +90,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		strings.TrimPrefix(friendpb.ClientPlayerFriend_AddFriend_FullMethodName, "/"): {Deny: true, Reason: "单测:顺序探针"},
 	})
-	chain := buildUnaryInterceptors(ks, testOriginalIdentityGuard())
+	chain := buildUnaryInterceptors(ks, friendEntry(t))
 	if len(chain) != 4 {
 		t.Fatalf("拦截器链长度应为 4(grpcstats/killswitch/session/serverbase),实际 %d", len(chain))
 	}
@@ -150,7 +157,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 		blocked: {Deny: true, Reason: "单测:好友库过载"},
 	})
 
-	chain := buildUnaryInterceptors(ks, testOriginalIdentityGuard())
+	chain := buildUnaryInterceptors(ks, friendEntry(t))
 
 	t.Run("命中规则的方法被短路", func(t *testing.T) {
 		handlerCalled := false
@@ -207,7 +214,7 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: friendpb.ClientPlayerFriend_AddFriend_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(ks, testOriginalIdentityGuard()), info, func(ctx context.Context, req any) (any, error) {
+	h := chainUnary(buildUnaryInterceptors(ks, friendEntry(t)), info, func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return &friendpb.AddFriendResponse{}, nil
 	})
@@ -225,16 +232,16 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 // NotifyFriendEvent 是服务端推给客户端的方向(rpc ... returns Empty),放在同一个
 // ClientPlayerFriend 服务里只是为了让生成器出 Unity / robot 的推送 handler。
 // 但它同时也就成了一个"客户端能拨的方法号":客户端若能调它,就能给自己伪造
-// "某人通过了你的好友申请"。第一道防线是 session 白名单不收它,
-// 第二道是 server 侧不实现它(继承 Unimplemented)。这条测试守第一道。
+// "某人通过了你的好友申请"。第一道防线是它标了 CLIENT_RPC_PUSH、不在生成的客户端方法集合里,
+// 入口准入带会话拨它即拒;第二道是 server 侧不实现它(继承 Unimplemented)。这条测试守第一道。
 //
-// 删掉 buildUnaryInterceptors 里 session 那一行,其余测试全绿,这条立刻 FAIL。
+// 删掉 buildUnaryInterceptors 里入口准入那一行,其余测试全绿,这条立刻 FAIL。
 func TestSessionRejectsNotifyFriendEventFromClient(t *testing.T) {
 	logtest.Discard(t) // 拒绝会打 Error 日志,这里只关心行为
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: friendpb.ClientPlayerFriend_NotifyFriendEvent_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), testOriginalIdentityGuard()), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), friendEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &base.Empty{}, nil
@@ -256,12 +263,12 @@ func TestBrokenSessionRejectedInChain(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: friendpb.ClientPlayerFriend_AddFriend_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), testOriginalIdentityGuard()), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), friendEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &friendpb.AddFriendResponse{}, nil
 		})
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(session.MetadataKey, "%%%不是base64"))
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(callerauth.MetaSessionDetail, "%%%不是base64"))
 
 	_, err := h(ctx, &friendpb.AddFriendRequest{})
 	if handlerCalled {

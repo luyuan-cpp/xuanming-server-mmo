@@ -46,6 +46,7 @@
 #include "proto/scene/player_mystery_merchant.pb.h"
 #include "proto/scene/scene_info.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/mystery_merchant_rules.h"
 #include "services/scene/player/system/player_mystery_merchant.h"
 #include "table/code/item_table.h"
@@ -497,6 +498,7 @@ protected:
 		tlsEcs.actorRegistry.emplace<SceneEntityComp>(entity).sceneEntity = sceneEntity;
 		// 生产侧由 PlayerDatabaseMessageFieldsUnmarshal 无条件挂上。
 		tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(entity);
+		tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(entity); // 同上,客户端请求幂等键账本(持久数据)
 		return entity;
 	}
 
@@ -935,6 +937,140 @@ TEST_F(PlayerMysteryMerchantTest, OlderRecordNeverReplacesANewerOne)
 	PlayerMysteryMerchantSystem::FillInfo(player, kNowMs, info);
 	EXPECT_EQ(kOtherSceneId, info.scene_id());
 	EXPECT_FALSE(info.here()) << "玩家还在原来那条线,商人已经不在这了";
+}
+
+// ── 客户端幂等键(docs/design/client-request-idempotency.md)───────────────────────
+
+constexpr uint64_t kClientKey = 0x5eed'1234'abcd'0001ULL;
+
+::BuyMysteryMerchantGoodsRequest Keyed(::BuyMysteryMerchantGoodsRequest request, uint64_t key)
+{
+	request.set_client_request_id(key);
+	return request;
+}
+
+TEST_F(PlayerMysteryMerchantTest, SameClientKeyBuysOnceAndReplaysTheSecondRequest)
+{
+	const auto *row = GoodsRowOrNull(stackGoods);
+	const uint64_t unitPrice = PriceOf(stackGoods, 60);
+	const uint64_t goldBefore = Gold(player);
+	const auto request = Keyed(Request(stackGoods, 1, 60), kClientKey);
+
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	EXPECT_FALSE(response.replayed());
+
+	// 回包没到,玩家又点了同一件同样的份数(或客户端结果未知之后重发):同一个键,参数原样。
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	EXPECT_TRUE(response.replayed());
+	EXPECT_EQ(goldBefore - unitPrice, Gold(player)) << "charged once";
+	EXPECT_EQ(static_cast<std::size_t>(row->item_count()), Inventory(player).GetTotalItemCount(row->item_id()))
+		<< "granted once";
+	EXPECT_EQ(1u, merchantrules::BoughtCount(Record(player), kRoundId, stackGoods)) << "limit consumed once";
+	EXPECT_EQ(1, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).records_size());
+
+	// 重放带回此刻的货架与背包,与成交时同形。
+	ASSERT_TRUE(response.has_info());
+	const auto *goods = FindGoods(response.info(), stackGoods);
+	ASSERT_NE(nullptr, goods);
+	EXPECT_EQ(1u, goods->bought_count());
+	ASSERT_TRUE(response.has_bag());
+	ASSERT_GT(response.bag().currency().values_size(), static_cast<int>(kCurrencyGold));
+	EXPECT_EQ(goldBefore - unitPrice, response.bag().currency().values(static_cast<int>(kCurrencyGold)));
+}
+
+TEST_F(PlayerMysteryMerchantTest, SameClientKeyWithOtherParametersIsRefusedWithoutSideEffects)
+{
+	ASSERT_EQ(kSuccess, Buy(player, Keyed(Request(stackGoods, 1, 60), kClientKey)));
+
+	// 客户端缺陷:把上一次的键用在了另一个份数 / 另一件商品上。
+	ExpectRejectedWithoutSideEffects(kInvalidParameter, player, Keyed(Request(stackGoods, 2, 60), kClientKey));
+	EXPECT_FALSE(response.replayed());
+	ExpectRejectedWithoutSideEffects(kInvalidParameter, player, Keyed(Request(uniqueGoods, 1, 40), kClientKey));
+	EXPECT_FALSE(response.replayed());
+}
+
+TEST_F(PlayerMysteryMerchantTest, ReplayIsAnsweredBeforeTheLimitAndThePresenceChecks)
+{
+	// 限购 1 的那件:首次成交之后名额就满了。重发要是先过预检,会被当成「已达限购」拒掉,客户端就以为没买到。
+	const auto request = Keyed(Request(uniqueGoods, 1, 40), kClientKey);
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	ExpectRejectedWithoutSideEffects(kMysteryMerchantLimitReached, player, Request(uniqueGoods, 1, 40));
+
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	EXPECT_TRUE(response.replayed());
+
+	// 商人已经离开、玩家也走远了:重发照样按首次结果回答,货架按此刻的样子带回。
+	tlsEcs.actorRegistry.get<Transform>(player).mutable_location()->set_x(kMerchantX + interactRange + 10.0);
+	const uint64_t afterLeaving = kAppearAtMs + kStayMs;
+	ASSERT_EQ(kSuccess, Buy(player, request, afterLeaving));
+	EXPECT_TRUE(response.replayed());
+	ASSERT_TRUE(response.has_info());
+	EXPECT_FALSE(response.info().active());
+	EXPECT_EQ(1u, merchantrules::BoughtCount(Record(player), kRoundId, uniqueGoods));
+}
+
+TEST_F(PlayerMysteryMerchantTest, RejectedPurchaseDoesNotRememberTheClientKey)
+{
+	auto &location = *tlsEcs.actorRegistry.get<Transform>(player).mutable_location();
+	location.set_x(kMerchantX + interactRange + 0.5);
+	const auto request = Keyed(Request(stackGoods, 1, 60), kClientKey);
+	ExpectRejectedWithoutSideEffects(kMysteryMerchantTooFar, player, request);
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).records_size()) << "a rejection leaves no record";
+
+	// 走近之后带同一个键重发:上一次没有副作用,这一次才是首次执行。
+	location.set_x(kMerchantX);
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	EXPECT_FALSE(response.replayed());
+	EXPECT_EQ(1u, merchantrules::BoughtCount(Record(player), kRoundId, stackGoods));
+}
+
+TEST_F(PlayerMysteryMerchantTest, ZeroClientKeyKeepsTheOldBehavior)
+{
+	ASSERT_EQ(kSuccess, Buy(player, Request(stackGoods, 1, 60)));
+	ASSERT_EQ(kSuccess, Buy(player, Request(stackGoods, 1, 60)));
+	EXPECT_FALSE(response.replayed());
+	EXPECT_EQ(2u, merchantrules::BoughtCount(Record(player), kRoundId, stackGoods))
+		<< "without a key every request is a new purchase";
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).records_size());
+}
+
+// 账本随存档落盘:把它序列化再读回来(加载就是这么拿到它的),换一份新的组件挂上,带原键的重发照样认得。
+TEST_F(PlayerMysteryMerchantTest, ReplayStillWorksAfterTheLedgerIsReloadedFromItsBytes)
+{
+	const uint64_t unitPrice = PriceOf(stackGoods, 60);
+	const uint64_t goldBefore = Gold(player);
+	const auto request = Keyed(Request(stackGoods, 1, 60), kClientKey);
+	ASSERT_EQ(kSuccess, Buy(player, request));
+
+	const std::string saved = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).SerializeAsString();
+	tlsEcs.actorRegistry.remove<ClientRequestLedgerComp>(player);
+	ClientRequestLedgerComp reloaded;
+	ASSERT_TRUE(reloaded.ParseFromString(saved));
+	tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player, reloaded);
+
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	EXPECT_TRUE(response.replayed());
+	EXPECT_EQ(goldBefore - unitPrice, Gold(player)) << "charged once";
+	EXPECT_EQ(1u, merchantrules::BoughtCount(Record(player), kRoundId, stackGoods));
+}
+
+TEST_F(PlayerMysteryMerchantTest, MissingLedgerRefusesKeyedPurchasesWithoutSideEffects)
+{
+	// 持久数据缺失(加载不变量被破坏):带键的购买分不清是不是重发,不执行;不带键的照常。
+	tlsEcs.actorRegistry.remove<ClientRequestLedgerComp>(player);
+	ExpectRejectedWithoutSideEffects(kServiceUnavailable, player, Keyed(Request(stackGoods, 1, 60), kClientKey));
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<ClientRequestLedgerComp>(player)) << "the buy path never creates it";
+	EXPECT_EQ(kSuccess, Buy(player, Request(stackGoods, 1, 60)));
+}
+
+TEST_F(PlayerMysteryMerchantTest, ClientKeysArePerPlayer)
+{
+	const auto other = NewPlayer(kOtherPlayerGuid, scene, kMerchantX, kMerchantY, kPlenty);
+	const auto request = Keyed(Request(stackGoods, 1, 60), kClientKey);
+	ASSERT_EQ(kSuccess, Buy(player, request));
+	ASSERT_EQ(kSuccess, Buy(other, request));
+	EXPECT_FALSE(response.replayed()) << "the same key from another player is another purchase";
+	EXPECT_EQ(1u, merchantrules::BoughtCount(Record(other), kRoundId, stackGoods));
 }
 
 } // namespace

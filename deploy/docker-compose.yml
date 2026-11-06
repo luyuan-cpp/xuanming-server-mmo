@@ -72,27 +72,27 @@ services:
   # 继任者的命令消费掉再丢弃(P1)。现在按 partition = node_id % P 寻址,
   # 消费端 assign 自己的分区、不进 group。旧 topic 已退役,不再预建。
   #
-  # Also pre-creates data_service's two audit topics with their contracted
+  # Also pre-creates data_service's two audit topics with at least their configured
   # partition counts (go/data_service/etc/data_service.yaml:
   # Kafka.TransactionLogPartitions=6 / Kafka.SnapshotPartitions=3) and
-  # retention.ms=2592000000 (30d, Kafka.RetentionMs). This has to happen before
-  # any scene process produces: the broker above runs auto.create.topics.enable
-  # with KAFKA_NUM_PARTITIONS=1, so the first C++ message would otherwise
-  # auto-create the topic with 1 partition and data_service's EnsureTopics would
-  # refuse it forever ("partition contract mismatch"; the only symptom is one
-  # Error log line every 30s). Effective names carry the generation suffix
-  # (<base>_g<N>, config.go EffectiveTransactionLogTopic);
-  # KAFKA_INIT_AUDIT_TOPIC_GENERATION mirrors Kafka.TopicGeneration. A partition
-  # change is a generation bump (new *_g<N+1> topic, drain, delete the old one),
-  # never an in-place expansion: that re-hashes key=player_id and breaks
-  # per-player ordering. Idempotent (--if-not-exists); an existing *_gN topic
-  # with the wrong PartitionCount makes this container exit 1 instead of
-  # pretending — delete the auto-created topic and re-run kafka-topic-init.
+  # retention.ms=2592000000 (30d, Kafka.RetentionMs). The broker above runs
+  # auto.create.topics.enable with KAFKA_NUM_PARTITIONS=1, so a C++ message sent
+  # before this init would auto-create a 1-partition topic; ensure_min_partitions
+  # grows it in place. Audit topics are the one exception to "partition counts are
+  # immutable": both tables dedupe on a primary/unique key and never rely on
+  # arrival order, so re-hashing key=player_id onto new partitions is harmless
+  # (docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A). They only grow;
+  # shrinking is still a generation bump (new *_g<N+1> topic, drain, delete the old
+  # one; docs/ops/audit-topic-generation-bump-runbook.md). Effective names carry the
+  # generation suffix (<base>_g<N>, config.go EffectiveTransactionLogTopic);
+  # KAFKA_INIT_AUDIT_TOPIC_GENERATION mirrors Kafka.TopicGeneration. Idempotent.
   #
   # 观战帧 topic(docs/design/battle-spectate-tiered-fanout.md §15.3)同样在这里预建,代号与命令 topic 同源:
   # gate-spectate_g<N> 的分区数等于命令 topic 分区数(partition = gate node_id % P);
   # spectate-bcast_g<N> 固定 16 分区(partition = battle_id % 16),与 C++ 常量 kSpectateBroadcastTopicPartitions
   # (node_command_topic.h)相等,改数走换代号。
+  # 世界频道广播 chat-world-bcast_g<N>(docs/design/chat-world-channel-fanout.md §4)同样在这里预建:代号同命令 topic,
+  # 固定 4 分区,与 C++ kChatWorldBroadcastTopicPartitions、Go kafkacmd.ChatWorldBroadcastTopicPartitions 相等。
   kafka-topic-init:
     # 与上面 kafka 服务同一个钉版引用(tag 与 digest 都相同),见 kafka 服务上方的注释。
     image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
@@ -168,14 +168,36 @@ services:
             | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
           if [ "$$_got" != "$$2" ]; then
             echo "ERROR: topic $$1 has PartitionCount=$${_got:-?} but the contract is $$2" >&2
-            echo "       (audit topics: go/data_service/etc/data_service.yaml; command topics:" >&2
+            echo "       (command topics:" >&2
             echo "        bin/etc/base_deploy_config.yaml Kafka.CommandTopicPartitions, also used by gate-spectate;" >&2
-            echo "        spectate-bcast: kSpectateBroadcastTopicPartitions in node_command_topic.h)." >&2
+            echo "        spectate-bcast: kSpectateBroadcastTopicPartitions in node_command_topic.h;" >&2
+            echo "        chat-world-bcast: kChatWorldBroadcastTopicPartitions in node_command_topic.h)." >&2
             echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
             echo "       If a producer auto-created this topic before this init ran, delete the topic and re-run kafka-topic-init." >&2
             exit 1
           fi
           echo "  verified: $$1 partitions=$$2"
+        }
+        # ensure_min_partitions <name> <minimum>: 只用于 data_service 的两个审计 topic。它们落库不依赖消息顺序,
+        # 分区只许加、可以原地加(docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A):少于配置就
+        # --alter 加到配置值(包括被生产者抢先自动建成 1 分区的情况),多于配置照收(Kafka 不能减分区)。
+        # 有序 topic 不许用它,继续走上面的 assert_partitions。
+        ensure_min_partitions() {
+          _got=$$(/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic "$$1" 2>/dev/null \
+            | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
+          if [ -n "$$_got" ] && [ "$$_got" -lt "$$2" ]; then
+            # data-service 的 EnsureTopics 可能同时在加,失败不退出,以下面的回读为准。
+            /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --alter --topic "$$1" --partitions "$$2" >/dev/null \
+              && echo "  grown  : $$1 partitions $$_got -> $$2" || echo "  alter failed: $$1, re-reading"
+            _got=$$(/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic "$$1" 2>/dev/null \
+              | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
+          fi
+          if [ -z "$$_got" ] || [ "$$_got" -lt "$$2" ]; then
+            echo "ERROR: audit topic $$1 has PartitionCount=$${_got:-?}, fewer than the configured $$2" >&2
+            echo "       (go/data_service/etc/data_service.yaml Kafka.TransactionLogPartitions / SnapshotPartitions)." >&2
+            exit 1
+          fi
+          echo "  verified: $$1 partitions=$$_got (>= $$2)"
         }
         # 控制面命令 topic:一个节点类型一个 topic,固定分区数,partition = node_id % P。
         # 旧的 per-node topic 已退役,不再预建。
@@ -200,14 +222,19 @@ services:
         create_topic "spectate-bcast_g$$cg" 16 "retention.ms=600000"
         assert_partitions "spectate-bcast_g$$cg" 16
         ensure_retention "spectate-bcast_g$$cg" 600000
-        # data_service audit topics (see the comment above): contracted partitions + 30d retention.
+        # 世界频道推送:gate 同样 assign + startAtEnd,漏掉的由客户端拉历史补,只留 10 分钟。
+        echo "Pre-creating world chat broadcast topic (generation g$$cg)..."
+        create_topic "chat-world-bcast_g$$cg" 4 "retention.ms=600000"
+        assert_partitions "chat-world-bcast_g$$cg" 4
+        ensure_retention "chat-world-bcast_g$$cg" 600000
+        # data_service audit topics (see the comment above): at least the configured partitions + 30d retention.
         g="$${KAFKA_INIT_AUDIT_TOPIC_GENERATION}"
         echo "Pre-creating data_service audit topics (generation g$$g)..."
         create_topic "transaction_log_topic_g$$g" 6 "retention.ms=2592000000"
-        assert_partitions "transaction_log_topic_g$$g" 6
+        ensure_min_partitions "transaction_log_topic_g$$g" 6
         ensure_retention "transaction_log_topic_g$$g" 2592000000
         create_topic "player_snapshot_topic_g$$g" 3 "retention.ms=2592000000"
-        assert_partitions "player_snapshot_topic_g$$g" 3
+        ensure_min_partitions "player_snapshot_topic_g$$g" 3
         ensure_retention "player_snapshot_topic_g$$g" 2592000000
         echo "Kafka topic init done."
     restart: "no"
@@ -471,17 +498,19 @@ services:
 
   # Etcd service (distributed key-value store)
   etcd:
-    # bitnami/etcd 2025-08 起从 Docker Hub 下架(Bitnami 商业化调整),
-    # bitnamilegacy/ 是官方冻结存档,镜像内容与环境变量语义完全一致。
-    # 与 deploy/k8s/manifests/infra/etcd.yaml、etcd-maintenance.yaml 逐字相同(etcd_maintenance_contract.tests.ps1 守住);
-    # 钉 tag@摘要待 Codex 实测 M0 后三处同批改(docs/ops/etcd-maintenance-runbook.md「阶段 2」)。
-    image: bitnamilegacy/etcd:latest
+    # etcd 官方镜像,按 tag@摘要钉死;与 deploy/k8s/manifests/infra/etcd.yaml 逐字相同(etcd_maintenance_contract.tests.ps1 守住,
+    # 选型与版本理由见那份文件)。官方镜像没有 shell:docker exec 只能直接跑 etcdctl(start_game.ps1 就是这么用的),
+    # 不能 exec 进去开 sh。以前的 bitnamilegacy/etcd:latest(实为 3.6.1)停更了;本机已有的 etcd-data 卷是 3.6.1 写的,
+    # 升到 3.6.16 是补丁升级,数据照用。新镜像只对新建的容器生效,见下面压缩一段的 --force-recreate。
+    image: quay.io/coreos/etcd:v3.6.16@sha256:a9c7cc12156f4b26ca41f0b57ba5b76c45037ff6c1e47ea3d68cb7908d48a965
     container_name: etcd
     ports:
       - "2379:2379"  # Client communication port
       - "2380:2380"  # Cluster peer communication port
     environment:
-      - ALLOW_NONE_AUTHENTICATION=yes  # Disable auth for dev (must enable in production)
+      # 不开认证(本机开发);官方镜像没有 bitnami 那个 ALLOW_NONE_AUTHENTICATION 开关,etcd 本身缺省就不认证。
+      # 数据目录 = 命名卷的根(bitnami 时代同一个卷挂在 /bitnami/etcd/data、目录就是卷根),换挂载点不换布局,已有数据照用。
+      - ETCD_DATA_DIR=/var/lib/etcd
       - ETCD_NAME=default
       - ETCD_INITIAL_CLUSTER=default=http://etcd:2380
       - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
@@ -500,22 +529,20 @@ services:
       - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379  # Listen on all interfaces for client connections
       - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380  # Listen on all interfaces for peer communication
       # MVCC 历史压缩与空间配额(P0-C,原理与取值见 docs/ops/etcd-maintenance-runbook.md;取值待实测 / 压测复核)。
-      # 这份 compose 也是 Linux 预发压测机的 etcd,那里没有 K8s CronJob,只能靠这三项。
-      #   - 自动压缩按 revision 保留最近 1000000 个版本,必须与 deploy/k8s/manifests/infra/etcd-maintenance.yaml
-      #     的 KEEP_REVISIONS 相同(etcd_maintenance_contract.tests.ps1 守住)。
+      # 这份 compose 也是 Linux 预发压测机的 etcd。K8s 与这里一样只靠 etcd 内置的自动压缩(2026-11-05 起没有压缩 CronJob)。
+      #   - 自动压缩按 revision 保留最近 1000000 个版本,与 deploy/k8s/manifests/infra/etcd.yaml 同值(etcd_maintenance_contract.tests.ps1 守住)。
       #   - 配额 3GiB:满足「配额 × 2 + 1Gi ≤ etcd.yaml 的 PVC 8Gi」,给 defrag 的临时文件留余量。K8s 的 etcd.yaml 同值。
+      # 官方镜像由 etcd 自己按同名参数解析这些 ETCD_* 环境变量(以前 bitnami 镜像会不会透传一直没实测,这个疑问随换镜像消失)。
       # 只对新建的容器生效:start_game.ps1 起 compose 带 --no-recreate,既有 etcd 容器要
       #   docker --context desktop-linux compose -f deploy/docker-compose.yml up -d --force-recreate etcd
-      # 才会带上。这等于重启本机 etcd(数据在命名卷 etcd-data 里,不丢),应与整栈重启一起做:C++ etcd 流重建
-      # (docs/design/grpc-muduo-transport.md §10.2 第 2 批)修好之前,单独重启 etcd 会让在跑的 C++ 节点进入约 181s 一轮的
+      # 才会换上新镜像与这些参数。这等于重启本机 etcd(数据在命名卷 etcd-data 里,不丢),应与整栈重启一起做:C++ etcd 流重建
+      # (docs/design/grpc-muduo-transport.md §10.2 第 2 批)还没有运行证据,单独重启 etcd 可能让在跑的 C++ 节点进入约 181s 一轮的
       # 失租重注册循环。
-      # 未验证(待 Codex 实测 M3):bitnamilegacy 镜像是否把这些 ETCD_* 环境变量交给 etcd(若它改用配置文件启动,
-      # etcd 会忽略环境变量)、已有数据目录重启后是否仍生效。生效前用 runbook「compose」一节的手工压缩兜底。
       - ETCD_AUTO_COMPACTION_MODE=revision
       - ETCD_AUTO_COMPACTION_RETENTION=1000000
       - ETCD_QUOTA_BACKEND_BYTES=3221225472
     volumes:
-      - etcd-data:/bitnami/etcd/data  # Persistent data volume
+      - etcd-data:/var/lib/etcd  # Persistent data volume(= ETCD_DATA_DIR)
     restart: unless-stopped
 
 volumes:

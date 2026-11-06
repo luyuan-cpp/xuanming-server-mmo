@@ -280,11 +280,15 @@ public class LoginRpcClient {
             log.warn("login.rpc dynamic endpoint port malformed, skipped: {}", ep);
             return null;
         }
+        // keepAliveWithoutCalls 必须是 false,理由见 start() 里静态通道的注释:go-zero 服务端沿用 grpc-go 缺省强制策略,
+        // 空闲时发 ping 会被当成滥用、以 too_many_pings 踢断,grpc-java 随后还会把探活间隔永久翻倍。
+        // 8-10 修静态通道时这里还不存在,8-17 新增动态通道时又写回了 true;etcd 发现开着时走的正是这条通道
+        // (docs/design/infra-reconnect-overview.md §4 R16)。
         ManagedChannel ch = ManagedChannelBuilder.forAddress(ep.substring(0, colon), port)
                 .usePlaintext()
                 .keepAliveTime(30, TimeUnit.SECONDS)
                 .keepAliveTimeout(10, TimeUnit.SECONDS)
-                .keepAliveWithoutCalls(true)
+                .keepAliveWithoutCalls(false)
                 .build();
         log.info("login.rpc dynamic channel up: {}", ep);
         return ch;

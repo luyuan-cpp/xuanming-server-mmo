@@ -36,6 +36,22 @@
 // **绝不阻塞**。于是 data_service 不可用时每个 scene 还能发完手里两段;库恢复后自动续。
 // 启动时首段是硬依赖(scene DependencyGate "id segments ready"),运行期是弱依赖。
 //
+// # 整批预检之后的续段(RequestTopUp,2026-11-06,数据覆写审计 R2 r2-battle#3)
+//
+// 预取只在**发号之后**判阈值。整批入包的调用方先用 Available() 预检「要 n 个号就得先有 n 个」,不够就整批延后、
+// 一个号都不发 —— 「需要量 > 剩余 > 预取阈值、又没有下一段」时谁都不发号,预取永远不触发,这一批就永远等不来新段。
+// 所以预检判出不足的调用方要调 RequestTopUp(needed):没有下一段、没有在途请求、也不在退避中就立刻领一段
+// (与预取同一条单飞路径);在途 / 退避中则记下这次需求,退避到期的重试不再因为「剩余还在阈值之上」而跳过。
+// 新段落下之后余量自然变多,调用方下一次重试即可通过。
+//
+// 续段那一次的 step 抬到不小于 needed(不超过 maxStep;评审修正 2026-11-06):落下的那一段单独就够这一批用,
+// 不指望手里剩下的号(会被别的入包用掉)。空闲节点的动态 step 会缩到 minStep,不抬的话一批比 minStep 大的入账
+// 永远凑不齐。只抬这一次,动态 step(step_)不变。下一段已经在手里还不够时(含当前段已发完、下一段还没换上来),
+// 先腾出一个 buffer:当前段剩下的号作废(从未发出,发号器也不会再发,不会撞号;号段本来允许浪费),下一段换成
+// 当前段,再按抬高的 step 领一段 —— 不腾就只能等别的发号把当前段用完,空闲节点上这一批永远 DEFER / RETRY。
+// needed 大于 maxStep:一段最多 maxStep 个号,只靠续段永远凑不齐,回终局结论 kExceedsMaxStep,不记需求、不发请求、
+// 不作废任何号,怎么处置由调用方按自己的错误语义定(资产通道记终局拒绝,战斗结算整笔延后并告警)。
+//
 // # 动态 step(§7.5 第 4 条,Leaf 口径)
 //
 // 记录每一段从"成为当前段"到"发完"撑了多久:不到 stepGrowBelowSec(15 分钟)就用完 →
@@ -138,6 +154,21 @@ public:
         double backoffSec{0};  // 下一次失败后将采用的退避
         uint32_t currentStep{0};      // 下一次领段会请求的 step
         double lastRangeLastedSec{0}; // 最近一段从成为当前段到发完撑了多久
+        uint64_t topUpFetches{0};     // RequestTopUp 当场发起的领段次数
+        bool topUpPending{false};     // 有一次续段需求还没等到新段落下(退避到期的重试据此照发)
+        uint64_t topUpStep{0};        // 续段需求要求的最小 step(0 = 没有需求);续段那一次按 max(currentStep, 它) 领
+        uint64_t topUpAbandonedIds{0}; // RequestTopUp 为腾出 buffer 作废的当前段剩余号数(累计,从未发出)
+    };
+
+    // RequestTopUp 的结局。底层类型按枚举项个数选;kCount 恒为最后一项(名字表 TopUpOutcomeName)。
+    enum class TopUpOutcome : uint8_t
+    {
+        kEnough,         // 手里两段合计已够 needed:什么都没做
+        kFetching,       // 已有一次领段在途或排着重试(可能就是这一次发起的):落下之后余量变多,调用方延后再试
+        kExceedsMaxStep, // needed 大于 maxStep:一段最多 maxStep 个号,只靠续段永远凑不齐。终局结论,调用方别再等续段
+        kUnavailable,    // 未启用或已停机:不会再领段
+
+        kCount
     };
 
     GuidSegmentClient() = default;
@@ -162,7 +193,18 @@ public:
     [[nodiscard]] bool IsReady() const;
 
     // 手里两段合计还能发多少号。批量入包用它做整批预检(要 n 个号就得先有 n 个)。
+    // 只读:不触发预取。预检判出不足时必须接着调 RequestTopUp,否则剩余高于预取阈值时不会有人去领新段。
     [[nodiscard]] uint64_t Available() const;
+
+    // 整批预检判出号不够 needed 时调用:不发号、不阻塞(见文件头「整批预检之后的续段」)。按下面顺序判:
+    //  - 未启用 / 已停机 → kUnavailable;
+    //  - Available() >= needed → kEnough;
+    //  - needed > maxStep → kExceedsMaxStep(终局:不记需求、不发请求、不作废号);
+    //  - 下一段已在手里(两段合计仍不够):当前段剩下的号作废(计入 topUpAbandonedIds),下一段换成当前段;
+    //  - 记下需求,续段 step 抬到 max(currentStep, needed);有在途请求或正在退避 → kFetching(落下的那一段 /
+    //    退避到期的重试会补上);都没有就立刻发起一次领段(why=top_up)→ kFetching,发不出去时按退避排重试,结局同样是 kFetching。
+    // 需求(连同抬高的 step)在下一次校验通过的段落下时清掉,Reset / Shutdown 也清。单飞:在途时重复调用不会多发请求。
+    TopUpOutcome RequestTopUp(uint64_t needed);
 
     // 发一个 id。当前段有号立即返回 true;用完则切到预取段;两段都空返回 false
     // (同时触发续段,**不阻塞**)。未启用恒 false。
@@ -232,6 +274,12 @@ private:
     bool inflight_{false};
     uint64_t fetchSeq_{0}; // 每次发送 +1;超时回调带着当时的 seq,只对当次生效
     bool retryPending_{false};
+    // 有调用方经 RequestTopUp 要过号、还没等到新段落下。只影响「退避到期的重试要不要发」:
+    // 没有它时重试见剩余高于阈值就跳过,预检判出的不足就又没人管了。
+    bool topUpPending_{false};
+    uint64_t topUpStep_{0}; // 续段需求要求的最小 step(≤ maxStep),只在 topUpPending_ 时生效
+    uint64_t topUpFetches_{0};
+    uint64_t topUpAbandonedIds_{0};
     uint64_t retryGen_{0}; // 每次安排重试 +1;Reset 也 +1,让旧回调作废
     double backoffSec_{0.5};
     uint64_t highWater_{0};
@@ -255,3 +303,6 @@ private:
     TimerTaskComp retryTimer_;
     TimerTaskComp fetchTimeoutTimer_;
 };
+
+// RequestTopUp 结局的日志名。越界返回 "?"。
+const char *TopUpOutcomeName(GuidSegmentClient::TopUpOutcome outcome);

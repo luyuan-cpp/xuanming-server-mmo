@@ -109,10 +109,10 @@
 | K2 | Disconnect 通知丢失 = 会话永久 ONLINE，没有对账路径 | 【码】`go/login/internal/logic/clientplayerlogin/session_lifecycle.go:45-52` | 已核（注释原文） |
 | K3 | 发号器复用空号，挑哪个空号取决于 Go map 随机顺序；19 号已易主一次 | 【码】`tools/proto_generator/protogen/internal/generator/cpp/service_register_info.go:189-202`、`service_register_info_test.go:57-58`、`PROGRESS.md:5124` | 已核 |
 | K4 | login 无客户端方法白名单；`Disconnect`、`LeaveGame` 标为客户端协议 | 【码】`route_table.go:57,59` | 已核；危害以自身会话为限（player_id 取自 gate 注入的会话头） |
-| K5 | 服务级可见性放出内部方法：`UpdateGuildScore` 为 `ClientProtocol:true`，只靠 guild 自己的 `ClientMethods` 拦住 | 【码】`route_table.go:121`、`go/guild/internal/session/session.go:94-106` | 已核 |
+| K5 | 服务级可见性放出内部方法：`UpdateGuildScore` 为 `ClientProtocol:true`；R4 之前 gate 白名单也放行它，只靠 guild 自己的 `ClientMethods` 拦住 | 【码】`route_table.go:121`、`go/guild/internal/session/session.go:94-106` | 已核；**gate 一侧由 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 处理（2026-11-05 已落码，未编译，待 Codex 重新生成并验证；Java 版待做）**：它标了 `CLIENT_RPC_SERVER_ONLY`，不再进 `IsClientMessageId`，客户端发上来 gate 按非法包丢弃；路由表里它仍是 `ClientProtocol:true`（F3 未修），guild 的 `ClientMethods` 保留为第二道防线 |
 | K6 | guild/friend/trade 把"没带会话头"当内部调用放行；安全性完全依赖 Go 端口不对外 | 【码】`go/guild/internal/session/session.go:94-96` | 已核 |
 | K7 | K8s 默认直连模式，chat/guild/friend/team/trade 玩家不可达 | 【码】`k8s_deploy.ps1:153`、`main.cpp:207-209` | 已核 |
-| K8 | 下行专用号（29 个 Notify* 及 23/34/124）在上行白名单里，客户端可上发 | 调研【码】`cpp/generated/rpc/service_metadata/rpc_event_registry.cpp:1536-1679` | 调研已核，本文作者未逐条复核 |
+| K8 | R4 之前：下行专用号（29 个 Notify* 及 23/34/124）在 gate 上行白名单里，客户端可上发，gate 会把它们转给 scene 或路由服 | 调研【码】`cpp/generated/rpc/service_metadata/rpc_event_registry.cpp:1536-1679`（HEAD `ed75ad177`） | 调研已核，本文作者未逐条复核；**由 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 处理（2026-11-05 已落码，未编译，待 Codex 重新生成并验证；Java 版待做，已登记 Java `PARITY.md`）**：C++ 生成器按方法级 `OptionClientRpcKind` 生成 `IsClientMessageId`，只收 REQUEST / ONE_WAY；推送号（含 23/34/124）与仅服务端方法发上来，gate 计一次非法包（累计到阈值踢线）、不回包，到不了 scene、路由服与业务服。分类用的是已有的 `OptionClientRpcKind`，不是本文 D53 设想的 `OptionMethodVisibility`（后者没有落地） |
 | K9 | 未登录会话的 `player_id = kInvalidGuid (UINT64_MAX)` 被原样放进 SessionDetails，Go 侧只判 `==0` | 调研【码】`session_info_comp.h:54`、`client_message_processor.cpp:119-133` | 调研已核；2026-10-22 已修（未编译、未测试），见 D60 行的落实状态 |
 
 K1–K2 已另开后台任务"gate 补 x-caller 签名与断线通知可靠性"，K3 已另开"发号器改为 message_id 只追加"。
@@ -144,7 +144,7 @@ K1–K2 已另开后台任务"gate 补 x-caller 签名与断线通知可靠性"�
 | # | 事实 | 证据 | 对设计的含义 |
 |---|---|---|---|
 | F1 | `kMaxRpcMethodCount=239` 是编译期常量，另有 static_assert 校验 | 【码】`cpp/generated/rpc/service_metadata/rpc_event_registry.h:28`、`rpc_event_registry.cpp:267-269` | 今天任何新方法都会改到 C++ 生成物 |
-| F2 | gate 白名单 `IsClientMessageId` 共 136 个 case：29 个 Notify*，S2C 的 23、34、124，`UpdateGuildScore`、`LeaveGame`、`Disconnect`，6 个 GM。`route_table.go` 共 138 条，其中 `ClientProtocol:true` 83 条（battle 12、guild 23、team 15、friend 11、match 10、login 6、trade 4、chat 2） | 【码】`rpc_event_registry.cpp:1536-1679`、`go/client_rpc_router/generated/pb/game/route_table.go` | 下行号和内部号今天都能上发（K8） |
+| F2 | R4 之前（HEAD `ed75ad177`）gate 白名单 `IsClientMessageId` 共 136 个 case：29 个 Notify*，S2C 的 23、34、124，`UpdateGuildScore`、`LeaveGame`、`Disconnect`，6 个 GM。**2026-11-05 起按 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 收口（已落码，未编译，待 Codex 重新生成并验证；Java 版待做）**：白名单只收 `OptionClientRpcKind` 为 REQUEST（含未标注）或 ONE_WAY 的方法，Notify* 推送、23（SendTipToClient）、34（KickPlayer）、124（RedirectToGate）、`UpdateGuildScore`（SERVER_ONLY）、`Disconnect`（SERVER_ONLY，由 gate 在 TCP 关闭时自己合成）都摘掉；`LeaveGame` 与 6 个 GM 是客户端发起的请求，仍在（GM 号另过 GM 闸）。`route_table.go` 共 138 条，其中 `ClientProtocol:true` 83 条（battle 12、guild 23、team 15、friend 11、match 10、login 6、trade 4、chat 2），R4 不改路由表 | 【码】`rpc_event_registry.cpp:1536-1679`（R4 前）、`go/client_rpc_router/generated/pb/game/route_table.go`、`tools/proto_generator/protogen/internal/client_rpc_kind.go`（`AcceptsClientUpstream`） | R4 之前下行号和内部号都能上发（K8）。R4 之后由 gate 按方向挡住；路由表的 `ClientProtocol` 仍是服务级（F3 不变，路由服不重复判方向），经路由服的 Go 业务服会话拦截器方法白名单（`ClientMethods`）保留为第二道防线；scene 的 TCP 路径没有第二道，方向约束只靠 gate |
 | F3 | 路由表的 ClientProtocol 是服务级布尔，路由服唯一的方法级闸是 `!route.ClientProtocol` | 【码】`tools/proto_generator/protogen/internal/route_table.go:66`、`go/client_rpc_router/internal/logic/forwardlogic.go:126` | 需要方法级可见性（D53） |
 | F4 | gate 实际闸门顺序：会话存在（859-866）→ verified（874-879）→ 白名单（890）→ 体积（847→269）→ 限流（849→301）→ GM 闸（925）→ 按 protocol 分流（951-968）。`client-rpc-router.md:37` 写的是体积、限速在白名单之前，与代码不符 | 【码】`cpp/nodes/gate/handler/rpc/client_message_processor.cpp` | 新顺序见 §12.2 |
 | F5 | 限流器每会话一份 `unordered_map<messageId, circular_buffer>`：先建桶再判断，桶从不回收；表值 uint32 被截成 uint8；秒级时钟；默认 3 次/秒 | 【码】`cpp/libs/engine/core/message_limiter/message_limiter.h:10,15-17`、`message_limiter.cpp:8,13-26,45-47` | 今天桶数有界，只因为白名单排在前面。ROUTER 段号**绝不能**进 `CanSend(id)` |
@@ -466,13 +466,13 @@ NODE 大区也在同一批里按 extent 重新发号（D52）。这样"legacy"�
 
 ### 14. 断线通知的完整口径
 
-- **今天**：gate 伪装成客户端的 58 号经 Forward 发给 login，请求体是 login pb。58 同时在客户端白名单里（K4），robot 以客户端身份发 58 号，但请求体为空，今天对租约不起作用（F15）。
+- **今天**（2026-11-05 依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4 改；未编译，待 Codex 重新生成并验证）：58 号只由 gate 在客户端 TCP 关闭时合成，经 Forward 发给 login，请求体是 login pb，带会话代次。58 标了 `CLIENT_RPC_SERVER_ONLY`，R4 生成器不再把它放进 gate 上行白名单 `IsClientMessageId`；gate 另有 `IsGateSynthesizedOnly`（`cpp/nodes/gate/handler/rpc/login_admission.h`）单独拒收，不依赖白名单是否已重新生成。客户端发上来按未授权号处置：计一次非法包（累计到阈值踢线）、不回包。robot 已不再发 58。下面「顺序约束」所说的「58 离开客户端可达集」，在本仓 gate 上由这两道落码承担，待 Codex 验证后成立；Java 版待做。R4 之前的口径：58 同时在客户端白名单里（K4），robot 以客户端身份发 58 号，但请求体为空，对租约不起作用（F15）。
 - **终态**：
   - login.Disconnect 标 VIS_GATE_ORIGIN，落在 GO_INTERNAL，客户端上发会被 gate 按大区拒掉，路由服的 `ClientRouteTable` 里也没有它；
   - 只能经 `NotifySessionClosed` → `GateHookTable` 到达；
   - login.Disconnect 改用 metadata 里的 session_id，请求体字段 `session_id` 标 deprecated。
 - **顺序约束（核验时发现的坑）**：login 改用 metadata 这一步**不能单独先上**。在 58 仍然客户端可达的窗口里，这一改会让伪造的 58 号**必然**命中自己的当前会话、挂上 30 秒租约，到期后清理掉一个仍然在线的玩家。所以它与"58 离开客户端可达集"必须在同一次切换里生效（阶段 2）。
-- robot 的 `sendDisconnectBestEffort` 在阶段 0 删除：定义在 `robot/login.go:278`，调用点有 `robot/main.go:355` 和各 smoke 场景约 20 处，`robot/login_test.go:14-45` 的两个用例一并删除。
+- robot 的 `sendDisconnectBestEffort` 已于 2026-11-05 删除（阶段 0 e 项；未编译，待 Codex 验证）：定义（原在 `robot/login.go`）、`robot/main.go` 与各 smoke 场景的全部调用点、`robot/login_test.go` 的两个用例（整个文件）一并删除，依据 [client-rpc-callback.md](./client-rpc-callback.md) §7 R4。断线通知现在只由 gate 在连接关闭时合成，robot 只需关连接。
 - Unity 是否发 58（Q4）：GATE_ORIGIN 方法不再生成 Unity 桩，客户端如果还引用 Disconnect 桩，重新生成后会直接编译失败，问题会被机械地暴露出来。
 
 ### 15. 安全前置（D62，顺序定死）
@@ -488,7 +488,7 @@ NODE 大区也在同一批里按 extent 重新发号（D52）。这样"legacy"�
 
 | 阶段 | 内容 | 依赖 |
 |---|---|---|
-| 0 | 与号段无关的现存缺陷，可以立即各自上线：<br>a 注册表空槽安全：生成 `const RpcMethodMeta* LookupMeta(id)`，改 `game_channel.cpp:356-358,455-456,511-513` 与 `scene_handler.cpp:76,314,386,623`（修今天 id=3 的 UB）<br>b `BuildSessionDetails` 把 player_id 归一(2026-10-22 已改,直连 / 路由 / 断线通知三条路径都覆盖,未编译,见 D60 行)<br>c MessageLimiter 的 uint8 截断（`message_limiter.cpp:8,17`、`.h:10,15`），CheckMessageLimit 的日志与 error_reporter 改采样<br>d 失败回执带请求 id：`main.cpp:323-348`、`client_message_processor.cpp:820,831-834`，连接仍按会话查找后 `lock()`，不在 call 对象里存 `TcpConnectionPtr`（§11.7）<br>e robot 删除 `sendDisconnectBestEffort`（§14）<br>f 路由服启停顺序（§13.8）<br>g 节点摘除：先移除 NodeInfo 使其不再被选中，保留 CQ、stub、Channel，等在途归零或超过实际 deadline 加余量后再销毁实体（F29）(2026-10-16:不再需要,F29 已随 gRPC 传输第 3 批失效,见上表 F29 行)<br>h guild、friend、trade 的拒绝日志改采样 | 无 |
+| 0 | 与号段无关的现存缺陷，可以立即各自上线：<br>a 注册表空槽安全：生成 `const RpcMethodMeta* LookupMeta(id)`，改 `game_channel.cpp:356-358,455-456,511-513` 与 `scene_handler.cpp:76,314,386,623`（修今天 id=3 的 UB）<br>b `BuildSessionDetails` 把 player_id 归一(2026-10-22 已改,直连 / 路由 / 断线通知三条路径都覆盖,未编译,见 D60 行)<br>c MessageLimiter 的 uint8 截断（`message_limiter.cpp:8,17`、`.h:10,15`），CheckMessageLimit 的日志与 error_reporter 改采样<br>d 失败回执带请求 id：`main.cpp:323-348`、`client_message_processor.cpp:820,831-834`，连接仍按会话查找后 `lock()`，不在 call 对象里存 `TcpConnectionPtr`（§11.7）<br>e robot 删除 `sendDisconnectBestEffort`（§14）(2026-11-05 已删定义、全部调用点与 `robot/login_test.go`,依据 client-rpc-callback.md §7 R4,未编译,待 Codex 验证)<br>f 路由服启停顺序（§13.8）<br>g 节点摘除：先移除 NodeInfo 使其不再被选中，保留 CQ、stub、Channel，等在途归零或超过实际 deadline 加余量后再销毁实体（F29）(2026-10-16:不再需要,F29 已随 gRPC 传输第 3 批失效,见上表 F29 行)<br>h guild、friend、trade 的拒绝日志改采样 | 无 |
 | 1 | K8s 翻到路由模式，路由服 ≥2 副本，在路由模式下跑通 battle-smoke → **删除直连路径**：`HandleGrpcNodeMessage`、直连白名单、回包反查表、battle 绑定与 match_event 处理、路由模式开关本身、`main.cpp:26` 的死 include、`SendMessageToPlayerOnGrpcNode`。修订 D-12，以及 `gate_security_test.cpp:160-168`「默认必须落在旧模式」的断言 | 0 |
 | 2 | **一次停服切换**（清单见 §16.1） | 1 |
 | 3 | 安全前置（§15） | 可与 1、2 并行，但内部顺序定死；任何非 dev 部署前必须完成 |

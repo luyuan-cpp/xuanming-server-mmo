@@ -206,7 +206,6 @@ TEST(SaveSeq, PersistedPayloadCurrentIgnoresSeq)
 {
     PlayerAllData current;
     current.mutable_player_database_data()->set_player_id(77);
-    current.mutable_player_database_1_data()->set_player_id(77);
 
     PlayerAllData landed = current;
     landed.set_last_save_seq(4242);
@@ -228,7 +227,6 @@ TEST(SaveSeq, PersistedPayloadCurrentWithNaNCoordinate)
 {
     PlayerAllData current;
     current.mutable_player_database_data()->set_player_id(77);
-    current.mutable_player_database_1_data()->set_player_id(77);
     current.mutable_player_database_data()->mutable_transform()->mutable_location()->set_x(
         std::numeric_limits<double>::quiet_NaN());
 

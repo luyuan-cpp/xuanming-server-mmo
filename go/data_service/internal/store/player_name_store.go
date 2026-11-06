@@ -34,6 +34,11 @@ import (
 //  4. **释放有时间窗**。无 admin token 的释放只能删 created_ms 落在窗口内的行
 //     (minCreatedMs > 0),防的是"删掉别人刚建好的号的名字"。窗口由 logic 按
 //     PlayerName.ReleaseWindow 算好后传进来,本层只忠实执行。
+//  5. **名字行是「预留 → 绑定」状态机**(03-names.md §3.4a)。Reserve 写下预留态(bound_ms=0,player_id 是候选角色);
+//     建角在玩家片提交 account_role 之后,目录先复核角色确已提交,再调 Bind 置为已绑定(bound_ms=绑定时刻)。
+//     Release(建角回滚、运维清孤儿)的 DELETE 只认预留态,已绑定的回 ReleaseBound,一个字节都不动;
+//     已绑定的名字只有删角写完墓碑之后的 ReleaseRemoved 能删。「角色从未提交」的证明在玩家片,不在这一层:
+//     logic 先让目录证明(必要时写墓碑),再调 Release,见 logic.ReleasePlayerName。
 //
 // 归一化不在这一层:display(name)与 norm(name_norm)都由 go/shared/playername 的
 // Normalize 一次算出后传进来,库只做逐字节比较(表 COLLATE=utf8mb4_bin)。本 store
@@ -46,13 +51,13 @@ import (
 //     (覆盖"Release 先于在途 INSERT 提交"的竞态,两次都落在 10 分钟窗口内)。第二次 Release 若赶上
 //     purge 滞后,会在第一次 Release 留下的删除标记记录上取锁、可能排队,单向等,不成环;
 //   - 两次都失败或 login 自己也崩了 → ERROR 日志 + orphan 计数,运维带 x-admin-token
-//     调 ReleasePlayerName(minCreatedMs=0,不限登记时间)清掉。
+//     调 ReleasePlayerName(minCreatedMs=0,不限登记时间)清掉。它同样只删预留态,删之前同样要过玩家片的证明。
 //
 // 服务端**刻意不做**"ctx 一超时就补偿删除":login 的同名重试可能恰好在补偿 DELETE
 // 之前拿到 AlreadyOwned(=建角成功),随后那条补偿就会把在役角色的名字删掉。补偿只能
-// 由知道"这次建角到底成没成"的 login 发起。
+// 由知道"这次建角到底成没成"的 login 发起;即使 login 判错,预留态的释放也要先在玩家片证明角色永远不会提交。
 //
-// 同理**不做**自动孤儿清扫:只凭这张表看不出角色是否建成,照它批量释放会拿走在役角色的名字。
+// 同理**不做**自动孤儿清扫:只凭这张表看不出角色是否建成。要清得先逐个去玩家片证明,目前只有运维路径这样做。
 
 const (
 	// PlayerNameBatchLimit 是 BatchGet 单次可查的 id 上限(契约 §3.1)。
@@ -77,6 +82,10 @@ const (
 	// 会重来的有两种可预期情况:MySQL 1213/1205(锁冲突,isRetryableMySQL;重来前抖动退避),
 	// 以及"没删到、但行在且落在窗口内"(在途 INSERT 在 DELETE 之后才提交,见 Release;不退避)。
 	playerNameReleaseAttempts = 3
+
+	// playerNameBindAttempts Bind 的尝试上限。会重来的:1213/1205(抖动退避),以及「名字行不在,按这名角色重新登记」
+	// 之后的那一轮置绑定(不退避)。两者叠加最多用掉两轮,取 3 留一次余量,和 Reserve 同一个口径。
+	playerNameBindAttempts = 3
 
 	// playerNameLockRetryBackoffMin / Max:Reserve / Release 因 1213/1205 重来之前的等待,在 [Min, Max] 内
 	// 均匀取值(jitteredBackoff)。预算:单次调用最坏多睡 (attempts-1)×Max = 100ms,是 login 单次
@@ -112,8 +121,30 @@ const playerNameReleaseForcedIndex = "PRIMARY"
 
 // playerNameReleaseSQL 是 Release 的条件删除。单表 DELETE 不接受索引提示,所以写成多表 DELETE 语法,
 // 删除语义与受影响行数与单表写法相同。真库用例用 EXPLAIN 钉住 key = PRIMARY 且是单行点查。
+// `bound_ms = 0` 写成字面量:只删预留态,已绑定的行这条语句碰不到(状态机见文件头不变量 5)。
+// 绑参仍是 (player_id, name_norm, min_created_ms) 三个,Reserve 撤销本次插入也用这一条。
 const playerNameReleaseSQL = "DELETE player_name FROM player_name FORCE INDEX (" + playerNameReleaseForcedIndex + ")" +
-	" WHERE player_id = ? AND name_norm = ? AND created_ms >= ?"
+	" WHERE player_id = ? AND name_norm = ? AND created_ms >= ? AND bound_ms = 0"
+
+// playerNameBindSQL 把预留态的名字行置为已绑定:只改这个 player_id 的、还是预留态的那一行,别人的行和已绑定的行都碰不到。
+// 绑定时刻非 0(Bind 入口核过),所以改到即受影响 1 行,与连接带不带 CLIENT_FOUND_ROWS 无关。
+const playerNameBindSQL = "UPDATE player_name SET bound_ms = ? WHERE name_norm = ? AND player_id = ? AND bound_ms = 0"
+
+// playerNameReleaseRemovedSQL 是删角之后的释放。角色已删(墓碑由目录在玩家片核过),这一行只要还在这名角色名下就删,
+// 不看状态、不看登记时刻。写法同 playerNameReleaseSQL:多表语法钉 PRIMARY。
+const playerNameReleaseRemovedSQL = "DELETE player_name FROM player_name FORCE INDEX (" + playerNameReleaseForcedIndex + ")" +
+	" WHERE player_id = ? AND name_norm = ?"
+
+// playerNameUndoRestoreSQL 撤掉 Bind 补登记写下的那一行(UndoRestore):同一个 player_id、同一个判重键,登记时刻和绑定时刻都是
+// 那一次 Bind 的时刻。别人的行、本角色更早登记的行都碰不到。写法同 playerNameReleaseSQL:多表语法钉 PRIMARY。
+const playerNameUndoRestoreSQL = "DELETE player_name FROM player_name FORCE INDEX (" + playerNameReleaseForcedIndex + ")" +
+	" WHERE player_id = ? AND name_norm = ? AND created_ms = ? AND bound_ms = ?"
+
+// playerNameRowStateSQL 读 (player_id, name_norm) 这一行的登记时刻和绑定时刻:Release 没删到之后分辨成因。
+const playerNameRowStateSQL = "SELECT created_ms, bound_ms FROM player_name WHERE player_id = ? AND name_norm = ?"
+
+// playerNameHoldingSQL 按主键读这个名字登记在谁名下、绑没绑定:Bind 没改到之后分辨成因。一致性读、不取锁。
+const playerNameHoldingSQL = "SELECT player_id, bound_ms FROM player_name WHERE name_norm = ?"
 
 var (
 	// ErrPlayerNameInvalidArgument 入参在库层就被拒:player_id=0 或 name_norm 为空。
@@ -175,9 +206,12 @@ const (
 	// ReleaseOutsideWindow 行在,但 created_ms 早于调用方给的窗口下界。
 	// 调用方必须当拒绝处理(需要 x-admin-token 才能不限时间地删)。
 	ReleaseOutsideWindow
+	// ReleaseBound 行在,但已经绑定在建成的角色上。调用方必须当拒绝处理,带不带 token 都一样:
+	// 已绑定的名字只有删角之后的 ReleaseRemoved 能删。两边都不动。
+	ReleaseBound
 )
 
-// String 仅供日志与指标 label(低基数,三个固定值)。
+// String 仅供日志与指标 label(低基数,四个固定值)。
 func (o ReleaseOutcome) String() string {
 	switch o {
 	case ReleaseDeleted:
@@ -186,6 +220,42 @@ func (o ReleaseOutcome) String() string {
 		return "absent"
 	case ReleaseOutsideWindow:
 		return "outside_window"
+	case ReleaseBound:
+		return "bound"
+	default:
+		return "unknown"
+	}
+}
+
+// BindOutcome 是一次 Bind 在库里的终局。
+type BindOutcome uint8
+
+const (
+	// BindBound 预留态的名字行这一次置成了已绑定。
+	BindBound BindOutcome = iota + 1
+	// BindAlreadyBound 已经是这名角色的、已绑定的名字行:幂等,什么都没写。
+	BindAlreadyBound
+	// BindRestored 名字行不在(恢复点错开,或者被误释放),按这名角色重新登记(连同 owner 行)并置为已绑定。
+	BindRestored
+	// BindTaken 名字行在别的 player_id 名下:建成的角色和别人共用一个名字(一名两角),什么都没写,占用者随返回值给出。
+	BindTaken
+	// BindConflict 名字行不在,而这个 player_id 名下登记着另一个名字(ID 复用事故,见 ReserveConflict):什么都没写。
+	BindConflict
+)
+
+// String 仅供日志(低基数,五个固定值)。
+func (o BindOutcome) String() string {
+	switch o {
+	case BindBound:
+		return "bound"
+	case BindAlreadyBound:
+		return "already_bound"
+	case BindRestored:
+		return "restored"
+	case BindTaken:
+		return "taken"
+	case BindConflict:
+		return "conflict"
 	default:
 		return "unknown"
 	}
@@ -229,7 +299,11 @@ func NewPlayerNameStore(cfg MySQLConfig) (*PlayerNameStore, error) {
 	return &PlayerNameStore{pools: pools}, nil
 }
 
-// assertPlayerNameKeys 核 player_name 的主键是 name_norm、player_name_owner 的主键是 player_id。
+// assertPlayerNameKeys 核 player_name 的主键是 name_norm、player_name_owner 的主键是 player_id,
+// 以及 player_name 有 bound_ms 列(「预留 → 绑定」状态机,见文件头不变量 5)。
+//
+// 缺 bound_ms 只会是加列之前建的库(CREATE TABLE IF NOT EXISTS 不改已有表)。带着它起来,Release 的条件删除
+// 和 Bind 每一条都会报未知列:建角回滚全部失败、提交之后的绑定全部失败。所以在这里就拒绝,提示重建。
 func assertPlayerNameKeys(ctx context.Context, db *sql.DB, schema string) error {
 	for _, shape := range []struct{ table, key string }{
 		{PlayerNameTableName, "name_norm"},
@@ -243,6 +317,16 @@ func assertPlayerNameKeys(ctx context.Context, db *sql.DB, schema string) error 
 			return fmt.Errorf("table %s primary key is %v, want (%s); empty means the table is missing, run `data_service -f <yaml> -migrate` first",
 				shape.table, keys, shape.key)
 		}
+	}
+	var boundColumns int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'bound_ms'`,
+		schema, PlayerNameTableName).Scan(&boundColumns); err != nil {
+		return fmt.Errorf("read columns of %s: %w", PlayerNameTableName, err)
+	}
+	if boundColumns != 1 {
+		return fmt.Errorf("table %s has no bound_ms column: it was created before the reserve/bind state machine; "+
+			"the project is not launched, drop and recreate the directory databases with `data_service -f <yaml> -migrate`", PlayerNameTableName)
 	}
 	return nil
 }
@@ -475,7 +559,12 @@ func (s *PlayerNameStore) dropOwnerRow(ctx context.Context, playerID uint64, nor
 //
 // 幂等:行不在(或早被删)返回 ReleaseAbsent,不是错误。
 //
-// 顺序:名字行优先,那是真相;ReleaseOutsideWindow 时两边都不动。删 owner 行失败回错误,调用方重放时名字行已不在,
+// 只删预留态:已绑定的行(建成的角色的名字)回 ReleaseBound,带不带 admin token 都一样,两边都不动。
+// 本层只看名字行;「这名角色永远不会再提交」要调用方事先在玩家片证明(logic.ReleasePlayerName 先调目录的
+// SealUncommittedRole)。证明之后角色提交不了,也就绑定不了;即使冒出来(没有路由行时证明不写墓碑的那一种残余),
+// DELETE 的 bound_ms 条件也删不到已绑定的行,探测回 ReleaseBound。
+//
+// 顺序:名字行优先,那是真相;ReleaseOutsideWindow、ReleaseBound 时两边都不动。删 owner 行失败回错误,调用方重放时名字行已不在,
 // 走 ReleaseAbsent 接着删 owner 行。一直删不掉也只留下一条指向空名字的 owner 行:这个角色建角失败了,没有人读它的名字;
 // 同一个 player_id 再 Reserve 时第 0 步会清掉。
 //
@@ -500,13 +589,25 @@ func (s *PlayerNameStore) Release(ctx context.Context, playerID uint64, norm str
 	if err != nil {
 		return 0, err
 	}
-	if outcome == ReleaseOutsideWindow {
+	if outcome == ReleaseOutsideWindow || outcome == ReleaseBound {
 		return outcome, nil
 	}
 	if err := s.dropOwnerRow(ctx, playerID, norm); err != nil {
 		return 0, err
 	}
 	return outcome, nil
+}
+
+// NameRowState 读 (playerID, name_norm) 这一行的登记时刻和绑定时刻(0 = 预留态);found=false 是没有这一行。一致性读、不取锁。
+//
+// 给 logic.ReleasePlayerName 在玩家片证明之前先判有没有一条可删的预留态:没有这一行、已绑定、登记早于窗口时,证明之前就回,
+// 两边一个字节都不写(证明可能写墓碑,不可逆)。名字行只会从预留走到已绑定或被删,读到预留态之后,真正删的那条 DELETE
+// 还会按 bound_ms = 0、窗口下界原子复核(Release),所以这里读旧了也删不错。
+func (s *PlayerNameStore) NameRowState(ctx context.Context, playerID uint64, norm string) (createdMs, boundMs uint64, found bool, err error) {
+	if playerID == 0 || norm == "" {
+		return 0, 0, false, fmt.Errorf("%w (row state player_id=%d name_norm=%q)", ErrPlayerNameInvalidArgument, playerID, norm)
+	}
+	return s.nameRowStateOf(ctx, playerID, norm)
 }
 
 func (s *PlayerNameStore) releaseNameRow(ctx context.Context, playerID uint64, norm string, minCreatedMs uint64) (ReleaseOutcome, error) {
@@ -532,14 +633,10 @@ func (s *PlayerNameStore) releaseNameRow(ctx context.Context, playerID uint64, n
 			return ReleaseDeleted, nil
 		}
 
-		// 没删到。不限时间时"没删到"只能是行不存在(DELETE 的时间条件恒真)。
-		if minCreatedMs == 0 {
-			return ReleaseAbsent, nil
-		}
-
-		// 限时间时"没删到"有三种成因,必须按 created_ms 分开 —— 只探"行在不在"会把第三种
-		// 误判成第二种,给调用方一个 FailedPrecondition 加一条指向错误方向的 ERROR。
-		createdMs, exists, err := s.createdMsOf(ctx, playerID, norm)
+		// 没删到有四种成因,必须按这一行的两列分开 —— 只探"行在不在"会把后三种混成一种:已绑定的被当成窗外
+		// (提示去拿运维 token,而带 token 也删不掉),在途 INSERT 被当成拒绝(留下一条孤儿)。
+		// 不限时间(minCreatedMs=0)时同样要探:已绑定的行这条 DELETE 也删不到。
+		createdMs, boundMs, exists, err := s.nameRowStateOf(ctx, playerID, norm)
 		if err != nil {
 			return 0, err
 		}
@@ -547,11 +644,14 @@ func (s *PlayerNameStore) releaseNameRow(ctx context.Context, playerID uint64, n
 		case !exists:
 			// 1. 行不存在(从没登记过,或已被删):幂等成功。
 			return ReleaseAbsent, nil
+		case boundMs != 0:
+			// 2. 行已绑定在建成的角色上:回滚路径和运维路径都不能释放,只有删角之后的 ReleaseRemoved 能删。
+			return ReleaseBound, nil
 		case createdMs < minCreatedMs:
-			// 2. 行在,登记时刻早于窗口下界:这正是窗口要拦的"删别人在役角色的名字",拒绝。
+			// 3. 行在,登记时刻早于窗口下界:这正是窗口要拦的"删别人在役角色的名字",拒绝。
 			return ReleaseOutsideWindow, nil
 		default:
-			// 3. 行在且落在窗口内,却没被刚才那条 DELETE 删到 —— 只能是这行在 DELETE 执行
+			// 4. 行在、预留态、落在窗口内,却没被刚才那条 DELETE 删到 —— 只能是这行在 DELETE 执行
 			//    **之后**才提交(在途 INSERT 与本次 Release 交叉)。而这恰恰是 login 两次补偿
 			//    释放要覆盖的竞态(见文件头「崩溃窗口」):此刻不重删就会留下一条孤儿行。
 			//    循环上限 playerNameReleaseAttempts 兜住"对端一直在重插"的极端情况,
@@ -563,6 +663,194 @@ func (s *PlayerNameStore) releaseNameRow(ctx context.Context, playerID uint64, n
 	}
 	return 0, fmt.Errorf("player_name release: player_id=%d name_norm=%q exhausted %d attempts",
 		playerID, norm, playerNameReleaseAttempts)
+}
+
+// Bind 把 (playerID, name_norm) 置为已绑定:建角在玩家片提交 account_role 之后由目录调(状态机见文件头不变量 5)。
+//
+// 契约:
+//   - 调用方必须已经在玩家片核过这名角色确已提交、角色行里的名字就是 name(目录的 bindRoleName、核账工具修之前的复核)。
+//     本层看不到角色行,不替调用方做这一步:对一个没提交的角色调它,等于把一条可能永远不会建成的预留钉成不可释放。
+//   - name / norm 同 Reserve,来自同一次 playername.Normalize;nowMs 是绑定时刻(Unix 毫秒),非 0。
+//   - 返回 BindBound / BindAlreadyBound / BindRestored 时名字行已经以已绑定提交;owner 只在 BindTaken 时非 0。
+//
+// 写法:一条 UPDATE 只改「这名角色的、预留态的」那一行(playerNameBindSQL),改到 1 行就是 BindBound。0 行时按主键读这一行:
+//   - 已绑定在本角色名下 → BindAlreadyBound(重放);
+//   - 在别人名下 → BindTaken,什么都不写(一名两角,交给核账工具报告);
+//   - 预留态、在本角色名下 → 这一行是 UPDATE 之后才提交的(在途的同名 Reserve 重试),下一轮再改;
+//   - 不在 → 角色建成了,名字行却没了(多集群恢复点错开,或者被误释放):按原名走 Reserve 重新登记(owner 行一起补上),
+//     下一轮再置绑定 → BindRestored。重新登记撞上别人 → BindTaken;这个 player_id 名下已有别的名字 → BindConflict。
+//
+// 每一步都是名字片(或 Reserve 里的玩家片)上的单条自动提交语句,只碰这一个主键,和 Reserve、Release 一样不成环;
+// 任何一步失败回错误,原样重放即可(UPDATE 带着预留态条件,重放不会改坏已绑定的行)。
+func (s *PlayerNameStore) Bind(ctx context.Context, playerID uint64, name, norm string, nowMs uint64) (BindOutcome, uint64, error) {
+	if playerID == 0 || norm == "" || nowMs == 0 {
+		return 0, 0, fmt.Errorf("%w (bind player_id=%d name_norm=%q bound_ms=%d)", ErrPlayerNameInvalidArgument, playerID, norm, nowMs)
+	}
+	db := s.pools.forName(norm)
+	restored := false
+	for attempt := 1; attempt <= playerNameBindAttempts; attempt++ {
+		res, err := db.ExecContext(ctx, playerNameBindSQL, nowMs, norm, playerID)
+		if err != nil {
+			if isRetryableMySQL(err) && attempt < playerNameBindAttempts {
+				logx.Infof("[PlayerNameStore] player_id=%d bind retry %d/%d after lock error: %v",
+					playerID, attempt, playerNameBindAttempts, err)
+				if waitErr := s.pauseBeforeLockRetry(ctx); waitErr != nil {
+					return 0, 0, fmt.Errorf("player_name bind player_id=%d: %w", playerID, errors.Join(err, waitErr))
+				}
+				continue
+			}
+			return 0, 0, fmt.Errorf("player_name bind player_id=%d: %w", playerID, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, 0, fmt.Errorf("player_name bind player_id=%d rows affected: %w", playerID, err)
+		}
+		switch n {
+		case 1:
+			if restored {
+				return BindRestored, 0, nil
+			}
+			return BindBound, 0, nil
+		case 0:
+			// 没改到,落到下面看这一行现在是什么样。
+		default:
+			// 按主键的 UPDATE 改不到多行;出现即说明语句被改过,fail-closed,不猜。
+			return 0, 0, fmt.Errorf("player_name bind player_id=%d: 受影响行数 %d,按主键的 UPDATE 只能改到 0 或 1 行", playerID, n)
+		}
+
+		holder, boundMs, found, err := s.nameHoldingOf(ctx, norm)
+		if err != nil {
+			return 0, 0, err
+		}
+		switch {
+		case found && holder != playerID:
+			return BindTaken, holder, nil
+		case found && boundMs != 0:
+			return BindAlreadyBound, 0, nil
+		case found:
+			logx.Infof("[PlayerNameStore] player_id=%d bind retry %d/%d: reserved row committed after the update",
+				playerID, attempt, playerNameBindAttempts)
+			continue
+		}
+
+		outcome, owner, err := s.Reserve(ctx, playerID, name, norm, nowMs)
+		if err != nil {
+			return 0, 0, err
+		}
+		switch outcome {
+		case ReserveTaken:
+			return BindTaken, owner, nil
+		case ReserveConflict:
+			return BindConflict, 0, nil
+		}
+		// Inserted 是本次重新登记的;AlreadyOwned 是读完之后别的路径(同名 Reserve 重试)补上的。都在下一轮置绑定。
+		restored = restored || outcome == ReserveInserted
+		logx.Infof("[PlayerNameStore] player_id=%d bind found no name row and re-registered it (outcome=%s)", playerID, outcome)
+	}
+	return 0, 0, fmt.Errorf("player_name bind: player_id=%d name_norm=%q exhausted %d attempts",
+		playerID, norm, playerNameBindAttempts)
+}
+
+// ReleaseRemoved 删掉一名**已删除**角色登记的名字:删角写完墓碑之后由目录调(AccountDirectoryStore.settleRemovedRole)。
+//
+// 契约:调用方必须已经在玩家片核过 account_role 是墓碑。墓碑不可逆,这个 player_id 再也不会有角色,所以这一行只要还在它名下
+// 就删,不看预留还是已绑定、也不看登记时刻(playerNameReleaseRemovedSQL);名字已经归了别人(player_id 对不上)不动,回 ReleaseAbsent。
+// 顺序、幂等、锁冲突重试都同 Release:先删名字行再删 owner 行,删 owner 行失败回错误,重放时名字行已不在,接着删 owner 行。
+func (s *PlayerNameStore) ReleaseRemoved(ctx context.Context, playerID uint64, norm string) (ReleaseOutcome, error) {
+	if playerID == 0 || norm == "" {
+		return 0, fmt.Errorf("%w (release removed player_id=%d name_norm=%q)", ErrPlayerNameInvalidArgument, playerID, norm)
+	}
+	outcome, err := s.releaseRemovedNameRow(ctx, playerID, norm)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.dropOwnerRow(ctx, playerID, norm); err != nil {
+		return 0, err
+	}
+	return outcome, nil
+}
+
+// UndoRestore 撤掉 Bind 补登记(BindRestored)写下的名字行和名字副本。只在目录补登记之后复读到这名角色已是墓碑时调
+// (AccountDirectoryStore.undoRestoreIfRemoved):删角收尾放名字的时候这一行还不在,不撤就绑在墓碑上没人放。
+//
+// restoredMs 是那一次 Bind 的 nowMs,补登记把它同时写进了 created_ms 和 bound_ms,按它认出本次写的那一行
+// (playerNameUndoRestoreSQL)。删到了再删名字副本,回 ReleaseDeleted;没删到回 ReleaseAbsent,两边都不动
+// (删角收尾已经放过了,或者这一行不是本次写的)。锁冲突按 Release 的口径退避重来。
+func (s *PlayerNameStore) UndoRestore(ctx context.Context, playerID uint64, norm string, restoredMs uint64) (ReleaseOutcome, error) {
+	if playerID == 0 || norm == "" || restoredMs == 0 {
+		return 0, fmt.Errorf("%w (undo restore player_id=%d name_norm=%q restored_ms=%d)", ErrPlayerNameInvalidArgument, playerID, norm, restoredMs)
+	}
+	db := s.pools.forName(norm)
+	for attempt := 1; ; attempt++ {
+		res, err := db.ExecContext(ctx, playerNameUndoRestoreSQL, playerID, norm, restoredMs, restoredMs)
+		if err != nil {
+			if isRetryableMySQL(err) && attempt < playerNameReleaseAttempts {
+				logx.Infof("[PlayerNameStore] player_id=%d undo restore retry %d/%d after lock error: %v",
+					playerID, attempt, playerNameReleaseAttempts, err)
+				if waitErr := s.pauseBeforeLockRetry(ctx); waitErr != nil {
+					return 0, fmt.Errorf("player_name undo restore player_id=%d: %w", playerID, errors.Join(err, waitErr))
+				}
+				continue
+			}
+			return 0, fmt.Errorf("player_name undo restore player_id=%d: %w", playerID, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, fmt.Errorf("player_name undo restore player_id=%d rows affected: %w", playerID, err)
+		}
+		if n == 0 {
+			return ReleaseAbsent, nil
+		}
+		break
+	}
+	if err := s.dropOwnerRow(ctx, playerID, norm); err != nil {
+		return 0, err
+	}
+	return ReleaseDeleted, nil
+}
+
+// BoundTo 报告这个 player_id 登记的名字是不是已经绑定在它名下:按名字副本(玩家片)找到判重键,再按主键读名字行(名字片),
+// 两步都是一致读、不取锁。没有名字副本、名字行不在或归了别人、还是预留态,都回 false。
+// 给后台判陈旧写墓碑之前找「角色提交过」的证据用(committedEvidence):绑定只在提交点之后做。
+func (s *PlayerNameStore) BoundTo(ctx context.Context, playerID uint64) (bool, error) {
+	if playerID == 0 {
+		return false, fmt.Errorf("%w (bound to player_id=0)", ErrPlayerNameInvalidArgument)
+	}
+	norm, found, err := s.ownedNormOf(ctx, playerID)
+	if err != nil || !found {
+		return false, err
+	}
+	holder, boundMs, held, err := s.nameHoldingOf(ctx, norm)
+	if err != nil {
+		return false, err
+	}
+	return held && holder == playerID && boundMs != 0, nil
+}
+
+func (s *PlayerNameStore) releaseRemovedNameRow(ctx context.Context, playerID uint64, norm string) (ReleaseOutcome, error) {
+	db := s.pools.forName(norm)
+	for attempt := 1; ; attempt++ {
+		res, err := db.ExecContext(ctx, playerNameReleaseRemovedSQL, playerID, norm)
+		if err != nil {
+			if isRetryableMySQL(err) && attempt < playerNameReleaseAttempts {
+				logx.Infof("[PlayerNameStore] player_id=%d release of removed role retry %d/%d after lock error: %v",
+					playerID, attempt, playerNameReleaseAttempts, err)
+				if waitErr := s.pauseBeforeLockRetry(ctx); waitErr != nil {
+					return 0, fmt.Errorf("player_name release removed player_id=%d: %w", playerID, errors.Join(err, waitErr))
+				}
+				continue
+			}
+			return 0, fmt.Errorf("player_name release removed player_id=%d: %w", playerID, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, fmt.Errorf("player_name release removed player_id=%d rows affected: %w", playerID, err)
+		}
+		if n > 0 {
+			return ReleaseDeleted, nil
+		}
+		return ReleaseAbsent, nil
+	}
 }
 
 // BatchGet 按 player_id 批量读展示名:按玩家分片拆组读 player_name_owner,不做全分片扫描。任一片失败整批报错,不回半份。
@@ -660,21 +948,33 @@ func (s *PlayerNameStore) ownerOfNorm(ctx context.Context, norm string) (owner u
 	return owner, true, nil
 }
 
-// createdMsOf 读 (playerID, name_norm) 这一行的登记时刻。found=false 表示没有行。
+// nameRowStateOf 读 (playerID, name_norm) 这一行的登记时刻和绑定时刻。found=false 表示没有行。
 //
-// 只给 Release 在"DELETE 一行没删到"之后定位成因用。刻意读 created_ms 而不是 `SELECT 1`:
-// 少了这一列就分不清"行太老"(该拒绝)与"行是 DELETE 之后才提交的"(该重删),
-// 而后者是 login 补偿路径的常规竞态,不是异常。
-func (s *PlayerNameStore) createdMsOf(ctx context.Context, playerID uint64, norm string) (createdMs uint64, found bool, err error) {
-	err = s.pools.forName(norm).QueryRowContext(ctx,
-		`SELECT created_ms FROM player_name WHERE player_id = ? AND name_norm = ?`, playerID, norm).Scan(&createdMs)
+// 只给 Release 在"DELETE 一行没删到"之后定位成因用。刻意读这两列而不是 `SELECT 1`:
+// 少了 bound_ms 分不清"已绑定"(该拒绝,而且带 token 也删不掉)与别的成因;少了 created_ms 分不清
+// "行太老"(该拒绝)与"行是 DELETE 之后才提交的"(该重删),而后者是 login 补偿路径的常规竞态,不是异常。
+func (s *PlayerNameStore) nameRowStateOf(ctx context.Context, playerID uint64, norm string) (createdMs, boundMs uint64, found bool, err error) {
+	err = s.pools.forName(norm).QueryRowContext(ctx, playerNameRowStateSQL, playerID, norm).Scan(&createdMs, &boundMs)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false, nil
+		return 0, 0, false, nil
 	}
 	if err != nil {
-		return 0, false, fmt.Errorf("player_name probe player_id=%d name_norm=%q: %w", playerID, norm, err)
+		return 0, 0, false, fmt.Errorf("player_name probe player_id=%d name_norm=%q: %w", playerID, norm, err)
 	}
-	return createdMs, true, nil
+	return createdMs, boundMs, true, nil
+}
+
+// nameHoldingOf 按**主键**读这个 name_norm 登记在谁名下、绑定时刻(0 = 预留态)。found=false 表示这个名字没人占。
+// 只给 Bind 在"UPDATE 没改到"之后定位成因用。一致性读、不取锁。
+func (s *PlayerNameStore) nameHoldingOf(ctx context.Context, norm string) (holder, boundMs uint64, found bool, err error) {
+	err = s.pools.forName(norm).QueryRowContext(ctx, playerNameHoldingSQL, norm).Scan(&holder, &boundMs)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, false, nil
+	}
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("player_name holding lookup by name_norm=%q: %w", norm, err)
+	}
+	return holder, boundMs, true, nil
 }
 
 // reserveInserted 按 ODKU 的受影响行数判定"插入成功"(1)还是"撞上已有行、no-op"(0)。

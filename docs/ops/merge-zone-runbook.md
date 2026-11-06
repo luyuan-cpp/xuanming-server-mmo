@@ -218,7 +218,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZ
 
    ```bash
    curl -X POST https://<gateway>/admin/zones/<源>/maintenance -H "X-Admin-Key: <admin-key>" \
-     -H "Content-Type: application/json" -d '{"maintenanceMsg":"本区已合并,请从角色列表进入"}'
+     -H "Content-Type: application/json" -d '{"maintenance_msg":"本区已合并,请从角色列表进入"}'
    ```
 
 2. **排空 gate**(external 形态的 StatefulSet),逐台:

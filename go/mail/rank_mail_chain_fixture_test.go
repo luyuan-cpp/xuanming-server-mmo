@@ -131,7 +131,7 @@ func TestRankMailChainFixture(t *testing.T) {
 		}
 		return response, nil
 	}
-	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(fixtureGateIdentity(), domainhost.Guard(server.ClientMethods(), 3*time.Second), loseFirstCommittedReply))
+	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(fixtureGateIdentity(), domainhost.Guard(3*time.Second), loseFirstCommittedReply))
 	mailpb.RegisterMailAdminServer(rpc, handler)
 	mailpb.RegisterClientPlayerMailServer(rpc, handler)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -20,7 +19,11 @@ import (
 
 	"schemamigrate"
 
+	"shared/callerauth"
+	"shared/callerauth/callerauthtest"
+	"shared/generated/clientrpc"
 	"shared/killswitch"
+	"shared/roleidentity"
 	"shared/serverbase"
 
 	"github.com/zeromicro/go-zero/core/logx/logtest"
@@ -28,7 +31,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // chainUnary 按 gRPC 的语义把一组一元拦截器串成一个 handler:切片里第一个是最外层。
@@ -49,15 +51,20 @@ func chainUnary(
 	return next
 }
 
-// incomingSessionContext 模拟路由服透传过来的 x-session-detail-bin(base64(SessionDetails))。
-func incomingSessionContext(t *testing.T, playerId uint64) context.Context {
+// incomingSessionContext 模拟 gate 发来、已过验签拦截器的客户端请求:会话带完整原身份,签名绑定 method。
+func incomingSessionContext(t *testing.T, method string, playerId uint64) context.Context {
 	t.Helper()
-	bin, err := proto.Marshal(&base.SessionDetails{SessionId: 1, PlayerId: playerId})
+	return callerauthtest.Incoming(t, method, callerauthtest.OnlineSession("trade-account", playerId, 7))
+}
+
+// tradeEntry 是 trade.go 装配的同一个入口准入。
+func tradeEntry(t *testing.T) grpc.UnaryServerInterceptor {
+	t.Helper()
+	entry, err := roleidentity.EntryInterceptor(clientrpc.Callable)
 	if err != nil {
-		t.Fatalf("序列化 SessionDetails 失败: %v", err)
+		t.Fatalf("入口准入装配失败: %v", err)
 	}
-	md := metadata.Pairs(session.MetadataKey, base64.StdEncoding.EncodeToString(bin))
-	return metadata.NewIncomingContext(context.Background(), md)
+	return entry
 }
 
 // TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → session → serverbase。
@@ -73,7 +80,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		strings.TrimPrefix(tradepb.ClientPlayerJubaozhai_BrowseListings_FullMethodName, "/"): {Deny: true, Reason: "单测:顺序探针"},
 	})
-	chain := buildUnaryInterceptors(ks)
+	chain := buildUnaryInterceptors(ks, tradeEntry(t))
 	if len(chain) != 4 {
 		t.Fatalf("拦截器链长度应为 4(grpcstats/killswitch/session/serverbase),实际 %d", len(chain))
 	}
@@ -101,7 +108,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 		t.Run(w.name, func(t *testing.T) {
 			logs := logtest.NewCollector(t)
 			var got observed
-			_, err := chain[i](incomingSessionContext(t, 42), &tradepb.BrowseListingsRequest{}, info,
+			_, err := chain[i](incomingSessionContext(t, info.FullMethod, 42), &tradepb.BrowseListingsRequest{}, info,
 				func(ctx context.Context, req any) (any, error) {
 					got.handlerCalled = true
 					_, got.sawSession = session.ClientPlayerID(ctx)
@@ -127,7 +134,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 	ks.SetRules(map[string]killswitch.Rule{
 		blocked: {Deny: true, Reason: "单测:浏览把库打爆了"},
 	})
-	chain := buildUnaryInterceptors(ks)
+	chain := buildUnaryInterceptors(ks, tradeEntry(t))
 
 	t.Run("命中规则的方法被短路", func(t *testing.T) {
 		handlerCalled := false
@@ -137,7 +144,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			return &tradepb.BrowseListingsResponse{}, nil
 		})
 
-		resp, err := h(incomingSessionContext(t, 42), &tradepb.BrowseListingsRequest{})
+		resp, err := h(incomingSessionContext(t, info.FullMethod, 42), &tradepb.BrowseListingsRequest{})
 		if handlerCalled {
 			t.Fatal("handler 被调用了:killswitch 没有挂上拦截器链(或不在 handler 上游)")
 		}
@@ -163,7 +170,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			}
 			return &tradepb.GetMyShelfResponse{}, nil
 		})
-		if _, err := h(incomingSessionContext(t, 42), &tradepb.GetMyShelfRequest{}); err != nil {
+		if _, err := h(incomingSessionContext(t, info.FullMethod, 42), &tradepb.GetMyShelfRequest{}); err != nil {
 			t.Fatalf("未命中规则的方法不该报错: %v", err)
 		}
 		if !handlerCalled {
@@ -179,11 +186,11 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.ClientPlayerJubaozhai_BrowseListings_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(ks), info, func(ctx context.Context, req any) (any, error) {
+	h := chainUnary(buildUnaryInterceptors(ks, tradeEntry(t)), info, func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return &tradepb.BrowseListingsResponse{}, nil
 	})
-	if _, err := h(incomingSessionContext(t, 42), &tradepb.BrowseListingsRequest{}); err != nil {
+	if _, err := h(incomingSessionContext(t, info.FullMethod, 42), &tradepb.BrowseListingsRequest{}); err != nil {
 		t.Fatalf("无规则时必须放行: %v", err)
 	}
 	if !handlerCalled {
@@ -199,13 +206,13 @@ func TestSessionGateRejectsClientCallToTradeAdmin(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{})), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &tradepb.SeedListingResponse{}, nil
 		})
 
-	_, err := h(incomingSessionContext(t, 42), &tradepb.SeedListingRequest{SellerPlayerId: 42})
+	_, err := h(incomingSessionContext(t, info.FullMethod, 42), &tradepb.SeedListingRequest{SellerPlayerId: 42})
 	if handlerCalled {
 		t.Fatal("客户端会话调用 SeedListing 走到了 handler:会话准入没有挂上拦截器链")
 	}
@@ -219,7 +226,7 @@ func TestSessionGateRejectsClientCallToTradeAdmin(t *testing.T) {
 func TestInternalSeedListingWithoutSessionReachesHandler(t *testing.T) {
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{})), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			if _, ok := session.ClientPlayerID(ctx); ok {
@@ -243,12 +250,12 @@ func TestBrokenSessionRejectedInChain(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: tradepb.TradeAdmin_SeedListing_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{})), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), tradeEntry(t)), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &tradepb.SeedListingResponse{}, nil
 		})
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(session.MetadataKey, "%%%不是base64"))
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(callerauth.MetaSessionDetail, "%%%不是base64"))
 
 	_, err := h(ctx, &tradepb.SeedListingRequest{})
 	if handlerCalled {

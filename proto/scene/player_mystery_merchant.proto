@@ -118,6 +118,13 @@ message BuyMysteryMerchantGoodsRequest
 	uint32 expected_currency_type = 5;  // 结算货币
 	uint32 expected_item_config_id = 6; // 买到的物品
 	uint32 expected_item_count = 7;     // 每份含几个
+	// 客户端幂等键(docs/design/client-request-idempotency.md)。玩家每点一次「购买」生成一个非 0 的随机 64 位数;
+	// 这一次购买拿到明确结果(成功,或带 tip 的拒绝)之前的所有重发 —— 超时、断线重连、gate 回 1003、
+	// 回包没到时玩家又点了同一件同样的份数 —— 都带同一个键,其余字段原样不变。
+	// scene 按 (玩家, 键) 去重:同键同参数的重发不再买第二份,回当前货架与背包并标 replayed;同键换了参数
+	// (另一件、另一个份数、另一轮或另一份报价)回 kInvalidParameter,不执行。0 = 旧客户端,不去重。
+	// 键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):下线重登、换节点、scene 重启之后照样认得。
+	uint64 client_request_id = 8;
 }
 
 message BuyMysteryMerchantGoodsResponse
@@ -126,6 +133,9 @@ message BuyMysteryMerchantGoodsResponse
 	// 以下两项仅成功时下发,客户端整体覆盖本地缓存。
 	MysteryMerchantInfo info = 2; // 最新货架(已购数已更新)
 	BagInfo bag = 3;              // 人物背包全量(含货币余额)
+	// true = 这一次是重发(client_request_id 命中了已成交的那一笔):没有再买,info / bag 是此刻的状态。
+	// 客户端按「首次那一笔已经成交」处理,不要再提示失败。
+	bool replayed = 4;
 }
 
 // 出现公告:新的一轮开始、或同一轮内商人换了线时,scene 节点向本节点的全部在线玩家各推一次。

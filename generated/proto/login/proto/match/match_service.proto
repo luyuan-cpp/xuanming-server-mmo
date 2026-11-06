@@ -50,6 +50,12 @@ service MatchService {
   // 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
   rpc RequestBattleTicket(RequestBattleTicketRequest) returns (RequestBattleTicketResponse) {}
   rpc ListWatchableBattles(ListWatchableBattlesRequest) returns (ListWatchableBattlesResponse) {}
+
+  // ---- 战报回放(battle-report-replay.md):每名玩家保留最近 100 场 PVP 战报 ----
+  // 请求都不带 player_id,只认会话本人。列表新的在前,一次全给(最多 100 条)。
+  rpc ListBattleReports(ListBattleReportsRequest) returns (ListBattleReportsResponse) {}
+  // 取一局的回放正文:只有列表里还有这一局的玩家能取。
+  rpc GetBattleReport(GetBattleReportRequest) returns (GetBattleReportResponse) {}
 }
 
 // ----- Match mode config -----
@@ -251,4 +257,43 @@ message MatchResult {
 message MatchTeam {
   uint32 team_index = 1;              // 0 = team A, 1 = team B
   repeated uint64 player_ids = 2;
+}
+
+// ----- 战报回放(battle-report-replay.md)-----
+
+// 列表里的一名真人参战者:开战时的快照,不含宝宝和怪物。
+message BattleReportMember {
+  uint64 player_id = 1;
+  uint32 team_index = 2;  // 0 = A 方(进攻),1 = B 方
+  string name = 3;
+  uint32 level = 4;
+  uint32 class_id = 5;
+}
+
+// 战报列表的一条。终局提交时由 match 生成,之后不变。
+message BattleReportSummary {
+  uint64 battle_id = 1;
+  MatchMode mode = 2;
+  uint32 battle_config_id = 3;
+  uint64 finished_at_ms = 4;               // 与 BattleResultEvent.finished_at_ms 同值(Unix 毫秒)
+  eBattleOutcome outcome = 5;              // 本人胜负看本人在 members 里的 team_index
+  uint32 total_rounds = 6;
+  repeated BattleReportMember members = 7; // 按 team_index、player_id 升序
+  bool has_replay = 8;                     // false = 回放正文没存下来(录制被丢弃),GetBattleReport 回 kMatchBattleReportNotFound
+}
+
+message ListBattleReportsRequest {}
+
+message ListBattleReportsResponse {
+  TipInfoMessage error_message = 1;
+  repeated BattleReportSummary reports = 2;  // 新的在前,最多 100 条
+}
+
+message GetBattleReportRequest {
+  uint64 battle_id = 1;
+}
+
+message GetBattleReportResponse {
+  TipInfoMessage error_message = 1;  // 0 = 成功;不在本人列表里 / 没存回放 / 不存在,统一回 kMatchBattleReportNotFound
+  BattleReplayEnvelope replay = 2;   // 成功时非空,就是存库的那一份
 }

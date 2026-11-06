@@ -56,7 +56,8 @@ type enterGameSessionState struct {
 }
 
 // enterGameChainBudget 是 EnterGame 后台链(预加载 → 写会话 → 绑 gate → 进场)的总预算。
-// gate 连接会话栅栏记录的寿命由它派生:记录必须比所有还可能读它的操作活得久(sessionfence.TTLFor)。
+// gate 连接会话栅栏里没绑定玩家、或已关闭的记录的寿命由它派生:记录必须比所有还可能读它的操作活得久(sessionfence.TTLFor)。
+// 绑定了玩家的记录不用它:绑定只由 LeaveGame / Disconnect 解除,寿命由 sessionfence 自己管(包注释「寿命」)。
 const enterGameChainBudget = 5 * time.Minute
 
 var sessionFenceTTL = sessionfence.TTLFor(enterGameChainBudget)
@@ -664,7 +665,7 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 // 补偿用 WithoutCancel 派生的独立 ctx:走到这里时链 ctx 可能已被心跳丢锁取消(chainCancel)或临近链预算截止,
 // markPlayerSessionDisconnecting 在 ctx 已取消时直接放弃,只留一条 CRITICAL 日志(与 CreatePlayer 补偿同约定)。
 func (l *EnterGameLogic) bindSessionFence(ctx context.Context, state enterGameSessionState) error {
-	outcome, err := sessionfence.BindPlayer(ctx, l.svcCtx.LoginRedis, state.fenceKey, state.playerID, state.fenceGen, sessionFenceTTL)
+	outcome, err := sessionfence.BindPlayer(ctx, l.svcCtx.LoginRedis, state.fenceKey, state.playerID, state.fenceGen)
 	if err != nil {
 		l.compensateFenceBind(ctx, state, true)
 		return fmt.Errorf("session fence bind for player %d: %w; disconnect lease placed by the enter chain", state.playerID, err)

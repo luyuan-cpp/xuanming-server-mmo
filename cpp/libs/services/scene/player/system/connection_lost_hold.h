@@ -1,9 +1,12 @@
 #pragma once
 
+#include <charconv>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <string_view>
+#include <system_error>
 
 #include "engine/core/type_define/type_define.h" // SessionId / kInvalidSessionId
 #include "player_exit_intent.h"                  // player_exit::IsBoundSession
@@ -169,11 +172,104 @@ namespace connection_lost_hold
 		return heldFor >= kHoldWindow;
 	}
 
-	// 一次进场是不是"新会话接回":绑上的是一个有效会话,而且不是断开的那一条。断开的那条会话 gate 已经摘掉,
-	// 它不会再带来进场;万一迟到的同会话进场到达,也不算接回,保留照常到期。
-	constexpr bool IsResumedBy(SessionId incoming, SessionId lost)
+	// 一次进场是不是"新的一次登录来接回":绑上的是一个有效会话,而且不是断开的那次登录 —— 会话号不同,或会话号相同而
+	// 登录代次比断开时大。后一种是 gate 以同一 node_id 重启后会话序号从头发,新登录拿回了断开的那个号:只比会话号的话
+	// 摘不掉保留,25 秒后保留到期,正在玩的玩家被按断线退出。判据与 EnterScene 第 1 步的"换会话"同一口径。
+	// 断开的那条会话 gate 已经摘掉,它不会再带来进场;万一断开的那次登录迟到的进场到达(号相同、代次不大于断开时),
+	// 也不算接回,保留照常到期。请求代次 0 = 上游没带,比不出新旧,同号时同样不算。
+	constexpr bool IsResumedBy(SessionId incoming, uint64_t incomingLoginGeneration, SessionId lost,
+							   uint64_t lostLoginGeneration)
 	{
-		return player_exit::IsBoundSession(incoming) && incoming != lost;
+		return player_exit::IsBoundSession(incoming) &&
+			   (incoming != lost || incomingLoginGeneration > lostLoginGeneration);
+	}
+
+	// ── 挂机月卡:离线托管(docs/design/player-connection-lost-hold.md §4.1)──
+	// 开通了挂机(挂机月卡有效)的玩家断线后不按 kHoldWindow 退出,一直保留到重连、月卡到期或被别的退出取代;
+	// 托管期间角色留在场景与 AOI 里,组队跟随照常把他带着走(team-follow-server-trail.md §3.6)。
+	// 月卡事实源:玩家域 Redis 键 player:afk_pass:{<player_id>},值为到期的 Unix 秒(购买 / 开通流程写入,
+	// 与 go/shared/redisslot AfkPassKey 同形)。player_locator 的租约监视在月卡有效期间每 5 分钟给断线会话续租
+	// (go/player_locator/internal/logic/leasemonitor.go afkPassState),所以托管期间 login 的断线租约一直在,
+	// 不受上面 kLoginReconnectLease 那条 static_assert 的约束;它只在看到月卡失效之后才让租约到期。
+
+	// scene 侧已知的月卡状态。底层类型 uint8_t 数的是状态种类数(现 3 种)。
+	enum class AfkPass : uint8_t
+	{
+		kUnknown,  // 还没查到结果(没查、在途或查询失败):按普通保留窗口计,窗口内每次扫描重查
+		kInactive, // 确认不能托管:键不存在、值坏了、已经到期或剩下不到 kHostingExitLead
+		kActive,   // 月卡有效,到期时刻是 PlayerConnectionLostComp::afkPassExpiresAtSec
+
+		kCount
+	};
+
+	// 托管在月卡到期之前提前结束的余量,与普通保留同一口径(扫描周期 + 退出存盘余量):player_locator 只在月卡失效
+	// 之后才让断线租约到期,提前这么多退出,租约到期时退出存盘已经落地、断线释放标记已写,LeaveScene 当场拿到证据。
+	inline constexpr std::chrono::seconds kHostingExitLead = kSweepInterval + kReleaseMargin;
+
+	// 月卡已知的到期时刻过去这么久仍确认不了续费(Redis 一直读不成),按到期处理、照常退出:
+	// 查询失败时先保持托管(与 player_locator 查不出来时推迟清理同口径),但不让托管无限期挂着。
+	inline constexpr std::chrono::seconds kHostingUnconfirmedGrace{30};
+
+	// 解析一次读成功的月卡值。found = false 表示键不存在。值是十进制的到期 Unix 秒;解析不了按没有月卡
+	// (与 player_locator 同口径)。剩余时间不超过 kHostingExitLead 也按不能托管:马上就该退了,不必开始或继续。
+	// 返回 kActive 时 expiresAtSec 为到期时刻,其余为 0。
+	inline AfkPass ParseAfkPass(bool found, std::string_view value, uint64_t nowUnixSec, uint64_t &expiresAtSec)
+	{
+		expiresAtSec = 0;
+		if (!found || value.empty())
+		{
+			return AfkPass::kInactive;
+		}
+		uint64_t parsed = 0;
+		const char *first = value.data();
+		const char *last = first + value.size();
+		const auto [end, error] = std::from_chars(first, last, parsed);
+		if (error != std::errc{} || end != last)
+		{
+			return AfkPass::kInactive;
+		}
+		if (nowUnixSec + static_cast<uint64_t>(kHostingExitLead.count()) >= parsed)
+		{
+			return AfkPass::kInactive;
+		}
+		expiresAtSec = parsed;
+		return AfkPass::kActive;
+	}
+
+	// 每次到期扫描对一个保留中的实体怎么处置。底层类型 uint8_t 数的是处置种类数(现 3 种)。
+	enum class HoldVerdict : uint8_t
+	{
+		kKeep,  // 继续保留(普通窗口没到期,或托管中)
+		kProbe, // 继续保留,并(再)查一次月卡
+		kExit,  // 按客户端断线退出
+
+		kCount
+	};
+
+	// 判定只看传入的事实:heldFor 是单调时钟的保留时长,nowUnixSec 是墙钟 Unix 秒(与月卡到期时刻同一口径)。
+	//   托管中:离到期还远 → 保留;快到期(剩下不到 kHostingExitLead)→ 查一次是不是续了(ParseAfkPass 按续没续
+	//           改成 kActive / kInactive);到期后 kHostingUnconfirmedGrace 仍确认不了 → 退出。
+	//   不能托管 / 还不知道:按普通窗口,到期退出;还不知道且没有查询在途 → 窗口内再查一次。
+	constexpr HoldVerdict JudgeHold(Clock::duration heldFor, AfkPass pass, uint64_t passExpiresAtSec,
+									uint64_t nowUnixSec, bool probeInFlight)
+	{
+		if (pass == AfkPass::kActive)
+		{
+			if (nowUnixSec + static_cast<uint64_t>(kHostingExitLead.count()) < passExpiresAtSec)
+			{
+				return HoldVerdict::kKeep;
+			}
+			if (nowUnixSec >= passExpiresAtSec + static_cast<uint64_t>(kHostingUnconfirmedGrace.count()))
+			{
+				return HoldVerdict::kExit;
+			}
+			return probeInFlight ? HoldVerdict::kKeep : HoldVerdict::kProbe;
+		}
+		if (IsExpired(heldFor))
+		{
+			return HoldVerdict::kExit;
+		}
+		return pass == AfkPass::kUnknown && !probeInFlight ? HoldVerdict::kProbe : HoldVerdict::kKeep;
 	}
 } // namespace connection_lost_hold
 
@@ -187,4 +283,12 @@ struct PlayerConnectionLostComp
 	connection_lost_hold::Clock::time_point lostAt{};
 	// 断开的那条会话(进入保留时实体快照里的会话)。接回判据见 connection_lost_hold::IsResumedBy。
 	SessionId sessionId{kInvalidSessionId};
+	// 断开的那次登录的代次(进入保留时实体登录身份 PlayerLoginIdentityComp 的代次,没有登录身份时为 0)。
+	// 重启后的 gate 会复用会话号,单凭会话号认不出拿回旧号的新登录,见 IsResumedBy。
+	uint64_t loginGeneration{0};
+	// ── 挂机月卡(离线托管,见 connection_lost_hold::JudgeHold)。只由 AfkHostingSystem 写(查询发出与回包)。──
+	connection_lost_hold::AfkPass afkPass{connection_lost_hold::AfkPass::kUnknown};
+	uint64_t afkPassExpiresAtSec{0}; // afkPass == kActive 时有效:月卡到期的 Unix 秒(Redis 原值)
+	bool afkProbeInFlight{false};    // 有一次月卡查询在途:不重复发
+	bool hostingStarted{false};      // 已按"托管开始"处理过(由服务器开启组队跟随只做一次)
 };

@@ -12,7 +12,7 @@ import (
 // GetPlayerAssetOpLedger 的实现(docs/design/guild-phase2/07-rollback-fail-closed.md §7.8.2)。
 //
 // 一句话:guild、trade、mail 的重投循环对「长期离线、scene 可能已经记过账」的行,来这里读玩家已提交的资产账本,
-// 读到「已应用 / 已拒绝」就能提前终结,读不到就继续等(不变量 I7,判定在调用方)。账本在 player_store 的 kAsset 行,
+// 读到「已应用 / 已拒绝」就能提前终结,读不到就继续等(不变量 I7,判定在调用方)。账本在 player_store 的 kWallet 行,
 // 写权行和账本出自同一条语句(docs/design/player-save-direct-commit.md §6)。
 //
 // 语义表(调用方依赖,改动须同步 07 §7.8.2 与 go/shared/assetop/ledger_dataservice.go):

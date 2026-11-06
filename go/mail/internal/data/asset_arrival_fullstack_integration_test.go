@@ -356,16 +356,21 @@ func (r *mailFullstackRig) readSQL(t *testing.T) *mailFullstackSQL {
 func (r *mailFullstackRig) readSQLContext(t *testing.T, ctx context.Context) *mailFullstackSQL {
 	t.Helper()
 	row := &mailFullstackSQL{}
-	// 写权行有代次和序号；kAsset 行是 player_database 的资产片段（货币、背包、账本）。
+	// 写权行有代次和序号；kWallet 行是货币与账本，kBag 行是背包（docs/design/player-save-direct-commit.md §1.1），合并后才是完整资产。
 	if err := r.playerDB.QueryRowContext(ctx, "SELECT owner_epoch,save_seq FROM player_store WHERE player_id=? AND kind=?", r.player, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)).Scan(&row.epoch, &row.seq); err != nil {
 		t.Fatalf("直接读取实际玩家写权行失败: %v", err)
 	}
-	var payload []byte
-	if err := r.playerDB.QueryRowContext(ctx, "SELECT payload FROM player_store WHERE player_id=? AND kind=?", r.player, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET)).Scan(&payload); err != nil {
-		t.Fatalf("直接读取实际玩家资产行失败: %v", err)
-	}
 	asset := &playerpb.PlayerDatabase{}
-	if proto.Unmarshal(payload, asset) != nil || asset.GetCurrency() == nil || asset.GetBagComponent() == nil || asset.GetAssetOpLedger() == nil {
+	for _, kind := range []storepb.PlayerStoreKind{storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET, storepb.PlayerStoreKind_PLAYER_STORE_KIND_BAG} {
+		var payload []byte
+		if err := r.playerDB.QueryRowContext(ctx, "SELECT payload FROM player_store WHERE player_id=? AND kind=?", r.player, int32(kind)).Scan(&payload); err != nil {
+			t.Fatalf("直接读取实际玩家资产行 %v 失败: %v", kind, err)
+		}
+		if err := (proto.UnmarshalOptions{Merge: true}).Unmarshal(payload, asset); err != nil {
+			t.Fatalf("实际玩家SQL资产行 %v 编码无效: %v", kind, err)
+		}
+	}
+	if asset.GetCurrency() == nil || asset.GetBagComponent() == nil || asset.GetAssetOpLedger() == nil {
 		t.Fatal("实际玩家SQL资产/账本编码无效")
 	}
 	row.currency, row.bag, row.ledger = asset.GetCurrency(), asset.GetBagComponent(), asset.GetAssetOpLedger()

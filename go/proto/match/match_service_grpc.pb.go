@@ -33,6 +33,8 @@ const (
 	MatchService_WatchBattle_FullMethodName           = "/match.MatchService/WatchBattle"
 	MatchService_RequestBattleTicket_FullMethodName   = "/match.MatchService/RequestBattleTicket"
 	MatchService_ListWatchableBattles_FullMethodName  = "/match.MatchService/ListWatchableBattles"
+	MatchService_ListBattleReports_FullMethodName     = "/match.MatchService/ListBattleReports"
+	MatchService_GetBattleReport_FullMethodName       = "/match.MatchService/GetBattleReport"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -70,6 +72,11 @@ type MatchServiceClient interface {
 	// 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
 	RequestBattleTicket(ctx context.Context, in *battle.RequestBattleTicketRequest, opts ...grpc.CallOption) (*battle.RequestBattleTicketResponse, error)
 	ListWatchableBattles(ctx context.Context, in *ListWatchableBattlesRequest, opts ...grpc.CallOption) (*ListWatchableBattlesResponse, error)
+	// ---- 战报回放(battle-report-replay.md):每名玩家保留最近 100 场 PVP 战报 ----
+	// 请求都不带 player_id,只认会话本人。列表新的在前,一次全给(最多 100 条)。
+	ListBattleReports(ctx context.Context, in *ListBattleReportsRequest, opts ...grpc.CallOption) (*ListBattleReportsResponse, error)
+	// 取一局的回放正文:只有列表里还有这一局的玩家能取。
+	GetBattleReport(ctx context.Context, in *GetBattleReportRequest, opts ...grpc.CallOption) (*GetBattleReportResponse, error)
 }
 
 type matchServiceClient struct {
@@ -200,6 +207,26 @@ func (c *matchServiceClient) ListWatchableBattles(ctx context.Context, in *ListW
 	return out, nil
 }
 
+func (c *matchServiceClient) ListBattleReports(ctx context.Context, in *ListBattleReportsRequest, opts ...grpc.CallOption) (*ListBattleReportsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBattleReportsResponse)
+	err := c.cc.Invoke(ctx, MatchService_ListBattleReports_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) GetBattleReport(ctx context.Context, in *GetBattleReportRequest, opts ...grpc.CallOption) (*GetBattleReportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBattleReportResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetBattleReport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -235,6 +262,11 @@ type MatchServiceServer interface {
 	// 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
 	RequestBattleTicket(context.Context, *battle.RequestBattleTicketRequest) (*battle.RequestBattleTicketResponse, error)
 	ListWatchableBattles(context.Context, *ListWatchableBattlesRequest) (*ListWatchableBattlesResponse, error)
+	// ---- 战报回放(battle-report-replay.md):每名玩家保留最近 100 场 PVP 战报 ----
+	// 请求都不带 player_id,只认会话本人。列表新的在前,一次全给(最多 100 条)。
+	ListBattleReports(context.Context, *ListBattleReportsRequest) (*ListBattleReportsResponse, error)
+	// 取一局的回放正文:只有列表里还有这一局的玩家能取。
+	GetBattleReport(context.Context, *GetBattleReportRequest) (*GetBattleReportResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -280,6 +312,12 @@ func (UnimplementedMatchServiceServer) RequestBattleTicket(context.Context, *bat
 }
 func (UnimplementedMatchServiceServer) ListWatchableBattles(context.Context, *ListWatchableBattlesRequest) (*ListWatchableBattlesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWatchableBattles not implemented")
+}
+func (UnimplementedMatchServiceServer) ListBattleReports(context.Context, *ListBattleReportsRequest) (*ListBattleReportsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBattleReports not implemented")
+}
+func (UnimplementedMatchServiceServer) GetBattleReport(context.Context, *GetBattleReportRequest) (*GetBattleReportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBattleReport not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -518,6 +556,42 @@ func _MatchService_ListWatchableBattles_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_ListBattleReports_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBattleReportsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ListBattleReports(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ListBattleReports_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ListBattleReports(ctx, req.(*ListBattleReportsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_GetBattleReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBattleReportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetBattleReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetBattleReport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetBattleReport(ctx, req.(*GetBattleReportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -572,6 +646,14 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListWatchableBattles",
 			Handler:    _MatchService_ListWatchableBattles_Handler,
+		},
+		{
+			MethodName: "ListBattleReports",
+			Handler:    _MatchService_ListBattleReports_Handler,
+		},
+		{
+			MethodName: "GetBattleReport",
+			Handler:    _MatchService_GetBattleReport_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,6 +1,6 @@
 // Package callerauthtest 给各服务的单测造「经 gate 签名、已过验签拦截器」的入站上下文。
 //
-// 在线域的原身份只认 gate 签名的 SessionDetails(shared/roleidentity.SessionAccount)。测试要么走真实的
+// 在线域的原身份只认 gate 签名的 SessionDetails(shared/roleidentity 的入口准入只读验签原件)。测试要么走真实的
 // 签名 + callerauth.SessionInterceptor 得到带验签原件的 ctx(Incoming),要么只放会话 metadata、
 // 不带原件(Unverified),用来证明未签名的声明进不了业务。密钥只在测试进程内使用。
 package callerauthtest
@@ -34,7 +34,7 @@ func (Key) Sign(data []byte) []byte {
 func (k Key) Verify(mac, data []byte) bool { return hmac.Equal(mac, k.Sign(data)) }
 
 // Incoming 按 gate 的签名契约给 detail 签 fullMethod,并让它通过 callerauth.SessionInterceptor。
-// 返回的 ctx 同时带原始入站 metadata(各服务自己的会话解码器照常读取)与验签原件。
+// 返回的 ctx 同时带原始入站 metadata 与验签原件;在线域入口准入(roleidentity.EntryInterceptor)只认后者。
 // detail 必须带 session_id、gate_instance_id、session_incarnation,否则验签拦截器拒绝,测试失败。
 func Incoming(t testing.TB, fullMethod string, detail *base.SessionDetails) context.Context {
 	t.Helper()

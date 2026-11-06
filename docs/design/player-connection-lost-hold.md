@@ -1,0 +1,204 @@
+# 玩家断线保留与短重连回原处
+
+> 2026-11-05,Claude。代码已随用户的快照提交入库(`0f484db0d`、`6452b949d` 等),协议生成物里已有 `ExitGameReason`。**未编译、未测试**,验证步骤见 §10。Java 版待做,见 §9。
+> 2026-11-06 补:回原场景排除回收中的频道(§6 第一段),新增用例 `TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel`;服务器驱动的组队跟随已让保留中的队员原地不动(§4)。同样未编译。
+> 2026-11-06 修正(未编译),两处判据都改为比登录身份:
+> - `EnterScene` 判「换会话」原先比会话快照,同一会话的重复路由也被拆掉重进(§5 第 3 步);
+> - 接回判据 `IsResumedBy` 原先只比会话号,gate 以同一 node_id 重启后拿回旧号的新登录摘不掉保留(§5 第 0.1 步)。
+>
+> 新增用例 `ConnectionLostHoldReentry.*` 与 `ConnectionLostHold.SameSessionNumberResumesOnlyWithNewerLogin`。
+
+## 0. 一句话
+
+玩家连接意外断开时,角色在原地保留 25 秒;30 秒断线租约内重连的新会话直接接回同一个实体、回到原来的场景,并拿到完整入场画面。超时才存盘下线,与原来断线即下线走同一条路。
+
+服务器之间的断线重连不在本文:节点链路由 muduo `enableRetry` 自动重连,每次建连做一次双向身份握手后置 Ready(`muduo-rpc-channel.md` §8.3);节点链路的应用层心跳与半开检测见同一文档的新增一节。两者都不做重连后的业务逻辑(负责人 2026-11-05 定)。
+
+## 1. 改之前
+
+- 客户端断线后,gate 的 `HandleConnectionDisconnection` 立即向 scene 代发 ExitGame。scene 把角色摘出场景和 AOI、存盘、销毁实体。login 同时把会话置成 DISCONNECTING,租约 30 秒。
+- 30 秒保住的只是「重连资格」,角色本身已经没了:
+  - 重连要从库里重新加载;
+  - 别的玩家看到角色瞬间消失;
+  - 运行时状态(实时技能 CD、Buff)丢失;
+  - gate 滚动重启时,整批玩家存盘,随后又整批加载。
+- 落点也不对。login 对 ShortReconnect / ReplaceLogin 发 `ZoneId = 0` 的 EnterScene,把去向交给 scene_manager。scene_manager 只跟随了 location 的 zone,场景仍按默认大世界最空的频道重新挑。在副本、非默认地图或别的频道的玩家,重连后会被换走(`disconnect-reconnect-audit-20261020.md` §2.2)。这与 GO-5「重连窗口内回到原处」、login 注释「顶号接管角色当前所在的位置」不符。
+
+## 2. 目标与非目标
+
+目标:
+
+- 意外断线不立刻下线;窗口内重连接回同一个实体、同一个场景。
+- 窗口外的行为与原来相同:存盘、写断线释放标记、租约到期删 location。
+- 不加「重连成功」的业务钩子。接回只是 EnterScene 的一次「换会话入场」,与 11-05 定的「连接层不做业务逻辑」一致。
+
+非目标:
+
+- 不补发断线期间的推送。仍按快照、查询、业务有主协议恢复(审计 §2.3)。
+- 不做 gate 与客户端之间的应用层心跳(要新增客户端协议,见 §8 第 1 条)。
+- 不改客户端,不改 AOI,不做离线托管 / AI 控制。
+
+## 3. gate:断线时带上原因
+
+`proto/scene/player_lifecycle.proto` 给 `GameNodeExitGameRequest` 加 `ExitGameReason reason = 1`。这是服务端内部字段,客户端不可见。gate 在 `NotifySceneExitGame` 里把原因序列化进请求体。
+
+| 情形 | reason | scene 怎么做 |
+|---|---|---|
+| TCP 断开:断网、gate 停机、顶号时 login 踢旧连接、输出缓冲高水位强关 | `DISCONNECTED` | 断线保留(§4) |
+| 客户端主动 LeaveGame(`gate_scene_entry::OnClientLeaveGame`) | `LOGOUT` | 立即退出 |
+| 断线租约到期后,gate 关掉残留的假死连接(`PlayerLeaseExpiredEventHandler` 先置 `SessionInfo::exitSceneImmediatelyOnClose`) | `LEASE_EXPIRED` | 立即退出 |
+| 旧版 gate,没有这个字段 | `UNSPECIFIED`(0) | 立即退出 |
+
+scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNECTED` 找不到实体,什么都不发生。
+
+顶号走保留是有意的:新会话随后就会接回同一个实体,比先退出再重载更快,也不丢运行时状态。
+
+兼容:项目未上线,gate 与 scene 同批升级。即使混跑,两个方向都退回原来的行为:旧 scene 不认这个字段,按空请求立即退出;新 scene 收到旧 gate 的 0 也立即退出。
+
+## 4. scene:断线保留
+
+入口只有一个:`PlayerLifecycleSystem::HandleClientConnectionLost`,由 ExitGame handler 在 `reason == DISCONNECTED` 时调用。常量与纯判定在 `player/system/connection_lost_hold.h`。
+
+判定 `connection_lost_hold::Decide`,按顺序:
+
+1. 已在退出中 → 立即退出,交给退出流程合并原因。
+2. 已在保留中 → 保持原来的计时,窗口不因重复通知延长。
+3. 归属交接已发起、整节点疏散中、实体没有绑定会话 → 立即退出(原行为)。
+4. 其余 → 保留。
+
+保留时做这几件事:
+
+1. 停步。与退出同一个函数 `StopMotionForExit`:清速度,并给观察者补一条停步广播,不然掉线时正在走的角色会一直走下去。
+2. 摘掉已断开的会话(`RemovePlayerSession`):快照里的会话置无效,擦掉仍属于本玩家的 SessionMap 映射。登录身份组件不动。
+3. 撤掉建镜像后的自动进场,与退出同口径。
+4. 挂 `PlayerConnectionLostComp`,记下单调时钟时刻、断开的会话号和那次登录的代次(取登录身份组件,保留期间它不变)。
+5. 请求一次关键进度存盘(有节流)。原来断线即存盘,这样落盘时机不比原来晚多少,节点崩溃时不多丢。
+6. 确保 1 秒一次的到期扫描已经挂上。
+
+为什么要摘会话:实体此刻确实没有活会话了。依赖「有没有活会话」的路径因此都自然按断线处理,不用改那些文件:
+
+- 跨节点交接不会发起(`HasLiveGateSession`);
+- 跨场景的队伍跟随跳过它(`player_team.cpp` 换场景分支的 `HasLiveSession`);同一场景里由服务器驱动的跟随不看会话,照常带着它走([team-follow-server-trail.md](team-follow-server-trail.md) §3.6);同场景的服务器驱动跟随把它当作"原地不动、仍在队形里",也不给它发跟随推送(`team_follow_system.cpp` 的 `IsHeldStill` / `HasLiveGateSession`);
+- 排空、疏散只存盘不改派(`EnqueueRelocateTicket`);
+- 推送不再发往 gate。
+
+登录身份组件留着,是因为租约到期的会话结束释放要按它判断「实体是不是还绑着这次登录」(`location-release-binding.md` §13)。
+
+保留期间:
+
+- 角色仍在场景与 AOI 里,别的玩家看得到它站在原地;正被组队跟随驱动的队员例外,照常跟着队长走(进保留时那一次停步之后,下一 tick 就接着走)。
+- 周期存盘照常;战斗照常推进(回合超时、自动行动);资产指令照常应用到在场的实体上。
+
+到期:`ExpireConnectionLostHolds` 每秒扫描一次。保留满 25 秒的,先摘掉保留组件,再 `HandleExitGameNode(kClientDisconnect)`,与原来断线即退出是同一条路。
+
+被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存):`HandleExitGameNode` 入口摘掉保留组件。首次挂退出意图时,`clientDisconnected` 置位,改派票据因此作废。
+
+`PlayerConnectionLostComp` 属于「按需状态」(`ecs-component-access-rules.md`):没有它 = 连接正常或不在保留中。它是纯内存组件,不落库。
+
+## 5. 重连接回
+
+1. login:租约内同账号重登判 ShortReconnect;别的在线会话判 ReplaceLogin。这部分不变。
+2. scene_manager:按 §6 派回原场景,通常就是同落点重连,RoutePlayerEvent 发给新 gate。
+3. scene 的 `HandleEnterGameNode` 复用实体,进 `EnterScene`:
+   - 第 0.1 步 `ResumeConnectionLostHold`:只有新的一次登录才摘掉保留(`connection_lost_hold::IsResumedBy`),判据与第 3 步的「换会话」同一口径。
+     - 会话号与断开的不同,算接回。
+     - 会话号相同而请求的登录代次比断开时大,也算接回。gate 停机时先让在线角色都进保留,它以同一 node_id 起来后会话序号从头发,新登录可能恰好拿回断开的那个号。2026-11-06 之前只比会话号,这种新登录摘不掉保留:入场本身完整,但 25 秒后保留到期,正在玩的玩家被按断线退出。
+     - 断开的那次登录迟到的进场(号相同、代次不大于断开时,或没带代次)、没有会话的进场,都不算接回。
+   - 第 1 步绑定新会话、记登录身份。
+   - 第 3 步按「换会话」先离场、再完整入场(审计 §9.1 的修复):新客户端收到入场通知、自身的创建通知和当前邻居。
+     「换会话」比的是实体此前放行过的登录身份(`PlayerLoginIdentityComp`,与入场栅栏同一口径):会话号不同,或会话号相同而登录代次更新(gate 以同一 node_id 重启后会话序号从头发,新登录可能拿回旧号),都算换了;同一次登录的重复路由(gate 补发、owner_epoch / 归属修订变了的 0 型转发)不离场、不重发入场通知。2026-11-06 修正前比的是会话快照,而入口第 2 步与断线保留都已先把快照会话置无效,同一会话的重复路由也恒判换了:已在目标场景的角色被拆掉重进,客户端重收入场通知,邻居看到它先销毁再创建。
+   - 之后战斗的 `BattleReconnectS2C`、落地恢复钩子照常执行。
+
+保留到期之后、租约到期之前(25 到 30 秒)到达的重连,照常判 ShortReconnect。退出存盘还在途时,`EnterScene` 第 0 步取消退出、复用实体;实体已销毁时,按原来的路径从盘上重载。两种结局都正确,后一种慢一点。
+
+## 6. scene_manager:回原场景
+
+`go/scene_manager/internal/logic/enter_resume_scene.go` 的 `resumeSceneOf`,在 EnterScene 第 3 步解析场景之前调用。
+
+条件(全部满足才回原场景):
+
+- 请求没有任何去向:ZoneId、SceneId、SceneConfId 全为 0。只有 login 的 ShortReconnect / ReplaceLogin 这样发。
+- location 落在本 zone 的具体节点上,并记着场景,不是跨 zone 传送途中的等待落点。
+
+先排除回收中的频道:原场景带着缩容摘线时写的排空标记 `scene:{id}:draining` 时不回去,直接按默认大世界落点。排空自己就是把还在线上的人改派到默认大世界(`sweepDrainingWorldChannels` 每拍对还有人的频道发 DestroyScene,C++ 侧按 scene_id / scene_conf_id 为 0 改派),回进去只会再被搬一次。标记读不到也按回落处理。这一步只多一次 EXISTS,只发生在短重连 / 顶号上。排空集合才是排空状态的权威、标记带 TTL;标记过期而频道仍在排空的少数情形会回进去,随后被排空正常改派走,不影响归属安全。
+
+结果:
+
+- 解析成功:通常就是第 4 步的同落点重连。不铸造 owner_epoch,不改 location,不重复计人数。
+- 解析失败(副本已回收、属主节点已死且场景重建不了、读失败):回落默认大世界,与原来相同,计 `enter_scene_rejected_total{reason="resume_scene_fallback"}`。
+- 再入屏障未到:照旧回可重试的 `ErrSceneReentryBarrier`,不回落。回落也只会撞上死节点的换手门(18),等屏障过了按死节点接管处理才对。
+
+不受影响的请求:
+
+- 首登(带本 zone);
+- 客户端选线(带 scene_id);
+- scene 自发的换图、跟随、疏散、交接重发(都带 zone);
+- 跨 zone 传送的第二条腿(票据指明本 zone);
+- location 在别的 zone(第 2 步已重定向走)。
+
+## 7. 时序与不变量
+
+- `kHoldWindow` 25s + 扫描周期 1s + 余量 4s ≤ login 断线租约 30s,由 `connection_lost_hold.h` 的 static_assert 守住。
+  - 保留在租约到期之前结束,退出存盘落地并写出断线释放标记(A1′)。租约到期时 LeaveScene 拿到释放证据,当场删 location。
+  - 如果保留拖过租约,LeaveScene 拿不到证据,只能先派 `ReleasePlayer(session_ended)`、回「等持有者释放」。这名玩家的清理要再等一个 claim 超时(约 30 秒),期间重登回「清理中」。
+- login 的 30(`sessionmanager.SetSessionDisconnecting` 的 `LeaseTtlSeconds`)与 C++ 的 `kLoginReconnectLease` 两边互相注明。改一边必须同步改另一边。
+- 一个实体同一时刻只处于一种状态:在线、保留中、退出中。
+  - 保留中 → 退出中(到期,或被别的退出取代);
+  - 保留中 → 在线(新会话接回);
+  - 退出中的实体不会进入保留。
+- 保留中的实体没有活会话(快照会话无效),登录身份不变。所以租约到期的会话结束释放仍能按 §13 的绑定判定退出它;新会话接回后身份变新,迟到的旧释放会被忽略。
+- 不丢数据:进入保留时请求一次关键进度存盘;保留期间周期存盘照常;到期退出走原来的退出存盘与收敛判定。
+
+## 8. 残余与后续
+
+1. **gate 与客户端之间没有应用层心跳和空闲超时**,客户端协议里也没有心跳消息。手机断网这类不发 FIN 的掉线,gate 要等 TCP 自己报错才知道,在那之前角色一直按在线处理。这一条要新增客户端可见消息,两版服务器和客户端同批改,本批只登记。节点链路(gate↔scene RPC0)的心跳已由另一会话做完。
+2. 客户端大厅断线后不会自动重登(审计 §3.1),属于客户端仓。没有客户端自动重连时,服务端的保留只在玩家手动重进时生效。
+3. 保留期间战斗结束:结算照常应用到实体上,终局推送发不出去。重连后的结果面板由另一批「近期战斗结果」恢复([battle-result-recovery.md](battle-result-recovery.md),11-05 落码、未编译),本批不重复做。
+4. 按 player_id 移动玩家、又不看活会话的入口:11-06 核对时没有。客户端换图要有客户端;镜像自动进场在进入保留时已撤掉;队伍跟随与跨节点交接都先看活会话;GM 传送(`TeleportRequest`)回 1006。以后新增这类入口要先看 `HasLiveGateSession`。漏看的后果是路由在 gate 被丢弃、location 指向新场景,重连按新 location 落地;不重连时与 gate 崩溃同一残余,由租约到期的会话结束释放和 `location-release-binding.md` §17 的撤销兜底。
+5. 实时场景 CD 与 Buff:保留内重连沿用实体,运行时状态还在;保留到期之后才重连仍会丢。规则未定,见审计 §9.2。
+6. 保留中的实体仍被 AOI 当作观察者计算,发给它的推送在 scene 侧因为没有会话直接丢弃。量级等于断线未归的玩家数,不处理。
+7. 月卡离线托管(ExitGame handler 里的 TODO)仍未做。login 对挂机权益会顺延租约,但实体照样 25 秒后退出,与原来一样。
+
+## 9. 双版本
+
+Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家的策略与 C++ 不同(`muduo-rpc-channel.md` §8.3 末段)。要做的是同一组行为:断线带原因、保留 25 秒、新会话接回、重连回原场景。
+
+2026-11-06 核对 §5 第 3 步的判据修正时看过 Java 版,没有同类问题,没有改 Java 仓:Java gate 发进场前先让旧场景放掉旧玩家,scene 每次进场都重新加载、新建实例并完整入场(`game-scene` 的 `SceneWorld.onPlayerEnter` / `finishPlayerLoaded`),不复用实体,也就没有「按已摘掉的快照会话判换会话」这一步。Java 做断线保留的接回时若改成复用实体,要用 §5 的两条判据:换会话按登录身份判(会话号或登录代次变了),不能比已摘掉的会话;接回保留也比登录代次,不能只比会话号。
+
+## 10. 验证(Codex)
+
+前置:协议生成物里已有 `ExitGameReason`(`cpp/generated/proto/scene/player_lifecycle.pb.h`、`go/proto/scene/player_lifecycle.pb.go`),说明已有人跑过一次完整生成。如需重跑,在仓库根执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+
+1. C++ 编译(Windows Debug x64,串行):`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,0 个 `error C` / `LNK`。scene 库、gate、scene 节点都改了;`run_cpp_tests.ps1 -Build` 不重编库,不能代替这一步。
+2. C++ 单测:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter cross_zone_test -LogDir build/verification/connection-lost-hold-20261105`。
+   - 定向复核(仓库根):`build\cpp\tests\cross_zone_test.exe --gtest_filter=ConnectionLostHold*:ExitPersistEcs.*`。
+   - 新增 12 条全部 PASS:`ConnectionLostHold.*` 5 条、`ConnectionLostHoldEcs.*` 7 条;`ExitPersistEcs.*` 原有用例不回归。
+   - 11-06 补 5 条,同一个过滤串已包含:`ConnectionLostHold.SameSessionNumberResumesOnlyWithNewerLogin` 1 条、`ConnectionLostHoldReentry.*` 4 条。`IsResumedBy` 与 `ResumeConnectionLostHold` 多了登录代次参数,原有的 `ConnectionLostHold.OnlyANewBoundSessionResumes`、`ConnectionLostHoldEcs.OnlyANewSessionResumesTheHold` 只补了代次 0,期望不变。
+   - 另跑 `--gtest_filter=EnterFenceEcs.*:SceneEntryPermissionTest.*`,确认入场栅栏与场景入场的原有用例不回归。
+   - 两条回归用例各守一条判据:`SameLoginRepeatRouteStaysInScene` 守第 3 步(拿快照比时,玩家会被移出格子、`Hex` 被摘);`ReusedSessionNumberWithNewerLoginResumesHold` 守第 0.1 步(只比会话号时,保留摘不掉)。
+3. Go(`go/scene_manager`):
+   - `go build ./...`、`go vet ./internal/logic/`;
+   - `go test ./internal/logic/ -count=1 -v -run 'TestResumeSceneOf|TestEnterScene_ZeroZoneReconnect|TestEnterScene_ZeroZoneOverLocationInGateZoneBehavesLikeExplicitGateZone|TestEnterScene_SamePlacement'`,全部 PASS;
+   - 最后 `go test ./... -count=1`。同包有别的会话的在途改动,红在别处时先分清是哪边的。
+4. Go(`go/login`):`go build ./...`。本批只改了注释。
+5. 本地联调(可选,不替代以上):起本地全套,机器人进大世界副本或非默认地图后断开 TCP。
+   - 25 秒内用 access_token 重登:scene 日志依次有 `[ConnectionLostHold] holding player` 和 `resumed by a new session`;RoutePlayerEvent 的 scene_id 等于断线前的场景;客户端收到入场通知。
+   - 超过 25 秒不重连:出现 `hold of player … expired`,随后是原来的退出存盘日志;30 秒租约到期时 LeaveScene 应判 `released`,不应出现 `pending`。
+
+## 11. 改动清单
+
+- proto:`proto/scene/player_lifecycle.proto`(`ExitGameReason`、`GameNodeExitGameRequest.reason`)。
+- gate:
+  - `cpp/libs/services/gate/session/comp/session_info_comp.h`(`exitSceneImmediatelyOnClose`);
+  - `cpp/nodes/gate/handler/rpc/client_session_handler.{h,cpp}`(`NotifySceneExitGame` 带原因,断线日志带 `exit_reason`);
+  - `cpp/nodes/gate/handler/event/scene_entry_dispatch.cpp`(LeaveGame 发 LOGOUT);
+  - `cpp/nodes/gate/handler/event/gate_event_handler.cpp`(租约到期关连接前置位)。
+- scene:
+  - `cpp/libs/services/scene/player/system/connection_lost_hold.h`(新增,组件 + 常量 + 纯判定);
+  - `player_lifecycle.{h,cpp}`(`HandleClientConnectionLost`、`ResumeConnectionLostHold`、`ExpireConnectionLostHolds`,`HandleExitGameNode` 摘保留,`EnterScene` 第 0.1 步);
+  - `player_exit_intent.h`(注释);
+  - `cpp/nodes/scene/handler/rpc/player/player_lifecycle_handler.cpp`(按原因分流);
+  - `scene.vcxproj` / `.filters`(登记新头文件)。
+- scene_manager:`go/scene_manager/internal/logic/enter_resume_scene.go`(新增)、`enterscenelogic.go`(第 3a 步与回落指标)、`enter_resume_scene_test.go`(新增)。
+- login:`go/login/internal/logic/pkg/sessionmanager/session_manager.go`(租约与 C++ 常量互注)。
+- 测试:`cpp/tests/cross_zone_test/cross_zone_test.cpp`(`ConnectionLostHold*`)。

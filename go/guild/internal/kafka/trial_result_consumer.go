@@ -35,6 +35,10 @@ package kafka
 //     消费组 reader 不能按分区暂停,要隔离就得在进程内无上限地缓存被卡分区的后续消息。
 //     不加抖动:每个进程同一时刻至多在重调 1 条,形不成惊群。
 //     确定性失败(溢出、奖励包坏、上下文畸形)由 handler 自己标成毒消息并回 nil,不会走到这条路上。
+//     生产路径(RelayAdmission 非 nil,走 kafkautil.BoundConsumerGroup)的重调由 owner 做(2026-11-05,r2-kc#1):
+//     每次回调只试一次(processRecordOnce),失败后 owner 按同样的 1s~30s 退避(带抖动)原地重调,退避期间不占 serial,
+//     别的分区照常结算;再均衡时 owner 不提交、把这条交还 Kafka,由新属主重投。再均衡与暂时失败都不会让消费者停下,
+//     只有不变量破坏、提交点越过保留期,或维护排空(StopFetching)时仍没结清,才 HOLD 并停止取新。
 //  3. **与 guild 无关的消息只提交、不处理**。match-results 里绝大多数是普通对局(没有活动上下文)或别的活动类型;
 //     它们的终局与 guild 无关。
 //  4. **单次 handler 的 panic 只算一次暂时性失败**(safego.Run)。让它把消费 goroutine 带走的后果更糟:
@@ -188,17 +192,7 @@ func NewTrialResultConsumer(cfg TrialResultConsumerConfig, handle TrialResultHan
 		sleep:        sleepTrialResult,
 	}
 	if cfg.RelayAdmission != nil {
-		owner, err := kafkautil.NewBoundConsumerGroup(kafkautil.BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: cfg.GroupID, Brokers: cfg.Brokers, Topics: []string{cfg.Topic}, StartOffset: kafkago.FirstOffset}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 500 * time.Millisecond}, HandlerTimeout: 5 * time.Minute}, cfg.RelayAdmission, func(call context.Context, message kafkago.Message) error {
-			consumer.serial.Lock()
-			defer consumer.serial.Unlock()
-			if err := call.Err(); err != nil {
-				return err
-			}
-			if !consumer.processRecord(call, message) {
-				return errors.Join(drainproof.ErrHold, call.Err())
-			}
-			return nil
-		})
+		owner, err := kafkautil.NewBoundConsumerGroup(kafkautil.BoundConsumerGroupConfig{Group: kafkago.ConsumerGroupConfig{ID: cfg.GroupID, Brokers: cfg.Brokers, Topics: []string{cfg.Topic}, StartOffset: kafkago.FirstOffset}, Reader: kafkago.ReaderConfig{MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 500 * time.Millisecond}, HandlerTimeout: 5 * time.Minute}, cfg.RelayAdmission, consumer.handleBound)
 		if err != nil {
 			return nil, err
 		}
@@ -245,12 +239,24 @@ func sleepTrialResult(ctx context.Context, d time.Duration) bool {
 // 返回前关闭 reader(离开消费组,分区交还给别的副本)。Run 只应调用一次。
 func (c *TrialResultConsumer) Run(ctx context.Context) {
 	if c.bound != nil {
-		// 正式 owner 的启动检查同步返回，不能遗留未 join 的 topic 管理任务。
-		if err := c.ensureTopics(c.cfg.Brokers, []kafkautil.TopicSpec{c.cfg.TopicSpec()}); err != nil {
-			c.cfg.RelayAdmission.Hold()
-			logx.Errorf("历练结果启动 HOLD: %v", err)
-			return
+		// 正式 owner 的启动检查同步做，不能遗留未 join 的 topic 管理任务。失败（Kafka 暂不可达）每 30s 重试、不放弃：
+		// 这时还没接纳任何记录，没有未知结局，不记 HOLD；ctx 先结束就不启动 owner（之后的 CloseAndReport 给零接纳收据）。
+		for attempt := 1; ; attempt++ {
+			err := c.ensureTopics(c.cfg.Brokers, []kafkautil.TopicSpec{c.cfg.TopicSpec()})
+			if err == nil {
+				break
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			logx.Errorf("[GuildTrial] Failed to ensure trial result topic %s; consumer owner not started, retrying after %v (attempt %d): %v",
+				c.cfg.Topic, trialResultStartRetryInterval, attempt, err)
+			if !c.sleep(ctx, trialResultStartRetryInterval) {
+				return
+			}
 		}
+		// owner 遇再均衡与暂时失败不返回（原地重试或交还重投，r2-kc#1）；返回 error 只可能是 HOLD：
+		// 不变量破坏、提交点越过保留期，或终止时仍有没结清的记录。此后不再取新，修复后重启进程。
 		if err := c.bound.Run(ctx); err != nil {
 			c.cfg.RelayAdmission.Hold()
 			logx.Errorf("历练结果消费者 HOLD: %v", err)
@@ -383,6 +389,15 @@ func (c *TrialResultConsumer) process(ctx context.Context, reader trialReader, m
 }
 
 func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Message) bool {
+	ev, ok := c.trialResultOf(msg)
+	if !ok {
+		return true
+	}
+	return c.settle(ctx, msg, ev)
+}
+
+// trialResultOf 解码并过滤一条消息。ok=false = 这条不用结算(坏消息已记日志与计数 / 不是帮会历练),调用方照常提交。
+func (c *TrialResultConsumer) trialResultOf(msg kafkago.Message) (*kafkapb.BattleResultEvent, bool) {
 	ev := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, ev); err != nil {
 		// 坏消息跳过并提交:留在 topic 里只会每次重启都撞一遍(match 的消费者对同一条消息也是这样处理)。
@@ -390,20 +405,45 @@ func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Mes
 		logx.Errorf("[GuildTrial] Failed to deserialize battle result; skipping partition=%d offset=%d key=%s: %v",
 			msg.Partition, msg.Offset, string(msg.Key), err)
 		countIfSet(c.counters.DecodeError)
-		return true
+		return nil, false
 	}
 	if !isGuildTrialResult(ev) {
-		return true
+		return nil, false
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(ev.GetBattleId(), 10) {
 		// key 契约是 battle_id(同一局的重发落在同一分区、保持有序)。不一致只记日志,以 payload 里的 battle_id 为准。
 		logx.Errorf("[GuildTrial] Trial result key=%s differs from battle_id=%d partition=%d offset=%d",
 			key, ev.GetBattleId(), msg.Partition, msg.Offset)
 	}
-	if !c.settle(ctx, msg, ev) {
-		return false
+	return ev, true
+}
+
+// handleBound 是交给 BoundConsumerGroup 的回调:与 consume 路径共用 serial,handler 不会被并发调用。
+func (c *TrialResultConsumer) handleBound(call context.Context, message kafkago.Message) error {
+	c.serial.Lock()
+	defer c.serial.Unlock()
+	if err := call.Err(); err != nil {
+		return err
 	}
-	return true
+	return c.processRecordOnce(call, message)
+}
+
+// processRecordOnce 是 BoundConsumerGroup 路径的单次处理:解码 / 过滤同 processRecord,历练结果只调一次 handler(r2-kc#1)。
+// 返回 error = 这一次没结算成,什么都没提交:owner 按 1s 起翻倍、封顶 30s 的退避原地重调同一条(纪律 2 的重试挪到 owner,
+// 退避期间不占 serial,别的分区照常结算);代次结束(再均衡)时 owner 把它交还 Kafka,由新属主重投,幂等闸门兜住。
+// 不在这里循环重试:那样一次再均衡要等到 HandlerTimeout(5 分钟)才放手,本副本会被踢出消费组再触发一轮再均衡。
+func (c *TrialResultConsumer) processRecordOnce(ctx context.Context, msg kafkago.Message) error {
+	ev, ok := c.trialResultOf(msg)
+	if !ok {
+		return nil
+	}
+	if err := c.attempt(ctx, ev); err != nil {
+		countIfSet(c.counters.HandlerRetry)
+		logx.Errorf("[GuildTrial] Trial result processing failed; offset not committed, the consumer owner retries the same record with backoff battle=%d guild=%d partition=%d offset=%d: %v",
+			ev.GetBattleId(), ev.GetActivityContext().GetGuildId(), msg.Partition, msg.Offset, err)
+		return err
+	}
+	return nil
 }
 
 // isGuildTrialResult 报告一条结果是否属于帮会同道历练。没有活动上下文(普通对局)、或是别的活动类型 → false。

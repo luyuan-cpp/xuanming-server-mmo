@@ -693,7 +693,7 @@ return 0
 
 ### D.2 身份
 - `team.server.callerOf(ctx)` 从 `ctxkeys.GetSessionDetails(ctx)`(`go/match/internal/pkg/ctxkeys`)取身份。session 缺失或 `player_id=0` 时，回 `TeamResponse{error_message: kTeamPlayerId}`,**fail-closed**。
-- match 的 `sessionInterceptor` 解不开会话头时不把会话放进 ctx,随后由 `originalRoleInterceptor` 对 MatchService / ClientPlayerTeam 回 PermissionDenied。`authoritativePlayerID` 只在不带会话头(内部调用)时用请求体里的 id,带了会话头就只认会话头(2026-11-05,[client-request-ordering.md](./client-request-ordering.md) §7.2 第 9 条)。team 的请求体里没有 player_id,本来就没有这条退路。
+- match 的会话只由在线域入口准入 `roleidentity.EntryInterceptor` 放进 ctx([gate-online-identity.md](./gate-online-identity.md) §9.2):客户端方法不带会话、会话头没有 gate 验签原件、或原件缺角色 / 原修订 / 账号,都在进 handler 之前被拒。`authoritativePlayerID` 只在没有会话(内部调用)时用请求体里的 id,有会话就只认会话(2026-11-05,[client-request-ordering.md](./client-request-ordering.md) §7.2 第 9 条)。team 的请求体里没有 player_id,本来就没有这条退路。
 - 客户端调用 `Notify*` 方法：服务端实现为空操作，直接返回 Empty,不产生任何副作用。
 
 ### D.3 home zone 与 AllowCrossZone
@@ -1015,7 +1015,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 **收敛性**(提交 → 读 location → 发事件):team 的投影写入时刻早于它读成员 location 的时刻。成员在别处加载时，加载晚于 location 写入(scene_manager 先写 location,见 `enterscenelogic.go:417-426`),也就晚于投影写入，所以拉取一定能看到新投影。事件丢失不影响正确性，只影响 TeamId 的及时性。
 
-#### C++ 协程试点暂缓（2026-11-05）
+#### C++ 协程工具链核实与标准 task 迁移（2026-11-05）
 
 第一批只涉及 `CheckFollowLeader` 到 `ReadLeaderLocationForFollow` 的两次异步 Redis GET。最初因两套工具链缺标准执行库而暂缓，随后负责人选择用标准 C++ 协程语法搭配仓库锁定的 Boost.Cobalt 实施。以下工具链门禁留给日后迁移标准 `task` 时使用。
 
@@ -2298,7 +2298,12 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
    - **接收者 = 正在显示 entity 的玩家**:AOI 反向索引 `AoiWatchersComp` 里可见、且有网关会话的观察者([AOI 单向关注](aoi-directed-interest.md))。关注是单向的,接收与否只看对方是否关注并显示我,与我的兴趣表无关;隐身期间没有侦测授权的观察者不在名单里。查反向索引不扫 7 格,每条移动上报的代价与观察者数成正比。属性同步(`ActorStateAttributeSyncSystem`)用同一份名单。
    - **调用点**:MoveStart / MoveSync / MoveStop 裁决之后;以及服务器自己把速度清零的三处 —— 战斗 / 归属冻结中收到 MoveStop、`MovementSystem::Update` 撞墙清速、`PlayerLifecycleSystem::StopMotionForExit`(走着掉线)。后一类不广播的话,观察者会按最后一次上报的速度一直外推下去(客户端另有 1 秒外推上限兜底,见 V.4)。
    - **量**:客户端移动中每 0.25s 一条 MoveSync,急转弯时立即补一条(客户端自己限在约 8 条 / 秒以内;gate 对 132 的限流是每窗口 20 条),即每个移动中的玩家约 4~8 次 / 秒 × 互相可见的人数(兴趣表有容量上限)。66 那一路原样保留,没有动。
-6. **走路跟随放在客户端**(`mmorpg-client` 同名分支,见 V.4):队员的客户端自己把本地角色走到「沿队长轨迹往回数 槽位 × 1.4」的点上,照常上报移动,服务端照常裁决。理由:移动本来就是客户端上报;服务端做跟随需要在 scene 里新增每帧系统、缓存队长与名单、处理转让队长的缓存失效,全部是没法在本机编译验证的 C++;而客户端这部分可以离线编译并真跑单测。代价:路人看到的队员位置各自多一段网络延迟,纵队在行进中会比队员自己屏幕上略松。
+6. **走路跟随**:2026-11-06 起分两种客户端。
+   - **声明了跟随的新客户端由服务器驱动**([team-follow-server-trail.md](team-follow-server-trail.md)):scene 每 tick 把队长位置记成轨迹,
+     队员站在轨迹上离队长 槽位 × 1.4 的点,全队同速同起停;客户端不再上报队员的移动,只显示服务器广播。
+     改的原因:客户端各自跟随时,路人看到的每名队员各带一段自己的网络延迟,队形在行进中参差、起停不齐,
+     折返等情形只能在每个客户端里各修一遍(V.7、V.8);服务器驱动后所有人看到同一份队形,且不需要寻路(不用 dtCrowd)。
+   - **旧客户端保持原样**(`mmorpg-client` 同名分支,见 V.4):队员的客户端自己把本地角色走到「沿队长轨迹往回数 槽位 × 1.4」的点上,照常上报移动,服务端照常裁决。
 
 ### V.3 服务端改动文件(9 个,全部手写,未编译)
 

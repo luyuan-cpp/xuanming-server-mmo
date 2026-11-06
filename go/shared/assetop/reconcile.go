@@ -175,7 +175,7 @@ type Applier interface {
 	Do(ctx context.Context, rpc RPC, req *assetpb.AssetOpRequest) (Result, error)
 }
 
-// LedgerReader 读玩家**已落盘**的账本(player_store 的 kAsset 行)。实现是 DataServiceLedger。
+// LedgerReader 读玩家**已落盘**的账本(player_store 的 kWallet 行)。实现是 DataServiceLedger。
 // 玩家没有写权行时返回 (nil, nil)。
 type LedgerReader interface {
 	ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error)
@@ -228,8 +228,9 @@ type ManualResolution struct {
 //
 // 长度上限跟列宽一致 —— 超长会被 MySQL 静默截断,而截掉的正是事后追责要看的那几个字。
 //
-// StatusAbandoned 刻意不在白名单里:放弃只能由 AbandonOnce 在全部条件成立时自动产生(abandon.go),
-// 人工判定「放弃」时应按证据选 Aborted(scene 流水里查不到 correlation_id)。
+// StatusAbandoned 刻意不在白名单里:放弃只能由 AbandonOnce 在全部条件成立时自动产生(abandon.go)。
+// 人工要判「没应用」只能选 Aborted,而且证据只能是已提交账本(JudgeManual 判出 rejected 或 never_applied);
+// scene 流水里查不到 correlation_id 不算证据:提交之后发送可能失败,没流水不等于没应用。
 func (r ManualResolution) validate() error {
 	switch r.Final {
 	case StatusApplied, StatusRejected, StatusAborted, StatusAppliedPartial:
@@ -1246,7 +1247,8 @@ func (l *Loop) refreshPendingAge(ctx context.Context) {
 }
 
 // ResolveManually 走人工终结通道。它不查证据、不猜结论:调用方(管理 RPC / assetopfix
-// CLI)已经按 scene 流水 correlation_id 判定过,这里只负责校验 + 落库 + 留痕 + 计数。
+// CLI)已经按已提交账本判定过(JudgeManual,manual_evidence.go;流水只是线索),
+// 终结用的 resolver 也应带读证据时的见证(QuietWitness),这里只负责校验 + 落库 + 留痕 + 计数。
 //
 // 为什么是包级函数而不是 Loop 的方法:D4 拍板的 assetopfix CLI 只连库,不连 scene,
 // 给不出 Applier,也没有循环节律可言。挂在 Loop 上就等于逼它先造一个假 Applier 和一份

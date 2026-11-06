@@ -19,7 +19,7 @@ This directory contains Kubernetes-only deployment assets for opening game zones
 
 ## Directory Layout
 
-- `manifests/infra/`: infra resources applied per namespace (`etcd`, `etcd-maintenance`, `redis`, `redis-match-cluster`, `kafka`, `mysql`, `loki`). `etcd` is a 3-replica StatefulSet with one PVC per member (see "etcd:3 副本 StatefulSet" below); `etcd-maintenance` 是 MVCC 历史压缩 CronJob `etcd-compact`(见该节「维护」) and `kafka` is a **single-broker** StatefulSet with one PVC (see "Kafka:StatefulSet + PVC" below); `redis` / `mysql` are still single-replica Deployments. `redis-match-cluster` 是 match 私有的 Redis Cluster(StatefulSet + 一次性建群 Job,Job template 落地后不可变,改建群脚本要先删 Job 再 apply)。`loki` 是 C++ 日志 sidecar 的写入目标(Deployment + `loki-data-pvc` 10Gi,retention 7 天),**只在 sidecar 开着且没给 `-LokiPushUrl` 时才随 `infra-up` apply** —— 关了 sidecar 或指向外部 Loki 时它不占集群资源(见 Optional Flags 的 `-NoCppLogSidecar`)。
+- `manifests/infra/`: infra resources applied per namespace (`etcd`, `redis`, `redis-match-cluster`, `kafka`, `mysql`, `loki`; non-dev profiles add `etcd-id-secondary`, `-HostIdRegistry` adds `etcd-id-registry`). `etcd` is a 3-replica StatefulSet with one PVC per member (see "etcd:3 副本 StatefulSet" below), MVCC 历史压缩用 etcd 内置的自动压缩(见该节「维护」;以前的压缩 CronJob `etcd-compact` 已退役) and `kafka` is a **single-broker** StatefulSet with one PVC (see "Kafka:StatefulSet + PVC" below); `redis` / `mysql` are still single-replica Deployments. `redis-match-cluster` 是 match 私有的 Redis Cluster(StatefulSet + 一次性建群 Job,Job template 落地后不可变,改建群脚本要先删 Job 再 apply)。`loki` 是 C++ 日志 sidecar 的写入目标(Deployment + `loki-data-pvc` 10Gi,retention 7 天),**只在 sidecar 开着且没给 `-LokiPushUrl` 时才随 `infra-up` apply** —— 关了 sidecar 或指向外部 Loki 时它不占集群资源(见 Optional Flags 的 `-NoCppLogSidecar`)。
 - `manifests/go-svc/`: Go micro-service K8s manifests (`db`, `data-service`, `login`, `player-locator`, `scene-manager`, `match`, `trade` + its `trade-migrate` schema Job, `friend` + its `friend-migrate` schema Job). `guild` has no manifest / ConfigMap yet (see "snowflake 缓存目录 / PlayerId 号段 / data_service 全局库" below). trade 见下面「聚宝斋 trade」,friend 见下面「好友 friend」。
 - `Dockerfile.go-svc`: multi-stage Dockerfile for building Go service images.
 - `zones.sample.json`: sample multi-zone definition file (JSON).
@@ -511,14 +511,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   状态:已落码,**未编译、未测试**,待 Codex 验证。下面的阈值全部是开服档起步值,**待压测确认**(L-14),不能据此下容量结论(AGENTS §6)。
   - 两个参数都取 `auto|on|off`,缺省 `auto` = 跟随 `-ReleaseProfile`:dev 关(ConfigMap 与 G4b 之前逐字相同),staging / prod 开。
     `off` 只用于事故止血与基线压测;`on` 只用于 dev 档联调。取值拼错在参数绑定时就失败。
-    - `-GatewayRateLimit`(gateway Bucket4j 限流):开时 gateway ConfigMap 的 `gate.rate-limit` 下写 `enabled: true`、`zone-default-rps: 2000`、
+    - `-GatewayRateLimit`(gateway 令牌桶限流):开时 gateway ConfigMap 的 `gate.rate-limit` 下写 `enabled: true`、`zone-default-rps: 2000`、
       `zone-default-burst: 5000`、`ip-rps: 5`、`ip-burst: 20`、`account-cooldown-ms: 5000`,与 `trusted-proxies` 共用同一个 `rate-limit:` 键;
       不写 `wave.*`(开服波次要一个开服时刻,属运营决策)、`zone-overrides` 和没有消费方的 `queue-timeout-ms`。关时不写,落回 jar 内的 `enabled: false`。
     - `-LoginQueue`(login 登录排队):开时 login ConfigMap 写 `Queue` 段:`Enabled: true`;`DispatcherLockKey` = login.yaml 的值加 `:zone:<本 zone>`(见下面 ②);
       `ZoneCapacityOverride` 只含本 zone 一项 `5000`,这是**本 zone 同时在线上限,不是速率**;其余键(`DispatchInterval` / `AdmitTTL` / `QueueEntryTTL` /
       `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL`)从 `go/login/etc/login.yaml` 镜像。`Secrets` 下另写 `QueueToken.Value`(见下一条)。
     - 与开关无关:gateway ConfigMap 的 `spring.data.redis` 在 `MMORPG_REDIS_PASSWORD` 非空时写 `password`(staging / prod 必须设该变量;dev 档没设时回落空串,不写)。
-      Bucket4j 的 Lettuce 客户端只从这个属性取口令,而 release 档的 Redis 带 `--requirepass`;不写口令时限流过不了 Redis 认证,要么每次调用都 fail-open 放行,
+      限流专用的 Lettuce 客户端只从这个属性取口令,而 release 档的 Redis 带 `--requirepass`;不写口令时限流过不了 Redis 认证,要么每次调用都 fail-open 放行,
       要么 gateway 建连接时就起不来(取决于 Lettuce 的握手行为,未实测)。口令与 go-svc ConfigMap 一样是明文。
   - **登录排队的合入门槛(2026-10-15 更正注:上面「staging / prod 开」目前只对 `-GatewayRateLimit` 成立)**。G4b-2 的 login 段已先于合入门槛
     随 `e4ff1d165` / `ebccaf04d` 入库(越序),`k8s_deploy.ps1` 用脚本常量 `$script:LoginQueueMergeGateCleared`(当前 `$false`)机械拦截:
@@ -581,18 +581,22 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     低于 `LoginQueueZoneCapacity`(5000)。否则排队一开,新登录全部入队,直到在线降到 5000 以下才出队,dispatcher 不会因此报错(规格 R20)。
     超过的先调大常量(见下一条),或先只开 gateway 限流(`-LoginQueue off`)。
     (2026-10-15 补:「首次打开排队」还要先过上面的合入门槛;门槛未清时排队在任何环境都关着,本条暂不适用。)
-  - **调阈值**:阈值只在常量表 `$script:PeakShavingLaunchTier`(不设覆盖参数);改常量后重跑部署,gateway / login 按指纹自动滚动。限流阈值另外要**清桶**:
-    Bucket4j 只在桶不存在时按新配置建桶,而持续有流量时桶的 TTL 一直被刷新、不会过期,所以改 rps / burst 后旧桶一直按旧配置跑
-    (推断:`AssignGateRateLimiter` 用 `build(key, supplier)`、没有配置替换,依 Bucket4j 8.x 语义,未实测)。在维护窗口对共享 Redis(`redis.<InfraNamespace>`,
-    staging / prod 要带口令)执行:
+  - **调阈值**:阈值只在常量表 `$script:PeakShavingLaunchTier`(不设覆盖参数);改常量后重跑部署,gateway / login 按指纹自动滚动。
+    (2026-11-05 改,服务器缺口清单第 29 条)限流不再用 Bucket4j,改成一段令牌桶 Lua(`ratelimit/RedisRateLimitStore.java`),rps / burst 每次随调用传进脚本,
+    gateway 滚动完即对已有的桶生效(余量按新 burst 封顶),**不用清桶**;只是关掉限流也不用清:放行后桶键在补满的那一刻过期(秒级)。
+    唯一要清的场合是**从 Bucket4j 版本升级到这一版**:旧桶键是 STRING、新脚本按 Hash 读,撞上就报 WRONGTYPE、按 fail-open 放行,直到旧键过期(约 1 小时加补满时间)。
+    升级前对 gateway 连的那个 Redis(拆分后是 `redis-queue-g<N>.<InfraNamespace>`,未拆是 `redis.<InfraNamespace>`;staging / prod 要带口令)执行一次:
     ```bash
     redis-cli --scan --pattern 'rl:zone:*' | xargs -r redis-cli DEL
     redis-cli --scan --pattern 'rl:ip:*'   | xargs -r redis-cli DEL
     ```
-    代价:清空后每个桶会重新拿到一次满额 burst。只是关掉限流不需要清:`rl:*` 空闲约 1h(外加重填到满的时间)后按 TTL 自然过期。
-  - **观测缺口**:gateway 没有限流指标;K8s 的 login ConfigMap 没有 `Prometheus` 段,`login_queue_*` 在集群里抓不到。开服当天看日志与回包码:gateway 启动时打
-    `Bucket4j Redis client -> …`(限流开)或 `RateLimiter disabled …`(关);Redis 出错时逐请求 WARN `rate-limit fail-open due to backend error`;login 的选主日志见 ②。
-  - 已知风险(保护不了 EnterGame、IP 桶误伤 NAT、先扣 zone 令牌再判 IP 桶、排队轮询压在共享 Redis 等)见设计稿 §十一。
+    代价:清空后每个桶会重新拿到一次满额 burst。上线前没有存量,压测流程本来就先清 Redis。
+  - **观测**:gateway 的限流计数(2026-11-05 起)经管理端口 8082 的 `/actuator/prometheus` 暴露:`gateway_rate_limit_decisions_total{outcome}`
+    (pass / wave_queue / zone_queue / ip_deny / cooldown_deny)与 `gateway_rate_limit_fail_open_total{reason}`(store_error = 碰 Redis 出错,
+    bypass = 熔断期间没碰 Redis 就放过两个桶)。K8s 的 login ConfigMap 没有 `Prometheus` 段,`login_queue_*` 在集群里抓不到。日志:gateway 启动时打
+    `rate-limit Redis client -> …`(限流开)或 `RateLimiter disabled …`(关);Redis 出错时 WARN `rate-limit fail-open:限流存储出错…`,
+    之后熔断 5 秒、不再碰 Redis,所以每个副本最多每 5 秒一条,放过了多少请求看上面的 fail_open 计数;恢复时 INFO `限流存储恢复`。login 的选主日志见 ②。
+  - 已知风险(保护不了 EnterGame、IP 桶误伤 NAT、排队轮询压在共享 Redis 等)见设计稿 §十一。
 
 ## Important Notes
 
@@ -625,21 +629,21 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   同样按上一条重启节点。
 - **kind / minikube**:单节点也能跑(反亲和是 preferred),但 PVC 要有默认 StorageClass(kind 自带 local-path)。
   `infra-status` 现在会列 `sts` / `pvc` / `pdb`;etcd 起不来先看 PVC 是否 Pending。
-- **维护:MVCC 历史压缩(2026-10-15,P0-C 阶段 1)**:etcd 不压缩就保留每个 key 的全部历史,本仓库每 zone 每秒约 6 个
-  revision(Go 发号水位等),写到配额(默认约 2GiB,待实测)就 NOSPACE:新注册、失租重注册、gate 上报、发号水位全部失败。
-  `manifests/infra/etcd-maintenance.yaml` 是独立的 ConfigMap + CronJob `etcd-compact`:每 5 分钟用线性一致读取当前 revision,
-  压缩到 `current - 1000000`(`KEEP_REVISIONS`,与 compose 的 `ETCD_AUTO_COMPACTION_RETENTION` 同值,取值待实测 / 压测复核);
-  不做 defrag、不解除告警,有活动告警时以 2 退出让 Job 失败可见。`infra-up` 在 `etcd.yaml` 之后 apply 它,`infra-status` 列
-  `cronjob`。它不碰 StatefulSet `etcd`,apply 不滚动 etcd。
-  - **有真实存档的环境不要为它跑 `infra-up`**(会连带 apply `mysql.yaml`,改到它的 Deployment 模板时全服 MySQL 停一次,见「MySQL 连接总账」),只 apply 这一个清单;它带 `__INFRA_NAMESPACE__` 占位,单独 apply 时要先替换:
-    `(Get-Content -Raw deploy/k8s/manifests/infra/etcd-maintenance.yaml).Replace('__INFRA_NAMESPACE__', 'mmorpg-infra') | kubectl --context <ctx> apply -n mmorpg-infra -f -`。
-  - 手工触发一次:`kubectl --context <ctx> -n mmorpg-infra create job --from=cronjob/etcd-compact etcd-compact-manual-<时间戳>`;
-    看结果:`kubectl -n mmorpg-infra get jobs -l app=etcd-maintenance`、`kubectl -n mmorpg-infra logs job/<名字>`。
-  - defrag 只手工、逐成员做;NOSPACE 的处置顺序、compose 环境的手工压缩、配额(3GiB)与阶段 2,全在
-    `docs/ops/etcd-maintenance-runbook.md`。
-  - **阶段 2(给 StatefulSet 加压缩 / 配额 env、钉镜像 tag@摘要、加抓取注解)会滚动 3 个成员,未做**:前置是 C++ etcd 流重建
-    (`docs/design/grpc-muduo-transport.md` §10.2 第 2 批)验证通过。`tools/scripts/tests/etcd_maintenance_contract.tests.ps1`
-    断言 `etcd.yaml` 里还没有这些 env,防止提前滚动。
+- **维护:MVCC 历史压缩与镜像(P0-C,2026-11-05 阶段 2 收尾)**:etcd 不压缩就保留每个 key 的全部历史,本仓库每 zone 每秒约 6 个
+  revision(Go 发号水位等),写到配额就 NOSPACE:新注册、失租重注册、gate 上报、发号水位全部失败。
+  - **镜像**:官方 `quay.io/coreos/etcd:v3.6.16`,按 Quay 的清单列表摘要钉死(`etcd.yaml`、发号器两套、两份 compose 同一个引用,
+    `tools/scripts/tests/etcd_maintenance_contract.tests.ps1` 守住)。以前的 `bitnamilegacy/etcd:latest` 是停更的归档(实为 3.6.1)。
+    官方镜像是 distroless,**没有 shell**:`kubectl exec` 只能直接跑 `etcdctl`(上一条的写法照用),不能 `sh -c`、`df`、`curl`。
+    数据目录是 PVC 下的 `data/` 子目录,挂载点从 `/bitnami/etcd` 改到 `/var/lib/etcd`,已有 PVC 里的数据照用。
+  - **压缩**:只靠 etcd 内置的自动压缩(`ETCD_AUTO_COMPACTION_MODE=revision`、保留 1000000 个 revision,每 5 分钟一次;与 compose 同值,
+    取值待实测 / 压测复核),配额 3GiB。阶段 1 的 CronJob `etcd-compact`(`etcd-maintenance.yaml`)退役:`infra-up` 不再下发它,
+    并在 apply `etcd.yaml` 之前删掉以前留下的 CronJob 与 ConfigMap `etcd-maintenance-scripts`。
+  - **告警**:`deploy/k8s/etcd-alerts.yaml`(无主、库文件到配额 80% / 95%、增长过快、碎片过半等,照 etcd 官方 mixin),
+    三套 etcd 的 Pod 模板都带抓取注解。
+  - **已有集群换镜像会逐个滚动 3 个成员**:先核对每个成员的 `etcd --version`(3.5.x 要先升到 3.5.32+);C++ etcd 流重建
+    (`docs/design/grpc-muduo-transport.md` §10.2 第 2 批)还没有「重启成员后零重注册」的运行证据,有 C++ 节点在跑的集群把这次滚动放进
+    全栈维护窗口。全新集群(未上线前的首次部署)没有这个问题。
+  - defrag 只手工、逐成员做;NOSPACE 的处置顺序、compose 环境的手工压缩与部署前置,全在 `docs/ops/etcd-maintenance-runbook.md`。
 
 ## snowflake 缓存目录 / PlayerId 号段 / data_service 全局库(2026-09-08,node-id-overhaul-plan §3.5 / §6 / §2.0c)
 
@@ -664,9 +668,9 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - `Schema.AutoMigrate`:所有档位固定 `false`,不镜像服务 yaml(服务 yaml 的 `true` 是本机口径)。常驻 data_service 见到 `true` 直接 panic,
     表只由 `data-service-migrate` Job 建(`data_service -f /app/etc/data_service.yaml -migrate`)。
   - `Kafka`:brokers `kafka.<InfraNamespace>:9092`;topic 名 / 分区数 / 消费组 / 保留期全部从 `go/data_service/etc/data_service.yaml` 取
-    (分区数是不可变契约,`EnsureTopics` 会拒绝与 broker 现状不一致的值)。Kafka 不可达不影响 RPC,只记日志并后台重试。
+    (2026-11-06 起两个审计 topic 的分区数只许加:broker 上少于配置时 `EnsureTopics` 原地加,多于配置照收)。Kafka 不可达不影响 RPC,只记日志并后台重试。
   - `Kafka.TopicGeneration`:同样从服务 yaml 镜像(当前 `1`),有效 topic 名 = `<基名>_g<N>`,当前集群消费第几代 topic 在 ConfigMap 里一眼可见;
-    改分区数 = 这个数 +1,绝不原地扩分区,见下面「Kafka 审计 topic 预建」。
+    加分区直接改配置的分区数;减分区才要这个数 +1,见下面「Kafka 审计 topic 预建」。
   - `IdSegment`:`AllowAutoSeed` dev 档取服务 yaml 的值(`true`),staging / prod 固定 `false`(与 `Schema.AutoMigrate` 同一条纪律;为什么见 [发号器运维手册](../../docs/ops/id-issuer-runbook.md) §2);
     `Tags` 与服务 yaml / Go 的 `DefaultIdSegmentTags` 同一份清单,新增永久身份三处同加(`id_issuer_deploy_contract.tests.ps1` 钉住);
     `Issuer.Region` 是 `-Region` 的地域码,所有档位都写(见下面「逻辑库和角色护栏的部署」);`Issuer` 的三组地址只在 staging / prod 写:两份本地预留记录分别放 `etcd` 和 `etcd-id-secondary`(`manifests/infra/etcd-id-secondary.yaml`,`infra-up` 非 dev 档部署),
@@ -929,7 +933,7 @@ player-inbox 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue['player-
 - **建表**:`manifests/go-svc/player-inbox-migrate.yaml`,`args: ["-f", "/app/etc/player_inbox.yaml", "-migrate"]`,按 `proto/player_inbox/player_inbox_table.proto`
   建 `player_inbox_stream` / `player_inbox_item` / `player_inbox_audit`(入口 `go/player_inbox/player_inbox.go` 的 `-migrate`,照 go/trade)。
   TiDB 上的索引预切不在 Job 里做,见 runbook「TiDB 索引预切」。
-- **账本不在这个库**:消费端账本是玩家存档里的 `inbox_ledger`(`mysql_database_table.proto` 字段 20,分组 2 = `PLAYER_STORE_KIND_ASSET`),
+- **账本不在这个库**:消费端账本是玩家存档里的 `inbox_ledger`(`mysql_database_table.proto` 字段 20,分行 7 = `PLAYER_STORE_KIND_WALLET`),
   随存盘写进玩家落点库的 `player_store` 行,不需要为它加列。
 - **入箱开关**:`PlayerInbox.EnqueueTypes` 镜像服务 yaml(各档位一致,白名单进 git、可审),每项必须是 `PlayerInboxMessageType` 的枚举名,否则生成期 throw。
   仓库默认列了 Battle 结算(`PLAYER_INBOX_MSG_BATTLE_SETTLEMENT`),`bin/etc/game_config.yaml` 默认 `consumer_enabled: true`,未上线阶段整批起步(2026-11-01,runbook §2)。
@@ -1214,7 +1218,9 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
   - `zones.10zones.yaml` 那种 10 个 zone 的配置按同一公式(Z=10、E_z=9)峰值是 4404,在单台 MySQL 上无解,与池怎么调无关(E_z=0 时稳态也有 2480):
     要上 10 个 zone 先完成 TiDB Phase 1。
   - 改规划档 = 重算 `max_connections` 与 MySQL Pod 内存,`mysql.yaml` 的两处注释、告警文件里额外库数的两个阈值一起改。
-    Phase 2 把 login 的 `Placement.NewPlayerStorageId` 指向非 zone 落点库(E_n ≥ 1,且非 zone 池要调大)之前必须重做规划档。
+    存档库和区脱钩(`docs/design/player-data-tidb-scaling-plan.md` §7.2):K8s 给 login 渲染 `Placement.Region` / `StorageShards`、
+    新号落进每地域 K 个地域存档库(E_n = K,且非 zone 池要按 1/K 的流量重定)之前必须重做规划档,这是批次 A17b 的工作;
+    在那之前 K8s 的 login 不渲染 `Placement`,新号照旧落本区库(启动日志打 ERROR 提醒)。
 - **部署时怎么看**:`zone-up` / `all-up` / `infra-up` 的写路径打印一行(`*-down` / `*-status` 不打):
   ```text
   MySQL connection ledger: zones=<Z> steady=<稳态> peak=<峰值> max_connections=<上限> headroom=<余量>; plan zones=4 peak=<规划峰值> headroom=<规划余量>
@@ -1367,23 +1373,28 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   不等打 `[RedisMaxClients]Mismatch:`(多半是 nofile 硬限把它压低了,看 `redis fd limit:` 与 `ERROR` 两行),读不到打 `[RedisMaxClients]CheckFailed:`。都只告警。
   高可用形态(2026-10-19)先等 `deployment/redis-proxy` 就绪,再逐个核 redis-0..2,全部相等才打 OK,见下一节「连接上限」。
 - **重启闸 `-ConfirmRedisCoreRestart`**:`redis.yaml` 的 Pod 模板(命令、env、探针、镜像、resources 任何一处)一变,apply 就重启唯一的 redis-0 ——
-  **全服登录中断并重放 AOF**。所以 `Apply-Infra` 在它的任何写操作之前先比较:
-  - 渲染后的 `spec.template` 段(去掉 YAML 注释与空行;启动薄壳字面块里的行原样保留)的 SHA-256 前 16 位,写在 StatefulSet **自己的** metadata 注解
-    `mmorpg.io/redis-pod-template-digest` 上(不在 Pod 模板里,改它不滚动);
-  - 线上既没有 `sts/redis` 也没有旧的 `deployment/redis` → 放行(全新集群);线上注解与本次摘要相同 → 放行;不同,或线上没有这条注解 →
-    没给 `-ConfirmRedisCoreRestart` 就拒绝,报错写明「apply 会重启 redis-0,全服登录中断并重放 AOF」,本次不做任何写操作;
-    给了开关就放行并打 `[RedisCoreRestart]Confirmed:` 告警。
+  **全服登录中断并重放 AOF**。所以 `Apply-Infra` 在它的任何写操作之前先比较(2026-11-05 起按服务端预演判定,取代「比较注解」):
+  - 线上有 `sts/redis` 时,把这次要 apply 的那份 StatefulSet 交给 API server 做服务端预演(`kubectl apply --dry-run=server -o json`,
+    与真 apply 同一种客户端 apply,不落库),拿预演结果的 `spec.template` 与线上的比较(键排序后的规范 JSON,`Compare-RedisPodTemplateJson`)。
+    这就是 `kubectl diff` 的比较,限定在 Pod 模板上:StatefulSet 只在 Pod 模板变化时滚动 Pod。
+  - 线上既没有 `sts/redis` 也没有旧的 `deployment/redis` → 放行(全新集群,未上线前的首次部署就是这种);预演后的模板与线上相同 → 放行,
+    打 `Redis restart gate: server-side dry-run shows the redis pod template unchanged`;不同 → 没给 `-ConfirmRedisCoreRestart` 就拒绝,
+    报错写明两边的模板摘要、变化落在哪些键上(如 `spec.containers`)与「apply 会重启 redis-0,全服登录中断并重放 AOF」,本次不做任何写操作;
+    给了开关就放行并打 `[RedisCoreRestart]Confirmed:` 告警。预演本身失败(不可变字段变了、准入拒绝、API 抖动)一律拒绝(fail-closed)。
+  - 渲染后的 `spec.template` 段的文本摘要(去掉 YAML 注释与空行后 SHA-256 前 16 位)仍写在 StatefulSet **自己的** metadata 注解
+    `mmorpg.io/redis-pod-template-digest` 上(不在 Pod 模板里,改它不滚动),只作标记:看得出线上是哪一版清单 apply 的,DryRun 那一行也打它。
+    线上没有这条注解(P0-E 之前部署的)不再一律要求确认,模板真没变就放行。
   - 线上没有 `sts/redis`、但还有 2026-09-19 之前的 `deployment/redis`(emptyDir)→ 同样要 `-ConfirmRedisCoreRestart`:`Apply-Infra` 会先删它再建
     StatefulSet,Redis 停机、数据不迁移(以前这种集群被当成全新集群放行)。查询 `sts` / `deployment` 时 kubectl 失败一律拒绝(fail-closed)。
   - DryRun 不查集群,只打 `Redis restart gate: skipped in DryRun ...` 一行。只改注释不触发。
-  - **高可用形态**(2026-10-19):闸比较的是所选清单(`-RedisReplicas 3` 时是 `redis-ha.yaml`)的模板摘要,StatefulSet 上是同一条注解。
+  - **高可用形态**(2026-10-19):预演提交的是所选清单(`-RedisReplicas 3` 时是 `redis-ha.yaml`)里的 StatefulSet。
     线上与本次都是高可用时,模板变化 = 逐个滚动 3 个 redis Pod,所以拒绝 / 告警文本换成「apply 会逐个滚动重启 3 个 redis Pod,每个先交接主」
-    (每次交接写入挂起约 2~3 秒),确认要求不变。单实例 → 高可用(1 → 3)仍按「重启 redis-0」的文本:闸在 `--cascade=orphan` 删除之前读线上摘要,照样要确认。
-  - **盲区**:比较的是上次经本脚本 apply 的模板(注解),不是线上真实的 `spec.template`。有人用 `kubectl edit` / `set image` / `patch` 带外改过
-    `redis.yaml` 里声明了的字段(镜像、resources、命令、探针)时,闸判「unchanged」放行,而 apply 的三方合并会把它们改回清单值、照样重启 redis-0;
-    所以放行那一行写的是 `pod template unchanged since the last apply by this script ... would be reverted`,不是「不会重启」。
-    对 sts/redis 带外改过之后,先把同样的改动落进 `redis.yaml` 再跑 infra-up。`rollout restart` 加的 `restartedAt` 注解不在清单里,三方合并保留它,不受影响。
-    用 server-side dry-run 的模板与线上模板比较可以补上,待负责人拍板与实测。
+    (每次交接写入挂起约 2~3 秒),确认要求不变。单实例 → 高可用(1 → 3)要先 `--cascade=orphan` 删 StatefulSet 再新建(`podManagementPolicy`
+    不可改,拿线上对象预演必然被拒),所以不做预演、直接按「重启 redis-0」要求确认(拒绝文本里线上摘要写 `<recreate>`)。
+  - **带外改动**:以前比较的是注解(上次经本脚本 apply 的模板),`kubectl edit` / `set image` / `patch` 带外改过 `redis.yaml` 里声明了的字段时会被
+    误判「unchanged」放行,而 apply 的三方合并把它们改回清单值、照样重启 redis-0。改成服务端预演之后,预演结果里这些字段已经被改回,与线上不同,
+    闸照实要求确认。`rollout restart` 加的 `restartedAt` 注解不在清单里,三方合并保留它,两边都有,不算变化。对 sts/redis 带外改过之后,
+    仍应先把同样的改动落进 `redis.yaml` 再跑 infra-up,否则每次都会被要求确认(而且确认后会被改回)。
     以前的另一个盲区(2026-10-19 已补,未运行,待 Codex 验证):`kubectl delete sts redis --cascade=orphan` 之后(改 volumeClaimTemplates 之类不可变字段的
     常规做法,或 1 → 3 切换在 orphan 删除之后 apply 失败)redis-<n> Pod 与 PVC 仍在服务,以前闸查不到 sts、也查不到旧 Deployment,按「全新集群」放行。
     现在两样都没有时再查带 `app=redis` 的 `redis-<n>` Pod(`Get-LiveRedisOrphanPodOrdinals`):有就判 `orphan-pods`,要求 `-ConfirmRedisCoreRestart`
@@ -1392,7 +1403,7 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
     (两次读之间文件被改时,不会出现「闸按旧内容放行、apply 新模板」,也不会拿新值去核对刚 apply 的旧值)。
   - 带 `-WaitReady` 确认重启时,`Wait-ForStatefulSetReady` 的时限是 `-WaitTimeoutSeconds`(缺省 180s),而 `startupProbe` 给 AOF 重放留了 300s、
     大库重放可能更久:等待超时会 throw,**其后的步骤全部没做** —— maxclients 核对、等 `kafka-topic-init` Complete、battle 池(含新的
-    `battle-node-config`)、全局 Go 服务,all-up 还有全部 zone。必须重跑同一条命令(安全:注解已更新,会判 unchanged);
+    `battle-node-config`)、全局 Go 服务,all-up 还有全部 zone。必须重跑同一条命令(安全:线上已是新模板,预演判 unchanged);
     或一开始就给大一点的 `-WaitTimeoutSeconds`。
   - `dev_tools.ps1`(`k8s-infra-up` / `k8s-all-up` / `k8s-release-all`)与 `k8s_image.ps1`(`release-all`)只在被指定时透传同名开关。
   - 它取代了 G4a 设计稿(`docs/design/shared-redis-split-by-purpose.md` §4.2)里「给了 `-RedisCoreMaxMemory` 就必须给 Confirm」的同名开关规划,语义更宽。
@@ -1812,27 +1823,37 @@ kubectl apply -n observability -f deploy/k8s/redis-player-alerts.yaml
 
 ## Kafka 审计 topic 预建(kafka-topic-init,2026-09-08,node-id-overhaul-plan §2.0c)
 
-data_service 的两条落库消费者(`transaction_log_topic` / `player_snapshot_topic`,C++ scene 生产、key=player_id)对分区数有**不可变契约**
-(`go/data_service/etc/data_service.yaml` 的 `Kafka.TransactionLogPartitions: 6` / `Kafka.SnapshotPartitions: 3`,`kafkautil.EnsureTopics` 会拒绝与 broker 现状不一致的值)。
-而 broker(compose 与 `manifests/infra/kafka.yaml`)都开着 `auto.create.topics.enable` 且 `num.partitions=1`:只要 scene 先于预建发出第一条消息,
-topic 就被自动建成 1 分区,EnsureTopics 从此永远报 `partition contract mismatch`,两条消费者一条都起不来,唯一症状是每 30s 一条 Error 日志,
-流水 / 快照全被保留期吃掉。所以 topic 必须由**部署侧**在任何 scene 起来之前按契约预建,不能依赖自动创建:
+data_service 的两条落库消费者(`transaction_log_topic` / `player_snapshot_topic`,C++ scene 生产、key=player_id)的分区数取
+`go/data_service/etc/data_service.yaml` 的 `Kafka.TransactionLogPartitions: 6` / `Kafka.SnapshotPartitions: 3`。
+**2026-11-06 起这两个 topic 的分区数只许加、可以原地加**(`docs/design/audit-pipeline-horizontal-scale-20261106.md` §2.A):
+两张审计表都按主键 / 唯一键去重,落库不依赖消息顺序,原地加分区重映射 key=player_id 的哈希没有害处。`kafkautil.EnsureTopics` 对它们打开
+`AllowPartitionGrowth`:broker 上少于配置就 `CreatePartitions` 加到配置值,多于配置照收,也不再建、不再核 `__mmorpg_partition_contract_*` 标记。
+其余按分区寻址的 topic(命令、观战、世界频道,以及 go/db 等按玩家有序的 topic)照旧是不可变契约。
+broker(compose 与 `manifests/infra/kafka.yaml`)都开着 `auto.create.topics.enable` 且 `num.partitions=1`:scene 先于预建发出第一条消息,
+topic 就被自动建成 1 分区、保留期继承 broker 默认值。审计 topic 的分区数能被 init 或 data-service 原地补上,保留期由 init 每次重新声明;
+命令 topic 少了分区就是一批节点永远收不到命令。所以 topic 仍由**部署侧**在任何 scene 起来之前预建,不能依赖自动创建:
 
 - **有效 topic 名带代号**:`<基名>_g<Kafka.TopicGeneration>`,当前是 `transaction_log_topic_g1`(6 分区)/ `player_snapshot_topic_g1`(3 分区),
   `retention.ms` = `Kafka.RetentionMs`(30 天)。生产者(C++)与消费者(data-service)必须用同一个有效名。
 - **compose**:`deploy/docker-compose.yml` 的 `kafka-topic-init` 一次性容器预建这两个 topic(`create_topic` 现在带分区参数;
-  代号来自 `KAFKA_INIT_AUDIT_TOPIC_GENERATION`,默认 1),建完核对 `PartitionCount`,不符则退出 1(`docker compose ps -a` 里能看到)。
+  代号来自 `KAFKA_INIT_AUDIT_TOPIC_GENERATION`,默认 1),建完用 `ensure_min_partitions` 核对:少于 6 / 3 就原地加,加完仍少则退出 1
+  (`docker compose ps -a` 里能看到);配置调得比 6 / 3 大时,其余分区由 data-service 启动时加。
 - **K8s**:`manifests/infra/kafka-topic-init.yaml` 是一个一次性 Job,`infra-up` 在全部 infra manifest(`Apply-Infra` 的 `$infraManifests`)之后、任何 zone 之前 apply 它
   (`Apply-KafkaTopicInitJob`);占位 `__KAFKA_AUDIT_*__` 由脚本从 `go/data_service/etc/data_service.yaml` 填(基名 / 分区数 / 保留期 / 代号,
   与 data-service ConfigMap 同源,manifest 里不写任何数字)。Job 自己等 broker 可达(最多 5 分钟),`kafka-topics.sh --create --if-not-exists`,
-  再 `--describe` 核对 `PartitionCount`,不符即失败(`backoffLimit: 6`,不会假装成功)。每次 `infra-up` 都先
+  再 `--describe` 核对 `PartitionCount`(审计 topic 带 `grow`:少了先 `--alter --partitions` 原地加,再核「不少于配置」;其余 topic 要求相等),
+  不符即失败(`backoffLimit: 6`,不会假装成功)。每次 `infra-up` 都先
   `kubectl delete job kafka-topic-init --ignore-not-found` 再 apply —— Job template 不可变,而且必须能重跑(见下面「Kafka Pod 重启」)。
 - **`-WaitReady` 会等它 Complete**(`infra-up` / `all-up`,在 etcd quorum 之后):这样 `all-up` 里的 zone 一定晚于 topic 建好。
   不带 `-WaitReady` 时,`zone-up` 之前自己核对 `kubectl -n mmorpg-infra get job kafka-topic-init`(COMPLETIONS `1/1`)/
   `kubectl -n mmorpg-infra logs job/kafka-topic-init`;`infra-status` 现在会列 `job`。
-- **改分区数 = 代号 +1,绝不原地扩分区**:原地 `--alter --partitions` 会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了,
-  而且 EnsureTopics 的 `__mmorpg_partition_contract_*` 标记 topic 也会与新值冲突。正确做法是**离线换代:停写 → 排空 → 三方同改 → 消费者先起、生产者后起**,
+- **加分区 = 原地加,不换代**(2026-11-06):先按新分区数核一遍 Kafka 盘预算(下面「Kafka 磁盘预算」,`Get-KafkaDiskPlan` 按配置的分区数算),
+  再调大 `go/data_service/etc/data_service.yaml` 的 `Kafka.TransactionLogPartitions` / `SnapshotPartitions`,重跑 `infra-kafka-topics -WaitReady`
+  (或直接 `zone-up` 滚动 data-service,第一个起来的副本 `EnsureTopics` 会加),最后再加 data-service 副本。C++ 生产者靠 librdkafka 定期刷新元数据
+  (缺省 5 分钟)看到新分区,期间照旧写老分区,不丢不乱。
+- **减分区 = 代号 +1**(Kafka 不能减分区):**离线换代:停写 → 排空 → 三方同改 → 消费者先起、生产者后起**,
   完整步骤见 [`docs/ops/audit-topic-generation-bump-runbook.md`](../../docs/ops/audit-topic-generation-bump-runbook.md)。
+  加分区之后再回滚到 2026-11-06 以前的 data-service 二进制也要先换代或把配置调成 broker 上的实际分区数:旧版 `EnsureTopics` 仍要求相等。
   **(2026-10-13 更正)** 这里以前写的是「建出 `*_g2` → 滚 data-service 与 scene → 老 topic 排空后再 `--delete`」:data-service 一切到 g2
   就不再消费 g1,而 scene 没滚完之前仍在写 g1 —— g1 的尾部无人消费,保留期一到就丢。必须先停掉所有 scene、等 g1 的 lag 归零,再切。
   data-service ConfigMap 里镜像了 `Kafka.TopicGeneration`,当前集群消费第几代一眼可见。
@@ -1841,7 +1862,7 @@ topic 就被自动建成 1 分区,EnsureTopics 从此永远报 `partition contra
   ③ 有人手工删过 topic。这三种情况下 topic 是空的,任何在跑的 scene 一发消息就会把 `*_g1` 自动建成 1 分区。
   做法是**在让 scene 产消息之前**跑 `pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-kafka-topics -WaitReady`
   (止血路径,不过发布门禁;`dev_tools.ps1` 还没透传这个命令),之后再 `rollout restart` 各 zone 的 scene 与 data-service。
-  如果晚了一步、Job 因 `PartitionCount=1` 失败,删掉那个被抢建的 topic 再重跑:
+  审计 topic 被抢建成 1 分区时 Job 会原地加到配置值,不再失败;**命令 topic**被抢建时 Job 因 `PartitionCount=1` 失败,删掉那个被抢建的 topic 再重跑:
   `kubectl -n mmorpg-infra exec sts/kafka -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --delete --topic <名>`。
 - **`kubectl exec deploy/kafka` 已失效**:broker 是 StatefulSet,用 `sts/kafka` 或 Pod 名 `kafka-0`。
 - 核对 broker 现状:`kubectl -n mmorpg-infra exec sts/kafka -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic transaction_log_topic_g1`
@@ -2146,32 +2167,62 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   「C++ 不调用」登记表的守护(C++ 不直接调用、gate 不按消息号转发、没有过期项),
   以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项;login ConfigMap 的 `Timeout` == login.yaml 在「login ConfigMap 关键值」用例的键对表里逐键钉住。
 
-## C++ 节点的 zone Redis 口令(2026-10-15,P0-A 第二批,docs/handoff/global-singletons-p0-findings-20261014.md)
+## C++ 节点的 zone Redis 口令(2026-10-15 P0-A 第二批;2026-11-05 改走 Secret,docs/handoff/handoff-global-singletons-p0-20261015.md §8)
 
 C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)的口令,K8s 上取自 `MMORPG_REDIS_PASSWORD`,
-与 Go 服务、gateway、服务端 Secret `redis-auth` 是同一个变量、同一个值。
+与 Go 服务、gateway、服务端 Secret `redis-auth` 是同一个变量、同一个值。scene 另连本 zone 组的控制域实例 `redis-ctl-g<N>`(`scene_control_redis`),
+同一个口令。
 
-- **口令怎么到达 C++(方案 A)**:`New-NodeConfigMapYaml` 把它明文写进 `node-config`(zone namespace)与 `battle-node-config`(infra namespace)
-  的 `game_config.yaml` → `zoneredis.password`。与各 Go 服务 / gateway 的 ConfigMap 同一做法:改走 Secret 不缩小暴露面(同 namespace 能读这份
-  ConfigMap 的人也能读那几份)。`-DryRun` 会把它连同其它 ConfigMap 一起打出来(既有行为)。dev 档没设该变量时写空串,C++ 不发 AUTH,与改动前相同。
-  C++ 进程另认环境变量 `ZONE_REDIS_PASSWORD`(覆盖 yaml,本机 / 验收用),K8s 模板不注入它。
+- **口令怎么到达 C++(K8s 标准做法:Secret + secretKeyRef)**:`node-config`(zone namespace)与 `battle-node-config`(infra namespace)的
+  `game_config.yaml` 里 `zoneredis.password`、`scene_control_redis.password` 一律写空串;C++ Pod 用 `secretKeyRef` 从**本 namespace** 的
+  Secret `redis-auth`(键 `password`)拿环境变量 `ZONE_REDIS_PASSWORD`,scene 另拿 `SCENE_CONTROL_REDIS_PASSWORD`,C++ 的 `config.cpp` 用它们覆盖 yaml
+  (值不进日志)。`secretKeyRef` 不写 `optional`:Secret 缺失时 Pod 停在 `CreateContainerConfigError`,不会带着空口令起来收一屏 NOAUTH。
+  - Secret 由 `Sync-RedisAuthSecret` 建:infra namespace 那份在 `Apply-Infra` 的 Redis 分支(Redis 服务端与 battle 共用,先于两者),每个 zone namespace
+    一份同名副本在 `Apply-Zone` 开头(先于 gate / scene;Secret 不能跨 namespace 引用)。值经 `Apply-InjectedSecret` 写入:`-DryRun` 只打一行
+    `# Secret redis-auth (key password; value hidden)`,不再把口令打进输出(以前 infra 那份用 here-string 直接 apply,DryRun 会打印口令)。
+  - dev 档没设该变量时口令是空串:两处 Secret 都删掉残留,C++ 工作负载不注入这两个环境变量、不写指纹注解,与引入口令之前逐字相同;C++ 不发 AUTH。
+  - 各 Go 服务 / gateway 的 ConfigMap 里目前**仍有同一个口令的明文**(`Pass:` / `spring.data.redis.password`),改走 Secret 另立任务
+    (要改 Go / Java 的配置加载)。在那之前同 namespace 的暴露面没有缩小,但 C++ 这一侧不再扩大它。
 - **C++ 的行为(第一批)**:口令非空时每条新连接(含断线重连)先 `AUTH`,回 `+OK` 才对业务可见;被拒、发不出去或超时一律 fail-closed ——
   zone Redis 对业务保持不可用,每个重连周期重试一次并打带 `metric=zone_redis_auth_failed` 的 ERROR,进程不退出、Pod 仍 Ready
   (「zone Redis 已认证」的就绪条件另起一项)。启动日志只打 `Zone Redis auth: on|off`,不打口令。
-- **生成期保护**:非 dev 档口令为空,或口令含 `"`、`\`、换行与其它控制字符(它要原样写进多份 YAML 双引号标量),在任何 `kubectl` 写操作之前拒绝,
-  报错只点变量名、不回显值。
-- **指纹注解**:挂 `/app/bin/etc` 的 C++ 工作负载在口令非空时,Pod 模板带 `mmorpg.io/zone-redis-auth-hash`(只哈希口令,不哈希整份 node-config ——
-  否则 P0-B 这类无关改动也会滚动 gate 与 battle)。C++ 只在启动时读配置,只改 ConfigMap 不会让进程重读;指纹把「换口令」变成 Pod 模板变化:
-  - gate / scene / battle 的 Deployment:apply 即滚动 —— gate 断开该 Pod 上的玩家,scene 迁走玩家,battle 作废在打的局。这是期望行为;
-  - Agones Fleet(scene / battle):新建 GameServerSet,已 Allocated 的实例打完才退 —— 它们一直用启动时读到的旧口令(首次开口令时是空口令),
-    Redis 带新口令重启后会一直认证失败或 NOAUTH,直到实例退出,**不会自行恢复**;高密度 scene 只要还有一个房间就一直是 Allocated。
-    处置见下面上线步骤的第 3 步前置;
+- **生成期保护**:非 dev 档口令为空,或口令含 `"`、`\`、换行与其它控制字符(它仍要原样写进 Go / gateway 的 ConfigMap 与哨兵配置),在任何 `kubectl`
+  写操作之前拒绝,报错只点变量名、不回显值。
+- **指纹注解**:C++ 工作负载在口令非空时,Pod 模板带 `mmorpg.io/zone-redis-auth-hash`(只哈希口令,不哈希整份 node-config —— 否则无关改动也会滚动
+  gate 与 battle)。环境变量只在容器启动时读,只改 Secret 时 Pod 模板逐字节没变、apply 是 no-op;指纹把「换口令」变成 Pod 模板变化,工作负载
+  收敛到新口令(即 Helm 的 checksum 注解做法)。各形态怎么换上新口令:
+  - gate / scene / battle 的 Deployment(缺省形态):apply 即滚动 —— gate 断开该 Pod 上的玩家,scene 迁走玩家,battle 作废在打的局;
+  - Agones Fleet(scene / battle):新建 GameServerSet,已 Allocated 的实例打完才退,期间一直用启动时拿到的旧口令;
   - `-ClientEntryMode external` 的 gate StatefulSet 是 `OnDelete`:模板换了不自动重建,按 `tools/scripts/k8s_gate_drain.ps1` 逐个排空删 Pod。
-- **上线步骤**(给已在运行、Redis 还没开口令的环境开口令,维护窗口内做):
-  1. 先发带 AUTH 的 C++ 镜像(第一批)。旧二进制忽略 `zoneredis.password`,Redis 一开口令就全线 NOAUTH,所以镜像必须先行;
+  旧 Pod 用旧口令能不能继续工作,取决于 Redis 是否同时认新旧两个口令 —— 所以换口令按下面的**双口令轮换**做,不要直接替换。
+- **首次部署(未上线前的全新集群)**:口令从第一天就在 Secret 里,Redis 带 `--requirepass` 起来,C++ Pod 第一次启动就拿到它 —— 没有滚动、
+  没有人被踢、没有作废的局。staging / prod 必须设 `MMORPG_REDIS_PASSWORD`(≥12 位);dev 档设了同样生效。
+- **换口令:双口令轮换**(Redis 6+ 的 ACL 允许一个用户同时有多个口令,`requirepass` 就是 `default` 用户的口令;**未在本仓库实测**,步骤按 Redis 文档写):
+  1. 在每个用这个口令的 Redis 进程上**加**新口令,旧口令仍有效:核心 `redis-0`(高可用形态是 `redis-0..2`)、`redis-queue-g<N>`、`redis-ctl-g<N>`。
+     口令经 `REDISCLI_AUTH` 交给 redis-cli,不上命令行参数、不进 shell 历史(写法同 `k8s_gate_drain.ps1` 的 `Invoke-GateDrainRedis`):
+     `ACL SETUSER default >新口令`。高可用形态还要让主从复制与哨兵也认新口令:每个数据节点 `CONFIG SET masterauth 新口令`,
+     每个哨兵 `SENTINEL SET mymaster auth-pass 新口令`(哨兵会写回自己的配置文件);哨兵自己的访问口令同样 `ACL SETUSER default >新口令`,
+     哨兵之间互认的口令 `SENTINEL CONFIG SET sentinel-pass 新口令`。
+  2. 用新的 `MMORPG_REDIS_PASSWORD` 跑 `infra-up` 与各 zone 的 `zone-up`:Secret `redis-auth`(infra 与每个 zone)换成新口令,C++ 指纹变化,
+     工作负载按上一条各自的方式换上新口令;旧 Pod 在退场之前继续用旧口令,不会 NOAUTH。`redis.yaml` 的 Pod 模板不含口令(Secret 引用),
+     这一步**不重启 Redis**,重启闸判 unchanged。Go / gateway 的 ConfigMap 同步换成新口令,它们怎么滚动以各自的配置指纹为准(另立的任务会改成 Secret)。
+  3. 等所有旧 Pod 都退场:Deployment 滚动完成;Agones 的旧一代 GameServerSet 里没有 Allocated 实例
+     (`kubectl -n <ns> get gs -L agones.dev/fleet,agones.dev/gameserverset`);external gate 都已排空换新。
+     高可用形态的代理(haproxy)在启动时从 Secret 读健康检查用的口令,要 `kubectl -n <infra> rollout restart deployment/redis-proxy`
+     (按用途拆出的实例同理:`redis-queue-g<N>-proxy`、`redis-ctl-g<N>-proxy`)并等它们就绪;不滚的话第 4 步之后代理把所有后端判下线 = 全服断 Redis。
+  4. 删旧口令,两种做法选一种:
+     - **计划内轮换(推荐)**:不手工删,留到下一次 Redis 的维护窗口重启 —— Redis 按 Secret 里的新口令起来,运行时加的旧口令不落盘、自然消失;
+       同 Pod 里的 `redis-exporter` sidecar 也是启动时读口令的,同一次重启一起换上新口令。
+     - **口令泄露,要立刻作废**:在第 1 步的每个进程上 `ACL SETUSER default <旧口令`(哨兵同理)。代价是 `redis-exporter` sidecar 还拿着旧口令,
+       在下一次 Redis 重启之前抓不到指标、`RedisDown` 会响(它只能随 Redis Pod 一起重启,要过重启闸)。
+  - 第 1~4 步之间 Redis 进程要是重启了,它只按 Secret 当时的值起来(运行时加的口令不落盘):第 2 步之前重启 = 只认旧口令(还没人用新口令,无害,重做第 1 步);
+    第 2 步之后重启 = 只认新口令,还没退场的旧 Pod 会 NOAUTH。所以轮换期间不跑会重启 Redis 的变更,万一重启了就对它重做第 1 步(加回旧口令)。
+  - 轮换前后核对:每个 C++ 节点日志 `Redis AUTH ok to <host:port>`,不再有 `metric=zone_redis_auth_failed`;Redis 的 `INFO errorstats` 里 NOAUTH 计数不再增长。
+- **给已在运行、Redis 还没开口令的旧环境开口令**(只剩本机 / dev 的存量集群会遇到;更简单的做法是 `infra-down` 后带口令重建),维护窗口内做:
+  1. 先发带 AUTH 的 C++ 镜像(第一批)。旧二进制不认口令,Redis 一开口令就全线 NOAUTH,所以镜像必须先行;
      新镜像配空口令时行为与今天相同,可以提前滚。
-  2. 维护窗口内带 `MMORPG_REDIS_PASSWORD` 重跑 `infra-up`(建 Secret `redis-auth`、写 `battle-node-config`)与各 zone 的 `zone-up`(写 `node-config`)。
-     staging / prod 必须设该变量(≥12 位);dev 档设了同样生效。
+  2. 维护窗口内带 `MMORPG_REDIS_PASSWORD` 重跑 `infra-up`(建 infra 的 Secret `redis-auth`,battle 带上 `ZONE_REDIS_PASSWORD`)与各 zone 的
+     `zone-up`(建 zone 的 Secret 副本,gate / scene 带上口令环境变量)。staging / prod 必须设该变量(≥12 位);dev 档设了同样生效。
   3. **前置(只针对 `-SceneOrchestrator agones` / `-BattleOrchestrator agones`)**:重启 Redis 之前,确认每个 Fleet 都只剩当前这一代
      GameServerSet(旧的已删除,或 DESIRED 与 CURRENT 都是 0),而且旧一代里没有 Allocated 实例。**先等 Fleet 滚动结束再查**:
      SceneManager 分配时只按 zone / role / build 标签选、不分代,第 2 步只改配置时 build 标签不变,滚动中旧一代的 Ready 实例在你查完之后、
@@ -2180,7 +2231,7 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
      kubectl -n <ns> get gameserverset -L agones.dev/fleet                               # 每个 Fleet 只应剩一行(或旧的 DESIRED/CURRENT 为 0)
      kubectl -n <ns> get gs -L agones.dev/fleet,agones.dev/gameserverset                 # 不按 Fleet 名过滤,免得填错名字查出空结果
      ```
-     旧一代里的 Allocated 实例启动时读的是旧 `node-config`(旧口令、空口令,或第 1 步之前的旧二进制 —— 它们根本不认口令),Redis 带新口令起来后
+     旧一代里的 Allocated 实例启动时没有口令(或是第 1 步之前的旧二进制 —— 它们根本不认口令),Redis 带口令起来后
      会一直 fail-closed 或 NOAUTH 到实例退出;battle 在空口令时还会把 NOAUTH 当成「已销账」删掉结算外发箱条目(`BattleRoomManager::ProbeAndRetryOne`,
      交接 handoff-global-singletons-p0-20261015.md §3 第 7 条那张卡片)。高密度 scene 只要还有房间就一直 Allocated,等它自己退出可能永远等不到,
      所以维护窗口里要**主动删除**这些旧实例(`kubectl -n <ns> delete gs <名字>`;代价:scene 迁走 / 断开实例上的玩家,battle 作废在打的局),
@@ -2192,11 +2243,13 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
      Redis 带口令起来后自行恢复(这一段未实测)。
   - **通过标准**:每个 C++ 节点日志都出现 `Zone Redis auth: on` 与 `Redis AUTH ok to <host:port>`,之后不再有 `metric=zone_redis_auth_failed`;
     Redis 的 `INFO errorstats` 里 NOAUTH 计数不再增长。
-  - 换口令同样走第 2–4 步;新旧口令并存期间总有一侧被拒,所以同样要维护窗口。首次开服是冷启动(Secret 先于 `redis.yaml` 落地),不存在滚动问题。
+  - 开口令是「从无到有」,做不了双口令:Redis 在无口令时对两参数的 `AUTH <口令>` 直接报错,所以只能按上面在维护窗口里切。
+    换口令走上面的双口令轮换,不要再走这里。
   - Service `redis` 不得重建:C++ 只在启动时解析一次地址。
-- **取值待实测 / 压测复核**:方案 A、指纹注解与上面的步骤都没有在集群上跑过;C++ 与部署两批都未经 Codex 编译 / 测试。
-- 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 3a 节(`zone Redis 口令…`)与 battle 段(`battle:带口令的 infra-up…`),
-  `tools/scripts/tests/k8s_client_entry_contract.tests.ps1` 的「库:-PodAnnotations 与 sidecar 配置指纹…」。
+- **取值待实测 / 压测复核**:Secret 下发、指纹注解、双口令轮换与上面的步骤都没有在集群上跑过;部署脚本与契约测试未经 Codex 运行。
+- 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 3a 节(`zone Redis 口令…`、`zone Redis 口令契约…`、`Sync-RedisAuthSecret…`)
+  与 battle 段(`battle:带口令的 infra-up…`),`tools/scripts/tests/k8s_client_entry_contract.tests.ps1` 的「库:-PodAnnotations 与 sidecar 配置指纹…」
+  与「库:-SecretEnv 渲染成 secretKeyRef…」。
 
 ## C++ 节点的文件描述符上限(2026-10-18,A0-2 / gate 准入 G4 P0-1)
 
@@ -2547,10 +2600,10 @@ scene 通过 gRPC 直接调 go/db,在 TiDB 的 `player_store` 表上提交玩家
 
 ## 挑 gate 回落告警(PrometheusRule,手工 apply;2026-11-05 登记,代码与规则都未编译、未在集群上 apply 过)
 
-login 的三处挑 gate 与 scene_manager 的跨 zone 重定向在候选全部停写或满载时回落到全部 gate 照常挑,只计 fallback(设计见 `docs/design/gate-load-balancing-design.md`「满载与停写的 gate」)。
+login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:完全合格的(没停写、没排空、没到自报上限 90%)优先,没有时退到连得上的(排空中或到水位),全部停写才退到全部;退档只计 fallback,不拒绝(设计见 `docs/design/gate-load-balancing-design.md`「满载与停写的 gate」;11-06 排空并入分档,告警随之调整)。
 
-- `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale / mixed:本 zone 的 gate 全部停写,或停写与满载各占一部分,新登录多半连不上)、`LoginGatePickFallbackFull`(warning,全部到自报连接上限的 90%,多半是 ZoneCapacity 比 gate 上限之和还大)。
-- `deploy/k8s/scene-manager-alerts.yaml` 加组 `scene-manager.gate-redirect`,1 条:`SceneManagerGateRedirectFallback`(warning,跨 zone 重定向时目标 zone 的 gate 全部停写或满载;目标 zone 的 gate 全卡住时由 login 那条 critical 呼人,这条不重复呼)。
+- `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale:本 zone 的 gate 全部停写,新登录多半连不上)、`LoginGatePickFallbackDegraded`(warning,reason 为 draining / full / mixed:没有完全合格的 gate,在连得上的里挑;draining 多半是整个 zone 被误标排空,full 多半是 ZoneCapacity 比 gate 上限之和还大)。
+- `deploy/k8s/scene-manager-alerts.yaml` 加组 `scene-manager.gate-redirect`,1 条:`SceneManagerGateRedirectFallback`(warning,跨 zone 重定向时目标 zone 没有完全合格的 gate;目标 zone 的 gate 全卡住时由 login 那条 critical 呼人,这条不重复呼)。
   ```bash
   kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
   kubectl apply -n observability -f deploy/k8s/scene-manager-alerts.yaml

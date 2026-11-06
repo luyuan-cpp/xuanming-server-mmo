@@ -289,6 +289,78 @@ func TestPlayerName_ReleaseConditional(t *testing.T) {
 	assert.Equal(t, store.ReserveInserted, outcome)
 }
 
+// TestPlayerName_BindStateMachine 是「预留 → 绑定」状态机在真 InnoDB 上的库层一半(03-names.md §3.4a;
+// 「角色从未提交」的证明在玩家片,由目录的真库用例 account_role_name_tidb_test.go 覆盖):
+//   - 绑定之后,建角回滚(带时间窗)和运维(不限时间)的 Release 都回 ReleaseBound,两边一个字节都不动;
+//   - 删角之后的 ReleaseRemoved 不看状态,删得掉,名字随即能被别人登记;
+//   - 名字行不在时 Bind 按原名重新登记再绑定,名字在别人名下时 Taken、什么都不写。
+func TestPlayerName_BindStateMachine(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	st := newPlayerNameStore(t, db)
+	ctx := context.Background()
+	now := playerNameNowMs()
+
+	const (
+		playerA uint64 = 3101
+		playerB uint64 = 3102
+		display        = "Bd56"
+		norm           = "bd56"
+	)
+
+	outcome, _, err := st.Reserve(ctx, playerA, display, norm, now)
+	require.NoError(t, err)
+	require.Equal(t, store.ReserveInserted, outcome)
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "name_norm = ? AND bound_ms = 0", norm), "登记是预留态")
+
+	bind, holder, err := st.Bind(ctx, playerA, display, norm, now+1)
+	require.NoError(t, err)
+	assert.Equal(t, store.BindBound, bind)
+	assert.Zero(t, holder)
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "name_norm = ? AND player_id = ? AND bound_ms = ?", norm, playerA, now+1))
+	bind, _, err = st.Bind(ctx, playerA, display, norm, now+2)
+	require.NoError(t, err)
+	assert.Equal(t, store.BindAlreadyBound, bind, "重放幂等,绑定时刻不刷新")
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "name_norm = ? AND bound_ms = ?", norm, now+1))
+
+	for _, minCreatedMs := range []uint64{now - 1, 0} {
+		rel, err := st.Release(ctx, playerA, norm, minCreatedMs)
+		require.NoError(t, err)
+		assert.Equalf(t, store.ReleaseBound, rel, "min_created_ms=%d", minCreatedMs)
+	}
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ?", playerA), "已绑定的名字行不动")
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", playerA), "名字副本也不动")
+
+	bind, holder, err = st.Bind(ctx, playerB, display, norm, now+3)
+	require.NoError(t, err)
+	assert.Equal(t, store.BindTaken, bind, "别人的名字绑不过来")
+	assert.Equal(t, playerA, holder)
+
+	rel, err := st.ReleaseRemoved(ctx, playerA, norm)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReleaseDeleted, rel, "删角之后不看状态")
+	assert.Equal(t, int64(0), db.Count(t, store.PlayerNameTableName, "name_norm = ?", norm))
+	assert.Equal(t, int64(0), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", playerA))
+	rel, err = st.ReleaseRemoved(ctx, playerA, norm)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReleaseAbsent, rel, "重放幂等")
+
+	outcome, _, err = st.Reserve(ctx, playerB, display, norm, now+4)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReserveInserted, outcome, "删角之后别人能登记")
+	rel, err = st.ReleaseRemoved(ctx, playerA, norm)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReleaseAbsent, rel, "名字已归别人,按旧角色删不到")
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ?", playerB))
+
+	// 名字行不在(恢复点错开、被误释放):按原名重新登记并绑定,名字副本一起补上。
+	const playerC uint64 = 3103
+	bind, _, err = st.Bind(ctx, playerC, "Cx78", "cx78", now+5)
+	require.NoError(t, err)
+	assert.Equal(t, store.BindRestored, bind)
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "name_norm = ? AND player_id = ? AND bound_ms = ?", "cx78", playerC, now+5))
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ? AND name_norm = ?", playerC, "cx78"))
+}
+
 // TestPlayerName_BatchGetSkipsAbsentAndRejectsOversize:缺席的 id 不出现在结果里(不是错误),
 // 返回的是**展示名**(保留大小写、保留汉字),超限的入参被拒。
 func TestPlayerName_BatchGetSkipsAbsentAndRejectsOversize(t *testing.T) {

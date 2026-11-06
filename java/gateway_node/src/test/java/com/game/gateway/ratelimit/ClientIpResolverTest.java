@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>回归的是历史缺陷:旧的 LoginController.extractIp 无条件采信 XFF 并取**最左**元素
  * —— 最左元素是客户端自己写的,于是每请求带一个随机 XFF 就能让每次都命中全新空桶,
- * IP 维度限流形同虚设,并把 Bucket4j 的 rl:ip:* key 空间变成攻击者可控的无限集合。
+ * IP 维度限流形同虚设,并把令牌桶的 rl:ip:* key 空间变成攻击者可控的无限集合。
  */
 class ClientIpResolverTest {
 

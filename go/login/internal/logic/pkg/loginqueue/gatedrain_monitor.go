@@ -30,6 +30,12 @@ const drainMonitorPoint = "login.gate_drain_monitor"
 // 所以这里的产出是一个明确的信号:`gate:{id}:drained`。缩容脚本 / 运维
 // 看到它才动手删 Pod。什么时候可以牺牲最后那批玩家的连接仍然是人的决定,
 // 只是"够不够安全"这个判断被自动化了。
+//
+// (2026-11-06)上面两条理由对**踢线**成立,对**重定向**不成立:客户端收到 msg 124 会自己换连接、重新 Login 与
+// EnterGame,玩家不用操作,也不弹「账号在别处登录」。所以开了 GateDrain.Migrate 时,同一拍还会给排空中的 gate
+// 发迁移许可,由 gate 按限速把已登录的连接重定向到同 zone 的其他 gate(gatedrain_migrate.go、
+// login/internal/svc/gate_migration.go,设计见 docs/design/gate-drain-session-migration.md)。这里仍然不踢人,
+// drained 的判定与写法也不变。
 
 const (
 	// GateDrainedKeyFmt 标记某台 gate 已排空到可以安全缩容。
@@ -105,6 +111,9 @@ func EvaluateGateDrain(online uint32, markedAtUnix, nowUnix int64, policy GateDr
 type GateOnline struct {
 	NodeID      uint32
 	PlayerCount uint32
+	// InstanceID 是 gate 进程启动时生成的 uuid(NodeInfo.node_uuid)。排空判定本身不用它;
+	// 排空迁移的许可要按它定向发给这个实例(gatedrain_migrate.go,AGENTS.md §7.2)。
+	InstanceID string
 }
 
 // GateSnapshotFunc 返回当前所有 gate 的在线快照(**不要**过滤 draining ——

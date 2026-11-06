@@ -262,3 +262,49 @@ func (matchServiceRpc) decodeListWatchableBattles(reply *base.MessageContent, er
 	}
 	return resp, nil
 }
+
+// ListBattleReports 异步调用 MatchService.ListBattleReports(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ListBattleReports(c *pkg.GameClient, req *match.ListBattleReportsRequest, timeout time.Duration, done func(*match.ListBattleReportsResponse, error)) {
+	c.Call(game.MatchServiceListBattleReportsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListBattleReports(reply, err))
+	})
+}
+
+// ListBattleReportsSync 同步调用 MatchService.ListBattleReports(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ListBattleReportsSync(ctx context.Context, c *pkg.GameClient, req *match.ListBattleReportsRequest, timeout time.Duration) (*match.ListBattleReportsResponse, error) {
+	return r.decodeListBattleReports(c.CallSync(ctx, game.MatchServiceListBattleReportsMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeListBattleReports(reply *base.MessageContent, err error) (*match.ListBattleReportsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ListBattleReportsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ListBattleReports reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetBattleReport 异步调用 MatchService.GetBattleReport(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetBattleReport(c *pkg.GameClient, req *match.GetBattleReportRequest, timeout time.Duration, done func(*match.GetBattleReportResponse, error)) {
+	c.Call(game.MatchServiceGetBattleReportMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetBattleReport(reply, err))
+	})
+}
+
+// GetBattleReportSync 同步调用 MatchService.GetBattleReport(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetBattleReportSync(ctx context.Context, c *pkg.GameClient, req *match.GetBattleReportRequest, timeout time.Duration) (*match.GetBattleReportResponse, error) {
+	return r.decodeGetBattleReport(c.CallSync(ctx, game.MatchServiceGetBattleReportMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetBattleReport(reply *base.MessageContent, err error) (*match.GetBattleReportResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetBattleReportResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetBattleReport reply: %w", err)
+	}
+	return resp, nil
+}

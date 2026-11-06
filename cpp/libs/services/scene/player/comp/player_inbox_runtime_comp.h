@@ -104,6 +104,10 @@ struct PlayerInboxDomainState
 	uint32_t failStreak{0};       // 连续失败次数,决定 1s→60s 的退避
 	uint32_t ackFailStreak{0};    // Ack 连续失败次数
 	PlayerInboxDeferReason deferReason{PlayerInboxDeferReason::kNone};
+	// 执行器最近一次 DEFER 带回的原因(PlayerInboxExecResult.reason,tip id;0 = 没带)。每次执行器 DEFER 都覆盖,
+	// 只在 deferReason == kExecutorDefer 时有意义。只用于日志与定向唤醒(PlayerInboxSystem::OnBagSpaceFreed 只挑
+	// kBagItemNotStacked = 背包放不下的域,2026-11-06),不参与退避,也不参与任何判定。
+	uint32_t executorDeferReason{0};
 	bool durableMismatchReported{false}; // "快照里的结局与内存不同"每批只报一次 ERROR
 
 	bool halted{false};

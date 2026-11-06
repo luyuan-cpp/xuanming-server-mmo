@@ -30,7 +30,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 | 类别 | 判据 | 典型组件 | 在哪里创建 | 读路径拿不到时 |
 |---|---|---|---|---|
-| **持久数据** | 会写进 DB / Redis | `CurrencyComp`、`PlayerCurrencyComp`、资产与结算账本、`LevelComp`、`BaseAttributesComp`、`PlayerPetComp`、背包、任务 | **只在加载时**(`*MessageFieldsUnmarshal` / `InitPlayerFromAllData`) | 不变量被破坏:`LOG_ERROR` + fail-closed,**绝不补默认值** |
+| **持久数据** | 会写进 DB / Redis | `CurrencyComp`、`PlayerCurrencyComp`、资产与结算账本、`LevelComp`、`BaseAttributesComp`、`PlayerPetComp`、背包、任务、`PlayerItemGainBlockComp` | **只在加载时**(`*MessageFieldsUnmarshal` / `InitPlayerFromAllData`) | 不变量被破坏:`LOG_ERROR` + fail-closed,**绝不补默认值**(`PlayerItemGainBlockComp` 的读路径例外见下文「单玩家物品获取封禁」一段) |
 | **按需状态**(延迟初始化) | 「没有」本身有明确含义:空、未激活、无冷却、不脏 | `CooldownTimeListComp`、`SkillContextCompMap`、`AoiListComp`、`SceneGridListComp`、施法阶段定时器、属性脏标记 | **该功能写入口第一次写时**,集中在一个命名函数里;结束时可以 `remove` | 正常分支:当作空 / 未激活处理,不是错误 |
 | **派生运行时数据** | 由其他组件算出来,实体存在期间必须有 | `DerivedAttributesComp`、`CombatStateFlagsComp` | 加载 / 创建流程直接调用初始化函数,在首个通知前创建并计算;后续重算只更新 | `LOG_ERROR` + 跳过本次处理;有返回码的请求明确失败 |
 
@@ -64,6 +64,8 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `BattleFreezeExpiredComp`(`player_battle.cpp` 内部,单槽 battle_id) | `RememberExpiredFightingBattle`,reaper 判定 FIGHTING 到期的收尾 `ReleaseExpiredFightingFreeze` 里、条件删锁之前(2026-10-19) | 不摘:下一次 FIGHTING 到期覆盖;实体销毁自然清理。按锁重建的两个入口只读它 |
 | `BattleLoginRecheckComp`(`player_battle.cpp` 内部空标记) | `MarkLoginRecheck`,登录钩子读挂起结算 / 读战斗锁没问到时(空应答、读记录 ERROR、命令没发出去、Redis 不可用;2026-10-16) | reaper 的 `RunLoginRechecks` 在 Redis 可用时摘除并重跑登录检查,又没问到就重新挂上;实体销毁自然清理 |
 | `BattleResultAwaitingCommitComp`(`player_battle.cpp` 内部,待公开的 battle_id) | `RecordBattleResult`,`ApplySettlementToEntity` 把本人结果写进近期结果的同一帧(2026-11-05,[战斗结果重登恢复](battle-result-recovery.md) §4.3) | `CompleteInboxSettlement` 在存档确认提交之后摘对应 battle_id,空了摘组件;结果被淘汰时一并摘。查询与确认只读它;缺失 = 没有待公开的结果。同功能的持久组件 `PlayerBattleResultComp` 属持久数据,只在加载时创建 |
+| `PlayerConnectionLostComp`(`connection_lost_hold.h`) | `PlayerLifecycleSystem::HandleClientConnectionLost`,gate 报连接意外断开、判定可以保留时(先 valid;2026-11-05,[断线保留](player-connection-lost-hold.md) §4) | 新会话接回(`EnterScene` 第 0.1 步 `ResumeConnectionLostHold`)、保留到期(`ExpireConnectionLostHolds`)、任何退出发起(`HandleExitGameNode` 入口)时摘;实体销毁自然清理。读路径只用 `try_get` / `any_of`,缺失 = 连接正常或不在保留中 |
+| `SceneOwnershipCheckComp`(scene 实体,`world/scene_ownership_reconciler.h`) | `scene_ownership::CollectChecks`,归属对账第一次核对到这个场景实体时(2026-11-06,[场景归属对账](scene-node-ownership-reconcile.md) §4.2) | CreateScene 按号命中已有实体时 `SceneLifecycle::ReuseExistingScene` 摘掉、下一轮重新登记;实体销毁自然清理。应答回来与指标采集只用 `try_get` / 视图读,缺失 = 还没核对过 |
 
 `PlayerMirrorCreateInFlightComp` 是按需状态。由 `RequestEnterMirrorScene` 发起的 `CreateMirrorAndEnter` 任务在发送之前登记，恢复后按令牌认领。`IsSceneChangeBusy` 只读它，缺失或过 TTL 表示没有建镜像在途。过期、UTC 回拨或本地停止只摘本次令牌并丢弃结果。普通换图、交接、退出提交或权威落点成功时也主动摘掉旧镜像组件，永久取消旧请求的提示和自动进场资格。
 
@@ -120,7 +122,9 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 新增组件使用有业务含义的独立类型，不能用基础类型或通用 std 容器别名共享池。已有 `BuffListComp`、`SkillContextCompMap`、`SceneGridListComp` 已改为具名类型，不提供从基类容器到组件类型的转换（继承构造天然排除基类的拷贝 / 移动构造）。传输侧 `RpcClientPtr`、`MuduoGrpcChannelPtr` 属于明确存量边界，不能据此新增同类业务组件。完整替换按 [gRPC 迁移验收](grpc-muduo-transport.md#101-来自-entt-审计的验收条件) 处理，源码 / 生成 / 运行状态以任务总索引为准。
 
-内部 SkillContext/Buff 暂仍以 uint64 本地句柄及 0 表示空来源，因此保留 actor 的 0 号句柄退役兼容。该历史约束不再承担客户端编号职责。AOI 容量、压力和策略组件缺失时采用既定默认值，`Npc` 标签保留给未来生成入口。负责人已选择删除无生产写入口的 `PlayerItemBlockList` 及死参数，物品封禁沿用全服机制，不新增单人 GM 或持久化契约。
+内部 SkillContext/Buff 暂仍以 uint64 本地句柄及 0 表示空来源，因此保留 actor 的 0 号句柄退役兼容。该历史约束不再承担客户端编号职责。AOI 容量、压力和策略组件缺失时采用既定默认值，`Npc` 标签保留给未来生成入口。
+
+单玩家物品获取封禁(2026-11-05,[收件箱设计](player-inbox-service.md) §2.2)是持久数据 `PlayerItemGainBlockComp`(`player_database.item_gain_block`):唯一创建点是加载,存盘缺它整份拒存;唯一写入方是收件箱 GM 域执行器,经 `GainBlockService::BlockPlayerItemGain / UnblockPlayerItemGain` 写,缺组件即拒绝、不补建。各物品获得入口只经 `GainBlockService::IsItemGainBlocked` 读它。**读路径是持久数据「读缺失即 fail-closed」的一处有记录的例外**:无效句柄只判全服,有效实体缺组件按「没有单人封禁」回答、不补建。理由与代价见收件箱设计 §2.2「读缺失的口径」:`BagService` 接受没有玩家上下文的容器级调用;缺组件的实体存盘被整份拒绝、资产通道与收件箱只在落盘后终结,发出的物品成不了盘上事实。2026-10-15 删除的旧 `PlayerItemBlockList` 及 `blockList` 参数没有恢复。
 
 上述规则包含第 6 批审查修复；生成产物与运行验证状态以 [任务总索引](../handoff/ecs-refactor/README.md) 及本批回执为准，不能用静态阅读代替构建或测试证据。
 

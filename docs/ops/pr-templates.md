@@ -7,6 +7,8 @@
 
 ## 模板 A: 单一大 PR(推荐:main → release/staging 分支)
 
+> 〔2026-11-05 注:下面 Test summary 里 robot 一行的「nil-guard + zero-PlayerId-guard for sendDisconnectBestEffort」是 R4 之前的口径:该函数与它的两条守卫用例已于 2026-11-05 随 `robot/login_test.go` 删除,`Disconnect` 只由 gate 在连接关闭时合成(依据 [client-rpc-callback.md](../design/client-rpc-callback.md) §7 R4)。套用本模板时删掉那半句。〕
+
 ```markdown
 ## Title
 feat(login): migrate primary auth path to Java Gateway POST /api/login
@@ -123,7 +125,9 @@ what-to-capture-before-rolling-back live in
   `HandleConnectionDisconnection` `set_player_id`
 - commit: `55b9b8cf5 + c5a3ad54b + ed2290c11`
 - 测试:go-zero login mock test (`SetSessionDisconnecting`) + robot
-  `sendDisconnectBestEffort` 守卫测试
+  `sendDisconnectBestEffort` 守卫测试(这是 R4 之前的口径:该用例已于 2026-11-05 随 `robot/login_test.go` 删除,
+  `Disconnect` 只由 gate 合成,依据 client-rpc-callback.md §7 R4;现在 gate 侧对应的回归是 `routing_identity_test` 的
+  `GateSynthesizedOnly.*` 与 `SessionDetailsBuilder.*`)
 - review 焦点:legacy 判定边界(`SessionDetails.SessionId > 0` 为 legacy)和 throttled 计数器实现
 
 ### B3 — feat(robot)+ops: HTTP login client + stress runner + docs
@@ -137,6 +141,8 @@ what-to-capture-before-rolling-back live in
 ---
 
 ## 模板 C: hotfix-only PR(只取 #B-1 治标 + 治本)
+
+> 〔2026-11-05 注:TL;DR 第 2 层「robot client sends `Disconnect` RPC before `Close()`」是 R4 之前的口径。依据 [client-rpc-callback.md](../design/client-rpc-callback.md) §7 R4,`Disconnect` 标了 `CLIENT_RPC_SERVER_ONLY`,只由 gate 在连接关闭时合成(带会话代次),客户端发上来 gate 按非法包丢弃;robot 的 `sendDisconnectBestEffort`、全部调用点与 `robot/login_test.go` 已删(见 [release-checklist.md](./release-checklist.md) F.B-1)。套用本模板时删掉第 2 层,只保留 gate 那一层;Test 段已换成 gate 侧回归测试。〕
 
 ```markdown
 ## Title
@@ -166,8 +172,9 @@ inflating the `online_players` metric over a multi-day uptime.
 ## Test
 - `go test -run TestSetSessionDisconnecting ./go/login/.../sessionmanager`
   pins the wire shape (player_id, session_id, lease_ttl=30).
-- `go test -run TestSendDisconnectBestEffort ./robot` covers
-  nil-client and zero-PlayerId guards.
+- `routing_identity_test --gtest_filter=GateSynthesizedOnly.*:SessionDetailsBuilder.*`
+  pins that clients cannot send `Disconnect` and that the gate-built
+  disconnect notice carries the session's player_id.
 - E2E re-run with neither wipe nor manual restart: 50 bots round-1 ✅
   (previously round-2+ would fail).
 

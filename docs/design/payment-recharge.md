@@ -447,7 +447,7 @@ type VerifiedTxn struct {
    - `commerce_delivery_intent`:主键 `(order_sn, revision)`,加 `entitled`、`trade_order_id`、`attempts`、`next_poll_ms`;状态集合 `PENDING / ACCEPTED / HELD / SUPERSEDED / QUARANTINE / DENIED / 终态`。
    - `commerce_delivery_receipt`:加 revision,唯一键 `(order_sn, revision)`,state 取 `DELIVERED / VOIDED / MANUAL`。
    - `oms_order`:加单调递增的 `version` 列,每次状态变化 +1。
-   - 退款待办与退款回执:改为以 `(channel, transaction_id)` 为主键,带 `order_sn`(普通索引)、`source`(`CANCELLED_LATE / ABNORMAL_SECOND / ABNORMAL_AMOUNT / OVER_LIMIT / HELD_DENIED / ADMIN`)、金额、币种和 `lease_until`。
+   - 退款待办与退款回执:以被退那笔付款的 `(channel, transaction_id)` 为主键,带 `order_sn`、`source`。**2026-11-05 已落码(未编译,第一轮数据审计 §4 第 19 条)**:来源现有 `CANCELLED_LATE / DELIVERY_REJECTED / DUPLICATE_PAYMENT`,本稿原称 `ABNORMAL_SECOND` 的「非充值订单第二笔钱」即 `DUPLICATE_PAYMENT`,记成 `order_sn` 为 NULL 的付款回执加 `commerce_duplicate_payment` 一行;待办不另存金额币种,取那笔付款回执;回执表主键 `(channel, payment_transaction_id)`,退款流水 `(channel, transaction_id)` 另有唯一键。仍待做:`ABNORMAL_AMOUNT / OVER_LIMIT / HELD_DENIED / ADMIN` 来源与 `lease_until`。
    - TiDB 上改主键:建新表 → 搬数据 → 改名。
 2. **发放物二选一**:
    - `create()` 要求恰好一种;充值 SKU 的 `quantity=1`,跳过预占与未付上限;`cancel()` 和付款对无限库存跳过库存运算;
@@ -488,8 +488,8 @@ type VerifiedTxn struct {
    - `/internal/payments/skus`;
    - `/internal/payments/held`。
 9. **退款待办**:
-   - `refunds()` 直接读待办自身的交易列(不再按 order_sn 联查),带游标与租约;
-   - `refunded()` 按 `(channel, transaction_id)` 幂等。只有 `source=CANCELLED_LATE` 才推进订单 5 → 6,异常付款不碰订单状态,也不碰已绑定的交易;
+   - `refunds()` 直接读待办自身的交易列(不再按 order_sn 联查,2026-11-05 已落码),带游标与租约(未做);
+   - `refunded()` 按被退付款的 `(channel, transaction_id)` 幂等,回执体须带 `paymentTransactionId`(2026-11-05 已落码)。只有订单本身的退款(`CANCELLED_LATE`,以及物品 SKU 的 `DELIVERY_REJECTED`)才推进订单 5 → 6,异常付款不碰订单状态,也不碰已绑定的交易;
    - 新增关闭回执"渠道不支持退款,已转发货";
    - 只自动执行白名单里的来源;
    - 充值 SKU 拒收 trade 的 `REFUND_PENDING` 回执。

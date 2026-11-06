@@ -13,7 +13,6 @@ import (
 	"match/internal/discovery"
 	"match/internal/metrics"
 	"match/internal/poolgroup"
-	"match/internal/poolowner"
 	"match/internal/ratingrule"
 	"match/internal/scope"
 	"match/internal/svc"
@@ -78,10 +77,9 @@ func (m *poolMatcher) round(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, poolRoundBudget)
 	defer cancel()
 	s := m.s
-	members, self := s.PoolMembers(), s.PoolMember()
 	var owned []catalog.Pool
 	for _, pool := range s.Catalog.Pools() {
-		if poolowner.Owns(self, pool.OwnerKey(), members) {
+		if s.OwnsWork(pool.OwnerKey()) {
 			owned = append(owned, pool)
 		}
 	}
@@ -274,6 +272,10 @@ func claimGroup(ctx context.Context, s *svc.ServiceContext, claim poolClaim, nod
 	if err != nil {
 		if !expectedClaimRejection(err) {
 			s.HoldRelay(err)
+		}
+		if errors.Is(err, authority.ErrRatingSpread) {
+			// 提交点复核的是撮合用过的同一批原票，按同一份 ratingrule 判，正常不会触发；触发说明两边的规则或配置不一致。
+			logx.Errorf("[match.pool] Rating spread rejected at commit; matcher and commit rules disagree mode=%s config=%d battle=%d", claim.pool.Mode, claim.pool.ConfigId, id)
 		}
 		metrics.ObserveGlobalFlow("claim", "conflict")
 		return metrics.PoolClaimConflict

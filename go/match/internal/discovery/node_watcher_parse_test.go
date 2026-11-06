@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	base "proto/common/base"
+
+	"shared/releasetrack"
 )
 
 // battleRegistrationHead 是一条 battle 注册值去掉结尾的部分(字段名与 C++ MessageToJsonString 一致:
@@ -63,4 +65,25 @@ func TestParseSkipsNonRegistrationsAndUnusableValues(t *testing.T) {
 
 	_, ok = w.parse(testBattlePrefix+"zone/0/node_type/12/node_id/9", []byte(`{"nodeId":"not-a-number"}`))
 	require.False(t, ok, "已知字段类型不符仍按解析失败处理")
+}
+
+// 发布轨道(docs/design/release-track-gray-canary.md §2.5):轨道照实解析;认不出的整条跳过;
+// StableOnly 的镜像不收 canary,没写轨道的节点按 stable 收。
+func TestParseReleaseTrackAndStableOnly(t *testing.T) {
+	all := NewNodeWatcher("battle", testBattlePrefix, nil, nil)
+	entry, ok := all.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"releaseTrack":"canary"}`))
+	require.True(t, ok)
+	require.Equal(t, releasetrack.Canary, entry.Track)
+
+	_, ok = all.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"releaseTrack":"beta"}`))
+	require.False(t, ok, "认不出的轨道既不能当 stable 也不能当 canary")
+
+	stableOnly := NewNodeWatcher("battle", testBattlePrefix, nil, nil).StableOnly()
+	_, ok = stableOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"releaseTrack":"canary"}`))
+	require.False(t, ok, "只收 stable 的镜像不能收 canary,否则匹配池归属和服务间调用会落到 canary 上")
+	entry, ok = stableOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"releaseTrack":"stable"}`))
+	require.True(t, ok)
+	require.Equal(t, releasetrack.Stable, entry.Track)
+	_, ok = stableOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`}`))
+	require.True(t, ok, "没写轨道的节点按 stable 收")
 }

@@ -136,12 +136,12 @@ func (d *itDirectory) set(player uint64, account string, revision, token uint64)
 	return state
 }
 
-// register 先到的登记有效,和目录的主键一样。
+// register 先到的登记有效，并独立保存原件，和真实目录一样。
 func (d *itDirectory) register(identity *base.RoleAdmissionIdentity) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, ok := d.admissions[admissionKey(identity)]; !ok {
-		d.admissions[admissionKey(identity)] = identity
+		d.admissions[admissionKey(identity)] = proto.Clone(identity).(*base.RoleAdmissionIdentity)
 	}
 }
 
@@ -742,28 +742,116 @@ func TestIntegrationItemGainSanctionsShareTheGmStreamInOrder(t *testing.T) {
 	}
 }
 
-// ── Fetch ────────────────────────────────────────────────────────────────
-
-func TestIntegrationFetchNoStreamAndFastPathWritesNothing(t *testing.T) {
+// GetItemGainBlocks 的收件箱一侧(设计 §2.2):只列 GM 域里仍 PENDING 的物品封禁 / 解封单,seq 升序、载荷解出配置号、
+// 已投递的带上投递次数;同域的货币处置与已作废的单不列。已落盘封禁表原样取自读取器;读不到存档(found=false)时
+// pending 照样列出;读存档失败整体报错,不回半份答案。
+func TestIntegrationItemGainBlocksListsPendingItemSanctions(t *testing.T) {
 	e := openIntegration(t)
-	if resp := e.fetch(t, 3001, 1, 0, 0); resp.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_NO_STREAM {
-		t.Fatalf("无流应 NO_STREAM: %+v", resp)
+	ctx := itCtx(t)
+	const pid = uint64(1007)
+	enqueue := func(requestID uint64, typ inboxpb.PlayerInboxMessageType, payload []byte) uint64 {
+		t.Helper()
+		res, err := e.store.Enqueue(ctx, EnqueueParams{
+			PlayerID: pid, Type: typ, Producer: inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_GM,
+			RequestID: requestID, IssuedAtMs: testNowMs, Payload: payload, Operator: "ops_it", Note: "工单 #77",
+		}, nil)
+		if err != nil || res.Code != 0 || !res.Created {
+			t.Fatalf("入箱 rid=%d %v: %+v %v", requestID, typ, res, err)
+		}
+		return res.Seq
+	}
+	itemPayload := func(config uint32) []byte { return marshal(t, &inboxpb.GmItemGainPayload{ItemConfigId: config}) }
+	enqueue(1, gmBlock, gainPayload(t, 1)) // 同域的货币处置:不列
+	blockSeq := enqueue(2, gmBlockItem, itemPayload(30045))
+	unblockSeq := enqueue(3, gmUnblockItem, itemPayload(30045))
+	voidedSeq := enqueue(4, gmBlockItem, itemPayload(30046))
+	if resp, err := e.store.Void(ctx, VoidParams{
+		PlayerID: pid, Domain: gmDomain, Seq: voidedSeq, Reason: inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_CANCELLED,
+		Operator: "ops_it", Note: "下错了", PeerAddr: "127.0.0.1:5",
+	}, nil); err != nil || resp.GetState() != inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_VOIDED {
+		t.Fatalf("从未投递的单应直接作废: %+v %v", resp, err)
+	}
+	e.epochs.set(pid, 5)
+	if fetched := e.fetch(t, pid, 5, 0, 0); len(fetched.GetItems()) != 3 {
+		t.Fatalf("应下发 3 条 PENDING(作废的那条不下发): %+v", fetched)
 	}
 
-	const pid = uint64(3002)
+	persisted := itItemGainBlocks{found: true, block: &componentpb.PlayerItemGainBlockComp{ItemConfigIds: []uint32{20001}}}
+	resp, err := e.store.ItemGainBlocks(ctx, pid, persisted)
+	if err != nil || resp.GetErrorMessage() != nil || !resp.GetFound() || resp.GetPlayerId() != pid {
+		t.Fatalf("ItemGainBlocks = %+v, %v", resp, err)
+	}
+	if got := resp.GetBlockedItemConfigIds(); len(got) != 1 || got[0] != 20001 {
+		t.Fatalf("已落盘封禁表应原样取自读取器: %v", got)
+	}
+	want := []struct {
+		seq uint64
+		typ inboxpb.PlayerInboxMessageType
+		rid uint64
+	}{{blockSeq, gmBlockItem, 2}, {unblockSeq, gmUnblockItem, 3}}
+	if len(resp.GetPending()) != len(want) {
+		t.Fatalf("pending 应只有两条物品单(货币单与已作废的不列): %+v", resp.GetPending())
+	}
+	for i, p := range resp.GetPending() {
+		if p.GetSeq() != want[i].seq || p.GetMsgType() != want[i].typ || p.GetRequestId() != want[i].rid ||
+			p.GetItemConfigId() != 30045 || p.GetDeliveryCount() != 1 || p.GetOperatorName() != "ops_it" || p.GetNote() != "工单 #77" {
+			t.Fatalf("第 %d 条 pending = %+v, want seq=%d type=%v rid=%d", i, p, want[i].seq, want[i].typ, want[i].rid)
+		}
+	}
+
+	absent, err := e.store.ItemGainBlocks(ctx, pid, itItemGainBlocks{})
+	if err != nil || absent.GetFound() || len(absent.GetBlockedItemConfigIds()) != 0 || len(absent.GetPending()) != len(want) {
+		t.Fatalf("读不到存档时 found=false、封禁表为空、pending 照样列出: %+v, %v", absent, err)
+	}
+	if _, err := e.store.ItemGainBlocks(ctx, pid, itItemGainBlocks{err: errors.New("data_service down")}); err == nil {
+		t.Fatal("读存档失败必须报错,不能回半份答案")
+	}
+}
+
+// itItemGainBlocks 是已落盘物品获取封禁表读取器的替身(生产经 data_service.GetPlayerItemGainBlock 读)。
+type itItemGainBlocks struct {
+	block *componentpb.PlayerItemGainBlockComp
+	found bool
+	err   error
+}
+
+func (b itItemGainBlocks) ReadItemGainBlock(context.Context, uint64) (*componentpb.PlayerItemGainBlockComp, bool, error) {
+	if b.err != nil {
+		return nil, false, b.err
+	}
+	return b.block, b.found, nil
+}
+
+// ── Fetch ────────────────────────────────────────────────────────────────
+
+func TestIntegrationFetchMissingAndEmptyStreams(t *testing.T) {
+	e := openIntegration(t)
+	const pid, epoch = uint64(3001), uint64(5)
+	e.epochs.set(pid, epoch)
+	if resp := e.fetch(t, pid, epoch, 0, 0); resp.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_NO_STREAM {
+		t.Fatalf("无流应 NO_STREAM: %+v", resp)
+	}
+	if st := e.stream(t, pid); st != nil {
+		t.Fatalf("无流拉取不得创建流: %+v", st)
+	}
+
 	if err := e.store.ensureStream(itCtx(t), RowShard(pid), pid, gmDomain, testNowMs); err != nil {
 		t.Fatal(err)
 	}
+	if resp := e.fetch(t, pid, epoch, 0, 0); resp.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_FIRST || len(resp.GetItems()) != 0 {
+		t.Fatalf("首次拉取空流应判 FIRST 且无条目: %+v", resp)
+	}
 	before := e.stream(t, pid)
-	e.epochs.set(pid, 5)
+	if before.GetFenceEpoch() != epoch {
+		t.Fatalf("首次拉取空流应建立围栏: %+v", before)
+	}
 	e.clock.advance(10_000)
-	resp := e.fetch(t, pid, 5, 0, 0)
-	if resp.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_FIRST || len(resp.GetItems()) != 0 {
-		t.Fatalf("快路径应按快照判 FIRST 且无条目: %+v", resp)
+	if resp := e.fetch(t, pid, epoch, 0, 0); resp.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_MATCH || len(resp.GetItems()) != 0 {
+		t.Fatalf("同 epoch 重拉空流应判 MATCH 且无条目: %+v", resp)
 	}
 	after := e.stream(t, pid)
 	if !proto.Equal(before, after) {
-		t.Fatalf("快路径不得写任何东西:before=%+v after=%+v", before, after)
+		t.Fatalf("同 epoch 重拉空流不得修改流记录: before=%+v after=%+v", before, after)
 	}
 }
 
@@ -816,8 +904,8 @@ func TestIntegrationFetchFenceRejections(t *testing.T) {
 	e.epochs.set(pid, 6)
 	forged := e.admission(t, pid, 7)
 	forged.Generation++
-	if _, err := e.store.Fetch(itCtx(t), &inboxpb.FetchPlayerInboxRequest{PlayerId: pid, Domain: gmDomain, OwnerEpoch: 7, Admission: forged}); err == nil {
-		t.Fatal("未登记原generation不得消费，不凭E大于Redis当前值授予权限")
+	if _, err := e.store.Fetch(itCtx(t), &inboxpb.FetchPlayerInboxRequest{PlayerId: pid, Domain: gmDomain, OwnerEpoch: 7, Admission: forged}); !errors.Is(err, ErrOriginalRole) {
+		t.Fatalf("未登记的入场世代应拒绝消费: %v", err)
 	}
 	if st := e.stream(t, pid); st.GetFenceEpoch() != 5 {
 		t.Fatalf("拒绝结局不得改围栏: %+v", st)
@@ -1666,9 +1754,9 @@ func TestIntegrationReconcile(t *testing.T) {
 	start := RowShard(pid)
 	recent := func(name string, l LedgerReader, wantInconsistent int) {
 		t.Helper()
-		res, err := e.store.ReconcileRecent(ctx, 0, start, l)
+		res, err := e.store.ReconcileShards(ctx, 0, ringOrder(start), l)
 		if err != nil || res.Inconsistent != wantInconsistent || res.PlayersPlanned != 1 || res.PlayersChecked != 1 || res.Truncated {
-			t.Fatalf("%s: ReconcileRecent = %+v err=%v, want %d 处不一致、1 名玩家、未截断", name, res, err, wantInconsistent)
+			t.Fatalf("%s: ReconcileShards = %+v err=%v, want %d 处不一致、1 名玩家、未截断", name, res, err, wantInconsistent)
 		}
 	}
 	recent("b 的落盘丢了", itLedgers{ledger: lostB, found: true}, 1)

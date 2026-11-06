@@ -1733,6 +1733,65 @@ func TestResolveManually_WritesAuditAndNextAttempt(t *testing.T) {
 	assert.Equal(t, uint64(1000), econFunds(t, f, guildID))
 }
 
+// TestAssetOpRow_AssetOpIsTheDeliveredRequest(纯单测):assetopfix 核收据用的请求必须与 Claim 下发的同形 ——
+// correlation_id 取 op_id、tx_type 与载荷原样,否则收据摘要对不上;载荷解不开就报错,不能当收据对得上。
+func TestAssetOpRow_AssetOpIsTheDeliveredRequest(t *testing.T) {
+	rec := econShopRecord(t, 441, 8590, testNowMs-100_000, 7)
+	rec.Attempts, rec.LastReason, rec.LastSendMs, rec.LeaseUntilMs = 3, assetop.ReasonBagFull, testNowMs-50, testNowMs-40
+	row := assetOpRowFrom(rec)
+	assert.Equal(t, testNowMs-40, row.LeaseUntilMs)
+	assert.Equal(t, testNowMs-50, row.LastSendMs)
+
+	op, err := row.AssetOp()
+	require.NoError(t, err)
+	assert.Equal(t, uint64(441), op.CorrelationID, "correlation_id 取 op_id")
+	assert.Equal(t, uint32(rollbackpb.TransactionType_TX_GUILD_SHOP), op.TxType)
+	assert.Equal(t, assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT, op.Stream)
+	assert.Equal(t, uint64(7), op.Seq)
+	assert.Equal(t, rec.GetStreamEpoch(), op.StreamEpoch)
+	assert.Equal(t, assetop.ReasonBagFull, op.LastReason, "上一次答复的原因码原样带过去:部分发放的粘性标记靠它")
+	assert.Zero(t, op.LeaseToken, "令牌只属于领取方")
+	wantBundle := &assetpb.AssetBundle{}
+	require.NoError(t, proto.Unmarshal(rec.GetPayload(), wantBundle))
+	assert.True(t, proto.Equal(wantBundle, op.Bundle))
+
+	row.Payload = nil
+	_, err = row.AssetOp()
+	assert.Error(t, err, "没有载荷就核不了收据")
+}
+
+// TestResolveManuallyIfQuiet_MissesAfterAClaim:assetopfix 带着读证据时的 lease_until_ms / last_send_ms 做 CAS 条件。
+// 读完之后有人领过这一行(可能已经发出请求),人工终结必须落空、对侧账不动;按新读的值再来才终结。
+func TestResolveManuallyIfQuiet_MissesAfterAClaim(t *testing.T) {
+	f := openEconomyFixture(t)
+	const player uint64 = 8591
+	econInsertOp(t, f, econShopRecord(t, 451, player, testNowMs-100_000, 9))
+	read, found, err := f.store.GetOp(f.ctx, 451)
+	require.NoError(t, err)
+	require.True(t, found)
+	witness := assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs}
+
+	_, claimed, err := f.store.Claim(f.ctx, 451, testNowMs, testNowMs+econLeaseMs, testNowMs+3_600_000, 0xbeef)
+	require.NoError(t, err)
+	require.True(t, claimed)
+
+	manual := assetop.ManualResolution{OpID: 451, Final: assetop.StatusApplied, Operator: "ops-bob", Reason: "已提交账本证实已应用"}
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, witness, testNowMs+1)
+	require.NoError(t, err)
+	assert.False(t, resolved, "读证据之后有人领过,证据作废")
+	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING, econRecord(t, f, 451).GetStatus())
+
+	fresh, _, err := f.store.GetOp(f.ctx, 451)
+	require.NoError(t, err)
+	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, manual, assetop.QuietWitness{LeaseUntilMs: fresh.LeaseUntilMs, LastSendMs: fresh.LastSendMs}, testNowMs+2)
+	require.NoError(t, err)
+	assert.True(t, resolved, "witness 与库里一致才终结")
+	stored := econRecord(t, f, 451)
+	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED, stored.GetStatus())
+	assert.Equal(t, "ops-bob", stored.GetResolvedBy())
+	assert.Zero(t, stored.GetDurable(), "人工终结不置 durable")
+}
+
 // ── 离帮 / 被踢 / 解散提前截止 ───────────────────────────────
 
 // TestAccelerate_LeaveKickDisbandPullDeadlineToNow:三个事务把本帮未决捐献的截止提前到 now、

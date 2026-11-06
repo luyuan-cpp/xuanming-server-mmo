@@ -121,14 +121,14 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 		require.NoError(t, s.PublishRankOnce(ctx, rankClient, secret))
 		require.NoError(t, s.PublishRankOnce(ctx, rankClient, secret), "来源重放不得重复提交榜批次")
 		var produced, committed, board, rankCursor uint64
-		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT produced_cursor,committed_cursor,board_id FROM match_rank_source WHERE source_epoch=1 AND shard=?", shard).Scan(&produced, &committed, &board))
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT produced_cursor,committed_cursor,board_id FROM match_rank_source WHERE source_epoch=1 AND mode=3 AND shard=?", shard).Scan(&produced, &committed, &board))
 		require.Equal(t, uint64(1), produced)
 		require.Equal(t, produced, committed)
 		require.NotZero(t, board)
 		require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT committed_cursor FROM rank_board WHERE board_id=?", board).Scan(&rankCursor))
 		require.Equal(t, uint64(i+1), rankCursor)
 		var body []byte
-		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=1 AND shard=? AND source_cursor=?", shard, produced).Scan(&body))
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=1 AND mode=3 AND shard=? AND source_cursor=?", shard, produced).Scan(&body))
 		replay := &rankpb.SubmitRankScoresRequest{}
 		require.NoError(t, proto.Unmarshal(body, replay))
 		replay.BoardId = board
@@ -142,28 +142,31 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	chainCount(t, ctx, s.DB, "SELECT COUNT(*) FROM match_rank_outbox", 2)
 	chainCount(t, ctx, rankDB, "SELECT COUNT(*) FROM rank_input_receipt", 2)
 	for _, player := range []uint64{7, 8} {
-		expected, err := s.Rating(ctx, player)
+		expected, err := s.Rating(ctx, player, 3)
 		require.NoError(t, err)
 		var score int64
 		var games uint64
 		require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT score FROM rank_score WHERE entity_id=?", player).Scan(&score))
 		require.Equal(t, expected, score)
-		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT games FROM match_rating WHERE player_id=?", player).Scan(&games))
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT games FROM match_rating WHERE player_id=? AND mode=3", player).Scan(&games))
 		require.Equal(t, uint64(2), games)
 	}
-	finalCursor, err := s.StopRankSource(ctx, 1)
+	// 只打了 1V1(mode 3):停写与封榜都按模式,1V1 的榜。
+	finalCursor, err := s.StopRankSource(ctx, 1, 3)
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), finalCursor)
-	before, err := s.Rating(ctx, 7)
+	before, err := s.Rating(ctx, 7, 3)
 	require.NoError(t, err)
-	_, err = s.ApplyRating(ctx, 5003, &kafkapb.BattleResultEvent{BattleId: 5003, MatchMode: 3}, 3, []uint64{7}, []uint64{8}, 1)
-	require.Error(t, err, "停代屏障必须阻止迟到评分")
-	after, err := s.Rating(ctx, 7)
+	late, err := s.ApplyRating(ctx, 5003, &kafkapb.BattleResultEvent{BattleId: 5003, MatchMode: 3}, 3, []uint64{7}, []uint64{8}, 1)
+	require.NoError(t, err, "停写之后的迟到计分局:评分照记、不进榜,结果消费不卡")
+	require.True(t, late)
+	after, err := s.Rating(ctx, 7, 3)
 	require.NoError(t, err)
-	require.Equal(t, before, after)
-	chainCount(t, ctx, s.DB, "SELECT COUNT(*) FROM match_rating_applied WHERE battle_id=5003", 0)
+	require.Greater(t, after, before, "胜方照常涨分")
+	chainCount(t, ctx, s.DB, "SELECT COUNT(*) FROM match_rating_applied WHERE battle_id=5003", 1)
+	chainCount(t, ctx, s.DB, "SELECT COUNT(*) FROM match_rank_outbox WHERE request_id=5003", 0)
 	var board uint64
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT MAX(board_id) FROM match_rank_source WHERE source_epoch=1").Scan(&board))
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT MAX(board_id) FROM match_rank_source WHERE source_epoch=1 AND mode=3").Scan(&board))
 	attachments := &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{CurrencyType: 0, Amount: 10}}}
 	freeze := &rankpb.FreezeRankGenerationRequest{BoardId: board, Generation: 1, SourceEpoch: 1,
 		ExpectedSourceCursor: finalCursor + 1, RequestId: 9901, TopN: 2,
@@ -190,7 +193,7 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT reward_id,player_id,attachments,created_ms FROM rank_mail_reward WHERE settlement_id=?", sealed.SettlementId).Scan(&rewardID, &recipient, &rewardBody, &created))
 	require.Equal(t, uint64(7), recipient)
 	require.NotZero(t, rewardID)
-	t.Log("真实评分/outbox 经两片各自的连续游标入榜；停代回滚迟到评分；未齐封榜拒绝，正式封榜生成 2 快照、1 奖励")
+	t.Log("真实评分/outbox 经两片各自的连续游标入榜；停写后迟到评分照记、不进榜；未齐封榜拒绝，正式封榜生成 2 快照、1 奖励")
 
 	chainTick(t, ctx, rankProcess)
 	var state, attempts uint32

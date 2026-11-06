@@ -334,6 +334,15 @@ func TestGateCommandFailsClosed(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.wantSubstr) {
 				t.Errorf("PushTipToUnboundSession error = %q, want it to mention %q", err, tc.wantSubstr)
 			}
+
+			err = sc.SendGateDrainMigration(tc.gateID, tc.instanceID,
+				&kafkapb.GateDrainMigrationEvent{DrainMarkedAt: 1000, RatePerSecond: 20, LeaseMs: 15000})
+			if err == nil {
+				t.Fatal("SendGateDrainMigration: want error, got nil (command would be unroutable/unfilterable)")
+			}
+			if !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Errorf("SendGateDrainMigration error = %q, want it to mention %q", err, tc.wantSubstr)
+			}
 		})
 	}
 }
@@ -632,5 +641,53 @@ func TestKickPlayerCommandPayloadCarriesEvent(t *testing.T) {
 	}
 	if event.GetLoginGeneration() != loginGeneration {
 		t.Errorf("KickPlayerEvent.login_generation = %d, want %d", event.GetLoginGeneration(), loginGeneration)
+	}
+}
+
+// TestGateDrainMigrationCommandPayloadCarriesEvent 拆开迁移许可:事件号、目标字段、分区与 payload 里的三个字段
+// (docs/design/gate-drain-session-migration.md §4.4)。这条命令针对整台 gate,信封不带会话与玩家。
+func TestGateDrainMigrationCommandPayloadCarriesEvent(t *testing.T) {
+	requireDefaultContract(t)
+
+	const (
+		gateID     = "300"
+		instanceID = "b0a1-uuid"
+	)
+	in := &kafkapb.GateDrainMigrationEvent{DrainMarkedAt: 1_762_400_000, RatePerSecond: 20, LeaseMs: 15000}
+
+	msg, err := buildGateDrainMigrationCommand(gateID, instanceID, in)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if _, err := buildGateDrainMigrationCommand(gateID, instanceID, nil); err == nil {
+		t.Fatal("nil event must be rejected")
+	}
+
+	var cmd kafkapb.GateCommand
+	if err := proto.Unmarshal(msg.Payload, &cmd); err != nil {
+		t.Fatalf("unmarshal GateCommand: %v", err)
+	}
+	if cmd.GetEventId() != uint32(game.ContractsKafkaGateDrainMigrationEventEventId) {
+		t.Fatalf("event_id = %d, want GateDrainMigrationEvent(%d)", cmd.GetEventId(), game.ContractsKafkaGateDrainMigrationEventEventId)
+	}
+	if cmd.GetTargetGateId() != 300 || cmd.GetTargetInstanceId() != instanceID {
+		t.Errorf("envelope target gate=%d instance=%q, want 300/%q", cmd.GetTargetGateId(), cmd.GetTargetInstanceId(), instanceID)
+	}
+	if cmd.GetSessionId() != 0 || cmd.GetPlayerId() != 0 {
+		t.Errorf("envelope session_id=%d player_id=%d, want 0/0 (the lease targets the whole gate)", cmd.GetSessionId(), cmd.GetPlayerId())
+	}
+	if msg.Partition != 44 {
+		t.Errorf("partition = %d, want 44 (300 %% 256)", msg.Partition)
+	}
+	if !kafkacmd.IsCommandTopic(msg.Topic) {
+		t.Errorf("IsCommandTopic(%q) = false; the producer would hash-partition this command", msg.Topic)
+	}
+
+	var event kafkapb.GateDrainMigrationEvent
+	if err := proto.Unmarshal(cmd.GetPayload(), &event); err != nil {
+		t.Fatalf("unmarshal GateDrainMigrationEvent: %v", err)
+	}
+	if !proto.Equal(&event, in) {
+		t.Errorf("payload = %+v, want %+v", &event, in)
 	}
 }

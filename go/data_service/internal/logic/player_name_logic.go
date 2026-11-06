@@ -46,6 +46,14 @@ var (
 	// 而本次调用没有 admin token。server 层映射成 FailedPrecondition +
 	// ErrCodeAdminAuthRequired。这道窗拦的是"拿别人早就建好的号的名字来释放"。
 	ErrPlayerNameReleaseOutsideWindow = errors.New("release outside window requires admin token")
+
+	// ErrPlayerNameBound:名字行已经绑定在建成的角色上(§3.4a)。建角回滚和运维清孤儿都不能释放,
+	// 只有删角写完墓碑之后由 data_service 自己释放。server 层映射成 FailedPrecondition + ErrCodePlayerNameInUse。
+	ErrPlayerNameBound = errors.New("player name is bound to a committed role")
+
+	// ErrPlayerNameRoleCommitted:名字行还是预留态,但玩家片上这名角色已经提交(提交之后的绑定没做完)。
+	// 名字属于在役角色,同样拒绝;映射同 ErrPlayerNameBound。出现即说明调用方判错了建角结局,或者调用方本不该来释放。
+	ErrPlayerNameRoleCommitted = errors.New("player name belongs to a committed role")
 )
 
 // ── 指标 ───────────────────────────────────────────────────────
@@ -59,7 +67,7 @@ var (
 // 端口,与 MetricsListenAddr 上已有的那套并存。用 core/metric 写在这里的后果是
 // 三个指标永远是 0,而且不报任何错(这正是 2026-09-19 核验查出来的缺陷)。
 //
-// 【低基数纪律】label 只有 op(3 个取值)、result(7 个取值)。**绝不放 player_id 或
+// 【低基数纪律】label 只有 op(3 个取值)、result(8 个取值)。**绝不放 player_id 或
 // 名字**:那是无上界的维度,会把 Prometheus 的时间序列打爆(AGENTS.md §9);
 // 需要 player_id 的排障信息一律走日志。
 
@@ -82,7 +90,10 @@ const (
 	playerNameResultInvalid       = "invalid"
 	playerNameResultConflict      = "conflict"
 	playerNameResultOutsideWindow = "outside_window"
-	playerNameResultError         = "error"
+	// playerNameResultInUse 只出现在 release:名字属于建成的角色(已绑定,或预留态但角色已提交),拒绝释放。
+	// 它抬头 = 有调用方在释放在役角色的名字(login 判错建角结局,或者调用方身份不对),必须有人看。
+	playerNameResultInUse = "in_use"
+	playerNameResultError = "error"
 )
 
 const (
@@ -233,10 +244,20 @@ var playerNameAdminRules = playername.Rules{MinRunes: 1, MaxRunes: math.MaxInt}
 // ReleasePlayerName 条件释放 playerID 名下的 raw 这个名字。
 //
 // admin=true 表示 server 层已经过了 authorizeAdmin,本次不限登记时间(运维按日志
-// 清孤儿);admin=false 是 login 的建角补偿路径,只能删 ReleaseWindow 之内的登记。
+// 清孤儿);admin=false 是 login 的建角补偿路径(server 层已核过 login 的签名),只能删 ReleaseWindow 之内的登记。
+//
+// 【只释放预留态,先证明角色永远不会提交】(§3.4a)两条路径都一样,顺序固定:
+//  0. 读名字行(releasableNameRow):没有这一行 → 幂等成功;已绑定 → ErrPlayerNameBound;登记早于窗口 → 窗外拒绝。
+//     这三种都在证明之前回,两边一个字节都不写:被拒或无事可做的释放不能留下不可逆的墓碑。
+//  1. 在玩家片证明(PlayerRoleSeals.SealUncommittedRole):角色在役 → ErrPlayerNameRoleCommitted,名字一个字节都不碰;
+//     没有角色行而有路由行 → 写墓碑,之后迟到的建角提交不了。证明失败(库不可达、闸门冻结)回错误,不释放。
+//  2. 在名字片条件删除,只删预留态:已绑定 → ErrPlayerNameBound,两边都不动(第 0 步之后的变化由这条 DELETE 原子复核)。
+//
+// 证明在前、删除在后:反过来的话,删完名字之后在途的建角还能提交,建成的角色就没有名字登记,别人能再占这个名字。
+// 证明写下的墓碑让这个 player_id 再也建不了角,所以只能由放弃了这个 id 的一方来调(login 回滚之后玩家重试会铸新 id)。
 //
 // 【幂等】行不存在返回 nil。login 的补偿会发两次(立即一次 + 约 10s 后一次,
-// 防"Release 先于在途 INSERT 提交"的竞态),第二次必然打空。
+// 防"Release 先于在途 INSERT 提交"的竞态),第二次必然打空:第 0 步读不到行就回,不再证明。
 func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, raw string, admin bool) error {
 	metricResult := playerNameResultError
 	defer observePlayerNameOp(playerNameOpRelease, &metricResult)()
@@ -285,15 +306,36 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 			store.ErrPlayerNameInvalidArgument, playerID, verdict, admin)
 	}
 
-	if svcCtx == nil || svcCtx.PlayerNameStore == nil {
+	if svcCtx == nil || svcCtx.PlayerNameStore == nil || svcCtx.PlayerRoleSeals == nil {
+		// 少了玩家片的证明就不知道角色有没有提交:宁可留一条孤儿名字,也不能释放一个在役角色的名字(fail-closed)。
 		return ErrPlayerNameStoreUnavailable
 	}
 
 	minCreatedMs := releaseWindowFloorMs(svcCtx, admin, time.Now())
 
-	outcome, err := svcCtx.PlayerNameStore.Release(ctx, playerID, norm, minCreatedMs)
+	// 先读名字行:没有这一行、已绑定、登记早于窗口,都在证明之前就按下面的终局回,两边一个字节都不写。
+	// 证明可能写墓碑,不可逆;被拒或无事可做的释放不能留下它。多集群恢复点错开时,「名字已绑定、角色行却不在」的
+	// 那名角色可能真的建成了(玩家片恢复点早于提交),先证明再拒绝会把它永远封死。
+	outcome, err := releasableNameRow(ctx, svcCtx.PlayerNameStore, playerID, norm, minCreatedMs)
 	if err != nil {
-		return fmt.Errorf("release player name for player %d: %w", playerID, err)
+		return fmt.Errorf("read player name row for player %d before releasing it: %w", playerID, err)
+	}
+	if outcome == 0 {
+		// 有一条窗口内的预留态:先证明、再删。DELETE 还会按 bound_ms = 0 与窗口下界原子复核,读完之后的变化由它兜住。
+		seal, err := svcCtx.PlayerRoleSeals.SealUncommittedRole(ctx, playerID)
+		if err != nil {
+			return fmt.Errorf("prove player %d never committed before releasing its name: %w", playerID, err)
+		}
+		if seal == store.RoleSealCommitted {
+			metricResult = playerNameResultInUse
+			logx.Errorf("[player-name] release refused: player_id=%d has a committed role, its name stays (admin=%v); "+
+				"the name row is still reserved, run create_residual -repair name to bind it", playerID, admin)
+			return fmt.Errorf("%w: player_id=%d", ErrPlayerNameRoleCommitted, playerID)
+		}
+		outcome, err = svcCtx.PlayerNameStore.Release(ctx, playerID, norm, minCreatedMs)
+		if err != nil {
+			return fmt.Errorf("release player name for player %d: %w", playerID, err)
+		}
 	}
 
 	switch outcome {
@@ -341,8 +383,35 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 			playerID, minCreatedMs)
 		return fmt.Errorf("%w: player_id=%d", ErrPlayerNameReleaseOutsideWindow, playerID)
 
+	case store.ReleaseBound:
+		// 名字绑定在建成的角色上(多半在证明之前就读到了,没有证明、没有写)。角色是墓碑的话是删角之后的释放还没做完,
+		// 由删角收尾(后台 ResumeRemovals)去删;角色行不在的话是玩家片恢复点早于建角提交,要人核对,不走这条路。
+		// 缓存不动:拒绝必须是零变更。
+		metricResult = playerNameResultInUse
+		logx.Errorf("[player-name] release refused: player_id=%d name is bound to a role (admin=%v); "+
+			"bound names are released only by the role removal path", playerID, admin)
+		return fmt.Errorf("%w: player_id=%d", ErrPlayerNameBound, playerID)
+
 	default:
 		return fmt.Errorf("unexpected release outcome %d for player %d", uint8(outcome), playerID)
+	}
+}
+
+// releasableNameRow 在玩家片证明之前读一次名字行:没有这一行回 ReleaseAbsent,已绑定回 ReleaseBound,登记早于窗口回
+// ReleaseOutsideWindow,这三种都什么都没写;有一条窗口内的预留态回 0,调用方先证明、再条件删除。
+func releasableNameRow(ctx context.Context, names svc.PlayerNameStore, playerID uint64, norm string, minCreatedMs uint64) (store.ReleaseOutcome, error) {
+	createdMs, boundMs, found, err := names.NameRowState(ctx, playerID, norm)
+	switch {
+	case err != nil:
+		return 0, err
+	case !found:
+		return store.ReleaseAbsent, nil
+	case boundMs != 0:
+		return store.ReleaseBound, nil
+	case createdMs < minCreatedMs:
+		return store.ReleaseOutsideWindow, nil
+	default:
+		return 0, nil
 	}
 }
 
