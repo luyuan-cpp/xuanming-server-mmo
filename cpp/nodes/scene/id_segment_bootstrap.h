@@ -17,3 +17,7 @@ class Node;
 // 配置自相矛盾(Enabled=true 但 step 三元组非法、同一种类配了两块)直接 LOG_FATAL:
 // 发号源配错了不该带病启动。没配 / Enabled=false 的种类 WARN 后按 fail-closed 跑。
 std::size_t ConfigureGuidSegmentClients(Node &node);
+
+// 停机时先关闭新领段，已提交的结果在退出存盘期间仍可交付；拆节点时停止本地等待。
+void CloseGuidSegmentTransport();
+void StopGuidSegmentTransport();

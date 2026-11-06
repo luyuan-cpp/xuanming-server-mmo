@@ -28,6 +28,7 @@
 #include "proto/scene/player_activity.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "proto/scene/player_battle_result.pb.h"
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_lifecycle.pb.h"
 #include "proto/scene/player_mission.pb.h"
@@ -73,6 +74,7 @@
 #include "rpc/service_metadata/player_activity_service_metadata.h"
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_bag_service_metadata.h"
+#include "rpc/service_metadata/player_battle_result_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
 #include "rpc/service_metadata/player_mission_service_metadata.h"
@@ -341,7 +343,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 371,
+static_assert(kMaxRpcMethodCount == 373,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1427,6 +1429,18 @@ void InitMessageInfo()
         std::make_unique<::RemoveGemResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneBattleResultClientPlayer ---
+    gRpcMethodRegistry[SceneBattleResultClientPlayerGetRecentBattleResultsMessageId] = RpcMethodMeta{
+        "SceneBattleResultClientPlayer", "GetRecentBattleResults",
+        std::make_unique<::GetRecentBattleResultsRequest>(),
+        std::make_unique<::GetRecentBattleResultsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBattleResultClientPlayerAckBattleResultsMessageId] = RpcMethodMeta{
+        "SceneBattleResultClientPlayer", "AckBattleResults",
+        std::make_unique<::AckBattleResultsRequest>(),
+        std::make_unique<::AckBattleResultsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneCurrencyClientPlayer ---
     gRpcMethodRegistry[SceneCurrencyClientPlayerGmAddCurrencyMessageId] = RpcMethodMeta{
         "SceneCurrencyClientPlayer", "GmAddCurrency",
@@ -2129,16 +2143,8 @@ bool IsClientMessageId(uint32_t messageId)
 	switch (messageId) {
 	case BattleClientPlayerSubmitBattleActionMessageId:
 	case BattleClientPlayerGetBattleStateMessageId:
-	case BattleClientPlayerNotifyBattleStartMessageId:
-	case BattleClientPlayerNotifyTurnResultMessageId:
-	case BattleClientPlayerNotifyBattleEndMessageId:
-	case BattleClientPlayerNotifyBattleReconnectMessageId:
 	case BattleClientPlayerStopWatchBattleMessageId:
 	case BattleClientPlayerSetAutoBattleMessageId:
-	case BattleClientPlayerNotifySpectateStateMessageId:
-	case BattleClientPlayerNotifySpectateTurnResultMessageId:
-	case BattleClientPlayerNotifySpectateEndMessageId:
-	case BattleClientPlayerNotifyBattleAssignedMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
 	case ClientPlayerFriendAddFriendMessageId:
@@ -2151,7 +2157,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerFriendUnblockMessageId:
 	case ClientPlayerFriendListBlocksMessageId:
 	case ClientPlayerFriendRecommendFriendsMessageId:
-	case ClientPlayerFriendNotifyFriendEventMessageId:
 	case GateClientSpectateSubscribeSpectateMessageId:
 	case GateClientSpectateUnsubscribeSpectateMessageId:
 	case GuildServiceCreateGuildMessageId:
@@ -2168,8 +2173,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceListMyGuildApplicationsMessageId:
 	case GuildServiceListGuildApplicationsMessageId:
 	case GuildServiceReviewGuildApplicationMessageId:
-	case GuildServiceNotifyGuildChangedMessageId:
-	case GuildServiceUpdateGuildScoreMessageId:
 	case GuildServiceGetGuildRankMessageId:
 	case GuildServiceGetGuildRankByGuildMessageId:
 	case GuildServiceGetGuildDonateOptionsMessageId:
@@ -2186,14 +2189,12 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:
 	case ClientPlayerLoginLeaveGameMessageId:
-	case ClientPlayerLoginDisconnectMessageId:
 	case ClientPlayerLoginRefreshTokenMessageId:
 	case ClientPlayerMailListMailsMessageId:
 	case ClientPlayerMailReadMailMessageId:
 	case ClientPlayerMailClaimMailAttachmentsMessageId:
 	case ClientPlayerMailDeleteMailsMessageId:
 	case ClientPlayerMailClearReadMailsMessageId:
-	case ClientPlayerMailNotifyMailChangedMessageId:
 	case MatchServiceGetNetworkProbePlanMessageId:
 	case MatchServiceCommitNetworkProbeMessageId:
 	case MatchServiceJoinQueueMessageId:
@@ -2201,16 +2202,11 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceGetQueueStatusMessageId:
 	case MatchServiceChallengePlayerMessageId:
 	case MatchServiceRespondChallengeMessageId:
-	case MatchServiceNotifyChallengeInviteMessageId:
-	case MatchServiceNotifyChallengeResultMessageId:
 	case MatchServiceWatchBattleMessageId:
 	case MatchServiceRequestBattleTicketMessageId:
 	case MatchServiceListWatchableBattlesMessageId:
 	case ClientPlayerRankGetRankPageMessageId:
 	case ClientPlayerRankGetRankAroundMessageId:
-	case SceneClientPlayerCommonSendTipToClientMessageId:
-	case SceneClientPlayerCommonKickPlayerMessageId:
-	case SceneClientPlayerCommonRedirectToGateMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
 	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
 	case SceneAttributeClientPlayerGetAttributePanelMessageId:
@@ -2220,7 +2216,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneAttributeClientPlayerCreateAttributeSchemeMessageId:
 	case SceneAttributeClientPlayerSwitchAttributeSchemeMessageId:
 	case SceneAttributeClientPlayerRenameAttributeSchemeMessageId:
-	case SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId:
 	case SceneAttributeClientPlayerGmSetPlayerLevelMessageId:
 	case SceneBagClientPlayerGetBagMessageId:
 	case SceneBagClientPlayerSortBagMessageId:
@@ -2230,6 +2225,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerEnhanceEquipMessageId:
 	case SceneBagClientPlayerInlayGemMessageId:
 	case SceneBagClientPlayerRemoveGemMessageId:
+	case SceneBattleResultClientPlayerGetRecentBattleResultsMessageId:
+	case SceneBattleResultClientPlayerAckBattleResultsMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:
 	case SceneCurrencyClientPlayerGmDeductCurrencyMessageId:
 	case SceneCurrencyClientPlayerGetCurrencyListMessageId:
@@ -2242,13 +2239,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneMovementClientPlayerMoveStopMessageId:
 	case SceneMovementClientPlayerMoveSyncMessageId:
 	case SceneMovementClientPlayerTeleportRequestMessageId:
-	case SceneMovementClientPlayerNotifyMoveAckMessageId:
-	case SceneMovementClientPlayerNotifyActorMoveMessageId:
-	case SceneMovementClientPlayerNotifyActorMoveListMessageId:
-	case SceneMovementClientPlayerNotifyTeleportMessageId:
 	case SceneMysteryMerchantClientPlayerGetMysteryMerchantInfoMessageId:
 	case SceneMysteryMerchantClientPlayerBuyMysteryMerchantGoodsMessageId:
-	case SceneMysteryMerchantClientPlayerNotifyMysteryMerchantMessageId:
 	case ScenePetClientPlayerGetPetListMessageId:
 	case ScenePetClientPlayerSummonPetMessageId:
 	case ScenePetClientPlayerRecallPetMessageId:
@@ -2256,22 +2248,12 @@ bool IsClientMessageId(uint32_t messageId)
 	case ScenePetClientPlayerResetPetPointsMessageId:
 	case ScenePetClientPlayerAutoAllocatePetPointsMessageId:
 	case ScenePetClientPlayerRenamePetMessageId:
-	case ScenePetClientPlayerNotifyPetListChangedMessageId:
 	case ScenePetClientPlayerGmGrantPetMessageId:
 	case SceneSceneClientPlayerEnterSceneMessageId:
-	case SceneSceneClientPlayerNotifyEnterSceneMessageId:
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
-	case SceneSceneClientPlayerNotifySceneInfoMessageId:
-	case SceneSceneClientPlayerNotifyActorCreateMessageId:
-	case SceneSceneClientPlayerNotifyActorDestroyMessageId:
-	case SceneSceneClientPlayerNotifyActorListCreateMessageId:
-	case SceneSceneClientPlayerNotifyActorListDestroyMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:
 	case SceneSceneClientPlayerGetSyncDigestMessageId:
-	case SceneSceneClientPlayerNotifySyncDigestMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
-	case SceneSkillClientPlayerNotifySkillUsedMessageId:
-	case SceneSkillClientPlayerNotifySkillInterruptedMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:
 	case ClientPlayerTeamCreateTeamMessageId:
@@ -2286,9 +2268,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerTeamTransferLeaderMessageId:
 	case ClientPlayerTeamDisbandTeamMessageId:
 	case ClientPlayerTeamStartTeamMatchMessageId:
-	case ClientPlayerTeamNotifyTeamSnapshotMessageId:
-	case ClientPlayerTeamNotifyTeamInviteMessageId:
-	case ClientPlayerTeamNotifyTeamEventMessageId:
 	case ClientPlayerJubaozhaiBrowseListingsMessageId:
 	case ClientPlayerJubaozhaiGetListingDetailMessageId:
 	case ClientPlayerJubaozhaiSetFavoriteMessageId:

@@ -258,12 +258,12 @@ func (c RoleFenceConfig) Validate() error {
 
 // IdSegmentConfig 是发号器的配置。
 type IdSegmentConfig struct {
-	// AllowAutoSeed=true:两份预留记录都不存在时自动初始化(只给 dev 用,空环境起了就能建角);
-	// false(生产):拒绝发号,返回 ErrCodeIdSegmentUnknownTag,不写任何记录,由部署步骤
-	// `data_service -id-issuer-init` 显式初始化。
+	// AllowAutoSeed=true:登记处没有这个码、或者本地记录缺失时,第一次预留自动补齐(只给 dev 用,空环境起了就能建角);
+	// false(生产):拒绝发号,返回 ErrCodeIdSegmentUnknownTag,不写任何记录。新地域由部署步骤
+	// `data_service -id-issuer-init` 显式初始化,事故由 `-id-issuer-recover` 恢复(docs/ops/id-issuer-runbook.md)。
 	//
-	// 为什么生产不能自动初始化:两份记录都不存在,要么是首次部署,要么是两套 etcd 同时丢了数据。
-	// 后者如果自动从头发号,新号可能和存量撞上,而撞号多数不报错,只会静默串档。这个判断要留给人。
+	// 为什么生产不能自动初始化:记录不存在,要么是新地域,要么是 etcd 丢了数据。后者如果自动从头发号,
+	// 新号可能和存量撞上,而撞号多数不报错,只会静默串档。这个判断要留给人,恢复只按幸存的记录取上界。
 	//
 	// 这里可以放心用裸 bool:go-zero 不下钻一个"整段 optional 且未出现"的嵌套结构,
 	// 里面的 default 标签一个都不会回填 —— 但本键的安全值恰好就是零值 false,块缺失
@@ -279,18 +279,23 @@ type IdSegmentConfig struct {
 	Issuer IdIssuerConfig `json:",optional"`
 }
 
-// IdIssuerConfig 是发号器预留记录的位置。两份记录都只增不减,一块号要两份都写成功才发,
-// 所以任何一份丢失或回退,另一份都盖得住发过的号。
+// IdIssuerConfig 是发号器预留记录的位置。三份记录都只增不减,一块号要三份都写成功才发,
+// 所以任何一份或两份丢失、回退,剩下的都盖得住发过的号(docs/design/player-data-tidb-scaling-plan.md §6.3)。
 type IdIssuerConfig struct {
 	// Region 是地域码,0..63,写进计数器的最高位。0 只给 Mode=dev、test:这个字段漏写也是 0,
-	// 其他模式拒绝启动。开始发号之后不能改;发号器发现记录里的地域和这里不一致会拒绝预留。
+	// 其他模式拒绝启动。开始发号之后不能改;登记处只认它绑定的那两套 etcd,记录里的地域和这里不一致也拒绝预留。
 	Region uint32 `json:",optional"`
 
-	// PrimaryEtcd / SecondaryEtcd 是放两份记录的两套 etcd。生产必须各配一套,地址不能有交集:
+	// PrimaryEtcd / SecondaryEtcd 是放两份本地记录的两套 etcd。生产必须各配一套,地址不能有交集:
 	// 两份记录在同一套 etcd 上就失去了意义。dev(AllowAutoSeed=true)可以不写,回落到服务自己的
-	// Etcd.Hosts,两份记录放同一套 etcd 的不同键。目前两套都不开认证,与现有 etcd 部署一致。
+	// Etcd.Hosts,两份记录放同一套 etcd 的不同键。目前都不开认证,与现有 etcd 部署一致。
 	PrimaryEtcd   []string `json:",optional"`
 	SecondaryEtcd []string `json:",optional"`
+
+	// RegistryEtcd 是全局号源登记处所在的 etcd:全部地域、全部物理集群、staging 和 prod 共用一套,
+	// 地域码绑定和第三份预留记录都在这里。生产必须配,地址不能和 PrimaryEtcd、SecondaryEtcd 有交集。
+	// dev 可以不写,回落到 PrimaryEtcd(再回落到 Etcd.Hosts),放不同的键。
+	RegistryEtcd []string `json:",optional"`
 }
 
 // DefaultIdSegmentTags 是走号段的永久身份清单。
@@ -309,9 +314,10 @@ func (c IdSegmentConfig) EffectiveTags() []string {
 	return out
 }
 
-// IssuerEndpoints 返回两份记录各自的 etcd 地址。fallback 是服务自己的 Etcd.Hosts,只有 dev 才能回落到它。
-func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary []string, err error) {
-	primary, secondary = c.Issuer.PrimaryEtcd, c.Issuer.SecondaryEtcd
+// IssuerEndpoints 返回两份本地记录和登记处各自的 etcd 地址。fallback 是服务自己的 Etcd.Hosts,只有 dev 才能回落到它。
+// 生产三组地址两两不能有交集;这只比字符串,运行期发号器再比 etcd 自己报的集群号。
+func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary, registry []string, err error) {
+	primary, secondary, registry = c.Issuer.PrimaryEtcd, c.Issuer.SecondaryEtcd, c.Issuer.RegistryEtcd
 	if c.AllowAutoSeed {
 		if len(primary) == 0 {
 			primary = fallback
@@ -319,24 +325,31 @@ func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary 
 		if len(secondary) == 0 {
 			secondary = primary
 		}
+		if len(registry) == 0 {
+			registry = primary
+		}
 		if len(primary) == 0 {
-			return nil, nil, errors.New("IdSegment.Issuer: no etcd endpoints (neither PrimaryEtcd nor Etcd.Hosts is set)")
+			return nil, nil, nil, errors.New("IdSegment.Issuer: no etcd endpoints (neither PrimaryEtcd nor Etcd.Hosts is set)")
 		}
-		return primary, secondary, nil
+		return primary, secondary, registry, nil
 	}
-	if len(primary) == 0 || len(secondary) == 0 {
-		return nil, nil, errors.New("IdSegment.Issuer: PrimaryEtcd and SecondaryEtcd are both required when AllowAutoSeed=false")
+	if len(primary) == 0 || len(secondary) == 0 || len(registry) == 0 {
+		return nil, nil, nil, errors.New("IdSegment.Issuer: PrimaryEtcd, SecondaryEtcd and RegistryEtcd are all required when AllowAutoSeed=false")
 	}
-	seen := make(map[string]struct{}, len(primary))
-	for _, endpoint := range primary {
-		seen[strings.ToLower(strings.TrimSpace(endpoint))] = struct{}{}
-	}
-	for _, endpoint := range secondary {
-		if _, shared := seen[strings.ToLower(strings.TrimSpace(endpoint))]; shared {
-			return nil, nil, fmt.Errorf("IdSegment.Issuer: PrimaryEtcd and SecondaryEtcd share %q; the two records must live on independent etcd clusters", endpoint)
+	owner := make(map[string]string, len(primary)+len(secondary)+len(registry))
+	for _, group := range []struct {
+		name      string
+		endpoints []string
+	}{{"PrimaryEtcd", primary}, {"SecondaryEtcd", secondary}, {"RegistryEtcd", registry}} {
+		for _, endpoint := range group.endpoints {
+			key := strings.ToLower(strings.TrimSpace(endpoint))
+			if other, shared := owner[key]; shared && other != group.name {
+				return nil, nil, nil, fmt.Errorf("IdSegment.Issuer: %s and %s share %q; the three records must live on independent etcd clusters", other, group.name, endpoint)
+			}
+			owner[key] = group.name
 		}
 	}
-	return primary, secondary, nil
+	return primary, secondary, registry, nil
 }
 
 // StoreConfig 决定 MySQL 侧的 store(快照 / 流水 / 号段 / 名字注册表)装配不起来时进程怎么办。

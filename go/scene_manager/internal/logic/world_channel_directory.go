@@ -482,7 +482,7 @@ func StartWorldChannelDirectoryPublisher(ctx context.Context, svcCtx *svc.Servic
 				return
 			}
 			now := time.Now()
-			for _, zoneID := range GetActiveZones() {
+			for _, zoneID := range orchestratedZones(svcCtx) {
 				PublishWorldChannelDirectoriesForZone(ctx, svcCtx, zoneID, now)
 			}
 		})

@@ -324,6 +324,8 @@ const (
 	stageEtcd  roundStage = "etcd"
 	stageRedis roundStage = "redis"
 	stagePanic roundStage = "panic"
+	// stageViewHeld:etcd 读成功了,但存活集被闸门压住(gate_sweep.go checkLiveView)。只有死 gate 清扫会有,不计入让位门槛。
+	stageViewHeld roundStage = "view_held"
 )
 
 type roundOutcome struct {
@@ -338,6 +340,8 @@ func (o roundOutcome) result() string {
 		return reconcileResultOK
 	case o.stage == stageEtcd:
 		return reconcileResultEtcdError
+	case o.stage == stageViewHeld:
+		return reconcileResultViewHeld
 	case o.stage == stagePanic:
 		return reconcileResultPanic
 	default:

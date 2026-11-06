@@ -369,3 +369,5 @@
 368=MatchInternalAcquireTrialOccupancy
 369=MatchInternalReleaseTrialOccupancy
 370=MatchInternalGetBattleCompletion
+371=SceneBattleResultClientPlayerGetRecentBattleResults
+372=SceneBattleResultClientPlayerAckBattleResults

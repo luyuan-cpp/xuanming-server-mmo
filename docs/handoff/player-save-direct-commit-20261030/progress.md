@@ -576,7 +576,7 @@ cd go/scene_manager && go build ./... && go test ./internal/logic/... -count=1
 cd robot && go vet ./... && go build ./...
 ```
 
-- 真 Redis:`LOGIN_TOKEN_REQUIRE_REAL_REDIS=1 LOGIN_TOKEN_TEST_REDIS_ADDR=<数值地址> LOGIN_TOKEN_TEST_REDIS_DB=9 go test ./internal/logic/pkg/token/ -run TestTokenFamily_RealRedis -count=1 -v`,7.2 与 8.x 各一轮。
+- [x] Go 令牌真 Redis（2026-11-05 复验完成）：`LOGIN_TOKEN_REQUIRE_REAL_REDIS=1 LOGIN_TOKEN_TEST_REDIS_ADDR=<数值地址> LOGIN_TOKEN_TEST_REDIS_DB=9 go test ./internal/logic/pkg/token/ -run TestTokenFamily_RealRedis -count=1 -v`，实际 Redis 7.2.16 / 8.10.2 各 10 个子项 PASS、0 FAIL、0 SKIP；详见文末「Go 令牌复验完成，Java 留 TODO」。
 - C++(串行 `/m:1`):编 `gate`、`scene`、`routing_identity_test`、`cross_zone_test`。跑 `routing_identity_test --gtest_filter=SessionDetailsBuilder.*`、`cross_zone_test --gtest_filter=EnterFenceEcs.*`。
 - Java 网关:`HotfixCheckServiceTest` 和网关全量单测。
 - 部署契约:`k8s_deploy_contract`、`k8s_redis_split_contract`、`redis_exporter_contract`、`k8s_client_entry_contract`。`Get-GrpcClientMethodsNotCalledFromCpp` 现在登记了 GM 回收三个方法。`k8s_redis_split_contract` 第 8 节是新写的,最可能因夹具红的是 prod 档和 all-up 两条 DryRun。
@@ -654,6 +654,65 @@ C++(串行 `/m:1`):先编 `kafka_producer.cpp` 所在的库,再编 `scene`。
 - 全链路:一条压缩前大于 1MB 的快照能发出去、落进 `player_snapshot`。topic 的 `max.message.bytes` 是 16777216。
 - 维护排空(§13 第 5 步):排空开始后不再有 `DELETE FROM player_snapshot`,不打成 HOLD。这条只读过代码,最可能出问题。
 - `go/login` 启动不再要求 `TaskWaitTimeout`、`LoginTotalTimeout`。
+
+### 清单第 2 条后半:转人工合同的恢复入口(2026-11-05,未编译)
+
+`proto/trade/trade_table.proto` 加了 `TradeCommerceQuarantine`、`TradeCommerceManualAction`、`TradeCommerceWorkflow.quarantine`、`manual_actions`、`TradeCommerceLeg.superseded_by`,要先重新生成协议,命令同上。然后都在 `go/trade` 下:
+
+```bash
+go build -gcflags=-e ./... && go vet ./cmd/... ./internal/commerce/... ./internal/data/... ./internal/svc/...
+```
+
+```bash
+go test -count=1 ./cmd/... ./internal/commerce/ -run 'Manual|Reissue|Refund|Resume|Settle|MarkManual|PlanFinalCredit|RunResolve|RunShow|RunList|ParseResolve|RejectsBadArgs'
+```
+
+```bash
+go test -count=1 ./internal/commerce/... ./internal/data/...
+```
+
+真库:按 `tick_isolation_db_test.go` 文件头的门控(`COMMERCE_TEST_MYSQL_DSN` + `COMMERCE_REQUIRE_MYSQL=1`,或 TiDB 那一组),跑 `go test -count=1 -v ./internal/commerce/ -run 'TestRealDB'`。
+
+通过标准:
+
+- 新用例全部 PASS:`manual_test.go`、`manual_db_test.go`(两例都要在 `-v` 里看到 PASS,不能是 SKIP)、`cmd/commercefix/main_test.go`。
+- 既有的 `TestRealDB*`、`tick_isolation_test.go`、`engine_test.go`、`cmd/assetopfix` 不能变红。变化最大的是最终发放没到账:以前 `stage=done`、op 行被标业务消费,现在 `stage=manual`、不标。有用例断言旧行为时报告,不要改断言。
+- `assetopfix` 改用共用的 `svc.OpenToolMySQL`,行为不变。
+
+失败时保留:编译全部错误;失败用例 `go test -count=1 -v -run '^用例名$' <包>` 的完整输出。
+
+### 清单第 3 条剩余与第 6 条(2026-11-05,未编译)
+
+`proto/common/base/config.proto` 加了 `GameConfig.audit_snapshot`,要先重新生成协议,命令同上。C++ 一律串行 `/m:1`,测试工程只链接预编好的库,先编库再跑测试:
+
+```bash
+msbuild cpp\libs\engine\config\config.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64
+```
+
+```bash
+msbuild cpp\libs\modules\modules.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64
+```
+
+```bash
+pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter configuration_table -LogDir <日志目录>/16-audit-snapshot
+```
+
+然后编 `scene`,确认 `cpp/generated/rpc` 删掉 `player_rollback_service_metadata.h` 之后 `rpc` 工程照常编过。部署合同:
+
+```bash
+pwsh -NoProfile -File tools/scripts/tests/audit_pipeline_deploy_contract.tests.ps1
+```
+
+```bash
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+```
+
+通过标准:
+
+- `configuration_table_test` 的 `GameConfigAuditSnapshot.*`、`AuditSnapshotPolicy.*` 全部 PASS,既有 `GameConfigPlayerInbox.*` 不变红。
+- 两份合同退出码 0。`k8s_deploy_contract` 的 Kafka 盘预算期望值(prod 40Gi 等)不该变:审计 retention.bytes 缺省沿用 broker 缺省。
+
+失败时保留:编译错误前 50 行;失败用例名和断言原文;合同测试的完整输出。
 
 ### 本聊天后续 A9 实际结果（2026-11-01，交原窗口处理）
 
@@ -807,7 +866,7 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
 
 **待查的代码问题**:
 
-3. §16 `TestTokenFamily_RealRedis/persistent-head-refresh` 在 Redis 7.2、8.x 都失败,是 Refresh token 的新代码。11-02 读代码没找到哪一步写了数据:几段脚本在拒绝前都不写。断言改成报出是哪个键变了(只报角色,不打令牌),下一轮据此定位。
+3. §16 `TestTokenFamily_RealRedis/persistent-head-refresh` 在 Redis 7.2、8.x 都失败,是 Refresh token 的新代码。11-02 读代码没找到哪一步写了数据:几段脚本在拒绝前都不写。断言改成报出是哪个键变了(只报角色,不打令牌),下一轮据此定位。**2026-11-05 已闭合**：11-02 改成 `keyContent` 内容比较的版本已重新编译并通过单测，Redis 7.2.16 / 8.10.2 各 10/10 子项通过，`persistent-head-refresh` 均转绿；历史失败保留，结果见文末复验回执。
 4. §18 双区启动:负例读配置读成了 `tools/go/data_service/etc/data_service.yaml`,白名单负例没有验到。11-02 已修:`tools/scripts/lib/sql_boot_catalog_local.ps1` 被直接调用时仓库根只往上退两级,改成三级。
 5. §13「全部失败断言分组」:先按时间分出 TiKV 失效之后的失败,其余逐组看。
 6. §7 部署合同另外 7 份失败;docs-index 那条是已知基线红,不用修。
@@ -825,7 +884,7 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
 
 - C++:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,裸指针门禁要过;再跑 `currency_test --gtest_filter=AssetOpRecallTest.*`。
 - `cd go/shared && go test -count=1 ./placement/...`
-- Refresh token,Redis 7.2 和 8.x 各一轮:设 `LOGIN_TOKEN_REQUIRE_REAL_REDIS=1`、`LOGIN_TOKEN_TEST_REDIS_ADDR`(按需 `LOGIN_TOKEN_TEST_REDIS_DB`、`LOGIN_TOKEN_TEST_REDIS_PASSWORD`),`cd go/login && go test -count=1 -v -run TestTokenFamily_RealRedis ./internal/logic/pkg/token/`。失败时把那一行(哪个键、长度)贴回来。
+- [x] Go Refresh token（2026-11-05 完成）：在 `go/login` 先跑 `gofmt -l internal/logic/pkg/token`、`go vet ./internal/logic/pkg/token/...`、`go test -count=1 -v ./internal/logic/pkg/token/...`，再设 `LOGIN_TOKEN_REQUIRE_REAL_REDIS=1`、`LOGIN_TOKEN_TEST_REDIS_ADDR`、`LOGIN_TOKEN_TEST_REDIS_DB=9`，执行 `go test -count=1 -v -run '^TestTokenFamily_RealRedis$' ./internal/logic/pkg/token/`，Redis 7.2.16 / 8.10.2 各一轮均通过；完整计数与日志见文末复验回执。
 - §18 负例:照第二轮的 `18-negative-no-allowlist` 命令重跑,期望是白名单拒绝,不再是找不到配置文件。
 
 ## Codex 第4项 Java 角色归属纠正与剩余配套（2026-11-02）
@@ -849,3 +908,95 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
 - 第一次Java同步尝试被72D启动准入拦截（native0）；后台退出、首轮C++结束后再次准入，随后另一窗口新MSBuild启动，同期运行期门禁中断本聊天pwsh/IO（2个native记录，0个命令完成）。后一次原件 `native-stage-20261102T094438239Z-104c9c53/proof.json`。未取得Sync/check通过结果，正式J仍git clean；部分备份保留，旧输出/计划不能原样重用。未运行Maven或SQL。
 - 本轮C++第一次实际整库exit1：cross_zone_test.cpp:6740未给Hex三个构造参数，检查器随之exit2；另一窗口已改该构建调用并在重编，本聊天没有改它。以其新实际结果为准。
 - 后续不再抢两次构建之间的短空档，等另一验证聊天本轮所有重型命令结束后，按当前计划重新准入。
+
+## r3 回执的修复范围与验证入口(2026-11-05,Claude)
+
+依据:`codex-results-r3-prep.md`(11-02)和其后的提交。负责人 11-05:Java 留 todo。
+
+**已改,在 HEAD；验证状态以各项后续回执为准**:
+
+1. Refresh token `TestTokenFamily_RealRedis`:比较「有没有被改写」改为按类型读内容(`keyContent`),不再比 `DUMP` 字节。r3 失败的是 family 哈希,长度 177 → 177,符合 hashtable 编码下只读 `HGET` 推进渐进式 rehash、字段顺序变了的情况。产品代码没改。**Go 已于 2026-11-05 完成令牌包格式检查、vet、重新编译与单测，以及 Redis 7.2.16 / 8.10.2 复验；Java 继续留 TODO。**详见文末复验回执。
+2. `KafkaCommandWhitelist`:scene 入口表去掉已退役的 42(`BattleSettlementEvent`)。
+3. `PersistRoundTripTest`:夹具补 GM 回收流的回执,带一条 `AssetRecallLine`。
+4. 双区脚本的仓库根(§18 负例,r3 已通过)、C++ 回收的裸指针成员、`placement` 测试竞态(r3 已通过)。
+
+**r3 的部署合同失败已经过时**:主要根因是 r3 版本的 `Get-SqlRuntimeManifestRange` 只认 6 格缩进的 `containers:`,battle 的 Agones Fleet 是 10 格,`infra-up` 第一步就失败,后面的 guild、chat、match 清单都没生成。它和 `publish_images.ps1` 的 `ConvertTo-Json` 都在 `ccbb4af69`(11-02 08:15,r3 开跑之后)修好;`AssetOps off` 的注入、`Get-FlatSubtreeKeys`、排队容量、data-service 连接池、`lock_touch` 几条断言也已更新。剩下什么要重跑才知道。
+
+**别人负责或待定,不在这里改**:
+
+- `cross_zone_test`(r3 有 18 个未播种失败)和 `rpc_controller_test`:Codex 11-05 记录分别是 359/359、298/298。
+- `PlayerEquipAttributeTest` 14 个:10-30 起的夹具越界,等负责人定。`PetAllocationTest.AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys`:宠物加点,不是这批改动,原因没查。
+- 缺口清单的未做项由另外几个窗口分工在做,见 `docs/handoff/server-gap-audit-20261101.md`。
+- **Java(负责人定:留 todo)**:多区启动接线缺 `mall`、`mall-replica`、`gateway`、`gateway-replica` 四个 Java 副本的配置、账号、授权和监听端口(本文件「Codex 第4项 Java 角色归属纠正」);`java/mall_game/pom.xml` 的 `authority-jdbc` 依赖已补进 `<dependencies>`,没有构建过。
+
+**给 Codex 的验证入口**(仓库根,失败不重试,留完整输出):
+
+- 部署合同:`tools/scripts/tests` 下全部 `*.tests.ps1` 在当前 HEAD 重跑一遍,给出最新失败清单和原文。
+- [x] Go Refresh token（2026-11-05 完成）：令牌包格式检查、vet、重新编译与 miniredis 单测通过，Redis 7.2.16 / 8.10.2 各 10 个子项全部 PASS、0 SKIP；命令、环境与完整日志见下方复验回执。
+- C++:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,再跑 `bag_test`、`kafka_command_test` 全量,单独报 `PersistRoundTripTest.*`、`KafkaCommandWhitelist.*`、`PetAllocationTest.*` 的结果。
+
+## 2026-11-05 Codex：Go 令牌复验完成，Java 留 TODO
+
+- [x] **Go 令牌验证完成**：针对 11-02 `family_test.go` 新增 `keyContent` 后尚未编译、运行的缺口，本轮只验证 `go/login/internal/logic/pkg/token`。§16 与 11-02 验证清单的 Go 令牌待验证项已闭合，本条记录该修订后的完整复验结果。
+- [ ] **Java 令牌验证继续留 TODO**：对应 Java `0.1.0-SNAPSHOT`，按负责人 11-05 决定，本轮不跑 Java 编译、单测、真 Redis 集成或机器人 `token` 场景；后续命令仍在 Java 仓 `PARITY.md`「令牌家族、重用检测与家族吊销」一行。
+
+执行环境：Windows/amd64、Go 1.27.2，`GOTOOLCHAIN=local`，工作目录 `D:/luyuan/xuanming-server-mmo-cpp/go/login`。各项只执行一轮，无失败、无重试；没有遇到 Access denied，无需 `go test -c` 回退。
+
+| 验证项 | 实际命令 | 结果 |
+|---|---|---|
+| 格式 | `gofmt -l internal/logic/pkg/token` | 退出 0，无输出 |
+| 静态检查 | `go vet ./internal/logic/pkg/token/...` | 退出 0，无输出 |
+| 重新编译与 miniredis 单测 | `go test -count=1 -v ./internal/logic/pkg/token/...` | 退出 0；48 个顶层测试及 148 个子项 PASS，0 FAIL；唯一 SKIP 为 `TestTokenFamily_RealRedis`，符合本轮未开启真 Redis 的预期 |
+| Redis 7.2.16 | `go test -count=1 -v -run '^TestTokenFamily_RealRedis$' ./internal/logic/pkg/token/` | 退出 0；10 个子项全部 PASS、0 FAIL、0 SKIP |
+| Redis 8.10.2 | 同上 | 退出 0；10 个子项全部 PASS、0 FAIL、0 SKIP |
+
+真 Redis 使用本次新建的 `--rm` 容器 `tok-redis72`（`redis:7.2`，`127.0.0.1:16379`）与 `tok-redis8`（`redis:8.10.2`，`127.0.0.1:16380`），未借用既有 `codex-*` 容器。两轮均设 `LOGIN_TOKEN_REQUIRE_REAL_REDIS=1`、`LOGIN_TOKEN_TEST_REDIS_DB=9`，按轮切换 `LOGIN_TOKEN_TEST_REDIS_ADDR`，不设密码；实际版本来自各容器的 `INFO server`。上轮失败项 `persistent-head-refresh` 在两版均 PASS。结束后按本次完整 CID 停止容器并由 `--rm` 删除，再次查询确认无残留。
+
+完整输出与回执目录：`C:/Users/luyua/AppData/Local/Temp/refresh-token-verify-20261106T032509Z-cf14a165/`（目录名为 UTC 日期，本次用户时区日期为 2026-11-05）。`01-gofmt.log`、`02-vet.log` 为零字节；`03-miniredis.log`、`06-real-redis72.log`、`06-real-redis8.log` 保留完整测试输出；`05-info-redis72.log`、`05-info-redis8.log` 记录实际版本；`commands.txt`、`static-results.json`、`miniredis-results.json`、`real-redis-results.json`、`receipt.json` 记录命令、环境、计数与清理结果。
+
+验证前后令牌包 6 个 Go 源文件 SHA-256 全部一致，`source-before.json` / `source-after.json` 保留核对依据。本轮未改产品代码或断言，未跑 robot、`go/login` 其他包或 Java；这些范围不以本轮结果替代其各自验证状态。后续仅按用户要求更新本交接文档和 `docs/PROGRESS.md`，未提交或推送。
+
+## 判脏分段耗时与基准(2026-11-05,Claude)
+
+范围:`player-data-tidb-scaling-plan.md` §4.6「下一步」,外加读代码时查出的退出收敛问题。只写了源码和文档,**未编译、未运行**。
+
+### 改了什么
+
+- **退出收敛和判脏用同一把尺子**:`player_exit::IsPersistedPayloadCurrent`(`player_lifecycle.cpp`)把两边都按行投影,逐行比字节,不再用 `MessageDifferencer`。
+  - 原因:逐字段比较判 NaN 不等于自己。坐标里一旦有 NaN,退出永远判「没存上」;退出存盘带写权释放,每轮都真写一笔,重存 5 轮(`kMaxExitResaveRounds`)后实体滞留在节点上。
+  - 只比进了行的字段:`player_id`、覆盖世代(0 组)、`last_save_seq`、`bag_data` / `quest_data` 都不参与。投影失败按不收敛处理,不销毁实体。
+- **分段耗时**:新文件 `save_timing_stats.h`,分 marshal、project、compare、submit、periodic_tick 五段。
+  - 计时点:`SavePlayerImpl`、`SubmitPlayerSave`(`player_lifecycle.cpp`),`PlayerStoreClient::Start`,周期存盘回调(`redis.cpp`)。
+  - 出口在 `player_save_metrics.{h,cpp}`:
+    - 每 30 秒打一行 `[SaveTiming]`,是窗口值;这 30 秒里有周期回调超过 10 毫秒时升 WARN。
+    - `/metrics` 导出 `scene_player_save_stage_*`、`scene_player_save_periodic_tick_over_budget_total`、`scene_player_save_events_total`,scene 的 `main.cpp` 登记采集回调。
+- **基准**:`cpp/tests/bag_test/player_save_cost_test.cpp`,三档玩家,测拼数据、按行序列化、比字节、`MessageDifferencer`。
+- **单测**:
+  - `cpp/tests/bag_test/player_save_metrics_test.cpp`(新);
+  - `cross_zone_test/save_seq_test.cpp` 新增 NaN 用例。原用例把改 `player_id` 换成改等级:`player_id` 不进任何行,换尺子之后改它测不出不收敛。
+- **压测汇总**:`stress_summarize.ps1` 汇总 `[SaveTiming]`。原来 `[DirtySave]` 只扫 `run\logs\cpp_nodes`,节点日志实际在 `bin\logs\cpp_nodes`,一直读不到;现在两处都扫,旧路径的文件名前加 `run/`。
+- **注释**:`dirty_save_stats.h`、`last_persisted_snapshot_comp.h`、`player_lifecycle.h`。
+- **工程文件**:`scene.vcxproj`、`.filters`、`CMakeLists.txt` 加 `player_save_metrics.cpp`;`bag_test.vcxproj`、`.filters` 加两个测试文件。
+- **Java 版**:存盘比较用 record 的 `equals`,double 分量按 `Double.compare` 比,NaN 判相等,退出收敛问题不适用。分段耗时指标登记在 Java 仓 `PARITY.md` 待做。
+
+### 和「玩家数据存储策略优化」会话的分工
+
+那边在改分行:删 `player_database_1` 和 `LEGACY1`,拆出 `CHARACTER` / `WALLET` / `BAG` / `LOCATION`,`ProjectPlayer` 会去掉 db1 参数。本批新增的三处 `ProjectPlayer` 调用(`IsPersistedPayloadCurrent` 一处、基准两处)由那边按新签名改。基准只断言「只改位置时恰好一行变化」,不写死 kind,新分行下照样成立。
+
+### Codex 验证
+
+C++ 一律串行 `/m:1`;测试工程只链接预编好的库,先编库再跑测试。两个会话的改动在同一工作区,失败时先分清是哪边的。
+
+1. 仓库根目录:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。通过标准:scene 库、scene 节点、`bag_test`、`cross_zone_test` 没有 error。
+2. `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir <日志目录>/save-timing`,再把 `-Filter` 换成 `cross_zone_test` 跑一遍。单独报这些用例:
+   - `bag_test`:`SaveTimingStats.*`、`SaveTimingLine.*`、`PlayerSaveMetrics.*`、`PlayerSaveCostTest.*`、`PlayerStoreClientTest.*`;
+   - `cross_zone_test`:`SaveSeq.*`、`ExitPersistPayload.*`。
+3. 基准取数:在 PowerShell 里设 `$env:PLAYER_SAVE_COST_ITERATIONS = '2000'`,再跑 `build\cpp\tests\bag_test.exe --gtest_filter=PlayerSaveCostTest.*`,把输出里全部 `[SaveCost]` 行原样贴进回执。这是 Debug 构建,只看各项之间的比例。
+4. Linux:按现有 `build_linux.sh` 编 scene,确认 `player_save_metrics.cpp` 能编过。另外,`core/system/scene_task_scope.cpp` 是别的会话加的,只进了 `scene.vcxproj`,`CMakeLists.txt` 里没有;Linux 链接报 `SceneTaskScope` 找不到就是这个原因。
+5. 脚本语法:在 PowerShell 里执行 `$errs = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/scripts/stress_summarize.ps1).Path, [ref]$null, [ref]$errs); $errs.Count`,输出 0。
+6. 本机调试栈冒烟,要有玩家在线 1 分钟以上:
+   - scene 日志里每 30 秒有一行 `[SaveTiming]`;
+   - `pwsh tools/scripts/stress_summarize.ps1 -RunDir <任一压测目录>` 打出「Player save stage timing」表;
+   - scene 设了 `MMORPG_METRICS_PORT` 时,`/metrics` 里有 `scene_player_save_stage_observations_total{stage="marshal"}`。
+
+失败时保留:msbuild 第一个 error、gtest 失败用例的断言原文,以及 `[SaveCost]` 的全部输出。

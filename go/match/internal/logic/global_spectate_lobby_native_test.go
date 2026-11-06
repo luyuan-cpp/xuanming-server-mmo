@@ -261,7 +261,7 @@ func (f *globalLobbyFixture) addCompletableFormation(t *testing.T, battleId, pla
 	for _, player := range []uint64{playerA, playerB} {
 		ticket := uuid.NewString()
 		members = append(members, &pb.MatchFormationMember{PlayerId: player, Ticket: ticket})
-		_, err = f.db.Exec("INSERT INTO match_authority_ticket(player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,preferred_region,owner_account,owner_revision) VALUES(?,?,?,?,?,2,2,?,0,1,0,?,0,?,0,0,0,?,7)",
+		_, err = f.db.Exec("INSERT INTO match_authority_ticket(player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision) VALUES(?,?,?,?,?,2,2,?,0,1,0,?,0,?,0,0,?,7)",
 			player, ticket, uuid.NewString(), mode, configId, createdMs, battleId, []byte{}, lobbyFixtureAccount(player))
 		require.NoError(t, err)
 	}

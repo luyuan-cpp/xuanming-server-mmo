@@ -47,9 +47,6 @@ type SchemaConf struct {
 }
 
 type Config struct {
-	// 原会话账号读全局 LoginRedis;角色归属锁本库护栏副本(docs/design/horizontal-scale-logical-db.md §3),不再跨库。
-	GlobalLoginSessions bool                          `json:",optional"`
-	LoginRedis          playerredis.LoginReaderConfig `json:",optional"`
 	zrpc.RpcServerConf
 	RedisClient RedisConf `json:"RedisClient"`
 	// PlayerLocatorRedis 现在只承担控制域:scene 发布的 assetop:wake 频道与它的跨副本去重键。键名留着,部署配置不用跟着改。
@@ -593,9 +590,6 @@ func (c *Config) Validate() error {
 	}
 	if _, err := authoritysql.ParseBackend(c.MySQL.Backend); err != nil {
 		return fmt.Errorf("MySQL.Backend: %w", err)
-	}
-	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 0 {
-		return errors.New("角色归属互锁须显式声明全局LoginRedis，同库登录态缺失拒绝")
 	}
 	if maxOpen, _ := c.MySQL.EffectivePool(); maxOpen < 1 || maxOpen > 128 {
 		return errors.New("MySQL.MaxOpenConn 必须在 [1, 128] 内")

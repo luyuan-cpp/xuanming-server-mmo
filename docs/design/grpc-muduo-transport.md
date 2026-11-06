@@ -421,6 +421,10 @@ EtcdHelper(唯一出口,EtcdManager 的 keepalive 也收进来)
 - `OnRange` 带上原请求(新传输知道是哪个前缀;官方实现传空 —— 生成层的成功回调拿不到请求,所以对账只在新传输上做)。
 - unary 失败(新传输能拿到,官方实现拿不到):只记日志,恢复仍靠既有的 txn / lease 10s 看门狗与 2s 全量 Range,语义不变。
 
+**当前 C++ 注册任务。** `EtcdService` 在节点 EventLoop 持有注册作用域。第一个 watch 应答触发租约申请，按顺序完成端口 CAS、全局节点号 CAS，等待本地 RPC 监听就绪后发布发现键。维护预备态同样等到实际开放监听。失租重注册保留原端口和节点号，CAS 确认冲突才退出身份。Watch、Range 对账和 KeepAlive 流仍各自推进。
+
+`LeaseGrant` 和 `Txn` 每次请求都有独立的完成函数，回复在本 loop 交付。传输或解析失败表示结局未知，沿用 10 秒预算和已有冲突退避。预算耗尽后，初次引导只复核同一个键是否缺失或仍挂在本次租约上。确认失败的初始分配 CAS 继续按原规则换候选节点号。监听打开后，发布重试保持已绑定的节点号。超时旧回包不会被后续请求认领。节点身份冲突或关机时取消本地注册等待，再拆传输，已发命令仍可能由 etcd 处理。
+
 ### 13.5 流重建与对账(落实 §10.2)
 
 - 流结束(任何原因)→ 按退避重建:0.2s 起、×2、封顶 5s、±20% 抖动、流稳定 10s 后清零、**不设次数上限**(偏离理由见 §10.2)。
@@ -1831,7 +1835,7 @@ FinalizeShutdownInLoop(阶段 0)
 | 调用 | 认领与校验 | 失败、迟到与客户端行为 |
 |---|---|---|
 | EnterScene | `SendCorrelatedEnterScene` 捕获 playerId + 非零关联号，交 `DispatchEnterSceneReply` / `DispatchEnterSceneTransportFailure`；响应非零 player_id / correlation_id 逐字段核对，不符记 ERROR、计 unmatched 后丢弃，零回显仍按捕获值认领 | 普通换图释放本次槽，玩家主动请求回 `kEnterSceneServerBusy`（3028），跟随只记日志；交接仍按 §16.2 处理。先分发再记录完成日志，不能按 player_id 误认另一请求 |
-| 镜像 CreateScene | `HandleMirrorCreateDone` 按捕获 playerId + token 认领；只认当前 token，随后要求 `now >= sentAtMs && now - sentAtMs < TTL` | token 不符不动新槽；匹配但过期或完成时检测到时间回拨，只摘自己的槽并静默丢弃，不推 tip、不自动进场。有效槽内业务拒绝、零 scene_id 或已进战斗回 `kEnterSceneFailed`，传输失败 / 无可用 SceneManager 回 3028 |
+| 镜像 CreateScene | `CreateMirrorAndEnter` 在所属 loop 恢复，按原实体、playerId 和当前 token 认领，随后要求 `now >= sentAtMs && now - sentAtMs < TTL` | token 不符保留新槽。匹配但过期、时间回拨或本地停止只摘本次槽并静默丢弃。有效槽内业务拒绝、零 scene_id 或已进战斗回 `kEnterSceneFailed`，传输失败或无可用 SceneManager 回 3028 |
 | AllocateIdSegment | `IdSegmentTransport` 捕获 seq 认领 inflight / abandoned，不依赖 `x-idseg-seq` 响应 metadata | 保留单飞和迟到窗口；正常传输失败交 `OnTransportFailure`，已放弃请求不重复判失败 |
 | 收件箱 Fetch / Ack | 捕获 playerId + domain + correlationId 及 confirmed admission；先核当前归属身份仍一致，再进入具名完成函数；非零回显逐字段核对后按捕获值认领 | 旧完成不清新在途；保留原退避、UNIMPLEMENTED 与 Ack 幂等语义，失败不阻断进场 |
 | gate 直连通用转发 | 捕获 session_id / incarnation、发送时 SessionDetails 原始字节及原请求 id / message_id；成功失败都先核对会话代次 | 拒绝 session_id 复用后的旧完成；成功不依赖服务端回显，成功包装和失败 1003 信封均携带原请求 id / message_id；失败仍走既有桥和 lane 认领 |

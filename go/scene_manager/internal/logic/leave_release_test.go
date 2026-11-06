@@ -180,7 +180,8 @@ func TestNoteLeaveReleaseWait_UsesRedisClock(t *testing.T) {
 	mr.SetTime(t0)
 	assert.Equal(t, time.Duration(0), noteLeaveReleaseWait(sc, playerID, scope, budget), "第一次见到:登记并返回 0")
 	assert.Equal(t, startedAt(t0, scope), leaveCasValue(t, mr, key), "起点写 Redis 的时钟")
-	assert.Equal(t, budget+leaveReleaseWaitKeyMargin, mr.TTL(key))
+	assert.Equal(t, unqualifiedRevokeGrace+leaveReleaseWaitKeyMargin, mr.TTL(key),
+		"预算 60s 短于缺省撤销宽限 120s,TTL 按宽限设(TestNoteLeaveReleaseWait_TTLCoversRevokeGrace)")
 
 	mr.SetTime(t0.Add(30*time.Second + 250*time.Millisecond))
 	assert.Equal(t, 30*time.Second+250*time.Millisecond, noteLeaveReleaseWait(sc, playerID, scope, budget))

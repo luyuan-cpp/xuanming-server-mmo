@@ -156,6 +156,21 @@ function Test-EnvDeclared {
     return ($Text -cmatch "(?m)^[ \t]*- name: $([regex]::Escape($Name))[ \t]*$")
 }
 
+# env 经 Secret 注入:secretKeyRef 指向 -SecretName / -SecretKey,且显式 optional: false。块式(本库生成器)与流式
+# (k8s_deploy.ps1 New-NodeDeploymentYaml 的单行 valueFrom)两种写法都认,合计恰好一处才算。
+function Test-EnvSecretRef {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$SecretName,
+        [Parameter(Mandatory = $true)][string]$SecretKey
+    )
+    $head = "(?m)^[ \t]*- name: $([regex]::Escape($Name))[ \t]*\r?\n[ \t]*valueFrom:"
+    $block = $head + "[ \t]*\r?\n[ \t]*secretKeyRef:[ \t]*\r?\n[ \t]*name: $([regex]::Escape($SecretName))[ \t]*\r?\n[ \t]*key: $([regex]::Escape($SecretKey))[ \t]*\r?\n[ \t]*optional: false[ \t]*\r?$"
+    $flow = $head + " \{secretKeyRef: \{name: $([regex]::Escape($SecretName)), key: $([regex]::Escape($SecretKey)), optional: false\}\}[ \t]*\r?$"
+    return (([regex]::Matches($Text, $block).Count + [regex]::Matches($Text, $flow).Count) -eq 1)
+}
+
 # Fleet 的 GameServer 级 ports 段(spec.template.spec.ports,第 6 列),不含 Pod 模板里容器自己的 ports。
 function Get-FleetGameServerPorts {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Doc)
@@ -436,6 +451,20 @@ Test-Case '库:gate StatefulSet 的 env —— static 来源 + REQUIRED=1 + 生�
         Assert-True -Condition (-not (Test-EnvDeclared -Text $main -Name $name)) -Because "$name 不写成 env:HOST / PORT 由启动 shell 按序号算出并 export;nodeport 模式不用 GATE_CLIENT_PORT"
     }
     Assert-NotMatch -Text $LibGateSts -Pattern $D92Pattern -Because 'D92:新生成器不复用集群内身份 env'
+}
+
+Test-Case '库:gate StatefulSet 带内部身份签名密钥 —— secretKeyRef 指向契约里的 Secret(optional: false),env 名与 C++ caller_auth.h 一致;给了 SecretName 不给 SecretKey 即 throw' {
+    # gate main.cpp 在 MMORPG_INTERNAL_AUTH_SECRET 缺失或不足 32 字节时拒绝启动。2026-11-05 只给 Deployment 形态补了它,
+    # external 的 StatefulSet 漏掉,gate Pod 会一直崩溃重启。
+    $c = Get-ClientEntryContract
+    $callerAuth = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'cpp' 'libs' 'engine' 'core' 'security' 'caller_auth.h') -Raw
+    Assert-Match -Text $callerAuth -Pattern ('kSecretEnv\[\] = "' + [regex]::Escape($c.InternalAuthSecretEnv) + '"') -Because '契约里的 env 名必须就是 C++ gate 读的那个(caller_auth::kSecretEnv)'
+    $main = Get-MainContainerSection -Doc $LibGateSts
+    Assert-True -Condition (Test-EnvSecretRef -Text $main -Name $c.InternalAuthSecretEnv -SecretName $c.InternalAuthSecretName -SecretKey $c.InternalAuthSecretKey) -Because "gate 容器必须经 Secret $($c.InternalAuthSecretName) 拿到 $($c.InternalAuthSecretEnv),且不是 optional"
+    Assert-True -Condition ($null -eq (Get-EnvLiteral -Text $main -Name $c.InternalAuthSecretEnv)) -Because '密钥只经 Secret 进容器,不写成字面值'
+    $message = ''
+    try { $null = Get-ClientEntryEnvYaml -Entries @(@{ Name = 'X'; SecretName = 'some-secret' }) -ItemIndent '  ' } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern 'SecretKey' -Because '缺 key 的 secretKeyRef 会被 API server 拒收,生成期就要 throw'
 }
 
 Test-Case '库:gate 启动 shell 先按序号算出客户端地址再启动进程,且不触发 kubelet 的 $(VAR) 展开' {
@@ -1077,6 +1106,30 @@ Test-Case '端到端 external:先删 Deployment 形态(带确认提示)与 gate-
     Assert-Match -Text $out -Pattern 'Gate \(external\): StatefulSet replicas=2 service_type=NodePort etp=Local host=127\.0\.0\.1 nodePort=30000\+ordinal' -Because '写路径要打出 gate 地址来源摘要'
 }
 
+Test-Case '端到端:两种入口形态的 gate 都经同一个 Secret 拿内部身份签名密钥,Secret 先于 gate 工作负载 apply;只部署 C++ 时照建' {
+    # 缺这把密钥 gate 拒绝启动(gate main.cpp)。Go 服务完整阶段(login 也 apply 同一个 Secret)排在 gate 之后,
+    # 所以「Secret 先于 gate」只能由 Apply-Zone 自己那一步满足;-SkipGoSvc 时它是本 namespace 唯一的来源。
+    $c = Get-ClientEntryContract
+    $secretLine = "[dry-run] kubectl apply -n $TestZoneNs -f -   # Secret $($c.InternalAuthSecretName) (key $($c.InternalAuthSecretKey); value hidden)"
+    $cases = @(
+        @{ Label = 'external'; Run = $ExternalRun; Kind = 'StatefulSet' },
+        @{ Label = 'podip'; Run = $PodipRun; Kind = 'Deployment' },
+        @{ Label = 'podip -SkipGoSvc -SkipJavaSvc'; Run = $PodipSingleRun; Kind = 'Deployment' }
+    )
+    foreach ($case in $cases) {
+        $out = $case.Run.Output
+        Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label) 的 zone-up DryRun 必须成功。输出: $out"
+        $gate = Select-ManifestDoc -Output $out -Kind $case.Kind -Name 'gate'
+        Assert-True -Condition ($null -ne $gate) -Because "$($case.Label):gate 是 $($case.Kind)"
+        $main = Get-MainContainerSection -Doc $gate
+        Assert-True -Condition (Test-EnvSecretRef -Text $main -Name $c.InternalAuthSecretEnv -SecretName $c.InternalAuthSecretName -SecretKey $c.InternalAuthSecretKey) -Because "$($case.Label):gate 容器必须经 Secret $($c.InternalAuthSecretName) 拿到 $($c.InternalAuthSecretEnv)(optional: false),缺了 gate 拒绝启动"
+        $secretAt = $out.IndexOf($secretLine)
+        $gateHead = [regex]::Match($out, "(?m)^kind: $($case.Kind)[ \t]*\r?\nmetadata:[ \t]*\r?\n  name: gate[ \t]*\r?$")
+        Assert-True -Condition $gateHead.Success -Because "$($case.Label):DryRun 输出里要有 gate 的 $($case.Kind) 清单头"
+        Assert-True -Condition ($secretAt -ge 0 -and $gateHead.Index -gt $secretAt) -Because "$($case.Label):Secret $($c.InternalAuthSecretName) 必须先于 gate 工作负载 apply(Secret 行位置 $secretAt,gate 清单位置 $($gateHead.Index))"
+    }
+}
+
 Test-Case '端到端 external:login / scene_manager 的 RequireClientEndpoint = true;gateway 带 Ingress 与 trusted proxies' {
     foreach ($cm in @(@{ Name = 'go-svc-login-config'; File = 'login.yaml' }, @{ Name = 'go-svc-scene-manager-config'; File = 'scene_manager_service.yaml' })) {
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestDoc -Output $ExternalRun.Output -Kind 'ConfigMap' -Name $cm.Name)
@@ -1437,6 +1490,7 @@ function Invoke-DeployWithFakeKubectl {
         # 逻辑库的闸同理(Assert-LogicalDbPreflight)。
         $all.DirectoryLogicalShards = 64
         $all.Region = 1
+        $all.IdRegistryEtcd = 'id-registry.invalid:2379'
         $Rules = @(@{ Pattern = '^get statefulset redis-player\b'; ExitCode = 0; Stdout = '6' }) + @($Rules)
         if (-not $Env.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) {
             $Env = @{} + $Env

@@ -228,14 +228,6 @@ extern const ::google::protobuf::internal::ClassDataFull MatchSpectatorRecord_cl
 #else
 extern const MatchSpectatorRecordGlobalsTypeInternal MatchSpectatorRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
-class MatchTicketRegionRecord;
-struct MatchTicketRegionRecordGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern MatchTicketRegionRecordGlobalsTypeInternal MatchTicketRegionRecord_globals_;
-extern const ::google::protobuf::internal::ClassDataFull MatchTicketRegionRecord_class_data_;
-#else
-extern const MatchTicketRegionRecordGlobalsTypeInternal MatchTicketRegionRecord_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
 }  // namespace match
 namespace google {
 namespace protobuf {
@@ -294,344 +286,6 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 // ===================================================================
 
 
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTicketRegionRecord final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:match.MatchTicketRegionRecord) */ {
- public:
-  inline MatchTicketRegionRecord() : MatchTicketRegionRecord(nullptr) {}
-  ~MatchTicketRegionRecord() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(MatchTicketRegionRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchTicketRegionRecord));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr MatchTicketRegionRecord(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline MatchTicketRegionRecord(const MatchTicketRegionRecord& from) : MatchTicketRegionRecord(nullptr, from) {}
-  inline MatchTicketRegionRecord(MatchTicketRegionRecord&& from) noexcept : MatchTicketRegionRecord(nullptr, ::std::move(from)) {}
-  inline MatchTicketRegionRecord& operator=(const MatchTicketRegionRecord& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline MatchTicketRegionRecord& operator=(MatchTicketRegionRecord&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const MatchTicketRegionRecord& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchTicketRegionRecord>(&MatchTicketRegionRecord_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 7;
-  friend void swap(MatchTicketRegionRecord& a, MatchTicketRegionRecord& b) { a.Swap(&b); }
-  inline void Swap(MatchTicketRegionRecord* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(MatchTicketRegionRecord* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] MatchTicketRegionRecord* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<MatchTicketRegionRecord>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const MatchTicketRegionRecord& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const MatchTicketRegionRecord& from) { MatchTicketRegionRecord::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(MatchTicketRegionRecord* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "match.MatchTicketRegionRecord"; }
-
-  explicit MatchTicketRegionRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  MatchTicketRegionRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchTicketRegionRecord& from);
-  MatchTicketRegionRecord(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchTicketRegionRecord&& from) noexcept
-      : MatchTicketRegionRecord(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kTicketFieldNumber = 3,
-    kPlayerIdFieldNumber = 1,
-    kPhysicalRegionFieldNumber = 2,
-    kModeFieldNumber = 4,
-    kConfigIdFieldNumber = 5,
-    kTeamSizeFieldNumber = 6,
-    kEnqueuedMsFieldNumber = 8,
-    kPreferredRegionFieldNumber = 7,
-    kRttMsFieldNumber = 10,
-    kRatingCentiFieldNumber = 9,
-    kExpiresMsFieldNumber = 11,
-    kHomeZoneFieldNumber = 12,
-  };
-  // string ticket = 3;
-  void clear_ticket() ;
-  [[nodiscard]] const ::std::string& ticket() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_ticket(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_ticket();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ticket();
-  void set_allocated_ticket(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_ticket() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_ticket(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_ticket();
-
-  public:
-  // uint64 player_id = 1;
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
-  // uint32 physical_region = 2;
-  void clear_physical_region() ;
-  [[nodiscard]] ::uint32_t physical_region() const;
-  void set_physical_region(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_physical_region() const;
-  void _internal_set_physical_region(::uint32_t value);
-
-  public:
-  // uint32 mode = 4;
-  void clear_mode() ;
-  [[nodiscard]] ::uint32_t mode() const;
-  void set_mode(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_mode() const;
-  void _internal_set_mode(::uint32_t value);
-
-  public:
-  // uint32 config_id = 5;
-  void clear_config_id() ;
-  [[nodiscard]] ::uint32_t config_id() const;
-  void set_config_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_config_id() const;
-  void _internal_set_config_id(::uint32_t value);
-
-  public:
-  // uint32 team_size = 6;
-  void clear_team_size() ;
-  [[nodiscard]] ::uint32_t team_size() const;
-  void set_team_size(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_team_size() const;
-  void _internal_set_team_size(::uint32_t value);
-
-  public:
-  // uint64 enqueued_ms = 8;
-  void clear_enqueued_ms() ;
-  [[nodiscard]] ::uint64_t enqueued_ms() const;
-  void set_enqueued_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_enqueued_ms() const;
-  void _internal_set_enqueued_ms(::uint64_t value);
-
-  public:
-  // uint32 preferred_region = 7;
-  void clear_preferred_region() ;
-  [[nodiscard]] ::uint32_t preferred_region() const;
-  void set_preferred_region(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_preferred_region() const;
-  void _internal_set_preferred_region(::uint32_t value);
-
-  public:
-  // uint32 rtt_ms = 10;
-  void clear_rtt_ms() ;
-  [[nodiscard]] ::uint32_t rtt_ms() const;
-  void set_rtt_ms(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_rtt_ms() const;
-  void _internal_set_rtt_ms(::uint32_t value);
-
-  public:
-  // int64 rating_centi = 9;
-  void clear_rating_centi() ;
-  [[nodiscard]] ::int64_t rating_centi() const;
-  void set_rating_centi(::int64_t value);
-
-  private:
-  ::int64_t _internal_rating_centi() const;
-  void _internal_set_rating_centi(::int64_t value);
-
-  public:
-  // uint64 expires_ms = 11;
-  void clear_expires_ms() ;
-  [[nodiscard]] ::uint64_t expires_ms() const;
-  void set_expires_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_expires_ms() const;
-  void _internal_set_expires_ms(::uint64_t value);
-
-  public:
-  // uint32 home_zone = 12;
-  void clear_home_zone() ;
-  [[nodiscard]] ::uint32_t home_zone() const;
-  void set_home_zone(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_home_zone() const;
-  void _internal_set_home_zone(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:match.MatchTicketRegionRecord)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
-                          0, 52,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const MatchTicketRegionRecord& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr ticket_;
-    ::uint64_t player_id_;
-    ::uint32_t physical_region_;
-    ::uint32_t mode_;
-    ::uint32_t config_id_;
-    ::uint32_t team_size_;
-    ::uint64_t enqueued_ms_;
-    ::uint32_t preferred_region_;
-    ::uint32_t rtt_ms_;
-    ::int64_t rating_centi_;
-    ::uint64_t expires_ms_;
-    ::uint32_t home_zone_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
-};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchSpectatorRecord final : public ::google::protobuf::Message
@@ -1885,7 +1539,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRatingRecord final : public ::
   [[nodiscard]] static const MatchRatingRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRatingRecord>(&MatchRatingRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(MatchRatingRecord& a, MatchRatingRecord& b) { a.Swap(&b); }
   inline void Swap(MatchRatingRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2134,7 +1788,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRatingAppliedRecord final : pu
   [[nodiscard]] static const MatchRatingAppliedRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRatingAppliedRecord>(&MatchRatingAppliedRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(MatchRatingAppliedRecord& a, MatchRatingAppliedRecord& b) { a.Swap(&b); }
   inline void Swap(MatchRatingAppliedRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2364,7 +2018,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankSourceRecord final : publi
   [[nodiscard]] static const MatchRankSourceRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankSourceRecord>(&MatchRankSourceRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(MatchRankSourceRecord& a, MatchRankSourceRecord& b) { a.Swap(&b); }
   inline void Swap(MatchRankSourceRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2625,7 +2279,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankOutboxRecord final : publi
   [[nodiscard]] static const MatchRankOutboxRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankOutboxRecord>(&MatchRankOutboxRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(MatchRankOutboxRecord& a, MatchRankOutboxRecord& b) { a.Swap(&b); }
   inline void Swap(MatchRankOutboxRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2879,7 +2533,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchPreparedEndpoint final : publi
   [[nodiscard]] static const MatchPreparedEndpoint& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchPreparedEndpoint>(&MatchPreparedEndpoint_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(MatchPreparedEndpoint& a, MatchPreparedEndpoint& b) { a.Swap(&b); }
   inline void Swap(MatchPreparedEndpoint* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3327,7 +2981,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchJoinIntentRecord final : publi
   [[nodiscard]] static const MatchJoinIntentRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchJoinIntentRecord>(&MatchJoinIntentRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(MatchJoinIntentRecord& a, MatchJoinIntentRecord& b) { a.Swap(&b); }
   inline void Swap(MatchJoinIntentRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3685,7 +3339,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchGlobalPolicyRecord final : pub
   [[nodiscard]] static const MatchGlobalPolicyRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchGlobalPolicyRecord>(&MatchGlobalPolicyRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(MatchGlobalPolicyRecord& a, MatchGlobalPolicyRecord& b) { a.Swap(&b); }
   inline void Swap(MatchGlobalPolicyRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3903,7 +3557,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationMember final : public
   [[nodiscard]] static const MatchFormationMember& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchFormationMember>(&MatchFormationMember_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(MatchFormationMember& a, MatchFormationMember& b) { a.Swap(&b); }
   inline void Swap(MatchFormationMember* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4133,7 +3787,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchChallengeInvitationRecord fina
   [[nodiscard]] static const MatchChallengeInvitationRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchChallengeInvitationRecord>(&MatchChallengeInvitationRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(MatchChallengeInvitationRecord& a, MatchChallengeInvitationRecord& b) { a.Swap(&b); }
   inline void Swap(MatchChallengeInvitationRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4476,7 +4130,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchBattleSettlementSourceRecord f
   [[nodiscard]] static const MatchBattleSettlementSourceRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchBattleSettlementSourceRecord>(&MatchBattleSettlementSourceRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(MatchBattleSettlementSourceRecord& a, MatchBattleSettlementSourceRecord& b) { a.Swap(&b); }
   inline void Swap(MatchBattleSettlementSourceRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4824,7 +4478,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchBattleCompletionRecord final :
   [[nodiscard]] static const MatchBattleCompletionRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchBattleCompletionRecord>(&MatchBattleCompletionRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(MatchBattleCompletionRecord& a, MatchBattleCompletionRecord& b) { a.Swap(&b); }
   inline void Swap(MatchBattleCompletionRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5328,7 +4982,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
     kSelectedRegionFieldNumber = 16,
     kExpiresMsFieldNumber = 15,
     kOwnerRevisionFieldNumber = 19,
-    kPreferredRegionFieldNumber = 17,
   };
   // string ticket = 2;
   void clear_ticket() ;
@@ -5530,21 +5183,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
   void _internal_set_owner_revision(::uint64_t value);
 
   public:
-  // uint32 preferred_region = 17;
-  void clear_preferred_region() ;
-  [[nodiscard]] ::uint32_t preferred_region() const;
-  void set_preferred_region(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_preferred_region() const;
-  void _internal_set_preferred_region(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:match.MatchAuthorityTicketRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
+      ::google::protobuf::internal::TcParseTable<5, 18,
                           0, 86,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5591,7 +5234,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
     ::uint32_t selected_region_;
     ::uint64_t expires_ms_;
     ::uint64_t owner_revision_;
-    ::uint32_t preferred_region_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5655,7 +5297,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
   [[nodiscard]] static const MatchFormationRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchFormationRecord>(&MatchFormationRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(MatchFormationRecord& a, MatchFormationRecord& b) { a.Swap(&b); }
   inline void Swap(MatchFormationRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6160,7 +5802,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchDirectIntentRecord final : pub
   [[nodiscard]] static const MatchDirectIntentRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchDirectIntentRecord>(&MatchDirectIntentRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(MatchDirectIntentRecord& a, MatchDirectIntentRecord& b) { a.Swap(&b); }
   inline void Swap(MatchDirectIntentRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6794,7 +6436,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchDirectStartOriginal final : pu
   [[nodiscard]] static const MatchDirectStartOriginal& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchDirectStartOriginal>(&MatchDirectStartOriginal_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(MatchDirectStartOriginal& a, MatchDirectStartOriginal& b) { a.Swap(&b); }
   inline void Swap(MatchDirectStartOriginal* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8909,30 +8551,6 @@ inline void MatchAuthorityTicketRecord::_internal_set_selected_region(::uint32_t
   _impl_.selected_region_ = value;
 }
 
-// uint32 preferred_region = 17;
-inline void MatchAuthorityTicketRecord::clear_preferred_region() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.preferred_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
-}
-inline ::uint32_t MatchAuthorityTicketRecord::preferred_region() const {
-  // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.preferred_region)
-  return _internal_preferred_region();
-}
-inline void MatchAuthorityTicketRecord::set_preferred_region(::uint32_t value) {
-  _internal_set_preferred_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
-  // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.preferred_region)
-}
-inline ::uint32_t MatchAuthorityTicketRecord::_internal_preferred_region() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.preferred_region_;
-}
-inline void MatchAuthorityTicketRecord::_internal_set_preferred_region(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.preferred_region_ = value;
-}
-
 // string owner_account = 18;
 inline void MatchAuthorityTicketRecord::clear_owner_account() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
@@ -9207,338 +8825,6 @@ inline ::uint64_t MatchRoleOccupancyRecord::_internal_expires_ms() const {
 inline void MatchRoleOccupancyRecord::_internal_set_expires_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expires_ms_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// MatchTicketRegionRecord
-
-// uint64 player_id = 1;
-inline void MatchTicketRegionRecord::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t MatchTicketRegionRecord::player_id() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.player_id)
-  return _internal_player_id();
-}
-inline void MatchTicketRegionRecord::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.player_id)
-}
-inline ::uint64_t MatchTicketRegionRecord::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void MatchTicketRegionRecord::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
-// uint32 physical_region = 2;
-inline void MatchTicketRegionRecord::clear_physical_region() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint32_t MatchTicketRegionRecord::physical_region() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.physical_region)
-  return _internal_physical_region();
-}
-inline void MatchTicketRegionRecord::set_physical_region(::uint32_t value) {
-  _internal_set_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.physical_region)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_physical_region() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.physical_region_;
-}
-inline void MatchTicketRegionRecord::_internal_set_physical_region(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.physical_region_ = value;
-}
-
-// string ticket = 3;
-inline void MatchTicketRegionRecord::clear_ticket() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.ticket_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline const ::std::string& MatchTicketRegionRecord::ticket() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.ticket)
-  return _internal_ticket();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void MatchTicketRegionRecord::set_ticket(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.ticket_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.ticket)
-}
-inline ::std::string* PROTOBUF_NONNULL MatchTicketRegionRecord::mutable_ticket()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_ticket();
-  // @@protoc_insertion_point(field_mutable:match.MatchTicketRegionRecord.ticket)
-  return _s;
-}
-inline const ::std::string& MatchTicketRegionRecord::_internal_ticket() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.ticket_.Get();
-}
-inline void MatchTicketRegionRecord::_internal_set_ticket(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.ticket_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL MatchTicketRegionRecord::_internal_mutable_ticket() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.ticket_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE MatchTicketRegionRecord::release_ticket() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:match.MatchTicketRegionRecord.ticket)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.ticket_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.ticket_.Set("", GetArena());
-  }
-  return released;
-}
-inline void MatchTicketRegionRecord::set_allocated_ticket(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-  _impl_.ticket_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ticket_.IsDefault()) {
-    _impl_.ticket_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:match.MatchTicketRegionRecord.ticket)
-}
-
-// uint32 mode = 4;
-inline void MatchTicketRegionRecord::clear_mode() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-}
-inline ::uint32_t MatchTicketRegionRecord::mode() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.mode)
-  return _internal_mode();
-}
-inline void MatchTicketRegionRecord::set_mode(::uint32_t value) {
-  _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.mode)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_mode() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.mode_;
-}
-inline void MatchTicketRegionRecord::_internal_set_mode(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.mode_ = value;
-}
-
-// uint32 config_id = 5;
-inline void MatchTicketRegionRecord::clear_config_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
-}
-inline ::uint32_t MatchTicketRegionRecord::config_id() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.config_id)
-  return _internal_config_id();
-}
-inline void MatchTicketRegionRecord::set_config_id(::uint32_t value) {
-  _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.config_id)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_config_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.config_id_;
-}
-inline void MatchTicketRegionRecord::_internal_set_config_id(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.config_id_ = value;
-}
-
-// uint32 team_size = 6;
-inline void MatchTicketRegionRecord::clear_team_size() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
-}
-inline ::uint32_t MatchTicketRegionRecord::team_size() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.team_size)
-  return _internal_team_size();
-}
-inline void MatchTicketRegionRecord::set_team_size(::uint32_t value) {
-  _internal_set_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.team_size)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_team_size() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.team_size_;
-}
-inline void MatchTicketRegionRecord::_internal_set_team_size(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.team_size_ = value;
-}
-
-// uint32 preferred_region = 7;
-inline void MatchTicketRegionRecord::clear_preferred_region() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.preferred_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
-}
-inline ::uint32_t MatchTicketRegionRecord::preferred_region() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.preferred_region)
-  return _internal_preferred_region();
-}
-inline void MatchTicketRegionRecord::set_preferred_region(::uint32_t value) {
-  _internal_set_preferred_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.preferred_region)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_preferred_region() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.preferred_region_;
-}
-inline void MatchTicketRegionRecord::_internal_set_preferred_region(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.preferred_region_ = value;
-}
-
-// uint64 enqueued_ms = 8;
-inline void MatchTicketRegionRecord::clear_enqueued_ms() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.enqueued_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
-}
-inline ::uint64_t MatchTicketRegionRecord::enqueued_ms() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.enqueued_ms)
-  return _internal_enqueued_ms();
-}
-inline void MatchTicketRegionRecord::set_enqueued_ms(::uint64_t value) {
-  _internal_set_enqueued_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.enqueued_ms)
-}
-inline ::uint64_t MatchTicketRegionRecord::_internal_enqueued_ms() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.enqueued_ms_;
-}
-inline void MatchTicketRegionRecord::_internal_set_enqueued_ms(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.enqueued_ms_ = value;
-}
-
-// int64 rating_centi = 9;
-inline void MatchTicketRegionRecord::clear_rating_centi() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rating_centi_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
-}
-inline ::int64_t MatchTicketRegionRecord::rating_centi() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.rating_centi)
-  return _internal_rating_centi();
-}
-inline void MatchTicketRegionRecord::set_rating_centi(::int64_t value) {
-  _internal_set_rating_centi(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.rating_centi)
-}
-inline ::int64_t MatchTicketRegionRecord::_internal_rating_centi() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.rating_centi_;
-}
-inline void MatchTicketRegionRecord::_internal_set_rating_centi(::int64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rating_centi_ = value;
-}
-
-// uint32 rtt_ms = 10;
-inline void MatchTicketRegionRecord::clear_rtt_ms() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rtt_ms_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
-}
-inline ::uint32_t MatchTicketRegionRecord::rtt_ms() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.rtt_ms)
-  return _internal_rtt_ms();
-}
-inline void MatchTicketRegionRecord::set_rtt_ms(::uint32_t value) {
-  _internal_set_rtt_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.rtt_ms)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_rtt_ms() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.rtt_ms_;
-}
-inline void MatchTicketRegionRecord::_internal_set_rtt_ms(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.rtt_ms_ = value;
-}
-
-// uint64 expires_ms = 11;
-inline void MatchTicketRegionRecord::clear_expires_ms() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.expires_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
-}
-inline ::uint64_t MatchTicketRegionRecord::expires_ms() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.expires_ms)
-  return _internal_expires_ms();
-}
-inline void MatchTicketRegionRecord::set_expires_ms(::uint64_t value) {
-  _internal_set_expires_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.expires_ms)
-}
-inline ::uint64_t MatchTicketRegionRecord::_internal_expires_ms() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.expires_ms_;
-}
-inline void MatchTicketRegionRecord::_internal_set_expires_ms(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.expires_ms_ = value;
-}
-
-// uint32 home_zone = 12;
-inline void MatchTicketRegionRecord::clear_home_zone() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.home_zone_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
-}
-inline ::uint32_t MatchTicketRegionRecord::home_zone() const {
-  // @@protoc_insertion_point(field_get:match.MatchTicketRegionRecord.home_zone)
-  return _internal_home_zone();
-}
-inline void MatchTicketRegionRecord::set_home_zone(::uint32_t value) {
-  _internal_set_home_zone(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
-  // @@protoc_insertion_point(field_set:match.MatchTicketRegionRecord.home_zone)
-}
-inline ::uint32_t MatchTicketRegionRecord::_internal_home_zone() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.home_zone_;
-}
-inline void MatchTicketRegionRecord::_internal_set_home_zone(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.home_zone_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -390,6 +390,11 @@ int main(int argc, char *argv[])
             ValidateGateConnectionLimitOrDie();
             ValidateSpectateTokenSecretOrDie();
 
+            // 连接上限随注册与每 10s 的人数上报写进 etcd:login 挑 gate 时剔除人数到上限 90% 的 gate
+            // (docs/design/gate-load-balancing-design.md「满载与停写的 gate」)。dev 下为 0 表示不设上限,login 不按上限过滤。
+            node.MutableNodeInfo().set_max_connections(
+                gNodeConfigManager.GetBaseDeployConfig().gate_max_connections());
+
             // 观战订阅中心。hub 先建好:客户端消息、会话关闭与 Kafka 回调都经 gate_spectate_client.h 的入口找它。
             context.spectateHub = gate_spectate::InstallHub(
                 *node.GetLoop(), gNodeConfigManager.GetBaseDeployConfig().spectate_token_secret());

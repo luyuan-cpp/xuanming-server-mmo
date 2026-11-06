@@ -18,8 +18,8 @@ package main
 //	5. R ClaimMailAttachments([Q]) 回 MailClaimNotOpen,再 ListMails 那封仍是 UNCLAIMED;
 //	6. R DeleteMails([Q]):deleted_count = 0、Q 在 protected_mail_ids;DeleteMails([P]) 两次都受理,之后列表里看不到 P;
 //	   R DeleteMails([S]):deleted_count = 1(系统邮件按人删),之后 R 看不到 S、O 仍看得到;
-//	7. D-9 反向断言:O 经 gate 发 NotifyMailEvent 的消息号 → 信封 kServiceUnavailable(会话白名单拒);
-//	   两个 MailAdmin 消息号经 gate 各发一次 → 必须**超时**(gate 丢弃非客户端消息号)。
+//	7. D-9 反向断言:O 经 gate 发 NotifyMailChanged 的消息号 → 必须**超时**(推送号不在 gate 上行白名单里,
+//	   client-rpc-callback.md §7 R4);两个 MailAdmin 消息号经 gate 各发一次 → 同样必须**超时**(gate 丢弃非客户端消息号)。
 //
 // 结果约定(供外层脚本消费):
 //	全过 → 日志一行 `MAIL_SMOKE_OK recipient=… observer=… sys_mail_id=… …`,退出码 0;
@@ -470,12 +470,12 @@ func RunMailSmoke(cfg *config.Config) {
 	zap.L().Info("[mail-smoke] step 6: unclaimed delete protected, claimed delete accepted, plain delete idempotent, system mail deleted for the recipient only")
 
 	// ---- 步骤 7:D-9 反向断言 ----
-	// NotifyMailEvent 与 5 个 C2S 方法同处 ClientPlayerMail(客户端协议服务),gate 白名单收这个号、请求会进到 mail;
-	// 挡它的是 mail 的会话拦截器(方法级白名单),路由服把上游 gRPC 错误统一翻成信封 kServiceUnavailable。
-	// 本步回包带请求号、真推送 id = 0,两者按 id 分开(见 onMessage),谁发都不会互相误认;
+	// NotifyMailChanged 与 5 个 C2S 方法同处 ClientPlayerMail(客户端协议服务),但它标了 CLIENT_RPC_PUSH:
+	// gate 的上行白名单 IsClientMessageId 只收客户端能发起的方法(REQUEST / ONE_WAY,client-rpc-callback.md §7 R4),
+	// 所以这个号在 gate 就按非法包丢弃、不回包,期望超时。mail 的会话拦截器(方法级白名单)仍是第二道防线,经 gate 走不到它。
 	// 仍由**不收定向邮件的 O** 来发,让 R 的推送留底与本步无关。
 	// 超时有三种来源要分开报:gate 回了信封但没回显请求号(onMessage 丢弃并计数)、回了不带错误也没回显请求号的
-	// 业务回包(onMessage 当成推送留底,O 在本步本不该收到推送)、真没回包。前两种按超时报会把排障引向「gate 丢弃」。
+	// 业务回包(onMessage 当成推送留底,O 在本步本不该收到推送)、真没回包(期望)。前两种说明 gate 收了这个号,不是丢弃。
 	// 等待预算 10s 大于路由服 ForwardTimeoutMs(5s),这类回包会落在等待期内。
 	notifyDropsBefore := o.uncorrelatedReplies(game.ClientPlayerMailNotifyMailChangedMessageId)
 	notifyPushesBefore := o.pushCount()
@@ -484,25 +484,23 @@ func RunMailSmoke(cfg *config.Config) {
 	switch {
 	case errors.Is(err, errMailSmokeTimeout) &&
 		o.uncorrelatedReplies(game.ClientPlayerMailNotifyMailChangedMessageId) > notifyDropsBefore:
-		fail("notify-via-gate", "Timed out, but gate replied on message_id=%d without echoing the request id (see the "+
-			"\"reply without request id dropped\" warning): the reply path does not carry ClientRequest.id, so this step cannot read the envelope",
+		fail("notify-via-gate", "Expected gate to drop NotifyMailChanged, but a reply without request id arrived on message_id=%d (see the "+
+			"\"reply without request id dropped\" warning): the gate client allowlist includes push message IDs "+
+			"(regenerate with the R4 generator and rebuild gate), and the reply path does not echo ClientRequest.id",
 			game.ClientPlayerMailNotifyMailChangedMessageId)
 	case errors.Is(err, errMailSmokeTimeout) && o.pushCount() > notifyPushesBefore:
 		fail("notify-via-gate", "Timed out, but a NotifyMailChanged message without request id and without error arrived meanwhile "+
 			"and was taken as a push: likely a business response to this request whose reply path does not echo ClientRequest.id. "+
 			"If so, the S2C push method is exposed to clients (D-9)")
 	case errors.Is(err, errMailSmokeTimeout):
-		fail("notify-via-gate", "Expected envelope tip=%d, but timed out: gate dropped the NotifyMailEvent message ID (not in the allowlist), "+
-			"or the request never reached the routing service. This assertion checks rejection by the mail session layer and proves nothing when the transport path is broken",
-			tipMailServiceUnavailable)
+		// 期望:gate 丢弃
 	case err != nil:
 		fail("notify-via-gate", "%v", err)
-	case envelopeTip == tipMailServiceUnavailable:
-		// 期望。同一时间窗口的 mail 日志里要有会话层拒绝 /mailpb.ClientPlayerMail/NotifyMailEvent 的记录 —— 信封码被各种上游错误共用。
 	case envelopeTip != 0:
-		fail("notify-via-gate", "Envelope tip=%d, expected %d (kServiceUnavailable)", envelopeTip, tipMailServiceUnavailable)
+		fail("notify-via-gate", "Expected gate to drop NotifyMailChanged (timeout), got envelope tip=%d: the gate client allowlist "+
+			"includes push message IDs (regenerate with the R4 generator and rebuild gate)", envelopeTip)
 	default:
-		fail("notify-via-gate", "A client calling NotifyMailEvent through gate received a business response: "+
+		fail("notify-via-gate", "A client calling NotifyMailChanged through gate received a business response: "+
 			"the S2C push method is exposed to clients, allowing anyone to forge a mail event (D-9)")
 	}
 	// MailAdmin 不是客户端协议:gate 的 IsClientMessageId 不收这两个号,直接丢弃且不回包,并计一次非法包
@@ -541,9 +539,7 @@ func RunMailSmoke(cfg *config.Config) {
 			fail("admin-via-gate", "A client calling MailAdmin.%s through gate received a business response", adminCall.name)
 		}
 	}
-	zap.L().Info("[mail-smoke] step 7: client cannot call NotifyMailEvent / MailAdmin",
-		zap.Uint32("notify_envelope_tip", envelopeTip),
-		zap.String("expect_mail_log", "session interceptor rejected /mailpb.ClientPlayerMail/NotifyMailEvent"))
+	zap.L().Info("[mail-smoke] step 7: gate dropped client-sent NotifyMailChanged / MailAdmin")
 
 	zap.L().Info(fmt.Sprintf("MAIL_SMOKE_OK recipient=%d observer=%d sys_mail_id=%d plain_mail_id=%d attach_mail_id=%d push_received=%v gate_recipient=%s gate_observer=%s",
 		r.gc.PlayerId, o.gc.PlayerId, sysID, plainID, attachID, pushReceived, r.gateAddr(), o.gateAddr()),

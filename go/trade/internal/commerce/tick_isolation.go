@@ -349,7 +349,7 @@ func (e *Engine) deferCommerce(parent context.Context, r *tradepb.TradeCommerceR
 		return
 	}
 	if class == failureCorrupt {
-		stage, quarantined, err := e.quarantine(ctx, r)
+		stage, quarantined, err := e.quarantine(ctx, r, cause)
 		if err == nil && quarantined {
 			quarantinedTotal.Inc()
 			logx.Errorf("[Commerce] Contract quarantined as manual (deterministic data error) commerce_id=%d kind=%d status=%d version=%d stage=%q: %v",
@@ -399,7 +399,7 @@ func tickFailureBackoff(nowMs uint64, cause error, rnd func() float64) uint64 {
 }
 
 // quarantine 把确定性坏数据的合同隔离为 Manual(移出 Due),返回原 stage 供日志取证。只在行仍是 r.Version 时生效。
-func (e *Engine) quarantine(ctx context.Context, r *tradepb.TradeCommerceRecord) (string, bool, error) {
+func (e *Engine) quarantine(ctx context.Context, r *tradepb.TradeCommerceRecord, cause error) (string, bool, error) {
 	stage, quarantined := "", false
 	err := e.Repo.Tx(ctx, func(tx *sql.Tx) error {
 		stage, quarantined = "", false
@@ -413,7 +413,7 @@ func (e *Engine) quarantine(ctx context.Context, r *tradepb.TradeCommerceRecord)
 		if cur.Version != r.Version || cur.Status == Manual {
 			return nil
 		}
-		if stage, err = e.quarantineLockedTx(ctx, tx, cur); err != nil {
+		if stage, err = e.quarantineLockedTx(ctx, tx, cur, manualReasonCorrupt, cause.Error()); err != nil {
 			return err
 		}
 		quarantined = true
@@ -430,12 +430,13 @@ func (e *Engine) quarantine(ctx context.Context, r *tradepb.TradeCommerceRecord)
 //     照常回 APPLIED 留下证据,没扣到的不会再扣 —— 隔离之后不再把任何人的资产扣进人工单(2026-10-22)。
 //     隔离之前已经排定的发放腿(stream 4)照常投递:它们来自隔离之前合法的状态,截住反而会让资产悬空。
 //   - workflow 解得开:stage 改成 "manual"(与 APPLIED_PARTIAL / 撮合子单坏账的既有隔离同形),
-//     这样 Mutate / PlaceBid / 撮合的 stage 判断都不会再把它拉回推进;
+//     这样 Mutate / PlaceBid / 撮合的 stage 判断都不会再把它拉回推进;原阶段、原因记进 workflow(markManual),
+//     人工恢复按它判断能做什么(manual.go);
 //   - 解不开:只改状态列(CommerceRepo.SaveStatus),坏字节原样保留作人工取证。
 //
 // 已托管的资产仍记在合同里,隔离本身不发出、不退回任何资产;人工按合同与 op 行证据处理
 // (docs/ops/trade-commerce-quarantine-runbook.md)。
-func (e *Engine) quarantineLockedTx(ctx context.Context, tx *sql.Tx, cur *tradepb.TradeCommerceRecord) (string, error) {
+func (e *Engine) quarantineLockedTx(ctx context.Context, tx *sql.Tx, cur *tradepb.TradeCommerceRecord, reason, detail string) (string, error) {
 	if err := e.Repo.Ops.ExpireCommerceEscrowDebitsTx(ctx, tx, cur.CommerceId, e.now()); err != nil {
 		return "", err
 	}
@@ -444,8 +445,7 @@ func (e *Engine) quarantineLockedTx(ctx context.Context, tx *sql.Tx, cur *tradep
 		return "<undecodable>", e.Repo.SaveStatus(ctx, tx, cur, Manual, e.now())
 	}
 	stage := w.Stage
-	cur.Status = Manual
-	w.Stage = "manual"
+	markManual(cur, w, reason, detail, e.now())
 	return stage, e.Repo.Save(ctx, tx, cur, w, e.now())
 }
 

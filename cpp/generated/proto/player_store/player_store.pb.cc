@@ -1033,67 +1033,73 @@ const char descriptor_table_protodef_proto_2fplayer_5fstore_2fplayer_5fstore_2ep
     protodesc_cold) = {
     "\n%proto/player_store/player_store.proto\022"
     "\013playerstore\032)proto/common/base/service_"
-    "call_auth.proto\"M\n\016PlayerStoreRow\022*\n\004kin"
-    "d\030\001 \001(\0162\034.playerstore.PlayerStoreKind\022\017\n"
-    "\007payload\030\002 \001(\014\"\362\001\n\021SavePlayerRequest\022*\n\004"
-    "auth\030\001 \001(\0132\034.common.base.ServiceCallAuth"
-    "\022\021\n\tplayer_id\030\002 \001(\004\022\022\n\nstorage_id\030\003 \001(\r\022"
-    "\023\n\013owner_epoch\030\004 \001(\004\022\020\n\010save_seq\030\005 \001(\004\022\022"
-    "\n\nschema_gen\030\006 \001(\r\022\023\n\013instance_id\030\007 \001(\014\022"
-    ")\n\004rows\030\010 \003(\0132\033.playerstore.PlayerStoreR"
-    "ow\022\017\n\007release\030\t \001(\010\"r\n\022SavePlayerRespons"
-    "e\022-\n\006result\030\001 \001(\0162\035.playerstore.SavePlay"
-    "erResult\022\027\n\017row_owner_epoch\030\002 \001(\004\022\024\n\014row"
-    "_save_seq\030\003 \001(\004\"\231\001\n\023LoadAndClaimRequest\022"
-    "*\n\004auth\030\001 \001(\0132\034.common.base.ServiceCallA"
-    "uth\022\021\n\tplayer_id\030\002 \001(\004\022\023\n\013owner_epoch\030\003 "
-    "\001(\004\022\023\n\013instance_id\030\004 \001(\014\022\031\n\021binary_schem"
-    "a_gen\030\005 \001(\r\"\301\001\n\024LoadAndClaimResponse\022/\n\006"
-    "result\030\001 \001(\0162\037.playerstore.LoadAndClaimR"
-    "esult\022\022\n\nstorage_id\030\002 \001(\r\022\023\n\013owner_epoch"
-    "\030\003 \001(\004\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nschema_gen\030\005"
-    " \001(\r\022)\n\004rows\030\006 \003(\0132\033.playerstore.PlayerS"
-    "toreRow*\302\001\n\017PlayerStoreKind\022\033\n\027PLAYER_ST"
-    "ORE_KIND_OWNER\020\000\022\031\n\025PLAYER_STORE_KIND_HO"
-    "T\020\001\022\033\n\027PLAYER_STORE_KIND_ASSET\020\002\022\034\n\030PLAY"
-    "ER_STORE_KIND_GROWTH\020\003\022\035\n\031PLAYER_STORE_K"
-    "IND_PROFILE\020\004\022\035\n\031PLAYER_STORE_KIND_LEGAC"
-    "Y1\020\005*\347\002\n\020SavePlayerResult\022\"\n\036SAVE_PLAYER"
-    "_RESULT_UNSPECIFIED\020\000\022\031\n\025SAVE_PLAYER_COM"
-    "MITTED\020\001\022\025\n\021SAVE_PLAYER_EQUAL\020\002\022\030\n\024SAVE_"
-    "PLAYER_NO_OWNER\020\003\022\027\n\023SAVE_PLAYER_INVALID"
-    "\020\004\022\033\n\027SAVE_PLAYER_STALE_OWNER\020\005\022\032\n\026SAVE_"
-    "PLAYER_NOT_HOLDER\020\006\022\031\n\025SAVE_PLAYER_UNCLA"
-    "IMED\020\007\022\031\n\025SAVE_PLAYER_OLDER_SEQ\020\010\022 \n\034SAV"
-    "E_PLAYER_SCHEMA_REGRESSED\020\t\022\036\n\032SAVE_PLAY"
-    "ER_SCHEMA_TOO_NEW\020\n\022\031\n\025SAVE_PLAYER_TOO_L"
-    "ARGE\020\013*\362\001\n\022LoadAndClaimResult\022%\n!LOAD_AN"
-    "D_CLAIM_RESULT_UNSPECIFIED\020\000\022\032\n\026LOAD_AND"
-    "_CLAIM_CLAIMED\020\001\022\033\n\027LOAD_AND_CLAIM_NO_OW"
-    "NER\020\002\022\032\n\026LOAD_AND_CLAIM_INVALID\020\003\022\036\n\032LOA"
-    "D_AND_CLAIM_STALE_OWNER\020\004\022\035\n\031LOAD_AND_CL"
-    "AIM_NOT_HOLDER\020\005\022!\n\035LOAD_AND_CLAIM_SCHEM"
-    "A_TOO_NEW\020\0062\265\001\n\013PlayerStore\022U\n\014LoadAndCl"
-    "aim\022 .playerstore.LoadAndClaimRequest\032!."
-    "playerstore.LoadAndClaimResponse\"\000\022O\n\nSa"
-    "vePlayer\022\036.playerstore.SavePlayerRequest"
-    "\032\037.playerstore.SavePlayerResponse\"\000B\036Z\031p"
-    "layer_store/player_store\200\001\000b\006proto3"
+    "call_auth.proto\032\033proto/db/proto_option.p"
+    "roto\"M\n\016PlayerStoreRow\022*\n\004kind\030\001 \001(\0162\034.p"
+    "layerstore.PlayerStoreKind\022\017\n\007payload\030\002 "
+    "\001(\014\"\362\001\n\021SavePlayerRequest\022*\n\004auth\030\001 \001(\0132"
+    "\034.common.base.ServiceCallAuth\022\021\n\tplayer_"
+    "id\030\002 \001(\004\022\022\n\nstorage_id\030\003 \001(\r\022\023\n\013owner_ep"
+    "och\030\004 \001(\004\022\020\n\010save_seq\030\005 \001(\004\022\022\n\nschema_ge"
+    "n\030\006 \001(\r\022\023\n\013instance_id\030\007 \001(\014\022)\n\004rows\030\010 \003"
+    "(\0132\033.playerstore.PlayerStoreRow\022\017\n\007relea"
+    "se\030\t \001(\010\"r\n\022SavePlayerResponse\022-\n\006result"
+    "\030\001 \001(\0162\035.playerstore.SavePlayerResult\022\027\n"
+    "\017row_owner_epoch\030\002 \001(\004\022\024\n\014row_save_seq\030\003"
+    " \001(\004\"\231\001\n\023LoadAndClaimRequest\022*\n\004auth\030\001 \001"
+    "(\0132\034.common.base.ServiceCallAuth\022\021\n\tplay"
+    "er_id\030\002 \001(\004\022\023\n\013owner_epoch\030\003 \001(\004\022\023\n\013inst"
+    "ance_id\030\004 \001(\014\022\031\n\021binary_schema_gen\030\005 \001(\r"
+    "\"\301\001\n\024LoadAndClaimResponse\022/\n\006result\030\001 \001("
+    "\0162\037.playerstore.LoadAndClaimResult\022\022\n\nst"
+    "orage_id\030\002 \001(\r\022\023\n\013owner_epoch\030\003 \001(\004\022\020\n\010s"
+    "ave_seq\030\004 \001(\004\022\022\n\nschema_gen\030\005 \001(\r\022)\n\004row"
+    "s\030\006 \003(\0132\033.playerstore.PlayerStoreRow*\361\002\n"
+    "\017PlayerStoreKind\022\033\n\027PLAYER_STORE_KIND_OW"
+    "NER\020\000\022#\n\030PLAYER_STORE_KIND_GROWTH\020\003\032\005\200\346\325"
+    "\002\001\022$\n\031PLAYER_STORE_KIND_PROFILE\020\004\032\005\200\346\325\002\001"
+    "\022$\n\031PLAYER_STORE_KIND_LEGACY1\020\005\032\005\200\346\325\002\001\022&"
+    "\n\033PLAYER_STORE_KIND_CHARACTER\020\006\032\005\200\346\325\002\001\022#"
+    "\n\030PLAYER_STORE_KIND_WALLET\020\007\032\005\200\346\325\002\001\022 \n\025P"
+    "LAYER_STORE_KIND_BAG\020\010\032\005\200\346\325\002\001\022%\n\032PLAYER_"
+    "STORE_KIND_LOCATION\020\t\032\005\200\346\325\002\002\"\004\010\001\020\001\"\004\010\002\020\002"
+    "*\025PLAYER_STORE_KIND_HOT*\027PLAYER_STORE_KI"
+    "ND_ASSET*\347\002\n\020SavePlayerResult\022\"\n\036SAVE_PL"
+    "AYER_RESULT_UNSPECIFIED\020\000\022\031\n\025SAVE_PLAYER"
+    "_COMMITTED\020\001\022\025\n\021SAVE_PLAYER_EQUAL\020\002\022\030\n\024S"
+    "AVE_PLAYER_NO_OWNER\020\003\022\027\n\023SAVE_PLAYER_INV"
+    "ALID\020\004\022\033\n\027SAVE_PLAYER_STALE_OWNER\020\005\022\032\n\026S"
+    "AVE_PLAYER_NOT_HOLDER\020\006\022\031\n\025SAVE_PLAYER_U"
+    "NCLAIMED\020\007\022\031\n\025SAVE_PLAYER_OLDER_SEQ\020\010\022 \n"
+    "\034SAVE_PLAYER_SCHEMA_REGRESSED\020\t\022\036\n\032SAVE_"
+    "PLAYER_SCHEMA_TOO_NEW\020\n\022\031\n\025SAVE_PLAYER_T"
+    "OO_LARGE\020\013*\362\001\n\022LoadAndClaimResult\022%\n!LOA"
+    "D_AND_CLAIM_RESULT_UNSPECIFIED\020\000\022\032\n\026LOAD"
+    "_AND_CLAIM_CLAIMED\020\001\022\033\n\027LOAD_AND_CLAIM_N"
+    "O_OWNER\020\002\022\032\n\026LOAD_AND_CLAIM_INVALID\020\003\022\036\n"
+    "\032LOAD_AND_CLAIM_STALE_OWNER\020\004\022\035\n\031LOAD_AN"
+    "D_CLAIM_NOT_HOLDER\020\005\022!\n\035LOAD_AND_CLAIM_S"
+    "CHEMA_TOO_NEW\020\0062\265\001\n\013PlayerStore\022U\n\014LoadA"
+    "ndClaim\022 .playerstore.LoadAndClaimReques"
+    "t\032!.playerstore.LoadAndClaimResponse\"\000\022O"
+    "\n\nSavePlayer\022\036.playerstore.SavePlayerReq"
+    "uest\032\037.playerstore.SavePlayerResponse\"\000B"
+    "\036Z\031player_store/player_store\200\001\000b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps[1] = {
+    descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps[2] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
+        &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto = {
     false,
     false,
-    1915,
+    2119,
     descriptor_table_protodef_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto,
     "proto/player_store/player_store.proto",
     &descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_once,
     descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto_deps,
-    1,
+    2,
     5,
     schemas,
     file_message_globals,
@@ -1108,7 +1114,7 @@ PlayerStoreKind_descriptor() {
   return file_level_enum_descriptors_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerStoreKind_internal_data_[] = {
-    393216u, 0u, };
+    65536u, 32u, 508u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 SavePlayerResult_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5fstore_2fplayer_5fstore_2eproto);

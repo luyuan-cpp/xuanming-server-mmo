@@ -1,4 +1,5 @@
 #include "etcd_manager.h"
+#include <utility>
 #include "proto/common/base/common.pb.h"
 #include "node/system/node/node_util.h"
 #include <muduo/base/Logging.h>
@@ -11,32 +12,6 @@
 void EtcdManager::Shutdown()
 {
 	leaseKeepAliveTimer.Cancel();
-	// 走 Take 而不是直接 clear,维持"有 pending key ⟺ 超时定时器在跑"这个不变量。
-	// 调用方是 EtcdService::Shutdown,此时 EtcdService 还活着,回调进去只是 Cancel,安全。
-	TakePendingTxnKey();
-}
-
-void EtcdManager::SetPendingTxnKey(const std::string &key)
-{
-	if (!pendingTxnKey_.empty() && pendingTxnKey_ != key)
-	{
-		// 注册流是串行的,这里非空说明上一个 CAS 的响应从来没回来(etcd RPC 失败时
-		// 生成的 client 不会调 handler)。把它打出来 —— 以前这种情况是静默地在队列里
-		// 多压一个 key,从此所有响应错位一格。
-		LOG_ERROR << "Overwriting an unanswered pending etcd txn key: old=" << pendingTxnKey_
-				  << " new=" << key;
-	}
-	pendingTxnKey_ = key;
-	// 不变量:有 pending key ⟺ 超时定时器在跑。
-	gNode->GetServiceDiscoveryManager().etcdService.ArmTxnTimeout();
-}
-
-std::string EtcdManager::TakePendingTxnKey()
-{
-	std::string key;
-	key.swap(pendingTxnKey_);
-	gNode->GetServiceDiscoveryManager().etcdService.CancelTxnTimeout();
-	return key;
 }
 
 std::string EtcdManager::GetServiceName(uint32_t type)
@@ -84,17 +59,17 @@ std::string EtcdManager::MakeNodePortEtcdKey(const NodeInfo &nodeInfo)
 	return MakeNodePortEtcdPrefix(nodeInfo) + std::to_string(nodeInfo.endpoint().port());
 }
 
-void EtcdManager::RegisterNodeService(bool reRegistering)
+void EtcdManager::RegisterNodeService(bool reRegistering, bool retryUnknown, EtcdHelper::TxnCompletion done)
 {
 	// Two-phase CAS under the same lease:
 	//   Phase 1 (this call): claim the global allocation key
 	//     `.../allocated/node_type/T/node_id/N`. Zone-independent, so two
 	//     zones racing on the same node_id lose exactly one to version!=0
 	//     and must try again with a different node_id.
-	//   Phase 2 (EtcdService::OnTxnSucceeded when the allocation key lands):
+	//   Phase 2 (EtcdService::RegisterAsync when the allocation key lands):
 	//     publish the per-zone NodeInfo under the discovery key for watchers.
 	//
-	// Keeping the two phases strictly sequential (driven by OnTxnSucceeded
+	// Keeping the two phases strictly sequential (driven by RegisterAsync
 	// rather than issuing both writes eagerly here) prevents a stale per-zone
 	// info record from lingering in etcd after a lost allocation race —
 	// otherwise Java Gateway's GateWatcher would see several phantom entries
@@ -108,17 +83,16 @@ void EtcdManager::RegisterNodeService(bool reRegistering)
 		// 而重注册模式下的 OnTxnFailed 把它判成"身份被抢"并自杀 —— 每次重注册都会
 		// 确定性地杀掉自己。只有 value 是**别人的** uuid 才是真的被抢。
 		LOG_INFO << "Re-claiming global node-id allocation (absent-or-owned): " << allocKey;
-		EtcdHelper::PutIfAbsentOrOwned(allocKey, info.node_uuid(), info.node_uuid(), gNode->GetLeaseId());
+		EtcdHelper::PutIfAbsentOrOwned(allocKey, info.node_uuid(), info.node_uuid(), gNode->GetLeaseId(), std::move(done));
 	}
 	else
 	{
 		LOG_INFO << "Claiming global node-id allocation: " << allocKey;
-		EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId());
+		EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId(), std::move(done), retryUnknown);
 	}
-	SetPendingTxnKey(allocKey);
 }
 
-void EtcdManager::PublishNodeInfoAfterAllocation(bool reRegistering)
+void EtcdManager::PublishNodeInfoAfterAllocation(bool reRegistering, bool retryUnknown, EtcdHelper::TxnCompletion done)
 {
 	// Second phase: allocation key CAS already succeeded, so (node_type,
 	// node_id) is globally reserved. Now publish NodeInfo for service
@@ -133,14 +107,12 @@ void EtcdManager::PublishNodeInfoAfterAllocation(bool reRegistering)
 		// 没法用 Value==... 判"是不是我的";但它的身份由刚刚 CAS 成功的分配键定义 ——
 		// 同 zone 里持有同一 (node_type, node_id) 的只可能是分配键的持有者,也就是我们。
 		// 与端口 key 的重注册同一理由(RegisterNodePort)。
-		EtcdHelper::PutWithLease(serviceKey, info, gNode->GetLeaseId());
+		EtcdHelper::PutWithLease(serviceKey, info, gNode->GetLeaseId(), std::move(done));
 	}
 	else
 	{
-		EtcdHelper::PutIfAbsent(serviceKey, info, gNode->GetLeaseId());
+		EtcdHelper::PutIfAbsent(serviceKey, info, gNode->GetLeaseId(), std::move(done), retryUnknown);
 	}
-	SetPendingTxnKey(serviceKey);
-	LOG_INFO << "Registered node to etcd: " << info.DebugString();
 }
 
 void EtcdManager::UpdateNodeInfo()
@@ -149,7 +121,7 @@ void EtcdManager::UpdateNodeInfo()
 	EtcdHelper::PutServiceNodeInfo(gNode->GetNodeInfo(), serviceKey, gNode->GetLeaseId());
 }
 
-void EtcdManager::RegisterNodePort(bool reRegistering)
+void EtcdManager::RegisterNodePort(bool reRegistering, bool retryUnknown, EtcdHelper::TxnCompletion done)
 {
 	const auto portKey = MakeNodePortEtcdKey(gNode->GetNodeInfo());
 	LOG_INFO << "Registering node port to etcd with key: " << portKey;
@@ -168,24 +140,21 @@ void EtcdManager::RegisterNodePort(bool reRegistering)
 	// 与之相对,node_id / 分配键那两把是**跨进程竞争**的,仍然保持 CAS 语义不变。
 	if (reRegistering)
 	{
-		EtcdHelper::PutWithLease(portKey, "", gNode->GetLeaseId());
+		EtcdHelper::PutWithLease(portKey, "", gNode->GetLeaseId(), std::move(done));
 	}
 	else
 	{
-		EtcdHelper::PutIfAbsent(portKey, "", 0, gNode->GetLeaseId());
+		EtcdHelper::PutIfAbsent(portKey, "", 0, gNode->GetLeaseId(), std::move(done), retryUnknown);
 	}
-	SetPendingTxnKey(portKey);
-	LOG_INFO << "Registered node port to etcd: " << gNode->GetNodeInfo().endpoint().port();
 }
 
-void EtcdManager::RequestNodeLease()
+void EtcdManager::RequestNodeLease(EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done)
 {
 	uint64_t ttlSeconds = tlsNodeConfigManager.GetBaseDeployConfig().node_ttl_seconds();
 	LOG_INFO << "[EtcdLease] Requesting lease with TTL: " << ttlSeconds
 			 << " seconds. Time: " << muduo::Timestamp::now().toFormattedString();
 	LOG_DEBUG << "[EtcdLease] Calling EtcdHelper::GrantLease...";
-	EtcdHelper::GrantLease(ttlSeconds);
-	LOG_INFO << "[EtcdLease] Lease request completed.";
+	EtcdHelper::GrantLease(ttlSeconds, std::move(done));
 }
 
 void EtcdManager::StartLeaseKeepAlive()

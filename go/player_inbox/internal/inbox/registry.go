@@ -74,6 +74,12 @@ var payloadRules = map[inboxpb.PlayerInboxMessageType]payloadRule{
 	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT: {
 		message: "player_inbox.GmCurrencyDebtPayload", validate: validateDebtPayload,
 	},
+	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN: {
+		message: "player_inbox.GmItemGainPayload", validate: validateItemGainPayload,
+	},
+	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN: {
+		message: "player_inbox.GmItemGainPayload", validate: validateItemGainPayload,
+	},
 }
 
 // 只核原件形状，不在Inbox重算战斗奖励；业务效果由Scene同一持久账本裁决。
@@ -121,6 +127,21 @@ func validateGainPayload(m proto.Message) error {
 	}
 	if !currencytype.IsKnown(p.GetCurrencyType()) {
 		return fmt.Errorf("%w: currency_type=%d not in currency_type.proto", errPayloadRule, p.GetCurrencyType())
+	}
+	return nil
+}
+
+// validateItemGainPayload:物品封锁 / 解封只有 item_config_id,必须非 0(配置号 0 不是任何物品)。
+// 不核对物品表:本服务不加载配置表;scene 也不要求本节点的表认识它 —— 表里没有的配置那个节点本来发不出来,
+// 封禁照样记下,到认识它的版本 / 节点时已经生效,所以不存在「版本错位停用本域」这一说(设计 §2.2)。
+// 写错的配置号不会被拒,只会封住一个发不出来的号;GM 工具下单前按物品表核对(runbook §4.1)。
+func validateItemGainPayload(m proto.Message) error {
+	p, ok := m.(*inboxpb.GmItemGainPayload)
+	if !ok {
+		return fmt.Errorf("%w: want GmItemGainPayload, got %T", errPayloadRule, m)
+	}
+	if p.GetItemConfigId() == 0 {
+		return fmt.Errorf("%w: item_config_id must be non-zero", errPayloadRule)
 	}
 	return nil
 }

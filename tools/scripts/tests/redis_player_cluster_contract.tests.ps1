@@ -86,9 +86,18 @@ $ServiceConfigs = [ordered]@{
     mail             = 'data.mail.yaml.'
 }
 $ZoneServices = @('login', 'data-service', 'player-locator', 'scene-manager')
-$GlobalServices = @('match', 'chat', 'friend', 'guild', 'trade', 'player-inbox', 'mail')
-# 读登录态的全局服务 → 配置段。trade 的在 Rmb 下。
-$LoginReaderSections = [ordered]@{ match = 'LoginRedis'; chat = 'LoginRedis'; friend = 'LoginRedis'; guild = 'LoginRedis'; mail = 'LoginRedis'; trade = 'Rmb.LoginRedis' }
+# 连玩家域的全局服务。chat 不连 Redis,不在这里。
+$GlobalServices = @('match', 'friend', 'guild', 'trade', 'player-inbox', 'mail')
+# 只认 gate 签名的会话身份原件、不读登录态的全局服务:ConfigMap 里不该有 GlobalLoginSessions / LoginRedis(trade 的曾在 Rmb 下)。
+$SignedIdentityServices = @('match', 'chat', 'friend', 'guild', 'mail', 'trade')
+
+# ConfigMap 里登录态段的残留键(顶层与 Rmb 下都查),给上面这几个服务做反向断言用。
+function Get-LoginSessionKeys {
+    param([Parameter(Mandatory = $true)]$Flat, [Parameter(Mandatory = $true)][string]$Prefix)
+    return @($Flat.Scalars.Keys | ForEach-Object { [string]$_ } | Where-Object {
+            $_.StartsWith($Prefix, [System.StringComparison]::Ordinal) -and $_.Substring($Prefix.Length) -cmatch '^(?:Rmb\.)?(?:GlobalLoginSessions|LoginRedis)(?:$|[.\[])'
+        })
+}
 
 $ZoneArgs = @('-Command', 'zone-up', '-ZoneName', 'cluster-test', '-ZoneId', '101', '-DryRun', '-InfraNamespace', $Infra,
     '-GlobalAuthorityTiDBHost', 'tidb.invalid:4000', '-GoSvcRegistry', 'registry.invalid/test', '-JavaSvcRegistry', 'registry.invalid/test')
@@ -277,7 +286,7 @@ Test-Case 'ConvertTo-RedisPlayerClusterManifest:每个节点一个 ClusterIP Ser
     Assert-Match -Text $message -Pattern '带序号占位的文档应恰好 1 份' -Because '模板没有序号占位就不能展开,不能悄悄只渲染一个 Service'
 }
 
-Test-Case 'New-PlayerRedisConfigYaml / New-NodePlayerRedisBlock:集群写种子、Cluster、PasswordEnv;没开集群只写池上限或显式地址;C++ 段不写口令' {
+Test-Case 'New-PlayerRedisConfigYaml / New-NodePlayerRedisBlock:集群写种子、Cluster、PasswordEnv;没开集群只写池上限;C++ 段不写口令' {
     $cluster = Get-PlayerRedisTopologyFor -Masters 3 -ReplicasPerMaster 1 -ReleaseProfileName 'prod' -InfraNamespace 'ns'
     $none = Get-PlayerRedisTopologyFor -Masters 0 -ReplicasPerMaster 1 -ReleaseProfileName 'dev' -InfraNamespace 'ns'
     $flat = (ConvertFrom-YamlToFlatMap -Text (New-PlayerRedisConfigYaml -Section 'PlayerRedis' -Topology $cluster -PoolSizePerNode 20 -ClusterPasswordEnv 'PLAYER_REDIS_PASSWORD')).Scalars
@@ -286,8 +295,7 @@ Test-Case 'New-PlayerRedisConfigYaml / New-NodePlayerRedisBlock:集群写种子�
     Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual $flat['PlayerRedis.PasswordEnv'] -Because '只写变量名'
     Assert-Equal -Expected '20' -Actual $flat['PlayerRedis.PoolSizePerNode'] -Because '池上限'
     Assert-Equal -Expected "PlayerRedis:`n  PoolSizePerNode: 20" -Actual (New-PlayerRedisConfigYaml -Section 'PlayerRedis' -Topology $none -PoolSizePerNode 20) -Because '没开集群只写池上限,地址由服务指向现有实例'
-    $login = (ConvertFrom-YamlToFlatMap -Text (New-PlayerRedisConfigYaml -Section 'LoginRedis' -Topology $none -PoolSizePerNode 8 -StandaloneAddr 'redis.ns:6379' -StandaloneDb 2 -StandalonePasswordEnv 'LOGIN_REDIS_PASSWORD')).Scalars
-    Assert-Equal -Expected 'redis.ns:6379/false/2/LOGIN_REDIS_PASSWORD' -Actual ('{0}/{1}/{2}/{3}' -f $login['LoginRedis.Addrs[0]'], $login['LoginRedis.Cluster'], $login['LoginRedis.DB'], $login['LoginRedis.PasswordEnv']) -Because '读登录态的服务必须显式声明 login 的实例与 DB'
+    Assert-Equal -Expected "LoginRedis:`n  PoolSizePerNode: 20" -Actual (New-PlayerRedisConfigYaml -Section 'LoginRedis' -Topology $none -PoolSizePerNode 20) -Because 'login 自己的登录域段同形:没开集群只写池上限,地址落到它的 Node.RedisClient'
     Assert-Equal -Expected '' -Actual (New-NodePlayerRedisBlock -Topology $none) -Because '没开集群 node-config 不写这一段(缺失 = standalone,沿用 zoneredis)'
     $node = (ConvertFrom-YamlToFlatMap -Text (New-NodePlayerRedisBlock -Topology $cluster)).Scalars
     Assert-Equal -Expected 'cluster' -Actual $node['player_redis.mode'] -Because 'mode'
@@ -299,32 +307,29 @@ Test-Case 'New-PlayerRedisConfigYaml / New-NodePlayerRedisBlock:集群写种子�
 # 3. 连接总账
 # ─────────────────────────────────────────────────────────────────
 
-Test-Case '玩家域总账输入:每个服务的每节点连接 = PlayerRedis 池 + LoginRedis 池 + 代码里写死的池;maxclients 读玩家域清单' {
+Test-Case '玩家域总账输入:每个服务的每节点连接 = PlayerRedis 池 + login 自己的 LoginRedis 池 + 代码里写死的池;maxclients 读玩家域清单' {
     $inputs = Get-RedisPlayerConnectionLedgerInputs
     Assert-Equal -Expected 40000 -Actual $inputs.MaxClients -Because '读 redis-player-cluster.yaml 的 MAXCLIENTS'
     Assert-Equal -Expected 1 -Actual $inputs.CppConnectionsPerProcess -Because '每个 scene 进程每个主节点 1 条'
     $player = { param($Path) [int](Get-EtcValue -RelativePath $Path -KeyPath 'PlayerRedis.PoolSizePerNode') }
-    $loginReader = { param($Path) [int](Get-EtcValue -RelativePath $Path -KeyPath 'LoginRedis.PoolSizePerNode') }
     $mintSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/scene_manager/internal/svc/owner_epoch_mint.go'))
     $mintPool = [int][regex]::Match($mintSource, '(?m)^\s*(?:const\s+)?ownerEpochMintPoolSize\s*=\s*(\d+)\s*$').Groups[1].Value
     $syncSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/svc/servicecontext.go'))
     $syncPool = [int][regex]::Match($syncSource, '(?m)^\s*(?:const\s+)?playerSyncRedisPoolSize\s*=\s*(\d+)\s*$').Groups[1].Value
-    $mailSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/mail/mail.go'))
-    $mailPool = [int][regex]::Match($mailSource, 'loginRedis, err := playerredis\.New\(c\.LoginRedis\.ClientConfig\(playerredis\.Config\{\s*PoolSizePerNode:\s*(\d+)').Groups[1].Value
-    Assert-True -Condition ($mintPool -gt 0 -and $syncPool -gt 0 -and $mailPool -gt 0) -Because "写死的池上限要从源码读到(实际 $mintPool / $syncPool / $mailPool),写法变了同步本用例"
+    Assert-True -Condition ($mintPool -gt 0 -and $syncPool -gt 0) -Because "写死的池上限要从源码读到(实际 $mintPool / $syncPool),写法变了同步本用例"
+    # 登录域只有 login 连;match、friend、guild、trade、mail 只认 gate 签名的会话身份原件,只剩玩家域句柄;chat 不连 Redis,不在表里。
     $expected = [ordered]@{
         login            = (& $player 'go/login/etc/login.yaml') + [int](Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'LoginRedis.PoolSizePerNode')
         # GM 回收读玩家位置键(go/data_service/internal/config/config.go 的 PlayerRedis),连接按打开计。
         'data-service'   = (& $player 'go/data_service/etc/data_service.yaml')
         'player-locator' = (& $player 'go/player_locator/etc/player_locator.yaml')
         'scene-manager'  = (& $player 'go/scene_manager/etc/scene_manager_service.yaml') + $mintPool
-        match            = (& $player 'go/match/etc/match_service.yaml') + (& $loginReader 'go/match/etc/match_service.yaml')
-        chat             = (& $loginReader 'go/chat/etc/chat.yaml')
-        friend           = (& $player 'go/friend/etc/friend.yaml') + (& $loginReader 'go/friend/etc/friend.yaml')
-        guild            = (& $player 'go/guild/etc/guild.yaml') + (& $loginReader 'go/guild/etc/guild.yaml') + $syncPool
-        trade            = (& $player 'go/trade/etc/trade.yaml') + [int](Get-EtcValue -RelativePath 'go/trade/etc/trade.yaml' -KeyPath 'Rmb.LoginRedis.PoolSizePerNode')
+        match            = (& $player 'go/match/etc/match_service.yaml')
+        friend           = (& $player 'go/friend/etc/friend.yaml')
+        guild            = (& $player 'go/guild/etc/guild.yaml') + $syncPool
+        trade            = (& $player 'go/trade/etc/trade.yaml')
         'player-inbox'   = (& $player 'go/player_inbox/etc/player_inbox.yaml')
-        mail             = (& $player 'go/mail/etc/mail.yaml') + $mailPool
+        mail             = (& $player 'go/mail/etc/mail.yaml')
     }
     Assert-Equal -Expected (@($expected.Keys | Sort-Object) -join ',') -Actual (@($inputs.Clients | ForEach-Object { $_.Name } | Sort-Object) -join ',') -Because '连玩家域的服务名单;新增一个连玩家域的服务 = 总账加一行'
     foreach ($client in $inputs.Clients) {
@@ -349,14 +354,15 @@ Test-Case '玩家域总账算式:每节点 = Z × Σ(zone 服务) + Σ(全局服
     Assert-Equal -Expected 32000 -Actual $ledger.WarnAt -Because '80% 水位,与核心总账同一纪律'
 }
 
-Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群就搬走,只剩登录态池的 chat 与 mail 不留行' {
+Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群就搬走,只剩玩家域句柄的 mail 不留行;chat 不连 Redis,两份都没有它' {
     $unsplit = Get-RedisConnectionLedgerInputs
     $split = Get-RedisConnectionLedgerInputs -PlayerDomainSplit $true
     # 行是字典:脚本块返回时单行会被展开,字典的 .Count 和 [0] 都不是想要的,调用处要包 @()。
     $rowOf = { param($Inputs, $Name) $Inputs.Clients | Where-Object { $_.Name -eq $Name } }
-    foreach ($gone in @('chat', 'mail')) {
-        Assert-Equal -Expected 1 -Actual @(& $rowOf $unsplit $gone).Count -Because "没建集群时 $gone 连这台 Redis"
-        Assert-Equal -Expected 0 -Actual @(& $rowOf $split $gone).Count -Because "建了集群 $gone 不再连这台 Redis,留 0 条的行总账函数会拒绝"
+    Assert-Equal -Expected 1 -Actual @(& $rowOf $unsplit 'mail').Count -Because '没建集群时 mail 的玩家域句柄连这台 Redis'
+    Assert-Equal -Expected 0 -Actual @(& $rowOf $split 'mail').Count -Because '建了集群 mail 不再连这台 Redis,留 0 条的行总账函数会拒绝'
+    foreach ($inputs in @($unsplit, $split)) {
+        Assert-Equal -Expected 0 -Actual @(& $rowOf $inputs 'chat').Count -Because 'chat 只认 gate 签名的会话身份原件、聊天权威在 SQL,不连 Redis'
     }
     $loginPool = [int](Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.PoolSize')
     Assert-Equal -Expected $loginPool -Actual @(& $rowOf $split 'login')[0].ConfiguredPoolConns -Because '建了集群 login 只剩 Node.RedisClient'
@@ -364,12 +370,12 @@ Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群�
     Assert-Equal -Expected '0/0/1' -Actual ('{0}/{1}/{2}' -f $smSplit.ConfiguredPoolConns, $smSplit.Fixed, $smSplit.DefaultPools) -Because '铸造通道搬到玩家域,控制域只剩 go-zero 缺省池'
     $guildSplit = @(& $rowOf $split 'guild')[0]
     $guildControl = [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'RedisClient.PoolSize') + [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'PlayerLocatorRedis.PoolSize')
-    Assert-Equal -Expected "$guildControl/0" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池留下,登录态池、玩家域句柄、摘要池搬走'
+    Assert-Equal -Expected "$guildControl/0" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池留下,玩家域句柄、摘要池搬走'
     $plan = @{ ZoneCount = 1; CppZoneProcesses = 6; BattleProcesses = 1; RolloutExtraPodsPerDeployment = 2; OpsReserve = 50; WarnRatio = 0.8 }
     Assert-True -Condition ((Get-RedisConnectionLedger -Inputs $split @plan).Steady -lt (Get-RedisConnectionLedger -Inputs $unsplit @plan).Steady) -Because '搬走之后控制域的账变小,而且没有 0 条的行让总账函数拒绝'
 }
 
-Test-Case '负向:PlayerRedis.PoolSizePerNode 不是正整数时 throw 并点名;mail 的登录态池是常数' {
+Test-Case '负向:PlayerRedis.PoolSizePerNode 不是正整数时 throw 并点名;登录域池只有 login 有' {
     $root = Join-Path $TempRoot 'pool-mirror'
     $relative = 'go/player_locator/etc/player_locator.yaml'
     $target = Join-Path $root $relative
@@ -386,9 +392,11 @@ Test-Case '负向:PlayerRedis.PoolSizePerNode 不是正整数时 throw 并点名
     finally { $RepoRoot = $saved }
     Assert-Match -Text $message -Pattern 'Redis 连接池镜像' -Because 'fail-closed:每节点池上限决定玩家域每个主节点的连接数'
     Assert-Match -Text $message -Pattern ([regex]::Escape("$relative 的 PlayerRedis.PoolSizePerNode='0'")) -Because '点名文件、键路径与值'
-    Assert-Equal -Expected 8 -Actual (Get-RedisPlayerPoolMirror -Target 'mail').Login -Because 'mail 的 LoginRedis 在 yaml 里不写池上限,写死在 go/mail/mail.go'
-    Assert-Equal -Expected 0 -Actual (Get-RedisPlayerPoolMirror -Target 'chat').Player -Because 'chat 没有玩家域句柄'
-    Assert-Equal -Expected ([int](Get-EtcValue -RelativePath 'go/trade/etc/trade.yaml' -KeyPath 'Rmb.LoginRedis.PoolSizePerNode')) -Actual (Get-RedisPlayerPoolMirror -Target 'trade').Login -Because 'trade 的登录态池键在 Rmb 下,按打开计'
+    Assert-Equal -Expected ([int](Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'LoginRedis.PoolSizePerNode')) -Actual (Get-RedisPlayerPoolMirror -Target 'login').Login -Because 'login 自己的登录域池镜像服务 yaml'
+    foreach ($service in @('match', 'friend', 'guild', 'trade', 'mail')) {
+        Assert-Equal -Expected 0 -Actual (Get-RedisPlayerPoolMirror -Target $service).Login -Because "$service 只认 gate 签名的会话身份原件,没有登录域池"
+    }
+    Assert-True -Condition ((Get-ThrownMessage { Get-RedisPlayerPoolMirror -Target 'chat' }) -ne '') -Because 'chat 不连 Redis,不是玩家域镜像的目标'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -411,28 +419,16 @@ Test-Case 'dev 缺省 zone-up:产物没有 redis-player,node-config 没有 playe
     }
 }
 
-Test-Case 'dev 缺省 infra-up:不渲染集群;读登录态的全局服务显式指向 login 的实例与 DB,口令走各自原来的路子' {
+Test-Case 'dev 缺省 infra-up:不渲染集群;只认签名会话身份的六个全局服务不渲染 GlobalLoginSessions / LoginRedis;trade 的 Rmb 段镜像服务 yaml' {
     Assert-Equal -Expected 0 -Actual $devInfraRun.ExitCode -Because "dev 缺省 infra-up DryRun 必须成功。输出: $($devInfraRun.Output)"
     $out = $devInfraRun.Output
     Assert-NotMatch -Text $out -Pattern $ClusterObjectPattern -Because '没开集群不 apply 也不删'
-    $loginDb = Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.DB'
-    foreach ($service in @($LoginReaderSections.Keys)) {
-        $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
-        $prefix = $ServiceConfigs[$service] + $LoginReaderSections[$service] + '.'
-        Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Addrs[0]')) -Because "$service 不建集群时显式指向 login 的实例"
-        Assert-Equal -Expected 'false' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 单实例"
-        Assert-Equal -Expected $loginDb -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'DB')) -Because "$service 与 login 同 DB"
+    foreach ($service in $SignedIdentityServices) {
+        $leftover = @(Get-LoginSessionKeys -Flat (Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config") -Prefix $ServiceConfigs[$service])
+        Assert-Equal -Expected 0 -Actual $leftover.Count -Because "$service 只认 gate 签名的会话身份原件,不该渲染登录态段(残留:$($leftover -join ', '))"
     }
-    foreach ($case in @(@{ Service = 'chat'; Env = 'LOGIN_REDIS_PASSWORD' }, @{ Service = 'match'; Env = 'MMORPG_LOGIN_REDIS_PASSWORD' }, @{ Service = 'mail'; Env = 'MMORPG_MAIL_REDIS_PASSWORD' })) {
-        $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$($case.Service)-config"
-        Assert-Equal -Expected $case.Env -Actual (Get-FlatValue -Flat $flat -KeyPath ($ServiceConfigs[$case.Service] + 'LoginRedis.PasswordEnv')) -Because "$($case.Service) 的单实例口令走 manifest 手写的环境变量"
-    }
-    $mail = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-mail-config'
-    Assert-Equal -Expected '8' -Actual (Get-FlatValue -Flat $mail -KeyPath 'data.mail.yaml.LoginRedis.PoolSizePerNode') -Because '写出来的池上限与 go/mail/mail.go 的缺省值同值'
     $trade = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-trade-config'
-    Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $trade -KeyPath 'data.trade.yaml.Rmb.GlobalLoginSessions') -Because 'AssetOp.Enabled=true 时 config.Validate 要求它'
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/trade/etc/trade.yaml' -KeyPath 'Rmb.LoginRedis.PoolSizePerNode') -Actual (Get-FlatValue -Flat $trade -KeyPath 'data.trade.yaml.Rmb.LoginRedis.PoolSizePerNode') -Because '池上限镜像服务 yaml'
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/trade/etc/trade.yaml' -KeyPath 'Rmb.Enabled') -Actual (Get-FlatValue -Flat $trade -KeyPath 'data.trade.yaml.Rmb.Enabled') -Because 'Rmb 其余键镜像服务 yaml'
+    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/trade/etc/trade.yaml' -KeyPath 'Rmb.Enabled') -Actual (Get-FlatValue -Flat $trade -KeyPath 'data.trade.yaml.Rmb.Enabled') -Because 'Rmb 段整段镜像服务 yaml'
 }
 
 Test-Case '-PlayerRedisMasters 3 的 infra-up:清单、Secret、建群 Job 都渲染,排在全局 Go 服务之前,占位全部替换,口令不进产物' {
@@ -453,25 +449,27 @@ Test-Case '-PlayerRedisMasters 3 的 infra-up:清单、Secret、建群 Job 都�
     Assert-NotMatch -Text $out -Pattern ([regex]::Escape($ClusterPassword)) -Because '口令不进任何产物与打印'
 }
 
-Test-Case '-PlayerRedisMasters 3 的 infra-up:全局服务的 PlayerRedis、LoginRedis 写种子与 PasswordEnv,容器有口令环境变量' {
+Test-Case '-PlayerRedisMasters 3 的 infra-up:全局服务的 PlayerRedis 写种子与 PasswordEnv,容器有口令环境变量;登录态段不渲染,chat 不拿口令' {
     $out = $clusterInfraRun.Output
     foreach ($service in $GlobalServices) {
         $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
-        $sections = @()
-        if ($service -ne 'chat') { $sections += 'PlayerRedis' }
-        if ($LoginReaderSections.Contains($service)) { $sections += $LoginReaderSections[$service] }
-        foreach ($section in $sections) {
-            $prefix = $ServiceConfigs[$service] + $section + '.'
-            foreach ($i in 0..2) {
-                Assert-Equal -Expected $Seeds[$i] -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + "Addrs[$i]")) -Because "$service 的 $section 种子 $i"
-            }
-            Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 的 $section"
-            Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'PasswordEnv')) -Because "$service 的 $section 只写变量名"
-            Assert-True -Condition (-not $flat.Scalars.Contains($prefix + 'Password')) -Because "$service 的 $section 不写口令值"
+        $prefix = $ServiceConfigs[$service] + 'PlayerRedis.'
+        foreach ($i in 0..2) {
+            Assert-Equal -Expected $Seeds[$i] -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + "Addrs[$i]")) -Because "$service 的 PlayerRedis 种子 $i"
         }
+        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 的 PlayerRedis"
+        Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'PasswordEnv')) -Because "$service 的 PlayerRedis 只写变量名"
+        Assert-True -Condition (-not $flat.Scalars.Contains($prefix + 'Password')) -Because "$service 的 PlayerRedis 不写口令值"
         $deployment = Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name $service
         Assert-Match -Text $deployment -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-player-auth\s+key: password' -Because "$service 容器要有口令:没有的话只有一屏 NOAUTH"
     }
+    foreach ($service in $SignedIdentityServices) {
+        $leftover = @(Get-LoginSessionKeys -Flat (Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config") -Prefix $ServiceConfigs[$service])
+        Assert-Equal -Expected 0 -Actual $leftover.Count -Because "$service 开了集群也不渲染登录态段(残留:$($leftover -join ', '))"
+    }
+    $chatFlat = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-chat-config'
+    Assert-Equal -Expected 0 -Actual @($chatFlat.Scalars.Keys | Where-Object { ([string]$_).StartsWith($ServiceConfigs['chat'] + 'PlayerRedis', [System.StringComparison]::Ordinal) }).Count -Because 'chat 没有玩家域段'
+    Assert-NotMatch -Text (Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name 'chat') -Pattern 'PLAYER_REDIS_PASSWORD' -Because 'chat 不连 Redis,容器不拿玩家域口令'
 }
 
 Test-Case '-PlayerRedisMasters 3 的 zone-up:node-config 写 player_redis,scene 有口令与配置指纹,gate 没有;zone 的 Go 服务写种子;WAITAOF 取 1' {

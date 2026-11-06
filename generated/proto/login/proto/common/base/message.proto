@@ -143,6 +143,10 @@ message NodeHandshakeRequest {
     string version = 1;
     string token = 2;
 	NodeInfo self_node = 3;
+	// 发起方要连的对端进程实例(对端 NodeInfo.node_uuid,取自权威发现)。入站侧只有它等于本进程 uuid 才登记:
+	// 同一地址上换了进程(崩溃后原地重启,旧实例的 etcd 键要等租约过期才消失)时,发起方指向旧实例的连接会连到新进程,
+	// 不核对的话它会顶替真正链路上的回推会话。空值一律拒绝。见 docs/design/muduo-rpc-channel.md §8.3。
+	string expected_peer_uuid = 4;
 }
 
 message NodeHandshakeResponse {

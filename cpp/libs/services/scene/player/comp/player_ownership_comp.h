@@ -248,7 +248,7 @@ struct PlayerSceneChangeInFlightComp
 // "同一玩家同时只有一件换图在途"。
 //
 // 按需状态(ecs-component-access-rules.md):只由 PlayerSceneSystem::RequestEnterMirrorScene 在发出之前创建;
-// 由该次调用的完成回调 PlayerSceneSystem::HandleMirrorCreateDone 按 token 认领并摘除。生成的 gRPC 客户端
+// 由 CreateMirrorAndEnter 在恢复后按 token 认领并摘除。生成的 gRPC 客户端
 // 保证每次调用的完成回调恰好一次(成功 / 业务失败 / 传输失败都会到);完成通知永远不来时,靠 sentAtMs 的
 // TTL 自然失效,TTL 与普通换图取同一个值(SceneManager 的 gRPC deadline + 1s)。完成认领还要复核同一
 // TTL:令牌匹配但已过期或 UTC 回拨,摘掉本槽后直接丢弃,不得给后来的换图推提示或自动进旧镜像。

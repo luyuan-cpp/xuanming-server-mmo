@@ -6,21 +6,24 @@ package logic
 //     (修复时 2026-10-22 是 resolveScene 的死节点自愈;10-23 起它只重建世界频道,这里模拟的是纵深防御要挡的
 //     写者)。修复前收尾用不比对属主的 force 脚本照样销毁:DestroyScene 发到新节点,新节点的 scene_count /
 //     player_count 被扣,玩家刚进的场景被拆。现在销毁脚本比对期望属主,落空就一个键都不动。
-//   - 显式 DestroyScene:快照读到属主 A 后,另一个写者(rebalance 的机会迁移等)把场景改派到 B。修复前按快照
-//     把 RPC 发到 A、计数扣在 A 上,B 的 scene_count 与反向索引永久多一份,B 上的实体成了孤儿。现在经
-//     destroyInstanceForce 原子认领,以脚本读到的属主 B 为准。
+//   - 显式 DestroyScene:另一个写者(rebalance 的机会迁移等)在销毁之前把场景从 A 改派到 B。修复前(10-23 之前)
+//     它先快照读到 A,按快照把 RPC 发到 A、计数扣在 A 上,B 的 scene_count 与反向索引永久多一份,B 上的实体成了
+//     孤儿。现在经 destroyInstanceForce 原子认领,副作用一律以认领应答里的属主 B 为准。
 //
-// 交错用 go-redis hook 注入(redis.WithHook,见 newIntegrationSvcCtxWithRedisOptions):调用方第一次
-// GET scene:{id}:node 拿到结果之后、继续往下走之前,同步提交一次 reassignSceneNode。注入点就是调用方自己的
-// 「读属主」。两条用例都从修复前就存在的入口进(reconcileDeadNodeScenes、DestroySceneLogic.DestroyScene),
-// 不直接调被修改的 destroyOrphanOfDeadNode / AtomicDestroyForce,所以能原样放到修复前代码上取红。
+// 交错用 go-redis hook 注入(redis.WithHook,见 newIntegrationSvcCtxWithRedisOptions),在下面两个时刻中先到的
+// 那一个同步提交一次 reassignSceneNode,只注入一次:
+//   - 调用方第一次 GET scene:{id}:node 拿到结果之后:收尾的快速过滤就是这一读,注入点即「读完属主、销毁之前」;
+//   - 调用方发出以 scene:{id}:node 为 KEYS[1] 的 EVAL 之前:2026-11-05 起 destroyInstanceInternal 在认领前不再读属主
+//     (一律取认领应答),显式 DestroyScene 的第一次触碰就是认领脚本,注入点是「认领之前」。
+// 两条用例都从生产入口进(reconcileDeadNodeScenes、DestroySceneLogic.DestroyScene)。
 //
-// 修复前红的取法:本文件只用修复前(940ef9746)已有的入口与辅助函数,可直接取红,不需要变异。
-// 在 %TEMP% 下 git worktree add --detach <tmp> 940ef9746,把当前的 integration_test.go(多了
-// newIntegrationSvcCtxWithRedisOptions)与本文件拷进 <tmp>/go/scene_manager/internal/logic/,
-// 跑 go test ./internal/logic/ -count=1 -v -run 'TestOwnerReadInterleave_',期望两条都红:
-//   - ReconcileSkipsSceneReassignedAfterOwnerRead:失败信息含「收尾不得向新属主发 DestroyScene」;
-//   - ExplicitDestroyFollowsOwnerAtClaimTime:失败信息含「DestroyScene 必须发给认领时的属主」。
+// 修复前红的取法(本文件依赖 10-31 起的成员集合辅助函数,拷不回修复前的提交,按变异取红):
+//   - ReconcileSkipsSceneReassignedAfterOwnerRead:按 reconcile_owner_cas_test.go 文件头的变异 C,把收尾里的
+//     destroyOrphanOfDeadNode 换回修复前的 destroyInstanceForce(..., "node_death")。失败信息含「收尾不得向新属主发
+//     DestroyScene」。
+//   - ExplicitDestroyFollowsOwnerAtClaimTime:变异 E,模拟修复前「副作用用自己快照读到的属主」。在 destroyInstanceInternal
+//     认领之前加 `snapshotOwner, _ := svcCtx.Redis.Get(sceneNodeKey(sceneId))`,并把 `nodeId := claim.NodeID` 换成
+//     `nodeId := snapshotOwner`。失败信息含「DestroyScene 必须发给认领时的属主 B」。
 
 import (
 	"context"
@@ -47,8 +50,11 @@ const (
 	interleaveNodeB    = "8985"
 )
 
-// afterOwnerReadHook 在第一次「GET key」返回之后、把结果交还调用方之前,同步执行一次 inject。
-// inject 里发出的命令同样经过本 hook;fired 先置位,所以不会重入。arm 之前一律放行,用例的现场搭建不受影响。
+// afterOwnerReadHook 在调用方第一次触碰属主键时同步执行一次 inject,两种触碰取先到的:
+//   - 「GET key」返回之后、把结果交还调用方之前;
+//   - 以 key 为 KEYS[1] 的 EVAL 发出之前(认领脚本在脚本里读属主,调用方事先不读)。
+// inject 里发出的命令(reassignSceneNode 自己的 EVAL 也以 key 为 KEYS[1])同样经过本 hook;fired 先置位,所以不会
+// 重入。arm 之前一律放行,用例的现场搭建不受影响。
 type afterOwnerReadHook struct {
 	key    string
 	inject func()
@@ -69,6 +75,9 @@ func (h *afterOwnerReadHook) ProcessPipelineHook(next redis.ProcessPipelineHook)
 
 func (h *afterOwnerReadHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
+		if h.armed.Load() && isEvalOnFirstKey(cmd, h.key) && h.fired.CompareAndSwap(false, true) {
+			h.inject()
+		}
 		err := next(ctx, cmd)
 		if h.armed.Load() && isGetOf(cmd, h.key) && h.fired.CompareAndSwap(false, true) {
 			h.inject()
@@ -84,6 +93,17 @@ func isGetOf(cmd redis.Cmder, key string) bool {
 		return false
 	}
 	k, ok := args[1].(string)
+	return ok && k == key
+}
+
+// isEvalOnFirstKey 报告 cmd 是不是 KEYS[1] 为 key 的 EVAL。go-redis 的参数形状是
+// ["eval", script, numkeys, KEYS[1], ...]。
+func isEvalOnFirstKey(cmd redis.Cmder, key string) bool {
+	args := cmd.Args()
+	if cmd.Name() != "eval" || len(args) < 4 {
+		return false
+	}
+	k, ok := args[3].(string)
 	return ok && k == key
 }
 
@@ -161,9 +181,10 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 	requireActiveInstance(t, sc, interleaveZone, sceneID, true)
 }
 
-// 显式 DestroyScene 快照读到属主 A 之后,场景被改派到 B(注入点即它自己的 GET)。销毁以认领时的属主 B 为准:
-// RPC 发给 B,计数与反向索引从 B 上摘,A 不再被扣。
-// 修复前:按快照把 RPC 发到 A、A 的 scene_count 被扣成 -1,B 的 scene_count 与反向索引多一份,B 上的实体成孤儿。
+// 显式 DestroyScene 认领之前,场景被改派到 B(注入点即它对属主键的第一次触碰,现在是认领脚本本身)。销毁以认领
+// 应答里的属主 B 为准:RPC 发给 B,计数与反向索引从 B 上摘,A 不再被扣。
+// 修复前:先快照读到 A,按快照把 RPC 发到 A、A 的 scene_count 被扣成 -1,B 的 scene_count 与反向索引多一份,
+// B 上的实体成孤儿。
 func TestOwnerReadInterleave_ExplicitDestroyFollowsOwnerAtClaimTime(t *testing.T) {
 	const sceneID uint64 = 89702
 	member := strconv.FormatUint(sceneID, 10)
@@ -188,7 +209,7 @@ func TestOwnerReadInterleave_ExplicitDestroyFollowsOwnerAtClaimTime(t *testing.T
 	})
 	require.NoError(t, err)
 
-	require.True(t, hook.fired.Load(), "改派必须真的插在 DestroyScene 读属主之后")
+	require.True(t, hook.fired.Load(), "改派必须真的插在 DestroyScene 认领之前")
 	require.EqualValues(t, 1, nodeB.fake.destroyCalls.Load(), "DestroyScene 必须发给认领时的属主 B")
 	require.Equal(t, sceneID, nodeB.fake.lastDestroyScene.Load())
 	require.EqualValues(t, 0, nodeA.fake.destroyCalls.Load(), "A 已不是属主,不得收到 DestroyScene")

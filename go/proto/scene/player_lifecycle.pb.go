@@ -23,6 +23,60 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// gate 代发 ExitGame 的原因(docs/design/player-connection-lost-hold.md)。服务端内部字段,客户端不可见。
+// 只有 DISCONNECTED 让 scene 把角色留在原地等重连;其余一律立即退出(与加字段之前相同)。
+type ExitGameReason int32
+
+const (
+	ExitGameReason_EXIT_GAME_REASON_UNSPECIFIED   ExitGameReason = 0 // 未填(旧版 gate):立即退出
+	ExitGameReason_EXIT_GAME_REASON_LOGOUT        ExitGameReason = 1 // 客户端主动 LeaveGame:立即退出
+	ExitGameReason_EXIT_GAME_REASON_DISCONNECTED  ExitGameReason = 2 // 客户端连接断开、没有登出(断网、gate 重启、顶号踢旧连接):保留到重连窗口结束
+	ExitGameReason_EXIT_GAME_REASON_LEASE_EXPIRED ExitGameReason = 3 // 断线租约已到期,gate 关掉残留的假死连接:立即退出
+)
+
+// Enum value maps for ExitGameReason.
+var (
+	ExitGameReason_name = map[int32]string{
+		0: "EXIT_GAME_REASON_UNSPECIFIED",
+		1: "EXIT_GAME_REASON_LOGOUT",
+		2: "EXIT_GAME_REASON_DISCONNECTED",
+		3: "EXIT_GAME_REASON_LEASE_EXPIRED",
+	}
+	ExitGameReason_value = map[string]int32{
+		"EXIT_GAME_REASON_UNSPECIFIED":   0,
+		"EXIT_GAME_REASON_LOGOUT":        1,
+		"EXIT_GAME_REASON_DISCONNECTED":  2,
+		"EXIT_GAME_REASON_LEASE_EXPIRED": 3,
+	}
+)
+
+func (x ExitGameReason) Enum() *ExitGameReason {
+	p := new(ExitGameReason)
+	*p = x
+	return p
+}
+
+func (x ExitGameReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExitGameReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_lifecycle_proto_enumTypes[0].Descriptor()
+}
+
+func (ExitGameReason) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_lifecycle_proto_enumTypes[0]
+}
+
+func (x ExitGameReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExitGameReason.Descriptor instead.
+func (ExitGameReason) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_lifecycle_proto_rawDescGZIP(), []int{0}
+}
+
 type GateLoginNotifyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EnterGsType   uint32                 `protobuf:"varint,1,opt,name=enter_gs_type,json=enterGsType,proto3" json:"enter_gs_type,omitempty"`
@@ -69,6 +123,7 @@ func (x *GateLoginNotifyRequest) GetEnterGsType() uint32 {
 
 type GameNodeExitGameRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        ExitGameReason         `protobuf:"varint,1,opt,name=reason,proto3,enum=ExitGameReason" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -103,14 +158,27 @@ func (*GameNodeExitGameRequest) Descriptor() ([]byte, []int) {
 	return file_proto_scene_player_lifecycle_proto_rawDescGZIP(), []int{1}
 }
 
+func (x *GameNodeExitGameRequest) GetReason() ExitGameReason {
+	if x != nil {
+		return x.Reason
+	}
+	return ExitGameReason_EXIT_GAME_REASON_UNSPECIFIED
+}
+
 var File_proto_scene_player_lifecycle_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_lifecycle_proto_rawDesc = "" +
 	"\n" +
 	"\"proto/scene/player_lifecycle.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bgoogle/protobuf/empty.proto\"<\n" +
 	"\x16GateLoginNotifyRequest\x12\"\n" +
-	"\renter_gs_type\x18\x01 \x01(\rR\venterGsType\"\x19\n" +
-	"\x17GameNodeExitGameRequest2\x96\x01\n" +
+	"\renter_gs_type\x18\x01 \x01(\rR\venterGsType\"B\n" +
+	"\x17GameNodeExitGameRequest\x12'\n" +
+	"\x06reason\x18\x01 \x01(\x0e2\x0f.ExitGameReasonR\x06reason*\x96\x01\n" +
+	"\x0eExitGameReason\x12 \n" +
+	"\x1cEXIT_GAME_REASON_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17EXIT_GAME_REASON_LOGOUT\x10\x01\x12!\n" +
+	"\x1dEXIT_GAME_REASON_DISCONNECTED\x10\x02\x12\"\n" +
+	"\x1eEXIT_GAME_REASON_LEASE_EXPIRED\x10\x032\x96\x01\n" +
 	"\vScenePlayer\x12B\n" +
 	"\x0fGateLoginNotify\x12\x17.GateLoginNotifyRequest\x1a\x16.google.protobuf.Empty\x12<\n" +
 	"\bExitGame\x12\x18.GameNodeExitGameRequest\x1a\x16.google.protobuf.Empty\x1a\x05\x80\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
@@ -127,22 +195,25 @@ func file_proto_scene_player_lifecycle_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_lifecycle_proto_rawDescData
 }
 
+var file_proto_scene_player_lifecycle_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_scene_player_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_scene_player_lifecycle_proto_goTypes = []any{
-	(*GateLoginNotifyRequest)(nil),  // 0: GateLoginNotifyRequest
-	(*GameNodeExitGameRequest)(nil), // 1: GameNodeExitGameRequest
-	(*emptypb.Empty)(nil),           // 2: google.protobuf.Empty
+	(ExitGameReason)(0),             // 0: ExitGameReason
+	(*GateLoginNotifyRequest)(nil),  // 1: GateLoginNotifyRequest
+	(*GameNodeExitGameRequest)(nil), // 2: GameNodeExitGameRequest
+	(*emptypb.Empty)(nil),           // 3: google.protobuf.Empty
 }
 var file_proto_scene_player_lifecycle_proto_depIdxs = []int32{
-	0, // 0: ScenePlayer.GateLoginNotify:input_type -> GateLoginNotifyRequest
-	1, // 1: ScenePlayer.ExitGame:input_type -> GameNodeExitGameRequest
-	2, // 2: ScenePlayer.GateLoginNotify:output_type -> google.protobuf.Empty
-	2, // 3: ScenePlayer.ExitGame:output_type -> google.protobuf.Empty
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: GameNodeExitGameRequest.reason:type_name -> ExitGameReason
+	1, // 1: ScenePlayer.GateLoginNotify:input_type -> GateLoginNotifyRequest
+	2, // 2: ScenePlayer.ExitGame:input_type -> GameNodeExitGameRequest
+	3, // 3: ScenePlayer.GateLoginNotify:output_type -> google.protobuf.Empty
+	3, // 4: ScenePlayer.ExitGame:output_type -> google.protobuf.Empty
+	3, // [3:5] is the sub-list for method output_type
+	1, // [1:3] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_lifecycle_proto_init() }
@@ -155,13 +226,14 @@ func file_proto_scene_player_lifecycle_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_lifecycle_proto_rawDesc), len(file_proto_scene_player_lifecycle_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_scene_player_lifecycle_proto_goTypes,
 		DependencyIndexes: file_proto_scene_player_lifecycle_proto_depIdxs,
+		EnumInfos:         file_proto_scene_player_lifecycle_proto_enumTypes,
 		MessageInfos:      file_proto_scene_player_lifecycle_proto_msgTypes,
 	}.Build()
 	File_proto_scene_player_lifecycle_proto = out.File

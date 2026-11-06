@@ -34,7 +34,8 @@ const (
 	// cascade-destroy path when a scene with mirrors is removed.
 	SceneMirrorsKeyFmt = "scene:%d:mirrors"
 	// NodeScenesKeyFmt is the Redis SET of scene ids currently hosted by a
-	// scene node. Populated by allocateScene, drained by every destroy path.
+	// scene node. Populated by the scene registration scripts
+	// (scene_registration.go), drained by every destroy path.
 	// Used by the node-death reconciliation loop to find orphan instances.
 	NodeScenesKeyFmt = "node:zone:%d:%s:scenes"
 )
@@ -267,51 +268,44 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		return &scene_manager.CreateSceneResponse{ErrorCode: code, ErrorMessage: err.Error()}, nil
 	}
 
-	sceneId, err := l.allocateScene(in.SceneConfId, targetNode, in.ZoneId)
+	// 失租后发号器被 fence,建场景整体失败:用一个已被别人接管的 worker id 铸号会撞号。
+	sceneId, err := l.svcCtx.SceneIDGen.Generate()
 	if err != nil {
-		// scene id 都没拿到,Redis 还没写任何东西,只需要把 Agones 名额还回去。
+		// Redis 还没写任何东西,只需要把 Agones 名额还回去。
 		if placement != nil {
-			ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "allocate_scene_failed")
+			ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "scene_id_unavailable")
 		}
-		return &scene_manager.CreateSceneResponse{ErrorCode: constants.ErrRedis, ErrorMessage: err.Error()}, nil
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    constants.ErrRedis,
+			ErrorMessage: fmt.Sprintf("scene id generator unavailable: %v", err),
+		}, nil
 	}
 
-	// 记住这个 Scene 开在哪个 GameServer 上。必须在调 C++ CreateScene **之前**
-	// 写:如果 RPC 失败后才写,进程正好在中间崩溃就永远找不回该减哪个计数。
+	// 实例的全部 Redis 状态由一段脚本登记(scene_registration.go),必须在调 C++ CreateScene **之前**:
+	// 进程在 RPC 前后崩溃时,空闲回收靠 active 集合找到它,按 agones_gs 归还名额。
+	//   - 镜像标记让空闲回收改用更短的 MirrorIdleTimeoutSeconds:镜像每次进场都重建 NPC,没人时留着纯属浪费;
+	//   - scene:{源}:mirrors 与 scene:{镜像}:source 是级联销毁和死节点收尾用的反向索引。
+	reg := instanceRegistration{
+		sceneRegistration: sceneRegistration{SceneID: sceneId, ZoneID: in.ZoneId, NodeID: targetNode},
+		CreatedAt:         time.Now().Unix(),
+		Mirror:            in.MirrorConfigId > 0 || in.SourceSceneId > 0,
+		SourceSceneID:     in.SourceSceneId,
+	}
 	if placement != nil {
-		if err := l.svcCtx.Redis.Set(sceneAgonesGsKey(sceneId), placement.GameServerName); err != nil {
-			l.Logger.Errorf("[Instance] Failed to record agones gs for scene %d: %v", sceneId, err)
-		}
+		reg.AgonesGs = placement.GameServerName
 	}
-
-	// Track in active instances sorted set (score = creation timestamp).
-	nowUnix := time.Now().Unix()
-	instKey := activeInstancesKey(in.ZoneId)
-	if _, err := l.svcCtx.Redis.Zadd(instKey, nowUnix, fmt.Sprintf("%d", sceneId)); err != nil {
-		l.Logger.Errorf("[Instance] Failed to track instance %d: %v", sceneId, err)
-	}
-
-	// Tag mirrors so the lifecycle manager can apply the shorter
-	// MirrorIdleTimeoutSeconds. Mirrors re-init NPCs on every entry, so
-	// lingering with 0 players is pure waste.
-	if in.MirrorConfigId > 0 || in.SourceSceneId > 0 {
-		if err := l.svcCtx.Redis.Set(sceneMirrorFlagKey(sceneId), "1"); err != nil {
-			l.Logger.Errorf("[Instance] Failed to set mirror flag for scene %d: %v", sceneId, err)
+	if outcome := registerInstance(l.svcCtx, reg); outcome != registrationRegistered {
+		if placement != nil && outcome.releasesReservation() {
+			ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "scene_registration_"+outcome.String())
 		}
-	}
-
-	// Reverse indexes for cascade destroy and node-death reconciliation.
-	// These use SET operations which are naturally idempotent — safe to
-	// re-run on retry.
-	if in.SourceSceneId > 0 {
-		// scene:{sourceId}:mirrors gives us O(1) enumeration of "mirrors of
-		// this scene" when the source is destroyed or the source node dies.
-		if _, err := l.svcCtx.Redis.Sadd(sceneMirrorsKey(in.SourceSceneId), fmt.Sprintf("%d", sceneId)); err != nil {
-			l.Logger.Errorf("[Instance] Failed to add mirror %d to source %d's mirror set: %v", sceneId, in.SourceSceneId, err)
+		code := constants.ErrRedis
+		if outcome == registrationConflict {
+			code = constants.ErrDuplicateScene
 		}
-		// scene:{mirrorId}:source remembers the source so the mirror can
-		// SREM itself from that set on destroy without a full table scan.
-		l.svcCtx.Redis.Set(sceneSourceKey(sceneId), fmt.Sprintf("%d", in.SourceSceneId))
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    code,
+			ErrorMessage: fmt.Sprintf("registering instance %d on node %s: %s", sceneId, targetNode, outcome),
+		}, nil
 	}
 
 	// Notify the C++ scene node to instantiate the ECS scene entity.
@@ -562,36 +556,4 @@ func (l *CreateSceneLogic) getNodeSceneCount(zoneId uint32, nodeId string) (int6
 		return 0, false
 	}
 	return count, true
-}
-
-// allocateScene generates a scene ID and registers it in Redis.
-// Shared by both main-world and instance creation.
-func (l *CreateSceneLogic) allocateScene(confId uint64, targetNode string, zoneId uint32) (uint64, error) {
-	// 失租后发号器被 fence,建场景整体失败。scene_id 撞号的后果比建帮更重:
-	// 下面是裸 Redis SET(无 CAS),两个场景共用一个 id 会互相覆盖路由,玩家被静默送错节点。
-	sceneId, err := l.svcCtx.SceneIDGen.Generate()
-	if err != nil {
-		return 0, fmt.Errorf("scene id generator unavailable: %w", err)
-	}
-
-	// scene -> node mapping.
-	if err := l.svcCtx.Redis.Set(sceneNodeKey(sceneId), targetNode); err != nil {
-		return 0, fmt.Errorf("redis set scene node failed: %w", err)
-	}
-	// scene -> zone mapping for cross-zone lookups.
-	l.svcCtx.Redis.Set(sceneZoneKey(sceneId), fmt.Sprintf("%d", zoneId))
-
-	// Increment node scene count for load tracking.
-	sceneCountKey := nodeSceneCountKey(zoneId, targetNode)
-	if _, err := l.svcCtx.Redis.Incr(sceneCountKey); err != nil {
-		l.Logger.Errorf("Failed to increment scene count for node %s: %v", targetNode, err)
-	}
-
-	// Reverse index: node -> scenes. The node-death reconciliation loop
-	// uses this to find orphan scenes without scanning the entire keyspace.
-	if _, err := l.svcCtx.Redis.Sadd(nodeScenesKey(zoneId, targetNode), fmt.Sprintf("%d", sceneId)); err != nil {
-		l.Logger.Errorf("Failed to add scene %d to node %s scenes set: %v", sceneId, targetNode, err)
-	}
-
-	return sceneId, nil
 }

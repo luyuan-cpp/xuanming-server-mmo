@@ -35,7 +35,7 @@ const (
 	// ErrChannelUnavailable:TEAM / SYSTEM / UNSPECIFIED 频道 v1 不开放。
 	ErrChannelUnavailable = uint32(table.CommonError_kFeatureUnavailable)
 
-	// ErrStorage:权威SQL/原登录态失败、原件损坏或提交结果未知。
+	// ErrStorage:权威SQL失败、原件损坏或提交结果未知。
 	// 这是 Tip.xlsx 里 fault 列标 1 的码,serverbase 会把它记成 rpc_inband_fault 并告警 ——
 	// **只用于真故障**,任何业务拒绝都不许复用它,否则告警会被正常流量淹没。
 	ErrStorage = uint32(table.CommonError_kServiceUnavailable)

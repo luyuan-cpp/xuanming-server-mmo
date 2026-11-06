@@ -46,6 +46,9 @@ message GmSanctionPlayerRequest {
     GmCurrencyGainPayload block_gain = 4;     // → PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN
     GmCurrencyGainPayload unblock_gain = 5;   // → PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
     GmCurrencyDebtPayload attach_debt = 6;    // → PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT;gm_operator 由服务端用 operator 覆盖
+    // 7 / 8 是下面的 reason / operator,oneof 成员接着取 9 起。
+    GmItemGainPayload block_item_gain = 9;    // → PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN:本玩家今后不能获得该配置的物品
+    GmItemGainPayload unblock_item_gain = 10; // → PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
   }
   string reason = 7;                    // 必填,≤ 256B,UTF-8;进审计
   string operator = 8;                  // 必填,≤ 64B,UTF-8;进审计与条目 operator_name

@@ -25,7 +25,7 @@
 | 合同自身的持久数据坏了（workflow 解不开、已发出的腿缺 outbox 行、腿状态非法、托管快照解不开、`plan` 判错、已扣出的托管转不动） | `[Commerce] Contract quarantined as manual (deterministic data error) commerce_id=… stage="原 stage": 原因` | `manual`；解不开时不改 workflow，日志里 `stage="<undecodable>"` |
 | 盘口上的对手单不可能成交（workflow 解不开、缺原归属身份、原主已换） | `[Commerce] Market counterparty quarantined as manual and taken off the book counterparty_id=… taker_id=… stage=…` | 同上 |
 | 某条腿 `APPLIED_PARTIAL` | 告警 `AssetOpAppliedPartial` | `manual` |
-| 最终发放腿没有成功（`deliver` / `return` 阶段的发放腿终局不是 APPLIED） | 无专门日志，按 op 行判断（§3.2） | `done` |
+| 最终发放腿没有成功（`deliver` / `return` 阶段的发放腿终局不是 APPLIED） | 无专门日志，按 op 行判断（§3.2） | `manual`（2026-11-05 之前是 `done`） |
 | 市场单名下有 Manual 的成交子单 | 无专门日志 | `manual` |
 | 人民币寄售退回失败 | 无专门日志 | `manual` |
 
@@ -35,7 +35,7 @@
 - 隔离之前已经排定的发放腿（`stream=4`）照常投递，因为它们来自隔离之前合法的状态。
 - 不发出、不退回任何资产，不把 op 行标为业务已消费，证据不会被清理。
 
-**原 stage 只在日志里。** 合同行的 stage 已被改成 `manual`，`workflow_proto` 是 protobuf 二进制，SQL 读不出来。收到告警后要先把日志行连同 `commerce_id` 和原 stage 记进工单，不要等日志过了保留期。
+**原 stage 记在合同里**（2026-11-05 起）：`workflow_proto` 的 `quarantine` 记下转人工之前的 stage、status、原因类别和错误原文，用 §4.2 的 `commercefix show` 查看。`workflow_proto` 是 protobuf 二进制，SQL 读不出来。解不开的 workflow 没有这份记录，日志仍是唯一来源，要把日志行连同 `commerce_id` 记进工单。
 
 ## 3. 只读取证
 
@@ -114,14 +114,33 @@ cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml resolve -op <op_id> -as
 
 只处理 PENDING、创建超过 30 分钟、反复 UNKNOWN（`attempts >= 10`）的行，`-force` 只跳过最后一条。结局只有 `applied`、`aborted`。不带 `-txlog-checked` 时只打印核对清单。写库要带写者身份（`authoritysql.LoadWriterConfig` 读的环境变量），和服务进程同一套；维护排空期间不要运行。终结之后合同下一轮推进按结局继续：`aborted` 走与 scene 判拒相同的补偿，实例扣款判 `applied` 时没有托管原件，合同隔离为 Manual。
 
-**目前没有补发、退回或恢复推进的管理入口。** 入口落地前按这个顺序处理：
+转人工的合同用 `go/trade/cmd/commercefix` 处理（2026-11-05 写，未编译，未演练）。三种动作的语义和拒绝条件见设计 [§15.7](../design/jubaozhai-market.md)：
 
-1. 取证：§3.1 的合同行、§3.2 的全部 op 行、隔离日志（原 stage 和原因）。
-2. 冻结现场：确认在途扣款都已有结局（§3.2 里 stream=3 没有 PENDING）。
-3. 登记工单：写上 `commerce_id`、`kind`、原 stage、每条 op 的 `op_id` / `stream` / `status`、参与者 `player_id`。
-4. 等管理入口上线后按工单补发或退回。
+- `resume`：转人工的原因已经消除，回到原阶段由引擎重新判定。
+- `reissue`：最终发放没到账，原样补发一条。
+- `refund`：还没有任何发放到账，把托管原样退回给扣出它的人，合同按取消结案。
 
-资产没有丢：已经扣出的托管仍记在合同和 op 行里，只是暂时没有自动出口。
+```bash
+cd go/trade && go run ./cmd/commercefix -f etc/trade.yaml list
+```
+
+```bash
+cd go/trade && go run ./cmd/commercefix -f etc/trade.yaml show -commerce <commerce_id>
+```
+
+```bash
+cd go/trade && go run ./cmd/commercefix -f etc/trade.yaml resolve -commerce <commerce_id> -action refund -expect-version <show 里的版本> -operator <名字> -reason <工单号和核对结论> -confirm <commerce_id>
+```
+
+处理顺序：
+
+1. 取证：`show` 的转人工记录、腿和每种动作能否处理；§3.2 的全部 op 行。
+2. 在途的腿等结局；卡死的单条指令先用上面的 `assetopfix` 终结。`show` 里还有在途的腿时三种动作都会拒绝。
+3. 不带 `-execute` 跑一次 `resolve`，核对计划里的新腿和被取代的腿，把 `[CommerceManual]` 行贴进工单。
+4. 加 `-execute` 再跑一次。版本已变（退出码 3）说明合同被处理或推进过，重新 `show` 再决定。
+5. 下一轮引擎给新腿发号、投递。用 §3.2 的查询确认新 op 行出现并到账，合同结案。
+
+工具只改合同行，不碰 op 行，不发资产，写库要带写者身份，维护排空期间不要运行。部分发放、竞价与拍品互相引用、已部分成交的市场单、原主已换的合同不能用工具处理，按工单人工判定。
 
 ### 4.3 角色冲突
 
@@ -147,6 +166,6 @@ cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml resolve -op <op_id> -as
 
 ## 6. 待补
 
-- 管理入口：Manual 合同的列表、恢复推进、补发和退回。需要另立设计，覆盖鉴权、操作留痕，以及沿用原腿和原 seq 的幂等。卡死指令的终结已有工具（§4.2）。
-- 把原 stage 和隔离原因持久化进合同。目前只在日志里，要改 `TradeCommerceWorkflow`。
+- 管理后台和审批流：现在只有命令行（§4.2），没有 RPC。
+- 部分发放、竞价与拍品互相引用、已部分成交的市场单、原主已换：没有工具出口，见设计 §15.7 残余。
 - Java 版对齐，见设计 §15.3「2026-10-22 修复」的残余项。

@@ -1,19 +1,17 @@
 # SceneManager 访问 Agones 所需的最小权限。
 #
-# 只在 `-SceneOrchestrator agones` 且 scene_manager_service.yaml 里
-# Agones.Enabled=true 时才需要 apply。默认部署用不到。
+# 只在 scene_manager 接管 Agones 容量时需要:`-SceneOrchestrator agones -AgonesHighDensity`
+# (k8s_deploy.ps1 Test-SceneManagerAgonesEnabled)。这时 k8s_deploy.ps1 在 scene-manager 的
+# Deployment 之前把本文件 apply 进 zone 命名空间,并给 Pod 模板写上
+# serviceAccountName: scene-manager;不接管时不挂这个身份,并删掉以前留下的这三个对象。
+# 默认部署用不到。
 #
 # 刻意**不**给 cluster-admin,也刻意全部是 namespace 级(Role 而不是
 # ClusterRole):Fleet 和 GameServer 都在 zone 命名空间里,SceneManager
 # 没有任何理由能看到别的命名空间。
 #
-# 用法(namespace 换成对应 zone 的命名空间):
-#   kubectl -n mmorpg-zone-<zone> apply -f deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml
-#
-# 注意:ServiceAccount 名字必须与 scene-manager Deployment 的
-# spec.template.spec.serviceAccountName 一致。默认部署没有显式指定
-# ServiceAccount(用的是 default),启用 Agones 时应当改成这里的
-# scene-manager,避免把权限挂到整个命名空间的 default SA 上。
+# 注意:ServiceAccount 名字必须与 k8s_deploy.ps1 注入的 serviceAccountName 一致;
+# 不用命名空间的 default SA,免得把权限挂到整个命名空间上。
 ---
 apiVersion: v1
 kind: ServiceAccount

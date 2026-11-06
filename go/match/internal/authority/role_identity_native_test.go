@@ -67,7 +67,7 @@ func nativeMatchSnapshot(t *testing.T, s *Store, ctx context.Context) map[string
 	out := make(map[string]string)
 	for table, order := range map[string]string{
 		"match_network_profile": "player_id", "match_authority_ticket": "player_id",
-		"match_ticket_region": "player_id,physical_region", "match_join_intent": "player_id,request_high,request_low",
+		"match_join_intent":   "player_id,request_high,request_low",
 		"match_direct_intent": "kind,owner_id,request_high,request_low", "match_formation": "battle_id",
 		"match_challenge_invitation": "challenge_id",
 	} {

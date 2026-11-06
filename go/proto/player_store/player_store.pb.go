@@ -13,6 +13,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	base "proto/common/base"
+	_ "proto/db"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -26,35 +27,56 @@ const (
 )
 
 // player_store 表一个玩家一组行。kind 0 是写权行,其余每个 kind 一行,payload 是
-// player_database 按字段投影出来的一段序列化结果。分组由 proto 字段选项声明(§1.1)。
+// player_database 按字段投影出来的一段序列化结果。字段属于哪一行由字段选项 OptionPersistGroup 声明,
+// 每一行怎么存由这里的 OptionPersistRowSavePolicy 声明(规格 §1.1)。两处漏标 scene 都拒绝启动。
+//
+// 分行只按「大小 × 变化频率 × 是否一起变」分,是性能决定;一致性由「一次存盘的所有脏行同事务、同一个整笔序号」保证,
+// 与分行无关(规格 §1.1)。所以 I3 这类「必须同一次提交」的不变量不要求同一行。
+//
+// 1、2 是 2026-11-05 退役的 HOT、ASSET:字段拆到了 CHARACTER、WALLET、BAG、LOCATION、PROFILE。退役号不复用,
+// 旧库残留的 1、2 行按未知 kind 拒绝加载,不会被当成新行误读(项目未上线,遇到就清库)。
+// 新加一行取下一个空闲号,不回填空号。
 type PlayerStoreKind int32
 
 const (
-	PlayerStoreKind_PLAYER_STORE_KIND_OWNER   PlayerStoreKind = 0 // 写权行,payload 恒为空
-	PlayerStoreKind_PLAYER_STORE_KIND_HOT     PlayerStoreKind = 1 // 位置、等级与频繁变化的数值
-	PlayerStoreKind_PLAYER_STORE_KIND_ASSET   PlayerStoreKind = 2 // 货币、背包与账本
-	PlayerStoreKind_PLAYER_STORE_KIND_GROWTH  PlayerStoreKind = 3 // 技能、属性、宠物、任务
-	PlayerStoreKind_PLAYER_STORE_KIND_PROFILE PlayerStoreKind = 4 // 身份与其余低频字段
-	PlayerStoreKind_PLAYER_STORE_KIND_LEGACY1 PlayerStoreKind = 5 // player_database_1 整个消息
+	PlayerStoreKind_PLAYER_STORE_KIND_OWNER PlayerStoreKind = 0 // 写权行,payload 恒为空
+	// 技能、加点、宠物、任务。中等大小,随进度变
+	PlayerStoreKind_PLAYER_STORE_KIND_GROWTH PlayerStoreKind = 3
+	// 职业、注册时间、名字副本、外观、性别、近期战斗结果、物品获取封禁、压测探针。都很小,大多建角后不变
+	PlayerStoreKind_PLAYER_STORE_KIND_PROFILE PlayerStoreKind = 4
+	// player_database_1 整个消息,随 player_database_1 一起删除(规格 §1.1「第二批」)
+	PlayerStoreKind_PLAYER_STORE_KIND_LEGACY1 PlayerStoreKind = 5
+	// 等级、基础属性与当前血蓝。小,战斗和升级时变
+	PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER PlayerStoreKind = 6
+	// 货币、资产通道账本、收件箱账本、神秘商人限购。小,任何经济行为都会改它
+	PlayerStoreKind_PLAYER_STORE_KIND_WALLET PlayerStoreKind = 7
+	// 背包道具。最大的一行,只在道具操作时变;和钱包分开,改几个铜板不用重写整个背包
+	PlayerStoreKind_PLAYER_STORE_KIND_BAG PlayerStoreKind = 8
+	// 位置。一直在变、丢了不心疼:只顺带写,不单独触发存盘
+	PlayerStoreKind_PLAYER_STORE_KIND_LOCATION PlayerStoreKind = 9
 )
 
 // Enum value maps for PlayerStoreKind.
 var (
 	PlayerStoreKind_name = map[int32]string{
 		0: "PLAYER_STORE_KIND_OWNER",
-		1: "PLAYER_STORE_KIND_HOT",
-		2: "PLAYER_STORE_KIND_ASSET",
 		3: "PLAYER_STORE_KIND_GROWTH",
 		4: "PLAYER_STORE_KIND_PROFILE",
 		5: "PLAYER_STORE_KIND_LEGACY1",
+		6: "PLAYER_STORE_KIND_CHARACTER",
+		7: "PLAYER_STORE_KIND_WALLET",
+		8: "PLAYER_STORE_KIND_BAG",
+		9: "PLAYER_STORE_KIND_LOCATION",
 	}
 	PlayerStoreKind_value = map[string]int32{
-		"PLAYER_STORE_KIND_OWNER":   0,
-		"PLAYER_STORE_KIND_HOT":     1,
-		"PLAYER_STORE_KIND_ASSET":   2,
-		"PLAYER_STORE_KIND_GROWTH":  3,
-		"PLAYER_STORE_KIND_PROFILE": 4,
-		"PLAYER_STORE_KIND_LEGACY1": 5,
+		"PLAYER_STORE_KIND_OWNER":     0,
+		"PLAYER_STORE_KIND_GROWTH":    3,
+		"PLAYER_STORE_KIND_PROFILE":   4,
+		"PLAYER_STORE_KIND_LEGACY1":   5,
+		"PLAYER_STORE_KIND_CHARACTER": 6,
+		"PLAYER_STORE_KIND_WALLET":    7,
+		"PLAYER_STORE_KIND_BAG":       8,
+		"PLAYER_STORE_KIND_LOCATION":  9,
 	}
 )
 
@@ -607,7 +629,7 @@ var File_proto_player_store_player_store_proto protoreflect.FileDescriptor
 
 const file_proto_player_store_player_store_proto_rawDesc = "" +
 	"\n" +
-	"%proto/player_store/player_store.proto\x12\vplayerstore\x1a)proto/common/base/service_call_auth.proto\"\\\n" +
+	"%proto/player_store/player_store.proto\x12\vplayerstore\x1a)proto/common/base/service_call_auth.proto\x1a\x1bproto/db/proto_option.proto\"\\\n" +
 	"\x0ePlayerStoreRow\x120\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1c.playerstore.PlayerStoreKindR\x04kind\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\"\xc8\x02\n" +
@@ -647,14 +669,16 @@ const file_proto_player_store_player_store_proto_rawDesc = "" +
 	"\bsave_seq\x18\x04 \x01(\x04R\asaveSeq\x12\x1d\n" +
 	"\n" +
 	"schema_gen\x18\x05 \x01(\rR\tschemaGen\x12/\n" +
-	"\x04rows\x18\x06 \x03(\v2\x1b.playerstore.PlayerStoreRowR\x04rows*\xc2\x01\n" +
+	"\x04rows\x18\x06 \x03(\v2\x1b.playerstore.PlayerStoreRowR\x04rows*\xf1\x02\n" +
 	"\x0fPlayerStoreKind\x12\x1b\n" +
-	"\x17PLAYER_STORE_KIND_OWNER\x10\x00\x12\x19\n" +
-	"\x15PLAYER_STORE_KIND_HOT\x10\x01\x12\x1b\n" +
-	"\x17PLAYER_STORE_KIND_ASSET\x10\x02\x12\x1c\n" +
-	"\x18PLAYER_STORE_KIND_GROWTH\x10\x03\x12\x1d\n" +
-	"\x19PLAYER_STORE_KIND_PROFILE\x10\x04\x12\x1d\n" +
-	"\x19PLAYER_STORE_KIND_LEGACY1\x10\x05*\xe7\x02\n" +
+	"\x17PLAYER_STORE_KIND_OWNER\x10\x00\x12#\n" +
+	"\x18PLAYER_STORE_KIND_GROWTH\x10\x03\x1a\x05\x80\xe6\xd5\x02\x01\x12$\n" +
+	"\x19PLAYER_STORE_KIND_PROFILE\x10\x04\x1a\x05\x80\xe6\xd5\x02\x01\x12$\n" +
+	"\x19PLAYER_STORE_KIND_LEGACY1\x10\x05\x1a\x05\x80\xe6\xd5\x02\x01\x12&\n" +
+	"\x1bPLAYER_STORE_KIND_CHARACTER\x10\x06\x1a\x05\x80\xe6\xd5\x02\x01\x12#\n" +
+	"\x18PLAYER_STORE_KIND_WALLET\x10\a\x1a\x05\x80\xe6\xd5\x02\x01\x12 \n" +
+	"\x15PLAYER_STORE_KIND_BAG\x10\b\x1a\x05\x80\xe6\xd5\x02\x01\x12%\n" +
+	"\x1aPLAYER_STORE_KIND_LOCATION\x10\t\x1a\x05\x80\xe6\xd5\x02\x02\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02*\x15PLAYER_STORE_KIND_HOT*\x17PLAYER_STORE_KIND_ASSET*\xe7\x02\n" +
 	"\x10SavePlayerResult\x12\"\n" +
 	"\x1eSAVE_PLAYER_RESULT_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SAVE_PLAYER_COMMITTED\x10\x01\x12\x15\n" +

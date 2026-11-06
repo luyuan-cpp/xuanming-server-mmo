@@ -139,22 +139,23 @@ func TestDeadNodeReconcile_ScopeIsDeathTimeSnapshot(t *testing.T) {
 	requireActiveInstance(t, sc, takeoverZone, lateScene, true)
 }
 
-// 任务表里解析不了的成员(不是本代码写的)对不上任何节点:摘掉,别的任务照常处理。
+// 任务表里解析不了的成员(不是本代码写的)对不上任何节点:摘掉,别的任务照常处理。zone 段不是本 zone 的成员同样摘掉:
+// 任务表按 zone,一个 zone 的表只可能被那个 zone 的领导者推进(control-plane-zone-scoping-20261105.md §4.2)。
 func TestDeadNodeReconcile_DropsMalformedTask(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	c := newTakeoverCase(t, sc, mr, "8996", 89961)
 	c.declareDead(t)
 	c.elapseBarrier(t)
-	for _, bad := range []string{"not-a-task", "x/8996", "1/"} {
-		_, err := mr.ZAdd(deadNodeReconcileTasksKey, 1, bad)
+	for _, bad := range []string{"not-a-task", "x/8996", "1/", "2/8996"} {
+		_, err := mr.ZAdd(deadNodeReconcileTasksKey(testZoneId), 1, bad)
 		require.NoError(t, err)
 	}
 
 	assert.Equal(t, 1, c.drain())
-	tasks, err := mr.ZMembers(deadNodeReconcileTasksKey)
+	tasks, err := mr.ZMembers(deadNodeReconcileTasksKey(testZoneId))
 	if !errors.Is(err, miniredis.ErrKeyNotFound) {
 		require.NoError(t, err)
-		assert.Empty(t, tasks, "解析不了的成员必须被摘掉")
+		assert.Empty(t, tasks, "解析不了的成员、别的 zone 的成员都必须被摘掉
 	}
 	c.requireCleanedUp(t, "别的任务照常处理")
 }

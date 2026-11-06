@@ -23,17 +23,20 @@ import (
 const subsystem = "client_rpc_router"
 
 // Forward 终态(outcome label 取值,低基数)。
+//
+// no_target 对全局类型指「会话轨道可用的实例」:stable 会话只算 stable 实例(发布轨道设计 §2.4)。
 const (
-	OutcomeOK                = "ok"                  // 目标正常响应,原始字节已回包
-	OutcomeMissingSession    = "missing_session"     // 缺 x-session-detail-bin,gRPC UNAUTHENTICATED
-	OutcomeInvalidRequest    = "invalid_request"     // ForwardRequest.request 为空
-	OutcomeUnknownMessage    = "unknown_message"     // 消息号不在路由表
-	OutcomeNotClientProtocol = "not_client_protocol" // 所属 service 不是客户端协议
-	OutcomeBattleRejected    = "battle_rejected"     // 目标是 Battle,战斗只走直连(D33)
-	OutcomeNoTarget          = "no_target"           // 目标类型没有可用实例(zone-scoped 时指同 zone 内)
-	OutcomeDialError         = "dial_error"          // 建目标连接失败
-	OutcomeUpstreamTimeout   = "upstream_timeout"    // 目标在 ForwardTimeoutMs 内未响应
-	OutcomeUpstreamError     = "upstream_error"      // 目标返回其它 gRPC 错误
+	OutcomeOK                  = "ok"                    // 目标正常响应,原始字节已回包
+	OutcomeMissingSession      = "missing_session"       // 缺 x-session-detail-bin,gRPC UNAUTHENTICATED
+	OutcomeInvalidRequest      = "invalid_request"       // ForwardRequest.request 为空
+	OutcomeUnknownMessage      = "unknown_message"       // 消息号不在路由表
+	OutcomeNotClientProtocol   = "not_client_protocol"   // 所属 service 不是客户端协议
+	OutcomeBattleRejected      = "battle_rejected"       // 目标是 Battle,战斗只走直连(D33)
+	OutcomeInvalidReleaseTrack = "invalid_release_track" // gate 自报的 release_track 不是空串 / stable / canary(契约违例)
+	OutcomeNoTarget            = "no_target"             // 目标类型没有可用实例(zone-scoped 时指同 zone 内)
+	OutcomeDialError           = "dial_error"            // 建目标连接失败
+	OutcomeUpstreamTimeout     = "upstream_timeout"      // 目标在 ForwardTimeoutMs 内未响应
+	OutcomeUpstreamError       = "upstream_error"        // 目标返回其它 gRPC 错误
 )
 
 // UnknownMessageIdLabel 是不在路由表里的消息号统一使用的 label 值。
@@ -43,7 +46,7 @@ var (
 	forwardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "forward_total",
-		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|no_target|dial_error|upstream_timeout|upstream_error).",
+		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|invalid_release_track|no_target|dial_error|upstream_timeout|upstream_error).",
 	}, []string{"message_id", "outcome"})
 
 	forwardSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{

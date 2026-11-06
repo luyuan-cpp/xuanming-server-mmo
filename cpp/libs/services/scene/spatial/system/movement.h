@@ -38,22 +38,21 @@ public:
     // 把 entity 此刻的权威位置 / 速度广播成 ActorMoveS2C。这是别的玩家"看到他在走 / 停下"的唯一通道:
     // 客户端只按 ActorMoveS2C 驱动远端角色的插值与外推(ActorBaseAttributesS2C 那一路的移动脏位不带
     // entity_id,观察者无从归属,客户端也没有接)。
-    // 接收者 = 互相可见的玩家:在 entity 的兴趣表里、对方的兴趣表里也有 entity、且对方有网关会话。
-    //   - 只按"我的兴趣表"发会把坐标发给看不到我的人(隐身时对方表里没有我);
-    //   - 严格的"谁看得到我"要扫当前格及邻格全部实体,这里是每条移动上报都走的路径,扫不起。
-    //   已知缺口:对方看得到我、但我的兴趣表因容量已满没有收下对方时,对方收不到我的移动
-    //   (与 ActorStateAttributeSyncSystem 同一个口径上的既有缺口)。
-    // 调用时机:服务器接受一条移动上报之后,以及服务器自己把速度清零的时刻(撞墙、战斗 / 冻结中的停步、
-    // 离场前停步)—— 后一类不广播的话,观察者会按最后一次上报的速度一直外推下去。
-    // 没有 Transform、兴趣表为空时直接返回。只读组件、不增删组件,可以在 view 遍历中调用。
+    // 接收者 = 客户端正在显示 entity 的玩家:AOI 反向索引(AoiWatchersComp)中可见、且有网关会话的观察者。
+    // 关注是单向的(docs/design/aoi-directed-interest.md):接收与否只看对方是否关注并显示我,
+    // 与我是否看得见对方无关;网格范围外的显式关注者同样收到。隐身期间没有侦测授权的观察者不在名单里。
+    // 调用时机:服务器接受一条移动上报之后,服务器自己把速度清零的时刻(撞墙、战斗 / 冻结中的停步、
+    // 离场前停步)—— 后一类不广播的话,观察者会按最后一次上报的速度一直外推下去 —— 以及同场景瞬移之后。
+    // 没有观察者或没有 Transform 时直接返回。只读组件、不增删组件,可以在 view 遍历中调用。
     static void BroadcastMove(entt::entity entity);
 
     // 把实体瞬移到**同一场景内**的另一点(服务器权威)。调用方保证 location 是该场景导航上的合法点。
     //   1. 写 Transform、清零 Velocity(否则 Update 会从新位置按瞬移前的速度继续积分);
     //   2. 挂 TeleportSettleComp,挡住瞬移之前发出的移动上报(见该组件注释);
     //   3. 实体是玩家时给它自己的客户端发 TeleportS2C(客户端收到即吸附);
-    //   4. AoiSystem::ResetEntityVisibility:旧位置的观察者收到销毁,新位置的可见性在下一次
-    //      AoiSystem::Update 重建。
+    //   4. AoiSystem::ResetEntityVisibility:旧位置的空间观察者收到销毁,新位置的可见性在下一次
+    //      AoiSystem::Update 重建;
+    //   5. BroadcastMove:仍显示它的显式关注者(网格范围外)立即收到新位置。
     // 没有 Transform 的实体直接返回。只能在 scene 节点 loop 线程调用。
     static void TeleportWithinScene(entt::entity entity, const Vector3& location, const Rotation& rotation,
                                     uint32_t reason);

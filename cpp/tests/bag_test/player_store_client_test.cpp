@@ -7,6 +7,8 @@
 
 #include <gtest/gtest.h>
 
+#include "core/system/scene_task_scope.h"
+#include "muduo/net/EventLoop.h"
 #include "player/system/player_store_client.h"
 #include "player/system/player_store_projection.h"
 
@@ -43,6 +45,8 @@ namespace
 
     struct Fixture
     {
+        muduo::net::EventLoop loop;
+        SceneTaskScope tasks{loop};
         struct Sent
         {
             playerstore::SavePlayerRequest request;
@@ -870,6 +874,50 @@ TEST(PlayerStoreClientTest, UnsettledPlayersListsOnlyPlayersWithWork)
 // ── 认领(规格 §3)────────────────────────────────────────────────────────
 
 // 播种用库里的原字节:没变化的行不写,变了的行带着认领返回的落点、代次发出去。
+TEST(PlayerStoreClientTest, FinalStopKeepsAcceptedSaveAndClaimUnsettled)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("old")));
+    bool saved = false;
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAccepted,
+        client.Submit(kPlayer, Rows("new"), {}, [&](const PlayerStoreClient::SaveResult&) { saved = true; }));
+    client.RequestClaim(kPlayer + 1);
+    ASSERT_EQ(1u, f.sent.size());
+    ASSERT_EQ(1u, f.sentClaims.size());
+
+    f.tasks.StopAll();
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED, kEpoch, f.sent.front().request.save_seq());
+    f.ReplyClaimed(1, kEpoch, 1, Rows("claimed"));
+    EXPECT_TRUE(client.HasUnsettled(kPlayer));
+    EXPECT_TRUE(client.HasPendingClaim(kPlayer + 1));
+    EXPECT_FALSE(saved);
+    EXPECT_TRUE(f.claimed.empty());
+}
+
+TEST(PlayerStoreClientTest, InlineReplyIsDeliveredAfterSendReturns)
+{
+    Fixture f;
+    bool saved = false;
+    f.options.send = [&](const playerstore::SavePlayerRequest& request, PlayerStoreClient::SendDone done) {
+        playerstore::SavePlayerResponse reply;
+        reply.set_result(playerstore::SAVE_PLAYER_COMMITTED);
+        done(true, &reply);
+        EXPECT_FALSE(saved);
+        EXPECT_EQ(kPlayer, request.player_id());
+        return true;
+    };
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("old")));
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAccepted,
+        client.Submit(kPlayer, Rows("new"), {}, [&](const PlayerStoreClient::SaveResult& result) {
+            EXPECT_EQ(PlayerStoreClient::SaveStatus::kCommitted, result.status);
+            saved = true;
+        }));
+    EXPECT_TRUE(saved);
+    EXPECT_FALSE(client.HasUnsettled(kPlayer));
+}
+
 TEST(PlayerStoreClientTest, ClaimSeedsConfirmedWithRawBytes)
 {
     Fixture f;

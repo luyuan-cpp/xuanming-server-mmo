@@ -319,7 +319,10 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LoginPreGateClient interface {
-	// Login picks the least-loaded Gate for the given zone, signs a one-time
+	// Login picks a Gate for the given zone (two random choices on the reported
+	// player counts, skipping gates that stopped rewriting their registration or
+	// sit at 90% of their max_connections; see
+	// docs/design/gate-load-balancing-design.md), signs a one-time
 	// HMAC token. Client TCP-connects to the assigned gate and sends the
 	// token as a ClientTokenVerifyRequest (first message after connect).
 	//
@@ -362,7 +365,10 @@ func (c *loginPreGateClient) QueryQueueStatus(ctx context.Context, in *QueryQueu
 // All implementations must embed UnimplementedLoginPreGateServer
 // for forward compatibility.
 type LoginPreGateServer interface {
-	// Login picks the least-loaded Gate for the given zone, signs a one-time
+	// Login picks a Gate for the given zone (two random choices on the reported
+	// player counts, skipping gates that stopped rewriting their registration or
+	// sit at 90% of their max_connections; see
+	// docs/design/gate-load-balancing-design.md), signs a one-time
 	// HMAC token. Client TCP-connects to the assigned gate and sends the
 	// token as a ClientTokenVerifyRequest (first message after connect).
 	//

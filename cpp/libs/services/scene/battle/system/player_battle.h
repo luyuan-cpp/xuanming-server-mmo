@@ -9,6 +9,8 @@
 //   - ApplyInboxSettlement / CompleteInboxSettlement:结算的唯一应用者(宪法 §7 新增不变量 4)。结算只走一条路:
 //     battle 提交 match SQL,match 发件箱投 player_inbox,这里应用后随存档提交,确认之后才解冻放锁
 //     (player-data-tidb-scaling-plan.md §5.4);
+//   - GetRecentBattleResults / AckBattleResults:本人近期战斗结果的查询与已读确认,结果随结算同一次存档提交
+//     (docs/design/battle-result-recovery.md);
 //   - OnPlayerEnterScene:登录/重连后置钩子(按锁重建冻结,再给战斗中换会话的客户端推重连提示);
 //   - reaper:低频扫描 InBattleComp,PREPARING 看 prepare_deadline_ms、FIGHTING 看 FreezeExpiresAtMs,
 //     过期即作废解冻(§3.2 补偿矩阵)。
@@ -59,6 +61,9 @@ class CancelBattlePrepareRequest;
 class BattleConfirmedEvent;
 class BattleSettlementData;
 class BattlePlayerSnapshot;
+// 近期战斗结果的客户端协议(proto/scene/player_battle_result.proto,无 package → 全局命名空间)。
+class GetRecentBattleResultsResponse;
+class AckBattleResultsRequest;
 struct PlayerInboxExecResult;
 
 class PlayerBattleSystem
@@ -70,7 +75,20 @@ public:
 	// 仅在原完整快照经同E/q双SQL ACK确认后调用(PlayerInboxSystem);不重复效果,不动另一局冻结。
 	// 这是结算路径上**唯一**的解冻放锁点:条件删 battle:lock + ctx、摘同一局的 InBattleComp、推 BattleEndS2C。
 	// 组件已不在(reaper 已判作废 / 实体是新建的)时照样条件删锁与推面板,锁确实删掉了就补一次组队跟随。
+	// 同时公开这一局的近期战斗结果(结果在应用时已随同一次存档写进去,确认提交之前不对客户端公开)。
 	static bool CompleteInboxSettlement(entt::entity player, const std::string& payload);
+
+	// ── 近期战斗结果(docs/design/battle-result-recovery.md)──────────────────────────────
+	// 结果在 ApplySettlementToEntity 的同一帧写进持久组件 PlayerBattleResultComp(随同一次存档提交),
+	// CompleteInboxSettlement 之后才对客户端公开。两个入口都只认会话里的本人(player 由会话解析),只在 loop 线程调用。
+	//
+	// 查询:按 result_seq 降序填至多 10 条已公开的结果。只读,不改变实体的组件集合。
+	// 返回 kSuccess,或 kEntityIsNull(实体无效)/ kServiceUnavailable(结果组件缺失 = 加载不变量被破坏,记 ERROR)。
+	static uint32_t GetRecentBattleResults(entt::entity player, ::GetRecentBattleResultsResponse& response);
+	// 确认已展示:把请求里已公开的局标成已读;不认识的局忽略;幂等。不触发存盘,已读标记随下一次存盘落地。
+	// 返回 kSuccess,或 kArraySizeTooLargeInMessage(超过 10 个 battle_id)/ kFeatureUnavailable(冻结、交接、
+	// 退出中或没有归属围栏:本节点此刻不改这名玩家的存档)/ kEntityIsNull / kServiceUnavailable(同上)。
+	static uint32_t AckBattleResults(entt::entity player, const ::AckBattleResultsRequest& request);
 	// match -> scene:冻结玩家并返回战斗快照。
 	// 校验:在线(实体在本节点且有 gate 会话)/ 无 InBattleComp / 无换图在途
 	// (PlayerLifecycleSystem::IsSceneChangeBusy:交接冻结、普通 EnterScene / 镜像建场景应答未回等,回 kFeatureUnavailable)。
@@ -173,8 +191,11 @@ public:
 	// 但必须在排它的同一线程上调用(实体注册表、续期在途登记都是 thread_local)。
 	// 注意:续期(renew_lock)链从首发起就登记为在途,直到链走到终态才摘 —— 注入实现若丢弃 fire 不调用,
 	// 同 (player_id, battle_id) 之后的续期首发会一直让路。传 nullptr 恢复为 EventLoop::runAfter。
-	using LockRetrySchedulerFn = void (*)(uint64_t delayMs, std::function<void()> fire);
+	using LockRetrySchedulerFn = bool (*)(uint64_t delayMs, std::function<void()> fire);
 	static void SetLockRetrySchedulerForTest(LockRetrySchedulerFn fn);
+    // 与生产 Lua 发送同一接缝。返回 REDIS_OK 才承诺回调，回复仅在回调期间借用。
+    using LockScriptSender = int (*)(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)>);
+    static void SetLockScriptSenderForTest(LockScriptSender fn);
 	// battle:lock 的 EX 在冻结到期时刻(FreezeExpiresAtMs:PREPARING 是备战期限,FIGHTING 是 deadline + 宽限 + 余量)
 	// 之上的余量(秒):锁必须活得比 InBattleComp 久,避免"组件还在、锁先没了"让 match 放进第二场,
 	// 也保证宽限期内重登仍能按锁重建冻结。
@@ -187,6 +208,8 @@ private:
 	static bool BuildBattleSnapshot(entt::entity player, ::BattlePlayerSnapshot& snapshot, uint32_t& errorTipId);
 
 	// 把结算终值落到玩家实体。true = 整笔已应用;false = 整笔零副作用,调用方按 DEFER 处理。
+	// 「整笔已应用」含按规则跳过的子效果,跳过的项逐项记日志、其余照常:被获得封禁的币种与掉落(封禁是终局业务决定,
+	// 解封后不补发)、配置行已删的物品、已不可用的宠物效果。
 	// 去重不在这里:ApplyInboxSettlement 由收件箱状态机驱动,同一条目按永久域水位只执行一次。
 	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement);
 

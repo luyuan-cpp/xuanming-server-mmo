@@ -37,13 +37,13 @@ func New(db *sql.DB, boardIDs, settlementIDs, rewardIDs NextID, itemExists func(
 	return &Repo{db: db, boardIDs: boardIDs, settlementIDs: settlementIDs, rewardIDs: rewardIDs, now: time.Now, itemExists: itemExists}
 }
 
-const boardColumns = "board_id,board_type,scope,scope_id,period,generation,producer,source_epoch,committed_cursor,ascending,state,settlement_id,open_request_id,open_request_hash,created_ms,sealed_ms,deleted_ms"
+const boardColumns = "board_id,board_type,scope,scope_id,period,generation,producer,source_epoch,committed_cursor,ascending,state,settlement_id,open_request_id,open_request_hash,created_ms,sealed_ms,deleted_ms,entries"
 
 type scanner interface{ Scan(...any) error }
 
 func scanBoard(row scanner) (*rankpb.RankBoardRecord, error) {
 	b := &rankpb.RankBoardRecord{}
-	err := row.Scan(&b.BoardId, &b.BoardType, &b.Scope, &b.ScopeId, &b.Period, &b.Generation, &b.Producer, &b.SourceEpoch, &b.CommittedCursor, &b.Ascending, &b.State, &b.SettlementId, &b.OpenRequestId, &b.OpenRequestHash, &b.CreatedMs, &b.SealedMs, &b.DeletedMs)
+	err := row.Scan(&b.BoardId, &b.BoardType, &b.Scope, &b.ScopeId, &b.Period, &b.Generation, &b.Producer, &b.SourceEpoch, &b.CommittedCursor, &b.Ascending, &b.State, &b.SettlementId, &b.OpenRequestId, &b.OpenRequestHash, &b.CreatedMs, &b.SealedMs, &b.DeletedMs, &b.Entries)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -96,7 +96,7 @@ func (r *Repo) Open(ctx context.Context, caller string, in *rankpb.OpenRankGener
 	}
 	now := uint64(r.now().UnixMilli())
 	b := in.Board
-	_, err = r.db.ExecContext(ctx, "INSERT INTO rank_board ("+boardColumns+") VALUES (?,?,?,?,?,?,?,?,0,?,1,0,?,?,?,0,0)", id, b.BoardType, uint32(b.Scope), b.ScopeId, b.Period, b.Generation, caller, in.SourceEpoch, boolInt(in.Ascending), in.RequestId, digest, now)
+	_, err = r.db.ExecContext(ctx, "INSERT INTO rank_board ("+boardColumns+") VALUES (?,?,?,?,?,?,?,?,0,?,1,0,?,?,?,0,0,0)", id, b.BoardType, uint32(b.Scope), b.ScopeId, b.Period, b.Generation, caller, in.SourceEpoch, boolInt(in.Ascending), in.RequestId, digest, now)
 	if err == nil {
 		return &rankpb.OpenRankGenerationResponse{BoardId: id}, nil
 	}
@@ -181,45 +181,53 @@ func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankS
 		if err != nil {
 			return err
 		}
+		// 一批最多 128 个实体:整批一次读、一次写(2026-11-05,缺口清单第 17 条)。以前逐个实体一读一写,一批要两百多次往返,
+		// 全都压在上面那把榜行锁里,同一张榜的写入吞吐被往返时延封顶。合并规则不变,只是改在内存里逐个算。
+		existing, err := loadScores(ctx, tx, in.BoardId, in.Generation, entries, removed)
+		if err != nil {
+			return err
+		}
+		writes := make([]scoreWrite, 0, len(entries))
+		var inserted uint64
 		for _, entry := range entries {
 			// 移除在这一代内是终局。这一批照样推进游标,其他实体照常写。
 			if removed[entry.EntityId] {
 				continue
 			}
-			var old int64
-			var achieved, version uint64
-			err := tx.QueryRowContext(ctx, "SELECT score,achieved_ms,score_version FROM rank_score WHERE board_id=? AND generation=? AND entity_id=?", in.BoardId, in.Generation, entry.EntityId).Scan(&old, &achieved, &version)
-			found := err == nil
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
+			old, found := existing[entry.EntityId]
 			// 不同片的批次到达顺序不代表发生顺序:带版本时旧版本迟到直接跳过,否则榜分会退回旧值。
-			if found && entry.ScoreVersion != 0 && entry.ScoreVersion <= version {
+			if found && entry.ScoreVersion != 0 && entry.ScoreVersion <= old.version {
 				continue
 			}
 			next := entry.Score
 			if in.Mode == rankpb.RankSubmitMode_RANK_SUBMIT_INCREMENT {
-				if (next > 0 && old > math.MaxInt64-next) || (next < 0 && old < math.MinInt64-next) {
+				if (next > 0 && old.score > math.MaxInt64-next) || (next < 0 && old.score < math.MinInt64-next) {
 					return ErrInvalid
 				}
-				next = old + next
+				next = old.score + next
 			}
-			if in.Mode == rankpb.RankSubmitMode_RANK_SUBMIT_SET_IF_HIGHER && found && ((b.Ascending == 0 && next <= old) || (b.Ascending != 0 && next >= old)) {
+			if in.Mode == rankpb.RankSubmitMode_RANK_SUBMIT_SET_IF_HIGHER && found && ((b.Ascending == 0 && next <= old.score) || (b.Ascending != 0 && next >= old.score)) {
 				continue
 			}
 			// 带版本的生产者自己定 achieved_ms(分数最后一次变化的时刻),和到达顺序无关;不带版本的按「分数变了才更新」。
-			if !found || next != old || entry.ScoreVersion != 0 {
+			achieved := old.achieved
+			if !found || next != old.score || entry.ScoreVersion != 0 {
 				achieved = entry.AchievedMs
 			}
-			if _, err := tx.ExecContext(ctx, "INSERT INTO rank_score (board_id,generation,entity_id,score,achieved_ms,source_cursor,score_version) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE score=VALUES(score),achieved_ms=VALUES(achieved_ms),source_cursor=VALUES(source_cursor),score_version=VALUES(score_version)", in.BoardId, in.Generation, entry.EntityId, next, achieved, in.SourceCursor, entry.ScoreVersion); err != nil {
-				return err
+			writes = append(writes, scoreWrite{entity: entry.EntityId, score: next, achieved: achieved, version: entry.ScoreVersion})
+			if !found {
+				inserted++
 			}
+		}
+		if err := upsertScores(ctx, tx, b, in.SourceCursor, writes); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO rank_input_receipt (board_id,generation,source_shard,source_cursor,request_id,request_hash,committed_ms) VALUES (?,?,?,?,?,?,?)", in.BoardId, in.Generation, in.SourceShard, in.SourceCursor, in.RequestId, digest, uint64(r.now().UnixMilli())); err != nil {
 			return err
 		}
-		// 榜上的 committed_cursor 是各片批次总数,封榜时与生产者的各片最终游标之和比对。
-		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET committed_cursor=committed_cursor+1 WHERE board_id=?", in.BoardId); err != nil {
+		// 榜上的 committed_cursor 是各片批次总数,封榜时与生产者的各片最终游标之和比对;entries 加上这一批新上榜的实体数
+		// (榜行锁把同榜写入串行了,上面「没读到」的实体就是本事务新插入的,计数精确)。
+		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET committed_cursor=committed_cursor+1,entries=entries+? WHERE board_id=?", inserted, in.BoardId); err != nil {
 			return err
 		}
 		result.CommittedCursor = in.SourceCursor
@@ -350,12 +358,4 @@ func (r *Repo) Freeze(ctx context.Context, caller string, in *rankpb.FreezeRankG
 				}
 			}
 		}
-		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET state=?,settlement_id=?,sealed_ms=? WHERE board_id=?", uint32(rankpb.RankGenerationState_RANK_GENERATION_SEALED), settlement, now, b.BoardId); err != nil {
-			return err
-		}
-		result.SettlementId = settlement
-		result.WinnerCount = uint64(len(winners))
-		return nil
-	})
-	return result, err
-}
+		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET state=?,settlement_id=?,sealed_ms=? WHERE board_id=?"

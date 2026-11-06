@@ -76,7 +76,7 @@ Copy-Item -LiteralPath $stubExe -Destination (Join-Path $stubDir 'go.exe')
 
 $childPath = Join-Path $fixture 'run.ps1'
 @'
-param([string]$FixtureRoot, [string]$Mode, [int]$ToolExit, [bool]$InitialEnvironment, [string]$SaveDuringBuild = '')
+param([string]$FixtureRoot, [string]$Mode, [int]$ToolExit, [bool]$InitialEnvironment, [string]$SaveDuringBuild = '', [string]$Command = 'proto-gen-run')
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $env:PATH = (Join-Path $FixtureRoot 'stub') + [IO.Path]::PathSeparator + $env:PATH
@@ -93,7 +93,7 @@ foreach ($name in $names) { $before[$name] = [Environment]::GetEnvironmentVariab
 Set-Location -LiteralPath $FixtureRoot
 $beforeLocation = $PWD.Path
 $parameters = @{
-    Command = 'proto-gen-run'; ImageTag = 'fixture'; GoSvcTag = 'fixture'
+    Command = $Command; ImageTag = 'fixture'; GoSvcTag = 'fixture'
     JavaSvcTag = 'fixture'; NodeImage = 'fixture:local'
 }
 if ($Mode -eq 'go-run') { $parameters.UseGoRun = $true }
@@ -175,6 +175,42 @@ foreach ($mode in $modes) {
             }
         }
     }
+}
+
+# ── persist-schema-seal / persist-schema-verify：复用 proto-gen-run 的 exe 选择，只多传各自的开关，失败码照样传出 ──
+# 用例前后保持 proto-gen.exe 的有无状态（上面循环的最后一个模式把两个 exe 都移走了），不影响后面的旧 exe 用例。
+$sealPrimaryPath = Join-Path $generatorDir 'proto-gen.exe'
+$sealPrimaryExisted = Test-Path -LiteralPath $sealPrimaryPath
+Copy-Item -LiteralPath $stubExe -Destination $sealPrimaryPath -Force
+try {
+    foreach ($ledgerCommand in @('persist-schema-seal', 'persist-schema-verify')) {
+        foreach ($sealCase in @(
+                @{ Mode = 'binary-primary'; Executable = 'proto-gen'; Arguments = "arguments=--$ledgerCommand" },
+                @{ Mode = 'go-run'; Executable = 'go'; Arguments = "arguments=run|./cmd|--$ledgerCommand" })) {
+            foreach ($toolExit in @(0, 23)) {
+                Test-Case "$ledgerCommand（$($sealCase.Mode)）：生成器退出 $toolExit" {
+                    $recordPath = Join-Path $fixture 'generator-record.txt'
+                    if (Test-Path -LiteralPath $recordPath) { Remove-Item -LiteralPath $recordPath }
+                    $output = & $pwshPath -NoProfile -NonInteractive -File $childPath -FixtureRoot $fixture -Mode $sealCase.Mode -ToolExit $toolExit -InitialEnvironment:$false -Command $ledgerCommand 2>&1 | Out-String
+                    $processExit = $LASTEXITCODE
+                    $output | Set-Content -LiteralPath (Join-Path $fixture "$ledgerCommand-$($sealCase.Mode)-exit-$toolExit.log")
+                    Assert-True (Test-Path -LiteralPath $recordPath) '必须运行隔离进程桩'
+                    $record = @(Get-Content -LiteralPath $recordPath)
+                    Assert-Equal 6 $record.Count '只调用一次生成器'
+                    Assert-Equal "executable=$($sealCase.Executable)" $record[0] '与 proto-gen-run 同一套生成器选择'
+                    Assert-Equal $sealCase.Arguments $record[5] "把 --$ledgerCommand 原样传给生成器"
+                    if ($toolExit -eq 0) {
+                        Assert-Equal 0 $processExit '生成器成功时入口应保持成功退出'
+                    } else {
+                        Assert-True ($processExit -ne 0) "生成器退出 $toolExit 时入口必须失败，实际退出 $processExit"
+                        Assert-Match $output '23' '失败诊断必须带原始生成器退出码'
+                    }
+                }
+            }
+        }
+    }
+} finally {
+    if (-not $sealPrimaryExisted -and (Test-Path -LiteralPath $sealPrimaryPath)) { Remove-Item -LiteralPath $sealPrimaryPath }
 }
 
 # ── 旧 exe 防护：选中的 exe 比生成器源码旧时，默认路径告警并改走 go run，-UseBinary 拒绝运行 ──

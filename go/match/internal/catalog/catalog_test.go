@@ -148,7 +148,7 @@ func TestRejectsBadRows(t *testing.T) {
 		"PVE_TEAM 超过引擎上限": mutate(func(r *Rows) {
 			r.PlayModes = append(r.PlayModes, PlayModeRow{Id: 99, Mode: modeTeam, ConfigId: 3, TeamSizeMax: 6})
 		}),
-		"PVE_TEAM 人数为 0":   mutate(func(r *Rows) { r.PlayModes[1].TeamSizeMax = 0 }),
+		"PVE_TEAM 人数为 0":  mutate(func(r *Rows) { r.PlayModes[1].TeamSizeMax = 0 }),
 		"PVP_TEAM 每侧超过 5": mutate(func(r *Rows) { r.PlayModes[4].TeamSizeMax = 6 }),
 		"1V1 写了人数":        mutate(func(r *Rows) { r.PlayModes[2].TeamSizeMax = 1 }),
 		"未开放的模式":          mutate(func(r *Rows) { r.PlayModes[2].Mode = modeReserved }),

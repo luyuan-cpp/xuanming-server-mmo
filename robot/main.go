@@ -566,6 +566,11 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	if profile != nil {
 		robotAI.SetProfile(profile)
 	}
+	// join_queue 动作(match-stress 档或 custom_weights 带 join_queue):接上匹配入口(stress_match_queue.go)。
+	// match_queue 段已在 config.Load 校验过;zone_id 只是请求里的当前 zone,票据按角色 home zone 记(match 侧)。
+	if profile.Weight(ai.ActionJoinQueue) > 0 {
+		robotAI.SetMatchQueue(newStressMatchQueue(gc, stats, gc.Account, cfg.ZoneID, cfg.MatchQueue), stressMatchDwell(cfg.MatchQueue))
+	}
 	if cfg.LLM.Enabled {
 		robotAI.SetLLM(ai.NewLLMAdvisor(cfg.LLM.Endpoint, cfg.LLM.APIKey, cfg.LLM.Model))
 	}

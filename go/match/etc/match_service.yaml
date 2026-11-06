@@ -1,12 +1,5 @@
 Name: matchservice.rpc
 Mode: dev
-# 客户端请求的原角色身份只从 login 同一实例 / DB 核对,必须开启。本机 go_services.ps1 按 login 的配置派生这两项。
-GlobalLoginSessions: true
-LoginRedis:
-  Addrs: [127.0.0.1:6379]
-  DB: 0
-  PasswordEnv: MMORPG_LOGIN_REDIS_PASSWORD
-  PoolSizePerNode: 8
 # 排队、占用、成局、评分与组队的权威都在这个 SQL 库,开发环境与生产同一份代码,所有副本连接同一库,缺配置不能起服。
 # 这里写的是 TiDB 入口;本机起 go_services.ps1 / start_game.ps1 默认连 MySQL 容器(Backend: mysql,派生配置改写)。
 # 库、表与开发密钥由启动脚本准备:库 mmorpg_match 预建,表用 match -migrate 迁移(与 guild 互相核对对方的表)。

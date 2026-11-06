@@ -26,6 +26,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/entity_error_tip.pb.h"
 #include "player/system/player_skill.h"
+#include "player/system/player_level_rules.h"  // SkillDamageLevelTest:playerlevel::kMaxLevel
 #include "player/comp/player_frozen_comp.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -1189,6 +1190,10 @@ TEST(PlayerSkillSystemTest, SanitizeSkillListKeepsUnknownSkillsInactiveAndRemove
 {
     entt::entity player = CreateSkillActor();
     auto &skillList = tlsEcs.actorRegistry.get_or_emplace<PlayerSkillListComp>(player);
+    // 已加载的玩家都有职业与等级(加载时挂上);缺了 HasSkill 按故障答"没有"(PlayerSkillBookTest 的缺组件用例)。
+    // 0 号职业没有职业技能,旧通用技能 1 号照常生效。
+    tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player);
+    tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(1);
     ASSERT_TRUE(SkillTableManager::Instance().Exists(1));
     ASSERT_FALSE(SkillTableManager::Instance().Exists(1001)) << "fixture: 1001 must be missing from SkillTable";
 
@@ -1283,6 +1288,86 @@ TEST(PlayerSkillSystemTest, SanitizeSkillListCarriesOutOfRangeRanksVerbatim)
     EXPECT_EQ(kClassSeed, skillList.skill_list(1).skill_table_id()) << "rank 0 的职业技能不删";
     EXPECT_EQ(7u, skillList.skill_list(2).rank()) << "旧通用技能的 rank 不清 0";
     EXPECT_EQ(1, skillList.unknown_fields().field_count());
+}
+
+// ---------------------------------------------------------------------------
+// 技能伤害的等级读点(2026-11-05;混版本持久字段保护设计 §12.2,规则见 player_level_rules.h 文件头)
+//
+// 施法者等级是伤害表达式的 level 参数(CalculateSkillDamage → SetDamageParam),目标等级进减伤的等级系数
+// (CalculateFinalDamage → combatdamage::LevelFactor)。两处都读 playerlevel::CappedLevel(存储等级):
+// 超上限按上限,0 按 1;两边 LevelComp 的存储值原样不动。
+// 施法者"0 级按 1 级"是这一批的新行为:表达式直接吃 0 级时 "100*level" 为 0,整次命中打不出伤害。
+// 目标一侧 combatdamage::LevelFactor 自己也把等级夹到 1..85,两层同口径;这里钉的是落到气血上的结果。
+// ---------------------------------------------------------------------------
+class SkillDamageLevelTest : public SkillUtilTest {
+protected:
+    // 真表 1 号技能:指定目标,伤害表达式 "100*level",法术伤害、攻击倍率 1。
+    // 夹具玩家没有力量、法伤与暴击率,原始伤害就是表达式的值,不掷暴击骰。
+    static constexpr uint32_t kSkillTableId = 1;
+    static constexpr uint64_t kSkillInstanceId = 93;
+    // 气血给足,落血不会被当前气血截断。
+    static constexpr uint64_t kTargetHealth = 1'000'000;
+    // 护甲 + 防御为 0 时受伤比例恒为 1,目标等级看不出来。480 恰为 1 级的等级系数(360 + 120 × 1):
+    // 1 级目标受伤比例 0.5,85 级目标 10560 / 11040,都不碰 60% 的常驻减伤封顶。
+    static constexpr uint64_t kTargetArmor = 480;
+
+    // 真表 1 号技能在给定等级下的表达式值,与 CalculateSkillDamage 同一个取值入口。
+    static double ExpressionDamageAt(uint32_t level) {
+        SkillTableManager::Instance().SetDamageParam({static_cast<double>(level)});
+        return SkillTableManager::Instance().GetDamage(kSkillTableId);
+    }
+
+    // 施法者用 1 号技能打目标一次,返回目标掉了多少气血。施法上下文直接挂上,再调落点入口 HandleSkillSpell
+    // (前摇定时器到点调的就是它),不跑事件循环。
+    uint64_t HealthLostFromOneHit(uint32_t casterStoredLevel, uint32_t targetStoredLevel) {
+        const auto scene = tlsEcs.sceneRegistry.create();
+        const auto caster = CreateLoadedPlayerInScene(scene);
+        const auto target = CreateLoadedPlayerInScene(scene);
+        tlsEcs.actorRegistry.get<LevelComp>(caster).set_level(casterStoredLevel);
+        tlsEcs.actorRegistry.get<LevelComp>(target).set_level(targetStoredLevel);
+        auto& targetAttributes = tlsEcs.actorRegistry.get<BaseAttributesComp>(target);
+        targetAttributes.set_health(kTargetHealth);
+        targetAttributes.set_armor(kTargetArmor);
+        auto context = std::make_shared<SkillContextComp>();
+        context->set_skillid(kSkillInstanceId);
+        context->set_skilltableid(kSkillTableId);
+        context->set_caster(entt::to_integral(caster));
+        context->set_target(entt::to_integral(target));
+        tlsEcs.actorRegistry.emplace<SkillContextCompMap>(caster).emplace(kSkillInstanceId, context);
+
+        EXPECT_TRUE(SkillSystem::HandleSkillSpell(caster, kSkillInstanceId))
+            << "caster level " << casterStoredLevel << " target level " << targetStoredLevel;
+        EXPECT_EQ(casterStoredLevel, tlsEcs.actorRegistry.get<LevelComp>(caster).level()) << "施法者的存储等级不改写";
+        EXPECT_EQ(targetStoredLevel, tlsEcs.actorRegistry.get<LevelComp>(target).level()) << "目标的存储等级不改写";
+        return kTargetHealth - tlsEcs.actorRegistry.get<BaseAttributesComp>(target).health();
+    }
+};
+
+// 真表数值(目标 1 级、受伤比例 0.5):1 级施法者打掉 50,85 级打掉 4250;若直读存储等级,0 级打掉 0、100 级打掉 5000。
+TEST_F(SkillDamageLevelTest, CasterStoredLevelIsCappedInTheDamageExpression) {
+    // 夹具前提(真表):表达式随等级单调上涨,且 0 级低于 1 级、超上限高于上限 —— 否则下面两条相等恒成立,
+    // 区分不出"0 按 1"与"超上限按上限"。
+    ASSERT_LT(ExpressionDamageAt(0), ExpressionDamageAt(1));
+    ASSERT_LT(ExpressionDamageAt(playerlevel::kMaxLevel), ExpressionDamageAt(playerlevel::kMaxLevel + 15));
+
+    const uint64_t atLevelOne = HealthLostFromOneHit(1, 1);
+    const uint64_t atCap = HealthLostFromOneHit(playerlevel::kMaxLevel, 1);
+    ASSERT_GT(atLevelOne, 0u);
+    ASSERT_GT(atCap, atLevelOne) << "施法者等级必须真的进了伤害";
+
+    EXPECT_EQ(atLevelOne, HealthLostFromOneHit(0, 1)) << "存储等级 0 的施法者按 1 级出伤害,不再是零伤害";
+    EXPECT_EQ(atCap, HealthLostFromOneHit(playerlevel::kMaxLevel + 15, 1)) << "超上限的施法者按上限出伤害";
+}
+
+// 真表数值(施法者 1 级、原始伤害 100):1 级目标掉 50,85 级目标掉 ceil(100 × 10560 / 11040) = 96。
+TEST_F(SkillDamageLevelTest, TargetStoredLevelIsCappedInTheDamageReduction) {
+    const uint64_t atLevelOne = HealthLostFromOneHit(1, 1);
+    const uint64_t atCap = HealthLostFromOneHit(1, playerlevel::kMaxLevel);
+    ASSERT_GT(atLevelOne, 0u);
+    ASSERT_GT(atCap, atLevelOne) << "夹具前提:目标等级要能改变受伤比例(护甲非 0、没碰减伤封顶)";
+
+    EXPECT_EQ(atLevelOne, HealthLostFromOneHit(1, 0)) << "存储等级 0 的目标按 1 级算减伤";
+    EXPECT_EQ(atCap, HealthLostFromOneHit(1, playerlevel::kMaxLevel + 15)) << "超上限的目标按上限算减伤";
 }
 
 // Main function

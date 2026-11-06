@@ -573,3 +573,71 @@ TEST_F(PlayerSkillBookTest, StoredLevelAboveCapReportsCappedPlayerLevel) {
     EXPECT_EQ(book.player_level(), 1u);
     EXPECT_EQ(tlsEcs.actorRegistry.get<LevelComp>(fresh).level(), 0u);
 }
+
+// ---------------------------------------------------------------------------
+// 缺职业 / 等级组件时 fail-closed(2026-11-05;组件访问规则,player_level_rules.h 文件头)
+// 两者都是加载时挂上的持久数据,缺任一项是加载不变量被破坏:读接口按"没有技能 / 没有被动"作答,初始技能不补发,
+// 组件也不补建。以前缺等级按 1 级、缺职业按 0 号职业继续算。
+// ---------------------------------------------------------------------------
+
+// 缺等级:1 级解锁的本职业技能与被动不再按 1 级生效,新号也不按 1 级补初始技能
+TEST_F(PlayerSkillBookTest, MissingLevelComponentLeavesNoUsableSkillsAndGrantsNothing) {
+    const auto player = NewPlayer(1, 30, 0);
+    Own(player, kPoZhenJingFeng, 3);  // 本职业主动,1 级解锁
+    Own(player, kTieGuZhuHun, 2);     // 本职业被动,1 级解锁
+    ASSERT_TRUE(PlayerSkillSystem::HasSkill(player, kPoZhenJingFeng)) << "夹具前提:组件齐全时能用";
+    ASSERT_GT(PlayerSkillSystem::CollectPassiveBonus(player).defense, 0.0);
+    EXPECT_EQ(PlayerSkillSystem::CheckSkillUsable(player, kPoZhenJingFeng), static_cast<uint32_t>(kSuccess));
+    EXPECT_EQ(PlayerSkillSystem::CheckSkillUsable(player, kHengGeLieYue), static_cast<uint32_t>(kInvalidTableId))
+        << "没学的技能是业务拒绝";
+    tlsEcs.actorRegistry.remove<LevelComp>(player);
+    const auto listBefore = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString();
+
+    EXPECT_EQ(PlayerSkillSystem::CheckSkillUsable(player, kPoZhenJingFeng), static_cast<uint32_t>(kServiceUnavailable))
+        << "缺等级是服务端故障,不能答成没有这个技能";
+    EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, kPoZhenJingFeng));
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kPoZhenJingFeng), 0u);
+    EXPECT_EQ(PlayerSkillSystem::EffectiveRank(player, kTieGuZhuHun), 0u);
+    BattlePlayerSnapshot snapshot;
+    PlayerSkillSystem::FillBattleSnapshot(player, snapshot);
+    EXPECT_EQ(snapshot.skill_table_ids_size(), 0);
+    EXPECT_TRUE(snapshot.skill_ranks().empty());
+    EXPECT_DOUBLE_EQ(PlayerSkillSystem::CollectPassiveBonus(player).defense, 0.0);
+    ListSkillsResponse book;
+    EXPECT_EQ(PlayerSkillSystem::BuildSkillBook(player, book), kServiceUnavailable);
+    EXPECT_EQ(listBefore, tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "读路径不补建持久组件";
+
+    const auto control = NewPlayer(1, 1, 0);
+    PlayerSkillSystem::RegisterPlayer(control);
+    ASSERT_FALSE(OwnedIds(control).empty()) << "夹具前提:组件齐全时 1 级新号补得到初始技能";
+    const auto fresh = NewPlayer(1, 1, 0);
+    tlsEcs.actorRegistry.remove<LevelComp>(fresh);
+    PlayerSkillSystem::RegisterPlayer(fresh);
+    PlayerSkillSystem::InitializeOnLoad(fresh);
+    EXPECT_TRUE(OwnedIds(fresh).empty()) << "缺等级时一条初始技能也不补";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(fresh));
+}
+
+// 缺职业:不再按 0 号职业继续算 —— 0 号职业没有职业技能,旧通用技能会因此生效、进战斗快照
+TEST_F(PlayerSkillBookTest, MissingClassComponentLeavesNoUsableSkills) {
+    const auto player = NewPlayer(5, 10, 0);  // 5 号职业还没有职业技能,用旧通用技能
+    Own(player, kLegacySkill, 0);
+    Own(player, 2, 0);
+    ASSERT_TRUE(PlayerSkillSystem::HasSkill(player, kLegacySkill)) << "夹具前提:组件齐全时旧通用技能能用";
+    BattlePlayerSnapshot withClass;
+    PlayerSkillSystem::FillBattleSnapshot(player, withClass);
+    ASSERT_GT(withClass.skill_table_ids_size(), 0) << "夹具前提:旧通用技能能进战斗快照";
+    tlsEcs.actorRegistry.remove<PlayerUint32Comp>(player);
+    const auto listBefore = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString();
+
+    EXPECT_EQ(PlayerSkillSystem::CheckSkillUsable(player, kLegacySkill), static_cast<uint32_t>(kServiceUnavailable));
+    EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, kLegacySkill));
+    EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, 2));
+    BattlePlayerSnapshot snapshot;
+    PlayerSkillSystem::FillBattleSnapshot(player, snapshot);
+    EXPECT_EQ(snapshot.skill_table_ids_size(), 0);
+    EXPECT_TRUE(snapshot.skill_ranks().empty());
+    EXPECT_EQ(listBefore, tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerUint32Comp>(player)) << "读路径不补建持久组件";
+}

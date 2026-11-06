@@ -333,13 +333,31 @@ const (
 // —— 否则失租进程的疏散改派会在屏障内全部被 17 挡住。
 func (l *EnterSceneLogic) playerLocationOwnerReplaced(playerID uint64, loc *scene_manager.PlayerLocation,
 	zoneID uint32, observedEpoch uint64, site string) ownerReplacedVerdict {
-	if loc == nil || zoneID == 0 || loc.GetNodeId() == "" || observedEpoch == 0 || !knownNodesSynced.Load() {
+	if loc == nil || zoneID == 0 || loc.GetNodeId() == "" || observedEpoch == 0 {
 		return ownerNotReplaced
 	}
 	nodeID := loc.GetNodeId()
-	registered, ok := knownNodeRegisteredInstance(zoneID, nodeID)
+	// 在册实例的来源:本 zone 读 watch 镜像(要先完成首次全量同步);别的 zone 本副本没有镜像,直读那个 zone 的 etcd 注册表
+	// (docs/design/control-plane-zone-scoping-20261105.md §3.5)。读不到按「没有证据」处理。
+	foreign := !ownsControlZone(l.svcCtx, zoneID)
+	var (
+		registered     string
+		ok             bool
+		foreignEntries []nodeEntry
+	)
+	if foreign {
+		registered, foreignEntries, ok = foreignRegisteredInstance(l.ctx, l.svcCtx, zoneID, nodeID)
+	} else if knownNodesSynced.Load() {
+		registered, ok = knownNodeRegisteredInstance(zoneID, nodeID)
+	}
 	if !ok {
 		return ownerNotReplaced
+	}
+	instanceRegistered := func(instance string) bool {
+		if foreign {
+			return entriesRegisterInstance(foreignEntries, instance)
+		}
+		return knownInstanceRegistered(instance)
 	}
 	fence, ok, err := readHandoffFence(l.svcCtx, playerID)
 	if err != nil {
@@ -348,7 +366,7 @@ func (l *EnterSceneLogic) playerLocationOwnerReplaced(playerID uint64, loc *scen
 		return ownerNotReplaced
 	}
 	if !ok || fence.SceneInstance == "" || fence.OwnerEpoch != observedEpoch || fence.SceneInstance == registered ||
-		knownInstanceRegistered(fence.SceneInstance) {
+		instanceRegistered(fence.SceneInstance) {
 		return ownerNotReplaced
 	}
 	holder := fence.SceneInstance

@@ -79,7 +79,7 @@ func TestDecideUnqualifiedRevoke_Table(t *testing.T) {
 		want   unqualifiedRevokeVerdict
 	}{
 		{"原件属于上一代", func(*unqualifiedRevokeFacts) {}, unqualifiedRevokeEligible},
-		{"原件属于更新的一代(回退之后)同样不是 E 下的资格", func(f *unqualifiedRevokeFacts) { f.fenceEpoch = 9 }, unqualifiedRevokeEligible},
+		{"原件比 E 新:协议写者写不出,按数据不一致不撤销", func(f *unqualifiedRevokeFacts) { f.fenceEpoch = 9 }, unqualifiedRevokeFenceAhead},
 		{"原件缺失(从未有人登记过)", func(f *unqualifiedRevokeFacts) { f.fencePresent, f.fenceValid, f.fenceEpoch = false, false, 0 },
 			unqualifiedRevokeEligible},
 		{"宽限未过最先判", func(f *unqualifiedRevokeFacts) { f.graceElapsed, f.epoch, f.fenceValid = false, 0, false }, unqualifiedRevokeNotDue},
@@ -88,6 +88,8 @@ func TestDecideUnqualifiedRevoke_Table(t *testing.T) {
 		{"代际先于原件判", func(f *unqualifiedRevokeFacts) { f.locationEpoch, f.fenceValid = 6, false }, unqualifiedRevokeEpochUnproven},
 		{"原件写坏", func(f *unqualifiedRevokeFacts) { f.fenceValid, f.fenceEpoch = false, 0 }, unqualifiedRevokeFenceMalformed},
 		{"原件属于 E:有进程在 E 下登记过", func(f *unqualifiedRevokeFacts) { f.fenceEpoch = 7 }, unqualifiedRevokeQualified},
+		{"owner_epoch 缺键(期望 E 为 0)时不拿 location 记的值补", func(f *unqualifiedRevokeFacts) { f.epoch = 0 },
+			unqualifiedRevokeEpochUnproven},
 		{"零值不撤销", func(f *unqualifiedRevokeFacts) { *f = unqualifiedRevokeFacts{} }, unqualifiedRevokeNotDue},
 	}
 	for _, tc := range cases {
@@ -136,10 +138,31 @@ func TestUnqualifiedHolderRevokeGraceConfig(t *testing.T) {
 		require.Error(t, c.ValidateUnqualifiedHolderRevokeGrace(), "%d 必须拒启", seconds)
 		assert.Equal(t, 120*time.Second, c.EffectiveUnqualifiedHolderRevokeGrace(), "%d 没过校验:按缺省", seconds)
 	}
+}
 
-	// 宽限上界不超过等待计时键的最短 TTL(诊断预算至少 1s + leaveReleaseWaitKeyMargin):否则计时键可能在宽限走完之前
-	// 过期、从头计时,撤销永远轮不到。
-	assert.LessOrEqual(t, time.Duration(config.MaxUnqualifiedHolderRevokeGraceSeconds)*time.Second, leaveReleaseWaitKeyMargin)
+// 等待计时键只在第一次登记时设 TTL、之后不续,要活过诊断预算与撤销宽限里更长的那个,再加余量。只按预算设的话,预算配得比宽限
+// 短时(这里 1s 对 600s)键在宽限走完后只剩 1s,清理每 30s 才重试一次,大概率错过、键过期从头计时,撤销永远轮不到。
+func TestNoteLeaveReleaseWait_TTLCoversRevokeGrace(t *testing.T) {
+	sc, mr := newTestSvcCtx(t, "")
+	sc.Config.UnqualifiedHolderRevokeGraceSeconds = config.MaxUnqualifiedHolderRevokeGraceSeconds
+	grace := time.Duration(config.MaxUnqualifiedHolderRevokeGraceSeconds) * time.Second
+	const (
+		playerID    = uint64(8338)
+		otherPlayer = uint64(8339)
+		scope       = "3:10:11:42"
+	)
+	mr.SetTime(leaveReleaseRedisNow)
+
+	noteLeaveReleaseWait(sc, playerID, scope, time.Second)
+	assert.Equal(t, grace+leaveReleaseWaitKeyMargin, mr.TTL(leaveReleaseWaitKey(playerID)), "预算比宽限短:按宽限")
+	noteLeaveReleaseWait(sc, otherPlayer, scope, 2*grace)
+	assert.Equal(t, 2*grace+leaveReleaseWaitKeyMargin, mr.TTL(leaveReleaseWaitKey(otherPlayer)), "预算比宽限长:按预算")
+
+	// 宽限走完的那一刻计时还在、起点没变,之后还有整整一个余量可撤。
+	mr.SetTime(leaveReleaseRedisNow.Add(grace))
+	mr.FastForward(grace)
+	assert.Equal(t, grace, noteLeaveReleaseWait(sc, playerID, scope, time.Second))
+	assert.Equal(t, leaveReleaseWaitKeyMargin, mr.TTL(leaveReleaseWaitKey(playerID)))
 }
 
 // ── 跨语言口径 ──────────────────────────────────────────────────────────────
@@ -267,6 +290,11 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 			unqualifiedRevokeSetFence(mr, playerID, held)
 			return held, true
 		}, unqualifiedRevokeOutcomeFenceNotProof},
+		{"观察到的原件比 E 新,且位数更多(按数值比,不按字典序)", func(_ *testing.T, mr *miniredis.Miniredis, playerID, _ uint64) (string, bool) {
+			ahead := unqualifiedRevokeFence(10, "scene-x", "5", "c", "H", "d")
+			unqualifiedRevokeSetFence(mr, playerID, ahead)
+			return ahead, true
+		}, unqualifiedRevokeOutcomeFenceNotProof},
 		{"原件写坏", func(_ *testing.T, mr *miniredis.Miniredis, playerID, _ uint64) (string, bool) {
 			unqualifiedRevokeSetFence(mr, playerID, "garbage")
 			return "garbage", true
@@ -330,7 +358,7 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 			}
 			assert.Equal(t, fenceBefore, unqualifiedRevokeFenceValue(mr, playerID), "资格原件一个字节都不动")
 
-			// 两个副本拿着同一份观察并发撤销(或 go-redis 原样重发):后到的看到 location 已不在,不再推进、不再扣人数。
+			// 两个副本拿着同一份观察并发撤销(或调用方重发同一条 EVAL):后到的看到 location 已不在,不再推进、不再扣人数。
 			afterFirst := mr.Dump()
 			outcome, err = runUnqualifiedRevoke(sc, target, observed)
 			require.NoError(t, err)
@@ -451,9 +479,39 @@ func TestRevokeUnqualifiedHolderRacesWithTravelAdoption(t *testing.T) {
 
 // ── LeaveScene 入口 ─────────────────────────────────────────────────────────
 
+// unqualifiedRevokeStoreFence 是一次被截下的存档写权行围栏调用,连同调用那一刻 Redis 的状态:用来证明写权行先于撤销 Lua 围好。
+type unqualifiedRevokeStoreFence struct {
+	ownerEpoch       uint64 // 传给 ReleaseDeadPlayerStoreHolder 的代次
+	locationAtCall   bool   // 调用时 location 还在
+	ownerEpochAtCall string // 调用时 owner_epoch 键的值
+}
+
+// installUnqualifiedRevokeStoreFenceRecorder 把 PlayerStoreHolders 换成记录器,每次返回 *replyErr(用例可以中途改它)。
+func installUnqualifiedRevokeStoreFenceRecorder(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, playerID uint64,
+	replyErr *error) func() []unqualifiedRevokeStoreFence {
+	t.Helper()
+	var calls []unqualifiedRevokeStoreFence
+	sc.PlayerStoreHolders = releaserFunc(func(_ context.Context, player, ownerEpoch uint64) error {
+		require.Equal(t, playerID, player)
+		calls = append(calls, unqualifiedRevokeStoreFence{ownerEpoch: ownerEpoch,
+			locationAtCall:   mr.Exists(getPlayerLocationKey(playerID)),
+			ownerEpochAtCall: leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID))})
+		return *replyErr
+	})
+	return func() []unqualifiedRevokeStoreFence { return append([]unqualifiedRevokeStoreFence(nil), calls...) }
+}
+
+// releaserFunc 把函数适配成 svc.PlayerStoreHolderReleaser,只给用例截下调用。
+type releaserFunc func(ctx context.Context, player, ownerEpoch uint64) error
+
+func (f releaserFunc) ReleaseDeadPlayerStoreHolder(ctx context.Context, player, ownerEpoch uint64) error {
+	return f(ctx, player, ownerEpoch)
+}
+
 // 主时序(§17.1):location 记着 (节点 10, E=3),节点 10 从未在 3 下登记成功,资格原件还是上一任在 2 下的。
-// 宽限内照旧保留 location、请持有节点释放、回 FailedPrecondition;宽限走完后的那次重试推进围栏(owner_epoch 3 → 4)、
-// 删 location 与等待计时、扣一次人数、计 revoked_unqualified,回成功(清理完成,不再请释放)。资格原件一个字节都不动。
+// 宽限内照旧保留 location、请持有节点释放、回 FailedPrecondition;宽限走完后的那次重试先请 data_service 按 E−1=2 围存档写权行
+// (≤2 时抬到 3、清持有者、released=1),此刻 location 与 owner_epoch 都还没动;再推进围栏(owner_epoch 3 → 4)、删 location
+// 与等待计时、扣一次人数、计 revoked_unqualified,回成功(清理完成,不再请持有节点释放)。资格原件一个字节都不动。
 func TestLeaveScene_UnqualifiedHolderRevokedAfterGrace(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	calls := installLeaveReleaseRecorder(t)
@@ -461,6 +519,8 @@ func TestLeaveScene_UnqualifiedHolderRevokedAfterGrace(t *testing.T) {
 		playerID = uint64(8331)
 		sceneID  = uint64(9431)
 	)
+	var storeErr error
+	storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
 	leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
 	fence := unqualifiedRevokePreviousFence(3)
 	unqualifiedRevokeSetFence(mr, playerID, fence)
@@ -478,9 +538,12 @@ func TestLeaveScene_UnqualifiedHolderRevokedAfterGrace(t *testing.T) {
 	assert.Equal(t, "3", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)), "宽限内不撤销")
 	assert.True(t, mr.Exists(getPlayerLocationKey(playerID)))
 	assert.Len(t, calls(), 2, "宽限内照常请持有节点释放")
+	assert.Empty(t, storeFences(), "宽限内不碰存档写权行")
 
 	mr.SetTime(t0.Add(unqualifiedRevokeGrace))
 	require.NoError(t, leave(), "撤销之后这次清理完成")
+	assert.Equal(t, []unqualifiedRevokeStoreFence{{ownerEpoch: 2, locationAtCall: true, ownerEpochAtCall: "3"}}, storeFences(),
+		"先按 E−1 围写权行(真源在前),这时 location 与 owner_epoch 还没动")
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
 	assert.Equal(t, "4", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
 	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
@@ -491,10 +554,85 @@ func TestLeaveScene_UnqualifiedHolderRevokedAfterGrace(t *testing.T) {
 	assert.Equal(t, revokedBefore+1, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
 	assert.Len(t, calls(), 2, "撤销那一次不再请释放")
 
-	// 迟到的重试:location 已不在,回成功,不再推进、不再计数。
+	// 迟到的重试:location 已不在,回成功,不再推进、不再计数,也不再碰写权行。
 	require.NoError(t, leave())
 	assert.Equal(t, "4", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
 	assert.Equal(t, revokedBefore+1, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
+	assert.Len(t, storeFences(), 1)
+}
+
+// 围写权行失败(data_service 暂时不可用):这次不撤销,location 与 owner_epoch 一个字节不动、照常请持有节点释放、回
+// FailedPrecondition(等持有者释放),不计 revoked_unqualified;data_service 恢复后的下一次重试照常撤销。
+// 不把顺序倒过来先撤销再补写权行:那样两步之间没有原子性,写权行那一步失败就要另记一笔欠账去补。
+func TestLeaveScene_UnqualifiedRevokeWaitsWhenPlayerStoreFenceFails(t *testing.T) {
+	sc, mr := newTestSvcCtx(t, "")
+	calls := installLeaveReleaseRecorder(t)
+	const (
+		playerID = uint64(8334)
+		sceneID  = uint64(9434)
+	)
+	raw := leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
+	unqualifiedRevokeSetFence(mr, playerID, unqualifiedRevokePreviousFence(3))
+	unqualifiedRevokeStartTimer(t, mr, playerID, 3, leaveReleaseRedisNow, unqualifiedRevokeGrace)
+	storeErr := errors.New("data_service down")
+	storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
+	revokedBefore := leaveReleaseCount(t, unqualifiedRevokeMetricVerdict)
+	leave := func() error {
+		_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+		return err
+	}
+
+	requireHolderReleasePending(t, leave())
+	assert.Len(t, storeFences(), 1, "试过围写权行")
+	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)), "围不成就不撤销")
+	assert.Equal(t, "3", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
+	assert.Len(t, calls(), 1, "照常请持有节点释放")
+	assert.Equal(t, revokedBefore, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
+
+	storeErr = nil
+	require.NoError(t, leave(), "data_service 恢复后照常撤销")
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
+	assert.Equal(t, "4", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
+	assert.Len(t, storeFences(), 2, "幂等:重试再围一次")
+	assert.Equal(t, revokedBefore+1, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
+}
+
+// 围写权行这一步本身:按 E−1 调;E ≤ 1 不调(建角写下的写权行就是 (1, 无持有者, released=1),没有更早的代次要挡);
+// 没装配 PlayerStoreHolders(单测宿主)不调;data_service 报错原样带回(调用方不撤销)。
+func TestFenceUnclaimedPlayerStore(t *testing.T) {
+	const playerID = uint64(8336)
+	cases := []struct {
+		name       string
+		epoch      uint64
+		holders    *fakePlayerStoreHolders
+		wantErr    bool
+		wantEpochs []uint64
+	}{
+		{name: "按 E−1 调", epoch: 3, holders: &fakePlayerStoreHolders{}, wantEpochs: []uint64{2}},
+		{name: "墙钟量级的代次", epoch: 1790000000000, holders: &fakePlayerStoreHolders{}, wantEpochs: []uint64{1789999999999}},
+		{name: "E 为 1 不调", epoch: 1, holders: &fakePlayerStoreHolders{}},
+		{name: "data_service 报错", epoch: 3, holders: &fakePlayerStoreHolders{err: errors.New("down")}, wantErr: true,
+			wantEpochs: []uint64{2}},
+		{name: "没装配不调", epoch: 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, _ := newTestSvcCtx(t, "")
+			if tc.holders != nil {
+				sc.PlayerStoreHolders = tc.holders
+			}
+			err := fenceUnclaimedPlayerStore(context.Background(), sc, playerID, tc.epoch)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			if tc.holders != nil {
+				assert.Equal(t, tc.wantEpochs, tc.holders.epochs)
+			}
+		})
+	}
 }
 
 // 资格原件缺失(新角色第一次落点就没登记成功,handoff hash 里从来没有资格)与「属于上一代」同理:撤销。
@@ -516,7 +654,7 @@ func TestLeaveScene_UnqualifiedHolderWithoutAnyFenceRevoked(t *testing.T) {
 }
 
 // 宽限走完也不撤销的情形:资格原件证明有进程在 E 下登记过(正常持有 / 已释放而标记过期 / 登记被撤销 —— 都交给凭证与 GO-3)、
-// 原件写坏或读不出、离场身份是 legacy(本次没有请持有节点释放)。location 原样保留,照旧回 FailedPrecondition。
+// 原件写坏、读不出或比 E 新、离场身份是 legacy(本次没有请持有节点释放)。location 原样保留、存档写权行不碰,照旧回 FailedPrecondition。
 func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 	cases := []struct {
 		name string
@@ -537,6 +675,9 @@ func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 		{name: "原件写坏", arrange: func(_ *testing.T, mr *miniredis.Miniredis, playerID uint64) {
 			unqualifiedRevokeSetFence(mr, playerID, "garbage")
 		}, wantReleases: 1},
+		{name: "原件比 E 新(数据被动过)", arrange: func(_ *testing.T, mr *miniredis.Miniredis, playerID uint64) {
+			unqualifiedRevokeSetFence(mr, playerID, unqualifiedRevokeFence(4, "scene-x", "5", "c", "H", "d"))
+		}, wantReleases: 1},
 		{name: "屏障键类型不对:读不出资格", arrange: func(t *testing.T, mr *miniredis.Miniredis, playerID uint64) {
 			require.NoError(t, mr.Set(handofffence.Key(playerID), "not-a-hash"))
 		}, wantReleases: 1},
@@ -553,6 +694,8 @@ func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 			raw := leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
 			tc.arrange(t, mr, playerID)
 			unqualifiedRevokeStartTimer(t, mr, playerID, 3, leaveReleaseRedisNow, unqualifiedRevokeGrace+time.Minute)
+			var storeErr error
+			storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
 			revokedBefore := leaveReleaseCount(t, unqualifiedRevokeMetricVerdict)
 			req := leaveReleaseRequest(playerID, sceneID)
 			if tc.request != nil {
@@ -563,6 +706,7 @@ func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 			requireHolderReleasePending(t, err)
 			assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)), "没有正证:location 原样保留")
 			assert.Equal(t, "3", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)), "没有正证:不推进围栏")
+			assert.Empty(t, storeFences(), "没有正证:不碰存档写权行")
 			assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 			assert.Len(t, calls(), tc.wantReleases)
 			assert.Equal(t, revokedBefore, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
@@ -570,8 +714,37 @@ func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 	}
 }
 
+// owner_epoch 键缺失(被单独删、数据被动过):LeaveScene 的释放判定退回 location 记的 E 继续等、照常请释放,但撤销不拿 location
+// 自己记的值当证据 —— 预判 epoch_unproven,不读资格原件、不围存档写权行、不发撤销 Lua,也不替缺键补值。
+// 以前传的是退回后的 E,预判照样放行,每次重试都白围一次写权行、再被撤销 Lua 以 -2 拒掉。
+func TestLeaveScene_UnqualifiedRevokeNeedsOwnerEpochKey(t *testing.T) {
+	sc, mr := newTestSvcCtx(t, "")
+	calls := installLeaveReleaseRecorder(t)
+	const (
+		playerID = uint64(8337)
+		sceneID  = uint64(9437)
+	)
+	var storeErr error
+	storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
+	raw := leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
+	unqualifiedRevokeSetFence(mr, playerID, unqualifiedRevokePreviousFence(3))
+	unqualifiedRevokeStartTimer(t, mr, playerID, 3, leaveReleaseRedisNow, unqualifiedRevokeGrace+time.Minute)
+	mr.Del(ownerepoch.OwnerEpochKey(playerID))
+	revokedBefore := leaveReleaseCount(t, unqualifiedRevokeMetricVerdict)
+
+	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+	requireHolderReleasePending(t, err)
+	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)), "location 原样保留")
+	assert.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)), "不替缺键补值")
+	assert.Empty(t, storeFences(), "没有代际证据就不碰存档写权行")
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
+	assert.Len(t, calls(), 1, "释放判定照常请持有节点释放")
+	assert.Equal(t, revokedBefore, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
+}
+
 // 预判合格之后、撤销 Lua 执行之前,持有节点在 E 下的入场登记先落地(资格原件变成 E 下的 H):Lua 复核原件不过,一个字节不写,
-// 这次清理照旧按 pending 回拒、照旧请持有节点释放。
+// 这次清理照旧按 pending 回拒、照旧请持有节点释放。写权行此前已按 E−1 围过(停在「E、无持有者」),新登记的 X 按 E 认领照常成功,
+// 所以先围写权行、后撤销落空是无害的。
 func TestLeaveScene_UnqualifiedRevokeLosesToRegistrationLandingFirst(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	calls := installLeaveReleaseRecorder(t)
@@ -579,6 +752,8 @@ func TestLeaveScene_UnqualifiedRevokeLosesToRegistrationLandingFirst(t *testing.
 		playerID = uint64(8333)
 		sceneID  = uint64(9433)
 	)
+	var storeErr error
+	storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
 	raw := leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
 	unqualifiedRevokeSetFence(mr, playerID, unqualifiedRevokePreviousFence(3))
 	unqualifiedRevokeStartTimer(t, mr, playerID, 3, leaveReleaseRedisNow, unqualifiedRevokeGrace)
@@ -603,13 +778,15 @@ func TestLeaveScene_UnqualifiedRevokeLosesToRegistrationLandingFirst(t *testing.
 	assert.Equal(t, "3", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
 	assert.Equal(t, held, unqualifiedRevokeFenceValue(mr, playerID))
 	assert.Len(t, calls(), 1, "没撤成:照旧请持有节点释放")
+	assert.Equal(t, []unqualifiedRevokeStoreFence{{ownerEpoch: 2, locationAtCall: true, ownerEpochAtCall: "3"}}, storeFences(),
+		"写权行只按 E−1 围:E 仍留给刚登记的持有者认领")
 }
 
 // ── EnterScene 持有者释放门 ─────────────────────────────────────────────────
 
 // 登录撞门(§12)一侧:location 记着 (节点 10, E=3),节点 10 从未在 3 下登记成功。第一次撞门请过释放、开始计时;宽限走完后的撞门
-// 在回 18 之前撤销(owner_epoch 3 → 4、删 location、扣旧场景与节点人数、计 revoked_unqualified);下一次重登没有 location,
-// 按无持有者落点铸造 5、指向节点 20。
+// 在回 18 之前撤销(先按 E−1=2 围存档写权行,再 owner_epoch 3 → 4、删 location、扣旧场景与节点人数、计 revoked_unqualified);
+// 下一次重登没有 location,按无持有者落点铸造 5、指向节点 20。
 func TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	const (
@@ -617,6 +794,8 @@ func TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace(t *testing.T) {
 		holderScene = uint64(9661)
 		targetScene = uint64(9662)
 	)
+	var storeErr error
+	storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
 	enterHolderReleaseSeed(t, sc, mr, playerID, holderScene, targetScene, enterHolderReleaseZombie)
 	fence := unqualifiedRevokePreviousFence(3)
 	unqualifiedRevokeSetFence(mr, playerID, fence)
@@ -647,6 +826,8 @@ func TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace(t *testing.T) {
 	assert.Equal(t, "0", sceneMemberCount(mr, targetScene), "拒绝不预占目标场景人数")
 	assert.Equal(t, fence, unqualifiedRevokeFenceValue(mr, playerID))
 	assert.Equal(t, revokedBefore+1, enterHolderReleaseCount(t, unqualifiedRevokeMetricVerdict))
+	assert.Equal(t, []unqualifiedRevokeStoreFence{{ownerEpoch: 2, locationAtCall: true, ownerEpochAtCall: "3"}}, storeFences(),
+		"先按 E−1 围写权行,再动 Redis")
 
 	resp, err = NewEnterSceneLogic(context.Background(), sc).EnterScene(login)
 	require.NoError(t, err)
@@ -657,6 +838,30 @@ func TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace(t *testing.T) {
 	assert.Equal(t, "20", loc.NodeId)
 	assert.Equal(t, uint64(5), loc.OwnerEpoch)
 	assert.Len(t, requested(), 3, "没有旧持有者可请")
+	assert.Len(t, storeFences(), 1, "落点不碰写权行:新持有者以更大的代次认领")
+}
+
+// 登录撞门一侧围写权行失败:这次不撤销,照回 18、location 与 owner_epoch 一个字节不动,不计数;下一次撞门或 LeaveScene 再来。
+func TestEnterScene_LoginRevokeWaitsWhenPlayerStoreFenceFails(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const (
+		playerID    = uint64(8763)
+		holderScene = uint64(9665)
+		targetScene = uint64(9666)
+	)
+	storeErr := errors.New("data_service down")
+	storeFences := installUnqualifiedRevokeStoreFenceRecorder(t, sc, mr, playerID, &storeErr)
+	enterHolderReleaseSeed(t, sc, mr, playerID, holderScene, targetScene, enterHolderReleaseZombie)
+	unqualifiedRevokeSetFence(mr, playerID, unqualifiedRevokePreviousFence(3))
+	unqualifiedRevokeStartTimer(t, mr, playerID, 3, leaveReleaseRedisNow, unqualifiedRevokeGrace)
+	installEnterHolderReleaseRecorder(t, nil)
+	revokedBefore := enterHolderReleaseCount(t, unqualifiedRevokeMetricVerdict)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(enterHolderReleaseLogin(playerID, targetScene))
+	requireHandoffRejectedUnchanged(t, sc, mr, playerID, resp, err, enterHolderReleaseZombie)
+	assert.Len(t, storeFences(), 1, "试过围写权行")
+	assert.Equal(t, "1", sceneMemberCount(mr, holderScene), "没撤销就不扣人数")
+	assert.Equal(t, revokedBefore, enterHolderReleaseCount(t, unqualifiedRevokeMetricVerdict))
 }
 
 // scene 自发的请求(带关联号)被 18 拒时释放门不请释放,也就不检查撤销 —— 即使宽限早已走完、资格原件也不属于 E。

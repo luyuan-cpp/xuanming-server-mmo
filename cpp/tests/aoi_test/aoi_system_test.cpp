@@ -5,7 +5,7 @@
 //   2. Entity-to-grid assignment after random movement
 //   3. Round-trip movement across all six hex neighbors
 //   4. Entity enter/leave visibility via AoiListComp
-//   5. Priority tags, capacity limits, pin/unpin
+//   5. Priority tags, capacity limits, explicit follows and the reverse watcher index
 //   6. Dynamic capacity (client-reported + server pressure)
 //   7. Per-scene priority policies (open-world, dungeon, PvP)
 
@@ -50,6 +50,19 @@ static bool IsInAoiList(entt::entity observer, entt::entity target)
 {
     const auto* aoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(observer);
     return aoiList && aoiList->Contains(target);
+}
+
+// 技能追踪类显式来源:最高淘汰权重,默认不授予侦测。
+static AoiFollowGrant SkillGrant(uint64_t id)
+{
+    return AoiFollowGrant{AoiFollowSource{AoiFollowKind::kSkill, id}, AoiPriority::kPinned, false};
+}
+
+// 反向索引里 target 的观察者 → 是否可见;没有索引返回空表。
+static std::unordered_map<entt::entity, bool> WatchersOf(entt::entity target)
+{
+    const auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(target);
+    return index ? index->watchers : std::unordered_map<entt::entity, bool>{};
 }
 
 // ---------------------------------------------------------------------------
@@ -423,8 +436,8 @@ TEST_F(AoiVisibilityTest, ResetEntityVisibilityDropsOldNeighbours)
     EXPECT_FALSE(IsInAoiList(entity2, entity1));
 }
 
-// kPinned 条目由 buff / skill 生命周期管理:重置既不摘"我钉住的",也不摘"钉住我的"。
-TEST_F(AoiVisibilityTest, ResetEntityVisibilityKeepsPinnedEntriesOnBothSides)
+// 显式关注由玩法生命周期管理:重置只撤空间来源,既不摘"我关注的",也不摘"关注我的"。
+TEST_F(AoiVisibilityTest, ResetEntityVisibilityKeepsExplicitFollowsOnBothSides)
 {
     auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
     location2.set_x(0);
@@ -433,15 +446,17 @@ TEST_F(AoiVisibilityTest, ResetEntityVisibilityKeepsPinnedEntriesOnBothSides)
     ASSERT_TRUE(IsInAoiList(entity1, entity2));
     ASSERT_TRUE(IsInAoiList(entity2, entity1));
 
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(entity1, entity2, AoiPriority::kPinned));
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(entity2, entity1, AoiPriority::kPinned));
+    ASSERT_TRUE(InterestSystem::Follow(entity1, entity2, SkillGrant(1)));
+    ASSERT_TRUE(InterestSystem::Follow(entity2, entity1, SkillGrant(2)));
 
     location2.set_x(500);
     location2.set_y(500);
     AoiSystem::ResetEntityVisibility(entity2);
 
-    EXPECT_TRUE(IsInAoiList(entity1, entity2)) << "对方钉住我的条目不能被重置摘掉";
-    EXPECT_TRUE(IsInAoiList(entity2, entity1)) << "我钉住对方的条目不能被重置摘掉";
+    EXPECT_TRUE(IsInAoiList(entity1, entity2)) << "对方显式关注我的条目不能被重置摘掉";
+    EXPECT_TRUE(IsInAoiList(entity2, entity1)) << "我显式关注对方的条目不能被重置摘掉";
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(entity1).entries.at(entity2).spatial) << "空间来源随重置撤掉";
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(entity2).entries.at(entity1).spatial);
 }
 
 // 还没进过格子的实体(刚进场、首次 Update 之前):重置不崩,首次 Update 照常建立可见性。
@@ -468,15 +483,15 @@ TEST_F(AoiVisibilityTest, FirstGridEntryWithoutVisibleTargetDoesNotCreateInteres
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(entity2));
 }
 
-// 重走首次进场分支(同场景瞬移之后)必须沿用已有兴趣表:kPinned 条目由 buff/skill 生命周期管理,
+// 重走首次进场分支(同场景瞬移之后)必须沿用已有兴趣表:显式来源由玩法生命周期管理,
 // 要跨瞬移存活,不能被一张新表覆盖。守护创建点不被改成 emplace_or_replace。
-TEST_F(AoiVisibilityTest, FirstEntryAfterResetKeepsPinnedEntries)
+TEST_F(AoiVisibilityTest, FirstEntryAfterResetKeepsExplicitFollows)
 {
     auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
     location2.set_x(0);
     location2.set_y(0);
     AoiSystem::Update(0.0);
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(entity2, entity1, AoiPriority::kPinned));
+    ASSERT_TRUE(InterestSystem::Follow(entity2, entity1, SkillGrant(1)));
 
     location2.set_x(500);
     location2.set_y(500);
@@ -484,7 +499,11 @@ TEST_F(AoiVisibilityTest, FirstEntryAfterResetKeepsPinnedEntries)
     AoiSystem::Update(0.0);
 
     ASSERT_TRUE(IsInAoiList(entity2, entity1));
-    EXPECT_EQ(tlsEcs.actorRegistry.get<AoiListComp>(entity2).entries.at(entity1).priority, AoiPriority::kPinned);
+    const auto& entry = tlsEcs.actorRegistry.get<AoiListComp>(entity2).entries.at(entity1);
+    ASSERT_EQ(1u, entry.follows.size());
+    EXPECT_EQ(AoiFollowKind::kSkill, entry.follows.front().source.kind);
+    EXPECT_FALSE(entry.spatial) << "新位置不在邻格内,只剩显式来源";
+    EXPECT_TRUE(WatchersOf(entity1).at(entity2)) << "反向索引仍记着可见的关注者";
 }
 
 // 离场路径对场景格子表只读/摘除。表缺失时按空表处理,不得补建。
@@ -618,7 +637,10 @@ TEST_F(AoiPriorityTest, AbsentInterestListReadsAndRemovalDoNotCreateIt)
     InterestSystem::RemoveAoiEntity(watcher, target);
     InterestSystem::UpgradePriority(watcher, target, AoiPriority::kPinned);
     InterestSystem::DowngradePriority(watcher, target, AoiPriority::kPinned, AoiPriority::kNormal);
+    InterestSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kSkill, 1});
+    InterestSystem::ClearRelations(watcher);
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiWatchersComp>(target));
 }
 
 // F078 回归:已销毁的观察者必须被拒绝。修复前 get_or_emplace 不校验存活,
@@ -644,6 +666,117 @@ TEST_F(AoiPriorityTest, AddAoiEntityRejectsDestroyedTarget)
     EXPECT_FALSE(InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kNormal));
     EXPECT_FALSE(IsInAoiList(watcher, target));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher));
+}
+
+// ---------------------------------------------------------------------------
+// 正反索引一致性(docs/design/aoi-directed-interest.md「关注关系」)
+// ---------------------------------------------------------------------------
+
+// 关注是有向的:正向在观察者身上,反向在目标身上;目标不因此获得兴趣表。
+TEST_F(AoiPriorityTest, FollowRegistersBothIndexesOneWay)
+{
+    const auto watcher = SpawnAt(0, 0);
+    const auto target = SpawnAt(500, 500);
+
+    ASSERT_TRUE(InterestSystem::Follow(watcher, target, SkillGrant(1)));
+
+    EXPECT_TRUE(IsInAoiList(watcher, target));
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size());
+    EXPECT_EQ((std::unordered_map<entt::entity, bool>{{watcher, true}}), WatchersOf(target));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(target));
+    EXPECT_TRUE(WatchersOf(watcher).empty());
+}
+
+// 同一来源重复登记只更新它的权重与授权,不产生第二份;不同来源并存,逐个撤销。
+TEST_F(AoiPriorityTest, SameSourceIsUpdatedInPlaceAndSourcesAreRevokedIndividually)
+{
+    const auto watcher = SpawnAt(0, 0);
+    const auto target = SpawnAt(500, 500);
+    const AoiFollowSource team{AoiFollowKind::kTeam, 42};
+
+    ASSERT_TRUE(InterestSystem::Follow(watcher, target, AoiFollowGrant{team, AoiPriority::kNormal, false}));
+    ASSERT_TRUE(InterestSystem::Follow(watcher, target, AoiFollowGrant{team, AoiPriority::kTeammate, false}));
+    ASSERT_TRUE(InterestSystem::Follow(watcher, target, SkillGrant(7)));
+    const auto& entry = tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target);
+    ASSERT_EQ(2u, entry.follows.size());
+    EXPECT_EQ(AoiPriority::kTeammate, entry.follows.front().priority);
+
+    InterestSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kSkill, 7});
+    EXPECT_TRUE(IsInAoiList(watcher, target));
+    InterestSystem::Unfollow(watcher, target, team);
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(target));
+    EXPECT_TRUE(WatchersOf(target).empty());
+    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size());
+}
+
+// 空间来源与显式来源合并在同一条目里;撤空间来源不影响显式来源,反之亦然。
+TEST_F(AoiPriorityTest, SpatialAndExplicitSourcesMergeIntoOneEntry)
+{
+    const auto watcher = SpawnAt(0, 0);
+    const auto target = SpawnAt(5, 0);
+
+    ASSERT_TRUE(InterestSystem::AddAoiEntity(watcher, target));
+    ASSERT_TRUE(InterestSystem::Follow(watcher, target, SkillGrant(1)));
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size()) << "只占一个容量名额";
+
+    InterestSystem::RemoveAoiEntity(watcher, target);
+    EXPECT_TRUE(IsInAoiList(watcher, target)) << "显式来源仍在";
+    ASSERT_TRUE(InterestSystem::AddAoiEntity(watcher, target));
+    InterestSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kSkill, 1});
+    EXPECT_TRUE(IsInAoiList(watcher, target)) << "空间来源仍在";
+    InterestSystem::RemoveAoiEntity(watcher, target);
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(target));
+    EXPECT_TRUE(WatchersOf(target).empty());
+}
+
+// 离场清理只走两张索引,清完之后任何索引都不再引用该实体;可重复调用。
+TEST_F(AoiPriorityTest, ClearRelationsRemovesEveryEdgeAndIsIdempotent)
+{
+    const auto leaver = SpawnAt(0, 0);
+    const auto nearWatcher = SpawnAt(5, 0);
+    const auto farWatcher = SpawnAt(500, 500);
+    const auto followedByLeaver = SpawnAt(-500, -500);
+    ASSERT_TRUE(InterestSystem::AddAoiEntity(nearWatcher, leaver));
+    ASSERT_TRUE(InterestSystem::AddAoiEntity(leaver, nearWatcher));
+    ASSERT_TRUE(InterestSystem::Follow(farWatcher, leaver, SkillGrant(1)));
+    ASSERT_TRUE(InterestSystem::Follow(leaver, followedByLeaver, SkillGrant(2)));
+    ASSERT_TRUE(InterestSystem::Follow(farWatcher, followedByLeaver, SkillGrant(3)));
+
+    AoiVisibilityChanges changes;
+    InterestSystem::ClearRelations(leaver, &changes);
+    InterestSystem::ClearRelations(leaver, &changes);
+
+    ASSERT_EQ(2u, changes.changes.size()) << "两个正在显示它的观察者各记一次移除,第二次调用不再记";
+    for (const auto& change : changes.changes)
+    {
+        EXPECT_EQ(leaver, change.target);
+        EXPECT_FALSE(change.shown);
+    }
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(leaver).entries.empty());
+    EXPECT_TRUE(WatchersOf(leaver).empty());
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(nearWatcher).HasRelation(leaver));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(farWatcher).HasRelation(leaver));
+    EXPECT_FALSE(WatchersOf(nearWatcher).contains(leaver));
+    EXPECT_EQ((std::unordered_map<entt::entity, bool>{{farWatcher, true}}), WatchersOf(followedByLeaver))
+        << "其他实体之间的关系不受影响";
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(farWatcher).Size());
+}
+
+// 跨场景、自身或已销毁的目标不能建立显式关注,也不留下组件。
+TEST_F(AoiPriorityTest, FollowRejectsInvalidSelfAndCrossSceneTargets)
+{
+    const auto watcher = SpawnAt(0, 0);
+    const auto destroyed = SpawnAt(5, 0);
+    tlsEcs.actorRegistry.destroy(destroyed);
+    const auto elsewhere = CreateAoiActor();
+    tlsEcs.actorRegistry.emplace<Transform>(elsewhere);
+    tlsEcs.actorRegistry.emplace<SceneEntityComp>(elsewhere, SceneEntityComp{tlsEcs.sceneRegistry.create()});
+
+    EXPECT_FALSE(InterestSystem::Follow(watcher, destroyed, SkillGrant(1)));
+    EXPECT_FALSE(InterestSystem::Follow(watcher, watcher, SkillGrant(1)));
+    EXPECT_FALSE(InterestSystem::Follow(watcher, elsewhere, SkillGrant(1)));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiWatchersComp>(elsewhere));
 }
 
 // ---------------------------------------------------------------------------
@@ -1009,8 +1142,8 @@ TEST_F(AoiTeammateRefreshTest, JoinAfterMutualVisibilityUpgradesBothDirections)
     EXPECT_EQ(PriorityOf(joiner, leader), AoiPriority::kTeammate);
 }
 
-// 离队:双向降回 kNormal;被 buff/skill 钉住的 kPinned 条目不受影响。
-TEST_F(AoiTeammateRefreshTest, LeaveDowngradesBothDirectionsButKeepsPinned)
+// 离队:空间标签双向降回 kNormal;显式来源(技能追踪)登记在自己的 grant 上,不受队伍刷新影响。
+TEST_F(AoiTeammateRefreshTest, LeaveDowngradesSpatialTagsButKeepsExplicitFollows)
 {
     auto leaver = SpawnAt(0, 0);
     auto mateB = SpawnAt(5, 0);
@@ -1022,15 +1155,17 @@ TEST_F(AoiTeammateRefreshTest, LeaveDowngradesBothDirectionsButKeepsPinned)
     AoiSystem::Update(0.0);
     ASSERT_EQ(PriorityOf(leaver, mateB), AoiPriority::kTeammate);
     ASSERT_EQ(PriorityOf(mateB, leaver), AoiPriority::kTeammate);
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(leaver, mateC, AoiPriority::kPinned));
-    ASSERT_EQ(PriorityOf(leaver, mateC), AoiPriority::kPinned);
+    ASSERT_TRUE(InterestSystem::Follow(leaver, mateC, SkillGrant(1)));
 
     SetTeam(leaver, 0);
     PlayerTeamSystem::RefreshTeammateAoi(leaver);
 
     EXPECT_EQ(PriorityOf(leaver, mateB), AoiPriority::kNormal);
     EXPECT_EQ(PriorityOf(mateB, leaver), AoiPriority::kNormal);
-    EXPECT_EQ(PriorityOf(leaver, mateC), AoiPriority::kPinned);
+    EXPECT_EQ(PriorityOf(leaver, mateC), AoiPriority::kNormal);
+    const auto& followed = tlsEcs.actorRegistry.get<AoiListComp>(leaver).entries.at(mateC);
+    ASSERT_EQ(1u, followed.follows.size());
+    EXPECT_EQ(AoiPriority::kPinned, followed.follows.front().priority);
     EXPECT_EQ(PriorityOf(mateC, leaver), AoiPriority::kNormal);
     // 与离队者无关的队友关系保持不变
     EXPECT_EQ(PriorityOf(mateB, mateC), AoiPriority::kTeammate);

@@ -90,7 +90,10 @@ message MatchAuthorityTicketRecord {
   bytes network_profile = 14;
   uint64 expires_ms = 15;
   uint32 selected_region = 16;
-  uint32 preferred_region = 17; // 签名测量最低RTT机房；同RTT按机房编号，不随节点暂时下线改本区。
+  // 17 原为 preferred_region：首选机房只给机房投影表用，投影随按池撮合退役（2026-11-05，未上线）。
+  // 撮合与提交点都从 network_profile 现算（authority.PreferredRegion），不再持久化派生值。
+  reserved 17;
+  reserved "preferred_region";
   string owner_account = 18;
   uint64 owner_revision = 19;
 }
@@ -107,29 +110,6 @@ message MatchRoleOccupancyRecord {
   string account = 4;
   uint64 owner_revision = 5;
   uint64 expires_ms = 6;  // match 库的时钟
-}
-
-// 仅作可重建候选索引，票与完整签名profile仍是提交点真相。
-// 同原票锁更新/清理；查询必须JOIN当前ticket代次，最终Claim复核原profile和原角色身份。
-message MatchTicketRegionRecord {
-  option (OptionTableName) = "match_ticket_region";
-  option (OptionPrimaryKey) = "player_id,physical_region";
-  option (OptionIndex) = "physical_region,mode,config_id,team_size,preferred_region,enqueued_ms,player_id;physical_region,mode,config_id,team_size,enqueued_ms,player_id;expires_ms,player_id,physical_region;physical_region,mode,config_id,team_size,home_zone,preferred_region,enqueued_ms,player_id;physical_region,mode,config_id,team_size,home_zone,enqueued_ms,player_id";
-  option (OptionTiDBNonclusteredPK) = true;
-  option (OptionTiDBShardRowIDBits) = 4;
-  option (OptionTiDBPreSplitRegions) = 4;
-  uint64 player_id = 1;
-  uint32 physical_region = 2;
-  string ticket = 3;
-  uint32 mode = 4;
-  uint32 config_id = 5;
-  uint32 team_size = 6;
-  uint32 preferred_region = 7;
-  uint64 enqueued_ms = 8;
-  int64 rating_centi = 9;
-  uint32 rtt_ms = 10;
-  uint64 expires_ms = 11;
-  uint32 home_zone = 12; // 来自原票的SQL home；整队禁止跨home时在LIMIT前过滤。
 }
 
 // 不能随当前票据覆盖或过期：否则旧 Join 在新一轮结束后重放会复活。
@@ -241,14 +221,17 @@ message MatchPreparedEndpoint {
   string endpoint = 2;
 }
 
+// 评分按 (玩家, 计分模式) 分开存(docs/design/global-match-hierarchical-pools.md §8):每个计分模式一条评分轨道,
+// 各自的分、各自的局数,打 1V1 不动 5V5 的分。只有计分模式(ratingrule.Rated)有行;PVP_TEAM 各档每侧人数共用一行。
 message MatchRatingRecord {
   option (OptionTableName) = "match_rating";
-  option (OptionPrimaryKey) = "player_id";
+  option (OptionPrimaryKey) = "player_id,mode";
   uint64 player_id = 1;
   int64 rating_centi = 2;
-  uint64 games = 3;
+  uint64 games = 3; // 本模式打过的计分局数;投榜批次的 score_version = 入账后的 games(这名玩家在本模式第几局)
   uint64 updated_ms = 4;
   uint64 score_changed_ms = 5; // 分数最后一次变化的时刻,进批次的 achieved_ms。榜上同分决胜用它,不看批次到达顺序
+  uint32 mode = 6; // MatchMode 数值,计分模式之一
 }
 message MatchRatingAppliedRecord {
   option (OptionTableName) = "match_rating_applied";
@@ -257,26 +240,30 @@ message MatchRatingAppliedRecord {
   bytes payload_digest = 2;
   uint64 applied_ms = 3;
 }
-// 评级投榜来源,按对局 id 拆片(shard = battle_id % 64,片数建表后不可改):每局只锁自己那一片。
-// 停写标记与最终游标和本片的评分事务争同一行锁；停写逐片取锁，不依赖墙钟猜最后一批。
+// 评级投榜来源,按 (计分模式, 对局 id) 拆片:每个计分模式一张榜、自己的 64 片(shard = battle_id % 64,片数建表后不可改),
+// 每局只锁本模式的那一片;游标按 (epoch, mode, shard) 各自从 1 连续。榜按模式分开是因为批次的 score_version 是
+// 「这名玩家在本模式第几局」,两种模式混在一张榜上会互相当成新旧版本(global-match-hierarchical-pools.md §8)。
+// 停写标记与最终游标和本片的评分事务争同一行锁；停写按模式逐片取锁，不依赖墙钟猜最后一批。
 message MatchRankSourceRecord {
   option (OptionTableName) = "match_rank_source";
-  option (OptionPrimaryKey) = "source_epoch,shard";
+  option (OptionPrimaryKey) = "source_epoch,mode,shard";
   uint64 source_epoch = 1;
   uint64 produced_cursor = 2;
   uint64 committed_cursor = 3;
-  uint64 board_id = 4;
+  uint64 board_id = 4; // 本模式那张榜(rank 的 board_id);同一模式各片必须相同
   bool stopped = 5;
   uint32 shard = 6;
+  uint32 mode = 7; // MatchMode 数值,计分模式之一
 }
 message MatchRankOutboxRecord {
   option (OptionTableName) = "match_rank_outbox";
-  option (OptionPrimaryKey) = "source_epoch,shard,source_cursor";
+  option (OptionPrimaryKey) = "source_epoch,mode,shard,source_cursor";
   uint64 source_epoch = 1;
   uint64 source_cursor = 2;
   uint64 request_id = 3;
   bytes entries = 4; // 确定性序列化 SubmitRankScoresRequest（未签名）；重投只重签 auth。
   uint32 shard = 5;
+  uint32 mode = 6; // MatchMode 数值,与来源行一致
 }
 
 enum MatchBattleCompletionSourceKind {

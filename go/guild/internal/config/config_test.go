@@ -13,36 +13,19 @@ import (
 	"shared/playerredis"
 )
 
-// 直接加载当前正式样例，避免测试注入掩盖全局会话权威的配置回归。
+// 直接加载当前正式样例，不在测试里注入覆盖，避免掩盖样例自身的配置回归。
 func loadEtcWithAuthorityForTest(t *testing.T, c *Config) error {
 	t.Helper()
 	return conf.Load("../../etc/guild.yaml", c)
 }
 
-func TestEtcTemplateRequiresExplicitGlobalSessions(t *testing.T) {
+func TestEtcTemplateDeclaresTiDB(t *testing.T) {
 	var c Config
 	if err := loadEtcWithAuthorityForTest(t, &c); err != nil {
-		t.Fatalf("当前样例显式全局权威配置应可加载: %v", err)
+		t.Fatalf("当前样例应可加载: %v", err)
 	}
-	if c.MySQL.Backend != "tidb" || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() {
-		t.Fatal("生产样例必须显式声明TiDB和全局LoginRedis")
-	}
-	for _, test := range []struct {
-		name   string
-		change func(*Config)
-	}{
-		{"未声明全局会话", func(c *Config) { c.GlobalLoginSessions = false }},
-		{"登录实例缺失", func(c *Config) { c.LoginRedis.Addrs = nil }},
-		{"非法登录DB", func(c *Config) { c.LoginRedis.DB = -1 }},
-		{"非法登录连接池", func(c *Config) { c.LoginRedis.PoolSizePerNode = -1 }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			invalid := c
-			test.change(&invalid)
-			if err := invalid.Validate(); err == nil || !strings.Contains(err.Error(), "LoginRedis") {
-				t.Fatalf("缺失或非法全局会话权威必须拒启: %v", err)
-			}
-		})
+	if c.MySQL.Backend != "tidb" {
+		t.Fatal("生产样例必须显式声明TiDB")
 	}
 }
 
@@ -82,9 +65,6 @@ const minimalGuildYaml = `
 Name: guild.rpc
 ListenOn: 127.0.0.1:50300
 Timeout: 4000
-GlobalLoginSessions: true
-LoginRedis:
-  Addrs: [127.0.0.1:26379]
 RedisClient:
   Host: 127.0.0.1:6379
   Password: ""

@@ -1,4 +1,4 @@
-// Package svc装配同域SQL、全局原登录态、etcd及既有缓存句柄和低基数指标。
+// Package svc装配同域SQL、etcd及既有缓存句柄和低基数指标。
 package svc
 
 import (
@@ -20,7 +20,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	redv9 "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -28,10 +27,9 @@ import (
 )
 
 type ServiceContext struct {
-	Config        config.Config
-	Authority     authority.Service
-	AuthorityDB   *sql.DB
-	LoginSessions redv9.UniversalClient
+	Config      config.Config
+	Authority   authority.Service
+	AuthorityDB *sql.DB
 	// directoryConn 是读角色权威状态的 data_service 连接,聊天不写资产,校验走 RPC。
 	directoryConn *grpc.ClientConn
 
@@ -82,18 +80,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		directoryConn.Close()
 		panic("聊天权威SQL初始化失败：" + err.Error())
 	}
-	login, err := openLoginSessions(ctx, c)
-	if err != nil {
-		directoryConn.Close()
-		db.Close()
-		panic(err)
-	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		login.Close()
 		directoryConn.Close()
 		db.Close()
 		panic("failed to create etcd client: " + err.Error())
@@ -101,7 +92,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 
 	chatRds, sharedRds, target := NewRedisHandles(c)
 	return &ServiceContext{
-		Authority: store, AuthorityDB: db, LoginSessions: login, directoryConn: directoryConn,
+		Authority: store, AuthorityDB: db, directoryConn: directoryConn,
 		WriterConfig: writer, RootAdmission: root,
 		Config:          c,
 		ChatRedis:       chatRds,
@@ -126,7 +117,7 @@ func NewRedisHandles(c config.Config) (chatRds, sharedRds *redis.Redis, target s
 	return chatRds, sharedRds, fmt.Sprintf("ChatRedis host=%s type=%s", c.ChatRedis.Host, c.ChatRedis.Type)
 }
 
-// Stop关闭本服务拥有的SQL/原登录态/etcd客户端。幂等，必须先排空RPC。
+// Stop关闭本服务拥有的SQL/etcd客户端。幂等，必须先排空RPC。
 // 调用方须保证 noderegistry.Close() 与 killswitch 的 ctx 取消都**先于**它 ——
 // 二者都在用这条连接,先关连接会让注销 Txn 失败、watch 撞上已关闭的 client。
 func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
@@ -165,9 +156,6 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 		return err
 	}
 	sc.stopOnce.Do(func() {
-		if sc.LoginSessions != nil {
-			sc.stopErr = errors.Join(sc.stopErr, sc.LoginSessions.Close())
-		}
 		if sc.directoryConn != nil {
 			sc.stopErr = errors.Join(sc.stopErr, sc.directoryConn.Close())
 		}
@@ -206,7 +194,7 @@ const (
 	OutcomeChannelUnavailable = "channel_unavailable" // TEAM / SYSTEM / UNSPECIFIED
 	OutcomeTooLong            = "too_long"            // 内容超 MaxContentBytes 或 trim 后为空
 	OutcomeRateLimited        = "rate_limited"        // 超每秒条数
-	OutcomeStorageError       = "storage_error"       // SQL/原登录态依赖故障或提交未知
+	OutcomeStorageError       = "storage_error"       // SQL依赖故障或提交未知
 )
 
 var (

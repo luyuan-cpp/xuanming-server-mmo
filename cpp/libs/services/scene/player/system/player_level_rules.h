@@ -10,6 +10,9 @@
 //     任务等级条件、宝宝跟随等级、装备穿戴等级……)一律读它。
 // LevelComp.level() 的直读只允许出现在四处:加载器(超上限只告警)、存盘(原样写出)、GmSetLevel(写前取旧值)、
 // 管理端 dump(原样展示)。其余读点一律经 CappedLevel。
+// LevelComp 是加载时挂上的持久数据(组件访问规则):玩家的读点缺这个组件就是加载不变量被破坏 —— 记 ERROR 并
+// fail-closed(拒绝、不生效、不补发),绝不按 1 级补默认值继续算;CappedLevel 的「0 按 1」只换算存储值,不覆盖缺组件。
+// 非玩家(NPC / 怪物)没有 LevelComp,按 1 级算是它们自己的规则(skill.cpp 的目标等级、回血 buff)。
 //
 // 写入口只有:新号初始化写 1(InitPlayerFromAllData)、GmSetPlayerLevel(IsValidLevel 拒绝越界)与将来的经验系统。
 // 经验系统的升级判断必须用存储等级(存储等级 ≥ kMaxLevel 就不再升级),绝不能写回 CappedLevel + 1 ——
@@ -19,7 +22,8 @@
 // 变强或变弱;新增非单调的按等级规则(只在某个等级以下生效的福利之类),要单独评估超上限玩家拿到的是哪一档。
 //
 // 单测:cpp/tests/turn_battle_engine_test/attribute_allocation_rules_test.cpp(PlayerLevelRulesTest);
-// 超上限存储等级的加载 / 存盘往返:cpp/tests/bag_test/persist_round_trip_test.cpp。
+// 超上限存储等级的加载 / 存盘往返:cpp/tests/bag_test/persist_round_trip_test.cpp;
+// 各读点的超上限、0 级与缺组件用例:战斗快照 / 穿戴 / 接任务在 bag_test,技能与伤害在 skill_test,回血在 buff_test。
 
 #include <cstdint>
 

@@ -61,9 +61,6 @@ const (
 // 报 "conflict key Redis"(core/conf/config.go addOrMergeFields)。共享库一律用 c.Redis.RedisConf
 // —— 与 chat / match / trade 同一写法。
 type Config struct {
-	GlobalLoginSessions bool `json:",optional"`
-	// LoginRedis 只读原登录态，必须显式指定全局同 login 的实例/DB，不能由 Redis 段猜测。
-	LoginRedis playerredis.LoginReaderConfig `json:",optional"`
 	zrpc.RpcServerConf
 
 	// ZoneId:只影响 etcd 注册路径 <Prefix>/zone/<z>/...(路由服按 NodeInfo 发现本服务)。
@@ -303,9 +300,6 @@ func IsRelaxedMode(mode string) bool {
 //
 // 每一条拒绝的都是"进程能起来、但行为静默出错"的配置 —— 逐条理由写在各分支旁边。
 func (c *Config) Validate() error {
-	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode <= 0 {
-		return errors.New("好友必须显式配置全局同 login 的 LoginRedis 实例/DB/正池上限")
-	}
 	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
 		return err
 	}

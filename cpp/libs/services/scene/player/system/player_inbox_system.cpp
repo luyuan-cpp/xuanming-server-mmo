@@ -1436,6 +1436,23 @@ void PlayerInboxSystem::Tick()
 	{
 		for (auto &state : runtime.domains)
 		{
+			// 停用对当前实体一直有效:按节拍补打同一个 metric=inbox_halted,[10m] 日志告警在实体存活期间一直亮着。
+			// 停用那一刻 Halt 已打过 ERROR(带 detail),这里只排期或补打,不改任何状态。
+			if (state.halted)
+			{
+				if (state.nextHaltRelogMs == 0)
+				{
+					state.nextHaltRelogMs = nowMs + player_inbox_rules::kHaltedDomainRelogIntervalMs;
+				}
+				else if (nowMs >= state.nextHaltRelogMs)
+				{
+					state.nextHaltRelogMs = nowMs + player_inbox_rules::kHaltedDomainRelogIntervalMs;
+					LOG_WARN << "[PlayerInbox] metric=inbox_halted reason=" << PlayerInboxHaltReasonName(state.haltReason)
+							 << " player_id=" << GuidOf(entity) << " domain=" << state.domain
+							 << " relog=1; this domain is still disabled for the player until the entity is recreated on this node";
+				}
+			}
+
 			// 在线有界兜底:计时只记在运行时,不进存档(设计 §7.3 第 3 条)。
 			if (periodicMinutes > 0 && !state.halted && state.nextPeriodicMs != 0 && nowMs >= state.nextPeriodicMs)
 			{

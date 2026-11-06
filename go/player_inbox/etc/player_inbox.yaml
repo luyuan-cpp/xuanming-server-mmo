@@ -116,10 +116,13 @@ PlayerInbox:
   # 另有字面键 AdminToken(与本键二选一),仓库里的 yaml 永远不写它。
   AdminTokenEnv: PLAYER_INBOX_ADMIN_TOKEN
   # 允许入箱的类型白名单(PlayerInboxMessageType 枚举名)。默认空 = 全部停用,回 kPlayerInboxDisabled。
-  # 上线顺序(设计 §11.7):scene 全部打开 consumer_enabled 之后,才在所有实例上一次性填入。v1 只放封锁 / 解封两种:
+  # 上线顺序(设计 §11.7):scene 全部打开 consumer_enabled 之后,才在所有实例上一次性填入。GM 域只放封锁 / 解封
+  # (货币两种、单玩家物品获取两种,设计 §2.2):
   #   EnqueueTypes:
   #     - PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN
   #     - PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
+  #     - PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN
+  #     - PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
   # v1 **不开** PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT(用户拍板 2026-10-16,交接 §6 M2 / M3):scene 挂欠款会合并
   # 同币种旧欠款、并用后来那单覆盖到期时间,挂错之后也没有撤销路径。合并语义、撤销类型与单笔上限做完之前,
   # 把它列进来 config.Validate 拒启;GmSanctionPlayer 对它回 kPlayerInboxDisabled。

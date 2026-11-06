@@ -476,6 +476,48 @@ func grpcSenderFor(method *internal.MethodInfo) (declaration, sender string, ok 
 	return declaration, method.CppPackage() + "::" + function, true
 }
 
+// inRpcRegistry 报告服务的方法是否写进 C++ RPC 注册表(rpc_event_registry.cpp 的 gRpcMethodRegistry):
+// 没有方法的、属于 db 节点的、对不上节点类型枚举的都不进(方法元数据要写目标节点类型,见 RPCServiceInfo.HasNodeType)。
+// 收头文件、写方法元数据、收 gate 上行白名单三处共用这一个判定。依赖 GenNodeUtil 填好的 NodeEnumValueSet。
+func inRpcRegistry(service *internal.RPCServiceInfo) bool {
+	return len(service.Methods) > 0 &&
+		!internal.IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) &&
+		service.HasNodeType()
+}
+
+// clientAllowlistCases 生成 gate 上行白名单 IsClientMessageId 的 case 行(docs/design/client-rpc-callback.md §7 R4)。
+//
+// 输入:services 生产传 GlobalRPCServiceList(消息号已分配);isSceneTCP 生产传 internal.IsSceneTCPMethod,单测注入;
+// messageIdSuffix 是消息号常量名后缀(_config.Global.Naming.MessageId)。
+// 输出:进 RPC 注册表(inRpcRegistry)的客户端协议服务里客户端能发起的方法(ClientRpcKind.AcceptsClientUpstream:
+// REQUEST / ONE_WAY),按服务与方法的声明顺序,去重。PUSH 只下行,SERVER_ONLY 由服务端或 gate 代发(Disconnect 由 gate 合成),都不收。
+// 方法形态取 internal.ClassifyClientRpcServices 的分类,与 Unity、robot 生成器同一份,本函数不自行读 option。
+// 错误:分类校验有任一违例(含 option 读不出来、Notify 前缀没标推送)即返回该错误,不按 REQUEST 兜底放行(fail-closed);
+// 调用方 Fatal。只读 services 与描述符,不读配置。
+func clientAllowlistCases(services internal.RPCServiceInfoList, isSceneTCP internal.SceneTCPPredicate, messageIdSuffix string) ([]string, error) {
+	classified, err := internal.ClassifyClientRpcServices(services, isSceneTCP)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		cases []string
+		seen  = make(map[string]struct{})
+	)
+	for _, service := range classified {
+		if !inRpcRegistry(service.Service) {
+			continue
+		}
+		for _, method := range service.Methods {
+			if !method.Kind.AcceptsClientUpstream() {
+				continue
+			}
+			cases = appendUniqueString(cases, seen, fmt.Sprintf("case %s%s:", method.Method.KeyName(), messageIdSuffix))
+		}
+	}
+	return cases, nil
+}
+
 // writeServiceInfoCppFile generates C++ code that initializes gRPC service metadata.
 func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -495,26 +537,15 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 		includes             []string
 		serviceInfoIncludes  []string
 		initLines            []string
-		clientIdLines        []string
 		senderDeclarations   []string
 		includeSet           = make(map[string]struct{})
 		serviceIncludeSet    = make(map[string]struct{})
 		senderDeclarationSet = make(map[string]struct{})
-		clientIDSet          = make(map[string]struct{})
 	)
 
 	// Step 1: Collect headers
 	for _, service := range internal.GlobalRPCServiceList {
-		if len(service.Methods) == 0 {
-			continue
-		}
-
-		if internal.IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
-			continue
-		}
-
-		// 方法元数据要写目标节点类型,没有节点类型的内部 service 不进注册表。
-		if !service.HasNodeType() {
+		if !inRpcRegistry(service) {
 			continue
 		}
 
@@ -527,17 +558,9 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 		serviceInfoIncludes = appendUniqueString(serviceInfoIncludes, serviceIncludeSet, firstMethod.ServiceInfoIncludeName())
 	}
 
-	// Step 2: Generate init lines for RpcService and allowed client message IDs
+	// Step 2: Generate init lines for RpcService
 	for _, service := range internal.GlobalRPCServiceList {
-		if len(service.Methods) == 0 {
-			continue
-		}
-
-		if internal.IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
-			continue
-		}
-
-		if !service.HasNodeType() {
+		if !inRpcRegistry(service) {
 			continue
 		}
 
@@ -550,7 +573,6 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 		for _, method := range service.Methods {
 			messageId := method.KeyName() + _config.Global.Naming.MessageId
 
-			isClientMessage := internal.IsClientProtocolService(service.ServiceDescriptorProto)
 			nodeType := fmt.Sprintf("%s::%sNodeService", internal.NodeEnumCppQualifiedType, service.NodeServiceForCpp())
 
 			meta := rpcMethodMetaInit{
@@ -572,14 +594,16 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 				meta.GrpcFullMethod = "/" + qualifiedService + "/" + method.Method()
 			}
 			initLines = append(initLines, rpcMethodMetaInitLines(meta)...)
-
-			if isClientMessage {
-				clientIdLines = appendUniqueString(clientIdLines, clientIDSet, fmt.Sprintf("case %s:", messageId))
-			}
 		}
 	}
 
-	// Step 3: Fill template data and render
+	// Step 3: gate 上行白名单(docs/design/client-rpc-callback.md §7 R4)
+	clientIdLines, err := clientAllowlistCases(internal.GlobalRPCServiceList, internal.IsSceneTCPMethod, _config.Global.Naming.MessageId)
+	if err != nil {
+		logger.Global.Fatal("Failed to build the gate client allowlist IsClientMessageId", zap.Error(err))
+	}
+
+	// Step 4: Fill template data and render
 	tmplData := ServiceInfoCppData{
 		Includes:             includes,
 		ServiceInfoIncludes:  serviceInfoIncludes,

@@ -43,8 +43,6 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchRoleOccupancyRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
-        // ::match::MatchTicketRegionRecord
-        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchJoinIntentRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchDirectIntentRecord
@@ -77,233 +75,6 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
 }  // namespace
 #endif
 namespace match {
-class MatchTicketRegionRecord::_Internal {
- public:
-  using HasBits = decltype(::std::declval<MatchTicketRegionRecord>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_._has_bits_);
-};
-
-constexpr MatchTicketRegionRecord::ParseTableT_ MatchTicketRegionRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_._has_bits_),
-      0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
-      0,  // num_aux_entries
-      offsetof(ParseTableT_, field_names),  // no aux_entries
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::match::MatchTicketRegionRecord>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTicketRegionRecord, _impl_.player_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.player_id_)}},
-      // uint32 physical_region = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.physical_region_), 2>(),
-       {16, 2, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.physical_region_)}},
-      // string ticket = 3;
-      {::_pbi::TcParser::FastUS1,
-       {26, 0, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.ticket_)}},
-      // uint32 mode = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.mode_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.mode_)}},
-      // uint32 config_id = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.config_id_), 4>(),
-       {40, 4, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.config_id_)}},
-      // uint32 team_size = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.team_size_), 5>(),
-       {48, 5, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.team_size_)}},
-      // uint32 preferred_region = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.preferred_region_), 7>(),
-       {56, 7, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.preferred_region_)}},
-      // uint64 enqueued_ms = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTicketRegionRecord, _impl_.enqueued_ms_), 6>(),
-       {64, 6, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.enqueued_ms_)}},
-      // int64 rating_centi = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTicketRegionRecord, _impl_.rating_centi_), 9>(),
-       {72, 9, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.rating_centi_)}},
-      // uint32 rtt_ms = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.rtt_ms_), 8>(),
-       {80, 8, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.rtt_ms_)}},
-      // uint64 expires_ms = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTicketRegionRecord, _impl_.expires_ms_), 10>(),
-       {88, 10, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.expires_ms_)}},
-      // uint32 home_zone = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTicketRegionRecord, _impl_.home_zone_), 11>(),
-       {96, 11, 0,
-        PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.home_zone_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 physical_region = 2;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.physical_region_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string ticket = 3;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.ticket_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // uint32 mode = 4;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.mode_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 config_id = 5;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.config_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 team_size = 6;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.team_size_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 preferred_region = 7;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.preferred_region_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 enqueued_ms = 8;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.enqueued_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // int64 rating_centi = 9;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.rating_centi_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
-      // uint32 rtt_ms = 10;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.rtt_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 expires_ms = 11;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.expires_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 home_zone = 12;
-      {PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.home_zone_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    }},
-    // no aux_entries
-    {{
-      "\35\0\0\6\0\0\0\0\0\0\0\0\0\0\0\0"
-      "match.MatchTicketRegionRecord"
-      "ticket"
-    }},
-  };
-}
-
-
-inline constexpr MatchTicketRegionRecord::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        ticket_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        player_id_{::uint64_t{0u}},
-        physical_region_{0u},
-        mode_{0u},
-        config_id_{0u},
-        team_size_{0u},
-        enqueued_ms_{::uint64_t{0u}},
-        preferred_region_{0u},
-        rtt_ms_{0u},
-        rating_centi_{::int64_t{0}},
-        expires_ms_{::uint64_t{0u}},
-        home_zone_{0u} {}
-
-template <typename>
-constexpr MatchTicketRegionRecord::MatchTicketRegionRecord(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL MatchTicketRegionRecord::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) MatchTicketRegionRecord(arena);
-}
-constexpr auto MatchTicketRegionRecord::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MatchTicketRegionRecord), alignof(MatchTicketRegionRecord));
-}
-constexpr auto MatchTicketRegionRecord::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &MatchTicketRegionRecord::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<MatchTicketRegionRecord>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &MatchTicketRegionRecord::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<MatchTicketRegionRecord>(), &MatchTicketRegionRecord::ByteSizeLong,
-              &MatchTicketRegionRecord::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct MatchTicketRegionRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr MatchTicketRegionRecordGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 MatchTicketRegionRecord_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(MatchTicketRegionRecord::InternalGenerateClassData_(
-            _default, &MatchTicketRegionRecord_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTicketRegionRecord>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~MatchTicketRegionRecordGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) MatchTicketRegionRecord _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTicketRegionRecord>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecordGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTicketRegionRecordGlobalsTypeInternal MatchTicketRegionRecord_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* MatchTicketRegionRecord_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return MatchTicketRegionRecord_globals_.GetClassData();
-#else
-  return MatchTicketRegionRecord_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 class MatchSpectatorRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<MatchSpectatorRecord>()._impl_._has_bits_);
@@ -1232,7 +1003,7 @@ constexpr auto MatchRatingRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -1390,7 +1161,7 @@ constexpr auto MatchRatingAppliedRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -1568,7 +1339,7 @@ constexpr auto MatchRankSourceRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -1742,7 +1513,7 @@ constexpr auto MatchRankOutboxRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -1895,7 +1666,7 @@ constexpr auto MatchPreparedEndpoint::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -2289,7 +2060,7 @@ constexpr auto MatchJoinIntentRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -2439,7 +2210,7 @@ constexpr auto MatchGlobalPolicyRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -2600,7 +2371,7 @@ constexpr auto MatchFormationMember::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -2830,7 +2601,7 @@ constexpr auto MatchChallengeInvitationRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3061,7 +2832,7 @@ constexpr auto MatchBattleSettlementSourceRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3316,7 +3087,7 @@ constexpr auto MatchBattleCompletionRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3381,9 +3152,9 @@ constexpr MatchAuthorityTicketRecord::ParseTableT_ MatchAuthorityTicketRecord::I
       0, // no _extensions_
       19, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294443008,  // skipmap
+      4294508544,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      19,  // num_field_entries
+      18,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -3458,10 +3229,7 @@ constexpr MatchAuthorityTicketRecord::ParseTableT_ MatchAuthorityTicketRecord::I
       {::_pbi::TcParser::FastV32S2,
        {384, 15, 0,
         PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.selected_region_)}},
-      // uint32 preferred_region = 17;
-      {::_pbi::TcParser::FastV32S2,
-       {392, 18, 0,
-        PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.preferred_region_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string owner_account = 18;
       {::_pbi::TcParser::FastUS2,
        {402, 3, 0,
@@ -3517,8 +3285,6 @@ constexpr MatchAuthorityTicketRecord::ParseTableT_ MatchAuthorityTicketRecord::I
       {PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.expires_ms_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 selected_region = 16;
       {PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.selected_region_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 preferred_region = 17;
-      {PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.preferred_region_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string owner_account = 18;
       {PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.owner_account_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 owner_revision = 19;
@@ -3526,7 +3292,7 @@ constexpr MatchAuthorityTicketRecord::ParseTableT_ MatchAuthorityTicketRecord::I
     }},
     // no aux_entries
     {{
-      "\40\0\6\12\0\0\0\0\0\0\0\0\0\0\0\0\0\0\15\0\0\0\0\0"
+      "\40\0\6\12\0\0\0\0\0\0\0\0\0\0\0\0\0\15\0\0\0\0\0\0"
       "match.MatchAuthorityTicketRecord"
       "ticket"
       "request_id"
@@ -3565,8 +3331,7 @@ inline constexpr MatchAuthorityTicketRecord::Impl_::Impl_(
         zone_id_{0u},
         selected_region_{0u},
         expires_ms_{::uint64_t{0u}},
-        owner_revision_{::uint64_t{0u}},
-        preferred_region_{0u} {}
+        owner_revision_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr MatchAuthorityTicketRecord::MatchAuthorityTicketRecord(::_pbi::ConstantInitialized,
@@ -3944,7 +3709,7 @@ constexpr auto MatchFormationRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -4185,7 +3950,7 @@ constexpr auto MatchDirectIntentRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -4541,7 +4306,7 @@ constexpr auto MatchDirectStartOriginal::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -4685,7 +4450,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_._has_bits_),
-        22, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.ticket_),
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.request_id_),
@@ -4702,7 +4467,6 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.network_profile_),
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.expires_ms_),
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.selected_region_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.preferred_region_),
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.owner_account_),
         PROTOBUF_FIELD_OFFSET(::match::MatchAuthorityTicketRecord, _impl_.owner_revision_),
         4,
@@ -4721,7 +4485,6 @@ const ::uint32_t
         2,
         16,
         15,
-        18,
         3,
         17,
         0x081, // bitmap
@@ -4739,33 +4502,6 @@ const ::uint32_t
         0,
         3,
         4,
-        0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_._has_bits_),
-        15, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.player_id_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.physical_region_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.ticket_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.mode_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.config_id_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.team_size_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.preferred_region_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.enqueued_ms_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.rating_centi_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.rtt_ms_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.expires_ms_),
-        PROTOBUF_FIELD_OFFSET(::match::MatchTicketRegionRecord, _impl_.home_zone_),
-        1,
-        2,
-        0,
-        3,
-        4,
-        5,
-        7,
-        6,
-        9,
-        8,
-        10,
-        11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchJoinIntentRecord, _impl_._has_bits_),
         15, // hasbit index offset
@@ -5044,22 +4780,21 @@ static const ::_pbi::MigrationSchema
         {67, sizeof(::match::MatchSpectatorHeadRecord)},
         {74, sizeof(::match::MatchNetworkProfileRecord)},
         {83, sizeof(::match::MatchAuthorityTicketRecord)},
-        {124, sizeof(::match::MatchRoleOccupancyRecord)},
-        {139, sizeof(::match::MatchTicketRegionRecord)},
-        {166, sizeof(::match::MatchJoinIntentRecord)},
-        {193, sizeof(::match::MatchDirectIntentRecord)},
-        {220, sizeof(::match::MatchDirectStartOriginal)},
-        {227, sizeof(::match::MatchChallengeInvitationRecord)},
-        {254, sizeof(::match::MatchGlobalPolicyRecord)},
-        {261, sizeof(::match::MatchFormationMember)},
-        {270, sizeof(::match::MatchFormationRecord)},
-        {317, sizeof(::match::MatchPreparedEndpoint)},
-        {324, sizeof(::match::MatchRatingRecord)},
-        {337, sizeof(::match::MatchRatingAppliedRecord)},
-        {346, sizeof(::match::MatchRankSourceRecord)},
-        {361, sizeof(::match::MatchRankOutboxRecord)},
-        {374, sizeof(::match::MatchBattleCompletionRecord)},
-        {407, sizeof(::match::MatchBattleSettlementSourceRecord)},
+        {122, sizeof(::match::MatchRoleOccupancyRecord)},
+        {137, sizeof(::match::MatchJoinIntentRecord)},
+        {164, sizeof(::match::MatchDirectIntentRecord)},
+        {191, sizeof(::match::MatchDirectStartOriginal)},
+        {198, sizeof(::match::MatchChallengeInvitationRecord)},
+        {225, sizeof(::match::MatchGlobalPolicyRecord)},
+        {232, sizeof(::match::MatchFormationMember)},
+        {241, sizeof(::match::MatchFormationRecord)},
+        {288, sizeof(::match::MatchPreparedEndpoint)},
+        {295, sizeof(::match::MatchRatingRecord)},
+        {308, sizeof(::match::MatchRatingAppliedRecord)},
+        {317, sizeof(::match::MatchRankSourceRecord)},
+        {332, sizeof(::match::MatchRankOutboxRecord)},
+        {345, sizeof(::match::MatchBattleCompletionRecord)},
+        {378, sizeof(::match::MatchBattleSettlementSourceRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5070,7 +4805,6 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::match::MatchNetworkProfileRecord_globals_,
         &::match::MatchAuthorityTicketRecord_globals_,
         &::match::MatchRoleOccupancyRecord_globals_,
-        &::match::MatchTicketRegionRecord_globals_,
         &::match::MatchJoinIntentRecord_globals_,
         &::match::MatchDirectIntentRecord_globals_,
         &::match::MatchDirectStartOriginal_globals_,
@@ -5120,7 +4854,7 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "\364\001\tplayer_id\"}\n\031MatchNetworkProfileRecor"
     "d\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007payload\030\002 \001(\014\022\022\n"
     "\nexpires_ms\030\003 \001(\004:(\212\222\364\001\025match_network_pr"
-    "ofile\222\222\364\001\tplayer_id\"\337\004\n\032MatchAuthorityTi"
+    "ofile\222\222\364\001\tplayer_id\"\335\004\n\032MatchAuthorityTi"
     "cketRecord\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006ticket\030"
     "\002 \001(\t\022\022\n\nrequest_id\030\003 \001(\t\022\014\n\004mode\030\004 \001(\r\022"
     "\021\n\tconfig_id\030\005 \001(\r\022\021\n\tteam_size\030\006 \001(\r\022\r\n"
@@ -5129,143 +4863,126 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "ing_centi\030\013 \001(\003\022\024\n\014formation_id\030\014 \001(\004\022\017\n"
     "\007team_id\030\r \001(\004\022\027\n\017network_profile\030\016 \001(\014\022"
     "\022\n\nexpires_ms\030\017 \001(\004\022\027\n\017selected_region\030\020"
-    " \001(\r\022\030\n\020preferred_region\030\021 \001(\r\022\025\n\rowner_"
-    "account\030\022 \001(\t\022\026\n\016owner_revision\030\023 \001(\004:\275\001"
-    "\212\222\364\001\026match_authority_ticket\222\222\364\001\tplayer_i"
-    "d\332\222\364\001\216\001state,mode,config_id,team_size,te"
-    "am_id,enqueued_ms,player_id;formation_id"
-    ";state,enqueued_ms,player_id;state,mode,"
-    "team_id,enqueued_ms,player_id\"\333\001\n\030MatchR"
-    "oleOccupancyRecord\022\021\n\tplayer_id\030\001 \001(\004\022\022\n"
-    "\nowner_kind\030\002 \001(\r\022\020\n\010owner_id\030\003 \001(\004\022\017\n\007a"
-    "ccount\030\004 \001(\t\022\026\n\016owner_revision\030\005 \001(\004\022\022\n\n"
-    "expires_ms\030\006 \001(\004:I\212\222\364\001\024match_role_occupa"
-    "ncy\222\222\364\001\tplayer_id\332\222\364\001\035owner_kind,owner_i"
-    "d,player_id\"\251\005\n\027MatchTicketRegionRecord\022"
-    "\021\n\tplayer_id\030\001 \001(\004\022\027\n\017physical_region\030\002 "
-    "\001(\r\022\016\n\006ticket\030\003 \001(\t\022\014\n\004mode\030\004 \001(\r\022\021\n\tcon"
-    "fig_id\030\005 \001(\r\022\021\n\tteam_size\030\006 \001(\r\022\030\n\020prefe"
-    "rred_region\030\007 \001(\r\022\023\n\013enqueued_ms\030\010 \001(\004\022\024"
-    "\n\014rating_centi\030\t \001(\003\022\016\n\006rtt_ms\030\n \001(\r\022\022\n\n"
-    "expires_ms\030\013 \001(\004\022\021\n\thome_zone\030\014 \001(\r:\241\003\212\222"
-    "\364\001\023match_ticket_region\222\222\364\001\031player_id,phy"
-    "sical_region\332\222\364\001\326\002physical_region,mode,c"
-    "onfig_id,team_size,preferred_region,enqu"
-    "eued_ms,player_id;physical_region,mode,c"
-    "onfig_id,team_size,enqueued_ms,player_id"
-    ";expires_ms,player_id,physical_region;ph"
-    "ysical_region,mode,config_id,team_size,h"
-    "ome_zone,preferred_region,enqueued_ms,pl"
-    "ayer_id;physical_region,mode,config_id,t"
-    "eam_size,home_zone,enqueued_ms,player_id"
-    "\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\205\003\n\025MatchJoinIntentRecor"
-    "d\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\t"
-    "\022\025\n\rticket_record\030\003 \001(\014\022\021\n\tcancelled\030\004 \001"
-    "(\010\022\024\n\014request_high\030\005 \001(\004\022\023\n\013request_low\030"
-    "\006 \001(\004\022\025\n\rowner_account\030\007 \001(\t\022\026\n\016owner_re"
-    "vision\030\010 \001(\004\022\026\n\016spectator_exit\030\t \001(\014\022\025\n\r"
-    "exit_prepared\030\n \001(\010\022\027\n\017request_payload\030\013"
-    " \001(\014\022\r\n\005state\030\014 \001(\r:j\212\222\364\001\021match_join_int"
-    "ent\222\222\364\001\"player_id,request_high,request_l"
-    "ow\332\222\364\001(state,player_id,request_high,requ"
-    "est_low\"\302\003\n\027MatchDirectIntentRecord\022\014\n\004k"
-    "ind\030\001 \001(\r\022\020\n\010owner_id\030\002 \001(\004\022\024\n\014request_h"
-    "igh\030\003 \001(\004\022\023\n\013request_low\030\004 \001(\004\022\017\n\007payloa"
-    "d\030\005 \001(\014\022\021\n\tbattle_id\030\006 \001(\004\022\021\n\tcancelled\030"
-    "\007 \001(\010\022\025\n\rowner_account\030\010 \001(\t\022\026\n\016owner_re"
-    "vision\030\t \001(\004\0224\n\017spectator_exits\030\n \003(\0132\033."
-    "match.MatchSpectatorRecord\022\025\n\rexit_prepa"
-    "red\030\013 \001(\010\022\026\n\016start_original\030\014 \001(\014:\220\001\212\222\364\001"
-    "\023match_direct_intent\222\222\364\001&kind,owner_id,r"
-    "equest_high,request_low\332\222\364\001Hexit_prepare"
-    "d,cancelled,battle_id,kind,owner_id,requ"
-    "est_high,request_low\"~\n\030MatchDirectStart"
-    "Original\022.\n\tformation\030\001 \001(\0132\033.match.Matc"
-    "hFormationRecord\0222\n\007tickets\030\002 \003(\0132!.matc"
-    "h.MatchAuthorityTicketRecord\"\335\003\n\036MatchCh"
-    "allengeInvitationRecord\022\024\n\014challenge_id\030"
-    "\001 \001(\004\022\034\n\024challenger_player_id\030\002 \001(\004\022\030\n\020t"
-    "arget_player_id\030\003 \001(\004\022\021\n\tconfig_id\030\004 \001(\r"
-    "\022\032\n\022challenger_account\030\005 \001(\t\022\033\n\023challeng"
-    "er_revision\030\006 \001(\004\022\026\n\016target_account\030\007 \001("
-    "\t\022\027\n\017target_revision\030\010 \001(\004\022\022\n\ncreated_ms"
-    "\030\t \001(\004\022\022\n\nexpires_ms\030\n \001(\004\022\r\n\005state\030\013 \001("
-    "\r\022\021\n\tbattle_id\030\014 \001(\004:\245\001\212\222\364\001\032match_challe"
-    "nge_invitation\222\222\364\001\014challenge_id\332\222\364\001atarg"
-    "et_player_id,state,expires_ms,challenge_"
-    "id;challenger_player_id,state,expires_ms"
-    ",challenge_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"m\n\027MatchGlo"
-    "balPolicyRecord\022\021\n\tpolicy_id\030\001 \001(\r\022\027\n\017co"
-    "ntract_digest\030\002 \001(\014:&\212\222\364\001\023match_global_p"
-    "olicy\222\222\364\001\tpolicy_id\"M\n\024MatchFormationMem"
-    "ber\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006ticket\030\002 \001(\t\022\022"
-    "\n\nteam_index\030\003 \001(\r\"\253\005\n\024MatchFormationRec"
-    "ord\022\021\n\tbattle_id\030\001 \001(\004\022\024\n\014operation_id\030\002"
-    " \001(\t\022\r\n\005state\030\003 \001(\r\022\027\n\017physical_region\030\004"
-    " \001(\r\022\026\n\016target_node_id\030\005 \001(\r\022\032\n\022target_i"
-    "nstance_id\030\006 \001(\t\022\027\n\017target_endpoint\030\007 \001("
-    "\t\022\014\n\004mode\030\010 \001(\r\022\021\n\tconfig_id\030\t \001(\r\022,\n\007me"
-    "mbers\030\n \003(\0132\033.match.MatchFormationMember"
-    "\022\026\n\016create_request\030\013 \001(\014\022\022\n\ncreated_ms\030\014"
-    " \001(\004\022\023\n\013deadline_ms\030\r \001(\004\022\023\n\013retry_at_ms"
-    "\030\016 \001(\004\022\030\n\020activity_context\030\017 \001(\014\022\032\n\022requ"
-    "eue_on_failure\030\020 \001(\010\022.\n\010prepared\030\021 \003(\0132\034"
-    ".match.MatchPreparedEndpoint\022 \n\030outcome_"
-    "protocol_version\030\022 \001(\r\022#\n\033preflight_supp"
-    "orted_version\030\023 \001(\r\022\035\n\025preflight_instanc"
-    "e_id\030\024 \001(\t\022(\n adopted_outcome_protocol_v"
-    "ersion\030\025 \001(\r\022 \n\030adopted_outcome_observed"
-    "\030\026 \001(\010:8\212\222\364\001\017match_formation\222\222\364\001\tbattle_"
-    "id\332\222\364\001\021state,retry_at_ms\"<\n\025MatchPrepare"
-    "dEndpoint\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010endpoint"
-    "\030\002 \001(\t\"\232\001\n\021MatchRatingRecord\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022\024\n\014rating_centi\030\002 \001(\003\022\r\n\005games\030\003"
-    " \001(\004\022\022\n\nupdated_ms\030\004 \001(\004\022\030\n\020score_change"
-    "d_ms\030\005 \001(\004:\037\212\222\364\001\014match_rating\222\222\364\001\tplayer"
-    "_id\"\202\001\n\030MatchRatingAppliedRecord\022\021\n\tbatt"
-    "le_id\030\001 \001(\004\022\026\n\016payload_digest\030\002 \001(\014\022\022\n\na"
-    "pplied_ms\030\003 \001(\004:\'\212\222\364\001\024match_rating_appli"
-    "ed\222\222\364\001\tbattle_id\"\301\001\n\025MatchRankSourceReco"
-    "rd\022\024\n\014source_epoch\030\001 \001(\004\022\027\n\017produced_cur"
-    "sor\030\002 \001(\004\022\030\n\020committed_cursor\030\003 \001(\004\022\020\n\010b"
-    "oard_id\030\004 \001(\004\022\017\n\007stopped\030\005 \001(\010\022\r\n\005shard\030"
-    "\006 \001(\r:-\212\222\364\001\021match_rank_source\222\222\364\001\022source"
-    "_epoch,shard\"\265\001\n\025MatchRankOutboxRecord\022\024"
-    "\n\014source_epoch\030\001 \001(\004\022\025\n\rsource_cursor\030\002 "
-    "\001(\004\022\022\n\nrequest_id\030\003 \001(\004\022\017\n\007entries\030\004 \001(\014"
-    "\022\r\n\005shard\030\005 \001(\r:;\212\222\364\001\021match_rank_outbox\222"
-    "\222\364\001 source_epoch,shard,source_cursor\"\257\004\n"
-    "\033MatchBattleCompletionRecord\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_"
-    "digest\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013"
-    "archived_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022"
-    "\030\n\020source_partition\030\007 \001(\005\022\025\n\rsource_offs"
-    "et\030\010 \001(\003\022.\n\010decision\030\t \001(\0162\034.match.Battl"
-    "eOutcomeDecision\022;\n\013source_kind\030\n \001(\0162&."
-    "match.MatchBattleCompletionSourceKind\022\036\n"
-    "\026placement_operation_id\030\013 \001(\t\022\032\n\022target_"
-    "instance_id\030\014 \001(\t\022 \n\030outcome_protocol_ve"
-    "rsion\030\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n"
-    "\rnext_retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_"
-    "completion\222\222\364\001\tbattle_id\332\222\364\0011decision,re"
-    "sult_published,next_retry_ms,battle_id\"\236"
-    "\003\n!MatchBattleSettlementSourceRecord\022\021\n\t"
-    "battle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020se"
-    "ttlement_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004"
-    " \001(\014\022\023\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_accou"
-    "nt\030\006 \001(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issu"
-    "ed_at_ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inb"
-    "ox_state\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025"
-    "\n\rnext_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle"
-    "_settlement_source\222\222\364\001\023battle_id,player_"
-    "id\332\222\364\0010dispatch_state,next_retry_ms,batt"
-    "le_id,player_id*\343\001\n\037MatchBattleCompletio"
-    "nSourceKind\022.\n*MATCH_BATTLE_COMPLETION_S"
-    "OURCE_UNSPECIFIED\020\000\022(\n$MATCH_BATTLE_COMP"
-    "LETION_SOURCE_KAFKA\020\001\022-\n)MATCH_BATTLE_CO"
-    "MPLETION_SOURCE_BATTLE_RPC\020\002\0227\n3MATCH_BA"
-    "TTLE_COMPLETION_SOURCE_MATCH_DEADLINE_AB"
-    "ORT\020\003B\rZ\013match/matchb\006proto3"
+    " \001(\r\022\025\n\rowner_account\030\022 \001(\t\022\026\n\016owner_rev"
+    "ision\030\023 \001(\004:\275\001\212\222\364\001\026match_authority_ticke"
+    "t\222\222\364\001\tplayer_id\332\222\364\001\216\001state,mode,config_i"
+    "d,team_size,team_id,enqueued_ms,player_i"
+    "d;formation_id;state,enqueued_ms,player_"
+    "id;state,mode,team_id,enqueued_ms,player"
+    "_idJ\004\010\021\020\022R\020preferred_region\"\333\001\n\030MatchRol"
+    "eOccupancyRecord\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\no"
+    "wner_kind\030\002 \001(\r\022\020\n\010owner_id\030\003 \001(\004\022\017\n\007acc"
+    "ount\030\004 \001(\t\022\026\n\016owner_revision\030\005 \001(\004\022\022\n\nex"
+    "pires_ms\030\006 \001(\004:I\212\222\364\001\024match_role_occupanc"
+    "y\222\222\364\001\tplayer_id\332\222\364\001\035owner_kind,owner_id,"
+    "player_id\"\205\003\n\025MatchJoinIntentRecord\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\t\022\025\n\rti"
+    "cket_record\030\003 \001(\014\022\021\n\tcancelled\030\004 \001(\010\022\024\n\014"
+    "request_high\030\005 \001(\004\022\023\n\013request_low\030\006 \001(\004\022"
+    "\025\n\rowner_account\030\007 \001(\t\022\026\n\016owner_revision"
+    "\030\010 \001(\004\022\026\n\016spectator_exit\030\t \001(\014\022\025\n\rexit_p"
+    "repared\030\n \001(\010\022\027\n\017request_payload\030\013 \001(\014\022\r"
+    "\n\005state\030\014 \001(\r:j\212\222\364\001\021match_join_intent\222\222\364"
+    "\001\"player_id,request_high,request_low\332\222\364\001"
+    "(state,player_id,request_high,request_lo"
+    "w\"\302\003\n\027MatchDirectIntentRecord\022\014\n\004kind\030\001 "
+    "\001(\r\022\020\n\010owner_id\030\002 \001(\004\022\024\n\014request_high\030\003 "
+    "\001(\004\022\023\n\013request_low\030\004 \001(\004\022\017\n\007payload\030\005 \001("
+    "\014\022\021\n\tbattle_id\030\006 \001(\004\022\021\n\tcancelled\030\007 \001(\010\022"
+    "\025\n\rowner_account\030\010 \001(\t\022\026\n\016owner_revision"
+    "\030\t \001(\004\0224\n\017spectator_exits\030\n \003(\0132\033.match."
+    "MatchSpectatorRecord\022\025\n\rexit_prepared\030\013 "
+    "\001(\010\022\026\n\016start_original\030\014 \001(\014:\220\001\212\222\364\001\023match"
+    "_direct_intent\222\222\364\001&kind,owner_id,request"
+    "_high,request_low\332\222\364\001Hexit_prepared,canc"
+    "elled,battle_id,kind,owner_id,request_hi"
+    "gh,request_low\"~\n\030MatchDirectStartOrigin"
+    "al\022.\n\tformation\030\001 \001(\0132\033.match.MatchForma"
+    "tionRecord\0222\n\007tickets\030\002 \003(\0132!.match.Matc"
+    "hAuthorityTicketRecord\"\335\003\n\036MatchChalleng"
+    "eInvitationRecord\022\024\n\014challenge_id\030\001 \001(\004\022"
+    "\034\n\024challenger_player_id\030\002 \001(\004\022\030\n\020target_"
+    "player_id\030\003 \001(\004\022\021\n\tconfig_id\030\004 \001(\r\022\032\n\022ch"
+    "allenger_account\030\005 \001(\t\022\033\n\023challenger_rev"
+    "ision\030\006 \001(\004\022\026\n\016target_account\030\007 \001(\t\022\027\n\017t"
+    "arget_revision\030\010 \001(\004\022\022\n\ncreated_ms\030\t \001(\004"
+    "\022\022\n\nexpires_ms\030\n \001(\004\022\r\n\005state\030\013 \001(\r\022\021\n\tb"
+    "attle_id\030\014 \001(\004:\245\001\212\222\364\001\032match_challenge_in"
+    "vitation\222\222\364\001\014challenge_id\332\222\364\001atarget_pla"
+    "yer_id,state,expires_ms,challenge_id;cha"
+    "llenger_player_id,state,expires_ms,chall"
+    "enge_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"m\n\027MatchGlobalPol"
+    "icyRecord\022\021\n\tpolicy_id\030\001 \001(\r\022\027\n\017contract"
+    "_digest\030\002 \001(\014:&\212\222\364\001\023match_global_policy\222"
+    "\222\364\001\tpolicy_id\"M\n\024MatchFormationMember\022\021\n"
+    "\tplayer_id\030\001 \001(\004\022\016\n\006ticket\030\002 \001(\t\022\022\n\nteam"
+    "_index\030\003 \001(\r\"\253\005\n\024MatchFormationRecord\022\021\n"
+    "\tbattle_id\030\001 \001(\004\022\024\n\014operation_id\030\002 \001(\t\022\r"
+    "\n\005state\030\003 \001(\r\022\027\n\017physical_region\030\004 \001(\r\022\026"
+    "\n\016target_node_id\030\005 \001(\r\022\032\n\022target_instanc"
+    "e_id\030\006 \001(\t\022\027\n\017target_endpoint\030\007 \001(\t\022\014\n\004m"
+    "ode\030\010 \001(\r\022\021\n\tconfig_id\030\t \001(\r\022,\n\007members\030"
+    "\n \003(\0132\033.match.MatchFormationMember\022\026\n\016cr"
+    "eate_request\030\013 \001(\014\022\022\n\ncreated_ms\030\014 \001(\004\022\023"
+    "\n\013deadline_ms\030\r \001(\004\022\023\n\013retry_at_ms\030\016 \001(\004"
+    "\022\030\n\020activity_context\030\017 \001(\014\022\032\n\022requeue_on"
+    "_failure\030\020 \001(\010\022.\n\010prepared\030\021 \003(\0132\034.match"
+    ".MatchPreparedEndpoint\022 \n\030outcome_protoc"
+    "ol_version\030\022 \001(\r\022#\n\033preflight_supported_"
+    "version\030\023 \001(\r\022\035\n\025preflight_instance_id\030\024"
+    " \001(\t\022(\n adopted_outcome_protocol_version"
+    "\030\025 \001(\r\022 \n\030adopted_outcome_observed\030\026 \001(\010"
+    ":8\212\222\364\001\017match_formation\222\222\364\001\tbattle_id\332\222\364\001"
+    "\021state,retry_at_ms\"<\n\025MatchPreparedEndpo"
+    "int\022\021\n\tplayer_id\030\001 \001(\004\022\020\n\010endpoint\030\002 \001(\t"
+    "\"\232\001\n\021MatchRatingRecord\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\024\n\014rating_centi\030\002 \001(\003\022\r\n\005games\030\003 \001(\004\022\022"
+    "\n\nupdated_ms\030\004 \001(\004\022\030\n\020score_changed_ms\030\005"
+    " \001(\004:\037\212\222\364\001\014match_rating\222\222\364\001\tplayer_id\"\202\001"
+    "\n\030MatchRatingAppliedRecord\022\021\n\tbattle_id\030"
+    "\001 \001(\004\022\026\n\016payload_digest\030\002 \001(\014\022\022\n\napplied"
+    "_ms\030\003 \001(\004:\'\212\222\364\001\024match_rating_applied\222\222\364\001"
+    "\tbattle_id\"\301\001\n\025MatchRankSourceRecord\022\024\n\014"
+    "source_epoch\030\001 \001(\004\022\027\n\017produced_cursor\030\002 "
+    "\001(\004\022\030\n\020committed_cursor\030\003 \001(\004\022\020\n\010board_i"
+    "d\030\004 \001(\004\022\017\n\007stopped\030\005 \001(\010\022\r\n\005shard\030\006 \001(\r:"
+    "-\212\222\364\001\021match_rank_source\222\222\364\001\022source_epoch"
+    ",shard\"\265\001\n\025MatchRankOutboxRecord\022\024\n\014sour"
+    "ce_epoch\030\001 \001(\004\022\025\n\rsource_cursor\030\002 \001(\004\022\022\n"
+    "\nrequest_id\030\003 \001(\004\022\017\n\007entries\030\004 \001(\014\022\r\n\005sh"
+    "ard\030\005 \001(\r:;\212\222\364\001\021match_rank_outbox\222\222\364\001 so"
+    "urce_epoch,shard,source_cursor\"\257\004\n\033Match"
+    "BattleCompletionRecord\022\021\n\tbattle_id\030\001 \001("
+    "\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_digest"
+    "\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013archiv"
+    "ed_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022\030\n\020sou"
+    "rce_partition\030\007 \001(\005\022\025\n\rsource_offset\030\010 \001"
+    "(\003\022.\n\010decision\030\t \001(\0162\034.match.BattleOutco"
+    "meDecision\022;\n\013source_kind\030\n \001(\0162&.match."
+    "MatchBattleCompletionSourceKind\022\036\n\026place"
+    "ment_operation_id\030\013 \001(\t\022\032\n\022target_instan"
+    "ce_id\030\014 \001(\t\022 \n\030outcome_protocol_version\030"
+    "\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n\rnext_"
+    "retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_comple"
+    "tion\222\222\364\001\tbattle_id\332\222\364\0011decision,result_p"
+    "ublished,next_retry_ms,battle_id\"\236\003\n!Mat"
+    "chBattleSettlementSourceRecord\022\021\n\tbattle"
+    "_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020settleme"
+    "nt_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004 \001(\014\022\023"
+    "\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_account\030\006 \001"
+    "(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issued_at_"
+    "ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inbox_sta"
+    "te\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025\n\rnext"
+    "_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle_settl"
+    "ement_source\222\222\364\001\023battle_id,player_id\332\222\364\001"
+    "0dispatch_state,next_retry_ms,battle_id,"
+    "player_id*\343\001\n\037MatchBattleCompletionSourc"
+    "eKind\022.\n*MATCH_BATTLE_COMPLETION_SOURCE_"
+    "UNSPECIFIED\020\000\022(\n$MATCH_BATTLE_COMPLETION"
+    "_SOURCE_KAFKA\020\001\022-\n)MATCH_BATTLE_COMPLETI"
+    "ON_SOURCE_BATTLE_RPC\020\002\0227\n3MATCH_BATTLE_C"
+    "OMPLETION_SOURCE_MATCH_DEADLINE_ABORT\020\003B"
+    "\rZ\013match/matchb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps[3] = {
@@ -5277,13 +4994,13 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fauthority_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto = {
     false,
     false,
-    7108,
+    6422,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto,
     "proto/match/match_authority.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps,
     3,
-    22,
+    21,
     schemas,
     file_message_globals,
     TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto::offsets,
@@ -7260,9 +6977,9 @@ MatchAuthorityTicketRecord::MatchAuthorityTicketRecord(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, preferred_region_) -
+           offsetof(Impl_, owner_revision_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::preferred_region_));
+               sizeof(Impl_::owner_revision_));
 
   // @@protoc_insertion_point(copy_constructor:match.MatchAuthorityTicketRecord)
 }
@@ -7280,9 +6997,9 @@ inline void MatchAuthorityTicketRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLAB
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, preferred_region_) -
+           offsetof(Impl_, owner_revision_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::preferred_region_));
+               sizeof(Impl_::owner_revision_));
 }
 MatchAuthorityTicketRecord::~MatchAuthorityTicketRecord() {
   // @@protoc_insertion_point(destructor:match.MatchAuthorityTicketRecord)
@@ -7360,10 +7077,10 @@ PROTOBUF_NOINLINE void MatchAuthorityTicketRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.selected_region_) -
         reinterpret_cast<char*>(&_impl_.state_)) + sizeof(_impl_.selected_region_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     ::memset(&_impl_.expires_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.preferred_region_) -
-        reinterpret_cast<char*>(&_impl_.expires_ms_)) + sizeof(_impl_.preferred_region_));
+        reinterpret_cast<char*>(&_impl_.owner_revision_) -
+        reinterpret_cast<char*>(&_impl_.expires_ms_)) + sizeof(_impl_.owner_revision_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -7533,15 +7250,6 @@ PROTOBUF_NOINLINE void MatchAuthorityTicketRecord::Clear() {
     }
   }
 
-  // uint32 preferred_region = 17;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
-    if (this_._internal_preferred_region() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          17, this_._internal_preferred_region(), target);
-    }
-  }
-
   // string owner_account = 18;
   if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_owner_account().empty()) {
@@ -7702,7 +7410,7 @@ PROTOBUF_NOINLINE void MatchAuthorityTicketRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     // uint64 expires_ms = 15;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_expires_ms() != 0) {
@@ -7715,13 +7423,6 @@ PROTOBUF_NOINLINE void MatchAuthorityTicketRecord::Clear() {
       if (this_._internal_owner_revision() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_owner_revision());
-      }
-    }
-    // uint32 preferred_region = 17;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
-      if (this_._internal_preferred_region() != 0) {
-        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
-                                        this_._internal_preferred_region());
       }
     }
   }
@@ -7842,7 +7543,7 @@ void MatchAuthorityTicketRecord::MergeImpl(::google::protobuf::MessageLite& to_m
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_expires_ms() != 0) {
         _this->_impl_.expires_ms_ = from._impl_.expires_ms_;
@@ -7851,11 +7552,6 @@ void MatchAuthorityTicketRecord::MergeImpl(::google::protobuf::MessageLite& to_m
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_owner_revision() != 0) {
         _this->_impl_.owner_revision_ = from._impl_.owner_revision_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
-      if (from._internal_preferred_region() != 0) {
-        _this->_impl_.preferred_region_ = from._impl_.preferred_region_;
       }
     }
   }
@@ -7883,8 +7579,8 @@ void MatchAuthorityTicketRecord::InternalSwap(MatchAuthorityTicketRecord* PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.network_profile_, &other->_impl_.network_profile_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.owner_account_, &other->_impl_.owner_account_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.preferred_region_)
-      + sizeof(MatchAuthorityTicketRecord::_impl_.preferred_region_)
+      PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.owner_revision_)
+      + sizeof(MatchAuthorityTicketRecord::_impl_.owner_revision_)
       - PROTOBUF_FIELD_OFFSET(MatchAuthorityTicketRecord, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -8237,487 +7933,6 @@ void MatchRoleOccupancyRecord::InternalSwap(MatchRoleOccupancyRecord* PROTOBUF_R
 }
 
 ::google::protobuf::Metadata MatchRoleOccupancyRecord::GetMetadata() const {
-  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
-}
-// ===================================================================
-
-MatchTicketRegionRecord::MatchTicketRegionRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, MatchTicketRegionRecord_get_class_data()) {
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:match.MatchTicketRegionRecord)
-}
-PROTOBUF_NDEBUG_INLINE MatchTicketRegionRecord::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::match::MatchTicketRegionRecord& from_msg)
-      : _has_bits_{from._has_bits_},
-        _cached_size_{0},
-        ticket_(arena, from.ticket_) {}
-
-MatchTicketRegionRecord::MatchTicketRegionRecord(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const MatchTicketRegionRecord& from)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, MatchTicketRegionRecord_get_class_data()) {
-
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  MatchTicketRegionRecord* const _this = this;
-  (void)_this;
-  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::memcpy(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           reinterpret_cast<const char*>(&from._impl_) +
-               offsetof(Impl_, player_id_),
-           offsetof(Impl_, home_zone_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::home_zone_));
-
-  // @@protoc_insertion_point(copy_constructor:match.MatchTicketRegionRecord)
-}
-PROTOBUF_NDEBUG_INLINE MatchTicketRegionRecord::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0},
-        ticket_(arena) {}
-
-inline void MatchTicketRegionRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, player_id_),
-           0,
-           offsetof(Impl_, home_zone_) -
-               offsetof(Impl_, player_id_) +
-               sizeof(Impl_::home_zone_));
-}
-MatchTicketRegionRecord::~MatchTicketRegionRecord() {
-  // @@protoc_insertion_point(destructor:match.MatchTicketRegionRecord)
-  SharedDtor(*this);
-}
-inline void MatchTicketRegionRecord::SharedDtor(MessageLite& self) {
-  MatchTicketRegionRecord& this_ = static_cast<MatchTicketRegionRecord&>(self);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.ticket_.Destroy();
-  this_._impl_.~Impl_();
-}
-
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull MatchTicketRegionRecord_class_data_ =
-        MatchTicketRegionRecord::InternalGenerateClassData_(MatchTicketRegionRecord_globals_._default);
-
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-MatchTicketRegionRecord::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTicketRegionRecord_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(MatchTicketRegionRecord_class_data_.tc_table);
-  return MatchTicketRegionRecord_class_data_.base();
-}
-#else
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-MatchTicketRegionRecord::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTicketRegionRecord_globals_);
-  ::google::protobuf::internal::PrefetchToLocalCache(
-      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTicketRegionRecord_globals_));
-  return MatchTicketRegionRecord_globals_.GetClassData();
-}
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTicketRegionRecord::ParseTableT_
-    MatchTicketRegionRecord::_table_ =
-        MatchTicketRegionRecord::InternalGenerateParseTable_(MatchTicketRegionRecord_class_data_.base());
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_NOINLINE void MatchTicketRegionRecord::Clear() {
-// @@protoc_insertion_point(message_clear_start:match.MatchTicketRegionRecord)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.ticket_.ClearNonDefaultToEmpty();
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.preferred_region_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.preferred_region_));
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    ::memset(&_impl_.rtt_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.home_zone_) -
-        reinterpret_cast<char*>(&_impl_.rtt_ms_)) + sizeof(_impl_.home_zone_));
-  }
-  _impl_._has_bits_.Clear();
-  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL MatchTicketRegionRecord::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const MatchTicketRegionRecord& this_ = static_cast<const MatchTicketRegionRecord&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL MatchTicketRegionRecord::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const MatchTicketRegionRecord& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTicketRegionRecord)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_player_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          1, this_._internal_player_id(), target);
-    }
-  }
-
-  // uint32 physical_region = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-    if (this_._internal_physical_region() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          2, this_._internal_physical_region(), target);
-    }
-  }
-
-  // string ticket = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!this_._internal_ticket().empty()) {
-      const ::std::string& _s = this_._internal_ticket();
-      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTicketRegionRecord.ticket");
-      target = stream->WriteStringMaybeAliased(3, _s, target);
-    }
-  }
-
-  // uint32 mode = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-    if (this_._internal_mode() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          4, this_._internal_mode(), target);
-    }
-  }
-
-  // uint32 config_id = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-    if (this_._internal_config_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          5, this_._internal_config_id(), target);
-    }
-  }
-
-  // uint32 team_size = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-    if (this_._internal_team_size() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          6, this_._internal_team_size(), target);
-    }
-  }
-
-  // uint32 preferred_region = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-    if (this_._internal_preferred_region() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          7, this_._internal_preferred_region(), target);
-    }
-  }
-
-  // uint64 enqueued_ms = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-    if (this_._internal_enqueued_ms() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          8, this_._internal_enqueued_ms(), target);
-    }
-  }
-
-  // int64 rating_centi = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-    if (this_._internal_rating_centi() != 0) {
-      target =
-          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<9>(
-              stream, this_._internal_rating_centi(), target);
-    }
-  }
-
-  // uint32 rtt_ms = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (this_._internal_rtt_ms() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          10, this_._internal_rtt_ms(), target);
-    }
-  }
-
-  // uint64 expires_ms = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
-    if (this_._internal_expires_ms() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          11, this_._internal_expires_ms(), target);
-    }
-  }
-
-  // uint32 home_zone = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-    if (this_._internal_home_zone() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          12, this_._internal_home_zone(), target);
-    }
-  }
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target =
-        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTicketRegionRecord)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t MatchTicketRegionRecord::ByteSizeLong(const MessageLite& base) {
-  const MatchTicketRegionRecord& this_ = static_cast<const MatchTicketRegionRecord&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t MatchTicketRegionRecord::ByteSizeLong() const {
-  const MatchTicketRegionRecord& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:match.MatchTicketRegionRecord)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void)cached_has_bits;
-
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // string ticket = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!this_._internal_ticket().empty()) {
-        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                        this_._internal_ticket());
-      }
-    }
-    // uint64 player_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_player_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_player_id());
-      }
-    }
-    // uint32 physical_region = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_physical_region() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_physical_region());
-      }
-    }
-    // uint32 mode = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (this_._internal_mode() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_mode());
-      }
-    }
-    // uint32 config_id = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (this_._internal_config_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_config_id());
-      }
-    }
-    // uint32 team_size = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (this_._internal_team_size() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_team_size());
-      }
-    }
-    // uint64 enqueued_ms = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_enqueued_ms() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_enqueued_ms());
-      }
-    }
-    // uint32 preferred_region = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (this_._internal_preferred_region() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_preferred_region());
-      }
-    }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    // uint32 rtt_ms = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_rtt_ms() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_rtt_ms());
-      }
-    }
-    // int64 rating_centi = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_rating_centi() != 0) {
-        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
-            this_._internal_rating_centi());
-      }
-    }
-    // uint64 expires_ms = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
-      if (this_._internal_expires_ms() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_expires_ms());
-      }
-    }
-    // uint32 home_zone = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-      if (this_._internal_home_zone() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_home_zone());
-      }
-    }
-  }
-  return this_.MaybeComputeUnknownFieldsSize(total_size,
-                                             &this_._impl_._cached_size_);
-}
-
-void MatchTicketRegionRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
-                      const ::google::protobuf::MessageLite& from_msg) {
-   auto* const _this = static_cast<MatchTicketRegionRecord*>(&to_msg);
-  auto& from = static_cast<const MatchTicketRegionRecord&>(from_msg);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    from.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTicketRegionRecord)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!from._internal_ticket().empty()) {
-        _this->_internal_set_ticket(from._internal_ticket());
-      } else {
-        if (_this->_impl_.ticket_.IsDefault()) {
-          _this->_internal_set_ticket("");
-        }
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_player_id() != 0) {
-        _this->_impl_.player_id_ = from._impl_.player_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_physical_region() != 0) {
-        _this->_impl_.physical_region_ = from._impl_.physical_region_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (from._internal_mode() != 0) {
-        _this->_impl_.mode_ = from._impl_.mode_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_config_id() != 0) {
-        _this->_impl_.config_id_ = from._impl_.config_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (from._internal_team_size() != 0) {
-        _this->_impl_.team_size_ = from._impl_.team_size_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_enqueued_ms() != 0) {
-        _this->_impl_.enqueued_ms_ = from._impl_.enqueued_ms_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_preferred_region() != 0) {
-        _this->_impl_.preferred_region_ = from._impl_.preferred_region_;
-      }
-    }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_rtt_ms() != 0) {
-        _this->_impl_.rtt_ms_ = from._impl_.rtt_ms_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_rating_centi() != 0) {
-        _this->_impl_.rating_centi_ = from._impl_.rating_centi_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
-      if (from._internal_expires_ms() != 0) {
-        _this->_impl_.expires_ms_ = from._impl_.expires_ms_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-      if (from._internal_home_zone() != 0) {
-        _this->_impl_.home_zone_ = from._impl_.home_zone_;
-      }
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-
-void MatchTicketRegionRecord::CopyFrom(const MatchTicketRegionRecord& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTicketRegionRecord)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-
-void MatchTicketRegionRecord::InternalSwap(MatchTicketRegionRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  auto* arena = GetArena();
-  ABSL_DCHECK_EQ(arena, other->GetArena());
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ticket_, &other->_impl_.ticket_, arena);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.home_zone_)
-      + sizeof(MatchTicketRegionRecord::_impl_.home_zone_)
-      - PROTOBUF_FIELD_OFFSET(MatchTicketRegionRecord, _impl_.player_id_)>(
-          reinterpret_cast<char*>(&_impl_.player_id_),
-          reinterpret_cast<char*>(&other->_impl_.player_id_));
-}
-
-::google::protobuf::Metadata MatchTicketRegionRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

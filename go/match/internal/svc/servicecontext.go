@@ -72,7 +72,6 @@ type ServiceContext struct {
 	DrainRuntime     *drainproof.Runtime
 	Config           config.Config
 	Authority        *authority.Store
-	LoginSessions    redv9.UniversalClient
 	// guild 调 MatchInternal 的签名(开局、取消、占用、终局读)。仅main显式装配，缺失时这些入口拒绝；不复用网络探测或其它服务秘密。
 	GuildCallAuth       *serviceauth.Verifier
 	GuildCallSecret     string
@@ -340,12 +339,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		sc.Stop()
 		panic(err)
 	}
-	loginSessions, err := NewLoginSessionClient(c)
-	if err != nil {
-		sc.Stop()
-		panic(err)
-	}
-	sc.LoginSessions = loginSessions
 	secret := os.Getenv(c.GlobalMatch.RankSecretEnv)
 	if len(secret) < 32 || c.GlobalMatch.RankEndpoint == "" {
 		sc.Stop()
@@ -615,9 +608,6 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	var result error
 	if sc.Authority != nil {
 		result = errors.Join(result, sc.Authority.DB.Close())
-	}
-	if sc.LoginSessions != nil {
-		result = errors.Join(result, sc.LoginSessions.Close())
 	}
 	if sc.PlayerRedis != nil {
 		result = errors.Join(result, sc.PlayerRedis.Close())

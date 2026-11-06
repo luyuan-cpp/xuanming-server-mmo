@@ -9,6 +9,14 @@ message EndpointComp
   uint32 port = 2;
 }
 
+// 节点可分配状态（NodeInfo.admission，R6，docs/design/global-match-hierarchical-pools.md §5.1）。
+// 取值上线后不复用；废弃时写 `reserved` 并注明原因（AGENTS.md §4.3）。
+enum NodeAdmission {
+  NODE_ADMISSION_UNSPECIFIED = 0; // 未上报：非 battle 节点，或不认识本字段的旧版本
+  NODE_ADMISSION_OPEN = 1;        // 接新房间（仍须过 battle 的建房准入闸与 Agones 分配许可）
+  NODE_ADMISSION_CLOSED = 2;      // 不接新房间：启动未完成、Agones 排空或未就绪、停机或维护关闸
+}
+
 message NodeInfo {
   uint32 node_id = 1;
   uint32 node_type = 2;
@@ -33,6 +41,24 @@ message NodeInfo {
   EndpointComp client_endpoint = 11;
   // 真实机房身份，由部署注入。0 = 未声明，不能用于跨地域匹配。
   uint32 physical_region = 12;
+  // 客户端连接上限：gate 启动时自报它的 GateMaxConnections（etc/base_deploy_config.yaml），与 player_count 同一单位。
+  // 0 = 未声明（非 gate 节点、dev 下不设上限的 gate），消费方不按上限过滤。
+  // login 挑 gate 时剔除人数到上限 90% 的 gate（docs/design/gate-load-balancing-design.md「满载与停写的 gate」）。
+  // 字段号 13 上线后不复用；废弃时写 `reserved 13;`（AGENTS.md §4.3）。
+  uint32 max_connections = 13;
+  // 可分配状态（R6）：此刻接不接新房间。只由 battle 填写，其它节点留 0（UNSPECIFIED）。
+  // battle 在 etcd 首次发布前填 CLOSED；建房准入闸打开且 Agones 放行许可后改 OPEN；排空、停机或维护关闸时改回 CLOSED。
+  // 只在变化时写 etcd，并按 watch 回读到的自身登记对账（cpp/nodes/battle/battle_admission_advertise.h），稳态零写入。
+  // 负载不放这里：房间数随 CreateBattleResponse.room_count 捎回，不周期写注册信息（写放大与读量随进程数平方增长）。
+  // match 选点排除 CLOSED；UNSPECIFIED 视为可选（旧节点 / 未上报）。只是提示，能否建房仍由 battle 的准入判定。
+  // 字段号 14 上线后不复用；废弃时写 `reserved 14;`（AGENTS.md §4.3）。
+  NodeAdmission admission = 14;
+  // 发布轨道（docs/design/release-track-gray-canary.md §2.1）："stable" 或 "canary"。
+  // 由部署经环境变量 MMORPG_RELEASE_TRACK 注入，进程存续期间不变；生产者只写这两个值。
+  // 消费方把空串（没写轨道的节点）当 stable，其他值当无效节点跳过。
+  // 用字符串不用枚举：发现方按 protojson 宽松解析，未知的枚举名会被静默丢成 0，将来新增的轨道会被误当成 stable。
+  // 字段号 15 上线后不复用；废弃时写 `reserved 15;`（AGENTS.md §4.3）。
+  string release_track = 15;
 }
 
 message NetworkAddress

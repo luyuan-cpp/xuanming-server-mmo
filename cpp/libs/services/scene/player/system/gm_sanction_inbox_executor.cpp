@@ -9,8 +9,11 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
+#include "modules/gain_block/gain_block_service.h"
 #include "proto/common/component/currency_comp.pb.h"
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/player_inbox/player_inbox.pb.h"
+#include "table/code/item_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/player_inbox_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -83,6 +86,44 @@ namespace
 		}
 		currencyType = decoded.currency_type();
 		return true;
+	}
+
+	// 物品封锁 / 解封共用的载荷:解码成功且配置号非 0 才算合法(配置号 0 不是任何物品)。
+	bool DecodeItemGainPayload(const std::string &payload, uint32_t &itemConfigId)
+	{
+		player_inbox::GmItemGainPayload decoded;
+		if (!decoded.ParseFromString(payload) || decoded.item_config_id() == 0)
+		{
+			return false;
+		}
+		itemConfigId = decoded.item_config_id();
+		return true;
+	}
+
+	// PlayerItemGainBlockComp 是只由加载创建的持久组件,缺了与货币组件缺失同口径:kDefer、不改状态。
+	bool HasItemGainBlockState(entt::entity player, const char *executor)
+	{
+		if (tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(player))
+		{
+			return true;
+		}
+		LOG_ERROR << "[PlayerInbox] " << executor
+				  << " deferred: persisted PlayerItemGainBlockComp missing (load invariant broken) player_id="
+				  << tlsEcs.GetPlayerId(player);
+		return false;
+	}
+
+	// 物品表不认识这个配置号:不是版本错位(封禁不依赖本节点能否发出这件物品),照样执行,只打一行线索,
+	// 运维据此核对是不是写错了配置号(入箱侧只校验非 0,不加载物品表)。
+	void WarnIfItemUnknownToThisTable(entt::entity player, const char *executor, uint32_t itemConfigId)
+	{
+		if (ItemTableManager::Instance().FindByIdSilent(itemConfigId).first != nullptr)
+		{
+			return;
+		}
+		LOG_WARN << "[PlayerInbox] " << executor << " item_config_id=" << itemConfigId
+				 << " is not in this node's Item table; recorded anyway (it cannot be granted here, the ban covers"
+				 << " versions/nodes that know it) player_id=" << tlsEcs.GetPlayerId(player);
 	}
 } // namespace
 
@@ -161,4 +202,35 @@ PlayerInboxExecResult GmSanctionInboxExecutor::AttachCurrencyDebt(entt::entity p
 	return FromTip(CurrencySystem::AttachDebt(player, static_cast<CurrencyType>(decoded.currency_type()),
 											  static_cast<int64_t>(decoded.owe_amount()), decoded.reason(),
 											  decoded.gm_operator(), decoded.expires_at()));
+}
+
+// 只改本玩家的物品获得封禁表;不扣已有库存、不碰全服封禁、不影响其他玩家。
+// 效果与收件箱记账同一帧写入,随同一次存盘落盘(PlayerItemGainBlockComp 与 inbox_ledger 同一次 Marshal)。
+PlayerInboxExecResult GmSanctionInboxExecutor::BlockItemGain(entt::entity player, const std::string &payload)
+{
+	uint32_t itemConfigId = 0;
+	if (!DecodeItemGainPayload(payload, itemConfigId))
+	{
+		return Rejected(kPlayerInboxPayloadInvalid);
+	}
+	if (!HasItemGainBlockState(player, "BlockItemGain"))
+	{
+		return Deferred();
+	}
+	WarnIfItemUnknownToThisTable(player, "BlockItemGain", itemConfigId);
+	return FromTip(GainBlockService::BlockPlayerItemGain(player, itemConfigId));
+}
+
+PlayerInboxExecResult GmSanctionInboxExecutor::UnblockItemGain(entt::entity player, const std::string &payload)
+{
+	uint32_t itemConfigId = 0;
+	if (!DecodeItemGainPayload(payload, itemConfigId))
+	{
+		return Rejected(kPlayerInboxPayloadInvalid);
+	}
+	if (!HasItemGainBlockState(player, "UnblockItemGain"))
+	{
+		return Deferred();
+	}
+	return FromTip(GainBlockService::UnblockPlayerItemGain(player, itemConfigId));
 }

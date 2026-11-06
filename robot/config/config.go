@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 
+	"proto/match"
 	"robot/logic/ai"
 	"shared/generated/table"
 )
@@ -131,6 +132,9 @@ type Config struct {
 	// Or set custom_weights to define your own action distribution.
 	Profile       string         `yaml:"profile"`
 	CustomWeights map[string]int `yaml:"custom_weights"` // e.g. {cast_skill: 50, move: 30, idle: 15, chat: 5}
+
+	// join_queue 动作(match-stress 档或 custom_weights 带 join_queue)的入队参数,见 MatchQueueConfig。
+	MatchQueue MatchQueueConfig `yaml:"match_queue"`
 
 	// LLM settings (optional). When enabled, LLM decides actions instead of profile weights.
 	// Best for 1-10 robots to model realistic player behavior. Not for mass load testing.
@@ -851,6 +855,63 @@ type LLMConfig struct {
 	Model    string `yaml:"model"`    // e.g. "gpt-4o-mini", "llama3", "qwen2"
 }
 
+// MatchQueueConfig 是压测 join_queue 动作的入队参数(robot/stress_match_queue.go;
+// docs/design/global-match-hierarchical-pools.md §11 R0)。只在 AI 档位带 join_queue 权重时校验与使用。
+type MatchQueueConfig struct {
+	// Mode 是 MatchMode 的枚举名(proto/match/match_service.proto)。只开放会进按池撮合或即时成局的模式:
+	// MATCH_MODE_1V1、MATCH_MODE_PVE_SOLO(即时开战,压 immediate_claim)、MATCH_MODE_PVE_TEAM、MATCH_MODE_PVP_TEAM。
+	// 5V5 / 3V3 未开放,PVP_CHALLENGE 是点名成局、不入队。
+	Mode string `yaml:"mode"`
+	// BattleConfigID 是战斗配置(PlayMode / DungeonTable 的行),必须 > 0。
+	BattleConfigID uint32 `yaml:"battle_config_id"`
+	// TeamSize 是人数档:PVE_TEAM 为同场人数,PVP_TEAM 为每侧人数,0..5(0 = 该模式缺省档,见 JoinQueueRequest.team_size)。
+	TeamSize uint32 `yaml:"team_size"`
+	// DwellSeconds 是排了这么久还没成局就撤单,1..600。
+	DwellSeconds int `yaml:"dwell_seconds"`
+}
+
+// matchQueueModes 是 join_queue 允许的模式。
+var matchQueueModes = []match.MatchMode{
+	match.MatchMode_MATCH_MODE_1V1,
+	match.MatchMode_MATCH_MODE_PVE_SOLO,
+	match.MatchMode_MATCH_MODE_PVE_TEAM,
+	match.MatchMode_MATCH_MODE_PVP_TEAM,
+}
+
+// MatchMode 返回 Mode 对应的枚举;名字不认识时返回 UNSPECIFIED(Validate 会先拒掉)。
+func (c MatchQueueConfig) MatchMode() match.MatchMode {
+	return match.MatchMode(match.MatchMode_value[c.Mode])
+}
+
+// Validate 校验入队参数。
+func (c MatchQueueConfig) Validate() error {
+	mode := c.MatchMode()
+	allowed := false
+	for _, m := range matchQueueModes {
+		if m == mode {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		names := make([]string, 0, len(matchQueueModes))
+		for _, m := range matchQueueModes {
+			names = append(names, m.String())
+		}
+		return fmt.Errorf("mode %q is not a queueing mode (expected one of %s)", c.Mode, strings.Join(names, ", "))
+	}
+	if c.BattleConfigID == 0 {
+		return fmt.Errorf("battle_config_id must be > 0")
+	}
+	if c.TeamSize > 5 {
+		return fmt.Errorf("team_size must be within 0..5 (got %d)", c.TeamSize)
+	}
+	if c.DwellSeconds < 1 || c.DwellSeconds > 600 {
+		return fmt.Errorf("dwell_seconds must be within 1..600 (got %d)", c.DwellSeconds)
+	}
+	return nil
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -884,6 +945,8 @@ func Load(path string) (*Config, error) {
 			Channel: "mock", Quantity: 1, ItemConfigID: 10, CountPerUnit: 2, DeliverTimeoutSeconds: 90, PollIntervalMs: 1500},
 		// equip-forge-topup 缺省补给 equip-forge-smoke 用的那个账号。
 		EquipForgeTopup: EquipForgeTopupConfig{Account: "robot_9104"},
+		// join_queue 缺省:1V1、战斗配置 1(PlayMode 表第一行)、排 30s 没成局就撤单。
+		MatchQueue: MatchQueueConfig{Mode: match.MatchMode_MATCH_MODE_1V1.String(), BattleConfigID: 1, DwellSeconds: 30},
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
@@ -934,6 +997,12 @@ func (c *Config) validate() error {
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
+	}
+	// 只在档位真会入队时校验:没用 join_queue 的压测不因这一段写错而起不来。
+	if c.ResolveProfile().Weight(ai.ActionJoinQueue) > 0 {
+		if err := c.MatchQueue.Validate(); err != nil {
+			return fmt.Errorf("match_queue: %w", err)
+		}
 	}
 	if c.Mode == "battle-smoke" && c.BattleSmoke.CrossZone {
 		if err := c.BattleSmoke.validate(); err != nil {

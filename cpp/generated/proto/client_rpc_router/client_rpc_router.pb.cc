@@ -47,11 +47,11 @@ constexpr ForwardRequest::ParseTableT_ ForwardRequest::InternalGenerateParseTabl
     {
       PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -61,21 +61,28 @@ constexpr ForwardRequest::ParseTableT_ ForwardRequest::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::client_rpc_router::ForwardRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 zone_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ForwardRequest, _impl_.zone_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.zone_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .ClientRequest request = 1;
       {::_pbi::TcParser::FastMtS1,
-       {10, 0, 0,
+       {10, 1, 0,
         PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.request_)}},
+      // uint32 zone_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ForwardRequest, _impl_.zone_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.zone_id_)}},
+      // string release_track = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.release_track_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .ClientRequest request = 1;
-      {PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.request_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.request_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 zone_id = 2;
-      {PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string release_track = 3;
+      {PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.release_track_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -85,6 +92,9 @@ constexpr ForwardRequest::ParseTableT_ ForwardRequest::InternalGenerateParseTabl
         #endif
     }},
     {{
+      "\40\0\0\15\0\0\0\0"
+      "client_rpc_router.ForwardRequest"
+      "release_track"
     }},
   };
 }
@@ -94,6 +104,9 @@ inline constexpr ForwardRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        release_track_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         request_{nullptr},
         zone_id_{0u} {}
 
@@ -113,7 +126,7 @@ inline void* PROTOBUF_NONNULL ForwardRequest::PlacementNew_(
   return ::new (mem) ForwardRequest(arena);
 }
 constexpr auto ForwardRequest::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ForwardRequest), alignof(ForwardRequest));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ForwardRequest), alignof(ForwardRequest));
 }
 constexpr auto ForwardRequest::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -199,11 +212,13 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::client_rpc_router::ForwardRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::client_rpc_router::ForwardRequest, _impl_.request_),
         PROTOBUF_FIELD_OFFSET(::client_rpc_router::ForwardRequest, _impl_.zone_id_),
-        0,
+        PROTOBUF_FIELD_OFFSET(::client_rpc_router::ForwardRequest, _impl_.release_track_),
         1,
+        2,
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -219,11 +234,12 @@ const char descriptor_table_protodef_proto_2fclient_5frpc_5frouter_2fclient_5frp
     "\n/proto/client_rpc_router/client_rpc_rou"
     "ter.proto\022\021client_rpc_router\032\033proto/db/p"
     "roto_option.proto\032\037proto/common/base/mes"
-    "sage.proto\"B\n\016ForwardRequest\022\037\n\007request\030"
-    "\001 \001(\0132\016.ClientRequest\022\017\n\007zone_id\030\002 \001(\r2P"
-    "\n\017ClientRpcRouter\022=\n\007Forward\022!.client_rp"
-    "c_router.ForwardRequest\032\017.MessageContent"
-    "B\027Z\021client_rpc_router\230\324a\037b\006proto3"
+    "sage.proto\"Y\n\016ForwardRequest\022\037\n\007request\030"
+    "\001 \001(\0132\016.ClientRequest\022\017\n\007zone_id\030\002 \001(\r\022\025"
+    "\n\rrelease_track\030\003 \001(\t2P\n\017ClientRpcRouter"
+    "\022=\n\007Forward\022!.client_rpc_router.ForwardR"
+    "equest\032\017.MessageContentB\027Z\021client_rpc_ro"
+    "uter\230\324a\037b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fclient_5frpc_5frouter_2fclient_5frpc_5frouter_2eproto_deps[2] = {
@@ -234,7 +250,7 @@ static ::absl::once_flag descriptor_table_proto_2fclient_5frpc_5frouter_2fclient
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fclient_5frpc_5frouter_2fclient_5frpc_5frouter_2eproto = {
     false,
     false,
-    313,
+    336,
     descriptor_table_protodef_proto_2fclient_5frpc_5frouter_2fclient_5frpc_5frouter_2eproto,
     "proto/client_rpc_router/client_rpc_router.proto",
     &descriptor_table_proto_2fclient_5frpc_5frouter_2fclient_5frpc_5frouter_2eproto_once,
@@ -253,7 +269,7 @@ namespace client_rpc_router {
 void ForwardRequest::clear_request() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.request_ != nullptr) _impl_.request_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 ForwardRequest::ForwardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -269,7 +285,8 @@ PROTOBUF_NDEBUG_INLINE ForwardRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     [[maybe_unused]] const ::client_rpc_router::ForwardRequest& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0} {}
+        _cached_size_{0},
+        release_track_(arena, from.release_track_) {}
 
 ForwardRequest::ForwardRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -286,7 +303,7 @@ ForwardRequest::ForwardRequest(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.request_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+  _impl_.request_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.request_)
                 : nullptr;
   _impl_.zone_id_ = from._impl_.zone_id_;
@@ -296,7 +313,8 @@ ForwardRequest::ForwardRequest(
 PROTOBUF_NDEBUG_INLINE ForwardRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        release_track_(arena) {}
 
 inline void ForwardRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -318,6 +336,7 @@ inline void ForwardRequest::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.release_track_.Destroy();
   delete this_._impl_.request_;
   this_._impl_.~Impl_();
 }
@@ -356,9 +375,14 @@ PROTOBUF_NOINLINE void ForwardRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.request_ != nullptr);
-    _impl_.request_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.release_track_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.request_ != nullptr);
+      _impl_.request_->Clear();
+    }
   }
   _impl_.zone_id_ = 0u;
   _impl_._has_bits_.Clear();
@@ -385,18 +409,28 @@ PROTOBUF_NOINLINE void ForwardRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .ClientRequest request = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.request_, this_._impl_.request_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 zone_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           2, this_._internal_zone_id(), target);
+    }
+  }
+
+  // string release_track = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_release_track().empty()) {
+      const ::std::string& _s = this_._internal_release_track();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "client_rpc_router.ForwardRequest.release_track");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
     }
   }
 
@@ -425,14 +459,21 @@ PROTOBUF_NOINLINE void ForwardRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // .ClientRequest request = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string release_track = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_release_track().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_release_track());
+      }
+    }
+    // .ClientRequest request = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.request_);
     }
     // uint32 zone_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
@@ -457,8 +498,17 @@ void ForwardRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_release_track().empty()) {
+        _this->_internal_set_release_track(from._internal_release_track());
+      } else {
+        if (_this->_impl_.release_track_.IsDefault()) {
+          _this->_internal_set_release_track("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(from._impl_.request_ != nullptr);
       if (_this->_impl_.request_ == nullptr) {
         _this->_impl_.request_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.request_);
@@ -466,7 +516,7 @@ void ForwardRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.request_->MergeFrom(*from._impl_.request_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_zone_id() != 0) {
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
@@ -487,8 +537,11 @@ void ForwardRequest::CopyFrom(const ForwardRequest& from) {
 
 void ForwardRequest::InternalSwap(ForwardRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ForwardRequest, _impl_.zone_id_)
       + sizeof(ForwardRequest::_impl_.zone_id_)

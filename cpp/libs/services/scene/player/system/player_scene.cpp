@@ -1,10 +1,17 @@
 #include "player_scene.h"
+#include "core/system/scene_task_scope.h"
 #include "engine/core/utils/registry/actor_log.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "type_alias/player_session_type_alias.h"
 #include "actor/actor_net_id.h"
 
+#define BOOST_COBALT_NO_LIB 1
+#include <boost/asio/dispatch.hpp>
+#include <boost/cobalt/op.hpp>
+#include <boost/cobalt/task.hpp>
+
 #include "muduo/base/Logging.h"
+#include "muduo/net/EventLoop.h"
 
 #include "hexagons_grid.h"
 
@@ -41,7 +48,9 @@
 #include <hiredis/hiredis.h>
 
 #include <limits>
+#include <memory>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -51,6 +60,89 @@ constexpr char kWorldChannelDirectoryKeyFmt[] = "world_channel_directory:zone:%u
 
 // 镜像 CreateScene 的令牌序号(PlayerMirrorCreateInFlightComp.token)。与 tlsEcs 同属本线程,先自增再用,恒非 0。
 thread_local uint64_t tlsMirrorCreateTokenSeq = 0;
+
+namespace asio = boost::asio;
+namespace cobalt = boost::cobalt;
+using muduo::net::EventLoop;
+
+struct MirrorCreateResult
+{
+	GrpcCallOutcome outcome;
+	std::optional<::scene_manager::CreateSceneResponse> reply;
+};
+
+// GrpcDone 的回包只在调用期间借用。本地停止没有传输结果，由空 optional 表示。
+class CreateMirrorCall final : public cobalt::op<std::optional<MirrorCreateResult>>
+{
+public:
+	CreateMirrorCall(EventLoop& loop, entt::entity node, const ::scene_manager::CreateSceneRequest& request,
+		const PlayerSceneSystem::MirrorCreateSubmit& submit) : loop_(loop), node_(node), request_(request), submit_(submit) {}
+
+	using Handler = cobalt::completion_handler<std::optional<MirrorCreateResult>>;
+	void initiate(Handler handler) override
+	{
+		loop_.assertInLoopThread();
+		auto state = std::make_shared<Completion>(loop_, std::move(handler));
+		const std::weak_ptr<Completion> weak = state;
+		auto slot = state->handler->get_cancellation_slot();
+		if (slot.is_connected())
+		{
+			slot.assign([weak](asio::cancellation_type) {
+				if (const auto state = weak.lock()) state->Finish(std::nullopt);
+			});
+		}
+		submit_(node_, request_, [weak](const GrpcCallOutcome& outcome, const ::scene_manager::CreateSceneResponse* reply) {
+			if (const auto state = weak.lock())
+			{
+				state->loop.assertInLoopThread();
+				MirrorCreateResult result{outcome, std::nullopt};
+				if (reply != nullptr) result.reply.emplace(*reply);
+				state->Finish(std::move(result));
+			}
+		});
+		state->submitting = false;
+		completion_ = std::move(state);
+	}
+
+private:
+	struct Completion
+	{
+		EventLoop& loop;
+		std::optional<Handler> handler;
+		bool submitting = true;
+
+		Completion(EventLoop& loop, Handler handler) : loop(loop), handler(std::move(handler)) {}
+
+		void Finish(std::optional<MirrorCreateResult> result)
+		{
+			loop.assertInLoopThread();
+			if (!handler) return;
+			auto complete = std::move(*handler);
+			handler.reset();
+			auto slot = complete.get_cancellation_slot();
+			if (slot.is_connected()) slot.clear();
+			if (submitting)
+			{
+				// 停止可以在提交内重入，交给 Cobalt 在 await_suspend 返回后恢复。
+				auto executor = complete.get_immediate_executor();
+				asio::dispatch(executor, [complete = std::move(complete), result = std::move(result)]() mutable {
+					complete(std::move(result));
+				});
+				return;
+			}
+			complete(std::move(result));
+		}
+	};
+
+	EventLoop& loop_;
+	entt::entity node_;
+	const ::scene_manager::CreateSceneRequest& request_;
+	const PlayerSceneSystem::MirrorCreateSubmit& submit_;
+	std::shared_ptr<Completion> completion_;
+};
+
+cobalt::task<void> CreateMirrorAndEnter(entt::entity player, entt::entity manager,
+	::scene_manager::CreateSceneRequest request, PlayerSceneSystem::MirrorCreateSubmit submit);
 
 bool ZoneRedisReady()
 {
@@ -299,7 +391,7 @@ void PlayerSceneSystem::LeaveCurrentScene(entt::entity player)
 	tlsEcs.actorRegistry.remove<SceneEntityComp, Hex>(player);
 }
 
-bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId)
+bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId, MirrorCreateSubmit submit)
 {
 	if (mirrorConfigId == 0)
 	{
@@ -364,69 +456,72 @@ bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mi
 		return false;
 	}
 
-	auto smEntity = GetSceneManagerEntity(playerSessionPB->player_id());
+	if (!SceneTaskScope::IsAccepting())
+	{
+		return false;
+	}
+	const auto smEntity = GetSceneManagerEntity(playerSessionPB->player_id());
 	if (smEntity == entt::null)
 	{
 		LOG_WARN << "RequestEnterMirrorScene: no SceneManager node available";
 		return false;
 	}
 
-	auto& smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-
-	// 值副本:下面要往 actorRegistry 挂组件,不跨这一步保留组件指针。
-	const Guid playerId = playerSessionPB->player_id();
-	const uint64_t sourceSceneId = sourceInfo->scene_id();
-	const uint64_t sourceSceneConfigId = sourceInfo->scene_config_id();
-
 	::scene_manager::CreateSceneRequest req;
-	req.set_scene_conf_id(sourceSceneConfigId);
+	req.set_scene_conf_id(sourceInfo->scene_config_id());
 	req.set_scene_type(::scene_manager::SCENE_TYPE_INSTANCE);
 	req.set_zone_id(GetZoneId());
-	req.set_source_scene_id(sourceSceneId);
+	req.set_source_scene_id(sourceInfo->scene_id());
 	req.set_mirror_config_id(mirrorConfigId);
-	req.add_creator_ids(playerId);
-
-	// 先登记、再发(与 PlayerLifecycleSystem::RequestSceneChange 同一纪律):完成回调从不在发送栈内同步调用,
-	// 但"等待者记下的令牌"必须在发出之前就位。
-	// PlayerMirrorCreateInFlightComp 是按需状态,此处延迟创建,也是它唯一的创建入口(ecs-component-access-rules.md);
-	// 一次镜像请求一次,不是 per-tick 路径。replace 只会发生在旧组件已过 TTL 时(上面的闸挡住了 TTL 内的),
-	// 旧请求的完成回调随后按令牌对不上而丢弃。
-	const uint64_t token = ++tlsMirrorCreateTokenSeq;
-	auto& inFlight = tlsEcs.actorRegistry.emplace_or_replace<PlayerMirrorCreateInFlightComp>(player);
-	inFlight.token = token;
-	inFlight.sentAtMs = TimeSystem::NowMillisecondsUTC();
-	inFlight.mirrorConfigId = mirrorConfigId;
-	inFlight.sourceSceneId = sourceSceneId;
-
-	// 每次调用回调:成功 / 业务失败 / 传输失败都恰好回调一次,不再走全局 CreateScene 处理器。
-	// 只按值捕获 player_id 与令牌,不捕获实体句柄或组件指针:回调到达时实体可能已销毁或被复用。
-	scene_manager::SendSceneManagerCreateScene(
-		smRegistry, smEntity, req,
-		[playerId = playerId, token = token](const GrpcCallOutcome& outcome,
-											 const ::scene_manager::CreateSceneResponse* reply)
-		{
-			HandleMirrorCreateDone(playerId, token, outcome, reply);
-		});
-
-	LOG_INFO << "RequestEnterMirrorScene: dispatched create_mirror player=" << playerId
-	         << " source_scene=" << sourceSceneId
-	         << " mirror_config=" << mirrorConfigId
-	         << " scene_conf=" << sourceSceneConfigId
-	         << " token=" << token;
-	return true;
+	req.add_creator_ids(playerSessionPB->player_id());
+	if (!submit)
+	{
+		submit = [](entt::entity manager, const ::scene_manager::CreateSceneRequest& request,
+			GrpcDone<::scene_manager::CreateSceneResponse> done) {
+			auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+			scene_manager::SendSceneManagerCreateScene(registry, manager, request, std::move(done));
+		};
+	}
+	return SceneTaskScope::TryStart(CreateMirrorAndEnter(player, smEntity, std::move(req), std::move(submit)), "CreateMirrorAndEnter");
 }
 
-void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, const GrpcCallOutcome& outcome,
-											   const ::scene_manager::CreateSceneResponse* reply)
+namespace
 {
+cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entity manager,
+	::scene_manager::CreateSceneRequest request, PlayerSceneSystem::MirrorCreateSubmit submit)
+{
+	auto& loop = *EventLoop::getEventLoopOfCurrentThread();
+	loop.assertInLoopThread();
+	const Guid playerId = request.creator_ids(0);
+	const uint32_t mirrorConfigId = request.mirror_config_id();
+
+	// 登记必须早于发送。已有有效令牌会被预检拦下，只有过期令牌可以替换。
+	const uint64_t token = ++tlsMirrorCreateTokenSeq;
+	tlsEcs.actorRegistry.emplace_or_replace<PlayerMirrorCreateInFlightComp>(originalPlayer,
+		PlayerMirrorCreateInFlightComp{token, TimeSystem::NowMillisecondsUTC(), mirrorConfigId, request.source_scene_id()});
+	LOG_INFO << "RequestEnterMirrorScene: dispatching create_mirror player=" << playerId
+			 << " source_scene=" << request.source_scene_id() << " mirror_config=" << mirrorConfigId
+			 << " scene_conf=" << request.scene_conf_id() << " token=" << token;
+
+	const auto result = co_await CreateMirrorCall{loop, manager, request, submit};
+	loop.assertInLoopThread();
+	if (!result || (co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none)
+	{
+		const auto* inFlight = tlsEcs.actorRegistry.try_get<PlayerMirrorCreateInFlightComp>(originalPlayer);
+		if (inFlight != nullptr && inFlight->token == token)
+		{
+			tlsEcs.actorRegistry.remove<PlayerMirrorCreateInFlightComp>(originalPlayer);
+		}
+		co_return;
+	}
 	// ── 认领:实体还在、令牌对得上才摘槽;TTL 仍有效才允许提示或自动进场 ──
 	const auto player = tlsEcs.GetPlayer(playerId);
-	if (!tlsEcs.actorRegistry.valid(player))
+	if (player != originalPlayer || !tlsEcs.actorRegistry.valid(player))
 	{
 		// 玩家在建镜像途中离开了本节点(断线 / 换节点):没有客户端可提示,镜像由 scene_manager 按空场景回收。
-		LOG_INFO << "CreateScene done: creator " << playerId << " not present on this node, dropping token=" << token
-				 << " ok=" << outcome.ok();
-		return;
+		LOG_INFO << "CreateScene done: original creator " << playerId << " not present on this node, dropping token=" << token
+				 << " ok=" << result->outcome.ok();
+		co_return;
 	}
 	const auto* inFlight = tlsEcs.actorRegistry.try_get<PlayerMirrorCreateInFlightComp>(player);
 	if (inFlight == nullptr || inFlight->token != token)
@@ -434,10 +529,9 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 		// 已被顶替(过了 TTL 又发了一次)或实体已重建(重连回本节点):不是当前等待者,不动它、不提示。
 		LOG_INFO << "CreateScene done: stale mirror create for player " << playerId << " token=" << token
 				 << " current_token=" << (inFlight != nullptr ? inFlight->token : uint64_t{0}) << ", dropping";
-		return;
+		co_return;
 	}
 	const bool requestWithinTtl = PlayerLifecycleSystem::IsSceneChangeRequestWithinTtl(inFlight->sentAtMs);
-	const uint32_t mirrorConfigId = inFlight->mirrorConfigId;
 	tlsEcs.actorRegistry.remove<PlayerMirrorCreateInFlightComp>(player);
 	if (!requestWithinTtl)
 	{
@@ -445,18 +539,20 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 		// 已建好的空镜像由 scene_manager 回收;UTC 回拨同样按失效处理。
 		LOG_INFO << "CreateScene done: expired mirror create for player " << playerId << " token=" << token
 				 << " mirror_config=" << mirrorConfigId << ", dropping";
-		return;
+		co_return;
 	}
 
 	// ── 建镜像没成 ──
-	if (!outcome.ok() || reply == nullptr)
+	const auto& outcome = result->outcome;
+	const auto& reply = result->reply;
+	if (!outcome.ok() || !reply)
 	{
 		// 结果未知(GrpcDone 契约:非 OK 不代表服务端没执行):回「服务器繁忙,请稍后再试」而不是"建镜像失败"。
 		// 镜像若其实已经建好,由 scene_manager 按空场景回收。
 		LOG_WARN << "SceneManager.CreateScene transport failure for player " << playerId << " code=" << outcome.code
 				 << " msg=" << outcome.message << " mirror_config=" << mirrorConfigId << " token=" << token;
 		PlayerTipSystem::SendToPlayer(player, kEnterSceneServerBusy, {});
-		return;
+		co_return;
 	}
 	if (reply->error_code() != 0 || reply->scene_id() == 0)
 	{
@@ -466,7 +562,7 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 				 << " msg=" << reply->error_message() << " scene_id=" << reply->scene_id()
 				 << " mirror_config=" << mirrorConfigId << " token=" << token;
 		PlayerTipSystem::SendToPlayer(player, kEnterSceneFailed, {});
-		return;
+		co_return;
 	}
 
 	// ── 建好了:提交点复核,再自动进场 ──
@@ -477,7 +573,7 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 		LOG_WARN << "[PlayerBattle] mirror auto-enter skipped: player battle in progress, player_id=" << playerId
 				 << " mirror_scene=" << mirrorSceneId;
 		PlayerTipSystem::SendToPlayer(player, kEnterSceneFailed, {});
-		return;
+		co_return;
 	}
 	// 自己的槽位已摘,此刻还忙只能是别的换图 / 交接(正常被上面的闸挡住;只在本槽过了 TTL 之后才可能出现)。
 	// 交接在途时不提示:交接自己会给结局,补一条"进入场景失败"会让客户端提前结束等待。
@@ -490,7 +586,7 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 		{
 			PlayerTipSystem::SendToPlayer(player, kEnterSceneFailed, {});
 		}
-		return;
+		co_return;
 	}
 	const auto* playerSessionPB = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
 	if (playerSessionPB == nullptr)
@@ -498,7 +594,7 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 		// 在线实体缺会话快照是不变量被破坏;没有会话也就送不出提示。
 		LOG_ERROR << "CreateScene done: PlayerSessionSnapshotComp missing for creator " << playerId
 				  << ", skipping auto-enter for mirror_scene=" << mirrorSceneId;
-		return;
+		co_return;
 	}
 	const auto smEntity = GetSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
@@ -507,7 +603,7 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 		LOG_WARN << "CreateScene done: no SceneManager node available to follow-up EnterScene for player " << playerId
 				 << " mirror_scene=" << mirrorSceneId;
 		PlayerTipSystem::SendToPlayer(player, kEnterSceneServerBusy, {});
-		return;
+		co_return;
 	}
 
 	const SessionId gateSessionId = playerSessionPB->gate_session_id();
@@ -539,6 +635,7 @@ void PlayerSceneSystem::HandleMirrorCreateDone(Guid playerId, uint64_t token, co
 	LOG_INFO << "CreateScene done: dispatched EnterScene player=" << playerId << " mirror_scene=" << mirrorSceneId
 			 << " mirror_node=" << reply->node_id() << " token=" << token << " corr=" << correlationId;
 }
+} // namespace
 
 void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirectory)
 {

@@ -77,6 +77,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 前置:构建机有 docker 与 pwsh 7;发 C++ 镜像时 `deploy/k8s/runtime/linux` 已由 `build_linux.sh` + `k8s_stage_runtime.ps1` 填好(`publish_images.ps1` 构建前会跑 `k8s_image.ps1 -Command preflight` 检查);发 Go 镜像时 go.mod 里 replace 到仓库外的目录(当前是 proto2mysql)已检出到 replace 期望的位置。
 
 - [ ] **① 改 CHANGELOG**:把 `## [Unreleased]` 下的条目移到新段 `## [X.Y.Z] - YYYY-MM-DD`(方括号内不带 `v`),在它上方重开一个空的 `## [Unreleased]`。同一版本只能有一段,且不能为空。提交。
+  同一个提交里封存持久 schema 台账(2026-11-05 增补,审计 r2-ps#1 / r2-ps#10):在主干运行 `pwsh -File tools/scripts/dev_tools.ps1 -Command persist-schema-seal`,台账 `proto/persist_schema_gen.txt` 末尾多一行 `sealed=<世代>:<行数>:<摘要>`,一起提交(已封存到最大世代时不改文件)。只对要上生产的版本封存:内部测试版本不要封存,封存之后引导期内就不能再加持久字段了。封存之后生成器每次运行都核对已封存世代的字段集合:引导期还在往世代 1 加字段、合并带进同一世代的行,proto 生成都会失败,按报错处理,不要改封存行。⑥ 的发布预检用 `release.persist_schema.sealed` 机械核对这一步(生产档 FAIL)。设计见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1「封存」。
 - [ ] **② 干净工作树**:切到要发布的提交,`git status --porcelain` 输出为空。
 - [ ] **③ 出包**。`-Registry` 填最终要推送的 registry 前缀:镜像名里带着它,④ 推送时才对得上;不填则用各镜像脚本的默认值(当前 `ghcr.io/luyuancpp`)。
   ```powershell
@@ -116,7 +117,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   ```
   部署沿用 `k8s_deploy.ps1` / `k8s_image.ps1` 的既有命令,`-ReleaseProfile prod`,镜像参数统一用本版本 tag:`-NodeImage <registry>/mmorpg-node:vX.Y.Z-<12位commit>`、`-GoSvcRegistry <registry> -GoSvcTag vX.Y.Z-<12位commit>`、`-JavaSvcRegistry <registry> -JavaSvcTag vX.Y.Z-<12位commit>`。部署前后按 §3.2 核对 digest。
   部署核对完成后,查看 §6 有没有本版本对应的一次性项(2026-10-16 增补)。
-  带新持久字段的版本(2026-10-20 增补,审计 r2-ps#1):首次上线之后,发布前先跑 `git diff <线上版本提交> <本版本提交> -- proto/persist_schema_gen.txt`。出现新增字段行(`<世代>=<消息>#<字段号> …`)时,台账的 `state` 行必须已是 `state=active`(§6.2);仍是 `state=bootstrap` 就停止发布,先做完 §6.2。原因:引导期内新增字段都记世代 1,旧 go/db 与新 scene 世代号相同,go/db 的世代校验拦不住,旧 go/db 会静默丢掉新列或读成旧值,见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §8.1 第 6 条。首次上线本身不受此限。
+  带新持久字段的版本(2026-10-20 增补,审计 r2-ps#1;2026-11-05 起由机器门禁兜住):首次上线之后,台账已在 ① 封存过,引导期内再加持久字段时 proto 生成直接失败(要求先做完 §6.2),合并带进已发布世代的字段行同样失败;⑥ 的 `release.persist_schema.sealed` 核对本版本台账已封存到最大世代。原因:同一世代号的新旧二进制认识的字段集合必须相同,否则 go/db 的世代校验拦不住,旧 go/db 会静默丢掉新列或读成旧值,见 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1「封存」与 §8.1 第 6 条。首次上线本身不受此限(首次封存时台账可以仍是 `bootstrap`)。
   首次发布含 B0-4(C++ 节点 fd 上限不够就拒启)的版本之前,先按 [gate-kernel-tuning-runbook.md](gate-kernel-tuning-runbook.md) §3.1「上线前置」第 1 步,读各集群各节点池的容器 nofile 硬限并记进 PROGRESS;硬限不够时先处理再发布。拒启的影响面按工作负载形态不同(单副本 battle hostPort 会整体停服),回滚另有 external gate 删 Pod 等额外步骤,见同节「紧急回退」(2026-10-18 增补)。
   共享 Redis 单实例 → 高可用(2026-10-19 增补;部署脚本改动未运行、待 Codex 验证,尚未在任何真实 staging / prod 集群上切换过):staging / prod 首次以缺省档跑 `infra-up`(或不带 `-SkipInfra` 的 `all-up`)时,`-RedisReplicas` 缺省按档位解析为 3,而线上还是单实例,脚本判定 1 → 3(`[RedisTopology]Upgrade:`)。这是一次全服登录中断:在维护窗口里做,先停写,带 `-ConfirmRedisCoreRestart`(没带就在任何写操作之前拒绝),口令不得含空白或单引号;步骤与回退见 [deploy/k8s/README.md](../../deploy/k8s/README.md)「共享 Redis:高可用形态」→「切换与回退」。切完对**每个 zone** 重跑 `zone-up`(WAITAOF 副本份数随之变为 1,入口行 `Redis topology: ... waitaof_replicas=1`),并在各 zone namespace 里 `kubectl rollout restart deploy/db` 与 `deploy/data-service`(只改 ConfigMap 不会滚动它们)。还没切的环境照常发 zone 版本:zone 写路径没给 `-RedisReplicas` 时跟随线上 `sts/redis` 的副本数,显式值与线上不同会被拒绝。
 
@@ -262,7 +263,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 - [ ] **① 逐个 zone 关闭引导期**:按 [deploy/k8s/README.md](../../deploy/k8s/README.md)「玩家持久 schema 世代」的「关闭引导期」执行(负责人执行;先确认全部 go/db Pod 上 `db_persist_schema_unstamped_write_total` 持续一个完整存盘周期不再增长,再写 `db:persist_schema:bootstrap_closed:zone:<zone>` = `closed`,`db_persist_schema_bootstrap_closed` 变为 1 即生效)。
 - [ ] **② 主干上把台账切到 `active`**:全部 zone 都做完 ① 之后,由负责人在主干提交里把 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 改为 `state=active`(只改这一行),再按 AGENTS.md §4 跑一次 proto 生成(Codex 执行),确认生成通过、台账其余行不变。此后每次出现新增字段的生成运行都会追加一个新世代。
 - [ ] **③ 记录**:在 `docs/PROGRESS.md` 记一条:各 zone 关闭引导期的时间、`state=active` 的提交号。
-- **门禁**:② 完成之前,不得发布任何新增持久字段的版本(§2.1 ⑦ 的台账比对)。机器门禁暂缺(生成器或发布预检都还不检查台账状态与上线状态的关系),目前只靠这一条人工核对。
+- **门禁**:② 完成之前,不得发布任何新增持久字段的版本。2026-11-05 起有机器门禁:首次上线的版本在 §2.1 ① 封存过台账之后,引导期内再加持久字段,proto 生成会失败并提示先做本节;发布预检 `release.persist_schema.sealed` 要求每个版本都封存到最大世代。
 
 ---
 

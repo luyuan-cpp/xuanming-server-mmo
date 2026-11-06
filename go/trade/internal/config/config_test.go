@@ -179,7 +179,6 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 // validConfig 是一份能通过 Validate 的最小配置,负向用例在它上面逐项改坏。
 func validConfig() Config {
 	c := Config{
-		Rmb:      RmbConf{GlobalLoginSessions: true, LoginRedis: playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, PoolSizePerNode: 8}},
 		ZoneId:   1,
 		LeaseTTL: 60,
 		MySQL: MySQLConf{

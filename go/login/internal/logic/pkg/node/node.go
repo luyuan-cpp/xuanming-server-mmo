@@ -7,6 +7,7 @@ import (
 	"login/internal/config"
 	etcd "login/internal/logic/pkg/etcd"
 	login_proto "proto/common/base"
+	"shared/releasetrack"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,7 +43,18 @@ func BuildRpcPath(serviceName string, zoneId, nodeType, nodeId uint32) string {
 	return fmt.Sprintf("%s/zone/%d/node_type/%d/node_id/%d", serviceName, zoneId, nodeType, nodeId)
 }
 
+// NewNode 注册本进程,任何一步失败都返回 nil,调用方随后拒启。
+//
+// 发布轨道(docs/design/release-track-gray-canary.md §2.1)在第一步读,不靠入口传参:取值非法时在碰 etcd 之前
+// 就放弃注册;漏写轨道的 canary 进程会被当成 stable(与 shared/noderegistry 同一理由)。本函数出错只回 nil,
+// 所以拒绝原因记在日志里。失租重注册重放的是分配时写下的同一份值,轨道不会丢。
 func NewNode(nodeType uint32, ip string, port uint32, ttl int64) *Node {
+	track, err := releasetrack.FromEnv()
+	if err != nil {
+		logx.Errorf("login node: refusing to register, invalid release track: %v", err)
+		return nil
+	}
+
 	client, err := etcd.NewClient()
 	if err != nil {
 		return nil
@@ -53,7 +65,29 @@ func NewNode(nodeType uint32, ip string, port uint32, ttl int64) *Node {
 		return nil
 	}
 
-	info := &login_proto.NodeInfo{
+	info := newNodeInfo(nodeType, config.AppConfig.Node.ZoneId, ip, port, track)
+
+	allocator := NewNodeAllocator(client, GetRpcPrefix(nodeType)).WithRegistry(reg)
+	nodeID, err := allocator.TryAllocateNodeID(context.Background(), info, reg.Lease)
+	if err != nil {
+		return nil
+	}
+
+	info.NodeId = uint32(nodeID)
+	logx.Infof("login node registered: zone=%d node_type=%d node_id=%d uuid=%s release_track=%s",
+		info.ZoneId, nodeType, info.NodeId, info.NodeUuid, track)
+
+	return &Node{
+		Info:   info,
+		reg:    reg,
+		Client: client,
+	}
+}
+
+// newNodeInfo 构造本进程写进 etcd 的 NodeInfo,node_id 由随后的分配步骤填。
+// 抽成函数是为了单测不连 etcd 就能核对轨道。
+func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releasetrack.Track) *login_proto.NodeInfo {
+	return &login_proto.NodeInfo{
 		NodeId:   uint32(time.Now().UnixNano()),
 		NodeType: nodeType,
 		Endpoint: &login_proto.EndpointComp{
@@ -64,24 +98,11 @@ func NewNode(nodeType uint32, ip string, port uint32, ttl int64) *Node {
 			Ip:   ip,
 			Port: port,
 		},
-		ZoneId:       config.AppConfig.Node.ZoneId,
+		ZoneId:       zoneId,
 		LaunchTime:   uint64(time.Now().Unix()),
 		ProtocolType: uint32(login_proto.ENodeProtocolType_PROTOCOL_GRPC),
 		NodeUuid:     uuid.New().String(),
-	}
-
-	allocator := NewNodeAllocator(client, GetRpcPrefix(nodeType)).WithRegistry(reg)
-	nodeID, err := allocator.TryAllocateNodeID(context.Background(), info, reg.Lease)
-	if err != nil {
-		return nil
-	}
-
-	info.NodeId = uint32(nodeID)
-
-	return &Node{
-		Info:   info,
-		reg:    reg,
-		Client: client,
+		ReleaseTrack: track.String(),
 	}
 }
 

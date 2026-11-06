@@ -131,6 +131,8 @@ namespace
         event.set_outcome(::BATTLE_OUTCOME_DRAW);
         event.set_total_rounds(7);
         event.set_finished_at_ms(123456);
+        event.set_match_mode(5);
+        event.set_battle_config_id(6);
         auto* team = event.add_teams();
         team->set_team_index(0);
         team->add_player_ids(92);
@@ -177,6 +179,11 @@ TEST(BattleResultCommit, FullSourcePreservesAllAssetsAndFixedBytes)
     auto source = MakeSettlementSources();
     auto expected = source.at(1);
     expected.set_outcome(::BATTLE_OUTCOME_DRAW);
+    // 终局时刻随 battle_id、outcome 一起盖进每一份个人结算(battle-result-recovery.md §6)。
+    expected.set_finished_at_ms(123456);
+    // 模式与配置号同样随原件盖进每一份个人结算,只给近期战斗结果展示用。
+    expected.set_match_mode(5);
+    expected.set_battle_config_id(6);
     ASSERT_TRUE(turnbattle::FreezeBattleSettlementSource(event, source));
     ASSERT_EQ(event.settlements_size(), 2);
     EXPECT_EQ(event.settlement_format_version(), 1u);
@@ -184,6 +191,9 @@ TEST(BattleResultCommit, FullSourcePreservesAllAssetsAndFixedBytes)
     EXPECT_EQ(event.settlements(1).player_id(), 93u);
     EXPECT_EQ(event.settlements(1).battle_id(), 851u);
     EXPECT_EQ(event.settlements(1).outcome(), ::BATTLE_OUTCOME_DRAW);
+    EXPECT_EQ(event.settlements(1).finished_at_ms(), 123456u);
+    EXPECT_EQ(event.settlements(1).match_mode(), 5u);
+    EXPECT_EQ(event.settlements(1).battle_config_id(), 6u);
     // 原件一经序列化就固定:重放 CommitBattleOutcome 只发这份字节,之后改动手里的来源影响不到它。
     const auto payload = event.SerializeAsString();
     source.at(1).set_gold_gain(99999);

@@ -71,17 +71,10 @@ func (l *QueryQueueStatusLogic) QueryQueueStatus(in *loginpb.QueryQueueStatusReq
 		}, nil
 	}
 
-	state, err := l.svcCtx.LoginQueue.Lookup(l.ctx, in.QueueToken, zoneID, func(slot *loginqueue.AdmitSlot) (*loginqueue.AdmitToken, error) {
-		// Sign at consume time so the 5-min token TTL begins now (R17 R1
-		// fix). The dispatcher only picked the gate; signing here means a
-		// client that polled slowly still gets a full-TTL token.
-		return loginqueue.SignGateToken(&loginqueue.GateCandidate{
-			NodeID: slot.NodeID,
-			IP:     slot.IP,
-			Port:   slot.Port,
-			ZoneID: slot.ZoneID,
-		}, l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
-	})
+	// 取走时现签(R17 R1):dispatcher 只挑了 gate,在这里签,轮询慢的客户端拿到的票也是完整 TTL。
+	// 签之前复核放行时选定的 gate,它已停写、满载或不在候选里就重挑(loginqueue.NewAdmitSigner,与 AssignGate 重入同一份)。
+	signFn := loginqueue.NewAdmitSigner(l.ctx, l.svcCtx.QueueCapacityProvider(), l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
+	state, err := l.svcCtx.LoginQueue.Lookup(l.ctx, in.QueueToken, zoneID, signFn)
 	if err != nil {
 		// Redis flap or similar — log so on-call can correlate with Redis
 		// metrics. We deliberately don't expose the raw error to the client

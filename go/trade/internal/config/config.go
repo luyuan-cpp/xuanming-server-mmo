@@ -133,11 +133,8 @@ type Config struct {
 }
 
 type RmbConf struct {
-	Enabled bool `json:",optional"`
-	// 必须由所有参与zone的login共用，不从SharedRedis/ZoneId推测或回落。
-	GlobalLoginSessions bool                          `json:",optional"`
-	LoginRedis          playerredis.LoginReaderConfig `json:",optional"`
-	CurrencyTypes       []uint32                      `json:",optional"`
+	Enabled       bool     `json:",optional"`
+	CurrencyTypes []uint32 `json:",optional"`
 }
 type MallConf struct {
 	URL               string `json:",optional"`
@@ -599,12 +596,6 @@ func (c *Config) Validate() error {
 	}
 	// 落地恢复参数只在通道开着时有消费者(停放 / 放弃 / 对账 / 唤醒都挂在重投循环上),关着时一概不查。
 	if c.AssetOp.Enabled {
-		if !c.Rmb.GlobalLoginSessions || !c.Rmb.LoginRedis.HasAddr() {
-			return errors.New("交易写面必须显式配置全局login会话Redis，不允许从SharedRedis推测")
-		}
-		if c.Rmb.LoginRedis.DB < 0 || c.Rmb.LoginRedis.PoolSizePerNode < 0 {
-			return errors.New("登录态Redis库号/连接池非法")
-		}
 		if c.Market.Scope != ScopeGlobal {
 			return errors.New("交易写面必须使用全球市场，禁止按区域独立撮合")
 		}

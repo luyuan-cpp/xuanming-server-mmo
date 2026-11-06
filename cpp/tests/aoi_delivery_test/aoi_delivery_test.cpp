@@ -1,4 +1,5 @@
 // 直接编译生产 AOI/Grid/Interest/View，只替换网络发送边界，观察实际接收者和消息体。
+// 单向关注的验收场景见 docs/design/aoi-directed-interest.md「验收场景」。
 #include <gtest/gtest.h>
 #include "actor/actor_net_id.h"
 #include "core/system/id_generator.h"
@@ -58,6 +59,47 @@ int DestroysFor(entt::entity receiver, entt::entity target) {
     return count;
 }
 
+// 离场路径发的是单实体 ActorDestroyS2C。
+int ActorDestroysFor(entt::entity receiver, entt::entity target) {
+    int count = 0;
+    for (const auto& sent : deliveries) {
+        if (sent.receiver != receiver || sent.messageId != SceneSceneClientPlayerNotifyActorDestroyMessageId) continue;
+        ActorDestroyS2C message;
+        EXPECT_TRUE(message.ParseFromString(sent.body));
+        if (message.entity() == actor_net_id::Of(tlsEcs.actorRegistry, target)) ++count;
+    }
+    return count;
+}
+
+// receiver 最近一次收到的 target 创建消息里的 x 坐标;没收到返回 NaN。
+double CreatedX(entt::entity receiver, entt::entity target) {
+    double x = std::numeric_limits<double>::quiet_NaN();
+    for (const auto& sent : deliveries) {
+        if (sent.receiver != receiver || sent.messageId != SceneSceneClientPlayerNotifyActorListCreateMessageId) continue;
+        ActorListCreateS2C message;
+        EXPECT_TRUE(message.ParseFromString(sent.body));
+        for (const auto& actor : message.actor_list()) {
+            if (actor.entity() == actor_net_id::Of(tlsEcs.actorRegistry, target)) x = actor.transform().location().x();
+        }
+    }
+    return x;
+}
+
+// 移动、属性、技能广播的接收者:反向索引里可见的观察者。
+EntityUnorderedSet VisibleWatchersOf(entt::entity target) {
+    EntityVector watchers;
+    InterestSystem::GetVisibleWatchers(target, watchers);
+    return {watchers.begin(), watchers.end()};
+}
+
+AoiFollowGrant SkillGrant(uint64_t id, bool revealsStealth = false) {
+    return AoiFollowGrant{AoiFollowSource{AoiFollowKind::kSkill, id}, AoiPriority::kPinned, revealsStealth};
+}
+
+AoiFollowGrant TeamGrant(uint64_t teamId) {
+    return AoiFollowGrant{AoiFollowSource{AoiFollowKind::kTeam, teamId}, AoiPriority::kTeammate, false};
+}
+
 class AoiDeliveryTest : public ::testing::Test {
 protected:
     SceneEntity scene = entt::null;
@@ -80,6 +122,11 @@ protected:
         tlsEcs.actorRegistry.emplace<Player>(entity);
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, 10000 + entt::to_integral(entity));
         return entity;
+    }
+    static void MoveTo(entt::entity entity, double x, double y) {
+        auto& location = *tlsEcs.actorRegistry.get<Transform>(entity).mutable_location();
+        location.set_x(x);
+        location.set_y(y);
     }
 };
 }
@@ -137,14 +184,14 @@ TEST_F(AoiDeliveryTest, EnterBroadcastSharesOneActorBodyAcrossAcceptedObservers)
     EXPECT_TRUE(broadcasts.empty());
 }
 
-TEST_F(AoiDeliveryTest, SpatialLeaveBroadcastExcludesPinnedAndUninterestedObservers) {
+TEST_F(AoiDeliveryTest, SpatialLeaveBroadcastExcludesFollowersAndUninterestedObservers) {
     const auto firstObserver = Spawn();
     const auto secondObserver = Spawn(1, 0);
     const auto pinnedObserver = Spawn(2, 0);
     const auto uninterestedObserver = Spawn(3, 0);
     const auto mover = Spawn();
     AoiSystem::Update(0);
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(pinnedObserver, mover, AoiPriority::kPinned));
+    ASSERT_TRUE(AoiSystem::Follow(pinnedObserver, mover, SkillGrant(1)));
     InterestSystem::RemoveAoiEntity(uninterestedObserver, mover);
     deliveries.clear();
     broadcasts.clear();
@@ -177,7 +224,7 @@ TEST_F(AoiDeliveryTest, VisibilityResetBroadcastsRemovalAndNextUpdateRebuildsObs
     const auto pinnedObserver = Spawn(2, 0);
     const auto mover = Spawn();
     AoiSystem::Update(0);
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(pinnedObserver, mover, AoiPriority::kPinned));
+    ASSERT_TRUE(AoiSystem::Follow(pinnedObserver, mover, SkillGrant(1)));
     deliveries.clear();
     broadcasts.clear();
 
@@ -225,6 +272,7 @@ TEST_F(AoiDeliveryTest, DestroyedTargetDoesNotCreateWatchersInterestList) {
     tlsEcs.actorRegistry.destroy(target);
     EXPECT_FALSE(InterestSystem::AddAoiEntity(watcher, target));
     EXPECT_FALSE(InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kPinned));
+    EXPECT_FALSE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher));
     EXPECT_TRUE(deliveries.empty());
 }
@@ -284,12 +332,12 @@ TEST_F(AoiDeliveryTest, FullObserverDoesNotReceiveRejectedNormalEntrant) {
     EXPECT_EQ(CreatesFor(entrant, stationary), 1);
 }
 
-TEST_F(AoiDeliveryTest, ReversePinnedEntryIsNotDestroyedOnSpatialLeave) {
+TEST_F(AoiDeliveryTest, ExplicitFollowIsNotDestroyedOnSpatialLeave) {
     auto stationary = Spawn();
     AoiSystem::Update(0);
     auto mover = Spawn();
     AoiSystem::Update(0);
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(stationary, mover, AoiPriority::kPinned));
+    ASSERT_TRUE(AoiSystem::Follow(stationary, mover, SkillGrant(1)));
     deliveries.clear();
     auto* transform = tlsEcs.actorRegistry.try_get<Transform>(mover);
     ASSERT_NE(transform, nullptr);
@@ -312,7 +360,7 @@ TEST_F(AoiDeliveryTest, VisibilityAndLeaveNotificationsCarryCorrectBodies) {
     AoiSystem::Update(0); // ActorListDestroy
     auto returner = Spawn();
     AoiSystem::Update(0);
-    AoiSystem::OnLeaveScene(returner); // ActorDestroy(BroadcastEntityLeave)
+    AoiSystem::OnLeaveScene(returner); // ActorDestroy(离场者的移除按单实体消息广播)
 
     // 前置条件:三条路径确实都发过消息,且消息体正确。
     ASSERT_EQ(CreatesFor(stationary, mover), 1);
@@ -328,23 +376,224 @@ TEST_F(AoiDeliveryTest, VisibilityAndLeaveNotificationsCarryCorrectBodies) {
     ASSERT_EQ(actorDestroyToStationary, 1);
 }
 
-TEST_F(AoiDeliveryTest, LeaveTouchesOnlyNeighborGridObservers) {
+TEST_F(AoiDeliveryTest, LeaveCleansRelationsThroughIndexesOnly) {
     const auto target = Spawn(0, 0);
     const auto nearby = Spawn(1, 0);
-    const auto otherScene = tlsEcs.sceneRegistry.create();
-    const auto elsewhere = Spawn(0, 0);
-    tlsEcs.actorRegistry.get<SceneEntityComp>(elsewhere).sceneEntity = otherScene;
+    const auto bystander = Spawn(500, 500);
     AoiSystem::Update(0);
-    // 普通非邻格条目代表另一个场景的观察者,不能让目标离场退化为扫描全节点。
-    ASSERT_TRUE(InterestSystem::AddAoiEntity(elsewhere, target));
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(bystander));
+    // 直接写正向表、绕过反向索引,代表一条与 target 没有索引关联的条目:
+    // 离场若退化成扫描全节点的 AoiListComp,这条会被误删并发出移除。
+    tlsEcs.actorRegistry.emplace<AoiListComp>(bystander).entries.emplace(target, AoiEntry{});
     deliveries.clear();
 
     AoiSystem::OnLeaveScene(target);
 
-    EXPECT_EQ(0, DestroysFor(elsewhere, target));
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(elsewhere).Contains(target))
-        << "离场只访问邻格观察者,不扫全节点";
-    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(nearby).Contains(target));
+    EXPECT_EQ(1, ActorDestroysFor(nearby, target));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(nearby).HasRelation(target));
+    EXPECT_EQ(0, ActorDestroysFor(bystander, target));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(bystander).HasRelation(target))
+        << "离场只访问正反索引里与它直接关联的关系,不扫全节点";
+}
+
+// 验收:A 在邻格外关注 B,先收创建和当前位置,再收 B 的移动;B 不因此收到 A 的移动。
+TEST_F(AoiDeliveryTest, ExplicitFollowBeyondGridSendsCreateAndDeliversOneWay) {
+    const auto watcher = Spawn(0, 0);
+    const auto target = Spawn(500, 500);
+    AoiSystem::Update(0);
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher)) << "前置条件:相距很远,没有空间关注";
+    deliveries.clear();
+
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
+
+    EXPECT_EQ(1, CreatesFor(watcher, target));
+    EXPECT_DOUBLE_EQ(500.0, CreatedX(watcher, target)) << "创建消息带当前位置";
+    EXPECT_EQ(0, CreatesFor(target, watcher)) << "单向关注:目标不因此看到观察者";
+    EXPECT_EQ((EntityUnorderedSet{watcher}), VisibleWatchersOf(target)) << "目标的移动与属性发给关注者";
+    EXPECT_TRUE(VisibleWatchersOf(watcher).empty()) << "观察者的移动不发给目标";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(target));
+
+    deliveries.clear();
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
+    EXPECT_TRUE(deliveries.empty()) << "同一来源重复登记不重复创建";
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target).follows.size());
+}
+
+// 验收:B 进出 A 的邻格、显式来源不变时,A 的客户端持续显示 B,不重复创建或移除。
+TEST_F(AoiDeliveryTest, ExplicitFollowKeepsTargetAcrossGridEntryAndExit) {
+    const auto watcher = Spawn(0, 0);
+    const auto target = Spawn(500, 500);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
+    deliveries.clear();
+
+    MoveTo(target, 1, 0);
+    AoiSystem::Update(0);
+    EXPECT_EQ(0, CreatesFor(watcher, target)) << "已在显示,进入邻格不重复创建";
+    EXPECT_EQ(1, CreatesFor(target, watcher)) << "目标一侧的空间关注照常建立";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target).spatial);
+
+    MoveTo(target, 500, 500);
+    AoiSystem::Update(0);
+    EXPECT_EQ(0, DestroysFor(watcher, target)) << "显式来源仍在,走出邻格不移除";
+    EXPECT_EQ(1, DestroysFor(target, watcher));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).Contains(target));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target).spatial);
+    EXPECT_EQ((EntityUnorderedSet{watcher}), VisibleWatchersOf(target)) << "范围外继续收移动";
+}
+
+// 验收:队伍与技能两个来源同时关注;结束技能不影响队伍来源,最后一个来源撤销时只发一次移除。
+TEST_F(AoiDeliveryTest, MultipleSourcesShareOneVisibleStateAndRemoveOnce) {
+    const auto watcher = Spawn(0, 0);
+    const auto target = Spawn(500, 500);
+    AoiSystem::Update(0);
+    deliveries.clear();
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, TeamGrant(42)));
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(7)));
+    EXPECT_EQ(1, CreatesFor(watcher, target)) << "多个来源只有一份客户端可见状态";
+    deliveries.clear();
+
+    AoiSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kSkill, 7});
+    EXPECT_TRUE(deliveries.empty()) << "结束技能不影响队伍来源";
+    EXPECT_EQ((EntityUnorderedSet{watcher}), VisibleWatchersOf(target));
+
+    AoiSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kSkill, 7});
+    AoiSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kTeam, 99});
+    EXPECT_TRUE(deliveries.empty()) << "撤销已撤或不存在的来源是无操作";
+
+    AoiSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kTeam, 42});
+    EXPECT_EQ(1, DestroysFor(watcher, target));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(target));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiWatchersComp>(target).watchers.empty()) << "两张索引同步清掉";
+}
+
+// 验收:解除最后一个显式关注时,目标仍在附近且可见就继续显示,否则立即移除。
+TEST_F(AoiDeliveryTest, UnfollowKeepsNearbyTargetAndRemovesDistantOne) {
+    const auto watcher = Spawn(0, 0);
+    const auto nearby = Spawn(1, 0);
+    const auto distant = Spawn(500, 500);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(AoiSystem::Follow(watcher, nearby, SkillGrant(1)));
+    ASSERT_TRUE(AoiSystem::Follow(watcher, distant, SkillGrant(2)));
+    deliveries.clear();
+
+    AoiSystem::Unfollow(watcher, nearby, AoiFollowSource{AoiFollowKind::kSkill, 1});
+    AoiSystem::Unfollow(watcher, distant, AoiFollowSource{AoiFollowKind::kSkill, 2});
+
+    EXPECT_EQ(0, DestroysFor(watcher, nearby));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).Contains(nearby));
+    EXPECT_EQ(1, DestroysFor(watcher, distant));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(distant));
+}
+
+// 验收:B 隐身时普通关注暂停投递并移除一次,侦测授权按玩法给出;恢复时用最新状态重新创建。
+TEST_F(AoiDeliveryTest, StealthPausesFollowersAndRecreatesWithLatestStateOnReveal) {
+    const auto follower = Spawn(0, 0);
+    const auto detector = Spawn(-300, 0);
+    const auto nearby = Spawn(501, 500);
+    const auto target = Spawn(500, 500);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(nearby).Contains(target));
+    ASSERT_TRUE(AoiSystem::Follow(follower, target, SkillGrant(1)));
+    ASSERT_TRUE(AoiSystem::Follow(detector, target, SkillGrant(2, /*revealsStealth=*/true)));
+    deliveries.clear();
+
+    tlsEcs.actorRegistry.emplace<StealthedTagComp>(target);
+    AoiSystem::RefreshTargetVisibility(target);
+
+    EXPECT_EQ(1, DestroysFor(follower, target));
+    EXPECT_EQ(1, DestroysFor(nearby, target));
+    EXPECT_EQ(0, DestroysFor(detector, target)) << "侦测授权由玩法明确给出";
+    EXPECT_EQ((EntityUnorderedSet{detector}), VisibleWatchersOf(target)) << "隐身期间只投递给有侦测授权的关注者";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(follower).HasRelation(target)) << "业务来源保留";
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(nearby).HasRelation(target)) << "空间关注随可见性撤掉";
+
+    deliveries.clear();
+    MoveTo(target, 505, 500);
+    tlsEcs.actorRegistry.remove<StealthedTagComp>(target);
+    AoiSystem::RefreshTargetVisibility(target);
+
+    EXPECT_EQ(1, CreatesFor(follower, target));
+    EXPECT_DOUBLE_EQ(505.0, CreatedX(follower, target)) << "恢复时用最新状态重新创建";
+    EXPECT_EQ(1, CreatesFor(nearby, target)) << "附近实体立即重新建立空间关注,不等跨格";
+    EXPECT_EQ(0, CreatesFor(detector, target));
+    EXPECT_EQ((EntityUnorderedSet{follower, detector, nearby}), VisibleWatchersOf(target));
+}
+
+// 验收:B 在范围外离场且网格组件已清,A 只收到一次移除;双方索引清干净,其他关系不受影响。
+TEST_F(AoiDeliveryTest, OutOfRangeLeaveWithoutGridStateNotifiesFollowerOnce) {
+    const auto watcher = Spawn(0, 0);
+    const auto target = Spawn(500, 500);
+    const auto other = Spawn(-500, -500);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
+    ASSERT_TRUE(AoiSystem::Follow(watcher, other, SkillGrant(2)));
+    ASSERT_TRUE(AoiSystem::Follow(target, other, SkillGrant(3)));
+    // 模拟先被摘出格子的销毁路径:离场清理不能依赖 Hex 或格子成员。
+    for (auto& [gridId, grid] : tlsEcs.sceneRegistry.get<SceneGridListComp>(scene)) grid.entities.erase(target);
+    tlsEcs.actorRegistry.remove<Hex>(target);
+    deliveries.clear();
+
+    AoiSystem::OnLeaveScene(target);
+
+    EXPECT_EQ(1, ActorDestroysFor(watcher, target));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(target));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).Contains(other)) << "与离场者无关的关系不受影响";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(target).entries.empty());
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiWatchersComp>(target).watchers.empty());
+    const auto& otherWatchers = tlsEcs.actorRegistry.get<AoiWatchersComp>(other).watchers;
+    EXPECT_FALSE(otherWatchers.contains(target)) << "离场者的出边也从目标的反向索引里摘掉";
+    EXPECT_TRUE(otherWatchers.contains(watcher));
+
+    deliveries.clear();
+    AoiSystem::OnLeaveScene(target);
+    EXPECT_TRUE(deliveries.empty()) << "重复调用安全";
+}
+
+// 容量:高权重的显式关注只淘汰本观察者表里的低权重条目并通知本人;低权重的显式关注登记后暂不显示,
+// 名额空出后按权重补回。
+TEST_F(AoiDeliveryTest, CapacityEvictionIsPerWatcherAndHiddenFollowIsPromotedLater) {
+    const auto watcher = Spawn(0, 0);
+    const auto neighbor = Spawn(1, 0);
+    const auto target = Spawn(500, 500);
+    const auto teammate = Spawn(-500, -500);
+    AoiSystem::Update(0);
+    tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(watcher, AoiClientCapacityComp{kAoiListCapacityMin});
+    for (uint32_t i = 1; i < kAoiListCapacityMin; ++i) {
+        ASSERT_TRUE(InterestSystem::AddAoiEntity(watcher, tlsEcs.actorRegistry.create(), AoiPriority::kPinned));
+    }
+    ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size());
+    deliveries.clear();
+
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
+    EXPECT_EQ(1, DestroysFor(watcher, neighbor)) << "被淘汰者通知到观察者本人";
+    EXPECT_EQ(1, CreatesFor(watcher, target));
+    EXPECT_EQ(0, DestroysFor(neighbor, watcher)) << "淘汰按观察者独立判断,不要求互相占位";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(neighbor).Contains(watcher));
+
+    deliveries.clear();
+    ASSERT_TRUE(AoiSystem::Follow(watcher, teammate, TeamGrant(42)));
+    EXPECT_EQ(0, CreatesFor(watcher, teammate)) << "权重不够淘汰任何条目:登记但暂不显示";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(teammate));
+    EXPECT_TRUE(VisibleWatchersOf(teammate).empty());
+
+    AoiSystem::Unfollow(watcher, target, AoiFollowSource{AoiFollowKind::kSkill, 1});
+    EXPECT_EQ(1, DestroysFor(watcher, target));
+    EXPECT_EQ(1, CreatesFor(watcher, teammate)) << "名额空出后补回暂隐的显式关注";
+    EXPECT_EQ((EntityUnorderedSet{watcher}), VisibleWatchersOf(teammate));
+}
+
+// 跨场景或无效目标不能建立显式关注,也不得留下组件。
+TEST_F(AoiDeliveryTest, FollowRejectsSelfAndOtherSceneTargets) {
+    const auto watcher = Spawn(0, 0);
+    const auto elsewhere = Spawn(500, 500);
+    tlsEcs.actorRegistry.get<SceneEntityComp>(elsewhere).sceneEntity = tlsEcs.sceneRegistry.create();
+
+    EXPECT_FALSE(AoiSystem::Follow(watcher, watcher, SkillGrant(1)));
+    EXPECT_FALSE(AoiSystem::Follow(watcher, elsewhere, SkillGrant(1)));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiWatchersComp>(elsewhere));
+    EXPECT_TRUE(deliveries.empty());
 }
 
 

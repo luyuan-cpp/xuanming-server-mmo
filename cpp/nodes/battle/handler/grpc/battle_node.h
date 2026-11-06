@@ -7,6 +7,7 @@
 #include "network/grpc_unary_call.h"
 #include "proto/battle/battle_node.pb.h"
 ///<<< BEGIN WRITING YOUR CODE: grpc.header.includes
+#include "engine/core/async/loop_task_scope.h"
 #include "battle_admission_gate.h"
 ///<<< END WRITING YOUR CODE
 
@@ -29,6 +30,16 @@ public:
 
     // SetBeforeShutdown 第一句调用(先于 AbortAllRooms)。终态,幂等。
     void CloseAdmission();
+
+    // ---- 可分配状态发布(R6,battle_admission_advertise.h;main.cpp 的对账定时器与关闸当场用) ----
+
+    // 准入闸的只读弱引用。定时器回调只弱持有它、不捕获 this(AGENTS §11.7),本对象销毁后 lock 失败即停止对账。
+    std::weak_ptr<const battle_admission::AdmissionGate> AdmissionGateView() const { return admission_; }
+
+    // Agones 侧此刻会不会放行分配许可的粗判,与 GameServerLifecycle 拒绝许可的条件同口径:排空中、Starting(/ready 未成功)、
+    // ShuttingDown、Stopped 都不放行;Disabled(本地 / 非 Agones)恒放行。只用于对外表态,不代替 CreateBattle 守护段里真正的许可。
+    // static:定时器不持有本对象也能调。lifecycle 的读接口自带锁,任何线程可调。
+    static bool LifecycleGrantsPermits();
     ///<<< END WRITING YOUR CODE
 
     // 方法表(按 :path 精确路由)。处理函数捕获 this:本对象必须活过注册它的 Node。
@@ -74,6 +85,7 @@ private:
     static void HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroadcastRequest* request, ::PromoteSpectateBroadcastResponse* response);
     muduo::net::EventLoop& loop_;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
+    LoopTaskScope creationTasks_{loop_};
     // 建房准入闸。用 shared_ptr 持有:grpc.CreateBattle.guard 的许可回调只弱持有它、不捕获 this(AGENTS §11.7),
     // 回调晚于本对象执行时 lock 失败即按「不接新房间」拒绝。
     std::shared_ptr<battle_admission::AdmissionGate> admission_ = std::make_shared<battle_admission::AdmissionGate>();

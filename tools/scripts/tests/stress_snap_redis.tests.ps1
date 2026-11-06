@@ -52,8 +52,8 @@ function Assert-RejectedBeforeCapture {
     Assert-True -Condition (-not (Test-Path (Join-Path $RunDir 'prom-snapshots'))) -Because "${Because}:校验必须在建目录、抓取之前"
 }
 
-Test-Case 'target 名:保留名 login / sm / db / ds 与非法写法在抓取之前拒绝' {
-    foreach ($name in @('login', 'sm', 'db', 'ds')) {
+Test-Case 'target 名:保留名 login / sm / db / ds / match / pl 与非法写法在抓取之前拒绝' {
+    foreach ($name in @('login', 'sm', 'db', 'ds', 'match', 'pl')) {
         $dir = New-RunDir
         Assert-RejectedBeforeCapture -RunDir $dir -Action { Invoke-Snap -RunDir $dir -Targets @{ $name = 'docker:redis' } } `
             -MessagePattern '冲突' -Because "保留名 $name 会让 t<N>m_redis_$name.txt 被汇总脚本当成 _$name 快照"

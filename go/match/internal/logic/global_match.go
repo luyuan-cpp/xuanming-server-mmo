@@ -346,7 +346,13 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 			s.HoldRelay(s.Authority.Unknown(ctx, f))
 			return
 		}
-		if e = createBattle(discovery.NodeEntry{NodeId: f.TargetNodeId, NodeUuid: f.TargetInstanceId, Endpoint: f.TargetEndpoint, PhysicalRegion: f.PhysicalRegion}, request); e == nil {
+		// rooms 与 e 用赋值而不是 :=:下面的 errors.As 要看到的是这次建房的错误,不能被 if 里的同名变量遮蔽。
+		var rooms uint32
+		if rooms, e = createBattle(discovery.NodeEntry{NodeId: f.TargetNodeId, NodeUuid: f.TargetInstanceId, Endpoint: f.TargetEndpoint, PhysicalRegion: f.PhysicalRegion}, request); e == nil {
+			// 负载随应答捎回(R6):恢复路径重放建房成功,同样记下节点此刻的房间数。
+			if s.Placement != nil {
+				s.Placement.Observe(f.TargetInstanceId, rooms)
+			}
 			if e = s.Authority.RecordBattleAdopted(ctx, f, f.TargetInstanceId, 1); e == nil {
 				s.HoldRelay(s.Authority.Finish(ctx, f, true))
 			} else {

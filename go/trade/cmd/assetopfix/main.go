@@ -37,7 +37,6 @@ import (
 	tradepb "proto/trade"
 	"shared/assetop"
 	"shared/authoritysql"
-	"shared/dbplacement"
 	"trade/internal/config"
 	"trade/internal/constants"
 	"trade/internal/data"
@@ -65,8 +64,7 @@ const (
 	listMaxLimit         = 500
 
 	// opTimeout 是一次 list / resolve 的总预算;AssetOpRepo 每次调用另有 constants.StoreOpTimeout。
-	opTimeout   = 15 * time.Second
-	pingTimeout = 5 * time.Second
+	opTimeout = 15 * time.Second
 
 	logServiceName = "trade-assetopfix"
 )
@@ -174,25 +172,13 @@ func withStore(configPath string, readOnly bool, stderr io.Writer, fn func(ctx c
 		defer writer.Seal()
 		permission = authoritysql.Writer(writer)
 	}
-	placementOptions, err := dbplacement.ForOneShot(ctx, c.MySQL.DbPlacement, c.MySQL.DBName)
+	db, err := svc.OpenToolMySQL(ctx, c.MySQL, permission)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitError
 	}
-	db, err := authoritysql.Open(ctx, svc.BuildDSN(c.MySQL), c.MySQL.DBName, authoritysql.Backend(c.MySQL.Backend), 2, permission, placementOptions...)
-	if err != nil {
-		// 错误里可能带 DSN,DSN 含口令,不打印原错误。
-		fmt.Fprintln(stderr, "Failed to open MySQL (DSN contains a password; the original error is not printed)")
-		return exitError
-	}
 	defer func() { _ = db.Close() }()
 
-	pingCtx, cancelPing := context.WithTimeout(ctx, pingTimeout)
-	defer cancelPing()
-	if err := db.PingContext(pingCtx); err != nil {
-		fmt.Fprintf(stderr, "Failed to connect to MySQL database %s: %v\n", c.MySQL.DBName, err)
-		return exitError
-	}
 	repo, err := data.NewAssetOpRepo(db, constants.StoreOpTimeout)
 	if err != nil {
 		fmt.Fprintf(stderr, "Failed to build AssetOpRepo: %v\n", err)

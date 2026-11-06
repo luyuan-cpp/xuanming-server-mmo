@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"login/internal/logic/pkg/loginqueue"
+	"login/internal/logic/pkg/node"
 	basepb "proto/common/base"
 )
 
@@ -36,6 +37,29 @@ func clientAddr(ip string, port uint32) *basepb.EndpointComp {
 	return &basepb.EndpointComp{Ip: ip, Port: port}
 }
 
+// watched 把 NodeInfo 包成 NodeWatcher.Nodes 的返回形状(都不停写),给 buildGateCandidates / candidatesFromNodes 用。
+func watched(infos ...*basepb.NodeInfo) []node.WatchedNode {
+	out := make([]node.WatchedNode, len(infos))
+	for i, info := range infos {
+		out[i] = node.WatchedNode{Info: info}
+	}
+	return out
+}
+
+// 停写判定与自报上限只原样透传、不在这里过滤:容量记账要数到每台 gate 上的人,过滤留给 loginqueue 挑 gate 时做。
+func TestBuildGateCandidates_PassesStaleAndMaxConnectionsThrough(t *testing.T) {
+	busy := gateNode(4, 1, 100, "10.244.0.4", 900, clientAddr("127.0.0.1", 30000))
+	busy.MaxConnections = 1000
+	nodes := []node.WatchedNode{
+		{Info: busy},
+		{Info: gateNode(5, 1, 100, "10.244.0.5", 3, clientAddr("127.0.0.1", 30001)), Stale: true},
+	}
+	assertCandidates(t, buildGateCandidates(nodes, 1, true), []loginqueue.GateCandidate{
+		{NodeID: 4, IP: "127.0.0.1", Port: 30000, PlayerCount: 900, ZoneID: 1, MaxConnections: 1000},
+		{NodeID: 5, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1, Stale: true},
+	})
+}
+
 func assertCandidates(t *testing.T, got, want []loginqueue.GateCandidate) {
 	t.Helper()
 	if len(got) == 0 && len(want) == 0 {
@@ -56,7 +80,7 @@ func TestBuildGateCandidates_UsesClientEndpoint(t *testing.T) {
 		{NodeID: 5, IP: "gate-1.z1.example.com", Port: 18000, PlayerCount: 3, ZoneID: 1},
 	}
 	for _, require := range []bool{false, true} {
-		assertCandidates(t, buildGateCandidates(nodes, 1, require), want)
+		assertCandidates(t, buildGateCandidates(watched(nodes...), 1, require), want)
 	}
 }
 
@@ -66,7 +90,7 @@ func TestBuildGateCandidates_FallsBackToEndpointWhenNotRequired(t *testing.T) {
 		gateNode(4, 1, 100, "10.244.0.4", 7, nil),
 		gateNode(5, 1, 100, "10.244.0.5", 3, clientAddr("127.0.0.1", 30001)),
 	}
-	assertCandidates(t, buildGateCandidates(nodes, 1, false), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 1, false), []loginqueue.GateCandidate{
 		{NodeID: 4, IP: "10.244.0.4", Port: gateRPCPort, PlayerCount: 7, ZoneID: 1},
 		{NodeID: 5, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
 	})
@@ -78,12 +102,12 @@ func TestBuildGateCandidates_SkipsGateWithoutClientEndpointWhenRequired(t *testi
 		gateNode(4, 1, 100, "10.244.0.4", 7, nil),
 		gateNode(5, 1, 100, "10.244.0.5", 3, clientAddr("127.0.0.1", 30001)),
 	}
-	assertCandidates(t, buildGateCandidates(nodes, 1, true), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 1, true), []loginqueue.GateCandidate{
 		{NodeID: 5, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
 	})
 
 	onlyMissing := []*basepb.NodeInfo{gateNode(4, 1, 100, "10.244.0.4", 7, nil)}
-	if got := buildGateCandidates(onlyMissing, 1, true); len(got) != 0 {
+	if got := buildGateCandidates(watched(onlyMissing...), 1, true); len(got) != 0 {
 		t.Fatalf("全部缺地址时应无候选,got %+v", got)
 	}
 }
@@ -93,10 +117,10 @@ func TestBuildGateCandidates_HalfFilledClientEndpointIsMissing(t *testing.T) {
 	for _, half := range []*basepb.EndpointComp{clientAddr("127.0.0.1", 0), clientAddr("", 30000)} {
 		nodes := []*basepb.NodeInfo{gateNode(4, 1, 100, "10.244.0.4", 7, half)}
 
-		assertCandidates(t, buildGateCandidates(nodes, 1, false), []loginqueue.GateCandidate{
+		assertCandidates(t, buildGateCandidates(watched(nodes...), 1, false), []loginqueue.GateCandidate{
 			{NodeID: 4, IP: "10.244.0.4", Port: gateRPCPort, PlayerCount: 7, ZoneID: 1},
 		})
-		if got := buildGateCandidates(nodes, 1, true); len(got) != 0 {
+		if got := buildGateCandidates(watched(nodes...), 1, true); len(got) != 0 {
 			t.Fatalf("半填 %+v 在 require 下应被跳过,got %+v", half, got)
 		}
 	}
@@ -115,7 +139,7 @@ func TestBuildGateCandidates_DedupesStaleRecordOnSameClientAddress(t *testing.T)
 		{NodeID: 9, IP: "127.0.0.1", Port: 30001, PlayerCount: 0, ZoneID: 1},
 	}
 	for _, require := range []bool{false, true} {
-		assertCandidates(t, buildGateCandidates(nodes, 1, require), want)
+		assertCandidates(t, buildGateCandidates(watched(nodes...), 1, require), want)
 	}
 }
 
@@ -125,7 +149,7 @@ func TestBuildGateCandidates_DedupesOnFallbackAddressToo(t *testing.T) {
 		gateNode(9, 1, 200, "10.244.0.5", 0, nil),
 		gateNode(5, 1, 100, "10.244.0.5", 50, nil),
 	}
-	assertCandidates(t, buildGateCandidates(nodes, 1, false), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 1, false), []loginqueue.GateCandidate{
 		{NodeID: 9, IP: "10.244.0.5", Port: gateRPCPort, PlayerCount: 0, ZoneID: 1},
 	})
 }
@@ -136,14 +160,14 @@ func TestBuildGateCandidates_ZoneFilterRunsBeforeDedupe(t *testing.T) {
 		gateNode(4, 1, 100, "10.244.0.4", 7, clientAddr("127.0.0.1", 30000)),
 		gateNode(8, 2, 900, "10.244.1.8", 1, clientAddr("127.0.0.1", 30000)), // 配错:与 zone 1 撞地址
 	}
-	assertCandidates(t, buildGateCandidates(nodes, 1, true), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 1, true), []loginqueue.GateCandidate{
 		{NodeID: 4, IP: "127.0.0.1", Port: 30000, PlayerCount: 7, ZoneID: 1},
 	})
-	assertCandidates(t, buildGateCandidates(nodes, 2, true), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 2, true), []loginqueue.GateCandidate{
 		{NodeID: 8, IP: "127.0.0.1", Port: 30000, PlayerCount: 1, ZoneID: 2},
 	})
 	// zoneID=0 = 不按 zone 过滤,此时两条同地址,只留 launch_time 大的。
-	assertCandidates(t, buildGateCandidates(nodes, 0, true), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 0, true), []loginqueue.GateCandidate{
 		{NodeID: 8, IP: "127.0.0.1", Port: 30000, PlayerCount: 1, ZoneID: 2},
 	})
 }
@@ -152,7 +176,7 @@ func TestBuildGateCandidates_ZoneFilterRunsBeforeDedupe(t *testing.T) {
 func TestBuildGateCandidates_SkipsMalformedRecords(t *testing.T) {
 	noIdentity := &basepb.NodeInfo{NodeId: 6, ZoneId: 1, LaunchTime: 100, ClientEndpoint: clientAddr("127.0.0.1", 30002)}
 	nodes := []*basepb.NodeInfo{nil, noIdentity, gateNode(4, 1, 100, "10.244.0.4", 7, nil)}
-	assertCandidates(t, buildGateCandidates(nodes, 1, false), []loginqueue.GateCandidate{
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 1, false), []loginqueue.GateCandidate{
 		{NodeID: 4, IP: "10.244.0.4", Port: gateRPCPort, PlayerCount: 7, ZoneID: 1},
 	})
 	if got := buildGateCandidates(nil, 1, false); len(got) != 0 {
@@ -185,7 +209,7 @@ func TestCandidatesFromNodes_DedupeRunsBeforeDrainingFilter(t *testing.T) {
 	}
 
 	// 对照:没有排空标记时,去重已经淘汰了 node 5。
-	assertCandidates(t, candidatesFromNodes(ctx, rdb, nodes, 1, true), []loginqueue.GateCandidate{
+	assertCandidates(t, candidatesFromNodes(ctx, rdb, watched(nodes...), 1, true), []loginqueue.GateCandidate{
 		{NodeID: 4, IP: "127.0.0.1", Port: 30000, PlayerCount: 7, ZoneID: 1},
 		{NodeID: 9, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
 	})
@@ -197,7 +221,7 @@ func TestCandidatesFromNodes_DedupeRunsBeforeDrainingFilter(t *testing.T) {
 		{NodeID: 4, IP: "127.0.0.1", Port: 30000, PlayerCount: 7, ZoneID: 1},
 	}
 	for _, require := range []bool{false, true} {
-		got := candidatesFromNodes(ctx, rdb, nodes, 1, require)
+		got := candidatesFromNodes(ctx, rdb, watched(nodes...), 1, require)
 		for _, c := range got {
 			if c.NodeID == 5 {
 				t.Fatalf("require=%v: 陈旧记录 node 5 不得在同地址的新 gate 被排空后顶上来,got %+v", require, got)
@@ -213,7 +237,7 @@ func TestCandidatesFromNodes_NilRedisSkipsDrainingFilter(t *testing.T) {
 		gateNode(5, 1, 100, "10.244.0.5", 50, clientAddr("127.0.0.1", 30001)),
 		gateNode(9, 1, 200, "10.244.0.9", 3, clientAddr("127.0.0.1", 30001)),
 	}
-	assertCandidates(t, candidatesFromNodes(context.Background(), nil, nodes, 1, true), []loginqueue.GateCandidate{
+	assertCandidates(t, candidatesFromNodes(context.Background(), nil, watched(nodes...), 1, true), []loginqueue.GateCandidate{
 		{NodeID: 9, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
 	})
 }

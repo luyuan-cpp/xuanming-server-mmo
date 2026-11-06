@@ -209,6 +209,8 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.3 战斗结果展示缺少重登恢复
 
+> 2026-11-05 已补(服务端已落码,未编译、未测试,待 Codex 验证;客户端改动交 Codex):结算应用的同一帧把本人实际入账的结果写进存档里的有界列表(最多 10 局、按 battle_id 去重),与奖励同一次存盘提交,确认提交之后才公开;客户端每次落地查 `GetRecentBattleResults`,收到无战斗上下文的 BattleEnd 时再查一次,展示后 `AckBattleResults`。方案比较与协议见 [战斗结果重登恢复](battle-result-recovery.md)。Java 版待做,`PARITY.md` 已记。
+
 **情形 A**：断线期间场景已经应用结算，直连和大厅两份终局通知均未被客户端消费。重连后 pending 已销账、账本命中不会重推，房间也已删除，140/179 无法取得历史终局。
 
 **情形 B**：断线期间战斗结束，重登才补应用 pending。客户端断线时已经清掉 `_battleId` 和 `_endPendingBattleId`；服务端即便此时发 BattleEnd，客户端无上下文会丢弃。该局已结束，冻结恢复不会先为它发送有效 144 来建立上下文。[首次应用才推](../../cpp/libs/services/scene/battle/system/player_battle.cpp#L2197)、[恢复顺序](../../cpp/libs/services/scene/battle/system/player_battle.cpp#L2303)、[清理与接收条件](../../../mmorpg-client/Assets/Scripts/Game/Battle/BattleClient.cs#L978)

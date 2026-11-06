@@ -4,11 +4,17 @@
 //
 //   - 从内存切号段。发号器先预留一大块号,记录落盘后,再从这块里切 [lo, hi) 给调用方。
 //     一块用完(或用掉一半时后台预取)才碰一次存储,所以没有单行热点和单键争用。
-//   - 预留记录写两份,放在两套互相独立的 etcd 里,都只增不减。一块号只有两份都写成功才能发。
-//     任何一份丢失或回退,另一份仍然盖得住所有发过的号,下一块自动跳到它之上,不用人工处理。
+//   - 预留记录写三份,都只增不减:本地域两套互相独立的 etcd 各一份(AGENTS §7 的强规定),
+//     全局号源登记处一份(全部地域、全部物理集群共用一套)。一块号只有三份都 CAS 成功才能发。
+//     任何一份或两份丢失、回退,剩下的那份仍然盖得住所有发过的号,下一块自动跳到它之上:
+//     本地两套同时回档时靠登记处,登记处丢失或回档时靠本地两份。
+//   - 登记处同时是地域码的唯一绑定。一个地域码只认一条发号世系(初始化时随机生成的 authority)
+//     和一对本地 etcd(按 etcd 自己报的集群号)。重复部署、克隆旧配置和快照、复用退役码,在预留之前被拒绝。
+//     绑定拦不住的情形(两套 etcd 的集群号碰巧也一样),登记处水位照样让它们串行,不会重号。
 //   - 块在内存里、从不回读,所以存储回退影响不到手里已有的块。
-//   - 时钟只是第三道防线:抬高块的起点,防的是两份记录同时回退。它只能把起点往上抬,所以坏时钟
-//     不会造成重号,也不会让发号停下来,最多浪费值域。正常路径不依赖时钟。
+//   - 时钟只是最后一道防线:抬高块的起点。它只能把起点往上抬,坏时钟不会造成重号。正常路径不依赖时钟。
+//   - 首次初始化和事故恢复分开:Init 只给从没认领过的地域码;Recover 只按幸存记录取上界,拿不到可信上界就拒绝;
+//     Retire 留墓碑,码永不再用。
 //
 // 所有种类共用一个计数器,所以系统里任意两个 id 都不相同。biz_tag 只用来校验和记指标。
 //
@@ -18,6 +24,8 @@ package idissuer
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -52,20 +60,24 @@ const (
 	// epochUnix 是时间字段的纪元:2026-01-01 00:00:00 UTC。
 	epochUnix = int64(1767225600)
 
-	// maxAheadSeconds:计数器比时钟超前这么多,说明时钟曾经跳到过未来。这不影响唯一性,只是
-	// 时间下限在追上来之前不起作用,所以只告警。正常超前量是最近几次预留的块长(每块约 256 秒)。
+	// maxAheadSeconds:计数器比时钟超前这么多,说明时钟曾经跳到过未来。这不影响唯一性,只告警。
+	// 正常超前量是最近几次预留的块长(每块约 256 秒)。
 	maxAheadSeconds = uint64(7 * 24 * 3600)
 
-	// bootstrapMarginSeconds:显式初始化时在当前时间之上再留的余量。两份记录都丢了的时候,
-	// 发出去的号可能比时钟超前几个块,留一天盖住它们。
-	bootstrapMarginSeconds = uint64(24 * 3600)
-
-	// reserveAttempts 是一次预留遇到 CAS 冲突时的重试上限。冲突只发生在多个副本同时预留时。
+	// reserveAttempts 是一次预留(或一次运维操作)遇到 CAS 冲突时的重试上限。冲突只发生在多个副本同时写时。
 	reserveAttempts = 8
-	// reserveTimeout 是后台预留的预算。
+	// reserveTimeout 是后台预留的预算。登记处可能在别的地域,三次读三次写留足余量。
 	reserveTimeout = 10 * time.Second
 	// reserveRetryBackoff 是预留失败后,下一次允许预留的最短间隔,防止把已经倒下的 etcd 打成雪崩。
 	reserveRetryBackoff = 500 * time.Millisecond
+)
+
+// 登记处里一个地域码的状态。
+const (
+	// ClaimActive:这个码正在发号,绑定见 Claim。
+	ClaimActive = "active"
+	// ClaimRetired:墓碑。这个码永不再发号,也不能重新初始化。
+	ClaimRetired = "retired"
 )
 
 var (
@@ -75,48 +87,115 @@ var (
 	ErrUnknownTag = errors.New("id issuer: biz_tag is not listed in IdSegment.Tags")
 	// ErrInvalidStep:step 超过 MaxStep。
 	ErrInvalidStep = errors.New("id issuer: step must be within 0..10000000")
-	// ErrCounterMissing:两份预留记录都不存在,而且不允许自动初始化。这是 id 安全事件。
-	ErrCounterMissing = errors.New("id issuer: both reservation records are missing; " +
-		"follow the id issuer runbook in docs/ops/id-issuer-runbook.md, then run data_service -id-issuer-init")
-	// ErrSameCluster:两份记录落在同一套 etcd 上。两套独立 etcd 是强规定(AGENTS §7),只有 dev 例外。
-	ErrSameCluster = errors.New("id issuer: both reservation records are on the same etcd cluster")
+	// ErrCounterMissing:登记处有这个码,两份本地记录都不存在。这是 id 安全事件,不是首次部署。
+	ErrCounterMissing = errors.New("id issuer: both local reservation records are missing; " +
+		"follow docs/ops/id-issuer-runbook.md §4.2 and run data_service -id-issuer-recover")
+	// ErrRegistryMissing:登记处没有这个地域码。新地域要先 -id-issuer-init;已经发过号的地域是登记处丢了数据。
+	ErrRegistryMissing = errors.New("id issuer: this region code is not registered in the id registry; " +
+		"a new region runs data_service -id-issuer-init, a region that has issued ids follows docs/ops/id-issuer-runbook.md §4.3")
+	// ErrRegistryNotOpened:登记处没有「下一个可认领的码」。世界第一次部署要先开启登记处;部署过的世界是登记处整个丢了。
+	ErrRegistryNotOpened = errors.New("id issuer: the id registry is not opened; the first deployment of the world runs " +
+		"data_service -id-registry-open, a registry that lost its data follows docs/ops/id-issuer-runbook.md §4.3")
+	// ErrRegionClaimed:初始化时发现这个码已经被认领过(无论是谁、无论是否退役),或者它小于登记处里下一个可认领的码。
+	ErrRegionClaimed = errors.New("id issuer: this region code was already claimed in the id registry; " +
+		"pick a code that was never used (docs/ops/open-new-region-runbook.md §3)")
+	// ErrRegionRetired:这个码已退役,永不再发号。
+	ErrRegionRetired = errors.New("id issuer: this region code is retired and can never issue again")
+	// ErrBindingMismatch:本地记录的世系或两套 etcd 的集群号,和登记处给这个码绑的不一致。
+	ErrBindingMismatch = errors.New("id issuer: these reservation records or etcd clusters are not the ones bound to this region code in the id registry")
+	// ErrRebindRequired:恢复要把这个码的发号资格转到这两套 etcd 上,需要运维显式确认。
+	ErrRebindRequired = errors.New("id issuer: recovery would move this region code to these etcd clusters; " +
+		"confirm the steps in docs/ops/id-issuer-runbook.md §4.2 and rerun with -id-issuer-rebind")
+	// ErrNoTrustedBound:登记处和本地都没有这个码的记录,没有任何东西盖得住发过的号,不能恢复。
+	ErrNoTrustedBound = errors.New("id issuer: no surviving record covers the ids this region code has issued; " +
+		"it cannot be recovered: retire it and initialize a new code (docs/ops/id-issuer-runbook.md §4.4)")
+	// ErrSameCluster:两份本地记录,或登记处和某一份本地记录,落在同一套 etcd 上。只有 dev 例外。
+	ErrSameCluster = errors.New("id issuer: two reservation records are on the same etcd cluster")
 	// ErrRegionMismatch:记录里的地域和本发号器配置的不一致。
 	ErrRegionMismatch = errors.New("id issuer: reservation record belongs to another region")
 	// ErrExhausted:值域见底,或者时间字段溢出。
 	ErrExhausted = errors.New("id issuer: counter space exhausted")
-	// ErrClockUnusable:只在显式初始化时用。时钟不在可表示的范围内,算不出初始值。
-	ErrClockUnusable = errors.New("id issuer: clock is outside the representable range; fix the clock before init")
-	// ErrContended:多个副本同时预留,重试上限内都没抢到。
+	// ErrContended:多个副本同时写,重试上限内都没抢到。
 	ErrContended = errors.New("id issuer: reservation kept conflicting")
 	// ErrClosed:发号器已关闭。
 	ErrClosed = errors.New("id issuer: closed")
 )
 
-var bizTagPattern = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
+var (
+	bizTagPattern    = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
+	authorityPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+)
 
 // IsValidBizTag 给 logic 层做指标 label 消毒:不合法的 tag 不能原样进 Prometheus label。
 func IsValidBizTag(tag string) bool {
 	return bizTagPattern.MatchString(tag)
 }
 
-// Record 是从一份预留记录读到的状态。Revision 是这份记录的 CAS 令牌,调用方不解释它。
+// Record 是从一份本地预留记录读到的状态。Revision 是这份记录的 CAS 令牌,调用方不解释它。
 type Record struct {
-	Value    uint64
-	Revision int64
-	Exists   bool
+	Value uint64
+	// Authority 是这份记录所属的发号世系:-id-issuer-init 时随机生成,和登记处里的一致才是本地域的记录。
+	Authority string
+	Revision  int64
+	Exists    bool
 	// ClusterID 是存储自己报的集群号,记录不存在时也要给。0 = 这种存储给不出(只有内存实现)。
 	ClusterID uint64
 }
 
-// CounterStore 是一份预留记录。两份实例必须落在互相独立的存储上。
+// CounterStore 是一份本地预留记录。两份实例必须落在互相独立的存储上。
 //
 // 契约:
 //   - Read 是线性读。值损坏时返回错误,不得当作不存在。
-//   - CompareAndSwap 仅当记录仍是 prev 时把值写成 next。false = 记录已被别人改过,没有写入;
+//   - CompareAndSwap 仅当记录仍是 prev 时把记录写成 (value, authority)。false = 记录已被别人改过,没有写入;
 //     返回错误 = 结果未知,调用方不得认为写入成功,也不得靠重读「值等于我写的」来认领。
 type CounterStore interface {
 	Read(ctx context.Context) (Record, error)
-	CompareAndSwap(ctx context.Context, prev Record, next uint64) (bool, error)
+	CompareAndSwap(ctx context.Context, prev Record, value uint64, authority string) (bool, error)
+	Close() error
+}
+
+// Claim 是登记处里一个地域码的状态。
+type Claim struct {
+	// State 是 ClaimActive 或 ClaimRetired。
+	State string
+	// Authority 是这个码的发号世系。墓碑可以为空:登记处重建时按台账补的退役码没有世系可查。
+	Authority string
+	// PrimaryCluster、SecondaryCluster 是这个码绑定的两套本地 etcd 的集群号。
+	PrimaryCluster   uint64
+	SecondaryCluster uint64
+	// HighWater 是这个码已预留号段的上界(不含):这个码发过的每个号都小于它。
+	HighWater uint64
+	// Blocks 是经登记处提交过的预留次数。0 = 这个码从没发过号,只有这时才允许把没做完的初始化接着做完。
+	Blocks uint64
+}
+
+// ClaimRecord 是从登记处读到的一个地域码。
+type ClaimRecord struct {
+	Claim
+	Revision int64
+	Exists   bool
+	// ClusterID 是登记处所在 etcd 自己报的集群号,记录不存在时也要给。0 = 给不出(只有内存实现)。
+	ClusterID uint64
+}
+
+// Registry 是全局号源登记处:每个地域码一条记录,外加一个「下一个可认领的码」。全部地域、全部物理集群共用一套,
+// 不能和任何一个地域的两套本地 etcd 是同一套。
+//
+// 码只按从小到大认领,认领时把「下一个可认领的码」推过去,所以一个码一生只能被认领一次:哪怕它的那条记录丢了,
+// 它也小于「下一个可认领的码」,初始化照样拒绝。
+//
+// 契约同 CounterStore:读是线性读,值损坏返回错误,不得当作不存在;写返回错误 = 结果未知。
+type Registry interface {
+	// Read 读一个码的记录。
+	Read(ctx context.Context, region uint8) (ClaimRecord, error)
+	// CompareAndSwap 仅当这个码的记录仍是 prev 时写入 next。false = 被别人改过,没有写入。
+	CompareAndSwap(ctx context.Context, region uint8, prev ClaimRecord, next Claim) (bool, error)
+	// ClaimNew 原子地认领一个新码:仅当登记处已开启(否则 ErrRegistryNotOpened)、region 不小于下一个可认领的码
+	// (否则 ErrRegionClaimed)、这个码没有记录时,写入 claim 并把下一个可认领的码推到 region+1。
+	// false = 并发写冲突,没有写入,调用方重读。
+	ClaimNew(ctx context.Context, region uint8, claim Claim) (bool, error)
+	// Open 开启登记处:写入下一个可认领的码。已开启时返回 false、不写;next 不大于已有记录里的某个码时拒绝。
+	Open(ctx context.Context, next uint32) (bool, error)
 	Close() error
 }
 
@@ -124,11 +203,14 @@ type CounterStore interface {
 type Options struct {
 	Primary   CounterStore
 	Secondary CounterStore
+	// Registry 是全局号源登记处。
+	Registry Registry
 	// Region 是本地域的地域码,不得超过 MaxRegion。
 	Region uint8
 	// BlockSize 是一块的大小,0 取 DefaultBlockSize。
 	BlockSize uint64
-	// AllowBootstrap=true:两份记录都不存在时自动初始化,也允许两份记录放在同一套存储上(只给 dev)。
+	// AllowBootstrap=true 只给 dev、test:缺什么补什么——登记处没有这个码就在第一次预留时认领,本地记录缺了就照
+	// 登记处或另一份重建;也允许三份记录放在同一套存储上,不比集群号。
 	AllowBootstrap bool
 	// Tags 是允许的 biz_tag 清单,不能为空。
 	Tags []string
@@ -136,6 +218,8 @@ type Options struct {
 	Now func() time.Time
 	// OnReserve 为 nil 不记。result 见 ReserveXxx 常量。
 	OnReserve func(result string)
+	// NewAuthority 生成发号世系,为 nil 用 crypto/rand。单测注入固定值。
+	NewAuthority func() (string, error)
 }
 
 // OnReserve 的 result 取值,基数有界。
@@ -147,6 +231,12 @@ const (
 	ReserveOneRecord    = "one_record_missing"
 	ReserveRecordsBack  = "record_behind"
 	ReserveAheadOfClock = "ahead_of_clock"
+	// ReserveLocalBehind:两份本地记录都落后登记处。正常写序(本地两份先、登记处最后)下不会出现,
+	// 只能是本地两套 etcd 被旧快照覆盖过。发号不受影响,下一块从登记处水位之上开始。
+	ReserveLocalBehind = "records_behind_registry"
+	// ReserveRegistryBehind:登记处落后本地记录。预留在写完本地、写登记处之前中断,或者两个副本同时预留,
+	// 都会差一块;差得多说明登记处被回档过。发号不受影响。
+	ReserveRegistryBehind = "registry_behind"
 )
 
 type block struct {
@@ -192,8 +282,8 @@ type Issuer struct {
 
 // New 构造发号器。不做任何 IO:第一块在首次 Allocate 时才预留。
 func New(opt Options) (*Issuer, error) {
-	if opt.Primary == nil || opt.Secondary == nil {
-		return nil, errors.New("id issuer: both reservation records are required")
+	if opt.Primary == nil || opt.Secondary == nil || opt.Registry == nil {
+		return nil, errors.New("id issuer: both local reservation records and the id registry are required")
 	}
 	if opt.Region > MaxRegion {
 		return nil, fmt.Errorf("id issuer: region %d exceeds %d", opt.Region, MaxRegion)
@@ -220,6 +310,9 @@ func New(opt Options) (*Issuer, error) {
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}
+	if opt.NewAuthority == nil {
+		opt.NewAuthority = randomAuthority
+	}
 	base := uint64(opt.Region) << regionShift
 	bg, cancel := context.WithCancel(context.Background())
 	return &Issuer{
@@ -231,6 +324,19 @@ func New(opt Options) (*Issuer, error) {
 		bg:      bg,
 		cancel:  cancel,
 	}, nil
+}
+
+// ValidAuthority 判断发号世系的格式:32 位小写十六进制。存储实现读到别的格式要当作记录损坏。
+func ValidAuthority(authority string) bool {
+	return authorityPattern.MatchString(authority)
+}
+
+func randomAuthority() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("id issuer: generate authority: %w", err)
+	}
+	return hex.EncodeToString(raw[:]), nil
 }
 
 // Allocate 切一段 [lo, hi)。hi-lo 可能小于 step(块尾截短),调用方不得假设相等。
@@ -297,38 +403,7 @@ func (i *Issuer) Close() error {
 	i.mu.Unlock()
 	i.cancel()
 	i.wg.Wait()
-	return errors.Join(i.opt.Primary.Close(), i.opt.Secondary.Close())
-}
-
-// Bootstrap 把两份都不存在的记录初始化到当前时间之上。只要有一份存在就什么也不做:
-// 只缺一份时,下一次预留会自动补齐。只由部署步骤显式调用,运行路径不走这里。
-func (i *Issuer) Bootstrap(ctx context.Context) (bool, error) {
-	p, err := i.opt.Primary.Read(ctx)
-	if err != nil {
-		return false, err
-	}
-	s, err := i.opt.Secondary.Read(ctx)
-	if err != nil {
-		return false, err
-	}
-	if err := i.requireIndependent(p, s); err != nil {
-		return false, err
-	}
-	if p.Exists || s.Exists {
-		return false, nil
-	}
-	floor := i.timeFloor()
-	if floor == 0 {
-		return false, ErrClockUnusable
-	}
-	start := floor + bootstrapMarginSeconds<<seqBits
-	if ok, err := i.opt.Primary.CompareAndSwap(ctx, p, start); err != nil || !ok {
-		return false, errors.Join(ErrContended, err)
-	}
-	if ok, err := i.opt.Secondary.CompareAndSwap(ctx, s, start); err != nil || !ok {
-		return false, errors.Join(ErrContended, err)
-	}
-	return true, nil
+	return errors.Join(i.opt.Primary.Close(), i.opt.Secondary.Close(), i.opt.Registry.Close())
 }
 
 // startReservationLocked 发起后台预留(单飞),返回在途的那次;退避期内返回 nil。
@@ -365,38 +440,55 @@ func (i *Issuer) startReservationLocked() *reservation {
 	return res
 }
 
-// reserve 预留一块。只有两份记录都 CAS 成功才返回成功。任何一步失败,这块都作废:
-// 已经写成功的那一份留在高位,只浪费值域,不影响唯一性。
+// view 是一次读到的三份记录。每次预留、每次运维操作都重读,不缓存:恢复之后旧进程下一次预留看到的就是新状态。
+type view struct {
+	p, s Record
+	g    ClaimRecord
+}
+
+func (i *Issuer) read(ctx context.Context) (view, error) {
+	p, err := i.opt.Primary.Read(ctx)
+	if err != nil {
+		return view{}, fmt.Errorf("read primary record: %w", err)
+	}
+	s, err := i.opt.Secondary.Read(ctx)
+	if err != nil {
+		return view{}, fmt.Errorf("read secondary record: %w", err)
+	}
+	g, err := i.opt.Registry.Read(ctx, i.opt.Region)
+	if err != nil {
+		return view{}, fmt.Errorf("read id registry: %w", err)
+	}
+	return view{p: p, s: s, g: g}, nil
+}
+
+// reserve 预留一块。只有三份记录都 CAS 成功才返回成功。任何一步失败,这块都作废:
+// 已经写成功的那几份留在高位,只浪费值域,不影响唯一性。
+//
+// 写序固定为主记录、副记录、登记处。所以正常情况下登记处不会高过本地两份,本地两份都落后登记处
+// 只能是本地被回档(ReserveLocalBehind)。
 func (i *Issuer) reserve(ctx context.Context) (block, error) {
 	for attempt := 0; attempt < reserveAttempts; attempt++ {
-		p, err := i.opt.Primary.Read(ctx)
+		v, err := i.read(ctx)
 		if err != nil {
 			i.observe(ReserveStoreError)
-			return block{}, fmt.Errorf("read primary record: %w", err)
-		}
-		s, err := i.opt.Secondary.Read(ctx)
-		if err != nil {
-			i.observe(ReserveStoreError)
-			return block{}, fmt.Errorf("read secondary record: %w", err)
-		}
-		if err := i.requireIndependent(p, s); err != nil {
-			i.observe(ReserveRefused)
 			return block{}, err
 		}
-		start, err := i.nextStart(p, s)
+		authority, err := i.reservable(v)
 		if err != nil {
 			i.observe(ReserveRefused)
 			return block{}, err
 		}
+		start := i.nextStart(v)
 		if start+i.opt.BlockSize >= i.limit {
 			i.observe(ReserveRefused)
 			return block{}, ErrExhausted
 		}
 		end := start + i.opt.BlockSize
 
-		// 两份都是严格的仲裁点:任何一份冲突,这块都作废,从头再来。不能因为「重读到的值已经
+		// 三份都是严格的仲裁点:任何一份冲突,这块都作废,从头再来。不能因为「重读到的值已经
 		// 不小于我的 end」就认领:etcd 回退的那一刻,两个副本可能算出同一块。
-		ok, err := i.opt.Primary.CompareAndSwap(ctx, p, end)
+		ok, err := i.opt.Primary.CompareAndSwap(ctx, v.p, end, authority)
 		if err != nil {
 			i.observe(ReserveStoreError)
 			return block{}, fmt.Errorf("write primary record: %w", err)
@@ -405,10 +497,19 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 			i.observe(ReserveConflict)
 			continue
 		}
-		ok, err = i.opt.Secondary.CompareAndSwap(ctx, s, end)
+		ok, err = i.opt.Secondary.CompareAndSwap(ctx, v.s, end, authority)
 		if err != nil {
 			i.observe(ReserveStoreError)
 			return block{}, fmt.Errorf("write secondary record: %w", err)
+		}
+		if !ok {
+			i.observe(ReserveConflict)
+			continue
+		}
+		ok, err = i.opt.Registry.CompareAndSwap(ctx, i.opt.Region, v.g, i.claimAfter(v, authority, end))
+		if err != nil {
+			i.observe(ReserveStoreError)
+			return block{}, fmt.Errorf("write id registry: %w", err)
 		}
 		if !ok {
 			i.observe(ReserveConflict)
@@ -421,56 +522,165 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 	return block{}, ErrContended
 }
 
-// requireIndependent 核对两份记录确实在两套 etcd 上。配置校验只比地址字符串,DNS 别名、负载均衡、IP 和域名混写都能骗过它,
-// 所以运行期再比 etcd 自己报的集群号。第二套 etcd 故障时读记录就失败了,走不到这里。
-func (i *Issuer) requireIndependent(p, s Record) error {
-	if i.opt.AllowBootstrap || p.ClusterID == 0 || p.ClusterID != s.ClusterID {
-		return nil
+// reservable 判断这次能不能预留,能的话返回要写进本地记录的发号世系。
+//
+// 生产:登记处必须有这个码、未退役;本地记录(在的那几份)的世系等于登记处的;两套 etcd 的集群号等于登记处绑定的;
+// 本地两份不能都不存在(那是事故,走 Recover)。dev(AllowBootstrap):只核世系,缺什么在这次预留里补。
+func (i *Issuer) reservable(v view) (string, error) {
+	if err := i.requireIndependent(v); err != nil {
+		return "", err
 	}
-	return fmt.Errorf("%w: cluster_id=%x", ErrSameCluster, p.ClusterID)
+	if err := i.checkRegion(v); err != nil {
+		return "", err
+	}
+	if !v.g.Exists {
+		if !i.opt.AllowBootstrap {
+			return "", ErrRegistryMissing
+		}
+		authority, err := localAuthority(v.p, v.s)
+		if err != nil || authority != "" {
+			return authority, err
+		}
+		return i.opt.NewAuthority()
+	}
+	if v.g.State != ClaimActive {
+		return "", ErrRegionRetired
+	}
+	if err := sameAuthority(v); err != nil {
+		return "", err
+	}
+	if !i.boundHere(v) {
+		return "", fmt.Errorf("%w: etcd clusters are (%x, %x), the registry binds (%x, %x)",
+			ErrBindingMismatch, v.p.ClusterID, v.s.ClusterID, v.g.PrimaryCluster, v.g.SecondaryCluster)
+	}
+	if !v.p.Exists && !v.s.Exists && !i.opt.AllowBootstrap {
+		return "", ErrCounterMissing
+	}
+	return v.g.Authority, nil
 }
 
-// nextStart 算下一块的起点:两份记录与时间下限的较大者。
-func (i *Issuer) nextStart(p, s Record) (uint64, error) {
-	for _, r := range []Record{p, s} {
+// claimAfter 是这块提交之后登记处的样子:绑定不变,水位推到 end。dev 第一次预留时顺带认领。
+func (i *Issuer) claimAfter(v view, authority string, end uint64) Claim {
+	c := v.g.Claim
+	if !v.g.Exists {
+		c = Claim{State: ClaimActive, Authority: authority, PrimaryCluster: v.p.ClusterID, SecondaryCluster: v.s.ClusterID}
+	}
+	c.HighWater = end
+	c.Blocks++
+	return c
+}
+
+// requireIndependent 核对三份记录确实在三套 etcd 上。配置校验只比地址字符串,DNS 别名、负载均衡、IP 和域名混写都能骗过它,
+// 所以运行期再比 etcd 自己报的集群号。某一套故障时读记录就失败了,走不到这里。
+func (i *Issuer) requireIndependent(v view) error {
+	if i.opt.AllowBootstrap {
+		return nil
+	}
+	if sameCluster(v.p.ClusterID, v.s.ClusterID) {
+		return fmt.Errorf("%w: primary and secondary report cluster_id=%x", ErrSameCluster, v.p.ClusterID)
+	}
+	if sameCluster(v.g.ClusterID, v.p.ClusterID) || sameCluster(v.g.ClusterID, v.s.ClusterID) {
+		return fmt.Errorf("%w: the id registry shares cluster_id=%x with a local record", ErrSameCluster, v.g.ClusterID)
+	}
+	return nil
+}
+
+func sameCluster(a, b uint64) bool {
+	return a != 0 && a == b
+}
+
+// checkRegion 核对三份记录里的值都属于本地域。值是 0 的登记处墓碑不核。
+func (i *Issuer) checkRegion(v view) error {
+	for _, r := range []Record{v.p, v.s} {
 		if r.Exists && r.Value>>regionShift != uint64(i.opt.Region) {
-			return 0, fmt.Errorf("%w: record=%d region=%d", ErrRegionMismatch, r.Value, i.opt.Region)
+			return fmt.Errorf("%w: record=%d region=%d", ErrRegionMismatch, r.Value, i.opt.Region)
 		}
 	}
-	if !p.Exists && !s.Exists && !i.opt.AllowBootstrap {
-		return 0, ErrCounterMissing
+	if v.g.Exists && v.g.HighWater != 0 && v.g.HighWater>>regionShift != uint64(i.opt.Region) {
+		return fmt.Errorf("%w: registry high_water=%d region=%d", ErrRegionMismatch, v.g.HighWater, i.opt.Region)
 	}
-	if p.Exists != s.Exists {
+	return nil
+}
+
+// boundHere:两套本地 etcd 就是登记处给这个码绑的那两套。dev 不比。
+func (i *Issuer) boundHere(v view) bool {
+	return i.opt.AllowBootstrap || (v.p.ClusterID == v.g.PrimaryCluster && v.s.ClusterID == v.g.SecondaryCluster)
+}
+
+// sameAuthority:在的本地记录都属于登记处里的世系。
+func sameAuthority(v view) error {
+	for _, r := range []Record{v.p, v.s} {
+		if r.Exists && r.Authority != v.g.Authority {
+			return fmt.Errorf("%w: local record authority %s, the registry binds %s", ErrBindingMismatch, r.Authority, v.g.Authority)
+		}
+	}
+	return nil
+}
+
+// localAuthority 是两份本地记录共同的世系;两份都不存在时返回空。
+func localAuthority(p, s Record) (string, error) {
+	switch {
+	case p.Exists && s.Exists && p.Authority != s.Authority:
+		return "", fmt.Errorf("%w: primary authority %s, secondary authority %s", ErrBindingMismatch, p.Authority, s.Authority)
+	case p.Exists:
+		return p.Authority, nil
+	case s.Exists:
+		return s.Authority, nil
+	}
+	return "", nil
+}
+
+// nextStart 算下一块的起点:三份记录与时间下限的最大值。
+func (i *Issuer) nextStart(v view) uint64 {
+	local := max(v.p.Value, v.s.Value)
+	if v.p.Exists != v.s.Exists {
 		i.observe(ReserveOneRecord)
-		logx.Errorf("[id-issuer] one reservation record is missing (primary=%v secondary=%v): "+
-			"continuing from the other one, and restoring the missing one", p.Exists, s.Exists)
-	} else if p.Exists && p.Value != s.Value {
+		logx.Errorf("[id-issuer] one local reservation record is missing (primary=%v secondary=%v): "+
+			"continuing above the surviving records, and restoring the missing one", v.p.Exists, v.s.Exists)
+	} else if v.p.Exists && v.p.Value != v.s.Value {
 		// 正常情况下两份相等(预留中途崩溃时主记录可能更高)。差得多说明某一份回退过。
 		i.observe(ReserveRecordsBack)
-		logx.Errorf("[id-issuer] reservation records differ (primary=%d secondary=%d): "+
-			"continuing from the larger one", p.Value, s.Value)
+		logx.Errorf("[id-issuer] local reservation records differ (primary=%d secondary=%d): "+
+			"continuing from the larger one", v.p.Value, v.s.Value)
+	}
+	if v.g.Exists && (v.p.Exists || v.s.Exists) {
+		switch {
+		case v.g.HighWater > local:
+			i.observe(ReserveLocalBehind)
+			logx.Errorf("[id-issuer] both local records (%d) are behind the id registry (%d): both local etcd clusters "+
+				"were restored from older data; continuing above the registry and raising them (docs/ops/id-issuer-runbook.md §4.1)",
+				local, v.g.HighWater)
+		case local > v.g.HighWater:
+			i.observe(ReserveRegistryBehind)
+			if local-v.g.HighWater > i.opt.BlockSize {
+				logx.Errorf("[id-issuer] the id registry (%d) is more than one block behind the local records (%d): "+
+					"the registry was restored from older data; continuing above the local records and raising it", v.g.HighWater, local)
+			} else {
+				logx.Infof("[id-issuer] the id registry (%d) is behind the local records (%d) by at most one block: "+
+					"an earlier reservation stopped before its registry write, or another replica is reserving", v.g.HighWater, local)
+			}
+		}
 	}
 
-	start := max(p.Value, s.Value, i.base)
-	// 时间下限永远生效,不因为跳得远就放弃:它只会把起点往上抬,不可能造成重号,而两份记录同时
-	// 回退时它是最后一道防线。记录落后时钟很多也是正常的:用量小的时候,一块号能用几个月。
+	start := max(local, v.g.HighWater, i.base)
+	// 时间下限永远生效,不因为跳得远就放弃:它只会把起点往上抬,不可能造成重号。记录落后时钟很多也是正常的:
+	// 用量小的时候,一块号能用几个月。
 	floor := i.timeFloor()
 	if floor > start {
 		start = floor
 	} else if floor != 0 && (start-floor)>>seqBits > maxAheadSeconds {
 		i.observe(ReserveAheadOfClock)
 		logx.Errorf("[id-issuer] counter %d is far ahead of the clock (floor %d): the clock jumped forward at some point; "+
-			"ids stay unique, but the time floor is not protecting against a rollback of both records until the clock catches up",
-			start, floor)
+			"ids stay unique, only the time floor is not adding anything until the clock catches up", start, floor)
 	}
 	if start == 0 {
 		start = 1 // 0 是非法 id
 	}
-	return start, nil
+	return start
 }
 
 // timeFloor 是当前时间对应的计数器值。时钟不在可表示的范围内时返回 0,即这次不采用时间下限:
-// 坏时钟不能挡住发号,两份记录仍然保证唯一性。
+// 坏时钟不能挡住发号,三份记录仍然保证唯一性。
 func (i *Issuer) timeFloor() uint64 {
 	sec := i.opt.Now().Unix() - epochUnix
 	if sec <= 0 || uint64(sec) >= uint64(1)<<timeBits {
@@ -484,4 +694,228 @@ func (i *Issuer) observe(result string) {
 	if i.opt.OnReserve != nil {
 		i.opt.OnReserve(result)
 	}
+}
+
+// Init 给一个从没认领过的地域码初始化:先在登记处认领(登记处里没有这个码才能成功),再建两份本地记录。
+// 只由部署步骤显式调用(data_service -id-issuer-init),运行路径不走这里。
+//
+// 返回 created=false、err=nil:这个码已经由这两套 etcd 初始化过,什么也没做,重复执行是安全的。
+// 认领之后、建本地记录之前中断过,而这个码还没发过号(Blocks=0)时,再跑一次接着做完。
+// 其他情形都拒绝,一律不写:
+//   - 码已被别的世系或别的 etcd 认领,或已退役:ErrRegionClaimed / ErrRegionRetired。用过的码永不再分配;
+//   - 本地有记录而登记处没有:登记处丢了数据,ErrRegistryMissing,走 Recover;
+//   - 发过号的码本地两份记录都没了:事故,ErrCounterMissing,走 Recover。
+func (i *Issuer) Init(ctx context.Context) (bool, error) {
+	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		v, err := i.read(ctx)
+		if err != nil {
+			return false, err
+		}
+		if err := i.requireIndependent(v); err != nil {
+			return false, err
+		}
+		if err := i.checkRegion(v); err != nil {
+			return false, err
+		}
+		if !v.g.Exists {
+			if v.p.Exists || v.s.Exists {
+				return false, fmt.Errorf("%w: the local records exist but the code is not registered; "+
+					"the registry lost data, this is not a new region", ErrRegistryMissing)
+			}
+			authority, err := i.opt.NewAuthority()
+			if err != nil {
+				return false, err
+			}
+			// 全新的码之前没发过任何号,从值域下限起步;第一次预留会被时间下限抬到当前时间。
+			claim := Claim{State: ClaimActive, Authority: authority, PrimaryCluster: v.p.ClusterID,
+				SecondaryCluster: v.s.ClusterID, HighWater: i.base | 1}
+			ok, err := i.opt.Registry.ClaimNew(ctx, i.opt.Region, claim)
+			if errors.Is(err, ErrRegionClaimed) || errors.Is(err, ErrRegistryNotOpened) {
+				return false, err
+			}
+			if err != nil {
+				return false, fmt.Errorf("claim the code in the id registry (outcome unknown, rerun -id-issuer-init): %w", err)
+			}
+			if !ok {
+				continue // 有人同时认领:重读,按已认领处理
+			}
+			if err := i.createMissing(ctx, v, claim.HighWater, authority); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		if v.g.State != ClaimActive {
+			return false, ErrRegionRetired
+		}
+		if err := sameAuthority(v); err != nil {
+			return false, fmt.Errorf("%w: %v", ErrRegionClaimed, err)
+		}
+		if !i.boundHere(v) {
+			return false, fmt.Errorf("%w: it is bound to etcd clusters (%x, %x), these are (%x, %x)",
+				ErrRegionClaimed, v.g.PrimaryCluster, v.g.SecondaryCluster, v.p.ClusterID, v.s.ClusterID)
+		}
+		if v.p.Exists && v.s.Exists {
+			return false, nil
+		}
+		if v.g.Blocks != 0 {
+			if !v.p.Exists && !v.s.Exists {
+				return false, ErrCounterMissing
+			}
+			return false, nil // 只缺一份:下一次预留按另一份补上
+		}
+		if err := i.createMissing(ctx, v, v.g.HighWater, v.g.Authority); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, ErrContended
+}
+
+// createMissing 建 v 里不存在的本地记录。任何一份写失败都返回错误,重跑同一个命令即可:已建的不会重建。
+func (i *Issuer) createMissing(ctx context.Context, v view, value uint64, authority string) error {
+	for _, r := range []struct {
+		name  string
+		store CounterStore
+		rec   Record
+	}{{"primary", i.opt.Primary, v.p}, {"secondary", i.opt.Secondary, v.s}} {
+		if r.rec.Exists {
+			continue
+		}
+		ok, err := r.store.CompareAndSwap(ctx, r.rec, value, authority)
+		if err != nil {
+			return fmt.Errorf("create the %s record (outcome unknown, rerun the same command): %w", r.name, err)
+		}
+		if !ok {
+			return fmt.Errorf("%w: the %s record was written concurrently, rerun the same command", ErrContended, r.name)
+		}
+	}
+	return nil
+}
+
+// Recover 修复事故之后的记录。上界只取幸存的记录,拿不到可信上界就拒绝,从不猜起点。
+// 只由运维显式调用(data_service -id-issuer-recover),运行路径不走这里。返回做了什么,给命令打印。
+//
+//   - 登记处没有这个码,本地还有记录:登记处丢了数据。按本地记录的最大值重新登记,绑定这两套 etcd。
+//     本地也一份不剩:ErrNoTrustedBound,这个码不能再用。
+//   - 登记处有,本地两份都没了:按登记处水位重建两份本地记录。两份都没了就证明不了这两套 etcd 还是原来那两套,
+//     所以要 rebind;认领之后从没发过号的码(没做完的初始化)例外。
+//   - 两套 etcd 的集群号和登记处绑的不一致(etcd 换成了新集群):要 rebind,把绑定改到这两套。
+//   - 本地只缺一份、本地落后登记处、登记处落后本地:不用恢复,下一次预留自动对齐。
+//
+// rebind=true 把这个码的发号资格转到这两套 etcd 上,原来那两套从此预留被拒(ErrBindingMismatch)。
+// 只在确认原来那两套已经不在、或不再用于这个地域之后用,见运维手册 §4.2。
+//
+// 旧进程不需要先停:三份记录每次预留都重读,旧进程下一次预留只能落在登记处水位之上或被拒;
+// 它们内存里的块都小于这里取的上界,接着发也不重号。
+func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
+	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		v, err := i.read(ctx)
+		if err != nil {
+			return "", err
+		}
+		if err := i.requireIndependent(v); err != nil {
+			return "", err
+		}
+		if err := i.checkRegion(v); err != nil {
+			return "", err
+		}
+		if !v.g.Exists {
+			authority, err := localAuthority(v.p, v.s)
+			if err != nil {
+				return "", err
+			}
+			if authority == "" {
+				return "", ErrNoTrustedBound
+			}
+			// Blocks 记不回来,写 1:非 0 表示这个码发过号,Init 不会把它当成没做完的初始化。
+			claim := Claim{State: ClaimActive, Authority: authority, PrimaryCluster: v.p.ClusterID,
+				SecondaryCluster: v.s.ClusterID, HighWater: max(v.p.Value, v.s.Value), Blocks: 1}
+			ok, err := i.opt.Registry.CompareAndSwap(ctx, i.opt.Region, v.g, claim)
+			if err != nil {
+				return "", fmt.Errorf("re-register the code (outcome unknown, rerun -id-issuer-recover): %w", err)
+			}
+			if !ok {
+				continue
+			}
+			return fmt.Sprintf("re-registered region %d in the id registry above the local records (high_water=%d)", i.opt.Region, claim.HighWater), nil
+		}
+		if v.g.State != ClaimActive {
+			return "", ErrRegionRetired
+		}
+		if err := sameAuthority(v); err != nil {
+			return "", err
+		}
+		bothMissing := !v.p.Exists && !v.s.Exists
+		bound := i.boundHere(v)
+		if bound && !bothMissing {
+			return "nothing to repair: a missing or older local record is restored by the next reservation", nil
+		}
+		if bound && v.g.Blocks == 0 {
+			if err := i.createMissing(ctx, v, v.g.HighWater, v.g.Authority); err != nil {
+				return "", err
+			}
+			return "completed an interrupted -id-issuer-init (the code never issued ids)", nil
+		}
+		if !rebind {
+			return "", ErrRebindRequired
+		}
+		claim := v.g.Claim
+		claim.PrimaryCluster, claim.SecondaryCluster = v.p.ClusterID, v.s.ClusterID
+		claim.HighWater = max(v.g.HighWater, v.p.Value, v.s.Value)
+		if claim != v.g.Claim {
+			ok, err := i.opt.Registry.CompareAndSwap(ctx, i.opt.Region, v.g, claim)
+			if err != nil {
+				return "", fmt.Errorf("rebind the code (outcome unknown, rerun the same command): %w", err)
+			}
+			if !ok {
+				continue
+			}
+		}
+		if err := i.createMissing(ctx, v, claim.HighWater, claim.Authority); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("bound region %d to these etcd clusters (%x, %x) above high_water=%d",
+			i.opt.Region, claim.PrimaryCluster, claim.SecondaryCluster, claim.HighWater), nil
+	}
+	return "", ErrContended
+}
+
+// Retire 让这个地域码永久退役:登记处留墓碑,之后预留、初始化、恢复全部拒绝,码永不再分配。
+// 登记处没有这个码时也写墓碑:登记处重建时按台账补回退役码,防止它被当成没用过的码重新认领。
+// 已经退役时什么也不做。只碰登记处,不碰本地记录;正在跑的发号器发完手里的块就停。
+func (i *Issuer) Retire(ctx context.Context) (bool, error) {
+	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		g, err := i.opt.Registry.Read(ctx, i.opt.Region)
+		if err != nil {
+			return false, fmt.Errorf("read id registry: %w", err)
+		}
+		if g.Exists && g.State == ClaimRetired {
+			return false, nil
+		}
+		claim := g.Claim
+		claim.State = ClaimRetired
+		ok, err := i.opt.Registry.CompareAndSwap(ctx, i.opt.Region, g, claim)
+		if err != nil {
+			return false, fmt.Errorf("retire the code (outcome unknown, rerun -id-issuer-retire): %w", err)
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, ErrContended
+}
+
+// MaxNextRegion 是「下一个可认领的码」的上限:等于它表示 0..MaxRegion 全部用过。
+const MaxNextRegion = uint32(MaxRegion) + 1
+
+// OpenRegistry 开启登记处,next 是第一个允许 -id-issuer-init 认领的码。只在两种时候由运维显式调用
+// (data_service -id-registry-open):世界第一次部署,next=1;登记处整个丢了数据重建时,next 取地域码台账里
+// 用过的最大码 +1(运维手册 §4.3)。已开启时什么也不做,返回 false。
+//
+// 这一步把「新世界」和「丢了数据的旧世界」分开:登记处没开启时,初始化一律拒绝,不会把用过的码当成没用过。
+func (i *Issuer) OpenRegistry(ctx context.Context, next uint32) (bool, error) {
+	if next > MaxNextRegion {
+		return false, fmt.Errorf("id issuer: next region %d exceeds %d", next, MaxNextRegion)
+	}
+	return i.opt.Registry.Open(ctx, next)
 }

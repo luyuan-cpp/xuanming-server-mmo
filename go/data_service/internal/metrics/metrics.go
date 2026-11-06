@@ -120,15 +120,17 @@ var (
 	idSegmentAllocateTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "id_segment_allocate_total",
-		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|records_missing|source_error).",
+		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|records_missing|refused|source_error).",
 	}, []string{"biz_tag", "outcome"})
 
 	// idIssuerReserveTotal 是发号器预留块的结果。ok 正常很少发生;one_record_missing / record_behind
-	// 说明某一份预留记录丢失或回退过,ahead_of_clock 说明时钟曾跳到未来,都要人看一眼。
+	// 说明某一份本地记录丢失或回退过,records_behind_registry 说明本地两套 etcd 都被旧数据覆盖过,
+	// registry_behind 持续出现说明登记处被回档过,ahead_of_clock 说明时钟曾跳到未来,都要人看一眼。
 	idIssuerReserveTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "id_issuer_reserve_total",
-		Help:      "Id issuer block reservations by result (ok|conflict|store_error|refused|one_record_missing|record_behind|ahead_of_clock).",
+		Help: "Id issuer block reservations by result (ok|conflict|store_error|refused|one_record_missing|record_behind|" +
+			"records_behind_registry|registry_behind|ahead_of_clock).",
 	}, []string{"result"})
 
 	// ── 玩家名字注册表(设计 docs/design/guild-phase2/03-names.md §3.6)────

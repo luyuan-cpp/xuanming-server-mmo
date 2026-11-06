@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,13 +27,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
-	base "proto/common/base"
 	dbpb "proto/common/database"
 	kafkapb "proto/contracts/kafka"
 	mailpb "proto/mail"
 	rankpb "proto/rank"
 	"shared/authoritysql"
-	"shared/domainhost"
+	"shared/callerauth"
+	"shared/callerauth/callerauthtest"
 	"shared/serviceauth"
 )
 
@@ -209,10 +208,11 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	require.Equal(t, created+30*86400000, expire)
 	list := func() {
 		t.Helper()
-		session, err := proto.Marshal(&base.SessionDetails{PlayerId: recipient, SessionId: 7, GateInstanceId: "mail-rank-chain-original", SessionIncarnation: 19, OwnerRevision: 3})
+		// 原账号只认 gate 签名原件,不读 login Redis:按 gate 契约现签整份会话,邮件夹具用同一份 callerauthtest 测试密钥验签。
+		md, err := callerauth.SignedMetadataForDetails(callerauthtest.Key{}, "gate", mailpb.ClientPlayerMail_ListMails_FullMethodName,
+			callerauthtest.OnlineSession("整链原账号", recipient, 3))
 		require.NoError(t, err)
-		playerCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(domainhost.SessionMetadata, base64.StdEncoding.EncodeToString(session)))
-		response, err := mailClient.ListMails(playerCtx, &mailpb.ListMailsRequest{})
+		response, err := mailClient.ListMails(metadata.NewOutgoingContext(ctx, md), &mailpb.ListMailsRequest{})
 		require.NoError(t, err)
 		require.Zero(t, response.GetErrorMessage().GetId())
 		require.Len(t, response.Mails, 1)

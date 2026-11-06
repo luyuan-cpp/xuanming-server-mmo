@@ -1,4 +1,8 @@
 #include <gtest/gtest.h>
+#include "services/scene/core/system/scene_task_scope.h"
+#include "muduo/net/EventLoop.h"
+#include "services/scene/core/system/scene_task_scope.h"
+#include "muduo/net/EventLoop.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <algorithm>
@@ -62,6 +66,10 @@
 #include "modules/mission/mission_events.h"
 #include "services/scene/battle/system/battle_lock_rules.h"
 #include "services/scene/battle/system/player_battle.h"
+// 本人近期战斗结果(docs/design/battle-result-recovery.md):持久组件、列表规则与客户端协议。
+#include "proto/common/component/player_battle_result_comp.pb.h"
+#include "proto/scene/player_battle_result.pb.h"
+#include "services/scene/battle/system/battle_result_history.h"
 #include "thread_context/ecs_context.h"
 // 冻结窗口内资产通道仍被战斗闸挡下的回归(2026-10-30):真实 Debit 入口 + 签名 + 资产通道账本。
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
@@ -168,18 +176,37 @@ void RecordLockScriptCall(const char* op, uint64_t playerId, uint64_t battleId, 
     gLockScriptCalls.push_back(LockScriptCall{op, playerId, battleId, ttlSec, ctxPayload});
 }
 
+bool RejectLockRetry(uint64_t, std::function<void()>) { return false; }
+
+bool RejectLockRetry(uint64_t, std::function<void()>) { return false; }
+
 class ScopedLockScriptRecorder {
 public:
     ScopedLockScriptRecorder() {
+        if (!muduo::net::EventLoop::getEventLoopOfCurrentThread()) loop_ = std::make_unique<muduo::net::EventLoop>();
+        if (!SceneTaskScope::IsAccepting()) tasks_ = std::make_unique<SceneTaskScope>(*muduo::net::EventLoop::getEventLoopOfCurrentThread());
+        PlayerBattleSystem::SetLockRetrySchedulerForTest(&RejectLockRetry);
         gLockScriptCalls.clear();
         PlayerBattleSystem::SetLockScriptObserverForTest(&RecordLockScriptCall);
     }
     ~ScopedLockScriptRecorder() {
+        tasks_.reset();
+        if (loop_) { loop_->queueInLoop([loop = loop_.get()] { loop->quit(); }); loop_->loop(); }
+        PlayerBattleSystem::SetLockScriptSenderForTest(nullptr);
+        PlayerBattleSystem::SetLockRetrySchedulerForTest(nullptr);
         PlayerBattleSystem::SetLockScriptObserverForTest(nullptr);
         gLockScriptCalls.clear();
     }
     ScopedLockScriptRecorder(const ScopedLockScriptRecorder&) = delete;
     ScopedLockScriptRecorder& operator=(const ScopedLockScriptRecorder&) = delete;
+    void Stop() { if (tasks_) tasks_->Stop(); }
+private:
+    std::unique_ptr<muduo::net::EventLoop> loop_;
+    std::unique_ptr<SceneTaskScope> tasks_;
+    void Stop() { if (tasks_) tasks_->Stop(); }
+private:
+    std::unique_ptr<muduo::net::EventLoop> loop_;
+    std::unique_ptr<SceneTaskScope> tasks_;
 };
 
 // 某一种锁脚本被发送(回调观察点)的次数。
@@ -192,8 +219,9 @@ size_t LockScriptCount(const std::string& op) {
 // 由用例手动触发,代替单测线程上不存在的 EventLoop::runAfter。同样是不带捕获的函数指针,队列只能放在文件级。
 std::vector<std::function<void()>> gCapturedLockRetries;
 
-void CaptureLockRetry(uint64_t /*delayMs*/, std::function<void()> fire) {
+bool CaptureLockRetry(uint64_t /*delayMs*/, std::function<void()> fire) {
     gCapturedLockRetries.push_back(std::move(fire));
+    return true;
 }
 
 // 触发最早排上的一次重试。没有可触发的返回 false。
@@ -262,6 +290,8 @@ protected:
         tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player).set_max_health(100);
         tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
         tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+        // 近期战斗结果是持久组件,生产里由加载创建;结算缺它整笔 DEFER(battle-result-recovery.md §4.3)。
+        tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player);
         ASSERT_TRUE(tlsEcs.playerList.emplace(kPlayerId, player).second);
     }
     void TearDown() override {
@@ -399,6 +429,8 @@ protected:
         derived.set_max_mana(50);
         tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
         tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+        // 近期战斗结果是持久组件,生产里由加载创建;结算缺它整笔 DEFER(battle-result-recovery.md §4.3)。
+        tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player);
         ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));
         // 规则入口接取受控任务;正式可达性由独立的真实任务4无sink用例验证。
         auto& missions = tlsEcs.actorRegistry.get<MissionsContainerComp>(player).map.at(0);
@@ -428,6 +460,13 @@ protected:
         return it->second.progress(slot);
     }
     uint32_t KillProgress() const { return KillProgressAt(0) + KillProgressAt(1); }
+    // 本人近期战斗结果的持久列表(含还没公开的局)与客户端查询看到的(只含已公开的局)。
+    const PlayerBattleResultComp& Results() const { return tlsEcs.actorRegistry.get<PlayerBattleResultComp>(player); }
+    GetRecentBattleResultsResponse QueryResults() const {
+        GetRecentBattleResultsResponse response;
+        EXPECT_EQ(static_cast<uint32_t>(kSuccess), PlayerBattleSystem::GetRecentBattleResults(player, response));
+        return response;
+    }
     void AddCurrencyGain(uint32_t type, uint64_t amount) {
         auto* gain = settlement.add_currency_gains();
         gain->set_currency_type(type);
@@ -441,6 +480,7 @@ protected:
         EXPECT_EQ(50u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana());
         EXPECT_EQ(0u, KillProgress());
         EXPECT_EQ(0, gPersistCalls);
+        EXPECT_EQ(0, Results().entries_size()) << "被拒的结算不记近期结果";
     }
     entt::entity player{entt::null};
     uint64_t playerId{};
@@ -690,8 +730,10 @@ TEST_F(PlayerBattleSettlementTest, TravelHandoffDefersWholeSettlement) {
     EXPECT_EQ(0u, KillProgress());
 }
 
-// 全服 GainBlock 与单人 GM 封禁口径相同(InboxGoldBlockDefersWholeSettlementAndRetryAppliesAllEffects):整笔延后、零副作用,解封后照常应用。
-TEST_F(PlayerBattleSettlementTest, GlobalCurrencyGainBlockDefersWholeSettlementAndRetryApplies) {
+// 全服 GainBlock 与单人 GM 封禁口径相同(InboxGoldBlockSkipsOnlyGoldAndAppliesTheRest):封禁是终局业务决定,
+// 被封的币种这一局整笔不入账、解封后不补发,其余效果照常应用,结算整笔算已应用(收件箱据此记 APPLIED)。
+// 2026-11-05 之前是整笔延后、解封后整笔补发:封禁期间这一局到不了 APPLIED,Match 的 ready 票一直占着。
+TEST_F(PlayerBattleSettlementTest, GlobalCurrencyGainBlockSkipsOnlyBlockedGoldAndAppliesTheRest) {
     struct ScopedGlobalGoldBlock {
         const uint32_t gold = static_cast<uint32_t>(kCurrencyGold);
         const bool wasBlocked =
@@ -701,16 +743,14 @@ TEST_F(PlayerBattleSettlementTest, GlobalCurrencyGainBlockDefersWholeSettlementA
             if (!wasBlocked) GainBlockService::UnblockGlobal(GainBlockService::GainType::kCurrency, gold);
         }
     };
-    {
-        ScopedGlobalGoldBlock block;
-        EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
-        EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
-        EXPECT_EQ(0u, KillProgress());
-        EXPECT_EQ(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health(), 100u);
-    }
+    ScopedGlobalGoldBlock block;
     ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
-    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u) << "被封的币种整笔不入账";
     EXPECT_EQ(KillProgress(), 2u);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health(), 80u);
+    EXPECT_TRUE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, block.gold)) << "结算不改封禁状态";
+    ASSERT_EQ(1, Results().entries_size()) << "已应用的局照常记近期结果";
+    EXPECT_EQ(0, Results().entries(0).currencies_size()) << "近期结果只记实际入账,被跳过的币种不记";
 }
 
 // 重复消费由PlayerInboxSystem永久域水位验证。
@@ -723,16 +763,43 @@ TEST_F(PlayerBattleSettlementTest, InboxSettlementUsesWholeEffectInputsWithoutOw
     EXPECT_EQ(0, gPersistCalls) << "执行器不独立落盘：由Inbox效果+永久游标同快照保存";
 }
 
-TEST_F(PlayerBattleSettlementTest, InboxGoldBlockDefersWholeSettlementAndRetryAppliesAllEffects) {
-    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
-    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
-    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+// battle 节点的奖励档按同一张取值表(proto/common/base/currency_type.proto)校验,本二进制不认识的币种只可能来自
+// 更新版本的 battle 节点:版本错位,收件箱停用本域、实体重建后重拉。不是 DEFER:会话内永远不会认识它,本地续做只会空转。
+// 整笔零副作用;同包里与版本无关的坏项(重复币种)先判出,仍按原口径延后(混版本持久字段保护设计 §12)。
+TEST_F(PlayerBattleSettlementTest, InboxSettlementWithCurrencyUnknownToThisVersionReportsVersionSkew) {
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(static_cast<uint32_t>(kCurrencyMax), 5);
+    ASSERT_FALSE(IsKnownCurrencyType(static_cast<uint32_t>(kCurrencyMax)));
+    const auto currencyBefore = tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString();
+
+    EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(currencyBefore, tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString()) << "已知币种也不先入账";
     EXPECT_EQ(0u, KillProgress());
     EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
-    ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(0, gPersistCalls);
+
+    AddCurrencyGain(kCurrencyGold, 3);
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind)
+        << "重复币种与版本无关,先于版本错位判出";
+    EXPECT_EQ(currencyBefore, tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString());
+}
+
+// 单人 GM 封禁了金币:这一局的金币整笔不入账、也不抵欠款(与 AddCurrency 拒绝被封币种的口径一致),
+// 解封后不补发;HP 与击杀照常,执行器回 APPLIED。2026-11-05 之前整笔 DEFER:封禁期间这一局到不了 APPLIED
+// (Match 的 ready 票停在 state 3,玩家不能再排全球匹配),解封后又整笔补发,违背封禁本意。
+TEST_F(PlayerBattleSettlementTest, InboxGoldBlockSkipsOnlyGoldAndAppliesTheRest) {
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    // 欠款额大于这一局的金币:万一被错误入账,欠款也只会部分抵扣、不被删除,下面的引用一直有效。
+    auto& debt = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts[static_cast<uint32_t>(kCurrencyGold)];
+    debt.owed = 100;
     EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
-    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "被封的币种整笔不入账";
+    EXPECT_EQ(0u, debt.paid) << "被封的币种也不抵欠款";
     EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_TRUE(CurrencySystem::IsCurrencyBlocked(player, kCurrencyGold)) << "结算不改封禁状态";
+    ASSERT_EQ(1, Results().entries_size()) << "已应用的局照常记近期结果";
+    EXPECT_EQ(0, Results().entries(0).currencies_size()) << "近期结果只记实际入账,被跳过的币种不记";
 }
 
 TEST_F(PlayerBattleSettlementTest, InboxChecksNetGoldAfterActiveDebtAndNeverWrapsBalance) {
@@ -923,6 +990,7 @@ protected:
         EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
         EXPECT_EQ(50u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana());
         EXPECT_EQ(0u, KillProgress()); EXPECT_EQ(0, gPersistCalls);
+        EXPECT_EQ(0, Results().entries_size()) << "被拒的结算不记近期结果";
     }
     void SetConsumed(uint32_t configId, uint64_t count) {
         auto* entry = settlement.add_items_consumed();
@@ -1105,6 +1173,327 @@ TEST_F(PlayerBattleSettlementTest, ReplayAfterCrashReleasesRebuiltFreezeWithoutP
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
 }
 
+// ---------------------------------------------------------------------------
+// 本人近期战斗结果(2026-11-05,docs/design/battle-result-recovery.md)
+// 缺陷:断线期间结束的一局,终局通知丢了之后玩家再也看不到胜负与奖励明细(断线重连审计 §9.3)。
+// 新行为:结果与奖励同一帧写进存档里的有界列表、同一次存盘提交,确认提交之后才对客户端公开;客户端落地时查。
+// ---------------------------------------------------------------------------
+
+PlayerBattleResult BattleResultFor(uint64_t battleId)
+{
+    PlayerBattleResult entry;
+    entry.set_battle_id(battleId);
+    entry.set_outcome(static_cast<uint32_t>(BATTLE_OUTCOME_SIDE_A_WIN));
+    return entry;
+}
+
+TEST(BattleResultHistory, RecordAssignsIncreasingSeqAndKeepsTheNewestEntries)
+{
+    PlayerBattleResultComp history;
+    std::vector<uint64_t> evicted;
+    for (uint64_t battleId = 1; battleId <= battle_result::kMaxEntries + 2; ++battleId) {
+        auto entry = BattleResultFor(battleId);
+        entry.set_result_seq(999); // 调用方填的序号与已读标记都会被覆盖
+        entry.set_seen(true);
+        EXPECT_EQ(battle_result::RecordOutcome::kRecorded, battle_result::Record(history, entry, evicted));
+    }
+    EXPECT_EQ(static_cast<int>(battle_result::kMaxEntries), history.entries_size());
+    EXPECT_EQ(static_cast<uint64_t>(battle_result::kMaxEntries + 2), history.last_result_seq());
+    EXPECT_EQ((std::vector<uint64_t>{1, 2}), evicted) << "按 result_seq 从小到大淘汰";
+    for (const auto& entry : history.entries()) {
+        EXPECT_EQ(entry.battle_id(), entry.result_seq()) << "本例 battle_id 与写入顺序一致";
+        EXPECT_FALSE(entry.seen()) << "新记录一律未读";
+    }
+}
+
+TEST(BattleResultHistory, RecordKeepsTheFirstEntryOfABattleAndIgnoresZeroBattleId)
+{
+    PlayerBattleResultComp history;
+    std::vector<uint64_t> evicted;
+    auto first = BattleResultFor(7);
+    first.set_total_rounds(3);
+    ASSERT_EQ(battle_result::RecordOutcome::kRecorded, battle_result::Record(history, first, evicted));
+    const auto before = history.SerializeAsString();
+    auto again = BattleResultFor(7);
+    again.set_total_rounds(9);
+    EXPECT_EQ(battle_result::RecordOutcome::kDuplicateBattle, battle_result::Record(history, again, evicted));
+    EXPECT_EQ(battle_result::RecordOutcome::kInvalidBattle, battle_result::Record(history, BattleResultFor(0), evicted));
+    EXPECT_EQ(before, history.SerializeAsString()) << "按 battle_id 去重:保留第一条,什么都不改";
+    EXPECT_TRUE(evicted.empty());
+}
+
+TEST(BattleResultHistory, RecordNeverReusesASeqWhenTheLoadedWatermarkLags)
+{
+    // 加载来的列表 last_result_seq 落后于现存条目:新条目仍排在现存最大序号之后,不撞号。
+    PlayerBattleResultComp history;
+    auto loaded = BattleResultFor(5);
+    loaded.set_result_seq(7);
+    *history.add_entries() = loaded;
+    std::vector<uint64_t> evicted;
+    ASSERT_EQ(battle_result::RecordOutcome::kRecorded, battle_result::Record(history, BattleResultFor(6), evicted));
+    ASSERT_EQ(2, history.entries_size());
+    EXPECT_EQ(8u, history.entries(1).result_seq());
+    EXPECT_EQ(8u, history.last_result_seq());
+}
+
+TEST(BattleResultHistory, VisibleOrderComesFromResultSeqNotStorageIndexAndHidesUncommitted)
+{
+    PlayerBattleResultComp history;
+    for (const auto& [battleId, seq] : std::vector<std::pair<uint64_t, uint64_t>>{{30, 3}, {10, 1}, {20, 2}}) {
+        auto entry = BattleResultFor(battleId);
+        entry.set_result_seq(seq);
+        *history.add_entries() = entry;
+    }
+    const std::vector<uint64_t> noneHidden;
+    std::vector<uint64_t> order;
+    for (const auto* entry : battle_result::VisibleNewestFirst(history, noneHidden)) order.push_back(entry->battle_id());
+    EXPECT_EQ((std::vector<uint64_t>{30, 20, 10}), order) << "新旧看 result_seq,不看下标(AGENTS §11.6)";
+    const std::vector<uint64_t> uncommitted{30};
+    order.clear();
+    for (const auto* entry : battle_result::VisibleNewestFirst(history, uncommitted)) order.push_back(entry->battle_id());
+    EXPECT_EQ((std::vector<uint64_t>{20, 10}), order) << "还没确认提交的局不公开";
+}
+
+TEST(BattleResultHistory, MarkSeenTouchesOnlyKnownPublishedEntriesAndIsIdempotent)
+{
+    PlayerBattleResultComp history;
+    std::vector<uint64_t> evicted;
+    for (const uint64_t battleId : std::vector<uint64_t>{11, 12, 13})
+        ASSERT_EQ(battle_result::RecordOutcome::kRecorded, battle_result::Record(history, BattleResultFor(battleId), evicted));
+    const std::vector<uint64_t> acked{11, 13, 11, 99};
+    const std::vector<uint64_t> uncommitted{13};
+    const std::vector<uint64_t> noneHidden;
+    EXPECT_EQ(1u, battle_result::MarkSeen(history, acked, uncommitted)) << "13 还没公开,99 不认识,11 重复只算一次";
+    EXPECT_EQ(1u, battle_result::MarkSeen(history, acked, noneHidden)) << "13 公开之后才接受确认";
+    EXPECT_EQ(0u, battle_result::MarkSeen(history, acked, noneHidden)) << "幂等";
+    std::vector<uint64_t> unread;
+    for (const auto& entry : history.entries())
+        if (!entry.seen()) unread.push_back(entry.battle_id());
+    EXPECT_EQ((std::vector<uint64_t>{12}), unread);
+}
+
+TEST(BattleResultHistory, FillItemLinesSortsSkipsEmptyLinesAndTruncatesAboveTheLimit)
+{
+    std::vector<std::pair<uint32_t, uint32_t>> items;
+    for (auto configId = static_cast<uint32_t>(battle_result::kMaxItemLinesPerList + 8); configId >= 1; --configId)
+        items.emplace_back(configId, 1);
+    items.emplace_back(0, 5);    // 配置号 0:跳过
+    items.emplace_back(1000, 0); // 数量 0:跳过
+    google::protobuf::RepeatedPtrField<PlayerBattleResultItem> lines;
+    EXPECT_TRUE(battle_result::FillItemLines(items, lines));
+    ASSERT_EQ(static_cast<int>(battle_result::kMaxItemLinesPerList), lines.size());
+    for (int i = 0; i < lines.size(); ++i)
+        EXPECT_EQ(static_cast<uint32_t>(i + 1), lines.Get(i).item_table_id()) << "按配置号升序,只留最小的那些";
+    google::protobuf::RepeatedPtrField<PlayerBattleResultItem> few;
+    EXPECT_FALSE(battle_result::FillItemLines({{5, 2}, {3, 1}}, few));
+    ASSERT_EQ(2, few.size());
+    EXPECT_EQ(3u, few.Get(0).item_table_id());
+    EXPECT_EQ(2u, few.Get(1).count());
+}
+
+// 与奖励同一帧写进持久列表;存档确认提交之前客户端查不到,确认提交之后与 BattleEndS2C 同一时机公开,恰好一条。
+TEST_F(PlayerBattleSettlementTest, InboxBattleResultIsRecordedWithRewardsAndPublishedOnlyAfterCommit)
+{
+    ScopedCompositionInbox inbox;
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    constexpr uint64_t kFinishedAtMs = 1'900'000'000'000;
+    settlement.set_finished_at_ms(kFinishedAtMs);
+    settlement.set_match_mode(5);
+    settlement.set_battle_config_id(6);
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+
+    ASSERT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    ASSERT_EQ(1, Results().entries_size()) << "结果与奖励同一帧写入";
+    const auto recorded = Results().entries(0);
+    EXPECT_EQ(settlement.battle_id(), recorded.battle_id());
+    EXPECT_EQ(1u, recorded.result_seq());
+    EXPECT_EQ(static_cast<uint32_t>(BATTLE_OUTCOME_SIDE_A_WIN), recorded.outcome());
+    EXPECT_EQ(0u, recorded.team_index());
+    EXPECT_EQ(kFinishedAtMs, recorded.finished_at_ms());
+    EXPECT_EQ(5u, recorded.match_mode());
+    EXPECT_EQ(6u, recorded.battle_config_id());
+    EXPECT_GT(recorded.settled_at_ms(), 0u);
+    ASSERT_EQ(1, recorded.currencies_size());
+    EXPECT_EQ(static_cast<uint32_t>(kCurrencyGold), recorded.currencies(0).currency_type());
+    EXPECT_EQ(12u, recorded.currencies(0).amount());
+    EXPECT_FALSE(recorded.seen());
+    EXPECT_EQ(0, QueryResults().results_size()) << "存档确认提交之前不公开";
+    PlayerInboxSystem::Tick();
+    EXPECT_EQ(0, QueryResults().results_size()) << "再转一拍也一样";
+
+    ASSERT_NO_FATAL_FAILURE(CommitInboxLedgerSnapshot());
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxAcks.size());
+    const auto visible = QueryResults();
+    ASSERT_EQ(1, visible.results_size()) << "断线期间结束的一局,重登后能查到,而且只一条";
+    EXPECT_EQ(recorded.SerializeAsString(), visible.results(0).SerializeAsString());
+    EXPECT_EQ(1, Results().entries_size());
+}
+
+// 崩溃窗口(提交之后、公开之前):盘上的结果随存档加载回来就是已提交的,直接可见;收件箱回放原结局不调执行器,
+// 不写第二条;确认之后照常收尾,结果不变。
+TEST_F(PlayerBattleSettlementTest, ReplayAfterCrashKeepsOneBattleResultAndTheLoadedResultIsVisible)
+{
+    ScopedCompositionInbox inbox;
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(settlement.battle_id());
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    ASSERT_EQ(1, Results().entries_size());
+
+    // 这份存档(效果、账本、结果)已提交,进程随即崩溃:新实体只从盘上带回账本与结果。
+    const auto persistedLedger = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player);
+    const auto persistedResults = Results();
+    tlsEcs.playerList.erase(playerId);
+    tlsEcs.actorRegistry.destroy(player);
+    ASSERT_NO_FATAL_FAILURE(CreatePlayerEntity());
+    RegisterPlayer();
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player, persistedLedger);
+    tlsEcs.actorRegistry.replace<PlayerBattleResultComp>(player, persistedResults);
+    auto& rebuilt = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    rebuilt.set_battle_id(settlement.battle_id());
+    rebuilt.set_state(IN_BATTLE_STATE_FIGHTING);
+    const auto loaded = QueryResults();
+    ASSERT_EQ(1, loaded.results_size()) << "盘上加载回来的结果都已提交,直接可见";
+    EXPECT_EQ(settlement.battle_id(), loaded.results(0).battle_id());
+
+    gCompositionInboxNowMs += player_inbox_rules::kMinCheckGapMs + 1;
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(2u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "回放不再发奖";
+    EXPECT_EQ(persistedResults.SerializeAsString(), Results().SerializeAsString()) << "回放不调执行器,不写第二条";
+
+    ASSERT_NO_FATAL_FAILURE(CommitInboxLedgerSnapshot());
+    PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gLockReleases.size());
+    const auto afterReplay = QueryResults();
+    ASSERT_EQ(1, afterReplay.results_size());
+    EXPECT_EQ(persistedResults.entries(0).SerializeAsString(), afterReplay.results(0).SerializeAsString());
+}
+
+// 近期战斗结果是持久数据:缺了说明加载不变量已被破坏,结算整笔 DEFER、零副作用;查询与确认回 1003;都不补建。
+TEST_F(PlayerBattleSettlementTest, MissingBattleResultHistoryDefersWholeSettlementWithoutCreatingIt)
+{
+    tlsEcs.actorRegistry.remove<PlayerBattleResultComp>(player);
+    EXPECT_EQ(PlayerInboxExecKind::kDefer, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_EQ(0u, KillProgress());
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player)) << "结算路径不补建持久组件";
+
+    GetRecentBattleResultsResponse response;
+    EXPECT_EQ(static_cast<uint32_t>(kServiceUnavailable), PlayerBattleSystem::GetRecentBattleResults(player, response));
+    EXPECT_EQ(0, response.results_size());
+    AckBattleResultsRequest ack;
+    ack.add_battle_ids(settlement.battle_id());
+    EXPECT_EQ(static_cast<uint32_t>(kServiceUnavailable), PlayerBattleSystem::AckBattleResults(player, ack));
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player)) << "查询与确认同样不补建";
+
+    tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player); // 模拟加载修复之后
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(1, Results().entries_size());
+}
+
+// 确认已展示:只认已公开的局,不认识的局忽略,幂等;冻结中不改存档(1006);超过 10 个回 1015。
+TEST_F(PlayerBattleSettlementTest, AckBattleResultsMarksOnlyPublishedResultsSeenAndIsIdempotent)
+{
+    ASSERT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    AckBattleResultsRequest ack;
+    ack.add_battle_ids(settlement.battle_id());
+    ack.add_battle_ids(999999); // 不认识的局:忽略
+    EXPECT_EQ(static_cast<uint32_t>(kSuccess), PlayerBattleSystem::AckBattleResults(player, ack));
+    EXPECT_FALSE(Results().entries(0).seen()) << "还没公开的局不接受确认";
+
+    EXPECT_TRUE(PlayerBattleSystem::CompleteInboxSettlement(player, settlement.SerializeAsString()));
+    ASSERT_EQ(1, QueryResults().results_size());
+    EXPECT_FALSE(QueryResults().results(0).seen());
+
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), PlayerBattleSystem::AckBattleResults(player, ack));
+    EXPECT_FALSE(Results().entries(0).seen()) << "冻结中不改存档";
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+
+    EXPECT_EQ(static_cast<uint32_t>(kSuccess), PlayerBattleSystem::AckBattleResults(player, ack));
+    EXPECT_TRUE(Results().entries(0).seen());
+    const auto seenBytes = Results().SerializeAsString();
+    EXPECT_EQ(static_cast<uint32_t>(kSuccess), PlayerBattleSystem::AckBattleResults(player, ack));
+    EXPECT_EQ(seenBytes, Results().SerializeAsString()) << "重复确认无副作用";
+    const auto visible = QueryResults();
+    ASSERT_EQ(1, visible.results_size());
+    EXPECT_TRUE(visible.results(0).seen());
+
+    AckBattleResultsRequest tooMany;
+    for (uint64_t battleId = 1; battleId <= battle_result::kMaxEntries + 1; ++battleId) tooMany.add_battle_ids(battleId);
+    EXPECT_EQ(static_cast<uint32_t>(kArraySizeTooLargeInMessage), PlayerBattleSystem::AckBattleResults(player, tooMany));
+    EXPECT_EQ(seenBytes, Results().SerializeAsString());
+}
+
+// 公开放在同局判断之外:应用与公开之间玩家已进了下一局,终局通知不推、下一局的冻结与锁不动,这一局的结果照样公开。
+TEST_F(PlayerBattleSettlementTest, BattleResultIsPublishedEvenWhenThePlayerAlreadyEnteredTheNextBattle)
+{
+    ASSERT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(0, QueryResults().results_size());
+    auto& next = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    next.set_battle_id(settlement.battle_id() + 1);
+    next.set_state(IN_BATTLE_STATE_PREPARING);
+    const auto nextBytes = next.SerializeAsString();
+    EXPECT_TRUE(PlayerBattleSystem::CompleteInboxSettlement(player, settlement.SerializeAsString()));
+    EXPECT_EQ(nextBytes, tlsEcs.actorRegistry.get<InBattleComp>(player).SerializeAsString());
+    EXPECT_TRUE(gLockReleases.empty()) << "旧局的确认不碰下一局的锁";
+    const auto visible = QueryResults();
+    ASSERT_EQ(1, visible.results_size());
+    EXPECT_EQ(settlement.battle_id(), visible.results(0).battle_id());
+}
+
+// 记的是本人实际入账,不是终局原件:消耗按实际持有夹紧,配置行已删的掉落不记,其余照实,与背包实际变化一致。
+TEST_F(PlayerBattleSettlementItemTest, InboxBattleResultRecordsActualAmountsNotTheTerminalSource)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    constexpr uint32_t kDeletedConfig = 0x7FFFFFF3u;
+    ASSERT_FALSE(ItemTableManager::Instance().Exists(kDeletedConfig)) << "前置:配置行不存在";
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 1));
+    SetConsumed(kSettlementStackItem, 3); // 原件要求扣 3,实际只持有 1
+    SetGained(kSettlementDropItem, 2);
+    SetGained(kDeletedConfig, 3);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementDropItem));
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementStackItem));
+
+    ASSERT_EQ(1, Results().entries_size());
+    const auto& recorded = Results().entries(0);
+    ASSERT_EQ(1, recorded.items_consumed_size());
+    EXPECT_EQ(kSettlementStackItem, recorded.items_consumed(0).item_table_id());
+    EXPECT_EQ(1u, recorded.items_consumed(0).count()) << "按实际持有夹紧,不是原件里的 3";
+    ASSERT_EQ(1, recorded.items_gained_size()) << "配置行已删的掉落不记";
+    EXPECT_EQ(kSettlementDropItem, recorded.items_gained(0).item_table_id());
+    EXPECT_EQ(2u, recorded.items_gained(0).count());
+    EXPECT_FALSE(recorded.lines_truncated());
+    ASSERT_EQ(1, recorded.currencies_size());
+    EXPECT_EQ(12u, recorded.currencies(0).amount());
+}
+
 TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAndPermanentReplayIgnoresLegacyGold)
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
@@ -1188,19 +1577,28 @@ TEST_F(PlayerBattleSettlementItemTest, InboxLaterCurrencyOverflowRejectsMoneyIte
     EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem)); EXPECT_EQ(2u, KillProgress());
 }
 
-TEST_F(PlayerBattleSettlementItemTest, InboxBlockedLaterCurrencyDefersWholeExchangeAndRetryCreditsEachCurrencyOnce)
+// 排在最后的币种被单人封禁:只跳过这一种,前两种币、消耗、掉落、HP 与击杀在同一次提交里照常应用,每种币恰好一次。
+// 2026-11-05 之前整笔 DEFER、解封后整笔补发(原名 InboxBlockedLaterCurrencyDefersWholeExchangeAndRetryCreditsEachCurrencyOnce)。
+TEST_F(PlayerBattleSettlementItemTest, InboxBlockedLaterCurrencySkipsOnlyThatCurrencyAndAppliesTheWholeExchange)
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
     ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
     ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyBindDiamond));
-    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
-    ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player, kCurrencyBindDiamond));
     EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
-    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond)) << "被封的币种整笔不入账";
     EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem));
     EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementNonStackItem)); EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_TRUE(CurrencySystem::IsCurrencyBlocked(player, kCurrencyBindDiamond)) << "结算不改封禁状态";
+    ASSERT_EQ(1, Results().entries_size());
+    const auto& recorded = Results().entries(0);
+    ASSERT_EQ(2, recorded.currencies_size()) << "近期结果只记实际入账的两种币";
+    EXPECT_EQ(static_cast<uint32_t>(kCurrencyGold), recorded.currencies(0).currency_type());
+    EXPECT_EQ(12u, recorded.currencies(0).amount());
+    EXPECT_EQ(static_cast<uint32_t>(kCurrencyDiamond), recorded.currencies(1).currency_type());
+    EXPECT_EQ(7u, recorded.currencies(1).amount());
 }
 
 TEST_F(PlayerBattleSettlementItemTest, InboxUnknownDebtOnLaterCurrencyStopsBeforeAnyCreditOrConsumption)
@@ -2428,3 +2826,186 @@ TEST(BattleLockContract, WriteLandsLockAndCtxTogetherAndResendIsIdempotent) {
 }
 
 }  // namespace
+
+// ============================================================================
+// 战斗快照的等级读点(2026-11-05;混版本持久字段保护设计 §12.2,规则见 player_level_rules.h 文件头)
+// ============================================================================
+#include "proto/common/component/player_network_comp.pb.h"  // PlayerSessionSnapshotComp:组快照先解析 gate 路由
+#include "services/scene/player/system/player_level_rules.h"
+
+namespace {
+
+// 非 0 即可:组快照只要求会话号非 0。单测里没有发现过 gate 节点,gate_instance_id 留空、只告警不拒绝。
+constexpr uint32_t kSnapshotLevelSessionId = 4242;
+
+// 快照等级 = playerlevel::CappedLevel(存储等级):超上限按上限,0 按 1;LevelComp 的存储值原样携带,升回新版本后恢复。
+// 引擎的伤害 / 回血 / 怪物参考等级都读快照等级:快照若照抄存储等级,超上限的玩家进了战斗就比合法的满级玩家更强。
+// 本夹具默认不挂组快照要的加载组件(见 SnapshotRejectsMissingPersistentOrDerivedInputsBeforeChangingOutput),
+// 这里补成能组出快照的最小玩家:空技能、空宠物、空背包都是合法的已加载状态。
+TEST_F(PlayerBattleSettlementTest, SnapshotLevelIsTheCappedLevelAndTheStoredLevelIsCarried) {
+    auto& registry = tlsEcs.actorRegistry;
+    auto& level = registry.emplace<LevelComp>(player);
+    registry.emplace<PlayerUint32Comp>(player);
+    registry.emplace<PlayerProfileComp>(player);
+    registry.emplace<PlayerSkillListComp>(player);
+    registry.emplace<PlayerPetComp>(player);
+    registry.emplace<PlayerBagsComp>(player);
+    registry.emplace<PlayerSessionSnapshotComp>(player).set_gate_session_id(kSnapshotLevelSessionId);
+
+    const auto expectSnapshotLevel = [&](uint32_t storedLevel, uint32_t effectiveLevel) {
+        level.set_level(storedLevel);
+        BattlePlayerSnapshot snapshot;
+        uint32_t errorTipId = kSuccess;
+        ASSERT_TRUE(PlayerBattleSettlementTestAccess::Snapshot(player, snapshot, errorTipId))
+            << "stored level " << storedLevel << " tip " << errorTipId;
+        EXPECT_EQ(playerId, snapshot.player_id());
+        EXPECT_EQ(effectiveLevel, snapshot.level()) << "stored level " << storedLevel;
+        EXPECT_EQ(storedLevel, level.level()) << "组快照不得改写存储等级";
+    };
+    // 新版本调高上限后回滚 scene、或混版本跨 zone 迁移带来的超上限等级
+    expectSnapshotLevel(playerlevel::kMaxLevel + 15, playerlevel::kMaxLevel);
+    // 新号加载期间(InitPlayerFromAllData 写 1 之前)的 0 级
+    expectSnapshotLevel(0, 1);
+    // 对照:上限本身原样生效
+    expectSnapshotLevel(playerlevel::kMaxLevel, playerlevel::kMaxLevel);
+}
+
+}  // namespace
+
+namespace {
+std::vector<std::function<void(redisReply*)>> coroutineLockReplies;
+int CaptureCoroutineLock(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)> done) {
+    coroutineLockReplies.push_back(std::move(done));
+    return REDIS_OK;
+}
+int RejectCoroutineLock(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)>) {
+    return REDIS_ERR;
+}
+}
+
+TEST_F(PlayerBattleSettlementTest, CoroutineLockWaitAndStopIgnoreLateErrorAndTimer) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    coroutineLockReplies.clear();
+    PlayerBattleSystem::SetLockScriptSenderForTest(&CaptureCoroutineLock);
+    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    freeze.set_battle_id(settlement.battle_id());
+    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
+    freeze.set_deadline_ms(9000000000000ULL);
+    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    ASSERT_EQ(coroutineLockReplies.size(), 1u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    auto* loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+    bool progressed = false;
+    loop->queueInLoop([&] { progressed = true; loop->quit(); });
+    loop->loop();
+    EXPECT_TRUE(progressed);
+    recorder.Stop();
+    coroutineLockReplies[0](nullptr);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
+    coroutineLockReplies.clear();
+}
+
+TEST_F(PlayerBattleSettlementTest, CoroutineLockRejectRetriesThenRechecksCurrentFreeze) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    PlayerBattleSystem::SetLockScriptSenderForTest(&RejectCoroutineLock);
+    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    freeze.set_battle_id(settlement.battle_id());
+    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
+    freeze.set_deadline_ms(9000000000000ULL);
+    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+    tlsEcs.actorRegistry.remove<InBattleComp>(player);
+    ASSERT_TRUE(FireNextLockRetry());
+    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+}
+
+TEST_F(PlayerBattleSettlementTest, CoroutineLockIntegerIsFinalAndDuplicateReplyCannotRetry) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    coroutineLockReplies.clear();
+    PlayerBattleSystem::SetLockScriptSenderForTest(&CaptureCoroutineLock);
+    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    freeze.set_battle_id(settlement.battle_id());
+    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
+    freeze.set_deadline_ms(9000000000000ULL);
+    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    auto reply = IntegerReply(0);
+    coroutineLockReplies[0](&reply);
+    coroutineLockReplies[0](nullptr);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    EXPECT_TRUE(tlsEcs.actorRegistry.all_of<InBattleComp>(player));
+    coroutineLockReplies.clear();
+}
+
+namespace {
+std::vector<std::function<void(redisReply*)>> coroutineLockReplies;
+int CaptureCoroutineLock(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)> done) {
+    coroutineLockReplies.push_back(std::move(done));
+    return REDIS_OK;
+}
+int RejectCoroutineLock(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)>) {
+    return REDIS_ERR;
+}
+}
+
+TEST_F(PlayerBattleSettlementTest, CoroutineLockWaitAndStopIgnoreLateErrorAndTimer) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    coroutineLockReplies.clear();
+    PlayerBattleSystem::SetLockScriptSenderForTest(&CaptureCoroutineLock);
+    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    freeze.set_battle_id(settlement.battle_id());
+    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
+    freeze.set_deadline_ms(9000000000000ULL);
+    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    ASSERT_EQ(coroutineLockReplies.size(), 1u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    auto* loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+    bool progressed = false;
+    loop->queueInLoop([&] { progressed = true; loop->quit(); });
+    loop->loop();
+    EXPECT_TRUE(progressed);
+    recorder.Stop();
+    coroutineLockReplies[0](nullptr);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
+    coroutineLockReplies.clear();
+}
+
+TEST_F(PlayerBattleSettlementTest, CoroutineLockRejectRetriesThenRechecksCurrentFreeze) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    PlayerBattleSystem::SetLockScriptSenderForTest(&RejectCoroutineLock);
+    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    freeze.set_battle_id(settlement.battle_id());
+    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
+    freeze.set_deadline_ms(9000000000000ULL);
+    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+    tlsEcs.actorRegistry.remove<InBattleComp>(player);
+    ASSERT_TRUE(FireNextLockRetry());
+    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+}
+
+TEST_F(PlayerBattleSettlementTest, CoroutineLockIntegerIsFinalAndDuplicateReplyCannotRetry) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    coroutineLockReplies.clear();
+    PlayerBattleSystem::SetLockScriptSenderForTest(&CaptureCoroutineLock);
+    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    freeze.set_battle_id(settlement.battle_id());
+    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
+    freeze.set_deadline_ms(9000000000000ULL);
+    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    auto reply = IntegerReply(0);
+    coroutineLockReplies[0](&reply);
+    coroutineLockReplies[0](nullptr);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    EXPECT_TRUE(tlsEcs.actorRegistry.all_of<InBattleComp>(player));
+    coroutineLockReplies.clear();
+}

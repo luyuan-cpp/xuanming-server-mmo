@@ -15,12 +15,15 @@
 #include "logic/battle_room_manager.h"
 #include "client/battle_client_edge.h"
 #include "client/network_probe_security.h"
+#include "battle_admission_advertise.h"
 #include "battle_security.h"
 #include "node_config_manager.h"
+#include "time/comp/timer_task_comp.h"
 
 #include "data/battle_table_fingerprint.h"
 #include "data/table_battle_data_provider.h"
 
+#include "proto/common/base/common.pb.h"
 #include "proto/common/base/node.pb.h"
 
 #include "table/code/skill_table.h"
@@ -31,7 +34,9 @@
 #include "table/code/monster_table.h"
 #include "table/code/item_table.h"
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <cstdlib>
@@ -52,6 +57,10 @@ namespace
     // EventLoop 心跳周期(D84)。worker 在心跳超过 LifecycleOptions.loopStaleAfter(默认 10s)
     // 未更新时停发 /health,让 Agones 判 Unhealthy 并替换卡死的实例;周期必须远小于该阈值。
     constexpr double kLoopHeartbeatIntervalSec = 1.0;
+
+    // 可分配状态对账周期(R6,battle_admission_advertise.h)。每拍只比对内存与回读,不一致才写 etcd;
+    // 周期决定开闸 / 排空 / 解除排空最迟多久被 match 看到(排空标签本身每 5s 读一次,LifecycleOptions.drainPollInterval)。
+    constexpr double kAdmissionAdvertiseIntervalSec = 1.0;
 
     // 日志用:"ip:port";未设置(podip 形态的 client_endpoint)打 "(unset)"。
     std::string EndpointForLog(const EndpointComp &endpoint)
@@ -92,6 +101,85 @@ namespace
         lifecycle.Start(std::move(transport), agonesEnv.BaseUrl(), std::move(options));
     }
 
+    // battle_admission::Advertised 与 proto NodeAdmission 的映射(纯头文件 battle_admission_advertise.h 不依赖 protobuf)。
+    NodeAdmission ToNodeAdmission(const battle_admission::Advertised advertised)
+    {
+        switch (advertised)
+        {
+        case battle_admission::Advertised::kOpen:
+            return NODE_ADMISSION_OPEN;
+        case battle_admission::Advertised::kClosed:
+            return NODE_ADMISSION_CLOSED;
+        case battle_admission::Advertised::kUnspecified:
+            return NODE_ADMISSION_UNSPECIFIED;
+        }
+        return NODE_ADMISSION_UNSPECIFIED;
+    }
+
+    battle_admission::Advertised FromNodeAdmission(const NodeAdmission admission)
+    {
+        switch (admission)
+        {
+        case NODE_ADMISSION_OPEN:
+            return battle_admission::Advertised::kOpen;
+        case NODE_ADMISSION_CLOSED:
+            return battle_admission::Advertised::kClosed;
+        default:
+            // UNSPECIFIED,以及更新版本才有的取值:都按「没有上报」处理,与期望值不一致即重写。
+            return battle_admission::Advertised::kUnspecified;
+        }
+    }
+
+    // etcd 回读:发现快照里本节点(同 uuid)的登记。battle watch 自己的前缀(劫持检测与注册自检),快照里的自身登记
+    // 就是 etcd 里此刻的值;回读里还看不到自己的键(首发未回、已失租)返回 nullopt。只在 loop 线程调用。
+    std::optional<battle_admission::Advertised> ObservedAdvertised(Node &node)
+    {
+        for (const auto &registered : node.GetServiceDiscoveryManager().ServiceNodes().NodesOfType(node.GetNodeType()))
+        {
+            if (node.IsCurrentNode(registered))
+            {
+                return FromNodeAdmission(registered.admission());
+            }
+        }
+        return std::nullopt;
+    }
+
+    // 一拍可分配状态对账(battle_admission_advertise.h)。内存里的 NodeInfo 恒为期望值:首发与重注册整份发布它,带上的
+    // 就是最新状态;etcd 里的值按回读对账,只在不一致且注册链空闲时写(UpdateNodeInfo:带租约的整份 Put)。
+    // 只在 loop 线程调用(MutableNodeInfo 断言 loop 线程)。
+    void ReconcileAdvertisedAdmission(Node &node, const battle_admission::AdmissionPhase phase,
+                                      battle_admission::AdvertisePolicy &policy)
+    {
+        const bool grantsPermits = BattleNodeImpl::LifecycleGrantsPermits();
+        const auto desired = battle_admission::DesiredAdvertised(phase, grantsPermits);
+        node.MutableNodeInfo().set_admission(ToNodeAdmission(desired));
+
+        auto &etcd = node.GetServiceDiscoveryManager().etcdService;
+        // 传输为空 = etcd 服务还没起或已经停了(停机收尾 CloseTransportOwnersInLoop 之后),写了也只会被丢弃。
+        const bool registrationIdle = etcd.Transport() != nullptr && etcd.IsIdentityConfirmedFresh() &&
+                                        !etcd.RegistrationInFlight();
+        const auto observed = ObservedAdvertised(node);
+        const auto action = policy.Decide(desired, observed, registrationIdle, std::chrono::steady_clock::now());
+        if (action == battle_admission::AdvertiseAction::kNone)
+        {
+            return;
+        }
+        const char *observedName = observed ? battle_admission::ToString(*observed) : "absent";
+        if (action == battle_admission::AdvertiseAction::kResend)
+        {
+            // 上次写出 kResendAfter 之后回读仍不一致:多半是 Put 静默丢了(etcd 抖动、传输流重建),也可能是 watch 回读滞后。
+            LOG_WARN << "battle admission readback still stale; re-advertising to etcd: admission="
+                     << battle_admission::ToString(desired) << " observed=" << observedName;
+        }
+        else
+        {
+            LOG_INFO << "battle admission advertised to etcd: admission=" << battle_admission::ToString(desired)
+                     << " observed=" << observedName << " gate=" << battle_admission::ToString(phase)
+                     << " lifecycle_grants_permits=" << (grantsPermits ? 1 : 0);
+        }
+        node.GetEtcdManager().UpdateNodeInfo();
+    }
+
     // battle 节点运行时状态:match 控制面 gRPC 服务 + 客户端直连面。
     // 房间状态本身在 BattleRoomManager 单例里(纯内存,崩溃即战斗作废,设计文档 §8)。
     // gate → battle 的客户端消息 gRPC 中继(BattleClientPlayerGrpcImpl)已随收缩删除
@@ -103,6 +191,11 @@ namespace
         std::unique_ptr<BattleNodeImpl> battleNodeService;
         // 客户端直连面(设计文档 §18):装在节点自身 TCP 端口上,票据握手 + 战斗消息就地派发
         std::shared_ptr<BattleClientEdge> clientEdge;
+        // 可分配状态发布(R6,battle_admission_advertise.h):对账决策状态 + loop 上每 kAdmissionAdvertiseIntervalSec 一拍的定时器。
+        // 定时器回调只弱持有决策状态与准入闸、经 gNode 访问节点(AGENTS §11.7);定时器随 context 析构取消,context 晚于 Node 析构。
+        std::shared_ptr<battle_admission::AdvertisePolicy> admissionAdvertise =
+            std::make_shared<battle_admission::AdvertisePolicy>();
+        TimerTaskComp admissionAdvertiseTimer;
     };
 
     // 启动门禁:空 battle_token_secret 在生产模式下**拒绝启动**(照 gate 的
@@ -279,6 +372,9 @@ int main(int argc, char *argv[])
         [](Node &node, BattleRuntimeContext &context)
         {
             node.MutableNodeInfo().set_physical_region(network_probe::PhysicalRegion());
+            // 可分配状态(R6):etcd 首次发布带的是 CLOSED;建房准入闸打开、Agones 放行许可之后,由对账定时器改写成 OPEN
+            // (battle_admission_advertise.h)。启动窗口里 match 据此不选本节点,不必等建房被准入闸拒绝、再熔断 30 秒。
+            node.MutableNodeInfo().set_admission(NODE_ADMISSION_CLOSED);
             if(network_probe::Enabled())
             {
                 if(network_probe::PhysicalRegion()==0||network_probe::Secret().size()<32)
@@ -350,7 +446,25 @@ int main(int argc, char *argv[])
                 if (!context.battleNodeService->OpenAdmission())
                 {
                     LOG_WARN << "battle shutdown started before startup completed;room admission gate remains closed";
-                } });
+                }
+
+                // 可分配状态对账(R6,battle_admission_advertise.h):不在本回调里直接写 etcd —— 正常启动时服务键的 PutIfAbsent
+                // 刚发出、还没回,维护预备启动时甚至还没发,此刻 Put 会抢在注册 CAS 之前把服务键建出来。由定时器在注册链空闲、
+                // 回读看得到自己的键之后把 CLOSED 改写成 OPEN,之后跟进 Agones 排空 / 解除排空;停机关闸当场另对账一次(closeSource)。
+                // 回调只弱持有准入闸与决策状态,经 gNode 访问节点,不捕获 this / Node(AGENTS §11.7)。
+                context.admissionAdvertiseTimer.RunEvery(
+                    kAdmissionAdvertiseIntervalSec,
+                    [gate = context.battleNodeService->AdmissionGateView(),
+                     policy = std::weak_ptr<battle_admission::AdvertisePolicy>(context.admissionAdvertise)]
+                    {
+                        const auto admission = gate.lock();
+                        const auto state = policy.lock();
+                        if (admission == nullptr || state == nullptr || gNode == nullptr)
+                        {
+                            return;
+                        }
+                        ReconcileAdvertisedAdmission(*gNode, admission->Phase(), *state);
+                    }); });
 
             // 停机收尾,顺序固定:
             //   0) 关建房准入闸(终态)。必须先于作废:本 hook 返回后框架才进入 gRPC 排空,排空期间已收完的
@@ -380,6 +494,12 @@ int main(int argc, char *argv[])
                     n.GetTcpServer().setMessageCallback([](const TcpConnectionPtr& conn, muduo::net::Buffer* buffer, Timestamp) { buffer->retrieveAll(); conn->forceClose(); });
                 }
                 context.battleNodeService->CloseAdmission();
+                // 关闸当场把 CLOSED 对账进 etcd,不等下一拍:match 越早看到,越少白拨(被拒的建房还会让它熔断本节点 30 秒)。
+                // 写不出去(注册链不空闲 / 回读看不到自己的键)时内存里已是 CLOSED,定时器后续几拍或框架的重注册会补上。
+                if (const auto gate = context.battleNodeService->AdmissionGateView().lock())
+                {
+                    ReconcileAdvertisedAdmission(n, gate->Phase(), *context.admissionAdvertise);
+                }
                 BattleRoomManager::Instance().AbortAllRooms("node_shutdown");
                 if (context.clientEdge)
                 {

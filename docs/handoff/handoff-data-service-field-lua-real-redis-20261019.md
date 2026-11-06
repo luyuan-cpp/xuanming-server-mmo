@@ -1,7 +1,8 @@
 # 交接:data_service 字段索引三段 Lua 的真 Redis 集成测试(2026-10-19)
 
-> 一句话状态:**按负责人授权,`c35e1133d` 业务源码加在隔离副本补生成的一个 Go 绑定,本条字段 Lua 线验证已通过。** 构建、两组 vet、105 个顶层单测通过;Redis 7.2.16 / 8.10.2 各 7 个顶层用例与 8 个拒绝子测试全部 PASS、零 SKIP,两轮命令均退出 0。799 个运行输入哈希前后一致,容器已清理。完整证据与范围见第 10 节;第 7–9 节保留此前失败记录。原样提交仍缺绑定,最新工作区不在本次通过范围;未改原工作区业务源码、未执行提交。
-> 接手前照 `AGENTS.md`「会话启动门禁」读一遍;Claude 不跑编译 / 测试(§10.1),本文第 3 节的命令交 Codex 执行。
+> **当前状态（2026-11-05 核对）**：旧 Redis 字段路径及测试已于 `fc504300b`（2026-10-30）删除，本文第 0–10 节的命令只作历史记录，不再用于当前主线。10-23 锁回滚后续实际运行通过；10-30 指定字段 Lua 未找到运行证据。证据与退役边界见第 11 节；新路径按 [玩家存盘交接](player-save-direct-commit-20261030/progress.md) 验证。
+>
+> **历史通过范围（2026-10-20）**：按负责人授权，`c35e1133d` 业务源码加在隔离副本补生成的一个 Go 绑定，本条字段 Lua 线验证通过。构建、两组 vet、105 个顶层单测通过；Redis 7.2.16 / 8.10.2 各 7 个顶层用例与 8 个拒绝子测试全部 PASS、零 SKIP。完整证据与范围见第 10 节；第 7–9 节保留此前失败记录。该结果不覆盖后续改动或当前主线。
 
 ## 0. 换账号接手
 
@@ -44,7 +45,7 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
 | 静态评审修正:Cluster 用例的就绪判断 | 集成测试用例 7:改为逐个种子节点等 `cluster_state:ok`(最多 30 秒)之后再建集群客户端,并断言 `CLUSTER SLOTS` 覆盖满 16384;第 3.2 节容器步骤改为三个节点都等到 ok | 已随 `c35e1133d` 入库 |
 | 进度记录 | `docs/PROGRESS.md`「第 4 节两个尾巴」一条 | 已随 `c35e1133d` 入库 |
 | 第四批(不在 `c35e1133d` 通过范围内):`parseVersionValue` 空串按损坏处理;`requireRealRedisIT`(`DATA_SERVICE_IT_REQUIRE=1` 时 SKIP 判 FAIL);routing 拿锁回滚 | `data_logic.go`、`data_logic_test.go`、`player_fields_test.go`、本线集成测试、`routing/router.go`、`routing/router_lock_test.go` | 已随 `7a23b4fed` 入库;10-23 Codex 普通单测通过,集成 tag 的 vet 与 REQUIRE=1 两版未跑 |
-| 第四批后续:指定字段读改为只读 Lua `loadSelectedFieldsScript`(逐键 TYPE,fail-closed);用例 1 加一段「版本键是 HASH 时指定字段读也拒」;routing `lockAcquireFailure` 日志与 mapping 侧回归用例 | 同上 | 10-23 / 10-30 改动,未编译、未测试;是否已入库以 `git log -1 -- <文件>` 为准 |
+| 第四批后续:指定字段读改为只读 Lua `loadSelectedFieldsScript`(逐键 TYPE,fail-closed);用例 1 加一段「版本键是 HASH 时指定字段读也拒」;routing `lockAcquireFailure` 日志与 mapping 侧回归用例 | 同上 | 2026-11-05 订正：10-23 锁后续已有当日真实 PASS；10-30 Lua 见 `before-b8` 快照，未找到运行证据；两者均随旧路径删除，见 §11 |
 
 7 个用例各钉什么:
 
@@ -189,3 +190,15 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
 - **证据**:本机 `build/verification/data-service-field-lua-c35-generated-20261020-1792484087475/summary.json` 汇总计算结果为 `scopeGatePassed=true`。原始日志 `unit.log`、`redis72/integration.log`、`redis8102/integration.log`;各阶段 `*-result.json`、`generation-result.json`、`derived-inputs.json`、`source-stability.json`、`cleanup-final.json` 及 `evidence-sha256.json` 同目录;生成与验证用副本保留在 `source/`。本机证据被 Git 忽略,跨机器接手须另拷。
 - **交付边界**:本条 Lua 线在上述授权派生输入上已达到第 3.3 节标准。第 9 节的原样提交缺绑定问题并未通过改原仓库解决,不能写成「c35 原样可编译」；最新工作区/D1 也不属于本次通过范围。未运行其他包单测、MySQL 集成、race、全服务启动、压测或全仓协议同步。Java 版 0.1.0-SNAPSHOT 无对应字段键族,本条不适用,未改 Java 仓;未执行提交或推送。
 - **回填**:设计文档已将这条字段 Lua 验证移出「仍未处理」并保留 Cluster 更正;PROGRESS 另起条目追加通过证据,第 7–9 节的历史失败不删除。
+
+## 11. 2026-11-05 核对后续运行证据与旧路径退役
+
+本次核对 HEAD `993b6da9d4ea51d5e4a27cc6ec17004af0fb97c1`，未编译、未运行测试、未启动 Redis、未提交。只订正文档状态并保留证据摘录。
+
+- **10-23 锁回滚后续确实跑过**：原始执行记录是 `go test -p=1 -count=1 -json ./...`，工作目录 `go/data_service`，2026-10-23 14:41:18（America/New_York；18:41:18 UTC）结束，原生退出 0。全模块测试事件计数为 1752 PASS / 0 FAIL / 103 SKIP（含子测试）；跳过项不能算通过，这也不是旧记录的 1653 轮或真 Redis 集成结果。
+- 原始 stdout 第 4715、4720、4727 行分别是 `TestAcquirePlayerLock_MappingSetNXReplyLostReleasesMappingLock`、`TestAcquirePlayerLock_MappingSetNXRetryHitsOwnTokenReleasesMappingLock`、`TestLockAcquireFailure` 的 PASS 事件；4724–4725 行实际输出新增的 `[PlayerLock]` 回滚释放失败日志。`-count=1`、用例事件和日志共同证明这里有真实执行，不能写成「只有 build-cache 命中」。
+- 运行输入中的 `router_lock_test.go` SHA256 为 `fcc8556ab35d0bee81756e4c7314c31f2e084be2ee7186810a9c4e47ddc89e4d`，与 `refs/snapshots/before-b8` 原始字节一致。原记录的运行前后及最终输入差异为空；`router.go` 此后另有改动，不把该结果外推到整个删除前文件或当前 SQL 路由。
+- **10-30 指定字段 Lua 没有补记通过**：`refs/snapshots/before-b8` 的 `data_logic.go` 中有 `loadSelectedFieldsScript`，但本次未找到其运行证据，10-23 日志也没有后来新增的 `TestLoadPlayerData_WrongTypeKeysFailClosed`。快照存在不等于已编译或测试，也不据此推断普通分支提交状态。
+- **当前已退役**：`fc504300be2524c6e2d0c4275b8fa4d1fb7deab1`（2026-10-30）删除 `data_logic.go`、`data_logic_test.go`、`data_logic_integration_test.go`、`player_fields_test.go`、`router_lock_test.go`，同时删除旧 Load/Save/GetField/SetField/Delete、创建快照/diff/回档 RPC。B8-3 及新路径去向见玩家存盘交接。原五步清单不再适用；不能以空匹配测试的退出 0 代替验收，不能为此恢复旧 Lua 或 SCAN 回退。旧文档的「键族去向二选一」也已被 B8 删除决策取代。
+- **证据**：摘录与原路径、运行结果、计数、输入哈希保存在本机 `build/verification/data-service-field-line-status-20261105-032206738/status.json`。原目录为 `C:/Users/luyua/.codex/tmp/xuanming-global-go-evidence-20261021T233020397Z-4d221b14/go-current-ordinary-post-generation-20261023-r8-E953-five-GiB/derive-data_service-Unit-20261023T183212038Z-85041317/execution-20261023T183941776Z-84e4fdea/`；原 stdout SHA256 已复核为 `6fd096618bb3c57b13181c1dbcd658c8cb383d5d9e7aa4402668dad8756e0b35`，与执行记录吻合。本机证据不随 Git 搬迁。
+- **限制**：文件级最近历史与删除提交可读，但禁用 lazy fetch 后的全历史 `git log --all -S loadSelectedFieldsScript` 遇缺对象 `9f74e636dcc5ea2cfa44d410d1693e34faf0dcee`；未重试、拉取或修复对象库。Java 版仍为 0.1.0-SNAPSHOT、无对应字段键族，本条不适用；未改 Java 仓。

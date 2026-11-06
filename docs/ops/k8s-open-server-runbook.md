@@ -26,8 +26,9 @@
 - 目录按 `Directory.LogicalShards` 分片,流水和快照在 `<全局库名>_ledger`([设计 §1、§5.1](../design/horizontal-scale-logical-db.md))。`-DirectoryLogicalShards`:prod 必须显式 64,staging 必须显式(64 的约数),dev 缺省 1。K 上线后不能改。这些库 `-migrate` 之前要建好,要是空库;MySQL 档由 `infra-up` 的 `mysql-init-sql` 预建,TiDB 档由运维预建片库 `<全局库名>_00..63`、`<全局库名>_ledger` 和各业务库。
 - data_service 的 boot 名册(`rosterFile`)每条 entry 的 `requests` 要恰好是片库、流水库和 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库,一共 K+1+存档库数份,多一份少一份都拒绝启动。`k8s_deploy.ps1` 在 apply 之前核一次,对不上就拒绝。
 - `-Region` 是地域码,写进 ConfigMap 模板的 `IdSegment.Issuer.Region`,同时注入 data-service 主容器的 `MMORPG_ID_ISSUER_EXPECTED_REGION`。常驻进程读的是 Secret 里抄的配置,抄错了 data_service 比对这个变量,拒绝启动。staging、prod 必须显式给 1..63,0 只给 dev。一旦发号不能改,不能和别的地域重复。开新地域见 [开新地域手册](open-new-region-runbook.md)。
+- `-IdRegistryEtcd` 是全局号源登记处的地址(`host:port`,全世界共用一套),写进 ConfigMap 模板的 `IdSegment.Issuer.RegistryEtcd`。staging、prod 必须给,不能是本集群的 `etcd` 或 `etcd-id-secondary`;托管登记处的那一个集群用 `-HostIdRegistry`(`infra-up` 部署 `etcd-id-registry`,地址取本集群的 Service)。Secret 里的配置要抄上同样的 `RegistryEtcd`。见[发号器运维手册](id-issuer-runbook.md) §1、§2。
 - 合服映射只在目录第 0 片,各服务经 `GetMergedZones` 读,不连目录。合服工具的写权限在操作员角色 `deploy/sql/authority_operator_role.sql` 里,不进运行账号。
-- **运维预置的每 boot 配置要带上新段**。常驻进程的配置来自 `runtimeConfigSecret`,schema Job 来自 `schemaConfigSecret`,`k8s_deploy.ps1` 渲染的 ConfigMap 是模板:把 ConfigMap 里的 `Directory`、`RoleFence`、`Recall`、`SharedRedis`、`PlayerRedis`、`MethodTimeouts`、`DbPlacement`、`IdSegment.Issuer.Region`、`DataServiceRpc`、`GuildRpc`、`MatchRpc` 抄进去,再填账号。两边不一致时以 Secret 为准,配置缺了服务拒绝启动。staging、prod 的 `schemaConfigSecret` 必须带 `DbPlacement`,没有时 `-migrate` 拒绝运行(`MMORPG_DB_PLACEMENT_REQUIRED`):它靠这一段看库是不是在搬。go/db 的 `db-migrate` Job 同样注入;手工跑 `cmd/migrate -command up` 时自己设这个环境变量,配置文件同样带这一段。
+- **运维预置的每 boot 配置要带上新段**。常驻进程的配置来自 `runtimeConfigSecret`,schema Job 来自 `schemaConfigSecret`,`k8s_deploy.ps1` 渲染的 ConfigMap 是模板:把 ConfigMap 里的 `Directory`、`RoleFence`、`Recall`、`SharedRedis`、`PlayerRedis`、`MethodTimeouts`、`DbPlacement`、`IdSegment.Issuer`(`Region`、两套本地 etcd、`RegistryEtcd`)、`DataServiceRpc`、`GuildRpc`、`MatchRpc` 抄进去,再填账号。两边不一致时以 Secret 为准,配置缺了服务拒绝启动。staging、prod 的 `schemaConfigSecret` 必须带 `DbPlacement`,没有时 `-migrate` 拒绝运行(`MMORPG_DB_PLACEMENT_REQUIRED`):它靠这一段看库是不是在搬。go/db 的 `db-migrate` Job 同样注入;手工跑 `cmd/migrate -command up` 时自己设这个环境变量,配置文件同样带这一段。
 - **schema Job 的账号**。目录条目的 `schemaPermissionSecret` 有两个键,必须是同一个账号:`principal` 所有 Job 都读(`MMORPG_SQL_SCHEMA_PRINCIPAL`);`dsn` 只有 guild、mail、rank 读,这三个服务的连接串走环境变量。两边对不上时 Job 报 `权威SQL受限主体不匹配`。其余服务的账号在 `schemaConfigSecret` 的配置里(chat 是 `chat-authority-secrets` 的 `migration-dsn`,match 是 `domain-service-secrets` 的 `match-migration-user`、`match-migration-password`),同样要等于这个 `principal`。`schemaConfigSecret` 的键名是配置文件名(`db.yaml`、`data_service.yaml` 等),内容从 `-DryRun` 渲染的 ConfigMap 抄。
 - **预置 Secret `domain-service-secrets` 的角色护栏密钥**。值由运维生成,不进仓库、不进日志;每把至少 32 字节,互不相同(data_service 拒绝跨用途复用),同名 key 在各 namespace 同值。manifest 都是 `optional: false`,缺一个 key 对应的 Pod 卡在 `CreateContainerConfigError`:
 
@@ -86,6 +87,8 @@ $Deploy = @{
   DirectoryLogicalShards = 64
   # 地域码 1..63,0 只给 dev。一旦发号不能改,不能和别的地域重复,见开新地域手册。
   Region = <地域码>
+  # 全局号源登记处,全世界共用一套。托管它的集群改用 HostIdRegistry = $true。
+  IdRegistryEtcd = "<登记处的 host:port>"
   NodeImage = "<镜像仓库>/mmorpg-node:<不可变 tag>"
   GoSvcRegistry = "<Go 镜像仓库前缀>"
   GoSvcTag = "<不可变 Go tag>"
@@ -171,14 +174,14 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
 
 ### 6.1 初始化发号器
 
-只在全新环境做一次,在第一个 zone 的 data-service 就绪之后、放流量之前。两份预留记录都不存在时发号器拒绝发号,这是刻意的,它分不清首次部署和两套 etcd 同时丢数据。
+只在全新地域做一次,在第一个 zone 的 data-service 就绪之后、放流量之前。这个地域码还没在全局号源登记处认领时发号器拒绝发号,这是刻意的。整个世界第一次部署时,先按[发号器运维手册](id-issuer-runbook.md) §2.1 托管并开启登记处(`-id-registry-open -id-registry-next 1`)。
 
 ```powershell
 kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig -n <zone-namespace> `
   exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
 ```
 
-输出 `both reservation records created` 就完成了,重复执行是安全的。mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。没初始化时建角和发号报错,scene 的号段门禁不放行,所以 zone 就绪不了。初始化之后不用重启任何服务,客户端按退避自动重试。详见[发号器运维手册](id-issuer-runbook.md) §2。
+输出 `region code claimed in the id registry and both reservation records created` 就完成了,重复执行是安全的。码被别的环境认领过、已退役时拒绝,不写任何东西;已经发过号的地域丢了记录走 `-id-issuer-recover`,不要重新初始化。mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。没初始化时建角和发号报错,scene 的号段门禁不放行,所以 zone 就绪不了。初始化之后不用重启任何服务,客户端按退避自动重试。详见[发号器运维手册](id-issuer-runbook.md) §2。
 
 ## 7. 部署后验收
 

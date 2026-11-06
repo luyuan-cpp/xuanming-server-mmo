@@ -67,6 +67,9 @@ const (
 	// 第二条腿:第一条腿记下的目标地图解析失败,已回落默认大世界(人照常落地,不是拒绝整个请求;
 	// 记在这条指标上是因为"玩家指定的那张图"确实被拒了,而且它不该有稳定速率)。
 	rejectReasonPendingMapFallback = "pending_map_fallback"
+	// 短重连 / 顶号回原场景(resumeSceneOf):location 记的场景解析失败(副本已回收、属主节点已死且场景重建不了、
+	// 读失败),已回落默认大世界 —— 与加回原场景之前的行为相同。人照常落地;记在这条指标上是因为"回到原处"没做到。
+	rejectReasonResumeSceneFallback = "resume_scene_fallback"
 	// destroy-while-entering:场景解析出来之后、预占人数之前被销毁(AtomicAddSceneMemberIfSceneExists
 	// 返回 <0)。请求指定 scene_id 的进入才走这条预占路径;稳态应≈0,持续非 0 = 副本回收与进入在抢。
 	rejectReasonSceneGone = "scene_gone"
@@ -76,6 +79,9 @@ const (
 	// session_conflict 代次相等而会话不同(违反 G2),应恒 0。
 	rejectReasonSessionStale    = "session_stale"
 	rejectReasonSessionConflict = "session_conflict"
+	// wrong_zone:请求的 gate zone 不是本进程的 zone(control-plane-zone-scoping-20261105.md §3.3)。调用方只连本 zone 的
+	// scene_manager,出现即说明发现键或前缀配错,应恒 0。
+	rejectReasonWrongZone = "wrong_zone"
 )
 
 const luaDeleteEnterSceneDedupeIfValue = `
@@ -190,6 +196,17 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			return errResp(constants.ErrInvalidGateID,
 				"missing gate_instance_id (required for gate anti-zombie filtering)"), nil
 		}
+	}
+	// 路由不变量(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):C++ gate / scene 与 login 只连本 zone 的
+	// scene_manager,请求的 gate zone 恒是本进程的 zone。不是的话是调用方连错了实例(发现键或前缀配错):本进程不能替
+	// 别的 zone 解析场景、预占人数、改成员 —— 那些都是别的 zone 的控制域键。在任何写入之前、一个字节都不改地拒绝。
+	// gate_zone_id = 0(调用方没填)不在这里拒,后面按原有口径处理。
+	if in.GateZoneId != 0 && in.GateZoneId != l.svcCtx.Config.ZoneId {
+		metrics.ObserveEnterSceneRejected(in.GateZoneId, rejectReasonWrongZone)
+		l.Logger.Errorf("[EnterScene] request from gate zone %d reached the scene_manager of zone %d; rejected without any write: player=%d gate=%s",
+			in.GateZoneId, l.svcCtx.Config.ZoneId, in.PlayerId, in.GateId)
+		return errResp(constants.ErrInvalidGateID,
+			fmt.Sprintf("gate zone %d is served by its own scene_manager (this process serves zone %d)", in.GateZoneId, l.svcCtx.Config.ZoneId)), nil
 	}
 
 	var dedupeKey string
@@ -542,7 +559,22 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		confFromPending = sceneConfID != 0
 	}
 	resolveStart := time.Now()
-	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, sceneConfID, targetZoneId, in.PlayerId)
+	// 3a. 短重连 / 顶号回原场景(resumeSceneOf,docs/design/player-connection-lost-hold.md §6)。解析成功通常就是下面
+	//     第 4 步的同落点重连:断线保留中的实体还在原节点、原场景,直接接回。解析失败回落默认大世界,与加这一步之前
+	//     相同;resolveSceneForEnter 对指定 scene_id 不做预占,失败时没有需要成对释放的人数。再入屏障未到不回落,
+	//     照旧回可重试的 ErrSceneReentryBarrier:回落也只会撞上死节点的换手门(18),等屏障过了按死节点接管才对。
+	resumeSceneID := resumeSceneOf(in, sceneConfID, currentLoc, awaitingPlacement, currentZoneID, targetZoneId)
+	requestedSceneID := in.SceneId
+	if resumeSceneID != 0 {
+		requestedSceneID = resumeSceneID
+	}
+	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(requestedSceneID, sceneConfID, targetZoneId, in.PlayerId)
+	if err != nil && resumeSceneID != 0 && !errors.Is(err, ErrReentryBarrierPending) {
+		metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonResumeSceneFallback)
+		l.Logger.Infof("[Reconnect] Previous scene unavailable; falling back to default world: player=%d zone=%d scene=%d node=%s err=%v",
+			in.PlayerId, targetZoneId, resumeSceneID, currentLoc.GetNodeId(), err)
+		sceneId, nodeId, reserved, err = l.resolveSceneForEnter(0, 0, targetZoneId, in.PlayerId)
+	}
 	if err != nil && confFromPending {
 		// 等待落点里记的地图解析不出来(两条腿之间频道被回收 / 节点全挂 / 满员,或第一条腿的只读检查
 		// 因 Redis 抖动放过了一张没开的图):回落到默认大世界再试一次,**人必须能落地**。
@@ -1069,6 +1101,12 @@ func (l *EnterSceneLogic) playerLocationOwnerDead(loc *scene_manager.PlayerLocat
 		return false
 	}
 	nodeID := loc.GetNodeId()
+	if !ownsControlZone(l.svcCtx, zoneID) {
+		// 位置落在别的 zone:本副本没有那个 zone 的 watch 镜像,也不读它的负载集与 death_at(控制域只读写本 zone,
+		// docs/design/control-plane-zone-scoping-20261105.md §3.5、§4.3)。证据改为那个 zone 的 etcd 直读 + 本副本首次
+		// 看到它不在册满一个再入屏障,不弱于本 zone 的 death_at。
+		return foreignOwnerDead(l.ctx, l.svcCtx, zoneID, nodeID, barrierSiteDeadOwnerTakeover)
+	}
 	if isKnownNodeIdentityAmbiguous(zoneID, nodeID) {
 		return false
 	}
@@ -1124,6 +1162,12 @@ func (l *EnterSceneLogic) playerLocationOwnerGone(loc *scene_manager.PlayerLocat
 	if loc == nil || zoneID == 0 {
 		return false
 	}
+	if !ownsControlZone(l.svcCtx, zoneID) {
+		// 别的 zone(合服下线的源区就是这个形态,它的控制域实例可能已经撤掉):只看 etcd 里那个 zone 是否一个场景节点都没有,
+		// 且本副本第一次看到它空已满一个再入屏障。不读它的负载集与 death_at(§3.5、§4.3);zone 级首次观察只会晚于其中任一
+		// 节点的消失,屏障同样覆盖持有节点的紧急疏散窗口。
+		return foreignZoneGone(l.ctx, l.svcCtx, zoneID, barrierSiteStaleLocation)
+	}
 	if !isZoneGoneFromRegistry(zoneID) {
 		return false
 	}
@@ -1156,15 +1200,19 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 	return now.Unix()-int64(loc.GetUpdateTime()) > redirectTokenTTLSeconds
 }
 
-// rejectTravelToUnopenedMap 是跨 zone 传送第一条腿上对目标地图的**只读**检查:目标 zone 里这张图
-// 一个世界频道都没登记过就拒绝(返回非 nil),此时一个字节都没改,源 scene 按失败应答解冻并回 tip。
+// rejectTravelToUnopenedMap 是跨 zone 传送第一条腿上对目标地图的**只读**检查:这张图在目标 zone 没开就拒绝
+// (返回非 nil),此时一个字节都没改,源 scene 按失败应答解冻并回 tip。
 //
-// 只看频道集合(worldChannelsKey,world_channels:zone:{z}:{conf})是否为空,不做解析、不预占:
-//   - 集合为空 = 这张图此刻没在目标 zone 开着。副本 / 镜像的 conf id、客户端乱填的 id、只在别的
-//     zone 开的图都落在这里(频道集合只登记 World 表里的图,由世界频道初始化与自动扩缩容维护);
-//   - 集合非空但频道暂时全不可用(节点刚换代、满员)照常放行:陈旧频道由第二条腿的解析懒修复,
+// 2026-11-05 起不再读目标 zone 的频道集合(world_channels:zone:{z}:{conf}):控制域只读写本 zone
+// (docs/design/control-plane-zone-scoping-20261105.md §4.3)。判定改为 foreignZoneOpensWorldMap,不做解析、不预占:
+//   - 图不在 World 表里 = 没开。副本 / 镜像的 conf id、客户端乱填的 id 都落在这里(每个 zone 只为 World 表里的图
+//     铺频道,由世界频道初始化与自动扩缩容维护);
+//   - 目标 zone 在 etcd 里没有能承载大世界的场景节点 = 没开(没铺过频道,或节点全没了,第二条腿必然落不了地);
+//   - 有节点但频道暂时全不可用(节点刚换代、满员)照常放行:陈旧频道由第二条腿的解析懒修复,
 //     指定了地图(conf≠0)时真落不进去,第二条腿回落默认大世界;conf=0 本身就是默认大世界,
 //     没有回落(见下)。这里拒它,就把目标区的过渡窗口变成了"传送不可用"。
+//   - 与原来读频道集合的差别只在目标 zone 刚起、节点已注册而领导者还没铺频道的那几秒:原来拒,现在放行,
+//     第二条腿解析不到时按原有失败处理(残余见设计稿 §6 第 1 条)。
 //
 // 查哪张图 —— 必须与第二条腿解析时用的是同一张:
 //   - 请求指定了地图(conf≠0):就是它。第一条腿把它记进等待落点,第二条腿读出来解析。
@@ -1172,7 +1220,7 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 //     只找 defaultWorldConfID() 这一张图的频道,**不回落**(confFromPending=false)。所以这里也只查它,
 //     取值走同一个函数,两边不会各看一张图。World 表为空 = 第二条腿必然解析失败,fail-closed 拒绝。
 //
-// Redis 读失败按放行处理(fail-open):这道检查只为给玩家一个更早、更准的拒绝,不是安全门;
+// etcd 读失败按放行处理(fail-open):这道检查只为给玩家一个更早、更准的拒绝,不是安全门;
 // 归属安全由后面的换手门与 epoch CAS 保证。
 func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterSceneRequest, targetZoneId uint32) *scene_manager.EnterSceneResponse {
 	confID, mapKind := in.SceneConfId, "指定地图"
@@ -1187,13 +1235,16 @@ func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterScene
 				fmt.Sprintf("no default world scene configured for target zone %d; player state untouched", targetZoneId))
 		}
 	}
-	channels, err := l.svcCtx.Redis.Scard(worldChannelsKey(targetZoneId, confID))
+	// 目标 zone 恒不是本 zone(调用方只在跨 zone 重定向里调),它的频道集合在它自己的控制域里,本进程不读
+	// (docs/design/control-plane-zone-scoping-20261105.md §4.3)。改为与 zone 无关的判定:图在 World 表里,
+	// 且 etcd 里目标 zone 有能承载大世界的场景节点(foreignZoneOpensWorldMap)。
+	open, err := foreignZoneOpensWorldMap(l.ctx, l.svcCtx, targetZoneId, confID)
 	if err != nil {
-		l.Logger.Errorf("[Travel] Failed to read target zone world channel set; skipping map precheck (second leg resolves destination): player=%d target_zone=%d map=%s scene_conf_id=%d err=%v",
+		l.Logger.Errorf("[Travel] Failed to read target zone scene node registry; skipping map precheck (second leg resolves destination): player=%d target_zone=%d map=%s scene_conf_id=%d err=%v",
 			in.PlayerId, targetZoneId, mapKind, confID, err)
 		return nil
 	}
-	if channels > 0 {
+	if open {
 		return nil
 	}
 	metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonTravelMapUnavailable)
@@ -1492,7 +1543,7 @@ const deadNodeReassignFollowUpTimeout = 3 * time.Second
 // deadNode 是调用方读到的属主。读与写之间隔着屏障判定、选节点和一次 RPC,期间别的写者可能已经改派走:
 // 另一个副本上的 EnterScene、rebalance、initWorldScenesForZone、懒改派,CAS 保证只有一个落地。
 // 记账(属主映射、两侧 node:zone:{z}:{n}:scenes、两侧 scene_count)由 CAS 脚本同批改,与
-// createscenelogic.go allocateScene 建场景时写的三项一致。
+// scene_registration.go 登记新场景时写的三项一致。
 func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, zoneId uint32, deadNode string) (uint64, string, error) {
 	if sceneConfId == 0 {
 		return 0, "", fmt.Errorf("scene %d is on dead node %s and cannot be recreated without scene_conf_id", sceneId, deadNode)

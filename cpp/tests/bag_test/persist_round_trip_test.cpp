@@ -541,6 +541,27 @@ protected:
         purchase->set_goods_id(2);
         purchase->set_count(1);
 
+        // 本人近期战斗结果(battle-result-recovery.md §4.1):一条记录,货币 / 掉落 / 消耗各一行,覆盖四个可携带类型。
+        // 加载原样挂上、存盘原样拷回,不做整理,所以每层的未知字段都要原样留下。
+        auto &battleResults = *db.mutable_battle_results();
+        battleResults.set_last_result_seq(4);
+        auto *battleResult = battleResults.add_entries();
+        battleResult->set_result_seq(4);
+        battleResult->set_battle_id((uint64_t{1} << 60) + 861);
+        battleResult->set_outcome(1); // BATTLE_OUTCOME_SIDE_A_WIN
+        battleResult->set_total_rounds(6);
+        battleResult->set_finished_at_ms(1900000000000);
+        battleResult->set_settled_at_ms(1900000001000);
+        auto *resultCurrency = battleResult->add_currencies();
+        resultCurrency->set_currency_type(0);
+        resultCurrency->set_amount(12);
+        auto *resultGained = battleResult->add_items_gained();
+        resultGained->set_item_table_id(3);
+        resultGained->set_count(2);
+        auto *resultConsumed = battleResult->add_items_consumed();
+        resultConsumed->set_item_table_id(3);
+        resultConsumed->set_count(1);
+
         auto &second = *all.mutable_player_database_1_data();
         second.set_player_id(kPlayerId);
         second.set_persist_schema_gen(secondSchemaGen);

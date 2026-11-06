@@ -169,7 +169,7 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #               upgrades / hot updates / canary releases are unaffected).
 #               Tier 0 = infra-adjacent (db, data_service)
 #               Tier 1 = scene_manager (depended by player_locator), client_rpc_router (gate 的唯一 gRPC 目标),
-#                        chat (TiDB权威、登录Redis只读、etcd发现),以及 trade / friend / player_inbox / mail / rank 等全局服务
+#                        chat (TiDB权威、会话身份只认 gate 签名原件、etcd发现),以及 trade / friend / player_inbox / mail / rank 等全局服务
 #                        (依赖 Tier 0 的 data_service 号段 / 归属区查询时都是 NonBlock 拨号)
 #               Tier 2 = player_locator (depended by login)
 #               Tier 3 = login (top of the dial chain)
@@ -209,12 +209,12 @@ $ServiceCatalogue = [ordered]@{
     # 端口 50600 与 match 的 50500 同一安全区间(已观测的 Windows 保留区 50000-50171 与 51573-51872 之间),
     # 与 go/client_rpc_router/etc/client_rpc_router.yaml 的 ListenOn 保持一致。
     client_rpc_router = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; Port = 50600; Desc = "Client RPC Router (gate 唯一 gRPC 目标)"; ConfigFlag = "-f"; ConfigFile = "etc/client_rpc_router.yaml"; AllowMultiInstance = $true; Tier = 1 }
-    # 全局聊天：多副本共用TiDB原件和原会话P锁，Redis仅核原登录连接，多实例只在路由服与
+    # 全局聊天：多副本共用TiDB原件和原会话P锁，会话身份只认 gate 签名原件、不连 login 的 Redis，多实例只在路由服与
     # NodeInfo 视角等价;本地双 zone 仍按既有规则每 zone 起一份(-Zone 位移端口与 ZoneId),不另开特例。
     # **前提:gate 必须以路由服模式启动(GATE_CLIENT_RPC_ROUTER=1)**。chat 只承诺经 gate → client_rpc_router
     # 到达;直连模式下 gate 白名单(cpp/nodes/gate/main.cpp)里没有 Chat,任何 zone 的玩家都到不了它 ——
     # 进程照样起得来、端口照样 LISTEN,所以「服务在跑」不等于「玩家可达」(start_game.ps1 -GateRouterMode 默认开)。
-    # Tier 1:它不拨任何 Go 服务(只连 etcd 注册 + Redis),没理由排在 login 之后;与路由服同批起,玩家登录后即可用。
+    # Tier 1:它只连 etcd 注册与聊天 SQL,data_service 目录 RPC 是 NonBlock 拨号,不连 Redis,没理由排在 login 之后;与路由服同批起,玩家登录后即可用。
     # 端口 50700 与 match 50500 / 路由服 50600 同一安全区间(已观测的 Windows 保留区 50000-50171 与 51573-51872 之间)。
     # 注意 -Zone 2 位移后是 51700,恰好落在已观测的 51573-51872 里:由 Resolve-BindablePort 自动上挪并走派生 yaml,
     # 路由服经 etcd NodeInfo 发现实际端口,不受影响(ZonePortShift 刻意不为它改)。
@@ -511,52 +511,37 @@ function ConvertTo-LocalMySQLDbConfig([string]$Content) {
     return $Content.Remove($offset, $value.Length).Insert($offset, 'mysql')
 }
 
-# 全局角色库与登录 Redis 的本机真相:chat / match 都取 data_service 与 login 的原件,缺失时不猜测。
-function Get-LocalAccountDirectorySources {
-    $redisHost = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.Host'
-    $redisDb = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.DB'
-    if (-not $redisHost.Found -or $redisHost.Value -notmatch '^(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$' -or -not $redisDb.Found -or $redisDb.Value -notmatch '^\d+$') {
-        throw '本机必须能读取同login Redis地址/DB，缺失时不猜测。'
-    }
-    return @{ RedisHost = $redisHost.Value; RedisDb = $redisDb.Value }
-}
-
+# chat 的本机启动只核 SQL 权威的形状(DSN 环境变量名、档位、有界连接池);会话身份只认 gate 签名的原件,不读 login 的 Redis。
 function Get-LocalChatAuthoritySettings {
     param([string]$ConfigPath, [switch]$RequireDsn)
     $values = @{}
-    foreach ($key in @('DSNEnv', 'Backend', 'GlobalLoginSessions', 'MaxOpenConns', 'LoginRedis.Addrs', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSizePerNode')) {
+    foreach ($key in @('DSNEnv', 'Backend', 'MaxOpenConns')) {
         $value = Get-YamlScalar -Path $ConfigPath -KeyPath $key
         if (-not $value.Found) { throw "Chat启动缺少显式权威配置字段 $key" }
         $values[$key] = $value.Value
     }
-    if ($values.DSNEnv -cne 'CHAT_AUTHORITY_DSN' -or $values.Backend -cnotin @('tidb', 'mysql') -or $values.GlobalLoginSessions -cne 'true' -or $values['LoginRedis.PasswordEnv'] -cne 'LOGIN_REDIS_PASSWORD') {
-        throw 'Chat必须使用SQL权威及原登录态；禁止旧Redis历史/幂等权威回退。'
+    if ($values.DSNEnv -cne 'CHAT_AUTHORITY_DSN' -or $values.Backend -cnotin @('tidb', 'mysql')) {
+        throw 'Chat必须使用SQL权威；禁止旧Redis历史/幂等权威回退。'
     }
-    if ($values.MaxOpenConns -notmatch '^\d+$' -or [int]$values.MaxOpenConns -lt 2 -or [int]$values.MaxOpenConns -gt 128 -or $values['LoginRedis.PoolSizePerNode'] -notmatch '^\d+$' -or [int]$values['LoginRedis.PoolSizePerNode'] -lt 1 -or [int]$values['LoginRedis.PoolSizePerNode'] -gt 128) {
-        throw 'Chat SQL和登录Redis池必须显式有界，不能采用随CPU变化的缺省池。'
+    if ($values.MaxOpenConns -notmatch '^\d+$' -or [int]$values.MaxOpenConns -lt 2 -or [int]$values.MaxOpenConns -gt 128) {
+        throw 'Chat SQL连接池必须显式有界(MaxOpenConns 2–128)。'
     }
-    $sources = Get-LocalAccountDirectorySources
     if ($RequireDsn) {
         $dsn = [Environment]::GetEnvironmentVariable($values.DSNEnv, 'Process')
         if ([string]::IsNullOrWhiteSpace($dsn) -or $dsn.Contains("`r") -or $dsn.Contains("`n")) {
             throw 'Chat缺少合法CHAT_AUTHORITY_DSN环境值；请先以迁移账号显式-migrate，再提供无DDL权限的运行账号DSN。值不会写入配置或日志。'
         }
-        if ($values['LoginRedis.Addrs'] -cne "[$($sources.RedisHost)]" -or $values['LoginRedis.DB'] -cne $sources.RedisDb) {
-            throw '派生Chat配置与当前login Redis原件不一致，拒绝启动。'
-        }
     }
-    return $sources
 }
 
-# match 的本机 MySQL 档:SQL 入口取 go/db 的原件,登录 Redis 同 chat。源配置写的是 TiDB 入口,不改。
+# match 的本机 MySQL 档:SQL 入口取 go/db 的原件。源配置写的是 TiDB 入口,不改。
 function Get-LocalMatchAuthoritySettings {
-    $sources = Get-LocalAccountDirectorySources
     $sqlHost = Get-YamlScalar -Path (Join-Path $GoRoot 'db/etc/db.yaml') -KeyPath 'ServerConfig.Database.Hosts'
     if (-not $sqlHost.Found) { throw '本机Match必须能读取go/db的SQL入口，缺失时不猜测。' }
     $endpoint = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', 'Process')
     if ([string]::IsNullOrWhiteSpace($endpoint)) { $endpoint = $sqlHost.Value }
     Assert-LoopbackSqlEndpoint $endpoint
-    return @{ SqlHost = $endpoint; RedisHost = $sources.RedisHost; RedisDb = $sources.RedisDb }
+    return @{ SqlHost = $endpoint }
 }
 
 # 只替换顶层配置段内两格缩进的标量,其余字节原样保留;段或字段不唯一就拒绝,不猜。
@@ -575,8 +560,7 @@ function Set-TopLevelBlockScalars {
 
 function ConvertTo-LocalMySQLMatchConfig {
     param([string]$Content, [hashtable]$Settings)
-    $Content = Set-TopLevelBlockScalars -Content $Content -Block 'GlobalMatch' -Values ([ordered]@{ Backend = 'mysql'; Host = $Settings.SqlHost })
-    return Set-TopLevelBlockScalars -Content $Content -Block 'LoginRedis' -Values ([ordered]@{ Addrs = "[$($Settings.RedisHost)]"; DB = $Settings.RedisDb })
+    return Set-TopLevelBlockScalars -Content $Content -Block 'GlobalMatch' -Values ([ordered]@{ Backend = 'mysql'; Host = $Settings.SqlHost })
 }
 
 # guild 的本机建表配置:档位改 mysql,连接串只走环境变量,DDL 账号的口令不落盘。
@@ -736,9 +720,11 @@ function Resolve-InstanceConfig {
     $port      = Resolve-BindablePort $port (Get-InstanceKey -Name $Name -Index $Index -Total $Total) $ReservedPorts
 	$globalTiDBOverride = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST','Process')
 	$rewriteGlobalTiDB = $Name -in @('data_service','db','match') -and -not [string]::IsNullOrWhiteSpace($globalTiDBOverride)
+    # chat 的 SQL 权威形状在派生 / 计划阶段就核,坏配置在起任何进程之前拒绝;启动时 Start-ServiceInstance 再带 -RequireDsn 核 DSN。
+    if ($Name -eq 'chat') { Get-LocalChatAuthoritySettings -ConfigPath $baseYaml }
 
     # Legacy fast path: single-zone, single-instance -> original yaml as-is.
-    if (-not $useLocalMySQL -and $Name -ne 'chat' -and -not $rewriteGlobalTiDB -and $Total -le 1 -and $Zone -le 0 -and $port -eq [int]$Info.Port) {
+    if (-not $useLocalMySQL -and -not $rewriteGlobalTiDB -and $Total -le 1 -and $Zone -le 0 -and $port -eq [int]$Info.Port) {
         return [pscustomobject]@{
             Path     = $Info.ConfigFile  # relative path; resolved by working dir
             FullPath = $baseYaml
@@ -775,13 +761,6 @@ function Resolve-InstanceConfig {
 	}
     if ($useLocalMySQL) {
         $content = if ($Name -eq 'match') { ConvertTo-LocalMySQLMatchConfig -Content $content -Settings (Get-LocalMatchAuthoritySettings) } else { ConvertTo-LocalMySQLDbConfig $content }
-    }
-    if ($Name -eq 'chat') {
-        $chatAuthority = Get-LocalChatAuthoritySettings -ConfigPath $baseYaml
-        $loginPattern = [regex]::new('(?m)^LoginRedis:\r?\n(?:[ \t]+[^\r\n]*(?:\r?\n|$))+')
-        if ($loginPattern.Matches($content).Count -ne 1) { throw 'Chat权威配置块缺失或重复，拒绝派生。' }
-        $loginBlock = "LoginRedis:`n  Addrs: [$($chatAuthority.RedisHost)]`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: $($chatAuthority.RedisDb)`n  PoolSizePerNode: $((Get-YamlScalar -Path $baseYaml -KeyPath 'LoginRedis.PoolSizePerNode').Value)`n"
-        $content = $loginPattern.Replace($content, $loginBlock, 1)
     }
     $regex   = [regex]::new('(?m)^(ListenOn:[ \t]*)([^:\s]+):(\d+)([ \t]*\r?)$')
     if (-not $regex.IsMatch($content)) {

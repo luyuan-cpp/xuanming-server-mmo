@@ -5,6 +5,7 @@
 #include "actor/attribute/constants/actor_state_attribute_constants.h"
 #include "player/comp/player_frozen_comp.h"  // cross-zone-readiness-audit.md §11.2
 #include "spatial/comp/scene_node_scene_comp.h"
+#include "spatial/system/interest.h"  // GetVisibleWatchers:属性同步的接收者
 #include "spatial/system/view.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
 
@@ -63,18 +64,17 @@ void ActorStateAttributeSyncSystem::Update(const double delta)
 	// side ongoing AOI broadcasts would leak stale state to neighbours
 	// and confuse the destination zone's first-frame reconciliation.
 	// cross-zone-readiness-audit.md §11.2.
-	for (auto [entity, transform] : tlsEcs.actorRegistry.view<Transform>(
+	// 接收者 = 客户端正在显示 entity 的观察者(AOI 反向索引中可见的那些)。关注是单向的:
+	// 属性跟着"谁关注并显示我"走,不是"我看得见谁"(docs/design/aoi-directed-interest.md)。
+	for (auto [entity, transform, watchersComp] : tlsEcs.actorRegistry.view<Transform, AoiWatchersComp>(
 			entt::exclude<PlayerFrozenComp>).each())
 	{
-		const auto* aoiListComp = tlsEcs.actorRegistry.try_get<AoiListComp>(entity);
-		if (!aoiListComp || aoiListComp->entries.empty()) continue;
+		if (watchersComp.watchers.empty()) continue;
 
 		// Build flat entity list for base attribute sync (avoids hash set allocation)
 		allAoiEntities.clear();
-		allAoiEntities.reserve(aoiListComp->entries.size());
-		for (const auto& [e, _] : aoiListComp->entries) {
-			allAoiEntities.emplace_back(e);
-		}
+		InterestSystem::GetVisibleWatchers(entity, allAoiEntities);
+		if (allAoiEntities.empty()) continue;
 
 		// R20 load shed: base-attribute broadcast was running EVERY frame to every
 		// visible neighbour, one of the heaviest per-frame AOI costs under 45k
@@ -90,19 +90,20 @@ void ActorStateAttributeSyncSystem::Update(const double delta)
 		level2Entities.clear();
 		level3Entities.clear();
 
-		for (const auto& [nearbyEntity, _] : aoiListComp->entries) {
-			const double maxRadius = ViewSystem::GetMaxViewRadius(nearbyEntity);
-			const auto distanceOpt = ViewSystem::GetDistanceBetweenEntities(nearbyEntity, entity);
+		for (const auto watcher : allAoiEntities) {
+			const double maxRadius = ViewSystem::GetMaxViewRadius(watcher);
+			const auto distanceOpt = ViewSystem::GetDistanceBetweenEntities(watcher, entity);
 			if (!distanceOpt)
 				continue;
 			const double distance = *distanceOpt;
 
 			if (distance <= maxRadius * kLevel1RadiusFactor) {
-				level1Entities.emplace_back(nearbyEntity);
+				level1Entities.emplace_back(watcher);
 			} else if (distance <= maxRadius * kLevel2RadiusFactor) {
-				level2Entities.emplace_back(nearbyEntity);
-			} else if (distance <= maxRadius) {
-				level3Entities.emplace_back(nearbyEntity);
+				level2Entities.emplace_back(watcher);
+			} else {
+				// 视野半径外的显式关注者(技能追踪等)仍在显示它:按最低档同步,不因距离整组丢掉。
+				level3Entities.emplace_back(watcher);
 			}
 		}
 

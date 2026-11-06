@@ -414,6 +414,9 @@ try {
         foreach ($id in @('release.version', 'release.artifact.dir', 'release.artifact.sha256sums', 'release.buildinfo.version', 'release.buildinfo.clean', 'release.manifest', 'release.imagetag.commit')) {
             Assert-Match -Text $run.Output -Pattern ('\[PASS\]\s+' + [regex]::Escape($id) + '(\s|$)') -Because "$id 应当 PASS"
         }
+        # 台账封存检查读真实仓库的台账:未封存时 dev 档判 WARN、生产档判 FAIL,封存后 PASS。这里只核接线 ——
+        # 带 -ReleaseVersion 时这一项必须出现,结论随仓库台账变化,不在这里断言。
+        Assert-Match -Text $run.Output -Pattern '\[(PASS|WARN)\]\s+release\.persist_schema\.sealed(\s|$)' -Because '版本发布必须核对持久 schema 台账已封存'
     }
 
     Test-Case "负向:预检篡改制品后 sha256sums FAIL;tag 版本段与 -ReleaseVersion 不符 FAIL" {

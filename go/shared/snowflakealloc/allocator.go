@@ -1050,14 +1050,25 @@ func (h *Handle) run(kaCtx context.Context, st *loopState) {
 // 判定顺序:
 //  1. Get slots key。value 是别人的 uuid → 所有权已丢,markLost。
 //  2. value 是我们、且 lease 正是当前 lease 且仍存活 → 虚惊(客户端侧误判),恢复 keepalive 即可。
-//  3. 否则 Grant 新 lease,**一笔** Txn:If CreateRev==0(key 已过期)Then Put;
-//     Else 内层 Txn If Value==uuid(还在旧 lease 上)Then Put。两支都不成立才去看是谁拿走了。
+//  3. 否则 Grant 新 lease,**一笔** Txn:
+//     If CreateRev==0(key 已过期)Then 内层 Txn If 两把水位 key 的 ModRevision 仍是我们最后的观测 Then Put;
+//     Else 内层 Txn If Value==uuid(还在旧 lease 上)Then Put。
+//     key 已过期但水位被别人写过 → 永久 fence(见下);两支都不成立才去看是谁拿走了。
 //
 // ⚠️ 这里必须是**一笔**嵌套 Txn,不能拆成两笔"先比 CreateRev、再比 Value"。拆开时旧 lease 的
 // revoke 只要落在两笔中间,第二笔的 Value 比较就会在一把**已经不存在**的 key 上失败,
 // 随后的 Get 读到 0 条记录,代码却把它当成"被别人抢走"→ markLost → 消费方 Fence + 退出。
 // 而这恰恰是 reclaim 存在的理由(lease 抖动),没有任何人拿走这个槽。所以:
 // 只有 follow-up Get 读到一条 value ≠ 我们 uuid 的记录,才算真的失去所有权。
+//
+// **重建要先证明"失联期间没人用过这个槽"**(第一轮数据审计 §4 第 21 条)。key 过期之后这个槽
+// 对别人就是空的:过了隔离期,继任者 B 可以合法申领并发号;B 若此刻恰好也与 etcd 断开(它的 key
+// 同样过期),它在自己的 F 内还会继续发号。这时把 key 重新 Create 回我们名下,就是两个进程拿同一个
+// worker id 同时发号 —— 隔离期被重建分支绕过了。任何发过号的持有者都先写过水位(闸只在水位写
+// 成功后 Ack;秒级或毫秒级任一),所以两把水位 key 的 ModRevision 仍等于我们最后一次观测的值,
+// 就证明这段时间没人用过;不等时分不清 B 已退出还是仍在发号,只能永久 fence,让进程重启后走受
+// 隔离期保护的正常申领。比较与重建在同一笔 Txn 里,没有先读后写的窗口。代价:我们自己最后一笔
+// 水位写"已提交但没收到应答"时 revision 同样对不上,也会 fence(fail-closed,只多一次重启)。
 //
 // etcd 不可达时什么都不改,留着 needReclaim 下一拍再试;这段时间发号器由 F 兜底。
 func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
@@ -1110,26 +1121,62 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 	if h.r.legacyMirror() {
 		puts = append(puts, clientv3.OpPut(legacyIDKey(h.r.legacy, h.Slot), h.host, clientv3.WithLease(lease.ID)))
 	}
+	wmKey := watermarkKey(h.Kind, h.Cluster, h.Slot)
+	wmMsKey := watermarkMsKey(h.Kind, h.Cluster, h.Slot)
+	// guardMu 跨 Txn 持有:拿来比较的 revision 与 Txn 之间不能夹进本进程自己的水位写
+	// (NewNode 的同步首写、login 的毫秒水位协程),否则刚写的那一笔会被误判成"别人写过"。
+	// 秒级 / 毫秒级都比:没写过毫秒水位的 kind 两边恒为 0(key 不存在时 ModRevision 按 0 比较)。
+	h.guardMu.Lock()
+	secRev, msRev := h.guardRev, h.msRev
 	txn, err := h.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(h.sKey()), "=", 0)).
-		Then(puts...).
+		Then(clientv3.OpTxn(
+			[]clientv3.Cmp{
+				clientv3.Compare(clientv3.ModRevision(wmKey), "=", secRev),
+				clientv3.Compare(clientv3.ModRevision(wmMsKey), "=", msRev),
+			},
+			puts,
+			[]clientv3.Op{clientv3.OpGet(wmKey), clientv3.OpGet(wmMsKey)},
+		)).
 		Else(clientv3.OpTxn(
 			[]clientv3.Cmp{clientv3.Compare(clientv3.Value(h.sKey()), "=", h.UUID)},
 			puts,
 			nil,
 		)).
 		Commit()
+	h.guardMu.Unlock()
 	if err != nil {
 		_, _ = h.cli.Revoke(context.Background(), lease.ID)
 		logx.Errorf("[snowflakealloc] reclaim (%s) txn failed (%s): %v; will retry", reason, h.LogFields(), err)
 		return
 	}
-	// recreated = key 当时已经不存在了,是我们重新 Create 出来的。这条信息决定要不要
-	// 重读地板(见下面的 refloor):key 消失意味着我们的 lease 曾经过期,而过期时长
-	// 可能已经越过隔离期 Q —— 那期间别人可以合法申领这个槽、发一批号、再释放。
-	recreated := txn.Succeeded
-	inner := txn.Responses[0].GetResponseTxn()
-	if !txn.Succeeded && !inner.GetSucceeded() {
+	// keyGone = key 当时已经不存在(我们的 lease 曾经过期)。两支各是一笔内层 Txn,
+	// branch 是实际执行的那一支的结果。
+	keyGone := txn.Succeeded
+	branch := txn.Responses[0].GetResponseTxn()
+	if keyGone && !branch.GetSucceeded() {
+		// 重建被拒:key 过期期间水位被别人写过(见函数注释)。新 lease 上什么都没挂,撤掉即可;
+		// 槽 key 留空,别人(包括仍在 F 内的 B)照常按自己的规则处理。
+		_, _ = h.cli.Revoke(context.Background(), lease.ID)
+		var gotSecRev, gotMsRev int64
+		gotSecVal := "<absent>"
+		for i, r := range branch.GetResponses() {
+			kvs := r.GetResponseRange().GetKvs()
+			if len(kvs) == 0 {
+				continue
+			}
+			if i == 0 {
+				gotSecRev, gotSecVal = kvs[0].ModRevision, string(kvs[0].Value)
+			} else {
+				gotMsRev = kvs[0].ModRevision
+			}
+		}
+		h.onOwnershipLost(fmt.Sprintf("reclaim (%s): the slot key had expired and the watermark was written by "+
+			"someone else meanwhile (sec rev %d -> %d value %s, ms rev %d -> %d); another holder may still be "+
+			"minting with this worker id, refusing to recreate the slot", reason, secRev, gotSecRev, gotSecVal, msRev, gotMsRev))
+		return
+	}
+	if !keyGone && !branch.GetSucceeded() {
 		_, _ = h.cli.Revoke(context.Background(), lease.ID)
 		g, gerr := h.cli.Get(ctx, h.sKey())
 		switch {
@@ -1148,13 +1195,15 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 		return
 	}
 
+	// recreated = key 是我们重新 Create 出来的(上面的 revision 比较已证明失联期间没人写过水位)。
+	recreated := keyGone
 	prevInc := h.incarnation.Load()
 	h.lease.Store(int64(lease.ID))
 	h.incarnation.Store(txn.Header.Revision)
 	h.needReclaim.Store(false)
 	h.registered.Store(true)
-	// 重新 Create 出来的 key,或本进程已经因水位过期自 fence 过 —— 两者都意味着"这中间
-	// 可能有别人当过这个槽的主人",必须把 etcd 里现在的水位重新吃成地板。
+	// 重新 Create 出来的 key,或本进程已经因水位过期自 fence 过:把 etcd 里现在的水位重新吃成
+	// 地板(纵深防御,见 refloorFromWatermark)。
 	if stale, _ := h.fence.Stale(); recreated || stale {
 		h.refloorFromWatermark(ctx, reason, recreated)
 	}

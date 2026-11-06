@@ -5,8 +5,6 @@
 Name: friend.rpc
 # 后端档位 tidb | mysql,不写就是 tidb;这份本地样例连单机 MySQL。全部副本必须连同一事务域。
 Backend: mysql
-# 必须由部署显式注入实际全局 login 实例/DB；占位配置拒绝启动，不推测 localhost。
-GlobalLoginSessions: false
 ListenOn: 127.0.0.1:50400
 
 # zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000(契约 §3),
@@ -26,11 +24,6 @@ Mode: dev
 # ⚠ 顶层唯一一处 ZoneId,且必须写在任何嵌套段之前:go_services.ps1 -Zone 只改写文件里第一处
 #   ZoneId,嵌套段里将来若出现同名键会把改写吃掉。行尾也不能加注释(改写正则要求 `ZoneId: <数字>$`)。
 ZoneId: 1
-LoginRedis:
-  Addrs: []
-  Password: ""
-  DB: 0
-  PoolSizePerNode: 8
 
 # etcd 节点注册租约 TTL(秒)= 崩溃场景的切换窗口:路由服 PickRandom 不看连接状态,
 # 进程崩掉后最多这么久还会被选中(契约 §2)。原值 500 意味着挂掉后 8 分钟仍在被路由。

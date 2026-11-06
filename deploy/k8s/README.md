@@ -669,7 +669,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     改分区数 = 这个数 +1,绝不原地扩分区,见下面「Kafka 审计 topic 预建」。
   - `IdSegment`:`AllowAutoSeed` dev 档取服务 yaml 的值(`true`),staging / prod 固定 `false`(与 `Schema.AutoMigrate` 同一条纪律;为什么见 [发号器运维手册](../../docs/ops/id-issuer-runbook.md) §2);
     `Tags` 与服务 yaml / Go 的 `DefaultIdSegmentTags` 同一份清单,新增永久身份三处同加(`id_issuer_deploy_contract.tests.ps1` 钉住);
-    `Issuer.Region` 是 `-Region` 的地域码,所有档位都写(见下面「逻辑库和角色护栏的部署」);`Issuer` 的两套地址只在 staging / prod 写:两份预留记录分别放 `etcd` 和 `etcd-id-secondary`(`manifests/infra/etcd-id-secondary.yaml`,`infra-up` 非 dev 档部署)。
+    `Issuer.Region` 是 `-Region` 的地域码,所有档位都写(见下面「逻辑库和角色护栏的部署」);`Issuer` 的三组地址只在 staging / prod 写:两份本地预留记录分别放 `etcd` 和 `etcd-id-secondary`(`manifests/infra/etcd-id-secondary.yaml`,`infra-up` 非 dev 档部署),
+    第三份在全世界共用的全局号源登记处 `RegistryEtcd`(`-IdRegistryEtcd`;托管它的集群带 `-HostIdRegistry`,`infra-up` 部署 `manifests/infra/etcd-id-registry.yaml`)。
   - `manifests/go-svc/data-service.yaml` 的 Deployment **2026-10-08 起是 2 副本 + RollingUpdate(maxSurge 1 / maxUnavailable 0)+ 反亲和 + 同文件 PDB**
     (docs/design/no-single-node-horizontal-scaling-20261001.md §4)。以前钉成 `Recreate` + `replicas: 1` 的理由(快照去重靠「单条语句 + 间隙锁」,
     两个实例互相等锁)已经过时:去重现在是唯一键 `uk_snapshot_guid_nz` + ON DUPLICATE KEY;消费者是 consumer group,分区在实例间独占分配;
@@ -686,8 +687,9 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   (`kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_global; GRANT ALL PRIVILEGES ON mmorpg_global.* TO '"'"'appuser'"'"'@'"'"'%'"'"';"'`,`mmorpg_global_ledger` 同样一句,K>1 时每片一句),
   否则 data-service 只剩 `schema auto-migrate failed`,login 建角全部失败。
   本地 compose 的对应物是 `deploy/mysql-init/00_init_zone_dbs.sql` 顺带建的 `testdb`、`testdb_ledger` 和 `mmorpg_global`、`mmorpg_global_ledger`,同样只对空数据卷生效。
-- **发号器的恢复与全局库无关**:发号器不用 `mmorpg_global`,恢复全局库不再影响发号。发号器的预留记录在两套 etcd 里,首次部署要显式初始化一次(`-id-issuer-init`),
-  丢数据、从备份恢复的处理见 [发号器运维手册](../../docs/ops/id-issuer-runbook.md)。两份记录都不存在时 staging / prod 拒绝发号,把决定留给人;dev 档会自动初始化。
+- **发号器的恢复与全局库无关**:发号器不用 `mmorpg_global`,恢复全局库不再影响发号。发号器的预留记录在本地两套 etcd 和全局号源登记处里,世界第一次部署要开启登记处(`-id-registry-open`),
+  每个新地域要显式初始化一次(`-id-issuer-init`);丢数据、从备份恢复走 `-id-issuer-recover`,处理见 [发号器运维手册](../../docs/ops/id-issuer-runbook.md)。记录不全时 staging / prod 拒绝发号,把决定留给人;dev 档会自动补。
+  **登记处不许从备份恢复**。
 - **guild 还没有 K8s ConfigMap / manifest**(存量缺口:`$GoSvcCatalogue` 没有它,`manifests/go-svc/` 也没有 `guild.yaml`,`go_svc_image.ps1` 之外没人碰它)。
   补的时候除了 MySQL DataSource / Redis 之外,还要写 `ClusterId`、`SnowflakeCacheDir`(+ 同名 emptyDir)、`DataServiceRpc`、`IdSegment`,
   形状照 `go/guild/etc/guild.yaml`;guild_id 号段与 PlayerId 走同一个 `AllocateIdSegment`(不同 `biz_tag`)。
@@ -995,14 +997,17 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
   grpc 探针、`preStop sleep 5`、`POD_IP`、metrics 9220)+ 同文件 PDB `guild-pdb`。不挂 snowflake 卷(ConfigMap 里 `SnowflakeCacheDir: ""`)。
   多副本安全性来自帮会二期的设计(资产指令行级租约、清理随机偏移、哨兵行 GET_LOCK、历练结果消费组 `guild-trial`、对账 / 放弃选主),**未在真实多副本下验证**。
 - **ConfigMap**:`go-svc-guild-config` 按 `go/guild/etc/guild.yaml` 生成,标量逐个镜像;`AssetOp`、`Activity` 两大块**逐行原样搬运**(含取值说明),
-  唯一改写的是 `AssetOp.Enabled`(部署决策,现固定 `false`)。三个 Redis 句柄都指向共享 Redis:`RedisClient`(DB 取服务 yaml,现为 0)、
-  `PlayerLocatorRedis`(DB 0,必须与 scene / scene_manager / battle 写在线、位置、历练结果的同一实例)、`LoginRedis`(DB 0,全局登录态只读)。
+  唯一改写的是 `AssetOp.Enabled`(部署决策,现固定 `false`)。两个控制域 Redis 句柄都指向共享 Redis:`RedisClient`(DB 取服务 yaml,现为 0)、
+  `PlayerLocatorRedis`(DB 0,必须与 scene / scene_manager / battle 写在线、位置、历练结果的同一实例);玩家域句柄 `PlayerRedis` 见「玩家域 Redis Cluster」。
+  guild 不读登录态:会话身份由 gate 签名,guild 只认签名原件,ConfigMap 里没有 `GlobalLoginSessions` / `LoginRedis`。
   生成期核对 `Activity.TrialResult.Partitions` == match 的 `ResultTopicPartitions`(不等就拒绝生成:结算消费者漏读分区,玩家白打且无报错)。
 - **建库 / 建表**:`mmorpg_guild` 只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`;**存量 PVC 要手工建库**(同 friend 一节的命令,把库名换成 `mmorpg_guild`)。
   表由 `manifests/go-svc/guild-migrate.yaml`(派生自 trade-migrate,`args: ["-f", "/app/etc/guild.yaml", "-migrate"]`)按 `proto/guild/guild_db.proto` 建;
   staging/prod 恒等它 Complete 才 apply Deployment,ConfigMap 固定 `Schema.AutoMigrate: false`。
 - **连接数**:guild 以前不设 MySQL 池上限(`database/sql` 默认不限),同批给 `go/guild` 加了 `MySQL.MaxOpenConn / MaxIdleConn`(不写 = 20 / 5),
-  ConfigMap 镜像、MySQL 连接总账按 2 × 20 记账 —— 加上它之后规划档余量只剩 20,见「MySQL 连接总账」。Redis 连接总账按每副本 3·10G + 9 记账。
+  ConfigMap 镜像、MySQL 连接总账按 2 × 20 记账 —— 加上它之后规划档余量只剩 20,见「MySQL 连接总账」。Redis 连接总账按每副本 2P + 1 记账
+  (`RedisClient`、`PlayerLocatorRedis` 两个显式池 + 落地唤醒订阅);玩家域句柄 `PlayerRedis` 与摘要专用池(4)不建玩家域集群时也记在这一份,
+  建了就搬到玩家域那一份(见「Redis 连接上限与总账」与「玩家域 Redis Cluster」)。
 - **上线顺序**(`92-handoff.md` §13.3):battle → match → 路由服与 gate → guild(match 新而 battle 旧时结果不带活动上下文,玩家白打)。
   号段 `guild`、`guild_asset_op` 已登记在 data-service 的 `IdSegment.Tags` 里。
 - **镜像**:`tools/scripts/go_svc_image.ps1` 登记 `guild`(ImageName `mmorpg-guild`,与本目录条目一致,契约测试钉住);与路由服成对发布。
@@ -1028,7 +1033,7 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
 |---|---|---|---|
 | scene / scene-world / scene-instance(zone ns) | 50000(RPC_PORT 20000 + 30000) | scene-manager、match、player-inbox、guild、trade | `go/scene_manager` scene_node_client;`go/match` node_watcher;`go/player_inbox` notify;guild / trade 经 `go/shared/assetop` |
 | guild(infra ns) | 50300 | client-rpc-router | 路由表 `GuildNodeService` |
-| match(infra ns) | 50500 | client-rpc-router、guild、gate | 路由表 `MatchNodeService`;guild `MatchRpc`(历练开战);gate 只在 `-GateRouterMode 0` 回退时直连 |
+| match(infra ns) | 50500 | client-rpc-router、guild、gate、data-service、scene、scene-world、scene-instance | 客户端路由、历练开战、Gate 直连回退、角色围栏参与者接口、Scene 的 `TeamAuthority` 成员读取 |
 
 - 不经这些 gRPC 口的:gate ↔ scene 走 muduo 节点口 20000(开放);battle → scene 走 Kafka 命令;match → guild 的历练结果走 Kafka;路由表里没有 `SceneNodeService`。
 - 与 G-05 原文的出入:scene 多放了 player-inbox(收件箱上线晚于 G-05,`notify.go` 会拨 scene);match 多放了 gate(回退模式);guild 不放 match(代码里 match 不调 guild)。
@@ -1307,15 +1312,15 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   | trade | `go/trade/etc/trade.yaml` 的 `SharedRedis.PoolSize` | go-svc-trade-config |
   | player-inbox | `go/player_inbox/etc/player_inbox.yaml` 的 `CoreRedis.PoolSize` | go-svc-player-inbox-config |
 
-  guild 2026-10-16 起由接入 K8s 那条线一并计入(`Get-RedisPoolMirror -Target guild` 读 `RedisClient` / `PlayerLocatorRedis` / `LoginRedis`
-  三段的 `PoolSize`),ConfigMap 由它自己的生成器写。
+  guild 2026-10-16 起由接入 K8s 那条线一并计入(`Get-RedisPoolMirror -Target guild` 读 `RedisClient` / `PlayerLocatorRedis`
+  两段的 `PoolSize`),ConfigMap 由它自己的生成器写。
   data-service 的 `NameCacheRedis` 是 go-zero 客户端(见下面「设不了的」),只放可丢弃的名字读缓存。go/db 不连 Redis,不在总账里。
   Go 侧语义:0 / 不写 = go-redis 缺省 10 × GOMAXPROCS(兼容旧 ConfigMap,滚动升级期间旧配置照常加载),负数起服即失败;部署侧要求正整数,
   写路径入口算总账时先于任何集群写操作把这些键读一遍,不合格就拒绝(`Redis 连接池镜像:...`)。各服务启动日志打一行 `pool_size=<生效值>`,
   用来核对 ConfigMap 里的值真的被加载(go-zero 对不认识的键静默忽略)。只设 `PoolSize`,不设 `MaxActiveConns`:Pub/Sub 专用连接走 `NewConn`、
   不占池名额,但受 `MaxActiveConns` 约束,池满时订阅会直接失败(go-redis v9.16.0 / v9.17.3 / v9.18.0 的 `newConn`)。
   **改值 = 重算总账**:看部署时打印的 `Redis connection ledger` 一行;池等满时调用方排队(go-redis `PoolTimeout`)。本机 Windows 以前是 10 × 核数,现在同样是 20 —— 压测对比时注意这一口径变化。
-  **设不了的**:go-zero 封装的客户端(data-service 的 `NameCacheRedis`、scene-manager、match、chat、friend 的共享库句柄)—— go-zero v1.9.2 / v1.10.0 的
+  **设不了的**:go-zero 封装的客户端(data-service 的 `NameCacheRedis`、scene-manager、match、friend 的共享库句柄)—— go-zero v1.9.2 / v1.10.0 的
   `redis.RedisConf` 没有池参数,`redisclientmanager.go` 不设 `PoolSize`、固定 `MinIdleConns: 8`,同一进程同一地址共用一个池。
   这些仍按缺省池(10G)记账,CPU limit 的输入钉子只对它们生效。
 - **公式**(P = 该服务 yaml 里的显式 `PoolSize`;G = GOMAXPROCS,只用于缺省池。Go 1.27.2 容器感知,CPU limit 500m / `"1"` 预期都是 2;**未实测,待 S6**;
@@ -1326,22 +1331,24 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   data-service    每副本 = 10G         # NameCacheRedis(go-zero,缺省池)
   scene-manager   每副本 = 10G         # go-zero,缺省池
   gateway(Java)  每副本 = 2           # Lettuce 共享连接 + 限流专用连接(staging / prod 缺省开限流;dev 关时实际 1,按 2 记)
-  match / chat / friend 每副本 = 10G   # go-zero,缺省池
+  match / friend  每副本 = 10G         # go-zero,缺省池
   trade           每副本 = P + 1       # 资产通道 + 落地唤醒订阅(资产通道开关缺省关,按开计)
-  guild           每副本 = 3P + 1 + 4  # 全局库 / 在线查询 / 合服标记三个显式池 + 落地唤醒订阅 + 摘要 bump 专用池(代码写死 4)
+  guild           每副本 = 2P + 1 + 4  # RedisClient / PlayerLocatorRedis 两个显式池 + 落地唤醒订阅 + 摘要 bump 专用池(代码写死 4,玩家域)
   player-inbox    每副本 = P           # 核心 Redis 一个 go-redis 池,没有 Pub/Sub
-  mail            每副本 = 8           # 代码里写死 PoolSize 8
+  mail            每副本 = P           # 只有玩家域句柄 PlayerRedis(服务 yaml 的 PoolSizePerNode),建了玩家域集群这一行就搬走
   gate / scene / battle 每进程 = 1     # node.cpp 唯一的 tlsRedis.Connect:每进程一条,不是每线程
   每 zone = Σ(zone 级客户端每副本 × 副本数) + gate 台数 + scene 台数
-  全局    = Σ(全局池客户端每副本 × 副本数) + battle 台数   # match / chat / friend、trade、guild、player-inbox、mail 各 2 副本
+  全局    = Σ(全局池客户端每副本 × 副本数) + battle 台数   # match / friend、trade、guild、player-inbox、mail 各 2 副本
   steady  = Z·每 zone(含各 zone 的 gate / scene)+ 全局
   surge   = R·(各客户端每副本之和 + 3)   # R = 2,同 MySQL 总账;C++ 按 gate / scene / battle 三个工作负载计
   peak    = steady + surge + 运维余量 50   # 探针、运维 redis-cli、merge_zone / route_tool 等一次性工具(估计值)
   ```
   具体条数以 `Get-RedisConnectionLedgerInputs` 的代码表与部署时打印的总账一行为准,这里不再手算。
+  各服务的玩家域句柄 `PlayerRedis`(以及 login 自己的 `LoginRedis`)不建玩家域集群时也连这台 Redis,记在这一份;建了就搬到玩家域那一份(「玩家域 Redis Cluster」的连接总账)。
   - player-inbox 2026-10-16 起计入:核心 Redis 一个 go-redis 池(`go/player_inbox/internal/svc/servicecontext.go` 的 `openCoreRedis`,
     围栏上界、在线提醒读 location 与后台循环选主锁共用),池上限 `CoreRedis.PoolSize`,没有 Pub/Sub。
   - 不计入(接上时在常数表加一行):client-rpc-router(不连 Redis)、
+    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;ConfigMap 的 `Redis` 段只为 `RpcServerConf` 兼容,go-zero 句柄 `NonBlock` 不预连、运行时不发命令)、
     login 的 PasswordAuth 失败配额池(K8s 不写该段,启用后每 login 副本 +4)、match 的 MatchRedis 与 chat 的 ChatRedis(在 redis-match-cluster 上)。
   - 契约测试钉住:显式池那几行等于服务 yaml 的值、ConfigMap 镜像同一个值、yaml 写 0 / 负数 / 非整数时部署侧 throw;
     有缺省池的行「manifest 的 CPU limit ≤ G 核」—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列。
@@ -1736,7 +1743,7 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 
 设计 [redis-player-store-cluster.md](../../docs/design/redis-player-store-cluster.md) §5.1、§5.6、§6、§7;运维手册(部署、扩缩容、节点故障、中断恢复、核对清单)[redis-player-cluster-runbook.md](../../docs/ops/redis-player-cluster-runbook.md)。
 
-玩家态协调键和登录域放进一个独立的 Redis Cluster,控制域(`redis`、`redis-queue-g<N>`)不变。登录域缺省和玩家域共用这个集群,Go 配置上能拆开,部署脚本目前只渲染共用形态,要拆时加参数。
+玩家态协调键和登录域放进一个独立的 Redis Cluster,控制域(`redis`、`redis-queue-g<N>`)不变。登录域只有 login 连(chat、friend、guild、match、mail、trade 只认 gate 签名的会话身份原件,不读登录态),缺省和玩家域共用这个集群,Go 配置上能拆开,部署脚本目前只渲染共用形态,要拆时加参数。
 
 ### 参数
 
@@ -1754,13 +1761,13 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 
 - **`manifests/infra/redis-player-cluster.yaml`**(`infra-up`、带 infra 的 `all-up` 才 apply):`statefulset/redis-player`(`OnDelete`)、每个节点一个 ClusterIP Service `redis-player-<序号>`(节点用 `cluster-announce-ip` 宣告它的 IP,C++ 路由层只认 IP 字面量)、PDB、建群 Job `redis-player-cluster-init`。Job 只在全部节点空白时 `--cluster create`,否则只核对,重跑幂等。
 - **node ConfigMap** 多 `player_redis: {mode: cluster, seeds: [...]}`。scene 的 Pod 模板多环境变量 `PLAYER_REDIS_PASSWORD` 和注解 `mmorpg.io/player-redis-config-hash`(种子或口令变了就滚动)。gate、battle 不变。
-- **Go 服务**:login、player-locator、scene-manager、match、friend、guild、trade、player-inbox、mail 的 `PlayerRedis`,login、match、chat、friend、guild、mail 的 `LoginRedis`,trade 的 `Rmb.LoginRedis`,都写 `Addrs`(种子)、`Cluster: true`、`PasswordEnv: PLAYER_REDIS_PASSWORD`、`PoolSizePerNode`。容器经 `Add-PlayerRedisSecretEnv` 拿口令。
+- **Go 服务**:login、player-locator、scene-manager、match、friend、guild、trade、player-inbox、mail 的 `PlayerRedis`,以及 login 自己的 `LoginRedis`,都写 `Addrs`(种子)、`Cluster: true`、`PasswordEnv: PLAYER_REDIS_PASSWORD`、`PoolSizePerNode`。这些服务的容器经 `Add-PlayerRedisSecretEnv` 拿口令;chat 不连 Redis,不拿。
 - **scene-manager** 的 `OwnerEpochMint.WaitAOFNumReplicas` 取 1(键在集群上,每主至少 1 副本)。
 - **`redis-wipe`** 的遍历多 `redis-player`,逐主节点。
 
 种子固定序号 0、1、2,不随主节点数变,扩容不用重发 zone。
 
-不开时(dev 缺省):node ConfigMap 不写 `player_redis`;`PlayerRedis` 只写池上限,地址落到各服务现有的实例;读登录态的服务 `LoginRedis` 显式指向 `redis.<infra>:6379` 与 login 的 DB。
+不开时(dev 缺省):node ConfigMap 不写 `player_redis`;`PlayerRedis` 与 login 的 `LoginRedis` 只写池上限,地址落到各服务现有的实例(login 落到它的 `Node.RedisClient`)。
 
 ### 变更闸
 
@@ -1787,9 +1794,9 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 Redis player connection ledger: per_master zones=<Z> scene_processes=<N> steady=<稳态> peak=<峰值> maxclients=40000 warn_at=32000 headroom=<余量>; plan zones=... peak=... headroom=...; masters=<M> nodes=<节点数> (...)
 ```
 
-- 池上限读服务 yaml 的 `PlayerRedis.PoolSizePerNode` 和 `LoginRedis` 的池(`Get-RedisPlayerPoolMirror`,不是正整数即 throw)。代码里写死的另算:scene-manager 铸造通道 32、guild 摘要池 4、mail 登录态池 8。trade 的 `Rmb.LoginRedis` 只在资产通道打开时连,按打开计。
+- 池上限读服务 yaml 的 `PlayerRedis.PoolSizePerNode` 和 login 的 `LoginRedis.PoolSizePerNode`(`Get-RedisPlayerPoolMirror`,不是正整数即 throw)。代码里写死的另算:scene-manager 铸造通道 32、guild 摘要池 4。
 - `maxclients` 读 `redis-player-cluster.yaml` 的 `MAXCLIENTS`,只定义一次。超过 80% 水位告警 `[RedisPlayerConnectionLedger]OverWarnRatio:`,不阻断。
-- **加主节点不减少每主连接**:它只取决于客户端进程数。控制域那一份总账去掉这些池,只剩登录态池的 chat、mail 不再计入。不开集群时这些池都记在控制域那一份上。
+- **加主节点不减少每主连接**:它只取决于客户端进程数。控制域那一份总账去掉这些池,只剩玩家域句柄的 mail 不再计入;chat 不连 Redis,两份账都没有它。不开集群时这些池都记在控制域那一份上。
 
 ### 告警
 
@@ -2439,6 +2446,15 @@ EffectiveGi = -KafkaStorageGi(> 0)
 
 (按仓库当前值手算,未运行。)
 
+### 审计 topic 的 retention.bytes(`-AuditKafkaRetentionBytes`,2026-11-05,未运行)
+
+审计 topic(transaction_log、player_snapshot)全服一份,保留 30 天,但每分区还受 retention.bytes 限制:积压超过它,没消费的审计消息会被 Kafka 删掉,data_service 只能事后发现(`data_service_kafka_consumer_retention_gap_messages`)。
+
+- `-AuditKafkaRetentionBytes` 是每分区的值,渲染进 data-service 的 `Kafka.TxLogRetentionBytes`、`Kafka.SnapshotRetentionBytes`,data_service 每次启动设到 topic 上(`kafkautil.TopicSpec.RetentionBytes`),盘预算的审计项按它算。
+- 三档缺省都沿用 broker 缺省(上表第 3 列),所以缺省的盘预算不变。
+- 定值的办法:每分区至少要放得下「审计写入速率 ÷ 分区数 × 要扛住的消费中断时长」。速率看压测里 data_service 的 Kafka 消费字节(`stress_summarize.ps1` 的 Kafka 段)。举例:快照 3 个分区、全服 6MB/s、要扛 2 小时数据库中断,每分区至少约 14GiB,prod 每个 broker 的盘随之约 190Gi。数字是举例,没有实测,上线前按压测结果定。
+- 量太大时先用 `bin/etc/game_config.yaml` 的 `audit_snapshot` 关掉一个触发点或抽样,它只影响审计证据,不影响存盘。
+
 ### 账本行(每次 zone-up / all-up / infra-up 打一行)
 
 ```text
@@ -2528,6 +2544,19 @@ scene 通过 gRPC 直接调 go/db,在 TiDB 的 `player_store` 表上提交玩家
 - 抓取前提:player-locator 的 ConfigMap 有 Prometheus 段(Host 0.0.0.0、Port 9190、Path /metrics,k8s_deploy.ps1 的 player-locator heredoc),manifest 带 prometheus.io 注解与名为 metrics 的 9190 端口,集群里有指向它的 ServiceMonitor / PodMonitor(或按注解抓取的 job)。**ConfigMap 的 Prometheus 段与 manifest 的注解 / 端口必须同批发布,或先发前者**:只有注解、进程没在 9190 监听时,按注解抓取的目标是 down,可能误触通用的 TargetDown 类告警。按 is_leader 过滤的规则用 `namespace`、`pod` 标签匹配,改用按注解抓取时 relabel 必须写出这两个标签。
 - 聚合口径:leader 是全服一个(选主锁在共用的会话 Redis 上),规则不按 namespace 分组。Stalled 不按 is_leader 过滤(last_success 启动预置 0,对全体副本取 max,「每一任都失败」时持续为真);GateIndexNotReady / LegacySessionWriters 用短子查询抹平换主空档、for 照旧。理由见告警文件头与设计文档 §9。
 - 设计、失败模式与处置见 `docs/design/player-locator-gate-session-index.md` §8、§9;单个玩家卡在 ONLINE 的定向补救见 `docs/ops/release-checklist.md` 附录 F.B-1。
+
+## 挑 gate 回落告警(PrometheusRule,手工 apply;2026-11-05 登记,代码与规则都未编译、未在集群上 apply 过)
+
+login 的三处挑 gate 与 scene_manager 的跨 zone 重定向在候选全部停写或满载时回落到全部 gate 照常挑,只计 fallback(设计见 `docs/design/gate-load-balancing-design.md`「满载与停写的 gate」)。
+
+- `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale / mixed:本 zone 的 gate 全部停写,或停写与满载各占一部分,新登录多半连不上)、`LoginGatePickFallbackFull`(warning,全部到自报连接上限的 90%,多半是 ZoneCapacity 比 gate 上限之和还大)。
+- `deploy/k8s/scene-manager-alerts.yaml` 加组 `scene-manager.gate-redirect`,1 条:`SceneManagerGateRedirectFallback`(warning,跨 zone 重定向时目标 zone 的 gate 全部停写或满载;目标 zone 的 gate 全卡住时由 login 那条 critical 呼人,这条不重复呼)。
+  ```bash
+  kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
+  kubectl apply -n observability -f deploy/k8s/scene-manager-alerts.yaml
+  ```
+- 抓取前提:login 的 ConfigMap Prometheus 段、Pod 模板的 prometheus.io 注解与 9101 容器端口三处一致(`tools/scripts/tests/login_metrics_contract.tests.ps1` 钉住),集群里有按注解抓取的 job 或指向 9101 的 PodMonitor。login 规则按 `namespace` 聚合(一个 zone 一个 namespace),按注解抓取时 relabel 要写出 `namespace`。scene_manager 的前提同 `scene-manager-alerts.yaml` 文件头。
+- 口径:两个计数健康时恒 0,任一次即告警(`for: 0m`);都不预置 0 值序列,所以每条规则带 `unless … offset 10m` 的新序列分支。指标名、reason 取值与规则形状由 `tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 从源码核对。
 
 ## 玩家归属与合服映射:只在全局库(2026-10-30;未编译、未测试,待 Codex 验证)
 

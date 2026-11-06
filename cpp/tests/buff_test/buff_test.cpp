@@ -30,7 +30,11 @@
 #include "proto/common/component/buff_comp.pb.h"
 #include "proto/common/component/actor_combat_state_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
+#include "proto/common/component/actor_comp.pb.h"  // BaseAttributesComp / LevelComp:回血读点用例
+#include "proto/common/component/actor_attribute_state_comp.pb.h"  // DerivedAttributesComp(max_health)
+#include "proto/common/component/player_comp.pb.h"  // Player:玩家标签
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/player_level_rules.h"  // playerlevel::kMaxLevel
 #include "table/code/buff_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -63,6 +67,7 @@ constexpr uint32_t kNoCasterBonusOwner = 9020;
 constexpr uint32_t kOtherNoCasterBonusOwner = 9021;
 constexpr uint32_t kNextAttackDispelledByChild = 9022;
 constexpr uint32_t kPermanentSilence = 9026;
+constexpr uint32_t kHealthRegenerationByLevel = 9027;  // 按已损气血回血(buff_type 42),每跳回已损气血的 level%
 constexpr int kManySubBuffCount = 16;
 
 // buff_type 一律显式写:缺省 0 是 kBuffTypeMovementSpeedReduction,会顺带去标记属性重算。
@@ -101,6 +106,7 @@ std::string FixtureBuffTableJson()
 		R"({"id":9021,"buff_type":43,"duration":-1,"interval":1,"combat_idle_seconds":5,"sub_buff":[9005]},)"
 		R"({"id":9022,"buff_type":36,"duration":-1,"tag":{"combat_idle":true},"sub_buff":[9017]},)"
 		R"({"id":9026,"buff_type":31,"duration":-1,"max_layer":1},)"
+		R"({"id":9027,"buff_type":42,"duration":0,"infinite_duration":1,"interval":1,"health_regeneration":"level*health/100"},)"
 		R"({"id":9007,"buff_type":10,"duration":-1,"immune_tag":{"blocked":true}},)"
 		R"({"id":9008,"buff_type":10,"duration":-1,"tag":{"blocked":true}})"
 		R"(]})";
@@ -709,6 +715,99 @@ TEST_F(BuffListLifecycleTest, LastBuffRemovalEndsOnDemandState)
 	BuffSystem::RemoveBuff(actor, UInt64Set{buffId});
 	BuffSystem::Update(0.0);
 	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<BuffListComp>(actor));
+}
+
+// ---------------------------------------------------------------------------
+// 按已损气血回血的等级读点(2026-11-05;混版本持久字段保护设计 §12.2,规则见 player_level_rules.h 文件头)
+//
+// 回血 buff 每跳把 playerlevel::CappedLevel(存储等级) 作 level 参数喂给回血表达式:超上限按上限,0 按 1;
+// LevelComp 的存储值原样不动。"0 级按 1 级"是这一批的新行为:表达式直接吃 0 级时一滴不回。
+// 真表 17 号回血 buff 是 "0.013*level*health",77 级起一跳就回满已损气血(0.013 × 77 > 1),85 级与 100 级
+// 看不出差别;所以夹具行 9027 用同一类型、同一对参数(level、已损气血)的线性式 "level*health/100"。
+// ---------------------------------------------------------------------------
+class BuffHealthRegenerationLevelTest : public BuffTableFixture
+{
+protected:
+	static constexpr uint64_t kMaxHealth = 100000;
+	// 已损 10000:1 级一跳回 100,85 级回 8500,都回不满;若直读存储等级,0 级回 0、100 级回 10000(回满)。
+	static constexpr uint64_t kHealth = 90000;
+	// 回血这一路不看时间;时间只喂脱战计时那一路(BuffImplSystem),对 buff_type 42 不起作用。
+	static constexpr uint64_t kAnyNowMs = 1000;
+
+	// 夹具行在给定等级下的表达式值,与回血实现同一个取值入口。
+	static double ExpressionHealAt(uint32_t level)
+	{
+		BuffTableManager::Instance().SetHealthRegenerationParam(
+			{static_cast<double>(level), static_cast<double>(kMaxHealth - kHealth)});
+		return BuffTableManager::Instance().GetHealthRegeneration(kHealthRegenerationByLevel);
+	}
+
+	// 只带气血组件、还没有等级组件的受伤实体;isPlayer 时挂上玩家标签。
+	static entt::entity NewWounded(bool isPlayer)
+	{
+		const auto actor = tlsEcs.actorRegistry.create();
+		if (isPlayer)
+		{
+			tlsEcs.actorRegistry.emplace<Player>(actor);
+		}
+		tlsEcs.actorRegistry.emplace<BaseAttributesComp>(actor).set_health(kHealth);
+		tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(actor).set_max_health(kMaxHealth);
+		return actor;
+	}
+
+	// 挂上回血 buff、走周期回调入口跳一次,返回回了多少气血。
+	static uint64_t HealOnce(entt::entity actor)
+	{
+		const auto buffId = AddBuffOrFail(actor, kHealthRegenerationByLevel);
+		BuffSystem::OnIntervalThink(actor, buffId, kAnyNowMs);
+		return tlsEcs.actorRegistry.get<BaseAttributesComp>(actor).health() - kHealth;
+	}
+
+	// 只有存储等级不同的玩家跳一次,返回回了多少气血;存储等级必须原样。
+	static uint64_t HealedByOneTick(uint32_t storedLevel)
+	{
+		const auto actor = NewWounded(/*isPlayer=*/true);
+		tlsEcs.actorRegistry.emplace<LevelComp>(actor).set_level(storedLevel);
+		const uint64_t healed = HealOnce(actor);
+		EXPECT_EQ(storedLevel, tlsEcs.actorRegistry.get<LevelComp>(actor).level()) << "回血不改写存储等级";
+		return healed;
+	}
+};
+
+TEST_F(BuffHealthRegenerationLevelTest, StoredLevelZeroAndAboveCapHealAsLevelOneAndTheCap)
+{
+	const auto* row = BuffTableManager::Instance().FindById(kHealthRegenerationByLevel).first;
+	ASSERT_NE(nullptr, row);
+	ASSERT_EQ(kBuffTypeHealthRegenerationBasedOnLostHealth, row->buff_type());
+	// 夹具前提:表达式随等级上涨,0 级低于 1 级、超上限高于上限 —— 否则下面两条相等恒成立。
+	ASSERT_LT(ExpressionHealAt(0), ExpressionHealAt(1));
+	ASSERT_LT(ExpressionHealAt(playerlevel::kMaxLevel), ExpressionHealAt(playerlevel::kMaxLevel + 15));
+
+	const uint64_t atLevelOne = HealedByOneTick(1);
+	const uint64_t atCap = HealedByOneTick(playerlevel::kMaxLevel);
+	ASSERT_GT(atLevelOne, 0u);
+	ASSERT_GT(atCap, atLevelOne) << "等级必须真的进了回血量";
+	ASSERT_LT(kHealth + atCap, kMaxHealth) << "夹具前提:上限等级一跳也回不满,否则超上限的一跳被气血上限截成同一个数";
+
+	EXPECT_EQ(atLevelOne, HealedByOneTick(0)) << "存储等级 0 按 1 级回血,不再一滴不回";
+	EXPECT_EQ(atCap, HealedByOneTick(playerlevel::kMaxLevel + 15)) << "超上限的存储等级按上限回血";
+}
+
+// 玩家缺 LevelComp 是加载不变量被破坏:这一跳不回血,也不补建组件(以前按 1 级回)。
+// 非玩家目标(NPC / 怪物)本来就没有等级组件,照常按 1 级回(组件访问规则;player_level_rules.h 文件头)。
+TEST_F(BuffHealthRegenerationLevelTest, PlayerWithoutLevelIsNotHealedWhileANonPlayerHealsAsLevelOne)
+{
+	const uint64_t atLevelOne = HealedByOneTick(1);
+	ASSERT_GT(atLevelOne, 0u);
+
+	const auto creature = NewWounded(/*isPlayer=*/false);
+	EXPECT_EQ(atLevelOne, HealOnce(creature)) << "非玩家没有等级组件,按 1 级回血";
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(creature));
+
+	const auto player = NewWounded(/*isPlayer=*/true);
+	EXPECT_EQ(0u, HealOnce(player)) << "玩家缺等级组件,这一跳不回血";
+	EXPECT_EQ(kHealth, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "读路径不补建持久组件";
 }
 
 int main(int argc, char **argv)

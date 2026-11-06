@@ -1,11 +1,13 @@
 #include "player_team.h"
 #include "player_team_follow_scope.h"
+#include "core/system/scene_task_scope.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 // 固定的 Cobalt 运行时已编入 third_party 静态库，由两套工程统一链接。
 #define BOOST_COBALT_NO_LIB 1
-#include <boost/asio/bind_cancellation_slot.hpp>
-#include <boost/cobalt/spawn.hpp>
+#include <boost/asio/dispatch.hpp>
+#include <boost/cobalt/op.hpp>
+#include <boost/cobalt/task.hpp>
 #include <hiredis/hiredis.h>
 
 #include <array>
@@ -17,7 +19,6 @@
 #include <limits>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <unordered_set>
 #include <utility>
 
@@ -67,41 +68,6 @@ namespace
 	namespace asio = boost::asio;
 	namespace cobalt = boost::cobalt;
 	using muduo::net::EventLoop;
-
-	// execution_context 只为 Cobalt 提供执行器属性，所有执行与投递都交给 Scene 的 muduo loop。
-	struct FollowExecutor
-	{
-		std::reference_wrapper<EventLoop> loop;
-		std::reference_wrapper<asio::execution_context> context;
-		bool allowInline = true;
-
-		bool operator==(const FollowExecutor& other) const noexcept
-		{
-			return &loop.get() == &other.loop.get() && &context.get() == &other.context.get() &&
-				allowInline == other.allowInline;
-		}
-		asio::execution_context& query(asio::execution::context_t) const noexcept { return context.get(); }
-		asio::execution::blocking_t query(asio::execution::blocking_t) const noexcept
-		{
-			if (allowInline) return asio::execution::blocking.possibly;
-			return asio::execution::blocking.never;
-		}
-		FollowExecutor require(asio::execution::blocking_t::never_t) const noexcept { return {loop, context, false}; }
-		FollowExecutor require(asio::execution::blocking_t::possibly_t) const noexcept { return {loop, context, true}; }
-
-		template<class Work>
-		void execute(Work&& work) const
-		{
-			if (allowInline && loop.get().isInLoopThread())
-			{
-				std::forward<Work>(work)();
-				return;
-			}
-			// muduo 的 Functor 可拷贝，Cobalt 的完成对象可能只可移动。
-			auto pending = std::make_shared<std::decay_t<Work>>(std::forward<Work>(work));
-			loop.get().queueInLoop([pending] { (*pending)(); });
-		}
-	};
 
 	enum class GetStatus : uint8_t { kString, kNil, kError, kRejected, kNoReply, kStopped, kUnexpectedReply };
 	struct GetResult
@@ -336,15 +302,11 @@ namespace
 struct PlayerTeamFollowScope::State
 {
 	EventLoop& loop;
-	asio::execution_context context;
-	cobalt::executor executor;
 	std::function<bool()> redisReady;
 	RedisGet get;
-	std::unordered_set<std::shared_ptr<asio::cancellation_signal>> active;
-	bool stopped = false;
 
 	State(EventLoop& loop, std::function<bool()> ready, RedisGet submit)
-		: loop(loop), executor(FollowExecutor{loop, context}), redisReady(std::move(ready)), get(std::move(submit)) {}
+		: loop(loop), redisReady(std::move(ready)), get(std::move(submit)) {}
 
 	bool CheckRedis(uint64_t playerId, uint64_t leaderId) const
 	{
@@ -353,7 +315,7 @@ struct PlayerTeamFollowScope::State
 		return false;
 	}
 
-	cobalt::task<void> FollowLeaderAsync(entt::entity player, uint64_t playerId, uint64_t leaderId);
+	static cobalt::task<void> FollowLeaderAsync(std::shared_ptr<State> state, entt::entity player, uint64_t playerId, uint64_t leaderId);
 };
 
 thread_local std::weak_ptr<PlayerTeamFollowScope::State> PlayerTeamFollowScope::current_;
@@ -374,18 +336,8 @@ PlayerTeamFollowScope::PlayerTeamFollowScope(EventLoop& loop, std::function<bool
 
 PlayerTeamFollowScope::~PlayerTeamFollowScope()
 {
-	Stop();
+	state_->loop.assertInLoopThread();
 	current_.reset();
-}
-
-void PlayerTeamFollowScope::Stop()
-{
-	const auto state = state_;
-	state->loop.assertInLoopThread();
-	if (std::exchange(state->stopped, true)) return;
-	// Cobalt 在根完成通知里清停止槽。通知同时持有信号，直到该槽清理完。
-	const auto pending = std::exchange(state->active, {});
-	for (const auto& signal : pending) signal->emit(asio::cancellation_type::all);
 }
 
 void PlayerTeamFollowScope::Start(entt::entity player, uint64_t playerId, uint64_t leaderId)
@@ -393,16 +345,7 @@ void PlayerTeamFollowScope::Start(entt::entity player, uint64_t playerId, uint64
 	const auto state = current_.lock();
 	if (!state) return;
 	state->loop.assertInLoopThread();
-	if (state->stopped) return;
-	const auto signal = std::make_shared<asio::cancellation_signal>();
-	state->active.insert(signal);
-	// 根完成闭包保留作用域及停止信号，直到协程帧销毁且通知在所属 loop 退休。
-	cobalt::spawn(state->executor, state->FollowLeaderAsync(player, playerId, leaderId),
-		asio::bind_cancellation_slot(signal->slot(), [state, signal](std::exception_ptr error) {
-			state->loop.assertInLoopThread();
-			state->active.erase(signal);
-			if (error) LOG_ERROR << "[PlayerTeam] Follow task failed with an exception";
-		}));
+	(void)SceneTaskScope::TryStart(State::FollowLeaderAsync(state, player, playerId, leaderId), "[PlayerTeam] Follow");
 }
 
 void PlayerTeamSystem::OnEnteredScene(entt::entity player)
@@ -527,18 +470,20 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 	PlayerTeamFollowScope::Start(player, GuidOf(player), leaderId);
 }
 
-cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(entt::entity player, uint64_t playerId, uint64_t leaderId)
+cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_ptr<State> state,
+	entt::entity player, uint64_t playerId, uint64_t leaderId)
 {
+	auto& loop = state->loop;
 	loop.assertInLoopThread();
-	if (stopped || !IsSamePlayer(player, playerId) || !CanFollow(player, playerId) || !CheckRedis(playerId, leaderId))
+	if (!IsSamePlayer(player, playerId) || !CanFollow(player, playerId) || !state->CheckRedis(playerId, leaderId))
 	{
 		co_return;
 	}
 
 	// 本人战斗锁与队长位置属于不同玩家 slot，顺序读取。登录时 InBattleComp 仍可能在异步重建。
-	const auto lock = co_await FollowRedisGet{loop, get, BattleLockKey(playerId)};
+	const auto lock = co_await FollowRedisGet{loop, state->get, BattleLockKey(playerId)};
 	loop.assertInLoopThread();
-	if (stopped || !IsSamePlayer(player, playerId))
+	if ((co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none || !IsSamePlayer(player, playerId))
 	{
 		co_return;
 	}
@@ -552,14 +497,14 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(entt::entity 
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
 		co_return;
 	}
-	if (!CheckRedis(playerId, leaderId))
+	if (!state->CheckRedis(playerId, leaderId))
 	{
 		co_return;
 	}
 
-	const auto location = co_await FollowRedisGet{loop, get, player_ownership::LocationRedisKey(leaderId)};
+	const auto location = co_await FollowRedisGet{loop, state->get, player_ownership::LocationRedisKey(leaderId)};
 	loop.assertInLoopThread();
-	if (stopped || !IsSamePlayer(player, playerId))
+	if ((co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none || !IsSamePlayer(player, playerId))
 	{
 		co_return;
 	}

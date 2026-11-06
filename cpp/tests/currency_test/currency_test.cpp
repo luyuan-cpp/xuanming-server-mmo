@@ -562,10 +562,12 @@ TEST(CurrencyTest, TravelHandoffMarkRequiresAtomicSqlBarrierSourceContract)
     EXPECT_NE(std::string::npos, begin.find("current->requestedAtMs = 0;"));
     EXPECT_NE(std::string::npos, begin.find("current->markEpoch = 0;"));
     EXPECT_NE(std::string::npos, begin.find("DestroyDeposedPlayer(playerId, \"handoff_sql_owner_rejected\")"));
-    const auto send = begin.find("RequestTravelEnterScene(playerId);");
+    const auto successfulMark = begin.find("reply->integer != 1");
+    ASSERT_NE(std::string::npos, successfulMark);
+    const auto send = begin.find("SendCorrelatedEnterScene(smEntity, request, correlationId,");
     ASSERT_NE(std::string::npos, send);
-    EXPECT_EQ(std::string::npos, begin.find("RequestTravelEnterScene(playerId);", send + 1));
-    EXPECT_GT(send, begin.find("reply->integer != 1")) << "只有明确 1 能发 SM";
+    EXPECT_EQ(std::string::npos, begin.find("SendCorrelatedEnterScene(smEntity, request, correlationId,", send + 1));
+    EXPECT_GT(send, successfulMark) << "只有明确 1 能发 SM";
 }
 
 // 存盘接入点(docs/design/player-save-direct-commit.md §6)。这几处的顺序决定了会不会回档,而宿主跑不到 EnterScene 和
@@ -594,10 +596,18 @@ TEST(CurrencyTest, PlayerStoreDirectPathSourceContract)
     EXPECT_LT(adopted, cleared);
 
     // 会话结束凭证:先释放,有结论才写。
-    const auto read = source.find("void OnSessionEndedQualificationRead(");
-    ASSERT_NE(std::string::npos, read);
-    const auto qualified = source.find("case CredentialQualification::kQualified:", read);
-    EXPECT_NE(std::string::npos, source.find("ReleaseThenWriteSessionEndedCredential(playerId, expectedOwnerEpoch, observed);", qualified));
+    const auto credential = source.find("WriteSessionEndedCredentialAsync(");
+    ASSERT_NE(std::string::npos, credential);
+    const auto read = source.find("\"HGET %b handoff_fence\"", credential);
+    const auto qualified = source.find("CheckSessionEndedQualification(playerId, expectedOwnerEpoch, *qualification)", read);
+    const auto release = source.find("PlayerStore().ReleaseDetached(playerId, expectedOwnerEpoch,", qualified);
+    const auto settled = source.find("DetachedReleaseSettled(release->result)", release);
+    const auto mark = source.find("MarkWriteSite::kSessionEndedCredential, qualification->fence", settled);
+    ASSERT_NE(std::string::npos, mark);
+    EXPECT_LT(read, qualified);
+    EXPECT_LT(qualified, release);
+    EXPECT_LT(release, settled);
+    EXPECT_LT(settled, mark);
 
     // 交接标记:用不查 ACK 的脚本,Redis 里没有 ACK 镜像,查了就永远发不出去。
     const auto begin = source.find("void PlayerLifecycleSystem::BeginTravelHandoff(");

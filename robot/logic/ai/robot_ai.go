@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -16,6 +17,29 @@ import (
 	"robot/pkg"
 )
 
+// ErrMatchOutcomeUnknown 标记 MatchQueue.Join 的结局未知(超时、断线、路由层信封拒绝):请求可能已被 match 受理。
+// RobotAI 按「已在队列里」处理,到时按请求号撤单 —— 服务端按 request_id 撤得掉结局未知的入队,并永久挡住它迟到入队。
+var ErrMatchOutcomeUnknown = errors.New("match queue request outcome unknown")
+
+// QueueTicket 是一次入队意图的撤单凭据。RequestID 是 JoinQueue 的请求号,Ticket 是受理(或「已在队列中」的拒绝)带回的票号;
+// 撤单时两者都带,服务端认任一个。
+type QueueTicket struct {
+	RequestID string
+	Ticket    string
+}
+
+// MatchQueue 是 join_queue 动作的匹配入口,由 main 注入:地域探测、按请求号认领回包与匹配协议都在 main 包
+// (network_probe.go、smoke_rpc_call.go)。两个方法都在 RunLoop 的 goroutine 上同步调用,不得在 RecvLoop 上调用。
+type MatchQueue interface {
+	// Join 保证本会话持有尚未临近过期的探测结果,再发一次 JoinQueue。
+	//   - 受理:返回凭据与 nil;
+	//   - 结局未知:返回带请求号的凭据与包裹 ErrMatchOutcomeUnknown 的错误;
+	//   - 业务拒绝:返回错误;「已在队列中」的拒绝带回票号时凭据里有 Ticket,调用方照样要撤掉它。
+	Join() (QueueTicket, error)
+	// Cancel 撤掉 t 这次入队意图。没有这张票(已成局、已过期)也不算错误;失败(含结局未知)返回错误,调用方下次再撤。
+	Cancel(t QueueTicket) error
+}
+
 // RobotAI drives a single robot's in-game behavior after login+enter.
 type RobotAI struct {
 	client   *pkg.GameClient
@@ -28,6 +52,13 @@ type RobotAI struct {
 	tick     int
 	posX     float64
 	posZ     float64
+
+	// join_queue 动作的状态,只归 RunLoop 这一个 goroutine。
+	queue      MatchQueue    // nil = 没注入,join_queue 只记失败
+	queueDwell time.Duration // 排了这么久还没成局就撤单
+	queued     QueueTicket   // 当前要撤的那次入队意图;RequestID 与 Ticket 都空 = 不在队列里
+	queuedAt   time.Time
+	now        func() time.Time // 单测注入;nil = time.Now
 }
 
 func NewRobotAI(client *pkg.GameClient, stats *metrics.Stats) *RobotAI {
@@ -45,6 +76,19 @@ func (ai *RobotAI) SetInterval(d time.Duration)    { ai.interval = d }
 func (ai *RobotAI) SetProfile(p *Profile)          { ai.profile = p }
 func (ai *RobotAI) SetLLM(llm *LLMAdvisor)         { ai.llm = llm }
 func (ai *RobotAI) SetPlayer(p *gameobject.Player) { ai.player = p }
+
+// SetMatchQueue 给 join_queue 动作接上匹配入口;dwell 是排队多久还没成局就撤单(必须为正)。在 RunLoop 之前调用。
+func (ai *RobotAI) SetMatchQueue(q MatchQueue, dwell time.Duration) {
+	ai.queue = q
+	ai.queueDwell = dwell
+}
+
+func (ai *RobotAI) clock() time.Time {
+	if ai.now != nil {
+		return ai.now()
+	}
+	return time.Now()
+}
 
 // RunLoop is a blocking loop that periodically performs actions.
 func (ai *RobotAI) RunLoop(stop <-chan struct{}) {
@@ -77,9 +121,54 @@ func (ai *RobotAI) doAction() {
 		ai.sendChat()
 	case ActionSwitchScene:
 		ai.switchScene()
+	case ActionJoinQueue:
+		ai.joinQueue()
 	case ActionIdle:
 		// do nothing
 	}
+}
+
+// joinQueue 是 join_queue 动作:一次只推进一步,不在一拍里等成局。
+//
+//	在战斗里(已成局)       → 放下本地的入队意图(票随成局消费),记 in battle;
+//	在队列里、没排满 dwell → 记 waiting;
+//	在队列里、排满 dwell   → 撤单,失败就留着下次再撤;
+//	不在队列里             → 入队。受理、结局未知、带回票号的拒绝都记成「在队列里」,到时撤掉。
+//
+// 收发计数由 MatchQueue 的实现记(它经 smokeCaller 发请求),这里只记行为。
+func (ai *RobotAI) joinQueue() {
+	start := ai.clock()
+	if ai.queue == nil {
+		ai.recordBehavior(ActionJoinQueue, start, false, "match queue not configured")
+		return
+	}
+	if ai.player != nil && ai.player.InBattle() {
+		ai.queued = QueueTicket{}
+		ai.recordBehavior(ActionJoinQueue, start, true, "in battle")
+		return
+	}
+	if ai.queued != (QueueTicket{}) {
+		if waited := start.Sub(ai.queuedAt); waited < ai.queueDwell {
+			ai.recordBehavior(ActionJoinQueue, start, true, fmt.Sprintf("waiting in queue %s", waited.Truncate(time.Second)))
+			return
+		}
+		if err := ai.queue.Cancel(ai.queued); err != nil {
+			ai.recordBehavior(ActionJoinQueue, start, false, "cancel: "+err.Error())
+			return
+		}
+		ai.queued = QueueTicket{}
+		ai.recordBehavior(ActionJoinQueue, start, true, fmt.Sprintf("cancelled after %s", ai.queueDwell))
+		return
+	}
+	ticket, err := ai.queue.Join()
+	if err == nil || errors.Is(err, ErrMatchOutcomeUnknown) || ticket.Ticket != "" {
+		ai.queued, ai.queuedAt = ticket, start
+	}
+	if err != nil {
+		ai.recordBehavior(ActionJoinQueue, start, false, "join: "+err.Error())
+		return
+	}
+	ai.recordBehavior(ActionJoinQueue, start, true, "joined")
 }
 
 // pickAction decides what to do next — either via LLM or weighted random.

@@ -29,7 +29,6 @@
     <ClInclude Include="service_metadata\common_event_npc_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_player_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_player_inbox_event_event_id.h" />
-    <ClInclude Include="service_metadata\common_event_player_migration_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_scene_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_server_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_skill_event_event_id.h" />
@@ -55,7 +54,6 @@
     <ClInclude Include="service_metadata\player_inbox_service_metadata.h" />
     <ClInclude Include="service_metadata\player_inbox_admin_service_metadata.h" />
     <ClInclude Include="service_metadata\player_currency_service_metadata.h" />
-    <ClInclude Include="service_metadata\player_rollback_service_metadata.h" />
     <ClInclude Include="service_metadata\scene_manager_service_service_metadata.h" />
     <ClInclude Include="service_metadata\scene_node_service_service_metadata.h" />
     <ClInclude Include="service_metadata\scene_service_metadata.h" />

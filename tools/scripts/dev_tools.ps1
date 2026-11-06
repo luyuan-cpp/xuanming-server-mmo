@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-migrate", "sql-boot-catalog-local", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "db-move", "kafka-offset-reset", "redis-wipe-local", "git-stats")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "persist-schema-seal", "persist-schema-verify", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-migrate", "sql-boot-catalog-local", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "db-move", "kafka-offset-reset", "redis-wipe-local", "git-stats")]
     [string]$Command,
 
     [string]$ConfigPath = "",
@@ -305,7 +305,10 @@
     [string]$SqlDefaultCluster = "",
     # 全新集群先跑迁移 Job(k8s_deploy.ps1 同名参数,docs/ops/k8s-open-server-runbook.md §5);写者 Pod 回收 CronJob 的镜像。留空不转发,默认值只在 k8s_deploy.ps1。
     [switch]$SqlSchemaOnly,
-    [string]$SqlWriterReaperImage = ""
+    [string]$SqlWriterReaperImage = "",
+    # 全局号源登记处(k8s_deploy.ps1 同名参数,docs/ops/id-issuer-runbook.md §1)。留空 / 不给不转发,档位规则只在 k8s_deploy.ps1。
+    [string]$IdRegistryEtcd = "",
+    [switch]$HostIdRegistry
 )
 
 $ErrorActionPreference = "Stop"
@@ -416,7 +419,10 @@ function Get-ProtoGenBinaryStaleReason {
     return "{0} ({1:o}) is older than generator source {2} ({3:o})" -f (Split-Path -Leaf $BinaryPath), $binaryWriteTimeUtc, $newestSource.FullName, $newestSource.LastWriteTimeUtc
 }
 
+# GeneratorArgs:原样追加给生成器的参数(exe 与 go run ./cmd 两条路径同一份)。缺省为空,proto-gen-run 的调用不变;
+# persist-schema-seal 用它传 --persist-schema-seal,复用同一套 exe 选择、判旧与配置路径。
 function Invoke-ProtoGenRun {
+    param([string[]]$GeneratorArgs = @())
     Push-Location $ProtoGenDir
     $previousConfigPath = [Environment]::GetEnvironmentVariable("PROTO_GEN_CONFIG_PATH", "Process")
     $previousEnablePprof = [Environment]::GetEnvironmentVariable($ProtoGenEnablePprofEnvVar, "Process")
@@ -451,7 +457,7 @@ function Invoke-ProtoGenRun {
         $legacyProtoGenExePath = Join-Path $ProtoGenDir "pbgen.exe"
 
         if ($UseGoRun) {
-            go run ./cmd
+            go run ./cmd @GeneratorArgs
             if ($LASTEXITCODE -ne 0) { throw "协议生成器执行失败（退出码 $LASTEXITCODE）；生成未完成，停止后续构建。" }
             return
         }
@@ -478,7 +484,7 @@ function Invoke-ProtoGenRun {
             if ($null -ne $binaryStaleReason) {
                 throw "Stale proto-gen binary refused; run proto-gen-build first or pass -UseGoRun. $binaryStaleReason."
             }
-            & $selectedProtoGenExePath
+            & $selectedProtoGenExePath @GeneratorArgs
             if ($LASTEXITCODE -ne 0) { throw "协议生成器执行失败（退出码 $LASTEXITCODE）；生成未完成，停止后续构建。" }
             return
         }
@@ -487,13 +493,13 @@ function Invoke-ProtoGenRun {
         # 选中的 exe 落后于源码时告警并改走 go run(按当前源码生成),不跑旧 exe。
         if ($null -ne $binaryStaleReason) {
             Write-Warning "$binaryStaleReason; running 'go run ./cmd' instead. Run proto-gen-build to refresh the binary."
-            go run ./cmd
+            go run ./cmd @GeneratorArgs
         }
         elseif ($null -ne $selectedProtoGenExePath) {
-            & $selectedProtoGenExePath
+            & $selectedProtoGenExePath @GeneratorArgs
         }
         else {
-            go run ./cmd
+            go run ./cmd @GeneratorArgs
         }
         # 外部命令非零退出不会自动抛异常；必须在 finally 清理之前把失败传给调用者。
         if ($LASTEXITCODE -ne 0) { throw "协议生成器执行失败（退出码 $LASTEXITCODE）；生成未完成，停止后续构建。" }
@@ -824,6 +830,9 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($SqlDefaultCluster)) { $args.SqlDefaultCluster = $SqlDefaultCluster }
     if ($SqlSchemaOnly) { $args.SqlSchemaOnly = $true }
     if (-not [string]::IsNullOrWhiteSpace($SqlWriterReaperImage)) { $args.SqlWriterReaperImage = $SqlWriterReaperImage }
+    # 全局号源登记处:给了才传。档位规则只在 k8s_deploy.ps1(Resolve-IdRegistryEtcd)。
+    if (-not [string]::IsNullOrWhiteSpace($IdRegistryEtcd)) { $args.IdRegistryEtcd = $IdRegistryEtcd }
+    if ($HostIdRegistry) { $args.HostIdRegistry = $true }
 
     if ($DryRun) {
         $args.DryRun = $true
@@ -1268,6 +1277,12 @@ dev_tools.ps1 command help
 Primary proto generator commands:
     -Command proto-gen-build
     -Command proto-gen-run
+    -Command persist-schema-seal
+        Seal proto/persist_schema_gen.txt at its current max generation before a release (appends sealed=...;
+        commit the result). Later generator runs fail if a sealed generation gains or loses a field row.
+        Same binary selection and -UseBinary / -UseGoRun / -ConfigPath as proto-gen-run; no post hooks.
+    -Command persist-schema-verify
+        Read-only check that every seal in the ledger still holds and the max generation is sealed (release preflight).
 
 Compatibility aliases (legacy):
     -Command pbgen-build
@@ -1391,6 +1406,8 @@ switch ($Command) {
     "pbgen-run" { Invoke-ProtoGenRun; Invoke-ProtoGenPostHooks }
     "proto-gen-build" { Invoke-ProtoGenBuild }
     "proto-gen-run" { Invoke-ProtoGenRun; Invoke-ProtoGenPostHooks }
+    "persist-schema-seal" { Invoke-ProtoGenRun -GeneratorArgs @('--persist-schema-seal') }
+    "persist-schema-verify" { Invoke-ProtoGenRun -GeneratorArgs @('--persist-schema-verify') }
     "tree" { Invoke-Tree }
     "naming-audit" { Invoke-NamingAudit }
     "naming-apply" { Invoke-NamingApply }

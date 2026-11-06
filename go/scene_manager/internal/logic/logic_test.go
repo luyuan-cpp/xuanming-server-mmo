@@ -97,6 +97,10 @@ func newTestSvcCtx(t *testing.T, nodeID string) (*svc.ServiceContext, *miniredis
 
 	c := config.Config{}
 	c.NodeID = nodeID
+	// 本进程服务 testZoneId(control-plane-zone-scoping-20261105.md §3.3)。模拟别的 zone 的 gate 发来的请求时,
+	// 用例要把 sc.Config.ZoneId 改成那个 zone:请求只会到 gate 所在 zone 的 scene_manager。
+	c.ZoneId = testZoneId
+	installTestZoneFakes(t, rds)
 
 	// 单测的 svcCtx 不接 data_service:显式声明单 zone 语义(gate zone 即归属 zone),
 	// 否则 resolveHomeZone 按 fail-closed 拒绝所有带 GateId 的 EnterScene。
@@ -459,6 +463,8 @@ func newTestSvcCtxWithWorldScenes(t *testing.T) (*svc.ServiceContext, *miniredis
 	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
 
 	c := config.Config{}
+	c.ZoneId = testZoneId // 见 newTestSvcCtx
+	installTestZoneFakes(t, rds)
 	c.WorldChannelCount = 1
 	c.InstanceIdleTimeoutSeconds = 300
 	c.InstanceCheckIntervalSeconds = 10
@@ -771,6 +777,7 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedWhileOldNodeAliveThenRedire
 
 func TestEnterScene_ZoneScopedNodeIDCollisionStillRejectedWhileOldNodeAlive(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.ZoneId = 2 // 请求来自 zone 2 的 gate;zone 1 的 node 10 对它是别的 zone(control-plane-zone-scoping §3.5)
 	ctx := context.Background()
 	writer := &countingKafkaWriter{}
 	sc.Kafka = writer
@@ -813,10 +820,13 @@ func TestEnterScene_ZoneScopedNodeIDCollisionStillRejectedWhileOldNodeAlive(t *t
 
 // seedStaleLocationFromZone1 摆出「玩家位置指向 zone 1 的 node 10 / oldScene,
 // 目标是 zone 2 的 targetID(node 10)」这组共用夹具;zone 1 在 etcd 注册表里已没有
-// 任何节点(源区已下线,陈旧位置判定的正面证据),负载集由各用例自己决定是活着、
-// 空着还是坏掉。注册表还有节点、只是负载键丢失的情形见 enter_stale_location_test.go。
+// 任何节点(源区已下线,陈旧位置判定的正面证据)。请求来自 zone 2 的 gate,只会到 zone 2 的
+// scene_manager(本函数把 sc 设成 zone 2):zone 1 对它是别的 zone,判定只看 etcd 与本副本第一次
+// 看到 zone 1 空的时刻(control-plane-zone-scoping-20261105.md §3.5),不读 zone 1 的负载集与 death_at。
+// 首次观察的时刻由各用例自己决定。注册表还有节点的情形见 enter_stale_location_test.go。
 func seedStaleLocationFromZone1(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, playerID, oldScene, targetID uint64) {
 	t.Helper()
+	sc.Config.ZoneId = 2
 	markZoneGoneFromRegistryForTest(t, 1, "10")
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
 	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, targetID), "2")
@@ -843,7 +853,8 @@ func TestEnterScene_StaleLocationFromDeadZoneAllowsPlacementViaTargetGate(t *tes
 		targetID = uint64(2220)
 	)
 	seedStaleLocationFromZone1(t, sc, mr, playerID, oldScene, targetID)
-	// zone 1 的负载集不存在:源区已永久下线(合服第二条腿:玩家已连到目标区 Gate)。
+	// 源区已永久下线(合服第二条腿:玩家已连到目标区 Gate),本副本早已看到 zone 1 空了一个屏障以上。
+	backdateForeignAbsenceForTest(foreignZoneAbsence, "1", sceneReentryBarrier(sc)+time.Second)
 
 	fake := withReachableSceneNode(t, sc, "10")
 	releasesBefore := fake.releaseCalls.Load()
@@ -871,7 +882,7 @@ func TestEnterScene_StaleLocationFromDeadZoneAllowsPlacementViaTargetGate(t *tes
 	assert.Equal(t, releasesBefore, fake.releaseCalls.Load(), "不得向已消失的旧节点发 ReleasePlayer")
 }
 
-func TestEnterScene_StaleLocationCheckFailsClosedOnRedisError(t *testing.T) {
+func TestEnterScene_StaleLocationCheckFailsClosedOnRegistryError(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	ctx := context.Background()
 	writer := &countingKafkaWriter{}
@@ -883,16 +894,17 @@ func TestEnterScene_StaleLocationCheckFailsClosedOnRedisError(t *testing.T) {
 		targetID = uint64(2221)
 	)
 	seedStaleLocationFromZone1(t, sc, mr, playerID, oldScene, targetID)
-	// zone 1 的负载集键被写成 string:ZCARD/ZSCORE 都会得到 WRONGTYPE —— 这是
-	// 「Redis 出错、状态未知」的真实形态。拿不到证据就不能把位置当不存在。
-	mr.Set(nodeLoadKey(1), "corrupt")
+	// zone 1 的 etcd 注册表读不到(etcd 不可达 / 超时)—— 这是「状态未知」的真实形态。拿不到证据就不能把位置当不存在,
+	// 哪怕本副本以前看到过 zone 1 空。
+	fakeZoneRegistry(t, nil, errors.New("etcd unreachable"))
+	backdateForeignAbsenceForTest(foreignZoneAbsence, "1", sceneReentryBarrier(sc)+time.Second)
 
 	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
 		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "Redis 错误时必须 fail-closed 沿用换手门拒绝")
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "注册表读不到时必须 fail-closed 沿用换手门拒绝")
 
 	targetCount := sceneCountText(sc, targetID)
 	nodeCount := nodeCountText(sc, 2, "10")
@@ -918,9 +930,11 @@ func TestEnterScene_StaleLocationCheckWaitsForReentryBarrier(t *testing.T) {
 		targetID = uint64(2222)
 	)
 	seedStaleLocationFromZone1(t, sc, mr, playerID, oldScene, targetID)
-	// zone 1 负载集空,但 node 10 是**刚**判死的:C++ 老进程还在 drain 里存盘。
-	// 屏障没走完之前,位置记录仍然代表一个可能在写的属主。
+	// zone 1 在 etcd 里已经空了,但本副本是**这一刻**才第一次看到:C++ 老进程可能还在 drain 里存盘。
+	// 屏障没走完之前,位置记录仍然代表一个可能在写的属主。别的 zone 的 death_at 本进程不读(§4.3),
+	// 写了也不该影响判定。
 	markNodeDeath(sc, 1, "10")
+	mr.Del(nodeDeathAtKey(1, "10"))
 
 	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
@@ -930,8 +944,8 @@ func TestEnterScene_StaleLocationCheckWaitsForReentryBarrier(t *testing.T) {
 	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "再入屏障未到时不得把陈旧位置当不存在")
 	assert.Equal(t, 0, writer.count())
 
-	// 屏障过后(死亡标记消失)同一请求放行。
-	mr.Del(nodeDeathAtKey(1, "10"))
+	// 本副本第一次看到 zone 1 空已满一个屏障:同一请求放行。
+	backdateForeignAbsenceForTest(foreignZoneAbsence, "1", sceneReentryBarrier(sc)+time.Second)
 	resp, err = NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
 		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",

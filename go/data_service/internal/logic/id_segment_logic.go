@@ -67,9 +67,16 @@ func AllocateIdSegment(ctx context.Context, svcCtx *svc.ServiceContext, req *All
 		logx.Errorf("[IdSegment] UNKNOWN TAG biz_tag=%s: add it to IdSegment.Tags in the data_service config", req.BizTag)
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentUnknownTag}, nil
 
-	case errors.Is(err, idissuer.ErrCounterMissing):
-		// 不写任何记录。不是首次部署的话,这就是两套 etcd 同时丢了数据,从头发号会静默串档。
+	case errors.Is(err, idissuer.ErrCounterMissing), errors.Is(err, idissuer.ErrRegistryMissing):
+		// 不写任何记录。新地域还没初始化,或者本地两份记录 / 登记处这个码的记录丢了;从头发号会静默串档。
 		metrics.ObserveIdSegmentAllocate(tagLabel, "records_missing")
+		logx.Errorf("[IdSegment] REFUSED biz_tag=%s: %v", req.BizTag, err)
+		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentUnknownTag}, nil
+
+	case errors.Is(err, idissuer.ErrBindingMismatch), errors.Is(err, idissuer.ErrRegionRetired):
+		// 不写任何记录。这两套 etcd 不是登记处给这个地域码绑的那两套(重复部署、克隆、换了 etcd 没有 rebind),
+		// 或者这个码已退役。重试不会变好,要人处理。
+		metrics.ObserveIdSegmentAllocate(tagLabel, "refused")
 		logx.Errorf("[IdSegment] REFUSED biz_tag=%s: %v", req.BizTag, err)
 		return &AllocateIdSegmentResp{ErrorCode: constants.ErrCodeIdSegmentUnknownTag}, nil
 

@@ -24,7 +24,7 @@ public:
     using Clock = std::chrono::steady_clock;
     struct LocalNode { std::string instanceId, nodeId; uint32_t zoneId{0}; };
     using RegisterReply = std::function<void(bool, const data_service::RegisterRoleAdmissionResponse*)>;
-    using FenceReply = std::function<void(bool, std::optional<std::string>)>;
+    using FenceReadReply = std::function<void(std::optional<std::string>)>;
     using CloseReply = std::function<void(bool, const data_service::CloseRoleAdmissionsResponse*)>;
     // 依赖只在当前逻辑线程使用；true表示已接管回调，false不得再回调。可同步完成。
     // 未替换的依赖沿正式HMAC/RPC/Redis适配器执行，不存在默认允许的授权分支。
@@ -34,8 +34,9 @@ public:
         std::function<bool(data_service::RegisterRoleAdmissionRequest, RegisterReply)> registerAdmission;
         std::function<bool(data_service::CloseRoleAdmissionsRequest, CloseReply)> closeAdmissions;
         std::function<bool(data_service::AckRoleTradeDrainRequest, std::function<void(bool)>)> ackDrain;
-        // expectedPrior 首次读取后固定；重试保留同一 candidate 与 prior，不从当前身份补资格。
-        std::function<bool(Guid, std::string, std::optional<std::string>, std::function<bool(const std::string&)>, FenceReply)> registerHandoffFence;
+        // HGET 的 NIL 表示空 prior；空 optional 表示读失败。写入只接收由当前任务固定的原 candidate 和 prior。
+        std::function<bool(Guid, FenceReadReply)> readHandoffFence;
+        std::function<bool(Guid, const std::string&, const std::string&, std::function<void(bool)>)> writeHandoffFence;
         std::function<bool(Guid, std::string, std::string, std::string, std::function<void(bool)>)> revokeHandoffFence;
         std::function<void(Guid, PlayerEnterContext)> activate;
         std::function<void(Guid)> freeze;

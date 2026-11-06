@@ -786,17 +786,6 @@ Redis 在每个实际 addr／DB 上由运维预置 `maintenance_recovery:target:
 
 新回归须包含非 loopback 的精确专用目标、仅调试 marker 拒绝、错物理 scope／nonce／TTL 在首副作用前拒绝、Linux 无 Codex／PE／FILETIME 输入、缺发行方／重复或同 COUNT 换成员、完整队列漏世代、所有 SQL／Lua 并发与未知提交前缀。现有本地旧 marker 和私有审核原件仅保留历史证据，不能称为新合同已通过；本条目前没有新的编译、单测、真库或 A／B 验收结果。
 
-#### 2026-10-30 修订：promotion 固定前复核、同维护单份原件与解除的 owner 计数器判据（未编译，待 Codex 验证）
-
-- **promotion**：首次写 PLAN_FIXED 之前，在 SQL 锁外完成三项只读复核——缓存仍与双 SQL 同内容、映射、Lua `check`；任一项不成立都不留收据，避免撤销失败后的孤儿原件永久阻断显式解除。计划时在、执行时已按 TTL 过期的缓存不再拒绝；重新出现且 bytes 不同仍拒。同一维护号内同一玩家只允许一份 promotion 原件：PreparePromotion 提前拒绝，固定原件时在维护标记行锁内再核一次。续跑以 SQL 里的原 bytes 为准，核原摘要后按语义比较，不要求重新编码后逐字节一致。
-- **显式解除**：成员新增 `redis_owner_epoch`，即审定时观测到的 owner 计数器原值，执行时逐字节钉死。非恢复成员要求它不低于双 SQL 围栏的 `owner_epoch`；恢复成员要求它等于 promotion 的 TargetOwner；屏障 ACK 仍须等于双 SQL 围栏版本。原「计数器等于 SQL 围栏」在真实 zone 必然失败，原因有两个：玩家进场后未存盘就退出时，计数器本就高于 SQL 围栏；scene_manager 铸代写的是 `max(观测+1, 墙钟毫秒)`。格式同批升版：计划升为 `player-save-explicit-maintenance-release-v3`，成员输入升为 `maintenance-release-member-input-v2`，Redis 解除收据前缀改为 `release-v3`。v2 计划与 v1 输入一律拒绝，验收工具须同步。
-- **旧 holder 恢复**：跨 zone 传送后，旧 holder 可能在别区 Scene 上。恢复事务对 Scene zone 和收据 home zone 两个 zone 都持锁核验 admission 维护标记，并删除原「home zone 必须等于 seal.zone_id」判据。确定拒绝返回固定 ASCII 原因码（`RecoveryRejectError`，`errors.Is(ErrConflict)` 仍成立），CLI 只打印原因码。plan 遇到已提交的原请求时，返回原件与 `ErrAdmissionRecoveryAlreadyCommitted`，提示「已提交、apply 只读重放」。Java 版 PlayerTradeStore／RecoverTradeAdmission 同批对齐。
-- **业务全列摘要**：协议收敛到 `go/shared/businessdigest`，go/db 的计划／解除与 data_service 的证明共用，并由 golden 测试固定字节。
-- **仍待负责人拍板**：
-  - 孤儿 PLAN_FIXED 收据的正式放弃阶段；
-  - 全 zone 等集的 1000 成员上限；
-  - 非恢复成员「无挂单、admission 全关」的判据是否收窄。崩溃 Scene 上的非交易在线玩家，现有工具都关不掉其 admission，一次崩溃就会阻断解除。
-
 ### 2026-10-24：终局提交宽限与永久不适用子效果的恢复边界
 
 本条为本轮已授权既有路径内的评审修复合同。Battle房间的原deadline不变，Match在deadline到达后继续禁止续领开房工作租约；SQL ABORT候选与持锁提交点统一改为经过60秒终局提交宽限后才能竞争终局。宽限内接受符合原Create、成员、身份与正文的COMPLETE，COMPLETE／ABORT仍由原主键和锁序决定唯一永久结果，不因临时RPC失败另造结果。两版目前使用单一具名60秒常量，未新增配置文件路径；这是有限恢复窗口，不保证任意长网络分区后仍能采用迟到结果。边界比较须避免deadline加法溢出，直接取消入口同样不能绕过该宽限。

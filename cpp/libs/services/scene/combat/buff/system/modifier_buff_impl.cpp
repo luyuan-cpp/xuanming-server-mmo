@@ -5,6 +5,7 @@
 #include "table/proto/buff_table.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"  // Player:区分玩家缺等级(故障)与 NPC 没有等级(按 1 级)
 #include "combat/buff/comp/buff_comp.h"
 #include "combat/buff/constants/buff.h"
 #include "player/system/player_level_rules.h"  // CappedLevel:回血公式按生效等级
@@ -35,11 +36,16 @@ static bool OnHealthRegenerationBasedOnLostHealth(entt::entity parent, BuffEntry
                  << entt::to_integral(parent) << " buff_table_id=" << buffTable->id();
         return false;
     }
-    // 没有等级组件的目标按 1 级算(与 skill.cpp 的伤害公式一致)。LevelComp 只有玩家有,
-    // 按生效等级取:超上限的存储等级按上限(player_level_rules.h)
+    // LevelComp 只有玩家有(加载时挂上的持久数据),按生效等级取:超上限的存储等级按上限,0 按 1(player_level_rules.h)。
+    // 非玩家目标(NPC / 怪物)没有等级组件,按 1 级算,与 skill.cpp 的伤害公式一致。
+    // 玩家缺 LevelComp 是加载不变量被破坏:记 ERROR、这一跳不回血,不按 1 级补默认值(组件访问规则)。
     uint32_t level = 1;
     if (const auto *levelComponent = tlsEcs.actorRegistry.try_get<LevelComp>(parent)) {
         level = playerlevel::CappedLevel(levelComponent->level());
+    } else if (tlsEcs.actorRegistry.any_of<Player>(parent)) {
+        LOG_ERROR << "Health regeneration skipped: player LevelComp missing (load invariant broken), entity="
+                  << entt::to_integral(parent) << " buff_table_id=" << buffTable->id();
+        return false;
     }
 
     const auto lostHealth = derivedAttributesPbComponent->max_health() - baseAttributesPbComponent->health();

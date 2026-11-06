@@ -105,6 +105,7 @@ set(SOURCE_FILES
     battle/system/player_battle.cpp
     player/system/player_lifecycle.cpp
     player/system/player_ownership_metrics.cpp
+    player/system/player_save_metrics.cpp
     player/system/role_admission_system.cpp
     player/system/player_scene.cpp
     player/system/player_team.cpp

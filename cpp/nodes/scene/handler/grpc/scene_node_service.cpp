@@ -1,6 +1,8 @@
 #include "scene_node_service.h"
 ///<<< BEGIN WRITING YOUR CODE
 #include "infra/agones/agones_gameserver_lifecycle.h"
+#include "engine/core/async/coroutine_callback.h"
+#include <boost/cobalt/task.hpp>
 #include "proto/scene/scene_info.pb.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/role_admission_system.h"
@@ -17,6 +19,30 @@ namespace
 // 停机开始后 CreateScene 的拒绝文案(grpc-muduo-transport.md §15.3 Q9)。不是跨语言契约:
 // SceneManager 收到任何错误都回滚,不匹配文案。
 constexpr char kSceneNodeShuttingDownMessage[] = "scene_node_shutting_down";
+boost::cobalt::task<void> CreateSceneWithPermit(muduo::net::EventLoop& loop,
+    std::shared_ptr<GrpcUnaryCall<::CreateSceneRequest, ::CreateSceneResponse>> call)
+{
+    using Permit = agones::GameServerLifecycle::AllocationPermit;
+    auto permit = co_await loop_async::AwaitCallback<std::unique_ptr<Permit>>(loop,
+        [&loop](auto done) {
+            agones::GameServerLifecycle::Instance().AcquireAllocationPermitAsync(loop,
+                [done](Permit value) { done(std::make_unique<Permit>(std::move(value))); });
+            return true;
+        }, nullptr);
+    if (!permit || call->ServerDraining())
+    {
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
+        co_return;
+    }
+    if (!*permit || !**permit)
+    {
+        LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id=" << call->request().scene_id();
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "agones allocate not confirmed"));
+        co_return;
+    }
+    call->Proceed(); // 许可的 RAII 覆盖同步创建，晚到的未消费许可自行释放。
+}
+
 } // namespace
 ///<<< END WRITING YOUR CODE
 
@@ -178,36 +204,8 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
     // 在途创建才能阻止提前回到 Ready。回调只捕获 call,不捕获 this(AGENTS §11.7)。
     //
     // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
-    agones::GameServerLifecycle::Instance().AcquireAllocationPermitAsync(
-        loop_,
-        [call](agones::GameServerLifecycle::AllocationPermit createPermit)
-        {
-            if (!createPermit && call->ServerDraining())
-            {
-                // 停机时 hook 里的 lifecycle.Stop() 先于 gRPC 排空拒掉还在等许可的调用;这些回调执行时排空已开始,
-                // 如实回「节点停机」并只打 WARN,不把正常停机记成 Agones 分配失败(SceneManager 对任何错误都回滚)。
-                LOG_WARN << "[gRPC] CreateScene rejected while waiting for permit: scene node is shutting down, scene_id="
-                         << call->request().scene_id();
-                call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
-                return;
-            }
-            if (!createPermit)
-            {
-                LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id="
-                          << call->request().scene_id() << " state="
-                          << agones::ToString(agones::GameServerLifecycle::Instance().State());
-                call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "agones allocate not confirmed"));
-                return;
-            }
-            if (call->ServerDraining())   // 等许可期间停机开始
-            {
-                LOG_WARN << "[gRPC] CreateScene rejected after permit: scene node is shutting down, scene_id="
-                         << call->request().scene_id();
-                call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
-                return;
-            }
-            call->Proceed();
-        });
+    if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "场景创建许可"))
+        call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
     return;
     ///<<< END WRITING YOUR CODE
     call->Proceed();

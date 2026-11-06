@@ -1,4 +1,5 @@
 #include "etcd_helper.h"
+#include <utility>
 #include <google/protobuf/util/json_util.h>
 #include <muduo/base/Logging.h>
 #include "node/system/etcd/etcd_transport.h"
@@ -17,6 +18,16 @@ EtcdTransport *ActiveTransport(const char *operation)
 		LOG_WARN << "etcd " << operation << " dropped: the etcd transport is not running";
 	}
 	return transport;
+}
+
+void SendRegistrationTxn(const etcdserverpb::TxnRequest &request, EtcdHelper::TxnCompletion done)
+{
+	if (auto *transport = ActiveTransport("Txn"))
+	{
+		transport->Txn(request, std::move(done));
+		return;
+	}
+	done(std::nullopt);
 }
 } // namespace
 
@@ -91,19 +102,32 @@ void EtcdHelper::StopAllWatching()
 	// TODO: Add cancel_request implementation if needed
 }
 
-void EtcdHelper::GrantLease(uint32_t ttlSeconds)
+void EtcdHelper::GrantLease(uint32_t ttlSeconds, EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done)
 {
 	etcdserverpb::LeaseGrantRequest leaseReq;
 	leaseReq.set_ttl(ttlSeconds);
 
 	if (auto *transport = ActiveTransport("LeaseGrant"))
 	{
-		transport->LeaseGrant(leaseReq);
+		transport->LeaseGrant(leaseReq, std::move(done));
+		return;
 	}
+	done(std::nullopt);
 }
 
-void EtcdHelper::PutIfAbsent(const std::string &key, const std::string &newValue, int64_t currentVersion, int64_t lease)
+void EtcdHelper::PutIfAbsent(const std::string &key, const std::string &newValue, int64_t currentVersion,
+							 int64_t lease, TxnCompletion done, bool checkSameLease)
 {
+	if (checkSameLease && lease > 0)
+	{
+		// 此键的上一条 CAS 结局未知。只承认同一租约下已经写好的键，不接管别的节点的键。
+		auto recovery = BuildClaimIfAbsentOrOwnedTxn(key, newValue, "", lease);
+		auto* compare = recovery.mutable_failure(0)->mutable_request_txn()->mutable_compare(0);
+		compare->set_target(etcdserverpb::Compare::LEASE);
+		compare->set_lease(lease);
+		SendRegistrationTxn(recovery, std::move(done));
+		return;
+	}
 	etcdserverpb::TxnRequest txn;
 
 	// Compare: version == 0 means key does not exist
@@ -118,30 +142,23 @@ void EtcdHelper::PutIfAbsent(const std::string &key, const std::string &newValue
 	successOp.set_value(newValue);
 	successOp.set_lease(lease);
 
-	if (auto *transport = ActiveTransport("Txn"))
-	{
-		transport->Txn(txn);
-	}
+	SendRegistrationTxn(txn, std::move(done));
 }
 
-void EtcdHelper::PutWithLease(const std::string &key, const std::string &newValue, int64_t lease)
+void EtcdHelper::PutWithLease(const std::string &key, const std::string &newValue, int64_t lease, TxnCompletion done)
 {
 	etcdserverpb::TxnRequest txn;
 
-	// 不加任何 compare:txn 恒成功。走 txn 而不是裸 Put,是为了让响应仍然落进
-	// OnTxnSucceeded / pendingTxnKey 这套既有回调链,不必再造一条并行路径。
+	// 不加任何 compare:成功应答仍与 CAS 共用同一注册步骤。
 	auto &successOp = *txn.add_success()->mutable_request_put();
 	successOp.set_key(key);
 	successOp.set_value(newValue);
 	successOp.set_lease(lease);
 
-	if (auto *transport = ActiveTransport("Txn"))
-	{
-		transport->Txn(txn);
-	}
+	SendRegistrationTxn(txn, std::move(done));
 }
 
-void EtcdHelper::PutWithLease(const std::string &key, const NodeInfo &nodeInfo, int64_t lease)
+void EtcdHelper::PutWithLease(const std::string &key, const NodeInfo &nodeInfo, int64_t lease, TxnCompletion done)
 {
 	std::string jsonValue;
 	auto status = google::protobuf::util::MessageToJsonString(nodeInfo, &jsonValue);
@@ -149,10 +166,11 @@ void EtcdHelper::PutWithLease(const std::string &key, const NodeInfo &nodeInfo, 
 	{
 		LOG_ERROR << " Failed to serialize NodeInfo to JSON. "
 				  << "Error: " << status.message().data();
+		done(std::nullopt);
 		return;
 	}
 
-	PutWithLease(key, jsonValue, lease);
+	PutWithLease(key, jsonValue, lease, std::move(done));
 }
 
 etcdserverpb::TxnRequest EtcdHelper::BuildClaimIfAbsentOrOwnedTxn(const std::string &key,
@@ -197,13 +215,11 @@ etcdserverpb::TxnRequest EtcdHelper::BuildClaimIfAbsentOrOwnedTxn(const std::str
 	return txn;
 }
 
-void EtcdHelper::PutIfAbsentOrOwned(const std::string &key, const std::string &value, const std::string &ownerValue, int64_t lease)
+void EtcdHelper::PutIfAbsentOrOwned(const std::string &key, const std::string &value, const std::string &ownerValue,
+								    int64_t lease, TxnCompletion done)
 {
 	const auto txn = BuildClaimIfAbsentOrOwnedTxn(key, value, ownerValue, lease);
-	if (auto *transport = ActiveTransport("Txn"))
-	{
-		transport->Txn(txn);
-	}
+	SendRegistrationTxn(txn, std::move(done));
 }
 
 bool EtcdHelper::TxnClaimSucceeded(const etcdserverpb::TxnResponse &reply)
@@ -235,7 +251,8 @@ const mvccpb::KeyValue *EtcdHelper::TxnClaimCurrentHolder(const etcdserverpb::Tx
 	return range.kvs_size() > 0 ? &range.kvs(0) : nullptr;
 }
 
-void EtcdHelper::PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease)
+void EtcdHelper::PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease, TxnCompletion done,
+							 bool checkSameLease)
 {
 	std::string jsonValue;
 	auto status = google::protobuf::util::MessageToJsonString(nodeInfo, &jsonValue);
@@ -243,10 +260,11 @@ void EtcdHelper::PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, i
 	{
 		LOG_ERROR << " Failed to serialize NodeInfo to JSON. "
 				  << "Error: " << status.message().data();
+		done(std::nullopt);
 		return;
 	}
 
-	PutIfAbsent(key, jsonValue, 0, lease);
+	PutIfAbsent(key, jsonValue, 0, lease, std::move(done), checkSameLease);
 }
 
 void EtcdHelper::RevokeLeaseAndCleanup(int64_t leaseId)

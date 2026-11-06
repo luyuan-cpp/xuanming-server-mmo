@@ -83,7 +83,7 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 	var engine string
 	require.NoError(t, db.QueryRow("SELECT VERSION()").Scan(&engine))
 	require.Contains(t, strings.ToLower(engine), "tidb")
-	tables := []proto.Message{&matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchNetworkProfileRecord{}, &matchpb.MatchTicketRegionRecord{}, &matchpb.MatchJoinIntentRecord{}, &matchpb.MatchDirectIntentRecord{}, &matchpb.MatchFormationRecord{}, &matchpb.MatchSpectatorRecord{}, &matchpb.MatchSpectatorIntentRecord{}, &matchpb.MatchSpectatorHeadRecord{}, &matchpb.MatchRoleOccupancyRecord{}, &teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{}, &teampb.TeamApplicationIndexRecord{}, &teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{}, &teampb.TeamLaunchRoleRecord{}}
+	tables := []proto.Message{&matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchNetworkProfileRecord{}, &matchpb.MatchJoinIntentRecord{}, &matchpb.MatchDirectIntentRecord{}, &matchpb.MatchFormationRecord{}, &matchpb.MatchSpectatorRecord{}, &matchpb.MatchSpectatorIntentRecord{}, &matchpb.MatchSpectatorHeadRecord{}, &matchpb.MatchRoleOccupancyRecord{}, &teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{}, &teampb.TeamApplicationIndexRecord{}, &teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRoleRecord{}}
 	_, err = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: schema, Tables: tables})
 	require.NoError(t, err)
 	require.NoError(t, rolefence.EnsureSchema(ctx, db))
@@ -416,9 +416,10 @@ func TestTeamTiDBWholeUnitsCrossWaitUnknownAndRecovery(t *testing.T) {
 	group := append(left, right...)
 	stamp, err := f.owner.Now(context.Background())
 	require.NoError(t, err)
-	peers, err := f.owner.TeamLaunchPeers(context.Background(), left[0], a, 1, 2, true, stamp)
+	// 按池读整队:同一 (模式, 模板, 人数档) 的排队整队在同一页里按入队序读出,撮合在内存里成组。
+	launches, err := f.owner.PoolTeamLaunches(context.Background(), catalog.Pool{Mode: matchpb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, TeamSize: 5}, 64)
 	require.NoError(t, err)
-	require.Len(t, peers, 1)
+	require.Equal(t, []uint64{a.ActorId, b.ActorId}, launchActors(launches))
 	formation := &matchpb.MatchFormationRecord{BattleId: 900, OperationId: uuid.NewString(), PhysicalRegion: 2, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1}
 	require.Error(t, f.owner.ClaimTeamUnits(context.Background(), formation, group, []*teampb.TeamLaunchRecord{a, b}), "全员未等满，队伍失败不重排也不能绕过跨区wait")
 	formation.PhysicalRegion = 1
@@ -446,7 +447,9 @@ func TestTeamTiDBWholeUnitsCrossWaitUnknownAndRecovery(t *testing.T) {
 	require.Empty(t, pinned.Commit.Decision.Record.MatchLockToken)
 }
 
-func TestTeamTiDBFinalHomeFiltersWholeUnitsBeforeLimit(t *testing.T) {
+// 按池读整队不按 home 过滤:七支整队都在同一页,跨 home 能不能成局由撮合与提交点的范围树决定;
+// 提交点另核票上的 home 仍是玩家当前归属。
+func TestTeamTiDBCrossHomeUnitsShareThePoolAndWaitForScope(t *testing.T) {
 	f := newNativeTeamFixture(t)
 	f.owner.TeamConfig.AllowCrossZone = false // 隔离夹具分别验证两种已准入规则，不是生产热更新入口。
 	f.create(t, 1, 101)
@@ -467,12 +470,9 @@ func TestTeamTiDBFinalHomeFiltersWholeUnitsBeforeLimit(t *testing.T) {
 	same := f.queued(t, 14, 1014)
 	left, err := f.owner.TeamLaunchTickets(context.Background(), anchor)
 	require.NoError(t, err)
-	stamp, err := f.owner.Now(context.Background())
+	launches, err := f.owner.PoolTeamLaunches(context.Background(), catalog.Pool{Mode: matchpb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, TeamSize: 5}, 64)
 	require.NoError(t, err)
-	peers, err := f.owner.TeamLaunchPeers(context.Background(), left[0], anchor, 1, 2, true, stamp)
-	require.NoError(t, err)
-	require.Len(t, peers, 1, "五个更早的其它home整单不能遮住合法晚整单")
-	require.Equal(t, same.ActorId, peers[0].ActorId)
+	require.Len(t, launches, 7, "不按 home 过滤,其它 home 的整队也在同一页")
 	right, err := f.owner.TeamLaunchTickets(context.Background(), foreign[0])
 	require.NoError(t, err)
 	// 跨 home 成局改由范围树双向同意决定(global-match-hierarchical-pools.md D2):两队 home 不同(未分大区,
@@ -495,7 +495,8 @@ func TestTeamTiDBFinalHomeFiltersWholeUnitsBeforeLimit(t *testing.T) {
 	require.ErrorIs(t, f.owner.ClaimTeamUnits(context.Background(), formation, append(append([]*matchpb.MatchAuthorityTicketRecord(nil), left...), right...), []*teampb.TeamLaunchRecord{anchor, same}), authority.ErrTeamRoute)
 }
 
-func TestTeamTiDBFinalHomeFiltersSoloPeersBeforeLimit(t *testing.T) {
+// 按池读单排票不按 home 过滤,按入队序一页读出;撮合挑出与锚点同 zone 的四人成组,提交点放行。
+func TestTeamTiDBPoolTicketsReadSoloUnitsAcrossHomes(t *testing.T) {
 	f := newNativeTeamFixture(t)
 	f.owner.TeamConfig.AllowCrossZone = false
 	ctx := context.Background()
@@ -518,15 +519,16 @@ func TestTeamTiDBFinalHomeFiltersSoloPeersBeforeLimit(t *testing.T) {
 			anchor = ticket
 		}
 	}
-	stamp, err := f.owner.Now(ctx)
+	page, err := f.owner.PoolTickets(ctx, catalog.Pool{Mode: matchpb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, TeamSize: 5}, authority.PoolCursor{}, 64)
 	require.NoError(t, err)
-	peers, err := f.owner.CandidateTeamPeers(ctx, anchor, 1, true, stamp)
-	require.NoError(t, err)
-	require.Len(t, peers, 4, "其它home的五个早单排不能占满LIMIT后才被丢弃")
-	for _, peer := range peers {
-		require.Equal(t, uint32(1), peer.ZoneId)
-		require.GreaterOrEqual(t, peer.PlayerId, uint64(7))
+	require.Len(t, page, 10, "其它 home 的单排也在同一页")
+	var peers []*matchpb.MatchAuthorityTicketRecord
+	for _, ticket := range page {
+		if ticket.PlayerId != anchor.PlayerId && ticket.ZoneId == anchor.ZoneId {
+			peers = append(peers, ticket)
+		}
 	}
+	require.Len(t, peers, 4)
 	formation := &matchpb.MatchFormationRecord{BattleId: 903, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1}
 	require.NoError(t, f.owner.ClaimTeamUnits(ctx, formation, append([]*matchpb.MatchAuthorityTicketRecord{anchor}, peers...), nil))
 }
@@ -578,9 +580,9 @@ func TestTeamTiDBFailedFormationRequeuesWholeOriginalUnit(t *testing.T) {
 				require.Zero(t, ticket.FormationId)
 			}
 		}
-		var singleRows int
-		require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM match_ticket_region r JOIN match_authority_ticket t ON t.player_id=r.player_id WHERE t.team_id=?", launch.TeamId).Scan(&singleRows))
-		require.Zero(t, singleRows, "整队恢复不得造逐人补位候选")
+		solo, err := f.owner.PoolTickets(context.Background(), catalog.Pool{Mode: matchpb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, TeamSize: 5}, authority.PoolCursor{}, 64)
+		require.NoError(t, err)
+		require.Empty(t, solo, "整队恢复后成员票仍挂在整队上,不进单排页,不能被逐人补位")
 	}
 }
 
@@ -594,18 +596,19 @@ func (f *nativeTeamFixture) setMergedZones(t *testing.T, merges map[uint32]uint3
 	f.owner.BindMergedZones(cache)
 }
 
+// launchActors 取一页整队的发起者序列,按读出的顺序。
+func launchActors(launches []*teampb.TeamLaunchRecord) []uint64 {
+	actors := make([]uint64, 0, len(launches))
+	for _, launch := range launches {
+		actors = append(actors, launch.ActorId)
+	}
+	return actors
+}
+
 func (f *nativeTeamFixture) setHome(t *testing.T, player uint64, zone uint32) {
 	t.Helper()
 	_, err := f.owner.DB.Exec("UPDATE role_fence SET home_zone=?,version=version+1 WHERE player_id=?", zone, player)
 	require.NoError(t, err)
-}
-
-// launchRegionHome 读 unit 的候选投影上的 home;投影按机房一行,同一个 unit 每行的 home 相同。
-func (f *nativeTeamFixture) launchRegionHome(t *testing.T, actor uint64) uint32 {
-	t.Helper()
-	var home uint32
-	require.NoError(t, f.owner.DB.QueryRow("SELECT home_zone FROM team_launch_region WHERE actor_id=? LIMIT 1", actor).Scan(&home))
-	return home
 }
 
 // 别名合服:护栏副本和记录里都是原始区,PlayerHomeZone 不解析,提交点复核两边解析到最终区(5→6→7 这样的链也沿到底)。
@@ -713,92 +716,6 @@ func TestTeamTiDBRosterZoneCheckResolvesMergedZones(t *testing.T) {
 	}
 }
 
-// 单排候选:成员集合展开成 IN,在 LIMIT 之前过滤。合服后两个原始区是同一个候选池,票上还是原始区。
-func TestTeamTiDBSoloPeersResolveMergedZones(t *testing.T) {
-	f := newNativeTeamFixture(t)
-	f.owner.TeamConfig.AllowCrossZone = false
-	ctx := context.Background()
-	homes := map[uint64]uint32{1: 1, 2: 2, 3: 2, 4: 1, 5: 3}
-	var anchor *matchpb.MatchAuthorityTicketRecord
-	for player := uint64(1); player <= 5; player++ {
-		f.setHome(t, player, homes[player])
-		f.profile(t, player)
-		profile, _, err := f.owner.Profile(ctx, player)
-		require.NoError(t, err)
-		ticket, created, err := f.owner.Join(f.actor(t, player), &matchpb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: uuid.NewString(), RequestId: uuid.NewString(), Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1, TeamSize: 5, ZoneId: homes[player]}, profile.PlanId, profile.SessionBinding)
-		require.NoError(t, err)
-		require.True(t, created)
-		if player == 1 {
-			anchor = ticket
-		}
-	}
-	peers := func() []uint64 {
-		t.Helper()
-		stamp, err := f.owner.Now(ctx)
-		require.NoError(t, err)
-		found, err := f.owner.CandidateTeamPeers(ctx, anchor, 1, true, stamp)
-		require.NoError(t, err)
-		ids := make([]uint64, 0, len(found))
-		for _, peer := range found {
-			require.Equal(t, homes[peer.PlayerId], peer.ZoneId, "票上还是原始区")
-			ids = append(ids, peer.PlayerId)
-		}
-		return ids
-	}
-	require.ElementsMatch(t, []uint64{4}, peers(), "没合服:只有同一个原始区")
-
-	f.setMergedZones(t, map[uint32]uint32{2: 1})
-	require.ElementsMatch(t, []uint64{2, 3, 4}, peers(), "2 区合进 1 区;3 区没参与")
-
-	f.setMergedZones(t, map[uint32]uint32{3: 2, 2: 1})
-	require.ElementsMatch(t, []uint64{2, 3, 4, 5}, peers(), "连续合服沿链解析")
-
-	f.setMergedZones(t, nil)
-	require.ElementsMatch(t, []uint64{4}, peers(), "撤销后回到各自的区")
-}
-
-// 整队候选:同上,投影上的 home 是原始区,按成员集合查。
-func TestTeamTiDBWholeUnitPeersResolveMergedZones(t *testing.T) {
-	f := newNativeTeamFixture(t)
-	f.owner.TeamConfig.AllowCrossZone = false
-	ctx := context.Background()
-	for leader, teamID := range map[uint64]uint64{1: 101, 4: 404, 6: 606} {
-		f.create(t, leader, teamID)
-		f.inviteAndAccept(t, leader, leader+1, teamID)
-	}
-	for _, player := range []uint64{4, 5} {
-		f.setHome(t, player, 2)
-	}
-	for _, player := range []uint64{6, 7} {
-		f.setHome(t, player, 3)
-	}
-	anchor := f.queued(t, 1, 101)
-	source := f.queued(t, 4, 404)
-	f.queued(t, 6, 606)
-	left, err := f.owner.TeamLaunchTickets(ctx, anchor)
-	require.NoError(t, err)
-	peers := func() []uint64 {
-		t.Helper()
-		stamp, err := f.owner.Now(ctx)
-		require.NoError(t, err)
-		found, err := f.owner.TeamLaunchPeers(ctx, left[0], anchor, 1, 2, true, stamp)
-		require.NoError(t, err)
-		ids := make([]uint64, 0, len(found))
-		for _, peer := range found {
-			ids = append(ids, peer.ActorId)
-		}
-		return ids
-	}
-	require.Empty(t, peers(), "没合服:别的原始区的整队进不了候选")
-
-	f.setMergedZones(t, map[uint32]uint32{2: 1})
-	require.Equal(t, []uint64{source.ActorId}, peers(), "2 区合进 1 区;3 区没参与")
-	require.Equal(t, uint32(2), f.launchRegionHome(t, source.ActorId), "投影上还是原始区")
-
-	f.setMergedZones(t, nil)
-	require.Empty(t, peers(), "撤销后回到各自的区")
-}
-
 // 开战原件在 launch 诞生时判一次同区,记路由行上的原始区(不是玩家当前位置的物理 zone)。
 // 名单跨两个原始区、禁止跨区时:没合服回业务拒绝,不留任何东西;合服后放行。撤销合服之后再开战和「没合服」是同一条路径。
 func TestTeamTiDBStartLaunchRequiresSameFinalZone(t *testing.T) {
@@ -844,7 +761,6 @@ func TestTeamTiDBStartLaunchRequiresSameFinalZone(t *testing.T) {
 	for _, ticket := range tickets {
 		require.Equal(t, data.Original.Zones[ticket.PlayerId], ticket.ZoneId, "票上是原始区")
 	}
-	require.Equal(t, uint32(1), f.launchRegionHome(t, 1), "两个原始区的 unit,投影记最终区")
 }
 
 // 合服提交时已经在队列里的整队:提交点按最终区判范围,不用重新排队;维护循环不报错。
@@ -902,13 +818,11 @@ func TestTeamTiDBUnmergeLeavesInFlightUnitsRunning(t *testing.T) {
 	f.setHome(t, 3, 2)
 	f.setMergedZones(t, map[uint32]uint32{2: 1})
 	a, b := f.queued(t, 1, 101), f.queued(t, 4, 404)
-	require.Equal(t, uint32(1), f.launchRegionHome(t, 1))
 
 	f.setMergedZones(t, nil)
 	closed, err := f.owner.MaintainQueuedTeam(ctx, a)
 	require.NoError(t, err, "映射变化不能让维护循环报错")
 	require.False(t, closed, "也不拆队、不撤单")
-	require.Zero(t, f.launchRegionHome(t, 1), "撤销后是混合 unit,按区候选不再选它")
 
 	left, err := f.owner.TeamLaunchTickets(ctx, a)
 	require.NoError(t, err)

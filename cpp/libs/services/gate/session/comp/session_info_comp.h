@@ -146,6 +146,11 @@ struct SessionInfo
 	// IllegalPacketCounter::ThresholdFromEnv).
 	uint32_t illegalPacketCount{0};
 
+	// 关连接之前置位:断开回调代发 ExitGame 时填 EXIT_GAME_REASON_LEASE_EXPIRED,scene 立即退出,不按断线保留角色
+	// (docs/design/player-connection-lost-hold.md §3)。目前只有断线租约到期、gate 关残留假死连接这一处置位:
+	// 后端已不认这个会话,再保留一个重连窗口没有意义。不置位的关闭(断网、gate 停机、顶号踢旧连接、高水位)按断线处理。
+	bool exitSceneImmediatelyOnClose{false};
+
 	// Per-session HMAC key for message signing (todo.md #76 slice A).
 	//
 	// Populated by client_session_handler.cpp::HandleClientTokenVerify

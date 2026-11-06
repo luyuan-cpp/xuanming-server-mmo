@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"shared/releasetrack"
 	"shared/snowflake"
 )
 
@@ -256,6 +259,83 @@ func TestRegisterRejectsBadInputsBeforeAnyIO(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("invalid input waited %v for the port instead of failing fast", elapsed)
 	}
+}
+
+// 发布轨道的环境变量非法时同样在碰 etcd、等端口之前拒绝(包注释「发布轨道」)。
+// 零值 client 只为越过 nil 检查;校验失败时不会用到它。
+func TestRegisterRejectsInvalidReleaseTrackBeforeAnyIO(t *testing.T) {
+	t.Setenv(releasetrack.EnvVar, "beta")
+	cli := &clientv3.Client{}
+	if _, err := Register(context.Background(), cli, unitSpec()); !errors.Is(err, errInvalidSpec) {
+		t.Fatalf("Register with %s=beta: want errInvalidSpec, got %v", releasetrack.EnvVar, err)
+	}
+	start := time.Now()
+	if _, err := RegisterAfterListening(context.Background(), cli, "127.0.0.1:1", 10*time.Second, unitSpec()); !errors.Is(err, errInvalidSpec) {
+		t.Fatalf("RegisterAfterListening with %s=beta: want errInvalidSpec, got %v", releasetrack.EnvVar, err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("invalid release track waited %v for the port instead of failing fast", elapsed)
+	}
+}
+
+func releaseTrackOf(t *testing.T, raw []byte) any {
+	t.Helper()
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("value is not a JSON object: %v", err)
+	}
+	return fields[releaseTrackField]
+}
+
+// 注册值里的 releaseTrack 由本包写:没写就补上,写了必须与进程轨道一致,空串等同没写。
+func TestWithReleaseTrack(t *testing.T) {
+	raw := []byte(`{"nodeId":7,"zoneId":2,"nodeUuid":"u"}`)
+	out, err := withReleaseTrack(raw, releasetrack.Canary)
+	if err != nil {
+		t.Fatalf("withReleaseTrack: %v", err)
+	}
+	if got := releaseTrackOf(t, out); got != "canary" {
+		t.Fatalf("releaseTrack = %v, want canary", got)
+	}
+	if m := decodeMirror(t, out); m.NodeId != 7 || m.ZoneId != 2 || m.NodeUuid != "u" {
+		t.Fatalf("other fields changed: %+v", m)
+	}
+	again, err := withReleaseTrack(raw, releasetrack.Canary)
+	if err != nil || string(again) != string(out) {
+		t.Fatalf("output is not deterministic: %s vs %s (%v)", out, again, err)
+	}
+
+	same := []byte(`{"nodeId":7,"releaseTrack":"stable"}`)
+	if out, err := withReleaseTrack(same, releasetrack.Stable); err != nil || string(out) != string(same) {
+		t.Fatalf("matching releaseTrack must pass through unchanged: %s, %v", out, err)
+	}
+
+	empty := []byte(`{"nodeId":7,"releaseTrack":""}`)
+	if out, err := withReleaseTrack(empty, releasetrack.Canary); err != nil || releaseTrackOf(t, out) != "canary" {
+		t.Fatalf("empty releaseTrack must be filled in: %s, %v", out, err)
+	}
+
+	rejected := []string{
+		`{"releaseTrack":"canary"}`, // 与进程轨道 stable 不一致
+		`{"releaseTrack":1}`,        // 不是字符串
+		`not json`,
+		`null`,
+		`[]`,
+	}
+	for _, value := range rejected {
+		if _, err := withReleaseTrack([]byte(value), releasetrack.Stable); !errors.Is(err, errInvalidValue) {
+			t.Fatalf("withReleaseTrack(%s): want errInvalidValue, got %v", value, err)
+		}
+	}
+}
+
+func decodeMirror(t *testing.T, raw []byte) nodeInfoMirror {
+	t.Helper()
+	var m nodeInfoMirror
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("value is not a JSON NodeInfo: %v", err)
+	}
+	return m
 }
 
 func TestDialAddrForListen(t *testing.T) {

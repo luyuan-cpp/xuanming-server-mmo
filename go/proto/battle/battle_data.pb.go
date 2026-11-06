@@ -1875,8 +1875,16 @@ type BattleSettlementData struct {
 	DefeatedMonsters []*BattleMonsterDefeat `protobuf:"bytes,15,rep,name=defeated_monsters,json=defeatedMonsters,proto3" json:"defeated_monsters,omitempty"`
 	// 新结算仅填此集合；非空时忽略旧 gold_gain，历史空集合仍读 gold_gain。
 	CurrencyGains []*BattleCurrencyGain `protobuf:"bytes,16,rep,name=currency_gains,json=currencyGains,proto3" json:"currency_gains,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 战斗结束时刻(Unix 毫秒,battle 节点时钟):battle 冻结终局原件时从 BattleResultEvent.finished_at_ms 盖进每一份个人结算
+	// (result_commit.h 的 FreezeBattleSettlementSource)。scene 把它写进本人近期战斗结果,供重登后展示
+	// (docs/design/battle-result-recovery.md);不参与任何结算判定。0 = 来源没盖。
+	FinishedAtMs uint64 `protobuf:"varint,17,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	// 这一局的匹配模式(MatchMode 数值)与战斗配置号:同样由 FreezeBattleSettlementSource 从 BattleResultEvent 盖进来,
+	// scene 写进本人近期战斗结果,供列表展示与按 battle_id 查回放;不参与任何结算判定。0 = 来源没盖。
+	MatchMode      uint32 `protobuf:"varint,18,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
+	BattleConfigId uint32 `protobuf:"varint,19,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -2019,6 +2027,27 @@ func (x *BattleSettlementData) GetCurrencyGains() []*BattleCurrencyGain {
 		return x.CurrencyGains
 	}
 	return nil
+}
+
+func (x *BattleSettlementData) GetFinishedAtMs() uint64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetMatchMode() uint32 {
+	if x != nil {
+		return x.MatchMode
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetBattleConfigId() uint32 {
+	if x != nil {
+		return x.BattleConfigId
+	}
+	return 0
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -2344,7 +2373,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xf6\x04\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xe5\x05\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -2362,7 +2391,11 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\ftotal_rounds\x18\r \x01(\rR\vtotalRounds\x12,\n" +
 	"\x04pets\x18\x0e \x03(\v2\x18.BattlePetSettlementDataR\x04pets\x12A\n" +
 	"\x11defeated_monsters\x18\x0f \x03(\v2\x14.BattleMonsterDefeatR\x10defeatedMonsters\x12:\n" +
-	"\x0ecurrency_gains\x18\x10 \x03(\v2\x13.BattleCurrencyGainR\rcurrencyGains\"u\n" +
+	"\x0ecurrency_gains\x18\x10 \x03(\v2\x13.BattleCurrencyGainR\rcurrencyGains\x12$\n" +
+	"\x0efinished_at_ms\x18\x11 \x01(\x04R\ffinishedAtMs\x12\x1d\n" +
+	"\n" +
+	"match_mode\x18\x12 \x01(\rR\tmatchMode\x12(\n" +
+	"\x10battle_config_id\x18\x13 \x01(\rR\x0ebattleConfigId\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +

@@ -78,6 +78,9 @@ func seedHolderInZone1MissingLoadSet(t *testing.T, sc *svc.ServiceContext, mr *m
 // 旧实现把位置当成「已下线 zone 的陈旧位置」过滤掉,不过换手门直接落点并铸出 epoch 2,node 10 之后带 1 的存盘全被拒。
 func TestEnterScene_MissingLoadSetWhileZoneRegisteredKeepsHandoffGate(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	// 请求来自 zone 2 的 gate,只会到 zone 2 的 scene_manager;zone 1 的持有节点对它是别的 zone,
+	// 按 etcd 注册表判定(control-plane-zone-scoping-20261105.md §3.5)。
+	sc.Config.ZoneId = 2
 	captured := capturingKafkaWriter(sc)
 	const (
 		playerID = uint64(6901)
@@ -131,12 +134,17 @@ func TestEnterScene_LoginOverMissingLoadSetDecidedByRegistry(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			sc.Config.ZoneId = 2 // 请求来自 zone 2 的 gate;zone 1 对它是别的 zone(§3.5)
 			captured := capturingKafkaWriter(sc)
 			resetRegistryMirrorForTest(t)
 			forgetNodeGoneObservationForTest(t, 1, "10")
 			registerKnownNodeForTest(t, "SceneNodeService.rpc/stale-z2-20", 2, "20")
 			if tc.zone1Registered {
 				registerKnownNodeForTest(t, "SceneNodeService.rpc/stale-z1-10", 1, "10")
+			} else {
+				// 别的 zone 整体下线要本副本第一次看到它空已满一个再入屏障;这里模拟早已看到(首次观察那一拍的拒绝见
+				// foreign_zone_registry_test.go)。
+				backdateForeignAbsenceForTest(foreignZoneAbsence, "1", sceneReentryBarrier(sc)+time.Second)
 			}
 			locRaw := seedHolderInZone1MissingLoadSet(t, sc, mr, playerID, oldScene)
 			// gate zone 2 开着默认大世界:位置一旦被过滤,这里就能落点(旧实现回档走的正是这条路)。

@@ -293,17 +293,6 @@ type ResolvedSecrets struct {
 // (Redis / Kafka / etcd),密钥不合格时进程要在建连之前就退出。
 var ActiveSecrets *ResolvedSecrets
 
-// EnforceInternalAuth 返回是否强制校验内部调用方签名。
-//
-// 生产模式恒为 true 且**关不掉** —— 配置里没有任何开关能在生产放行未签名
-// 的身份声明。ForceEnforce 只用于在 dev/test 提前把强制档打开做联调。
-func EnforceInternalAuth(cfg *Config) bool {
-	if !IsRelaxedMode(cfg.Mode) {
-		return true
-	}
-	return cfg.InternalAuth.ForceEnforce
-}
-
 // ResolveSecrets 解析并校验全部密钥。返回的 warnings 由调用方打日志;
 // 返回 error 表示配置不可用,调用方应当直接拒绝启动。
 //
@@ -356,7 +345,7 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	// 谁是必需的:
 	//   - GateToken:AssignGate 每次都要签票据,恒必需。
 	//   - QueueToken:只有开了登录排队才会签/验排队 token。
-	//   - InternalAuth:只有强制验签时才必需(生产恒强制)。
+	//   - InternalAuth:任何模式都强制验签,恒必需(dev/test 可用 yaml 里的开发值)。
 	var firstErr error
 	keep := func(w []string, e error) {
 		collect(w)
@@ -366,7 +355,7 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	}
 	keep(gate.validate("GateToken", relaxed, true))
 	keep(queue.validate("QueueToken", relaxed, cfg.Queue.Enabled))
-	keep(internal.validate("InternalAuth", relaxed, EnforceInternalAuth(cfg)))
+	keep(internal.validate("InternalAuth", relaxed, true))
 	if firstErr != nil {
 		return nil, warnings, firstErr
 	}

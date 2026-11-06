@@ -63,6 +63,13 @@ func TestReconcileMetricLabelsArePrimed(t *testing.T) {
 			t.Errorf("写者检查会发出 %v,但没有预置", c)
 		}
 	}
+	// 存活集闸门压住只出现在死 gate 清扫里(写者检查不过闸门)。
+	if c := [2]string{reconcileLoopIndex, roundOutcome{stage: stageViewHeld, err: errTestSentinel}.result()}; !primed[c] {
+		t.Errorf("死 gate 清扫会发出 %v,但没有预置", c)
+	}
+	if got := (roundOutcome{stage: stageViewHeld, err: errTestSentinel}).result(); got != reconcileResultViewHeld {
+		t.Errorf("压住的拍 result = %q, want %q(不能混进 etcd_error,否则 RoundsFailing 会把压住当成失败)", got, reconcileResultViewHeld)
+	}
 	for _, c := range [][2]string{
 		{reconcileLoopRepair, reconcileResultOK}, {reconcileLoopRepair, reconcileResultEtcdError},
 		{reconcileLoopRepair, reconcileResultRedisError}, {reconcileLoopRepair, reconcileResultGenChanged},

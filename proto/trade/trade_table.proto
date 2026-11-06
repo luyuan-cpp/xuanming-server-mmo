@@ -226,6 +226,32 @@ message TradeCommerceWorkflow {
   TradeRmbConsignmentWorkflow rmb = 20;
   TradeRoleIdentity seller_identity = 21;
   TradeRoleIdentity buyer_identity = 22;
+  // 转人工时的阶段、状态和原因(commerce.markManual 写),人工恢复按它判断能做哪种处理(jubaozhai-market.md §15.7)。
+  TradeCommerceQuarantine quarantine = 23;
+  // 人工处理留痕,只追加(commerce.ResolveManual 写)。
+  repeated TradeCommerceManualAction manual_actions = 24;
+}
+
+// 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);
+// detail 是错误原文,截到 256 字节。
+message TradeCommerceQuarantine {
+  string stage = 1;
+  uint32 status = 2;
+  string reason = 3;
+  string detail = 4;
+  uint64 at_ms = 5;
+}
+
+// 一次人工处理(go/trade/cmd/commercefix resolve)。
+message TradeCommerceManualAction {
+  string action = 1;                        // resume / reissue / refund
+  string operator = 2;
+  string reason = 3;                        // 操作人写的依据,例如工单号和核对结论
+  uint64 at_ms = 4;
+  uint64 version_before = 5;
+  TradeCommerceQuarantine quarantine = 6;   // 处理时的转人工记录
+  repeated string new_legs = 7;
+  repeated string superseded_legs = 8;
 }
 
 // 合同原件中的角色归属；后台恢复只能复用此原件，不能借用过户后的当前账号或修订。
@@ -264,6 +290,8 @@ message TradeCommerceLeg {
   uint64 op_id = 5;
   AssetSnapshot snapshot = 6;
   uint32 outcome = 7;
+  // 被人工补发取代时是补发腿的名字,被整单退回取代时是 "refund"。取代后不再算作最终发放(commerce.finalCredits)。
+  string superseded_by = 8;
 }
 
 // outbox 行做的是哪一步。与 stream 不是一回事:同为 TRADE_CREDIT 流,交付买家与退回卖家

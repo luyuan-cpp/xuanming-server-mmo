@@ -48,6 +48,11 @@ spec:
                 secretKeyRef: {name: domain-service-secrets, key: account-directory-scene-manager, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
+            # Agones 段打开时(k8s_deploy.ps1 Test-SceneManagerAgonesEnabled)Fleet 所在的命名空间:ConfigMap 不写 Agones.Namespace,
+            # Go 侧读这个变量。scene-manager 与 Fleet 同在 zone namespace。
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef: {fieldPath: metadata.namespace}
           args: ["-f", "/app/etc/scene_manager_service.yaml"]
           ports:
             - containerPort: 60000

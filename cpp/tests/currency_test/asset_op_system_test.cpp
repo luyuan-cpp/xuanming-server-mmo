@@ -23,6 +23,7 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
+#include "modules/gain_block/gain_block_service.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/comp/player_frozen_comp.h"
@@ -33,6 +34,7 @@
 #include "player/system/asset_op_system.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h" // UnregisterPlayer
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "security/token_security.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/asset_error_tip.pb.h"
@@ -825,6 +827,105 @@ TEST_F(AssetOpSystemTest, CreditBlockedRejected)
 	ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player_, kCurrencyGold));
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, CallCredit(request).outcome());
 	EXPECT_EQ(0u, Gold());
+}
+
+// ── 单玩家物品获取封禁(收件箱设计 §2.2)──────────────────────────────────
+// 资产转入与各入包入口共用 GainBlockService::IsItemGainBlocked;封禁是记账式终局拒绝(REJECTED kAssetBlocked),
+// 判在号段余量与背包空间两道 RETRY 预检、以及任何改动之前。
+
+// 混合包(货币 + 未封禁物品 + 本人被封禁的物品)整包拒绝:不发货币、不发另一件、不铸号,不留半笔。
+// 解封后同 seq 仍是原拒绝(结局固定,I2)。
+TEST_F(AssetOpSystemTest, CreditWithAPlayerBannedItemIsRejectedWholeBeforeAnyMutation)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置";
+	GiveBags();
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_); // 生产里由加载创建
+	constexpr uint32_t kBanned = 10;
+	constexpr uint32_t kAllowed = 11;
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, kBanned));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	const auto issuedBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued;
+	PlayerAssetOpSystem::SetAddCurrencyFnForTest(&FakeAddCurrency);
+
+	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	auto* allowed = request.mutable_bundle()->add_items();
+	allowed->set_config_id(kAllowed);
+	allowed->set_count(1);
+	auto* banned = request.mutable_bundle()->add_items();
+	banned->set_config_id(kBanned);
+	banned->set_count(1);
+	const auto response = CallCredit(request);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), response.reason().id());
+	EXPECT_FALSE(response.partial());
+	EXPECT_EQ(0u, Gold()) << "同包货币不发";
+	EXPECT_EQ(0, g_addCurrencyCalls) << "拒绝发生在发币之前";
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(kAllowed)) << "同包未封禁的物品也不发";
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(kBanned));
+	EXPECT_EQ(0u, inventory.OccupiedGridCount());
+	EXPECT_EQ(issuedBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued) << "拒绝发生在铸号之前";
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "记账式终局拒绝,不是 RETRY";
+
+	ASSERT_EQ(kSuccess, GainBlockService::UnblockPlayerItemGain(player_, kBanned));
+	const auto replay = CallCredit(request);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, replay.outcome()) << "结局固定:解封后同 seq 仍是拒绝";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), replay.reason().id());
+	EXPECT_EQ(0u, inventory.GetTotalItemCount(kAllowed));
+}
+
+// 背包满 + 物品被封禁:回 REJECTED kAssetBlocked,而不是「背包满、稍后重试」(封禁不是容量不足),也不改投临时格。
+TEST_F(AssetOpSystemTest, CreditOfABannedItemIntoAFullBagIsRejectedNotRetried)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置";
+	GiveBags();
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	bags.bags[kInventory].SetCapacityForRestore(0); // 塞满 = 一格都没有
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 10));
+
+	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	request.mutable_bundle()->clear_currencies();
+	auto* item = request.mutable_bundle()->add_items();
+	item->set_config_id(10);
+	item->set_count(1);
+	const auto response = CallCredit(request);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), response.reason().id());
+	EXPECT_EQ(0u, bags.bags[kTemporary].OccupiedGridCount()) << "不改投临时格";
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT));
+}
+
+// 按预设完整实例转入(交易托管交付)同样过封禁判定:实例不进包,记账式终局拒绝。
+TEST_F(AssetOpSystemTest, CreditOfAPlayerBannedCompleteInstanceIsRejected)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
+	GiveBags();
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 1));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ItemComp incoming;
+	incoming.set_item_id(950199995);
+	incoming.set_config_id(1);
+	incoming.set_size(1);
+
+	::AssetOpRequest credit = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_CREDIT, 1, 1, TX_TRADE);
+	credit.clear_bundle();
+	auto* transfer = credit.mutable_bundle()->add_item_instances();
+	transfer->set_item_uuid(incoming.item_id());
+	transfer->set_config_id(1);
+	transfer->set_stack_size(1);
+	transfer->set_instance_proto(incoming.SerializeAsString());
+	SignForTest("credit", credit, "trade");
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Credit(credit, response);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), response.reason().id());
+	EXPECT_EQ(nullptr, inventory.GetItemCompByGuid(incoming.item_id())) << "预设实例不进包";
+	EXPECT_EQ(0u, inventory.OccupiedGridCount());
 }
 
 TEST_F(AssetOpSystemTest, CreditFirstCurrencyFailsRetry)

@@ -2,9 +2,10 @@
 // etcd list-watch 内存镜像,以及按 endpoint 缓存的 gRPC 连接。
 //
 // 本文件复制自 go/match/internal/discovery/node_watcher.go(match 对 scene / battle
-// 的同一套 list-watch + 连接缓存),只增加了 PickRandomInZone(设计决策 D33 的
-// zone 过滤)。两份副本后续收成 go/shared 一份(设计文档 §5「后续」);
-// 改 watch / 连接缓存行为时请同步另一份。
+// 的同一套 list-watch + 连接缓存),只增加了路由服自己的两种选法:PickRandomInZone
+// (设计决策 D33 的 zone 过滤)与 PickRandomForTrack(按会话的发布轨道选全局实例,
+// docs/design/release-track-gray-canary.md §2.4)。两份副本后续收成 go/shared 一份
+// (设计文档 §5「后续」);改 watch / 连接缓存行为时请同步另一份。
 package discovery
 
 import (
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -37,6 +40,8 @@ type nodeRegistrationJSON struct {
 		IP   string `json:"ip"`
 		Port uint32 `json:"port"`
 	} `json:"grpcEndpoint"`
+	// ReleaseTrack 是 NodeInfo.release_track;没写(空串)按 stable。
+	ReleaseTrack string `json:"releaseTrack"`
 }
 
 // NodeEntry 是 watch 镜像里的一个节点。
@@ -48,6 +53,8 @@ type NodeEntry struct {
 	// endpoint(那是 raw TCP protobuf 口,用 gRPC 拨会协议错乱,
 	// 先例见 scene_manager resolveFromKnownNodes 的注释)。
 	Endpoint string
+	// Track 是节点的发布轨道,解析注册值时已校验;轨道无效的节点不进镜像。
+	Track releasetrack.Track
 }
 
 // NodeWatcher 对一个 etcd 前缀做 list-watch,维护 key -> NodeEntry 镜像。
@@ -199,8 +206,8 @@ func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
 		w.onRemove(prev)
 	}
 	if !existed {
-		logx.Infof("[NodeWatcher:%s] Node online: zone=%d node=%d endpoint=%s",
-			w.name, entry.ZoneId, entry.NodeId, entry.Endpoint)
+		logx.Infof("[NodeWatcher:%s] Node online: zone=%d node=%d endpoint=%s release_track=%s",
+			w.name, entry.ZoneId, entry.NodeId, entry.Endpoint, entry.Track)
 	}
 	w.reportCount(count)
 }
@@ -221,11 +228,19 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 			w.name, key, reg.ZoneId, reg.NodeId)
 		return NodeEntry{}, false
 	}
+	track, err := releasetrack.Parse(reg.ReleaseTrack)
+	if err != nil {
+		// 认不出的轨道既不能当 stable(stable 会话会被送进它),也不能当 canary,只能整条跳过。
+		logx.Errorf("[NodeWatcher:%s] Node has an unknown release track; ignoring: key=%s zone=%d node=%d: %v",
+			w.name, key, reg.ZoneId, reg.NodeId, err)
+		return NodeEntry{}, false
+	}
 	return NodeEntry{
 		NodeId:   reg.NodeId,
 		ZoneId:   reg.ZoneId,
 		NodeUuid: reg.NodeUuid,
 		Endpoint: fmt.Sprintf("%s:%d", reg.GrpcEndpoint.IP, reg.GrpcEndpoint.Port),
+		Track:    track,
 	}, true
 }
 
@@ -248,21 +263,22 @@ func (w *NodeWatcher) reportCount(count int) {
 	}
 }
 
-// PickRandom 随机取一个节点(全局池节点类型的选法:随机,负载感知不在本期)。
-func (w *NodeWatcher) PickRandom() (NodeEntry, bool) {
+// PickRandomForTrack 是全局池节点类型的选法:先按会话的发布轨道留下可用的实例
+// (releasetrack.Select:canary 会话有 canary 就只用 canary、没有退回 stable;stable 会话只用 stable),
+// 再在其中均匀随机取一个(负载感知不在本期)。没有可用实例返回 false。
+func (w *NodeWatcher) PickRandomForTrack(session releasetrack.Track) (NodeEntry, bool) {
 	w.mu.RLock()
-	defer w.mu.RUnlock()
-	if len(w.nodes) == 0 {
+	all := make([]NodeEntry, 0, len(w.nodes))
+	for _, entry := range w.nodes {
+		all = append(all, entry)
+	}
+	w.mu.RUnlock()
+
+	candidates := releasetrack.Select(session, all, func(entry NodeEntry) releasetrack.Track { return entry.Track })
+	if len(candidates) == 0 {
 		return NodeEntry{}, false
 	}
-	idx := rand.Intn(len(w.nodes))
-	for _, entry := range w.nodes {
-		if idx == 0 {
-			return entry, true
-		}
-		idx--
-	}
-	return NodeEntry{}, false
+	return candidates[rand.Intn(len(candidates))], true
 }
 
 // PickRandomInZone 只在 zone_id 相同的节点里随机取一个(zone-scoped 节点类型

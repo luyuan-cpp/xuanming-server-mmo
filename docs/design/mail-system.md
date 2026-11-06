@@ -1288,7 +1288,7 @@ Java `java-mail-notify-sql-redis.log`邮件9/9真实TiDB加Redis测试通过、0
 
 ### 2026-10-21 角色交易后的原会话围栏（源码候选，运行待验）
 
-玩家邮箱入口必须携带原账号、原 `owner_revision`，不能在处理旧请求时读取新目录修订替它补权。Go 从 gate 的原进程 UUID、连接 incarnation 只读全局 login 登录态取账号，并保留 `SessionDetails.owner_revision`；缺账号、修订、进程或连接原件均在仓储调用前拒绝。必须显式配置与 login 相同的全局 Redis 实例和 DB；本地 YAML 的空地址与 `GlobalLoginSessions=false` 是拒启占位值，部署配置必须覆盖。邮件 SQL 池须为同一 TiDB 集群，启动只读检查显式目录库的必要列。
+玩家邮箱入口必须携带原账号、原 `owner_revision`，不能在处理旧请求时读取新目录修订替它补权。原账号只取 gate 签名的会话原件（`shared/roleidentity.CaptureSession`，不读 login 登录态，见 [gate 在线身份](gate-online-identity.md)），并保留 `SessionDetails.owner_revision`；未签名、与原件不符、缺账号、修订、进程或连接原件均在仓储调用前拒绝。mail 不持有 login Redis 连接。邮件 SQL 池须为同一 TiDB 集群，启动只读检查显式目录库的必要列。
 
 列表、已读、删除、清理和领取的业务事务先锁全局目录角色行 P，核原账号、修订和未冻结状态，再执行邮箱守卫、状态、seq 与 op 的原事务；列表使用事务快照。补建邮箱守卫也位于 P 后，不能在预检查之外先写库。仓储校验入口玩家与已捕获原会话玩家一致；旧会话即使命中领取幂等记录仍须先拒绝。后台可信发件与资产收据处理不伪造玩家原会话。
 

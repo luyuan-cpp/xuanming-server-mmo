@@ -6,6 +6,7 @@
 #include "player_activity_handler.h"
 #include "player_attribute_handler.h"
 #include "player_bag_handler.h"
+#include "player_battle_result_handler.h"
 #include "player_currency_handler.h"
 #include "player_lifecycle_handler.h"
 #include "player_mission_handler.h"
@@ -20,6 +21,7 @@ class SceneClientPlayerCommonImpl : public SceneClientPlayerCommon {};
 class SceneActivityClientPlayerImpl : public SceneActivityClientPlayer {};
 class SceneAttributeClientPlayerImpl : public SceneAttributeClientPlayer {};
 class SceneBagClientPlayerImpl : public SceneBagClientPlayer {};
+class SceneBattleResultClientPlayerImpl : public SceneBattleResultClientPlayer {};
 class SceneCurrencyClientPlayerImpl : public SceneCurrencyClientPlayer {};
 class ScenePlayerImpl : public ScenePlayer {};
 class SceneMissionClientPlayerImpl : public SceneMissionClientPlayer {};
@@ -39,6 +41,7 @@ void InitPlayerService()
     gPlayerService.emplace("SceneActivityClientPlayer", std::make_unique<SceneActivityClientPlayerHandler>(std::make_unique<SceneActivityClientPlayerImpl>()));
     gPlayerService.emplace("SceneAttributeClientPlayer", std::make_unique<SceneAttributeClientPlayerHandler>(std::make_unique<SceneAttributeClientPlayerImpl>()));
     gPlayerService.emplace("SceneBagClientPlayer", std::make_unique<SceneBagClientPlayerHandler>(std::make_unique<SceneBagClientPlayerImpl>()));
+    gPlayerService.emplace("SceneBattleResultClientPlayer", std::make_unique<SceneBattleResultClientPlayerHandler>(std::make_unique<SceneBattleResultClientPlayerImpl>()));
     gPlayerService.emplace("SceneCurrencyClientPlayer", std::make_unique<SceneCurrencyClientPlayerHandler>(std::make_unique<SceneCurrencyClientPlayerImpl>()));
     gPlayerService.emplace("ScenePlayer", std::make_unique<ScenePlayerHandler>(std::make_unique<ScenePlayerImpl>()));
     gPlayerService.emplace("SceneMissionClientPlayer", std::make_unique<SceneMissionClientPlayerHandler>(std::make_unique<SceneMissionClientPlayerImpl>()));

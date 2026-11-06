@@ -139,10 +139,25 @@ extend google.protobuf.FieldOptions {
 	// 只经这类字段可达的消息类型不进入往返测试,也不受冻结规则约束。编号说明同 OptionPersistFrozen。
 	optional bool OptionPersistUncarried = 600040;
 
-	// 玩家表字段属于 player_store 的哪一组,取值是 playerstore.PlayerStoreKind 的数值;0 表示元数据,不进片段
+	// 玩家表字段属于 player_store 的哪一行,取值是 playerstore.PlayerStoreKind 的数值;0 表示元数据,不进片段
 	// (docs/design/player-save-direct-commit.md §1.1)。player_database 每个字段都必须声明,
-	// 漏标 scene 拒绝启动,不会静默丢数据。用 uint32 而不是枚举:这个文件被全部 proto 依赖,不能反过来依赖业务 proto。
+	// 漏标或标到退役、不存在的行,scene 拒绝启动,不会静默丢数据。用 uint32 而不是枚举:这个文件被全部 proto 依赖,不能反过来依赖业务 proto。
 	optional uint32 OptionPersistGroup = 600041;
+}
+
+// 玩家存档一行的存盘方式(docs/design/player-save-direct-commit.md §1.1),声明在 playerstore.PlayerStoreKind 的每个数据行上。
+// 它只决定「这一行单独变了要不要触发一次存盘」;一旦决定存盘,所有和上次确认提交不同的行都写,不按方式挑行。
+enum PersistRowSavePolicy {
+	PERSIST_ROW_SAVE_UNSPECIFIED = 0;  // 未声明:scene 拒绝启动
+	PERSIST_ROW_SAVE_PERIODIC = 1;     // 有变化就随下一次定时存盘写入
+	// 只顺带:单独有变化不触发存盘。别的行要写、最终存盘(下线、交接、停机)、或者这一行已经脏了超过兜底间隔时一起写
+	PERSIST_ROW_SAVE_PIGGYBACK = 2;
+}
+
+// Enum-value-level options。编号避开上面各类已用的段。
+extend google.protobuf.EnumValueOptions {
+	// 写在 playerstore.PlayerStoreKind 的每个数据行上;写权行(0)不写。漏标 scene 拒绝启动。
+	optional PersistRowSavePolicy OptionPersistRowSavePolicy = 700000;
 }
 
 // ==============================================================================

@@ -29,6 +29,7 @@
     <ClCompile Include="rpc_replies\register_handler.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="battle_admission_advertise.h" />
     <ClInclude Include="battle_admission_gate.h" />
     <ClInclude Include="battle_push_policy.h" />
     <ClInclude Include="battle_room_table.h" />

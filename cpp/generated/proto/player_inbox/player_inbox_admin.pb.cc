@@ -2548,12 +2548,12 @@ constexpr GmSanctionPlayerRequest::ParseTableT_ GmSanctionPlayerRequest::Interna
     {
       PROTOBUF_FIELD_OFFSET(GmSanctionPlayerRequest, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      10, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
-      3,  // num_aux_entries
+      10,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -2604,6 +2604,10 @@ constexpr GmSanctionPlayerRequest::ParseTableT_ GmSanctionPlayerRequest::Interna
       {PROTOBUF_FIELD_OFFSET(GmSanctionPlayerRequest, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string operator = 8;
       {PROTOBUF_FIELD_OFFSET(GmSanctionPlayerRequest, _impl_.operator__), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .player_inbox.GmItemGainPayload block_item_gain = 9;
+      {PROTOBUF_FIELD_OFFSET(GmSanctionPlayerRequest, _impl_.action_.block_item_gain_), _Internal::kOneofCaseOffset + 0, 3, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .player_inbox.GmItemGainPayload unblock_item_gain = 10;
+      {PROTOBUF_FIELD_OFFSET(GmSanctionPlayerRequest, _impl_.action_.unblock_item_gain_), _Internal::kOneofCaseOffset + 0, 4, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2620,6 +2624,16 @@ constexpr GmSanctionPlayerRequest::ParseTableT_ GmSanctionPlayerRequest::Interna
         {::_pbi::TcParser::GetTable<::player_inbox::GmCurrencyDebtPayload>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::player_inbox::GmCurrencyDebtPayload_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::player_inbox::GmItemGainPayload>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::player_inbox::GmItemGainPayload_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::player_inbox::GmItemGainPayload>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::player_inbox::GmItemGainPayload_globals_},
         #endif
     }},
     {{
@@ -2928,10 +2942,12 @@ const ::uint32_t
         0x085, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_._has_bits_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_._oneof_case_[0]),
-        13, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.issued_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.action_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.action_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmSanctionPlayerRequest, _impl_.action_),
@@ -2941,6 +2957,8 @@ const ::uint32_t
         2,
         3,
         4,
+        ~0u,
+        ~0u,
         ~0u,
         ~0u,
         ~0u,
@@ -3144,21 +3162,21 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::player_inbox::GmSanctionPlayerRequest)},
-        {21, sizeof(::player_inbox::GmSanctionPlayerResponse)},
-        {32, sizeof(::player_inbox::GetPlayerInboxSummaryRequest)},
-        {37, sizeof(::player_inbox::PlayerInboxStreamSummary)},
-        {54, sizeof(::player_inbox::GetPlayerInboxSummaryResponse)},
-        {65, sizeof(::player_inbox::PlayerInboxItemView)},
-        {108, sizeof(::player_inbox::ListPlayerInboxItemsRequest)},
-        {121, sizeof(::player_inbox::ListPlayerInboxItemsResponse)},
-        {130, sizeof(::player_inbox::LookupPlayerInboxRequest)},
-        {139, sizeof(::player_inbox::LookupPlayerInboxResponse)},
-        {146, sizeof(::player_inbox::VoidPlayerInboxItemRequest)},
-        {163, sizeof(::player_inbox::VoidPlayerInboxItemResponse)},
-        {174, sizeof(::player_inbox::ReconcilePlayerInboxRequest)},
-        {181, sizeof(::player_inbox::PlayerInboxReconcileDiff)},
-        {194, sizeof(::player_inbox::PlayerInboxReconcileCursor)},
-        {203, sizeof(::player_inbox::ReconcilePlayerInboxResponse)},
+        {25, sizeof(::player_inbox::GmSanctionPlayerResponse)},
+        {36, sizeof(::player_inbox::GetPlayerInboxSummaryRequest)},
+        {41, sizeof(::player_inbox::PlayerInboxStreamSummary)},
+        {58, sizeof(::player_inbox::GetPlayerInboxSummaryResponse)},
+        {69, sizeof(::player_inbox::PlayerInboxItemView)},
+        {112, sizeof(::player_inbox::ListPlayerInboxItemsRequest)},
+        {125, sizeof(::player_inbox::ListPlayerInboxItemsResponse)},
+        {134, sizeof(::player_inbox::LookupPlayerInboxRequest)},
+        {143, sizeof(::player_inbox::LookupPlayerInboxResponse)},
+        {150, sizeof(::player_inbox::VoidPlayerInboxItemRequest)},
+        {167, sizeof(::player_inbox::VoidPlayerInboxItemResponse)},
+        {178, sizeof(::player_inbox::ReconcilePlayerInboxRequest)},
+        {185, sizeof(::player_inbox::PlayerInboxReconcileDiff)},
+        {198, sizeof(::player_inbox::PlayerInboxReconcileCursor)},
+        {207, sizeof(::player_inbox::ReconcilePlayerInboxResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3184,122 +3202,125 @@ const char descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5fa
     "\n+proto/player_inbox/player_inbox_admin."
     "proto\022\014player_inbox\032\033proto/common/base/t"
     "ip.proto\032%proto/player_inbox/player_inbo"
-    "x.proto\"\266\002\n\027GmSanctionPlayerRequest\022\021\n\tp"
+    "x.proto\"\260\003\n\027GmSanctionPlayerRequest\022\021\n\tp"
     "layer_id\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\004\022\024\n\014is"
     "sued_at_ms\030\003 \001(\004\0229\n\nblock_gain\030\004 \001(\0132#.p"
     "layer_inbox.GmCurrencyGainPayloadH\000\022;\n\014u"
     "nblock_gain\030\005 \001(\0132#.player_inbox.GmCurre"
     "ncyGainPayloadH\000\022:\n\013attach_debt\030\006 \001(\0132#."
-    "player_inbox.GmCurrencyDebtPayloadH\000\022\016\n\006"
-    "reason\030\007 \001(\t\022\020\n\010operator\030\010 \001(\tB\010\n\006action"
-    "\"\223\001\n\030GmSanctionPlayerResponse\022&\n\rerror_m"
-    "essage\030\001 \001(\0132\017.TipInfoMessage\022\013\n\003seq\030\002 \001"
-    "(\004\022\017\n\007created\030\003 \001(\010\0221\n\005state\030\004 \001(\0162\".pla"
-    "yer_inbox.PlayerInboxItemState\"1\n\034GetPla"
-    "yerInboxSummaryRequest\022\021\n\tplayer_id\030\001 \001("
-    "\004\"\341\001\n\030PlayerInboxStreamSummary\022/\n\006domain"
+    "player_inbox.GmCurrencyDebtPayloadH\000\022:\n\017"
+    "block_item_gain\030\t \001(\0132\037.player_inbox.GmI"
+    "temGainPayloadH\000\022<\n\021unblock_item_gain\030\n "
+    "\001(\0132\037.player_inbox.GmItemGainPayloadH\000\022\016"
+    "\n\006reason\030\007 \001(\t\022\020\n\010operator\030\010 \001(\tB\010\n\006acti"
+    "on\"\223\001\n\030GmSanctionPlayerResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022\013\n\003seq\030\002"
+    " \001(\004\022\017\n\007created\030\003 \001(\010\0221\n\005state\030\004 \001(\0162\".p"
+    "layer_inbox.PlayerInboxItemState\"1\n\034GetP"
+    "layerInboxSummaryRequest\022\021\n\tplayer_id\030\001 "
+    "\001(\004\"\341\001\n\030PlayerInboxStreamSummary\022/\n\006doma"
+    "in\030\001 \001(\0162\037.player_inbox.PlayerInboxDomai"
+    "n\022\022\n\nopen_count\030\002 \001(\r\022\020\n\010next_seq\030\003 \001(\004\022"
+    "\023\n\013fence_epoch\030\004 \001(\004\022\037\n\027delivered_unacke"
+    "d_count\030\005 \001(\r\022!\n\031oldest_pending_created_"
+    "ms\030\006 \001(\004\022\025\n\rnotify_due_ms\030\007 \001(\004\"\254\001\n\035GetP"
+    "layerInboxSummaryResponse\022&\n\rerror_messa"
+    "ge\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tplayer_id\030\002"
+    " \001(\004\0227\n\007streams\030\003 \003(\0132&.player_inbox.Pla"
+    "yerInboxStreamSummary\022\027\n\017max_fence_epoch"
+    "\030\004 \001(\004\"\257\005\n\023PlayerInboxItemView\022/\n\006domain"
     "\030\001 \001(\0162\037.player_inbox.PlayerInboxDomain\022"
-    "\022\n\nopen_count\030\002 \001(\r\022\020\n\010next_seq\030\003 \001(\004\022\023\n"
-    "\013fence_epoch\030\004 \001(\004\022\037\n\027delivered_unacked_"
-    "count\030\005 \001(\r\022!\n\031oldest_pending_created_ms"
-    "\030\006 \001(\004\022\025\n\rnotify_due_ms\030\007 \001(\004\"\254\001\n\035GetPla"
-    "yerInboxSummaryResponse\022&\n\rerror_message"
-    "\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tplayer_id\030\002 \001"
-    "(\004\0227\n\007streams\030\003 \003(\0132&.player_inbox.Playe"
-    "rInboxStreamSummary\022\027\n\017max_fence_epoch\030\004"
-    " \001(\004\"\257\005\n\023PlayerInboxItemView\022/\n\006domain\030\001"
-    " \001(\0162\037.player_inbox.PlayerInboxDomain\022\013\n"
-    "\003seq\030\002 \001(\004\0226\n\010msg_type\030\003 \001(\0162$.player_in"
-    "box.PlayerInboxMessageType\022<\n\rproducer_k"
-    "ind\030\004 \001(\0162%.player_inbox.PlayerInboxProd"
-    "ucerKind\022\022\n\nrequest_id\030\005 \001(\004\022\017\n\007payload\030"
-    "\006 \001(\014\0221\n\005state\030\007 \001(\0162\".player_inbox.Play"
-    "erInboxItemState\0225\n\tdirective\030\010 \001(\0162\".pl"
-    "ayer_inbox.PlayerInboxDirective\0228\n\013void_"
-    "reason\030\t \001(\0162#.player_inbox.PlayerInboxV"
-    "oidReason\022\026\n\016delivery_count\030\n \001(\r\022\034\n\024las"
-    "t_delivered_epoch\030\013 \001(\004\022\031\n\021last_delivere"
-    "d_ms\030\014 \001(\004\022\026\n\016outcome_reason\030\r \001(\r\0228\n\014fi"
-    "nalized_by\030\016 \001(\0162\".player_inbox.PlayerIn"
-    "boxFinalizer\022\025\n\rdecided_epoch\030\017 \001(\004\022\024\n\014i"
-    "ssued_at_ms\030\020 \001(\004\022\022\n\ncreated_ms\030\021 \001(\004\022\022\n"
-    "\nupdated_ms\030\022 \001(\004\022\025\n\roperator_name\030\023 \001(\t"
-    "\022\014\n\004note\030\024 \001(\t\"\266\001\n\033ListPlayerInboxItemsR"
-    "equest\022\021\n\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 \001("
-    "\0162\037.player_inbox.PlayerInboxDomain\0221\n\005st"
-    "ate\030\003 \001(\0162\".player_inbox.PlayerInboxItem"
-    "State\022\021\n\tafter_seq\030\004 \001(\004\022\r\n\005limit\030\005 \001(\r\""
-    "\212\001\n\034ListPlayerInboxItemsResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\0220\n\005item"
-    "s\030\002 \003(\0132!.player_inbox.PlayerInboxItemVi"
-    "ew\022\020\n\010has_more\030\003 \001(\010\"\177\n\030LookupPlayerInbo"
-    "xRequest\022\021\n\tplayer_id\030\001 \001(\004\022<\n\rproducer_"
-    "kind\030\002 \001(\0162%.player_inbox.PlayerInboxPro"
-    "ducerKind\022\022\n\nrequest_id\030\003 \001(\004\"t\n\031LookupP"
-    "layerInboxResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\022/\n\004item\030\002 \001(\0132!.playe"
-    "r_inbox.PlayerInboxItemView\"\363\001\n\032VoidPlay"
-    "erInboxItemRequest\022\021\n\tplayer_id\030\001 \001(\004\022/\n"
-    "\006domain\030\002 \001(\0162\037.player_inbox.PlayerInbox"
-    "Domain\022\013\n\003seq\030\003 \001(\004\0223\n\006reason\030\004 \001(\0162#.pl"
-    "ayer_inbox.PlayerInboxVoidReason\022\020\n\010oper"
-    "ator\030\005 \001(\t\022\014\n\004note\030\006 \001(\t\022/\n\004mode\030\007 \001(\0162!"
-    ".player_inbox.PlayerInboxVoidMode\"\322\001\n\033Vo"
-    "idPlayerInboxItemResponse\022&\n\rerror_messa"
-    "ge\030\001 \001(\0132\017.TipInfoMessage\0221\n\005state\030\002 \001(\016"
-    "2\".player_inbox.PlayerInboxItemState\022\026\n\016"
-    "void_requested\030\003 \001(\010\022@\n\rforce_verdict\030\004 "
-    "\001(\0162).player_inbox.PlayerInboxForceVoidV"
-    "erdict\"a\n\033ReconcilePlayerInboxRequest\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.playe"
-    "r_inbox.PlayerInboxDomain\"\331\001\n\030PlayerInbo"
-    "xReconcileDiff\022/\n\006domain\030\001 \001(\0162\037.player_"
-    "inbox.PlayerInboxDomain\022\013\n\003seq\030\002 \001(\004\0228\n\004"
-    "kind\030\003 \001(\0162*.player_inbox.PlayerInboxRec"
-    "oncileDiffKind\0221\n\005state\030\004 \001(\0162\".player_i"
-    "nbox.PlayerInboxItemState\022\022\n\nrequest_id\030"
-    "\005 \001(\004\"\205\001\n\032PlayerInboxReconcileCursor\022/\n\006"
-    "domain\030\001 \001(\0162\037.player_inbox.PlayerInboxD"
-    "omain\022\036\n\026ledger_decided_through\030\002 \001(\004\022\026\n"
-    "\016inbox_next_seq\030\003 \001(\004\"\316\001\n\034ReconcilePlaye"
-    "rInboxResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\024\n\014ledger_found\030\002 \001(\010\0229\n\007"
-    "cursors\030\003 \003(\0132(.player_inbox.PlayerInbox"
-    "ReconcileCursor\0225\n\005diffs\030\004 \003(\0132&.player_"
-    "inbox.PlayerInboxReconcileDiff*c\n\023Player"
-    "InboxVoidMode\022!\n\035PLAYER_INBOX_VOID_MODE_"
-    "NORMAL\020\000\022)\n%PLAYER_INBOX_VOID_MODE_FORCE"
-    "_MISMATCH\020\001*\361\002\n\033PlayerInboxForceVoidVerd"
-    "ict\022\'\n#PLAYER_INBOX_FORCE_VOID_UNSPECIFI"
-    "ED\020\000\022\"\n\036PLAYER_INBOX_FORCE_VOID_PROVEN\020\001"
-    "\022)\n%PLAYER_INBOX_FORCE_VOID_NOT_DELIVERE"
-    "D\020\002\022)\n%PLAYER_INBOX_FORCE_VOID_LEDGER_AB"
-    "SENT\020\003\022\'\n#PLAYER_INBOX_FORCE_VOID_NOT_DE"
-    "CIDED\020\004\022+\n\'PLAYER_INBOX_FORCE_VOID_SEQ_N"
-    "OT_IN_RING\020\005\022-\n)PLAYER_INBOX_FORCE_VOID_"
-    "REQUEST_IN_LEDGER\020\006\022*\n&PLAYER_INBOX_FORC"
-    "E_VOID_LEDGER_INVALID\020\007*\253\001\n\034PlayerInboxR"
-    "econcileDiffKind\022+\n\'PLAYER_INBOX_RECONCI"
-    "LE_DIFF_UNSPECIFIED\020\000\022.\n*PLAYER_INBOX_RE"
-    "CONCILE_FINAL_NOT_IN_LEDGER\020\001\022.\n*PLAYER_"
-    "INBOX_RECONCILE_PENDING_BUT_DECIDED\020\0022\373\004"
-    "\n\020PlayerInboxAdmin\022c\n\020GmSanctionPlayer\022%"
-    ".player_inbox.GmSanctionPlayerRequest\032&."
-    "player_inbox.GmSanctionPlayerResponse\"\000\022"
-    "g\n\nGetSummary\022*.player_inbox.GetPlayerIn"
-    "boxSummaryRequest\032+.player_inbox.GetPlay"
-    "erInboxSummaryResponse\"\000\022d\n\tListItems\022)."
-    "player_inbox.ListPlayerInboxItemsRequest"
-    "\032*.player_inbox.ListPlayerInboxItemsResp"
-    "onse\"\000\022d\n\017LookupByRequest\022&.player_inbox"
-    ".LookupPlayerInboxRequest\032\'.player_inbox"
-    ".LookupPlayerInboxResponse\"\000\022a\n\010VoidItem"
-    "\022(.player_inbox.VoidPlayerInboxItemReque"
-    "st\032).player_inbox.VoidPlayerInboxItemRes"
-    "ponse\"\000\022j\n\017ReconcilePlayer\022).player_inbo"
-    "x.ReconcilePlayerInboxRequest\032*.player_i"
-    "nbox.ReconcilePlayerInboxResponse\"\000B\036Z\031p"
-    "layer_inbox/player_inbox\200\001\000b\006proto3"
+    "\013\n\003seq\030\002 \001(\004\0226\n\010msg_type\030\003 \001(\0162$.player_"
+    "inbox.PlayerInboxMessageType\022<\n\rproducer"
+    "_kind\030\004 \001(\0162%.player_inbox.PlayerInboxPr"
+    "oducerKind\022\022\n\nrequest_id\030\005 \001(\004\022\017\n\007payloa"
+    "d\030\006 \001(\014\0221\n\005state\030\007 \001(\0162\".player_inbox.Pl"
+    "ayerInboxItemState\0225\n\tdirective\030\010 \001(\0162\"."
+    "player_inbox.PlayerInboxDirective\0228\n\013voi"
+    "d_reason\030\t \001(\0162#.player_inbox.PlayerInbo"
+    "xVoidReason\022\026\n\016delivery_count\030\n \001(\r\022\034\n\024l"
+    "ast_delivered_epoch\030\013 \001(\004\022\031\n\021last_delive"
+    "red_ms\030\014 \001(\004\022\026\n\016outcome_reason\030\r \001(\r\0228\n\014"
+    "finalized_by\030\016 \001(\0162\".player_inbox.Player"
+    "InboxFinalizer\022\025\n\rdecided_epoch\030\017 \001(\004\022\024\n"
+    "\014issued_at_ms\030\020 \001(\004\022\022\n\ncreated_ms\030\021 \001(\004\022"
+    "\022\n\nupdated_ms\030\022 \001(\004\022\025\n\roperator_name\030\023 \001"
+    "(\t\022\014\n\004note\030\024 \001(\t\"\266\001\n\033ListPlayerInboxItem"
+    "sRequest\022\021\n\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 "
+    "\001(\0162\037.player_inbox.PlayerInboxDomain\0221\n\005"
+    "state\030\003 \001(\0162\".player_inbox.PlayerInboxIt"
+    "emState\022\021\n\tafter_seq\030\004 \001(\004\022\r\n\005limit\030\005 \001("
+    "\r\"\212\001\n\034ListPlayerInboxItemsResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\0220\n\005it"
+    "ems\030\002 \003(\0132!.player_inbox.PlayerInboxItem"
+    "View\022\020\n\010has_more\030\003 \001(\010\"\177\n\030LookupPlayerIn"
+    "boxRequest\022\021\n\tplayer_id\030\001 \001(\004\022<\n\rproduce"
+    "r_kind\030\002 \001(\0162%.player_inbox.PlayerInboxP"
+    "roducerKind\022\022\n\nrequest_id\030\003 \001(\004\"t\n\031Looku"
+    "pPlayerInboxResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\022/\n\004item\030\002 \001(\0132!.pla"
+    "yer_inbox.PlayerInboxItemView\"\363\001\n\032VoidPl"
+    "ayerInboxItemRequest\022\021\n\tplayer_id\030\001 \001(\004\022"
+    "/\n\006domain\030\002 \001(\0162\037.player_inbox.PlayerInb"
+    "oxDomain\022\013\n\003seq\030\003 \001(\004\0223\n\006reason\030\004 \001(\0162#."
+    "player_inbox.PlayerInboxVoidReason\022\020\n\010op"
+    "erator\030\005 \001(\t\022\014\n\004note\030\006 \001(\t\022/\n\004mode\030\007 \001(\016"
+    "2!.player_inbox.PlayerInboxVoidMode\"\322\001\n\033"
+    "VoidPlayerInboxItemResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\0221\n\005state\030\002 \001"
+    "(\0162\".player_inbox.PlayerInboxItemState\022\026"
+    "\n\016void_requested\030\003 \001(\010\022@\n\rforce_verdict\030"
+    "\004 \001(\0162).player_inbox.PlayerInboxForceVoi"
+    "dVerdict\"a\n\033ReconcilePlayerInboxRequest\022"
+    "\021\n\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.pla"
+    "yer_inbox.PlayerInboxDomain\"\331\001\n\030PlayerIn"
+    "boxReconcileDiff\022/\n\006domain\030\001 \001(\0162\037.playe"
+    "r_inbox.PlayerInboxDomain\022\013\n\003seq\030\002 \001(\004\0228"
+    "\n\004kind\030\003 \001(\0162*.player_inbox.PlayerInboxR"
+    "econcileDiffKind\0221\n\005state\030\004 \001(\0162\".player"
+    "_inbox.PlayerInboxItemState\022\022\n\nrequest_i"
+    "d\030\005 \001(\004\"\205\001\n\032PlayerInboxReconcileCursor\022/"
+    "\n\006domain\030\001 \001(\0162\037.player_inbox.PlayerInbo"
+    "xDomain\022\036\n\026ledger_decided_through\030\002 \001(\004\022"
+    "\026\n\016inbox_next_seq\030\003 \001(\004\"\316\001\n\034ReconcilePla"
+    "yerInboxResponse\022&\n\rerror_message\030\001 \001(\0132"
+    "\017.TipInfoMessage\022\024\n\014ledger_found\030\002 \001(\010\0229"
+    "\n\007cursors\030\003 \003(\0132(.player_inbox.PlayerInb"
+    "oxReconcileCursor\0225\n\005diffs\030\004 \003(\0132&.playe"
+    "r_inbox.PlayerInboxReconcileDiff*c\n\023Play"
+    "erInboxVoidMode\022!\n\035PLAYER_INBOX_VOID_MOD"
+    "E_NORMAL\020\000\022)\n%PLAYER_INBOX_VOID_MODE_FOR"
+    "CE_MISMATCH\020\001*\361\002\n\033PlayerInboxForceVoidVe"
+    "rdict\022\'\n#PLAYER_INBOX_FORCE_VOID_UNSPECI"
+    "FIED\020\000\022\"\n\036PLAYER_INBOX_FORCE_VOID_PROVEN"
+    "\020\001\022)\n%PLAYER_INBOX_FORCE_VOID_NOT_DELIVE"
+    "RED\020\002\022)\n%PLAYER_INBOX_FORCE_VOID_LEDGER_"
+    "ABSENT\020\003\022\'\n#PLAYER_INBOX_FORCE_VOID_NOT_"
+    "DECIDED\020\004\022+\n\'PLAYER_INBOX_FORCE_VOID_SEQ"
+    "_NOT_IN_RING\020\005\022-\n)PLAYER_INBOX_FORCE_VOI"
+    "D_REQUEST_IN_LEDGER\020\006\022*\n&PLAYER_INBOX_FO"
+    "RCE_VOID_LEDGER_INVALID\020\007*\253\001\n\034PlayerInbo"
+    "xReconcileDiffKind\022+\n\'PLAYER_INBOX_RECON"
+    "CILE_DIFF_UNSPECIFIED\020\000\022.\n*PLAYER_INBOX_"
+    "RECONCILE_FINAL_NOT_IN_LEDGER\020\001\022.\n*PLAYE"
+    "R_INBOX_RECONCILE_PENDING_BUT_DECIDED\020\0022"
+    "\373\004\n\020PlayerInboxAdmin\022c\n\020GmSanctionPlayer"
+    "\022%.player_inbox.GmSanctionPlayerRequest\032"
+    "&.player_inbox.GmSanctionPlayerResponse\""
+    "\000\022g\n\nGetSummary\022*.player_inbox.GetPlayer"
+    "InboxSummaryRequest\032+.player_inbox.GetPl"
+    "ayerInboxSummaryResponse\"\000\022d\n\tListItems\022"
+    ").player_inbox.ListPlayerInboxItemsReque"
+    "st\032*.player_inbox.ListPlayerInboxItemsRe"
+    "sponse\"\000\022d\n\017LookupByRequest\022&.player_inb"
+    "ox.LookupPlayerInboxRequest\032\'.player_inb"
+    "ox.LookupPlayerInboxResponse\"\000\022a\n\010VoidIt"
+    "em\022(.player_inbox.VoidPlayerInboxItemReq"
+    "uest\032).player_inbox.VoidPlayerInboxItemR"
+    "esponse\"\000\022j\n\017ReconcilePlayer\022).player_in"
+    "box.ReconcilePlayerInboxRequest\032*.player"
+    "_inbox.ReconcilePlayerInboxResponse\"\000B\036Z"
+    "\031player_inbox/player_inbox\200\001\000b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto_deps[2] = {
@@ -3310,7 +3331,7 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto = {
     false,
     false,
-    4755,
+    4877,
     descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto,
     "proto/player_inbox/player_inbox_admin.proto",
     &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto_once,
@@ -3419,6 +3440,54 @@ void GmSanctionPlayerRequest::clear_attach_debt() {
     clear_has_action();
   }
 }
+void GmSanctionPlayerRequest::set_allocated_block_item_gain(::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE block_item_gain) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_action();
+  if (block_item_gain) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(block_item_gain)->GetArena();
+    if (message_arena != submessage_arena) {
+      block_item_gain = ::google::protobuf::internal::GetOwnedMessage(message_arena, block_item_gain, submessage_arena);
+    }
+    set_has_block_item_gain();
+    _impl_.action_.block_item_gain_ = block_item_gain;
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.GmSanctionPlayerRequest.block_item_gain)
+}
+void GmSanctionPlayerRequest::clear_block_item_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (action_case() == kBlockItemGain) {
+    if (GetArena() == nullptr) {
+      delete _impl_.action_.block_item_gain_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.block_item_gain_);
+    }
+    clear_has_action();
+  }
+}
+void GmSanctionPlayerRequest::set_allocated_unblock_item_gain(::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE unblock_item_gain) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_action();
+  if (unblock_item_gain) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(unblock_item_gain)->GetArena();
+    if (message_arena != submessage_arena) {
+      unblock_item_gain = ::google::protobuf::internal::GetOwnedMessage(message_arena, unblock_item_gain, submessage_arena);
+    }
+    set_has_unblock_item_gain();
+    _impl_.action_.unblock_item_gain_ = unblock_item_gain;
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.GmSanctionPlayerRequest.unblock_item_gain)
+}
+void GmSanctionPlayerRequest::clear_unblock_item_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (action_case() == kUnblockItemGain) {
+    if (GetArena() == nullptr) {
+      delete _impl_.action_.unblock_item_gain_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.unblock_item_gain_);
+    }
+    clear_has_action();
+  }
+}
 GmSanctionPlayerRequest::GmSanctionPlayerRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, GmSanctionPlayerRequest_get_class_data()) {
@@ -3471,6 +3540,12 @@ GmSanctionPlayerRequest::GmSanctionPlayerRequest(
         break;
       case kAttachDebt:
         _impl_.action_.attach_debt_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.attach_debt_);
+        break;
+      case kBlockItemGain:
+        _impl_.action_.block_item_gain_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.block_item_gain_);
+        break;
+      case kUnblockItemGain:
+        _impl_.action_.unblock_item_gain_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.unblock_item_gain_);
         break;
   }
 
@@ -3538,6 +3613,22 @@ void GmSanctionPlayerRequest::clear_action() {
         delete _impl_.action_.attach_debt_;
       } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
         ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.attach_debt_);
+      }
+      break;
+    }
+    case kBlockItemGain: {
+      if (GetArena() == nullptr) {
+        delete _impl_.action_.block_item_gain_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.block_item_gain_);
+      }
+      break;
+    }
+    case kUnblockItemGain: {
+      if (GetArena() == nullptr) {
+        delete _impl_.action_.unblock_item_gain_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.action_.unblock_item_gain_);
       }
       break;
     }
@@ -3689,6 +3780,22 @@ PROTOBUF_NOINLINE void GmSanctionPlayerRequest::Clear() {
     }
   }
 
+  switch (this_.action_case()) {
+    case kBlockItemGain: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          9, *this_._impl_.action_.block_item_gain_, this_._impl_.action_.block_item_gain_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kUnblockItemGain: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          10, *this_._impl_.action_.unblock_item_gain_, this_._impl_.action_.unblock_item_gain_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    default:
+      break;
+  }
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3768,6 +3875,18 @@ PROTOBUF_NOINLINE void GmSanctionPlayerRequest::Clear() {
     case kAttachDebt: {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.attach_debt_);
+      break;
+    }
+    // .player_inbox.GmItemGainPayload block_item_gain = 9;
+    case kBlockItemGain: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.block_item_gain_);
+      break;
+    }
+    // .player_inbox.GmItemGainPayload unblock_item_gain = 10;
+    case kUnblockItemGain: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.action_.unblock_item_gain_);
       break;
     }
     case ACTION_NOT_SET: {
@@ -3861,6 +3980,22 @@ void GmSanctionPlayerRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_impl_.action_.attach_debt_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.attach_debt_);
         } else {
           _this->_impl_.action_.attach_debt_->MergeFrom(*from._impl_.action_.attach_debt_);
+        }
+        break;
+      }
+      case kBlockItemGain: {
+        if (oneof_needs_init) {
+          _this->_impl_.action_.block_item_gain_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.block_item_gain_);
+        } else {
+          _this->_impl_.action_.block_item_gain_->MergeFrom(*from._impl_.action_.block_item_gain_);
+        }
+        break;
+      }
+      case kUnblockItemGain: {
+        if (oneof_needs_init) {
+          _this->_impl_.action_.unblock_item_gain_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.action_.unblock_item_gain_);
+        } else {
+          _this->_impl_.action_.unblock_item_gain_->MergeFrom(*from._impl_.action_.unblock_item_gain_);
         }
         break;
       }

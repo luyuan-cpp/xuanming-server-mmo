@@ -50,17 +50,28 @@ using equiprules::AffixTier;
 using equiprules::EffectKind;
 
 
-// 等级 / 职业的取法与 player_attribute.cpp 的同名函数同口径(那两个是它的文件内私有函数,
-// 这里照 player_pet.cpp 的 OwnerLevel 的做法各留一份;改组件归属时三处一起改)。
-// 等级按 playerlevel::CappedLevel 生效(超上限的存储等级按上限,0 按 1,player_level_rules.h);缺组件仍按 1 级。
+// 穿戴门槛的两项持久输入(等级、职业),都由加载挂上(组件访问规则)。缺任一项是加载不变量被破坏:
+// 记 ERROR 并返回 false,调用方按服务端故障拒绝 —— 不按 1 级 / 0 号职业判门槛(那会让坏档玩家穿上 1 级、不限职业的装备)。
+bool HasLevelAndClass(entt::entity player) {
+	const auto& registry = tlsEcs.actorRegistry;
+	if (registry.all_of<LevelComp, PlayerUint32Comp>(player)) {
+		return true;
+	}
+	LOG_ERROR << "[PlayerEquip] Persisted input missing (load invariant broken); equip rejected: player_id="
+			  << tlsEcs.GetPlayerId(player) << " has_level=" << registry.all_of<LevelComp>(player)
+			  << " has_class=" << registry.all_of<PlayerUint32Comp>(player);
+	return false;
+}
+
+// 等级 / 职业的取法与 player_attribute.cpp 的同名函数同口径(那两个是它的文件内私有函数,这里各留一份;
+// 改组件归属时几处一起改)。调用方都已过 HasLevelAndClass。
+// 等级按 playerlevel::CappedLevel 生效(超上限的存储等级按上限,0 按 1,player_level_rules.h)。
 uint32_t PlayerLevel(entt::entity player) {
-	const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
-	return levelComp != nullptr ? playerlevel::CappedLevel(levelComp->level()) : 1;
+	return playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 }
 
 uint32_t PlayerClassId(entt::entity player) {
-	const auto* uint32Comp = tlsEcs.actorRegistry.try_get<PlayerUint32Comp>(player);
-	return uint32Comp != nullptr ? uint32Comp->class_() : 0;
+	return tlsEcs.actorRegistry.get<PlayerUint32Comp>(player).class_();
 }
 
 // 表行借用只在下一次 Load() 之前有效:下面所有用法都是「现查现用」,不跨请求保存。
@@ -927,7 +938,7 @@ uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
 		return err;
 	}
 	auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
-	if (bags == nullptr) {
+	if (bags == nullptr || !HasLevelAndClass(player)) {
 		return kEquipInternalError;
 	}
 	Bag& inventory = bags->bags[kInventory];

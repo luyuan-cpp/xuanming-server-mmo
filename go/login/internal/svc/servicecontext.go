@@ -409,7 +409,7 @@ func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zon
 // 剔除正在排空的 gate 放在这里而不是 PickGate 里,是因为这是**所有** gate 选择路径的唯一收口
 // (队列 dispatcher 与非队列快路径都经过它),而 PickGate 是个纯函数、拿不到 Redis。
 // rdb 为 nil 时跳过排空过滤。失败方向是放行不是拦截,全部被标记时也会放行 —— 见 FilterDrainingGates。
-func candidatesFromNodes(ctx context.Context, rdb *redis.Client, nodes []*login_proto.NodeInfo,
+func candidatesFromNodes(ctx context.Context, rdb *redis.Client, nodes []node.WatchedNode,
 	zoneID uint32, require bool) []loginqueue.GateCandidate {
 	out := buildGateCandidates(nodes, zoneID, require)
 	if rdb != nil {
@@ -440,10 +440,13 @@ type gateChoice struct {
 //  3. 按选中的地址 DedupeNewest,同一地址只留 launch_time 最大者,见 clientendpoint.DedupeNewest。
 //
 // 排空过滤不在这里,由调用方在本函数**之后**做(见 CandidatesForZone)。
+// 停写(WatchedNode.Stale)与自报上限(NodeInfo.max_connections)只原样透传进候选,这里不过滤:
+// 容量记账(FreeSlots)要数到每台 gate 上的人,过滤在 loginqueue 挑 gate 时做(eligibleGates)。
 // 输出保持 nodes 的相对顺序;最终挑哪台由 loginqueue.PickGate 按负载决定,与顺序无关。
-func buildGateCandidates(nodes []*login_proto.NodeInfo, zoneID uint32, require bool) []loginqueue.GateCandidate {
+func buildGateCandidates(nodes []node.WatchedNode, zoneID uint32, require bool) []loginqueue.GateCandidate {
 	choices := make([]gateChoice, 0, len(nodes))
-	for _, n := range nodes {
+	for _, w := range nodes {
+		n := w.Info
 		if n == nil || n.Endpoint == nil {
 			continue
 		}
@@ -459,11 +462,13 @@ func buildGateCandidates(nodes []*login_proto.NodeInfo, zoneID uint32, require b
 		}
 		choices = append(choices, gateChoice{
 			candidate: loginqueue.GateCandidate{
-				NodeID:      n.NodeId,
-				IP:          host,
-				Port:        port,
-				PlayerCount: n.PlayerCount,
-				ZoneID:      n.ZoneId,
+				NodeID:         n.NodeId,
+				IP:             host,
+				Port:           port,
+				PlayerCount:    n.PlayerCount,
+				ZoneID:         n.ZoneId,
+				MaxConnections: n.MaxConnections,
+				Stale:          w.Stale,
 			},
 			launchTime: n.LaunchTime,
 		})

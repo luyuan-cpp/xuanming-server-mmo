@@ -971,12 +971,16 @@ func (x *ClientRequest) GetMessageId() uint32 {
 }
 
 type NodeHandshakeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
-	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
-	SelfNode      *NodeInfo              `protobuf:"bytes,3,opt,name=self_node,json=selfNode,proto3" json:"self_node,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Version  string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Token    string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	SelfNode *NodeInfo              `protobuf:"bytes,3,opt,name=self_node,json=selfNode,proto3" json:"self_node,omitempty"`
+	// 发起方要连的对端进程实例(对端 NodeInfo.node_uuid,取自权威发现)。入站侧只有它等于本进程 uuid 才登记:
+	// 同一地址上换了进程(崩溃后原地重启,旧实例的 etcd 键要等租约过期才消失)时,发起方指向旧实例的连接会连到新进程,
+	// 不核对的话它会顶替真正链路上的回推会话。空值一律拒绝。见 docs/design/muduo-rpc-channel.md §8.3。
+	ExpectedPeerUuid string `protobuf:"bytes,4,opt,name=expected_peer_uuid,json=expectedPeerUuid,proto3" json:"expected_peer_uuid,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *NodeHandshakeRequest) Reset() {
@@ -1028,6 +1032,13 @@ func (x *NodeHandshakeRequest) GetSelfNode() *NodeInfo {
 		return x.SelfNode
 	}
 	return nil
+}
+
+func (x *NodeHandshakeRequest) GetExpectedPeerUuid() string {
+	if x != nil {
+		return x.ExpectedPeerUuid
+	}
+	return ""
 }
 
 type NodeHandshakeResponse struct {
@@ -1356,11 +1367,12 @@ const file_proto_common_base_message_proto_rawDesc = "" +
 	"\x06method\x18\x03 \x01(\tR\x06method\x12\x12\n" +
 	"\x04body\x18\x04 \x01(\fR\x04body\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x05 \x01(\rR\tmessageId\"n\n" +
+	"message_id\x18\x05 \x01(\rR\tmessageId\"\x9c\x01\n" +
 	"\x14NodeHandshakeRequest\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12&\n" +
-	"\tself_node\x18\x03 \x01(\v2\t.NodeInfoR\bselfNode\"u\n" +
+	"\tself_node\x18\x03 \x01(\v2\t.NodeInfoR\bselfNode\x12,\n" +
+	"\x12expected_peer_uuid\x18\x04 \x01(\tR\x10expectedPeerUuid\"u\n" +
 	"\x15NodeHandshakeResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12&\n" +
 	"\tpeer_node\x18\x02 \x01(\v2\t.NodeInfoR\bpeerNode\"\xe5\x01\n" +

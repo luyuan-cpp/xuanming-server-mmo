@@ -1227,6 +1227,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
    - SessionInfo 新增两个字段:`lastSceneRoute`(每次路由到达时无条件覆盖,供 BindSession 晚到时建欠账)和 `std::optional<PendingSceneEntry> pendingSceneEntry`。
 3. **通信层提供链路就绪能力**
    - 节点客户端显式选择 `Readiness::kAfterHandshake`,每次 TCP UP 立即发送一次现有 `NodeHandshake`,3s 截止。通信层核对预期实例身份及本次连接后才提交 Ready;普通业务 `CallMethod` / `SendRequest` 统一受此门禁约束。
+   - 身份双向核对:请求点名要连的 scene 实例(`expected_peer_uuid`),scene 不是它就拒绝、不换回推用的 `RpcSession`(scene 原地重启时,gate 指向旧实例的连接不能顶替真正链路);失败按 0.5s 起翻倍、8s 封顶退避后关闭重连。细节与理由见 `muduo-rpc-channel.md` §8.3。
    - `ForwardPlayerToScene` 只查询 `RpcClient::IsReady()`:未就绪时返回 `kNotConnected`,不比较连接、不写业务握手组件。握手失败、旧连接回包和关机后的晚回包都不能使替代连接就绪。
    - 已删除 `SetHandshakeSucceededHook`、`SceneLinkHandshakeComp`、`OnSceneLinkHandshaken` 与业务侧 `ClassifySceneLink`。通信成功不遍历玩家会话,不提前调整欠账时间。
    - pending 由自己的扫描按 `nextAttemptAt` 推进;退避封顶 2s、扫描周期 250ms。短暂 TCP 断开只使链路不可用,不删除玩家内存或会话路由;节点 UUID 变化仍按新进程处理。
@@ -1258,7 +1259,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 9. **可观测性**
    - `[SceneEntry] forward deferred` / `forward recovered` 按 1/64 采样,第一条必打。
    - `giving up` 不采样。
-   - 通信层确认就绪时打 `Node link ready: type=… uuid=…`;Gate 业务不再打 `scene link ready` 或计 `links_ready`。
+   - 通信层确认就绪时打 `Node link ready: type=… uuid=… node_id=… zone=…, peer=…`;握手失败打 `Node handshake failed: …`(格式见 `muduo-rpc-channel.md` §8.3 表)。Gate 业务不再打 `scene link ready` 或计 `links_ready`。
    - 30s 汇总行 `[SceneEntry] deferred= recovered= gave_up= superseded= session_closed= player_changed= pending=`,有变化才打。
    - 原来逐条的 `RoutePlayer: scene node not found in registry` 等三条 ERROR 已删除(已核实没有下游依赖)。
 
@@ -2021,7 +2022,9 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
   - 历史(2026-10-24 复核订正):旧实现用 `SceneLinkHandshakeComp` 证明当前连接已经核验 UUID;更早只取注册表里 `RpcClient` 的连接,同地址换了进程、旧 RpcClient 重连到新进程而握手被拒时会认错发送方。新通信层查询保留这道当前连接约束,不能退回按端点、预期 UUID 或另一条连接推断发送身份。
 - 任一侧认不出时照发,与旧行为相同:34 是让客户端脱困的出口,没有证据就丢,会让一个实体已被销毁的客户端挂在原地。比进程实例号,不比 node_id 或实体句柄。
 - 只拦 34:前面那条 tip 仍会送到,多显示一条"传送未成"只是提示不准,不断连接。客户端契约不变。
-- 残余(2026-10-24 复核补):gate 的改绑发生在转发时,不代表目标已接住玩家。目标随后拒绝入场(资格登记失败、A2′ 清继承标记失败、CL-C1 预检)时只推 3023、不推 34、也不通知 gate 解绑;若源端此时正因冻结上限(70s,zone Redis 不可用的相关故障)、改派踢线或回滚采纳后的退出推 34,这条 34 会被栅栏丢掉,客户端挂在没有实体的节点上,要手动重登。路径很窄,只伤活性。根治是让目标的入场拒绝出口也按「3023 + 34」收口(与 gate 放弃补发的契约一致),但这改变入场失败时客户端的行为,属客户端契约,要两版同批、单独拍板。
+- 残余(2026-10-24 复核补;2026-11-05 定为接受、不改代码):gate 在转发时就改绑，这时目标还没接住玩家。目标随后拒绝入场(资格登记失败、A2′ 清继承标记失败、CL-C1 预检)时，只经 `SendTipToPendingSession` / `RefuseInheritedEntry` 推 3023，不推 34，也不通知 gate 解绑。源端如果此时正因冻结上限(70s，多见于 zone Redis 不可用)、改派踢线或回滚采纳后的退出推 34，这条 34 会被栅栏丢掉。
+  - 客户端不会因此挂住。3023 是 login 与 scene 共用的进场失败通知，按 `go/login/.../entergamelogic.go` `notifyEnterGameFailed` 注释的实情，当前 Unity 客户端收到后直接拆连接回选服。3023 本身没送到时(推送是尽力而为)，还有客户端自己的 60s 进场超时兜底。robot 这类同连接重试的客户端会再发 EnterGame，重新走一遍落点与入场。
+  - 不改的理由。让目标的拒绝出口改发「3023 + 34」会改变客户端可见行为：同连接重试的客户端会被逼回选服，属客户端契约，两版要同批改。另加一条「拒绝入场即通知 gate 解绑」的内部 RPC 不改客户端契约，但只覆盖「3023 没送到、源端又恰好推 34」这种双重故障，而这种情形已经有客户端超时兜底；为它新增协议和 gate 状态不值得(AGENTS §11.2 KISS / YAGNI)。哪天客户端改成收到 3023 后留在原连接等待，再补解绑通知：按会话号与路由的 owner_epoch 条件清除绑定，迟到的解绑不能清掉更新的绑定。
 - 覆盖面:同 zone"交接其实已放行、会话已改绑、源没收到应答"的那一类。跨 zone 时旧会话从没被改绑,34 先于迟到的 124 到达的情形不在此列,仍按 §13.2 记残余。
 
 **4. 标记残留(§12.1-A 的残余)与 M13:已由资格围栏覆盖,不再改 proto**
@@ -2566,7 +2569,7 @@ sequenceDiagram
 - **回归**：Go `TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate`（`lc1_…` / `lc2_…` 两个子用例按 Redis 实际执行顺序重放，断言迟到写不改任何字节、换手门与 LeaveScene 都拿不到证据，且新持有者自己的发布照常放行）；C++ `CurrencyTest.HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCredentialAgainstRealRedis`（两条真实连接，旧帧先 `redisAppendCommandArgv` 留在输出缓冲、新连接跑完取证 / 重载后才发出；需 `MMORPG_TEST_REDIS_ADDR`）。会话结束凭证（同日评审后修订为带围栏，不再拒发）：Go 子用例 `session_ended_credential_lands_after_same_node_reload`（迟到凭证帧回 -2）/ `session_ended_credential_releases_idle_holder`（原件 F 照写、换手门与 LeaveScene 拿到证据）；C++ 同一真 Redis 用例第三段（F / R 原件照写、迟到帧 -2、owner 推进 0）；`ReleaseFenceEcs.SessionEndedReleaseWithoutHolderReadsQualificationBeforeCredential`（HEAD 原名 `..._WithoutHolderWritesCredential`）、`RoleAdmissionTest.RegistrationInFlightBlocksSessionEndedCredential`、`ReleaseFence.CredentialQualification*`；`kReleaseMarkLua` 的 -2 相应更新了既有期望。均未编译、未运行。
 - **残余**：
   1. Redis 自身回退（异步复制下故障转移丢掉已确认的 fence 写）不在本围栏能力内：丢掉新登记后旧 H 可能重新成为现任，迟到写会被接受。归"zone Redis 回退时的存档防护"另案。
-  2. ~~会话结束凭证不再发~~（评审后修订：§15 起等待上限不再授权删 location，拒发会让"持有节点活着而不持有"永久卡住，已改为带围栏的凭证）。剩下的是拿不出资格的情形：本节点从未在 location 记的那个 E 下登记成功（入场登记在写 fence 之前被拒；或交接回滚把 location 推到 E+2、而实体已在销毁侧收尾、转写标记又已过期）时，fence 原件的 E 对不上，判 `no_qualification` 并升 WARN；这条 location 要等玩家下次登录落回该节点重新登记，或持有节点死亡 / 被顶替。活性代价，不是数据风险。**（2026-10-30 已收口，未编译、未测试：由 [location-release-binding.md](location-release-binding.md) §17 的「无资格持有者带围栏撤销」处理 —— scene_manager 请过持有节点释放、过了宽限之后，原子复核资格原件缺失或属于别的 E、没有 E 代标记，再推进 owner_epoch 并删 location；实现与用例见那里的 §17.9。）**
+  2. ~~会话结束凭证不再发~~（评审后修订：§15 起等待上限不再授权删 location，拒发会让"持有节点活着而不持有"永久卡住，已改为带围栏的凭证）。剩下的是拿不出资格的情形：本节点从未在 location 记的那个 E 下登记成功（入场登记在写 fence 之前被拒；或交接回滚把 location 推到 E+2、而实体已在销毁侧收尾、转写标记又已过期）时，fence 原件的 E 对不上，判 `no_qualification` 并升 WARN；这条 location 要等玩家下次登录落回该节点重新登记，或持有节点死亡 / 被顶替。活性代价，不是数据风险。**（2026-10-30 已收口，未编译、未测试：由 [location-release-binding.md](location-release-binding.md) §17 的「无资格持有者带围栏撤销」处理 —— scene_manager 请过持有节点释放、过了宽限之后，原子复核资格原件缺失或属于别的 E、没有 E 代标记，再推进 owner_epoch 并删 location；11-05 起随后按 E 释放存档写权行（released=1）；实现与用例见那里的 §17.9。）**
   3. 改派已写成 F 之后标记被消费或过期，踢线前补写返回 -2；**评审后修订**：玩家重登撞门时，scene_manager 的登录撞门释放请求（location-release-binding.md §12）落到本节点、走会话结束凭证，本节点自己的 F 原件可以被消费写出凭证（整节点疏散期间身份不确认，不写，等节点退出后由注册表证据收口）。
   4. `RoleAdmissionSystem` 的登记已落地又被撤销（15s 截止 / Seal）时，登记脚本删掉的继承标记没有即时补写路径；**评审后修订**：撤销留下的 R 原件同样能被会话结束凭证消费，下一次 LeaveScene 重试 / 登录撞门即可收口。
 - **Java 版**：不适用。Java 的跨节点交接是一笔 MySQL 交出事务（Java 仓 `PARITY.md`「跨节点换图与归属交接」行的有意差异 D1），没有 handoff 标记、A1′ / A2′ 与 `ReleasePlayer` 凭证这条链；结局不明时用加锁读探测（在同一行锁上等旧事务提交或回滚），不依赖连接顺序。只读核对 PARITY 行文，未读 Java 源码细节，不登记 PARITY。

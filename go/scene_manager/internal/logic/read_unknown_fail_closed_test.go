@@ -743,9 +743,11 @@ func TestDestroyInstanceForce_MirrorPreReadErrorAbandonsRound(t *testing.T) {
 	requireSceneOwner(t, sc, mirror, "", "故障过去后照常级联")
 }
 
-// 提交前读不到镜像源:本轮不销毁。两个销毁脚本都会删掉 scene:{id}:source,提交之后就再也不知道该从哪个
+// 读不到镜像源:本轮不销毁。两个销毁脚本都会删掉 scene:{id}:source,提交之后就再也不知道该从哪个
 // 源的子集合里摘掉自己。
 // 旧代码:源读错当「不是镜像」,镜像照常销毁,但源的子集合永久挂着它的死 id(channelHasMirrors 恒真)。
+// 2026-11-05 起镜像源由认领脚本在删除之前读出、随快照返回,不再单独预读:故障落在脚本里,脚本报错、一个键都
+// 没删,算认领结局未知而不是预读读错,所以 instance_destroy 的读错计数不变。
 func TestDestroyInstance_SourceReadErrorAbandonsRound(t *testing.T) {
 	sc, mr, parent, mirror := createInstanceWithMirrorForReadUnknown(t)
 	ctx := context.Background()
@@ -756,7 +758,7 @@ func TestDestroyInstance_SourceReadErrorAbandonsRound(t *testing.T) {
 	destroyInstance(ctx, sc, testZoneId, mirror)
 	require.EqualValues(t, 1, fired.Load())
 	requireSceneOwner(t, sc, mirror, "10", "读不到镜像源时不能提交销毁")
-	assert.Equal(t, before+1, readUnknownCount(t, testZoneId, readUnknownSiteInstanceDestroy))
+	assert.Equal(t, before, readUnknownCount(t, testZoneId, readUnknownSiteInstanceDestroy))
 
 	destroyInstance(ctx, sc, testZoneId, mirror)
 	requireSceneOwner(t, sc, mirror, "")

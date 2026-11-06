@@ -33,6 +33,7 @@ import (
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/serverbase"
+	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -148,6 +149,9 @@ func runChat(c config.Config) (runErr error) {
 	}
 	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root)
 
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="chat",pool="primary"}:只有聊天权威库这一个池,抓取时现取 DBStats。
+	// 不放进 NewServiceContext:单测会多次构造它,默认注册表重复注册会失败。
+	sqlpoolstats.Register("chat", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, svcCtx.AuthorityDB))
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
 	stopMetrics := svc.StartMetrics(c.MetricsListenAddr)
 
@@ -195,7 +199,7 @@ func runChat(c config.Config) (runErr error) {
 	if authErr != nil {
 		return authErr
 	}
-	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root), gateIdentity}, buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor(svcCtx.LoginSessions))...)...)
+	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root), gateIdentity}, buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor())...)...)
 
 	// 先启动gRPC再注册。保存真实Server用于主动排空,Start错误经通道交回主线程,
 	// 让监听失败、注册失败和收到启动期信号都能清理已创建的资源。

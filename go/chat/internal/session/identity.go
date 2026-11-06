@@ -2,30 +2,21 @@ package session
 
 import (
 	"context"
-	"time"
 
-	base "proto/common/base"
-	dspb "proto/data_service"
-	"shared/loginsession"
 	"shared/roleidentity"
 
 	"google.golang.org/grpc"
 )
 
-// 解码后捕获原gate连接账号与原wire修订；失败不补当前目录，由业务入口按缺原件拒绝。
-func OriginalIdentityInterceptor(reader loginsession.Reader) grpc.UnaryServerInterceptor {
+// 解码后捕获原账号与原wire修订。在线域原账号只认 gate 签名原件，不读 login Redis；
+// 未签名、与原件不符或会话不完整时不绑身份照常放行，不补当前目录，由业务入口按缺原件拒绝。
+func OriginalIdentityInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 		detail, ok := GetSessionDetails(ctx)
-		if !ok || detail.PlayerId == 0 || detail.OwnerRevision == 0 {
+		if !ok {
 			return next(ctx, req)
 		}
-		lookup, cancel := context.WithTimeout(ctx, time.Second)
-		account, err := loginsession.Account(lookup, reader, detail)
-		cancel()
-		if err != nil {
-			return next(ctx, req)
-		}
-		bound, err := roleidentity.Capture(ctx, &dspb.AccountRoleOwnership{Account: account, OwnerRevision: detail.OwnerRevision, Role: &base.AccountSimplePlayer{PlayerId: detail.PlayerId}})
+		bound, err := roleidentity.CaptureSession(ctx, detail)
 		if err != nil {
 			return next(ctx, req)
 		}

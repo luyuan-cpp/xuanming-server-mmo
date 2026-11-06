@@ -55,6 +55,7 @@ service_discovery_prefixes:
   - "DataServiceNodeService.rpc" # 全局数据服务（Go-Zero gRPC，全局池不分 zone）：scene 经它的 AllocateIdSegment 领 item / txlog / snapshot 三种永久 guid 的号段（IdSegments 里启用的种类领到首段是启动硬依赖）。前提：data_service 须按 C++ 约定把 NodeInfo 注册到本前缀下（同 scene_manager 的 noderegistry），只注册 go-zero 的 dataservice.rpc 是发现不到的
   - "PlayerInboxNodeService.rpc" # 玩家持久收件箱（Go-Zero gRPC，全服一份、多副本，不分 zone）：scene 经它的 FetchItems / AckItems 拉取并确认 GM 处置等待办（docs/design/player-inbox-service.md §1.4）。弱依赖：不进 DependencyGate，发现不到只退避、不阻断进场（IB-7）。前提：player_inbox 按 C++ 约定经 shared/noderegistry 注册到本前缀下
   - "PlayerStoreNodeService.rpc" # 玩家存盘(go/db 提供,按 zone 发现):scene 经它 LoadAndClaim / SavePlayer
+  - "TeamNodeService.rpc" # 全服队伍服务由 Match 同端口提供，Scene 经它读取签名成员关系，属于启动弱依赖。
 
 
 # Kafka 配置（分布式消息队列，用于异步通信、日志收集、事件分发等）

@@ -63,6 +63,10 @@ message CreateBattleResponse {
   TipInfoMessage error_message = 2;
   uint32 adopted_outcome_protocol_version = 3;
   string target_instance_id = 4;
+  // 负载随应答捎回（R6，docs/design/global-match-hierarchical-pools.md §5.1）：成功应答（含幂等命中）带本节点此刻的房间数，
+  // 含这次建成的这一间；失败应答不填。0 = 未上报（旧节点）。match 只拿它比较同机房节点的负载，不另发上报流量；
+  // 读数会过期（go/match/internal/battleplace DefaultReportTTL），不作容量或准入判定。字段号 5 上线后不复用。
+  uint32 room_count = 5;
 }
 
 message DestroyBattleRequest {
@@ -90,6 +94,11 @@ message QueryBattleCreationResponse {
   // ABSENT 也回显节点能力；PRESENT 的 adopted 只取原创建原件，不按现能力追认。
   uint32 supported_outcome_protocol_version = 3;
   uint32 adopted_outcome_protocol_version = 4;
+  // 节点此刻会拒绝新建房：建房准入闸未开或已关、Agones 排空中、lifecycle 正在停机。只在回显了本实例时填。
+  // match 在把建房原件落库之前读它：为真就本局干净失败、全员回队，不必等落库后被 battle_not_allocatable 拒、
+  // 再等唯一 SQL 终局。只是预检：预检之后节点仍可能开始排空，CreateBattle 的准入仍是唯一判定。
+  // 缺省 false = 旧节点照旧按"接新房"处理。
+  bool rejects_new_battles = 5;
 }
 
 // ---- 二期:观战(match → battle,设计文档 §10) ----

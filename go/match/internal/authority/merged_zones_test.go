@@ -36,20 +36,6 @@ func TestMergedZonesWithoutACacheMeansNoMerges(t *testing.T) {
 	require.Equal(t, []uint32{4, 5, 6}, s.MergedZones().Members(5))
 }
 
-func TestZoneInSQL(t *testing.T) {
-	clause, args := zoneInSQL("r.home_zone", []uint32{5})
-	require.Equal(t, "r.home_zone IN(?)", clause, "单个成员和原来的等值条件一样走索引")
-	require.Equal(t, []any{uint32(5)}, args)
-
-	clause, args = zoneInSQL("r.home_zone", []uint32{4, 5, 6})
-	require.Equal(t, "r.home_zone IN(?,?,?)", clause)
-	require.Equal(t, []any{uint32(4), uint32(5), uint32(6)}, args)
-
-	clause, args = zoneInSQL("r.home_zone", nil)
-	require.Equal(t, "1=0", clause, "空集合不匹配任何区,不能退化成不过滤")
-	require.Empty(t, args)
-}
-
 func TestTeamUnitHomeZoneResolvesMergedZones(t *testing.T) {
 	zones, err := placement.NewMergedZones(map[uint32]uint32{5: 6})
 	require.NoError(t, err)

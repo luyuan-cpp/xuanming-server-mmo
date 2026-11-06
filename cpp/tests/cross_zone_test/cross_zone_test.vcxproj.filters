@@ -19,6 +19,9 @@
     <ClCompile Include="player_ownership_metrics_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="discovery_zone_scope_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Include">
@@ -27,5 +30,9 @@
     <Filter Include="source">
       <UniqueIdentifier>{5f3fffc6-c25e-4376-b911-251d3222cb4c}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="loop_task_scope_test.cpp" />
+    <ClCompile Include="etcd_registration_wait_test.cpp" />
   </ItemGroup>
 </Project>

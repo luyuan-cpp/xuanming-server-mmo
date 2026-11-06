@@ -1,5 +1,6 @@
 #include "player/system/player_store_projection.h"
 
+#include <string_view>
 #include <vector>
 
 #include <google/protobuf/io/coded_stream.h>
@@ -15,19 +16,76 @@ namespace player_store_rows
         using google::protobuf::FieldDescriptor;
 
         constexpr auto kLegacyIndex = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_LEGACY1);
+        constexpr auto kOwnerIndex = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_OWNER);
+
+        bool IsKnownKind(std::size_t kind)
+        {
+            return kind < kKindCount && playerstore::PlayerStoreKind_IsValid(static_cast<int>(kind));
+        }
+
+        // 允许放进只顺带(PERSIST_ROW_SAVE_PIGGYBACK)行的字段,白名单。只顺带的行被定时存盘推迟时最多晚写
+        // piggybackFallbackSec,所以只放丢了不心疼的字段:资产、账本、任务领取标记这类随 I3 一起提交、
+        // 丢了玩家会明显感知的字段一律不许(规格 §1.1)。加字段要先过这条再改这里,不能只改 proto。
+        constexpr std::string_view kPiggybackAllowedFields[] = {"transform"};
+
+        bool PiggybackAllowed(std::string_view fieldName)
+        {
+            for (const std::string_view allowed : kPiggybackAllowedFields)
+            {
+                if (allowed == fieldName)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         struct GroupTable
         {
             // 下标是 PlayerStoreKind 的值。元数据字段(player_id、围栏、世代)值为 0,不进任何片段。
             std::array<std::vector<const FieldDescriptor *>, kKindCount> fields;
+            // 下标是 PlayerStoreKind 的值。只有数据行有值,其余是 UNSPECIFIED。
+            std::array<PersistRowSavePolicy, kKindCount> policy{};
             // 下标是 FieldDescriptor::index()。
             std::vector<std::size_t> groupOf;
             std::string error;
         };
 
+        // 每一行数据都要声明存盘方式;写权行不声明。
+        bool BuildPolicies(GroupTable &table)
+        {
+            const auto *kinds = playerstore::PlayerStoreKind_descriptor();
+            for (int i = 0; i < kinds->value_count(); ++i)
+            {
+                const auto *value = kinds->value(i);
+                const auto kind = static_cast<std::size_t>(value->number());
+                if (kind == kOwnerIndex)
+                {
+                    continue;
+                }
+                if (kind >= kKindCount)
+                {
+                    table.error = "PlayerStoreKind." + std::string(value->name()) + " is out of KindBytes range";
+                    return false;
+                }
+                const auto policy = value->options().GetExtension(OptionPersistRowSavePolicy);
+                if (policy != PERSIST_ROW_SAVE_PERIODIC && policy != PERSIST_ROW_SAVE_PIGGYBACK)
+                {
+                    table.error = "PlayerStoreKind." + std::string(value->name()) + " has no OptionPersistRowSavePolicy";
+                    return false;
+                }
+                table.policy[kind] = policy;
+            }
+            return true;
+        }
+
         GroupTable BuildGroups()
         {
             GroupTable table;
+            if (!BuildPolicies(table))
+            {
+                return table;
+            }
             const auto *descriptor = player_database::descriptor();
             table.groupOf.resize(static_cast<std::size_t>(descriptor->field_count()));
             for (int i = 0; i < descriptor->field_count(); ++i)
@@ -40,9 +98,18 @@ namespace player_store_rows
                     return table;
                 }
                 const auto group = static_cast<std::size_t>(options.GetExtension(OptionPersistGroup));
-                if (group >= kKindCount || group == kLegacyIndex)
+                // 0 是元数据;其余必须是现存的数据行。kLegacy1 是另一个消息,player_database 的字段不能标到它。
+                if (group != kOwnerIndex && (!IsKnownKind(group) || group == kLegacyIndex))
                 {
-                    table.error = "player_database." + std::string(field->name()) + " has an invalid OptionPersistGroup";
+                    table.error = "player_database." + std::string(field->name()) + " has an invalid OptionPersistGroup " +
+                                  std::to_string(group) + " (retired or unknown kind)";
+                    return table;
+                }
+                if (table.policy[group] == PERSIST_ROW_SAVE_PIGGYBACK &&
+                    !PiggybackAllowed(std::string_view(field->name().data(), field->name().size())))
+                {
+                    table.error = "player_database." + std::string(field->name()) + " is in a piggyback row (kind " +
+                                  std::to_string(group) + "); only fields in kPiggybackAllowedFields may be deferred";
                     return table;
                 }
                 table.groupOf[static_cast<std::size_t>(field->index())] = group;
@@ -68,6 +135,16 @@ namespace player_store_rows
         }
     } // namespace
 
+    bool IsDataKind(std::size_t kind)
+    {
+        return kind != kOwnerIndex && IsKnownKind(kind);
+    }
+
+    PersistRowSavePolicy RowSavePolicy(std::size_t kind)
+    {
+        return kind < kKindCount ? Groups().policy[kind] : PERSIST_ROW_SAVE_UNSPECIFIED;
+    }
+
     bool ValidatePersistGroups(std::string &error)
     {
         error = Groups().error;
@@ -88,12 +165,13 @@ namespace player_store_rows
             error = "player_database has unknown top-level fields; refusing to save and lose them";
             return false;
         }
-        out[0].clear();
         player_database scratch;
-        for (std::size_t kind = 1; kind < kKindCount; ++kind)
+        for (std::size_t kind = 0; kind < kKindCount; ++kind)
         {
-            if (kind == kLegacyIndex)
+            // 写权行、退役空位恒为空串:out 可能是复用的数组,不清掉会留下上一次的内容。
+            if (!IsDataKind(kind) || kind == kLegacyIndex)
             {
+                out[kind].clear();
                 continue;
             }
             const auto &fields = groups.fields[kind];
@@ -135,9 +213,12 @@ namespace player_store_rows
                 }
                 continue;
             }
-            if (kind == 0 || kind >= kKindCount)
+            // 写权行不随数据返回;退役号(旧分行布局的 1、2)和本版本不认识的号都整份拒绝:
+            // 按现在的分行去解读别的布局写的行,不属于本行的字段会被清掉,等于静默丢数据。
+            if (!IsDataKind(kind))
             {
-                error = "unknown player_store kind " + std::to_string(kind);
+                error = "unknown or retired player_store kind " + std::to_string(kind) +
+                        " (a row from another row layout; the project has not launched, rebuild the database)";
                 return false;
             }
             player_database part;

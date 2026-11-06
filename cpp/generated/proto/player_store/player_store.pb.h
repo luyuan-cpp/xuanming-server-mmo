@@ -32,6 +32,7 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/db/proto_option.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -120,11 +121,13 @@ internal::EnumTraitsT<::playerstore::SavePlayerResult_internal_data_>
 namespace playerstore {
 enum PlayerStoreKind : int {
   PLAYER_STORE_KIND_OWNER = 0,
-  PLAYER_STORE_KIND_HOT = 1,
-  PLAYER_STORE_KIND_ASSET = 2,
   PLAYER_STORE_KIND_GROWTH = 3,
   PLAYER_STORE_KIND_PROFILE = 4,
   PLAYER_STORE_KIND_LEGACY1 = 5,
+  PLAYER_STORE_KIND_CHARACTER = 6,
+  PLAYER_STORE_KIND_WALLET = 7,
+  PLAYER_STORE_KIND_BAG = 8,
+  PLAYER_STORE_KIND_LOCATION = 9,
   PlayerStoreKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerStoreKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -135,11 +138,11 @@ extern const uint32_t PlayerStoreKind_internal_data_[];
 inline constexpr PlayerStoreKind PlayerStoreKind_MIN =
     static_cast<PlayerStoreKind>(0);
 inline constexpr PlayerStoreKind PlayerStoreKind_MAX =
-    static_cast<PlayerStoreKind>(5);
+    static_cast<PlayerStoreKind>(9);
 [[nodiscard]] inline bool PlayerStoreKind_IsValid(int value) {
-  return 0 <= value && value <= 5;
+  return 0 <= value && value <= 9 && ((1017u >> value) & 1) != 0;
 }
-inline constexpr int PlayerStoreKind_ARRAYSIZE = 5 + 1;
+inline constexpr int PlayerStoreKind_ARRAYSIZE = 9 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerStoreKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerStoreKind) {
@@ -154,7 +157,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerStoreKind_Name(PlayerStoreKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerStoreKind_descriptor, 0, 5>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerStoreKind_descriptor, 0, 9>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerStoreKind_Parse(

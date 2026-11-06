@@ -183,6 +183,12 @@ const (
 	// 挂补缴欠款 → CurrencySystem::AttachDebt。**不幂等**,只靠消费端账本去重(设计 §2.2、§4.4)。
 	PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT PlayerInboxMessageType = 3
 	PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT       PlayerInboxMessageType = 4
+	// 封锁本玩家今后获得某配置的物品 → GainBlockService::BlockPlayerItemGain(天然幂等)。
+	// 只挡今后的新增获得:各获得入口共用 GainBlockService::IsItemGainBlocked;不扣已有库存,不影响其他玩家,
+	// 与全服封禁互相独立。封禁状态落 player_database.item_gain_block,与本域执行账本同一次存盘提交(设计 §2.2)。
+	PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN PlayerInboxMessageType = 5
+	// 解除本玩家的物品获得封锁 → GainBlockService::UnblockPlayerItemGain(天然幂等)。
+	PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN PlayerInboxMessageType = 6
 )
 
 // Enum value maps for PlayerInboxMessageType.
@@ -193,6 +199,8 @@ var (
 		2: "PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN",
 		3: "PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT",
 		4: "PLAYER_INBOX_MSG_BATTLE_SETTLEMENT",
+		5: "PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN",
+		6: "PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN",
 	}
 	PlayerInboxMessageType_value = map[string]int32{
 		"PLAYER_INBOX_MSG_UNSPECIFIED":              0,
@@ -200,6 +208,8 @@ var (
 		"PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN": 2,
 		"PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT":  3,
 		"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT":        4,
+		"PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN":       5,
+		"PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN":     6,
 	}
 )
 
@@ -863,6 +873,53 @@ func (x *GmCurrencyDebtPayload) GetExpiresAt() uint64 {
 	return 0
 }
 
+// GM_BLOCK_ITEM_GAIN / GM_UNBLOCK_ITEM_GAIN。
+// 入箱只校验非 0,不核对物品表(player_inbox 不加载配置表);scene 也不要求本节点的物品表认识它:
+// 表里没有的配置本节点本来就发不出来,封禁照样记下,换到认识它的版本 / 节点时已经生效(设计 §2.2)。
+type GmItemGainPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemConfigId  uint32                 `protobuf:"varint,1,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"` // Item 表 id(配置号,不是实例 guid);必须非 0
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GmItemGainPayload) Reset() {
+	*x = GmItemGainPayload{}
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GmItemGainPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GmItemGainPayload) ProtoMessage() {}
+
+func (x *GmItemGainPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GmItemGainPayload.ProtoReflect.Descriptor instead.
+func (*GmItemGainPayload) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GmItemGainPayload) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
 // 固定原归属与签发时间；重投只能重签 auth，不得刷新正文或借当前目录补权。
 type BattleSettlementInboxRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
@@ -879,7 +936,7 @@ type BattleSettlementInboxRequest struct {
 
 func (x *BattleSettlementInboxRequest) Reset() {
 	*x = BattleSettlementInboxRequest{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[4]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -891,7 +948,7 @@ func (x *BattleSettlementInboxRequest) String() string {
 func (*BattleSettlementInboxRequest) ProtoMessage() {}
 
 func (x *BattleSettlementInboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[4]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -904,7 +961,7 @@ func (x *BattleSettlementInboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleSettlementInboxRequest.ProtoReflect.Descriptor instead.
 func (*BattleSettlementInboxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{4}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BattleSettlementInboxRequest) GetPlayerId() uint64 {
@@ -972,7 +1029,7 @@ type BattleSettlementInboxResponse struct {
 
 func (x *BattleSettlementInboxResponse) Reset() {
 	*x = BattleSettlementInboxResponse{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -984,7 +1041,7 @@ func (x *BattleSettlementInboxResponse) String() string {
 func (*BattleSettlementInboxResponse) ProtoMessage() {}
 
 func (x *BattleSettlementInboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -997,7 +1054,7 @@ func (x *BattleSettlementInboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleSettlementInboxResponse.ProtoReflect.Descriptor instead.
 func (*BattleSettlementInboxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{5}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BattleSettlementInboxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1073,7 +1130,7 @@ type FetchPlayerInboxRequest struct {
 
 func (x *FetchPlayerInboxRequest) Reset() {
 	*x = FetchPlayerInboxRequest{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1085,7 +1142,7 @@ func (x *FetchPlayerInboxRequest) String() string {
 func (*FetchPlayerInboxRequest) ProtoMessage() {}
 
 func (x *FetchPlayerInboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1098,7 +1155,7 @@ func (x *FetchPlayerInboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchPlayerInboxRequest.ProtoReflect.Descriptor instead.
 func (*FetchPlayerInboxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{6}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *FetchPlayerInboxRequest) GetPlayerId() uint64 {
@@ -1180,7 +1237,7 @@ type PlayerInboxItem struct {
 
 func (x *PlayerInboxItem) Reset() {
 	*x = PlayerInboxItem{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1192,7 +1249,7 @@ func (x *PlayerInboxItem) String() string {
 func (*PlayerInboxItem) ProtoMessage() {}
 
 func (x *PlayerInboxItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1205,7 +1262,7 @@ func (x *PlayerInboxItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInboxItem.ProtoReflect.Descriptor instead.
 func (*PlayerInboxItem) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{7}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PlayerInboxItem) GetSeq() uint64 {
@@ -1279,7 +1336,7 @@ type FetchPlayerInboxResponse struct {
 
 func (x *FetchPlayerInboxResponse) Reset() {
 	*x = FetchPlayerInboxResponse{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1291,7 +1348,7 @@ func (x *FetchPlayerInboxResponse) String() string {
 func (*FetchPlayerInboxResponse) ProtoMessage() {}
 
 func (x *FetchPlayerInboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1304,7 +1361,7 @@ func (x *FetchPlayerInboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchPlayerInboxResponse.ProtoReflect.Descriptor instead.
 func (*FetchPlayerInboxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{8}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *FetchPlayerInboxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1368,7 +1425,7 @@ type PlayerInboxDecisionReport struct {
 
 func (x *PlayerInboxDecisionReport) Reset() {
 	*x = PlayerInboxDecisionReport{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1380,7 +1437,7 @@ func (x *PlayerInboxDecisionReport) String() string {
 func (*PlayerInboxDecisionReport) ProtoMessage() {}
 
 func (x *PlayerInboxDecisionReport) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1393,7 +1450,7 @@ func (x *PlayerInboxDecisionReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInboxDecisionReport.ProtoReflect.Descriptor instead.
 func (*PlayerInboxDecisionReport) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{9}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PlayerInboxDecisionReport) GetSeq() uint64 {
@@ -1442,7 +1499,7 @@ type AckPlayerInboxRequest struct {
 
 func (x *AckPlayerInboxRequest) Reset() {
 	*x = AckPlayerInboxRequest{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1454,7 +1511,7 @@ func (x *AckPlayerInboxRequest) String() string {
 func (*AckPlayerInboxRequest) ProtoMessage() {}
 
 func (x *AckPlayerInboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1467,7 +1524,7 @@ func (x *AckPlayerInboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckPlayerInboxRequest.ProtoReflect.Descriptor instead.
 func (*AckPlayerInboxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{10}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AckPlayerInboxRequest) GetPlayerId() uint64 {
@@ -1537,7 +1594,7 @@ type PlayerInboxAckItem struct {
 
 func (x *PlayerInboxAckItem) Reset() {
 	*x = PlayerInboxAckItem{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1549,7 +1606,7 @@ func (x *PlayerInboxAckItem) String() string {
 func (*PlayerInboxAckItem) ProtoMessage() {}
 
 func (x *PlayerInboxAckItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1562,7 +1619,7 @@ func (x *PlayerInboxAckItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInboxAckItem.ProtoReflect.Descriptor instead.
 func (*PlayerInboxAckItem) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{11}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PlayerInboxAckItem) GetSeq() uint64 {
@@ -1600,7 +1657,7 @@ type AckPlayerInboxResponse struct {
 
 func (x *AckPlayerInboxResponse) Reset() {
 	*x = AckPlayerInboxResponse{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1612,7 +1669,7 @@ func (x *AckPlayerInboxResponse) String() string {
 func (*AckPlayerInboxResponse) ProtoMessage() {}
 
 func (x *AckPlayerInboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1625,7 +1682,7 @@ func (x *AckPlayerInboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckPlayerInboxResponse.ProtoReflect.Descriptor instead.
 func (*AckPlayerInboxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{12}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AckPlayerInboxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1721,7 +1778,9 @@ const file_proto_player_inbox_player_inbox_proto_rawDesc = "" +
 	"\vgm_operator\x18\x04 \x01(\tR\n" +
 	"gmOperator\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x05 \x01(\x04R\texpiresAt\"\xc9\x02\n" +
+	"expires_at\x18\x05 \x01(\x04R\texpiresAt\"9\n" +
+	"\x11GmItemGainPayload\x12$\n" +
+	"\x0eitem_config_id\x18\x01 \x01(\rR\fitemConfigId\"\xc9\x02\n" +
 	"\x1cBattleSettlementInboxRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x124\n" +
@@ -1808,13 +1867,15 @@ const file_proto_player_inbox_player_inbox_proto_rawDesc = "" +
 	"\x11PlayerInboxDomain\x12#\n" +
 	"\x1fPLAYER_INBOX_DOMAIN_UNSPECIFIED\x10\x00\x124\n" +
 	"%PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION\x10\x01\x1a\t\x8a\x8a\xcd\x01\x04\b@\x10\x01\x128\n" +
-	"+PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT\x10\x02\x1a\a\x8a\x8a\xcd\x01\x02\b\x01*\xa5\x03\n" +
+	"+PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT\x10\x02\x1a\a\x8a\x8a\xcd\x01\x02\b\x01*\xd3\x04\n" +
 	"\x16PlayerInboxMessageType\x12 \n" +
 	"\x1cPLAYER_INBOX_MSG_UNSPECIFIED\x10\x00\x12\\\n" +
 	"'PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN\x10\x01\x1a/\x92\x8a\xcd\x01*\b\x01\x10\x01\x1a\"player_inbox.GmCurrencyGainPayload @\x12^\n" +
 	")PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN\x10\x02\x1a/\x92\x8a\xcd\x01*\b\x01\x10\x01\x1a\"player_inbox.GmCurrencyGainPayload @\x12^\n" +
 	"(PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT\x10\x03\x1a0\x92\x8a\xcd\x01+\b\x01\x10\x01\x1a\"player_inbox.GmCurrencyDebtPayload \x80\b\x12K\n" +
-	"\"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT\x10\x04\x1a#\x92\x8a\xcd\x01\x1e\b\x02\x10\x01\x1a\x14BattleSettlementData \x80\x80\x01*\xdc\x01\n" +
+	"\"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT\x10\x04\x1a#\x92\x8a\xcd\x01\x1e\b\x02\x10\x01\x1a\x14BattleSettlementData \x80\x80\x01\x12T\n" +
+	"#PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN\x10\x05\x1a+\x92\x8a\xcd\x01&\b\x01\x10\x01\x1a\x1eplayer_inbox.GmItemGainPayload @\x12V\n" +
+	"%PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN\x10\x06\x1a+\x92\x8a\xcd\x01&\b\x01\x10\x01\x1a\x1eplayer_inbox.GmItemGainPayload @*\xdc\x01\n" +
 	"\x14PlayerInboxItemState\x12!\n" +
 	"\x1dPLAYER_INBOX_ITEM_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19PLAYER_INBOX_ITEM_PENDING\x10\x01\x12\x1d\n" +
@@ -1879,7 +1940,7 @@ func file_proto_player_inbox_player_inbox_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_player_inbox_player_inbox_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_proto_player_inbox_player_inbox_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_proto_player_inbox_player_inbox_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_proto_player_inbox_player_inbox_proto_goTypes = []any{
 	(PlayerInboxClass)(0),                 // 0: player_inbox.PlayerInboxClass
 	(PlayerInboxProducerKind)(0),          // 1: player_inbox.PlayerInboxProducerKind
@@ -1896,60 +1957,61 @@ var file_proto_player_inbox_player_inbox_proto_goTypes = []any{
 	(*PlayerInboxTypeSpec)(nil),           // 12: player_inbox.PlayerInboxTypeSpec
 	(*GmCurrencyGainPayload)(nil),         // 13: player_inbox.GmCurrencyGainPayload
 	(*GmCurrencyDebtPayload)(nil),         // 14: player_inbox.GmCurrencyDebtPayload
-	(*BattleSettlementInboxRequest)(nil),  // 15: player_inbox.BattleSettlementInboxRequest
-	(*BattleSettlementInboxResponse)(nil), // 16: player_inbox.BattleSettlementInboxResponse
-	(*FetchPlayerInboxRequest)(nil),       // 17: player_inbox.FetchPlayerInboxRequest
-	(*PlayerInboxItem)(nil),               // 18: player_inbox.PlayerInboxItem
-	(*FetchPlayerInboxResponse)(nil),      // 19: player_inbox.FetchPlayerInboxResponse
-	(*PlayerInboxDecisionReport)(nil),     // 20: player_inbox.PlayerInboxDecisionReport
-	(*AckPlayerInboxRequest)(nil),         // 21: player_inbox.AckPlayerInboxRequest
-	(*PlayerInboxAckItem)(nil),            // 22: player_inbox.PlayerInboxAckItem
-	(*AckPlayerInboxResponse)(nil),        // 23: player_inbox.AckPlayerInboxResponse
-	(*base.ServiceCallAuth)(nil),          // 24: common.base.ServiceCallAuth
-	(*base.TipInfoMessage)(nil),           // 25: TipInfoMessage
-	(*base.RoleAdmissionIdentity)(nil),    // 26: common.base.RoleAdmissionIdentity
-	(*descriptorpb.EnumValueOptions)(nil), // 27: google.protobuf.EnumValueOptions
+	(*GmItemGainPayload)(nil),             // 15: player_inbox.GmItemGainPayload
+	(*BattleSettlementInboxRequest)(nil),  // 16: player_inbox.BattleSettlementInboxRequest
+	(*BattleSettlementInboxResponse)(nil), // 17: player_inbox.BattleSettlementInboxResponse
+	(*FetchPlayerInboxRequest)(nil),       // 18: player_inbox.FetchPlayerInboxRequest
+	(*PlayerInboxItem)(nil),               // 19: player_inbox.PlayerInboxItem
+	(*FetchPlayerInboxResponse)(nil),      // 20: player_inbox.FetchPlayerInboxResponse
+	(*PlayerInboxDecisionReport)(nil),     // 21: player_inbox.PlayerInboxDecisionReport
+	(*AckPlayerInboxRequest)(nil),         // 22: player_inbox.AckPlayerInboxRequest
+	(*PlayerInboxAckItem)(nil),            // 23: player_inbox.PlayerInboxAckItem
+	(*AckPlayerInboxResponse)(nil),        // 24: player_inbox.AckPlayerInboxResponse
+	(*base.ServiceCallAuth)(nil),          // 25: common.base.ServiceCallAuth
+	(*base.TipInfoMessage)(nil),           // 26: TipInfoMessage
+	(*base.RoleAdmissionIdentity)(nil),    // 27: common.base.RoleAdmissionIdentity
+	(*descriptorpb.EnumValueOptions)(nil), // 28: google.protobuf.EnumValueOptions
 }
 var file_proto_player_inbox_player_inbox_proto_depIdxs = []int32{
 	2,  // 0: player_inbox.PlayerInboxTypeSpec.domain:type_name -> player_inbox.PlayerInboxDomain
 	0,  // 1: player_inbox.PlayerInboxTypeSpec.klass:type_name -> player_inbox.PlayerInboxClass
-	24, // 2: player_inbox.BattleSettlementInboxRequest.auth:type_name -> common.base.ServiceCallAuth
-	25, // 3: player_inbox.BattleSettlementInboxResponse.error_message:type_name -> TipInfoMessage
+	25, // 2: player_inbox.BattleSettlementInboxRequest.auth:type_name -> common.base.ServiceCallAuth
+	26, // 3: player_inbox.BattleSettlementInboxResponse.error_message:type_name -> TipInfoMessage
 	4,  // 4: player_inbox.BattleSettlementInboxResponse.state:type_name -> player_inbox.PlayerInboxItemState
-	24, // 5: player_inbox.BattleSettlementInboxResponse.auth:type_name -> common.base.ServiceCallAuth
+	25, // 5: player_inbox.BattleSettlementInboxResponse.auth:type_name -> common.base.ServiceCallAuth
 	2,  // 6: player_inbox.FetchPlayerInboxRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	26, // 7: player_inbox.FetchPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
-	24, // 8: player_inbox.FetchPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
+	27, // 7: player_inbox.FetchPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
+	25, // 8: player_inbox.FetchPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
 	3,  // 9: player_inbox.PlayerInboxItem.msg_type:type_name -> player_inbox.PlayerInboxMessageType
 	5,  // 10: player_inbox.PlayerInboxItem.directive:type_name -> player_inbox.PlayerInboxDirective
 	6,  // 11: player_inbox.PlayerInboxItem.void_reason:type_name -> player_inbox.PlayerInboxVoidReason
-	25, // 12: player_inbox.FetchPlayerInboxResponse.error_message:type_name -> TipInfoMessage
+	26, // 12: player_inbox.FetchPlayerInboxResponse.error_message:type_name -> TipInfoMessage
 	2,  // 13: player_inbox.FetchPlayerInboxResponse.domain:type_name -> player_inbox.PlayerInboxDomain
 	9,  // 14: player_inbox.FetchPlayerInboxResponse.fence:type_name -> player_inbox.PlayerInboxFenceVerdict
-	18, // 15: player_inbox.FetchPlayerInboxResponse.items:type_name -> player_inbox.PlayerInboxItem
+	19, // 15: player_inbox.FetchPlayerInboxResponse.items:type_name -> player_inbox.PlayerInboxItem
 	8,  // 16: player_inbox.PlayerInboxDecisionReport.outcome:type_name -> player_inbox.PlayerInboxOutcome
 	2,  // 17: player_inbox.AckPlayerInboxRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	20, // 18: player_inbox.AckPlayerInboxRequest.decisions:type_name -> player_inbox.PlayerInboxDecisionReport
-	26, // 19: player_inbox.AckPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
-	24, // 20: player_inbox.AckPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
+	21, // 18: player_inbox.AckPlayerInboxRequest.decisions:type_name -> player_inbox.PlayerInboxDecisionReport
+	27, // 19: player_inbox.AckPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
+	25, // 20: player_inbox.AckPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
 	10, // 21: player_inbox.PlayerInboxAckItem.result:type_name -> player_inbox.PlayerInboxAckResult
 	4,  // 22: player_inbox.PlayerInboxAckItem.state:type_name -> player_inbox.PlayerInboxItemState
-	25, // 23: player_inbox.AckPlayerInboxResponse.error_message:type_name -> TipInfoMessage
+	26, // 23: player_inbox.AckPlayerInboxResponse.error_message:type_name -> TipInfoMessage
 	2,  // 24: player_inbox.AckPlayerInboxResponse.domain:type_name -> player_inbox.PlayerInboxDomain
 	9,  // 25: player_inbox.AckPlayerInboxResponse.fence:type_name -> player_inbox.PlayerInboxFenceVerdict
-	22, // 26: player_inbox.AckPlayerInboxResponse.results:type_name -> player_inbox.PlayerInboxAckItem
-	27, // 27: player_inbox.OptionPlayerInboxDomain:extendee -> google.protobuf.EnumValueOptions
-	27, // 28: player_inbox.OptionPlayerInboxType:extendee -> google.protobuf.EnumValueOptions
+	23, // 26: player_inbox.AckPlayerInboxResponse.results:type_name -> player_inbox.PlayerInboxAckItem
+	28, // 27: player_inbox.OptionPlayerInboxDomain:extendee -> google.protobuf.EnumValueOptions
+	28, // 28: player_inbox.OptionPlayerInboxType:extendee -> google.protobuf.EnumValueOptions
 	11, // 29: player_inbox.OptionPlayerInboxDomain:type_name -> player_inbox.PlayerInboxDomainSpec
 	12, // 30: player_inbox.OptionPlayerInboxType:type_name -> player_inbox.PlayerInboxTypeSpec
-	17, // 31: player_inbox.PlayerInbox.FetchItems:input_type -> player_inbox.FetchPlayerInboxRequest
-	21, // 32: player_inbox.PlayerInbox.AckItems:input_type -> player_inbox.AckPlayerInboxRequest
-	15, // 33: player_inbox.PlayerInbox.EnqueueBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
-	15, // 34: player_inbox.PlayerInbox.LookupBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
-	19, // 35: player_inbox.PlayerInbox.FetchItems:output_type -> player_inbox.FetchPlayerInboxResponse
-	23, // 36: player_inbox.PlayerInbox.AckItems:output_type -> player_inbox.AckPlayerInboxResponse
-	16, // 37: player_inbox.PlayerInbox.EnqueueBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
-	16, // 38: player_inbox.PlayerInbox.LookupBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
+	18, // 31: player_inbox.PlayerInbox.FetchItems:input_type -> player_inbox.FetchPlayerInboxRequest
+	22, // 32: player_inbox.PlayerInbox.AckItems:input_type -> player_inbox.AckPlayerInboxRequest
+	16, // 33: player_inbox.PlayerInbox.EnqueueBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
+	16, // 34: player_inbox.PlayerInbox.LookupBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
+	20, // 35: player_inbox.PlayerInbox.FetchItems:output_type -> player_inbox.FetchPlayerInboxResponse
+	24, // 36: player_inbox.PlayerInbox.AckItems:output_type -> player_inbox.AckPlayerInboxResponse
+	17, // 37: player_inbox.PlayerInbox.EnqueueBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
+	17, // 38: player_inbox.PlayerInbox.LookupBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
 	35, // [35:39] is the sub-list for method output_type
 	31, // [31:35] is the sub-list for method input_type
 	29, // [29:31] is the sub-list for extension type_name
@@ -1968,7 +2030,7 @@ func file_proto_player_inbox_player_inbox_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_player_inbox_player_inbox_proto_rawDesc), len(file_proto_player_inbox_player_inbox_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 2,
 			NumServices:   1,
 		},

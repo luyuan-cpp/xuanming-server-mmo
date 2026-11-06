@@ -60,7 +60,7 @@ func (s *Store) maintainQueuedTeamOnce(ctx context.Context, observed *teampb.Tea
 		}
 		return true, tx.Commit()
 	}
-	if err = s.replaceTeamLaunchRegions(ctx, tx, current, group, stamp); err != nil {
+	if err = s.requireQueuedTeamGroupTx(ctx, tx, current, group); err != nil {
 		return false, err
 	}
 	return false, tx.Commit()
@@ -259,9 +259,6 @@ func (s *Store) requeueFailedTeamLaunchTx(ctx context.Context, tx *sql.Tx, launc
 		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=?,formation_id=0,selected_region=0,not_before_ms=? WHERE player_id=? AND ticket=?", ticket.State, ticket.NotBeforeMs, ticket.PlayerId, ticket.Ticket); err != nil {
 			return err
 		}
-		if err = s.replaceTicketRegions(ctx, tx, ticket, stamp); err != nil {
-			return err
-		}
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE team_launch SET state=?,battle_id=0,not_before_ms=? WHERE actor_id=? AND request_high=? AND request_low=? AND state=3 AND battle_id=?", state, stamp+1000, launch.ActorId, launch.RequestHigh, launch.RequestLow, launch.BattleId); err != nil {
 		return err
@@ -270,10 +267,9 @@ func (s *Store) requeueFailedTeamLaunchTx(ctx context.Context, tx *sql.Tx, launc
 		return err
 	}
 	if expired {
-		_, err = tx.ExecContext(ctx, "DELETE FROM team_launch_region WHERE actor_id=? AND request_high=? AND request_low=?", launch.ActorId, launch.RequestHigh, launch.RequestLow)
-		return err
+		return nil
 	}
-	return s.replaceTeamLaunchRegions(ctx, tx, launch, group, stamp)
+	return s.requireQueuedTeamGroupTx(ctx, tx, launch, group)
 }
 
 // 建房成功只能解名册锁；原成员全部由ready终态CAS释放后，才关闭挂起域原件。

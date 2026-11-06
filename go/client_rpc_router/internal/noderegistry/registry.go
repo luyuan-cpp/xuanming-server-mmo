@@ -25,6 +25,7 @@ import (
 
 	base "proto/common/base"
 	"shared/nodeinfo"
+	"shared/releasetrack"
 	"shared/snowflake"
 
 	"github.com/google/uuid"
@@ -73,7 +74,10 @@ func allocationKeyPrefix(prefix string, nodeType uint32) string {
 }
 
 // Register 在 etcd 里以租约写入 NodeInfo,node_id 用原子 CAS 分配。
-func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uint32, ttl int64) (*NodeRegistration, error) {
+// track 是本进程的发布轨道(调用方从 releasetrack.FromEnv 取),写进 NodeInfo.release_track:
+// gate 按它选路由服(docs/design/release-track-gray-canary.md §2.4)。这一参数是本副本独有的,
+// 同步其他副本时不必带过去;它们的轨道在迁到 shared/noderegistry 后由那边统一写。
+func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uint32, ttl int64, track releasetrack.Track) (*NodeRegistration, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -98,6 +102,7 @@ func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uin
 		LaunchTime:   uint64(time.Now().Unix()),
 		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),
 		NodeUuid:     uuid.New().String(),
+		ReleaseTrack: track.String(),
 	}
 
 	// CAS 分配 node_id

@@ -135,6 +135,9 @@ func GmSanctionPlayer(ctx context.Context, deps GmSanctionDeps, in *inboxpb.GmSa
 
 // sanctionPayload 把 oneof 映射成 (msg_type, 最终载荷)。attach_debt 返回的是**副本**,gm_operator 已被
 // 服务端认定的 operator 覆盖,不改调用方的请求对象。action 缺失返回 ok=false。
+//
+// 物品封锁 / 解封(block_item_gain / unblock_item_gain)与货币的两种同域同序:同一玩家的封锁与解封按 seq 先后执行,
+// 不会颠倒(设计 §2.2)。载荷值(item_config_id 非 0)由 Store.Enqueue 里的注册表校验判,这里只做 oneof 映射。
 func sanctionPayload(in *inboxpb.GmSanctionPlayerRequest) (inboxpb.PlayerInboxMessageType, proto.Message, bool) {
 	switch a := in.GetAction().(type) {
 	case *inboxpb.GmSanctionPlayerRequest_BlockGain:
@@ -147,6 +150,16 @@ func sanctionPayload(in *inboxpb.GmSanctionPlayerRequest) (inboxpb.PlayerInboxMe
 			return 0, nil, false
 		}
 		return inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN, a.UnblockGain, true
+	case *inboxpb.GmSanctionPlayerRequest_BlockItemGain:
+		if a.BlockItemGain == nil {
+			return 0, nil, false
+		}
+		return inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN, a.BlockItemGain, true
+	case *inboxpb.GmSanctionPlayerRequest_UnblockItemGain:
+		if a.UnblockItemGain == nil {
+			return 0, nil, false
+		}
+		return inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN, a.UnblockItemGain, true
 	case *inboxpb.GmSanctionPlayerRequest_AttachDebt:
 		if a.AttachDebt == nil {
 			return 0, nil, false

@@ -193,7 +193,7 @@ func StartWorldAutoscaler(ctx context.Context, svcCtx *svc.ServiceContext) {
 			if !isLeader() {
 				return
 			}
-			for _, zoneID := range GetActiveZones() {
+			for _, zoneID := range orchestratedZones(svcCtx) {
 				AutoscaleWorldChannelsForZone(ctx, svcCtx, zoneID)
 			}
 		})
@@ -498,6 +498,13 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 	if !IsNodeAlive(svcCtx, zoneID, nodeID) {
 		// 节点已死:实体随进程一起没了,玩家会走各自的掉线/重连路径。
 		// 这里只负责把 Redis 状态清干净。
+		//
+		// 再入屏障(2026-11-05):摘出负载集不代表老节点已经停笔,它丢租约后还有 emergency drain 在
+		// SavePlayerToRedis。收尾删映射、成员集合与名额记录,属于「销毁」一类,与死节点收尾、孤儿清理同受屏障约束
+		// (reentry_barrier.go 顶部)。屏障未到本拍什么都不做,频道留在排空集合,下一拍 sweep 再来。
+		if reentryBarrierBlocks(svcCtx, zoneID, nodeID, barrierSiteAutoscaleDrain) {
+			return
+		}
 		logx.Infof("[WorldAutoscale] draining channel %d: node %s is gone, cleaning up state",
 			sceneID, nodeID)
 		finishDrainedChannel(ctx, svcCtx, zoneID, confID, sceneID, nodeID)
@@ -566,7 +573,12 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
 	if nodeID != "" {
 		svcCtx.Redis.Srem(nodeScenesKey(zoneID, nodeID), sceneIDStr)
-		svcCtx.Redis.Incrby(nodeSceneCountKey(zoneID, nodeID), -1)
+		// 只扣活属主的 scene_count(2026-11-05,与孤儿清理 tearDownOrphanScene 同口径)。死属主的计数键由死节点收尾在
+		// 收尾完成时整个删掉;死属主分支又要等屏障走完,与那次删除差不多同时到期,删了之后再扣会把键重建成 -1,
+		// 被复用同一 node_id 的新进程继承(理由同 luaReassignSceneNode 对老节点只在 > 0 时才减)。
+		if IsNodeAlive(svcCtx, zoneID, nodeID) {
+			svcCtx.Redis.Incrby(nodeSceneCountKey(zoneID, nodeID), -1)
+		}
 		removeResidualSceneMembers(svcCtx, sceneID, zoneID, nodeID, claim.Members)
 	}
 	if claim.AgonesGs != "" {

@@ -34,7 +34,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * 直接取 X,只排队。编排、purge 挡板与门控见 {@link MySqlLockOrderFixture}。
  *
  * <ul>
- *   <li>{@link #upsertBehindPendingDeleteOnlyQueues}:生产的 {@link ZoneConfigRepository#UPSERT_SQL}(同一个常量)
+ *   <li>{@link #upsertBehindPendingDeleteOnlyQueues}:生产的 {@link ZoneConfigRepository#INSERT_IF_ABSENT_SQL}(同一个常量;
+ *       2026-11-05 起重复键分支是不改值的自引用 —— 只插不改,取锁形状与原来的整行覆盖相同,仍是 ODKU 直接取 X)
  *       两个都成功、零 1213、只剩一行。</li>
  *   <li>{@link #legacyMergeInsertBehindPendingDeleteDeadlocks}:对照组。旧 create = save(zone) 在 merge 的 SELECT
  *       查不到行时发出的普通 INSERT,同一时序下必须撞出恰好一个 1213;不复现就说明夹具走样,查原因,不要删它。</li>
@@ -49,7 +50,7 @@ class ZoneConfigUpsertLockOrderMySqlTest {
     private static final long ZONE_UPSERT = 990_001L;
     private static final long ZONE_LEGACY = 990_002L;
 
-    private static final NamedSql UPSERT = NamedSql.parse(ZoneConfigRepository.UPSERT_SQL);
+    private static final NamedSql UPSERT = NamedSql.parse(ZoneConfigRepository.INSERT_IF_ABSENT_SQL);
     /** 与 {@link ZoneConfigRepository#DELETE_BY_ID_JPQL} 等价的 SQL:按主键的单条删除。 */
     private static final String DELETE_BY_ID_SQL = "DELETE FROM zone_config WHERE zone_id = ?";
     /** 旧 create = save(zone) 走 merge、SELECT 查不到行时 Hibernate 发出的普通 INSERT 形状,只给对照组用。 */
@@ -91,7 +92,7 @@ class ZoneConfigUpsertLockOrderMySqlTest {
             Optional<SQLException> err = outcomes.get(i);
             if (err.isPresent() && isDeadlock(err.get())) {
                 fail("第 " + (i + 1) + " 个 upsert 撞上 InnoDB 死锁(1213):主键重复检查又拿回了 S 锁"
-                        + "(UPSERT_SQL 被改回普通 INSERT / INSERT IGNORE?)—— 见 ZoneConfigRepository#upsert。"
+                        + "(INSERT_IF_ABSENT_SQL 被改回普通 INSERT / INSERT IGNORE?)—— 见 ZoneConfigRepository#insertIfAbsent。"
                         + "purge 挡板已关掉「purge 恰在窗口内」的固有情形;仍不明时看 SHOW ENGINE INNODB STATUS 的"
                         + " LATEST DETECTED DEADLOCK 段", err.get());
             }
@@ -139,7 +140,7 @@ class ZoneConfigUpsertLockOrderMySqlTest {
                 writer);
     }
 
-    /** 与 {@link ZoneConfigRepository#upsert} 绑定的列一一对应;HashMap 是因为 open_time 要绑 null。 */
+    /** 与 {@link ZoneConfigRepository#insertIfAbsent} 绑定的列一一对应;HashMap 是因为 open_time 要绑 null。 */
     private static Map<String, Object> upsertParams(long zoneId, String name) {
         Map<String, Object> p = new HashMap<>();
         p.put("zoneId", zoneId);

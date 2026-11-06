@@ -2,8 +2,9 @@
 #include "muduo/base/Logging.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
-#include "grid.h"
+#include "interest.h"
 #include "proto/common/component/base_comp.pb.h"
+#include "proto/common/component/player_network_comp.pb.h"  // PlayerSessionSnapshotComp:只有有网关会话的玩家才能收广播
 #include "Detour/DetourCommon.h"
 #include "spatial/constants/view.h"
 #include "proto/scene/player_scene.pb.h"
@@ -126,9 +127,17 @@ void ViewSystem::FillActorCreateMessageInfo(entt::entity entrant, uint64_t netId
 void ViewSystem::BroadcastMessageToVisiblePlayers(entt::entity entity, const uint32_t message_id,
                                                   const google::protobuf::Message &message)
 {
-    EntityUnorderedSet entities;
-    GridSystem::GetEntitiesInViewAndNearby(entity, entities);
-    BroadcastToPlayerClients(message_id, message, entities);
+    // 客户端只显示关注列表里的对象:没显示 entity 的人收到它的技能消息既无用,也会泄露隐身者的行动。
+    EntityVector receivers;
+    InterestSystem::GetVisibleWatchers(entity, receivers);
+    // 没有会话快照的实体(NPC 等)没有客户端可发,留在名单里只会让广播函数逐个报错。
+    std::erase_if(receivers, [](entt::entity watcher)
+                  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(watcher); });
+    if (receivers.empty())
+    {
+        return;
+    }
+    BroadcastToPlayerClients(message_id, message, receivers);
 }
 
 void ViewSystem::LookAtPosition(entt::entity entity, const Vector3 &pos)
@@ -180,17 +189,16 @@ bool ViewSystem::CanSee(entt::entity observer, entt::entity target)
     if (!IsWithinViewRadius(observer, target))
         return false;
 
-    // Stealth check: stealthed targets are invisible unless observer
-    // has a pinned interest in them (e.g. skill/buff forced visibility).
+    // 隐身目标只对持有侦测授权的观察者可见:授权登记在观察者对它的显式关注来源上,
+    // 由技能等玩法明确给出;普通关注、队伍关系或空间邻近都不能看穿隐身。
     if (IsStealthed(target))
     {
-        // Check if observer has the target pinned in its interest list.
         const auto *aoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(observer);
         if (aoiList == nullptr)
             return false;
 
-        auto it = aoiList->entries.find(target);
-        if (it == aoiList->entries.end() || it->second.priority < AoiPriority::kPinned)
+        const auto it = aoiList->entries.find(target);
+        if (it == aoiList->entries.end() || !it->second.RevealsStealth())
         {
             return false;
         }

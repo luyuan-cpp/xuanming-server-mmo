@@ -141,6 +141,12 @@ func TestGmSanctionActionsMapToTypes(t *testing.T) {
 		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN: func(r *inboxpb.GmSanctionPlayerRequest) {
 			r.Action = &inboxpb.GmSanctionPlayerRequest_UnblockGain{UnblockGain: &inboxpb.GmCurrencyGainPayload{CurrencyType: 2}}
 		},
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN: func(r *inboxpb.GmSanctionPlayerRequest) {
+			r.Action = &inboxpb.GmSanctionPlayerRequest_BlockItemGain{BlockItemGain: &inboxpb.GmItemGainPayload{ItemConfigId: 10}}
+		},
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN: func(r *inboxpb.GmSanctionPlayerRequest) {
+			r.Action = &inboxpb.GmSanctionPlayerRequest_UnblockItemGain{UnblockItemGain: &inboxpb.GmItemGainPayload{ItemConfigId: 10}}
+		},
 	}
 	for want, set := range cases {
 		store := &fakeSanctionStore{result: inbox.EnqueueResult{Seq: 5, Created: true}}
@@ -151,6 +157,61 @@ func TestGmSanctionActionsMapToTypes(t *testing.T) {
 		if len(store.params) != 1 || store.params[0].Type != want {
 			t.Errorf("want type %v, got %+v", want, store.params)
 		}
+	}
+}
+
+// TestGmSanctionItemGainEnqueuesConfigIDWithAuditAndStableBytes:单玩家物品获取封禁(设计 §2.2)走与货币封锁同一条入箱路径:
+// 同一个 GM 生产方与 (producer_kind, request_id) 幂等键、同事务审计(域 = SCENE_GM_SANCTION)、确定性载荷字节
+// (同一请求重试得到 DUPLICATE 而不是 CONFLICT)。载荷原样带配置号,不改写调用方的请求。
+func TestGmSanctionItemGainEnqueuesConfigIDWithAuditAndStableBytes(t *testing.T) {
+	logtest.Discard(t)
+	for name, tc := range map[string]struct {
+		set  func(r *inboxpb.GmSanctionPlayerRequest)
+		want inboxpb.PlayerInboxMessageType
+	}{
+		"封锁": {func(r *inboxpb.GmSanctionPlayerRequest) {
+			r.Action = &inboxpb.GmSanctionPlayerRequest_BlockItemGain{BlockItemGain: &inboxpb.GmItemGainPayload{ItemConfigId: 30045}}
+		}, inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN},
+		"解封": {func(r *inboxpb.GmSanctionPlayerRequest) {
+			r.Action = &inboxpb.GmSanctionPlayerRequest_UnblockItemGain{UnblockItemGain: &inboxpb.GmItemGainPayload{ItemConfigId: 30045}}
+		}, inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := &fakeSanctionStore{result: inbox.EnqueueResult{Seq: 88, Created: true, State: inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING}}
+			var audits []*inboxpb.PlayerInboxAudit
+			deps := newDeps(t, store, &audits)
+			req := validRequest()
+			tc.set(req)
+			resp := GmSanctionPlayer(context.Background(), deps, req, "10.0.0.5:51234")
+			if resp.GetErrorMessage() != nil || resp.GetSeq() != 88 || !resp.GetCreated() {
+				t.Fatalf("resp = %+v", resp)
+			}
+			if len(store.params) != 1 {
+				t.Fatalf("Enqueue 调用 %d 次", len(store.params))
+			}
+			p := store.params[0]
+			if p.Type != tc.want || p.Producer != inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_GM ||
+				p.PlayerID != 42 || p.RequestID != 9001 || p.Operator != "ops_alice" || p.Note != req.GetReason() {
+				t.Fatalf("EnqueueParams = %+v", p)
+			}
+			payload := &inboxpb.GmItemGainPayload{}
+			if err := proto.Unmarshal(p.Payload, payload); err != nil || payload.GetItemConfigId() != 30045 {
+				t.Fatalf("载荷 = %+v, err = %v,want item_config_id=30045", payload, err)
+			}
+			if len(audits) != 1 || audits[0].GetSeq() != 88 || audits[0].GetOperator() != "ops_alice" ||
+				audits[0].GetPeerAddr() != "10.0.0.5:51234" ||
+				audits[0].GetDomain() != uint32(inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION) ||
+				audits[0].GetAction() != uint32(inboxpb.PlayerInboxAuditAction_PLAYER_INBOX_AUDIT_SANCTION) {
+				t.Fatalf("审计行 = %+v", audits)
+			}
+			// 原样重试:载荷字节不变(内容摘要包含载荷)。
+			retry := validRequest()
+			tc.set(retry)
+			GmSanctionPlayer(context.Background(), deps, retry, "10.0.0.5:51234")
+			if len(store.params) != 2 || string(store.params[0].Payload) != string(store.params[1].Payload) {
+				t.Fatal("同一请求两次的载荷字节不同,重试会被判成幂等冲突")
+			}
+		})
 	}
 }
 
@@ -168,6 +229,12 @@ func TestGmSanctionRejectsBeforeEnqueue(t *testing.T) {
 		{"没有 action", func(r *inboxpb.GmSanctionPlayerRequest) { r.Action = nil }, constants.ErrInvalidParameter},
 		{"action 内容为空", func(r *inboxpb.GmSanctionPlayerRequest) {
 			r.Action = &inboxpb.GmSanctionPlayerRequest_BlockGain{}
+		}, constants.ErrInvalidParameter},
+		{"物品封锁 action 内容为空", func(r *inboxpb.GmSanctionPlayerRequest) {
+			r.Action = &inboxpb.GmSanctionPlayerRequest_BlockItemGain{}
+		}, constants.ErrInvalidParameter},
+		{"物品解封 action 内容为空", func(r *inboxpb.GmSanctionPlayerRequest) {
+			r.Action = &inboxpb.GmSanctionPlayerRequest_UnblockItemGain{}
 		}, constants.ErrInvalidParameter},
 		{"operator 为空", func(r *inboxpb.GmSanctionPlayerRequest) { r.Operator = "" }, constants.ErrInvalidParameter},
 		{"operator 超 64B", func(r *inboxpb.GmSanctionPlayerRequest) { r.Operator = strings.Repeat("o", 65) }, constants.ErrTextTooLong},

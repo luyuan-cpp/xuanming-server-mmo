@@ -449,21 +449,30 @@ func (x *PlayerCentreDatabase) GetSceneInfo() *component.PlayerSceneContextComp 
 	return nil
 }
 
-// Player database table 1: important data here, less important in another table
-// (important = money, revenue-related); loaded immediately on login
-// 每个字段都用 OptionPersistGroup 声明属于 player_store 的哪一组(docs/design/player-save-direct-commit.md §1.1):
-// 1 = 热数据,2 = 资产,3 = 成长,4 = 低频,0 = 元数据不进片段。新字段不标,scene 拒绝启动。
-// 只是存盘的内存形状:没有 OptionTableName,不建表。落库的是 player_store 里按分组投影出来的片段。
+// 玩家存档的内存形状:没有 OptionTableName,不建表。落库的是 player_store 里按行投影出来的片段
+// (docs/design/player-save-direct-commit.md §1.1)。每个字段都用 OptionPersistGroup 声明属于哪一行,
+// 取值是 playerstore.PlayerStoreKind 的数值:
+//
+//	9 = LOCATION(位置,只顺带写)  6 = CHARACTER(等级、基础属性与当前血蓝)  7 = WALLET(货币与账本)
+//	8 = BAG(背包)  3 = GROWTH(技能、加点、宠物、任务)  4 = PROFILE(职业、注册时间、身份等小而少变的字段)
+//	0 = 元数据,不进片段。
+//
+// 新字段不标、标到退役的 1 / 2 / 5 或不存在的行,scene 都拒绝启动。
+// 选哪一行只看大小、变化频率、和谁一起变:一次存盘的所有脏行同事务、同一个整笔序号,
+// 所以「必须同一次提交」的不变量(I3、IB-3)不要求同一行。
 type PlayerDatabase struct {
-	state                      protoimpl.MessageState         `protogen:"open.v1"`
-	PlayerId                   uint64                         `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Transform                  *component.Transform           `protobuf:"bytes,2,opt,name=transform,proto3" json:"transform,omitempty"`
-	Uint64PbComponent          *component.PlayerUint64Comp    `protobuf:"bytes,3,opt,name=uint64_pb_component,json=uint64PbComponent,proto3" json:"uint64_pb_component,omitempty"`
-	SkillList                  *component.PlayerSkillListComp `protobuf:"bytes,4,opt,name=skill_list,json=skillList,proto3" json:"skill_list,omitempty"`
-	Uint32PbComponent          *component.PlayerUint32Comp    `protobuf:"bytes,5,opt,name=uint32_pb_component,json=uint32PbComponent,proto3" json:"uint32_pb_component,omitempty"`
-	DerivedAttributesComponent *component.BaseAttributesComp  `protobuf:"bytes,6,opt,name=derived_attributes_component,json=derivedAttributesComponent,proto3" json:"derived_attributes_component,omitempty"`
-	LevelComponent             *component.LevelComp           `protobuf:"bytes,7,opt,name=level_component,json=levelComponent,proto3" json:"level_component,omitempty"`
-	Currency                   *component.CurrencyComp        `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId  uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Transform *component.Transform   `protobuf:"bytes,2,opt,name=transform,proto3" json:"transform,omitempty"` // LOCATION
+	// 注册时间:建角后只在首次进场写一次。
+	Uint64PbComponent *component.PlayerUint64Comp    `protobuf:"bytes,3,opt,name=uint64_pb_component,json=uint64PbComponent,proto3" json:"uint64_pb_component,omitempty"` // PROFILE
+	SkillList         *component.PlayerSkillListComp `protobuf:"bytes,4,opt,name=skill_list,json=skillList,proto3" json:"skill_list,omitempty"`                           // GROWTH
+	// 职业:建角事务里和名字、外观、性别一起写进 PROFILE 行。
+	Uint32PbComponent *component.PlayerUint32Comp `protobuf:"bytes,5,opt,name=uint32_pb_component,json=uint32PbComponent,proto3" json:"uint32_pb_component,omitempty"` // PROFILE
+	// 字段名沿用旧名:装的是基础属性和当前血蓝(BaseAttributesComp);真正的派生属性 DerivedAttributesComp 不落库,加载时重算。
+	DerivedAttributesComponent *component.BaseAttributesComp `protobuf:"bytes,6,opt,name=derived_attributes_component,json=derivedAttributesComponent,proto3" json:"derived_attributes_component,omitempty"` // CHARACTER
+	LevelComponent             *component.LevelComp          `protobuf:"bytes,7,opt,name=level_component,json=levelComponent,proto3" json:"level_component,omitempty"`                                       // CHARACTER
+	Currency                   *component.CurrencyComp       `protobuf:"bytes,8,opt,name=currency,proto3" json:"currency,omitempty"`                                                                         // WALLET
 	// Stress-test instrumentation. Empty during normal play. See
 	// PlayerStressTestProbe for the verification contract.
 	// scene 每次真正写盘时重新打探针、不读回加载值,所以标 OptionPersistUncarried
@@ -473,8 +482,9 @@ type PlayerDatabase struct {
 	AttributeComponent *component.PlayerAttributeComp `protobuf:"bytes,11,opt,name=attribute_component,json=attributeComponent,proto3" json:"attribute_component,omitempty"`
 	// 宝宝(宠物):实例列表 + 出战中的宝宝,设计文档 player-pet.md
 	PetComponent *component.PlayerPetComp `protobuf:"bytes,12,opt,name=pet_component,json=petComponent,proto3" json:"pet_component,omitempty"`
-	// 背包资产与任务领取权同属一条玩家数据库记录，随同一次提交保存。
-	BagComponent     *BagAllData   `protobuf:"bytes,13,opt,name=bag_component,json=bagComponent,proto3" json:"bag_component,omitempty"`
+	// 背包资产与任务领取权随同一次存盘提交保存(不同行、同一事务)。背包是最大的一行,单独成行,
+	// 改货币、账本时不用重写整个背包。
+	BagComponent     *BagAllData   `protobuf:"bytes,13,opt,name=bag_component,json=bagComponent,proto3" json:"bag_component,omitempty"` // BAG
 	MissionComponent *QuestAllData `protobuf:"bytes,14,opt,name=mission_component,json=missionComponent,proto3" json:"mission_component,omitempty"`
 	// 角色名副本,见 player_comp.proto PlayerProfileComp。
 	// 真源是 data_service 全局库的 player_name 表(全服唯一);这里只是随 player_database
@@ -485,14 +495,14 @@ type PlayerDatabase struct {
 	// 【加列纪律】player_database 新字段一律取"落码当时的下一个空闲号",并声明在 message 末尾。
 	ProfileComponent *component.PlayerProfileComp `protobuf:"bytes,15,opt,name=profile_component,json=profileComponent,proto3" json:"profile_component,omitempty"`
 	// 通用资产通道账本(每流 seq 窗口),docs/design/guild-phase2/04-asset-channel.md §4.3.4。
-	// 必须与 currency / bag_component 同组同一次提交:账本与资产一起落盘、一起丢,
-	// 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
-	AssetOpLedger *component.PlayerAssetOpLedgerComp `protobuf:"bytes,16,opt,name=asset_op_ledger,json=assetOpLedger,proto3" json:"asset_op_ledger,omitempty"`
+	// 必须与 currency / bag_component 同一次提交:账本与资产一起落盘、一起丢,
+	// 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。同一次存盘的脏行同事务,所以不要求同一行。
+	AssetOpLedger *component.PlayerAssetOpLedgerComp `protobuf:"bytes,16,opt,name=asset_op_ledger,json=assetOpLedger,proto3" json:"asset_op_ledger,omitempty"` // WALLET
 	// 玩家收件箱消费端账本(docs/design/player-inbox-service.md §4.4):每域「已按 seq 处理到哪」+ 最近 32 条结局。
-	// 与 asset_op_ledger 同一条不变量 I3(收件箱侧记作 IB-3):必须与 currency / bag_component 同记录同一次落盘 ——
+	// 与 asset_op_ledger 同一条不变量 I3(收件箱侧记作 IB-3):必须与 currency / bag_component 同一次落盘 ——
 	// GM 处置的效果(封锁 / 欠款随 CurrencyComp 落盘)和它的账本要么一起在盘上,要么一起没有;
 	// 否则「效果落了账本没落」会让不幂等的 AttachDebt 被重复执行,「账本落了效果没落」会把没生效的处置确认成已执行。
-	InboxLedger *component.PlayerInboxLedgerComp `protobuf:"bytes,20,opt,name=inbox_ledger,json=inboxLedger,proto3" json:"inbox_ledger,omitempty"`
+	InboxLedger *component.PlayerInboxLedgerComp `protobuf:"bytes,20,opt,name=inbox_ledger,json=inboxLedger,proto3" json:"inbox_ledger,omitempty"` // WALLET
 	// 覆盖世代(docs/design/mixed-version-persist-field-protection.md §3.3):这份记录里该世代及以前定义的字段,值都是真实的。
 	// 由 scene 存盘时盖章 max(本二进制世代, 加载世代);go/db 据此判定超前延后 / 倒退拒写(§6.2)。
 	// 0 = 未盖戳(机制上线前写入或 login 新号种子),所有比较先按 1 处理。世代号由 proto 生成器按
@@ -500,12 +510,23 @@ type PlayerDatabase struct {
 	// 按加列纪律取 20 之后的下一个空闲号 21,声明在末尾、不留空洞。
 	PersistSchemaGen uint32 `protobuf:"varint,21,opt,name=persist_schema_gen,json=persistSchemaGen,proto3" json:"persist_schema_gen,omitempty"`
 	// 神秘商人的个人限购记录(docs/design/mystery-merchant.md §5.3)。与上面几本账本同一条不变量 I3:
-	// 必须与 currency / bag_component 同记录同一次落盘 —— 「钱、货、已购数」要么一起在盘上,要么一起回档,
+	// 必须与 currency / bag_component 同一次落盘 —— 「钱、货、已购数」要么一起在盘上,要么一起回档,
 	// 否则回档后会出现「货没了名额却用掉了」或「货还在名额却清零可再买」。
 	// 与覆盖世代合并后取下一个空闲号 22；项目尚未上线，下一个新字段从 23 起。
-	MysteryMerchant *component.PlayerMysteryMerchantComp `protobuf:"bytes,22,opt,name=mystery_merchant,json=mysteryMerchant,proto3" json:"mystery_merchant,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	MysteryMerchant *component.PlayerMysteryMerchantComp `protobuf:"bytes,22,opt,name=mystery_merchant,json=mysteryMerchant,proto3" json:"mystery_merchant,omitempty"` // WALLET
+	// 近期战斗结果(docs/design/battle-result-recovery.md §4):结算应用的同一帧写入,与奖励、收件箱账本同一次存盘提交。
+	// 一次存盘的所有脏行同事务、同一个整笔序号(docs/design/player-save-direct-commit.md §1.1),所以不必与资产同组;
+	// 放 PROFILE 组:列表只在结算与客户端确认时变,放 ASSET 会让每一次资产写入都带上它。
+	// 取下一个空闲号 23;下一个新字段从 24 起。
+	BattleResults *component.PlayerBattleResultComp `protobuf:"bytes,23,opt,name=battle_results,json=battleResults,proto3" json:"battle_results,omitempty"`
+	// 单玩家物品获取封禁(docs/design/player-inbox-service.md §2.2):GM 处置的效果状态,由收件箱 GM 域执行器写。
+	// 与执行账本 inbox_ledger 同一次存盘提交(IB-3):一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),
+	// 所以不必与 inbox_ledger 同一行;它小、只在 GM 处置时变,放 PROFILE 行,不让每一次货币写入都带上它。
+	// 加载时无条件挂组件、存盘时缺组件整份拒存(持久数据,ecs-component-access-rules.md)。
+	// 取下一个空闲号 24;下一个新字段从 25 起。
+	ItemGainBlock *component.PlayerItemGainBlockComp `protobuf:"bytes,24,opt,name=item_gain_block,json=itemGainBlock,proto3" json:"item_gain_block,omitempty"` // PROFILE
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -660,6 +681,20 @@ func (x *PlayerDatabase) GetPersistSchemaGen() uint32 {
 func (x *PlayerDatabase) GetMysteryMerchant() *component.PlayerMysteryMerchantComp {
 	if x != nil {
 		return x.MysteryMerchant
+	}
+	return nil
+}
+
+func (x *PlayerDatabase) GetBattleResults() *component.PlayerBattleResultComp {
+	if x != nil {
+		return x.BattleResults
+	}
+	return nil
+}
+
+func (x *PlayerDatabase) GetItemGainBlock() *component.PlayerItemGainBlockComp {
+	if x != nil {
+		return x.ItemGainBlock
 	}
 	return nil
 }
@@ -844,7 +879,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -884,30 +919,33 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xcd\t\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xdd\n" +
+	"\n" +
 	"\x0fplayer_database\x12\"\n" +
 	"\tplayer_id\x18\x01 \x01(\x04B\x05\xc8\xfe\xa4\x02\x00R\bplayerId\x12/\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
-	".TransformB\x05\xc8\xfe\xa4\x02\x01R\ttransform\x12H\n" +
-	"\x13uint64_pb_component\x18\x03 \x01(\v2\x11.PlayerUint64CompB\x05\xc8\xfe\xa4\x02\x01R\x11uint64PbComponent\x12:\n" +
+	".TransformB\x05\xc8\xfe\xa4\x02\tR\ttransform\x12H\n" +
+	"\x13uint64_pb_component\x18\x03 \x01(\v2\x11.PlayerUint64CompB\x05\xc8\xfe\xa4\x02\x04R\x11uint64PbComponent\x12:\n" +
 	"\n" +
 	"skill_list\x18\x04 \x01(\v2\x14.PlayerSkillListCompB\x05\xc8\xfe\xa4\x02\x03R\tskillList\x12H\n" +
-	"\x13uint32_pb_component\x18\x05 \x01(\v2\x11.PlayerUint32CompB\x05\xc8\xfe\xa4\x02\x01R\x11uint32PbComponent\x12\\\n" +
-	"\x1cderived_attributes_component\x18\x06 \x01(\v2\x13.BaseAttributesCompB\x05\xc8\xfe\xa4\x02\x01R\x1aderivedAttributesComponent\x12:\n" +
+	"\x13uint32_pb_component\x18\x05 \x01(\v2\x11.PlayerUint32CompB\x05\xc8\xfe\xa4\x02\x04R\x11uint32PbComponent\x12\\\n" +
+	"\x1cderived_attributes_component\x18\x06 \x01(\v2\x13.BaseAttributesCompB\x05\xc8\xfe\xa4\x02\x06R\x1aderivedAttributesComponent\x12:\n" +
 	"\x0flevel_component\x18\a \x01(\v2\n" +
-	".LevelCompB\x05\xc8\xfe\xa4\x02\x01R\x0elevelComponent\x120\n" +
-	"\bcurrency\x18\b \x01(\v2\r.CurrencyCompB\x05\xc8\xfe\xa4\x02\x02R\bcurrency\x12N\n" +
+	".LevelCompB\x05\xc8\xfe\xa4\x02\x06R\x0elevelComponent\x120\n" +
+	"\bcurrency\x18\b \x01(\v2\r.CurrencyCompB\x05\xc8\xfe\xa4\x02\aR\bcurrency\x12N\n" +
 	"\x11stress_test_probe\x18\t \x01(\v2\x16.PlayerStressTestProbeB\n" +
 	"\xc0\xfe\xa4\x02\x01\xc8\xfe\xa4\x02\x04R\x0fstressTestProbe\x12L\n" +
 	"\x13attribute_component\x18\v \x01(\v2\x14.PlayerAttributeCompB\x05\xc8\xfe\xa4\x02\x03R\x12attributeComponent\x12:\n" +
 	"\rpet_component\x18\f \x01(\v2\x0e.PlayerPetCompB\x05\xc8\xfe\xa4\x02\x03R\fpetComponent\x127\n" +
-	"\rbag_component\x18\r \x01(\v2\v.BagAllDataB\x05\xc8\xfe\xa4\x02\x02R\fbagComponent\x12A\n" +
+	"\rbag_component\x18\r \x01(\v2\v.BagAllDataB\x05\xc8\xfe\xa4\x02\bR\fbagComponent\x12A\n" +
 	"\x11mission_component\x18\x0e \x01(\v2\r.QuestAllDataB\x05\xc8\xfe\xa4\x02\x03R\x10missionComponent\x12F\n" +
 	"\x11profile_component\x18\x0f \x01(\v2\x12.PlayerProfileCompB\x05\xc8\xfe\xa4\x02\x04R\x10profileComponent\x12G\n" +
-	"\x0fasset_op_ledger\x18\x10 \x01(\v2\x18.PlayerAssetOpLedgerCompB\x05\xc8\xfe\xa4\x02\x02R\rassetOpLedger\x12@\n" +
-	"\finbox_ledger\x18\x14 \x01(\v2\x16.PlayerInboxLedgerCompB\x05\xc8\xfe\xa4\x02\x02R\vinboxLedger\x123\n" +
+	"\x0fasset_op_ledger\x18\x10 \x01(\v2\x18.PlayerAssetOpLedgerCompB\x05\xc8\xfe\xa4\x02\aR\rassetOpLedger\x12@\n" +
+	"\finbox_ledger\x18\x14 \x01(\v2\x16.PlayerInboxLedgerCompB\x05\xc8\xfe\xa4\x02\aR\vinboxLedger\x123\n" +
 	"\x12persist_schema_gen\x18\x15 \x01(\rB\x05\xc8\xfe\xa4\x02\x00R\x10persistSchemaGen\x12L\n" +
-	"\x10mystery_merchant\x18\x16 \x01(\v2\x1a.PlayerMysteryMerchantCompB\x05\xc8\xfe\xa4\x02\x02R\x0fmysteryMerchant:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
+	"\x10mystery_merchant\x18\x16 \x01(\v2\x1a.PlayerMysteryMerchantCompB\x05\xc8\xfe\xa4\x02\aR\x0fmysteryMerchant\x12E\n" +
+	"\x0ebattle_results\x18\x17 \x01(\v2\x17.PlayerBattleResultCompB\x05\xc8\xfe\xa4\x02\x04R\rbattleResults\x12G\n" +
+	"\x0fitem_gain_block\x18\x18 \x01(\v2\x18.PlayerItemGainBlockCompB\x05\xc8\xfe\xa4\x02\x04R\ritemGainBlock:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
 	"\x10\vJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14\"\xbc\x02\n" +
 	"\fplayer_store\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
@@ -968,6 +1006,8 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.PlayerAssetOpLedgerComp)(nil),   // 25: PlayerAssetOpLedgerComp
 	(*component.PlayerInboxLedgerComp)(nil),     // 26: PlayerInboxLedgerComp
 	(*component.PlayerMysteryMerchantComp)(nil), // 27: PlayerMysteryMerchantComp
+	(*component.PlayerBattleResultComp)(nil),    // 28: PlayerBattleResultComp
+	(*component.PlayerItemGainBlockComp)(nil),   // 29: PlayerItemGainBlockComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	10, // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -988,12 +1028,14 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	25, // 15: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
 	26, // 16: player_database.inbox_ledger:type_name -> PlayerInboxLedgerComp
 	27, // 17: player_database.mystery_merchant:type_name -> PlayerMysteryMerchantComp
-	19, // 18: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	28, // 18: player_database.battle_results:type_name -> PlayerBattleResultComp
+	29, // 19: player_database.item_gain_block:type_name -> PlayerItemGainBlockComp
+	19, // 20: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

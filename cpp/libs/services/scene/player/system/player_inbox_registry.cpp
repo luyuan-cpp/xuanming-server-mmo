@@ -25,6 +25,8 @@ namespace player_inbox_registry
 			&GmSanctionInboxExecutor::UnblockCurrencyGain, // PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
 			&GmSanctionInboxExecutor::AttachCurrencyDebt,  // PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT
 			&PlayerBattleSystem::ApplyInboxSettlement,    // PLAYER_INBOX_MSG_BATTLE_SETTLEMENT
+			&GmSanctionInboxExecutor::BlockItemGain,       // PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN
+			&GmSanctionInboxExecutor::UnblockItemGain,     // PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
 		};
 		static_assert(std::size(kExecutors) == static_cast<std::size_t>(player_inbox::PlayerInboxMessageType_ARRAYSIZE),
 					  "执行器表与 PlayerInboxMessageType 脱节:proto 加了类型就在这里补执行器");
@@ -33,6 +35,8 @@ namespace player_inbox_registry
 		static_assert(player_inbox::PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN == 2, "执行器表第 2 行错位");
 		static_assert(player_inbox::PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT == 3, "执行器表第 3 行错位");
 		static_assert(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT == 4, "执行器表第 4 行错位");
+		static_assert(player_inbox::PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN == 5, "执行器表第 5 行错位");
+		static_assert(player_inbox::PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN == 6, "执行器表第 6 行错位");
 
 		// 类型规格的缓存(读一次描述符,此后只读)。
 		struct TypeEntry

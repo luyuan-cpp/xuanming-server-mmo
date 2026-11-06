@@ -21,7 +21,8 @@ import (
 // Prometheus label,拼进 scene_id / node_id 会把基数打爆(AGENTS.md §9)。除注明的以外,都是「本轮放弃、没写」。
 const (
 	// initWorldScenesForZone 读期望频道数 / 频道集合(读不到就不知道缺几个),
-	// 或补发 CreateScene 之前读频道集合 / 属主(这一组或这个频道本轮不补发)。
+	// 或补发 CreateScene 之前读频道集合 / 属主(这一组或这个频道本轮不补发),
+	// 或死节点改派动手之前重读属主(moveWorldChannelOffDeadNode,本轮不改派)。
 	readUnknownSiteWorldInit = "world_init"
 	// GetBestWorldChannel / ReserveBestWorldChannelForEnter 读频道属主:该频道本次不当候选也不当陈旧。
 	readUnknownSiteWorldPick = "world_channel_pick"

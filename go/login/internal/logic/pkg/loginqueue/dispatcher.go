@@ -378,8 +378,11 @@ func (d *Dispatcher) dispatchOnce(ctx context.Context) {
 // 处理相同。dispatchOnce 传进来的候选已由 freeSlotsFromCandidates 判过非空,正常走不到这条。
 // (2026-10-18 更正)「以分数 0 放回队首」改读:PopAdmit 跳过该条,条目从未离开队列、分数不变,不写放行槽和占位,
 // 首个错误随 PopAdmit 的返回值交给 dispatchOnce。
+//
+// 记账之前先剔除停写与满载的 gate(eligibleGates,与快速通道同一份规则),全部不合格时回落全集。
+// 只影响这一拍挑哪台;本拍放多少人仍由 freeSlotsFromCandidates 按全部候选的人数算。
 func newBatchPickFn(candidates []GateCandidate) PickAdmitSlotFn {
-	picker := newGatePicker(candidates)
+	picker := newGatePicker(eligibleGates(candidates))
 	return func(uint32, string) (*AdmitSlot, error) {
 		gate, err := picker.pick()
 		if err != nil {

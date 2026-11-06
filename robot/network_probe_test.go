@@ -807,3 +807,79 @@ func TestBackfillCancelQueueCancelsTheTicketFromStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestTeamSmokeWritesSendCanonicalAndStableRequestId(t *testing.T) {
+	gate := startFakeProbeGate(t, func(*base.ClientRequest) *base.MessageContent {
+		return fakeGateReply(&base.Empty{})
+	})
+	gc := gate.dial(t, 9_100_008)
+	stats := metrics.NewStats()
+	bot := &teamSmokeBot{name: "A", account: "robot_t", gc: gc, stats: stats,
+		caller: newSmokeCaller(gc, stats, "robot_t", 5*time.Second, errTeamSmokeTimeout)}
+	send := func(messageId uint32, request proto.Message) proto.Message {
+		t.Helper()
+		bot.lastRequestAt = time.Time{}
+		if tip, err := bot.call(messageId, request, &base.Empty{}); err != nil || tip != 0 {
+			t.Fatalf("message_id=%d tip=%d err=%v", messageId, tip, err)
+		}
+		sent := gate.requestsTo(messageId)
+		if len(sent) == 0 {
+			t.Fatalf("message_id=%d has no captured request", messageId)
+		}
+		received := request.ProtoReflect().New().Interface()
+		if err := proto.Unmarshal(sent[len(sent)-1].GetBody(), received); err != nil {
+			t.Fatal(err)
+		}
+		return received
+	}
+	type teamWrite interface {
+		proto.Message
+		GetRequestId() string
+	}
+	for _, tc := range []struct {
+		messageId uint32
+		request   teamWrite
+	}{
+		{game.ClientPlayerTeamCreateTeamMessageId, &teampb.CreateTeamRequest{}},
+		{game.ClientPlayerTeamApplyJoinTeamMessageId, &teampb.ApplyJoinTeamRequest{}},
+		{game.ClientPlayerTeamHandleApplicationMessageId, &teampb.HandleApplicationRequest{}},
+		{game.ClientPlayerTeamInviteToTeamMessageId, &teampb.InviteToTeamRequest{}},
+		{game.ClientPlayerTeamRespondInviteMessageId, &teampb.RespondInviteRequest{}},
+		{game.ClientPlayerTeamLeaveTeamMessageId, &teampb.LeaveTeamRequest{}},
+		{game.ClientPlayerTeamKickMemberMessageId, &teampb.KickMemberRequest{}},
+		{game.ClientPlayerTeamTransferLeaderMessageId, &teampb.TransferLeaderRequest{}},
+		{game.ClientPlayerTeamDisbandTeamMessageId, &teampb.DisbandTeamRequest{}},
+		{game.ClientPlayerTeamStartTeamMatchMessageId, &teampb.StartTeamMatchRequest{}},
+	} {
+		first := send(tc.messageId, tc.request).(teamWrite)
+		if !canonicalUUIDv4.MatchString(first.GetRequestId()) || first.GetRequestId() != tc.request.GetRequestId() {
+			t.Fatalf("message_id=%d has invalid or unstored request_id: %q", tc.messageId, first.GetRequestId())
+		}
+		if replay := send(tc.messageId, tc.request); !proto.Equal(first, replay) {
+			t.Fatalf("message_id=%d replay changed the request", tc.messageId)
+		}
+	}
+
+	const explicitId = "12345678-1234-4234-8234-123456789abc"
+	const invite = game.ClientPlayerTeamInviteToTeamMessageId
+	explicit := &teampb.InviteToTeamRequest{TargetPlayerId: 7, ExpectedTeamId: 5, RequestId: explicitId}
+	if received := send(invite, explicit); !proto.Equal(explicit, received) || explicit.GetRequestId() != explicitId {
+		t.Fatal("explicit request_id was overwritten")
+	}
+	first := &teampb.InviteToTeamRequest{TargetPlayerId: 7, ExpectedTeamId: 5}
+	second := &teampb.InviteToTeamRequest{TargetPlayerId: 7, ExpectedTeamId: 5}
+	send(invite, first)
+	send(invite, second)
+	if first.GetRequestId() == second.GetRequestId() {
+		t.Fatal("distinct invite intents reused a request_id")
+	}
+
+	query := &teampb.GetMyTeamRequest{MatchRequestId: explicitId, Regroup: true}
+	if received := send(game.ClientPlayerTeamGetMyTeamMessageId, query); !proto.Equal(query, received) {
+		t.Fatal("GetMyTeam was changed")
+	}
+	cancel := &match.CancelQueueRequest{QueueTicket: "ticket-1"}
+	if received := send(game.MatchServiceCancelQueueMessageId, cancel).(*match.CancelQueueRequest); received.GetRequestId() != "" {
+		t.Fatal("Match request was assigned a team request_id")
+	}
+}

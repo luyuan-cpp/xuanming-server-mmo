@@ -163,12 +163,17 @@
     </ClCompile>
     <ClCompile Include="cross_zone_test.cpp" />
     <ClCompile Include="player_team_follow_test.cpp" />
+    <ClCompile Include="loop_task_scope_test.cpp" />
     <ClCompile Include="role_admission_test.cpp" />
     <ClCompile Include="save_seq_test.cpp" />
     <ClCompile Include="player_ownership_metrics_test.cpp" />
+    <ClCompile Include="discovery_zone_scope_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="etcd_registration_wait_test.cpp" />
+  </ItemGroup>
 </Project>
 

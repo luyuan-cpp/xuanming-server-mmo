@@ -16,6 +16,8 @@ const (
 	optionIsPlayerDatabase protowire.Number = 500013
 	optionPersistFrozen    protowire.Number = 500040
 	optionPersistUncarried protowire.Number = 600040
+	// 玩家表顶层字段的存储分组(玩家存储按分组拆成多行,docs/design/player-save-direct-commit.md §1)。
+	optionPersistGroup protowire.Number = 600041
 )
 
 // Schema 是本次生成从描述符集合里收集到的持久字段视图。
@@ -65,11 +67,13 @@ func CollectSchema(files []*descriptorpb.FileDescriptorProto) Schema {
 		reserved:  map[string][]reservedRange{},
 	}
 
+	tables := map[string]bool{}
 	var roots []string
 	for name, info := range messages {
 		isTable := boolOption(info.desc.GetOptions(), optionIsPlayerDatabase)
 		if isTable {
 			s.PlayerTables = append(s.PlayerTables, name)
+			tables[name] = true
 		}
 		if isTable || boolOption(info.desc.GetOptions(), optionPersistFrozen) {
 			roots = append(roots, name)
@@ -88,6 +92,9 @@ func CollectSchema(files []*descriptorpb.FileDescriptorProto) Schema {
 		}
 		for _, fd := range info.desc.GetField() {
 			f := describeField(messages, info, fd)
+			if tables[info.fullName] {
+				f.Group, f.HasGroup = uint32Option(fd.GetOptions(), optionPersistGroup)
+			}
 			s.Fields[f.Key()] = f
 			if boolOption(fd.GetOptions(), optionPersistUncarried) {
 				s.Uncarried[f.Key()] = info.fullName + "." + fd.GetName()
@@ -266,4 +273,51 @@ func boolOption(opts proto.Message, number protowire.Number) bool {
 		raw = raw[skip:]
 	}
 	return value
+}
+
+// uint32Option 按字段号读 uint32 选项,口径同 boolOption:已知扩展与未知字段两处都看,出现多次取最后一次。
+// 第二个返回值表示选项是否出现过(0 是合法的分组值:元数据字段不进任何分组)。
+func uint32Option(opts proto.Message, number protowire.Number) (uint32, bool) {
+	if opts == nil {
+		return 0, false
+	}
+	m := opts.ProtoReflect()
+	if !m.IsValid() {
+		return 0, false
+	}
+	var value uint32
+	found := false
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		if fd.Number() == number && fd.Kind() == protoreflect.Uint32Kind && !fd.IsList() {
+			found, value = true, uint32(v.Uint())
+			return false
+		}
+		return true
+	})
+	if found {
+		return value, true
+	}
+	raw := m.GetUnknown()
+	for len(raw) > 0 {
+		num, typ, n := protowire.ConsumeTag(raw)
+		if n < 0 {
+			return value, found
+		}
+		raw = raw[n:]
+		if num == number && typ == protowire.VarintType {
+			v, vn := protowire.ConsumeVarint(raw)
+			if vn < 0 {
+				return value, found
+			}
+			value, found = uint32(v), true
+			raw = raw[vn:]
+			continue
+		}
+		skip := protowire.ConsumeFieldValue(num, typ, raw)
+		if skip < 0 {
+			return value, found
+		}
+		raw = raw[skip:]
+	}
+	return value, found
 }

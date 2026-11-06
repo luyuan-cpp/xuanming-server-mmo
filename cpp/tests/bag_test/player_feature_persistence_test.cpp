@@ -24,7 +24,11 @@
 #include "proto/common/component/time_comp.pb.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
+#include "modules/gain_block/gain_block_service.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
+#include "proto/common/component/player_battle_result_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"  // PlayerProfileComp
 #include "proto/common/component/player_login_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
@@ -149,7 +153,9 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<MissionsContainerComp>(player);
     EmplaceIfAbsent<PlayerAssetOpLedgerComp>(player);
     EmplaceIfAbsent<PlayerInboxLedgerComp>(player);
+    EmplaceIfAbsent<PlayerItemGainBlockComp>(player); // 单玩家物品获取封禁(player-inbox-service.md §2.2)
     EmplaceIfAbsent<PlayerMysteryMerchantComp>(player);
+    EmplaceIfAbsent<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
@@ -354,6 +360,56 @@ TEST_F(PlayerFeaturePersistenceTest, DatabaseRecordAloneRestoresBagAssetsAndMiss
     const auto restored = NewPlayer();
     PlayerAllDataMessageFieldsUnmarshal(restored, coldSnapshot);
     ExpectStocked(restored);
+}
+
+// 单玩家物品获取封禁(player-inbox-service.md §2.2):GM 处置的效果与收件箱执行账本由同一次 Marshal 写进同一份
+// player_database,冷读加载回来封禁照样生效(重登 / 换节点 / 重启都走这条加载);封禁之前已持有的同配置物品
+// 原样还原(存档还原不是新增获得)。原样再存一次封禁表字节不变;解封后再存,盘上就没有它了。
+TEST_F(PlayerFeaturePersistenceTest, ItemGainBanAndItsInboxDecisionRoundTripInTheSameRecord)
+{
+    const auto player = StockedPlayer(); // 仓库里那堆 config 10 是封禁之前就有的
+    ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::BlockPlayerItemGain(player, 30045));
+    ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::BlockPlayerItemGain(player, 10));
+    // 收件箱在执行这条处置的同一帧记下的结局(GM 域,GM_BLOCK_ITEM_GAIN = 5)。
+    auto* cursor = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player).add_cursors();
+    cursor->set_domain(1);
+    cursor->set_decided_through_seq(42);
+    auto* decision = cursor->add_recent();
+    decision->set_seq(42);
+    decision->set_outcome(1); // PLAYER_INBOX_OUTCOME_APPLIED
+    decision->set_request_id(9001);
+    decision->set_msg_type(5);
+
+    PlayerAllData saved;
+    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(player, saved));
+    const auto& database = saved.player_database_data();
+    const auto& bannedIds = database.item_gain_block().item_config_ids();
+    EXPECT_EQ((std::vector<uint32_t>{10, 30045}), std::vector<uint32_t>(bannedIds.begin(), bannedIds.end()))
+        << "封禁表按升序存";
+    ASSERT_EQ(1, database.inbox_ledger().cursors_size()) << "效果与执行账本在同一份记录里";
+    EXPECT_EQ(42u, database.inbox_ledger().cursors(0).decided_through_seq());
+
+    std::string bytes;
+    ASSERT_TRUE(database.SerializeToString(&bytes));
+    PlayerAllData coldSnapshot;
+    ASSERT_TRUE(coldSnapshot.mutable_player_database_data()->ParseFromString(bytes));
+    const auto restored = NewPlayer();
+    PlayerAllDataMessageFieldsUnmarshal(restored, coldSnapshot);
+    EXPECT_TRUE(GainBlockService::IsItemGainBlocked(restored, 10)) << "加载回来封禁继续生效";
+    EXPECT_TRUE(GainBlockService::IsItemGainBlocked(restored, 30045));
+    EXPECT_FALSE(GainBlockService::IsItemGainBlocked(restored, 9)) << "没封的配置不受影响";
+    ExpectStocked(restored); // 被封的 config 10 那堆照样还原:不扣已有库存,还原不当作新增获得
+
+    PlayerAllData resaved;
+    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(restored, resaved));
+    EXPECT_EQ(database.item_gain_block().SerializeAsString(),
+              resaved.player_database_data().item_gain_block().SerializeAsString()) << "原样往返,不在加载时整理";
+
+    ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(restored, 10));
+    PlayerAllData afterUnban;
+    ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(restored, afterUnban));
+    const auto& remaining = afterUnban.player_database_data().item_gain_block().item_config_ids();
+    EXPECT_EQ((std::vector<uint32_t>{30045}), std::vector<uint32_t>(remaining.begin(), remaining.end()));
 }
 
 TEST_F(PlayerFeaturePersistenceTest, AuthoritativeEmptyDatabaseSnapshotWinsOverStaleLegacyTopLevel)
@@ -632,7 +688,10 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<MissionsContainerComp>("MissionsContainerComp");
     ExpectMarshalRefusedWithout<PlayerAssetOpLedgerComp>("PlayerAssetOpLedgerComp");
     ExpectMarshalRefusedWithout<PlayerInboxLedgerComp>("PlayerInboxLedgerComp");
+    // 封禁表缺失同样整份拒绝:补一份空表落盘等于把 GM 下的单人物品封禁全部解开,而账本说它们已执行。
+    ExpectMarshalRefusedWithout<PlayerItemGainBlockComp>("PlayerItemGainBlockComp");
     ExpectMarshalRefusedWithout<PlayerMysteryMerchantComp>("PlayerMysteryMerchantComp");
+    ExpectMarshalRefusedWithout<PlayerBattleResultComp>("PlayerBattleResultComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
     ExpectMarshalRefusedWithout<PlayerCurrencyComp>("PlayerCurrencyComp");
     // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。

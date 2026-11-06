@@ -231,9 +231,10 @@ func TestValidate(t *testing.T) {
 	}
 	ok = validConfig()
 	ok.PlayerInbox.AdminToken = strings.Repeat("k", MinAdminTokenBytes)
-	ok.PlayerInbox.EnqueueTypes = []string{"PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN", "PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN"}
+	ok.PlayerInbox.EnqueueTypes = []string{"PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN", "PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN",
+		"PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN", "PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN"}
 	if err := ok.Validate(); err != nil {
-		t.Errorf("合法口令与白名单(v1:封锁 / 解封)应通过: %v", err)
+		t.Errorf("合法口令与白名单(货币与物品的封锁 / 解封)应通过: %v", err)
 	}
 	ok = validConfig()
 	ok.Middlewares.Stat = true
@@ -281,6 +282,19 @@ func TestParseEnqueueTypes(t *testing.T) {
 	if _, err := ParseEnqueueTypes([]string{"PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT"}); err == nil ||
 		!strings.Contains(err.Error(), "PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT") {
 		t.Errorf("ATTACH_DEBT 在 v1 应被拒绝且点名类型: %v", err)
+	}
+	// 单玩家物品获取封禁的两种(设计 §2.2)与货币封锁同属可开放的封锁 / 解封,不在 v1 禁开表里。
+	items, err := ParseEnqueueTypes([]string{"PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN", "PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN"})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("物品封锁 / 解封应能进白名单: %v, %v", items, err)
+	}
+	for _, typ := range []inboxpb.PlayerInboxMessageType{
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN,
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN,
+	} {
+		if _, ok := items[typ]; !ok {
+			t.Errorf("解析结果缺 %v", typ)
+		}
 	}
 }
 

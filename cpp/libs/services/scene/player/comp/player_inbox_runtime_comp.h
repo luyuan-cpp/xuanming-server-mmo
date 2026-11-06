@@ -108,6 +108,9 @@ struct PlayerInboxDomainState
 
 	bool halted{false};
 	PlayerInboxHaltReason haltReason{PlayerInboxHaltReason::kNone};
+	// 停用之后下一次补打 metric=inbox_halted 的时刻,0 = 还没排(由 Tick 排)。停用对当前实体一直有效,只在停用那一刻
+	// 打一条的话,scene 日志告警的 [10m] 窗口过后就熄灭,值班会以为好了(player_inbox_rules::kHaltedDomainRelogIntervalMs)。
+	uint64_t nextHaltRelogMs{0};
 };
 
 struct PlayerInboxRuntimeComp

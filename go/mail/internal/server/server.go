@@ -11,12 +11,10 @@ import (
 	"mail/internal/data"
 	"mail/internal/metrics"
 	base "proto/common/base"
-	dspb "proto/data_service"
 	mailpb "proto/mail"
 	"shared/assetop"
 	"shared/domainhost"
 	table "shared/generated/pb/table"
-	"shared/loginsession"
 	"shared/rolefence"
 	"shared/roleidentity"
 	"shared/serviceauth"
@@ -25,10 +23,9 @@ import (
 type Server struct {
 	mailpb.UnimplementedClientPlayerMailServer
 	mailpb.UnimplementedMailAdminServer
-	repo          *data.Repo
-	auth          *serviceauth.Verifier
-	reminder      Notifier
-	loginSessions loginsession.Reader
+	repo     *data.Repo
+	auth     *serviceauth.Verifier
+	reminder Notifier
 }
 type Notifier interface {
 	Personal(context.Context, uint64, uint64)
@@ -42,26 +39,18 @@ func New(repo *data.Repo, auth *serviceauth.Verifier, reminders ...Notifier) *Se
 	return s
 }
 
-// WithLoginSessions只绑定部署已声明的全局登录态只读连接；不授权写登录目录。
-func (s *Server) WithLoginSessions(reader loginsession.Reader) *Server {
-	s.loginSessions = reader
-	return s
-}
-
+// actor 捕获客户端请求的原角色归属。在线域原账号只认 gate 签名原件,不读 login Redis:
+// 解码出的会话与验签原件不符、未签名或缺账号都当作无效请求拒绝。
 func (s *Server) actor(ctx context.Context) (context.Context, uint64, bool) {
 	session := domainhost.Session(ctx)
 	if session.GetPlayerId() == 0 || session.GetOwnerRevision() == 0 {
 		return ctx, 0, false
 	}
-	account, err := loginsession.Account(ctx, s.loginSessions, session)
+	bound, err := roleidentity.CaptureSession(ctx, session)
 	if err != nil {
 		return ctx, 0, false
 	}
-	bound, err := roleidentity.Capture(ctx, &dspb.AccountRoleOwnership{
-		Account: account, OwnerRevision: session.OwnerRevision,
-		Role: &base.AccountSimplePlayer{PlayerId: session.PlayerId},
-	})
-	return bound, session.PlayerId, err == nil
+	return bound, session.PlayerId, true
 }
 func ClientMethods() map[string]bool {
 	return map[string]bool{mailpb.ClientPlayerMail_ListMails_FullMethodName: true, mailpb.ClientPlayerMail_ReadMail_FullMethodName: true, mailpb.ClientPlayerMail_ClaimMailAttachments_FullMethodName: true, mailpb.ClientPlayerMail_DeleteMails_FullMethodName: true, mailpb.ClientPlayerMail_ClearReadMails_FullMethodName: true}

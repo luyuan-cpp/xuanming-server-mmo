@@ -17,28 +17,25 @@ func TestMatchServiceYamlLoads(t *testing.T) {
 	require.NoError(t, conf.Load(filepath.Join("..", "..", "etc", "match_service.yaml"), &c))
 }
 
-// validForTest 是能过 Validate 的最小配置:SQL 权威与原角色身份来源都配齐,其余取零值。
+// validForTest 是能过 Validate 的最小配置:SQL 权威配齐,其余取零值。
+// 原角色身份只认 gate 签名原件,不读 login Redis,所以配置里没有身份来源这一项。
 func validForTest() Config {
 	c := Config{}
 	c.Mode = "pro"
 	c.GlobalMatch = GlobalMatchConf{Backend: "tidb", Host: "tidb:4000", User: "runtime"}
-	c.GlobalLoginSessions = true
-	c.LoginRedis.Addrs = []string{"redis:6379"}
 	return c
 }
 
-// SQL 权威是匹配唯一路径,开发环境与生产同一份代码:缺入口或缺原角色身份来源都不能起服,哪一档都一样。
+// SQL 权威是匹配唯一路径,开发环境与生产同一份代码:缺入口不能起服,哪一档都一样。
 func TestAuthorityConfigIsRequiredInEveryMode(t *testing.T) {
 	for _, mode := range []string{"dev", "test", "pro"} {
 		c := validForTest()
 		c.Mode = mode
 		require.NoError(t, c.Validate(), mode)
 		for name, mutate := range map[string]func(c *Config){
-			"缺 SQL 入口":      func(c *Config) { c.GlobalMatch.Host = " " },
-			"缺 SQL 账号":      func(c *Config) { c.GlobalMatch.User = "" },
-			"未知后端":          func(c *Config) { c.GlobalMatch.Backend = "oracle" },
-			"未开原角色身份":       func(c *Config) { c.GlobalLoginSessions = false },
-			"缺 login Redis": func(c *Config) { c.LoginRedis.Addrs = nil },
+			"缺 SQL 入口": func(c *Config) { c.GlobalMatch.Host = " " },
+			"缺 SQL 账号": func(c *Config) { c.GlobalMatch.User = "" },
+			"未知后端":     func(c *Config) { c.GlobalMatch.Backend = "oracle" },
 		} {
 			c := validForTest()
 			c.Mode = mode

@@ -235,14 +235,14 @@ func normalizeSeqKeys(keys []SeqKey) ([]SeqKey, error) {
 	return slices.Compact(out), nil
 }
 
-// seqRowReader 是 *sql.DB 与 *sql.Tx 的公共子集,只为让"自动提交探针"与"事务内确认读"
+// rowQuerier 是 *sql.DB 与 *sql.Tx 的公共子集,只为让"自动提交探针"与"事务内确认读"
 // 共用同一段实现、同一条 SQL 常量。
-type seqRowReader interface {
+type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 // missingSeqRows 用 sqlSeqRowExists(普通读,RC 下不取行锁)挑出还不存在的行,保持入参顺序。
-func (r *AssetOpRepo) missingSeqRows(ctx context.Context, q seqRowReader, keys []SeqKey) ([]SeqKey, error) {
+func (r *AssetOpRepo) missingSeqRows(ctx context.Context, q rowQuerier, keys []SeqKey) ([]SeqKey, error) {
 	missing := make([]SeqKey, 0, len(keys))
 	for _, k := range keys {
 		var exists int

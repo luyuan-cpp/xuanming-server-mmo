@@ -9,8 +9,8 @@
 // muduo_grpc 通道上的 etcd 传输(docs/design/grpc-muduo-transport.md §13)。
 //
 //   * unary(Range / Put / DeleteRange / Txn / LeaseGrant / LeaseRevoke):每次调用带截止时间
-//     (grpc_call_deadline::Get(EtcdNodeService),与生成的 etcd 客户端同一配置);失败只记日志(按方法限频),
-//     恢复仍靠 EtcdService 既有的 txn / lease 10s 看门狗与 2s 全量 Range。
+//     (grpc_call_deadline::Get(EtcdNodeService),与生成的 etcd 客户端同一配置)。注册请求按每次调用完成，
+//     其它 unary 的失败按方法限频记录，发现侧继续按既有策略对账。
 //   * Watch / LeaseKeepAlive 两条双向流常驻;任何原因结束都按退避重建:0.2s 起、×2、封顶 5s、±20% 抖动,
 //     流活过 10s 再断则从 0.2s 重新开始,**不设次数上限**(§10.2 第 1 条的有意偏离)。
 //     重建后回调 sink 的 OnWatchStreamRestarted / OnKeepAliveStreamRestarted,由 EtcdService 重新 Range 对账 / 补一拍。
@@ -34,8 +34,10 @@ public:
     void Range(const etcdserverpb::RangeRequest &request) override;
     void Put(const etcdserverpb::PutRequest &request) override;
     void DeleteRange(const etcdserverpb::DeleteRangeRequest &request) override;
-    void Txn(const etcdserverpb::TxnRequest &request) override;
-    void LeaseGrant(const etcdserverpb::LeaseGrantRequest &request) override;
+    void Txn(const etcdserverpb::TxnRequest &request,
+             EtcdRegistrationCompletion<etcdserverpb::TxnResponse> done) override;
+    void LeaseGrant(const etcdserverpb::LeaseGrantRequest &request,
+                    EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done) override;
     void LeaseRevoke(const etcdserverpb::LeaseRevokeRequest &request) override;
     void WatchWrite(const etcdserverpb::WatchRequest &request) override;
     void KeepAliveWrite(const etcdserverpb::LeaseKeepAliveRequest &request) override;

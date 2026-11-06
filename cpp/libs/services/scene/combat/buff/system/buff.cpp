@@ -16,6 +16,7 @@
 #include "player/comp/player_frozen_comp.h" // Frozen exclude — cross-zone-readiness-audit.md §11.2
 #include "proto/common/component/battle_comp.pb.h" // InBattleComp:回合制战斗局中闸
 #include "core/system/id_generator.h"
+#include "spatial/system/aoi.h" // RefreshTargetVisibility:隐身状态变化后重判 AOI 观察者
 #include <thread_context/ecs_context.h>
 
 
@@ -411,10 +412,13 @@ void BuffSystem::OnBuffStart(entt::entity parent, BuffEntry& buff, const BuffTab
     // 冻结目标的 "buff drop" 判定已上移到 AddOrUpdateBuff 的入口(插入之前),
     // 见那里的注释。
 
-    // Maintain stealth tag cache
-    if (buffTable && buffTable->buff_type() == kBuffTypeStealth)
+    // Maintain stealth tag cache. 标签从无到有时让 AOI 立即重判观察者:没有侦测授权的
+    // 观察者暂停投递并收到一次移除(docs/design/aoi-directed-interest.md「可见与同步」)。
+    if (buffTable && buffTable->buff_type() == kBuffTypeStealth &&
+        !tlsEcs.actorRegistry.any_of<StealthedTagComp>(parent))
     {
-        tlsEcs.actorRegistry.emplace_or_replace<StealthedTagComp>(parent);
+        tlsEcs.actorRegistry.emplace<StealthedTagComp>(parent);
+        AoiSystem::RefreshTargetVisibility(parent);
     }
 
     BuffImplSystem::OnBuffStart(parent, buff, buffTable);
@@ -431,10 +435,12 @@ void BuffSystem::OnBuffRemove(const entt::entity parent, BuffEntry& buffComp, co
 {
     // Maintain stealth tag cache: drop the tag only when no other stealth buff remains
     // (this buff is still in the list at this point, so exclude it from the scan).
+    // 标签真正摘掉时,暂停的显式关注恢复、附近能看见它的实体重新建立空间关注,都先收到当前状态。
     if (buffTable && buffTable->buff_type() == kBuffTypeStealth &&
-        !HasStealthBuffExcept(parent, buffComp.buffPb.buff_id()))
+        !HasStealthBuffExcept(parent, buffComp.buffPb.buff_id()) &&
+        tlsEcs.actorRegistry.remove<StealthedTagComp>(parent) > 0)
     {
-        tlsEcs.actorRegistry.remove<StealthedTagComp>(parent);
+        AoiSystem::RefreshTargetVisibility(parent);
     }
 
     ModifierBuffImplSystem::OnBuffRemove(parent, buffComp, buffTable);

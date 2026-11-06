@@ -757,7 +757,7 @@ func StartMysteryMerchantScheduler(ctx context.Context, svcCtx *svc.ServiceConte
 				return
 			}
 			now := time.Now()
-			for _, zoneID := range GetActiveZones() {
+			for _, zoneID := range orchestratedZones(svcCtx) {
 				if ctx.Err() != nil {
 					return
 				}

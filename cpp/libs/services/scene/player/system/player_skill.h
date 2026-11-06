@@ -24,7 +24,9 @@ class UpgradeSkillResponse;
 // 角色等级一律按 playerlevel::CappedLevel(LevelComp.level()) 参与计算,存储等级不改写。
 //
 // 组件归属:PlayerSkillListComp 由加载(PlayerDatabaseMessageFieldsUnmarshal)挂上;职业(PlayerUint32Comp)
-// 与等级(LevelComp)同样由加载挂上。本类只取不建,缺组件按服务端故障处理。
+// 与等级(LevelComp)同样由加载挂上。本类只取不建,缺组件按服务端故障处理:BuildSkillBook / UpgradeSkill 回
+// kServiceUnavailable;缺职业或等级时,读接口(HasSkill / EffectiveRank / FillBattleSnapshot / CollectPassiveBonus)
+// 记 ERROR 并按"没有技能 / 没有被动"作答,初始技能也不补发 —— 不按 0 号职业或 1 级补默认值继续算。
 // 写操作只发生在 scene 线程(EventLoop),扣费与改等级在同一个回调里完成、同属一条 player_database 记录,
 // 由常规存盘整份落库:不存在"钱扣了、等级没涨"或反过来的中间态(与属性洗点 Reset 同一口径)。
 class PlayerSkillSystem {
@@ -47,8 +49,12 @@ public:
 	// 查不到表的数量与超上限重数的数量每次加载汇总打一行 WARN。没有要剔除的条目时组件不被替换。
 	static void SanitizeSkillList(entt::entity player);
 
-	// 是否拥有且能用:旧通用技能在列表里即可;职业技能还要生效等级 > 0(职业对、等级够;rank 0 即未学)
+	// 是否拥有且能用:旧通用技能在列表里即可;职业技能还要生效等级 > 0(职业对、等级够;rank 0 即未学)。
+	// 等于 CheckSkillUsable 回 kSuccess。
 	static bool HasSkill(entt::entity player, uint32_t skillTableId);
+	// 同一判定带上原因(施法入口用):能用回 kSuccess;没有这个技能、不生效或不能用回 kInvalidTableId;
+	// 缺技能列表、职业或等级(加载不变量被破坏)回 kServiceUnavailable 并记 ERROR;实体无效回 kEntityIsNull。
+	static uint32_t CheckSkillUsable(entt::entity player, uint32_t skillTableId);
 
 	// 职业技能的生效等级 = min(存储重数, 当前角色等级的上限),后者不超过本版本 max_rank;
 	// 没学(含 rank 0)/ 不是本职业 / 旧通用技能返回 0

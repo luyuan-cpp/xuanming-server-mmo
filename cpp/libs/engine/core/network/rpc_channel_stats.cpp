@@ -49,7 +49,9 @@ std::string FormatRpcChannelStats(const RpcChannelStats& stats)
         << " adopted=" << Load(stats.adopted)
         << " reply_run_twice=" << Load(stats.replyRunTwice)
         << " reply_channel_gone=" << Load(stats.replyChannelGone)
-        << " reply_abandoned=" << Load(stats.replyAbandoned);
+        << " reply_abandoned=" << Load(stats.replyAbandoned)
+        << " link_idle_closed=" << Load(stats.linkIdleClosed)
+        << " link_idle_deferred=" << Load(stats.linkIdleDeferred);
     return out.str();
 }
 

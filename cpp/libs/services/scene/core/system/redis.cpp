@@ -13,9 +13,11 @@
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_save_metrics.h" // [SaveTiming] 汇总行
 #include "player/system/player_store_client.h"
 #include "player/system/release_fence.h" // [ReleaseFence] 汇总行
 #include "player/system/save_seq.h"      // [SaveSeq] 汇总行
+#include "player/system/save_timing_stats.h"
 #include "thread_context/ecs_context.h"
 
 thread_local RedisSystem tlsRedisSystem;
@@ -174,14 +176,13 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     // lastEnterFence:上一次打出 [EnterFence] 时的计数(只在本定时器里读写,逻辑线程上;初值全 0 = 第一次有计数就打)。
     // lastReleaseFence:上一次打出 [ReleaseFence] 时的计数(同上,只在本定时器里读写)。
     // lastPlayerRedis:上一次打出 [PlayerRedis] 时的计数(同上)。
+    // lastSaveTiming:上一次打 [SaveTiming] 时的存盘分段耗时累计值(同上),这一行打的是两次之间的窗口值。
     snapshotTimerId_ = loop->runEvery(kQueueSnapshotIntervalSec, [lastEnterFence = enter_fence_stats::Snapshot{},
                                                                   lastReleaseFence = release_fence_stats::Snapshot{},
-                                                                  lastPlayerRedis = RedisClusterStats{}]() mutable
+                                                                  lastPlayerRedis = RedisClusterStats{},
+                                                                  lastSaveTiming = save_timing_stats::Snapshot{}]() mutable
                                       {
-        // Piggyback on the same 30s tick so a fresh timer isn't needed
-        // just for two counters. Format is parsed by
-        // tools/scripts/stress_summarize.ps1 — keep the prefix and the
-        // key=value layout stable, or update the parser.
+        // 格式由 tools/scripts/stress_summarize.ps1 解析:前缀和 key=value 的写法不要改,改了要同步改脚本。
         const auto stats = dirty_save_stats::Read();
         if (stats.total > 0)
         {
@@ -191,6 +192,23 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                      << " skip_pct=" << (pctTenths / 10) << "."
                      << (pctTenths % 10) << "%";
         }
+        // 存盘分段耗时(save_timing_stats.h):这 30 秒里各段的次数、平均与最大耗时。窗口最大值只在这里取走清零。
+        // 周期回调这一窗口里有超过预算的就升 WARN:那是 §4.6 说的「摊到多个 tick」的信号。没有存盘就不打。
+        const auto saveTiming = save_timing_stats::Read();
+        const auto saveTimingLine =
+            player_save_metrics::FormatSaveTimingLine(saveTiming, lastSaveTiming, save_timing_stats::TakeWindowMax());
+        if (!saveTimingLine.empty())
+        {
+            if (saveTiming.periodicTickOverBudget > lastSaveTiming.periodicTickOverBudget)
+            {
+                LOG_WARN << saveTimingLine;
+            }
+            else
+            {
+                LOG_INFO << saveTimingLine;
+            }
+        }
+        lastSaveTiming = saveTiming;
         // 拒存与相等跳过分开汇总,保持 [DirtySave] 的既有解析格式和跳过率分母不变。
         // 只统计缺有效 Guid/持久组件造成的完整消息组装失败,累计值不带玩家维度。
         if (stats.marshalRefused > 0)
@@ -374,6 +392,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
             {
                 return;
             }
+            // 单次回调的总耗时进 periodic_tick 段,含遍历整张在线表;超过 kPeriodicTickBudget 另计一次。
+            const auto tickStart = save_timing_stats::Clock::now();
             std::size_t saved = 0;
             for (const auto& [playerId, player] : tlsEcs.playerList)
             {
@@ -388,6 +408,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 PlayerLifecycleSystem::SavePlayer(player);
                 ++saved;
             }
+            save_timing_stats::ObserveSince(save_timing_stats::Stage::kPeriodicTick, tickStart);
             // 只在整个周期的最后一个槽位打一条汇总,避免每秒刷日志。
             if (currentSlot == slotCount - 1 && saved > 0)
             {

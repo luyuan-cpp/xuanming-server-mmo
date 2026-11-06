@@ -1,0 +1,52 @@
+syntax = "proto3";
+option go_package = "common/component";
+
+// 玩家近期战斗结果(docs/design/battle-result-recovery.md §4)。
+//
+// 落在 player_database.battle_results(字段 23,PROFILE 组)。结算应用的同一帧写入,与奖励、收件箱账本随同一次存档、
+// 同一个整笔序号提交(player-data-tidb-scaling-plan.md §4.3):要么一起在盘上,要么一起没有。
+// 记的是本人实际入账的结果,不是终局原件:消耗按实际持有夹紧,配置行已删掉的物品不记,经验系统没接入不记经验。
+// 存档确认提交之前不对客户端公开(与 BattleEndS2C 同一个公开时机)。
+//
+// 持久数据:只在加载时创建(PlayerDatabaseMessageFieldsUnmarshal),存盘缺它整份拒存(docs/design/ecs-component-access-rules.md)。
+// 客户端查询(proto/scene/player_battle_result.proto)直接下发 PlayerBattleResult,同 CurrencyComp 的用法。
+// 枚举存 uint32(eBattleOutcome、CurrencyType):common 不反向依赖 battle 包。
+// 新旧只看 result_seq,不看下标(AGENTS §11.6);存放顺序只为确定性序列化。
+// 字段号上线后不复用,删字段写 reserved(AGENTS §4)。
+
+// 一种货币的实际入账额。
+message PlayerBattleResultCurrency {
+  uint32 currency_type = 1;  // CurrencyType:0 金币、1 钻石、2 绑定钻石
+  uint64 amount = 2;         // 本局入账额;先抵欠款的部分也算在内
+}
+
+// 一种物品的实际数量。
+message PlayerBattleResultItem {
+  uint32 item_table_id = 1;
+  uint64 count = 2;
+}
+
+// 一局的本人结果。
+message PlayerBattleResult {
+  uint64 result_seq = 1;      // 本玩家的结果序号,从 1 起只增;新旧看它
+  uint64 battle_id = 2;       // 去重键:同一局至多一条
+  uint32 outcome = 3;         // eBattleOutcome:A 胜 / B 胜 / 平局,不会是 ONGOING
+  uint32 team_index = 4;      // 本人所在方(0 = A 方);胜负 = outcome 对照它
+  bool is_dead = 5;           // 本人终局时阵亡
+  bool fled = 6;              // 本人逃离了战斗
+  uint32 total_rounds = 7;
+  uint64 finished_at_ms = 8;  // 战斗结束时刻(battle 冻结终局时的 UTC 毫秒);0 = 结算原件没带
+  uint64 settled_at_ms = 9;   // 奖励入账时刻(scene 应用结算时的 UTC 毫秒)
+  repeated PlayerBattleResultCurrency currencies = 10;  // 按 currency_type 升序,只含非 0
+  repeated PlayerBattleResultItem items_gained = 11;    // 实际入包(含临时背包)的掉落,按 item_table_id 升序
+  repeated PlayerBattleResultItem items_consumed = 12;  // 实际扣除的战斗消耗,按 item_table_id 升序
+  bool lines_truncated = 13;  // 物品行超过上限被截掉了一部分(只留配置号最小的那些)
+  bool seen = 14;             // 客户端已确认展示过(AckBattleResults)
+  uint32 match_mode = 15;     // MatchMode 数值;0 = 结算原件没带
+  uint32 battle_config_id = 16; // 战斗配置号;0 = 结算原件没带
+}
+
+message PlayerBattleResultComp {
+  uint64 last_result_seq = 1;               // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
+  repeated PlayerBattleResult entries = 2;  // 至多 10 条(battle_result_history.h 的 kMaxEntries)
+}

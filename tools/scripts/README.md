@@ -109,7 +109,7 @@ PlayerRedis:
   Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
   Cluster: true
   PoolSizePerNode: 20
-# LoginRedis 同样结构(login、chat、friend、guild、match、mail,trade 在 Rmb 下)。DB 必须是 0 或不写。
+# go/login/etc/login.yaml 的 LoginRedis 同样结构(只有 login 有这一段:其余服务只认 gate 签名的会话身份原件,不读登录态)。DB 必须是 0 或不写。
 LoginRedis:
   Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
   Cluster: true

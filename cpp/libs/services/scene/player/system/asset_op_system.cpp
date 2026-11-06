@@ -616,7 +616,8 @@ void ApplyCurrencyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp
 	response.set_durable(PersistAndProbeDurable(player, request, /*expectApplied=*/true, nowMs));
 }
 
-// Credit 应用(§4.33,顺序固定):货币封禁预检 → 物品 guid 余量预检 → 物品 → 货币 → 结局。
+// Credit 应用(§4.33,顺序固定):货币封禁预检 → 物品获得封禁预检(全服 + 本人,含完整实例)→ 物品 guid 余量预检
+// → 背包空间预检 → 物品 → 完整实例 → 货币 → 结局。两道封禁都是记账式终局拒绝,排在两道 RETRY 预检之前。
 // 先物品后货币:只有物品会"暂时失败"(背包满),先做它就不会留下半截。
 // 一旦已有改动后又失败,记 kAppliedPartial 并回 APPLIED + partial=true,
 // **不再**把部分发放记成完整成功(AGENTS §11.3:错误不得伪装成功)。
@@ -1035,6 +1036,27 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 		}
 	}
 
+	// (a') 物品获得封禁预检(全服 + 本人),按数量发放与完整实例转入一起判,同样是终局拒绝。
+	// 排在号段余量与背包空间两道 RETRY 预检之前:被封禁的物品无论背包满不满都是 REJECTED,
+	// 不能先回「背包满、稍后重试」(封禁不是容量不足)。完整实例的 config_id 已由第 8 步
+	// ValidateCreditBundle 核对与 instance_proto 里的一致,这里不必解码。
+	for (const auto& item : bundle.items())
+	{
+		if (GainBlockService::IsItemGainBlocked(player, item.config_id()))
+		{
+			RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response);
+			return;
+		}
+	}
+	for (const auto& transfer : bundle.item_instances())
+	{
+		if (GainBlockService::IsItemGainBlocked(player, transfer.config_id()))
+		{
+			RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response);
+			return;
+		}
+	}
+
 	// (b) 物品 guid 号段余量预检。Σcount 是新实例数的上界(每堆至少 1 个),只会偏严。
 	// 号段发不出号时 BagService 会整批拒,失败面前移到这里就不会先扣号再半途而废。
 	ItemCountMap itemsToAdd;
@@ -1065,8 +1087,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 		ItemComp item;
 		if (!item.ParseFromString(transfer.instance_proto()))
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
-		if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, item.config_id()))
-		{ RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response); return; }
+		// 获得封禁已在 (a') 按 transfer.config_id() 判过(与 item.config_id() 相等,第 8 步核对)。
 		// 名下已有这个实例身份就拒:固定包、动态包,以及携带着的本版本不认识的包类型记录都要查
 		// (PlayerBagsComp::ContainsGuid,混版本设计 §12 第 5 批)。
 		if (destinationBags->ContainsGuid(item.item_id()))
@@ -1077,8 +1098,6 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 	}
 	if (!totalIncoming.empty() && destinationBags->bags[kInventory].CheckSpaceFor(totalIncoming) != kSuccess)
 	{ Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
-	for (const auto& item : itemsToAdd) if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, item.first))
-	{ RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response); return; }
 	if (bundle.has_pet_instance())
 	{
 		if (!transferredPet.ParseFromString(bundle.pet_instance().instance_proto()))
@@ -1111,8 +1130,10 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 			{
 				Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull);
 			}
-			else if (error == kInvalidParameter)
+			else if (error == kAssetBlocked || error == kInvalidParameter)
 			{
+				// kAssetBlocked:BagService 的获得封禁(全服 + 本人);(a') 已先判,走到这里只可能是防线兜底。
+				// kInvalidParameter 保持原口径(终局拒绝),不改成可重试。
 				RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response);
 			}
 			else

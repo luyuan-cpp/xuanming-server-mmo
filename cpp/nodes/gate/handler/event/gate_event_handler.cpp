@@ -216,6 +216,9 @@ void GateEventHandler::PlayerLeaseExpiredEventHandler(const contracts::kafka::Pl
         // 不在这里重复清理。
         LOG_INFO << "LeaseExpired: force closing zombie connection. session_id=" << sessionId
                  << " player_id=" << event.player_id();
+        // 后端已不认这个会话:断开回调代发的 ExitGame 要求 scene 立即退出,不再按断线保留一个重连窗口
+        // (docs/design/player-connection-lost-hold.md §3)。必须在 forceClose 之前置位:断开回调排在之后执行。
+        it->second.exitSceneImmediatelyOnClose = true;
         conn->forceClose();
         return;
     }

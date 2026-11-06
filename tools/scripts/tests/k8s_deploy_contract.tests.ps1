@@ -2338,6 +2338,13 @@ Test-Case '发现前缀:node-config 含 ClientRpcRouterNodeService.rpc;battle-no
     Assert-Match -Text (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config') -Pattern '- "BattleNodeService\.rpc"' -Because 'gate 已不连 battle(turn-based §22 D66),但 battle 自己按这些前缀 watch 自身节点键做劫持检测与注册自检,不能当死前缀删掉'
 }
 
+Test-Case '队伍跟随在本地与 K8s 均能发现 TeamAuthority' {
+    $teamPrefix = '(?m)^\s*-\s*"TeamNodeService\.rpc"'
+    Assert-Match -Text (Select-ManifestByName -Output $devOut -Name 'node-config') -Pattern $teamPrefix -Because 'Scene 从挂载的 node-config 发现 TeamAuthority'
+    $localDeploy = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'bin/etc/base_deploy_config.yaml') -Raw
+    Assert-Match -Text $localDeploy -Pattern $teamPrefix -Because '本地和 Docker Debug 的基础配置也须发现 TeamAuthority'
+}
+
 Test-Case '玩家收件箱:node-config 与 bin/etc 都含 PlayerInboxNodeService.rpc,deadline 门禁核对了 PlayerInboxNodeService' {
     # scene 按这个前缀发现 player_inbox(docs/design/player-inbox-service.md §1.4)。两份前缀表任一漏写,收件箱在那一侧永远拉不到 ——
     # 弱依赖不报错(IB-7),只会表现为「GM 处置永不生效」。
@@ -3255,10 +3262,10 @@ Test-Case '连 MySQL 的 ConfigMap 只有总账认识的那些(zone-up 三个、
         $authorityBlock = Select-ManifestByName -Output $infraRun.Output -Name "go-svc-$authorityService-config"
         $authorityFlat = ConvertTo-FlatManifest -Block $authorityBlock
         $authorityPrefix = "data.$authorityService.yaml."
-        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'GlobalLoginSessions')) -Because "$authorityService 必须声明真实全局登录态，不沿用本地占位false"
         Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $authorityFlat -Path ($authorityPrefix + 'AccountRoleSchema')).Count -Because "$authorityService 不再跨库读角色目录,角色状态走本库 role_fence 或目录 RPC"
-        Assert-Match -Text (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.Addrs[0]')) -Pattern '^redis\..+:6379$' -Because "$authorityService 必须连接部署的全局login Redis，不能空地址"
-        Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.DB') -Actual (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.DB')) -Because "$authorityService 原会话账号读取必须与login同DB"
+        foreach ($removed in @('GlobalLoginSessions', 'LoginRedis')) {
+            Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $authorityFlat -Path ($authorityPrefix + $removed)).Count -Because "$authorityService 只认 gate 签名的会话身份原件,不读 login 的 Redis,ConfigMap 不再渲染 $removed"
+        }
     }
     $infraExpected = @('go-svc-friend-config', 'go-svc-trade-config', 'go-svc-player-inbox-config', 'go-svc-guild-config', 'go-svc-mail-config', 'go-svc-rank-config', 'go-svc-chat-config', 'go-svc-match-config' | Sort-Object) -join ','
     Assert-Equal -Expected $infraExpected -Actual (@(Get-MysqlClientConfigMapNames -Output $infraRun.Output) -join ',') -Because 'infra-up 产物里连 MySQL 的 ConfigMap 必须恰好是 friend / trade / player-inbox / guild / mail 五个(总账的全局部分只算了它们)'
@@ -3667,10 +3674,11 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
     Assert-Equal -Expected 10 -Actual $inputs.GoPoolSizePerProc -Because 'go-redis v9 的 PoolSize 缺省 = 10 × GOMAXPROCS(只用于还没显式池上限的 DefaultPools)'
     Assert-Equal -Expected 1 -Actual $inputs.CppConnectionsPerProcess -Because 'C++ 每进程 1 条(node.cpp 唯一的 tlsRedis.Connect)'
     $names = @($inputs.Clients | ForEach-Object { $_.Name })
-    foreach ($expectedName in @('login', 'data-service', 'player-locator', 'scene-manager', 'gateway', 'match', 'chat', 'friend', 'trade', 'guild', 'player-inbox')) {
+    foreach ($expectedName in @('login', 'data-service', 'player-locator', 'scene-manager', 'gateway', 'match', 'friend', 'trade', 'guild', 'player-inbox')) {
         Assert-True -Condition ($names -contains $expectedName) -Because "客户端表里必须有 $expectedName(它连着共享 Redis;不连了要先改代码再删这一行)"
     }
     Assert-True -Condition ($names -notcontains 'db') -Because 'go/db 不连 Redis,总账里不该有它'
+    Assert-True -Condition ($names -notcontains 'chat') -Because 'chat 不连 Redis(聊天权威在 SQL,会话身份只认 gate 签名的原件),总账里不该有它'
     # player-inbox(go/player_inbox/internal/svc/servicecontext.go openCoreRedis):全局一份、核心 Redis 一个 go-redis 池(CoreRedis.PoolSize,
     # 池上限的出处在下面 $explicitPools 里核)、没有 Pub/Sub;围栏上界、在线提醒与选主锁共用这一个客户端。改成多个池或加订阅时这里先变红,逼着同改总账那一行。
     $inbox = @($inputs.Clients | Where-Object { $_.Name -eq 'player-inbox' })
@@ -3680,26 +3688,26 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
 
     # 显式 PoolSize 的 go-redis 直连池(P0-E 第 3 批):ConfiguredPoolConns 必须等于服务 yaml 里那个键的值(这里独立读,不经被测函数),
     # 且是正整数;这几个服务剩下的缺省大小池(go-zero 封装)按表里的 DefaultPools 核。换键名、拆成多个池、或删掉显式值时这里先变红。
-    # 没建玩家域集群时(本用例的缺省输入),PlayerRedis 与 LoginRedis 也连这台 Redis,一起算。ConstPool 是代码里写死的池:mail 的 LoginRedis 在 go/mail/mail.go 写死 8。
+    # 没建玩家域集群时(本用例的缺省输入),PlayerRedis 与 login 自己的 LoginRedis 也连这台 Redis,一起算。
+    # 登录域只有 login 连:match / friend / guild / trade / mail 只认 gate 签名的会话身份原件,没有 LoginRedis;chat 不连 Redis,不在表里。
     $explicitPools = @(
         # GM 回收只借 Redis 做落地唤醒和位置读取；资产及回收账本仍由 SQL 持久化。
         @{ Name = 'data-service'; Source = 'go/data_service/etc/data_service.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
         @{ Name = 'login'; Source = 'go/login/etc/login.yaml'; KeyPath = @('Node.RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode', 'LoginRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'player-locator'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'scene-manager'; Source = 'go/scene_manager/etc/scene_manager_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
-        @{ Name = 'trade'; Source = 'go/trade/etc/trade.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode', 'Rmb.LoginRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'guild'; Source = 'go/guild/etc/guild.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerLocatorRedis.PoolSize', 'LoginRedis.PoolSizePerNode', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'friend'; Source = 'go/friend/etc/friend.yaml'; KeyPath = @('LoginRedis.PoolSizePerNode', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
-        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = @('LoginRedis.PoolSizePerNode', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
-        @{ Name = 'chat'; Source = 'go/chat/etc/chat.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; DefaultPools = 0 }
+        @{ Name = 'trade'; Source = 'go/trade/etc/trade.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'guild'; Source = 'go/guild/etc/guild.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerLocatorRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'friend'; Source = 'go/friend/etc/friend.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
+        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
         @{ Name = 'player-inbox'; Source = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = @('CoreRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'mail'; Source = 'go/mail/etc/mail.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; ConstPool = 8; DefaultPools = 0 }
+        @{ Name = 'mail'; Source = 'go/mail/etc/mail.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 0 }
     )
     $explicitNames = @($explicitPools | ForEach-Object { $_.Name })
     foreach ($pool in $explicitPools) {
         $row = @($inputs.Clients | Where-Object { $_.Name -eq $pool.Name })
         Assert-Equal -Expected 1 -Actual $row.Count -Because "客户端表里 $($pool.Name) 只能有一行"
-        $expected = [int]$pool.ConstPool
+        $expected = 0
         foreach ($poolKey in @($pool.KeyPath)) {
             $raw = Get-EtcValue -RelativePath $pool.Source -KeyPath $poolKey
             $poolValue = 0
@@ -3846,10 +3854,6 @@ Test-Case 'ConfigMap 镜像 go-redis 池上限 PoolSize == 服务 yaml(zone-up:l
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/player_inbox/etc/player_inbox.yaml' -KeyPath 'CoreRedis.PoolSize') `
         -Actual (Get-FlatValue -Flat $inboxFlat -KeyPath 'data.player_inbox.yaml.CoreRedis.PoolSize') `
         -Because 'go-svc-player-inbox-config 的 CoreRedis.PoolSize 必须与 go/player_inbox/etc/player_inbox.yaml 一致(Redis 连接总账读的是同一个键)'
-    $chatFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $infraRun.Output -Name 'go-svc-chat-config')
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'LoginRedis.PoolSizePerNode') `
-        -Actual (Get-FlatValue -Flat $chatFlat -KeyPath 'data.chat.yaml.LoginRedis.PoolSizePerNode') `
-        -Because 'Chat 唯一登录原件只读池与其服务 YAML、Redis 总账使用同一个显式上限'
 }
 
 # go-redis 池上限镜像(Get-RedisPoolMirror)读的服务配置。夹具用例把它们拷到临时目录再逐项改坏,不碰仓库。
@@ -3862,7 +3866,6 @@ $redisPoolMirrorFixtureFiles = @(
     'go/trade/etc/trade.yaml'
     'go/guild/etc/guild.yaml'
     'go/friend/etc/friend.yaml'
-    'go/chat/etc/chat.yaml'
     'go/player_inbox/etc/player_inbox.yaml'
     'go/scene_manager/etc/scene_manager_service.yaml'
     'go/mail/etc/mail.yaml'
@@ -3888,13 +3891,14 @@ Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-Redis
         $RepoRoot = $tempRoot
         # 前提:副本不改就该放行,且每个目标恰好一个正整数池上限。否则下面几条负向断言分不清是谁造成的失败。
         & $resetFixture
-        foreach ($target in @('login', 'player-locator', 'trade', 'guild', 'friend', 'match', 'chat', 'player-inbox')) {
+        # friend / match / chat 不再有 go-redis 直连池(登录态段已删,只认 gate 签名的会话身份原件),不是这里的目标。
+        foreach ($target in @('login', 'player-locator', 'trade', 'guild', 'player-inbox')) {
             $values = Get-RedisPoolMirror -Target $target
-            $expectedPoolCount = if ($target -eq 'guild') { 3 } else { 1 }
+            $expectedPoolCount = if ($target -eq 'guild') { 2 } else { 1 }
             Assert-Equal -Expected $expectedPoolCount -Actual $values.Count -Because "前提:$target 的显式池数量必须与真实客户端匹配"
             if ($target -eq 'guild') {
-                Assert-Equal -Expected 'LoginRedis.PoolSizePerNode,PlayerLocatorRedis.PoolSize,RedisClient.PoolSize' `
-                    -Actual (@($values.Keys | Sort-Object) -join ',') -Because 'Guild 的三池逐键绑定当前服务客户端，不能只把计数改大'
+                Assert-Equal -Expected 'PlayerLocatorRedis.PoolSize,RedisClient.PoolSize' `
+                    -Actual (@($values.Keys | Sort-Object) -join ',') -Because 'Guild 的两个控制域池逐键绑定当前服务客户端，不能只把计数改大'
             }
             foreach ($poolSize in $values.Values) { Assert-True -Condition ($poolSize -gt 0) -Because "前提:仓库里 $target 的 PoolSize 是正整数" }
         }
@@ -3906,10 +3910,6 @@ Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-Redis
             @{ Why = 'trade 写 0'; Target = 'trade'; File = 'go/trade/etc/trade.yaml'; KeyPath = 'SharedRedis.PoolSize'; Value = '0' }
             @{ Why = 'guild 全局池写0'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'RedisClient.PoolSize'; Value = '0' }
             @{ Why = 'guild 在线池写负数'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'PlayerLocatorRedis.PoolSize'; Value = '-1' }
-            @{ Why = 'guild 登录原件池写0'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '0' }
-            @{ Why = 'friend 登录原件池写负数'; Target = 'friend'; File = 'go/friend/etc/friend.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '-1' }
-            @{ Why = 'match 登录原件池写0'; Target = 'match'; File = 'go/match/etc/match_service.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '0' }
-            @{ Why = 'chat 登录原件池写0'; Target = 'chat'; File = 'go/chat/etc/chat.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '0' }
             @{ Why = 'player-inbox 写 0'; Target = 'player-inbox'; File = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = 'CoreRedis.PoolSize'; Value = '0' }
         )) {
             & $resetFixture
@@ -5336,6 +5336,32 @@ Test-Case 'go_svc_image.ps1 与 k8s_deploy.ps1 的 rank 镜像名一致(否则�
     Assert-Equal -Expected $rankGrpcPort -Actual $localPort.Groups['p'].Value -Because 'go_services.ps1 目录里的 rank 端口 == 服务 yaml 的 ListenOn'
 }
 
+Test-Case 'match-alerts.yaml:PrometheusRule 形状;规则引用的 match_* 指标都由 go/match/internal/metrics 注册;outcome 只用 pool.go 的成局结果常量' {
+    $repo = Get-RepoRoot
+    $alerts = [IO.File]::ReadAllText((Join-Path $repo 'deploy/k8s/match-alerts.yaml')) -replace "`r`n", "`n"
+    Assert-Match -Text $alerts -Pattern '(?m)^kind:[ ]*PrometheusRule[ ]*$' -Because '必须是 PrometheusRule(与 rank / mail 同一安装方式)'
+    $metricsDir = Join-Path $repo 'go/match/internal/metrics'
+    $sources = @(Get-ChildItem -LiteralPath $metricsDir -Filter '*.go' | Where-Object { $_.Name -notlike '*_test.go' } | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
+    $subsystem = [regex]::Match($sources, '(?m)^const subsystem = "(?<s>[a-z_]+)"')
+    Assert-True -Condition ($subsystem.Success -and $subsystem.Groups['s'].Value -ceq 'match') -Because '指标前缀必须与实际注册源一致'
+    $registered = @([regex]::Matches($sources, 'Name:\s*"(?<n>[a-z0-9_]+)"') | ForEach-Object { 'match_' + $_.Groups['n'].Value })
+    # 直方图在规则里以 _bucket / _sum / _count 出现,注册名不带后缀。
+    $referenced = @([regex]::Matches($alerts, '\bmatch_[a-z0-9_]+') | ForEach-Object { $_.Value -replace '_(bucket|sum|count)$', '' } | Sort-Object -Unique)
+    Assert-True -Condition ($referenced.Count -ge 1) -Because '告警必须实际引用 match 指标'
+    foreach ($name in $referenced) {
+        Assert-True -Condition ($registered -contains $name) -Because "告警指标 $name 必须由 go/match/internal/metrics 注册"
+    }
+    $poolGo = [IO.File]::ReadAllText((Join-Path $metricsDir 'pool.go'))
+    foreach ($outcome in @([regex]::Matches($alerts, 'outcome="(?<o>[a-z_]+)"') | ForEach-Object { $_.Groups['o'].Value } | Sort-Object -Unique)) {
+        Assert-Match -Text $poolGo -Pattern ('(?m)^\s*PoolClaim\w+\s*=\s*"{0}"' -f [regex]::Escape($outcome)) -Because "outcome=$outcome 必须是 pool.go 的成局结果常量"
+    }
+    $ruleCount = [regex]::Matches($alerts, '(?m)^\s+- alert: ').Count
+    Assert-Equal -Expected 4 -Actual $ruleCount -Because '规则名单:MatchPoolsUnowned / MatchPoolRoundSlow / MatchPoolNoBattleNode / MatchPoolGatherSlotsFull'
+    foreach ($field in @('for:', 'severity:', 'summary:', 'description:')) {
+        Assert-Equal -Expected $ruleCount -Actual ([regex]::Matches($alerts, ('(?m)^\s+{0}' -f [regex]::Escape($field))).Count) -Because "每条规则都要有 $field"
+    }
+}
+
 Test-Case 'rank SQL指标与告警同源:确认提交与回放分开，奖励真实延迟及失败保旧，无Redis消费者真相' {
     $repo = Get-RepoRoot
     $alerts = [IO.File]::ReadAllText((Join-Path $repo 'deploy/k8s/rank-alerts.yaml')) -replace "`r`n", "`n"
@@ -5657,7 +5683,7 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
     $policies = @(
         # data-service 是协调者(PrepareRoleFreeze、ApplyRoleFence),mail 读玩家所在的帮(GuildRpc)。
         @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail'; Port = 50300 }
-        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service'; Port = 50500 }
+        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance'; Port = 50500 }
     )
     foreach ($p in $policies) {
         $policy = Select-ManifestByName -Output $out -Name $p.Name
@@ -7692,6 +7718,47 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
         if(-not $full.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $full) -notlike 'mmorpg-sql-deploy-*'){throw '夹具清理范围非法'}
         Remove-Item -LiteralPath $full -Recurse -Force
     }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# scene_manager 接管 Agones 容量(k8s_deploy.ps1 Test-SceneManagerAgonesEnabled:-SceneOrchestrator agones -AgonesHighDensity)
+# ─────────────────────────────────────────────────────────────────
+# 以前 Fleet 的 rooms Counter 和 FleetAutoscaler 都按 rooms 计数,scene_manager 的 ConfigMap 却没有 Agones 段:Go 侧 Agones.Enabled
+# 落回 false,rooms 没人记账,自动扩容对人数增长无感;访问 Agones API 的 RBAC 只能手工 apply,Pod 用的还是 default 身份。
+$sceneManagerAgonesRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SceneOrchestrator', 'agones', '-AgonesHighDensity', '-AgonesRoomCapacity', '6', '-SkipJavaSvc'))
+
+Test-Case 'scene_manager 接管 Agones:ConfigMap 写 Agones 段,Pod 用 scene-manager 身份,RBAC 先于 Deployment apply' {
+    if ($sceneManagerAgonesRun.ExitCode -ne 0) { Write-Host $sceneManagerAgonesRun.Output }
+    Assert-Equal -Expected 0 -Actual $sceneManagerAgonesRun.ExitCode -Because '高密度 Agones 的 DryRun 要能渲染'
+    $out = $sceneManagerAgonesRun.Output
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-scene-manager-config')
+    Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.Agones.Enabled') -Because 'scene_manager 要经 GameServerAllocation 选节点'
+    Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.Agones.HighDensityEnabled') -Because 'rooms 计数要由 scene_manager 原子加减'
+    Assert-Equal -Expected '6' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.Agones.RoomCapacity') -Because '参考值与 Fleet 的 rooms capacity 同源(-AgonesRoomCapacity)'
+
+    $deployment = @(Get-ManifestBlocks -Output $out | Where-Object {
+        $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch '(?m)^  name: scene-manager\s*$'
+    }) | Select-Object -First 1
+    Assert-True -Condition ($null -ne $deployment) -Because 'DryRun 输出里应当有 scene-manager 的 Deployment'
+    Assert-Match -Text $deployment -Pattern '(?m)^      serviceAccountName: scene-manager\s*$' -Because 'Pod 要用有 Agones 权限的身份,不能用 default'
+    Assert-Match -Text $deployment -Pattern 'name: POD_NAMESPACE\s+valueFrom:\s+fieldRef: \{fieldPath: metadata.namespace\}' -Because 'ConfigMap 不写 Agones.Namespace,Go 侧按 POD_NAMESPACE 找 Fleet'
+
+    $role = Select-ManifestByName -Output $out -Name 'scene-manager-agones'
+    Assert-True -Condition ($null -ne $role) -Because 'Role / RoleBinding 要随部署 apply,不再靠手工'
+    Assert-Match -Text $role -Pattern '(?m)^kind: Role\s*$' -Because '权限只限本 zone namespace(Role,不是 ClusterRole)'
+    $roleIndex = $out.IndexOf('name: scene-manager-agones')
+    $deployIndex = $out.IndexOf('name: scene-manager-pdb')
+    Assert-True -Condition ($roleIndex -ge 0 -and $deployIndex -gt $roleIndex) -Because 'RBAC 必须先于 Deployment apply,否则新 Pod 第一次调 Agones API 就是 403'
+}
+
+Test-Case 'scene_manager 不接管 Agones(默认编排):不写 Agones 段,不挂 scene-manager 身份' {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name 'go-svc-scene-manager-config')
+    Assert-True -Condition (@(Get-FlatSubtreeKeys -Flat $flat -Path 'data.scene_manager_service.yaml.Agones').Count -eq 0) -Because '没有高密度 Fleet 时 Agones 段必须缺席,Go 侧默认关闭'
+    $deployment = @(Get-ManifestBlocks -Output $devOut | Where-Object {
+        $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch '(?m)^  name: scene-manager\s*$'
+    }) | Select-Object -First 1
+    Assert-True -Condition ($null -ne $deployment) -Because 'DryRun 输出里应当有 scene-manager 的 Deployment'
+    Assert-NotMatch -Text $deployment -Pattern 'serviceAccountName' -Because '不接管时不挂有 Agones 权限的身份'
 }
 
 exit (Complete-TestRun -SuiteName "k8s_deploy contract")

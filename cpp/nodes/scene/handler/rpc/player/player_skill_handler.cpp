@@ -27,11 +27,12 @@ if (skillTableId == 0 || !SkillTableManager::Instance().Exists(skillTableId))
 	return;
 }
 
-if (!PlayerSkillSystem::HasSkill(player, skillTableId))
+// 没有这个技能 / 不能用回 kInvalidTableId;缺技能列表、职业或等级是加载故障,回 kServiceUnavailable(已记 ERROR)
+if (const auto usable = PlayerSkillSystem::CheckSkillUsable(player, skillTableId); usable != kSuccess)
 {
 	LOG_WARN << "Reject ReleaseSkill: entity=" << entt::to_integral(player)
-			 << " does not own skill_table_id=" << skillTableId;
-	response->mutable_error_message()->set_id(kInvalidTableId);
+			 << " cannot use skill_table_id=" << skillTableId << " tip=" << usable;
+	response->mutable_error_message()->set_id(usable);
 	return;
 }
 

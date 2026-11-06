@@ -7,8 +7,6 @@ import (
 
 	"friend/internal/data"
 	base "proto/common/base"
-	dspb "proto/data_service"
-	"shared/loginsession"
 	"shared/roleidentity"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -26,8 +24,8 @@ func Details(ctx context.Context) *base.SessionDetails {
 	return proto.Clone(detail).(*base.SessionDetails)
 }
 
-// 原账号只读显式全局 login 实例；修订只读原 gate 会话字段，不从当前 SQL 补造。
-func OriginalIdentityInterceptor(login loginsession.Reader, budget time.Duration, check func(context.Context) error) grpc.UnaryServerInterceptor {
+// 在线域原账号只认 gate 签名原件，不读 login Redis；修订只读原 gate 会话字段，不从当前 SQL 补造。
+func OriginalIdentityInterceptor(budget time.Duration, check func(context.Context) error) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 		detail := Details(ctx)
 		if detail == nil {
@@ -38,14 +36,9 @@ func OriginalIdentityInterceptor(login loginsession.Reader, budget time.Duration
 		}
 		ctx, cancel := context.WithTimeout(ctx, budget)
 		defer cancel()
-		account, err := loginsession.Account(ctx, login, detail)
+		ctx, err := roleidentity.CaptureSession(ctx, detail)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "好友原登录态不可用")
-		}
-		ctx, err = roleidentity.Capture(ctx, &dspb.AccountRoleOwnership{Account: account, OwnerRevision: detail.OwnerRevision,
-			Role: &base.AccountSimplePlayer{PlayerId: detail.PlayerId}})
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "好友原登录身份非法")
+			return nil, status.Error(codes.Unauthenticated, "好友原登录身份缺少gate签名原件")
 		}
 		if err := check(ctx); err != nil {
 			if errors.Is(err, data.ErrOriginalRole) {

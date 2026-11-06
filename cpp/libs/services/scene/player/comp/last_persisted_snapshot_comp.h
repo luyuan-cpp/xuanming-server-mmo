@@ -6,39 +6,27 @@
 
 #include "proto/common/database/player_cache.pb.h"
 
-// Last-persisted snapshot for proto-compare dirty-save (todo.md #204 / #226).
+// 最近一次确认提交的整份 PlayerAllData,是「已提交」的证据。
 //
-// This component is attached to a player entity AFTER a successful
-// HandlePlayerAsyncSaved and holds the exact bytes that were just
-// committed to TiDB. On the next save, the new PlayerAllData is compared
-// (via dirty_save::IsEqual) against this snapshot; if equal, the save
-// is skipped.
+// 谁读:
+//   - 资产通道、战斗结算、收件箱:拿它判断某次改动是否已经落盘,再发确认;committed_owner_epoch / committed_save_seq
+//     说明这份是哪个代次、哪一笔提交的;
+//   - 存盘:快照上没有当前代次的提交时,哪怕一行都没变也强制写一笔(SubmitPlayerSave 的 options.force),
+//     否则上面这些读者等不到证据。
+// 判脏不读它:写哪些行由 PlayerStoreClient 逐行和确认提交的字节比较决定。退出收敛也不读它:比的是刚落地的那份
+// 和当前内存(player_exit::IsPersistedPayloadCurrent)。
 //
-// Lifetime:
-//   - Created on the FIRST successful save for a player. Before that,
-//     no component exists → ShouldPersist returns true unconditionally
-//     (the dirty_save::ShouldPersist helper handles nullptr).
-//   - Replaced wholesale on every subsequent successful save.
-//   - Cleared when the player entity is destroyed (entt removes
-//     components with the entity, no manual cleanup needed).
+// 生命周期:
+//   - 第一次确认提交之后才创建(HandlePlayerAsyncSaved,或还有排队快照时的 OnPlayerStoreSaveDone)。
+//     加载之后、第一次提交之前没有这个组件。
+//   - 之后每次确认提交整份替换;实体销毁时随实体一起清掉。
 //
-// Memory cost:
-//   - One `PlayerAllData` per online player. For a typical player snapshot
-//     of ~5 KB and a 10k-online-player gate, ~50 MB of additional
-//     memory. Acceptable for a modern dedicated game server; if a
-//     deployment finds it too much, the slice B integration can swap
-//     to a hash-only model and accept hash-collision false negatives.
+// 代价:
+//   - 内存:每个在线玩家一份整份数据,和 ECS 实时数据、PlayerStoreClient 的 confirmed 字节合起来是三份
+//     (docs/design/player-data-tidb-scaling-plan.md §4.6「常驻内存」)。读者把它当证据,不能简单去掉。
+//   - CPU:Replace 是整份深拷贝,每次确认提交一次。
 //
-// Why a unique_ptr instead of holding the proto directly:
-//   - PlayerAllData is generated protobuf with non-trivial constructors.
-//     Holding it by pointer keeps the component cheap to default-
-//     construct (the registry creates one on entt::emplace before we
-//     fill it in) and lets us pay the proto allocation cost only when
-//     we actually have a snapshot to record.
-//   - std::unique_ptr means the component owns the proto exclusively;
-//     no shared-mutation hazards across systems.
-//   - Replacement is a single pointer swap, not a deep copy from the
-//     SavePlayer hot path.
+// 用 unique_ptr:第一次提交之前不付分配的代价;组件独占这份数据,别的系统改不到。
 struct PlayerLastPersistedSnapshotComp
 {
     // The persisted proto; nullptr until the first save completes.
@@ -62,14 +50,10 @@ struct PlayerLastPersistedSnapshotComp
         source_save_seq_ = seq;
     }
 
-    // Helper: replace the snapshot in one call. Allocates a new
-    // PlayerAllData copy and stamps the timestamp. Cheap to call
-    // from HandlePlayerAsyncSaved.
+    // 整份替换快照(深拷贝)并记下时间。
     //
     // 拷贝之后清掉 last_save_seq(docs/design/db-write-fencing-mysql.md §7.3):它是每次写盘都变的存盘序号,
-    // 不是业务数据。快路径拿「新 marshal 的消息」与本快照比 dirty_save::IsEqual,新消息在比较时还没发号
-    // (SavePlayerImpl 在快路径之后才写 last_save_seq),快照若带着序号,快路径永远不命中。
-    // 剥离只在落地时做一次,不在每次存盘尝试的热路径上拷贝。快照的其他读者(资产 / 结算 / 收件箱账本的
+    // 不是业务数据;这份快照是哪一笔提交的由 committed_save_seq 记。快照的读者(资产 / 结算 / 收件箱账本的
     // 「已落盘」判定)都不读这个字段。
     void Replace(const PlayerAllData& fresh)
     {

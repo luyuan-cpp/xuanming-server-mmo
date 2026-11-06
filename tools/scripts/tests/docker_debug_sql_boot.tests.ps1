@@ -115,7 +115,7 @@ function New-FixturePaths {
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'db.yaml') -Value "ZoneId: 1`nServerConfig:`n  Database:`n    Backend: mysql`n    Hosts: mysql:3306`n" -NoNewline
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'data_service.yaml') -Value "SnapshotMySQL:`n  Backend: mysql`n  Host: mysql:3306`n  DBName: testdb`nSchema:`n  AutoMigrate: false`n" -NoNewline
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'login.yaml') -Value "Node:`n  RedisClient:`n    Host: redis:6379`n    DB: 0`n" -NoNewline
-    Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'match.yaml') -Value "LoginRedis:`n  Addrs: [redis:6379]`n  DB: 0`nGlobalMatch:`n  Backend: mysql`n  Host: mysql:3306`n  User: root`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'match.yaml') -Value "GlobalMatch:`n  Backend: mysql`n  Host: mysql:3306`n  User: root`n" -NoNewline
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'player_inbox.yaml') -Value "MySQL:`n  Host: mysql:3306`n  DBName: mmorpg_player_inbox`n  Backend: mysql`nSchema:`n  AutoMigrate: false`n" -NoNewline
     return $paths
 }
@@ -260,7 +260,7 @@ try {
         Assert-Equal (Get-BootUser $paths 'db') (Get-YamlScalar -Path $db -KeyPath 'ServerConfig.Database.User').Value 'db 账号'
         $match = Join-Path $paths.BootRoot 'match/runtime/match.yaml'
         Assert-Equal (Get-BootUser $paths 'match') (Get-YamlScalar -Path $match -KeyPath 'GlobalMatch.User').Value 'match 账号'
-        Assert-Equal '["redis:6379"]' (Get-YamlScalar -Path $match -KeyPath 'LoginRedis.Addrs').Value '登录 Redis 取容器地址'
+        Assert-Equal $false (Get-YamlScalar -Path $match -KeyPath 'LoginRedis').Found 'match 只认 gate 签名的会话身份原件,注册器不补登录态段'
         Assert-Equal $false (Get-YamlScalar -Path $match -KeyPath 'GlobalMatch.AccountRoleSchema').Found 'match 不再跨库读角色目录'
         $inbox = Join-Path $paths.BootRoot 'player_inbox/runtime/player_inbox.yaml'
         Assert-Equal 'mysql:3306' (Get-YamlScalar -Path $inbox -KeyPath 'MySQL.Host').Value 'player_inbox 端点'

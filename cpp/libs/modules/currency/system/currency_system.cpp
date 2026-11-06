@@ -50,6 +50,16 @@ PlayerCurrencyComp *FindRequiredPlayerCurrencyComp(entt::entity player, const ch
     return comp;
 }
 
+// 欠款是否带着更新版本才有的字段(新版本给 CurrencyDebtEntry 加的)。已退役字段的残留字节不算,否则带残留的欠款
+// 会被永远当成新版本数据(unknown_field_carry::CarriesNewerVersionFields)。
+// DebtCarriesUnknownFields 与 AddCurrency 的补缴扣还守卫共用这一个判据(混版本设计 §4.4)。
+bool DebtCarriesNewerVersionFields(const CurrencyDebt &debt)
+{
+    const auto debtEntryName = CurrencyDebtEntry::descriptor()->full_name();
+    return unknown_field_carry::CarriesNewerVersionFields(
+        std::string_view(debtEntryName.data(), debtEntryName.size()), debt.unknownFields);
+}
+
 } // namespace
 
 void CurrencySystem::EnsureCurrencySlots(CurrencyComp &currency)

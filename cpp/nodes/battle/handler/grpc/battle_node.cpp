@@ -1,8 +1,12 @@
 #include "battle_node.h"
 ///<<< BEGIN WRITING YOUR CODE
 #include "infra/agones/agones_gameserver_lifecycle.h"
+#include "engine/core/async/coroutine_callback.h"
+#include <boost/cobalt/task.hpp>
 #include "logic/battle_room_manager.h"
 #include "muduo/base/Logging.h"
+#include "network/node_utils.h"   // GetNodeInfo:QueryBattleCreation 预检读本节点已算好的可分配状态
+#include "proto/common/base/common.pb.h"
 
 namespace
 {
@@ -26,6 +30,28 @@ bool AdmissionOpen(const std::weak_ptr<battle_admission::AdmissionGate>& gate)
     return admission != nullptr && admission->Phase() == battle_admission::AdmissionPhase::kOpen;
 }
 
+boost::cobalt::task<void> CreateBattleWithPermit(muduo::net::EventLoop& loop,
+    std::shared_ptr<GrpcUnaryCall<::CreateBattleRequest, ::CreateBattleResponse>> call,
+    std::weak_ptr<battle_admission::AdmissionGate> gate)
+{
+    using Permit = agones::GameServerLifecycle::AllocationPermit;
+    auto permit = co_await loop_async::AwaitCallback<std::unique_ptr<Permit>>(loop,
+        [&loop](auto done) {
+            agones::GameServerLifecycle::Instance().AcquireAllocationPermitAsync(loop,
+                [done](Permit value) { done(std::make_unique<Permit>(std::move(value))); });
+            return true;
+        }, nullptr);
+    // 所有者停止、许可拒绝和等候期间关闸均走原拒绝契约。
+    if (!permit || !*permit || !**permit || !AdmissionOpen(gate))
+    {
+        LOG_WARN << "CreateBattle rejected while awaiting allocation permission, battle_id=" << call->request().battle_id();
+        call->Reject(NotAllocatable());
+        co_return;
+    }
+    // 许可活到同步业务返回，计入在途创建，防止零房间时提前回 Ready。
+    call->Proceed();
+}
+
 } // namespace
 
 bool BattleNodeImpl::OpenAdmission()
@@ -39,7 +65,32 @@ bool BattleNodeImpl::OpenAdmission()
 void BattleNodeImpl::CloseAdmission()
 {
     admission_->Close();
+    creationTasks_.Stop();
     LOG_INFO << "battle room admission gate closed: subsequent CreateBattle calls return UNAVAILABLE " << kBattleNotAllocatableMessage;
+}
+
+bool BattleNodeImpl::LifecycleGrantsPermits()
+{
+    const auto &lifecycle = agones::GameServerLifecycle::Instance();
+    if (lifecycle.IsDraining())
+    {
+        return false;
+    }
+    // 逐个列出状态而不写 default:lifecycle 以后加状态时编译器会提醒这里跟着判。
+    switch (lifecycle.State())
+    {
+    case agones::LifecycleState::Disabled:
+    case agones::LifecycleState::Ready:
+    case agones::LifecycleState::Allocating:
+    case agones::LifecycleState::Allocated:
+    case agones::LifecycleState::ReturningToReady:
+        return true;
+    case agones::LifecycleState::Starting:
+    case agones::LifecycleState::ShuttingDown:
+    case agones::LifecycleState::Stopped:
+        return false;
+    }
+    return false;
 }
 ///<<< END WRITING YOUR CODE
 
@@ -61,6 +112,15 @@ void BattleNodeImpl::HandleQueryBattleCreation(const ::QueryBattleCreationReques
 {
 ///<<< BEGIN WRITING YOUR CODE
     BattleRoomManager::Instance().HandleQueryBattleCreation(*request,*response);
+    // 落库前预检(docs/design/global-match-hierarchical-pools.md §5.5):回显了本实例时告诉 match 本节点此刻接不接新房间,
+    // match 看到不接就在落建房原件之前干净失败、全员回队。目标实例不符的空回包不填,match 按能力未知处理。
+    // 判定只有一份:battle main.cpp 每秒对账用 battle_admission::AcceptsNewRooms(闸阶段, LifecycleGrantsPermits())
+    // 算出期望状态并写进内存里的 NodeInfo.admission(停机关闸时当场再算一次)。这里读它而不另算 —— 本函数是静态的,
+    // 拿不到准入闸。代价是最多晚一个对账周期(1 秒);它只是预检,真正的判定仍是 CreateBattle 的三道准入。
+    if (!response->target_instance_id().empty())
+    {
+        response->set_rejects_new_battles(GetNodeInfo().admission() != NODE_ADMISSION_OPEN);
+    }
 ///<<< END WRITING YOUR CODE
 }
 
@@ -70,6 +130,13 @@ void BattleNodeImpl::HandleCreateBattle(const ::CreateBattleRequest* request,
     ///<<< BEGIN WRITING YOUR CODE
     // 业务逻辑全部在手写类 BattleRoomManager(cpp/nodes/battle/logic/),此处只做委托
     BattleRoomManager::Instance().HandleCreateBattle(*request, *response);
+    // 负载随应答捎回(R6,docs/design/global-match-hierarchical-pools.md §5.1):成功应答(含幂等命中)带本节点此刻的房间数,
+    // match 拿它比较同机房节点的负载,不另发上报流量。失败应答不带(0 = 未上报)。放在委托之后的这一处,
+    // 覆盖 HandleCreateBattle 的全部成功出口。
+    if (response->error_message().id() == 0)
+    {
+        response->set_room_count(BattleRoomManager::Instance().RoomCount());
+    }
     ///<<< END WRITING YOUR CODE
 }
 
@@ -160,34 +227,8 @@ void BattleNodeImpl::CreateBattle(const std::shared_ptr<CreateBattleCall>& call)
     // 2) 分配许可(集群外入口 D82)。拿不到(排空标签在、allocate 未确认、lifecycle 已停 / 仍在 Starting、等待超时)即拒绝:
     //    此刻还没进 Handle*,房间、定时器、推送、Kafka 事件一概没有发生。非 Agones 环境许可恒放行(启停窗口由第 1、3 道兜住)。
     //    回调只捕获 call 与 weak 闸,不捕获 this(AGENTS §11.7)。
-    agones::GameServerLifecycle::Instance().AcquireAllocationPermitAsync(
-        loop_,
-        [call, gate = std::weak_ptr<battle_admission::AdmissionGate>(admission_)](
-            agones::GameServerLifecycle::AllocationPermit permit)
-        {
-            auto &lifecycle = agones::GameServerLifecycle::Instance();
-            if (!permit)
-            {
-                LOG_WARN << "CreateBattle rejected: this instance is not allocatable, battle_id=" << call->request().battle_id()
-                         << " agones_state=" << agones::ToString(lifecycle.State())
-                         << " draining=" << (lifecycle.IsDraining() ? 1 : 0)
-                         << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
-                call->Reject(NotAllocatable());
-                return;
-            }
-            // 3) 许可回到 loop 后复核准入闸:等许可期间 SetBeforeShutdown 可能已关闸并作废全部房间(关闸与 AbortAllRooms
-            //    在同一个 loop 任务里,排在后面的本回调必然看到 kClosed);放行的话房间会在进程退出时无声丢失。
-            if (!AdmissionOpen(gate))
-            {
-                LOG_WARN << "CreateBattle rejected: shutdown started during dispatch(rechecked in loop), battle_id="
-                         << call->request().battle_id() << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
-                call->Reject(NotAllocatable());
-                return;   // permit 随回调返回析构:零房间时自动收口回 Ready
-            }
-            // permit 活到 Proceed() 返回:在途创建计入 lifecycle,防止"最后一个旧房间刚移除"时 worker 抢先回 Ready;
-            // 调用已失效 / 幂等命中而零房间时,析构自动收口回 Ready。
-            call->Proceed();
-        });
+    if (!creationTasks_.Start(CreateBattleWithPermit(loop_, call, admission_), "战斗创建许可"))
+        call->Reject(NotAllocatable());
     return;
     ///<<< END WRITING YOUR CODE
     call->Proceed();

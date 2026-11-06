@@ -44,8 +44,11 @@
     <ClCompile Include="player_activity_system_test.cpp" />
     <ClCompile Include="player_feature_persistence_test.cpp" />
     <ClCompile Include="persist_round_trip_test.cpp" />
+    <ClCompile Include="player_item_gain_block_test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="scene_spawn_test.cpp" />
+    <ClCompile Include="player_save_cost_test.cpp" />
+    <ClCompile Include="player_save_metrics_test.cpp" />
   </ItemGroup>
 </Project>

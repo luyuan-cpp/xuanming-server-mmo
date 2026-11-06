@@ -367,7 +367,9 @@ void OnClientLeaveGame(const SessionId sessionId, SessionInfo &session)
     // 先通知、后遗忘(R5):清掉指向之后,这条会话再断线也不会替它给原节点发 ExitGame 了。
     uint32_t sceneNodeId = 0;
     const bool hadSceneBinding = session.HasNodeEntity(SceneNodeService);
-    const bool exitSent = GateClientSessionHandler::NotifySceneExitGame(sessionId, session, sceneNodeId);
+    // 主动登出:scene 立即退出,不按断线保留(docs/design/player-connection-lost-hold.md §3)。
+    const bool exitSent =
+        GateClientSessionHandler::NotifySceneExitGame(sessionId, session, EXIT_GAME_REASON_LOGOUT, sceneNodeId);
     const uint64_t previousSceneId = session.sceneId;
     const uint64_t previousOwnerEpoch = session.ownerEpoch;
     const bool hadPendingEntry = session.pendingSceneEntry.has_value();

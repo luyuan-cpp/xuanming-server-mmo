@@ -180,6 +180,7 @@
     <ClCompile Include="inflight_index_test.cpp" />
     <ClCompile Include="rpc_channel_loopback_test.cpp" />
     <ClCompile Include="rpc_chain_test.cpp" />
+    <ClCompile Include="rpc_link_heartbeat_test.cpp" />
     <ClCompile Include="../../nodes/battle/tests/battle_admission_gate_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>

@@ -84,6 +84,7 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		sceneMirrorsKey(sceneID),
 		sceneAgonesGsKey(sceneID),
 		sceneClaimRecordKey(sceneID),
+		sceneRegistrationRecordKey(sceneID),
 		sceneDrainingKey(sceneID),
 		instanceMembersKey(sceneID),
 		nodeMembersKey(zoneID, nodeID),
@@ -101,8 +102,8 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		worldChannelLineNoKey(zoneID, confID),
 		worldChannelDirectoryKey(zoneID, confID),
 		mysteryMerchantKey(zoneID),
-		deadNodeReconcileTasksKey,
-		sceneManagerZonesKey,
+		deadNodeReconcileTasksKey(zoneID),
+		LeaderLockKey(zoneID),
 		fmt.Sprintf(worldInitLockKeyFmt, zoneID),
 		fmt.Sprintf(gateDrainingKeyFmt, uint32(5)),
 	} {

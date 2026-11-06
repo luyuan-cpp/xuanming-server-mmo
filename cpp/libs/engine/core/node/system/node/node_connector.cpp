@@ -152,6 +152,9 @@ void NodeConnector::ConnectToTcpNode(const NodeInfo &nodeInfo)
             NodeHandshakeManager::BeginHandshake(weakClient.lock(), selfNode, expectedPeer, conn);
         }
     });
+	// 节点链路心跳(docs/design/muduo-rpc-channel.md §21):检测半开连接,读空闲满超时就关闭,交给 enableRetry 重连、再握手。
+	// 对端的入站 RpcServer 由 Node::StartRpcServer 同样开启;两端必须都开。
+	client->setLinkHeartbeat(kNodeLinkHeartbeat);
 	client->connect();
 
 	LOG_INFO << "Connecting to TCP node, Uuid: " << nodeInfo.node_uuid()

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"match/internal/config"
-	"math"
 	"sort"
 
 	pb "proto/match"
@@ -14,7 +13,7 @@ import (
 
 var ErrTeamLaunchActive = errors.New("team: 原整队成局尚未确认结束")
 
-// 调用方已按全员P→Team→launch加锁；所有占用、整队unit与候选投影同tx可见。
+// 调用方已按全员P→Team→launch加锁；所有占用与整队unit同tx可见。
 func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *teampb.TeamLaunchRecord) error {
 	data, err := DecodeTeamLaunch(launch)
 	if err != nil {
@@ -43,7 +42,7 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 	var group []*pb.MatchAuthorityTicketRecord
 	for _, member := range members {
 		player := member.Original.PlayerId
-		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,0,'',0)", player, []byte{}); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", player, []byte{}); err != nil {
 			return err
 		}
 		old, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", player))
@@ -69,15 +68,16 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 			return errors.New("team: 原成员地域测量已失效")
 		}
 		ticket := &pb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: data.Original.Request.RequestId, Mode: mode, ConfigId: launch.ConfigId, TeamSize: launch.TargetSize, State: 1, EnqueuedMs: launch.EnqueuedMs, NotBeforeMs: launch.NotBeforeMs, ZoneId: data.Original.Zones[player], TeamId: launch.TeamId, NetworkProfile: payload, ExpiresMs: expiry, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision}
-		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=?,zone_id=?,rating_centi=0,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.OwnerAccount, ticket.OwnerRevision, player); err != nil {
+		// 计分模式（PVP_TEAM）把成员此刻的评分快照写进票，撮合与提交点按它算队伍分；非计分模式为 0。
+		if ticket.RatingCenti, err = s.queueRatingCentiTx(ctx, tx, player, mode); err != nil {
 			return err
 		}
-		if err = s.replaceTicketRegions(ctx, tx, ticket, stamp); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=?,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.OwnerAccount, ticket.OwnerRevision, player); err != nil {
 			return err
 		}
 		group = append(group, ticket)
 	}
-	if err = s.replaceTeamLaunchRegions(ctx, tx, launch, group, stamp); err != nil {
+	if err = s.requireQueuedTeamGroupTx(ctx, tx, launch, group); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, "UPDATE team_launch SET state=2 WHERE actor_id=? AND request_high=? AND request_low=? AND state=1", launch.ActorId, launch.RequestHigh, launch.RequestLow)
@@ -88,7 +88,10 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 	return err
 }
 
-func (s *Store) replaceTeamLaunchRegions(ctx context.Context, tx *sql.Tx, launch *teampb.TeamLaunchRecord, group []*pb.MatchAuthorityTicketRecord, stamp uint64) error {
+// requireQueuedTeamGroupTx 核对排队整队的一组原票仍是这支队伍的完整原件:人数一致、票上的 home 与开战原件一致、
+// 每人当前归属仍是该 home(requireTeamHomeGroupTx)。排队、维护、失败回队三处在同一事务里调用,出错整笔回滚。
+// 原先这组校验夹在机房投影 team_launch_region 的写入里,投影随按池撮合退役(2026-11-05),校验原样保留。
+func (s *Store) requireQueuedTeamGroupTx(ctx context.Context, tx *sql.Tx, launch *teampb.TeamLaunchRecord, group []*pb.MatchAuthorityTicketRecord) error {
 	data, err := DecodeTeamLaunch(launch)
 	if err != nil {
 		return err
@@ -104,51 +107,8 @@ func (s *Store) replaceTeamLaunchRegions(ctx context.Context, tx *sql.Tx, launch
 	if err = s.requireTeamHomeGroupTx(ctx, tx, group); err != nil {
 		return err
 	}
-	// 投影按当前映射算，每次维护重写一遍，合服、撤销之后最多落后一轮维护。
-	home, err := TeamUnitHomeZone(group, s.MergedZones())
-	if err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM team_launch_region WHERE actor_id=? AND request_high=? AND request_low=?", launch.ActorId, launch.RequestHigh, launch.RequestLow); err != nil {
-		return err
-	}
-	common := map[uint32]*teampb.TeamLaunchRegionRecord{}
-	for index, ticket := range group {
-		profile, err := DecodeProfile(ticket.NetworkProfile)
-		if err != nil {
-			return err
-		}
-		latencies := Latencies(profile, stamp, math.MaxUint32)
-		preferred := PreferredRegion(profile, stamp)
-		if index == 0 {
-			for region, rtt := range latencies {
-				common[region] = &teampb.TeamLaunchRegionRecord{ActorId: launch.ActorId, RequestHigh: launch.RequestHigh, RequestLow: launch.RequestLow, PhysicalRegion: region, ConfigId: launch.ConfigId, TargetSize: launch.TargetSize, MemberCount: launch.MemberCount, LocalPreferred: preferred == region, EnqueuedMs: launch.EnqueuedMs, ExpiresMs: ticket.ExpiresMs, MaxRttMs: rtt, HomeZone: home, Mode: TeamLaunchMode(launch)}
-			}
-		} else {
-			for region, row := range common {
-				rtt, ok := latencies[region]
-				if !ok {
-					delete(common, region)
-					continue
-				}
-				row.LocalPreferred = row.LocalPreferred && preferred == region
-				row.MaxRttMs = max(row.MaxRttMs, rtt)
-				row.ExpiresMs = min(row.ExpiresMs, ticket.ExpiresMs)
-			}
-		}
-	}
-	regions := make([]uint32, 0, len(common))
-	for region := range common {
-		regions = append(regions, region)
-	}
-	sort.Slice(regions, func(i, j int) bool { return regions[i] < regions[j] })
-	for _, region := range regions {
-		row := common[region]
-		if _, err := tx.ExecContext(ctx, "INSERT INTO team_launch_region(actor_id,request_high,request_low,physical_region,config_id,target_size,member_count,local_preferred,enqueued_ms,expires_ms,max_rtt_ms,home_zone,mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", row.ActorId, row.RequestHigh, row.RequestLow, row.PhysicalRegion, row.ConfigId, row.TargetSize, row.MemberCount, row.LocalPreferred, row.EnqueuedMs, row.ExpiresMs, row.MaxRttMs, row.HomeZone, row.Mode); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err = TeamUnitHomeZone(group, s.MergedZones())
+	return err
 }
 
 // 名册/队长变化在Team同tx关闭旧queued整单。forming/UNKNOWN禁止按TTL猜结束。
@@ -193,12 +153,6 @@ func (s *Store) closeQueuedTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch 
 		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=? AND ticket=? AND team_id=? AND formation_id=0 AND state=1", member.Original.PlayerId, member.Ticket, launch.TeamId); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, "DELETE FROM match_ticket_region WHERE player_id=? AND ticket=?", member.Original.PlayerId, member.Ticket); err != nil {
-			return err
-		}
-	}
-	if _, err = tx.ExecContext(ctx, "DELETE FROM team_launch_region WHERE actor_id=? AND request_high=? AND request_low=?", launch.ActorId, launch.RequestHigh, launch.RequestLow); err != nil {
-		return err
 	}
 	_, err = tx.ExecContext(ctx, "UPDATE team_launch SET state=5 WHERE actor_id=? AND request_high=? AND request_low=? AND state=2", launch.ActorId, launch.RequestHigh, launch.RequestLow)
 	if err != nil {

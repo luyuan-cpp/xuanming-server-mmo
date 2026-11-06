@@ -477,7 +477,10 @@ Test-Case 'mail 的迁移门禁与 trade 同链路,只引用现役预置生产�
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'mail-migrate Job 要读取先前创建的 ConfigMap'
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false,表没建出来 mail 会拒启,迁移必须先于 Deployment'
     Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
-    Assert-True -Condition (-not ($events | Where-Object { $_ -like 'apply:Secret:*' })) -Because '未注入令牌时不能建出一个空令牌的 Secret'
+    # gate-identity-auth 是在线服务必需的内部身份验签密钥(与令牌无关),单独钉住;其余 Secret 一个都不能建。
+    Assert-True -Condition (-not ($events | Where-Object { $_ -like 'apply:Secret:*' -and $_ -ne 'apply:Secret:gate-identity-auth' })) -Because '未注入令牌时不能建出一个空令牌的 Secret'
+    Assert-Equal -Expected 1 -Actual @($events | Where-Object { $_ -eq 'apply:Secret:gate-identity-auth' }).Count -Because '内部身份验签密钥恰好建一次'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:gate-identity-auth') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,验签密钥 Secret 必须先于 Deployment'
     Assert-True -Condition ([Array]::LastIndexOf($events, 'delete:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '只替换本轮迁移Job，不删除运行实例仍引用的预置Secret'
     $content = $script:DeploymentContent
     Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '镜像、拉取策略与令牌指纹占位都必须被替换'
@@ -535,7 +538,9 @@ Test-Case 'trade 资产通道关着:指纹占位整行删掉,不引用签名密�
     Assert-NotMatch -Text $effectiveContent -Pattern 'PLACEHOLDER_' -Because '生效清单不能残留未替换占位'
     Assert-NotMatch -Text $effectiveContent -Pattern '(?m)^[ \t]*-[ \t]+name:[ \t]*["'']?MMORPG_ASSET_OP_SECRET_TRADE["'']?[ \t]*(?:#.*)?$' -Because '关着时不能注入签名密钥环境变量'
     Assert-NotMatch -Text $effectiveContent -Pattern '(?m)^[ \t]+name:[ \t]*["'']?asset-op-secret-trade["'']?[ \t]*(?:#.*)?$' -Because '关着时不能引用一个不存在的签名密钥 Secret'
-    Assert-True -Condition (-not ($script:Events | Where-Object { $_ -like 'apply:Secret:*' })) -Because '关着时不建 Secret'
+    # 资产通道关着只是不建资产签名 Secret;内部身份验签密钥与资产通道无关,在线服务恒需要。
+    Assert-True -Condition (-not ($script:Events | Where-Object { $_ -like 'apply:Secret:*' -and $_ -ne 'apply:Secret:gate-identity-auth' })) -Because '关着时不建资产签名 Secret'
+    Assert-Equal -Expected 1 -Actual @($script:Events | Where-Object { $_ -eq 'apply:Secret:gate-identity-auth' }).Count -Because '内部身份验签密钥恰好建一次'
 }
 
 Test-Case 'trade 资产通道打开:先建 Secret 再 apply Deployment,env 走 secretKeyRef,模板带指纹,密钥值不进 manifest' {
@@ -564,7 +569,8 @@ Test-Case 'guild 资产off仅移除唯一inline资产env，SQL与Match签名保�
     Assert-NotMatch -Text $content -Pattern 'MMORPG_ASSET_OP_SECRET_GUILD|key: asset-guild|PLACEHOLDER_ASSET_OP_SECRET_HASH|mmorpg.io/asset-op-secret-guild-hash:' -Because 'off不能保留本域资产密钥或滚动指纹'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, '(?m)^\s*- name: MMORPG_MATCH_INTERNAL_SECRET_GUILD\s*$').Count) -Because 'off不能删除常驻必需MMORPG_MATCH_INTERNAL_SECRET_GUILD'
     Assert-Match -Text $content -Pattern 'MMORPG_GUILD_SQL_DSN=\\"\$\(cat /app/etc/private/env/MMORPG_GUILD_SQL_DSN\)\\"' -Because 'off不能删除常驻必需的SQL连接串;它来自本boot选中的环境文件'
-    Assert-True -Condition (-not ($script:Events | Where-Object { $_ -like 'apply:Secret:*' })) -Because 'off不创建可选资产Secret'
+    Assert-True -Condition (-not ($script:Events | Where-Object { $_ -like 'apply:Secret:*' -and $_ -ne 'apply:Secret:gate-identity-auth' })) -Because 'off不创建可选资产Secret'
+    Assert-Equal -Expected 1 -Actual @($script:Events | Where-Object { $_ -eq 'apply:Secret:gate-identity-auth' }).Count -Because '内部身份验签密钥与资产开关无关,恰好建一次'
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '资产off不能旁路正式SQL迁移门禁'
 }

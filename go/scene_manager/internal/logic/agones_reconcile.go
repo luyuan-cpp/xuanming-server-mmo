@@ -48,7 +48,7 @@ func StartAgonesReconcile(ctx context.Context, svcCtx *svc.ServiceContext) {
 			if !isLeader() {
 				return
 			}
-			for _, zoneID := range GetActiveZones() {
+			for _, zoneID := range orchestratedZones(svcCtx) {
 				ReconcileAgonesRoomsForZone(ctx, svcCtx, zoneID)
 			}
 		})

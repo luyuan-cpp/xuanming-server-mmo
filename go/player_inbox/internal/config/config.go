@@ -129,7 +129,8 @@ type PlayerInboxConf struct {
 	// EnqueueTypes:允许入箱的消息类型白名单,写 PlayerInboxMessageType 的枚举名
 	// (如 PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN)。**默认空 = 全部停用**,是入箱开关的唯一来源(设计 §3.3);
 	// 不在白名单里的类型回 kPlayerInboxDisabled。上线顺序见设计 §11.7:scene 全部打开消费之后才填它。
-	// v1 只放封锁 / 解封两种,v1DisabledEnqueueTypes 里的类型(挂欠款)列进来即拒启。
+	// GM 域只放封锁 / 解封:货币两种(GM_BLOCK/UNBLOCK_CURRENCY_GAIN)与物品两种(GM_BLOCK/UNBLOCK_ITEM_GAIN);
+	// v1DisabledEnqueueTypes 里的类型(挂欠款)列进来即拒启。
 	EnqueueTypes []string `json:",optional"`
 
 	// TerminalRetentionDays保留旧配置兼容；全球item现为永久原请求收据，Sweep不再物删。
@@ -280,7 +281,7 @@ func ParseEnqueueTypes(names []string) (map[inboxpb.PlayerInboxMessageType]struc
 			return nil, errors.New("PlayerInbox.EnqueueTypes 不能含 PLAYER_INBOX_MSG_UNSPECIFIED")
 		}
 		if why, disabled := v1DisabledEnqueueTypes[t]; disabled {
-			return nil, fmt.Errorf("PlayerInbox.EnqueueTypes 不能含 %s:v1 不开放,%s;v1 只放封锁 / 解封两种", name, why)
+			return nil, fmt.Errorf("PlayerInbox.EnqueueTypes 不能含 %s:v1 不开放,%s;GM 域只放货币与物品的封锁 / 解封", name, why)
 		}
 		if _, dup := out[t]; dup {
 			return nil, fmt.Errorf("PlayerInbox.EnqueueTypes 重复列出 %q", name)

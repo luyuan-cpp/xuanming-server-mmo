@@ -77,10 +77,10 @@
 
    | yaml | 覆盖 | 本项通过标准 |
    |---|---|---|
-   | `friend_smoke` / `guild_smoke` / `team_smoke` / `trade_smoke` | 10-19 首批;team 另含 10-20 的排队请求与 `startSoloBattle` | `*_SMOKE_OK`。trade 第 2 步的超时是 gate 丢弃 TradeAdmin,属预期。team 默认 `cross_zone: true` 需双 zone,单 zone 改成 false;S8 日志应出现「StartTeamMatch rejected while B was in battle」 |
+   | `friend_smoke` / `guild_smoke` / `team_smoke` / `trade_smoke` | 10-19 首批;team 另含 10-20 的排队请求与 `startSoloBattle` | `*_SMOKE_OK`。trade 第 2 步的超时是 gate 丢弃 TradeAdmin,属预期;11-05 起(设计 §7 R4)friend 第 6 步(NotifyFriendEvent)与 guild 第 9 步(UpdateGuildScore)同样期望 gate 丢弃、各等约 10s 超时。team 默认 `cross_zone: true` 需双 zone,单 zone 改成 false;S8 日志应出现「StartTeamMatch rejected while B was in battle」 |
    | `team_follow_smoke`(可选) | 10-19 改了构造 | `TEAM_FOLLOW_SMOKE_OK` |
    | `team_backfill_smoke` | CancelQueue(Empty 响应,经 gRPC 照常回包)/ GetQueueStatus / JoinQueue | `TEAM_BACKFILL_SMOKE_OK` |
-   | `mail_smoke` | mail call | `MAIL_SMOKE_OK`。第 7 步两个 MailAdmin 各等约 10s 超时,属预期;本冒烟有发件和领取副作用 |
+   | `mail_smoke` | mail call | `MAIL_SMOKE_OK`。第 7 步 NotifyMailChanged(11-05 起,设计 §7 R4)与两个 MailAdmin 各等约 10s 超时,属预期;本冒烟有发件和领取副作用 |
    | `rank_smoke` | rank call | `RANK_SMOKE_OK`;跑的时候不要有别的 1V1 排队 |
    | `sync_smoke` | friendRpc、travelTo | 单 zone:`SYNC_SMOKE_OK … cross_zone=off`。跨 zone 腿要在双 zone 环境跑:把 yaml 复制到不入库的 `logs/sync_smoke_cross_zone.yaml`,只改 `cross_zone: true`,期望 `cross_zone=checked` |
    | `travel_smoke`(双 zone) | travelTo、expectTravelRejected、金币读写 | `TRAVEL_SMOKE_OK`,其中 `reject_tip`、`reject_map_tip` 非 0,`gold_back = gold_home + 7` |
@@ -94,7 +94,7 @@
 失败的快速定位:
 
 - **出现 `reply without request id dropped`**:服务端没回显请求号。先查 gate 是否为新编译版;scene TCP 路径(channel / merchant / travel)看 `scene_handler.cpp` 的 `set_id`。
-- **friend 第 6 步 / guild 第 9 步拿不到信封拒绝**:看路由服是否把上游 PermissionDenied 翻成了 1003 并带回 id。
+- **friend 第 6 步 / mail 第 7 步 / guild 第 9 步报「got envelope tip=…: the gate client allowlist includes push / server-only message IDs」**:gate 的上行白名单还收推送或仅服务端方法的号,说明 gate 不是按 11-05 的生成器(设计 §7 R4)重新生成、重新编译的版本。
 - **trade 第 2 步**:期望的就是超时,即 gate 丢弃 TradeAdmin 消息号。
 - **R1 落地之后**(会话 6b6cd9 在做 gate 侧):scene 派发前早退的请求会收到带请求号的 1003 信封,不再超时,失败原因里会显示信封 tip=1003。白名单外的消息号仍然不回包,上面这几个「期望超时」的步骤不受影响。
 

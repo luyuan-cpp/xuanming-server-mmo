@@ -2,6 +2,8 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <chrono>
 #include <deque>
+#include <optional>
+#include <utility>
 #include <vector>
 #include <node_config_manager.h>
 #include "hexagons_grid.h"
@@ -11,6 +13,7 @@
 #include "muduo_grpc/channel.h"
 #include "actor/actor_net_id.h"
 #include "core/system/id_generator.h"
+#include "core/system/scene_task_scope.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include "engine/core/type_define/type_define.h"
@@ -786,7 +789,9 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 #include "modules/mission/comp/mission_comp.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
+#include "proto/common/component/player_battle_result_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"         // UnregisterPlayer
 #include "proto/common/component/player_network_comp.pb.h" // PlayerSessionSnapshotComp
 #include "type_alias/player_session_type_alias.h"          // SessionMap
@@ -1007,7 +1012,9 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<MissionsContainerComp>(player);
     registry.emplace<PlayerAssetOpLedgerComp>(player);
     registry.emplace<PlayerInboxLedgerComp>(player);
+    registry.emplace<PlayerItemGainBlockComp>(player); // 单玩家物品获取封禁(player-inbox-service.md §2.2)
     registry.emplace<PlayerMysteryMerchantComp>(player);
+    registry.emplace<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
     registry.emplace<CurrencyComp>(player);
     registry.emplace<PlayerCurrencyComp>(player);
     // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
@@ -1527,8 +1534,14 @@ struct PlayerStoreDirectFixture
     std::deque<SentClaim> sentClaims;
     std::vector<std::function<void()>> timers;
 
+    std::optional<muduo::net::EventLoop> ownedLoop;
+    std::optional<SceneTaskScope> ownedTasks;
+
     PlayerStoreDirectFixture()
     {
+        auto* loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+        if (loop == nullptr) loop = &ownedLoop.emplace();
+        if (!SceneTaskScope::IsDurableAccepting()) ownedTasks.emplace(*loop);
         PlayerStoreTransport transport;
         transport.send = [this](const playerstore::SavePlayerRequest& request, PlayerStoreClient::SendDone done)
         {
@@ -1544,8 +1557,11 @@ struct PlayerStoreDirectFixture
         PlayerStoreDirectTestAccess::InstallTransport(transport);
     }
 
+    muduo::net::EventLoop& Loop() { return *muduo::net::EventLoop::getEventLoopOfCurrentThread(); }
+
     ~PlayerStoreDirectFixture()
     {
+        if (ownedTasks) ownedTasks->StopAll();
         PlayerStoreDirectTestAccess::Reset();
         PlayerLifecycleSystem::GetPendingEnterMap().clear();
     }
@@ -2055,7 +2071,7 @@ TEST(PlayerStoreDirectEcs, KeyProgressSaveRunsAfterTheCallerAndCoalesces)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    muduo::net::EventLoop loop;
+    auto& loop = f.Loop();
 
     PlayerLifecycleSystem::RequestKeyProgressSave(player, "test");
     PlayerLifecycleSystem::RequestKeyProgressSave(player, "test");
@@ -2766,16 +2782,31 @@ public:
     }
     ~ScopedFakeSceneManagerNode()
     {
-        auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-        const auto* channel = registry.try_get<MuduoGrpcChannelPtr>(entity_);
-        EXPECT_TRUE(channel != nullptr && *channel != nullptr && (*channel)->outstandingCalls() == 0)
-            << "夹具不得发起真实 RPC";
-        registry.destroy(entity_);
+        if (entity_ != entt::null)
+        {
+            auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+            const auto* channel = registry.try_get<MuduoGrpcChannelPtr>(entity_);
+            EXPECT_TRUE(channel != nullptr && *channel != nullptr && (*channel)->outstandingCalls() == 0)
+                << "夹具不得发起真实 RPC";
+            registry.destroy(entity_);
+        }
         loop_.queueInLoop([&loop = loop_] { loop.queueInLoop([&loop] { loop.quit(); }); });
+        loop_.wakeup();
         loop_.loop();
     }
     ScopedFakeSceneManagerNode(const ScopedFakeSceneManagerNode&) = delete;
     ScopedFakeSceneManagerNode& operator=(const ScopedFakeSceneManagerNode&) = delete;
+
+    muduo::net::EventLoop& Loop() { return loop_; }
+
+    void Disconnect()
+    {
+        if (entity_ != entt::null)
+        {
+            auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+            registry.destroy(std::exchange(entity_, entt::null));
+        }
+    }
 
 private:
     // 先于实体构造、最后析构:通道与它排进队列的拆除都要在 loop 还在时处理掉。
@@ -7102,9 +7133,10 @@ TEST(EnterFenceEcs, StaleEnterDoesNotSupersedeRelocateEntry)
 //     缺陷形状:EnterSceneC2S 的镜像分支发出 CreateScene 后不登记任何在途记录,IsSceneChangeBusy 看不见它,
 //     建镜像这一个往返里客户端换图 / 跨 zone 传送 / 队伍跟随都被放行,随后镜像的自动进场再把玩家搬一次。
 //     另一半:CreateScene 的业务失败应答不回显 creator_ids,旧的全局处理器找不到创建者,客户端收不到任何提示。
-//     这里直接驱动 RequestEnterMirrorScene 的闸与 HandleMirrorCreateDone(每次调用回调的落点),不发真实 RPC。
+//     用 RequestEnterMirrorScene 发起真实任务，通过可控的 CreateScene 回包推进业务。
 // ============================================================================
 #include "core/network/grpc_client_call.h"                    // GrpcCallOutcome
+#include "core/system/scene_task_scope.h"
 #include "player/system/player_tip.h"                     // 校准迟到完成不得推提示的日志观察器
 #include "proto/common/component/battle_comp.pb.h"       // InBattleComp
 
@@ -7128,7 +7160,7 @@ GrpcCallOutcome OkOutcome()
 GrpcCallOutcome DeadlineExceededOutcome()
 {
     GrpcCallOutcome outcome;
-    outcome.code = 4; // grpc::StatusCode::DEADLINE_EXCEEDED
+    outcome.code = kGrpcStatusDeadlineExceeded;
     outcome.message = "Deadline Exceeded";
     return outcome;
 }
@@ -7145,6 +7177,55 @@ bool HasMirrorCreate(entt::entity player)
 {
     return tlsEcs.actorRegistry.any_of<PlayerMirrorCreateInFlightComp>(player);
 }
+
+class MirrorCreateFixture
+{
+    std::deque<GrpcDone<::scene_manager::CreateSceneResponse>> pending_;
+
+public:
+    static constexpr uint64_t kSourceScene = 1001;
+    static constexpr uint32_t kSourceConfig = 17;
+    static constexpr uint32_t kMirrorConfig = 3;
+
+    static void PlaceAtSource(entt::entity player)
+    {
+        const auto scene = PlaceInScene(player, kSourceScene);
+        tlsEcs.sceneRegistry.get<SceneInfoComp>(scene).set_scene_config_id(kSourceConfig);
+    }
+
+    bool Start(entt::entity player)
+    {
+        return PlayerSceneSystem::RequestEnterMirrorScene(player, kMirrorConfig,
+            [player = player, &pending = pending_](entt::entity sceneManager,
+                const ::scene_manager::CreateSceneRequest& request,
+                GrpcDone<::scene_manager::CreateSceneResponse> done)
+            {
+                EXPECT_TRUE(HasMirrorCreate(player)) << "RPC 提交前必须登记镜像槽";
+                EXPECT_EQ(sceneManager, GetSceneManagerEntity(kExitPlayerId));
+                EXPECT_EQ(request.scene_conf_id(), kSourceConfig);
+                EXPECT_EQ(request.scene_type(), ::scene_manager::SCENE_TYPE_INSTANCE);
+                EXPECT_EQ(request.zone_id(), GetZoneId());
+                EXPECT_EQ(request.source_scene_id(), kSourceScene);
+                EXPECT_EQ(request.mirror_config_id(), kMirrorConfig);
+                ASSERT_EQ(request.creator_ids_size(), 1);
+                EXPECT_EQ(request.creator_ids(0), kExitPlayerId);
+                pending.push_back(std::move(done));
+            });
+    }
+
+    void Reply(const GrpcCallOutcome& outcome, const ::scene_manager::CreateSceneResponse* reply)
+    {
+        ASSERT_FALSE(pending_.empty());
+        auto done = std::move(pending_.front());
+        pending_.pop_front();
+        done(outcome, reply);
+    }
+
+    std::size_t PendingCount() const { return pending_.size(); }
+
+    ScopedFakeSceneManagerNode sceneManager;
+    std::optional<SceneTaskScope> tasks{std::in_place, sceneManager.Loop()};
+};
 
 // 此宿主没有 gate:推一次 tip 会在发送边界留下 Gate session not found 的 ERROR。
 // 沿用 bag_test 的 PanelPushProbe 做法,每次先校准再清零,避免把没推与观察器失效混淆。
@@ -7185,8 +7266,10 @@ void CheckLateMirrorCompletion(const GrpcCallOutcome& outcome, const ::scene_man
         {
             SCOPED_TRACE(::testing::Message() << "clock_went_back=" << clockWentBack
                                              << " newer_change_in_flight=" << newerChangeInFlight);
+            MirrorCreateFixture mirror;
             const auto player = MakeOnlinePlayer(kSessionAtExit);
-            AttachMirrorCreate(player, /*token=*/71);
+            mirror.PlaceAtSource(player);
+            ASSERT_TRUE(mirror.Start(player));
             const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
             const uint64_t deadlineMs =
                 static_cast<uint64_t>(grpc_call_deadline::Get(eNodeType::SceneManagerNodeService).count());
@@ -7208,7 +7291,7 @@ void CheckLateMirrorCompletion(const GrpcCallOutcome& outcome, const ::scene_man
             ASSERT_EQ(tipPush.Count(), 1) << "校准:宿主能观察到一次提示的发送尝试";
             tipPush.Reset();
 
-            PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 71, outcome, reply);
+            mirror.Reply(outcome, reply);
 
             EXPECT_FALSE(HasMirrorCreate(player)) << "匹配的旧令牌即使失效也须摘掉";
             EXPECT_EQ(tipPush.Count(), 0) << "旧成功/失败均不得给后来的换图补推提示";
@@ -7235,9 +7318,10 @@ void CheckMirrorCompletionAfterClockRecovery(const GrpcCallOutcome& outcome,
     for (const bool newerChangeInFlight : {false, true})
     {
         SCOPED_TRACE(newerChangeInFlight);
-        const ScopedFakeSceneManagerNode sceneManager; // 提供 EventLoop,析构时排空本地失败回调。
+        MirrorCreateFixture mirror;
         const auto player = MakeOnlinePlayer(kSessionAtExit);
-        AttachMirrorCreate(player, /*token=*/81);
+        mirror.PlaceAtSource(player);
+        ASSERT_TRUE(mirror.Start(player));
         auto oldMirror = tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player);
         tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).sentAtMs =
             TimeSystem::NowMillisecondsUTC() + 60000;
@@ -7271,7 +7355,7 @@ void CheckMirrorCompletionAfterClockRecovery(const GrpcCallOutcome& outcome,
         ASSERT_EQ(tipPush.Count(), 1);
         tipPush.Reset();
 
-        PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, oldMirror.token, outcome, reply);
+        mirror.Reply(outcome, reply);
 
         EXPECT_FALSE(HasMirrorCreate(player));
         EXPECT_EQ(tipPush.Count(), 0);
@@ -7342,18 +7426,32 @@ TEST(MirrorCreateInFlightEcs, RequestRefusedWhileAnotherSceneChangeIsInFlight)
 
 TEST(MirrorCreateInFlightEcs, DoneClaimsOnlyItsOwnToken)
 {
-    const auto player = MakeOnlinePlayer(kSessionAtExit);
-    AttachMirrorCreate(player, /*token=*/7);
+    MirrorCreateFixture mirror;
+    const auto departed = MakeOnlinePlayer(kSessionAtExit);
+    mirror.PlaceAtSource(departed);
+    ASSERT_TRUE(mirror.Start(departed));
+    tlsEcs.actorRegistry.destroy(departed);
+    tlsEcs.playerList.erase(kExitPlayerId);
+    mirror.Reply(DeadlineExceededOutcome(), nullptr);
 
-    // 不在本节点的玩家、被顶替的令牌:都不动当前等待者。
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId + 1, 7, DeadlineExceededOutcome(), nullptr);
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 6, DeadlineExceededOutcome(), nullptr);
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
+    const auto oldToken = tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).token;
+    tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).sentAtMs =
+        TimeSystem::NowMillisecondsUTC() + 60000;
+    ASSERT_TRUE(mirror.Start(player));
+    const auto newToken = tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).token;
+    ASSERT_NE(newToken, oldToken);
+
+    // 被新请求替换的旧令牌不得摘掉新槽。
+    mirror.Reply(DeadlineExceededOutcome(), nullptr);
     ASSERT_TRUE(HasMirrorCreate(player));
-    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).token, 7u);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).token, newToken);
     EXPECT_TRUE(PlayerLifecycleSystem::IsSceneChangeBusy(player));
 
     // 自己的传输失败(结果未知):摘槽位,玩家可以立刻重试;不发自动进场。
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 7, DeadlineExceededOutcome(), nullptr);
+    mirror.Reply(DeadlineExceededOutcome(), nullptr);
     EXPECT_FALSE(HasMirrorCreate(player));
     EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
@@ -7362,18 +7460,20 @@ TEST(MirrorCreateInFlightEcs, DoneClaimsOnlyItsOwnToken)
 TEST(MirrorCreateInFlightEcs, RejectedCreateReleasesTheSlot)
 {
     // 业务失败应答不回显 creator_ids:旧的全局处理器找不到创建者,槽位(若有)只能等 TTL。每次调用回调按令牌认领。
+    MirrorCreateFixture mirror;
     const auto player = MakeOnlinePlayer(kSessionAtExit);
-    AttachMirrorCreate(player, /*token=*/11);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
     const auto rejected = MakeCreateReply(/*errorCode=*/5, /*sceneId=*/0);
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 11, OkOutcome(), &rejected);
+    mirror.Reply(OkOutcome(), &rejected);
     EXPECT_FALSE(HasMirrorCreate(player));
     EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 
     // 成功却没给 scene_id:同样按失败收尾,不拿 0 去进场。
-    AttachMirrorCreate(player, /*token=*/12);
+    ASSERT_TRUE(mirror.Start(player));
     const auto noScene = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/0);
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 12, OkOutcome(), &noScene);
+    mirror.Reply(OkOutcome(), &noScene);
     EXPECT_FALSE(HasMirrorCreate(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 }
@@ -7381,12 +7481,14 @@ TEST(MirrorCreateInFlightEcs, RejectedCreateReleasesTheSlot)
 TEST(MirrorCreateInFlightEcs, CreatedWhileInBattleDoesNotAutoEnter)
 {
     // 提交点复核:建镜像这一个往返里玩家可能刚进备战,战斗在途不换场景。
+    MirrorCreateFixture mirror;
     const auto player = MakeOnlinePlayer(kSessionAtExit);
-    AttachMirrorCreate(player, /*token=*/21);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
     tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(4242);
     const auto created = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/9001);
 
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 21, OkOutcome(), &created);
+    mirror.Reply(OkOutcome(), &created);
 
     EXPECT_FALSE(HasMirrorCreate(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player)) << "不发自动进场的 EnterScene";
@@ -7394,16 +7496,82 @@ TEST(MirrorCreateInFlightEcs, CreatedWhileInBattleDoesNotAutoEnter)
 
 TEST(MirrorCreateInFlightEcs, CreatedWithoutSceneManagerReleasesTheSlot)
 {
+    MirrorCreateFixture mirror;
     const auto player = MakeOnlinePlayer(kSessionAtExit);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
+    mirror.sceneManager.Disconnect();
     ASSERT_EQ(GetSceneManagerEntity(kExitPlayerId), entt::entity{entt::null}) << "前置:宿主没有 scene_manager 节点,不会发真实 RPC";
-    AttachMirrorCreate(player, /*token=*/31);
     const auto created = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/9001);
 
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 31, OkOutcome(), &created);
+    mirror.Reply(OkOutcome(), &created);
 
     EXPECT_FALSE(HasMirrorCreate(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
     EXPECT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player));
+}
+
+TEST(MirrorCreateInFlightEcs, HeldReplyLetsLoopRunAndSuccessRegistersCorrelatedEnter)
+{
+    MirrorCreateFixture mirror;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
+    ASSERT_EQ(mirror.PendingCount(), 1u);
+
+    auto& loop = mirror.sceneManager.Loop();
+    auto ran = std::make_shared<bool>(false);
+    const auto watchdog = loop.runAfter(1.0, [&loop] { loop.quit(); });
+    loop.queueInLoop([&loop, ran] {
+        *ran = true;
+        loop.quit();
+    });
+    loop.wakeup();
+    loop.loop();
+    loop.cancel(watchdog);
+    ASSERT_TRUE(*ran) << "建镜像回包还未交付，loop 的其它任务仍可推进";
+    EXPECT_TRUE(HasMirrorCreate(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+
+    constexpr uint64_t mirrorSceneId = 9001;
+    const auto created = MakeCreateReply(/*errorCode=*/0, mirrorSceneId);
+    mirror.Reply(OkOutcome(), &created);
+
+    EXPECT_FALSE(HasMirrorCreate(player));
+    const auto* enter = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
+    ASSERT_NE(enter, nullptr) << "回包在同一轮提交普通换图，无须再排队续跑";
+    EXPECT_EQ(enter->sceneId, mirrorSceneId);
+    EXPECT_NE(enter->correlationId, 0u);
+    EXPECT_TRUE(enter->playerRequested);
+    // 本测试只观察普通换图的登记。后续 RPC 可仍在排队，也可因假节点不可达而已排队完成。
+    mirror.sceneManager.Disconnect();
+}
+
+TEST(MirrorCreateInFlightEcs, StopReleasesLocalSlotAndLateReplyCannotEnter)
+{
+    MirrorCreateFixture mirror;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
+    ASSERT_TRUE(HasMirrorCreate(player));
+    ASSERT_EQ(mirror.PendingCount(), 1u);
+
+    MirrorTipPushProbe tipPush;
+    PlayerTipSystem::SendToPlayer(player, kEnterSceneFailed, {});
+    ASSERT_EQ(tipPush.Count(), 1);
+    tipPush.Reset();
+
+    mirror.tasks->Stop();
+    EXPECT_FALSE(HasMirrorCreate(player));
+    EXPECT_FALSE(mirror.Start(player)) << "已停的作用域拒绝新的镜像任务";
+    EXPECT_FALSE(HasMirrorCreate(player));
+    EXPECT_EQ(mirror.PendingCount(), 1u);
+    mirror.tasks.reset();
+
+    const auto created = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/9001);
+    mirror.Reply(OkOutcome(), &created);
+    EXPECT_EQ(tipPush.Count(), 0);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 }
 
 TEST(MirrorCreateInFlightEcs, UncorrelatedEnterSceneReplyLeavesMirrorCreateAlone)
@@ -7459,10 +7627,11 @@ TEST(MirrorCreateInFlightEcs, ClockRecoveryAfterCommittedChangeCannotReviveOldTr
 
 TEST(MirrorCreateInFlightEcs, CommittedHandoffPermanentlyCancelsOldMirror)
 {
-    const ScopedFakeSceneManagerNode sceneManager;
+    MirrorCreateFixture mirror;
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReplyTestPlayer(player));
-    AttachMirrorCreate(player, /*token=*/82);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
     tlsEcs.actorRegistry.get<PlayerMirrorCreateInFlightComp>(player).sentAtMs =
         TimeSystem::NowMillisecondsUTC() + 60000;
     ASSERT_FALSE(PlayerLifecycleSystem::IsSceneChangeBusy(player));
@@ -7481,16 +7650,18 @@ TEST(MirrorCreateInFlightEcs, CommittedHandoffPermanentlyCancelsOldMirror)
     ASSERT_EQ(tipPush.Count(), 1);
     tipPush.Reset();
     const auto created = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/9001);
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 82, OkOutcome(), &created);
+    mirror.Reply(OkOutcome(), &created);
     EXPECT_EQ(tipPush.Count(), 0);
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 }
 
 TEST(MirrorCreateInFlightEcs, CommittedExitCancelsMirrorWhileWaitingForSaveCommit)
 {
+    MirrorCreateFixture mirror;
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
-    AttachMirrorCreate(player, /*token=*/83);
+    mirror.PlaceAtSource(player);
+    ASSERT_TRUE(mirror.Start(player));
 
     PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kNodeShutdown);
 
@@ -7502,7 +7673,7 @@ TEST(MirrorCreateInFlightEcs, CommittedExitCancelsMirrorWhileWaitingForSaveCommi
     ASSERT_EQ(tipPush.Count(), 1);
     tipPush.Reset();
     const auto created = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/9001);
-    PlayerSceneSystem::HandleMirrorCreateDone(kExitPlayerId, 83, OkOutcome(), &created);
+    mirror.Reply(OkOutcome(), &created);
     EXPECT_EQ(tipPush.Count(), 0);
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 }

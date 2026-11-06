@@ -1,6 +1,6 @@
 # AOI 单向关注与范围外同步
 
-状态：需求已确认，待实现和验证。现有网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
+状态：服务端已落码（2026-11-05），未编译，待 Codex 按文末「验证」执行；Java 版待做。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
 
 ## 前言
 
@@ -38,4 +38,51 @@
 | B 隐身，随后恢复可见 | 普通关注期间暂停投递；恢复时用最新状态重新创建。侦测能力按玩法授权判断 |
 | B 在范围外离场或销毁，且网格组件已清 | A 收到一次移除；双方索引清干净，其他实体的关系不受影响 |
 
-当前入口可从 [`InterestSystem`](../../cpp/libs/services/scene/spatial/system/interest.h)、[`AoiSystem`](../../cpp/libs/services/scene/spatial/system/aoi.cpp)、[移动同步](../../cpp/libs/services/scene/spatial/system/movement.cpp)和[队伍 AOI](../../cpp/libs/services/scene/player/system/player_team_aoi.cpp)开始检查。旧 `Pin/Unpin` 的删除见[第六批修复记录](../handoff/ecs-refactor/batch6-review-fixes.md) T3.4，仅用于核对历史行为。
+## 实现
+
+### 数据结构
+
+两张索引描述同一批有向关系，只由 [`InterestSystem`](../../cpp/libs/services/scene/spatial/system/interest.h) 写，定义在 [`scene_node_scene_comp.h`](../../cpp/libs/services/scene/spatial/comp/scene_node_scene_comp.h)：
+
+| 组件 | 所在实体 | 内容 | 创建 |
+| --- | --- | --- | --- |
+| `AoiListComp`（正向） | 观察者 | 目标 → `AoiEntry`；`visibleCount` 为已占用的容量 | 第一次建立关系时（空间来源被接纳或显式关注登记） |
+| `AoiWatchersComp`（反向） | 目标 | 观察者 → 是否显示 | 第一次有人关注它时 |
+
+`AoiEntry` 记录空间来源（`spatial` 与空间标签 `priority`）、显式来源列表 `follows` 和显示状态 `visible`。显式来源 `AoiFollowGrant` 由身份 `AoiFollowSource`（种类 `AoiFollowKind` + 实例号，如 `team_id`、`buff_id`）、淘汰权重标签和侦测授权 `revealsStealth` 组成。两个组件都是按需状态，不入库。
+
+不变量：条目存在当且仅当有空间来源或显式来源；有空间来源必然在显示；在显示必然满足可见条件（未隐身，或某个显式来源授予侦测）并占一个名额；正向条目与反向记录一一对应，显示状态一致。所有改动经 `interest.cpp` 里的插入、删除、显示、隐藏四个原语完成。
+
+### 入口
+
+| 入口 | 用途 |
+| --- | --- |
+| `AoiSystem::Follow(watcher, target, grant)` / `Unfollow(watcher, target, source)` | 玩法建立和撤销显式关注，必要时立即下发创建或移除 |
+| `AoiSystem::RefreshTargetVisibility(target)` | `BuffSystem` 在隐身标签出现、消失时调用 |
+| `AoiSystem::OnLeaveScene(entity)` | 离场、换场景、销毁前的唯一 AOI 清理入口；`DestroyPlayer` 兜底补调 `LeaveCurrentScene` |
+| `AoiSystem::Update` | 网格评估，只增删空间来源 |
+| `InterestSystem::GetVisibleWatchers(target, out)` | 移动、属性、技能广播的接收者 |
+
+`InterestSystem` 的写函数把可见性变化按发生顺序写进 `AoiVisibilityChanges`。`AoiSystem::SendVisibilityChanges` 求出每对（观察者，目标）的净变化，同一批里显示又隐藏的不发；只涉及一个目标的观察者按目标合并成一次广播，涉及多个目标的收一条列表消息；离场者的移除用 `ActorDestroyS2C`。消息号、消息体与客户端契约不变。
+
+### 投递
+
+- 移动（`MovementSystem::BroadcastMove`）、属性同步（`ActorStateAttributeSyncSystem`）和技能广播（`ViewSystem::BroadcastMessageToVisiblePlayers`）都发给反向索引里正在显示目标、且有网关会话的观察者。视野半径外的显式关注者按最低档接收属性增量。
+- 同场景瞬移只撤空间来源；`TeleportWithinScene` 随后补发一次移动广播，让仍在显示它的显式关注者立即拿到新位置。
+- 队伍逻辑没有改：队友在视野内仍按空间标签 `kTeammate` 提高优先级（[team-system.md](team-system.md) §F.4），视野外不同步。需要视野外同步时，由队伍逻辑按两个方向分别 `Follow`，来源种类用 `AoiFollowKind::kTeam`。
+
+### 代价
+
+- 离场清理只访问该实体的出边与入边，复杂度与它的关系数成正比，不扫描全节点。
+- 补位只在观察者有暂不显示的显式关注时才扫描它自己的表；多数观察者一条都没有，直接返回。
+- 每个条目多一个空的 `std::vector` 和两个布尔，约增加 24～32 字节，反向索引与正向条目一一对应。没有压测数据，上线前随 AOI 压测复核。
+
+### 验证
+
+未编译。交给 Codex，在仓库根目录用 VS 2026 Developer PowerShell 串行执行：
+
+1. 先编库：`msbuild cpp/libs/modules/modules.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`，再 `msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`。测试工程链接预编好的库，改了库不先编库就会跑旧代码。
+2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例。
+3. 编 Scene 节点，确认 `actor_state_attribute_sync.cpp`、`buff.cpp`、`movement.cpp` 链接无误。
+
+旧 `Pin/Unpin` 的删除见[第六批修复记录](../handoff/ecs-refactor/batch6-review-fixes.md) T3.4，那次删掉的是只在离场时全节点扫描的远端清理；现在由反向索引承担同一职责。

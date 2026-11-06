@@ -32,6 +32,7 @@ import (
 	"shared/domainhost"
 	tables "shared/generated/table"
 	"shared/serviceauth"
+	"shared/sqlpoolstats"
 )
 
 type config struct {
@@ -146,6 +147,8 @@ func run(c config, migrate bool) (runErr error) {
 		return nil
 	}
 	metrics.Register()
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="rank",pool="primary"}:只有排行库这一个池,抓取时现取 DBStats。
+	sqlpoolstats.Register("rank", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, db))
 	secrets, err := c.Secrets()
 	if err != nil {
 		return err

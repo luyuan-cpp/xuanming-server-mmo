@@ -79,7 +79,7 @@ func (s *Store) prepareJoinOnce(ctx context.Context, offered *pb.MatchAuthorityT
 	if err = s.requireMatchEntryTx(ctx, tx, []*pb.MatchAuthorityTicketRecord{actor}, nil); err != nil {
 		return nil, nil, false, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,0,'',0)", offered.PlayerId, []byte{}); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", offered.PlayerId, []byte{}); err != nil {
 		return nil, nil, false, err
 	}
 	current, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", offered.PlayerId))
@@ -122,9 +122,6 @@ func (s *Store) prepareJoinOnce(ctx context.Context, offered *pb.MatchAuthorityT
 		return nil, nil, false, err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=0,formation_id=0,team_id=0,owner_account=?,owner_revision=? WHERE player_id=?", original.Ticket, original.RequestId, original.Mode, original.ConfigId, original.TeamSize, original.OwnerAccount, original.OwnerRevision, original.PlayerId); err != nil {
-		return nil, nil, false, err
-	}
-	if err = deleteTicketRegions(ctx, tx, original.PlayerId); err != nil {
 		return nil, nil, false, err
 	}
 	return original, exit, true, tx.Commit()

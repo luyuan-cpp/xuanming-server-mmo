@@ -2199,11 +2199,11 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      19, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294443008,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      19,  // num_field_entries
       5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2213,10 +2213,7 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
       ::_pbi::TcParser::GetTable<::BattleSettlementData>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .BattleCurrencyGain currency_gains = 16;
-      {::_pbi::TcParser::FastMtR2,
-       {386, 4, 4,
-        PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.currency_gains_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 battle_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleSettlementData, _impl_.battle_id_), 5>(),
        {8, 5, 0,
@@ -2277,6 +2274,34 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
       {::_pbi::TcParser::FastMtR1,
        {122, 3, 3,
         PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.defeated_monsters_)}},
+      // repeated .BattleCurrencyGain currency_gains = 16;
+      {::_pbi::TcParser::FastMtR2,
+       {386, 4, 4,
+        PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.currency_gains_)}},
+      // uint64 finished_at_ms = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.finished_at_ms_)}},
+      // uint32 match_mode = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.match_mode_)}},
+      // uint32 battle_config_id = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.battle_config_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2312,6 +2337,12 @@ constexpr BattleSettlementData::ParseTableT_ BattleSettlementData::InternalGener
       {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.defeated_monsters_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .BattleCurrencyGain currency_gains = 16;
       {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.currency_gains_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 finished_at_ms = 17;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.finished_at_ms_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 match_mode = 18;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.match_mode_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 battle_config_id = 19;
+      {PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2385,7 +2416,10 @@ inline constexpr BattleSettlementData::Impl_::Impl_(
         gold_gain_{::uint64_t{0u}},
         is_dead_{false},
         fled_{false},
-        total_rounds_{0u} {}
+        total_rounds_{0u},
+        finished_at_ms_{::uint64_t{0u}},
+        match_mode_{0u},
+        battle_config_id_{0u} {}
 
 template <typename>
 constexpr BattleSettlementData::BattleSettlementData(::_pbi::ConstantInitialized,
@@ -4084,7 +4118,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_._has_bits_),
-        19, // hasbit index offset
+        22, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.outcome_),
@@ -4101,6 +4135,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.pets_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.defeated_monsters_),
         PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.currency_gains_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.finished_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.match_mode_),
+        PROTOBUF_FIELD_OFFSET(::BattleSettlementData, _impl_.battle_config_id_),
         5,
         6,
         7,
@@ -4117,6 +4154,9 @@ const ::uint32_t
         2,
         3,
         4,
+        16,
+        17,
+        18,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattlePetSettlementData, _impl_._has_bits_),
         7, // hasbit index offset
@@ -4166,8 +4206,8 @@ static const ::_pbi::MigrationSchema
         {258, sizeof(::BattleRewardProfile)},
         {273, sizeof(::BattleRewardConfig)},
         {278, sizeof(::BattleSettlementData)},
-        {313, sizeof(::BattlePetSettlementData)},
-        {324, sizeof(::BattleActivityContext)},
+        {319, sizeof(::BattlePetSettlementData)},
+        {330, sizeof(::BattleActivityContext)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4274,7 +4314,7 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "in\022\022\n\nitem_draws\030\005 \001(\r\022-\n\014random_items\030\006"
     " \003(\0132\027.BattleRandomItemReward\"<\n\022BattleR"
     "ewardConfig\022&\n\010profiles\030\001 \003(\0132\024.BattleRe"
-    "wardProfile\"\311\003\n\024BattleSettlementData\022\021\n\t"
+    "wardProfile\"\217\004\n\024BattleSettlementData\022\021\n\t"
     "battle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022 \n\007ou"
     "tcome\030\003 \001(\0162\017.eBattleOutcome\022\031\n\021player_t"
     "eam_index\030\004 \001(\r\022\016\n\006health\030\005 \001(\004\022\014\n\004mana\030"
@@ -4285,47 +4325,49 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "otal_rounds\030\r \001(\r\022&\n\004pets\030\016 \003(\0132\030.Battle"
     "PetSettlementData\022/\n\021defeated_monsters\030\017"
     " \003(\0132\024.BattleMonsterDefeat\022+\n\016currency_g"
-    "ains\030\020 \003(\0132\023.BattleCurrencyGain\"X\n\027Battl"
-    "ePetSettlementData\022\016\n\006pet_id\030\001 \001(\004\022\016\n\006he"
-    "alth\030\002 \001(\004\022\014\n\004mana\030\003 \001(\004\022\017\n\007is_dead\030\004 \001("
-    "\010\"\310\001\n\025BattleActivityContext\022\"\n\004kind\030\001 \001("
-    "\0162\024.eBattleActivityKind\022\020\n\010guild_id\030\002 \001("
-    "\004\022\023\n\013activity_id\030\003 \001(\r\022\022\n\nperiod_key\030\004 \001"
-    "(\r\022\033\n\023initiator_player_id\030\005 \001(\004\022\030\n\020guild"
-    "_period_key\030\006 \001(\r\022\031\n\021launch_request_id\030\007"
-    " \001(\004*\206\001\n\020eBattleActorType\022\032\n\026BATTLE_ACTO"
-    "R_TYPE_NONE\020\000\022\034\n\030BATTLE_ACTOR_TYPE_PLAYE"
-    "R\020\001\022\035\n\031BATTLE_ACTOR_TYPE_MONSTER\020\002\022\031\n\025BA"
-    "TTLE_ACTOR_TYPE_PET\020\003*\250\001\n\021eBattleActionT"
-    "ype\022\026\n\022BATTLE_ACTION_NONE\020\000\022\030\n\024BATTLE_AC"
-    "TION_ATTACK\020\001\022\027\n\023BATTLE_ACTION_SKILL\020\002\022\030"
-    "\n\024BATTLE_ACTION_DEFEND\020\003\022\026\n\022BATTLE_ACTIO"
-    "N_ITEM\020\004\022\026\n\022BATTLE_ACTION_FLEE\020\005*\235\003\n\020eBa"
-    "ttleEventType\022\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023"
-    "BATTLE_EVENT_ATTACK\020\001\022\026\n\022BATTLE_EVENT_SK"
-    "ILL\020\002\022\027\n\023BATTLE_EVENT_DAMAGE\020\003\022\025\n\021BATTLE"
-    "_EVENT_HEAL\020\004\022\031\n\025BATTLE_EVENT_BUFF_ADD\020\005"
-    "\022\034\n\030BATTLE_EVENT_BUFF_REMOVE\020\006\022\032\n\026BATTLE"
-    "_EVENT_BUFF_TICK\020\007\022\026\n\022BATTLE_EVENT_DEATH"
-    "\020\010\022\027\n\023BATTLE_EVENT_DEFEND\020\t\022\025\n\021BATTLE_EV"
-    "ENT_ITEM\020\n\022\025\n\021BATTLE_EVENT_FLEE\020\013\022\025\n\021BAT"
-    "TLE_EVENT_MISS\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r"
-    "\022\025\n\021BATTLE_EVENT_MANA\020\016\022\027\n\023BATTLE_EVENT_"
-    "RESIST\020\017*m\n\016eBattleHitKind\022\025\n\021BATTLE_HIT"
-    "_NORMAL\020\000\022\024\n\020BATTLE_HIT_COMBO\020\001\022\026\n\022BATTL"
-    "E_HIT_COUNTER\020\002\022\026\n\022BATTLE_HIT_REFLECT\020\003*"
-    "\203\001\n\016eBattleOutcome\022\032\n\026BATTLE_OUTCOME_ONG"
-    "OING\020\000\022\035\n\031BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n"
-    "\031BATTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_O"
-    "UTCOME_DRAW\020\003*Z\n\023eBattleActivityKind\022\035\n\031"
-    "BATTLE_ACTIVITY_KIND_NONE\020\000\022$\n BATTLE_AC"
-    "TIVITY_KIND_GUILD_TRIAL\020\001*{\n\023eSpectateVi"
-    "sibility\022#\n\037SPECTATE_VISIBILITY_UNSPECIF"
-    "IED\020\000\022\037\n\033SPECTATE_VISIBILITY_PRIVATE\020\001\022\036"
-    "\n\032SPECTATE_VISIBILITY_PUBLIC\020\002*_\n\reSpect"
-    "ateTier\022\030\n\024SPECTATE_TIER_DIRECT\020\000\022\027\n\023SPE"
-    "CTATE_TIER_RELAY\020\001\022\033\n\027SPECTATE_TIER_BROA"
-    "DCAST\020\002B\010Z\006battleb\006proto3"
+    "ains\030\020 \003(\0132\023.BattleCurrencyGain\022\026\n\016finis"
+    "hed_at_ms\030\021 \001(\004\022\022\n\nmatch_mode\030\022 \001(\r\022\030\n\020b"
+    "attle_config_id\030\023 \001(\r\"X\n\027BattlePetSettle"
+    "mentData\022\016\n\006pet_id\030\001 \001(\004\022\016\n\006health\030\002 \001(\004"
+    "\022\014\n\004mana\030\003 \001(\004\022\017\n\007is_dead\030\004 \001(\010\"\310\001\n\025Batt"
+    "leActivityContext\022\"\n\004kind\030\001 \001(\0162\024.eBattl"
+    "eActivityKind\022\020\n\010guild_id\030\002 \001(\004\022\023\n\013activ"
+    "ity_id\030\003 \001(\r\022\022\n\nperiod_key\030\004 \001(\r\022\033\n\023init"
+    "iator_player_id\030\005 \001(\004\022\030\n\020guild_period_ke"
+    "y\030\006 \001(\r\022\031\n\021launch_request_id\030\007 \001(\004*\206\001\n\020e"
+    "BattleActorType\022\032\n\026BATTLE_ACTOR_TYPE_NON"
+    "E\020\000\022\034\n\030BATTLE_ACTOR_TYPE_PLAYER\020\001\022\035\n\031BAT"
+    "TLE_ACTOR_TYPE_MONSTER\020\002\022\031\n\025BATTLE_ACTOR"
+    "_TYPE_PET\020\003*\250\001\n\021eBattleActionType\022\026\n\022BAT"
+    "TLE_ACTION_NONE\020\000\022\030\n\024BATTLE_ACTION_ATTAC"
+    "K\020\001\022\027\n\023BATTLE_ACTION_SKILL\020\002\022\030\n\024BATTLE_A"
+    "CTION_DEFEND\020\003\022\026\n\022BATTLE_ACTION_ITEM\020\004\022\026"
+    "\n\022BATTLE_ACTION_FLEE\020\005*\235\003\n\020eBattleEventT"
+    "ype\022\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVE"
+    "NT_ATTACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023B"
+    "ATTLE_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEA"
+    "L\020\004\022\031\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE"
+    "_EVENT_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUF"
+    "F_TICK\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATT"
+    "LE_EVENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n"
+    "\022\025\n\021BATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EVENT_"
+    "MISS\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BATTLE"
+    "_EVENT_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017*m"
+    "\n\016eBattleHitKind\022\025\n\021BATTLE_HIT_NORMAL\020\000\022"
+    "\024\n\020BATTLE_HIT_COMBO\020\001\022\026\n\022BATTLE_HIT_COUN"
+    "TER\020\002\022\026\n\022BATTLE_HIT_REFLECT\020\003*\203\001\n\016eBattl"
+    "eOutcome\022\032\n\026BATTLE_OUTCOME_ONGOING\020\000\022\035\n\031"
+    "BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n\031BATTLE_OU"
+    "TCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_OUTCOME_DRA"
+    "W\020\003*Z\n\023eBattleActivityKind\022\035\n\031BATTLE_ACT"
+    "IVITY_KIND_NONE\020\000\022$\n BATTLE_ACTIVITY_KIN"
+    "D_GUILD_TRIAL\020\001*{\n\023eSpectateVisibility\022#"
+    "\n\037SPECTATE_VISIBILITY_UNSPECIFIED\020\000\022\037\n\033S"
+    "PECTATE_VISIBILITY_PRIVATE\020\001\022\036\n\032SPECTATE"
+    "_VISIBILITY_PUBLIC\020\002*_\n\reSpectateTier\022\030\n"
+    "\024SPECTATE_TIER_DIRECT\020\000\022\027\n\023SPECTATE_TIER"
+    "_RELAY\020\001\022\033\n\027SPECTATE_TIER_BROADCAST\020\002B\010Z"
+    "\006battleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[2] = {
@@ -4336,7 +4378,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    5305,
+    5375,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -9928,9 +9970,9 @@ BattleSettlementData::BattleSettlementData(
                offsetof(Impl_, battle_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, battle_id_),
-           offsetof(Impl_, total_rounds_) -
+           offsetof(Impl_, battle_config_id_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::total_rounds_));
+               sizeof(Impl_::battle_config_id_));
 
   // @@protoc_insertion_point(copy_constructor:BattleSettlementData)
 }
@@ -9969,9 +10011,9 @@ inline void BattleSettlementData::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, battle_id_),
            0,
-           offsetof(Impl_, total_rounds_) -
+           offsetof(Impl_, battle_config_id_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::total_rounds_));
+               sizeof(Impl_::battle_config_id_));
 }
 BattleSettlementData::~BattleSettlementData() {
   // @@protoc_insertion_point(destructor:BattleSettlementData)
@@ -10047,6 +10089,11 @@ PROTOBUF_NOINLINE void BattleSettlementData::Clear() {
     ::memset(&_impl_.player_team_index_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.total_rounds_) -
         reinterpret_cast<char*>(&_impl_.player_team_index_)) + sizeof(_impl_.total_rounds_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    ::memset(&_impl_.finished_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.battle_config_id_) -
+        reinterpret_cast<char*>(&_impl_.finished_at_ms_)) + sizeof(_impl_.battle_config_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -10235,6 +10282,33 @@ PROTOBUF_NOINLINE void BattleSettlementData::Clear() {
     }
   }
 
+  // uint64 finished_at_ms = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_finished_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_finished_at_ms(), target);
+    }
+  }
+
+  // uint32 match_mode = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_match_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_match_mode(), target);
+    }
+  }
+
+  // uint32 battle_config_id = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_battle_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_battle_config_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -10374,6 +10448,29 @@ PROTOBUF_NOINLINE void BattleSettlementData::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    // uint64 finished_at_ms = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_finished_at_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_finished_at_ms());
+      }
+    }
+    // uint32 match_mode = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_match_mode() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_match_mode());
+      }
+    }
+    // uint32 battle_config_id = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_battle_config_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_battle_config_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -10476,6 +10573,23 @@ void BattleSettlementData::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_finished_at_ms() != 0) {
+        _this->_impl_.finished_at_ms_ = from._impl_.finished_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_match_mode() != 0) {
+        _this->_impl_.match_mode_ = from._impl_.match_mode_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_battle_config_id() != 0) {
+        _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -10499,8 +10613,8 @@ void BattleSettlementData::InternalSwap(BattleSettlementData* PROTOBUF_RESTRICT 
   _impl_.defeated_monsters_.InternalSwap(&other->_impl_.defeated_monsters_);
   _impl_.currency_gains_.InternalSwap(&other->_impl_.currency_gains_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.total_rounds_)
-      + sizeof(BattleSettlementData::_impl_.total_rounds_)
+      PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.battle_config_id_)
+      + sizeof(BattleSettlementData::_impl_.battle_config_id_)
       - PROTOBUF_FIELD_OFFSET(BattleSettlementData, _impl_.battle_id_)>(
           reinterpret_cast<char*>(&_impl_.battle_id_),
           reinterpret_cast<char*>(&other->_impl_.battle_id_));

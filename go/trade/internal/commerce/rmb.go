@@ -214,13 +214,12 @@ func (e *Engine) planRmb(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerc
 				return err
 			}
 		}
-		if returned := leg(w, "seller_return"); returned == nil || done(returned) {
+		if returned := currentLeg(w, "seller_return"); returned == nil || done(returned) {
 			if returned == nil || applied(returned) {
 				w.Stage = "rmb_returned"
 				r.Status = Cancelled
 			} else {
-				w.Stage = "manual"
-				r.Status = Manual
+				markManual(r, w, manualReasonRmbReturn, "人民币寄售退回没到账", now)
 			}
 		}
 	}

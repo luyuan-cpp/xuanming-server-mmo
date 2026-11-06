@@ -205,10 +205,5 @@ Mall:
 
 Rmb:
   Enabled: false
-  GlobalLoginSessions: false
-  LoginRedis:
-    Addrs: []
-    DB: 0
-    PoolSizePerNode: 8
   # 默认仅金币0；钻石1需显式开启；绑定币2永远禁售。
   CurrencyTypes: [0]

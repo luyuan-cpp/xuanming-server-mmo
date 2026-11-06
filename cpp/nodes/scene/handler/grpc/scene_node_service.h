@@ -7,6 +7,7 @@
 #include "network/grpc_unary_call.h"
 #include "proto/scene_manager/scene_node_service.pb.h"
 ///<<< BEGIN WRITING YOUR CODE: grpc.header.includes
+#include "engine/core/async/loop_task_scope.h"
 ///<<< END WRITING YOUR CODE
 
 // 由 proto 工具生成 SceneNodeGrpc 的 gRPC 服务端骨架(muduo_grpc,docs/design/grpc-muduo-transport.md §15);自定义代码只写在守护段内。
@@ -19,6 +20,7 @@ class SceneNodeGrpcImpl final : public muduo_grpc::Service
 public:
     explicit SceneNodeGrpcImpl(muduo::net::EventLoop& loop);
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.public
+    void CloseCreationAdmission() { creationTasks_.Stop(); }
     ///<<< END WRITING YOUR CODE
 
     // 方法表(按 :path 精确路由)。处理函数捕获 this:本对象必须活过注册它的 Node。
@@ -68,5 +70,6 @@ private:
     static void HandleAssetAckReceipt(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     muduo::net::EventLoop& loop_;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
+    LoopTaskScope creationTasks_{loop_};
     ///<<< END WRITING YOUR CODE
 };

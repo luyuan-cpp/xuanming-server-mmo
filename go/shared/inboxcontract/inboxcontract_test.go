@@ -70,6 +70,9 @@ func TestMaxPayloadBytesReadsProtoOption(t *testing.T) {
 		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN: 64,
 		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT:  1024,
 		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT:        16 * 1024,
+		// 单玩家物品获取封禁(收件箱设计 §2.2):载荷只有配置号,与货币封锁同为 64B。
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN:   64,
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN: 64,
 	} {
 		if got, ok := MaxPayloadBytes(typ); !ok || got != want {
 			t.Errorf("%v: got (%d, %v), want (%d, true)", typ, got, ok, want)

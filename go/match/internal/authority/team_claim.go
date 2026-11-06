@@ -132,9 +132,6 @@ func (s *Store) claimTeamUnitsOnce(ctx context.Context, formation *pb.MatchForma
 		if _, err = tx.ExecContext(ctx, "UPDATE team_launch_role SET state=3 WHERE actor_id=? AND request_high=? AND request_low=?", current.ActorId, current.RequestHigh, current.RequestLow); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, "DELETE FROM team_launch_region WHERE actor_id=? AND request_high=? AND request_low=?", current.ActorId, current.RequestHigh, current.RequestLow); err != nil {
-			return err
-		}
 	}
 	for _, ticket := range group {
 		if ticket.TeamId != 0 && !covered[ticket.PlayerId] {

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <string>
 
 #include "entt/src/entt/entity/entity.hpp"
@@ -19,14 +22,26 @@
 // 1 分区,消费端的分区契约随即永久失配。
 constexpr char kTransactionLogTopicBase[] = "transaction_log_topic";
 
-// Stateless utility that builds TransactionLogEntry messages and sends them
-// to Kafka for persistence by the Go DB service.
+// Builds TransactionLogEntry messages and sends them to Kafka for persistence by the Go DB service.
 //
 // Usage:
 //   TransactionLogSystem::LogCurrencyAdd(player, kCurrencyGold, 100, balanceBefore, balanceAfter);
 //   TransactionLogSystem::LogItemTransfer(fromPlayer, toPlayer, itemUuid, configId, qty, TX_TRADE, corrId);
 //
 // All methods are fire-and-forget: failures are logged but never block gameplay.
+//
+// 流水跟着存盘提交走(2026-11-05,docs/design/data-consistency-guarantee-map-20261020.md §6):
+// 流水描述的是玩家存档里的改动。改动在内存里一发生就发 Kafka 的话,存盘最终没提交(scene 崩溃、实体被废黜、
+// 存盘被确定性拒绝)时,流水里会留下一笔从未落库的收益或扣减:人工终结工具会凭它判「scene 已应用」(一物两得),
+// GM 回收会按它多挂一笔玩家从没拿到的欠款。所以 scene 上开了提交闸门(EnableCommitGating)之后:
+//   - 只涉及一名玩家的流水先进这名玩家的队列,带一个进程内单调的水位;
+//   - 存盘状态机确认「这份快照里的资产改动已在库里」时,按取快照那一刻的水位放行(PublishThrough);
+//   - 改动最终没落库(实体销毁、存盘落定之后还剩的,或这名玩家在本节点重新认领之前)整队丢掉(DiscardPending)。
+// 于是「流水里有这条」就等于「这笔改动已提交」。反过来不成立:提交之后发送失败(只打 ERROR)、
+// 提交成功但回包丢失时进程崩溃,都会让已提交的改动没有流水,判「从未应用」必须另有证据(已提交账本)。
+// 没开闸门的进程(battle、单测、工具)立即发送,行为与以前相同。
+//
+// 线程:只在所属逻辑线程上调用。闸门状态是线程局部的,scene 上就是 tlsEcs 所在的那条线程。
 class TransactionLogSystem
 {
 public:
@@ -104,10 +119,35 @@ public:
 
     // ── Generic / low-level ──────────────────────────────────────────────
 
-    // Build and send a fully custom entry.
+    // Build and send a fully custom entry. 开了提交闸门时,只涉及一名玩家的流水先排队(见类注释)。
     static void SendEntry(const TransactionLogEntry &entry);
 
+    // ── 提交闸门(见类注释)──────────────────────────────────────────────
+
+    // 开关提交闸门。scene 在装配存盘状态机时打开,和放行钩子(PublishThrough)一起接上:只开闸门不接钩子,
+    // 流水永远出不去;只接钩子不开闸门,行为与以前相同。关掉时已排队的不动,仍由 PublishThrough / DiscardPending 处置。
+    static void EnableCommitGating(bool enabled);
+
+    // 此刻的水位:已经记下的流水,水位都不大于它。存盘取快照时调用并记在这份快照上。
+    static uint64_t CommitMark();
+
+    // 这名玩家水位不大于 mark 的流水已随存盘提交,按记录顺序发出。
+    static void PublishThrough(uint64_t playerId, uint64_t mark);
+
+    // 丢掉这名玩家还没放行的流水,返回条数:它们描述的改动没有落库。reason 只进日志。
+    static std::size_t DiscardPending(uint64_t playerId, const char *reason);
+
+    // 这名玩家还没放行的条数。日志与单测用。
+    [[nodiscard]] static std::size_t PendingCount(uint64_t playerId);
+
+    // 单测用:替换真正的发送(缺省发 Kafka)。传空函数恢复缺省。
+    using Publisher = std::function<void(const TransactionLogEntry &entry)>;
+    static void SetPublisherForTest(Publisher publisher);
+
 private:
+    // 序列化并发 Kafka(或单测替换的发送函数)。失败只打 ERROR。
+    static void Publish(const TransactionLogEntry &entry);
+
     // Get the player_id from an entity. Returns 0 if not resolvable.
     static uint64_t ResolvePlayerId(entt::entity player);
 

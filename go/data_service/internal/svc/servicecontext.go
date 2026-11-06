@@ -610,7 +610,8 @@ func (s *ServiceContext) SQLPoolSamples() []sqlpoolstats.Sample {
 	return sqlPoolSamples(s.namedStores(), store.DBStatsOf)
 }
 
-// 两份预留记录的键。生产在两套 etcd 上,dev 可以在同一套上,所以键名也要不同。
+// 两份本地预留记录的键。生产在两套 etcd 上,dev 可以在同一套上,所以键名也要不同。
+// 登记处的键由 idissuer.RegistryKey 给出(/id_registry/v1/region/NN),和这两个键也不同。
 const (
 	idIssuerPrimaryKey   = "/id_issuer/counter/primary"
 	idIssuerSecondaryKey = "/id_issuer/counter/secondary"
@@ -640,11 +641,11 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err := checkExpectedRegion(os.Getenv(envExpectedIdRegion), c.IdSegment.Issuer.Region); err != nil {
 		return nil, err
 	}
-	// 两套独立 etcd 是强规定(AGENTS §7)。AllowAutoSeed 会让两份记录回落到同一套,只有 dev、test 能开。
+	// 两套独立 etcd 是强规定(AGENTS §7)。AllowAutoSeed 会让三份记录回落到同一套,只有 dev、test 能开。
 	if c.IdSegment.AllowAutoSeed && c.Mode != service.DevMode && c.Mode != service.TestMode {
 		return nil, fmt.Errorf("IdSegment.AllowAutoSeed=true requires Mode=dev or test, got %q", c.Mode)
 	}
-	primaryHosts, secondaryHosts, err := c.IdSegment.IssuerEndpoints(c.Etcd.Hosts)
+	primaryHosts, secondaryHosts, registryHosts, err := c.IdSegment.IssuerEndpoints(c.Etcd.Hosts)
 	if err != nil {
 		return nil, err
 	}
@@ -656,16 +657,21 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err != nil {
 		return nil, errors.Join(err, primary.Close())
 	}
+	registry, err := idissuer.NewEtcdRegistry(registryHosts)
+	if err != nil {
+		return nil, errors.Join(err, primary.Close(), secondary.Close())
+	}
 	issuer, err := idissuer.New(idissuer.Options{
 		Primary:        primary,
 		Secondary:      secondary,
+		Registry:       registry,
 		Region:         uint8(c.IdSegment.Issuer.Region),
 		AllowBootstrap: c.IdSegment.AllowAutoSeed,
 		Tags:           c.IdSegment.EffectiveTags(),
 		OnReserve:      metrics.ObserveIdIssuerReserve,
 	})
 	if err != nil {
-		return nil, errors.Join(err, primary.Close(), secondary.Close())
+		return nil, errors.Join(err, primary.Close(), secondary.Close(), registry.Close())
 	}
 	return issuer, nil
 }

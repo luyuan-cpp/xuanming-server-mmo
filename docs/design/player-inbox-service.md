@@ -971,7 +971,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
       - `APPLIED`：记账。
       - `REJECTED(reason)`：记账。认识的类型但载荷解码失败，按 `REJECTED(kPlayerInboxPayloadInvalid)` 记账。
       - `DEFER(reason)`：在这一条**停下**（严格顺序），已处理的前缀从本地缓存摘掉，剩下的本地退避后续做，不重新 Fetch；续做时仍先过前置闸（§7.5）。v1 的执行器只在持久货币组件缺失（加载不变量被破坏）时返回 DEFER，不把这条处置因本地缺陷钉成终态。**只有会话内不会自愈的原因才能用 DEFER**：本地续做看不到服务端之后挂的 VOID，原因一旦在会话内消失，续做就会执行一条可能已作废的处置（§7.5 评审 L1）。
-      - `VERSION_SKEW`（`PlayerInboxExecKind::kVersionSkew`，2026-10-19 起）：认识的类型，但本二进制不能安全执行这一条。与未知类型同口径：在这一条停下，不记账、不 Ack 这一条（已定的前缀照常确认），halt，`metric=inbox_halted reason=version_skew`。这一行留在 PENDING，实体下次在本节点新建（退出完成后再登录）或换节点新建时重拉：已挂 VOID 就记 SKIPPED，落到新版本节点就正常执行。退出保留期内重登会复用实体（owner_epoch +1 的同节点复用），停用仍有效、不重拉。GM 处置域有两个来源。① 挂欠款时，同币种的既有欠款带着更新版本的字段（`mixed-version-persist-field-protection.md` §4.4）：`AttachDebt` 不会把新的一笔并进这种欠款，执行器在调用它之前用 `CurrencySystem::DebtCarriesUnknownFields` 判定。不能用 DEFER：这笔欠款可能在会话内被还清删除，错位随之消失，按本地旧副本续做就会把一条可能已作废的欠款挂上并报 APPLIED（2026-10-19 对抗复核 A-1）。② 载荷里的币种不在本二进制的取值表内（2026-10-23 起，混版本保护第 6 批）：Go 入箱已按同源取值表拒绝写错的值，不认识的值只可能是更新版本加的币种。不用 DEFER：本二进制在会话内永远不会认识它，本地续做只会空转。执行器先判与版本无关的确定性条件（解码失败、欠款额越界照旧 REJECTED），再判币种；日志 `metric=persist_version_skew where=inbox_currency`。REJECTED 一条仍只用于解码失败与确定性非法。
+      - `VERSION_SKEW`（`PlayerInboxExecKind::kVersionSkew`，2026-10-19 起）：认识的类型，但本二进制不能安全执行这一条。与未知类型同口径：在这一条停下，不记账、不 Ack 这一条（已定的前缀照常确认），halt，`metric=inbox_halted reason=version_skew`。这一行留在 PENDING，实体下次在本节点新建（退出完成后再登录）或换节点新建时重拉：已挂 VOID 就记 SKIPPED，落到新版本节点就正常执行。退出保留期内重登会复用实体（owner_epoch +1 的同节点复用），停用仍有效、不重拉。GM 处置域有两个来源。① 挂欠款时，同币种的既有欠款带着更新版本的字段（`mixed-version-persist-field-protection.md` §4.4）：`AttachDebt` 不会把新的一笔并进这种欠款，执行器在调用它之前用 `CurrencySystem::DebtCarriesUnknownFields` 判定。不能用 DEFER：这笔欠款可能在会话内被还清删除，错位随之消失，按本地旧副本续做就会把一条可能已作废的欠款挂上并报 APPLIED（2026-10-19 对抗复核 A-1）。② 载荷里的币种不在本二进制的取值表内（2026-10-23 起，混版本保护第 6 批）：Go 入箱已按同源取值表拒绝写错的值，不认识的值只可能是更新版本加的币种。不用 DEFER：本二进制在会话内永远不会认识它，本地续做只会空转。执行器先判与版本无关的确定性条件（解码失败、欠款额越界照旧 REJECTED），再判币种；日志 `metric=persist_version_skew where=inbox_currency`。REJECTED 一条仍只用于解码失败与确定性非法。战斗结算域另有一个来源（2026-11-05 起）：结算载荷里的奖励币种不在本二进制的取值表内（battle 节点按同一张取值表校验奖励档，只可能来自更新版本的 battle 节点），回 `VERSION_SKEW`、日志 `metric=persist_version_skew where=battle_currency`；金额越界、重复币种这类坏载荷先判，照旧 DEFER（战斗结算域不收 REJECTED）。
 
    **记账**的含义：在同一个 loop 帧里写效果，推进 `decided_through=seq`，把 (seq, 结局, request_id, msg_type) 压入最近结局环（超过 32 条就挤掉最旧的）。
 
@@ -1280,6 +1280,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - **scene 侧**：没有 Prometheus 端点，沿用 `[PlayerInbox] metric=` 日志的写法：
   - `metric=inbox_deferred reason=disabled|frozen|handoff|exiting|epoch_zero|ledger_invalid|in_battle|no_node|transport|unimplemented|stale_owner|server_error|executor_defer`（INFO，原因变化时打）
   - `metric=inbox_unknown_type`、`metric=inbox_replay_mismatch`、`metric=inbox_halted`、`metric=inbox_stale_owner`、`metric=inbox_ack_anomaly`（ERROR）
+  - `metric=inbox_halted` 的补打（WARN，带 `relog=1`，2026-11-05 起）：域停用对当前实体一直有效，停用之后每 5 分钟补打一条（`player_inbox_rules::kHaltedDomainRelogIntervalMs`，与节点级停用同一节拍，落在 [10m] 告警窗口之内），实体销毁后自然停
   - `metric=inbox_ledger_invalid source=loader|apply_gate`（评审 L13）：加载时 ERROR；前置闸首次 WARN，之后每 8 次退避补打（§7.5）
   - `metric=inbox_registry_broken`（ERROR）：注册表自检失败、整个节点停用消费；启动时一条，之后 Tick 每 5 分钟补打
   - `metric=inbox_consumer_disabled`（WARN，评审 H1）：消费开关关着；启动时一条，之后每 5 分钟补打（§3.3）

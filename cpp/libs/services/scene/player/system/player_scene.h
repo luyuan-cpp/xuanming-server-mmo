@@ -3,13 +3,14 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "engine/core/utils/registry/scene_entity.h"
 #include "engine/core/type_define/type_define.h"
+#include "core/network/grpc_client_call.h"
 
 #include <cstdint>
 #include <optional>
 
-struct GrpcCallOutcome;
 namespace scene_manager
 {
+class CreateSceneRequest;
 class CreateSceneResponse;
 }
 
@@ -71,34 +72,12 @@ public:
 	//     mirror inherits the same map definition
 	//   - scene_type       = INSTANCE (mirrors are not main-world channels)
 	//
-	// 发出之前登记 PlayerMirrorCreateInFlightComp(令牌、发送时刻),走生成客户端的每次调用回调重载:
-	// 完成回调带着 player_id 与令牌转到 HandleMirrorCreateDone,成功 / 业务失败 / 传输失败三条路径都能认领
-	// 创建者。登记期间 PlayerLifecycleSystem::IsSceneChangeBusy 为真,别的换图 / 传送 / 跟随一律被挡。
-	//
-	// CreateScene 已发出时返回 true。战斗中、已有其他换图在途、当前场景或 SceneManager 不可用、
-	// 玩家会话缺失时返回 false,且不登记在途状态;发起失败记录 WARN。
-	//
-	// mirrorConfigId must be > 0. Pass 0 only if the intent is "clone
-	// everything from source" (no template), which goes through the
-	// source-clone refusal path on SceneManager and is currently NOT
-	// supported by this helper (callers always pick a mirror template).
-	static bool RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId);
-
-	// 镜像 CreateScene 的完成回调:RequestEnterMirrorScene 绑定的 GrpcDone 转到这里(单测直接调)。
-	// 先按 playerId 找实体、按 token 认领 PlayerMirrorCreateInFlightComp,认领即摘;找不到实体或令牌对不上
-	// (玩家已离开 / 实体已重建 / 已被顶替)就丢弃,不提示,建好的镜像由 scene_manager 按空场景回收。
-	// 令牌匹配时先取发送时刻的 TTL 判据再摘槽;超过 deadline + 1s 或 UTC 回拨也只丢弃,不提示、不自动进场。
-	// 后来的普通换图/交接/退出提交或权威落点成功已摘掉旧令牌;时钟恢复到 TTL 内也不会重新取得资格。
-	// 认领后按结果分派:
-	//   - 传输失败(结果未知):提示 kEnterSceneServerBusy,不断言"建镜像失败";
-	//   - scene_manager 拒绝,或成功却回 scene_id 0:提示 kEnterSceneFailed;
-	//   - 成功:提交点复核(不在战斗、没有别的换图 / 交接在途、scene_manager 可达)后,经
-	//     PlayerLifecycleSystem::RequestSceneChange 发自动进场的 EnterScene,之后的 18 / 失败照普通换图处理。
-	// EnterSceneC2S 早已回"已受理",仍有效而没进成的路径要给一条 tip(交接在途除外,交接自己会给结局),
-	// 否则客户端一直等一个不会来的 EnterSceneS2C。
-	// reply 只在 outcome.ok() 时非空,且只在调用期间有效(GrpcDone 契约)。
-	static void HandleMirrorCreateDone(Guid playerId, uint64_t token, const GrpcCallOutcome& outcome,
-									   const ::scene_manager::CreateSceneResponse* reply);
+	// 受理后当场登记镜像令牌并提交 CreateScene，自动进场由任务在同一 Scene loop 完成。
+	// mirrorConfigId 必须非 0。预检未通过或停机时返回 false，不登记在途状态。
+	// 提交接缝遵守 GrpcDone 契约：请求借用到提交返回，完成在所属 loop 异步交付。
+	using MirrorCreateSubmit = std::function<void(entt::entity, const ::scene_manager::CreateSceneRequest&,
+		GrpcDone<::scene_manager::CreateSceneResponse>)>;
+	static bool RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId, MirrorCreateSubmit submit = {});
 
 	// 把玩家当前场景的信息推给客户端(NotifySceneInfo,31 号)。SceneInfoC2S(43 号)的应答类型是 Empty,
 	// 数据只走这条推送。withChannelDirectory(= 请求里的 with_channel_directory)为 true 且当前场景是

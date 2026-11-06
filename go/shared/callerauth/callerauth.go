@@ -1,12 +1,17 @@
-// Package callerauth 给 login 的**内部调用方身份声明**加签名闸门。
+// Package callerauth 给 gate 发往 Go 服务的**会话身份声明**(x-session-detail-bin)加签名闸门。
+//
+// 使用方:login 自己的适配器(go/login/internal/logic/pkg/callerauth),以及在线域
+// chat / friend / guild / trade / match / mail / rank 经 GateInterceptor 装配的同一验签器。
+// 在线域的原账号只认验签原件里的 authenticated_account(shared/roleidentity.SessionAccount),
+// 不读登录 Redis。整条链路见 docs/design/gate-online-identity.md。
 //
 // # 修的是什么洞
 //
-// login 的 SessionInterceptor 原本从 gRPC metadata 取 `x-session-detail-bin`,
+// 各服务原本从 gRPC metadata 取 `x-session-detail-bin`,
 // base64 解码 + proto.Unmarshal 成 SessionDetails 之后**直接写进 ctx 当可信
-// 身份用**,全程没有任何校验。后果:任何能连到 login gRPC 端口的进程
+// 身份用**,全程没有任何校验。后果:任何能连到服务 gRPC 端口的进程
 // (同集群里任意 Pod、任意被攻陷的边车、任意能穿到内网的人)都可以自称是
-// 任意会话的任意玩家,进而调 Disconnect / LeaveGame / EnterGame 操纵别人的档。
+// 任意会话的任意玩家,进而调 Disconnect / LeaveGame / EnterGame 或在线业务操纵别人的档。
 // 这不是「缺一层防御」,是**根本没有认证**。
 //
 // # 修法

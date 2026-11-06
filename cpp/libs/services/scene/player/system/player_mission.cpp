@@ -147,6 +147,14 @@ uint32_t PlayerMissionSystem::CheckAccept(entt::entity player, uint32_t scope,
         if (condition->condition_category() == static_cast<uint32_t>(eConditionType::kConditionKillMonster) &&
             !HasReachableMonster(*condition))
             return kServiceUnavailable;
+        // 等级条件在接取时按当前生效等级补一次进度(见 Accept)。LevelComp 是加载时挂上的持久数据,缺了是加载不变量
+        // 被破坏:在写任务之前拒绝,不接下之后再静默跳过、留下一条缺了当前等级进度的任务(组件访问规则「校验前置」)。
+        if (condition->condition_category() == static_cast<uint32_t>(eConditionType::kConditionLevelUp) &&
+            !tlsEcs.actorRegistry.all_of<LevelComp>(player)) {
+            LOG_ERROR << "接取等级条件任务被拒:缺少持久等级组件 entity=" << entt::to_integral(player)
+                      << " mission=" << missionId;
+            return kServiceUnavailable;
+        }
         if (condition->quantity_type() > 1 ||
             (condition->quantity_type() == 1 && condition->condition_category() != static_cast<uint32_t>(eConditionType::kConditionLevelUp)))
             return kServiceUnavailable;
@@ -172,6 +180,7 @@ uint32_t PlayerMissionSystem::Accept(entt::entity player, uint32_t scope,
     const auto result = MissionSystem::AcceptMission(event, missions, MissionConfig::GetSingleton());
     if (result == kSuccess) {
         (*missions.GetMutableMissionList().mutable_mission_begin_time())[missionId] = nowMs;
+        // 带等级条件的任务已在 CheckAccept 确认 LevelComp 在;不带等级条件的任务这条事件本来推不动,缺组件时不发也一样。
         if (const auto* level = tlsEcs.actorRegistry.try_get<LevelComp>(player); level != nullptr) {
             // 等级条件与其他玩法同口径,按生效等级判(超上限的存储等级按上限,0 按 1,player_level_rules.h)
             const uint32_t effectiveLevel = playerlevel::CappedLevel(level->level());

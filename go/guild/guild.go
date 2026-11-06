@@ -47,11 +47,11 @@ import (
 	"shared/idsegment"
 	"shared/kafkautil"
 	"shared/killswitch"
-	"shared/playerredis"
 	"shared/rolefence"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
+	"shared/sqlpoolstats"
 )
 
 var configFile = flag.String("f", "etc/guild.yaml", "config file path")
@@ -175,23 +175,6 @@ func main() {
 	roleFence, err := rolefence.NewParticipantServer(svcCtx.DB, data.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if err != nil {
 		logx.Must(fmt.Errorf("guild role fence participant: %w", err))
-	}
-	loginRedis, err := playerredis.New(config.AppConfig.LoginRedis.ClientConfig(playerredis.Config{
-		PoolSizePerNode: 8, DialTimeoutMs: 5000, ReadTimeoutMs: 3000, WriteTimeoutMs: 3000, PoolTimeoutMs: 1000,
-	}))
-	if err != nil {
-		logx.Must(fmt.Errorf("guild LoginRedis config: %w", err))
-	}
-	defer func() {
-		if !ownerReady || shutdownComplete {
-			loginRedis.Close()
-		}
-	}()
-	loginProbe, loginCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	loginErr := loginRedis.Ping(loginProbe).Err()
-	loginCancel()
-	if loginErr != nil {
-		logx.Must(errors.New("显式全局LoginRedis不可用"))
 	}
 
 	// 数据库版本下限(纵深防御,2026-09-21 死锁修复第四轮;判定与理由见 data/server_version.go):
@@ -538,12 +521,15 @@ func main() {
 	// (理由与告警口径见 server.PrimeGuildInternalMetrics)。
 	server.PrimeGuildInternalMetrics()
 	svc.PrimeMergedZoneMetrics()
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="guild",pool="primary"}:只有帮会库这一个池,抓取时现取 DBStats。
+	// 走 client_golang 默认注册表,由 go-zero 的 prometheus agent 一并暴露;不放进 NewServiceContext(单测会多次构造)。
+	sqlpoolstats.Register("guild", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, svcCtx.DB))
 	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
 	if authErr != nil {
 		panic(authErr)
 	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole, func(err error) bool {
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(repo.CheckOriginalRole, func(err error) bool {
 		return errors.Is(err, data.ErrWriteConflict) || errors.Is(err, rolefence.ErrRoleNotFound)
 	}))...)
 	defer s.Stop()

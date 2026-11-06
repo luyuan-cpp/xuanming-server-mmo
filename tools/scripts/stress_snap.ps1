@@ -10,11 +10,15 @@
 #   :9160  db               (db_player_store_seconds, db_player_store_requests_total, db_player_store_row_bytes)
 #   :9260  data_service     (data_service_home_zone_read_seconds, data_service_account_directory_rpc_seconds,
 #                            data_service_route_read_total;2026-10-23 起,L-18 观测批)
+#   :9170  match            (match_pool_*、match_immediate_claim_total:按池撮合;2026-11-05 起,
+#                            global-match-hierarchical-pools.md §11 R0 / 服务器缺口清单第 10 条)
+#   :9190  player_locator   (player_locator_reconcile_*、stale_gate_instance_total、go-zero rpc_server_*;2026-11-05 起)
 #
 # Each snapshot is written as `t{N}m_<service>.txt` so stress_summarize.ps1
-# can route it by suffix (_login / _sm / _db / _ds).
+# can route it by suffix (_login / _sm / _db / _ds / _match / _pl).
 # 某个端点没起(例如本机没开 data_service)只在 job.log 记一行 FAIL,不中断。
-# 多 zone 本机启动(go_services.ps1 -Zone N)时各服务端口按该脚本的规则位移,四个端口都要经 -Endpoints 手传。
+# 多 zone 本机启动(go_services.ps1 -Zone N)时各服务端口按该脚本的规则位移,六个端口都要经 -Endpoints 手传
+# (login 9101 / player_locator 9190 是嵌套的 Prometheus 段,-Zone 不改写它们;见 docs/design/leaderboard-system.md 的端口说明)。
 #
 # Redis INFO 快照(L-18 / G4a 第 1a 批,命名同 docs/design/shared-redis-split-by-purpose.md §6.4):
 #   每个时刻 HTTP 抓完后,再对 -RedisTargets 里的每个实例抓一次 `redis-cli INFO <sections>`,
@@ -24,7 +28,7 @@
 #
 # 参数:
 #   -RedisTargets       hashtable,name → spec,缺省 @{ core = 'docker:redis' };传 @{} 关闭 Redis 抓取。
-#                       name 必须匹配 ^[a-z][a-z0-9-]{0,31}$ 且不得为 login / sm / db / ds
+#                       name 必须匹配 ^[a-z][a-z0-9-]{0,31}$ 且不得为 login / sm / db / ds / match / pl
 #                       (否则 t5m_redis_db.txt 的 BaseName 以 _db 结尾,会被汇总脚本当成 db 快照)。
 #                       spec 两种:
 #                         'docker:<container>'   docker --context <DockerContext> exec <container> redis-cli INFO …
@@ -77,6 +81,8 @@ param(
         'sm'    = 'http://127.0.0.1:9150/metrics'
         'db'    = 'http://127.0.0.1:9160/metrics'
         'ds'    = 'http://127.0.0.1:9260/metrics'
+        'match' = 'http://127.0.0.1:9170/metrics'
+        'pl'    = 'http://127.0.0.1:9190/metrics'
     },
 
     [hashtable]$RedisTargets = @{ 'core' = 'docker:redis' },
@@ -97,7 +103,7 @@ $ErrorActionPreference = 'Stop'
 $RedisInfoTimeoutSec = 10
 
 # 汇总脚本按 BaseName 后缀分流 prom 快照,这些名字做 Redis target 会撞后缀。
-$ReservedRedisTargetNames = @('login', 'sm', 'db', 'ds')
+$ReservedRedisTargetNames = @('login', 'sm', 'db', 'ds', 'match', 'pl')
 
 # ----- Redis target 校验与命令拼装 ---------------------------------------------
 

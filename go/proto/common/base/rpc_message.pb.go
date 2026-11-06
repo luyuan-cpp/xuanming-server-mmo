@@ -28,6 +28,9 @@ const (
 	GameMessageType_REQUEST   GameMessageType = 0
 	GameMessageType_RESPONSE  GameMessageType = 1
 	GameMessageType_RPC_ERROR GameMessageType = 4 // 框架或 handler 拒绝本次调用;回显请求的 id 与 message_id
+	// 链路心跳(docs/design/muduo-rpc-channel.md §21):只有 type,id、message_id、载荷都为空。
+	// 开了心跳的一端写空闲满间隔就发一帧;收到只说明对端还活着,不派发、不回包。
+	GameMessageType_HEARTBEAT GameMessageType = 5
 )
 
 // Enum value maps for GameMessageType.
@@ -36,11 +39,13 @@ var (
 		0: "REQUEST",
 		1: "RESPONSE",
 		4: "RPC_ERROR",
+		5: "HEARTBEAT",
 	}
 	GameMessageType_value = map[string]int32{
 		"REQUEST":   0,
 		"RESPONSE":  1,
 		"RPC_ERROR": 4,
+		"HEARTBEAT": 5,
 	}
 )
 
@@ -237,11 +242,12 @@ const file_proto_common_base_rpc_message_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\x0e2\x0e.GameErrorCodeR\x05error\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x05 \x01(\rR\tmessageId\x12\x0e\n" +
-	"\x02id\x18\x06 \x01(\x04R\x02id*g\n" +
+	"\x02id\x18\x06 \x01(\x04R\x02id*v\n" +
 	"\x0fGameMessageType\x12\v\n" +
 	"\aREQUEST\x10\x00\x12\f\n" +
 	"\bRESPONSE\x10\x01\x12\r\n" +
-	"\tRPC_ERROR\x10\x04\"\x04\b\x02\x10\x02\"\x04\b\x03\x10\x03*\x12RPC_CLIENT_REQUEST*\n" +
+	"\tRPC_ERROR\x10\x04\x12\r\n" +
+	"\tHEARTBEAT\x10\x05\"\x04\b\x02\x10\x02\"\x04\b\x03\x10\x03*\x12RPC_CLIENT_REQUEST*\n" +
 	"NODE_ROUTE*\xb0\x01\n" +
 	"\rGameErrorCode\x12\x10\n" +
 	"\fRPC_NO_ERROR\x10\x00\x12\x0f\n" +

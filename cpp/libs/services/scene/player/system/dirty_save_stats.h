@@ -3,40 +3,23 @@
 #include <atomic>
 #include <cstdint>
 
-// Dirty-save statistics for the proto-compare fast-path in SavePlayer.
+// 存盘尝试和「一行都没变」跳过的计数。
 //
-// Background: SavePlayer (player_lifecycle.cpp) compares the freshly
-// marshaled PlayerAllData against PlayerLastPersistedSnapshotComp via
-// dirty_save::IsEqual; on a match the entire save (one player_store commit)
-// is skipped. This is a sizable write-traffic win during idle /
-// AFK / move-only gameplay where most of the proto is unchanged between
-// periodic 300s save ticks.
+// 现在的判脏:SavePlayerImpl(player_lifecycle.cpp)拼出整份 PlayerAllData,SubmitPlayerSave 按行投影并确定性序列化,
+// PlayerStoreClient 逐行和上一次确认提交的字节比较,只发变了的行;一行都没变、也不用释放写权或补代次时不发请求。
+// 规格见 docs/design/player-save-direct-commit.md,开销讨论见 docs/design/player-data-tidb-scaling-plan.md §4.6。
 //
-// We need numbers, not vibes — these counters expose the skip rate so we
-// can prove the optimization fires under stress. Two counters:
-//   * total   — every SavePlayer call that reaches the fast-path
-//               check (i.e. valid entity, marshaled OK; pre-condition
-//               failures don't count)
-//   * skipped — calls that returned early because IsEqual matched the
-//               last persisted snapshot
+//   total           走到判脏的存盘尝试:实体有效、拼数据成功、不在交接中
+//   skipped         一行都没变、没有发请求的次数(SubmitResult::kAlreadyPersisted)
+//   piggybackDeferred 定时存盘只遇到位置这类只顺带的行有变化、推迟写入的次数(计入 total,不计入 skipped)
+//   marshalRefused  拒存次数:缺有效 Guid 或持久组件、拼不出完整数据(这类不计入 total),
+//                   以及按行投影失败(发生在计入 total 之后)
 //
-// Skip ratio = skipped / total.
+// 跳过率 = skipped / total。进程启动以来累计,不带玩家维度。
+// 读者:RedisSystem 每 30 秒的 [DirtySave] / [PlayerSave] 汇总日志(stress_summarize.ps1 解析),以及 /metrics 的
+// scene_player_save_events_total(player_save_metrics.cpp)。各段耗时在 save_timing_stats.h。
 //
-// save_marshal_refused 单独统计 SavePlayerImpl 因缺少有效 Guid 或持久组件,
-// 无法组装完整存盘消息而拒绝的次数。它不计入 total/skipped,不计相等跳过、交接跳过,
-// 也不计已经失效的实体,不带任何玩家维度。进程启动以来累计,由同一 30s 定时器汇总。
-//
-// Why not Prometheus: cpp scene processes don't currently expose a
-// metrics HTTP endpoint (Round 16 added :9150 / :9160 only on the go
-// SceneManager + db services). Rather than dragging in prometheus-cpp
-// just for two counters, we piggyback on the existing 30s
-// LogQueueSnapshot timer in RedisSystem and emit one LOG_INFO line
-// (parsed by stress_summarize.ps1).
-//
-// std::atomic<uint64_t> with relaxed ordering: counters are
-// fire-and-forget; readers are the LOG sink which can tolerate a
-// tearing read on 32-bit (we don't run there) and a slightly stale
-// view (logs print every 30s — a single sample miss is invisible).
+// relaxed 原子:计数只增不减,读者容忍两次读取之间差一两次。
 namespace dirty_save_stats {
 
 inline std::atomic<uint64_t>& Total()
@@ -57,23 +40,27 @@ inline std::atomic<uint64_t>& MarshalRefused()
     return g_marshalRefused;
 }
 
-// Convenience wrappers so call sites read like prose and we don't have
-// to repeat memory_order_relaxed everywhere. The save-path overhead of
-// a relaxed inc is a single LOCK XADD on x86 — well below the cost of
-// the proto compare itself, and dwarfed by the avoided Redis + Kafka
-// round trip when we hit the skip branch.
+// 定时存盘只遇到只顺带的行(位置)有变化、把这一笔推迟的次数(SaveResult::kDeferred,
+// player-save-direct-commit.md §1.1)。计入 total,不计入 skipped:位置变了,只是晚点写。
+inline std::atomic<uint64_t>& PiggybackDeferred()
+{
+    static std::atomic<uint64_t> g_piggybackDeferred{0};
+    return g_piggybackDeferred;
+}
+
+// 调用点不必每处都写 memory_order_relaxed。
 inline void IncTotal()   { Total().fetch_add(1, std::memory_order_relaxed); }
 inline void IncSkipped() { Skipped().fetch_add(1, std::memory_order_relaxed); }
 inline void IncMarshalRefused() { MarshalRefused().fetch_add(1, std::memory_order_relaxed); }
+inline void IncPiggybackDeferred() { PiggybackDeferred().fetch_add(1, std::memory_order_relaxed); }
 
-// Read-only snapshot. All fields use relaxed loads — we accept a tiny
-// inconsistency between the two reads for cheaper reads; the only
-// consumer is a periodic LOG_INFO and a small lag is invisible.
+// 只读快照,各项分别 relaxed 读。
 struct Snapshot
 {
     uint64_t total;
     uint64_t skipped;
     uint64_t marshalRefused;
+    uint64_t piggybackDeferred;
 
     // Skip percentage rounded to one decimal, returned as integer
     // tenths-of-a-percent so the LOG path doesn't drag in floating
@@ -92,7 +79,8 @@ inline Snapshot Read()
     return Snapshot{
         Total().load(std::memory_order_relaxed),
         Skipped().load(std::memory_order_relaxed),
-        MarshalRefused().load(std::memory_order_relaxed)};
+        MarshalRefused().load(std::memory_order_relaxed),
+        PiggybackDeferred().load(std::memory_order_relaxed)};
 }
 
 } // namespace dirty_save_stats

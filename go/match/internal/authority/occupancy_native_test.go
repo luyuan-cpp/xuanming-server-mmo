@@ -378,7 +378,6 @@ func TestPendingTiDBMatchBlocksFreezeAndRemoval(t *testing.T) {
 		{"match-state-zero-with-network", "match_authority_ticket", "match_authority_ticket", &pb.MatchAuthorityTicketRecord{PlayerId: 11, NetworkProfile: []byte{1}}, "player_id=11"},
 		{"match-state-zero-with-expiry", "match_authority_ticket", "match_authority_ticket", &pb.MatchAuthorityTicketRecord{PlayerId: 11, ExpiresMs: 1}, "player_id=11"},
 		{"match-state-zero-with-selected-region", "match_authority_ticket", "match_authority_ticket", &pb.MatchAuthorityTicketRecord{PlayerId: 11, SelectedRegion: 1}, "player_id=11"},
-		{"match-state-zero-with-preferred-region", "match_authority_ticket", "match_authority_ticket", &pb.MatchAuthorityTicketRecord{PlayerId: 11, PreferredRegion: 1}, "player_id=11"},
 		{"match-challenge-challenger-pending", "match_challenge_invitation", "match_challenge_invitation", &pb.MatchChallengeInvitationRecord{ChallengeId: 51, ChallengerPlayerId: 11, TargetPlayerId: 12, State: 1, ExpiresMs: ^uint64(0)}, "challenger_player_id=11"},
 		{"match-challenge-target-pending", "match_challenge_invitation", "match_challenge_invitation", &pb.MatchChallengeInvitationRecord{ChallengeId: 51, ChallengerPlayerId: 12, TargetPlayerId: 11, State: 1, ExpiresMs: ^uint64(0)}, "target_player_id=11"},
 		{"match-challenge-state-zero", "match_challenge_invitation", "match_challenge_invitation", &pb.MatchChallengeInvitationRecord{ChallengeId: 51, ChallengerPlayerId: 11, TargetPlayerId: 12, State: 0}, "challenger_player_id=11"},

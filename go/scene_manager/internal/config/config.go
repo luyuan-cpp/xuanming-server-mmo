@@ -61,8 +61,12 @@ type Config struct {
 	// 所以不能给太长;默认 1500ms 与 login 的 EnterLookupTimeout 对齐。<=0 用默认值。
 	HomeZoneLookupTimeoutMs int64 `json:",default=1500"`
 
-	// ZoneId: zone identifier for this SceneManager instance.
-	// Used for C++ convention etcd registration so Scene nodes can discover this service.
+	// ZoneId: 本进程服务、编排的 zone(docs/design/control-plane-zone-scoping-20261105.md §3.3)。
+	//   - 按 C++ 约定注册进 etcd 的 SceneManagerNodeService.rpc/zone/<ZoneId>/,本 zone 的 scene / gate 只连这里的实例;
+	//   - 选主锁是 scene_manager:leader:lock:zone:<ZoneId>,领导者的全部循环只处理这个 zone;
+	//   - 只 watch SceneNodeService.rpc/zone/<ZoneId>/,内存镜像只有本 zone 的场景节点;
+	//   - 只读写本 zone 的控制域键(Redis 段是本 zone 所属组的控制域实例)。
+	// 每个有 scene / gate 节点的 zone 都必须部署至少一个 ZoneId 等于它的 scene_manager。
 	ZoneId uint32 `json:",default=1"`
 
 	// LeaseTTL: etcd lease TTL in seconds for node registration keepalive.
@@ -91,16 +95,12 @@ type Config struct {
 	// 读取走 EffectiveLeaderLockTTLSeconds():分线目录的 TTL 也按它算竞选间隔(TTL/3)。
 	LeaderLockTTLSeconds int64 `json:",default=30"`
 
-	// LeaderLockKey:选主锁的 Redis key,留空用默认 scene_manager:leader:lock。
-	// 服务本身 zone-agnostic,所有副本共用同一把锁。
-	LeaderLockKey string `json:",optional"`
-
 	// LeaderEligible:本副本是否参与选主。金丝雀副本必须设 false ——
 	// 金丝雀靠 etcd 发现天然按实例比例分到 RPC 数据面流量,这正是想灰度的
-	// 部分;但领导者只有一个,金丝雀一旦当选,新版本的**编排**逻辑
-	// (补频道 / rebalance / 伸缩 / 清理)会作用于全部 zone,爆炸半径失控。
-	// 注意:所有副本都设 false 会导致无人编排(scene_manager_is_leader
-	// 全体之和为 0,超过锁 TTL 应告警)。默认 true。
+	// 部分;但每个 zone 的领导者只有一个,金丝雀一旦当选,新版本的**编排**逻辑
+	// (补频道 / rebalance / 伸缩 / 清理)会作用于整个 zone。
+	// 注意:同一 zone 的副本都设 false 会导致这个 zone 无人编排(该 zone 的
+	// scene_manager_is_leader 之和为 0,超过锁 TTL 应告警)。默认 true。
 	LeaderEligible bool `json:",default=true"`
 
 	// TableDir: directory containing exported table data files (JSON or binary pb).
@@ -552,8 +552,8 @@ const (
 	// MinUnqualifiedHolderRevokeGraceSeconds 是下界(不含):C++ 入场登记截止 15s(role_admission_system.cpp registerDeadline)
 	// + 交接冻结硬上限 70s(travel_freeze_cap.h kFreezeCap)。logic 包的跨语言用例钉住这两个 C++ 常量。
 	MinUnqualifiedHolderRevokeGraceSeconds int64 = 85
-	// MaxUnqualifiedHolderRevokeGraceSeconds 是上界(含):等待计时键的 TTL = LeaveScene 诊断预算(≥ 1s)+ 600s 余量
-	// (logic leaveReleaseWaitKeyMargin),宽限不超过 600s,计时键就不会在宽限走完之前过期、从头计时。
+	// MaxUnqualifiedHolderRevokeGraceSeconds 是上界(含),只防配错:宽限越长,卡住的玩家进不了场越久。等待计时键的 TTL
+	// 按 max(诊断预算, 宽限) + 600s 余量设(logic noteLeaveReleaseWait),不靠这个上界保证宽限走完之前键还在。
 	MaxUnqualifiedHolderRevokeGraceSeconds int64 = 600
 )
 

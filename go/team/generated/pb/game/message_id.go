@@ -339,3 +339,5 @@ const DataServiceResolveRecallOpMessageId = 367
 const MatchInternalAcquireTrialOccupancyMessageId = 368
 const MatchInternalReleaseTrialOccupancyMessageId = 369
 const MatchInternalGetBattleCompletionMessageId = 370
+const SceneBattleResultClientPlayerGetRecentBattleResultsMessageId = 371
+const SceneBattleResultClientPlayerAckBattleResultsMessageId = 372

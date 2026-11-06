@@ -164,6 +164,11 @@ func (r *CommerceRepo) List(ctx context.Context, player uint64, after CommerceCu
 func (r *CommerceRepo) Due(ctx context.Context, nowMs uint64, limit int) ([]*tradepb.TradeCommerceRecord, error) {
 	return r.Query(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE status IN (1,3,4,6,8) AND updated_ms<=? ORDER BY updated_ms,commerce_id LIMIT ?", nowMs, limit)
 }
+// ListManual 列转人工的合同(status=10),最早转人工的在前,给人工恢复工具用。走 (status, updated_ms) 索引:
+// 转人工之后 updated_ms 不再变,直到人工处理。
+func (r *CommerceRepo) ListManual(ctx context.Context, limit int) ([]*tradepb.TradeCommerceRecord, error) {
+	return r.Query(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE status=10 ORDER BY updated_ms,commerce_id LIMIT ?", limit)
+}
 func (r *CommerceRepo) Query(ctx context.Context, query string, args ...any) ([]*tradepb.TradeCommerceRecord, error) {
 	rows, err := r.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -229,11 +234,12 @@ func (o LegOutcome) Source() string {
 // LegResult 在调用方(已锁合同行)的事务里普通读一条腿的结局,不锁 op 行:终态行的 status 不再变化,
 // 读到 PENDING 就等下一轮。Finalize / ResolveManually / Abandon 只点锁 op 行、从不碰合同行,
 // 与"合同行 → op 行"的引擎锁序不成环。行不存在时回 sql.ErrNoRows,由调用方按坏数据处理。
-func (r *CommerceRepo) LegResult(ctx context.Context, tx *sql.Tx, id uint64) (LegOutcome, error) {
+// 人工恢复工具只读查看时传 *sql.DB。
+func (r *CommerceRepo) LegResult(ctx context.Context, q rowQuerier, id uint64) (LegOutcome, error) {
 	var status int32
 	var resolvedBy sql.NullString // MEDIUMTEXT 列:按可空扫,不赌建表口径
 	var out LegOutcome
-	err := tx.QueryRowContext(ctx, "SELECT status,escrow_snapshot,resolved_by FROM trade_asset_op WHERE op_id=?", id).Scan(&status, &out.Snapshot, &resolvedBy)
+	err := q.QueryRowContext(ctx, "SELECT status,escrow_snapshot,resolved_by FROM trade_asset_op WHERE op_id=?", id).Scan(&status, &out.Snapshot, &resolvedBy)
 	out.Status = tradepb.TradeAssetOpStatus(status)
 	out.ResolvedBy = resolvedBy.String
 	return out, err

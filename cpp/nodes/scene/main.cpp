@@ -1,4 +1,4 @@
-﻿#include "muduo/net/EventLoop.h"
+#include "muduo/net/EventLoop.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "muduo/base/Logging.h"
 
@@ -11,10 +11,12 @@
 #include "core/config/config.h"
 #include "world/world.h"
 #include "core/system/redis.h"
+#include "core/system/scene_task_scope.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_team_follow_scope.h"
 #include "player/system/player_ownership_metrics.h"
+#include "player/system/player_save_metrics.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_inbox_system.h"
 #include "player/system/player_mystery_merchant.h"
@@ -45,6 +47,7 @@ namespace
         DependencyGate dependencyGate;
         SceneNodeGrpcImpl grpcService;
         PlayerTeamFollowScope teamFollow;
+        SceneTaskScope tasks;
         std::unordered_set<Guid> shutdownPlayerIds;
         std::size_t lastPendingPlayerSaves = std::numeric_limits<std::size_t>::max();
         std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
@@ -55,7 +58,7 @@ namespace
         // 本次停机里"drain 只剩改派待确认表"的逐条清单已经打过(每次停机只打一次)。
         bool relocateBacklogLogged = false;
 
-        explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop), teamFollow(loop) {}
+        explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop), teamFollow(loop), tasks(loop) {}
     };
 
     struct SceneNodeHooks
@@ -105,9 +108,10 @@ int main(int argc, char *argv[])
         // 在 PlayerInboxNodeService.rpc 前缀下发现;docs/design/player-inbox-service.md §1.4)。
         // PlayerStoreNodeService:玩家存盘的 LoadAndClaim / SavePlayer(go/db,按 zone 发现;
         // docs/design/player-save-direct-commit.md §5.2)。
+        // TeamNodeService:队伍成员权威读取由 Match 同端口提供，只在需要刷新队伍时使用。
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
-                                                PlayerInboxNodeService, PlayerStoreNodeService },
+                                                PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
@@ -126,6 +130,8 @@ int main(int argc, char *argv[])
 
         // 归属交接 / owner_epoch 计数挂到 Prometheus 出口(设了 MMORPG_METRICS_PORT 才有出口,见 metrics_http_exporter.h)。
         RegisterPlayerOwnershipMetrics();
+        // 存盘分段耗时与存盘尝试计数(player_save_metrics.h),同一个出口。
+        RegisterPlayerSaveMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);
@@ -149,9 +155,11 @@ int main(int argc, char *argv[])
         // 先复制实体列表,再逐个走完整 HandleExitGameNode 流程。
         auto exitAllPlayers = [&context](Node &)
         {
-            context->teamFollow.Stop();
+            context->tasks.Stop();
+            context->grpcService.CloseCreationAdmission();
             // 停机后不再续段(定时器取消、不再发 gRPC);手里的号照常发完。
             // 放在最前面与 dependencyGate / worldTimer 一起收,晚了会在拆传输层时再发请求。
+            CloseGuidSegmentTransport();
             tlsGuidSegmentRegistry.ShutdownAll();
             // 先停 Agones lifecycle worker 并 join,再动玩家数据。
             // 顺序不能反:worker 还在跑的时候进程正在退出,health / ready 请求
@@ -291,7 +299,9 @@ int main(int argc, char *argv[])
         // 拆除前钩子(Node::SetBeforeTeardown):日志 / ECS 都还活着,把没落定的存盘留一行证据(带玩家号)。
         node.SetBeforeTeardown([&context](Node &)
                                {
-                                   context->teamFollow.Stop();
+                                   context->tasks.StopAll();
+                                   context->grpcService.CloseCreationAdmission();
+                                   StopGuidSegmentTransport();
                                    context->playerInboxTimer.Cancel();
                                    PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
                                });
@@ -305,7 +315,8 @@ int main(int argc, char *argv[])
         // 反过来做的话,新节点会从 Redis 读到存盘前的旧数据(回档)。
         node.SetOnConflictShutdown([&context](Node &, NodeIdConflictReason)
                                    {
-            context->teamFollow.Stop();
+            context->tasks.Stop();
+            context->grpcService.CloseCreationAdmission();
             // 先停 Agones lifecycle worker(理由同 exitAllPlayers 里的注释),
             // 再动玩家数据。Stop() 幂等。
             agones::GameServerLifecycle::Instance().Stop();
@@ -403,7 +414,9 @@ int main(int argc, char *argv[])
 		PlayerLifecycleSystem::SetNodeIdentityProbe({});
 
 		// Node 正常 finalizer 已先 free Hiredis;这里是幂等兜底。
-		context->teamFollow.Stop();
+		context->tasks.StopAll();
+		context->grpcService.CloseCreationAdmission();
+		StopGuidSegmentTransport();
 		tlsRedis.Shutdown();
 		tlsPlayerRedis.Shutdown();
 		tlsRedisSystem.Shutdown();

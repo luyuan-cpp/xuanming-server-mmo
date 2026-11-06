@@ -6,7 +6,6 @@ package discovery
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -14,33 +13,14 @@ import (
 	"sync"
 	"time"
 
+	base "proto/common/base"
+	"shared/nodeinfo"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
-
-// nodeRegistrationJSON 对应 etcd 里 protojson 序列化的 NodeInfo
-// (Go noderegistry 与 C++ MessageToJsonString 都是 camelCase 字段)。
-type nodeRegistrationJSON struct {
-	NodeId         uint32 `json:"nodeId"`
-	NodeType       uint32 `json:"nodeType"`
-	NodeUuid       string `json:"nodeUuid"`
-	ZoneId         uint32 `json:"zoneId"`
-	PhysicalRegion uint32 `json:"physicalRegion"`
-	ClientEndpoint struct {
-		IP   string `json:"ip"`
-		Port uint32 `json:"port"`
-	} `json:"clientEndpoint"`
-	Endpoint struct {
-		IP   string `json:"ip"`
-		Port uint32 `json:"port"`
-	} `json:"endpoint"`
-	GrpcEndpoint struct {
-		IP   string `json:"ip"`
-		Port uint32 `json:"port"`
-	} `json:"grpcEndpoint"`
-}
 
 // NodeEntry 是 watch 镜像里的一个节点。
 type NodeEntry struct {
@@ -54,6 +34,9 @@ type NodeEntry struct {
 	// endpoint(那是 raw TCP protobuf 口,用 gRPC 拨会协议错乱,
 	// 先例见 scene_manager resolveFromKnownNodes 的注释)。
 	Endpoint string
+	// Admission 是节点自报的可分配状态(NodeInfo.admission,R6):只有 battle 填,其它节点恒为 UNSPECIFIED。
+	// 只是选点提示(battleplace 排除 CLOSED),建房能否成功仍由 battle 的准入判定。
+	Admission base.NodeAdmission
 }
 
 // NodeWatcher 对一个 etcd 前缀做 list-watch,维护 key -> NodeEntry 镜像。
@@ -216,25 +199,30 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 	if strings.Contains(key, "/allocated/") {
 		return NodeEntry{}, false
 	}
-	var reg nodeRegistrationJSON
-	if err := json.Unmarshal(value, &reg); err != nil {
+	// 值是 protojson 序列化的 NodeInfo(C++ MessageToJsonString 与 Go noderegistry 都是 camelCase、枚举写名字)。
+	// 经 shared/nodeinfo 解析:未知字段与未知枚举名被忽略(滚动期间新版本节点多带的字段不让整台节点从镜像里消失,D77),
+	// 枚举按名字或数字都认。以前用 encoding/json 镜像结构解析,枚举字段要另写一套 protojson 的取值规则,改走统一入口。
+	var reg base.NodeInfo
+	if err := nodeinfo.Unmarshal(value, &reg); err != nil {
 		logx.Errorf("[NodeWatcher:%s] Failed to parse registration value key=%s: %v", w.name, key, err)
 		return NodeEntry{}, false
 	}
-	if reg.GrpcEndpoint.Port == 0 {
+	grpcEndpoint := reg.GetGrpcEndpoint()
+	if grpcEndpoint.GetPort() == 0 {
 		// 没有 gRPC endpoint 的节点无法作为 gather 对端,记日志后忽略。
 		logx.Errorf("[NodeWatcher:%s] Node missing grpcEndpoint; ignoring: key=%s zone=%d node=%d",
-			w.name, key, reg.ZoneId, reg.NodeId)
+			w.name, key, reg.GetZoneId(), reg.GetNodeId())
 		return NodeEntry{}, false
 	}
 	return NodeEntry{
-		NodeId:         reg.NodeId,
-		ZoneId:         reg.ZoneId,
-		NodeUuid:       reg.NodeUuid,
-		PhysicalRegion: reg.PhysicalRegion,
-		ClientHost:     reg.ClientEndpoint.IP,
-		ClientPort:     reg.ClientEndpoint.Port,
-		Endpoint:       fmt.Sprintf("%s:%d", reg.GrpcEndpoint.IP, reg.GrpcEndpoint.Port),
+		NodeId:         reg.GetNodeId(),
+		ZoneId:         reg.GetZoneId(),
+		NodeUuid:       reg.GetNodeUuid(),
+		PhysicalRegion: reg.GetPhysicalRegion(),
+		ClientHost:     reg.GetClientEndpoint().GetIp(),
+		ClientPort:     reg.GetClientEndpoint().GetPort(),
+		Endpoint:       fmt.Sprintf("%s:%d", grpcEndpoint.GetIp(), grpcEndpoint.GetPort()),
+		Admission:      reg.GetAdmission(),
 	}, true
 }
 

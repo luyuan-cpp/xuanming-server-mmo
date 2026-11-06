@@ -41,6 +41,7 @@
 #include "proto/common/base/node.pb.h"
 #include "node/system/node/node_util.h"
 #include "node/system/node/node_events.h"
+#include "node/system/node/release_track.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
 #include <session/manager/session_manager.h>
@@ -163,6 +164,10 @@ static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 	// 全局池类型(如 match)不比对 zone:任一 zone 的实例都能服务本 zone 玩家,
 	// 某 zone 的实例全挂时自动落到其他 zone(设计文档 cross-zone-matchmaking.md D11)。
 	const bool globalPool = NodeUtils::IsGlobalPoolNodeType(nodeType);
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.4):不分 zone 的类型是全局服务,按本 gate 的轨道
+	// 选,也就是连在本 gate 上的会话的轨道,stable 会话永远不进 canary 实例;zone-scoped 类型按 zone 选、不看轨道,
+	// 一个 zone 只有一条轨道(§2.2)。这里选的都是客户端请求的去向(路由服,以及直连模式下的业务服务)。
+	const bool byReleaseTrack = !NodeUtils::IsZoneScopedNodeType(nodeType);
 	const auto selfZoneId = GetNodeInfo().zone_id();
 	for (auto entity : view)
 	{
@@ -171,10 +176,24 @@ static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 			continue;
 		}
 		const auto &node = view.get<NodeInfo>(entity);
+		if (byReleaseTrack && !release_track::Parse(node.release_track()))
+		{
+			// 认不出的轨道既不能当 stable(stable 会话会被送进它),也不能当 canary;发现时已记过错误日志。
+			continue;
+		}
 		if (globalPool || node.zone_id() == selfZoneId)
 		{
 			candidates.push_back(entity);
 		}
+	}
+	if (byReleaseTrack)
+	{
+		// 自身轨道在 Node::InitRpcServer 校验过,非法值已拒启,这里必定解析成功。
+		const auto selfTrack = release_track::Parse(GetNodeInfo().release_track()).value_or(release_track::Track::kStable);
+		candidates = release_track::Select(selfTrack, candidates, [&view](entt::entity entity)
+		{
+			return release_track::Parse(view.get<NodeInfo>(entity).release_track()).value_or(release_track::Track::kStable);
+		});
 	}
 
 	if (candidates.empty())
@@ -234,6 +253,9 @@ static bool SendRawViaRouter(const ClientRequest &request, const std::string &se
 	// zone-scoped 目标(login)由路由服按这个 zone 挑同 zone 实例,与直连模式下
 	// PickRandomNode 的 zone 过滤语义一致(D33)。
 	forwardRequest.set_zone_id(gNode->GetNodeInfo().zone_id());
+	// 会话的发布轨道就是本 gate 的轨道(发布轨道设计 §2.3):路由服按它给全局类型选实例,
+	// 与上面 PickRandomNode 按轨道选路由服是同一条规则。
+	forwardRequest.set_release_track(gNode->GetNodeInfo().release_track());
 
 	// 传输只有一种:路由服节点实体上的 muduo_grpc 通道(NodeConnector::ConnectToGrpcNode 建,
 	// docs/design/grpc-muduo-transport.md §14)。一次调用只发一次,失败不重发。
@@ -463,7 +485,7 @@ bool ParseMessageFromRequestBody(Message &message, const Request &request, const
 }
 
 bool GateClientSessionHandler::NotifySceneExitGame(const SessionId sessionId, const SessionInfo &session,
-												  uint32_t &sceneNodeId)
+												  const ExitGameReason reason, uint32_t &sceneNodeId)
 {
 	sceneNodeId = 0;
 	if (!session.HasNodeEntity(SceneNodeService))
@@ -493,6 +515,11 @@ bool GateClientSessionHandler::NotifySceneExitGame(const SessionId sessionId, co
 		exitMsg.set_player_id(session.playerId);
 	}
 	exitMsg.mutable_message_content()->set_message_id(ScenePlayerExitGameMessageId);
+	// 原因写进请求体:scene 据此决定立即退出还是断线保留(docs/design/player-connection-lost-hold.md §3)。
+	// 旧版 scene 不认这个字段,按空请求立即退出,与加字段之前相同。
+	GameNodeExitGameRequest exitRequest;
+	exitRequest.set_reason(reason);
+	exitMsg.mutable_message_content()->set_serialized_message(exitRequest.SerializeAsString());
 	// 单向:断线时会话随后就 erase,LeaveGame 时会话随后清掉 scene 指向,回包都无处可去。返回值只用于日志(未连接时为 false)。
 	return (*rpcClient)->SendRequest<SceneProcessClientPlayerMessageRpc>(exitMsg);
 }
@@ -532,10 +559,18 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 	bool sceneNotified = false;
 	uint32_t sceneNodeId = 0;
 
+	ExitGameReason exitReason = EXIT_GAME_REASON_DISCONNECTED;
 	if (sessionFound)
 	{
-		// Notify Scene to exit the player immediately (saves state and stops broadcasting).
-		sceneNotified = NotifySceneExitGame(sessionId, sessionIt->second, sceneNodeId);
+		// 告诉 scene 连接断了。连接意外断开(断网、gate 停机、顶号踢旧连接、高水位)填 DISCONNECTED:scene 把角色
+		// 停在原地、留到重连窗口结束,窗口内新会话接回同一个实体;只有关连接前已置位 exitSceneImmediatelyOnClose
+		// (断线租约到期后关残留假死连接)才要求立即退出。主动登出在 LeaveGame 收包时已经代发过 LOGOUT,
+		// 并清掉了 scene 指向,这里不会再发。docs/design/player-connection-lost-hold.md §3。
+		if (sessionIt->second.exitSceneImmediatelyOnClose)
+		{
+			exitReason = EXIT_GAME_REASON_LEASE_EXPIRED;
+		}
+		sceneNotified = NotifySceneExitGame(sessionId, sessionIt->second, exitReason, sceneNodeId);
 	}
 
 	// Disconnect notification goes to Login; its session manager owns the disconnect lease.
@@ -637,6 +672,7 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 				 << ", session_found=" << sessionFound
 				 << ", scene_node_id=" << sceneNodeId
 				 << ", scene_notified=" << sceneNotified
+				 << ", exit_reason=" << ExitGameReason_Name(exitReason)
 				 << ", remaining_sessions=" << sessions.size();
 	}
 	else
@@ -1158,8 +1194,9 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 
 	// 战斗消息 gate 两种模式都不中继(turn-based §22 D66):BattleClientPlayer 的上行只走客户端
 	// 直连 battle;gate 出站白名单里没有 BattleNodeService,也不维护会话到 battle 的绑定。
-	// 这组号仍在 IsClientMessageId 里(它们同时是直连面与 Notify* 下行的协议号,不能摘掉
-	// OptionIsClientProtocolService),所以放在上面几道闸之后、按协议分派之前一处拦下,
+	// 这组请求号仍在 IsClientMessageId 里(服务标了 OptionIsClientProtocolService,直连面要用,不能摘掉;
+	// 白名单只收 REQUEST / ONE_WAY,Notify* 推送号不在其中,上面已按非法包丢弃,client-rpc-callback.md §7 R4),
+	// 所以放在上面几道闸之后、按协议分派之前一处拦下,
 	// 同时覆盖直连模式与路由模式,HandleGrpcNodeMessage / HandleRouterForward 都见不到它们。
 	// 回 kServiceUnavailable、不计非法包、不断连:这是合法协议号(旧客户端或误走大厅),
 	// 踢线会把大厅连接一起拆掉。逐条只打 DEBUG,与上面几道闸的明细日志同一口径。

@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -26,7 +24,6 @@ import (
 	"schemamigrate"
 	"shared/authoritysql"
 	"shared/domainhost"
-	"shared/redisslot"
 	"shared/rolefence"
 	"shared/serviceauth"
 )
@@ -113,17 +110,14 @@ func TestRankMailChainFixture(t *testing.T) {
 	var ids atomic.Uint64
 	next := func(context.Context) (uint64, error) { return ids.Add(1), nil }
 	repo := data.New(db, next, next, func(uint32) bool { return true }, noGuilds{})
-	// 角色权威状态与原登录态是客户端列表的真实依赖;目录这边用替身,副本和自愈走真的。
+	// 角色权威状态与 gate 签名的原身份是客户端列表的真实依赖;目录这边用替身,副本和自愈走真的。
+	// 原账号只认 gate 签名原件,不读 login Redis:父进程按 callerauthtest 的测试密钥签名,本进程用同一密钥验签。
 	repo.ConfigureRoleFence(rolefence.NewGuard(db, fixedRoleOwner{account: "整链原账号", revision: 3}))
-	loginCache := miniredis.RunT(t)
-	loginCache.Set(redisslot.LoginSessionKey("mail-rank-chain-original:19"), "整链原账号")
-	loginReader := redis.NewClient(&redis.Options{Addr: loginCache.Addr()})
-	t.Cleanup(func() { _ = loginReader.Close() })
 	auth, err := serviceauth.New(map[string]string{"rank": secret})
 	if err != nil {
 		t.Fatal("整链邮件调用方配置无效")
 	}
-	handler := server.New(repo, auth).WithLoginSessions(loginReader)
+	handler := server.New(repo, auth)
 	var responseLost atomic.Bool
 	loseFirstCommittedReply := func(ctx context.Context, request any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 		response, err := next(ctx, request)
@@ -137,7 +131,7 @@ func TestRankMailChainFixture(t *testing.T) {
 		}
 		return response, nil
 	}
-	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(domainhost.Guard(server.ClientMethods(), 3*time.Second), loseFirstCommittedReply))
+	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(fixtureGateIdentity(), domainhost.Guard(server.ClientMethods(), 3*time.Second), loseFirstCommittedReply))
 	mailpb.RegisterMailAdminServer(rpc, handler)
 	mailpb.RegisterClientPlayerMailServer(rpc, handler)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

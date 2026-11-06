@@ -22,18 +22,17 @@ Test-Case 'Chat部署先显式迁移，两类DSN只通过独立Secret key交给�
     Assert-Match (ChatSource 'tools/scripts/k8s_deploy.ps1') 'chat\s*=\s*@\{[^\r\n]+MigrateJob = "chat-migrate.yaml"' '现有迁移门禁先于常驻实例'
 }
 
-Test-Case 'Chat渲染必须携原会话与同域目录，账号值不进ConfigMap' {
+Test-Case 'Chat渲染携SQL原件与同域目录、不渲染登录态段，账号值不进ConfigMap' {
     $source=ChatSource 'tools/scripts/k8s_deploy.ps1'
     $start=$source.IndexOf('Name: ${chatName}')
     $stop=$source.IndexOf('"client-rpc-router" {',$start)
     Assert-True ($start-ge 0-and $stop-gt $start) '能够定位正式Chat渲染分支'
     $chat=$source.Substring($start,$stop-$start)
-    foreach($pattern in @('DSNEnv: \$\{chatSqlDsnEnv\}','Backend: \$\{DatabaseBackend\}','MaxOpenConns: \$\{chatSqlMaxOpen\}','GlobalLoginSessions: true','\$\{loginRedisBlock\}','(?m)^DataServiceRpc:','(?m)^\$\{dbPlacementTop\}')) {
-        Assert-Match $chat $pattern '不能遗漏正式SQL或原登录态字段'
+    foreach($pattern in @('DSNEnv: \$\{chatSqlDsnEnv\}','Backend: \$\{DatabaseBackend\}','MaxOpenConns: \$\{chatSqlMaxOpen\}','(?m)^DataServiceRpc:','(?m)^\$\{dbPlacementTop\}')) {
+        Assert-Match $chat $pattern '不能遗漏正式SQL或同域目录字段'
     }
-    # 登录态段由公共准备段渲染(New-PlayerRedisConfigYaml):不建玩家域集群时指向 login 的实例与 DB,口令只写环境变量名。
-    Assert-Match $source "'chat' \{ \`$loginRedisArgs\.StandalonePasswordEnv = 'LOGIN_REDIS_PASSWORD' \}" '单实例时口令走环境变量'
-    Assert-Match $source "loginRedisArgs\.StandaloneDb = \[int\]\(Get-AuthoritativeScalar -RelativePath 'go/login/etc/login\.yaml' -KeyPath 'Node\.RedisClient\.DB'\)" '库号与 login 相同'
+    # 会话身份只认 gate 签名的原件:chat 不读 login 的 Redis,渲染分支里不能再有登录态段。
+    Assert-NotMatch $chat 'GlobalLoginSessions|LoginRedis|\$\{loginRedisBlock\}|LOGIN_REDIS_PASSWORD' '登录态段已删,不能恢复'
     Assert-NotMatch $chat '(?m)^ChatRedis:|^\s+(?:Pass|Password):' '旧缓存不能恢复成聊天权威，也不在兼容配置内写密码值'
     Assert-NotMatch $chat 'AccountRoleSchema' '身份校验走目录 RPC，聊天不再跨库读角色目录'
     $config=Join-Path $chatRepo 'go/chat/etc/chat.yaml'

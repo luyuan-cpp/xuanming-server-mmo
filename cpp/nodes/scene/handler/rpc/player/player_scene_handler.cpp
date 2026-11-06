@@ -74,7 +74,7 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	// (joining an existing mirror by id) and falls through to the normal
 	// path below. We dispatch via PlayerSceneSystem::RequestEnterMirrorScene,
 	// 该入口登记 PlayerMirrorCreateInFlightComp,让上方在途闸阻止后续换图,并通过每次调用回调
-	// 发起 CreateScene。PlayerSceneSystem::HandleMirrorCreateDone 负责后续 EnterScene 或失败提示。
+	// 发起 CreateScene。Scene 任务等待结果后发起 EnterScene 或推送失败提示。
 	// Success here is "request queued", not "player entered" — mirror
 	// creation is async and the client sees the normal EnterSceneS2C
 	// when the pipeline completes.

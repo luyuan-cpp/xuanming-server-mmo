@@ -260,6 +260,14 @@ message BattleSettlementData {
   repeated BattleMonsterDefeat defeated_monsters = 15;
   // 新结算仅填此集合；非空时忽略旧 gold_gain，历史空集合仍读 gold_gain。
   repeated BattleCurrencyGain currency_gains = 16;
+  // 战斗结束时刻(Unix 毫秒,battle 节点时钟):battle 冻结终局原件时从 BattleResultEvent.finished_at_ms 盖进每一份个人结算
+  // (result_commit.h 的 FreezeBattleSettlementSource)。scene 把它写进本人近期战斗结果,供重登后展示
+  // (docs/design/battle-result-recovery.md);不参与任何结算判定。0 = 来源没盖。
+  uint64 finished_at_ms = 17;
+  // 这一局的匹配模式(MatchMode 数值)与战斗配置号:同样由 FreezeBattleSettlementSource 从 BattleResultEvent 盖进来,
+  // scene 写进本人近期战斗结果,供列表展示与按 battle_id 查回放;不参与任何结算判定。0 = 来源没盖。
+  uint32 match_mode = 18;
+  uint32 battle_config_id = 19;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----

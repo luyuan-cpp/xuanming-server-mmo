@@ -603,7 +603,9 @@ uint32_t PlayerMysteryMerchantSystem::Buy(entt::entity player, const ::BuyMyster
 	}
 	auto &inventory = bags->bags[kInventory];
 	// 封禁与余额先判,是为了给玩家一个看得懂的原因;发物自己还会再判一遍封禁与空间(见第二段)。
-	if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, goods.itemConfigId))
+	// 封禁 = 全服封禁或本玩家被 GM 封禁获得该物品(GainBlockService::IsItemGainBlocked,与各入包入口同一个判定),
+	// 判在扣钱之前:被封禁的玩家一分钱不扣。
+	if (GainBlockService::IsItemGainBlocked(player, goods.itemConfigId))
 	{
 		return kMysteryMerchantItemBlocked;
 	}

@@ -129,7 +129,7 @@ func deadNodeEntryForTest(zoneID uint32, nodeID string) nodeEntry {
 // 任务表成员资格按成员查(mr.ZScore 对缺成员回 (0, nil),理由见 loadSetMembersForTest)。
 func pendingDeadNodeForTest(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, nodeID string) ([]string, bool) {
 	t.Helper()
-	tasks, err := mr.ZMembers(deadNodeReconcileTasksKey)
+	tasks, err := mr.ZMembers(deadNodeReconcileTasksKey(zoneID))
 	if errors.Is(err, miniredis.ErrKeyNotFound) {
 		return nil, false
 	}
@@ -601,7 +601,7 @@ func TestSweepStaleLoadSetMembers_DefersInsteadOfZremOnDeathMarkFailure(t *testi
 	seen := map[uint32]map[string]struct{}{testZoneId: {"20": {}}}
 	faults.failDeathAt.Store(true)
 
-	require.True(t, sweepStaleLoadSetMembers(sc, seen, []uint32{testZoneId}))
+	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{testZoneId}, nil))))
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "20")
 	assert.Contains(t, loadSetMembersForTest(t, mr, otherZone), "30", "快照外的 zone 同样按推迟处理")
@@ -619,7 +619,8 @@ func TestSweepStaleLoadSetMembers_DefersInsteadOfZremOnDeathMarkFailure(t *testi
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "20")
 
 	t.Cleanup(SetLeaderCheckForTest(func() bool { return false }))
-	assert.False(t, sweepStaleLoadSetMembers(sc, seen, []uint32{testZoneId}), "中途失去领导权必须报告给调用方")
+	assert.False(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{testZoneId}, nil))),
+		"中途失去领导权必须报告给调用方")
 	assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "20")))
 }
 

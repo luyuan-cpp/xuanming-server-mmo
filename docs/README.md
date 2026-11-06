@@ -39,7 +39,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
 
-全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。
+全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与三批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05，未落码）。
 
 ## 索引
 
@@ -106,6 +106,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
@@ -220,6 +221,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [no-single-node-horizontal-scaling-20261001.md](design/no-single-node-horizontal-scaling-20261001.md) — 消除单节点:所有服务都能水平扩展(2026-10-01)
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
+- [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化(发现只看本 zone、scene_manager 按 zone 选主)与控制域 Redis 按 zone 组分实例(缺口第 4、5 条)
 - [thread-count-monitoring.md](design/thread-count-monitoring.md) — Thread Count Monitoring & Control per Process · [EN](design/thread-count-monitoring_en.md) · [中文](design/thread-count-monitoring_zh.md)
 - [traffic-statistics-design.md](design/traffic-statistics-design.md) — Traffic Statistics Design
 
@@ -235,6 +237,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [docker_k8s_build_deploy.md](design/docker_k8s_build_deploy.md) — Docker & K8s Build/Deploy Guide (Windows) · [EN](design/docker_k8s_build_deploy_en.md) · [中文](design/docker_k8s_build_deploy_zh.md)
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
+- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05，未落码）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
 
@@ -252,6 +255,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 未分类
 
 - [account-role-authority.md](design/account-role-authority.md) — 账号角色目录的全局 SQL 权威
+- [gate-online-identity.md](design/gate-online-identity.md) — Gate 在线身份：login 认证、gate 持有、签名传递、提交点复核
 - [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外同步
 - [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
 - [client-rpc-callback.md](design/client-rpc-callback.md) — 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler
@@ -352,9 +356,11 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [d1-review-fix-handoff-20261023.md](handoff/d1-review-fix-handoff-20261023.md) — 交接:D1 最终语义评审与修复(10-19 ~ 10-23)——移交「映射直读 TiDB」新方向
 - [friend-handoff-20260920.md](handoff/friend-handoff-20260920.md) — friend 服务移植 —— 交接文档(2026-09-20)
 - [gate-auth-role-fence-review-20261104.md](handoff/gate-auth-role-fence-review-20261104.md) — Gate 登录身份修复与 Claude Code 审核说明
+- [gate-online-identity-single-source-20261105/CODEX.md](handoff/gate-online-identity-single-source-20261105/CODEX.md) — 在线原身份只认 gate 签名（删 login Redis 回退）的 Codex 执行清单
 - [global-economy-claude-review-20261022.md](handoff/global-economy-claude-review-20261022.md) — 全球同服、交易与角色归属：Claude Code 审核入口
 - [global-economy-review-20261021.md](handoff/global-economy-review-20261021.md) — 全球交易、角色归属与双版交付审核交接
 - [global-final-acceptance-resume-20261027.md](handoff/global-final-acceptance-resume-20261027.md) — 全球同服剩余验收：全新主窗口交接（2026-10-27）
+- [global-id-issuer-registry-20261105.md](handoff/global-id-issuer-registry-20261105.md) — 交接：发号器三份记录与全局号源登记处（交 Codex 验证，2026-11-05）
 - [global-id-prelaunch-claude-20261028.md](handoff/global-id-prelaunch-claude-20261028.md) — 交接：全球同服 ID 发号上线前决策与修复（交 Claude Code，2026-10-28）
 - [global-singletons-p0-codex-tasksheet-20261014.md](handoff/global-singletons-p0-codex-tasksheet-20261014.md) — Codex 任务单:全局单点 P0 五项的实测核实(2026-10-14)
 - [global-singletons-p0-findings-20261014.md](handoff/global-singletons-p0-findings-20261014.md) — 全局单点 P0 五项:静态调查记录与修复设计(2026-10-14)

@@ -1,6 +1,7 @@
 package cpp
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -9,6 +10,9 @@ import (
 
 	"protogen/internal"
 
+	messageoption "github.com/luyuancpp/protooption"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
@@ -643,6 +647,125 @@ func TestGrpcSenderFor(t *testing.T) {
 			}
 			if decl != wantDecl || sender != wantSender {
 				t.Fatalf("声明=%q 绑定=%q；期望 %q / %q", decl, sender, wantDecl, wantSender)
+			}
+		})
+	}
+}
+
+// gate 上行白名单 IsClientMessageId 的收号规则(docs/design/client-rpc-callback.md §7 R4)。
+// 这里测的是 writeServiceInfoCppFile 实际调用的 clientAllowlistCases(接线),判定本身由 internal 包的
+// TestClientRpcKindAcceptsClientUpstreamOnlyForClientInitiatedKinds 覆盖。
+
+// allowlistFixtureMethod 是白名单单测里的一个方法;kind 为 nil 表示不标 OptionClientRpcKind(按 REQUEST)。
+type allowlistFixtureMethod struct {
+	name   string
+	output string
+	kind   *uint64
+}
+
+func allowlistKind(value uint64) *uint64 { return &value }
+
+// newAllowlistService 构造一个服务。clientProtocol 决定是否标 OptionIsClientProtocolService;fileNode 不是
+// NODE_UNSPECIFIED 时写进文件级 OptionFileDefaultNode。方法号从 firstId 起顺序分配(分类校验拒收未分配的号)。
+// OptionClientRpcKind 与真实描述符一样写在未知字段里(外部 option 绑定里没有这个扩展)。
+func newAllowlistService(file, service string, clientProtocol bool, fileNode messageoption.NodeType, firstId uint64,
+	methods ...allowlistFixtureMethod) *internal.RPCServiceInfo {
+	fd := &descriptorpb.FileDescriptorProto{Name: strPtr(file)}
+	if fileNode != messageoption.NodeType_NODE_UNSPECIFIED {
+		fd.Options = &descriptorpb.FileOptions{}
+		proto.SetExtension(fd.Options, messageoption.E_OptionFileDefaultNode, fileNode)
+	}
+	sd := &descriptorpb.ServiceDescriptorProto{Name: strPtr(service), Options: &descriptorpb.ServiceOptions{}}
+	if clientProtocol {
+		proto.SetExtension(sd.Options, messageoption.E_OptionIsClientProtocolService, true)
+	}
+	info := internal.ProtoFileInfo{Fd: fd, ServiceDescriptorProto: sd}
+	result := &internal.RPCServiceInfo{ProtoFileInfo: info}
+	for i, m := range methods {
+		md := &descriptorpb.MethodDescriptorProto{
+			Name:       strPtr(m.name),
+			InputType:  strPtr(".fixture." + m.name + "Request"),
+			OutputType: strPtr(m.output),
+			Options:    &descriptorpb.MethodOptions{},
+		}
+		if m.kind != nil {
+			md.Options.ProtoReflect().SetUnknown(protowire.AppendVarint(
+				protowire.AppendTag(nil, internal.OptionClientRpcKindNumber, protowire.VarintType), *m.kind))
+		}
+		sd.Method = append(sd.Method, md)
+		result.Methods = append(result.Methods, &internal.MethodInfo{
+			ProtoFileInfo:         info,
+			Id:                    firstId + uint64(i),
+			Index:                 uint64(i),
+			MethodDescriptorProto: md,
+		})
+	}
+	return result
+}
+
+// withGuildNodeType 让 proto/guild/ 下的服务对上节点类型枚举(HasNodeType 按目录名回退到 GuildNodeService)。
+func withGuildNodeType(t *testing.T) {
+	t.Helper()
+	original := internal.NodeEnumValueSet
+	t.Cleanup(func() { internal.NodeEnumValueSet = original })
+	internal.NodeEnumValueSet = map[string]bool{"GuildNodeService": true}
+}
+
+// 只收进注册表的客户端协议服务里客户端能发起的方法:未标注(= REQUEST)与 ONE_WAY 收;PUSH、SERVER_ONLY、
+// 没标客户端协议的服务、db 节点的服务、对不上节点类型的服务都不收。改前按服务全收,推送号与 UpdateGuildScore 也进了白名单。
+func TestClientAllowlistCasesOnlyAdmitsClientInitiatedMethods(t *testing.T) {
+	withGuildNodeType(t)
+	sceneTCP := func(*internal.MethodInfo) bool { return true }
+
+	services := internal.RPCServiceInfoList{
+		newAllowlistService("proto/guild/guild.proto", "GuildService", true, messageoption.NodeType_NODE_UNSPECIFIED, 10,
+			allowlistFixtureMethod{"CreateGuild", ".fixture.CreateGuildResponse", nil},
+			allowlistFixtureMethod{"NotifyGuildEvent", ".Empty", allowlistKind(uint64(internal.ClientRpcPush))},
+			allowlistFixtureMethod{"Move", ".Empty", allowlistKind(uint64(internal.ClientRpcOneWay))},
+			allowlistFixtureMethod{"UpdateGuildScore", ".fixture.UpdateGuildScoreResponse", allowlistKind(uint64(internal.ClientRpcServerOnly))},
+		),
+		newAllowlistService("proto/guild/guild_admin.proto", "GuildAdmin", false, messageoption.NodeType_NODE_UNSPECIFIED, 20,
+			allowlistFixtureMethod{"SetScore", ".fixture.SetScoreResponse", nil},
+		),
+		newAllowlistService("proto/guild/guild_db.proto", "GuildDb", true, messageoption.NodeType_NODE_DB, 30,
+			allowlistFixtureMethod{"Load", ".fixture.LoadResponse", nil},
+		),
+		newAllowlistService("proto/role_fence/role_fence.proto", "RoleFenceParticipant", true, messageoption.NodeType_NODE_UNSPECIFIED, 40,
+			allowlistFixtureMethod{"ApplyRoleFence", ".fixture.ApplyRoleFenceResponse", nil},
+		),
+	}
+
+	got, err := clientAllowlistCases(services, sceneTCP, "MessageId")
+	if err != nil {
+		t.Fatalf("clientAllowlistCases: %v", err)
+	}
+	want := []string{"case GuildServiceCreateGuildMessageId:", "case GuildServiceMoveMessageId:"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("白名单 = %q, want %q", got, want)
+	}
+}
+
+// 形态读不出来或违反 §5.2 的方法让生成失败,不按 REQUEST 兜底放进白名单(fail-closed)。
+func TestClientAllowlistCasesFailsClosedOnInvalidClientRpcKind(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		method allowlistFixtureMethod
+	}{
+		{"越界的形态值", allowlistFixtureMethod{"CreateGuild", ".fixture.CreateGuildResponse", allowlistKind(9)}},
+		{"Notify前缀没标推送", allowlistFixtureMethod{"NotifyGuildEvent", ".fixture.GuildEvent", nil}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			withGuildNodeType(t)
+			services := internal.RPCServiceInfoList{
+				newAllowlistService("proto/guild/guild.proto", "GuildService", true, messageoption.NodeType_NODE_UNSPECIFIED, 10, test.method),
+			}
+			got, err := clientAllowlistCases(services, func(*internal.MethodInfo) bool { return false }, "MessageId")
+			var validation *internal.ClientRpcValidationError
+			if !errors.As(err, &validation) {
+				t.Fatalf("err = %v, want *internal.ClientRpcValidationError", err)
+			}
+			if got != nil {
+				t.Fatalf("出错时不得返回白名单, got %q", got)
 			}
 		})
 	}

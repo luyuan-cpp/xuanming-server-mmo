@@ -153,7 +153,7 @@ func TestIdSegmentDefaultsWhenBlockAbsent(t *testing.T) {
 	if got, want := c.IdSegment.EffectiveTags(), DefaultIdSegmentTags; !equalStrings(got, want) {
 		t.Fatalf("tags without a block = %v, want the default set %v", got, want)
 	}
-	if _, _, err := c.IdSegment.IssuerEndpoints([]string{"etcd:2379"}); err == nil {
+	if _, _, _, err := c.IdSegment.IssuerEndpoints([]string{"etcd:2379"}); err == nil {
 		t.Fatal("production must not fall back to the service's own etcd")
 	}
 }
@@ -195,62 +195,63 @@ IdSegment:
     Region: 5
     PrimaryEtcd: ["a:2379", "b:2379"]
     SecondaryEtcd: ["c:2379"]
+    RegistryEtcd: ["r:2379"]
 `)
 	if c.IdSegment.Issuer.Region != 5 {
 		t.Fatalf("Region = %d", c.IdSegment.Issuer.Region)
 	}
-	primary, secondary, err := c.IdSegment.IssuerEndpoints(nil)
+	primary, secondary, registry, err := c.IdSegment.IssuerEndpoints(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !equalStrings(primary, []string{"a:2379", "b:2379"}) || !equalStrings(secondary, []string{"c:2379"}) {
-		t.Fatalf("primary=%v secondary=%v", primary, secondary)
+	if !equalStrings(primary, []string{"a:2379", "b:2379"}) || !equalStrings(secondary, []string{"c:2379"}) || !equalStrings(registry, []string{"r:2379"}) {
+		t.Fatalf("primary=%v secondary=%v registry=%v", primary, secondary, registry)
 	}
 }
 
 func TestIdSegmentIssuerEndpoints(t *testing.T) {
 	own := []string{"own:2379"}
+	issuer := func(primary, secondary, registry []string) IdSegmentConfig {
+		return IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: primary, SecondaryEtcd: secondary, RegistryEtcd: registry}}
+	}
+	a, b, r := []string{"a:2379"}, []string{"b:2379"}, []string{"r:2379"}
 	cases := []struct {
 		name          string
 		cfg           IdSegmentConfig
 		wantPrimary   []string
 		wantSecondary []string
+		wantRegistry  []string
 		wantErr       bool
 	}{
-		{name: "production needs both", wantErr: true},
-		{name: "production missing secondary", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379"}}}, wantErr: true},
-		{name: "production missing primary", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{SecondaryEtcd: []string{"a:2379"}}}, wantErr: true},
-		{
-			name:    "production shared endpoint",
-			cfg:     IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379", "b:2379"}, SecondaryEtcd: []string{"c:2379", " B:2379 "}}},
-			wantErr: true,
-		},
-		{
-			name:          "production independent clusters",
-			cfg:           IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379"}, SecondaryEtcd: []string{"b:2379"}}},
-			wantPrimary:   []string{"a:2379"},
-			wantSecondary: []string{"b:2379"},
-		},
-		{name: "dev falls back to own etcd", cfg: IdSegmentConfig{AllowAutoSeed: true}, wantPrimary: own, wantSecondary: own},
+		{name: "production needs all three", wantErr: true},
+		{name: "production missing secondary", cfg: issuer(a, nil, r), wantErr: true},
+		{name: "production missing primary", cfg: issuer(nil, b, r), wantErr: true},
+		{name: "production missing registry", cfg: issuer(a, b, nil), wantErr: true},
+		{name: "production local records share an endpoint", cfg: issuer([]string{"a:2379", "b:2379"}, []string{"c:2379", " B:2379 "}, r), wantErr: true},
+		{name: "production registry shares the primary", cfg: issuer(a, b, []string{" A:2379"}), wantErr: true},
+		{name: "production registry shares the secondary", cfg: issuer(a, b, []string{"r:2379", "b:2379"}), wantErr: true},
+		{name: "production independent clusters", cfg: issuer(a, b, r), wantPrimary: a, wantSecondary: b, wantRegistry: r},
+		{name: "dev falls back to own etcd", cfg: IdSegmentConfig{AllowAutoSeed: true}, wantPrimary: own, wantSecondary: own, wantRegistry: own},
 		{
 			name:          "dev may share one cluster",
-			cfg:           IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379"}}},
-			wantPrimary:   []string{"a:2379"},
-			wantSecondary: []string{"a:2379"},
+			cfg:           IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{PrimaryEtcd: a}},
+			wantPrimary:   a,
+			wantSecondary: a,
+			wantRegistry:  a,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			primary, secondary, err := tc.cfg.IssuerEndpoints(own)
+			primary, secondary, registry, err := tc.cfg.IssuerEndpoints(own)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, wantErr = %v", err, tc.wantErr)
 			}
-			if !equalStrings(primary, tc.wantPrimary) || !equalStrings(secondary, tc.wantSecondary) {
-				t.Fatalf("primary=%v secondary=%v", primary, secondary)
+			if !equalStrings(primary, tc.wantPrimary) || !equalStrings(secondary, tc.wantSecondary) || !equalStrings(registry, tc.wantRegistry) {
+				t.Fatalf("primary=%v secondary=%v registry=%v", primary, secondary, registry)
 			}
 		})
 	}
-	if _, _, err := (IdSegmentConfig{AllowAutoSeed: true}).IssuerEndpoints(nil); err == nil {
+	if _, _, _, err := (IdSegmentConfig{AllowAutoSeed: true}).IssuerEndpoints(nil); err == nil {
 		t.Fatal("dev without any etcd must be rejected")
 	}
 }

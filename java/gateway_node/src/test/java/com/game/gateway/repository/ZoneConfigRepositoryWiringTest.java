@@ -1,6 +1,7 @@
 package com.game.gateway.repository;
 
 import com.game.gateway.controller.AdminZoneController;
+import com.game.gateway.dto.ZoneSettingsRequest;
 import com.game.gateway.entity.ZoneConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -22,8 +24,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * ZoneConfigRepository 与 AdminZoneController 的 Spring Data 接线测试(死锁审计 #18 同类项的另一半证据)。
  *
  * <p>验「语句经 Spring Data / Hibernate 真的能执行、语义对」:native ODKU 的命名参数绑定(含 open_time 为 null、
- * 同名参数 :now 出现两次)、覆盖分支保留 created_at、JPQL 批量 UPDATE / DELETE、COALESCE 保留维护文案,
- * 以及控制器各写接口的 200 / 204 / 404 与「update 绝不插入」。<b>不验锁行为</b>:H2 没有 InnoDB 的锁语义,
+ * 同名参数 :now 出现两次)、已存在的行一列不改(第一轮数据审计 §4 第 18 条)、JPQL 批量 UPDATE / DELETE、
+ * COALESCE 保留维护文案,以及控制器各写接口的 200 / 204 / 400 / 404 / 409 与「update 绝不插入」。
+ * <b>不验锁行为</b>:H2 没有 InnoDB 的锁语义,
  * 锁序由 {@link ZoneConfigUpsertLockOrderMySqlTest} 在真 MySQL 上验。
  *
  * <p>用 NOT_SUPPORTED 关掉 {@code @DataJpaTest} 的外层回滚事务,理由同 {@link ZoneWhitelistRepositoryWiringTest}:
@@ -54,28 +57,30 @@ class ZoneConfigRepositoryWiringTest {
     }
 
     @Test
-    void upsertInsertsThenOverwritesBusinessColumnsButKeepsCreatedAt() {
-        repo.upsert(zone(ZONE, "first", 0, 5000, "", null, true, 1), T1);
+    void insertIfAbsentInsertsOnceAndNeverOverwritesExistingRow() {
+        repo.insertIfAbsent(zone(ZONE, "first", 1, 5000, "维护中", null, true, 1), T1);
         ZoneConfig inserted = repo.findById(ZONE).orElseThrow();
         assertEquals("first", inserted.getName());
+        assertEquals(1, inserted.getManualStatus());
         assertTrue(inserted.isRecommended());
         assertNull(inserted.getOpenTime(), "open_time 绑 null 必须原样落库");
         assertEquals(T1, inserted.getCreatedAt());
         assertEquals(T1, inserted.getUpdatedAt());
 
+        // 第一轮数据审计 §4 第 18 条的 POST 变种:同键第二次写入曾覆盖全部业务列,把维护中的区服改回 OPEN。
         LocalDateTime openTime = LocalDateTime.of(2026, 10, 1, 9, 0, 0);
-        repo.upsert(zone(ZONE, "second", 1, 8000, "维护中", openTime, false, 7), T2);
-        ZoneConfig overwritten = repo.findById(ZONE).orElseThrow();
+        repo.insertIfAbsent(zone(ZONE, "second", 0, 8000, "", openTime, false, 7), T2);
+        ZoneConfig kept = repo.findById(ZONE).orElseThrow();
 
-        assertEquals("second", overwritten.getName());
-        assertEquals(1, overwritten.getManualStatus());
-        assertEquals(8000, overwritten.getCapacity());
-        assertEquals("维护中", overwritten.getMaintenanceMsg());
-        assertEquals(openTime, overwritten.getOpenTime());
-        assertFalse(overwritten.isRecommended());
-        assertEquals(7, overwritten.getSortOrder());
-        assertEquals(T1, overwritten.getCreatedAt(), "覆盖分支不得改 created_at(ServerListService 靠它判「新服」)");
-        assertEquals(T2, overwritten.getUpdatedAt());
+        assertEquals("first", kept.getName());
+        assertEquals(1, kept.getManualStatus(), "已存在的行一列都不能改,维护中不能被改回 OPEN");
+        assertEquals(5000, kept.getCapacity());
+        assertEquals("维护中", kept.getMaintenanceMsg());
+        assertNull(kept.getOpenTime());
+        assertTrue(kept.isRecommended());
+        assertEquals(1, kept.getSortOrder());
+        assertEquals(T1, kept.getCreatedAt(), "不得改 created_at(ServerListService 靠它判「新服」)");
+        assertEquals(T1, kept.getUpdatedAt(), "没有改写就不刷新 updated_at");
         assertEquals(1, repo.findAll().stream().filter(z -> z.getZoneId() == ZONE).count(), "同键不能另插一行");
     }
 
@@ -84,7 +89,7 @@ class ZoneConfigRepositoryWiringTest {
         repo.updateSettings(ABSENT_ZONE, zone(ABSENT_ZONE, "ghost", 0, 1, "", null, false, 0), T1);
         assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "更新不存在的区服不得把它插进来");
 
-        repo.upsert(zone(ZONE, "a", 0, 5000, "", null, false, 0), T1);
+        repo.insertIfAbsent(zone(ZONE, "a", 0, 5000, "", null, false, 0), T1);
         repo.updateSettings(ZONE, zone(ZONE, "b", 2, 100, "关服", null, true, 3), T2);
 
         ZoneConfig z = repo.findById(ZONE).orElseThrow();
@@ -100,7 +105,7 @@ class ZoneConfigRepositoryWiringTest {
 
     @Test
     void updateManualStatusKeepsMessageWhenNullAndLeavesOtherColumnsAlone() {
-        repo.upsert(zone(ZONE, "keep-me", 0, 6000, "", null, true, 9), T1);
+        repo.insertIfAbsent(zone(ZONE, "keep-me", 0, 6000, "", null, true, 9), T1);
 
         repo.updateManualStatus(ZONE, 1, "14:00 恢复", T2);
         repo.updateManualStatus(ZONE, 1, null, T2);
@@ -119,7 +124,7 @@ class ZoneConfigRepositoryWiringTest {
 
     @Test
     void deleteByZoneIdRunsInItsOwnTransactionAndReportsAffectedRows() {
-        repo.upsert(zone(ZONE, "x", 0, 5000, "", null, false, 0), T1);
+        repo.insertIfAbsent(zone(ZONE, "x", 0, 5000, "", null, false, 0), T1);
 
         assertEquals(1, repo.deleteByZoneId(ZONE));
         assertTrue(repo.findById(ZONE).isEmpty());
@@ -130,18 +135,30 @@ class ZoneConfigRepositoryWiringTest {
     void controllerWritePathsEndToEnd() {
         AdminZoneController controller = new AdminZoneController(repo, new TransactionTemplate(txManager));
 
-        ZoneConfig created = controller.create(zone(ZONE, "z", 0, 5000, "", null, false, 0)).getBody();
+        ZoneConfig created = controller.create(settings(ZONE, "z", 1, 5000, "维护中", null, false, 0)).getBody();
         assertNotNull(created);
         assertNotNull(created.getCreatedAt(), "插入分支写入 created_at,回读得到的是库里的值");
 
-        ZoneConfig recreated = controller.create(zone(ZONE, "z2", 0, 5000, "", null, false, 0)).getBody();
-        assertNotNull(recreated);
-        assertEquals("z2", recreated.getName(), "已存在即覆盖,与旧 save() 语义一致");
-        assertEquals(created.getCreatedAt(), recreated.getCreatedAt(), "覆盖分支保留并返回库里的 created_at");
+        ResponseEntity<ZoneConfig> replay = controller.create(settings(ZONE, "z", 1, 5000, "维护中", null, false, 0));
+        assertEquals(HttpStatus.OK, replay.getStatusCode(), "同一份请求重放是幂等的 200");
+        assertEquals(created.getCreatedAt(), replay.getBody().getCreatedAt());
 
-        assertEquals(HttpStatus.OK, controller.update(ZONE, zone(ZONE, "z3", 0, 5000, "", null, false, 0)).getStatusCode());
+        ResponseEntity<ZoneConfig> conflict = controller.create(settings(ZONE, "z2", 0, 9000, "", null, true, 5));
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode(), "已存在且内容不同:不覆盖,回 409");
+        ZoneConfig untouched = repo.findById(ZONE).orElseThrow();
+        assertEquals("z", untouched.getName());
+        assertEquals(1, untouched.getManualStatus(), "维护中的区服不能被一次 create 改回 OPEN");
+        assertEquals(5000, untouched.getCapacity());
+        assertEquals("维护中", untouched.getMaintenanceMsg());
+
+        ZoneSettingsRequest partial = new ZoneSettingsRequest();
+        partial.setName("only-name");
+        assertEquals(HttpStatus.BAD_REQUEST, controller.update(ZONE, partial).getStatusCode(), "只给 name 的 PUT 回 400");
+        assertEquals(1, repo.findById(ZONE).orElseThrow().getManualStatus(), "被拒的 PUT 一列都不写");
+
+        assertEquals(HttpStatus.OK, controller.update(ZONE, settings(null, "z3", 1, 5000, "维护中", null, false, 0)).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND,
-                controller.update(ABSENT_ZONE, zone(ABSENT_ZONE, "ghost", 0, 5000, "", null, false, 0)).getStatusCode());
+                controller.update(ABSENT_ZONE, settings(null, "ghost", 0, 5000, "", null, false, 0)).getStatusCode());
         assertTrue(repo.findById(ABSENT_ZONE).isEmpty(), "update 不存在的区服回 404,且不得插入");
 
         ZoneConfig maintenance = controller.setMaintenance(ZONE, new AdminZoneController.MaintenanceRequest("m")).getBody();
@@ -159,6 +176,22 @@ class ZoneConfigRepositoryWiringTest {
         assertEquals(HttpStatus.NO_CONTENT, controller.delete(ZONE).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, controller.delete(ZONE).getStatusCode());
         assertTrue(repo.findById(ZONE).isEmpty());
+    }
+
+    /** 控制器的请求体:每个业务字段都给(openTime 经 setter 记为「给了」,null 就是没有开服时间)。 */
+    private static ZoneSettingsRequest settings(Long zoneId, String name, int manualStatus, int capacity,
+                                                String maintenanceMsg, LocalDateTime openTime, boolean recommended,
+                                                int sortOrder) {
+        ZoneSettingsRequest s = new ZoneSettingsRequest();
+        s.setZoneId(zoneId);
+        s.setName(name);
+        s.setManualStatus(manualStatus);
+        s.setCapacity(capacity);
+        s.setMaintenanceMsg(maintenanceMsg);
+        s.setOpenTime(openTime);
+        s.setRecommended(recommended);
+        s.setSortOrder(sortOrder);
+        return s;
     }
 
     private static ZoneConfig zone(long zoneId, String name, int manualStatus, int capacity, String maintenanceMsg,

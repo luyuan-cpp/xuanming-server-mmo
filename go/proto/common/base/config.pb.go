@@ -614,12 +614,13 @@ func (x *BaseDeployConfig) GetGrpcClient() *GrpcClientConfig {
 
 // Game config
 type GameConfig struct {
-	state         protoimpl.MessageState        `protogen:"open.v1"`
-	SceneNodeType uint32                        `protobuf:"varint,1,opt,name=scene_node_type,json=sceneNodeType,proto3" json:"scene_node_type,omitempty"` // Scene node type
-	ZoneId        uint32                        `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                        // Zone ID
-	ZoneRedis     *GameConfig_ZoneRedisConfig   `protobuf:"bytes,7,opt,name=zone_redis,json=zoneRedis,proto3" json:"zone_redis,omitempty"`                // Zone Redis config
-	PlayerInbox   *GameConfig_PlayerInboxConfig `protobuf:"bytes,8,opt,name=player_inbox,json=playerInbox,proto3" json:"player_inbox,omitempty"`
-	PlayerRedis   *GameConfig_PlayerRedisConfig `protobuf:"bytes,9,opt,name=player_redis,json=playerRedis,proto3" json:"player_redis,omitempty"`
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	SceneNodeType uint32                          `protobuf:"varint,1,opt,name=scene_node_type,json=sceneNodeType,proto3" json:"scene_node_type,omitempty"` // Scene node type
+	ZoneId        uint32                          `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                        // Zone ID
+	ZoneRedis     *GameConfig_ZoneRedisConfig     `protobuf:"bytes,7,opt,name=zone_redis,json=zoneRedis,proto3" json:"zone_redis,omitempty"`                // Zone Redis config
+	PlayerInbox   *GameConfig_PlayerInboxConfig   `protobuf:"bytes,8,opt,name=player_inbox,json=playerInbox,proto3" json:"player_inbox,omitempty"`
+	PlayerRedis   *GameConfig_PlayerRedisConfig   `protobuf:"bytes,9,opt,name=player_redis,json=playerRedis,proto3" json:"player_redis,omitempty"`
+	AuditSnapshot *GameConfig_AuditSnapshotConfig `protobuf:"bytes,10,opt,name=audit_snapshot,json=auditSnapshot,proto3" json:"audit_snapshot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -685,6 +686,13 @@ func (x *GameConfig) GetPlayerInbox() *GameConfig_PlayerInboxConfig {
 func (x *GameConfig) GetPlayerRedis() *GameConfig_PlayerRedisConfig {
 	if x != nil {
 		return x.PlayerRedis
+	}
+	return nil
+}
+
+func (x *GameConfig) GetAuditSnapshot() *GameConfig_AuditSnapshotConfig {
+	if x != nil {
+		return x.AuditSnapshot
 	}
 	return nil
 }
@@ -879,6 +887,70 @@ func (x *GameConfig_PlayerRedisConfig) GetPassword() string {
 	return ""
 }
 
+// 进场、离场的审计快照(整档发 Kafka,data_service 落 player_snapshot;modules/snapshot/audit_snapshot_policy.h)。
+// 由 readGameConfig 手工逐键解析,yaml 键名 audit_snapshot。**整段或单键缺失时加载器显式取默认**:两个触发点都开、全量。
+// K8s 的 node-config 从 bin/etc/game_config.yaml 整段复制这一段。只影响审计证据,不影响存盘。
+type GameConfig_AuditSnapshotConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	LoginEnabled  bool                   `protobuf:"varint,1,opt,name=login_enabled,json=loginEnabled,proto3" json:"login_enabled,omitempty"`
+	LogoutEnabled bool                   `protobuf:"varint,2,opt,name=logout_enabled,json=logoutEnabled,proto3" json:"logout_enabled,omitempty"`
+	// 抽样千分比,1000 = 全量,0 = 两个触发点都不发。按 player_id 稳定抽样,同一玩家的进退场快照成对。
+	SamplePerMille uint32 `protobuf:"varint,3,opt,name=sample_per_mille,json=samplePerMille,proto3" json:"sample_per_mille,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GameConfig_AuditSnapshotConfig) Reset() {
+	*x = GameConfig_AuditSnapshotConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameConfig_AuditSnapshotConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameConfig_AuditSnapshotConfig) ProtoMessage() {}
+
+func (x *GameConfig_AuditSnapshotConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameConfig_AuditSnapshotConfig.ProtoReflect.Descriptor instead.
+func (*GameConfig_AuditSnapshotConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 3}
+}
+
+func (x *GameConfig_AuditSnapshotConfig) GetLoginEnabled() bool {
+	if x != nil {
+		return x.LoginEnabled
+	}
+	return false
+}
+
+func (x *GameConfig_AuditSnapshotConfig) GetLogoutEnabled() bool {
+	if x != nil {
+		return x.LogoutEnabled
+	}
+	return false
+}
+
+func (x *GameConfig_AuditSnapshotConfig) GetSamplePerMille() uint32 {
+	if x != nil {
+		return x.SamplePerMille
+	}
+	return 0
+}
+
 var File_proto_common_base_config_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_config_proto_rawDesc = "" +
@@ -935,7 +1007,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
 	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\x122\n" +
 	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
-	"grpcClient\"\xc5\x04\n" +
+	"grpcClient\"\x9b\x06\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +
@@ -943,7 +1015,9 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\n" +
 	"zone_redis\x18\a \x01(\v2\x1b.GameConfig.ZoneRedisConfigR\tzoneRedis\x12@\n" +
 	"\fplayer_inbox\x18\b \x01(\v2\x1d.GameConfig.PlayerInboxConfigR\vplayerInbox\x12@\n" +
-	"\fplayer_redis\x18\t \x01(\v2\x1d.GameConfig.PlayerRedisConfigR\vplayerRedis\x1ae\n" +
+	"\fplayer_redis\x18\t \x01(\v2\x1d.GameConfig.PlayerRedisConfigR\vplayerRedis\x12F\n" +
+	"\x0eaudit_snapshot\x18\n" +
+	" \x01(\v2\x1f.GameConfig.AuditSnapshotConfigR\rauditSnapshot\x1ae\n" +
 	"\x0fZoneRedisConfig\x12\x12\n" +
 	"\x04host\x18\x03 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x04 \x01(\rR\x04port\x12\x1a\n" +
@@ -955,7 +1029,11 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x11PlayerRedisConfig\x12\x12\n" +
 	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x14\n" +
 	"\x05seeds\x18\x02 \x03(\tR\x05seeds\x12\x1a\n" +
-	"\bpassword\x18\x03 \x01(\tR\bpasswordB\x13Z\x11proto/common/baseb\x06proto3"
+	"\bpassword\x18\x03 \x01(\tR\bpassword\x1a\x8b\x01\n" +
+	"\x13AuditSnapshotConfig\x12#\n" +
+	"\rlogin_enabled\x18\x01 \x01(\bR\floginEnabled\x12%\n" +
+	"\x0elogout_enabled\x18\x02 \x01(\bR\rlogoutEnabled\x12(\n" +
+	"\x10sample_per_mille\x18\x03 \x01(\rR\x0esamplePerMilleB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_config_proto_rawDescOnce sync.Once
@@ -969,19 +1047,20 @@ func file_proto_common_base_config_proto_rawDescGZIP() []byte {
 	return file_proto_common_base_config_proto_rawDescData
 }
 
-var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_common_base_config_proto_goTypes = []any{
-	(*ServiceConfig)(nil),                // 0: ServiceConfig
-	(*KafkaConfig)(nil),                  // 1: KafkaConfig
-	(*IdSegmentKindConfig)(nil),          // 2: IdSegmentKindConfig
-	(*IdSegmentConfig)(nil),              // 3: IdSegmentConfig
-	(*GrpcClientConfig)(nil),             // 4: GrpcClientConfig
-	(*BaseDeployConfig)(nil),             // 5: BaseDeployConfig
-	(*GameConfig)(nil),                   // 6: GameConfig
-	nil,                                  // 7: GrpcClientConfig.CallDeadlineMsEntry
-	(*GameConfig_ZoneRedisConfig)(nil),   // 8: GameConfig.ZoneRedisConfig
-	(*GameConfig_PlayerInboxConfig)(nil), // 9: GameConfig.PlayerInboxConfig
-	(*GameConfig_PlayerRedisConfig)(nil), // 10: GameConfig.PlayerRedisConfig
+	(*ServiceConfig)(nil),                  // 0: ServiceConfig
+	(*KafkaConfig)(nil),                    // 1: KafkaConfig
+	(*IdSegmentKindConfig)(nil),            // 2: IdSegmentKindConfig
+	(*IdSegmentConfig)(nil),                // 3: IdSegmentConfig
+	(*GrpcClientConfig)(nil),               // 4: GrpcClientConfig
+	(*BaseDeployConfig)(nil),               // 5: BaseDeployConfig
+	(*GameConfig)(nil),                     // 6: GameConfig
+	nil,                                    // 7: GrpcClientConfig.CallDeadlineMsEntry
+	(*GameConfig_ZoneRedisConfig)(nil),     // 8: GameConfig.ZoneRedisConfig
+	(*GameConfig_PlayerInboxConfig)(nil),   // 9: GameConfig.PlayerInboxConfig
+	(*GameConfig_PlayerRedisConfig)(nil),   // 10: GameConfig.PlayerRedisConfig
+	(*GameConfig_AuditSnapshotConfig)(nil), // 11: GameConfig.AuditSnapshotConfig
 }
 var file_proto_common_base_config_proto_depIdxs = []int32{
 	2,  // 0: IdSegmentConfig.kinds:type_name -> IdSegmentKindConfig
@@ -993,11 +1072,12 @@ var file_proto_common_base_config_proto_depIdxs = []int32{
 	8,  // 6: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
 	9,  // 7: GameConfig.player_inbox:type_name -> GameConfig.PlayerInboxConfig
 	10, // 8: GameConfig.player_redis:type_name -> GameConfig.PlayerRedisConfig
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	11, // 9: GameConfig.audit_snapshot:type_name -> GameConfig.AuditSnapshotConfig
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_config_proto_init() }
@@ -1011,7 +1091,7 @@ func file_proto_common_base_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_base_config_proto_rawDesc), len(file_proto_common_base_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

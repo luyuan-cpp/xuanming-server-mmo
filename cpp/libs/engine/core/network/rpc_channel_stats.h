@@ -50,6 +50,11 @@ struct RpcChannelStats
     std::atomic<uint64_t> replyRunTwice{0};
     std::atomic<uint64_t> replyChannelGone{0};
     std::atomic<uint64_t> replyAbandoned{0};
+
+    // 链路心跳(docs/design/muduo-rpc-channel.md §21)。正常运行两项都应为 0。
+    // 心跳收发次数故意不计:空闲链路上它每 5s 都在变,汇总行就会每 30s 打一次,失去「计数变化才打」的意义。
+    std::atomic<uint64_t> linkIdleClosed{0};     // 读空闲满超时,判对端已死并 forceClose 的次数
+    std::atomic<uint64_t> linkIdleDeferred{0};   // 读空闲已满,但检查迟到(本端 loop 卡过),推迟到下一次检查的次数
 };
 
 RpcChannelStats& GetRpcChannelStats();

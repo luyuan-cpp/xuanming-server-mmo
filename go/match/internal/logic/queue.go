@@ -12,17 +12,25 @@ import (
 )
 
 // authoritativePlayerID 取权威 player_id:客户端直达协议(gate gRPC)时以
-// x-session-detail-bin 里的身份为准,请求体里的 player_id 仅供内部调用使用
+// x-session-detail-bin 里的身份为准,请求体里的 player_id 仅供不带会话头的内部调用使用
 // (照 login 的 session metadata 模式)。带了 session 但与请求体不一致时记日志。
+//
+// 带了会话头就只认会话头:会话未绑角色(player_id = 0)时原样返回 0,由调用方按「缺少玩家身份」拒绝,
+// 绝不回落到请求体 —— 否则未绑角色的会话在请求体里填别人的 player_id,就能替别人取消排队、查排队状态、
+// 发起或应答切磋、观战(client-request-ordering.md §7.2 第 9 条)。生产链上 originalRoleInterceptor 已先拒掉
+// 不带会话、或会话 player_id / owner_revision 为 0 的 MatchService 请求;这里是业务层自己的一道,
+// 不依赖拦截器的装配顺序。
 func authoritativePlayerID(ctx context.Context, reqPlayerId uint64) uint64 {
-	if detail, ok := ctxkeys.GetSessionDetails(ctx); ok && detail.GetPlayerId() != 0 {
-		if reqPlayerId != 0 && reqPlayerId != detail.GetPlayerId() {
-			logx.Errorf("[match] Request player_id=%d differs from authoritative session identity %d; using session identity",
-				reqPlayerId, detail.GetPlayerId())
-		}
-		return detail.GetPlayerId()
+	detail, ok := ctxkeys.GetSessionDetails(ctx)
+	if !ok {
+		return reqPlayerId
 	}
-	return reqPlayerId
+	sessionPlayerID := detail.GetPlayerId()
+	if reqPlayerId != 0 && reqPlayerId != sessionPlayerID {
+		logx.Errorf("[match] Request player_id=%d differs from authoritative session identity %d; using session identity",
+			reqPlayerId, sessionPlayerID)
+	}
+	return sessionPlayerID
 }
 
 // isPlayerBattleLocked 咨询性检查 battle:lock:{player_id}(scene 写,契约 key

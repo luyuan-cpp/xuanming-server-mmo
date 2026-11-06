@@ -38,6 +38,11 @@ uint64_t Bump(std::atomic<uint64_t> &counter, uint64_t delta = 1)
     return counter.fetch_add(delta, std::memory_order_relaxed) + delta;
 }
 
+long long ToMilliseconds(std::chrono::steady_clock::duration duration)
+{
+    return static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
+}
+
 const char *MethodNameOf(uint32_t messageId)
 {
     return IsDispatchableMessageId(messageId) ? gRpcMethodRegistry[messageId].methodName : "<unknown_method>";
@@ -506,19 +511,37 @@ void RpcChannel::CompleteDeferred(RpcDoneCallback::State &state, GameErrorCode e
 
 std::shared_ptr<RpcChannel> RpcChannel::Create(muduo::net::EventLoop &loop,
                                                const TcpConnectionPtr &connection,
-                                               RpcServiceMap services, std::shared_ptr<RpcMaintenanceState> maintenance)
+                                               RpcServiceMap services, std::shared_ptr<RpcMaintenanceState> maintenance,
+                                               std::optional<RpcLinkHeartbeat> heartbeat)
 {
-    return std::make_shared<RpcChannel>(PrivateTag{}, loop, connection, std::move(services), std::move(maintenance));
+    auto channel = std::make_shared<RpcChannel>(PrivateTag{}, loop, connection, std::move(services),
+                                                std::move(maintenance), heartbeat);
+    // 检查节拍要绑 weak_from_this(),构造函数里还拿不到,所以在这里挂第一拍。
+    channel->ArmLinkCheck();
+    return channel;
 }
 
 RpcChannel::RpcChannel(PrivateTag, muduo::net::EventLoop &loop, const TcpConnectionPtr &connection,
-                       RpcServiceMap services, std::shared_ptr<RpcMaintenanceState> maintenance)
+                       RpcServiceMap services, std::shared_ptr<RpcMaintenanceState> maintenance,
+                       std::optional<RpcLinkHeartbeat> heartbeat)
     : maintenance_(std::move(maintenance)),
       loop_(loop),
       connection_(connection),
       services_(std::move(services)),
       codec_(std::bind(&RpcChannel::OnRpcMessage, this, _1, _2, _3))
 {
+    if (heartbeat)
+    {
+        if (!IsValidLinkHeartbeat(*heartbeat))
+        {
+            LOG_FATAL << "RpcChannel: invalid link heartbeat (interval_ms=" << heartbeat->interval.count()
+                      << ", idle_timeout_ms=" << heartbeat->idleTimeout.count()
+                      << ", check_period_ms=" << heartbeat->checkPeriod.count()
+                      << "); need 0 < check_period <= interval and interval + 2 * check_period < idle_timeout";
+        }
+        // 基线是创建时刻:连上之前没有收发,从这一刻起计写空闲与读空闲。
+        liveness_.emplace(*heartbeat, Clock::now());
+    }
     LOG_DEBUG << "RpcChannel created: " << this;
 }
 
@@ -723,6 +746,11 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
 void RpcChannel::OnMessage(const TcpConnectionPtr &connection, muduo::net::Buffer *buffer, muduo::Timestamp receiveTime)
 {
     loop_.assertInLoopThread();
+    if (liveness_)
+    {
+        // 按字节算对端活着,在解码之前:大帧分几次到也算,坏帧也说明对端的网络栈还在。
+        liveness_->OnReceived();
+    }
     codec_.onMessage(connection, buffer, receiveTime);
 }
 
@@ -769,6 +797,10 @@ void RpcChannel::SendFrame(const TcpConnectionPtr &connection, const GameRpcMess
     const auto size = static_cast<uint32_t>(LogIfMessageTooLarge(message));
     codec_.send(connection, message);
     TrafficStatsCollector::Instance().RecordSend(message.message_id(), size);
+    if (liveness_)
+    {
+        liveness_->OnSent();   // 发出了业务帧,这一轮不必再发心跳
+    }
 }
 
 void RpcChannel::FailAll(RpcStatus status)
@@ -849,11 +881,100 @@ void RpcChannel::SweepTimeouts(Clock::time_point now)
     }
 }
 
+// ====================== 链路心跳(§21) ======================
+
+void RpcChannel::ArmLinkCheck()
+{
+    // 没开心跳、已经挂着、或连接已不在(判死 forceClose 之后、DOWN 之后)都不挂。
+    if (!liveness_ || linkCheckArmed_ || !IsConnected())
+    {
+        return;
+    }
+    std::weak_ptr<RpcChannel> weakSelf = weak_from_this();
+    if (weakSelf.expired())
+    {
+        LOG_FATAL << "RpcChannel must be owned by shared_ptr (use RpcChannel::Create)";
+    }
+    linkCheckArmed_ = true;
+    const double delaySeconds = std::chrono::duration<double>(liveness_->options().checkPeriod).count();
+    // 从不 cancel:channel 没了,节拍触发时 lock 失败就结束;与超时 tick(§4.5)同一写法、互不相干。
+    loop_.runAfter(delaySeconds, [weakSelf]
+    {
+        if (const auto self = weakSelf.lock())
+        {
+            self->OnLinkCheckTick();
+        }
+    });
+}
+
+void RpcChannel::OnLinkCheckTick()
+{
+    linkCheckArmed_ = false;
+    CheckLinkLiveness(Clock::now());
+    ArmLinkCheck();
+}
+
+RpcLinkLiveness::Verdict RpcChannel::CheckLinkLiveness(Clock::time_point now)
+{
+    loop_.assertInLoopThread();
+    if (!liveness_)
+    {
+        return {};
+    }
+    const auto connection = LockConnectedConnection();
+    if (!connection)
+    {
+        return {};   // 连接已断开或正在关闭:DOWN 路径负责收尾,这里不再判
+    }
+    // 关闭(Close,关机阶段 0)不影响心跳:关闭只拒新调用,不能让对端在本端排空期间把链路判死。
+    const auto verdict = liveness_->Check(now);
+    if (verdict.closeIdle)
+    {
+        // 只关传输,不做任何业务收尾:在途调用由 DOWN 以 kDisconnected 失败;出站由 enableRetry 重连后重新握手,
+        // 入站由 RpcServer 的 DOWN 摘掉会话。forceClose 当场把连接置为 kDisconnecting,IsReady / IsConnected 随即为假。
+        // 每次判死打一行、不采样:每次死亡每条链路只有一行(§21.7)。
+        const auto n = Bump(GetRpcChannelStats().linkIdleClosed);
+        LOG_WARN << "[RpcChannel] link idle timeout, forcing close: peer=" << connection->peerAddress().toIpPort()
+                 << ", silent_ms=" << ToMilliseconds(liveness_->SilentFor(now))
+                 << ", idle_timeout_ms=" << static_cast<long long>(liveness_->options().idleTimeout.count())
+                 << ", outstanding=" << outstandings_.Size() << ", occurrences=" << n;
+        connection->forceClose();
+        return verdict;
+    }
+    if (verdict.idleDeferred)
+    {
+        const auto n = Bump(GetRpcChannelStats().linkIdleDeferred);
+        if (ShouldLogRpcEvent(n))
+        {
+            LOG_WARN << "[RpcChannel] link idle verdict deferred, local loop stalled: check_gap_ms="
+                     << ToMilliseconds(verdict.checkGap) << ", silent_ms=" << ToMilliseconds(liveness_->SilentFor(now))
+                     << ", peer=" << connection->peerAddress().toIpPort() << ", occurrences=" << n;
+        }
+    }
+    if (verdict.sendHeartbeat)
+    {
+        SendHeartbeat(connection);
+    }
+    return verdict;
+}
+
+void RpcChannel::SendHeartbeat(const TcpConnectionPtr &connection)
+{
+    GameRpcMessage heartbeat;
+    heartbeat.set_type(HEARTBEAT);
+    codec_.send(connection, heartbeat);
+}
+
 void RpcChannel::OnRpcMessage(const TcpConnectionPtr &connection, const RpcMessagePtr &messagePtr,
                               muduo::Timestamp /*receiveTime*/)
 {
     assert(connection == connection_.lock());
     const auto &message = *messagePtr;
+    if (message.type() == HEARTBEAT)
+    {
+        // 链路心跳(§21):OnMessage 收到字节时已经记过对端活着。不派发、不回包,也不按 message_id 0 记流量。
+        return;
+    }
 
     const size_t messageSize = LogIfMessageTooLarge(message);
     LOG_TRACE << "RPC message received, type: " << message.type() << ", message ID: " << message.message_id()

@@ -49,6 +49,7 @@ import (
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/serverbase"
+	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -268,6 +269,9 @@ func runTrade(c config.Config) (runErr error) {
 		stopAssetOpCleanup = stop
 	}
 
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="trade",pool="primary"}:只有交易库这一个池,抓取时现取 DBStats。
+	// 不放进 NewServiceContext:单测会多次构造它,默认注册表重复注册会失败。
+	sqlpoolstats.Register("trade", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, svcCtx.DB))
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
 	svc.StartMetrics(c.MetricsListenAddr)
 

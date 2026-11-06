@@ -37,6 +37,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::GmCurrencyDebtPayload
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::GmItemGainPayload
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::BattleSettlementInboxRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::BattleSettlementInboxResponse
@@ -367,7 +369,7 @@ constexpr auto PlayerInboxItem::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -677,7 +679,7 @@ constexpr auto PlayerInboxDecisionReport::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -833,7 +835,7 @@ constexpr auto PlayerInboxAckItem::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -880,6 +882,147 @@ const ::_pbi::ClassData* PlayerInboxAckItem_get_class_data() {
   return PlayerInboxAckItem_globals_.GetClassData();
 #else
   return PlayerInboxAckItem_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GmItemGainPayload::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GmItemGainPayload>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GmItemGainPayload, _impl_._has_bits_);
+};
+
+constexpr GmItemGainPayload::ParseTableT_ GmItemGainPayload::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GmItemGainPayload, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::GmItemGainPayload>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 item_config_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GmItemGainPayload, _impl_.item_config_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GmItemGainPayload, _impl_.item_config_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 item_config_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GmItemGainPayload, _impl_.item_config_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GmItemGainPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        item_config_id_{0u} {}
+
+template <typename>
+constexpr GmItemGainPayload::GmItemGainPayload(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GmItemGainPayload::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GmItemGainPayload(arena);
+}
+constexpr auto GmItemGainPayload::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GmItemGainPayload), alignof(GmItemGainPayload));
+}
+constexpr auto GmItemGainPayload::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GmItemGainPayload::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GmItemGainPayload>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GmItemGainPayload::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GmItemGainPayload>(), &GmItemGainPayload::ByteSizeLong,
+              &GmItemGainPayload::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GmItemGainPayload, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GmItemGainPayloadGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GmItemGainPayloadGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GmItemGainPayload_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GmItemGainPayload::InternalGenerateClassData_(
+            _default, &GmItemGainPayload_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GmItemGainPayload>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GmItemGainPayloadGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GmItemGainPayload _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GmItemGainPayload>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GmItemGainPayloadGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GmItemGainPayloadGlobalsTypeInternal GmItemGainPayload_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GmItemGainPayload_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GmItemGainPayload_globals_.GetClassData();
+#else
+  return GmItemGainPayload_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1353,7 +1496,7 @@ constexpr auto FetchPlayerInboxResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -1568,7 +1711,7 @@ constexpr auto FetchPlayerInboxRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -1776,7 +1919,7 @@ constexpr auto BattleSettlementInboxResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -1973,7 +2116,7 @@ constexpr auto BattleSettlementInboxRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2166,7 +2309,7 @@ constexpr auto AckPlayerInboxResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2376,7 +2519,7 @@ constexpr auto AckPlayerInboxRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2471,6 +2614,11 @@ const ::uint32_t
         0,
         1,
         3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GmItemGainPayload, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GmItemGainPayload, _impl_.item_config_id_),
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_inbox::BattleSettlementInboxRequest, _impl_._has_bits_),
         10, // hasbit index offset
@@ -2626,15 +2774,16 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::player_inbox::PlayerInboxTypeSpec)},
         {18, sizeof(::player_inbox::GmCurrencyGainPayload)},
         {23, sizeof(::player_inbox::GmCurrencyDebtPayload)},
-        {36, sizeof(::player_inbox::BattleSettlementInboxRequest)},
-        {53, sizeof(::player_inbox::BattleSettlementInboxResponse)},
-        {72, sizeof(::player_inbox::FetchPlayerInboxRequest)},
-        {93, sizeof(::player_inbox::PlayerInboxItem)},
-        {112, sizeof(::player_inbox::FetchPlayerInboxResponse)},
-        {129, sizeof(::player_inbox::PlayerInboxDecisionReport)},
-        {140, sizeof(::player_inbox::AckPlayerInboxRequest)},
-        {159, sizeof(::player_inbox::PlayerInboxAckItem)},
-        {168, sizeof(::player_inbox::AckPlayerInboxResponse)},
+        {36, sizeof(::player_inbox::GmItemGainPayload)},
+        {41, sizeof(::player_inbox::BattleSettlementInboxRequest)},
+        {58, sizeof(::player_inbox::BattleSettlementInboxResponse)},
+        {77, sizeof(::player_inbox::FetchPlayerInboxRequest)},
+        {98, sizeof(::player_inbox::PlayerInboxItem)},
+        {117, sizeof(::player_inbox::FetchPlayerInboxResponse)},
+        {134, sizeof(::player_inbox::PlayerInboxDecisionReport)},
+        {145, sizeof(::player_inbox::AckPlayerInboxRequest)},
+        {164, sizeof(::player_inbox::PlayerInboxAckItem)},
+        {173, sizeof(::player_inbox::AckPlayerInboxResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2642,6 +2791,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::player_inbox::PlayerInboxTypeSpec_globals_,
         &::player_inbox::GmCurrencyGainPayload_globals_,
         &::player_inbox::GmCurrencyDebtPayload_globals_,
+        &::player_inbox::GmItemGainPayload_globals_,
         &::player_inbox::BattleSettlementInboxRequest_globals_,
         &::player_inbox::BattleSettlementInboxResponse_globals_,
         &::player_inbox::FetchPlayerInboxRequest_globals_,
@@ -2669,134 +2819,140 @@ const char descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_2ep
     "rrency_type\030\001 \001(\r\"{\n\025GmCurrencyDebtPaylo"
     "ad\022\025\n\rcurrency_type\030\001 \001(\r\022\022\n\nowe_amount\030"
     "\002 \001(\004\022\016\n\006reason\030\003 \001(\t\022\023\n\013gm_operator\030\004 \001"
-    "(\t\022\022\n\nexpires_at\030\005 \001(\004\"\343\001\n\034BattleSettlem"
-    "entInboxRequest\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tba"
-    "ttle_id\030\002 \001(\004\022\036\n\026expected_owner_account\030"
-    "\003 \001(\t\022\037\n\027expected_owner_revision\030\004 \001(\004\022\024"
-    "\n\014issued_at_ms\030\005 \001(\004\022\032\n\022settlement_paylo"
-    "ad\030\006 \001(\014\022*\n\004auth\030\007 \001(\0132\034.common.base.Ser"
-    "viceCallAuth\"\211\002\n\035BattleSettlementInboxRe"
-    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
-    "essage\022\021\n\tplayer_id\030\002 \001(\004\022\021\n\tbattle_id\030\003"
-    " \001(\004\022\013\n\003seq\030\004 \001(\004\0221\n\005state\030\005 \001(\0162\".playe"
-    "r_inbox.PlayerInboxItemState\022\026\n\016content_"
-    "sha256\030\006 \001(\014\022\026\n\016request_digest\030\007 \001(\t\022*\n\004"
-    "auth\030\010 \001(\0132\034.common.base.ServiceCallAuth"
-    "\"\271\002\n\027FetchPlayerInboxRequest\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.player_inbox.P"
-    "layerInboxDomain\022\023\n\013owner_epoch\030\003 \001(\004\022\026\n"
-    "\016correlation_id\030\004 \001(\004\022\021\n\tmax_items\030\005 \001(\r"
-    "\022 \n\030consumer_decided_through\030\006 \001(\004\022\025\n\rsc"
-    "ene_node_id\030\007 \001(\r\0225\n\tadmission\030\010 \001(\0132\".c"
-    "ommon.base.RoleAdmissionIdentity\022*\n\004auth"
-    "\030\t \001(\0132\034.common.base.ServiceCallAuth\"\230\002\n"
-    "\017PlayerInboxItem\022\013\n\003seq\030\001 \001(\004\0226\n\010msg_typ"
-    "e\030\002 \001(\0162$.player_inbox.PlayerInboxMessag"
-    "eType\022\017\n\007payload\030\003 \001(\014\0225\n\tdirective\030\004 \001("
-    "\0162\".player_inbox.PlayerInboxDirective\0228\n"
-    "\013void_reason\030\005 \001(\0162#.player_inbox.Player"
-    "InboxVoidReason\022\022\n\nrequest_id\030\006 \001(\004\022\026\n\016d"
-    "elivery_count\030\007 \001(\r\022\022\n\ncreated_ms\030\010 \001(\004\""
-    "\224\002\n\030FetchPlayerInboxResponse\022&\n\rerror_me"
-    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tplayer_i"
-    "d\030\002 \001(\004\022/\n\006domain\030\003 \001(\0162\037.player_inbox.P"
-    "layerInboxDomain\022\026\n\016correlation_id\030\004 \001(\004"
-    "\0224\n\005fence\030\005 \001(\0162%.player_inbox.PlayerInb"
-    "oxFenceVerdict\022,\n\005items\030\006 \003(\0132\035.player_i"
-    "nbox.PlayerInboxItem\022\020\n\010has_more\030\007 \001(\010\"\177"
-    "\n\031PlayerInboxDecisionReport\022\013\n\003seq\030\001 \001(\004"
-    "\0221\n\007outcome\030\002 \001(\0162 .player_inbox.PlayerI"
-    "nboxOutcome\022\016\n\006reason\030\003 \001(\r\022\022\n\nrequest_i"
-    "d\030\004 \001(\004\"\276\002\n\025AckPlayerInboxRequest\022\021\n\tpla"
+    "(\t\022\022\n\nexpires_at\030\005 \001(\004\"+\n\021GmItemGainPayl"
+    "oad\022\026\n\016item_config_id\030\001 \001(\r\"\343\001\n\034BattleSe"
+    "ttlementInboxRequest\022\021\n\tplayer_id\030\001 \001(\004\022"
+    "\021\n\tbattle_id\030\002 \001(\004\022\036\n\026expected_owner_acc"
+    "ount\030\003 \001(\t\022\037\n\027expected_owner_revision\030\004 "
+    "\001(\004\022\024\n\014issued_at_ms\030\005 \001(\004\022\032\n\022settlement_"
+    "payload\030\006 \001(\014\022*\n\004auth\030\007 \001(\0132\034.common.bas"
+    "e.ServiceCallAuth\"\211\002\n\035BattleSettlementIn"
+    "boxResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
+    "InfoMessage\022\021\n\tplayer_id\030\002 \001(\004\022\021\n\tbattle"
+    "_id\030\003 \001(\004\022\013\n\003seq\030\004 \001(\004\0221\n\005state\030\005 \001(\0162\"."
+    "player_inbox.PlayerInboxItemState\022\026\n\016con"
+    "tent_sha256\030\006 \001(\014\022\026\n\016request_digest\030\007 \001("
+    "\t\022*\n\004auth\030\010 \001(\0132\034.common.base.ServiceCal"
+    "lAuth\"\271\002\n\027FetchPlayerInboxRequest\022\021\n\tpla"
     "yer_id\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.player_in"
     "box.PlayerInboxDomain\022\023\n\013owner_epoch\030\003 \001"
-    "(\004\022\026\n\016correlation_id\030\004 \001(\004\022:\n\tdecisions\030"
-    "\005 \003(\0132\'.player_inbox.PlayerInboxDecision"
-    "Report\022\025\n\rscene_node_id\030\006 \001(\r\0225\n\tadmissi"
-    "on\030\007 \001(\0132\".common.base.RoleAdmissionIden"
-    "tity\022*\n\004auth\030\010 \001(\0132\034.common.base.Service"
-    "CallAuth\"\210\001\n\022PlayerInboxAckItem\022\013\n\003seq\030\001"
-    " \001(\004\0222\n\006result\030\002 \001(\0162\".player_inbox.Play"
-    "erInboxAckResult\0221\n\005state\030\003 \001(\0162\".player"
-    "_inbox.PlayerInboxItemState\"\205\002\n\026AckPlaye"
-    "rInboxResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\021\n\tplayer_id\030\002 \001(\004\022/\n\006dom"
-    "ain\030\003 \001(\0162\037.player_inbox.PlayerInboxDoma"
-    "in\022\026\n\016correlation_id\030\004 \001(\004\0224\n\005fence\030\005 \001("
-    "\0162%.player_inbox.PlayerInboxFenceVerdict"
-    "\0221\n\007results\030\006 \003(\0132 .player_inbox.PlayerI"
-    "nboxAckItem*V\n\020PlayerInboxClass\022\"\n\036PLAYE"
-    "R_INBOX_CLASS_UNSPECIFIED\020\000\022\036\n\032PLAYER_IN"
-    "BOX_CLASS_DURABLE\020\001*\177\n\027PlayerInboxProduc"
-    "erKind\022%\n!PLAYER_INBOX_PRODUCER_UNSPECIF"
-    "IED\020\000\022\034\n\030PLAYER_INBOX_PRODUCER_GM\020\001\022\037\n\033P"
-    "LAYER_INBOX_PRODUCER_MATCH\020\002*\250\001\n\021PlayerI"
-    "nboxDomain\022#\n\037PLAYER_INBOX_DOMAIN_UNSPEC"
-    "IFIED\020\000\0224\n%PLAYER_INBOX_DOMAIN_SCENE_GM_"
-    "SANCTION\020\001\032\t\212\212\315\001\004\010@\020\001\0228\n+PLAYER_INBOX_DO"
-    "MAIN_SCENE_BATTLE_SETTLEMENT\020\002\032\007\212\212\315\001\002\010\001*"
-    "\245\003\n\026PlayerInboxMessageType\022 \n\034PLAYER_INB"
-    "OX_MSG_UNSPECIFIED\020\000\022\\\n\'PLAYER_INBOX_MSG"
-    "_GM_BLOCK_CURRENCY_GAIN\020\001\032/\222\212\315\001*\010\001\020\001\032\"pl"
-    "ayer_inbox.GmCurrencyGainPayload @\022^\n)PL"
-    "AYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN\020"
-    "\002\032/\222\212\315\001*\010\001\020\001\032\"player_inbox.GmCurrencyGai"
-    "nPayload @\022^\n(PLAYER_INBOX_MSG_GM_ATTACH"
-    "_CURRENCY_DEBT\020\003\0320\222\212\315\001+\010\001\020\001\032\"player_inbo"
-    "x.GmCurrencyDebtPayload \200\010\022K\n\"PLAYER_INB"
-    "OX_MSG_BATTLE_SETTLEMENT\020\004\032#\222\212\315\001\036\010\002\020\001\032\024B"
-    "attleSettlementData \200\200\001*\334\001\n\024PlayerInboxI"
-    "temState\022!\n\035PLAYER_INBOX_ITEM_UNSPECIFIE"
-    "D\020\000\022\035\n\031PLAYER_INBOX_ITEM_PENDING\020\001\022\035\n\031PL"
-    "AYER_INBOX_ITEM_APPLIED\020\002\022\036\n\032PLAYER_INBO"
-    "X_ITEM_REJECTED\020\003\022\034\n\030PLAYER_INBOX_ITEM_V"
-    "OIDED\020\004\022%\n!PLAYER_INBOX_ITEM_SETTLED_UNK"
-    "NOWN\020\005*X\n\024PlayerInboxDirective\022\037\n\033PLAYER"
-    "_INBOX_DIRECTIVE_NONE\020\000\022\037\n\033PLAYER_INBOX_"
-    "DIRECTIVE_VOID\020\001*~\n\025PlayerInboxVoidReaso"
-    "n\022!\n\035PLAYER_INBOX_VOID_UNSPECIFIED\020\000\022\037\n\033"
-    "PLAYER_INBOX_VOID_CANCELLED\020\001\022!\n\035PLAYER_"
-    "INBOX_VOID_QUARANTINED\020\002*\205\001\n\024PlayerInbox"
-    "Finalizer\022&\n\"PLAYER_INBOX_FINALIZER_UNSP"
-    "ECIFIED\020\000\022#\n\037PLAYER_INBOX_FINALIZER_CONS"
-    "UMER\020\001\022 \n\034PLAYER_INBOX_FINALIZER_ADMIN\020\002"
-    "*\303\001\n\022PlayerInboxOutcome\022$\n PLAYER_INBOX_"
-    "OUTCOME_UNSPECIFIED\020\000\022 \n\034PLAYER_INBOX_OU"
-    "TCOME_APPLIED\020\001\022!\n\035PLAYER_INBOX_OUTCOME_"
-    "REJECTED\020\002\022 \n\034PLAYER_INBOX_OUTCOME_SKIPP"
-    "ED\020\003\022 \n\034PLAYER_INBOX_OUTCOME_UNKNOWN\020\004*\244"
-    "\002\n\027PlayerInboxFenceVerdict\022\"\n\036PLAYER_INB"
-    "OX_FENCE_UNSPECIFIED\020\000\022 \n\034PLAYER_INBOX_F"
-    "ENCE_NO_STREAM\020\001\022\034\n\030PLAYER_INBOX_FENCE_F"
-    "IRST\020\002\022\034\n\030PLAYER_INBOX_FENCE_MATCH\020\003\022\036\n\032"
-    "PLAYER_INBOX_FENCE_ADVANCE\020\004\022\034\n\030PLAYER_I"
-    "NBOX_FENCE_STALE\020\005\022%\n!PLAYER_INBOX_FENCE"
-    "_EPOCH_REQUIRED\020\006\022\"\n\036PLAYER_INBOX_FENCE_"
-    "EPOCH_AHEAD\020\007*\250\002\n\024PlayerInboxAckResult\022 "
-    "\n\034PLAYER_INBOX_ACK_UNSPECIFIED\020\000\022\036\n\032PLAY"
-    "ER_INBOX_ACK_FINALIZED\020\001\022!\n\035PLAYER_INBOX"
-    "_ACK_ALREADY_SAME\020\002\022\035\n\031PLAYER_INBOX_ACK_"
-    "CONFLICT\020\003\022 \n\034PLAYER_INBOX_ACK_UNKNOWN_S"
-    "EQ\020\004\022\"\n\036PLAYER_INBOX_ACK_NOT_DELIVERED\020\005"
-    "\022\'\n#PLAYER_INBOX_ACK_SKIP_NOT_REQUESTED\020"
-    "\006\022\035\n\031PLAYER_INBOX_ACK_MISMATCH\020\0072\254\003\n\013Pla"
-    "yerInbox\022]\n\nFetchItems\022%.player_inbox.Fe"
-    "tchPlayerInboxRequest\032&.player_inbox.Fet"
-    "chPlayerInboxResponse\"\000\022W\n\010AckItems\022#.pl"
-    "ayer_inbox.AckPlayerInboxRequest\032$.playe"
-    "r_inbox.AckPlayerInboxResponse\"\000\022r\n\027Enqu"
-    "eueBattleSettlement\022*.player_inbox.Battl"
-    "eSettlementInboxRequest\032+.player_inbox.B"
-    "attleSettlementInboxResponse\022q\n\026LookupBa"
-    "ttleSettlement\022*.player_inbox.BattleSett"
-    "lementInboxRequest\032+.player_inbox.Battle"
-    "SettlementInboxResponse:i\n\027OptionPlayerI"
-    "nboxDomain\022!.google.protobuf.EnumValueOp"
-    "tions\030\241\321\031 \001(\0132#.player_inbox.PlayerInbox"
-    "DomainSpec:e\n\025OptionPlayerInboxType\022!.go"
-    "ogle.protobuf.EnumValueOptions\030\242\321\031 \001(\0132!"
-    ".player_inbox.PlayerInboxTypeSpecB\036Z\031pla"
-    "yer_inbox/player_inbox\200\001\000b\006proto3"
+    "(\004\022\026\n\016correlation_id\030\004 \001(\004\022\021\n\tmax_items\030"
+    "\005 \001(\r\022 \n\030consumer_decided_through\030\006 \001(\004\022"
+    "\025\n\rscene_node_id\030\007 \001(\r\0225\n\tadmission\030\010 \001("
+    "\0132\".common.base.RoleAdmissionIdentity\022*\n"
+    "\004auth\030\t \001(\0132\034.common.base.ServiceCallAut"
+    "h\"\230\002\n\017PlayerInboxItem\022\013\n\003seq\030\001 \001(\004\0226\n\010ms"
+    "g_type\030\002 \001(\0162$.player_inbox.PlayerInboxM"
+    "essageType\022\017\n\007payload\030\003 \001(\014\0225\n\tdirective"
+    "\030\004 \001(\0162\".player_inbox.PlayerInboxDirecti"
+    "ve\0228\n\013void_reason\030\005 \001(\0162#.player_inbox.P"
+    "layerInboxVoidReason\022\022\n\nrequest_id\030\006 \001(\004"
+    "\022\026\n\016delivery_count\030\007 \001(\r\022\022\n\ncreated_ms\030\010"
+    " \001(\004\"\224\002\n\030FetchPlayerInboxResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tpla"
+    "yer_id\030\002 \001(\004\022/\n\006domain\030\003 \001(\0162\037.player_in"
+    "box.PlayerInboxDomain\022\026\n\016correlation_id\030"
+    "\004 \001(\004\0224\n\005fence\030\005 \001(\0162%.player_inbox.Play"
+    "erInboxFenceVerdict\022,\n\005items\030\006 \003(\0132\035.pla"
+    "yer_inbox.PlayerInboxItem\022\020\n\010has_more\030\007 "
+    "\001(\010\"\177\n\031PlayerInboxDecisionReport\022\013\n\003seq\030"
+    "\001 \001(\004\0221\n\007outcome\030\002 \001(\0162 .player_inbox.Pl"
+    "ayerInboxOutcome\022\016\n\006reason\030\003 \001(\r\022\022\n\nrequ"
+    "est_id\030\004 \001(\004\"\276\002\n\025AckPlayerInboxRequest\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.play"
+    "er_inbox.PlayerInboxDomain\022\023\n\013owner_epoc"
+    "h\030\003 \001(\004\022\026\n\016correlation_id\030\004 \001(\004\022:\n\tdecis"
+    "ions\030\005 \003(\0132\'.player_inbox.PlayerInboxDec"
+    "isionReport\022\025\n\rscene_node_id\030\006 \001(\r\0225\n\tad"
+    "mission\030\007 \001(\0132\".common.base.RoleAdmissio"
+    "nIdentity\022*\n\004auth\030\010 \001(\0132\034.common.base.Se"
+    "rviceCallAuth\"\210\001\n\022PlayerInboxAckItem\022\013\n\003"
+    "seq\030\001 \001(\004\0222\n\006result\030\002 \001(\0162\".player_inbox"
+    ".PlayerInboxAckResult\0221\n\005state\030\003 \001(\0162\".p"
+    "layer_inbox.PlayerInboxItemState\"\205\002\n\026Ack"
+    "PlayerInboxResponse\022&\n\rerror_message\030\001 \001"
+    "(\0132\017.TipInfoMessage\022\021\n\tplayer_id\030\002 \001(\004\022/"
+    "\n\006domain\030\003 \001(\0162\037.player_inbox.PlayerInbo"
+    "xDomain\022\026\n\016correlation_id\030\004 \001(\004\0224\n\005fence"
+    "\030\005 \001(\0162%.player_inbox.PlayerInboxFenceVe"
+    "rdict\0221\n\007results\030\006 \003(\0132 .player_inbox.Pl"
+    "ayerInboxAckItem*V\n\020PlayerInboxClass\022\"\n\036"
+    "PLAYER_INBOX_CLASS_UNSPECIFIED\020\000\022\036\n\032PLAY"
+    "ER_INBOX_CLASS_DURABLE\020\001*\177\n\027PlayerInboxP"
+    "roducerKind\022%\n!PLAYER_INBOX_PRODUCER_UNS"
+    "PECIFIED\020\000\022\034\n\030PLAYER_INBOX_PRODUCER_GM\020\001"
+    "\022\037\n\033PLAYER_INBOX_PRODUCER_MATCH\020\002*\250\001\n\021Pl"
+    "ayerInboxDomain\022#\n\037PLAYER_INBOX_DOMAIN_U"
+    "NSPECIFIED\020\000\0224\n%PLAYER_INBOX_DOMAIN_SCEN"
+    "E_GM_SANCTION\020\001\032\t\212\212\315\001\004\010@\020\001\0228\n+PLAYER_INB"
+    "OX_DOMAIN_SCENE_BATTLE_SETTLEMENT\020\002\032\007\212\212\315"
+    "\001\002\010\001*\323\004\n\026PlayerInboxMessageType\022 \n\034PLAYE"
+    "R_INBOX_MSG_UNSPECIFIED\020\000\022\\\n\'PLAYER_INBO"
+    "X_MSG_GM_BLOCK_CURRENCY_GAIN\020\001\032/\222\212\315\001*\010\001\020"
+    "\001\032\"player_inbox.GmCurrencyGainPayload @\022"
+    "^\n)PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_"
+    "GAIN\020\002\032/\222\212\315\001*\010\001\020\001\032\"player_inbox.GmCurren"
+    "cyGainPayload @\022^\n(PLAYER_INBOX_MSG_GM_A"
+    "TTACH_CURRENCY_DEBT\020\003\0320\222\212\315\001+\010\001\020\001\032\"player"
+    "_inbox.GmCurrencyDebtPayload \200\010\022K\n\"PLAYE"
+    "R_INBOX_MSG_BATTLE_SETTLEMENT\020\004\032#\222\212\315\001\036\010\002"
+    "\020\001\032\024BattleSettlementData \200\200\001\022T\n#PLAYER_I"
+    "NBOX_MSG_GM_BLOCK_ITEM_GAIN\020\005\032+\222\212\315\001&\010\001\020\001"
+    "\032\036player_inbox.GmItemGainPayload @\022V\n%PL"
+    "AYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN\020\006\032+\222"
+    "\212\315\001&\010\001\020\001\032\036player_inbox.GmItemGainPayload"
+    " @*\334\001\n\024PlayerInboxItemState\022!\n\035PLAYER_IN"
+    "BOX_ITEM_UNSPECIFIED\020\000\022\035\n\031PLAYER_INBOX_I"
+    "TEM_PENDING\020\001\022\035\n\031PLAYER_INBOX_ITEM_APPLI"
+    "ED\020\002\022\036\n\032PLAYER_INBOX_ITEM_REJECTED\020\003\022\034\n\030"
+    "PLAYER_INBOX_ITEM_VOIDED\020\004\022%\n!PLAYER_INB"
+    "OX_ITEM_SETTLED_UNKNOWN\020\005*X\n\024PlayerInbox"
+    "Directive\022\037\n\033PLAYER_INBOX_DIRECTIVE_NONE"
+    "\020\000\022\037\n\033PLAYER_INBOX_DIRECTIVE_VOID\020\001*~\n\025P"
+    "layerInboxVoidReason\022!\n\035PLAYER_INBOX_VOI"
+    "D_UNSPECIFIED\020\000\022\037\n\033PLAYER_INBOX_VOID_CAN"
+    "CELLED\020\001\022!\n\035PLAYER_INBOX_VOID_QUARANTINE"
+    "D\020\002*\205\001\n\024PlayerInboxFinalizer\022&\n\"PLAYER_I"
+    "NBOX_FINALIZER_UNSPECIFIED\020\000\022#\n\037PLAYER_I"
+    "NBOX_FINALIZER_CONSUMER\020\001\022 \n\034PLAYER_INBO"
+    "X_FINALIZER_ADMIN\020\002*\303\001\n\022PlayerInboxOutco"
+    "me\022$\n PLAYER_INBOX_OUTCOME_UNSPECIFIED\020\000"
+    "\022 \n\034PLAYER_INBOX_OUTCOME_APPLIED\020\001\022!\n\035PL"
+    "AYER_INBOX_OUTCOME_REJECTED\020\002\022 \n\034PLAYER_"
+    "INBOX_OUTCOME_SKIPPED\020\003\022 \n\034PLAYER_INBOX_"
+    "OUTCOME_UNKNOWN\020\004*\244\002\n\027PlayerInboxFenceVe"
+    "rdict\022\"\n\036PLAYER_INBOX_FENCE_UNSPECIFIED\020"
+    "\000\022 \n\034PLAYER_INBOX_FENCE_NO_STREAM\020\001\022\034\n\030P"
+    "LAYER_INBOX_FENCE_FIRST\020\002\022\034\n\030PLAYER_INBO"
+    "X_FENCE_MATCH\020\003\022\036\n\032PLAYER_INBOX_FENCE_AD"
+    "VANCE\020\004\022\034\n\030PLAYER_INBOX_FENCE_STALE\020\005\022%\n"
+    "!PLAYER_INBOX_FENCE_EPOCH_REQUIRED\020\006\022\"\n\036"
+    "PLAYER_INBOX_FENCE_EPOCH_AHEAD\020\007*\250\002\n\024Pla"
+    "yerInboxAckResult\022 \n\034PLAYER_INBOX_ACK_UN"
+    "SPECIFIED\020\000\022\036\n\032PLAYER_INBOX_ACK_FINALIZE"
+    "D\020\001\022!\n\035PLAYER_INBOX_ACK_ALREADY_SAME\020\002\022\035"
+    "\n\031PLAYER_INBOX_ACK_CONFLICT\020\003\022 \n\034PLAYER_"
+    "INBOX_ACK_UNKNOWN_SEQ\020\004\022\"\n\036PLAYER_INBOX_"
+    "ACK_NOT_DELIVERED\020\005\022\'\n#PLAYER_INBOX_ACK_"
+    "SKIP_NOT_REQUESTED\020\006\022\035\n\031PLAYER_INBOX_ACK"
+    "_MISMATCH\020\0072\254\003\n\013PlayerInbox\022]\n\nFetchItem"
+    "s\022%.player_inbox.FetchPlayerInboxRequest"
+    "\032&.player_inbox.FetchPlayerInboxResponse"
+    "\"\000\022W\n\010AckItems\022#.player_inbox.AckPlayerI"
+    "nboxRequest\032$.player_inbox.AckPlayerInbo"
+    "xResponse\"\000\022r\n\027EnqueueBattleSettlement\022*"
+    ".player_inbox.BattleSettlementInboxReque"
+    "st\032+.player_inbox.BattleSettlementInboxR"
+    "esponse\022q\n\026LookupBattleSettlement\022*.play"
+    "er_inbox.BattleSettlementInboxRequest\032+."
+    "player_inbox.BattleSettlementInboxRespon"
+    "se:i\n\027OptionPlayerInboxDomain\022!.google.p"
+    "rotobuf.EnumValueOptions\030\241\321\031 \001(\0132#.playe"
+    "r_inbox.PlayerInboxDomainSpec:e\n\025OptionP"
+    "layerInboxType\022!.google.protobuf.EnumVal"
+    "ueOptions\030\242\321\031 \001(\0132!.player_inbox.PlayerI"
+    "nboxTypeSpecB\036Z\031player_inbox/player_inbo"
+    "x\200\001\000b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto_deps[4] = {
@@ -2809,13 +2965,13 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto = {
     false,
     false,
-    5713,
+    5932,
     descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
     "proto/player_inbox/player_inbox.proto",
     &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto_once,
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto_deps,
     4,
-    13,
+    14,
     schemas,
     file_message_globals,
     TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto::offsets,
@@ -2850,7 +3006,7 @@ PlayerInboxMessageType_descriptor() {
   return file_level_enum_descriptors_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto[3];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerInboxMessageType_internal_data_[] = {
-    327680u, 0u, };
+    458752u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxItemState_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto);
@@ -3957,6 +4113,195 @@ void GmCurrencyDebtPayload::InternalSwap(GmCurrencyDebtPayload* PROTOBUF_RESTRIC
 }
 
 ::google::protobuf::Metadata GmCurrencyDebtPayload::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GmItemGainPayload::GmItemGainPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GmItemGainPayload_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.GmItemGainPayload)
+}
+GmItemGainPayload::GmItemGainPayload(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GmItemGainPayload& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GmItemGainPayload_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GmItemGainPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GmItemGainPayload::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.item_config_id_ = {};
+}
+GmItemGainPayload::~GmItemGainPayload() {
+  // @@protoc_insertion_point(destructor:player_inbox.GmItemGainPayload)
+  SharedDtor(*this);
+}
+inline void GmItemGainPayload::SharedDtor(MessageLite& self) {
+  GmItemGainPayload& this_ = static_cast<GmItemGainPayload&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GmItemGainPayload_class_data_ =
+        GmItemGainPayload::InternalGenerateClassData_(GmItemGainPayload_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GmItemGainPayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GmItemGainPayload_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GmItemGainPayload_class_data_.tc_table);
+  return GmItemGainPayload_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GmItemGainPayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GmItemGainPayload_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GmItemGainPayload_globals_));
+  return GmItemGainPayload_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GmItemGainPayload::ParseTableT_
+    GmItemGainPayload::_table_ =
+        GmItemGainPayload::InternalGenerateParseTable_(GmItemGainPayload_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GmItemGainPayload::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.GmItemGainPayload)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.item_config_id_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GmItemGainPayload::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GmItemGainPayload& this_ = static_cast<const GmItemGainPayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GmItemGainPayload::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GmItemGainPayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.GmItemGainPayload)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 item_config_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_item_config_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.GmItemGainPayload)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GmItemGainPayload::ByteSizeLong(const MessageLite& base) {
+  const GmItemGainPayload& this_ = static_cast<const GmItemGainPayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GmItemGainPayload::ByteSizeLong() const {
+  const GmItemGainPayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.GmItemGainPayload)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint32 item_config_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GmItemGainPayload::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GmItemGainPayload*>(&to_msg);
+  auto& from = static_cast<const GmItemGainPayload&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.GmItemGainPayload)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_item_config_id() != 0) {
+      _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GmItemGainPayload::CopyFrom(const GmItemGainPayload& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.GmItemGainPayload)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GmItemGainPayload::InternalSwap(GmItemGainPayload* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.item_config_id_, other->_impl_.item_config_id_);
+}
+
+::google::protobuf::Metadata GmItemGainPayload::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

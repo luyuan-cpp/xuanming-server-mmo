@@ -162,6 +162,10 @@ public:
     // match 走通用补偿(DestroyBattle 幂等 → CancelBattlePrepare)。
     void HandleCreateBattle(const ::CreateBattleRequest &request, ::CreateBattleResponse &response);
 
+    // 本节点此刻的房间数:表里的全部房间,含停机作废后还在等 SQL 决定的(它们仍占着资源)。
+    // CreateBattle 成功应答把它捎回给 match 比较负载(R6,BattleNodeImpl::HandleCreateBattle)。只在 loop 线程调用。
+    uint32_t RoomCount() const { return static_cast<uint32_t>(rooms_.Size()); }
+
     // 房间还在就什么都不做:房间只由 Match 的持久决定收尾(COMPLETE / ABORT),过期的补偿不能把一局在打的房间作废。
     // 房间不存在时幂等成功;带放置操作的请求同时立一条操作墓碑,挡住同 battle_id 迟到的 CreateBattle。
     void HandleDestroyBattle(const ::DestroyBattleRequest &request);

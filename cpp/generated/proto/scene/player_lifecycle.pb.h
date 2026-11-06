@@ -21,7 +21,6 @@
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
-#include "google/protobuf/generated_message_bases.h"
 #include "google/protobuf/generated_message_tctable_decl.h"
 #include "google/protobuf/generated_message_util.h"
 #include "google/protobuf/metadata_lite.h"
@@ -30,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/service.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/db/proto_option.pb.h"
@@ -57,6 +57,8 @@ struct TableStruct_proto_2fscene_2fplayer_5flifecycle_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5flifecycle_2eproto;
 }  // extern "C"
+enum ExitGameReason : int;
+extern const uint32_t ExitGameReason_internal_data_[];
 class GameNodeExitGameRequest;
 struct GameNodeExitGameRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -75,9 +77,56 @@ extern const GateLoginNotifyRequestGlobalsTypeInternal GateLoginNotifyRequest_gl
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::ExitGameReason_internal_data_>
+    internal::EnumTraitsImpl::value<::ExitGameReason>;
 }  // namespace protobuf
 }  // namespace google
 
+enum ExitGameReason : int {
+  EXIT_GAME_REASON_UNSPECIFIED = 0,
+  EXIT_GAME_REASON_LOGOUT = 1,
+  EXIT_GAME_REASON_DISCONNECTED = 2,
+  EXIT_GAME_REASON_LEASE_EXPIRED = 3,
+  ExitGameReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ExitGameReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ExitGameReason_internal_data_[];
+inline constexpr ExitGameReason ExitGameReason_MIN =
+    static_cast<ExitGameReason>(0);
+inline constexpr ExitGameReason ExitGameReason_MAX =
+    static_cast<ExitGameReason>(3);
+[[nodiscard]] inline bool ExitGameReason_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int ExitGameReason_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ExitGameReason_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ExitGameReason) {
+  return ExitGameReason_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& ExitGameReason_Name(T value) {
+  static_assert(::std::is_same<T, ExitGameReason>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to ExitGameReason_Name().");
+  return ExitGameReason_Name(static_cast<ExitGameReason>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& ExitGameReason_Name(ExitGameReason value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ExitGameReason_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool ExitGameReason_Parse(
+    ::absl::string_view name, ExitGameReason* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ExitGameReason>(ExitGameReason_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -285,10 +334,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateLoginNotifyRequest final : publ
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameNodeExitGameRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameNodeExitGameRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:GameNodeExitGameRequest) */ {
  public:
   inline GameNodeExitGameRequest() : GameNodeExitGameRequest(nullptr) {}
+  ~GameNodeExitGameRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(GameNodeExitGameRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -360,17 +410,50 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameNodeExitGameRequest final : pub
 
   [[nodiscard]] GameNodeExitGameRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GameNodeExitGameRequest>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<GameNodeExitGameRequest>(arena);
   }
-  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
-  inline void CopyFrom(const GameNodeExitGameRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
-  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
-  void MergeFrom(const GameNodeExitGameRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GameNodeExitGameRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GameNodeExitGameRequest& from) { GameNodeExitGameRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GameNodeExitGameRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -398,11 +481,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameNodeExitGameRequest final : pub
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
+  enum : int {
+    kReasonFieldNumber = 1,
+  };
+  // .ExitGameReason reason = 1;
+  void clear_reason() ;
+  [[nodiscard]] ::ExitGameReason reason() const;
+  void set_reason(::ExitGameReason value);
+
+  private:
+  ::ExitGameReason _internal_reason() const;
+  void _internal_set_reason(::ExitGameReason value);
+
+  public:
   // @@protoc_insertion_point(class_scope:GameNodeExitGameRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 0,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -419,6 +515,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameNodeExitGameRequest final : pub
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GameNodeExitGameRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int reason_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5flifecycle_2eproto;
 };
 
@@ -537,12 +649,49 @@ inline void GateLoginNotifyRequest::_internal_set_enter_gs_type(::uint32_t value
 
 // GameNodeExitGameRequest
 
+// .ExitGameReason reason = 1;
+inline void GameNodeExitGameRequest::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::ExitGameReason GameNodeExitGameRequest::reason() const {
+  // @@protoc_insertion_point(field_get:GameNodeExitGameRequest.reason)
+  return _internal_reason();
+}
+inline void GameNodeExitGameRequest::set_reason(::ExitGameReason value) {
+  _internal_set_reason(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:GameNodeExitGameRequest.reason)
+}
+inline ::ExitGameReason GameNodeExitGameRequest::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::ExitGameReason>(_impl_.reason_);
+}
+inline void GameNodeExitGameRequest::_internal_set_reason(::ExitGameReason value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
 
 // @@protoc_insertion_point(namespace_scope)
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::ExitGameReason> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::ExitGameReason>() {
+  return ::ExitGameReason_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

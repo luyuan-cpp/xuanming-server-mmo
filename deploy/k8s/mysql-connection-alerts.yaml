@@ -9,12 +9,18 @@
 #   kubectl apply -n observability -f deploy/k8s/mysql-connection-alerts.yaml
 #
 # Scrape prerequisites:
-#   - sql-pool.client 组(客户端侧,指标由 go/db 与 data_service 导出):
+#   - sql-pool.client 组(客户端侧,指标由各 Go 服务经 go/shared/sqlpoolstats 导出):
 #       go/db 的 MetricsListenAddr 已配置(本地惯例 ":9160",AGENTS.md §6.1)。K8s 上 db 的 ConfigMap 必须写出同一端口,
 #       与 manifests/go-svc/db.yaml 的 metrics 端口 / prometheus.io/port 注解一致;留空时 go/db 不起 /metrics,
 #       sql_client="db" 的序列全无,下面涉及 db 的规则全部是哑的(空表达式不报错,和「一切正常」长得一样)。
 #       data_service 的 MetricsListenAddr 已配置(K8s ConfigMap 固定 ":9260",本地同)。
-#       A ServiceMonitor or PodMonitor pointed at those two ports.
+#       2026-11-05 起 chat / friend / guild / mail / match / rank / trade / login 也导出(服务器缺口清单第 8 条),
+#       走各自已有的 /metrics 端口与 prometheus.io/* 注解,口径同上:端口留空的服务没有序列,规则对它是哑的。
+#       A ServiceMonitor or PodMonitor pointed at those ports.
+#   - sql-pool.gateway 组(Java gateway 的 Hikari 连接池,Micrometer 指标):gateway 在独立管理端口 8082 的
+#       /actuator/prometheus 上导出(k8s_deploy.ps1 的 gateway ConfigMap 打开 exposure,Pod 模板注解由同一脚本生成)。
+#       指标名按 HikariCP 的 Micrometer 命名写成(hikaricp_connections_{active,max,pending,timeout_total}),
+#       池名由 jar 内 spring.datasource.hikari.pool-name 固定为 gateway;部署后对着 /actuator/prometheus 核对一次。
 #   - mysql.connection-budget 组(MySQL 服务端侧,**现在没有数据**):需要 mysqld_exporter。
 #       仓库里还没有部署它(是否部署、怎么部署待拍板,G2b 规格 §10 第 6 条);落地前这一组没有序列,不会触发,也不会误报。
 #       用到的三个指标名凭记忆写成,未在本机核实:
@@ -26,7 +32,12 @@
 # 池指标 mmorpg_sql_pool_*{sql_client,pool} 由 go/shared/sqlpoolstats 导出,按池类别聚合,不含库名:
 #   sql_client="db"            pool = home | extra_zone | extra_non_zone(go/db/internal/metrics 的 Pool* 常量)
 #   sql_client="data_service"  pool = snapshot | transaction_log | player_name | player_route(go/data_service/internal/metrics 的 Pool* 常量)
-# friend / trade / Java gateway 没有导出池指标,不在 sql-pool.client 组的覆盖范围内;它们占的连接只能从 MySQL 服务端那一组看到。
+#   sql_client="chat" | "friend" | "guild" | "mail" | "match" | "rank" | "trade"  pool = primary(各服务只有本服务逻辑库这一个池,
+#                              sqlpoolstats.PrimaryPool)
+#   sql_client="login"         pool = password_auth(只在打开 PasswordAuth 时存在;login 没有别的 SQL 池)
+# player_inbox 按它自己的设计(player-inbox-service.md §9.4)导出 client_golang 的 go_sql_*{db_name="player_inbox"},
+# 规则在 deploy/k8s/player-inbox-alerts.yaml,不在本文件;Java gateway 见 sql-pool.gateway 组。
+# (2026-11-05 以前这里写「friend / trade / Java gateway 没有导出池指标」,已由服务器缺口清单第 8 条补上。)
 #
 # 表达式按 namespace 分组(zone 级服务每个 zone 一个 namespace)。namespace 是抓取配置附加的目标 label:
 # 抓取配置没有附加它时各 zone 会被并成一组 —— 不报错,但分不清 zone,求和类的比值也会被摊平。
@@ -113,7 +124,8 @@ spec:
               调上限的做法与内存约束见 deploy/k8s/manifests/infra/mysql.yaml 的「连接上限」注释。
 
     # ── 客户端侧(连接池)──────────────────────────────────────────────────
-    # go/db(:9160)与 data-service(:9260)的 /metrics。friend / trade / Java gateway 没导出池指标,不在覆盖范围内。
+    # 各 Go 服务 /metrics 上的 mmorpg_sql_pool_*(go/db :9160、data-service :9260,以及文件头列出的其余 sql_client)。
+    # 表达式按 (namespace, sql_client, pool) 分组,新接入的服务不用改规则。Java gateway 见下面的 sql-pool.gateway 组。
     - name: sql-pool.client
       interval: 30s
       rules:
@@ -193,3 +205,40 @@ spec:
               是哪一类,按 pool 查 mmorpg_sql_pool_pools{sql_client="db"}:extra_zone 超了多半是 zone 数增加或合服留下了源区库;
               extra_non_zone 非 0 说明 Phase 2 的落点库已被打开。
               两种都要先重做规划档、重算 max_connections 与 MySQL Pod 内存,再继续扩。
+
+    # ── Java gateway(Hikari 连接池)──────────────────────────────────────────
+    # gateway 在管理端口 8082 的 /actuator/prometheus 上导出 Micrometer 的 hikaricp_connections_*{pool="gateway"}(文件头 Scrape prerequisites)。
+    # gateway 的池很小(jar 内 maximum-pool-size 5、connection-timeout 3000ms,计入 MySQL 连接总账),取连接超时就是 assign-gate /
+    # server-list 回 5xx,所以按「超时出现就报」写,不等池长期满。阈值与 for 都是占位值,待压测确认。
+    - name: sql-pool.gateway
+      interval: 30s
+      rules:
+        # 取连接等满 connection-timeout(3s)仍没拿到:这次请求已经失败。一次就报,不等。
+        - alert: GatewayHikariAcquireTimeout
+          expr: |
+            sum by (namespace) (increase(hikaricp_connections_timeout_total{pool="gateway"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "gateway 取 MySQL 连接超时(过去 5 分钟约 {{ $value | printf \"%.0f\" }} 次)"
+            description: >-
+              {{ $labels.namespace }} 的 gateway 过去 5 分钟有请求等满 connection-timeout 仍没拿到连接,这些 assign-gate / server-list
+              请求已经回 5xx。先看 hikaricp_connections_active / hikaricp_connections_max 是否顶满、hikaricp_connections_pending 是否堆积,
+              再看 MySQL 侧慢查询与 zone_config 上的锁等待(MDL)。调大 maximum-pool-size 之前先重算 MySQL 连接总账
+              (tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger):gateway 每个副本的池都压在同一台 MySQL 的 max_connections 上。
+
+        # 池长期用满:active / max > 0.9 持续 15 分钟。只作趋势信号,真正失败看上一条。
+        - alert: GatewayHikariSaturated
+          expr: |
+            sum by (namespace) (hikaricp_connections_active{pool="gateway"})
+              / sum by (namespace) (hikaricp_connections_max{pool="gateway"}) > 0.9
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: "gateway 的 Hikari 连接池长期用满(占比 {{ $value | printf \"%.2f\" }})"
+            description: >-
+              {{ $labels.namespace }} 的 gateway 在用连接占池上限的 {{ $value | printf "%.2f" }}(1 = 满),已持续 15 分钟。
+              合并查询与准入缓存本该让每副本并发不超过 2(docs/handoff/godb-pipeline-handoff-20261013-appendix.md 的连接预算),
+              长期用满多半是 MySQL 变慢或缓存失效;同时出现 GatewayHikariAcquireTimeout 时按那一条处置。

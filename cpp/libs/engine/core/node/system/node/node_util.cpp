@@ -5,6 +5,7 @@
 #include <network/rpc_client.h>
 #include <network/rpc_session.h>
 #include "thread_context/node_context_manager.h"
+#include <string_view>
 #include <vector>
 
 // Static node-type-to-name map
@@ -23,6 +24,8 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	// WatchBattle 等消息,缺席则发现侧报 "Unknown service type for prefix:
 	// MatchNodeService.rpc/..."(2026-09-01 冒烟补)。
 	{eNodeType::MatchNodeService, eNodeType_Name(MatchNodeService)},
+	// 队伍权威读取由 Match 同端口提供，独立登记在全服 TeamNodeService.rpc 前缀。
+	{eNodeType::TeamNodeService, eNodeType_Name(TeamNodeService)},
 	// 客户端 RPC 路由服:etcd 前缀 ClientRpcRouterNodeService.rpc;gate 唯一的 gRPC 目标
 	// (docs/design/client-rpc-router.md),Go-Zero 实现,全局池。
 	{eNodeType::ClientRpcRouterNodeService, eNodeType_Name(ClientRpcRouterNodeService)},
@@ -129,10 +132,30 @@ bool NodeUtils::IsZoneScopedNodeType(uint32_t nodeType)
 	case eNodeType::LoginNodeService:
 	case eNodeType::PlayerLocatorNodeService:
 	case eNodeType::PlayerStoreNodeService:
+	// 2026-11-05:scene_manager 按 zone 选主、只服务本 zone(control-plane-zone-scoping-20261105.md §3.1)。
+	case eNodeType::SceneManagerNodeService:
 		return true;
 	default:
 		return false;
 	}
+}
+
+std::string NodeUtils::DiscoveryPrefixFor(const std::string &configuredPrefix, uint32_t zoneId)
+{
+	static constexpr std::string_view kRpcSuffix = ".rpc";
+	if (configuredPrefix.size() <= kRpcSuffix.size() ||
+		configuredPrefix.compare(configuredPrefix.size() - kRpcSuffix.size(), kRpcSuffix.size(), kRpcSuffix) != 0)
+	{
+		return configuredPrefix;
+	}
+	eNodeType nodeType{};
+	if (!eNodeType_Parse(configuredPrefix.substr(0, configuredPrefix.size() - kRpcSuffix.size()), &nodeType) ||
+		!IsZoneScopedNodeType(nodeType))
+	{
+		return configuredPrefix;
+	}
+	// 与 EtcdManager::MakeNodeEtcdPrefix 同一键形:<Svc>.rpc/zone/<z>/node_type/<t>/node_id/<n>。
+	return configuredPrefix + "/zone/" + std::to_string(zoneId) + "/";
 }
 
 bool NodeUtils::IsGlobalPoolNodeType(uint32_t nodeType)

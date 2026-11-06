@@ -24,10 +24,12 @@ import (
 )
 
 const (
-	gmBlock   = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN
-	gmUnblock = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
-	gmDebt    = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT
-	gmDomain  = inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
+	gmBlock       = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN
+	gmUnblock     = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
+	gmDebt        = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT
+	gmBlockItem   = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN
+	gmUnblockItem = inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
+	gmDomain      = inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
 )
 
 func TestBattleOriginalPermanentErrorsPrecedeStorage(t *testing.T) {
@@ -115,7 +117,8 @@ func TestBattleProducerCannotUseGenericEnqueueOrVoid(t *testing.T) {
 }
 
 func allTypesAllowed() map[inboxpb.PlayerInboxMessageType]struct{} {
-	return map[inboxpb.PlayerInboxMessageType]struct{}{gmBlock: {}, gmUnblock: {}, gmDebt: {}, inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT: {}}
+	return map[inboxpb.PlayerInboxMessageType]struct{}{gmBlock: {}, gmUnblock: {}, gmDebt: {}, gmBlockItem: {}, gmUnblockItem: {},
+		inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT: {}}
 }
 
 func mustRegistry(t *testing.T) *Registry {
@@ -144,6 +147,9 @@ func TestNewRegistryFromGeneratedDescriptors(t *testing.T) {
 		gmBlock:   {"player_inbox.GmCurrencyGainPayload", 64},
 		gmUnblock: {"player_inbox.GmCurrencyGainPayload", 64},
 		gmDebt:    {"player_inbox.GmCurrencyDebtPayload", 1024},
+		// 单玩家物品获取封禁(设计 §2.2):与货币封锁同域、同分级,载荷只有配置号。
+		gmBlockItem:   {"player_inbox.GmItemGainPayload", 64},
+		gmUnblockItem: {"player_inbox.GmItemGainPayload", 64},
 	}
 	for typ, w := range want {
 		e, ok := r.Type(typ)
@@ -426,6 +432,16 @@ func TestValidatePayload(t *testing.T) {
 		{"expires_at 误传毫秒", gmDebt, all, marshal(t, withDebt(func(p *inboxpb.GmCurrencyDebtPayload) { p.ExpiresAt = 1_900_000_000_000 })), constants.ErrPayloadInvalid},
 		{"expires_at 为 0 = 永不过期", gmDebt, all, marshal(t, withDebt(func(p *inboxpb.GmCurrencyDebtPayload) { p.ExpiresAt = 0 })), 0},
 		{"上限内的最长文本", gmDebt, all, marshal(t, longestDebt), 0},
+		// 单玩家物品获取封禁:配置号必须非 0;不核对物品表(本服务不加载配置表,设计 §2.2)。
+		{"物品封锁:合法", gmBlockItem, all, marshal(t, &inboxpb.GmItemGainPayload{ItemConfigId: 10}), 0},
+		{"物品解封:合法", gmUnblockItem, all, marshal(t, &inboxpb.GmItemGainPayload{ItemConfigId: 10}), 0},
+		{"物品封锁:配置号取 uint32 上限也只核非 0", gmBlockItem, all, marshal(t, &inboxpb.GmItemGainPayload{ItemConfigId: math.MaxUint32}), 0},
+		{"物品封锁:空载荷(配置号 = 0)", gmBlockItem, all, nil, constants.ErrPayloadInvalid},
+		{"物品解封:空载荷(配置号 = 0)", gmUnblockItem, all, nil, constants.ErrPayloadInvalid},
+		{"物品封锁:带未知字段", gmBlockItem, all, []byte{0x08, 0x0a, 0x48, 0x01}, constants.ErrPayloadInvalid},
+		{"物品封锁:解码失败", gmBlockItem, all, []byte{0xff}, constants.ErrPayloadInvalid},
+		{"物品封锁:超过类型上限", gmBlockItem, all, bytes.Repeat([]byte{0x08, 0x01}, 33), constants.ErrPayloadTooLarge},
+		{"物品封锁:不在白名单", gmBlockItem, onlyBlock, marshal(t, &inboxpb.GmItemGainPayload{ItemConfigId: 10}), constants.ErrDisabled},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -490,6 +506,9 @@ func TestLabelsAreLowCardinality(t *testing.T) {
 	}
 	if got := TypeLabel(gmDebt); got != "gm_attach_currency_debt" {
 		t.Errorf("TypeLabel = %q", got)
+	}
+	if got := TypeLabel(gmBlockItem); got != "gm_block_item_gain" {
+		t.Errorf("TypeLabel(物品封锁) = %q", got)
 	}
 	if got := TypeLabel(inboxpb.PlayerInboxMessageType(12345)); got != "unknown" {
 		t.Errorf("未知类型标签 = %q, want unknown", got)

@@ -15,7 +15,7 @@ import java.util.Optional;
  * zone_config(选服目录)的读写。
  *
  * <h2>写路径:每条都是「按主键的单条语句」,只锁一条主键记录,且没有 S→X 升级(2026-09-21 死锁审计 #18 同类项)</h2>
- * zone_id 是业务赋值的主键(实体上没有生成策略),表上没有二级索引。写入只有四条:{@link #upsert}(ODKU)、
+ * zone_id 是业务赋值的主键(实体上没有生成策略),表上没有二级索引。写入只有四条:{@link #insertIfAbsent}(ODKU)、
  * {@link #updateSettings}、{@link #updateManualStatus}、{@link #deleteByZoneId}。每条语句在 InnoDB 里最多取
  * <b>一把</b>行锁 —— 主键记录上的 X(记录不在时是一把间隙锁,间隙锁从不等待)—— 而且是它所在事务的第一把锁;
  * 调用方事务里其后只有非锁定的一致性读回读。一个事务「等锁时手里什么都没有、拿到锁之后再不等」,就不可能出现在
@@ -45,23 +45,20 @@ import java.util.Optional;
 public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
 
     /**
-     * {@link #upsertColumns} 的语句。抽成常量,是为了让真库锁序回归用例执行与生产<b>同一份</b>文本。
+     * {@link #insertIfAbsentColumns} 的语句。抽成常量,是为了让真库锁序回归用例执行与生产<b>同一份</b>文本。
      *
-     * <p>语义与旧 create 的 {@code save()}(merge)一致:不存在则插入;已存在则<b>覆盖</b>全部业务列
-     * (name / manual_status / capacity / maintenance_msg / open_time / recommended / sort_order)并刷新 updated_at,
-     * <b>保留 created_at</b>(对应实体上的 {@code updatable = false})。
+     * <p>语义:不存在则插入整行(created_at = updated_at = :now);<b>已存在则一列都不改</b> —— 重复键分支是不改值的
+     * 自引用 {@code zone_id = zone_id},只为让重复键检查走 ODKU 的 X 锁(锁序论证见 {@link #insertIfAbsent})。
      *
-     * <p>写法 {@code VALUES(col)} 与 {@link ZoneWhitelistRepository#UPSERT_SQL} 同一口径(部署 mysql:8.0 / latest
-     * 与迁移目标 TiDB v8.5 都认;行别名写法 TiDB 不认;MySQL 8.0.20 起带 1287 弃用告警但语义不变),理由见那里,
-     * 不在这里另选一套。
+     * <p>2026-11-05 之前这里是整行覆盖(与旧 create 的 {@code save()}/merge 一致):POST 一个已存在的 zone_id
+     * 会把全部业务列改成请求体的值,请求体漏的字段又被实体的基本类型初值顶上,维护中的区服因此被改成 OPEN
+     * (第一轮数据审计 §4 第 18 条的 POST 变种)。现在「新建」绝不改写已有的行;改已有的行只能走 PUT 或 /maintenance、/open。
      */
-    String UPSERT_SQL = "INSERT INTO zone_config (zone_id, name, manual_status, capacity, maintenance_msg, open_time,"
-            + " recommended, sort_order, created_at, updated_at)"
+    String INSERT_IF_ABSENT_SQL = "INSERT INTO zone_config (zone_id, name, manual_status, capacity, maintenance_msg,"
+            + " open_time, recommended, sort_order, created_at, updated_at)"
             + " VALUES (:zoneId, :name, :manualStatus, :capacity, :maintenanceMsg, :openTime,"
             + " :recommended, :sortOrder, :now, :now)"
-            + " ON DUPLICATE KEY UPDATE name = VALUES(name), manual_status = VALUES(manual_status),"
-            + " capacity = VALUES(capacity), maintenance_msg = VALUES(maintenance_msg), open_time = VALUES(open_time),"
-            + " recommended = VALUES(recommended), sort_order = VALUES(sort_order), updated_at = VALUES(updated_at)";
+            + " ON DUPLICATE KEY UPDATE zone_id = zone_id";
 
     /** {@link #updateSettingColumns} 的语句(JPQL)。Hibernate 翻译成按主键定位的单条 UPDATE。 */
     String UPDATE_SETTINGS_JPQL = "UPDATE ZoneConfig z SET z.name = :name, z.manualStatus = :manualStatus,"
@@ -83,49 +80,51 @@ public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
     Optional<ZoneConfig> findById(Long zoneId);
 
     /**
-     * 按主键幂等写入整行:见 {@link #UPSERT_SQL}。{@code zone.getZoneId()} 与 {@code zone.getName()} 必须非空
-     * (前者是主键,后者列上 NOT NULL;库的 sql_mode 若不含 STRICT,NULL 会被静默改成 '',所以由调用方在接缝处拦)。
+     * 区服不存在则按 {@code zone} 插入整行,已存在则什么也不改:见 {@link #INSERT_IF_ABSENT_SQL}。{@code zone} 必须是
+     * 校验过的完整设置({@link com.game.gateway.dto.ZoneSettingsRequest#toZoneConfig}):实体字段是带初值的基本类型,
+     * 没校验的对象会把初值当真值插进去;name 列 NOT NULL,库的 sql_mode 若不含 STRICT,NULL 会被静默改成 ''。
      *
      * <h3>为什么 ODKU 只会排队</h3>
      * ODKU 在主键重复检查时对已存在 / 删除标记的记录直接取 <b>X</b>(记录锁,不带间隙),其后「插入到删除标记记录上」
-     * 或走 UPDATE 分支要的也是同一把 X —— 没有「先拿 S、再升级」这一步。X 与 X 互斥,同键的并发者只能一个一个拿到:
-     * 先到者插入(或覆盖)并提交,后到者拿到锁时看见的是活行,走 UPDATE 分支。键完全不存在时直接插入新记录(隐式锁),
-     * 只在插入意向上等别人的间隙锁;而本仓库对这张表唯一会留下间隙锁的写者是「更新 / 删除一个不存在的 zone_id」,
-     * 它拿到那把间隙锁之后不再等任何锁,构不成环。
+     * 或走 UPDATE 分支要的也是同一把 X —— 没有「先拿 S、再升级」这一步;UPDATE 分支改不改值不影响取锁。X 与 X 互斥,
+     * 同键的并发者只能一个一个拿到:先到者插入并提交,后到者拿到锁时看见的是活行,走(不改值的)UPDATE 分支。
+     * 键完全不存在时直接插入新记录(隐式锁),只在插入意向上等别人的间隙锁;而本仓库对这张表唯一会留下间隙锁的写者是
+     * 「更新 / 删除一个不存在的 zone_id」,它拿到那把间隙锁之后不再等任何锁,构不成环。
      *
      * <h3>剩下去不掉的固有情形</h3>
      * 同键并发写入且<b>先到者回滚</b>,或 purge 恰在排队期间清掉删除标记记录:排队者挂在那条记录上的锁被 InnoDB
      * 继承成后继记录上的间隙锁,两个排队者的插入意向互相挡住 → 1213。这与语句写法无关,由调用方
      * (AdminZoneController#create)做有上限的整事务重试兜住,收敛论证见那里。
      *
-     * <p>返回值是驱动报告的行数,调用方不要拿它区分插入 / 覆盖 / 未变(Connector/J 默认报 found rows),
-     * 需要结果时在同一事务里回读。
+     * <p>返回值是驱动报告的行数,调用方不要拿它区分插入 / 已存在(Connector/J 默认报 found rows,不改值的 UPDATE
+     * 分支也报 1)。要知道结果,在同一事务里回读,再与请求逐列比较。
      */
-    default int upsert(ZoneConfig zone, LocalDateTime now) {
-        return upsertColumns(zone.getZoneId(), zone.getName(), zone.getManualStatus(), zone.getCapacity(),
+    default int insertIfAbsent(ZoneConfig zone, LocalDateTime now) {
+        return insertIfAbsentColumns(zone.getZoneId(), zone.getName(), zone.getManualStatus(), zone.getCapacity(),
                 zone.getMaintenanceMsg(), zone.getOpenTime(), zone.isRecommended(), zone.getSortOrder(), now);
     }
 
     /**
-     * {@link #upsert} 的列级形式。调用方用 {@link #upsert},这里只负责绑定。
+     * {@link #insertIfAbsent} 的列级形式。调用方用 {@link #insertIfAbsent},这里只负责绑定。
      *
      * <p>native 语句绕过持久化上下文,所以先 flush 再 clear,免得同一事务里随后读到缓存里的旧实体。
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
-    @Query(value = UPSERT_SQL, nativeQuery = true)
-    int upsertColumns(@Param("zoneId") Long zoneId, @Param("name") String name,
-                      @Param("manualStatus") int manualStatus, @Param("capacity") int capacity,
-                      @Param("maintenanceMsg") String maintenanceMsg, @Param("openTime") LocalDateTime openTime,
-                      @Param("recommended") boolean recommended, @Param("sortOrder") int sortOrder,
-                      @Param("now") LocalDateTime now);
+    @Query(value = INSERT_IF_ABSENT_SQL, nativeQuery = true)
+    int insertIfAbsentColumns(@Param("zoneId") Long zoneId, @Param("name") String name,
+                              @Param("manualStatus") int manualStatus, @Param("capacity") int capacity,
+                              @Param("maintenanceMsg") String maintenanceMsg, @Param("openTime") LocalDateTime openTime,
+                              @Param("recommended") boolean recommended, @Param("sortOrder") int sortOrder,
+                              @Param("now") LocalDateTime now);
 
     /**
      * 覆盖已存在区服的全部业务列(不含 created_at),刷新 updated_at;区服不存在时什么也不写,<b>不会</b>插入。
-     * 列集合与旧 update 接口逐列一致。{@code values.getName()} 必须非空(理由同 {@link #upsert})。
+     * {@code values} 必须是校验过的完整设置(理由同 {@link #insertIfAbsent}):PUT 是完整资源替换,请求体漏字段由
+     * 控制器在接缝处回 400,不能让实体初值替它补上。
      *
      * <p>单条按主键的 UPDATE:记录在则取它的 X,不在则只取一把间隙锁;之后调用方只做非锁定回读。
-     * 返回值同 {@link #upsert},不要拿它判断存在性(found rows / affected rows 取决于连接参数),在同一事务里回读。
+     * 返回值同 {@link #insertIfAbsent},不要拿它判断存在性(found rows / affected rows 取决于连接参数),在同一事务里回读。
      */
     default int updateSettings(Long zoneId, ZoneConfig values, LocalDateTime now) {
         return updateSettingColumns(zoneId, values.getName(), values.getManualStatus(), values.getCapacity(),

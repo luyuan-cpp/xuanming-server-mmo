@@ -15,6 +15,7 @@ import (
 
 	"data_service/internal/config"
 	"data_service/internal/constants"
+	"data_service/internal/idissuer"
 	dskafka "data_service/internal/kafka"
 	"data_service/internal/metrics"
 	"data_service/internal/noderegistry"
@@ -57,10 +58,25 @@ var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Gete
 // 库要提前建好。生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
 var migrateOnly = flag.Bool("migrate", false, "run the directory and ledger schema migration and exit")
 
-// idIssuerInit 把发号器的两份预留记录初始化到当前时间之上,跑完即退出。只在首次部署,或确认过
-// 两套 etcd 同时丢数据的影响之后跑(docs/ops/id-issuer-runbook.md)。不并进 -migrate:部署每次都跑
-// -migrate,而两份记录都不存在可能是事故,不能让一次普通发布悄悄盖过去。
-var idIssuerInit = flag.Bool("id-issuer-init", false, "initialize the id issuer reservation records and exit")
+// 发号器的运维入口(docs/ops/id-issuer-runbook.md),都是跑完即退出,都不并进 -migrate:部署每次都跑 -migrate,
+// 而记录不存在可能是事故,不能让一次普通发布悄悄盖过去。首次初始化和事故恢复是两个入口,不能互相代替。
+//
+// idIssuerInit 给一个从没认领过的地域码初始化:在全局号源登记处认领这个码,再建两份本地记录。只在新地域第一次部署时跑。
+var idIssuerInit = flag.Bool("id-issuer-init", false, "claim a never-used region code in the id registry, create its reservation records and exit")
+
+// idIssuerRecover 在事故之后修复记录,上界只取幸存的记录;没有可信上界就拒绝,不猜起点。
+var idIssuerRecover = flag.Bool("id-issuer-recover", false, "repair the id issuer records from the surviving ones after an incident and exit")
+
+// idIssuerRebind 只和 -id-issuer-recover 一起用:允许把这个地域码的发号资格转到配置里的这两套 etcd 上。
+var idIssuerRebind = flag.Bool("id-issuer-rebind", false, "with -id-issuer-recover: move this region code to the configured etcd clusters")
+
+// idIssuerRetire 让配置里的地域码永久退役:登记处留墓碑,之后这个码预留、初始化、恢复全部拒绝。
+var idIssuerRetire = flag.Bool("id-issuer-retire", false, "retire the configured region code in the id registry forever and exit")
+
+// idRegistryOpen 开启全局号源登记处:写入第一个可认领的码。只在世界第一次部署(-id-registry-next 1),
+// 或登记处整个丢了数据重建时跑(-id-registry-next 取台账里用过的最大码 +1)。
+var idRegistryOpen = flag.Bool("id-registry-open", false, "open the global id registry with -id-registry-next as the first claimable region code and exit")
+var idRegistryNext = flag.Int("id-registry-next", -1, "with -id-registry-open: the first region code -id-issuer-init may claim (1 for a new world)")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
@@ -77,28 +93,57 @@ const (
 	entryMigrate
 	entryRouteTool
 	entryIdIssuerInit
+	entryIdIssuerRecover
+	entryIdIssuerRetire
+	entryIdRegistryOpen
 )
 
+// entryFlags 是选入口要看的 flag。
+type entryFlags struct {
+	migrate       bool
+	routeTool     bool
+	issuerInit    bool
+	issuerRecover bool
+	issuerRebind  bool
+	issuerRetire  bool
+	registryOpen  bool
+}
+
 // selectEntry 按 flag 选入口(纯函数,data_service_entry_test.go 表驱动钉住)。args 是 flag.Args()(第一个非 flag 参数起)。
-//   - -migrate、-route-tool、-id-issuer-init 同时给多个:拒绝(一次只做一件事);
+//   - -migrate、-route-tool、-id-issuer-init、-id-issuer-recover、-id-issuer-retire、-id-registry-open 同时给多个:拒绝(一次只做一件事);
+//   - -id-issuer-rebind 不和 -id-issuer-recover 一起:拒绝,它只是恢复的一个确认开关;
 //   - -route-tool 但没有子命令:拒绝;
 //   - 没有 -route-tool 却带位置参数:拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml freeze` 会被当成一次普通启动、
 //     起一个服务进发现池,而运维以为自己跑的是冻结。
-func selectEntry(migrate, routeTool, issuerInit bool, args []string) (entryMode, error) {
+func selectEntry(f entryFlags, args []string) (entryMode, error) {
+	exclusive := 0
+	for _, on := range []bool{f.migrate, f.routeTool, f.issuerInit, f.issuerRecover, f.issuerRetire, f.registryOpen} {
+		if on {
+			exclusive++
+		}
+	}
 	switch {
-	case migrate && routeTool, migrate && issuerInit, routeTool && issuerInit:
-		return entryServe, errors.New("-migrate, -route-tool and -id-issuer-init are mutually exclusive")
-	case routeTool && len(args) == 0:
+	case exclusive > 1:
+		return entryServe, errors.New("-migrate, -route-tool, -id-issuer-init, -id-issuer-recover, -id-issuer-retire and -id-registry-open are mutually exclusive")
+	case f.issuerRebind && !f.issuerRecover:
+		return entryServe, errors.New("-id-issuer-rebind only works together with -id-issuer-recover")
+	case f.routeTool && len(args) == 0:
 		return entryServe, errors.New("-route-tool needs a subcommand: data_service -f <yaml> -route-tool <subcommand> [flags]")
-	case routeTool:
+	case f.routeTool:
 		return entryRouteTool, nil
 	case len(args) > 0:
 		return entryServe, fmt.Errorf("unexpected positional arguments %q; route_tool subcommands need -route-tool "+
 			"(data_service -f <yaml> -route-tool %s ...)", args, args[0])
-	case migrate:
+	case f.migrate:
 		return entryMigrate, nil
-	case issuerInit:
+	case f.issuerInit:
 		return entryIdIssuerInit, nil
+	case f.issuerRecover:
+		return entryIdIssuerRecover, nil
+	case f.issuerRetire:
+		return entryIdIssuerRetire, nil
+	case f.registryOpen:
+		return entryIdRegistryOpen, nil
 	default:
 		return entryServe, nil
 	}
@@ -128,7 +173,15 @@ const nodeRegisterListenPoll = 100 * time.Millisecond
 
 func main() {
 	flag.Parse()
-	entry, err := selectEntry(*migrateOnly, *routeTool, *idIssuerInit, flag.Args())
+	entry, err := selectEntry(entryFlags{
+		migrate:       *migrateOnly,
+		routeTool:     *routeTool,
+		issuerInit:    *idIssuerInit,
+		issuerRecover: *idIssuerRecover,
+		issuerRebind:  *idIssuerRebind,
+		issuerRetire:  *idIssuerRetire,
+		registryOpen:  *idRegistryOpen,
+	}, flag.Args())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "data_service: %v\n", err)
 		os.Exit(2)
@@ -155,8 +208,21 @@ func main() {
 	if entry == entryMigrate {
 		os.Exit(runMigration(c))
 	}
-	if entry == entryIdIssuerInit {
-		os.Exit(runIdIssuerInit(c))
+	switch entry {
+	case entryIdIssuerInit:
+		os.Exit(runIdIssuerTool(c, "id issuer init", idIssuerInitOp))
+	case entryIdIssuerRecover:
+		rebind := *idIssuerRebind
+		os.Exit(runIdIssuerTool(c, "id issuer recover", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+			return issuer.Recover(ctx, rebind)
+		}))
+	case entryIdIssuerRetire:
+		os.Exit(runIdIssuerTool(c, "id issuer retire", idIssuerRetireOp))
+	case entryIdRegistryOpen:
+		next := *idRegistryNext
+		os.Exit(runIdIssuerTool(c, "id registry open", func(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+			return idRegistryOpenOp(ctx, issuer, next)
+		}))
 	}
 	var globalErr error
 	c, globalErr = c.ResolveGlobalAuthority(os.Getenv)
@@ -547,31 +613,66 @@ func runMigration(c config.Config) int {
 	return 0
 }
 
-// idIssuerInitTimeout 是 -id-issuer-init 的预算:读写两套 etcd 各一次,不需要更久。
-const idIssuerInitTimeout = 30 * time.Second
+// idIssuerToolTimeout 是发号器运维入口的预算:读写三套 etcd 各几次,登记处可能在别的地域,不需要更久。
+const idIssuerToolTimeout = 30 * time.Second
 
-// runIdIssuerInit 是 -id-issuer-init 的实现:成功 0,失败 1。
-// 只要有一份记录存在就什么也不做,所以重复执行是安全的。
-func runIdIssuerInit(c config.Config) int {
+// runIdIssuerTool 按配置装配发号器,跑一个运维操作:成功 0,失败 1。输出一行结果给运维核对。
+func runIdIssuerTool(c config.Config, name string, op func(context.Context, *idissuer.Issuer) (string, error)) int {
 	issuer, err := svc.NewIdIssuer(c)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "id issuer init FAILED: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s FAILED: %v\n", name, err)
 		return 1
 	}
 	defer issuer.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), idIssuerInitTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), idIssuerToolTimeout)
 	defer cancel()
-	created, err := issuer.Bootstrap(ctx)
+	result, err := op(ctx, issuer)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "id issuer init FAILED: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s FAILED: %v\n", name, err)
 		return 1
 	}
-	if created {
-		fmt.Println("id issuer init OK: both reservation records created")
-	} else {
-		fmt.Println("id issuer init: at least one reservation record already exists, nothing changed")
-	}
+	fmt.Printf("%s OK: %s\n", name, result)
 	return 0
+}
+
+// idIssuerInitOp 是 -id-issuer-init。这个码已经由这两套 etcd 初始化过时什么也不做,所以重复执行是安全的。
+func idIssuerInitOp(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+	created, err := issuer.Init(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !created {
+		return "this region code is already initialized on these etcd clusters, nothing changed", nil
+	}
+	return "region code claimed in the id registry and both reservation records created", nil
+}
+
+// idIssuerRetireOp 是 -id-issuer-retire。已退役时什么也不做。
+func idIssuerRetireOp(ctx context.Context, issuer *idissuer.Issuer) (string, error) {
+	retired, err := issuer.Retire(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !retired {
+		return "this region code was already retired, nothing changed", nil
+	}
+	return "region code retired in the id registry; it can never issue or be claimed again", nil
+}
+
+// idRegistryOpenOp 是 -id-registry-open。-id-registry-next 必须显式给 1..64:新世界给 1,
+// 重建给台账里用过的最大码 +1。已开启时什么也不做。
+func idRegistryOpenOp(ctx context.Context, issuer *idissuer.Issuer, next int) (string, error) {
+	if next < 1 || next > int(idissuer.MaxNextRegion) {
+		return "", fmt.Errorf("-id-registry-open needs -id-registry-next in 1..%d (1 for a new world, the largest used code + 1 when rebuilding)", idissuer.MaxNextRegion)
+	}
+	opened, err := issuer.OpenRegistry(ctx, uint32(next))
+	if err != nil {
+		return "", err
+	}
+	if !opened {
+		return "the id registry is already open, nothing changed", nil
+	}
+	return fmt.Sprintf("id registry opened, the first claimable region code is %d", next), nil
 }
 
 // migrateExitLockBusy 与 go/schemamigrate 的 ExitLockBusy 同值:迁移锁被另一个实例(另一个副本的启动路径,

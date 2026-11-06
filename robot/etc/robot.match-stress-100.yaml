@@ -1,0 +1,35 @@
+# 匹配压测(match-stress 档,docs/design/global-match-hierarchical-pools.md §11 R0;服务器缺口清单第 10 条)。
+# 在 stress 档的场景负载上加入队 / 撤单:每个 AI 动作按权重选 cast_skill / join_queue / switch_scene,
+# join_queue 先地域探测(GetNetworkProbePlan → 逐机房探测 → CommitNetworkProbe,结果按玩家缓存),再 JoinQueue;
+# 排满 match_queue.dwell_seconds 还没成局就按请求号撤单;成局后不连 battle,等这局的 NotifyBattleEnd 之后再排。
+#
+# 前置:match(:9170 /metrics)与 battle 都在跑,battle 的公网端点从 robot 所在机器可达(探测要直连 battle)。
+# 抓取:stress_snap.ps1 缺省已抓 :9170(t<N>m_match.txt);汇总看 stress_summarize.ps1 的 G1 / G2 / G3 段。
+# 账号前缀与 robot.stress-100.yaml 分开,两种压测的数据不混。
+gateway_addr: "http://127.0.0.1:8081"
+zone_id: 1
+robot_count: 100
+account_fmt: "matchbot_%05d"
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 5
+report_interval: 5
+
+mode: "stress"
+
+auth_type: "password"
+use_http_login: true
+
+profile: "match-stress"
+
+# 入队参数(robot/config/config.go MatchQueueConfig)。1V1 两人成局,队列深度与成局最直接;
+# 压组队档改 MATCH_MODE_PVE_TEAM / MATCH_MODE_PVP_TEAM 并给 team_size(1..5);battle_config_id=1 是 PlayMode 表第一行。
+match_queue:
+  mode: "MATCH_MODE_1V1"
+  battle_config_id: 1
+  team_size: 0
+  dwell_seconds: 30
+
+llm:
+  enabled: false

@@ -28,11 +28,13 @@ struct RpcMethodMeta {
 	const char* grpcFullMethod{nullptr};
 };
 
-constexpr uint32_t kMaxRpcMethodCount = 371;
+constexpr uint32_t kMaxRpcMethodCount = 373;
 constexpr uint32_t kMaxEventCount = 52;
 
 extern std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
 void InitMessageInfo();
 bool IsValidEventId(uint32_t eventId);
+// gate 上行白名单:客户端协议服务里客户端能发起的方法(REQUEST / ONE_WAY);推送与仅服务端方法不在其中
+// (docs/design/client-rpc-callback.md §7 R4)。
 bool IsClientMessageId(uint32_t messageId);

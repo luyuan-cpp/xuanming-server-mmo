@@ -65,7 +65,8 @@ function New-SqlWriterCatalogFixture {
 
 .DESCRIPTION
     staging / prod 必须显式给 -PlayerRedisMasters,要 apply 集群时还要容量,开了集群还要口令(docs/design/redis-player-store-cluster.md §5.1)。
-    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)和 -Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)。
+    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)、-Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)
+    和 -IdRegistryEtcd(全局号源登记处,docs/ops/id-issuer-runbook.md §1)。
     绝大多数用例测的不是这些闸,不补的话全部非 dev 档的 DryRun 都停在这里。
     用例自己给了 -PlayerRedisMasters(含 0,测闸本身)就原样不动;-Env 写了 MMORPG_PLAYER_REDIS_PASSWORD(含空串)就用它。
     -DirectoryLogicalShards、-Region 同理(测闸本身时给 0、-1)。
@@ -83,6 +84,8 @@ function Add-PlayerRedisDeployFixture {
     $logicalDb = @()
     if ($Arguments -notcontains '-DirectoryLogicalShards') { $logicalDb += @('-DirectoryLogicalShards', '64') }
     if ($Arguments -notcontains '-Region') { $logicalDb += @('-Region', '1') }
+    # 全局号源登记处同理(Resolve-IdRegistryEtcd):测闸本身时用例自己给 -IdRegistryEtcd ''。
+    if ($Arguments -notcontains '-IdRegistryEtcd' -and $Arguments -notcontains '-HostIdRegistry') { $logicalDb += @('-IdRegistryEtcd', 'id-registry.invalid:2379') }
     $result.Arguments = @($Arguments) + $logicalDb
     if ($Arguments -contains '-PlayerRedisMasters') { return $result }
     $added = @('-PlayerRedisMasters', '3')

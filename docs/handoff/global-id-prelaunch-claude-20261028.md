@@ -1,5 +1,7 @@
 # 交接：全球同服 ID 发号上线前决策与修复（交 Claude Code，2026-10-28）
 
+> **2026-11-05 更新**：本文 §3 写的 SQL `id_segment` 号段在 10-30 已换成 etcd 发号器（`go/data_service/internal/idissuer`）。两套 etcd 同时回档会重发、地域码防重靠人工这两个缺口，已按「三份预留记录 + 全局号源登记处」落码（未编译，待 Codex 验证），设计见 [总体方案 §6.3](../design/player-data-tidb-scaling-plan.md)，验证步骤见 [新交接](./global-id-issuer-registry-20261105.md)。Java 版按用户 11-05 要求本轮不实现，已在 Java 仓 `PARITY.md` 记待做。
+
 > 状态：需求与审计交接，最终实现方案由 Claude Code 决定并修复。本次未修改实现、未清库。
 > 主仓基线：`c370cf6cf` 及本会话工作区；进入实施前重新核对源码与其他会话改动。
 > 用户最新前提：项目尚未上线，可以清理开发数据，不考虑旧 ID、历史数据兼容或迁移。

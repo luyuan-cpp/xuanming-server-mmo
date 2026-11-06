@@ -162,6 +162,9 @@ set(SOURCE_FILES
     gate/gate_spectate_ticket.pb.cc
     player_store/player_store.pb.cc
     role_fence/role_fence.pb.cc
+    common/component/player_battle_result_comp.pb.cc
+    common/component/player_item_gain_block_comp.pb.cc
+    scene/player_battle_result.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

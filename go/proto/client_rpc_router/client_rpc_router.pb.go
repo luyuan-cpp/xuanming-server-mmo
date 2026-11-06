@@ -24,9 +24,13 @@ const (
 )
 
 type ForwardRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Request       *base.ClientRequest    `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`              // 客户端原包(id / message_id / body),路由服不解析 body
-	ZoneId        uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // 发起 gate 所在 zone:zone-scoped 目标(login)只挑同 zone 实例
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Request *base.ClientRequest    `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`              // 客户端原包(id / message_id / body),路由服不解析 body
+	ZoneId  uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // 发起 gate 所在 zone:zone-scoped 目标(login)只挑同 zone 实例
+	// 会话的发布轨道(docs/design/release-track-gray-canary.md §2.3):gate 填自己的 NodeInfo.release_track,
+	// 会话连在哪台 gate 上就是哪条轨道。路由服按它给全局类型选实例(§2.4);zone-scoped 目标按 zone_id 选,不看它。
+	// 空串 = stable(没写轨道的 gate);stable、canary 之外的值是契约违例,路由服拒绝这条请求。
+	ReleaseTrack  string `protobuf:"bytes,3,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -75,14 +79,22 @@ func (x *ForwardRequest) GetZoneId() uint32 {
 	return 0
 }
 
+func (x *ForwardRequest) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
+}
+
 var File_proto_client_rpc_router_client_rpc_router_proto protoreflect.FileDescriptor
 
 const file_proto_client_rpc_router_client_rpc_router_proto_rawDesc = "" +
 	"\n" +
-	"/proto/client_rpc_router/client_rpc_router.proto\x12\x11client_rpc_router\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/common/base/message.proto\"S\n" +
+	"/proto/client_rpc_router/client_rpc_router.proto\x12\x11client_rpc_router\x1a\x1bproto/db/proto_option.proto\x1a\x1fproto/common/base/message.proto\"x\n" +
 	"\x0eForwardRequest\x12(\n" +
 	"\arequest\x18\x01 \x01(\v2\x0e.ClientRequestR\arequest\x12\x17\n" +
-	"\azone_id\x18\x02 \x01(\rR\x06zoneId2P\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12#\n" +
+	"\rrelease_track\x18\x03 \x01(\tR\freleaseTrack2P\n" +
 	"\x0fClientRpcRouter\x12=\n" +
 	"\aForward\x12!.client_rpc_router.ForwardRequest\x1a\x0f.MessageContentB\x1d\x98\xd4a\x1fZ\x17proto/client_rpc_routerb\x06proto3"
 

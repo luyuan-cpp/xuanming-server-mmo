@@ -21,11 +21,21 @@ Kafka 后台线程只收取并投递，不能直接改 Scene 的 registry。
 ThreadMonitor 继续采样实际线程基线，不再查询官方库的初始化状态。
 `GRPC_SERVER_MAX_POLLERS` 已退役，不能用它或旧线程池变量调当前节点线程数。
 
-### 队伍跟随的两次异步读取
+### Scene 协程任务
 
-`SceneRuntimeContext` 持有 `PlayerTeamFollowScope`，启动、两次 Redis GET 的恢复和停止均断言在所属 Scene EventLoop。Cobalt 的执行器使用同一个 muduo loop。同线程 `dispatch` 内联，根任务的完成通知经 `queueInLoop` 退休。两次正常 Redis 回包直接在原回调栈内恢复业务。Boost 的 `execution_context` 只提供执行器属性，实际工作由 muduo 驱动。
+2026-11-05 后续批次将角色授权、跨节点交接、战斗锁写入与续期、会话释放、存盘与认领、疏散改派、etcd 注册、号段预取及创建许可的单次异步操作收进协程。原有 SQL/Redis 围栏、未知结果确认表、重试身份、截止时间和持久状态机仍是权威。此次改变控制流表达，不构成吞吐或帧耗时结论，Java 内部实现无须照搬。
 
-等待回复期间协程挂起，Scene 可以执行其它排队工作。提交内即时拒绝或重入完成在 `command` 返回后交付。维护 P1、普通关机和身份冲突入口先关闭跟随准入并发出本地取消，拆除前再做幂等兜底。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。Redis 迟到回包无法再访问任务帧。整个路径沿用已有线程，沿用下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
+共享 `LoopTaskScope` 只把 Cobalt task 交给现有 muduo loop，`Close` 封住新增，`Stop` 取消本地等待，均不等待任务排空。`AwaitCallback` 的提交与回调必须在同一 loop，状态在提交前准备，立即拒绝、提交内重入及本地停止只交付一次。结果值在原回调期间复制或移动为自有数据，晚回调只持操作状态的弱引用。正常回调原栈恢复，保持现有事件顺序。
+
+Scene 的任务所有者分为瞬态与持久排空两组。维护 P1、普通关机、身份冲突停止瞬态任务。授权、存盘和会话释放在原业务排空期间仍允许必要工作，由 `TryStartDurable` 启动，只在 `BeforeTeardown` 停止本地等待。停止不减去未结束的远端写计数、不确认 SQL 提交、不解除围栏、不丢掉待确认记录。原传输关闭、Hiredis 空回复、客户端及 EventLoop 的销毁顺序不变。
+
+etcd 注册、领段及创建许可由各自对象或节点作用域持有。etcd unary 每次调用有独立终态归属，旧阶段的迟到回复不能命中新阶段。号段超时后原有迟到认领窗口保留。Agones 继续调用现有异步许可接口，已存在的 worker 和队列投递规则不变，本批不增加线程或线程池。
+
+`SceneRuntimeContext` 持有 `SceneTaskScope`。队伍跟随和镜像创建后自动进场都在所属 Scene EventLoop 启动、恢复和停止。Cobalt 执行器的同线程 `dispatch` 内联，根任务的完成通知经 `queueInLoop` 回收。Boost 的 `execution_context` 提供执行器属性，实际工作由 muduo 驱动。
+
+等待回复期间协程挂起，Scene 可以执行其他排队工作。正常 Redis 和 gRPC 回包直接在原回调栈恢复。Redis 提交内即时拒绝或重入完成在 `command` 返回后交付。镜像沿用生成 gRPC 客户端的异步完成，连本地发送失败也按原规则排队交付。
+
+维护 P1、普通关机和身份冲突入口关闭任务准入并发出本地取消，拆除前再做幂等兜底。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。晚到的 Redis 和 gRPC 回包只持等待状态的弱引用。整个路径沿用已有线程，以及下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
 
 ## 2. 当前帧与派发预算
 
@@ -52,7 +62,7 @@ Running → ClosingIngress →（GrpcDraining 与 PersistenceDraining）→ Fina
 ```
 
 1. 停止并 join Kafka consumer，封住 Kafka 业务入站；producer 继续存活，供退出存盘使用。
-   执行关机前业务 hook，Scene 停止队伍跟随和 lifecycle，并让尚待许可的创建请求按拒绝路径收口。
+   执行关机前业务 hook，Scene 停止协程任务和 lifecycle，并让尚待许可的创建请求按拒绝路径收口。
 2. 调用 `BeginShutdown({2s, 1s, 1s}, onDrained)`，设置排空状态、排队撤监听，发送两阶段 GOAWAY。
    最终 GOAWAY 前的在途请求仍可能追加业务工作。到期后拒绝未开始的调用、结束已开始的调用；
    已提交的 DATA / trailers 仍须处理写窗口与背压，帧写完且所有流关闭后半关；排空到期路径的 closeGrace 从该到期时刻起算，

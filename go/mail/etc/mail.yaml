@@ -21,12 +21,6 @@ SharedRedisAddr: 127.0.0.1:6379
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。读写与取连接 300ms、拨号 1s 沿用这条路径原来的口径。
 PlayerRedis:
   PoolSizePerNode: 8
-# 启动必须声明真实全局登录态命名空间。
-GlobalLoginSessions: false
-LoginRedis:
-  Addrs: []
-  DB: 0
-  PasswordEnv: MMORPG_LOGIN_REDIS_PASSWORD
 KafkaBrokers: [127.0.0.1:9092]
 AssetSecretEnv: MMORPG_ASSET_OP_SECRET_MAIL
 DataServiceRpc:

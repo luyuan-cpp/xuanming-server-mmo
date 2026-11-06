@@ -9,8 +9,9 @@
 //  1. 先本机房：组内全员的首选机房相同；再跨机房：全员都等满 CrossRegionAfterMs（D-16 区域内优先）。
 //  2. 每个机房阶段内，范围树从窄到宽：同 zone → 同大区 → 全服，锚点只走到它当前允许的层级；
 //     候选也必须已经等到这一层（scope.Admit 的双向同意）。
-//  3. 计分模式在容差内按评分就近，并要求组内极差不超过锚点容差；非计分模式按排队序装箱，预组队不拆；
-//     分边模式（PVP_TEAM）再把一局分成人数相等的两侧，预组队整体落在同一侧。
+//  3. 计分且不分边（1V1 / 5V5）在容差内按评分就近，并要求组内极差不超过锚点容差；非计分模式按排队序装箱，预组队不拆；
+//     分边模式（PVP_TEAM，2026-11-05 起计分）按人数分桶和拆分模板选人，组内队伍分极差不超过锚点容差，
+//     大车队打小车队要吃亏一侧等够，再分成人数相等、总分接近的两侧，预组队整体落在同一侧（pvp_units.go）。
 package poolgroup
 
 import (
@@ -37,7 +38,9 @@ type Unit struct {
 	EnqueuedMs  uint64            // 排队序：单排 = 原票入队时刻，整队 = launch 入队时刻
 	Preferred   uint32            // 全体成员共同的首选机房；成员不一致时为 0，只能参加跨机房阶段
 	RTT         map[uint32]uint32 // 全体成员都在硬延迟内的机房 → 成员中的最大 RTT（毫秒）
-	RatingCenti int64             // 计分模式的评分×100；计分模式只接受单排单位
+	// RatingCenti 是队伍分×100，只在计分时用：单排是本人评分，整队是成员平均分加组队加成（调用方按 ratingrule.UnitCenti 算）。
+	// 计分且不分边（1V1 / 5V5）只接受单排单位。
+	RatingCenti int64
 }
 
 // Policy 是一个池的成组规则。调用方从配置与模板目录取值，提交点用同一组值复核。
@@ -45,9 +48,12 @@ type Policy struct {
 	Target             int            // 每组人数，1..MaxTarget
 	Scope              scope.Schedule // 范围树逐级放宽阈值
 	CrossRegionAfterMs uint64         // 跨机房前全员至少要等的时长（D-16）
-	Rated              bool           // 计分模式（1V1 / 5V5）
+	Rated              bool           // 计分模式（1V1 / 5V5 / PVP_TEAM）
 	// Sides：Target 人要分成人数相等的两侧（PVP_TEAM），预组队整体落在同一侧，单位人数不得超过一侧。
 	Sides bool
+	// PremadeGapStepMs 只在 Sides 时用：两侧最大车队人数之差（车队差）超过 1 时，吃亏一侧每个单位都要等到
+	// 1 + 等待 / 步长 ≥ 车队差。0 = 不限车队差。
+	PremadeGapStepMs uint64
 	// ToleranceCenti 返回锚点等待 waitMs 时允许的组内评分极差（评分×100），须随等待单调不减。
 	// +Inf 表示不限。只在 Rated 时调用；为 nil 视为不限。
 	ToleranceCenti    func(anchorWaitMs uint64) float64
@@ -71,8 +77,8 @@ type unitState struct {
 	valid     bool
 	placeable bool // 硬延迟内至少有一个机房当前可分配
 	allowed   scope.Level
-	waitMs  uint64
-	keys    [scope.LevelCount]uint32 // 单位在各层所属子树的键；0 表示这一层没有可共享的子树
+	waitMs    uint64
+	keys      [scope.LevelCount]uint32 // 单位在各层所属子树的键；0 表示这一层没有可共享的子树
 }
 
 // Form 返回本页能切出的全部候选组，组与组之间不共用单位，也不共用玩家。
@@ -82,8 +88,8 @@ func Form(units []Unit, regions map[uint32]bool, nowMs uint64, p Policy) []Group
 	if p.Target < 1 || p.Target > MaxTarget || len(units) == 0 || len(regions) == 0 {
 		return nil
 	}
-	if p.Sides && (p.Target%2 != 0 || p.Rated) {
-		return nil // 分边模式是人数相等的两侧、不计分（PVP_TEAM）
+	if p.Sides && p.Target%2 != 0 {
+		return nil // 分边模式是人数相等的两侧（PVP_TEAM）
 	}
 	f := former{units: units, regions: regions, now: nowMs, p: p}
 	f.prepare()
@@ -166,7 +172,7 @@ func (f *former) prepare() {
 func (f *former) inspect(u *Unit) unitState {
 	var st unitState
 	size := len(u.Players)
-	if size == 0 || size > f.p.Target || len(u.Members) != size || len(u.RTT) == 0 || (f.p.Rated && size != 1) || (f.p.Sides && size > f.p.Target/2) {
+	if size == 0 || size > f.p.Target || len(u.Members) != size || len(u.RTT) == 0 || (f.p.Rated && !f.p.Sides && size != 1) || (f.p.Sides && size > f.p.Target/2) {
 		return st
 	}
 	seen := make(map[uint64]bool, size)
@@ -333,7 +339,9 @@ func (f *former) candidates(a int, level scope.Level, cross bool, tolerance floa
 	limit := f.p.MaxCandidates
 	if limit <= 0 {
 		limit = defaultMaxCandidates
-		if f.p.Rated {
+		// 单排计分池要在大量候选里找分差最小的窗口；分边模式一局最多 9 个候选单位，按排队序取 64 个已经够，
+		// 评分窗口枚举是候选数的平方级，不放宽到 512。
+		if f.p.Rated && !f.p.Sides {
 			limit = defaultMaxRatedCandidates
 		}
 	}
@@ -374,7 +382,7 @@ func (f *former) candidates(a int, level scope.Level, cross bool, tolerance floa
 func (f *former) pack(a int, peers []int, tolerance float64) ([]int, []uint32) {
 	switch {
 	case f.p.Sides:
-		return f.packSides(a, peers)
+		return f.packSides(a, peers, tolerance)
 	case f.p.Rated:
 		return f.packRated(a, peers, tolerance), nil
 	default:
@@ -382,15 +390,15 @@ func (f *former) pack(a int, peers []int, tolerance float64) ([]int, []uint32) {
 	}
 }
 
-// packSides 把锚点与候选按排队序装成人数相等的两侧，锚点固定在 0 侧，预组队不拆。
-// 两侧各至多 5 人，状态只有 36 个（PickPvpUnits）。
-func (f *former) packSides(a int, peers []int) ([]int, []uint32) {
+// packSides 把锚点与候选（排队序）交给 pickSides 选人并分成人数相等的两侧，锚点固定在 0 侧，预组队不拆。
+// tolerance 是锚点容差（不计分时为 +Inf）。
+func (f *former) packSides(a int, peers []int, tolerance float64) ([]int, []uint32) {
 	order := append([]int{a}, peers...)
-	sizes := make([]int, len(order))
+	units := make([]SideUnit, len(order))
 	for i, u := range order {
-		sizes[i] = len(f.units[u].Players)
+		units[i] = SideUnit{Size: len(f.units[u].Players), RatingCenti: f.units[u].RatingCenti, WaitMs: f.state[u].waitMs}
 	}
-	picked, sides := PickPvpUnits(sizes, f.p.Target/2)
+	picked, sides := pickSides(units, SideRule{PerSide: f.p.Target / 2, Rated: f.p.Rated, ToleranceCenti: tolerance, GapStepMs: f.p.PremadeGapStepMs})
 	if picked == nil {
 		return nil, nil
 	}

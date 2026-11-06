@@ -1,11 +1,16 @@
 #include "role_admission_system.h"
 #include "player/system/handoff_sql_barrier.h"
+#include "core/async/coroutine_callback.h"
+#include "core/system/scene_task_scope.h"
+
+#include <boost/cobalt/task.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -56,6 +61,7 @@ struct RoleAdmissionState {
     std::map<Guid, Role> roles;
     uint64_t nextGeneration{0};
     bool timerArmed{false};
+    bool hasDurableAdmissions{false};
 };
 namespace {
 using Clock = RoleAdmissionSystem::Clock;
@@ -106,37 +112,59 @@ void ArmTimer() {
         loop->runEvery(0.5, [original] { if (Owns(original)) RoleAdmissionSystem::Tick(); });
     }
 }
-// Redis 适配器不持有连接；HGET 原件随后只作为同一候选的 CAS 输入。
-// 上层弱 state/原 generation 在两次异步边界均复核，迟到完成不会激活新实体。
-bool RegisterFence(Guid player, std::string candidate, std::optional<std::string> expected,
-    std::function<bool(const std::string&)> stillQualified, RoleAdmissionSystem::FenceReply completed) {
-    const auto parsed = handoff_sql_barrier::ParseFence(candidate);
-    if (!parsed || parsed->state != handoff_sql_barrier::FenceState::kHeld) return false;
-    auto submit = [player, candidate, stillQualified, completed](std::string prior) {
-        if (!stillQualified(prior)) { completed(false, prior); return; }
-        if (!tlsPlayerRedis.connected()) { completed(false, prior); return; }
-        const auto record = handoff_sql_barrier::ParseFence(candidate);
-        const std::string owner = player_ownership::OwnerEpochRedisKey(player);
-        const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(player);
-        const std::string mark = player_ownership::HandoffRedisKey(player);
-        const auto epoch = std::to_string(record->ownerEpoch);
-        const int sent = tlsPlayerRedis.command([completed, prior](hiredis::Hiredis*, redisReply* reply) {
-            completed(reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1, prior);
-        }, "EVAL %s 3 %b %b %b %b %b %b", handoff_sql_barrier::kRegisterFenceLua.c_str(),
-            owner.data(), owner.size(), handoffFenceKey.data(), handoffFenceKey.size(), mark.data(), mark.size(),
-            epoch.data(), epoch.size(), candidate.data(), candidate.size(), prior.data(), prior.size());
-        if (sent != REDIS_OK) completed(false, prior);
-    };
-    if (expected) { submit(*expected); return true; }
-    if (!tlsPlayerRedis.connected()) return false;
-    const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(player);
-    return tlsPlayerRedis.command([submit, completed](hiredis::Hiredis*, redisReply* reply) {
-        if (reply && reply->type == REDIS_REPLY_NIL) submit("");
-        else if (reply && reply->type == REDIS_REPLY_STRING && reply->str)
-            submit(std::string(reply->str, reply->len));
-        else completed(false, std::nullopt);
-    }, "HGET %b handoff_fence", handoffFenceKey.data(), handoffFenceKey.size()) == REDIS_OK;
+namespace cobalt = boost::cobalt;
+using muduo::net::EventLoop;
+using loop_async::AwaitCallback;
+
+struct FenceAttemptResult {
+    bool accepted{false};
+    bool registered{false};
+    std::optional<std::string> prior;
+};
+struct AdmissionRegisterResult {
+    bool accepted{false};
+    std::optional<data_service::RegisterRoleAdmissionResponse> reply;
+};
+
+enum class AdmissionTransportKind : uint8_t { kRegister, kFence };
+struct AdmissionTransport {
+    std::weak_ptr<RoleAdmissionState> original;
+    Guid playerId;
+    uint64_t generation;
+    AdmissionTransportKind kind;
+    bool completed{false};
+    bool readCompleted{false};
+
+    // 实际终态或明确未接纳才归还计数。回调可能在本地等待取消之后到达。
+    void Complete() {
+        if (std::exchange(completed, true) || !Owns(original)) return;
+        const auto it = state->roles.find(playerId);
+        if (it == state->roles.end() || it->second.identity.generation() != generation) return;
+        auto& role = it->second;
+        if (kind == AdmissionTransportKind::kRegister) {
+            if (role.registerCalls > 0) --role.registerCalls;
+        } else {
+            if (role.callbacks > 0) --role.callbacks;
+            role.fenceInFlight = false;
+        }
+    }
+};
+
+// 恢复时只认原 Scene 的入场状态和原世代。先固定 prior，Seal 才能撤销尚在途的 CAS。
+bool QualifyFence(const std::weak_ptr<RoleAdmissionState>& original, Guid playerId, uint64_t generation,
+    const std::string& candidate, const std::string& prior) {
+    if (!Owns(original)) return false;
+    const auto it = state->roles.find(playerId);
+    if (it == state->roles.end()) return false;
+    auto& role = it->second;
+    if (!role.waitingFence || role.identity.generation() != generation || role.context.handoffFence != candidate
+        || generation <= role.closedThrough || generation <= role.sealedThrough || Now() >= role.registerDeadline
+        || (role.fencePrior && *role.fencePrior != prior)) return false;
+    role.fencePrior = prior;
+    return true;
 }
+
+
 void CancelPendingFence(Guid playerId) {
     auto found = state->roles.find(playerId);
     if (found == state->roles.end()) return;
@@ -180,115 +208,232 @@ void CancelPendingFence(Guid playerId) {
     }
     if (!sent) { role.fenceRevokeInFlight = false; --role.callbacks; }
 }
-void SendFence(Guid playerId) {
-    auto found = state->roles.find(playerId);
-    if (found == state->roles.end()) return;
-    auto& role = found->second;
-    if (!role.waitingFence || role.fenceInFlight) return;
-    if (Now() >= role.registerDeadline || role.fenceAttempts >= 3) {
+cobalt::task<void> RegisterFenceAttempt(Guid playerId) {
+    const std::weak_ptr<RoleAdmissionState> original = state;
+    uint64_t generation;
+    std::string candidate;
+    std::optional<std::string> prior;
+    {
+        const auto it = state->roles.find(playerId);
+        if (it == state->roles.end()) co_return;
+        auto& role = it->second;
+        if (!role.waitingFence || role.fenceInFlight) co_return;
+        if (Now() >= role.registerDeadline || role.fenceAttempts >= 3) {
+            const auto session = role.context.enterInfo.session_id();
+            role.waitingFence = false;
+            CancelPendingFence(playerId);
+            Reject(playerId, session);
+            co_return;
+        }
+        generation = role.identity.generation();
+        if (generation <= role.closedThrough || generation <= role.sealedThrough) {
+            role.waitingFence = false;
+            co_return;
+        }
+        candidate = role.context.handoffFence;
+        prior = role.fencePrior;
+        role.fenceInFlight = true;
+        ++role.fenceAttempts;
+        ++role.callbacks;
+    }
+
+    auto& loop = *EventLoop::getEventLoopOfCurrentThread();
+    const auto transport = std::make_shared<AdmissionTransport>(
+        AdmissionTransport{original, playerId, generation, AdmissionTransportKind::kFence});
+    FenceAttemptResult result;
+    if (const auto parsed = handoff_sql_barrier::ParseFence(candidate);
+        parsed && parsed->state == handoff_sql_barrier::FenceState::kHeld) {
+        const auto fenceKey = player_ownership::HandoffFenceRedisKey(playerId);
+        if (!prior) {
+            auto read = [&](auto done) {
+                auto completed = [transport, done = std::move(done)](std::optional<std::string> old) {
+                    if (std::exchange(transport->readCompleted, true)) return;
+                    if (!SceneTaskScope::IsDurableAccepting()) transport->Complete();
+                    done(FenceAttemptResult{true, false, std::move(old)});
+                };
+                bool sent = false;
+                if (state->dependencies.readHandoffFence) {
+                    sent = state->dependencies.readHandoffFence(playerId, std::move(completed));
+                } else if (tlsPlayerRedis.connected()) {
+                    sent = tlsPlayerRedis.command([completed = std::move(completed)](hiredis::Hiredis*, redisReply* reply) mutable {
+                        std::optional<std::string> old;
+                        if (reply && reply->type == REDIS_REPLY_NIL) old.emplace();
+                        else if (reply && reply->type == REDIS_REPLY_STRING && reply->str) old.emplace(reply->str, reply->len);
+                        completed(std::move(old));
+                    }, "HGET %b handoff_fence", fenceKey.data(), fenceKey.size()) == REDIS_OK;
+                }
+                if (!sent) transport->Complete();
+                return sent;
+            };
+            auto readResult = co_await AwaitCallback<FenceAttemptResult>(loop, std::move(read), FenceAttemptResult{});
+            if (!readResult || !Owns(original)) co_return;
+            if (!SceneTaskScope::IsDurableAccepting()) {
+                transport->Complete(); // 读已完成，停止之前未提交 CAS。
+                co_return;
+            }
+            result.accepted = readResult->accepted;
+            prior = std::move(readResult->prior);
+        }
+        if (prior) {
+            result.accepted = true;
+            if (QualifyFence(original, playerId, generation, candidate, *prior)) {
+                const auto ownerKey = player_ownership::OwnerEpochRedisKey(playerId);
+                const auto markKey = player_ownership::HandoffRedisKey(playerId);
+                const auto epoch = std::to_string(parsed->ownerEpoch);
+                auto write = [&](auto done) {
+                    auto completed = [transport, done = std::move(done)](bool registered) {
+                        transport->Complete();
+                        done(registered);
+                    };
+                    bool sent = false;
+                    if (state->dependencies.writeHandoffFence) {
+                        sent = state->dependencies.writeHandoffFence(playerId, candidate, *prior, std::move(completed));
+                    } else if (tlsPlayerRedis.connected()) {
+                        sent = tlsPlayerRedis.command([completed = std::move(completed)](hiredis::Hiredis*, redisReply* reply) {
+                            completed(reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1);
+                        }, "EVAL %s 3 %b %b %b %b %b %b", handoff_sql_barrier::kRegisterFenceLua.c_str(),
+                            ownerKey.data(), ownerKey.size(), fenceKey.data(), fenceKey.size(), markKey.data(), markKey.size(),
+                            epoch.data(), epoch.size(), candidate.data(), candidate.size(), prior->data(), prior->size()) == REDIS_OK;
+                    }
+                    if (!sent) transport->Complete();
+                    return sent;
+                };
+                const auto registered = co_await AwaitCallback<bool>(loop, std::move(write), false);
+                if (!registered || !SceneTaskScope::IsDurableAccepting()) co_return;
+                result.registered = *registered;
+            }
+            result.prior = std::move(prior);
+        }
+    }
+
+    transport->Complete(); // HGET 失败或资格失效时不会提交 CAS。
+    if (!Owns(original)) co_return;
+    const auto it = state->roles.find(playerId);
+    if (it == state->roles.end() || it->second.identity.generation() != generation) co_return;
+    auto& role = it->second;
+    if (!result.accepted) {
+        role.retryAt = Now() + std::chrono::seconds(1);
+        co_return;
+    }
+    if (!role.waitingFence) co_return;
+    if (result.prior && !role.fencePrior) role.fencePrior = std::move(result.prior);
+    if (Now() >= role.registerDeadline || generation <= role.closedThrough || generation <= role.sealedThrough) {
+        const auto session = role.context.enterInfo.session_id();
         role.waitingFence = false;
         CancelPendingFence(playerId);
-        Reject(playerId, role.context.enterInfo.session_id()); return;
+        Reject(playerId, session);
+        co_return;
     }
-    const auto generation = role.identity.generation();
-    if (generation <= role.closedThrough || generation <= role.sealedThrough) { role.waitingFence = false; return; }
-    role.fenceInFlight = true; ++role.fenceAttempts; ++role.callbacks;
+    if (!result.registered) {
+        role.retryAt = Now() + std::chrono::seconds(1);
+        co_return;
+    }
+    role.waitingFence = false;
+    role.authorized = generation;
+    Activate(playerId, role.context);
+}
+
+cobalt::task<void> RegisterAdmissionAttempt(Guid playerId) {
     const std::weak_ptr<RoleAdmissionState> original = state;
-    auto stillQualified = [original, playerId, generation, candidate = role.context.handoffFence](const std::string& prior) {
-        if (!Owns(original)) return false;
+    data_service::RegisterRoleAdmissionRequest request;
+    uint64_t generation;
+    {
         const auto it = state->roles.find(playerId);
-        if (it == state->roles.end()) return false;
-        auto& current = it->second;
-        const bool allowed = current.waitingFence && current.identity.generation() == generation
-            && current.context.handoffFence == candidate && generation > current.closedThrough
-            && generation > current.sealedThrough && Now() < current.registerDeadline;
-        if (!allowed || (current.fencePrior && *current.fencePrior != prior)) return false;
-        current.fencePrior = prior; // 发CAS前固定，Seal可撤销尚在途的登记。
+        if (it == state->roles.end()) co_return;
+        auto& role = it->second;
+        if (!role.waitingRegister) co_return;
+        if (Now() >= role.registerDeadline) {
+            role.waitingRegister = false;
+            Reject(playerId, role.context.enterInfo.session_id());
+            co_return;
+        }
+        if (role.registerCalls != 0 || role.attempts >= 3) co_return;
+        *request.mutable_identity() = role.identity;
+        generation = role.identity.generation();
+        ++role.attempts;
+        ++role.registerCalls;
+    }
+
+    const auto transport = std::make_shared<AdmissionTransport>(
+        AdmissionTransport{original, playerId, generation, AdmissionTransportKind::kRegister});
+    auto submit = [&](auto done) {
+        auto completed = [transport, done = std::move(done)](bool ok, const data_service::RegisterRoleAdmissionResponse* reply) {
+            transport->Complete();
+            AdmissionRegisterResult result{true, std::nullopt};
+            if (ok && reply != nullptr) result.reply.emplace(*reply);
+            done(std::move(result));
+        };
+        if (state->dependencies.registerAdmission) {
+            const bool sent = state->dependencies.registerAdmission(request, std::move(completed));
+            if (!sent) transport->Complete();
+            return sent;
+        }
+        const auto node = ReadyNode();
+        if (node == entt::null || !Sign(request, "RegisterRoleAdmission")) {
+            transport->Complete();
+            return false;
+        }
+        data_service::SendDataServiceRegisterRoleAdmission(tlsNodeContextManager.GetRegistry(common::base::DataServiceNodeService),
+            node, request, [completed = std::move(completed)](const GrpcCallOutcome& outcome,
+                const data_service::RegisterRoleAdmissionResponse* reply) mutable { completed(outcome.ok(), reply); });
         return true;
     };
-    auto completed = [original, playerId, generation](bool ok, std::optional<std::string> prior) {
-        if (!Owns(original)) return;
-        auto it = state->roles.find(playerId);
-        if (it == state->roles.end()) return;
-        auto& current = it->second;
-        if (current.callbacks) --current.callbacks;
-        if (current.identity.generation() != generation) return;
-        current.fenceInFlight = false;
-        if (!current.waitingFence) return;
-        if (prior && !current.fencePrior) current.fencePrior = std::move(prior);
-        if (Now() >= current.registerDeadline || generation <= current.closedThrough || generation <= current.sealedThrough) {
-            current.waitingFence = false; CancelPendingFence(playerId); Reject(playerId, current.context.enterInfo.session_id()); return;
+    auto& loop = *EventLoop::getEventLoopOfCurrentThread();
+    const auto result = co_await AwaitCallback<AdmissionRegisterResult>(loop, std::move(submit), AdmissionRegisterResult{});
+    // 停机取消的只是本地等待，未到终态的登记不从账本退役。
+    if (!result || !Owns(original) || !SceneTaskScope::IsDurableAccepting()) co_return;
+    {
+        const auto it = state->roles.find(playerId);
+        if (it == state->roles.end()) co_return;
+        auto& role = it->second;
+        if (role.identity.generation() != generation) co_return;
+        if (!result->accepted) {
+            --role.attempts;
+            role.retryAt = Now() + std::chrono::seconds(1);
+            co_return;
         }
-        if (!ok) { current.retryAt = Now() + std::chrono::seconds(1); return; }
-        current.waitingFence = false; current.authorized = generation;
-        Activate(playerId, current.context);
-    };
-    const bool sent = state->dependencies.registerHandoffFence
-        ? state->dependencies.registerHandoffFence(playerId, role.context.handoffFence, role.fencePrior, stillQualified, completed)
-        : RegisterFence(playerId, role.context.handoffFence, role.fencePrior, stillQualified, completed);
-    if (!sent) {
-        role.fenceInFlight = false; --role.callbacks;
+        if (!role.waitingRegister) co_return;
         role.retryAt = Now() + std::chrono::seconds(1);
-    }
-}
-void SendRegister(Guid playerId) {
-    auto it = state->roles.find(playerId);
-    if (it == state->roles.end()) return;
-    auto& role = it->second;
-    if (!role.waitingRegister) return;
-    if (Now() >= role.registerDeadline) {
-        role.waitingRegister = false;
-        Reject(playerId, role.context.enterInfo.session_id());
-        return;
-    }
-    if (role.registerCalls != 0 || role.attempts >= 3) return;
-    data_service::RegisterRoleAdmissionRequest request;
-    *request.mutable_identity() = role.identity;
-    const uint64_t generation = role.identity.generation();
-    ++role.attempts; ++role.registerCalls;
-    const std::weak_ptr<RoleAdmissionState> original = state;
-    auto completed = [original, playerId, generation](bool ok, const data_service::RegisterRoleAdmissionResponse* reply) {
-        if (!Owns(original)) return;
-        auto found = state->roles.find(playerId);
-        if (found == state->roles.end()) return;
-        auto& current = found->second;
-        if (current.registerCalls > 0) --current.registerCalls;
-        if (current.identity.generation() != generation || !current.waitingRegister) return;
-        current.retryAt = Now() + std::chrono::seconds(1);
-        if (Now() >= current.registerDeadline) {
-            current.waitingRegister = false;
-            Reject(playerId, current.context.enterInfo.session_id());
-            return;
+        if (Now() >= role.registerDeadline) {
+            role.waitingRegister = false;
+            Reject(playerId, role.context.enterInfo.session_id());
+            co_return;
         }
-        if (!ok || reply == nullptr || reply->identity().SerializeAsString() != current.identity.SerializeAsString()
+        const auto& reply = result->reply;
+        if (!reply || reply->identity().SerializeAsString() != role.identity.SerializeAsString()
             || reply->closed_through() >= generation) {
-            if (current.attempts >= 3) {
-                current.waitingRegister = false;
-                Reject(playerId, current.context.enterInfo.session_id());
+            if (role.attempts >= 3) {
+                role.waitingRegister = false;
+                Reject(playerId, role.context.enterInfo.session_id());
             }
-            return; // 未知结果只重放原generation，绝不先建实体。
+            co_return; // 未知结果只重放原 generation。
         }
-        current.waitingRegister = false;
-        current.closedThrough = std::max(current.closedThrough, reply->closed_through());
-        current.confirmedIdentity = current.identity;
-        if (generation <= current.sealedThrough || generation <= current.closedThrough) return;
-        if (current.seal && current.drained) {
-            current.completedSeal = std::move(current.seal);
-            current.seal.reset(); current.drained = false;
-            current.tradeSaveRequired = false; current.tradeSaveQueued = false; current.tradeFreezeSaving = false;
+        role.waitingRegister = false;
+        role.closedThrough = std::max(role.closedThrough, reply->closed_through());
+        role.confirmedIdentity = role.identity;
+        if (generation <= role.sealedThrough || generation <= role.closedThrough) co_return;
+        if (role.seal && role.drained) {
+            role.completedSeal = std::move(role.seal);
+            role.seal.reset();
+            role.drained = false;
+            role.tradeSaveRequired = false;
+            role.tradeSaveQueued = false;
+            role.tradeFreezeSaving = false;
         }
-        current.waitingFence = true;
-        SendFence(playerId);
-    };
-    bool sent = false;
-    if (state->dependencies.registerAdmission) sent = state->dependencies.registerAdmission(request, completed);
-    else if (const auto node = ReadyNode(); node != entt::null && Sign(request, "RegisterRoleAdmission")) {
-        data_service::SendDataServiceRegisterRoleAdmission(tlsNodeContextManager.GetRegistry(common::base::DataServiceNodeService), node, request,
-            [completed](const GrpcCallOutcome& outcome, const data_service::RegisterRoleAdmissionResponse* reply) { completed(outcome.ok(), reply); });
-        sent = true;
+        role.waitingFence = true;
     }
-    if (!sent) { --role.registerCalls; --role.attempts; role.retryAt = Now() + std::chrono::seconds(1); }
+    co_await RegisterFenceAttempt(playerId);
 }
+
+void SendRegister(Guid playerId) {
+    (void)SceneTaskScope::TryStartDurable(RegisterAdmissionAttempt(playerId), "RegisterRoleAdmission");
+}
+
+void SendFence(Guid playerId) {
+    (void)SceneTaskScope::TryStartDurable(RegisterFenceAttempt(playerId), "RegisterRoleHandoffFence");
+}
+
+
 bool HasUnsettledSave(Guid playerId) {
     return state->dependencies.hasUnsettledSave ? state->dependencies.hasUnsettledSave(playerId)
         : PlayerLifecycleSystem::IsPlayerSaveUnsettled(playerId);
@@ -386,6 +531,8 @@ void RoleAdmissionSystem::RequestEnter(Guid playerId, PlayerEnterContext context
         || !enter_fence::Admits(PlayerLifecycleSystem::JudgeEnter(playerId, session, context.loginGeneration))) {
         Reject(playerId, session); return;
     }
+    if (!SceneTaskScope::IsDurableAccepting()) { Reject(playerId, session); return; }
+    state->hasDurableAdmissions = true;
     auto& role = state->roles[playerId];
     if (role.controlInFlight || (role.seal && !role.drained)) { Reject(playerId, session); return; }
     if (role.waitingRegister || role.waitingFence) {
@@ -574,6 +721,7 @@ bool RoleAdmissionSystem::HasAdmissionInFlight(Guid playerId) {
 std::string RoleAdmissionSystem::LocalInstanceId() { return ReadLocalNode().instanceId; }
 void RoleAdmissionSystem::OnDestroyed(Guid) { ArmTimer(); }
 void RoleAdmissionSystem::Tick() {
+    if (state->hasDurableAdmissions && !SceneTaskScope::IsDurableAccepting()) return;
     for (auto& [playerId, role] : state->roles) {
         if (role.retryAt > Now()) continue;
         role.retryAt = Now() + std::chrono::seconds(1);

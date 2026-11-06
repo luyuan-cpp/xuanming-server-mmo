@@ -3,6 +3,10 @@
 #include "service_node_snapshot.h"
 #include "time/comp/timer_task_comp.h"
 
+#include <random>
+#include <string>
+#include <vector>
+
 class ServiceDiscoveryManager {
 public:
 	// 同步定时器捕获 this,生命周期内禁止复制或移动宿主。
@@ -17,6 +21,10 @@ public:
 	void Shutdown();
 
 	void FetchServiceNodes();
+
+	// 本节点实际 Range / watch 的前缀:配置的 service_discovery_prefixes 逐项经 NodeUtils::DiscoveryPrefixFor 收窄,
+	// zone-scoped 类型只看本 zone。只在所属 loop 线程调用。
+	std::vector<std::string> EffectiveDiscoveryPrefixes() const;
 
 	void AddServiceNode(const std::string& nodeJson, uint32_t nodeType);
 
@@ -33,6 +41,11 @@ public:
 	EtcdService etcdService;
 
 private:
+	// 排下一次兜底全量 Range(discovery_resync_policy.h)。定时器捕获 this,见类头的禁止复制 / 移动。
+	void ScheduleNextResync();
+
 	ServiceNodeSnapshot serviceNodes_;
 	TimerTaskComp serviceNodeSyncTimer_;
+	// 抖动的随机源,只在 loop 线程用。
+	std::mt19937 resyncJitter_{std::random_device{}()};
 };

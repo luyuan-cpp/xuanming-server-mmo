@@ -19,9 +19,9 @@
 #include "proto/scene/player_state_attribute_sync.pb.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "spatial/comp/nav_comp.h"
-#include "spatial/comp/scene_node_scene_comp.h"  // AoiListComp:移动广播的接收者
 #include "spatial/comp/teleport_settle_comp.h"
 #include "spatial/system/aoi.h"
+#include "spatial/system/interest.h"  // GetVisibleWatchers:移动广播的接收者
 #include "spatial/system/nav_query.h"
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
@@ -120,41 +120,20 @@ void MovementSystem::Update(const double delta)
 
 void MovementSystem::BroadcastMove(const entt::entity entity)
 {
-	const auto* aoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(entity);
-	if (aoiList == nullptr || aoiList->entries.empty())
+	// 接收者 = 客户端正在显示我的观察者(AOI 反向索引中可见的那些):关注是单向的,
+	// 我是否看得见对方与此无关;网格范围外的显式关注者同样收到。没显示我的人(隐身、对方表满)
+	// 收到坐标既没有意义,也是在泄露位置。
+	EntityVector observers;
+	InterestSystem::GetVisibleWatchers(entity, observers);
+	// 没有会话快照的实体(NPC 等)没有客户端可发;留在名单里只会让广播函数为每一个打一条 ERROR。
+	std::erase_if(observers, [](entt::entity observer)
+				  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(observer); });
+	if (observers.empty())
 	{
 		return;
 	}
 	const auto* transform = tlsEcs.actorRegistry.try_get<Transform>(entity);
 	if (transform == nullptr)
-	{
-		return;
-	}
-
-	EntityVector observers;
-	observers.reserve(aoiList->entries.size());
-	for (const auto& [observer, _] : aoiList->entries)
-	{
-		if (!tlsEcs.actorRegistry.valid(observer))
-		{
-			continue;
-		}
-		// 没有会话快照的实体(NPC 等)没有客户端可发;
-		// 留在名单里只会让广播函数为每一个打一条 ERROR。
-		if (!tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(observer))
-		{
-			continue;
-		}
-		// 对方的兴趣表里也得有我:否则对方客户端上根本没有这个角色(隐身、对方表满),
-		// 把我的坐标发过去既没有意义,也是在泄露位置。
-		const auto* observerAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(observer);
-		if (observerAoi == nullptr || !observerAoi->Contains(entity))
-		{
-			continue;
-		}
-		observers.emplace_back(observer);
-	}
-	if (observers.empty())
 	{
 		return;
 	}
@@ -225,6 +204,8 @@ void MovementSystem::TeleportWithinScene(const entt::entity entity, const Vector
 	}
 
 	AoiSystem::ResetEntityVisibility(entity);
+	// 重置只撤空间来源,网格外的显式关注者仍显示它:立即把新位置发给它们,不必等它下一次移动上报。
+	BroadcastMove(entity);
 }
 
 bool MovementSystem::ShouldDropReportAfterTeleport(const entt::entity entity, const Location& reported)

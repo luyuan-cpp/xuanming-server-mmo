@@ -84,6 +84,15 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Prometheus 导出(2026-11-05,服务器缺口清单第 8 条):Hikari 连接池等 Micrometer 指标经
+             /actuator/prometheus 暴露,与 Go 服务的 mmorpg_sql_pool_* 一起进 MySQL 连接总账的观测面。
+             版本由 spring-boot-starter-parent 的依赖管理给出,不单独写。端点只在 K8s 的独立管理端口 8082 上打开
+             (tools/scripts/k8s_deploy.ps1 的 gateway ConfigMap),jar 内默认不暴露,本机业务端口 8081 上看不到。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Rate limiting (Bucket4j + Redis via Lettuce; gateway already pulls Lettuce
              through spring-boot-starter-data-redis, so no extra Redis client needed). -->
         <dependency>

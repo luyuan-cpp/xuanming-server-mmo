@@ -222,6 +222,8 @@ func newIntegrationSvcCtxWithRedisOptions(t *testing.T, opts ...redis.Option) (*
 	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"}, opts...)
 
 	c := config.Config{}
+	c.ZoneId = testZoneId // 本进程服务的 zone,见 logic_test.go newTestSvcCtx
+	installTestZoneFakes(t, rds)
 	c.WorldChannelCount = 1
 	c.MaxRebalanceMigrationsPerTick = 16 // generous so tests don't hit budget
 	c.NodeLoadWeightSceneCount = 1.0
@@ -524,7 +526,7 @@ func TestIntegration_Rebalance_BetterHome_EndToEnd(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sceneId), strconv.FormatUint(uint64(zoneId), 10)))
 	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
-	// Seed the reverse index the way a real allocateScene would. The
+	// Seed the reverse index the way the real scene registration would. The
 	// migration must move the sceneId from hA's set to hB's set; otherwise
 	// node-death reconciliation later on will either miss the scene (if
 	// hB dies) or force-destroy a still-live scene (if hA dies).

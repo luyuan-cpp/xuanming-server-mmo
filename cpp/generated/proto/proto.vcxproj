@@ -432,4 +432,12 @@
     <ClCompile Include="role_fence\role_fence.pb.cc" />
     <ClInclude Include="role_fence\role_fence.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_battle_result_comp.pb.cc" />
+    <ClCompile Include="common\component\player_item_gain_block_comp.pb.cc" />
+    <ClCompile Include="scene\player_battle_result.pb.cc" />
+    <ClInclude Include="common\component\player_battle_result_comp.pb.h" />
+    <ClInclude Include="common\component\player_item_gain_block_comp.pb.h" />
+    <ClInclude Include="scene\player_battle_result.pb.h" />
+  </ItemGroup>
 </Project>

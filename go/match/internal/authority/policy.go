@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"match/internal/config"
+	"match/internal/ratingrule"
 )
 
 // 不保存或打印密钥；同一事务域的撮合口径只准入一次，不让新副本覆盖旧策略。
@@ -26,6 +27,9 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 	// 范围树逐级放宽阈值是提交点规则（claimTx 用它复核），各副本必须一致。
 	// 模板目录（PlayMode / Dungeon / ZoneGroup 表）不进指纹：改表滚动生效，不需要停全部副本。
 	parts = append(parts, "scope-tree/v1", strconv.FormatUint(uint64(c.GlobalMatch.ScopeGroupAfterSeconds), 10), strconv.FormatUint(uint64(c.GlobalMatch.ScopeGlobalAfterSeconds), 10))
+	// 计分组排（2026-11-05）：提交点按计分模式集合决定复不复核组内极差，按组队加成算整队的队伍分（requireRatedSpread），
+	// 各副本必须一致。车队差放宽步长是质量规则，不进指纹。
+	parts = append(parts, "rated-unit-spread/v1", ratingrule.FingerprintKey(), strconv.FormatUint(uint64(c.GlobalMatch.PartyRatingBonusPerMember), 10))
 	mac := hmac.New(sha256.New, s.Secret)
 	_, _ = mac.Write([]byte(strings.Join(parts, "\n")))
 	digest := mac.Sum(nil)
@@ -37,7 +41,7 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 		if !bytes.Equal(current, digest) {
 			return errors.New(policyMismatch)
 		}
-		s.TeamConfig = c.Team
+		s.TeamConfig, s.ratingCurve = c.Team, ratingrule.CurveOf(c)
 		return nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -60,6 +64,6 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	s.TeamConfig = c.Team
+	s.TeamConfig, s.ratingCurve = c.Team, ratingrule.CurveOf(c)
 	return nil
 }

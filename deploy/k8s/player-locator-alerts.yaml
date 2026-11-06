@@ -85,9 +85,14 @@ spec:
         # (「每一任都失败」时所有副本都是 0,表达式持续为真,不受换主空档影响)。没有 leader 时与 NoLeader 一起亮。
         # (2026-10-18 评审更正:原写法按 is_leader 关联,现任从未成功过时为空集、卸任过的 Pod 都挂着 0、absent 也不触发,
         # 全员失败恰好无声;原注释「读数为 0,所以刚换主不会误报」的推理是反的。)
+        # 存活集闸门压住期间 last_success 不推进(压住的拍没有完成清扫),由 GateLiveViewHeld 报,这里用 unless 排除,
+        # 免得同一件事两条 critical。absent 分支不受影响。
         - alert: PlayerLocatorReconcilerStalled
           expr: |
-            (time() - max(player_locator_reconcile_last_success_unix{loop="index"})) > 300
+            (
+              (time() - max(player_locator_reconcile_last_success_unix{loop="index"})) > 300
+              unless on () (max(player_locator_reconcile_live_view_holding) > 0)
+            )
             or absent(player_locator_reconcile_last_success_unix{loop="index"})
           for: 5m
           labels:
@@ -102,9 +107,10 @@ spec:
 
         # 清扫循环失败的拍占比。第 7 批起每个副本都跑这个循环,绝对次数随副本数涨,所以按全部副本的失败比例判,不再写死拍数。
         # 单个副本连续 3 拍失败会退出分片、让别的副本接手,成功一拍再回来;比例持续高说明多数副本都有问题,不是单点。
+        # view_held(存活集闸门压住)不是失败,不计入分子,由 GateLiveViewHeld 单独报。
         - alert: PlayerLocatorReconcileRoundsFailing
           expr: |
-            sum(increase(player_locator_reconcile_round_total{loop="index", result!="ok"}[15m]))
+            sum(increase(player_locator_reconcile_round_total{loop="index", result!~"ok|view_held"}[15m]))
             /
             sum(increase(player_locator_reconcile_round_total{loop="index"}[15m])) > 0.2
           for: 15m
@@ -115,6 +121,42 @@ spec:
             description: >-
               按 result 拆分:etcd_error(gate 存活集读不出,本拍不推进去抖)、redis_error(玩家域读不到,先看 deploy/k8s/redis-player-alerts.yaml)、
               panic(同时看 safego_panic_total{point=~"player_locator.session_reconciler.*"})。按 pod 拆分看是不是集中在少数副本。
+
+        # 存活集合理性闸门(决策清单 B1-1,go/player_locator/internal/logic/gate_sweep.go checkLiveView):etcd 给的 gate 存活集为空,
+        # 或登记的 gate 超过一半同时缺席,清扫被压住。压住的拍不转换任何会话、不推进去抖,也不让副本退出分片。
+        # for: 5m:etcd 抖一下、gate 集中重新注册,下一拍就恢复;压住 5 分钟还在,要人看。骤降在缺席数稳定 30 分钟后自动放行,
+        # 所以这条亮着的时候就是人工介入的窗口;空集永远不会自动放行。
+        - alert: PlayerLocatorGateLiveViewHeld
+          expr: |
+            max(player_locator_reconcile_live_view_holding) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "player_locator 死 gate 清扫被存活集闸门压住超过 5 分钟"
+            description: >-
+              副本日志 "GateSweeper: index round held by the live view gate" 带登记 gate 数、缺席数与 etcd 存活集大小。
+              先拿 etcdctl get GateNodeService.rpc/ --prefix --keys-only 数一下 gate 注册,和 kubectl get pods 里在跑的 gate 比:
+              注册比在跑的少很多 = etcd 回档 / 重建 / 连错,修 etcd(gate 失租后会自己重新注册,恢复一个,缺席数就变一次,放行计时从头算);
+              注册和在跑的一致、确实死了一大半 gate = 真实的大面积故障,不用处置,缺席数稳定 30 分钟后自动放行、照常清扫,
+              期间死 gate 上没重连的玩家保持在线。etcd 是坏的、30 分钟内修不好:滚动重启 player_locator 会把放行计时清零
+              (每个新进程从头压住),再按 etcd 的恢复进度决定。
+
+        # 存活集闸门放行了一次骤降:从这一拍起,缺席的 gate(超过登记数的一半)按死亡处理,上面的会话陆续转 DISCONNECTING。
+        # 真实的大面积故障会走到这一步;如果 GateLiveViewHeld 期间判断的是 etcd 出错而没修好,这里就是误判开始兑现,要立刻处置。
+        - alert: PlayerLocatorGateLiveViewReleased
+          expr: |
+            sum(increase(player_locator_reconcile_live_view_released_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "player_locator 存活集闸门放行:一大批 gate 被判死,会话开始转 DISCONNECTING"
+            description: >-
+              副本日志 "GateSweeper: live view gate released" 带登记 gate 数与缺席数。核对 gate 是否真的都死了(同上一条的 etcdctl 与 kubectl 对照)。
+              是真的:看 player_locator_reconcile_dead_gate_members 下降即可。不是真的(etcd 视图错了):立刻修 etcd;修不好就把
+              player_locator 配置的 Lease.ReconcileIntervalSeconds 改成 -1 后滚动重启,只停对账、不停会话写入。已经转 DISCONNECTING 的会话
+              30 秒后被释放,那些玩家需要重登。
 
         # 有不维护 gate 索引的旧版 player_locator 在注册(滚动升级窗口内是预期的)。持续 30 分钟说明升级卡住,
         # 或有别的环境的旧版 locator 注册在同一个 etcd 上(只会带来持续补建的成本,见设计文档 §8)。

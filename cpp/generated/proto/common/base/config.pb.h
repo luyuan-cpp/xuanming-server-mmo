@@ -73,6 +73,14 @@ extern const ::google::protobuf::internal::ClassDataFull GameConfig_class_data_;
 #else
 extern const GameConfigGlobalsTypeInternal GameConfig_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GameConfig_AuditSnapshotConfig;
+struct GameConfig_AuditSnapshotConfigGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GameConfig_AuditSnapshotConfigGlobalsTypeInternal GameConfig_AuditSnapshotConfig_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GameConfig_AuditSnapshotConfig_class_data_;
+#else
+extern const GameConfig_AuditSnapshotConfigGlobalsTypeInternal GameConfig_AuditSnapshotConfig_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GameConfig_PlayerInboxConfig;
 struct GameConfig_PlayerInboxConfigGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1711,6 +1719,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig_PlayerInboxConfig final 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig_AuditSnapshotConfig final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GameConfig.AuditSnapshotConfig) */ {
+ public:
+  inline GameConfig_AuditSnapshotConfig() : GameConfig_AuditSnapshotConfig(nullptr) {}
+  ~GameConfig_AuditSnapshotConfig() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GameConfig_AuditSnapshotConfig));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GameConfig_AuditSnapshotConfig(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GameConfig_AuditSnapshotConfig(const GameConfig_AuditSnapshotConfig& from) : GameConfig_AuditSnapshotConfig(nullptr, from) {}
+  inline GameConfig_AuditSnapshotConfig(GameConfig_AuditSnapshotConfig&& from) noexcept : GameConfig_AuditSnapshotConfig(nullptr, ::std::move(from)) {}
+  inline GameConfig_AuditSnapshotConfig& operator=(const GameConfig_AuditSnapshotConfig& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GameConfig_AuditSnapshotConfig& operator=(GameConfig_AuditSnapshotConfig&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GameConfig_AuditSnapshotConfig& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GameConfig_AuditSnapshotConfig>(&GameConfig_AuditSnapshotConfig_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(GameConfig_AuditSnapshotConfig& a, GameConfig_AuditSnapshotConfig& b) { a.Swap(&b); }
+  inline void Swap(GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GameConfig_AuditSnapshotConfig>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GameConfig_AuditSnapshotConfig& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GameConfig_AuditSnapshotConfig& from) { GameConfig_AuditSnapshotConfig::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GameConfig.AuditSnapshotConfig"; }
+
+  explicit GameConfig_AuditSnapshotConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GameConfig_AuditSnapshotConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GameConfig_AuditSnapshotConfig& from);
+  GameConfig_AuditSnapshotConfig(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GameConfig_AuditSnapshotConfig&& from) noexcept
+      : GameConfig_AuditSnapshotConfig(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kLoginEnabledFieldNumber = 1,
+    kLogoutEnabledFieldNumber = 2,
+    kSamplePerMilleFieldNumber = 3,
+  };
+  // bool login_enabled = 1;
+  void clear_login_enabled() ;
+  [[nodiscard]] bool login_enabled() const;
+  void set_login_enabled(bool value);
+
+  private:
+  bool _internal_login_enabled() const;
+  void _internal_set_login_enabled(bool value);
+
+  public:
+  // bool logout_enabled = 2;
+  void clear_logout_enabled() ;
+  [[nodiscard]] bool logout_enabled() const;
+  void set_logout_enabled(bool value);
+
+  private:
+  bool _internal_logout_enabled() const;
+  void _internal_set_logout_enabled(bool value);
+
+  public:
+  // uint32 sample_per_mille = 3;
+  void clear_sample_per_mille() ;
+  [[nodiscard]] ::uint32_t sample_per_mille() const;
+  void set_sample_per_mille(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_sample_per_mille() const;
+  void _internal_set_sample_per_mille(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:GameConfig.AuditSnapshotConfig)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GameConfig_AuditSnapshotConfig& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool login_enabled_;
+    bool logout_enabled_;
+    ::uint32_t sample_per_mille_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fconfig_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdSegmentConfig final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:IdSegmentConfig) */ {
  public:
@@ -2186,7 +2419,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
   [[nodiscard]] static const GameConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GameConfig>(&GameConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(GameConfig& a, GameConfig& b) { a.Swap(&b); }
   inline void Swap(GameConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2278,12 +2511,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
   using ZoneRedisConfig = GameConfig_ZoneRedisConfig;
   using PlayerInboxConfig = GameConfig_PlayerInboxConfig;
   using PlayerRedisConfig = GameConfig_PlayerRedisConfig;
+  using AuditSnapshotConfig = GameConfig_AuditSnapshotConfig;
 
   // accessors -------------------------------------------------------
   enum : int {
     kZoneRedisFieldNumber = 7,
     kPlayerInboxFieldNumber = 8,
     kPlayerRedisFieldNumber = 9,
+    kAuditSnapshotFieldNumber = 10,
     kSceneNodeTypeFieldNumber = 1,
     kZoneIdFieldNumber = 2,
   };
@@ -2335,6 +2570,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
   ::GameConfig_PlayerRedisConfig* PROTOBUF_NONNULL _internal_mutable_player_redis();
 
   public:
+  // .GameConfig.AuditSnapshotConfig audit_snapshot = 10;
+  [[nodiscard]] bool has_audit_snapshot()
+      const;
+  void clear_audit_snapshot() ;
+  [[nodiscard]] const ::GameConfig_AuditSnapshotConfig& audit_snapshot() const;
+  [[nodiscard]] ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE release_audit_snapshot();
+  ::GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL mutable_audit_snapshot();
+  void set_allocated_audit_snapshot(::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_audit_snapshot(::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE value);
+  ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE unsafe_arena_release_audit_snapshot();
+
+  private:
+  const ::GameConfig_AuditSnapshotConfig& _internal_audit_snapshot() const;
+  ::GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL _internal_mutable_audit_snapshot();
+
+  public:
   // uint32 scene_node_type = 1;
   void clear_scene_node_type() ;
   [[nodiscard]] ::uint32_t scene_node_type() const;
@@ -2359,8 +2610,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 5,
-                          3, 0,
+      ::google::protobuf::internal::TcParseTable<2, 6,
+                          4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2391,6 +2642,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
     ::GameConfig_ZoneRedisConfig* PROTOBUF_NULLABLE zone_redis_;
     ::GameConfig_PlayerInboxConfig* PROTOBUF_NULLABLE player_inbox_;
     ::GameConfig_PlayerRedisConfig* PROTOBUF_NULLABLE player_redis_;
+    ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE audit_snapshot_;
     ::uint32_t scene_node_type_;
     ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -5301,13 +5553,89 @@ inline void GameConfig_PlayerRedisConfig::set_allocated_password(::std::string* 
 
 // -------------------------------------------------------------------
 
+// GameConfig_AuditSnapshotConfig
+
+// bool login_enabled = 1;
+inline void GameConfig_AuditSnapshotConfig::clear_login_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.login_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool GameConfig_AuditSnapshotConfig::login_enabled() const {
+  // @@protoc_insertion_point(field_get:GameConfig.AuditSnapshotConfig.login_enabled)
+  return _internal_login_enabled();
+}
+inline void GameConfig_AuditSnapshotConfig::set_login_enabled(bool value) {
+  _internal_set_login_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:GameConfig.AuditSnapshotConfig.login_enabled)
+}
+inline bool GameConfig_AuditSnapshotConfig::_internal_login_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.login_enabled_;
+}
+inline void GameConfig_AuditSnapshotConfig::_internal_set_login_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.login_enabled_ = value;
+}
+
+// bool logout_enabled = 2;
+inline void GameConfig_AuditSnapshotConfig::clear_logout_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.logout_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool GameConfig_AuditSnapshotConfig::logout_enabled() const {
+  // @@protoc_insertion_point(field_get:GameConfig.AuditSnapshotConfig.logout_enabled)
+  return _internal_logout_enabled();
+}
+inline void GameConfig_AuditSnapshotConfig::set_logout_enabled(bool value) {
+  _internal_set_logout_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:GameConfig.AuditSnapshotConfig.logout_enabled)
+}
+inline bool GameConfig_AuditSnapshotConfig::_internal_logout_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.logout_enabled_;
+}
+inline void GameConfig_AuditSnapshotConfig::_internal_set_logout_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.logout_enabled_ = value;
+}
+
+// uint32 sample_per_mille = 3;
+inline void GameConfig_AuditSnapshotConfig::clear_sample_per_mille() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sample_per_mille_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t GameConfig_AuditSnapshotConfig::sample_per_mille() const {
+  // @@protoc_insertion_point(field_get:GameConfig.AuditSnapshotConfig.sample_per_mille)
+  return _internal_sample_per_mille();
+}
+inline void GameConfig_AuditSnapshotConfig::set_sample_per_mille(::uint32_t value) {
+  _internal_set_sample_per_mille(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:GameConfig.AuditSnapshotConfig.sample_per_mille)
+}
+inline ::uint32_t GameConfig_AuditSnapshotConfig::_internal_sample_per_mille() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sample_per_mille_;
+}
+inline void GameConfig_AuditSnapshotConfig::_internal_set_sample_per_mille(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sample_per_mille_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // GameConfig
 
 // uint32 scene_node_type = 1;
 inline void GameConfig::clear_scene_node_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_node_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t GameConfig::scene_node_type() const {
   // @@protoc_insertion_point(field_get:GameConfig.scene_node_type)
@@ -5315,7 +5643,7 @@ inline ::uint32_t GameConfig::scene_node_type() const {
 }
 inline void GameConfig::set_scene_node_type(::uint32_t value) {
   _internal_set_scene_node_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:GameConfig.scene_node_type)
 }
 inline ::uint32_t GameConfig::_internal_scene_node_type() const {
@@ -5331,7 +5659,7 @@ inline void GameConfig::_internal_set_scene_node_type(::uint32_t value) {
 inline void GameConfig::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t GameConfig::zone_id() const {
   // @@protoc_insertion_point(field_get:GameConfig.zone_id)
@@ -5339,7 +5667,7 @@ inline ::uint32_t GameConfig::zone_id() const {
 }
 inline void GameConfig::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:GameConfig.zone_id)
 }
 inline ::uint32_t GameConfig::_internal_zone_id() const {
@@ -5643,6 +5971,104 @@ inline void GameConfig::set_allocated_player_redis(::GameConfig_PlayerRedisConfi
 
   _impl_.player_redis_ = reinterpret_cast<::GameConfig_PlayerRedisConfig*>(value);
   // @@protoc_insertion_point(field_set_allocated:GameConfig.player_redis)
+}
+
+// .GameConfig.AuditSnapshotConfig audit_snapshot = 10;
+inline bool GameConfig::has_audit_snapshot() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.audit_snapshot_ != nullptr);
+  return value;
+}
+inline void GameConfig::clear_audit_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.audit_snapshot_ != nullptr) _impl_.audit_snapshot_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::GameConfig_AuditSnapshotConfig& GameConfig::_internal_audit_snapshot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::GameConfig_AuditSnapshotConfig* p = _impl_.audit_snapshot_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GameConfig_AuditSnapshotConfig>(&::GameConfig_AuditSnapshotConfig_globals_);
+}
+inline const ::GameConfig_AuditSnapshotConfig& GameConfig::audit_snapshot() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GameConfig.audit_snapshot)
+  return _internal_audit_snapshot();
+}
+inline void GameConfig::unsafe_arena_set_allocated_audit_snapshot(
+    ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.audit_snapshot_);
+  }
+  _impl_.audit_snapshot_ = reinterpret_cast<::GameConfig_AuditSnapshotConfig*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GameConfig.audit_snapshot)
+}
+inline ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE GameConfig::release_audit_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::GameConfig_AuditSnapshotConfig* released = _impl_.audit_snapshot_;
+  _impl_.audit_snapshot_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE GameConfig::unsafe_arena_release_audit_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GameConfig.audit_snapshot)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::GameConfig_AuditSnapshotConfig* temp = _impl_.audit_snapshot_;
+  _impl_.audit_snapshot_ = nullptr;
+  return temp;
+}
+inline ::GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL GameConfig::_internal_mutable_audit_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.audit_snapshot_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::GameConfig_AuditSnapshotConfig>(GetArena());
+    _impl_.audit_snapshot_ = reinterpret_cast<::GameConfig_AuditSnapshotConfig*>(p);
+  }
+  return _impl_.audit_snapshot_;
+}
+inline ::GameConfig_AuditSnapshotConfig* PROTOBUF_NONNULL GameConfig::mutable_audit_snapshot()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::GameConfig_AuditSnapshotConfig* _msg = _internal_mutable_audit_snapshot();
+  // @@protoc_insertion_point(field_mutable:GameConfig.audit_snapshot)
+  return _msg;
+}
+inline void GameConfig::set_allocated_audit_snapshot(::GameConfig_AuditSnapshotConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.audit_snapshot_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.audit_snapshot_ = reinterpret_cast<::GameConfig_AuditSnapshotConfig*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GameConfig.audit_snapshot)
 }
 
 #ifdef __GNUC__

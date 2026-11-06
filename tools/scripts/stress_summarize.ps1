@@ -20,8 +20,9 @@
           when | mint | name | register | account_write | name_orphan
 
       [L1 Login outbound RPC(login :9101 的 go-zero rpc_client_requests_*,2026-10-23 起):登录链路调
-       data_service 的 5 个方法各自的次数 / 累计均值 / p99(桶插值)/ 非 OK 码数;缺序列打印 n/a]
-          when | bgz_n bgz_avg bgz_p99 bgz_err | bpn_* | ghz_* | rad_* | lar_*
+       data_service 的 5 个方法各自的次数 / 累计均值 / p99(桶插值)/ 非 OK 码数;缺序列打印 n/a。
+       末列 bgz_fb = login_role_list_home_zone_fallback_total(角色列表整次回落到建角 zone 的次数,2026-11-05 起)]
+          when | bgz_n bgz_avg bgz_p99 bgz_err | bpn_* | ghz_* | rad_* | lar_* | bgz_fb
 
       [L2 Login gate directory reads(login_gate_directory_reads_total):gate 目录读镜像还是回落直读 etcd]
           when | cache etcd_unsynced etcd_stale | cache%
@@ -48,6 +49,19 @@
 
       [P4 DB pools and placement(mmorpg_sql_pool_*、db_placement_*、db_store_cooldown_stores)]
           when | sql_in_use sql_wait sql_wait_s | open_stores open_err cooldown
+
+      [G1 Match pools(*_match,:9170,2026-11-05 起;global-match-hierarchical-pools.md §11 R0):按池撮合的总览,跨 mode / level 求和]
+          when | owned units | rd_n rd_avg rd_p99 rd/int | committed conflict no_node no_slot id_err party_end | conflict% | imm_ok imm_n imm% | expired | bn_open bn_all
+          rd/int = 轮耗时 p99 ÷ 撮合轮间隔(-MatchRoundIntervalMs,缺省 500);§5.6 的扩容信号是持续 > 0.8
+
+      [G2 Match wait by scope level:每个快照 × level(zone / group / global)一行,成局数与成局时组内最长等待]
+          when | level | committed | wait_n wait_p50 wait_p95
+
+      [G3 Match by mode:每个快照 × mode 一行(mode 取快照里出现过的值)]
+          when | mode | committed conflict% | units | imm_ok imm_n
+
+      [PL1 player_locator(*_pl,:9190,2026-11-05 起):会话对账与断线上报的健康度 + 服务端 RPC 总耗时]
+          when | leader view_hold | idx_ok idx_err idx_held | to_disc cas pruned repaired audit_rep errors | dead_gates dead_members | stale_inst | rpc_n rpc_avg rpc_p99
 
       [R1 Redis instance load(stress_snap.ps1 抓的 t<N>m_redis_<name>.txt,INFO 相邻两份求差 + 首末整体窗口)]
           target | window | secs ops/s cpu% main% in_KB/s out_KB/s | clients used_MB mem% | rej_conn err_rep oom aof_dfs | note
@@ -91,6 +105,10 @@
     (go/data_service/etc/data_service.yaml 的 Kafka.TransactionLogConsumerGroup / SnapshotConsumerGroup)。
     玩家存盘不经 Kafka,go/db 没有消费组;控制面命令 topic 是 assign 分区、不进消费组,这里看不到。
 
+.PARAMETER MatchRoundIntervalMs
+    match 按池撮合的轮间隔(毫秒),G1 的 rd/int 列用它做分母。缺省 500 = match 配置 MatcherIntervalMs 不写时的取值
+    (go/match/internal/logic/global_pool_matcher.go StartGlobalPoolMatcher);压测环境改过 MatcherIntervalMs 就按它传。
+
 .EXAMPLE
     # Standard post-run summary
     pwsh tools/scripts/stress_summarize.ps1 -RunDir robot/logs/stress-1zone-25k-mysqlpool-20260528-095929
@@ -109,7 +127,10 @@ param(
     [string]$ProbePromUrl = "",
 
     [string]$KafkaContainer = "kafka",
-    [string[]]$KafkaConsumerGroups = @("data_service-transaction-log", "data_service-player-snapshot")
+    [string[]]$KafkaConsumerGroups = @("data_service-transaction-log", "data_service-player-snapshot"),
+
+    [ValidateRange(1, 600000)]
+    [int]$MatchRoundIntervalMs = 500
 )
 
 $ErrorActionPreference = "Stop"
@@ -605,12 +626,42 @@ $playerStoreClaimColumns = [ordered]@{
 }
 # $playerStoreRowKinds:db_player_store_row_bytes 的 kind(PlayerStoreKind 枚举名,写权行不带 payload,不在这里)→ 列名前缀。
 $playerStoreRowKinds = [ordered]@{ hot = 'PLAYER_STORE_KIND_HOT'; asset = 'PLAYER_STORE_KIND_ASSET'; growth = 'PLAYER_STORE_KIND_GROWTH'; profile = 'PLAYER_STORE_KIND_PROFILE'; legacy1 = 'PLAYER_STORE_KIND_LEGACY1' }
+# $matchPoolClaimOutcomes:match_pool_claim_total / match_immediate_claim_total 的 outcome,同 go/match/internal/metrics/pool.go
+#   的 PoolClaim* 常量、按该文件的顺序(钉名测试 go/match/internal/metrics/pool_names_stress_test.go);
+#   $matchPoolClaimColumns 是 G1 的列名,与之同序。
+$matchPoolClaimOutcomes = @('committed', 'conflict', 'no_node', 'no_slot', 'id_error', 'party_ended')
+$matchPoolClaimColumns = @('committed', 'conflict', 'no_node', 'no_slot', 'id_err', 'party_end')
+# $matchPoolLevels:match_pool_claim_total / match_pool_wait_seconds 的 level,同 go/match/internal/scope 的 kLevelNames
+#   (钉名测试 go/match/internal/scope/level_names_stress_test.go)。
+$matchPoolLevels = @('zone', 'group', 'global')
+# $plIndexRoundResults:player_locator_reconcile_round_total{loop="index"} 的 result,同
+#   go/player_locator/internal/logic/reconcile_metrics.go 的 reconcileRoundCombos 里 index 那几项、同序;PL1 按 $plIndexRoundColumns 分组出列
+#   (view_held = etcd 存活集骤降或为空、本拍被 B1-1 闸门压住,不算失败,单独一列)。
+#   $plSessionActions:player_locator_reconcile_sessions_total 的 action,同该文件 reconcileSessionActions 的顺序
+#   (钉名测试 go/player_locator/internal/logic/reconcile_names_stress_test.go)。PL1 按下面的分组出列。
+$plIndexRoundResults = @('ok', 'etcd_error', 'redis_error', 'panic', 'view_held')
+$plIndexRoundColumns = [ordered]@{ idx_ok = @('ok'); idx_err = @('etcd_error', 'redis_error', 'panic'); idx_held = @('view_held') }
+$plSessionActions = @('to_disconnecting', 'cas_conflict', 'pruned_stale', 'pruned_missing', 'pruned_malformed', 'pruned_bad_member', 'repaired', 'audit_repaired', 'member_error', 'gate_error')
+$plSessionActionColumns = [ordered]@{
+    to_disc = @('to_disconnecting'); cas = @('cas_conflict')
+    pruned = @('pruned_stale', 'pruned_missing', 'pruned_malformed', 'pruned_bad_member')
+    repaired = @('repaired'); audit_rep = @('audit_repaired'); errors = @('member_error', 'gate_error')
+}
 
 if ($loginRpcMethods.Count -ne $loginRpcColumns.Count) {
     throw "`$loginRpcMethods 与 `$loginRpcColumns 长度不一致"
 }
 foreach ($st in $smLookupStages) {
     if ($smEnterSceneStages -cnotcontains $st) { throw "`$smLookupStages 的 $st 不在 `$smEnterSceneStages 里" }
+}
+if ($matchPoolClaimOutcomes.Count -ne $matchPoolClaimColumns.Count) {
+    throw "`$matchPoolClaimOutcomes 与 `$matchPoolClaimColumns 长度不一致"
+}
+foreach ($pair in @(@('plSessionActions', $plSessionActions, $plSessionActionColumns), @('plIndexRoundResults', $plIndexRoundResults, $plIndexRoundColumns))) {
+    $grouped = @($pair[2].Values | ForEach-Object { $_ })
+    if ($grouped.Count -ne $pair[1].Count -or @($pair[1] | Where-Object { $grouped -cnotcontains $_ }).Count -ne 0) {
+        throw "`$$($pair[0]) 的分组必须恰好覆盖每个取值一次"
+    }
 }
 
 # ----- 1. robot stats ---------------------------------------------------
@@ -665,6 +716,8 @@ $snapshots = @()
 $smSnapshots = @()
 $dbSnapshots = @()
 $dsSnapshots = @()
+$matchSnapshots = @()
+$plSnapshots = @()
 $redisSnapshots = @()
 
 if (Test-Path $snapDir) {
@@ -689,11 +742,14 @@ if (Test-Path $snapDir) {
     $smSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_sm$' })
     $dbSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_db$' })
     $dsSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_ds$' })
+    # match(:9170)与 player_locator(:9190),2026-11-05 起由 stress_snap.ps1 缺省抓取。
+    $matchSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_match$' })
+    $plSnapshots = @($promTxt | Where-Object { $_.BaseName -match '_pl$' })
     if ($loginTxt.Count -gt 0) {
         $snapshots += $loginTxt
     } else {
         # Legacy: bare t{N}m.txt files all hold login metrics.
-        $snapshots += @($promTxt | Where-Object { $_.BaseName -notmatch '_(login|sm|db|ds)$' })
+        $snapshots += @($promTxt | Where-Object { $_.BaseName -notmatch '_(login|sm|db|ds|match|pl)$' })
     }
 }
 
@@ -829,6 +885,12 @@ for ($i = 0; $i -lt $loginRpcColumns.Count; $i++) {
         $l1Rule += ('-' * $title.Length)
     }
 }
+# 末列 bgz_fb:角色列表整次回落到建角 zone 的次数(login_role_list_home_zone_fallback_total,go/login/internal/logic/pkg/homezone;
+# BatchGetPlayerHomeZone 整次失败时为不挡登录而放行,玩家此刻可能看到合服前的旧区)。promauto 的无 label 计数器,login 起服即有
+# 0 值序列;读到 n/a = 这个 login 还没有这条指标(2026-11-01 之前的版本)。
+$l1Fmt += (' | {{{0}}}' -f (1 + 4 * $loginRpcColumns.Count))
+$l1Header += 'bgz_fb'
+$l1Rule += '------'
 $l1Legend = for ($i = 0; $i -lt $loginRpcColumns.Count; $i++) { "$($loginRpcColumns[$i])=$($loginRpcMethods[$i] -replace '^.*/', '')" }
 Write-Host ""
 Write-Host "=== L1 Login outbound RPC (rpc_client_requests_duration_ms / _code_total, login :9101) ===" -ForegroundColor Yellow
@@ -849,6 +911,7 @@ if ($snapshots.Count -eq 0) {
             if ($null -eq $codeOk) { $codeOk = 0.0 }
             $cells += $(if ($null -eq $codeAll) { 'n/a' } else { Format-CountCell ($codeAll - $codeOk) })
         }
+        $cells += Format-CountCell (Get-SeriesSumOrNull $m 'login_role_list_home_zone_fallback_total')
         Write-Host ($l1Fmt -f $cells)
     }
 }
@@ -1003,35 +1066,38 @@ if ($dsSnapshots.Count -eq 0) {
     }
 }
 
-# ----- 2bb. Dirty-save skip rate (cpp scene log, parsed not scraped) ----
+# ----- 2bb. 存盘跳过率与分段耗时(cpp scene 日志的 [DirtySave] / [SaveTiming]) ----
 #
-# Why log-parsing instead of a Prometheus scrape: cpp scene processes don't
-# expose a metrics HTTP endpoint today (only go SceneManager :9150 and go
-# db :9160 do). The two atomic counters live in dirty_save_stats.h and emit
-# one LOG_INFO line from the scene's 30 s counter snapshot timer. We pull
-# the LATEST line from the most recent scene_*.log and surface the
-# total / skipped / skip_pct triple.
-#
-# Stays silent when no [DirtySave] line is found — keeps legacy stress
-# runs (pre-dirty-save-metric) clean and avoids a noisy "0 saves" line in
-# very short smoke tests.
+# 为什么读日志不抓指标:C++ 节点有 /metrics 出口(设了 MMORPG_METRICS_PORT 才开,player_save_metrics.cpp
+# 导出同一份计数),但本地压测的 stress_snap.ps1 不抓 scene。两行都由 scene 的 30 秒计数定时器打(core/system/redis.cpp):
+#   [DirtySave]  进程累计值(dirty_save_stats.h),每个日志取最后一行;
+#   [SaveTiming] 30 秒窗口值(save_timing_stats.h):各段的 <段>_n / <段>_avg_us / <段>_max_us 与 periodic_tick_over_budget。
+#                每个日志按次数加权合并全部窗口,最大值取各窗口最大。段名与 save_timing_stats::kStageNames 一致。
+# 节点日志实际落在 bin\logs\cpp_nodes(start_game.ps1),旧路径 run\logs\cpp_nodes 也一并扫。一行都没有时保持沉默。
 
 # Resolve repo root once from the script's own location ($PSScriptRoot is
 # tools/scripts/, so two levels up is the repo root) — stress_summarize.ps1
-# doesn't otherwise need it, but the dirty-save log scan below does.
+# doesn't otherwise need it, but the cpp log scans below do.
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $cppLogDir = Join-Path $RepoRoot "run\logs\cpp_nodes"
+$cppBinLogDir = Join-Path $RepoRoot "bin\logs\cpp_nodes"
 
 # Only scan scene*.log files (gate logs don't run SavePlayer).
 # The glob deliberately omits the underscore so it matches both legacy
 # single-instance "scene.stdout.log" and multi-instance "scene_1.stdout.log".
+# 旧路径下的文件名前面加 run/,和 bin 下的同名文件分开。
 $sceneLogs = @()
-if (Test-Path $cppLogDir) {
-    $sceneLogs = Get-ChildItem -Path $cppLogDir -Filter 'scene*.log' `
-                 -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+foreach ($dir in @($cppBinLogDir, $cppLogDir)) {
+    if (-not (Test-Path $dir)) { continue }
+    $prefix = if ($dir -eq $cppLogDir) { 'run/' } else { '' }
+    foreach ($file in @(Get-ChildItem -Path $dir -Filter 'scene*.log' -ErrorAction SilentlyContinue)) {
+        $sceneLogs += [pscustomobject]@{ Label = $prefix + $file.Name; FullName = $file.FullName }
+    }
 }
 
+$saveTimingStages = @('marshal', 'project', 'compare', 'submit', 'periodic_tick')
 $dirtySaveLines = @()
+$saveTimingLines = @()
 foreach ($log in $sceneLogs) {
     # Tail-style scan: read the file once and keep all matches; counters
     # are monotonic so the LAST match per file is the cumulative total.
@@ -1054,11 +1120,17 @@ foreach ($log in $sceneLogs) {
             $line = $sr.ReadLine()
             if ($line -match '\[DirtySave\] total=(?<total>\d+) skipped=(?<skipped>\d+) skip_pct=(?<pct>[0-9.]+)%') {
                 $dirtySaveLines += [pscustomobject]@{
-                    Log     = $log.Name
+                    Log     = $log.Label
                     Total   = [int64]$matches['total']
                     Skipped = [int64]$matches['skipped']
                     Pct     = [double]$matches['pct']
                 }
+            } elseif ($line -match '\[SaveTiming\](?<rest>.*)$') {
+                $fields = @{}
+                foreach ($m in [regex]::Matches($matches['rest'], '(?<k>[a-z_]+)=(?<v>[0-9.]+)')) {
+                    $fields[$m.Groups['k'].Value] = $m.Groups['v'].Value
+                }
+                $saveTimingLines += [pscustomobject]@{ Log = $log.Label; Fields = $fields }
             }
         }
     } finally {
@@ -1089,6 +1161,33 @@ if ($dirtySaveLines.Count -gt 0) {
     }
 }
 
+if ($saveTimingLines.Count -gt 0) {
+    Write-Host ""
+    Write-Host "=== Player save stage timing (cpp scene LOG [SaveTiming], 30 s windows) ===" -ForegroundColor Yellow
+    Write-Host ""
+    "  scene_log                      stage           n           avg_us      max_us" | Write-Host
+    "  ---------                      -----           -           ------      ------" | Write-Host
+    foreach ($g in ($saveTimingLines | Group-Object -Property Log)) {
+        foreach ($stage in $saveTimingStages) {
+            [int64]$n = 0
+            [double]$weighted = 0
+            [double]$max = 0
+            foreach ($row in $g.Group) {
+                $count = [int64]($row.Fields["${stage}_n"])
+                if ($count -le 0) { continue }
+                $n += $count
+                $weighted += $count * [double]($row.Fields["${stage}_avg_us"])
+                $max = [math]::Max($max, [double]($row.Fields["${stage}_max_us"]))
+            }
+            $avg = if ($n -gt 0) { $weighted / $n } else { 0 }
+            ("  {0,-30} {1,-15} {2,-11} {3,-11:N1} {4,-11:N1}" -f $g.Name, $stage, (Format-Number $n 11), $avg, $max) | Write-Host
+        }
+        $overBudget = [int64]0
+        foreach ($row in $g.Group) { $overBudget += [int64]($row.Fields['periodic_tick_over_budget']) }
+        ("  {0,-30} periodic_tick_over_budget={1}  (budget: save_timing_stats::kPeriodicTickBudget)" -f $g.Name, $overBudget) | Write-Host
+    }
+}
+
 # ----- 2bc. 节点间 RPC0 调用结局(cpp gate / scene 日志的 [RpcChannel] summary) ----
 #
 # C++ 节点没有 Prometheus 出口,RpcChannelStats(cpp/libs/engine/core/network/rpc_channel_stats.h)每 30s、
@@ -1099,7 +1198,9 @@ if ($dirtySaveLines.Count -gt 0) {
 
 $rpcChannelFields = @('started', 'ok', 'not_sent', 'remote_rejected', 'remote_failed', 'reply_dropped', 'timeout',
                       'disconnected', 'channel_closed', 'invalid_response', 'late_reply', 'legacy_id0_reply',
-                      'max_in_flight', 'handler_failed', 'reply_abandoned')
+                      'max_in_flight', 'handler_failed', 'reply_abandoned',
+                      # 链路心跳(muduo-rpc-channel.md §21):读空闲判死并关闭 / 因本端 loop 卡顿推迟判死的次数,正常为 0。
+                      'link_idle_closed', 'link_idle_deferred')
 $rpcChannelLatest = [ordered]@{}
 foreach ($dir in @((Join-Path $RepoRoot "bin\logs\cpp_nodes"), $cppLogDir)) {
     if (-not (Test-Path $dir)) { continue }
@@ -1149,6 +1250,7 @@ if ($rpcChannelLatest.Count -gt 0) {
         Write-Host ("    {0}" -f ($cells -join ' '))
     }
     Write-Host "  (after a same-zone cutover timeout / late_reply / legacy_id0_reply should stay 0)"
+    Write-Host "  (link_idle_closed / link_idle_deferred stay 0 unless a node link went silent for 15s or the local loop stalled)"
 }
 
 # ----- 2c. 存盘接口(go/db 的 PlayerStore gRPC,*_db 快照,:9160) ----------
@@ -1267,6 +1369,197 @@ if ($dbSnapshots.Count -eq 0) {
             (Format-CountCell (Get-SeriesSumOrNull $m 'db_placement_open_stores')),
             (Format-CountCell $openErr),
             (Format-CountCell (Get-SeriesSumOrNull $m 'db_store_cooldown_stores'))))
+    }
+}
+
+# ----- 2d. 匹配(match :9170,*_match)与 player_locator(:9190,*_pl),2026-11-05 ------------------
+#
+# 服务器缺口清单第 10 条;匹配段口径见 docs/design/global-match-hierarchical-pools.md §5.6、§11 R0。
+# 计数与直方图都是进程启动以来的累计值,看一段压测要拿相邻两个快照相减。每个快照是一个副本:多副本时跨副本自己相加
+# (owned 尤其:各副本负责不同的池,owned 全为 0 = 没有副本在撮合排队池)。
+# 按池撮合的指标没有预建,第一次写入之后才有序列:整族缺失打印 n/a,族内缺的取值记 0(族内存在规则)。
+
+# 族内存在规则的单值版:整族一条序列都没有 → $null(n/a);族内有序列 → 按 $Match 求和,没匹配到记 0。
+function Get-FamilySumOrNull {
+    param([hashtable]$M, [string]$Name, [hashtable]$Match = @{})
+    if ($null -eq (Get-SeriesSumOrNull $M $Name)) { return $null }
+    $v = Get-SeriesSumOrNull $M $Name $Match
+    if ($null -eq $v) { return 0.0 }
+    return $v
+}
+
+# 把 Get-FamilyCountsOrNull 的结果按一组取值相加;任一取值为 $null(整族缺失)结果就是 $null。
+function Get-GroupSumOrNull {
+    param($Counts, [string[]]$Keys)
+    $sum = 0.0
+    foreach ($k in $Keys) {
+        if ($null -eq $Counts[$k]) { return $null }
+        $sum += [double]$Counts[$k]
+    }
+    return $sum
+}
+
+# 一族序列里某个 label 出现过的全部取值,按字典序。G3 的 mode 用:mode 来自配表(PlayMode),不是封闭集合。
+function Get-SeriesLabelValues {
+    param([hashtable]$M, [string]$Name, [string]$Label)
+    $values = @{}
+    foreach ($k in $M.Keys) {
+        $labels = Get-SeriesLabels -Key $k -Name $Name
+        if ($null -ne $labels -and $labels.ContainsKey($Label)) { $values[$labels[$Label]] = $true }
+    }
+    return @($values.Keys | Sort-Object)
+}
+
+# 直方图分位数一格,按秒打一位小数(G2 的等待以秒计,桶 1~300s,很粗,只看量级)。
+# 缺序列 / 没有桶 → n/a;没有样本 → "-";落在 +Inf 桶 → 前缀 '>'(至少这么大)。
+function Get-QuantileSecondsCell {
+    param($Hist, [double]$Q)
+    $q = Get-HistogramQuantile -Hist $Hist -Q $Q
+    if ($null -eq $q) { return 'n/a' }
+    if ($q -is [double]) { return '-' }
+    return $(if ($q.Overflow) { '>' } else { '' }) + (Format-DecimalCell $q.Value 1 's')
+}
+
+$matchNoSnapshot = "没有 *_match 快照(2026-11-05 之前的 stress_snap.ps1 不抓 :9170,或本机没起 match)"
+
+# G1:每个快照一行,跨 mode / level / pass 求和。
+#   owned        match_pool_owned(本副本负责的池数);units = match_pool_page_units 之和(本轮读到的可撮合单位数,近似排队深度,受页大小截断)
+#   rd_*         match_pool_round_seconds(每轮耗时);rd/int = p99 ÷ -MatchRoundIntervalMs,§5.6 的信号是持续 > 0.8
+#   committed …  match_pool_claim_total 每个 outcome($matchPoolClaimOutcomes);conflict% = conflict ÷ 全部提交(§5.6 的信号是 < 5% 时仍跟不上)
+#   imm_*        match_immediate_claim_total:committed 次数 / 全部 / 成功率(单人档入队即开局,失败的票留给池写者兜底)
+#   expired      match_pool_expired_total(探测有效期内没续命、被清扫的单排票)
+#   bn_open/all  match_battle_nodes{state}:本副本此刻看到的可分配 battle 节点数(state=open)/ 全部状态合计
+#                (R6,state 取 open / unspecified / closed / cooldown / invalid,每轮撮合刷新;no_node 多时先看这两列)
+$g1Header = @('snapshot', 'owned', 'units', 'rd_n', 'rd_avg', 'rd_p99', 'rd/int') + $matchPoolClaimColumns + @('conflict%', 'imm_ok', 'imm_n', 'imm%', 'expired', 'bn_open', 'bn_all')
+$g1Fmt = "  {0,-30} | {1,-5} {2,-6} | {3,-6} {4,-8} {5,-8} {6,-6} | {7,-9} {8,-8} {9,-7} {10,-7} {11,-6} {12,-9} | {13,-9} | {14,-6} {15,-6} {16,-6} | {17,-7} | {18,-7} {19}"
+Write-Host ""
+Write-Host "=== G1 Match pools (match_pool_*, match_immediate_claim_total, :9170) ===" -ForegroundColor Yellow
+Write-Host "  rd/int = pool_round_seconds p99 / round interval $MatchRoundIntervalMs ms; conflict% = conflict / all pool claims; imm% = immediate committed / all immediate"
+Write-Host ""
+if ($matchSnapshots.Count -eq 0) {
+    Write-NoData $matchNoSnapshot
+} else {
+    Write-Host ($g1Fmt -f $g1Header)
+    Write-Host ($g1Fmt -f @($g1Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $matchSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $round = Get-HistogramOrNull $m 'match_pool_round_seconds'
+        $q = Get-HistogramQuantile -Hist $round -Q 0.99
+        $ratioCell = if ($null -eq $q) { 'n/a' }
+                     elseif ($q -is [double]) { '-' }
+                     else { $(if ($q.Overflow) { '>' } else { '' }) + (Format-DecimalCell ($q.Value * 1000.0 / $MatchRoundIntervalMs) 2) }
+        $claims = Get-FamilyCountsOrNull $m 'match_pool_claim_total' 'outcome' $matchPoolClaimOutcomes
+        $imm = Get-FamilyCountsOrNull $m 'match_immediate_claim_total' 'outcome' $matchPoolClaimOutcomes
+        $immAll = Get-SumOrNull $imm.Values
+        $cells = @($snap.BaseName,
+            (Format-CountCell (Get-SeriesSumOrNull $m 'match_pool_owned')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'match_pool_page_units'))) + (Get-HistogramCells $round 1) + @($ratioCell)
+        $cells += @($matchPoolClaimOutcomes | ForEach-Object { Format-CountCell $claims[$_] })
+        $cells += Format-RatioCell $claims['conflict'] (Get-SumOrNull $claims.Values)
+        $cells += @((Format-CountCell $imm['committed']), (Format-CountCell $immAll), (Format-RatioCell $imm['committed'] $immAll))
+        $cells += Format-CountCell (Get-FamilySumOrNull $m 'match_pool_expired_total')
+        $cells += @((Format-CountCell (Get-FamilySumOrNull $m 'match_battle_nodes' @{ state = 'open' })),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'match_battle_nodes')))
+        Write-Host ($g1Fmt -f $cells)
+    }
+}
+
+# G2:每个快照 × level 一行,跨 mode / pass 求和:该层的成局数(outcome=committed),与成局时组内最长等待
+#     match_pool_wait_seconds 的 n / p50 / p95。范围树按 zone → group → global 逐级放宽,global 层等待长是预期。
+$g2Fmt = "  {0,-30} | {1,-6} | {2,-9} | {3,-6} {4,-8} {5}"
+Write-Host ""
+Write-Host "=== G2 Match wait by scope level (match_pool_claim_total committed, match_pool_wait_seconds) ===" -ForegroundColor Yellow
+Write-Host ""
+if ($matchSnapshots.Count -eq 0) {
+    Write-NoData $matchNoSnapshot
+} else {
+    Write-Host ($g2Fmt -f @('snapshot', 'level', 'committed', 'wait_n', 'wait_p50', 'wait_p95'))
+    Write-Host ($g2Fmt -f @('--------', '-----', '---------', '------', '--------', '--------'))
+    foreach ($snap in $matchSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $waitFamilySeen = $null -ne (Get-SeriesSumOrNull $m 'match_pool_wait_seconds_count')
+        foreach ($lv in $matchPoolLevels) {
+            $wait = Get-HistogramOrNull $m 'match_pool_wait_seconds' @{ level = $lv }
+            $waitCells = if ($null -ne $wait) {
+                @((Format-CountCell $wait.Count), (Get-QuantileSecondsCell $wait 0.5), (Get-QuantileSecondsCell $wait 0.95))
+            } elseif ($waitFamilySeen) { @('0', '-', '-') } else { @('n/a', 'n/a', 'n/a') }
+            $committed = Get-FamilySumOrNull $m 'match_pool_claim_total' @{ level = $lv; outcome = 'committed' }
+            Write-Host ($g2Fmt -f (@($snap.BaseName, $lv, (Format-CountCell $committed)) + $waitCells))
+        }
+    }
+}
+
+# G3:每个快照 × mode 一行:成局数、冲突率、排队单位数(match_pool_page_units)、单人即时成局。
+#     mode 取这一份快照里三族指标出现过的值;一个都没有时打一行 n/a。
+$g3Fmt = "  {0,-30} | {1,-24} | {2,-9} {3,-9} | {4,-6} | {5,-6} {6}"
+Write-Host ""
+Write-Host "=== G3 Match by mode (match_pool_claim_total, match_pool_page_units, match_immediate_claim_total) ===" -ForegroundColor Yellow
+Write-Host ""
+if ($matchSnapshots.Count -eq 0) {
+    Write-NoData $matchNoSnapshot
+} else {
+    Write-Host ($g3Fmt -f @('snapshot', 'mode', 'committed', 'conflict%', 'units', 'imm_ok', 'imm_n'))
+    Write-Host ($g3Fmt -f @('--------', '----', '---------', '---------', '-----', '------', '-----'))
+    foreach ($snap in $matchSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $modes = @(@('match_pool_claim_total', 'match_pool_page_units', 'match_immediate_claim_total') |
+            ForEach-Object { Get-SeriesLabelValues $m $_ 'mode' } | Sort-Object -Unique)
+        if ($modes.Count -eq 0) {
+            Write-Host ($g3Fmt -f @($snap.BaseName, 'n/a', 'n/a', 'n/a', 'n/a', 'n/a', 'n/a'))
+            continue
+        }
+        foreach ($mode in $modes) {
+            $all = Get-FamilySumOrNull $m 'match_pool_claim_total' @{ mode = $mode }
+            Write-Host ($g3Fmt -f @($snap.BaseName, $mode,
+                (Format-CountCell (Get-FamilySumOrNull $m 'match_pool_claim_total' @{ mode = $mode; outcome = 'committed' })),
+                (Format-RatioCell (Get-FamilySumOrNull $m 'match_pool_claim_total' @{ mode = $mode; outcome = 'conflict' }) $all),
+                (Format-CountCell (Get-FamilySumOrNull $m 'match_pool_page_units' @{ mode = $mode })),
+                (Format-CountCell (Get-FamilySumOrNull $m 'match_immediate_claim_total' @{ mode = $mode; outcome = 'committed' })),
+                (Format-CountCell (Get-FamilySumOrNull $m 'match_immediate_claim_total' @{ mode = $mode }))))
+        }
+    }
+}
+
+# PL1:player_locator 每个快照一行(go/player_locator/internal/logic/reconcile_metrics.go、setdisconnectinglogic.go)。
+#   leader       reconcile_is_leader(只有 leader 跑 writers / repair / audit 三个 loop)
+#   view_hold    reconcile_live_view_holding(B1-1 存活集闸门此刻压着没放:etcd 存活集骤降或为空)
+#   idx_*        reconcile_round_total{loop="index"} 按 $plIndexRoundColumns:成功 / 失败(etcd_error + redis_error + panic)/
+#                被闸门压住的拍(view_held,不算失败)
+#   to_disc …    reconcile_sessions_total 按 $plSessionActionColumns 分组;压测里 audit_rep、errors 应为 0,
+#                to_disc 只该在 gate 真的消失时出现(B1-1 存活集闸门之前,etcd 回空曾会把全部会话判死)
+#   dead_*       reconcile_dead_gates / _dead_gate_members(本副本上还没清完的死 gate 与索引键,gauge)
+#   stale_inst   stale_gate_instance_total(来自别的 gate 实例、被忽略的断线 / 登出上报,跨 op 求和)
+#   rpc_*        go-zero 服务端 rpc_server_requests_duration_ms,跨全部方法(Reconnect、SetDisconnecting 等)
+$plNoSnapshot = "没有 *_pl 快照(2026-11-05 之前的 stress_snap.ps1 不抓 :9190,或本机没起 player_locator)"
+$pl1Header = @('snapshot', 'leader', 'view_hold') + @($plIndexRoundColumns.Keys) + @($plSessionActionColumns.Keys) + @('dead_gates', 'dead_members', 'stale_inst', 'rpc_n', 'rpc_avg', 'rpc_p99')
+$pl1Fmt = "  {0,-30} | {1,-6} {2,-9} | {3,-6} {4,-7} {5,-8} | {6,-7} {7,-5} {8,-6} {9,-8} {10,-9} {11,-6} | {12,-10} {13,-12} | {14,-10} | {15,-7} {16,-8} {17}"
+Write-Host ""
+Write-Host "=== PL1 player_locator reconcile and RPC (player_locator_reconcile_*, stale_gate_instance_total, rpc_server_*, :9190) ===" -ForegroundColor Yellow
+Write-Host "  pruned = pruned_stale + pruned_missing + pruned_malformed + pruned_bad_member; errors = member_error + gate_error; rpc_* = all server methods"
+Write-Host ""
+if ($plSnapshots.Count -eq 0) {
+    Write-NoData $plNoSnapshot
+} else {
+    Write-Host ($pl1Fmt -f $pl1Header)
+    Write-Host ($pl1Fmt -f @($pl1Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $plSnapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $rounds = Get-FamilyCountsOrNull $m 'player_locator_reconcile_round_total' 'result' $plIndexRoundResults @{ loop = 'index' }
+        $actions = Get-FamilyCountsOrNull $m 'player_locator_reconcile_sessions_total' 'action' $plSessionActions
+        $cells = @($snap.BaseName,
+            (Format-CountCell (Get-SeriesSumOrNull $m 'player_locator_reconcile_is_leader')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'player_locator_reconcile_live_view_holding')))
+        foreach ($col in $plIndexRoundColumns.Keys) {
+            $cells += Format-CountCell (Get-GroupSumOrNull $rounds $plIndexRoundColumns[$col])
+        }
+        foreach ($col in $plSessionActionColumns.Keys) {
+            $cells += Format-CountCell (Get-GroupSumOrNull $actions $plSessionActionColumns[$col])
+        }
+        $cells += @((Format-CountCell (Get-SeriesSumOrNull $m 'player_locator_reconcile_dead_gates')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'player_locator_reconcile_dead_gate_members')),
+            (Format-CountCell (Get-FamilySumOrNull $m 'player_locator_stale_gate_instance_total')))
+        $cells += Get-HistogramCells (Get-HistogramOrNull $m 'rpc_server_requests_duration_ms') 0.001 1
+        Write-Host ($pl1Fmt -f $cells)
     }
 }
 

@@ -77,6 +77,12 @@ public:
     // 只读查询玩家货币窗口计数,不创建窗口;目前仅供测试观测。
     static uint32_t GetCurrencyGainCount(entt::entity player, CurrencyType type);
 
+    // 重置单个玩家的收益统计窗口(货币和物品),须在玩家所属场景线程上调用,
+    // 供处置误报等内部流程使用,不对外暴露 RPC。只移除该玩家的窗口组件:
+    // 阈值、已发出的告警、流水和其他玩家的窗口都不变,下一笔收益重新开始计数。
+    // 空句柄、陈旧句柄和重复调用都是无操作;登出不需要调用,窗口随玩家实体销毁。
+    static void ClearPlayer(entt::entity player);
+
     // 测试隔离用,清空所有玩家窗口但不销毁玩家;登出不需要清理,窗口随玩家实体销毁。
     static void ClearAll();
 

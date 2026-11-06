@@ -12,7 +12,6 @@ import (
 	"chat/internal/textfilter"
 	"shared/authoritysql"
 	"shared/dbplacement"
-	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -46,9 +45,7 @@ type Config struct {
 	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
 	// ActorVerifyTTLSeconds:身份校验结果的进程内缓存秒数,0 = 每次都校验。
 	// 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(authority/actor_verify.go)。
-	ActorVerifyTTLSeconds int                           `json:",default=30"`
-	GlobalLoginSessions   bool                          `json:",default=true"`
-	LoginRedis            playerredis.LoginReaderConfig `json:",optional"`
+	ActorVerifyTTLSeconds int `json:",default=30"`
 
 	// ChatRedis保留既有可丢缓存配置；正式Send/Pull只用SQL原件，不读写旧LIST或授权键。
 	ChatRedis redis.RedisConf `json:",optional"`
@@ -125,8 +122,8 @@ func (c *Config) Validate() error {
 	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
 		return err
 	}
-	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 1 || c.LoginRedis.PoolSizePerNode > 128 {
-		return errors.New("聊天必须显式配置SQL原件库与全局原登录态只读句柄")
+	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 {
+		return errors.New("聊天必须显式配置SQL原件库")
 	}
 	if c.DataServiceRpc.Etcd.Key == "" && len(c.DataServiceRpc.Endpoints) == 0 && c.DataServiceRpc.Target == "" {
 		return errors.New("DataServiceRpc 必须配置 Etcd.Key / Endpoints / Target 之一:聊天的身份校验走目录 RPC")

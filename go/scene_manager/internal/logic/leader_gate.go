@@ -1,6 +1,19 @@
 package logic
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
+
+// leaderLockKeyFmt 是按 zone 的选主锁(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.2)。
+// 原来全服一把 scene_manager:leader:lock,一个领导者编排全部 zone;现在每个 zone 一把,锁在该 zone 所属组的
+// 控制域实例上,同组几个 zone 的锁互不相干。
+const leaderLockKeyFmt = "scene_manager:leader:lock:zone:%d"
+
+// LeaderLockKey 返回 zone 的选主锁键。锁名只由 zone 决定、不可配置。
+func LeaderLockKey(zoneID uint32) string {
+	return fmt.Sprintf(leaderLockKeyFmt, zoneID)
+}
 
 // 领导权闸门:scene_manager 多副本部署时,**变更类**后台动作(补建世界频道 /
 // rebalance / 死节点孤儿清理 / 空闲副本销毁 / 世界频道自动扩缩容 / Agones
@@ -12,7 +25,8 @@ import "sync"
 // 死节点重新 ZADD 回负载集(理由见 load_reporter.go updateNodeLoad)。2026-10-16 起跟随者连读
 // 也不做,每节点指标只由领导者导出,跟随者只发布本 zone 的 nodes_by_role(load_refresh.go)。
 //
-// 领导者由 shared/leader 的 Redis 锁选出,接线在 scene_manager_service.go。
+// 领导者由 shared/leader 的 Redis 锁选出(锁按 zone,见 LeaderLockKey),接线在 scene_manager_service.go。
+// isLeader 为真的含义是「本副本是配置 ZoneId 这一个 zone 的领导者」,变更动作只作用于这个 zone(orchestrated_zones.go)。
 // 未接线时(单测、旧启动路径)一律视为领导者,与历史单实例行为完全一致。
 var (
 	leaderCheckMu sync.RWMutex

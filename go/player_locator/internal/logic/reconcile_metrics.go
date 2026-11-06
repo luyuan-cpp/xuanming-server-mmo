@@ -31,6 +31,8 @@ const (
 	metricGateIndexReady           = "gate_index_ready"
 	metricGateIndexMembers         = "gate_index_members"
 	metricSlotShardSegments        = "slot_shard_segments"
+	metricLiveViewHolding          = "reconcile_live_view_holding"
+	metricLiveViewReleasedTotal    = "reconcile_live_view_released_total"
 )
 
 // reconcile_round_total / reconcile_last_success_unix 的 loop 取值。
@@ -56,6 +58,8 @@ const (
 	reconcileResultGenChanged = "gen_changed" // 补建期间出现过旧写者,结束时不设就绪标记
 	reconcileResultIncomplete = "incomplete"  // 补建扫完了,但有 ONLINE 会话因键类型错误没能补进索引,不设就绪标记
 	reconcileResultPanic      = "panic"
+	// view_held:读都成功了,但 etcd 存活集为空或骤降,被闸门压住(gate_sweep.go checkLiveView)。只有 index 循环有,不算失败。
+	reconcileResultViewHeld = "view_held"
 )
 
 // reconcile_sessions_total 的 action 取值。
@@ -80,6 +84,7 @@ var reconcileRoundCombos = [][2]string{
 	{reconcileLoopIndex, reconcileResultEtcdError},
 	{reconcileLoopIndex, reconcileResultRedisError},
 	{reconcileLoopIndex, reconcileResultPanic},
+	{reconcileLoopIndex, reconcileResultViewHeld},
 	{reconcileLoopWriters, reconcileResultOK},
 	{reconcileLoopWriters, reconcileResultEtcdError},
 	{reconcileLoopWriters, reconcileResultRedisError},
@@ -114,8 +119,9 @@ var (
 		Namespace: reconcileMetricsNamespace,
 		Name:      metricReconcileRoundTotal,
 		Help: "Session reconciler rounds by loop (index | writers | repair | audit) and result " +
-			"(ok | etcd_error | redis_error | gen_changed | incomplete | panic). Every replica runs index rounds " +
-			"over its own slots; only the leader runs the other loops.",
+			"(ok | etcd_error | redis_error | gen_changed | incomplete | panic | view_held). Every replica runs index rounds " +
+			"over its own slots; only the leader runs the other loops. view_held = the etcd live gate set was empty or " +
+			"dropped by more than half and the round was held by the live view gate (not a failure).",
 		Labels: []string{"loop", "result"},
 	})
 	reconcileLastSuccessUnix = metric.NewGaugeVec(&metric.GaugeVecOpts{
@@ -178,6 +184,20 @@ var (
 			"means some slots have no scanner right now.",
 		Labels: []string{"role"},
 	})
+	// 存活集闸门(gate_sweep.go checkLiveView,决策清单 B1-1)。每个副本一份,规则用 max() / sum()。
+	reconcileLiveViewHolding = metric.NewGaugeVec(&metric.GaugeVecOpts{
+		Namespace: reconcileMetricsNamespace,
+		Name:      metricLiveViewHolding,
+		Help: "1 while this replica's last index round was held by the live view gate (the etcd live gate set was empty, " +
+			"or more than half of the registered gates vanished and the missing count has not been stable for the hold time), " +
+			"0 after a completed round. Per replica.",
+	})
+	reconcileLiveViewReleasedTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: reconcileMetricsNamespace,
+		Name:      metricLiveViewReleasedTotal,
+		Help: "Times the live view gate released a hold on this replica: the missing gate count stayed unchanged for the " +
+			"hold time, so the missing gates are treated as dead from then on. Per replica, sum it.",
+	})
 )
 
 // reconcileMetricFullNames 是本文件注册的全部指标全名(告警文件守卫用,见 reconcile_metrics_test.go)。
@@ -186,7 +206,7 @@ func reconcileMetricFullNames() []string {
 		metricReconcileRoundTotal, metricReconcileLastSuccessUnix, metricReconcileSessionsTotal,
 		metricReconcileDeadGates, metricReconcileDeadGateMembers,
 		metricReconcileLegacyWriters, metricReconcileIsLeader, metricGateIndexReady, metricGateIndexMembers,
-		metricSlotShardSegments,
+		metricSlotShardSegments, metricLiveViewHolding, metricLiveViewReleasedTotal,
 	}
 	for i, n := range names {
 		names[i] = reconcileMetricsNamespace + "_" + n
@@ -213,6 +233,8 @@ func primeReconcileMetrics() {
 	reconcileDeadGates.Set(0)
 	reconcileDeadGateMembers.Set(0)
 	gateIndexMembers.Set(0)
+	reconcileLiveViewHolding.Set(0)
+	reconcileLiveViewReleasedTotal.Add(0)
 	for _, loop := range reconcileLoops {
 		reconcileLastSuccessUnix.Set(0, loop)
 	}

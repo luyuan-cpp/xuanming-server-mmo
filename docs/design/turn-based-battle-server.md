@@ -343,7 +343,7 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 |-----|------|------|
 | `spectate:battles:active` | ZSET member=battle_id score=created_at_ms,只收公开局 | 随机/列表索引;战斗终局时摘除,懒剔除 + 定期按 score 清过期 |
 
-2026-10-30 起 `spectate:battle:*`、`spectate:watching:*` 已删:观战记录由 SQL 成局现算(`loadSpectateBattle`),观战占用与原操作在 `match_spectator` / `match_spectator_intent`。档位与 L1 / L2 的键见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) §15.6。
+观战记录不进 Redis,由 SQL 成局现算(`loadSpectateBattle`)。观战占用与原操作在 `match_spectator` / `match_spectator_intent`,与匹配票在同一事务里互斥;Redis 只放这条展示索引,丢了不影响开局、补签与观战占用。档位与 L1 / L2 的键见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) §15.6。
 
 ### 10.5 房间侧规格(battle 节点)
 

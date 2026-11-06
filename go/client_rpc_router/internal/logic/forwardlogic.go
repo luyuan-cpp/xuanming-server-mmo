@@ -17,6 +17,8 @@ import (
 	pb "proto/client_rpc_router"
 	base "proto/common/base"
 
+	"shared/releasetrack"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -135,7 +137,16 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
 
-	// 3) 选实例。
+	// 3) 选实例。会话的发布轨道是 gate 自报的(docs/design/release-track-gray-canary.md §2.3),
+	//    空串 = stable;认不出的取值是 gate 的契约违例,不论目标类型一律拒绝,不猜它属于哪条轨道。
+	sessionTrack, err := releasetrack.Parse(in.GetReleaseTrack())
+	if err != nil {
+		finish(metrics.OutcomeInvalidReleaseTrack)
+		sampledErrorf(metrics.OutcomeInvalidReleaseTrack,
+			"[forward] gate 自报的发布轨道无法识别,拒绝 zone_id=%d message_id=%d id=%d: %v",
+			in.ZoneId, request.MessageId, request.Id, err)
+		return rejected(request, constants.ErrInvalidParameter), nil
+	}
 	nodeTypeName := base.ENodeType_name[int32(route.NodeType)]
 	watcher := l.svcCtx.Targets[route.NodeType]
 	if watcher == nil {
@@ -144,12 +155,12 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 			nodeTypeName, request.MessageId)
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
-	target, ok := l.pickTarget(watcher, route.NodeType, in.ZoneId)
+	target, ok := l.pickTarget(watcher, route.NodeType, in.ZoneId, sessionTrack)
 	if !ok {
 		finish(metrics.OutcomeNoTarget)
 		sampledErrorf(metrics.OutcomeNoTarget,
-			"[forward] 目标类型 %s 无可用实例 zone_scoped=%v zone_id=%d message_id=%d",
-			nodeTypeName, l.svcCtx.IsZoneScoped(route.NodeType), in.ZoneId, request.MessageId)
+			"[forward] 目标类型 %s 无可用实例 zone_scoped=%v zone_id=%d release_track=%s message_id=%d",
+			nodeTypeName, l.svcCtx.IsZoneScoped(route.NodeType), in.ZoneId, sessionTrack, request.MessageId)
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
 
@@ -190,13 +201,15 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	}, nil
 }
 
-// pickTarget 按 D33 选实例:zone-scoped 类型只挑与发起 gate 同 zone 的实例,
-// 其余全局随机。
-func (l *ForwardLogic) pickTarget(watcher *discovery.NodeWatcher, nodeType base.ENodeType, zoneId uint32) (discovery.NodeEntry, bool) {
+// pickTarget 选实例:zone-scoped 类型按 D33 只挑与发起 gate 同 zone 的实例,不看轨道
+// (一个 zone 只有一条轨道,发布轨道设计 §2.2);全局类型按会话轨道选(§2.4),
+// stable 会话永远不会被送进 canary 实例。
+func (l *ForwardLogic) pickTarget(watcher *discovery.NodeWatcher, nodeType base.ENodeType, zoneId uint32,
+	sessionTrack releasetrack.Track) (discovery.NodeEntry, bool) {
 	if l.svcCtx.IsZoneScoped(nodeType) {
 		return watcher.PickRandomInZone(zoneId)
 	}
-	return watcher.PickRandom()
+	return watcher.PickRandomForTrack(sessionTrack)
 }
 
 // echoSessionHeader 把 x-session-detail-bin 原值登记进响应头。

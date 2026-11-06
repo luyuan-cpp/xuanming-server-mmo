@@ -11,26 +11,27 @@ import (
 	scenepb "proto/scene"
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
-	"shared/loginsession"
-	"shared/playerredis"
+	"shared/roleidentity"
 	"shared/scenenode"
 	"shared/serviceauth"
 	"trade/internal/commerce"
 )
 
-// RmbIdentity 先读原gate连接账号再核强SQL当前角色归属；当前owner不能替代会话账号。
+// RmbIdentity 先取原gate连接账号再核强SQL当前角色归属；当前owner不能替代会话账号。
+// 在线域原账号只认 gate 签名原件,不读 login Redis,所以这里只依赖角色目录。
 type RmbIdentity struct {
-	Login     loginsession.Reader
 	Directory *accountdirectory.TradeClient
 }
 
 func (a *RmbIdentity) Resolve(ctx context.Context, in *base.SessionDetails, player uint64) (*dspb.AccountRoleOwnership, error) {
-	if a == nil || a.Login == nil || a.Directory == nil || in.GetPlayerId() == 0 || in.GetOwnerRevision() == 0 {
+	if a == nil || a.Directory == nil || in.GetPlayerId() == 0 || in.GetOwnerRevision() == 0 {
 		return nil, commerce.ErrInvalid
 	}
-	account, err := loginsession.Account(ctx, a.Login, in)
+	account, err := roleidentity.SessionAccount(ctx, in)
 	if err != nil {
-		return nil, err
+		// 未签名、与原件不符或缺原账号是请求本身无效(同上面的缺会话),不是服务端故障:
+		// 回故障 tip 会被计成故障并让 RootAdmission 把排空证明打成 Hold。
+		return nil, commerce.ErrInvalid
 	}
 	me, err := a.Directory.Lookup(ctx, in.PlayerId)
 	if err != nil {
@@ -85,8 +86,8 @@ func (sc *ServiceContext) initRmb() error {
 	if sc.Commerce == nil {
 		return nil
 	}
-	if sc.Assets == nil || !sc.Config.Rmb.GlobalLoginSessions || !sc.Config.Rmb.LoginRedis.HasAddr() {
-		return errors.New("交易必须显式装配资产通道与全局login态Redis")
+	if sc.Assets == nil {
+		return errors.New("交易必须显式装配资产通道")
 	}
 	for _, c := range sc.Config.Rmb.CurrencyTypes {
 		if c > 1 {
@@ -98,21 +99,8 @@ func (sc *ServiceContext) initRmb() error {
 	if err := serviceauth.Sign(accountdirectory.MethodPrefix+"LookupAccountRole", probe, "trade", secret, uint64(time.Now().UnixMilli())); err != nil {
 		return errors.New("角色交易独立签名密钥未就绪")
 	}
-	rdb, err := playerredis.New(sc.Config.Rmb.LoginRedis.ClientConfig(playerredis.Config{
-		PoolSizePerNode: 8, DialTimeoutMs: 5000, ReadTimeoutMs: 3000, WriteTimeoutMs: 3000, PoolTimeoutMs: 1000,
-	}))
-	if err != nil {
-		return errors.New("全局登录态Redis配置非法")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		_ = rdb.Close()
-		return errors.New("全局登录态Redis不可用")
-	}
 	directory := accountdirectory.NewTradeClient(sc.DataServiceClient, secret)
-	sc.rmbLoginRedis = rdb
-	sc.RmbIdentity = &RmbIdentity{Login: rdb, Directory: directory}
+	sc.RmbIdentity = &RmbIdentity{Directory: directory}
 	if !sc.Config.Rmb.Enabled {
 		return nil
 	}

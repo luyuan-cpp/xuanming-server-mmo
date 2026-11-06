@@ -9,6 +9,10 @@ package node
 //
 // 2026-10-18 登记:player_locator 的副本在 tryClaimNodeID / allocateNodeID 末尾多一个可选 extraOps 钩子
 // (缺省为空,用来把能力键放进同一个注册事务),详见该文件头「有意的差异」;同步修改时保留它即可。
+//
+// 2026-11-05 登记(发布轨道,docs/design/release-track-gray-canary.md §2.1):各副本都在注册入口第一步读
+// releasetrack.FromEnv,取值非法就在碰 etcd 之前返回错误;合法的轨道经 newNodeInfo 写进 NodeInfo.release_track,
+// 重注册沿用同一个 Info。与 shared/noderegistry 同一做法,同步修改时保留。
 
 import (
 	"context"
@@ -25,6 +29,7 @@ import (
 	"guild/internal/config"
 	base "proto/common/base"
 	"shared/nodeinfo"
+	"shared/releasetrack"
 	"shared/snowflake"
 )
 
@@ -69,7 +74,14 @@ func allocationKeyPrefix(prefix string, nodeType uint32) string {
 	return fmt.Sprintf("%s/allocated/node_type/%d/node_id/", prefix, nodeType)
 }
 
+// NewNode 注册本进程并返回句柄。发布轨道在第一步读,不靠入口传参:取值非法时在碰 etcd 之前就返回错误,
+// 进程随之拒启;漏写轨道的 canary 进程会被当成 stable,接到 stable 的流量(与 shared/noderegistry 同一理由)。
 func NewNode(nodeType uint32, ip string, port uint32) (*Node, error) {
+	track, err := releasetrack.FromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("release track: %w", err)
+	}
+
 	cfg := config.AppConfig
 
 	client, err := clientv3.New(clientv3.Config{
@@ -86,19 +98,7 @@ func NewNode(nodeType uint32, ip string, port uint32) (*Node, error) {
 		return nil, fmt.Errorf("etcd grant failed: %w", err)
 	}
 
-	info := &base.NodeInfo{
-		NodeType: nodeType,
-		Endpoint: &base.EndpointComp{
-			Ip:   ip,
-			Port: port,
-		},
-		// 路由服只从 grpcEndpoint 选择 gRPC 目标；Endpoint 保留既有服务发现兼容字段。
-		GrpcEndpoint: &base.EndpointComp{Ip: ip, Port: port},
-		ZoneId:       cfg.Node.ZoneId,
-		LaunchTime:   uint64(time.Now().Unix()),
-		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),
-		NodeUuid:     uuid.New().String(),
-	}
+	info := newNodeInfo(nodeType, cfg.Node.ZoneId, ip, port, track)
 
 	prefix := rpcPrefix(nodeType)
 	nodeID, err := allocateNodeID(context.Background(), client, prefix, info, grant.ID)
@@ -108,12 +108,33 @@ func NewNode(nodeType uint32, ip string, port uint32) (*Node, error) {
 		return nil, err
 	}
 	info.NodeId = nodeID
+	logx.Infof("guild node registered: zone=%d node_type=%d node_id=%d uuid=%s release_track=%s",
+		info.ZoneId, nodeType, nodeID, info.NodeUuid, track)
 
 	return &Node{
 		Info:    info,
 		client:  client,
 		leaseID: grant.ID,
 	}, nil
+}
+
+// newNodeInfo 构造本进程写进 etcd 的 NodeInfo,node_id 由随后的分配步骤填。
+// 抽成函数是为了单测不连 etcd 就能核对轨道;重注册沿用同一个 Info,轨道不会丢。
+func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releasetrack.Track) *base.NodeInfo {
+	return &base.NodeInfo{
+		NodeType: nodeType,
+		Endpoint: &base.EndpointComp{
+			Ip:   ip,
+			Port: port,
+		},
+		// 路由服只从 grpcEndpoint 选择 gRPC 目标；Endpoint 保留既有服务发现兼容字段。
+		GrpcEndpoint: &base.EndpointComp{Ip: ip, Port: port},
+		ZoneId:       zoneId,
+		LaunchTime:   uint64(time.Now().Unix()),
+		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),
+		NodeUuid:     uuid.New().String(),
+		ReleaseTrack: track.String(),
+	}
 }
 
 // allocateNodeID 在 (node_type) 下找一个空闲 node_id 并通过 etcd Txn CAS 占住。

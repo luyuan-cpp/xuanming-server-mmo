@@ -202,7 +202,10 @@ Set-Content -Path $fakeLogPath -Value $fakeSceneLog -Encoding utf8
 #     - t18m_login 追加 L1 / L2 的序列;t5m_login 不加(旧版 login → 两张表全 n/a)。
 #       L1:BatchGetPlayerHomeZone 100 次,sum 300ms → avg 3.0ms;桶 le=2:40、le=5:99 → p99 插值到 5.0ms;code≠0 两次。
 #       L2:cache 90、etcd_stale 10、没有 etcd_unsynced → 那列按族内存在规则打 0,cache% 90.0%。
+#       L1 末列 bgz_fb(2026-11-05):login_role_list_home_zone_fallback_total 3;t5m_login 没有这条 → n/a。
 Add-Content -Path (Join-Path $snapDirForTest "t18m_login.txt") -Encoding utf8 -Value @"
+# TYPE login_role_list_home_zone_fallback_total counter
+login_role_list_home_zone_fallback_total 3
 # TYPE rpc_client_requests_duration_ms histogram
 rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="1"} 10
 rpc_client_requests_duration_ms_bucket{method="/data_service.DataService/BatchGetPlayerHomeZone",le="2"} 40
@@ -291,6 +294,117 @@ $fakeDsOld = @"
 data_service_merged_zone_refresh_total{result="ok"} 1
 "@
 Set-Content -Path (Join-Path $snapDirForTest "t5m_ds.txt") -Value $fakeDsOld -Encoding utf8
+
+# 1f. 匹配与 player_locator(2026-11-05,服务器缺口清单第 10 条)。
+#     - G1:t18m_match 是新版 match。owned 4;page_units 30 + 12 = 42;round 100 轮 sum 6s → 60.0ms,
+#       桶 le=0.05:50、le=0.1:90、le=0.25:100 → p99 插值到 235.0ms,÷ 500ms = 0.47;
+#       pool_claim:committed 40 + 8 + 2 = 50、conflict 5、no_node 1、no_slot 3、id_error / party_ended 无序列 → 族内存在规则打 0,
+#       合计 59 → conflict% 8.5%;immediate:committed 9 / no_slot 1 → 9 / 10 / 90.0%;expired 7;
+#       match_battle_nodes open 3 / closed 1 / cooldown 1 → bn_open 3、bn_all 5(R6,2026-11-05)。
+#     - G2:zone 层 committed 40 + 2 = 42,等待桶跨 mode 相加 le=5:22、le=10:40、le=20:42 → p50 4.8s、p95 10.0s;
+#       group 层 committed 8,桶 le=20:8 → p50 15.0s、p95 19.5s;global 层只有 no_node → committed 0,等待族在、这层没序列 → 0 - -。
+#     - G3:mode 按字典序 1V1 / PVE_SOLO / PVE_TEAM。1V1 committed 48、全部 56 → 8.9%,units 30,没有即时成局 → 0 0;
+#       PVE_SOLO 只有即时成局 → committed 0、0/0 打 "-"、units 0、imm 9 / 10;PVE_TEAM committed 2、全部 3、没有 conflict → 0.0%、units 12。
+#     - t5m_match 是没有按池撮合指标的旧版 match → G1 全 n/a,G2 全 n/a,G3 一行 n/a。
+$fakeMatchNew = @"
+# TYPE match_pool_owned gauge
+match_pool_owned 4
+# TYPE match_pool_page_units gauge
+match_pool_page_units{mode="MATCH_MODE_1V1",team_size="0"} 30
+match_pool_page_units{mode="MATCH_MODE_PVE_TEAM",team_size="3"} 12
+# TYPE match_pool_round_seconds histogram
+match_pool_round_seconds_bucket{le="0.05"} 50
+match_pool_round_seconds_bucket{le="0.1"} 90
+match_pool_round_seconds_bucket{le="0.25"} 100
+match_pool_round_seconds_bucket{le="+Inf"} 100
+match_pool_round_seconds_sum 6
+match_pool_round_seconds_count 100
+# TYPE match_pool_claim_total counter
+match_pool_claim_total{level="zone",mode="MATCH_MODE_1V1",outcome="committed",pass="local"} 40
+match_pool_claim_total{level="group",mode="MATCH_MODE_1V1",outcome="committed",pass="local"} 8
+match_pool_claim_total{level="zone",mode="MATCH_MODE_PVE_TEAM",outcome="committed",pass="local"} 2
+match_pool_claim_total{level="zone",mode="MATCH_MODE_1V1",outcome="conflict",pass="local"} 5
+match_pool_claim_total{level="zone",mode="MATCH_MODE_1V1",outcome="no_slot",pass="cross"} 3
+match_pool_claim_total{level="global",mode="MATCH_MODE_PVE_TEAM",outcome="no_node",pass="local"} 1
+# TYPE match_pool_wait_seconds histogram
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_1V1",le="5"} 20
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_1V1",le="10"} 38
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_1V1",le="20"} 40
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_1V1",le="+Inf"} 40
+match_pool_wait_seconds_sum{level="zone",mode="MATCH_MODE_1V1"} 200
+match_pool_wait_seconds_count{level="zone",mode="MATCH_MODE_1V1"} 40
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_PVE_TEAM",le="5"} 2
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_PVE_TEAM",le="10"} 2
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_PVE_TEAM",le="20"} 2
+match_pool_wait_seconds_bucket{level="zone",mode="MATCH_MODE_PVE_TEAM",le="+Inf"} 2
+match_pool_wait_seconds_sum{level="zone",mode="MATCH_MODE_PVE_TEAM"} 4
+match_pool_wait_seconds_count{level="zone",mode="MATCH_MODE_PVE_TEAM"} 2
+match_pool_wait_seconds_bucket{level="group",mode="MATCH_MODE_1V1",le="5"} 0
+match_pool_wait_seconds_bucket{level="group",mode="MATCH_MODE_1V1",le="10"} 0
+match_pool_wait_seconds_bucket{level="group",mode="MATCH_MODE_1V1",le="20"} 8
+match_pool_wait_seconds_bucket{level="group",mode="MATCH_MODE_1V1",le="+Inf"} 8
+match_pool_wait_seconds_sum{level="group",mode="MATCH_MODE_1V1"} 120
+match_pool_wait_seconds_count{level="group",mode="MATCH_MODE_1V1"} 8
+# TYPE match_pool_expired_total counter
+match_pool_expired_total{mode="MATCH_MODE_1V1"} 7
+# TYPE match_immediate_claim_total counter
+match_immediate_claim_total{mode="MATCH_MODE_PVE_SOLO",outcome="committed"} 9
+match_immediate_claim_total{mode="MATCH_MODE_PVE_SOLO",outcome="no_slot"} 1
+# TYPE match_battle_nodes gauge
+match_battle_nodes{state="open"} 3
+match_battle_nodes{state="closed"} 1
+match_battle_nodes{state="cooldown"} 1
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t18m_match.txt") -Value $fakeMatchNew -Encoding utf8
+$fakeMatchOld = @"
+# TYPE match_join_queue_total counter
+match_join_queue_total 1
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t5m_match.txt") -Value $fakeMatchOld -Encoding utf8
+
+#     - PL1:t18m_pl。leader 1;view_hold 0;index 拍 ok 120、etcd_error 2 + redis_error 1 + panic 0 → idx_err 3(writers 拍不算),
+#       view_held 无序列 → 族内存在规则打 0;
+#       会话动作 to_disconnecting 6、cas_conflict 4、pruned_stale 3 + pruned_missing 2 → pruned 5、repaired 5、
+#       audit_repaired 无序列 → 0、member_error 1 → errors 1;死 gate 0 / 0;stale_inst 2 + 1 = 3;
+#       服务端 RPC 跨两个方法 100 次、sum 150ms → 1.5ms,桶 le=1:40、le=5:100 → p99 插值到 4.9ms。
+$fakePlNew = @"
+# TYPE player_locator_reconcile_is_leader gauge
+player_locator_reconcile_is_leader 1
+# TYPE player_locator_reconcile_live_view_holding gauge
+player_locator_reconcile_live_view_holding 0
+# TYPE player_locator_reconcile_round_total counter
+player_locator_reconcile_round_total{loop="index",result="ok"} 120
+player_locator_reconcile_round_total{loop="index",result="etcd_error"} 2
+player_locator_reconcile_round_total{loop="index",result="redis_error"} 1
+player_locator_reconcile_round_total{loop="index",result="panic"} 0
+player_locator_reconcile_round_total{loop="writers",result="ok"} 60
+# TYPE player_locator_reconcile_sessions_total counter
+player_locator_reconcile_sessions_total{action="to_disconnecting"} 6
+player_locator_reconcile_sessions_total{action="cas_conflict"} 4
+player_locator_reconcile_sessions_total{action="pruned_stale"} 3
+player_locator_reconcile_sessions_total{action="pruned_missing"} 2
+player_locator_reconcile_sessions_total{action="repaired"} 5
+player_locator_reconcile_sessions_total{action="member_error"} 1
+# TYPE player_locator_reconcile_dead_gates gauge
+player_locator_reconcile_dead_gates 0
+# TYPE player_locator_reconcile_dead_gate_members gauge
+player_locator_reconcile_dead_gate_members 0
+# TYPE player_locator_stale_gate_instance_total counter
+player_locator_stale_gate_instance_total{op="set_disconnecting"} 2
+player_locator_stale_gate_instance_total{op="mark_offline"} 1
+# TYPE rpc_server_requests_duration_ms histogram
+rpc_server_requests_duration_ms_bucket{method="/player_locator.PlayerLocator/Reconnect",le="1"} 10
+rpc_server_requests_duration_ms_bucket{method="/player_locator.PlayerLocator/Reconnect",le="5"} 50
+rpc_server_requests_duration_ms_bucket{method="/player_locator.PlayerLocator/Reconnect",le="+Inf"} 50
+rpc_server_requests_duration_ms_sum{method="/player_locator.PlayerLocator/Reconnect"} 100
+rpc_server_requests_duration_ms_count{method="/player_locator.PlayerLocator/Reconnect"} 50
+rpc_server_requests_duration_ms_bucket{method="/player_locator.PlayerLocator/SetDisconnecting",le="1"} 30
+rpc_server_requests_duration_ms_bucket{method="/player_locator.PlayerLocator/SetDisconnecting",le="5"} 50
+rpc_server_requests_duration_ms_bucket{method="/player_locator.PlayerLocator/SetDisconnecting",le="+Inf"} 50
+rpc_server_requests_duration_ms_sum{method="/player_locator.PlayerLocator/SetDisconnecting"} 50
+rpc_server_requests_duration_ms_count{method="/player_locator.PlayerLocator/SetDisconnecting"} 50
+"@
+Set-Content -Path (Join-Path $snapDirForTest "t18m_pl.txt") -Value $fakePlNew -Encoding utf8
 
 #     - R1 / R2:core 在 t2m、t5m 各一份 INFO 快照,uptime 100 → 280 → 窗口 180s。
 #       total_commands_processed 1000 → 19000 → ops/s 100;cpu(sys+user)1.0 → 2.8 → 1.0%;main 0.5 → 1.4 → 0.5%;
@@ -575,14 +689,17 @@ function Assert-SectionAnyRow {
     exit 1
 }
 
-Assert-HeaderMatches -Lines $outputLines -Pattern 'bgz_n\s+bgz_avg\s+bgz_p99\s+bgz_err\s+\|.*lar_err\s*$' `
-    -Reason "L1 header must list the five login→data_service methods, four columns each"
+Assert-HeaderMatches -Lines $outputLines -Pattern 'bgz_n\s+bgz_avg\s+bgz_p99\s+bgz_err\s+\|.*lar_err\s+\|\s+bgz_fb\s*$' `
+    -Reason "L1 header must list the five login→data_service methods, four columns each, then the role-list fallback count"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'L1 Login outbound RPC' -SnapshotName 't18m_login' `
+    -Pattern '\|\s+3\s*$' `
+    -Reason "bgz_fb prints login_role_list_home_zone_fallback_total as the last column"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'L1 Login outbound RPC' -SnapshotName 't18m_login' `
     -Pattern '^\s*t18m_login\s+\|\s+100\s+3\.0ms\s+5\.0ms\s+2\s+\|\s+n/a\s+n/a\s+n/a\s+n/a\s+\|' `
     -Reason "BatchGetPlayerHomeZone: n=100, avg 3.0ms, p99 interpolated to 5.0ms, err = non-zero codes; missing methods print n/a"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'L1 Login outbound RPC' -SnapshotName 't5m_login' `
-    -Pattern '^\s*t5m_login(\s+\|(\s+n/a){4}){5}\s*$' `
-    -Reason "an old login without rpc_client_* series must print n/a everywhere"
+    -Pattern '^\s*t5m_login(\s+\|(\s+n/a){4}){5}\s+\|\s+n/a\s*$' `
+    -Reason "an old login without rpc_client_* series and without the fallback counter must print n/a everywhere"
 
 Assert-SectionRow -Lines $outputLines -SectionMarker 'L2 Login gate directory' -SnapshotName 't18m_login' `
     -Pattern '^\s*t18m_login\s+\|\s+90\s+0\s+10\s+\|\s+90\.0%\s*$' `
@@ -648,6 +765,51 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -Sna
 Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -SnapshotName 't20m' `
     -Pattern '^\s*t20m\s+\|\s+n/a\s+n/a\s+\|(\s+n/a){3}\s+\|(\s+n/a){2}\s+\|\s+10\.0ms\s+2\.0ms\s+\|\s+n/a\s+n/a\s*$' `
     -Reason "db_claim / db_save come from db_player_store_seconds{op}"
+
+# ── 匹配与 player_locator(造数见 1f,2026-11-05) ───────────────────────────────
+
+Assert-HeaderMatches -Lines $outputLines `
+    -Pattern 'owned\s+units\s+\|\s+rd_n\s+rd_avg\s+rd_p99\s+rd/int\s+\|\s+committed\s+conflict\s+no_node\s+no_slot\s+id_err\s+party_end\s+\|\s+conflict%\s+\|\s+imm_ok\s+imm_n\s+imm%\s+\|\s+expired\s+\|\s+bn_open\s+bn_all\s*$' `
+    -Reason "G1 Match pools table must keep its column order"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'G1 Match pools' -SnapshotName 't18m_match' `
+    -Pattern '^\s*t18m_match\s+\|\s+4\s+42\s+\|\s+100\s+60\.0ms\s+235\.0ms\s+0\.47\s+\|\s+50\s+5\s+1\s+3\s+0\s+0\s+\|\s+8\.5%\s+\|\s+9\s+10\s+90\.0%\s+\|\s+7\s+\|\s+3\s+5\s*$' `
+    -Reason "owned / units / round latency and p99 over the 500ms interval / each claim outcome / conflict% / immediate claims / expired / open battle nodes of all"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'G1 Match pools' -SnapshotName 't5m_match' `
+    -Pattern '^\s*t5m_match\s+\|\s+n/a\s+n/a\s+\|(\s+n/a){4}\s+\|(\s+n/a){6}\s+\|\s+n/a\s+\|(\s+n/a){3}\s+\|\s+n/a\s+\|\s+n/a\s+n/a\s*$' `
+    -Reason "a match without pool metrics must print n/a, not 0"
+
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G2 Match wait by scope level' `
+    -Pattern '^\s*t18m_match\s+\|\s+zone\s+\|\s+42\s+\|\s+42\s+4\.8s\s+10\.0s\s*$' `
+    -Reason "zone: committed summed across modes, wait buckets summed across modes, p50 / p95 interpolated"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G2 Match wait by scope level' `
+    -Pattern '^\s*t18m_match\s+\|\s+group\s+\|\s+8\s+\|\s+8\s+15\.0s\s+19\.5s\s*$' `
+    -Reason "group: its own committed count and wait percentiles"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G2 Match wait by scope level' `
+    -Pattern '^\s*t18m_match\s+\|\s+global\s+\|\s+0\s+\|\s+0\s+-\s+-\s*$' `
+    -Reason "a level without commits prints 0 when both families exist"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G2 Match wait by scope level' `
+    -Pattern '^\s*t5m_match\s+\|\s+zone\s+\|\s+n/a\s+\|(\s+n/a){3}\s*$' `
+    -Reason "an old match prints n/a for every level"
+
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G3 Match by mode' `
+    -Pattern '^\s*t18m_match\s+\|\s+MATCH_MODE_1V1\s+\|\s+48\s+8\.9%\s+\|\s+30\s+\|\s+0\s+0\s*$' `
+    -Reason "1V1: committed across levels, conflict% within the mode, units, no immediate claims"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G3 Match by mode' `
+    -Pattern '^\s*t18m_match\s+\|\s+MATCH_MODE_PVE_SOLO\s+\|\s+0\s+-\s+\|\s+0\s+\|\s+9\s+10\s*$' `
+    -Reason "a mode seen only in immediate claims: no pool claims (0 and '-'), immediate 9 / 10"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G3 Match by mode' `
+    -Pattern '^\s*t18m_match\s+\|\s+MATCH_MODE_PVE_TEAM\s+\|\s+2\s+0\.0%\s+\|\s+12\s+\|\s+0\s+0\s*$' `
+    -Reason "PVE_TEAM: 2 of 3 claims committed, no conflict"
+Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'G3 Match by mode' `
+    -Pattern '^\s*t5m_match\s+\|\s+n/a\s+\|\s+n/a\s+n/a\s+\|\s+n/a\s+\|\s+n/a\s+n/a\s*$' `
+    -Reason "an old match without any mode label prints a single n/a row"
+
+Assert-HeaderMatches -Lines $outputLines `
+    -Pattern 'leader\s+view_hold\s+\|\s+idx_ok\s+idx_err\s+idx_held\s+\|\s+to_disc\s+cas\s+pruned\s+repaired\s+audit_rep\s+errors\s+\|\s+dead_gates\s+dead_members\s+\|\s+stale_inst\s+\|\s+rpc_n\s+rpc_avg\s+rpc_p99\s*$' `
+    -Reason "PL1 player_locator table must keep its column order"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'PL1 player_locator' -SnapshotName 't18m_pl' `
+    -Pattern '^\s*t18m_pl\s+\|\s+1\s+0\s+\|\s+120\s+3\s+0\s+\|\s+6\s+4\s+5\s+5\s+0\s+1\s+\|\s+0\s+0\s+\|\s+3\s+\|\s+100\s+1\.5ms\s+4\.9ms\s*$' `
+    -Reason "index rounds ok / failed / held by the live-set gate, grouped session actions (missing values print 0), dead gates, stale reports, server RPC across methods"
 
 # ── Cleanup ─────────────────────────────────────────────────────────────
 

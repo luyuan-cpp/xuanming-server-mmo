@@ -419,7 +419,7 @@ NodeInfo HandshakeNode(uint32_t type, const std::string& uuid)
 // 服务端只接管回包；测试显式完成，避免把网络调度先后当成就绪判据。全部由 loop 线程访问。
 struct HandshakeServerState
 {
-    std::vector<NodeInfo> requests;
+    std::vector<NodeHandshakeRequest> requests;
     std::vector<RpcDoneCallback> replies;
 };
 
@@ -432,7 +432,7 @@ public:
     void NodeHandshake(::google::protobuf::RpcController*, const ::NodeHandshakeRequest* request,
                        ::NodeHandshakeResponse*, ::google::protobuf::Closure* done) override
     {
-        state_->requests.push_back(request->self_node());
+        state_->requests.push_back(*request);
         state_->replies.push_back(RpcDoneCallback::Adopt(done));
     }
 
@@ -541,7 +541,9 @@ TEST_P(RpcClientHandshakeTarget, CurrentPeerHandshakeMakesOnlyItsConnectionReady
     RunInLoopAndWait([&] {
         EXPECT_FALSE(client->IsReady()) << "服务端尚未确认，链路必须保持未就绪";
         ASSERT_EQ(handshakes_->requests.size(), 1u);
-        EXPECT_EQ(handshakes_->requests.front().node_uuid(), "local-gate");
+        EXPECT_EQ(handshakes_->requests.front().self_node().node_uuid(), "local-gate");
+        EXPECT_EQ(handshakes_->requests.front().expected_peer_uuid(), expected.node_uuid())
+            << "请求必须点名要连的对端实例，入站侧据此拒绝发给旧实例的连接";
     });
     Reply(0, expected);
     EXPECT_TRUE(WaitForCompletion(client));
@@ -590,8 +592,53 @@ TEST_F(RpcClientHandshakeLoopback, PeerRejectionCannotMakeTheLinkReady)
     EXPECT_TRUE(WaitForRequest(1));
     Reply(0, expected, kFailedToRegisterTheNode);
     EXPECT_TRUE(WaitForCompletion(client));
-    RunInLoopAndWait([&] { EXPECT_FALSE(client->IsReady()); });
+    RunInLoopAndWait([&] {
+        EXPECT_FALSE(client->IsReady());
+        // 被拒已经记了一次连续失败,这里再记一次应得 2:失败路径确实接上了退避计数。
+        EXPECT_EQ(client->RecordHandshakeFailure(), 2u) << "被拒没有计入连续失败,关闭前的退避不会拉长";
+    });
     DestroyClientAndDrain(client);
+}
+
+TEST_F(RpcClientLoopback, HandshakeFailureCountIsConsecutiveAndResetByReady)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    RunInLoopAndWait([&] {
+        EXPECT_EQ(client->RecordHandshakeFailure(), 1u);
+        EXPECT_EQ(client->RecordHandshakeFailure(), 2u);
+        ASSERT_TRUE(client->MarkReady(client->GetConnection()));
+        EXPECT_EQ(client->RecordHandshakeFailure(), 1u) << "握手成功后重新从第一次失败计";
+    });
+    DestroyClientAndDrain(client);
+}
+
+// 已建立的连接关闭后 muduo 当场重连且重置自己的退避,握手失败的退避只能由关闭前的等待提供。
+TEST(NodeHandshakeBackoff, CloseDelayDoublesFromHalfSecondAndCapsAtEightSeconds)
+{
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(0), 0.5) << "0 按第一次失败处理";
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(1), 0.5);
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(2), 1.0);
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(3), 2.0);
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(4), 4.0);
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(5), 8.0);
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(6), 8.0);
+    EXPECT_DOUBLE_EQ(NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(UINT32_MAX), 8.0);
+}
+
+// 同一地址上换了进程时,发起方指向旧实例的连接会连到新进程;入站侧只认点名自己的握手。
+TEST(NodeHandshakeTarget, InboundHandshakeMustNameThisInstance)
+{
+    NodeHandshakeRequest request;
+    request.mutable_self_node()->set_node_type(common::base::GateNodeService);
+    request.mutable_self_node()->set_node_uuid("gate-1");
+
+    EXPECT_FALSE(NodeHandshakeManager::IsAddressedTo(request, "scene-new")) << "未点名一律拒绝";
+    request.set_expected_peer_uuid("scene-old");
+    EXPECT_FALSE(NodeHandshakeManager::IsAddressedTo(request, "scene-new")) << "发给旧实例的连接不得登记";
+    request.set_expected_peer_uuid("scene-new");
+    EXPECT_TRUE(NodeHandshakeManager::IsAddressedTo(request, "scene-new"));
+    request.clear_expected_peer_uuid();
+    EXPECT_FALSE(NodeHandshakeManager::IsAddressedTo(request, "")) << "两边都空也不算点名";
 }
 
 TEST_F(RpcClientHandshakeLoopback, BusinessCallsBeforeHandshakeFailExactlyOnceWithoutSending)

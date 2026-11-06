@@ -63,7 +63,7 @@ func (f *fakeKV) getCount() int {
 func getResp(rev int64, kvs ...nodeEvent) *clientv3.GetResponse {
 	resp := &clientv3.GetResponse{Header: &etcdserverpb.ResponseHeader{Revision: rev}}
 	for _, kv := range kvs {
-		resp.Kvs = append(resp.Kvs, &mvccpb.KeyValue{Key: []byte(kv.key), Value: kv.value})
+		resp.Kvs = append(resp.Kvs, &mvccpb.KeyValue{Key: []byte(kv.key), Value: kv.value, ModRevision: kv.modRev})
 	}
 	return resp
 }
@@ -357,6 +357,10 @@ func TestNodeWatcher_NodesFallsBackToEtcdWithCallerCtx(t *testing.T) {
 			if err != nil || fmt.Sprint(nodeIDs(nodes)) != "[1]" {
 				t.Fatalf("Nodes = (%v, %v), want [1] read from etcd", nodeIDs(nodes), err)
 			}
+			// 直读没有历史可比:判不了停写,不能把直读到的记录标成 Stale。
+			if got := staleIDs(nodes); len(got) != 0 {
+				t.Fatalf("stale nodes on the direct-read fallback = %v, want none", got)
+			}
 			kv.mu.Lock()
 			defer kv.mu.Unlock()
 			if len(kv.ctxs) != 1 || kv.ctxs[0].Value(ctxMarker{}) != "caller" {
@@ -366,5 +370,57 @@ func TestNodeWatcher_NodesFallsBackToEtcdWithCallerCtx(t *testing.T) {
 				t.Fatal("the fallback read must be bounded by ServiceDiscoveryTimeout")
 			}
 		})
+	}
+}
+
+func putEventRev(key string, nodeID, playerCount uint32, modRev int64) *clientv3.Event {
+	ev := putEvent(key, nodeID, playerCount)
+	ev.Kv.ModRevision = modRev
+	return ev
+}
+
+// 停写判定要靠全量同步与 watch 事件都把 ModRevision 带进镜像。gate 2 在流上写过一次(ModRevision 10)之后卡住,
+// 之后每次重同步拿到的都是 10:只有 watch 路径记下了 10、全量同步路径也带着 10,它的停写时长才不会被重同步清零,
+// 跨过 nodeDataStaleAfter 后 Nodes 标它 Stale。gate 1 每次重同步都是新的 ModRevision,不受影响。
+func TestNodeWatcher_ModRevisionReachesTheMirror(t *testing.T) {
+	g1, g2 := testPrefix+"node_id/1", testPrefix+"node_id/2"
+	kv := newFakeKV(
+		getResp(10, putRev(g1, 1, 10, 9), putRev(g2, 2, 20, 8)),
+		getResp(21, putRev(g1, 1, 10, 21), putRev(g2, 2, 20, 10)),
+		getResp(31, putRev(g1, 1, 10, 31), putRev(g2, 2, 20, 10)),
+		getResp(41, putRev(g1, 1, 10, 41), putRev(g2, 2, 20, 10)),
+	)
+	h := newWatchHarness(t, kv)
+	watchers := []*fakeWatcher{h.addWatcher(), h.addWatcher(), h.addWatcher(), h.addWatcher()}
+	h.start(t)
+
+	for round, w := range watchers {
+		waitSignal(t, kv.calls, fmt.Sprintf("full sync %d", round+1))
+		h.waitWatchEstablished(t, w)
+		if round == len(watchers)-1 {
+			break
+		}
+		if round == 0 {
+			// gate 2 最后一次写记录:之后它就卡住了。
+			send(t, w, clientv3.WatchResponse{Events: []*clientv3.Event{putEventRev(g2, 2, 20, 10), putEventRev(g1, 1, 10, 11)}})
+		}
+		// 静默检查触发下一次重同步(每轮 13s,三轮之后 gate 2 已 39s 没写)。
+		h.clk.advance(cacheResyncAfter + time.Second)
+		select {
+		case h.timers.tick <- time.Time{}:
+		case <-time.After(waitBound):
+			t.Fatal("watch loop is not ticking")
+		}
+	}
+
+	nodes, err := h.nw.Nodes(context.Background())
+	if err != nil || fmt.Sprint(nodeIDs(nodes)) != "[1 2]" {
+		t.Fatalf("Nodes = (%v, %v), want [1 2] from the mirror", nodeIDs(nodes), err)
+	}
+	if got := fmt.Sprint(staleIDs(nodes)); got != "[2]" {
+		t.Fatalf("stale nodes = %s, want [2]: gate 2 has rewritten nothing since ModRevision 10", got)
+	}
+	if n := kv.getCount(); n != 4 {
+		t.Fatalf("etcd Get calls = %d, want 4 (three silence-triggered resyncs, the read served from the mirror)", n)
 	}
 }

@@ -275,8 +275,12 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 	}
 	if !release.verdict.deletes() {
 		// 持有节点在当前代从未登记成功(拿不出资格,§3.3 残余 1)、过了宽限仍没有释放证据时,由本服务带围栏撤销
-		// (location-release-binding.md §17,unqualified_holder_revoke.go)。撤销成功即清理完成;否则照常保留、请释放、回拒。
-		if l.revokeUnqualifiedHolderOnLeave(in, currentLoc, raw, tag, currentRole.OwnerRevision, release) {
+		// (location-release-binding.md §17,unqualified_holder_revoke.go)。location 没了即清理完成,收尾没做完回错误让清理重试;
+		// 没撤销就照常保留、请释放、回拒。
+		if done, err := l.revokeUnqualifiedHolderOnLeave(in, currentLoc, raw, tag, currentRole.OwnerRevision, release); done {
+			if err != nil {
+				return nil, err
+			}
 			return &base.Empty{}, nil
 		}
 		return l.keepLocationUntilReleased(in, currentLoc, release)
@@ -328,11 +332,12 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 
 // holderReleaseJudgement 是一次 LeaveScene 的释放判定结果。
 type holderReleaseJudgement struct {
-	verdict leaveReleaseVerdict
-	epoch   uint64        // 当前代 E(leaveReleaseEpoch)
-	zoneID  uint32        // 持有节点所在 zone(派发释放用);拿不到为 0
-	waited  time.Duration // 仅等待诊断，不参与授权删除
-	budget  time.Duration
+	verdict       leaveReleaseVerdict
+	epoch         uint64        // 当前代 E(leaveReleaseEpoch)
+	observedEpoch uint64        // owner_epoch 键原值,缺键为 0;无资格撤销只认它(unqualified_holder_revoke.go)
+	zoneID        uint32        // 持有节点所在 zone(派发释放用);拿不到为 0
+	waited        time.Duration // 仅等待诊断，不参与授权删除
+	budget        time.Duration
 }
 
 // pendingVerdictFor:没拿到证据时按离场身份选 pending(可证明属于离场会话,发释放)或 pending_unproven(只等不发,R3)。
@@ -361,6 +366,7 @@ func (l *LeaveSceneLogic) judgeHolderRelease(in *scene_manager.LeaveSceneRequest
 			return j, fmt.Errorf("read owner_epoch of player %d: %w", in.PlayerId, err)
 		}
 		j.epoch = leaveReleaseEpoch(observedEpoch, loc)
+		j.observedEpoch = observedEpoch
 		facts.epoch = j.epoch
 		facts.noHolder = loc.GetNodeId() == ""
 		j.zoneID = loc.GetZoneId()

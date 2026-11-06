@@ -13,14 +13,19 @@ import (
 	"shared/handofffence"
 )
 
-// GO-3(cross-zone-scene-travel.md §13.10)判「持有进程已被顶替」的前提是三件跨语言的事实,这里把它们钉住:
+// GO-3(cross-zone-scene-travel.md §13.10)判「持有进程已被顶替」的前提是四件跨语言的事实,这里把它们钉住:
 //  1. 交接资格存在 handoff hash 的 handoff_fence 字段(C++ handoff_sql_barrier::kFenceField);
 //  2. 资格原文第二段写的是本进程的 NodeInfo.node_uuid(role_admission_system.cpp 的 ReadLocalNode 取
 //     GetNodeInfo().node_uuid(),登记候选按 {ownerEpoch, local.instanceId, ...} 编码);
-//  3. 同一个 node_uuid 以 nodeUuid 出现在 etcd 注册 JSON 里(NodeInfo 的 MessageToJsonString,字段 node_uuid)。
+//  3. 同一个 node_uuid 以 nodeUuid 出现在 etcd 注册 JSON 里(NodeInfo 的 MessageToJsonString,字段 node_uuid),
+//     本副本的注册表镜像按它记 (zone,node) 的现任实例;
+//  4. etcd 复核读的 C++ 节点号占位键是 sceneNodeAllocationPrefix 下的键,值是本进程 node_uuid 原文
+//     (etcd_manager.cpp GetServiceName / MakeNodeAllocationPrefix / RegisterNodeService)。
 //
-// 任何一条变了(换字段名、实例号改用别的来源、注册不再带 UUID),判定会静默退化成「永远没有证据」或误判,
-// 所以改动时这里先失败。找不到 C++ 源码(只拷了 go/ 的构建环境)时跳过。
+// 任何一条变了(换字段名、实例号改用别的来源、注册不再带 UUID、占位键换了前缀或值),判定会静默退化成
+// 「永远没有证据」或误判。第 4 条变了最危险:复核读到的实例集合恒为空,镜像滞后时本该由复核兜住的「持有者
+// 其实刚注册」会被判成「已消失」,屏障一过就接管一个活着的持有者。所以改动时这里先失败。
+// 找不到 C++ 源码(只拷了 go/ 的构建环境)时跳过。
 func TestOwnerReplacedEvidenceMatchesCppFenceStamp(t *testing.T) {
 	read := func(rel string) string {
 		t.Helper()
@@ -44,4 +49,20 @@ func TestOwnerReplacedEvidenceMatchesCppFenceStamp(t *testing.T) {
 	common := read("proto/common/base/common.proto")
 	require.Regexp(t, regexp.MustCompile(`(?m)^\s*string\s+node_uuid\s*=\s*8\s*;`), common,
 		"NodeInfo.node_uuid 变了:etcd 注册 JSON 的 nodeUuid 不再是进程实例号")
+
+	// 第 4 条:占位键 = eNodeType 名 + ".rpc" + "/allocated/node_type/<T>/node_id/<N>",值 = node_uuid 原文。
+	require.Equal(t, "SceneNodeService.rpc/allocated/", sceneNodeAllocationPrefix,
+		"Go 侧占位键前缀变了,要与 C++ MakeNodeAllocationPrefix 一起改")
+	nodeTypes := read("proto/common/base/node.proto")
+	require.Regexp(t, regexp.MustCompile(`(?s)enum\s+eNodeType\s*\{[^}]*\bSceneNodeService\s*=\s*\d+\s*;`), nodeTypes,
+		"eNodeType 里没有 SceneNodeService:C++ GetServiceName 拼出的服务名不再是 SceneNodeService")
+	etcdManager := read("cpp/libs/engine/core/node/system/etcd/etcd_manager.cpp")
+	require.Regexp(t, regexp.MustCompile(`eNodeType_Name\(type\)\s*\+\s*"\.rpc"`), etcdManager,
+		"C++ GetServiceName 不再是「eNodeType 名 + .rpc」:占位键前缀与 sceneNodeAllocationPrefix 对不上")
+	require.Regexp(t, regexp.MustCompile(`GetServiceName\(nodeType\)\s*\+\s*"/allocated/node_type/"`), etcdManager,
+		"C++ MakeNodeAllocationPrefix 不再是「服务名 + /allocated/node_type/」:etcd 复核会读空")
+	require.Regexp(t, regexp.MustCompile(`EtcdHelper::PutIfAbsent\(allocKey,\s*info\.node_uuid\(\)`), etcdManager,
+		"首次注册写占位键的值不再是 node_uuid 原文:复核按值认实例会认不出")
+	require.Regexp(t, regexp.MustCompile(`EtcdHelper::PutIfAbsentOrOwned\(allocKey,\s*info\.node_uuid\(\)`), etcdManager,
+		"失租重注册写占位键的值不再是 node_uuid 原文:复核按值认实例会认不出")
 }

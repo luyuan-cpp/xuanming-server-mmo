@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -53,6 +54,8 @@ struct TableStruct_proto_2fcommon_2fbase_2fcommon_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fcommon_2eproto;
 }  // extern "C"
+enum NodeAdmission : int;
+extern const uint32_t NodeAdmission_internal_data_[];
 class EndpointComp;
 struct EndpointCompGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -79,9 +82,55 @@ extern const NodeInfoGlobalsTypeInternal NodeInfo_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::NodeAdmission_internal_data_>
+    internal::EnumTraitsImpl::value<::NodeAdmission>;
 }  // namespace protobuf
 }  // namespace google
 
+enum NodeAdmission : int {
+  NODE_ADMISSION_UNSPECIFIED = 0,
+  NODE_ADMISSION_OPEN = 1,
+  NODE_ADMISSION_CLOSED = 2,
+  NodeAdmission_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  NodeAdmission_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t NodeAdmission_internal_data_[];
+inline constexpr NodeAdmission NodeAdmission_MIN =
+    static_cast<NodeAdmission>(0);
+inline constexpr NodeAdmission NodeAdmission_MAX =
+    static_cast<NodeAdmission>(2);
+[[nodiscard]] inline bool NodeAdmission_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int NodeAdmission_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+NodeAdmission_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(NodeAdmission) {
+  return NodeAdmission_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& NodeAdmission_Name(T value) {
+  static_assert(::std::is_same<T, NodeAdmission>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to NodeAdmission_Name().");
+  return NodeAdmission_Name(static_cast<NodeAdmission>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& NodeAdmission_Name(NodeAdmission value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<NodeAdmission_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool NodeAdmission_Parse(
+    ::absl::string_view name, NodeAdmission* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<NodeAdmission>(NodeAdmission_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -673,6 +722,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeInfo final : public ::google::p
   // accessors -------------------------------------------------------
   enum : int {
     kNodeUuidFieldNumber = 8,
+    kReleaseTrackFieldNumber = 15,
     kEndpointFieldNumber = 5,
     kGrpcEndpointFieldNumber = 10,
     kClientEndpointFieldNumber = 11,
@@ -684,6 +734,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeInfo final : public ::google::p
     kProtocolTypeFieldNumber = 7,
     kPlayerCountFieldNumber = 9,
     kPhysicalRegionFieldNumber = 12,
+    kMaxConnectionsFieldNumber = 13,
+    kAdmissionFieldNumber = 14,
   };
   // string node_uuid = 8;
   void clear_node_uuid() ;
@@ -698,6 +750,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeInfo final : public ::google::p
   const ::std::string& _internal_node_uuid() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_node_uuid(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_node_uuid();
+
+  public:
+  // string release_track = 15;
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
 
   public:
   // .EndpointComp endpoint = 5;
@@ -828,12 +895,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeInfo final : public ::google::p
   void _internal_set_physical_region(::uint32_t value);
 
   public:
+  // uint32 max_connections = 13;
+  void clear_max_connections() ;
+  [[nodiscard]] ::uint32_t max_connections() const;
+  void set_max_connections(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_connections() const;
+  void _internal_set_max_connections(::uint32_t value);
+
+  public:
+  // .NodeAdmission admission = 14;
+  void clear_admission() ;
+  [[nodiscard]] ::NodeAdmission admission() const;
+  void set_admission(::NodeAdmission value);
+
+  private:
+  ::NodeAdmission _internal_admission() const;
+  void _internal_set_admission(::NodeAdmission value);
+
+  public:
   // @@protoc_insertion_point(class_scope:NodeInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
-                          3, 34,
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          3, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -862,6 +949,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeInfo final : public ::google::p
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr node_uuid_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::EndpointComp* PROTOBUF_NULLABLE endpoint_;
     ::EndpointComp* PROTOBUF_NULLABLE grpc_endpoint_;
     ::EndpointComp* PROTOBUF_NULLABLE client_endpoint_;
@@ -873,6 +961,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeInfo final : public ::google::p
     ::uint32_t protocol_type_;
     ::uint32_t player_count_;
     ::uint32_t physical_region_;
+    ::uint32_t max_connections_;
+    int admission_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -991,7 +1081,7 @@ inline void EndpointComp::_internal_set_port(::uint32_t value) {
 inline void NodeInfo::clear_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t NodeInfo::node_id() const {
   // @@protoc_insertion_point(field_get:NodeInfo.node_id)
@@ -999,7 +1089,7 @@ inline ::uint32_t NodeInfo::node_id() const {
 }
 inline void NodeInfo::set_node_id(::uint32_t value) {
   _internal_set_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:NodeInfo.node_id)
 }
 inline ::uint32_t NodeInfo::_internal_node_id() const {
@@ -1015,7 +1105,7 @@ inline void NodeInfo::_internal_set_node_id(::uint32_t value) {
 inline void NodeInfo::clear_node_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t NodeInfo::node_type() const {
   // @@protoc_insertion_point(field_get:NodeInfo.node_type)
@@ -1023,7 +1113,7 @@ inline ::uint32_t NodeInfo::node_type() const {
 }
 inline void NodeInfo::set_node_type(::uint32_t value) {
   _internal_set_node_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:NodeInfo.node_type)
 }
 inline ::uint32_t NodeInfo::_internal_node_type() const {
@@ -1039,7 +1129,7 @@ inline void NodeInfo::_internal_set_node_type(::uint32_t value) {
 inline void NodeInfo::clear_launch_time() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.launch_time_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t NodeInfo::launch_time() const {
   // @@protoc_insertion_point(field_get:NodeInfo.launch_time)
@@ -1047,7 +1137,7 @@ inline ::uint64_t NodeInfo::launch_time() const {
 }
 inline void NodeInfo::set_launch_time(::uint64_t value) {
   _internal_set_launch_time(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:NodeInfo.launch_time)
 }
 inline ::uint64_t NodeInfo::_internal_launch_time() const {
@@ -1063,7 +1153,7 @@ inline void NodeInfo::_internal_set_launch_time(::uint64_t value) {
 inline void NodeInfo::clear_scene_node_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_node_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t NodeInfo::scene_node_type() const {
   // @@protoc_insertion_point(field_get:NodeInfo.scene_node_type)
@@ -1071,7 +1161,7 @@ inline ::uint32_t NodeInfo::scene_node_type() const {
 }
 inline void NodeInfo::set_scene_node_type(::uint32_t value) {
   _internal_set_scene_node_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:NodeInfo.scene_node_type)
 }
 inline ::uint32_t NodeInfo::_internal_scene_node_type() const {
@@ -1085,14 +1175,14 @@ inline void NodeInfo::_internal_set_scene_node_type(::uint32_t value) {
 
 // .EndpointComp endpoint = 5;
 inline bool NodeInfo::has_endpoint() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.endpoint_ != nullptr);
   return value;
 }
 inline void NodeInfo::clear_endpoint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.endpoint_ != nullptr) _impl_.endpoint_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::EndpointComp& NodeInfo::_internal_endpoint() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1111,16 +1201,16 @@ inline void NodeInfo::unsafe_arena_set_allocated_endpoint(
   }
   _impl_.endpoint_ = reinterpret_cast<::EndpointComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:NodeInfo.endpoint)
 }
 inline ::EndpointComp* PROTOBUF_NULLABLE NodeInfo::release_endpoint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::EndpointComp* released = _impl_.endpoint_;
   _impl_.endpoint_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -1140,7 +1230,7 @@ inline ::EndpointComp* PROTOBUF_NULLABLE NodeInfo::unsafe_arena_release_endpoint
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:NodeInfo.endpoint)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::EndpointComp* temp = _impl_.endpoint_;
   _impl_.endpoint_ = nullptr;
   return temp;
@@ -1155,7 +1245,7 @@ inline ::EndpointComp* PROTOBUF_NONNULL NodeInfo::_internal_mutable_endpoint() {
 }
 inline ::EndpointComp* PROTOBUF_NONNULL NodeInfo::mutable_endpoint()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::EndpointComp* _msg = _internal_mutable_endpoint();
   // @@protoc_insertion_point(field_mutable:NodeInfo.endpoint)
   return _msg;
@@ -1172,9 +1262,9 @@ inline void NodeInfo::set_allocated_endpoint(::EndpointComp* PROTOBUF_NULLABLE v
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.endpoint_ = reinterpret_cast<::EndpointComp*>(value);
@@ -1185,7 +1275,7 @@ inline void NodeInfo::set_allocated_endpoint(::EndpointComp* PROTOBUF_NULLABLE v
 inline void NodeInfo::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t NodeInfo::zone_id() const {
   // @@protoc_insertion_point(field_get:NodeInfo.zone_id)
@@ -1193,7 +1283,7 @@ inline ::uint32_t NodeInfo::zone_id() const {
 }
 inline void NodeInfo::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:NodeInfo.zone_id)
 }
 inline ::uint32_t NodeInfo::_internal_zone_id() const {
@@ -1209,7 +1299,7 @@ inline void NodeInfo::_internal_set_zone_id(::uint32_t value) {
 inline void NodeInfo::clear_protocol_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.protocol_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t NodeInfo::protocol_type() const {
   // @@protoc_insertion_point(field_get:NodeInfo.protocol_type)
@@ -1217,7 +1307,7 @@ inline ::uint32_t NodeInfo::protocol_type() const {
 }
 inline void NodeInfo::set_protocol_type(::uint32_t value) {
   _internal_set_protocol_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:NodeInfo.protocol_type)
 }
 inline ::uint32_t NodeInfo::_internal_protocol_type() const {
@@ -1297,7 +1387,7 @@ inline void NodeInfo::set_allocated_node_uuid(::std::string* PROTOBUF_NULLABLE v
 inline void NodeInfo::clear_player_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t NodeInfo::player_count() const {
   // @@protoc_insertion_point(field_get:NodeInfo.player_count)
@@ -1305,7 +1395,7 @@ inline ::uint32_t NodeInfo::player_count() const {
 }
 inline void NodeInfo::set_player_count(::uint32_t value) {
   _internal_set_player_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:NodeInfo.player_count)
 }
 inline ::uint32_t NodeInfo::_internal_player_count() const {
@@ -1319,14 +1409,14 @@ inline void NodeInfo::_internal_set_player_count(::uint32_t value) {
 
 // .EndpointComp grpc_endpoint = 10;
 inline bool NodeInfo::has_grpc_endpoint() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.grpc_endpoint_ != nullptr);
   return value;
 }
 inline void NodeInfo::clear_grpc_endpoint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.grpc_endpoint_ != nullptr) _impl_.grpc_endpoint_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::EndpointComp& NodeInfo::_internal_grpc_endpoint() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1345,16 +1435,16 @@ inline void NodeInfo::unsafe_arena_set_allocated_grpc_endpoint(
   }
   _impl_.grpc_endpoint_ = reinterpret_cast<::EndpointComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:NodeInfo.grpc_endpoint)
 }
 inline ::EndpointComp* PROTOBUF_NULLABLE NodeInfo::release_grpc_endpoint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::EndpointComp* released = _impl_.grpc_endpoint_;
   _impl_.grpc_endpoint_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -1374,7 +1464,7 @@ inline ::EndpointComp* PROTOBUF_NULLABLE NodeInfo::unsafe_arena_release_grpc_end
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:NodeInfo.grpc_endpoint)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::EndpointComp* temp = _impl_.grpc_endpoint_;
   _impl_.grpc_endpoint_ = nullptr;
   return temp;
@@ -1389,7 +1479,7 @@ inline ::EndpointComp* PROTOBUF_NONNULL NodeInfo::_internal_mutable_grpc_endpoin
 }
 inline ::EndpointComp* PROTOBUF_NONNULL NodeInfo::mutable_grpc_endpoint()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::EndpointComp* _msg = _internal_mutable_grpc_endpoint();
   // @@protoc_insertion_point(field_mutable:NodeInfo.grpc_endpoint)
   return _msg;
@@ -1406,9 +1496,9 @@ inline void NodeInfo::set_allocated_grpc_endpoint(::EndpointComp* PROTOBUF_NULLA
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.grpc_endpoint_ = reinterpret_cast<::EndpointComp*>(value);
@@ -1417,14 +1507,14 @@ inline void NodeInfo::set_allocated_grpc_endpoint(::EndpointComp* PROTOBUF_NULLA
 
 // .EndpointComp client_endpoint = 11;
 inline bool NodeInfo::has_client_endpoint() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
   PROTOBUF_ASSUME(!value || _impl_.client_endpoint_ != nullptr);
   return value;
 }
 inline void NodeInfo::clear_client_endpoint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.client_endpoint_ != nullptr) _impl_.client_endpoint_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::EndpointComp& NodeInfo::_internal_client_endpoint() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1443,16 +1533,16 @@ inline void NodeInfo::unsafe_arena_set_allocated_client_endpoint(
   }
   _impl_.client_endpoint_ = reinterpret_cast<::EndpointComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:NodeInfo.client_endpoint)
 }
 inline ::EndpointComp* PROTOBUF_NULLABLE NodeInfo::release_client_endpoint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::EndpointComp* released = _impl_.client_endpoint_;
   _impl_.client_endpoint_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -1472,7 +1562,7 @@ inline ::EndpointComp* PROTOBUF_NULLABLE NodeInfo::unsafe_arena_release_client_e
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:NodeInfo.client_endpoint)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::EndpointComp* temp = _impl_.client_endpoint_;
   _impl_.client_endpoint_ = nullptr;
   return temp;
@@ -1487,7 +1577,7 @@ inline ::EndpointComp* PROTOBUF_NONNULL NodeInfo::_internal_mutable_client_endpo
 }
 inline ::EndpointComp* PROTOBUF_NONNULL NodeInfo::mutable_client_endpoint()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::EndpointComp* _msg = _internal_mutable_client_endpoint();
   // @@protoc_insertion_point(field_mutable:NodeInfo.client_endpoint)
   return _msg;
@@ -1504,9 +1594,9 @@ inline void NodeInfo::set_allocated_client_endpoint(::EndpointComp* PROTOBUF_NUL
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
 
   _impl_.client_endpoint_ = reinterpret_cast<::EndpointComp*>(value);
@@ -1517,7 +1607,7 @@ inline void NodeInfo::set_allocated_client_endpoint(::EndpointComp* PROTOBUF_NUL
 inline void NodeInfo::clear_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t NodeInfo::physical_region() const {
   // @@protoc_insertion_point(field_get:NodeInfo.physical_region)
@@ -1525,7 +1615,7 @@ inline ::uint32_t NodeInfo::physical_region() const {
 }
 inline void NodeInfo::set_physical_region(::uint32_t value) {
   _internal_set_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:NodeInfo.physical_region)
 }
 inline ::uint32_t NodeInfo::_internal_physical_region() const {
@@ -1535,6 +1625,118 @@ inline ::uint32_t NodeInfo::_internal_physical_region() const {
 inline void NodeInfo::_internal_set_physical_region(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_region_ = value;
+}
+
+// uint32 max_connections = 13;
+inline void NodeInfo::clear_max_connections() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_connections_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t NodeInfo::max_connections() const {
+  // @@protoc_insertion_point(field_get:NodeInfo.max_connections)
+  return _internal_max_connections();
+}
+inline void NodeInfo::set_max_connections(::uint32_t value) {
+  _internal_set_max_connections(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:NodeInfo.max_connections)
+}
+inline ::uint32_t NodeInfo::_internal_max_connections() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_connections_;
+}
+inline void NodeInfo::_internal_set_max_connections(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_connections_ = value;
+}
+
+// .NodeAdmission admission = 14;
+inline void NodeInfo::clear_admission() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::NodeAdmission NodeInfo::admission() const {
+  // @@protoc_insertion_point(field_get:NodeInfo.admission)
+  return _internal_admission();
+}
+inline void NodeInfo::set_admission(::NodeAdmission value) {
+  _internal_set_admission(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:NodeInfo.admission)
+}
+inline ::NodeAdmission NodeInfo::_internal_admission() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::NodeAdmission>(_impl_.admission_);
+}
+inline void NodeInfo::_internal_set_admission(::NodeAdmission value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.admission_ = value;
+}
+
+// string release_track = 15;
+inline void NodeInfo::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& NodeInfo::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:NodeInfo.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void NodeInfo::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:NodeInfo.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL NodeInfo::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:NodeInfo.release_track)
+  return _s;
+}
+inline const ::std::string& NodeInfo::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void NodeInfo::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL NodeInfo::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE NodeInfo::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:NodeInfo.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void NodeInfo::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:NodeInfo.release_track)
 }
 
 // -------------------------------------------------------------------
@@ -1635,6 +1837,19 @@ inline void NetworkAddress::_internal_set_port(::uint32_t value) {
 
 // @@protoc_insertion_point(namespace_scope)
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::NodeAdmission> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::NodeAdmission>() {
+  return ::NodeAdmission_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

@@ -140,10 +140,14 @@ local function recordClaim(reply)
 end
 `
 
-// 三段认领脚本的应答格式相同,由 parseSceneClaimReply 解:{状态, nodeId, agonesGs, 成员...}。
+// 三段认领脚本的应答格式相同,由 parseSceneClaimReply 解:{状态, nodeId, agonesGs, 镜像源, 镜像标记, 成员...}。
 // 状态是 'claimed'、'stale'(比对落空,一个键都没动)或 'busy'(场景里有人,只有空闲回收脚本会回)。
 // 格式统一是因为 SceneClaimTokens 按场景记 token:空闲回收和 force 都可能接手同一个结局未知的认领,
 // 接手的一方拿到的快照要能照常做完副作用。
+//
+// 镜像源与镜像标记也必须在脚本里读、随快照返回(2026-11-05):接手发生在第一次执行之后,那时
+// scene:{id}:source 与 scene:{id}:mirror 已经删了,调用方再读只会读到空,镜像不从源的子集合里摘掉,
+// 源频道的 channelHasMirrors 恒真、永远缩不了容。
 
 // luaAtomicDestroyInstance 是空闲回收的认领脚本:
 //  1. 场景里有人:把空闲时钟重置成 ARGV[4],一个键都不删,回 'busy'。重置放在脚本里,并发销毁之后不会把
@@ -169,17 +173,19 @@ end
 const luaAtomicDestroyInstance = luaSceneClaimPrelude + `
 if redis.call('SCARD', KEYS[2]) > 0 then
     redis.call('ZADD', KEYS[3], 'XX', ARGV[4], ARGV[1])
-    return {'busy', '', ''}
+    return {'busy', '', '', '', ''}
 end
 local nodeId = redis.call('GET', KEYS[1])
 local agonesGs = redis.call('GET', KEYS[7])
+local source = redis.call('GET', KEYS[5])
+local mirror = redis.call('GET', KEYS[4])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
-return recordClaim({'claimed', nodeId or '', agonesGs or ''})
+return recordClaim({'claimed', nodeId or '', agonesGs or '', source or '', mirror or ''})
 `
 
 // luaAtomicDestroyInstanceForce 是 luaAtomicDestroyInstance 的 force 版:不做人数守卫,认领以映射存在为前提;
-// 回 'claimed' 时带抹除前的 nodeId、agonesGs 和成员。读与 DEL 在同一脚本里原子执行,
+// 回 'claimed' 时带抹除前的 nodeId、agonesGs、镜像源、镜像标记和成员。读与 DEL 在同一脚本里原子执行,
 // 并发的销毁(空闲回收的非 force 脚本、explicit / 级联 / 收尾的 force 脚本,或领导者降级
 // 窗口里的新旧领导者)只有第一个能认领 —— 计数减法 / Agones 名额归还 / 镜像级联
 // 这些副作用因此恰好执行一次,不双减计数、不双还名额。
@@ -204,25 +210,27 @@ return recordClaim({'claimed', nodeId or '', agonesGs or ''})
 const luaAtomicDestroyInstanceForce = luaSceneClaimPrelude + `
 local nodeId = redis.call('GET', KEYS[1])
 if ARGV[4] ~= '' and nodeId ~= ARGV[4] then
-    return {'stale', '', ''}
+    return {'stale', '', '', '', ''}
 end
 if ARGV[5] == 'absent' then
     if nodeId then
-        return {'stale', '', ''}
+        return {'stale', '', '', '', ''}
     end
 elseif not nodeId then
-    return {'stale', '', ''}
+    return {'stale', '', '', '', ''}
 end
 local agonesGs = redis.call('GET', KEYS[7])
+local source = redis.call('GET', KEYS[5])
+local mirror = redis.call('GET', KEYS[4])
 local members = redis.call('SMEMBERS', KEYS[2])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
 for i = 9, #KEYS do
     redis.call('SREM', KEYS[i], ARGV[1])
 end
-local out = {'claimed', nodeId or '', agonesGs or ''}
+local out = {'claimed', nodeId or '', agonesGs or '', source or '', mirror or ''}
 for i = 1, #members do
-    out[i + 3] = members[i]
+    out[i + 5] = members[i]
 end
 return recordClaim(out)
 `
@@ -238,9 +246,11 @@ return recordClaim(out)
 // ARGV[1] = sceneId,ARGV[2..3] 见 luaSceneClaimPrelude,ARGV[4] = 这次分配的节点。
 const luaRollbackInstanceAllocation = luaSceneClaimPrelude + `
 if redis.call('GET', KEYS[1]) ~= ARGV[4] then
-    return {'stale', '', ''}
+    return {'stale', '', '', '', ''}
 end
 local agonesGs = redis.call('GET', KEYS[7])
+local source = redis.call('GET', KEYS[5])
+local mirror = redis.call('GET', KEYS[4])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
 redis.call('SREM', KEYS[9], ARGV[1])
@@ -248,22 +258,20 @@ redis.call('DECR', KEYS[10])
 if KEYS[11] then
     redis.call('SREM', KEYS[11], ARGV[1])
 end
-return recordClaim({'claimed', ARGV[4], agonesGs or ''})
+return recordClaim({'claimed', ARGV[4], agonesGs or '', source or '', mirror or ''})
 `
 
-// AtomicDestroyForce 原子认领并抹掉一个场景的全部 Redis 键(不看人数)。
-// 返回抹除前的 (nodeId, agonesGs, members)。三者全空说明别的进程
-// 已抢先抹掉 —— 调用方必须跳过一切副作用(计数、归还、级联、RPC)。
+// AtomicDestroyForce 原子认领并抹掉一个场景的全部 Redis 键(不看人数),返回抹除前的快照。
+// Claimed=false 说明别的进程已抢先抹掉,或属主已不是 expectedOwner —— 调用方必须跳过一切副作用
+// (计数、归还、级联、RPC)。
 //
-// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才抹;不等(含映射已不存在)时什么都不动,
-// 返回值同样全空。认领成功时返回的 nodeId 必然等于 expectedOwner,所以调用方仍按「全空即未认领」判断。
-// 空串表示不比对。
-func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (string, string, []string, error) {
-	claim, err := evalSceneClaim(svcCtx, sceneId, luaAtomicDestroyInstanceForce, sceneClaimKeys(zoneId, sceneId), expectedOwner)
-	if err != nil {
-		return "", "", nil, err
-	}
-	return claim.NodeID, claim.AgonesGs, claim.Members, nil
+// expectedOwner 非空时只在 scene:{id}:node 仍等于它时才抹;不等(含映射已不存在)时什么都不动。
+// 空串表示不比对,但映射必须还在。
+//
+// 是否认领只看 Claimed,不看 NodeID 是否为空(2026-11-05):本进程接手结局未知的认领时(见 evalSceneClaim),
+// 回放的可能是空闲回收清扫残留或世界频道 absent 认领的快照,那两种认领成功时 NodeID 都为空。
+func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (sceneClaim, error) {
+	return evalSceneClaim(svcCtx, sceneId, luaAtomicDestroyInstanceForce, sceneClaimKeys(zoneId, sceneId), expectedOwner)
 }
 
 // sceneClaimKeys 是认领脚本的 KEYS[1..8]:一个场景在 Redis 里的全部状态键、zone 的 active instances 集合
@@ -282,31 +290,42 @@ func sceneClaimKeys(zoneId uint32, sceneId uint64) []string {
 }
 
 // sceneClaim 是认领脚本的应答。Claimed=false 时其余字段都为空:比对落空,或场景里有人(Busy)。
-// Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在)。
+// Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在)。调用方的副作用一律以这些值为准,
+// 不用认领前自己读的:接手回放时那些键早已删掉。
+// Source 是镜像源 scene_id 的十进制(不是镜像时为空),MirrorFlag 是 scene:{id}:mirror 的值("1" 表示镜像)。
 // Members 是场景里剩的成员,要由调用方从节点集合里摘掉(removeResidualSceneMembers)。
 type sceneClaim struct {
-	Claimed  bool
-	Busy     bool
-	NodeID   string
-	AgonesGs string
-	Members  []string
+	Claimed    bool
+	Busy       bool
+	NodeID     string
+	AgonesGs   string
+	Source     string
+	MirrorFlag string
+	Members    []string
 }
 
 // parseSceneClaimReply 解认领脚本的应答,格式见 luaSceneClaimPrelude 之后的说明。
 func parseSceneClaimReply(raw any) sceneClaim {
 	parts := toSlice(raw)
-	if len(parts) < 3 {
+	if len(parts) < 5 {
 		return sceneClaim{}
 	}
 	switch toString(parts[0]) {
 	case "busy":
 		return sceneClaim{Busy: true}
 	case "claimed":
-		members := make([]string, 0, len(parts)-3)
-		for _, member := range parts[3:] {
+		members := make([]string, 0, len(parts)-5)
+		for _, member := range parts[5:] {
 			members = append(members, toString(member))
 		}
-		return sceneClaim{Claimed: true, NodeID: toString(parts[1]), AgonesGs: toString(parts[2]), Members: members}
+		return sceneClaim{
+			Claimed:    true,
+			NodeID:     toString(parts[1]),
+			AgonesGs:   toString(parts[2]),
+			Source:     toString(parts[3]),
+			MirrorFlag: toString(parts[4]),
+			Members:    members,
+		}
 	}
 	return sceneClaim{}
 }

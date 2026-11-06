@@ -4,7 +4,25 @@
 > 「**已核实**」= 本会话在代码上沿路径走通过;「**上一会话报出,未核实**」= 只见于上一会话的聊天记录,本机没有对应代码,无法复核。
 > 设计与落码记录的权威出处是 [`cross-zone-scene-travel.md`](../design/cross-zone-scene-travel.md)(本轮内容在 §12);本文只讲"现在是什么状态、接下来做什么、别踩什么"。
 >
-> **2026-10-24 现状(一屏版,先读这段)**。它取代下面 10-23 的同名一屏版。本轮只落码、写文档,没有跑任何构建或测试。
+> **2026-11-05 现状(一屏版,先读这段)**。它取代下面 10-24 的同名一屏版。本轮只核对现状、补一条测试、清一个生成残留、改文档,没有跑任何构建或测试。
+> **Codex 2026-11-05 验证回执**：`gofmt -l internal/logic/owner_replaced_crosslang_test.go` 无输出、退出 0；`go vet ./internal/logic/` 退出 1，阻塞在 `gate_redirect.go:258` 的 `NodeInfo.GetMaxConnections` 未定义。另一会话已在 `proto/common/base/common.proto` 加 `max_connections = 13`，Go 绑定尚未重生成；其同日交接明确要求先生成协议。本次指定跨语言测试与 scene_manager 全量测试均未执行，不能记为通过。按 AGENTS.md §10.2 停在失败处，未重试、未改生成物；需先完成协议生成，再按下列清单继续。完整日志与运行环境见 PROGRESS 同日「跨 zone GO-3 验证被协议生成前置阻塞」条目。
+> - **服务器代码:本线已做完。** 剩下的是 Codex 验证、压测基线和客户端项;残余 5 已有代码,在另一会话收尾。
+> - **各项现状**:
+>   - GO-3 同号重启接管:`go/scene_manager/internal/logic/owner_replaced.go`。资格解析包 10-30 由 `go/shared/savebarrier` 改名为 `go/shared/handofffence`,资格存在 `player:{P}:handoff_fence` hash 的 `handoff_fence` 字段,别的会话改名时已同步改了本线代码。Codex 11-01 第二轮的 `go test ./...`(`go/scene_manager`)退出 0,之后的改动没有再验证。11-05 给 `owner_replaced_crosslang_test.go` 补了第 4 条跨语言钉子(C++ 节点号占位键的前缀与值):这两样一变,etcd 复核会恒读空,镜像滞后时会接管活着的持有者。
+>   - gate 34 来源栅栏:`session_identity_fence.h` `ClassifySceneKickSource`。11-05 握手重构把发送方判定改成 `client->IsReadyOn(ctx.conn())`(设计文档 §13.10 第 3 条),编译状态以 Codex 回执为准。
+>   - C++ Prometheus 出口:Codex 10-24 整解构建 0 错误,`cross_zone_test` 361 条全过,含 `PlayerOwnershipMetrics.*` 4 条。
+>   - 合服:负责人 10-30 改为不停服合服(`docs/ops/merge-zone-runbook.md`)。停服版手册已归档,10-24 给旧工具加的 `assertZoneDown` 注册表正证随旧工具一起退役,不再是本线的事。
+>   - 残余 5(资格 E 小于当前 owner_epoch 时被同号顶替):由 [`location-release-binding.md`](../design/location-release-binding.md) §17 收口,10-30 已落码、未编译,11-05 另一会话在收尾。
+>   - 34 栅栏「改绑后目标拒绝入场」那一支:11-05 定为接受、不改代码。目标拒绝时推的 3023 会让当前客户端拆连接回选服,3023 没送到时有客户端 60s 进场超时,详见设计文档 §13.10 第 3 条残余。
+>   - `player_migration_event`:proto 与各语言产物早已删除,只剩生成器不清退的 `cpp/generated/rpc/service_metadata/common_event_player_migration_event_event_id.h` 和 `rpc.vcxproj(.filters)` 两条登记,11-05 已手删(§4 第 3 条清单到此做完)。
+> - **剩下的**:
+>   1. Codex:`go/scene_manager` 跑 `go test ./internal/logic/ -count=1 -v -run TestOwnerReplacedEvidenceMatchesCppFenceStamp`(必须 PASS,SKIP 不算),再全量;C++ `rpc.vcxproj` 少了一条头文件登记,随下一次整解构建确认;实跑 runbook 场景 RS(GO-3)。
+>   2. 等压测基线:`handoff_pending_no_marker` 比值告警的阈值;GO-3 每次带位置的 EnterScene 多一次 `HGET`,成本待测。
+>   3. 客户端(交 Codex / 客户端任务,本线未核对是否已做):gate 信封码 1003 显示裸编号、§13.6 三处过时注释、34 张 4K 审图 PNG。
+>   4. 不做:`SendTipAndKickToClient` 收敛(形似代码不抽象,AGENTS §11.2)。
+> - **Java 版**:GO-3 与 34 来源栅栏在 Java 仓 `PARITY.md` 记「Java 待做」(负责人 11-05:Java 留 todo)。C++ Prometheus 出口是本仓内部实现,Java 不适用。
+>
+> **2026-10-24 现状(一屏版)**。*(已被上面 11-05 版取代,保留作记录;其中合服 `assertZoneDown` 一项已随停服版合服工具退役。)* 它取代下面 10-23 的同名一屏版。本轮只落码、写文档,没有跑任何构建或测试。
 > - **服务器代码:本线已全部落码,待 Codex 编译与测试。** 剩下的只有运行验证、压测基线、客户端项和两条需单独评审的残余。
 > - **10-24 落码(未编译、未测试)**:
 >   - GO-3 复核订正:etcd 复核改读 C++ 节点号占位键,读失败回 17 不写,复核请求合并、只复用加入之后发起的那一轮;实例消失记录在重新在册时作废、全量重同步后改记;屏障内资格是 F 时交给换手门;LeaveScene 释放路径同样接入。新增 `scene_manager_owner_replaced_recheck_total`。依据见设计文档 §13.10 第 2 条「2026-10-24 复核订正」;
@@ -309,6 +327,7 @@
    - 客户端侧:CL-3 / CL-4(回家入口消失)已随 §12.5.5 修复;~~CL-2 仍未修~~ **CL-2 已落码待验证**(2026-09-21,`ValidateRedirectTarget` 只打日志不拦截,以 gate(B) 验票为准,§12.5.6);CL-7 已入库;CL-5(手动重进无冷却)的根因修复见 0d(已落码待验证,见 0g)。CL-6 / CL-8 已落码待验证,见设计文档 §13.6(客户端分支 `crosszone/client-cl6-cl8` 的 `54034fe`,已随合并提交 `96d36da` 推到客户端 `origin/main`,09-29 05:25,按本机跟踪引用;见本文 §2.2 末行)。
 3. **需要随一次全量 regen 做的**:真删 `proto/common/event/player_migration_event.proto`(整条 DEPRECATED、无调用方,仍占着 event id 27 / 41,清单写在该文件头注释里);`proto/common/database/player_cache.proto:7` 与 `bag_quest_mail_data.proto:7-8` 的注释仍把 `PlayerAllData` 说成"跨 zone 迁移携带的快照"。「Friend 服务移植后续工作」会话计划跑 regen,可与它同批。*2026-09-29 仍未做*:`player_migration_event.proto` 仍在,`player_cache.proto:7` 的注释未改。09-28 gRPC 失败回调那次 regen 是在隔离 worktree 里跑的,只拷回了 40 个文件,不算全量 regen。本轮 proto 一律走窄面 regen,只动 `scene_manager_service.proto` / `storage.proto`。
    *2026-10-20 仍未做,下面是按当前生成器核过的完整清单(2026-10-22 按对抗复核订正)*。10-20 写的阻塞原因是 `proto/common/base/config.proto` 有别的会话的在途改动;它已随 `10fa5d939` 落地,阻塞解除,之后的几次全量生成只是没有顺带做这件事。下一次全量 regen 前,与当时 `proto/` 下有未提交改动的会话对一下,就可以按本清单做。
+   *2026-11-05 已做完*:proto 已删,`proto/event_id.txt` 里是 `27=reserved:PlayerMigrationEvent`、`41=reserved:PlayerMigrationAckEvent`,下面第 3 步列的产物都已不在;最后剩的 `common_event_player_migration_event_event_id.h` 与 `rpc.vcxproj(.filters)` 两条登记 11-05 手删,没有任何源文件 include 它。
    - **事件号不会平移**:
      - 台账 `proto/event_id.txt` 里是 `27=PlayerMigrationEvent`、`41=PlayerMigrationAckEvent`。
      - 生成器 `tools/proto_generator/protogen/internal/generator/cpp/event_id.go` 的 `assignEventIds` 对"台账里有、proto 里没了"的号写成墓碑 `N=reserved:<名>`,其余号不动。

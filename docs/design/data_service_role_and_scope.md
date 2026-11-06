@@ -1,5 +1,7 @@
 # data_service 定位与边界
 
+> **2026-11-05 状态订正**：下文关于 Redis 字段 KV、数据双锁及旧 Load/Save/Field/回档 RPC 的描述属于历史实现。`fc504300b`（2026-10-30）已删除这条路径及其测试；当前玩家存档走 `player_store`，目录路由直读 SQL。当前实施与验证入口见 [玩家存盘交接](../handoff/player-save-direct-commit-20261030/progress.md)。字段 Lua 历史验收的订正见 [原交接 §11](../handoff/handoff-data-service-field-lua-real-redis-20261019.md#11-2026-11-05-核对后续运行证据与旧路径退役)，不能再按旧测试名验收当前主线。
+
 > 2026-10-15 按当前代码修订服务职责与 Login 依赖；本文区分目录/发号 RPC 与玩家存档的 Redis/Kafka 加载链。
 
 ## 定位
@@ -102,9 +104,9 @@ Windows 第一轮真实正例已通过；第二轮新测试程序在运行前被
 
 ### `AllocateIdSegment(biz_tag, step) → [lo, hi)`
 - 半开区间,一经返回视为已发出、绝不重发;段内剩余号作废不回收。`hi-lo` 可能小于 `step`(块尾截短)。
-- 2026-10-30 起不再用 `id_segment` 表:发号器(`internal/idissuer`)从内存切段,预留记录写两份,放在两套独立的 etcd 里。设计见 [总体方案](./player-data-tidb-scaling-plan.md) §6。
+- 2026-10-30 起不再用 `id_segment` 表:发号器(`internal/idissuer`)从内存切段。2026-11-05 起预留记录写三份:本地域两套独立的 etcd 各一份,全世界共用的全局号源登记处一份,登记处还把地域码唯一绑定到一对本地 etcd。设计见 [总体方案](./player-data-tidb-scaling-plan.md) §6.3。
 - `biz_tag` 必须匹配 `^[a-z0-9_]{1,64}$`,`step` 不超过 1000 万,否则 `ErrCodeInvalidRequest`(不算故障);没登记进 `IdSegment.Tags` 的 → `ErrCodeIdSegmentUnknownTag`。
-- 两份预留记录都不存在,且 `IdSegment.AllowAutoSeed=false`(生产)→ `ErrCodeIdSegmentUnknownTag`,不写任何记录。首次部署跑 `data_service -id-issuer-init`,其余情况是 ID 安全事件,见 [发号器运维手册](../ops/id-issuer-runbook.md)。
+- 生产(`IdSegment.AllowAutoSeed=false`)记录不全 → `ErrCodeIdSegmentUnknownTag`,不写任何记录:登记处没有这个地域码(新地域跑 `data_service -id-issuer-init`),本地两份都不存在,这两套 etcd 不是登记处给这个码绑的那两套,或者码已退役。除了新地域都是 ID 安全事件,用 `-id-issuer-recover` 处理,见 [发号器运维手册](../ops/id-issuer-runbook.md)。
 - 值域见底 → `ErrCodeIdSegmentExhausted`;读写预留记录失败 → `ErrCodeIdSegmentSourceError`。这两个与上面那个都进 `FaultCodeSet` 告警。
 - 恢复全局库不再影响发号。
 
@@ -152,6 +154,8 @@ Kafka:
 
 ## 玩家路由 `ClientForPlayer` 的分布式审计(2026-10-18)
 
+> **本节以下保留历史审计与契约，不代表当前接口。** 2026-11-05 已核实：10-23 后续的两个 MappingSetNX 用例及 `TestLockAcquireFailure` 有真实运行 PASS 与 `[PlayerLock]` 输出；10-30 指定字段 Lua 修复只确认保留在 `refs/snapshots/before-b8`，未找到运行证据。旧实现及四个测试文件、对应 RPC 随 `fc504300b` 退役，旧五步验收清单不再适用。退役不等于补齐历史测试，也不代表新 SQL 路径已完成验收。
+
 起因是一个问题:`LoadPlayerData` 里的 `svcCtx.Router.ClientForPlayer(ctx, req.PlayerID)` 有没有分布式问题。审计分 4 个视角并行(映射变更时序、映射存储一致性、Redis Cluster 命令语义、调用方影响),去重后 19 条发现,每条再由「代码事实」「生产可达性」两个视角对抗核验。结论与整改状态记在这里,整改流水见 `docs/PROGRESS.md` 2026-10-19 的两条 data_service 条目。
 
 ### 结论
@@ -166,7 +170,7 @@ Kafka:
 - merge_zone(第一批 `checkDataRedisBlobFlags`、第三批数据锁拷贝集成用例、第四批 `requireIT` / `itMissing`):2026-10-22 Codex merge_zone 全量验收通过(`MERGE_ZONE_IT_REQUIRE=1`,439 PASS / 0 SKIP,输入哈希与 `7a23b4fed` 一致,见 PROGRESS 同日 Codex 条目)。
 - 第二、三批的 `internal/logic` 包:2026-10-20 在 `c35e1133d` 授权副本上编译、单测通过,真 Redis 两版也通过(见下文「字段 Lua 验证结果」)。
 - 第四批 data_service 部分:2026-10-23 Codex `go test -p=1 -count=1 ./...` 1653 PASS / 0 FAIL,覆盖空串版本与 routing 拿锁回滚(输入为 `7a23b4fed` 的文件)。没跑:`go vet -tags=integration ./internal/logic/`,以及 `DATA_SERVICE_IT_REQUIRE=1` 下的真 Redis 两版。
-- 「四(后续)」两行:未编译、未测试,待 Codex 验证。
+- 「四(后续)」两行（2026-11-05 订正）：10-23 拿锁回滚后续已由当日另一轮 `go test -p=1 -count=1 -json ./...` 实际覆盖，新增三个用例 PASS；该轮全模块事件计数为 1752 PASS / 0 FAIL / 103 SKIP（含子测试），不是上一行的 1653 轮，也不是两版真 Redis 集成结果。10-30 指定字段 Lua 未找到运行证据；随后旧路径整体退役。原始日志、输入哈希与边界见原交接 §11。
 
 | 批 | 问题 | 改法 | 位置 |
 |----|------|------|------|
@@ -228,8 +232,8 @@ Kafka:
 - **代价**:每次写多两次 mapping Redis 往返(ReadRequiresReady=true 时是两次就绪读,缓存不可信时两次库点查,`route_read_total{path="home_fence"}` 会混入写门禁的读);复核耗时计入 3s 锁 TTL,慢到锁过期时提交被拒成 LockConflict,只损活性。db_first 下 SQL 回源读 `zone_merge_fence`,merge_zone 目前只写 Redis 围栏,沿用「第 2 批落地前禁止 merge_zone 写模式」的冻结前提。
 - **部署**:merge_zone 的拷贝前查锁只有在所有 data_service 副本都含写门禁时才成立;Regions 下合服(含 unmerge)之前必须确认副本已全部升级。
 
-### 仍未处理
-- **这族键本身的去向待定**:按 [TiDB 决策](./global-data-layer-tidb-decision.md) §9.3 表 A,`player:{id}:<field>` / `__version` / `__fields` / `__lock` 属于「移出 Redis」,去向是删除,或把 GM 快照、回档重建在 TiDB 玩家行上,二选一待负责人定(2026-10-24 方向,未设计、未落码)。本节前面的修复只保证现行代码在被替换之前 fail-closed,不是在为这族键扩功能。
+### 历史遗留（旧字段路径已退役）
+- **键族去向已由 B8 落地，不再待二选一**：`fc504300b` 删除 Redis 字段 KV、旧 GM 创建快照/diff/回档 RPC、路由数据 Redis 和旧调试工具；保留审计快照查询。后续 `debug_fetch` / `debug_import` 已按 `player_store` 重写，见 [玩家存盘交接](../handoff/player-save-direct-commit-20261030/progress.md) 的 B8-3 与「线上拉数工具」。下列旧工具问题及后文 Regions 前提仅作历史记录，不应恢复旧代码或 SCAN 回退来完成它们。
 - `cmd/debug_import` 的 player 模式仍然不持玩家锁、先写数据后登记映射、把版本重置为 `"1"`(调试工具,只写本地目标;字段索引问题已由 `writeLegacyPlayerFields` 解决)。与正在运行的 data_service 写入并发时可能互相覆盖,不要对线上进程正在写的玩家导入。
 
 ### 启用 Regions(去掉 DevRedis)之前必须先处理

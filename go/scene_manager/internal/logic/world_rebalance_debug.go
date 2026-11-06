@@ -50,7 +50,7 @@ func RegisterRebalanceDebugHandler(svcCtx *svc.ServiceContext) {
 			}
 			zones = []uint32{uint32(z)}
 		} else {
-			zones = GetActiveZones()
+			zones = orchestratedZones(svcCtx)
 		}
 
 		resp := rebalanceDebugResponse{Zones: make([]zoneRebalanceDebug, 0, len(zones))}

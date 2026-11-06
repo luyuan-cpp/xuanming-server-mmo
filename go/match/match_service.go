@@ -43,6 +43,7 @@ import (
 	"shared/rolefence"
 	"shared/serverbase"
 	"shared/serviceauth"
+	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -142,6 +143,9 @@ func main() {
 		panic(fmt.Errorf("全球匹配结果主题未满足耐久契约，拒绝启动: %w", err))
 	}
 
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="match",pool="primary"}:只有全球匹配权威库这一个池,抓取时现取 DBStats。
+	// svcCtx.Authority 在 NewServiceContextWithAdmission 里必建(打不开就 panic),这里不会是 nil。
+	sqlpoolstats.Register("match", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, svcCtx.Authority.DB))
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
 	metrics.Start(c.MetricsListenAddr)
 	// 本实例生效的组队跨区开关;多实例取值不一致 = 滚动切换中(team-system.md J-13a)。
@@ -229,7 +233,7 @@ func main() {
 			matchpb.MatchInternal_GetBattleCompletion_FullMethodName:   true,
 		}, svcCtx.RelayIngress),
 		sessionInterceptor,
-		originalRoleInterceptor(svcCtx),
+		originalRoleInterceptor,
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 		serverbase.WriterFrozenInterceptor(),
 	)

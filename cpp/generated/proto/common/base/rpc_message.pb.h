@@ -81,6 +81,7 @@ enum GameMessageType : int {
   REQUEST = 0,
   RESPONSE = 1,
   RPC_ERROR = 4,
+  HEARTBEAT = 5,
   GameMessageType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   GameMessageType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -91,11 +92,11 @@ extern const uint32_t GameMessageType_internal_data_[];
 inline constexpr GameMessageType GameMessageType_MIN =
     static_cast<GameMessageType>(0);
 inline constexpr GameMessageType GameMessageType_MAX =
-    static_cast<GameMessageType>(4);
+    static_cast<GameMessageType>(5);
 [[nodiscard]] inline bool GameMessageType_IsValid(int value) {
-  return 0 <= value && value <= 4 && ((19u >> value) & 1) != 0;
+  return 0 <= value && value <= 5 && ((51u >> value) & 1) != 0;
 }
-inline constexpr int GameMessageType_ARRAYSIZE = 4 + 1;
+inline constexpr int GameMessageType_ARRAYSIZE = 5 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GameMessageType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GameMessageType) {
@@ -110,7 +111,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& GameMessageType_Name(GameMessageType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<GameMessageType_descriptor, 0, 4>(
+  return ::google::protobuf::internal::NameOfDenseEnum<GameMessageType_descriptor, 0, 5>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool GameMessageType_Parse(

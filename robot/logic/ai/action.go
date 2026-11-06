@@ -11,6 +11,9 @@ const (
 	ActionCastSkill                 // release a skill at a random target/position
 	ActionSwitchScene               // request a scene/channel switch
 	ActionChat                      // send a chat message
+	// ActionJoinQueue 进匹配队列:不在队列里就入队(先地域探测),排满 match_queue.dwell_seconds 还没成局就撤单,
+	// 成局后等这局结束再排。依赖 main 注入的 MatchQueue(RobotAI.SetMatchQueue),没注入时只记失败。
+	ActionJoinQueue
 )
 
 var actionNames = map[Action]string{
@@ -19,6 +22,7 @@ var actionNames = map[Action]string{
 	ActionCastSkill:   "cast_skill",
 	ActionSwitchScene: "switch_scene",
 	ActionChat:        "chat",
+	ActionJoinQueue:   "join_queue",
 }
 
 func (a Action) String() string {
@@ -115,4 +119,23 @@ var BuiltinProfiles = map[string]Profile{
 			ActionSwitchScene: 15,
 		},
 	},
+	// match-stress:匹配压测(global-match-hierarchical-pools.md §11 R0)。在 stress 的场景负载上加入队 / 撤单,
+	// 给按池撮合造排队深度与成局。stress 档的权重不动:历史压测按它对比(AGENTS.md §6.2)。
+	// 入队参数见 robot.yaml 的 match_queue 段。
+	"match-stress": {
+		Name: "match-stress",
+		Weights: map[Action]int{
+			ActionCastSkill:   50,
+			ActionJoinQueue:   40,
+			ActionSwitchScene: 10,
+		},
+	},
+}
+
+// Weight 返回 a 在本档里的权重(没有这项为 0)。
+func (p *Profile) Weight(a Action) int {
+	if p == nil {
+		return 0
+	}
+	return p.Weights[a]
 }

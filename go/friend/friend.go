@@ -54,6 +54,7 @@ import (
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/serverbase"
+	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -220,6 +221,9 @@ func runFriend(c config.Config) (runErr error) {
 
 	deps := logic.NewDeps(svcCtx)
 
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="friend",pool="primary"}:只有好友库这一个池,抓取时现取 DBStats。
+	// 不放进 NewServiceContext:单测会多次构造它,默认注册表重复注册会失败。
+	sqlpoolstats.Register("friend", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, svcCtx.DB))
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。指标本身是懒注册的,不调 Start 也能安全 Inc。
 	metrics.Start(c.MetricsListenAddr)
 
@@ -271,7 +275,7 @@ func runFriend(c config.Config) (runErr error) {
 	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks,
-		session.OriginalIdentityInterceptor(svcCtx.LoginSessions, c.RequestBudget(), deps.CheckOriginalRole))...)
+		session.OriginalIdentityInterceptor(c.RequestBudget(), deps.CheckOriginalRole))...)
 
 	// **先起 gRPC,再注册**(契约 §2)。Start 在监听失败时 panic:recover 成错误交回主线程,
 	// 走同一条收尾后以非 0 退出(进程拉起方 / K8s 仍可见),不带着已创建的资源直接崩。

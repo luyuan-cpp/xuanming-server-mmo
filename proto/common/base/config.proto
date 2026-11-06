@@ -188,4 +188,16 @@ message GameConfig {
     }
 
     PlayerRedisConfig player_redis = 9;
+
+    // 进场、离场的审计快照(整档发 Kafka,data_service 落 player_snapshot;modules/snapshot/audit_snapshot_policy.h)。
+    // 由 readGameConfig 手工逐键解析,yaml 键名 audit_snapshot。**整段或单键缺失时加载器显式取默认**:两个触发点都开、全量。
+    // K8s 的 node-config 从 bin/etc/game_config.yaml 整段复制这一段。只影响审计证据,不影响存盘。
+    message AuditSnapshotConfig {
+        bool login_enabled = 1;
+        bool logout_enabled = 2;
+        // 抽样千分比,1000 = 全量,0 = 两个触发点都不发。按 player_id 稳定抽样,同一玩家的进退场快照成对。
+        uint32 sample_per_mille = 3;
+    }
+
+    AuditSnapshotConfig audit_snapshot = 10;
 }

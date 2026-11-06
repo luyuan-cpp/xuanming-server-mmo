@@ -2,10 +2,18 @@
 
 // 收件箱 SCENE_GM_SANCTION 域的执行器(docs/design/player-inbox-service.md §2.2、§7.6)。
 //
-// 三种类型 → 三个现成原语:
-//   GM_BLOCK_CURRENCY_GAIN    → CurrencySystem::BlockCurrency    (天然幂等)
-//   GM_UNBLOCK_CURRENCY_GAIN  → CurrencySystem::UnblockCurrency  (天然幂等)
-//   GM_ATTACH_CURRENCY_DEBT   → CurrencySystem::AttachDebt       (**不幂等**,只靠收件箱账本去重)
+// 五种类型 → 五个现成原语:
+//   GM_BLOCK_CURRENCY_GAIN    → CurrencySystem::BlockCurrency                (天然幂等)
+//   GM_UNBLOCK_CURRENCY_GAIN  → CurrencySystem::UnblockCurrency              (天然幂等)
+//   GM_ATTACH_CURRENCY_DEBT   → CurrencySystem::AttachDebt                   (**不幂等**,只靠收件箱账本去重)
+//   GM_BLOCK_ITEM_GAIN        → GainBlockService::BlockPlayerItemGain        (天然幂等)
+//   GM_UNBLOCK_ITEM_GAIN      → GainBlockService::UnblockPlayerItemGain      (天然幂等)
+//
+// 物品封禁的效果状态是持久组件 PlayerItemGainBlockComp(player_database.item_gain_block),与收件箱账本
+// 同一次存盘提交;各物品获得入口都经 GainBlockService::IsItemGainBlocked 读它。物品类型的结局口径:
+//   * 载荷解码失败、item_config_id 为 0 → kRejected(kPlayerInboxPayloadInvalid);
+//   * 不核对本节点物品表:表里没有的配置本节点发不出来,封禁照样记下(不是版本错位,不停用本域);
+//   * PlayerItemGainBlockComp 缺失(加载不变量被破坏)→ kDefer,不改任何状态,理由同货币组件缺失。
 //
 // 结局口径:
 //   * 载荷解码失败、欠款额不在 (0, INT64_MAX] → kRejected(kPlayerInboxPayloadInvalid);
@@ -35,4 +43,6 @@ public:
 	static PlayerInboxExecResult BlockCurrencyGain(entt::entity player, const std::string &payload);
 	static PlayerInboxExecResult UnblockCurrencyGain(entt::entity player, const std::string &payload);
 	static PlayerInboxExecResult AttachCurrencyDebt(entt::entity player, const std::string &payload);
+	static PlayerInboxExecResult BlockItemGain(entt::entity player, const std::string &payload);
+	static PlayerInboxExecResult UnblockItemGain(entt::entity player, const std::string &payload);
 };

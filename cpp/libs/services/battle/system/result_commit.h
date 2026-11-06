@@ -23,6 +23,8 @@ inline constexpr std::size_t kMaxCompleteResultBytes = 960 * 1024;
 
 // 从首次引擎结算固定完整来源。先校验全部成员，失败不修改event；强制DRAW统一盖章。
 // 仅归档来源，不能以这个格式版本代替玩家归属、源存档版本或资产SQL收据。
+// 终局时刻(event.finished_at_ms)一并盖进每一份个人结算:scene 据此给本人近期战斗结果标结束时间
+// (docs/design/battle-result-recovery.md §6);只供展示,不参与任何结算判定,所以不校验来源里原有的值。
 inline bool FreezeBattleSettlementSource(contracts::kafka::BattleResultEvent& event,
                                         std::vector<::BattleSettlementData> settlements)
 {
@@ -56,6 +58,10 @@ inline bool FreezeBattleSettlementSource(contracts::kafka::BattleResultEvent& ev
     {
         settlement.set_battle_id(event.battle_id());
         settlement.set_outcome(event.outcome());
+        settlement.set_finished_at_ms(event.finished_at_ms());
+        // 模式与配置号同样只给 scene 写近期战斗结果用(battle-result-recovery.md),不参与结算判定。
+        settlement.set_match_mode(event.match_mode());
+        settlement.set_battle_config_id(event.battle_config_id());
         *frozen.add_settlements() = std::move(settlement);
     }
     frozen.set_settlement_format_version(1);

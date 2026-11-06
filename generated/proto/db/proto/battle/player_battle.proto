@@ -51,6 +51,8 @@ message TurnResultS2C {
   repeated uint64 action_order = 5;  // 本回合按速度排定的出手序(actor_id;含被跳过者),演出"行动预告条"用
 }
 
+// scene 在结算随存档确认提交之后推。客户端没有这一局的战斗上下文时(断线清了上下文、重登才应用)不要丢弃,
+// 改为查 SceneBattleResultClientPlayer.GetRecentBattleResults 补看胜负与奖励(docs/design/battle-result-recovery.md §7)。
 message BattleEndS2C {
   uint64 battle_id = 1;
   eBattleOutcome outcome = 2;

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -18,38 +17,6 @@ import (
 // etcYaml 用相对路径而不是绝对路径:`go test ./...` 的工作目录是**被测包目录**,
 // 所以这条相对路径在任何机器 / 任何 checkout 位置都成立(与 trade 同名测试同一写法)。
 const etcYaml = "../../etc/friend.yaml"
-
-// 本地yaml保留未授权占位；测试只在内存副本显式声明自己的受控全局登录态。
-func loadEtcFixture(c *Config) error {
-	raw, err := os.ReadFile(etcYaml)
-	if err != nil {
-		return err
-	}
-	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	if !strings.Contains(text, "GlobalLoginSessions: false") || !strings.Contains(text, "LoginRedis:\n  Addrs: []") {
-		return fmt.Errorf("本地原登录态占位形状已变化")
-	}
-	text = strings.Replace(text, "GlobalLoginSessions: false", "GlobalLoginSessions: true", 1)
-	text = strings.Replace(text, "LoginRedis:\n  Addrs: []", "LoginRedis:\n  Addrs: [127.0.0.1:6379]", 1)
-	return conf.LoadFromYamlBytes([]byte(text), c)
-}
-
-func TestOriginalLoginConfigMustBeExplicit(t *testing.T) {
-	var placeholder Config
-	if err := conf.Load(etcYaml, &placeholder); err == nil {
-		t.Fatal("占位全局登录态不应静默获授权")
-	}
-	for _, mutate := range []func(*Config){
-		func(c *Config) { c.GlobalLoginSessions = false }, func(c *Config) { c.LoginRedis.Addrs = nil },
-		func(c *Config) { c.LoginRedis.DB = -1 }, func(c *Config) { c.LoginRedis.PoolSizePerNode = 0 },
-	} {
-		c := validConfig()
-		mutate(&c)
-		if err := c.Validate(); err == nil {
-			t.Fatal("缺原登录态原件配置仍通过")
-		}
-	}
-}
 
 // 门禁只看档位是否合法,不看 Mode:两档都能上生产(player-data-tidb-scaling-plan.md §9)。
 func TestBackendMustBeLegalInEveryMode(t *testing.T) {
@@ -78,7 +45,7 @@ func TestBackendMustBeLegalInEveryMode(t *testing.T) {
 // 所以这条测试同时证明"etc/friend.yaml 能通过 conf.Load + Validate"。
 func TestEtcYamlContractValues(t *testing.T) {
 	var c Config
-	if err := loadEtcFixture(&c); err != nil {
+	if err := conf.Load(etcYaml, &c); err != nil {
 		t.Fatalf("load %s: %v", etcYaml, err)
 	}
 	// 再显式调一次:万一将来 go-zero 改了自动校验的触发条件,这条断言也不会失效。
@@ -180,7 +147,7 @@ func TestEtcYamlContractValues(t *testing.T) {
 // (默认 735,比 need 少 RecommendMaxLimit-1 = 19)。所以这条会比实际需要早 19 个名额变红;偏保守不会漏判,算式有意不收紧。
 func TestRecommendAnchorWindowCoversExclusionBudget(t *testing.T) {
 	var c Config
-	if err := loadEtcFixture(&c); err != nil {
+	if err := conf.Load(etcYaml, &c); err != nil {
 		t.Fatalf("load %s: %v", etcYaml, err)
 	}
 	f := c.Friend
@@ -252,8 +219,8 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^Etcd:\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+Key:\s*""`).MatchString(text) {
 		t.Error("Etcd 段必须显式写 `Key: \"\"`")
 	}
-	// go-zero 的共享 RedisConf 没有 DB 字段；独立的 LoginRedis 段则必须允许
-	// 显式选择原登录态的 DB。禁止未知字段只作用于共享 Redis 段，不能误伤登录态。
+	// go-zero 的共享 RedisConf 没有 DB 字段；PlayerRedis 段(playerredis.Config)则允许
+	// 显式写 DB。禁止未知字段只作用于共享 Redis 段，不能误伤其他段。
 	if sharedRedisHasDBKey(text) {
 		t.Error("共享 Redis 段不应出现 DB: 键(契约 key 由多运行时共写,DB 号必须全仓一致 = 默认 0)")
 	}
@@ -295,10 +262,10 @@ func TestSharedRedisDBAnchorScope(t *testing.T) {
 		yaml string
 		want bool
 	}{
-		{"登录态DB在共享段之前", "LoginRedis:\n  DB: 3\nRedis:\n  Key: \"\"\n", false},
-		{"登录态DB在共享段之后", "Redis:\r\n  Key: \"\"\r\nLoginRedis:\r\n  DB: 0\r\n", false},
-		{"共享段显式零DB仍是未知字段", "Redis:\n  Key: \"\"\n  DB: 0\nLoginRedis:\n  DB: 3\n", true},
-		{"共享段非零DB不能假装生效", "LoginRedis:\n  DB: 0\nRedis:\n  DB: 3\n  Key: \"\"\n", true},
+		{"玩家域DB在共享段之前", "PlayerRedis:\n  DB: 3\nRedis:\n  Key: \"\"\n", false},
+		{"玩家域DB在共享段之后", "Redis:\r\n  Key: \"\"\r\nPlayerRedis:\r\n  DB: 0\r\n", false},
+		{"共享段显式零DB仍是未知字段", "Redis:\n  Key: \"\"\n  DB: 0\nPlayerRedis:\n  DB: 3\n", true},
+		{"共享段非零DB不能假装生效", "PlayerRedis:\n  DB: 0\nRedis:\n  DB: 3\n  Key: \"\"\n", true},
 		{"共享段空行与注释不能掩盖DB", "Redis:\n  Key: \"\"\n\n# 共享段注释\n  DB: 3\n", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -313,12 +280,10 @@ func TestSharedRedisDBAnchorScope(t *testing.T) {
 // 刻意不从 yaml 读:yaml 里任何一处被改坏,负向用例就会因为"基准本来就不合法"而集体误报。
 func validConfig() Config {
 	c := Config{
-		GlobalLoginSessions: true,
-		LoginRedis:          playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, DB: 3, PoolSizePerNode: 8},
-		Backend:             "tidb",
-		ZoneId:              1,
-		LeaseTTL:            60,
-		MetricsListenAddr:   ":9180",
+		Backend:           "tidb",
+		ZoneId:            1,
+		LeaseTTL:          60,
+		MetricsListenAddr: ":9180",
 		MySQL: MySQLConf{
 			Host: "127.0.0.1:3306", User: "appuser", DBName: data.DatabaseName,
 			MaxOpenConn: 20, MaxIdleConn: 5,

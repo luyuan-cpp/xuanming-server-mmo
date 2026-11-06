@@ -4,66 +4,53 @@ import (
 	"context"
 	"encoding/base64"
 	"testing"
-	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	redv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"match/internal/authority"
 	"match/internal/pkg/ctxkeys"
-	"match/internal/svc"
 	base "proto/common/base"
 	dspb "proto/data_service"
 	matchpb "proto/match"
-	"shared/loginsession"
+	"shared/callerauth/callerauthtest"
 	"shared/roleidentity"
 )
 
+// joinQueueMethod 是测试链路模拟的客户端方法;签名绑定方法名,验签原件只对这个方法成立。
+const joinQueueMethod = matchpb.MatchService_JoinQueue_FullMethodName
+
+// originalRoleSession 是已绑定角色的在线会话:原账号、原修订与 gate 连接身份齐全。
 func originalRoleSession() *base.SessionDetails {
-	return &base.SessionDetails{SessionId: 7, PlayerId: 11, GateInstanceId: "original-gate-uuid", SessionIncarnation: 19, OwnerRevision: 9}
+	return callerauthtest.OnlineSession("原账号", 11, 9)
 }
 
-func originalRoleIncoming(t *testing.T, detail *base.SessionDetails) context.Context {
-	t.Helper()
-	raw, err := proto.Marshal(detail)
-	require.NoError(t, err)
-	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(sessionMetadataKey, base64.StdEncoding.EncodeToString(raw)))
-}
-
-func originalRoleFixture(t *testing.T) (*svc.ServiceContext, *redv9.Client) {
-	t.Helper()
-	mr := miniredis.RunT(t)
-	client := redv9.NewClient(&redv9.Options{Addr: mr.Addr(), DB: 2, MaxRetries: -1})
-	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	// DB故意为nil：原件捕获不准查询当前SQL；若入口偷偷补权，此例会直接失败。
-	return &svc.ServiceContext{Authority: &authority.Store{}, LoginSessions: client}, client
-}
-
-func originalRoleChain(sc *svc.ServiceContext, ctx context.Context, handler grpc.UnaryHandler) (any, error) {
-	info := &grpc.UnaryServerInfo{FullMethod: "/match.MatchService/JoinQueue"}
+// originalRoleChain 按生产顺序串起会话解码与原角色捕获;ctx 里有没有验签原件由调用方决定。
+// 拦截器不持有任何存储句柄:原件捕获查不了当前 SQL 或 login Redis,入口无从给旧会话补权。
+func originalRoleChain(ctx context.Context, handler grpc.UnaryHandler) (any, error) {
+	info := &grpc.UnaryServerInfo{FullMethod: joinQueueMethod}
 	return sessionInterceptor(ctx, &matchpb.JoinQueueRequest{}, info, func(decoded context.Context, request any) (any, error) {
-		return originalRoleInterceptor(sc)(decoded, request, info, handler)
+		return originalRoleInterceptor(decoded, request, info, handler)
 	})
 }
 
-func TestOriginalRoleInterceptorCapturesLoginAccountAndWireRevisionAfterSessionDecode(t *testing.T) {
-	sc, client := originalRoleFixture(t)
-	detail := originalRoleSession()
-	key, err := loginsession.ConnectionKey(detail)
+// withClaimedSession 保留 ctx 里的验签原件,只把透传的会话 metadata 换成另一份声明,模拟业务解码结果与原件不符。
+func withClaimedSession(t *testing.T, ctx context.Context, claimed *base.SessionDetails) context.Context {
+	t.Helper()
+	raw, err := proto.Marshal(claimed)
 	require.NoError(t, err)
-	require.NoError(t, client.Set(context.Background(), key, "原账号", time.Hour).Err())
-	// 同一Redis服务的另一个DB与旧session号键均不能为此连接授予身份。
-	other := redv9.NewClient(&redv9.Options{Addr: client.Options().Addr, DB: 0, MaxRetries: -1})
-	defer other.Close()
-	require.NoError(t, other.Set(context.Background(), key, "错误实例账号", time.Hour).Err())
-	require.NoError(t, client.Set(context.Background(), "login_session:7", "旧session号账号", time.Hour).Err())
+	md, _ := metadata.FromIncomingContext(ctx)
+	md = md.Copy()
+	md.Set(sessionMetadataKey, base64.StdEncoding.EncodeToString(raw))
+	return metadata.NewIncomingContext(ctx, md)
+}
+
+func TestOriginalRoleInterceptorCapturesSignedAccountAndWireRevisionAfterSessionDecode(t *testing.T) {
+	detail := originalRoleSession()
 	calls := 0
-	result, err := originalRoleChain(sc, originalRoleIncoming(t, detail), func(ctx context.Context, _ any) (any, error) {
+	result, err := originalRoleChain(callerauthtest.Incoming(t, joinQueueMethod, detail), func(ctx context.Context, _ any) (any, error) {
 		calls++
 		decoded, ok := ctxkeys.GetSessionDetails(ctx)
 		require.True(t, ok)
@@ -86,62 +73,69 @@ func TestOriginalRoleInterceptorCapturesLoginAccountAndWireRevisionAfterSessionD
 	require.Equal(t, "原账号", result.(*dspb.AccountRoleOwnership).Account)
 }
 
-func TestOriginalRoleInterceptorRejectsMissingRevLegacyConnectionAndRevokedLogin(t *testing.T) {
-	for _, mode := range []string{"zero-revision", "no-gate-uuid", "no-incarnation", "revoked", "missing-login-pool", "bad-session-bytes", "bad-session-protobuf"} {
+// 未签名的自报身份、签了名但缺修订或缺账号、解码不出会话,一律 PermissionDenied 且不进 handler。
+func TestOriginalRoleInterceptorRejectsUnsignedOrIncompleteSession(t *testing.T) {
+	for _, mode := range []string{"unsigned", "unsigned-no-gate-uuid", "unsigned-no-incarnation", "zero-revision", "no-account", "bad-session-bytes", "bad-session-protobuf"} {
 		t.Run(mode, func(t *testing.T) {
-			sc, client := originalRoleFixture(t)
 			detail := originalRoleSession()
-			key, err := loginsession.ConnectionKey(detail)
-			require.NoError(t, err)
-			require.NoError(t, client.Set(context.Background(), key, "原账号", time.Hour).Err())
+			var ctx context.Context
 			switch mode {
+			case "unsigned":
+				ctx = callerauthtest.Unverified(t, detail)
+			case "unsigned-no-gate-uuid":
+				// 缺 gate 实例或连接代次的会话过不了验签拦截器,到这里只能是没有原件的自报身份。
+				detail.GateInstanceId = ""
+				ctx = callerauthtest.Unverified(t, detail)
+			case "unsigned-no-incarnation":
+				detail.SessionIncarnation = 0
+				ctx = callerauthtest.Unverified(t, detail)
 			case "zero-revision":
 				detail.OwnerRevision = 0
-			case "no-gate-uuid":
-				detail.GateInstanceId = ""
-			case "no-incarnation":
-				detail.SessionIncarnation = 0
-			case "revoked":
-				require.NoError(t, client.Del(context.Background(), key).Err())
-			case "missing-login-pool":
-				sc.LoginSessions = nil
-			}
-			ctx := originalRoleIncoming(t, detail)
-			if mode == "bad-session-bytes" {
+				ctx = callerauthtest.Incoming(t, joinQueueMethod, detail)
+			case "no-account":
+				// gate 只在角色绑定后才写账号;即使签了名,缺账号的会话也不能授予在线角色身份。
+				detail.AuthenticatedAccount = ""
+				ctx = callerauthtest.Incoming(t, joinQueueMethod, detail)
+			case "bad-session-bytes":
 				ctx = metadata.NewIncomingContext(context.Background(), metadata.Pairs(sessionMetadataKey, "%%%"))
-			}
-			if mode == "bad-session-protobuf" {
+			case "bad-session-protobuf":
 				ctx = metadata.NewIncomingContext(context.Background(), metadata.Pairs(sessionMetadataKey, base64.StdEncoding.EncodeToString([]byte{0xff})))
 			}
 			calls := 0
-			_, err = originalRoleChain(sc, ctx, func(context.Context, any) (any, error) { calls++; return nil, nil })
+			_, err := originalRoleChain(ctx, func(context.Context, any) (any, error) { calls++; return nil, nil })
 			require.Equal(t, codes.PermissionDenied, status.Code(err))
 			require.Zero(t, calls)
 		})
 	}
 }
 
-func TestOriginalRoleInterceptorDoesNotBorrowLegacySessionIDOrAnotherIncarnation(t *testing.T) {
-	sc, client := originalRoleFixture(t)
-	detail := originalRoleSession()
-	require.NoError(t, client.Set(context.Background(), "login_session:7", "错误旧账号", time.Hour).Err())
-	previous := proto.Clone(detail).(*base.SessionDetails)
-	previous.SessionIncarnation--
-	key, err := loginsession.ConnectionKey(previous)
-	require.NoError(t, err)
-	require.NoError(t, client.Set(context.Background(), key, "旧连接账号", time.Hour).Err())
-	calls := 0
-	_, err = originalRoleChain(sc, originalRoleIncoming(t, detail), func(context.Context, any) (any, error) { calls++; return nil, nil })
-	require.Equal(t, codes.PermissionDenied, status.Code(err))
-	require.Zero(t, calls)
+// 透传的会话声明与验签原件不符时拒绝:不能借另一条连接、另一个账号或另一次归属的签名进匹配。
+func TestOriginalRoleInterceptorRejectsClaimsThatDifferFromSignedOriginal(t *testing.T) {
+	for name, mutate := range map[string]func(*base.SessionDetails){
+		"新修订":      func(d *base.SessionDetails) { d.OwnerRevision++ },
+		"换角色":      func(d *base.SessionDetails) { d.PlayerId++ },
+		"换账号":      func(d *base.SessionDetails) { d.AuthenticatedAccount = "别人" },
+		"重启后的gate": func(d *base.SessionDetails) { d.GateInstanceId = "gate-after-restart" },
+		"上一连接代次":   func(d *base.SessionDetails) { d.SessionIncarnation-- },
+	} {
+		t.Run(name, func(t *testing.T) {
+			signed := originalRoleSession()
+			claimed := proto.Clone(signed).(*base.SessionDetails)
+			mutate(claimed)
+			ctx := withClaimedSession(t, callerauthtest.Incoming(t, joinQueueMethod, signed), claimed)
+			calls := 0
+			_, err := originalRoleChain(ctx, func(context.Context, any) (any, error) { calls++; return nil, nil })
+			require.Equal(t, codes.PermissionDenied, status.Code(err))
+			require.Zero(t, calls)
+		})
+	}
 }
 
 func TestOriginalRoleInterceptorInternalCallCannotManufactureClientActor(t *testing.T) {
-	sc, _ := originalRoleFixture(t)
 	info := &grpc.UnaryServerInfo{FullMethod: matchpb.MatchInternal_CancelActivityBattle_FullMethodName}
 	calls := 0
 	_, err := sessionInterceptor(context.Background(), &matchpb.CancelActivityBattleRequest{}, info, func(ctx context.Context, request any) (any, error) {
-		return originalRoleInterceptor(sc)(ctx, request, info, func(bound context.Context, _ any) (any, error) {
+		return originalRoleInterceptor(ctx, request, info, func(bound context.Context, _ any) (any, error) {
 			calls++
 			_, ok := roleidentity.Original(bound)
 			require.False(t, ok)

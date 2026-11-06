@@ -1454,6 +1454,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryBattleCreationResponse final :
     kStateFieldNumber = 1,
     kSupportedOutcomeProtocolVersionFieldNumber = 3,
     kAdoptedOutcomeProtocolVersionFieldNumber = 4,
+    kRejectsNewBattlesFieldNumber = 5,
   };
   // string target_instance_id = 2;
   void clear_target_instance_id() ;
@@ -1500,11 +1501,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryBattleCreationResponse final :
   void _internal_set_adopted_outcome_protocol_version(::uint32_t value);
 
   public:
+  // bool rejects_new_battles = 5;
+  void clear_rejects_new_battles() ;
+  [[nodiscard]] bool rejects_new_battles() const;
+  void set_rejects_new_battles(bool value);
+
+  private:
+  bool _internal_rejects_new_battles() const;
+  void _internal_set_rejects_new_battles(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:QueryBattleCreationResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1537,6 +1548,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryBattleCreationResponse final :
     int state_;
     ::uint32_t supported_outcome_protocol_version_;
     ::uint32_t adopted_outcome_protocol_version_;
+    bool rejects_new_battles_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3356,6 +3368,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleResponse final : public
     kErrorMessageFieldNumber = 2,
     kBattleIdFieldNumber = 1,
     kAdoptedOutcomeProtocolVersionFieldNumber = 3,
+    kRoomCountFieldNumber = 5,
   };
   // string target_instance_id = 4;
   void clear_target_instance_id() ;
@@ -3408,11 +3421,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleResponse final : public
   void _internal_set_adopted_outcome_protocol_version(::uint32_t value);
 
   public:
+  // uint32 room_count = 5;
+  void clear_room_count() ;
+  [[nodiscard]] ::uint32_t room_count() const;
+  void set_room_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_room_count() const;
+  void _internal_set_room_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CreateBattleResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           1, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3445,6 +3468,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleResponse final : public
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::uint64_t battle_id_;
     ::uint32_t adopted_outcome_protocol_version_;
+    ::uint32_t room_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6259,6 +6283,30 @@ inline void CreateBattleResponse::set_allocated_target_instance_id(::std::string
   // @@protoc_insertion_point(field_set_allocated:CreateBattleResponse.target_instance_id)
 }
 
+// uint32 room_count = 5;
+inline void CreateBattleResponse::clear_room_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.room_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t CreateBattleResponse::room_count() const {
+  // @@protoc_insertion_point(field_get:CreateBattleResponse.room_count)
+  return _internal_room_count();
+}
+inline void CreateBattleResponse::set_room_count(::uint32_t value) {
+  _internal_set_room_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:CreateBattleResponse.room_count)
+}
+inline ::uint32_t CreateBattleResponse::_internal_room_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.room_count_;
+}
+inline void CreateBattleResponse::_internal_set_room_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.room_count_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // DestroyBattleRequest
@@ -6773,6 +6821,30 @@ inline ::uint32_t QueryBattleCreationResponse::_internal_adopted_outcome_protoco
 inline void QueryBattleCreationResponse::_internal_set_adopted_outcome_protocol_version(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_protocol_version_ = value;
+}
+
+// bool rejects_new_battles = 5;
+inline void QueryBattleCreationResponse::clear_rejects_new_battles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rejects_new_battles_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool QueryBattleCreationResponse::rejects_new_battles() const {
+  // @@protoc_insertion_point(field_get:QueryBattleCreationResponse.rejects_new_battles)
+  return _internal_rejects_new_battles();
+}
+inline void QueryBattleCreationResponse::set_rejects_new_battles(bool value) {
+  _internal_set_rejects_new_battles(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:QueryBattleCreationResponse.rejects_new_battles)
+}
+inline bool QueryBattleCreationResponse::_internal_rejects_new_battles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rejects_new_battles_;
+}
+inline void QueryBattleCreationResponse::_internal_set_rejects_new_battles(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rejects_new_battles_ = value;
 }
 
 // -------------------------------------------------------------------

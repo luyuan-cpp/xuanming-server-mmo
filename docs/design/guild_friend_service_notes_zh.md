@@ -27,7 +27,7 @@
 - 已实现申请、接受、拒绝、删除、拉黑、解除拉黑、列表与推荐；RPC 契约见 [friend.proto](../../proto/friend/friend.proto)。
 - **写路径**：在关系写事务前按玩家 ID 升序补齐容量行，缺行从 `COUNT(friend)` 的权威边数初始化；事务内按相同顺序锁双方容量行，再校验申请代次、双向拉黑、好友边和硬上限，申请状态、双向边与容量同事务提交。默认好友上限为 200；见 [friend_repo.go](../../go/friend/internal/data/friend_repo.go)。
 - **读路径**：`GetFriendList` 与 `GetPendingRequests` 直接调用 SQL 加载函数，旧好友 / 申请列表 Redis 键不参与权威读。代码仍保留 cache-aside helper 和提交后失效逻辑，不能据此把当前列表描述成“Redis → SQL → 回填”。资料和在线状态在关系读取后补全，不能反过来授权关系变更。
-- **Redis 句柄分工**：`SharedRedis` 读取 `player:session:{id}` 等跨运行时契约并维护同步摘要；`FriendRedis` 承载私有配额与派生数据，未配置时回落共享实例并告警；`LoginRedis` 用于全局登录会话校验。权威关系的 SQL 提交、Redis 失效和推送不在同一事务；失效或推送失败不能把已提交关系改报为未提交，也不能返回旧关系缓存充当成功读取。装配见 [servicecontext.go](../../go/friend/internal/svc/servicecontext.go)。
+- **Redis 句柄分工**：`SharedRedis` 读取 `player:session:{id}` 等跨运行时契约并维护同步摘要；`FriendRedis` 承载私有配额与派生数据，未配置时回落共享实例并告警；不持有 login Redis，原账号只取 gate 签名的会话原件（[gate 在线身份](gate-online-identity.md)）。权威关系的 SQL 提交、Redis 失效和推送不在同一事务；失效或推送失败不能把已提交关系改报为未提交，也不能返回旧关系缓存充当成功读取。装配见 [servicecontext.go](../../go/friend/internal/svc/servicecontext.go)。
 - `friend_capacity_backfill_v1` / `guild_schema_migration` 的旧共享库 readiness 门禁已于 2026-09-18 退役。friend 只在独占业务库维护关系，不再查询旧共享库 readiness 标记；当前容量守卫与锁序仍须保留。完整约束见[好友持久化架构](./friend-persistence-architecture.md)。
 
 ## TiDB 门禁与 schema 事实源

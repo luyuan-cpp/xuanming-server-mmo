@@ -13,7 +13,7 @@ func TestTicketOccupancyAllowsOnlyExactIdleAndTerminal(t *testing.T) {
 	if TicketOccupied(nil) || TicketOccupied(idle) {
 		t.Fatal("缺行或仅登记原身份的空占位不应占用")
 	}
-	for _, field := range []protoreflect.Name{"ticket", "request_id", "formation_id", "mode", "config_id", "team_size", "enqueued_ms", "not_before_ms", "zone_id", "rating_centi", "team_id", "network_profile", "expires_ms", "selected_region", "preferred_region"} {
+	for _, field := range []protoreflect.Name{"ticket", "request_id", "formation_id", "mode", "config_id", "team_size", "enqueued_ms", "not_before_ms", "zone_id", "rating_centi", "team_id", "network_profile", "expires_ms", "selected_region"} {
 		t.Run(string(field), func(t *testing.T) {
 			ticket := proto.Clone(idle).(*pb.MatchAuthorityTicketRecord)
 			message := ticket.ProtoReflect()

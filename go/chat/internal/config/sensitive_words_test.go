@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"chat/internal/textfilter"
-	"shared/playerredis"
 
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +13,7 @@ func TestValidateSensitiveWordsBeforeServiceStartup(t *testing.T) {
 		ZoneId: 1, LeaseTTL: 60, MaxContentBytes: 512, RateLimitPerSecond: 5,
 		HistoryMaxEntries: 200, HistoryTTLSeconds: 604800, HistoryDefaultLimit: 20,
 		HistoryMaxLimit: 50, RequestIdTTLSeconds: 60,
-		DSNEnv: "CHAT_AUTHORITY_DSN", Backend: "tidb", MaxOpenConns: 16, GlobalLoginSessions: true, LoginRedis: playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, DB: 0, PoolSizePerNode: 4},
+		DSNEnv: "CHAT_AUTHORITY_DSN", Backend: "tidb", MaxOpenConns: 16,
 	}
 	cfg.DataServiceRpc.Endpoints = []string{"127.0.0.1:9000"}
 	cfg.ListenOn = "127.0.0.1:50700"

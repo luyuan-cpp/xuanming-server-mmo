@@ -24,6 +24,7 @@ import (
 
 	"shared/buildinfo"
 	"shared/grpcstats"
+	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/netx"
@@ -48,6 +49,12 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	// 发布轨道是进程级部署属性(docs/design/release-track-gray-canary.md §2.1),取值非法就不起服:
+	// 带着认不出的轨道注册,gate 会把本实例当无效节点跳过,不报错也收不到流量。
+	releaseTrack, err := releasetrack.FromEnv()
+	if err != nil {
+		panic("client_rpc_router release track: " + err.Error())
+	}
 	// NewServiceContext 内含 Validate:配置错(如 Timeout ≤ ForwardTimeoutMs、
 	// ZoneScopedNodeTypes 名字非法)直接 panic,不带病起服。
 	svcCtx := svc.NewServiceContext(c)
@@ -87,6 +94,7 @@ func main() {
 		c.ZoneId,
 		advertisedHost(listenHost), port,
 		c.LeaseTTL,
+		releaseTrack,
 	)
 	if err != nil {
 		panic("failed to register ClientRpcRouter node in etcd: " + err.Error())
@@ -110,6 +118,7 @@ func main() {
 	}
 	fmt.Printf("  node_id:     %d (etcd CAS)\n", nr.Info.NodeId)
 	fmt.Printf("  node_uuid:   %s\n", nr.Info.NodeUuid)
+	fmt.Printf("  release:     %s\n", releaseTrack)
 	fmt.Printf("  targets:     %s\n", strings.Join(targetNames, ", "))
 	fmt.Printf("  zone_scoped: %v\n", c.ZoneScopedNodeTypes)
 	fmt.Printf("  fwd_timeout: %d ms\n", c.ForwardTimeoutMs)

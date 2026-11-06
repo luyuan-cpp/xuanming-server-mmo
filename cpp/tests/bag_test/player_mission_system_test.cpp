@@ -472,6 +472,50 @@ TEST_F(PlayerMissionSystemTest, ActivityAcceptUsesCappedLevelWithoutChangingStor
     }
 }
 
+// 带等级条件的任务接取时要按当前生效等级补一次进度。缺 LevelComp(加载不变量被破坏)时在写任务之前拒绝,
+// 不接下之后再静默跳过、留下一条缺了当前等级进度的任务;组件也不补建(组件访问规则「校验前置」,2026-11-05)。
+TEST_F(PlayerMissionSystemTest, LevelConditionAcceptIsRefusedBeforeAnyWriteWhenLevelComponentIsMissing) {
+    ActivityScheduleTableManager::Instance().Load();
+    const auto* mission = MissionTableManager::Instance().FindByIdSilent(15).first;
+    const auto* schedule = ActivityScheduleTableManager::Instance().FindByIdSilent(15).first;
+    const auto* condition = ConditionTableManager::Instance().FindByIdSilent(24).first;
+    ASSERT_NE(nullptr, mission);
+    ASSERT_NE(nullptr, schedule);
+    ASSERT_NE(nullptr, condition);
+    auto& missionRow = *const_cast<MissionTable*>(mission);
+    auto& scheduleRow = *const_cast<ActivityScheduleTable*>(schedule);
+    auto& conditionRow = *const_cast<ConditionTable*>(condition);
+    ScopedTestRestore restoreMission(missionRow);
+    ScopedTestRestore restoreSchedule(scheduleRow);
+    ScopedTestRestore restoreCondition(conditionRow);
+    missionRow.clear_condition_id();
+    missionRow.add_condition_id(24);
+    missionRow.clear_target_count();
+    missionRow.add_target_count(5);
+    missionRow.set_auto_reward(0);
+    conditionRow.set_condition_category(static_cast<uint32_t>(eConditionType::kConditionLevelUp));
+    conditionRow.clear_condition1();
+    conditionRow.set_quantity_type(1);
+    conditionRow.set_comparison_op(0);
+    scheduleRow.set_baseline_start_at_ms(1000);
+    scheduleRow.set_baseline_end_at_ms(2000);
+    scheduleRow.set_enabled(true);
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "夹具默认不挂等级组件";
+
+    EXPECT_EQ(kServiceUnavailable, PlayerMissionSystem::CheckAccept(player, 0, 15, 1500));
+    EXPECT_EQ(kServiceUnavailable, PlayerMissionSystem::Accept(player, 0, 15, 1500));
+    EXPECT_FALSE(Missions().IsAccepted(15));
+    EXPECT_FALSE(Missions().GetMissionList().mission_begin_time().contains(15));
+    EXPECT_EQ(0u, Missions().MissionSize());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "读路径不补建持久组件";
+
+    tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(3);
+    ASSERT_EQ(kSuccess, PlayerMissionSystem::Accept(player, 0, 15, 1500)) << "组件齐全时照常接取";
+    ASSERT_EQ(1, Missions().GetMissionList().missions().at(15).progress_size());
+    EXPECT_EQ(3u, Missions().GetMissionList().missions().at(15).progress(0)) << "按当前生效等级补进度";
+    EXPECT_FALSE(Missions().IsComplete(15));
+}
+
 TEST_F(PlayerMissionSystemTest, OwnedLevelFactsReplaceProgressInsteadOfAccumulating) {
     struct LevelConfig : MissionConfig {
         google::protobuf::RepeatedField<uint32_t> conditions;

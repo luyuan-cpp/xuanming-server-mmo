@@ -159,6 +159,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="currency_test.cpp" />
+    <ClCompile Include="currency_add_guard_test.cpp" />
     <ClCompile Include="anomaly_detector_test.cpp" />
     <ClCompile Include="asset_op_auth_test.cpp" />
     <ClCompile Include="asset_op_ledger_test.cpp" />
@@ -169,6 +170,7 @@
     <ClCompile Include="gm_sanction_inbox_executor_test.cpp" />
     <ClCompile Include="player_inbox_system_test.cpp" />
     <ClCompile Include="player_redis_route_contract_test.cpp" />
+    <ClCompile Include="transaction_log_commit_gate_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

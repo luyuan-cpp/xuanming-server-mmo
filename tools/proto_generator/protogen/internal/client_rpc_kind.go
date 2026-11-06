@@ -16,7 +16,8 @@ import (
 // 客户端协议方法的调用形态(docs/design/client-rpc-callback.md §5.1–§5.2)。
 //
 // 形态由方法级 option OptionClientRpcKind(proto/db/proto_option.proto,字段号 410001)显式声明,未标注即 REQUEST。
-// 本文件是 Unity 与 robot 两个客户端生成器共用的唯一判定:读 option、筛客户端协议服务、做生成期校验。
+// 本文件是 Unity 与 robot 两个客户端生成器、以及 C++ 生成器的 gate 上行白名单(clientAllowlistCases)共用的唯一判定:
+// 读 option、筛客户端协议服务、做生成期校验。
 // 生成器不得再按服务名、Notify 前缀或响应类型自行推断形态 —— 那些约定只在这里作为校验出现。
 
 // ClientRpcKind 与 proto 枚举 ClientRpcKind 的数值一一对应。
@@ -71,6 +72,14 @@ func (k ClientRpcKind) String() string {
 	default:
 		return fmt.Sprintf("ClientRpcKind(%d)", int32(k))
 	}
+}
+
+// AcceptsClientUpstream 报告客户端能不能发起这种形态的方法:只有 REQUEST 与 ONE_WAY。
+// PUSH 只下行,SERVER_ONLY 由服务端或 gate 代发(例如 gate 合成的 Disconnect)。
+// gate 的上行白名单 IsClientMessageId 按它生成(docs/design/client-rpc-callback.md §7 R4):方向约束在 gate 这一道闸
+// 就收住,不再依赖各业务服的会话拦截器去挡客户端伪造的推送与内部方法。
+func (k ClientRpcKind) AcceptsClientUpstream() bool {
+	return k == ClientRpcRequest || k == ClientRpcOneWay
 }
 
 // ReadClientRpcKind 读取方法上的 OptionClientRpcKind。

@@ -3966,7 +3966,9 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<MissionsContainerComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player); // 经 mysql_database_table.pb.h 可见
+    tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player); // 同上,单玩家物品获取封禁(player-inbox-service.md §2.2)
     tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(player); // 同上,经 mysql_database_table.pb.h 可见
+    tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player); // 同上,近期战斗结果(battle-result-recovery.md)
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);

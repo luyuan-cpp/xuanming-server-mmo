@@ -483,3 +483,10 @@ zlib、hiredis、yaml-cpp 也必须按 `/MDd` 构建；Debug 的 `/WHOLEARCHIVE`
   通过标准:infra 0 warning / 0 error;`agones_lifecycle_test` 全绿(磁盘上 `TEST(` 共 51 个,以实际运行数为准)。Linux 按 `tools/scripts/build_linux.sh`,`ldd` 确认 scene / battle 链接 libcurl。
 - 行为回归:scene 日志应为 `require_loop_heartbeat=false ... drain_label=<disabled>` 且无 `GET /gameserver`;battle 应为 `require_loop_heartbeat=true ... drain_label=mmorpg.io/drain`。
 - `/gameserver` 的真实 JSON 形状仍待 kind 阶段 B 用 curl 实测;元数据键名若既不是 `object_meta` 也不是 `objectMeta`,排空会一直保持上一次判定并每 5s 打 WARN(不会静默解除)。
+
+
+### 2026-11-05 创建许可的协程接续
+
+Scene/Battle 的 gRPC 创建守护段由各自服务对象的 `LoopTaskScope` 持有单次任务，等待现有 `AcquireAllocationPermitAsync` 后复核停机/准入并 `Proceed`。许可按值移入自有 RAII 对象，覆盖同步建房全过程。关闸取消本地等待，晚到许可仍自行释放，不能再次创建房间。
+
+这层接续不启动线程、不调用阻塞许可接口、不增加期限或重试。原 Agones worker、超时和投回 EventLoop 的顺序保持不变。正常许可回复在原 loop 回调栈续跑。Java 不使用这套 C++ Agones 适配，无客户端契约变化。

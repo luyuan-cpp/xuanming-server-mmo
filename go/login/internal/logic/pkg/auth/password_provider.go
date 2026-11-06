@@ -110,6 +110,14 @@ func (s *SQLPasswordHashStore) Close() error {
 	return s.db.Close()
 }
 
+// Stats 返回连接池统计,给 /metrics 的连接池收集器用(见 ProductionPasswordProvider.PoolStats);只读内存计数,不做 I/O。
+func (s *SQLPasswordHashStore) Stats() sql.DBStats {
+	if s == nil || s.db == nil {
+		return sql.DBStats{}
+	}
+	return s.db.Stats()
+}
+
 func (s *SQLPasswordHashStore) LookupPasswordHash(ctx context.Context, account string) (string, string, bool, error) {
 	rows, err := s.db.QueryContext(ctx,
 		"SELECT account, password FROM user_accounts WHERE account = ? LIMIT 2", account)
@@ -182,6 +190,16 @@ func NewProductionPasswordProviderWithLimits(store PasswordHashStore, quota Pass
 		kdfWaitTimeout: waitTimeout,
 		verifyKDF:      verifyArgon2id,
 	}, nil
+}
+
+// PoolStats 返回口令库的连接池统计,给 /metrics 的连接池收集器用。存储不是 SQL 池(单测替身)时 ok=false。
+// 只读内存计数,不做 I/O,可与 ValidatePassword 并发调用。
+func (p *ProductionPasswordProvider) PoolStats() (stats sql.DBStats, ok bool) {
+	pooled, ok := p.store.(interface{ Stats() sql.DBStats })
+	if !ok {
+		return sql.DBStats{}, false
+	}
+	return pooled.Stats(), true
 }
 
 func (p *ProductionPasswordProvider) ValidatePassword(ctx context.Context, account, password string) (*AuthResult, error) {

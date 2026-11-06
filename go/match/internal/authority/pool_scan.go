@@ -71,19 +71,8 @@ func (s *Store) PoolTeamLaunches(ctx context.Context, pool catalog.Pool, limit i
 func (s *Store) ExpireTickets(ctx context.Context, tickets []*pb.MatchAuthorityTicketRecord) (int, error) {
 	expired := 0
 	for _, ticket := range tickets {
-		tx, err := s.DB.BeginTx(ctx, nil)
+		r, err := s.DB.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=? AND ticket=? AND state=1 AND team_id=0 AND expires_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)", ticket.PlayerId, ticket.Ticket)
 		if err != nil {
-			return expired, err
-		}
-		r, err := tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=? AND ticket=? AND state=1 AND team_id=0 AND expires_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)", ticket.PlayerId, ticket.Ticket)
-		if err == nil {
-			_, err = tx.ExecContext(ctx, "DELETE FROM match_ticket_region WHERE player_id=? AND ticket=?", ticket.PlayerId, ticket.Ticket)
-		}
-		if err == nil {
-			err = tx.Commit()
-		}
-		if err != nil {
-			_ = tx.Rollback()
 			return expired, err
 		}
 		if n, _ := r.RowsAffected(); n == 1 {

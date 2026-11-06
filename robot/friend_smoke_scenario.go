@@ -14,9 +14,8 @@ package main
 //	   (验跨区读共享库的 player:session:{id});
 //	4. C Block(A) 受理、C ListBlocks 含 A;A→C 与 C→A 的 AddFriend **两个方向都**回 FriendBlocked;
 //	5. A RecommendFriends(limit=50):条数被服务端钳到 ≤20,且不含自己 / 已是好友的 B / 已拉黑的 C(弱断言);
-//	6. D-9 反向断言:A 经 gate 发 NotifyFriendEvent 的消息号 → 必须拿不到业务回包,
-//	   期望信封 tip = kServiceUnavailable(friend 的会话拦截器回 PermissionDenied,
-//	   路由服把上游 gRPC 错误统一翻成这个信封码,见 go/client_rpc_router 的 forwardlogic);
+//	6. D-9 反向断言:A 经 gate 发 NotifyFriendEvent 的消息号 → 必须**超时**:它是推送(CLIENT_RPC_PUSH),
+//	   gate 的上行白名单只收客户端能发起的方法,直接按非法包丢弃、不回包(client-rpc-callback.md §7 R4);
 //	7. 清理:A RemoveFriend(B)、C Unblock(A)。
 //
 // 结果约定(供外层脚本消费):
@@ -431,11 +430,11 @@ func RunFriendSmoke(cfg *config.Config) {
 		zap.Int("candidates", len(rec.GetCandidates())))
 
 	// ---- 步骤 6:D-9 反向断言 —— 客户端不能调 S2C 方法 ----
-	// NotifyFriendEvent 与 10 个 C2S 方法同处 ClientPlayerFriend 这一个服务里
-	// (客户端协议服务只看 OptionIsClientProtocolService,推送方法标 CLIENT_RPC_PUSH),
-	// 所以 gate 的客户端白名单**会**收这个消息号、请求**会**进到 friend ——
-	// 与 trade 第 2 步那种"gate 直接丢弃、表现为超时"不是同一回事,这里期望的是信封拒绝。
-	// 挡它的是 friend 的会话拦截器(方法级白名单),不是"服务端恰好没实现"。
+	// NotifyFriendEvent 与 10 个 C2S 方法同处 ClientPlayerFriend(客户端协议服务),但它标了 CLIENT_RPC_PUSH:
+	// gate 的上行白名单 IsClientMessageId 只收客户端能发起的方法(REQUEST / ONE_WAY,client-rpc-callback.md §7 R4),
+	// 所以这个号在 gate 就按非法包丢弃、不回包,表现为超时,与 trade 第 2 步同一口径(单发一次,远低于踢线阈值)。
+	// friend 的会话拦截器(方法级白名单)仍是第二道防线,只是经 gate 已经走不到它。
+	// 信封拒绝说明白名单收了推送号(gate 不是按新生成器重新生成、重新编译的版本);业务回包说明推送方法对客户端开放。
 	envelopeTip, err := a.call(game.ClientPlayerFriendNotifyFriendEventMessageId,
 		&friendpb.FriendEventS2C{
 			Reason:     friendpb.FriendEventReason_FRIEND_EVENT_REASON_REQUEST_ACCEPTED,
@@ -444,24 +443,17 @@ func RunFriendSmoke(cfg *config.Config) {
 		}, &base.Empty{})
 	switch {
 	case errors.Is(err, errFriendSmokeTimeout):
-		fail("notify-via-gate", "Expected envelope tip=%d, but timed out: gate dropped the NotifyFriendEvent message ID (not included in the allowlist), "+
-			"or the request never reached the routing service. This assertion checks rejection by the friend session layer and proves nothing when the transport path is broken",
-			tipFriendServiceUnavailable)
+		// 期望:gate 丢弃
 	case err != nil:
 		fail("notify-via-gate", "%v", err)
-	case envelopeTip == tipFriendServiceUnavailable:
-		// 期望:friend 回 PermissionDenied,路由服统一翻成 kServiceUnavailable 的信封拒绝。
-		// 同时去 friend 日志里核对一行"拒绝客户端调用非客户端方法 /friendpb.ClientPlayerFriend/NotifyFriendEvent"
-		// —— 信封码是被各种上游错误共用的,只有那行日志能证明拒绝来自会话层的白名单。
 	case envelopeTip != 0:
-		fail("notify-via-gate", "Envelope tip=%d, expected %d (kServiceUnavailable)", envelopeTip, tipFriendServiceUnavailable)
+		fail("notify-via-gate", "Expected gate to drop NotifyFriendEvent (timeout), got envelope tip=%d: the gate client allowlist "+
+			"includes push message IDs (regenerate with the R4 generator and rebuild gate)", envelopeTip)
 	default:
 		fail("notify-via-gate", "A client calling NotifyFriendEvent through gate received a business response: "+
 			"the S2C push method is exposed to clients, allowing anyone to forge a friend event (D-9)")
 	}
-	zap.L().Info("[friend-smoke] step 6: NotifyFriendEvent refused for client callers",
-		zap.Uint32("envelope_tip", envelopeTip),
-		zap.String("expect_friend_log", "Reject client calls to the non-client method .../NotifyFriendEvent"))
+	zap.L().Info("[friend-smoke] step 6: NotifyFriendEvent dropped by gate for client callers")
 
 	// ---- 步骤 7:清理 ----
 	// 这里**断言**结果码(与步骤 0b 的预清理不同):清理失败说明 RemoveFriend / Unblock

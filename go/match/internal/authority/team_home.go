@@ -15,7 +15,7 @@ import (
 var ErrTeamCrossZone = fmt.Errorf("%w: 开战名单不同区", ErrTeamRoute)
 
 // TeamUnitHomeZone 返回完整unit的共同home：全员原始区相同给原始区；原始区不同、合服后解析到同一个最终区给最终区；
-// 解析后仍不同的混合unit为0（投影 team_launch_region.home_zone 的0不进任何按区候选）；缺原home是损坏。
+// 解析后仍不同的混合unit为0；缺原home是损坏。
 // home是角色归属，不能用实际战斗机房或队长所在zone替代。zones 是调用方取的一份映射快照，nil = 没有合服；
 // 只想核结构合法的调用方传 nil。
 func TeamUnitHomeZone(group []*pb.MatchAuthorityTicketRecord, zones *placement.MergedZones) (uint32, error) {

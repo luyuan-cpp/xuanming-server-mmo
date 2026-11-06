@@ -25,11 +25,16 @@ message RankBoardRecord {
   uint64 created_ms = 15;
   uint64 sealed_ms = 16;
   uint64 deleted_ms = 17;
+  // 本代榜上现有的实体数(2026-11-05,缺口清单第 18 条):Submit 新增实体时加、Remove 删行时减,都在榜行锁里改,
+  // 与 rank_score 同事务提交。读路径的总数直接取它,不再对全榜 COUNT。
+  uint64 entries = 18;
 }
 message RankScoreRecord {
   option (OptionTableName) = "rank_score";
   option (OptionPrimaryKey) = "board_id,generation,entity_id";
-  option (OptionIndex) = "board_id,generation,score,achieved_ms,entity_id";
+  // 名次顺序索引(2026-11-05 起按 order_key,缺口清单第 18 条):降序榜原来是「score DESC, achieved_ms ASC」混合方向,
+  // 单向索引用不上,分页、求名次、封榜取前 N 都要整榜排序。order_key 把两种榜统一成同一方向,三处都顺着索引走。
+  option (OptionIndex) = "board_id,generation,order_key,achieved_ms,entity_id";
   uint64 board_id = 1;
   uint64 generation = 2;
   uint64 entity_id = 3;
@@ -37,6 +42,9 @@ message RankScoreRecord {
   uint64 achieved_ms = 5;
   uint64 source_cursor = 6;
   uint64 score_version = 7; // 最后写入这一行的批次版本,0 = 生产者不带版本。
+  // 名次越靠前越小的排序键:升序榜 = score,降序榜 = ^score(按位取反,即 -score-1,单调递减且覆盖整个 int64 不溢出)。
+  // 只由 go/rank 写(data.orderKey),与 score 同一条语句写入,不单独改。
+  int64 order_key = 8;
 }
 // 每一片每一游标的完整请求摘要保留至本代保留窗结束，晚重试不能冒充新一批。
 message RankInputReceiptRecord {

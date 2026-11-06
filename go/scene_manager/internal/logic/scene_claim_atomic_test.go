@@ -62,22 +62,24 @@ func TestSceneClaim_ForceReplyLostNextAttemptGetsSnapshot(t *testing.T) {
 	const sceneID uint64 = 89601
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 2)
 
-	_, _, _, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	_, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
 	require.Error(t, err)
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.False(t, mr.Exists(sceneNodeKey(sceneID)), "脚本已执行")
 
-	node, gs, members, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
 	require.NoError(t, err)
-	require.Equal(t, "node-a", node)
-	require.Equal(t, "gs-a", gs)
-	require.Len(t, members, 2)
+	require.True(t, claim.Claimed)
+	require.Equal(t, "node-a", claim.NodeID)
+	require.Equal(t, "gs-a", claim.AgonesGs)
+	require.Len(t, claim.Members, 2)
 
-	node, gs, members, err = AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	claim, err = AtomicDestroyForce(sc, claimTestZone, sceneID, "")
 	require.NoError(t, err)
-	require.Empty(t, node, "快照只交付一次")
-	require.Empty(t, gs)
-	require.Empty(t, members)
+	require.False(t, claim.Claimed, "快照只交付一次")
+	require.Empty(t, claim.NodeID)
+	require.Empty(t, claim.AgonesGs)
+	require.Empty(t, claim.Members)
 }
 
 // 空闲回收同理。旧代码把重发当成「有人进场」,重新 ZADD 并丢掉 agones_gs,实例成永久僵尸。
@@ -183,11 +185,10 @@ func TestAtomicDestroyForce_NoOwnerDoesNotClaimUnmappedScene(t *testing.T) {
 	const sceneID uint64 = 89607
 	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-x"))
 
-	node, gs, members, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
+	claim, err := AtomicDestroyForce(sc, claimTestZone, sceneID, "")
 	require.NoError(t, err)
-	require.Empty(t, node)
-	require.Empty(t, gs)
-	require.Empty(t, members)
+	require.False(t, claim.Claimed)
+	require.Empty(t, claim.AgonesGs)
 	require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(sceneID)))
 }
 
@@ -216,6 +217,8 @@ func TestRollbackInstanceAllocation_WipesEverythingOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, first.Claimed)
 	require.Equal(t, "gs-a", first.AgonesGs)
+	require.Equal(t, strconv.FormatUint(source, 10), first.Source)
+	require.Equal(t, "1", first.MirrorFlag)
 
 	again, err := evalSceneClaimWithToken(sc, sceneID, "token-1", luaRollbackInstanceAllocation, keys, node)
 	require.NoError(t, err)
@@ -303,4 +306,109 @@ func TestBeginDrain_ScriptFailureLeavesChannelRouted(t *testing.T) {
 	require.Empty(t, draining)
 	require.False(t, mr.Exists(sceneDrainingKey(102)))
 	require.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
+}
+
+// 以下三条守「本进程接手结局未知的认领」(evalSceneClaim)在 destroyInstanceInternal 里的副作用:接手的一方与
+// 第一次执行的不是同一个脚本,回放的快照仍要照常做完。旧代码在同一输入下的表现写在各用例注释里;修复前本文件
+// 编不过(AtomicDestroyForce 改了返回值),取红按 docs/PROGRESS.md 2026-11-05「销毁认领接手」条目的三个变异。
+// 三条都经 destroyInstanceInternal 进,hook 按脚本原文挑第一次 EVAL。
+
+// force 认领已执行、回包丢失;同一场景下一次认领来自空闲回收,回放 force 的快照(带 2 个剩余成员)。
+// 旧代码:空闲分支只取属主和 gs,成员丢掉,节点成员集合里那 2 人永远摘不掉,节点人数永久偏高。
+func TestDestroyInstance_TakesOverLostForceClaimAndUnlinksMembers(t *testing.T) {
+	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	ctx := context.Background()
+	const sceneID uint64 = 89612
+	const node = "node-a"
+	seedClaimScene(t, mr, sceneID, node, "gs-a", 2)
+	seedNodeMembers(mr, claimTestZone, node, 2)
+	require.NoError(t, mr.Set(nodeSceneCountKey(claimTestZone, node), "1"))
+
+	destroyed, err := destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
+	require.True(t, hook.fired.Load(), "注入必须真的发生")
+	require.Error(t, err)
+	require.False(t, destroyed)
+	require.True(t, mr.Exists(nodeMembersKey(claimTestZone, node)), "前提:回包丢失时副作用一样都没做")
+
+	destroyed, err = destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle")
+	require.NoError(t, err)
+	require.True(t, destroyed, "接手到 force 的快照,照常做完副作用")
+	require.False(t, mr.Exists(nodeMembersKey(claimTestZone, node)), "快照里的剩余成员要从节点集合摘掉")
+	require.Equal(t, "0", mustGet(t, mr, nodeSceneCountKey(claimTestZone, node)))
+}
+
+// 空闲回收清扫一个映射已不在的残留(带 agones_gs),回包丢失;下一次认领来自显式 DestroyScene,回放清扫的快照。
+// 清扫成功时属主为空。旧代码:force 分支按「属主为空 = 落空」判,回 false,名额永久不还(token 已被拿走,原路径
+// 再试只会落空)。
+func TestDestroyInstanceForce_TakesOverLostResidueSweepAndReleasesRoom(t *testing.T) {
+	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstance}
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	ctx := context.Background()
+	alloc := newFakeAllocator(&fakeGameServer{name: "gs-left", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4})
+	withAgones(t, sc, alloc, true)
+	const sceneID uint64 = 89613
+	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-left"))
+	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
+	require.NoError(t, err)
+
+	destroyed, err := destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle")
+	require.True(t, hook.fired.Load(), "注入必须真的发生")
+	require.Error(t, err)
+	require.False(t, destroyed)
+	require.False(t, mr.Exists(sceneAgonesGsKey(sceneID)), "前提:清扫已执行")
+	_, releases, _ := alloc.stats()
+	require.Zero(t, releases, "前提:回包丢失时名额还没还")
+
+	destroyed, err = destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
+	require.NoError(t, err)
+	require.True(t, destroyed, "接手到清扫的快照,属主为空也算认领成功")
+	_, releases, _ = alloc.stats()
+	require.Equal(t, 1, releases, "残留的名额还且只还一次")
+	require.EqualValues(t, 0, alloc.roomsOf("gs-left"))
+
+	destroyed, err = destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
+	require.NoError(t, err)
+	require.False(t, destroyed, "快照只交付一次")
+	_, releases, _ = alloc.stats()
+	require.Equal(t, 1, releases)
+}
+
+// 镜像的 force 认领回包丢失;空闲回收接手时 scene:{id}:source 与镜像标记早已删掉。
+// 旧代码:接手前预读镜像源读到空,镜像不从源的子集合里摘掉,源的 channelHasMirrors 恒真;指标 kind 记成 instance。
+func TestDestroyInstance_TakesOverLostMirrorClaimAndUnlinksFromSource(t *testing.T) {
+	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
+	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
+	ctx := context.Background()
+	const (
+		mirror  uint64 = 89614
+		source  uint64 = 89615
+		sibling uint64 = 89616
+	)
+	mirrorStr := strconv.FormatUint(mirror, 10)
+	siblingStr := strconv.FormatUint(sibling, 10)
+	seedClaimScene(t, mr, mirror, "node-a", "", 0)
+	require.NoError(t, mr.Set(sceneMirrorFlagKey(mirror), "1"))
+	require.NoError(t, mr.Set(sceneSourceKey(mirror), strconv.FormatUint(source, 10)))
+	_, err := mr.SAdd(sceneMirrorsKey(source), mirrorStr, siblingStr)
+	require.NoError(t, err)
+	mirrorDestroys := func() float64 {
+		return counterValueForTest(t, "scene_manager_instance_destroyed_total", map[string]string{
+			"zone_id": strconv.FormatUint(uint64(claimTestZone), 10), "kind": "mirror", "reason": "idle",
+		})
+	}
+	before := mirrorDestroys()
+
+	_, err = destroyInstanceForce(ctx, sc, claimTestZone, mirror, "explicit")
+	require.True(t, hook.fired.Load(), "注入必须真的发生")
+	require.Error(t, err)
+	require.False(t, mr.Exists(sceneSourceKey(mirror)), "前提:脚本已执行,镜像源键已删")
+
+	destroyed, err := destroyInstanceInternal(ctx, sc, claimTestZone, mirror, false, "", "idle")
+	require.NoError(t, err)
+	require.True(t, destroyed)
+	members, err := mr.Members(sceneMirrorsKey(source))
+	require.NoError(t, err)
+	require.Equal(t, []string{siblingStr}, members, "镜像源取自认领快照,镜像要从源的子集合里摘掉")
+	require.Equal(t, before+1, mirrorDestroys(), "kind 取自认领快照")
 }

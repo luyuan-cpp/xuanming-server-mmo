@@ -48,6 +48,11 @@ type GateCandidate struct {
 	Port        uint32
 	PlayerCount uint32
 	ZoneID      uint32
+	// MaxConnections 是这台 gate 自报的客户端连接上限(NodeInfo.max_connections,即它的 GateMaxConnections),
+	// 与 PlayerCount 同一单位。0 = 没声明(dev 下不设上限的 gate),不按上限过滤。
+	MaxConnections uint32
+	// Stale:这台 gate 的注册记录已有三个上报周期没被重写,多半卡住了(见 node.WatchedNode.Stale)。
+	Stale bool
 }
 
 // PickAndSignGateToken selects a gate from the candidate list (already
@@ -68,6 +73,7 @@ type GateCandidate struct {
 // the comment on `consumeAdmitAndSign` for the rationale (R17 R1 root
 // cause — admit could sit in Redis for 4-5 minutes and burn the token's
 // 5-min TTL before the client redeemed it).
+// (2026-11-05)取走现签之前还会复核放行时选定的 gate,不合格就用 PickGate 的规则重挑,见 admit_recheck.go 的 NewAdmitSigner。
 func PickAndSignGateToken(candidates []GateCandidate, secret []byte, ttl time.Duration) (*AdmitToken, error) {
 	gate, err := PickGate(candidates)
 	if err != nil {
@@ -91,8 +97,10 @@ func PickAndSignGateToken(candidates []GateCandidate, secret []byte, ttl time.Du
 // 仍能把人摊开;最忙的那台只有和同样忙的 gate 比时才会被选中。
 //
 // dispatcher 一拍放一批,在同一份快照上连续挑并记账,用的是确定性的 gatePicker(同数取 NodeID 小的),规则不同。
+//
+// 挑之前先剔除停写与满载的 gate(eligibleGates,两条挑法共用);全部不合格时回落全集。
 func PickGate(candidates []GateCandidate) (*GateCandidate, error) {
-	return pickTwoChoices(candidates, mathrand.IntN)
+	return pickTwoChoices(eligibleGates(candidates), mathrand.IntN)
 }
 
 // pickTwoChoices 是 PickGate 的实现,随机源显式传入:intn(n) 返回 [0, n) 上均匀分布的整数

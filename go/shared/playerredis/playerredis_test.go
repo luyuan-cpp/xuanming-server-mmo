@@ -339,42 +339,6 @@ func TestConfigOrDefault(t *testing.T) {
 	}
 }
 
-// 读登录态的服务:地址、口令、库号都取这一段,调用方的超时和缺省连接池保留。
-func TestLoginReaderConfig(t *testing.T) {
-	base := Config{PoolSizePerNode: 8, ReadTimeoutMs: 300, Addrs: []string{"不该留下:1"}, Password: "不该留下"}
-
-	cluster := LoginReaderConfig{Addrs: []string{"a:1", "b:2"}, Cluster: true, PasswordEnv: "ENV", PoolSizePerNode: 5}
-	got := cluster.ClientConfig(base)
-	if len(got.Addrs) != 2 || got.Addrs[0] != "a:1" || !got.Cluster || got.PasswordEnv != "ENV" || got.Password != "" || got.PoolSizePerNode != 5 || got.ReadTimeoutMs != 300 {
-		t.Fatalf("这一段应覆盖调用方的地址和口令,调用方的超时保留,得到 %+v", got)
-	}
-	if err := got.Validate(); err != nil {
-		t.Fatalf("集群形状应合法: %v", err)
-	}
-
-	single := LoginReaderConfig{Addrs: []string{"host:3"}, Password: "pw", DB: 3}
-	got = single.ClientConfig(base)
-	if len(got.Addrs) != 1 || got.Addrs[0] != "host:3" || got.Cluster || got.Password != "pw" || got.DB != 3 || got.PoolSizePerNode != 8 {
-		t.Fatalf("单实例形状应生效,没写连接池取调用方的缺省,得到 %+v", got)
-	}
-
-	if (LoginReaderConfig{}).HasAddr() {
-		t.Fatal("没写地址时 HasAddr 应为 false")
-	}
-	if !(LoginReaderConfig{Addrs: []string{"a:1"}}).HasAddr() {
-		t.Fatal("写了地址时 HasAddr 应为 true")
-	}
-	if err := (LoginReaderConfig{}).ClientConfig(Config{}).Validate(); err == nil {
-		t.Fatal("没写地址不能静默落到别的实例,Validate 应拒绝")
-	}
-	if err := (LoginReaderConfig{Addrs: []string{"  "}}).ClientConfig(Config{}).Validate(); err == nil {
-		t.Fatal("空白地址不能过校验")
-	}
-	if err := (LoginReaderConfig{Addrs: []string{"a:1"}, Cluster: true, DB: 3}).ClientConfig(Config{}).Validate(); err == nil {
-		t.Fatal("Redis Cluster 只有 DB 0")
-	}
-}
-
 // 口令可以来自环境变量,优先于 Password;Describe 不带口令。
 func TestConfigPasswordEnvAndDescribe(t *testing.T) {
 	const env = "PLAYERREDIS_TEST_PASSWORD"

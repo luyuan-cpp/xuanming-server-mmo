@@ -2,6 +2,7 @@
 #include <functional>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -86,8 +87,13 @@ public:
     {
         if (channelsClosed_ || !conn || !connected() || !channel_->IsBoundTo(conn)) return false;
         ready_ = true;
+        consecutiveHandshakeFailures_ = 0;
         return true;
     }
+
+    // 仅通信握手模块在一条连接握手失败时调用,返回含本次在内的连续失败次数(握手成功时清零)。
+    // 握手模块据此拉长关闭失败连接前的等待;计数跨重连保留,只描述这条链路,不承载业务状态。
+    uint32_t RecordHandshakeFailure() { return ++consecutiveHandshakeFailures_; }
 
     // 必须在 connect() 之前调用:每次连上时把服务表拷进新的 RpcChannel。
     void registerService(google::protobuf::Service* service)
@@ -100,6 +106,14 @@ public:
     void setConnectionObserver(ConnectionObserver observer)
     {
         connectionObserver_ = std::move(observer);
+    }
+
+    // 链路心跳(docs/design/muduo-rpc-channel.md §21):之后每次连上新建的 channel 都带心跳,写空闲时发 HEARTBEAT,
+    // 读空闲满超时就关闭连接,交给 enableRetry 重连、再走握手。与 registerService 一样必须在 connect() 之前调用。
+    // 只由节点装配(NodeConnector)开启,默认关;对端(入站 RpcServer)必须同样开启。
+    void setLinkHeartbeat(const RpcLinkHeartbeat& heartbeat)
+    {
+        heartbeat_ = heartbeat;
     }
 
     void connect()
@@ -244,7 +258,7 @@ private:
                 // 没等到旧连接的 DOWN 就来了新连接(不应发生):旧 channel 上的在途调用先按断连失败。
                 channel_->OnDisconnect();
             }
-            channel_ = RpcChannel::Create(*conn->getLoop(), conn, services_, maintenance_);
+            channel_ = RpcChannel::Create(*conn->getLoop(), conn, services_, maintenance_, heartbeat_);
             if (channelsClosed_)
             {
                 channel_->Close();   // 节点已进入关机阶段 0(见 CloseChannel)
@@ -285,7 +299,10 @@ private:
     // 与 RpcChannel 使用同一维护域；生产默认进程域，独立域允许测试隔离节点关机的永久终态。
     std::shared_ptr<RpcMaintenanceState> maintenance_;
     bool ready_{false};
+    uint32_t consecutiveHandshakeFailures_{0};
     RpcServiceMap services_;
+    // 有值时每次连上的 channel 都带链路心跳(setLinkHeartbeat)。
+    std::optional<RpcLinkHeartbeat> heartbeat_;
     bool channelsClosed_{false};
     // 声明在 client_ 之后:析构时先于 client_ 释放(~RpcChannel 在 loop 还活着时把在途调用排进队列)。
     RpcChannelPtr channel_;

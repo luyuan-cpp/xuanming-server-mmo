@@ -26,6 +26,11 @@
 #   - msbuild / cmake  (cpp build is out of scope; build cpp manually
 #                       and drop binaries under bin/)
 #
+# Required environment:
+#   - MMORPG_INTERNAL_AUTH_SECRET  shared internal identity signing secret
+#                       (>=32 bytes, same value for gate / login / online
+#                       services); start refuses to run without it
+#
 # Usage examples:
 #   ./tools/scripts/deploy-staging.sh start
 #   ./tools/scripts/deploy-staging.sh stop
@@ -111,8 +116,22 @@ check_cpp_node_started() {
   grep '\[open_file_limit\]' "$logfile" 2>/dev/null | while read -r line; do log "  $node: $line"; done || true
 }
 
+# 内部身份签名密钥(docs/design/gate-online-identity.md §4):gate 对发往 Go 服务的会话身份签名,login 与在线服务验签,
+# 三方必须是同一把。gate 缺它或不足 32 字节直接拒启,所以在擦 Redis、起任何进程之前先查,缺了就停,不留半截部署。
+# 本脚本不生成、不落盘、不打印密钥:由操作员在 start 前 export,子进程继承环境变量。
+require_internal_auth_secret() {
+  local secret="${MMORPG_INTERNAL_AUTH_SECRET:-}"
+  local LC_ALL=C # 让 ${#secret} 按字节计,与 gate 的 32 字节下限同一口径
+  [[ -n "$secret" ]] || die "MMORPG_INTERNAL_AUTH_SECRET is not set: export the shared internal identity signing secret (>=32 bytes, same value for gate, login and the online services) before '$0 start'"
+  (( ${#secret} >= 32 )) || die "MMORPG_INTERNAL_AUTH_SECRET must be at least 32 bytes; gate refuses to start otherwise"
+  [[ ! "$secret" =~ ^[[:space:]] && ! "$secret" =~ [[:space:]]$ ]] || die "MMORPG_INTERNAL_AUTH_SECRET must not have leading or trailing whitespace; the Go verifiers reject such keys"
+  export MMORPG_INTERNAL_AUTH_SECRET
+}
+
 # ── Subcommands ────────────────────────────────────────────────────
 cmd_start() {
+  require_internal_auth_secret
+
   log "checking docker infra (redis/etcd/mysql/kafka)..."
   for c in redis etcd mysql kafka; do
     if ! docker ps --format '{{.Names}}' | grep -qx "$c"; then

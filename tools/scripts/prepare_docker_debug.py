@@ -88,27 +88,8 @@ def load_yaml(relative: str) -> dict:
     return value
 
 
-def write_yaml(path: Path, value: dict, *, inline_match_login_addrs: bool = False) -> None:
-    if inline_match_login_addrs:
-        # Match 迁移直接读这份配置。注册器还会替换 Addrs 整行，必须保留单行序列。
-        class InlineAddresses(list):
-            pass
-
-        class MatchDumper(yaml.SafeDumper):
-            pass
-
-        MatchDumper.add_representer(
-            InlineAddresses,
-            lambda dumper, addresses: dumper.represent_sequence(
-                "tag:yaml.org,2002:seq", addresses, flow_style=True
-            ),
-        )
-        login_redis = value["LoginRedis"]
-        value = {**value, "LoginRedis": {**login_redis, "Addrs": InlineAddresses(login_redis["Addrs"])}}
-        text = yaml.dump(value, Dumper=MatchDumper, allow_unicode=True, sort_keys=False, width=float("inf"))
-    else:
-        text = yaml.safe_dump(value, allow_unicode=True, sort_keys=False)
-    path.write_text(text, encoding="utf-8")
+def write_yaml(path: Path, value: dict) -> None:
+    path.write_text(yaml.safe_dump(value, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
 def container_addresses(value):
@@ -472,7 +453,7 @@ def main() -> None:
     # TicketSecret 与下面 C++ 的 SpectateTokenSecret 同值：match 签发、gate 验签。
     match["Spectate"].update(TicketSecret=environment["SPECTATE_TOKEN_SECRET"], OpsCallerSecret=environment["MATCH_OPS_CALLER_SECRET"])
     for service, config in configs.items():
-        write_yaml(config_dir / f"{service}.yaml", config, inline_match_login_addrs=(service == "match"))
+        write_yaml(config_dir / f"{service}.yaml", config)
     # 建表用 root（compose 的 db-migrate、data-migrate、player-inbox-migrate）：常驻账号没有 DDL。root 口令只落这三份忽略目录里的配置。
     schema_db = copy.deepcopy(db)
     schema_db["ServerConfig"]["Database"].update(User="root", Passwd=environment["MYSQL_ROOT_PASSWORD"])

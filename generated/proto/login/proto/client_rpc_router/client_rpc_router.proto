@@ -26,4 +26,8 @@ service ClientRpcRouter {
 message ForwardRequest {
   ClientRequest request = 1;   // 客户端原包(id / message_id / body),路由服不解析 body
   uint32 zone_id = 2;          // 发起 gate 所在 zone:zone-scoped 目标(login)只挑同 zone 实例
+  // 会话的发布轨道(docs/design/release-track-gray-canary.md §2.3):gate 填自己的 NodeInfo.release_track,
+  // 会话连在哪台 gate 上就是哪条轨道。路由服按它给全局类型选实例(§2.4);zone-scoped 目标按 zone_id 选,不看它。
+  // 空串 = stable(没写轨道的 gate);stable、canary 之外的值是契约违例,路由服拒绝这条请求。
+  string release_track = 3;
 }

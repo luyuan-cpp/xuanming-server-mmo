@@ -28,7 +28,7 @@ Priority is split into two layers:
 | `kAttacker` | 2 | Combat/threat system (TODO: integrate) |
 | `kQuestNpc` | 3 | Quest/mission system marks NPC (TODO: integrate) |
 | `kBoss`     | 4 | Boss / elite monster |
-| `kPinned`   | 5 | 预留锁定标签，权重恒为 255；玩法尚未接入 |
+| `kPinned`   | 5 | Highest weight (255) for explicit follows that must never be evicted, e.g. skill tracking |
 
 ### Built-in Policies
 
@@ -94,26 +94,37 @@ stores it in `AoiClientCapacityComp.clientDesiredCount` and clamps it to
 `InterestSystem::GetEffectiveCapacity(watcher)` returns
 `min(clamped_client, server_pressure_cap)`.
 
-## 锁定 / 解锁（尚未接入）
+## Explicit Follows
 
-未接入；接入时须同批设计目标离场的远端清理，不得全节点扫描。当前只保留预留的 `kPinned` 优先级语义与测试。
+Requirements and acceptance: [aoi-directed-interest.md](aoi-directed-interest.md). The reserved Pin/Unpin
+idea is replaced by explicit follows; the Chinese version of this document has the full rules.
+
+- Gameplay calls `AoiSystem::Follow(watcher, target, grant)` / `AoiSystem::Unfollow(watcher, target, source)`.
+  The target must be in the same scene and may be outside the hex grid range.
+- `AoiFollowGrant` carries the source identity (`AoiFollowSource`: kind + instance id), an eviction
+  priority tag and an optional stealth-detection grant. Re-adding a source updates it in place;
+  unfollow revokes only that source.
+- One relation may have a spatial source and several explicit sources but only one client-visible
+  state. Leaving the grid removes only the spatial source; the client gets one removal when the last
+  source is gone.
 
 ## Stealth Visibility
 
-`ViewSystem::CanSee(observer, target)` replaces raw `IsWithinViewRadius` in
-AOI enter checks:
+`ViewSystem::CanSee(observer, target)` is the spatial enter check: distance, then stealth.
+A stealthed target is visible only when one of the observer's explicit sources for it sets
+`revealsStealth`. When the stealth tag appears or disappears, `BuffSystem` calls
+`AoiSystem::RefreshTargetVisibility`: watchers without detection get one removal (explicit
+sources are kept), and on reveal paused follows plus nearby observers get a fresh create with the
+current position immediately.
 
-1. Distance check (as before).
-2. If target has `kBuffTypeStealth` buff → invisible **unless** observer has
-   the target pinned (`AoiPriority::kPinned`) in its interest list.
+## Directionality and Delivery
 
-侦测隐身的远端锁定尚未接入，不能将预留标签视为现有技能入口。
-
-## Directionality
-
-Interest is **unidirectional**: A seeing B does not require B to see A. Each
-direction is checked independently during `HandleEntityVisibility`. This
-enables asymmetric scenarios (different view radii, stealth, capacity limits).
+Interest is **unidirectional**. Two indexes describe the same directed relations and are written only
+by `InterestSystem`: `AoiListComp` on the watcher (forward) and `AoiWatchersComp` on the target
+(reverse). Movement, attribute sync and skill broadcasts go to the target's visible watchers that have
+a gateway session, including explicit followers outside the grid. Leaving the scene or being destroyed
+goes through `AoiSystem::OnLeaveScene`, which removes every in/out edge through the two indexes without
+scanning the node.
 
 ## Files Changed
 
@@ -123,7 +134,7 @@ enables asymmetric scenarios (different view radii, stealth, capacity limits).
 | `spatial/comp/scene_node_scene_comp.h` | `AoiListComp` (entries map), `AoiClientCapacityComp`, `ScenePressureComp`, `ScenePriorityPolicyComp` |
 | `spatial/system/interest.h/.cpp` | Policy-aware `AddAoiEntity`, `GetEffectiveCapacity`, `GetPriorityPolicy`, `UpgradePriority` |
 | `spatial/system/view.h/.cpp` | `CanSee()`, `IsStealthed()` |
-| `spatial/system/aoi.cpp` | Uses `CanSee`, `DetermineAoiPriority` (semantic tags), pinned check via `==` |
+| `spatial/system/aoi.cpp` | Grid evaluation with `CanSee` / `DetermineAoiPriority`, explicit follow entry points, netted visibility delivery |
 | `actor/attribute/system/actor_state_attribute_sync.cpp` | Updated for `entries` API |
 | `tests/aoi_test/*` | Priority, capacity, pin/team, dynamic capacity, policy tests |
 

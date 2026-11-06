@@ -937,3 +937,225 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 - 仓外：Java 仓 `PARITY.md`。
 
 同一批文件上有别的会话未提交的改动：`currency_test.cpp`、`player_battle.cpp`、`result_commit.h`、收件箱几份文件等。编译或用例失败时先按行号归因，不要回退任何一方。
+
+## 15. 续：§12 持久值域收尾核对（2026-11-05，核对 §12 的会话）
+
+> 本节只追加，不改上文。只读核对加改文档，没有改代码，也没有编译或运行。
+
+- **代码状态**：§13 的改动已全部随别的会话的整仓快照入库（`5de132e2`、`fc504300b`，另有 `65c69f4a9` / `ccbb4af69` / `372caca25` 里的小改），这些文件在工作区里没有未提交改动。
+  - 10-30 之后别的会话对这几个文件的改动，大多与本主题无关：删除战斗结算账本、`SendToPlayerClient` 改名、装备用例按新的词条上限调小测试值。
+  - 只有一处相关：`ccbb4af69` 给两个夹具补载了自动加点方案表（见下）。
+  - 玩家存档已改成 `player_store` 分组片段直写，但本主题核对过的入口都还在：加载走 `PlayerDatabaseMessageFieldsUnmarshal` → 各 `InitializeOnLoad`，存盘走 `MarshalPlayerForPersist`。10-22 之后玩家存档没有新增顶层字段，只删了 10、17、18、19 号，所以 §12.1 的逐项结论不用重做。
+- **运行结果**：取自 11-02 r3，即玩家存盘重构那条线的 Codex 回归（`build/player-store-verify-20261102-r3-prep/06-cpp-tests/bag_test.stdout.log`）。
+  - 本主题在 bag_test 里有 25 条用例，23 条通过。通过的包括 10-30 新增的 `PetAllocationTest.StoredLevelAboveSpeciesCapIsEffectiveAtTheCap`、`PetAllocationTest.SummonAndBattleCompareOwnerLevelWithTheCappedPetLevel`、角色与宝宝各一条 `OnlyUnknownKeysResetIsNothingToChangeAndFree`，以及 `PersistRoundTripTest.ValueDomainsBeyondThisBuildSurviveLoadAndSave`、`PlayerMissionSystemTest.ActivityAcceptUsesCappedLevelWithoutChangingStoredLevel`。
+  - 失败两条：`PlayerEquipAttributeTest.AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 回 25013，`PetAllocationTest.AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 回 26014。原因：我 10-30 写这两条用例时，没给夹具加载 `AttributeAutoPlan` 表，`AutoAllocate` 回了"无自动加点方案"。`ccbb4af69`（11-02）已在两个夹具的 `SetUp` 里补上 `AttributeAutoPlanTableManager::Instance().Load()`，补完之后还没有复跑。
+  - 同一轮 bag_test 还有别的失败：14 条装备词条用例，以及 `PersistRoundTripTest.UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave` 缺 `AssetRecallLine` 覆盖。它们不属于本主题，`ccbb4af69` 里也已改。
+  - skill_test、turn_battle_engine_test：10-24 的全量运行已通过（见 §13 开头），之后这两块的本主题代码没有变。
+- **D7 作废**：10-31 起，战斗结算改走 match SQL + player_inbox。`player_database.settlement_ledger`（17 号）已 `reserved`，`BattleSettlementLedgerComp` 与 `kMaxAppliedRecords` 已删除。
+  - 设计 §8.3、§12、§12.1、§12.2 里"调大 `kMaxAppliedRecords` 的版本不可回滚 scene"这条发布约束已撤。
+  - §12「待确认」那一行结案：`merge_state` 已删除，`stress_test_probe` 按设计每次写盘重新生成。
+- **待 Codex**：只需要复跑 bag_test，确认那两条自动加点用例变绿。
+  - 玩家存盘那条线的 `docs/handoff/player-save-direct-commit-20261030/progress.md`「给 Codex 的验证入口」已含 `game.sln` 构建与 bag_test 全量（单独报 `PetAllocationTest.*`），跑那一次就能覆盖。
+  - 单独跑时：先在仓库根 `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`（`run_cpp_tests -Build` 不重编库，库改过要先编），再执行：
+    ```
+    pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/persist-value-domain
+    ```
+  - 通过标准：两条 `AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 在列且通过，本主题其余用例保持通过。失败时保留 gtest 原文，不改断言重跑。
+- **仍在进行**：等级读点（战斗快照、技能伤害、回血 buff、装备穿戴）的超上限与 0 级用例，由用户 11-05 启动的会话「补等级读点的超上限与 0 级回归用例」在做。
+- **Java（负责人 11-05 定：留 todo）**：不变，Java 仓 `PARITY.md` 原有那一行已登记待做。
+
+## 16. 续：等级读点的超上限与 0 级回归用例（2026-11-05，补等级读点用例的会话）
+
+> 本节只追加，不改上文。只加了测试，没改生产代码，也没有编译或运行（AGENTS §10.1）。补的是 §13.3「测试 / 静态编译评审」第 1 条和 §13.4 最后一条登记的缺口。
+
+- **口径**：按 `player_level_rules.h` 文件头与设计 §12.2，存储等级原样携带，玩法读 `playerlevel::CappedLevel`（0 按 1，超过 85 按 85）。每条用例都同时断言生效值正确、`LevelComp` 的存储值不变。
+- **新增用例**（6 条，四个读点各至少一条）：
+
+  | 读点 | 工程 / 文件 | 用例 | 要点 |
+  |---|---|---|---|
+  | 战斗快照：`PlayerBattleSystem::BuildBattleSnapshot` | bag_test：`player_battle_settlement_test.cpp`，文件末尾新开一节 | `PlayerBattleSettlementTest.SnapshotLevelIsTheCappedLevelAndTheStoredLevelIsCarried` | 存储 100 时快照 85，存储 0 时快照 1，存储 85 时快照 85。夹具补齐组快照要的组件，会话号非 0 即可 |
+  | 技能伤害：施法者等级（`CalculateSkillDamage` 的表达式参数） | skill_test：`skill_test.cpp` | `SkillDamageLevelTest.CasterStoredLevelIsCappedInTheDamageExpression` | 真表 1 号技能，走落点入口 `SkillSystem::HandleSkillSpell`。0 级等于 1 级（新行为，原先打不出伤害），100 级等于 85 级 |
+  | 技能伤害：目标等级（`CalculateFinalDamage` 减伤的等级系数） | 同上 | `SkillDamageLevelTest.TargetStoredLevelIsCappedInTheDamageReduction` | 目标护甲 480，受伤比例才随等级变。0 级等于 1 级，100 级等于 85 级 |
+  | 回血 buff：`OnHealthRegenerationBasedOnLostHealth` | buff_test：`buff_test.cpp` | `BuffHealthRegenerationLevelTest.StoredLevelZeroAndAboveCapHealAsLevelOneAndTheCap` | 夹具表新增 9027 行（buff_type 42，`level*health/100`），走 `BuffSystem::OnIntervalThink`。0 级等于 1 级（新行为，原先一滴不回），100 级等于 85 级 |
+  | 装备穿戴：`player_equip.cpp` 顶部的 `PlayerLevel` | bag_test：`player_equip_test.cpp`，放在 `EquipChecksTheLevelRequirement` 之后 | `PlayerEquipTest.EquipLevelRequirementTreatsAStoredLevelAboveTheCapAsTheCap`<br>`PlayerEquipTest.EquipLevelRequirementTreatsAStoredLevelZeroAsLevelOne` | 在内存里临时改穿戴等级要求，TearDown 重新加载表。存储 100 够不着 86 级、够得着 85 级；存储 0 够不着 2 级、够得着 1 级 |
+
+- **数值推导**（真表 `generated/tables`）：
+  - 技能：1 号技能的伤害表达式是 `100*level`。目标护甲取 480，正好等于 1 级的等级系数（360 + 120），所以 1 级目标受伤比例 0.5，85 级目标是 10560 / 11040。
+    - 打 1 级目标：1 级施法者掉 50，85 级掉 4250；如果直读存储等级，0 级掉 0，100 级掉 5000。
+    - 1 级施法者打目标：1 级目标掉 50，85 级目标掉 ceil(95.65) = 96。
+  - 回血：真表 17 号是 `0.013*level*health`，77 级起一跳就回满（0.013 × 77 > 1），85 级和 100 级分不出来，所以夹具行改用同类型、同参数的线性式。已损气血 10000 时，1 级回 100，85 级回 8500，都回不满。
+  - 装备：真表样例装备最高 80 级，85 级和 100 级都够得着，所以用例里临时抬高要求。
+- **区分力**：每条用例先断言等级确实影响结果（85 级大于 1 级）。技能和回血还断言表达式取值 0 级小于 1 级、100 级大于 85 级，免得相等断言恒成立。
+- **已知边界**：目标一侧的 `combatdamage::LevelFactor` 自己也把等级夹到 1..85。所以即使 `skill.cpp` 直读目标的存储等级，目标那条用例的两个相等断言照样成立。它钉的是落到气血上的结果；`skill.cpp` 目标等级那一行是否走 `CappedLevel`，仍靠代码评审守。施法者那条没有这层兜底，能直接区分。
+- **改动文件**：
+  - `cpp/tests/bag_test/player_battle_settlement_test.cpp`：只在文件末尾加了一节。同一文件中段有别的会话未提交的收件箱币种用例，不是本节写的；
+  - `cpp/tests/bag_test/player_equip_test.cpp`、`cpp/tests/skill_test/skill_test.cpp`、`cpp/tests/buff_test/buff_test.cpp`；
+  - 本文、`docs/PROGRESS.md`。
+  - 生产代码和工程文件都没动，没有新增源文件。
+- **给 Codex**（工作目录为仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7，MSBuild 必须串行 `/m:1`，日志放 `build/verification/level-readers/`）：
+  1. 库代码如果在上次编译之后改过（别的会话有在途改动），先编库：`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。`run_cpp_tests -Build` 只编测试工程，链接的是预编好的库。本节没改库。
+  2. 依次执行：
+     ```
+     pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/level-readers
+     pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter skill_test -LogDir build/verification/level-readers
+     pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter buff_test -LogDir build/verification/level-readers
+     ```
+  3. 通过标准：上表 6 条用例在列且通过；三个工程的其余用例不因本节变红。bag_test 在 11-02 那一轮有与本节无关的既有失败，以及之后的修正，见 §15。
+  4. 失败时：保留首个编译错误和失败用例的 gtest 原文，不改断言重跑。快照那条如果卡在 `ASSERT_TRUE(...Snapshot...)`，用例消息里带着 tip 码，请一并回报。
+- **Java 版（AGENTS §12）**：待做，不在本节范围。Java 加载时仍用 `PlayerLevels.clampStored` 压回等级（§13.1），这几个读点要随那一项一起对齐。Java 仓 `PARITY.md` 原有那一行已登记待做，本节不另加行。
+
+## 17. 续：第 7 批：台账封存门禁、战斗结算币种、收件箱停用补打（2026-11-05，第 6 批会话）
+
+> **状态**：已落码，未编译、未测试，在工作区未提交。用户第三次要求按最标准的方式做完，范围按服务器缺口清单第 13 条（`docs/handoff/server-gap-audit-20261101.md`）加上 14.4 的待办。Java 版待做（PARITY 已登记）。
+
+**10-30 部分的运行证据（补记）**
+
+Codex 11-02 跑过一轮全量 C++ 回归，证据在 `build/player-store-verify-20261102-r3-prep/06-cpp-tests/`。14.3 列出的 16 条 C++ 用例都实际运行并通过，其中包括 10-30 新增的 `AssetOpSystemTest.QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry`；currency_test 299 条、turn_battle_engine_test 300 条全绿。
+
+同一轮 bag_test 有 16 条失败，都不是这批的问题：
+- 13 条 `PlayerEquipAttributeTest` 失败，原因是测试取值超过了配置表上限（`attr 2 ... 500 vs 400`）。是表数据被改过，不在本线。
+- `PetAllocationTest.AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 是 §12 核对会话 10-30 新增的用例。
+- `player_feature_handler_test.cpp:1053` 那一条也不在本线。
+- `PersistRoundTripTest.UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave` 报新持久类型 `AssetRecallLine` 不在往返夹具里。这是往返测试按设计在拦漏网的新类型；之后已由别人在 `ccbb4af69` 补进夹具，尚未重跑。
+
+Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍没有运行记录。
+
+**做了什么**
+
+1. **台账封存门禁**（设计 §3.1「封存」、§13 第 11 条；审计 r2-ps#1 / r2-ps#10）
+   - 生成器 `tools/proto_generator/protogen/internal/persistschema/`：
+     - `ledger.go`：新增 `Seal`；`sealed=<世代>:<行数>:<sha256>` 的解析与写回；`SealDigest` / `SealViolations` / `SealLedger`；
+     - `apply.go`：每次生成核对封存，引导期加字段、合并带进同世代的行都失败，分别给出处置提示；
+     - `generate.go`：`SealLedgerFile`。
+   - 命令行：`cmd/root.go` 新增 `--persist-schema-seal`，与 `--grpc-handler` 互斥；`tools/scripts/dev_tools.ps1 -Command persist-schema-seal`。`Invoke-ProtoGenRun` 加了 `GeneratorArgs` 参数，缺省为空，proto-gen-run 的行为不变。
+   - 发布预检：`tools/scripts/release_preflight.ps1` 的 H 节新增 `release.persist_schema.sealed`，生产档 FAIL、dev 档 WARN。
+   - 台账 `proto/persist_schema_gen.txt` 只改了表头注释（两行），与生成器常量逐字一致。
+   - 文档：`docs/ops/release-checklist.md` §2.1 ① / ⑦、§6.2；审计 `data-overwrite-rollback-audit-r2-20261019.md` 的 r2-ps#1 / #10 两行登记已落码。
+   - 没做运行期字段集合指纹，理由见设计 §13 第 11 条。
+2. **战斗结算的币种版本错位**（设计 §12 载荷行，缺口清单第 13 条后半）
+   - `player_battle.cpp`：`CollectSettlementCurrencyGains` 改为三种结论（有效 / 不认识的币种 / 坏载荷）。
+   - 收件箱执行器 `ApplyInboxSettlement`：不认识的币种回 `kVersionSkew`（原来是 `kDefer`），日志 `metric=persist_version_skew where=battle_currency`；坏载荷（金额越界、重复币种）先判，照旧 `kDefer`。
+   - `ApplySettlementToEntity` 的结局不变。
+3. **收件箱域停用的周期补打**（14.4 第 1 条）
+   - 代码：`player_inbox_runtime_comp.h` 加 `nextHaltRelogMs`；`player_inbox_rules.h` 加 `kHaltedDomainRelogIntervalMs`（5 分钟，带 static_assert）。`player_inbox_system.cpp` 的 Tick 对停用的域先排期，到点补打 `metric=inbox_halted ... relog=1`（WARN），只打日志、不改状态。
+   - 告警与文档：`deploy/k8s/player-inbox-alerts.yaml` 的停用查询注释写明会补打；PoisonSuspect 描述加「先排除版本错位」。运行手册告警表、收件箱设计 §9.4 与 §7.6 同步更新。
+
+**待 Codex 验证（照抄执行）**
+
+工作目录为仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7。C++ MSBuild 必须串行 `/m:1`。日志放 `build/verification/persist-batch7/`。**不要在主仓运行 `persist-schema-seal`**：项目未上线，台账封存之后引导期内就不能再加持久字段。只对要上生产的版本封存（release-checklist §2.1 ①）。
+
+1. 生成器源码变了，先重建：
+   ```
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
+   ```
+   可选：再跑一次 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。通过标准：台账 `proto/persist_schema_gen.txt` 与持久 schema 产物没有新的差异（表头两行已在工作区）。别的会话的 proto 改动带来的差异照常归属。
+2. 生成器单测与静态检查（在 `tools/proto_generator/protogen` 下）：
+   ```
+   go test -count=1 ./internal/persistschema/... ./cmd/...
+   go vet ./internal/persistschema/... ./cmd/...
+   ```
+   通过标准：全绿，下列用例在列：
+   - `TestSealLedgerSealsMaxGenAndIsIdempotent`
+   - `TestApplyAfterSealAddsFieldsInANewGeneration`
+   - `TestApplyRejectsFieldAddedToASealedGenerationInBootstrap`
+   - `TestApplyRejectsRowMergedIntoASealedGeneration`
+   - `TestSealLedgerFileWritesOnlyWhenSomethingNewIsSealed`
+   - 回归：`TestLedgerFormatParseRoundTrip`（已带封存行）、`TestParseLedgerRejectsMalformed`（新增 5 种非法封存行）、`TestRepositoryLedgerIsCanonical`（表头一致）。
+3. PowerShell 契约测试：
+   ```
+   pwsh -File tools/scripts/tests/dev_tools_proto_gen_exit.tests.ps1
+   pwsh -File tools/scripts/tests/release_common_version.tests.ps1
+   pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+   ```
+   通过标准：
+   - 前两个退出 0。第一个新增 4 条 `persist-schema-seal（binary-primary / go-run）` 用例；第二个的完整制品正向用例多一条 `release.persist_schema.sealed` 断言。
+   - 第三个只看「LogQL 契约:player-inbox-alerts.yaml …」这一条：本批只改了注释与告警描述。该套件的其余既有失败另列，不归本批。
+4. C++：按 §5.2 第 1 步编 `game.sln`（`/m:1`）。测试工程链接预编好的库，只跑 `run_cpp_tests -Build` 不会重编 scene 库，所以必须先编整解。然后依次执行：
+   ```
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter currency_test -LogDir build/verification/persist-batch7
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/persist-batch7
+   ```
+   通过标准：
+   - currency_test 全绿，`PlayerInboxSystemTest.HaltedDomainRelogsOnTheIntervalWhileTheEntityLives` 在列。
+   - bag_test：`PlayerBattleSettlementTest.*` 全绿，含新增的 `InboxSettlementWithCurrencyUnknownToThisVersionReportsVersionSkew`；`PersistRoundTripTest.*` 全绿，`AssetRecallLine` 的夹具已补。
+   - 上面说的 15 条既有失败（装备属性 13、宝宝加点 1、`player_feature_handler_test` 1）若仍在，另列归属，不算本批失败。
+5. Go（10-30 的部分，至今没有运行记录）：在 `go/shared`、`go/player_inbox`、`go/guild`、`go/trade`、`go/scene_manager`、`go/mail`、`go/rank` 各跑 `go test -count=1 ./...` 与 `go vet ./...`。
+   - 交易真库用例另跑：设置 `COMMERCE_TEST_DSN` 指向一次性 TiDB、`COMMERCE_REQUIRE_TIDB=1`，在 `go/trade` 下执行：
+     ```
+     go test -count=1 -run 'TestTiDBSellerCancelsMarketOrderStillInEscrow|TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren' ./internal/commerce/
+     ```
+     没有 DSN 时这条会 Skip，Skip 不算通过。
+   - `go/trade/internal/commerce/engine.go` 当前有别的会话未提交的 manual 相关改动，失败时先按行号归因。
+6. **失败时**：保留首个编译错误与失败用例原文，不改断言重跑。
+
+**未做 / 风险**
+
+- 运行期字段集合指纹没做（设计 §13 第 11 条）。部署绕过发布流程时（用未封存分支的产物上线），封存门禁管不到。
+- 14.4 里其余待办照旧：
+  - 交易 Go 侧三处币种字面量。`engine.go`、`rmb.go` 这两个文件当前有别的会话的改动，本批没动。
+  - 设计 §13 第 10 条三项待拍板。
+  - `ValidateDebitBundle` 不看 `equip_kind`。
+  - `asset-channel-alerts.yaml` 其余 `{app=...}` 选择器。
+- Java 版：封存门禁随 Java 的机制二一起做；战斗结算币种、收件箱停用补打都待做。
+
+**本节文件清单**（工作区，未提交）
+- 生成器：`tools/proto_generator/protogen/internal/persistschema/{ledger.go,apply.go,generate.go,persistschema_test.go}`、`tools/proto_generator/protogen/cmd/root.go`；
+- 台账：`proto/persist_schema_gen.txt`（只改表头注释）；
+- 脚本与契约测试：`tools/scripts/{dev_tools.ps1,release_preflight.ps1}`、`tools/scripts/tests/{dev_tools_proto_gen_exit.tests.ps1,release_common_version.tests.ps1}`；
+- C++：`cpp/libs/services/scene/battle/system/player_battle.cpp`、`cpp/libs/services/scene/player/system/{player_inbox_system.cpp,player_inbox_rules.h}`、`cpp/libs/services/scene/player/comp/player_inbox_runtime_comp.h`；
+- C++ 测试：`cpp/tests/bag_test/player_battle_settlement_test.cpp`、`cpp/tests/currency_test/player_inbox_system_test.cpp`；
+- 部署：`deploy/k8s/player-inbox-alerts.yaml`；
+- 文档：`docs/design/{mixed-version-persist-field-protection.md,player-inbox-service.md,data-overwrite-rollback-audit-r2-20261019.md}`、`docs/ops/{release-checklist.md,player-inbox-runbook.md}`、`docs/handoff/server-gap-audit-20261101.md`、本文、`docs/PROGRESS.md`；
+- 仓外：Java 仓 `PARITY.md`。
+
+## 18. 续：读点缺 `LevelComp` 时改为 fail-closed（2026-11-05，补等级读点用例的会话，接 §16）
+
+> 本节只追加，不改上文。用户 11-05 要求把本主题剩下的服务器代码按最标准的方式做完，§13.4「缺 `LevelComp` 的语义」一条在这里落码。改了生产代码，**未编译、未运行**。
+
+- **口径**：按组件访问规则，持久数据缺失时 `LOG_ERROR` 并 fail-closed，绝不补默认值。
+  - 等级与职业都在加载时挂上，玩家缺了就是加载不变量被破坏。以前下面几处按 1 级或 0 号职业继续算。
+  - `CappedLevel` 的"0 按 1"只换算存储值，不覆盖缺组件。
+  - 这条口径已写进权威出处 `player_level_rules.h` 的文件头。
+- **改法**：
+
+  | 文件 | 以前 | 现在 |
+  |---|---|---|
+  | `player_skill.cpp` / `.h` | `PlayerLevel` 缺组件按 1 级，`PlayerClassId` 缺组件按 0 号职业（0 号职业会让旧通用技能生效） | 新增 `HasClassAndLevel`，缺任一项记 ERROR、返回 false：`HasSkill` 答没有，`EffectiveRank` 为 0，`FillBattleSnapshot` 不填技能，`CollectPassiveBonus` 为 0，`GrantInitialSkills` 不补发。两个取值函数改为在确认组件存在之后 `get`，与 `player_attribute.cpp` 的 `CheckAttributeInputs` 写法相同。新增 `CheckSkillUsable`，带原因：缺列表、职业或等级回 `kServiceUnavailable`，没有或不能用回 `kInvalidTableId`；`HasSkill` 等于它回 `kSuccess`。`BuildSkillBook` / `UpgradeSkill` 原来就有 `all_of` 守卫，没动 |
+  | `player_skill_handler.cpp`（守护段内） | 缺组件时与"没有这个技能"一样回 `kInvalidTableId` | 改调 `CheckSkillUsable`，原样回它的码：故障回 `kServiceUnavailable`，业务拒绝仍是 `kInvalidTableId` |
+  | `player_equip.cpp` | 穿戴门槛缺等级按 1 级、缺职业按 0 号 | 新增 `HasLevelAndClass`，`Equip` 在缺背包的同一处回 `kEquipInternalError`，两个包不动 |
+  | `modifier_buff_impl.cpp` | 缺等级按 1 级回血 | 玩家（带 `Player` 标签）缺 `LevelComp`：记 ERROR，这一跳不回血。非玩家没有等级组件，仍按 1 级 |
+  | `player_mission.cpp` | 接取后读不到等级，就静默跳过当前等级进度 | `CheckAccept` 对带等级条件（`kConditionLevelUp`）的任务要求 `LevelComp`，缺了在写任务之前回 `kServiceUnavailable`。不带等级条件的任务不受影响 |
+
+- **没改**：
+  - `skill.cpp`：施法者缺 `LevelComp` 本来就回 false，玩家目标由 `HasRequiredTargetComps` 拦下；NPC 目标按 1 级是另一条规则。
+  - `player_attribute.cpp`、`player_pet.cpp`、`player_battle.cpp`：本来就先确认组件存在。
+- **生产路径**：正常玩家走不到新分支，只有坏档才会。
+  - 加载器先挂 `PlayerUint32Comp`、`LevelComp`，再调 `PlayerSkillSystem::InitializeOnLoad`；
+  - 新号 `InitPlayerFromAllData` 先写等级再 `RegisterPlayer`；
+  - 属性重算先过 `CheckAttributeInputs`，组战斗快照先过 `all_of`。
+- **新增用例**（5 条）：
+  - skill_test：`PlayerSkillBookTest.MissingLevelComponentLeavesNoUsableSkillsAndGrantsNothing`、`PlayerSkillBookTest.MissingClassComponentLeavesNoUsableSkills`。两条都断言 `CheckSkillUsable` 的三种码；
+  - bag_test：`PlayerEquipTest.EquipRejectsWhenTheLevelOrClassComponentIsMissing`、`PlayerMissionSystemTest.LevelConditionAcceptIsRefusedBeforeAnyWriteWhenLevelComponentIsMissing`；
+  - buff_test：`BuffHealthRegenerationLevelTest.PlayerWithoutLevelIsNotHealedWhileANonPlayerHealsAsLevelOne`。
+  - 每条都先断言组件齐全时有这个能力作对照，再断言缺组件时拒绝或不生效、持久数据不变、组件不被补建。
+- **改了一条既有用例**：skill_test 的 `PlayerSkillSystemTest.SanitizeSkillListKeepsUnknownSkillsInactiveAndRemovesDuplicates` 在裸实体上断言 `HasSkill(1)` 为真，靠的正是"缺职业按 0 号"的兜底。给它补上已加载玩家本来就有的 `PlayerUint32Comp`（0 号职业）与 `LevelComp`（1 级），断言不变。
+- **buff_test 夹具**：`BuffHealthRegenerationLevelTest` 拆成 `NewWounded` / `HealOnce` / `HealedByOneTick` 三个函数。§16 那条用例的实体现在带 `Player` 标签，与真实玩家一致，断言不变。
+- **影响面核对**：
+  - 真表里带等级条件的任务只有 6 号（条件 24），用例接取它本来就因别的条件回 `kServiceUnavailable`；
+  - 调 `PlayerEquipSystem::Equip` 的只有 `player_equip_test.cpp`，夹具两个组件都挂；无背包那条照旧回 `kEquipInternalError`；
+  - `HasSkill` 的生产调用方只有施法 handler。
+- **改动文件**：
+  - 生产代码：`cpp/libs/services/scene/player/system/{player_skill.cpp,player_skill.h,player_equip.cpp,player_mission.cpp,player_level_rules.h}`、`cpp/libs/services/scene/combat/buff/system/modifier_buff_impl.cpp`、`cpp/nodes/scene/handler/rpc/player/player_skill_handler.cpp`；
+  - 测试：`cpp/tests/skill_test/{player_skill_book_test.cpp,skill_test.cpp}`、`cpp/tests/bag_test/{player_equip_test.cpp,player_mission_system_test.cpp}`、`cpp/tests/buff_test/buff_test.cpp`；
+  - 文档：设计 §12.2「等级上限」一行、本文、`docs/PROGRESS.md`。设计稿上同时有别的会话未提交的改动，本节只动了那一行。
+- **给 Codex**：本节改了库，而 `run_cpp_tests -Build` 只编测试工程、不重编库，所以必须先编 `game.sln`：
+  1. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`，输出 Tee 到 `build/verification/level-readers/game-sln.build.log`。通过标准：Scene 共享库与 Scene / Gate / Battle 节点退出 0。
+  2. 再按 §16 的三条命令依次跑 bag_test、skill_test、buff_test。通过标准：
+     - §16 的 6 条与本节 5 条在列且通过；
+     - 被改的 `SanitizeSkillListKeepsUnknownSkillsInactiveAndRemovesDuplicates` 通过；
+     - 三个工程的其余用例不因本节变红。
+  3. 失败时：保留首个编译错误与失败用例的 gtest 原文，不改断言重跑。
+- **残余**：
+  - `LevelComp.level()` 的直读白名单仍只靠评审守（§13.4「契约测试没做」），没有机器门禁。
+  - 客户端：缺组件只在坏档时出现，客户端看到的是这几类请求被拒（施法与接任务回 `kServiceUnavailable`，穿戴回 `kEquipInternalError`），不需要客户端改动。
+- **Java 版（AGENTS §12）**：待做，随 §13.1 那一项一起对齐，不另加行。

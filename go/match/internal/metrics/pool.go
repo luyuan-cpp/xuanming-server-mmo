@@ -7,8 +7,8 @@ import (
 )
 
 // 按池撮合的指标（docs/design/global-match-hierarchical-pools.md §5、§11 R0）。
-// label 只用模式名、人数档、范围层级（zone / group / global）、机房阶段（local / cross）与有限的结果枚举；
-// 模板号、玩家号、对局号一律不进 label。
+// label 只用模式名、人数档、范围层级（zone / group / global）、机房阶段（local / cross）、battle 节点选点状态（五个值）
+// 与有限的结果枚举；模板号、玩家号、对局号、节点实例号一律不进 label。
 
 // 成局提交结果（ObservePoolClaim 的 outcome）。
 const (
@@ -51,10 +51,14 @@ var (
 		Subsystem: subsystem, Name: "immediate_claim_total",
 		Help: "入队后立即成局（单人档）的结果，失败的票留给池写者兜底。outcome 同 pool_claim_total。",
 	}, []string{"mode", "outcome"})
+	battleNodes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem, Name: "battle_nodes",
+		Help: "本副本看到的 battle 节点数，按选点状态分（battleplace.State*，R6）：open、unspecified 可选；closed（节点自报不接新房间）、cooldown（本副本熔断中）、invalid（注册不完整）不可选。每个撮合轮刷新。",
+	}, []string{"state"})
 )
 
 func poolCollectors() []prometheus.Collector {
-	return []prometheus.Collector{poolRoundSeconds, poolOwned, poolPageUnits, poolClaimTotal, poolWaitSeconds, poolExpiredTotal, immediateClaimTotal}
+	return []prometheus.Collector{poolRoundSeconds, poolOwned, poolPageUnits, poolClaimTotal, poolWaitSeconds, poolExpiredTotal, immediateClaimTotal, battleNodes}
 }
 
 func ObservePoolRound(elapsed time.Duration) { poolRoundSeconds.Observe(elapsed.Seconds()) }
@@ -73,4 +77,11 @@ func ObservePoolExpired(mode string, count int) {
 		poolExpiredTotal.WithLabelValues(mode).Add(float64(count))
 	}
 }
-func ObserveImmediateClaim(mode, outcome string) { immediateClaimTotal.WithLabelValues(mode, outcome).Inc() }
+func ObserveImmediateClaim(mode, outcome string) {
+	immediateClaimTotal.WithLabelValues(mode, outcome).Inc()
+}
+
+// SetBattleNodes 写一种选点状态下的 battle 节点数（match_battle_nodes{state}）。state 只取 battleplace.State* 的五个值。
+func SetBattleNodes(state string, count int) {
+	battleNodes.WithLabelValues(state).Set(float64(count))
+}

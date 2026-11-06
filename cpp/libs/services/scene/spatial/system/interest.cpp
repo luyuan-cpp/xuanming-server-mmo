@@ -1,40 +1,271 @@
 #include "interest.h"
 
 #include <algorithm>
-#include <entt/src/entt/entity/entity.hpp>
+#include <limits>
 
 #include "spatial/comp/scene_node_scene_comp.h"
 #include "spatial/constants/aoi_priority.h"
+#include "spatial/system/view.h"
 
 #include <modules/scene/comp/scene_comp.h>
 #include <muduo/base/Logging.h>
 #include <thread_context/ecs_context.h>
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
+// 设计见 docs/design/aoi-directed-interest.md。本文件是正向索引 AoiListComp 与反向索引
+// AoiWatchersComp 的唯一写者:所有改动经下面的 InsertEntry / EraseEntry / Show / Hide 四个原语,
+// 两张索引因此始终描述同一批关系。
 
-// Find the entry with the lowest policy weight.  On tie, pick any.
-static entt::entity FindLowestWeightEntity(const AoiListComp& comp,
-                                           const AoiPriorityPolicy& policy)
+namespace
 {
-    entt::entity worst = entt::null;
-    uint8_t worstWeight = 255; // start high so anything is lower
+using EntryIterator = std::unordered_map<entt::entity, AoiEntry>::iterator;
 
-    for (const auto& [entity, entry] : comp.entries)
+void Record(AoiVisibilityChanges* changes, entt::entity watcher, entt::entity target, bool shown)
+{
+    if (changes != nullptr)
     {
-        const auto w = policy.GetWeight(entry.priority);
-        if (w < worstWeight)
-        {
-            worstWeight = w;
-            worst = entity;
-        }
+        changes->changes.push_back({watcher, target, shown});
     }
-    return worst;
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// 索引原语
+// ---------------------------------------------------------------------------
+
+void MarkWatcherVisible(entt::entity target, entt::entity watcher, bool visible)
+{
+    if (auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(target))
+    {
+        if (const auto it = index->watchers.find(watcher); it != index->watchers.end())
+        {
+            it->second = visible;
+        }
+    }
+}
+
+// 新建一条暂不可见的关系。调用方保证 watcher 与 target 存活且条目尚不存在。
+EntryIterator InsertEntry(entt::entity watcher, AoiListComp& list, entt::entity target)
+{
+    // 反向索引的唯一创建点:第一次有人关注 target 时延迟创建。
+    tlsEcs.actorRegistry.get_or_emplace<AoiWatchersComp>(target).watchers.emplace(watcher, false);
+    return list.entries.emplace(target, AoiEntry{}).first;
+}
+
+void Show(entt::entity watcher, AoiListComp& list, entt::entity target, AoiEntry& entry,
+          AoiVisibilityChanges* changes)
+{
+    entry.visible = true;
+    ++list.visibleCount;
+    MarkWatcherVisible(target, watcher, true);
+    Record(changes, watcher, target, true);
+}
+
+void Hide(entt::entity watcher, AoiListComp& list, entt::entity target, AoiEntry& entry,
+          AoiVisibilityChanges* changes)
+{
+    entry.visible = false;
+    --list.visibleCount;
+    MarkWatcherVisible(target, watcher, false);
+    Record(changes, watcher, target, false);
+}
+
+// 删除一条关系;显示中的先记一次移除。调用后 it 失效。
+void EraseEntry(entt::entity watcher, AoiListComp& list, EntryIterator it, AoiVisibilityChanges* changes)
+{
+    const auto target = it->first;
+    if (it->second.visible)
+    {
+        Hide(watcher, list, target, it->second, changes);
+    }
+    if (auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(target))
+    {
+        index->watchers.erase(watcher);
+    }
+    list.entries.erase(it);
+}
+
+// ---------------------------------------------------------------------------
+// 判定
+// ---------------------------------------------------------------------------
+
+void DropSpatial(AoiEntry& entry)
+{
+    entry.spatial = false;
+    entry.priority = AoiPriority::kNormal;
+}
+
+// 条目的淘汰权重:空间标签与各显式来源标签里最高的一个。
+uint8_t EntryWeight(const AoiEntry& entry, const AoiPriorityPolicy& policy)
+{
+    uint8_t weight = entry.spatial ? policy.GetWeight(entry.priority) : 0;
+    for (const auto& grant : entry.follows)
+    {
+        weight = std::max(weight, policy.GetWeight(grant.priority));
+    }
+    return weight;
+}
+
+// 距离只约束空间来源(由网格评估把关);显式关注可以超出视野,但仍受隐身约束。
+bool IsEligible(entt::entity target, const AoiEntry& entry)
+{
+    return !ViewSystem::IsStealthed(target) || entry.RevealsStealth();
+}
+
+bool InSameScene(entt::entity lhs, entt::entity rhs)
+{
+    const auto* lhsScene = tlsEcs.actorRegistry.try_get<SceneEntityComp>(lhs);
+    const auto* rhsScene = tlsEcs.actorRegistry.try_get<SceneEntityComp>(rhs);
+    return lhsScene != nullptr && rhsScene != nullptr && lhsScene->sceneEntity == rhsScene->sceneEntity &&
+           tlsEcs.sceneRegistry.valid(lhsScene->sceneEntity);
+}
+
+// 先校验再动表:已销毁的句柄既不能当观察者(会在空槽位挂出孤儿组件),
+// 也不能被登记成目标(下发给客户端的网络号会指向不存在的 actor)。
+bool IsValidPair(entt::entity watcher, entt::entity target, const char* caller)
+{
+    if (watcher == entt::null || target == entt::null || watcher == target)
+    {
+        return false;
+    }
+    if (!tlsEcs.actorRegistry.valid(watcher) || !tlsEcs.actorRegistry.valid(target))
+    {
+        LOG_ERROR << caller << ": invalid entity, watcher=" << entt::to_integral(watcher)
+                  << " target=" << entt::to_integral(target);
+        return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// 容量
+// ---------------------------------------------------------------------------
+
+// 已显示条目里权重最低的一个(不含 exclude);没有返回 end。
+EntryIterator FindLowestVisible(AoiListComp& list, const AoiPriorityPolicy& policy, entt::entity exclude)
+{
+    auto lowest = list.entries.end();
+    uint8_t lowestWeight = std::numeric_limits<uint8_t>::max();
+    for (auto it = list.entries.begin(); it != list.entries.end(); ++it)
+    {
+        if (!it->second.visible || it->first == exclude)
+        {
+            continue;
+        }
+        const auto weight = EntryWeight(it->second, policy);
+        if (lowest == list.entries.end() || weight < lowestWeight)
+        {
+            lowest = it;
+            lowestWeight = weight;
+        }
+    }
+    return lowest;
+}
+
+// 容量已满时,为权重 weight 的 incoming 让出一个名额:只淘汰权重严格更低的已显示条目。
+// 被淘汰者只剩空间来源时整条删除(下次跨格重新评估);有显式来源时转为暂隐,名额空出后补回。
+// 淘汰只改本观察者的表,目标那一侧的关系各自独立,不要求互相占位。
+bool EvictForWeight(entt::entity watcher, AoiListComp& list, uint8_t weight, entt::entity incoming,
+                    const AoiPriorityPolicy& policy, AoiVisibilityChanges* changes)
+{
+    const auto lowest = FindLowestVisible(list, policy, incoming);
+    if (lowest == list.entries.end() || weight <= EntryWeight(lowest->second, policy))
+    {
+        return false;
+    }
+    DropSpatial(lowest->second);
+    if (lowest->second.follows.empty())
+    {
+        EraseEntry(watcher, list, lowest, changes);
+    }
+    else
+    {
+        Hide(watcher, list, lowest->first, lowest->second, changes);
+    }
+    return true;
+}
+
+// 尝试显示一条暂不可见的关系:可见条件满足且有名额(必要时按权重淘汰)才显示。
+bool TryShow(entt::entity watcher, AoiListComp& list, entt::entity target, AoiEntry& entry,
+             AoiVisibilityChanges* changes)
+{
+    if (!IsEligible(target, entry))
+    {
+        return false;
+    }
+    const auto& policy = InterestSystem::GetPriorityPolicy(watcher);
+    if (list.visibleCount >= InterestSystem::GetEffectiveCapacity(watcher) &&
+        !EvictForWeight(watcher, list, EntryWeight(entry, policy), target, policy, changes))
+    {
+        return false;
+    }
+    Show(watcher, list, target, entry, changes);
+    return true;
+}
+
+// 观察者让出名额后,按权重从高到低补上满足可见条件的暂隐关系。
+// 暂隐关系只来自显式关注,多数观察者一条都没有,此时不扫描。
+void FillFreeSlots(entt::entity watcher, AoiListComp& list, AoiVisibilityChanges* changes)
+{
+    if (list.entries.size() == list.visibleCount)
+    {
+        return;
+    }
+    const auto capacity = InterestSystem::GetEffectiveCapacity(watcher);
+    const auto& policy = InterestSystem::GetPriorityPolicy(watcher);
+    while (list.visibleCount < capacity)
+    {
+        auto best = list.entries.end();
+        uint8_t bestWeight = 0;
+        for (auto it = list.entries.begin(); it != list.entries.end(); ++it)
+        {
+            if (it->second.visible || !IsEligible(it->first, it->second))
+            {
+                continue;
+            }
+            const auto weight = EntryWeight(it->second, policy);
+            if (best == list.entries.end() || weight > bestWeight)
+            {
+                best = it;
+                bestWeight = weight;
+            }
+        }
+        if (best == list.entries.end())
+        {
+            return;
+        }
+        Show(watcher, list, best->first, best->second, changes);
+    }
+}
+
+// 按当前可见条件校正一条关系:不再满足就暂停显示(空间来源以能看见为前提,一并撤掉),
+// 重新满足就尝试显示。可能删除条目,调用后不得再使用 it。
+void Reconcile(entt::entity watcher, AoiListComp& list, EntryIterator it, AoiVisibilityChanges* changes)
+{
+    const auto target = it->first;
+    auto& entry = it->second;
+    const bool eligible = IsEligible(target, entry);
+    if (entry.visible && !eligible)
+    {
+        DropSpatial(entry);
+        if (entry.follows.empty())
+        {
+            EraseEntry(watcher, list, it, changes);
+        }
+        else
+        {
+            Hide(watcher, list, target, entry, changes);
+        }
+        FillFreeSlots(watcher, list, changes);
+        return;
+    }
+    if (!entry.visible && eligible)
+    {
+        TryShow(watcher, list, target, entry, changes);
+    }
+}
+} // namespace
+
+// ---------------------------------------------------------------------------
+// 容量与策略
 // ---------------------------------------------------------------------------
 
 std::size_t InterestSystem::GetEffectiveCapacity(entt::entity watcher)
@@ -80,83 +311,125 @@ const AoiPriorityPolicy& InterestSystem::GetPriorityPolicy(entt::entity watcher)
     return kPolicyOpenWorld;
 }
 
-bool InterestSystem::AddAoiEntity(entt::entity watcher, entt::entity target, AoiPriority priority)
-{
-    if (watcher == entt::null || target == entt::null) return false;
+// ---------------------------------------------------------------------------
+// 空间来源
+// ---------------------------------------------------------------------------
 
-    // 先校验再动表:已销毁的句柄(格子集合里的陈旧条目、调用方持有的过期实体)
-    // 既不能当观察者,也不能被登记进别人的兴趣表 —— 前者会在空槽位上挂出孤儿组件,
-    // 后者会把下发给客户端的实体号指向一个不存在的 actor。
-    if (!tlsEcs.actorRegistry.valid(watcher) || !tlsEcs.actorRegistry.valid(target))
+bool InterestSystem::AddAoiEntity(entt::entity watcher, entt::entity target, AoiPriority priority,
+                                  AoiVisibilityChanges* changes)
+{
+    if (!IsValidPair(watcher, target, "AddAoiEntity"))
     {
-        LOG_ERROR << "AddAoiEntity: invalid entity, watcher=" << entt::to_integral(watcher)
-                  << " target=" << entt::to_integral(target);
         return false;
     }
 
-    // 按需状态的唯一写入口:没有兴趣表表示尚无观察对象,不是初始化失败。
-    // 先完成句柄与容量校验,只有下面确实插入第一个条目时才延迟创建。
-    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     const auto& policy = GetPriorityPolicy(watcher);
-
-    // If target already present, upgrade priority if the new tag has higher weight.
-    if (comp != nullptr)
+    if (list != nullptr)
     {
-        if (auto it = comp->entries.find(target); it != comp->entries.end())
+        if (const auto it = list->entries.find(target); it != list->entries.end())
         {
-            if (policy.GetWeight(priority) > policy.GetWeight(it->second.priority))
+            auto& entry = it->second;
+            if (entry.visible)
             {
-                it->second.priority = priority;
+                // 已在显示(可能只因显式来源):补上空间来源,标签只升不降,不重复创建。
+                if (!entry.spatial)
+                {
+                    entry.spatial = true;
+                    entry.priority = priority;
+                }
+                else if (policy.GetWeight(priority) > policy.GetWeight(entry.priority))
+                {
+                    entry.priority = priority;
+                }
+                return true;
             }
-            return true;
+            // 暂隐的显式关注:按空间与显式来源合并后的权重争取名额;争不到就不单独保留空间来源。
+            entry.spatial = true;
+            entry.priority = priority;
+            if (!TryShow(watcher, *list, target, entry, changes))
+            {
+                DropSpatial(entry);
+            }
+            return entry.visible;
         }
     }
 
-    // Room available — insert directly.
+    // 新关系:先确认可见条件与名额,确实要显示时才创建条目(以及兴趣表本身)。
+    // 新的空间关系没有显式来源,也就没有侦测授权。
+    if (ViewSystem::IsStealthed(target))
+    {
+        return false;
+    }
     const auto capacity = GetEffectiveCapacity(watcher);
-    if (capacity == 0) return false;
-    if (comp == nullptr)
+    if (capacity == 0)
     {
-        // 此处延迟创建,空间可见性写入统一经本入口。
-        comp = &tlsEcs.actorRegistry.emplace<AoiListComp>(watcher);
+        return false;
     }
-    if (comp->entries.size() < capacity)
+    if (list != nullptr && list->visibleCount >= capacity &&
+        !EvictForWeight(watcher, *list, policy.GetWeight(priority), target, policy, changes))
     {
-        comp->entries.emplace(target, AoiEntry{priority});
-        return true;
+        return false;
     }
-
-    // At capacity: try to evict the lowest-weight entry if new one outranks it.
-    const auto lowestEntity = FindLowestWeightEntity(*comp, policy);
-    if (lowestEntity == entt::null) return false;
-
-    const auto lowestWeight = policy.GetWeight(comp->entries.at(lowestEntity).priority);
-    if (policy.GetWeight(priority) <= lowestWeight) return false; // not important enough
-
-    comp->entries.erase(lowestEntity);
-    comp->entries.emplace(target, AoiEntry{priority});
+    if (list == nullptr)
+    {
+        // 按需状态的创建点之一(另一个是 Follow):第一次真正建立关系时才挂兴趣表。
+        list = &tlsEcs.actorRegistry.emplace<AoiListComp>(watcher);
+    }
+    const auto it = InsertEntry(watcher, *list, target);
+    it->second.spatial = true;
+    it->second.priority = priority;
+    Show(watcher, *list, target, it->second, changes);
     return true;
 }
 
-void InterestSystem::RemoveAoiEntity(entt::entity watcher, entt::entity target)
+void InterestSystem::RemoveAoiEntity(entt::entity watcher, entt::entity target, AoiVisibilityChanges* changes)
 {
-    if (watcher == entt::null || target == entt::null) return;
+    if (watcher == entt::null || target == entt::null)
+    {
+        return;
+    }
+    auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list == nullptr)
+    {
+        return;
+    }
+    const auto it = list->entries.find(target);
+    if (it == list->entries.end() || !it->second.spatial)
+    {
+        return;
+    }
 
-    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
-    if (comp == nullptr) return;
-    comp->entries.erase(target);
+    DropSpatial(it->second);
+    if (!it->second.follows.empty())
+    {
+        // 显式来源仍在:走出邻格也继续显示,客户端不收移除。
+        return;
+    }
+    const bool freedSlot = it->second.visible;
+    EraseEntry(watcher, *list, it, changes);
+    if (freedSlot)
+    {
+        FillFreeSlots(watcher, *list, changes);
+    }
 }
 
 void InterestSystem::UpgradePriority(entt::entity watcher, entt::entity target, AoiPriority priority)
 {
-    if (watcher == entt::null || target == entt::null) return;
-
-    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
-    if (comp == nullptr) return;
-
-    auto it = comp->entries.find(target);
-    if (it == comp->entries.end()) return;
-
+    if (watcher == entt::null || target == entt::null)
+    {
+        return;
+    }
+    auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list == nullptr)
+    {
+        return;
+    }
+    const auto it = list->entries.find(target);
+    if (it == list->entries.end() || !it->second.spatial)
+    {
+        return;
+    }
     const auto& policy = GetPriorityPolicy(watcher);
     if (policy.GetWeight(priority) > policy.GetWeight(it->second.priority))
     {
@@ -166,17 +439,206 @@ void InterestSystem::UpgradePriority(entt::entity watcher, entt::entity target, 
 
 void InterestSystem::DowngradePriority(entt::entity watcher, entt::entity target, AoiPriority from, AoiPriority to)
 {
-    if (watcher == entt::null || target == entt::null) return;
-
-    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
-    if (comp == nullptr) return;
-
-    auto it = comp->entries.find(target);
-    if (it == comp->entries.end()) return;
-
-    // 只认标签不认权重:条目已被别的来源改成其它标签(如 kPinned / kAttacker)时,
-    // 那个来源才是它的所有者,这里不能越权回退。
-    if (it->second.priority != from) return;
+    if (watcher == entt::null || target == entt::null)
+    {
+        return;
+    }
+    auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list == nullptr)
+    {
+        return;
+    }
+    const auto it = list->entries.find(target);
+    if (it == list->entries.end() || !it->second.spatial)
+    {
+        return;
+    }
+    // 只认标签不认权重:标签已被别的空间判定改成其他值时,那次判定才是它的所有者,这里不越权回退。
+    if (it->second.priority != from)
+    {
+        return;
+    }
     it->second.priority = to;
 }
 
+// ---------------------------------------------------------------------------
+// 显式来源
+// ---------------------------------------------------------------------------
+
+bool InterestSystem::Follow(entt::entity watcher, entt::entity target, const AoiFollowGrant& grant,
+                            AoiVisibilityChanges* changes)
+{
+    if (!IsValidPair(watcher, target, "Follow"))
+    {
+        return false;
+    }
+    if (!InSameScene(watcher, target))
+    {
+        LOG_WARN << "Follow: watcher and target are not in the same scene, watcher="
+                 << entt::to_integral(watcher) << " target=" << entt::to_integral(target);
+        return false;
+    }
+
+    // 按需状态的另一个创建点:显式关系即使暂不可见也要登记,条件满足后才能自动显示。
+    auto& list = tlsEcs.actorRegistry.get_or_emplace<AoiListComp>(watcher);
+    auto it = list.entries.find(target);
+    if (it == list.entries.end())
+    {
+        it = InsertEntry(watcher, list, target);
+    }
+    auto& follows = it->second.follows;
+    if (const auto same = std::ranges::find(follows, grant.source, &AoiFollowGrant::source); same != follows.end())
+    {
+        *same = grant;
+    }
+    else
+    {
+        follows.push_back(grant);
+    }
+    Reconcile(watcher, list, it, changes);
+    return true;
+}
+
+void InterestSystem::Unfollow(entt::entity watcher, entt::entity target, const AoiFollowSource& source,
+                              AoiVisibilityChanges* changes)
+{
+    if (watcher == entt::null || target == entt::null)
+    {
+        return;
+    }
+    auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (list == nullptr)
+    {
+        return;
+    }
+    const auto it = list->entries.find(target);
+    if (it == list->entries.end())
+    {
+        return;
+    }
+    auto& follows = it->second.follows;
+    const auto same = std::ranges::find(follows, source, &AoiFollowGrant::source);
+    if (same == follows.end())
+    {
+        return;
+    }
+    follows.erase(same);
+
+    if (follows.empty() && !it->second.spatial)
+    {
+        const bool freedSlot = it->second.visible;
+        EraseEntry(watcher, *list, it, changes);
+        if (freedSlot)
+        {
+            FillFreeSlots(watcher, *list, changes);
+        }
+        return;
+    }
+    // 还有其他来源:撤掉的若是唯一的侦测授权,隐身目标随之不可见。
+    Reconcile(watcher, *list, it, changes);
+}
+
+// ---------------------------------------------------------------------------
+// 可见条件变化与离场
+// ---------------------------------------------------------------------------
+
+void InterestSystem::RefreshTargetVisibility(entt::entity target, AoiVisibilityChanges* changes)
+{
+    const auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(target);
+    if (index == nullptr || index->watchers.empty())
+    {
+        return;
+    }
+    // 先拷名单:校正可能删除关系,会改到这张反向索引。
+    EntityVector watchers;
+    watchers.reserve(index->watchers.size());
+    for (const auto& [watcher, visible] : index->watchers)
+    {
+        watchers.push_back(watcher);
+    }
+    for (const auto watcher : watchers)
+    {
+        auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+        if (list == nullptr)
+        {
+            continue;
+        }
+        if (const auto it = list->entries.find(target); it != list->entries.end())
+        {
+            Reconcile(watcher, *list, it, changes);
+        }
+    }
+}
+
+void InterestSystem::ClearRelations(entt::entity entity, AoiVisibilityChanges* changes)
+{
+    if (entity == entt::null)
+    {
+        return;
+    }
+
+    // 出边:从每个目标的反向索引里摘掉自己。自己的客户端不记移除:离场、换场景后由新场景整体重建。
+    if (auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(entity))
+    {
+        for (const auto& [target, entry] : list->entries)
+        {
+            if (auto* targetIndex = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(target))
+            {
+                targetIndex->watchers.erase(entity);
+            }
+        }
+        list->entries.clear();
+        list->visibleCount = 0;
+    }
+
+    // 入边:从每个观察者的正向表里摘掉自己。正在显示的记一次移除,并把让出的名额补给它的暂隐关注。
+    if (auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(entity))
+    {
+        const auto watchers = std::move(index->watchers);
+        index->watchers.clear();
+        for (const auto& [watcher, visible] : watchers)
+        {
+            auto* watcherList = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+            if (watcherList == nullptr)
+            {
+                continue;
+            }
+            const auto it = watcherList->entries.find(entity);
+            if (it == watcherList->entries.end())
+            {
+                continue;
+            }
+            const bool freedSlot = it->second.visible;
+            if (freedSlot)
+            {
+                Hide(watcher, *watcherList, entity, it->second, changes);
+            }
+            watcherList->entries.erase(it);
+            if (freedSlot)
+            {
+                FillFreeSlots(watcher, *watcherList, changes);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 只读查询
+// ---------------------------------------------------------------------------
+
+void InterestSystem::GetVisibleWatchers(entt::entity target, EntityVector& out)
+{
+    const auto* index = tlsEcs.actorRegistry.try_get<AoiWatchersComp>(target);
+    if (index == nullptr)
+    {
+        return;
+    }
+    out.reserve(out.size() + index->watchers.size());
+    for (const auto& [watcher, visible] : index->watchers)
+    {
+        if (visible && tlsEcs.actorRegistry.valid(watcher))
+        {
+            out.push_back(watcher);
+        }
+    }
+}

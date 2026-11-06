@@ -570,6 +570,7 @@ func TestEnterScene_CrossZoneRedirectKafkaFailureBumpsEpochAndLeavesReceipt(t *t
 
 func TestEnterScene_AwaitingPlacementSecondLegIsAllowedWithoutMarker(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.ZoneId = 2 // 第二条腿来自 zone 2 的 gate,只会到 zone 2 的 scene_manager(control-plane-zone-scoping §3.3)
 	captured := capturingKafkaWriter(sc)
 
 	const (
@@ -812,6 +813,7 @@ func TestEnterScene_CrossZoneRedirectFailureAfterMarkerWithdrawnKeepsAwaitingPla
 // 记新 epoch、没有回执),UpdateTime / PendingSceneConfId 原样保留,票据有效期的判断不变;不凭标记就不写标记。
 func TestEnterScene_SecondLegRouteFailureBumpsEpochAndStaysAwaiting(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.ZoneId = 2 // 第二条腿来自 zone 2 的 gate,只会到 zone 2 的 scene_manager(control-plane-zone-scoping §3.3)
 	sc.Kafka = &countingKafkaWriter{err: errors.New("broker unavailable")}
 	sc.Config.KafkaWriteTimeoutSeconds = 1
 
@@ -1497,6 +1499,7 @@ func TestEnterScene_TravelWithoutMapReleasesWhenTargetDefaultWorldIsOpen(t *test
 // 「原地」可回;硬拒的话这条等待落点在票据有效期内会让他每一次登录都读到同一个 pending 值再失败一次。
 func TestEnterScene_TravelSecondLegFallsBackToDefaultWorldWhenPendingMapIsUnavailable(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.ZoneId = 2 // 第二条腿来自 zone 2 的 gate,只会到 zone 2 的 scene_manager(control-plane-zone-scoping §3.3)
 	captured := capturingKafkaWriter(sc)
 
 	const (
@@ -1540,6 +1543,7 @@ func TestEnterScene_TravelSecondLegFallsBackToDefaultWorldWhenPendingMapIsUnavai
 // (源 scene / 客户端)还持有玩家、能把失败告诉他;悄悄把人送进另一张图才是错的。
 func TestEnterScene_ExplicitMapIsNotSubjectToPendingMapFallback(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.ZoneId = 2 // 第二条腿来自 zone 2 的 gate,只会到 zone 2 的 scene_manager(control-plane-zone-scoping §3.3)
 	capturingKafkaWriter(sc)
 
 	const (
@@ -2215,6 +2219,7 @@ func TestEnterScene_TravelSecondLegRejectsUnmappedHomeZone(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			sc.Config.ZoneId = 2 // 第二条腿来自 zone 2 的 gate,只会到 zone 2 的 scene_manager(control-plane-zone-scoping §3.3)
 			captured := capturingKafkaWriter(sc)
 			sc.HomeZone = tc.homeZone
 

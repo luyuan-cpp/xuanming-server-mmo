@@ -521,6 +521,48 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 后台受限目录／库存命令的当前实施合同见[商城后台设计](mall-administration.md)；它不能直接改已付款、已交付或历史订单快照。完整后台、人民币托管成交、卖家收入、mock提现和角色过户仍需逐项接线及实际验收，本条不是完成声明。
 
+### 15.7 2026-11-05 转人工合同的恢复入口（未编译、未运行）
+
+对应 [缺口清单](../handoff/server-gap-audit-20261101.md) 第 2 条后半。**状态：已落码，未编译、未测试，待 Codex 验证。** 实现在 `go/trade/internal/commerce/manual.go`、命令行 `go/trade/cmd/commercefix`，手册 [§4.2](../ops/trade-commerce-quarantine-runbook.md)。
+
+**原问题**：合同转人工（`status=10`）之后引擎不再推进，托管的物品和货币没有出口，原 stage 只在日志里。手册只能让运维取证、登记工单、等入口。
+
+**转人工记录**：`TradeCommerceWorkflow.quarantine` 记下转人工之前的 stage、status、原因类别和错误原文（截到 256 字节）。所有转人工的地方都改走 `markManual`：tick 隔离（`corrupt`）、坏对手单（`bad_counterparty`）、部分发放（`applied_partial`）、最终发放没到账（`final_credit_failed`）、市场单名下有转人工的子单（`market_fill_manual`）、人民币寄售退回失败（`rmb_return_failed`）。已经在 manual 的不覆盖第一次的记录。workflow 解不开的合同仍只改状态列，没有记录。
+
+**行为变化**：最终发放没到账以前写 `stage=done`，op 行随即被标业务消费、过保留期会被清掉；现在写 `stage=manual`，op 行留到人工处理完。
+
+**三种处理**，都只改合同行，不碰 op 行，不发资产：
+
+| 动作 | 什么时候用 | 做什么 | 拒绝 |
+|---|---|---|---|
+| `resume` | 转人工的原因已经消除（数据修好了、卡死的腿已终结、子单已处理） | 回到记录里的 stage、status，由引擎重新判定；原因还在会再次转人工 | 原因是 `final_credit_failed`（重新判定还是转人工） |
+| `reissue` | 最终发放没到账 | 每条没到账的发放腿补发一条：原样的资产、原样的收件人，名字是原名加 `#2`、`#3`；原腿标 `superseded_by`，不再算作最终发放；回到记录里的 stage | 原因不是 `final_credit_failed` 或 `rmb_return_failed` |
+| `refund` | 还没有任何发放到账 | 每条已扣进托管的腿各退一条给扣出它的人（`<原名>/refund`），没到账的发放腿标 `superseded_by=refund`；stage 改 `return`，按取消结案 | 官方商城、人民币寄售、竞价、成交子单、已部分成交的市场单、已有出价的拍品；已有发放到账；实例托管没有原件 |
+
+共同的前置：合同在 manual、有转人工记录、所有腿都有结局。转人工之后才有结局的腿（隔离时被截止的托管扣款）在处理前按 `advance` 同一判定补记；在途的腿、查不到 outbox 行的腿、部分发放的腿拒绝，要先等结局、取证或按资产通道 §4.33 逐件核对。一次新建的腿不超过引擎单步上限 8。
+
+**写路径与幂等**：
+
+- `commerce.ResolveManual` 在 `CommerceRepo.Tx` 里：主键点锁合同行 → 核对操作人给的版本 → 补记结局 → `planManualAction`（纯函数）→ 追加 `manual_actions` 留痕 → `Save`（带版本条件，版本加一，`updated_ms` 写成现在）。锁序与引擎相同。
+- 新腿不带 `op_id`。合同重新到期之后，发号、写 outbox、投递、记结局都由引擎的 `advance` 做，和玩家操作同一条写路径：原归属身份核对、按角色名只建一次的腿、单副本串行都不变。原腿和原 seq 不动，留作证据。
+- 版本条件让同一条命令只生效一次：重跑时版本已变，回「未改动」。不加 `-execute` 时只算计划，同样在锁下算。
+
+**鉴权与留痕**：v1 只做命令行，不开 RPC，与帮会 `assetopfix` 同一口径（90-consistency.md D4）：写库要带写者身份（`authoritysql.LoadWriterConfig`），只能在部署允许的 Pod 里连库；操作人、依据、二次确认、版本都必须给。留痕写进合同（`manual_actions`：动作、操作人、依据、时刻、处理前版本、转人工记录、新腿、被取代的腿），同时打 ERROR 级的 `[CommerceManual]` 行，原样贴进工单。
+
+**残余**：
+
+- 原主已换的合同，补发和退回都会被引擎的原归属身份核对挡住（角色冲突，5 分钟复查），资产归谁要产品或运营决定，见手册 §4.3。
+- 部分发放、竞价与拍品互相引用、已部分成交的市场单不能整单处理，要人工逐件核对。
+- 实例托管被人工判定 APPLIED 时没有原件，退回不了，要按 `player_snapshot` 人工补发。
+- 没有 RPC 和管理后台，没有审批流。
+- Java 版待做，记在 `PARITY.md`。
+
+**回归测试**（都没有运行）：
+
+- 单测 `go/trade/internal/commerce/manual_test.go`：转人工记录（含只记第一次、按字截断）、补发和补发链、恢复推进、整单退回及六种拒绝、单步上限、补记结局的五种拒绝、请求校验。
+- 命令行 `go/trade/cmd/commercefix/main_test.go`：退出码、默认只算计划、参数校验、show 列出每种动作能否处理。
+- 真库 `go/trade/internal/commerce/manual_db_test.go`（门控同 `tick_isolation_db_test.go`）：隔离后的寄售整单退回，计划不写库、执行留痕、重跑落空、引擎发号且只退一次、到账后按取消结案；没转人工和不存在的合同拒绝。
+
 ## 16. 人民币寄售的商城权威实现批次（2026-10-21，实施中）
 
 原 `CreateConsignment` 的游戏币价格协议保持原语义，人民币寄售另设明确入口，不能把原price悄悄解释为人民币分。托管与实例快照继续由trade可靠合同及scene SQL终局负责；商城只在已认证trade提交原托管合同引用／摘要后登记寄售条款。登记不等于新写一次玩家扣款，商户、买家或后台不能自报快照取得托管资格。

@@ -144,7 +144,10 @@ inline void RecordPurchase(::PlayerMysteryMerchantComp &record, uint64_t roundId
 {
 	if (record.round_id() != roundId)
 	{
-		record.clear_purchases();
+		// 换轮是逻辑重置:整条 Clear() 再重设轮次(docs/design/mixed-version-persist-field-protection.md §4.2 L7)。
+		// 逐字段清空会漏掉本版本不认识的字段 —— 更新版本加的按轮作废的字段会跨轮存活,把上一轮的状态带进新一轮。
+		// 需要跨轮保留的新字段在本版本会被清掉,按破坏性变更处理(同文 R5)。
+		record.Clear();
 		record.set_round_id(roundId);
 	}
 	for (auto &purchase : *record.mutable_purchases())

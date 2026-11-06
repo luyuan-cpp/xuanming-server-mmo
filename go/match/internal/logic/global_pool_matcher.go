@@ -14,6 +14,7 @@ import (
 	"match/internal/metrics"
 	"match/internal/poolgroup"
 	"match/internal/poolowner"
+	"match/internal/ratingrule"
 	"match/internal/scope"
 	"match/internal/svc"
 
@@ -85,6 +86,12 @@ func (m *poolMatcher) round(parent context.Context) {
 		}
 	}
 	metrics.SetPoolOwned(len(owned))
+	// battle 节点按选点状态计数(match_battle_nodes{state},R6):放在"本副本不负责任何池"的提前返回之前,
+	// 不撮合的副本也照常报。
+	nodes := s.BattleNodes.Snapshot()
+	for state, count := range s.Placement.Census(nodes) {
+		metrics.SetBattleNodes(state, count)
+	}
 	if len(owned) == 0 {
 		return
 	}
@@ -93,7 +100,6 @@ func (m *poolMatcher) round(parent context.Context) {
 		logx.Errorf("[match.pool] Failed to read database time: %v", err)
 		return
 	}
-	nodes := s.BattleNodes.Snapshot()
 	regions := s.Placement.Regions(nodes)
 	var claims []poolClaim
 	for _, pool := range owned {
@@ -311,7 +317,7 @@ func claimImmediately(s *svc.ServiceContext, ticket *pb.MatchAuthorityTicketReco
 	})
 }
 
-// poolPolicy 是一个池的成组规则；提交点用同一组配置复核。
+// poolPolicy 是一个池的成组规则；提交点用同一组配置复核（车队差是质量规则，提交点不复核）。
 func poolPolicy(s *svc.ServiceContext, pool catalog.Pool) poolgroup.Policy {
 	rated := isRatedMode(pool.Mode)
 	return poolgroup.Policy{
@@ -320,6 +326,7 @@ func poolPolicy(s *svc.ServiceContext, pool catalog.Pool) poolgroup.Policy {
 		CrossRegionAfterMs: uint64(s.Config.GlobalMatch.CrossRegionWaitSeconds) * 1000,
 		Rated:              rated,
 		Sides:              pool.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM,
+		PremadeGapStepMs:   s.Config.GlobalMatch.PremadeGapStepMs(),
 		ToleranceCenti: func(anchorWaitMs uint64) float64 {
 			return anchorToleranceFor(s, rated, int64(anchorWaitMs/1000)) * 100
 		},
@@ -360,9 +367,12 @@ func poolUnitInput(s *svc.ServiceContext, unit poolUnit, now uint64) (poolgroup.
 		input.Players = append(input.Players, ticket.PlayerId)
 		input.Members = append(input.Members, scope.Member{Node: s.Catalog.ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
 	}
-	if len(unit.tickets) == 1 {
-		input.RatingCenti = unit.tickets[0].RatingCenti
+	// 队伍分：单排是本人评分，整队是成员平均分加组队加成；提交点按同一公式复核组内极差（authority.requireRatedSpread）。
+	ratings := make([]int64, len(unit.tickets))
+	for i, ticket := range unit.tickets {
+		ratings[i] = ticket.RatingCenti
 	}
+	input.RatingCenti = ratingrule.UnitCenti(ratings, s.Config.GlobalMatch.PartyBonusCenti())
 	return input, len(input.RTT) > 0
 }
 
@@ -425,9 +435,9 @@ func reserveGatherSlot(s *svc.ServiceContext) bool {
 }
 
 // expectedClaimRejection 报告提交失败是不是撮合与提交之间的正常变化（不影响排空判定）：
-// 票被取消或已被别人提交、整队名单变化、范围或入口规则在提交点不满足、home 迁移。
+// 票被取消或已被别人提交、整队名单变化、范围、入口或评分规则在提交点不满足、home 迁移。
 func expectedClaimRejection(err error) bool {
-	for _, expected := range []error{authority.ErrScopeWait, authority.ErrTemplateClosed, authority.ErrDirectConflict, authority.ErrTeamLaunchActive, authority.ErrOriginalPlayer, authority.ErrTeamRoute} {
+	for _, expected := range []error{authority.ErrScopeWait, authority.ErrTemplateClosed, authority.ErrDirectConflict, authority.ErrTeamLaunchActive, authority.ErrOriginalPlayer, authority.ErrTeamRoute, authority.ErrRatingSpread} {
 		if errors.Is(err, expected) {
 			return true
 		}

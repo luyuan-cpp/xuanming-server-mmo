@@ -91,10 +91,9 @@ func main() {
 	// 现在选主抽到了 shared/leader,副本数已放开(见 scene-manager.yaml)。
 	// 必须在所有后台循环启动之前接线,否则首拍可能带着"人人都是领导者"
 	// 的缺省闸门跑变更动作。
-	leaderLockKey := c.LeaderLockKey
-	if leaderLockKey == "" {
-		leaderLockKey = "scene_manager:leader:lock"
-	}
+	// 按 zone 选主(docs/design/control-plane-zone-scoping-20261105.md §3.3):一个进程只编排配置的 ZoneId,
+	// 锁名由 zone 决定、不可配置 —— 配错就会让两个 zone 抢一把锁(其中一个 zone 没人编排)。
+	leaderLockKey := logic.LeaderLockKey(c.ZoneId)
 	// ≤ 0 时取默认 30s 的兜底在取值方法里:分线目录的 TTL 要按同一个值算竞选间隔
 	// (logic/world_channel_directory.go worldChannelDirectoryTTLSeconds),两处不能各兜各的。
 	leaderLockTTL := time.Duration(c.EffectiveLeaderLockTTLSeconds()) * time.Second

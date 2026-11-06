@@ -15,6 +15,7 @@ import (
 	"player_locator/internal/config"
 	"player_locator/internal/svc"
 	pb "proto/player_locator"
+	"shared/liveview"
 	"shared/redisslot"
 	"shared/safego"
 )
@@ -27,20 +28,19 @@ import (
 //
 // 副本看不清 etcd 或 Redis(连续 3 拍失败,或 3 拍内没有一次成功)就让出它的段(eligible=false,分片随后释放段、撤销成员
 // 登记),其余副本接手。让出之后每拍照常试一次,成功了再回来。全部副本都看不清时没人清扫,与「fail-closed:宁可不清理」一致。
+// 被存活集闸门压住的拍(view_held)不算失败、不让出段:读都成功了,可疑的是 etcd 给的视图本身,换副本看到的也是同一份。
 
-// 存活集合理性闸门(拍板清单 B1-1)。etcd 回档、重建或连错时 Range 照样成功,只是回空或残缺。
+// 存活集合理性闸门(决策清单 B1-1,规则与阈值见 shared/liveview)。etcd 回档、重建或连错时 Range 照样成功,只是回空或残缺。
 // 照单全收的话,约两拍之后全部在线会话转 DISCONNECTING,30 秒后全员被踢。
-const (
-	// liveViewDropMinGates:登记的 gate 少于这个数时不判骤降,小集群挂一台就可能超过一半。
-	liveViewDropMinGates = 4
-	// liveViewDropHoldRounds:超过一半的 gate 同时消失时,最多压住这么多拍。真有这么多 gate 死了,压住之后照常收尾;
-	// 是 etcd 的问题的话,这段时间够人看到 PlayerLocatorReconcileRoundsFailing 告警。
-	liveViewDropHoldRounds = 30
-)
+//
+// liveViewHold:骤降之后缺席的 gate 数连续这么久不变才放行。取 30 分钟:压住只推迟死 gate 上会话的清理(玩家重连照常
+// 顶掉旧会话),误判的代价却是全员被踢,所以留足人工介入的时间(PlayerLocatorGateLiveViewHeld 告警 5 分钟后响)。
+// 真有这么多 gate 死了,放行之后照常收尾。按时间计、不按拍数计:拍长可配,改拍长不该连带改压住时长。
+const liveViewHold = 30 * time.Minute
 
 var (
 	errLiveViewEmpty = errors.New("etcd returned an empty live gate set while gates are registered")
-	errLiveViewDrop  = errors.New("more than half of the registered gates vanished at once")
+	errLiveViewDrop  = errors.New("more than half of the registered gates vanished at once, or the live view is still changing after such a drop")
 )
 
 // gateSweeper 是一个副本上的清扫状态。suspects / cursors 只由 run 所在的 goroutine 访问。
@@ -57,9 +57,9 @@ type gateSweeper struct {
 	memberBudget    int
 
 	suspects map[string]int // gate uuid → 连续缺席拍数(封顶 2)
-	// liveViewHeldRounds 是存活集骤降已经连续压住的拍数(checkLiveView)。
-	liveViewHeldRounds int
-	cursors            map[gateSlot]uint64 // 已确认死亡、被预算截断的索引键 → 下一拍续扫的 SSCAN 游标
+	// liveView 是存活集闸门的状态(checkLiveView)。只由 run 所在的 goroutine 访问。
+	liveView *liveview.Gate
+	cursors  map[gateSlot]uint64 // 已确认死亡、被预算截断的索引键 → 下一拍续扫的 SSCAN 游标
 
 	// eligible 为 false 时本副本退出清扫分片(slot_shard 的 healthy)。
 	eligible atomic.Bool
@@ -84,6 +84,7 @@ func newGateSweeper(svcCtx *svc.ServiceContext, owner slotOwner, cfg config.Reco
 		transitionPacer: deps.newPacer(cfg.MaxTransitionsPerSecond),
 		memberBudget:    budget,
 		suspects:        make(map[string]int),
+		liveView:        liveview.NewGate(liveViewHold),
 		cursors:         make(map[gateSlot]uint64),
 	}
 	s.eligible.Store(true)
@@ -103,14 +104,27 @@ func (s *gateSweeper) run(ctx context.Context) {
 		}
 		now := s.deps.now()
 		reconcileRoundTotal.Inc(reconcileLoopIndex, outcome.result())
-		if outcome.err == nil {
+		switch {
+		case outcome.err == nil:
 			failures = 0
 			lastSuccess = now
 			reconcileLastSuccessUnix.Set(float64(now.Unix()), reconcileLoopIndex)
+			reconcileLiveViewHolding.Set(0)
 			if s.eligible.CompareAndSwap(false, true) {
 				logx.Info("GateSweeper: round succeeded, rejoining the sweep shard")
 			}
-		} else {
+		case outcome.stage == stageViewHeld:
+			// 闸门压住不算失败:本副本读得到 etcd 与 Redis,让出段只会把同一份可疑视图交给别的副本。以前它按 etcd_error 计,
+			// 连续 3 拍就让出段,下一拍没段可扫时闸门被空观察清零,压住上限永远到不了(2026-11-05 修)。
+			// 这里只推进让位判定用的 lastSuccess;last_success 指标不推进(这一拍没有完成清扫),Stalled 告警在压住期间由规则排除。
+			failures = 0
+			lastSuccess = now
+			reconcileLiveViewHolding.Set(1)
+			if s.eligible.CompareAndSwap(false, true) {
+				logx.Info("GateSweeper: round held by the live view gate, rejoining the sweep shard")
+			}
+			logx.Errorf("GateSweeper: index round held by the live view gate, no gate is judged dead this round: %v", outcome.err)
+		default:
 			failures++
 			logx.Errorf("GateSweeper: index round failed stage=%s consecutive_failures=%d: %v", outcome.stage, failures, outcome.err)
 		}
@@ -160,7 +174,7 @@ func (s *gateSweeper) indexRound(ctx context.Context) roundOutcome {
 		return roundOutcome{stage: stageEtcd, err: fmt.Errorf("list live gates: %w", err), report: rep}
 	}
 	if err := s.checkLiveView(pairs, live); err != nil {
-		return roundOutcome{stage: stageEtcd, err: err, report: rep}
+		return roundOutcome{stage: stageViewHeld, err: err, report: rep}
 	}
 
 	// c)
@@ -181,8 +195,10 @@ func (s *gateSweeper) indexRound(ctx context.Context) roundOutcome {
 	return roundOutcome{report: rep}
 }
 
-// checkLiveView 判断这一拍的存活集能不能用。不能用时回错误,这一拍不推进去抖、不转换,和读失败同一口径。
-// 全空一直压住:新 gate 一注册就不再是空集。骤降有上限,见 liveViewDropHoldRounds。
+// checkLiveView 判断这一拍的存活集能不能用(shared/liveview 的规则)。不能用时回错误,这一拍不推进去抖、不转换。
+// 基线是本副本持有的 slot 的登记集里出现的 gate(同一 gate 在多个 slot 上只算一次),缺席 = 不在 etcd 存活集里。
+// 全空一直压住:新 gate 一注册就不再是空集。骤降之后缺席数连续 liveViewHold 不变才放行,变了从头计时。
+// 这一拍没分到 slot(登记集为空)不是恢复的证据,闸门状态不动。
 func (s *gateSweeper) checkLiveView(pairs []gateSlot, live map[string]struct{}) error {
 	registered := make(map[string]struct{}, len(pairs))
 	missing := 0
@@ -195,18 +211,19 @@ func (s *gateSweeper) checkLiveView(pairs []gateSlot, live map[string]struct{}) 
 			missing++
 		}
 	}
-	if len(registered) > 0 && len(live) == 0 {
-		return errLiveViewEmpty
+	obs := liveview.Observation{Known: len(registered), Missing: missing, Empty: len(live) == 0}
+	switch verdict := s.liveView.Observe(obs, s.deps.now()); verdict {
+	case liveview.HoldEmpty:
+		return fmt.Errorf("%w: registered_gates=%d", errLiveViewEmpty, obs.Known)
+	case liveview.HoldDrop:
+		return fmt.Errorf("%w: registered_gates=%d missing=%d live=%d hold=%v", errLiveViewDrop, obs.Known, obs.Missing, len(live), liveViewHold)
+	case liveview.Release:
+		reconcileLiveViewReleasedTotal.Inc()
+		logx.Errorf("GateSweeper: live view gate released after the missing gate count stayed unchanged for %v; "+
+			"treating the missing gates as dead from this round on: registered_gates=%d missing=%d live=%d",
+			liveViewHold, obs.Known, obs.Missing, len(live))
 	}
-	if len(registered) < liveViewDropMinGates || missing*2 <= len(registered) {
-		s.liveViewHeldRounds = 0
-		return nil
-	}
-	if s.liveViewHeldRounds >= liveViewDropHoldRounds {
-		return nil
-	}
-	s.liveViewHeldRounds++
-	return errLiveViewDrop
+	return nil
 }
 
 // advanceSuspects 推进 gate 级去抖。返回已确认死亡(连续两拍缺席)的 gate(排过序)、这些 gate 的索引键(按 gate、slot 排序),

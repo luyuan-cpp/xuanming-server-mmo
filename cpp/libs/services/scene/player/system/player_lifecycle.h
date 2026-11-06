@@ -29,8 +29,11 @@
 #include "services/scene/player/system/relocate_confirm.h"
 // 入场会话栅栏(JudgeEnter 的返回类型、PlayerLoginIdentityComp、enter_fence_stats)。写全路径,理由同上。
 #include "services/scene/player/system/enter_fence.h"
+// 断线保留(ExpireConnectionLostHolds 的参数类型、PlayerConnectionLostComp)。写全路径,理由同上。
+#include "services/scene/player/system/connection_lost_hold.h"
 
 namespace scene_manager { class EnterSceneRequest; class EnterSceneResponse; }
+namespace boost::cobalt { template<class T> struct task; }
 namespace storage { class PlayerLocation; }
 // 按值传给 PlayerLifecycleSystem::HandleSceneChangeEnterSceneReply;定义在 player/comp/player_ownership_comp.h。
 // 只前置声明:函数声明里的按值参数不要求完整类型,定义与调用都在 player_lifecycle.cpp(那里包含了组件头)。
@@ -38,6 +41,7 @@ struct PlayerSceneChangeInFlightComp;
 class PlayerStoreClient;
 struct PlayerStoreSaveResult;
 struct PlayerStoreTransport;
+struct GrpcCallOutcome;
 namespace playerstore
 {
 class LoadAndClaimResponse;
@@ -762,13 +766,15 @@ namespace relocate_confirm_stats
 
 namespace player_exit
 {
-	// 刚落地的 PlayerAllData 是否就是当前内存(M1 "比对后才销毁")。比对前把两边 player_database /
-	// player_database_1 的 stress_test_probe 剔掉:压测探针只在真正写盘的那份上打(SavePlayer 在快路径
-	// 比对之后才 Stamp),落地的 message 带着 test_seq / test_sig,而新 marshal 的不带;不剔的话开了
-	// STRESS_TEST_PROBE 的构建永远判"不一致",退出永不收敛。其余字段用 dirty_save::IsEqual(与快路径同一把尺子)。
-	// 同样剔掉存盘元数据 last_save_seq 与两张子表的 fence_*(db-write-fencing-mysql.md §7.3):落地的那份带着发号写入的
-	// 序号、当前 marshal 不带,两笔存盘在途时两边序号也不同;不剔的话退出永不收敛。
-	// 入参不改;内部各拷一份再剔。只在退出收敛 / 交接路径上调,不在每次存盘的快路径上(快路径直接比 dirty_save::IsEqual)。
+	// 刚落地的 PlayerAllData 是否就是当前内存(M1 "比对后才销毁")。
+	// 尺子和存盘判脏是同一把:两边都按行投影、确定性序列化,逐行比字节(PlayerStoreClient::DirtyKinds)。
+	// 不再用 MessageDifferencer 逐字段比:它判 NaN 不等于自己,坐标里一旦有 NaN,退出永远判"不一致";
+	// 退出存盘带 release,每轮都真写一笔,重存到上限后实体就滞留在节点上。
+	// 只比进了行的字段:last_save_seq(存盘元数据,db-write-fencing-mysql.md §7.3)、player_id 与覆盖世代(0 组)、
+	// bag_data / quest_data(给旧读者的副本)都不进任何行,自然不参与。
+	// 比之前把两边的 stress_test_probe 剔掉:探针只打在真正写盘的那份上,不剔的话开了 STRESS_TEST_PROBE 的构建
+	// 永远判"不一致"。投影失败按"不一致"处理(不销毁实体)。
+	// 入参不改,内部各拷一份再剔。只在退出收敛路径上调。
 	bool IsPersistedPayloadCurrent(const PlayerAllData& landed, const PlayerAllData& current);
 } // namespace player_exit
 
@@ -1151,12 +1157,30 @@ public:
 	// 退出即冻结运动学:把 Velocity 清零(只改已有组件,不 emplace)。HandleExitGameNode 在
 	// 第一次存盘之前调用。不清的话 MovementSystem 会继续积分退出中实体的 Transform(它不排除 UnregisterPlayer,
 	// 摘掉 SceneEntityComp 后导航夹持也失效),退出存盘的收敛比对每轮都判不一致。重连后客户端会重新上报速度。
-	// 公开只为单测能直接验证;业务代码不要在退出流程之外调用。
+	// 公开只为单测能直接验证;业务代码不要在退出流程之外调用。唯一的例外是断线保留(HandleClientConnectionLost):
+	// 掉线的角色要停在原地,效果与退出时停步完全相同。
 	static void StopMotionForExit(entt::entity player);
 
 	// 重连取消退出(EnterScene 第 0 步):UnregisterPlayer 与 PlayerExitIntentComp 成对摘掉
 	// (player_exit_intent.h 的成对约定)。两者都不在时 no-op。公开只为单测能直接验证成对摘除。
 	static void CancelExitOnReconnect(entt::entity player);
+
+	// 客户端连接意外断开(gate 代发 ExitGame,reason = EXIT_GAME_REASON_DISCONNECTED)的唯一入口
+	// (docs/design/player-connection-lost-hold.md,常量与判定见 connection_lost_hold.h)。按 connection_lost_hold::Decide 处置:
+	//   kHold        → 停步(StopMotionForExit)、挂 PlayerConnectionLostComp、请求一次关键进度存盘、确保到期扫描已挂上;
+	//                  角色仍在场景与 AOI 里,窗口内新会话进场由 EnterScene 接回;
+	//   kKeepHolding → 同一次断线的重复通知,什么都不做(窗口不延长);
+	//   kExitNow     → HandleExitGameNode(kClientDisconnect),与加保留之前的断线处理相同。
+	static void HandleClientConnectionLost(entt::entity player);
+
+	// 断线保留到期扫描:保留满 connection_lost_hold::kHoldWindow 还没被接回的,按客户端断线退出。先收集、后处置
+	// (退出会改 registry)。由 1s 定时器(player_lifecycle.cpp 的 EnsureConnectionLostHoldTimer,第一次保留时挂上)
+	// 与单测调用,now 显式传入(单调时钟,AGENTS §11.2 显式依赖)。不是 per-tick 路径:平时只有断线未归的几个实体。
+	static void ExpireConnectionLostHolds(connection_lost_hold::Clock::time_point now);
+
+	// EnterScene 第 0 步:新会话接回断线保留中的角色时摘掉 PlayerConnectionLostComp(判据 connection_lost_hold::IsResumedBy)。
+	// 不在保留中、或进场带的不是新会话时 no-op。公开只为单测能直接验证。
+	static void ResumeConnectionLostHold(entt::entity player, SessionId incomingSessionId);
 
 	// 进场路由命中本节点上的旧实体(退出中的,或不在交接中的活实体)、且 owner_epoch 显示中间有别的持有者
 	// (player_exit::IsDeposedOnReentry)时,按"被废黜"不存盘销毁它并返回 true,调用方随后从盘上重载。
@@ -1222,6 +1246,10 @@ public:
 	static bool SavePlayer(entt::entity player);
 	// 资产重查要求这一笔真的提交，必须重投当前整份载荷，不能被快照相等跳过。
 	static bool SavePlayerForAssetCommit(entt::entity player);
+	// 定时存盘(RedisSystem 的周期回调)专用。和 SavePlayer 相同,只多一条:只有只顺带的行(LOCATION)有变化时
+	// 推迟这一笔,位置随下一笔有别的行要写的存盘、最终存盘或兜底一起写(player-save-direct-commit.md §1.1)。
+	// 别的入口(资产、关键进度、下线、交接、停机)要的都是落盘,一律用 SavePlayer / SavePlayerImpl,不推迟。
+	static bool SavePlayerPeriodic(entt::entity player);
 
 	// 关键进度存盘(docs/design/player-data-tidb-scaling-plan.md §4):等级、任务这类玩家投入了时间的变化不等定时存盘。
 	// 存盘不在调用方的栈上发生,调用方可能正处在一连串状态变化的中间(完成任务 → 自动领奖 → 接下一环)。
@@ -1602,8 +1630,11 @@ private:
 	// 条目已不在 kMarkWriting(已结清 / 进场路由已先把他带回本节点 / 写标记超时已转核实)时不再发 —— 那次改派已有去向。
 	// 发出去 → 条目转 kAwaitingReply;没发出去(scene_manager 注册表为空)→ 计 not_sent 并立即核实。
 	// markWrite 只记到条目上进日志。
-	static void TrackRelocateDispatch(Guid playerId, uint64_t seq, const EmergencyRelocateTicket &ticket,
-									  relocate_confirm::MarkWrite markWrite);
+	using EnterSceneDone = std::function<void(const GrpcCallOutcome&, const ::scene_manager::EnterSceneResponse*)>;
+	static uint64_t TrackRelocateDispatch(Guid playerId, uint64_t seq, const EmergencyRelocateTicket &ticket,
+										 relocate_confirm::MarkWrite markWrite, EnterSceneDone done = {});
+	struct RelocateMarkAttempt;
+	static boost::cobalt::task<void> PublishAndDispatchRelocate(RelocateMarkAttempt attempt);
 
 	// 抄改派票据 + 推进退出流程。整节点疏散与单场景排空共用。
 	// 返回 true 表示登记了票据(玩家有活着的 gate 会话)。
@@ -1618,7 +1649,17 @@ private:
 		kAlreadyPersisted,
 		kHandoffAlreadyRequested,
 		kRejected,
+		// 定时存盘推迟了只顺带的行(player-save-direct-commit.md §1.1):这一笔没有提交,不是落盘证据。
+		// 只有 SaveTrigger::kPeriodic 的存盘会得到它。
+		kDeferred,
 		kCount,
+	};
+
+	// 谁发起的存盘。只有定时存盘允许推迟只顺带的行;其余入口都是调用方要它落盘。
+	enum class SaveTrigger : uint8_t
+	{
+		kOnDemand,  // 资产、关键进度、下线、交接、停机、疏散:有变化就写
+		kPeriodic,  // 定时存盘:只有只顺带的行有变化、且推迟不到兜底间隔时不写
 	};
 
 	// SavePlayer 的本体。allowSkipWhenPersisted = false 时跳过 dirty-save 快路径,
@@ -1632,14 +1673,16 @@ private:
 	//     目标节点若在回滚前提交过一份,不强制写的话 dirty-save 快路径会误判"盘上已是同一份"。
 	//   * SavePlayerForAssetCommit:资产重查要求这一笔真的提交,即使快照相等也必须重投整份载荷。
 	// 不给 SavePlayer 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
-	static SaveResult SavePlayerImpl(entt::entity player, bool allowSkipWhenPersisted);
+	static SaveResult SavePlayerImpl(entt::entity player, bool allowSkipWhenPersisted,
+									 SaveTrigger trigger = SaveTrigger::kOnDemand);
 
 	// 存盘的后半段(docs/design/player-save-direct-commit.md §5.1):校验、marshal、交接跳过
 	// 都在 SavePlayerImpl 里;这里投影成行、交给状态机。是否跳过由状态机比对库里已确认的字节决定:
 	// allowSkipWhenPersisted = false 或快照上没有当前代次的提交时强制写一笔;退出中的每一笔都带 release,
 	// 所以挂机下线也会真的发出去、等到回调。
+	// trigger 为 kPeriodic、不带 release、不必强制写时,先问状态机能不能推迟只顺带的行(DeferPeriodicSave)。
 	static SaveResult SubmitPlayerSave(entt::entity player, Guid playerId, const std::shared_ptr<PlayerAllData>& message,
-									   bool allowSkipWhenPersisted);
+									   bool allowSkipWhenPersisted, SaveTrigger trigger);
 
 	// 状态机的回调。提交成功走 HandlePlayerAsyncSaved(有排队的快照时不走:这份不是最终态);
 	// 拒绝映射:STALE_OWNER / NOT_HOLDER / UNCLAIMED → HandlePlayerSaveRejected,
@@ -1785,15 +1828,11 @@ private:
 	// (Table::MarkSent:转 kAwaitingReply,应答与 settle 的钟从此刻起算)**再**交给 gRPC —— 统一出口
 	// SendCorrelatedEnterScene 的前置条件"先记到等待者上再发"。应答 / 传输失败回来时靠这个号认领。
 	static uint64_t SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket,
-													uint64_t trackSeq);
+													uint64_t trackSeq, EnterSceneDone done);
 
-	// handoff 标记落地后向 scene_manager 请求 EnterScene(目标 zone / 场景)。gate / session 从实体上现取
-	// (与 DispatchEmergencyRelocate 不同:交接中实体还活着,不需要提前抄票据)。
-	// 发送前取关联号写进 PlayerTravelHandoffComp.enterSceneCorrelationId:只有回显这个号的应答才算本代交接的应答。
-	// 只由 SET 的 OK 回调调用:走到这里标记确定已写,按骨架**不许解冻**。冻结已超过晚发窗口
-	// (travel_freeze_cap::kDispatchWindow)、没有 gate 会话、没有 scene_manager 三种情形都不发 EnterScene,
-	// 走 ConcludeHandoffAfterMarkSent(tip + 踢线 34 + 不存盘销毁)。
-	static void RequestTravelEnterScene(Guid playerId);
+	// 持久存盘已有成功证据后，发布本代标记并等待本次 EnterScene。看门狗与归属核实仍由交接状态机裁决。
+	struct TravelMarkAttempt;
+	static boost::cobalt::task<void> PublishAndEnterTravel(TravelMarkAttempt attempt);
 
 	// 交接的 EnterScene 应答(DispatchEnterSceneReply 分到 kTravelHandoff / kLegacyTravelHandoff 才会进来,
 	// 调用时实体有效、交接组件在)。

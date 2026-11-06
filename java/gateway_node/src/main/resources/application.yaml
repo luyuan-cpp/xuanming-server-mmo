@@ -39,6 +39,9 @@ spring:
       maximum-pool-size: 5
       minimum-idle: 2
       connection-timeout: 3000
+      # 池名固定为 gateway(2026-11-05):Hikari 指标 hikaricp_connections_*{pool=...} 按它分组,告警写死这个值
+      # (deploy/k8s/mysql-connection-alerts.yaml 的 sql-pool.gateway 组);缺省是 HikariPool-1,会随池的创建顺序变。
+      pool-name: gateway
   jpa:
     hibernate:
       ddl-auto: validate
@@ -170,6 +173,9 @@ management:
   # 代价:探针不再反映业务连接器是否还能接新连接 —— 业务线程卡死时 liveness 仍是 UP,要靠日志与上游错误率发现。
   # 2026-10-16 补注:readiness 同理 —— 业务线程被占满或卡死时这个副本仍是 Ready,不会被摘流;gateway 目前不导出指标、也没有
   # 错误率告警,「上游错误率」尚无落地手段。K8s 上的发现与处置见 deploy/k8s/README.md「gateway 探针、管理端口与回退口径」2026-10-16 补注。
+  # 2026-11-05 更正:K8s 上已导出指标 —— gateway ConfigMap 在管理端口 8082 上把 prometheus 加进 exposure,
+  # Pod 模板按 prometheus.io/* 注解抓 /actuator/prometheus(Hikari 连接池、HTTP 服务端请求计时等 Micrometer 指标)。
+  # 这里(jar 内)仍只暴露 health,info:本机业务端口 8081 不出指标。错误率告警仍未写。
   endpoint:
     health:
       probes:

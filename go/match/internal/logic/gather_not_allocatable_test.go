@@ -48,49 +48,65 @@ func TestIsBattleNotAllocatable(t *testing.T) {
 func TestCreateBattleClassifiesReply(t *testing.T) {
 	node := discovery.NodeEntry{NodeId: 7, Endpoint: "battle-7"}
 	req := &battlepb.CreateBattleRequest{BattleId: 1, TargetInstanceId: "instance-a"}
+	// 失败分支只看错误分类,同时确认失败时不带出房间数(调用方只在成功时 Observe)。
+	createErr := func() error {
+		rooms, err := createBattle(node, req)
+		if err != nil {
+			require.Zero(t, rooms, "失败应答不能带出房间数")
+		}
+		return err
+	}
 
 	// 准入拒绝:errors.Is 可判。
 	stubCreateBattle(t, func(*battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		return nil, errNotAllocatable
 	})
-	require.ErrorIs(t, createBattle(node, req), errBattleNotAllocatable)
+	require.ErrorIs(t, createErr(), errBattleNotAllocatable)
 
 	// 普通 RPC 失败不误判成准入拒绝。
 	stubCreateBattle(t, func(*battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		return nil, status.Error(codes.Unavailable, "transport is closing")
 	})
-	err := createBattle(node, req)
+	err := createErr()
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errBattleNotAllocatable)
 
-	// 业务拒绝(如 battle 预签票据失败,turn-based §22 D70)。
+	// 业务拒绝(如 battle 预签票据失败,turn-based §22 D70)。应答里就算带了房间数也不采信。
 	stubCreateBattle(t, func(r *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
-		return &battlepb.CreateBattleResponse{BattleId: r.BattleId, ErrorMessage: tipErr(uint32(table.CommonError_kServiceUnavailable), "拒绝建房")}, nil
+		return &battlepb.CreateBattleResponse{BattleId: r.BattleId, ErrorMessage: tipErr(uint32(table.CommonError_kServiceUnavailable), "拒绝建房"), RoomCount: 9}, nil
 	})
-	require.Error(t, createBattle(node, req))
+	require.Error(t, createErr())
 
 	// 回执的原局或原实例不符。
 	stubCreateBattle(t, func(r *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		return &battlepb.CreateBattleResponse{BattleId: r.BattleId + 1, TargetInstanceId: r.TargetInstanceId, AdoptedOutcomeProtocolVersion: 1}, nil
 	})
-	require.Error(t, createBattle(node, req))
+	require.Error(t, createErr())
 	stubCreateBattle(t, func(r *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		return &battlepb.CreateBattleResponse{BattleId: r.BattleId, TargetInstanceId: "instance-b", AdoptedOutcomeProtocolVersion: 1}, nil
 	})
-	require.Error(t, createBattle(node, req))
+	require.Error(t, createErr())
 
 	// 明确未采用终局协议 1:带回实例与版本,调用方据此持久化观察结果,不追认。
 	stubCreateBattle(t, func(r *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		return &battlepb.CreateBattleResponse{BattleId: r.BattleId, TargetInstanceId: r.TargetInstanceId}, nil
 	})
 	var adoption *outcomeAdoptionError
-	require.ErrorAs(t, createBattle(node, req), &adoption)
+	require.ErrorAs(t, createErr(), &adoption)
 	require.Equal(t, "instance-a", adoption.instance)
 	require.Zero(t, adoption.version)
 
-	// 成功。
+	// 成功:带回节点捎回的房间数(R6);旧节点不填时为 0。
+	stubCreateBattle(t, func(r *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
+		return &battlepb.CreateBattleResponse{BattleId: r.BattleId, TargetInstanceId: r.TargetInstanceId, AdoptedOutcomeProtocolVersion: 1, RoomCount: 3}, nil
+	})
+	rooms, err := createBattle(node, req)
+	require.NoError(t, err)
+	require.Equal(t, uint32(3), rooms)
 	stubCreateBattle(t, func(r *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		return &battlepb.CreateBattleResponse{BattleId: r.BattleId, TargetInstanceId: r.TargetInstanceId, AdoptedOutcomeProtocolVersion: 1}, nil
 	})
-	require.NoError(t, createBattle(node, req))
+	rooms, err = createBattle(node, req)
+	require.NoError(t, err)
+	require.Zero(t, rooms)
 }

@@ -31,7 +31,8 @@ package logic
 //     AnotherWriterFirst、SameTargetAdoptsPreCreatedEntity、ScriptFailure 的「CAS 之前已预建」断言跟着红。
 //   - 变异 C:删掉 reassignSceneOffDeadNode 开头的 world_channels 成员资格检查。InstanceAndMismatchedConf 红。
 //   - 变异 D:resolveScene 的 zone 守卫换回 GetSceneZone(读错 / 值损坏都当 0 放行)。CorruptZoneRecord 红。
-//   - 变异 F:删掉 luaReassignSceneNode 里 `#KEYS >= 6` 那段在役核对。ChannelDrainedBeforeCommit 红。
+//   - 变异 F:删掉 luaReassignSceneNode 里 `#KEYS >= 7` 那段在役核对(2026-11-05 前是 `#KEYS >= 6`,KEYS[6] 让给了
+//     重发回执)。ChannelDrainedBeforeCommit 红。
 // BarrierPending 是行为守护,上面各种变异下都绿。
 
 import (
@@ -203,7 +204,7 @@ func TestResolveScene_DeadOwner_ScriptFailureChangesNothing(t *testing.T) {
 }
 
 // 没有竞争写者时从 resolveScene 入口走完整次改派:先在 late 上建实体,再把属主映射、两侧反向索引与
-// scene_count 同批改到 late,记账口径与 createscenelogic.go allocateScene 一致。
+// scene_count 同批改到 late,记账口径与 scene_registration.go 登记新场景时一致。
 // 修复前:只 SET 属主映射,late 的反向索引与 scene_count 都没有,dead 的还挂着这个频道。
 func TestResolveScene_DeadOwner_MovesIndexAndSceneCount(t *testing.T) {
 	c := newResolveDeadOwnerCase(t, 89004)

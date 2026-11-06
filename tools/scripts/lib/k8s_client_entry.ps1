@@ -213,6 +213,18 @@ function Get-ClientEntryContract {
 		# 该脚本自己的两个模板(New-CppMetricsEnvLines / New-CppMetricsPortLines)也取这里的名字。
 		CppMetricsPortEnv          = 'MMORPG_METRICS_PORT'
 		CppMetricsPortName         = 'metrics'
+		# 发布轨道(docs/design/release-track-gray-canary.md §2.1;C++ release_track.h kEnvVar、Go shared/releasetrack.EnvVar)。
+		# k8s_deploy.ps1 -ReleaseTrack 经 PodCommon.ReleaseTrack 写进本库三个 C++ 生成器(Get-ClientEntryNodeBaseEnv),
+		# 该脚本自己的两个模板(New-CppReleaseTrackEnvLines)与 Go 服务也取这里的名字。只认小写;stable 不写(不设 = stable)。
+		ReleaseTrackEnv            = 'MMORPG_RELEASE_TRACK'
+		ReleaseTracks              = @('stable', 'canary')
+		# gate 出站调用的内部身份签名密钥(cpp/libs/engine/core/security/caller_auth.h kSecretEnv)。gate main.cpp 在它缺失
+		# 或不足 32 字节时拒绝启动,所以两种入口形态都必须带:本库 New-GateStatefulSetYaml(external)与 k8s_deploy.ps1
+		# New-NodeDeploymentYaml 的 gate 分支(podip)都按这三个名字写 secretKeyRef,Apply-Zone 按同名先于 gate 建 Secret。
+		# login 等验签方的 Go 服务引用同一个 Secret(k8s_deploy.ps1 Apply-OneGoSvc)。
+		InternalAuthSecretEnv      = 'MMORPG_INTERNAL_AUTH_SECRET'
+		InternalAuthSecretName     = 'gate-identity-auth'
+		InternalAuthSecretKey      = 'secret'
 	}
 }
 
@@ -654,7 +666,10 @@ function New-ClientEntryPodCommon {
 		[AllowEmptyString()][string]$OpenFileLimitMode = '',
 		# C++ Prometheus 出口端口(k8s_deploy.ps1 -CppMetricsPort)。0 = 不开:不写 env、不声明容器端口,生成物与不传时逐字相同。
 		# 抓取注解(prometheus.io/*)由调用方放进 -PodAnnotations,本库不另写。
-		[ValidateRange(0, 65535)][int]$MetricsPort = 0
+		[ValidateRange(0, 65535)][int]$MetricsPort = 0,
+		# 发布轨道(k8s_deploy.ps1 -ReleaseTrack)。留空或 stable = 不写 env(C++ 不设即 stable),生成物与不传时逐字相同;
+		# canary 写 MMORPG_RELEASE_TRACK=canary。只收小写,在渲染时(Get-ClientEntryNodeBaseEnv)校验。
+		[AllowEmptyString()][string]$ReleaseTrack = ''
 	)
 
 	$given = @($SidecarContainerYaml, $SidecarVolumeYaml, $SidecarConfigHash | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -684,10 +699,11 @@ function New-ClientEntryPodCommon {
 		PodAnnotations       = $podAnnotationsCopy
 		OpenFileLimitMode    = $OpenFileLimitMode
 		MetricsPort          = $MetricsPort
+		ReleaseTrack         = $ReleaseTrack
 	}
 }
 
-# env 列表。每项 @{ Name; Value } 或 @{ Name; FieldPath }(downward API)。值一律加引号。
+# env 列表。每项 @{ Name; Value }、@{ Name; FieldPath }(downward API)或 @{ Name; SecretName; SecretKey }(必需密钥)。值一律加引号。
 # 顺序有意义:K8s 的 $(VAR) 依赖展开只认排在前面的 env(battle hostPort 的 CLIENT_ENDPOINT_HOST 依赖 HOST_IP)。
 function Get-ClientEntryEnvYaml {
 	param(
@@ -702,6 +718,17 @@ function Get-ClientEntryEnvYaml {
 			$lines += "${keyIndent}valueFrom:"
 			$lines += "${keyIndent}  fieldRef:"
 			$lines += "${keyIndent}    fieldPath: $($entry.FieldPath)"
+		}
+		elseif (-not [string]::IsNullOrEmpty($entry.SecretName)) {
+			if ([string]::IsNullOrEmpty($entry.SecretKey)) {
+				throw "Get-ClientEntryEnvYaml: env $($entry.Name) 给了 SecretName=$($entry.SecretName) 却没给 SecretKey。"
+			}
+			# 显式 optional: false:Secret 缺失时 Pod 停在 CreateContainerConfigError,不会带着空值启动。
+			$lines += "${keyIndent}valueFrom:"
+			$lines += "${keyIndent}  secretKeyRef:"
+			$lines += "${keyIndent}    name: $($entry.SecretName)"
+			$lines += "${keyIndent}    key: $($entry.SecretKey)"
+			$lines += "${keyIndent}    optional: false"
 		}
 		else {
 			$lines += "${keyIndent}value: $(ConvertTo-ClientEntryYamlString -Value ([string]$entry.Value))"
@@ -738,6 +765,17 @@ function Get-ClientEntryNodeBaseEnv {
 	$metricsPort = Get-ClientEntryMetricsPort -PodCommon $PodCommon
 	if ($metricsPort -gt 0) {
 		$entries += @{ Name = $contract.CppMetricsPortEnv; Value = [string]$metricsPort }
+	}
+	# 发布轨道:同样经 Get-ClientEntryMember 读,缺成员、空串或 stable = 不写(C++ 不设即 stable)。区分大小写(-cnotin):
+	# C++ 只认小写,大写会让进程拒启。
+	$releaseTrack = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ReleaseTrack'))
+	if (-not [string]::IsNullOrEmpty($releaseTrack)) {
+		if ($releaseTrack -cnotin $contract.ReleaseTracks) {
+			throw "Get-ClientEntryNodeBaseEnv: PodCommon.ReleaseTrack 只收小写 $($contract.ReleaseTracks -join ' / ')(留空 = 不写 $($contract.ReleaseTrackEnv)),实际 '$releaseTrack'。"
+		}
+		if ($releaseTrack -ceq 'canary') {
+			$entries += @{ Name = $contract.ReleaseTrackEnv; Value = $releaseTrack }
+		}
 	}
 	return ,$entries
 }
@@ -906,6 +944,8 @@ function Get-ClientEntryPodAnnotationBlock {
 	    (GATE_CLIENT_HOST_TEMPLATE / CLIENT_PUBLIC_HOST / GATE_CLIENT_PORT_MODE / GATE_NODE_PORT_BASE | GATE_CLIENT_PORT,
 	    C++ 不读),启动 shell 前缀由它们算出 CLIENT_ENDPOINT_HOST / PORT。
 	  - args 改用块标量:地址片段含双引号,塞进流式标量要层层转义。
+	两种形态共有的内部身份签名密钥(契约 InternalAuthSecretEnv,secretKeyRef 到 InternalAuthSecretName)同样写在这里:
+	缺了它 gate 拒绝启动。Secret 由 k8s_deploy.ps1 Apply-Zone 先于本清单建好。
 	副本数取自 Plan.Ordinals 的个数,与每序号 Service 同源。
 #>
 function New-GateStatefulSetYaml {
@@ -927,6 +967,7 @@ function New-GateStatefulSetYaml {
 	$envEntries = Get-ClientEntryNodeBaseEnv -PodCommon $PodCommon -RpcPort $RpcPort
 	$envEntries += @(
 		@{ Name = 'GATE_CLIENT_RPC_ROUTER'; Value = $GateRouterMode },
+		@{ Name = $contract.InternalAuthSecretEnv; SecretName = $contract.InternalAuthSecretName; SecretKey = $contract.InternalAuthSecretKey },
 		@{ Name = 'POD_NAME'; FieldPath = 'metadata.name' },
 		@{ Name = 'HOST_IP'; FieldPath = 'status.hostIP' },
 		@{ Name = $contract.ClientEndpointSourceEnv; Value = $contract.ClientEndpointSourceStatic },

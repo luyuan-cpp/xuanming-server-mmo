@@ -53,6 +53,7 @@ type Player struct {
 	// battleId 由 NotifyBattleStart 写入;battleStart/battleEnd 是一次性广播
 	// 通道(close 即广播),照 sceneReady 的惯例做懒初始化 + sync.Once 保护。
 	battleId        uint64        // 当前对局 id(NotifyBattleStart 记录)
+	endedBattleId   uint64        // 最近一次被接受的 NotifyBattleEnd 所属对局 id(InBattle 用;0 = 还没结束过)
 	battleOutcome   int32         // 战斗结果(EBattleOutcome,NotifyBattleEnd 记录)
 	turnCount       int           // 收到的 NotifyTurnResult 条数(参战视角回合数)
 	battleStart     chan struct{} // NotifyBattleStart 到达时 close
@@ -545,8 +546,18 @@ func (p *Player) SignalBattleEnd(battleId uint64, outcome int32) {
 		return
 	}
 	p.battleOutcome = outcome
+	p.endedBattleId = current
 	p.mu.Unlock()
 	p.battleEndOnce.Do(func() { close(p.battleEnd) })
+}
+
+// InBattle 报告最近一次 NotifyBattleStart 的那一局是否还没收到它自己的 NotifyBattleEnd。
+// 只比对局 id、不看一次性广播通道,所以同一个会话打多局时也成立(压测 join_queue 动作用:战斗里不再入队)。
+// 结束推送丢了时会一直为 true,该机器人从此只记「in battle」,不再入队;服务端的入队校验不依赖这里。
+func (p *Player) InBattle() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.battleId != 0 && p.endedBattleId != p.battleId
 }
 
 // WaitBattleEnd 阻塞等待 NotifyBattleEnd,返回战斗结果(EBattleOutcome 数值)。

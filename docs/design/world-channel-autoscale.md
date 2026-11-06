@@ -54,6 +54,24 @@
 顺序不能反。先排空再摘路由的话,刚被改派出去的玩家有可能又被分回这个正在
 销毁的频道。
 
+第 6 步「清 Redis 状态」的现状(`finishDrainedChannel`):
+
+- 按本拍读到的属主做比较并删除(`atomicTeardownScene`,2026-10-23 起):映射、成员集合、zone、
+  `agones_gs` 与排空集合成员资格在同一个 Lua 脚本里删;属主已不是读到的那个就一个键都不动,
+  下一拍按新属主重来。名额按脚本删除前读到的 `agones_gs` 归还,认领成功的一方才扣计数、摘
+  反向索引、还名额。
+- 属主已死时先过再入屏障(点位 `autoscale_drain`,2026-11-05 起):摘出负载集不等于老节点
+  已停笔,屏障未到本拍什么都不做,频道留在排空集合。死属主的 `scene_count` 不扣:它的计数键
+  由死节点收尾整个删掉,删了之后再扣会把键重建成 -1。
+- 改派一侧:init 的死节点改派、懒改派、resolveScene 的死节点自愈都是先建后改,提交走
+  `reassignWorldChannelNode`(属主 CAS 与在役成员资格同一个脚本),已开始排空的频道不会再被
+  搬活;rebalance 也是先建后改,改派先落地时收尾的属主比对落空,下一拍按新属主收。
+  改派 CAS(`luaReassignSceneNode`)与名额转移(`luaCommitAgonesRoomTransfer`)每次调用一个 token、一把自己的短 TTL
+  回执键(`scene:{id}:reassign_receipt:{token}`、`scene:{id}:agones_transfer_receipt:{token}`),成功时写回执,
+  go-redis 重发同一个 EVAL 时原样回「已落地」,不会把结论翻成「落空 / 已记账」。重发也都没拿到应答、Eval 最终回错时,
+  调用方用同一个 token 跑 `luaResolveCasReceipt` 问清结局:落地了照常做后续;没落地就同时写下作废标记,那次 EVAL
+  之后才到也一个键不动,调用方可以放心回收预建实体、还掉刚占的名额。问也出错才按结论未知处理(2026-11-05)。
+
 ### 1.4 防抖
 
 两条:

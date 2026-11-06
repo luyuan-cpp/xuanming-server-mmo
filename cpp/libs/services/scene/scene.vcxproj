@@ -45,6 +45,7 @@
     <ClInclude Include="core\constants\fps.h" />
     <ClInclude Include="core\system\id_generator.h" />
     <ClInclude Include="core\system\redis.h" />
+    <ClInclude Include="core\system\scene_task_scope.h" />
     <ClInclude Include="frame\manager\frame_time.h" />
     <ClInclude Include="generated\attribute\actorbaseattributess2c_attribute_sync.h" />
     <ClInclude Include="generated\attribute\attributedelta10framess2c_attribute_sync.h" />
@@ -72,6 +73,7 @@
     <ClInclude Include="player\system\handoff_mark_withdraw.h" />
     <ClInclude Include="player\system\exit_release_mark.h" />
     <ClInclude Include="player\system\travel_freeze_cap.h" />
+    <ClInclude Include="player\system\connection_lost_hold.h" />
     <ClInclude Include="player\system\relocate_confirm.h" />
     <ClInclude Include="player\system\enter_fence.h" />
     <ClInclude Include="player\system\release_fence.h" />
@@ -80,6 +82,8 @@
     <ClInclude Include="player\system\player_exit_intent.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_ownership_metrics.h" />
+    <ClInclude Include="player\system\player_save_metrics.h" />
+    <ClInclude Include="player\system\save_timing_stats.h" />
     <ClInclude Include="player\system\player_scene.h" />
     <ClInclude Include="player\system\player_team.h" />
     <ClInclude Include="player\system\player_team_follow_scope.h" />
@@ -129,6 +133,7 @@
     <ClCompile Include="actor\actor_net_id.cpp" />
     <ClCompile Include="core\system\id_generator.cpp" />
     <ClCompile Include="core\system\redis.cpp" />
+    <ClCompile Include="core\system\scene_task_scope.cpp" />
     <ClCompile Include="frame\manager\frame_time.cpp" />
     <ClCompile Include="generated\attribute\actorbaseattributess2c_attribute_sync.cpp" />
     <ClCompile Include="generated\attribute\attributedelta10framess2c_attribute_sync.cpp" />
@@ -151,6 +156,7 @@
     <ClCompile Include="battle\system\player_battle.cpp" />
     <ClCompile Include="player\system\player_lifecycle.cpp" />
     <ClCompile Include="player\system\player_ownership_metrics.cpp" />
+    <ClCompile Include="player\system\player_save_metrics.cpp" />
     <ClCompile Include="player\system\role_admission_system.cpp" />
     <ClCompile Include="player\system\player_scene.cpp" />
     <ClCompile Include="player\system\player_team.cpp" />

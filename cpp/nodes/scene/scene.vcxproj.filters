@@ -50,6 +50,8 @@
     <ClInclude Include="handler\rpc\player\player_activity_handler.h" />
     <ClCompile Include="handler\rpc\player\player_mystery_merchant_handler.cpp" />
     <ClInclude Include="handler\rpc\player\player_mystery_merchant_handler.h" />
+    <ClCompile Include="handler\rpc\player\player_battle_result_handler.cpp" />
+    <ClInclude Include="handler\rpc\player\player_battle_result_handler.h" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

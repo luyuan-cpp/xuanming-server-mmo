@@ -91,6 +91,14 @@ etcd:`/mmorpg/capability/player_locator/gate_session_index/v2/<node_uuid>`,KV,�
 
 1. **登记集快照**(分批 pipeline SMEMBERS 持有的 slot),必须先于第 2 步:gate 先在 etcd 注册,login 才会把玩家分给它,快照里的每个 gate 都早于那次 Range 注册过。
 2. **etcd 存活集**(Range `GateNodeService.rpc/`,宽松解析 NodeInfo,D77)。出错:整拍返回,去抖不推进、不转换(fail-closed)。
+   读成功后过**存活集闸门**(决策清单 B1-1,2026-11-05;状态机 `go/shared/liveview`,与 scene_manager 的 fullSync 共用规则与阈值):
+   基线是第 1 步登记集里出现的 gate(按 gate 去重),缺席 = 不在存活集里。存活集为空而登记集里有 gate → 一直压住;登记的 gate
+   不少于 4 个且缺席超过一半 → 压住,缺席数连续 30 分钟不变才放行,变了(有 gate 重新注册,或又少了)从头计时,恢复到一半以下
+   也继续压住,直到恢复完或稳定下来;放行之后 30 分钟内照常放行,让这批死 gate 收完。压住的拍记 `view_held`,不推进去抖、
+   不转换,**不计入让出段的门槛**:读都成功了,可疑的是视图本身,换副本看到的是同一份。没分到 slot 的拍(登记集为空)不改变闸门状态。
+   30 分钟按时间计(拍长可配,改拍长不连带改压住时长),取值理由:压住只推迟死 gate 上会话的清理,玩家重连照常顶掉旧会话;
+   误判的代价是全员被踢,所以留足人工介入的时间。
+   (2026-11-01 的第一版按拍计、上限 30 拍,压住的拍按 etcd_error 计:连续 3 拍就让出段,下一拍没段可扫时计数被清零,上限永远到不了。)
 3. **gate 级去抖**:存活 → 清嫌疑与游标;缺席 → 计数(封顶 2),≥2 即确认死亡。已确认死亡的 gate 只要还在本副本持有的登记集里就保持确认;gate 在 etcd 重新出现(重注册沿用同一 uuid)即清掉嫌疑。去抖按 gate 算,不按索引键算:新接管一个段时,已确认死亡的 gate 在新段上不必重新等两拍。
 4. **预算内处理死 gate 的索引键**(按 gate、slot 排序):逐页 SSCAN → 按 slot 分组 MGET 本页会话 → 逐个判定:
    - ONLINE 且就在这个 gate 上 → 经 transitionPacer 限速,转成 DISCONNECTING(版本 +1、ZADD 租约,deadline = now + DefaultTTLSeconds);CAS 失败计 `cas_conflict`,成员保留下一拍重判;
@@ -175,6 +183,7 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 |---|---|
 | 某个副本到 etcd 的路径坏了(其余副本正常) | 它的清扫每拍 etcd_error,连续 3 拍退出 `gate_sweep` 分片,其余副本接手它的段;之后每拍试一次,成功就回来。它是 leader 时写者检查同样连续 3 拍让位 |
 | etcd 整体抖动 < 3 拍 | 去抖不推进,标记不动(租约 3.5 拍内续上),补建不作废 |
+| etcd 回档 / 重建 / 连错:Range 成功,但回空或缺了一大半 gate | 存活集闸门压住(§4.2 第 2 步,`view_held`):空集一直压住;骤降压到缺席数连续 30 分钟不变;gate 失租后会重新注册,恢复一个计时就从头算。副本不让出段。`PlayerLocatorGateLiveViewHeld`(critical)5 分钟后亮,放行时 `PlayerLocatorGateLiveViewReleased`(critical)亮。真有一半以上的 gate 同时死了:放行后照常收尾,死 gate 上没重连的会话比以前多挂约 30 分钟 |
 | etcd 整体长时间不可达 | 全部副本退出清扫分片,leader 轮流让位;对账停摆(与旧实现相同,fail-closed),断线租约照常到期(LeaseMonitor 是另一套分片);标记过期,恢复后补建一遍。`PlayerLocatorReconcilerStalled`(critical)持续亮 |
 | 控制域 Redis 不可达 | 选主失败,写者检查与补建 / 审计停;清扫与 LeaseMonitor 只依赖玩家域,照常 |
 | 玩家域某个主节点不可达 | 落在它上面的段读不到持有者,这一周期不算持有、不扫,故障转移后恢复;别的段照常。会话写入在这 1/M 玩家上同样不可用。只有个别副本到不了它时,这些副本不算成员,读得全的副本接管那些段 |
@@ -209,7 +218,9 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 
 | 指标 | 类型 | 说明 |
 |---|---|---|
-| `player_locator_reconcile_round_total{loop,result}` | counter | loop = index(清扫,每个副本)/ writers / repair / audit(leader);result = ok / etcd_error / redis_error / gen_changed / incomplete(补建有候选因键类型错误被跳过,不设标记) / panic;启动时全部组合预置 0 |
+| `player_locator_reconcile_round_total{loop,result}` | counter | loop = index(清扫,每个副本)/ writers / repair / audit(leader);result = ok / etcd_error / redis_error / gen_changed / incomplete(补建有候选因键类型错误被跳过,不设标记) / panic / view_held(只有 index:存活集闸门压住,不算失败);启动时全部组合预置 0 |
+| `player_locator_reconcile_live_view_holding` | gauge(每副本) | 1 = 本副本最近一拍被存活集闸门压住,0 = 最近一拍完成;启动预置 0 |
+| `player_locator_reconcile_live_view_released_total` | counter(每副本) | 闸门放行骤降的次数(缺席数连续 30 分钟不变);预置 0 |
 | `player_locator_reconcile_last_success_unix{loop}` | gauge | 最近一次完成。index 每个副本一份;writers / repair / audit 只由 leader 产出,任期开始与结束都清零。进程启动全部预置 0 |
 | `player_locator_reconcile_sessions_total{action}` | counter | to_disconnecting / cas_conflict / pruned_stale / pruned_missing / pruned_malformed / pruned_bad_member / repaired / audit_repaired / member_error(成员跳过:会话键或本 slot 的租约键类型不对) / gate_error(索引键或登记集类型不对);预置 0 |
 | `player_locator_reconcile_dead_gates` | gauge(每副本) | 本副本持有的 slot 上已确认死亡、尚未释放的 gate 数。一个 gate 通常跨很多 slot,跨副本求和会重复计 |
@@ -220,7 +231,9 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 | `player_locator_gate_index_members` | gauge(每副本) | 存活 gate 的索引键数,跨副本求和约等于在线数(同 slot 同 gate 的多名玩家只计一次,脏键等审计清掉)。不再是上界 |
 | `player_locator_slot_shard_segments{role}` | gauge(每副本) | 本副本持有的段数。按 role 求和不到 256 说明有 slot 此刻没人扫 |
 
-规则 `deploy/k8s/player-locator-alerts.yaml`:NoLeader、Stalled(critical,都带 absent 分支)、RoundsFailing、LegacySessionWriters、GateIndexNotReady、GateIndexAuditRepaired、DeadGatesPending(warning)。**规则文件第 7 批没动,部署批次要改**:
+规则 `deploy/k8s/player-locator-alerts.yaml`:NoLeader、Stalled(critical,都带 absent 分支)、RoundsFailing、LegacySessionWriters、GateIndexNotReady、GateIndexAuditRepaired、DeadGatesPending(warning)。
+2026-11-05 加 GateLiveViewHeld(critical,`max(live_view_holding) > 0` 持续 5 分钟)与 GateLiveViewReleased(critical,15 分钟内放行过);
+压住的拍不推进 last_success,Stalled 用 `unless on () (max(live_view_holding) > 0)` 排除压住期间,RoundsFailing 的分子排除 `view_held`。**规则文件第 7 批没动,部署批次要改**:
 
 - DeadGatesPending 现在按 is_leader 过滤,只看得到 leader 自己那一份,要改成 `sum(player_locator_reconcile_dead_gate_members) > 0`;
 - Stalled 对全体副本取 max 的写法还成立,含义变成「没有任何副本完成清扫」;RoundsFailing 的 `> 3` 现在是全部副本的合计,要按副本数重估;

@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include <google/protobuf/unknown_field_set.h>
+
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h"
 #include "modules/bag/bag_service.h"
@@ -202,6 +204,29 @@ TEST(MysteryMerchantRulesTest, PurchaseRecordIsScopedToOneRound)
 	EXPECT_EQ(4u, merchantrules::BoughtCount(record, 101, 7));
 	EXPECT_EQ(0u, merchantrules::BoughtCount(record, 101, 3));
 	EXPECT_EQ(0u, merchantrules::BoughtCount(record, 100, 3)) << "上一轮的记录已经作废";
+}
+
+// 换轮是逻辑重置:整条 Clear() 再重设轮次(docs/design/mixed-version-persist-field-protection.md §4.2 L7、§4.4)。
+// 更新版本给这份记录加的按轮字段,在本版本是记录本层的未知字段;逐字段清空(clear_purchases + set_round_id)
+// 会让它们跨轮存活,把上一轮的状态带进新一轮。同一轮内累加不是重置,未知字段照常携带、存盘原样写回。
+TEST(MysteryMerchantRulesTest, RoundChangeAlsoClearsFieldsUnknownToThisVersion)
+{
+	constexpr int kFutureField = 9999; // 本版本不认识的字段号
+	::PlayerMysteryMerchantComp record;
+	merchantrules::RecordPurchase(record, 100, 3, 2);
+	record.mutable_unknown_fields()->AddVarint(kFutureField, 1);
+
+	merchantrules::RecordPurchase(record, 100, 3, 1);
+	ASSERT_EQ(1, record.unknown_fields().field_count()) << "同一轮内累加不是重置,未知字段照常携带";
+	EXPECT_EQ(kFutureField, record.unknown_fields().field(0).number());
+	EXPECT_EQ(3u, merchantrules::BoughtCount(record, 100, 3));
+
+	merchantrules::RecordPurchase(record, 101, 7, 4);
+	EXPECT_TRUE(record.unknown_fields().empty()) << "上一轮的未知字段跨轮存活了";
+	EXPECT_EQ(101u, record.round_id());
+	ASSERT_EQ(1, record.purchases_size());
+	EXPECT_EQ(4u, merchantrules::BoughtCount(record, 101, 7));
+	EXPECT_EQ(0u, merchantrules::BoughtCount(record, 101, 3));
 }
 
 TEST(MysteryMerchantRulesTest, LimitCheckDoesNotWrapAround)

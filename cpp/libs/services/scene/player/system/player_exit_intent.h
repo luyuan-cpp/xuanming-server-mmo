@@ -73,6 +73,7 @@ struct PlayerExitIntentComp
 	// 0 时核实一律判"判不清"、不踢。
 	uint64_t sceneIdAtExit{0};
 	// 粘性:本次退出期间收到过 kClientDisconnect(gate 断线 / 客户端主动退出)= 这条会话已经死了。置位后不清。
+	// 断线保留中的角色(PlayerConnectionLostComp,connection_lost_hold.h)发起任何原因的退出时也置位:会话早已断开。
 	// 改派票据据此作废(relocate_confirm::DecideTicket):给死会话改派,scene_manager 放行后路由会在 gate 被丢掉,
 	// location 停在一个从未载入该玩家的节点上。与 cause 分开记:cause 只保留第一次的原因,排空 / 疏散发起的退出之后
 	// 才断线的玩家,cause 仍是 kSceneDrain / kIdentityConflict。

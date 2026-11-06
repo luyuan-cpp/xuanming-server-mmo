@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"match/internal/config"
@@ -24,15 +25,71 @@ import (
 func Tables() []proto.Message {
 	return []proto.Message{
 		&pb.MatchSpectatorRecord{}, &pb.MatchSpectatorIntentRecord{}, &pb.MatchSpectatorHeadRecord{},
-		&pb.MatchNetworkProfileRecord{}, &pb.MatchAuthorityTicketRecord{}, &pb.MatchTicketRegionRecord{},
+		&pb.MatchNetworkProfileRecord{}, &pb.MatchAuthorityTicketRecord{},
 		&pb.MatchChallengeInvitationRecord{}, &pb.MatchGlobalPolicyRecord{}, &pb.MatchJoinIntentRecord{},
 		&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}, &pb.MatchRatingRecord{},
 		&pb.MatchRatingAppliedRecord{}, &pb.MatchRankSourceRecord{}, &pb.MatchRankOutboxRecord{},
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
-		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{},
+		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{},
 		&teampb.TeamApplicationIndexRecord{}, &teampb.TeamLaunchRoleRecord{},
 	}
+}
+
+// CheckCandidateIndexes 核对撮合与维护扫描依赖的普通索引。既有表缺索引时迁移器只给计划 / 警告，
+// 扫描不能带着全表排序接流，所以启动与迁移后都核一遍。
+// 机房投影表 match_ticket_region / team_launch_region 已随按池撮合退役（2026-11-05）；旧库里若还在是孤表，不再核对。
+func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
+	rows, err := s.DB.QueryContext(ctx, `SELECT table_name,index_name,column_name FROM information_schema.statistics
+		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_join_intent','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator')
+		ORDER BY table_name,index_name,seq_in_index`)
+	if err != nil {
+		return err
+	}
+	indexes := map[string][]string{}
+	for rows.Next() {
+		var table, index, column string
+		if err = rows.Scan(&table, &index, &column); err != nil {
+			rows.Close()
+			return err
+		}
+		key := table + "/" + index
+		indexes[key] = append(indexes[key], column)
+	}
+	readErr := rows.Err()
+	closeErr := rows.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	for table, required := range map[string][]string{
+		"match_authority_ticket":     {"state,enqueued_ms,player_id", "state,mode,team_id,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,enqueued_ms,player_id"},
+		"match_challenge_invitation": {"target_player_id,state,expires_ms,challenge_id", "challenger_player_id,state,expires_ms,challenge_id"},
+		"match_direct_intent":        {"exit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low"},
+		"match_join_intent":          {"state,player_id,request_high,request_low"},
+		"match_spectator":            {"state,player_id", "updated_ms,player_id"},
+		"team_authority":             {"state,idle_expires_ms,team_id"},
+		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
+		"team_application_index":     {"applicant_id,expires_ms,team_id"},
+		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low"},
+		"team_launch_role":           {"player_id,state,actor_id,request_high,request_low"},
+	} {
+		for _, columns := range required {
+			found := false
+			for key, actual := range indexes {
+				if strings.HasPrefix(key, table+"/") && strings.Join(actual, ",") == columns {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("%s缺候选索引(%s)，先执行迁移计划再接流", table, columns)
+			}
+		}
+	}
+	return nil
 }
 
 type schemaRunner func(context.Context, *sql.DB, schemamigrate.Options) (schemamigrate.Report, error)

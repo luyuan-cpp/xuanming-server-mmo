@@ -48,6 +48,7 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"proto/battle"
 	"proto/common/base"
@@ -318,9 +319,9 @@ func RunTeamSmoke(cfg *config.Config) {
 		zap.Uint64("version_before", approved.GetVersion()), zap.Uint64("version_after", replayed.GetVersion()))
 
 	// ---- S3:邀请 D → D 拒绝 → 再邀请 → D 接受 ----
-	inviteReq := &teampb.InviteToTeamRequest{TargetPlayerId: d.gc.PlayerId, ExpectedTeamId: tid}
 	inviteResp := &teampb.TeamResponse{}
-	if err := a.expect(game.ClientPlayerTeamInviteToTeamMessageId, inviteReq, inviteResp, 0); err != nil {
+	if err := a.expect(game.ClientPlayerTeamInviteToTeamMessageId,
+		&teampb.InviteToTeamRequest{TargetPlayerId: d.gc.PlayerId, ExpectedTeamId: tid}, inviteResp, 0); err != nil {
 		fail("S3-invite", "%v", err)
 	}
 	if !teamSmokeHasPendingInvite(inviteResp.GetTeam(), d.gc.PlayerId) {
@@ -344,7 +345,9 @@ func RunTeamSmoke(cfg *config.Config) {
 	}); err != nil {
 		fail("S3-decline-push", "%v", err)
 	}
-	if err := a.expect(game.ClientPlayerTeamInviteToTeamMessageId, inviteReq, &teampb.TeamResponse{}, 0); err != nil {
+	// 对方已拒绝。再邀请是新意图，复用第一次的请求号只会得到旧回执。
+	if err := a.expect(game.ClientPlayerTeamInviteToTeamMessageId,
+		&teampb.InviteToTeamRequest{TargetPlayerId: d.gc.PlayerId, ExpectedTeamId: tid}, &teampb.TeamResponse{}, 0); err != nil {
 		fail("S3-reinvite", "%v", err)
 	}
 	acceptResp := &teampb.TeamResponse{}
@@ -685,6 +688,14 @@ func (b *teamSmokeBot) mark() int {
 // 返回的 envelopeTip 非 0 表示 gate / 路由服级拒绝(信封 error_message,body 为空),此时 response 未填充;
 // 为 0 时 response 已解码。gate 推 kServiceUnavailable 或超时返回 error。
 func (b *teamSmokeBot) call(messageId uint32, request, response proto.Message) (envelopeTip uint32, err error) {
+	if request != nil && teamSmokeIsTeamRequest(messageId) {
+		// 写请求的 UUID 绑定原意图。填在原消息上，重试复用；队伍读请求没有此字段。
+		message := request.ProtoReflect()
+		field := message.Descriptor().Fields().ByName("request_id")
+		if message.IsValid() && field != nil && message.Get(field).String() == "" {
+			message.Set(field, protoreflect.ValueOfString(chatSmokeRequestId()))
+		}
+	}
 	b.pace()
 	b.lastRequestAt = time.Now()
 	return b.caller.call(messageId, request, response)

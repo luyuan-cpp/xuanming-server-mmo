@@ -60,7 +60,7 @@ Redis 抖动触发改派、销毁或清理。歧义节点身份另有 fail-close
 | `NodeDeathMarkTTL` | 10 分钟，须大于屏障；重新注册时显式清理 |
 
 `markNodeDeath` 把观察到的死亡时刻写入 `node:zone:{zone}:{node}:death_at`。改派、rebalance、
-孤儿收尾及玩家接管等入口通过 `CanReclaimDeadNode` / `reentryBarrierBlocks` 检查：标记还在
+孤儿收尾、缩容排空收尾的死属主分支（2026-11-05 补上，点位 `autoscale_drain`）及玩家接管等入口通过 `CanReclaimDeadNode` / `reentryBarrierBlocks` 检查：标记还在
 屏障内、读失败、格式错误或时间在未来都拒绝本轮接管；合法标记已过屏障则放行。没有近期死亡
 标记且不在推迟摘除队列时允许接管，不把“无标记”当永久禁止。
 

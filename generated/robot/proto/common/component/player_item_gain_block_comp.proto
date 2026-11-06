@@ -1,0 +1,23 @@
+syntax = "proto3";
+option go_package = "robot/proto/common/component";
+
+// 单玩家物品获取封禁(scene 侧玩家实体组件,**落库**)。设计:docs/design/player-inbox-service.md §2.2。
+//
+// 它是 GM 处置的**效果状态**:收件箱 SCENE_GM_SANCTION 域的 GM_BLOCK_ITEM_GAIN / GM_UNBLOCK_ITEM_GAIN 执行器
+// 经 GainBlockService::BlockPlayerItemGain / UnblockPlayerItemGain 改它,各物品获得入口经
+// GainBlockService::IsItemGainBlocked 读它(与全服封禁同一个判定函数)。
+//
+// 为什么落在玩家存档里,而不是节点内存或 Redis:
+//   - 封禁必须在重登、换节点、服务器重启后继续生效;状态跟着玩家存档走,任何节点加载玩家就拿到它,
+//     不需要进程级全局表或旁路缓存,水平扩展时不多出一份要同步的真相。
+//   - 它与收件箱执行账本(player_database.inbox_ledger)同一次存盘提交(IB-3):要么「封禁生效 + 账本记了这条」
+//     一起在盘上,要么一起没有。不会出现「账本说执行过、盘上没封」(处置被确认却没生效),
+//     也不会出现「盘上封了、账本没记」(重投时再执行一次,天然幂等,无害)。
+//
+// 只挡**今后的新增获得**:不扣已有库存;存档还原(bag_marshal)与同一所有者内部搬运(整理、仓库互转、装备穿脱)
+// 不经过获得判定,不受影响。
+message PlayerItemGainBlockComp {
+  // 被禁止今后获得的物品配置号(Item 表 id)。写入侧保持升序、无重复、不含 0;读取侧按值查找、不依赖顺序
+  // (AGENTS.md §11.6:下标不承载业务语义)。不要求配置号在本节点的物品表里存在(设计 §2.2)。
+  repeated uint32 item_config_ids = 1;
+}

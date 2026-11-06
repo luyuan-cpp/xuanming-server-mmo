@@ -9,10 +9,12 @@ import (
 	mathrand "math/rand/v2"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	commonpb "proto/common/base"
 	"proto/scene_manager"
+	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 	"shared/clientendpoint"
 	"shared/gatepick"
@@ -31,8 +33,8 @@ const (
 )
 
 // AssignGateForZone picks a Gate in the target zone (two random choices by
-// load, skipping gates marked draining) and signs a redirect token. Returns
-// nil if no gate is available.
+// load, skipping gates marked draining, stale or full) and signs a redirect
+// token. Returns nil if no gate is available.
 //
 // 票据绑定持票者(player_id)与目标 zone(target_zone_id):目标 zone 的 gate / login
 // 只接受本人持票,并且看到 target_zone_id == 本 zone 时不再按 home_zone 弹回
@@ -41,20 +43,38 @@ const (
 //
 // 下发给客户端的 TargetGateIp/Port 是 gate 自报的客户端可达地址(NodeInfo.client_endpoint,
 // 缺省回落 endpoint),选址规则与 login CandidatesForZone 同一份权威实现
-// shared/clientendpoint(k8s-client-entry D76/D78)。本函数只做 I/O(读 etcd、读排空标记、取墙钟与随机源),
+// shared/clientendpoint(k8s-client-entry D76/D78)。本函数只做 I/O(读 etcd、判停写、读排空标记、取墙钟与随机源),
 // 挑哪台、下发哪个地址、怎么签全在纯函数 signRedirectToGate 里。
+//
+// 停写(2026-11-05 起):每次直读 etcd 时把每条 gate 记录的 ModRevision 交给 svcCtx.RedirectGateRevisions,
+// 同一个 ModRevision 在本进程持续超过 gatepick.StaleAfter 的 gate 判停写(staleGateIDs)。没有 watch 镜像,
+// 判定只靠本进程读过的历史:进程刚起、或某个 zone 第一次被重定向时不判;读得稀疏时最早在第一次看到之后隔超过
+// StaleAfter 的那次重定向才判出来。
 func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZoneId uint32, playerID uint64) (*scene_manager.RedirectToGateInfo, error) {
 	if svcCtx.Config.GateTokenSecret == "" {
 		return nil, fmt.Errorf("GateTokenSecret not configured, cannot sign redirect token")
 	}
 
-	gates, err := fetchGateNodes(ctx, svcCtx, targetZoneId)
+	records, err := fetchGateNodes(ctx, svcCtx, targetZoneId)
 	if err != nil {
 		return nil, fmt.Errorf("fetch gate nodes for zone %d: %w", targetZoneId, err)
 	}
-	draining := drainingGateIDs(ctx, svcCtx.Redis, gates)
-	return signRedirectToGate(gates, draining, svcCtx.Config.RequireClientEndpoint,
+	// 读完 etcd 立即取时刻:停写时长按「这次读返回」算,排空标记的 MGET 不算进去。
+	stale := staleGateIDs(&svcCtx.RedirectGateRevisions, targetZoneId, records, time.Now())
+	gates := gateRecordNodes(records)
+	marks := gateMarks{
+		draining: drainingGateIDs(ctx, svcCtx.Redis, gates),
+		stale:    stale,
+	}
+	return signRedirectToGate(gates, marks, svcCtx.Config.RequireClientEndpoint,
 		svcCtx.Config.GateTokenSecret, targetZoneId, playerID, time.Now(), mathrand.IntN)
+}
+
+// gateMarks 是 AssignGateForZone 经 I/O 得到的两类按 node_id 记的标记,纯函数 signRedirectToGate 据此过滤。
+// 两个 map 都可以为 nil(没有标记)。
+type gateMarks struct {
+	draining map[uint32]bool // 正在排空(Redis 标记,drainingGateIDs)
+	stale    map[uint32]bool // 注册记录停写(本进程的直读历史,staleGateIDs)
 }
 
 // signRedirectToGate 从目标 zone 的 gate 节点里挑一台并签重定向票据。
@@ -62,11 +82,13 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 // 便于直接对出口做面向契约的测试。
 //
 // 前置条件:secret 非空(AssignGateForZone 在读 etcd 之前已校验)。
-// 顺序与 login 的 CandidatesForZone 一致:先经 selectGateTargets 选客户端地址并按地址去重,再剔除 draining 里的
-// gate(先去重后过滤:排空标记打在活着的那台上,先过滤会让同地址的陈旧影子顶上来),最后按 player_count
-// 随机二选一(shared/gatepick,2026-10-18 起;此前确定性取最小,一个上报周期里重定向的人全落同一台)。
+// 顺序与 login 的 CandidatesForZone + PickGate 一致:先经 selectGateTargets 选客户端地址并按地址去重,再剔除 marks.draining
+// 里的 gate(先去重后过滤:排空标记打在活着的那台上,先过滤会让同地址的陈旧影子顶上来),再剔除停写与满载的 gate
+// (eligibleTargets,规则在 shared/gatepick.Eligible,2026-11-05 起),最后按 player_count 随机二选一
+// (shared/gatepick,2026-10-18 起;此前确定性取最小,一个上报周期里重定向的人全落同一台)。
+// 两层过滤各自在全部不合格时回落,不因过滤让重定向无 gate 可选。
 // 没有任何可下发地址的 gate 时返回错误(调用方映射成 ErrNoAvailableNode,不改任何状态)。
-func signRedirectToGate(nodes []*commonpb.NodeInfo, draining map[uint32]bool, requireClientEndpoint bool, secret string,
+func signRedirectToGate(nodes []*commonpb.NodeInfo, marks gateMarks, requireClientEndpoint bool, secret string,
 	targetZoneId uint32, playerID uint64, now time.Time, intn func(int) int) (*scene_manager.RedirectToGateInfo, error) {
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no gate nodes available for zone %d", targetZoneId)
@@ -76,7 +98,8 @@ func signRedirectToGate(nodes []*commonpb.NodeInfo, draining map[uint32]bool, re
 		return nil, fmt.Errorf("no gate with client-reachable address for zone %d (gates=%d require_client_endpoint=%v)",
 			targetZoneId, len(nodes), requireClientEndpoint)
 	}
-	targets = filterDrainingTargets(targets, draining, targetZoneId)
+	targets = filterDrainingTargets(targets, marks.draining, targetZoneId)
+	targets = eligibleTargets(targets, marks.stale, targetZoneId, now)
 
 	idx, _ := gatepick.TwoChoices(targets, func(t gateTarget) uint32 { return t.node.GetPlayerCount() }, intn)
 	best := targets[idx]
@@ -216,6 +239,97 @@ func filterDrainingTargets(targets []gateTarget, draining map[uint32]bool, targe
 	return kept
 }
 
+// gateRedirectLogEvery:eligibleTargets 两条日志各自的最小间隔。跨 zone 重定向平时稀疏,但一次大规模跨区(活动开场)
+// 会让同一台卡住的 gate 每次重定向都被剔一次;持续多久看指标,日志只负责告诉运维是哪几台。
+const gateRedirectLogEvery = 30 * time.Second
+
+var (
+	staleRedirectGateLog redirectLogThrottle
+	redirectFallbackLog  redirectLogThrottle
+)
+
+// eligibleTargets 剔除停写与满载的 gate,保持原顺序;全部不合格时回落全集(规则在 shared/gatepick.Eligible,
+// 与 login 挑 gate 同一份;回落的理由见那里)。停写看 stale(按 node_id,staleGateIDs 判),满载看 NodeInfo 自报的
+// max_connections(人数到 90%;0 = 没声明,不判)。副作用只有指标与节流日志,now 只用于日志节流。
+func eligibleTargets(targets []gateTarget, stale map[uint32]bool, targetZoneId uint32, now time.Time) []gateTarget {
+	kept, ex := gatepick.Eligible(targets, func(t gateTarget) gatepick.State {
+		return gatepick.State{
+			PlayerCount:    t.node.GetPlayerCount(),
+			MaxConnections: t.node.GetMaxConnections(),
+			Stale:          stale[t.node.GetNodeId()],
+		}
+	})
+	if ex.Stale > 0 {
+		metrics.ObserveGateRedirectExcluded(targetZoneId, gatepick.ReasonStale, ex.Stale)
+		if staleRedirectGateLog.allow(now, gateRedirectLogEvery) {
+			logx.Errorf("eligibleTargets: gates of zone %d left out of the redirect because their etcd record has not been "+
+				"rewritten for %s (likely hung while the lease lives on): node_ids=%v; further reports are suppressed for %s, "+
+				"see scene_manager_gate_redirect_excluded_total{reason=\"stale\"}",
+				targetZoneId, gatepick.StaleAfter, staleTargetIDs(targets, stale), gateRedirectLogEvery)
+		}
+	}
+	if ex.Full > 0 {
+		metrics.ObserveGateRedirectExcluded(targetZoneId, gatepick.ReasonFull, ex.Full)
+	}
+	if ex.FellBack {
+		metrics.ObserveGateRedirectFallback(targetZoneId, ex.FallbackReason())
+		if redirectFallbackLog.allow(now, gateRedirectLogEvery) {
+			logx.Errorf("eligibleTargets: every gate of zone %d is stale or full (stale=%d full=%d of %d); falling back to all "+
+				"of them so the redirect can still land; further reports are suppressed for %s, "+
+				"see scene_manager_gate_redirect_fallback_total",
+				targetZoneId, ex.Stale, ex.Full, len(targets), gateRedirectLogEvery)
+		}
+	}
+	return kept
+}
+
+func staleTargetIDs(targets []gateTarget, stale map[uint32]bool) []uint32 {
+	ids := make([]uint32, 0, len(stale))
+	for _, t := range targets {
+		if stale[t.node.GetNodeId()] {
+			ids = append(ids, t.node.GetNodeId())
+		}
+	}
+	return ids
+}
+
+// redirectLogThrottle 让一条日志每个窗口至多打一次,并发安全。生产传入的 now 来自 time.Now(),带单调时钟读数,
+// 墙钟回拨不会把日志压住。
+type redirectLogThrottle struct {
+	mu   sync.Mutex
+	last time.Time
+}
+
+func (l *redirectLogThrottle) allow(now time.Time, every time.Duration) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.last.IsZero() && now.Sub(l.last) >= 0 && now.Sub(l.last) < every {
+		return false
+	}
+	l.last = now
+	return true
+}
+
+// staleGateIDs 把这一次直读到的 gate 记录交给 tracker,返回判为停写的 gate(按 node_id;没有时为 nil)。
+// readAt 取这次读返回之后的时刻。每次读都要过 tracker,哪怕读到零条:零条会清掉该 zone 的历史。
+func staleGateIDs(tracker *gatepick.RevisionTracker, zoneID uint32, records []gateRecord, readAt time.Time) map[uint32]bool {
+	revs := make([]gatepick.Revision, len(records))
+	for i, r := range records {
+		revs[i] = gatepick.Revision{Key: r.key, ModRev: r.modRev}
+	}
+	var stale map[uint32]bool
+	for i, s := range tracker.Observe(zoneID, revs, readAt) {
+		if !s {
+			continue
+		}
+		if stale == nil {
+			stale = make(map[uint32]bool)
+		}
+		stale[records[i].node.GetNodeId()] = true
+	}
+	return stale
+}
+
 // gateTargetAddr 是去重键:客户端实际要连的 host:port。
 func gateTargetAddr(t gateTarget) string {
 	return net.JoinHostPort(t.host, strconv.FormatUint(uint64(t.port), 10))
@@ -225,13 +339,33 @@ func gateTargetLaunchTime(t gateTarget) uint64 {
 	return t.node.GetLaunchTime()
 }
 
+// gateFetchTimeout 是跨 zone 重定向直读 etcd gate 前缀的时限。它也是停写判定的误差项:读返回的时刻比读的线性化点
+// 至多晚这么久,健康 gate 的停写时长上界是「一个上报周期 + 本值」,必须小于 gatepick.StaleAfter(单测钉住)。
+const gateFetchTimeout = 5 * time.Second
+
+// gateRecord 是 etcd gate 前缀下的一条注册记录:解析后的 NodeInfo,外加停写判定要用的键与 ModRevision。
+type gateRecord struct {
+	key    string
+	modRev int64
+	node   *commonpb.NodeInfo
+}
+
+// gateRecordNodes 取出记录里的 NodeInfo,保持顺序。
+func gateRecordNodes(records []gateRecord) []*commonpb.NodeInfo {
+	nodes := make([]*commonpb.NodeInfo, 0, len(records))
+	for _, r := range records {
+		nodes = append(nodes, r.node)
+	}
+	return nodes
+}
+
 // fetchGateNodes queries etcd for Gate nodes in the given zone.
 // 只负责 etcd 读取;逐条解析与过滤全在 decodeGateNodes,测试经它即覆盖本函数的真实解析路径。
-func fetchGateNodes(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32) ([]*commonpb.NodeInfo, error) {
+func fetchGateNodes(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32) ([]gateRecord, error) {
 	gateNodeType := uint32(commonpb.ENodeType_GateNodeService)
 	prefix := fmt.Sprintf("%s/zone/%d/node_type/%d/", gateEtcdPrefix, zoneId, gateNodeType)
 
-	fetchCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	fetchCtx, cancel := context.WithTimeout(ctx, gateFetchTimeout)
 	defer cancel()
 
 	resp, err := svcCtx.Etcd.Get(fetchCtx, prefix, clientv3.WithPrefix())
@@ -241,15 +375,16 @@ func fetchGateNodes(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint
 	return decodeGateNodes(resp.Kvs), nil
 }
 
-// decodeGateNodes 把 etcd gate 前缀下的键值解析成 NodeInfo(fetchGateNodes 唯一的解析路径):
+// decodeGateNodes 把 etcd gate 前缀下的键值解析成 gate 记录(fetchGateNodes 唯一的解析路径):
 //   - 必须经 nodeinfo.Unmarshal 忽略未知字段(k8s-client-entry D77):滚动升级窗口里新版 gate 写的
 //     NodeInfo 可能带本进程还不认识的字段,严格解析会把整台 gate 当坏记录丢掉,跨 zone 重定向随之无 gate 可选;
 //   - JSON 语法错误 / 已知字段类型不符:记日志并跳过该条,不连累同批其余 gate;
-//   - 没有 endpoint 的值不是可路由的 gate 注册记录,跳过(与抽出前的行为一致,不打日志)。
+//   - 没有 endpoint 的值不是可路由的 gate 注册记录,跳过(与抽出前的行为一致,不打日志);
+//   - 每条带上 etcd 键与 ModRevision(2026-11-05 起),给停写判定用(staleGateIDs)。
 //
 // 除解析失败时的诊断日志外无 I/O;返回保持 etcd 的键序。
-func decodeGateNodes(kvs []*mvccpb.KeyValue) []*commonpb.NodeInfo {
-	nodes := make([]*commonpb.NodeInfo, 0, len(kvs))
+func decodeGateNodes(kvs []*mvccpb.KeyValue) []gateRecord {
+	records := make([]gateRecord, 0, len(kvs))
 	for _, kv := range kvs {
 		info := &commonpb.NodeInfo{}
 		if err := nodeinfo.Unmarshal(kv.Value, info); err != nil {
@@ -257,10 +392,10 @@ func decodeGateNodes(kvs []*mvccpb.KeyValue) []*commonpb.NodeInfo {
 			continue
 		}
 		if info.Endpoint != nil {
-			nodes = append(nodes, info)
+			records = append(records, gateRecord{key: string(kv.Key), modRev: kv.ModRevision, node: info})
 		}
 	}
-	return nodes
+	return records
 }
 
 // signHMAC computes HMAC-SHA256 and returns hex-encoded bytes (matches Login and Java Gateway).

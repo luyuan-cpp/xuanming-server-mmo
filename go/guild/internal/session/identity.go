@@ -4,8 +4,6 @@ import (
 	"context"
 
 	base "proto/common/base"
-	dspb "proto/data_service"
-	"shared/loginsession"
 	"shared/roleidentity"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -23,9 +21,9 @@ func Details(ctx context.Context) *base.SessionDetails {
 	return proto.Clone(detail).(*base.SessionDetails)
 }
 
-// 原账号只读部署显式的全局login实例；修订只读gate发出时的会话原件，不从当前归属补造。
+// 在线域原账号只认 gate 签名原件，不读 login Redis；修订只读gate发出时的会话原件，不从当前归属补造。
 // roleRejected 判 check 的错误是不是确实查到角色变了或被冻结。
-func OriginalIdentityInterceptor(login loginsession.Reader, check func(context.Context) error, roleRejected func(error) bool) grpc.UnaryServerInterceptor {
+func OriginalIdentityInterceptor(check func(context.Context) error, roleRejected func(error) bool) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 		detail := Details(ctx)
 		if detail == nil {
@@ -34,13 +32,9 @@ func OriginalIdentityInterceptor(login loginsession.Reader, check func(context.C
 		if detail.GetOwnerRevision() == 0 || check == nil {
 			return nil, status.Error(codes.Unauthenticated, "原登录修订未就绪")
 		}
-		account, err := loginsession.Account(ctx, login, detail)
+		ctx, err := roleidentity.CaptureSession(ctx, detail)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "原登录态不可用")
-		}
-		ctx, err = roleidentity.Capture(ctx, &dspb.AccountRoleOwnership{Account: account, OwnerRevision: detail.OwnerRevision, Role: &base.AccountSimplePlayer{PlayerId: detail.PlayerId}})
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "原登录身份非法")
+			return nil, status.Error(codes.Unauthenticated, "原登录身份缺少gate签名原件")
 		}
 		if err = check(ctx); err != nil {
 			if roleRejected != nil && roleRejected(err) {

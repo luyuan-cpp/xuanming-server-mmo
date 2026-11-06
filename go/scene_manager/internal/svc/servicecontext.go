@@ -12,6 +12,7 @@ import (
 	"time"
 
 	dspb "proto/data_service"
+	"shared/gatepick"
 	"shared/generated/table"
 	"shared/kafkacmd"
 	"shared/playerredis"
@@ -65,6 +66,8 @@ type ServiceContext struct {
 	SceneIDGen     *snowflake.Node
 	// SceneClaimTokens 记结局未知的场景认领(scene_id -> token),零值可用,见 logic.evalSceneClaim。
 	SceneClaimTokens sync.Map
+	// RedirectGateRevisions 记跨 zone 重定向每次直读到的 gate 注册记录版本,判 gate 停写用(logic.AssignGateForZone),零值可用。
+	RedirectGateRevisions gatepick.RevisionTracker
 	snowflakeHd      *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
 	// ownerEpochMintRedis 是 OwnerEpochMint 的生产实现本体,只为 Stop 时关闭它的专用连接池。
 	ownerEpochMintRedis *RedisOwnerEpochMinter

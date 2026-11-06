@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 
-#include "core/utils/proto/proto_dirty_compare.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h"
 #include "modules/bag/comp/player_bags_comp.h"
@@ -217,9 +217,27 @@ TEST(SaveSeq, PersistedPayloadCurrentIgnoresSeq)
     otherSeq.set_last_save_seq(4243);
     EXPECT_TRUE(player_exit::IsPersistedPayloadCurrent(landed, otherSeq)) << "两笔存盘在途、序号不同:仍判收敛";
 
+    // 改等级而不是 player_id:收敛和存盘判脏是同一把尺子,只比进了行的字段,player_id 在 0 组,不进任何行。
     PlayerAllData changed = current;
-    changed.mutable_player_database_data()->set_player_id(78);
+    changed.mutable_player_database_data()->mutable_level_component()->set_level(2);
     EXPECT_FALSE(player_exit::IsPersistedPayloadCurrent(landed, changed)) << "业务字段不同照样判不收敛";
+}
+
+// 逐字段比较判 NaN 不等于自己,坐标里一旦有 NaN,退出就永远不收敛;按行比字节没有这个问题。
+TEST(SaveSeq, PersistedPayloadCurrentWithNaNCoordinate)
+{
+    PlayerAllData current;
+    current.mutable_player_database_data()->set_player_id(77);
+    current.mutable_player_database_1_data()->set_player_id(77);
+    current.mutable_player_database_data()->mutable_transform()->mutable_location()->set_x(
+        std::numeric_limits<double>::quiet_NaN());
+
+    const PlayerAllData landed = current;
+    EXPECT_TRUE(player_exit::IsPersistedPayloadCurrent(landed, current)) << "同一份数据,NaN 坐标也判收敛";
+
+    PlayerAllData moved = current;
+    moved.mutable_player_database_data()->mutable_transform()->mutable_location()->set_y(5.0);
+    EXPECT_FALSE(player_exit::IsPersistedPayloadCurrent(landed, moved)) << "别的坐标变了照样判不收敛";
 }
 
 TEST(SaveSeq, SnapshotStripsLastSaveSeq)

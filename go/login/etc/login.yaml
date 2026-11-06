@@ -315,10 +315,8 @@ Secrets:
     Value: "local-dev-internal-auth-secret-0123456789abcdef"
 
 # 内部调用方验签策略。
-# **生产模式恒强制验签,这里没有任何开关能关掉它**;
-# ForceEnforce 只是让 dev/test 提前进入强制档,方便上游接完签名后联调。
+# **任何运行模式都强制验签,这里没有开关能关掉它**(dev/test 与生产同一条路径)。
 InternalAuth:
-  ForceEnforce: false
   MaxClockSkew: 30s
   MaxNonceEntries: 500000
   # 留空表示不限制调用方名字(签名仍然必须验过)。

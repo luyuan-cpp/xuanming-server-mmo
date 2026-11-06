@@ -38,7 +38,7 @@ $parseErrors = $null
 $deployAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count -gt 0) { throw "部署脚本语法错误: $($parseErrors[0].Message)" }
 $deployFunctions = @(
-    'Resolve-DirectoryLogicalShards', 'Resolve-IdIssuerRegion', 'Get-DataServiceWriterSchemas', 'Get-DataServiceRosterProblems', 'Get-SqlWriterRosterMinimumEntries',
+    'Resolve-DirectoryLogicalShards', 'Resolve-IdIssuerRegion', 'Resolve-IdRegistryEtcd', 'Get-DataServiceWriterSchemas', 'Get-DataServiceRosterProblems', 'Get-SqlWriterRosterMinimumEntries',
     'Get-DbPlacementPlan', 'New-DbPlacementYaml', 'ConvertTo-DbPlacementJson',
     'Get-AuthoritativeScalar', 'Get-MysqlConnectionPlan', 'Get-MysqlMaxConnectionsFromManifest', 'Get-ManifestDeploymentReplicas',
     'Get-AccountDirectoryPoolMaxOpen', 'Get-MysqlConnectionLedgerInputs', 'Get-MysqlConnectionLedger'
@@ -165,6 +165,40 @@ Test-Case '-Region:dev 缺省 0,staging 和 prod 必须显式且不能用 0,范�
         Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 0 -ReleaseProfileName $profileName }) -Pattern 'reserved for dev' -Because "$profileName 不能用 dev 的地域码,漏写也是 0"
     }
     Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 64 -ReleaseProfileName 'dev' }) -Pattern 'out of range' -Because '超界'
+}
+
+Test-Case '-IdRegistryEtcd:dev 不写,staging 和 prod 必须给或者本集群托管,不能是本集群两套发号 etcd' {
+    Assert-Equal -Expected 0 -Actual @(Resolve-IdRegistryEtcd -Requested '' -ReleaseProfileName 'dev' -Hosted $false -Namespace $Infra).Count -Because 'dev 回落到本地 etcd'
+    Assert-Equal -Expected 'reg-a.invalid:2379,reg-b.invalid:2379' -Actual (@(Resolve-IdRegistryEtcd -Requested ' reg-a.invalid:2379, reg-b.invalid:2379 ' -ReleaseProfileName 'prod' -Hosted $false -Namespace $Infra) -join ',') -Because '逗号分隔,去空白'
+    Assert-Equal -Expected "etcd-id-registry.${Infra}:2379" -Actual (@(Resolve-IdRegistryEtcd -Requested '' -ReleaseProfileName 'staging' -Hosted $true -Namespace $Infra) -join ',') -Because '托管登记处的集群取本集群的 Service'
+    foreach ($profileName in @('staging', 'prod')) {
+        Assert-Match -Text (Get-ThrownMessage { Resolve-IdRegistryEtcd -Requested '' -ReleaseProfileName $profileName -Hosted $false -Namespace $Infra }) -Pattern 'must pass -IdRegistryEtcd' -Because "$profileName 不猜登记处"
+    }
+    foreach ($local in @("etcd.${Infra}:2379", "etcd-id-secondary.${Infra}:2379")) {
+        Assert-Match -Text (Get-ThrownMessage { Resolve-IdRegistryEtcd -Requested $local -ReleaseProfileName 'prod' -Hosted $false -Namespace $Infra }) -Pattern 'cannot be this cluster' -Because '登记处是第三份记录,不能和本地两份同一套'
+    }
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdRegistryEtcd -Requested 'http://reg.invalid:2379' -ReleaseProfileName 'prod' -Hosted $false -Namespace $Infra }) -Pattern 'must be host:port' -Because '不收 scheme 和凭据'
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdRegistryEtcd -Requested 'reg.invalid:2379' -ReleaseProfileName 'dev' -Hosted $false -Namespace $Infra }) -Pattern 'staging and prod only' -Because 'dev 写了就是配错'
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdRegistryEtcd -Requested '' -ReleaseProfileName 'dev' -Hosted $true -Namespace $Infra }) -Pattern 'staging and prod only' -Because 'dev 不托管登记处'
+}
+
+# 缺登记处的拒绝只在上一条用例里按函数测:空串参数要穿过两层子进程,不同 pwsh 版本处理不一样,不拿它当夹具。
+Test-Case 'DryRun:prod 的 data-service ConfigMap 写出登记处;指到本集群发号 etcd、dev 写了都在出清单之前拒绝' {
+    Assert-Match -Text $prodZoneRun.Output -Pattern 'RegistryEtcd: \["id-registry\.invalid:2379"\]' -Because 'deploy_capture 夹具补的 -IdRegistryEtcd 要进 IdSegment.Issuer'
+    Assert-Match -Text $prodZoneRun.Output -Pattern 'Id issuer: region=7 registry=id-registry\.invalid:2379' -Because '入口打印本次登记处'
+    Assert-NotMatch -Text $devZoneRun.Output -Pattern 'RegistryEtcd:' -Because 'dev 回落到本地 etcd,不写'
+    $hosted = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-HostIdRegistry')) -Env $ProdEnv
+    Assert-Equal -Expected 0 -Actual $hosted.ExitCode -Because "输出: $($hosted.Output)"
+    Assert-Match -Text $hosted.Output -Pattern ('RegistryEtcd: \["etcd-id-registry\.' + [regex]::Escape($Infra) + ':2379"\]') -Because '托管登记处的集群指向本集群的 Service'
+    foreach ($case in @(
+            @{ Args = $ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-IdRegistryEtcd', "etcd-id-secondary.${Infra}:2379"); Pattern = 'cannot be this cluster'; Why = 'prod 登记处指到本集群的副记录 etcd' }
+            @{ Args = $ZoneArgs + @('-IdRegistryEtcd', 'reg.invalid:2379'); Pattern = 'staging and prod only'; Why = 'dev 写了登记处' }
+        )) {
+        $run = Invoke-LogicalDbDryRun -Arguments $case.Args -Env $ProdEnv
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "$($case.Why) 必须拒绝。输出: $($run.Output)"
+        Assert-Match -Text $run.Output -Pattern $case.Pattern -Because "$($case.Why) 要点名"
+        Assert-NotMatch -Text $run.Output -Pattern '--- BEGIN MANIFEST ---' -Because "$($case.Why):在任何清单生成之前拒绝"
+    }
 }
 
 Test-Case '写路径入口:Assert-LogicalDbPreflight 排在任何集群写操作之前' {

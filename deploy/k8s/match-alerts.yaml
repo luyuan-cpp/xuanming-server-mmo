@@ -1,0 +1,68 @@
+# match 按池撮合的告警(docs/design/global-match-hierarchical-pools.md §5、§14)。安装方式与 rank / mail 相同:
+#   kubectl apply -n observability -f deploy/k8s/match-alerts.yaml
+# 抓取前提:集群里要有按注解抓取 match 指标端口(9170,go/match/etc 下服务配置的 MetricsListenAddr)的 job 或 PodMonitor;
+# 本文件里以 match 加下划线开头的词都会被契约测试当成指标名核对,注释里不要写这种形状的文件名。
+# 没有序列时规则不触发,和「一切正常」长得一样。
+# label 只用模式、范围层级、机房阶段与有限的结果枚举(go/match/internal/metrics/pool.go 的 PoolClaim* 常量),不含玩家号、对局号或模板号。
+# 正确性不靠这些告警:同一玩家不进两局由提交事务保证,这里报的都是"排队池不成局 / 成局变慢"。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: match-alerts
+  labels:
+    app: match
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: match.pool
+      interval: 30s
+      rules:
+        - alert: MatchPoolsUnowned
+          expr: |
+            sum(match_pool_owned) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "没有任何 match 副本在撮合排队池"
+            description: >-
+              全部副本负责的池数之和为 0。池归属按 etcd 里注册的 MatchNodeService 实例做最高随机权重哈希,
+              成员表为空或副本都没注册上时排队池没有写者,只剩单人档入队即开局。核 etcd 可用性与 match 的注册日志。
+
+        - alert: MatchPoolRoundSlow
+          expr: |
+            histogram_quantile(0.99, sum by (le) (rate(match_pool_round_seconds_bucket[5m]))) > 0.4
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "按池撮合一轮的 p99 超过轮间隔的 0.8 倍"
+            description: >-
+              轮间隔缺省 500ms(MatcherIntervalMs),p99 超过 400ms 说明读页、成组、提交跟不上节拍,排队会越积越长。
+              这是设计 §5.6 第 1 条的观察信号:先按压测汇总定位读页还是提交慢,再决定是否按机房拆写者。
+
+        - alert: MatchPoolNoBattleNode
+          expr: |
+            sum by (mode) (rate(match_pool_claim_total{outcome="no_node"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "成组之后目标机房没有可选的 battle 节点"
+            description: >-
+              组已凑齐,但机房内的 battle 节点都在本副本熔断中或自报不接新房,这一组留到下一轮。
+              核该机房 battle 节点数量、排空与 Agones 分配。
+
+        - alert: MatchPoolGatherSlotsFull
+          expr: |
+            sum by (mode) (rate(match_pool_claim_total{outcome="no_slot"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "备战并发已满,成组的局留到下一轮"
+            description: >-
+              本副本同时备战的成局数达到 GlobalMatch.GatherSlots。核 scene 备战与 battle 建房耗时;
+              容量不够时加副本,不要只调大槽数掩盖下游变慢。

@@ -1,4 +1,5 @@
 #include "snapshot_system.h"
+#include "audit_snapshot_policy.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <muduo/base/Logging.h>
@@ -29,6 +30,10 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
         return 0;
     }
     const Guid playerId = guidPtr->value;
+    if (!audit_snapshot_policy::ShouldCapture(tlsNodeConfigManager.GetGameConfig().audit_snapshot(), trigger, playerId))
+    {
+        return 0;
+    }
 
     // ── Marshal player state ─────────────────────────────────────────────
     // 放在领 snapshot_id 之前:校验不过就不消耗号段。

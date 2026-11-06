@@ -62,6 +62,8 @@ enum NodeType : int;
 extern const uint32_t NodeType_internal_data_[];
 enum OPERATE_TYPE : int;
 extern const uint32_t OPERATE_TYPE_internal_data_[];
+enum PersistRowSavePolicy : int;
+extern const uint32_t PersistRowSavePolicy_internal_data_[];
 namespace google {
 namespace protobuf {
 template <>
@@ -79,6 +81,9 @@ internal::EnumTraitsT<::NodeType_internal_data_>
 template <>
 internal::EnumTraitsT<::OPERATE_TYPE_internal_data_>
     internal::EnumTraitsImpl::value<::OPERATE_TYPE>;
+template <>
+internal::EnumTraitsT<::PersistRowSavePolicy_internal_data_>
+    internal::EnumTraitsImpl::value<::PersistRowSavePolicy>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -192,6 +197,47 @@ template <>
 [[nodiscard]] inline bool ClientRpcKind_Parse(
     ::absl::string_view name, ClientRpcKind* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<ClientRpcKind>(ClientRpcKind_descriptor(), name,
+                                           value);
+}
+enum PersistRowSavePolicy : int {
+  PERSIST_ROW_SAVE_UNSPECIFIED = 0,
+  PERSIST_ROW_SAVE_PERIODIC = 1,
+  PERSIST_ROW_SAVE_PIGGYBACK = 2,
+  PersistRowSavePolicy_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  PersistRowSavePolicy_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t PersistRowSavePolicy_internal_data_[];
+inline constexpr PersistRowSavePolicy PersistRowSavePolicy_MIN =
+    static_cast<PersistRowSavePolicy>(0);
+inline constexpr PersistRowSavePolicy PersistRowSavePolicy_MAX =
+    static_cast<PersistRowSavePolicy>(2);
+[[nodiscard]] inline bool PersistRowSavePolicy_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int PersistRowSavePolicy_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+PersistRowSavePolicy_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PersistRowSavePolicy) {
+  return PersistRowSavePolicy_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& PersistRowSavePolicy_Name(T value) {
+  static_assert(::std::is_same<T, PersistRowSavePolicy>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to PersistRowSavePolicy_Name().");
+  return PersistRowSavePolicy_Name(static_cast<PersistRowSavePolicy>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& PersistRowSavePolicy_Name(PersistRowSavePolicy value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<PersistRowSavePolicy_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool PersistRowSavePolicy_Parse(
+    ::absl::string_view name, PersistRowSavePolicy* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<PersistRowSavePolicy>(PersistRowSavePolicy_descriptor(), name,
                                            value);
 }
 enum OPERATE_TYPE : int {
@@ -441,6 +487,9 @@ extern ::google::protobuf::internal::ExtensionIdentifier<
 inline constexpr int kOptionPersistGroupFieldNumber = 600041;
 extern ::google::protobuf::internal::ExtensionIdentifier<
     ::google::protobuf::FieldOptions, ::google::protobuf::internal::PrimitiveTypeTraits< ::uint32_t >, 13, false>(OptionPersistGroup);
+inline constexpr int kOptionPersistRowSavePolicyFieldNumber = 700000;
+extern ::google::protobuf::internal::ExtensionIdentifier<
+    ::google::protobuf::EnumValueOptions, ::google::protobuf::internal::EnumTypeTraits< ::PersistRowSavePolicy>, 14, false>(OptionPersistRowSavePolicy);
 
 // ===================================================================
 
@@ -470,6 +519,12 @@ struct is_proto_enum<::ClientRpcKind> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::ClientRpcKind>() {
   return ::ClientRpcKind_descriptor();
+}
+template <>
+struct is_proto_enum<::PersistRowSavePolicy> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::PersistRowSavePolicy>() {
+  return ::PersistRowSavePolicy_descriptor();
 }
 template <>
 struct is_proto_enum<::OPERATE_TYPE> : std::true_type {};

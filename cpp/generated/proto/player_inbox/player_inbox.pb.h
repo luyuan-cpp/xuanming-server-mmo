@@ -145,6 +145,14 @@ extern const ::google::protobuf::internal::ClassDataFull GmCurrencyGainPayload_c
 #else
 extern const GmCurrencyGainPayloadGlobalsTypeInternal GmCurrencyGainPayload_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GmItemGainPayload;
+struct GmItemGainPayloadGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GmItemGainPayloadGlobalsTypeInternal GmItemGainPayload_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GmItemGainPayload_class_data_;
+#else
+extern const GmItemGainPayloadGlobalsTypeInternal GmItemGainPayload_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerInboxAckItem;
 struct PlayerInboxAckItemGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -353,6 +361,8 @@ enum PlayerInboxMessageType : int {
   PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN = 2,
   PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT = 3,
   PLAYER_INBOX_MSG_BATTLE_SETTLEMENT = 4,
+  PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN = 5,
+  PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN = 6,
   PlayerInboxMessageType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerInboxMessageType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -363,11 +373,11 @@ extern const uint32_t PlayerInboxMessageType_internal_data_[];
 inline constexpr PlayerInboxMessageType PlayerInboxMessageType_MIN =
     static_cast<PlayerInboxMessageType>(0);
 inline constexpr PlayerInboxMessageType PlayerInboxMessageType_MAX =
-    static_cast<PlayerInboxMessageType>(4);
+    static_cast<PlayerInboxMessageType>(6);
 [[nodiscard]] inline bool PlayerInboxMessageType_IsValid(int value) {
-  return 0 <= value && value <= 4;
+  return 0 <= value && value <= 6;
 }
-inline constexpr int PlayerInboxMessageType_ARRAYSIZE = 4 + 1;
+inline constexpr int PlayerInboxMessageType_ARRAYSIZE = 6 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxMessageType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerInboxMessageType) {
@@ -382,7 +392,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerInboxMessageType_Name(PlayerInboxMessageType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxMessageType_descriptor, 0, 4>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxMessageType_descriptor, 0, 6>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerInboxMessageType_Parse(
@@ -997,7 +1007,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxItem final : public ::go
   [[nodiscard]] static const PlayerInboxItem& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerInboxItem>(&PlayerInboxItem_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(PlayerInboxItem& a, PlayerInboxItem& b) { a.Swap(&b); }
   inline void Swap(PlayerInboxItem* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1500,7 +1510,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxDecisionReport final : p
   [[nodiscard]] static const PlayerInboxDecisionReport& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerInboxDecisionReport>(&PlayerInboxDecisionReport_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(PlayerInboxDecisionReport& a, PlayerInboxDecisionReport& b) { a.Swap(&b); }
   inline void Swap(PlayerInboxDecisionReport* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1737,7 +1747,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxAckItem final : public :
   [[nodiscard]] static const PlayerInboxAckItem& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerInboxAckItem>(&PlayerInboxAckItem_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(PlayerInboxAckItem& a, PlayerInboxAckItem& b) { a.Swap(&b); }
   inline void Swap(PlayerInboxAckItem* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1899,6 +1909,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxAckItem final : public :
     ::uint64_t seq_;
     int result_;
     int state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmItemGainPayload final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:player_inbox.GmItemGainPayload) */ {
+ public:
+  inline GmItemGainPayload() : GmItemGainPayload(nullptr) {}
+  ~GmItemGainPayload() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GmItemGainPayload* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GmItemGainPayload));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GmItemGainPayload(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GmItemGainPayload(const GmItemGainPayload& from) : GmItemGainPayload(nullptr, from) {}
+  inline GmItemGainPayload(GmItemGainPayload&& from) noexcept : GmItemGainPayload(nullptr, ::std::move(from)) {}
+  inline GmItemGainPayload& operator=(const GmItemGainPayload& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GmItemGainPayload& operator=(GmItemGainPayload&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GmItemGainPayload& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GmItemGainPayload>(&GmItemGainPayload_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(GmItemGainPayload& a, GmItemGainPayload& b) { a.Swap(&b); }
+  inline void Swap(GmItemGainPayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GmItemGainPayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GmItemGainPayload* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GmItemGainPayload>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GmItemGainPayload& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GmItemGainPayload& from) { GmItemGainPayload::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GmItemGainPayload* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "player_inbox.GmItemGainPayload"; }
+
+  explicit GmItemGainPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GmItemGainPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GmItemGainPayload& from);
+  GmItemGainPayload(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GmItemGainPayload&& from) noexcept
+      : GmItemGainPayload(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemConfigIdFieldNumber = 1,
+  };
+  // uint32 item_config_id = 1;
+  void clear_item_config_id() ;
+  [[nodiscard]] ::uint32_t item_config_id() const;
+  void set_item_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_config_id() const;
+  void _internal_set_item_config_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:player_inbox.GmItemGainPayload)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GmItemGainPayload& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t item_config_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2422,7 +2633,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FetchPlayerInboxResponse final : pu
   [[nodiscard]] static const FetchPlayerInboxResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FetchPlayerInboxResponse>(&FetchPlayerInboxResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(FetchPlayerInboxResponse& a, FetchPlayerInboxResponse& b) { a.Swap(&b); }
   inline void Swap(FetchPlayerInboxResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2712,7 +2923,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FetchPlayerInboxRequest final : pub
   [[nodiscard]] static const FetchPlayerInboxRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FetchPlayerInboxRequest>(&FetchPlayerInboxRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(FetchPlayerInboxRequest& a, FetchPlayerInboxRequest& b) { a.Swap(&b); }
   inline void Swap(FetchPlayerInboxRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3021,7 +3232,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementInboxResponse final
   [[nodiscard]] static const BattleSettlementInboxResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleSettlementInboxResponse>(&BattleSettlementInboxResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(BattleSettlementInboxResponse& a, BattleSettlementInboxResponse& b) { a.Swap(&b); }
   inline void Swap(BattleSettlementInboxResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3328,7 +3539,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementInboxRequest final 
   [[nodiscard]] static const BattleSettlementInboxRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleSettlementInboxRequest>(&BattleSettlementInboxRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(BattleSettlementInboxRequest& a, BattleSettlementInboxRequest& b) { a.Swap(&b); }
   inline void Swap(BattleSettlementInboxRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3617,7 +3828,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckPlayerInboxResponse final : publ
   [[nodiscard]] static const AckPlayerInboxResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckPlayerInboxResponse>(&AckPlayerInboxResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(AckPlayerInboxResponse& a, AckPlayerInboxResponse& b) { a.Swap(&b); }
   inline void Swap(AckPlayerInboxResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3895,7 +4106,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckPlayerInboxRequest final : publi
   [[nodiscard]] static const AckPlayerInboxRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckPlayerInboxRequest>(&AckPlayerInboxRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(AckPlayerInboxRequest& a, AckPlayerInboxRequest& b) { a.Swap(&b); }
   inline void Swap(AckPlayerInboxRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4586,6 +4797,34 @@ inline ::uint64_t GmCurrencyDebtPayload::_internal_expires_at() const {
 inline void GmCurrencyDebtPayload::_internal_set_expires_at(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expires_at_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GmItemGainPayload
+
+// uint32 item_config_id = 1;
+inline void GmItemGainPayload::clear_item_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t GmItemGainPayload::item_config_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.GmItemGainPayload.item_config_id)
+  return _internal_item_config_id();
+}
+inline void GmItemGainPayload::set_item_config_id(::uint32_t value) {
+  _internal_set_item_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:player_inbox.GmItemGainPayload.item_config_id)
+}
+inline ::uint32_t GmItemGainPayload::_internal_item_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_config_id_;
+}
+inline void GmItemGainPayload::_internal_set_item_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_config_id_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	login_proto "proto/common/base"
 )
 
 // fakeClock 是手动时钟:只在测试里前进,不碰真实墙钟。watch 循环与测试 goroutine 会并发读写,所以加锁。
@@ -39,10 +37,28 @@ func put(key string, nodeID, playerCount uint32) nodeEvent {
 	return nodeEvent{key: key, value: gateJSON(nodeID, playerCount)}
 }
 
-func nodeIDs(nodes []*login_proto.NodeInfo) []uint32 {
+// putRev 同 put,带上 etcd 的 ModRevision:停写判定按它变没变算。
+func putRev(key string, nodeID, playerCount uint32, modRev int64) nodeEvent {
+	ev := put(key, nodeID, playerCount)
+	ev.modRev = modRev
+	return ev
+}
+
+func nodeIDs(nodes []WatchedNode) []uint32 {
 	out := make([]uint32, 0, len(nodes))
 	for _, n := range nodes {
-		out = append(out, n.GetNodeId())
+		out = append(out, n.Info.GetNodeId())
+	}
+	return out
+}
+
+// staleIDs 返回被判停写的节点号,按镜像顺序。
+func staleIDs(nodes []WatchedNode) []uint32 {
+	out := []uint32{}
+	for _, n := range nodes {
+		if n.Stale {
+			out = append(out, n.Info.GetNodeId())
+		}
 	}
 	return out
 }
@@ -52,7 +68,7 @@ func newTestCache() (*nodeCache, *fakeClock) {
 	return newNodeCache("test", clk.now), clk
 }
 
-func mustView(t *testing.T, c *nodeCache) []*login_proto.NodeInfo {
+func mustView(t *testing.T, c *nodeCache) []WatchedNode {
 	t.Helper()
 	nodes, ok, source := c.view()
 	if !ok || source != readSourceCache {
@@ -108,8 +124,8 @@ func TestNodeCache_ApplyEvents(t *testing.T) {
 	if got := nodeIDs(nodes); fmt.Sprint(got) != "[1 3]" {
 		t.Fatalf("nodes = %v, want [1 3]", got)
 	}
-	if nodes[0].GetPlayerCount() != 15 {
-		t.Fatalf("gate 1 player_count = %d, want the updated 15", nodes[0].GetPlayerCount())
+	if nodes[0].Info.GetPlayerCount() != 15 {
+		t.Fatalf("gate 1 player_count = %d, want the updated 15", nodes[0].Info.GetPlayerCount())
 	}
 
 	c.apply([]nodeEvent{{key: "gate/3", value: []byte("garbage")}})
@@ -126,7 +142,7 @@ func TestNodeCache_ViewIsImmutableSnapshot(t *testing.T) {
 
 	c.apply([]nodeEvent{put("gate/1", 1, 99), {key: "gate/2", deleted: true}})
 
-	if len(before) != 2 || before[0].GetPlayerCount() != 10 || before[1].GetNodeId() != 2 {
+	if len(before) != 2 || before[0].Info.GetPlayerCount() != 10 || before[1].Info.GetNodeId() != 2 {
 		t.Fatalf("earlier snapshot changed after apply: %v", before)
 	}
 }
@@ -207,5 +223,69 @@ func TestNodeWatcher_NodesServesFreshMirrorWithoutEtcd(t *testing.T) {
 	nodes, err := nw.Nodes(context.Background())
 	if err != nil || fmt.Sprint(nodeIDs(nodes)) != "[1]" {
 		t.Fatalf("Nodes = (%v, %v), want gate 1 from the mirror", nodeIDs(nodes), err)
+	}
+}
+
+// 停写判定(nodeDataStaleAfter):一台 gate 不再重写记录,重同步拿到的是同一个 ModRevision,停写时长不清零;
+// 照常上报的 gate 每次都是新的 ModRevision,不受影响。镜像本身靠重同步保持可读,停写判定与镜像新鲜度互不干扰。
+func TestNodeCache_StaleWhenRecordIsNotRewritten(t *testing.T) {
+	c, clk := newTestCache()
+	c.replaceAll([]nodeEvent{putRev("gate/1", 1, 10, 100), putRev("gate/2", 2, 20, 101)})
+
+	// 每个上报周期:gate/1 照常写(新的 ModRevision),gate/2 卡住;watch 循环发现 gate/2 静默后重同步。
+	rev := int64(101)
+	for elapsed := time.Duration(0); elapsed <= nodeDataStaleAfter; elapsed += gateReportPeriod {
+		clk.advance(gateReportPeriod)
+		rev++
+		c.replaceAll([]nodeEvent{putRev("gate/1", 1, 10, rev), putRev("gate/2", 2, 20, 101)})
+	}
+	nodes := mustView(t, c) // 重同步刷新了每台的 seenAt,镜像照常可读
+	if got := fmt.Sprint(staleIDs(nodes)); got != "[2]" {
+		t.Fatalf("stale nodes = %s, want [2]: gate/2 has not rewritten its record for over %s", got, nodeDataStaleAfter)
+	}
+
+	// gate/2 恢复写入(watch 事件)即不再停写。
+	c.apply([]nodeEvent{putRev("gate/2", 2, 21, rev+1)})
+	if got := fmt.Sprint(staleIDs(mustView(t, c))); got != "[]" {
+		t.Fatalf("stale nodes after gate/2 wrote again = %s, want []", got)
+	}
+}
+
+// 恰好等于阈值不算停写,超过才算。
+func TestNodeCache_StaleThresholdBoundary(t *testing.T) {
+	c, clk := newTestCache()
+	c.replaceAll([]nodeEvent{putRev("gate/1", 1, 10, 7)})
+
+	clk.advance(nodeDataStaleAfter)
+	c.replaceAll([]nodeEvent{putRev("gate/1", 1, 10, 7)}) // 同一个 ModRevision:没重写;重同步只让镜像保持可读
+	if got := fmt.Sprint(staleIDs(mustView(t, c))); got != "[]" {
+		t.Fatalf("stale at exactly %s = %s, want [] (the threshold itself still counts as writing)", nodeDataStaleAfter, got)
+	}
+	clk.advance(time.Millisecond)
+	if got := fmt.Sprint(staleIDs(mustView(t, c))); got != "[1]" {
+		t.Fatalf("stale just past %s = %s, want [1]", nodeDataStaleAfter, got)
+	}
+}
+
+// ModRevision 未知(0,只出现在单测里)时不沿用旧的写入时刻:当作每次都是新写,宁可判不出停写也不误判。
+func TestNodeCache_UnknownModRevisionCountsAsWrite(t *testing.T) {
+	c, clk := newTestCache()
+	c.replaceAll([]nodeEvent{put("gate/1", 1, 10)})
+	for range 4 {
+		clk.advance(gateReportPeriod)
+		c.replaceAll([]nodeEvent{put("gate/1", 1, 10)})
+	}
+	if got := fmt.Sprint(staleIDs(mustView(t, c))); got != "[]" {
+		t.Fatalf("stale nodes = %s, want []: an unknown ModRevision must never carry an old write time over", got)
+	}
+}
+
+// 时限之间的关系是契约:镜像可读期间,健康 gate 的停写时长至多约 gateReportPeriod + cacheStaleAfter
+// (最后一次被看到的写最晚在那次刷新之前一个周期,镜像在刷新之后最多再被读 cacheStaleAfter)。停写阈值必须比它大,
+// 否则 watch 卡住、靠重同步撑着的那段时间里,好 gate 会被误判停写。
+func TestNodeCache_DataStaleThresholdExceedsHealthyAge(t *testing.T) {
+	if nodeDataStaleAfter <= gateReportPeriod+cacheStaleAfter {
+		t.Fatalf("nodeDataStaleAfter(%s) must exceed gateReportPeriod(%s)+cacheStaleAfter(%s)",
+			nodeDataStaleAfter, gateReportPeriod, cacheStaleAfter)
 	}
 }

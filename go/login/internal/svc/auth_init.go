@@ -15,7 +15,12 @@ import (
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/token"
 	"shared/playerredis"
+	"shared/sqlpoolstats"
 )
+
+// passwordAuthPool 是口令登录只读权威库那个池在 mmorpg_sql_pool_*{sql_client="login"} 里的类别名。
+// login 只有这一个 SQL 池,只在打开 PasswordAuth 时存在。
+const passwordAuthPool = "password_auth"
 
 // InitAuthProviders 按显式配置注册认证器。生产口令认证只读权威 MySQL 中的
 // Argon2id 哈希；没有显式启用时仍 fail-closed。开发共享密钥认证与生产认证
@@ -45,6 +50,15 @@ func InitAuthProviders() (cleanup func()) {
 		}
 		cleanup = closeProvider
 		auth.RegisterPassword(provider)
+		// 连接池指标 mmorpg_sql_pool_*{sql_client="login",pool="password_auth"},抓取时现取 DBStats。
+		// 与 RegisterPassword 同为进程级一次性注册(重复注册只记 ERROR,不挡启动)。
+		sqlpoolstats.Register("login", []string{passwordAuthPool}, func() []sqlpoolstats.Sample {
+			stats, ok := provider.PoolStats()
+			if !ok {
+				return nil
+			}
+			return []sqlpoolstats.Sample{{Pool: passwordAuthPool, Stats: stats}}
+		})
 		logx.Info("Production password auth registered (authoritative MySQL Argon2id, read-only)")
 	}
 	if devPassword.Enabled {

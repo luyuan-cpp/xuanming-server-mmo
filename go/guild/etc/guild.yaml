@@ -1,13 +1,6 @@
 # Guild Service Configuration
 Name: guild.rpc
 Mode: dev
-# 必须指向login实际使用的同一全局实例/DB；不能按gateNodeId猜zone或回退本地缓存。
-GlobalLoginSessions: true
-LoginRedis:
-  Addrs: [127.0.0.1:6379]
-  Password: ""
-  DB: 0
-  PoolSizePerNode: 8
 ListenOn: 127.0.0.1:50300
 # zrpc 服务端整体超时(毫秒):≤ 路由服 ForwardTimeoutMs(5000)− 1000 = 4000
 # (docs/design/guild-phase2/00-contract.md §2)。另须 ≥ DataServiceRpc.Timeout + 1500(归属区查询)

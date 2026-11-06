@@ -24,11 +24,13 @@
 #include "network/network_utils.h"
 #include "network/node_utils.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
+#include "node/system/node/node_util.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/enter_fence.h"
 #include "player/system/player_team.h"
 #include "player/system/player_team_follow_scope.h"
+#include "core/system/scene_task_scope.h"
 #include "player/system/role_admission_system.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
@@ -195,6 +197,7 @@ protected:
 
     void TearDown() override
     {
+        tasks_.reset();
         scope_.reset();
         tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService).clear();
         tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).clear();
@@ -274,6 +277,7 @@ protected:
     muduo::net::EventLoop loop_;
     FakeRedis redis_;
     std::optional<PlayerTeamFollowScope> scope_;
+    std::optional<SceneTaskScope> tasks_{std::in_place, loop_};
     RecordingSceneManager sceneManager_;
     std::shared_ptr<muduo_grpc::Server> server_;
     SceneEntity scene_{entt::null};
@@ -302,6 +306,13 @@ TEST_F(PlayerTeamFollowTest, FirstGetRequiresExplicitNil)
     EXPECT_EQ(redis_.keys.size(), count + 2);
     EXPECT_TRUE(redis_.pending.empty());
     ExpectNoRegroup(player_);
+}
+
+TEST(PlayerTeamFollowDiscoveryTest, TeamAuthorityUsesTheGlobalServiceRegistry)
+{
+    const auto type = NodeUtils::GetServiceTypeFromPrefix("TeamNodeService.rpc/zone/1/node_type/10/node_id/1");
+    EXPECT_EQ(type, eNodeType::TeamNodeService);
+    EXPECT_FALSE(NodeUtils::IsZoneScopedNodeType(type));
 }
 
 TEST_F(PlayerTeamFollowTest, RedisNotReadyBeforeSecondGetDoesNotSubmitIt)
@@ -397,8 +408,8 @@ TEST_F(PlayerTeamFollowTest, ReusedEntitySlotDoesNotContinueAfterFirstGet)
 TEST_F(PlayerTeamFollowTest, ChangedPlayerIdDoesNotContinueAfterSecondGet)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    // 保留原会话索引，确保本例由第二跳的实体身份复核挡住。
     tlsEcs.actorRegistry.get<PlayerGuidComp>(player_).value = kPlayerId + 10;
-    BindSession(player_, kPlayerId + 10, SessionOnGate(kOriginalGateId));
     redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
     ExpectNoRegroup(player_);
 }
@@ -490,10 +501,10 @@ TEST_F(PlayerTeamFollowTest, StoppingRejectsNewChecksAndLateReplyAfterScopeDestr
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     auto late = redis_.TakeReply();
-    scope_->Stop();
+    tasks_->Stop();
     Check();
     ASSERT_EQ(redis_.keys.size(), 2u);
-    scope_.reset();
+    tasks_.reset();
     Deliver(std::move(late), REDIS_REPLY_STRING, LeaderLocation());
     ExpectNoRegroup(player_);
 }
@@ -502,7 +513,7 @@ TEST_F(PlayerTeamFollowTest, CompletedRegroupSurvivesLaterStop)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    scope_->Stop();
+    tasks_->Stop();
     EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
     EXPECT_EQ(redis_.keys.size(), 2u);
 }
@@ -525,10 +536,23 @@ TEST_F(PlayerTeamFollowTest, InlineRepliesCompleteBothGetsOnce)
 
 TEST_F(PlayerTeamFollowTest, StopReenteredAfterInlineReplyPreventsSecondGet)
 {
-    redis_.onSubmit = [&scope = *scope_](RedisReplyHandler callback)
+    redis_.onSubmit = [&scope = *tasks_](RedisReplyHandler callback)
     {
         Deliver(std::move(callback), REDIS_REPLY_NIL);
         scope.Stop();
+    };
+    Check();
+    EXPECT_EQ(redis_.keys.size(), 1u);
+    EXPECT_TRUE(redis_.pending.empty());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, StopReenteredBeforeInlineReplyPreventsSecondGet)
+{
+    redis_.onSubmit = [&scope = *tasks_](RedisReplyHandler callback)
+    {
+        scope.Stop();
+        Deliver(std::move(callback), REDIS_REPLY_NIL);
     };
     Check();
     EXPECT_EQ(redis_.keys.size(), 1u);

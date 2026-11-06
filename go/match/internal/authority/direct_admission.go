@@ -188,7 +188,6 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 		ticket.NetworkProfile, ticket.ExpiresMs, ticket.EnqueuedMs, ticket.State, ticket.FormationId, ticket.SelectedRegion = raw, expiry, stamp, 0, 0, 0
 		ticket.NotBeforeMs = 0
 		ticket.RequestId = formation.OperationId
-		ticket.PreferredRegion = PreferredRegion(profile, stamp)
 		original.Tickets = append(original.Tickets, ticket)
 	}
 	exits, err := s.CaptureSpectatorExitsTx(ctx, tx, original.Tickets)
@@ -201,7 +200,7 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 		if ticket.PlayerId == 0 || ticket.Ticket == "" || ticket.RequestId != formation.OperationId || (index > 0 && ordered[index-1].PlayerId == ticket.PlayerId) {
 			return nil, ErrDirectConflict
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,0,'',0)", ticket.PlayerId, []byte{}); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", ticket.PlayerId, []byte{}); err != nil {
 			return nil, err
 		}
 		old, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", ticket.PlayerId))
@@ -211,10 +210,7 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 		if TicketOccupied(old) {
 			return nil, ErrDirectConflict
 		}
-		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=0,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,preferred_region=?,owner_account=?,owner_revision=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.PreferredRegion, ticket.OwnerAccount, ticket.OwnerRevision, ticket.PlayerId); err != nil {
-			return nil, err
-		}
-		if err = deleteTicketRegions(ctx, tx, ticket.PlayerId); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=0,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.OwnerAccount, ticket.OwnerRevision, ticket.PlayerId); err != nil {
 			return nil, err
 		}
 	}

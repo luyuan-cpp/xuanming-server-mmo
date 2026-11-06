@@ -16,6 +16,7 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -692,16 +693,6 @@ func StartLoadReporter(ctx context.Context, svcCtx *svc.ServiceContext) {
 	}
 }
 
-// checkNodeView 拦住「etcd 成功返回了空的节点集」。etcd 回档、重建或连错时 Get 照样成功,照单全收的话,fullSync 把全部节点
-// 当成消失,领导者随后按死节点摘除并拆实例场景(拍板清单 B1-1)。正常下线由 watch DELETE 逐个摘除,不会一次全空。
-// 全部节点真的没了时调用方每 3 秒重试,新节点注册之后下一次全量同步就恢复。
-func checkNodeView(next, prev int) error {
-	if next == 0 && prev > 0 {
-		return fmt.Errorf("etcd returned no scene nodes while %d were known, refusing to treat them all as gone", prev)
-	}
-	return nil
-}
-
 // fullSync does a complete etcd Get to build baseline state, updates Redis,
 // and ensures main scenes for all discovered zones. Returns the etcd revision.
 func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
@@ -709,11 +700,16 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("etcd get %s: %w", sceneNodePrefix, err)
 	}
+	return applyNodeSnapshot(ctx, svcCtx, resp.Kvs, resp.Header.Revision)
+}
 
+// applyNodeSnapshot 是 fullSync 拿到 etcd 快照之后的全部动作:过存活集闸门、换镜像、刷新、清扫、补频道。
+// 与读 etcd 分开,单测不起 etcd 就能喂快照(node_view_gate_test.go 测闸门与陈旧清扫的组合)。返回 revision 原样。
+func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*mvccpb.KeyValue, revision int64) (int64, error) {
 	seenByZone := make(map[uint32]map[string]struct{})
 
-	next := make(map[string]nodeEntry, len(resp.Kvs))
-	for _, kv := range resp.Kvs {
+	next := make(map[string]nodeEntry, len(kvs))
+	for _, kv := range kvs {
 		key := string(kv.Key)
 		entry, ok := parseNodeEntry(kv.Value)
 		if !ok {
@@ -728,12 +724,23 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 		seenByZone[zoneId][entry.nodeID] = struct{}{}
 	}
 
-	knownNodesMu.Lock()
-	prevKnown := knownNodes
-	if err := checkNodeView(len(next), len(prevKnown)); err != nil {
-		knownNodesMu.Unlock()
+	// 存活集闸门(node_view_gate.go,拍板清单 B1-1):换掉镜像之前,先拿旧镜像(领导者再加各 zone 负载集)当基线比一比,
+	// 空快照或某个 zone 缺席过半就整轮作废、3s 后重试。领导者读到的负载集同时是下面陈旧清扫的范围。
+	// leaderView 记下这一刻的身份:读基线时还不是领导者、做到一半才当选的副本,这一轮不做领导者动作 —— 它没拿负载集比过,
+	// 当选时 OnStateChange 请求的 resync 会马上以领导者身份再跑一遍 fullSync。
+	// 镜像只由本 goroutine 改写(fullSync 与 handleWatchEvent 都在这里),所以先抄基线、做完 Redis 读再加写锁替换,中间不会变。
+	prevIDs := knownNodeIDsByZone()
+	leaderView := isLeader()
+	var loadSets map[uint32][]string
+	if leaderView {
+		loadSets = readLoadSetBaseline(svcCtx, nodeViewZones(svcCtx, zoneKeysOf(seenByZone), zoneKeysOf(prevIDs)))
+	}
+	if err := sceneNodeViewGate.check(nodeViewBaseline(prevIDs, loadSets), seenByZone, len(next) == 0); err != nil {
 		return 0, err
 	}
+
+	knownNodesMu.Lock()
+	prevKnown := knownNodes
 	knownNodes = next
 	knownNodesMu.Unlock()
 
@@ -787,11 +794,14 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 	// 跟随者的 fullSync 只负责重建本进程的 etcd 内存镜像(负载分也只由领导者刷新)。
 	// 领导者缺位窗口(选举间隙 / 领导者刚挂)里漏掉的动作,由新任领导者
 	// 当选时触发的 RequestLoadReporterResync -> fullSync 一次补齐。
-	if isLeader() {
+	if !leaderView && isLeader() {
+		logx.Info("[LoadReporter] became leader during this full sync; leader actions wait for the resync requested by the leadership change")
+	}
+	if leaderView && isLeader() {
 		// 中途失去领导权:降级即停,新领导者的 resync fullSync 会重扫同一批(与旧写法一致,
 		// 后面的 drain / init / rebalance / 孤儿清理本轮都不做)。
-		if !sweepStaleLoadSetMembers(svcCtx, seenByZone, zones) {
-			return resp.Header.Revision, nil
+		if !sweepStaleLoadSetMembers(svcCtx, seenByZone, loadSets) {
+			return revision, nil
 		}
 
 		// 清扫不判截止(写不进只续推迟);先重试推迟的摘除(GO-6)再 drain,本次写成的节点同一拍
@@ -823,21 +833,21 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 	}
 
 	logx.Infof("[LoadReporter] full sync: %d nodes, %d zones, rev=%d",
-		len(resp.Kvs), len(zones), resp.Header.Revision)
-	return resp.Header.Revision, nil
+		len(kvs), len(zones), revision)
+	return revision, nil
 }
 
 // sweepStaleLoadSetMembers 清掉 Redis 负载集里、但不在本次 etcd 快照里的节点(只在领导者上调用)。
-// seenByZone 是快照里每个 zone 的节点集合,snapshotZones 是快照里出现过的 zone。
+// seenByZone 是快照里每个 zone 的节点集合,loadSets 是 readLoadSetBaseline 读到的各 zone 负载集成员 —— 与存活集闸门比基线
+// 用的是同一份读数,闸门放行了才走到这里(node_view_gate.go);读失败的 zone 不在里面,本轮不扫。
 // 中途失去领导权返回 false,调用方应停止本轮后续的变更动作;扫完返回 true。
 //
-// 扫描范围 = 快照里的 zone ∪ Redis 里还留有负载集的 zone。只按快照扫有个洞:某 zone 的
+// 扫描范围由 nodeViewZones 定(快照 zone ∪ 镜像 zone ∪ zone 登记集合)。只按快照扫有个洞:某 zone 的
 // **最后一个**节点在无领导窗口(或 SM 整体停机)里死掉时,快照里根本没有这个 zone,它的
 // 负载集条目、计数和孤儿实例就永远没人清(runPeriodicRebalance 也只迭代 GetActiveZones)。
 // 「还留有负载集的 zone」以前靠 SCAN scene_nodes:zone:*:load 发现,全库遍历在开服规模下是小时级;
 // 2026-10-16 起改读 zone 登记集合 scene_manager:zones(zone_registry.go):领导者刷新时先登记再写
-// 负载集,有活节点的 zone 每拍自愈。读登记集合失败时只扫快照里的 zone(打 Error),与旧 SCAN 出错即
-// break 的退化方向一致。覆盖不到的只有 zone_registry.go 文件头列出的两类缺口。
+// 负载集,有活节点的 zone 每拍自愈。覆盖不到的只有 zone_registry.go 文件头列出的两类缺口。
 //
 // 每个陈旧成员与 watch DELETE 走同一条摘除路径 removeNodeFromRedis:先写 death_at 再摘负载集,
 // 写不进就推迟(GO-6)。已在推迟队列里的节点被重扫到时:这次写成 death_at 就按首次推迟时的
@@ -846,26 +856,17 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 // 与旧写法的差异:这条路径现在会调
 // ForgetNode(nodeID, zone, 0) —— 本进程不认识这个节点,删不存在的序列是 no-op;同身份的活节点
 // 也不在清扫范围里。
-func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]map[string]struct{}, snapshotZones []uint32) bool {
-	registered, err := listRegisteredZones(svcCtx)
-	if err != nil {
-		logx.Errorf("[LoadReporter] read zone registry failed; sweeping snapshot zones only: %v", err)
-	}
-
-	for _, zoneId := range unionZones(snapshotZones, registered) {
+func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]map[string]struct{}, loadSets map[uint32][]string) bool {
+	for _, zoneId := range zoneKeysOf(loadSets) {
 		// seen 对快照外的 zone 是 nil map —— 该 zone 所有条目都视为 stale。
 		seen := seenByZone[zoneId]
-		pairs, err := svcCtx.Redis.ZrangeWithScores(nodeLoadKey(zoneId), 0, -1)
-		if err != nil {
-			continue
-		}
-		for _, p := range pairs {
+		for _, member := range loadSets[zoneId] {
 			// 长循环里领导权可能中途易主:降级即停,
 			// 新领导者的 resync fullSync 会重扫同一批。
 			if !isLeader() {
 				return false
 			}
-			if _, ok := seen[p.Key]; ok {
+			if _, ok := seen[member]; ok {
 				continue
 			}
 			// SceneManager 停机 / 领导者缺位窗口期间死掉的节点走不到 watch DELETE,这里是唯一
@@ -876,7 +877,7 @@ func sweepStaleLoadSetMembers(svcCtx *svc.ServiceContext, seenByZone map[uint32]
 			// 领导者补齐跟随期间漏掉的 DELETE 事件的唯一路径):与 watch DELETE 同构,摘负载集时
 			// 同一次 Lua 写收尾任务,等再入屏障走完由 drainPendingDeadNodeReconciles 收尾;计数在收尾
 			// 范围清空后与出队一起删(理由见 finishDeadNodeReconcile)。
-			staleEntry := nodeEntry{nodeID: p.Key}
+			staleEntry := nodeEntry{nodeID: member}
 			staleEntry.reg.ZoneId = zoneId
 			removeNodeFromRedis(svcCtx, staleEntry)
 		}

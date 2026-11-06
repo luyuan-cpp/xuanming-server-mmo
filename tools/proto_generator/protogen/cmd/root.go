@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	_config "protogen/internal/config"
 	cppGen "protogen/internal/generator/cpp"
+	"protogen/internal/persistschema"
 	"protogen/logger"
 	"strings"
 	"syscall"
@@ -62,7 +63,20 @@ func isEnabledEnv(key string) bool {
 func main() {
 	defer logger.Sync()
 	grpcHandler := flag.String("grpc-handler", "", "仅从指定源 proto 重生成内部 C++ gRPC handler，不执行全量或客户端生成")
+	persistSchemaSeal := flag.Bool("persist-schema-seal", false,
+		"只把持久 schema 台账封存到当前最大世代(发布前运行),不执行生成;见 docs/ops/release-checklist.md §2.1 ①")
+	persistSchemaVerify := flag.Bool("persist-schema-verify", false,
+		"只核对持久 schema 台账:全部封存成立且已封存到最大世代,不写任何文件;发布预检调用")
 	flag.Parse()
+	exclusiveModes := 0
+	for _, on := range []bool{*persistSchemaSeal, *persistSchemaVerify, strings.TrimSpace(*grpcHandler) != ""} {
+		if on {
+			exclusiveModes++
+		}
+	}
+	if exclusiveModes > 1 {
+		logger.Global.Fatal("--persist-schema-seal、--persist-schema-verify 与 --grpc-handler 只能选一个")
+	}
 	flag.Visit(func(option *flag.Flag) {
 		if option.Name == "grpc-handler" && strings.TrimSpace(*grpcHandler) == "" {
 			logger.Global.Fatal("--grpc-handler 必须指定源 proto，空值不能进入全量生成")
@@ -75,7 +89,7 @@ func main() {
 	start := time.Now()
 	logger.Global.Info("Program started", zap.Duration("elapsed", time.Since(start)))
 	enablePprof := isEnabledEnv("PROTOGEN_ENABLE_PPROF") || isEnabledEnv("PBGEN_ENABLE_PPROF")
-	if enablePprof && *grpcHandler == "" {
+	if enablePprof && *grpcHandler == "" && !*persistSchemaSeal && !*persistSchemaVerify {
 		startPprofServer()
 	}
 
@@ -84,6 +98,24 @@ func main() {
 	}
 
 	logger.Global.Info("Config loaded", zap.String("output_root", _config.Global.Paths.OutputRoot))
+	if *persistSchemaVerify {
+		seal, err := persistschema.VerifyLedgerFile(_config.Global.Paths.PersistSchemaLedgerFile)
+		if err != nil {
+			logger.Global.Fatal("Persist schema ledger verification failed", zap.Error(err))
+		}
+		logger.Global.Info("Persist schema ledger verified", zap.Uint32("sealed_gen", seal.Gen), zap.Int("rows", seal.Rows),
+			zap.String("ledger", _config.Global.Paths.PersistSchemaLedgerFile))
+		return
+	}
+	if *persistSchemaSeal {
+		seal, changed, err := persistschema.SealLedgerFile(_config.Global.Paths.PersistSchemaLedgerFile)
+		if err != nil {
+			logger.Global.Fatal("Persist schema ledger seal failed", zap.Error(err))
+		}
+		logger.Global.Info("Persist schema ledger sealed", zap.Uint32("gen", seal.Gen), zap.Int("rows", seal.Rows),
+			zap.Bool("changed", changed), zap.String("ledger", _config.Global.Paths.PersistSchemaLedgerFile))
+		return
+	}
 	if *grpcHandler != "" {
 		if err := cppGen.GenerateGrpcHandler(*grpcHandler); err != nil {
 			logger.Global.Fatal("定向生成 gRPC handler 失败", zap.Error(err))

@@ -345,12 +345,9 @@ type QueueConf struct {
 // InternalAuthConf 控制内部调用方身份声明的验签闸门(见
 // internal/logic/pkg/callerauth)。
 //
-// **生产模式恒强制验签,这里没有任何开关能关掉它** —— 唯一能放宽的是
-// go-zero Mode=dev/test,而那是编排层的决定,不是业务配置。
+// **任何运行模式都强制验签,这里没有开关能关掉它**:gate 已对全部会话身份签名,
+// dev/test 与生产走同一条路径,签名格式或密钥不一致在本机就会暴露,不会拖到上线。
 type InternalAuthConf struct {
-	// ForceEnforce 让 dev/test 也走强制档。上游(cpp gate / Java gateway)
-	// 接完签名后,先在本地把它打开做联调,再上生产。
-	ForceEnforce bool `json:"ForceEnforce,default=false"`
 
 	// MaxClockSkew 是允许的时间戳偏移窗口(双向)。签名里带毫秒时间戳,
 	// 超出这个窗口一律拒绝 —— 这是防重放的第一道闸,nonce 是第二道。

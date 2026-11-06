@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -14,6 +15,8 @@
 #include "engine/core/type_define/type_define.h"
 #include "player/system/player_store_projection.h"
 #include "proto/player_store/player_store.pb.h"
+
+namespace boost::cobalt { template<class T> struct task; }
 
 enum class PlayerStoreSaveStatus : uint8_t
 {
@@ -44,7 +47,7 @@ struct PlayerStoreSaveResult
 // 存盘未落定时不能重新播种(Seed 返回 false),所以迟到的回包不可能改到重新加载之后的状态。
 //
 // 传输、定时器、发号都是注入的,单测用假实现。单线程语义:所有入口都在 scene 逻辑线程上。
-// 回包与定时器的闭包捕获 this,实例必须活得比事件循环长(生产用线程局部实例,AGENTS §11.7 的同寿命例外)。
+// 回包与定时器只借用实例身份。持久任务由所属 Scene loop 持有，排空前仍处理真实回包。
 class PlayerStoreClient
 {
 public:
@@ -112,9 +115,21 @@ public:
         double claimBudgetSec{30.0};
         // 可选:缺省是单调时钟。
         std::function<Clock::time_point()> now;
+        // 只顺带的行(PERSIST_ROW_SAVE_PIGGYBACK,即 LOCATION)被定时存盘推迟的上限(规格 §1.1)。
+        // 从第一次推迟算起,超过它定时存盘就照常写。<= 0 = 不推迟,定时存盘遇到位置变化也写(压测对照用)。
+        double piggybackFallbackSec{300.0};
+        // 可选:提交水位。生产用它让资产流水跟着存盘提交走(TransactionLogSystem 类注释)。
+        // Submit 收快照时调 commitMark 取一个单调值记在这份快照上;能确定「这份快照里的改动都已在库里」时,
+        // 调 onCommittedThrough(玩家, 这份快照的水位)。确定的情形只有三种:这一笔 COMMITTED 或 EQUAL;
+        // 快照和已确认的内容一样、不用写(Submit 回 kAlreadyPersisted,或排队的那份轮到时不用写)。
+        // 被拒、结果未知、被更新的快照取代都不调;取代它的那份水位更大,提交时一并放行。
+        // 推迟的定时存盘(DeferPeriodicSave)不进状态机,不会走到这里。
+        std::function<uint64_t()> commitMark;
+        std::function<void(Guid playerId, uint64_t commitMark)> onCommittedThrough;
     };
 
     explicit PlayerStoreClient(Options options);
+    ~PlayerStoreClient();
     PlayerStoreClient(const PlayerStoreClient &) = delete;
     PlayerStoreClient &operator=(const PlayerStoreClient &) = delete;
 
@@ -154,6 +169,14 @@ public:
     // 玩家离开本节点且存盘已落定时调用。未落定返回 false,状态保留,等落定时由调用方再次 Forget。
     bool Forget(Guid playerId);
 
+    // 只给定时存盘用(规格 §1.1「只顺带」):这份快照和上一次确认提交相比,只有只顺带的行有变化,
+    // 而且这些行被推迟还不到 piggybackFallbackSec。返回 true 时调用方不提交这一笔,没有回调、不取号:
+    // 位置留在内存里,随下一笔有别的行要写的存盘、最终存盘(下线、交接、停机都不调这个函数)或兜底一起写。
+    // 其余情况返回 false,调用方照常 Submit:未播种、有在途或排队、有别的行脏、只顺带的行结果未决、
+    // 上一笔带着 release、代次落后、超过兜底间隔、或者没有任何变化(交给 Submit 判「已落盘」)。
+    // 只看行字节,不碰排队语义:推迟的快照从来没有进状态机,所以「已落盘」类结果永远不会代表一份没写的位置。
+    [[nodiscard]] bool DeferPeriodicSave(Guid playerId, const player_store_rows::KindBytes &rows);
+
 private:
     using KindSet = std::bitset<player_store_rows::kKindCount>;
 
@@ -171,6 +194,8 @@ private:
         // 提交成功后写进 confirmed 的字节,不含探针。
         player_store_rows::KindBytes confirmOnCommit;
         Callbacks callbacks;
+        // 这份快照的提交水位(Options::commitMark),提交时交给 onCommittedThrough。
+        uint64_t commitMark{0};
     };
 
     struct Pending
@@ -178,6 +203,8 @@ private:
         player_store_rows::KindBytes rows;
         SubmitOptions options;
         Callbacks callbacks;
+        // 排队的是最新一份快照,水位取最新的(单调,取代的那份更小)。
+        uint64_t commitMark{0};
     };
 
     struct State
@@ -199,6 +226,9 @@ private:
         uint64_t attemptGen{0};
         // 这一笔连续失败的次数,只用来打日志。
         uint32_t failedAttempts{0};
+        // 只顺带的行第一次被定时存盘推迟的时刻(单调时钟)。Start 发出一笔带着这些行的存盘时清掉,
+        // 所以它量的是「位置有多久没跟着任何一笔写出去」,超过 piggybackFallbackSec 定时存盘就照常写。
+        std::optional<Clock::time_point> piggybackDeferredSince;
     };
 
     enum class StartResult : uint8_t
@@ -220,11 +250,16 @@ private:
     };
 
     [[nodiscard]] KindSet DirtyKinds(const State &state, const player_store_rows::KindBytes &rows) const;
-    // 开始一笔。没有发出去时 callbacks 不动,由调用方处置。
-    StartResult Start(Guid playerId, State &state, const player_store_rows::KindBytes &rows, const SubmitOptions &submitOptions, Callbacks &callbacks);
+    // 存盘方式是 PERSIST_ROW_SAVE_PIGGYBACK 的行。由 proto 选项决定,启动校验之后不变。
+    [[nodiscard]] static const KindSet &PiggybackKinds();
+    // 开始一笔。没有发出去时 callbacks 不动,由调用方处置。commitMark 记到发出去的这一笔上。
+    StartResult Start(Guid playerId, State &state, const player_store_rows::KindBytes &rows, const SubmitOptions &submitOptions, Callbacks &callbacks,
+                      uint64_t commitMark);
+    // 这份快照(水位 commitMark)里的改动已确定在库里:交给 Options::onCommittedThrough。
+    void NotifyCommittedThrough(Guid playerId, uint64_t commitMark) const;
     void Attempt(Guid playerId, State &state);
     void ScheduleRetry(Guid playerId, State &state);
-    void OnAttemptDone(Guid playerId, uint64_t attemptGen, bool ok, const playerstore::SavePlayerResponse *response);
+    void HandleSaveResponse(Guid playerId, State &state, const playerstore::SavePlayerResponse &response);
     void Finish(Guid playerId, State &state, const SaveResult &result, bool committed);
     void Advance(Guid playerId);
     // 这个玩家的存盘都落定了:通知调用方,再放行等着它的认领。
@@ -236,9 +271,18 @@ private:
     void StartClaim(Guid playerId, Claim &claim);
     void AttemptClaim(Guid playerId, Claim &claim);
     void ScheduleClaimRetry(Guid playerId, Claim &claim);
-    void OnClaimAttemptDone(Guid playerId, uint64_t attemptGen, bool ok, const playerstore::LoadAndClaimResponse *response);
     void FinishClaim(Guid playerId, const playerstore::LoadAndClaimResponse *response);
 
+    struct Lifetime
+    {
+        std::optional<std::reference_wrapper<PlayerStoreClient>> owner;
+    };
+    static PlayerStoreClient* ResolveOwner(const std::weak_ptr<Lifetime>& original);
+    static boost::cobalt::task<void> RunSaveAttempt(std::weak_ptr<Lifetime> original, Guid playerId, uint64_t attemptGen);
+    static boost::cobalt::task<void> RunClaimAttempt(std::weak_ptr<Lifetime> original, Guid playerId,
+        uint64_t attemptGen, playerstore::LoadAndClaimRequest request);
+
+    std::shared_ptr<Lifetime> lifetime_;
     Options options_;
     std::unordered_map<Guid, State> states_;
     std::unordered_set<Guid> detachedInFlight_;

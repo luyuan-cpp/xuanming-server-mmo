@@ -29,7 +29,7 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 	require.NoError(t, s.EnsureGlobalPolicy(ctx, original))
 	var before []byte
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT contract_digest FROM match_global_policy WHERE policy_id=1").Scan(&before))
-	for _, mode := range []string{"wait", "hard", "secret", "ttl", "rating", "challenge", "scope-group", "scope-global", "team-cross-zone", "team-fill"} {
+	for _, mode := range []string{"wait", "hard", "secret", "ttl", "rating", "challenge", "scope-group", "scope-global", "team-cross-zone", "team-fill", "party-bonus"} {
 		t.Run(mode, func(t *testing.T) {
 			copyStore := *s
 			changed := original
@@ -54,6 +54,8 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 				changed.GlobalMatch.ScopeGroupAfterSeconds++
 			case "scope-global":
 				changed.GlobalMatch.ScopeGlobalAfterSeconds++
+			case "party-bonus":
+				changed.GlobalMatch.PartyRatingBonusPerMember++
 			}
 			require.Error(t, copyStore.EnsureGlobalPolicy(ctx, changed))
 			var after []byte
@@ -66,6 +68,10 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 	retabled := original
 	retabled.TableDir = "another-table-dir"
 	require.NoError(t, s.EnsureGlobalPolicy(ctx, retabled))
+	// 车队差放宽步长是质量规则，提交点不复核，不进指纹。
+	regapped := original
+	regapped.GlobalMatch.PremadeGapStepSeconds = 99
+	require.NoError(t, s.EnsureGlobalPolicy(ctx, regapped))
 }
 
 func TestAuthorityTiDBConflictingInitialPoliciesHaveOnePermanentWinner(t *testing.T) {

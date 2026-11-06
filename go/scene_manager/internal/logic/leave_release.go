@@ -143,7 +143,7 @@ func newHolderReleasePendingError(playerID, sceneID uint64, nodeID string, epoch
 
 // ── 等待计时 ─────────────────────────────────────────────────────────────────
 //
-// player:{id}:leave_release_wait = "{E}:{node}:{sid}:{gen}:{first_ms}",EX = 上限 + leaveReleaseWaitKeyMargin。
+// player:{id}:leave_release_wait = "{E}:{node}:{sid}:{gen}:{first_ms}",EX = max(上限, 无资格撤销宽限) + leaveReleaseWaitKeyMargin。
 // 第一次拿不到证据时写入;location 的 (E, 节点, 登录身份) 变了就当作一次新的等待重新计时。删 location 的 Lua 顺手删掉它。
 // 读写失败一律按"刚开始等"处理:宁可多等一轮,也不因为计时读不出来而提前 forced。
 //
@@ -188,7 +188,10 @@ return 0
 // noteLeaveReleaseWait 返回这份 location 已经等了多久(第一次见到时登记并返回 0)。时钟取 Redis 服务端的(见上),
 // 不读本进程墙钟;脚本出错按"刚开始等"返回 0(只会多等)。
 func noteLeaveReleaseWait(svcCtx *svc.ServiceContext, playerID uint64, scope string, budget time.Duration) time.Duration {
-	ttlSeconds := int64((budget + leaveReleaseWaitKeyMargin) / time.Second)
+	// 键只在第一次登记时设 TTL、之后不续,所以要活过两个使用者里更长的那个:LeaveScene 的等待诊断预算与无资格撤销的宽限
+	// (unqualified_holder_revoke.go)。只按预算算的话,预算配得比宽限短时,宽限走完之后键只剩不到一个清理重试周期就过期、
+	// 从头计时,撤销永远轮不到。
+	ttlSeconds := int64((max(budget, svcCtx.Config.EffectiveUnqualifiedHolderRevokeGrace()) + leaveReleaseWaitKeyMargin) / time.Second)
 	result, err := playerRedisEval(svcCtx, luaNoteLeaveReleaseWait, []string{leaveReleaseWaitKey(playerID)}, scope,
 		strconv.FormatInt(ttlSeconds, 10))
 	if err != nil {

@@ -30,7 +30,7 @@ void NodeAllocator::RecordLostId(uint32_t id)
 	lostIds().insert(id);
 }
 
-void NodeAllocator::AcquireNode()
+void NodeAllocator::SelectNodeId()
 {
 	const uint32_t nodeType = gNode->GetNodeType();
 	LOG_INFO << "Acquiring node ID for node type: " << nodeType;
@@ -88,20 +88,6 @@ void NodeAllocator::AcquireNode()
 	(void)maxUsedId; // retained for log/debug parity; iteration starts at 0
 
 	gNode->MutableNodeInfo().set_node_id(nextNodeId);
-
-	gNode->GetEtcdManager().RegisterNodeService();
-}
-
-void NodeAllocator::ReRegisterExistingNode()
-{
-	// Re-registration must keep existing node_id to preserve SnowFlake worker bits
-	// and avoid mid-flight identity change after temporary lease loss.
-	LOG_INFO << "Re-registering existing node with node_id=" << GetNodeInfo().node_id()
-			 << " port=" << GetNodeInfo().endpoint().port();
-	// reRegistering=true:端口 key 仍挂在旧租约上,必须无条件改挂新租约。
-	// 见 EtcdManager::RegisterNodePort 的注释 —— 用 PutIfAbsent 会必然 CAS 失败,
-	// 而重注册模式下的 OnTxnFailed 会把它判成"身份被抢"并自杀。
-	gNode->GetEtcdManager().RegisterNodePort(/*reRegistering=*/true);
 }
 
 bool IsGateNodeType(uint32_t type)
@@ -326,6 +312,5 @@ bool NodeAllocator::AcquireNodePort()
 			 << " IP: " << GetNodeInfo().endpoint().ip()
 			 << " Port: " << assignedPort;
 
-	gNode->GetEtcdManager().RegisterNodePort();
 	return true;
 }

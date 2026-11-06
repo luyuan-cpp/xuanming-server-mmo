@@ -20,6 +20,7 @@ $ErrorActionPreference = 'Stop'
 # 路径一律正斜杠 + Join-Path:CI 在 ubuntu 上跑。
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $script:SecondaryPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/etcd-id-secondary.yaml'
+$script:RegistryPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/etcd-id-registry.yaml'
 $script:DeployPath = Join-Path $script:RepoRoot 'tools/scripts/k8s_deploy.ps1'
 $script:ServiceYamlPath = Join-Path $script:RepoRoot 'go/data_service/etc/data_service.yaml'
 $script:ConfigGoPath = Join-Path $script:RepoRoot 'go/data_service/internal/config/config.go'
@@ -69,6 +70,41 @@ Test-Case '部署脚本只在非 dev 档起第二套 etcd,并把两套地址写�
     # 脚本里引号带 PowerShell 的反引号转义。
     Assert-Match -Text $text -Pattern 'PrimaryEtcd: \[`?"etcd\.\$\{InfraNamespace\}:2379`?"\]' -Because '主记录放现有 etcd'
     Assert-Match -Text $text -Pattern 'SecondaryEtcd: \[`?"etcd-id-secondary\.\$\{InfraNamespace\}:2379`?"\]' -Because '副记录放独立 etcd,漏了生产发号器装配失败'
+}
+
+Test-Case '登记处 etcd 的名字和标签与两套发号 etcd 完全分开,反亲和同时避开它们' {
+    $text = Get-NonCommentText (Read-RepoText $script:RegistryPath)
+    $names = @([regex]::Matches($text, '(?m)^  name:\s*(\S+)\s*$') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    Assert-Equal -Expected 'etcd-id-registry,etcd-id-registry-headless' -Actual ($names -join ',') -Because '对象名不能和 etcd、etcd-id-secondary 重名'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, '(?m)^\s*app:\s*etcd\s*$').Count) -Because 'app: etcd 只能出现在反亲和里,否则混进主 etcd 的 Service 和 PDB'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, '(?m)^\s*app:\s*etcd-id-secondary\s*$').Count) -Because 'app: etcd-id-secondary 只能出现在反亲和里'
+    Assert-Match -Text $text -Pattern '(?s)podAntiAffinity:.*app:\s*etcd\s*\n.*app:\s*etcd-id-secondary\s*\n' -Because '反亲和避开本集群两套发号 etcd'
+    Assert-Match -Text $text -Pattern '(?m)^  replicas:\s*3\s*$' -Because '3 成员才能容忍单节点故障'
+    Assert-Match -Text $text -Pattern 'value:\s*"mmorpg-etcd-id-registry-__INFRA_NAMESPACE__"' -Because '引导令牌和两套发号 etcd 都不同'
+    Assert-Match -Text $text -Pattern 'value:\s*"etcd-id-registry-0=http://etcd-id-registry-0\.etcd-id-registry-headless\.' -Because '成员表指向自己的 headless Service'
+    Assert-Match -Text $text -Pattern '(?m)^\s*publishNotReadyAddresses:\s*true\s*$' -Because '不发布未就绪地址,成员永远互相找不到'
+    Assert-Equal -Expected (Get-NonCommentText (Read-RepoText $script:SecondaryPath) | Select-String -Pattern '(?m)^\s*image:\s*(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value }) `
+        -Actual ($text | Select-String -Pattern '(?m)^\s*image:\s*(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value }) -Because '和另外两套 etcd 同一镜像,钉版本一起改'
+}
+
+Test-Case '部署脚本:登记处只在 -HostIdRegistry 的集群起,地址写进 data-service ConfigMap,入口先解析' {
+    $text = Read-RepoText $script:DeployPath
+    Assert-Match -Text $text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*if \(\$ReleaseProfile -eq ''dev''\) \{\s*throw[^\n]*\n\s*\}\s*\$infraManifests \+= "etcd-id-registry\.yaml"' -Because '全世界只有一个集群托管登记处,dev 不起'
+    Assert-Match -Text $text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*Wait-ForStatefulSetReady -Namespace \$InfraNamespace -StatefulSetName "etcd-id-registry"' -Because '-WaitReady 要等它成 quorum'
+    Assert-Match -Text $text -Pattern 'RegistryEtcd: \[\$registryList\]' -Because '登记处地址漏了,生产发号器装配失败'
+    Assert-Match -Text $text -Pattern '(?s)if \(\$deploysDataService\) \{\s*#[^\n]*\n\s*\$registry = @\(Resolve-IdRegistryEtcd\)' -Because '入口在任何写操作之前解析登记处地址'
+    $devTools = Read-RepoText (Join-Path $script:RepoRoot 'tools/scripts/dev_tools.ps1')
+    Assert-Match -Text $devTools -Pattern '\$args\.IdRegistryEtcd = \$IdRegistryEtcd' -Because 'dev_tools 转发 -IdRegistryEtcd'
+    Assert-Match -Text $devTools -Pattern 'if \(\$HostIdRegistry\) \{ \$args\.HostIdRegistry = \$true \}' -Because 'dev_tools 转发 -HostIdRegistry'
+}
+
+Test-Case '运维手册:初始化、恢复、退役、开启登记处是分开的入口,恢复不靠手算余量' {
+    $runbook = Read-RepoText (Join-Path $script:RepoRoot 'docs/ops/id-issuer-runbook.md')
+    foreach ($flag in @('-id-registry-open', '-id-issuer-init', '-id-issuer-recover', '-id-issuer-rebind', '-id-issuer-retire')) {
+        Assert-Match -Text $runbook -Pattern ([regex]::Escape($flag)) -Because "手册要写 $flag 什么时候用"
+    }
+    Assert-NotMatch -Text $runbook -Pattern '30 \* 86400' -Because '恢复取幸存记录的上界,不再手算时间余量'
+    Assert-NotMatch -Text $runbook -Pattern 'etcdctl put /id_issuer' -Because '不再手工改记录'
 }
 
 Test-Case '-Region 注入 data-service 主容器,初始化命令用私有目录里生效的配置' {

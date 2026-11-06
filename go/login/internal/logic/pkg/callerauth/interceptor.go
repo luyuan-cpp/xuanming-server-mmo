@@ -15,13 +15,10 @@ import (
 	"shared/callerauth"
 )
 
-// 稳定事件名:日志检索与告警规则认这些字符串,改它们等于改对外契约。
+// 稳定事件名:日志检索与告警规则认这个字符串,改它等于改对外契约。
 const (
-	// EventRejected 强制档下拒绝了一条身份声明。
+	// EventRejected 拒绝了一条验不过的身份声明。任何运行模式都拒绝,没有放行档。
 	EventRejected = "caller_auth_rejected"
-	// EventBypassed 宽松档(dev/test)下放行了一条验不过的身份声明。
-	// **生产日志里出现这条 = 有人把 Mode 配错了**,应当直接告警。
-	EventBypassed = "caller_auth_bypassed"
 )
 
 // sensitiveMetadataKeys 是交给 handler 之前必须从入站 metadata 里摘掉的 key。
@@ -55,8 +52,7 @@ var sensitiveMetadataKeys = []string{
 //  1. **没带身份声明 = 没有身份**。不带 x-session-detail-bin 的调用(Java
 //     Gateway 的 POST /api/login 新链路就是这样)原样放行,ctx 里不会凭空
 //     出现 SessionDetails,handler 走「无会话」分支 —— 与改造前一致。
-//  2. **带了身份声明就必须验签**。强制档下验不过直接 Unauthenticated;
-//     宽松档(dev/test)打 WARN 后放行,方便上游分批接签名。
+//  2. **带了身份声明就必须验签**。验不过直接 Unauthenticated,任何运行模式都一样。
 //  3. **只有验过的身份能进 ctx**。原始 metadata 在交给 handler 前被摘干净。
 func UnaryServerInterceptor(v *callerauth.Verifier) grpc.UnaryServerInterceptor {
 	return func(
@@ -75,32 +71,21 @@ func UnaryServerInterceptor(v *callerauth.Verifier) grpc.UnaryServerInterceptor 
 			if raw != "" {
 				verifiedCtx, detail, err := v.AuthenticateContext(ctx, info.FullMethod)
 				if err != nil {
+					// 验不过一律拒绝,不看 Verifier 的 Enforce:这里没有「告警放行」档,
+					// 未验证的声明不能以任何形式进 ctx。
 					reason := callerauth.Reason(err)
-					recordAuth(reason, v.Enforcing())
-					if v.Enforcing() {
-						logx.Errorw(EventRejected,
-							logx.Field("method", info.FullMethod),
-							logx.Field("reason", reason),
-							logx.Field("detail", err.Error()),
-						)
-						return nil, status.Errorf(codes.Unauthenticated,
-							"Internal caller identity signature verification failed (%s): caller must include %s/%s/%s/%s per callerauth contract",
-							reason, callerauth.MetaCaller, callerauth.MetaTimestamp, callerauth.MetaNonce, callerauth.MetaSignature)
-					}
-					logx.Errorw(EventBypassed,
+					recordAuth(reason, true)
+					logx.Errorw(EventRejected,
 						logx.Field("method", info.FullMethod),
 						logx.Field("reason", reason),
 						logx.Field("detail", err.Error()),
-						logx.Field("hint", "Allowed in dev/test relaxed mode; this request would be rejected in production"),
 					)
-					// 宽松档:仍然把声明写进 ctx,保持本地链路可用。
-					if detail != nil {
-						ctx = ctxkeys.WithSessionDetails(ctx, detail)
-					}
-				} else {
-					recordAuth("ok", v.Enforcing())
-					ctx = ctxkeys.WithSessionDetails(verifiedCtx, detail)
+					return nil, status.Errorf(codes.Unauthenticated,
+						"Internal caller identity signature verification failed (%s): caller must include %s/%s/%s/%s per callerauth contract",
+						reason, callerauth.MetaCaller, callerauth.MetaTimestamp, callerauth.MetaNonce, callerauth.MetaSignature)
 				}
+				recordAuth("ok", true)
+				ctx = ctxkeys.WithSessionDetails(verifiedCtx, detail)
 			}
 
 			// 无论有没有身份声明都要摘:未验证的 authorization 之类同样不能

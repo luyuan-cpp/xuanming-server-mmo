@@ -179,19 +179,21 @@ const ::_pbi::ClassData* GateLoginNotifyRequest_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 class GameNodeExitGameRequest::_Internal {
  public:
+  using HasBits = decltype(::std::declval<GameNodeExitGameRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GameNodeExitGameRequest, _impl_._has_bits_);
 };
 
 constexpr GameNodeExitGameRequest::ParseTableT_ GameNodeExitGameRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(GameNodeExitGameRequest,
-                            _impl_._cached_size_),  // no hasbits
+      PROTOBUF_FIELD_OFFSET(GameNodeExitGameRequest, _impl_._has_bits_),
       0, // no _extensions_
-      0, 0,  // max_field_number, fast_idx_mask
+      1, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967295,  // skipmap
-      offsetof(ParseTableT_, field_names),  // no field_entries
-      0,  // num_field_entries
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -201,23 +203,38 @@ constexpr GameNodeExitGameRequest::ParseTableT_ GameNodeExitGameRequest::Interna
       ::_pbi::TcParser::GetTable<::GameNodeExitGameRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // .ExitGameReason reason = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GameNodeExitGameRequest, _impl_.reason_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GameNodeExitGameRequest, _impl_.reason_)}},
     }}, {{
       65535, 65535
-    }}, // no field_entries, or aux_entries
+    }}, {{
+      // .ExitGameReason reason = 1;
+      {PROTOBUF_FIELD_OFFSET(GameNodeExitGameRequest, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
     {{
     }},
   };
 }
 
+
+inline constexpr GameNodeExitGameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        reason_{static_cast< ::ExitGameReason >(0)} {}
+
 template <typename>
 constexpr GameNodeExitGameRequest::GameNodeExitGameRequest(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::internal::ZeroFieldsBase(
+    : ::google::protobuf::Message(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           class_data
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      ) {
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
 }
 inline void* PROTOBUF_NONNULL GameNodeExitGameRequest::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
@@ -240,10 +257,10 @@ constexpr auto GameNodeExitGameRequest::InternalGenerateClassData_(
 #endif
           nullptr,  // IsInitialized
           &GameNodeExitGameRequest::MergeImpl,
-          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<GameNodeExitGameRequest>(),
+          ::google::protobuf::Message::GetNewImpl<GameNodeExitGameRequest>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           &GameNodeExitGameRequest::SharedDtor,
-          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<GameNodeExitGameRequest>(), &GameNodeExitGameRequest::ByteSizeLong,
+          ::google::protobuf::Message::GetClearImpl<GameNodeExitGameRequest>(), &GameNodeExitGameRequest::ByteSizeLong,
               &GameNodeExitGameRequest::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
           PROTOBUF_FIELD_OFFSET(GameNodeExitGameRequest, _impl_._cached_size_),
@@ -301,8 +318,8 @@ const ::_pbi::ClassData* GameNodeExitGameRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_proto_2fscene_2fplayer_5flifecycle_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_proto_2fscene_2fplayer_5flifecycle_2eproto[1];
 static const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL
     file_level_service_descriptors_proto_2fscene_2fplayer_5flifecycle_2eproto[1];
 const ::uint32_t
@@ -313,7 +330,11 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::GateLoginNotifyRequest, _impl_.enter_gs_type_),
         0,
-        0x000, // bitmap
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::GameNodeExitGameRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::GameNodeExitGameRequest, _impl_.reason_),
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -331,12 +352,17 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5flifecycle_2eproto[
     "\n\"proto/scene/player_lifecycle.proto\032\033pr"
     "oto/db/proto_option.proto\032\033google/protob"
     "uf/empty.proto\"/\n\026GateLoginNotifyRequest"
-    "\022\025\n\renter_gs_type\030\001 \001(\r\"\031\n\027GameNodeExitG"
-    "ameRequest2\226\001\n\013ScenePlayer\022B\n\017GateLoginN"
-    "otify\022\027.GateLoginNotifyRequest\032\026.google."
-    "protobuf.Empty\022<\n\010ExitGame\022\030.GameNodeExi"
-    "tGameRequest\032\026.google.protobuf.Empty\032\005\200\250"
-    "\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "\022\025\n\renter_gs_type\030\001 \001(\r\":\n\027GameNodeExitG"
+    "ameRequest\022\037\n\006reason\030\001 \001(\0162\017.ExitGameRea"
+    "son*\226\001\n\016ExitGameReason\022 \n\034EXIT_GAME_REAS"
+    "ON_UNSPECIFIED\020\000\022\033\n\027EXIT_GAME_REASON_LOG"
+    "OUT\020\001\022!\n\035EXIT_GAME_REASON_DISCONNECTED\020\002"
+    "\022\"\n\036EXIT_GAME_REASON_LEASE_EXPIRED\020\0032\226\001\n"
+    "\013ScenePlayer\022B\n\017GateLoginNotify\022\027.GateLo"
+    "ginNotifyRequest\032\026.google.protobuf.Empty"
+    "\022<\n\010ExitGame\022\030.GameNodeExitGameRequest\032\026"
+    ".google.protobuf.Empty\032\005\200\250\303\001\001B\016Z\005scene\200\001"
+    "\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5flifecycle_2eproto_deps[2] = {
@@ -347,7 +373,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5flifecycle_2ep
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5flifecycle_2eproto = {
     false,
     false,
-    347,
+    533,
     descriptor_table_protodef_proto_2fscene_2fplayer_5flifecycle_2eproto,
     "proto/scene/player_lifecycle.proto",
     &descriptor_table_proto_2fscene_2fplayer_5flifecycle_2eproto_once,
@@ -360,6 +386,13 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_
     file_level_enum_descriptors_proto_2fscene_2fplayer_5flifecycle_2eproto,
     file_level_service_descriptors_proto_2fscene_2fplayer_5flifecycle_2eproto,
 };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ExitGameReason_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5flifecycle_2eproto);
+  return file_level_enum_descriptors_proto_2fscene_2fplayer_5flifecycle_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t ExitGameReason_internal_data_[] = {
+    262144u, 0u, };
 // ===================================================================
 
 GateLoginNotifyRequest::GateLoginNotifyRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -553,27 +586,45 @@ void GateLoginNotifyRequest::InternalSwap(GateLoginNotifyRequest* PROTOBUF_RESTR
 
 GameNodeExitGameRequest::GameNodeExitGameRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::internal::ZeroFieldsBase(arena, GameNodeExitGameRequest_get_class_data()) {
+    : ::google::protobuf::Message(arena, GameNodeExitGameRequest_get_class_data()) {
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:GameNodeExitGameRequest)
 }
 GameNodeExitGameRequest::GameNodeExitGameRequest(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const GameNodeExitGameRequest& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GameNodeExitGameRequest& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::internal::ZeroFieldsBase(arena, GameNodeExitGameRequest_get_class_data()) {
-
+    : ::google::protobuf::Message(arena, GameNodeExitGameRequest_get_class_data()),
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+    : ::google::protobuf::Message(arena),
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  GameNodeExitGameRequest* const _this = this;
-  (void)_this;
+      _impl_(from._impl_) {
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GameNodeExitGameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
 
-  // @@protoc_insertion_point(copy_constructor:GameNodeExitGameRequest)
+inline void GameNodeExitGameRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.reason_ = {};
+}
+GameNodeExitGameRequest::~GameNodeExitGameRequest() {
+  // @@protoc_insertion_point(destructor:GameNodeExitGameRequest)
+  SharedDtor(*this);
+}
+inline void GameNodeExitGameRequest::SharedDtor(MessageLite& self) {
+  GameNodeExitGameRequest& this_ = static_cast<GameNodeExitGameRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
 }
 
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -602,15 +653,123 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GameNodeExitGameRequest::ParseTableT_
     GameNodeExitGameRequest::_table_ =
         GameNodeExitGameRequest::InternalGenerateParseTable_(GameNodeExitGameRequest_class_data_.base());
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GameNodeExitGameRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:GameNodeExitGameRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.reason_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GameNodeExitGameRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GameNodeExitGameRequest& this_ = static_cast<const GameNodeExitGameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GameNodeExitGameRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GameNodeExitGameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:GameNodeExitGameRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .ExitGameReason reason = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_reason() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_reason(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:GameNodeExitGameRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GameNodeExitGameRequest::ByteSizeLong(const MessageLite& base) {
+  const GameNodeExitGameRequest& this_ = static_cast<const GameNodeExitGameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GameNodeExitGameRequest::ByteSizeLong() const {
+  const GameNodeExitGameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:GameNodeExitGameRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .ExitGameReason reason = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_reason() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_reason());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GameNodeExitGameRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GameNodeExitGameRequest*>(&to_msg);
+  auto& from = static_cast<const GameNodeExitGameRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:GameNodeExitGameRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_reason() != 0) {
+      _this->_impl_.reason_ = from._impl_.reason_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GameNodeExitGameRequest::CopyFrom(const GameNodeExitGameRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:GameNodeExitGameRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
 
 
-
-
-
-
+void GameNodeExitGameRequest::InternalSwap(GameNodeExitGameRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.reason_, other->_impl_.reason_);
+}
 
 ::google::protobuf::Metadata GameNodeExitGameRequest::GetMetadata() const {
-  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
 

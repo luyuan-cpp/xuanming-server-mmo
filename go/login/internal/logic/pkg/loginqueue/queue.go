@@ -383,6 +383,9 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 // time (gate IP/Port/NodeID/ZoneID). Returning (nil, err) makes Lookup
 // surface the error to the caller; returning (nil, nil) is not allowed —
 // either we sign successfully or we have an error.
+//
+// (2026-11-05)生产入口一律用 NewAdmitSigner:签之前复核 slot 里的 gate,它已停写、满载或不在此刻的候选里就改签另一台;
+// 复核读不到候选时照签 slot 里的 gate,复核本身不产生错误(见 admit_recheck.go)。
 type SignAdmitFn func(slot *AdmitSlot) (*AdmitToken, error)
 
 // Lookup translates a queue token to its current state. The signFn is

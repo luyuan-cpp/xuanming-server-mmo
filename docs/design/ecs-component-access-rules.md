@@ -52,7 +52,8 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `SkillContextCompMap` | `SkillSystem::AddSkillContext`,登记合法施法的施法者上下文时 | `HandleSkillFinish` 删除本次上下文;目标不保存镜像 |
 | `ActorStateComp` | `ActorActionStateSystem::AddState`,首次激活合法状态时 | 状态移除;无表表示无激活状态 |
 | `BuffListComp` | `BuffSystem::AddOrUpdateBuff`,完成驱散 / 免疫等判断后首次真正插入时 | 帧末摘除空列表 |
-| `AoiListComp` | `InterestSystem::AddAoiEntity`,完成实体 / 容量校验后首次加入观察对象时 | 移除观察关系;无表表示无观察对象 |
+| `AoiListComp` | `InterestSystem::AddAoiEntity`(空间来源被接纳)或 `InterestSystem::Follow`(显式关注登记),完成实体 / 容量 / 同场景校验后首次建立关系时 | 移除观察关系;无表表示无观察对象 |
+| `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
 | `SceneGridListComp` | `AoiSystem::UpdateGridState`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
 | `CastingTimerComp` | `SetupCastingTimer`,进入前摇时 | 前摇结束 / 打断时摘除 |
 | `RecoveryTimerComp` | `SkillSystem::HandleSkillRecovery`,进入后摇时 | 后摇结束 / 打断时摘除 |
@@ -62,8 +63,9 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | 生成的各 `*DirtyMaskComp` | `Set*AttrDirtyBit`,先校验位范围与实体再标脏 | 有接收者时消费后摘除;接收者为空保留 |
 | `BattleFreezeExpiredComp`(`player_battle.cpp` 内部,单槽 battle_id) | `RememberExpiredFightingBattle`,reaper 判定 FIGHTING 到期的收尾 `ReleaseExpiredFightingFreeze` 里、条件删锁之前(2026-10-19) | 不摘:下一次 FIGHTING 到期覆盖;实体销毁自然清理。按锁重建的两个入口只读它 |
 | `BattleLoginRecheckComp`(`player_battle.cpp` 内部空标记) | `MarkLoginRecheck`,登录钩子读挂起结算 / 读战斗锁没问到时(空应答、读记录 ERROR、命令没发出去、Redis 不可用;2026-10-16) | reaper 的 `RunLoginRechecks` 在 Redis 可用时摘除并重跑登录检查,又没问到就重新挂上;实体销毁自然清理 |
+| `BattleResultAwaitingCommitComp`(`player_battle.cpp` 内部,待公开的 battle_id) | `RecordBattleResult`,`ApplySettlementToEntity` 把本人结果写进近期结果的同一帧(2026-11-05,[战斗结果重登恢复](battle-result-recovery.md) §4.3) | `CompleteInboxSettlement` 在存档确认提交之后摘对应 battle_id,空了摘组件;结果被淘汰时一并摘。查询与确认只读它;缺失 = 没有待公开的结果。同功能的持久组件 `PlayerBattleResultComp` 属持久数据,只在加载时创建 |
 
-`PlayerMirrorCreateInFlightComp`(2026-10-15)也是按需状态:只由 `PlayerSceneSystem::RequestEnterMirrorScene` 在发 CreateScene 之前创建,由该次调用的完成回调 `HandleMirrorCreateDone` 按令牌摘除;`IsSceneChangeBusy` 只读它,缺失或过 TTL 表示没有建镜像在途。完成回调按令牌认领后仍须复核相同 TTL;过期或 UTC 回拨只摘该令牌的槽并丢弃,不得推提示或自动进场,也不得摘掉新令牌。普通换图、交接、退出提交或权威落点成功时也主动摘掉旧镜像组件,永久取消旧请求的提示/自动进场资格,避免 UTC 回拨后恢复让它复活。
+`PlayerMirrorCreateInFlightComp` 是按需状态。由 `RequestEnterMirrorScene` 发起的 `CreateMirrorAndEnter` 任务在发送之前登记，恢复后按令牌认领。`IsSceneChangeBusy` 只读它，缺失或过 TTL 表示没有建镜像在途。过期、UTC 回拨或本地停止只摘本次令牌并丢弃结果。普通换图、交接、退出提交或权威落点成功时也主动摘掉旧镜像组件，永久取消旧请求的提示和自动进场资格。
 
 `CombatStateCollectionComp`、`InBattleComp` 也属于按需状态:分别在实际添加战斗状态、进入战斗或从权威战斗锁恢复时创建；`InBattleComp` 的三处业务入口各自先确认不存在、再 `emplace`；查询缺失表示无对应状态。不要把状态存在与派生投影混为一谈:`CombatStateFlagsComp` 是创建 actor 时就应存在的同步投影。
 
@@ -93,7 +95,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 进程内 dispatcher 事件是模块内的普通结构体，字段明确所属 registry。Kafka 只能进入显式标注的 proto 事件，详见 [控制面事件入口](control-plane-topic-partitioning-20260908.md#2026-10-15-事件入口边界第-4-批源码方案)。同一业务同时需要两种传播时，在网络入口把业务 ID 解析成本地句柄再通知。
 
-没有消费者不发事件；dispatcher 只做可有可无的一对多通知，必需步骤直接调用；监听者不得销毁或替换实体，不得改 `SceneEntityComp`、`playerList` 或会话；`trigger` 之后不写恢复分支。必要的 AOI 离场清理由离场入口直接调用，离场只清 7 格内的观察者。场景成员只以 actor 上的 `SceneEntityComp` 为准，排空时扫描玩家，不另维护反向集合。
+没有消费者不发事件；dispatcher 只做可有可无的一对多通知，必需步骤直接调用；监听者不得销毁或替换实体，不得改 `SceneEntityComp`、`playerList` 或会话；`trigger` 之后不写恢复分支。必要的 AOI 离场清理由离场入口直接调用（`AoiSystem::OnLeaveScene`），按正向 `AoiListComp` 与反向 `AoiWatchersComp` 清掉该实体的全部出边和入边，只访问与它直接关联的关系，不扫描全节点，也不依赖 `Hex`。场景成员只以 actor 上的 `SceneEntityComp` 为准，排空时扫描玩家，不另维护反向集合。
 
 `SceneEntityComp` 保存非拥有的带版本场景句柄，不保活场景，也不会随场景销毁自动清空。业务上的同场景判定必须确认 `sceneRegistry.valid()`，不能只比较两个非空句柄；技能在施法预检和延迟回调入口都重验施法者场景，失效时拒绝或终止该次施法。`SceneLifecycle::DestroyScene` 发起排空后按全部 `SceneEntityComp` 的剩余绑定数决定能否销毁；改派票据数不是居民数，断线或身份不完整的绑定同样阻止销毁。
 

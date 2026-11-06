@@ -90,7 +90,10 @@ message MatchAuthorityTicketRecord {
   bytes network_profile = 14;
   uint64 expires_ms = 15;
   uint32 selected_region = 16;
-  uint32 preferred_region = 17; // 签名测量最低RTT机房；同RTT按机房编号，不随节点暂时下线改本区。
+  // 17 原为 preferred_region：首选机房只给机房投影表用，投影随按池撮合退役（2026-11-05，未上线）。
+  // 撮合与提交点都从 network_profile 现算（authority.PreferredRegion），不再持久化派生值。
+  reserved 17;
+  reserved "preferred_region";
   string owner_account = 18;
   uint64 owner_revision = 19;
 }
@@ -107,29 +110,6 @@ message MatchRoleOccupancyRecord {
   string account = 4;
   uint64 owner_revision = 5;
   uint64 expires_ms = 6;  // match 库的时钟
-}
-
-// 仅作可重建候选索引，票与完整签名profile仍是提交点真相。
-// 同原票锁更新/清理；查询必须JOIN当前ticket代次，最终Claim复核原profile和原角色身份。
-message MatchTicketRegionRecord {
-  option (OptionTableName) = "match_ticket_region";
-  option (OptionPrimaryKey) = "player_id,physical_region";
-  option (OptionIndex) = "physical_region,mode,config_id,team_size,preferred_region,enqueued_ms,player_id;physical_region,mode,config_id,team_size,enqueued_ms,player_id;expires_ms,player_id,physical_region;physical_region,mode,config_id,team_size,home_zone,preferred_region,enqueued_ms,player_id;physical_region,mode,config_id,team_size,home_zone,enqueued_ms,player_id";
-  option (OptionTiDBNonclusteredPK) = true;
-  option (OptionTiDBShardRowIDBits) = 4;
-  option (OptionTiDBPreSplitRegions) = 4;
-  uint64 player_id = 1;
-  uint32 physical_region = 2;
-  string ticket = 3;
-  uint32 mode = 4;
-  uint32 config_id = 5;
-  uint32 team_size = 6;
-  uint32 preferred_region = 7;
-  uint64 enqueued_ms = 8;
-  int64 rating_centi = 9;
-  uint32 rtt_ms = 10;
-  uint64 expires_ms = 11;
-  uint32 home_zone = 12; // 来自原票的SQL home；整队禁止跨home时在LIMIT前过滤。
 }
 
 // 不能随当前票据覆盖或过期：否则旧 Join 在新一轮结束后重放会复活。

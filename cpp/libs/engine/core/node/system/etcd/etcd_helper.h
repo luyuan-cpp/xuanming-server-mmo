@@ -4,6 +4,7 @@
 #include <vector>
 #include "proto/common/base/common.pb.h"
 #include "proto/etcd/etcd.pb.h"
+#include "node/system/etcd/etcd_transport.h"
 
 namespace EtcdHelper
 {
@@ -11,14 +12,16 @@ namespace EtcdHelper
 	void RangeQuery(const std::string &prefix);
 	void StartWatchingPrefix(const std::string &prefix, int64_t revision);
 	void StopAllWatching(); // placeholder — extensible
-	void GrantLease(uint32_t ttlSeconds);
-	void PutIfAbsent(const std::string &key, const std::string &newValue, int64_t currentVersion, int64_t lease);
-	void PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease);
-	// 无条件把 key 挂到 lease 上(txn 不带 compare,恒成功),走同一套 txn 回调,
-	// 因此 OnTxnSucceeded / pendingTxnKey 流程不变。
+	using TxnCompletion = EtcdRegistrationCompletion<etcdserverpb::TxnResponse>;
+	void GrantLease(uint32_t ttlSeconds, EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done);
+	void PutIfAbsent(const std::string &key, const std::string &newValue, int64_t currentVersion, int64_t lease,
+	                 TxnCompletion done, bool checkSameLease = false);
+	void PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease, TxnCompletion done,
+	                 bool checkSameLease = false);
+	// 无条件把 key 挂到 lease 上(txn 不带 compare,恒成功)。
 	// 只给"这个 key 按定义就该属于自己"的场景用,例如按 IP+端口作用域的端口 key 重注册。
-	void PutWithLease(const std::string &key, const std::string &newValue, int64_t lease);
-	void PutWithLease(const std::string &key, const NodeInfo &nodeInfo, int64_t lease);
+	void PutWithLease(const std::string &key, const std::string &newValue, int64_t lease, TxnCompletion done);
+	void PutWithLease(const std::string &key, const NodeInfo &nodeInfo, int64_t lease, TxnCompletion done);
 
 	// "不存在,或者已经是我的"才写 —— 重注册(临时失租后拿新租约)专用的 CAS。
 	//
@@ -37,7 +40,8 @@ namespace EtcdHelper
 														   const std::string &ownerValue,
 														   int64_t lease,
 														   const std::vector<etcdserverpb::RequestOp> &extraSuccessOps = {});
-	void PutIfAbsentOrOwned(const std::string &key, const std::string &value, const std::string &ownerValue, int64_t lease);
+	void PutIfAbsentOrOwned(const std::string &key, const std::string &value, const std::string &ownerValue, int64_t lease,
+	                        TxnCompletion done);
 
 	// 普通 txn:reply.succeeded();BuildClaimIfAbsentOrOwnedTxn 的嵌套形态:外层或内层任一成功。
 	bool TxnClaimSucceeded(const etcdserverpb::TxnResponse &reply);

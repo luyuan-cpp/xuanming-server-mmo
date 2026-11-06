@@ -5,9 +5,11 @@
 #include <chrono>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "proto/etcd/etcd.pb.h"
+#include "async/loop_task_scope.h"
 #include "time/comp/timer_task_comp.h"
 #include "node/system/discovery/discovery_key_index.h"
 #include "node/system/etcd/etcd_transport.h"
@@ -18,7 +20,7 @@ class EtcdService final : public EtcdResponseSink {
 public:
     // 重试回调捕获 this;已武装的定时器可移动,宿主地址仍必须固定。
     EtcdService() = default;
-    ~EtcdService() override = default;
+    ~EtcdService() override;
     EtcdService(const EtcdService&) = delete;
     EtcdService& operator=(const EtcdService&) = delete;
     EtcdService(EtcdService&&) = delete;
@@ -26,7 +28,6 @@ public:
 
     void Init();
     void Shutdown();
-    void RequestNodeLease();
 
     // EtcdHelper 的唯一出口。Init 之前 / Shutdown 之后返回 nullptr(调用方丢弃请求)。
     EtcdTransport* Transport() { return transport_.get(); }
@@ -34,32 +35,15 @@ public:
     // 拿一个新 lease 并把端口 / 分配 / 服务三把 key 改挂上去,node_id 不变。
     // 触发源:健康监控发现本节点快照消失、keepalive 返回 TTL<=0、本地 ACK 超时。
     // 失租**不碰发号**(永久 guid 走号段,与 lease 无关):身份由 CAS 决定 —— 只有分配键的 value 已经是别人的
-    // uuid(OnTxnFailed → OnNodeIdConflictShutdown)才是真的被抢。
+    // uuid(注册 CAS 明确拒绝 → OnNodeIdConflictShutdown)才是真的被抢。
     void RequestReRegistration(const char* reason);
 
     // 永久停掉注册流的所有重试(端口 / node_id / txn 超时兜底)。
     // 身份冲突收尾期间必须调用:这台节点已经不是 node_id 的合法持有者了,
     // 再去重抢端口 / 重占 node_id 只会干扰正在接手的那个进程。
     void StopRegistrationRetries();
-    void RegisterService();
-    void StartLeaseKeepAlive();
-
-    // 注册流 CAS 的响应超时。由 EtcdManager 在设置 / 取走 pendingTxnKey_ 时成对调用,
-    // 维持不变量:**有 pending key ⟺ 超时定时器在跑**。
-    //
-    // 为什么需要:生成的 etcd grpc client 只在 `status.ok()` 时才调 handler,
-    // RPC 失败时**什么都不做** —— 于是注册流会永久停在某一阶段(没 node_id、
-    // 不发布服务发现、也不重试)。到期后重查权威(重发同一条幂等 CAS 链),
-    // 不是"假设成功继续往下走"。
-    void ArmTxnTimeout();
-    void CancelTxnTimeout();
-
-    // Called by Node::StartGrpcServer after the gRPC port is bound and accepting
-    // connections. Publishes the discovery key (NodeInfo) that peers watch.
-    // The publish was deliberately deferred from OnTxnSucceeded(allocKey) so
-    // peers don't see the node alive via etcd watch and dial gRPC before the
-    // port is open (cold-start "connection refused" race).
-    // No-op for re-registration mode (gRPC stayed up, publish happened early).
+    [[nodiscard]] bool RegistrationInFlight() const { return registrationRunning_; }
+    // Node::StartGrpcServer 的就绪通知。初次引导或维护预备态还未开放监听时，注册任务等在发布之前。
     void PublishDiscoveryAfterGrpcReady();
 
     int64_t GetLeaseId() const { return leaseId; }
@@ -83,8 +67,6 @@ public:
     void OnRange(const etcdserverpb::RangeRequest* request, const etcdserverpb::RangeResponse& reply) override;
     void OnPut(const etcdserverpb::PutResponse& reply) override;
     void OnDeleteRange(const etcdserverpb::DeleteRangeResponse& reply) override;
-    void OnTxn(const etcdserverpb::TxnResponse& reply) override;
-    void OnLeaseGrant(const etcdserverpb::LeaseGrantResponse& reply) override;
     void OnWatch(const etcdserverpb::WatchResponse& reply) override;
     void OnKeepAlive(const etcdserverpb::LeaseKeepAliveResponse& reply) override;
     void OnWatchStreamRestarted() override;
@@ -104,7 +86,6 @@ private:
 
     void HandlePutEvent(const std::string& key, const std::string& value);
     void HandleDeleteEvent(const std::string& key, const std::string& value);
-    void OnLeaseGranted(const ::etcdserverpb::LeaseGrantResponse& reply);
     void OnKeepAliveResponse(const ::etcdserverpb::LeaseKeepAliveResponse& reply);
 
     // 新传输:一个前缀的 Range 快照 → 应用 PUT → 对账删除 → 该前缀在当前流上还没 watch 就从 R+1 建。
@@ -124,32 +105,23 @@ private:
                            std::vector<PendingRemoval>& removals);
     void FlushPendingRemovals(std::vector<PendingRemoval>& removals);
     void ResetPrefixWatch(const std::string& prefix);
+    // watch 因压缩以外的原因被取消:按前缀退避重拉(discovery_resync_policy.h)。所有待重拉的前缀共用一个定时器。
+    void ScheduleCanceledPrefixRetry(const std::string& prefix);
     static bool IsAllocationKey(const std::string& key);
 
-    void OnTxnSucceeded(const std::string& key);
-    void OnTxnFailed(const std::string& key);
-    // Allocates the RPC port and retries with backoff while none is available.
-    // Reuses acquirePortTimer so there is a single retry path for the port phase.
-    void AcquirePortWithRetry();
-
-    void OnTxnTimeout();
-    // LeaseGrant 的 RPC 失败时生成的 client 不调 handler,leaseRequestInFlight_ 会永久卡住 ——
-    // etcd 抖一下就再也拿不到 lease。到期清标记重发。
-    void OnLeaseGrantTimeout();
+    void RequestNodeLease();
+    boost::cobalt::task<void> RegisterAsync(muduo::net::EventLoop& loop);
     void SetRegistrationMode(RegistrationMode mode, const char* reason);
     const char* RegistrationModeName(RegistrationMode mode) const;
-    bool IsNodePortKey(const std::string& key) const;
-    bool IsNodeIdKey(const std::string& key) const;
-    // True if `key` is the global allocation key for this node's
-    // (node_type, node_id). Distinguishing it from the per-zone NodeIdKey
-    // lets OnTxnSucceeded skip Snowflake activation on the alloc-only step
-    // (we activate Snowflake only after the per-zone publish succeeds).
-    bool IsNodeAllocationKey(const std::string& key) const;
 
 private:
     bool hasSentWatch = false;
-    bool leaseRequestInFlight_ = false;
+    bool registrationRunning_ = false;
     bool registrationStopped_ = false;
+    bool restartRegistration_ = false;
+    bool rpcPrepared_ = false;
+    bool grpcReady_ = false;
+    std::function<void(bool)> grpcReadyCompletion_;
     RegistrationMode registrationMode_ = RegistrationMode::kInitialBoot;
     int64_t leaseId = 0;
     int64_t leaseTtlSeconds_ = 0;
@@ -162,10 +134,11 @@ private:
     DiscoveryKeyIndex discoveryKeys_;
     // 每个前缀已经应用过的最新 Range 快照的 revision:更旧的应答整条丢弃,watch 从它之后建(跨流重建保留)。
     std::unordered_map<std::string, int64_t> appliedSnapshotRevision_;
-    TimerTaskComp acquireNodeTimer;
-	TimerTaskComp acquirePortTimer;
-	TimerTaskComp txnTimeoutTimer;
-	TimerTaskComp leaseGrantTimeoutTimer_;
-    // 放在最后:先于上面的状态析构(传输层的回调只经 weak_ptr 进来,析构后不再回调本对象)。
+    // 取消后待重拉的前缀(去重、按到达顺序),与每个前缀当前的退避秒数;建成 watch 时清掉该前缀的退避。
+    std::vector<std::string> canceledPrefixesToRetry_;
+    std::unordered_map<std::string, double> cancelRetryBackoffSeconds_;
+	TimerTaskComp cancelRetryTimer_;
+    // 先停止注册等待，再析构传输；传输回调不持有注册任务。
     std::unique_ptr<EtcdTransport> transport_;
+    std::optional<LoopTaskScope> registrationTasks_;
 };

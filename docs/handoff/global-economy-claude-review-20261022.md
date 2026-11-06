@@ -1160,3 +1160,54 @@ Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及�
 数据库窗口五步实际CCDF62F6全部5native0、03精确核验通过后才启动，原PD新Started已记录、running／exit0／OOMfalse／restart0，Memory536870912与MemorySwap536870912；其它9容器36个捕获字段及PD其它配置保留，未清数据或改系统。Root重新核了真实pin和结果。新SQL强会话尚未验收，不以start冒ready；后续每段fresh pwsh按原G3／S1／尾case和时限单次执行，任何红停，不继续加内存或重start。
 
 四窗口继续分工：Java普通Full30已绿且新ReadFull345C正式交接，六组真库需各自freshCaseRoot保护已验产物；Java与双区各自准备真实Battle终局故障叶，临时JDI控制器归双区唯一owner。架构197候选与143并集314、名义保7需321，但完整非SQL排空阶段、部署身份入口及JDBC支持矩阵尚待补齐，未请求或取得新架构授权、未落地。当前143／150，新地图与他人代码保留，整体和下游SDK交接仍未完成。
+
+### 2026-11-05 Claude 修复记录（10-24 评审结论的处置，未编译，待 Codex 验证）
+
+**结论**：评审里的服务端问题已全部处置，处置方式分三类：Codex 已修、本轮 Claude 修复、随重构失效。Java 一律登记为待做，见 Java 仓 `PARITY.md`「2026-11-05 历练 v1 终局与收件箱评审修复（Java 待做）」。下文所有改动**都没有编译和运行**，验证命令在本节末尾。
+
+**处置一览**
+- **Codex 10-24 已修**（Claude 10-30 对照源码复核仍在）：A1 截止 60s 宽限、A2 宠物缺失跳过子效果、A3 首投与等待分流并退避、C3 player-inbox-match 按全球匹配开关注入、C5 缺密钥时宣告不支持 v1、C7 永久冲突回 FailedPrecondition。
+- **随「玩家存档只存 TiDB」重构失效**：`go/db/internal/barrierrestore`、`save_barrier_restore` 的 promotion/release、data_service 的旧 holder 维护恢复链都已删除。评审中 B1、B2、C1、C2 及 10-30 复核里的「缓存 TTL」「孤儿收据」「全 zone 等集」「跨 zone holder」等条目不再适用。Claude 10-30 在这些文件上的修改和新增的 `go/shared/businessdigest` 随之消失。`cross-zone-matchmaking.md` 中描述它们的「2026-10-30 修订」小节本轮已删。
+- **本轮 Claude 修复，C++**：
+  - 收件箱回档后同一 battle 换新 seq 重投，只记 APPLIED、不重复发奖（只认最近 32 条结局环，有界缓解）；
+  - 物品配置行被热更删除时，只跳过该掉落/消耗；
+  - 结算载荷上限改读收件箱类型规格；
+  - SQL 确认探测有界重探与退避；
+  - 销账回包的身份闸只包住账本摘除，组队跟随唤醒不再丢失；
+  - v1 房间提交越过 6h 后改为 60s 慢速重放，24h 后才本地删房；
+  - FIGHTING 冻结改为 deadline + 60s 终局宽限 + 60s 收件箱投递余量才解冻，锁 TTL 覆盖同一窗口（堵住资产通道提前放开导致的逐局资产复制，数据覆写审计 R2 转交的发现）。
+- **本轮 Claude 修复，Go**：
+  - PlayerInbox：Battle 域运维文案不再建议 Void（告警与 runbook 同步）；缺 Match 密钥时启动打 ERROR，gauge `player_inbox_battle_producer_ready` 置 0，不拒启（理由写在 `resolveMatchProducer` 注释里）；新增 `go/shared/inboxcontract`，16KiB 上限和内容摘要只剩一个来源。
+  - Match：不可恢复成局有专用计数和存量 gauge；ABORT 行改记 `format_version=0` 与新的 `MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT`；终局发件箱支持配置 `GlobalMatch.OutcomeOutbox`（批量、并发、节拍，默认值与原行为一致）并补积压指标；巡检尊重等待退避；到期终局恢复挪到独立循环 `match.global.outcome.recover`。
+- **按「最标准方式」做的口径决定**：
+  - 坏形状成局、收件箱里数据损坏的 Battle 条目，保持 fail-closed：告警、计数、runbook §6.1 人工处置，不自动 ABORT、不提供放弃出口。理由：损坏数据需要人看，自动终结会掩盖缺陷。
+  - Java「Create 被拒票据快速收尾」证明链风险高，两版都维持现状：等截止 + 60s。
+
+**C++ 改动的函数**（供以后合并 `claude/recover-battle-settlement-f39089db` 恢复分支时对齐）
+- `player_battle.h`：新增 `FreezeExpiresAtMs`、`kTerminalOutcomeGraceMs`、`kInboxSettlementDeliveryMarginMs`、`SetSettlementAckSenderForTest`、`SetFollowWakeFnForTest`、`SetSqlProbeRetrySchedulerForTest`、`ReapExpiredFreezes`。
+- `player_battle.cpp`：
+  - 新增：`DefaultSqlProbeRetryScheduler`、`FightingLockTtlSecFor`、`OnSettlementAckReply`、`DropItemsWithoutConfigRow`、`ReapExpiredFreezes`。
+  - 修改：`ClearPendingSettlementIfMatch`、`RequestSqlConfirmedSettlementAck`、`RemoveInBattleComp`、`DeleteBattleLockIfMatch`、`HasUnsupportedInboxConsumption`、`ApplySettlementToEntity`、`ApplyInboxSettlement`、`ApplySettlementItems`、`ConfirmBattle`、`RebuildBattleFreezeFromLock`、`RestoreBattleFreezeOnLogin`、`StartReaper`。
+- 收件箱：`player_inbox_rules.{h,cpp}`（`HasRecentAppliedBattleSettlement`、`SqlProbeBackoffMs`）、`player_inbox_system.cpp`、`player_inbox_registry.{h,cpp}`（`MaxPayloadBytes`）、`player_inbox_runtime_comp.h`（`sqlProbeStreak`）。
+- 战斗节点：`result_commit.h`（`SqlOutcomeSpanExceeded`、`SqlOutcomeReplayAbandoned`、`SqlOutcomeRetryInterval`）、`battle_room_manager.cpp` 的 `PumpSqlOutcomes`。
+
+**给 Codex 的命令**（仓库根目录，按顺序执行）
+1. proto 重新生成（`proto/match/match_authority.proto` 新增枚举值）：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
+2. Go：
+   - `cd go/shared && go vet ./inboxcontract/ && go test -count=1 ./inboxcontract/`
+   - `cd go/player_inbox && go build ./... && go vet ./... && go test -count=1 ./...`
+   - `cd go/match && go build ./... && go vet ./... && go test -count=1 ./...`
+   - 并发：`go test -race -count=1 ./internal/authority/ -run 'TestOutboxJobs|TestOutcomeOutboxOptions|TestUnrecoverableFormation'`、`go test -race -count=1 ./internal/logic/ -run 'TestGlobalOutcome|TestGlobalRoundNoLonger'`
+   - 真 TiDB：`MATCH_IT_TIDB=<端口> MATCH_IT_REQUIRE_TIDB=1 go test -count=1 ./internal/authority/ -run 'TestOutcomeTiDB|TestReadyTiDB|TestTerminalTiDB|TestStartedFormationTiDB|TestFormationExitTiDB|TestCompletionTiDB'`
+3. C++：`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`，必须串行。改了库要先编库再跑测试，`run_cpp_tests -Build` 不会重编库。之后运行：
+   - `bag_test.exe --gtest_filter=PlayerBattleSettlement*:BattleFreezeExpiry*:PlayerBattleSettlementItemTest*`
+   - `currency_test.exe --gtest_filter=PlayerInbox*`
+   - `turn_battle_engine_test.exe --gtest_filter=Battle*`
+   - 以上三个 exe 再各跑一次完整套件。
+4. 通过标准：编译 0 错误，`/WX` 无新告警；上述用例全绿；真 TiDB 用例不得跳过。失败时保留首个编译错误和失败用例的 gtest/go test 输出。
+
+**未验证项与风险**
+- 10-30 之后玩家存盘重构改动了大量相邻代码，这批修复没有在新代码上编译过，首轮编译可能暴露符号漂移，需要按编译错误逐个修正。
+- C-1 只覆盖最近 32 局。
+- FIGHTING 冻结延长约 120s，从不结算的局里，玩家要多等这么久才能再排队。
+- 新指标还没有配告警规则。

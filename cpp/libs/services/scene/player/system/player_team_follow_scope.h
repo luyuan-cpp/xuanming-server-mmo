@@ -10,7 +10,7 @@
 struct redisReply;
 namespace muduo::net { class EventLoop; }
 
-// Scene 主 loop 持有。构造、启动、停止和析构均在该 loop，每个 loop 只绑定一个作用域。
+// Scene 主 loop 绑定跟随使用的 Redis 接缝。跟随任务由同一 loop 的 SceneTaskScope 持有。
 class PlayerTeamFollowScope final
 {
 public:
@@ -24,8 +24,6 @@ public:
 	~PlayerTeamFollowScope();
 	PlayerTeamFollowScope(const PlayerTeamFollowScope&) = delete;
 	PlayerTeamFollowScope& operator=(const PlayerTeamFollowScope&) = delete;
-
-	void Stop();
 
 private:
 	friend class PlayerTeamSystem;

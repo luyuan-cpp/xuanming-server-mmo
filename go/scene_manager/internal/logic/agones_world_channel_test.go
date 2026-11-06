@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// 正常路径:按哈希目标节点预占,并写下 scene:{id}:agones_gs。
+// 正常路径:按哈希目标节点预占,交回占到的 GameServer。agones_gs 由登记脚本写(scene_registration_test.go)。
 func TestWorldChannel_ReservesRoomOnHashTargetNode(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 
@@ -28,14 +28,16 @@ func TestWorldChannel_ReservesRoomOnHashTargetNode(t *testing.T) {
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 
-	node, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5001, "10", testZoneId)
+	node, placement, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5001, "10", testZoneId)
 	require.True(t, ok)
 	assert.Equal(t, "10", node, "哈希目标节点有容量时必须落在它上面,否则 rebalance 会一直想搬回去")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-a"))
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-b"))
+	require.NotNil(t, placement)
+	assert.Equal(t, "gs-a", placement.GameServerName, "登记要拿它写 agones_gs,否则崩溃后找不回该向谁归还")
 
 	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5001))
-	assert.Equal(t, "gs-a", gs, "必须在调 CreateScene 之前记下 gs,否则崩溃后找不回该向谁归还")
+	assert.Equal(t, "", gs, "预占不写 Redis:agones_gs 与频道其余状态在同一段登记脚本里写")
 }
 
 // 哈希目标满了 -> 回落自由分配,落点可能不是哈希目标(rebalance 之后会搬回去)。
@@ -50,9 +52,11 @@ func TestWorldChannel_FallsBackToFreeAllocationWhenHashTargetIsFull(t *testing.T
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	bindPodIP(t, "20", "10.0.0.9", testZoneId, constants.SceneNodeTypeMainWorld)
 
-	node, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5002, "10", testZoneId)
+	node, placement, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5002, "10", testZoneId)
 	require.True(t, ok)
 	assert.Equal(t, "20", node)
+	require.NotNil(t, placement)
+	assert.Equal(t, "gs-free", placement.GameServerName)
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-full"), "满了的节点不能被超卖")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-free"))
 }
@@ -67,21 +71,23 @@ func TestWorldChannel_FailsClosedWhenNoCapacityAnywhere(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 
-	node, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5003, "10", testZoneId)
+	node, placement, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5003, "10", testZoneId)
 	assert.False(t, ok)
 	assert.Equal(t, "", node)
+	assert.Nil(t, placement)
 
 	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5003))
 	assert.Equal(t, "", gs, "没占到名额就不能留下映射")
 }
 
-// Agones 关闭时完全惰性:原样返回首选节点,不写任何映射。
+// Agones 关闭时完全惰性:原样返回首选节点,没有名额,不写任何映射。
 func TestWorldChannel_InertWhenAgonesDisabled(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 
-	node, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5004, "10", testZoneId)
+	node, placement, ok := ReserveAgonesRoomForWorldChannel(context.Background(), sc, 5004, "10", testZoneId)
 	assert.True(t, ok)
 	assert.Equal(t, "10", node)
+	assert.Nil(t, placement)
 
 	gs, _ := sc.Redis.Get(sceneAgonesGsKey(5004))
 	assert.Equal(t, "", gs)

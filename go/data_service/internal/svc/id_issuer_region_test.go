@@ -42,6 +42,6 @@ func TestNewIdIssuer_RegionAccepted(t *testing.T) {
 		c.Mode = tc.mode
 		c.IdSegment.Issuer.Region = tc.region
 		_, err := NewIdIssuer(c)
-		require.ErrorContains(t, err, "PrimaryEtcd and SecondaryEtcd are both required", "mode=%q region=%d", tc.mode, tc.region)
+		require.ErrorContains(t, err, "PrimaryEtcd, SecondaryEtcd and RegistryEtcd are all required", "mode=%q region=%d", tc.mode, tc.region)
 	}
 }

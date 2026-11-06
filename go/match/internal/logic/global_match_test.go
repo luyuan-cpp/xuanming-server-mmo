@@ -41,7 +41,7 @@ func TestOutcomeCreateResponseRequiresOriginalInstanceAndAdoptedVersion(t *testi
 			createBattleFn = func(string, *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 				return &battlepb.CreateBattleResponse{BattleId: test.id, TargetInstanceId: test.instance, AdoptedOutcomeProtocolVersion: test.adopted}, nil
 			}
-			err := createBattle(discovery.NodeEntry{Endpoint: "fixture"}, req)
+			_, err := createBattle(discovery.NodeEntry{Endpoint: "fixture"}, req)
 			if test.good {
 				require.NoError(t, err)
 			} else {
@@ -85,7 +85,7 @@ func globalCandidate(pid, queued, now uint64, first, second uint32) *pb.MatchAut
 		p.Receipts = append(p.Receipts, &pb.NetworkProbeReceipt{Grant: &pb.NetworkProbeGrant{PlayerId: pid, PhysicalRegion: region, ExpiresAtMs: now + 1000}, RttMs: rtt, SampleCount: 3, MeasuredAtMs: now, ExpiresAtMs: now + 1000})
 	}
 	b, _ := proto.Marshal(p)
-	return &pb.MatchAuthorityTicketRecord{PlayerId: pid, ZoneId: 1, Mode: 3, ConfigId: 1, TeamSize: 2, State: 1, EnqueuedMs: queued, NetworkProfile: b, RatingCenti: 150000, ExpiresMs: now + 1000, PreferredRegion: authority.PreferredRegion(p, now)}
+	return &pb.MatchAuthorityTicketRecord{PlayerId: pid, ZoneId: 1, Mode: 3, ConfigId: 1, TeamSize: 2, State: 1, EnqueuedMs: queued, NetworkProfile: b, RatingCenti: 150000, ExpiresMs: now + 1000}
 }
 
 // 按池撮合的单位输入与成组(global_pool_matcher.go):生产代码 poolUnitInput / poolPolicy 原样参与,
@@ -137,7 +137,7 @@ func TestPoolUnitInputIntersectsMemberLatency(t *testing.T) {
 	require.Equal(t, uint64(2), team.ID)
 	require.Equal(t, uint64(5), team.EnqueuedMs, "整队按 launch 入队时刻排队")
 	require.Equal(t, []uint64{1, 2}, team.Players)
-	require.Zero(t, team.RatingCenti, "整队不参加计分模式")
+	require.Equal(t, int64(150000), team.RatingCenti, "整队的队伍分 = 成员平均分 + 组队加成（本夹具加成为 0）")
 
 	far, near := globalCandidate(3, 0, n, 250, 20), globalCandidate(4, 0, n, 20, 250)
 	_, ok = poolUnitInput(s, poolUnit{tickets: []*pb.MatchAuthorityTicketRecord{far, near}, launch: launch}, n)
@@ -253,7 +253,4 @@ func TestGlobalJoinRejectsMalformedIdentityBeforeAnySQLRead(t *testing.T) {
 	s := &svc.ServiceContext{Authority: &authority.Store{}}
 	l := NewJoinQueueLogic(context.Background(), s)
 	for _, request := range []string{"", "bad", uuid.Nil.String(), "fF000000-0000-0000-0000-000000000001"} {
-		_, e := globalJoin(l, &pb.JoinQueueRequest{PlayerId: 1, RequestId: request}, 2)
-		require.Equal(t, codes.InvalidArgument, status.Code(e))
-	}
-}
+		_, e := globalJoin(l, &pb.JoinQueueRequest{PlayerId: 1, RequestId: request}, 

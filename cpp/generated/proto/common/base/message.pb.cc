@@ -3408,11 +3408,11 @@ constexpr NodeHandshakeRequest::ParseTableT_ NodeHandshakeRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -3422,7 +3422,10 @@ constexpr NodeHandshakeRequest::ParseTableT_ NodeHandshakeRequest::InternalGener
       ::_pbi::TcParser::GetTable<::NodeHandshakeRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // string expected_peer_uuid = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.expected_peer_uuid_)}},
       // string version = 1;
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -3433,7 +3436,7 @@ constexpr NodeHandshakeRequest::ParseTableT_ NodeHandshakeRequest::InternalGener
         PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.token_)}},
       // .NodeInfo self_node = 3;
       {::_pbi::TcParser::FastMtS1,
-       {26, 2, 0,
+       {26, 3, 0,
         PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.self_node_)}},
     }}, {{
       65535, 65535
@@ -3443,7 +3446,9 @@ constexpr NodeHandshakeRequest::ParseTableT_ NodeHandshakeRequest::InternalGener
       // string token = 2;
       {PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.token_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .NodeInfo self_node = 3;
-      {PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.self_node_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.self_node_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string expected_peer_uuid = 4;
+      {PROTOBUF_FIELD_OFFSET(NodeHandshakeRequest, _impl_.expected_peer_uuid_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3453,10 +3458,11 @@ constexpr NodeHandshakeRequest::ParseTableT_ NodeHandshakeRequest::InternalGener
         #endif
     }},
     {{
-      "\24\7\5\0\0\0\0\0"
+      "\24\7\5\0\22\0\0\0"
       "NodeHandshakeRequest"
       "version"
       "token"
+      "expected_peer_uuid"
     }},
   };
 }
@@ -3470,6 +3476,9 @@ inline constexpr NodeHandshakeRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         token_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        expected_peer_uuid_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         self_node_{nullptr} {}
@@ -3704,12 +3713,14 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::NodeHandshakeRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::NodeHandshakeRequest, _impl_.version_),
         PROTOBUF_FIELD_OFFSET(::NodeHandshakeRequest, _impl_.token_),
         PROTOBUF_FIELD_OFFSET(::NodeHandshakeRequest, _impl_.self_node_),
+        PROTOBUF_FIELD_OFFSET(::NodeHandshakeRequest, _impl_.expected_peer_uuid_),
         0,
         1,
+        3,
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::NodeHandshakeResponse, _impl_._has_bits_),
@@ -3769,10 +3780,10 @@ static const ::_pbi::MigrationSchema
         {109, sizeof(::MyNestedMessage)},
         {116, sizeof(::ClientRequest)},
         {129, sizeof(::NodeHandshakeRequest)},
-        {138, sizeof(::NodeHandshakeResponse)},
-        {145, sizeof(::GateTokenPayload)},
-        {160, sizeof(::ClientTokenVerifyRequest)},
-        {167, sizeof(::ClientTokenVerifyResponse)},
+        {140, sizeof(::NodeHandshakeResponse)},
+        {147, sizeof(::GateTokenPayload)},
+        {162, sizeof(::ClientTokenVerifyRequest)},
+        {169, sizeof(::ClientTokenVerifyResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3842,19 +3853,20 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fmessage_2eproto[] A
     "sted_int32_field\030\001 \001(\005\022\032\n\022nested_int64_f"
     "ield\030\002 \001(\003\"^\n\rClientRequest\022\n\n\002id\030\001 \001(\004\022"
     "\017\n\007service\030\002 \001(\t\022\016\n\006method\030\003 \001(\t\022\014\n\004body"
-    "\030\004 \001(\014\022\022\n\nmessage_id\030\005 \001(\r\"T\n\024NodeHandsh"
+    "\030\004 \001(\014\022\022\n\nmessage_id\030\005 \001(\r\"p\n\024NodeHandsh"
     "akeRequest\022\017\n\007version\030\001 \001(\t\022\r\n\005token\030\002 \001"
-    "(\t\022\034\n\tself_node\030\003 \001(\0132\t.NodeInfo\"]\n\025Node"
-    "HandshakeResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022\034\n\tpeer_node\030\002 \001(\0132\t.N"
-    "odeInfo\"\230\001\n\020GateTokenPayload\022\024\n\014gate_nod"
-    "e_id\030\001 \001(\r\022\017\n\007zone_id\030\002 \001(\r\022\030\n\020expire_ti"
-    "mestamp\030\003 \001(\003\022\030\n\020hmac_session_key\030\004 \001(\014\022"
-    "\021\n\tplayer_id\030\005 \001(\004\022\026\n\016target_zone_id\030\006 \001"
-    "(\r\">\n\030ClientTokenVerifyRequest\022\017\n\007payloa"
-    "d\030\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\";\n\031ClientToke"
-    "nVerifyResponse\022\017\n\007success\030\001 \001(\010\022\r\n\005erro"
-    "r\030\002 \001(\tB\rZ\013common/baseb\006proto3"
+    "(\t\022\034\n\tself_node\030\003 \001(\0132\t.NodeInfo\022\032\n\022expe"
+    "cted_peer_uuid\030\004 \001(\t\"]\n\025NodeHandshakeRes"
+    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
+    "ssage\022\034\n\tpeer_node\030\002 \001(\0132\t.NodeInfo\"\230\001\n\020"
+    "GateTokenPayload\022\024\n\014gate_node_id\030\001 \001(\r\022\017"
+    "\n\007zone_id\030\002 \001(\r\022\030\n\020expire_timestamp\030\003 \001("
+    "\003\022\030\n\020hmac_session_key\030\004 \001(\014\022\021\n\tplayer_id"
+    "\030\005 \001(\004\022\026\n\016target_zone_id\030\006 \001(\r\">\n\030Client"
+    "TokenVerifyRequest\022\017\n\007payload\030\001 \001(\014\022\021\n\ts"
+    "ignature\030\002 \001(\014\";\n\031ClientTokenVerifyRespo"
+    "nse\022\017\n\007success\030\001 \001(\010\022\r\n\005error\030\002 \001(\tB\rZ\013c"
+    "ommon/baseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto_deps[3] = {
@@ -3866,7 +3878,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fmessage_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto = {
     false,
     false,
-    2150,
+    2178,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fmessage_2eproto,
     "proto/common/base/message.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto_once,
@@ -8197,7 +8209,7 @@ void ClientRequest::InternalSwap(ClientRequest* PROTOBUF_RESTRICT PROTOBUF_NONNU
 void NodeHandshakeRequest::clear_self_node() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.self_node_ != nullptr) _impl_.self_node_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 NodeHandshakeRequest::NodeHandshakeRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -8215,7 +8227,8 @@ PROTOBUF_NDEBUG_INLINE NodeHandshakeRequest::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         version_(arena, from.version_),
-        token_(arena, from.token_) {}
+        token_(arena, from.token_),
+        expected_peer_uuid_(arena, from.expected_peer_uuid_) {}
 
 NodeHandshakeRequest::NodeHandshakeRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -8232,7 +8245,7 @@ NodeHandshakeRequest::NodeHandshakeRequest(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.self_node_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.self_node_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.self_node_)
                 : nullptr;
 
@@ -8243,7 +8256,8 @@ PROTOBUF_NDEBUG_INLINE NodeHandshakeRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         version_(arena),
-        token_(arena) {}
+        token_(arena),
+        expected_peer_uuid_(arena) {}
 
 inline void NodeHandshakeRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -8262,6 +8276,7 @@ inline void NodeHandshakeRequest::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.version_.Destroy();
   this_._impl_.token_.Destroy();
+  this_._impl_.expected_peer_uuid_.Destroy();
   delete this_._impl_.self_node_;
   this_._impl_.~Impl_();
 }
@@ -8300,7 +8315,7 @@ PROTOBUF_NOINLINE void NodeHandshakeRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.version_.ClearNonDefaultToEmpty();
     }
@@ -8308,6 +8323,9 @@ PROTOBUF_NOINLINE void NodeHandshakeRequest::Clear() {
       _impl_.token_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.expected_peer_uuid_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.self_node_ != nullptr);
       _impl_.self_node_->Clear();
     }
@@ -8356,10 +8374,20 @@ PROTOBUF_NOINLINE void NodeHandshakeRequest::Clear() {
   }
 
   // .NodeInfo self_node = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *this_._impl_.self_node_, this_._impl_.self_node_->GetCachedSize(), target,
         stream);
+  }
+
+  // string expected_peer_uuid = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_expected_peer_uuid().empty()) {
+      const ::std::string& _s = this_._internal_expected_peer_uuid();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "NodeHandshakeRequest.expected_peer_uuid");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -8387,7 +8415,7 @@ PROTOBUF_NOINLINE void NodeHandshakeRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // string version = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_version().empty()) {
@@ -8402,8 +8430,15 @@ PROTOBUF_NOINLINE void NodeHandshakeRequest::Clear() {
                                         this_._internal_token());
       }
     }
-    // .NodeInfo self_node = 3;
+    // string expected_peer_uuid = 4;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_expected_peer_uuid().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_expected_peer_uuid());
+      }
+    }
+    // .NodeInfo self_node = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.self_node_);
     }
@@ -8426,7 +8461,7 @@ void NodeHandshakeRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_version().empty()) {
         _this->_internal_set_version(from._internal_version());
@@ -8446,6 +8481,15 @@ void NodeHandshakeRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_expected_peer_uuid().empty()) {
+        _this->_internal_set_expected_peer_uuid(from._internal_expected_peer_uuid());
+      } else {
+        if (_this->_impl_.expected_peer_uuid_.IsDefault()) {
+          _this->_internal_set_expected_peer_uuid("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(from._impl_.self_node_ != nullptr);
       if (_this->_impl_.self_node_ == nullptr) {
         _this->_impl_.self_node_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.self_node_);
@@ -8475,6 +8519,7 @@ void NodeHandshakeRequest::InternalSwap(NodeHandshakeRequest* PROTOBUF_RESTRICT 
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.version_, &other->_impl_.version_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_, &other->_impl_.token_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.expected_peer_uuid_, &other->_impl_.expected_peer_uuid_, arena);
   swap(_impl_.self_node_, other->_impl_.self_node_);
 }
 

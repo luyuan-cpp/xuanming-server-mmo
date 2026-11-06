@@ -33,6 +33,8 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
+#include "modules/gain_block/gain_block_service.h"  // 单玩家物品获取封禁(设计 §2.2)的判定与状态
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "muduo/base/Logging.h"             // Logger::setOutput:抓 metric= 对账行(评审 M4 的缺口)
 #include "network/node_utils.h"             // InstallLocalNodeInfo / GetNodeInfo
 #include "node/system/grpc_call_deadline.h" // 在途期限从 PlayerInboxNodeService 的 deadline 派生
@@ -56,6 +58,7 @@
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"         // UnregisterPlayer
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/common/component/player_battle_result_comp.pb.h" // PlayerBattleResultComp:战斗结算域的持久前置
 #include "proto/common/component/player_network_comp.pb.h" // PlayerSessionSnapshotComp
 #include "proto/player_inbox/player_inbox.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -84,6 +87,8 @@ namespace
 	constexpr uint32_t kBlockType = player_inbox::PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN;
 	constexpr uint32_t kUnblockType = player_inbox::PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN;
 	constexpr uint32_t kDebtType = player_inbox::PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT;
+	constexpr uint32_t kBlockItemType = player_inbox::PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN;
+	constexpr uint32_t kUnblockItemType = player_inbox::PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN;
 	// 本二进制不认识的类型(新类型先于 scene 升级被启用的版本错位)。proto3 枚举是开放的,线上可以出现。
 	constexpr uint32_t kUnknownType = 99;
 
@@ -203,6 +208,14 @@ namespace
 	player_inbox::PlayerInboxItem BlockGold(uint64_t seq, uint64_t requestId)
 	{
 		return MakeItem(seq, kBlockType, requestId, GainPayload(kGold));
+	}
+
+	// 单玩家物品获取封禁 / 解封的条目(载荷只有配置号)。
+	player_inbox::PlayerInboxItem ItemGainItem(uint64_t seq, uint32_t msgType, uint64_t requestId, uint32_t itemConfigId)
+	{
+		player_inbox::GmItemGainPayload payload;
+		payload.set_item_config_id(itemConfigId);
+		return MakeItem(seq, msgType, requestId, payload.SerializeAsString());
 	}
 
 	// 服务端给已投递的行挂上作废指令后再投(设计 §7.9):协议上载荷为空。
@@ -570,7 +583,11 @@ namespace
 			tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kTestPlayerId);
 			tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
 			tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+			// 单玩家物品获取封禁表(GM 物品处置的效果状态)同样只由加载创建,这里是测试的创建点。
+			tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player);
 			tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player, ledger);
+			// 近期战斗结果同属持久组件(battle-result-recovery.md §4.3):战斗结算域的用例要它在场,缺了结算整笔 DEFER。
+			tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player);
 			// 收件箱只在存盘带归属围栏的实体上消费(player_mutability::HasFencedOwnership)。
 			tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = epoch;
 			tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, admissionGeneration_, std::uint64_t{1});
@@ -814,6 +831,74 @@ TEST_F(PlayerInboxSystemTest, FetchAndAckRequestsCarryOwnerEpochAndSceneNodeId)
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_REJECTED,
 				   static_cast<uint32_t>(kPlayerInboxPayloadInvalid), 1001);
+}
+
+// ── 单玩家物品获取封禁(设计 §2.2)─────────────────────────────────────────
+
+// GM 物品封锁 / 解封与货币封锁走同一条有序流:严格按 seq 执行(同一配置先封后解 = 结果是解开),
+// 效果与记账同一帧写入,落盘之前不确认;Ack 逐条带 request_id。同一配置再封一次(GM 用新 request_id 重下)
+// 天然幂等:表里仍只有一条。
+TEST_F(PlayerInboxSystemTest, ItemGainBansApplyInSeqOrderAndAckOnlyAfterTheSave)
+{
+	constexpr uint32_t kItemA = 10;
+	constexpr uint32_t kItemB = 11;
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+
+	PlayerInboxSystem::OnFetchReply(
+		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
+		FetchReplyFor(fetch, {ItemGainItem(10, kBlockItemType, 2001, kItemA), ItemGainItem(11, kBlockItemType, 2002, kItemB),
+							  ItemGainItem(12, kUnblockItemType, 2003, kItemA), ItemGainItem(13, kBlockItemType, 2004, kItemB)}));
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player_, kItemA)) << "seq 10 封、seq 12 解:按 seq 执行,结果是解开";
+	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player_, kItemB));
+	const auto &banned = tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player_).item_config_ids();
+	EXPECT_EQ((std::vector<uint32_t>{kItemB}), std::vector<uint32_t>(banned.begin(), banned.end()))
+		<< "seq 13 重复封同一配置:天然幂等,不重复登记";
+	EXPECT_FALSE(GoldBlocked(player_)) << "物品封禁不碰货币";
+	EXPECT_EQ(13u, DecidedThrough(player_)) << "效果与记账同一帧";
+	EXPECT_EQ(1, g_persistCalls) << "本批有新记账:请求一次存盘";
+	EXPECT_TRUE(g_sentAcks.empty()) << "落盘之前不确认";
+
+	player_inbox::AckPlayerInboxRequest ack;
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_EQ(4, ack.decisions_size());
+	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2001);
+	ExpectDecision(ack.decisions(1), 11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2002);
+	ExpectDecision(ack.decisions(2), 12, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2003);
+	ExpectDecision(ack.decisions(3), 13, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2004);
+	PlayerInboxSystem::OnAckReply(ack.player_id(), static_cast<uint32_t>(ack.domain()), ack.correlation_id(), AckReplyFor(ack));
+	ASSERT_NE(nullptr, GmState(player_));
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
+}
+
+// 存档里的账本已记了「seq 10 封 A、seq 11 解 A」,封禁表(与账本同一次落盘)里也就没有 A。重登 / 换节点后
+// 服务端把 seq 10 原样重投(上次确认的回包丢了):按账本回放原结局并确认,执行器不再跑 —— 若重做,
+// 已经解开的 A 会被重新封上。配置号为 0 的新条目是确定性 REJECTED(reason = tip),不改封禁表。
+TEST_F(PlayerInboxSystemTest, RedeliveredItemBanReplaysFromTheLedgerWithoutReexecuting)
+{
+	constexpr uint32_t kItemA = 10;
+	ASSERT_NO_FATAL_FAILURE(SeedLedger(
+		11, {MakeDecision(10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 2001, kBlockItemType),
+			 MakeDecision(11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 2002, kUnblockItemType)}));
+	CompleteFakeSave(player_); // 这份账本就是从存档加载的:已落盘
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	EXPECT_EQ(11u, fetch.consumer_decided_through());
+
+	PlayerInboxSystem::OnFetchReply(
+		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
+		FetchReplyFor(fetch, {ItemGainItem(10, kBlockItemType, 2001, kItemA), ItemGainItem(12, kBlockItemType, 2003, 0)}));
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player_, kItemA)) << "seq ≤ 水位的重投按账本回放,不再执行";
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player_).item_config_ids_size())
+		<< "配置号为 0 的条目被拒,不写封禁表";
+	EXPECT_EQ(12u, DecidedThrough(player_)) << "坏条目记终态,不卡住流";
+
+	player_inbox::AckPlayerInboxRequest ack;
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_EQ(2, ack.decisions_size());
+	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2001);
+	ExpectDecision(ack.decisions(1), 12, player_inbox::PLAYER_INBOX_OUTCOME_REJECTED,
+				   static_cast<uint32_t>(kPlayerInboxPayloadInvalid), 2003);
 }
 
 // ── 单飞与关联号(设计 §7.4、§7.11)─────────────────────────────────────────
@@ -1325,6 +1410,46 @@ TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAn
 	EXPECT_EQ(10u, DecidedThrough(player_));
 	EXPECT_EQ(1u, g_sentFetches.size()) << "停用对当前实体一直有效,实体重建后才重拉";
 	EXPECT_EQ(1u, g_sentAcks.size());
+}
+
+// 停用对当前实体一直有效、不会自愈:停用那一刻打一条 ERROR,之后每 kHaltedDomainRelogIntervalMs 补打同一个
+// metric=inbox_halted,[10m] 日志告警在实体存活期间一直亮着(混版本持久字段保护第 6 批对抗复核)。节拍本身由
+// player_inbox_rules.h 的 static_assert 钉住;这里钉接线与「差 1ms 不到点、到点只打一条」。
+TEST_F(PlayerInboxSystemTest, HaltedDomainRelogsOnTheIntervalWhileTheEntityLives)
+{
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ScopedLogCapture capture;
+	PlayerInboxSystem::OnFetchReply(
+		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
+		FetchReplyFor(fetch, {MakeItem(10, kUnknownType, 1001, "opaque")}));
+	ASSERT_NE(nullptr, GmState(player_));
+	ASSERT_TRUE(GmState(player_)->halted);
+	const auto haltedLines = [] { return CapturedLinesWith({"[PlayerInbox]", "metric=inbox_halted", "reason=unknown_type"}); };
+	const auto relogLines = [] { return CapturedLinesWith({"WARN  ", "[PlayerInbox]", "metric=inbox_halted", "relog=1"}); };
+	EXPECT_EQ(1u, haltedLines()) << "停用那一刻打一条";
+
+	PlayerInboxSystem::Tick();
+	EXPECT_EQ(1u, haltedLines()) << "第一个 tick 只排期";
+	Advance(rules::kHaltedDomainRelogIntervalMs - 1);
+	PlayerInboxSystem::Tick();
+	EXPECT_EQ(1u, haltedLines()) << "差 1ms 不到点";
+	Advance(1);
+	PlayerInboxSystem::Tick();
+	EXPECT_EQ(2u, haltedLines()) << "到点补打一次";
+	EXPECT_EQ(1u, relogLines()) << "补打的那一行是 WARN 并带 relog=1";
+
+	// 按生产节奏每秒 tick 一次走满下一个间隔:只在最后一个 tick 打一条。
+	uint64_t elapsedMs = 0;
+	do
+	{
+		Advance(1000);
+		elapsedMs += 1000;
+		PlayerInboxSystem::Tick();
+	} while (elapsedMs < rules::kHaltedDomainRelogIntervalMs);
+	EXPECT_EQ(2u, relogLines());
+	EXPECT_TRUE(GmState(player_)->halted) << "补打只打日志,不解除停用";
+	EXPECT_EQ(1u, g_sentFetches.size()) << "停用期间不重拉";
 }
 
 // DEFER 之后续做时闸不过:同样丢掉剩下的本地副本,但已定前缀既不丢、也不留到下一批 —— 先确认,再重拉。

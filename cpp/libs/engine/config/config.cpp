@@ -22,6 +22,9 @@ const char *GetNonEmptyEnv(const char *name)
     return value;
 }
 
+// GameConfig.audit_snapshot.sample_per_mille 的缺省值与上限:全量。
+constexpr uint32_t kAuditSnapshotSampleAll = 1000;
+
 // GameConfig.player_inbox.periodic_fetch_minutes 的缺省值(docs/design/player-inbox-service.md §7.3、D14)。
 // proto3 的 uint32 默认是 0,而 0 的含义是"关闭在线兜底",所以缺键时必须由加载器显式写入,不能依赖 proto 默认。
 constexpr uint32_t kDefaultPlayerInboxPeriodicFetchMinutes = 30;
@@ -318,6 +321,37 @@ bool readGameConfig(const std::string &filename, GameConfig &gameConfig)
 			if (inboxNode["periodic_fetch_minutes"])
 			{
 				inboxConfig->set_periodic_fetch_minutes(inboxNode["periodic_fetch_minutes"].as<uint32_t>());
+			}
+		}
+	}
+
+	// 进场、离场的审计快照(modules/snapshot/audit_snapshot_policy.h)。整段或单键缺失都取默认:两个触发点都开、全量。
+	// 抽样千分比超过 1000 拒绝加载:配错的值不能被悄悄当成全量或零。
+	// K8s 的 node-config 由 tools/scripts/k8s_deploy.ps1 从 bin/etc/game_config.yaml 整段复制 audit_snapshot 段。
+	{
+		auto *snapshotConfig = gameConfig.mutable_audit_snapshot();
+		snapshotConfig->set_login_enabled(true);
+		snapshotConfig->set_logout_enabled(true);
+		snapshotConfig->set_sample_per_mille(kAuditSnapshotSampleAll);
+		if (const YAML::Node snapshotNode = root["audit_snapshot"]; snapshotNode)
+		{
+			if (snapshotNode["login_enabled"])
+			{
+				snapshotConfig->set_login_enabled(snapshotNode["login_enabled"].as<bool>());
+			}
+			if (snapshotNode["logout_enabled"])
+			{
+				snapshotConfig->set_logout_enabled(snapshotNode["logout_enabled"].as<bool>());
+			}
+			if (snapshotNode["sample_per_mille"])
+			{
+				const auto perMille = snapshotNode["sample_per_mille"].as<uint32_t>();
+				if (perMille > kAuditSnapshotSampleAll)
+				{
+					LOG_ERROR << "game_config audit_snapshot.sample_per_mille=" << perMille << " exceeds " << kAuditSnapshotSampleAll;
+					return false;
+				}
+				snapshotConfig->set_sample_per_mille(perMille);
 			}
 		}
 	}

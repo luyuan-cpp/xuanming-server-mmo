@@ -390,3 +390,36 @@ func TestClientRpcKindsReadRegisteredExtension(t *testing.T) {
 		})
 	}
 }
+
+// gate 上行白名单(IsClientMessageId)只收客户端能发起的形态:未标注(= REQUEST)与 ONE_WAY 收,PUSH 与 SERVER_ONLY 不收
+// (docs/design/client-rpc-callback.md §7 R4)。按方法上的 option 读出形态再判定。本测只测判定;C++ 生成器按它收号的接线
+// 由 generator/cpp 的 TestClientAllowlistCases* 覆盖。
+func TestClientRpcKindAcceptsClientUpstreamOnlyForClientInitiatedKinds(t *testing.T) {
+	_, unmarked := clientRpcRegressionService()
+	kind, explicit, err := ReadClientRpcKind(unmarked.MethodDescriptorProto)
+	if err != nil || explicit || !kind.AcceptsClientUpstream() {
+		t.Fatalf("未标注的方法按 REQUEST 进白名单: kind=%s explicit=%v err=%v", kind, explicit, err)
+	}
+
+	for _, test := range []struct {
+		kind ClientRpcKind
+		want bool
+	}{
+		{ClientRpcRequest, true},
+		{ClientRpcOneWay, true},
+		{ClientRpcPush, false},
+		{ClientRpcServerOnly, false},
+	} {
+		t.Run(test.kind.String(), func(t *testing.T) {
+			_, method := clientRpcRegressionService()
+			clientRpcRegressionSetKind(method, uint64(test.kind))
+			kind, explicit, err := ReadClientRpcKind(method.MethodDescriptorProto)
+			if err != nil || !explicit || kind != test.kind {
+				t.Fatalf("读出的形态不对: kind=%s explicit=%v err=%v, want %s", kind, explicit, err, test.kind)
+			}
+			if got := kind.AcceptsClientUpstream(); got != test.want {
+				t.Errorf("%s.AcceptsClientUpstream() = %v, want %v", test.kind, got, test.want)
+			}
+		})
+	}
+}

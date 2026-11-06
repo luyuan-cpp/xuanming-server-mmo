@@ -2,6 +2,11 @@
 #include "engine/core/type_define/player_guid_comp.h"
 #include "battle_lock_reply_shape.h"
 #include "battle_lock_rules.h"
+#include "engine/core/async/coroutine_callback.h"
+#include "core/system/scene_task_scope.h"
+#include <boost/cobalt/task.hpp>
+// 本人近期战斗结果的列表规则(docs/design/battle-result-recovery.md §4.2)。
+#include "battle_result_history.h"
 
 #include <muduo/base/Logging.h>
 #include <muduo/net/EventLoop.h>
@@ -61,6 +66,10 @@
 #include "player/system/player_inbox_system.h"
 #include "player/system/player_inbox_registry.h"
 #include "proto/player_inbox/player_inbox.pb.h"  // PLAYER_INBOX_MSG_BATTLE_SETTLEMENT:按类型规格取载荷上限
+// 近期战斗结果:确认已读前判「此刻能不能改这名玩家」的唯一判定;持久组件与客户端协议。
+#include "player/system/player_mutability.h"
+#include "proto/common/component/player_battle_result_comp.pb.h"
+#include "proto/scene/player_battle_result.pb.h"
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
 #include "services/battle/constants/turn_battle_constants.h"
@@ -131,6 +140,7 @@ namespace
 	// 锁写入 / 续期重试的调度器注入点(见 PlayerBattleSystem::SetLockRetrySchedulerForTest)。
 	// 生产为 nullptr = 当前线程的 EventLoop::runAfter(ScheduleLockWriteRetry)。
 	PlayerBattleSystem::LockRetrySchedulerFn gLockRetryScheduler = nullptr;
+	PlayerBattleSystem::LockScriptSender gLockScriptSender = nullptr;
 
 
 	// 战斗锁与上下文都是玩家域键,走 tlsPlayerRedis。这里为真只说明至少一个节点连着,这名玩家所在的 slot 不一定可用,
@@ -178,12 +188,12 @@ namespace
 	//  ① 拿到整数应答(1 或 0 都是结论);
 	//  ② 重发前门禁放弃(实体在本节点,但这一局在它身上已不是 FIGHTING);
 	//  ③ 放弃重试:次数 / 预算用尽,或当前线程没有 loop(ScheduleLockWriteRetry 返回 false);
-	//  ④ 命令没发出去(或 Redis 未就绪)且排不上重试 —— 与 ③ 同一个出口(RetryRenewOrEndChain)。
+	//  ④ 命令没发出去(或 Redis 未就绪)且排不上重试 —— 与 ③ 同一个出口。
+	//  ⑤ Scene 作用域停止本地等待。
 	// 排上重试不是终态,登记留给下一次发送。登记在首发之前、全程单线程,同一时刻同键至多一条链,按键摘不会摘掉别的链。
 	// 所有权与线程模型:thread_local,scene loop 线程独占(发送函数、hiredis 回调、定时器都在 loop 线程上),
-	// 不持久化、不跨线程。节点停机时没开火的定时器随 loop 一起丢弃,残留登记随线程结束销毁;
-	// 停机路径先 tlsPlayerRedis.Shutdown()(空应答回调在 loop 线程上跑完),再退线程,回调碰不到已销毁的集合。
-	// 只用于去重,不参与任何正确性判定;但漏摘会让同键之后的续期首发一直让路、续期再也发不出去,所以上面四个终态缺一不可。
+	// 不持久化、不跨线程。任务的 RAII 在终态或本地停止时摘登记;晚定时器和 Redis 回复不再恢复任务。
+	// 只用于去重,不参与任何正确性判定;但漏摘会让同键之后的续期首发一直让路、续期再也发不出去,所以上面终态缺一不可。
 	using RenewChainKey = std::pair<uint64_t, uint64_t>; // (player_id, battle_id)
 	thread_local std::set<RenewChainKey> gRenewChainsInFlight;
 
@@ -249,7 +259,7 @@ namespace
 		std::function<void()> fire = [resend = std::move(resend), next]() { resend(next); };
 		if (gLockRetryScheduler != nullptr)
 		{
-			gLockRetryScheduler(delayMs, std::move(fire));
+			return gLockRetryScheduler(delayMs, std::move(fire));
 		}
 		else
 		{
@@ -524,144 +534,108 @@ namespace
 		return (inBattle != nullptr && inBattle->battle_id() == battleId) ? inBattle : nullptr;
 	}
 
-	// 写战斗锁 + 伴生 ctx(PrepareBattle 首发与重试共用,一条 Lua:kWriteBattleLockScript)。
-	// 每次发之前按实体现状取值:实体仍在本节点、InBattleComp 仍是这一局才写 —— 重试时备战可能已被取消、结算或判废,
-	// 那时再写会复活一把已删的锁。TTL 与 ctx 都按此刻的组件算:确认若已到达,重试写的就是 FIGHTING 与正式期限。
-	// 没问到(空应答 / ERROR / Redis 未就绪 / 命令没发出去)时有界重试。
-	// 不去重(只有续期去重,gRenewChainsInFlight 的说明):每局只有 PrepareBattle 一次首发。
-	// 返回这一次算出的 TTL 秒(只给调用方打日志);门禁不过时返回 0。
-	uint64_t WriteBattleLock(const uint64_t playerId, const uint64_t battleId, LockWriteAttempt attempt = {})
+	// 仅适配这三条 Lua 的自有结果，不把空回复、错误或本地停止当成整数结论。
+	struct LockReply
 	{
-		bool entityPresent = false;
-		const auto* inBattle = CurrentFreezeOf(playerId, battleId, entityPresent);
-		if (inBattle == nullptr)
-		{
-			if (attempt.number > 1)
-			{
-				LOG_INFO << "[PlayerBattle] Battle lock write retry abandoned: freeze no longer belongs to this battle, player_id="
-						 << playerId << " battle_id=" << battleId;
-			}
-			return 0;
-		}
-		attempt = StartLockWriteAttempt(attempt);
-		const uint64_t ttlSec = LockTtlSecOf(*inBattle, TimeSystem::NowMillisecondsUTC());
-		// 伴生 ctx(同 TTL):玩家完整下线再登录 / 备战到期后迟到的确认,靠它重建 InBattleComp
-		// (battle_node_id 只有这里知道,BattleConfirmedEvent 不带)
-		const std::string ctxPayload = SerializeBattleCtx(*inBattle);
-		NotifyLockScriptObserver(kLockOpWrite, playerId, battleId, ttlSec, ctxPayload);
-		const auto resend = [playerId, battleId](const LockWriteAttempt next) { WriteBattleLock(playerId, battleId, next); };
-		if (!RedisReady())
-		{
-			LOG_WARN << "[PlayerBattle] Battle lock write deferred(Redis disconnected), player_id=" << playerId
-					 << " battle_id=" << battleId << "(match queue check and freeze restore are blind until it lands;InBattleComp remains authoritative on this entity)";
-			ScheduleLockWriteRetry(kLockOpWrite, playerId, battleId, attempt, resend);
-			return ttlSec;
-		}
-		const int rc = tlsPlayerRedis.command(
-			[playerId, battleId, attempt, resend](hiredis::Hiredis*, redisReply* reply) {
-				const auto shape = battle_lock::ReplyShapeOf(reply);
-				if (battle_lock::IsLockWriteAnswered(shape))
-				{
-					return;
-				}
-				LOG_WARN << "[PlayerBattle] Battle lock write unanswered, player_id=" << playerId << " battle_id=" << battleId
-						 << " reply=" << battle_lock::ReplyShapeName(shape)
-						 << " err=" << std::string(battle_lock::ReplyText(reply));
-				ScheduleLockWriteRetry(kLockOpWrite, playerId, battleId, attempt, resend);
-			},
-			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
-			kWriteBattleLockScript, playerId, playerId, battleId, ttlSec, ctxPayload.data(), ctxPayload.size());
-		if (rc != REDIS_OK)
-		{
-			// 命令没发出去时回调永远不会来。
-			ScheduleLockWriteRetry(kLockOpWrite, playerId, battleId, attempt, resend);
-		}
-		return ttlSec;
+		battle_lock::ReplyShape shape = battle_lock::ReplyShape::kNoReply;
+		int64_t integer = 0;
+		std::string text;
+	};
+
+	auto AwaitLockReply(muduo::net::EventLoop& loop, const char* op, uint64_t playerId,
+		uint64_t battleId, uint64_t ttlSec, const std::string& payload)
+	{
+		return loop_async::AwaitCallback<LockReply>(loop,
+			[op, playerId, battleId, ttlSec, payload](auto done) {
+				auto receive = [done](redisReply* reply) {
+					done(LockReply{battle_lock::ReplyShapeOf(reply), reply ? reply->integer : 0,
+						std::string(battle_lock::ReplyText(reply))});
+				};
+				if (gLockScriptSender)
+					return gLockScriptSender(op, playerId, battleId, ttlSec, payload, receive) == REDIS_OK;
+				if (!RedisReady()) return false;
+				return tlsPlayerRedis.command([receive](hiredis::Hiredis*, redisReply* reply) { receive(reply); },
+					(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
+					op == kLockOpWrite ? kWriteBattleLockScript : kRenewBattleLockIfMatchScript,
+					playerId, playerId, battleId, ttlSec, payload.data(), payload.size()) == REDIS_OK;
+			}, LockReply{});
 	}
 
-	// 续期没问到(Redis 未就绪 / 命令没发出去 / 空应答 / ERROR):排下一次;排不上(放弃重试)就是这条续期链的终态,
-	// 摘在途登记(gRenewChainsInFlight 的 ③④)。只给 ConfirmBattleLockIfMatch 用。
-	void RetryRenewOrEndChain(const uint64_t playerId, const uint64_t battleId, const LockWriteAttempt attempt,
-							  std::function<void(LockWriteAttempt)> resend)
+	void ResolveRebuiltFreezeRecheck(uint64_t playerId, uint64_t battleId, uint32_t attemptNumber,
+		battle_lock::ReplyShape shape, int64_t integer);
+
+	// 一次写入链的门禁、发送、回复、原预算退避在同一函数。续期账本只负责同局去重。
+	boost::cobalt::task<void> RunLockWrites(muduo::net::EventLoop& loop, const char* op,
+		uint64_t playerId, uint64_t battleId, uint64_t deadlineMs, uint64_t ttlSec, std::string payload)
 	{
-		if (!ScheduleLockWriteRetry(kLockOpRenew, playerId, battleId, attempt, std::move(resend)))
+		const bool renew = op == kLockOpRenew;
+		if (renew && !TryBeginRenewChain(playerId, battleId)) co_return;
+		struct RenewalGuard
 		{
-			EndRenewChain(playerId, battleId);
+			uint64_t playerId, battleId;
+			bool active;
+			~RenewalGuard() { if (active) EndRenewChain(playerId, battleId); }
+		} renewal{playerId, battleId, renew};
+		auto attempt = StartLockWriteAttempt({});
+		for (;;)
+		{
+			// 组件只在这段同步门禁内借用，任何 await 都只保存 ID 和自有字节。
+			if (op == kLockOpWrite || attempt.number > 1)
+			{
+				bool present = false;
+				const auto* current = CurrentFreezeOf(playerId, battleId, present);
+				if (renew)
+				{
+					if (present && (!current || current->state() != IN_BATTLE_STATE_FIGHTING)) co_return;
+					if (present) { deadlineMs = current->deadline_ms(); payload = SerializeBattleCtx(*current); }
+				}
+				else
+				{
+					if (!current) co_return;
+					ttlSec = LockTtlSecOf(*current, TimeSystem::NowMillisecondsUTC());
+					payload = SerializeBattleCtx(*current);
+				}
+			}
+			if (renew) ttlSec = FightingLockTtlSecFor(deadlineMs, TimeSystem::NowMillisecondsUTC());
+			NotifyLockScriptObserver(op, playerId, battleId, ttlSec, payload);
+			auto reply = co_await AwaitLockReply(loop, op, playerId, battleId, ttlSec, payload);
+			if (!reply) co_return;
+			if (battle_lock::IsLockWriteAnswered(reply->shape))
+			{
+				if (op == kLockOpRebuildRecheck)
+					ResolveRebuiltFreezeRecheck(playerId, battleId, attempt.number, reply->shape, reply->integer);
+				else if (renew && reply->integer == 0)
+					LOG_WARN << "[PlayerBattle] Conditional renewal did not match, player_id=" << playerId << " battle_id=" << battleId;
+				co_return;
+			}
+			LOG_WARN << "[PlayerBattle] Lock unanswered op=" << op << " player_id=" << playerId
+				<< " battle_id=" << battleId << " reply=" << battle_lock::ReplyShapeName(reply->shape) << " err=" << reply->text;
+			auto next = co_await loop_async::AwaitCallback<LockWriteAttempt>(loop,
+				[op, playerId, battleId, attempt](auto done) {
+					return ScheduleLockWriteRetry(op, playerId, battleId, attempt, std::move(done));
+				}, LockWriteAttempt{0, attempt.firstSentMs});
+			if (!next || next->number == 0) co_return;
+			attempt = *next;
 		}
 	}
 
-	// 条件续期 + 覆写 ctx(kRenewBattleLockIfMatchScript:锁值 == battleId 才动,只延长不缩短)。
-	// 确认升级、重复确认、离线确认共用:把备战短期限切成冻结到期时刻,并把 FIGHTING 状态落进 ctx 供登录重建。
-	// deadlineMs 是 FIGHTING 的正式期限,TTL 由它按 FightingLockTtlSecFor 算。
-	// 去重(只有续期去重):首发发出之前登记 (player_id, battle_id),同键已有在途续期链就让给它、这一次什么都不发
-	// (DEBUG 留痕,锁脚本观察点也不回调);链的每个终态恰好摘一次登记(gRenewChainsInFlight 的说明)。
-	// 没问到时有界重试;重发前的门禁:
-	//  - 实体在本节点:InBattleComp 必须仍是这一局的 FIGHTING,期限与 ctx 按此刻的组件重算;否则这一局在本节点已收尾,放弃;
-	//  - 实体不在(离线确认,或首发后玩家下线):沿用首发时的期限与 ctx —— 脚本按锁值条件执行且只延长,重发改不坏别的局。
-	// 脚本回 0(锁不在 / 已易主)是结论,不重试,也不补写(kRenewBattleLockIfMatchScript 的说明)。
-	void ConfirmBattleLockIfMatch(const uint64_t playerId, const uint64_t battleId, uint64_t deadlineMs,
-								  std::string ctxPayload, LockWriteAttempt attempt = {})
+	uint64_t WriteBattleLock(uint64_t playerId, uint64_t battleId)
 	{
-		if (attempt.number == 1 && !TryBeginRenewChain(playerId, battleId))
-		{
-			return;
-		}
-		if (attempt.number > 1)
-		{
-			bool entityPresent = false;
-			const auto* inBattle = CurrentFreezeOf(playerId, battleId, entityPresent);
-			if (entityPresent)
-			{
-				if (inBattle == nullptr || inBattle->state() != IN_BATTLE_STATE_FIGHTING)
-				{
-					LOG_INFO << "[PlayerBattle] Conditional renewal retry abandoned: battle no longer fighting on this entity, player_id="
-							 << playerId << " battle_id=" << battleId;
-					EndRenewChain(playerId, battleId); // 终态 ②:门禁放弃
-					return;
-				}
-				deadlineMs = inBattle->deadline_ms();
-				ctxPayload = SerializeBattleCtx(*inBattle);
-			}
-		}
-		attempt = StartLockWriteAttempt(attempt);
-		const uint64_t ttlSec = FightingLockTtlSecFor(deadlineMs, TimeSystem::NowMillisecondsUTC());
-		NotifyLockScriptObserver(kLockOpRenew, playerId, battleId, ttlSec, ctxPayload);
-		const auto resend = [playerId, battleId, deadlineMs, ctxPayload](const LockWriteAttempt next) {
-			ConfirmBattleLockIfMatch(playerId, battleId, deadlineMs, ctxPayload, next);
-		};
-		if (!RedisReady())
-		{
-			LOG_WARN << "[PlayerBattle] Conditional renewal deferred(Redis disconnected), player_id=" << playerId
-					 << " battle_id=" << battleId << "(lock may expire before battle ends until it lands;match queue check is temporarily blind)";
-			RetryRenewOrEndChain(playerId, battleId, attempt, resend);
-			return;
-		}
-		const int rc = tlsPlayerRedis.command(
-			[playerId, battleId, ttlSec, attempt, resend](hiredis::Hiredis*, redisReply* reply) {
-				const auto shape = battle_lock::ReplyShapeOf(reply);
-				if (!battle_lock::IsLockWriteAnswered(shape))
-				{
-					LOG_WARN << "[PlayerBattle] Conditional renewal unanswered, player_id=" << playerId << " battle_id=" << battleId
-							 << " reply=" << battle_lock::ReplyShapeName(shape)
-							 << " err=" << std::string(battle_lock::ReplyText(reply));
-					RetryRenewOrEndChain(playerId, battleId, attempt, resend);
-					return;
-				}
-				EndRenewChain(playerId, battleId); // 终态 ①:整数应答
-				if (reply->integer == 0)
-				{
-					LOG_WARN << "[PlayerBattle] Conditional renewal did not match(lock missing or value mismatch), player_id="
-							 << playerId << " battle_id=" << battleId << " ttl_sec=" << ttlSec;
-				}
-			},
-			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
-			kRenewBattleLockIfMatchScript, playerId, playerId, battleId, ttlSec,
-			ctxPayload.data(), ctxPayload.size());
-		if (rc != REDIS_OK)
-		{
-			// 命令没发出去时回调永远不会来,终态只能在这里判。
-			RetryRenewOrEndChain(playerId, battleId, attempt, resend);
-		}
+		if (!SceneTaskScope::IsAccepting()) return 0;
+		bool present = false;
+		const auto* current = CurrentFreezeOf(playerId, battleId, present);
+		if (!current) return 0;
+		const auto ttl = LockTtlSecOf(*current, TimeSystem::NowMillisecondsUTC());
+		auto& loop = *muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		(void)SceneTaskScope::TryStart(RunLockWrites(loop, kLockOpWrite, playerId, battleId, 0, ttl, {}), "写战斗锁");
+		return ttl;
+	}
+
+	void ConfirmBattleLockIfMatch(uint64_t playerId, uint64_t battleId, uint64_t deadlineMs, std::string payload)
+	{
+		if (!SceneTaskScope::IsAccepting()) return;
+		auto& loop = *muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		(void)SceneTaskScope::TryStart(RunLockWrites(loop, kLockOpRenew, playerId, battleId, deadlineMs, 0, std::move(payload)), "续期战斗锁");
 	}
 
 	// 重建复核(ConfirmRebuiltFreeze)应答的「判定 + 撤销」。只有整数应答是结论:
@@ -718,56 +692,11 @@ namespace
 	// 期限与 ctx 按此刻的组件重算(期间迟到的确认可能已把 PREPARING 升级成 FIGHTING)。
 	// 闭包只捕获 id 与字节,不捕获实体句柄(实体可能已销毁、句柄可能被复用)。
 	// 重试放弃时重建保留,由 reaper 按期限解冻。
-	void ConfirmRebuiltFreeze(const uint64_t playerId, const uint64_t battleId, uint64_t ttlSec, std::string ctxPayload,
-							  LockWriteAttempt attempt = {})
+	void ConfirmRebuiltFreeze(uint64_t playerId, uint64_t battleId, uint64_t ttlSec, std::string payload)
 	{
-		if (attempt.number > 1)
-		{
-			bool entityPresent = false;
-			const auto* current = CurrentFreezeOf(playerId, battleId, entityPresent);
-			if (current == nullptr)
-			{
-				LOG_INFO << "[PlayerBattle] Reconstruction recheck retry abandoned: rebuilt freeze no longer on this node, player_id="
-						 << playerId << " battle_id=" << battleId;
-				return;
-			}
-			ttlSec = LockTtlSecOf(*current, TimeSystem::NowMillisecondsUTC());
-			ctxPayload = SerializeBattleCtx(*current);
-		}
-		attempt = StartLockWriteAttempt(attempt);
-		NotifyLockScriptObserver(kLockOpRebuildRecheck, playerId, battleId, ttlSec, ctxPayload);
-		const auto resend = [playerId, battleId, ttlSec, ctxPayload](const LockWriteAttempt next) {
-			ConfirmRebuiltFreeze(playerId, battleId, ttlSec, ctxPayload, next);
-		};
-		if (!RedisReady())
-		{
-			LOG_WARN << "[PlayerBattle] Reconstruction recheck deferred(Redis disconnected), player_id=" << playerId
-					 << " battle_id=" << battleId << "(retrying;reaper releases the freeze at the deadline if it never lands)";
-			ScheduleLockWriteRetry(kLockOpRebuildRecheck, playerId, battleId, attempt, resend);
-			return;
-		}
-		const int rc = tlsPlayerRedis.command(
-			[playerId, battleId, attempt, resend](hiredis::Hiredis*, redisReply* reply) {
-				const auto shape = battle_lock::ReplyShapeOf(reply);
-				if (!battle_lock::IsLockWriteAnswered(shape))
-				{
-					LOG_WARN << "[PlayerBattle] Reconstruction recheck unanswered, player_id=" << playerId
-							 << " battle_id=" << battleId << " reply=" << battle_lock::ReplyShapeName(shape)
-							 << " err=" << std::string(battle_lock::ReplyText(reply));
-					ScheduleLockWriteRetry(kLockOpRebuildRecheck, playerId, battleId, attempt, resend);
-					return;
-				}
-				ResolveRebuiltFreezeRecheck(playerId, battleId, attempt.number, shape,
-											static_cast<int64_t>(reply->integer));
-			},
-			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
-			kRenewBattleLockIfMatchScript, playerId, playerId, battleId, ttlSec,
-			ctxPayload.data(), ctxPayload.size());
-		if (rc != REDIS_OK)
-		{
-			// 命令没发出去时回调永远不会来。
-			ScheduleLockWriteRetry(kLockOpRebuildRecheck, playerId, battleId, attempt, resend);
-		}
+		if (!SceneTaskScope::IsAccepting()) return;
+		auto& loop = *muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		(void)SceneTaskScope::TryStart(RunLockWrites(loop, kLockOpRebuildRecheck, playerId, battleId, 0, ttlSec, std::move(payload)), "复核战斗锁");
 	}
 
 	// 解析 kGetCtxIfLockMatchScript / kGetLockAndCtxScript 返回的数组元素:
@@ -842,27 +771,6 @@ namespace
 	{
 		const auto* itemRow = ItemTableManager::Instance().FindByIdSilent(configId).first;
 		return itemRow != nullptr && itemRow->battle_usable() != 0;
-	}
-
-	// 结算掉落按 config 汇总:跳过空项,数量夹到 uint32。只给号段预检用。
-	ItemCountMap CollectGainedItems(const ::BattleSettlementData& settlement)
-	{
-		ItemCountMap gained;
-		for (const auto& item : settlement.items_gained())
-		{
-			if (item.item_table_id() == 0 || item.count() == 0)
-			{
-				continue;
-			}
-			// BattleItemEntry.count 是 uint64,ItemCountMap 的值是 uint32:先夹到上限,
-			// 否则高位截断会把一个天文数字变成小数量。同一 config 多行累加时也按上限饱和。
-			const uint64_t clamped =
-				std::min<uint64_t>(item.count(), std::numeric_limits<uint32_t>::max());
-			auto& total = gained[item.item_table_id()];
-			total = static_cast<uint32_t>(
-				std::min<uint64_t>(uint64_t{total} + clamped, std::numeric_limits<uint32_t>::max()));
-		}
-		return gained;
 	}
 
 	// item 号段此刻能不能为掉落铸齐新实例的身份(审计 cpp-economy#0)。
@@ -1725,33 +1633,81 @@ void DropItemsWithoutConfigRow(ItemCountMap& items, const char* side, std::vecto
     }
 }
 
-using SettlementCurrencyGains = std::map<CurrencyType, uint64_t>;
-
-// 新集合优先；只有集合为空才解释旧金币字段。全笔币种/金额/去重校验不产生副作用。
-bool CollectSettlementCurrencyGains(const ::BattleSettlementData& settlement, SettlementCurrencyGains& gains)
+// 掉落里此刻被获得封禁的项(全服或本人:GainBlockService::IsItemGainBlocked,与各入包入口、资产通道同一个判定)。
+// 封禁是终局业务决定:这一项从整笔候选里剔除,这一局不发、解封后也不补发,其余效果照常应用;调用方在应用成功后
+// 逐项记 WARN(metric=battle_settlement_item_blocked)。不剔除的话 BagService 会整批回 kAssetBlocked,整笔 DEFER
+// 让这一局在封禁期间永远到不了 APPLIED、解封后又整笔补发。BagService 的「任一项被封整批拒绝」契约不变,
+// 剔除只在本调用方做。只看掉落:消耗是扣减,不受获得封禁约束。按配置号升序处理,日志顺序确定。
+std::vector<std::pair<uint32_t, uint32_t>> DropBlockedGains(entt::entity player, ItemCountMap& gained)
 {
-    if (settlement.currency_gains_size() > 0) {
-        for (const auto& gain : settlement.currency_gains()) {
-            if (gain.currency_type() >= static_cast<uint32_t>(kCurrencyMax) ||
-                gain.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
-                !gains.emplace(static_cast<CurrencyType>(gain.currency_type()), gain.amount()).second) return false;
-        }
-    } else if (settlement.gold_gain() > 0) {
-        if (settlement.gold_gain() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return false;
-        gains.emplace(kCurrencyGold, settlement.gold_gain());
+    std::vector<std::pair<uint32_t, uint32_t>> blocked;
+    for (const auto& [configId, count] : SortedByConfigId(gained))
+    {
+        if (!GainBlockService::IsItemGainBlocked(player, configId)) continue;
+        blocked.emplace_back(configId, count);
+        gained.erase(configId);
     }
-    return true;
+    return blocked;
 }
 
-// Inbox整批提交前按每个币种复核净入账额；未知债务和封禁继续保留原件，不部分提交。
+using SettlementCurrencyGains = std::map<CurrencyType, uint64_t>;
+
+// 结算币种的校验结论。不认识的币种单列一类:battle 节点的奖励档按同一张取值表(proto/common/base/currency_type.proto)
+// 校验,本二进制不认识的值只可能来自更新版本的 battle 节点,是版本错位;它在会话内永远不会被认识,收件箱回 kVersionSkew
+// 而不是 kDefer(本地续做只会空转,混版本持久字段保护设计 §12)。金额越界、重复币种在任何版本上都是坏载荷。
+enum class SettlementCurrencyVerdict : uint8_t
+{
+    kValid,
+    kUnknownCurrency,
+    kMalformed,
+};
+
+// 新集合优先；只有集合为空才解释旧金币字段。全笔币种/金额/去重校验不产生副作用。
+// 与版本无关的坏载荷优先于版本错位:整笔判完才看有没有不认识的币种。gains 只收本版本认识的币种。
+SettlementCurrencyVerdict CollectSettlementCurrencyGains(const ::BattleSettlementData& settlement, SettlementCurrencyGains& gains)
+{
+    if (settlement.currency_gains_size() > 0) {
+        std::set<uint32_t> seenTypes;
+        bool unknownCurrency = false;
+        for (const auto& gain : settlement.currency_gains()) {
+            if (gain.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+                !seenTypes.insert(gain.currency_type()).second) return SettlementCurrencyVerdict::kMalformed;
+            if (!IsKnownCurrencyType(gain.currency_type())) {
+                unknownCurrency = true;
+                continue;
+            }
+            gains.emplace(static_cast<CurrencyType>(gain.currency_type()), gain.amount());
+        }
+        if (unknownCurrency) return SettlementCurrencyVerdict::kUnknownCurrency;
+    } else if (settlement.gold_gain() > 0) {
+        if (settlement.gold_gain() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+            return SettlementCurrencyVerdict::kMalformed;
+        gains.emplace(kCurrencyGold, settlement.gold_gain());
+    }
+    return SettlementCurrencyVerdict::kValid;
+}
+
+// 这一币种的获得此刻是否被封禁:全服 GainBlock 或本人 GM 封禁,与 CurrencySystem::AddCurrency 回 kAssetBlocked 的
+// 条件相同(货币入口的标准判法,见 gain_block_service.h)。预检(CanCreditWholeBattleCurrency)与入账(creditCurrencies)
+// 共用这一个判定,两处对同一币种不会给出不同结论。
+bool IsSettlementCurrencyGainBlocked(entt::entity player, CurrencyType type)
+{
+    return GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(type)) ||
+           CurrencySystem::IsCurrencyBlocked(player, type);
+}
+
+// Inbox整批提交前按每个币种复核净入账额；缺组件、金额越界、未知债务与余额溢出继续保留原件，不部分提交。
+// 被封禁的币种回 true,意思是「这一项将被跳过」,不是「可以入账」:封禁是终局业务决定,这一币种这一局整笔不入账、
+// 也不抵欠款,解封后不补发(与资产通道 Credit 的 REJECTED、已删除的旧结算路径同一口径);跳过发生在 creditCurrencies。
+// 若按「不能入账」整笔 DEFER,封禁期间这一局永远到不了 APPLIED(Match 的 ready 票一直占着),解封后又整笔补发,违背封禁本意。
+// 封禁排在组件与金额校验之后、欠款与溢出复核之前:不入账的币种不必复核它的欠款与余额。
 bool CanCreditWholeBattleCurrency(entt::entity player, CurrencyType type, uint64_t amount)
 {
     if (amount == 0) return true;
     const auto* balances = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
     const auto* currency = tlsEcs.actorRegistry.try_get<PlayerCurrencyComp>(player);
-    if (!balances || !currency || amount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
-        GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(type)) ||
-        CurrencySystem::IsCurrencyBlocked(player, type)) return false;
+    if (!balances || !currency || amount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return false;
+    if (IsSettlementCurrencyGainBlocked(player, type)) return true;
     uint64_t net = amount;
     if (const auto it = currency->debts.find(static_cast<uint32_t>(type)); it != currency->debts.end()) {
         const auto& debt = it->second;
@@ -1840,6 +1796,130 @@ bool HasCompleteBattleEffectInputs(entt::entity player, const ::BattleSettlement
 }
 } // namespace
 
+namespace {
+// ── 本人近期战斗结果(docs/design/battle-result-recovery.md §4、§5)──────────────────────────────
+//
+// 已写进近期结果、但这份存档还没确认提交的局(按需状态,只在本文件内):
+//  - 创建:RecordBattleResult(ApplySettlementToEntity 写结果的同一帧)延迟创建,唯一创建入口;
+//  - 摘除:PublishBattleResult(CompleteInboxSettlement,同 E/q 双 SQL 确认之后)摘掉对应 battle_id,空了就摘组件;
+//    结果被淘汰出列表时也一并摘掉;
+//  - 读者:查询与确认只读它,列在这里的局不对客户端公开 —— 与 BattleEndS2C 同一个公开时机。
+// 不落库:实体重建后从盘上加载回来的结果都已提交。
+struct BattleResultAwaitingCommitComp
+{
+    std::vector<uint64_t> battleIds;
+};
+
+// 本实体还没公开的局;没有组件 = 没有。none 由调用方提供(一个空 vector),返回的引用不会悬空。
+const std::vector<uint64_t>& AwaitingCommitBattleIds(entt::entity player, const std::vector<uint64_t>& none)
+{
+    const auto* awaiting = tlsEcs.actorRegistry.try_get<BattleResultAwaitingCommitComp>(player);
+    return awaiting != nullptr ? awaiting->battleIds : none;
+}
+
+std::vector<std::pair<uint32_t, uint32_t>> ItemLinesOf(const ItemCountMap& items)
+{
+    return std::vector<std::pair<uint32_t, uint32_t>>(items.begin(), items.end());
+}
+
+// 这一局本人实际入账的结果。货币取整笔预检通过、实际入账的金额(先抵欠款的部分也算在内);掉落取剔除了配置行已删项
+// 之后的清单(granted);消耗取 min(要求, 实际持有)(consumed)。经验系统没接入,不记经验。
+PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, const SettlementCurrencyGains& currencyGains,
+                                     const ItemCountMap& granted, const ItemCountMap& consumed, const uint64_t settledAtMs)
+{
+    PlayerBattleResult entry;
+    entry.set_battle_id(settlement.battle_id());
+    entry.set_outcome(static_cast<uint32_t>(settlement.outcome()));
+    entry.set_team_index(settlement.player_team_index());
+    entry.set_is_dead(settlement.is_dead());
+    entry.set_fled(settlement.fled());
+    entry.set_total_rounds(settlement.total_rounds());
+    entry.set_finished_at_ms(settlement.finished_at_ms());
+    entry.set_match_mode(settlement.match_mode());
+    entry.set_battle_config_id(settlement.battle_config_id());
+    entry.set_settled_at_ms(settledAtMs);
+    for (const auto& [type, amount] : currencyGains) // std::map:按币种升序
+    {
+        if (amount == 0) continue;
+        auto* line = entry.add_currencies();
+        line->set_currency_type(static_cast<uint32_t>(type));
+        line->set_amount(amount);
+    }
+    const bool gainedTruncated = battle_result::FillItemLines(ItemLinesOf(granted), *entry.mutable_items_gained());
+    const bool consumedTruncated = battle_result::FillItemLines(ItemLinesOf(consumed), *entry.mutable_items_consumed());
+    entry.set_lines_truncated(gainedTruncated || consumedTruncated);
+    return entry;
+}
+
+// 把这一局的本人结果写进近期结果。ApplySettlementToEntity 全部效果写完之后、同一帧调用,随同一次存档提交;
+// 效果之前已确认 PlayerBattleResultComp 在场,这之后没有失败分支,所以这里只记日志、不回失败。
+void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::BattleSettlementData& settlement,
+                        const SettlementCurrencyGains& currencyGains, const ItemCountMap& granted, const ItemCountMap& consumed)
+{
+    const uint64_t battleId = settlement.battle_id();
+    auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
+    if (history == nullptr)
+    {
+        // 只可能是缺陷:效果之前核对过它在场,效果路径不摘持久组件。奖励已入账、不能回头;这一局重登后看不到结果。
+        LOG_ERROR << "[PlayerBattle] metric=battle_result_record_missing player_id=" << playerId << " battle_id=" << battleId
+                  << ";persisted PlayerBattleResultComp vanished after the preflight, result not recorded (rewards already applied)";
+        return;
+    }
+    auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, TimeSystem::NowMillisecondsUTC());
+    const bool truncated = entry.lines_truncated();
+    const int currencyLines = entry.currencies_size();
+    const int gainedLines = entry.items_gained_size();
+    const int consumedLines = entry.items_consumed_size();
+    std::vector<uint64_t> evicted;
+    switch (battle_result::Record(*history, std::move(entry), evicted))
+    {
+    case battle_result::RecordOutcome::kRecorded:
+        break;
+    case battle_result::RecordOutcome::kDuplicateBattle:
+        // 同一局的结算按收件箱账本只执行一次,走到这里只可能是上游缺陷:保留第一条,不写第二条。
+        LOG_WARN << "[PlayerBattle] metric=battle_result_duplicate player_id=" << playerId << " battle_id=" << battleId
+                 << ";this battle already has a result record, keeping the first one";
+        return;
+    case battle_result::RecordOutcome::kInvalidBattle:
+    case battle_result::RecordOutcome::kCount:
+        // battle_id 为 0 的结算在 ApplySettlementToEntity 入口就被拒了,这里只为穷举。
+        return;
+    }
+    // 此处延迟创建:这一局的结果在存档确认提交之前不公开(PublishBattleResult 摘)。
+    auto& awaiting = tlsEcs.actorRegistry.get_or_emplace<BattleResultAwaitingCommitComp>(player).battleIds;
+    // 被淘汰出列表的局不再有结果可公开。
+    awaiting.erase(std::remove_if(awaiting.begin(), awaiting.end(),
+                                  [&evicted](const uint64_t id) { return battle_result::ContainsBattle(evicted, id); }),
+                   awaiting.end());
+    awaiting.push_back(battleId);
+    if (truncated)
+    {
+        LOG_WARN << "[PlayerBattle] metric=battle_result_lines_truncated player_id=" << playerId << " battle_id=" << battleId
+                 << " max_lines=" << battle_result::kMaxItemLinesPerList
+                 << ";item lines above the per-list limit are left out of the result record (rewards unaffected)";
+    }
+    LOG_INFO << "[PlayerBattle] metric=battle_result_recorded player_id=" << playerId << " battle_id=" << battleId
+             << " result_seq=" << history->last_result_seq() << " currencies=" << currencyLines
+             << " items_gained=" << gainedLines << " items_consumed=" << consumedLines
+             << " truncated=" << (truncated ? 1 : 0) << " evicted=" << evicted.size();
+}
+
+// 这一局的存档已确认提交(CompleteInboxSettlement 调用):结果从此对客户端公开。
+// 没在等的局什么都不做:收件箱回放原结局、实体重建后加载回来的结果本就已公开。
+void PublishBattleResult(entt::entity player, const uint64_t battleId)
+{
+    auto* awaiting = tlsEcs.actorRegistry.try_get<BattleResultAwaitingCommitComp>(player);
+    if (awaiting == nullptr) return;
+    auto& ids = awaiting->battleIds;
+    const auto it = std::find(ids.begin(), ids.end(), battleId);
+    if (it == ids.end()) return;
+    ids.erase(it);
+    if (ids.empty()) tlsEcs.actorRegistry.remove<BattleResultAwaitingCommitComp>(player);
+    LOG_INFO << "[PlayerBattle] metric=battle_result_published player_id=" << tlsEcs.GetPlayerId(player)
+             << " battle_id=" << battleId;
+}
+} // namespace
+
 PlayerInboxExecResult PlayerBattleSystem::ApplyInboxSettlement(entt::entity player, const std::string& payload)
 {
     ::BattleSettlementData settlement;
@@ -1853,7 +1933,18 @@ PlayerInboxExecResult PlayerBattleSystem::ApplyInboxSettlement(entt::entity play
     if (!tlsEcs.actorRegistry.valid(player)) return {PlayerInboxExecKind::kDefer, 0};
     if (HasUnsupportedInboxConsumption(player, settlement)) return {PlayerInboxExecKind::kVersionSkew, 0};
     SettlementCurrencyGains currencyGains;
-    if (!CollectSettlementCurrencyGains(settlement, currencyGains)) return {PlayerInboxExecKind::kDefer, 0};
+    switch (CollectSettlementCurrencyGains(settlement, currencyGains)) {
+    case SettlementCurrencyVerdict::kValid:
+        break;
+    case SettlementCurrencyVerdict::kUnknownCurrency:
+        LOG_WARN << "[PlayerBattle] metric=persist_version_skew where=battle_currency player_id=" << tlsEcs.GetPlayerId(player)
+                 << " battle_id=" << settlement.battle_id()
+                 << "; settlement carries a currency unknown to this version, halting the battle settlement domain";
+        return {PlayerInboxExecKind::kVersionSkew, 0};
+    case SettlementCurrencyVerdict::kMalformed:
+        // 坏载荷在任何版本上都不会成功;战斗结算域不收 REJECTED(Ack 只认 APPLIED),原件留着交人工(runbook「Battle 域条目卡住」)。
+        return {PlayerInboxExecKind::kDefer, 0};
+    }
     for (const auto& [type, amount] : currencyGains)
         if (amount > 0 && CurrencySystem::DebtCarriesUnknownFields(player, type))
             return {PlayerInboxExecKind::kVersionSkew, 0};
@@ -1868,6 +1959,9 @@ bool PlayerBattleSystem::CompleteInboxSettlement(entt::entity player, const std:
         HasNestedUnknownFields(settlement) || settlement.player_id() != tlsEcs.GetPlayerId(player) ||
         settlement.battle_id() == 0) return false;
     // SQL确认之后才公开终局/解冻/放锁；旧局不能修改已经开始的新局HP或摘新局组件。
+    // 近期战斗结果同一个时机公开,而且放在下面的同局判断之外:玩家此刻若已在下一局里,终局通知不推,结果照样公开。
+    // 先于 BattleEndS2C:客户端收到终局通知就可能立刻来查(docs/design/battle-result-recovery.md §5、§7)。
+    PublishBattleResult(player, settlement.battle_id());
     const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
     if (current == nullptr || current->battle_id() == settlement.battle_id()) {
         // 先发条件删锁再摘组件:摘组件会触发组队跟随链,它读 battle:lock fail-closed,两条命令同 slot,路由层停等。
@@ -1879,6 +1973,65 @@ bool PlayerBattleSystem::CompleteInboxSettlement(entt::entity player, const std:
         PushBattleEndToPlayer(player, settlement);
     }
     return true;
+}
+
+uint32_t PlayerBattleSystem::GetRecentBattleResults(entt::entity player, ::GetRecentBattleResultsResponse& response)
+{
+    if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
+    const uint64_t playerId = tlsEcs.GetPlayerId(player);
+    const auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
+    if (history == nullptr)
+    {
+        // 持久组件只由加载创建;缺了是加载不变量被破坏,不补空列表冒充「没有结果」(ECS 组件访问规则)。
+        LOG_ERROR << "[PlayerBattle] metric=battle_result_history_missing player_id=" << playerId << " op=query"
+                  << ";persisted PlayerBattleResultComp missing (load invariant broken)";
+        return kServiceUnavailable;
+    }
+    const std::vector<uint64_t> none;
+    const auto& hidden = AwaitingCommitBattleIds(player, none);
+    uint32_t unread = 0;
+    for (const auto* entry : battle_result::VisibleNewestFirst(*history, hidden))
+    {
+        *response.add_results() = *entry;
+        if (!entry->seen()) ++unread;
+    }
+    LOG_INFO << "[PlayerBattle] Recent battle results queried: player_id=" << playerId
+             << " returned=" << response.results_size() << " unread=" << unread
+             << " awaiting_commit=" << hidden.size();
+    return kSuccess;
+}
+
+uint32_t PlayerBattleSystem::AckBattleResults(entt::entity player, const ::AckBattleResultsRequest& request)
+{
+    if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
+    const uint64_t playerId = tlsEcs.GetPlayerId(player);
+    if (static_cast<std::size_t>(request.battle_ids_size()) > battle_result::kMaxEntries)
+    {
+        return kArraySizeTooLargeInMessage;
+    }
+    // 冻结 / 交接 / 退出中 / 没有归属围栏:本节点此刻不改这名玩家的存档(player_mutability.h 的唯一判定)。
+    // 已读标记不是资产,拒掉的代价只是客户端下次落地再补发一次确认。
+    if (const auto mutability = player_mutability::ClassifyPlayerMutability(player);
+        mutability != player_mutability::PlayerMutability::kMutable)
+    {
+        LOG_INFO << "[PlayerBattle] Battle result acknowledgement rejected: player_id=" << playerId
+                 << " reason=" << player_mutability::PlayerMutabilityName(mutability);
+        return kFeatureUnavailable;
+    }
+    auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
+    if (history == nullptr)
+    {
+        LOG_ERROR << "[PlayerBattle] metric=battle_result_history_missing player_id=" << playerId << " op=ack"
+                  << ";persisted PlayerBattleResultComp missing (load invariant broken)";
+        return kServiceUnavailable;
+    }
+    const std::vector<uint64_t> none;
+    const uint32_t newlySeen =
+        battle_result::MarkSeen(*history, request.battle_ids(), AwaitingCommitBattleIds(player, none));
+    // 不触发存盘:已读标记随下一次存盘(周期存盘或下一笔结算)落地,丢了最多让客户端再弹一次。
+    LOG_INFO << "[PlayerBattle] Battle results acknowledged: player_id=" << playerId
+             << " requested=" << request.battle_ids_size() << " newly_seen=" << newlySeen;
+    return kSuccess;
 }
 
 bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement)
@@ -1906,7 +2059,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 否则永久水位一过,漏掉的宠物状态或物品再也无法补回。
     const bool advancesMissions = std::any_of(settlement.defeated_monsters().begin(), settlement.defeated_monsters().end(),
         [](const auto& defeat) { return defeat.monster_config_id() != 0 && defeat.count() > 0; });
-    if (!tlsEcs.actorRegistry.all_of<DerivedAttributesComp>(player) ||
+    // 近期战斗结果(PlayerBattleResultComp)同属持久数据,效果写完要在同一帧记进去,那时已没有失败分支:
+    // 缺了说明加载不变量已被破坏,在这里整笔 DEFER,不补默认值(docs/design/battle-result-recovery.md §4.3)。
+    if (!tlsEcs.actorRegistry.all_of<DerivedAttributesComp, PlayerBattleResultComp>(player) ||
         (settlement.pets_size() > 0 && !tlsEcs.actorRegistry.all_of<PlayerPetComp>(player)) ||
         (advancesMissions && !tlsEcs.actorRegistry.all_of<MissionsContainerComp>(player)) ||
         ((settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0) &&
@@ -1918,7 +2073,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     }
 
     SettlementCurrencyGains currencyGains;
-    if (!CollectSettlementCurrencyGains(settlement, currencyGains)) {
+    if (CollectSettlementCurrencyGains(settlement, currencyGains) != SettlementCurrencyVerdict::kValid) {
         LOG_ERROR << "[PlayerBattle] Invalid currency settlement: player_id=" << playerId
                   << " battle_id=" << battleId;
         return false;
@@ -1939,6 +2094,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 必须在下面按候选算实际可扣量之前做:actualConsumption 与 ConsumeInventoryAndGrant 只看剔除后的两张表。
     DropItemsWithoutConfigRow(inboxConsumed, "consumed", skippedItems);
     DropItemsWithoutConfigRow(inboxGained, "gained", skippedItems);
+    // 被获得封禁的掉落同样只剔除这一项(DropBlockedGains 的说明)。排在号段预检与入包之前:被封的掉落不铸号、不进候选。
+    const auto blockedDrops = DropBlockedGains(player, inboxGained);
     if (settlement.pets_size() > 0) originalPets = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
     if (!inboxConsumed.empty()) {
         const auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
@@ -1948,7 +2105,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 
     // 掉落要铸的新实例身份必须先有着落(审计 cpp-economy#0)。号段暂缺是会自己消失的条件,
     // 与跨区冻结同类:整笔 DEFER、零副作用,条目留在收件箱。
-    if (!HasItemGuidsForDrops(CollectGainedItems(settlement), playerId, battleId))
+    // 按真正交给 ConsumeInventoryAndGrant 的掉落算(已剔除配置行已删与被封禁的项):剔除的项不铸号,
+    // 按原件算会把本可发放的结算误判成号段不足。
+    if (!HasItemGuidsForDrops(inboxGained, playerId, battleId))
     {
         return false;
     }
@@ -1961,10 +2120,18 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         return false;
     }
 
+    // 被获得封禁而跳过的币种(CanCreditWholeBattleCurrency 的说明),应用成功之后逐项记日志并从 currencyGains 摘掉。
+    std::vector<std::pair<CurrencyType, uint64_t>> blockedCurrencies;
     // scene EventLoop内同步执行且不让出；全部可拒绝条件已在首笔入账前复核。
+    // 封禁按提交这一刻判定,与紧挨着的复核(credit 里的 HasCompleteBattleEffectInputs)看到同一份状态;
+    // 先判再调 AddCurrency:被封的币种不进入账原语,也就不走它的错误分支(那里回 kAssetBlocked 并打调用栈)。
     const auto creditCurrencies = [&]() -> uint32_t {
         for (const auto& [type, amount] : currencyGains) {
             if (amount == 0) continue;
+            if (IsSettlementCurrencyGainBlocked(player, type)) {
+                blockedCurrencies.emplace_back(type, amount);
+                continue;
+            }
             const auto err = CurrencySystem::AddCurrency(player, type, static_cast<int64_t>(amount), TX_SYSTEM_GRANT, battleId);
             if (err != kSuccess) {
                 LOG_ERROR << "[PlayerBattle] Currency credit failed after preflight;settlement deferred: player_id="
@@ -1983,7 +2150,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             (settlement.pets_size() > 0 && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
             HasUnsupportedInboxConsumption(player, settlement) ||
             !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
-            !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp>(player)) return kInvalidParameter;
+            !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, PlayerBattleResultComp>(player))
+            return kInvalidParameter;
         return creditCurrencies();
     };
     const auto result = inboxConsumed.empty() && inboxGained.empty() ? credit() :
@@ -2014,6 +2182,18 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
                   << " count=" << skipped.count << " config_id=" << skipped.configId
                   << " battle_id=" << battleId << " player_id=" << playerId
                   << ";item config row no longer exists, this item effect was dropped and the rest of the settlement applied";
+    // 被获得封禁而跳过的掉落与币种:封禁本意就是不发,不补偿、解封后也不补发,只留痕供客服与对账按 battle_id 查。
+    for (const auto& [configId, count] : blockedDrops)
+        LOG_WARN << "[PlayerBattle] metric=battle_settlement_item_blocked source=inbox battle_id=" << battleId
+                 << " config_id=" << configId << " count=" << count << " player_id=" << playerId
+                 << ";item gain blocked (global or this player), this drop was skipped and the rest of the settlement applied";
+    for (const auto& [type, amount] : blockedCurrencies) {
+        LOG_WARN << "[PlayerBattle] metric=battle_settlement_currency_blocked source=inbox battle_id=" << battleId
+                 << " currency_type=" << static_cast<uint32_t>(type) << " amount=" << amount << " player_id=" << playerId
+                 << ";currency gain blocked (global or this player), this currency was skipped and the rest of the settlement applied";
+        // 近期战斗结果只记实际入账(RecordBattleResult 读 currencyGains):被跳过的币种从这里摘掉。
+        currencyGains.erase(type);
+    }
     baseAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player); // 初始化回调后不持旧storage地址。
 
     // HP/MP 终值回写(引擎输出已按快照上限饱和,这里再按派生上限夹一次,防御引擎侧越界)
@@ -2079,6 +2259,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             PlayerMissionSystem::OnCondition(player, progress);
         }
     }
+    // 本人近期战斗结果:与上面全部效果同一帧写入,随同一次存档提交;存档确认提交之后由 CompleteInboxSettlement 公开
+    // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除配置行已删项之后的掉落、按实际持有夹紧的消耗。
+    RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption);
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。
 }
 
@@ -2320,6 +2503,11 @@ void PlayerBattleSystem::SetFollowWakeFnForTest(FollowWakeFn fn)
 void PlayerBattleSystem::SetLockScriptObserverForTest(LockScriptObserver observer)
 {
 	gLockScriptObserver = observer; // nullptr = 生产(不观察)
+}
+
+void PlayerBattleSystem::SetLockScriptSenderForTest(LockScriptSender fn)
+{
+    gLockScriptSender = fn;
 }
 
 void PlayerBattleSystem::SetLockRetrySchedulerForTest(LockRetrySchedulerFn fn)

@@ -382,7 +382,8 @@ var (
 	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
 	// 拒绝的改派/销毁/清理次数。site 是**代码里写死的常量点位名**
 	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup|
-	// dead_node_cleanup|stale_location|dead_owner_takeover,定义在
+	// dead_node_cleanup|autoscale_drain|stale_location|dead_owner_takeover|
+	// replaced_owner_takeover|replaced_owner_leave_release,定义在
 	// internal/logic/reentry_barrier.go 的 barrierSite* 常量),
 	// 绝不能拼进 scene_id / node_id 之类运行期值。
 	//
@@ -576,8 +577,79 @@ var (
 		Help:      "Mystery merchant scheduling ticks by outcome (created|relocated|kept|idle|no_channel|lost_race|invalid_table|error).",
 	}, []string{"zone_id", "outcome"})
 
+	// sceneRegistrationTotal:新场景登记脚本(internal/logic/scene_registration.go)的结局。
+	// kind 取 SceneRegistrationKind* 常量;outcome:
+	//   registered  全部登记写入已落地(稳态下几乎只有它)
+	//   conflict    scene_id 已被占用(或登记落地后场景已被销毁或改派),这一次一个键都没写,名额不还 —— 任何一次都该查发号器
+	//   aborted     EVAL 回错,用同一 token 作废成功:登记没落地,预占的 Agones 名额已归还
+	//   unknown     作废也失败,结局未知:名额没还(可能多占一份),看 agones_counter_drift
+	sceneRegistrationTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "scene_registration_total",
+		Help:      "New scene registration script outcomes by kind (instance|world_channel) and outcome (registered|conflict|aborted|unknown).",
+	}, []string{"zone_id", "kind", "outcome"})
+
+	// gateRedirectExcludedTotal / gateRedirectFallbackTotal:跨 zone 重定向挑 gate 之前按 shared/gatepick.Eligible
+	// 剔除的 gate 与回落(internal/logic/gate_redirect.go eligibleTargets,2026-11-05)。zone_id 是目标 zone;
+	// reason 只取 gatepick.ReasonStale / ReasonFull / ReasonMixed(mixed 只出现在 fallback)。
+	// excluded{reason="stale"} 持续增长说明目标 zone 有 gate 卡住(按 ERROR 日志里的 node_id 去查);
+	// fallback 任何一次增长都值得告警:要么整个 zone 的 gate 都停写,要么准入放进来的人超过 gate 上限之和。
+	gateRedirectExcludedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "gate_redirect_excluded_total",
+		Help:      "Gate candidates left out of a cross-zone redirect pick, by target zone and reason: 'stale' = the gate's etcd record kept the same ModRevision for three report periods as seen by this process (likely hung while its lease lives on); 'full' = player_count at 90% of the gate's self-reported max_connections. Counted once per redirect per excluded gate.",
+	}, []string{"zone_id", "reason"})
+	gateRedirectFallbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "gate_redirect_fallback_total",
+		Help:      "Cross-zone redirects where every candidate gate of the target zone was stale or full, so the pick fell back to all of them, by target zone and reason (stale|full|mixed). Any increase is worth an alert.",
+	}, []string{"zone_id", "reason"})
+
+	// foreignZoneRegistryReadsTotal:判断别的 zone 的场景节点时对那个 zone 的 etcd 注册表的直读
+	// (internal/logic/foreign_zone_registry.go,docs/design/control-plane-zone-scoping-20261105.md §3.5)。
+	// zone_id 是被读的 zone;outcome 取 ForeignZoneRegistryRead* 常量。error 持续增长说明 etcd 不可达或那个 zone 有坏注册,
+	// 位置落在那个 zone 的玩家会一直被可重试地拒绝。
+	foreignZoneRegistryReadsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "foreign_zone_registry_reads_total",
+		Help:      "Direct etcd reads of another zone's scene node registry, used to judge holders of locations in that zone, by zone and outcome (ok|error).",
+	}, []string{"zone_id", "outcome"})
+
+	// foreignZoneSkipsTotal:数据面上遇到别的 zone 的控制域写入、按不变量跳过的次数(§4.3)。site 取 ForeignZoneSkipSite* 常量。
+	// 跳过的成员由那个 zone 的成员对账收敛;本计数只用来看这类请求有多频繁,不是故障信号。
+	foreignZoneSkipsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "foreign_zone_skips_total",
+		Help:      "Control-domain writes for another zone skipped by this scene_manager (that zone's own reconciler converges them), by site.",
+	}, []string{"site"})
+
 	registerOnce sync.Once
 )
+
+// 别的 zone 注册表直读的结局,见 foreignZoneRegistryReadsTotal。
+const (
+	ForeignZoneRegistryReadOK    = "ok"
+	ForeignZoneRegistryReadError = "error"
+)
+
+// 按不变量跳过别的 zone 控制域写入的点位,见 foreignZoneSkipsTotal。
+const (
+	ForeignZoneSkipSiteMemberAdd    = "member_add"
+	ForeignZoneSkipSiteMemberRemove = "member_remove"
+	ForeignZoneSkipSiteScenePlayer  = "scene_player_remove"
+)
+
+// ObserveForeignZoneRegistryRead 记一次别的 zone 注册表直读,outcome 取 ForeignZoneRegistryRead* 常量。
+func ObserveForeignZoneRegistryRead(zoneID uint32, outcome string) {
+	register()
+	foreignZoneRegistryReadsTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), outcome).Inc()
+}
+
+// ObserveForeignZoneSkip 记一次按不变量跳过的别 zone 控制域写入,site 取 ForeignZoneSkipSite* 常量。
+func ObserveForeignZoneSkip(site string) {
+	register()
+	foreignZoneSkipsTotal.WithLabelValues(site).Inc()
+}
 
 // EnterScene sub-stage labels. Keep these in sync with the call sites in
 // internal/logic/enterscenelogic.go; new stages must be both added here and
@@ -627,6 +699,10 @@ func register() {
 			loadRefreshTotal, loadRefreshSeconds, loadRefreshNodeErrorsTotal,
 			mysteryMerchantScheduleTotal,
 			sceneMemberReconcileMembersTotal, sceneMemberReconcilePassesTotal,
+			sceneRegistrationTotal,
+			nodeViewHolding, nodeViewReleasedTotal, // node_view.go
+			gateRedirectExcludedTotal, gateRedirectFallbackTotal,
+			foreignZoneRegistryReadsTotal, foreignZoneSkipsTotal,
 		)
 		for _, outcome := range loadRefreshOutcomes {
 			loadRefreshTotal.WithLabelValues(outcome).Add(0)
@@ -1091,6 +1167,43 @@ func ObserveMirrorDedup(zoneID uint32, outcome string) {
 	mirrorDedupTotal.WithLabelValues(
 		strconv.FormatUint(uint64(zoneID), 10), outcome,
 	).Inc()
+}
+
+// 新场景登记的 kind 标签,见 sceneRegistrationTotal。
+const (
+	SceneRegistrationKindInstance     = "instance"
+	SceneRegistrationKindWorldChannel = "world_channel"
+)
+
+// sceneRegistrationAlertOutcomes 是告警盯的两个结局。increase() 看不到序列从「不存在」到 1 的第一次跳变,
+// 所以每次登记都给同 zone、同 kind 预建这两条值为 0 的序列(Add(0) 不改值)。
+var sceneRegistrationAlertOutcomes = []string{"conflict", "unknown"}
+
+// ObserveSceneRegistration 记一次新场景登记的结局,取值见 sceneRegistrationTotal。
+func ObserveSceneRegistration(zoneID uint32, kind, outcome string) {
+	register()
+	zone := strconv.FormatUint(uint64(zoneID), 10)
+	for _, alertOutcome := range sceneRegistrationAlertOutcomes {
+		sceneRegistrationTotal.WithLabelValues(zone, kind, alertOutcome).Add(0)
+	}
+	sceneRegistrationTotal.WithLabelValues(zone, kind, outcome).Inc()
+}
+
+// ObserveGateRedirectExcluded 记一次跨 zone 重定向挑 gate 时剔除的 gate 数,reason 取 gatepick.ReasonStale / ReasonFull,
+// 见 gateRedirectExcludedTotal。count 不大于 0 时不记。
+func ObserveGateRedirectExcluded(zoneID uint32, reason string, count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	gateRedirectExcludedTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), reason).Add(float64(count))
+}
+
+// ObserveGateRedirectFallback 记一次目标 zone 的 gate 全部停写或满载、回落全集的跨 zone 重定向,
+// reason 取 gatepick.ReasonStale / ReasonFull / ReasonMixed,见 gateRedirectFallbackTotal。
+func ObserveGateRedirectFallback(zoneID uint32, reason string) {
+	register()
+	gateRedirectFallbackTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10), reason).Inc()
 }
 
 // ObserveReleasePlayer records one outcome of a cross-node ReleasePlayer

@@ -44,11 +44,12 @@ const (
 	// ErrCodeIdSegmentExhausted:本地域的值域见底,fail-closed 拒绝。理论上万年内不会命中,命中即事故。
 	ErrCodeIdSegmentExhausted uint32 = 19
 
-	// ErrCodeIdSegmentUnknownTag:发号器确定地拒绝发号,不写任何记录。两种原因:
+	// ErrCodeIdSegmentUnknownTag:发号器确定地拒绝发号,不写任何记录。原因:
 	//   - biz_tag 没登记进 IdSegment.Tags:配置漏了;
-	//   - 两份预留记录都不存在,且 IdSegment.AllowAutoSeed=false(生产形态)。首次部署要显式跑
-	//     `data_service -id-issuer-init`;如果不是首次部署,就是两套 etcd 同时丢了数据,这是 ID 安全事件,
-	//     按 docs/ops/id-issuer-runbook.md 处理。
+	//   - 生产形态(IdSegment.AllowAutoSeed=false)下记录不全:登记处没有这个地域码,或者本地两份记录都不存在。
+	//     新地域要显式跑 `data_service -id-issuer-init`;已经发过号的地域就是 etcd 丢了数据,这是 ID 安全事件,
+	//     按 docs/ops/id-issuer-runbook.md §4 用 `-id-issuer-recover` 处理;
+	//   - 这两套 etcd 不是登记处给这个地域码绑的那两套(重复部署、克隆快照、换了 etcd 没有 rebind),或者这个码已退役。
 	// 与 InvalidRequest 分开:调用方 tag 拼错是"业务拒绝",而这里是必须告警的故障。
 	ErrCodeIdSegmentUnknownTag uint32 = 20
 

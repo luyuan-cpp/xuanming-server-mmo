@@ -290,9 +290,10 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		}
 		logx.Infof("EnterGame complete (decision=%d) playerId=%d", decision, playerID)
 
-		// 入场成功后仍保留本连接的登录态：匹配、聊天等在线服务通过它核验原账号。
-		// 只由 LeaveGame / Disconnect 清理，过期继续遵循登录态已有 TTL；不能在这里
-		// 删除再按玩家当前归属补权，否则原连接身份丢失，进场后的请求会全部被拒绝。
+		// 入场成功不删本连接的登录态：账号设备集按它判断这条连接是否还在（PruneStaleFromDeviceSet），
+		// 由 LeaveGame / Disconnect 清理，过期遵循已有 TTL（过期后该连接不再计入设备软上限）。
+		// 在线服务的原账号不读这条记录：它随 BindSessionEvent 交给 gate，由 gate 签名传递
+		// （shared/roleidentity.SessionAccount）。
 		observeTotal(chainStart, ResultSuccess)
 	}
 

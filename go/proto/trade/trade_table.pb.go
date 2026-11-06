@@ -1136,8 +1136,12 @@ type TradeCommerceWorkflow struct {
 	Rmb              *TradeRmbConsignmentWorkflow `protobuf:"bytes,20,opt,name=rmb,proto3" json:"rmb,omitempty"`
 	SellerIdentity   *TradeRoleIdentity           `protobuf:"bytes,21,opt,name=seller_identity,json=sellerIdentity,proto3" json:"seller_identity,omitempty"`
 	BuyerIdentity    *TradeRoleIdentity           `protobuf:"bytes,22,opt,name=buyer_identity,json=buyerIdentity,proto3" json:"buyer_identity,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 转人工时的阶段、状态和原因(commerce.markManual 写),人工恢复按它判断能做哪种处理(jubaozhai-market.md §15.7)。
+	Quarantine *TradeCommerceQuarantine `protobuf:"bytes,23,opt,name=quarantine,proto3" json:"quarantine,omitempty"`
+	// 人工处理留痕,只追加(commerce.ResolveManual 写)。
+	ManualActions []*TradeCommerceManualAction `protobuf:"bytes,24,rep,name=manual_actions,json=manualActions,proto3" json:"manual_actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TradeCommerceWorkflow) Reset() {
@@ -1324,6 +1328,199 @@ func (x *TradeCommerceWorkflow) GetBuyerIdentity() *TradeRoleIdentity {
 	return nil
 }
 
+func (x *TradeCommerceWorkflow) GetQuarantine() *TradeCommerceQuarantine {
+	if x != nil {
+		return x.Quarantine
+	}
+	return nil
+}
+
+func (x *TradeCommerceWorkflow) GetManualActions() []*TradeCommerceManualAction {
+	if x != nil {
+		return x.ManualActions
+	}
+	return nil
+}
+
+// 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);
+// detail 是错误原文,截到 256 字节。
+type TradeCommerceQuarantine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Stage         string                 `protobuf:"bytes,1,opt,name=stage,proto3" json:"stage,omitempty"`
+	Status        uint32                 `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	AtMs          uint64                 `protobuf:"varint,5,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TradeCommerceQuarantine) Reset() {
+	*x = TradeCommerceQuarantine{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeCommerceQuarantine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeCommerceQuarantine) ProtoMessage() {}
+
+func (x *TradeCommerceQuarantine) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeCommerceQuarantine.ProtoReflect.Descriptor instead.
+func (*TradeCommerceQuarantine) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TradeCommerceQuarantine) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *TradeCommerceQuarantine) GetStatus() uint32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *TradeCommerceQuarantine) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *TradeCommerceQuarantine) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *TradeCommerceQuarantine) GetAtMs() uint64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
+// 一次人工处理(go/trade/cmd/commercefix resolve)。
+type TradeCommerceManualAction struct {
+	state          protoimpl.MessageState   `protogen:"open.v1"`
+	Action         string                   `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"` // resume / reissue / refund
+	Operator       string                   `protobuf:"bytes,2,opt,name=operator,proto3" json:"operator,omitempty"`
+	Reason         string                   `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"` // 操作人写的依据,例如工单号和核对结论
+	AtMs           uint64                   `protobuf:"varint,4,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
+	VersionBefore  uint64                   `protobuf:"varint,5,opt,name=version_before,json=versionBefore,proto3" json:"version_before,omitempty"`
+	Quarantine     *TradeCommerceQuarantine `protobuf:"bytes,6,opt,name=quarantine,proto3" json:"quarantine,omitempty"` // 处理时的转人工记录
+	NewLegs        []string                 `protobuf:"bytes,7,rep,name=new_legs,json=newLegs,proto3" json:"new_legs,omitempty"`
+	SupersededLegs []string                 `protobuf:"bytes,8,rep,name=superseded_legs,json=supersededLegs,proto3" json:"superseded_legs,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TradeCommerceManualAction) Reset() {
+	*x = TradeCommerceManualAction{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeCommerceManualAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeCommerceManualAction) ProtoMessage() {}
+
+func (x *TradeCommerceManualAction) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeCommerceManualAction.ProtoReflect.Descriptor instead.
+func (*TradeCommerceManualAction) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TradeCommerceManualAction) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *TradeCommerceManualAction) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *TradeCommerceManualAction) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *TradeCommerceManualAction) GetAtMs() uint64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
+func (x *TradeCommerceManualAction) GetVersionBefore() uint64 {
+	if x != nil {
+		return x.VersionBefore
+	}
+	return 0
+}
+
+func (x *TradeCommerceManualAction) GetQuarantine() *TradeCommerceQuarantine {
+	if x != nil {
+		return x.Quarantine
+	}
+	return nil
+}
+
+func (x *TradeCommerceManualAction) GetNewLegs() []string {
+	if x != nil {
+		return x.NewLegs
+	}
+	return nil
+}
+
+func (x *TradeCommerceManualAction) GetSupersededLegs() []string {
+	if x != nil {
+		return x.SupersededLegs
+	}
+	return nil
+}
+
 // 合同原件中的角色归属；后台恢复只能复用此原件，不能借用过户后的当前账号或修订。
 type TradeRoleIdentity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1335,7 +1532,7 @@ type TradeRoleIdentity struct {
 
 func (x *TradeRoleIdentity) Reset() {
 	*x = TradeRoleIdentity{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1347,7 +1544,7 @@ func (x *TradeRoleIdentity) String() string {
 func (*TradeRoleIdentity) ProtoMessage() {}
 
 func (x *TradeRoleIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1360,7 +1557,7 @@ func (x *TradeRoleIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeRoleIdentity.ProtoReflect.Descriptor instead.
 func (*TradeRoleIdentity) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{7}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TradeRoleIdentity) GetAccount() string {
@@ -1404,7 +1601,7 @@ type TradeRmbConsignmentWorkflow struct {
 
 func (x *TradeRmbConsignmentWorkflow) Reset() {
 	*x = TradeRmbConsignmentWorkflow{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1416,7 +1613,7 @@ func (x *TradeRmbConsignmentWorkflow) String() string {
 func (*TradeRmbConsignmentWorkflow) ProtoMessage() {}
 
 func (x *TradeRmbConsignmentWorkflow) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1429,7 +1626,7 @@ func (x *TradeRmbConsignmentWorkflow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeRmbConsignmentWorkflow.ProtoReflect.Descriptor instead.
 func (*TradeRmbConsignmentWorkflow) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{8}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TradeRmbConsignmentWorkflow) GetSellerAccount() string {
@@ -1552,21 +1749,23 @@ func (x *TradeRmbConsignmentWorkflow) GetBuyerOwnerRevision() uint64 {
 }
 
 type TradeCommerceLeg struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Role          string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
-	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Stream        uint32                 `protobuf:"varint,3,opt,name=stream,proto3" json:"stream,omitempty"`
-	Bundle        *asset.AssetBundle     `protobuf:"bytes,4,opt,name=bundle,proto3" json:"bundle,omitempty"`
-	OpId          uint64                 `protobuf:"varint,5,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`
-	Snapshot      *asset.AssetSnapshot   `protobuf:"bytes,6,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
-	Outcome       uint32                 `protobuf:"varint,7,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Role     string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
+	PlayerId uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Stream   uint32                 `protobuf:"varint,3,opt,name=stream,proto3" json:"stream,omitempty"`
+	Bundle   *asset.AssetBundle     `protobuf:"bytes,4,opt,name=bundle,proto3" json:"bundle,omitempty"`
+	OpId     uint64                 `protobuf:"varint,5,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`
+	Snapshot *asset.AssetSnapshot   `protobuf:"bytes,6,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	Outcome  uint32                 `protobuf:"varint,7,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	// 被人工补发取代时是补发腿的名字,被整单退回取代时是 "refund"。取代后不再算作最终发放(commerce.finalCredits)。
+	SupersededBy  string `protobuf:"bytes,8,opt,name=superseded_by,json=supersededBy,proto3" json:"superseded_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TradeCommerceLeg) Reset() {
 	*x = TradeCommerceLeg{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1578,7 +1777,7 @@ func (x *TradeCommerceLeg) String() string {
 func (*TradeCommerceLeg) ProtoMessage() {}
 
 func (x *TradeCommerceLeg) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1591,7 +1790,7 @@ func (x *TradeCommerceLeg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeCommerceLeg.ProtoReflect.Descriptor instead.
 func (*TradeCommerceLeg) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{9}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TradeCommerceLeg) GetRole() string {
@@ -1641,6 +1840,13 @@ func (x *TradeCommerceLeg) GetOutcome() uint32 {
 		return x.Outcome
 	}
 	return 0
+}
+
+func (x *TradeCommerceLeg) GetSupersededBy() string {
+	if x != nil {
+		return x.SupersededBy
+	}
+	return ""
 }
 
 var File_proto_trade_trade_table_proto protoreflect.FileDescriptor
@@ -1754,7 +1960,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\tparent_id\x18\x14 \x01(\x04R\bparentId\x12'\n" +
 	"\x0fcounterparty_id\x18\x15 \x01(\x04R\x0ecounterpartyId:\x93\x02\x8a\x92\xf4\x01\x0etrade_commerce\x92\x92\xf4\x01\vcommerce_idڒ\xf4\x01\xcb\x01status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status\xe2\x92\xf4\x01\vrequest_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"]\n" +
 	"\x18TradeCommerceGuardRecord\x12\x19\n" +
-	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xeb\a\n" +
+	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xf4\b\n" +
 	"\x15TradeCommerceWorkflow\x12?\n" +
 	"\rseller_assets\x18\x01 \x01(\v2\x1a.trade.TradeAssetSelectionR\fsellerAssets\x12=\n" +
 	"\fbuyer_assets\x18\x02 \x01(\v2\x1a.trade.TradeAssetSelectionR\vbuyerAssets\x12)\n" +
@@ -1779,7 +1985,28 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x0fexternal_amount\x18\x13 \x01(\x04R\x0eexternalAmount\x124\n" +
 	"\x03rmb\x18\x14 \x01(\v2\".trade.TradeRmbConsignmentWorkflowR\x03rmb\x12A\n" +
 	"\x0fseller_identity\x18\x15 \x01(\v2\x18.trade.TradeRoleIdentityR\x0esellerIdentity\x12?\n" +
-	"\x0ebuyer_identity\x18\x16 \x01(\v2\x18.trade.TradeRoleIdentityR\rbuyerIdentity\"T\n" +
+	"\x0ebuyer_identity\x18\x16 \x01(\v2\x18.trade.TradeRoleIdentityR\rbuyerIdentity\x12>\n" +
+	"\n" +
+	"quarantine\x18\x17 \x01(\v2\x1e.trade.TradeCommerceQuarantineR\n" +
+	"quarantine\x12G\n" +
+	"\x0emanual_actions\x18\x18 \x03(\v2 .trade.TradeCommerceManualActionR\rmanualActions\"\x8c\x01\n" +
+	"\x17TradeCommerceQuarantine\x12\x14\n" +
+	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\rR\x06status\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x12\x13\n" +
+	"\x05at_ms\x18\x05 \x01(\x04R\x04atMs\"\xa7\x02\n" +
+	"\x19TradeCommerceManualAction\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x1a\n" +
+	"\boperator\x18\x02 \x01(\tR\boperator\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x13\n" +
+	"\x05at_ms\x18\x04 \x01(\x04R\x04atMs\x12%\n" +
+	"\x0eversion_before\x18\x05 \x01(\x04R\rversionBefore\x12>\n" +
+	"\n" +
+	"quarantine\x18\x06 \x01(\v2\x1e.trade.TradeCommerceQuarantineR\n" +
+	"quarantine\x12\x19\n" +
+	"\bnew_legs\x18\a \x03(\tR\anewLegs\x12'\n" +
+	"\x0fsuperseded_legs\x18\b \x03(\tR\x0esupersededLegs\"T\n" +
 	"\x11TradeRoleIdentity\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12%\n" +
 	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\"\xd0\x05\n" +
@@ -1803,7 +2030,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x0e \x01(\tR\x0fclientRequestId\x12H\n" +
 	"\x12registered_listing\x18\x0f \x01(\v2\x19.trade.RmbConsignmentViewR\x11registeredListing\x12'\n" +
 	"\x0fdelivery_digest\x18\x10 \x01(\fR\x0edeliveryDigest\x120\n" +
-	"\x14buyer_owner_revision\x18\x11 \x01(\x04R\x12buyerOwnerRevision\"\xdc\x01\n" +
+	"\x14buyer_owner_revision\x18\x11 \x01(\x04R\x12buyerOwnerRevision\"\x81\x02\n" +
 	"\x10TradeCommerceLeg\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -1811,7 +2038,8 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x06bundle\x18\x04 \x01(\v2\f.AssetBundleR\x06bundle\x12\x13\n" +
 	"\x05op_id\x18\x05 \x01(\x04R\x04opId\x12*\n" +
 	"\bsnapshot\x18\x06 \x01(\v2\x0e.AssetSnapshotR\bsnapshot\x12\x18\n" +
-	"\aoutcome\x18\a \x01(\rR\aoutcome*\xfb\x01\n" +
+	"\aoutcome\x18\a \x01(\rR\aoutcome\x12#\n" +
+	"\rsuperseded_by\x18\b \x01(\tR\fsupersededBy*\xfb\x01\n" +
 	"\rListingStatus\x12\x1e\n" +
 	"\x1aLISTING_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18LISTING_STATUS_ESCROWING\x10\x01\x12\x19\n" +
@@ -1852,7 +2080,7 @@ func file_proto_trade_trade_table_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_trade_trade_table_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_trade_trade_table_proto_goTypes = []any{
 	(ListingStatus)(0),                  // 0: trade.ListingStatus
 	(TradeAssetOpKind)(0),               // 1: trade.TradeAssetOpKind
@@ -1865,36 +2093,41 @@ var file_proto_trade_trade_table_proto_goTypes = []any{
 	(*TradeCommerceRecord)(nil),         // 8: trade.TradeCommerceRecord
 	(*TradeCommerceGuardRecord)(nil),    // 9: trade.TradeCommerceGuardRecord
 	(*TradeCommerceWorkflow)(nil),       // 10: trade.TradeCommerceWorkflow
-	(*TradeRoleIdentity)(nil),           // 11: trade.TradeRoleIdentity
-	(*TradeRmbConsignmentWorkflow)(nil), // 12: trade.TradeRmbConsignmentWorkflow
-	(*TradeCommerceLeg)(nil),            // 13: trade.TradeCommerceLeg
-	(ListingCategory)(0),                // 14: trade.ListingCategory
-	(*TradeAssetSelection)(nil),         // 15: trade.TradeAssetSelection
-	(*asset.AssetBundle)(nil),           // 16: AssetBundle
-	(*RmbConsignmentView)(nil),          // 17: trade.RmbConsignmentView
-	(*asset.AssetSnapshot)(nil),         // 18: AssetSnapshot
+	(*TradeCommerceQuarantine)(nil),     // 11: trade.TradeCommerceQuarantine
+	(*TradeCommerceManualAction)(nil),   // 12: trade.TradeCommerceManualAction
+	(*TradeRoleIdentity)(nil),           // 13: trade.TradeRoleIdentity
+	(*TradeRmbConsignmentWorkflow)(nil), // 14: trade.TradeRmbConsignmentWorkflow
+	(*TradeCommerceLeg)(nil),            // 15: trade.TradeCommerceLeg
+	(ListingCategory)(0),                // 16: trade.ListingCategory
+	(*TradeAssetSelection)(nil),         // 17: trade.TradeAssetSelection
+	(*asset.AssetBundle)(nil),           // 18: AssetBundle
+	(*RmbConsignmentView)(nil),          // 19: trade.RmbConsignmentView
+	(*asset.AssetSnapshot)(nil),         // 20: AssetSnapshot
 }
 var file_proto_trade_trade_table_proto_depIdxs = []int32{
-	14, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
+	16, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
 	0,  // 1: trade.TradeListingRecord.status:type_name -> trade.ListingStatus
 	1,  // 2: trade.TradeAssetOpRecord.kind:type_name -> trade.TradeAssetOpKind
 	2,  // 3: trade.TradeAssetOpRecord.status:type_name -> trade.TradeAssetOpStatus
 	3,  // 4: trade.TradeAssetOpRecord.ref_kind:type_name -> trade.TradeAssetOpRefKind
-	15, // 5: trade.TradeCommerceWorkflow.seller_assets:type_name -> trade.TradeAssetSelection
-	15, // 6: trade.TradeCommerceWorkflow.buyer_assets:type_name -> trade.TradeAssetSelection
-	13, // 7: trade.TradeCommerceWorkflow.legs:type_name -> trade.TradeCommerceLeg
-	16, // 8: trade.TradeCommerceWorkflow.official_bundle:type_name -> AssetBundle
-	12, // 9: trade.TradeCommerceWorkflow.rmb:type_name -> trade.TradeRmbConsignmentWorkflow
-	11, // 10: trade.TradeCommerceWorkflow.seller_identity:type_name -> trade.TradeRoleIdentity
-	11, // 11: trade.TradeCommerceWorkflow.buyer_identity:type_name -> trade.TradeRoleIdentity
-	17, // 12: trade.TradeRmbConsignmentWorkflow.registered_listing:type_name -> trade.RmbConsignmentView
-	16, // 13: trade.TradeCommerceLeg.bundle:type_name -> AssetBundle
-	18, // 14: trade.TradeCommerceLeg.snapshot:type_name -> AssetSnapshot
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	17, // 5: trade.TradeCommerceWorkflow.seller_assets:type_name -> trade.TradeAssetSelection
+	17, // 6: trade.TradeCommerceWorkflow.buyer_assets:type_name -> trade.TradeAssetSelection
+	15, // 7: trade.TradeCommerceWorkflow.legs:type_name -> trade.TradeCommerceLeg
+	18, // 8: trade.TradeCommerceWorkflow.official_bundle:type_name -> AssetBundle
+	14, // 9: trade.TradeCommerceWorkflow.rmb:type_name -> trade.TradeRmbConsignmentWorkflow
+	13, // 10: trade.TradeCommerceWorkflow.seller_identity:type_name -> trade.TradeRoleIdentity
+	13, // 11: trade.TradeCommerceWorkflow.buyer_identity:type_name -> trade.TradeRoleIdentity
+	11, // 12: trade.TradeCommerceWorkflow.quarantine:type_name -> trade.TradeCommerceQuarantine
+	12, // 13: trade.TradeCommerceWorkflow.manual_actions:type_name -> trade.TradeCommerceManualAction
+	11, // 14: trade.TradeCommerceManualAction.quarantine:type_name -> trade.TradeCommerceQuarantine
+	19, // 15: trade.TradeRmbConsignmentWorkflow.registered_listing:type_name -> trade.RmbConsignmentView
+	18, // 16: trade.TradeCommerceLeg.bundle:type_name -> AssetBundle
+	20, // 17: trade.TradeCommerceLeg.snapshot:type_name -> AssetSnapshot
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_trade_table_proto_init() }
@@ -1910,7 +2143,7 @@ func file_proto_trade_trade_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_trade_table_proto_rawDesc), len(file_proto_trade_trade_table_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

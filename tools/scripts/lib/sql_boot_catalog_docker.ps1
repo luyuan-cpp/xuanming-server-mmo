@@ -44,7 +44,7 @@ function New-DockerSqlBootSettings {
     $rootPassword = [string][Environment]::GetEnvironmentVariable('MYSQL_ROOT_PASSWORD', 'Process')
     if ([string]::IsNullOrEmpty($rootPassword)) { throw 'MYSQL_ROOT_PASSWORD is required; run tools/scripts/prepare_docker_debug.py and start through its .env.' }
     $settings = New-LocalSqlBootSettings -Endpoint 'mysql:3306' -EndpointName 'mysql' -Port 3306 -RootUser 'root' -RootPassword $rootPassword -RootPrincipal 'root@%' `
-        -DbConfigPath (Join-Path $Paths.ConfigRoot 'db.yaml') -DataServiceConfigPath (Join-Path $Paths.ConfigRoot 'data_service.yaml') -LoginConfigPath (Join-Path $Paths.ConfigRoot 'login.yaml')
+        -DbConfigPath (Join-Path $Paths.ConfigRoot 'db.yaml') -DataServiceConfigPath (Join-Path $Paths.ConfigRoot 'data_service.yaml')
     $settings.Executor = New-LocalSqlBootClientExecutor -Settings $settings -ClientPath 'mysql' -PrivateRoot $Paths.ClientRoot
     return $settings
 }

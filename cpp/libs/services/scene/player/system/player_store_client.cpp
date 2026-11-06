@@ -1,4 +1,8 @@
 #include "player/system/player_store_client.h"
+#include "core/async/coroutine_callback.h"
+#include "core/system/scene_task_scope.h"
+
+#include <boost/cobalt/task.hpp>
 
 #include <algorithm>
 #include <cstdlib>
@@ -15,6 +19,7 @@
 #include "engine/config/player_store_path.h"
 #include "grpc_client/player_store/player_store_grpc_client.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
+#include "player/system/save_timing_stats.h"
 #include "proto/common/base/common.pb.h"
 #include "proto/common/base/node.pb.h"
 #include "thread_context/node_context_manager.h"
@@ -32,6 +37,21 @@ namespace
     constexpr std::size_t kMinSecretBytes = 32;
     // 连续失败时每这么多次打一条,第一次也打。退避封顶 5s 时约等于每分钟一条。
     constexpr uint32_t kFailureLogEveryN = 12;
+
+    template<class Reply>
+    struct AttemptResult
+    {
+        bool accepted{false};
+        std::optional<Reply> reply;
+    };
+
+    template<class Reply>
+    void DeliverAttempt(const std::function<void(AttemptResult<Reply>)>& done, bool ok, const Reply* reply)
+    {
+        AttemptResult<Reply> result{true, std::nullopt};
+        if (ok && reply != nullptr) result.reply.emplace(*reply);
+        done(std::move(result));
+    }
 
     bool IsOwnerRejection(playerstore::SavePlayerResult result)
     {
@@ -97,9 +117,22 @@ bool DetachedReleaseSettled(playerstore::SavePlayerResult result)
 }
 
 
-PlayerStoreClient::PlayerStoreClient(Options options) : options_(std::move(options))
+PlayerStoreClient::PlayerStoreClient(Options options)
+    : lifetime_(std::make_shared<Lifetime>(Lifetime{std::ref(*this)})), options_(std::move(options))
 {
 }
+
+PlayerStoreClient::~PlayerStoreClient()
+{
+    lifetime_->owner.reset();
+}
+
+PlayerStoreClient* PlayerStoreClient::ResolveOwner(const std::weak_ptr<Lifetime>& original)
+{
+    const auto lifetime = original.lock();
+    return lifetime && lifetime->owner ? &lifetime->owner->get() : nullptr;
+}
+
 
 bool PlayerStoreClient::Seed(Guid playerId, uint32_t storageId, uint64_t ownerEpoch, uint64_t committedSaveSeq, player_store_rows::KindBytes confirmed)
 {
@@ -176,6 +209,56 @@ PlayerStoreClient::KindSet PlayerStoreClient::DirtyKinds(const State &state, con
     return dirty;
 }
 
+const PlayerStoreClient::KindSet &PlayerStoreClient::PiggybackKinds()
+{
+    static const KindSet kinds = []
+    {
+        KindSet set;
+        for (std::size_t kind = 1; kind < player_store_rows::kKindCount; ++kind)
+        {
+            if (player_store_rows::IsDataKind(kind) &&
+                player_store_rows::RowSavePolicy(kind) == PERSIST_ROW_SAVE_PIGGYBACK)
+            {
+                set.set(kind);
+            }
+        }
+        return set;
+    }();
+    return kinds;
+}
+
+bool PlayerStoreClient::DeferPeriodicSave(Guid playerId, const player_store_rows::KindBytes &rows)
+{
+    if (options_.piggybackFallbackSec <= 0)
+    {
+        return false;
+    }
+    const auto it = states_.find(playerId);
+    // 有在途或排队时不推迟:让这份快照照常并进排队,不改排队与回调的语义。
+    if (it == states_.end() || it->second.inflight.has_value() || it->second.pending.has_value())
+    {
+        return false;
+    }
+    State &state = it->second;
+    const KindSet &piggyback = PiggybackKinds();
+    const KindSet dirty = DirtyKinds(state, rows);
+    // 一定要写的情况:有别的行脏(位置照样顺带写出去);只顺带的行结果未决(库里是哪一份不知道,不能拖);
+    // 上一笔带着 release 或代次落后(Start 会强制写一笔)。没有任何变化时交给 Submit 判「已落盘」,计数照旧。
+    if (dirty.none() || (dirty & ~piggyback).any() || (state.uncertain & piggyback).any() ||
+        state.releaseCommitted || state.committedOwnerEpoch != state.ownerEpoch)
+    {
+        return false;
+    }
+    const auto now = Now();
+    if (!state.piggybackDeferredSince)
+    {
+        state.piggybackDeferredSince = now;
+        return true;
+    }
+    const std::chrono::duration<double> deferred = now - *state.piggybackDeferredSince;
+    return deferred.count() < options_.piggybackFallbackSec;
+}
+
 PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_store_rows::KindBytes rows, const SubmitOptions &submitOptions, SaveDone done)
 {
     const auto it = states_.find(playerId);
@@ -184,6 +267,8 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
         return SubmitResult::kNotSeeded;
     }
     State &state = it->second;
+    // 快照就是调用方此刻的内存,水位要在这时取:之后再发生的改动不在这份快照里。
+    const uint64_t commitMark = options_.commitMark ? options_.commitMark() : 0;
     // pending 非空也算忙:回调里再次 Submit 时,这份快照比 pending 新,不能抢到它前面发出去。
     if (state.inflight.has_value() || state.pending.has_value())
     {
@@ -193,6 +278,7 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
         }
         Pending &pending = *state.pending;
         pending.rows = std::move(rows);
+        pending.commitMark = std::max(pending.commitMark, commitMark);
         // force 粘性:被覆盖的那份要求的是「一定写一笔」,这个要求不能跟着快照一起丢。
         // release 不粘:最后一份说了算,断线重连复用实体时后来的存盘要把释放撤销。
         pending.options.force = pending.options.force || submitOptions.force;
@@ -207,11 +293,13 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
     }
     Callbacks callbacks;
     callbacks.latest = std::move(done);
-    switch (Start(playerId, state, rows, submitOptions, callbacks))
+    switch (Start(playerId, state, rows, submitOptions, callbacks, commitMark))
     {
     case StartResult::kSent:
         return SubmitResult::kAccepted;
     case StartResult::kNothingToWrite:
+        // 和已确认的内容一样:这份快照里的改动早已在库里。
+        NotifyCommittedThrough(playerId, commitMark);
         return SubmitResult::kAlreadyPersisted;
     case StartResult::kSeqExhausted:
     default:
@@ -220,9 +308,12 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
     }
 }
 
-PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &state, const player_store_rows::KindBytes &rows, const SubmitOptions &submitOptions, Callbacks &callbacks)
+PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &state, const player_store_rows::KindBytes &rows, const SubmitOptions &submitOptions, Callbacks &callbacks,
+                                                        uint64_t commitMark)
 {
+    const auto compareStart = save_timing_stats::Clock::now();
     KindSet dirty = DirtyKinds(state, rows);
+    save_timing_stats::ObserveSince(save_timing_stats::Stage::kCompare, compareStart);
     const bool epochBehind = state.committedOwnerEpoch != state.ownerEpoch;
     if (dirty.none() && !submitOptions.release && !submitOptions.force && !state.releaseCommitted && !epochBehind)
     {
@@ -263,7 +354,13 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
         inflight.confirmOnCommit[kind] = rows[kind];
     }
     inflight.sentKinds = dirty;
+    // 只顺带的行跟着这一笔写出去了:推迟的计时从下一次推迟重新开始(规格 §1.1)。
+    if ((dirty & PiggybackKinds()).any())
+    {
+        state.piggybackDeferredSince.reset();
+    }
     inflight.callbacks = std::move(callbacks);
+    inflight.commitMark = commitMark;
     state.inflight.emplace(std::move(inflight));
     state.backoffSec = options_.retryMinSec;
     state.failedAttempts = 0;
@@ -272,11 +369,16 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
         // 和 go/db 回 TOO_LARGE 走同一条路。排到下一轮:调用方可能还在自己的栈上,回调里的处置可能销毁它正在用的实体。
         LOG_ERROR << "[player_store] save of player " << playerId << " is " << requestBytes << " bytes, over the transport budget "
                   << options_.maxRequestBytes << "; refusing it without sending";
-        options_.schedule(0.0, [this, playerId, attemptGen = ++state.attemptGen]()
+        const std::weak_ptr<Lifetime> original = lifetime_;
+        options_.schedule(0.0, [original, playerId, attemptGen = ++state.attemptGen]()
         {
+            auto* owner = ResolveOwner(original);
+            if (owner == nullptr) return;
+            const auto it = owner->states_.find(playerId);
+            if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return;
             playerstore::SavePlayerResponse response;
             response.set_result(playerstore::SAVE_PLAYER_TOO_LARGE);
-            OnAttemptDone(playerId, attemptGen, true, &response);
+            owner->HandleSaveResponse(playerId, it->second, response);
         });
         return StartResult::kSent;
     }
@@ -287,15 +389,41 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
 void PlayerStoreClient::Attempt(Guid playerId, State &state)
 {
     const uint64_t attemptGen = ++state.attemptGen;
-    const bool sent = options_.send(state.inflight->request, [this, playerId, attemptGen](bool ok, const playerstore::SavePlayerResponse *response)
-    {
-        OnAttemptDone(playerId, attemptGen, ok, response);
-    });
-    if (!sent)
-    {
-        ScheduleRetry(playerId, state);
-    }
+    (void)SceneTaskScope::TryStartDurable(RunSaveAttempt(lifetime_, playerId, attemptGen), "PlayerStoreSave");
 }
+
+boost::cobalt::task<void> PlayerStoreClient::RunSaveAttempt(std::weak_ptr<Lifetime> original, Guid playerId, uint64_t attemptGen)
+{
+    using Result = AttemptResult<playerstore::SavePlayerResponse>;
+    auto submit = [&](auto done) {
+        auto* owner = ResolveOwner(original);
+        if (owner == nullptr) return false;
+        const auto it = owner->states_.find(playerId);
+        if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return false;
+        return owner->options_.send(it->second.inflight->request,
+            [done = std::move(done)](bool ok, const playerstore::SavePlayerResponse* reply) {
+                DeliverAttempt(done, ok, reply);
+            });
+    };
+    auto& loop = *muduo::net::EventLoop::getEventLoopOfCurrentThread();
+    auto outcome = co_await loop_async::AwaitCallback<Result>(loop, std::move(submit), Result{});
+    // 最终拆除时只结束本地等待，未确认的快照仍未落定。
+    if (!outcome || !SceneTaskScope::IsDurableAccepting()) co_return;
+    auto* owner = ResolveOwner(original);
+    if (owner == nullptr) co_return;
+    const auto it = owner->states_.find(playerId);
+    if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) co_return;
+    auto& state = it->second;
+    if (!outcome->reply)
+    {
+        // 已接纳但结局未知，可能已经提交。未接纳没有这次写入。
+        if (outcome->accepted) state.uncertain |= state.inflight->sentKinds;
+        owner->ScheduleRetry(playerId, state);
+        co_return;
+    }
+    owner->HandleSaveResponse(playerId, state, *outcome->reply);
+}
+
 
 void PlayerStoreClient::ScheduleRetry(Guid playerId, State &state)
 {
@@ -307,40 +435,27 @@ void PlayerStoreClient::ScheduleRetry(Guid playerId, State &state)
     }
     const double delay = Jittered(state.backoffSec);
     state.backoffSec = std::min(state.backoffSec * 2.0, options_.retryMaxSec);
-    options_.schedule(delay, [this, playerId, attemptGen = state.attemptGen]()
+    const std::weak_ptr<Lifetime> original = lifetime_;
+    options_.schedule(delay, [original, playerId, attemptGen = state.attemptGen]()
     {
-        const auto it = states_.find(playerId);
-        if (it == states_.end() || !it->second.inflight.has_value() || it->second.attemptGen != attemptGen)
-        {
-            return;
-        }
-        Attempt(playerId, it->second);
+        auto* owner = ResolveOwner(original);
+        if (owner == nullptr) return;
+        const auto it = owner->states_.find(playerId);
+        if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return;
+        owner->Attempt(playerId, it->second);
     });
 }
 
-void PlayerStoreClient::OnAttemptDone(Guid playerId, uint64_t attemptGen, bool ok, const playerstore::SavePlayerResponse *response)
+void PlayerStoreClient::HandleSaveResponse(Guid playerId, State &state, const playerstore::SavePlayerResponse &response)
 {
-    const auto it = states_.find(playerId);
-    if (it == states_.end() || !it->second.inflight.has_value() || it->second.attemptGen != attemptGen)
-    {
-        return;
-    }
-    State &state = it->second;
-    if (!ok || response == nullptr)
-    {
-        // 结果未知:可能已经提交。同内容同序号重试,go/db 会回 EQUAL。
-        state.uncertain |= state.inflight->sentKinds;
-        ScheduleRetry(playerId, state);
-        return;
-    }
     const auto &request = state.inflight->request;
     SaveResult result;
-    result.result = response->result();
-    result.rowOwnerEpoch = response->row_owner_epoch();
-    result.rowSaveSeq = response->row_save_seq();
+    result.result = response.result();
+    result.rowOwnerEpoch = response.row_owner_epoch();
+    result.rowSaveSeq = response.row_save_seq();
     result.ownerEpoch = request.owner_epoch();
     result.saveSeq = request.save_seq();
-    switch (response->result())
+    switch (response.result())
     {
     case playerstore::SAVE_PLAYER_COMMITTED:
     case playerstore::SAVE_PLAYER_EQUAL:
@@ -354,7 +469,7 @@ void PlayerStoreClient::OnAttemptDone(Guid playerId, uint64_t attemptGen, bool o
         if (state.failedAttempts % kFailureLogEveryN == 0)
         {
             LOG_ERROR << "[player_store] save of player " << playerId << " seq " << request.save_seq()
-                      << " will retry: " << playerstore::SavePlayerResult_Name(response->result());
+                      << " will retry: " << playerstore::SavePlayerResult_Name(response.result());
         }
         ScheduleRetry(playerId, state);
         return;
@@ -362,12 +477,12 @@ void PlayerStoreClient::OnAttemptDone(Guid playerId, uint64_t attemptGen, bool o
         // 这一笔明确没有提交,但之前结果未知的那次发送可能已经提交了,库里是哪一份不知道,
         // 所以这些行必须并入脏集,否则改回原值的行不会被写。
         LOG_ERROR << "[player_store] save of player " << playerId << " seq " << request.save_seq()
-                  << " rejected: " << playerstore::SavePlayerResult_Name(response->result())
-                  << " owner_epoch=" << request.owner_epoch() << " row_owner_epoch=" << response->row_owner_epoch()
-                  << " row_save_seq=" << response->row_save_seq();
+                  << " rejected: " << playerstore::SavePlayerResult_Name(response.result())
+                  << " owner_epoch=" << request.owner_epoch() << " row_owner_epoch=" << response.row_owner_epoch()
+                  << " row_save_seq=" << response.row_save_seq();
         state.uncertain |= state.inflight->sentKinds;
         // 排队的快照带着同一个代次,发出去也只会再被拒,一并丢弃;代次变了的照常发。
-        if (IsOwnerRejection(response->result()) && state.pending.has_value() && state.ownerEpoch == request.owner_epoch())
+        if (IsOwnerRejection(response.result()) && state.pending.has_value() && state.ownerEpoch == request.owner_epoch())
         {
             Pending dropped = std::move(*state.pending);
             state.pending.reset();
@@ -418,10 +533,20 @@ void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &re
         state.releaseCommitted = finished.request.release();
         state.committedOwnerEpoch = finished.request.owner_epoch();
         state.committedSaveSeq = finished.request.save_seq();
+        // 先放行再回调:回调里可能销毁实体,那之后还没放行的会被当成没落库丢掉。
+        NotifyCommittedThrough(playerId, finished.commitMark);
     }
     // 回调里可能再次 Submit(进 pending),也可能 Forget,之后不再使用 state。
     Fire(finished.callbacks, result);
     Advance(playerId);
+}
+
+void PlayerStoreClient::NotifyCommittedThrough(Guid playerId, uint64_t commitMark) const
+{
+    if (options_.onCommittedThrough)
+    {
+        options_.onCommittedThrough(playerId, commitMark);
+    }
 }
 
 void PlayerStoreClient::Advance(Guid playerId)
@@ -448,7 +573,7 @@ void PlayerStoreClient::Advance(Guid playerId)
         }
         Pending next = std::move(*state.pending);
         state.pending.reset();
-        const StartResult started = Start(playerId, state, next.rows, next.options, next.callbacks);
+        const StartResult started = Start(playerId, state, next.rows, next.options, next.callbacks, next.commitMark);
         if (started == StartResult::kSent)
         {
             return;
@@ -459,6 +584,8 @@ void PlayerStoreClient::Advance(Guid playerId)
             outcome.status = SaveStatus::kAlreadyPersisted;
             outcome.ownerEpoch = state.committedOwnerEpoch;
             outcome.saveSeq = state.committedSaveSeq;
+            // 排队的那份和已确认的内容一样:它里面的改动早已在库里。先放行再回调,理由同 Finish。
+            NotifyCommittedThrough(playerId, next.commitMark);
         }
         Fire(next.callbacks, outcome);
     }
@@ -518,26 +645,20 @@ void PlayerStoreClient::ReleaseDetached(Guid playerId, uint64_t ownerEpoch, uint
     request.set_instance_id(options_.instanceId());
     request.set_release(true);
     detachedInFlight_.insert(playerId);
-    // shared_ptr:send 返回 false 时 done 还要在这里调用,而闭包已经移交给了 send。
-    auto shared = std::make_shared<ReleaseDone>(std::move(done));
-    const bool sent = options_.send(request, [this, playerId, shared](bool ok, const playerstore::SavePlayerResponse *response)
+    const std::weak_ptr<Lifetime> original = lifetime_;
+    auto complete = [original, playerId, done = std::move(done)](bool ok, const playerstore::SavePlayerResponse* response)
     {
-        detachedInFlight_.erase(playerId);
-        (*shared)(ok && response != nullptr, response != nullptr ? response->result() : playerstore::SAVE_PLAYER_RESULT_UNSPECIFIED);
-        if (!HasUnsettled(playerId))
+        auto* owner = ResolveOwner(original);
+        if (owner == nullptr) return;
+        owner->detachedInFlight_.erase(playerId);
+        done(ok && response != nullptr, response != nullptr ? response->result() : playerstore::SAVE_PLAYER_RESULT_UNSPECIFIED);
+        owner = ResolveOwner(original);
+        if (owner != nullptr && !owner->HasUnsettled(playerId))
         {
-            NotifySettled(playerId);
+            owner->NotifySettled(playerId);
         }
-    });
-    if (!sent)
-    {
-        detachedInFlight_.erase(playerId);
-        (*shared)(false, playerstore::SAVE_PLAYER_RESULT_UNSPECIFIED);
-        if (!HasUnsettled(playerId))
-        {
-            NotifySettled(playerId);
-        }
-    }
+    };
+    if (!options_.send(request, complete)) complete(false, nullptr);
 }
 
 double PlayerStoreClient::Jittered(double delaySec) const
@@ -579,22 +700,72 @@ void PlayerStoreClient::StartClaim(Guid playerId, Claim &claim)
 
 void PlayerStoreClient::AttemptClaim(Guid playerId, Claim &claim)
 {
-    const auto request = options_.claimRequest(playerId);
+    if (!SceneTaskScope::IsDurableAccepting()) return;
+    auto request = options_.claimRequest(playerId);
     if (!request)
     {
         FinishClaim(playerId, nullptr);
         return;
     }
     const uint64_t attemptGen = ++claim.attemptGen;
-    const bool sent = options_.sendClaim(*request, [this, playerId, attemptGen](bool ok, const playerstore::LoadAndClaimResponse *response)
-    {
-        OnClaimAttemptDone(playerId, attemptGen, ok, response);
-    });
-    if (!sent)
-    {
-        ScheduleClaimRetry(playerId, claim);
-    }
+    (void)SceneTaskScope::TryStartDurable(
+        RunClaimAttempt(lifetime_, playerId, attemptGen, std::move(*request)), "PlayerStoreClaim");
 }
+
+boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifetime> original, Guid playerId,
+    uint64_t attemptGen, playerstore::LoadAndClaimRequest request)
+{
+    using Result = AttemptResult<playerstore::LoadAndClaimResponse>;
+    auto submit = [&](auto done) {
+        auto* owner = ResolveOwner(original);
+        if (owner == nullptr) return false;
+        return owner->options_.sendClaim(request,
+            [done = std::move(done)](bool ok, const playerstore::LoadAndClaimResponse* reply) {
+                DeliverAttempt(done, ok, reply);
+            });
+    };
+    auto& loop = *muduo::net::EventLoop::getEventLoopOfCurrentThread();
+    auto outcome = co_await loop_async::AwaitCallback<Result>(loop, std::move(submit), Result{});
+    if (!outcome || !SceneTaskScope::IsDurableAccepting()) co_return;
+    auto* owner = ResolveOwner(original);
+    if (owner == nullptr) co_return;
+    const auto it = owner->claims_.find(playerId);
+    if (it == owner->claims_.end() || it->second.attemptGen != attemptGen) co_return;
+    const auto& response = outcome->reply;
+    if (!response)
+    {
+        owner->ScheduleClaimRetry(playerId, it->second);
+        co_return;
+    }
+    if (response->result() != playerstore::LOAD_AND_CLAIM_CLAIMED)
+    {
+        owner->FinishClaim(playerId, &*response);
+        co_return;
+    }
+
+    player_store_rows::KindBytes confirmed;
+    for (const auto &row : response->rows())
+    {
+        const auto kind = static_cast<std::size_t>(row.kind());
+        // 退役号(旧分行布局的 1、2)也算未知:按现在的分行解读别的布局写的行会丢字段(规格 §1.1)。
+        if (!player_store_rows::IsDataKind(kind))
+        {
+            LOG_ERROR << "[player_store] claim of player " << playerId << " returned an unknown or retired kind " << kind
+                      << " (a row from another row layout; the project has not launched, rebuild the database)";
+            owner->FinishClaim(playerId, nullptr);
+            co_return;
+        }
+        confirmed[kind] = row.payload();
+    }
+    if (!owner->Seed(playerId, response->storage_id(), response->owner_epoch(), response->save_seq(), std::move(confirmed)))
+    {
+        LOG_ERROR << "[player_store] claim of player " << playerId << " landed while a save is unsettled; refusing the entry";
+        owner->FinishClaim(playerId, nullptr);
+        co_return;
+    }
+    owner->FinishClaim(playerId, &*response);
+}
+
 
 void PlayerStoreClient::ScheduleClaimRetry(Guid playerId, Claim &claim)
 {
@@ -608,53 +779,15 @@ void PlayerStoreClient::ScheduleClaimRetry(Guid playerId, Claim &claim)
     ++claim.failedAttempts;
     const double delay = Jittered(claim.backoffSec);
     claim.backoffSec = std::min(claim.backoffSec * 2.0, options_.retryMaxSec);
-    options_.schedule(delay, [this, playerId, attemptGen = claim.attemptGen]()
+    const std::weak_ptr<Lifetime> original = lifetime_;
+    options_.schedule(delay, [original, playerId, attemptGen = claim.attemptGen]()
     {
-        const auto it = claims_.find(playerId);
-        if (it == claims_.end() || it->second.attemptGen != attemptGen)
-        {
-            return;
-        }
-        AttemptClaim(playerId, it->second);
+        auto* owner = ResolveOwner(original);
+        if (owner == nullptr) return;
+        const auto it = owner->claims_.find(playerId);
+        if (it == owner->claims_.end() || it->second.attemptGen != attemptGen) return;
+        owner->AttemptClaim(playerId, it->second);
     });
-}
-
-void PlayerStoreClient::OnClaimAttemptDone(Guid playerId, uint64_t attemptGen, bool ok, const playerstore::LoadAndClaimResponse *response)
-{
-    const auto it = claims_.find(playerId);
-    if (it == claims_.end() || it->second.attemptGen != attemptGen)
-    {
-        return;
-    }
-    if (!ok || response == nullptr)
-    {
-        ScheduleClaimRetry(playerId, it->second);
-        return;
-    }
-    if (response->result() != playerstore::LOAD_AND_CLAIM_CLAIMED)
-    {
-        FinishClaim(playerId, response);
-        return;
-    }
-    player_store_rows::KindBytes confirmed;
-    for (const auto &row : response->rows())
-    {
-        const auto kind = static_cast<std::size_t>(row.kind());
-        if (kind == 0 || kind >= player_store_rows::kKindCount)
-        {
-            LOG_ERROR << "[player_store] claim of player " << playerId << " returned an unknown kind " << kind;
-            FinishClaim(playerId, nullptr);
-            return;
-        }
-        confirmed[kind] = row.payload();
-    }
-    if (!Seed(playerId, response->storage_id(), response->owner_epoch(), response->save_seq(), std::move(confirmed)))
-    {
-        LOG_ERROR << "[player_store] claim of player " << playerId << " landed while a save is unsettled; refusing the entry";
-        FinishClaim(playerId, nullptr);
-        return;
-    }
-    FinishClaim(playerId, response);
 }
 
 void PlayerStoreClient::FinishClaim(Guid playerId, const playerstore::LoadAndClaimResponse *response)

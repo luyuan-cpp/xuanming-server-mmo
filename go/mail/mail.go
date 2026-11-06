@@ -42,6 +42,7 @@ import (
 	"shared/rolefence"
 	"shared/scenenode"
 	"shared/serviceauth"
+	"shared/sqlpoolstats"
 )
 
 // roleFenceCaller 是邮件读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(roleFenceCaller)。
@@ -55,11 +56,9 @@ type config struct {
 	SharedRedisPasswordEnv string             `json:"SharedRedisPasswordEnv,optional"`
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):提醒读会话,资产定位读位置。
 	// 没写 Addrs 时指向 SharedRedisAddr 那一个实例(playerRedisConfig),开发环境不用改。
-	PlayerRedis         playerredis.Config            `json:",optional"`
-	AssetSecretEnv      string                        `json:"AssetSecretEnv"`
-	KafkaBrokers        []string                      `json:"KafkaBrokers"`
-	GlobalLoginSessions bool                          `json:"GlobalLoginSessions"`
-	LoginRedis          playerredis.LoginReaderConfig `json:"LoginRedis"`
+	PlayerRedis    playerredis.Config `json:",optional"`
+	AssetSecretEnv string             `json:"AssetSecretEnv"`
+	KafkaBrokers   []string           `json:"KafkaBrokers"`
 	// GuildRpc:读玩家所在的帮,给帮会文本邮件判可见。帮会表归 guild 服务,邮件库不跨库读。
 	GuildRpc zrpc.RpcClientConf `json:"GuildRpc"`
 }
@@ -193,9 +192,6 @@ func run(c config, migrate bool) (runErr error) {
 	if migrate {
 		return nil
 	}
-	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 {
-		return errors.New("邮件必须显式装配全局登录态Redis")
-	}
 	if err = rolefence.VerifySchema(ctx, db); err != nil {
 		return fmt.Errorf("role_fence 表不可用,先运行 mail -migrate: %w", err)
 	}
@@ -252,6 +248,8 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	metrics.Register()
+	// 连接池指标 mmorpg_sql_pool_*{sql_client="mail",pool="primary"}:只有邮件库这一个池,抓取时现取 DBStats。
+	sqlpoolstats.Register("mail", []string{sqlpoolstats.PrimaryPool}, sqlpoolstats.Single(sqlpoolstats.PrimaryPool, db))
 	playerRedis, err := playerredis.New(c.playerRedisConfig())
 	if err != nil {
 		return fmt.Errorf("invalid PlayerRedis config: %w", err)
@@ -281,24 +279,8 @@ func run(c config, migrate bool) (runErr error) {
 			runErr = errors.Join(runErr, writer.Close())
 		}
 	}()
-	loginRedis, err := playerredis.New(c.LoginRedis.ClientConfig(playerredis.Config{
-		PoolSizePerNode: 8, DialTimeoutMs: 1000, ReadTimeoutMs: 300, WriteTimeoutMs: 300, PoolTimeoutMs: 300,
-	}))
-	if err != nil {
-		return fmt.Errorf("invalid LoginRedis config: %w", err)
-	}
-	defer func() {
-		if !resourcesTransferred {
-			runErr = errors.Join(runErr, loginRedis.Close())
-		}
-	}()
-	loginCheck, cancelLoginCheck := context.WithTimeout(ctx, time.Second)
-	err = loginRedis.Ping(loginCheck).Err()
-	cancelLoginCheck()
-	if err != nil {
-		return errors.New("邮件全局登录态Redis不可用")
-	}
-	handler := server.New(repo, auth, &notify.Notifier{Redis: playerRedis, Publisher: &relayPublisher{gate: relay, writer: writer}}).WithLoginSessions(loginRedis)
+	// 在线域原账号只认 gate 签名原件(domainhost 装配的验签拦截器),不读 login Redis,所以这里不装配登录态连接。
+	handler := server.New(repo, auth, &notify.Notifier{Redis: playerRedis, Publisher: &relayPublisher{gate: relay, writer: writer}})
 	etcd, err := clientv3.New(clientv3.Config{Endpoints: c.Etcd.Hosts, DialTimeout: 3 * time.Second})
 	if err != nil {
 		return err
@@ -408,7 +390,7 @@ func run(c config, migrate bool) (runErr error) {
 		}
 		sqlWriter.Seal()
 		conns.Close()
-		relayErr = errors.Join(ids.RPC.Conn().Close(), guildRPC.Conn().Close(), loginRedis.Close(), playerRedis.Close(), etcd.Close(), db.Close())
+		relayErr = errors.Join(ids.RPC.Conn().Close(), guildRPC.Conn().Close(), playerRedis.Close(), etcd.Close(), db.Close())
 		relayClosed = true
 		if relayErr != nil {
 			relay.Hold()

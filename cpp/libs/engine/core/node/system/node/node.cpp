@@ -39,6 +39,7 @@
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/open_file_limit.h"
+#include "node/system/node/release_track.h"
 #include "engine/config/node_log_level.h"
 #include "thread_context/node_context_manager.h"
 #include "muduo_grpc/address.h"
@@ -782,18 +783,21 @@ namespace
 
 	// 每个 C++ 节点都有的两条身份序列,排在各模块的采集结果之前。Pod 标签只能说明「哪个 Pod」,
 	// zone / node_id 要靠这条关联;node_id 在 etcd 分配前为 0。
+	// release_track 只有 stable / canary 两个取值(发布轨道设计 §2.1),按轨道比较新旧版本时用它关联;
+	// 指标出口先于 InitRpcServer 启动,那之前它是空串。
 	std::string RenderNodeIdentityMetrics(const NodeInfo &info)
 	{
 		prometheus_text::Writer writer;
 		writer.BeginFamily("cpp_node_info",
-						   "Identity of this C++ node process (value is always 1); node_id is 0 before etcd allocation.",
+						   "Identity of this C++ node process (value is always 1); node_id is 0 before etcd allocation, "
+						   "release_track is empty before startup resolves it.",
 						   prometheus_text::MetricType::kGauge);
 		const auto nodeType = std::to_string(info.node_type());
 		const auto zoneId = std::to_string(info.zone_id());
 		const auto nodeId = std::to_string(info.node_id());
 		const auto sceneNodeType = std::to_string(info.scene_node_type());
 		writer.Sample({{"node_type", nodeType}, {"zone_id", zoneId}, {"node_id", nodeId},
-					   {"scene_node_type", sceneNodeType}},
+					   {"scene_node_type", sceneNodeType}, {"release_track", info.release_track()}},
 					  1);
 		writer.BeginFamily("cpp_node_start_time_seconds",
 						   "Unix time this C++ node process started (NodeInfo.launch_time).",
@@ -1106,6 +1110,17 @@ void Node::InitRpcServer()
 		NodeUtils::IsGrpcOnlyNodeType(GetNodeType()) ? PROTOCOL_GRPC : PROTOCOL_TCP);
 	localNodeInfo.set_launch_time(TimeSystem::NowMicrosecondsUTC());
 	localNodeInfo.set_zone_id(tlsNodeConfigManager.GetGameConfig().zone_id());
+
+	// 发布轨道是进程级部署属性(docs/design/release-track-gray-canary.md §2.1),必须在首次发布 NodeInfo 之前定下。
+	// 取值非法就拒启:带着认不出的轨道注册,所有选点方都会把本节点当无效节点跳过,不报错,却也收不到流量。
+	const auto releaseTrack = release_track::FromEnv();
+	if (!releaseTrack)
+	{
+		FatalStartupConfig("release track",
+						   std::string(release_track::kEnvVar) + " must be \"stable\" or \"canary\" (leave it unset for stable)");
+	}
+	localNodeInfo.set_release_track(std::string(release_track::Name(*releaseTrack)));
+	LOG_INFO << "Node release track: " << localNodeInfo.release_track();
 
 	localNodeInfo.set_node_uuid(boost::uuids::to_string(uuidGenerator()));
 
@@ -1535,6 +1550,9 @@ void Node::StartRpcServer()
 			 << " registered endpoint=" << localNodeInfo.endpoint().ip() << ":" << listenPort;
 
 	rpcServer = std::make_unique<RpcServerPtr::element_type>(&eventLoop, rpcListenAddress);
+	// 入站节点链路的心跳(docs/design/muduo-rpc-channel.md §21),对端出站 RpcClient 由 NodeConnector 同样开启。
+	// gate / battle 的这个端口给客户端与战斗边缘,SetAfterStart 会换掉 RpcServer 的回调,实际只有 scene 的入站节点链路用到。
+	rpcServer->setLinkHeartbeat(kNodeLinkHeartbeat);
 	if(!maintenancePrepareBoot_)rpcServer->start();
 	auto *nodeReplyService = GetNodeReplyService();
 	if (nodeReplyService != nullptr)

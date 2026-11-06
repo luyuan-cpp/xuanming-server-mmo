@@ -13,6 +13,10 @@ package node
 // docs/design/player-locator-gate-session-index.md §6):对账 leader 据此判断有没有不维护索引的旧版写者,
 // 两者同生同灭才不会出现「有 NodeInfo 没能力键」的误判窗口。同步 allocator 修改时保留这个钩子即可;
 // 将来收进 go/shared 时把它做成公共选项。
+//
+// 2026-11-05 登记(发布轨道,docs/design/release-track-gray-canary.md §2.1):各副本都在注册入口第一步读
+// releasetrack.FromEnv,取值非法就在碰 etcd 之前返回错误;合法的轨道经 newNodeInfo 写进 NodeInfo.release_track,
+// 重注册沿用同一个 Info。与 shared/noderegistry 同一做法,同步修改时保留。
 
 import (
 	"context"
@@ -29,6 +33,7 @@ import (
 	"player_locator/internal/config"
 	proto_common "proto/common/base"
 	"shared/nodeinfo"
+	"shared/releasetrack"
 	"shared/snowflake"
 )
 
@@ -93,7 +98,14 @@ func allocationKeyPrefix(prefix string, nodeType uint32) string {
 	return fmt.Sprintf("%s/allocated/node_type/%d/node_id/", prefix, nodeType)
 }
 
+// NewNode 注册本进程并返回句柄。发布轨道在第一步读,不靠入口传参:取值非法时在碰 etcd 之前就返回错误,
+// 进程随之拒启;漏写轨道的 canary 进程会被当成 stable(与 shared/noderegistry 同一理由)。
 func NewNode(nodeType uint32, ip string, port uint32, opts ...Option) (*Node, error) {
+	track, err := releasetrack.FromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("release track: %w", err)
+	}
+
 	cfg := config.AppConfig
 	var o nodeOptions
 	for _, opt := range opts {
@@ -114,17 +126,7 @@ func NewNode(nodeType uint32, ip string, port uint32, opts ...Option) (*Node, er
 		return nil, fmt.Errorf("etcd grant failed: %w", err)
 	}
 
-	info := &proto_common.NodeInfo{
-		NodeType: nodeType,
-		Endpoint: &proto_common.EndpointComp{
-			Ip:   ip,
-			Port: port,
-		},
-		ZoneId:       cfg.Node.ZoneId,
-		LaunchTime:   uint64(time.Now().Unix()),
-		ProtocolType: uint32(proto_common.ENodeProtocolType_PROTOCOL_GRPC),
-		NodeUuid:     uuid.New().String(),
-	}
+	info := newNodeInfo(nodeType, cfg.Node.ZoneId, ip, port, track)
 
 	prefix := rpcPrefix(nodeType)
 	markers := leaseBoundMarkerOps(o.markerPrefixes, info.NodeUuid, grant.ID)
@@ -135,6 +137,8 @@ func NewNode(nodeType uint32, ip string, port uint32, opts ...Option) (*Node, er
 		return nil, err
 	}
 	info.NodeId = nodeID
+	logx.Infof("player_locator node registered: zone=%d node_type=%d node_id=%d uuid=%s release_track=%s",
+		info.ZoneId, nodeType, nodeID, info.NodeUuid, track)
 
 	return &Node{
 		Info:           info,
@@ -142,6 +146,23 @@ func NewNode(nodeType uint32, ip string, port uint32, opts ...Option) (*Node, er
 		leaseID:        grant.ID,
 		markerPrefixes: o.markerPrefixes,
 	}, nil
+}
+
+// newNodeInfo 构造本进程写进 etcd 的 NodeInfo,node_id 由随后的分配步骤填。
+// 抽成函数是为了单测不连 etcd 就能核对轨道;重注册沿用同一个 Info,轨道不会丢。
+func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releasetrack.Track) *proto_common.NodeInfo {
+	return &proto_common.NodeInfo{
+		NodeType: nodeType,
+		Endpoint: &proto_common.EndpointComp{
+			Ip:   ip,
+			Port: port,
+		},
+		ZoneId:       zoneId,
+		LaunchTime:   uint64(time.Now().Unix()),
+		ProtocolType: uint32(proto_common.ENodeProtocolType_PROTOCOL_GRPC),
+		NodeUuid:     uuid.New().String(),
+		ReleaseTrack: track.String(),
+	}
 }
 
 // allocateNodeID 在 (node_type) 下找空闲 node_id 并通过 etcd Txn CAS 占住。

@@ -53,9 +53,10 @@ var realWatchTimers = watchTimers{
 //     那条路径要 fail-closed(读不到就本轮不判),不能拿可能过期的镜像当事实。
 //   - Nodes:读 Run 维护的进程内 list-watch 镜像;镜像还没同步、或有节点超过 cacheStaleAfter 没刷新时,
 //     回落到 FetchAllNodesCtx。AssignGate 快速通道与排队 dispatcher 用它 —— 它们本来就容忍 gate 人数
-//     约 10s 的上报滞后,没必要每个请求打一次 etcd(容量模型 A0-7)。
+//     约 10s 的上报滞后,没必要每个请求打一次 etcd(容量模型 A0-7)。读镜像时每台节点带停写判定
+//     (WatchedNode.Stale,见 nodeDataStaleAfter),直读没有历史可比,不判。
 //
-// Run 不起时 Nodes 永远回落直读,行为与引入镜像之前完全相同。
+// Run 不起时 Nodes 永远回落直读,行为与引入镜像之前完全相同(也就没有停写判定)。
 type NodeWatcher struct {
 	kv clientv3.KV
 	// newWatcher 每轮 watch 建一个独立的 Watcher,用完 Close(见 watch)。
@@ -109,14 +110,23 @@ func (nw *NodeWatcher) FetchAllNodesCtx(ctx context.Context) ([]*login_proto.Nod
 }
 
 // Nodes 返回本前缀下的全部节点:镜像新鲜就读镜像,否则回落直读(见类型注释)。
-// 返回的切片与元素只读,不得修改(镜像会把同一份交给别的调用方)。
-func (nw *NodeWatcher) Nodes(ctx context.Context) ([]*login_proto.NodeInfo, error) {
+// 回落直读时没有历史可比,判不了停写,Stale 一律为 false,与引入停写判定之前的行为相同。
+// 返回的切片归调用方;其中的 Info 只读,不得修改(镜像会把同一份交给别的调用方)。
+func (nw *NodeWatcher) Nodes(ctx context.Context) ([]WatchedNode, error) {
 	nodes, ok, source := nw.cache.view()
 	gateDirectoryReads.Inc(source)
 	if ok {
 		return nodes, nil
 	}
-	return nw.FetchAllNodesCtx(ctx)
+	infos, err := nw.FetchAllNodesCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]WatchedNode, len(infos))
+	for i, info := range infos {
+		out[i] = WatchedNode{Info: info}
+	}
+	return out, nil
 }
 
 // Run 阻塞式跑 list-watch:全量同步建镜像 → 从同步时的 revision 往后 watch 增量;watch 出错、被压缩、
@@ -154,7 +164,7 @@ func (nw *NodeWatcher) fullSync(ctx context.Context) (int64, error) {
 	}
 	kvs := make([]nodeEvent, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
-		kvs = append(kvs, nodeEvent{key: string(kv.Key), value: kv.Value})
+		kvs = append(kvs, nodeEvent{key: string(kv.Key), value: kv.Value, modRev: kv.ModRevision})
 	}
 	// 没有 gate 的 zone 每 cacheResyncAfter 就同步一次,只在首次或节点数变化时打日志,不刷屏。
 	if prev, first := nw.cache.replaceAll(kvs); first || prev != len(kvs) {
@@ -201,6 +211,7 @@ func (nw *NodeWatcher) watch(ctx context.Context, rev int64) {
 				events = append(events, nodeEvent{
 					key:     string(ev.Kv.Key),
 					value:   ev.Kv.Value,
+					modRev:  ev.Kv.ModRevision,
 					deleted: ev.Type == clientv3.EventTypeDelete,
 				})
 			}

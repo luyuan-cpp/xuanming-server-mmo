@@ -36,6 +36,13 @@
 //     这类服务在进程内换号,等于把旧身份上的在途消息 / 状态悄悄丢给了别人。
 //     D-11 的前提是"node_id = worker id"只对 C++ / login 成立,Go 全局服务不成立。
 //
+// # 发布轨道(docs/design/release-track-gray-canary.md §2.1)
+//
+// 注册值里的 releaseTrack 由本包写,调用方的 BuildValue 不用管。轨道是进程级的部署属性,
+// 本包在 Register 时读 releasetrack.FromEnv,取值非法就拒注册(进而拒启动)。放在这里而不是
+// 让每个服务自己填,是为了不留漏填的口子:canary 进程漏写轨道,就会被当成 stable 接 stable 的流量。
+// BuildValue 若自己写了 releaseTrack,必须与进程轨道一致,否则拒注册。
+//
 // # 使用顺序
 //
 //	reg, err := noderegistry.RegisterAfterListening(ctx, cli, c.ListenOn, 30*time.Second, spec)
@@ -68,6 +75,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"shared/releasetrack"
 	"shared/safego"
 	"shared/snowflake"
 )
@@ -108,7 +116,7 @@ type Spec struct {
 	LeaseTTL int64
 	// BuildValue 生成 rpcPath 的值:protojson(NodeInfo),必须使用 protojson 默认的
 	// lowerCamelCase 字段名(与 C++ MessageToJsonString 一致)。nodeId / nodeUuid 必须
-	// 原样写入入参;换号重注册时会用新 nodeID 再调一次。
+	// 原样写入入参;换号重注册时会用新 nodeID 再调一次。releaseTrack 不用写,由本包补上(见包注释)。
 	BuildValue func(nodeID uint32, nodeUUID string) ([]byte, error)
 	// OnReclaimFailed 见 ReclaimPolicy。零值 = ReallocateNewID。
 	OnReclaimFailed ReclaimPolicy
@@ -128,6 +136,8 @@ type Registration struct {
 	cli    *clientv3.Client
 	spec   Spec
 	nodeID atomic.Uint32
+	// track 是本进程的发布轨道,Register 时从环境变量解析一次,之后不变;每次 buildValue 写进 releaseTrack。
+	track releasetrack.Track
 
 	// ctx 是注册句柄自身的生命周期(keepalive / 重注册的全部 etcd 调用都挂在它下面),
 	// 与 Register 的入参 ctx(启动期超时)无关;Close 取消它。
@@ -212,7 +222,8 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string {
 // 所有校验(spec、BuildValue 产物)都在任何 Put 之前完成;失败时 Revoke 已申请的租约,
 // etcd 里不留任何东西。
 func Register(ctx context.Context, cli *clientv3.Client, spec Spec) (*Registration, error) {
-	if err := validateInputs(cli, spec); err != nil {
+	track, err := validateInputs(cli, spec)
+	if err != nil {
 		return nil, err
 	}
 
@@ -224,7 +235,7 @@ func Register(ctx context.Context, cli *clientv3.Client, spec Spec) (*Registrati
 		return nil, fmt.Errorf("noderegistry: etcd lease grant (prefix=%s): %w", spec.Prefix, err)
 	}
 
-	r := newRegistration(cli, spec, uuid.NewString())
+	r := newRegistration(cli, spec, uuid.NewString(), track)
 	id, value, err := r.allocate(opCtx, grant.ID)
 	if err != nil {
 		revokeLease(cli, grant.ID, r.logPrefix())
@@ -233,8 +244,8 @@ func Register(ctx context.Context, cli *clientv3.Client, spec Spec) (*Registrati
 	}
 	r.commit(grant.ID, id, value)
 
-	logx.Infof("%s registered: zone=%d node_type=%d node_id=%d uuid=%s lease=%x ttl=%ds policy=%s",
-		r.logPrefix(), spec.ZoneId, spec.NodeType, id, r.NodeUUID, int64(grant.ID), spec.LeaseTTL, spec.OnReclaimFailed)
+	logx.Infof("%s registered: zone=%d node_type=%d node_id=%d uuid=%s lease=%x ttl=%ds policy=%s release_track=%s",
+		r.logPrefix(), spec.ZoneId, spec.NodeType, id, r.NodeUUID, int64(grant.ID), spec.LeaseTTL, spec.OnReclaimFailed, track)
 	return r, nil
 }
 
@@ -244,8 +255,8 @@ func Register(ctx context.Context, cli *clientv3.Client, spec Spec) (*Registrati
 // listenAddr 是服务的监听地址(ListenOn);"0.0.0.0:port" / "[::]:port" / ":port" 本机只能拨
 // loopback,所以探 "127.0.0.1:port"。timeout 内始终连不上即返回错误,不注册。
 func RegisterAfterListening(ctx context.Context, cli *clientv3.Client, listenAddr string, timeout time.Duration, spec Spec) (*Registration, error) {
-	// 配置错误先报,别让它白等一个 timeout。
-	if err := validateInputs(cli, spec); err != nil {
+	// 配置错误(含发布轨道的环境变量)先报,别让它白等一个 timeout。
+	if _, err := validateInputs(cli, spec); err != nil {
 		return nil, err
 	}
 	dialAddr, err := dialAddrForListen(listenAddr)
@@ -337,12 +348,13 @@ func (r *Registration) Close() {
 
 // ---- 内部 ----------------------------------------------------------------------------
 
-func newRegistration(cli *clientv3.Client, spec Spec, nodeUUID string) *Registration {
+func newRegistration(cli *clientv3.Client, spec Spec, nodeUUID string, track releasetrack.Track) *Registration {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Registration{
 		NodeUUID: nodeUUID,
 		cli:      cli,
 		spec:     spec,
+		track:    track,
 		ctx:      ctx,
 		cancel:   cancel,
 		loopDone: make(chan struct{}),
@@ -356,11 +368,19 @@ func (r *Registration) logPrefix() string {
 	return "[NodeRegistry " + r.spec.Prefix + "]"
 }
 
-func validateInputs(cli *clientv3.Client, spec Spec) error {
+// validateInputs 做注册前的全部纯校验,并解析本进程的发布轨道(见包注释「发布轨道」)。
+func validateInputs(cli *clientv3.Client, spec Spec) (releasetrack.Track, error) {
 	if cli == nil {
-		return fmt.Errorf("%w: nil etcd client", errInvalidSpec)
+		return releasetrack.Stable, fmt.Errorf("%w: nil etcd client", errInvalidSpec)
 	}
-	return spec.validate()
+	if err := spec.validate(); err != nil {
+		return releasetrack.Stable, err
+	}
+	track, err := releasetrack.FromEnv()
+	if err != nil {
+		return releasetrack.Stable, fmt.Errorf("%w: %v", errInvalidSpec, err)
+	}
+	return track, nil
 }
 
 // validate 只做纯校验,不碰 etcd。
@@ -488,16 +508,58 @@ func scanUsedNodeIDs(ctx context.Context, cli *clientv3.Client, prefix string) (
 	return usedNodeIDsFromKeys(keys), nil
 }
 
-// buildValue 调回调并校验,返回可直接 Put 的值。
+// buildValue 调回调、写入发布轨道并校验,返回可直接 Put 的值。
 func (r *Registration) buildValue(nodeID uint32) (string, error) {
 	raw, err := r.spec.BuildValue(nodeID, r.NodeUUID)
 	if err != nil {
 		return "", fmt.Errorf("BuildValue(node_id=%d): %w", nodeID, err)
 	}
+	raw, err = withReleaseTrack(raw, r.track)
+	if err != nil {
+		return "", err
+	}
 	if err := validateValue(raw, r.spec, nodeID, r.NodeUUID); err != nil {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+// releaseTrackField 是 NodeInfo.release_track 的 protojson 字段名(lowerCamelCase,与 C++ 一致)。
+const releaseTrackField = "releaseTrack"
+
+// withReleaseTrack 把进程轨道写进注册值的 releaseTrack。值里已有非空的 releaseTrack 时必须与进程轨道相同;
+// 空串(按 EmitUnpopulated 编码时会出现)等同没写,照常补上。
+//
+// 经 map 重新编码会让键按字母序排列、去掉多余空白;发现方都是按字段名解析 JSON,不受影响。
+// 同一输入的输出是确定的,换号重注册时重建出来的值与上次一致。
+func withReleaseTrack(raw []byte, track releasetrack.Track) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return nil, fmt.Errorf("%w: not a JSON object NodeInfo: %v", errInvalidValue, err)
+	}
+	want := track.String()
+	if existing, ok := fields[releaseTrackField]; ok {
+		var got string
+		if err := json.Unmarshal(existing, &got); err != nil {
+			return nil, fmt.Errorf("%w: releaseTrack=%s is not a string", errInvalidValue, existing)
+		}
+		if got == want {
+			return raw, nil
+		}
+		if got != "" {
+			return nil, fmt.Errorf("%w: releaseTrack=%q, but this process runs on track %q", errInvalidValue, got, want)
+		}
+	}
+	encodedTrack, err := json.Marshal(want)
+	if err != nil {
+		return nil, fmt.Errorf("%w: encode releaseTrack: %v", errInvalidValue, err)
+	}
+	fields[releaseTrackField] = encodedTrack
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: re-encode NodeInfo: %v", errInvalidValue, err)
+	}
+	return out, nil
 }
 
 // allocate 从 1..nodeIDMax 顺序找第一个空位,用 CAS 占住,返回 id 与已写入的值。

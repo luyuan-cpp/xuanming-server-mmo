@@ -3982,6 +3982,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSanctionPlayerRequest final : pub
     kBlockGain = 4,
     kUnblockGain = 5,
     kAttachDebt = 6,
+    kBlockItemGain = 9,
+    kUnblockItemGain = 10,
     ACTION_NOT_SET = 0,
   };
   static constexpr int kIndexInFileMessages = 0;
@@ -4084,6 +4086,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSanctionPlayerRequest final : pub
     kBlockGainFieldNumber = 4,
     kUnblockGainFieldNumber = 5,
     kAttachDebtFieldNumber = 6,
+    kBlockItemGainFieldNumber = 9,
+    kUnblockItemGainFieldNumber = 10,
   };
   // string reason = 7;
   void clear_reason() ;
@@ -4205,6 +4209,46 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSanctionPlayerRequest final : pub
   ::player_inbox::GmCurrencyDebtPayload* PROTOBUF_NONNULL _internal_mutable_attach_debt();
 
   public:
+  // .player_inbox.GmItemGainPayload block_item_gain = 9;
+  [[nodiscard]] bool has_block_item_gain()
+      const;
+  private:
+  bool _internal_has_block_item_gain() const;
+
+  public:
+  void clear_block_item_gain() ;
+  [[nodiscard]] const ::player_inbox::GmItemGainPayload& block_item_gain() const;
+  [[nodiscard]] ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE release_block_item_gain();
+  ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL mutable_block_item_gain();
+  void set_allocated_block_item_gain(::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_block_item_gain(::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE value);
+  ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE unsafe_arena_release_block_item_gain();
+
+  private:
+  const ::player_inbox::GmItemGainPayload& _internal_block_item_gain() const;
+  ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL _internal_mutable_block_item_gain();
+
+  public:
+  // .player_inbox.GmItemGainPayload unblock_item_gain = 10;
+  [[nodiscard]] bool has_unblock_item_gain()
+      const;
+  private:
+  bool _internal_has_unblock_item_gain() const;
+
+  public:
+  void clear_unblock_item_gain() ;
+  [[nodiscard]] const ::player_inbox::GmItemGainPayload& unblock_item_gain() const;
+  [[nodiscard]] ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE release_unblock_item_gain();
+  ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL mutable_unblock_item_gain();
+  void set_allocated_unblock_item_gain(::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_unblock_item_gain(::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE value);
+  ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE unsafe_arena_release_unblock_item_gain();
+
+  private:
+  const ::player_inbox::GmItemGainPayload& _internal_unblock_item_gain() const;
+  ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL _internal_mutable_unblock_item_gain();
+
+  public:
   void clear_action();
   ActionCase action_case() const;
   // @@protoc_insertion_point(class_scope:player_inbox.GmSanctionPlayerRequest)
@@ -4213,11 +4257,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSanctionPlayerRequest final : pub
   void set_has_block_gain();
   void set_has_unblock_gain();
   void set_has_attach_debt();
+  void set_has_block_item_gain();
+  void set_has_unblock_item_gain();
   [[nodiscard]] inline bool has_action() const;
   inline void clear_has_action();
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          3, 67,
+      ::google::protobuf::internal::TcParseTable<3, 10,
+                          5, 67,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4256,6 +4302,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmSanctionPlayerRequest final : pub
       ::google::protobuf::Message* PROTOBUF_NULLABLE block_gain_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE unblock_gain_;
       ::google::protobuf::Message* PROTOBUF_NULLABLE attach_debt_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE block_item_gain_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE unblock_item_gain_;
     } action_;
     ::uint32_t _oneof_case_[1];
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4816,6 +4864,148 @@ inline ::player_inbox::GmCurrencyDebtPayload* PROTOBUF_NONNULL GmSanctionPlayerR
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
   ::player_inbox::GmCurrencyDebtPayload* _msg = _internal_mutable_attach_debt();
   // @@protoc_insertion_point(field_mutable:player_inbox.GmSanctionPlayerRequest.attach_debt)
+  return _msg;
+}
+
+// .player_inbox.GmItemGainPayload block_item_gain = 9;
+inline bool GmSanctionPlayerRequest::has_block_item_gain() const {
+  return action_case() == kBlockItemGain;
+}
+inline bool GmSanctionPlayerRequest::_internal_has_block_item_gain() const {
+  return action_case() == kBlockItemGain;
+}
+inline void GmSanctionPlayerRequest::set_has_block_item_gain() {
+  _impl_._oneof_case_[0] = kBlockItemGain;
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE GmSanctionPlayerRequest::release_block_item_gain() {
+  // @@protoc_insertion_point(field_release:player_inbox.GmSanctionPlayerRequest.block_item_gain)
+  if (action_case() == kBlockItemGain) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.block_item_gain_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.action_.block_item_gain_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::player_inbox::GmItemGainPayload& GmSanctionPlayerRequest::_internal_block_item_gain() const {
+  return action_case() == kBlockItemGain ? static_cast<const ::player_inbox::GmItemGainPayload&>(*reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.block_item_gain_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::player_inbox::GmItemGainPayload>(&::player_inbox::GmItemGainPayload_globals_);
+}
+inline const ::player_inbox::GmItemGainPayload& GmSanctionPlayerRequest::block_item_gain() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.GmSanctionPlayerRequest.block_item_gain)
+  return _internal_block_item_gain();
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE GmSanctionPlayerRequest::unsafe_arena_release_block_item_gain() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:player_inbox.GmSanctionPlayerRequest.block_item_gain)
+  if (action_case() == kBlockItemGain) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.block_item_gain_);
+    _impl_.action_.block_item_gain_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmSanctionPlayerRequest::unsafe_arena_set_allocated_block_item_gain(
+    ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_action();
+  if (value) {
+    set_has_block_item_gain();
+    _impl_.action_.block_item_gain_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_inbox.GmSanctionPlayerRequest.block_item_gain)
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL GmSanctionPlayerRequest::_internal_mutable_block_item_gain() {
+  if (action_case() != kBlockItemGain) {
+    clear_action();
+    set_has_block_item_gain();
+    _impl_.action_.block_item_gain_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::player_inbox::GmItemGainPayload>(GetArena()));
+  }
+  return reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.block_item_gain_);
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL GmSanctionPlayerRequest::mutable_block_item_gain()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::player_inbox::GmItemGainPayload* _msg = _internal_mutable_block_item_gain();
+  // @@protoc_insertion_point(field_mutable:player_inbox.GmSanctionPlayerRequest.block_item_gain)
+  return _msg;
+}
+
+// .player_inbox.GmItemGainPayload unblock_item_gain = 10;
+inline bool GmSanctionPlayerRequest::has_unblock_item_gain() const {
+  return action_case() == kUnblockItemGain;
+}
+inline bool GmSanctionPlayerRequest::_internal_has_unblock_item_gain() const {
+  return action_case() == kUnblockItemGain;
+}
+inline void GmSanctionPlayerRequest::set_has_unblock_item_gain() {
+  _impl_._oneof_case_[0] = kUnblockItemGain;
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE GmSanctionPlayerRequest::release_unblock_item_gain() {
+  // @@protoc_insertion_point(field_release:player_inbox.GmSanctionPlayerRequest.unblock_item_gain)
+  if (action_case() == kUnblockItemGain) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.unblock_item_gain_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.action_.unblock_item_gain_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::player_inbox::GmItemGainPayload& GmSanctionPlayerRequest::_internal_unblock_item_gain() const {
+  return action_case() == kUnblockItemGain ? static_cast<const ::player_inbox::GmItemGainPayload&>(*reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.unblock_item_gain_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::player_inbox::GmItemGainPayload>(&::player_inbox::GmItemGainPayload_globals_);
+}
+inline const ::player_inbox::GmItemGainPayload& GmSanctionPlayerRequest::unblock_item_gain() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.GmSanctionPlayerRequest.unblock_item_gain)
+  return _internal_unblock_item_gain();
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE GmSanctionPlayerRequest::unsafe_arena_release_unblock_item_gain() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:player_inbox.GmSanctionPlayerRequest.unblock_item_gain)
+  if (action_case() == kUnblockItemGain) {
+    clear_has_action();
+    auto* temp = reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.unblock_item_gain_);
+    _impl_.action_.unblock_item_gain_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void GmSanctionPlayerRequest::unsafe_arena_set_allocated_unblock_item_gain(
+    ::player_inbox::GmItemGainPayload* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_action();
+  if (value) {
+    set_has_unblock_item_gain();
+    _impl_.action_.unblock_item_gain_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_inbox.GmSanctionPlayerRequest.unblock_item_gain)
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL GmSanctionPlayerRequest::_internal_mutable_unblock_item_gain() {
+  if (action_case() != kUnblockItemGain) {
+    clear_action();
+    set_has_unblock_item_gain();
+    _impl_.action_.unblock_item_gain_ = reinterpret_cast<::google::protobuf::Message*>(
+        ::google::protobuf::Message::DefaultConstruct<::player_inbox::GmItemGainPayload>(GetArena()));
+  }
+  return reinterpret_cast<::player_inbox::GmItemGainPayload*>(_impl_.action_.unblock_item_gain_);
+}
+inline ::player_inbox::GmItemGainPayload* PROTOBUF_NONNULL GmSanctionPlayerRequest::mutable_unblock_item_gain()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::player_inbox::GmItemGainPayload* _msg = _internal_mutable_unblock_item_gain();
+  // @@protoc_insertion_point(field_mutable:player_inbox.GmSanctionPlayerRequest.unblock_item_gain)
   return _msg;
 }
 

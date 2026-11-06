@@ -10,6 +10,7 @@
 #include "table/code/buff_table_comp.h"
 #include "../test_config_helper.h"
 #include "engine/config/config.h"
+#include "modules/snapshot/audit_snapshot_policy.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -780,4 +781,71 @@ int main(int argc, char **argv)
 		return 1;
 	LoadTables();
 	return RUN_ALL_TESTS();
+}
+
+TEST(GameConfigAuditSnapshot, ShippedYamlCapturesEverything)
+{
+    GameConfig cfg;
+    ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
+    EXPECT_TRUE(cfg.audit_snapshot().login_enabled());
+    EXPECT_TRUE(cfg.audit_snapshot().logout_enabled());
+    EXPECT_EQ(cfg.audit_snapshot().sample_per_mille(), 1000u);
+}
+
+TEST(GameConfigAuditSnapshot, MissingSectionFallsBackToFullCapture)
+{
+    const auto path = WriteTempGameConfig("game_config_audit_snapshot_missing.yaml", "");
+    GameConfig cfg;
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_TRUE(cfg.audit_snapshot().login_enabled());
+    EXPECT_TRUE(cfg.audit_snapshot().logout_enabled());
+    EXPECT_EQ(cfg.audit_snapshot().sample_per_mille(), 1000u) << "缺段必须显式取全量,不能落到 proto3 的 0(= 一个都不发)";
+}
+
+TEST(GameConfigAuditSnapshot, SectionOverridesAndRejectsOutOfRange)
+{
+    const auto path = WriteTempGameConfig("game_config_audit_snapshot_partial.yaml",
+                                          "audit_snapshot:\n  login_enabled: false\n  sample_per_mille: 250\n");
+    GameConfig cfg;
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_FALSE(cfg.audit_snapshot().login_enabled());
+    EXPECT_TRUE(cfg.audit_snapshot().logout_enabled()) << "缺键取默认";
+    EXPECT_EQ(cfg.audit_snapshot().sample_per_mille(), 250u);
+
+    const auto bad = WriteTempGameConfig("game_config_audit_snapshot_bad.yaml", "audit_snapshot:\n  sample_per_mille: 1001\n");
+    GameConfig rejected;
+    const bool badLoaded = readGameConfig(bad.string(), rejected);
+    RemoveTempGameConfig(bad);
+    EXPECT_FALSE(badLoaded) << "超过 1000 的抽样比必须拒绝加载";
+}
+
+TEST(AuditSnapshotPolicy, TriggerSwitchesAndStableSampling)
+{
+    GameConfig::AuditSnapshotConfig cfg;
+    cfg.set_login_enabled(false);
+    cfg.set_logout_enabled(true);
+    cfg.set_sample_per_mille(1000);
+    EXPECT_FALSE(audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_LOGIN, 42));
+    EXPECT_TRUE(audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_LOGOUT, 42));
+    EXPECT_TRUE(audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_GM_MANUAL, 42)) << "按需快照不受开关影响";
+
+    cfg.set_login_enabled(true);
+    cfg.set_sample_per_mille(0);
+    EXPECT_FALSE(audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_LOGIN, 42));
+    EXPECT_TRUE(audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_PRE_TRADE, 42)) << "抽样不影响按需快照";
+
+    cfg.set_sample_per_mille(300);
+    uint32_t sampled = 0;
+    for (uint64_t player = 1; player <= 10000; ++player)
+    {
+        const bool login = audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_LOGIN, player);
+        EXPECT_EQ(login, audit_snapshot_policy::ShouldCapture(cfg, SNAPSHOT_LOGOUT, player)) << "同一玩家进退场要成对";
+        sampled += login ? 1 : 0;
+    }
+    EXPECT_GT(sampled, 2700u);
+    EXPECT_LT(sampled, 3300u);
 }

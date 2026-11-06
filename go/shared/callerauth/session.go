@@ -10,6 +10,8 @@ import (
 
 	base "proto/common/base"
 
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -19,6 +21,23 @@ import (
 
 // SecretEnv 与既有部署的内部身份密钥同源；不复用客户端 gate 票据密钥。
 const SecretEnv = "MMORPG_INTERNAL_AUTH_SECRET"
+
+// 在线域验签闸门的指标。label 只放 Reason 的有限枚举，绝不放 caller 或玩家标识（低基数纪律）。
+// 稳态下 result!="ok" 应恒 0：非 0 说明 gate 与服务密钥不一致、时钟漂移超窗、签名格式被改写或有伪造调用。
+var (
+	sessionVerifyTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: "caller_auth",
+		Name:      "session_verify_total",
+		Help:      "带会话身份的内部请求验签结果；result 取值见 callerauth.Reason。",
+		Labels:    []string{"result"},
+	})
+	sessionNonceOverflowTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: "caller_auth",
+		Name:      "nonce_overflow_total",
+		Help:      "nonce 表超过上限被迫提前翻代的次数；非 0 表示本进程的重放窗口被临时缩短。",
+		Labels:    []string{},
+	})
+)
 
 type authenticatedSessionKey struct{}
 
@@ -70,6 +89,7 @@ func SessionInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 			return next(ctx, request)
 		}
 		verified, _, err := v.AuthenticateContext(ctx, info.FullMethod)
+		sessionVerifyTotal.Inc(Reason(err))
 		if err != nil {
 			return nil, status.Error(codes.Unauthenticated, "内部会话身份验证失败")
 		}
@@ -108,5 +128,11 @@ func GateInterceptor(getenv func(string) string) (grpc.UnaryServerInterceptor, e
 		}
 		secrets.keys = append(secrets.keys, []byte(key))
 	}
-	return SessionInterceptor(NewVerifier(Options{Secrets: secrets, Enforce: true, AllowedCallers: []string{"gate"}})), nil
+	return SessionInterceptor(NewVerifier(Options{Secrets: secrets, Enforce: true, AllowedCallers: []string{"gate"},
+		// 超限提前翻代只会缩短重放窗口、不会放行验签失败的请求；必须看得见，才知道该调上限还是有异常流量。
+		OnNonceOverflow: func() {
+			sessionNonceOverflowTotal.Inc()
+			logx.Error("callerauth: nonce 表超过上限被迫提前翻代，本进程重放窗口临时缩短")
+		},
+	})), nil
 }

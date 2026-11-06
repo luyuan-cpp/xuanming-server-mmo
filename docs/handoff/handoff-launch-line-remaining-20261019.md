@@ -141,6 +141,7 @@
     - 第四条(`deploy/k8s/AGENTS.md`)待负责人确认,未改。包装入口(dev_tools / k8s_image / k8s_zone_rollback)尚未透传新参数。
     - (2026-10-22 续)负责人已确认,第四条已写进 `deploy/k8s/AGENTS.md` 的 CONVENTIONS(「C++ 启动壳不加 `ulimit`」)。包装入口透传另开会话在做。
     - (2026-10-22 再续,已落码、未验证)包装入口已透传 `-NodeOpenFileLimitMode`:`dev_tools.ps1`(含 `k8s-zone-rollback`)、`k8s_image.ps1`、`k8s_zone_rollback.ps1` 的 Step 6,留空不透传,与 `-GateRouterMode` 同口径。契约清单已钉住,Codex 命令见 PROGRESS「B0-4 部署侧:包装入口透传 -NodeOpenFileLimitMode」条目。回滚第 0 步不核对集群里的这个 env,以 warn 运行的 zone 回滚时要照传。
+    - (2026-11-05 更正,覆盖上两条中关于回滚的部分)`k8s_zone_rollback.ps1` 与 `dev_tools.ps1 -Command k8s-zone-rollback` 已于 2026-10-31 退役,脚本与 `k8s_zone_rollback_*.tests.ps1` 随 `2b8184428` 删除,下一条说的第 0 步 nofile 核对随之下线。灾难恢复改走 `docs/ops/mysql-backup-pitr-runbook.md` §4.0:第 2 步停写前记下上一次部署的 `-NodeOpenFileLimitMode`,第 6 步起服照传。B0-4 在回档路径上不再有遗留项。
     - (2026-10-23 更正,已落码、未验证)回滚脚本第 0 步 a 现在核对:`-NodeOpenFileLimitMode` 留空时,`-Apply` 在 Step 1 停服之前读 gate / scene(含 Agones Fleet)模板里的 `NODE_OPEN_FILE_LIMIT_MODE`,任一为 warn 或读不到即拒绝;显式给值不核对。见 PROGRESS「2026-10-23:回滚脚本第 0 步核对 B0-4 nofile 豁免」。
 - **B0-5**:A1 还没做:scene_manager 按 zone 选主、watch 与 knownNodes 收窄到本 zone,以及 rebalance 等领导者循环限定到本 zone。`handleWatchEvent` 的 PUT 换 zone 分支没有按领导者门控。
   - **(2026-10-20 核对)** 两条都仍未做,也没人认领。A1 多了一个新前置:10-19 EnterScene 陈旧位置会话新增的 `isZoneGoneFromRegistry`,以及既有的 `isNodeGoneFromRegistry`,都依赖 knownNodes 是全服镜像。watch 收窄之前,这两处要先改成按 zone 查注册表,否则别的 zone 会一律被判成已下线。另外,上 Cluster 后 `pipelineBatchRejected` 的整批判定要复核(G4a §17)。

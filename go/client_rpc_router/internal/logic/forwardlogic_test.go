@@ -23,6 +23,8 @@ import (
 	pb "proto/client_rpc_router"
 	base "proto/common/base"
 
+	"shared/releasetrack"
+
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -322,6 +324,111 @@ func TestForwardGlobalPoolTargetIgnoresZone(t *testing.T) {
 	require.Equal(t, 60, z1Calls+z2Calls)
 	require.Greater(t, z1Calls, 0, "全局随机应能挑到 zone 1 的 match")
 	require.Greater(t, z2Calls, 0, "全局随机应能挑到 zone 2 的 match(不按 gate zone 过滤)")
+}
+
+// ---------------------------------------------------------------------------
+// 发布轨道(docs/design/release-track-gray-canary.md §2.4):全局类型按 gate 自报的会话轨道选实例。
+// ---------------------------------------------------------------------------
+
+func addNodeOnTrack(sc *svc.ServiceContext, nodeType base.ENodeType, nodeId, zoneId uint32, endpoint string, track releasetrack.Track) {
+	key := fmt.Sprintf("%s.rpc/zone/%d/node_type/%d/node_id/%d", base.ENodeType_name[int32(nodeType)], zoneId, nodeType, nodeId)
+	sc.Targets[nodeType].Upsert(key, discovery.NodeEntry{NodeId: nodeId, ZoneId: zoneId, Endpoint: endpoint, Track: track})
+}
+
+func forwardReqOnTrack(messageId uint32, id uint64, zoneId uint32, body []byte, track string) *pb.ForwardRequest {
+	req := forwardReq(messageId, id, zoneId, body)
+	req.ReleaseTrack = track
+	return req
+}
+
+// stable 会话(空串或 "stable")只进 stable 实例;canary 会话有 canary 实例时只进 canary。
+func TestForwardGlobalTargetFollowsSessionTrack(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
+	dialer := newBufDialer(t)
+	stableTarget := startEchoTarget(t, "match-stable", route.FullMethod)
+	canaryTarget := startEchoTarget(t, "match-canary", route.FullMethod)
+	dialer.add("match-stable", stableTarget)
+	dialer.add("match-canary", canaryTarget)
+
+	sc := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(sc, base.ENodeType_MatchNodeService, 1, 1, "match-stable", releasetrack.Stable)
+	addNodeOnTrack(sc, base.ENodeType_MatchNodeService, 2, 1, "match-canary", releasetrack.Canary)
+
+	for i := 0; i < 20; i++ {
+		for _, stableTrack := range []string{"", "stable"} {
+			resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+				Forward(forwardReqOnTrack(game.MatchServiceJoinQueueMessageId, uint64(i), 1, []byte("q"), stableTrack))
+			require.NoError(t, err)
+			require.Nil(t, resp.ErrorMessage)
+			require.Equal(t, "match-stable|q", string(resp.SerializedMessage), "stable 会话被送进了 canary 实例")
+		}
+		resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+			Forward(forwardReqOnTrack(game.MatchServiceJoinQueueMessageId, uint64(i), 1, []byte("q"), "canary"))
+		require.NoError(t, err)
+		require.Nil(t, resp.ErrorMessage)
+		require.Equal(t, "match-canary|q", string(resp.SerializedMessage), "有 canary 实例时 canary 会话只能进它")
+	}
+}
+
+// 退回只有一个方向:canary 会话没有 canary 实例时由 stable 接;stable 会话不会退到 canary 实例。
+func TestForwardReleaseTrackFallbackIsOneWay(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
+	dialer := newBufDialer(t)
+	dialer.add("match-stable", startEchoTarget(t, "match-stable", route.FullMethod))
+	dialer.add("match-canary", startEchoTarget(t, "match-canary", route.FullMethod))
+
+	onlyStable := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(onlyStable, base.ENodeType_MatchNodeService, 1, 1, "match-stable", releasetrack.Stable)
+	resp, err := logic.NewForwardLogic(ctxWithSession(), onlyStable).
+		Forward(forwardReqOnTrack(game.MatchServiceJoinQueueMessageId, 1, 1, []byte("q"), "canary"))
+	require.NoError(t, err)
+	require.Nil(t, resp.ErrorMessage)
+	require.Equal(t, "match-stable|q", string(resp.SerializedMessage))
+
+	onlyCanary := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(onlyCanary, base.ENodeType_MatchNodeService, 2, 1, "match-canary", releasetrack.Canary)
+	label := strconv.Itoa(int(game.MatchServiceJoinQueueMessageId))
+	before := metrics.ForwardTotalValue(label, metrics.OutcomeNoTarget)
+	resp, err = logic.NewForwardLogic(ctxWithSession(), onlyCanary).
+		Forward(forwardReqOnTrack(game.MatchServiceJoinQueueMessageId, 2, 1, []byte("q"), "stable"))
+	require.NoError(t, err)
+	requireEnvelopeError(t, resp, 2, game.MatchServiceJoinQueueMessageId, constants.ErrServiceUnavailable)
+	require.Equal(t, before+1, metrics.ForwardTotalValue(label, metrics.OutcomeNoTarget))
+}
+
+// zone-scoped 目标按 zone 选、不看轨道:一个 zone 只有一条轨道(§2.2),zone 切换期间新旧实例都要能接本 zone 的会话。
+func TestForwardZoneScopedTargetIgnoresReleaseTrack(t *testing.T) {
+	route, _ := game.LookupRoute(game.ClientPlayerLoginEnterGameMessageId)
+	dialer := newBufDialer(t)
+	dialer.add("login-z1-canary", startEchoTarget(t, "login-z1-canary", route.FullMethod))
+
+	sc := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(sc, base.ENodeType_LoginNodeService, 1, 1, "login-z1-canary", releasetrack.Canary)
+	resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+		Forward(forwardReqOnTrack(game.ClientPlayerLoginEnterGameMessageId, 3, 1, []byte("enter"), "stable"))
+	require.NoError(t, err)
+	require.Nil(t, resp.ErrorMessage)
+	require.Equal(t, "login-z1-canary|enter", string(resp.SerializedMessage))
+}
+
+// gate 自报的轨道认不出:契约违例,回 kInvalidParameter 并计 invalid_release_track,不猜它属于哪条轨道。
+func TestForwardInvalidReleaseTrackIsInvalidParameter(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
+	dialer := newBufDialer(t)
+	target := startEchoTarget(t, "match-stable", route.FullMethod)
+	dialer.add("match-stable", target)
+	sc := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(sc, base.ENodeType_MatchNodeService, 1, 1, "match-stable", releasetrack.Stable)
+
+	label := strconv.Itoa(int(game.MatchServiceJoinQueueMessageId))
+	before := metrics.ForwardTotalValue(label, metrics.OutcomeInvalidReleaseTrack)
+	resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+		Forward(forwardReqOnTrack(game.MatchServiceJoinQueueMessageId, 4, 1, []byte("q"), "beta"))
+	require.NoError(t, err)
+	requireEnvelopeError(t, resp, 4, game.MatchServiceJoinQueueMessageId, constants.ErrInvalidParameter)
+	require.Equal(t, before+1, metrics.ForwardTotalValue(label, metrics.OutcomeInvalidReleaseTrack))
+	calls, _, _ := target.snapshot()
+	require.Equal(t, 0, calls, "轨道无法识别的请求不能转发到任何实例")
 }
 
 // ---------------------------------------------------------------------------

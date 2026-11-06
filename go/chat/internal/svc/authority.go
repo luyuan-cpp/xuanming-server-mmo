@@ -3,7 +3,6 @@ package svc
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 
@@ -12,10 +11,8 @@ import (
 	dspb "proto/data_service"
 	"shared/authoritysql"
 	"shared/dbplacement"
-	"shared/playerredis"
 	"shared/rolefence"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 )
@@ -98,19 +95,4 @@ func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate b
 		return nil, nil, err
 	}
 	return db, store, nil
-}
-
-func openLoginSessions(ctx context.Context, c config.Config) (redis.UniversalClient, error) {
-	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 1 || c.LoginRedis.PoolSizePerNode > 128 {
-		return nil, errors.New("聊天全局原登录态依赖缺失")
-	}
-	r, err := playerredis.New(c.LoginRedis.ClientConfig(playerredis.Config{DialTimeoutMs: 1000, ReadTimeoutMs: 1000, WriteTimeoutMs: 1000, PoolTimeoutMs: 1000}))
-	if err != nil {
-		return nil, errors.New("聊天全局原登录态配置非法")
-	}
-	if err := r.Ping(ctx).Err(); err != nil {
-		r.Close()
-		return nil, errors.New("聊天全局原登录态不可用")
-	}
-	return r, nil
 }

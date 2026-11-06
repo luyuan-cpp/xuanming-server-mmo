@@ -1,6 +1,7 @@
 #include "bag_service.h"
 
 #include <algorithm>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 #include <typeindex>
@@ -118,12 +119,13 @@ uint32_t BagService::AddItem(
 		return PrintStackAndReturnError(kInvalidParameter);
 	}
 
-	// ── Global (server-wide) block check ─────────────────────────────────
-	if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, configId))
+	// ── 物品获得封禁(全服 + 本人)───────────────────────────────────────
+	// 业务拒绝,不是编程错误:回 kAssetBlocked、不打调用栈,调用方据此与「背包满」区分开,不得改投临时格。
+	if (GainBlockService::IsItemGainBlocked(playerEntity, configId))
 	{
-		LOG_WARN << "BagService::AddItem: item GLOBALLY blocked. config_id="
+		LOG_WARN << "BagService::AddItem: item gain blocked (global or this player). config_id="
 				 << configId << " player=" << bag.PlayerGuid();
-		return PrintStackAndReturnError(kInvalidParameter);
+		return kAssetBlocked;
 	}
 
 	// ── Delegate to pure container ───────────────────────────────────────
@@ -171,16 +173,16 @@ uint32_t BagService::AddItems(
 	}
 
 	// 同一批按配置号升序预检、占格和记流水,不依赖请求哈希表的历史插入顺序。
+	// 任一项被封禁(全服或本人)整批拒绝,在容器做任何规划之前:一件不发,不留半笔。
 	const auto ordered = SortedByConfigId(itemsToAdd);
 	for (const auto &[configId, count] : ordered)
 	{
-		if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, configId))
+		if (GainBlockService::IsItemGainBlocked(playerEntity, configId))
 		{
-			LOG_WARN << "BagService::AddItems: item GLOBALLY blocked. config_id="
+			LOG_WARN << "BagService::AddItems: item gain blocked (global or this player), whole batch rejected. config_id="
 					 << configId << " player=" << bag.PlayerGuid();
-			return PrintStackAndReturnError(kInvalidParameter);
+			return kAssetBlocked;
 		}
-
 	}
 
     // 容器一次性提交整批，返回每项真实去处；失败不淘汰、不合堆，也不落任何资产流水。
@@ -231,12 +233,20 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
         for (const auto& [config, count] : *batch)
             if (config == 0 || count == 0 || ItemTableManager::Instance().FindByIdSilent(config).first == nullptr)
                 return kInvalidParameter;
-    const auto gainsAllowed = [&gained] {
-        return std::all_of(gained.begin(), gained.end(), [](const auto& entry) {
-            return !GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, entry.first);
-        });
+    // 物品获得封禁(全服 + 本人)在扣消耗、建候选、回调之前判:任一项被封整笔拒绝,不扣材料、不发半笔,
+    // 也不会因「主包放不下」改投临时格(封禁不是容量不足)。提交前再复核一次。
+    // entt::entity 用 init-capture(MSVC C3495,见 .github/copilot-instructions.md)。
+    const auto firstBlockedGain = [player = playerEntity, &gained]() -> std::optional<uint32_t> {
+        for (const auto& entry : gained)
+            if (GainBlockService::IsItemGainBlocked(player, entry.first)) return entry.first;
+        return std::nullopt;
     };
-    if (!gainsAllowed()) return kInvalidParameter;
+    if (const auto blocked = firstBlockedGain(); blocked.has_value()) {
+        LOG_WARN << "BagService::ConsumeInventoryAndGrant: item gain blocked (global or this player), whole grant rejected"
+                 << " before consuming anything. player_id=" << playerId << " config_id=" << *blocked
+                 << " correlation_id=" << correlationId;
+        return kAssetBlocked;
+    }
     if (consumed.empty() && gained.empty()) return beforeCommit ? beforeCommit() : uint32_t{kSuccess};
     auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
     if (bags == nullptr) return kInvalidParameter;
@@ -291,7 +301,8 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
         if (result != kSuccess) return result;
         if (written.size() != gained.size()) return kInvalidParameter;
     }
-    if (!sameSource() || !gainsAllowed()) return kInvalidParameter;
+    if (!sameSource()) return kInvalidParameter;
+    if (firstBlockedGain().has_value()) return kAssetBlocked;
     if (beforeCommit) {
         const auto result = beforeCommit();
         if (result != kSuccess) return result;
@@ -343,17 +354,16 @@ uint32_t BagService::AddItems(
 		return PrintStackAndReturnError(kInvalidParameter);
 	}
 
-	// ── Block checks first (transactional: reject whole batch if any blocked) ──
+	// ── 封禁先判(全服或本人任一项命中就整批拒绝,容器一件不动)──────────
 	for (const auto &param : itemsToAdd)
 	{
 		const auto configId = param.itemPBComp.config_id();
-		if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kItem, configId))
+		if (GainBlockService::IsItemGainBlocked(playerEntity, configId))
 		{
-			LOG_WARN << "BagService::AddItems: item GLOBALLY blocked. config_id="
+			LOG_WARN << "BagService::AddItems: item gain blocked (global or this player), whole batch rejected. config_id="
 					 << configId << " player=" << bag.PlayerGuid();
-			return PrintStackAndReturnError(kInvalidParameter);
+			return kAssetBlocked;
 		}
-
 	}
 
     // 完整实例按输入顺序提交；预设身份、equip presence 与每项流水关联原样保留。

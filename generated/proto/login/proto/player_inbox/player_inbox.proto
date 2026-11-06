@@ -101,6 +101,22 @@ enum PlayerInboxMessageType {
     payload_message: "BattleSettlementData"
     max_payload_bytes: 16384
   }];
+  // 封锁本玩家今后获得某配置的物品 → GainBlockService::BlockPlayerItemGain(天然幂等)。
+  // 只挡今后的新增获得:各获得入口共用 GainBlockService::IsItemGainBlocked;不扣已有库存,不影响其他玩家,
+  // 与全服封禁互相独立。封禁状态落 player_database.item_gain_block,与本域执行账本同一次存盘提交(设计 §2.2)。
+  PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN = 5 [(OptionPlayerInboxType) = {
+    domain: PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
+    klass: PLAYER_INBOX_CLASS_DURABLE
+    payload_message: "player_inbox.GmItemGainPayload"
+    max_payload_bytes: 64
+  }];
+  // 解除本玩家的物品获得封锁 → GainBlockService::UnblockPlayerItemGain(天然幂等)。
+  PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN = 6 [(OptionPlayerInboxType) = {
+    domain: PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
+    klass: PLAYER_INBOX_CLASS_DURABLE
+    payload_message: "player_inbox.GmItemGainPayload"
+    max_payload_bytes: 64
+  }];
 }
 
 // ── 条目状态与结局(设计 §4.3)──────────────────────────────────────────
@@ -179,6 +195,13 @@ message GmCurrencyDebtPayload {
   string reason = 3;                  // ≤ 256B,UTF-8;随 CurrencyDebtEntry 永久进玩家存档
   string gm_operator = 4;             // 服务端用请求的 operator 覆盖,≤ 64B
   uint64 expires_at = 5;              // Unix 秒(UTC),与 CurrencyDebtEntry.expires_at 同单位;0 = 永不过期
+}
+
+// GM_BLOCK_ITEM_GAIN / GM_UNBLOCK_ITEM_GAIN。
+// 入箱只校验非 0,不核对物品表(player_inbox 不加载配置表);scene 也不要求本节点的物品表认识它:
+// 表里没有的配置本节点本来就发不出来,封禁照样记下,换到认识它的版本 / 节点时已经生效(设计 §2.2)。
+message GmItemGainPayload {
+  uint32 item_config_id = 1;          // Item 表 id(配置号,不是实例 guid);必须非 0
 }
 
 // Scene 分方法签名后拉取/确认；Match 用独立签名专门入箱/查询永久结算原收据。

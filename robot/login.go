@@ -340,29 +340,16 @@ func httpRefreshWithinGrace(gatewayAddr, refresh string, stop, done <-chan struc
 	return nil, fmt.Errorf("refresh outcome unknown after %d attempt(s) within %s: %w", attempts, refreshRetryBudget, lastErr)
 }
 
-// sendDisconnectBestEffort tells login that this client is going away
-// gracefully so the player_locator session moves from Online to
-// Disconnecting (with a 30s reconnect lease) instead of staying stuck at
-// Online. This is the lightweight "treat me as TCP-FIN" signal — we do
-// not wait for a response and never block the deferred Close path.
+// sendDisconnectBestEffort 以前在收尾时经 gate 发一条 ClientPlayerLogin.Disconnect,让 login 把 player_locator 会话
+// 从 Online 转成 Disconnecting,免得两轮冒烟之间要清库。那是 gate 还不处理连接关闭时的临时办法。
 //
-// The legacy gate still owns the cleanup decision; login.Disconnect is a
-// hint, not a kick. If the send itself fails (gate already gone, queue
-// full) we silently swallow — the lease will eventually time out anyway.
-//
-// Architecture-level fix is in cpp gate's TCP-close handler (see ARCH §12
-// follow-up); this function exists so robot smoke runs can iterate without
-// having to FLUSHDB between rounds.
-func sendDisconnectBestEffort(gc *pkg.GameClient) {
-	if gc == nil || gc.PlayerId == 0 {
-		return
-	}
-	defer func() { _ = recover() }()
-	_ = gc.SendRequest(
-		game.ClientPlayerLoginDisconnectMessageId,
-		&login.LoginNodeDisconnectRequest{},
-	)
-}
+// 现在不再发送:Disconnect 标了 CLIENT_RPC_SERVER_ONLY,由 gate 在连接关闭时自己合成并发给 login(带会话代次,
+// client_session_handler.cpp 的连接关闭处理),客户端不得发起;2026-11-05 起 gate 的上行白名单也不再收它
+// (docs/design/client-rpc-callback.md §7 R4),发上去只会被当非法包丢弃。调用方随后关连接,gate 就会代发。
+// 函数暂留为空:40 处调用点分散在多个正被别的会话修改的场景文件里,后续统一清理时连同调用点一起删除;
+// 届时一并删掉 login_test.go 里两条只测「不 panic」的用例(函数已空,它们不再守任何行为),并改正 main.go
+// runRobotOnce 里「Disconnect 必须先于关 TCP 发出」的旧注释(docs/design/client-rpc-callback.md §7 R4 连带待改)。
+func sendDisconnectBestEffort(*pkg.GameClient) {}
 
 // fetchSaToken calls the SA-Token dev-login endpoint and returns the token value.
 func fetchSaToken(saTokenAddr, account string) (string, error) {

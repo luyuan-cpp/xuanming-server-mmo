@@ -64,6 +64,7 @@
 #include "services/scene/player/system/equip_attribute_rules.h"
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
+#include "services/scene/player/system/player_level_rules.h"  // 穿戴等级读点用例:playerlevel::kMaxLevel
 #include "table/code/attributeallocratio_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
@@ -1370,6 +1371,75 @@ TEST_F(PlayerEquipTest, EquipChecksTheLevelRequirement)
 	ExpectBagsUnchanged(inventoryBefore, equipmentBefore);
 
 	SetLevel(kLevel80); // 恰好够
+	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA));
+	EXPECT_EQ(kWeaponSlot, Equipment().GetItemPosByGuid(kGuidA));
+}
+
+// 穿戴等级要求按生效等级判(2026-11-05;混版本持久字段保护设计 §12.2,规则见 player_level_rules.h 文件头):
+// 超上限的存储等级按上限判,LevelComp 的存储值原样不动。真表样例装备最高 80 级,85 级与 100 级都够得着、
+// 区分不出封顶,所以在内存里把 80 级武器这一行的要求临时抬到上限之上一级(TearDown 重新加载表,改动不外漏)。
+TEST_F(PlayerEquipTest, EquipLevelRequirementTreatsAStoredLevelAboveTheCapAsTheCap)
+{
+	constexpr uint32_t kStoredAboveCap = playerlevel::kMaxLevel + 15;
+	auto &row = Editable(ItemRowOrNull(kWeaponL80));
+	row.set_equip_level(playerlevel::kMaxLevel + 1);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL80), 0}});
+	const BagState inventoryBefore = Capture(Inventory());
+	const BagState equipmentBefore = Capture(Equipment());
+
+	SetLevel(kStoredAboveCap);
+	EXPECT_EQ(kEquipLevelNotEnough, PlayerEquipSystem::Equip(player, kGuidA))
+		<< "a stored level above the cap counts as the cap, which is below this requirement";
+	ExpectBagsUnchanged(inventoryBefore, equipmentBefore);
+	EXPECT_EQ(kStoredAboveCap, tlsEcs.actorRegistry.get<LevelComp>(player).level()) << "穿戴判定不改写存储等级";
+
+	row.set_equip_level(playerlevel::kMaxLevel); // 要求恰为上限:按上限判,恰好够
+	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA));
+	EXPECT_EQ(kWeaponSlot, Equipment().GetItemPosByGuid(kGuidA));
+	EXPECT_EQ(kStoredAboveCap, tlsEcs.actorRegistry.get<LevelComp>(player).level()) << "穿上之后存储等级仍原样";
+}
+
+// 存储等级 0(新号加载期间,InitPlayerFromAllData 写 1 之前)按 1 级判:够得着 1 级装备,够不着 2 级;存储值不动。
+// 直读存储等级时 0 < 1,连 1 级装备都穿不上。
+TEST_F(PlayerEquipTest, EquipLevelRequirementTreatsAStoredLevelZeroAsLevelOne)
+{
+	auto &row = Editable(ItemRowOrNull(kWeaponL1));
+	row.set_equip_level(kLevel1 + 1);
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	const BagState inventoryBefore = Capture(Inventory());
+	const BagState equipmentBefore = Capture(Equipment());
+
+	SetLevel(0);
+	EXPECT_EQ(kEquipLevelNotEnough, PlayerEquipSystem::Equip(player, kGuidA))
+		<< "a stored level 0 counts as level 1, not higher";
+	ExpectBagsUnchanged(inventoryBefore, equipmentBefore);
+
+	row.set_equip_level(kLevel1); // 真表原值:1 级
+	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA)) << "a stored level 0 counts as level 1";
+	EXPECT_EQ(kWeaponSlot, Equipment().GetItemPosByGuid(kGuidA));
+	EXPECT_EQ(0u, tlsEcs.actorRegistry.get<LevelComp>(player).level()) << "穿戴判定不改写存储等级";
+}
+
+// 等级与职业是加载时挂上的持久数据:缺任一项按服务端故障拒绝穿戴,两个包不动,组件也不补建(组件访问规则)。
+// 以前缺等级按 1 级、缺职业按 0 号职业判门槛,坏档玩家穿得上 1 级、不限职业的装备。
+TEST_F(PlayerEquipTest, EquipRejectsWhenTheLevelOrClassComponentIsMissing)
+{
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	const BagState inventoryBefore = Capture(Inventory());
+	const BagState equipmentBefore = Capture(Equipment());
+
+	tlsEcs.actorRegistry.remove<LevelComp>(player);
+	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Equip(player, kGuidA)) << "missing level";
+	ExpectBagsUnchanged(inventoryBefore, equipmentBefore);
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "a refused call must not create the level";
+
+	tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(kLevel1);
+	tlsEcs.actorRegistry.remove<PlayerUint32Comp>(player);
+	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Equip(player, kGuidA)) << "missing class";
+	ExpectBagsUnchanged(inventoryBefore, equipmentBefore);
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerUint32Comp>(player)) << "a refused call must not create the class";
+
+	tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player); // 组件齐全:1 级、不限职业的武器照常能穿
 	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA));
 	EXPECT_EQ(kWeaponSlot, Equipment().GetItemPosByGuid(kGuidA));
 }

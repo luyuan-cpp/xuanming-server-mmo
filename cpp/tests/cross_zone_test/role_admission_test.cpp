@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 #include "core/security/service_call_auth.h"
+#include "core/system/scene_task_scope.h"
+#include "muduo/net/EventLoop.h"
 #include "core/type_alias/player_session_type_alias.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "player/system/player_lifecycle.h"
@@ -55,17 +57,20 @@ protected:
         dependencies.ackDrain = [this](auto request, auto reply) {
             acks.push_back(std::move(request)); ackReplies.push_back(std::move(reply)); return true;
         };
-        dependencies.registerHandoffFence = [this](Guid player, std::string candidate, std::optional<std::string> prior,
-            std::function<bool(const std::string&)> stillQualified, Admission::FenceReply reply) {
+        dependencies.readHandoffFence = [this](Guid player, Admission::FenceReadReply reply) {
             EXPECT_EQ(kPlayer, player);
-            fenceCandidates.push_back(candidate); fencePriors.push_back(prior);
-            auto afterRead = [this, stillQualified = std::move(stillQualified), reply = std::move(reply)] {
-                const bool allowed = stillQualified("");
-                if (allowed) ++fenceWrites;
-                auto finish = [reply, allowed] { reply(allowed, std::string("")); };
-                if (delayFenceReply) fenceReplies.push_back(std::move(finish)); else finish();
-            };
-            if (delayFence) fenceReads.push_back(std::move(afterRead)); else afterRead();
+            auto finish = [reply = std::move(reply)] { reply(std::string("")); };
+            if (delayFence) fenceReads.push_back(std::move(finish)); else finish();
+            return true;
+        };
+        dependencies.writeHandoffFence = [this](Guid player, const std::string& candidate, const std::string& prior,
+            std::function<void(bool)> reply) {
+            EXPECT_EQ(kPlayer, player);
+            EXPECT_TRUE(prior.empty());
+            fenceCandidates.push_back(candidate);
+            ++fenceWrites;
+            auto finish = [reply = std::move(reply)] { reply(true); };
+            if (delayFenceReply) fenceReplies.push_back(std::move(finish)); else finish();
             return true;
         };
         dependencies.revokeHandoffFence = [this](Guid player, std::string candidate, std::string prior,
@@ -87,6 +92,7 @@ protected:
         ASSERT_TRUE(enter_fence::Admits(PlayerLifecycleSystem::JudgeEnter(kPlayer, 91, 9)));
     }
     void TearDown() override {
+        tasks.StopAll();
         RemoveEntity();
         PlayerLifecycleSystem::GetPendingEnterMap().erase(kPlayer);
         PlayerLifecycleSystem::EraseSessionMappingIfOwned(91, kPlayer);
@@ -158,6 +164,8 @@ protected:
         if (found != tlsEcs.playerList.end() && found->second == entity) tlsEcs.playerList.erase(found);
         entity = entt::null;
     }
+    muduo::net::EventLoop loop;
+    SceneTaskScope tasks{loop};
     SceneEntity scene{entt::null};
     entt::entity entity{entt::null};
     Admission::Clock::time_point now{Admission::Clock::time_point{} + 1h};
@@ -180,7 +188,6 @@ protected:
     uint32_t fenceWrites{0};
     std::vector<std::string> fenceCandidates;
     std::vector<std::string> revokedCandidates;
-    std::vector<std::optional<std::string>> fencePriors;
     std::vector<std::function<void()>> fenceReads;
 };
 
@@ -292,6 +299,41 @@ TEST_F(RoleAdmissionTest, CallbackFromDestroyedScopeCannotMutateRestoredThreadSt
     callback(true, &reply);
     EXPECT_TRUE(activated.empty());
     EXPECT_FALSE(Admission::Allows(kPlayer, reply.identity().generation(), kRevision));
+}
+
+TEST_F(RoleAdmissionTest, OnlyActualSqlReplyRetiresRegistrationAfterStop) {
+    Enter();
+    ASSERT_TRUE(Admission::Seal(SealFor()));
+    ASSERT_TRUE(Admission::HasAdmissionInFlight(kPlayer));
+    tasks.StopAll();
+    EXPECT_TRUE(Admission::HasAdmissionInFlight(kPlayer));
+    CompleteRegister(0);
+    Tick();
+    EXPECT_FALSE(Admission::HasAdmissionInFlight(kPlayer));
+    EXPECT_TRUE(fenceCandidates.empty());
+    EXPECT_TRUE(activated.empty());
+    EXPECT_TRUE(acks.empty());
+    EXPECT_EQ(0u, rejections);
+}
+
+TEST_F(RoleAdmissionTest, OnlyActualFenceReplyRetiresWriteAfterStop) {
+    delayFenceReply = true;
+    Enter();
+    CompleteRegister(0);
+    ASSERT_EQ(1u, fenceWrites);
+    ASSERT_EQ(1u, fenceReplies.size());
+    ASSERT_TRUE(Admission::Seal(SealFor()));
+    ASSERT_EQ(1u, revokedCandidates.size());
+    ASSERT_TRUE(Admission::HasAdmissionInFlight(kPlayer));
+    tasks.StopAll();
+    EXPECT_TRUE(Admission::HasAdmissionInFlight(kPlayer));
+    fenceReplies.front()();
+    fenceReplies.front()();
+    Tick();
+    EXPECT_FALSE(Admission::HasAdmissionInFlight(kPlayer));
+    EXPECT_TRUE(activated.empty());
+    EXPECT_TRUE(acks.empty());
+    EXPECT_EQ(0u, rejections);
 }
 
 TEST_F(RoleAdmissionTest, DrainWaitsForEntityCallbacksAndActualForcedSave) {

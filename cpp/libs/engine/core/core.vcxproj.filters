@@ -62,11 +62,13 @@
     <ClInclude Include="node\system\etcd\etcd_endpoint.h" />
     <ClInclude Include="node\system\etcd\etcd_stream_backoff.h" />
     <ClInclude Include="node\system\discovery\discovery_key_index.h" />
+    <ClInclude Include="node\system\discovery\discovery_resync_policy.h" />
     <ClInclude Include="node\system\node\node.h" />
     <ClInclude Include="node\system\node\node_allocator.h" />
     <ClInclude Include="node\system\node\node_connector.h" />
     <ClInclude Include="node\system\node\client_endpoint.h" />
     <ClInclude Include="node\system\node\open_file_limit.h" />
+    <ClInclude Include="node\system\node\release_track.h" />
     <ClInclude Include="node\system\node\node_util.h" />
     <ClInclude Include="node\system\registration\registration_manager.h" />
     <ClInclude Include="node\system\discovery\service_discovery_manager.h" />
@@ -84,6 +86,7 @@
     <ClInclude Include="metrics\metrics_http_exporter.h" />
     <ClInclude Include="network\rpc_controller.h" />
     <ClInclude Include="network\rpc_done_callback.h" />
+    <ClInclude Include="network\rpc_link_liveness.h" />
     <ClInclude Include="network\grpc_client_call.h" />
     <ClInclude Include="network\grpc_unary_call.h" />
     <ClInclude Include="network\rpc_status.h" />
@@ -127,5 +130,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="node\system\node\node_events.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="async\loop_task_scope.cpp" />
+    <ClInclude Include="async\loop_task_scope.h" />
+    <ClInclude Include="async\coroutine_callback.h" />
+    <ClInclude Include="node\system\etcd\etcd_registration_wait.h" />
   </ItemGroup>
 </Project>

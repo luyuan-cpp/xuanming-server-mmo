@@ -32,7 +32,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -83,12 +82,11 @@ type ServiceContext struct {
 	// **整个字段可能为 nil**:AssetOp.Enabled=false(默认)时通道根本不装配。调用托管 / 交付前
 	// 应判 Assets.Enabled(),好给玩家一个明确的"功能未开放";漏判也不会 panic —— AssetChannel
 	// 的方法都带空接收者守卫,reconcile 同理,业务侧拿到的是 reconcile.ErrSignerMissing。
-	Assets        *AssetChannel
-	Commerce      *commerce.Engine
-	Mall          *commerce.Mall
-	Rmb           *commerce.RmbConsignments
-	RmbIdentity   *RmbIdentity
-	rmbLoginRedis redis.UniversalClient
+	Assets      *AssetChannel
+	Commerce    *commerce.Engine
+	Mall        *commerce.Mall
+	Rmb         *commerce.RmbConsignments
+	RmbIdentity *RmbIdentity
 
 	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
 	WriterConfig     authoritysql.WriterConfig
@@ -465,9 +463,6 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	var result error
 	if sc.directoryConn != nil {
 		result = errors.Join(result, sc.directoryConn.Close())
-	}
-	if sc.rmbLoginRedis != nil {
-		result = errors.Join(result, sc.rmbLoginRedis.Close())
 	}
 	if sc.DB != nil {
 		result = errors.Join(result, sc.DB.Close())

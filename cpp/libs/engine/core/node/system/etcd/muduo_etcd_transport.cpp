@@ -179,12 +179,14 @@ public:
 		OpenStream(StreamKind::kKeepAlive);
 	}
 
-	// 发一个 unary 调用;成功且应答能解析时 onReply(*this, response)。失败只记日志(恢复由 EtcdService 的看门狗负责)。
+	// 发现请求只处理可解析的成功应答。注册请求另有每次调用自己的失败完成。
 	template <typename Response, typename OnReply>
-	void Unary(const char *method, const google::protobuf::Message &request, OnReply onReply)
+	void Unary(const char *method, const google::protobuf::Message &request, OnReply onReply,
+			   std::function<void()> onFailure = {})
 	{
 		if (shutdown_ || !channel_)
 		{
+			if (onFailure) onFailure();
 			return;
 		}
 		muduo_grpc::UnaryCallRequest call;
@@ -192,22 +194,26 @@ public:
 		if (!request.SerializeToString(&call.message))
 		{
 			LOG_ERROR << "etcd " << method << ": failed to serialize the request";
+			if (onFailure) onFailure();
 			return;
 		}
 		call.deadline = std::chrono::steady_clock::now() + callDeadline_;
 		std::weak_ptr<Core> weakSelf = weak_from_this();
 		channel_->StartUnaryCall(std::move(call),
-								 [weakSelf, methodName = std::string(method), onReply = std::move(onReply)](
+								 [weakSelf, methodName = std::string(method), onReply = std::move(onReply),
+								  onFailure = std::move(onFailure)](
 									 muduo_grpc::UnaryCallResult &&result)
 								 {
 			const auto self = weakSelf.lock();
 			if (!self || self->shutdown_)
 			{
+				if (onFailure) onFailure();
 				return;
 			}
 			if (!result.status.ok())
 			{
 				self->LogCallFailure(methodName, result.status);
+				if (onFailure) onFailure();
 				return;
 			}
 			Response response;
@@ -215,6 +221,7 @@ public:
 			{
 				self->LogCallFailure(methodName, muduo_grpc::Status(muduo_grpc::StatusCode::kInternal,
 																	 "failed to parse the response"));
+				if (onFailure) onFailure();
 				return;
 			}
 			onReply(*self, response); });
@@ -468,18 +475,20 @@ void MuduoEtcdTransport::DeleteRange(const etcdserverpb::DeleteRangeRequest &req
 													{ core.sink().OnDeleteRange(reply); });
 }
 
-void MuduoEtcdTransport::Txn(const etcdserverpb::TxnRequest &request)
+void MuduoEtcdTransport::Txn(const etcdserverpb::TxnRequest &request,
+						    EtcdRegistrationCompletion<etcdserverpb::TxnResponse> done)
 {
 	core_->Unary<etcdserverpb::TxnResponse>(kTxnMethod, request,
-											[](Core &core, const etcdserverpb::TxnResponse &reply)
-											{ core.sink().OnTxn(reply); });
+		[done](Core &, etcdserverpb::TxnResponse &reply) { done(std::move(reply)); },
+		[done] { done(std::nullopt); });
 }
 
-void MuduoEtcdTransport::LeaseGrant(const etcdserverpb::LeaseGrantRequest &request)
+void MuduoEtcdTransport::LeaseGrant(const etcdserverpb::LeaseGrantRequest &request,
+								   EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done)
 {
 	core_->Unary<etcdserverpb::LeaseGrantResponse>(kLeaseGrantMethod, request,
-												   [](Core &core, const etcdserverpb::LeaseGrantResponse &reply)
-												   { core.sink().OnLeaseGrant(reply); });
+		[done](Core &, etcdserverpb::LeaseGrantResponse &reply) { done(std::move(reply)); },
+		[done] { done(std::nullopt); });
 }
 
 void MuduoEtcdTransport::LeaseRevoke(const etcdserverpb::LeaseRevokeRequest &request)

@@ -82,6 +82,53 @@ func TestFenceClock_SeedAckCountsFromThePast(t *testing.T) {
 	}
 }
 
+// hasMonotonic 报告 t 是否带单调读数。time.Time 的 == 连单调读数一起比(time 包文档),
+// 而 Round(0) 只去掉单调读数、其余不变,所以两者不等 ⇔ 带单调读数。
+func hasMonotonic(t time.Time) bool { return t != t.Round(0) }
+
+// 第一轮数据审计 §4 第 20 条回归:生产构造器拿 time.Now 当墙钟,而 time.Now 带单调读数;
+// 两个都带单调读数的 Time 相减只看单调读数,墙钟规则会退化成第二条单调规则 —— Linux 的
+// CLOCK_MONOTONIC 不含系统挂起时间,VM 挂起之后两条规则都不触发。上面几条用例的墙钟由
+// time.Date 构造(本来就不带单调读数),正好把这个问题盖住了。
+//
+// time 包造不出"墙钟走了、单调读数没走"的 Time,所以这里用真实 time.Now 钉住机制本身:
+// 墙钟规则的锚点(LastAckWall)不得带单调读数 —— 只要有一端不带,Sub 就按墙钟相减。
+// 修复前 Ack 原样存 time.Now(),SeedAck 原样存入参,两处断言都会失败。
+func TestFenceClock_RealWallClockAnchorCarriesNoMonotonicReading(t *testing.T) {
+	cases := []struct {
+		name string
+		fc   *FenceClock
+	}{
+		{"NewFenceClock", NewFenceClock(time.Minute)},
+		{"injected time.Now", NewFenceClockWithClocks(time.Minute, func() time.Duration { return 0 }, time.Now)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.fc.Ack()
+			if got := tc.fc.LastAckWall(); hasMonotonic(got) {
+				t.Fatalf("Ack 记下的墙钟带着单调读数(%v):墙钟规则会退化成单调规则,VM 挂起后不触发", got)
+			}
+			if stale, age := tc.fc.Stale(); stale || age >= time.Minute {
+				t.Fatalf("刚 Ack 不该过期: stale=%v age=%v", stale, age)
+			}
+
+			// 调用方用 time.Now() 推算的时刻同样带单调读数,SeedAck 也得去掉。
+			seed := time.Now().Add(-30 * time.Second)
+			tc.fc.SeedAck(seed)
+			got := tc.fc.LastAckWall()
+			if hasMonotonic(got) {
+				t.Fatalf("SeedAck 记下的墙钟带着单调读数(%v)", got)
+			}
+			if !got.Equal(seed) {
+				t.Fatalf("SeedAck 记下的时刻变了: got %v want %v", got, seed)
+			}
+			if stale, age := tc.fc.Stale(); stale || age < 30*time.Second {
+				t.Fatalf("灌入 30s 前的 Ack:不过期但年龄≥30s, stale=%v age=%v", stale, age)
+			}
+		})
+	}
+}
+
 // Node.Generate 必须在入口执行水位年龄判定:过期 → ErrWatermarkStale,不交号;
 // 重新 Ack → 恢复。这是 shared/snowflake 与 login PlayerIDGen 共用的规则。
 func TestGenerate_RefusesWhenWatermarkStale(t *testing.T) {

@@ -10,6 +10,9 @@ enum GameMessageType
   reserved 2, 3;
   reserved "RPC_CLIENT_REQUEST", "NODE_ROUTE";
   RPC_ERROR = 4; // 框架或 handler 拒绝本次调用;回显请求的 id 与 message_id
+  // 链路心跳(docs/design/muduo-rpc-channel.md §21):只有 type,id、message_id、载荷都为空。
+  // 开了心跳的一端写空闲满间隔就发一帧;收到只说明对端还活着,不派发、不回包。
+  HEARTBEAT = 5;
 }
 
 enum GameErrorCode

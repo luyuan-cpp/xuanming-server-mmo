@@ -225,9 +225,25 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ForwardRequest final : public ::goo
 
   // accessors -------------------------------------------------------
   enum : int {
+    kReleaseTrackFieldNumber = 3,
     kRequestFieldNumber = 1,
     kZoneIdFieldNumber = 2,
   };
+  // string release_track = 3;
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
   // .ClientRequest request = 1;
   [[nodiscard]] bool has_request()
       const;
@@ -258,8 +274,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ForwardRequest final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -287,6 +303,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ForwardRequest final : public ::goo
         const ForwardRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::ClientRequest* PROTOBUF_NULLABLE request_;
     ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -313,7 +330,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ForwardRequest final : public ::goo
 
 // .ClientRequest request = 1;
 inline bool ForwardRequest::has_request() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.request_ != nullptr);
   return value;
 }
@@ -334,16 +351,16 @@ inline void ForwardRequest::unsafe_arena_set_allocated_request(
   }
   _impl_.request_ = reinterpret_cast<::ClientRequest*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:client_rpc_router.ForwardRequest.request)
 }
 inline ::ClientRequest* PROTOBUF_NULLABLE ForwardRequest::release_request() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::ClientRequest* released = _impl_.request_;
   _impl_.request_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -363,7 +380,7 @@ inline ::ClientRequest* PROTOBUF_NULLABLE ForwardRequest::unsafe_arena_release_r
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:client_rpc_router.ForwardRequest.request)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::ClientRequest* temp = _impl_.request_;
   _impl_.request_ = nullptr;
   return temp;
@@ -378,7 +395,7 @@ inline ::ClientRequest* PROTOBUF_NONNULL ForwardRequest::_internal_mutable_reque
 }
 inline ::ClientRequest* PROTOBUF_NONNULL ForwardRequest::mutable_request()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::ClientRequest* _msg = _internal_mutable_request();
   // @@protoc_insertion_point(field_mutable:client_rpc_router.ForwardRequest.request)
   return _msg;
@@ -395,9 +412,9 @@ inline void ForwardRequest::set_allocated_request(::ClientRequest* PROTOBUF_NULL
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.request_ = reinterpret_cast<::ClientRequest*>(value);
@@ -408,7 +425,7 @@ inline void ForwardRequest::set_allocated_request(::ClientRequest* PROTOBUF_NULL
 inline void ForwardRequest::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t ForwardRequest::zone_id() const {
   // @@protoc_insertion_point(field_get:client_rpc_router.ForwardRequest.zone_id)
@@ -416,7 +433,7 @@ inline ::uint32_t ForwardRequest::zone_id() const {
 }
 inline void ForwardRequest::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:client_rpc_router.ForwardRequest.zone_id)
 }
 inline ::uint32_t ForwardRequest::_internal_zone_id() const {
@@ -426,6 +443,70 @@ inline ::uint32_t ForwardRequest::_internal_zone_id() const {
 inline void ForwardRequest::_internal_set_zone_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = value;
+}
+
+// string release_track = 3;
+inline void ForwardRequest::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ForwardRequest::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:client_rpc_router.ForwardRequest.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ForwardRequest::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:client_rpc_router.ForwardRequest.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL ForwardRequest::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:client_rpc_router.ForwardRequest.release_track)
+  return _s;
+}
+inline const ::std::string& ForwardRequest::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void ForwardRequest::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ForwardRequest::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ForwardRequest::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:client_rpc_router.ForwardRequest.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ForwardRequest::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:client_rpc_router.ForwardRequest.release_track)
 }
 
 #ifdef __GNUC__

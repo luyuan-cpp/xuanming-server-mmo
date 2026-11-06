@@ -293,14 +293,11 @@ try {
                 @{ Key = 'db'; Path = 'ServerConfig.Database.Hosts'; Value = '127.0.0.1:3306' }
                 @{ Key = 'chat'; Path = 'Backend'; Value = 'mysql' }
                 @{ Key = 'friend'; Path = 'Backend'; Value = 'mysql' }
-                @{ Key = 'friend'; Path = 'GlobalLoginSessions'; Value = 'true' }
-                @{ Key = 'friend'; Path = 'LoginRedis.Addrs'; Value = '["127.0.0.1:6379"]' }
                 @{ Key = 'friend'; Path = 'MySQL.Host'; Value = '127.0.0.1:3306' }
                 @{ Key = 'guild'; Path = 'MySQL.Backend'; Value = 'mysql' }
                 @{ Key = 'guild'; Path = 'MySQL.DataSourceEnv'; Value = 'MMORPG_GUILD_SQL_DSN' }
                 @{ Key = 'mail'; Path = 'Etcd.Key'; Value = '' }
                 @{ Key = 'mail'; Path = 'Backend'; Value = 'mysql' }
-                @{ Key = 'mail'; Path = 'GlobalLoginSessions'; Value = 'true' }
                 @{ Key = 'rank'; Path = 'Etcd.Key'; Value = '' }
                 @{ Key = 'rank'; Path = 'Backend'; Value = 'mysql' }
                 @{ Key = 'match'; Path = 'GlobalMatch.Backend'; Value = 'mysql' }
@@ -325,6 +322,13 @@ try {
                 @{ Key = 'db'; Path = 'Placement.RouteSchema' }
             )) {
             Assert-Equal $false (Get-ConfigValue -Summary $summary -Key $check.Key -KeyPath $check.Path).Found "$($check.Key) 不再有 $($check.Path)"
+        }
+        # 会话身份只认 gate 签名的原件,这六个服务不读 login 的 Redis:源配置没有登录态段,生成器也不能补回(trade 的曾在 Rmb 下)。
+        foreach ($key in @('chat', 'friend', 'guild', 'mail', 'match', 'trade')) {
+            $prefix = if ($key -ceq 'trade') { 'Rmb.' } else { '' }
+            foreach ($section in @('GlobalLoginSessions', 'LoginRedis')) {
+                Assert-Equal $false (Get-ConfigValue -Summary $summary -Key $key -KeyPath ($prefix + $section)).Found "$key 不再有 $prefix$section"
+            }
         }
         foreach ($key in @('data_service', 'db', 'friend', 'trade', 'player_inbox')) {
             $catalog = Read-MaintenanceJson -Path $summary.catalog
@@ -438,11 +442,10 @@ try {
         $null = New-Item -ItemType Directory -Path $configRoot -Force
         Set-Content -LiteralPath (Join-Path $configRoot 'db.yaml') -Value "ZoneId: 1`n" -NoNewline
         Set-Content -LiteralPath (Join-Path $configRoot 'data_service.yaml') -Value "Directory:`n  LogicalShards: 4`nSnapshotMySQL:`n  DBName: fixture_global`n" -NoNewline
-        Set-Content -LiteralPath (Join-Path $configRoot 'login.yaml') -Value "Node:`n  RedisClient:`n    Host: 127.0.0.1:6379`n    DB: 0`n" -NoNewline
         [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_1_db,zone_2_db,player_store_1000000_db', 'Process')
         try {
             $settings = New-LocalSqlBootSettings -Endpoint '127.0.0.1:3306' -EndpointName '127.0.0.1' -Port 3306 -RootUser 'root' -RootPassword 'fixture-password' -RootPrincipal 'root@%' `
-                -DbConfigPath (Join-Path $configRoot 'db.yaml') -DataServiceConfigPath (Join-Path $configRoot 'data_service.yaml') -LoginConfigPath (Join-Path $configRoot 'login.yaml')
+                -DbConfigPath (Join-Path $configRoot 'db.yaml') -DataServiceConfigPath (Join-Path $configRoot 'data_service.yaml')
             Assert-Equal 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03' (@($settings.DirectoryShards) -join ',') '片库名与 dirshard.DirectoryDBNames 同形'
             Assert-Equal 'fixture_global_00' $settings.DirectorySchema '第 0 片放 zone_merged_into,注册账号也连它'
             Assert-Equal 'fixture_global_ledger' $settings.LedgerSchema '流水库'

@@ -202,7 +202,7 @@ function ConvertTo-LocalSqlBootOrdinalSet {
     return [string[]]@($unique)
 }
 
-# 本机账号、库名与登录 Redis 全部取已有配置的原件,缺了不猜。root 与 go_services.ps1 的本机建表同一来源:
+# 本机账号与库名全部取已有配置的原件,缺了不猜。root 与 go_services.ps1 的本机建表同一来源:
 # go/db 的账号(与 compose 的 MYSQL_ROOT_PASSWORD 同值),值只进子进程环境;容器外连入 CURRENT_USER() 是 root@%。
 function Resolve-LocalSqlBootSettings {
     param([Parameter(Mandatory)][string]$RepoRoot, [string]$Endpoint = '', [int[]]$Zones = @())
@@ -221,10 +221,10 @@ function Resolve-LocalSqlBootSettings {
     if ([string]::IsNullOrWhiteSpace($rootPrincipal)) { $rootPrincipal = "${rootUser}@%" }
 
     return New-LocalSqlBootSettings -Endpoint $resolved -EndpointName $parsed.Name -Port $parsed.Port -RootUser $rootUser -RootPassword $rootPassword -RootPrincipal $rootPrincipal `
-        -DbConfigPath $dbConfig -DataServiceConfigPath (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml') -Zones $Zones
+        -DbConfigPath $dbConfig -DataServiceConfigPath (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -Zones $Zones
 }
 
-# 库名清单、保护集合与登录 Redis 只有这一份。端点和 root 身份由调用方定:本机入口先过回环校验,docker 调试栈固定 compose 的 mysql。
+# 库名清单与保护集合只有这一份。端点和 root 身份由调用方定:本机入口先过回环校验,docker 调试栈固定 compose 的 mysql。
 function New-LocalSqlBootSettings {
     param(
         [Parameter(Mandatory)][string]$Endpoint,
@@ -235,7 +235,6 @@ function New-LocalSqlBootSettings {
         [Parameter(Mandatory)][string]$RootPrincipal,
         [Parameter(Mandatory)][string]$DbConfigPath,
         [Parameter(Mandatory)][string]$DataServiceConfigPath,
-        [Parameter(Mandatory)][string]$LoginConfigPath,
         # 非空 = 多区:白名单必须显式给,源 db.yaml 的 ZoneId 不当目标区。
         [int[]]$Zones = @()
     )
@@ -258,9 +257,6 @@ function New-LocalSqlBootSettings {
     # 多区没有「本 zone」:留空后存档库迁移每个都显式传 -storage-id。
     if ($Zones.Count -gt 0) { $zoneDatabase = '' }
 
-    $loginRedisHost = Get-LocalSqlBootYamlRequired -Path $LoginConfigPath -KeyPath 'Node.RedisClient.Host'
-    $loginRedisDb = Get-LocalSqlBootYamlRequired -Path $LoginConfigPath -KeyPath 'Node.RedisClient.DB'
-
     # 本机全部逻辑库。每个库自带一份写者闸门,写者连接的 DATABASE() 必须等于它的闸门所在的库(authoritysql pool.go、Java WriterAuthority)。
     $schemas = ConvertTo-LocalSqlBootOrdinalSet -Values (@('mmorpg', $ledgerSchema, 'mmorpg_chat', 'mmorpg_friend', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_player_inbox', 'mmorpg_rank', 'mmorpg_trade') + $directoryShards + $playerDatabases)
     foreach ($schema in $schemas) { $null = ConvertTo-AuthoritySqlIdentifier $schema }
@@ -270,7 +266,7 @@ function New-LocalSqlBootSettings {
         RootUser = $RootUser; RootPassword = $RootPassword; RootPrincipal = $RootPrincipal
         GlobalSchema = $globalSchema; DirectoryShards = $directoryShards; DirectorySchema = $directoryShards[0]; LedgerSchema = $ledgerSchema
         ZoneDatabase = $zoneDatabase; PlayerDatabases = $playerDatabases
-        LogicalDatabases = [string[]]@($schemas); LoginRedisHost = $loginRedisHost; LoginRedisDb = $loginRedisDb
+        LogicalDatabases = [string[]]@($schemas)
         Executor = $null; Backend = ''; LockPrimitive = ''
     }
 }
@@ -443,8 +439,6 @@ function Get-LocalSqlBootConfigPatch {
     $endpoint = ConvertTo-LocalSqlBootYamlString -Value $Settings.Endpoint
     $userLiteral = ConvertTo-LocalSqlBootYamlString -Value $User
     $passwordLiteral = ConvertTo-LocalSqlBootYamlString -Value $Password
-    $redisHost = ConvertTo-LocalSqlBootYamlString -Value $Settings.LoginRedisHost
-    $redisDb = $Settings.LoginRedisDb
     $values = [ordered]@{}
     $remove = @()
     switch -CaseSensitive ($Service) {
@@ -465,9 +459,6 @@ function Get-LocalSqlBootConfigPatch {
         'chat' { $values['Backend'] = $backend }
         'friend' {
             $values['Backend'] = $backend
-            $values['GlobalLoginSessions'] = 'true'
-            $values['LoginRedis.Addrs'] = "[$redisHost]"
-            $values['LoginRedis.DB'] = $redisDb
             $values['MySQL.Host'] = $endpoint
             $values['MySQL.User'] = $userLiteral
             $values['MySQL.Password'] = $passwordLiteral
@@ -482,9 +473,6 @@ function Get-LocalSqlBootConfigPatch {
             # 源配置缺 Etcd.Key,go-zero 加载就失败;必须显式空串(契约 D-13,同 friend.yaml)。
             $values['Etcd.Key'] = '""'
             $values['Backend'] = $backend
-            $values['GlobalLoginSessions'] = 'true'
-            $values['LoginRedis.Addrs'] = "[$redisHost]"
-            $values['LoginRedis.DB'] = $redisDb
         }
         'rank' {
             $values['Etcd.Key'] = '""'
@@ -494,8 +482,6 @@ function Get-LocalSqlBootConfigPatch {
             $values['GlobalMatch.Backend'] = $backend
             $values['GlobalMatch.Host'] = $endpoint
             $values['GlobalMatch.User'] = $userLiteral
-            $values['LoginRedis.Addrs'] = "[$redisHost]"
-            $values['LoginRedis.DB'] = $redisDb
         }
         'trade' {
             $values['MySQL.Backend'] = $backend

@@ -54,7 +54,10 @@
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_unknown_type" [10m]) > 0
 #             (新类型先于 scene 支持被加进 EnqueueTypes:scene 停在队头不记 REJECTED,§8 #13;回滚 EnqueueTypes 或先升 scene)
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_halted" [10m]) > 0
-#             (MISMATCH / NOT_DELIVERED / SKIP_NOT_REQUESTED 后该玩家该域停用,§7.7;与下面的 PlayerInboxAckAnomaly 对照)
+#             (MISMATCH / NOT_DELIVERED / SKIP_NOT_REQUESTED 后该玩家该域停用,§7.7;与下面的 PlayerInboxAckAnomaly 对照。
+#              停用对当前实体一直有效:停用那一刻打一条 ERROR,之后每 5 分钟补打一条带 relog=1 的 WARN
+#              (player_inbox_rules.h 的 kHaltedDomainRelogIntervalMs),所以玩家在线期间告警一直亮着,实体销毁后才熄灭。
+#              reason=version_skew 是混版本窗口里 scene 版本不够新,按 runbook §5.2 A′ 处理,不要作废)
 #   critical: count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_replay_mismatch" [10m]) > 0(IB-9 回放核对失败)
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_ack_anomaly" [10m]) > 0
 #             (scene 收到异常的 Ack 回包,停用该玩家该域:结果不是 FINALIZED / ALREADY_SAME、seq 对不上,或服务端回
@@ -269,6 +272,9 @@ spec:
             summary: "收件箱有条目被投递了 {{ $value | printf \"%.0f\" }} 次仍未终结"
             description: >-
               疑似毒消息(载荷让 scene 崩溃或处理永远失败)。只统计最近 24 小时内投递的行。
+              先排除版本错位:玩家在几台旧版本 scene 之间换图或重建实体时,每次重拉都会让投递次数 +1。
+              该玩家 scene 日志里有 metric=inbox_halted reason=version_skew 或 metric=persist_version_skew 时,
+              这是合法处置,不要 QUARANTINED,按 docs/ops/player-inbox-runbook.md §5.2 A′ 处理。
               先看收件箱同一时刻的 ERROR `Item delivered N times without ack` 里的 domain:
               GM 处置域(domain=1)核对后用 PlayerInboxAdmin.VoidItem(reason=QUARANTINED)隔离,
               作废路径不解码载荷,不会再次触发崩溃。步骤与限速见 docs/ops/player-inbox-runbook.md「卡住与毒消息」。

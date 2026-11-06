@@ -1,9 +1,13 @@
 // Package gatepick 是「从一批 gate 候选里挑一台」的共享规则。login 的 AssignGate 快路径
 // (go/login/internal/logic/pkg/loginqueue PickGate)与 scene_manager 的跨 zone 重定向
-// (go/scene_manager/internal/logic/gate_redirect.go)都用它,一条规则只有这一份实现。
+// (go/scene_manager/internal/logic/gate_redirect.go)都用它,一条规则只有这一份实现:
+//   - TwoChoices:随机二选一(本文件);
+//   - Eligible:挑之前剔除停写与满载的 gate,全部不合格时回落全集(eligibility.go);
+//   - RevisionTracker:给每次直读 etcd、没有 watch 镜像的调用方判停写(revisions.go)。
 //
-// 不含任何 I/O:候选怎么来(etcd / 镜像)、怎么过滤(排空、客户端地址)由调用方决定,
-// 随机源由调用方显式传入。设计与取舍见 docs/design/gate-load-balancing-design.md「gate 目录怎么读、怎么挑」。
+// 不含网络或存储 I/O:候选怎么来(etcd / 镜像)、排空与客户端地址怎么过滤由调用方决定,
+// 随机源与时刻由调用方显式传入。设计与取舍见 docs/design/gate-load-balancing-design.md
+// 「gate 目录怎么读、怎么挑」「满载与停写的 gate」。
 package gatepick
 
 // TwoChoices 用「随机二选一」从 items 里挑一个,返回下标;items 为空时 ok=false。

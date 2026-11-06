@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"match/internal/catalog"
 	"match/internal/config"
+	"match/internal/ratingrule"
 	"match/internal/scope"
 	battlepb "proto/battle"
 	pb "proto/match"
@@ -41,9 +42,12 @@ type Store struct {
 	schedule scope.Schedule
 	// zones 是合服映射缓存，BindMergedZones 启动时写一次，之后只读（见 merged_zones.go）。
 	zones *placement.MergedZoneCache
+	// ratingCurve 是组内评分极差的容差曲线，EnsureGlobalPolicy 与 TeamConfig 一起装配（同一份策略指纹准入），
+	// 之后只读；未装配（单测）时是零值，按 ratingrule.Curve 的默认值算（见 rated_spread.go）。
+	ratingCurve ratingrule.Curve
 }
 
-const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,preferred_region,owner_account,owner_revision"
+const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision"
 const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared,outcome_protocol_version,preflight_supported_version,preflight_instance_id,adopted_outcome_protocol_version,adopted_outcome_observed"
 
 var ErrJoinCancelled = errors.New("匹配请求已经撤销")
@@ -94,7 +98,7 @@ type scanner interface{ Scan(...any) error }
 
 func scanTicket(s scanner) (*pb.MatchAuthorityTicketRecord, error) {
 	t := &pb.MatchAuthorityTicketRecord{}
-	err := s.Scan(&t.PlayerId, &t.Ticket, &t.RequestId, &t.Mode, &t.ConfigId, &t.TeamSize, &t.State, &t.EnqueuedMs, &t.NotBeforeMs, &t.ZoneId, &t.RatingCenti, &t.FormationId, &t.TeamId, &t.NetworkProfile, &t.ExpiresMs, &t.SelectedRegion, &t.PreferredRegion, &t.OwnerAccount, &t.OwnerRevision)
+	err := s.Scan(&t.PlayerId, &t.Ticket, &t.RequestId, &t.Mode, &t.ConfigId, &t.TeamSize, &t.State, &t.EnqueuedMs, &t.NotBeforeMs, &t.ZoneId, &t.RatingCenti, &t.FormationId, &t.TeamId, &t.NetworkProfile, &t.ExpiresMs, &t.SelectedRegion, &t.OwnerAccount, &t.OwnerRevision)
 	return t, err
 }
 func (s *Store) Ticket(ctx context.Context, pid uint64) (*pb.MatchAuthorityTicketRecord, error) {
@@ -214,10 +218,6 @@ func (s *Store) commitProfileOnce(ctx context.Context, pid uint64, plan, binding
 			if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET network_profile=?,expires_ms=? WHERE player_id=? AND state=1", b, expires, pid); e != nil {
 				return e
 			}
-			active.NetworkProfile, active.ExpiresMs = b, expires
-			if e = s.replaceTicketRegions(ctx, tx, active, n); e != nil {
-				return e
-			}
 		}
 	}
 	return tx.Commit()
@@ -248,7 +248,7 @@ func (s *Store) joinOnce(ctx context.Context, t *pb.MatchAuthorityTicketRecord, 
 	if e = s.lockActor(ctx, tx, t.PlayerId); e != nil {
 		return nil, false, e
 	}
-	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,0,'',0)", t.PlayerId, []byte{}); e != nil {
+	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", t.PlayerId, []byte{}); e != nil {
 		return nil, false, e
 	}
 	old, e := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", t.PlayerId))
@@ -371,9 +371,6 @@ func (s *Store) joinOnce(ctx context.Context, t *pb.MatchAuthorityTicketRecord, 
 	if e != nil {
 		return nil, false, e
 	}
-	if e = s.replaceTicketRegions(ctx, tx, t, n); e != nil {
-		return nil, false, e
-	}
 	if e = saveJoinIntent(ctx, tx, t); e != nil {
 		return nil, false, e
 	}
@@ -426,7 +423,7 @@ func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, reques
 	if e = s.lockActor(ctx, tx, pid); e != nil {
 		return e
 	}
-	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,0,'',0)", pid, []byte{}); e != nil {
+	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", pid, []byte{}); e != nil {
 		return e
 	}
 	old, e := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", pid))
@@ -460,9 +457,6 @@ func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, reques
 	}
 	if (old.State == 1 || (old.State == 0 && old.Ticket != "")) && ((request != "" && old.RequestId == request && (ticket == "" || old.Ticket == ticket)) || (request == "" && old.Ticket == ticket)) {
 		if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=? AND state IN(0,1)", pid); e != nil {
-			return e
-		}
-		if e = deleteTicketRegions(ctx, tx, pid); e != nil {
 			return e
 		}
 	}
@@ -506,26 +500,6 @@ func (s *Store) requestCancelledOnce(ctx context.Context, pid uint64, request st
 	}
 	return cancelled, tx.Commit()
 }
-func (s *Store) Candidates(ctx context.Context) ([]*pb.MatchAuthorityTicketRecord, error) {
-	return s.CandidatesAfter(ctx, 0, 0)
-}
-func (s *Store) CandidatesAfter(ctx context.Context, afterMs, afterPlayer uint64) ([]*pb.MatchAuthorityTicketRecord, error) {
-	r, e := s.DB.QueryContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE state=1 AND expires_ms>CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND (enqueued_ms>? OR (enqueued_ms=? AND player_id>?)) ORDER BY enqueued_ms,player_id LIMIT 32", afterMs, afterMs, afterPlayer)
-	if e != nil {
-		return nil, e
-	}
-	defer r.Close()
-	var out []*pb.MatchAuthorityTicketRecord
-	for r.Next() {
-		t, e := scanTicket(r)
-		if e != nil {
-			return nil, e
-		}
-		out = append(out, t)
-	}
-	return out, r.Err()
-}
-
 func (s *Store) Claim(ctx context.Context, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) error {
 	return s.Fenced(ctx, func() error { return s.claimOnce(ctx, f, group) })
 }
@@ -619,6 +593,9 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 		if _, admitted := s.admitScope(current, n); !admitted {
 			return ErrScopeWait
 		}
+		if err := s.requireRatedSpread(f.Mode, current, n); err != nil {
+			return err
+		}
 	}
 	f.CreatedMs = n
 	f.DeadlineMs = s.battleDeadlineMs(n, f.ConfigId)
@@ -647,9 +624,6 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 	}
 	for _, t := range locked {
 		if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=2,formation_id=?,selected_region=? WHERE player_id=? AND ticket=? AND state=1", f.BattleId, f.PhysicalRegion, t.PlayerId, t.Ticket); e != nil {
-			return e
-		}
-		if e = deleteTicketRegions(ctx, tx, t.PlayerId); e != nil {
 			return e
 		}
 	}
@@ -700,7 +674,7 @@ func (s *Store) reserveGroupTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForma
 		if t.PlayerId == 0 || (i > 0 && ordered[i-1].PlayerId == t.PlayerId) {
 			return errors.New("整组身份无效")
 		}
-		if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,0,'',0)", t.PlayerId, []byte{}); e != nil {
+		if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", t.PlayerId, []byte{}); e != nil {
 			return e
 		}
 		old, e := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", t.PlayerId))
@@ -733,9 +707,6 @@ func (s *Store) reserveGroupTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForma
 		t.EnqueuedMs = n
 		t.ExpiresMs = exp
 		if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", t.Ticket, t.RequestId, t.Mode, t.ConfigId, t.TeamSize, n, t.ZoneId, t.RatingCenti, t.TeamId, data, t.ExpiresMs, t.OwnerAccount, t.OwnerRevision, t.PlayerId); e != nil {
-			return e
-		}
-		if e = s.replaceTicketRegions(ctx, tx, t, n); e != nil {
 			return e
 		}
 	}
@@ -1184,16 +1155,6 @@ func (s *Store) finish(ctx context.Context, work *pb.MatchFormationRecord, succe
 			notBefore = n + 1000
 		}
 		if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=?,formation_id=?,selected_region=?,not_before_ms=? WHERE player_id=? AND ticket=? AND formation_id=?", memberState, formationID, region, notBefore, m.PlayerId, m.Ticket, id); e != nil {
-			return e
-		}
-		current, readErr := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", m.PlayerId))
-		if readErr != nil {
-			return readErr
-		}
-		if current.Ticket != m.Ticket {
-			continue
-		}
-		if e = s.replaceTicketRegions(ctx, tx, current, n); e != nil {
 			return e
 		}
 	}

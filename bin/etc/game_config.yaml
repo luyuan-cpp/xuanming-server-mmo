@@ -45,3 +45,12 @@ zoneredis:
 player_inbox:
   consumer_enabled: true
   periodic_fetch_minutes: 30
+
+# 进场、离场的审计快照(整档发 Kafka,data_service 落 player_snapshot)。只影响审计证据,不影响存盘。
+# 整段或单键缺失时加载器取下面的默认值;K8s 的 node-config 从这里整段复制。
+#   login_enabled / logout_enabled  两个触发点各自的开关。
+#   sample_per_mille               千分比,1000 = 全量,按 player_id 稳定抽样,同一玩家的进退场快照成对。
+audit_snapshot:
+  login_enabled: true
+  logout_enabled: true
+  sample_per_mille: 1000

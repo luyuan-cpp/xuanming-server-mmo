@@ -514,6 +514,8 @@ C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 
 **部署要改的键(第 10 批)**:`login` 的 `PlayerRedis.{Addrs,Cluster,Password|PasswordEnv,PoolSizePerNode}`、`LoginRedis.{同上}`;chat、friend、guild、match 的 `LoginRedis.{Addrs,Cluster,DB,Password|PasswordEnv,PoolSizePerNode}`(Cluster 下 `DB` 必须是 0)。mail 和 trade 也读登录态:mail 的 ConfigMap 原来写 `Host` 指向控制域,trade 的 `Rmb.LoginRedis` 原来没渲染,第 10 批都补了(未运行),否则上 Cluster 后这两个服务读不到登录态,客户端请求一律被拒。连接总账:login 每个 Pod 多两个池(单实例回落时各按 `Node.RedisClient.PoolSize`,etc 里写的是 20),口令配额池(每节点 4)改连登录域;mail 读登录态的池固定 8。
 
+**现状(2026-11-05 起,未编译)**:chat、friend、guild、match、mail、trade 不再读登录态,也不再有 `LoginRedis` / `GlobalLoginSessions` 配置与连接池,`shared/loginsession` 与 `playerredis.LoginReaderConfig` 已删除。在线原账号只认 gate 签名的会话原件([gate 在线身份](gate-online-identity.md))。登录域的读写方只剩 login;上面第 10、11 批关于这六个服务读登录态的条目是当时的实现记录,连接总账已去掉这六个服务的登录域池。
+
 ### 10.3 再往上：多集群联邦
 
 Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与副本都算）。按 §10.1 每主 1 副本还有约 2–10 倍余量，每主 2 副本约 1.3–6.7 倍。**节点数达到约 600 时立项联邦**：`partition = hash64(pid) mod 2^k`，版本化的分区表（存 etcd）把分区映射到集群，客户端先选集群再按 slot 选节点。**键形不变**；跨集群搬分区需要自建「冻结分区 → 复制 → 翻转 → 清理」的迁移协议，届时单独设计。

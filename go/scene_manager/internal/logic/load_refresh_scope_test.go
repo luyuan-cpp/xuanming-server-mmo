@@ -427,7 +427,7 @@ func TestSweepStaleLoadSetMembers_UsesZoneRegistryNotScan(t *testing.T) {
 	})
 	seen := map[uint32]map[string]struct{}{1: {}}
 
-	require.True(t, sweepStaleLoadSetMembers(sc, seen, []uint32{1}))
+	require.True(t, sweepStaleLoadSetMembers(sc, seen, readLoadSetBaseline(sc, nodeViewZones(sc, []uint32{1}, nil))))
 
 	assert.True(t, mr.Exists(nodeDeathAtKey(93, "9301")), "快照外 zone 的陈旧成员要先补记死亡时刻")
 	assert.NotContains(t, loadSetMembersForTest(t, mr, 93), "9301")

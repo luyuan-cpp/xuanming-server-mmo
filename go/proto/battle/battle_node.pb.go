@@ -413,8 +413,12 @@ type CreateBattleResponse struct {
 	ErrorMessage                  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	AdoptedOutcomeProtocolVersion uint32                 `protobuf:"varint,3,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
 	TargetInstanceId              string                 `protobuf:"bytes,4,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
+	// 负载随应答捎回（R6，docs/design/global-match-hierarchical-pools.md §5.1）：成功应答（含幂等命中）带本节点此刻的房间数，
+	// 含这次建成的这一间；失败应答不填。0 = 未上报（旧节点）。match 只拿它比较同机房节点的负载，不另发上报流量；
+	// 读数会过期（go/match/internal/battleplace DefaultReportTTL），不作容量或准入判定。字段号 5 上线后不复用。
+	RoomCount     uint32 `protobuf:"varint,5,opt,name=room_count,json=roomCount,proto3" json:"room_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateBattleResponse) Reset() {
@@ -473,6 +477,13 @@ func (x *CreateBattleResponse) GetTargetInstanceId() string {
 		return x.TargetInstanceId
 	}
 	return ""
+}
+
+func (x *CreateBattleResponse) GetRoomCount() uint32 {
+	if x != nil {
+		return x.RoomCount
+	}
+	return 0
 }
 
 type DestroyBattleRequest struct {
@@ -611,8 +622,13 @@ type QueryBattleCreationResponse struct {
 	// ABSENT 也回显节点能力；PRESENT 的 adopted 只取原创建原件，不按现能力追认。
 	SupportedOutcomeProtocolVersion uint32 `protobuf:"varint,3,opt,name=supported_outcome_protocol_version,json=supportedOutcomeProtocolVersion,proto3" json:"supported_outcome_protocol_version,omitempty"`
 	AdoptedOutcomeProtocolVersion   uint32 `protobuf:"varint,4,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
-	unknownFields                   protoimpl.UnknownFields
-	sizeCache                       protoimpl.SizeCache
+	// 节点此刻会拒绝新建房：建房准入闸未开或已关、Agones 排空中、lifecycle 正在停机。只在回显了本实例时填。
+	// match 在把建房原件落库之前读它：为真就本局干净失败、全员回队，不必等落库后被 battle_not_allocatable 拒、
+	// 再等唯一 SQL 终局。只是预检：预检之后节点仍可能开始排空，CreateBattle 的准入仍是唯一判定。
+	// 缺省 false = 旧节点照旧按"接新房"处理。
+	RejectsNewBattles bool `protobuf:"varint,5,opt,name=rejects_new_battles,json=rejectsNewBattles,proto3" json:"rejects_new_battles,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *QueryBattleCreationResponse) Reset() {
@@ -671,6 +687,13 @@ func (x *QueryBattleCreationResponse) GetAdoptedOutcomeProtocolVersion() uint32 
 		return x.AdoptedOutcomeProtocolVersion
 	}
 	return 0
+}
+
+func (x *QueryBattleCreationResponse) GetRejectsNewBattles() bool {
+	if x != nil {
+		return x.RejectsNewBattles
+	}
+	return false
 }
 
 // ---- 二期:观战(match → battle,设计文档 §10) ----
@@ -1501,12 +1524,14 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x12target_instance_id\x18\f \x01(\tR\x10targetInstanceId\x12&\n" +
 	"\x0fadmit_before_ms\x18\r \x01(\x04R\radmitBeforeMs\x128\n" +
 	"\x18outcome_protocol_version\x18\x0e \x01(\rR\x16outcomeProtocolVersion\x12E\n" +
-	"\x13spectate_visibility\x18\x0f \x01(\x0e2\x14.eSpectateVisibilityR\x12spectateVisibility\"\xe0\x01\n" +
+	"\x13spectate_visibility\x18\x0f \x01(\x0e2\x14.eSpectateVisibilityR\x12spectateVisibility\"\xff\x01\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12G\n" +
 	" adopted_outcome_protocol_version\x18\x03 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12,\n" +
-	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\"\xaf\x01\n" +
+	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\x12\x1d\n" +
+	"\n" +
+	"room_count\x18\x05 \x01(\rR\troomCount\"\xaf\x01\n" +
 	"\x14DestroyBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x124\n" +
@@ -1515,12 +1540,13 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x1aQueryBattleCreationRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\x16placement_operation_id\x18\x02 \x01(\tR\x14placementOperationId\x12,\n" +
-	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"\x8d\x02\n" +
+	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"\xbd\x02\n" +
 	"\x1bQueryBattleCreationResponse\x12*\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x14.BattleCreationStateR\x05state\x12,\n" +
 	"\x12target_instance_id\x18\x02 \x01(\tR\x10targetInstanceId\x12K\n" +
 	"\"supported_outcome_protocol_version\x18\x03 \x01(\rR\x1fsupportedOutcomeProtocolVersion\x12G\n" +
-	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\"\xba\x02\n" +
+	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12.\n" +
+	"\x13rejects_new_battles\x18\x05 \x01(\bR\x11rejectsNewBattles\"\xba\x02\n" +
 	"\x12AddObserverRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
 	"\x12observer_player_id\x18\x02 \x01(\x04R\x10observerPlayerId\x12(\n" +

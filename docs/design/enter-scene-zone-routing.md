@@ -61,7 +61,7 @@ SceneManager 正常启动已要求 `DataServiceRpc` 和角色目录签名能力�
 
 读取位置后，再按 `(session_id, login_generation)` 裁决会话：陈旧或冲突的跨会话请求回 25；同有效会话保留最大代次。兼容无代次请求的分支仍存在，但不能降低已有的非零身份。
 
-`correlation_id` 用于对应某次异步发送，响应原样回显；它不决定路由。C++ Scene 自发进场经 `RequestSceneChange` / `SendCorrelatedEnterScene` 统一出口发送并携带非零关联号，Login 的关联号为 0。镜像创建完成的入口是 `player_scene.cpp` 的 `PlayerSceneSystem::HandleMirrorCreateDone`，旧 `scene_manager_response_handler.cpp` 已由它取代。
+`correlation_id` 用于对应某次异步发送，响应原样回显。C++ Scene 自发进场经 `RequestSceneChange` / `SendCorrelatedEnterScene` 统一出口发送并携带非零关联号，Login 的关联号为 0。镜像建场由 `player_scene.cpp` 的 `CreateMirrorAndEnter` 等待结果，再走同一进场出口。
 
 ### 3.3 目标区解析链
 
@@ -217,6 +217,6 @@ epoch 目标方案与实际接线状态对照 [zone-redis-regression-guard-20261
 | 位置与持有者原子提交 | `changesceneutil.go`、`owner_epoch.go`、`location_revision.go`、`placement_identity.go` |
 | 离场与登录催释放 | `leavescenelogic.go`、`leave_release.go`、`enter_holder_release.go`；[位置释放绑定设计](location-release-binding.md) |
 | 源 Scene 存盘、旅行标记与回滚采纳 | `player_lifecycle.cpp`、`handoff_sql_barrier.h`、`exit_release_mark.h`；[跨区旅行设计](cross-zone-scene-travel.md) |
-| 地图与场景所属区登记 | `world_init.go`、`createscenelogic.go` 的 `allocateScene` |
+| 地图与场景所属区登记 | `scene_registration.go`(`world_init.go` 铺频道、`createscenelogic.go` 建实例时调用) |
 
 本次已做源码调用核对；未运行编译、单元测试、真 Redis / TiDB、跨区或合服故障用例。后续实现变更应复核 `owner_epoch_test.go`、`placement_identity_test.go`、`enter_holder_release_test.go`、离场释放测试和 C++ 交接测试等对应行为，并按 [PROGRESS](../PROGRESS.md) 的实际输入与运行结果记录证据。既有测试源码、历史通过结果及本次静态核对都不能代替最新工作区的运行验收。

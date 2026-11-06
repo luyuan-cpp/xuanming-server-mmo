@@ -355,6 +355,8 @@ func (x *TurnResultS2C) GetActionOrder() []uint64 {
 	return nil
 }
 
+// scene 在结算随存档确认提交之后推。客户端没有这一局的战斗上下文时(断线清了上下文、重登才应用)不要丢弃,
+// 改为查 SceneBattleResultClientPlayer.GetRecentBattleResults 补看胜负与奖励(docs/design/battle-result-recovery.md §7)。
 type BattleEndS2C struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`

@@ -1,8 +1,13 @@
 #include "etcd_service.h"
 #include "etcd_helper.h"
 #include "etcd_manager.h"
+#include "etcd_registration_wait.h"
+#include <boost/cobalt/task.hpp>
+#include "node/system/discovery/discovery_resync_policy.h"
+#include "node/system/discovery/service_discovery_manager.h"
 #include <algorithm>
 #include <unordered_set>
+#include <utility>
 #include <google/protobuf/util/json_util.h>
 #include <boost/algorithm/string.hpp>
 #include "node/system/node/node.h"
@@ -10,9 +15,15 @@
 #include "thread_context/node_context_manager.h"
 #include <node_config_manager.h>
 
+EtcdService::~EtcdService()
+{
+	if (registrationTasks_) registrationTasks_->Stop();
+}
+
 void EtcdService::Init() {
 	const std::string& etcdAddr = *tlsNodeConfigManager.GetBaseDeployConfig().etcd_hosts().begin();
 	// 传输在 Node 构造期建好(loop 线程,loop 尚未运行);新传输的地址解析也在这里做完(§13.6)。
+	registrationTasks_.emplace(*gNode->GetLoop());
 	transport_ = etcd_transport::Create(*gNode->GetLoop(), etcdAddr, *this);
 	LOG_INFO << "etcd transport=" << transport_->Name()
 			 << ": watch / keepalive streams are rebuilt with backoff, each prefix re-ranged and reconciled"
@@ -177,34 +188,6 @@ void EtcdService::OnDeleteRange(const etcdserverpb::DeleteRangeResponse&)
 {
 }
 
-void EtcdService::OnTxn(const etcdserverpb::TxnResponse& reply)
-{
-	LOG_TRACE << "Txn response: " << reply.DebugString();
-
-	std::string key = gNode->GetEtcdManager().TakePendingTxnKey();
-	if (key.empty())
-	{
-		LOG_WARN << "Ignore txn response: no CAS is currently pending.";
-		return;
-	}
-	// 超时定时器已由 TakePendingTxnKey 一并取消(两者成对维护)。
-
-	// 重注册用的是"不存在或已是我的"嵌套 txn,外层 succeeded 只反映"不存在"那一半。
-	if (EtcdHelper::TxnClaimSucceeded(reply))
-	{
-		OnTxnSucceeded(key);
-	}
-	else
-	{
-		OnTxnFailed(key);
-	}
-}
-
-void EtcdService::OnLeaseGrant(const etcdserverpb::LeaseGrantResponse& reply)
-{
-	OnLeaseGranted(reply);
-}
-
 void EtcdService::OnKeepAlive(const etcdserverpb::LeaseKeepAliveResponse& reply)
 {
 	OnKeepAliveResponse(reply);
@@ -237,6 +220,11 @@ void EtcdService::OnStreamWatchResponse(const etcdserverpb::WatchResponse& respo
 			pendingWatchCreates_.pop_front();
 			prefixWatches_[prefix].watchId = response.watch_id();
 			watchIdToPrefix_[response.watch_id()] = prefix;
+			if (!response.canceled())
+			{
+				// 建成了:这个前缀的取消退避清零(discovery_resync_policy.h)。
+				cancelRetryBackoffSeconds_.erase(prefix);
+			}
 			LOG_INFO << "etcd watch created: prefix=" << prefix << " watch_id=" << response.watch_id();
 		}
 	}
@@ -263,8 +251,36 @@ void EtcdService::OnStreamWatchResponse(const etcdserverpb::WatchResponse& respo
 	{
 		// 起点已被压缩:立刻重新 Range → 对账 → 从新快照的 R+1 建 watch(新起点必然在压缩点之后,不会再被拒)。
 		EtcdHelper::RangeQuery(prefix);
+		return;
 	}
-	// 其他原因的取消等每 2s 的全量 Range 重建:对端持续拒绝时不空转。
+	// 其他原因的取消:以前等下一次 2 秒全量 Range 重建;兜底周期拉长到约 60 秒之后不能再等它,
+	// 改为按前缀退避重拉(1 秒起、翻倍、封顶 30 秒),对端持续拒绝时不空转。
+	ScheduleCanceledPrefixRetry(prefix);
+}
+
+void EtcdService::ScheduleCanceledPrefixRetry(const std::string& prefix)
+{
+	double& backoff = cancelRetryBackoffSeconds_[prefix];
+	backoff = discovery_resync::NextCancelRetrySeconds(backoff);
+	if (std::find(canceledPrefixesToRetry_.begin(), canceledPrefixesToRetry_.end(), prefix) == canceledPrefixesToRetry_.end())
+	{
+		canceledPrefixesToRetry_.push_back(prefix);
+	}
+	if (cancelRetryTimer_.IsActive())
+	{
+		// 已经排了一拍:这个前缀随那一拍一起重拉(最多晚到 30 秒的上限)。
+		return;
+	}
+	LOG_WARN << "etcd watch for prefix " << prefix << " canceled; re-ranging in " << backoff << "s";
+	cancelRetryTimer_.RunAfter(backoff, [this] {
+		std::vector<std::string> prefixes;
+		prefixes.swap(canceledPrefixesToRetry_);
+		for (const auto& p : prefixes)
+		{
+			// 应答到了走 OnPrefixRange:对账,并在当前流上还没有 watch 时从快照之后建。
+			EtcdHelper::RangeQuery(p);
+		}
+	});
 }
 
 void EtcdService::ApplyWatchEvents(const etcdserverpb::WatchResponse& response)
@@ -336,11 +352,15 @@ void EtcdService::OnWatchStreamRestarted()
 {
 	// 新流上一个 watch 都没有:旧流上的 watch_id、待回的 created 全部作废。逐前缀重新 Range,
 	// 应答到了再对账、再从 R+1 建 watch(OnPrefixRange)。流断期间下线的对端在对账里补删。
-	const auto& prefixes = tlsNodeConfigManager.GetBaseDeployConfig().service_discovery_prefixes();
+	// 与 FetchServiceNodes 同一份前缀(zone-scoped 类型只看本 zone,control-plane-zone-scoping-20261105.md §3.1)。
+	const auto prefixes = gNode->GetServiceDiscoveryManager().EffectiveDiscoveryPrefixes();
 	LOG_WARN << "etcd watch stream rebuilt; re-ranging " << prefixes.size() << " prefixes before re-creating watches";
 	prefixWatches_.clear();
 	pendingWatchCreates_.clear();
 	watchIdToPrefix_.clear();
+	// 全部前缀马上重拉,排着的取消重拉不必再跑。
+	cancelRetryTimer_.Cancel();
+	canceledPrefixesToRetry_.clear();
 	for (const auto& prefix : prefixes)
 	{
 		EtcdHelper::RangeQuery(prefix);
@@ -380,126 +400,11 @@ void EtcdService::SetRegistrationMode(RegistrationMode mode, const char* reason)
 	registrationMode_ = mode;
 }
 
-bool EtcdService::IsNodePortKey(const std::string& key) const {
-	return boost::algorithm::starts_with(key, gNode->GetEtcdManager().MakeNodePortEtcdPrefix(gNode->GetNodeInfo()));
-}
-
-bool EtcdService::IsNodeIdKey(const std::string& key) const {
-	return boost::algorithm::starts_with(key, gNode->GetEtcdManager().MakeNodeEtcdPrefix(gNode->GetNodeInfo()));
-}
-
-bool EtcdService::IsNodeAllocationKey(const std::string& key) const {
-	const auto &info = gNode->GetNodeInfo();
-	const auto allocPrefix = gNode->GetEtcdManager().GetServiceName(info.node_type()) +
-							 "/allocated/node_type/" + std::to_string(info.node_type()) +
-							 "/node_id/";
-	return boost::algorithm::starts_with(key, allocPrefix);
-}
-
-void EtcdService::OnTxnSucceeded(const std::string& key) {
-	if (IsNodePortKey(key)) {
-		if (registrationMode_ == RegistrationMode::kReRegisterExisting) {
-			// Re-register path keeps the same node_id and only refreshes lease-bound etcd records.
-			gNode->GetEtcdManager().RegisterNodeService(/*reRegistering=*/true);
-			return;
-		}
-
-		NodeAllocator::AcquireNode();
-		return;
-	}
-
-	// Allocation key success is the gate that authorizes publishing the
-	// per-zone NodeInfo. Doing the info write only now (instead of eagerly
-	// inside RegisterNodeService) guarantees no stale per-zone record is
-	// left behind when two zones race for the same node_id.
-	if (IsNodeAllocationKey(key)) {
-		LOG_INFO << "Global node-id allocation acquired: " << key;
-		if (registrationMode_ == RegistrationMode::kReRegisterExisting)
-		{
-			// Re-registration path: gRPC server stayed up across the lease loss,
-			// so peers won't get "connection refused" if we advertise immediately.
-			gNode->GetEtcdManager().PublishNodeInfoAfterAllocation(/*reRegistering=*/true);
-			return;
-		}
-		// Initial boot: kick off RPC/gRPC startup now. The discovery publish is
-		// deferred to PublishDiscoveryAfterGrpcReady() (called at the end of
-		// Node::StartGrpcServer) so peers can't dial our gRPC port before it's
-		// bound. Without this deferral, scene_manager sees the node via etcd
-		// watch within milliseconds of the alloc-key txn, dials gRPC, and gets
-		// "connection refused" because StartGrpcServer hasn't run yet.
-		//
-		// 路由 node_id 到手就起 RPC,**不等任何发号器**:永久 guid 走号段(scene 的
-		// GuidSegmentRegistry 经 DataService.AllocateIdSegment 领段,与 etcd 无关),
-		// scene 的 DependencyGate 用 "id segments ready" 条件挡住玩家进入;gate / battle 不铸永久 guid。
-		gNode->StartRpcServer();
-		return;
-	}
-
-	if (!IsNodeIdKey(key)) {
-		LOG_WARN << "Unexpected txn success key: " << key;
-		return;
-	}
-
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting) {
-		SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration succeeded");
-		LOG_INFO << "Node re-registration successful, node_id=" << gNode->GetNodeInfo().node_id();
-		return;
-	}
-
-	// Initial-boot serviceKey publish confirmed (OnTxnSucceeded(allocKey) started
-	// the RPC/gRPC servers, which then published the discovery key).
-	LOG_INFO << "Node service info published: node_id=" << gNode->GetNodeInfo().node_id();
-}
-
 void EtcdService::PublishDiscoveryAfterGrpcReady()
 {
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
-	{
-		// Re-registration already published in OnTxnSucceeded(allocKey).
-		return;
-	}
-	gNode->GetEtcdManager().PublishNodeInfoAfterAllocation(/*reRegistering=*/false);
-}
-
-void EtcdService::OnTxnFailed(const std::string &key)
-{
-	if (registrationStopped_)
-	{
-		LOG_INFO << "Ignoring txn failure for " << key << ": registration retries already stopped.";
-		return;
-	}
-
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
-	{
-		SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration failed");
-		LOG_ERROR << "Node re-registration FAILED for key: " << key
-				  << ", node_id=" << gNode->GetNodeInfo().node_id()
-				  << ". Another node has claimed this ID - SnowFlake collision is inevitable if we "
-					 "keep minting. Fencing ID generation, persisting and relocating players, "
-					 "then terminating.";
-		gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed);
-		return;
-	}
-
-	// 记录本轮全局抢号失败，重试直接跳过已知被占的号。
-	// 冷启动时服务发现快照可能尚未收到获胜节点，不能仅靠快照决定下一次选号。
-	if (IsNodeAllocationKey(key))
-	{
-		const auto lostId = gNode->GetNodeInfo().node_id();
-		NodeAllocator::RecordLostId(lostId);
-		LOG_INFO << "Global node-id allocation lost: " << key
-				 << " (id=" << lostId << "); reallocating after backoff";
-		acquireNodeTimer.RunAfter(1, [] { NodeAllocator::AcquireNode(); });
-		return;
-	}
-
-	if (IsNodeIdKey(key))
-	{
-		acquireNodeTimer.RunAfter(1, [] { NodeAllocator::AcquireNode(); });
-		return;
-	}
-
-	acquirePortTimer.RunAfter(1, [this] { AcquirePortWithRetry(); });
+	gNode->GetLoop()->assertInLoopThread();
+	grpcReady_ = true;
+	if (auto done = std::exchange(grpcReadyCompletion_, {})) done(true);
 }
 
 void EtcdService::HandlePutEvent(const std::string &key, const std::string &value)
@@ -566,58 +471,171 @@ void EtcdService::HandleDeleteEvent(const std::string &key, const std::string &v
 
 void EtcdService::RequestNodeLease()
 {
-	if (leaseRequestInFlight_)
+	auto& loop = *gNode->GetLoop();
+	loop.assertInLoopThread();
+	if (registrationStopped_ || registrationRunning_ || !registrationTasks_) return;
+	registrationRunning_ = true;
+	if (!registrationTasks_->Start(RegisterAsync(loop), "[EtcdRegistration]")) registrationRunning_ = false;
+}
+
+boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop)
+{
+	// 注册任务与 EtcdService 同寿命。跨异步边界只交出本次等待的完成函数。
+	struct RunningGuard
 	{
-		LOG_TRACE << "Skip lease request because one is already in flight. mode="
-				  << RegistrationModeName(registrationMode_);
-		return;
-	}
+		bool& running;
+		~RunningGuard() { running = false; }
+	} runningGuard{registrationRunning_};
+	enum class Stage : uint8_t { kPort, kAllocation, kPublish };
+	constexpr double kResponseBudgetSeconds = 10.0;
+	constexpr double kConflictRetrySeconds = 1.0;
+	TimerTaskComp timer;
 
-	leaseRequestInFlight_ = true;
-	LOG_INFO << "Requesting etcd lease. mode=" << RegistrationModeName(registrationMode_);
-	gNode->GetEtcdManager().RequestNodeLease();
-
-	// 与 txn 超时同一预算、同一理由(见 ArmTxnTimeout)。
-	constexpr double kLeaseGrantBudgetSec = 10.0;
-	leaseGrantTimeoutTimer_.RunAfter(kLeaseGrantBudgetSec, [this] { OnLeaseGrantTimeout(); });
-}
-
-void EtcdService::OnLeaseGrantTimeout()
-{
-	if (!leaseRequestInFlight_ || registrationStopped_)
+	while (!registrationStopped_)
 	{
-		return;
+		restartRegistration_ = false;
+		const bool reRegistering = registrationMode_ == RegistrationMode::kReRegisterExisting;
+		LOG_INFO << "Requesting etcd lease. mode=" << RegistrationModeName(registrationMode_);
+		auto lease = co_await etcd_registration::AwaitReply<etcdserverpb::LeaseGrantResponse>(loop, timer,
+			kResponseBudgetSeconds, [](auto done) { gNode->GetEtcdManager().RequestNodeLease(std::move(done)); });
+		timer.Cancel();
+		if (!lease) co_return;
+		if (restartRegistration_) continue;
+		if (!*lease)
+		{
+			LOG_ERROR << "No etcd LeaseGrant response within the budget; retrying. mode="
+					  << RegistrationModeName(registrationMode_);
+			continue;
+		}
+
+		leaseId = (*lease)->id();
+		if (leaseId <= 0)
+		{
+			LOG_ERROR << "Invalid lease ID received.";
+			co_return;
+		}
+		leaseTtlSeconds_ = (*lease)->ttl();
+		lastKeepAliveAckTime_ = std::chrono::steady_clock::now();
+		LOG_INFO << "Lease granted: id=" << leaseId << ", ttl=" << leaseTtlSeconds_ << "s";
+		gNode->GetEtcdManager().StartLeaseKeepAlive();
+
+		Stage stage = Stage::kPort;
+		bool retryUnknown = false;
+		while (!restartRegistration_ && !registrationStopped_)
+		{
+			// CAS 结果未知时复核同一个键，不重新挑选端口或节点号。
+			if (stage == Stage::kPort && !reRegistering && !retryUnknown && !NodeAllocator::AcquireNodePort())
+			{
+				LOG_ERROR << "RPC port allocation failed for node_type=" << gNode->GetNodeType()
+						  << "; nothing published to etcd, retrying in 1s";
+				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
+				if (!waited || !*waited) co_return;
+				continue;
+			}
+			if (stage == Stage::kAllocation && !reRegistering && !retryUnknown) NodeAllocator::SelectNodeId();
+
+			// 普通引导的监听在 StartRpcServer 内就绪。维护预备态需等提交开放监听；
+			// 失租重注册通常已经就绪，但维护预备态也必须守住这一道闸。
+			if (stage == Stage::kPublish && !grpcReady_)
+			{
+				auto ready = co_await loop_async::AwaitCallback<bool>(loop, [&completion = grpcReadyCompletion_](auto done) {
+					completion = std::move(done);
+					return true;
+				}, false);
+				if (!ready) co_return;
+				if (!*ready || restartRegistration_) break;
+			}
+
+			const auto& info = gNode->GetNodeInfo();
+			auto& manager = gNode->GetEtcdManager();
+			const std::string key = stage == Stage::kPort ? manager.MakeNodePortEtcdKey(info) :
+				(stage == Stage::kAllocation ? manager.MakeNodeAllocationKey(info) : manager.MakeNodeEtcdKey(info));
+			auto reply = co_await etcd_registration::AwaitReply<etcdserverpb::TxnResponse>(loop, timer,
+				kResponseBudgetSeconds, [stage, reRegistering, retryUnknown](auto done) {
+					auto& manager = gNode->GetEtcdManager();
+					switch (stage)
+					{
+					case Stage::kPort: manager.RegisterNodePort(reRegistering, retryUnknown, std::move(done)); break;
+					case Stage::kAllocation: manager.RegisterNodeService(reRegistering, retryUnknown, std::move(done)); break;
+					case Stage::kPublish: manager.PublishNodeInfoAfterAllocation(reRegistering, retryUnknown, std::move(done)); break;
+					}
+				});
+			timer.Cancel();
+			if (!reply) co_return;
+			if (restartRegistration_) break;
+			if (!*reply)
+			{
+				LOG_ERROR << "No etcd txn response for key " << key << " within the budget; "
+						  << "rechecking the same key. mode=" << RegistrationModeName(registrationMode_);
+				retryUnknown = true;
+				continue;
+			}
+
+			retryUnknown = false;
+			if (!EtcdHelper::TxnClaimSucceeded(**reply))
+			{
+				if (reRegistering)
+				{
+					SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration failed");
+					LOG_ERROR << "Node re-registration FAILED for key: " << key
+							  << ", node_id=" << gNode->GetNodeInfo().node_id();
+					gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed);
+					co_return;
+				}
+				if (stage == Stage::kAllocation) NodeAllocator::RecordLostId(gNode->GetNodeInfo().node_id());
+				LOG_WARN << "etcd registration CAS rejected for " << key << "; retrying in 1s";
+				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
+				if (!waited || !*waited) co_return;
+				continue;
+			}
+
+			if (stage == Stage::kPort)
+			{
+				stage = Stage::kAllocation;
+				continue;
+			}
+			if (stage == Stage::kAllocation)
+			{
+				LOG_INFO << "Global node-id allocation acquired: " << key;
+				if (!rpcPrepared_)
+				{
+					rpcPrepared_ = true;
+					gNode->StartRpcServer();
+				}
+				stage = Stage::kPublish;
+				continue;
+			}
+
+			if (reRegistering)
+			{
+				SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration succeeded");
+				LOG_INFO << "Node re-registration successful, node_id=" << gNode->GetNodeInfo().node_id();
+			}
+			else
+			{
+				LOG_INFO << "Node service info published: node_id=" << gNode->GetNodeInfo().node_id();
+			}
+			co_return;
+		}
 	}
-	leaseRequestInFlight_ = false;
-	LOG_ERROR << "No etcd LeaseGrant response within the budget; retrying. mode="
-			  << RegistrationModeName(registrationMode_);
-	RequestNodeLease();
-}
-
-void EtcdService::StartLeaseKeepAlive()
-{
-	gNode->GetEtcdManager().StartLeaseKeepAlive();
-}
-
-void EtcdService::RegisterService()
-{
-	gNode->GetEtcdManager().RegisterNodeService();
 }
 
 void EtcdService::Shutdown()
 {
-	acquireNodeTimer.Cancel();
-	acquirePortTimer.Cancel();
-	txnTimeoutTimer.Cancel();
-	leaseGrantTimeoutTimer_.Cancel();
-	leaseRequestInFlight_ = false;
+	if (!registrationStopped_)
+	{
+		registrationStopped_ = true;
+		if (registrationTasks_) registrationTasks_->Stop();
+		grpcReadyCompletion_ = {};
+	}
+	cancelRetryTimer_.Cancel();
+	canceledPrefixesToRetry_.clear();
 	SetRegistrationMode(RegistrationMode::kInitialBoot, "service shutdown");
 
 	EtcdHelper::StopAllWatching();
 	gNode->GetEtcdManager().Shutdown();
 
-	// 传输最后释放(§13.7):调用方 FinalizeShutdownInLoop 已在前面经 ReleaseNodeId 发出 LeaseRevoke;
-	// 新传输的通道在这里析构(loop 仍在运行,阶段 0),在途调用以失败投递、不再回调本对象。
+	// FinalizeShutdownInLoop 已经发出 LeaseRevoke，先停本地注册等待再拆传输。
 	if (transport_)
 	{
 		transport_->Shutdown();
@@ -630,123 +648,32 @@ void EtcdService::Shutdown()
 
 void EtcdService::RequestReRegistration(const char *reason)
 {
-	if (registrationStopped_)
-	{
-		return;
-	}
+	gNode->GetLoop()->assertInLoopThread();
+	if (registrationStopped_) return;
 	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
 	{
 		LOG_DEBUG << "Re-registration already in progress, skipping duplicate attempt. reason=" << reason;
 		return;
 	}
-	SetRegistrationMode(RegistrationMode::kReRegisterExisting, reason);
-	RequestNodeLease();
-}
-
-void EtcdService::OnLeaseGranted(const etcdserverpb::LeaseGrantResponse &reply)
-{
-	leaseRequestInFlight_ = false;
-	leaseGrantTimeoutTimer_.Cancel();
-	leaseId = reply.id();
-
-	if (leaseId <= 0)
+	if (rpcPrepared_ || !registrationRunning_) SetRegistrationMode(RegistrationMode::kReRegisterExisting, reason);
+	if (registrationRunning_)
 	{
-		LOG_ERROR << "Invalid lease ID received.";
+		// 旧调用结束或预算到期后只领新租约，不再推进失租前的步骤。若在等监听开放，立即唤醒。
+		restartRegistration_ = true;
+		if (auto done = std::exchange(grpcReadyCompletion_, {})) done(false);
 		return;
 	}
-
-	leaseTtlSeconds_ = reply.ttl();
-	lastKeepAliveAckTime_ = std::chrono::steady_clock::now();
-	LOG_INFO << "Lease granted: id=" << leaseId << ", ttl=" << leaseTtlSeconds_ << "s";
-
-	StartLeaseKeepAlive();
-
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
-	{
-		NodeAllocator::ReRegisterExistingNode();
-	}
-	else
-	{
-		AcquirePortWithRetry(); // Only acquire port initially
-	}
+	RequestNodeLease();
 }
 
 void EtcdService::StopRegistrationRetries()
 {
+	gNode->GetLoop()->assertInLoopThread();
+	if (registrationStopped_) return;
 	registrationStopped_ = true;
-	acquireNodeTimer.Cancel();
-	acquirePortTimer.Cancel();
-	gNode->GetEtcdManager().TakePendingTxnKey(); // 顺带取消超时定时器
+	if (registrationTasks_) registrationTasks_->Stop();
+	grpcReadyCompletion_ = {};
 	LOG_INFO << "Registration retries stopped (node identity is no longer ours).";
-}
-
-void EtcdService::ArmTxnTimeout()
-{
-	if (registrationStopped_)
-	{
-		return;
-	}
-
-	// 预算推导:一次 etcd CAS 的正常往返是毫秒级;10s 覆盖 etcd 短暂重启 / 主从切换
-	// 后客户端重连的时间,又不会让一次真正丢掉的响应把节点挂很久。
-	// TODO: 待压测实测复核。
-	constexpr double kTxnResponseBudgetSec = 10.0;
-
-	txnTimeoutTimer.RunAfter(kTxnResponseBudgetSec, [this] { OnTxnTimeout(); });
-}
-
-void EtcdService::CancelTxnTimeout()
-{
-	txnTimeoutTimer.Cancel();
-}
-
-void EtcdService::OnTxnTimeout()
-{
-	if (registrationStopped_)
-	{
-		return;
-	}
-
-	// TakePendingTxnKey 会顺带 Cancel 本定时器 —— TimerTaskComp::OnTimer 对
-	// "回调里取消自己"是安全的(one-shot 先清 timerId 再拷贝 callback 调用)。
-	const std::string lost = gNode->GetEtcdManager().TakePendingTxnKey();
-	if (lost.empty())
-	{
-		return;
-	}
-
-	LOG_ERROR << "No etcd txn response for key " << lost << " within the budget; "
-			  << "restarting the registration phase. mode=" << RegistrationModeName(registrationMode_);
-
-	// 到期后**重查权威**(重发同一条幂等 CAS 链),不是假设成功继续往下走。
-	// 重注册路径保留原 node_id 与原端口;初始引导路径从端口阶段重来。
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
-	{
-		NodeAllocator::ReRegisterExistingNode();
-		return;
-	}
-	AcquirePortWithRetry();
-}
-
-void EtcdService::AcquirePortWithRetry()
-{
-	if (registrationStopped_)
-	{
-		return;
-	}
-	if (NodeAllocator::AcquireNodePort())
-	{
-		return;
-	}
-
-	// 端口暂时分配不到(本机端口被占 / 区间耗尽)。这里刻意什么都不发布:
-	// 旧实现会把 port=0 注册进 etcd,于是这个节点以 "ip:0" 出现在服务发现里,
-	// 别的节点拿 0 端口去连,只会得到一串莫名其妙的连接失败,而且它还占着 node_id。
-	// 退避重试,复用 acquirePortTimer,不新开一套定时器状态机。
-	LOG_ERROR << "RPC port allocation failed for node_type=" << gNode->GetNodeType()
-			  << "; nothing published to etcd, retrying in 1s";
-	acquirePortTimer.RunAfter(1, [this]
-							  { AcquirePortWithRetry(); });
 }
 
 void EtcdService::OnKeepAliveResponse(const etcdserverpb::LeaseKeepAliveResponse &reply)
@@ -806,4 +733,4 @@ bool EtcdService::IsIdentityConfirmedFresh() const
 // 2026-09-08 起这里不再激活任何发号器(旧 ActivateSnowFlakeAfterGuard:读分 zone Redis
 // 的 guard 后 OnNodeStart(路由 node_id) 再 StartRpcServer)。永久 guid 改走号段
 // (docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5),由 scene 的 GuidSegmentRegistry
-// 经 DataService 领段,与 etcd 注册流无关;RPC 服务器在分配键 CAS 成功时直接启动(OnTxnSucceeded)。
+// 经 DataService 领段,与 etcd 注册流无关;RPC 服务器在分配键 CAS 成功时直接启动(RegisterAsync)。

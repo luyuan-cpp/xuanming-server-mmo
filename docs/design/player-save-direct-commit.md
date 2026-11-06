@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `player_store` (
 | kHot | `transform`、`level_component`、`uint64_pb_component`、`uint32_pb_component`、`derived_attributes_component` |
 | kAsset | `currency`、`bag_component`、`asset_op_ledger`、`settlement_ledger`、`inbox_ledger`、`mystery_merchant` |
 | kGrowth | `skill_list`、`attribute_component`、`pet_component`、`mission_component` |
-| kProfile | `profile_component`、`merge_state`、`stress_test_probe` |
+| kProfile | `profile_component`、`merge_state`、`stress_test_probe`、`battle_results`(本人近期战斗结果,2026-11-05,[战斗结果重登恢复](battle-result-recovery.md) §4.1:只在结算与客户端确认时变,不放 kAsset 免得每次资产写入都带上它) |
 | 元数据(不入 payload) | `player_id`、`fence_owner_epoch`、`fence_save_seq`、`persist_schema_gen` |
 
 - `player_database_1` 整个消息作为一行 `kLegacy1`。它基本是空的,不变就不写。去留是独立事项。它和 `player_database` 是两个消息,字段号有重叠(字段 2 与 `transform` 冲突),加载时要单独解析,不参与拼接。
@@ -207,6 +207,8 @@ E=0、实例为空在进事务前回 `INVALID`。
 7. **迟到的回包不会改到重新加载之后的状态。** 回调恰好一次回到 scene 线程,不捕获实体句柄(`grpc_client_call.h` 的约定 [C]),用 Guid 查实体。不用加载代次:存盘未落定时不能重新播种(`Seed` 返回 false),认领也要先等落定,所以实体销毁重载之后(`PL:5940`)不存在还在路上的存盘。
 8. **全局完成只在彻底落定时触发。** 有 `pending` 时不算完成(`RC:1171`):否则 q9 一落地就 `BeginTravelHandoff`(`PL:2425`),交接标记早于冻结快照,目标读到旧档。`HasUnsettledPlayerSave`、`HasPendingLoad` 全部接到新的在途状态上。
 9. **快路径也要释放。** `PL:3455` 这条「没有变化就不存盘」的下线路径是挂机玩家的常态,要发空行 `Save(release=true)`,否则 `released` 永远不会是 1。
+
+Scene 持久任务作用域托管每次 Save 或 LoadAndClaim 尝试，回包在原 EventLoop 恢复，接纳与结果未知分别处理。存盘排队、原 q/E、认领预算、退避、整笔落定通知仍由玩家存盘状态机决定。维护阶段继续处理真实提交和重试。最终拆除时，本地取消保留未确认的存盘和认领，不触发提交、播种、放行或落定通知。延迟回包和定时器只持有实例的弱身份。
 
 ### 5.2 通道
 

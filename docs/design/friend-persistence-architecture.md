@@ -325,9 +325,9 @@ friend 现在**有**一条 S2C 推送通道,但它与在线状态无关,只做�
 
 ## 2026-10-21 原会话归属与角色交易互锁（源码候选，未运行）
 
-角色过户后，好友入口不能只保留会话 player_id。客户端会话先经原方法白名单，再在同一请求预算内用 `shared/loginsession` 读取部署明确指定的全局 login 实例/DB，按原 gate UUID/incarnation 定位账号；`SessionDetails.owner_revision=9` 是发出时原件，零值拒绝，禁止从当前 SQL 归属补造。`shared/roleidentity.Capture` 克隆原账号/角色/修订并显式随 context 传到业务与 Repo；十个客户端业务入口缺捕获原件均拒绝。纯逻辑测试显式注入原件，不能作为真实身份校验证据。
+角色过户后，好友入口不能只保留会话 player_id。客户端会话先经原方法白名单，再用 `shared/roleidentity.CaptureSession` 取 gate 签名原件里的原账号（2026-11-05 起不再读 login Redis，见 [gate 在线身份](gate-online-identity.md)）；`SessionDetails.owner_revision=9` 是发出时原件，零值拒绝，禁止从当前 SQL 归属补造。捕获的原账号/角色/修订显式随 context 传到业务与 Repo；十个客户端业务入口缺捕获原件均拒绝。纯逻辑测试显式注入原件，不能作为真实身份校验证据。
 
-`AccountRoleSchema` 显式声明与好友库同一 TiDB 集群的全局目录；启动时验证强读悲观会话与 account_role 接缝。`GlobalLoginSessions=true`、`LoginRedis.Host/DB/PoolSize` 必须由部署实际指定；原本 SharedRedis 仅在线投影和摘要用途，不能据此推测登录态实例。新增登录态只读池独立限定大小/DB/超时、关闭重试，本地 yaml 保留未授权占位并明确拒启，配置测试只补齐内存副本。全局部署模板与 Redis 连接预算由同批主控统一接线，不能只部署旧 ConfigMap。
+`AccountRoleSchema` 显式声明与好友库同一 TiDB 集群的全局目录；启动时验证强读悲观会话与 account_role 接缝。好友服务不持有 login Redis 连接；SharedRedis 仅在线投影和摘要用途。
 
 绑定 Repo 的容量补建、最终守卫写、Unblock 单写及全部客户端权威读，均在同一个 SQL 事务首锁 account_role（P）复核原账号原字节、原 owner_revision 与未冻结；涉及双方时先按 uint64 玩家号升序锁 P，再沿用原容量守卫与完整主键关系锁。存在的冻结目标也不能修改关系；目标缺行保留原好友语义。容量补建仍为独立短事务，随后最终写必须重新验证原件，预检成功不能替代提交授权。过户前已完成的合法容量补建可能保留，关系写拒绝后由既有 sweep 回收。账号过户、同账号 ABA、交易冻结和缺原件均 fail-closed。Go 仍保留完整 uint64 修订；Java native 明确只接受 1..Long.MAX_VALUE，高半区拒绝而不截断。
 

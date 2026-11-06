@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"match/internal/metrics"
+	"match/internal/ratingrule"
 	"match/internal/svc"
 
 	battlepb "proto/battle"
@@ -30,16 +31,11 @@ import (
 // defaultRating 无历史的新号评分。
 const defaultRating = 1500
 
-// isRatedMode 报告该队列模式是否按评分凑组 / 更新评分:只有 PVP 队列模式
-// (1V1 / 5V5)。PVE 组队不看评分沿用等待序(容差 ∞);切磋点名成局、PVE 单人
-// 即时开战都不入队也不计分。
+// isRatedMode 报告该队列模式是否按评分凑组 / 更新评分:1V1、5V5 与人数档真人 PVP(PVP_TEAM,
+// 2026-11-05 起)。PVE 组队不看评分沿用等待序(容差 ∞);切磋点名成局、PVE 单人即时开战都不入队也不计分。
+// 判定只在 ratingrule 一处,提交点的组内极差复核用同一份。
 func isRatedMode(mode matchpb.MatchMode) bool {
-	switch mode {
-	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5:
-		return true
-	default:
-		return false
-	}
+	return ratingrule.Rated(mode)
 }
 
 // formatRating 评分的日志形态:保留两位小数。
@@ -85,51 +81,26 @@ func loadRatings(svcCtx *svc.ServiceContext, members []uint64) map[uint64]float6
 // 45s 后放宽到 ±1000。Base 取 100 而不是 0 是为了让两个都是 1500 的新号(以及
 // 几局内评分小幅分化的号)第一轮就能互配。配置漏配 / 测试直接构造 Config 时
 // 用默认值,0 不是合法容差。曲线本身有上限;上限之外的终态兜底见 anchorToleranceFor。
+// 曲线只在 ratingrule.Curve 一处实现,提交点的组内极差复核用同一条。
 func ratingToleranceFor(svcCtx *svc.ServiceContext, waitSeconds int64) float64 {
-	base := float64(svcCtx.Config.RatingToleranceBase)
-	if base <= 0 {
-		base = 100
-	}
-	stepSeconds := svcCtx.Config.RatingToleranceStepSeconds
-	if stepSeconds <= 0 {
-		stepSeconds = 5
-	}
-	stepDelta := float64(svcCtx.Config.RatingToleranceStepDelta)
-	if stepDelta <= 0 {
-		stepDelta = 100
-	}
-	maxTol := float64(svcCtx.Config.RatingToleranceMax)
-	if maxTol <= 0 {
-		maxTol = 1000
-	}
-	if waitSeconds < 0 {
-		waitSeconds = 0
-	}
-	tol := base + float64(waitSeconds/stepSeconds)*stepDelta
-	if tol > maxTol {
-		tol = maxTol
-	}
-	return tol
+	return ratingrule.CurveOf(svcCtx.Config).Tolerance(waitSeconds)
 }
 
 // ratingToleranceMaxWaitFor 返回容差曲线的终态兜底秒数(RatingToleranceMaxWaitSeconds,
 // 0 / 漏配按默认 90):锚点等到这么久后容差 ∞。不支持关闭 —— 曲线上限之外没有
 // 兜底就是"分差 > Max 的两人永久饥饿到票据 6h 过期"(复审问题)。
 func ratingToleranceMaxWaitFor(svcCtx *svc.ServiceContext) int64 {
-	if v := svcCtx.Config.RatingToleranceMaxWaitSeconds; v > 0 {
-		return v
-	}
-	return 90
+	return ratingrule.CurveOf(svcCtx.Config).MaxWait()
 }
 
 // anchorToleranceFor 返回撮合里锚点实际使用的容差(poolPolicy):非 rated 模式(PVE_TEAM)
 // 恒 ∞;rated 模式已等 ≥ RatingToleranceMaxWaitSeconds 时也退化为 ∞(纯等待序,
 // 与 PVE_TEAM 同分支),保证"最长等待 N 秒必配";否则走曲线。
 func anchorToleranceFor(svcCtx *svc.ServiceContext, rated bool, waitSeconds int64) float64 {
-	if !rated || waitSeconds >= ratingToleranceMaxWaitFor(svcCtx) {
+	if !rated {
 		return math.Inf(1)
 	}
-	return ratingToleranceFor(svcCtx, waitSeconds)
+	return ratingrule.CurveOf(svcCtx.Config).Anchor(waitSeconds)
 }
 
 // ---- 5v5 分队 ----

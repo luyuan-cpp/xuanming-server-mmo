@@ -18,8 +18,8 @@ replace schemamigrate => ../schemamigrate
 // 刻意**不再**直接依赖:
 //   - github.com/google/uuid:节点 uuid 由 shared/noderegistry 生成,friend 自己不再拼
 //     (原先只有已删除的 internal/node 包用它,全仓 friend 下已无 import)。
-// 全局登录态只读接缝 shared/loginsession 使用 go-redis/v9，故提升现有锁定版本为直接依赖。
-// 好友缓存仍使用 go-zero；登录态独立池显式限定大小、DB和超时，并关闭自动重试。
+// go-redis/v9 是直接依赖:玩家域句柄(shared/playerredis)上的会话、在线目录与推送读写在
+// internal/data、internal/logic、internal/svc 直接用它的类型；好友私有缓存仍使用 go-zero。
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/go-sql-driver/mysql v1.9.3

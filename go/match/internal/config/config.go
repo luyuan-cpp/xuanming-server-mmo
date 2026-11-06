@@ -22,10 +22,7 @@ type Config struct {
 	// 排队、占用、成局、评分与组队的权威都在同一个 SQL 事务域,开发环境与生产走同一条路径(玩家数据方案 §5.4)。
 	// 不标 optional:整段缺席或缺 Host / User / 两个跨域 schema 时加载期就失败,缺配置不能起服。
 	GlobalMatch GlobalMatchConf
-	// GlobalLoginSessions 必须为 true,LoginRedis 必须指向 login 同一实例 / DB:客户端请求的原角色身份只从这里核(Validate)。
-	GlobalLoginSessions bool                          `json:",optional"`
-	LoginRedis          playerredis.LoginReaderConfig `json:",optional"`
-	Kafka               struct {
+	Kafka       struct {
 		Brokers []string
 	}
 
@@ -171,6 +168,13 @@ type GlobalMatchConf struct {
 	// 两者都是提交点规则,进全局策略指纹,各副本必须一致。初值待按真实等待分布定标(D-16)。
 	ScopeGroupAfterSeconds  uint32 `json:",default=10"`
 	ScopeGlobalAfterSeconds uint32 `json:",default=20"`
+	// 人数档真人 PVP 计分组排(docs/design/global-match-hierarchical-pools.md 开头「计分组排」):
+	// PartyRatingBonusPerMember:整队的队伍分 = 成员平均分 + 每多一人加这么多分(评分点),只用于凑人、分边和
+	// 提交点的组内极差复核。是提交点规则,进全局策略指纹。缺省 25(5 人队 +100),待按车队胜率定标。
+	PartyRatingBonusPerMember uint32 `json:",default=25"`
+	// PremadeGapStepSeconds:两侧最大车队人数之差(车队差)的放宽步长。车队差不超过 1 立即可成;更大的差要
+	// 吃亏一侧每个单位都等够(能接受的差 = 1 + 等待 / 步长)。0 = 不限车队差。质量规则,提交点不复核,不进指纹。
+	PremadeGapStepSeconds uint32 `json:",default=10"`
 	// GatherSlots:每个副本同时进行的成局备战(PrepareBattle + CreateBattle)上限。池写者先占槽再提交成局,
 	// 占不到槽本轮就不再提交,票留在队列里。不是提交点规则,不进策略指纹。
 	GatherSlots int `json:",default=256"`
@@ -214,6 +218,16 @@ func (g GlobalMatchConf) PoolPage() int {
 		return 512
 	}
 	return g.PoolPageSize
+}
+
+// PartyBonusCenti 返回组队加成(×100),撮合算队伍分与提交点复核共用。直接构造 Config 的单测里是 0。
+func (g GlobalMatchConf) PartyBonusCenti() int64 {
+	return int64(g.PartyRatingBonusPerMember) * 100
+}
+
+// PremadeGapStepMs 返回车队差放宽步长(毫秒);0 = 不限车队差。
+func (g GlobalMatchConf) PremadeGapStepMs() uint64 {
+	return uint64(g.PremadeGapStepSeconds) * 1000
 }
 
 // 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
@@ -349,9 +363,6 @@ func (c *Config) Validate() error {
 	}
 	if strings.TrimSpace(c.GlobalMatch.Host) == "" || strings.TrimSpace(c.GlobalMatch.User) == "" {
 		return errors.New("GlobalMatch.Host 与 GlobalMatch.User 必须显式配置:匹配只有 SQL 权威一条路径")
-	}
-	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() {
-		return errors.New("GlobalLoginSessions 必须为 true 且 LoginRedis 的地址必须显式配置:客户端请求的原角色身份只从 login 同一实例核对")
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)

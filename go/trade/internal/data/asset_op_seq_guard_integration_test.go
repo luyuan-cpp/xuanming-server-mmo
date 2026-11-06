@@ -199,9 +199,9 @@ func startSeqRowRace(t *testing.T, db *sql.DB, player uint64,
 }
 
 // seqRowCount 数某玩家某条流在 seq 表里的行数。
-// q 用生产代码里的 seqRowReader(*sql.DB 与 *sql.Tx 的公共子集):本文件有些读必须在某个特定
+// q 用生产代码里的 rowQuerier(*sql.DB 与 *sql.Tx 的公共子集):本文件有些读必须在某个特定
 // 事务里发(见 startSeqRowRace 第 1 步)。不另抄一份同形接口。
-func seqRowCount(t *testing.T, ctx context.Context, q seqRowReader, player uint64) int {
+func seqRowCount(t *testing.T, ctx context.Context, q rowQuerier, player uint64) int {
 	t.Helper()
 	var n int
 	err := q.QueryRowContext(ctx,

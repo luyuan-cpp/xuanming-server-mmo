@@ -1,6 +1,6 @@
 # 交接：帮会捐献 / 兑换恢复记录的两个出口（2026-10-23）
 
-> **一句话**：服务端两版（Go `go/guild`、Java `game-guild`）已写完、未编译未测试；客户端（`mmorpg-client`）由 Codex 按本文实现，参考补丁 [guild-economy-recovery-client-20261023.patch](guild-economy-recovery-client-20261023.patch)（基于客户端 `242e35060`，只含 `GuildClient.cs`，没有用例）。
+> **当前状态（2026-11-05）**：客户端前两个出口已实现并通过完整帮会 EditMode 263/263；Go 隔离 HEAD 单测、vet、构建与独立 MySQL 集成 10/10 通过，Java 定向单测 36/36 通过，见 §4。随后负责人要求补齐损坏记录出口，新增契约及验证见 §5。下文保留原交接规格；[参考补丁](guild-economy-recovery-client-20261023.patch) 基于历史客户端 `242e35060`，当前客户端已落地，不要再次应用。
 >
 > **规格**：[05-economy.md §5.44.1](../design/guild-phase2/05-economy.md)。负责人 2026-10-22 拍板：超窗记录「玩家确认后作废」。项目未上线，不涉及存量兼容。
 >
@@ -8,7 +8,7 @@
 
 ---
 
-## 1. 服务端改动（未提交，待 Codex 验证）
+## 1. 服务端改动（原交接清单；当前验证见 §4）
 
 | 版本 | 文件 | 改动 |
 |---|---|---|
@@ -48,7 +48,7 @@ Java 仓工作区里另有别的会话未提交的 `game-data` / `game-friend` /
 
    通过标准：`GuildEconomyServiceTest` 0 失败 0 错误，含新增用例；`幂等键_查重失败交给事务复核_键0一次都不查` 不回归（它走的是写成指令的路径）。
 
-## 2. 客户端实现规格（交 Codex）
+## 2. 客户端实现规格（已实现）
 
 仓库 `D:\luyuan\mmorpg-client`，文件 `Assets/Scripts/Game/Guild/GuildClient.cs`。参考补丁可直接 `git apply`，也可以按下面的规格重写。
 
@@ -64,7 +64,7 @@ Java 仓工作区里另有别的会话未提交的 `game-data` / `game-friend` /
 - 不能重发时，第一次只警告并记下这条记录（`_staleEconomyRecord = saved`）。文案由 `StaleEconomyText(clockBehind)` 生成，确定性的，含「安全恢复期」「再点一次「恢复原请求」」。
 - **确认判据**：`_staleEconomyRecord == saved && Status == StaleEconomyText(clockBehind)`，即状态栏仍是那句警告时再点一次。满足时作废：`_economyRecovery.Clear(PlayerId, saved)`（CAS），写「已作废超期的待确认记录，原请求未重发；之后的捐献或兑换按新请求处理。」；`Info != null` 时按 method 带着这句文案重拉捐献页或商店页，否则只写文案。绝不重发，也不换新键重发。
 - `OwnsEconomyRequest` 发现超窗（预读在网络里停了很久）时也走警告这一步，玩家紧接着再点一次即作废。
-- 超窗时不解析请求字节（损坏的旧字节也能作废）；字段头解析失败仍按「记录损坏」fail-closed（残余，见 §3）。
+- 超窗时不解析请求字节（损坏的旧字节也能作废）；字段头解析失败不能走重发或超窗出口，改走 §5 的损坏记录二次确认出口。
 - UI 不改：`GuildWindow` 的刷新键在 `HasPendingEconomyWrite` 时仍显示「恢复原请求」。
 
 ### 2.3 用例（`Assets/Tests/EditMode/Guild/GuildEconomyRecoveryTests.cs`）
@@ -75,7 +75,7 @@ Java 仓工作区里另有别的会话未提交的 `game-data` / `game-friend` /
   2. 同上四组，但重发回合法视图（捐献 `OpId=9, DonateId=2, Applied`；兑换 `OpId=9, GoodsId=101, Count=2, Applied`，兑换另带 `ContributionBalance=9999`）→ 记录清空、`Status` 含「原帮会」、`AssetsChanged` 恰触发 1 次、没有重拉本页；在别的帮时本人成员行的 `ContributionBalance` 没被改成 9999。
   3. `[TestCase(donation, expired)]` 四组（`expired=false` 即 `_now -= 1` 的时钟回拨）：先 `LoadPage`，首发回空成功 → 拨钟 → 第 1 次恢复：零网络、记录保留、`Status` 含「再点一次」→ `Donate(3)` 被挡（零网络，状态栏被换成「已有待确认…」）→ 第 2 次恢复：因为警告已被换掉，仍只警告、记录保留 → 第 3 次恢复：记录清空、原 method 总共只发过 1 次、最后一发是 `GetGuildDonateOptions` / `GetGuildShop`，`ReplyPageReload` 后 `Status` 含「已作废」→ 再 `Send` 是新键。
   4. `ALongDelayedGuildReadCannotReplayAfterTheSafeWindow` 末尾追加：再 `RecoverEconomyRequest` 一次即作废（记录清空、最后一发是 `GetGuildDonateOptions`）。
-- **不改、应继续通过**：`ExpiryOrClockRegressionCannotReplayBeyondTheServerDeduplicationWindow`（警告文案仍含「安全恢复」）、`CorruptRecordsFailClosedWithoutNetworkOrDeletion`、`NewProcessReplaysTheSameOriginalRequestAfterConnectionFailure`、`EmptySuccessBusyAndFaultKeepTheKeyAndBlockAnotherWrite`、`InvalidParameterRetiresTheKeyWithoutResendingItAndReloadsThePage`、`ExistingRefreshButtonExposesRecoveryWithoutCreatingAnotherPayment`。
+- **不改、应继续通过**：`ExpiryOrClockRegressionCannotReplayBeyondTheServerDeduplicationWindow`（警告文案仍含「安全恢复」）、`NewProcessReplaysTheSameOriginalRequestAfterConnectionFailure`、`EmptySuccessBusyAndFaultKeepTheKeyAndBlockAnotherWrite`、`InvalidParameterRetiresTheKeyWithoutResendingItAndReloadsThePage`、`ExistingRefreshButtonExposesRecoveryWithoutCreatingAnotherPayment`。旧 `CorruptRecordsFailClosedWithoutNetworkOrDeletion` 的永久拒绝结论由 §5 覆盖，已改写为二次确认契约。
 
 ### 2.4 Codex 验证命令
 
@@ -90,4 +90,30 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 ## 3. 残余（不阻塞）
 
 - 首发仍在服务端途中、重发恰在玩家离帮后到达：重发回 14002，首发若在离帮前已拿到成员行锁仍会提交。不会重复扣款，只是「原请求未执行」的提示不准，结算推送到达后页面自会更新。
-- 记录损坏（`DurableRequestFileStore.Load` 回 `!损坏` / `!无法读取`，或字段头解析失败）仍 fail-closed、没有出口，同样会永久阻塞该角色的捐献 / 兑换。建议另立任务：比照超窗作废的确认流程处理。
+- 记录损坏出口已按负责人后续要求纳入本任务，见 §5；真实读取或权限故障仍须先恢复存储可读性，不能盲删。
+
+## 4. 2026-11-05 Codex 实现与验证
+
+客户端在当前 `7a1b038b7` 基线上实现两个出口，并补齐记录头方法白名单、Reset 清除确认状态，以及离帮后本人申请列表自动刷新成功时保留一次原结论。窗口与协议没有改动。测试新增 29 个实例，覆盖离帮 / 换帮原字节重发、原帮订单不污染现帮余额、超窗 / 回拨确认、校时、换角 / 重连、记录替换、损坏请求体与非法方法，以及结论不被自动刷新覆盖。
+
+| 验证 | 实际结果 | 证据 |
+|---|---|---|
+| 客户端旧实现红灯 | 55 个恢复用例中 24 个预期失败，31 个通过；失败对应本次缺失的恢复行为 | 客户端 `Logs/guild-economy-recovery-20261105/red-tests.xml`、`red-unity.log` |
+| 客户端最终 EditMode | Unity 6000.6.0f1 退出 0；263/263，零跳过：GuildClientTests 147、GuildEconomyRecoveryTests 62、GuildWindowTests 54；源码首尾摘要一致 | 客户端 `Logs/guild-economy-recovery-20261105/green-tests.xml`、`green-unity.log`、`green-sources-before.json`、`green-sources-after.json` |
+| Go 定向单测、静态检查、构建 | §1.1 两个顶层单测（含 5 个查重失败分支）、`go vet ./internal/logic`、`go build ./...` 均退出 0 | [汇总](../../build/verification/guild-economy-recovery-20261105/go-head-summary.json) |
+| Go 真 MySQL 集成 | §1.1 选择器 10/10 PASS、零跳过，含原字节离帮恢复、expected_guild_id 拒绝与并发同键去重 | [集成日志](../../build/verification/guild-economy-recovery-20261105/go-head-integration.log) |
+| Java 定向单测与依赖构建 | GuildEconomyServiceTest 36/36，零失败、错误、跳过；11 个 Maven reactor 项通过，目标源码首尾一致 | Java 仓 `build/verification/guild-recovery-20261105-20261106T031338Z/maven.log`、`tests.json` |
+
+**Go 证据范围**：共享工作区首次编译因另一会话正在迁移 `shared/loginsession` 而失败，保留 `go-unit.log`。负责人随后授权在固定 HEAD `993b6da9d4ea51d5e4a27cc6ec17004af0fb97c1` 的隔离副本验证；三份目标源码与共享工作区 SHA-256 相同。测试不覆盖那条在途身份迁移，不恢复或修改他人文件。集成使用本地已有 MySQL 镜像创建独立名称、随机本机端口、tmpfs 数据目录的一次性容器，按正式 `tools/scripts/sql_fixture_env.ps1` 装配当前进程测试资格，运行后仅清理该容器；未使用共享数据库。当前真库测试除 DSN 外还需该脚本要求的权威资格，不能仅靠设置 DSN 声称可运行。
+
+**边界**：Java 对齐版本仍为 `0.1.0-SNAPSHOT`，`PARITY.md` 已追加本轮验证。未执行客户端联网冒烟、打包、真实 TiDB 或跨区域验收。本批当时留下的损坏记录问题由下节继续处理；首发与离帮竞态的提示限制仍保留。本会话未提交或推送；Unity 导入自动改写的九份资源索引仅时间戳变化已单独留存补丁并撤销。
+
+## 5. 2026-11-05 补齐损坏记录出口
+
+按负责人追加要求，损坏头、未知方法、错误角色字段、窗口内坏请求体，以及真实空文件、超长文件和无效 UTF-8 均采用二次确认作废。首次只警告原请求可能已经到账，不发包；同一警告仍显示、同一存储实例及当前角色槽位的原始内容不变时，第二次才删除。不会发送坏请求，也不会代替玩家换新键重试。损坏或超窗确认期间若被换成合法的新请求，本次确认点击只提示记录变化、保留新记录；下一次主动恢复才允许重发。
+
+恢复读取改用 `DurableRequestFileStore.ReadSnapshot`：同一 `.lock` 下从同一流取得解析文本和原始长度/SHA-256，`Snapshot` 同时绑定实例、角色与绝对路径。不能先按 `Load` 的占位串判坏，再给另一份文件内容发放删除许可。`ClearSnapshot` 在同一写者锁下重新核对原字节后删除；其他角色、其他来源和替换记录均不受旧确认影响。已有 `Load/Save/Transition/Clear` 未改。
+
+读取、占用、锁或删除失败时保留记录并撤销确认，解除故障后重新警告；不把无法读取当成已不存在。作废成功只读刷新本人帮会，使旧经济页失效；有效快照或 14002 保留作废结论，读取错误按真实错误显示。申请列表与帮会读取在途期间的新推送优先于旧作废结论。普通无参数刷新仍保持既有语义。
+
+本项只修改两版服务器共用的客户端，不增加服务端契约、不重跑已完成的 Go / Java 验证，也不修改 Claude Code 的在途代码。规格见 `05-economy.md` §5.44.2；执行证据目录为客户端 `Logs/guild-corrupt-recovery-20261105/`。

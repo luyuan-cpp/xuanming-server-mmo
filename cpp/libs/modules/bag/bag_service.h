@@ -12,9 +12,14 @@
 // Orchestration layer for bag operations.
 //
 // Handles cross-cutting concerns that do NOT belong in the Bag container:
-//   - Global (server-wide) item block check  (GainBlockService)
+//   - 物品获得封禁(全服 + 本人)            (GainBlockService::IsItemGainBlocked)
 //   - Transaction logging                     (TransactionLogSystem)
 //   - Anomaly detection                       (AnomalyDetector)
+//
+// 封禁的返回口径(四个入包入口一致):任一项被封禁 → 整批回 kAssetBlocked(27005「该资产当前被禁止获取」),
+// 在容器做任何规划之前,一件不发、不记流水。它是确定性的业务拒绝,与背包满(kBagItemNotStacked 等)是两回事:
+// 调用方不得把它当成容量不足改投临时格,也不得当成可重试。存档还原(Bag::InsertItemForRestore / RestoreItems)
+// 与同一所有者内部搬运(Bag::TakeInstance / PutInstance、MergeAndCompact)不经过本类的入包入口,不受封禁影响。
 //
 // 2026-09-01 起还多一件:**为腾位而被挤掉的实例要落 LogItemDestroy**。
 // 临时格(kTemporary)配的是先进先出淘汰策略,满了会销毁最早进包的实例;
@@ -43,13 +48,13 @@ public:
 	static void SetItemInstanceInitializer(ItemInstanceInitializer initializer);
 
 	// Orchestrated AddItem:
-	//   block check → Bag::AddItem → transaction log → anomaly detection
+	//   frozen check → 获得封禁(全服 + 本人,kAssetBlocked) → Bag::AddItem → transaction log → anomaly detection
 	static uint32_t AddItem(
 		entt::entity playerEntity,
 		Bag &bag,
 		const InitItemParam &param);
 
-    // 批量入包：冻结/全服禁发预检 → Bag::AddItems 候选提交 → 每项流水与异常检测。
+    // 批量入包：冻结/获得封禁(全服 + 本人,任一项命中整批 kAssetBlocked)预检 → Bag::AddItems 候选提交 → 每项流水与异常检测。
     // 容器先完成最终空间规划和全部发号，任何拒绝都不修改原包、布局或回执，不发资产流水。
     // 发号允许烧掉尚未入包的 ID；这不是跨 Kafka 或持久化存储的事务。
     // correlationId / extra 继续关联获取流水（战斗掉落传 battle_id 与来源）。
@@ -63,6 +68,8 @@ public:
 
     // 同步整笔：主包按实际持有扣消耗，再把全批新增放主包或全批转临时格。先在store/layout候选中
     // 完成全部空间、发号、初始化与禁发检查；任何失败不改玩家包、不记流水。允许烧掉未提交的ID。
+    // 获得封禁(全服 + 本人)在扣消耗与建候选之前判,任一项命中整笔回 kAssetBlocked;临时格兜底只用于
+    // 主包放不下,封禁不会走到它。提交前(beforeCommit 之前)再复核一次。
     // beforeCommit只给同帧外层的另一份零失败后置效果（当前为货币）：失败必须零副作用；不得yield、
     // 抛异常或修改背包。它返回成功之后，只做不抛出的两层swap及流水发布，不再有业务失败分支。
     // 策略只在本同步调用内借用原只读对象；返回时不保留任何连接、实体或策略引用。
@@ -85,7 +92,7 @@ public:
 	// Orchestrated batch AddItems carrying full ItemComp per piece
 	//   (mail attachments mixing equipment + stackable items): preserves
 	//   each piece's preassigned guid / attributes.
-    //   先逐项禁发/身份预检，再统一候选提交，最后按输入顺序记每项流水；原子性口径同上。
+    //   先逐项禁发(全服 + 本人)/身份预检，再统一候选提交，最后按输入顺序记每项流水；原子性口径同上。
 	//
 	//   ⚠ 信任边界(docs/design/equipment-attributes.md §8):入参里已带 equip 段的实例**原样入库**
 	//   —— has_equip() 即视为「已初始化」,不重掷,也**不校验**它的随机属性(条数、同档是否重复、

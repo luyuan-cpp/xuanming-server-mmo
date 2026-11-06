@@ -1,4 +1,6 @@
-# 交接：观战分级扩容（B / C / P0 剩余已落码；评审修正与 P1 / P2 待做，2026-10-30）
+# 交接：观战分级扩容（服务端已落盘，专项验收待闭合）
+
+> **当前状态（2026-11-05）**：C++/Go 与 Java 的 B / C / P0 剩余、P1 / P2 及评审修正均已交付。进程重启后的提交、Java 文件内容与近两天其他会话变动已核对，详见 [CODEX.md](CODEX.md) 第 0 节。已有部分构建、单测及 L0 冒烟证据；L1 / L2 端到端与整批专项验证尚未闭合。下文第 1—5 节保留 10 月 30 日的分工历史，“下一步”“在跑”不再是当前任务。
 
 设计与契约：[battle-spectate-tiered-fanout.md](../../design/battle-spectate-tiered-fanout.md)（§10.1 A 批进展、§12 / §13 决策、**§15 P1 / P2 落码契约**）。
 负责人 2026-10-30 授权：项目未上线、玩家数据可清空；服务端按标准做法全部做完，客户端代码、协议生成、编译、冒烟交给 Codex。
@@ -7,7 +9,7 @@ specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代
 
 **给 Codex 的执行清单见 [CODEX.md](CODEX.md)**（取代下面第 3 节）。`specs/85-local-mark-consistency.md` 已作废：本地模式已删除，只剩 SQL 路径，不用按它验证。
 
-## 1. 已落码（都没编译、没跑测试）
+## 1. 首批落码清单（2026-10-30 交付时状态）
 
 | 批 | 内容 | 交付说明 |
 |---|---|---|
@@ -15,10 +17,10 @@ specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代
 | B | 可见性闸：`eSpectateVisibility` 建房冻结；match 四处执法；battle 第二道闸。策略：只有非活动局的 PVE_SOLO / PVE_TEAM 公开，1V1 / 5V5 计分局（匹配设计 D7）、切磋、帮会历练、PVP_TEAM、未知模式都私密 | `reports/go-match-b.md`、`reports/cpp-battle.md` |
 | P0 剩余 | 观众帧编码一次；观众席节点配额（各房间名单和 ≥ max(20, 连接上限/4) 回 16021） | `reports/cpp-battle.md` |
 | C | gate 推送身份栅栏（`PushToPlayerEvent.player_id` / `BroadcastToPlayersEvent.player_list`）、共享投递模块 `gate_push`、Kafka 场景 / 全服广播 handler 补全、广播编码一次、生成器对必须带 payload 的事件拒绝空 payload；Go 全部生产者填目标玩家；跨语言对拍向量 | `reports/cpp-gate.md`、`reports/go-push.md` |
-| Java | B + 本地模式原操作 + P0 剩余（代理在 5 小时额度见底时仍在跑；先看 Java 仓 `PARITY.md` 末尾与 `git -C D:\luyuan\xuanming-server-mmo status` 确认做到哪） | `reports/java.md`（若存在） |
+| Java | B + 本地模式原操作 + P0 剩余；后续 P1 / P2 与 FIX-JAVA 也已交回并核对落盘 | `reports/java.md`、`reports/java-p1.md`、`reports/fix-java.md` |
 | proto | P1 / P2 全部协议已由主会话改好（§15.2）：battle_node 两条新 RPC、`SpectateFrameEvent`（观战帧 topic 的消息体本身，不套 GateCommand）、`eSpectateTier`、`eSpectateDelivery`、凭证 `gate_spectate_ticket.proto`、gate 本地客户端服务 `gate_client_spectate.proto`、`spectate_token_secret`（config 字段 24）、`MatchSpectatorIntentRecord.delivery = 10`、`MatchInternal.SetSpectateFeatured`、`SPECTATE_END_SOURCE_LOST`；Tip.xlsx 新增 `MatchSpectateTicketInvalid`（第 269 行）；topic 命名工具 `node_command_topic.h`（`kSpectateRelayTopicBase` 等） | 本文件 |
 
-## 2. 下一步（按顺序；额度允许时每波 ≤ 4 个代理）
+## 2. 历史实施顺序（已完成，不再派发）
 
 1. **B / C / P0 评审修正**（主会话已定的修正点，评审代理再找其它问题）：
    - gate `gate_push`：单播、场景、全服广播缺 `message_content` 一律拒绝并计数（现在只有指名广播检查）。
@@ -43,7 +45,7 @@ specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代
 - 「全球经济系统代码审核」：只改了 `battle_room_manager.cpp` 的 `PumpSqlOutcomes`；P1 改该文件前重读。
 - 「Turn battle gap closure handoff」：不碰 battle 节点观战文件。
 
-## 5. 进度更新（2026-10-30 第二波，主会话随时可能压缩上下文，以本节为准）
+## 5. 历史进度（2026-10-30 第二波，已由第 6 节及 CODEX.md 第 0 节取代）
 
 **已落码（未编译）**：C++ / Go 的 B、C、P0 剩余、P1 / P2（`reports/p1-battle.md`、`p1-gate.md`、`p1-match.md`、`p1-deploy.md`）；Java 的 B、P1 / P2（`reports/java.md`、`java-p1.md`）；本地模式标记一致性（`specs/85-local-mark-consistency.md`，已随本地模式删除）。Codex 10-30 03:18 跑过一次导表与 proto-gen，之后 proto 又改过（`SPECTATE_FEATURED_REJECT_DENIED`、注释），要再跑一次。
 主会话已直接改：`config.cpp` 读 `SpectateTokenSecret`；`k8s_client_entry_contract.tests.ps1` 补新密钥；`gate-spectate` 保留期降到 10 分钟（compose、K8s、脚本、契约测试）；gate hub 拆两条水位（`lastTurnRound` / `cachedStateRound`）并补 3 条用例；`match_service.yaml` 日志忽略表加 `SetSpectateFeatured`；runbook 与 topic 保留策略文档；§6.1 / §9 / §15.4 / §15.5 / §15.7。
@@ -61,3 +63,7 @@ specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代
 ## 6. 收尾（2026-11-01）
 
 服务端代码全部落完，第 5 节的待办都已完成，只剩 [CODEX.md](CODEX.md) 的生成、编译、测试与冒烟，以及 robot / 客户端接入。修正批没有过第二轮评审，详见 `docs/PROGRESS.md` 同日条目。
+
+## 7. 重启后文档收尾（2026-11-05）
+
+Java 报告与实现没有因重启丢失：报告在主仓 `fc504300b`，48 个具名实现/测试/配套文件与 Java `a6d2e137` 一致。近两天其他任务已改变共享 Gate 身份入口、match 启动/配套和构建环境，因此继续验证时以当前磁盘输入为准。详细证据、已有运行结果及未验证项统一维护在 [CODEX.md](CODEX.md) 第 0 节；本次没有派代理、修改服务端代码、运行构建测试或清库，也没有提交/推送。

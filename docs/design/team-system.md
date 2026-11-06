@@ -693,7 +693,7 @@ return 0
 
 ### D.2 身份
 - `team.server.callerOf(ctx)` 从 `ctxkeys.GetSessionDetails(ctx)`(`go/match/internal/pkg/ctxkeys`)取身份。session 缺失或 `player_id=0` 时，回 `TeamResponse{error_message: kTeamPlayerId}`,**fail-closed**。
-- match 的 `sessionInterceptor` 解析失败也会放行(`match_service.go:175-183`);`authoritativePlayerID` 在没有 session 时会退回请求体里的 id(`queue.go:192-201`)。team 的请求体里没有 player_id,也就没有这条退路。
+- match 的 `sessionInterceptor` 解不开会话头时不把会话放进 ctx,随后由 `originalRoleInterceptor` 对 MatchService / ClientPlayerTeam 回 PermissionDenied。`authoritativePlayerID` 只在不带会话头(内部调用)时用请求体里的 id,带了会话头就只认会话头(2026-11-05,[client-request-ordering.md](./client-request-ordering.md) §7.2 第 9 条)。team 的请求体里没有 player_id,本来就没有这条退路。
 - 客户端调用 `Notify*` 方法：服务端实现为空操作，直接返回 Empty,不产生任何副作用。
 
 ### D.3 home zone 与 AllowCrossZone
@@ -964,6 +964,8 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 ### F.2 TeamId 写入与清除的时机
 
+> 本节前半保留原 Redis 投影方案的历史。现行成员读取与跟随见本节末「第一批 C++ 跟随协程」。
+
 | 时机 | 触发 | 动作 |
 |---|---|---|
 | 登录、重连、跨节点加载、同节点换场景 | `PlayerLifecycleSystem::EnterScene` 第 3 步 `HandleEnterScene` 之后(`player_lifecycle.cpp:407-408`);s2s 路径 `cpp/nodes/scene/handler/rpc/player/s2s_player_scene_handler.cpp:23` 调完 `HandleEnterScene` 之后(守护段内)补调 | 调 `PlayerTeamSystem::OnEnteredScene(player)`;删掉 `HandleEnterScene` 第 5 步(`player_scene.cpp:265-279`)。**不放在 `HandleEnterScene` 里**:它开头的幂等早退(`player_scene.cpp:195-202`,玩家已在目标场景)在第 5 步之前就 return。30s 宽限期内同场景重连走 scene_manager 的 samePlacement 分支(`enterscenelogic.go:348-363`)→ gate → 已在线实体(`scene_handler.cpp:160-163`)→ `EnterScene` → 早退，放在第 5 步就会漏刷新 |
@@ -1018,12 +1020,13 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 第一批只涉及 `CheckFollowLeader` 到 `ReadLeaderLocationForFollow` 的两次异步 Redis GET。最初因两套工具链缺标准执行库而暂缓，随后负责人选择用标准 C++ 协程语法搭配仓库锁定的 Boost.Cobalt 实施。以下工具链门禁留给日后迁移标准 `task` 时使用。
 
 - Windows 的 VS 2026 `v145` 工程已用 `/std:c++latest`。实测默认 MSVC 14.51 和本机已有的 14.52 都缺 `std::execution::task` 与 `schedule`、`connect`、`start`、`get_stop_token`。Linux 固定 Debug SDK 的 GCC 13.4.0 / libstdc++ 13 在 C++23 下同样缺这些接口，也不识别 `-std=c++26`。两边的 `std::stop_source`、`std::stop_callback` 编译和运行探针均通过。[C++ 工作草案](https://eel.is/c++draft/exec.task) · [MSVC STL 实现跟踪](https://github.com/microsoft/STL/issues/4768)
-- 迁移条件是在两套正式工具链上用 `std::execution::task` 实际编译并运行接入 muduo EventLoop 的探针。用可控的两次异步结果验证同 loop 启动与恢复、等待期间 loop 可推进、正常同 loop 完成保留回调顺序，以及本地停止后迟到结果不再恢复任务。此前 Linux 上的基础协程探针只验证了模拟结果的调度。
-- 日后迁移仍先验证这两跳。只在本人战斗锁明确为 NIL 时读取队长位置，两次完成后复核原实体和玩家身份，第二次完成后再检查跟随资格。保留同区同节点限制、归队和换图语义，以及 [Scene 现行停机顺序](scene-node-threading-model.md#4-finalize-的两阶段收尾)。
+- [ ] **TODO（C++26 发布后）**：Windows 和 Linux 的正式工具链都支持 `std::execution::task` 后，把节点协程任务迁移到标准 `task`。先实际编译并运行接入 muduo EventLoop 的探针，验证同 loop 启动与恢复、等待期间 loop 可推进、回包顺序及本地取消。迁移后重跑跟随、镜像进场、角色授权、交接、战斗锁、会话释放、存盘/认领、疏散改派、etcd 注册、号段、创建许可，以及 AOI 与 Redis 回归。持久排空必须区分本地停止与远端写入终态。确认 Cobalt 已无使用者后，移除其编译和镜像接线。
 
 #### 第一批 C++ 跟随协程
 
-`CheckFollowLeader` 仍是发起一次检查的入口。Scene 的 `PlayerTeamFollowScope` 在所属 loop 启动 Cobalt `task<void>`，由 `FollowLeaderAsync` 顺序读取本人战斗锁和队长位置。两个玩家键分属各自 slot，只有第一跳明确收到 NIL 才发第二跳。每次完成后核对原实体句柄和 `player_id`，第二次完成后重查战斗、交接、换图在途和会话。跨等待只携带身份值及已取得的自有结果。队伍 SQL 权威查询、签名、入场身份、成员应用规则仍由原入口处理。
+成员读取使用当前的 SQL 权威接缝。Scene 从 `TeamNodeService.rpc` 发现 Match 同端口提供的 `TeamAuthority`，核对原入场身份及签名后才发起跟随。该连接属于启动弱依赖。本地配置与 K8s `node-config` 都登记此前缀。启用 K8s 网络策略时，Match 的 gRPC 口允许三类 Scene 工作负载发起此调用。
+
+`CheckFollowLeader` 仍是发起一次检查的入口。Scene 的 `SceneTaskScope` 在所属 loop 启动 Cobalt `task<void>`，由 `FollowLeaderAsync` 顺序读取本人战斗锁和队长位置。两个玩家键分属各自 slot，只有第一跳明确收到 NIL 才发第二跳。每次完成后核对原实体句柄和 `player_id`，第二次完成后重查战斗、交接、换图在途和会话。跨等待只携带身份值及已取得的自有结果。队伍 SQL 权威查询、签名、入场身份、成员应用规则仍由原入口处理。
 
 GET 继续调用 `tlsPlayerRedis.command`。结果区分字符串（含空串）、NIL、Redis 错误、未接纳、空回复和本地停止，另保留意外回复类型供战斗锁守卫诊断。借用的 `redisReply` 在回调返回前按长度复制，Redis 层沿用现有重试、背压及关闭规则。提交中重入的结果暂存到提交返回后再交付，正常回包在同一个 Redis 回调栈恢复。停机取消本地等待，已发出的命令仍由 Redis 层收尾。迟到回复只持等待状态的弱引用。执行与停机见 [Scene 线程模型](scene-node-threading-model.md)。
 
@@ -2292,7 +2295,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
    - `AoiSystem::ResetEntityVisibility(entity)`(见下)。
 4. **`AoiSystem::ResetEntityVisibility`**(`aoi.{h,cpp}`):把同场景瞬移当作「离开旧位置、重新进场」。立刻:自己的非 `kPinned` 条目全部摘掉并通知自己的客户端销毁;旧格及邻格里看着它的观察者摘掉并收到销毁(对方钉住的不动);移出格子、摘掉 `Hex`。下一次 `AoiSystem::Update`:没有 `Hex` 的实体走「首次进场」分支,在新位置重建双向可见性。**没有去改事实 2 本身**(给 Update 加同格重评估是另一件事,影响所有玩家的每帧开销,不在本轮范围)。
 5. **移动广播** `MovementSystem::BroadcastMove(entity)`:把实体此刻的权威 Transform / Velocity 发成 `ActorMoveS2C`(`move_state` 0/1)。
-   - **接收者 = 互相可见的玩家**:在 entity 的兴趣表里、对方的兴趣表里也有 entity、且对方有网关会话。只按「我的兴趣表」发会把坐标发给看不到我的人(隐身);严格的「谁看得到我」要扫 7 格全部实体,这是每条移动上报都走的路径,扫不起。已知缺口:对方看得到我、但我的兴趣表因容量已满没有收下对方时,对方收不到我的移动(与 `ActorStateAttributeSyncSystem` 同一口径上的既有缺口)。
+   - **接收者 = 正在显示 entity 的玩家**:AOI 反向索引 `AoiWatchersComp` 里可见、且有网关会话的观察者([AOI 单向关注](aoi-directed-interest.md))。关注是单向的,接收与否只看对方是否关注并显示我,与我的兴趣表无关;隐身期间没有侦测授权的观察者不在名单里。查反向索引不扫 7 格,每条移动上报的代价与观察者数成正比。属性同步(`ActorStateAttributeSyncSystem`)用同一份名单。
    - **调用点**:MoveStart / MoveSync / MoveStop 裁决之后;以及服务器自己把速度清零的三处 —— 战斗 / 归属冻结中收到 MoveStop、`MovementSystem::Update` 撞墙清速、`PlayerLifecycleSystem::StopMotionForExit`(走着掉线)。后一类不广播的话,观察者会按最后一次上报的速度一直外推下去(客户端另有 1 秒外推上限兜底,见 V.4)。
    - **量**:客户端移动中每 0.25s 一条 MoveSync,急转弯时立即补一条(客户端自己限在约 8 条 / 秒以内;gate 对 132 的限流是每窗口 20 条),即每个移动中的玩家约 4~8 次 / 秒 × 互相可见的人数(兴趣表有容量上限)。66 那一路原样保留,没有动。
 6. **走路跟随放在客户端**(`mmorpg-client` 同名分支,见 V.4):队员的客户端自己把本地角色走到「沿队长轨迹往回数 槽位 × 1.4」的点上,照常上报移动,服务端照常裁决。理由:移动本来就是客户端上报;服务端做跟随需要在 scene 里新增每帧系统、缓存队长与名单、处理转让队长的缓存失效,全部是没法在本机编译验证的 C++;而客户端这部分可以离线编译并真跑单测。代价:路人看到的队员位置各自多一段网络延迟,纵队在行进中会比队员自己屏幕上略松。
@@ -2340,7 +2343,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 - **跨节点 / 跨 zone 仍不跟**(DV-6 不变)。
 - **事实 2 没有根治**:只对「归队瞬移」这一条路径做了可见性重建。两个不同队的玩家同格相距 10 以上再走近,仍然互相看不见。
 - **被钉住(kPinned)的观察者**收不到被瞬移者的销毁 / 重建;移动广播只发给互相可见的玩家,所以被瞬移者在那些客户端上会停在瞬移前的位置,直到双方重新互相可见。目前没有任何玩法钉住玩家。
-- **兴趣表不对称时的移动广播缺口**:见 V.2 第 5 条。人挤到兴趣表装不下时才会出现。
+- **兴趣表不对称时的移动广播**:2026-11-05 起移动与属性按反向索引投递,对方能看见我、而我的表因容量已满没收下对方时,对方照样收到我的移动(V.2 第 5 条)。
 - **入队后立刻开战**:入队触发的换场景在途(`IsSceneChangeBusy`)时队长点开战,名单里有人正在换图。真人操作到不了这么快,robot `team_smoke` 的开战步骤排在跟随步骤之后;需要联机时留意 `StartTeamMatch` 的预检与 gather 是否报成员未就绪。
 - **移动广播的量**:每个移动中的玩家每秒约 4~8 条 × 互相可见的人数。压测前先评估;要减可以改成只在起步 / 停步 / 转向时发(协议注释的原意),代价是远端外推误差变大。
 - **瞬移落点在客户端掩码上不可走**(两边导航数据不一致时):客户端会自己挪到最近可走点并回报;这条若离目标超过 3,会在 3 秒超时前被当成过期丢弃,之后恢复。
@@ -2551,7 +2554,7 @@ V.7 第 4 条的第一轮修复(游标)上真机后,真实客户端连跑 8 遍�
 
 `team_launch`既是直接开战原件，也是补位队伍的完整queue unit。它保存原actor、UUID、原Team版本、队长/显式join_seq名单、token、原owner、显式roster_order及稳定个人票、原Start请求、zones和SQL入队时间。提交允许当前Team版本大于等于原版本，但必须逐项核队长、完整名册、join_seq、原owner及token；仅申请/邀请变化不使有效队伍永久饿死。形成中或结果UNKNOWN的token为持久锁（`match_lock_expire_at_ms=0`），不能按旧TTL释放成员。
 
-完整队伍与全员SQL queued票同事务可见。队伍票固定入队时签名profile，网络探测允许刷新独立profile，不能单独改其中一名队员的queued票；任一原测量过期即整单安全撤队，重新探测后由新的Start UUID入队。`team_launch_region`只作可重建索引，每unit至多16机房；完整成员均达硬延迟才入对应机房，只有全员首选同一机房才有共同本区。个人`match_ticket_region`不放队伍成员，防止单排候选被整队成员拆走或在大量队伍票中扫描证明单排不足。
+完整队伍与全员SQL queued票同事务可见。队伍票固定入队时签名profile，网络探测允许刷新独立profile，不能单独改其中一名队员的queued票；任一原测量过期即整单安全撤队，重新探测后由新的Start UUID入队。机房投影`team_launch_region`、`match_ticket_region`已于2026-11-05随按池撮合退役（[global-match-hierarchical-pools.md](global-match-hierarchical-pools.md) §6）：撮合按池直接读`team_launch`的池索引与单排票的池索引，整队可放置的机房由撮合按全员都在硬延迟内、取成员中最大RTT现算，只有全员首选同一机房才有共同本区；单排页只读`team_id=0`的票，整队成员不会被单排候选拆走。
 
 全球PVE_TEAM由一个装箱流程统一处理单排size1和完整队伍size2..5。单排、队伍分别用索引keyset公平锚点，每轮合并至多32个实际尝试项；region/lane/size资格在SQL LIMIT前过滤，每size桶至多5个unit，用最多5人的精确装箱，复杂度与内存由32锚点、16机房、5个size桶和容量5约束，不逐锚点扫描全队列。轮次预算3秒，本区阶段至多1秒，余下时间只对本区完整尝试过的锚点扩区；单个未知/无解项也推进调度游标，后续完整轮次重访。跨区必须逐人等满原等待；该围栏与失败是否重排是两件独立规则。首轮候选投影以固定高水位有界修复完成后才开放跨区，新入队不会无限延长尾界。
 

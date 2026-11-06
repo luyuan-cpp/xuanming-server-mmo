@@ -63,8 +63,10 @@ Assert-Render ([bool]$GoSvcCatalogue['guild'].Global) '帮会必须进全局池'
 $guild = Read-RenderedConfig 'guild'
 Assert-Render ($guild['MySQL.DataSourceEnv'] -eq 'MMORPG_GUILD_SQL_DSN' -and [string]::IsNullOrEmpty($guild['MySQL.DataSource'])) '帮会必须从Secret读取同一全服SQL DSN'
 Assert-Render ($guild['TableDir'] -eq '/generated/tables' -and $guild['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc' -and $guild['MatchRpc.Etcd.Key'] -eq 'matchservice.rpc') '帮会配表或内部调用未接线'
-Assert-Render ($guild['GlobalLoginSessions'] -eq 'true') '帮会登录会话必须显式指向全服权威'
 foreach ($removed in @('AccountRoleSchema', 'MatchAuthoritySchema')) { Assert-Render (-not $guild.Contains($removed)) "帮会不再跨库，不该渲染 $removed" }
+# 帮会只认 gate 签名的会话身份原件，不读 login 的 Redis：登录态段一个键都不能渲染。
+$guildLoginKeys = @($guild.Keys | ForEach-Object { [string]$_ } | Where-Object { $_ -ceq 'GlobalLoginSessions' -or $_.StartsWith('LoginRedis.', [StringComparison]::Ordinal) -or $_ -ceq 'LoginRedis' })
+Assert-Render ($guildLoginKeys.Count -eq 0) "帮会不该渲染登录态段（残留：$($guildLoginKeys -join ', ')）"
 # 按映射拨号（docs/ops/db-move-runbook.md §2）：guild 的段在 MySQL 下，mail 在顶层。
 Assert-Render ($guild['MySQL.DbPlacement.DefaultCluster'] -eq 'main' -and $guild['MySQL.DbPlacement.SqlClusters.main.Hosts'] -eq $GlobalAuthorityTiDBHost) '帮会缺 DbPlacement，或默认集群不是权威入口'
 Assert-Render ($mail['DbPlacement.DefaultCluster'] -eq 'main' -and $mail['DbPlacement.SqlClusters.main.Hosts'] -eq $GlobalAuthorityTiDBHost) '邮件缺顶层 DbPlacement'
@@ -73,10 +75,7 @@ foreach ($key in @('Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Acti
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath $key
     Assert-Render ($source.Found -and $guild[$key] -eq $source.Value) "帮会${key}未镜像权威配置"
 }
-# 登录域与玩家域按 playerredis 的形状渲染:服务 yaml 和 ConfigMap 的 LoginRedis.PoolSizePerNode 同值。
-$guildLoginPool = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath 'LoginRedis.PoolSizePerNode'
-Assert-Render ($guildLoginPool.Found -and $guild['LoginRedis.PoolSizePerNode'] -eq $guildLoginPool.Value) '帮会登录态读池未镜像权威配置'
-Assert-Render ($guild['LoginRedis.Addrs[0]'] -eq 'redis.fixture-infra:6379') '帮会不建集群时必须显式指向login的Redis'
+# 玩家域按 playerredis 的形状渲染:服务 yaml 和 ConfigMap 的 PlayerRedis.PoolSizePerNode 同值。
 $guildPlayerPool = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath 'PlayerRedis.PoolSizePerNode'
 Assert-Render ($guildPlayerPool.Found -and $guild['PlayerRedis.PoolSizePerNode'] -eq $guildPlayerPool.Value) '帮会玩家域池未镜像权威配置'
 Assert-Render ([string]::IsNullOrEmpty($guild['PlayerRedis.Addrs[0]'])) '帮会不建集群时玩家域不写地址'
@@ -95,9 +94,10 @@ Assert-Render ($guildManifest.Contains('MMORPG_GUILD_SQL_DSN="$(cat /app/etc/pri
 Assert-Render ($guildManifest.Contains('name: POD_IP') -and $guildManifest.Contains('key: asset-guild')) '帮会缺可路由地址或资产签名引用'
 $guildLedger = (Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'guild' }
 $guildPools = Get-RedisPoolMirror -Target 'guild'
-# 不建集群时,玩家域与登录域的池也记在这台 Redis 上。
+# 不建集群时,玩家域的池也记在这台 Redis 上;帮会没有登录域池。
 $guildPlayerPools = Get-RedisPlayerPoolMirror -Target 'guild'
-$expectedPools = $guildPools['RedisClient.PoolSize'] + $guildPools['PlayerLocatorRedis.PoolSize'] + $guildPlayerPools.Player + $guildPlayerPools.Login
+Assert-Render ($guildPools.Count -eq 2 -and $guildPlayerPools.Login -eq 0) '帮会只有两个控制域显式池，没有登录域池'
+$expectedPools = $guildPools['RedisClient.PoolSize'] + $guildPools['PlayerLocatorRedis.PoolSize'] + $guildPlayerPools.Player
 $guildSvcSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'go/guild/internal/svc/servicecontext.go') -Raw
 $syncPool = [regex]::Match($guildSvcSource, '(?m)^\s*(?:const\s+)?playerSyncRedisPoolSize\s*=\s*(\d+)\s*$')
 Assert-Render ($syncPool.Success -and $guildLedger.Fixed -eq [int]$syncPool.Groups[1].Value) '帮会摘要专用池预算与实际源码不符'

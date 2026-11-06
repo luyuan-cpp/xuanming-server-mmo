@@ -9,8 +9,11 @@
 // 线程:所有公开入口只在构造时给定的 EventLoop 线程调用(assertInLoopThread,Release 下同样 LOG_FATAL)。
 // 不加锁 —— 原版的 MutexLock / AtomicInt64 是为跨线程 CallMethod 准备的,本仓的节点只有一个 EventLoop。
 //
-// 生命周期(AGENTS §11.7):必须由 shared_ptr 持有(Create);超时 tick 与连接的消息回调只绑 weak_ptr<RpcChannel>;
-// 只存 weak_ptr<TcpConnection>。所有者:入站是连接的 context(RpcServer),出站是 RpcClient(每次连上新建一个)。
+// 生命周期(AGENTS §11.7):必须由 shared_ptr 持有(Create);超时 tick、链路心跳的检查节拍与连接的消息回调只绑
+// weak_ptr<RpcChannel>;只存 weak_ptr<TcpConnection>。所有者:入站是连接的 context(RpcServer),出站是 RpcClient(每次连上新建一个)。
+//
+// 链路心跳(§21,Create 传了 heartbeat 才启用):写空闲满间隔就发一帧 HEARTBEAT,读空闲满超时就 forceClose 连接。
+// 只做传输层的存活检测,判死之后走既有的 DOWN 路径,不触发任何业务逻辑。
 
 #include <chrono>
 #include <cstdint>
@@ -18,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -31,6 +35,7 @@
 #include "muduo/net/TcpConnection.h"
 #include "network/codec/dispatcher.h"
 #include "network/rpc_done_callback.h"
+#include "network/rpc_link_liveness.h"
 #include "network/rpc_status.h"
 #include "proto/common/base/rpc_message.pb.h"
 #include "thread_context/trace_context_tls.h"
@@ -130,13 +135,17 @@ public:
     using Clock = std::chrono::steady_clock;
     static std::shared_ptr<RpcMaintenanceState> ProcessMaintenance();
 
+    // heartbeat 有值才启用链路心跳(§21),不合法(IsValidLinkHeartbeat 为假)时 LOG_FATAL。只由节点装配经
+    // RpcClient / RpcServer::setLinkHeartbeat 开启;两端必须都开,否则开了的一端会把对端写空闲的健康链路判死。
     static std::shared_ptr<RpcChannel> Create(muduo::net::EventLoop& loop,
                                               const TcpConnectionPtr& connection,
                                               RpcServiceMap services,
-                                              std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance());
+                                              std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance(),
+                                              std::optional<RpcLinkHeartbeat> heartbeat = std::nullopt);
 
     RpcChannel(PrivateTag, muduo::net::EventLoop& loop, const TcpConnectionPtr& connection, RpcServiceMap services,
-               std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance());
+               std::shared_ptr<RpcMaintenanceState> maintenance = ProcessMaintenance(),
+               std::optional<RpcLinkHeartbeat> heartbeat = std::nullopt);
     ~RpcChannel();
 
     RpcChannel(const RpcChannel&) = delete;
@@ -199,6 +208,12 @@ public:
     // 超时扫描:把截止时刻 <= now 的在途调用以 kTimeout 完成。超时 tick 每 100ms 调一次;也是单测接缝(loop 线程调用)。
     void SweepTimeouts(Clock::time_point now);
 
+    // 链路心跳的一次存活检查(loop 线程调用;§21)。读空闲满 idleTimeout 时 forceClose 连接:只关传输,在途调用由 DOWN
+    // 以 kDisconnected 失败,出站随后由 enableRetry 重连并重新握手。写空闲满 interval 时发一帧 HEARTBEAT。
+    // 检查节拍每 checkPeriod 调一次;也是单测接缝(合成时刻,同 SweepTimeouts)。没开心跳或连接已不在时什么都不做,返回空 Verdict。
+    RpcLinkLiveness::Verdict CheckLinkLiveness(Clock::time_point now);
+    bool HasLinkHeartbeat() const { return liveness_.has_value(); }
+
     // 一次「本地确定没发出」的调用:计入 started、采样记录原因,在 loop 上以 kNotSent 投递给 done
     // (恰好一次、不同步执行)。RpcClient / RpcSession 当前没有可用 channel 时也走这里。
     static void FailNotSent(muduo::net::EventLoop& loop, uint32_t messageId, ClientDoneCallback done,
@@ -248,6 +263,12 @@ private:
     void ArmTimeoutTick();
     void OnTimeoutTick();
 
+    // 链路心跳的检查节拍:连接仍连着就每 checkPeriod 挂一次,只绑 weak,从不 cancel。
+    void ArmLinkCheck();
+    void OnLinkCheckTick();
+    // 心跳帧直接写,不经 SendFrame:不按 message_id 0 记流量,也不算作业务发送。
+    void SendHeartbeat(const TcpConnectionPtr& connection);
+
     void SendFrame(const TcpConnectionPtr& connection, const GameRpcMessage& message);
     TcpConnectionPtr LockConnectedConnection() const;
 
@@ -261,6 +282,9 @@ private:
     InflightIndex<OutstandingCall> outstandings_;
     bool timeoutTickArmed_{false};
     bool closed_{false};
+    // 没开链路心跳时为空。
+    std::optional<RpcLinkLiveness> liveness_;
+    bool linkCheckArmed_{false};
 };
 
 using RpcChannelPtr = std::shared_ptr<RpcChannel>;

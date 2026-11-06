@@ -29,9 +29,7 @@ SQL 事务内不访问 Redis、Kafka 或 scene。RPC 和事务共享可取消截
 
 登录列表、建角上限、EnterGame 归属、身份补齐和孤儿清理接缝均走 SQL 目录；既有无生产调用者的 LoginAdmin 删除 RPC 继续明确 Unimplemented，不借迁移扩大破坏性权限。旧账号 self-heal 不再根据 Redis 反向键制造角色。AssignGate 的“已有会话”优化也查询同一目录。P0-b 原始批次只覆盖这些目录入口；随后获授权的 P4 增加下节的交易锁与过户收据，但不改变玩家种子、父快照及 scene owner_epoch 的事实源。
 
-2026-11-04 在线身份补充：`EnterGame` 成功不清理本条 gate 连接的 `login_session`。匹配、聊天等在线服务需要通过 `shared/loginsession.Account` 将原连接绑定回认证账号，再以原归属修订进行授权；不能在进场后删掉认证事实，再查询角色当前归属补权。登录态仍受原 TTL 限制，由 `LeaveGame` / `Disconnect` 清理。回归测试必须经过完整异步入场链，并证明进场后可读原账号、离场或断线后不可再读。
-
-2026-11-05 已实施原身份传递：login 继续认证凭据并在选角时捕获原账号和 owner_revision，经内部 BindSessionEvent 连同 gate 连接 incarnation 交给 gate；gate 从其会话状态构造 authenticated_account，随每次内部调用的 SessionDetails 整体签名。在线业务先验签，再读取这份原身份，不为每条消息 GET 登录域 Redis；原账号不来自客户端正文，也不反查当前 owner。登录/选角阶段的 Redis 会话栅栏、设备集清理仍保留，业务提交的本库 role_fence 与事务外自愈保持。具体运行证据及未覆盖范围见 [本轮审核交接](../handoff/gate-auth-role-fence-review-20261104.md)。
+在线身份（2026-11-05）：login 认证凭据，并在 EnterGame 时捕获原账号和 owner_revision，经内部 BindSessionEvent 连同 gate 连接 incarnation 交给 gate；gate 从自己的会话状态构造 authenticated_account，随每次内部调用的 SessionDetails 整体签名。在线域（match / chat / friend / guild / trade / mail）验签后只认这份原件（`shared/roleidentity.SessionAccount`），**不读登录域 Redis，也没有回退路径**；原账号不来自客户端正文，也不反查当前 owner。`login_session` 只服务登录/选角阶段与设备集，EnterGame 成功后保留到 `LeaveGame` / `Disconnect` 或 TTL。业务提交的本库 role_fence 与事务外自愈保持。完整链路、生命周期与已知边界见 [gate 在线身份](gate-online-identity.md)，运行证据见 [审核交接](../handoff/gate-auth-role-fence-review-20261104.md)。
 
 新 gate 进程不会继承旧连接的认证标记。客户端重连须重新取得 gate 票据、在新 TCP 连接以有效 access token 完成 Login，再对原角色发 EnterGame 并等 NotifyEnterScene；令牌失效时停止恢复，不能仅凭角色号恢复身份。旧客户端仍可手动重新登录，自动恢复是独立客户端增量。退出/踢线以后 gate 停止接收新业务；撤销前已经受理的调用按原业务合同完成或拒绝，角色冻结/过户仍由提交护栏决定，不能靠异步踢线消息代替提交互斥。
 
@@ -89,6 +87,8 @@ Register 与 Begin 在同 account_role 行锁裁决。Begin 先持久 FREEZING�
 
 scene 必须在任何实体复用／激活副作用之前成功 Register；请求未知结果只能重试原 generation，不能先激活。Seal 在逻辑线程安装原≤upper 的墓碑，取消 pending 并挡住 SQL load 完成后的迟到回调；实体严格完整存盘、两表 ACK 与本次版本完全相等后卸载，才发原 holder 的 ACK。现有普通退出或 Kafka broker ACK 不等于这份证据，不能直接复用 Destroy 的名字推断排空；新 drain 不写跨场景 handoff，不采用 35 秒自动解冻。原生钩子与故障回归由同批 C++ 接线提供，本文源码候选不冒其已运行。
 
+C++ Scene 的一次入场尝试在所属 EventLoop 顺序等待 SQL Register、缺失时的 Redis HGET 和按原 prior 的 CAS，复核原世代后才激活。退避和尝试上限仍由入场账本推进。Seal 在 CAS 提交前复核资格，提交后仍可用固定的原 prior 发原样撤销。维护阶段继续处理真实完成，最终拆除仅取消本地等待，传输终态或明确未接纳才归还计数，迟到回复也照常记账。不能凭本地取消发送 Close 或交易 ACK。
+
 Close/Ack 的 0/0 只表示本次没有新的激活实体存盘，不清除历史所需 SQL 下限。普通退出即使 SQL 暂未追上，也必须先持久记录最后完整存盘下限；Begin 包括已关闭登记在内捕获全历史最大下限。Confirm 在同 TiDB 事务锁读原 holder 全部 drained、权威 player_route 有效存储以及实际两张玩家 SQL 行；不查 Redis 资产证明，不接受 caller 自报离线。库名只从合法 storage_id 派生，且必须在白名单；冻结落点、缺行、SQL 错误、两行围栏或覆盖世代不齐／超前、SQL 低于所需下限均拒绝。摘要按列名排序并包含全部 SQL 原字节，保留未知字段所在 blob；每行超 16MiB 拒绝。
 
 冻结证据 kind 显式区分 NO_ADMISSION 与 SCENE。只有实际两行 SQL 都为 0/0、无历史所需下限且本轮无 holder 时允许 NO_ADMISSION；SCENE 必须为非零完整围栏。未分类的证据拒绝。Remove 与受控 Import 在同角色行锁下同样拒绝 OPEN admission，关闭水位与历史 SQL 下限保留。
@@ -99,7 +99,7 @@ P4 完整验收至少包括：冻结持久化后新登录拒绝、冻结前已�
 
 ## 业务原会话与资产合同提交互锁（2026-10-21，源码候选）
 
-gate发出的`SessionDetails.owner_revision=9`是原会话修订。交易和帮会只读部署显式指定的全局LoginRedis，以原gate进程UUID与连接incarnation找到原账号；键规则由`shared/loginsession`与login共用。缺账号、旧连接、修订0、未声明全局同一登录态实例均拒绝。SQL Lookup只复核这份原账号／修订，不能用当前owner填补旧会话。`shared/roleidentity`复制原件进context；后台处理则从持久合同取原件，不能以后台context没有actor为由绕过归属检查。冻结踢原会话是通知，不作为在途提交的安全证据。
+gate发出的`SessionDetails.owner_revision=9`是原会话修订。交易和帮会的原账号只取gate签名的会话原件（`shared/roleidentity.SessionAccount`，不读LoginRedis，见[gate在线身份](gate-online-identity.md)）。未签名、与原件不符、缺账号、修订0均拒绝。SQL Lookup只复核这份原账号／修订，不能用当前owner填补旧会话。`shared/roleidentity`复制原件进context；后台处理则从持久合同取原件，不能以后台context没有actor为由绕过归属检查。冻结踢原会话是通知，不作为在途提交的安全证据。
 
 trade普通交易、寄售、拍卖、撮合和人民币合同的所有新增参与者／资产腿，先在同一实际TiDB强会话池按player_id升序锁全体`account_role`，核原actor账号／修订与非交易锁，再取原guard、commerce、seq、outbox锁。普通合同持久`seller_identity=21/buyer_identity=22`；后台退款、撮合子单和原最高竞价退款沿用各自持久身份。缺原件、已换主或修订ABA均拒发，保留托管证据。私有历史按原账号与修订筛选，角色易主不会把旧合同身份授予新主。
 
@@ -109,13 +109,13 @@ trade普通交易、寄售、拍卖、撮合和人民币合同的所有新增参
 
 目录Begin、Remove与受控Import在同一P行锁下，除原生admission、默认离帮检查外，锁读未终局trade合同、trade/guild pending或manual outbox、mail pending或manual outbox、guild owed及历练ACTIVE参与原件。库名由显式`RoleTradeTradeSchema/RoleTradeGuildSchema/RoleTradeMailSchema`给定，禁止从DSN猜。交易合同超过单角色256条或任一schema／表／查询不可用均拒绝，不能截断全集后宣称无挂起合同。仅自己的CHARACTER `rmb_freezing`原账号／修订例外，不允许借另一listing或资产合同绕过。
 
-帮会客户端由显式全局LoginRedis捕获原actor。`runTxBody`在任何G／state／member／seq／outbox之前，合并原actor和本次所有资产／入帮目标，按player_id升序取P首锁并复核原actor。建帮与审批通过也走此统一前缀，审批不在G锁后回头拿申请人P。目录Begin不取G，只在P之后锁state／原member，所以它不会与原G→state锁序成环。捐献、商店、活动领奖、历练结算全候选和owed转换均声明目标前缀；被冻结owed保留原行，不重建奖励。邮件与好友的同类入口由各自实现批次接线，不能用trade的完成代替它们的门禁。
+帮会客户端由gate签名的会话原件捕获原actor（`roleidentity.CaptureSession`）。`runTxBody`在任何G／state／member／seq／outbox之前，合并原actor和本次所有资产／入帮目标，按player_id升序取P首锁并复核原actor。建帮与审批通过也走此统一前缀，审批不在G锁后回头拿申请人P。目录Begin不取G，只在P之后锁state／原member，所以它不会与原G→state锁序成环。捐献、商店、活动领奖、历练结算全候选和owed转换均声明目标前缀；被冻结owed保留原行，不重建奖励。邮件与好友的同类入口由各自实现批次接线，不能用trade的完成代替它们的门禁。
 
 历练邀请的同意身份是服务端私有`GuildTrialLobbyConsent`，按(lobby,player)在Redis保存不可覆盖原件；发起人建房捕获本人，被邀者亲自同意时捕获本人。缺件或不同账号／修订要求重新组队，不向客户端LobbyMember加入账号。launch前读取全体原同意，在全员P升序与G锁下核原账号／修订及本帮成员，持久`guild_trial_launch`完整原件和`guild_trial_launch_role` ACTIVE索引，再调用原request_id的Match Start。未知结果保留PREPARED，恢复轮转重放原名单、周期、配置与身份，不再从Redis或当前owner捕获。结果通过服务端`BattleActivityContext.launch_request_id=7`定位原件，结算和POISON同事务终结参与索引；owed／真实op继续独立保护资产。原有EXPIRED允许迟到结果，故不是安全撤销证明，不能清ACTIVE。PREPARED释放还要求Match同原意图锁的持久取消墓碑，或真实formation安全中止终局；RPC负答和房间过期都不够。
 
 2026-10-23 更正（第二轮审计 r2-guild#1）：上段没有覆盖「开局成功（Match formation=4）之后战斗不出结果」，即 battle 停机作废、崩溃或活动结果没发出。那时既无结算也无标毒，原先 launch 与 ACTIVE 占用永不解除，冻结、删除、导入与全球匹配入口的挂起守卫一直拒绝这批角色。现在的出口是 Match 的 SQL 终局：权威截止之后，`RecoverExpiredOutcomes` 或帮会重放原 Start 的签名 `CancelActivityBattle`，在原 P→formation 锁内与 COMPLETE 争同一主键，原子提交 ABORT，formation 4→5、全员原票置 4。帮会拿到 formation=5、TerminalDecision=ABORT 的回执后，`FinishCancelledTrialLaunch` 同事务置 launch3、role2、lobby4、slot0，本文挂起守卫随之放行。截止前的 formation=4、一次 RPC 超时、EXPIRED、帮会解散都不是终局，占用照旧保留；formation=5 却带 COMPLETE 的矛盾回执同样拒绝。释放规则只在 `go/guild/internal/data/trial_launch_repo.go` 的 `TrialCancelReceiptIsTerminal` 一处，推导与回归见 cross-zone-matchmaking.md §13.6「2026-10-23 修复」。
 
-装配还必须显式配置trade／guild的`AccountRoleSchema`、`GlobalLoginSessions`和`LoginRedis`；进程实际断言TiDB pessimistic／RC／leader／strict／无快照／无staleness，不能只看配置布尔值。普通独立交易状态机测试可显式注入fixture角色接口，旧目录隔离测试可显式关闭跨域guard；它们不能当原生验收。新增真TiDB回归分别使用独占`ACCOUNT_DIRECTORY_TEST_DSN`、`COMMERCE_TEST_DSN`与`GUILD_ROLE_TEST_DSN`及对应REQUIRE开关，fullstack还必须显式给`TRADE_ASSET_FULLSTACK_GLOBAL_SCHEMA`。本批只执行源码格式化和静态检查，正式生成、编译、真实SQL与双区在线验收须另记实际证据。
+装配还必须显式配置trade／guild的`AccountRoleSchema`（两者都不再有`GlobalLoginSessions`／`LoginRedis`）；进程实际断言TiDB pessimistic／RC／leader／strict／无快照／无staleness，不能只看配置布尔值。普通独立交易状态机测试可显式注入fixture角色接口，旧目录隔离测试可显式关闭跨域guard；它们不能当原生验收。新增真TiDB回归分别使用独占`ACCOUNT_DIRECTORY_TEST_DSN`、`COMMERCE_TEST_DSN`与`GUILD_ROLE_TEST_DSN`及对应REQUIRE开关，fullstack还必须显式给`TRADE_ASSET_FULLSTACK_GLOBAL_SCHEMA`。本批只执行源码格式化和静态检查，正式生成、编译、真实SQL与双区在线验收须另记实际证据。
 
 ## 跨域挂起守卫的终态白名单（2026-10-21 源码补充）
 

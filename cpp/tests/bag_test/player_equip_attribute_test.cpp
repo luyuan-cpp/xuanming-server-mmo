@@ -55,7 +55,9 @@
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
+#include "proto/common/component/player_battle_result_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/item_base_comp.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
@@ -962,7 +964,9 @@ protected:
 		EmplaceIfAbsent<MissionsContainerComp>(entity);
 		EmplaceIfAbsent<PlayerAssetOpLedgerComp>(entity);
 		EmplaceIfAbsent<PlayerInboxLedgerComp>(entity);
+		EmplaceIfAbsent<PlayerItemGainBlockComp>(entity); // 单玩家物品获取封禁(player-inbox-service.md §2.2)
 		EmplaceIfAbsent<PlayerMysteryMerchantComp>(entity);
+		EmplaceIfAbsent<PlayerBattleResultComp>(entity); // 近期战斗结果(battle-result-recovery.md)
 		// 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
 		EmplaceIfAbsent<PlayerDatabaseCarryComp>(entity);
 		EmplaceIfAbsent<PlayerDatabase1CarryComp>(entity);

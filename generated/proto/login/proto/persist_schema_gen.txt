@@ -4,6 +4,8 @@
 #   生成运行追加一个新世代。只在主干发号:发布分支需要新持久字段时,先合主干拿号,再原样 cherry-pick 本文件的行。
 # 字段行:<世代>=<消息全名>#<字段号> <标签> <类型> <字段名>[ oneof=<oneof 名>]
 # 退役行:retired=<消息全名>#<字段号>(字段已删除并写了 reserved;字段号永不复用)
+# 封存行:sealed=<世代>:<行数>:<sha256>,发布前由 dev_tools.ps1 -Command persist-schema-seal 追加。世代 ≤ 它的
+#   字段行此后不得增删:引导期还在加字段、合并带进同一世代的行,都会让生成失败(设计 §3.1「封存」)。
 state=bootstrap
 
 1=AssetItemInstance#1 optional uint64 item_uuid

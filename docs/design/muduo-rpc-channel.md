@@ -382,16 +382,45 @@ lambda 捕获 `{sessionId, incarnation, clientRequestId, innerMessageId}`:
 
 ### 8.3 握手(`registration_manager.cpp`)
 
-2026-11-05 调整：握手只负责确认当前通信链路，不承担玩家注册、业务恢复或跨服务启动顺序。
+2026-11-05 调整：握手只负责确认当前通信链路，不承担玩家注册、业务恢复或跨服务启动顺序。连上某一类节点、重连成功都不触发任何业务逻辑：每条链路每次建连只做一次握手，工作量与节点数、玩家数和其他链路无关，也没有先后依赖。
 
 - `RpcClient` 拥有当前连接的 Ready。普通客户端默认 TCP UP 即 Ready；节点装配显式选择 `Readiness::kAfterHandshake`。业务 `CallMethod` / `SendRequest` 统一要求 Ready，未就绪分别异步返回 `kNotSent` / 返回 false，不缓存、不重放。
-- `NodeHandshakeManager::BeginHandshake(client, selfNode, expectedPeer, conn)` 直接接受依赖，每条连接立即发一次现有 typed `NodeHandshake`，超时 3s。请求经当前 channel 发出，不经过业务 Ready 门禁。回包核对预期实例身份，仅仍属于该 client 的当前连接可以 `MarkReady`；关机后和旧连接回包不能改变 Ready。
-- 失败时不留在同一连接无限握手，也不挂 ECS `TimerTaskComp`：仅对失败的当前连接延迟 0.5s 关闭，避免快速拒绝形成忙循环；后续建连由既有 muduo `enableRetry` 负责。延迟闭包只持 weak client / weak connection，晚到的关闭不影响替代连接。每条连接最多一次握手 RPC，不重放结果未知的业务请求。
+- `NodeHandshakeManager::BeginHandshake(client, selfNode, expectedPeer, conn)` 直接接受依赖，每条连接立即发一次现有 typed `NodeHandshake`，超时 3s。请求经当前 channel 发出，不经过业务 Ready 门禁。**身份双向核对**：
+  - 请求带 `expected_peer_uuid`(要连的对端实例,取自发现记录)。入站侧 `OnNodeHandshake` 在类型白名单之后、碰任何注册表之前用 `IsAddressedTo` 核对它等于本进程 uuid；为空或不等一律以 `kFailedToRegisterTheNode` 拒绝，不登记、不换 `RpcSession`。
+  - 回包带入站侧自己的 `NodeInfo`，出站侧逐项比对 type / uuid / node_id / zone 与发现记录一致，且回包所走的仍是该 client 的当前连接，才 `MarkReady`；关机后和旧连接回包不能改变 Ready。
+- 失败(超时、被拒、身份不符)时不留在同一连接无限握手，也不挂 ECS `TimerTaskComp`：按连续失败次数退避后关闭失败的当前连接，后续建连由既有 muduo `enableRetry` 负责。
+  - 退避：首次 0.5s，每多失败一次翻倍，8s 封顶(`FailedHandshakeCloseDelaySeconds`)；计数在 `RpcClient`(`RecordHandshakeFailure`)，跨重连累计，握手成功即清零。
+  - 退避只能放在关闭之前：已建立的连接关闭后，muduo `TcpClient::removeConnection → Connector::restart` 会当场重连并把它自己的建连退避重置为 500ms。
+  - 重试持续多久由权威发现决定：对端实例从 etcd 摘除时 `RpcClient` 随节点实体销毁，延迟闭包 lock 失败即止。不加抖动：每轮只有一次轻量握手，打到同一 scene 的链路数就是 gate 数。
+  - 延迟闭包只持 weak client / weak connection，晚到的关闭不影响替代连接。每条连接最多一次握手 RPC，不重放结果未知的业务请求。
 - 删除 `SetHandshakeSucceededHook`、Gate 的 `SceneLinkHandshakeComp` 和 `OnSceneLinkHandshaken`。进场待办仍按自身 250ms 扫描、期限与次数预算推进；握手成功不遍历玩家，不调整业务待办。
 - 同 UUID 的出站 client / 节点实体稳定复用。入站握手只把同 UUID 的 `RpcSession` 绑定到当前通信连接；旧连接 DOWN 只摘匹配连接的会话。TCP DOWN 不发布节点删除，不清理玩家内存；权威发现删除仍走既有节点移除流程。UUID 变化是新进程，不能冒充同实例重连。
 - Gate 的 Kick 来源继续按本次 RPC 的连接查已确认实例，使用 `IsReadyOn(conn)`；不以端点或另一条当前连接代替来源确认，既有会话代次栅栏保持不变。
 
-本次保留现有节点目录实体、入站绑定与发现准入规则，不引入全协议 `NodeLinks` 框架，也不把握手身份确认宣称为鉴权。Java 握手成功本来就没有此业务恢复钩子，无需复制 RPC0 的内部实现；Java 目前断链清退玩家的策略与 C++ 不同，属于另一个业务语义改造，本批不声称已统一。
+**为什么入站侧必须核对目标实例(2026-11-05 第二轮审阅)**。只靠出站侧比对回包时，入站侧在出站侧验完之前就已经登记了。scene 崩溃后在同一地址原地重启(K8s 容器重启保留 Pod IP 与预设端口)，旧实例的 etcd 键要等租约过期(本地 `NodeTTLSeconds` 180s)才消失，这段时间里：
+
+1. gate 指向旧实例的 `RpcClient` 不断重连到新进程；新进程照常登记，把这个 gate 实体的 `RpcSession` 换成这条注定被关的连接；
+2. gate 发现新实例后另建 `RpcClient`，握手成功、Ready；
+3. 旧 `RpcClient` 下一轮重连再次顶替 `RpcSession`，随后因身份不符被 gate 关闭，入站 DOWN 经 `RemoveRpcSessionsBoundTo` 把会话一起摘掉；
+4. 真正的链路已 Ready、不会再握手，scene 对这个 gate 的回推(进场通知、AOI、踢线)全部丢失，直到它因别的原因重连。
+
+失败关闭改成每轮重连之后，这个窗口从"一次竞态"变成"每轮必现"。点名目标实例后，第 1、3 步在入站侧就被拒，不改任何状态。
+
+**重连为什么不需要业务逻辑**。数据在两端内存里，TCP 断开不等于实例消失：两端进程都活着时内存状态都还有效，断线只会丢在路上的消息。实例是否消失只看权威发现(etcd 租约)，进程重启一定换 uuid，按新节点处理，旧实例的状态随节点移除收口。丢掉的在途消息由各自业务协议兜底，不靠重连补发：
+
+- 未交出去的进场由 gate 的进场待办在预算内补发(§8.2，`cross-zone-scene-travel.md` CPP-2 节)；
+- 断线时没送达 scene 的 ExitGame，由 Login 断线租约 → player_locator `LeaseMonitor` → `SceneManager.LeaveScene` → scene_manager 经 Kafka 定向命令请持有节点释放(`location-release-binding.md` §3.3)收口，与 gate↔scene 链路无关；持有关系由 owner_epoch 与存盘围栏保护。
+- 推送类消息丢了不补，由客户端或业务按快照恢复。
+
+本次保留现有节点目录实体、入站绑定与发现准入规则，不引入全协议 `NodeLinks` 框架，也不把握手身份确认宣称为鉴权。`expected_peer_uuid` 是新增的服务端内部字段，入站侧对空值 fail-closed：项目未上线(负责人 2026-10-18 确认)，gate 与 scene 同批升级，不保留旧版混跑兼容。Java 版不走 RPC0 握手(`NodeHandshakeRequest` 只在其 proto 副本里)，握手成功本来就没有业务恢复钩子；Java 目前断链清退玩家的策略与 C++ 不同，属于另一个业务语义改造，本批不声称已统一，待办见 Java 仓 `PARITY.md`。
+
+可观测性(本节日志，联调按这些核对)：
+
+| 日志 | 级别 | 含义 |
+|---|---|---|
+| `Node link ready: type=<t> uuid=<u> node_id=<n> zone=<z>, peer=<ip:port>` | INFO | 出站链路在当前连接上握手成功、已 Ready。每条链路每次建连一行，gate 启动后每个 scene 各一行 |
+| `Node handshake failed: <原因>, peer=<ip:port>, consecutive_failures=<k>, close_in_seconds=<s>` | WARN | 握手失败，`s` 秒后关闭这条连接重连。原因是 `status=<RpcStatus>` / `rejected by peer error_id=<id>` / `identity mismatch expected … got …` / `invalid expected peer …` 之一 |
+| `Reject node handshake addressed to another instance: … expected_peer_uuid=<旧> self_uuid=<新> …` | WARN | 入站侧拒绝发给别的实例的握手。scene 原地重启后到旧实例租约过期前会周期出现，间隔按退避拉长到 8s |
 
 ### 8.4 B 的下游是 gRPC(本轮的过渡写法)
 
@@ -823,6 +852,138 @@ WARN 的条数和 message_id.txt 的 diff(只改行、只追加、不删行)。
 
 **双版本(AGENTS §12)**:墓碑格式与 Route 一族删除涉及客户端契约文件(message_id.txt 与 proto),Java 侧读墓碑已在 `15058ad` 完成,ContractSync 待主仓提交后重跑;
 四个方法的退役、RpcSession / 握手 / dev_tools 都是 C++ 服务端内部,Java 不适用。Java 仓 `PARITY.md` 已登记。
+
+## 21. 链路心跳:检测半开连接(2026-11-05,未编译,待 Codex 验证)
+
+§8.3 的握手只在建连时确认一次对端身份,之后链路是否还活着没有人检测。本节补上传输层的存活检测。它纯属传输层,不触发任何业务逻辑(§8.3「重连为什么不需要业务逻辑」)。
+
+### 21.1 现状与缺口
+
+- 节点链路只靠系统 TCP keepalive:muduo `TcpConnection` 构造时 `setKeepAlive(true)`(`muduo_windows/src/muduo/net/TcpConnection.cc:63`),探测参数用系统默认,Linux 与 Windows 都是空闲 2 小时后才开始探测。
+- 对端主机断电或网络分区时,FIN / RST 不会到达。这时有三处同时失效:
+  - 出站侧 `RpcClient::IsReady()` 一直为真;
+  - 单向 `SendRequest` 写进内核发送缓冲就算成功,实际静默丢失,包括移动类客户端消息、断线代发 ExitGame、`PlayerEnterGameNode`;
+  - 入站侧 scene 经 `RpcSession` 的推送同样静默丢失,包括 AOI、进场通知、踢线。
+- 只有两件事会结束这种状态:
+  - 某次需要应答的调用自己超时(10–12s,§4.5),但超时不会断开连接;
+  - etcd 租约到期摘节点(本地 `NodeTTLSeconds` 180s)。
+  在那之前,路由方看到的链路一直「可用」。
+
+### 21.2 做法:两端对称的写空闲心跳 + 读空闲判死
+
+信封新增 `GameMessageType.HEARTBEAT = 5`(`proto/common/base/rpc_message.proto`)。心跳帧只有 `type`,没有调用号、message_id 和载荷,线上 14 字节(长度 4 + `RPC0` 4 + 载荷 2 + 校验 4)。
+
+开了心跳的一端只做两件事。节点链路两端都开。
+
+1. **写空闲**满 `interval`,即这段时间本端一帧都没发出:发一帧 HEARTBEAT。
+2. **读空闲**满 `idleTimeout`,即这段时间没有从对端收到一个字节:`forceClose()` 这条连接。
+
+收到的任何字节(业务请求、回包、心跳)都说明对端活着;发出的任何帧都说明本端不空闲。所以忙的链路一帧心跳都不发。收到 HEARTBEAT 时不派发、不回包、不计流量统计,读到即丢。
+
+判死之后只走既有路径,不新增任何收尾:
+
+- 出站侧(gate 的 `RpcClient`):DOWN → 在途调用以 `kDisconnected` 失败(§6.1)→ muduo `enableRetry` 重连 → §8.3 握手 → Ready。
+- 入站侧(scene 的 `RpcServer`):DOWN → `OnDisconnect` → `RemoveRpcSessionsBoundTo`(§6.2)。
+- `forceClose()` 当场把连接置为 kDisconnecting,`RpcClient::IsReady()`、`RpcSession::IsConnected()` 立刻变假。之后的业务发送当场以 `kNotSent` 或 `false` 失败,不会再写进死连接。
+- 不重放、不补发、不遍历玩家。实例是否消失仍只看 etcd(§8.3)。
+
+### 21.3 为什么两端对称,而不是「出站 ping、入站回 pong」
+
+两端各自检测,就要求每一端在每个 `interval` 里至少收到对端一帧。如果只有一方发 ping,它必须在「写空闲**或**读空闲」时都发,只看一种都会误判:
+
+- 只按写空闲发:gate 持续向 scene 发单向的 MoveSync(单向调用没有回包),而场景里只有这一个玩家在动、scene 没有东西要推回来。gate 永远不写空闲,不发 ping,也收不到 pong,15s 后把健康链路判死。
+- 只按读空闲发:scene 持续推 AOI,而 gate 没有客户端消息要转。gate 永远不读空闲,不发 ping,scene 收不到任何帧,把健康链路判死。
+
+对称心跳里,每一端只承诺一件事:每个 `interval` 至少给对端一帧。两端规则相同,全部实现在 `RpcChannel` 里,不需要应答类型,也不用区分入站和出站。AMQP 0-9-1、STOMP 的心跳就是这样做的。空闲链路上的流量与 ping/pong 相同,每个 `interval` 每个方向一帧。任务要求的「出站侧空闲就发 ping」照样满足:出站侧写空闲时发,入站侧也一样。
+
+### 21.4 取值(`network/rpc_link_liveness.h` 的 `kNodeLinkHeartbeat`)
+
+| 常量 | 值 | 理由 |
+|---|---|---|
+| `interval` | 5s | 空闲链路每 5s 每个方向 14 字节。gate 的链路数等于本 zone 的 scene 数,开销可以忽略。一个判死窗口内能收到 3 帧 |
+| `idleTimeout` | 15s(= 3 × interval) | 健康的空闲链路上,相邻两次「收到」最长相隔 interval + 2 × checkPeriod ≈ 7s:发送方在节拍上才判出写空闲,接收方在节拍上才记下收到,各晚一个节拍。余下约 8s 留给两端 loop 卡顿与网络抖动。从对端最后一帧算起,15–16s 后判死 |
+| `checkPeriod` | 1s | 精度 ±1s。每个 channel 每秒一个定时器,gate 有几条 scene 链路就有几个,开销可以忽略 |
+
+- 15s 与客户端请求超时(15s)、gate→scene 调用超时(12s)在同一量级。对端死掉时,在途调用以 `kTimeout` 或 `kDisconnected` 结束,两者同属「结果未知」(§4.3 (d)),调用方处理相同。它比 etcd 租约(180s)短一个量级,比系统 keepalive(2h)短两个量级以上。
+- 不再缩短:scene loop 卡住 15s 已经是节点级故障。阈值再短,几秒的卡顿就会变成重连,而带着未读数据关闭连接会回 RST,对端接收缓冲里还没读的帧会一起丢掉。
+- 不再拉长:单向消息静默丢失的窗口会随之线性变长。
+- 写成编译期常量,两端用同一份,不走 yaml:只改一端就等于混跑(§21.6)。头文件用 `static_assert` 锁住两条:`interval + 2 × checkPeriod < idleTimeout`,以及 `idleTimeout = 3 × interval`。
+- 与 Java 版 NodeLink 同值(`link-ping-interval: 5s`、`link-idle-timeout: 15s`),两版判死节点链路前容忍的静默时长一致。
+
+### 21.5 实现
+
+- **判定是纯逻辑**。`RpcLinkLiveness`(`network/rpc_link_liveness.h`,只依赖 `<chrono>`)不做 I/O、不读时钟,时刻全由调用方传入,所以能用合成时刻单测(同 `InflightIndex` 的测法)。
+  - 收发路径只置位(`OnReceived` / `OnSent`),热路径不读时钟。每次检查把置位折算成「本次检查时刻有过收 / 发」。折算最多晚一个节拍,方向保守:心跳最多晚发一个节拍,判死最多晚判一个节拍,都不会提前。
+  - `Check(now)` 返回 `Verdict{checkGap, inboundSeen, idleDeferred, closeIdle, sendHeartbeat}`。返回 `sendHeartbeat` 时调用方随即发帧,函数已把它记为本次检查的发送。
+  - **本端卡顿不怪对端**。如果本次检查距上次超过 2 × checkPeriod,说明本端 loop 卡过,对端的帧可能还在接收缓冲里没读。Linux muduo 的 timerfd 与连接 fd 在同一次 `epoll_wait` 里返回、处理先后不定,而且一次最多返回 `events_.size()` 个 fd。所以这一次不下「对端已死」的结论(`idleDeferred`,计入 `link_idle_deferred`),留到下一次检查再判;心跳照发。
+- **`RpcChannel` 接线**。`RpcChannel::Create(..., std::optional<RpcLinkHeartbeat> heartbeat)` 传了值才启用,默认关;参数不合法时 `LOG_FATAL`。
+  - `OnMessage`(收到字节,解码之前)调用 `OnReceived`。按字节而不是按完整帧算,大帧慢慢到也算对端活着。
+  - `SendFrame` 调用 `OnSent`。请求、回包、单向、拒绝都经过它。心跳帧由 `SendHeartbeat` 直接写,不经过 `SendFrame`,所以不会按 message_id 0 记流量,也不置位。
+  - `OnRpcMessage` 开头遇到 HEARTBEAT 直接返回,排在大小告警、流量统计、派发之前。
+  - 检查节拍:每个 channel 一个 `runAfter(checkPeriod)`,触发后重挂。它只捕获 `weak_ptr<RpcChannel>`,从不 cancel(同 §4.5 的超时 tick)。channel 没了,lock 失败即止;连接不再是已连接状态(判死 `forceClose` 之后、DOWN 之后),就不再重挂。
+  - 与超时 tick 互不相干。`Close()`(关机阶段 0)之后心跳照常:关闭只拒新调用,不能让对端在本端排空期间把链路判死。
+  - `CheckLinkLiveness(now)` 公开,在 loop 线程调用。它既是节拍的本体,也是单测接缝,同 `SweepTimeouts`。
+- **只在节点装配处开启**,同 `Readiness::kAfterHandshake` 的做法(§8.3):
+  - 出站:`NodeConnector::ConnectToTcpNode` 在 `connect()` 之前调 `client->setLinkHeartbeat(kNodeLinkHeartbeat)`。
+  - 入站:`Node::StartRpcServer` 建出 `RpcServer` 后调 `rpcServer->setLinkHeartbeat(kNodeLinkHeartbeat)`。gate、battle 的 `RpcServer` 端口给客户端和战斗边缘用,`SetAfterStart` 里换掉了 `RpcServer` 的回调,所以实际只有 scene 的入站节点链路用到它。
+  - 默认关:测试夹具与直接 `Create` 的 channel 行为不变。
+  - **两端必须都开**:只检测、不发心跳的一端,会在对端写空闲时把健康链路判死。
+- 生命周期(AGENTS §11.7):只存 `weak_ptr<TcpConnection>`,节拍只绑 `weak_ptr<RpcChannel>`,不新增任何强引用。全部在 loop 线程上执行。
+- `RpcServer` 新增 `setConnectionObserver`,与 `RpcClient` 的同名接口同义:在本类自己的 UP / DOWN 处理之后同步调用。生产代码不调用它,它是测试隔离接缝(AGENTS §11.5):测试靠它拿到入站连接上的 channel,喂合成时刻。
+
+### 21.6 兼容
+
+- 同 zone 的 gate 与 scene 必须同批升级(项目未上线,负责人 2026-10-18 确认;与 §18.1 同口径)。混跑会这样:
+  - 旧二进制收到 HEARTBEAT,计入 `unknown_type` 后丢弃,不断连;
+  - 旧二进制不发心跳,新的一端在对端写空闲满 15s 时关掉链路,于是重连、握手、再关,反复抖动。`link idle timeout` 日志与 `link_idle_closed` 计数可见,不会写坏数据。
+- 直连 scene RPC0 端口的外部工具(`GmGracefulShutdown`,仓库内没有发送方)必须在 15s 内发出任意一帧,否则连接会被关掉;15s 内完成的一问一答不受影响。
+
+### 21.7 可观测性
+
+- 每次判死打一行 WARN,不采样。每次死亡、每条链路只有一行,与「断连每次一行」(§12)同口径:
+  `[RpcChannel] link idle timeout, forcing close: peer=<ip:port>, silent_ms=<n>, idle_timeout_ms=15000, outstanding=<k>, occurrences=<n>`
+- 推迟判死按 `ShouldLogRpcEvent` 采样打 WARN:
+  `[RpcChannel] link idle verdict deferred, local loop stalled: check_gap_ms=<n>, silent_ms=<n>, peer=<ip:port>, occurrences=<n>`
+- `[RpcChannel] summary` 末尾追加 `link_idle_closed=` 与 `link_idle_deferred=`,`stress_summarize.ps1` 的 RPC0 段同步打出这两项。正常运行时两项都应为 0。
+- 心跳的收发次数不进汇总行。空闲链路上它每 5s 都在变,这行就会每 30s 打一次,失去「计数变化才打」的意义。心跳不正常时会体现为 `link_idle_closed` 增长。
+
+### 21.8 测试(`cpp/tests/rpc_controller_test/rpc_link_heartbeat_test.cpp`)
+
+- **A 纯逻辑 `RpcLinkLiveness.*`**:合成时刻,按 1s 步进模拟节拍。覆盖:
+  - 写空闲满 interval 恰好发一次,早一纳秒不发;任何发送都推迟心跳;
+  - 读空闲满 idleTimeout 才判死,早一纳秒不判;任何收到都重新计时;
+  - 迟到的检查推迟判死,下一次准时的检查才判;迟到那次检查之前收到过字节,就不算空闲;
+  - 参数校验。
+- **B 真实回环 `RpcLinkHeartbeatLoopback.*`**:测试取 `checkPeriod = 1h`,真实节拍在用例寿命内不会触发,一律由 `CheckLinkLiveness` 的合成时刻驱动。建连前后各取一次时刻 t0 / t1,真实建连时刻必在其间,同 §4.5 的测法。覆盖:
+  - 出站写空闲时,线上恰好出现一帧 HEARTBEAT(type=5、id=0、message_id=0、无载荷),用屏障帧证明没有多发;
+  - 出站读空闲判死:判死的同一栈上 `IsReady()` 已为假;在途调用以 `kDisconnected` 失败恰好一次;对端看到 DOWN;`enableRetry` 重连出新 channel;`link_idle_closed` +1;
+  - 对端发来一帧 HEARTBEAT,判死时刻整体后移;
+  - 收到 HEARTBEAT 不派发、不回包、不计 `unknown_type`,用屏障请求证明;
+  - 入站:真身 `RpcServer` 的每条连接都带心跳,写空闲时发帧,读空闲时判死,DOWN 清掉连接的 context;
+  - 默认关:没开心跳的 channel 什么都不做;
+  - `Close()` 之后心跳照发;
+  - 汇总行含 `link_idle_closed=` 与 `link_idle_deferred=`,这是与 `stress_summarize.ps1` 的契约。
+
+### 21.9 残余
+
+- 从对端最后一帧到判死有 15–16s,其间发出的单向消息照样会丢,由各业务协议兜底(§8.3)。
+- 本端 loop 持续迟到(每次检查都相隔 2s 以上)时,判死会一直推迟。这时本端已经无法服务,对端会从它那一侧判死并关闭连接,etcd 租约兜底。另外,卡顿恢复后 1s 内如果还没读完积压(例如积压的连接极多),仍可能误判一次。
+- 心跳只证明对端的 loop 与网络还在转,不证明业务健康。业务卡死而 loop 照转的情况不归链路管。
+- 系统 TCP keepalive 保持开启,作为最后一道兜底。
+
+### 21.10 双版本(AGENTS §12)
+
+Java 版节点链路已有等价机制,具体是:
+
+- gate 在链路就绪后每 5s 发一次 `LinkPing`(`game-gate/src/main/java/com/game/gate/link/SceneLink.java` 的 `startHeartbeat`);
+- scene 回 `LinkPong`(`game-scene/src/main/java/com/game/scene/link/NodeLinkHandler.java`);
+- 两端都用 Netty `IdleStateHandler` 按读空闲 15s 判死:gate 取 `link-idle-timeout: 15s`,scene 取 3 × ping 间隔。
+
+Java 侧不需要改代码,只剩一项待做:同步 `game-proto` 里 `rpc_message.proto` 的副本(新增一个枚举值;Java 不解析 RPC0 信封)。已在 Java 仓 `PARITY.md` 末尾登记。
+
+### 21.11 给 Codex 的验证步骤
+
+见 `docs/PROGRESS.md` 2026-11-05「节点链路应用层心跳」条目:proto 生成 → 串行编译 → 单测 → 冒烟,另有可选的进程挂起演练。
 
 ## 附录 A:主要事实证据
 

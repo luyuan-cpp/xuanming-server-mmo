@@ -9,7 +9,7 @@ package logic
 // 本文件守收尾用的销毁入口 destroyOrphanOfDeadNode 与脚本层的契约,手法与 reassign_cas_test.go /
 // resolve_scene_reassign_cas_test.go 相同:先摆出「收尾已读到属主是 dead」的现场,再用 reassignSceneNode 提交
 // 改派,最后拿那次陈旧的观察调销毁入口。经 reconcileDeadNodeScenes 入口、在它自己的 GET 之后注入改派的用例
-// 在 owner_read_interleave_test.go(那边能在修复前代码上直接取红)。
+// 在 owner_read_interleave_test.go(它的取红方法也是下面的变异 C)。
 //
 // 修复前红的取法(修复前没有 destroyOrphanOfDeadNode,本文件编不过,所以按变异取红):
 //   - 变异 A:把 destroyOrphanOfDeadNode 末行传给 destroyInstanceInternal 的 deadNode 换成 ""。期望属主为空时
@@ -175,11 +175,12 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 	require.NoError(t, mr.Set(sceneNodeKey(reassigned), reconcileNodeLive))
 
 	for _, id := range []uint64{reassigned, unmapped} {
-		node, gs, members, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead)
+		claim, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead)
 		require.NoError(t, err)
-		require.Empty(t, node)
-		require.Empty(t, gs)
-		require.Empty(t, members)
+		require.False(t, claim.Claimed)
+		require.Empty(t, claim.NodeID)
+		require.Empty(t, claim.AgonesGs)
+		require.Empty(t, claim.Members)
 	}
 	for _, id := range []uint64{reassigned, unmapped} {
 		require.Equal(t, "1", mustGet(t, mr, sceneZoneKey(id)))
@@ -206,11 +207,12 @@ func TestAtomicDestroyForce_NoExpectedOwnerWipesWhoeverOwnsIt(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	node, gs, members, err := AtomicDestroyForce(sc, reconcileCASZone, sceneID, "")
+	claim, err := AtomicDestroyForce(sc, reconcileCASZone, sceneID, "")
 	require.NoError(t, err)
-	require.Equal(t, reconcileNodeLive, node)
-	require.Equal(t, "gs-live", gs)
-	require.Len(t, members, 4)
+	require.True(t, claim.Claimed)
+	require.Equal(t, reconcileNodeLive, claim.NodeID)
+	require.Equal(t, "gs-live", claim.AgonesGs)
+	require.Len(t, claim.Members, 4)
 
 	require.False(t, mr.Exists(sceneNodeKey(sceneID)))
 	require.False(t, mr.Exists(instanceMembersKey(sceneID)))

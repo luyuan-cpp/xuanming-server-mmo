@@ -63,6 +63,11 @@ namespace player_inbox_rules
 	constexpr uint64_t kNodeStuckRelogIntervalMs = 5ULL * 60ULL * 1000ULL;
 	static_assert(kNodeStuckRelogIntervalMs + kStuckWarnSlackMs <= kSceneLogAlertWindowMs,
 				  "节点级停用的补打间隔必须落在 scene 日志告警窗口之内");
+	// 逐玩家的域停用(metric=inbox_halted:版本错位、未知类型、回放不一致等)对当前实体一直有效,不会自愈,同样按时间补打:
+	// 停用之后每 5 分钟一次,告警在实体存活期间一直亮着,实体销毁后自然停(混版本持久字段保护第 6 批对抗复核)。
+	constexpr uint64_t kHaltedDomainRelogIntervalMs = 5ULL * 60ULL * 1000ULL;
+	static_assert(kHaltedDomainRelogIntervalMs + kStuckWarnSlackMs <= kSceneLogAlertWindowMs,
+				  "域停用的补打间隔必须落在 scene 日志告警窗口之内");
 
 	// ── 账本 ────────────────────────────────────────────────────────────────
 

@@ -1246,7 +1246,7 @@ uint32_t PlayerAttributeSystem::GmSetLevel(entt::entity player, uint32_t level) 
 	// 写前取存储原值(player_level_rules.h 允许直读 LevelComp 的四处之一)。GM 是绝对设值:
 	// 存储等级超上限(新版本提高上限后回滚 / 混版本带进来,读路径按上限生效、原值照常携带)时,这一下会把
 	// 携带的等级覆写掉且不可恢复。GM 只在 dev/test 开放,这里留痕不拦。
-	const auto oldLevel = levelComp.level();
+	const auto oldLevel = levelComp.level();  // 直读存储等级:GmSetLevel(写前取旧值)
 	if (oldLevel > playerlevel::kMaxLevel) {
 		LOG_WARN << "[PlayerAttribute] GM level set overwrites a carried stored level above the cap: player_id="
 				 << tlsEcs.GetPlayerId(player) << " stored_level=" << oldLevel << " cap=" << playerlevel::kMaxLevel

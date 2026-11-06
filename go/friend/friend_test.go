@@ -4,10 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	redv9 "github.com/redis/go-redis/v9"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +20,7 @@ import (
 
 	"schemamigrate"
 
+	"shared/callerauth/callerauthtest"
 	"shared/killswitch"
 	"shared/serverbase"
 
@@ -30,7 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // chainUnary 按 gRPC 的语义把一组一元拦截器串成一个 handler:切片里第一个是最外层,
@@ -55,26 +53,17 @@ func chainUnary(
 }
 
 // incomingSessionContext 模拟 gate 注入、路由服原样透传的 x-session-detail-bin
-// (值 = base64(proto SessionDetails))。客户端请求体里没有 player_id(D-9),
+// (值 = base64(proto SessionDetails)),并按 gate 契约对 fullMethod 签名、过了验签拦截器:
+// 在线域原账号只认 gate 签名原件,不读 login Redis。客户端请求体里没有 player_id(D-9),
 // 身份只能从这里来,所以凡是"像客户端来的"测试都必须带上它。
-func incomingSessionContext(t *testing.T, playerId uint64) context.Context {
+func incomingSessionContext(t *testing.T, fullMethod string, playerId uint64) context.Context {
 	t.Helper()
-	bin, err := proto.Marshal(&base.SessionDetails{SessionId: 1, PlayerId: playerId, GateInstanceId: "原gate", SessionIncarnation: 9, OwnerRevision: 7})
-	if err != nil {
-		t.Fatalf("序列化 SessionDetails 失败: %v", err)
-	}
-	md := metadata.Pairs(session.MetadataKey, base64.StdEncoding.EncodeToString(bin))
-	return metadata.NewIncomingContext(context.Background(), md)
+	return callerauthtest.Incoming(t, fullMethod, callerauthtest.OnlineSession("original", playerId, 7))
 }
 
-type testLoginReader struct{}
-
-func (testLoginReader) Get(context.Context, string) *redv9.StringCmd {
-	return redv9.NewStringResult("original", nil)
-}
 func testOriginalIdentityGuard() grpc.UnaryServerInterceptor {
-	// 纯拦截器测试显式提供登录态与 SQL 检查替身，真库身份由 data 用例证明。
-	return session.OriginalIdentityInterceptor(testLoginReader{}, time.Second, func(context.Context) error { return nil })
+	// 纯拦截器测试显式提供 SQL 检查替身，真库身份由 data 用例证明。
+	return session.OriginalIdentityInterceptor(time.Second, func(context.Context) error { return nil })
 }
 
 // TestBuildUnaryInterceptorsOrder 钉住链长与顺序:grpcstats → killswitch → session → serverbase。
@@ -124,7 +113,7 @@ func TestBuildUnaryInterceptorsOrder(t *testing.T) {
 		t.Run(w.name, func(t *testing.T) {
 			logs := logtest.NewCollector(t)
 			var got observed
-			_, err := chain[i](incomingSessionContext(t, 42), &friendpb.AddFriendRequest{}, info,
+			_, err := chain[i](incomingSessionContext(t, info.FullMethod, 42), &friendpb.AddFriendRequest{}, info,
 				func(ctx context.Context, req any) (any, error) {
 					got.handlerCalled = true
 					_, got.sawSession = session.ClientPlayerID(ctx)
@@ -171,7 +160,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			return &friendpb.AddFriendResponse{}, nil
 		})
 
-		resp, err := h(incomingSessionContext(t, 42), &friendpb.AddFriendRequest{})
+		resp, err := h(incomingSessionContext(t, info.FullMethod, 42), &friendpb.AddFriendRequest{})
 		if handlerCalled {
 			t.Fatal("handler 被调用了:killswitch 没有挂上拦截器链(或不在 handler 上游)")
 		}
@@ -199,7 +188,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 			return &friendpb.GetFriendListResponse{}, nil
 		})
 
-		if _, err := h(incomingSessionContext(t, 42), &friendpb.GetFriendListRequest{}); err != nil {
+		if _, err := h(incomingSessionContext(t, info.FullMethod, 42), &friendpb.GetFriendListRequest{}); err != nil {
 			t.Fatalf("未命中规则的方法不该报错: %v", err)
 		}
 		if !handlerCalled {
@@ -223,7 +212,7 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 		return &friendpb.AddFriendResponse{}, nil
 	})
 
-	if _, err := h(incomingSessionContext(t, 42), &friendpb.AddFriendRequest{}); err != nil {
+	if _, err := h(incomingSessionContext(t, info.FullMethod, 42), &friendpb.AddFriendRequest{}); err != nil {
 		t.Fatalf("无规则时必须放行: %v", err)
 	}
 	if !handlerCalled {
@@ -251,7 +240,7 @@ func TestSessionRejectsNotifyFriendEventFromClient(t *testing.T) {
 			return &base.Empty{}, nil
 		})
 
-	_, err := h(incomingSessionContext(t, 42), &friendpb.FriendEventS2C{})
+	_, err := h(incomingSessionContext(t, info.FullMethod, 42), &friendpb.FriendEventS2C{})
 	if handlerCalled {
 		t.Fatal("客户端会话调用 NotifyFriendEvent 走到了 handler:S2C 方法没有被会话白名单挡住")
 	}

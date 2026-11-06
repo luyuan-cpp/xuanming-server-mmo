@@ -249,9 +249,9 @@ func TestEntryTiDBRoleTerminalNeedsActualParentTerminalAndOccupancyOnlyEndsWithI
 	}
 }
 
-func TestEntryTiDBOccupiedSQLMatchesAllFifteenProtoFieldsAndRejectsNull(t *testing.T) {
+func TestEntryTiDBOccupiedSQLMatchesAllFourteenProtoFieldsAndRejectsNull(t *testing.T) {
 	s := testStore(t)
-	columns := []string{"state", "ticket", "request_id", "formation_id", "mode", "config_id", "team_size", "enqueued_ms", "not_before_ms", "zone_id", "rating_centi", "team_id", "network_profile", "expires_ms", "selected_region", "preferred_region"}
+	columns := []string{"state", "ticket", "request_id", "formation_id", "mode", "config_id", "team_size", "enqueued_ms", "not_before_ms", "zone_id", "rating_centi", "team_id", "network_profile", "expires_ms", "selected_region"}
 	selects := make([]string, len(columns))
 	for index, column := range columns {
 		selects[index] = "? AS " + column
@@ -262,7 +262,7 @@ func TestEntryTiDBOccupiedSQLMatchesAllFifteenProtoFieldsAndRejectsNull(t *testi
 		if profile == nil {
 			profile = []byte{}
 		}
-		return []any{ticket.State, ticket.Ticket, ticket.RequestId, ticket.FormationId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, profile, ticket.ExpiresMs, ticket.SelectedRegion, ticket.PreferredRegion}
+		return []any{ticket.State, ticket.Ticket, ticket.RequestId, ticket.FormationId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, profile, ticket.ExpiresMs, ticket.SelectedRegion}
 	}
 	for index := range columns {
 		ticket := &pb.MatchAuthorityTicketRecord{}

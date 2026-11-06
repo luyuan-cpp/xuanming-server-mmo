@@ -26,9 +26,14 @@ var ErrWatermarkStale = errors.New(
 // 设计稿 §3.4:持有者维护 lastAck = 最近一次水位 Put 成功时的**单调时钟**读数 + 同刻墙钟。
 // Generate() 先判 `mono_now − lastAckMono > F` **或** `wall_now − lastAckWall > F`,
 // 任一触发即拒发。两个时钟都看是因为它们各挡一类故障:
-//   - 单调钟:墙钟被 NTP 回拨时仍准确;
-//   - 墙钟:VM 挂起 / 容器冻结时**单调钟停走**(CLOCK_MONOTONIC 不含挂起时间),
-//     解冻后单调钟看起来"才过了一瞬",只有墙钟知道真实流逝了多久。
+//   - 单调钟:墙钟被 NTP 回拨时仍准确;进程被 SIGSTOP / cgroup 冻结时它照走,也由它挡;
+//   - 墙钟:VM 挂起 / 宿主机休眠时**单调钟停走**(Linux 的 CLOCK_MONOTONIC 不含系统挂起时间),
+//     恢复后单调钟看起来"才过了一瞬",只有墙钟知道真实流逝了多久。
+//
+// **墙钟规则只认去掉单调读数的时刻。** Go 的 time.Now() 同时带墙钟与单调读数,而两个都带
+// 单调读数的 Time 做 Sub 只用单调读数 —— 不去掉的话墙钟规则会悄悄变成第二条单调规则,
+// VM 挂起后两条都不触发(第一轮数据审计 §4 第 20 条)。所以每个读入墙钟的入口(Ack /
+// SeedAck / Stale)都先 Round(0)(time 包给出的标准去单调写法),不依赖注入的时钟自己去掉。
 //
 // 一个 FenceClock 由 snowflakealloc.Handle 持有并 Ack,同时被 shared/snowflake.Node
 // 与 login 的 PlayerIDGen(bwmarrin 包装)共用,两种发号器执行同一条规则。
@@ -43,7 +48,7 @@ type FenceClock struct {
 	mu      sync.Mutex
 	acked   bool
 	ackMono time.Duration
-	ackWall time.Time
+	ackWall time.Time // 不带单调读数(见类型注释)
 }
 
 // NewFenceClock 用真实时钟构造。budget 即 F。
@@ -51,11 +56,11 @@ func NewFenceClock(budget time.Duration) *FenceClock {
 	origin := time.Now() // 带单调读数;time.Since 只看单调部分
 	return NewFenceClockWithClocks(budget,
 		func() time.Duration { return time.Since(origin) },
-		time.Now)
+		time.Now) // 带单调读数也无妨:墙钟一律经 wallReading 去掉
 }
 
 // NewFenceClockWithClocks 允许注入两个时钟,给测试用(生产路径请用 NewFenceClock)。
-// monoNow 返回的是"自某固定原点起的流逝量",wallNow 返回墙钟。
+// monoNow 返回的是"自某固定原点起的流逝量",wallNow 返回墙钟(带不带单调读数都行)。
 func NewFenceClockWithClocks(budget time.Duration, monoNow func() time.Duration, wallNow func() time.Time) *FenceClock {
 	if budget <= 0 {
 		panic("snowflake: FenceClock budget must be positive")
@@ -66,22 +71,27 @@ func NewFenceClockWithClocks(budget time.Duration, monoNow func() time.Duration,
 // Budget 返回 F。
 func (c *FenceClock) Budget() time.Duration { return c.budget }
 
+// wallReading 读一次墙钟并去掉单调读数,墙钟规则的两端都只经它取值(见类型注释)。
+func (c *FenceClock) wallReading() time.Time { return c.wallNow().Round(0) }
+
 // Ack 记录"此刻水位写成功"。只应在 **etcd 确认写入成功** 后调用。
 func (c *FenceClock) Ack() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.acked = true
 	c.ackMono = c.monoNow()
-	c.ackWall = c.wallNow()
+	c.ackWall = c.wallReading()
 }
 
 // SeedAck 用一个**过去的墙钟时刻**灌入上次 Ack(本地缓存启动路径:etcd 不通,
 // 但缓存说 lastAckWall 在 F 之内)。单调读数按"墙钟差"回推,于是两条规则都从
 // 那一刻起算,不会因为进程刚起、单调钟原点在现在而白送 F 的余量。
+// wall 若带单调读数(调用方用 time.Now() 推算)同样先去掉。
 func (c *FenceClock) SeedAck(wall time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	elapsed := c.wallNow().Sub(wall)
+	wall = wall.Round(0)
+	elapsed := c.wallReading().Sub(wall)
 	if elapsed < 0 {
 		elapsed = 0
 	}
@@ -99,7 +109,7 @@ func (c *FenceClock) Stale() (stale bool, age time.Duration) {
 		return true, 0
 	}
 	monoAge := c.monoNow() - c.ackMono
-	wallAge := c.wallNow().Sub(c.ackWall)
+	wallAge := c.wallReading().Sub(c.ackWall) // 两端都已去掉单调读数 ⇒ 按墙钟相减
 	age = monoAge
 	if wallAge > age {
 		age = wallAge
@@ -107,7 +117,7 @@ func (c *FenceClock) Stale() (stale bool, age time.Duration) {
 	return monoAge > c.budget || wallAge > c.budget, age
 }
 
-// LastAckWall 返回上次 Ack 的墙钟时刻(零值 = 从未 Ack)。供本地缓存落盘。
+// LastAckWall 返回上次 Ack 的墙钟时刻(零值 = 从未 Ack),不带单调读数。供本地缓存落盘。
 func (c *FenceClock) LastAckWall() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()

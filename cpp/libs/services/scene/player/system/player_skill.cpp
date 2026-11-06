@@ -35,19 +35,33 @@ namespace
 		return guid != nullptr ? guid->value : 0;
 	}
 
+	// 职业与等级是技能判定的两项持久输入,都由加载挂上(PlayerDatabaseMessageFieldsUnmarshal;组件访问规则)。
+	// 缺任一项是加载不变量被破坏:记 ERROR 并返回 false,调用方按 fail-closed 处理 —— 没有技能、没有被动、
+	// 不补发初始技能。不按 0 号职业 / 1 级补默认值继续算:0 号职业会让旧通用技能生效,1 级会让 1 级解锁的职业技能生效。
+	bool HasClassAndLevel(entt::entity player, const char *where)
+	{
+		const auto &registry = tlsEcs.actorRegistry;
+		if (registry.all_of<PlayerUint32Comp, LevelComp>(player))
+		{
+			return true;
+		}
+		LOG_ERROR << "[PlayerSkill] " << where << " skipped: persisted input missing (load invariant broken), player_id="
+				  << GuidForLog(player) << " has_class=" << registry.all_of<PlayerUint32Comp>(player)
+				  << " has_level=" << registry.all_of<LevelComp>(player);
+		return false;
+	}
+
+	// 下面两个取值函数的调用方都已确认组件在:HasClassAndLevel,或 BuildSkillBook / UpgradeSkill 开头的 all_of。
 	uint32_t PlayerClassId(entt::entity player)
 	{
-		const auto *identity = tlsEcs.actorRegistry.try_get<PlayerUint32Comp>(player);
-		return identity != nullptr ? identity->class_() : 0;
+		return tlsEcs.actorRegistry.get<PlayerUint32Comp>(player).class_();
 	}
 
 	// 玩法用的角色等级 = CappedLevel(存储等级):新号加载时 LevelComp 还是 0(InitPlayerFromAllData 随后才写 1)
 	// 按 1 级算;超过本版本 kMaxLevel 的存储等级(新版本写入 / 上限下调)按上限算,存储值原样携带不改写。
-	// 缺组件按 1 级算(既有行为)。
 	uint32_t PlayerLevel(entt::entity player)
 	{
-		const auto *level = tlsEcs.actorRegistry.try_get<LevelComp>(player);
-		return level != nullptr ? playerlevel::CappedLevel(level->level()) : 1;
+		return playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 	}
 
 	const SkillTable *FindSkillRow(uint32_t skillTableId)
@@ -188,6 +202,10 @@ namespace
 	// 不另加一条。已学(rank >= 1)的职业技能与已在列表里的旧通用技能都不碰。幂等。
 	uint32_t GrantInitialSkills(entt::entity player, PlayerSkillListComp &list)
 	{
+		if (!HasClassAndLevel(player, "Initial skill grant"))
+		{
+			return 0;
+		}
 		const auto classId = PlayerClassId(player);
 		const auto *classRow = ClassTableManager::Instance().FindByIdSilent(classId).first;
 		if (classRow == nullptr)
@@ -309,23 +327,39 @@ void PlayerSkillSystem::InitializeOnLoad(entt::entity player)
 
 bool PlayerSkillSystem::HasSkill(entt::entity player, const uint32_t skillTableId)
 {
-	if (skillTableId == 0 || !tlsEcs.actorRegistry.valid(player))
+	return CheckSkillUsable(player, skillTableId) == kSuccess;
+}
+
+uint32_t PlayerSkillSystem::CheckSkillUsable(entt::entity player, const uint32_t skillTableId)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
 	{
-		return false;
+		return kEntityIsNull;
 	}
-	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
-	const auto *row = FindSkillRow(skillTableId);
-	if (list == nullptr || row == nullptr)
+	const auto *row = FindSkillRow(skillTableId);  // 0 与本版本表里查不到的 id 都是 nullptr
+	if (row == nullptr)
 	{
-		return false;
+		return kInvalidTableId;
+	}
+	// 技能列表、职业、等级都是加载时挂上的持久数据:缺了是服务端故障,不能答成"没有这个技能"
+	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
+	if (list == nullptr)
+	{
+		LOG_ERROR << "[PlayerSkill] Skill usability check skipped: PlayerSkillListComp missing (load invariant broken), "
+				  << "player_id=" << GuidForLog(player);
+		return kServiceUnavailable;
+	}
+	if (!HasClassAndLevel(player, "Skill usability check"))
+	{
+		return kServiceUnavailable;
 	}
 	const auto *entry = FindEntry(*list, skillTableId);
-	if (entry == nullptr)
-	{
-		return false;
-	}
 	const auto classId = PlayerClassId(player);
-	return IsUsable(*row, *entry, classId, ClassHasClassSkills(classId), PlayerLevel(player));
+	if (entry == nullptr || !IsUsable(*row, *entry, classId, ClassHasClassSkills(classId), PlayerLevel(player)))
+	{
+		return kInvalidTableId;
+	}
+	return kSuccess;
 }
 
 uint32_t PlayerSkillSystem::EffectiveRank(entt::entity player, const uint32_t skillTableId)
@@ -336,7 +370,8 @@ uint32_t PlayerSkillSystem::EffectiveRank(entt::entity player, const uint32_t sk
 	}
 	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
 	const auto *row = FindSkillRow(skillTableId);
-	if (list == nullptr || row == nullptr || !IsClassSkill(*row) || row->class_id() != PlayerClassId(player))
+	if (list == nullptr || row == nullptr || !IsClassSkill(*row) || !HasClassAndLevel(player, "EffectiveRank") ||
+		row->class_id() != PlayerClassId(player))
 	{
 		return 0;
 	}
@@ -643,7 +678,7 @@ void PlayerSkillSystem::FillBattleSnapshot(entt::entity player, BattlePlayerSnap
 {
 	// 这里是第一道过滤,引擎 InitPlayers 还有一道(快照来自本进程也不能单点信任)。
 	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
-	if (list == nullptr)
+	if (list == nullptr || !HasClassAndLevel(player, "Battle snapshot skills"))
 	{
 		return;
 	}
@@ -672,7 +707,7 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 {
 	PassiveBonus bonus;
 	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
-	if (list == nullptr)
+	if (list == nullptr || !HasClassAndLevel(player, "Passive bonus"))
 	{
 		return bonus;
 	}

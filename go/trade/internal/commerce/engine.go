@@ -528,9 +528,25 @@ func transferLeg(w *tradepb.TradeCommerceWorkflow, role string, to uint64, from 
 }
 func done(l *tradepb.TradeCommerceLeg) bool    { return l != nil && l.Outcome != 0 }
 func applied(l *tradepb.TradeCommerceLeg) bool { return l != nil && l.Outcome == 2 }
+
+// currentLeg 是 role 这条腿现在算数的那一条:被人工补发取代的,沿 SupersededBy 找到最新的补发腿。
+// 被整单退回取代的(SupersededBy 不是腿名)就是原腿本身。
+func currentLeg(w *tradepb.TradeCommerceWorkflow, role string) *tradepb.TradeCommerceLeg {
+	l := leg(w, role)
+	for l != nil && l.SupersededBy != "" {
+		next := leg(w, l.SupersededBy)
+		if next == nil {
+			break
+		}
+		l = next
+	}
+	return l
+}
+
+// finalCredits 报告发放腿是否都有结局、是否都到账。被人工补发或退回取代的腿不算:它的资产由取代它的腿负责。
 func finalCredits(w *tradepb.TradeCommerceWorkflow) (bool, bool) {
 	for _, l := range w.Legs {
-		if l.Stream == 4 {
+		if l.Stream == 4 && l.SupersededBy == "" {
 			if !done(l) {
 				return false, false
 			}
@@ -541,6 +557,9 @@ func finalCredits(w *tradepb.TradeCommerceWorkflow) (bool, bool) {
 	}
 	return true, true
 }
+
+// maxNewLegsPerStep 是 advance 一步最多发出的新腿数(一步预取这么多 op_id)。人工处理一次加的腿也不能超过它。
+const maxNewLegsPerStep = 8
 
 // plan只决定下一批幂等腿；副作用仅为同一SQL事务写outbox，RPC在提交后由既有Loop发送。
 func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, now uint64) error {
@@ -731,11 +750,12 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 	}
 	if w.Stage == "deliver" || w.Stage == "return" {
 		ready, ok := finalCredits(w)
-		if ready {
+		if ready && !ok {
+			// 有发放腿没到账:转人工(补发或退回见 manual.go)。stage 不是 done,所以 op 行不标业务消费,证据留着。
+			markManual(r, w, manualReasonFinalCredit, "最终发放腿没有全部到账", now)
+		} else if ready {
 			w.Stage = "done"
-			if !ok {
-				r.Status = Manual
-			} else if r.Status == CancelPending {
+			if r.Status == CancelPending {
 				r.Status = Cancelled
 			} else {
 				r.Status = Settled
@@ -761,7 +781,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 	if err := e.Repo.Ops.EnsureSeqRows(ctx, e.now(), keys...); err != nil {
 		return err
 	}
-	ids := make([]uint64, 8)
+	ids := make([]uint64, maxNewLegsPerStep)
 	for i := range ids {
 		ids[i], err = e.OpIDs.Next(ctx)
 		if err != nil {
@@ -813,16 +833,11 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 				if err := e.Repo.Ops.ExpireCommerceEscrowDebitsTx(ctx, tx, r.CommerceId, e.now()); err != nil {
 					return err
 				}
-				r.Status = Manual
-				w.Stage = "manual"
+				markManual(r, w, manualReasonAppliedPartial, fmt.Sprintf("腿 %s op_id=%d 部分发放", l.Role, l.OpId), e.now())
 				return e.Repo.Save(ctx, tx, r, w, e.now())
 			}
-			l.Outcome = uint32(out.Status)
-			if len(out.Snapshot) > 0 {
-				l.Snapshot = &assetpb.AssetSnapshot{}
-				if err := proto.Unmarshal(out.Snapshot, l.Snapshot); err != nil {
-					return corrupt(fmt.Errorf("腿 %s op_id=%d 的托管快照损坏: %w", l.Role, l.OpId, err))
-				}
+			if err := recordLegOutcome(l, out); err != nil {
+				return corrupt(err)
 			}
 			// 已扣出的托管迟早要原样转给对方或退回(Transfer),在记下结局的这一刻就核对它转得动。
 			// 典型是人工终结为 APPLIED 的实例扣款:ResolveManually 不写 escrow_snapshot,自动路径缺原件则根本不终结

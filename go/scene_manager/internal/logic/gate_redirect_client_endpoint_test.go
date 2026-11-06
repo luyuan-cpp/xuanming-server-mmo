@@ -146,7 +146,7 @@ func TestSignRedirectToGate_TargetAddressIsSelectResult(t *testing.T) {
 	const playerID = uint64(9_000_001)
 	const targetZone = testRedirectZoneID
 
-	info, err := signRedirectToGate([]*commonpb.NodeInfo{busy, idle}, nil, true, testRedirectSecret, targetZone, playerID, now, firstDraws)
+	info, err := signRedirectToGate([]*commonpb.NodeInfo{busy, idle}, gateMarks{}, true, testRedirectSecret, targetZone, playerID, now, firstDraws)
 
 	require.NoError(t, err)
 	wantHost, wantPort, ok := clientendpoint.Select(
@@ -172,7 +172,7 @@ func TestSignRedirectToGate_FallbackAddressWhenNotRequired(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	n := testGateNode(1, 100, 0, testEndpoint("10.0.0.1", 18000), nil)
 
-	info, err := signRedirectToGate([]*commonpb.NodeInfo{n}, nil, false, testRedirectSecret, testRedirectZoneID, 1, now, firstDraws)
+	info, err := signRedirectToGate([]*commonpb.NodeInfo{n}, gateMarks{}, false, testRedirectSecret, testRedirectZoneID, 1, now, firstDraws)
 
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.1", info.GetTargetGateIp(), "podip 模式行为与改动前一致:下发 endpoint")
@@ -186,7 +186,7 @@ func TestSignRedirectToGate_NeverPicksStaleRecordOfCrashedGate(t *testing.T) {
 	stale := testGateNode(1, 100, 0, testEndpoint("10.0.0.1", 18000), testEndpoint("127.0.0.1", 30000))
 	fresh := testGateNode(3, 200, 40, testEndpoint("10.0.0.9", 18000), testEndpoint("127.0.0.1", 30000))
 
-	info, err := signRedirectToGate([]*commonpb.NodeInfo{stale, fresh}, nil, true, testRedirectSecret, testRedirectZoneID, 1, now, firstDraws)
+	info, err := signRedirectToGate([]*commonpb.NodeInfo{stale, fresh}, gateMarks{}, true, testRedirectSecret, testRedirectZoneID, 1, now, firstDraws)
 
 	require.NoError(t, err)
 	payload := &commonpb.GateTokenPayload{}
@@ -203,14 +203,14 @@ func TestSignRedirectToGate_FailsWhenNoGateHasRequiredClientEndpoint(t *testing.
 		testGateNode(2, 100, 0, testEndpoint("10.0.0.2", 18000), testEndpoint("127.0.0.1", 0)),
 	}
 
-	info, err := signRedirectToGate(nodes, nil, true, testRedirectSecret, testRedirectZoneID, 1, now, firstDraws)
+	info, err := signRedirectToGate(nodes, gateMarks{}, true, testRedirectSecret, testRedirectZoneID, 1, now, firstDraws)
 
 	require.Error(t, err, "require=true 且没有任何可下发地址时必须失败,不得回落 PodIP")
 	assert.Nil(t, info)
 }
 
 func TestSignRedirectToGate_FailsWithoutGates(t *testing.T) {
-	info, err := signRedirectToGate(nil, nil, false, testRedirectSecret, testRedirectZoneID, 1, time.Unix(1_800_000_000, 0), firstDraws)
+	info, err := signRedirectToGate(nil, gateMarks{}, false, testRedirectSecret, testRedirectZoneID, 1, time.Unix(1_800_000_000, 0), firstDraws)
 
 	require.Error(t, err)
 	assert.Nil(t, info)
@@ -238,10 +238,10 @@ const newerGateNodeInfoJSON = `{
 func TestDecodeGateNodes_NewerGateWithUnknownFieldReachesClientAddress(t *testing.T) {
 	// fetchGateNodes 读完 etcd 只调 decodeGateNodes 解析(D77):值里带本进程不认识的字段时,
 	// 必须照常解析并一路走到客户端地址,而不是整条丢弃、让跨 zone 重定向无 gate 可选。
-	nodes := decodeGateNodes([]*mvccpb.KeyValue{testGateKV(7, newerGateNodeInfoJSON)})
+	records := decodeGateNodes([]*mvccpb.KeyValue{testGateKV(7, newerGateNodeInfoJSON)})
 
-	require.Len(t, nodes, 1, "带未知字段的合法值必须保留")
-	targets := selectGateTargets(nodes, true)
+	require.Len(t, records, 1, "带未知字段的合法值必须保留")
+	targets := selectGateTargets(gateRecordNodes(records), true)
 	require.Len(t, targets, 1)
 	assert.Equal(t, uint32(7), targets[0].node.GetNodeId())
 	assert.Equal(t, "gate-0.z2.example.com", targets[0].host)
@@ -257,10 +257,22 @@ func TestDecodeGateNodes_SkipsMalformedAndEndpointlessValues(t *testing.T) {
 		testGateKV(9, `{"nodeId": 9, "zoneId": 2, "clientEndpoint": {"ip": "gate-2.z2.example.com", "port": 30102}}`),
 	}
 
-	nodes := decodeGateNodes(kvs)
+	records := decodeGateNodes(kvs)
 
-	require.Len(t, nodes, 1, "格式错误与缺 endpoint 的值逐条跳过,不连累同批的合法值")
-	assert.Equal(t, uint32(7), nodes[0].GetNodeId())
+	require.Len(t, records, 1, "格式错误与缺 endpoint 的值逐条跳过,不连累同批的合法值")
+	assert.Equal(t, uint32(7), records[0].node.GetNodeId())
+}
+
+// 每条记录带上 etcd 键与 ModRevision,停写判定按它们认记录、比版本(2026-11-05)。
+func TestDecodeGateNodes_CarriesKeyAndModRevision(t *testing.T) {
+	kv := testGateKV(7, newerGateNodeInfoJSON)
+	kv.ModRevision = 4242
+
+	records := decodeGateNodes([]*mvccpb.KeyValue{kv})
+
+	require.Len(t, records, 1)
+	assert.Equal(t, string(kv.Key), records[0].key)
+	assert.Equal(t, int64(4242), records[0].modRev)
 }
 
 // firstDraws 是固定的随机源:每次都抽第一个可选下标。两台候选时随机二选一恰好比较这两台,结果与取最小相同。
@@ -282,7 +294,13 @@ func seqDraws(t *testing.T, seq ...int) func(int) int {
 
 func redirectGateID(t *testing.T, nodes []*commonpb.NodeInfo, draining map[uint32]bool, intn func(int) int) uint32 {
 	t.Helper()
-	info, err := signRedirectToGate(nodes, draining, true, testRedirectSecret, testRedirectZoneID, 1,
+	return redirectGateIDMarked(t, nodes, gateMarks{draining: draining}, intn)
+}
+
+// redirectGateIDMarked 同 redirectGateID,标记由调用方给全(排空与停写)。
+func redirectGateIDMarked(t *testing.T, nodes []*commonpb.NodeInfo, marks gateMarks, intn func(int) int) uint32 {
+	t.Helper()
+	info, err := signRedirectToGate(nodes, marks, true, testRedirectSecret, testRedirectZoneID, 1,
 		time.Unix(1_800_000_000, 0), intn)
 	require.NoError(t, err)
 	payload := &commonpb.GateTokenPayload{}

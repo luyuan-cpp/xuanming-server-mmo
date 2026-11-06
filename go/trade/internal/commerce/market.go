@@ -91,7 +91,7 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 			return err
 		}
 		if found != nil {
-			stage, err := e.quarantineLockedTx(ctx, tx, other)
+			stage, err := e.quarantineLockedTx(ctx, tx, other, manualReasonBadCounterparty, found.Error())
 			if err != nil {
 				return err
 			}
@@ -220,8 +220,7 @@ func (e *Engine) marketBarrier(ctx context.Context, tx *sql.Tx, r *tradepb.Trade
 		return err
 	}
 	if bad > 0 {
-		r.Status = Manual
-		w.Stage = "manual"
+		markManual(r, w, manualReasonMarketFill, "名下有转人工的成交子单", e.now())
 		return nil
 	}
 	if w.Stage == "done" && pending > 0 {

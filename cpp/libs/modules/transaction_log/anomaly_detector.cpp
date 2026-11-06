@@ -231,6 +231,17 @@ uint32_t AnomalyDetector::GetCurrencyGainCount(entt::entity player, CurrencyType
     return count;
 }
 
+void AnomalyDetector::ClearPlayer(entt::entity player)
+{
+    // valid() 连版本号一起比较:陈旧句柄碰不到复用同一槽位的新玩家,空句柄同样直接返回。
+    if (!tlsEcs.actorRegistry.valid(player))
+    {
+        return;
+    }
+    // 没有窗口时 remove 返回 0,所以重复调用安全。下一笔收益经 WindowForWrite 重新建窗口。
+    tlsEcs.actorRegistry.remove<PlayerAnomalyWindowComp>(player);
+}
+
 void AnomalyDetector::ClearAll()
 {
     tlsEcs.actorRegistry.clear<PlayerAnomalyWindowComp>();

@@ -5155,6 +5155,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeHandshakeRequest final : public
   enum : int {
     kVersionFieldNumber = 1,
     kTokenFieldNumber = 2,
+    kExpectedPeerUuidFieldNumber = 4,
     kSelfNodeFieldNumber = 3,
   };
   // string version = 1;
@@ -5187,6 +5188,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeHandshakeRequest final : public
   ::std::string* PROTOBUF_NONNULL _internal_mutable_token();
 
   public:
+  // string expected_peer_uuid = 4;
+  void clear_expected_peer_uuid() ;
+  [[nodiscard]] const ::std::string& expected_peer_uuid() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_expected_peer_uuid(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_expected_peer_uuid();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_expected_peer_uuid();
+  void set_allocated_expected_peer_uuid(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_expected_peer_uuid() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_expected_peer_uuid(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_expected_peer_uuid();
+
+  public:
   // .NodeInfo self_node = 3;
   [[nodiscard]] bool has_self_node()
       const;
@@ -5207,8 +5223,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeHandshakeRequest final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
-                          1, 41,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 59,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5238,6 +5254,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeHandshakeRequest final : public
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr version_;
     ::google::protobuf::internal::ArenaStringPtr token_;
+    ::google::protobuf::internal::ArenaStringPtr expected_peer_uuid_;
     ::NodeInfo* PROTOBUF_NULLABLE self_node_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -7732,7 +7749,7 @@ inline void NodeHandshakeRequest::set_allocated_token(::std::string* PROTOBUF_NU
 
 // .NodeInfo self_node = 3;
 inline bool NodeHandshakeRequest::has_self_node() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.self_node_ != nullptr);
   return value;
 }
@@ -7753,16 +7770,16 @@ inline void NodeHandshakeRequest::unsafe_arena_set_allocated_self_node(
   }
   _impl_.self_node_ = reinterpret_cast<::NodeInfo*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:NodeHandshakeRequest.self_node)
 }
 inline ::NodeInfo* PROTOBUF_NULLABLE NodeHandshakeRequest::release_self_node() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::NodeInfo* released = _impl_.self_node_;
   _impl_.self_node_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -7782,7 +7799,7 @@ inline ::NodeInfo* PROTOBUF_NULLABLE NodeHandshakeRequest::unsafe_arena_release_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:NodeHandshakeRequest.self_node)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::NodeInfo* temp = _impl_.self_node_;
   _impl_.self_node_ = nullptr;
   return temp;
@@ -7797,7 +7814,7 @@ inline ::NodeInfo* PROTOBUF_NONNULL NodeHandshakeRequest::_internal_mutable_self
 }
 inline ::NodeInfo* PROTOBUF_NONNULL NodeHandshakeRequest::mutable_self_node()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::NodeInfo* _msg = _internal_mutable_self_node();
   // @@protoc_insertion_point(field_mutable:NodeHandshakeRequest.self_node)
   return _msg;
@@ -7814,13 +7831,77 @@ inline void NodeHandshakeRequest::set_allocated_self_node(::NodeInfo* PROTOBUF_N
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.self_node_ = reinterpret_cast<::NodeInfo*>(value);
   // @@protoc_insertion_point(field_set_allocated:NodeHandshakeRequest.self_node)
+}
+
+// string expected_peer_uuid = 4;
+inline void NodeHandshakeRequest::clear_expected_peer_uuid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_peer_uuid_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& NodeHandshakeRequest::expected_peer_uuid() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:NodeHandshakeRequest.expected_peer_uuid)
+  return _internal_expected_peer_uuid();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void NodeHandshakeRequest::set_expected_peer_uuid(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.expected_peer_uuid_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:NodeHandshakeRequest.expected_peer_uuid)
+}
+inline ::std::string* PROTOBUF_NONNULL NodeHandshakeRequest::mutable_expected_peer_uuid()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_expected_peer_uuid();
+  // @@protoc_insertion_point(field_mutable:NodeHandshakeRequest.expected_peer_uuid)
+  return _s;
+}
+inline const ::std::string& NodeHandshakeRequest::_internal_expected_peer_uuid() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_peer_uuid_.Get();
+}
+inline void NodeHandshakeRequest::_internal_set_expected_peer_uuid(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_peer_uuid_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL NodeHandshakeRequest::_internal_mutable_expected_peer_uuid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.expected_peer_uuid_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE NodeHandshakeRequest::release_expected_peer_uuid() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:NodeHandshakeRequest.expected_peer_uuid)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.expected_peer_uuid_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.expected_peer_uuid_.Set("", GetArena());
+  }
+  return released;
+}
+inline void NodeHandshakeRequest::set_allocated_expected_peer_uuid(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.expected_peer_uuid_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.expected_peer_uuid_.IsDefault()) {
+    _impl_.expected_peer_uuid_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:NodeHandshakeRequest.expected_peer_uuid)
 }
 
 // -------------------------------------------------------------------

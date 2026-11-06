@@ -254,21 +254,21 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2frpc_5fmessage_2epro
     "\n\016GameRpcMessage\022\036\n\004type\030\001 \001(\0162\020.GameMes"
     "sageType\022\017\n\007request\030\002 \001(\014\022\020\n\010response\030\003 "
     "\001(\014\022\035\n\005error\030\004 \001(\0162\016.GameErrorCode\022\022\n\nme"
-    "ssage_id\030\005 \001(\r\022\n\n\002id\030\006 \001(\004*g\n\017GameMessag"
+    "ssage_id\030\005 \001(\r\022\n\n\002id\030\006 \001(\004*v\n\017GameMessag"
     "eType\022\013\n\007REQUEST\020\000\022\014\n\010RESPONSE\020\001\022\r\n\tRPC_"
-    "ERROR\020\004\"\004\010\002\020\002\"\004\010\003\020\003*\022RPC_CLIENT_REQUEST*"
-    "\nNODE_ROUTE*\260\001\n\rGameErrorCode\022\020\n\014RPC_NO_"
-    "ERROR\020\000\022\017\n\013WRONG_PROTO\020\001\022\016\n\nNO_SERVICE\020\002"
-    "\022\r\n\tNO_METHOD\020\003\022\023\n\017INVALID_REQUEST\020\004\022\024\n\020"
-    "INVALID_RESPONSE\020\005\022\013\n\007TIMEOUT\020\006\022\022\n\016HANDL"
-    "ER_FAILED\020\007\022\021\n\rREPLY_DROPPED\020\010B\rZ\013common"
-    "/baseb\006proto3"
+    "ERROR\020\004\022\r\n\tHEARTBEAT\020\005\"\004\010\002\020\002\"\004\010\003\020\003*\022RPC_"
+    "CLIENT_REQUEST*\nNODE_ROUTE*\260\001\n\rGameError"
+    "Code\022\020\n\014RPC_NO_ERROR\020\000\022\017\n\013WRONG_PROTO\020\001\022"
+    "\016\n\nNO_SERVICE\020\002\022\r\n\tNO_METHOD\020\003\022\023\n\017INVALI"
+    "D_REQUEST\020\004\022\024\n\020INVALID_RESPONSE\020\005\022\013\n\007TIM"
+    "EOUT\020\006\022\022\n\016HANDLER_FAILED\020\007\022\021\n\rREPLY_DROP"
+    "PED\020\010B\rZ\013common/baseb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2frpc_5fmessage_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2frpc_5fmessage_2eproto = {
     false,
     false,
-    493,
+    508,
     descriptor_table_protodef_proto_2fcommon_2fbase_2frpc_5fmessage_2eproto,
     "proto/common/base/rpc_message.proto",
     &descriptor_table_proto_2fcommon_2fbase_2frpc_5fmessage_2eproto_once,
@@ -287,7 +287,7 @@ GameMessageType_descriptor() {
   return file_level_enum_descriptors_proto_2fcommon_2fbase_2frpc_5fmessage_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t GameMessageType_internal_data_[] = {
-    131072u, 32u, 4u, };
+    131072u, 32u, 12u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GameErrorCode_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fcommon_2fbase_2frpc_5fmessage_2eproto);

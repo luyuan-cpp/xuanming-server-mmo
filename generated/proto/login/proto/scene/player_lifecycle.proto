@@ -12,8 +12,19 @@ message GateLoginNotifyRequest
   uint32 enter_gs_type = 1;
 }
 
+// gate 代发 ExitGame 的原因(docs/design/player-connection-lost-hold.md)。服务端内部字段,客户端不可见。
+// 只有 DISCONNECTED 让 scene 把角色留在原地等重连;其余一律立即退出(与加字段之前相同)。
+enum ExitGameReason
+{
+  EXIT_GAME_REASON_UNSPECIFIED = 0;  // 未填(旧版 gate):立即退出
+  EXIT_GAME_REASON_LOGOUT = 1;       // 客户端主动 LeaveGame:立即退出
+  EXIT_GAME_REASON_DISCONNECTED = 2; // 客户端连接断开、没有登出(断网、gate 重启、顶号踢旧连接):保留到重连窗口结束
+  EXIT_GAME_REASON_LEASE_EXPIRED = 3; // 断线租约已到期,gate 关掉残留的假死连接:立即退出
+}
+
 message GameNodeExitGameRequest
 {
+  ExitGameReason reason = 1;
 }
 
 service ScenePlayer

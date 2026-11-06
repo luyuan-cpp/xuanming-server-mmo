@@ -393,26 +393,17 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 // 现在改成 fail-closed:带了身份声明就必须带 HMAC 签名,验不过直接
 // Unauthenticated;不带声明的调用(Java Gateway 新链路)行为不变。
 //
-// 强制档由**运行模式**决定,配置关不掉(见 config.EnforceInternalAuth):
-// dev/test 放行并打 WARN,给上游 cpp gate / Java gateway 留出接签名的窗口;
-// 其余模式一律强制。
+// 任何运行模式都强制:gate 已对全部会话身份签名,dev/test 不再保留「告警放行」档,
+// 与在线域的 callerauth.GateInterceptor 一致。
 func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
-	enforce := config.EnforceInternalAuth(&cfg)
 	var secrets callerauth.SecretVerifier
 	if config.ActiveSecrets != nil {
 		secrets = config.ActiveSecrets.InternalAuth
 	}
 
-	if enforce {
-		logx.Info("Internal caller signature verification: enforced mode (all identity claims failing verification are rejected)")
-	} else {
-		logx.Errorf("SECURITY WARNING: Internal caller signature verification in relaxed mode (Mode=%s), "+
-			"identity claims failing verification are logged but allowed; production mode cannot enter this mode", cfg.Mode)
-	}
-
 	return loginauth.UnaryServerInterceptor(callerauth.NewVerifier(callerauth.Options{
 		Secrets:         secrets,
-		Enforce:         enforce,
+		Enforce:         true,
 		MaxClockSkew:    cfg.InternalAuth.MaxClockSkew,
 		MaxNonceEntries: cfg.InternalAuth.MaxNonceEntries,
 		AllowedCallers:  cfg.InternalAuth.AllowedCallers,

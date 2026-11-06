@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"proto/scene_manager"
+	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -78,8 +79,22 @@ func sceneMemberKeys(sceneID uint64, zoneID uint32, nodeID string) []string {
 	return keys
 }
 
-// addSceneMember 把玩家加进场景与节点的成员集合。幂等。
+// skipForeignZoneMembership:zoneID 不是本进程的 zone(或未知)时跳过成员集合的写入(docs/design/control-plane-zone-scoping-20261105.md
+// §4.3)。成员集合是派生索引,权威是玩家域的 location;别的 zone 的陈旧成员由那个 zone 的成员对账在宽限后摘掉
+// (scene_member_reconcile.go),本进程没摘过的成员回滚时也不需要加回。同组的键在同一个实例上读得到也不写:行为不随组的划分变。
+func skipForeignZoneMembership(svcCtx *svc.ServiceContext, zoneID uint32, site string) bool {
+	if ownsControlZone(svcCtx, zoneID) {
+		return false
+	}
+	metrics.ObserveForeignZoneSkip(site)
+	return true
+}
+
+// addSceneMember 把玩家加进场景与节点的成员集合。幂等。只写本 zone(skipForeignZoneMembership)。
 func addSceneMember(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zoneID uint32, nodeID string) error {
+	if skipForeignZoneMembership(svcCtx, zoneID, metrics.ForeignZoneSkipSiteMemberAdd) {
+		return nil
+	}
 	keys := sceneMemberKeys(sceneID, zoneID, nodeID)
 	if len(keys) == 0 {
 		return nil
@@ -92,7 +107,11 @@ func addSceneMember(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zoneID
 // 读 location 走玩家域句柄(GetPlayerLocation),写成员走控制域句柄。
 //
 // 返回错误时成员身份处于未知状态(SREM 可能已生效)。需要收敛的调用方把错误交给上游重试,见 LeaveScene。
+// 只写本 zone(skipForeignZoneMembership)。
 func removeSceneMember(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zoneID uint32, nodeID string) error {
+	if skipForeignZoneMembership(svcCtx, zoneID, metrics.ForeignZoneSkipSiteMemberRemove) {
+		return nil
+	}
 	loc, err := GetPlayerLocation(context.Background(), svcCtx, playerID)
 	if err != nil {
 		return err
@@ -138,12 +157,16 @@ func locationOverlap(loc *scene_manager.PlayerLocation, sceneID uint64, zoneID u
 
 // removeScenePlayer 按场景此刻的属主摘成员,给手里只有场景号的路径用(离场、撤销)。zoneID 为 0 时按 scene:{id}:zone 补。
 // 场景被改派过时玩家当初进的是旧节点的集合,而改派只发生在旧节点已死之后,它的集合由死节点收尾删掉。
+// scene:{id}:zone 只在本组的控制域实例里查:读不到(场景在别的组,或已销毁)或不是本 zone,就不动(§4.3)。
 func removeScenePlayer(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zoneID uint32) error {
 	if sceneID == 0 {
 		return nil
 	}
 	if zoneID == 0 {
 		zoneID = GetSceneZone(svcCtx, sceneID)
+	}
+	if skipForeignZoneMembership(svcCtx, zoneID, metrics.ForeignZoneSkipSiteScenePlayer) {
+		return nil
 	}
 	return removeSceneMember(svcCtx, playerID, sceneID, zoneID, lookupSceneNode(svcCtx, sceneID))
 }

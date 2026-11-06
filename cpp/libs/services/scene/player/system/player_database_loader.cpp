@@ -26,9 +26,13 @@
 // 玩家收件箱消费端账本(player-inbox-service.md §4.4):与资产账本同一条不变量(IB-3 ≡ I3),
 // 处置效果(CurrencyComp.blocked_types / debts)与账本必须同记录、同一次落盘。
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+// 单玩家物品获取封禁(player-inbox-service.md §2.2):GM 处置的效果状态,与收件箱账本同一次存盘提交(IB-3)。
+#include "proto/common/component/player_item_gain_block_comp.pb.h"
 // 神秘商人的个人限购记录(docs/design/mystery-merchant.md §5.3):与上面几本账本同一条不变量 I3,
 // 必须与 currency / bag_component 同记录同一次落盘。
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
+// 本人近期战斗结果(docs/design/battle-result-recovery.md):结算应用同一帧写入,随同一次存盘提交。
+#include "proto/common/component/player_battle_result_comp.pb.h"
 #include "asset_op_ledger.h"
 #include "asset_op_system.h"
 #include "player/comp/player_inbox_runtime_comp.h" // PlayerInboxLedgerInvalidComp
@@ -135,9 +139,10 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 都会带着超上限的等级进来;压回会随下一次存盘把等级永久降下来,升回新版本也恢复不了。
 	// 总点数 / 面板 / 战斗快照 / 怪物参考等级等玩法一律按 playerlevel::CappedLevel 生效(player_level_rules.h),
 	// 这里只告警、不改组件。
-	if (levelComp.level() > playerlevel::kMaxLevel) {
+	const uint32_t storedLevel = levelComp.level();  // 直读存储等级:加载器(超上限只告警)
+	if (storedLevel > playerlevel::kMaxLevel) {
 		LOG_WARN << "[PlayerInit] metric=level_above_cap player_id=" << message.player_id()
-				 << " stored_level=" << levelComp.level() << " cap=" << playerlevel::kMaxLevel
+				 << " stored_level=" << storedLevel << " cap=" << playerlevel::kMaxLevel
 				 << "; stored level carried as-is, gameplay uses the cap";
 	}
 	tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player, message.attribute_component());
@@ -169,10 +174,18 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 				  << " reason=" << err << "; ledger corrupted, inbox consumption disabled for this player";
 		tlsEcs.actorRegistry.emplace_or_replace<PlayerInboxLedgerInvalidComp>(player);
 	}
+	// 单玩家物品获取封禁(字段 24)跟着同一条 player_database 记录回来;旧存档没有这个字段 = 空表 = 没有封禁,合法。
+	// 唯一创建点:无条件挂上,原样携带、不在加载时整理(写入侧 GainBlockService 保持升序无重复,读取侧按值查找)。
+	// 存盘缺它整份拒存;各物品获得入口经 GainBlockService::IsItemGainBlocked 只读它,不补建。
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player, message.item_gain_block());
 	// 神秘商人限购记录跟着同一条 player_database 行回来。不做校验、不阻断登录:记录只跨一轮,
 	// 轮次号对不上时读写两侧都按「空」处理(mystery_merchant_rules.h),坏数据最多影响当前这一轮。
 	// 必须在这里 emplace:购买路径用 try_get 且缺组件即拒绝,不会现造一份空记录来放行。
 	tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(player, message.mystery_merchant());
+	// 本人近期战斗结果(字段 23)跟着同一条 player_database 记录回来;旧存档没有这个字段 = 空列表,合法。
+	// 原样挂上、不在加载时整理:列表规则(去重、序号、条数上限)在下一次写入时由 battle_result::Record 维持,
+	// 加载就改写会让未知字段与存放顺序在一次往返里变样。唯一创建点,结算与查询路径缺它一律 fail-closed。
+	tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player, message.battle_results());
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -219,9 +232,13 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	const auto* assetOpLedger = FindPersistedComp<PlayerAssetOpLedgerComp>(player, "PlayerAssetOpLedgerComp", missing);
 	// 收件箱账本缺失同样整份拒存:补一本空账本落盘,会让已执行过的挂欠款在下次投递时被判成"没见过"再挂一次。
 	const auto* inboxLedger = FindPersistedComp<PlayerInboxLedgerComp>(player, "PlayerInboxLedgerComp", missing);
+	// 物品获取封禁缺失同样整份拒存:补一份空表落盘,等于把 GM 下的单人物品封禁全部解除,而账本说它们已执行。
+	const auto* itemGainBlock = FindPersistedComp<PlayerItemGainBlockComp>(player, "PlayerItemGainBlockComp", missing);
 	// 限购记录缺失同样整份拒存:补一份空记录落盘,等于把这一轮已经买过的名额清零。
 	const auto* mysteryMerchant =
 		FindPersistedComp<PlayerMysteryMerchantComp>(player, "PlayerMysteryMerchantComp", missing);
+	// 近期战斗结果缺失同样整份拒存:补一份空列表落盘,等于把玩家还没看过的结算结果抹掉。
+	const auto* battleResults = FindPersistedComp<PlayerBattleResultComp>(player, "PlayerBattleResultComp", missing);
 	const auto* currency = FindPersistedComp<CurrencyComp>(player, "CurrencyComp", missing);
 	const auto* currencyRuntime = FindPersistedComp<PlayerCurrencyComp>(player, "PlayerCurrencyComp", missing);
 	// 顶层未知字段缺了载体同样整份拒存:补空等于把新版本写进来的整列抹掉(混版本设计 §4.2 L1)。
@@ -265,8 +282,13 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	// 同一次 Marshal。位置同样必须在下面那对 currency CopyFrom / SaveToProto **之外**:那一对的先后决定
 	// 欠款会不会被抹掉,任何新写入都不夹进它们中间。
 	message.mutable_inbox_ledger()->CopyFrom(*inboxLedger);
+	// 单玩家物品获取封禁(字段 24):GM 处置的效果,与上一行的执行账本同一次 Marshal、同一次提交(IB-3)。
+	// 位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
+	message.mutable_item_gain_block()->CopyFrom(*itemGainBlock);
 	// 神秘商人限购记录:与上面几本账本同理由(不变量 I3),位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	message.mutable_mystery_merchant()->CopyFrom(*mysteryMerchant);
+	// 近期战斗结果:与结算效果同一次 Marshal、同一次提交;位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
+	message.mutable_battle_results()->CopyFrom(*battleResults);
 	message.mutable_currency()->CopyFrom(*currency);
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

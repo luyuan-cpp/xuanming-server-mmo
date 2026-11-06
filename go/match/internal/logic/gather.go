@@ -202,6 +202,14 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
 	capability, cerr := queryOutcomeCapability(capctx, battleNode, createReq)
 	capcancel()
+	if errors.Is(cerr, errBattleNotAllocatable) {
+		// 节点此刻不接新房(启动未完成、排空或停机):原件还没落库,本局干净失败、全员保留原入队时刻回队;
+		// 本副本熔断这个实例,后续成局在同机房换节点。落库之后才被拒的话,就只能等唯一 SQL 终局。
+		if svcCtx.Placement != nil {
+			svcCtx.Placement.MarkUnavailable(f.TargetInstanceId)
+		}
+		return fail("not_allocatable", 0)
+	}
 	if cerr != nil {
 		return fail("outcome_capability_missing", 0)
 	}
@@ -225,7 +233,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	if workErr != nil {
 		return false
 	}
-	err = createBattle(battleNode, createReq)
+	rooms, err := createBattle(battleNode, createReq)
 	if err != nil {
 		if errors.Is(err, errBattleNotAllocatable) && svcCtx.Placement != nil {
 			// 节点级准入拒绝:本副本短时熔断这个实例,后续成局在同机房换节点。
@@ -242,6 +250,10 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		_ = svcCtx.Authority.Unknown(ctx, f)
 		cancel()
 		return false
+	}
+	// 负载随应答捎回(R6):记下这台节点此刻的房间数,本副本后续在同机房选点时据此比较负载。
+	if svcCtx.Placement != nil {
+		svcCtx.Placement.Observe(f.TargetInstanceId, rooms)
 	}
 
 	// 成功收尾:提交 state 4,后续状态由 battle 节点的 BattleStartS2C / 结算链路接管。
@@ -467,28 +479,29 @@ func cancelBattlePrepareRPC(endpoint string, req *scenepb.CancelBattlePrepareReq
 	return err
 }
 
-// createBattle 调 battle 节点建房。返回的错误分三类:
+// createBattle 调 battle 节点建房。成功时返回节点随应答捎回的房间数(CreateBattleResponse.room_count,
+// 0 = 节点没上报),调用方交给 Placement.Observe 比较负载(R6)。返回的错误分三类:
 //   - 包装了 errBattleNotAllocatable(errors.Is 可判):节点级准入拒绝,battle 侧无副作用;
 //   - 其余 RPC 失败:请求可能已送达、房间可能已建成,结果未知;
 //   - battle 业务拒绝(tip≠0)或回执不符 / 明确未采用协议 1(outcomeAdoptionError)。
-func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) error {
+func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) (uint32, error) {
 	resp, err := createBattleFn(node.Endpoint, req)
 	if err != nil {
 		if isBattleNotAllocatable(err) {
-			return fmt.Errorf("battle 节点拒绝分配 node=%d: %w", node.NodeId, errBattleNotAllocatable)
+			return 0, fmt.Errorf("battle 节点拒绝分配 node=%d: %w", node.NodeId, errBattleNotAllocatable)
 		}
-		return fmt.Errorf("CreateBattle RPC 失败: %w", err)
+		return 0, fmt.Errorf("CreateBattle RPC 失败: %w", err)
 	}
 	if resp.GetErrorMessage().GetId() != 0 {
-		return fmt.Errorf("battle 节点拒绝建房 tip_id=%d", resp.GetErrorMessage().GetId())
+		return 0, fmt.Errorf("battle 节点拒绝建房 tip_id=%d", resp.GetErrorMessage().GetId())
 	}
 	if resp.GetBattleId() != req.BattleId || resp.GetTargetInstanceId() != req.TargetInstanceId {
-		return errors.New("Battle创建回执原局或原UUID不符")
+		return 0, errors.New("Battle创建回执原局或原UUID不符")
 	}
 	if resp.GetAdoptedOutcomeProtocolVersion() != 1 {
-		return &outcomeAdoptionError{instance: resp.TargetInstanceId, version: resp.AdoptedOutcomeProtocolVersion}
+		return 0, &outcomeAdoptionError{instance: resp.TargetInstanceId, version: resp.AdoptedOutcomeProtocolVersion}
 	}
-	return nil
+	return resp.GetRoomCount(), nil
 }
 
 type outcomeAdoptionError struct {
@@ -511,6 +524,9 @@ func queryOutcomeCapability(ctx context.Context, node discovery.NodeEntry, req *
 	}
 	if resp.GetTargetInstanceId() != req.TargetInstanceId || resp.GetSupportedOutcomeProtocolVersion() != 1 || resp.GetState() != battlepb.BattleCreationState_BATTLE_CREATION_ABSENT {
 		return nil, errors.New("原节点能力未知或原创建并非ABSENT，禁止发Create")
+	}
+	if resp.GetRejectsNewBattles() {
+		return nil, fmt.Errorf("battle 节点此刻不接新房 node=%d: %w", node.NodeId, errBattleNotAllocatable)
 	}
 	return resp, nil
 }

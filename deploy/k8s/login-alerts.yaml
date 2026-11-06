@@ -1,0 +1,92 @@
+# Prometheus alert rules for login 挑 gate(2026-11-05 起;代码与规则都未编译、未实测)。
+#
+# 来源:docs/design/gate-load-balancing-design.md「满载与停写的 gate」。login 的三处挑 gate(AssignGate 快路径、排队 dispatcher、
+# 排队取走时的复核)挑之前都剔除停写与满载的 gate;一个 zone 的候选全部不合格时回落全集照常挑,不拒绝,只计 fallback。
+# 指标定义(名字与取值以代码为准,本文件只引用;改了要同改,tools/scripts/tests/gate_pick_alerts_contract.tests.ps1 从源码核对):
+#   - login(go/login/internal/logic/pkg/loginqueue/gate_eligibility.go,go-zero metric,Namespace "login"、Subsystem "gate_pick"):
+#       login_gate_pick_fallback_total{reason=stale|full|mixed}
+#         reason 取 go/shared/gatepick/eligibility.go 的 Reason* 常量:stale = 候选全部停写;full = 全部到水位;mixed = 两种都有
+#       login_gate_pick_excluded_total{reason=stale|full}   每次挑每台被剔除的 gate 计一次;剔除说明过滤在起作用,本身不告警
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
+#
+# Scrape prerequisites:
+#   - login ConfigMap 的 Prometheus 段(Port 9101)、Pod 模板的 prometheus.io/* 注解与容器 metrics 端口三处一致
+#     (k8s_deploy.ps1 恒写,tools/scripts/tests/login_metrics_contract.tests.ps1 钉住);集群要有按注解抓取的 job,
+#     或指向 9101 的 PodMonitor。前提不满足时这些告警是哑的(同 scene-manager-alerts.yaml)。
+#   - 规则按 namespace 聚合(一个 zone 一个 namespace),用的是抓取时附加的 namespace 标签(PodMonitor 默认附加;
+#     按注解抓取的 job 要在 relabel 里把 __meta_kubernetes_namespace 写成 namespace,标签名不同就同改本文件)。
+#
+# 口径:
+#   - fallback 健康时恒 0,任一次即告警,不设 for(for: 0m)。go-zero 的计数在第一次 Inc 时才建出序列,没有预置 0 值,
+#     increase() 看不到序列从「不存在」到 1 的第一次跳变,所以每条规则带第二支 `unless … offset 10m`(新序列),
+#     写法同 player-placement-alerts.yaml 的 DbPlacementStoreRejected;第二支带 `> 0`,不会因新 Pod 误报。
+#   - stale / mixed 是 critical:本 zone 能接人的 gate 一台都不剩,新登录多半连不上 gate(gate 全卡住),或者 gate 全都写不进
+#     etcd(etcd 写满 / 不可写);两种都要马上有人看。full 是 warning:区级准入放进来的人比 gate 上限之和还多,是容量配置问题,
+#     gate 按 GateMaxConnections 拒连兜底。
+#   - login 自己的视图出问题不会造成「全部停写」:镜像跟不上 etcd 时读路径回落直读,直读不判停写(node_cache.go 的 cacheStaleAfter)。
+#   - 没有实测基线(代码未压测),首轮演练后回头校准。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: login-alerts
+  labels:
+    app: login
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: login.gate-pick
+      interval: 30s
+      rules:
+        # 本 zone 的 gate 全部停写(或停写与满载各占一部分):挑 gate 回落到全部候选,分出去的票大概率落在卡住的 gate 上。
+        - alert: LoginGatePickFallbackStale
+          expr: |
+            sum by (namespace, reason) (increase(login_gate_pick_fallback_total{reason=~"stale|mixed"}[10m])) > 0
+            or
+            sum by (namespace, reason) (
+              login_gate_pick_fallback_total{reason=~"stale|mixed"}
+              unless login_gate_pick_fallback_total{reason=~"stale|mixed"} offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 login 挑 gate 时候选全部不合格({{ $labels.reason }}),已回落到全部 gate"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次挑 gate(AssignGate 快路径每请求一次、排队 dispatcher 每拍一次、排队取走复核每次一次)
+              发现本 zone 的 gate 没有一台能接新玩家:reason=stale 是全部停写(注册记录三个上报周期 30s 没被重写),reason=mixed 是
+              停写的与人数到自报上限 90% 的各占一部分。回落之后照常签票,票多半落在卡住的 gate 上,玩家连不上。
+              先分辨是 gate 卡住还是 gate 写不进 etcd:看这个 zone 的 gate Pod 是否还在处理连接(gate 日志、存活探针、CPU),
+              再查 etcd(etcdctl endpoint status 的 DB 大小与 alarm list 里的 NOSPACE、写延迟)。login 日志搜 "[GateSelect] every gate candidate is stale or full",
+              停写的 node_id 在 "[GateSelect] gates left out of the pick" 行里;login_gate_pick_excluded_total{reason="stale"} 给出被剔除的台次。
+            runbook_url: docs/design/gate-load-balancing-design.md
+
+        # 本 zone 的 gate 全部到水位:区级准入(FreeSlots)放进来的人比 gate 上限之和还多,多半是 ZoneCapacity 配大了。
+        - alert: LoginGatePickFallbackFull
+          expr: |
+            sum by (namespace) (increase(login_gate_pick_fallback_total{reason="full"}[10m])) > 0
+            or
+            sum by (namespace) (
+              login_gate_pick_fallback_total{reason="full"}
+              unless login_gate_pick_fallback_total{reason="full"} offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 gate 全部到了自报连接上限的 90%,login 挑 gate 已回落到全部 gate"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次挑 gate 时本 zone 每台 gate 的人数都到了自报 max_connections 的 90%。
+              拦人的地方本该是区级准入:走到这里说明 ZoneCapacity(Queue.ZoneCapacityOverride)比本 zone 全部 gate 的
+              GateMaxConnections 之和还大,或者 gate 台数比预期少(看 gate 副本数与 login_gate_pick_excluded_total{reason="full"})。
+              回落之后照常签票,gate 满了按 GateMaxConnections 拒连,玩家要重试。处置:把 ZoneCapacity 调到 gate 上限之和的 90% 以下,
+              或扩 gate 副本。
+            runbook_url: docs/design/gate-load-balancing-design.md

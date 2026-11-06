@@ -455,6 +455,96 @@ Test-NumericFloor -Id 'debug.cpp.loglevel' -RelativePath 'bin/etc/base_deploy_co
 
 <#
 .SYNOPSIS
+    要发布的持久 schema 台账必须已封存到最大世代,且每条封存都成立(混版本持久字段保护设计 §3.1「封存」,
+    审计 r2-ps#1 / r2-ps#10)。
+
+.DESCRIPTION
+    台账 proto/persist_schema_gen.txt 的封存行 sealed=<世代>:<行数>:<sha256> 由
+    dev_tools.ps1 -Command persist-schema-seal 追加。不变量是「同一世代号,所有二进制认识的字段集合相同」:
+    最大世代没封存,下一个分支就可能往这个已经上线的世代里追加字段,只比世代号的 go/db C1 / C1b / C2、
+    scene C3、login C4 都拦不住,旧写方会静默丢掉新列。
+
+    分两步:
+      1. 按文本比世代号:最后一条封存的世代必须等于最大世代(没封存就不用往下核)。
+      2. 调生成器的只核不写模式 go run ./cmd --persist-schema-verify,与生成同一份摘要口径(persistschema.SealDigest),
+         确认每条封存都成立。只比世代号会放过「合并带进同世代的行」:那时封存已被违反,最大世代却仍等于
+         最后一条封存的世代(2026-11-05 评审)。摘要不在这里另写一份,避免两种语言的口径漂移。
+    档位与本脚本其余检查一致:只有 -ReleaseProfile dev 降为 WARN。内部测试版本不封存,跑预检用 dev 档。
+    找不到 go、生成器失败都按档位判,不跳过。
+    读的是当前工作树的台账,与本脚本其余配置检查同口径;制品与工作树不是同一提交时 release.buildinfo.commit 会告警。
+#>
+function Test-PersistSchemaLedgerSealed {
+    $ledgerPath = Join-Path $RepoRoot 'proto/persist_schema_gen.txt'
+    $severity = if ($ReleaseProfile -eq 'dev') { 'WARN' } else { 'FAIL' }
+    if (-not [System.IO.File]::Exists($ledgerPath)) {
+        Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "台账不存在,按 fail-safe 判 FAIL。"
+        return
+    }
+    $maxGen = 0
+    $lastSealGen = 0
+    foreach ($line in [System.IO.File]::ReadAllLines($ledgerPath)) {
+        $text = $line.Trim()
+        if ($text -match '^(\d+)=') {
+            $gen = [int64]$Matches[1]
+            if ($gen -gt $maxGen) { $maxGen = $gen }
+        }
+        elseif ($text -cmatch '^sealed=(\d+):(\d+):[0-9a-f]{64}$') {
+            $lastSealGen = [int64]$Matches[1]
+        }
+        elseif ($text.StartsWith('sealed=')) {
+            Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "封存行格式不对:'$text'。不要手改台账,用 dev_tools.ps1 -Command persist-schema-seal 重新封存。"
+            return
+        }
+    }
+    if ($maxGen -eq 0) {
+        Add-Result -Id 'release.persist_schema.sealed' -Status 'FAIL' -Target $ledgerPath -Detail "台账里没有任何字段行,按 fail-safe 判 FAIL。"
+        return
+    }
+    if ($lastSealGen -ne $maxGen) {
+        $sealed = if ($lastSealGen -eq 0) { '还没有封存过' } else { "最后封存到世代 $lastSealGen" }
+        Add-Result -Id 'release.persist_schema.sealed' -Status $severity -Target $ledgerPath `
+            -Detail "台账最大世代 $maxGen 尚未封存($sealed):发布前在主干运行 pwsh -File tools/scripts/dev_tools.ps1 -Command persist-schema-seal 并提交,再出版本(docs/ops/release-checklist.md §2.1 ①)。"
+        return
+    }
+    $verify = Invoke-PersistSchemaLedgerVerify
+    if ($verify.Ok) {
+        Add-Result -Id 'release.persist_schema.sealed' -Status 'PASS' -Target $ledgerPath -Detail "台账已封存到最大世代 $maxGen,生成器核对全部封存成立。"
+        return
+    }
+    Add-Result -Id 'release.persist_schema.sealed' -Status $severity -Target $ledgerPath `
+        -Detail "台账封存到了最大世代 $maxGen,但生成器核对没通过:$($verify.Reason)。按生成器提示修台账(多半是合并带进了已封存世代的行),不要改封存行。"
+}
+
+# 运行生成器的只核不写模式。PROTO_GEN_CONFIG_PATH 只用来定位台账;用 no-unity 配置,不碰客户端仓。
+# 原生 stderr 是诊断数据,本函数内不让它按 Stop 终止(脚本顶层是 Stop)。
+function Invoke-PersistSchemaLedgerVerify {
+    $ErrorActionPreference = 'Continue'
+    $go = Get-Command go -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $go) {
+        return @{ Ok = $false; Reason = '找不到 go,无法运行生成器核对封存' }
+    }
+    $generatorDir = Join-Path $RepoRoot 'tools/proto_generator/protogen'
+    $configPath = Join-Path $generatorDir 'etc/proto_gen.no-unity.yaml'
+    $previousConfig = [Environment]::GetEnvironmentVariable('PROTO_GEN_CONFIG_PATH', 'Process')
+    Push-Location -LiteralPath $generatorDir
+    try {
+        [Environment]::SetEnvironmentVariable('PROTO_GEN_CONFIG_PATH', $configPath, 'Process')
+        $output = & $go.Source run ./cmd --persist-schema-verify 2>&1 | Out-String
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable('PROTO_GEN_CONFIG_PATH', $previousConfig, 'Process')
+        Pop-Location
+    }
+    if ($exitCode -eq 0) {
+        return @{ Ok = $true; Reason = '' }
+    }
+    $tail = (@($output -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) | Select-Object -Last 3) -join ' | '
+    return @{ Ok = $false; Reason = "go run ./cmd --persist-schema-verify 退出 ${exitCode}:$tail" }
+}
+
+<#
+.SYNOPSIS
     检查待发布版本的制品本身:存在、完整、确实是这个版本、来自干净工作树、release manifest 已落盘。
 
 .DESCRIPTION
@@ -609,6 +699,8 @@ function Invoke-ReleaseArtifactChecks {
             Add-Result -Id 'release.imagetag.commit' -Status 'PASS' -Target $tagTarget -Detail "tag 的 commit 与 build-info.commit 一致。"
         }
     }
+
+    Test-PersistSchemaLedgerSealed
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ReleaseVersion)) {

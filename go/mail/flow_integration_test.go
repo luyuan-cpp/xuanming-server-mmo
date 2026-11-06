@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"net"
@@ -15,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -25,14 +22,20 @@ import (
 	"google.golang.org/protobuf/proto"
 	"mail/internal/data"
 	"mail/internal/server"
-	base "proto/common/base"
 	mailpb "proto/mail"
 	"schemamigrate"
+	"shared/callerauth"
+	"shared/callerauth/callerauthtest"
 	"shared/domainhost"
-	"shared/redisslot"
 	"shared/rolefence"
 	"shared/serviceauth"
 )
+
+// fixtureGateIdentity 是夹具服务端的 gate 验签闸门,与生产 domainhost 装配一样放在拦截器链最外层。
+// 在线域原账号只认 gate 签名原件,不读 login Redis;夹具和调用方共用 callerauthtest 的测试密钥。
+func fixtureGateIdentity() grpc.UnaryServerInterceptor {
+	return callerauth.SessionInterceptor(callerauth.NewVerifier(callerauth.Options{Secrets: callerauthtest.Key{}, Enforce: true, AllowedCallers: []string{"gate"}}))
+}
 
 func mailMainFixtureEndpoint(address string) error {
 	host, port, err := net.SplitHostPort(address)
@@ -123,22 +126,18 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 	next := func(context.Context) (uint64, error) { return ids.Add(1), nil }
 	repo := data.New(db, next, next, func(uint32) bool { return true }, noGuilds{})
 	repo.ConfigureRoleFence(rolefence.NewGuard(db, fixedRoleOwner{account: "邮件原账号", revision: 3}))
-	loginCache := miniredis.RunT(t)
-	loginCache.Set(redisslot.LoginSessionKey("mail-rpc-original:19"), "邮件原账号")
-	loginReader := redis.NewClient(&redis.Options{Addr: loginCache.Addr()})
-	t.Cleanup(func() { _ = loginReader.Close() })
 	const secret = "mail-rpc-integration-only-never-a-real-secret"
 	verifier, err := serviceauth.New(map[string]string{"rank": secret})
 	if err != nil {
 		t.Fatal(err)
 	}
 	reminder := &committedReminder{db: db, t: t}
-	handler := server.New(repo, verifier, reminder).WithLoginSessions(loginReader)
+	handler := server.New(repo, verifier, reminder)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := grpc.NewServer(grpc.UnaryInterceptor(domainhost.Guard(server.ClientMethods(), 3*time.Second)))
+	rpc := grpc.NewServer(grpc.ChainUnaryInterceptor(fixtureGateIdentity(), domainhost.Guard(server.ClientMethods(), 3*time.Second)))
 	mailpb.RegisterMailAdminServer(rpc, handler)
 	mailpb.RegisterClientPlayerMailServer(rpc, handler)
 	go func() { _ = rpc.Serve(listener) }()
@@ -170,27 +169,35 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 	if _, err = sender.SendPersonalMail(ctx, tampered); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("签名不能换收件人: %v", err)
 	}
-	session, _ := proto.Marshal(&base.SessionDetails{PlayerId: 7, SessionId: 7, GateInstanceId: "mail-rpc-original", SessionIncarnation: 19, OwnerRevision: 3})
-	playerCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs(domainhost.SessionMetadata, base64.StdEncoding.EncodeToString(session)))
-	if _, err = sender.SendPersonalMail(playerCtx, request); status.Code(err) != codes.PermissionDenied {
+	// gate 对每次转发按方法现签整份会话,nonce 只能用一次,所以每个调用各签一份。
+	player := callerauthtest.OnlineSession("邮件原账号", 7, 3)
+	playerCtx := func(method string) context.Context {
+		t.Helper()
+		md, err := callerauth.SignedMetadataForDetails(callerauthtest.Key{}, "gate", method, player)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return metadata.NewOutgoingContext(ctx, md)
+	}
+	if _, err = sender.SendPersonalMail(playerCtx(mailpb.MailAdmin_SendPersonalMail_FullMethodName), request); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("客户端metadata不能进入Admin: %v", err)
 	}
-	if _, err = client.NotifyMailChanged(playerCtx, &mailpb.MailChangedEvent{MailId: sent.MailId}); status.Code(err) != codes.PermissionDenied {
+	if _, err = client.NotifyMailChanged(playerCtx(mailpb.ClientPlayerMail_NotifyMailChanged_FullMethodName), &mailpb.MailChangedEvent{MailId: sent.MailId}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("S2C入口不可被客户端伪造: %v", err)
 	}
-	listed, err := client.ListMails(playerCtx, &mailpb.ListMailsRequest{})
+	listed, err := client.ListMails(playerCtx(mailpb.ClientPlayerMail_ListMails_FullMethodName), &mailpb.ListMailsRequest{})
 	if err != nil || listed.GetErrorMessage().GetId() != 0 || len(listed.Mails) != 1 {
 		t.Fatalf("真实会话读取: %v %+v", err, listed)
 	}
-	claimed, err := client.ClaimMailAttachments(playerCtx, &mailpb.ClaimMailAttachmentsRequest{MailIds: []uint64{sent.MailId}})
+	claimed, err := client.ClaimMailAttachments(playerCtx(mailpb.ClientPlayerMail_ClaimMailAttachments_FullMethodName), &mailpb.ClaimMailAttachmentsRequest{MailIds: []uint64{sent.MailId}})
 	if err != nil || len(claimed.Results) != 1 || claimed.Results[0].ClaimState != mailpb.MailClaimState_MAIL_CLAIM_PENDING {
 		t.Fatalf("实际领取入口: %v %+v", err, claimed)
 	}
-	again, err := client.ClaimMailAttachments(playerCtx, &mailpb.ClaimMailAttachmentsRequest{MailIds: []uint64{sent.MailId}})
+	again, err := client.ClaimMailAttachments(playerCtx(mailpb.ClientPlayerMail_ClaimMailAttachments_FullMethodName), &mailpb.ClaimMailAttachmentsRequest{MailIds: []uint64{sent.MailId}})
 	if err != nil || again.Results[0].AssetOpId != claimed.Results[0].AssetOpId {
 		t.Fatalf("RPC重放应同op: %v %+v", err, again)
 	}
-	deleted, err := client.DeleteMails(playerCtx, &mailpb.DeleteMailsRequest{MailIds: []uint64{sent.MailId}})
+	deleted, err := client.DeleteMails(playerCtx(mailpb.ClientPlayerMail_DeleteMails_FullMethodName), &mailpb.DeleteMailsRequest{MailIds: []uint64{sent.MailId}})
 	if err != nil || len(deleted.ProtectedMailIds) != 1 || len(deleted.DeletedMailIds) != 0 {
 		t.Fatalf("RPC不能删除待到账邮件: %v %+v", err, deleted)
 	}

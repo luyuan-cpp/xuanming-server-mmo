@@ -60,9 +60,7 @@ const (
 )
 
 type ServiceContext struct {
-	// LoginSessions 只读显式全局 login 登录态，与好友缓存/在线投影句柄分离。
-	LoginSessions redv9.UniversalClient
-	Config        config.Config
+	Config config.Config
 
 	// Etcd 供 shared/noderegistry 注册与 shared/killswitch 监听共用 —— 同一个集群不开第二条连接。
 	//
@@ -199,14 +197,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		_ = etcdCli.Close()
 		panic(fmt.Errorf("friend 申请号源装配失败: %w", err))
 	}
-	loginSessions, err := NewLoginSessionClient(c)
-	if err != nil {
-		requestIDs.Close()
-		_ = directoryConn.Close()
-		_ = db.Close()
-		_ = etcdCli.Close()
-		panic("好友显式全局 LoginRedis 不可用")
-	}
 
 	kafkaWriter := newKafkaWriter(c)
 	if kafkaWriter != nil {
@@ -221,7 +211,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		RootAdmission:      root,
 		RelayAdmission:     relay,
 		RelayIngress:       drainproof.New(),
-		LoginSessions:      loginSessions,
 		Config:             c,
 		Etcd:               etcdCli,
 		DB:                 db,
@@ -236,24 +225,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		KafkaWriter:        kafkaWriter,
 		GateCommandBuilder: friendkafka.NewGateCommandBuilder(),
 	}
-}
-
-func NewLoginSessionClient(c config.Config) (redv9.UniversalClient, error) {
-	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode <= 0 {
-		return nil, errors.New("好友全局 LoginRedis 未显式配置")
-	}
-	client, err := playerredis.New(c.LoginRedis.ClientConfig(playerredis.Config{PoolTimeoutMs: 1000, DialTimeoutMs: 2000,
-		ReadTimeoutMs: 2000, WriteTimeoutMs: 2000}))
-	if err != nil {
-		return nil, errors.New("好友全局 LoginRedis 配置非法")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
-		return nil, errors.New("好友全局登录态实例不可用")
-	}
-	return client, nil
 }
 
 // 沿用全局 dataservice.rpc 注册键与本服务 etcd 集群；非阻塞连接保证好友功能
@@ -539,9 +510,6 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	var result error
 	if sc.directoryConn != nil {
 		result = errors.Join(result, sc.directoryConn.Close())
-	}
-	if sc.LoginSessions != nil {
-		result = errors.Join(result, sc.LoginSessions.Close())
 	}
 	if sc.PlayerRedis != nil {
 		result = errors.Join(result, sc.PlayerRedis.Close())

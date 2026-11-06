@@ -672,6 +672,76 @@ func TestIntegrationConcurrentEnqueueSeqContiguous(t *testing.T) {
 	}
 }
 
+// TestIntegrationItemGainSanctionsShareTheGmStreamInOrder:单玩家物品获取封禁(设计 §2.2)与货币封锁走同一条
+// (玩家, SCENE_GM_SANCTION) 有序流:seq 严格递增、Fetch 按 seq 原样下发类型与配置号,封锁与解封的先后不会颠倒;
+// 原样重试得到 DUPLICATE(原 seq),配置号为 0 的载荷在注册表校验处被拒、什么都不写;每次新建同事务写一行审计。
+func TestIntegrationItemGainSanctionsShareTheGmStreamInOrder(t *testing.T) {
+	e := openIntegration(t)
+	const pid = uint64(1006)
+	const itemConfig = uint32(30045)
+	enqueueTyped := func(requestID uint64, typ inboxpb.PlayerInboxMessageType, payload []byte) (EnqueueResult, error) {
+		ctx := itCtx(t)
+		return e.store.Enqueue(ctx, EnqueueParams{
+			PlayerID: pid, Type: typ, Producer: inboxpb.PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_GM,
+			RequestID: requestID, IssuedAtMs: testNowMs, Payload: payload, Operator: "ops_it", Note: "item-ban-it",
+		}, func(tx *sql.Tx, seq uint64) error {
+			return InsertAudit(ctx, tx, &inboxpb.PlayerInboxAudit{
+				PlayerId: pid, Domain: uint32(gmDomain), Seq: seq,
+				Action:   uint32(inboxpb.PlayerInboxAuditAction_PLAYER_INBOX_AUDIT_SANCTION),
+				Operator: "ops_it", PeerAddr: "127.0.0.1:1", Reason: "item-ban-it", CreatedMs: testNowMs,
+			})
+		})
+	}
+	itemPayload := marshal(t, &inboxpb.GmItemGainPayload{ItemConfigId: itemConfig})
+	order := []struct {
+		rid     uint64
+		typ     inboxpb.PlayerInboxMessageType
+		payload []byte
+	}{
+		{1, gmBlock, gainPayload(t, 1)},
+		{2, gmBlockItem, itemPayload},
+		{3, gmUnblockItem, itemPayload},
+	}
+	var seqs []uint64
+	for _, step := range order {
+		res, err := enqueueTyped(step.rid, step.typ, step.payload)
+		if err != nil || res.Code != 0 || !res.Created {
+			t.Fatalf("入箱 %v: %+v %v", step.typ, res, err)
+		}
+		if len(seqs) > 0 && res.Seq <= seqs[len(seqs)-1] {
+			t.Fatalf("seq 必须严格递增: %v 之后得到 %d", seqs, res.Seq)
+		}
+		seqs = append(seqs, res.Seq)
+	}
+
+	dup, err := enqueueTyped(2, gmBlockItem, itemPayload)
+	if err != nil || dup.Code != 0 || dup.Created || dup.Seq != seqs[1] {
+		t.Fatalf("物品封锁原样重试应 DUPLICATE 原 seq: %+v %v", dup, err)
+	}
+	zero, err := enqueueTyped(4, gmBlockItem, marshal(t, &inboxpb.GmItemGainPayload{}))
+	if err != nil || zero.Code != constants.ErrPayloadInvalid {
+		t.Fatalf("配置号为 0 应拒为 PayloadInvalid: %+v %v", zero, err)
+	}
+	if st := e.stream(t, pid); st.GetOpenCount() != uint32(len(order)) {
+		t.Fatalf("重试与被拒的载荷不应改 open_count: %+v", st)
+	}
+	if n := auditCount(t, e.db, pid); n != len(order) {
+		t.Fatalf("审计行 = %d, want %d(只有新建那几次)", n, len(order))
+	}
+
+	e.epochs.set(pid, 5)
+	resp := e.fetch(t, pid, 5, 0, 0)
+	if len(resp.GetItems()) != len(order) {
+		t.Fatalf("应下发 %d 条: %+v", len(order), resp)
+	}
+	for i, it := range resp.GetItems() {
+		if it.GetSeq() != seqs[i] || it.GetMsgType() != order[i].typ || it.GetRequestId() != order[i].rid ||
+			!bytes.Equal(it.GetPayload(), order[i].payload) {
+			t.Fatalf("第 %d 条 = %+v, want seq=%d type=%v rid=%d", i, it, seqs[i], order[i].typ, order[i].rid)
+		}
+	}
+}
+
 // ── Fetch ────────────────────────────────────────────────────────────────
 
 func TestIntegrationFetchNoStreamAndFastPathWritesNothing(t *testing.T) {

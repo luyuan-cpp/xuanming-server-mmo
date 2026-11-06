@@ -55,12 +55,6 @@ ServerConfig:
 $fixture = ($fixture -replace '\r?\n', "`r`n") + "`r`n"
 $matchFixture = @'
 Name: matchservice.rpc
-GlobalLoginSessions: true
-LoginRedis:
-  Addrs: [127.0.0.1:6379]
-  DB: 0
-  PasswordEnv: MMORPG_LOGIN_REDIS_PASSWORD
-  PoolSizePerNode: 8
 # 源配置保持 TiDB 入口
 GlobalMatch:
   Backend: tidb
@@ -308,14 +302,15 @@ try {
             Assert-Match $call.Extent.Text '-LocalMySQL:\$LocalMySQL' '不静默丢失显式档位'
         }
     }
-    Test-Case 'match 本机档只改档位、SQL入口和登录 Redis' {
+    Test-Case 'match 本机档只改档位和SQL入口' {
         Write-MatchFixture
         $LocalMySQL = $true
         $sourceHash = (Get-FileHash -LiteralPath (Join-Path $GoRoot 'match/etc/match_service.yaml') -Algorithm SHA256).Hash
         $result = Resolve-InstanceConfig -Name match -Info $ServiceCatalogue.match -Index 1 -Total 1
         Assert-Equal (Join-Path $DerivedEtcDir 'match.yaml') $result.Path '标准派生路径'
-        $expected = $matchFixture.Replace('  Backend: tidb', '  Backend: mysql').Replace('  Host: 127.0.0.1:4000', '  Host: 127.0.0.1:3306').Replace('  Addrs: [127.0.0.1:6379]', '  Addrs: [127.0.0.1:26379]').Replace('  DB: 0', '  DB: 2')
-        Assert-Equal $expected (Get-Content -LiteralPath $result.Path -Raw) '只改这四个标量，其余字节不变'
+        # match 只认 gate 签名的会话身份原件,不读 login 的 Redis:派生只改 GlobalMatch 的两个标量。
+        $expected = $matchFixture.Replace('  Backend: tidb', '  Backend: mysql').Replace('  Host: 127.0.0.1:4000', '  Host: 127.0.0.1:3306')
+        Assert-Equal $expected (Get-Content -LiteralPath $result.Path -Raw) '只改这两个标量，其余字节不变'
         Assert-Equal $sourceHash (Get-FileHash -LiteralPath (Join-Path $GoRoot 'match/etc/match_service.yaml') -Algorithm SHA256).Hash '源配置不变'
     }
     Test-Case 'match 未启用本机档时用源配置的 TiDB 入口' {
@@ -332,7 +327,7 @@ try {
         $actual = Get-Content -LiteralPath (Resolve-InstanceConfig -Name match -Info $ServiceCatalogue.match -Index 1 -Total 1).Path -Raw
         Assert-Match $actual '(?m)^  Host: "tidb\.example\.com:4000"' '进程使用显式全球地址'
         Assert-Match $actual '(?m)^  Backend: tidb' '未启用本机档不降低 TiDB 要求'
-        Assert-Match $actual '(?m)^  Addrs: \[127\.0\.0\.1:6379\]' '登录 Redis 地址不受影响'
+        Assert-NotMatch $actual '(?m)^LoginRedis:' '派生配置不补登录态段'
     }
     Test-Case 'match 本机档拒绝远端 SQL 入口，不写派生文件' {
         Write-MatchFixture

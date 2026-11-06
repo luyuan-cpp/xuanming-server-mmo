@@ -6,13 +6,19 @@
 // 实现只有 MuduoEtcdTransport(muduo_grpc 通道 + 双向流,流断按退避重建,§13.5);官方 CQ 实现 GrpcEtcdTransport
 // 已随第 3 批删除(§14)。接口仍保留,单测可经 SetFactory 换成替身。
 //
-// 线程:全部接口只在节点 EventLoop 线程调用;sink 的回调也只在该线程、且永不在发起调用的栈内同步执行。
+// 线程:全部接口只在节点 EventLoop 线程调用，sink 的回调也只在该线程异步执行。
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "proto/etcd/etcd.pb.h"
+
+// Txn/LeaseGrant 各自拥有一次完成。空值表示提交或传输失败，CAS 拒绝仍有真实 TxnResponse。
+// 已发出的命令可以在停机后由通道收尾，调用方先取消本地等待。
+template<class Reply>
+using EtcdRegistrationCompletion = std::function<void(std::optional<Reply>)>;
 
 namespace muduo
 {
@@ -31,8 +37,6 @@ public:
     virtual void OnRange(const etcdserverpb::RangeRequest *request, const etcdserverpb::RangeResponse &reply) = 0;
     virtual void OnPut(const etcdserverpb::PutResponse &reply) = 0;
     virtual void OnDeleteRange(const etcdserverpb::DeleteRangeResponse &reply) = 0;
-    virtual void OnTxn(const etcdserverpb::TxnResponse &reply) = 0;
-    virtual void OnLeaseGrant(const etcdserverpb::LeaseGrantResponse &reply) = 0;
     virtual void OnWatch(const etcdserverpb::WatchResponse &reply) = 0;
     virtual void OnKeepAlive(const etcdserverpb::LeaseKeepAliveResponse &reply) = 0;
 
@@ -51,8 +55,10 @@ public:
     virtual void Range(const etcdserverpb::RangeRequest &request) = 0;
     virtual void Put(const etcdserverpb::PutRequest &request) = 0;
     virtual void DeleteRange(const etcdserverpb::DeleteRangeRequest &request) = 0;
-    virtual void Txn(const etcdserverpb::TxnRequest &request) = 0;
-    virtual void LeaseGrant(const etcdserverpb::LeaseGrantRequest &request) = 0;
+    virtual void Txn(const etcdserverpb::TxnRequest &request,
+                     EtcdRegistrationCompletion<etcdserverpb::TxnResponse> done) = 0;
+    virtual void LeaseGrant(const etcdserverpb::LeaseGrantRequest &request,
+                            EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done) = 0;
     virtual void LeaseRevoke(const etcdserverpb::LeaseRevokeRequest &request) = 0;
     // 往 Watch / LeaseKeepAlive 双向流写一条请求。新传输:流断开、尚未重建时直接丢弃 ——
     // 重建后由 sink 的 Restarted 回调重发需要的请求,旧流上的请求没有意义。

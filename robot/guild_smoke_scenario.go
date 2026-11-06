@@ -15,8 +15,9 @@ package main
 //	   member-names:这份快照里每个成员的 name 与帮会的 leader_name 都非空(名字来自 data_service 名字注册表);
 //	7. A 改公告 → B 读到;700 字节公告 → kGuildAnnouncementTooLong(guild 侧拒绝,整包仍 < gate 1KB);
 //	8. 身份伪造:B 发 LeaveGuild 但请求体 player_id 填 A → 服务端按会话身份让 B 退出,A 仍是帮主;
-//	9. 内部方法:A 发 UpdateGuildScore → 收到 kServiceUnavailable 信封拒绝,随后查榜成功且积分仍是 0;
-//	   确切拒绝原因需结合路由服 PermissionDenied 日志与 session 单测确认(信封不保留 gRPC code);
+//	9. 内部方法:A 发 UpdateGuildScore → 必须**超时**(SERVER_ONLY 不在 gate 上行白名单里,client-rpc-callback.md §7 R4),
+//	   随后查榜成功且积分仍是 0;请求到不了路由服与 guild,它们的日志里不会有这次请求;
+//	   guild 会话拦截器(方法级白名单)是第二道防线,经 gate 走不到,由 session 单测证明;
 //
 // 管理段 M1–M10(设计 docs/design/guild-phase2/02-management.md §24.2),跑在第 9 步之后、解散之前。
 // 进入这一段时帮会里只剩帮主 A(B 已在第 8 步退帮),同区的 D / E / F 三人全程在场:
@@ -473,16 +474,22 @@ func RunGuildSmoke(cfg *config.Config) {
 	zap.L().Info("[guild-smoke] step 8: spoofed player_id ignored, session identity used")
 
 	// ---- 步骤 9:内部方法 UpdateGuildScore 对客户端关闭 ----
+	// 它标了 CLIENT_RPC_SERVER_ONLY:gate 的上行白名单只收客户端能发起的方法(REQUEST / ONE_WAY,
+	// client-rpc-callback.md §7 R4),所以这个号在 gate 就按非法包丢弃、不回包,期望超时(单发一次,远低于踢线阈值)。
+	// guild 的会话拦截器(方法级白名单)仍是第二道防线,经 gate 已经走不到它。
+	// 信封拒绝说明白名单收了内部方法号(gate 不是按新生成器重新生成、重新编译的版本);业务回包说明内部方法对客户端开放。
 	scoreEnvelopeTip, err := a.call(game.GuildServiceUpdateGuildScoreMessageId,
 		&guildpb.UpdateGuildScoreRequest{GuildId: guildID, Score: 999999, ZoneId: sc.ZoneA}, &guildpb.UpdateGuildScoreResponse{})
-	if err != nil {
+	switch {
+	case errors.Is(err, errGuildSmokeTimeout):
+		// 期望:gate 丢弃
+	case err != nil:
 		fail("internal-method", "%v", err)
-	}
-	// 路由服将上游 PermissionDenied 映射为 kServiceUnavailable。超时、成功业务回包、
-	// 其它信封码(如路由表未更新)都不能当作方法白名单生效的证据。
-	if scoreEnvelopeTip != tipGuildServiceUnavailable {
-		fail("internal-method", "UpdateGuildScore expected envelope tip=%d, got tip=%d (0 means a business response was received)",
-			tipGuildServiceUnavailable, scoreEnvelopeTip)
+	case scoreEnvelopeTip != 0:
+		fail("internal-method", "Expected gate to drop UpdateGuildScore (timeout), got envelope tip=%d: the gate client allowlist "+
+			"includes server-only message IDs (regenerate with the R4 generator and rebuild gate)", scoreEnvelopeTip)
+	default:
+		fail("internal-method", "A client calling UpdateGuildScore through gate received a business response: the server-only method is exposed to clients")
 	}
 	scoreAfter := &guildpb.GetGuildRankByGuildResponse{}
 	if err := a.expect(game.GuildServiceGetGuildRankByGuildMessageId,
@@ -492,10 +499,7 @@ func RunGuildSmoke(cfg *config.Config) {
 	if scoreAfter.GetEntry().GetScore() != 0 {
 		fail("internal-method-verify", "The client changed guild score: score=%d, expected 0", scoreAfter.GetEntry().GetScore())
 	}
-	// 不扩展线协议就不能区分 PermissionDenied 与其它上游故障:这里只声明已观察到的拒绝
-	// 与积分不变,验收时还须核对路由服该方法的 code=PermissionDenied 日志与 session 单测。
-	zap.L().Info("[guild-smoke] step 9: received envelope rejection, then successfully queried the ranking with unchanged score; verify allowlist rejection through routing-service code=PermissionDenied logs and session unit tests",
-		zap.Uint32("envelope_tip", scoreEnvelopeTip),
+	zap.L().Info("[guild-smoke] step 9: gate dropped client-sent UpdateGuildScore, then the ranking query showed the score unchanged",
 		zap.String("method", guildpb.GuildService_UpdateGuildScore_FullMethodName))
 
 	// ---- 管理段 M1–M10(02-management.md §24.2)----

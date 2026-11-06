@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"math"
 	"strconv"
 
 	"google.golang.org/protobuf/proto"
@@ -56,6 +57,22 @@ func SessionBinding(ctx context.Context, s *base.SessionDetails) string {
 	data = binary.BigEndian.AppendUint64(data, original.OwnerRevision)
 	b := sha256.Sum256(data)
 	return hex.EncodeToString(b[:])
+}
+
+// MaxProbeRegions 是一份探测最多覆盖的机房数，公开探测入口（network_probe.go）与按池撮合共用。
+const MaxProbeRegions = 16
+
+// PreferredRegion 由完整签名探测决定，不随某个副本的节点发现抖动或硬阈值变化：取最低 RTT 的机房，
+// 同 RTT 取机房号小者。最低 RTT 都超过硬阈值时不存在合格机房，所以保存全部测量可直接适应阈值调整。
+// 撮合（poolUnitInput）与提交点（claimTx）各自现算，不持久化。
+func PreferredRegion(profile *pb.MatchNetworkProfile, now uint64) uint32 {
+	var preferred, best uint32
+	for region, rtt := range Latencies(profile, now, math.MaxUint32) {
+		if preferred == 0 || rtt < best || (rtt == best && region < preferred) {
+			preferred, best = region, rtt
+		}
+	}
+	return preferred
 }
 
 // Latencies 仅接受签名且逐玩家、逐会话、逐计划匹配的回执。超时/缺测保持不可用。

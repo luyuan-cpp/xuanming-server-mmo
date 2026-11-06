@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -263,8 +265,7 @@ func AcquireAgonesRoomOnNode(
 	}, nil
 }
 
-// ReserveAgonesRoomForWorldChannel 为一个**世界频道**预占房间名额,并把
-// scene:{id}:agones_gs 记下来。
+// ReserveAgonesRoomForWorldChannel 为一个**世界频道**预占房间名额。
 //
 // 世界频道与副本的分配策略不同,不能直接复用 AcquireAgonesPlacement:
 // 频道的落点是 assignNodeByHash 的一致性哈希结果,rebalance 依赖这个分布
@@ -272,7 +273,9 @@ func AcquireAgonesRoomOnNode(
 // 想搬回哈希目标)。所以这里先按**指定节点**预占,只有那个节点没容量时
 // 才回落到自由分配,并把实际落点返回给调用方。
 //
-// 返回 (实际节点, 是否成功)。Agones 未启用时返回 (preferredNode, true) —— 不做任何事。
+// 返回 (实际节点, 预占的名额, 是否成功)。Agones 未启用时返回 (preferredNode, nil, true) —— 不做任何事。
+// scene:{id}:agones_gs 由调用方的登记脚本和频道的其余状态一起写(registerWorldChannel),
+// 登记没落地时由调用方归还这里占的名额。
 //
 // 没有这一步的后果:世界频道不占 rooms 名额 -> Counter 少算 ->
 // FleetAutoscaler(policy=Counter,key=rooms)对大世界的人数增长完全无感,
@@ -283,9 +286,9 @@ func ReserveAgonesRoomForWorldChannel(
 	sceneID uint64,
 	preferredNode string,
 	zoneID uint32,
-) (string, bool) {
+) (string, *agonesPlacement, bool) {
 	if !AgonesEnabled(svcCtx) {
-		return preferredNode, true
+		return preferredNode, nil, true
 	}
 
 	placement, err := AcquireAgonesRoomOnNode(ctx, svcCtx, preferredNode, zoneID)
@@ -296,16 +299,10 @@ func ReserveAgonesRoomForWorldChannel(
 		placement, err = AcquireAgonesPlacement(ctx, svcCtx, zoneID, constants.NodePurposeWorld)
 		if err != nil {
 			logx.Errorf("[Agones] world channel %d: no room capacity in zone %d: %v", sceneID, zoneID, err)
-			return "", false
+			return "", nil, false
 		}
 	}
-
-	// 必须在调 C++ CreateScene 之前写:中途崩溃时这是唯一能找回
-	// "该向哪个 GameServer 归还名额" 的依据。
-	if err := svcCtx.Redis.Set(sceneAgonesGsKey(sceneID), placement.GameServerName); err != nil {
-		logx.Errorf("[Agones] world channel %d: failed to record agones gs: %v", sceneID, err)
-	}
-	return placement.NodeID, true
+	return placement.NodeID, placement, true
 }
 
 // luaCommitAgonesRoomTransfer 是名额记录改写的比较并交换:只有 scene:{id}:node 仍是 newNode
@@ -314,12 +311,26 @@ func ReserveAgonesRoomForWorldChannel(
 //
 // KEYS[1] = scene:{id}:node
 // KEYS[2] = scene:{id}:agones_gs
+// KEYS[3] = scene:{id}:agones_transfer_receipt:{token},本次调用的回执(见下)
 // ARGV[1] = newNode
 // ARGV[2] = newGs
+// ARGV[3] = 回执存活秒数
 // 返回 {1, prev}:已改到 newGs,prev 是被覆盖的旧值(没有记录时为空串);
-// {0, ''}:属主已不是 newNode,或场景已被销毁,一个键都没动;
+// {0, ''}:属主已不是 newNode,或场景已被销毁,或这次调用已被作废,一个键都没动;
 // {2, ''}:记录已经是 newGs(别的写者转过了),一个键都没动。
+//
+// 回执(2026-11-05,与 luaReassignSceneNode 同一套,见那里)。go-redis 对读超时 / EOF 会原样重发 EVAL;第一次已经
+// 改写、回包丢了,重发时记录已是 newGs,没有回执会回 2:调用方把刚记账的新名额还掉、旧名额永不归还。
+//   - 改写成功时把被覆盖的旧值以 cjson 写进回执,同一 token 再来原样回 {1, prev}、什么都不动。0 / 2 不写回执。
+//   - Eval 最终回错时调用方用 luaResolveCasReceipt 问清结局,没执行的写下 'aborted',之后才到的 EVAL 回 {0, ''}。
 const luaCommitAgonesRoomTransfer = `
+local receipt = redis.call('GET', KEYS[3])
+if receipt == 'aborted' then
+    return {0, ''}
+end
+if receipt then
+    return {1, cjson.decode(receipt).prev}
+end
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then
     return {0, ''}
 end
@@ -331,8 +342,14 @@ if prev == ARGV[2] then
     return {2, ''}
 end
 redis.call('SET', KEYS[2], ARGV[2])
+redis.call('SET', KEYS[3], cjson.encode({prev = prev}), 'EX', ARGV[3])
 return {1, prev}
 `
+
+// sceneAgonesTransferReceiptKey 是 luaCommitAgonesRoomTransfer 一次调用的回执键,存活 sceneClaimRecordTTLSeconds。
+func sceneAgonesTransferReceiptKey(sceneID uint64, token string) string {
+	return fmt.Sprintf("scene:%d:agones_transfer_receipt:%s", sceneID, token)
+}
 
 const (
 	agonesTransferStale   = 0
@@ -355,7 +372,8 @@ const (
 // 预读 + 无条件覆盖会在这些交错里让新名额永久泄漏、旧名额被还两次;预读出错时还会覆盖掉唯一的记录。
 //   - 属主已不是 newNode 或场景已销毁:还掉刚占的这份,旧记录留给销毁方或真正的属主处理。
 //   - 记录已经是新节点的 GameServer:还掉刚占的这份。所以同一目标重复调用是幂等的。
-//   - Redis 出错:结论未知,两边都不还,只打日志 —— 猜错一边就是重复归还,宁可多占一份交给 reconcile 暴露。
+//   - Redis 出错:先用同一个 token 问清结局(2026-11-05):已改写就照常还旧名额;没改写就同时作废,还掉刚占的新名额。
+//     问也出错才是结论未知,两边都不还,只打日志 —— 猜错一边就是重复归还,宁可多占一份交给 reconcile 暴露。
 func TransferAgonesRoomForScene(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
@@ -378,22 +396,40 @@ func TransferAgonesRoomForScene(
 	}
 	newGs := placement.GameServerName
 
-	keys := []string{sceneNodeKey(sceneID), sceneAgonesGsKey(sceneID)}
-	raw, err := svcCtx.Redis.Eval(luaCommitAgonesRoomTransfer, keys, newNode, newGs)
+	// 每次调用一个新 token、一把自己的回执键,go-redis 内部重发带同一个,脚本据此认出重发(见 luaCommitAgonesRoomTransfer)。
+	receiptKey := sceneAgonesTransferReceiptKey(sceneID, uuid.NewString())
+	keys := []string{sceneNodeKey(sceneID), sceneAgonesGsKey(sceneID), receiptKey}
+	raw, err := svcCtx.Redis.Eval(luaCommitAgonesRoomTransfer, keys, newNode, newGs, sceneClaimRecordTTLSeconds)
+	var status int64
+	var prev string
 	if err != nil {
-		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: recording the room on %s (node %s) failed with an unknown outcome; "+
-			"releasing neither the new nor the old room, watch scene_manager_agones_counter_drift: %v",
-			sceneID, newGs, newNode, err)
-		return
+		// go-redis 的重发也都没拿到应答,脚本可能已经执行。用同一个 token 问清结局(见 resolveAgonesTransfer)。
+		var resolveErr error
+		status, prev, resolveErr = resolveAgonesTransfer(svcCtx, receiptKey)
+		if resolveErr != nil {
+			logx.Errorf("[Agones] COUNTER DRIFT: scene %d: recording the room on %s (node %s) failed with an unknown outcome; "+
+				"releasing neither the new nor the old room, watch scene_manager_agones_counter_drift: %v / %v",
+				sceneID, newGs, newNode, err, resolveErr)
+			return
+		}
+		if status == agonesTransferApplied {
+			logx.Infof("[Agones] scene %d: recording the room on %s lost its reply; resolved as applied: %v", sceneID, newGs, err)
+		} else {
+			// 脚本自己报错也走到这里,用 Errorf 不埋掉。
+			logx.Errorf("[Agones] scene %d: recording the room on %s failed; resolved as not applied (now fenced off), "+
+				"returning the room just taken: %v", sceneID, newGs, err)
+		}
+	} else {
+		parts := toSlice(raw)
+		if len(parts) < 2 {
+			logx.Errorf("[Agones] COUNTER DRIFT: scene %d: unexpected transfer script reply %v; releasing nothing", sceneID, raw)
+			return
+		}
+		status, prev = toInt64(parts[0]), toString(parts[1])
 	}
-	parts := toSlice(raw)
-	if len(parts) < 2 {
-		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: unexpected transfer script reply %v; releasing nothing", sceneID, raw)
-		return
-	}
-	switch toInt64(parts[0]) {
+	switch status {
 	case agonesTransferApplied:
-		if prev := toString(parts[1]); prev != "" {
+		if prev != "" {
 			ReleaseAgonesRoom(ctx, svcCtx, agonesNamespace(svcCtx), prev, "scene_migrated")
 		}
 	case agonesTransferNoop:
@@ -403,8 +439,31 @@ func TransferAgonesRoomForScene(
 			sceneID, newNode, newGs)
 		ReleaseAgonesRoom(ctx, svcCtx, placement.Namespace, newGs, "transfer_owner_changed")
 	default:
-		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: unexpected transfer script status %v; releasing nothing", sceneID, parts[0])
+		logx.Errorf("[Agones] COUNTER DRIFT: scene %d: unexpected transfer script status %v; releasing nothing", sceneID, status)
 	}
+}
+
+// resolveAgonesTransfer 在转移脚本结论未知时用同一个 token 问清结局(luaResolveCasReceipt),折回脚本自己的返回状态:
+//   - 已改写:agonesTransferApplied 与回执里记的被覆盖旧值,调用方照常还旧名额;
+//   - 没改写:问的同时已作废,以后也不会改写,折成 agonesTransferStale,调用方还掉刚占的新名额。
+//     不分原本会落成 0 还是 2:两种都没改记录,刚占的那份都没人记账。
+//
+// 问也出错、或回执内容解不开时回 error,结局仍未知。
+func resolveAgonesTransfer(svcCtx *svc.ServiceContext, receiptKey string) (int64, string, error) {
+	verdict, err := resolveCasReceipt(svcCtx, receiptKey)
+	if err != nil {
+		return 0, "", err
+	}
+	if verdict == casReceiptAborted {
+		return agonesTransferStale, "", nil
+	}
+	var receipt struct {
+		Prev string `json:"prev"`
+	}
+	if err := json.Unmarshal([]byte(verdict), &receipt); err != nil {
+		return 0, "", fmt.Errorf("decode transfer receipt %s: %w", receiptKey, err)
+	}
+	return agonesTransferApplied, receipt.Prev, nil
 }
 
 // ReleaseAgonesRoom 把一个房间名额还给 Agones。

@@ -116,13 +116,22 @@ namespace NodeUtils
 	// present in zones 2, 3 and 4) alias different zones onto the same
 	// entt::entity slot and break PickRandomNode's zone filter.
 	//
-	//   zone-scoped (local-only)  : GateNode, SceneNode, LoginNode, PlayerLocator
-	//   cross-zone (global pool)  : DataService, SceneManager, Chat/Guild/...
+	//   zone-scoped (local-only)  : GateNode, SceneNode, LoginNode, PlayerLocator, PlayerStore, SceneManager
+	//   cross-zone (global pool)  : DataService, Match, Battle, ClientRpcRouter, PlayerInbox, Team, Chat/Guild/...
 	//
-	// SceneManager is multi-zone by design — it's how Gate/Scene request a
-	// cross-zone redirect. DataService runs one logical pool for global data
-	// (e.g. account lookup) that every zone shares.
+	// SceneManager 2026-11-05 起是 zone-scoped(docs/design/control-plane-zone-scoping-20261105.md §3.1):
+	// 每个 zone 有自己的 scene_manager(按 zone 选主、只编排本 zone),gate / scene 只连本 zone 的实例。
+	// 跨 zone 重定向仍由本 zone 的 scene_manager 签发,不需要连别的 zone 的实例。
+	// DataService runs one logical pool for global data (e.g. account lookup) that every zone shares.
+	//
+	// 这份分类同时决定发现前缀(DiscoveryPrefixFor):zone-scoped 类型只 Range / watch 本 zone 的前缀。
 	bool IsZoneScopedNodeType(uint32_t nodeType);
+
+	// 配置里的一个发现前缀(service_discovery_prefixes 的一项,形如 "SceneNodeService.rpc")在本节点实际 Range / watch 的前缀。
+	// zone-scoped 类型返回 "<prefix>/zone/<zoneId>/",与 EtcdManager::MakeNodeEtcdPrefix 的键形一致;别的 zone 的键与
+	// 分配键 "<prefix>/allocated/..." 都不在里面。其余类型、认不出的前缀原样返回(全局池照旧看全服)。
+	// 纯函数,只按字面精确匹配 "<eNodeType 名>.rpc",不做子串匹配。
+	std::string DiscoveryPrefixFor(const std::string &configuredPrefix, uint32_t zoneId);
 
 	// 全局池节点类型:实例不分 zone,任一 zone 的调用方都可以路由过去。
 	// gate 的 PickRandomNode 对这两类**不比对 zone**(设计文档

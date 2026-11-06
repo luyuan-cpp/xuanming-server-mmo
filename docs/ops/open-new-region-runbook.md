@@ -6,9 +6,9 @@
 
 ## 1. 先记住三件事
 
-- **地域码一旦发号不能改。** 地域码写在发号计数器的最高位,打散之后的 ID 上看不出来。发号之后改配置,发号器发现记录里的地域和配置不一致,拒绝发号,建角和发物品全部停下。只有值域见底这类事故才换码,按[发号器运维手册](id-issuer-runbook.md) §4.4 换成一个没用过的码。
-- **地域码不能和别的地域重复。** 两个地域用同一个码,发出来的 ID 会撞,而且撞的时候没有任何报错。部署脚本查不到别的地域用了哪个码,唯一的防线是 §3 的登记表。
-- **用过的地域码不再分配。** 哪怕那个地域已经下线,它发过的 ID 可能还在日志、备份和对账记录里。
+- **地域码一旦发号不能改。** 地域码写在发号计数器的最高位,打散之后的 ID 上看不出来。发号之后改配置,发号器发现记录里的地域和配置不一致,拒绝发号,建角和发物品全部停下。只有值域见底这类事故才换码,按[发号器运维手册](id-issuer-runbook.md) §4.5 换成一个没用过的码。
+- **地域码不能和别的地域重复。** 两个地域用同一个码,发出来的 ID 会撞,而且撞的时候没有任何报错。2026-11-05 起由程序把关:全局号源登记处里一个码只绑一对本地 etcd,另一套环境用同一个码初始化会被拒绝(`was already claimed`),拿别人的快照克隆过来也发不了号(`not the ones bound`)。§3 的登记表仍然要维护:登记处整个丢了数据时,要按它补回退役码、定下一个可认领的码。
+- **用过的地域码不再分配。** 哪怕那个地域已经下线,它发过的 ID 可能还在日志、备份和对账记录里。登记处按从小到大认领,认领过的码(包括退役的)初始化一律拒绝。
 
 ## 2. 一个地域要有什么
 
@@ -20,7 +20,8 @@
 | 存档库 | `zone_<n>_db`、`player_store_<id>_db`,由 `MMORPG_DB_ALLOWED_DATABASES` 列出 |
 | Redis | 共享实例和玩家域集群,按 [K8s 开服手册](k8s-open-server-runbook.md) 部署 |
 | Kafka | 这个地域自己一套,topic 不跨地域 |
-| etcd | **两套**:`etcd` 和 `etcd-id-secondary`,发号器的两份预留记录分别放这两套,地址不能有交集 |
+| etcd | **两套**:`etcd` 和 `etcd-id-secondary`,发号器的两份本地预留记录分别放这两套,地址不能有交集 |
+| 全局号源登记处 | **全世界共用一套**,不是每个地域一套。新地域只要能经私网访问它,部署时用 `-IdRegistryEtcd` 指过去,见[发号器运维手册](id-issuer-runbook.md) §1 |
 | 物理机房号 | `-PhysicalRegion`,全局匹配用,是机房编号,和地域码不是一回事 |
 
 每个地域一份角色列表,和现在一个账号多区多角色是同一个模型。**不做全局账号目录**:客户端的地域列表由网关配置给出,玩家在别的地域有没有角色,这边不知道。
@@ -29,7 +30,9 @@
 
 ## 3. 地域码登记表
 
-分配之前先查这张表,分配之后**先改表再部署**,和部署变更一起评审。生产和 staging 用 1 到 63。
+分配之前先查这张表,分配之后**先改表再部署**,和部署变更一起评审。生产和 staging 用 1 到 63,共用一个登记处,按从小到大分配。
+
+这张表和登记处是两份记录:登记处在发号前把关,这张表是登记处整个丢了数据时的重建依据(退役码要补墓碑,下一个可认领的码取表里用过的最大码 +1,[发号器运维手册](id-issuer-runbook.md) §4.3)。两边对不上时停下来查。
 
 | 地域码 | 地域 | 环境 | 启用日期 | 状态 |
 |---|---|---|---|---|
@@ -56,13 +59,14 @@
 
 ### 4.3 部署
 
-`-Region` 和 `-DirectoryLogicalShards` 在 staging、prod 必须显式给,prod 的 K 只能是 64。这些参数不粘滞,这个地域以后每次部署都要照传同样的值,回滚也一样。
+`-Region`、`-DirectoryLogicalShards` 和 `-IdRegistryEtcd` 在 staging、prod 必须显式给,prod 的 K 只能是 64。这些参数不粘滞,这个地域以后每次部署都要照传同样的值,回滚也一样。托管登记处的那个集群可以用 `-HostIdRegistry` 代替 `-IdRegistryEtcd`。
 
 ```powershell
 $Deploy = @{
   KubeContext = "<这个地域的 context>"
   ReleaseProfile = "prod"
   Region = <地域码>
+  IdRegistryEtcd = "<登记处的 host:port>"
   DirectoryLogicalShards = 64
   GlobalAuthorityTiDBHost = "<这个地域的 TiDB 入口>"
   PhysicalRegion = <机房编号>
@@ -80,7 +84,9 @@ $Deploy = @{
 Logical databases: directory_shards=64 directory=mmorpg_global_00..63 ledger=mmorpg_global_ledger id_region=<地域码> ...
 ```
 
-ConfigMap 里的 `IdSegment.Issuer.Region` 只是模板,常驻进程读的是运维预置的 Secret,所以要核 Pod 里生效的配置。下面两个数都要等于这个地域的码:
+紧接着还有一行 `Id issuer: region=<地域码> registry=<登记处地址>`。
+
+ConfigMap 里的 `IdSegment.Issuer` 只是模板,常驻进程读的是运维预置的 Secret,所以要核 Pod 里生效的配置。Secret 里的 `IdSegment.Issuer` 要有 `Region` 和 `RegistryEtcd`,`RegistryEtcd` 等于部署时的 `-IdRegistryEtcd`。下面两个数都要等于这个地域的码:
 
 ```powershell
 kubectl --context <context> -n <zone-namespace> exec deploy/data-service -- grep -n 'Region:' /app/etc/private/data_service.yaml
@@ -93,7 +99,7 @@ kubectl --context <context> -n <zone-namespace> exec deploy/data-service -- prin
 
 ### 4.4 初始化发号器
 
-新地域两份预留记录都不存在,发号器拒绝发号,这是刻意的。在第一个 zone 的 data-service 就绪之后、放流量之前做这一步。确认这确实是全新环境之后,在任意一个 data-service Pod 里跑一次:
+新地域的码还没在登记处认领,发号器拒绝发号,这是刻意的。整个世界第一次部署时,先按[发号器运维手册](id-issuer-runbook.md) §2.1 托管并开启登记处。在第一个 zone 的 data-service 就绪之后、放流量之前做这一步。在任意一个 data-service Pod 里跑一次:
 
 ```bash
 kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
@@ -101,7 +107,7 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
 
 mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。没初始化时建角和发号报错,scene 的号段门禁不放行,所以带 `WaitReady` 的部署要另开一个终端跑这一步,或者第一遍不带 `WaitReady`。初始化之后不用重启任何服务。
 
-输出 `both reservation records created` 就完成了。**只在全新地域跑。** 已经发过号的地域两份记录都不见了是 ID 安全事件,按[发号器运维手册](id-issuer-runbook.md) §4 处理。
+输出 `region code claimed in the id registry and both reservation records created` 就完成了。码被别的环境认领过、已退役,或者小于登记处里下一个可认领的码,初始化都会拒绝,不写任何东西。**只在全新地域跑。** 已经发过号的地域丢了记录是 ID 安全事件,按[发号器运维手册](id-issuer-runbook.md) §4 用 `-id-issuer-recover` 处理,不要重新初始化。
 
 ### 4.5 接入客户端
 
@@ -128,5 +134,7 @@ mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。�
 | 部署报 `must use -DirectoryLogicalShards 64` | prod 的 K 不是 64 | 改成 64 |
 | 日志 `belongs to another region` | 记录里的地域和配置不一致 | 配错了 `-Region`。改回去,重新部署。**不要改记录** |
 | data_service 启动报 `IdSegment.Issuer.Region` 和 `MMORPG_ID_ISSUER_EXPECTED_REGION` 不一致 | 运维预置的 Secret 里地域码抄错了,或者 `-Region` 传错了 | 查 §3 的表,改错的那一边 |
-| 发现两个地域用了同一个码,还没有发过号 | 还来得及 | 换一个没用过的码,按[发号器运维手册](id-issuer-runbook.md) §4.4 清记录,重新初始化 |
-| 发现两个地域用了同一个码,已经发过号 | ID 可能已经撞了 | 事故。先停这两个地域的建角,按事故流程处理,再决定怎么办 |
+| 部署报 `must pass -IdRegistryEtcd` | 没给登记处地址 | 给全世界共用的那个登记处地址,托管它的集群可以带 `-HostIdRegistry` |
+| 初始化报 `was already claimed` | 这个码被别的环境认领过,或者小于登记处里下一个可认领的码 | 查 §3 的表,换一个没用过的码。登记处只认一个环境,另一个环境发不出号,不会撞号 |
+| 发号日志 `not the ones bound to this region code` | 这两套 etcd 不是登记处给这个码绑的那两套:重复部署、克隆了别的环境的快照,或者换了 etcd | 重复部署或克隆:这套环境换一个没用过的码。换了 etcd:按[发号器运维手册](id-issuer-runbook.md) §4.2 rebind |
+| 发现两个地域在 2026-11-05 之前就用了同一个码,已经发过号 | ID 可能已经撞了(那时还没有登记处把关) | 事故。先停这两个地域的建角,按事故流程处理,再决定怎么办 |

@@ -68,7 +68,7 @@ func TestGateDrainMonitorWiring_OneRoundMarksDrainedGate(t *testing.T) {
 	}
 
 	// 对照:候选链里根本没有 node 9。
-	for _, c := range candidatesFromNodes(ctx, rdb, nodes, 1, true) {
+	for _, c := range candidatesFromNodes(ctx, rdb, watched(nodes...), 1, true) {
 		if c.NodeID == 9 {
 			t.Fatalf("正在排空且缺客户端地址的 node 9 不应进候选集,got %+v", c)
 		}

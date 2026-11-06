@@ -19,7 +19,7 @@ var (
 		Namespace: metricNamespace,
 		Name:      "total",
 		Help: "内部调用方身份声明的验签结果。result=ok 为通过,其余取值见 " +
-			"callerauth.Reason;mode=enforce 表示失败会拒绝请求,permissive 表示只告警放行。",
+			"callerauth.Reason;失败一律拒绝,mode 恒为 enforce(保留该 label 维持指标形状)。",
 		Labels: []string{"result", "mode"},
 	})
 

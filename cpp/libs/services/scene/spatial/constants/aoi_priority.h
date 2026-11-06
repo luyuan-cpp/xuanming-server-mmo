@@ -15,7 +15,7 @@ enum class AoiPriority : uint8_t
     kAttacker    = 2,   // Entities currently attacking the observer
     kQuestNpc    = 3,   // NPCs related to active quests/missions
     kBoss        = 4,   // Boss / elite monsters
-    kPinned      = 5,   // Manually pinned by buff/skill (e.g. eagle-eye, assassination target)
+    kPinned      = 5,   // 显式关注的最高权重(如技能追踪鹰眼术、暗杀目标),登记在 AoiFollowGrant 上
 
     kCount       = 6,   // Sentinel — always last
 };
@@ -24,6 +24,7 @@ enum class AoiPriority : uint8_t
 // Priority policy — maps each AoiPriority tag to a numeric weight.
 // Higher weight = harder to evict. Scenes pick a policy at creation time.
 // kPinned always gets max weight so it can never be evicted by spatial logic.
+// 标签只决定淘汰权重;来源(空间或显式)与可见条件见 spatial/comp/scene_node_scene_comp.h 的 AoiEntry。
 // ---------------------------------------------------------------------------
 struct AoiPriorityPolicy
 {

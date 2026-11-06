@@ -14,6 +14,11 @@ package noderegistry
 //
 // 2026-10-18 登记:player_locator 的副本在 tryClaimNodeID / allocateNodeID 末尾多一个可选 extraOps 钩子
 // (缺省为空,用来把能力键放进同一个注册事务),详见该文件头「有意的差异」;同步修改时保留它即可。
+//
+// 2026-11-05 登记(发布轨道,docs/design/release-track-gray-canary.md §2.1):各副本都在注册入口第一步读
+// releasetrack.FromEnv,取值非法就在碰 etcd 之前返回错误;合法的轨道经 newNodeInfo 写进 NodeInfo.release_track,
+// 重注册沿用同一个 Info。与 shared/noderegistry 同一做法,同步修改时保留。
+// 本副本只注册 MatchNodeService;同进程的 TeamNodeService 走 shared/noderegistry,轨道由那边写。
 
 import (
 	"context"
@@ -24,6 +29,7 @@ import (
 
 	base "proto/common/base"
 	"shared/nodeinfo"
+	"shared/releasetrack"
 	"shared/snowflake"
 
 	"github.com/google/uuid"
@@ -72,7 +78,15 @@ func allocationKeyPrefix(prefix string, nodeType uint32) string {
 }
 
 // Register creates a NodeInfo entry in etcd with a lease, using atomic CAS for node_id allocation.
+//
+// 发布轨道在这里读,不靠入口传参:取值非法时在碰 etcd 之前就返回错误,进程随之拒启;
+// 漏写轨道的 canary 进程会被当成 stable,接到 stable 的流量,所以不留这个口子(与 shared/noderegistry 同一理由)。
 func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uint32, ttl int64) (*NodeRegistration, error) {
+	track, err := releasetrack.FromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("release track: %w", err)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -83,21 +97,7 @@ func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uin
 	}
 
 	prefix := rpcPrefix(nodeType)
-	info := &base.NodeInfo{
-		NodeType: nodeType,
-		Endpoint: &base.EndpointComp{
-			Ip:   ip,
-			Port: port,
-		},
-		GrpcEndpoint: &base.EndpointComp{
-			Ip:   ip,
-			Port: port,
-		},
-		ZoneId:       zoneId,
-		LaunchTime:   uint64(time.Now().Unix()),
-		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),
-		NodeUuid:     uuid.New().String(),
-	}
+	info := newNodeInfo(nodeType, zoneId, ip, port, track)
 
 	// Allocate node_id via CAS
 	nodeID, err := allocateNodeID(ctx, cli, prefix, info, leaseResp.ID)
@@ -115,6 +115,8 @@ func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uin
 		return nil, fmt.Errorf("protojson marshal failed: %w", err)
 	}
 
+	logx.Infof("[NodeRegistry] registered: zone=%d node_type=%d node_id=%d uuid=%s release_track=%s",
+		zoneId, nodeType, nodeID, info.NodeUuid, track)
 	return &NodeRegistration{
 		client:   cli,
 		leaseID:  leaseResp.ID,
@@ -125,6 +127,27 @@ func Register(cli *clientv3.Client, nodeType, zoneId uint32, ip string, port uin
 		value:    string(value),
 		Info:     info,
 	}, nil
+}
+
+// newNodeInfo 构造本进程写进 etcd 的 NodeInfo,node_id 由随后的分配步骤填。
+// 抽成函数是为了单测不连 etcd 就能核对轨道;换号重注册沿用同一个 Info,轨道不会丢。
+func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releasetrack.Track) *base.NodeInfo {
+	return &base.NodeInfo{
+		NodeType: nodeType,
+		Endpoint: &base.EndpointComp{
+			Ip:   ip,
+			Port: port,
+		},
+		GrpcEndpoint: &base.EndpointComp{
+			Ip:   ip,
+			Port: port,
+		},
+		ZoneId:       zoneId,
+		LaunchTime:   uint64(time.Now().Unix()),
+		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),
+		NodeUuid:     uuid.New().String(),
+		ReleaseTrack: track.String(),
+	}
 }
 
 // allocateNodeID 在 (node_type) 下找空闲 node_id 并通过 etcd Txn CAS 占住。

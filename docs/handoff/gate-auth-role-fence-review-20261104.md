@@ -15,8 +15,8 @@
 1. login 在完整入场链中把原认证账号、原 owner_revision、连接 incarnation 与原有 player_id/login_generation 一起发给 gate。BindSessionEvent 属于内部 Kafka 协议。
 2. gate 将认证账号与原修订单独保存在 SessionInfo，和会变化的场景路由版本分开；缺字段、错连接代次、旧登录代次或同代身份冲突不能绑定。离场清理同时清除认证原件。
 3. 所有面向 Go 的在线身份由 gate 从服务端会话构造。SessionDetails 整体字节摘要、实际目标 RPC 全名、时间戳和随机 nonce 参与既有 v1 HMAC。直连与 client_rpc_router 转发都签实际业务方法。生成器增加 grpcFullMethod，生成产物通过正式 no-unity 流程产生。
-4. Go 共用 shared/callerauth 验签接缝，覆盖 chat/friend/guild/trade/match 与 domainhost 装配的 mail/rank。通过后在 context 保存不可变原件。shared/loginsession 只有在该证明与请求身份完全一致时直接取原账号，不读 Redis；伪造账号或修改 revision/gate UUID 拒绝。
-5. login 保留原适配器的强制/开发宽松配置和敏感 metadata 清理。未带原账号的旧内部请求保留原 Redis 路径，但有账号声明、没有验签证明时禁止回落补权。该兼容分支不是允许旧 gate 绕过新服务的验签拦截器。
+4. Go 共用 shared/callerauth 验签接缝，覆盖 chat/friend/guild/trade/match 与 domainhost 装配的 mail/rank。通过后在 context 保存不可变原件。在线域只经 `shared/roleidentity.SessionAccount` / `CaptureSession` 取原账号：声明须与该原件完全一致，伪造账号或修改 revision/gate UUID 拒绝。
+5. login 保留原适配器的强制/开发宽松配置和敏感 metadata 清理。2026-11-05 后续批次删除了在线域「未带原账号时读 login Redis」的兼容回退：项目未上线，六个在线服务不再有 LoginRedis 配置与连接，未带原账号的在线请求一律拒绝（未编译，见 [gate 在线身份](../design/gate-online-identity.md) 与 [执行清单](gate-online-identity-single-source-20261105/CODEX.md)）。
 6. 已排队请求保存准入时的身份，发送前复核当前绑定；离场后残留请求不能借后来的身份继续执行。角色归属检查和本库 role_fence 提交锁未删除，事务内不新增 RPC。
 7. 本机启动器只对需要它的进程注入同源内部密钥；生产部署通过 Secret 引用注入。未配密钥拒启，不把真实密钥写入仓库或日志。协议可使用额外验钥环境变量分阶段轮换。
 8. Java 独立实现中，绑定角色的 SessionContext 使用入场时 ownerAccount，而不是后续可能变化的 account。新连接仍从空身份开始。Java 内部使用既有 Dubbo 认证机制，不宣称与 C++/Go 新签名格式相同。
