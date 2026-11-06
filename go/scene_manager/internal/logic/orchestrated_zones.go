@@ -1,6 +1,10 @@
 package logic
 
-import "scene_manager/internal/svc"
+import (
+	"slices"
+
+	"scene_manager/internal/svc"
+)
 
 // 一个 scene_manager 进程只编排一个 zone(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3)。
 //
@@ -22,4 +26,21 @@ func orchestratedZones(svcCtx *svc.ServiceContext) []uint32 {
 // 控制域键由那个 zone 的 scene_manager 维护,哪怕同组、在同一个 Redis 实例上读得到也不读。
 func ownsControlZone(svcCtx *svc.ServiceContext, zoneID uint32) bool {
 	return zoneID != 0 && zoneID == svcCtx.Config.ZoneId
+}
+
+// unionZones 合并若干 zone 列表,去重后升序返回。顺序确定,日志与测试才可复现。
+// (原在 zone_registry.go;zone 登记集合 scene_manager:zones 2026-11-05 删除,这个工具函数搬到这里。)
+func unionZones(lists ...[]uint32) []uint32 {
+	set := make(map[uint32]struct{})
+	for _, list := range lists {
+		for _, z := range list {
+			set[z] = struct{}{}
+		}
+	}
+	out := make([]uint32, 0, len(set))
+	for z := range set {
+		out = append(out, z)
+	}
+	slices.Sort(out)
+	return out
 }

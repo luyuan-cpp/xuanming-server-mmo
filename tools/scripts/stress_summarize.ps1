@@ -1120,12 +1120,14 @@ foreach ($log in $sceneLogs) {
         $sr = [System.IO.StreamReader]::new($fs)
         while (-not $sr.EndOfStream) {
             $line = $sr.ReadLine()
-            if ($line -match '\[DirtySave\] total=(?<total>\d+) skipped=(?<skipped>\d+) skip_pct=(?<pct>[0-9.]+)%') {
+            # piggyback_deferred 是 2026-11-05 追加的,老二进制的行没有它,按 -1 记、打 "-"。
+            if ($line -match '\[DirtySave\] total=(?<total>\d+) skipped=(?<skipped>\d+) skip_pct=(?<pct>[0-9.]+)%(?: piggyback_deferred=(?<deferred>\d+))?') {
                 $dirtySaveLines += [pscustomobject]@{
-                    Log     = $log.Label
-                    Total   = [int64]$matches['total']
-                    Skipped = [int64]$matches['skipped']
-                    Pct     = [double]$matches['pct']
+                    Log      = $log.Label
+                    Total    = [int64]$matches['total']
+                    Skipped  = [int64]$matches['skipped']
+                    Pct      = [double]$matches['pct']
+                    Deferred = if ($matches.ContainsKey('deferred')) { [int64]$matches['deferred'] } else { [int64]-1 }
                 }
             } elseif ($line -match '\[SaveTiming\](?<rest>.*)$') {
                 $fields = @{}
@@ -1145,20 +1147,23 @@ if ($dirtySaveLines.Count -gt 0) {
     Write-Host ""
     Write-Host "=== Dirty-save skip rate (cpp scene LOG_INFO [DirtySave]) ============" -ForegroundColor Yellow
     Write-Host ""
-    "  scene_log                      total       skipped     skip_pct" | Write-Host
-    "  ---------                      -----       -------     --------" | Write-Host
+    "  scene_log                      total       skipped     skip_pct  piggyback_deferred" | Write-Host
+    "  ---------                      -----       -------     --------  ------------------" | Write-Host
 
     # Group by log file and take the last (== highest, monotonic) sample
     # per scene instance. With one scene_1.log this is just one row; with
     # multi-scene runs each instance gets its own row.
+    # skip_pct 只算「一行都没变」;只有位置变了而推迟的那些算在 piggyback_deferred,两者都没发请求。
     $byLog = $dirtySaveLines | Group-Object -Property Log
     foreach ($g in $byLog) {
         $latest = $g.Group | Select-Object -Last 1
-        $line = "  {0,-30} {1,-11} {2,-11} {3,5:N1}%" -f `
+        $deferredCell = if ($latest.Deferred -ge 0) { Format-Number $latest.Deferred 11 } else { '-' }
+        $line = "  {0,-30} {1,-11} {2,-11} {3,5:N1}%    {4}" -f `
             $g.Name, `
             (Format-Number $latest.Total 11), `
             (Format-Number $latest.Skipped 11), `
-            $latest.Pct
+            $latest.Pct, `
+            $deferredCell
         Write-Host $line
     }
 }

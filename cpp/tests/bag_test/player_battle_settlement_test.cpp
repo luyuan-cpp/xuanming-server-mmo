@@ -2933,3 +2933,119 @@ TEST_F(PlayerBattleSettlementTest, CoroutineLockIntegerIsFinalAndDuplicateReplyC
     EXPECT_TRUE(tlsEcs.actorRegistry.all_of<InBattleComp>(player));
     coroutineLockReplies.clear();
 }
+
+// ============================================================================
+// 收件箱战斗结算遇到获得封禁(2026-11-05,负责人定):封禁是终局业务决定,只跳过被封的那部分。
+// 被封的币种整笔不入账、被封的掉落不发,解封后都不补发;击杀、HP、未封的币种与掉落照常应用,结算记 APPLIED,
+// Match 照常放 ready 票。与资产通道 Credit 的 REJECTED、已删除的旧结算路径的跳过同一口径。
+// 2026-11-05 之前整笔 DEFER:封禁期间这一局永远到不了 APPLIED(玩家不能再排全球匹配),解封后又整笔补发。
+// 冻结、溢出、满包、身份变化、版本错位仍整笔 DEFER / 停域(InboxLaterCurrencyOverflowRejectsMoneyItemsHealthAndMissionTogether、
+// InboxFullBagsKeepConsumptionGoldHealthAndKillsUnchanged 等);BagService「任一项被封整批拒绝」的契约不变
+// (PreparedExchangeGainBlockRejectsBeforeConsumptionOrCredit)。单人封禁与全服封禁走同一个判定,单人金币封禁见
+// InboxGoldBlockSkipsOnlyGoldAndAppliesTheRest。
+// ============================================================================
+
+namespace {
+
+// 全服封禁一项获得,析构时还原(用例开始前就封着的不解封)。
+struct ScopedGlobalGainBlock {
+    ScopedGlobalGainBlock(GainBlockService::GainType blockedType, uint32_t blockedId)
+        : type(blockedType), id(blockedId), wasBlocked(GainBlockService::IsGloballyBlocked(blockedType, blockedId)) {
+        GainBlockService::BlockGlobal(type, id);
+    }
+    ~ScopedGlobalGainBlock() { if (!wasBlocked) GainBlockService::UnblockGlobal(type, id); }
+    ScopedGlobalGainBlock(const ScopedGlobalGainBlock&) = delete;
+    ScopedGlobalGainBlock& operator=(const ScopedGlobalGainBlock&) = delete;
+    const GainBlockService::GainType type;
+    const uint32_t id;
+    const bool wasBlocked;
+};
+
+// 全服封禁了金币:同一笔里的钻石照常入账、HP 与击杀照常,收件箱按 APPLIED 确认(Match 只凭 APPLIED 收据放 ready 票)。
+// 解封之后同一条目再投一次:收件箱按账本里的原结局回报、不再执行,被跳过的金币不补发。
+TEST_F(PlayerBattleSettlementTest, InboxGlobalCurrencyBlockSkipsOnlyThatCurrencyAndUnblockDoesNotRepay)
+{
+    ScopedCompositionInbox inbox;
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyDiamond, 5);
+    player_inbox::AckPlayerInboxRequest ack;
+    {
+        ScopedGlobalGainBlock goldBlock(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(kCurrencyGold));
+        PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+        ASSERT_EQ(1u, gCompositionInboxFetches.size());
+        RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+        EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "被封的币种整笔不入账";
+        EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyDiamond)) << "同一笔里未封的币种照常入账";
+        EXPECT_EQ(2u, KillProgress());
+        EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+        ASSERT_EQ(1, Results().entries_size()) << "已应用的局照常记近期结果";
+        ASSERT_EQ(1, Results().entries(0).currencies_size()) << "近期结果只记实际入账,被跳过的币种不记";
+        EXPECT_EQ(static_cast<uint32_t>(kCurrencyDiamond), Results().entries(0).currencies(0).currency_type());
+        EXPECT_EQ(5u, Results().entries(0).currencies(0).amount());
+
+        ASSERT_NO_FATAL_FAILURE(CommitInboxLedgerSnapshot());
+        PlayerInboxSystem::Tick();
+        ASSERT_EQ(1u, gCompositionInboxAcks.size());
+        ack = gCompositionInboxAcks.back();
+        ASSERT_EQ(1, ack.decisions_size());
+        EXPECT_EQ(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, ack.decisions(0).outcome())
+            << "封禁期间照样记 APPLIED,不再整笔 DEFER";
+    }
+
+    // 收件箱服务确认落定;金币此时已解封(goldBlock 已析构),同一条目再投一次。
+    ASSERT_FALSE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(kCurrencyGold)));
+    player_inbox::AckPlayerInboxResponse acknowledged;
+    acknowledged.set_player_id(playerId); acknowledged.set_domain(ack.domain());
+    acknowledged.set_correlation_id(ack.correlation_id()); acknowledged.set_fence(player_inbox::PLAYER_INBOX_FENCE_MATCH);
+    auto* finalized = acknowledged.add_results(); finalized->set_seq(ack.decisions(0).seq());
+    finalized->set_result(player_inbox::PLAYER_INBOX_ACK_FINALIZED); finalized->set_state(player_inbox::PLAYER_INBOX_ITEM_APPLIED);
+    PlayerInboxSystem::OnAckReply(playerId, kCompositionBattleDomain, ack.correlation_id(), acknowledged);
+    gCompositionInboxNowMs += player_inbox_rules::kMinCheckGapMs + 1;
+    PlayerInboxSystem::OnNotifyEvent(playerId, kCompositionBattleDomain); PlayerInboxSystem::Tick();
+    ASSERT_EQ(2u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "解封不补发";
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyDiamond)) << "重放不再执行";
+    EXPECT_EQ(1, Results().entries_size()) << "重放不写第二条近期结果";
+}
+
+// 全服封禁了一种掉落:只剔除这一项(不发、也不改投临时格),其余掉落、消耗、金币、击杀与 HP 照常应用,执行器回 APPLIED。
+// 号段预检按剔除之后的掉落算:被封的 3 件不可叠加物不铸号,号段只剩 1 个号也够发未封的那一堆。
+TEST_F(PlayerBattleSettlementItemTest, InboxGlobalItemBlockSkipsOnlyTheBlockedDropAndAppliesTheRest)
+{
+    ScopedItemSegmentBaseline restoreBaseline;
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3)); // 铺底在换号段之前,用的是基线号段
+    SetConsumed(kSettlementStackItem, 1);
+    SetGained(kSettlementNonStackItem, 3); // 被封:3 件不可叠加 = 3 个新实例
+    SetGained(kSettlementDropItem, 2);     // 未封:可叠加,1 个新实例
+    ScopedGlobalGainBlock block(GainBlockService::GainType::kItem, kSettlementNonStackItem);
+    ASSERT_TRUE(ArmSettlementMissionItemSegment(99700000, 99700001)); // 只剩 1 个号
+
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind)
+        << "2026-11-05 之前:号段预检按原件要 4 个号、ConsumeInventoryAndGrant 整批回 kAssetBlocked,都整笔 DEFER";
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kSettlementNonStackItem)) << "被封的掉落不发";
+    EXPECT_EQ(0u, Temporary().GetTotalItemCount(kSettlementNonStackItem)) << "也不改投临时格";
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementDropItem)) << "未封的掉落照常入包";
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "消耗照常扣";
+    EXPECT_EQ(0u, tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available()) << "只为未封的那一堆铸了 1 个号";
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_TRUE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, kSettlementNonStackItem))
+        << "结算不改封禁状态";
+    ASSERT_EQ(1, Results().entries_size()) << "已应用的局照常记近期结果";
+    const auto& recorded = Results().entries(0);
+    ASSERT_EQ(1, recorded.items_gained_size()) << "近期结果只记实际入包的掉落";
+    EXPECT_EQ(kSettlementDropItem, recorded.items_gained(0).item_table_id());
+    EXPECT_EQ(2u, recorded.items_gained(0).count());
+}
+
+}  // namespace

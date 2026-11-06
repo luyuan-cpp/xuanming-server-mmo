@@ -161,12 +161,12 @@ const (
 // err 非 nil 时 outcome=error,调用方(Kafka 消费者)重试;其余情况已终态。
 //
 // 规则:
-//   - 只对 PVP 队列模式(isRatedMode)计分,PVE / 切磋忽略;
+//   - 只对计分模式(isRatedMode)计分,PVE / 切磋忽略;评分轨道与榜按结果里的 match_mode 选
+//     (成局时写进 CreateBattleRequest 的那个 mode,新终局协议还在提交点核过它与成局原件一致);
 //   - outcome 只认 SIDE_A_WIN(team 0 胜)/ SIDE_B_WIN(team 1 胜)/ DRAW(各 0.5),
 //     其余忽略;必须恰好两支非空队伍;
-//   - 回合打满按平局:total_rounds ≥ RatingDrawRoundCapFor(config) 的胜负结果按 0.5
-//     结算(C++ 引擎回合打满一律判 SIDE_B_WIN,是 PVE"进攻方判负"规则泄漏到 PVP;
-//     team 0 = 1v1 锚点 / 5v5 评分最高者所在队,照胜负算会系统性扣他们的分);
+//   - 回合打满按平局,判定见 ratedScoreA:引擎回合打满一律判 SIDE_B_WIN,是 PVE"进攻方判负"规则泄漏到 PVP
+//     (team 0 = 1v1 按 battle_id 定的一侧 / 5v5 蛇形分边的一侧,照胜负算对 team 0 不公平);
 //   - Elo 与幂等在 Authority.ApplyRating 的 SQL 事务里:队伍用平均分算期望,K=32,评分下限 0。
 func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEvent) (string, error) {
 	mode := matchpb.MatchMode(event.GetMatchMode())
@@ -179,15 +179,9 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 	if !isRatedMode(mode) {
 		return finish(ratingOutcomeIgnored), nil
 	}
-	var scoreA float64
-	switch event.GetOutcome() {
-	case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN:
-		scoreA = 1
-	case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN:
-		scoreA = 0
-	case battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW:
-		scoreA = 0.5
-	default:
+	roundLimit := svcCtx.Catalog.RoundLimit(event.GetBattleConfigId())
+	scoreA, roundCap, rated := ratedScoreA(event, roundLimit)
+	if !rated {
 		logx.Infof("[rating] Battle result does not affect rating battle=%d mode=%s outcome=%s", battleId, modeName, event.GetOutcome())
 		return finish(ratingOutcomeIgnored), nil
 	}
@@ -196,14 +190,14 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 		logx.Errorf("[rating] Invalid team structure in battle result; rating unchanged battle=%d mode=%s teams=%d", battleId, modeName, len(event.GetTeams()))
 		return finish(ratingOutcomeIgnored), nil
 	}
-	if scoreA != 0.5 {
-		if roundCap := svcCtx.Config.RatingDrawRoundCapFor(event.GetBattleConfigId()); roundCap > 0 && event.GetTotalRounds() >= roundCap {
-			// 回合打满:引擎判的 SIDE_B_WIN 是 PVE 规则,PVP 按平局。最后一回合真打死
-			// 也落在这里(total_rounds == 上限,与打满不可区分),保守按平局。
-			logx.Infof("[rating] Round limit reached; settling as draw battle=%d mode=%s outcome=%s rounds=%d cap=%d config=%d",
-				battleId, modeName, event.GetOutcome(), event.GetTotalRounds(), roundCap, event.GetBattleConfigId())
-			metrics.ObserveRatingRoundCapDraw(modeName)
-			scoreA = 0.5
+	if roundCap != "" {
+		logx.Infof("[rating] Round limit reached; settling as draw battle=%d mode=%s outcome=%s basis=%s rounds=%d limit=%d config=%d",
+			battleId, modeName, event.GetOutcome(), roundCap, event.GetTotalRounds(), roundLimit, event.GetBattleConfigId())
+		if roundCap == roundCapBySurvivors && event.GetTotalRounds() < roundLimit {
+			// 0 队没全灭却判 1 队胜,回合数又没到本副本按模板推出的上限:battle 用的 Dungeon 表与本副本不是同一版
+			// (滚动换表),或者引擎多了一条胜负规则。仍按原件的事实判平局,留日志查原因。
+			logx.Errorf("[rating] Side B win without wiping side 0 before this replica's round limit; settled as draw battle=%d mode=%s rounds=%d limit=%d config=%d",
+				battleId, modeName, event.GetTotalRounds(), roundLimit, event.GetBattleConfigId())
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -215,7 +209,74 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 	if !applied {
 		return finish(ratingOutcomeDuplicate), nil
 	}
+	if roundCap != "" {
+		// 只在真正入账时计数:重复投递、重试不重复计。
+		metrics.ObserveRatingRoundCapDraw(modeName, roundCap)
+	}
 	return finish(ratingOutcomeApplied), nil
+}
+
+// 回合打满改判平局的依据(指标 match_rating_round_cap_draw_total{mode,basis} 的 basis,封闭集合)。
+const (
+	// roundCapBySurvivors:完整个人原件(settlement_format_version=1)证明 0 队还有能行动的单位。引擎只有回合打满
+	// 这一条路会在 0 队没全灭时判 1 队胜,所以这是确定的「打满」,不用回合数猜。
+	roundCapBySurvivors = "survivors"
+	// roundCapByRoundLimit:没有个人原件的旧版结果,只能看回合数达到模板回合上限(catalog.RoundLimit,与引擎同一换算)。
+	roundCapByRoundLimit = "round_limit"
+)
+
+// ratedScoreA 把计分局的终局换算成 0 队的 Elo 得分:1 胜、0.5 平、0 负。rated=false:这个终局不计分。
+// roundCap 非空:引擎判的 1 队胜其实是回合打满,按平局计,值是判定依据。roundLimit 是本局模板的回合上限。
+//
+// 引擎的胜负规则对所有模式相同(TurnBattleEngine::UpdateOutcome):双方同时全灭判平;一方全灭判另一方胜;
+// 都没全灭而回合数到了上限(模板 time_limit 换算,缺省 300 回合),判进攻方(0 队)负。整场期限打满时 battle 节点
+// 直接盖平局章(OnBattleDeadline),结果本来就是 DRAW。所以:
+//   - DRAW:0.5;
+//   - SIDE_A_WIN:1。回合打满只会判 1 队胜,0 队胜一定是把 1 队打到全灭,哪怕发生在最后一回合;
+//   - SIDE_B_WIN:有完整个人原件时看 0 队还有没有能行动的单位,有就是回合打满,按平局;0 队全灭才是真输,
+//     最后一回合真打死也能分清。没有个人原件的旧版结果只能看回合数:达到上限按平局
+//     (分不清最后一回合真打死,保守按平局),否则算输。
+func ratedScoreA(event *kafkapb.BattleResultEvent, roundLimit uint32) (scoreA float64, roundCap string, rated bool) {
+	switch event.GetOutcome() {
+	case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN:
+		return 1, "", true
+	case battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW:
+		return 0.5, "", true
+	case battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN:
+	default:
+		return 0, "", false
+	}
+	if event.GetSettlementFormatVersion() == 1 {
+		// 版本 1 的个人原件与成员一一对应、队伍一致,结果消费者在入账之前已经核过(authority.ArchiveCompletion)。
+		if sideHasActiveUnit(event.GetSettlements(), 0) {
+			return 0.5, roundCapBySurvivors, true
+		}
+		return 0, "", true
+	}
+	if roundLimit > 0 && event.GetTotalRounds() >= roundLimit {
+		return 0.5, roundCapByRoundLimit, true
+	}
+	return 0, "", true
+}
+
+// sideHasActiveUnit 报告终局时 team 这一侧还有没有能行动的单位,口径同引擎的 SideWiped:玩家未阵亡且未逃跑,
+// 或他出战的宝宝未阵亡(PVP 不刷怪,一侧只有玩家和宝宝)。宝宝的个人原件没有逃跑标记:PVP 逃跑必然失败
+// (ExecuteFlee 只在 PVE 掷骰),宝宝不会因逃跑离场,只看阵亡。
+func sideHasActiveUnit(settlements []*battlepb.BattleSettlementData, team uint32) bool {
+	for _, settlement := range settlements {
+		if settlement.GetPlayerTeamIndex() != team {
+			continue
+		}
+		if !settlement.GetIsDead() && !settlement.GetFled() {
+			return true
+		}
+		for _, pet := range settlement.GetPets() {
+			if !pet.GetIsDead() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // splitResultTeams 把结果里的队伍拆成 team 0 / team 1 的成员列表:必须恰好两支

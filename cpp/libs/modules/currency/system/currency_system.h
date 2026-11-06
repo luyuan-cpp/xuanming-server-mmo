@@ -45,6 +45,12 @@ public:
     //   amount<=0 / 类型越界 / 缺组件 -> kInvalidParameter(编程错误,不变)
     //   缺组件 = CurrencyComp 或 PlayerCurrencyComp 任一缺失(两者都只在玩家加载时挂上)。
     //   本系统只取不建:缺失时余额、欠款、流水都不动,也不会补建组件。
+    //   入账后余额溢出 uint64 -> kInvalidParameter(坏数据,同编程错误;不新增 tip)。按补缴扣还后的净入账额判,
+    //   与战斗结算的整批预检 CanCreditWholeBattleCurrency 同口径;拒绝时欠款、余额、流水、异常检测都不动。
+    //
+    // 补缴扣还:该币种欠款有效(未冻结、未过期)时先扣还、扣满即删,余下的再入账。欠款带更新版本才有的字段时
+    // (与 DebtCarriesUnknownFields 同一判据)本版本不扣还也不删除,按冻结处理、全额入账,并打
+    // metric=persist_version_skew where=currency_clawback 的 WARN(docs/design/mixed-version-persist-field-protection.md §4.4)。
     //
     // **判定顺序是契约的一部分**:amount<=0 与类型越界这两条零副作用的纯参数校验
     // 排在冻结 / 封禁之前。冻结中的玩家传一个越界币种,得到的仍是 kInvalidParameter
@@ -92,9 +98,9 @@ public:
     // 见 unknown_field_carry::CarriesNewerVersionFields)。只读,不建组件:
     // 缺 PlayerCurrencyComp、类型越界、没有这种币种的欠款都返回 false。
     // 需要判"欠款是否带新版本字段"的地方一律调它,不要直接看 CurrencyDebt::unknownFields 是否为空。
-    // AttachDebt 遇到 true 拒绝合并;收件箱执行器在调用 AttachDebt 之前先判,命中回 kVersionSkew
-    // (收件箱停用本域,实体重建后重拉;docs/design/mixed-version-persist-field-protection.md §4.4)。
-    // 结果会在会话内变化(欠款被还清删除后变 false),调用方不能把一次 true 当成"本会话一直做不了"。
+    // AttachDebt 遇到 true 拒绝合并,AddCurrency 遇到 true 不扣还(按冻结处理);收件箱执行器在调用 AttachDebt 之前先判,
+    // 命中回 kVersionSkew(收件箱停用本域,实体重建后重拉;docs/design/mixed-version-persist-field-protection.md §4.4)。
+    // 结果可能在会话内变化(这笔欠款被删除后变 false;AddCurrency 不会把它还清删除),调用方不能把一次 true 当成"本会话一直做不了"。
     static bool DebtCarriesUnknownFields(entt::entity player, CurrencyType type);
 
     // Write off all remaining debt for the given currency type.

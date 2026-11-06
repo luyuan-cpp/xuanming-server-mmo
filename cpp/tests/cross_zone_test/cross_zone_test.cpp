@@ -7918,6 +7918,144 @@ protected:
 };
 } // namespace
 
+TEST_F(LifecycleCoroutineTest, TravelPublishesBeforeEnterAndLateReplyCannotMovePlayer)
+{
+    const auto player = FrozenPlayer();
+    PlayerLifecycleSystem::BeginTravelHandoff(kExitPlayerId);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    EXPECT_EQ(redis->commands.front().at(1), handoff_sql_barrier::kPublishMarkDirectLua);
+    EXPECT_TRUE(sceneManager.pending->empty());
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).markEpoch, kDirectEpoch);
+    redis->Reply(":1\r\n");
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return sceneManager.pending->size() == 1; }));
+    const auto& request = sceneManager.pending->front().request;
+    EXPECT_EQ(request.zone_id(), kReplyTargetZone);
+    EXPECT_EQ(request.session_id(), kSessionAtExit);
+    EXPECT_EQ(request.login_generation(), 9u);
+    EXPECT_NE(request.correlation_id(), 0u);
+    EXPECT_EQ(request.correlation_id(), tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).enterSceneCorrelationId);
+    tasks.StopAll();
+    sceneManager.Complete(/*withRedirect=*/true);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] {
+        const auto channel = sceneChannel.lock();
+        return channel && channel->outstandingCalls() == 0;
+    }));
+    RunPending();
+    EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+}
+
+TEST_F(LifecycleCoroutineTest, TravelUnknownMarkDoesNotSendEnterScene)
+{
+    const auto player = FrozenPlayer();
+    const auto before = tlsPlayerRedis.stats().nullReplies;
+    PlayerLifecycleSystem::BeginTravelHandoff(kExitPlayerId);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    redis->Disconnect();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return tlsPlayerRedis.stats().nullReplies > before; }));
+    RunPending();
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, PlayerFrozenComp>(player));
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).enterSceneCorrelationId, 0u);
+    EXPECT_TRUE(sceneManager.pending->empty());
+}
+
+TEST_F(LifecycleCoroutineTest, TravelSupersededMarkDestroysOnlyTheOldOwner)
+{
+    const auto player = FrozenPlayer();
+    PlayerLifecycleSystem::BeginTravelHandoff(kExitPlayerId);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    redis->Reply(":-2\r\n");
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return !tlsEcs.actorRegistry.valid(player); }));
+    EXPECT_TRUE(sceneManager.pending->empty());
+}
+
+TEST_F(LifecycleCoroutineTest, SessionCredentialWaitsForSqlBeforeFencedWrite)
+{
+    const auto baseline = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
+    EndSession();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    EXPECT_EQ(redis->commands.front().front(), "HGET");
+    EXPECT_EQ(PlayerLifecycleSystem::ExitReleaseMarksInFlight(), baseline + 1);
+    ReplyFence();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return store.sent.size() == 1; }));
+    EXPECT_TRUE(store.sent.front().request.release());
+    EXPECT_EQ(store.sent.front().request.owner_epoch(), kDirectEpoch);
+    EXPECT_EQ(redis->commands.size(), 1u);
+    EXPECT_EQ(PlayerLifecycleSystem::ExitReleaseMarksInFlight(), baseline + 1);
+    store.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 2; }));
+    const auto& args = redis->commands.back();
+    EXPECT_EQ(args.at(1), handoff_sql_barrier::kCredentialMarkLua);
+    EXPECT_NE(std::find(args.begin(), args.end(), kFence), args.end());
+    EXPECT_EQ(PlayerLifecycleSystem::ExitReleaseMarksInFlight(), baseline + 1);
+    redis->Reply(":1\r\n");
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return PlayerLifecycleSystem::ExitReleaseMarksInFlight() == baseline; }));
+}
+
+TEST_F(LifecycleCoroutineTest, SessionCredentialRechecksNewLocalHolder)
+{
+    const auto baseline = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
+    EndSession();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    const auto player = MakeOnlinePlayer(kNewerSession);
+    ReplyFence();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return PlayerLifecycleSystem::ExitReleaseMarksInFlight() == baseline; }));
+    EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_TRUE(store.sent.empty());
+    EXPECT_EQ(redis->commands.size(), 1u);
+}
+
+TEST_F(LifecycleCoroutineTest, SessionCredentialStopKeepsSqlInFlightUntilItsReply)
+{
+    const auto baseline = PlayerLifecycleSystem::ExitReleaseMarksInFlight();
+    EndSession();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+    ReplyFence();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return store.sent.size() == 1; }));
+    tasks.StopAll();
+    EXPECT_EQ(PlayerLifecycleSystem::ExitReleaseMarksInFlight(), baseline + 1);
+    store.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    EXPECT_EQ(PlayerLifecycleSystem::ExitReleaseMarksInFlight(), baseline);
+    RunPending();
+    EXPECT_EQ(redis->commands.size(), 1u);
+}
+
+TEST_F(LifecycleCoroutineTest, RelocateSupersededMarkStillAsksSceneManagerAndTracksItsReply)
+{
+    ASSERT_NO_FATAL_FAILURE(BeginRelocate());
+    redis->Reply(":-2\r\n");
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return sceneManager.pending->size() == 1; }));
+    const auto awaiting = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(awaiting);
+    EXPECT_EQ(awaiting->markWrite, relocate_confirm::MarkWrite::kSuperseded);
+    EXPECT_EQ(awaiting->phase, relocate_confirm::Phase::kAwaitingReply);
+    EXPECT_EQ(awaiting->correlationId, sceneManager.pending->front().request.correlation_id());
+    EXPECT_NE(awaiting->correlationId, 0u);
+    sceneManager.Complete(/*withRedirect=*/false);
+    ASSERT_NO_FATAL_FAILURE(RunUntil([] {
+        const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+        return entry && entry->completionSeen;
+    }));
+    const auto verifying = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(verifying);
+    EXPECT_EQ(verifying->phase, relocate_confirm::Phase::kVerifying);
+}
+
+TEST_F(LifecycleCoroutineTest, RelocateStopLeavesConfirmationAndLateMarkCannotDispatch)
+{
+    ASSERT_NO_FATAL_FAILURE(BeginRelocate());
+    const auto before = tlsPlayerRedis.stats().nullReplies;
+    tasks.StopAll();
+    redis->Disconnect();
+    ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return tlsPlayerRedis.stats().nullReplies > before; }));
+    RunPending();
+    EXPECT_TRUE(sceneManager.pending->empty());
+    const auto tracked = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(tracked);
+    EXPECT_EQ(tracked->phase, relocate_confirm::Phase::kMarkWriting);
+    EXPECT_EQ(tracked->correlationId, 0u);
+}
+
 // ============================================================================
 // Test bootstrap
 // ============================================================================

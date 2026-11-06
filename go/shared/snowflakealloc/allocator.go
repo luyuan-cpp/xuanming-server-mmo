@@ -971,8 +971,15 @@ type loopState struct {
 // run 是唯一会改 lease / watch / keepalive channel 的 goroutine。
 //
 // 失租处理(设计稿 §1.3 / §3.4):keepalive 流结束、slots key 被删,都**不再**直接 markLost,
-// 而是 reclaim —— 重新 Grant 一个 lease,把 slots key 挂回去(If CreateRev==0 或
-// Value==uuid)。只有 key 被别的 uuid 占着才是真的失去所有权。
+// 而是 reclaim —— 重新 Grant 一个 lease,把 slots key 挂回去(key 已过期时还要水位 revision
+// 未被别人动过,见 reclaim;或 Value==uuid)。只有 key 被别的 uuid 占着,或过期期间水位被
+// 别人写过,才算失去所有权。
+//
+// 这里刻意**不做**"两拍墙钟间隔远大于周期 ⇒ 判冻结"的检测:它要等解冻后的下一拍才生效,
+// 请求线程可能已经先发出号;它用的墙钟又与 FenceClock 的墙钟规则是同一个读数 —— 看得见的
+// 冻结(超过 F)Generate() 入口就已拦下,看不见的(墙钟也没走)它同样看不见。短于 F 的冻结
+// 不必感知:Q > F 保证这段时间没人能申领这个槽;lease 若已过期,下一拍水位 Txn 的归属校验
+// 失败,自然转入 reclaim。
 func (h *Handle) run(kaCtx context.Context, st *loopState) {
 	ticker := time.NewTicker(guardWriteInterval)
 	defer ticker.Stop()

@@ -727,10 +727,11 @@ func (s *Store) SpectatorsThrough(ctx context.Context, afterPlayer, through uint
 	return out, rows.Err()
 }
 
-// SpectatorFormationEnded 判定观战目标成局的房间必已不在:成局已关(state 5),或已过权威截止 + 终局提交宽限,
-// 房间必已被 battle 定时器收尾(与到期终局恢复裁决 ABORT 同一分界,terminalAbortDue)。stamp 取 TiDB 时钟。
+// SpectatorFormationEnded 判定观战目标成局的房间必已不在:终局已持久落定(FormationOutcomeDecided:COMPLETE 或 ABORT),
+// 或已过权威截止 + 终局提交宽限,房间必已被 battle 定时器收尾(与到期终局恢复裁决 ABORT 同一分界,terminalAbortDue)。
+// stamp 取 TiDB 时钟。
 func SpectatorFormationEnded(formation *pb.MatchFormationRecord, stamp uint64) bool {
-	return formation.GetState() == 5 || terminalAbortDue(formation.GetDeadlineMs(), stamp)
+	return FormationOutcomeDecided(formation) || terminalAbortDue(formation.GetDeadlineMs(), stamp)
 }
 
 // spectatorIntentRetentionMs 是已关闭意图的保留期:7 天。意图只为同 request_id 重放提供同一结论,重放窗口是秒级

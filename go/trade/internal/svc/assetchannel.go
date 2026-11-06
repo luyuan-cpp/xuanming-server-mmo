@@ -438,7 +438,11 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 // 带属主校验释放锁(leader.Elector.Run 的收尾,自带 2s 预算 —— 所以 Close 必须等它、且早于关 Redis)。
 // 节点镜像、重投循环与维护三个 goroutine 都记进 wg(Close 等它们全部退出再关连接,与 guild 的 AssetPipeline 同形);
 // wg.Add 在 mu 内、closed 判断之后,Close 置 closed 之后才 wg.Wait,所以不会出现 Wait 之后再 Add。
-func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
+//
+// globalBackground 为 false(发布轨道 canary,docs/design/release-track-gray-canary.md §2.5)时只起 scene 节点镜像:
+// 托管 RPC 提交后同步投一次与 Rmb sealer 要靠它定位节点;重投循环、商务推进、维护选主与唤醒订阅都是全局作用域的后台,
+// 由 stable 副本承担,canary 写下的行由它们接手(首投失败的行租约到期后照常被领走)。
+func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client, globalBackground bool) {
 	if a == nil {
 		return
 	}
@@ -457,6 +461,10 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 			defer a.holdPanic()
 			a.Watcher.Run(loopCtx, etcd)
 		})
+		if !globalBackground {
+			logx.Info("[trade] Asset channel on a canary replica: scene node mirror only; redelivery, commerce, maintenance and wake run on stable replicas")
+			return
+		}
 		if a.Pipeline == nil {
 			// 装配层已保证:AssetOp.Enabled=true 走到这里 Pipeline 必非 nil(密钥不可用会在
 			// NewServiceContext 就拒启),Enabled=false 则整个 AssetChannel 是 nil、上面就返回了。

@@ -630,7 +630,7 @@ TEST(PlayerStoreProjectionTest, FieldInTwoRowsIsNotMergedTwice)
 {
     player_database inAsset;
     inAsset.mutable_currency()->add_values(1000);
-    // 旧分组把货币写在 kCharacter 行里。
+    // 模拟换行之前的布局:货币曾经写在 kCharacter 行里,现在属于 kWallet。
     player_database inHot;
     inHot.mutable_currency()->add_values(1000);
     inHot.mutable_level_component()->set_level(30);
@@ -1151,4 +1151,113 @@ TEST(PlayerStoreClientTest, RunWhenSettledFiresEvenIfTheCallbackForgotThePlayer)
     f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kEpoch + 1, 1);
     EXPECT_EQ(1, calls);
     EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded, client.Submit(kPlayer, Rows("h1"), {}, nullptr));
+}
+
+// ── 提交水位(资产流水跟着存盘提交走,TransactionLogSystem 类注释)──────────────────────
+namespace
+{
+    struct WatermarkProbe
+    {
+        uint64_t mark{0};
+        std::vector<std::pair<Guid, uint64_t>> reported;
+
+        void Install(PlayerStoreClient::Options &options)
+        {
+            options.commitMark = [this] { return mark; };
+            options.onCommittedThrough = [this](Guid player, uint64_t commitMark) { reported.emplace_back(player, commitMark); };
+        }
+    };
+}
+
+// 只有确定提交了才报告水位,而且先报告、后回调:回调里可能销毁实体,那之后没放行的流水会被丢掉。
+TEST(PlayerStoreClientTest, CommitWatermarkIsReportedOnlyAfterTheCommitAndBeforeTheCallback)
+{
+    Fixture f;
+    WatermarkProbe probe;
+    probe.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    probe.mark = 5;
+    std::size_t reportedAtCallback = 99;
+    client.Submit(kPlayer, Rows("h1"), {}, [&](const PlayerStoreClient::SaveResult &) { reportedAtCallback = probe.reported.size(); });
+    probe.mark = 6; // 取快照之后才记的流水,这份快照提交了也不能放
+    EXPECT_TRUE(probe.reported.empty()) << "发出去不算提交";
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    ASSERT_EQ(1u, probe.reported.size());
+    EXPECT_EQ(kPlayer, probe.reported[0].first);
+    EXPECT_EQ(5u, probe.reported[0].second);
+    EXPECT_EQ(1u, reportedAtCallback);
+}
+
+// 被拒、结果未知都不报告:这份快照里的改动不一定在库里。
+TEST(PlayerStoreClientTest, RejectedOrUnknownSavesDoNotReportTheWatermark)
+{
+    Fixture f;
+    WatermarkProbe probe;
+    probe.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    probe.mark = 5;
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+
+    f.ReplyUnknown();
+    EXPECT_TRUE(probe.reported.empty());
+    f.FireTimers();
+    ASSERT_EQ(1u, f.sent.size()) << "结果未知按同内容重发";
+    f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kEpoch + 1, 1);
+
+    EXPECT_TRUE(probe.reported.empty());
+}
+
+// 被更新的快照取代的那份不单独报告;取代它的那份提交时水位更大,一并放行。
+TEST(PlayerStoreClientTest, SupersededSnapshotsAreReleasedByTheLaterCommit)
+{
+    Fixture f;
+    WatermarkProbe probe;
+    probe.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    probe.mark = 5;
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+    probe.mark = 8;
+    client.Submit(kPlayer, Rows("h2"), {}, nullptr);
+    probe.mark = 9;
+    client.Submit(kPlayer, Rows("h3"), {}, nullptr);
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    ASSERT_EQ(1u, probe.reported.size());
+    EXPECT_EQ(5u, probe.reported[0].second);
+    ASSERT_EQ(1u, f.sent.size()) << "只发最新的那份";
+    EXPECT_EQ("h3", PayloadOf(f.sent.front().request, kCharacter));
+
+    f.Reply(playerstore::SAVE_PLAYER_EQUAL);
+    ASSERT_EQ(2u, probe.reported.size()) << "EQUAL 也是提交";
+    EXPECT_EQ(9u, probe.reported[1].second);
+}
+
+// 和已确认的内容一样、不用写的快照,改动早已在库里:立刻报告,不管是新交的还是排队轮到的。
+TEST(PlayerStoreClientTest, SnapshotsWithNothingToWriteReportTheWatermark)
+{
+    Fixture f;
+    WatermarkProbe probe;
+    probe.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    probe.mark = 3;
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, Rows("h0"), {}, nullptr));
+    ASSERT_EQ(1u, probe.reported.size());
+    EXPECT_EQ(3u, probe.reported[0].second);
+
+    probe.mark = 4;
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+    probe.mark = 7;
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr); // 排队,内容和在途那笔一样
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    EXPECT_TRUE(f.sent.empty()) << "排队的那份不用写";
+    ASSERT_EQ(3u, probe.reported.size());
+    EXPECT_EQ(4u, probe.reported[1].second);
+    EXPECT_EQ(7u, probe.reported[2].second);
 }

@@ -9,7 +9,8 @@
 //   - 生效等级 = CappedLevel(存储等级)。所有玩法(总点数、面板、技能解锁与生效重数、战斗快照、伤害与回血公式、
 //     任务等级条件、宝宝跟随等级、装备穿戴等级……)一律读它。
 // LevelComp.level() 的直读只允许出现在四处:加载器(超上限只告警)、存盘(原样写出)、GmSetLevel(写前取旧值)、
-// 管理端 dump(原样展示)。其余读点一律经 CappedLevel。
+// 管理端 dump(原样展示)。其余读点一律经 CappedLevel。这四处的直读在同一行带一条写明场合的标记注释,
+// 由契约测试 tools/scripts/tests/test_cpp_level_comp_reads.py 扫描 cpp/libs 与 cpp/nodes 守住(标记格式见该文件)。
 // LevelComp 是加载时挂上的持久数据(组件访问规则):玩家的读点缺这个组件就是加载不变量被破坏 —— 记 ERROR 并
 // fail-closed(拒绝、不生效、不补发),绝不按 1 级补默认值继续算;CappedLevel 的「0 按 1」只换算存储值,不覆盖缺组件。
 // 非玩家(NPC / 怪物)没有 LevelComp,按 1 级算是它们自己的规则(skill.cpp 的目标等级、回血 buff)。

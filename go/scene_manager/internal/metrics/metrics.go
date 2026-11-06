@@ -527,10 +527,10 @@ var (
 	//                    读失败的节点数见 load_refresh_node_errors_total
 	//   read_failed      至少一批读遇到传输层失败(熔断拒绝 / 取连接 / 网络 / 超时),受影响的节点本拍不更新分数。
 	//                    只按错误类型判,与批怎么切无关(internal/logic/load_refresh.go pipelineHitTransportError)
-	//   registry_failed  zone 登记集合 scene_manager:zones 写失败(负载集照常写)
 	//   write_failed     写批(类型镜像 / ZADD)有命令失败,或整批没执行
 	//   lost_leadership  刷新途中失去领导权,剩余写入放弃(新领导者下一拍接上)
-	// 同时出现多种时按 write_failed > read_failed > registry_failed > lost_leadership > partial 取一个。
+	// 同时出现多种时按 write_failed > read_failed > lost_leadership > partial 取一个。
+	// (registry_failed 2026-11-05 随 zone 登记集合删除,docs/design/control-plane-zone-scoping-20261105.md §4.3。)
 	// 只有领导者发出;watch PUT 触发的单节点刷新不计入。所有 outcome 在注册时预置为 0:increase() 看不到
 	// 序列从「不存在」到 1 的第一次跳变,「刷新停摆」告警也要靠预置的 0 序列区分「没人在刷」与「指标不存在」。
 	// 告警见 deploy/k8s/scene-manager-alerts.yaml SceneManagerLoadRefreshStalled / Failing / Slow / NodeErrors。
@@ -538,7 +538,7 @@ var (
 	loadRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "load_refresh_total",
-		Help:      "Leader load-score refresh ticks by outcome (ok|partial|read_failed|registry_failed|write_failed|lost_leadership).",
+		Help:      "Leader load-score refresh ticks by outcome (ok|partial|read_failed|write_failed|lost_leadership).",
 	}, []string{"outcome"})
 
 	// loadRefreshSeconds:一拍领导者刷新的墙钟耗时(登记 SADD + 分批 pipeline 读 + 分批 pipeline 写)。
@@ -749,7 +749,6 @@ const (
 	LoadRefreshOutcomeOK             = "ok"
 	LoadRefreshOutcomePartial        = "partial"
 	LoadRefreshOutcomeReadFailed     = "read_failed"
-	LoadRefreshOutcomeRegistryFailed = "registry_failed"
 	LoadRefreshOutcomeWriteFailed    = "write_failed"
 	LoadRefreshOutcomeLostLeadership = "lost_leadership"
 )
@@ -759,7 +758,6 @@ var loadRefreshOutcomes = [...]string{
 	LoadRefreshOutcomeOK,
 	LoadRefreshOutcomePartial,
 	LoadRefreshOutcomeReadFailed,
-	LoadRefreshOutcomeRegistryFailed,
 	LoadRefreshOutcomeWriteFailed,
 	LoadRefreshOutcomeLostLeadership,
 }

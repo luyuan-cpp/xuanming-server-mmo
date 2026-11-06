@@ -92,21 +92,18 @@ type loadRefreshNode struct {
 type loadRefreshReport struct {
 	nodeReadErrors      int  // 计数没读到的节点数(含传输层失败与逐条回复错误 / 坏值)
 	readTransportFailed bool // 至少一批读遇到传输层失败(熔断拒绝 / 取连接 / 网络 / 超时),见 pipelineHitTransportError
-	registryFailed      bool
 	writeFailed         bool
 	lostLeadership      bool
 }
 
-// outcome 在多种情况同时出现时只取一个:write_failed > read_failed > registry_failed > lost_leadership
-// > partial > ok。前三种是告警口径(SceneManagerLoadRefreshFailing),排在前面才不会被别的盖掉。
+// outcome 在多种情况同时出现时只取一个:write_failed > read_failed > lost_leadership > partial > ok。
+// 前两种是告警口径(SceneManagerLoadRefreshFailing),排在前面才不会被别的盖掉。
 func (r loadRefreshReport) outcome() string {
 	switch {
 	case r.writeFailed:
 		return metrics.LoadRefreshOutcomeWriteFailed
 	case r.readTransportFailed:
 		return metrics.LoadRefreshOutcomeReadFailed
-	case r.registryFailed:
-		return metrics.LoadRefreshOutcomeRegistryFailed
 	case r.lostLeadership:
 		return metrics.LoadRefreshOutcomeLostLeadership
 	case r.nodeReadErrors > 0:
@@ -174,11 +171,8 @@ func refreshZoneLoadSets(svcCtx *svc.ServiceContext, byZone map[uint32][]loadRef
 	slices.Sort(zones)
 	ctx := context.Background()
 
-	// ① 登记先于负载集写入。失败不扣成员资格,ZADD 照常写、不加 XX(理由见 zone_registry.go)。
-	if err := registerSceneManagerZones(svcCtx, zones...); err != nil {
-		report.registryFailed = true
-		logx.Errorf("[LoadRefresh] zone registry write failed; load sets are still written and registration retries next tick: %v", err)
-	}
+	// ① 原来先 SADD 进 zone 登记集合 scene_manager:zones;2026-11-05 按 zone 选主后登记集合删除
+	// (docs/design/control-plane-zone-scoping-20261105.md §4.3),byZone 只有本 zone。
 
 	// ② 读。nodes 指向 byZone 各切片里的元素,读结果直接回填。
 	nodes := make([]*loadRefreshNode, 0)

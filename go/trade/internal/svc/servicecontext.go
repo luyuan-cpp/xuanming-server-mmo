@@ -272,8 +272,9 @@ func observeMergedZoneRefresh(err error) {
 // StartAssetChannel 起 scene 节点镜像与资产重投循环。ctx 取消即退出。
 // 放在起 gRPC 之前调用:循环只依赖 MySQL 与 etcd,早一点开始把积压的 outbox 投出去。
 // AssetOp.Enabled=false 时 Assets 为 nil,这里整体是空操作(不起任何后台 goroutine)。
-func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
-	sc.Assets.Start(ctx, sc.Etcd)
+// globalBackground 为 false 时(发布轨道 canary)只起节点镜像,见 AssetChannel.Start。
+func (sc *ServiceContext) StartAssetChannel(ctx context.Context, globalBackground bool) {
+	sc.Assets.Start(ctx, sc.Etcd, globalBackground)
 }
 
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:

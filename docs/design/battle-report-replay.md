@@ -251,7 +251,7 @@ gzip 用 zlib 的 `deflateInit2(..., windowBits = 15 + 16, ...)`,封成一个 RA
 
 1. **事务前,纯校验**(和 `:385-394` 同一层):`replay` 为空就跳过。不为空时依次检查 `format_version == 1`、`codec == GZIP`、`raw_bytes ≤ 1 MiB`、`len(payload) ≤ 512 KiB`。不合格就丢掉战报,记 `reason=invalid_envelope` 或 `too_large`,**不返回错误**(BR-7)。
 2. **事务内**:`terminalFormation` 拿到成局行之后,解析 `f.CreateRequest`;`record_replay` 为假而请求带了战报,也丢掉,记 `reason=not_requested`。`INSERT match_battle_completion` 成功之后、更新成局行之前,`INSERT match_battle_report`,`created_ms` 用同一个 `stamp`(`:423`)。插入失败按普通 SQL 错误处理:整笔回滚,返回「未确认」,battle 按原字节重放。这和事务里其他行一样,不另设分支。
-3. **重放**(`replayTerminal`,`:362`):决定是 COMPLETE 时,读 `match_battle_report.envelope_digest` 和请求比。对不上,或者请求带了而库里没有,只记 `match_battle_report_replay_mismatch`,照常返回已持久的决定,不改库里那份(BR-7)。
+3. **重放**(`replayTerminal`,`:362`):决定是 COMPLETE、库里有这一局的战报行时,拿 `envelope_digest` 和请求里的战报比;对不上只记 `match_battle_report_replay_mismatch`,照常返回已持久的决定,不改库里那份(BR-7)。库里没有这一行就不比:第一次提交时战报可能已按第 1、2 步被合法丢弃,重放走的是事务前的快速返回(`:399-401`),拿不到成局行,分不清是哪种情况。
 4. `abortTerminalTx`(`:464`)不动:ABORT 没有战报。
 
 **为什么插入失败不也 fail-open**:SQL 错误和其他行一样是瞬时的;一定会失败的情形(超大、格式不对)已经在事务前挡掉了。在事务里吞掉错误,要么得开保存点,要么会让整笔事务处在未知状态,反而更复杂。
@@ -431,7 +431,7 @@ player_id 只进日志字段,不进任何指标 label。
 |---|---|
 | 录制模块 | 开战 + 若干回合 + 冻结,解压解析后与输入逐字段相同;实时字段已清;超过 1 MiB 截断并标记;强制判平记 `final_state`;压缩后超过 512 KiB 返回空;没调 `Start` 就冻结返回空 |
 | battle 节点 | `record_replay` 为假时不创建录制、请求里没有 `replay`;为真时首次提交和每次重放的请求摘要相同(钉住 `BuildOutcomeRequest`);录进去的帧等于观众版帧;ABORT 和本地删房两条路径不发战报 |
-| match 写入 | 带战报 → 同事务写入;同字节重放 → 返回 COMPLETE、不重复写;重放摘要不同 → 返回原决定、记指标、库里不变;外壳不合格 / 超大 / `record_replay` 为假 → 终局照常、没有战报行;ABORT → 没有战报行 |
+| match 写入 | 带战报 → 同事务写入;同字节重放 → 返回 COMPLETE、不重复写;重放摘要不同 → 返回原决定、记指标、库里不变;第一次被丢弃的战报再重放 → 不记 mismatch;外壳不合格 / 超大 / `record_replay` 为假 → 终局照常、没有战报行;ABORT → 没有战报行 |
 | match 查询 | 参战者取得到;非参战者、过期、没录、不存在都回同一个码;没有会话身份 fail-closed;存储错误回 `kMatchInternal` |
 | 清理 | 只删过期行;翻页游标正确;多副本同时跑无害;缺索引时拒绝接流 |
 | 策略 | 每个 `MatchMode` 都在表里;活动局按表;全局开关关闭时一律不录 |

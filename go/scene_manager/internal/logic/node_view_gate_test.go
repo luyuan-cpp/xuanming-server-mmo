@@ -169,15 +169,14 @@ func TestApplyNodeSnapshot_FreshLeaderHoldsMassVanishingAgainstLoadSet(t *testin
 	sc, mr := newLoadRefreshScopeCtx(t)
 	clock := useNodeViewGateForTest(t)
 	const zone = uint32(71)
+	sc.Config.ZoneId = zone // 本进程编排的 zone(orchestratedZones)
 	for _, id := range idRange(7101, 7108) {
 		_, err := mr.ZAdd(nodeLoadKey(zone), 0, fmt.Sprint(id))
 		require.NoError(t, err)
 	}
-	_, err := mr.SAdd(zoneRegistryKeyForTest, fmt.Sprint(zone))
-	require.NoError(t, err)
 	snapshot := sceneNodeKVsForTest(zone, 7101, 7102)
 
-	_, err = applyNodeSnapshot(context.Background(), sc, snapshot, 10)
+	_, err := applyNodeSnapshot(context.Background(), sc, snapshot, 10)
 	require.Error(t, err, "8 个里缺 6 个:压住")
 	assert.Len(t, loadSetMembersForTest(t, mr, zone), 8, "压住期间不清扫")
 	assert.False(t, mr.Exists(nodeDeathAtKey(zone, "7103")), "压住期间不写 death_at")
@@ -204,6 +203,7 @@ func TestApplyNodeSnapshot_FollowerHoldsAgainstItsMirror(t *testing.T) {
 	t.Cleanup(SetLeaderCheckForTest(func() bool { return false }))
 	clock := useNodeViewGateForTest(t)
 	const zone = uint32(72)
+	sc.Config.ZoneId = zone
 	for _, id := range idRange(7201, 7208) {
 		t.Cleanup(SetKnownNodeForTest(fmt.Sprintf("SceneNodeService.rpc/view-test/zone/%d/node/%d", zone, id), fmt.Sprint(id), "", zone, 1))
 		_, err := mr.ZAdd(nodeLoadKey(zone), 0, fmt.Sprint(id))
@@ -227,9 +227,8 @@ func TestApplyNodeSnapshot_EmptySnapshotAgainstLoadSetIsHeldForever(t *testing.T
 	sc, mr := newLoadRefreshScopeCtx(t)
 	clock := useNodeViewGateForTest(t)
 	const zone = uint32(73)
+	sc.Config.ZoneId = zone
 	_, err := mr.ZAdd(nodeLoadKey(zone), 0, "7301")
-	require.NoError(t, err)
-	_, err = mr.SAdd(zoneRegistryKeyForTest, fmt.Sprint(zone))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {

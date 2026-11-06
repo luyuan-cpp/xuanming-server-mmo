@@ -39,6 +39,14 @@ func terminalAbortDue(deadline, stamp uint64) bool {
 	return deadline != 0 && stamp >= deadline && stamp-deadline >= terminalOutcomeGraceMs
 }
 
+// FormationOutcomeDecided 判定成局的终局已经持久落定:state 5(安全中止 / 截止 ABORT),或 state 4 且 retry_at_ms 已是
+// terminalOutcomeNoRetryMs。后者只有两个写入点,都要求同一原件的终局行已在:COMPLETE 提交(commitCompleteTx)与
+// retireTerminalOutcomeSchedules。COMPLETE 之后成局仍是 state 4,只看 state 认不出这场已结束(观战第二轮评审 R2-GO 严重-1)。
+// 终局落定之后 battle 上的房间已收尾或正在收尾,这场不再接纳观众。
+func FormationOutcomeDecided(formation *pb.MatchFormationRecord) bool {
+	return formation.GetState() == 5 || formation.GetState() == 4 && formation.GetRetryAtMs() == terminalOutcomeNoRetryMs
+}
+
 // ArchiveCompletion 只保全完整结算来源，不投递资产、不确认玩家到账，也不销账。
 // 同一事务保存 Kafka 原字节及全部个人原件；重复局只接受完全相同的原字节。
 // 原提交结果未知时按原消息重放，不得重算另一份结算。来源位点记录第一次成功归档的位置。

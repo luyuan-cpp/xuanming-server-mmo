@@ -535,7 +535,7 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
   - 评审修正：生成器加只核不写的 `--persist-schema-verify`（`dev_tools.ps1 -Command persist-schema-verify`），发布预检用它核摘要；封存违反按两种成因分别给处置，同一根因只报一次；`TestRepositoryLedgerIsCanonical` 同时核仓库台账的封存。
   - 收件箱域停用的周期补打：停用之后每 5 分钟补打一条 `metric=inbox_halted ... relog=1`（`kHaltedDomainRelogIntervalMs`），告警在实体存活期间一直亮着；`player-inbox-alerts.yaml` 的毒消息告警描述先排除版本错位。用例 `PlayerInboxSystemTest.HaltedDomainRelogsOnTheIntervalWhileTheEntityLives`。
 
-  文件与 Codex 命令见[交接 §17](../handoff/mixed-version-persist-handoff-20261019.md)。
+  文件与 Codex 命令见[交接 §17、§19](../handoff/mixed-version-persist-handoff-20261019.md)。
 
 | 批 | 内容 | 主要改动 | Codex 验证 |
 |---|---|---|---|

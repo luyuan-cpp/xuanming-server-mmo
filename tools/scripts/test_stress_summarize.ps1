@@ -114,7 +114,7 @@ Set-Content -Path (Join-Path $snapDirForTest "t18m_db.txt") -Value $fakeDbSnapsh
 #       桶 le=0.002:60、le=0.005:108 → p99 插值到 4.9ms。
 #     - claim:结局 15 / 2 / 3,合计 20 次;sum 0.2s → 10.0ms;桶 le=0.01:10、le=0.025:20 → p99 插值到 24.7ms。
 #     - denied 只出现在 claim 上:按 op 过滤写错就会串到 save 那张表。
-#     - row_bytes:HOT 100 行,sum 12800 → 128 字节,桶 le=256:100 → p99 插值到 253;ASSET 有 count 没有桶 → p99 n/a;
+#     - row_bytes:LOCATION 100 行,sum 12800 → 128 字节,桶 le=256:100 → p99 插值到 253;CHARACTER 有 count 没有桶 → p99 n/a;
 #       其余组没有序列 → n/a。
 #     - sql_in_use 跨 pool 求和 3 + 1 = 4;open_err = error 6 + rejected 0;cooldown 跨 pool 求和 0 + 1 = 1。
 $fakeDbSnapshotStore = @"
@@ -144,12 +144,12 @@ db_player_store_requests_total{op="claim",result="LOAD_AND_CLAIM_CLAIMED"} 15
 db_player_store_requests_total{op="claim",result="LOAD_AND_CLAIM_NO_OWNER"} 2
 db_player_store_requests_total{op="claim",result="denied"} 3
 # TYPE db_player_store_row_bytes histogram
-db_player_store_row_bytes_bucket{kind="PLAYER_STORE_KIND_HOT",le="256"} 100
-db_player_store_row_bytes_bucket{kind="PLAYER_STORE_KIND_HOT",le="+Inf"} 100
-db_player_store_row_bytes_sum{kind="PLAYER_STORE_KIND_HOT"} 12800
-db_player_store_row_bytes_count{kind="PLAYER_STORE_KIND_HOT"} 100
-db_player_store_row_bytes_sum{kind="PLAYER_STORE_KIND_ASSET"} 3000
-db_player_store_row_bytes_count{kind="PLAYER_STORE_KIND_ASSET"} 10
+db_player_store_row_bytes_bucket{kind="PLAYER_STORE_KIND_LOCATION",le="256"} 100
+db_player_store_row_bytes_bucket{kind="PLAYER_STORE_KIND_LOCATION",le="+Inf"} 100
+db_player_store_row_bytes_sum{kind="PLAYER_STORE_KIND_LOCATION"} 12800
+db_player_store_row_bytes_count{kind="PLAYER_STORE_KIND_LOCATION"} 100
+db_player_store_row_bytes_sum{kind="PLAYER_STORE_KIND_CHARACTER"} 3000
+db_player_store_row_bytes_count{kind="PLAYER_STORE_KIND_CHARACTER"} 10
 # TYPE mmorpg_sql_pool_in_use_connections gauge
 mmorpg_sql_pool_in_use_connections{pool="home",sql_client="db"} 3
 mmorpg_sql_pool_in_use_connections{pool="extra_zone",sql_client="db"} 1
@@ -651,14 +651,14 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'P2 Player store claim' -Sn
     -Pattern '^\s*t18m_db\s+\|(\s+n/a){3}\s+\|\s+n/a\s+\|(\s+n/a){5}\s+\|(\s+n/a){3}\s*$' `
     -Reason "a db without any claim series must print n/a, not 0"
 
-# P3 行大小:五组,每组 n avg p99,单位字节。
-Assert-HeaderMatches -Lines $outputLines -Pattern 'hot_n\s+hot_avg\s+hot_p99\s+\|\s+asset_n\s+asset_avg\s+asset_p99\s+\|.*legacy1_p99\s*$' `
-    -Reason "P3 Player store row bytes table must list the five kinds"
+# P3 行大小:七组(2026-11-05 新分行),每组 n avg p99,单位字节。
+Assert-HeaderMatches -Lines $outputLines -Pattern 'location_n\s+location_avg\s+location_p99\s+\|\s+character_n\s+character_avg\s+character_p99\s+\|.*legacy1_p99\s*$' `
+    -Reason "P3 Player store row bytes table must list the seven kinds"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P3 Player store row bytes' -SnapshotName 't20m_db' `
-    -Pattern '^\s*t20m_db\s+\|\s+100\s+128\s+253\s+\|\s+10\s+300\s+n/a\s+\|(\s+n/a){3}\s+\|(\s+n/a){3}\s+\|(\s+n/a){3}\s*$' `
+    -Pattern '^\s*t20m_db\s+\|\s+100\s+128\s+253\s+\|\s+10\s+300\s+n/a(\s+\|(\s+n/a){3}){5}\s*$' `
     -Reason "per-kind n / avg bytes / interpolated p99; no buckets print p99 n/a; missing kinds print n/a"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P3 Player store row bytes' -SnapshotName 't18m_db' `
-    -Pattern '^\s*t18m_db(\s+\|(\s+n/a){3}){5}\s*$' `
+    -Pattern '^\s*t18m_db(\s+\|(\s+n/a){3}){7}\s*$' `
     -Reason "a db without committed rows must print n/a"
 
 # P4 连接池与落点。

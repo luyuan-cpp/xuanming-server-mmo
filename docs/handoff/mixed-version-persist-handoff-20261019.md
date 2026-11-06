@@ -1159,3 +1159,60 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
   - `LevelComp.level()` 的直读白名单仍只靠评审守（§13.4「契约测试没做」），没有机器门禁。
   - 客户端：缺组件只在坏档时出现，客户端看到的是这几类请求被拒（施法与接任务回 `kServiceUnavailable`，穿戴回 `kEquipInternalError`），不需要客户端改动。
 - **Java 版（AGENTS §12）**：待做，随 §13.1 那一项一起对齐，不另加行。
+
+## 19. 续：第 7 批补充：独立复核修正与存储分组门禁（2026-11-05，第 6 批会话，接 §17）
+
+> **状态**：已落码，未编译、未测试，在工作区未提交。§17 的 Codex 命令照旧执行，本节只列增量。
+
+**独立复核**
+
+对 §17 的改动与 10-30 没有运行证据的 Go 改动做了一次只读复核，没有高危，结论如下：
+
+| 发现 | 结论 | 处理 |
+|---|---|---|
+| 发布预检只比世代号、不核摘要：合并带进同世代的行之后，封存已被违反，最大世代却仍等于最后一条封存的世代，预检误判 PASS（中） | 成立 | 生成器加只核不写的 `--persist-schema-verify`，入口是 `persistschema.VerifyLedgerFile`、`dev_tools.ps1 -Command persist-schema-verify`。发布预检封存到最大世代之后调它（`go run ./cmd --persist-schema-verify`），摘要口径只在生成器里一份。`TestRepositoryLedgerIsCanonical` 同时核仓库台账的封存 |
+| 预检档位与文档不一致（低） | 成立 | 代码沿用脚本其余检查的口径（只有 dev 档降为 WARN），文档改为「内部测试版本用 `-ReleaseProfile dev`」 |
+| 预检新函数插在 `Invoke-ReleaseArtifactChecks` 的帮助块与函数之间（低） | 成立 | 挪到帮助块之前 |
+| 引导期的违反提示分不清成因，同一根因按封存条数重复报（低） | 成立 | 先核台账本身（合并或手改），再核本次新增行（引导期加字段），分别给处置；只报世代最低的一条，其余计数 |
+| 文档指针写成 §2.1 ⑦、错误头写 §3.2（低） | 成立 | 改为 §2.1 ①、§3.1 / §3.2 |
+| 契约测试说明「封存不跑生成后钩子」证明不了（低） | 成立 | 说明改为「只调用一次生成器」，同时覆盖 seal / verify 两条命令 |
+| 单项模式也会起 pprof（低） | 成立 | 条件加上两个台账开关 |
+| 封存只封台账、不核 proto（低，推测） | 成立 | `release-checklist.md` §2.1 ① 写明封存前先跑一次生成，并确认台账与产物无改动 |
+| 范围外：`market.go` 选对手单只按 status=3，托管阶段（stage=escrow）的单子也是 3，会被选为最优对手；`matchMarket` 发现阶段不对就本轮不成交 | 未核实到底 | `market.go` 与 `engine.go` 当前有别的会话未提交的改动，本批不动，列入下面的待办 |
+
+**存储分组门禁（数据覆写审计 R2 的 N1，「数据覆写审计 R2 交接」会话转来）**
+
+- **问题**：玩家存储按 `OptionPersistGroup` 把 `player_database` 拆成多行。`player_store_projection.cpp` 的 `AssemblePlayer` 只认字段的当前分组，旧分组行里的同一字段会被 `ClearField`。所以字段换组之后，第一次载入会把旧分组那一行里的字段清掉，而新分组那一行里还没有，第一次存盘就把它永久写丢。`player-save-direct-commit.md` §1 原写「换组必须安全」，实际只防住了两行各有一份时合并翻倍。
+- **做法**：
+  - 生成器 `schema.go` 读 `OptionPersistGroup`（600041）。
+  - 台账给玩家表顶层字段记 `group=<分组>`（`ledger.go` 的 `Field.Group` / `HasGroup`，不进封存摘要）。
+  - `apply.go`：分组换掉或分组选项被删时生成失败，提示走 R4 expand / contract；分组出现之前写下的旧行第一次生成时原地补记，留一条 Note。
+  - 投影代码只加注释，行为不变。
+- **文档**：`player-save-direct-commit.md` §1、混版本设计 §3.1「存储分组不得改」与 R4、v0.10。
+- **用例**：`TestCollectSchemaReadsStorageGroupOnTableFieldsOnly`、`TestApplyRejectsStorageGroupChange`、`TestApplyRejectsRemovedStorageGroup`、`TestApplyBackfillsStorageGroupOnce`，以及 `TestParseLedgerRejectsMalformed` 新增的 3 种非法 `group=` 段。
+- **Java 版**：不适用。Java 玩家状态是单个 BLOB，没有分组拆行，不往 PARITY 加行。
+
+**给 Codex 的增量（接 §17 的命令）**
+
+1. 第 1 步的 `proto-gen-run` 会改台账：给 `player_database` 的每个顶层字段行一次性补上 ` group=<n>`。这是预期差异，与生成产物一起提交；台账其余行与持久 schema 产物应无差异。
+   - 如果报「存储分组由 X 改成了 Y」或「OptionPersistGroup 被删掉了」，说明补记之后又有人改了分组，按提示处理，不要改台账。
+   - 补记之前不会有这类报错。
+2. 第 2 步的生成器单测在列表上新增：
+   - `TestVerifyLedgerFileRequiresAnIntactSealAtTheMaxGeneration`；
+   - 上面 4 条存储分组用例；
+   - `TestApplyRejectsRowMergedIntoASealedGeneration` 现在走「台账本身已违反封存」那条提示。
+3. 第 3 步的 `dev_tools_proto_gen_exit.tests.ps1` 现在有 8 条台账命令用例：seal / verify × exe / go run × 退出 0 / 23。
+   - `release_common_version.tests.ps1` 不变：仓库台账未封存，预检在第一步就判 WARN，不会去跑 go。
+4. 只读核对可单独跑：`pwsh -File tools/scripts/dev_tools.ps1 -Command persist-schema-verify -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。仓库台账未封存时它应失败，并报「还没有封存过」。这是预期结果，不要为了让它通过去封存主仓台账。
+
+**待办 / 风险（在 §17 之外新增）**
+
+- 生成器单测不在 CI 的 Go 模块扫描里（`go-modules-ci.yml` 只扫 `go/`、`robot/`），仓库台账的封存与分组核对只在跑生成器单测或生成时生效。纳入 CI 要先确认 protogen 模块在 CI 镜像里能构建，本批没改 CI。
+- 交易盘口：托管阶段的材料订单会被当成最优对手单，挡住同价位的撮合（复核的范围外观察，未核实到底）。`market.go` / `engine.go` 正被别的会话改，留给交易线负责人。
+
+**本节文件清单**（工作区，未提交，在 §17 清单之外新增或再改）
+- 生成器：`tools/proto_generator/protogen/internal/persistschema/{schema.go,ledger.go,apply.go,generate.go,persistschema_test.go}`、`cmd/root.go`；
+- 台账：`proto/persist_schema_gen.txt`（又改了表头注释两行，与生成器常量一致）；
+- 脚本：`tools/scripts/{dev_tools.ps1,release_preflight.ps1}`、`tools/scripts/tests/dev_tools_proto_gen_exit.tests.ps1`；
+- C++：`cpp/libs/services/scene/player/system/player_store_projection.cpp`（只加注释）；
+- 文档：`docs/design/{mixed-version-persist-field-protection.md,player-save-direct-commit.md}`、`docs/ops/release-checklist.md`、本文、`docs/PROGRESS.md`。

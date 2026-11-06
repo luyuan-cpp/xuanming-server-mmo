@@ -342,6 +342,33 @@ Claude 未执行任何编译、测试或生成。协议生成可与 §12.3 合�
 3. **Go**（`go/match`）：`go build ./... && go vet ./... && go test ./internal/battleplace/... ./internal/discovery/... ./internal/logic/... -count=1`。重点用例：`TestPickByAdmissionAndLoad`（12 个子用例）、`TestCensusCountsEveryState`、既有 4 个 battleplace 用例、`TestParseReadsAdmissionByNameOrNumber`、`TestParseSkipsNonRegistrationsAndUnusableValues`、`TestCreateBattleClassifiesReply`、`TestOutcomeCreateResponseRequiresOriginalInstanceAndAdoptedVersion`。`go/shared/nodeinfo` 只改了注释。
 4. **冒烟**（本机，清空 redis / mysql / etcd 后起服）：battle 开闸后约 1 秒内，`etcdctl get --prefix BattleNodeService.rpc/zone/` 里该节点的值出现 `"admission":"NODE_ADMISSION_OPEN"`，battle 日志有一条 `battle admission advertised to etcd: admission=open observed=closed`；优雅停机（或维护关闸）时日志有一条 `admission=closed`，租约撤销之前 etcd 里变成 `NODE_ADMISSION_CLOSED`；稳态下不再出现 `battle admission` 日志，该键的 `mod_revision`（`etcdctl get <键> -w json`）不再增长，证明不是周期写。match 的 `/metrics` 里 `match_battle_nodes{state="open"}` 等于在线 battle 数。
 
+### 12.5 R7（2026-11-05：人数档真人 PVP 计分组排）
+
+Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译、测试或生成。本批不改 proto、不改配置表、不加 tip 码，不需要导表或协议生成。评分按模式分开存（R5，回合制缺口会话）同时在改 `authority/rating.go`、`logic/rating.go` 等文件，编译失败时先确认出错的是哪一批的文件；`match_rating` 的建表变化以 R5 的清单为准，真库用例要在 R5 落地之后跑。
+
+1. **编译与静态检查**（工作目录 `go/match`）：
+   ```bash
+   go build ./...
+   go vet ./...
+   ```
+   通过标准：0 退出。失败时保留编译错误全文。
+2. **单测**（工作目录 `go/match`，不依赖外部服务）：
+   ```bash
+   go test ./internal/ratingrule/... ./internal/poolgroup/... ./internal/config/... ./internal/logic/... ./internal/authority/... -count=1
+   ```
+   重点用例：`ratingrule` 包全部；`poolgroup` 的 `TestPickSides*`、`TestCompositionsForCountsPartitions`、`TestFormRatedSides*`、`TestFormSidesPremadeGapUsesUnitWait`，以及原有的 `TestSides*`、`TestRated*`；`authority` 的 `TestRequireRatedSpread*`；`logic` 的 `TestPoolUnitInputScoresPartiesWithBonus`、`TestPoolPolicyRatesPvpTeamPools`、`TestRatedModeIncludesPvpTeam`、`TestRatingSpreadIsExpectedClaimRejection`、`TestPoolUnitInputIntersectsMemberLatency`（整队队伍分的断言已改），以及 `rating_match_test.go` / `rating_review_fix_test.go`（容差曲线改成委托 `ratingrule`，数值不变）。通过标准：全部 PASS。没有 TiDB 时 `TestAuthorityTiDB*` 跳过属正常，如实报告为未运行。失败时保留用例名与断言原文。
+3. **真库回归**（隔离的一次性 TiDB，清库后用 `match -f <配置> -migrate` 建表；旧库里 `match_global_policy` 的摘要会让新进程拒启，见 §14）：
+   ```bash
+   cd go/match
+   MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/team/... -count=1
+   ```
+   重点用例：`TestAuthorityTiDBQueueRatingSnapshot`（整队入队按模式读分、没有记录按 1500、非计分模式为 0）；`TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRules`（新增 `party-bonus` 子用例，改车队差步长仍应准入）；team 包的整队入队与成局用例（PVE_TEAM 整队票的 `rating_centi` 仍为 0）。
+4. **冒烟**（本机全局路径，清空 redis / mysql / etcd 后起服；PVP_TEAM 用 `battle_config_id=1`）：
+   - 2V2（`team_size=2`）：一支双排 + 两个单人入队，成一局，双排在同一侧；
+   - 3V3（`team_size=3`）：一支 3 人队 + 3 个单人同时入队，前 10 秒不成局（车队差 2），单人等满 10 秒后成局；
+   - 打完一局，`match_rating` 里这些人 `mode=7` 的行按胜负变化，`mode=3`（1V1）的行不动（R5 的口径）；
+   - `match_pool_claim_total{mode="MATCH_MODE_PVP_TEAM"}` 没有持续的 `conflict`：`ErrRatingSpread` 只应在撮合与提交之间票变化时偶发。
+
 ## 13. Java 版（AGENTS.md §12）
 
 两版共享的只有客户端契约（tip 码、白名单拒绝语义）与配置表数据。Java 版需要：
