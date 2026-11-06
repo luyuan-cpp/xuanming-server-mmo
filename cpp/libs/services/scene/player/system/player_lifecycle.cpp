@@ -38,6 +38,7 @@
 #include "player/system/player_store_client.h"
 #include "player/system/player_store_projection.h"
 #include "player/system/save_timing_stats.h"
+#include "modules/transaction_log/transaction_log_system.h" // 资产流水跟着存盘提交走(MakePlayerStoreOptions)
 #include "utils/random/random.h"
 #include "player/system/player_inbox_system.h" // FinishExitAfterPersist:销毁前尽力补发收件箱 Ack(评审 M4)
 #include "player/system/release_fence.h" // HandleReleaseFromSceneManager 的纯判定与计数
@@ -3290,8 +3291,12 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 	tlsEcs.playerList.erase(playerId);
 	RoleAdmissionSystem::OnDestroyed(playerId);
 
-	// 存盘状态:还有未落定的存盘时这次不生效,落定时由 onSettled 回收。
-	PlayerStore().Forget(playerId);
+	// 存盘状态:还有未落定的存盘时这次不生效,落定时由 onSettled 回收(连同没放行的流水)。
+	if (PlayerStore().Forget(playerId))
+	{
+		// 存盘都已落定:已提交的流水早在提交时放行,还排着的描述的是没落库的改动。
+		TransactionLogSystem::DiscardPending(playerId, "entity destroyed and its saves settled");
+	}
 }
 
 void PlayerLifecycleSystem::RejectRoleAdmission(Guid playerId, SessionId sessionId)
@@ -4659,12 +4664,19 @@ namespace
 				(void)stamp.AppendToString(&profileBytes);
 			};
 		}
+		// 资产流水跟着存盘提交走(TransactionLogSystem 类注释):闸门和放行钩子在这里一起接上,建状态机的地方就是开闸的地方。
+		// 只开闸门不接钩子,流水永远出不去;只接钩子不开闸门,行为与以前相同。
+		TransactionLogSystem::EnableCommitGating(true);
+		options.commitMark = [] { return TransactionLogSystem::CommitMark(); };
+		options.onCommittedThrough = [](Guid playerId, uint64_t commitMark) { TransactionLogSystem::PublishThrough(playerId, commitMark); };
 		options.onSettled = [](Guid playerId)
 		{
 			// 实体在存盘未落定时销毁(被废黜):DestroyPlayer 那次 Forget 没有生效,这里补上。
 			if (!tlsEcs.actorRegistry.valid(tlsEcs.GetPlayer(playerId)))
 			{
 				PlayerLifecycleSystem::PlayerStore().Forget(playerId);
+				// 实体没了、存盘都落定了:还没放行的流水描述的改动没有落库,随改动一起丢。
+				TransactionLogSystem::DiscardPending(playerId, "entity gone and its saves settled");
 			}
 		};
 		options.sendClaim = SendPlayerStoreClaimOverGrpc;
@@ -4682,7 +4694,13 @@ namespace
 			request.set_binary_schema_gen(persist_schema::kPersistSchemaGen);
 			return request;
 		};
-		options.onClaimed = PlayerLifecycleSystem::HandlePlayerStoreClaimed;
+		options.onClaimed = [](Guid playerId, const playerstore::LoadAndClaimResponse *response)
+		{
+			// 认领只在本节点没有这名玩家的实体、存盘都已落定时发生:队列里还剩的,只可能是上一个实体没落库的改动。
+			// 在载入建实体之前丢掉,否则新实体第一次提交会把它们当成自己的改动放行出去(初始化发的物品就会记两遍)。
+			TransactionLogSystem::DiscardPending(playerId, "claimed again on this node");
+			PlayerLifecycleSystem::HandlePlayerStoreClaimed(playerId, response);
+		};
 		// 只顺带的行(位置)最多被定时存盘推迟多少秒(player-save-direct-commit.md §1.1)。初值 300,压测后定;
 		// 0 = 不推迟,定时存盘遇到位置变化也写(压测对照用)。不是非负整数就按缺省并报错,不静默关掉。
 		if (const char *raw = std::getenv("SCENE_PLAYER_PIGGYBACK_FALLBACK_SECONDS"))

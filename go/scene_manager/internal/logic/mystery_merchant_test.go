@@ -315,7 +315,7 @@ func TestScheduleMysteryMerchant_CreatesOncePerRoundThenKeeps(t *testing.T) {
 	assert.Equal(t, []uint32{60, 50, 40}, []uint32{state.GetShelf()[0].GetDiscountPercent(), state.GetShelf()[1].GetDiscountPercent(), state.GetShelf()[2].GetDiscountPercent()})
 
 	assert.Equal(t, fmt.Sprintf("%d", merchantTestRoundID*1000+1), mr.HGet(mysteryMerchantKey(testZoneId), MysteryMerchantVersionField))
-	assert.Equal(t, 2*time.Hour, mr.TTL(mysteryMerchantKey(testZoneId)), "TTL = 2 个间隔")
+	assert.Equal(t, 24*time.Hour, mr.TTL(mysteryMerchantKey(testZoneId)), "TTL = 2 个间隔,但不低于最长间隔(merchantMaxIntervalSeconds)")
 
 	// 同一轮内再跑:线还在,什么都不写。
 	before := mr.HGet(mysteryMerchantKey(testZoneId), MysteryMerchantStateField)

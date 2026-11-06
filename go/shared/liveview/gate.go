@@ -10,15 +10,17 @@
 // 规则:
 //   - 这次的存活集为空、基线不空:压住(HoldEmpty)。为空期间计时一直从头算,所以永远不会自动放行;
 //   - 基线不少于 MinKnown 且缺席超过一半:进入压住(HoldDrop);
-//   - 压住期间缺席数一变(有成员回来,或又少了),计时从头算:视图还在动,不下结论。所以恢复到一半以下也继续压住,
-//     直到缺席降到 0 或稳定下来;
+//   - 压住期间缺席数一变(有成员回来,或又少了),计时从头算:视图还在动,不下结论;
+//   - 什么时候算恢复由消费方选(Recovery):RecoverWhenClear 要缺席降到 0,恢复到一半以下也继续压住;
+//     RecoverBelowThreshold 只要不再超过一半就复位放行;
 //   - 缺席数连续 hold 时长不变才放行(Release,每次压住只返回一次)。放行之后 hold 时长内照常放行(Accept),
 //     让调用方把这批缺席收完;放行期过了仍超过一半就重新压住;
 //   - 缺席降到 0 就复位;
 //   - 基线为空(这次没有可比的)不改变状态。
 //
-// 阈值:MinKnown 与「超过一半」由两个消费方共用,在这里改。hold 时长按压住的代价由消费方各自定:scene_manager 压住时
-// 整条 load reporter 停摆,取 60s;player_locator 压住只推迟死 gate 清扫,取 30 分钟,留出人工介入的时间。
+// 阈值:MinKnown 与「超过一半」由两个消费方共用,在这里改。hold 时长与恢复口径按各自的代价定:
+//   - scene_manager 的 fullSync:放行之后立刻清扫、没有自己的去抖,压住时整条 load reporter 停摆 → 60s、RecoverWhenClear;
+//   - player_locator 的死 gate 清扫:每个 gate 还要连续两拍缺席才判死,压住只推迟清理 → 30 分钟、RecoverBelowThreshold。
 //
 // 线程模型:Gate 不并发安全,一个 Gate 只给一个 goroutine 用。时刻由调用方传入,传 time.Now() 时计时走单调读数,
 // 不受墙钟回拨影响。
@@ -64,6 +66,19 @@ func (v Verdict) Held() bool {
 	return v == HoldEmpty || v == HoldDrop
 }
 
+// Recovery 决定压住之后,视图恢复到什么程度算「恢复了」、复位放行。
+type Recovery int
+
+const (
+	// RecoverWhenClear:缺席降到 0 才算恢复。给放行之后立刻做不可逆收尾、自己没有去抖的消费方:
+	// 恢复到一半以下时剩下的缺席多半也正在重新注册,不能按死亡处理。
+	RecoverWhenClear Recovery = iota
+	// RecoverBelowThreshold:不再超过一半就算恢复。给对每个缺席成员还有自己的去抖的消费方(player_locator 连续两拍
+	// 缺席才判死):剩下的那些在去抖窗口里重新注册就不会被处理;要缺席清零才复位的话,滚动发布里一次短暂过半
+	// 就会压住整整一个 hold。
+	RecoverBelowThreshold
+)
+
 // Observation 是一次观察。Known、Missing 按调用方自己的去重口径数:scene_manager 按 (zone,node),player_locator 按 gate 实例。
 type Observation struct {
 	// Known 是基线成员数。
@@ -74,9 +89,10 @@ type Observation struct {
 	Empty bool
 }
 
-// Gate 是一份视图的闸门状态。用 NewGate 构造,零值的 hold 为 0。
+// Gate 是一份视图的闸门状态。用 NewGate 构造。
 type Gate struct {
-	hold time.Duration
+	hold     time.Duration
+	recovery Recovery
 
 	holding     bool
 	lastMissing int
@@ -86,9 +102,9 @@ type Gate struct {
 	releasedAt time.Time
 }
 
-// NewGate 返回一个缺席数稳定满 hold 才放行的闸门。
-func NewGate(hold time.Duration) *Gate {
-	return &Gate{hold: hold}
+// NewGate 返回一个缺席数稳定满 hold 才放行、按 recovery 判恢复的闸门。
+func NewGate(hold time.Duration, recovery Recovery) *Gate {
+	return &Gate{hold: hold, recovery: recovery}
 }
 
 // Observe 记一次观察,返回这次该不该处理缺席的成员。
@@ -111,12 +127,17 @@ func (g *Gate) Observe(o Observation, now time.Time) Verdict {
 		g.restart(o.Missing, now)
 		return HoldEmpty
 	}
+	dropped := o.Known >= MinKnown && o.Missing*2 > o.Known
 	if !g.holding {
-		if o.Known < MinKnown || o.Missing*2 <= o.Known {
+		if !dropped {
 			return Accept
 		}
 		g.restart(o.Missing, now)
 		return HoldDrop
+	}
+	if !dropped && g.recovery == RecoverBelowThreshold {
+		g.reset()
+		return Accept
 	}
 	if o.Missing != g.lastMissing {
 		g.restart(o.Missing, now)
@@ -138,5 +159,5 @@ func (g *Gate) restart(missing int, now time.Time) {
 }
 
 func (g *Gate) reset() {
-	*g = Gate{hold: g.hold}
+	*g = Gate{hold: g.hold, recovery: g.recovery}
 }

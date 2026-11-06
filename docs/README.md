@@ -106,6 +106,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：观众版帧随终局原件同事务存进 match 库，参战者按 battle_id 取回放（2026-11-05，设计稿，未落码）
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)

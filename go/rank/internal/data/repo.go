@@ -314,11 +314,8 @@ func (r *Repo) Freeze(ctx context.Context, caller string, in *rankpb.FreezeRankG
 		if b.CommittedCursor != in.ExpectedSourceCursor {
 			return ErrCursor
 		}
-		order := "score DESC,achieved_ms ASC,entity_id ASC"
-		if b.Ascending != 0 {
-			order = "score ASC,achieved_ms ASC,entity_id ASC"
-		}
-		rows, err := tx.QueryContext(ctx, "SELECT entity_id,score,achieved_ms FROM rank_score WHERE board_id=? AND generation=? ORDER BY "+order+" LIMIT ?", b.BoardId, b.Generation, top)
+		// 顺着名次索引取前 N(order_key 已把升降序统一成同一方向,见 orderKey),不整榜排序。
+		rows, err := tx.QueryContext(ctx, "SELECT entity_id,score,achieved_ms FROM rank_score WHERE board_id=? AND generation=? ORDER BY "+rankIndexOrder+" LIMIT ?", b.BoardId, b.Generation, top)
 		if err != nil {
 			return err
 		}
@@ -358,4 +355,12 @@ func (r *Repo) Freeze(ctx context.Context, caller string, in *rankpb.FreezeRankG
 				}
 			}
 		}
-		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET state=?,settlement_id=?,sealed_ms=? WHERE board_id=?"
+		if _, err := tx.ExecContext(ctx, "UPDATE rank_board SET state=?,settlement_id=?,sealed_ms=? WHERE board_id=?", uint32(rankpb.RankGenerationState_RANK_GENERATION_SEALED), settlement, now, b.BoardId); err != nil {
+			return err
+		}
+		result.SettlementId = settlement
+		result.WinnerCount = uint64(len(winners))
+		return nil
+	})
+	return result, err
+}

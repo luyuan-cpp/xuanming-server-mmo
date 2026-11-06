@@ -1,15 +1,20 @@
 package com.game.gateway.controller;
 
 import com.game.gateway.dto.ManualZoneStatus;
+import com.game.gateway.dto.ZoneSettingsRequest;
 import com.game.gateway.entity.ZoneConfig;
 import com.game.gateway.repository.ZoneConfigRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -21,11 +26,20 @@ import java.util.function.Supplier;
  * {@link ZoneConfigRepository}。旧写法走 JPA 的 {@code save()}(merge → 普通 INSERT)会在主键重复检查上
  * S→X 互等,且 findById + save 在行被删的窗口里会把区服重新 INSERT 回来;现在都没有了。
  *
- * <p>成功时的返回形状不变:200 + ZoneConfig JSON / 204 / 404。输入校验与时间戳上的有意变化写在各接口注释里。
+ * <h2>完整资源语义(2026-11-05,第一轮数据审计 §4 第 18 条)</h2>
+ * create / update 的请求体是 {@link ZoneSettingsRequest}:每个业务字段都必须给,缺一个或取值越界就回 400、不碰库。
+ * 之前两者直接绑实体,实体字段是带初值的基本类型,漏传 manualStatus 就是 0 = OPEN,一次只想改名的 PUT 会把维护中的
+ * 区服改成开放,容量、推荐、排序、开服时间、维护文案一并被初值覆盖;create 撞上已存在的 zone_id 也走同样的整行覆盖。
+ * 现在 create 只插不改(已存在且内容不同回 409),局部修改走 {@code /maintenance}、{@code /open}。
+ *
+ * <p>返回形状:200 + ZoneConfig JSON / 204 / 404 不变;新增 400(请求体不完整或不合法,原因记 WARN 日志)与
+ * 409(create 撞上已存在且内容不同的区服,响应体是库里那一行)。时间戳上的有意变化写在各接口注释里。
  */
 @RestController
 @RequestMapping("/admin/zones")
 public class AdminZoneController {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminZoneController.class);
 
     private final ZoneConfigRepository zoneConfigRepo;
     private final TransactionOperations tx;
@@ -56,45 +70,48 @@ public class AdminZoneController {
     }
 
     /**
-     * 创建区服;zone_id 已存在时<b>覆盖</b>全部业务列(保留 created_at),与旧 {@code save()}(merge)的语义一致,
-     * 返回库里的那一行。
+     * 创建区服:zone_id 不存在则按请求体插入整行;<b>已存在则一列都不改</b>。回读到的那一行与请求体逐列一致回 200
+     * (同一份请求重放是幂等的),不一致回 409 + 库里那一行 —— 要改已有的区服走 PUT 或 /maintenance、/open。
+     * 请求体必须给全每个业务字段(见 {@link ZoneSettingsRequest#problem}),否则 400、不碰库。
      *
-     * <p>写入用 {@link ZoneConfigRepository#upsert}(ODKU):主键重复检查直接取 X,同键并发的 create 只排队,
-     * 不再有普通 INSERT 的 S→X 互等。upsert 与回读在同一事务里:upsert 持有该行的 X 直到提交,其间并发的 delete
-     * 删不掉它,而本事务自己的写入对自己的读一律可见(与隔离级别无关),所以回读必然命中。整事务包在
-     * {@link InnoDbDeadlockRetry#execute} 里,只兜「同键并发写入 + 先到者回滚 / purge 恰在排队窗口」这类
-     * InnoDB 固有的 1213,收敛论证见那里。
+     * <p>写入用 {@link ZoneConfigRepository#insertIfAbsent}(ODKU,重复键分支不改值):主键重复检查直接取 X,同键并发的
+     * create 只排队,不再有普通 INSERT 的 S→X 互等。写入与回读在同一事务里:语句持有该行的 X 直到提交,其间并发的
+     * delete 删不掉它;本事务自己的插入对自己的读一律可见,已存在的那一行在本事务拿到锁之前已经提交,回读也看得见,
+     * 所以回读必然命中。整事务包在 {@link InnoDbDeadlockRetry#execute} 里,只兜「同键并发写入 + 先到者回滚 / purge
+     * 恰在排队窗口」这类 InnoDB 固有的 1213,收敛论证见那里。
      *
-     * <p>相对 2026-09-21 之前的有意变化:
-     * <ul>
-     *   <li>缺 zone_id 或 name 回 400。旧写法缺 zone_id 时 Hibernate 报「主键须手工赋值」、缺 name 时报非空校验失败,
-     *       都冒成 500;现在 native 语句绕过了 Hibernate 的非空校验,库的 sql_mode 若不含 STRICT,NULL 会被静默写成 '',
-     *       所以必须在接缝处拦。</li>
-     *   <li>并发 create 同一个新 zone_id:旧写法后到者撞 1062 回 500,现在后到者走覆盖分支回 200(与「已存在即覆盖」
-     *       的既有语义一致,最后提交者生效)。</li>
-     *   <li>覆盖分支一律刷新 updated_at;旧写法在请求体与库里完全相同时不发 UPDATE、updated_at 不变。</li>
-     *   <li>覆盖分支返回的是回读的那一行,created_at 是库里的真值;旧写法返回 merge 后的对象,created_at 是请求体里的值
-     *       (通常为 null)。</li>
-     * </ul>
+     * <p>「插入了还是本来就在」不看驱动报的行数(found rows 下两者都报 1),只看回读与请求是否逐列一致:一致说明库里已经是
+     * 请求要的样子,是谁写的都不必再改;不一致说明那一行不是这次写的。这条判据与隔离级别无关,换成 RC 也成立。
+     *
+     * <p>相对 2026-11-05 之前的有意变化(第一轮数据审计 §4 第 18 条的 POST 变种):已存在的 zone_id 不再被整行覆盖,
+     * updated_at 也不再刷新;缺任一业务字段回 400(之前只查 zone_id 与 name,其余字段落成实体初值,
+     * manualStatus 缺省就是 OPEN)。
      */
     @PostMapping
-    public ResponseEntity<ZoneConfig> create(@RequestBody ZoneConfig zone) {
-        if (zone.getZoneId() == null || zone.getName() == null) {
-            return ResponseEntity.badRequest().build();
+    public ResponseEntity<ZoneConfig> create(@RequestBody ZoneSettingsRequest body) {
+        String problem = body == null ? "request body is missing" : body.problem(null);
+        if (problem != null) {
+            return rejected("create", null, problem);
         }
-        long zoneId = zone.getZoneId();
+        long zoneId = body.getZoneId();
+        ZoneConfig requested = body.toZoneConfig(zoneId);
         LocalDateTime at = now.get();
         ZoneConfig stored = InnoDbDeadlockRetry.execute(tx, "zone create", zoneId, () -> {
-            zoneConfigRepo.upsert(zone, at);
+            zoneConfigRepo.insertIfAbsent(requested, at);
             return zoneConfigRepo.findById(zoneId)
                     .orElseThrow(() -> new IllegalStateException(
-                            "zone_config upsert 之后同一事务内回读不到该行,违反事务可见性,zone_id=" + zoneId));
+                            "zone_config row invisible after insert-if-absent in the same transaction, zone_id=" + zoneId));
         });
+        if (!sameSettings(requested, stored)) {
+            log.warn("zone create refused: zone {} already exists with different settings; use PUT to replace it", zoneId);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(stored);
+        }
         return ResponseEntity.ok(stored);
     }
 
     /**
-     * 覆盖已存在区服的业务列(列集合与旧实现逐列一致),区服不存在回 404,<b>绝不插入</b>。
+     * 以请求体<b>整行替换</b>已存在区服的业务列(完整资源语义:每个业务字段都必须给,见 {@link ZoneSettingsRequest#problem}),
+     * 区服不存在回 404,<b>绝不插入</b>。请求体带 zoneId 时必须与路径一致。
      *
      * <p>存在性由同一事务里的回读判定,不看 UPDATE 的行数:Connector/J 默认报 found rows,但连接参数一旦改成
      * useAffectedRows=true,「值没变」的 UPDATE 会报 0 行,拿行数判 404 就错了。
@@ -125,16 +142,20 @@ public class AdminZoneController {
      *
      * <p>不重试:事务里只有这一条加锁语句,它等锁时手里什么都没有、拿到锁之后不再等,不可能成为死锁牺牲者。
      *
-     * <p>有意变化:缺 name 回 400(理由同 {@link #create});每次调用都刷新 updated_at。
+     * <p>有意变化:缺任一业务字段、取值越界、请求体 zoneId 与路径不一致都回 400 且不碰库(2026-11-05,第一轮数据审计
+     * §4 第 18 条:之前只查 name,只想改名的 PUT 会把 manualStatus 等字段写成实体初值,维护中的区服被改成 OPEN);
+     * 每次调用都刷新 updated_at。
      */
     @PutMapping("/{zoneId}")
-    public ResponseEntity<ZoneConfig> update(@PathVariable Long zoneId, @RequestBody ZoneConfig body) {
-        if (body.getName() == null) {
-            return ResponseEntity.badRequest().build();
+    public ResponseEntity<ZoneConfig> update(@PathVariable Long zoneId, @RequestBody ZoneSettingsRequest body) {
+        String problem = body == null ? "request body is missing" : body.problem(zoneId);
+        if (problem != null) {
+            return rejected("update", zoneId, problem);
         }
+        ZoneConfig values = body.toZoneConfig(zoneId);
         LocalDateTime at = now.get();
         return okOrNotFound(tx.execute(status -> {
-            zoneConfigRepo.updateSettings(zoneId, body, at);
+            zoneConfigRepo.updateSettings(zoneId, values, at);
             return zoneConfigRepo.findById(zoneId);
         }));
     }
@@ -188,6 +209,23 @@ public class AdminZoneController {
 
     private static ResponseEntity<ZoneConfig> okOrNotFound(Optional<ZoneConfig> zone) {
         return zone.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** 请求体不完整或不合法:400、不碰库;原因只含字段名,不含请求里的值。 */
+    private static ResponseEntity<ZoneConfig> rejected(String action, Long zoneId, String problem) {
+        log.warn("zone {} rejected: zone={} reason={}", action, zoneId, problem);
+        return ResponseEntity.badRequest().build();
+    }
+
+    /** 两行的业务列是否逐列相同(不比 created_at / updated_at)。create 用它判「库里已是请求要的样子」。 */
+    private static boolean sameSettings(ZoneConfig requested, ZoneConfig stored) {
+        return Objects.equals(requested.getName(), stored.getName())
+                && requested.getManualStatus() == stored.getManualStatus()
+                && requested.getCapacity() == stored.getCapacity()
+                && Objects.equals(requested.getMaintenanceMsg(), stored.getMaintenanceMsg())
+                && Objects.equals(requested.getOpenTime(), stored.getOpenTime())
+                && requested.isRecommended() == stored.isRecommended()
+                && requested.getSortOrder() == stored.getSortOrder();
     }
 
     public record MaintenanceRequest(String maintenanceMsg) {}

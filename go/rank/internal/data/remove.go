@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	rankpb "proto/rank"
 	"rank/internal/metrics"
@@ -62,7 +63,7 @@ func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankE
 			if _, err = tx.ExecContext(ctx, "INSERT INTO rank_removed_entry (board_id,generation,entity_id,removed_ms) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE removed_ms=removed_ms", b.BoardId, b.Generation, in.EntityId, uint64(r.now().UnixMilli())); err != nil {
 				return err
 			}
-			_, err = tx.ExecContext(ctx, "DELETE FROM rank_score WHERE board_id=? AND generation=? AND entity_id=?", b.BoardId, b.Generation, in.EntityId)
+			err = deleteScoreAndCount(ctx, tx, b, in.EntityId)
 		}
 		if err != nil {
 			return err
@@ -70,6 +71,35 @@ func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankE
 		_, err = tx.ExecContext(ctx, "INSERT INTO rank_mutation (board_id,generation,request_id,request_hash,created_ms) VALUES (?,?,?,?,?)", b.BoardId, b.Generation, in.RequestId, digest, uint64(r.now().UnixMilli()))
 		return err
 	})
+}
+
+// errEntriesDrift:删掉了一行,榜上的 entries 却已经是 0。计数与 rank_score 对不上只可能是数据被绕过本服务改过,
+// 回错误让整笔事务回滚(fail-closed),不把计数夹到 0 了事。
+var errEntriesDrift = errors.New("排行榜条目计数与数据不符")
+
+// deleteScoreAndCount 删掉 entity 在本代的分数行;真的删到一行时把榜上的 entries 减一。调用方持榜行锁。
+func deleteScoreAndCount(ctx context.Context, tx *sql.Tx, b *rankpb.RankBoardRecord, entity uint64) error {
+	result, err := tx.ExecContext(ctx, "DELETE FROM rank_score WHERE board_id=? AND generation=? AND entity_id=?", b.BoardId, b.Generation, entity)
+	if err != nil {
+		return err
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if deleted == 0 {
+		return nil
+	}
+	result, err = tx.ExecContext(ctx, "UPDATE rank_board SET entries=entries-1 WHERE board_id=? AND entries>0", b.BoardId)
+	if err != nil {
+		return err
+	}
+	if updated, err := result.RowsAffected(); err != nil {
+		return err
+	} else if updated != 1 {
+		return errEntriesDrift
+	}
+	return nil
 }
 
 // removedEntries 读这一代被移除的实体。移除是运营操作,一代只有少数几条,整代读一次比逐条查便宜。

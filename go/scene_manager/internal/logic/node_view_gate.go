@@ -123,18 +123,13 @@ func knownNodeIDsByZone() map[uint32]map[string]struct{} {
 
 // nodeViewZones 是领导者读负载集基线、做陈旧清扫的 zone 范围,两处只经这里取。
 //
-// 现在 = 快照里的 zone ∪ 旧镜像里的 zone ∪ zone 登记集合 scene_manager:zones(zone_registry.go)。登记集合补的是快照与镜像里
-// 都没有、负载集里还留着成员的 zone:某 zone 的最后一个节点在无领导窗口(或 SM 整体停机)里死掉,它的负载集条目、计数和孤儿实例
-// 只有这里能发现。读登记集合失败只打 Error,退回前两者(与旧 SCAN 出错即 break 的退化方向一致)。
-//
-// 按 zone 选主(容量模型 A1,docs/design/control-plane-zone-scoping-20261105.md)落地之后,一个副本只编排本 zone,
-// 这里改成只返回本 zone;控制域按 zone 组分实例后登记集合里会有同组别的 zone,再并进来会把它们的活节点当成陈旧成员摘掉。
+// 恒为本进程编排的 zone(orchestrated_zones.go,docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):按 zone 选主之后
+// 一个副本只编排本 zone,本 zone 一个节点都没有时照样扫,最后一个节点在无领导窗口里死掉时留下的负载集条目、计数和孤儿实例
+// 也收得掉。快照与旧镜像只会有本 zone,参数留着是为了让闸门调用处读起来与基线的来源对得上;原来并进来的 zone 登记集合
+// scene_manager:zones 已删除:控制域按 zone 组分实例后同组别的 zone 也在同一个实例里,并进来会把它们的活节点当成陈旧成员摘掉。
 func nodeViewZones(svcCtx *svc.ServiceContext, snapshotZones, prevZones []uint32) []uint32 {
-	registered, err := listRegisteredZones(svcCtx)
-	if err != nil {
-		logx.Errorf("[LoadReporter] read zone registry failed; using snapshot and mirror zones only: %v", err)
-	}
-	return unionZones(snapshotZones, prevZones, registered)
+	_, _ = snapshotZones, prevZones
+	return orchestratedZones(svcCtx)
 }
 
 // readLoadSetBaseline 读 zones 里每个 zone 负载集的成员:闸门拿它当基线,陈旧清扫拿它当清扫范围,两者用同一份读数,

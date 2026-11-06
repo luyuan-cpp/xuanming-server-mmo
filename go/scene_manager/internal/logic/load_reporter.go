@@ -32,20 +32,9 @@ const (
 	sceneNodePrefix      = "SceneNodeService.rpc/"
 )
 
-// activeZones holds the zone IDs derived from currently known nodes.
-var (
-	activeZonesMu sync.RWMutex
-	activeZones   []uint32
-)
-
-// GetActiveZones returns the zone IDs from the current known node set.
-func GetActiveZones() []uint32 {
-	activeZonesMu.RLock()
-	defer activeZonesMu.RUnlock()
-	result := make([]uint32, len(activeZones))
-	copy(result, activeZones)
-	return result
-}
+// 本进程只 watch、只编排配置的 ZoneId(docs/design/control-plane-zone-scoping-20261105.md §3.3):全量同步与 watch 的前缀是
+// sceneNodeZonePrefix(ZoneId),knownNodes 只有本 zone 的场景节点;领导者循环的 zone 范围见 orchestrated_zones.go。
+// 原来按镜像里出现的 zone 推出的 activeZones / GetActiveZones 随之删除。
 
 // nodeLoadKey returns the zone-scoped Redis sorted-set key.
 func nodeLoadKey(zoneID uint32) string {
@@ -89,7 +78,8 @@ type nodeEntry struct {
 	nodeID string
 }
 
-// knownNodes tracks nodes currently registered in etcd, keyed by etcd key.
+// knownNodes tracks this zone's scene nodes currently registered in etcd, keyed by etcd key.
+// 只有本 zone(本节开头):别的 zone 的节点判定走 foreign_zone_registry.go 的 etcd 直读,不经这张表。
 var (
 	knownNodesMu sync.RWMutex
 	knownNodes   = make(map[string]nodeEntry)
@@ -195,8 +185,9 @@ func isNodeGoneFromRegistry(zoneID uint32, nodeID string) bool {
 //
 // 与 isNodeGoneFromRegistry 同源、同前提:尚未完成首次全量同步时返回 false(拿不到证据)。「zone 负载集为空」
 // 替代不了它:负载键丢失 / 被淘汰时 ZCARD 读作 0,节点却都活着、都还在注册表里(第二轮审计 r2-sm#3 同源缺陷)。
-// 依赖 knownNodes 是**全服**注册表的镜像(watch 前缀不分 zone)。将来把 watch 收窄到本 zone(容量模型 A1)时,
-// 别的 zone 在这里恒为「没有节点」,必须先改成按 zone 查注册表,否则跨 zone 的陈旧位置会被一律判成已下线。
+// **只对本 zone 调用**:2026-11-05 起 knownNodes 只有本 zone(watch 收窄到本 zone,容量模型 A1),别的 zone 在这里恒为
+// 「没有节点」。别的 zone 走 foreign_zone_registry.go 的 foreignZoneGone(etcd 直读 + 本副本首次观察屏障),调用方按
+// ownsControlZone 分流(enterscenelogic.go playerLocationOwnerGone)。isNodeGoneFromRegistry 同理。
 func isZoneGoneFromRegistry(zoneID uint32) bool {
 	if !knownNodesSynced.Load() {
 		return false
@@ -643,24 +634,6 @@ func SetKnownNodeForTest(etcdKey, nodeID, podIP string, zoneID, sceneNodeType ui
 	}
 }
 
-// rebuildActiveZones derives activeZones from knownNodes.
-func rebuildActiveZones() {
-	knownNodesMu.RLock()
-	zoneSet := make(map[uint32]struct{})
-	for _, entry := range knownNodes {
-		zoneSet[entry.reg.ZoneId] = struct{}{}
-	}
-	knownNodesMu.RUnlock()
-
-	zones := make([]uint32, 0, len(zoneSet))
-	for z := range zoneSet {
-		zones = append(zones, z)
-	}
-	activeZonesMu.Lock()
-	activeZones = zones
-	activeZonesMu.Unlock()
-}
-
 // ---------------------------------------------------------------------------
 // StartLoadReporter — list-watch pattern (like K8s informer)
 // ---------------------------------------------------------------------------
@@ -669,8 +642,6 @@ func rebuildActiveZones() {
 // with a periodic ticker for load-score refresh and grace-period checks.
 // On Watch error or channel close, it re-lists and re-watches automatically.
 func StartLoadReporter(ctx context.Context, svcCtx *svc.ServiceContext) {
-	// 每个副本启动时登记自己的 ZoneId 进 scene_manager:zones(跟随者此后不再发 Redis 命令,见 zone_registry.go)。
-	registerOwnZoneOnStartup(svcCtx)
 	for {
 		rev, err := fullSync(ctx, svcCtx)
 		if err != nil {
@@ -693,12 +664,14 @@ func StartLoadReporter(ctx context.Context, svcCtx *svc.ServiceContext) {
 	}
 }
 
-// fullSync does a complete etcd Get to build baseline state, updates Redis,
-// and ensures main scenes for all discovered zones. Returns the etcd revision.
+// fullSync does a complete etcd Get of this zone's scene nodes to build baseline state, updates Redis,
+// and ensures main scenes for this zone. Returns the etcd revision.
+// 前缀只到本 zone(sceneNodeZonePrefix):etcd 读量按 zone 线性,不再随全服进程数平方增长(容量模型 §2.2)。
 func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
-	resp, err := svcCtx.Etcd.Get(ctx, sceneNodePrefix, clientv3.WithPrefix())
+	prefix := sceneNodeZonePrefix(svcCtx.Config.ZoneId)
+	resp, err := svcCtx.Etcd.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
-		return 0, fmt.Errorf("etcd get %s: %w", sceneNodePrefix, err)
+		return 0, fmt.Errorf("etcd get %s: %w", prefix, err)
 	}
 	return applyNodeSnapshot(ctx, svcCtx, resp.Kvs, resp.Header.Revision)
 }
@@ -713,6 +686,11 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 		key := string(kv.Key)
 		entry, ok := parseNodeEntry(kv.Value)
 		if !ok {
+			continue
+		}
+		if entry.reg.ZoneId != svcCtx.Config.ZoneId {
+			// 本 zone 前缀下的注册自称别的 zone:部署错配(镜像只放本 zone,与 watch PUT 同一口径)。不进镜像。
+			logx.Errorf("[LoadReporter] registration %s under zone %d prefix claims zone %d; ignored", key, svcCtx.Config.ZoneId, entry.reg.ZoneId)
 			continue
 		}
 		next[key] = entry
@@ -781,14 +759,8 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 	// 在册的实例作废旧的消失记录;仍不在册的已记录实例改记为此刻(断档期间可能「回来又消失」,保守后推一个屏障)。
 	reconcileInstanceGoneObservationsAfterResync(seenInstances)
 
-	// Update activeZones.
-	zones := make([]uint32, 0, len(seenByZone))
-	for z := range seenByZone {
-		zones = append(zones, z)
-	}
-	activeZonesMu.Lock()
-	activeZones = zones
-	activeZonesMu.Unlock()
+	// 快照里有节点的 zone:只可能是本 zone(或者空)。补频道 / rebalance 只在本 zone 有节点时做。
+	zones := zoneKeysOf(seenByZone)
 
 	// 以下全部是**变更类**动作,多副本时只有领导者执行(单写者语义);
 	// 跟随者的 fullSync 只负责重建本进程的 etcd 内存镜像(负载分也只由领导者刷新)。
@@ -812,7 +784,7 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 		// 屏障已过的立刻做掉,没过的原样留着等下一拍。
 		drainPendingDeadNodeReconciles(ctx, svcCtx)
 
-		// Ensure world scenes for all zones (handles SceneManager restart). We
+		// Ensure world scenes for this zone (handles SceneManager restart). We
 		// run init followed by a rebalance pass: init handles under-provisioning
 		// (new confIds, fresh zone) while rebalance handles drift that
 		// accumulated while SceneManager was offline (nodes joined/left without
@@ -842,12 +814,11 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 // 用的是同一份读数,闸门放行了才走到这里(node_view_gate.go);读失败的 zone 不在里面,本轮不扫。
 // 中途失去领导权返回 false,调用方应停止本轮后续的变更动作;扫完返回 true。
 //
-// 扫描范围由 nodeViewZones 定(快照 zone ∪ 镜像 zone ∪ zone 登记集合)。只按快照扫有个洞:某 zone 的
-// **最后一个**节点在无领导窗口(或 SM 整体停机)里死掉时,快照里根本没有这个 zone,它的
-// 负载集条目、计数和孤儿实例就永远没人清(runPeriodicRebalance 也只迭代 GetActiveZones)。
-// 「还留有负载集的 zone」以前靠 SCAN scene_nodes:zone:*:load 发现,全库遍历在开服规模下是小时级;
-// 2026-10-16 起改读 zone 登记集合 scene_manager:zones(zone_registry.go):领导者刷新时先登记再写
-// 负载集,有活节点的 zone 每拍自愈。覆盖不到的只有 zone_registry.go 文件头列出的两类缺口。
+// 扫描范围由 nodeViewZones 定,恒为本 zone(orchestrated_zones.go,docs/design/control-plane-zone-scoping-20261105.md §4.3):
+// 本 zone 一个节点都没有时照样扫,最后一个节点在无领导窗口(或 SM 整体停机)里死掉时留下的负载集条目、计数和孤儿实例
+// 也收得掉。原来靠 SCAN scene_nodes:zone:*:load、后来靠 zone 登记集合 scene_manager:zones 去发现「还留有负载集的 zone」;
+// 按 zone 选主之后不需要发现,登记集合删除 —— 控制域按 zone 组分实例后,同组别的 zone 也在同一个实例里,
+// 并进来会把它们的活节点当成陈旧成员摘掉。
 //
 // 每个陈旧成员与 watch DELETE 走同一条摘除路径 removeNodeFromRedis:先写 death_at 再摘负载集,
 // 写不进就推迟(GO-6)。已在推迟队列里的节点被重扫到时:这次写成 death_at 就按首次推迟时的
@@ -897,7 +868,7 @@ func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64)
 	// 取消的子 ctx 建;handleWatchEvent 里的补频道 / rebalance 仍用服务 ctx,不受影响。
 	watchCtx, cancelWatch := context.WithCancel(ctx)
 	defer cancelWatch()
-	watchCh := svcCtx.Etcd.Watch(watchCtx, sceneNodePrefix,
+	watchCh := svcCtx.Etcd.Watch(watchCtx, sceneNodeZonePrefix(svcCtx.Config.ZoneId),
 		clientv3.WithPrefix(),
 		clientv3.WithRev(rev+1),
 		clientv3.WithPrevKV(),
@@ -972,7 +943,7 @@ func runPeriodicRebalance(ctx context.Context, svcCtx *svc.ServiceContext) {
 	if len(wids) == 0 {
 		return
 	}
-	for _, z := range GetActiveZones() {
+	for _, z := range orchestratedZones(svcCtx) {
 		RebalanceWorldChannelsForZone(ctx, svcCtx, z, wids)
 	}
 }
@@ -985,6 +956,14 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 	case clientv3.EventTypePut:
 		entry, ok := parseNodeEntry(ev.Kv.Value)
 		if !ok {
+			return
+		}
+		if entry.reg.ZoneId != svcCtx.Config.ZoneId {
+			// 本 zone 前缀下的注册自称别的 zone(部署错配):镜像只放本 zone。这个键不再代表本 zone 的任何节点,
+			// 按 DELETE 收尾它原来代表的身份(与全量同步丢弃这类条目同一口径)。
+			logx.Errorf("[LoadReporter] registration %s under zone %d prefix claims zone %d; treated as deregistered",
+				key, svcCtx.Config.ZoneId, entry.reg.ZoneId)
+			retireWatchKey(ctx, svcCtx, key)
 			return
 		}
 
@@ -1037,7 +1016,6 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		}
 
 		updateNodeLoad(svcCtx, entry)
-		rebuildActiveZones()
 
 		// 补频道 / rebalance 是变更动作,只有领导者做;跟随者只维护上面的
 		// 内存镜像(updateNodeLoad 在跟随者上直接返回)。跟随者当选时会经 resync -> fullSync 补齐。
@@ -1062,20 +1040,25 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		}
 
 	case clientv3.EventTypeDelete:
-		knownNodesMu.Lock()
-		entry, existed := knownNodes[key]
-		if existed {
-			delete(knownNodes, key)
-		}
-		knownNodesMu.Unlock()
-
-		if !existed {
-			return
-		}
-		rebuildActiveZones()
-		retireNodeIdentityIfGone(ctx, svcCtx, entry)
-		noteInstanceRetiredIfGone(entry)
+		retireWatchKey(ctx, svcCtx, key)
 	}
+}
+
+// retireWatchKey 把一个 etcd 键从镜像里拿掉,并按「这个键不再代表它原来的身份」收尾(watch DELETE,或本 zone 前缀下
+// 出现了自称别的 zone 的注册)。镜像里没有这个键时什么都不做。
+func retireWatchKey(ctx context.Context, svcCtx *svc.ServiceContext, key string) {
+	knownNodesMu.Lock()
+	entry, existed := knownNodes[key]
+	if existed {
+		delete(knownNodes, key)
+	}
+	knownNodesMu.Unlock()
+
+	if !existed {
+		return
+	}
+	retireNodeIdentityIfGone(ctx, svcCtx, entry)
+	noteInstanceRetiredIfGone(entry)
 }
 
 // retireNodeIdentityIfGone:某个 etcd 键不再代表 gone 这个 (zone,node) 身份时调用(watch DELETE,或 PUT 换了身份)。

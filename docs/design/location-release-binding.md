@@ -802,7 +802,7 @@ Lookup是缓存修复的观察点，不与Redis合并成角色授权事务。Loo
 
 ## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（2026-10-30 落码，11-05 补「先围存档写权行」；未编译、未测试）
 
-负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例在工作区，**未编译、未测试，待 Codex 验证**。
+负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留，只有「原件 E ≠ E」一处 11-05 按评审改成了「< E」，见 §17.9 差异 7）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例在工作区，**未编译、未测试，待 Codex 验证**。
 
 ### 17.1 问题
 
@@ -826,7 +826,7 @@ r2-lc#2 之后，会话结束凭证只能由本节点以"本进程实例在期�
 
 不变量 I-1：玩家实体只会在 E 下的入场登记成功（`kRegisterFenceLua` 写出 E 下的 H）或交接采纳（`kResumeFenceLua` 把 R 恢复为 E 或 E+2 下的 H）之后才建出或继续持有。没有登记、没有采纳，就没有实体；没有实体，就没有 E 下未落盘的进度。
 
-推论：`handoff_fence` 原件缺失，或其 E 不等于 location 的 E，且这一状态在一次原子检查里与 location、owner_epoch 同时成立，就是"此刻没有任何进程以 E 持有该玩家"的正证。
+推论：`handoff_fence` 原件缺失，或其 E 小于 location 的 E，且这一状态在一次原子检查里与 location、owner_epoch 同时成立，就是"此刻没有任何进程以 E 持有该玩家"的正证。原件的 E 大于 location 的 E 是协议写不出的形态（各写者写出的代次都 ≤ owner_epoch），不当正证（11-05 收紧，§17.9 差异 7）。
 
 **接手时第一件事是核对 I-1**（§17.8 第 1 步）：A2′ 闸门、RoleAdmission、`InitPlayerFromAllData`、交接采纳、同节点复用实体、退出保留期重登这几条路径，是否都在登记或采纳成功之后才建出或复用实体。只要有一条例外，就要把例外写进 §17.4 的条件，不能靠宽限期掩盖。
 
@@ -834,7 +834,7 @@ r2-lc#2 之后，会话结束凭证只能由本节点以"本进程实例在期�
 
 1. location 存在，指向 (X, E)，E ≠ 0。
 2. 当前没有 E 下的交接释放标记（有的话走现有释放证据路径，不撤销）。
-3. 资格原件缺失，或原件 E ≠ E。原件 E == E 时：实例与 X 的在册实例一致就是正常持有，不撤销；不一致归 GO-3 判定，不撤销。
+3. 资格原件缺失，或原件 E < E（原件 E > E 不撤销，§17.9 差异 7）。原件 E == E 时：实例与 X 的在册实例一致就是正常持有，不撤销；不一致归 GO-3 判定，不撤销。
 4. 本副本已经按现有路径请过 X 释放（LeaveScene 的 `ReleasePlayer.session_ended`，或 EnterScene 持有者释放门的同步请求），并且从首次请求起、按 Redis `TIME` 计（复用 `luaNoteLeaveReleaseWait` 的计时键与口径）已过宽限 `UnqualifiedHolderRevokeGraceSeconds`。缺省 120s，须大于入场登记截止 15s 与交接冻结上限 70s 之和，留出 RPC 与重试余量。宽限只为不打断在途的入场与"采纳 E+2"窗口（§17.6 第 3 条），正确性不依赖它。
 
 ### 17.5 原子动作（一段 Lua，scene_manager 侧）
@@ -843,7 +843,7 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 
 在同一段 Lua 里：
 
-1. location 字节等于 ARGV；`owner_epoch` 等于 E；`save_barrier.handoff_fence` 字节等于 ARGV（缺失对缺失），解析后 E ≠ 期望 E；E 下的交接标记不存在；§16 的 location_revision tag / floor 校验与现有删除 Lua 同口径。任一不满足返回 0（"状态已变"，什么都不写）。
+1. location 字节等于 ARGV；`owner_epoch` 等于 E；`save_barrier.handoff_fence` 字节等于 ARGV（缺失对缺失），解析后 E < 期望 E；E 下的交接标记不存在；§16 的 location_revision tag / floor 校验与现有删除 Lua 同口径。任一不满足返回 0（"状态已变"，什么都不写）。
 2. `INCR owner_epoch`（E → E+1）。这是围栏：此后 E 下的存盘（严格屏障 Lua 比 owner）、标记写、入场登记、凭证都因 owner 不等而被拒。
 3. 删除 location，按现有删除 Lua 的方式处理 location_revision 侧车（不删 floor）。
 4. 返回 1。
@@ -855,7 +855,7 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 1. **不会回档**：由 I-1，撤销时没有 E 下的实体，也就没有 E 下未落盘的进度；E 之前各代已落盘的数据在父快照与 SQL 里，受提交屏障保护，新铸造照常加载。
 2. **与在途登记的竞态**：X 上一次在途入场登记的 `kRegisterFenceLua` 若先执行，fence 原件变成 E 下的 H，撤销 Lua 的第 1 步判 fence 已变，返回 0，不撤销；若撤销先执行，owner 已是 E+1，登记脚本比 owner 失败，那次入场失败，客户端重登走新铸造。两种顺序都不会出现两个持有者。迟到帧（旧连接重传）同理，都被 owner CAS 拒绝。
 3. **"采纳 E+2"窗口**：scene_manager 回滚把 location 推到 E+2 并写 "E+2:t" 标记期间，条件 2 不满足（标记在），不撤销。标记过期之后，源节点若还没取证采纳，fence 仍在 E。此时撤销会让采纳的 `kResumeFenceLua` 因 owner 不等失败，源实体按废黜处理；但它处于交接冻结中，冻结存盘已两表落地（`kPublishMarkLua` 的前置），没有未落盘进度。宽限期大于冻结上限，正常路径下采纳早已完成。
-4. **与 GO-3 互不重叠**：GO-3 处理原件 E == location E、实例已从注册表消失；本机制只处理原件 E ≠ location E（或缺失）。两者都以推进 epoch 收尾。
+4. **与 GO-3 互不重叠**：GO-3 处理原件 E == location E、实例已从注册表消失；本机制只处理原件 E < location E（或缺失）。两者都以推进 epoch 收尾。
 5. **多副本**：判定与动作在一段 Lua 里，以 Redis 状态为准；计时键用 Redis `TIME`，各副本口径一致。两个副本同时撤销时，后到者第 1 步判 location 已变，返回 0。
 6. **不扩大 §15 的放权**：撤销靠正证（§17.3）加围栏（§17.5 第 2 步），不靠超时；超时只决定"什么时候去检查正证"。
 
@@ -882,26 +882,26 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 
 ### 17.9 落码记录（2026-10-30 落码，11-05 按存档直写与玩家域 Redis 补一轮；未编译、未测试，待 Codex 验证）
 
-10-31 起两处底层变了，本节按 11-05 的代码写：玩家存档改为直写 TiDB，存盘与认领由写权行（`player_store` 的 kind 0 行）挡旧写，见 [player-save-direct-commit.md](player-save-direct-commit.md) §4；交接资格从 `save_barrier` 搬到独立 hash `player:{id}:handoff_fence`，玩家键都带 `{id}`，走玩家域句柄；场景人数改为成员集合，放在控制域。撤销实现由那次改造的会话随 `65c69f4a9` / `e33b99351` 适配过（键、成员、句柄），11-05 本会话补上撤销之前先围存档写权行这一步（「数据覆写审计 R2 交接」会话按存档直写之后的代码复核时提出）。
+10-31 起两处底层变了，本节按 11-05 的代码写：玩家存档改为直写 TiDB，存盘与认领由写权行（`player_store` 的 kind 0 行）挡旧写，见 [player-save-direct-commit.md](player-save-direct-commit.md) §4；交接资格从 `save_barrier` 搬到独立 hash `player:{id}:handoff_fence`，玩家键都带 `{id}`，走玩家域句柄；场景人数改为成员集合，放在控制域。撤销实现由那次改造的会话随 `65c69f4a9` / `e33b99351` 适配过（键、成员、句柄），11-05 本会话补上撤销之前先围存档写权行这一步（「数据覆写审计 R2 交接」会话按存档直写之后的代码复核时提出）。同日一次独立的对抗评审（只读子代理）之后又收紧四处：预判只认 owner_epoch 键原值；原件代次 > E 不撤销；等待计时键的 TTL 盖住宽限；摘成员没做完改由成员集合对账兜底。见下面差异 2、3、7 与残余 4。评审对着的是同日先写的「撤销后补释放 + 发件箱」版本，结论按改后的代码逐条复核过；只针对发件箱的几条随方案作废。
 
 **I-1 核对（§17.8 第 1 步）：成立，没有例外，§17.4 的条件不用改。** 10-30 逐条读了 `role_admission_system.cpp`、`player_lifecycle.cpp`、`handoff_sql_barrier.h`、`scene_handler.cpp`，11-05 按改造后的代码复核：
 
 - **入场**（首次载入、同节点复用实体、退出保留期重登、同落点重连都走这一条）：scene 的唯一入口 `SceneHandler::PlayerEnterGameNode` 在任何本地会话 / 实体 / 载入副作用之前调 `RoleAdmissionSystem::RequestEnter`。它拒绝 owner_epoch 为 0 的路由，先做 SQL 登记，再 `SendFence`（`kRegisterFenceLua`，要求 owner_epoch == 候选的 E）；只有登记回包成功才置 `authorized` 并 `Activate` → `HandleEnterGameNode`。`HandleEnterGameNode` 第一步 `RoleAdmissionSystem::Allows`（authorized == 本次 generation）不过即拒；复用实体（+1 抬缓存、≥ +2 废黜重载）、取消退出都排在它之后。载入回包 `HandlePlayerAsyncLoaded` 只消费 `HandleEnterGameNode` 登记的待入场条目，A2′ 闸门（`kConfirmFenceLua` 只确认原 H）过了才 `InitPlayerFromAllData`。
 - **认领**（存档直写之后）：`LoadAndClaim` 由 `HandleEnterGameNode` 之后的载入发起，排在资格登记成功之后。所以 X 从没在 E 下登记成功，也就从没在 E 下认领过写权行，写权行上没有它要保的东西。
 - **交接采纳**：`ResumeTravelAfterRevocation` 的 `kResumeFenceLua` 要求 owner_epoch == 目标 E、location 原字节不变、没有标记，成功回调里才把实体缓存改成目标 E。回 0 时实体保持冻结，到冻结硬上限后按「标记已发出」不存盘销毁；交接标记只在冻结快照的最终存盘明确成功之后才发布（`kPublishMarkDirectLua`，player-save-direct-commit.md §6），没有未落盘进度（§17.6 第 3 条）。
-- **owner_epoch == E 期间原件只能是 E 下的**：
+- **某进程在 E 下写出 H 之后，只要 owner_epoch 仍是 E，别的写者就改不掉这份原件**。I-1 真正要用的是这一条。10-30 写的是「owner 为 E 期间一切资格写只能写出 E 下的原件」，字面上不成立：`kCancelRegistrationLua` 只要求 owner ≥ 候选的 E，`kRevokeFenceLua` 在 next 为 R 时不比 owner，`kJudgeOutcomeLua` 也会写出代次低于 owner 的 R。逐个写者看：
   - `kRegisterFenceLua`、发布 / 释放 / 凭证（`kPublishMarkDirectLua`、`kReleaseMarkLua`、`kCredentialMarkLua`）、采纳（`kResumeFenceLua`）都要求 owner == 原件的 E；
   - `kCancelRegistrationLua` 只替换本次候选或它观察到的 prior，同 E 异实例回 0；
-  - `kRevokeFenceLua`、`kJudgeOutcomeLua` 只认本实体缓存的原件。
+  - `kRevokeFenceLua`、`kJudgeOutcomeLua` 只认本实体缓存的原件（prior 原件比对加 order 检查），别的实体拿着不同的缓存改不动。
 
-  所以 E 下有合法持有者时，原件的 E 必为 E，别的进程改不掉。离线工具（`save_barrier_restore` / `debug_import`）在停写时运行，不计入。
+  所以 E 下有合法持有者时，原件就是它写下的 E 代那一份，别的进程改不掉；它按协议交出时留下 E 代标记。各写者写出的代次都 ≤ owner_epoch，原件代次 > E 只能是数据被动过（差异 7）。离线工具（`save_barrier_restore` / `debug_import`）在停写时运行，不计入。
 - **前提**：玩家域 Redis（本地单实例与 `redis-player-cluster`）是 noeviction，`handoff_fence` hash 不设 TTL（`kRegisterFenceLua` 的 `types3()` 也要求 PTTL == -1），所以原件「缺失」只能是从来没人登记过。
 
 **实现**（只改 scene_manager 与 `shared/redisslot`；C++、proto、data_service 不改）：
 
 - `go/scene_manager/internal/logic/unqualified_holder_revoke.go`（新）：
   - 撤销 Lua `luaRevokeUnqualifiedHolder`；
-  - 预判 `decideUnqualifiedRevoke`，取值 `not_due / epoch_unproven / fence_malformed / qualified / eligible`；
+  - 预判 `decideUnqualifiedRevoke`，取值 `not_due / epoch_unproven / fence_malformed / qualified / fence_ahead / eligible`；
   - 执行 `revokeUnqualifiedHolder`；
   - 两个调用点的粘合 `revokeUnqualifiedHolderOnLeave` / `revokeUnqualifiedHolderOnLogin`。
 
@@ -912,14 +912,14 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
   2. **再跑撤销 Lua**：按 §17.5 原子复核下列条件，都成立才写：
      - location 原字节，§16 侧车原文与 floor；
      - owner_epoch 按串严格等于 E（缺键不 INCR）；
-     - `handoff_fence` 原字节等于观察值，且按 C++ 口径解析出的 E ≠ 期望 E（或原件缺失）；
+     - `handoff_fence` 原字节等于观察值，且按 C++ 口径解析出的代次 < 期望 E（或原件缺失）；代次用 helpers 的 `cmp` 按数值比；
      - 没有 E 代或写坏的标记。
 
-     写入：`INCR owner_epoch`，删 location、等待计时与 §16 侧车（floor 保留）。资格原件一个字节不动。7 把键都在这名玩家的 slot 上（`scene_keys_contract_test.go` 从生产函数取键核对）。返回码：1 已撤销、0 location 已不在、-1 location / 修订已变、-2 owner 已不是 E、-3 原件已变、-4 原件属于 E 或写坏、-5 有 E 代标记。不是 1 时一个字节不写；参数形状不对回 error_reply，不写。
+     写入：`INCR owner_epoch`，删 location、等待计时与 §16 侧车（floor 保留）。资格原件一个字节不动。7 把键都在这名玩家的 slot 上（`scene_keys_contract_test.go` 从生产函数取键核对）。返回码：1 已撤销、0 location 已不在、-1 location / 修订已变、-2 owner 已不是 E、-3 原件已变、-4 原件属于 E、比 E 新或写坏、-5 有 E 代标记。不是 1 时一个字节不写；参数形状不对回 error_reply，不写。
 
-  收尾：Lua 回 1 或 0 之后摘场景成员（控制域，幂等），失败让清理重试，LeaveScene「没有 location」一支会再摘一次。
+  收尾：Lua 回 1 或 0 之后摘场景成员（控制域，幂等）。摘成员失败时 LeaveScene 照删除路径的口径回错误，但请求路径上不会再有人摘：player_locator 重试时先从 location 反查场景号，反查不到就直接收工、不调 LeaveScene（`notifySceneManagerLeave`）。残留的成员由成员集合对账摘掉（`scene_member_reconcile.go`，领导者周期跑，成员连续 2 分钟不指向这里就摘），与 LeaveScene 删除路径同一兜底。10-30 版写的是「LeaveScene『没有 location』一支会再摘一次」，那一支实际走不到。
 
-  **为什么要动写权行**：交接、判死接管、交接回滚之后，写权行通常还挂在上一任名下、released=0（交接不 release，靠下一任认领抬代次）。撤销删掉 location 之后没有下一任，不动写权行的话 released 一直是 0，这名玩家待放弃的资产操作永远卡着，与判死释放（player-save-direct-commit.md §5.5）同一个理由。同时它把上一任及更早的持有者在存储真源上围住，不再只靠 Redis 投影。
+  **为什么要动写权行**：交接、判死接管、交接回滚之后，写权行通常还挂在上一任名下、released=0（交接不 release，靠下一任认领抬代次）。撤销删掉 location 之后没有下一任，不动写权行的话 released 一直是 0，这名玩家待放弃的资产操作永远卡着，与判死释放（player-save-direct-commit.md §5.5）同一个理由。同时它把上一任及更早的持有者在存储真源上围住，不再只靠 Redis 投影。上一任若其实还活着（判死 / GO-3 误判留下的进程），它的存盘从这里开始被拒，代价与 E 下正常认领时一样：铸出 E 那一刻 scene_manager 已判它出局，存档一侧本该由 E 下的认领围住，X 没认领，就由撤销补上；撤销相当于延后的那次认领（11-05 评审 nit 9）。
 
   **为什么按 E−1 而不是判死路径的 E**：
   - 判死的节点在 E 下认领过，要把它围掉；这里 X 按 I-1 从没在 E 下认领，只需挡住 ≤ E−1 的。
@@ -928,12 +928,12 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 
   **为什么写权行在前**：TiDB 是真源，先在真源上推进令牌是标准做法；这一步幂等、对任何以 ≥ E 代次的合法认领无害，失败时什么都没撤，所以不需要发件箱或补做通道。反过来先撤 Redis 再补写权行，两步之间没有原子性，写权行那一步失败就要另记欠账去补。
 - **调用点**：
-  - `leavescenelogic.go`：判 `pending` 时，在保留 location、请释放之前先检查（`revokeUnqualifiedHolderOnLeave`，返回 `(done, err)`）。location 没了（撤销成功，或已被删）即清理完成；摘成员没做完回错误（不是 FailedPrecondition），player_locator 按失败重试。围写权行失败按没撤销处理：照常请释放、回 FailedPrecondition。
+  - `leavescenelogic.go`：判 `pending` 时，在保留 location、请释放之前先检查（`revokeUnqualifiedHolderOnLeave`，返回 `(done, err)`）。location 没了（撤销成功，或已被删）即清理完成；摘成员没做完回错误（不是 FailedPrecondition），成员由对账摘（见上「收尾」）。围写权行失败按没撤销处理：照常请释放、回 FailedPrecondition。期望 E 用 owner_epoch 键原值（`holderReleaseJudgement.observedEpoch`，缺键为 0），不用释放判定退回 location 记值之后的 `epoch`（差异 3）。
   - `enterscenelogic.go` 第 3 步：换手门以 18 拒绝、`requestHolderReleaseForLogin` 判 eligible 并已请过释放之后检查。该函数改为返回是否请过。撤销与否都照回 18；围写权行给 1s（登录链预算有限），超时或失败就这次不撤销。
-- **宽限**：配置 `UnqualifiedHolderRevokeGraceSeconds`（`config.go`、`etc/scene_manager_service.yaml`）。0 / 不写 = 120；必须在 (85, 600] 内，否则 `svc.NewServiceContext` 拒启。没有关闭开关。K8s ConfigMap 不渲染此键，取缺省。
+- **宽限**：配置 `UnqualifiedHolderRevokeGraceSeconds`（`config.go`、`etc/scene_manager_service.yaml`）。0 / 不写 = 120；必须在 (85, 600] 内，否则 `svc.NewServiceContext` 拒启。没有关闭开关。K8s ConfigMap 不渲染此键，取缺省。等待计时键的 TTL 取 max(LeaveScene 诊断预算, 宽限) + 600s（`leave_release.go` `noteLeaveReleaseWait`，差异 2）。
 - **可观测**：
   - 指标：`scene_manager_leave_holder_release_total{verdict="revoked_unqualified"}` 与 `scene_manager_enter_holder_release_total{verdict="revoked_unqualified"}`，只在 Lua 返回 1 时计（摘成员没做完也计：location 已经撤掉）。
-  - 日志：`[UnqualifiedRevoke]`。撤销成功、摘成员没做完、原件写坏、读写或围写权行失败打 ERROR（go-zero logx 没有 WARN 级），已过宽限而不撤销打 INFO，宽限内不打。日志带节点、E、原件的 E 与状态，不打原件原文。
+  - 日志：`[UnqualifiedRevoke]`。撤销成功、摘成员没做完、原件写坏或比 E 新、读写或围写权行失败打 ERROR（go-zero logx 没有 WARN 级），已过宽限而不撤销打 INFO，宽限内不打。日志带节点、E、原件的 E 与状态，不打原件原文。
   - 都不以 player_id 作 label。
 
 **与 §17.1–§17.8 正文的差异**（都是收紧或说清，不放宽）：
@@ -941,18 +941,19 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 1. 「已请过释放」（§17.4 第 4 条）落成：只在本次请求本身就在请持有节点释放的流程里检查，即 LeaveScene 判 `pending`（离场身份 `deleted`）、EnterScene 释放门判 `eligible`。`pending_unproven`（legacy 离场身份，不发释放）与 scene 自发的 18 都不检查。
    - 宽限从这份 location 的等待计时起点算（`noteLeaveReleaseWait`，Redis TIME）。LeaveScene 与 EnterScene 释放门共用一把键、同一个 scope。
    - 因此 EnterScene 释放门第一次写等待计时键。§12.2「不写任何 Redis 状态」对 `requestHolderReleaseForLogin` 本身仍成立。
-2. 宽限加上界 600s：等待计时键的 TTL = 诊断预算（≥ 1s）+ 600s 余量；宽限更长时，计时键会在宽限走完之前过期、从头计时，撤销就永远轮不到。
-3. owner_epoch 键与 location 记的 E 必须同为 E 且非 0：Go 预判出 `epoch_unproven` 就不发，Lua 按串严格比键值。
+2. 宽限加上界 600s，只防配错：宽限越长，卡住的玩家进不了场越久。等待计时键只在首次登记时设 TTL、之后不续，所以 TTL 取 max(诊断预算, 宽限) + 600s，宽限走完之后至少还剩 600s 可撤。10-30 版只按诊断预算算（预算 + 600s），并以「宽限 ≤ 600s」担保键不先过期；但预算配成 1s、宽限 600s 时，宽限走完后键只剩 1s，清理 30s 才重试一次，大概率错过、键过期从头计时，撤销永远轮不到（11-05 评审 m3，缺省 600 对 120 不受影响）。
+3. owner_epoch 键与 location 记的 E 必须同为 E 且非 0：Go 预判出 `epoch_unproven` 就不发，Lua 按串严格比键值。LeaveScene 一侧传的是键原值（缺键为 0），不是释放判定退回 location 记值之后的 E。10-30 版传了后者，缺键时 location 自己证明自己、预判照样放行，每次重试白读一次原件、发一次 Lua 被 -2 拒掉；11-05 加了写权行那一步之后还会白围一次写权行（11-05 评审 m4）。
 4. 推进围栏用 INCR，不取 G3a 墙钟地板。撤销不把新值交给任何节点；下一次落点照常走铸造（墙钟地板 + WAITAOF），WAITAOF 确认的复制偏移覆盖排在它之前的撤销。
 5. EnterScene 一侧撤销之后照回 18，不在同一次请求里接着落点；下一次重登按无持有者落点铸造（≥ E+2）。
 6. 新增「先围存档写权行」（11-05）：10-24 设计时存档还走 Redis 屏障，owner_epoch 一处就挡住全部旧写；存档改为直写 TiDB 之后，写权行是第二处令牌、而且是真源，撤销要先在它上面推进，理由、代次与顺序见上面「两处令牌」。
+7. 原件代次 > E 不撤销（11-05）：预判 `fence_ahead`，打 ERROR；Lua 同样回 -4。§17.3 推论与 §17.4 第 3 条原写「原件 E ≠ E」，已在正文改为「< E」。协议写者写出的代次都 ≤ owner_epoch，原件比 E 新说明数据被动过（手工改键、局部恢复）。这时撤销 INCR 出来的 E+1 可能不大于原件代次，围栏不再单调盖住现存的原件；按 AGENTS.md §11.3 数据完整性路径 fail-closed，交给离线维护（残余 3）。10-30 版的预判表把它判成 `eligible`（11-05 评审 nit 5）。
 
 **残余**：
 
 1. 宽限只防打断在途的登记 / 采纳，不参与安全性；宽限内被拒的入场按既有路径重试。
-2. Redis 自身回退（异步复制下故障转移丢写）不在本机制能力内，同 `cross-zone-scene-travel.md` 写入口对照节残余 1。回退只会让撤销连同其后的写一起丢失，退回撤销之前的卡住状态，不产生两个持有者。
-3. 离线恢复 / 维护提升留下的形态不在本机制内，属离线维护流程：location 记的 E 与 owner_epoch 不一致（预判 `epoch_unproven`），或原件是 E 下的恢复墓碑（n = 0，预判 `qualified`）。
-4. 撤销 EVAL 的应答丢了（玩家域句柄不自动重发，调用方重试）：重试看到 location 已不在，按 `already_gone` 摘成员，那一次少计一次指标；围写权行与摘成员都幂等，不会多做。
+2. Redis 自身回退（异步复制下故障转移丢写）不在本机制能力内，同 `cross-zone-scene-travel.md` 写入口对照节残余 1。回退只会让撤销连同其后的写一起丢失，Redis 退回撤销之前的卡住状态，不产生两个持有者。写权行在 TiDB，不跟着回退，停在「E、无持有者、released=1」，与残余 5 同一形态：下一次检查时第 1 步不动它（库里已是 E）、第 2 步再撤一次；同节点重登按 E 登记、按 E 认领照常成功。所以 Redis 回退不会让写权行把谁卡住，这也是按 E−1 而不是 E 围的原因之一。
+3. 离线恢复 / 维护提升留下的形态不在本机制内，属离线维护流程：location 记的 E 与 owner_epoch 不一致，或 owner_epoch 缺键（预判 `epoch_unproven`）；原件是 E 下的恢复墓碑（n = 0，预判 `qualified`）；原件代次比 E 新（预判 `fence_ahead`，ERROR）。
+4. location 已删而摘场景成员没做成：控制域出错，或撤销 EVAL 已执行而应答丢了（玩家域句柄不自动重发）。后一种这次按没撤销处理，LeaveScene 回 FailedPrecondition、登录照回 18，日志是 `check failed; treating as not revoked`。之后 player_locator 看到没有 location 就收工，下一次登录按无持有者落点；旧场景与节点的成员由成员集合对账摘掉（见实现「收尾」），这段时间旧场景多算一人，选线可能少放一个人进去，无害；指标少计一次。写权行此前已围好，不受影响。不在这里加「应答丢了就重发」：重发同一条 CAS 脚本本身安全（已执行就回 0），但收益只是早一两分钟摘成员、指标准一次，删除路径同样靠对账兜底，保持一个口径。
 5. 写权行围好、撤销 Lua 随后落空时，写权行停在「E、无持有者、released=1」，直到有人以 ≥ E 的代次认领。这段时间待放弃的资产操作可能把这名玩家当作已离线处理；它们以写权行为准提交，之后的认领与载入读到的就是处理之后的状态，与「下线后立刻重登」同一种先后。
 6. data_service 在旧存档路径上对 `ReleaseDeadPlayerStoreHolder` 回 Unavailable（两边开关不一致），这时围写权行一直失败、撤销一直不发生，location 照旧等释放证据；与判死释放同一个前提，靠发布时七份开关一致的核对（player-save-direct-commit.md §5.4）保证。
 
@@ -960,19 +961,21 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 
 | 验收项 | 用例 |
 |---|---|
-| 预判表、名表、指标取值与两族既有取值不撞 | `TestDecideUnqualifiedRevoke_Table`、`TestUnqualifiedRevokeVerdictNamesCoverEveryValue` |
-| 宽限缺省 / 范围 / 越界拒启、上界不超过计时键最短 TTL | `TestUnqualifiedHolderRevokeGraceConfig` |
+| 预判表（含原件比 E 新判 `fence_ahead`、期望 E 为 0 判 `epoch_unproven`）、名表、指标取值与两族既有取值不撞 | `TestDecideUnqualifiedRevoke_Table`、`TestUnqualifiedRevokeVerdictNamesCoverEveryValue` |
+| 宽限缺省 / 范围 / 越界拒启 | `TestUnqualifiedHolderRevokeGraceConfig` |
+| 等待计时键 TTL 盖住宽限：预算比宽限短按宽限、比宽限长按预算；宽限走完时计时还在、还剩一个余量 | `TestNoteLeaveReleaseWait_TTLCoversRevokeGrace`（`TestNoteLeaveReleaseWait_UsesRedisClock` 的 TTL 断言随之改） |
 | 原件解析与 C++ 同口径；宽限下界 = C++ 登记截止 15s + 冻结硬上限 70s | `TestUnqualifiedRevokeFenceParsingMatchesCpp`、`TestUnqualifiedRevokeGraceFloorMatchesCppDeadlines` |
-| Lua 每个返回码、合格时的写集合、不合格一个字节不写、两副本 / 重发只撤一次、参数错不写 | `TestRevokeUnqualifiedHolderLua_Outcomes`、`TestRevokeUnqualifiedHolderLua_RejectsMalformedArguments` |
+| Lua 每个返回码（含原件比 E 新且位数更多回 -4：按数值比，不按字典序）、合格时的写集合、不合格一个字节不写、两副本 / 重发只撤一次、参数错不写 | `TestRevokeUnqualifiedHolderLua_Outcomes`、`TestRevokeUnqualifiedHolderLua_RejectsMalformedArguments` |
 | 与在途登记的两种先后（C++ `kRegisterFenceLua` 金样） | `TestRevokeUnqualifiedHolderRacesWithRegistration` |
 | 「采纳 E+2」窗口的两种先后（C++ `kResumeFenceLua` 金样） | `TestRevokeUnqualifiedHolderRacesWithTravelAdoption` |
 | LeaveScene 主时序：宽限内保留并请释放；宽限到先按 E−1 围写权行（此刻 location 与 owner_epoch 未动），再撤销、围栏 +1、计数；迟到重试不再动 | `TestLeaveScene_UnqualifiedHolderRevokedAfterGrace`、`TestLeaveScene_UnqualifiedHolderWithoutAnyFenceRevoked` |
 | 围写权行失败：不撤销、照常请释放、回 FailedPrecondition、不计数；恢复后下一次重试撤销 | `TestLeaveScene_UnqualifiedRevokeWaitsWhenPlayerStoreFenceFails` |
 | 围写权行这一步：按 E−1 调；E ≤ 1 不调；未装配不调；报错带回 | `TestFenceUnclaimedPlayerStore` |
-| 原件属于 E / 写坏 / 读不出、legacy 离场身份：不撤销（也不碰写权行） | `TestLeaveScene_UnqualifiedRevokeRequiresProof` |
+| 原件属于 E / 写坏 / 读不出 / 比 E 新、legacy 离场身份：不撤销、不碰写权行 | `TestLeaveScene_UnqualifiedRevokeRequiresProof` |
+| owner_epoch 缺键：预判 `epoch_unproven`，不围写权行、不发 Lua、不补键；释放判定照常请释放 | `TestLeaveScene_UnqualifiedRevokeNeedsOwnerEpochKey` |
 | 预判之后登记先落地：写权行已按 E−1 围过、Lua 拒绝、照旧请释放 | `TestLeaveScene_UnqualifiedRevokeLosesToRegistrationLandingFirst` |
 | EnterScene 释放门：计时、宽限到先围写权行再撤销、照回 18、下一次重登铸造 | `TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace` |
 | EnterScene 一侧围写权行失败：不撤销、照回 18、状态不变 | `TestEnterScene_LoginRevokeWaitsWhenPlayerStoreFenceFails` |
 | scene 自发的 18 不撤销 | `TestEnterScene_SceneInitiatedRejectionNeverRevokes` |
 
-**验证（Codex）**：命令见 `docs/PROGRESS.md` 2026-11-05「location 无资格持有者带围栏撤销（§17）落码收尾」条目。运维观测与演练见 `docs/ops/cross-zone-failure-test-runbook.md` v3.2 / v3.3（§2.3、§2.4、场景 UQ）。
+**验证（Codex）**：命令见 `docs/PROGRESS.md` 2026-11-05「§17 无资格撤销订正」条目（它取代同日「location 无资格持有者带围栏撤销（§17）落码收尾」条目里的发件箱描述与验证命令）。运维观测与演练见 `docs/ops/cross-zone-failure-test-runbook.md` v3.2 / v3.3（§2.3、§2.4、场景 UQ）。

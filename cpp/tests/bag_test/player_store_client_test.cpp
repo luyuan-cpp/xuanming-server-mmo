@@ -17,8 +17,8 @@ namespace
 {
     constexpr Guid kPlayer = 7;
     constexpr uint64_t kEpoch = 100;
-    constexpr auto kHot = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_HOT);
-    constexpr auto kAsset = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_ASSET);
+    constexpr auto kCharacter = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_CHARACTER);
+    constexpr auto kWallet = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_WALLET);
     constexpr auto kProfile = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_PROFILE);
 
     PlayerStoreClient::SubmitOptions Released()
@@ -38,8 +38,8 @@ namespace
     player_store_rows::KindBytes Rows(const std::string &hot, const std::string &asset = "a0")
     {
         player_store_rows::KindBytes rows;
-        rows[kHot] = hot;
-        rows[kAsset] = asset;
+        rows[kCharacter] = hot;
+        rows[kWallet] = asset;
         return rows;
     }
 
@@ -246,7 +246,7 @@ TEST(PlayerStoreClientTest, OnlyDirtyKindsAreSent)
     EXPECT_EQ(1001u, request.save_seq());
     EXPECT_EQ("instance-a", request.instance_id());
     ASSERT_EQ(1, request.rows_size());
-    EXPECT_EQ("h1", PayloadOf(request, kHot));
+    EXPECT_EQ("h1", PayloadOf(request, kCharacter));
     f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
     EXPECT_FALSE(client.HasUnsettled(kPlayer));
     EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, Rows("h1", "a0"), {}, nullptr))
@@ -278,7 +278,7 @@ TEST(PlayerStoreClientTest, SingleInflightCoalescesPendingSnapshots)
     ASSERT_EQ(1u, calls.size());
     EXPECT_EQ("first:ok", calls[0]);
     ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ("h3", PayloadOf(f.sent.front().request, kHot)) << "只发最新的快照";
+    EXPECT_EQ("h3", PayloadOf(f.sent.front().request, kCharacter)) << "只发最新的快照";
     EXPECT_TRUE(f.settled.empty()) << "有 pending 时不算完成";
 
     f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
@@ -315,7 +315,7 @@ TEST(PlayerStoreClientTest, UnknownOutcomeRetriesSameRequest)
     f.Reply(playerstore::SAVE_PLAYER_EQUAL);
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_EQ(1002u, f.sent.front().request.save_seq());
-    EXPECT_EQ("h2", PayloadOf(f.sent.front().request, kHot));
+    EXPECT_EQ("h2", PayloadOf(f.sent.front().request, kCharacter));
     EXPECT_EQ(kEpoch + 50, f.sent.front().request.owner_epoch()) << "下一笔用新代次";
 }
 
@@ -342,7 +342,7 @@ TEST(PlayerStoreClientTest, OversizedRequestIsRefusedWithoutSending)
 
     EXPECT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1"), {}, nullptr));
     ASSERT_EQ(1u, f.sent.size()) << "变小了照常发";
-    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kHot));
+    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
 }
 
 // 无状态释放只要说明不用再试就能写标记,否则玩家锁死到节点重启;部署和代码问题不算。
@@ -420,7 +420,7 @@ TEST(PlayerStoreClientTest, RejectedAfterUnknownKeepsRowsDirty)
     client.SetOwnerEpoch(kPlayer, 300);
     EXPECT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h0"), {}, nullptr));
     ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ("h0", PayloadOf(f.sent.front().request, kHot));
+    EXPECT_EQ("h0", PayloadOf(f.sent.front().request, kCharacter));
 }
 
 // 明确拒绝也不提交比较基准。
@@ -494,7 +494,7 @@ TEST(PlayerStoreClientTest, SubmitFromCallbackDoesNotOvertakePending)
     client.Submit(kPlayer, Rows("h2"), {}, nullptr);
     f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
     ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ("h3", PayloadOf(f.sent.front().request, kHot));
+    EXPECT_EQ("h3", PayloadOf(f.sent.front().request, kCharacter));
 }
 
 // 排队的快照和已提交的相同:回调照常调用,状态是不需要写。
@@ -630,17 +630,17 @@ TEST(PlayerStoreProjectionTest, FieldInTwoRowsIsNotMergedTwice)
 {
     player_database inAsset;
     inAsset.mutable_currency()->add_values(1000);
-    // 旧分组把货币写在 kHot 行里。
+    // 旧分组把货币写在 kCharacter 行里。
     player_database inHot;
     inHot.mutable_currency()->add_values(1000);
     inHot.mutable_level_component()->set_level(30);
 
     google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
     auto *hot = rows.Add();
-    hot->set_kind(playerstore::PLAYER_STORE_KIND_HOT);
+    hot->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);
     hot->set_payload(inHot.SerializeAsString());
     auto *asset = rows.Add();
-    asset->set_kind(playerstore::PLAYER_STORE_KIND_ASSET);
+    asset->set_kind(playerstore::PLAYER_STORE_KIND_WALLET);
     asset->set_payload(inAsset.SerializeAsString());
 
     player_database restored;
@@ -664,7 +664,7 @@ TEST(PlayerStoreProjectionTest, UnknownFieldsAreRejected)
 
     google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
     auto *row = rows.Add();
-    row->set_kind(playerstore::PLAYER_STORE_KIND_HOT);
+    row->set_kind(playerstore::PLAYER_STORE_KIND_CHARACTER);
     row->set_payload(db.SerializeAsString());
     player_database restored;
     player_database_1 restored1;
@@ -792,7 +792,7 @@ TEST(PlayerStoreClientTest, OwnerRejectionKeepsPendingOfNewerEpoch)
     client.Submit(kPlayer, Rows("h2"), {}, nullptr);
     f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kEpoch + 10, 1);
     ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ("h2", PayloadOf(f.sent.front().request, kHot));
+    EXPECT_EQ("h2", PayloadOf(f.sent.front().request, kCharacter));
     EXPECT_EQ(kEpoch + 50, f.sent.front().request.owner_epoch());
 }
 
@@ -937,8 +937,8 @@ TEST(PlayerStoreClientTest, ClaimSeedsConfirmedWithRawBytes)
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_EQ(9u, f.sent.front().request.storage_id());
     EXPECT_EQ(kEpoch, f.sent.front().request.owner_epoch());
-    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kHot));
-    EXPECT_EQ("<absent>", PayloadOf(f.sent.front().request, kAsset));
+    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ("<absent>", PayloadOf(f.sent.front().request, kWallet));
 }
 
 // 新号库里只有部分行:缺的 kind 按空比较,投影结果也是空就不写。

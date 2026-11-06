@@ -165,7 +165,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
         return PrintStackAndReturnError(kInvalidParameter);
     }
 
-    uint64_t gain = static_cast<uint64_t>(amount);
+    const uint64_t gain = static_cast<uint64_t>(amount);
 
     uint64_t *balance = ResolveCurrencyField(player, type);
     if (balance == nullptr)
@@ -175,41 +175,75 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
 
     const uint64_t balanceBefore = *balance;
 
-    // ── Deferred-clawback / 补缴 deduction ──────────────────────────────
-    auto it = comp->debts.find(static_cast<uint32_t>(type));
-    if (it != comp->debts.end())
+    // ── Deferred-clawback / 补缴:先只算扣还额,不动欠款 ─────────────────
+    // 判定与提交分两段:下面的溢出判定要用扣还后的净入账额,而拒绝必须发生在扣还之前 ——
+    // 先扣还、再发现溢出而拒绝,欠款已经少了一截,这笔收入却没入账,扣掉的那部分就凭空没了。
+    auto debtIt = comp->debts.find(static_cast<uint32_t>(type));
+    CurrencyDebt *debt = (debtIt != comp->debts.end()) ? &debtIt->second : nullptr;
+    uint64_t deduct = 0;
+    bool clawbackSkippedForVersionSkew = false;
+    if (debt != nullptr)
     {
-        auto &debt = it->second;
-        uint64_t remaining = debt.Remaining();
         // Only deduct if the debt is active (not frozen and not expired).
-        const bool frozen = debt.frozen;
-        const bool expired = (debt.expiresAt > 0 && TimeSystem::NowSecondsUTC() >= debt.expiresAt);
-        if (remaining > 0 && !frozen && !expired)
+        const bool expired = (debt->expiresAt > 0 && TimeSystem::NowSecondsUTC() >= debt->expiresAt);
+        if (!debt->frozen && !expired)
         {
-            uint64_t deduct = std::min(gain, remaining);
-            debt.paid += deduct;
-            gain -= deduct;
+            deduct = std::min(gain, debt->Remaining());
+        }
+        // 混版本保护(docs/design/mixed-version-persist-field-protection.md §4.4):欠款带着更新版本才有的字段时,
+        // 本版本不扣还也不删除,按冻结处理。新字段可能改了扣还口径(例如利息、分期),按 owed−paid 扣就扣错了;
+        // 扣满还会整条删除,新字段随之消失。这笔收入全额入账,欠款原样留给认识这些字段的版本去收。
+        if (deduct > 0 && DebtCarriesNewerVersionFields(*debt))
+        {
+            clawbackSkippedForVersionSkew = true;
+            deduct = 0;
+        }
+    }
+    const uint64_t credit = gain - deduct;
 
-            LOG_INFO << "CurrencySystem: deferred clawback deducted " << deduct
-                     << " from gain, debt remaining=" << debt.Remaining()
-                     << " CurrencyType=" << static_cast<uint32_t>(type)
-                     << " entity=" << entt::to_integral(player);
+    // ── uint64 溢出:零副作用拒绝 ─────────────────────────────────────────
+    // 回绕后的余额是个很小的数:玩家的钱凭空没了,流水却记成一笔正常入账。余额逼近 2^64 只可能是坏数据或刷钱,
+    // 与 amount<=0 同类按编程错误回 kInvalidParameter(不新增 tip)。按净入账额判,与战斗结算的整批预检
+    // CanCreditWholeBattleCurrency 同口径 —— 预检放行的那一笔这里不能再拒,否则多币种结算会只入一半。
+    // 判定排在扣还、流水、异常检测之前:拒绝时欠款、余额、脏标记、流水、异常窗口都不动。
+    if (credit > std::numeric_limits<uint64_t>::max() - balanceBefore)
+    {
+        LOG_ERROR << "CurrencySystem::AddCurrency: balance overflow rejected, balance=" << balanceBefore
+                  << " credit=" << credit << " amount=" << amount
+                  << " CurrencyType=" << static_cast<uint32_t>(type)
+                  << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
 
-            // Emit clawback tx log entry.
-            TransactionLogSystem::LogClawbackDeduction(player, type, deduct, debt.Remaining());
+    // ── 提交:从这里起不再有失败分支 ───────────────────────────────────
+    if (clawbackSkippedForVersionSkew)
+    {
+        // 版本错位的统一计数口径:告警与值班查询按 metric= / where= 数行(asset-channel-alerts.yaml 文件头)。
+        LOG_WARN << "[CurrencySystem] metric=persist_version_skew where=currency_clawback player_id="
+                 << tlsEcs.GetPlayerId(player) << " currency_type=" << static_cast<uint32_t>(type)
+                 << " owed=" << debt->owed << " paid=" << debt->paid << " gain=" << gain
+                 << "; debt carries fields unknown to this version, clawback skipped as if frozen";
+    }
+    if (deduct > 0)
+    {
+        debt->paid += deduct;
 
-            if (debt.Remaining() <= 0)
-            {
-                comp->debts.erase(it);
-            }
+        LOG_INFO << "CurrencySystem: deferred clawback deducted " << deduct
+                 << " from gain, debt remaining=" << debt->Remaining()
+                 << " CurrencyType=" << static_cast<uint32_t>(type)
+                 << " entity=" << entt::to_integral(player);
+
+        // Emit clawback tx log entry.
+        TransactionLogSystem::LogClawbackDeduction(player, type, deduct, debt->Remaining());
+
+        if (debt->Remaining() == 0)
+        {
+            comp->debts.erase(debtIt);
         }
     }
 
     // ── Credit remaining amount after debt ───────────────────────────────
-    if (gain > 0)
-    {
-        *balance += gain;
-    }
+    *balance += credit;
 
     comp->dirty = true;
 
@@ -366,7 +400,8 @@ uint32_t CurrencySystem::AttachDebt(entt::entity player, CurrencyType type, int6
     // 新字段的含义可能依赖这笔欠款的金额或来源(例如利息、分期),旧代码把新的一笔并进去,两者就对不上了。
     // 本原语只负责 fail-closed 拒绝、不合并。这是版本错位,不是确定性拒绝:调用方必须先用
     // DebtCarriesUnknownFields 判定,按版本错位处理(不执行、不记终态拒绝,之后重新取一次处置再判),
-    // 不能按本地副本原地重试 —— 这笔欠款在会话内可能被还清删除,错位随之消失,而那条处置可能已被作废
+    // 不能按本地副本原地重试 —— 本地副本看不到服务端之后挂的作废;这笔欠款若在会话内被删除,错位随之消失,
+    // 续做就会挂上一条可能已被作废的处置(AddCurrency 不扣还带新字段的欠款,它不会被还清删除;错位不消失时续做只会空转)
     // (收件箱执行器 GmSanctionInboxExecutor::AttachCurrencyDebt 回 kVersionSkew,收件箱停用本域,实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉)。
     if (DebtCarriesUnknownFields(player, type))
     {
@@ -439,9 +474,8 @@ bool CurrencySystem::DebtCarriesUnknownFields(entt::entity player, CurrencyType 
         return false;
     }
     // 只认更新版本加的字段;已退役字段的残留字节不算(否则带残留的欠款会被永远当成新版本数据,再也挂不上新欠款)。
-    const auto debtEntryName = CurrencyDebtEntry::descriptor()->full_name();
-    return unknown_field_carry::CarriesNewerVersionFields(
-        std::string_view(debtEntryName.data(), debtEntryName.size()), existing->second.unknownFields);
+    // 与 AddCurrency 的补缴扣还守卫是同一个判据。
+    return DebtCarriesNewerVersionFields(existing->second);
 }
 
 // ---------------------------------------------------------------------------

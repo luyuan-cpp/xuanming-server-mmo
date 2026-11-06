@@ -149,9 +149,11 @@ login → go/db 读任务 → SELECT 本版本认识的列 → 读回执 → log
     - 引导期往世代 1 加字段：提示先按 `release-checklist.md` §6.2 切 `active`；
     - 合并带进同世代的行：提示丢弃本分支在台账里新增的行，在合入后的主干上重新生成，新字段拿新世代。
   - 已有封存被违反时，封存命令拒绝执行，不能用新封存把问题盖住。
-  - 发布预检 `release_preflight.ps1 -ReleaseVersion` 的 `release.persist_schema.sealed` 要求本次发布的台账已封存到最大世代（生产档 FAIL、dev 档 WARN）。摘要由生成器核，预检只比世代号。
+  - 发布预检 `release_preflight.ps1 -ReleaseVersion` 的 `release.persist_schema.sealed` 要求本次发布的台账已封存到最大世代，并调生成器的只核不写模式 `--persist-schema-verify`（`dev_tools.ps1 -Command persist-schema-verify`）核每条封存的摘要。只比世代号会放过「合并带进同世代的行」：那时封存已被违反，最大世代却仍等于最后一条封存的世代（2026-11-05 评审）。档位与预检其余检查一致：只有 dev 档降为 WARN。
+  - 封存前先跑一次生成，确认台账与 proto 一致（`release-checklist.md` §2.1 ①）：封存只封台账，不读描述符。
   - 只对要上生产的版本封存：引导期一旦封存，再加持久字段就必须先切 `active`。
-  - 没有做运行期指纹（每次写盘带字段集合指纹、go/db 遇到同世代异指纹时延后）。它是纵深防御，要改两张表的戳列、C1～C4、屏障 Lua 与恢复工具，约 30 个文件。构建期门禁已经从源头堵住上面两种来源，剩下的漏洞只有一种：部署绕过发布流程、用未封存分支的产物上线。这条靠发布纪律，记在 §13 第 11 条。
+  - 没有做运行期指纹（每次写盘带字段集合指纹、go/db 遇到同世代异指纹时延后）。它是纵深防御，要改两张表的戳列、C1～C4、屏障 Lua 与恢复工具，约 30 个文件。构建期门禁已经从源头堵住上面两种来源。剩下的漏洞靠发布纪律，记在 §13 第 11 条：部署绕过发布流程（用未封存或未经预检的产物上线）；台账与 proto 脱节时封存（例如解决合并冲突时丢了台账行、却留下了生成代码）。生成器单测目前不在 CI 的 Go 模块扫描范围里（`go-modules-ci.yml` 只扫 `go/`、`robot/`），仓库台账的封存核对只在跑生成器单测时生效。
+- **存储分组不得改**（2026-11-05，数据覆写审计 R2 的 N1）：玩家存储按 `OptionPersistGroup` 把 `player_database` 拆成多行（`player-save-direct-commit.md` §1），加载时只认字段的当前分组。字段换组后第一次载入会把旧分组那一行里的字段清掉，新分组那一行里还没有，第一次存盘就把它永久写丢。台账给玩家表顶层字段记 `group=<分组>`（不进封存摘要），换组或删掉分组选项时生成失败；分组出现之前写下的旧行在第一次生成时原地补记一次。换存储位置按 R4 走 expand / contract。
 
 ### 3.2 可携带性规则
 
@@ -160,7 +162,7 @@ login → go/db 读任务 → SELECT 本版本认识的列 → 读回执 → log
 | R1 | 给**冻结类型**加字段（生成期强制） | 先给这个类型实现运行时携带，并纳入往返测试，再解冻；或者把数据放进可携带的类型，例如物品数据放进 `ItemComp`（AGENTS §11.6） |
 | R2 | 给已有的持久 oneof 加新成员（生成期强制） | 字段放到 oneof 之外，或者走破坏性变更流程（整批停机换版，或 expand / contract） |
 | R3 | 改号、改类型、复用号（生成期强制） | 用 `reserved` |
-| R4 | 字段迁移：子消息字段提升为列、拆分、换存储位置。生成器只能检测"同一世代内既删又增"并给出提示 | expand / contract：新旧位置双写一个完整版本周期，然后再切换读方 |
+| R4 | 字段迁移：子消息字段提升为列、拆分、换存储位置。生成器只能检测"同一世代内既删又增"并给出提示；玩家表顶层字段换存储分组（`OptionPersistGroup`）由生成器直接拒绝（2026-11-05，§3.1「存储分组不得改」） | expand / contract：新旧位置双写一个完整版本周期，然后再切换读方 |
 | R5 | **语义耦合字段**：会参与等价判定、合堆、合并、逻辑重置的字段，或者按 ID 引用其他实体、而这类实体旧代码能删除后重建的字段。生成器无法检测，列入评审清单 | 依赖 §4.4 的守卫（合堆、欠款合并：旧代码拒绝执行；按 config 计数与扣数量：旧代码不计、不扣带更新版本字段的单位，按版本错位处理，第 6 批；纪元重置：旧代码整体清空未知字段）；守卫覆盖不到的场景，走破坏性变更流程，包括新版要求跨纪元保留的流账本字段（旧版重置时会清掉）。§4.4 仍未守的：`has_equip` 实例按 config 运算（调用方在表上排除装备兜住）；`EquipInstanceData` 内部的新字段（谓词只看 `ItemComp` 本层）；按 guid 托管或改写实例时才生效的新字段（例如不可交易、封印）；`AttributeScheme`、`PetInstance`、`PlayerSkillComp` 本层的新字段（§12.2）。**会被普遍写入的 `ItemComp` 新字段（例如获得时间）分两版发布**：版本 N 只在 proto 里声明（读、忽略、原样存盘），版本 N 全量之后版本 N+1 才开始写，回滚下限是 N；否则跨版本窗口里几乎所有新堆都会变成"不可按数量扣除"（守卫分不出有语义和无语义的字段）。`ItemComp` 新字段不得改变 `size` 的计数含义，也不得让单个实例的可扣量超过 `size`（这是"确定不足可以记终态"的前提）。跨实体引用只能用永不复用的实例 ID |
 
 **两个 option**，都定义在 `proto/db/proto_option.proto`。生成器从描述符的原始字节按字段号动态读取，不需要升级外部模块 `protooption`：
@@ -526,9 +528,11 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
 
   文件、用例与 Codex 命令见[交接 §14](../handoff/mixed-version-persist-handoff-20261019.md)。
   - **运行证据（10-30 部分）**：Codex 11-02 的全量 C++ 回归（`build/player-store-verify-20261102-r3-prep/06-cpp-tests/`）里，这批 16 条 C++ 用例都实际运行且通过，其中包括 10-30 新增的 `AssetOpSystemTest.QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry`；currency_test 299 条、turn_battle_engine_test 300 条全绿。同一轮 bag_test 的 16 条失败与这批无关：13 条装备属性测试的数值超过了配置表上限，1 条宝宝加点用例属另一会话；`PersistRoundTripTest.UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave` 报的是新持久类型 `AssetRecallLine` 不在往返夹具里，已由别人在 `ccbb4af69` 补上夹具，尚未重跑。Go 侧（`currencytype`、收件箱入箱、交易托管撤单）没有运行记录。
-- **第 7 批：已落码，未编译、未测试（Claude，2026-11-05）**。三件事：
+- **第 7 批：已落码，未编译、未测试（Claude，2026-11-05）**。四件事：
   - 台账封存门禁（§3.1「封存」）：生成器 `persistschema` 的封存行解析、写回与核对（`ledger.go`、`apply.go`、`generate.go`），生成器命令行开关 `--persist-schema-seal`（`cmd/root.go`），`dev_tools.ps1 -Command persist-schema-seal`，发布预检 `release.persist_schema.sealed`，以及 `release-checklist.md` §2.1 ① / ⑦、§6.2。用例在 `persistschema_test.go`、`dev_tools_proto_gen_exit.tests.ps1`、`release_common_version.tests.ps1`。
   - 战斗结算的币种版本错位（§12 载荷行）：`player_battle.cpp` 的币种校验拆成三种结论（有效 / 不认识 / 坏载荷），收件箱执行器对不认识的币种回 `kVersionSkew`；用例 `PlayerBattleSettlementTest.InboxSettlementWithCurrencyUnknownToThisVersionReportsVersionSkew`。
+  - 存储分组不得改（数据覆写审计 R2 的 N1，§3.1）：生成器读 `OptionPersistGroup`，台账给玩家表顶层字段记 `group=`，换组或删分组选项即失败，旧行首次补记。用例 `TestCollectSchemaReadsStorageGroupOnTableFieldsOnly`、`TestApplyRejectsStorageGroupChange`、`TestApplyRejectsRemovedStorageGroup`、`TestApplyBackfillsStorageGroupOnce`。
+  - 评审修正：生成器加只核不写的 `--persist-schema-verify`（`dev_tools.ps1 -Command persist-schema-verify`），发布预检用它核摘要；封存违反按两种成因分别给处置，同一根因只报一次；`TestRepositoryLedgerIsCanonical` 同时核仓库台账的封存。
   - 收件箱域停用的周期补打：停用之后每 5 分钟补打一条 `metric=inbox_halted ... relog=1`（`kHaltedDomainRelogIntervalMs`），告警在实体存活期间一直亮着；`player-inbox-alerts.yaml` 的毒消息告警描述先排除版本错位。用例 `PlayerInboxSystemTest.HaltedDomainRelogsOnTheIntervalWhileTheEntityLives`。
 
   文件与 Codex 命令见[交接 §17](../handoff/mixed-version-persist-handoff-20261019.md)。
@@ -803,7 +807,7 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
     - **GM 对新币种的处置是否改为"按 ID 透明执行"**：封锁、解封、挂欠款对币种只做按 ID 的集合或映射操作，旧 scene 照写也与新版本语义一致，可以不停用处置域（需要给收件箱执行器开只认 ID 的窄口子，内部调用方仍按非法参数拒绝）。现状是回 `kVersionSkew` 停用本域，同一玩家后面的处置一起延后到实体重建。推荐维持现状：发布纪律已要求 scene 全量之前不对新币种下处置；改为透明执行要放宽三个原语的契约，将来原语一旦按币种做事（例如查余额），这条前提会悄悄失效。
     - **新币种的启用开关**：把"二进制认识"与"运营已启用"分开（Go 入口判 `IsKnown(v) && enabled(v)`，`enabled` 来自部署配置白名单，上线顺序与收件箱 `EnqueueTypes` 一致：scene 全量 → 改配置开启）。推荐在第一次真正新增币种时再做（YAGNI）；在那之前靠第 7 条的发布次序。
 
-11. **已定（2026-11-05 落码，未编译）：台账的机器门禁用构建期封存，不做运行期指纹**（§3.1「封存」，审计 r2-ps#1 / r2-ps#10）。封存从源头堵住「引导期新字段并进已上线世代」与「合并带进已发布世代」两种来源；剩下的漏洞是部署绕过发布流程（用未封存分支的产物上线、或把发布分支自己追加的世代推上线），靠 §3.1「只在主干发号」与 `release-checklist.md` 的发布纪律。运行期指纹作为纵深防御另立一批，改动约 30 个文件，等真有绕过发布流程的部署方式时再做。
+11. **已定（2026-11-05 落码，未编译）：台账的机器门禁用构建期封存，不做运行期指纹**（§3.1「封存」，审计 r2-ps#1 / r2-ps#10）。封存从源头堵住「引导期新字段并进已上线世代」与「合并带进已发布世代」两种来源，发布预检用生成器核每条封存的摘要。剩下的漏洞靠 §3.1「只在主干发号」与 `release-checklist.md` 的发布纪律：部署绕过发布流程（用未封存或未经预检的产物上线、或把发布分支自己追加的世代推上线）；台账与 proto 脱节时封存（§2.1 ① 要求封存前先跑一次生成）。生成器单测纳入 CI 列为待办（`go-modules-ci.yml` 只扫 `go/`、`robot/`）。运行期指纹作为纵深防御另立一批，改动约 30 个文件，等真有绕过发布流程的部署方式时再做。
 
 ---
 
@@ -951,6 +955,8 @@ v0.2 要求每次存盘都满足"加载世代 ≥ hash"，而写入成功后 has
 | 不做运行期指纹 | 只做构建期封存 | 运行期指纹要改戳列、C1～C4、屏障 Lua、恢复工具，约 30 个文件；构建期门禁已经从源头堵住已知的两种来源 |
 | 战斗结算的币种（§12） | 不认识的币种回 `kVersionSkew`，坏载荷照旧 `kDefer` 并且先判 | 与 GM 处置、资产通道同口径；会话内永远不会认识这个值，`kDefer` 的本地续做只会空转 |
 | 收件箱停用补打 | 停用之后每 5 分钟补打 `metric=inbox_halted relog=1` | 第 6 批对抗复核：停用对实体一直有效，只打一条的话 [10m] 告警会熄灭；10-30 时相关文件被别的会话占用没做 |
+| 存储分组不得改（§3.1、R4） | 台账给玩家表顶层字段记 `group=`，换组或删分组选项即生成失败，旧行首次补记 | 数据覆写审计 R2 的 N1：加载只认当前分组，换组后首次载入清掉旧行里的字段、新行里还没有，首次存盘永久写丢；`player-save-direct-commit.md` 原写「换组必须安全」只防住了翻倍 |
+| 评审修正（同日只读复核） | 预检调生成器 `--persist-schema-verify` 核摘要；封存违反分成因报、同一根因只报一次；预检函数挪回正确位置；文档指针改为 §2.1 ① | 只比世代号会放过「合并带进同世代的行」（中）；其余为低危 |
 
 ### v0.3（第二轮评审）
 

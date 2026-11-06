@@ -48,6 +48,16 @@ type cacheRecord struct {
 	// **不刷新**:健康跑了很久后崩溃、且重启时 etcd 恰好也不通,缓存会因它早于 F 而不可用,
 	// 只能等 etcd —— 双重故障,§7.5-5 明确接受;故障期间崩溃则由故障首写保证它是新鲜的。
 	LastAckWall int64 `json:"lastAckWall"`
+	// WatermarkRev / WatermarkMsRev 是落盘那一刻本进程对 watermark/<slot>、watermark_ms/<slot>
+	// 最后观测到的 ModRevision(0 = 没观测过或 key 不存在)。缓存启动之后,etcd 回来时前任的
+	// slots key 多半已随 lease 过期,reclaim 要凭它证明"这段时间没人写过水位"才肯把 key 重新
+	// Create 出来(allocator.go reclaim,第一轮数据审计 §4 第 21 条)。
+	//
+	// 只在既有的落盘时机抄入,不因 revision 变化额外写盘(§7.5-5 稳态零写盘不变)。所以优雅
+	// 退出与故障期崩溃时它是准的;稳态崩溃时它落后于前任后来的写入 —— 落后只会让重建比较
+	// 不成立而 fence(多一次重启),不会放行。缺字段的旧文件读成 0:只要水位 key 存在,同样 fence。
+	WatermarkRev   int64 `json:"watermarkRev,omitempty"`
+	WatermarkMsRev int64 `json:"watermarkMsRev,omitempty"`
 }
 
 // DefaultCachePath 给出消费方约定的缓存文件路径:<dir>/snowflake-<kind>-<affinity>.json。

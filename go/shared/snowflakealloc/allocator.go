@@ -802,6 +802,11 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, kind, host
 		if rec.LocalHighWaterMs > h.msWritten {
 			h.msWritten = rec.LocalHighWaterMs
 		}
+		// 前任落盘时最后观测到的水位 revision:etcd 回来时前任的 slots key 多半已随 lease 过期,
+		// reclaim 只有凭它证明"这段时间没人写过水位"才肯把 key 重新 Create 出来(见 reclaim)。
+		// 缺字段的旧缓存读成 0,重建时就判为别人写过 → fence,不会放行。
+		h.guardRev = rec.WatermarkRev
+		h.msRev = rec.WatermarkMsRev
 		h.cache = *rec
 		h.fence.SeedAck(time.UnixMilli(rec.LastAckWall))
 		h.needReclaim.Store(true)
@@ -1224,10 +1229,11 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 // refloorFromWatermark 在"槽 key 曾经消失过"或"本进程曾经因水位过期自 fence"之后,
 // 把 etcd 里当前的水位重新当地板吃回来(秒级喂 SetGuardTime,毫秒级抬 msWritten)。
 //
-// 为什么申领时读一次不够:reclaim 的 CreateRev==0 分支是一次**重新申领** —— key 之所以
-// 不存在,是因为我们的 lease 早就过期了。如果那段失联超过隔离期 Q,继任者 B 可以合法拿走
-// 这个槽、发一批号、再释放;等我们回来把 key 重新 Create 出来时,发号器还停在自己那口
-// (可能落后于 B 的)时钟上,没有任何东西把它抬到 B 的高水位之上。
+// "失联期间别的持有者用过这个槽"不会走到这里:reclaim 的重建分支用水位 revision 比较把它
+// 拒掉并永久 fence(第一轮数据审计 §4 第 21 条)。这一步是纵深防御,兜两类不经过那条比较的
+// 地板:缓存启动后 key 仍挂在前任(同 uuid 的上一个本进程)lease 上、走内层分支重挂时,前任
+// 在缓存落盘之后又写过的水位;以及过渡期旧布局 snowflake_guard 上旧二进制写的值
+// (readWatermarkFloor 与它取 max)。
 //
 // 读失败时只告警不阻断:putWatermarkLocked 的 CAS 是最后一道保险 —— 它发现 etcd 里的
 // 存值更高时会把存值当地板吃下去,而**闸只在那条路径上 Ack**,所以在地板补齐之前
@@ -1246,7 +1252,11 @@ func (h *Handle) refloorFromWatermark(ctx context.Context, reason string, recrea
 	if floor > h.guardWritten {
 		h.guardWritten = floor
 	}
-	h.guardRev = rev
+	// revision 只往前走:读地板与这里加锁之间,本进程自己的水位写可能已把 guardRev 推到更新的值,
+	// 读到的旧 revision 不能把它盖回去 —— 盖回去会让下一次重建比较把自己的写误判成"别人写过"。
+	if rev > h.guardRev {
+		h.guardRev = rev
+	}
 	if msErr == nil && ms > h.msWritten {
 		h.msWritten = ms
 	}
@@ -1254,8 +1264,8 @@ func (h *Handle) refloorFromWatermark(ctx context.Context, reason string, recrea
 		// 地板语义:只在比当前高水位更晚时才生效,绝不把发号器往回拨。
 		n.SetGuardTime(floor)
 	}
-	logx.Errorf("[snowflakealloc] reclaim (%s) re-applied the watermark floor sec=%d ms=%d (%s, recreated=%v): "+
-		"another holder may have used this slot while we were away", reason, floor, h.msWritten, h.LogFields(), recreated)
+	logx.Errorf("[snowflakealloc] reclaim (%s) re-applied the watermark floor sec=%d ms=%d (%s, recreated=%v)",
+		reason, floor, h.msWritten, h.LogFields(), recreated)
 }
 
 // readMsWatermarkRaw 读本槽的毫秒水位(新 key 与过渡期旧 key 取 max)。与 ReadMsWatermark
@@ -1551,6 +1561,10 @@ func (h *Handle) flushCacheLocked() {
 }
 
 func (h *Handle) writeCacheLocked() {
+	// 水位 revision 每次写都在变,只在落盘这一刻抄进记录:磁盘上总是落盘时刻最新的观测
+	// (不因 revision 变化额外写盘,稳态零写盘不变;见 cacheRecord.WatermarkRev)。
+	h.cache.WatermarkRev = h.guardRev
+	h.cache.WatermarkMsRev = h.msRev
 	if err := writeCacheFileFn(h.r.cachePath, &h.cache); err != nil {
 		// 缓存只影响"下次 etcd 不通时能不能起",限频告警即可。cacheDirty 留着,下一个
 		// 落盘时机再补写。

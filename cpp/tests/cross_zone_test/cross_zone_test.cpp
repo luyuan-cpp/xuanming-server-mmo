@@ -7678,6 +7678,246 @@ TEST(MirrorCreateInFlightEcs, CommittedExitCancelsMirrorWhileWaitingForSaveCommi
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 }
 
+// 夹具控制回包时机，Redis 路由与 gRPC 传输都由同一个真实 loop 驱动。
+#include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
+#include "muduo/net/Buffer.h"
+#include "muduo/net/TcpServer.h"
+#include "muduo_grpc/server.h"
+#include "player/system/handoff_sql_barrier.h"
+#include "../muduo_grpc_test/muduo_test_loop.h"
+
+namespace
+{
+class HeldPlayerRedis final : public std::enable_shared_from_this<HeldPlayerRedis>
+{
+public:
+    HeldPlayerRedis(muduo::net::EventLoop& loop, uint16_t port)
+        : server_(&loop, muduo::net::InetAddress("127.0.0.1", port), "lifecycle-redis-test") {}
+
+    void Start()
+    {
+        server_.setConnectionCallback([weak = weak_from_this()](const muduo::net::TcpConnectionPtr& conn)
+        {
+            if (const auto self = weak.lock(); self && conn->connected()) self->connection_ = conn;
+        });
+        server_.setMessageCallback([weak = weak_from_this()](const muduo::net::TcpConnectionPtr&,
+            muduo::net::Buffer* bytes, muduo::Timestamp)
+        {
+            if (const auto self = weak.lock()) self->Read(*bytes);
+        });
+        server_.start();
+    }
+
+    void Reply(const std::string& wire)
+    {
+        const auto connection = connection_.lock();
+        ASSERT_NE(connection, nullptr);
+        connection->send(wire);
+    }
+
+    void Disconnect()
+    {
+        const auto connection = connection_.lock();
+        ASSERT_NE(connection, nullptr);
+        connection->forceClose();
+    }
+
+    std::vector<std::vector<std::string>> commands;
+
+private:
+    void Read(muduo::net::Buffer& bytes)
+    {
+        ASSERT_NE(reader_, nullptr);
+        ASSERT_EQ(redisReaderFeed(reader_.get(), bytes.peek(), bytes.readableBytes()), REDIS_OK);
+        bytes.retrieveAll();
+        for (;;)
+        {
+            void* decoded = nullptr;
+            ASSERT_EQ(redisReaderGetReply(reader_.get(), &decoded), REDIS_OK);
+            if (decoded == nullptr) return;
+            const std::unique_ptr<redisReply, decltype(&freeReplyObject)> command(static_cast<redisReply*>(decoded), freeReplyObject);
+            ASSERT_EQ(command->type, REDIS_REPLY_ARRAY);
+            auto& args = commands.emplace_back();
+            for (std::size_t i = 0; i < command->elements; ++i)
+            {
+                const auto* item = command->element[i];
+                ASSERT_EQ(item->type, REDIS_REPLY_STRING);
+                args.emplace_back(item->str, item->len);
+            }
+        }
+    }
+
+    muduo::net::TcpServer server_;
+    std::weak_ptr<muduo::net::TcpConnection> connection_;
+    std::unique_ptr<redisReader, decltype(&redisReaderFree)> reader_{redisReaderCreate(), redisReaderFree};
+};
+
+class HeldLifecycleSceneManager final : public muduo_grpc::Service
+{
+public:
+    struct Pending
+    {
+        ::scene_manager::EnterSceneRequest request;
+        muduo_grpc::ServerCall call;
+    };
+
+    void RegisterMethods(muduo_grpc::MethodTable& methods) override
+    {
+        methods.AddUnary(std::string(scene_manager::kSceneManagerEnterSceneGrpcPath),
+            [weak = std::weak_ptr(pending)](muduo_grpc::ServerCall call, std::string_view bytes)
+            {
+                const auto queue = weak.lock();
+                if (!queue || !call.TryStartBusiness()) return;
+                ::scene_manager::EnterSceneRequest request;
+                if (!request.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())))
+                {
+                    call.FinishError({muduo_grpc::StatusCode::kInvalidArgument, "invalid fixture request"});
+                    return;
+                }
+                queue->push_back({std::move(request), std::move(call)});
+            });
+    }
+
+    void Complete(bool withRedirect)
+    {
+        ASSERT_EQ(pending->size(), 1u);
+        auto accepted = std::move(pending->front());
+        pending->pop_front();
+        const auto reply = MakeReply(accepted.request.player_id(), 0, accepted.request.correlation_id(), withRedirect);
+        accepted.call.FinishOk(reply.SerializeAsString());
+    }
+
+    std::shared_ptr<std::deque<Pending>> pending = std::make_shared<std::deque<Pending>>();
+};
+
+class LifecycleCoroutineTest : public ::testing::Test
+{
+protected:
+    static constexpr char kSceneInstance[] = "explicit-test-scene";
+    static constexpr char kFence[] = "7|explicit-test-scene|1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|H|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    void SetUp() override
+    {
+        tlsEcs.Clear();
+        TestLocalNodeInfo().set_zone_id(kReplyTestZone);
+        TestLocalNodeInfo().set_node_id(11);
+        TestLocalNodeInfo().set_node_uuid(kSceneInstance);
+
+        const auto redisPort = muduo_grpc_test::FindFreeLoopbackPort();
+        ASSERT_NE(redisPort, 0u);
+        redis = std::make_shared<HeldPlayerRedis>(loop, redisPort);
+        redis->Start();
+        RedisClusterOptions options;
+        options.seeds.push_back({"127.0.0.1", redisPort});
+        options.reconnectJitterSec = 0;
+        tlsPlayerRedis.Connect(&loop, std::move(options));
+        ASSERT_NO_FATAL_FAILURE(RunUntil([] { return tlsPlayerRedis.connected(); }));
+
+        const auto managerPort = muduo_grpc_test::FindFreeLoopbackPort();
+        ASSERT_NE(managerPort, 0u);
+        server = muduo_grpc::Server::Create(loop, "127.0.0.1", managerPort);
+        ASSERT_NE(server, nullptr);
+        ASSERT_TRUE(server->RegisterService(sceneManager));
+        server->Start();
+        muduo_grpc::ChannelOptions channelOptions;
+        channelOptions.maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+        auto channel = muduo_grpc::Channel::Create(loop, "127.0.0.1", managerPort, std::move(channelOptions));
+        ASSERT_NE(channel, nullptr);
+        sceneChannel = channel;
+        auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+        const auto entity = registry.create();
+        registry.emplace<NodeInfo>(entity);
+        registry.emplace<MuduoGrpcChannelPtr>(entity, std::move(channel));
+    }
+
+    void TearDown() override
+    {
+        tasks.StopAll();
+        tlsPlayerRedis.Shutdown();
+        tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService).clear();
+        server.reset();
+        redis.reset();
+        RunPending();
+        PlayerLifecycleSystem::ReconcileRelocateOnReentry(kExitPlayerId, kInvalidSessionId);
+        tlsEcs.Clear();
+    }
+
+    template<class Done>
+    void RunUntil(Done done)
+    {
+        if (done()) return;
+        const auto timer = loop.runEvery(0.001, [&] { if (done()) loop.quit(); });
+        const auto watchdog = loop.runAfter(2.0, [&] { loop.quit(); });
+        loop.loop();
+        loop.cancel(timer);
+        loop.cancel(watchdog);
+        ASSERT_TRUE(done()) << "未收到预期的异步请求或完成";
+    }
+
+    void RunPending()
+    {
+        loop.queueInLoop([&loop = loop] { loop.queueInLoop([&loop] { loop.quit(); }); });
+        loop.wakeup();
+        loop.loop();
+    }
+
+    void ReplyFence()
+    {
+        const std::string value{kFence};
+        redis->Reply("$" + std::to_string(value.size()) + "\r\n" + value + "\r\n");
+    }
+
+    static void EndSession()
+    {
+        PlayerLifecycleSystem::HandleSessionEndedRelease(kExitPlayerId, kDirectEpoch, kSessionAtExit, 9);
+    }
+
+    entt::entity FrozenPlayer()
+    {
+        const auto player = MakeOnlinePlayer(kSessionAtExit);
+        auto& owner = tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player);
+        owner.epoch = kDirectEpoch;
+        owner.handoffFence = kFence;
+        auto& travel = tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+        travel.targetZoneId = kReplyTargetZone;
+        travel.sceneConfigId = 12;
+        travel.frozenAtSteady = travel_freeze_cap::Clock::now();
+        travel.holderFence = kFence;
+        tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player).toZoneId = kReplyTargetZone;
+        auto& login = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+        login.sessionId = kSessionAtExit;
+        login.loginGeneration = 9;
+        return player;
+    }
+
+    void BeginRelocate()
+    {
+        const auto player = MakeClaimedPlayer();
+        tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).handoffFence = kFence;
+        const auto scene = PlaceInScene(player, kRelocateSourceScene);
+        ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
+        ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
+        ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return redis->commands.size() == 1; }));
+        ASSERT_EQ(redis->commands.front().at(1), exit_release_mark::kLuaWriteIfOwnerEpoch);
+        const auto tracked = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+        ASSERT_TRUE(tracked);
+        EXPECT_EQ(tracked->phase, relocate_confirm::Phase::kMarkWriting);
+        EXPECT_TRUE(sceneManager.pending->empty());
+    }
+
+    muduo::net::EventLoop loop;
+    SceneTaskScope tasks{loop};
+    PlayerStoreDirectFixture store;
+    ScopedConfirmedNodeIdentity identity;
+    std::shared_ptr<HeldPlayerRedis> redis;
+    HeldLifecycleSceneManager sceneManager;
+    std::shared_ptr<muduo_grpc::Server> server;
+    std::weak_ptr<muduo_grpc::Channel> sceneChannel;
+};
+} // namespace
+
 // ============================================================================
 // Test bootstrap
 // ============================================================================

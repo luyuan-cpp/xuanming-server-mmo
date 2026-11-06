@@ -21364,3 +21364,23 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
   - 没找到 Java 的死 gate 会话清扫。
   - 本轮没改 Java 代码。
 - **提交情况**:未提交。
+
+## 2026-11-05 Claude:战报回放设计稿(未落码、未编译、未测试;Java 待做)
+
+- **起因**:用户问现在的战报能不能支持率土那样的客户端回放。核对结论:每回合下发的 `TurnResultS2C` 已经是事件日志式战报(事件带结算后血量,每帧附全量状态),但只实时推给在场的人,打完不落盘;终局原件 `BattleResultEvent` 不含帧;客户端没有取历史帧的协议。
+- **设计**:`docs/design/battle-report-replay.md`。battle 在房间里录观众版帧(开战状态 + 每回合),终局冻结时 gzip,随 `CommitBattleOutcome` 新字段提交;match 在写终局的同一事务里写 `match_battle_report`,只有 COMPLETE 才有战报;录不录由 match 建房时按模式冻结进 `CreateBattleRequest.record_replay`;客户端调 `MatchService.GetBattleReport`,只许参战者看;战报出问题不挡终局;保留期按 match 库时间清理。
+- **分工**:与「Turn battle gap closure」会话对齐:近期对局列表只留 `battle-result-recovery.md` 那一份(玩家存档最多 10 局,条目带 `battle_id`、`match_mode`、`battle_config_id`),match 不建按玩家的列表;`result_commit.h`、`BattleSettlementData`、`PlayerBattleResult` 归那边。
+- **顺带改正文**:turn-based §9 的「回放持久化」预留、观战分级 §2 与 §11 P3 的「归档消费者落对象存储」,都改成指向新文档;`docs/README.md` 手工登记一行(没跑生成器)。
+- **待负责人拍板**(设计稿 §13):哪些模式录(建议 PVP 全录、活动局录、PVE 先不录)、保留天数(建议 7 天)、录制上限(建议原始 1 MiB、压缩后 512 KiB)、客户端解压还是 match 解压、非参战者能否看。
+- **未做**:只写了文档,没有改代码;体积和压缩耗时都是估算,要按 §9 实测。客户端仓未查看。
+- **Java 版(AGENTS §12)**:待做,落点写在设计稿 §16;本仓落码时在 Java 仓 `PARITY.md` 登记。
+- **提交情况**:未提交。
+
+### 2026-11-05 Codex：帮会损坏恢复记录补齐二次确认出口
+
+- 按负责人追加要求，只扩展本任务客户端恢复逻辑及共用文件存储接缝：空文件、超长、无效 UTF-8、损坏头/身份/方法及窗口内坏请求体，首次警告原请求可能已到账，第二次确认同一原始记录才作废本机槽位，不重发、不自动创建新支付。合法新记录在确认期间替换原文件时，本次点击保留并提示变化，下一次主动恢复才允许发送；超窗确认同步受该保护。
+- `DurableRequestFileStore.ReadSnapshot/ClearSnapshot` 绑定存储实例、角色、绝对路径与原字节长度/SHA-256；读取和删除复核使用既有写者锁，空/超长占位串不能充当删除凭证。流式哈希控制内存；原有 Load/Save/Transition/Clear 契约未变。读取、锁、占用或删除失败保留记录并撤销确认，解除故障后重新警告。
+- 作废成功只读刷新本人帮会、失效经济页缓存；有效快照和不在帮保留结论，故障或无效快照显示真实错误，在途新推送优先于旧作废文案。换角、重连及提示变化均不能沿用旧确认。
+- 红灯证据：损坏恢复 87 项中 17 个预期失败；确认期间合法替换 4 项全部复现误发。最终 Unity 6000.6.0f1 的 14 组相关 EditMode 501/501、零失败、零跳过、退出 0，含帮会恢复 83、存储 12；源码测试前后与当前工作区摘要一致。证据：客户端 `Logs/guild-corrupt-recovery-20261105/final-tests.xml`、`final-unity.log`、`final-sources-before.json`、`final-sources-after.json`；未执行联网冒烟、播放器打包或真实资产验收。
+- 设计 §5.44.2、原交接 §5 与客户端 `Docs/GuildUI.md` 已补齐；Java `0.1.0-SNAPSHOT` 的 `PARITY.md` 只追加共同客户端状态，本轮没有修改或重新验证 Go/Java 服务端，也未改 Claude Code 的业务改动。
+- 本聊天未提交或推送。收尾检测到外部操作已提交客户端 `1dfb79433`（相同测试源码及九份资源时间戳）和服务端 `0f484db0d`；时间戳清理保护检查因工作区已干净而停止，未逆向修改外部提交。最终验证文档在该状态上追加，保留他人历史记录。

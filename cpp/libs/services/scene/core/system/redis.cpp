@@ -187,10 +187,12 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         if (stats.total > 0)
         {
             const uint32_t pctTenths = stats.SkipPctTenths();
+            // piggyback_deferred 追加在行尾:只有位置变了、定时存盘推迟的次数,计入 total、不计入 skipped。
             LOG_INFO << "[DirtySave] total=" << stats.total
                      << " skipped=" << stats.skipped
                      << " skip_pct=" << (pctTenths / 10) << "."
-                     << (pctTenths % 10) << "%";
+                     << (pctTenths % 10) << "%"
+                     << " piggyback_deferred=" << stats.piggybackDeferred;
         }
         // 存盘分段耗时(save_timing_stats.h):这 30 秒里各段的次数、平均与最大耗时。窗口最大值只在这里取走清零。
         // 周期回调这一窗口里有超过预算的就升 WARN:那是 §4.6 说的「摊到多个 tick」的信号。没有存盘就不打。
@@ -371,6 +373,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     // 超过即直接丢模拟时间。注释里 "10k players over 300s = ~33 saves/sec"
     // 的摊销口径,现在才真的成立。
     // 只写有变化的行,没有变化不发请求,所以周期可以短(总体方案 §4,初值,压测后定)。环境变量优先。
+    // 走 SavePlayerPeriodic:只有位置变了就推迟这一笔,位置随下一笔有别的行要写的存盘、下线等最终存盘
+    // 或兜底间隔一起写(player-save-direct-commit.md §1.1)。别的入口要的是落盘,不走这里。
     int periodicSaveSec = 60;
     if (const char* env = std::getenv("SCENE_PLAYER_SAVE_INTERVAL_SECONDS"))
     {
@@ -405,7 +409,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 {
                     continue;
                 }
-                PlayerLifecycleSystem::SavePlayer(player);
+                PlayerLifecycleSystem::SavePlayerPeriodic(player);
                 ++saved;
             }
             save_timing_stats::ObserveSince(save_timing_stats::Stage::kPeriodicTick, tickStart);

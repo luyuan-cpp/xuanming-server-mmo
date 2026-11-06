@@ -293,7 +293,7 @@ K8s 部署到 infra namespace 一次、replicas ≥ 2;排队/票据/挑战/观�
 ## 9. 二期清单
 
 **本轮实现(2026-08-31)**:观战 + 观战匹配(§10)、自动战斗 + 5v5 + 队伍上限 5(§11)。
-**仍预留**:ready check、转播 relay、回放持久化(事件流落盘)、宠物参战(快照加 pet 段)、
+**仍预留**:ready check、转播 relay、回放持久化(事件流落盘;2026-11-05 方案已定,观众版帧随终局原件同事务存进 match 库,见 [battle-report-replay.md](./battle-report-replay.md),未落码)、宠物参战(快照加 pet 段)、
 robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDurationMs 换算)、
 观战事件流延迟推送(反侦察,见 §10.6)、预组队入队(party_member_ids)。
 

@@ -53,6 +53,7 @@ import (
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
+	"shared/releasetrack"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
 
@@ -159,6 +160,12 @@ func runFriend(c config.Config) (runErr error) {
 	if err != nil {
 		return err
 	}
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理路由服转来的客户端请求,
+	// 不跑全局作用域的后台工作(这里是终态行与零好友行的清理)。取值非法就拒启,注册时 noderegistry 还会再核一次。
+	releaseTrack, err := releasetrack.FromEnv()
+	if err != nil {
+		return err
+	}
 
 	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 	if err != nil {
@@ -240,9 +247,14 @@ func runFriend(c config.Config) (runErr error) {
 	//
 	// 停机和正式排空均须等待 sweep 的实际停止；
 	// 关闭只停止下一轮；已接纳轮次使用自己的预算，必须在关闭 SQL 池之前真实返回。
-	stopSweep := logic.StartSweep(ctx, deps)
-	if err := svcCtx.BindSourceStop(stopSweep); err != nil {
-		return err
+	// canary 副本不起清理(发布轨道设计 §2.5):不起就不绑停止函数,CloseSource 对没绑的情况本来就安全。
+	if releaseTrack.RunsGlobalBackgroundWork() {
+		stopSweep := logic.StartSweep(ctx, deps)
+		if err := svcCtx.BindSourceStop(stopSweep); err != nil {
+			return err
+		}
+	} else {
+		logx.Infof("[friend] release_track=%s: background sweep disabled (canary serves client RPCs only)", releaseTrack)
 	}
 
 	// RPC 级热关停(shared/killswitch):复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行。

@@ -535,6 +535,10 @@ protected:
         decision->set_request_id(4242);
         decision->set_msg_type(1);
 
+        // 单玩家物品获取封禁(player-inbox-service.md §2.2):加载原样挂上、存盘原样拷回,
+        // PlayerItemGainBlockComp 这一层的未知字段要原样留下。
+        db.mutable_item_gain_block()->add_item_config_ids(3);
+
         auto &merchant = *db.mutable_mystery_merchant();
         merchant.set_round_id(3);
         auto *purchase = merchant.add_purchases();

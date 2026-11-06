@@ -253,4 +253,7 @@ func TestGlobalJoinRejectsMalformedIdentityBeforeAnySQLRead(t *testing.T) {
 	s := &svc.ServiceContext{Authority: &authority.Store{}}
 	l := NewJoinQueueLogic(context.Background(), s)
 	for _, request := range []string{"", "bad", uuid.Nil.String(), "fF000000-0000-0000-0000-000000000001"} {
-		_, e := globalJoin(l, &pb.JoinQueueRequest{PlayerId: 1, RequestId: request}, 
+		_, e := globalJoin(l, &pb.JoinQueueRequest{PlayerId: 1, RequestId: request}, 2)
+		require.Equal(t, codes.InvalidArgument, status.Code(e))
+	}
+}

@@ -1,8 +1,6 @@
 #include <gtest/gtest.h>
 #include "services/scene/core/system/scene_task_scope.h"
 #include "muduo/net/EventLoop.h"
-#include "services/scene/core/system/scene_task_scope.h"
-#include "muduo/net/EventLoop.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <algorithm>
@@ -178,8 +176,6 @@ void RecordLockScriptCall(const char* op, uint64_t playerId, uint64_t battleId, 
 
 bool RejectLockRetry(uint64_t, std::function<void()>) { return false; }
 
-bool RejectLockRetry(uint64_t, std::function<void()>) { return false; }
-
 class ScopedLockScriptRecorder {
 public:
     ScopedLockScriptRecorder() {
@@ -203,10 +199,7 @@ public:
 private:
     std::unique_ptr<muduo::net::EventLoop> loop_;
     std::unique_ptr<SceneTaskScope> tasks_;
-    void Stop() { if (tasks_) tasks_->Stop(); }
-private:
-    std::unique_ptr<muduo::net::EventLoop> loop_;
-    std::unique_ptr<SceneTaskScope> tasks_;
+
 };
 
 // 某一种锁脚本被发送(回调观察点)的次数。
@@ -2871,75 +2864,6 @@ TEST_F(PlayerBattleSettlementTest, SnapshotLevelIsTheCappedLevelAndTheStoredLeve
 }
 
 }  // namespace
-
-namespace {
-std::vector<std::function<void(redisReply*)>> coroutineLockReplies;
-int CaptureCoroutineLock(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)> done) {
-    coroutineLockReplies.push_back(std::move(done));
-    return REDIS_OK;
-}
-int RejectCoroutineLock(const char*, uint64_t, uint64_t, uint64_t, const std::string&, std::function<void(redisReply*)>) {
-    return REDIS_ERR;
-}
-}
-
-TEST_F(PlayerBattleSettlementTest, CoroutineLockWaitAndStopIgnoreLateErrorAndTimer) {
-    ScopedLockScriptRecorder recorder;
-    ScopedLockRetryCapture retries;
-    coroutineLockReplies.clear();
-    PlayerBattleSystem::SetLockScriptSenderForTest(&CaptureCoroutineLock);
-    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
-    freeze.set_battle_id(settlement.battle_id());
-    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
-    freeze.set_deadline_ms(9000000000000ULL);
-    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
-    ASSERT_EQ(coroutineLockReplies.size(), 1u);
-    EXPECT_TRUE(gCapturedLockRetries.empty());
-    auto* loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
-    bool progressed = false;
-    loop->queueInLoop([&] { progressed = true; loop->quit(); });
-    loop->loop();
-    EXPECT_TRUE(progressed);
-    recorder.Stop();
-    coroutineLockReplies[0](nullptr);
-    EXPECT_TRUE(gCapturedLockRetries.empty());
-    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
-    coroutineLockReplies.clear();
-}
-
-TEST_F(PlayerBattleSettlementTest, CoroutineLockRejectRetriesThenRechecksCurrentFreeze) {
-    ScopedLockScriptRecorder recorder;
-    ScopedLockRetryCapture retries;
-    PlayerBattleSystem::SetLockScriptSenderForTest(&RejectCoroutineLock);
-    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
-    freeze.set_battle_id(settlement.battle_id());
-    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
-    freeze.set_deadline_ms(9000000000000ULL);
-    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
-    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
-    tlsEcs.actorRegistry.remove<InBattleComp>(player);
-    ASSERT_TRUE(FireNextLockRetry());
-    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
-    EXPECT_TRUE(gCapturedLockRetries.empty());
-}
-
-TEST_F(PlayerBattleSettlementTest, CoroutineLockIntegerIsFinalAndDuplicateReplyCannotRetry) {
-    ScopedLockScriptRecorder recorder;
-    ScopedLockRetryCapture retries;
-    coroutineLockReplies.clear();
-    PlayerBattleSystem::SetLockScriptSenderForTest(&CaptureCoroutineLock);
-    auto& freeze = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
-    freeze.set_battle_id(settlement.battle_id());
-    freeze.set_state(IN_BATTLE_STATE_FIGHTING);
-    freeze.set_deadline_ms(9000000000000ULL);
-    ASSERT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
-    auto reply = IntegerReply(0);
-    coroutineLockReplies[0](&reply);
-    coroutineLockReplies[0](nullptr);
-    EXPECT_TRUE(gCapturedLockRetries.empty());
-    EXPECT_TRUE(tlsEcs.actorRegistry.all_of<InBattleComp>(player));
-    coroutineLockReplies.clear();
-}
 
 namespace {
 std::vector<std::function<void(redisReply*)>> coroutineLockReplies;

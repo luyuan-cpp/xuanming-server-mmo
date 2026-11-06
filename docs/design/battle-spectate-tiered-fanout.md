@@ -41,7 +41,8 @@ D68 规定战斗帧不走 gate：`battle_push_policy.h:21-27,42-48` 把 158 / 16
 
 **非目标（本期不做）**
 - **防偷看延迟**：观众帧按「非参战者」脱敏，看到的只是任一参战者视角的子集（§14 B3），延迟推送没有收益。以后加入私有信息，或赛事需要解说延时，再做。
-- **回放落盘、跨机房中继、增量帧**：放到 P3，或者在 P0 实测不达标时再做。
+- **回放落盘**：不走观战链路。2026-11-05 改为终局提交时随原件一并存进 match 库，见 [battle-report-replay.md](battle-report-replay.md)（设计稿，未落码）。
+- **跨机房中继、增量帧**：放到 P3，或者在 P0 实测不达标时再做。
 - **私密局观战**：自定义房间 v1 不开观战（`configurable-templates.md:885`）。全服放大之前必须先补观战可见性闸（§10 第 6 条）。
 
 ## 3. 分级定义
@@ -285,7 +286,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 | **P0 修缺陷 + 去硬编码 + 实测** | K 改成配置（默认仍是 20）；观众连接配额；§10 第 1~5 条；battle 观众帧编码一次；**实测帧大小，以及 gate 单线程用编码一次的字节扇出的上限** | C++ battle、Go match；Java battle / match。第 5 条的新 tip 两版同批 | 改配置 |
 | **P1 L1 gate 中继** | D94~D98 落地；`gate-spectate_g<N>`；gate SpectateHub；令牌订阅；match 档位判定与轻量准入；§10 第 6 条可见性闸；客户端按 `delivery` 分支，大厅连接挂 158/161/166 | C++ battle / gate、Go match、proto、Tip.xlsx、客户端；Java battle / gate / match / robot | `SpectateRelay.Enabled=false`：直连满了回「观战人数已满」 |
 | **P2 L2 全服广播** | `spectate-bcast_g<N>`；全服配额 B；运营 featured 入口（admin）；人数上报与热门列表；`BattleWatchSummary` 加 featured / viewer_hint | C++ battle / gate、Go match、admin、客户端列表 | `SpectateBroadcast.MaxConcurrent=0`：只用 L1 |
-| **P3 按需** | 多机房：每个机房一个中继消费者，再扇到本机房的 gate；回放：归档消费者把帧落对象存储，只对赛事开；有私有信息之后再做延迟推送 | — | — |
+| **P3 按需** | 多机房：每个机房一个中继消费者，再扇到本机房的 gate；有私有信息之后再做延迟推送。回放不在这里做：归档消费者要多一条链路，battle 发送失败就丢，所以改为终局提交时随原件一并存库（[battle-report-replay.md](battle-report-replay.md)） | — | — |
 
 每个阶段完成后：在 `turn-based-battle-server.md` 登记对应的 D 号，在 Java 仓 `PARITY.md` 登记一行，在 `PROGRESS.md` 记流水。
 

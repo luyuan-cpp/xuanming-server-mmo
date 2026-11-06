@@ -118,11 +118,14 @@ namespace connection_lost_hold
 		bool exiting{false};         // 实体挂着 UnregisterPlayer
 		bool handoffInFlight{false}; // PlayerLifecycleSystem::IsHandoffRequested
 		bool nodeEvacuating{false};  // 整节点疏散已开始
-		bool sessionBound{false};    // 实体当前绑着会话(player_exit::IsBoundSession(快照会话))
+		// 实体当前绑着会话(player_exit::IsBoundSession(快照会话)),且有 Guid。进入保留时会话已被摘掉,
+		// 所以已在保留中的实体这一项恒为假 —— Decide 先看 alreadyHeld,不让重复通知落进 kNoBoundSession。
+		bool sessionBound{false};
 		bool alreadyHeld{false};     // 实体已挂着 PlayerConnectionLostComp
 	};
 
 	// 不能保留的原因,按优先级取第一个。已在退出中排第一:退出流程有自己的合并规则,不能被保留打断。
+	// 只在 Decide 判 kExitNow 时用来打日志;对已在保留中的实体没有意义。
 	constexpr ExitNowReason ExitNowReasonOf(const Facts &facts)
 	{
 		if (facts.exiting)
@@ -144,13 +147,20 @@ namespace connection_lost_hold
 		return ExitNowReason::kNone;
 	}
 
+	// 顺序:已在退出中 → 立即退出(交给退出流程合并原因);已在保留中 → 保持原计时(重复通知不延长窗口,也不因
+	// 会话已摘掉被当成"没有会话"退出);其余按 ExitNowReasonOf 判能不能保留。保留中的实体不会同时在退出中
+	// (任何退出发起时都会摘掉保留),也发起不了交接(没有活会话),所以 alreadyHeld 排在这两项的哪一侧结论都一样。
 	constexpr Decision Decide(const Facts &facts)
 	{
-		if (ExitNowReasonOf(facts) != ExitNowReason::kNone)
+		if (facts.exiting)
 		{
 			return Decision::kExitNow;
 		}
-		return facts.alreadyHeld ? Decision::kKeepHolding : Decision::kHold;
+		if (facts.alreadyHeld)
+		{
+			return Decision::kKeepHolding;
+		}
+		return ExitNowReasonOf(facts) == ExitNowReason::kNone ? Decision::kHold : Decision::kExitNow;
 	}
 
 	// 保留了 heldFor 之后是否到期。恰好等于窗口即到期。时钟不会倒退(steady_clock),负值按没到期处理。

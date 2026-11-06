@@ -625,7 +625,9 @@ $playerStoreClaimColumns = [ordered]@{
     unknown = 'unknown_outcome'; unavail = 'unavailable'; denied = 'denied'
 }
 # $playerStoreRowKinds:db_player_store_row_bytes 的 kind(PlayerStoreKind 枚举名,写权行不带 payload,不在这里)→ 列名前缀。
-$playerStoreRowKinds = [ordered]@{ hot = 'PLAYER_STORE_KIND_HOT'; asset = 'PLAYER_STORE_KIND_ASSET'; growth = 'PLAYER_STORE_KIND_GROWTH'; profile = 'PLAYER_STORE_KIND_PROFILE'; legacy1 = 'PLAYER_STORE_KIND_LEGACY1' }
+# 2026-11-05 起按新分行(player-save-direct-commit.md §1.1):HOT、ASSET 退役(reserved 1、2),go/db 不会再报这两个标签;
+# LEGACY1 等删 player_database_1 时去掉。
+$playerStoreRowKinds = [ordered]@{ location = 'PLAYER_STORE_KIND_LOCATION'; character = 'PLAYER_STORE_KIND_CHARACTER'; wallet = 'PLAYER_STORE_KIND_WALLET'; bag = 'PLAYER_STORE_KIND_BAG'; growth = 'PLAYER_STORE_KIND_GROWTH'; profile = 'PLAYER_STORE_KIND_PROFILE'; legacy1 = 'PLAYER_STORE_KIND_LEGACY1' }
 # $matchPoolClaimOutcomes:match_pool_claim_total / match_immediate_claim_total 的 outcome,同 go/match/internal/metrics/pool.go
 #   的 PoolClaim* 常量、按该文件的顺序(钉名测试 go/match/internal/metrics/pool_names_stress_test.go);
 #   $matchPoolClaimColumns 是 G1 的列名,与之同序。
@@ -1311,7 +1313,8 @@ if ($dbSnapshots.Count -eq 0) {
 }
 
 # P3:已提交行的 payload 大小(db_player_store_row_bytes{kind},字节,只记 SAVE_PLAYER_COMMITTED 里带的行)。每组三列 n / avg / p99;
-#     某组没有序列打 n/a。n 的比例就是写放大的分布:只写有变化的行,hot 应远多于其它组。
+#     某组没有序列打 n/a。n 的比例就是写放大的分布:只写有变化的行,character、location 应远多于其它组;
+#     location 只顺带写,它的 n 明显少于定时存盘次数才说明推迟生效了。
 $p3Fmt = '  {0,-30}'
 $p3Header = @('snapshot')
 $p3Rule = @('--------')

@@ -1,10 +1,13 @@
 package logic
 
-// 评分匹配(设计文档 cross-zone-matchmaking.md §11):
+// 评分匹配(设计文档 cross-zone-matchmaking.md §11、global-match-hierarchical-pools.md §8):
 //   - 评分只存全球权威库(TiDB 的 match_rating / match_rating_applied,authority/rating.go),默认 1500;
+//     按 (player_id, mode) 分开存,每个计分模式一条评分轨道、一张榜。入队读分(globalJoin)、5v5 分队
+//     (gather.teamAssignment)、结算(ApplyBattleResult)用的是同一局的同一个 mode:票与成局原件上的 mode
+//     原样写进 CreateBattleRequest.match_mode,battle 回显成结果的 match_mode;
 //   - 结果回流:battle 打完的局经 Kafka match-results 进 ApplyBattleResult,只对
-//     PVP 队列模式(1V1 / 5V5)做 Elo(K=32,队伍用平均分,平局 0.5;回合打满按
-//     平局),整局在一个 SQL 事务里入账,幂等靠 match_rating_applied;
+//     计分模式(isRatedMode)做 Elo(K=32,队伍用平均分,平局 0.5;回合打满按
+//     平局,判定见 ratedScoreA),整局在一个 SQL 事务里入账,幂等靠 match_rating_applied;
 //   - 容差曲线 ratingTolerance:起始 100、每 5s 放宽 100、上限 1000(可配),
 //     两个零历史新号(都 1500)立即互配,分差大的等一会儿就能配上;锚点等满
 //     RatingToleranceMaxWaitSeconds 后容差 ∞ 兜底,不会永久饥饿;
@@ -43,32 +46,43 @@ func formatRating(rating float64) string {
 	return strconv.FormatFloat(rating, 'f', 2, 64)
 }
 
-// loadRating 读玩家评分;没有记录返回 defaultRating。评分只在权威库。
-func loadRating(svcCtx *svc.ServiceContext, playerId uint64) (float64, error) {
+// loadRating 读玩家在计分模式 mode 下的评分;没有记录返回 defaultRating。评分只在权威库。
+// mode 必须是计分模式(isRatedMode),不计分的模式没有评分轨道,authority 直接报错。
+func loadRating(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, playerId uint64) (float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	rating, e := svcCtx.Authority.Rating(ctx, playerId)
+	rating, e := svcCtx.Authority.Rating(ctx, playerId, uint32(mode))
 	return float64(rating) / 100, e
 }
 
 // loadRatingOrDefault 读评分,失败只记日志回落默认值:评分在这里只是分队与点名成局记录的软约束,
 // 计分池的入队另走 loadRating(读不到拒绝入队)。
-func loadRatingOrDefault(svcCtx *svc.ServiceContext, playerId uint64) float64 {
-	rating, err := loadRating(svcCtx, playerId)
+func loadRatingOrDefault(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, playerId uint64) float64 {
+	rating, err := loadRating(svcCtx, mode, playerId)
 	if err != nil {
-		logx.Errorf("[match] Failed to read rating; using default %d player=%d: %v", defaultRating, playerId, err)
+		logx.Errorf("[match] Failed to read rating; using default %d player=%d mode=%s: %v", defaultRating, playerId, mode, err)
 		return defaultRating
 	}
 	return rating
 }
 
-// loadRatings 批量读评分(逐人),失败者回落默认值。
-func loadRatings(svcCtx *svc.ServiceContext, members []uint64) map[uint64]float64 {
+// loadRatings 批量读同一计分模式下的评分(逐人),失败者回落默认值。
+func loadRatings(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, members []uint64) map[uint64]float64 {
 	out := make(map[uint64]float64, len(members))
 	for _, pid := range members {
-		out[pid] = loadRatingOrDefault(svcCtx, pid)
+		out[pid] = loadRatingOrDefault(svcCtx, mode, pid)
 	}
 	return out
+}
+
+// ratingSnapshotCenti 是点名成局(切磋、活动、整队直接开战)票上记的评分快照(×100):计分模式读本模式的评分,
+// 读失败回落默认分(点名成局名单固定,这份快照不参与撮合);不计分的模式没有评分轨道,记 0,不为它读库
+// (与单排入队、整队排队的非计分票同口径)。
+func ratingSnapshotCenti(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, playerId uint64) int64 {
+	if !isRatedMode(mode) {
+		return 0
+	}
+	return int64(math.Round(loadRatingOrDefault(svcCtx, mode, playerId) * 100))
 }
 
 // ---- 容差曲线 ----

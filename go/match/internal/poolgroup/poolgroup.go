@@ -32,12 +32,12 @@ const (
 
 // Unit 是一个不可拆的撮合单位：一张单排票，或一支完整的预组队。
 type Unit struct {
-	ID          uint64            // 单排 = player_id，整队 = 发起者 actor_id；只参与确定性排序
-	Players     []uint64          // 与 Members 一一对应
-	Members     []scope.Member    // 成员的范围树位置与原始入队时刻
-	EnqueuedMs  uint64            // 排队序：单排 = 原票入队时刻，整队 = launch 入队时刻
-	Preferred   uint32            // 全体成员共同的首选机房；成员不一致时为 0，只能参加跨机房阶段
-	RTT         map[uint32]uint32 // 全体成员都在硬延迟内的机房 → 成员中的最大 RTT（毫秒）
+	ID         uint64            // 单排 = player_id，整队 = 发起者 actor_id；只参与确定性排序
+	Players    []uint64          // 与 Members 一一对应
+	Members    []scope.Member    // 成员的范围树位置与原始入队时刻
+	EnqueuedMs uint64            // 排队序：单排 = 原票入队时刻，整队 = launch 入队时刻
+	Preferred  uint32            // 全体成员共同的首选机房；成员不一致时为 0，只能参加跨机房阶段
+	RTT        map[uint32]uint32 // 全体成员都在硬延迟内的机房 → 成员中的最大 RTT（毫秒）
 	// RatingCenti 是队伍分×100，只在计分时用：单排是本人评分，整队是成员平均分加组队加成（调用方按 ratingrule.UnitCenti 算）。
 	// 计分且不分边（1V1 / 5V5）只接受单排单位。
 	RatingCenti int64

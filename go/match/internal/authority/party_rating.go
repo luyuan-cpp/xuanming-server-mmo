@@ -3,7 +3,6 @@ package authority
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"match/internal/ratingrule"
 

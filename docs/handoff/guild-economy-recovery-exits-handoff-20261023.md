@@ -117,3 +117,14 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 读取、占用、锁或删除失败时保留记录并撤销确认，解除故障后重新警告；不把无法读取当成已不存在。作废成功只读刷新本人帮会，使旧经济页失效；有效快照或 14002 保留作废结论，读取错误按真实错误显示。申请列表与帮会读取在途期间的新推送优先于旧作废结论。普通无参数刷新仍保持既有语义。
 
 本项只修改两版服务器共用的客户端，不增加服务端契约、不重跑已完成的 Go / Java 验证，也不修改 Claude Code 的在途代码。规格见 `05-economy.md` §5.44.2；执行证据目录为客户端 `Logs/guild-corrupt-recovery-20261105/`。
+
+实际验证使用 Unity 6000.6.0f1：
+
+| 验证 | 实际结果 | 证据（相对上述目录） |
+|---|---|---|
+| 损坏恢复旧行为红灯 | 87 项中 70 通过、17 个预期失败，零跳过；退出 2 | `red-tests.xml`、`red-unity.log` |
+| 确认期间合法替换红灯 | 损坏/超窗警告 × 捐献/兑换替换，4 个预期失败；确认点击错误发起读取 | `replacement-red-tests.xml`、`replacement-red-unity.log` |
+| 最终相关 EditMode 回归 | 14 组 501/501，零失败、零跳过，退出 0；含帮会客户端 147、恢复 83、窗口 54、文件存储 12，以及共用存储/网络的相邻调用者 | `final-tests.xml`、`final-unity.log`、`final-exitcode.txt` |
+| 源码一致性 | 生产代码、恢复/存储测试及既有帮会测试在运行前后及收尾时 SHA-256 相同 | `final-sources-before.json`、`final-sources-after.json` |
+
+完整筛选器存于 `green-filters.txt`，最终回归沿用该筛选器。未执行联网冒烟、播放器打包或真实资产到账验收。本聊天未执行提交或推送；收尾时检测到外部操作已将相同客户端源码与九份 Unity 导入时间戳一并提交至 `1dfb79433`，保护检查停止了时间戳清理，没有回退外部提交；服务端文档也已被外部提交 `0f484db0d` 收录。本节最终验证记录随后单独补写。

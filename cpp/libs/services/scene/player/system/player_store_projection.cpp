@@ -237,6 +237,9 @@ namespace player_store_rows
             }
             // 剩下的是退役字段的残留。丢掉:留着会进 Carry 组件,下一次存盘被 ProjectPlayer 拒绝。
             reflection->MutableUnknownFields(&part)->Clear();
+            // 只认字段的当前分组:两行各有一份时(旧数据)按当前分组取,合并不翻倍。它不防丢失 —— 字段换组后
+            // 旧分组那一行里的这份会在这里被清掉,所以换组由 proto 生成器拒绝(持久 schema 台账记 group=,
+            // 数据覆写审计 R2 的 N1,player-save-direct-commit.md §1),换存储位置按 expand / contract 走。
             std::vector<const FieldDescriptor *> present;
             reflection->ListFields(part, &present);
             for (const FieldDescriptor *field : present)

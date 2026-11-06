@@ -34,7 +34,8 @@ import java.util.function.Supplier;
  *   <li>{@link AdminZoneController#create} 写的 {@code zone_config}:它走的是<b>另一条</b>安全路径,与「新项排在
  *       后面」毫无关系。这张表只有 {@code zone_id INT UNSIGNED PRIMARY KEY}(见 schema.sql),主键由请求体传入、
  *       <b>不是</b>自增,也没有任何二级唯一索引;争抢的键就是<b>聚簇主键</b>,而 {@link
- *       com.game.gateway.repository.ZoneConfigRepository#UPSERT_SQL} 是 ODKU —— 两个条件凑齐,重复键才走原地改写。
+ *       com.game.gateway.repository.ZoneConfigRepository#INSERT_IF_ABSENT_SQL} 是 ODKU —— 两个条件凑齐,重复键才走
+ *       原地的 UPDATE 分支(2026-11-05 起这个分支不改值,只插不改;取锁形状不变)。
  *       探针 {@code probe-results.md} 第 54 行正是把它与 {@code trade_favorite}、friend 各表归在这一类;</li>
  *   <li>反例 ——「新行主键<b>小于</b>删除标记那条记录的主键」的形状(go/login 的 {@code player_name}:主键 player_id +
  *       唯一索引 name_norm,号段发的新 id 小于存量 snowflake id):同一条 ODKU <b>5/5 成环</b>。</li>

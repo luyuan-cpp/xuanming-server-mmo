@@ -38,7 +38,7 @@ ALLOWED_MARKERS = {
 IDENTIFIER = r"[A-Za-z_]\w*"
 # 至多三层嵌套的一对括号:调用实参
 CALL_ARGS = r"\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)"
-LEVEL_COMP_TYPE = r"(?:const\s+)?LevelComp\s*(?:const\s*)?[*&]{0,2}"
+LEVEL_COMP_TYPE = r"(?:const\s+)?LevelComp\b\s*(?:const\b\s*)?[*&]{0,2}"
 LEVEL_CALL = r"\s*(?:\.|->)\s*level\s*\(\s*\)"
 # 不经变量的读法:registry.get<LevelComp>(player).level()、static_cast<const LevelComp*>(p)->level()、
 # message.level_component().level()
@@ -47,14 +47,14 @@ DIRECT_CHAIN = re.compile(
 )
 # 初始化式里取 LevelComp 的声明:const auto* lc = registry.try_get<LevelComp>(player);(含 if 的初始化语句)
 DECLARED = re.compile(
-    r"\b(?:const\s+)?(?:auto|LevelComp)\s*(?:const\s*)?[*&]{0,2}\s*(?P<name>" + IDENTIFIER + r")\s*=\s*"
+    r"\b(?:const\s+)?(?:auto|LevelComp)\b\s*(?:const\b\s*)?[*&]{0,2}\s*(?P<name>" + IDENTIFIER + r")\s*=\s*"
     r"[^;{}]*?(?:<\s*" + LEVEL_COMP_TYPE + r"\s*>|\blevel_component\s*\(\s*\))"
 )
 # 写明类型的形参与局部变量:const LevelComp& lc、LevelComp* lc、LevelComp lc;
 TYPED = re.compile(r"\b" + LEVEL_COMP_TYPE + r"\s*(?P<name>" + IDENTIFIER + r")\s*(?=[,;)={])")
 # 别名:auto& lc = *ptr;、const auto* lc = other;
 ALIAS = re.compile(
-    r"\b(?:const\s+)?(?:auto|LevelComp)\s*(?:const\s*)?[*&]{0,2}\s*(?P<name>" + IDENTIFIER + r")\s*=\s*"
+    r"\b(?:const\s+)?(?:auto|LevelComp)\b\s*(?:const\b\s*)?[*&]{0,2}\s*(?P<name>" + IDENTIFIER + r")\s*=\s*"
     r"[*&]?\s*(?P<source>" + IDENTIFIER + r")\s*;"
 )
 CAPPED_LEVEL_OPEN = re.compile(r"\bCappedLevel\s*\(")
