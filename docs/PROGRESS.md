@@ -20252,3 +20252,11 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - 核对了 12 个运行应用的镜像、源码、二进制、调试符号和资源。三个 C++ 节点各核对 100 份表资源和 14 份导航资源。证据位于 build/verification/docker-debug-refresh-20261104-r2/local-deploy-serial-r1 和 runtime-checks/local-acceptance-serial-r1。
 - 三个 C++ 节点均实际附加后分离。Scene 的 node.cpp 命中第 541 行并单步至第 542 行。Go Login 命中 providers.go 第 67 行，恢复并确认 Delve 断开。Java 网关命中 ServerListController.java 第 21 行，恢复并分离。分离后 C++ TracerPid 均为 0。
 - 双客户端单区冒烟实际退出 0，约 23 秒，两端登录并进入场景，战斗与观战的四项计数各 9。验收结束服务持续运行，网关 18085 和 18086 均返回 UP。修改后先保存并运行对应 Docker 重编任务，再选对应附加配置按 F5，C++ 选择容器中的进程 1。
+
+## 2026-11-05 Codex：Hiredis 同批生命周期验证收尾，Windows 重复 20 轮通过
+
+- **交付归属**：确认 `e33b99351` 已在当前主干祖先链中；10-30 的三份适配器同步、Windows 两条用例及设计文档均已合入。原临时 `hiredis-verify-doc.patch` 仍存在，`git apply --check` 通过；已采纳其历史验证回填，补入本轮结果，并把结论限定为 Hiredis 范围。设计文档 `docs/design/redis-async-client-retry-fix.md` 的旧「未编译、未测试」标题改为「已合入并验证」。
+- **历史证据复核**：11-02 Linux `b55b0ac`、`f1fc77e` 各 122/122，编译保留断言并启用 ASan/UBSan，运行无报告；Windows `muduo_grpc_test` 200 通过、0 失败，5 条外部 Go 互通用例跳过，`HiredisPeerFin` 41ms 通过。11-05 `rpc_controller_test` 298/298，另 2 条既有 DISABLED 基准，两条 `HiredisEventBatchWindows` 均实际通过。原日志位置见设计文档本节末表格，不改写旧 PROGRESS 条目。
+- **本次执行**：在仓库根目录，用 `build/cpp/tests/rpc_controller_test.exe` 的逐字节副本执行 `--gtest_filter=HiredisEventBatchWindows.* --gtest_repeat=20`。两条各运行并通过 20 次，共 **40/40**，进程退出 0，零失败、零跳过，stderr 为空。本轮没有重新编译；受测 exe 为 11-05 构建产物，晚于 `muduo.lib`，库哈希与 11-02 验证记录相同。
+- **源码与证据**：三份当前 `Hiredis.cc` / `Hiredis.h` 的 SHA256 分别一致，并与 11-02 记录及两版 Linux 构建副本一致；Windows 测试文件自 `e33b99351` 未改。运行前后记录的源码、库及原 exe 哈希均不变。证据目录 `build/verification/hiredis-event-batch-repeat-20261105-033750494/` 保存 stdout、stderr、`result.json`、前后输入哈希、二进制副本及哈希和原文档补丁。40/40 以 stdout 的 RUN / OK 计数为准，XML 仅最后一轮。
+- **边界**：本次只更新该设计文档与追加本条；未修改业务代码、其它会话的 `rpc_client_lifecycle_test.cpp` 或服务器缺口清单，未提交。历史 298/298 不代表当前工作区其它在途改动已重新全量验证。Java 版使用 Redisson，无对应 muduo 适配层或本项待办，不新增 PARITY 条目。

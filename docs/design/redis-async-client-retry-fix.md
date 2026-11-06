@@ -236,7 +236,7 @@ ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
   timeout 60s build/redis-lifecycle/redis_lifecycle_test
 ```
 
-## 2026-10-30：三份 Hiredis 适配器恢复逐字节一致，补 Windows 同批与半关闭回归（Claude，未编译、未测试）
+## 2026-10-30：三份 Hiredis 适配器恢复逐字节一致，补 Windows 同批与半关闭回归（已合入并验证）
 
 ### 三份适配器
 
@@ -279,3 +279,30 @@ Hiredis 适配器有三份副本：`cpp/libs/engine/muduo_windows/src/contrib/hi
 loop 跑在测试线程上，等待都由 2 秒看门狗或 WSAPoll 1.5 秒超时兜底。排空时加零延时定时器：在 loop 线程上
 `queueInLoop` 不会唤醒 poll，Windows 没有定时器时一次 poll 要等满 `kPollTimeMs`（100ms，10 秒是 Linux 分支的值）。
 这两条用例依赖 `Hiredis::Create`，修复前的代码编不过，红态以 10-21 Linux 专项为准（退出 134）。
+
+### 2026-11-05 验证收尾
+
+本节代码与文档于 11-01 随 `e33b99351` 并入主干。Codex 核对历史构建、运行日志及源码哈希，并补完 Windows 两条用例的 20 轮重复检查：
+
+| 范围 | 实际结果 | 证据 |
+|---|---|---|
+| 三份 Hiredis 副本 | 11-02 `fc.exe /b` 两两比较六组全部一致；11-05 再核对 SHA256 一致 | `build/player-store-verify-20261101-r2/15-hiredis-copy-results.json`；本轮 `inputs-before.json` |
+| Linux `redis_lifecycle_test`，muduo-linux `b55b0ac` | 11-02 实跑 122/122，ASan/UBSan 无报告 | `build/player-store-verify-20261101-r2/15-linux-b55b0ac-test.log` |
+| 同上，muduo-linux `f1fc77e` | 11-02 实跑 122/122，ASan/UBSan 无报告；确认端口写法两版都能编 | `build/player-store-verify-20261101-r2/15-linux-f1fc77e-test.log` |
+| Windows `muduo_grpc_test` | 11-02 实跑 200 通过、0 失败；5 条 Go 互通用例缺外部端点而跳过；`HiredisPeerFin` 41ms 通过 | `build/player-store-verify-20261101-r2/15-hiredis-grpc-after-buildfix/muduo_grpc_test.stdout.log` |
+| Windows `rpc_controller_test` 全量 | 11-05 实跑 298/298，另 2 条既有 DISABLED 基准；`HiredisEventBatchWindows` 两条都通过 | `build/verification/team-follow-cobalt-20261105T145854735Z/windows-tests/rpc_controller_test.stdout.log`（两条用例见 207–210 行） |
+| Windows `HiredisEventBatchWindows.*` 重复 20 轮 | 本次实跑 40/40，退出 0，零失败、零跳过、stderr 为空 | `build/verification/hiredis-event-batch-repeat-20261105-033750494/stdout.log`、`result.json` |
+
+三份当前 `Hiredis.cc` 的 SHA256 均为 `8C8AF27C6F03B7536CC18B7C6CAA87968D88CBA5B8606A224DDEE4D0D79B55F4`，
+三份 `Hiredis.h` 均为 `B8BB1AC73AA86313A65CEB5B1C4687BC33CC24F57AAB203BDB64B201026E4F21`，
+与 11-02 的记录及两版 Linux 实际构建目录内的源码一致。Windows 测试文件自 `e33b99351` 后未改，
+SHA256 为 `2489095421E90DA40178E7C68A4BD64CC1224ADDE66609068C321BCDF9542B6C`。
+
+本轮重复检查使用 11-05 构建的 `rpc_controller_test.exe` 的逐字节副本及同目录 DLL，存入上述证据目录的 `bin/`，
+在仓库根目录执行 `--gtest_filter=HiredisEventBatchWindows.* --gtest_repeat=20`；本轮未重新编译。
+exe 晚于 `muduo.lib`，该库 SHA256 与 11-02 验证记录相同。源码、库和原 exe 的运行前后哈希均未变化，见
+`inputs-before.json`、`inputs-after.json`；副本哈希见 `binary-snapshot.json`。
+40/40 按 stdout 中每条用例各 20 次 RUN / OK 统计，`last-iteration.xml` 只保存最后一轮。
+
+上述源码一致性结论限于本节 Hiredis 适配器及 Windows 测试；历史 298/298 不代表当前工作区其它在途改动已重新全量验证。
+Java 版使用 Redisson，没有对应 muduo 适配层，本节无 Java 待办。
