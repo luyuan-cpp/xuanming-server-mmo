@@ -7,6 +7,8 @@
 > 范围：服务端进程对外部依赖的断线与重连，包括 Redis、MySQL / TiDB、etcd、Kafka、服务间 gRPC、节点间 muduo 链路、Agones。玩家客户端的断线重连见 [断线重连恢复审计](disconnect-reconnect-audit-20261020.md) 与 [断线保留](player-connection-lost-hold.md)。Java 版服务器（独立仓库）的核对见 §7，本文原则同样适用。
 >
 > 2026-11-06 第二轮（负责人：「全部按优先级修」）：R1、R2、R3、R5、R8、R9、R10、R11、R12、R14、R16 和新发现的 R20 已落码，R4 复核后降为低危，未编译、未测试，待 Codex 验证；R6、R7、R13 等要先定设计的留到下一批。逐条状态见 §4.1。下面 §0~§4 的现状描述保留第一轮核对时的原文。
+>
+> 2026-11-06 Codex 续验仅更新 R11：负责人确认全球 Match 坏结果应保留位点并告警，取代历史“跳过并提交”建议，见 §4.1 和 `cross-zone-matchmaking.md` §13.4。位点保护定向 4 条由红转绿；Match build、vet、完整普通测试通过（438 条顶层通过、178 条外部环境用例跳过）。不代表本文其余重连修复、真实故障演练或真 TiDB 专项已经通过。
 
 ## 0. 结论
 
@@ -403,7 +405,7 @@ C++ 有三个 Redis 句柄：
 | R8 | 部分修 | `shared/leader` 与 login 的 `pkg/locker`：SETNX 回「已存在」时核对锁里是不是自己这次的值，是就当选或拿锁；各加两个单测。剩余：没逐个证明重放安全的非幂等脚本（如 friend 申请配额计数）仍在 `MaxRetries` 缺省 3 的句柄上 |
 | R9 | 已修 | C++ `ResolveRedisAddress`：DNS 失败按 1s 间隔重试 10 次（与 etcd 端点同口径），仍失败就致命退出，不再把主机名当 IP 字面量 |
 | R10 | 已修 | C++ Agones `RunInitialReady`：快速重试用完之后不放弃，按 `readyMaxBackoff` 一直重试到成功或 Stop()，期间照旧 fail-closed；日志在第 `readyMaxAttempts` 次和此后每 30 次打一行 ERROR。旧用例 `ReadyGivesUpAfterMaxAttemptsAndKeepsFailingClosed` 改为 `ReadyKeepsRetryingPastMaxAttemptsAndStaysFailClosedUntilSidecarRecovers` |
-| R11 | 已修 | match 对局结果消费：解码失败、同局原字节冲突（新哨兵 `authority.ErrCompletionOriginalConflict`）记日志和指标（`decode_error`、`original_conflict`）后跳过并提交；新增两个单测 |
+| R11 | 按负责人 2026-11-06 决定修正 | match 对局结果消费：解码失败、同局原字节冲突（`authority.ErrCompletionOriginalConflict`）保留位点并告警，等待人工处置。单轮处理立即返回错误，不做三次业务重试；consumer owner 仍按既有退避恢复原消息。日志、`decode_error` / `original_conflict` 指标及提交停滞告警保留。两个永久错误单测改为拒绝，新增冲突不提交位点的消费者用例，原损坏消息不提交断言不变。取代上方历史 R11 的跳过方案，契约与处置边界以 `cross-zone-matchmaking.md` §13.4 为准 |
 | R12 | 已修 | killswitch 不再在 watch 开着时每 3s 无条件续期：watch 按 StaleAfter 的三分之一定期返回，只在全量读成功或收到改变规则的事件时续 `syncedAt`；新增 `recheckInterval` 单测 |
 | R13 | 未修 | 先定审计流水是否要求不丢；要求不丢就加本地落盘队列，Kafka 恢复后补发 |
 | R14 | 已修 | 删掉 `redis.cpp` 里玩家域 Redis 的重连回调，改为注释说明为什么不挂。三个函数的 `reconnected` 参数在生产代码里已恒为 false，`cross_zone_test.cpp` 仍有一处传 true，留待下次改 `player_lifecycle` 时一并删除 |
@@ -426,7 +428,7 @@ C++ 有三个 Redis 句柄：
 | 持续竞选和续期的同时，让 Redis 主从切换（Sentinel 或手动 failover） | 记录双领导窗口和无领导窗口 | R7、R8 |
 | scene 启动时让 `redis.<namespace>` 解析失败 10s，再恢复 | 修复后：进程退出、由编排重启，或者恢复后连上 | R9 |
 | Agones sidecar 推迟 2 分钟就绪 | 实例最终变成 Ready | R10 |
-| 往对局结果 topic 投一条坏消息 | 分区后续消息照常处理，坏消息有记录 | R11 |
+| 往对局结果 topic 投一条坏消息 | 保留原位点，不评分、不提交后续消息；单轮处理不重试，日志和指标记录错误，提交停滞告警触发，人工在保留期内保全并核对原件 | R11 |
 | 断开 etcd，持续时间超过 StaleAfter | killswitch 规则按设计作废 | R12 |
 | Kafka 全停 6 分钟，期间产生交易流水 | 修复前记录丢失条数；修复后确认恢复后补齐 | R13 |
 | gate↔scene 网络断开 20s 后恢复 | 15–16s 内判死，然后重连、握手、Ready；不触发任何业务补发 | 节点链路 |
@@ -608,5 +610,5 @@ C++ 有三个 Redis 句柄：
 | 运行中重启 game-friend，等它重新监听后，立刻发好友请求 | 修复前：约 60s 内回 1003；修复后：按新的重连间隔恢复 | J1 |
 | TiDB 滚动重启后，立即发一批帮会与邮件写 | 修复前：每个池的首批调用报结局未知；修复后：零失败 | J2 |
 | scene 端口拒绝连接，或握手一直被拒时，持续登录进这个 scene | 记录建连频率；修复后受冷却限制 | J3 |
-| 开启 global 模式后，往对局结果 topic 投一条坏消息 | 按定下的口径：跳过并记录，或者停住并告警 | J4 |
+| 开启 global 模式后，往对局结果 topic 投一条坏消息 | 按负责人 2026-11-06 确认口径：保留位点并告警，等待人工处置；单轮处理不做永久错误的无效重试。Java 对齐情况仍待验证，见主仓 §4.1 R11 与 Java PARITY 待做 | J4 |
 | gate↔scene 断网 20s 后恢复 | 修复前：其上玩家全部掉线；修复后：会话保留 | J5 |

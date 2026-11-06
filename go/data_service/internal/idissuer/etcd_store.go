@@ -246,33 +246,42 @@ func (r *EtcdRegistry) Open(ctx context.Context, next uint32) (bool, error) {
 	if next > MaxNextRegion {
 		return false, fmt.Errorf("id issuer: next region %d exceeds %d", next, MaxNextRegion)
 	}
-	if _, _, opened, err := r.readNext(ctx); err != nil || opened {
-		return false, err
-	}
 	prefix := r.root + "region/"
-	resp, err := r.cli.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
-	if err != nil {
-		return false, err
-	}
-	for _, kv := range resp.Kvs {
-		code, err := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), prefix), 10, 8)
-		if err != nil {
-			return false, fmt.Errorf("id issuer: unexpected registry key %q", kv.Key)
-		}
-		if uint32(code) >= next {
-			return false, fmt.Errorf("%w: code %d already has an entry, the next claimable code must be above it", ErrRegionClaimed, code)
-		}
-	}
 	raw, err := json.Marshal(nextJSON{Next: next})
 	if err != nil {
 		return false, err
 	}
-	txn, err := r.cli.Txn(ctx).If(clientv3.Compare(clientv3.CreateRevision(r.nextKey()), "=", 0)).
-		Then(clientv3.OpPut(r.nextKey(), string(raw))).Commit()
-	if err != nil {
-		return false, err
+	for attempt := 0; attempt < reserveAttempts; attempt++ {
+		if _, _, opened, err := r.readNext(ctx); err != nil || opened {
+			return false, err
+		}
+		resp, err := r.cli.Get(ctx, prefix, clientv3.WithPrefix(), clientv3.WithKeysOnly())
+		if err != nil {
+			return false, err
+		}
+		for _, kv := range resp.Kvs {
+			code, err := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), prefix), 10, 8)
+			if err != nil {
+				return false, fmt.Errorf("id issuer: unexpected registry key %q", kv.Key)
+			}
+			if uint32(code) >= next {
+				return false, fmt.Errorf("%w: code %d already has an entry, the next claimable code must be above it", ErrRegionClaimed, code)
+			}
+		}
+		// 扫描与提交之间可能有 Recover/Retire 新增记录，必须连同范围一起在提交点复核。
+		// 范围内任何键的版本超过扫描版本就重读；仅比较已扫描键会漏掉当时还不存在的码。
+		txn, err := r.cli.Txn(ctx).If(
+			clientv3.Compare(clientv3.CreateRevision(r.nextKey()), "=", 0),
+			clientv3.Compare(clientv3.ModRevision(prefix), "<", resp.Header.Revision+1).WithPrefix(),
+		).Then(clientv3.OpPut(r.nextKey(), string(raw))).Commit()
+		if err != nil {
+			return false, err
+		}
+		if txn.Succeeded {
+			return true, nil
+		}
 	}
-	return txn.Succeeded, nil
+	return false, ErrContended
 }
 
 // Close 关闭 etcd 连接。

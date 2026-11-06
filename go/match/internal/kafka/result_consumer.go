@@ -258,11 +258,11 @@ func runResultConsumer(ctx context.Context, reader resultReader, handle ResultHa
 func processResultRecord(ctx context.Context, msg kafkago.Message, handle ResultHandler, wait func(context.Context, time.Duration) bool, record ResultRecordHandler) error {
 	event := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, event); err != nil {
-		// 坏消息永远解不出来:原地重试只会让这个分区后续的评分与结算归档全部停住。与 data_service、guild 的消费者一致,
-		// 记录后跳过并提交(docs/design/infra-reconnect-overview.md §4 R11);按 decode_error 计数告警。
+		// 损坏原件尚未归档，必须保留位点供人工处置，不能把日志当成入账收据。
+		// 单轮处理立即返回错误；由 consumer owner 保留原消息并退避恢复，不消耗业务重试次数。
 		metrics.ObserveRatingUpdate("unknown", "decode_error")
-		logx.Errorf("结果原件解码失败,跳过 partition=%d offset=%d: %v", msg.Partition, msg.Offset, err)
-		return nil
+		logx.Errorf("结果原件解码失败,保留位点等待人工处置 topic=%s partition=%d offset=%d: %v", msg.Topic, msg.Partition, msg.Offset, err)
+		return fmt.Errorf("结果原件解码失败: %w", err)
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(event.GetBattleId(), 10) {
 		logx.Errorf("结果 key 与 battle_id 不符 partition=%d offset=%d", msg.Partition, msg.Offset)
@@ -277,11 +277,11 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 			return nil
 		}
 		if errors.Is(last, authority.ErrCompletionOriginalConflict) {
-			// 永久错误:同一局已归档的原件与这条不同,重试永远不会成功。已归档的那份原件照旧有效,这一条记录后跳过,
-			// 不卡住分区(§4 R11);按 original_conflict 计数告警,人工核对两份原件。
+			// 永久错误不在本轮反复尝试；既有归档不能证明冲突消息也已处理。
+			// 保留原位点、错误和指标，等待人工核对两份原件（cross-zone-matchmaking.md §13.4）。
 			metrics.ObserveRatingUpdate(matchpb.MatchMode(event.GetMatchMode()).String(), "original_conflict")
-			logx.Errorf("结果原件与已归档的不一致,跳过 partition=%d offset=%d battle=%d: %v", msg.Partition, msg.Offset, event.GetBattleId(), last)
-			return nil
+			logx.Errorf("结果原件与已归档的不一致,保留位点等待人工处置 topic=%s partition=%d offset=%d battle=%d: %v", msg.Topic, msg.Partition, msg.Offset, event.GetBattleId(), last)
+			return last
 		}
 		logx.Errorf("结果处理未确认 attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
 		// 闸门冻结是搬库窗口:确定没写,不占重试次数,不然窗口稍长消费者就停了。等到 handler 的预算用完为止。

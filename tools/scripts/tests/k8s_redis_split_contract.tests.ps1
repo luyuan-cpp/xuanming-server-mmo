@@ -6,8 +6,8 @@
 .DESCRIPTION
     设计:docs/design/shared-redis-split-by-purpose.md §25.3(2026-10-23 拍板记录)、§3.2.1;部署说明见 deploy/k8s/README.md
     「共享 Redis 按用途拆实例」。本文件钉住:
-      1. 不带 -RedisSplit(缺省 auto,DryRun 按 none)时 zone-up / infra-up 的产物里没有 QueueRedis、没有 redis-queue-g 字样,
-         gateway 的 spring.data.redis.host 仍是核心 redis.<infra>;
+      1. 不带 -RedisSplit(缺省 auto,DryRun 按 none)时 zone-up / infra-up 不配置 QueueRedis、不渲染或操作 redis-queue-g 实例,
+         infra-up 共享模板的整行说明注释除外;gateway 的 spring.data.redis.host 仍是核心 redis.<infra>;
       2. -RedisSplit queue:login 整段写 Node.QueueRedis(Host = redis-queue-g0.<infra>:6379,其余字段与 RedisClient 逐项同值),
          gateway 指向 redis-queue-g0.<infra>;C++ zoneredis、data-service NameCacheRedis 仍是核心,go/db 不连 Redis;
       3. zones 配置的 redisQueueGroup: 2 → redis-queue-g2;非法值(负数、小数、字符串)在任何写操作之前 throw;
@@ -108,9 +108,10 @@ Test-Case '缺省 zone-up DryRun:login 没有 QueueRedis、gateway 指向核心 
     Assert-Match -Text $out -Pattern 'Redis split: zone=split-test zone_id=101 requested=auto resolved=none ' -Because 'DryRun 下 auto 按 none 渲染,并把将要写的地址打出来'
 }
 
-Test-Case '缺省 infra-up DryRun:不渲染任何 queue 实例,也没有 redis-queue-g 字样' {
+Test-Case '缺省 infra-up DryRun:不渲染或操作 queue 实例,共享模板的整行说明注释不算部署' {
     Assert-Equal -Expected 0 -Actual $defaultInfraRun.ExitCode -Because "缺省 infra-up DryRun 必须成功。输出: $($defaultInfraRun.Output)"
-    Assert-NotMatch -Text $defaultInfraRun.Output -Pattern 'redis-queue-g' -Because 'infra-up 的 auto 按 none:不 apply 也不删除 queue 实例'
+    # 控制域实例复用 redis-purpose.yaml,模板头说明包含 redis-queue-g<N>;只排除整行注释,实际资源和操作仍须没有 queue 实例。
+    Assert-NotMatch -Text $defaultInfraRun.Output -Pattern '(?m)^(?![ \t]*#)[^\r\n]*redis-queue-g' -Because 'infra-up 的 auto 按 none:不 apply 也不删除 queue 实例'
     Assert-Match -Text $defaultInfraRun.Output -Pattern 'mmorpg\.io/redis-pod-template-digest' -Because '对照:核心 Redis 照常渲染'
 }
 
@@ -448,7 +449,7 @@ Test-Case 'redis-wipe DryRun:非压测 namespace 或缺确认即拒绝;两条都
     Assert-Match -Text $noConfirm.Output -Pattern '没给 -ConfirmWipeAllRedis' -Because '错误点名缺确认'
     $plan = Invoke-SplitDryRun -Arguments @('-Command', 'redis-wipe', '-DryRun', '-InfraNamespace', 'mmorpg-stress-contract', '-ConfirmWipeAllRedis')
     Assert-Equal -Expected 0 -Actual $plan.ExitCode -Because "准入满足时 DryRun 成功。输出: $($plan.Output)"
-    Assert-Match -Text $plan.Output -Pattern '\[dry-run\] redis-wipe would list StatefulSets redis / redis-queue-g<N> / redis-match-cluster / redis-player ' -Because 'DryRun 只打计划;玩家域集群的每个主节点也要清'
+    Assert-Match -Text $plan.Output -Pattern '\[dry-run\] redis-wipe would list StatefulSets redis / redis-queue-g<N> / redis-ctl-g<N> / redis-match-cluster / redis-player ' -Because 'DryRun 只打计划;控制域实例与玩家域集群的每个主节点也要清'
     Assert-NotMatch -Text $plan.Output -Pattern '\[dry-run\] kubectl ' -Because 'DryRun 不发任何 kubectl'
 }
 

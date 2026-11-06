@@ -14,9 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// 解码失败的坏消息永远处理不了:记录后跳过(返回 nil,由 owner 提交),不进处理器、不原地重试,
-// 否则这个分区后续的评分与结算归档全部停住(docs/design/infra-reconnect-overview.md §4 R11)。
-func TestProcessResultRecordSkipsUndecodableMessage(t *testing.T) {
+// 损坏原件尚未归档，不能让 owner 把错误当成已处理并提交位点；单轮处理不做无效重试。
+func TestProcessResultRecordRejectsUndecodableMessageWithoutRetry(t *testing.T) {
 	handled := false
 	err := processResultRecord(context.Background(), kafkago.Message{Value: []byte{0xff, 0xff, 0xff}}, func(context.Context, *kafkapb.BattleResultEvent) error {
 		handled = true
@@ -24,13 +23,16 @@ func TestProcessResultRecordSkipsUndecodableMessage(t *testing.T) {
 	}, func(context.Context, time.Duration) bool {
 		t.Fatal("坏消息不应等待重试")
 		return false
-	}, noArchive)
-	require.NoError(t, err)
+	}, func(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error {
+		t.Fatal("坏消息不能归档")
+		return nil
+	})
+	require.Error(t, err)
 	require.False(t, handled)
 }
 
-// 同一局已归档的原件与这条不同:永久错误,只归档尝试一次就跳过,不进处理器、不等待重试。
-func TestProcessResultRecordSkipsOriginalConflictWithoutRetry(t *testing.T) {
+// 同局原件冲突需要人工核对两份原件；只尝试一次，保留错误，不评分、不等待重试。
+func TestProcessResultRecordRejectsOriginalConflictWithoutRetry(t *testing.T) {
 	body, err := proto.Marshal(&kafkapb.BattleResultEvent{BattleId: 7})
 	require.NoError(t, err)
 	archives := 0
@@ -45,7 +47,29 @@ func TestProcessResultRecordSkipsOriginalConflictWithoutRetry(t *testing.T) {
 		archives++
 		return fmt.Errorf("archive: %w", authority.ErrCompletionOriginalConflict)
 	})
-	require.NoError(t, err)
+	require.ErrorIs(t, err, authority.ErrCompletionOriginalConflict)
 	require.Equal(t, 1, archives)
 	require.False(t, handled)
+}
+
+func TestGlobalOriginalConflictCannotAdvanceOffset(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	body, err := proto.Marshal(&kafkapb.BattleResultEvent{BattleId: 7})
+	require.NoError(t, err)
+	r := &resultReaderFixture{message: kafkago.Message{Value: body}, cancel: cancel}
+	archives := 0
+	runResultConsumer(ctx, r, func(context.Context, *kafkapb.BattleResultEvent) error {
+		t.Fatal("原件冲突不能评分")
+		return nil
+	}, func(context.Context, time.Duration) bool {
+		t.Fatal("永久错误单轮处理不应等待重试")
+		return false
+	}, func(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error {
+		archives++
+		return authority.ErrCompletionOriginalConflict
+	})
+	require.Equal(t, 1, archives)
+	require.Equal(t, 1, r.fetched)
+	require.Zero(t, r.committed)
 }

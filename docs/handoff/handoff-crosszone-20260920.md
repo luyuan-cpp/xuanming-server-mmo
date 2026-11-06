@@ -4,11 +4,11 @@
 > 「**已核实**」= 本会话在代码上沿路径走通过;「**上一会话报出,未核实**」= 只见于上一会话的聊天记录,本机没有对应代码,无法复核。
 > 设计与落码记录的权威出处是 [`cross-zone-scene-travel.md`](../design/cross-zone-scene-travel.md)(本轮内容在 §12);本文只讲"现在是什么状态、接下来做什么、别踩什么"。
 >
-> **2026-11-05 现状(一屏版,先读这段)**。它取代下面 10-24 的同名一屏版。本轮只核对现状、补一条测试、清一个生成残留、改文档,没有跑任何构建或测试。
-> **Codex 2026-11-05 续验回执**：负责人已授权完整协议生成。`proto-gen-build` 及两轮 `proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml` 均退出 0，旧 `GetMaxConnections` 阻塞已解除；第二轮用于同步第一轮结束后其他会话新增的神秘商人字段。生成后第一轮 `go vet ./internal/logic/` 因 `AtomicDestroyForce` 调用少参退出 1，核对时该调用已由其他会话补齐；第二轮 vet 仍退出 1，当前阻塞为 `scene_member_reconcile_test.go:35` 引用已删除的 `sceneManagerZonesKey`（控制面按 zone 拆分的测试夹具未同步）。指定跨语言测试与 scene_manager 全量测试均未执行，不能记为通过；需同步该夹具后再运行下列清单。旧格式检查已通过。生成保留了守护段及并行会话的新逻辑，未访问客户端、未提交、未执行 C++ 构建。完整证据见 PROGRESS 同日「跨 zone 完整协议生成续验：生成成功，scene_manager 测试夹具仍阻塞」条目。
+> **2026-11-05 现状(一屏版,先读这段；Go 验证更新至 11-06)**。它取代下面 10-24 的同名一屏版。原 Claude 轮只核对现状、补一条测试、清一个生成残留、改文档；后续运行证据见下一段。
+> **Codex 2026-11-06 验证回执**：前轮 no-unity 完整协议生成已成功。此前阻塞的旧 zone 夹具及其他同包夹具已由并行会话修复，本轮保留；另修复 `leave_release_test.go` 两处竞态钩子提前命中快照读取的问题，先用时点断言取得 3 个场景的红态，再限定为条件删除脚本，原有数据与计数断言不变。最终 `go vet ./...` 退出 0；GO-3 指定测试实际 PASS、无 SKIP；`go test ./... -count=1 -json` 退出 0，788 个顶层用例 PASS（含子用例共 1210 个 PASS），0 FAIL、0 用例 SKIP。最终验证期间记录的相关输入哈希无变化。未触碰客户端、未提交、未执行 C++ 构建；Claude 独立审核尚未进行。证据与审核交接见本文末尾「2026-11-06 交 Claude Code 的独立审核材料」。
 > - **服务器代码:本线已做完。** 剩下的是 Codex 验证、压测基线和客户端项;残余 5 已有代码,在另一会话收尾。
 > - **各项现状**:
->   - GO-3 同号重启接管:`go/scene_manager/internal/logic/owner_replaced.go`。资格解析包 10-30 由 `go/shared/savebarrier` 改名为 `go/shared/handofffence`,资格存在 `player:{P}:handoff_fence` hash 的 `handoff_fence` 字段,别的会话改名时已同步改了本线代码。Codex 11-01 第二轮的 `go test ./...`(`go/scene_manager`)退出 0,之后的改动没有再验证。11-05 给 `owner_replaced_crosslang_test.go` 补了第 4 条跨语言钉子(C++ 节点号占位键的前缀与值):这两样一变,etcd 复核会恒读空,镜像滞后时会接管活着的持有者。
+>   - GO-3 同号重启接管:`go/scene_manager/internal/logic/owner_replaced.go`。资格解析包 10-30 由 `go/shared/savebarrier` 改名为 `go/shared/handofffence`,资格存在 `player:{P}:handoff_fence` hash 的 `handoff_fence` 字段,别的会话改名时已同步改了本线代码。11-05 给 `owner_replaced_crosslang_test.go` 补了第 4 条跨语言钉子(C++ 节点号占位键的前缀与值):这两样一变,etcd 复核会恒读空,镜像滞后时会接管活着的持有者。Codex 11-06 已执行指定测试与 scene_manager 全量，结果见上方回执。
 >   - gate 34 来源栅栏:`session_identity_fence.h` `ClassifySceneKickSource`。11-05 握手重构把发送方判定改成 `client->IsReadyOn(ctx.conn())`(设计文档 §13.10 第 3 条),编译状态以 Codex 回执为准。
 >   - C++ Prometheus 出口:Codex 10-24 整解构建 0 错误,`cross_zone_test` 361 条全过,含 `PlayerOwnershipMetrics.*` 4 条。
 >   - 合服:负责人 10-30 改为不停服合服(`docs/ops/merge-zone-runbook.md`)。停服版手册已归档,10-24 给旧工具加的 `assertZoneDown` 注册表正证随旧工具一起退役,不再是本线的事。
@@ -16,7 +16,7 @@
 >   - 34 栅栏「改绑后目标拒绝入场」那一支:11-05 定为接受、不改代码。目标拒绝时推的 3023 会让当前客户端拆连接回选服,3023 没送到时有客户端 60s 进场超时,详见设计文档 §13.10 第 3 条残余。
 >   - `player_migration_event`:proto 与各语言产物早已删除,只剩生成器不清退的 `cpp/generated/rpc/service_metadata/common_event_player_migration_event_event_id.h` 和 `rpc.vcxproj(.filters)` 两条登记,11-05 已手删(§4 第 3 条清单到此做完)。
 > - **剩下的**:
->   1. Codex:`go/scene_manager` 跑 `go test ./internal/logic/ -count=1 -v -run TestOwnerReplacedEvidenceMatchesCppFenceStamp`(必须 PASS,SKIP 不算),再全量;C++ `rpc.vcxproj` 少了一条头文件登记,随下一次整解构建确认;实跑 runbook 场景 RS(GO-3)。
+>   1. Go 静态检查、GO-3 指定测试和 scene_manager 全量已于 11-06 通过；仍需 Claude 独立审核、下次 C++ 整解构建确认 `rpc.vcxproj` 清退登记，以及真实环境实跑 runbook 场景 RS(GO-3)。
 >   2. 等压测基线:`handoff_pending_no_marker` 比值告警的阈值;GO-3 每次带位置的 EnterScene 多一次 `HGET`,成本待测。
 >   3. 客户端(交 Codex / 客户端任务,本线未核对是否已做):gate 信封码 1003 显示裸编号、§13.6 三处过时注释、34 张 4K 审图 PNG。
 >   4. 不做:`SendTipAndKickToClient` 收敛(形似代码不抽象,AGENTS §11.2)。
@@ -456,3 +456,32 @@ docs/design/cross-zone-scene-travel.md 的 §12 与 §13(各小节的验证清�
   (分支 crosszone/client-cl6-cl8 本身按本机跟踪引用没有推成远端分支,提交是经合并提交 96d36da 进的 main)。
 然后给出你打算做的第一件事。
 ```
+
+## 2026-11-06 交 Claude Code 的独立审核材料
+
+负责人要求：Codex 修复并验证后，交给 Claude Code 按自己的思路独立审核。本节提供事实、改动归属与运行证据，不预设审核结论；请自行决定需要追到哪些关联路径，可以推翻本文的判断。先按 AGENTS.md 完成启动门禁。遵守当前范围：保留其他会话改动，不动客户端、不提交；Claude 不运行构建或测试，需要新增验证时给 Codex 可执行命令。
+
+本线原目标是核对 10-24 的跨 zone 交接逻辑在后续重构后是否仍成立，重点为 GO-3 的 etcd 节点占位键跨语言契约；34 来源栅栏残余现维持「接受、不改代码」。前轮 `proto-gen-build` 与 no-unity 完整生成已成功，协议生成前置不再阻塞。Java GO-3 与 34 仍按负责人要求留 todo。
+
+本次接手时，旧 `sceneManagerZonesKey` 夹具和此前 5 项全量失败涉及的夹具已被其他会话修复或正在修复，本会话保留它们，没有重复重写。可从 `scene_member_reconcile_test.go`、`leavescene_cas_test.go`、`scene_membership_test.go`、`node_detach_deferred_test.go`、`read_unknown_fail_closed_test.go` 及对应 zone 拆分设计查看这些变化；它们不是本次 Codex 新写的修复。
+
+本次实际源码改动只有 `go/scene_manager/internal/logic/leave_release_test.go`：
+
+- `TestLeaveScene_MarkerWithdrawnBeforeDeleteKeepsLocation` 和 `TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted` 原先按「第一次带 location 键的 EVAL/EVALSHA」注入竞态。引入原子快照读取之后，这会提前命中 `luaReadLocationSnapshot`，测试绕过原本想验证的「释放判定完成后、条件删除提交前」阶段，仍可能呈绿。
+- 先只增加实际注入脚本的时点断言，保持旧钩子，两个顶层用例的 3 个场景全部在新断言处失败。再将触发条件限定为 `EVAL` 的 `luaDeletePlayerLocationIfUnchanged`，保留一次性触发与时点断言，三个场景转绿。location 原文、场景人数、释放请求及计数断言均未删除或放宽。
+- 生产代码、GO-3 的四项跨语言断言和客户端协议未在本轮修改。测试修改的直接补丁为证据目录中的 `leave-release-hook-review.patch`，生成前副本为 `leave_release_test.before.go`；共享工作区的总 diff 不代表本会话的全部改动。
+
+运行环境：Windows amd64，Go 1.27.2，`GOTOOLCHAIN=local`、`GOPROXY=off`，测试工作目录 `D:\luyuan\xuanming-server-mmo-cpp\go\scene_manager`。本轮证据基线 HEAD 为 `bc24d18027d3478ebbc5c9381a0a5709ff7c58e7`，另有未提交工作区内容。本会话未提交；最终静态检查和全量测试前后记录的相关源码 SHA256 一致，见 `inputs-final-before.json` / `inputs-final-changed.json`。
+
+| 验证 | 实际结果 | 证据文件 |
+|---|---|---|
+| `gofmt -l internal/logic/leave_release_test.go`、本次文件 `git diff --check` | 无输出、通过 | `06-gofmt-final.log` |
+| `go vet ./...` | 最终退出 0 | `07-vet-final.log`、`.exit.txt` |
+| `go test ./internal/logic/ -count=1 -v -run '^TestOwnerReplacedEvidenceMatchesCppFenceStamp$'` | 实际 PASS，非 SKIP，退出 0 | `02-go3-target.log` |
+| 两个竞态用例，仅补时点断言、保留旧钩子 | 3 个场景按时点断言失败，退出 1（预期红态） | `04-race-hook-red.log` |
+| 限定正确脚本后的同一定向用例 | 3 个场景全 PASS，退出 0；日志可见 `outcome=superseded/already_gone holder_release=released` | `05-race-hook-green.log` |
+| `go test ./... -count=1 -json` | 最终退出 0；788 个顶层 PASS，含子用例共 1210 个 PASS；0 FAIL、0 用例 SKIP。6 个有测试包通过，另 10 个包无测试文件 | `08-scene-manager-all-final.jsonl`、`.stderr.log`、`.exit.txt`、`final-summary.json` |
+
+证据目录：`C:\Users\luyua\AppData\Local\Temp\crosszone-go3-finish-20261106-b5b0b400\`。上表最终全量也包含 GO-3 和全部修复相关用例，不使用测试缓存（`-count=1`）。没有启用 `integration` build tag，因此真实 etcd 集成测试不在本轮范围；也没有执行 C++/Java 构建、真实 RS 故障演练或压测。该回执只证明本轮 Go 静态检查与默认全量测试通过，不等于整个服务器上线验收。
+
+请给出你独立判断的问题、证据与严重性，或明确说明未发现阻塞项；无需沿用 Codex 的审查次序或结论。若提出修复或补测建议，区分本轮改动、既有问题和尚未取得运行证据的推断。

@@ -468,12 +468,17 @@ func requireStillDraining(t *testing.T, sc *svc.ServiceContext, sceneID uint64) 
 	require.Equal(t, "2", count, "scene_count 不能先减")
 }
 
-func requireDrainFinished(t *testing.T, sc *svc.ServiceContext, sceneID uint64) {
+func requireDrainedChannelRemoved(t *testing.T, sc *svc.ServiceContext, sceneID uint64) {
 	t.Helper()
 	requireSceneOwner(t, sc, sceneID, "")
 	draining, err := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	require.NoError(t, err)
 	require.NotContains(t, draining, strconv.FormatUint(sceneID, 10))
+}
+
+func requireDrainFinished(t *testing.T, sc *svc.ServiceContext, sceneID uint64) {
+	t.Helper()
+	requireDrainedChannelRemoved(t, sc, sceneID)
 	count, err := sc.Redis.Get(nodeSceneCountKey(testZoneId, "10"))
 	require.NoError(t, err)
 	require.Equal(t, "1", count)
@@ -521,13 +526,22 @@ func TestAutoscale_DrainStepReadErrorKeepsDrainingState(t *testing.T) {
 func TestAutoscale_FinishDrainRemovesResidualMembersFromNodeSet(t *testing.T) {
 	sc, mr := beginDrainingForReadUnknown(t)
 	const player uint64 = 7001
+	countBefore, err := mr.Get(nodeSceneCountKey(testZoneId, "10"))
+	require.NoError(t, err)
 	seedSceneMembersVia(sc, 102, 1, player)
 	seedNodeMembersVia(sc, testZoneId, "10", 1, player)
-	_, err := mr.ZRem(testLoadKey(), "10")
+	_, err = mr.ZRem(testLoadKey(), "10")
 	require.NoError(t, err)
 
 	sweepDrainingWorldChannels(context.Background(), sc, testZoneId)
-	requireDrainFinished(t, sc, 102)
+	requireDrainedChannelRemoved(t, sc, 102)
+	// 死属主计数由死节点收尾整键删除，排空不能扣减或重建它（world-channel-autoscale.md §1）。
+	countAfter, err := mr.Get(nodeSceneCountKey(testZoneId, "10"))
+	require.NoError(t, err)
+	assert.Equal(t, countBefore, countAfter)
+	scenes, err := sc.Redis.Smembers(nodeScenesKey(testZoneId, "10"))
+	require.NoError(t, err)
+	assert.NotContains(t, scenes, "102", "场景反向索引仍须摘掉")
 	assert.Equal(t, "0", sceneMemberCount(mr, 102))
 	assert.Equal(t, "0", nodeMemberCount(mr, testZoneId, "10"), "节点集合不能留着已销毁场景的成员")
 }

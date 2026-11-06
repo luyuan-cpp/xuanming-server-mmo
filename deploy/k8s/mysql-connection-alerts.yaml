@@ -177,12 +177,11 @@ spec:
               go/db 的 home 池实际就是限流点,高负载下常满属预期;其它池长期用满、或同时出现 SqlPoolSlowAcquire 时才需要处理。
               要调池先重算 MySQL 连接总账(tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger)。
 
-        # 某个 go/db 实例打开的额外落点库数超过了总账规划档:max_connections 是按规划档算的,超出后可能已经不够。
-        #   extra_zone     —— 本 zone 库之外的 zone 家族库(zone_*_db):落点在别的 zone 的玩家跨区进场、合服 pin 后的源区库。
-        #                     每个库一个常驻池;最坏情形每个实例打开其余全部 zone 的库,名义预算随 zone 数平方增长。
-        #   extra_non_zone —— 非 zone 落点库(player_store_*_db,Phase 2):规划档按「未开」计,
-        #                     出现一个就说明 Phase 2 的库在没有重做规划的情况下被打开了。
-        # 两个阈值与 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 ExtraZoneStores / NonZoneStores 同源,
+        # 存档库已和区脱钩(docs/design/player-data-tidb-scaling-plan.md §7.2):每地域固定 K 个存档逻辑库,每库一个常驻池。
+        #   extra_zone     —— 旧 zone_*_db 存档库已退役,规划为 0;仍打开它说明目录或旧环境没有清理完成。
+        #   extra_non_zone —— player_store_*_db 存档库,本规则按生产 TiDB 规划档 K=64 判断。
+        # MySQL 小 K 档仍按本次部署的 K 核算连接总账;这条生产阈值不替代各档位的容量核算。
+        # 两个阈值与 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 ExtraZoneStores / TidbNonZoneStores 同源,
         # 契约测试(tools/scripts/tests/k8s_deploy_contract.tests.ps1)按行用正则提取后与规划档核对:
         # **每个阈值必须单独占一行,不要合并或改写成别的形状**;改规划档必须同改这两行(反之亦然),并重算 max_connections。
         # pool 的两个取值写死为 go/db/internal/metrics 的 PoolExtraZone / PoolExtraNonZone,改常量必须同改这里。
@@ -190,21 +189,20 @@ spec:
         # 这是事后信号:库已经打开、池已经建好才会响。阈值来自规划档,规划档本身待压测确认。
         - alert: DbExtraStorePoolsBeyondPlan
           expr: |
-            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="extra_zone"}) > 3
+            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="extra_zone"}) > 0
             or
-            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="extra_non_zone"}) > 0
+            max by (namespace, instance) (mmorpg_sql_pool_pools{sql_client="db", pool="extra_non_zone"}) > 64
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: "go/db 打开的额外落点库数超过了 MySQL 连接总账的规划档"
+            summary: "go/db 打开的存档库池数偏离生产规划"
             description: >-
               {{ $labels.namespace }} / {{ $labels.instance }} 的 go/db 有一类额外落点库已打开 {{ $value | printf "%.0f" }} 个(每个库一个常驻连接池),
-              超过规划档(tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 ExtraZoneStores / NonZoneStores)。
-              max_connections 是按规划档算的,可能已经不够,盯住 MysqlConnectionsNearMax / MysqlConnectionsRefused。
-              是哪一类,按 pool 查 mmorpg_sql_pool_pools{sql_client="db"}:extra_zone 超了多半是 zone 数增加或合服留下了源区库;
-              extra_non_zone 非 0 说明 Phase 2 的落点库已被打开。
-              两种都要先重做规划档、重算 max_connections 与 MySQL Pod 内存,再继续扩。
+              超过规划档(tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionPlan 的 ExtraZoneStores / TidbNonZoneStores)。
+              按 pool 查 mmorpg_sql_pool_pools{sql_client="db"}:extra_zone 非 0 表示仍在使用已退役的 zone 存档库,
+              应核查目录落点和旧环境清理;extra_non_zone 超过 64 表示打开的存档库多于生产 TiDB 规划档,
+              应核对本地域固定 K 与目录映射。继续扩容前重算连接总账、max_connections 和数据库内存预算。
 
     # ── Java gateway(Hikari 连接池)──────────────────────────────────────────
     # gateway 在管理端口 8082 的 /actuator/prometheus 上导出 Micrometer 的 hikaricp_connections_*{pool="gateway"}(文件头 Scrape prerequisites)。

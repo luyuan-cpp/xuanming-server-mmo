@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    发号器部署面的静态契约:第二套 etcd 的清单、部署脚本的接线,以及 biz_tag 清单三处一致。
+    发号器部署契约:etcd 清单、部署接线、入口拒绝顺序,以及 biz_tag 清单三处一致。
 
 .DESCRIPTION
     设计:docs/design/player-data-tidb-scaling-plan.md §6.3;运维:docs/ops/id-issuer-runbook.md。
@@ -16,6 +16,7 @@
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
+. "$PSScriptRoot/lib/deploy_capture.ps1"
 
 # 路径一律正斜杠 + Join-Path:CI 在 ubuntu 上跑。
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
@@ -43,6 +44,17 @@ function Get-TagSet {
     $match = [regex]::Match($Text, $Pattern)
     Assert-True -Condition $match.Success -Because "找不到 biz_tag 清单: $Pattern"
     return (@($match.Groups[1].Value -split ',' | ForEach-Object { $_.Trim(' ', '"') } | Where-Object { $_ } | Sort-Object) -join ',')
+}
+
+Test-Case 'dev 托管登记处在 infra-up / all-up 的任何写计划之前拒绝,不依赖部署 data-service' {
+    foreach ($command in @('infra-up', 'all-up')) {
+        # 正式脚本入口仍走完整前置校验;DryRun 把原本的写操作变成计划,不能让 Namespace 创建先于拒绝。
+        $run = Invoke-DeployDryRun -Arguments @('-Command', $command, '-DryRun', '-SkipPreflight', '-SkipGoSvc', '-SkipJavaSvc',
+            '-BattleReplicas', '0', '-NoCppLogSidecar', '-HostIdRegistry')
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "$command 的 dev 档必须拒绝托管登记处"
+        Assert-Match -Text $run.Output -Pattern 'HostIdRegistry.*staging and prod only' -Because "$command 必须因登记处档位不合法而拒绝"
+        Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl |--- BEGIN MANIFEST ---' -Because "$command 拒绝前不能到达任何 kubectl 或清单写计划"
+    }
 }
 
 Test-Case '第二套 etcd 的名字和标签与主 etcd 完全分开' {
@@ -89,10 +101,10 @@ Test-Case '登记处 etcd 的名字和标签与两套发号 etcd 完全分开,�
 
 Test-Case '部署脚本:登记处只在 -HostIdRegistry 的集群起,地址写进 data-service ConfigMap,入口先解析' {
     $text = Read-RepoText $script:DeployPath
-    Assert-Match -Text $text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*if \(\$ReleaseProfile -eq ''dev''\) \{\s*throw[^\n]*\n\s*\}\s*\$infraManifests \+= "etcd-id-registry\.yaml"' -Because '全世界只有一个集群托管登记处,dev 不起'
+    Assert-Match -Text $text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*\$infraManifests \+= "etcd-id-registry\.yaml"' -Because '只有显式托管登记处的集群才加入清单,dev 拒绝由真实入口回归验证'
     Assert-Match -Text $text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*Wait-ForStatefulSetReady -Namespace \$InfraNamespace -StatefulSetName "etcd-id-registry"' -Because '-WaitReady 要等它成 quorum'
     Assert-Match -Text $text -Pattern 'RegistryEtcd: \[\$registryList\]' -Because '登记处地址漏了,生产发号器装配失败'
-    Assert-Match -Text $text -Pattern '(?s)if \(\$deploysDataService\) \{\s*#[^\n]*\n\s*\$registry = @\(Resolve-IdRegistryEtcd\)' -Because '入口在任何写操作之前解析登记处地址'
+    Assert-Match -Text $text -Pattern '(?s)if \(\$deploysDataService -or \$HostIdRegistry -or -not \[string\]::IsNullOrWhiteSpace\(\$IdRegistryEtcd\)\) \{\s*\$registry = @\(Resolve-IdRegistryEtcd\)' -Because '部署 data-service 或显式给登记处参数时,都在写路径入口解析'
     $devTools = Read-RepoText (Join-Path $script:RepoRoot 'tools/scripts/dev_tools.ps1')
     Assert-Match -Text $devTools -Pattern '\$args\.IdRegistryEtcd = \$IdRegistryEtcd' -Because 'dev_tools 转发 -IdRegistryEtcd'
     Assert-Match -Text $devTools -Pattern 'if \(\$HostIdRegistry\) \{ \$args\.HostIdRegistry = \$true \}' -Because 'dev_tools 转发 -HostIdRegistry'

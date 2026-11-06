@@ -308,13 +308,16 @@ func TestLeaveScene_MarkerWithdrawnBeforeDeleteKeepsLocation(t *testing.T) {
 	require.NoError(t, mr.Set(handoffKey, "3:1700000000000"))
 	locKey := getPlayerLocationKey(playerID)
 
-	// 钩子在第一次碰到 location 键的 EVAL / EVALSHA 时删掉标记(先消费一次性标志再改数据:Lua 内部的 redis.call
-	// 会带着 miniredis 的锁重入钩子,那时标志已被消费,做法同 leavescene_cas_test.go)。
+	// 只在条件删除脚本前撤回标记。快照读取也用 EVAL 且带 location 键,不能按「首次碰到键」注入,
+	// 否则还没做释放判定就已丢掉证据,测不到提交点复核。先消费标志,避免 Lua 内部 redis.call 重入。
 	var fired atomic.Bool
+	var injectedAtDelete atomic.Bool
 	mr.Server().SetPreHook(func(_ *server.Peer, cmd string, args ...string) bool {
-		if (cmd != "EVAL" && cmd != "EVALSHA") || !slices.Contains(args, locKey) || !fired.CompareAndSwap(false, true) {
+		if cmd != "EVAL" || len(args) == 0 || args[0] != luaDeletePlayerLocationIfUnchanged ||
+			!slices.Contains(args, locKey) || !fired.CompareAndSwap(false, true) {
 			return false
 		}
+		injectedAtDelete.Store(cmd == "EVAL" && len(args) > 0 && args[0] == luaDeletePlayerLocationIfUnchanged)
 		mr.Del(handoffKey)
 		return false
 	})
@@ -322,6 +325,7 @@ func TestLeaveScene_MarkerWithdrawnBeforeDeleteKeepsLocation(t *testing.T) {
 
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	require.True(t, fired.Load(), "钩子没触发,用例空转")
+	require.True(t, injectedAtDelete.Load(), "必须在条件删除前撤回标记,不能在读取快照时提前撤回")
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, locKey), "证据消失时不得删除")
 	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
@@ -804,13 +808,16 @@ func TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted(t *testing.T) {
 			tc.arrange(t, mr, tc.playerID)
 			locKey := getPlayerLocationKey(tc.playerID)
 
-			// 钩子只在第一次碰到 location 键的 EVAL / EVALSHA(即删除 Lua)时改动 location,做法同
-			// TestLeaveScene_MarkerWithdrawnBeforeDeleteKeepsLocation。
+			// 释放判定已经完成,到条件删除脚本前才改 location。不能抢先命中带同一键的快照读取,
+			// 否则会走「入口已无位置 / 登录身份已更新」早返回,绕过本用例要守的提交计数。
 			var fired atomic.Bool
+			var injectedAtDelete atomic.Bool
 			mr.Server().SetPreHook(func(_ *server.Peer, cmd string, args ...string) bool {
-				if (cmd != "EVAL" && cmd != "EVALSHA") || !slices.Contains(args, locKey) || !fired.CompareAndSwap(false, true) {
+				if cmd != "EVAL" || len(args) == 0 || args[0] != luaDeletePlayerLocationIfUnchanged ||
+					!slices.Contains(args, locKey) || !fired.CompareAndSwap(false, true) {
 					return false
 				}
+				injectedAtDelete.Store(cmd == "EVAL" && len(args) > 0 && args[0] == luaDeletePlayerLocationIfUnchanged)
 				tc.race(mr, locKey, tc.sceneID)
 				return false
 			})
@@ -819,6 +826,7 @@ func TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted(t *testing.T) {
 
 			_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(tc.playerID, tc.sceneID))
 			require.True(t, fired.Load(), "钩子没触发,用例空转")
+			require.True(t, injectedAtDelete.Load(), "必须在释放判定后的条件删除前改动 location,不能在读取快照时提前改动")
 			require.NoError(t, err, "没删成也不是故障:location 已被别人处理")
 			assert.Equal(t, tc.wantLoc(tc.sceneID), leaveCasValue(t, mr, locKey))
 			assert.Equal(t, tc.wantScene, sceneMemberCount(mr, tc.sceneID))

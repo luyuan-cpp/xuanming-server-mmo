@@ -149,3 +149,8 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 执行入口及必要环境变量见客户端 `Docs/GuildUI.md` 本日追加节；本次实际运行器保留在 `Logs/guild-corrupt-online-20261106/run-live-smoke.ps1`，密码只经子进程环境传入，不写入证据。此前 EditMode 501/501 证据不变，本轮没有生产源码修改，因此没有重复执行该组测试。未执行 Java 后端联机、播放器打包、真实 TiDB 或跨区验收。
 
 **Claude Code 审核状态**：按负责人要求已准备只读审核材料 `Logs/guild-corrupt-online-20261106/claude-review-prompt.txt` 及限定范围补丁。准备操作 Claude 桌面时收到物理 Esc 停止信号，已停止电脑操作；审核请求尚未发送，不能声称已审核。尚待继续该审核。本聊天没有提交或推送。
+## 7. 2026-11-06 续交 Claude Code 审核的状态
+
+负责人继续授权“可以修复，然后交接给 Claude Code 审核”。本次只读复核没有发现本任务新增待修项：帮会恢复生产代码、相关 EditMode 测试，以及新增 GuildNetwork 用例与程序集均与其已保存验证摘要一致。客户端当前核对 HEAD 为 `f8076ce9596f84c745a5b86fdf9c4de5dad414e0`；其他会话已改过 `GameClient.cs`、`GateTcpClient.cs`、`AppBootstrap.cs`，没有审改或回退这些变化。因此 501/501 与 attempt-4 的 1/1 仍是当时源码的真实证据，不能扩大为当前 HEAD 整条联网链已经复验。本次没有重跑构建或测试。逐项 SHA 与适用范围保存在客户端 `Logs/guild-corrupt-online-20261106/review-current-scope.json`。
+
+限定范围的只读审核说明已更新到同目录 `claude-review-prompt.txt`，并填入 Claude Code 的独立新会话草稿。桌面明确显示 `Weekly limit reached`（所有模型周用量 100%，界面显示 11 月 12 日 15:00 重置）；发送点击被系统通知遮挡，后续窗口操作也未能完成，未观察到已发送消息或审核开始，故状态仍为**草稿已准备、未发送、未取得 Claude 审核结果**。没有改付费、权限或登录设置，没有用其他代理冒充 Claude 审核。本次未修改业务源码、未提交或推送，待该外部限制解除后继续发送审核。

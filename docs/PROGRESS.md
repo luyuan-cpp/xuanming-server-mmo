@@ -24642,3 +24642,64 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - **实际验证**：仅运行迁移后的 `shared-redis-secret-dev-compare.ps1` 一次；仅当前命令进程清除 `MMORPG_*`，临时目录指向本仓已忽略的 `build/redis-secret-finish-20261106/`，未操作集群。四次 DryRun 均退出 0，但整份输出逐字比较失败：zone-up 首差第 2561 行，infra-up 首差第 2670 行，比对脚本退出 1。未重跑、未修改脚本或断言。
 - **失败后的只读核查**：两组输出分别为 2811 / 6267 行，前后行数相同；按完整 manifest 内容的 SHA-256 与出现次数核对，zone-up 的 20 份、infra-up 的 40 份清单均一致，其余输出行及出现次数也一致，差异在服务渲染顺序（备份脚本遍历 Hashtable.Keys）。这不计作原“逐字相同”门禁通过。原始输出及 `dev-compare.log` 保留在上述验证目录；脚本生成的临时部署文件已自行清理。
 - **未验证项**：本次是分支清理与保全收尾，没有执行 Go 全量构建、单测、部署契约回归或集群验证；Redis Secret 功能的完整验证仍按交接 §9.5 执行。Java 版未改动，沿用原交接“不适用”的范围判断。
+
+## 2026-11-06 Codex：帮会恢复交接复核，Claude 审核仍待发送
+
+- 本任务帮会恢复实现、既有相关单测与新增联网用例摘要未变化，无新增待修项；未修改其他会话的登录、传输或启动代码。当前客户端 `f8076ce959` 的这三类依赖已变化，历史 501/501 与联网 1/1 证据不扩大为当前 HEAD 全链复验；本次未重跑构建或测试。
+- 已更新限定范围的只读审核提示和逐项摘要，并填入 Claude Code 新会话草稿；Claude 桌面显示所有模型周额度 100%。发送未成功，未取得实际审核结果。详见[交接 §7](handoff/guild-economy-recovery-exits-handoff-20261023.md#7-2026-11-06-续交-claude-code-审核的状态)。未改业务源码、未提交或推送。
+## 2026-11-06 Codex：跨 zone GO-3 验证收口，修复离场竞态测试假绿，交 Claude 独立审核
+
+- **授权与范围**：负责人允许同步旧测试夹具、完成 go vet / GO-3 指定测试 / scene_manager 全量，再交 Claude Code 按其自己的思路审核；选择交接写入现有页面并给可复制提示。保留其他会话改动，不动客户端、不提交。
+- **既有修复归属**：接手时 `scene_member_reconcile_test.go` 已删除旧 `sceneManagerZonesKey` 写入；`seedLeaveCasFixture` 已补场景 zone；foreign-zone 清理夹具已改由旧 zone 的服务执行；zone-flip 和死节点排空计数测试已对齐现契约。这些来自并行会话，本轮保留，没有重写或冒记为本轮修复。
+- **本轮实际修复**：只改 `go/scene_manager/internal/logic/leave_release_test.go` 两处钩子。原「第一次带 location 键的 EVAL/EVALSHA」先命中 `luaReadLocationSnapshot`，使撤回标记、location 被顶替、location 已删除三个场景绕过原定提交窗口仍呈绿。先增加 `injectedAtDelete` 时点断言，保留旧钩子，3 场景全部按断言测红；再限定为 `EVAL` 的 `luaDeletePlayerLocationIfUnchanged`，3 场景转绿。保留一次性触发、时点、location 原文、成员数、释放请求和计数断言。生产代码与 GO-3 跨语言断言未改。
+- **实际验证**：Windows amd64 / Go 1.27.2；`GOTOOLCHAIN=local`、`GOPROXY=off`；工作目录 `go/scene_manager`。`gofmt -l` 与本次文件的 `git diff --check` 无输出；最终 `go vet ./...` 退出 0；`go test ./internal/logic/ -count=1 -v -run '^TestOwnerReplacedEvidenceMatchesCppFenceStamp$'` 实际 PASS（无 SKIP），退出 0；最终 `go test ./... -count=1 -json` 退出 0，788 个顶层 PASS，含子用例共 1210 个 PASS，0 FAIL、0 用例 SKIP，6 个有测试包通过，10 个包无测试文件。最终全量再次覆盖 GO-3 及两处竞态测试。
+- **证据与版本边界**：HEAD `bc24d18027d3478ebbc5c9381a0a5709ff7c58e7` 加工作区；最终验证前后已记录的相关源码 SHA256 无变化。证据目录 `C:\Users\luyua\AppData\Local\Temp\crosszone-go3-finish-20261106-b5b0b400\`，含指定测试日志、红/绿日志、最终 JSONL/退出码/统计、源码哈希、工作区状态、原测试副本与仅本轮修改的 `leave-release-hook-review.patch`。前轮 no-unity 完整生成的成功结果及失败历史仍保留在本文件旧条目。
+- **交接**：更新 `docs/handoff/handoff-crosszone-20260920.md` 文件头状态与剩余项，末尾追加「2026-11-06 交 Claude Code 的独立审核材料」。提供改动归属、准确命令、原始证据与未验证项，允许 Claude 自主选择关联路径、推翻本轮判断。材料已写入，尚未实际进行 Claude 审核；没有调用本地 Claude 或发送到其他会话。
+- **未验证与残余**：本轮未执行 C++/Java 构建、`integration` 标签的真实 etcd 集成、runbook RS、压力测试或客户端验证；C++ 生成清退登记仍随下次整解构建确认。34 残余维持接受、不改。Java 0.1.0-SNAPSHOT 的 GO-3 / 34 仍留 todo，本轮无 Java 变更。
+- **提交**：本会话未执行 git add / commit / push，未回退或覆盖其他会话的工作。
+
+## 2026-11-06 Codex：登录 Redis 清退后的 match 连接总账修正，交 Claude 独立审核
+
+- 用户授权修复后交 Claude Code，按 Claude 自己的思路审核。核对时六服务的登录 Redis 配置、镜像与登录域连接池已由身份会话同步清退；本轮发现 match 仍沿用已删除的 sharedRds 控制域默认池。K8s 的 MatchRedis 指向专用匹配集群，NewRedisHandles 只建该句柄；Get-RedisConnectionLedgerInputs 的 match 行改为 DefaultPools=0、GoMaxProcs=0，消除每副本虚增 20 条连接。未拆玩家域仍计 PlayerRedis，拆分后由既有过滤移除其零连接控制域行。
+- 契约：k8s_deploy_contract 的 match 期望同步；redis_player_cluster_contract 对 mail/match 同时核对未拆仅玩家域池、拆后无控制域行。排队套件另修两条旧断言：控制域复用模板的整行注释不算部署 queue 实例；redis-wipe 预览名单补 redis-ctl-g<N>。实际部署选择器、清库实现和准入没有因此放宽。
+- Codex 实测：定向原测试 AST 回归红 2/2 → 绿 2/2；玩家域完整契约 34/34 PASS；排队完整契约先 41 PASS/2 FAIL（上述旧断言）、修后 43/43 PASS；maxclients 完整 7/7 PASS。四个修改过的 ps1 解析无错误，针对本轮文件的 diff --check 无空白错误。所有部署执行均为 DryRun 或替身，没有真实集群操作。
+- 完整 k8s_deploy_contract 的修复前基线发现三项发布轨道失败后停止：两项 Select-CppWorkloadBlock 未定义，一项稳定版块命中 -canary；不声明该整套通过。服务业务代码、Go/C++ 构建与真集群故障切换不在本轮验证证据内。
+- 交接：docs/handoff/redis-login-ledger-review-20261106.md（已登记 docs/README.md）包含改动归属、证据、复现入口与自主审核请求。Claude CLI 未登录，桌面 Code 已登录但显示 Weekly limit reached，未成功提交审核请求，暂无 Claude 审核结论。原始日志在 C:\Users\luyua\AppData\Local\Temp\redis-ledger-review-20261106。
+- Java 0.1.0-SNAPSHOT：本修复仅针对本仓 PowerShell 总账，Java 无同实现、不适用；原有身份清退与 Redis 拆分状态仍见 Java PARITY.md。本会话未提交、未推送，未覆盖同文件中其他会话的发号器等改动。
+
+## 2026-11-06 Codex：心跳三端补齐与分层验证（节点冒烟进行中）
+
+- **范围**：续接三条 gate 心跳交接，完成 Unity 网络线程心跳、判活与原角色短重连；Java 0.1.0-SNAPSHOT 对齐验签即跟踪、10 秒握手期限及 robot 心跳。C++ 保持 10000/30000ms 通告、单检查点堆、迟到扫描延后与既有断线处理。未实现独立未验签连接名额/LRU，仍属于准入控制压测任务。
+- **正式生成**：`dev_tools.ps1 -Command proto-gen-build`、默认完整 `proto-gen-run -UseBinary`、客户端 `tools/gen_proto.ps1` 与完整导表通过。使用 `third_party/protobuf/install_vs2026_dbg/bin/protoc.exe` 35.1，匹配 C++ runtime 7.35.1；未手改生成物。全量同步同时保留其他会话的新协议，不能将整批生成差异都归为心跳改动。Unity 正式生成清单补齐观战/战报传递依赖。
+- **构建阻断修正**：C++ `SessionView` 的裸指针成员改为非空借用引用，`optional` 继续表示会话不存在；通过正式 AST 门禁。修复汇总脚本 `$Q`/`$q` 大小写不敏感碰撞及测试函数定义顺序；导表器保留另一正式生成器拥有的 `go/shared/generated/clientrpc/methods.go`，新增归属回归。为实际构建修正 login 既有重复 err 声明、match 重复 rowQuerier/countRows 与缺失 deadlineProbe 成员，未改其他会话业务判定。robot 冒烟诊断文案改为验签已开始跟踪，不再将缺心跳回包误说成未跟踪。
+- **C++ / Go 验证通过**：心跳 35/35（22 纯逻辑、13 真实回环 TCP），乱序重复 20 轮全部通过；整个 routing 测试 267/267。主机纽约时间 03:23 意外重启中断主仓全解；重启后另有会话使用主仓输出，本轮改用独立源码/依赖库快照正式重建 gate.lib 与 routing 工程，拷贝及编译前后 SHA256 一致，不将这项替代全节点构建。robot 心跳 8/8、20 次重复、pkg/config 回归、build/vet/gofmt 通过；本机无 CGO/GCC，未执行 race。Go proto build、login node 定向测试、match build 与 4 项定向测试通过。汇总脚本回归及导表归属 17 项回归通过。
+- **Unity 验证通过**：446 个运行时源文件编译通过；35/35 测试通过（心跳时序 10、真实 TCP 心跳 8、既有 TCP 生命周期 10、Unity EditMode 恢复 7）。真实 10000/30000ms 参数运行 120100ms，全程不调用主线程 Poll，收到 13 条心跳、首条 45ms、连接存活。恢复用本地 HTTP + TCP 跑 AssignGate、验签、token Login、原角色 EnterGame；没有替换当前生产源码。未做移动实机挂起、完整播放器出包。
+- **Java 分层结果**：gate 完整 362/362；robot 完整 695 项中 692 通过、3 项既有 bash 条件跳过；新增心跳 22 项全过，两模块分别 clean install 成功。同步后修正测试中 MatchService 12→14 方法的旧完整名单，以及 battle-settle 未触达观察项缺 equipment；保留原有严格断言。全依赖真库测试仍因 TiDB 8.5.2 缺少强 SQL 策略要求的 `tidb_dml_max_execution_time` 而失败，没有跳门禁或调低预算。全 reactor 编译另发现 game-scene 引用已退役的 BattleSettlementEvent，不能声称全仓构建通过；状态与精确命令见 Java `PARITY.md` 2026-11-06 心跳续验条目。
+- **独立运行环境**：Go 所需 10 项镜像均已在本轮正式构建；Linux C++ 三节点同批构建在主机重启后重新执行，输出 `cpp-images-resumed`。首次隔离栈两项迁移在主机高负载时发生 I/O 超时并返回 SQL UNKNOWN；只读确认生成列已落库但唯一索引缺失、match 基线完成而后续目录未建。原项目已停止，卷与完整日志保留，未重放不明 SQL；新项目/新卷/新授权已准备，等待编译结束后顺序执行正式迁移。端到端 heartbeat-idle-smoke、真实 10 秒握手探针和场景回归尚未计作通过。
+- **HTTP 网关边界**：当前 gateway 的 authority_jdbc 正式夹具固定 24000，被重启后恢复的其他项目占用；没有停止那个项目或绕过真库测试。缓存 gateway 镜像与当前源码有 25 项变化、7 项新增，且无 authority_jdbc 源码摘要，只可作为明确标注的旧支持服务，不能算新版网关构建通过。
+- **证据**：本仓 `build/verification/client-heartbeat-20261106/`（`cpp/results.json`、协议/导表/汇总日志、镜像 result.json、`host-reboot.json`、`stack/migration-readonly/diagnosis.md`、`gateway-fixture/fixture-blocker.json`）；客户端 `.codex-artifacts/heartbeat-20261106/`；Java `build/heartbeat-20261106/`。设计文档 `docs/design/gate-client-heartbeat.md` §9–11 与客户端 `Docs/ClientProtocolCompatibility.md` 已更新。本会话未执行提交或推送；主工作区与 HEAD 同时有其他会话的提交和改动，全部保留。
+
+## 2026-11-06 Codex：owner_epoch 定向复验与 Claude Code 审核交接（本线通过，主仓整解在途，未压测）
+
+- **授权与范围**：负责人授权修复验证阻塞，再交 Claude Code 按自己的思路独立审核；此前「现在先别压测」继续有效。本轮没有改 owner_epoch 生产逻辑，没有清理常驻数据栈，没有提交或推送。
+- **旧阻塞复核**：上一轮缺失的配置绑定、观战帧 const 不匹配、旧 HOT/ASSET 引用、scene_manager 字符串与旧全区查询调用，均已由其他会话修齐；本轮未覆盖这些改动。
+- **唯一新增代码修复**：`go/data_service/internal/playerbundle/bundle_test.go` 的旧文本预期未跟随未知/退役 kind 契约更新。首次定向为 14 PASS / 1 FAIL；修正该测试并加强未知 99、退役 1/2/5 的“不解码、诊断明确、原字节不变”断言后，原 15 项全部通过。未修改生产逻辑。gofmt 与该文件 diff --check 均通过。
+- **Go 本轮运行**：scene_manager build ./...、vet ./... 均 exit 0；owner_epoch 定向 40/40（logic mint 18、svc mint 16、跨语言/恢复 Lua 2、原铸造 Lua 4），shared/playerredis 全包 20/20；data_service store/playerbundle build exit 0、修后定向 15/15。最终共 75 个顶层 PASS、0 FAIL、0 SKIP；不称当前 scene_manager/data_service 全量通过。
+- **C++ 本轮运行及证据边界**：复用 APS 已构建的隔离快照，固定复制 EXE/DLL 并记录 SHA-256；与主仓比对 17 份文件和 5 个目标片段，完整归属判定、回滚恢复、Lua 与目标用例一致，全快照仍有任务外差异。本线重跑 `TravelOwnership.*` 8 项、`TravelOwnershipEcs.*` 1 项、`PlayerStoreDirectEcs.ClaimFillsTheMetadataBackIntoTheLoad` 1 项，10/10 PASS、0 SKIP，含墙钟地板回滚用例。该快照的 cross_zone 全集另有组队跟随失败，本线不宣称全量通过，也不以快照替代主仓整解。
+- **真 Redis**：隔离 Redis 7.2.16、8.10.2 各跑 `CurrencyTest.*AgainstRealRedis`，均 3/3 PASS、0 FAIL、0 SKIP、exit 0。唯一任务标签、随机 loopback 端口、无共享卷；两实例清理均 exit 0，标签下无残留。未进行真实 Cluster 切主/迁槽演练、R-b 或连接池定容。
+- **整解状态**：另一会话 PID 45412 正在主仓串行构建 game.sln，日志 `C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/r4/13-cpp-msbuild.log`；本轮收尾观察尚在 gate 编译，未取得最终退出回执。未抢占共享输出启动第二条整解，不能宣称当前主仓整解通过。
+- **版本与原始证据**：`build/owner-epoch-review-20261106/` 下保存逐条命令/UTC/cwd/exit 回执、红绿日志、gtest XML、二进制来源、快照比较与前后源码哈希。记录 HEAD 为 `bc24d18027d3478ebbc5c9381a0a5709ff7c58e7`；最后复核本线核心文件和快照比对的主仓输入无新增变化。Go 绿色复验期间唯一有意改动为上述测试修复。
+- **Claude Code 交接**：[独立审核入口](handoff/owner-epoch-claude-review-20261106.md) 已准备，明确由 Claude 自行选择审核方法和重点、不预设结论。实际桌面显示周额度 100%，11 月 12 日 15:00 恢复；当前还存在其他任务草稿，未覆盖。后续窗口读取超时，恢复调用未派发，未发送本线审核消息，未声称 Claude 已接手或审核完成。审核仍待额度/入口恢复。
+- **Java**：SQL 事务内递增 owner_epoch，不属于 Redis 铸造链；本轮不适用，不新增待办。
+
+
+## 2026-11-06 Codex：修正 scene_manager 五项旧夹具，Go 与真实 Redis 复验通过，C++ 转入隔离构建
+
+- **授权与边界**：接续上一条五项失败，用户明确授权“你可以修复”；仅修改测试夹具及断言所属区/活死节点口径，没有修改其他会话的业务代码。本聊天未执行 commit、push 或回退；期间其他会话将前三项测试修正收入 `bc24d1802`，不能将共享工作区描述为“所有改动仍未提交”。
+- **四个测试文件、五项失败**：`leavescene_cas_test.go` 的公共夹具补 `sceneZoneKey`，使 location 已删后的成员清理仍能识别本区，修复两项重试/成员数失败；`scene_membership_test.go` 将跨区清理的执行者明确设为旧成员集合所属区 77，保留原成员数断言；`node_detach_deferred_test.go` 按单 zone 契约把外区注册视为注销，并放入外区哨兵节点，断言整个外区负载集不变；`read_unknown_fail_closed_test.go` 分开共用的映射清理断言与活节点计数断言，死节点排空保持原场景计数、清除反向索引及残留成员，计数最终由死节点收尾整键删除。没有把业务行为改成迁就测试。
+- **红/绿与全量**：先定向复现原 5 项 FAIL，再分别取得四项定向 PASS 和四项排空/死节点围栏 PASS。`go/scene_manager` 下 `GOTOOLCHAIN=local`、`GOPROXY=off`，`go build ./...`、`go vet ./...`、`go test -count=1 -json ./internal/logic/...` 均退出 0；logic **756 个顶层 PASS、0 FAIL、0 SKIP**，91.695 秒，03:40:12 纽约时间完成；scenemanager 子包无测试文件，不计入用例跳过。四个修正文件 SHA-256 与运行时记录一致，gofmt 与限定范围 diff 检查无输出，独立静态复核未发现断言弱化。
+- **并行测试更新**：全量完成后，另一会话于 03:41 修改 `leave_release_test.go` 的竞态注入位置。本聊天保留原改动，仅对 `TestLeaveScene_MarkerWithdrawnBeforeDeleteKeepsLocation` 与 `TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted` 重新定向运行，两项均 PASS。全量结果对应当次执行时的工作区，不能扩大为所有后续并行改动均已复验。
+- **证据保全与补验**：前轮 shared/trade/no-unity/third/real-redis 原始日志已不在原 TEMP 位置，按精确文件名搜索 TEMP 与仓库 build 亦未找到；旧条目的运行摘要仍在，不能再称旧原始日志仍保留。本轮现存日志已复制到 `build/verification/consistency-20261106-afca/evidence/codex-consistency-validation-20261106/`。为补齐证据，重新执行 shared 的 build、assetop vet/test（144 PASS、9 个真实 MySQL 门控 SKIP），以及 trade 的 build、全服务 vet、assetopfix/data/reconcile/svc 测试（111 PASS），命令均退出 0；新结果在同级 `recheck-*-results.json`、`recheck-*-test.jsonl`。no-unity 正式生成沿用前轮成功摘要，本轮没有重复生成或手改产物。
+- **真实 Redis 本轮重验**：现有本地镜像实际 Redis 7.2.16、8.10.2 各 **8/8 PASS，共 16/16**；登记先到、回滚先到、缺失/旧代/同代 H/同代 R/更高代/坏原件全部通过。生产 Go/C++ Lua 的三项逐字关系通过，四份源文件前后 SHA-256 不变，脚本哈希与前轮摘要一致。仅使用自建的无网络、无端口、无挂载卷、关闭持久化的临时容器，完成后按完整 ID 删除并确认无残留。证据 `build/verification/consistency-20261106-afca/evidence/real-redis-repeat/{result.json,commands.jsonl,validate_real_redis.py}`，明确标为本轮重验；只证明 Lua 层，不替代 Kafka 故障注入、Redis Cluster 或服务端端到端验证。
+- **C++ 当前状态（尚非通过）**：主仓整解在 `no_raw_pointer_project.ps1:66` 的 Test-Path/Remove-Item 之间发现缓存戳消失，继而 MSB3073；不是裸指针违规，也不是缺目录。同时发现另一会话主仓整解在本轮启动后加入，疑似共享缓存删除竞态，尚无文件级追踪确证。停止了仅本轮构建树，未干预其他进程、未改门禁。随后把当前输入复制到已忽略的 `run/consistency-20261106-afca/source`，9,785 文件、215,305,560 字节，逐文件 hash 校验且关键 C++ 输入漂移 0；52 个工程的 Debug 输出均实际求值确认落在隔离目录，未复用业务库或旧测试 EXE。正在独立执行 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`，成功后再串行重编并运行测试；最终结果另追加。证据在 `build/verification/consistency-20261106-afca/cpp-isolated/`。
+- **仍未验证**：真实 MySQL 条件写竞态、本地跨节点换图、流水提交时序、etcd 断连和 Kafka 投递故障演练；本机无 promtool，告警规则未运行该检查。Java `0.1.0-SNAPSHOT` 状态仍按原交接只登记待办，未改 Java、未验证 Java。

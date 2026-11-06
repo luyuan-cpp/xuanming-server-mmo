@@ -234,8 +234,8 @@ const (
 	// ReserveLocalBehind:两份本地记录都落后登记处。正常写序(本地两份先、登记处最后)下不会出现,
 	// 只能是本地两套 etcd 被旧快照覆盖过。发号不受影响,下一块从登记处水位之上开始。
 	ReserveLocalBehind = "records_behind_registry"
-	// ReserveRegistryBehind:登记处落后本地记录。预留在写完本地、写登记处之前中断,或者两个副本同时预留,
-	// 都会差一块;差得多说明登记处被回档过。发号不受影响。
+	// ReserveRegistryBehind:复核登记处版本未变后,确认它落后本地记录。预留中断和登记处回档都可能造成差距;
+	// 多次预留未完成也能累积超过一块,不能仅凭差距认定回档。发号不受影响。
 	ReserveRegistryBehind = "registry_behind"
 )
 
@@ -440,13 +440,19 @@ func (i *Issuer) startReservationLocked() *reservation {
 	return res
 }
 
-// view 是一次读到的三份记录。每次预留、每次运维操作都重读,不缓存:恢复之后旧进程下一次预留看到的就是新状态。
+// view 是依次读到的三份记录,不是跨集群原子快照。每次预留、每次运维操作都重读,不缓存。
 type view struct {
 	p, s Record
 	g    ClaimRecord
 }
 
 func (i *Issuer) read(ctx context.Context) (view, error) {
+	// 预留最后写登记处,这里先读登记处再读本地:无回档时,后读的两份本地记录不会低于已读到的登记处水位。
+	// 若反过来读,并发副本可能在本地读完后提交新块,旧本地值和新登记处值就会被误判为双本地回档。
+	g, err := i.opt.Registry.Read(ctx, i.opt.Region)
+	if err != nil {
+		return view{}, fmt.Errorf("read id registry: %w", err)
+	}
 	p, err := i.opt.Primary.Read(ctx)
 	if err != nil {
 		return view{}, fmt.Errorf("read primary record: %w", err)
@@ -454,10 +460,6 @@ func (i *Issuer) read(ctx context.Context) (view, error) {
 	s, err := i.opt.Secondary.Read(ctx)
 	if err != nil {
 		return view{}, fmt.Errorf("read secondary record: %w", err)
-	}
-	g, err := i.opt.Registry.Read(ctx, i.opt.Region)
-	if err != nil {
-		return view{}, fmt.Errorf("read id registry: %w", err)
 	}
 	return view{p: p, s: s, g: g}, nil
 }
@@ -478,6 +480,19 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 		if err != nil {
 			i.observe(ReserveRefused)
 			return block{}, err
+		}
+		if v.g.Exists && max(v.p.Value, v.s.Value) > v.g.HighWater {
+			// 本地后读,可能已经看到了其他副本刚提交的新块。复核登记处仍是同一版本后才能诊断其落后,
+			// 否则整轮重读,不能把正常并发说成回档。对齐路径不增加读取;真实差异仍在任何写入前上报。
+			latest, err := i.opt.Registry.Read(ctx, i.opt.Region)
+			if err != nil {
+				i.observe(ReserveStoreError)
+				return block{}, fmt.Errorf("recheck id registry: %w", err)
+			}
+			if latest != v.g {
+				i.observe(ReserveConflict)
+				continue
+			}
 		}
 		start := i.nextStart(v)
 		if start+i.opt.BlockSize >= i.limit {
@@ -654,7 +669,8 @@ func (i *Issuer) nextStart(v view) uint64 {
 			i.observe(ReserveRegistryBehind)
 			if local-v.g.HighWater > i.opt.BlockSize {
 				logx.Errorf("[id-issuer] the id registry (%d) is more than one block behind the local records (%d): "+
-					"the registry was restored from older data; continuing above the local records and raising it", v.g.HighWater, local)
+					"several reservations may have stopped before their registry writes, or registry data may have been restored; "+
+					"continuing above the local records and raising it", v.g.HighWater, local)
 			} else {
 				logx.Infof("[id-issuer] the id registry (%d) is behind the local records (%d) by at most one block: "+
 					"an earlier reservation stopped before its registry write, or another replica is reserving", v.g.HighWater, local)

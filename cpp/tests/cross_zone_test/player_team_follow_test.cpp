@@ -674,14 +674,16 @@ TEST_F(TeamFollowDriveTest, OfflineFollowerKeepsWalkingBehindTheLeader)
 
 TEST_F(TeamFollowDriveTest, FollowerInBattleWaitsAndCatchesUpAfterwards)
 {
+    // 停在 WalkLeader 的整步上，避免最后一步落在轨迹采样阈值。
+    constexpr double kLeaderStopX = 4.5;
     tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
-    WalkLeader(5.0);
+    WalkLeader(kLeaderStopX);
     EXPECT_DOUBLE_EQ(X(follower_), -1.0) << "战斗中原地不动";
     EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "名次照留,不摘驱动";
 
     tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
     Stand(30);
-    EXPECT_NEAR(X(follower_), 5.0 - kTeamFollowSpacing, 1e-6) << "战斗结束后沿路赶回自己的槽位";
+    EXPECT_NEAR(X(follower_), kLeaderStopX - kTeamFollowSpacing, 1e-6) << "战斗结束后沿路赶回自己的槽位";
 }
 
 TEST_F(TeamFollowDriveTest, LeavingFollowStopsDrivingAtOnce)

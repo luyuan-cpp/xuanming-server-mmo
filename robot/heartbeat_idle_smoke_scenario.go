@@ -149,7 +149,7 @@ func RunHeartbeatIdleSmoke(cfg *config.Config) {
 			got.Milliseconds(), heartbeatIdleWantTimeout.Milliseconds())
 	}
 	if !waitUntil(heartbeatIdleReplyTimeout, func() bool { return gc.HeartbeatReplies() >= 1 }) {
-		fail("H1-reply", "no ClientHeartbeatResponse within %s: the gate is not answering heartbeats, so it is not tracking this connection either",
+		fail("H1-reply", "no ClientHeartbeatResponse within %s: verification started idle tracking, but heartbeat responses are missing",
 			heartbeatIdleReplyTimeout)
 	}
 	playerID := gc.PlayerId

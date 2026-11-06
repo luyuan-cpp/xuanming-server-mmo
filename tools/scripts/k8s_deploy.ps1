@@ -2847,8 +2847,8 @@ function Get-RedisConnectionLedgerInputs {
 		# bucket4j 专用连接再 1 条。staging / prod 缺省开限流(-GatewayRateLimit auto),dev 关时实际 1 条;按 2 记,偏保守。
 		[ordered]@{ Name = 'gateway'; Scope = 'zone'; Manifest = 'deploy/k8s/manifests/java-svc/gateway.yaml'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 0; Fixed = 2 }
 		# —— 全局池(infra namespace 一份)——
-		# match:go/match/internal/svc/servicecontext.go NewRedisHandles 的 sharedRds(go-zero,缺省池);MatchRedis 是 redis-match-cluster,不计。
-		[ordered]@{ Name = 'match'; Scope = 'global'; Manifest = "$goSvc/match.yaml"; PlayerMirror = 'match'; DefaultPools = 1; GoMaxProcs = $g; PubSub = 0; Fixed = 0 }
+		# match:NewRedisHandles 只创建 MatchRedis,K8s 指向 redis-match-cluster,不计这台;这里只记尚未拆走的 PlayerRedis。
+		[ordered]@{ Name = 'match'; Scope = 'global'; Manifest = "$goSvc/match.yaml"; PlayerMirror = 'match'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 0; Fixed = 0 }
 		# friend:go/friend/internal/svc/servicecontext.go NewRedisHandles(go-zero,缺省池);K8s 不配 FriendRedis,私有 key 回落共享库、两者是同一个句柄。
 		[ordered]@{ Name = 'friend'; Scope = 'global'; Manifest = "$goSvc/friend.yaml"; PlayerMirror = 'friend'; DefaultPools = 1; GoMaxProcs = $g; PubSub = 0; Fixed = 0 }
 		# trade:go/trade/internal/svc/assetchannel.go newAssetChannel 的 redis.NewClient(SharedRedis.PoolSize),加 shared/assetopwake 订阅
@@ -2882,7 +2882,7 @@ function Get-RedisConnectionLedgerInputs {
 		}
 		$client['ConfiguredPoolConns'] = $configuredPoolConns
 	}
-	# 建了集群之后只剩玩家域句柄的服务(mail)不再连这台 Redis,不留 0 条的行:Get-RedisConnectionLedger 会拒绝。
+	# 建了集群之后只剩玩家域句柄的服务(mail / match)不再连这台 Redis,不留 0 条的行:Get-RedisConnectionLedger 会拒绝。
 	if ($PlayerDomainSplit) {
 		$clients = @($clients | Where-Object { ([int]$_['ConfiguredPoolConns'] + [int]$_['DefaultPools'] + [int]$_['PubSub'] + [int]$_['Fixed']) -gt 0 })
 	}
@@ -6051,6 +6051,11 @@ function Assert-LogicalDbPreflight {
 		throw "-SqlSchemaOnly only works with zone-up and all-up: infra-up already stops at the schema Jobs until a zone's data-service is ready. Nothing was written."
 	}
 	$deploysDataService = Test-ZoneDbDeployed
+	# infra-up 即使不部署 data-service,也可能托管登记处;显式登记处参数必须先于提前返回和任何写操作校验。
+	$registry = @()
+	if ($deploysDataService -or $HostIdRegistry -or -not [string]::IsNullOrWhiteSpace($IdRegistryEtcd)) {
+		$registry = @(Resolve-IdRegistryEtcd)
+	}
 	if ($SqlSchemaOnly -and -not $deploysDataService) {
 		throw "-SqlSchemaOnly runs the schema Jobs of the zone Go services, so it needs -GoSvcRegistry and no -SkipGoSvc. Nothing was written."
 	}
@@ -6077,8 +6082,6 @@ function Assert-LogicalDbPreflight {
 	Write-Host ("Logical databases: directory_shards={0} directory={1} ledger={2} id_region={3} sql_clusters={4} default_cluster={5}" -f $k,
 		$(if ($k -eq 1) { $GlobalDbName } else { "${GlobalDbName}_00..$('{0:d2}' -f ($k - 1))" }), (Get-DirectoryLedgerDbName -Base $GlobalDbName), $regionText, (@($plan.SqlClusters.Keys) -join ','), $plan.DefaultCluster)
 	if ($deploysDataService) {
-		# 登记处地址在任何写操作之前解析:staging、prod 缺了在这里拒绝,而不是渲染 ConfigMap 时 gate、scene 已经 apply 了。
-		$registry = @(Resolve-IdRegistryEtcd)
 		Write-Host ("Id issuer: region={0} registry={1}" -f $regionText, $(if ($registry.Count -eq 0) { 'local-etcd(dev)' } else { $registry -join ',' }))
 	}
 }
@@ -14678,9 +14681,6 @@ function Apply-Infra {
 	# etcd-id-registry.yaml:全局号源登记处(docs/ops/id-issuer-runbook.md §1)。全世界只有一个集群部署它(-HostIdRegistry),
 	# 其他集群的 data-service 用 -IdRegistryEtcd 指过来。dev 不起,登记处放本地 etcd 的不同键。
 	if ($HostIdRegistry) {
-		if ($ReleaseProfile -eq 'dev') {
-			throw "-HostIdRegistry is for staging and prod only: dev keeps the id registry on its own etcd. Nothing was written."
-		}
 		$infraManifests += "etcd-id-registry.yaml"
 	}
 	if ($script:CppLogSidecarEnabled -and [string]::IsNullOrWhiteSpace($LokiPushUrl)) {

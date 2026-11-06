@@ -3970,20 +3970,25 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
     Assert-Match -Text $effective -Pattern '(?m)^metadata:[ ]*\n[ ]+name:[ ]*mysql-connection-alerts[ ]*$' -Because 'metadata.name 必须是 mysql-connection-alerts'
 
     $alerts = [regex]::Matches($effective, '(?m)^[ ]*- alert:[ ]*(?<name>\S+)')
-    Assert-Equal -Expected 5 -Actual $alerts.Count -Because ("应当恰好 5 条规则(MySQL 服务端侧 2 条 + 客户端连接池侧 3 条),实际:{0}" -f (@($alerts | ForEach-Object { $_.Groups['name'].Value }) -join ', '))
+    $expectedAlerts = @('MysqlConnectionsRefused', 'MysqlConnectionsNearMax', 'SqlPoolSlowAcquire', 'SqlPoolSaturated',
+        'DbExtraStorePoolsBeyondPlan', 'GatewayHikariAcquireTimeout', 'GatewayHikariSaturated')
+    $actualAlerts = @($alerts | ForEach-Object { $_.Groups['name'].Value })
+    Assert-Equal -Expected ($expectedAlerts | Sort-Object -CaseSensitive | Join-String -Separator ',') `
+        -Actual ($actualAlerts | Sort-Object -CaseSensitive | Join-String -Separator ',') `
+        -Because '规则名单必须完整且不重复:MySQL 服务端 2 条、Go 连接池 3 条、gateway Hikari 连接池 2 条'
     for ($i = 0; $i -lt $alerts.Count; $i++) {
         $bodyEnd = if ($i + 1 -lt $alerts.Count) { $alerts[$i + 1].Index } else { $effective.Length }
         $body = $effective.Substring($alerts[$i].Index, $bodyEnd - $alerts[$i].Index)
         Assert-Match -Text $body -Pattern '(?m)^[ ]+severity:[ ]*\S+' -Because "规则 $($alerts[$i].Groups['name'].Value) 必须带 labels.severity(严重级约定见文件头)"
     }
 
-    # DbExtraStorePoolsBeyondPlan 的两个阈值就是规划档的额外库数:规划档改了而阈值没跟(或反过来),这条告警要么恒响、要么该响不响。
+    # 旧 zone 存档库已退役,非区库按生产 TiDB 规划档核对;不能拿 MySQL 小 K 档误报合法的生产存档库。
     # 提取依赖告警文件「每个阈值单独占一行,形如 pool="extra_zone"}) > 3」的写法(文件里该规则上方的注释写明了这条约定)。
     # 把表达式改写成别的形状会让本条变红 —— 有意为之:要么保持这个形状,要么同步改这里的提取方式。
     $plan = Get-MysqlConnectionPlan
     foreach ($threshold in @(
         @{ Pool = 'extra_zone'; PlanKey = 'ExtraZoneStores' }
-        @{ Pool = 'extra_non_zone'; PlanKey = 'NonZoneStores' }
+        @{ Pool = 'extra_non_zone'; PlanKey = 'TidbNonZoneStores' }
     )) {
         $thresholdPattern = 'pool="' + [regex]::Escape($threshold.Pool) + '"\}\) > (?<n>\d+)'
         $found = [regex]::Matches($effective, $thresholdPattern)
@@ -4102,7 +4107,7 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
         @{ Name = 'trade'; Source = 'go/trade/etc/trade.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'guild'; Source = 'go/guild/etc/guild.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerLocatorRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'friend'; Source = 'go/friend/etc/friend.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
-        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
+        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 0 }
         @{ Name = 'player-inbox'; Source = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = @('CoreRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'mail'; Source = 'go/mail/etc/mail.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 0 }
     )

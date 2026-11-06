@@ -11,7 +11,7 @@
 #       → H6 旧连接没收到踢线推送 34(它在重登之前已被 gate 关掉,login 走的是短重连,不是顶号)
 #
 # 前置(缺一条就会失败,原因写进 HEARTBEAT_IDLE_SMOKE_FAIL 的 reason):
-#   1. gate 是带客户端心跳的版本(C++ 仓 2026-11-06 起)。Java 版 gate 尚未实现,不通告心跳,H1-advert 失败。
+#   1. gate 是带客户端心跳的版本(2026-11-06 起 C++ 与 Java 均已实现)。旧版不通告心跳,H1-advert 失败。
 #   2. gate 签发票据:本地 bin/etc/base_deploy_config.yaml 与 login 都配了 GateTokenSecret。空密钥 dev 直通时
 #      robot 不验签,拿不到心跳参数,H1 失败。
 #   3. scene 带断线保留(player-connection-lost-hold.md)。没有的话 H5 的 actor 号会变。

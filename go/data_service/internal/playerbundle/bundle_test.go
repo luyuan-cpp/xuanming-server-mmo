@@ -1,6 +1,7 @@
 package playerbundle
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -44,10 +45,30 @@ func TestDecodeRowKeepsBundleUsableWhenPayloadIsBad(t *testing.T) {
 	if row.DecodeNote == "" || row.Decoded != nil {
 		t.Fatalf("bad payload must only leave a note: %+v", row)
 	}
-	unknown := Row{Kind: 99}
-	unknown.Decode()
-	if !strings.Contains(unknown.DecodeNote, "unknown kind") {
-		t.Fatalf("unknown kind note: %+v", unknown)
+	if !bytes.Equal(row.Payload, []byte{0xff}) {
+		t.Fatal("无法解码的原始字节不得改变")
+	}
+	// 退役编号与未知编号都不能套用当前分行布局，导出包须保留原件供排查。
+	payload := assetPayload(t)
+	for _, tc := range []struct {
+		name string
+		kind int32
+	}{
+		{"未知编号", 99},
+		{"退役热数据行", 1},
+		{"退役资产行", 2},
+		{"退役旧表行", 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			unknown := Row{Kind: tc.kind, Payload: bytes.Clone(payload)}
+			unknown.Decode()
+			if !strings.HasPrefix(unknown.DecodeNote, "unknown or retired kind:") || unknown.Decoded != nil {
+				t.Fatalf("未知或退役编号只能留下诊断，不得按当前布局解码: %+v", unknown)
+			}
+			if !bytes.Equal(unknown.Payload, payload) {
+				t.Fatal("未知或退役编号的原始字节不得改变")
+			}
+		})
 	}
 }
 

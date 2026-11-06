@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "actor/actor_net_id.h"
@@ -61,7 +62,7 @@ using Clock = std::chrono::steady_clock;
 
 struct Tier
 {
-    const char *name;
+    std::string_view name;
     int skills;
     int pets;
     int equipment;  // 带三条词条、一颗宝石的装备
@@ -118,10 +119,11 @@ std::vector<double> Measure(int iterations, Work &&work)
     return micros;
 }
 
-void Report(const char *tier, const char *op, const std::vector<double> &micros)
+void Report(std::string_view tier, const char *op, const std::vector<double> &micros)
 {
-    std::printf("[SaveCost] tier=%s op=%s iterations=%zu p50_us=%.1f p99_us=%.1f\n", tier, op, micros.size(),
-                Percentile(micros, 0.50), Percentile(micros, 0.99));
+    std::printf("[SaveCost] tier=%.*s op=%s iterations=%zu p50_us=%.1f p99_us=%.1f\n",
+                static_cast<int>(tier.size()), tier.data(), op, micros.size(), Percentile(micros, 0.50),
+                Percentile(micros, 0.99));
 }
 
 // 和 PlayerStoreClient::DirtyKinds 同一个比法(不含 uncertain:那是客户端的在途状态,和数据无关)。
@@ -360,7 +362,8 @@ TEST_F(PlayerSaveCostTest, ReportsStageCostsForThreeTiers)
                 sizes += std::to_string(rows[kind].size());
             }
         }
-        std::printf("[SaveCost] tier=%s row_bytes(kind=bytes):%s\n", tier.name, sizes.c_str());
+        std::printf("[SaveCost] tier=%.*s row_bytes(kind=bytes):%s\n",
+                    static_cast<int>(tier.name.size()), tier.name.data(), sizes.c_str());
     }
 }
 

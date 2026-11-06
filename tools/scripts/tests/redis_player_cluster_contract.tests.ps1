@@ -354,13 +354,22 @@ Test-Case '玩家域总账算式:每节点 = Z × Σ(zone 服务) + Σ(全局服
     Assert-Equal -Expected 32000 -Actual $ledger.WarnAt -Because '80% 水位,与核心总账同一纪律'
 }
 
-Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群就搬走,只剩玩家域句柄的 mail 不留行;chat 不连 Redis,两份都没有它' {
+Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群就搬走,只剩玩家域句柄的 mail / match 不留行;chat 不连 Redis,两份都没有它' {
     $unsplit = Get-RedisConnectionLedgerInputs
     $split = Get-RedisConnectionLedgerInputs -PlayerDomainSplit $true
     # 行是字典:脚本块返回时单行会被展开,字典的 .Count 和 [0] 都不是想要的,调用处要包 @()。
     $rowOf = { param($Inputs, $Name) $Inputs.Clients | Where-Object { $_.Name -eq $Name } }
-    Assert-Equal -Expected 1 -Actual @(& $rowOf $unsplit 'mail').Count -Because '没建集群时 mail 的玩家域句柄连这台 Redis'
-    Assert-Equal -Expected 0 -Actual @(& $rowOf $split 'mail').Count -Because '建了集群 mail 不再连这台 Redis,留 0 条的行总账函数会拒绝'
+    # K8s 的 match 私有池始终指向 redis-match-cluster;身份回退删除后,它与 mail 在核心上都只剩玩家域池。
+    foreach ($service in @('mail', 'match')) {
+        $unsplitRows = @(& $rowOf $unsplit $service)
+        Assert-Equal -Expected 1 -Actual $unsplitRows.Count -Because "没建集群时 $service 的玩家域句柄连这台 Redis"
+        $source = if ($service -eq 'match') { 'go/match/etc/match_service.yaml' } else { 'go/mail/etc/mail.yaml' }
+        $playerPool = [int](Get-EtcValue -RelativePath $source -KeyPath 'PlayerRedis.PoolSizePerNode')
+        Assert-Equal -Expected $playerPool -Actual $unsplitRows[0].ConfiguredPoolConns -Because "$service 在核心上的显式连接只有玩家域池"
+        Assert-Equal -Expected '0/0/0/0' -Actual ('{0}/{1}/{2}/{3}' -f $unsplitRows[0].DefaultPools, $unsplitRows[0].GoMaxProcs, $unsplitRows[0].PubSub, $unsplitRows[0].Fixed) `
+            -Because "$service 不再有独立的控制域池或订阅,不能沿用删除登录身份回退前的连接数"
+        Assert-Equal -Expected 0 -Actual @(& $rowOf $split $service).Count -Because "建了集群 $service 不再连这台 Redis,留 0 条的行总账函数会拒绝"
+    }
     foreach ($inputs in @($unsplit, $split)) {
         Assert-Equal -Expected 0 -Actual @(& $rowOf $inputs 'chat').Count -Because 'chat 只认 gate 签名的会话身份原件、聊天权威在 SQL,不连 Redis'
     }

@@ -1,7 +1,7 @@
 # gate 与客户端的连接存活:握手期限、应用层心跳与空闲超时
 
 > 2026-11-06,Claude。负责人 2026-11-05 要求补齐断线重连的应用层,本文是其中「gate 及时发现客户端掉线」这一块。
-> C++ gate 与 robot 已落码,**未编译、未测试**,验证步骤见 §11。客户端仓与 Java 版待做,见 §9、§10。
+> 2026-11-06 Codex 续接：C++/Go、Unity 与 Java 心跳实现均已落码，协议已通过正式生成器同步。分层验证状态见 §11；真实服务器冒烟以该节的实际结果为准。
 > 同日负责人确认项目未上线、玩家数据可以清空、不考虑旧客户端,所以按标准做法:验签成功即开始判死,未验签连接有握手期限(§6)。
 
 ## 0. 一句话
@@ -162,7 +162,7 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 |---|---|---|
 | 新 | 新 | 验签后发心跳;掉线 30 秒内关;不验签的连接 10 秒内关 |
 | 新 | 旧(不发心跳) | 验签后 30 秒一帧不发就被关:挂机不动的玩家会掉线。**旧客户端不能连新 gate,客户端要与服务器同批升级** |
-| 旧 / Java 版未实现 | 新 | 回包里没有参数(0),客户端不发心跳。旧 gate 不认识心跳类型,发了会被强关,所以这条是硬约定 |
+| 旧(不通告参数) | 新 | 回包里没有参数(0),客户端不发心跳。旧 gate 不认识心跳类型,发了会被强关,所以这条是硬约定 |
 
 - robot 已经带上心跳(本仓 `robot/pkg/heartbeat.go`),压测与冒烟不受影响。
 - 客户端要在验签成功后立即发第一条心跳,不要等满一个间隔(§9)。
@@ -212,7 +212,7 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
   4. 静默满 34 秒后同账号重登,要落回原场景、自己的 actor 号不变(断线保留接回同一个实体);
   5. 旧连接上没收到顶号踢线 34,证明它在重登之前已被 gate 关掉,login 走的是短重连。
 
-## 9. 客户端仓要做的(`../mmorpg-client`,交 Codex;不做的话挂机 30 秒就掉线)
+## 9. Unity 客户端契约与实现(`../mmorpg-client`)
 
 1. 同步 `message.proto`,重新生成协议代码。
 2. 建连后立即发验签请求(现在就是这样);gate 10 秒内收不到会关连接。
@@ -228,19 +228,31 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 robot(本仓 `robot/pkg/heartbeat.go`)按第 1–5、7、8 条实现了发送一侧,可作参考:心跳只发往验签成功的那条连接,跟随 gate 重定向时新连接验签之前不发;`RecvOne` / `RecvLoop` 认领心跳回包、不交给业务分发。第 6 条(判 gate 已死)robot 没做,见 §12。
 
-## 10. Java 版(待做,已在 Java 仓 `PARITY.md` 登记)
+Unity 已完成上述契约：`GateTcpClient` 的网络读线程认领成功验签与心跳回包，独立线程用 `GateHeartbeat` 的单调时钟发包，任何入站字节刷新判活；不依赖主线程 `Poll`。`GameClient.Reconnect.cs` 在意外断线后用既有 access/refresh token 重新 AssignGate，在总计 20 秒预算内进入原角色。显式登出、顶号、切服不自动抢回；两个宿主转发前后台事件。详细行为与复跑命令见客户端 `Docs/ClientProtocolCompatibility.md` 的「Gate 心跳与短重连」。
+
+## 10. Java 版(0.1.0-SNAPSHOT 已实现)
 
 两版共享的是客户端契约,行为要一致。Java 按 Netty 惯用方式实现,不照抄 C++:
 
-- ContractSync 同步 `message.proto`。
-- `ClientDispatcher` 的验签成功回包(现在是常量 `VERIFY_OK`)填同样的两个参数,取同值 10000 / 30000,并从这一刻起按读空闲 30 秒判死(例如往 pipeline 里补一个 `IdleStateHandler`)。判死只关连接,断线处理走既有路径。
+- ContractSync 已同步 `message.proto` 与当前权威消息映射。
+- `ClientDispatcher` 验签成功回包填同样的两个参数 10000 / 30000，从此开始按完整入站帧的 30 秒空闲判死。每条连接只保留一个 Netty 定时任务，事件循环迟到超过 2 秒则推迟到下一轮；不遍历会话表。判死只关连接，断线处理走既有路径。
 - 收 `ClientHeartbeatRequest`:验签前断开;每 10 秒窗口最多回 3 条,超出的不回、计入 `illegalPacketThreshold`;其余回显 seq。
-- 握手期限:Java 已有 `handshake-timeout`,现为 30 秒,对齐到 10 秒。
-- Java robot 同样在验签成功后按通告发心跳、跳过回包,判死冒烟可照本仓 `heartbeat_idle_smoke_scenario.go`。
+- 握手期限：`handshake-timeout` 默认值已由 30 秒对齐到 10 秒，收未验签字节不续期。
+- Java robot 已在验签成功后立即发心跳，按通告间隔继续发送、跳过回包；重定向和关闭同步管理心跳生命周期。
 
-## 11. 验证(交 Codex)
+## 11. 验证记录
 
 见 `docs/PROGRESS.md` 2026-11-06 三条:「gate 与客户端应用层心跳」(协议生成 → 串行编译 → 单测 → 冒烟)、「robot 客户端心跳与判死冒烟」(robot 编译、单测、`heartbeat-idle-smoke`)与「验签即判死与握手期限」(本轮改动与更正后的用例数、冒烟口径)。
+
+2026-11-06 续验已完成：正式 `proto-gen-build` / `proto-gen-run`、Unity 协议生成与完整导表；Go 协议构建；robot 8 项心跳测试及 20 次重复、pkg/config 回归、构建和 vet；汇总脚本回归与导表输出归属回归 17 项。生成使用本仓 protoc 35.1，与 C++ runtime 7.35.1 对齐。
+
+C++ 35 项心跳用例通过（22 项纯逻辑、13 项真实回环 TCP），随机排序重复 20 轮全部通过，整个 `routing_identity_test` 267 项回归通过。重启后主工作区已有其他会话构建，因此使用独立源码和库快照正式重建 `gate.lib` / `routing_identity_test`，全部 AST 门禁通过；快照源文件、拷贝前后库与编译前后库均留有哈希证据。这不替代全节点构建和端到端冒烟。
+
+Unity 全部 446 个运行时源文件编译通过，35 项测试通过（10 项心跳时序、8 项真实 TCP 心跳、10 项既有 TCP 生命周期、7 项 Unity EditMode 恢复）。真实 10000/30000 参数下持续 120100ms 不调用主线程 `Poll`，收到 13 条心跳，首条 45ms，连接保持存活。未执行移动设备实机挂起与完整播放器出包。
+
+Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项通过、3 项既有 bash 环境条件跳过；新增的 22 项心跳测试全部通过。两个模块分别完成正式 `clean install`。全依赖真库门禁仍失败：隔离 TiDB 8.5.2 不支持当前强 SQL 策略要求的 `@@SESSION.tidb_dml_max_execution_time`。全 reactor `-fae compile` 为 31 项成功、2 项失败：game-scene / game-battle 仍引用本次同步前已退役的 `BattleSettlementEvent`；未为编译恢复旧结算协议。没有删测试、跳过门禁或调低 SQL 安全要求。
+
+本仓证据：`build/verification/client-heartbeat-20261106/`；Unity：`../mmorpg-client/.codex-artifacts/heartbeat-20261106/`；Java：`../xuanming-server-mmo/build/heartbeat-20261106/`。主机在纽约时间 03:23 意外重启，未结束的 C++ 构建和 Java 全测保留原始日志，不计作通过；恢复后的验证单独记账。
 
 ## 12. 残余
 
@@ -251,7 +263,7 @@ robot(本仓 `robot/pkg/heartbeat.go`)按第 1–5、7、8 条实现了发送一
 
 ## 13. 改动清单
 
-- proto:`proto/common/base/message.proto`。只改源文件,生成交 Codex。
+- proto:`proto/common/base/message.proto`。生成物已通过正式生成器同步。
 - gate 新增:
   - `cpp/libs/services/gate/session/comp/client_liveness.h`;
   - `cpp/nodes/gate/handler/rpc/client_heartbeat.h`、`client_heartbeat.cpp`;

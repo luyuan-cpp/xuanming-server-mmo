@@ -362,6 +362,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 ### 交接说明(`handoff/`)
 
+- [owner-epoch-claude-review-20261106.md](handoff/owner-epoch-claude-review-20261106.md) — owner_epoch G3a/G3b 复验与 Claude Code 独立审核入口
 - [aoi-and-player-safeguards-20261104.md](handoff/aoi-and-player-safeguards-20261104.md) — Claude Code 交接：AOI 单向关注与两项玩家止损能力
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接：战报回放的客户端细节（列表、取回放、gzip 解码、复用观战播放、测试，2026-11-06）
 - [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
@@ -410,6 +411,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [placement-reverify-checklist-20261012.md](handoff/placement-reverify-checklist-20261012.md) — 玩家存储落点:当前 HEAD 复验清单(交 Codex)
 - [player-inbox-handoff-20261015.md](handoff/player-inbox-handoff-20261015.md) — 玩家持久收件箱：实现交接（2026-10-15）
 - [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（2026-10-19）
+- [redis-login-ledger-review-20261106.md](handoff/redis-login-ledger-review-20261106.md) — 交 Claude Code 独立审核：登录 Redis 清退后的连接总账修正与验证证据
 - [redis-horizontal-scaling-requirements-20261022.md](handoff/redis-horizontal-scaling-requirements-20261022.md) — 交接：Redis 物理水平扩展需求与当前存盘链问题（2026-10-22）
 - [redis-player-store-batch2-brief-20261023.md](handoff/redis-player-store-batch2-brief-20261023.md) — 交接：玩家态 Redis 集群化第 2 批（2a–2d）落码简报（2026-10-23）
 - [shared-redis-secret-README.md](handoff/shared-redis-secret-20261106/shared-redis-secret-README.md) — 共享 Redis 口令迁入 Secret 的补丁、比对脚本与必要备份（2026-11-06）
