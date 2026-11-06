@@ -253,7 +253,6 @@ func RunMerchantSmoke(cfg *config.Config) {
 			return
 		}
 		_ = leaveGame(bot.gc, stats)
-		sendDisconnectBestEffort(bot.gc)
 		gameobject.PlayerList.Delete(bot.gc.PlayerId)
 		bot.gc.Close()
 	}

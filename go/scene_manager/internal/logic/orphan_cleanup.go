@@ -27,19 +27,20 @@ import (
 //     table load failure, not an intentional wipe.
 //  2. Only delete channels whose confId is NOT in the current valid set.
 //     Misaligned channels (wrong node) are handled by the rebalancer.
-//  3. Point lookups only, never a keyspace SCAN (2026-10-16): candidate zones
-//     come from the zone registry scene_manager:zones ∪ the zones with live
-//     nodes, candidate (zone, confId) groups from the fields of
+//  3. Point lookups only, never a keyspace SCAN (2026-10-16): the only zone is
+//     this process's own (orchestrated_zones.go; 2026-11-05 the zone registry
+//     scene_manager:zones was removed, docs/design/control-plane-zone-scoping-20261105.md §4.3),
+//     candidate (zone, confId) groups come from the fields of
 //     world_channels:desired:zone:{z}. The old SCAN world_channels:zone:*
 //     walked the whole shared Redis on the LoadReporter goroutine — hours at
 //     launch scale.
 //
 // 发现覆盖范围(2026-10-16):生产代码里往频道集合 SADD 的唯一入口是 initWorldScenesForZone,它先经
-// DesiredWorldChannelCount 播种 world_channels:desired:zone:{z} 的字段、后 SADD,而播种前会登记 zone
-// (zone_registry.go)。所以「有频道集合」基本蕴含「有期望数字段、zone 已登记」。覆盖不到的组合:
+// DesiredWorldChannelCount 播种 world_channels:desired:zone:{z} 的字段、后 SADD。所以「有频道集合」基本蕴含
+// 「有期望数字段」。覆盖不到的组合:
 //   - 2026-10-23 之前 DesiredWorldChannelCount 的 HSETNX 出错兜底路径(直接返回种子值、不写字段)建出来的
 //     集合;该兜底已改为回 error、本轮不补建,新数据不再产生这种组合;
-//   - 升级前遗留、zone 又从未登记的数据(补登记见 docs/ops/scene-node-role-split.md §6.1)。
+//   - 升级前遗留的数据(项目未上线,首次上线前清空,不会遇到)。
 //
 // 这些只会残留成垃圾键,不影响路由。反过来,「集合已空、期望数字段还在」的残留以前 SCAN 找不到,现在能清掉。
 // 期望数字段是发现索引,所以 deleteOrphanChannel 把删它放到最后一步。
@@ -60,13 +61,10 @@ func CleanupOrphanWorldChannels(ctx context.Context, svcCtx *svc.ServiceContext)
 		confIdSet[id] = struct{}{}
 	}
 
-	registered, err := listRegisteredZones(svcCtx)
-	if err != nil {
-		logx.Errorf("[OrphanCleanup] read zone registry failed; checking zones with live nodes only: %v", err)
-	}
-
+	// 只查本进程编排的 zone(orchestrated_zones.go,docs/design/control-plane-zone-scoping-20261105.md §4.3):同组别的 zone
+	// 的期望数 Hash 在同一个控制域实例里,由那个 zone 的领导者清。
 	removed := 0
-	for _, zone := range unionZones(registered, GetActiveZones()) {
+	for _, zone := range orchestratedZones(svcCtx) {
 		desiredKey := worldDesiredChannelsKey(zone)
 		fields, err := svcCtx.Redis.Hkeys(desiredKey)
 		if err != nil {

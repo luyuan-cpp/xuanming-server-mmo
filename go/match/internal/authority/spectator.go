@@ -499,11 +499,15 @@ func (s *Store) beginSpectatorOnce(ctx context.Context, player uint64, request *
 		return nil, fmt.Errorf("%w: %w", ErrSpectatorBusy, ticketOccupiedErr(ticket))
 	}
 	var state uint32
+	var retryAt uint64
 	var endpoint, instance string
-	if err = tx.QueryRowContext(ctx, "SELECT state,target_endpoint,target_instance_id FROM match_formation WHERE battle_id=? FOR UPDATE", formation.BattleId).Scan(&state, &endpoint, &instance); err != nil {
+	if err = tx.QueryRowContext(ctx, "SELECT state,retry_at_ms,target_endpoint,target_instance_id FROM match_formation WHERE battle_id=? FOR UPDATE", formation.BattleId).Scan(&state, &retryAt, &endpoint, &instance); err != nil {
 		return nil, err
 	}
-	if state != 4 || endpoint != formation.TargetEndpoint || instance != formation.TargetInstanceId {
+	// 终局已落定也在提交点复核:COMPLETE 写的是同一行,行锁让先提交的那一方在这里可见。调用方的预检(logic 的
+	// globalFormationWatchable)只能挡住大多数,代替不了这里。落定之后房间已收尾或正在收尾,原件落下去 Add 必拿不到席位。
+	if state != 4 || FormationOutcomeDecided(&pb.MatchFormationRecord{State: state, RetryAtMs: retryAt}) ||
+		endpoint != formation.TargetEndpoint || instance != formation.TargetInstanceId {
 		return nil, ErrSpectatorFormationClosed
 	}
 	stamp, err := now(ctx, tx)

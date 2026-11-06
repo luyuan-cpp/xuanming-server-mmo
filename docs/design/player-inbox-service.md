@@ -283,13 +283,15 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
 
 **消费域**：`SCENE_GM_SANCTION`。由 owner scene 在接管完成后执行，严格按 seq 顺序处理，因为封锁和解封的先后不能颠倒。
 
-**三种类型**：
+**类型**（货币三种，2026-11-05 起加物品获取两种）：
 
 | 类型 | 执行 | 幂等性 |
 |---|---|---|
 | `GM_BLOCK_CURRENCY_GAIN` | `CurrencySystem::BlockCurrency` | 天然幂等（已封锁时直接返回成功，`currency_system.cpp:560-567`） |
 | `GM_UNBLOCK_CURRENCY_GAIN` | `UnblockCurrency` | 天然幂等 |
 | `GM_ATTACH_CURRENCY_DEBT` | `AttachDebt`，需要改成返回错误码（§11 第 3 批） | **不幂等**，必须靠账本去重 |
+| `GM_BLOCK_ITEM_GAIN` | `GainBlockService::BlockPlayerItemGain`（见下「单玩家物品获取封禁」） | 天然幂等（已封禁时直接成功） |
+| `GM_UNBLOCK_ITEM_GAIN` | `GainBlockService::UnblockPlayerItemGain` | 天然幂等 |
 
 **AttachDebt 算不算资产指令**：它不改余额，只是让以后的 `AddCurrency` 先抵扣欠款（`currency_system.h:74-75`）。本设计把它归为「账户处置状态」，纳入 v1。这条界线已由 D2 于 2026-10-15 拍板。
 
@@ -297,6 +299,28 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
 - 原因：`AttachDebt` 会合并同币种的旧欠款，并用后来那单覆盖到期时间、原因和操作人，一张小单就能让大额欠款提前失效；挂错之后 v1 也没有撤销路径。
 - 做法：类型、载荷与执行器都保留；`EnqueueTypes` 只放封锁 / 解封，列进挂欠款即拒启（§3.3）。
 - 合并语义、同域撤销类型（走 AdjustDebt 按金额减）、单笔上限和只读欠款查询，后续一起做；做完之后解禁。
+
+**单玩家物品获取封禁**（2026-11-05，[交接](../handoff/aoi-and-player-safeguards-20261104.md) §2；源码已改，未编译、未测试）：
+
+- **语义**：按 `player_id + item_config_id` 封禁、解禁、判断。只挡这名玩家今后对这个配置的**新增获得**；不扣已有库存，不影响其他玩家。全服封禁（`GainBlockService` 的全服集合）继续独立生效，两者互不覆盖：解除一边不会解开另一边。旧 `PlayerItemBlockList` 与 `blockList` 参数（2026-10-15 C004 删除）没有恢复，这里是新的形状。
+- **契约**：`GmSanctionPlayerRequest.oneof action` 加 `block_item_gain = 9` / `unblock_item_gain = 10`，载荷 `GmItemGainPayload{ item_config_id = 1 }`，对应 `PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN = 5` / `GM_UNBLOCK_ITEM_GAIN = 6`：同属 `SCENE_GM_SANCTION`、DURABLE、载荷上限 64B。鉴权（`x-admin-token`）、幂等键 `(producer_kind, request_id)` 与内容摘要判重、同事务审计（`action = SANCTION`）、按 seq 有序投递与 owner_epoch 围栏全部沿用货币封锁的路径，没有新的入口或表。
+- **入箱校验**：只要求 `item_config_id` 非 0（`registry.go` 的 `validateItemGainPayload`，空载荷即配置号 0，同样拒绝）。player_inbox 不加载配置表，所以不核对物品表：写错的配置号只会封住一个发不出来的号，GM 工具下单前按物品表核对（runbook §4.1）。
+- **scene 执行**：`GmSanctionInboxExecutor::BlockItemGain / UnblockItemGain` 调 `GainBlockService::BlockPlayerItemGain / UnblockPlayerItemGain`。解码失败或配置号为 0 → `REJECTED(kPlayerInboxPayloadInvalid)`；本节点物品表不认识的配置号照样记下、只打一行 WARN，不算版本错位——表里没有的配置本节点本来发不出来，封禁对认识它的版本 / 节点提前生效，不必停用本域；封禁表组件缺失（加载不变量被破坏）→ DEFER，不改状态。GM 域要求非战斗（§7.5），战斗中下的封禁出战斗后才执行。
+- **效果状态与同次落盘**：`PlayerItemGainBlockComp`（`proto/common/component/player_item_gain_block_comp.proto`，`repeated uint32 item_config_ids`，写入侧保持升序无重复、读取侧按值查找），挂在 `player_database.item_gain_block = 24`（PROFILE 行：它小、只在 GM 处置时变）。加载时无条件挂组件；存盘时与 `inbox_ledger` 在同一次 `PlayerDatabaseMessageFieldsMarshal` 里写出，缺组件整份拒存。一次存盘的所有脏行同事务（`player-save-direct-commit.md` §1.1），所以「封禁生效」与「账本记了这条」要么一起在盘上、要么一起没有（IB-3）；收件箱照常在落盘之后才 Ack。重登、换节点、服务器重启都从同一份存档加载，封禁继续生效。状态跟着玩家存档走，不引入进程级全局表或旁路缓存。
+- **唯一判定**：`GainBlockService::IsItemGainBlocked(player, configId)` = 全服封禁 ∨ 本人封禁。全部真实获得入口都调它，拒绝发生在扣款、扣材料、建候选和提交之前：
+
+  | 入口 | 接入方式 | 拒绝口径 |
+  |---|---|---|
+  | `BagService::AddItem`、两种 `BagService::AddItems`（按数量 / 按完整实例） | 容器规划之前逐项判，任一项命中整批拒绝 | `kAssetBlocked`；一件不发、不铸号、不记流水 |
+  | `BagService::ConsumeInventoryAndGrant`（战斗结算的整笔换取） | 扣材料、建候选、调外层回调之前判，提交前复核 | `kAssetBlocked`；不扣材料、不发币、不改投临时格（临时格兜底只用于主包放不下）。战斗结算执行器据此整笔 DEFER，原件留在收件箱，解封后照常应用——与全服封禁、货币封禁同口径，不部分提交 |
+  | 资产转入 `ApplyCredit`（帮会商店 / 活动、交易托管交付、邮件附件领取都经资产通道到这里），含按预设完整实例直接入包 | 货币封禁之后、号段余量与背包空间两道 RETRY 预检之前，按数量发放与完整实例一起判 | 记账式 `REJECTED kAssetBlocked`；背包满时也是 REJECTED，不回「背包满、稍后重试」 |
+  | 神秘商人购买 | 扣钱之前预检 | `kMysteryMerchantItemBlocked`；发物仍经 `AddItems` 再判一次 |
+  | 任务奖励、活力奖励、GM 发物、宝石取下 | 经 `BagService::AddItems` | 透传 `kAssetBlocked`；宝石取下映射成 `kEquipInternalError`，宝石留在装备上（与全服封禁同口径） |
+
+- **不算新增获得、不调判定**：存档还原（`bag_marshal` 的 `RestoreItems`）、整理（`MergeAndCompact`）、同一所有者内部搬运（`TakeInstance` / `PutInstance`：装备穿脱、背包与仓库互转）、消耗与扣出。
+- **错误码**：复用 `kAssetBlocked`（27005「该资产当前被禁止获取」），不新增 tip。2026-11-05 起 `BagService` 对全服物品封禁也回它（原为 `kInvalidParameter`），与货币封禁同码；资产通道对 `BagService` 回的 `kAssetBlocked` 与 `kInvalidParameter` 都记 `REJECTED kAssetBlocked`，原有的「资产拒绝 / 可重试 / 账本结局」划分不变。
+- **读缺失的口径**（持久数据「读缺失即 fail-closed」规则的一处有记录的例外，见 `ecs-component-access-rules.md`）：判定对无效句柄（`entt::null`）只判全服；有效实体缺封禁表时按「没有单人封禁」回答、不补建。理由：`BagService` 的入口历来接受没有玩家上下文的容器级调用；这个组件唯一的创建点是加载，缺了说明加载不变量已被破坏，而同一实体的存盘会因缺组件整份拒绝，资产通道与收件箱只在落盘之后才终结 / 确认，所以这种状态下发出的物品成不了盘上事实，封禁绕不过去。代价是这个实体的会话内存里可能短暂多出被封物品（随实体不存盘丢弃）；线索是存盘拒绝的 ERROR（`missing=PlayerItemGainBlockComp`）。写入口（Block / Unblock）缺组件一律拒绝、不补建。
+- **已知边界**：战斗结算域 `max_pending = 1`，被封物品的那笔结算挡在收件箱时，该玩家之后的结算也进不了收件箱，直到解封（货币封禁的现状相同）；宝石取下被拦时打一条 ERROR（取下入口把背包满以外的失败都当内部错误）。
 
 ### 2.3 如实评估
 

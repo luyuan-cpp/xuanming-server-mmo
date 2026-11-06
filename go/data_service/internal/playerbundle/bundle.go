@@ -74,10 +74,12 @@ type Global struct {
 	Errors         []string         `json:"errors,omitempty"`
 }
 
-// dataMessage 按 kind 给出 payload 的消息类型。前四种都是 player_database 按分组投影的片段。
+// dataMessage 按 kind 给出 payload 的消息类型。除 kLegacy1 外都是 player_database 按行投影的片段
+// (docs/design/player-save-direct-commit.md §1.1)。退役的 1、2 和不认识的号返回 nil,只记 DecodeNote。
 func dataMessage(kind int32) proto.Message {
 	switch storepb.PlayerStoreKind(kind) {
-	case storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT, storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET,
+	case storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER, storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET,
+		storepb.PlayerStoreKind_PLAYER_STORE_KIND_BAG, storepb.PlayerStoreKind_PLAYER_STORE_KIND_LOCATION,
 		storepb.PlayerStoreKind_PLAYER_STORE_KIND_GROWTH, storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE:
 		return &dbpb.PlayerDatabase{}
 	case storepb.PlayerStoreKind_PLAYER_STORE_KIND_LEGACY1:

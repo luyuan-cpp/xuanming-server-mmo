@@ -711,7 +711,7 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 	leaderView := isLeader()
 	var loadSets map[uint32][]string
 	if leaderView {
-		loadSets = readLoadSetBaseline(svcCtx, nodeViewZones(svcCtx, zoneKeysOf(seenByZone), zoneKeysOf(prevIDs)))
+		loadSets = readLoadSetBaseline(svcCtx, nodeViewZones(svcCtx))
 	}
 	if err := sceneNodeViewGate.check(nodeViewBaseline(prevIDs, loadSets), seenByZone, len(next) == 0); err != nil {
 		return 0, err

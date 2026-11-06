@@ -93,8 +93,10 @@ etcd:`/mmorpg/capability/player_locator/gate_session_index/v2/<node_uuid>`,KV,�
 2. **etcd 存活集**(Range `GateNodeService.rpc/`,宽松解析 NodeInfo,D77)。出错:整拍返回,去抖不推进、不转换(fail-closed)。
    读成功后过**存活集闸门**(决策清单 B1-1,2026-11-05;状态机 `go/shared/liveview`,与 scene_manager 的 fullSync 共用规则与阈值):
    基线是第 1 步登记集里出现的 gate(按 gate 去重),缺席 = 不在存活集里。存活集为空而登记集里有 gate → 一直压住;登记的 gate
-   不少于 4 个且缺席超过一半 → 压住,缺席数连续 30 分钟不变才放行,变了(有 gate 重新注册,或又少了)从头计时,恢复到一半以下
-   也继续压住,直到恢复完或稳定下来;放行之后 30 分钟内照常放行,让这批死 gate 收完。压住的拍记 `view_held`,不推进去抖、
+   不少于 4 个且缺席超过一半 → 压住,缺席数连续 30 分钟不变才放行,变了(有 gate 重新注册,或又少了)从头计时;缺席不再超过
+   一半就复位放行(`RecoverBelowThreshold`):剩下的缺席 gate 还要连续两拍缺席才判死,在去抖窗口里重新注册就不会被处理,
+   而 gate 滚动发布里旧 gate 已下线、新 gate 还没接到玩家时可能短暂过半,要缺席清零才放行的话每次发布都会压住 30 分钟。
+   放行之后 30 分钟内照常放行,让这批死 gate 收完。压住的拍记 `view_held`,不推进去抖、
    不转换,**不计入让出段的门槛**:读都成功了,可疑的是视图本身,换副本看到的是同一份。没分到 slot 的拍(登记集为空)不改变闸门状态。
    30 分钟按时间计(拍长可配,改拍长不连带改压住时长),取值理由:压住只推迟死 gate 上会话的清理,玩家重连照常顶掉旧会话;
    误判的代价是全员被踢,所以留足人工介入的时间。
@@ -183,7 +185,7 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 |---|---|
 | 某个副本到 etcd 的路径坏了(其余副本正常) | 它的清扫每拍 etcd_error,连续 3 拍退出 `gate_sweep` 分片,其余副本接手它的段;之后每拍试一次,成功就回来。它是 leader 时写者检查同样连续 3 拍让位 |
 | etcd 整体抖动 < 3 拍 | 去抖不推进,标记不动(租约 3.5 拍内续上),补建不作废 |
-| etcd 回档 / 重建 / 连错:Range 成功,但回空或缺了一大半 gate | 存活集闸门压住(§4.2 第 2 步,`view_held`):空集一直压住;骤降压到缺席数连续 30 分钟不变;gate 失租后会重新注册,恢复一个计时就从头算。副本不让出段。`PlayerLocatorGateLiveViewHeld`(critical)5 分钟后亮,放行时 `PlayerLocatorGateLiveViewReleased`(critical)亮。真有一半以上的 gate 同时死了:放行后照常收尾,死 gate 上没重连的会话比以前多挂约 30 分钟 |
+| etcd 回档 / 重建 / 连错:Range 成功,但回空或缺了一大半 gate | 存活集闸门压住(§4.2 第 2 步,`view_held`):空集一直压住;骤降压到缺席数连续 30 分钟不变,或缺席不再过半;gate 失租后会重新注册,恢复一个计时就从头算,剩下的交给两拍去抖。副本不让出段。`PlayerLocatorGateLiveViewHeld`(critical)5 分钟后亮,放行时 `PlayerLocatorGateLiveViewReleased`(critical)亮。真有一半以上的 gate 同时死了:放行后照常收尾,死 gate 上没重连的会话比以前多挂约 30 分钟 |
 | etcd 整体长时间不可达 | 全部副本退出清扫分片,leader 轮流让位;对账停摆(与旧实现相同,fail-closed),断线租约照常到期(LeaseMonitor 是另一套分片);标记过期,恢复后补建一遍。`PlayerLocatorReconcilerStalled`(critical)持续亮 |
 | 控制域 Redis 不可达 | 选主失败,写者检查与补建 / 审计停;清扫与 LeaseMonitor 只依赖玩家域,照常 |
 | 玩家域某个主节点不可达 | 落在它上面的段读不到持有者,这一周期不算持有、不扫,故障转移后恢复;别的段照常。会话写入在这 1/M 玩家上同样不可用。只有个别副本到不了它时,这些副本不算成员,读得全的副本接管那些段 |

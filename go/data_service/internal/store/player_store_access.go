@@ -22,10 +22,12 @@ import (
 
 const (
 	playerStoreOwnerKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)
-	playerStoreAssetKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET)
+	// 钱包行:货币、资产通道账本、收件箱账本、限购(docs/design/player-save-direct-commit.md §1.1)。账本读只要它。
+	playerStoreWalletKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_WALLET)
 
-	playerStoreHotKind     = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT)
-	playerStoreProfileKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE)
+	// 展示资料:等级在角色行,职业、名字、外观、性别在资料行。
+	playerStoreCharacterKind = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER)
+	playerStoreProfileKind   = int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE)
 
 	// 证据读取不是批量导出;超过正常玩家存档预算显式拒绝,避免无限读 blob。
 	playerStoreProofMaxBytes = 16 << 20
@@ -34,13 +36,14 @@ const (
 	PlayerDisplayBatchLimit = 1024
 )
 
-// PlayerAssetRow 是写权行和 kAsset 行的一次一致读。
+// PlayerAssetRow 是写权行和钱包行(kWallet)的一次一致读。
 type PlayerAssetRow struct {
 	OwnerEpoch uint64
 	SaveSeq    uint64
 	// Released:持有者已最终存盘并释放,或者还没有人认领过。
 	Released bool
-	// Player 只有 kAsset 组的字段(账本、货币、背包等)和 player_id;没有 kAsset 行时只有 player_id。
+	// Player 只有钱包行的字段(货币、资产通道账本、收件箱账本、限购)和 player_id;没有钱包行时只有 player_id。
+	// 背包在另一行(kBag),这里读不到:账本读不需要它。
 	Player *dbpb.PlayerDatabase
 }
 
@@ -79,7 +82,7 @@ func (s *AccountDirectoryStore) playerStorage(ctx context.Context, playerID uint
 	return route.StorageID, nil
 }
 
-// ReadPlayerStoreAsset 强读写权行和 kAsset 行。两行出自同一条语句:判「不在线」和判「账本未见」看的是同一个时刻。
+// ReadPlayerStoreAsset 强读写权行和钱包行。两行出自同一条语句:判「不在线」和判「账本未见」看的是同一个时刻。
 // 返回 (nil, nil) = 没有写权行或路由(角色不存在或未建完)。读不到回错误,不能当成没有:调用方拿它判账本有没有见过一笔资产。
 func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, playerID uint64) (*PlayerAssetRow, error) {
 	if s == nil || playerID == 0 {
@@ -102,7 +105,7 @@ func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, player
 		return nil, err
 	}
 	rows, err := db.QueryContext(ctx, "SELECT kind,owner_epoch,save_seq,released,payload FROM player_store WHERE player_id=? AND kind IN (?,?)",
-		playerID, playerStoreOwnerKind, playerStoreAssetKind)
+		playerID, playerStoreOwnerKind, playerStoreWalletKind)
 	if err != nil {
 		return nil, fmt.Errorf("读玩家账本行: %w", err)
 	}
@@ -120,7 +123,7 @@ func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, player
 		switch kind {
 		case playerStoreOwnerKind:
 			result = &PlayerAssetRow{OwnerEpoch: epoch, SaveSeq: seq, Released: released != 0}
-		case playerStoreAssetKind:
+		case playerStoreWalletKind:
 			assetPayload = payload
 		}
 	}
@@ -138,7 +141,7 @@ func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, player
 	return result, nil
 }
 
-// ReadPlayerDisplays 批量读展示资料,来自 kHot(等级、职业)和 kProfile(名字、外观、性别)两行。按玩家分片读路由,按落点分组读存档库。
+// ReadPlayerDisplays 批量读展示资料,来自 kCharacter(等级)和 kProfile(职业、名字、外观、性别)两行。按玩家分片读路由,按落点分组读存档库。
 // 缺席的 id 不出现在结果里。一行坏了或者一个落点读不了只跳过那些玩家:这是展示数据,不能让一个人或一个库拖垮整页。
 func (s *AccountDirectoryStore) ReadPlayerDisplays(ctx context.Context, ids []uint64) (map[uint64]*dspb.PlayerDisplay, error) {
 	if s == nil || len(ids) > PlayerDisplayBatchLimit {
@@ -218,7 +221,7 @@ func readPlayerDisplaysIn(ctx context.Context, db *sql.DB, players []uint64) (ma
 	for _, id := range players {
 		args = append(args, id)
 	}
-	args = append(args, playerStoreHotKind, playerStoreProfileKind)
+	args = append(args, playerStoreCharacterKind, playerStoreProfileKind)
 	query := "SELECT player_id,kind,payload FROM player_store WHERE player_id IN (?" +
 		strings.Repeat(",?", len(players)-1) + ") AND kind IN (?,?)"
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -245,10 +248,10 @@ func readPlayerDisplaysIn(ctx context.Context, db *sql.DB, players []uint64) (ma
 			out[player] = display
 		}
 		switch kind {
-		case playerStoreHotKind:
+		case playerStoreCharacterKind:
 			display.Level = row.GetLevelComponent().GetLevel()
-			display.ClassId = row.GetUint32PbComponent().GetClass()
 		case playerStoreProfileKind:
+			display.ClassId = row.GetUint32PbComponent().GetClass()
 			display.Name = row.GetProfileComponent().GetName()
 			display.AppearanceId = row.GetProfileComponent().GetAppearanceId()
 			display.Gender = row.GetProfileComponent().GetGender()

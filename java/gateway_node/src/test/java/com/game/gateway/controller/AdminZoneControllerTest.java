@@ -2,6 +2,7 @@ package com.game.gateway.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.game.gateway.dto.ZoneSettingsRequest;
 import com.game.gateway.entity.ZoneConfig;
 import com.game.gateway.repository.ZoneConfigRepository;
@@ -36,8 +37,9 @@ import static org.mockito.Mockito.*;
  * 204 / 404;时间戳取自注入的时钟。「ODKU 在真库上不成环」由 {@code ZoneConfigUpsertLockOrderMySqlTest} 验,
  * 语句能否在 Spring Data 上执行、已存在的行是否真的一列不改由 {@code ZoneConfigRepositoryWiringTest} 验,这里替代不了。
  *
- * <p>请求体经与线上同一种 Jackson 配置(Spring 的构建器:未知字段忽略、注册 java.time)从 JSON 反序列化,
- * 「字段给没给」由 JSON 决定,不在测试里手搭对象绕过绑定。
+ * <p>请求体经与线上同一种 Jackson 配置(Spring 的构建器:未知字段忽略、注册 java.time,加上 application.yaml 的
+ * {@code spring.jackson.property-naming-strategy: SNAKE_CASE})从 JSON 反序列化,「字段给没给」由 JSON 决定,
+ * 不在测试里手搭对象绕过绑定。
  *
  * <p>事务用 {@link TransactionOperations#withoutTransaction()} 直通:这里不验事务边界。
  */
@@ -45,10 +47,11 @@ class AdminZoneControllerTest {
 
     private static final long ZONE = 7L;
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 21, 12, 0, 0);
-    private static final ObjectMapper JSON = Jackson2ObjectMapperBuilder.json().build();
-    /** 完整资源的每一个业务字段;PUT 的请求体可以不带 zoneId(以路径为准),POST 必须带。 */
+    private static final ObjectMapper JSON = Jackson2ObjectMapperBuilder.json()
+            .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
+    /** 完整资源的每一个业务字段(线上 JSON 名);PUT 的请求体可以不带 zone_id(以路径为准),POST 必须带。 */
     private static final List<String> BUSINESS_FIELDS =
-            List.of("name", "manualStatus", "capacity", "maintenanceMsg", "openTime", "recommended", "sortOrder");
+            List.of("name", "manual_status", "capacity", "maintenance_msg", "open_time", "recommended", "sort_order");
 
     private ZoneConfigRepository repo;
     private AdminZoneController controller;
@@ -84,8 +87,8 @@ class AdminZoneControllerTest {
         existing.setMaintenanceMsg("维护中");
         when(repo.findById(ZONE)).thenReturn(Optional.of(existing));
         Map<String, Object> open = fields(ZONE);
-        open.put("manualStatus", 0);
-        open.put("maintenanceMsg", "");
+        open.put("manual_status", 0);
+        open.put("maintenance_msg", "");
 
         ResponseEntity<ZoneConfig> resp = controller.create(body(open));
 
@@ -109,7 +112,7 @@ class AdminZoneControllerTest {
     void createRejectsMissingZoneIdOrAnyMissingFieldWithoutTouchingDb() {
         assertEquals(HttpStatus.BAD_REQUEST, controller.create(body(fields(null))).getStatusCode(), "缺 zoneId");
         Map<String, Object> zeroId = fields(ZONE);
-        zeroId.put("zoneId", 0);
+        zeroId.put("zone_id", 0);
         assertEquals(HttpStatus.BAD_REQUEST, controller.create(body(zeroId)).getStatusCode(), "zoneId 必须为正");
         for (String field : BUSINESS_FIELDS) {
             Map<String, Object> missing = fields(ZONE);
@@ -151,8 +154,8 @@ class AdminZoneControllerTest {
 
     @Test
     void updateOverwritesEverySettingFromCompleteBodyAndReturnsStoredRow() {
-        Map<String, Object> complete = fields(null); // 请求体可以不带 zoneId,以路径为准
-        complete.put("openTime", "2026-10-01T09:00:00");
+        Map<String, Object> complete = fields(null); // 请求体可以不带 zone_id,以路径为准
+        complete.put("open_time", "2026-10-01T09:00:00");
         ZoneConfig stored = storedCopyOf(complete);
         when(repo.findById(ZONE)).thenReturn(Optional.of(stored));
 
@@ -165,10 +168,10 @@ class AdminZoneControllerTest {
         assertWrittenEquals(complete, ZONE, written.getValue());
         verify(repo, never()).insertIfAbsent(any(), any());
 
-        // 带 zoneId 也行,只要与路径一致(GET 回来的整行原样 PUT 回去,连 createdAt / updatedAt 一起)。
+        // 带 zone_id 也行,只要与路径一致(GET 回来的整行原样 PUT 回去,连 created_at / updated_at 一起)。
         Map<String, Object> roundTrip = fields(ZONE);
-        roundTrip.put("createdAt", "2026-09-01T00:00:00");
-        roundTrip.put("updatedAt", "2026-09-02T00:00:00");
+        roundTrip.put("created_at", "2026-09-01T00:00:00");
+        roundTrip.put("updated_at", "2026-09-02T00:00:00");
         assertEquals(HttpStatus.OK, controller.update(ZONE, body(roundTrip)).getStatusCode());
     }
 
@@ -181,7 +184,7 @@ class AdminZoneControllerTest {
             Map<String, Object> missing = fields(null);
             missing.remove(field);
             assertEquals(HttpStatus.BAD_REQUEST, controller.update(ZONE, body(missing)).getStatusCode(), "缺 " + field);
-            if (!field.equals("openTime")) {
+            if (!field.equals("open_time")) {
                 Map<String, Object> explicitNull = fields(null);
                 explicitNull.put(field, null);
                 assertEquals(HttpStatus.BAD_REQUEST, controller.update(ZONE, body(explicitNull)).getStatusCode(),
@@ -189,6 +192,16 @@ class AdminZoneControllerTest {
             }
         }
         assertEquals(HttpStatus.BAD_REQUEST, controller.update(ZONE, null).getStatusCode(), "没有请求体");
+        // 线上 JSON 是 snake_case:驼峰键名是未知字段、被静默忽略,等同全都没给,同样只能是 400,不能落成初值。
+        Map<String, Object> camelCase = new LinkedHashMap<>();
+        camelCase.put("name", "z");
+        camelCase.put("manualStatus", 1);
+        camelCase.put("capacity", 8000);
+        camelCase.put("maintenanceMsg", "");
+        camelCase.put("openTime", null);
+        camelCase.put("recommended", true);
+        camelCase.put("sortOrder", 3);
+        assertEquals(HttpStatus.BAD_REQUEST, controller.update(ZONE, body(camelCase)).getStatusCode(), "驼峰键名");
         verifyNoInteractions(repo);
     }
 
@@ -202,9 +215,9 @@ class AdminZoneControllerTest {
     @Test
     void writesRejectUndefinedStatusAndOutOfRangeValuesWithoutTouchingDb() {
         Object[][] invalid = {
-                {"manualStatus", 4}, {"manualStatus", -1}, {"capacity", 0}, {"capacity", -5},
-                {"name", " "}, {"name", "x".repeat(65)}, {"maintenanceMsg", "m".repeat(257)},
-                {"openTime", "2026-10-01T09:00:00.5"}};
+                {"manual_status", 4}, {"manual_status", -1}, {"capacity", 0}, {"capacity", -5},
+                {"name", " "}, {"name", "x".repeat(65)}, {"maintenance_msg", "m".repeat(257)},
+                {"open_time", "2026-10-01T09:00:00.5"}};
         for (Object[] bad : invalid) {
             Map<String, Object> post = fields(ZONE);
             post.put((String) bad[0], bad[1]);
@@ -299,15 +312,15 @@ class AdminZoneControllerTest {
     private static Map<String, Object> fields(Long zoneId) {
         Map<String, Object> f = new LinkedHashMap<>();
         if (zoneId != null) {
-            f.put("zoneId", zoneId);
+            f.put("zone_id", zoneId);
         }
         f.put("name", "z");
-        f.put("manualStatus", 1);
+        f.put("manual_status", 1);
         f.put("capacity", 8000);
-        f.put("maintenanceMsg", "14:00 恢复");
-        f.put("openTime", null);
+        f.put("maintenance_msg", "14:00 恢复");
+        f.put("open_time", null);
         f.put("recommended", true);
-        f.put("sortOrder", 3);
+        f.put("sort_order", 3);
         return f;
     }
 
@@ -321,15 +334,15 @@ class AdminZoneControllerTest {
 
     /** 库里与这份请求体逐列相同的那一行(回读替身)。 */
     private static ZoneConfig storedCopyOf(Map<String, Object> fields) {
-        Object id = fields.get("zoneId");
+        Object id = fields.get("zone_id");
         ZoneConfig z = zone(id == null ? ZONE : ((Number) id).longValue(), (String) fields.get("name"));
-        z.setManualStatus((Integer) fields.get("manualStatus"));
+        z.setManualStatus((Integer) fields.get("manual_status"));
         z.setCapacity((Integer) fields.get("capacity"));
-        z.setMaintenanceMsg((String) fields.get("maintenanceMsg"));
-        Object openTime = fields.get("openTime");
+        z.setMaintenanceMsg((String) fields.get("maintenance_msg"));
+        Object openTime = fields.get("open_time");
         z.setOpenTime(openTime == null ? null : LocalDateTime.parse((String) openTime));
         z.setRecommended((Boolean) fields.get("recommended"));
-        z.setSortOrder((Integer) fields.get("sortOrder"));
+        z.setSortOrder((Integer) fields.get("sort_order"));
         return z;
     }
 

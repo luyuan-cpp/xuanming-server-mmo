@@ -342,6 +342,21 @@
 
 ## 6. 后续各波（待周额度重置）
 
+**2026-11-05 续做（进行中；以本段为准，下面 10-30 的盘点按 10-31 迁移前的代码写，部分已过时）：**
+
+- **方向变化**：负责人 11-05 要求"都按最标准的做"，待拍板事项一律按标准做法定，不再逐条请示。10-31 玩家数据只存 TiDB、10-30 映射直读 TiDB 已落码（未编译）。11-05 按新代码把三份审计的全部条目重判了一遍，结论分四类：随迁移失效；已修且仍成立；原问题在新路径重现；仍开着。正文 §1、§3、§5 待按重判结果整体重写。
+- **随迁移失效（机制已删）**：r2-db#1/#2/#3、r2-rr#1~#5、r2-ps#1（go/db 侧）、r2-ps#3/#4、r2-low#1/#2、r2-login#1、r2-battle#1/#4、r2-match#1、r2-mz#1/#2、r2-ds#2，第一轮 §2.2、第一轮 §4 第 3、10、13、14、15、17、22 条，go-db-pipeline#3/#4，data-service#0/#2/#3，login-session-route#2，ops-tools-java#0，Redis 回退一族，player-save#3，cross-service-assets#1/#3，social-global#1，social-match-battle#2。
+- **已修且仍成立（均未编译）**：r2-gate#1、r2-sm#1/#2/#3、r2-lc#1/#2（交接资格现为 `player:{id}:handoff_fence`）、§17 no_qualification（no_qualification 会话 11-05 补了 TiDB 写权释放，传 E−1）、r2-ps#2/#5/#8/#9、r2-ds#1、第一轮 §2.1/§2.3、§2.5 三条、cpp-economy#0、第 6、11 条、cross-service-assets#2、social-global-v#1、handover-single-writer#1、ops-tools-java#1。
+- **由其他会话认领并落码**：
+  - N1 新问题（字段换组后首次载入永久丢字段）与 r2-ps#10：混合版本持久化会话，生成器禁止换组 + 台账封存门禁。见 `docs/handoff/mixed-version-persist-handoff-20261019.md` §17、§19，`mixed-version-persist-field-protection.md` §3.1「封存」「存储分组不得改」、§13 第 11 条。
+  - r2-v1#1 主路径：全球经济审核会话，FIGHTING 冻结到期 = 截止 + 60s 终局宽限 + 60s 投递余量。
+  - r2-v1#2 / cpp-economy#1（v1 遇封禁整笔延后，属原问题在新路径重现）：全球经济审核会话正在修，口径为跳过被封部分、其余 APPLIED、解封不补发。
+  - 交易流水改为提交后才发（第一轮第 7 条根治）、trade 的 assetopfix 判据、scene 失租自保存盘（handover-single-writer-v#1 的 C++ 侧）：「服务器数据一致性问题」会话。
+  - r2-battle#2 / r2-guild#1 的独立评审与人工释放 CLI：「数据覆盖审计交接文档」会话。
+- **本会话在修（11-05 开工，未编译）**：r2-kc#1（排空框架消费者永久停，guild / match / data_service）；第一轮第 5 条 AddCurrency 溢出与 r2-ps#6/#7；r2-mail#1/#2；r2-mm#1；handover-single-writer-v#1 的 scene_manager 侧（判死释放比持有者与 claim_seq，并做 etcd 线性读复核）；第 9 条会话栅栏与 gate 拒客户端 Disconnect；r2-equip#1 与 cpp-economy#2（改客户端可见 proto，Java 版下一批）；第 18、19 条 Java 管理面；过时文档与 r2-dcc#1；第 20、21 条发号原语；多集群 PITR 后建角残留的核账与修复工具；GM 回收计划与 guild assetopfix 改以已提交账本为证据（判据放 `go/shared/assetop` 供 trade 共用）。
+- **本会话排队（等 player_battle.cpp 的其他代理收尾）**：r2-battle#3 号段预检续段；r2-v1#1 残余窗口（到期先查 SQL 终局，已 COMPLETE 未应用就续冻，需新增 match 内部只读终局查询 RPC）。
+- **新问题（11-05 重判）**：match 不可用跨过截止 + 60s 会把已打完的局 ABORT（low），已转全服匹配会话；第一轮第 12 条评级停写卡消费（潜伏），同转；第一轮 §4 第 2 条在新路径重现为"超限后永远存不进、退出时回到上次提交"，C++ 本地拒绝没有指标（low，待排）。
+
 **2026-10-30 进度与未关条目盘点**（只读盘点，以当日工作区为准）：
 
 - 换视角查找第 1 轮已跑（§3.9），有新发现，按规则还要跑第 2 轮。

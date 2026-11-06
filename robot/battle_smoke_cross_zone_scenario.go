@@ -106,7 +106,6 @@ func runCrossZoneMatchSmoke(cfg *config.Config) {
 				continue
 			}
 			_ = leaveGame(b.gc, stats)
-			sendDisconnectBestEffort(b.gc)
 			gameobject.PlayerList.Delete(b.gc.PlayerId)
 			b.gc.Close()
 		}

@@ -126,10 +126,9 @@ func knownNodeIDsByZone() map[uint32]map[string]struct{} {
 //
 // 恒为本进程编排的 zone(orchestrated_zones.go,docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):按 zone 选主之后
 // 一个副本只编排本 zone,本 zone 一个节点都没有时照样扫,最后一个节点在无领导窗口里死掉时留下的负载集条目、计数和孤儿实例
-// 也收得掉。快照与旧镜像只会有本 zone,参数留着是为了让闸门调用处读起来与基线的来源对得上;原来并进来的 zone 登记集合
-// scene_manager:zones 已删除:控制域按 zone 组分实例后同组别的 zone 也在同一个实例里,并进来会把它们的活节点当成陈旧成员摘掉。
-func nodeViewZones(svcCtx *svc.ServiceContext, snapshotZones, prevZones []uint32) []uint32 {
-	_, _ = snapshotZones, prevZones
+// 也收得掉。快照与旧镜像只会有本 zone,不再并进来;原来并进来的 zone 登记集合 scene_manager:zones 已删除:控制域按
+// zone 组分实例后同组别的 zone 也在同一个实例里,并进来会把它们的活节点当成陈旧成员摘掉。
+func nodeViewZones(svcCtx *svc.ServiceContext) []uint32 {
 	return orchestratedZones(svcCtx)
 }
 

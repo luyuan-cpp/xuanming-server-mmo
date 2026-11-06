@@ -28,7 +28,7 @@ import (
 // 那时可以直接复用的形状。
 //
 // 一次刷新的形状(refreshZoneLoadSets):
-//  1. 一条 SADD 把本次涉及的全部 zone 登记进 scene_manager:zones(尽力而为,见 zone_registry.go);
+//  1. (原来的「SADD 登记 zone」2026-11-05 随 zone 登记集合删除;byZone 只有本 zone)
 //  2. 读:pipeline 分批,每个节点一条 GET(scene_count)、一条 SCARD(成员集合);
 //  3. 写之前再判一次领导权;pipeline 分批写:每个节点一条 SET 类型镜像,每个 zone 一条 ZADD 写读成功的
 //     节点,再加一条 ZADD NX 把读失败的节点以哨兵分加进去(已在负载集里的不受影响);

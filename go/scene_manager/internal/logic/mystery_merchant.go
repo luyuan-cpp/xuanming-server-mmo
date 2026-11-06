@@ -62,8 +62,10 @@ const (
 	mysteryMerchantVersionRoundFactor uint64 = 1000
 	mysteryMerchantMaxRevision        uint32 = 999
 
-	// 记录的 TTL = 间隔的这么多倍。记录本身带 expire_at_ms,读侧按它判定商人在不在;TTL 只负责
-	// 「功能被关掉 / 调度长期停摆之后,旧记录自己消失」,所以取得宽松。
+	// 记录的 TTL = 间隔的这么多倍,且不低于最长间隔(merchantMaxIntervalSeconds)。记录本身带 expire_at_ms,读侧按它判定
+	// 商人在不在;TTL 只负责「功能被关掉 / 调度长期停摆之后,旧记录自己消失」,所以取得宽松。
+	// 下限的来历:记录的轮次号是用过的最大轮次号,改了间隔之后靠它挡住撞号的新一轮(见 scheduleMysteryMerchant)。
+	// 它得活到任何间隔下「现在」这一轮的轮次号都超过它为止,即最后一次写入之后至少一个最长间隔。
 	mysteryMerchantStateTTLRounds int64 = 2
 
 	// 商人所在的线连续这么多拍不在分线目录里,才判定「线没了」并换线。
@@ -102,9 +104,8 @@ func mysteryMerchantKey(zoneID uint32) string {
 // 没有这道比较,后写的会把先写的同一轮记录盖成另一条线、另一批货,而 scene 节点可能已经按前一份
 // 发过公告、卖过东西。表里的 v 是坏值(非数字)时按 0 处理,等于允许覆盖。
 //
-// 强制覆盖只用在两种「现有记录已经不可信」的情形(见 scheduleMysteryMerchant):现有记录解析不了,
-// 或它是按另一个出现间隔排出来的(调表 / 改覆盖项之后,旧时间轴上的版本号可能比新时间轴的大,
-// 不强制的话新的一轮要等旧键 TTL 过期才写得进去)。
+// 强制覆盖只用在「现有记录已经不可信」的情形:它解析不了,或写的不是这个 zone(见 scheduleMysteryMerchant)。
+// 改了出现间隔不强制:新间隔下只写轮次号比旧记录大的一轮,版本号本来就更大。
 const luaWriteMysteryMerchantState = `
 local current = tonumber(redis.call('HGET', KEYS[1], 'v') or '0') or 0
 local incoming = tonumber(ARGV[1])
@@ -286,9 +287,9 @@ type merchantRound struct {
 //
 // 轮次号直接用出现时刻的 Unix 秒,而不是「第几个间隔」(now / 间隔):后者依赖间隔本身,间隔一调大
 // 轮次号就变小,版本号跟着倒退 —— 新的一轮写不进 Redis,scene 节点还会把它当旧记录丢弃。
-// 出现时刻只跟墙钟走:间隔不变时逐轮递增;改间隔的那一刻对齐点会变,新一轮的出现时刻可能比旧一轮早
-// (回退不到一个新间隔,只发生这一次)—— 那一次由 scheduleMysteryMerchant 强制覆盖旧记录来接上。
-// 玩家存档里的限购记录按它记账:轮次号不同就当作新的一轮,不会因为改间隔而把两轮的已购数串在一起。
+// 出现时刻只跟墙钟走:间隔不变时逐轮递增;改间隔的那一刻对齐点会变,新时间轴上「现在」这一轮的轮次号可能
+// 不比旧记录大(回退不到一个新间隔,只发生这一次)—— 那一轮不写,等新时间轴上轮次号更大的一轮(见 scheduleMysteryMerchant)。
+// 玩家存档里的限购记录按它记账:轮次号不同就当作新的一轮。所以一个轮次号只能用一次,否则会把两轮的已购数串在一起。
 func merchantRoundAt(nowUnix, intervalSeconds, staySeconds int64) merchantRound {
 	if nowUnix < 0 {
 		nowUnix = 0
@@ -412,7 +413,7 @@ func writeMysteryMerchantState(svcCtx *svc.ServiceContext, state *scenepb.Myster
 		return false, fmt.Errorf("序列化神秘商人记录失败: %w", err)
 	}
 	version := state.GetRoundId()*mysteryMerchantVersionRoundFactor + uint64(state.GetRevision())
-	ttlSeconds := int64(state.GetIntervalSeconds()) * mysteryMerchantStateTTLRounds
+	ttlSeconds := max(int64(state.GetIntervalSeconds())*mysteryMerchantStateTTLRounds, merchantMaxIntervalSeconds)
 	// 值是 protobuf 字节,直接当 Go string 传(Redis 字符串二进制安全;分线目录同款)。
 	forceArg := "0"
 	if force {
@@ -517,21 +518,29 @@ func scheduleMysteryMerchant(svcCtx *svc.ServiceContext, zoneID uint32, now time
 	if err != nil {
 		return metrics.MerchantScheduleError, err
 	}
-	// 现有记录不可信的两种情形:解析不了,或它是按另一个出现间隔排的(调表 / 改覆盖项之后)。
-	// 都按「没有记录」重新排,并在写入时强制覆盖 —— 旧时间轴上的版本号可能比新的大,不强制就写不进去。
-	// 两个副本在领导权交接窗口里同时走到这里会各写一份(强制覆盖不比较版本),后写的赢;
-	// 这只可能发生在「改间隔」与「换领导者」撞在同一拍,下一拍就收敛(记录已是新间隔,回到正常路径)。
+	// 现有记录解析不了(或写的不是这个 zone):按「没有记录」重新排,并在写入时强制覆盖 —— 坏记录的 v 可能恰好是
+	// 合法的本轮版本,不强制就要等到下一轮才盖得掉。两个副本在领导权交接窗口里同时走到这里会各写一份(强制覆盖
+	// 不比较版本),后写的赢;下一拍记录已经可解析,回到正常路径。
 	force := corrupt
 	if corrupt {
 		logMerchantProblem(zoneID, now, "existing record failed to parse or belongs to another zone; treating it as absent and overwriting")
 	}
-	// 这个分支在「改了间隔」到「新间隔下的第一轮开始」之间每一拍都会走到(那段时间没有东西可写),
-	// 所以这里只记下旧间隔,等真正覆盖写入时再打一条日志。
+	// 现有记录是按另一个出现间隔排的(调表 / 改覆盖项之后):旧时间轴上的那一轮先卖完,新时间轴从轮次号更大的一轮接上
+	// (第二轮审计 r2-mm#1)。
+	//   - 旧的那一轮还在停留期内:不覆盖,照常核对线、必要时同一轮内换线。scene 节点在手里那一轮结束之前丢弃版本更小的
+	//     记录(merchantrules::ShouldDiscardAsStale),新起的节点没有缓存、照单采纳 —— 提前覆盖就是两轮同时在售,玩家在
+	//     两条线之间往返买,每换一次轮限购记录整份清空,名额反复清零。
+	//   - 新时间轴上「现在」这一轮的轮次号不比旧记录大:不写,等轮次号更大的那一轮。轮次号是玩家限购记录的账本键;
+	//     旧记录的轮次号是用过的最大值(写入只进不退,TTL 不低于最长间隔),比它大就不会撞上任何一轮用过的号,
+	//     撞号会把那一轮的已购数带进新货架。
+	//   - 都过了才写新一轮:轮次号更大,版本号也就更大,照常比较版本写入,不强制覆盖。
+	// 这个分支在「改了间隔」到「新间隔下的第一轮开始」之间每一拍都会走到,所以这里只记下旧间隔,等真正写入时再打一条日志。
 	var replacedIntervalSeconds uint32
 	if current != nil && int64(current.GetIntervalSeconds()) != tables.rule.intervalSeconds {
+		if uint64(now.UnixMilli()) < current.GetExpireAtMs() || round.id <= current.GetRoundId() {
+			return keepOrRelocateMerchant(svcCtx, zoneID, now, rnd, tables, current)
+		}
 		replacedIntervalSeconds = current.GetIntervalSeconds()
-		current = nil
-		force = true
 	}
 	if current != nil && current.GetRoundId() == round.id {
 		return keepOrRelocateMerchant(svcCtx, zoneID, now, rnd, tables, current)
@@ -575,7 +584,7 @@ func scheduleMysteryMerchant(svcCtx *svc.ServiceContext, zoneID uint32, now time
 		return metrics.MerchantScheduleLostRace, nil
 	}
 	if replacedIntervalSeconds != 0 {
-		logx.Infof("[MysteryMerchant] zone=%d: appearance interval changed from %ds to %ds; the record scheduled on the old interval was overwritten",
+		logx.Infof("[MysteryMerchant] zone=%d: appearance interval changed from %ds to %ds; the round scheduled on the old interval has ended, writing the first round of the new interval",
 			zoneID, replacedIntervalSeconds, tables.rule.intervalSeconds)
 	}
 	logx.Infof("[MysteryMerchant] zone=%d round=%d: appeared on map %d channel %d (scene=%d, spot=%d), shelf=%d goods, stays until %s",
@@ -596,6 +605,7 @@ func placeMerchant(state *scenepb.MysteryMerchantState, channel merchantChannel,
 }
 
 // keepOrRelocateMerchant 处理「本轮已经排好」的情形:核对商人所在的线还在不在,不在了就同一轮内换线。
+// 改了出现间隔之后,旧时间轴上的那一轮卖完之前也走这里(见 scheduleMysteryMerchant),换线时记录里的间隔照旧。
 //
 // 换线只动落点(地图 / 线 / 站位)与 revision,**轮次号与货架原样保留**:玩家的限购记录按轮次号记,
 // 货架一变,已经买过的人就对不上账了。

@@ -4,8 +4,14 @@
 # 流程:A 建帮(请求体 zone 填错)→ 帮会落在 zone_a → A 重复建帮被拒 → B 在本区榜上看到
 #       → C(zone_b)看不见 / 查不到名次 / 加不进 / 同名被拒 → B 未入帮改公告被拒 → B 加入
 #       → A 改公告、B 读到;超长公告被拒 → B 伪造 player_id=A 退帮,服务端按会话让 B 退出
-#       → A 直调 UpdateGuildScore 收到 kServiceUnavailable、随后查榜积分不变 → A 解散。
-#       验收同时核对路由服该方法 code=PermissionDenied 日志;超时不能算通过。
+#       → A 直调 UpdateGuildScore(第 9 步)期望等满约 10s 超时、随后查榜积分仍为 0 → A 解散。
+#       第 9 步的口径依据 docs/design/client-rpc-callback.md §7 R4:UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,
+#       不进 gate 上行白名单,gate 按非法包丢弃(计一次非法包,单发一次远低于踢线阈值)、不回包,请求到不了
+#       路由服与 guild,它们的日志里不应出现这次请求。收到信封拒绝(如 kServiceUnavailable)即说明 gate 不是 R4
+#       重新生成后编出的版本;收到业务回包说明内部方法对客户端开放。两种都判失败。
+#       guild 会话拦截器的方法级白名单(ClientMethods)是第二道防线,经 gate 走不到,由单测证明:
+#       go/guild/internal/session 的 TestClientCannotCallInternalMethod、go/guild 的 TestSessionGateWiredIntoUnaryChain。
+#       (R4 之前这一步期望 kServiceUnavailable 信封、核对路由服 code=PermissionDenied 日志,现已不适用。)
 #       解散之后(第 11 步,docs/design/client-request-ordering.md §6.4):A 另建临时帮、B 入帮 → B 带过期
 #       expected_guild_id(刚解散的旧帮)退帮被拒(kGuildNotInGuild)、仍在临时帮 → B 带临时帮 id 退帮照常受理 → A 解散临时帮。
 #
@@ -13,7 +19,8 @@
 #   1. gate 以 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式);guild 的客户端入口只承诺路由服模式。
 #      start_game.ps1 默认已开;cross_zone=true 时两个 zone 的 gate 都要开。
 #   2. client_rpc_router、data_service、guild 已起(guild 全局一份即可);proto 已按本次改动重生成
-#      (gate 白名单 / 路由表里 GuildService 为客户端协议),gate 与路由服已换上新二进制。
+#      (gate 白名单 / 路由表里 GuildService 为客户端协议;gate 白名单须由 R4 生成器按方法方向收号,
+#      不含 UpdateGuildScore 与 Notify*),gate 与路由服已换上新二进制。
 #   3. MessageLimiter / Tip 表已导出,gate 已重启(否则公会消息号吃默认 3 次 / 窗口限速)。
 #   4. robot_9201 / 9202 首次在 zone_a 建角、robot_9203 首次在 zone_b 建角(归属区映射在建角时登记);
 #      之前在别的区登录过的账号,第 1 步"帮会落区"断言会失败。

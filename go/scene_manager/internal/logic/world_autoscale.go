@@ -92,12 +92,6 @@ func DesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID 
 	if seed < 1 {
 		seed = 1
 	}
-	// 期望数字段是孤儿清理的发现索引(orphan_cleanup.go):写字段之前先把 zone 登记进 scene_manager:zones。
-	// 只在播种分支登记,命中已有字段的热路径不多发命令。登记失败照常往下走:登记集合只服务清扫与孤儿清理,
-	// 不能挡住补频道和进场景。这里可能跑在任意副本上(CreateScene 兜底),集合只加不减,多写者安全。
-	if err := registerSceneManagerZones(svcCtx, zoneID); err != nil {
-		logx.Errorf("[WorldAutoscale] register zone %d before seeding desired channels failed (seeding anyway): %v", zoneID, err)
-	}
 	// Hsetnx:并发的多个 SceneManager 实例同时播种时,只有一个赢,
 	// 其余读到已有值。不能用 Hset —— 那会把别人已经伸缩过的值冲掉。
 	seeded, err := svcCtx.Redis.Hsetnx(key, field, strconv.Itoa(seed))
@@ -154,10 +148,6 @@ func clampDesiredWorldChannelCount(svcCtx *svc.ServiceContext, n int) int {
 // setDesiredWorldChannelCount 写回期望频道数,并钳到 [min, max]。
 func setDesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, n int) {
 	n = clampDesiredWorldChannelCount(svcCtx, n)
-	// 与 DesiredWorldChannelCount 的播种分支同理:写字段前尽力登记 zone,失败照常写。
-	if err := registerSceneManagerZones(svcCtx, zoneID); err != nil {
-		logx.Errorf("[WorldAutoscale] register zone %d before writing desired channels failed (writing anyway): %v", zoneID, err)
-	}
 	if err := svcCtx.Redis.Hset(worldDesiredChannelsKey(zoneID), strconv.FormatUint(confID, 10), strconv.Itoa(n)); err != nil {
 		logx.Errorf("[WorldAutoscale] set desired channels zone=%d conf=%d=%d failed: %v", zoneID, confID, n, err)
 	}
@@ -417,10 +407,6 @@ func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zon
 	ttl := svcCtx.Config.WorldAutoscale.DrainTimeoutSeconds
 	if ttl <= 0 {
 		ttl = 300
-	}
-	// 与 DesiredWorldChannelCount 的播种分支同理:写字段前尽力登记 zone,失败照常写。
-	if err := registerSceneManagerZones(svcCtx, zoneID); err != nil {
-		logx.Errorf("[WorldAutoscale] register zone %d before draining failed (draining anyway): %v", zoneID, err)
 	}
 	moved, err := svcCtx.Redis.Eval(luaBeginDrainWorldChannel,
 		[]string{

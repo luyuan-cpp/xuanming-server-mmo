@@ -440,15 +440,13 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 		stats.LoginFail()
 		return
 	}
-	// Order matters: Disconnect must go out BEFORE we close the TCP, otherwise
-	// gate sees an EOF on a verified session, drops it, and login never finds
-	// out. Once login receives Disconnect it marks the player_locator session
-	// as Disconnecting (with a 30s reconnect lease) — without this, repeated
-	// dev runs leave residual ONLINE sessions that flip the next EnterGame
-	// into ReplaceLogin against a now-dead gate. See docs/design/
-	// stress-test-2026-05-http-login.md §四 #B-1 for the diagnosis.
+	// 断线通知由 gate 在 TCP 关闭时合成(带会话代次,client_session_handler.cpp 的连接关闭处理),
+	// 这里只需关连接:login 收到后把 player_locator 会话转成 Disconnecting(带重连租约),
+	// 下一轮 EnterGame 不会被残留的 ONLINE 会话顶成 ReplaceLogin。客户端不得自己发 Disconnect:
+	// 它标了 CLIENT_RPC_SERVER_ONLY,不在 gate 上行白名单里,发上去只会被当非法包丢弃
+	// (docs/design/client-rpc-callback.md §7 R4)。残留会话的原始诊断见
+	// docs/design/stress-test-2026-05-http-login.md §四 #B-1。
 	defer gc.Close()
-	defer sendDisconnectBestEffort(gc)
 	stats.Connected()
 	defer stats.Disconnected()
 

@@ -694,25 +694,51 @@ func TestSpectatorTiDBLobbyAndCloseTipFirstWriteWins(t *testing.T) {
 	require.ErrorIs(t, f.store.RequireLobbyReplay(f.actor, 11, lobby.RequestId), ErrSpectatorSuperseded)
 }
 
-// 房间必已不在的判据:成局已关,或已过权威截止 + 终局提交宽限(与到期终局恢复裁决 ABORT 同一分界)。
+// 房间必已不在的判据:终局已落定(ABORT 关成 5,或 COMPLETE 之后仍是 4 但 retry_at_ms 已是 NoRetry),
+// 或已过权威截止 + 终局提交宽限(与到期终局恢复裁决 ABORT 同一分界)。
 func TestSpectatorFormationEnded(t *testing.T) {
 	const deadline = uint64(1_000_000)
 	for _, c := range []struct {
-		name  string
-		state uint32
-		limit uint64
-		stamp uint64
-		want  bool
+		name    string
+		state   uint32
+		retryAt uint64
+		limit   uint64
+		stamp   uint64
+		want    bool
 	}{
-		{"战斗中", 4, deadline, deadline - 1, false},
-		{"刚到期限", 4, deadline, deadline, false},
-		{"还差1毫秒过宽限", 4, deadline, deadline + terminalOutcomeGraceMs - 1, false},
-		{"过了宽限", 4, deadline, deadline + terminalOutcomeGraceMs, true},
-		{"成局已关", 5, deadline, 0, true},
-		{"没有期限", 4, 0, deadline, false},
+		{"战斗中", 4, 0, deadline, deadline - 1, false},
+		{"刚到期限", 4, 0, deadline, deadline, false},
+		{"还差1毫秒过宽限", 4, 0, deadline, deadline + terminalOutcomeGraceMs - 1, false},
+		{"过了宽限", 4, 0, deadline, deadline + terminalOutcomeGraceMs, true},
+		{"成局已关", 5, 0, deadline, 0, true},
+		{"没有期限", 4, 0, 0, deadline, false},
+		{"COMPLETE已提交期限未到", 4, terminalOutcomeNoRetryMs, deadline, deadline - 1, true},
+		{"工作租约在身不算终局", 4, deadline + WorkLeaseMs, deadline, deadline - 1, false},
+		{"NoRetry只认state4", 3, terminalOutcomeNoRetryMs, deadline, deadline - 1, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			require.Equal(t, c.want, SpectatorFormationEnded(&pb.MatchFormationRecord{State: c.state, DeadlineMs: c.limit}, c.stamp))
+			formation := &pb.MatchFormationRecord{State: c.state, RetryAtMs: c.retryAt, DeadlineMs: c.limit}
+			require.Equal(t, c.want, SpectatorFormationEnded(formation, c.stamp))
+		})
+	}
+}
+
+// 终局已落定只认持久信号:ABORT 写的 state 5,与 COMPLETE 写的 state 4 + NoRetry。
+func TestFormationOutcomeDecided(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		state   uint32
+		retryAt uint64
+		want    bool
+	}{
+		{"开房成功", 4, 0, false},
+		{"开房成功且在租约中", 4, 120000, false},
+		{"COMPLETE", 4, terminalOutcomeNoRetryMs, true},
+		{"安全中止", 5, 0, true},
+		{"结果未知不算", 3, terminalOutcomeNoRetryMs, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			require.Equal(t, c.want, FormationOutcomeDecided(&pb.MatchFormationRecord{State: c.state, RetryAtMs: c.retryAt}))
 		})
 	}
 }

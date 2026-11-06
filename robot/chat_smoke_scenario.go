@@ -123,7 +123,6 @@ func RunChatSmoke(cfg *config.Config) {
 				continue
 			}
 			_ = leaveGame(b.gc, stats)
-			sendDisconnectBestEffort(b.gc)
 			gameobject.PlayerList.Delete(b.gc.PlayerId)
 			b.gc.Close()
 		}
@@ -338,7 +337,6 @@ func chatSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (*
 	defer waitCancel()
 	if err := bot.player.WaitSceneReady(waitCtx); err != nil {
 		// 已 EnterGame 成功,补一个 Disconnect 再关连接,避免残留 ONLINE 会话顶掉下一次冒烟
-		sendDisconnectBestEffort(gc)
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()
 		return nil, fmt.Errorf("wait scene ready: %w", err)

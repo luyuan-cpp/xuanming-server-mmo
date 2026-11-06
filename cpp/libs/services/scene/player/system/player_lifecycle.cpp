@@ -7006,9 +7006,108 @@ std::size_t PlayerLifecycleSystem::ExitReleaseMarksInFlight()
 	return tlsExitReleaseMarksInFlight;
 }
 
+namespace
+{
+	// ── 身份不确认期间补存(2026-11-05,docs/design/data-consistency-guarantee-map-20261020.md §6)──────────
+	//
+	// 节点和 etcd 单边失联时,进程照常连着 gate、go/db,玩家照常在玩;scene_manager 却在租约到期、再过一个再入屏障之后
+	// 把这里的玩家当成无主,下一次进场或换图就铸新代次派给别的节点。新持有者认领之后,本节点的存盘一律被 go/db 拒绝
+	// (STALE_OWNER),内存里比上一次提交多出来的进度随实体销毁丢掉。写权行保证这里只丢不盖,但丢多少由存盘节奏决定:
+	// 定时存盘 60 秒一轮,最多丢 60 秒。
+	//
+	// 所以本节点身份不再确认时(IsNodeIdentityConfirmed 为假:keepalive 应答超过半个租约没来、重注册中、紧急疏散中),
+	// 每 kIdentityAtRiskSaveIntervalSec 秒给所有还能改的玩家存一次,身份恢复后回到定时存盘的节奏。身份不确认比租约到期
+	// 早半个租约,再加上 scene_manager 的再入屏障,接管之前通常已经补存过很多轮,丢失上限缩到这个间隔。
+	// 这是缩短窗口,不是围栏:最后一次补存到接管之间的改动照样会丢(冻结所有玩家才能做到零丢失,代价是一次 etcd 抖动
+	// 就让整个节点停摆,暂不这样做)。
+	//
+	// 用 SavePlayer 不用 SavePlayerPeriodic:要把位置也写进去,接管的节点才从这里最后的位置接着走。
+	// 只存可改的玩家(IsPlayerMutable):冻结、交接、退出中的实体已经在自己的存盘流程里,再插一笔只会打乱它们的收尾判定。
+	constexpr double kIdentityAtRiskSaveIntervalSec = 5.0;
+
+	void RunIdentityAtRiskSaves()
+	{
+		static thread_local bool atRisk = false;
+		static thread_local std::chrono::steady_clock::time_point lastRound{};
+		// 探针被清掉(停机时节点入口会清)说明不再由节点身份管着,不算身份不确认。
+		if (!tlsNodeIdentityProbe)
+		{
+			return;
+		}
+		if (IsNodeIdentityConfirmed())
+		{
+			if (atRisk)
+			{
+				atRisk = false;
+				LOG_WARN << "[IdentityAtRisk] node identity confirmed again; back to the periodic save cadence";
+			}
+			return;
+		}
+		if (tlsEcs.playerList.empty())
+		{
+			return; // 启动期(租约还没授予)也走到这里:没有玩家就没有要补的,也不打日志
+		}
+		const auto now = std::chrono::steady_clock::now();
+		if (!atRisk)
+		{
+			atRisk = true;
+			lastRound = {};
+			LOG_WARN << "[IdentityAtRisk] node identity is no longer confirmed (etcd keepalive late, re-registering or evacuating);"
+					 << " saving every " << kIdentityAtRiskSaveIntervalSec << "s until it is, so a takeover loses at most that much"
+					 << " (online=" << tlsEcs.playerList.size() << ", metric=identity_at_risk_saves)";
+		}
+		if (lastRound != std::chrono::steady_clock::time_point{} &&
+			now - lastRound < std::chrono::duration<double>(kIdentityAtRiskSaveIntervalSec))
+		{
+			return;
+		}
+		lastRound = now;
+		// 先收集后存:存盘的回调不会在这一轮同步回来,但不在遍历 playerList 时调可能改它的东西,和定时存盘一样稳妥。
+		std::vector<entt::entity> players;
+		players.reserve(tlsEcs.playerList.size());
+		for (const auto &[playerId, player] : tlsEcs.playerList)
+		{
+			if (PlayerLifecycleSystem::IsPlayerMutable(player))
+			{
+				players.push_back(player);
+			}
+		}
+		for (const auto player : players)
+		{
+			if (tlsEcs.actorRegistry.valid(player))
+			{
+				PlayerLifecycleSystem::SavePlayer(player);
+			}
+		}
+	}
+
+	// 写法同 EnsureTravelFreezeCapTimer:节点入口注入身份探针时在当前线程的 EventLoop 上挂一次,没有 loop(单测宿主)直接返回。
+	// 每秒看一次身份,真正的存盘节奏由 RunIdentityAtRiskSaves 自己控制;loop 析构时定时器随之销毁。
+	void EnsureIdentityAtRiskSaveTimer()
+	{
+		static thread_local bool armed = false;
+		if (armed)
+		{
+			return;
+		}
+		auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		if (loop == nullptr)
+		{
+			return;
+		}
+		armed = true;
+		loop->runEvery(1.0, [] { RunIdentityAtRiskSaves(); });
+	}
+} // namespace
+
 void PlayerLifecycleSystem::SetNodeIdentityProbe(std::function<bool()> probe)
 {
 	tlsNodeIdentityProbe = std::move(probe);
+	// 只有真的注入了探针才挂补存定时器:没有探针时 IsNodeIdentityConfirmed 恒为假(fail-closed),挂上会一直补存。
+	if (tlsNodeIdentityProbe)
+	{
+		EnsureIdentityAtRiskSaveTimer();
+	}
 }
 
 void PlayerLifecycleSystem::EnforceTravelFreezeCaps(travel_freeze_cap::Clock::time_point now)

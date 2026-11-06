@@ -21,6 +21,15 @@
 // 两段都在同一个 Redis 上原子执行,天然可串行化:关闭在前,绑定一定看到 closed,由后台链补发断线租约;
 // 绑定在前,关闭一定读到 player,由 Disconnect 补发。两种顺序都收敛到「带租约的 DISCONNECTING」。
 //
+// 寿命分两种(2026-11-05,docs/design/data-overwrite-rollback-audit-20261018.md §4 login 第 2 条):
+//
+//   - 没绑定玩家、或连接已关闭的记录:调用方给的 ttl(TTLFor(后台链总预算)),只需比还可能读它的在途操作活得久;
+//   - 绑定了玩家、连接未关闭的记录:绑定只由 Leave(离开游戏)与 Close(断线)解除,两者把记录收回到 ttl。
+//     记录本身用 boundRecordTTL 兜底,登录提交(登录态续期)、进游戏入口、绑定都把它续满。
+//
+// 以前绑定与其余字段共用 ttl:绑定后 6 分钟内没有 LeaveGame / Disconnect,player 随记录一起过期,
+// 同一连接再 EnterGame 就能绑上第二个角色,断线时也读不到绑定的玩家。
+//
 // 记录在登录域(LoginRedis,生产是 Redis Cluster)。键带连接身份的 hash tag,所以 CommitLogin 只能碰本连接的栅栏与
 // login_session;账号设备集按账号分布,在另一个槽,由调用方在 CommitLogin 成功之后单独写(docs/design/redis-player-store-cluster.md §10.2)。
 package sessionfence
@@ -62,11 +71,21 @@ func (k Key) redisKey() string {
 	return redisslot.SessionFenceKey(k.String())
 }
 
-// TTLFor 由 EnterGame 后台链的总预算派生栅栏记录的寿命:记录必须比所有还可能读它的操作活得久,
+// TTLFor 由 EnterGame 后台链的总预算派生**没绑定玩家或已关闭**的记录的寿命:记录必须比所有还可能读它的操作活得久,
 // 最长的是后台链本身;多留 1 分钟吸收时钟与调度误差。不用 SessionExpireMin(那是登录态的寿命,不是在途操作的寿命)。
+// 绑定了玩家的记录不用它,见 boundRecordTTL。
 func TTLFor(enterGameChainBudget time.Duration) time.Duration {
 	return enterGameChainBudget + time.Minute
 }
+
+// boundRecordTTL 是绑定了玩家、连接未关闭的记录的兜底寿命。绑定不靠它到期,只由 Leave / Close 解除;
+// 它只回收 gate 进程崩溃(Disconnect 没有发出)之后再没人会读的记录,让这类记录有界。
+// 这条连接上的栅栏操作(登录提交即登录态续期、进游戏入口、绑定)都把它续满。
+//
+// 残余:gate 连接没有寿命上限。一条连接在游戏里连续停满 boundRecordTTL、期间没有任何栅栏操作时,login 这一层会丢绑定;
+// 之后同一连接换角由 gate 会话层拒绝(cpp/nodes/gate/handler/rpc/login_admission.h EnterGameRoleSwitchRejectTip,
+// gate 的会话与连接同寿命)。取一周:要回收的只是已死 gate 进程的记录,内存代价可以忽略;取得更长不改变这条残余的性质,只推迟回收。
+const boundRecordTTL = 7 * 24 * time.Hour
 
 // Outcome 是栅栏判定的结果。
 type Outcome uint8
@@ -99,17 +118,23 @@ func (o Outcome) String() string {
 // ErrClosed:CommitLogin 时连接已断开,Login 不写任何状态。
 var ErrClosed = errors.New("gate connection already closed")
 
-// KEYS = {栅栏, login_session};ARGV = {account, sessionTTL(ms)}。两个键带同一个连接 tag,必然同槽。
+// KEYS = {栅栏, login_session};ARGV = {account, sessionTTL(ms), boundRecordTTL(ms)}。两个键带同一个连接 tag,必然同槽。
 var commitLoginScript = redis.NewScript(`
 if redis.call('HGET', KEYS[1], 'closed') == '1' then
   return 0
 end
 redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+if redis.call('HEXISTS', KEYS[1], 'player') == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[3])
+end
 return 1
 `)
 
 // CommitLogin 原子地「检查连接未关闭 → 写 login_session」。检查与写入必须在同一段脚本里,否则仍有
 // 「检查通过、Disconnect 插进来、再写入」的窗口。连接已关闭返回 ErrClosed,什么都不写。
+//
+// 登录态续期时同步续栅栏:这条连接上已绑定了玩家(游戏里在同一连接上重新 Login)时,记录续满 boundRecordTTL,
+// 绑定不会因为登录态续上了、栅栏却到期而丢。没有记录或没绑定玩家时不建记录、不改寿命:那样的记录只服务在途操作。
 //
 // 设备集按账号分布、不同槽,进不了这段脚本,由调用方在成功之后写(loginsession.RegisterDevice)。两步之间的结局见
 // loginsession 包注释,都能自愈。
@@ -119,7 +144,7 @@ func CommitLogin(ctx context.Context, rdb redis.UniversalClient, key Key, accoun
 		return fmt.Errorf("session fence commit login: non-positive session ttl %s", sessionTTL)
 	}
 	res, err := commitLoginScript.Run(ctx, rdb, []string{key.redisKey(), redisslot.LoginSessionKey(key.String())},
-		account, sessionTTL.Milliseconds(),
+		account, sessionTTL.Milliseconds(), boundRecordTTL.Milliseconds(),
 	).Int64()
 	if err != nil {
 		return err
@@ -142,6 +167,7 @@ return '0'
 
 // Close 标记连接已断开,并返回这条连接上已绑定的玩家(没有为 0)。Disconnect 在清理 login_session 之前调用;
 // 会话里的 player_id 为 0(BindSession 还没到 gate)时,用这里返回的玩家补发断线租约。
+// 关闭是终态:记录收回到 ttl(绑定随之解除),之后只剩在途操作会读它。
 func Close(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Duration) (uint64, error) {
 	raw, err := closeScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).Text()
 	if err != nil {

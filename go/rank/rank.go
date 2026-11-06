@@ -31,6 +31,7 @@ import (
 	"shared/dbplacement"
 	"shared/domainhost"
 	tables "shared/generated/table"
+	"shared/releasetrack"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
 )
@@ -71,6 +72,12 @@ func main() {
 func run(c config, migrate bool) (runErr error) {
 	if err := c.Validate(); err != nil {
 		return err
+	}
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理客户端请求,不跑奖励投递这条全局后台。
+	// 取值非法就拒启。错误另起名字:本函数后面有 var err error。
+	releaseTrack, trackErr := releasetrack.FromEnv()
+	if trackErr != nil {
+		return trackErr
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -187,7 +194,13 @@ func run(c config, migrate bool) (runErr error) {
 	worker := &reward.Worker{Relay: relay, Repo: repo, Mail: mailpb.NewMailAdminClient(mailRPC.Conn()), Secret: mailSecret}
 	workerCtx, cancelWorker := context.WithCancel(ctx)
 	finished := make(chan struct{})
-	go func() { defer close(finished); worker.Run(workerCtx) }()
+	if releaseTrack.RunsGlobalBackgroundWork() {
+		go func() { defer close(finished); worker.Run(workerCtx) }()
+	} else {
+		// canary 副本不投奖励,到期奖励由 stable 副本领租约投出。完成通道直接关掉,停机时 closeRelay 等它立即返回。
+		close(finished)
+		logx.Infof("[rank] release_track=%s: reward worker disabled (canary serves client RPCs only)", releaseTrack)
+	}
 	resourcesTransferred = true
 	var sourceMu, relayMu sync.Mutex
 	sourceClosed, relayClosed := false, false

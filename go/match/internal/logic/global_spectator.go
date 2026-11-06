@@ -362,12 +362,13 @@ func globalLobbyResult(battle uint64, admission spectateLobbyAdmission) globalWa
 	return globalWatchResult{battleID: battle, verdict: globalWatchVerdict{outcome: "lobby"}, delivery: pb.ESpectateDelivery_SPECTATE_DELIVERY_LOBBY, ticket: admission.ticket}
 }
 
-// globalFormationWatchable 判定全局成局此刻能否接纳观众:已确认开房(state 4),且建房原件冻结的可见性为
-// PUBLIC(formationSpectatePublic)。提交点 BeginSpectator 只在事务里复核 state 与落点、不再读可见性:可见性随
-// create_request 冻结(成局 1→2 时写入一次,之后只允许逐字节相同的重写),state 4 时必已落库,这里判过的结论
-// 到提交点不会变。
+// globalFormationWatchable 判定全局成局此刻能否接纳观众:已确认开房(state 4)、终局还没落定(COMPLETE 之后成局仍是 state 4,
+// 见 authority.FormationOutcomeDecided),且建房原件冻结的可见性为 PUBLIC(formationSpectatePublic)。提交点 BeginSpectator
+// 在事务里复核 state、终局与落点,不再读可见性:可见性随 create_request 冻结(成局 1→2 时写入一次,之后只允许逐字节相同的重写),
+// state 4 时必已落库,这里判过的结论到提交点不会变。
 func globalFormationWatchable(formation *pb.MatchFormationRecord) bool {
-	return formation.GetState() == 4 && formationSpectatePublic(formation.GetCreateRequest())
+	return formation.GetState() == 4 && !authority.FormationOutcomeDecided(formation) &&
+		formationSpectatePublic(formation.GetCreateRequest())
 }
 
 // closeUnpreparedGlobalWatch 关闭尚未发出 Add 的意图并持久化关闭原因。先写的原因为准：首答回的就是

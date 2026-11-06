@@ -537,7 +537,6 @@ func (s *featureSmokeSession) close() {
 		return
 	}
 	_ = leaveGame(s.gc, s.stats)
-	sendDisconnectBestEffort(s.gc)
 	gameobject.PlayerList.Delete(s.gc.PlayerId)
 	pkg.Clients.Unregister(s.gc.PlayerId, s.gc)
 	s.gc.Close()

@@ -87,18 +87,31 @@ func TestCheckLiveView_DropIsHeldUntilStableThenReleased(t *testing.T) {
 	}
 }
 
-// 压住期间有 gate 回来(etcd 恢复、gate 正在重新注册):计时从头算,恢复到一半以下也继续压住。
-func TestCheckLiveView_RecoveryRestartsTheClock(t *testing.T) {
+// 压住期间有 gate 回来、但仍过半(etcd 恢复中):计时从头算。
+func TestCheckLiveView_ChangeWhileDroppedRestartsTheClock(t *testing.T) {
 	clock := newTestClock()
 	s := newViewTestSweeper(clock)
 	pairs := viewPairs("a", "b", "c", "d", "e")
 	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a")), errLiveViewDrop)
 	clock.Advance(20 * time.Minute)
-	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a", "b", "c", "d")), errLiveViewDrop, "只剩一个缺席也还在压住")
+	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a", "b")), errLiveViewDrop, "还缺三个,仍过半")
 	clock.Advance(liveViewHold - time.Second)
-	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a", "b", "c", "d")), errLiveViewDrop, "从回来那一刻起还不满")
+	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a", "b")), errLiveViewDrop, "从回来那一刻起还不满")
 	clock.Advance(time.Second)
-	require.NoError(t, s.checkLiveView(pairs, liveSet("a", "b", "c", "d")))
+	require.NoError(t, s.checkLiveView(pairs, liveSet("a", "b")))
+}
+
+// 恢复到一半以下就放行:剩下的缺席 gate 还要连续两拍缺席才判死,在去抖窗口里重新注册就不会被处理。
+// 要缺席清零才放行的话,gate 滚动发布里一次短暂过半就会把清扫压住整整 liveViewHold。
+func TestCheckLiveView_RecoveryBelowHalfReleasesToTheDebounce(t *testing.T) {
+	clock := newTestClock()
+	s := newViewTestSweeper(clock)
+	pairs := viewPairs("a", "b", "c", "d", "e")
+	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a")), errLiveViewDrop)
+	clock.Advance(testReconcileInterval)
+	require.NoError(t, s.checkLiveView(pairs, liveSet("a", "b", "c")), "只剩两个缺席(不过半):放行")
+	clock.Advance(testReconcileInterval)
+	require.ErrorIs(t, s.checkLiveView(pairs, liveSet("a")), errLiveViewDrop, "再次过半要重新压住")
 }
 
 // 小集群挂一台、大集群挂不到一半都是日常,不压。同一 gate 在多个 slot 上只算一次。

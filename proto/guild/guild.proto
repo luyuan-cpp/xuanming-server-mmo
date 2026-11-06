@@ -555,8 +555,11 @@ message GetGuildRankByGuildResponse {
 
 // 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
 // 身份与 zone 一律由服务端决定:请求体里的 player_id / zone_id 只对内部调用(无会话)生效。
-// 本开关是服务级的,UpdateGuildScore 也会进 gate 白名单与路由表;
-// 它对客户端的拒绝在 go/guild/internal/session 的方法白名单里(port-decisions D-9)。
+// 本开关是服务级的,整个服务都登记在路由表;gate 上行白名单按方法方向收号,只收 REQUEST / ONE_WAY
+// (docs/design/client-rpc-callback.md §7 R4)。UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,仍登记在路由表,
+// 但不进 gate 上行白名单,客户端发上来在 gate 按非法包丢弃(计一次非法包、不回包,到不了路由服与 guild);
+// 推送号(NotifyGuildChanged 等 CLIENT_RPC_PUSH)同理。
+// guild 的会话白名单(go/guild/internal/session 的 ClientMethods,port-decisions D-9)是第二道防线。
 service GuildService {
   option (OptionIsClientProtocolService) = true;
 
@@ -580,7 +583,8 @@ service GuildService {
   rpc ReviewGuildApplication (ReviewGuildApplicationRequest) returns (ReviewGuildApplicationResponse);
 
   // 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
-  // **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+  // 标了 CLIENT_RPC_PUSH:不进 gate 上行白名单,客户端经 gate 发这个 id 按非法包丢弃(client-rpc-callback.md §7 R4);
+  // 也**不进** go/guild session.ClientMethods,即使到了 guild 也会被 PermissionDenied(第二道防线)。
   rpc NotifyGuildChanged (GuildChangedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 
   // Ranking

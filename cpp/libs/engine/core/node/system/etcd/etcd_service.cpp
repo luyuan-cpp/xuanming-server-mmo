@@ -23,12 +23,42 @@ EtcdService::~EtcdService()
 void EtcdService::Init() {
 	const std::string& etcdAddr = *tlsNodeConfigManager.GetBaseDeployConfig().etcd_hosts().begin();
 	// 传输在 Node 构造期建好(loop 线程,loop 尚未运行);新传输的地址解析也在这里做完(§13.6)。
-	registrationTasks_.emplace(*gNode->GetLoop());
+	ConfigureRegistration(*gNode->GetLoop(), {
+		[](auto done) { gNode->GetEtcdManager().RequestNodeLease(std::move(done)); },
+		[] { gNode->GetEtcdManager().StartLeaseKeepAlive(); },
+		&NodeAllocator::AcquireNodePort,
+		&NodeAllocator::SelectNodeId,
+		[] { NodeAllocator::RecordLostId(gNode->GetNodeInfo().node_id()); },
+		[](RegistrationStage stage) {
+			const auto& info = gNode->GetNodeInfo();
+			auto& manager = gNode->GetEtcdManager();
+			return stage == RegistrationStage::kPort ? manager.MakeNodePortEtcdKey(info) :
+				(stage == RegistrationStage::kAllocation ? manager.MakeNodeAllocationKey(info) : manager.MakeNodeEtcdKey(info));
+		},
+		[](RegistrationStage stage, bool reRegistering, bool retryUnknown, RegistrationIo::TxnDone done) {
+			auto& manager = gNode->GetEtcdManager();
+			switch (stage)
+			{
+			case RegistrationStage::kPort: manager.RegisterNodePort(reRegistering, retryUnknown, std::move(done)); break;
+			case RegistrationStage::kAllocation: manager.RegisterNodeService(reRegistering, retryUnknown, std::move(done)); break;
+			case RegistrationStage::kPublish: manager.PublishNodeInfoAfterAllocation(reRegistering, retryUnknown, std::move(done)); break;
+			}
+		},
+		[] { gNode->StartRpcServer(); },
+		[] { gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed); },
+	});
 	transport_ = etcd_transport::Create(*gNode->GetLoop(), etcdAddr, *this);
 	LOG_INFO << "etcd transport=" << transport_->Name()
 			 << ": watch / keepalive streams are rebuilt with backoff, each prefix re-ranged and reconciled"
 			 << " (docs/design/grpc-muduo-transport.md §13.5)";
 	LOG_INFO << "EtcdService initialized with etcd: " << etcdAddr;
+}
+
+void EtcdService::ConfigureRegistration(muduo::net::EventLoop& loop, RegistrationIo io)
+{
+	registrationLoop_ = loop;
+	registrationIo_ = std::move(io);
+	registrationTasks_.emplace(loop);
 }
 
 void EtcdService::OnRange(const etcdserverpb::RangeRequest* request, const etcdserverpb::RangeResponse& reply)
@@ -402,7 +432,7 @@ void EtcdService::SetRegistrationMode(RegistrationMode mode, const char* reason)
 
 void EtcdService::PublishDiscoveryAfterGrpcReady()
 {
-	gNode->GetLoop()->assertInLoopThread();
+	registrationLoop_->get().assertInLoopThread();
 	grpcReady_ = true;
 	if (auto done = std::exchange(grpcReadyCompletion_, {})) done(true);
 }
@@ -471,9 +501,9 @@ void EtcdService::HandleDeleteEvent(const std::string &key, const std::string &v
 
 void EtcdService::RequestNodeLease()
 {
-	auto& loop = *gNode->GetLoop();
-	loop.assertInLoopThread();
 	if (registrationStopped_ || registrationRunning_ || !registrationTasks_) return;
+	auto& loop = registrationLoop_->get();
+	loop.assertInLoopThread();
 	registrationRunning_ = true;
 	if (!registrationTasks_->Start(RegisterAsync(loop), "[EtcdRegistration]")) registrationRunning_ = false;
 }
@@ -486,7 +516,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 		bool& running;
 		~RunningGuard() { running = false; }
 	} runningGuard{registrationRunning_};
-	enum class Stage : uint8_t { kPort, kAllocation, kPublish };
+	using Stage = RegistrationStage;
 	constexpr double kResponseBudgetSeconds = 10.0;
 	constexpr double kConflictRetrySeconds = 1.0;
 	TimerTaskComp timer;
@@ -497,7 +527,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 		const bool reRegistering = registrationMode_ == RegistrationMode::kReRegisterExisting;
 		LOG_INFO << "Requesting etcd lease. mode=" << RegistrationModeName(registrationMode_);
 		auto lease = co_await etcd_registration::AwaitReply<etcdserverpb::LeaseGrantResponse>(loop, timer,
-			kResponseBudgetSeconds, [](auto done) { gNode->GetEtcdManager().RequestNodeLease(std::move(done)); });
+			kResponseBudgetSeconds, registrationIo_.requestLease);
 		timer.Cancel();
 		if (!lease) co_return;
 		if (restartRegistration_) continue;
@@ -517,22 +547,21 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 		leaseTtlSeconds_ = (*lease)->ttl();
 		lastKeepAliveAckTime_ = std::chrono::steady_clock::now();
 		LOG_INFO << "Lease granted: id=" << leaseId << ", ttl=" << leaseTtlSeconds_ << "s";
-		gNode->GetEtcdManager().StartLeaseKeepAlive();
+		registrationIo_.startKeepAlive();
 
 		Stage stage = Stage::kPort;
 		bool retryUnknown = false;
 		while (!restartRegistration_ && !registrationStopped_)
 		{
 			// CAS 结果未知时复核同一个键，不重新挑选端口或节点号。
-			if (stage == Stage::kPort && !reRegistering && !retryUnknown && !NodeAllocator::AcquireNodePort())
+			if (stage == Stage::kPort && !reRegistering && !retryUnknown && !registrationIo_.selectPort())
 			{
-				LOG_ERROR << "RPC port allocation failed for node_type=" << gNode->GetNodeType()
-						  << "; nothing published to etcd, retrying in 1s";
+				LOG_ERROR << "RPC port allocation failed; nothing published to etcd, retrying in 1s";
 				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
 				if (!waited || !*waited) co_return;
 				continue;
 			}
-			if (stage == Stage::kAllocation && !reRegistering && !retryUnknown) NodeAllocator::SelectNodeId();
+			if (stage == Stage::kAllocation && !reRegistering && !retryUnknown) registrationIo_.selectNodeId();
 
 			// 普通引导的监听在 StartRpcServer 内就绪。维护预备态需等提交开放监听；
 			// 失租重注册通常已经就绪，但维护预备态也必须守住这一道闸。
@@ -546,19 +575,10 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 				if (!*ready || restartRegistration_) break;
 			}
 
-			const auto& info = gNode->GetNodeInfo();
-			auto& manager = gNode->GetEtcdManager();
-			const std::string key = stage == Stage::kPort ? manager.MakeNodePortEtcdKey(info) :
-				(stage == Stage::kAllocation ? manager.MakeNodeAllocationKey(info) : manager.MakeNodeEtcdKey(info));
+			const std::string key = registrationIo_.key(stage);
 			auto reply = co_await etcd_registration::AwaitReply<etcdserverpb::TxnResponse>(loop, timer,
-				kResponseBudgetSeconds, [stage, reRegistering, retryUnknown](auto done) {
-					auto& manager = gNode->GetEtcdManager();
-					switch (stage)
-					{
-					case Stage::kPort: manager.RegisterNodePort(reRegistering, retryUnknown, std::move(done)); break;
-					case Stage::kAllocation: manager.RegisterNodeService(reRegistering, retryUnknown, std::move(done)); break;
-					case Stage::kPublish: manager.PublishNodeInfoAfterAllocation(reRegistering, retryUnknown, std::move(done)); break;
-					}
+				kResponseBudgetSeconds, [&claim = registrationIo_.claim, stage, reRegistering, retryUnknown](auto done) {
+					claim(stage, reRegistering, retryUnknown, std::move(done));
 				});
 			timer.Cancel();
 			if (!reply) co_return;
@@ -577,12 +597,11 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 				if (reRegistering)
 				{
 					SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration failed");
-					LOG_ERROR << "Node re-registration FAILED for key: " << key
-							  << ", node_id=" << gNode->GetNodeInfo().node_id();
-					gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed);
+					LOG_ERROR << "Node re-registration FAILED for key: " << key;
+					registrationIo_.fenceIdentity();
 					co_return;
 				}
-				if (stage == Stage::kAllocation) NodeAllocator::RecordLostId(gNode->GetNodeInfo().node_id());
+				if (stage == Stage::kAllocation) registrationIo_.recordLostNodeId();
 				LOG_WARN << "etcd registration CAS rejected for " << key << "; retrying in 1s";
 				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
 				if (!waited || !*waited) co_return;
@@ -600,7 +619,7 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 				if (!rpcPrepared_)
 				{
 					rpcPrepared_ = true;
-					gNode->StartRpcServer();
+					registrationIo_.startRpc();
 				}
 				stage = Stage::kPublish;
 				continue;
@@ -609,11 +628,11 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 			if (reRegistering)
 			{
 				SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration succeeded");
-				LOG_INFO << "Node re-registration successful, node_id=" << gNode->GetNodeInfo().node_id();
+				LOG_INFO << "Node re-registration successful, key=" << key;
 			}
 			else
 			{
-				LOG_INFO << "Node service info published: node_id=" << gNode->GetNodeInfo().node_id();
+				LOG_INFO << "Node service info published: key=" << key;
 			}
 			co_return;
 		}
@@ -648,7 +667,8 @@ void EtcdService::Shutdown()
 
 void EtcdService::RequestReRegistration(const char *reason)
 {
-	gNode->GetLoop()->assertInLoopThread();
+	if (!registrationLoop_) return;
+	registrationLoop_->get().assertInLoopThread();
 	if (registrationStopped_) return;
 	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
 	{
@@ -668,7 +688,7 @@ void EtcdService::RequestReRegistration(const char *reason)
 
 void EtcdService::StopRegistrationRetries()
 {
-	gNode->GetLoop()->assertInLoopThread();
+	if (registrationLoop_) registrationLoop_->get().assertInLoopThread();
 	if (registrationStopped_) return;
 	registrationStopped_ = true;
 	if (registrationTasks_) registrationTasks_->Stop();

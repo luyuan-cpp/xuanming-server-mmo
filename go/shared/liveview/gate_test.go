@@ -64,7 +64,22 @@ func TestObserve_ChangeRestartsTheClock(t *testing.T) {
 	expect(t, "稳定满 hold", g.Observe(Observation{Known: 10, Missing: 7}, at(165*time.Second)), Release)
 }
 
-// 压住期间恢复到一半以下也继续压住(还没恢复完的那些多半也正在重新注册),恢复完复位。
+// RecoverBelowThreshold:不再超过一半就复位放行,剩下的缺席交给消费方自己的去抖;之后再过半就重新压住、重新计时。
+func TestObserve_BelowThresholdRecoversOnceNoLongerDropped(t *testing.T) {
+	g := NewGate(testHold, RecoverBelowThreshold)
+	expect(t, "骤降", g.Observe(Observation{Known: 10, Missing: 8}, at(0)), HoldDrop)
+	expect(t, "缺席变了仍过半,继续压", g.Observe(Observation{Known: 10, Missing: 6}, at(50*time.Second)), HoldDrop)
+	expect(t, "降到一半", g.Observe(Observation{Known: 10, Missing: 5}, at(55*time.Second)), Accept)
+	expect(t, "复位后挂一台", g.Observe(Observation{Known: 10, Missing: 1}, at(56*time.Second)), Accept)
+	expect(t, "再次过半重新压住", g.Observe(Observation{Known: 10, Missing: 6}, at(60*time.Second)), HoldDrop)
+	expect(t, "从重新压住起不满 hold", g.Observe(Observation{Known: 10, Missing: 6}, at(60*time.Second+testHold-time.Second)), HoldDrop)
+	expect(t, "从重新压住起满 hold", g.Observe(Observation{Known: 10, Missing: 6}, at(60*time.Second+testHold)), Release)
+	// 空集照样一直压住;回到残缺时不过半就放行。
+	expect(t, "空集", g.Observe(Observation{Known: 10, Missing: 10, Empty: true}, at(time.Hour)), HoldEmpty)
+	expect(t, "空集之后不过半", g.Observe(Observation{Known: 10, Missing: 3}, at(time.Hour+time.Second)), Accept)
+}
+
+// RecoverWhenClear:压住期间恢复到一半以下也继续压住(还没恢复完的那些多半也正在重新注册),恢复完复位。
 func TestObserve_RecoveringBelowHalfStaysHeldUntilClear(t *testing.T) {
 	g := NewGate(testHold, RecoverWhenClear)
 	expect(t, "骤降", g.Observe(Observation{Known: 10, Missing: 9}, at(0)), HoldDrop)

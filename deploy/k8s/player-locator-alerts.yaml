@@ -124,8 +124,8 @@ spec:
 
         # 存活集合理性闸门(决策清单 B1-1,go/player_locator/internal/logic/gate_sweep.go checkLiveView):etcd 给的 gate 存活集为空,
         # 或登记的 gate 超过一半同时缺席,清扫被压住。压住的拍不转换任何会话、不推进去抖,也不让副本退出分片。
-        # for: 5m:etcd 抖一下、gate 集中重新注册,下一拍就恢复;压住 5 分钟还在,要人看。骤降在缺席数稳定 30 分钟后自动放行,
-        # 所以这条亮着的时候就是人工介入的窗口;空集永远不会自动放行。
+        # for: 5m:etcd 抖一下、gate 集中重新注册,下一拍就恢复(缺席不再过半就放行,剩下的交给两拍去抖);压住 5 分钟还在,
+        # 要人看。骤降在缺席数稳定 30 分钟后自动放行,所以这条亮着的时候就是人工介入的窗口;空集永远不会自动放行。
         - alert: PlayerLocatorGateLiveViewHeld
           expr: |
             max(player_locator_reconcile_live_view_holding) > 0

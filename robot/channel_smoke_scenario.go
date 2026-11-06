@@ -159,7 +159,6 @@ func RunChannelSmoke(cfg *config.Config) {
 			return
 		}
 		_ = leaveGame(bot.gc, stats)
-		sendDisconnectBestEffort(bot.gc)
 		gameobject.PlayerList.Delete(bot.gc.PlayerId)
 		bot.gc.Close()
 	}
@@ -414,7 +413,6 @@ func channelSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats)
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), channelSmokeSceneReadyTimeout)
 	defer waitCancel()
 	if err := bot.player.WaitSceneReady(waitCtx); err != nil {
-		sendDisconnectBestEffort(gc)
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()
 		return nil, fmt.Errorf("wait scene ready(account=%s): %w", account, err)

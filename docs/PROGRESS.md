@@ -21476,3 +21476,25 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
   - 心跳只证明对端的 loop 与网络还在转,不证明业务健康。
 - **Java 版**(`0.1.0-SNAPSHOT`):节点链路已有等价机制,不需要改代码。gate 每 5s 发 `LinkPing`,scene 回 `LinkPong`,两端都用 Netty `IdleStateHandler` 按读空闲 15s 判死。只剩一项待做:同步 `game-proto` 里 `rpc_message.proto` 的副本,已在 Java 仓 `PARITY.md` 末尾登记。本次没有写 Java 代码。
 - 本次没有编译,也没有运行任何测试或程序。
+
+## 2026-11-05 Claude:人数档真人 PVP 计分组排(2V2～5V5,R7;未编译、未测试,待 Codex 验证;Java 0.1.0-SNAPSHOT 全部记待做)
+
+- **负责人要求**:2V2～5V5 按 LoL 手游的方式匹配,单人、双排、三排都能进,凑满两边人数;算法上按人数分桶与拆分模板凑人、车队对等、分数接近、两边实力平衡全部做进去,Java 全部记待做。
+- **规则**:写进 `docs/design/global-match-hierarchical-pools.md` 开头「人数档真人 PVP 与计分组排」第 1～8 条,§3.3、§4、§5.5、§8、§10、§11(R7)、§12.5、§13、§14 同步改正文。要点:
+  - PVP_TEAM 进计分模式。单人入队读分,读失败拒绝;整队在入队事务里读成员评分,写进成员票。
+  - 队伍分 = 成员平均分 + `GlobalMatch.PartyRatingBonusPerMember` ×(人数 − 1),缺省每多一人 25 分。
+  - 选人:候选按人数分桶,一局的人数组成按 2N 的拆分枚举(5V5 最多 30 种),每个桶取排队最早的;计分池再逐个试宽度等于锚点容差、包含锚点的评分窗口。
+  - 车队对等:两侧最大车队人数差不超过 1 立即可成,更大的差要吃亏一侧每个单位都等够 `1 + 等待 ÷ PremadeGapStepSeconds`(缺省 10 秒)。
+  - 分边:枚举全部分法(最多 512 种),取车队差最小、两侧"队伍分 × 人数"之和最接近的。先来先成局优先于分边质量。
+  - 提交点新增计分排队局(1V1、5V5、PVP_TEAM)的组内队伍分极差复核(`ErrRatingSpread`),补上 §5.5 原来的「未做」。计分模式集合与组队加成进全局策略指纹。
+- **代码**(`go/match`):
+  - 新包 `internal/ratingrule`(计分模式、容差曲线、队伍分),`logic/rating.go` 的 `isRatedMode` 与三个容差函数改为委托它,数值不变;
+  - `poolgroup/pvp_units.go` 重写为 `pickSides`(原 `PickPvpUnits` 删除),`poolgroup.go` 允许计分分边、分边模式候选上限仍是 64、新增 `Policy.PremadeGapStepMs`;
+  - `logic/global_pool_matcher.go` 的 `poolPolicy`、`poolUnitInput`(整队算队伍分)、`expectedClaimRejection`;
+  - `authority/rated_spread.go`(提交点复核)、`authority/party_rating.go`(整队读分)、`store.go` 的 `claimTx` 复核段与 `ratingCurve` 字段、`policy.go` 指纹段、`team_queue.go` 的 `EnqueueTeamLaunchTx`;
+  - `config.GlobalMatchConf` 新增 `PartyRatingBonusPerMember`(缺省 25)、`PremadeGapStepSeconds`(缺省 10)。
+- **测试**:新增 `ratingrule/ratingrule_test.go`、`poolgroup/pvp_units_test.go`(重写)、`authority/rated_spread_test.go`(含真库用例 `TestAuthorityTiDBQueueRatingSnapshot`)、`logic/pvp_team_rating_test.go`;`authority/policy_test.go` 加 `party-bonus` 子用例;`logic/global_match_test.go` 改整队队伍分断言。
+- **与 R5 的分工**:评分按模式分开存、按模式分榜、平局阈值由回合制缺口会话做(R5)。两边 11-05 约定 PVP_TEAM 按 mode 一条评分轨道、一张榜(board_type 3);`queueRatingCentiTx` 已由 R5 改成按模式读。两边都改了 `logic/rating.go`,函数不重叠。
+- **验证**:Claude 只跑过 `gofmt -l`(改动文件无输出),没有编译或运行测试。Codex 按设计 §12.5 执行:`go build ./...`、`go vet ./...`、`go test ./internal/ratingrule/... ./internal/poolgroup/... ./internal/config/... ./internal/logic/... ./internal/authority/... -count=1`,然后跑真库回归与 2V2 / 3V3 冒烟。真库用例要等 R5 的建表变化落地;旧库的 `match_global_policy` 摘要会让新进程拒启,清库重建。
+- **未做,等负责人定**:5V5 不收 4 人队、组队成员评分差上限(都要新 tip 码和客户端可见的拒绝);Elo 的组队修正;5V5(`MATCH_MODE_5V5`)的组排。
+- **Java 版**(`0.1.0-SNAPSHOT`):全部待做,已登记 Java 仓 `PARITY.md`「2026-11-05 人数档真人 PVP 计分组排(Java 待做)」。Java 版人数档 PVP 的撮合本身也还没有(game-match 主代码里 `PVP_TEAM` 只出现在观战可见性表)。客户端契约不变。本次没有写 Java 代码。

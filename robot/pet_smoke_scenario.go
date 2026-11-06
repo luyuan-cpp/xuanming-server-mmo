@@ -110,7 +110,6 @@ func RunPetSmoke(cfg *config.Config) {
 	cleanup := func() {
 		if session != nil && session.gc != nil {
 			_ = leaveGame(session.gc, stats)
-			sendDisconnectBestEffort(session.gc)
 			gameobject.PlayerList.Delete(session.gc.PlayerId)
 			session.gc.Close()
 		}
@@ -552,7 +551,6 @@ func (s *petSmokeSession) autoAllocate(petId uint64) (map[uint32]uint32, error) 
 // (HandlePlayerAsyncSaved 会把过快的重登判成"重连取代登出")。
 func (s *petSmokeSession) relogin(cfg *config.Config) (*petSmokeSession, error) {
 	_ = leaveGame(s.gc, s.stats)
-	sendDisconnectBestEffort(s.gc)
 	gameobject.PlayerList.Delete(s.gc.PlayerId)
 	s.gc.Close()
 	time.Sleep(2 * time.Second)

@@ -123,7 +123,6 @@ func runGuildEconomySmoke(cfg *config.Config, stats *metrics.Stats) {
 	cleanup := func() {
 		for _, bot := range bots {
 			_ = leaveGame(bot.gc, stats)
-			sendDisconnectBestEffort(bot.gc)
 			gameobject.PlayerList.Delete(bot.gc.PlayerId)
 			bot.gc.Close()
 		}

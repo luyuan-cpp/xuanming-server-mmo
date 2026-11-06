@@ -24,19 +24,14 @@ type initialStoreRow struct {
 	payload  []byte
 }
 
-// initialPlayerStoreRows 给出新角色的初始行(docs/design/player-save-direct-commit.md §1、§9.2):写权行,以及身份所在的两行。
-// 身份在这里一次写全,不再需要 login 入场时往父键补:名字、外观、性别在 kProfile,职业在 kHot。
+// initialPlayerStoreRows 给出新角色的初始行(docs/design/player-save-direct-commit.md §1、§1.1、§9.2):写权行,以及身份所在的资料行。
+// 身份在这里一次写全,不再需要 login 入场时往父键补:职业、名字、外观、性别都在 kProfile。
 // 写权行 released=1:新角色没有持有者,不算在线。其余 kind 没有行,加载时按空处理;
-// registration_timestamp 留空,首次进场由 scene 判定为新号。
+// registration_timestamp(也在 kProfile)留空,首次进场由 scene 判定为新号。
 func initialPlayerStoreRows(role *base.AccountSimplePlayer) ([]initialStoreRow, error) {
 	deterministic := proto.MarshalOptions{Deterministic: true}
-	hot, err := deterministic.Marshal(&databasepb.PlayerDatabase{
-		Uint32PbComponent: &comppb.PlayerUint32Comp{Class: role.GetClassId()},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("序列化玩家初始热行: %w", err)
-	}
 	profile, err := deterministic.Marshal(&databasepb.PlayerDatabase{
+		Uint32PbComponent: &comppb.PlayerUint32Comp{Class: role.GetClassId()},
 		ProfileComponent: &comppb.PlayerProfileComp{
 			Name:         role.GetName(),
 			AppearanceId: role.GetAppearanceId(),
@@ -48,7 +43,6 @@ func initialPlayerStoreRows(role *base.AccountSimplePlayer) ([]initialStoreRow, 
 	}
 	return []initialStoreRow{
 		{kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER, released: 1, payload: []byte{}},
-		{kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT, payload: hot},
 		{kind: storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE, payload: profile},
 	}, nil
 }

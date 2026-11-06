@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -118,17 +117,9 @@ type Config struct {
 	// 默认 90(曲线 45s 饱和后再等 45s);0 / 漏配按默认,不支持关闭。
 	RatingToleranceMaxWaitSeconds int64 `json:",default=90"`
 
-	// RatingDrawRoundCap:PVP 队列模式"回合打满"的判定阈值。C++ 引擎对所有模式
-	// 一律 roundIndex >= maxRounds → SIDE_B_WIN(PVE"进攻方判负"规则泄漏到 PVP),
-	// 而 team 0 不是随机的(1v1 是锚点、5v5 是评分最高者所在队),照胜负结算会
-	// 让锚点 / 高分方系统性扣分。BattleResultEvent.total_rounds ≥ 该值的胜负结果
-	// 一律按平局(0.5)结算。默认 300 = C++ kDefaultMaxRounds;0 关闭该判定。
-	RatingDrawRoundCap uint32 `json:",default=300"`
-
-	// RatingDrawRoundCapByConfigId:按 battle_config_id 覆盖回合上限(引擎按
-	// DungeonTable.time_limit 换算,配了 time_limit 的配置上限可能不是 300)。
-	// yaml map 键是字符串(go-zero 不支持整数键的 map);0 视为未配置。
-	RatingDrawRoundCapByConfigId map[string]uint32 `json:",optional"`
+	// 计分局「回合打满按平局」不再有配置项(原 RatingDrawRoundCap / RatingDrawRoundCapByConfigId,2026-11-05 删除):
+	// 先看结果的个人原件里 0 队有没有全灭,旧版结果才看模板时限换算的回合上限(catalog.RoundLimit,与引擎同一换算),
+	// 见 logic.ratedScoreA 与 docs/design/global-match-hierarchical-pools.md §8。
 
 	// ---- 组队(docs/design/team-system.md §D.1)----
 
@@ -372,19 +363,4 @@ func (c *Config) Validate() error {
 			c.GlobalMatch.ScopeGroupAfterSeconds, c.GlobalMatch.ScopeGlobalAfterSeconds)
 	}
 	return c.validateSpectate()
-}
-
-// RatingDrawRoundCapFor 返回 battle_config_id 对应的"回合打满按平局"阈值:
-// 按配置覆盖优先,否则用 RatingDrawRoundCap;返回 0 表示不做该判定。
-func (c *Config) RatingDrawRoundCapFor(configId uint32) uint32 {
-	for key, value := range c.RatingDrawRoundCapByConfigId {
-		if value == 0 {
-			continue
-		}
-		parsed, err := strconv.ParseUint(key, 10, 32)
-		if err == nil && uint32(parsed) == configId {
-			return value
-		}
-	}
-	return c.RatingDrawRoundCap
 }

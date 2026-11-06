@@ -482,7 +482,6 @@ func syncSmokeLogin(cfg *config.Config, account string, strictRelogin bool, stat
 	go gc.RecvLoop(bot.onMessage)
 
 	if err := bot.waitSceneReady(); err != nil {
-		sendDisconnectBestEffort(gc)
 		pkg.Clients.Unregister(gc.PlayerId, gc)
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()
@@ -534,7 +533,6 @@ func (b *syncSmokeBot) waitSceneReady() error {
 // close 尽力收尾一个会话:LeaveGame + 断线通知 + 摘掉登记 + 关连接。连接可能已断(重连失败、搬迁途中失败),失败一律忽略。
 func (b *syncSmokeBot) close() {
 	_ = leaveGame(b.gc, b.stats)
-	sendDisconnectBestEffort(b.gc)
 	pkg.Clients.Unregister(b.homePlayer, b.gc)
 	gameobject.PlayerList.Delete(b.homePlayer)
 	b.gc.Close()

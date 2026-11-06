@@ -200,12 +200,9 @@ func (r *sceneMemberReconciler) runRound(ctx context.Context, svcCtx *svc.Servic
 
 // listSceneMemberSets 列出要核对的集合。读失败的 zone 或节点这一遍跳过,打 Error。
 func listSceneMemberSets(svcCtx *svc.ServiceContext) []sceneMemberSet {
-	registered, err := listRegisteredZones(svcCtx)
-	if err != nil {
-		logx.Errorf("[SceneMemberReconcile] read zone registry failed; checking zones with live nodes only: %v", err)
-	}
+	// 只核本进程编排的 zone(orchestrated_zones.go,§4.3):别的 zone 的成员集合由那个 zone 的领导者核,本进程只摘自己 zone 的残留。
 	sets := make([]sceneMemberSet, 0)
-	for _, zone := range unionZones(registered, GetActiveZones()) {
+	for _, zone := range orchestratedZones(svcCtx) {
 		nodes, err := svcCtx.Redis.ZrangeWithScores(nodeLoadKey(zone), 0, -1)
 		if err != nil {
 			logx.Errorf("[SceneMemberReconcile] read load set of zone %d failed; skipping it this pass: %v", zone, err)

@@ -148,7 +148,6 @@ func RunTeamFollowSmoke(cfg *config.Config) {
 	cleanup := func() {
 		for _, bot := range bots {
 			_ = leaveGame(bot.gc, stats)
-			sendDisconnectBestEffort(bot.gc)
 			gameobject.PlayerList.Delete(bot.gc.PlayerId)
 			bot.gc.Close()
 		}
@@ -230,7 +229,6 @@ func RunTeamFollowSmoke(cfg *config.Config) {
 		followerId := b.gc.PlayerId
 		leaderMark := a.recordMark()
 		_ = leaveGame(b.gc, stats)
-		sendDisconnectBestEffort(b.gc)
 		gameobject.PlayerList.Delete(b.gc.PlayerId)
 		b.gc.Close()
 		bots = []*teamFollowSmokeBot{a}
@@ -571,7 +569,6 @@ func teamFollowSmokeLogin(cfg *config.Config, name, account string, stats *metri
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), teamSmokeSceneReadyTimeout)
 	defer waitCancel()
 	if err := bot.player.WaitSceneReady(waitCtx); err != nil {
-		sendDisconnectBestEffort(gc)
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()
 		return nil, fmt.Errorf("wait scene ready: %w", err)

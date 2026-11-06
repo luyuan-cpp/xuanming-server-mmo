@@ -328,7 +328,6 @@ func RunTravelSmoke(cfg *config.Config) {
 		// 死在搬迁途中(旧连接已关、重登失败)时这两条发不到任何 login,属预期:
 		// 残留靠 login 断线租约 / handoff 门自己过期,yaml 文件头写了"等一会儿再重跑"。
 		_ = leaveGame(bot.gc, stats)
-		sendDisconnectBestEffort(bot.gc)
 		pkg.Clients.Unregister(bot.homePlayer, bot.gc)
 		gameobject.PlayerList.Delete(bot.homePlayer)
 		bot.gc.Close()
@@ -558,7 +557,6 @@ func travelSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) 
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), travelSmokeSceneReadyTimeout)
 	defer waitCancel()
 	if err := bot.player.WaitSceneReady(waitCtx); err != nil {
-		sendDisconnectBestEffort(gc)
 		pkg.Clients.Unregister(gc.PlayerId, gc)
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()

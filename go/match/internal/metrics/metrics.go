@@ -563,4 +563,8 @@ func Start(addr string) {
 	}
 	go func() {
 		logx.Infof("[metrics] Prometheus /metrics listening on %s", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClose
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logx.Errorf("[metrics] HTTP server exited: %v", err)
+		}
+	}()
+}

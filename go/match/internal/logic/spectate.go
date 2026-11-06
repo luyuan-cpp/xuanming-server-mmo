@@ -74,9 +74,11 @@ func addSpectateActive(svcCtx *svc.ServiceContext, battleId, createdAtMs uint64,
 	logx.Infof("[spectate] Battle registered for spectating battle=%d", battleId)
 }
 
-// loadSpectateBattle 由 SQL 成局组一场战斗的观战记录;不存在或已中止返回 (nil, nil)。
-func loadSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+// loadSpectateBattle 由 SQL 成局组一场战斗的观战记录;不存在或终局已落定(ABORT 关成 5,或 COMPLETE 之后仍是 4,
+// authority.FormationOutcomeDecided)返回 (nil, nil)。截止挂在请求 ctx 上:列表逐条读成局,客户端已取消或超时之后
+// 不能还在占权威库连接(R2-GO 一般-6)。
+func loadSpectateBattle(ctx context.Context, svcCtx *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	f, e := svcCtx.Authority.Formation(ctx, battleId)
 	if errors.Is(e, sql.ErrNoRows) {
@@ -85,7 +87,7 @@ func loadSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) (*matchpb.S
 	if e != nil {
 		return nil, e
 	}
-	if f.State == 5 {
+	if authority.FormationOutcomeDecided(f) {
 		return nil, nil
 	}
 	return spectateRecordFromFormation(f)

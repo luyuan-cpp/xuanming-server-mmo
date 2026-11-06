@@ -39,6 +39,7 @@ import (
 	tables "shared/generated/table"
 	"shared/kafkacmd"
 	"shared/playerredis"
+	"shared/releasetrack"
 	"shared/rolefence"
 	"shared/scenenode"
 	"shared/serviceauth"
@@ -113,6 +114,12 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	if err := c.Validate(); err != nil {
+		return err
+	}
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理客户端请求,
+	// 不跑 SYSTEM_CREDIT 重投与清理这两条全局作用域的后台。取值非法就拒启。
+	releaseTrack, err := releasetrack.FromEnv()
+	if err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -318,8 +325,16 @@ func run(c config, migrate bool) (runErr error) {
 	loopDone := make(chan struct{})
 	sweepDone := make(chan struct{})
 	go func() { defer close(watchDone); watcher.Run(workerCtx, etcd) }()
-	go func() { defer close(loopDone); loop.Run(workerCtx) }()
-	go func() { defer close(sweepDone); maintenance.Run(sweepCtx, repo, c.Sweep, root) }()
+	if releaseTrack.RunsGlobalBackgroundWork() {
+		go func() { defer close(loopDone); loop.Run(workerCtx) }()
+		go func() { defer close(sweepDone); maintenance.Run(sweepCtx, repo, c.Sweep, root) }()
+	} else {
+		// canary 副本:不起重投与清理,canary 领到的附件由 stable 的重投循环投出。两个完成通道直接关掉,
+		// closeSource / closeRelay 等它们时立即返回,否则停机要等满超时再 HOLD。
+		close(loopDone)
+		close(sweepDone)
+		logx.Infof("[mail] release_track=%s: redelivery loop and sweep disabled (canary serves client RPCs only)", releaseTrack)
+	}
 	resourcesTransferred = true
 	var sourceMu, relayMu sync.Mutex
 	sourceClosed, relayClosed := false, false

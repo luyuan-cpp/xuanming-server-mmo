@@ -164,7 +164,6 @@ func RunFriendSmoke(cfg *config.Config) {
 	cleanup := func() {
 		for _, bot := range bots {
 			_ = leaveGame(bot.gc, stats)
-			sendDisconnectBestEffort(bot.gc)
 			gameobject.PlayerList.Delete(bot.gc.PlayerId)
 			bot.gc.Close()
 		}
@@ -555,7 +554,6 @@ func friendSmokeLogin(cfg *config.Config, account string, spacing, pushTimeout t
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), friendSmokeSceneReadyTimeout)
 	defer waitCancel()
 	if err := bot.player.WaitSceneReady(waitCtx); err != nil {
-		sendDisconnectBestEffort(gc)
 		gameobject.PlayerList.Delete(gc.PlayerId)
 		gc.Close()
 		return nil, fmt.Errorf("wait scene ready: %w", err)

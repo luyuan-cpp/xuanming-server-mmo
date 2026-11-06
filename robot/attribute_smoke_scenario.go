@@ -105,7 +105,6 @@ func RunAttributeSmoke(cfg *config.Config) {
 	cleanup := func() {
 		if session != nil && session.gc != nil {
 			_ = leaveGame(session.gc, stats)
-			sendDisconnectBestEffort(session.gc)
 			gameobject.PlayerList.Delete(session.gc.PlayerId)
 			session.gc.Close()
 		}
@@ -516,7 +515,6 @@ func (s *attributeSmokeSession) callTolerant(messageId uint32, request proto.Mes
 // 过快的重登判成"重连取代登出")。
 func (s *attributeSmokeSession) relogin(cfg *config.Config) (*attributeSmokeSession, error) {
 	_ = leaveGame(s.gc, s.stats)
-	sendDisconnectBestEffort(s.gc)
 	gameobject.PlayerList.Delete(s.gc.PlayerId)
 	s.gc.Close()
 	time.Sleep(2 * time.Second)

@@ -234,7 +234,6 @@ func TestFullstackOwnershipFaultRobot(t *testing.T) {
 
 func ownershipCloseRobot(bot *travelSmokeBot) {
 	_ = leaveGame(bot.gc, bot.stats)
-	sendDisconnectBestEffort(bot.gc)
 	pkg.Clients.Unregister(bot.homePlayer, bot.gc)
 	gameobject.PlayerList.Delete(bot.homePlayer)
 	bot.gc.Close()

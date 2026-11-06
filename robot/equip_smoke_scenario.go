@@ -600,7 +600,6 @@ func (s *equipSmokeSession) close() {
 		return
 	}
 	_ = leaveGame(s.gc, s.stats)
-	sendDisconnectBestEffort(s.gc)
 	gameobject.PlayerList.Delete(s.gc.PlayerId)
 	s.gc.Close()
 	s.gc = nil
