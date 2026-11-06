@@ -170,7 +170,8 @@ func recallInstructionIDs(filter recallFilter, rows []*store.TransactionLogRow) 
 //   - 进计划:已提交账本证实它那条指令恰好应用了一次,且几条流水能还原成同一次发放。数量只算一次,
 //     同一指令的全部流水(含重投出来的、时间窗外的)一起消费;
 //   - 待人工核对:证明不了,原因见 dspb.RecallReviewReason。不进计划,也不消费;
-//   - 剔除:它那条指令已经被回收过(任何一条流水已消费)。
+//   - 剔除:它那条指令已经被回收过,或已登记交人工处置(任何一条流水已消费,见 RegisterRecallReviewHandled)。
+//     证据以后转正也不会再进计划,人工扣过的不会被自动再扣一次。
 func buildRecallPlan(filter recallFilter, in recallInputs) (*recallPlan, error) {
 	plan := &recallPlan{}
 	groups := make(map[recallInstructionKey][]*store.TransactionLogRow)

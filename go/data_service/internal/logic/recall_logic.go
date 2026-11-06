@@ -127,21 +127,25 @@ func (r *BatchRecallReq) filter() recallFilter {
 		TimeStart: r.TimeStart, TimeEnd: r.TimeEnd, TxTypes: r.TxTypes}
 }
 
-// validate 是不碰库的入参校验。币种 0 是银两,所以种类由 Kind 决定,不能靠 currency_type 是否为 0 判。
+// validRecallAsset 校验回收的资产:道具要配置号、不带币种;货币要认识的币种、不带配置号。
+// 币种 0 是银两,所以种类由 Kind 决定,不能靠 currency_type 是否为 0 判。
+func validRecallAsset(kind dspb.RecallKind, itemConfigID, currencyType uint32) bool {
+	switch kind {
+	case dspb.RecallKind_RECALL_KIND_ITEM:
+		return itemConfigID != 0 && currencyType == 0
+	case dspb.RecallKind_RECALL_KIND_CURRENCY:
+		return itemConfigID == 0 && currencytype.IsKnown(currencyType)
+	default:
+		return false
+	}
+}
+
+// validate 是不碰库的入参校验。
 func (r *BatchRecallReq) validate() bool {
 	if r.TimeStart == 0 || r.TimeEnd == 0 || r.TimeStart > r.TimeEnd || len(r.PlayerIDs) > maxRecallPlayers {
 		return false
 	}
-	switch r.Kind {
-	case dspb.RecallKind_RECALL_KIND_ITEM:
-		if r.ItemConfigID == 0 || r.CurrencyType != 0 {
-			return false
-		}
-	case dspb.RecallKind_RECALL_KIND_CURRENCY:
-		if r.ItemConfigID != 0 || !currencytype.IsKnown(r.CurrencyType) {
-			return false
-		}
-	default:
+	if !validRecallAsset(r.Kind, r.ItemConfigID, r.CurrencyType) {
 		return false
 	}
 	if r.DryRun {
@@ -530,7 +534,12 @@ func recallResultOf(op *store.RecallOpRow) RecallResult {
 	case op.IsApplied():
 		result.ErrorDetail = fmt.Sprintf("%s: shortfall=%d", label, op.Shortfall)
 	case op.IsPartial():
-		result.ErrorDetail = fmt.Sprintf("%s: taken=%d is a lower bound, check transaction_log by correlation_id=%d", label, op.Taken, op.OpID)
+		// taken 只是下限:scene 报部分应用时是确认过的那部分,人工关成 PARTIAL(ResolveRecallOp)时一律记 0。实际扣了多少只认
+		// 已提交账本里这一行的回收收据(correlation_id = op_id,明细在 AssetRecallLine);流水只是线索,扣过的可能没有流水,
+		// 照「流水里没有」去补挂欠款会多扣。
+		result.ErrorDetail = fmt.Sprintf("%s: taken=%d is only a lower bound and a manually resolved PARTIAL records taken=0; "+
+			"read the GM_RECALL receipt with correlation_id=%d via GetPlayerAssetOpLedger(player_id=%d) before any follow-up, "+
+			"and never add debt because transaction_log has no matching row", label, op.Taken, op.OpID, op.PlayerID)
 	default:
 		result.ErrorDetail = fmt.Sprintf("%s: nothing recalled, reason=%d", label, op.LastReason)
 	}

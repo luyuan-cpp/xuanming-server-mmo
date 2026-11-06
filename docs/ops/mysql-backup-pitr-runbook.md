@@ -292,10 +292,10 @@ TRUNCATE TABLE role_fence;
 
 反方向(`account_role` 不在,名字、路由、ref、初始行在)不在这张表,工具也不报。多集群恢复时它有两种来历,**先分清再动**(2026-11-06 评审补):
 
-- 建成了,只是玩家片恢复点早于建角提交。有任何一条已提交的证据就是这种:账号片的 ref 是 ACTIVE(`state=2`,提交点之后才写)、名字行已绑定(`bound_ms≠0`)、存档库有存过盘的行(`save_seq` 大于初始值,或者有初始行以外的 kind)。这时**不要**释放名字,也不要让后台判陈旧碰它:两者都会在玩家片写墓碑,墓碑不可逆,角色再也补不回来。先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单交负责人定。名字行已绑定时 `ReleasePlayerName` 在证明之前就以 `error_code=38` 拒绝,不写墓碑。
+- 建成了,只是玩家片恢复点早于建角提交。有任何一条已提交的证据就是这种:账号片的 ref 是 ACTIVE(`state=2`,提交点之后才写)、名字行已绑定(`bound_ms≠0`)、存档库有存过盘的行(`save_seq` 大于初始值,或者有初始行以外的 kind)。这时**不要**释放名字:`ReleasePlayerName` 释放预留态之前会在玩家片写墓碑(有路由行时),墓碑不可逆,角色再也补不回来。先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单交负责人定。名字行已绑定时 `ReleasePlayerName` 在证明之前就以 `error_code=38` 拒绝,不写墓碑。
 - 没有任何已提交的证据,是 login 当时就放弃了的建角:PENDING ref 由后台判陈旧,初始行没人读得到,名字留着(预留态),按日志带 token 调 `ReleasePlayerName` 释放:它先在玩家片证明这名角色永远不会提交(有路由行就写墓碑),再删预留态的名字行。
 
-后台判陈旧对「角色行不在、ref 还是 PENDING、超过 5 分钟」的 ref 会直接写墓碑,data_service 一起服就开始扫。所以分清反方向残留、以及下面第 1~3 步的 plan 和 apply,都要在起服之前做完;第 4 步里要调 `ReleasePlayerName`、要等 `ResumeRemovals` 的那几项在起服之后做。
+后台判陈旧(data_service 一起服就开始扫)对「角色行不在、ref 还是 PENDING、超过 5 分钟」的 ref 写墓碑之前,先看名字行是否已绑定、存档库是否进过场或存过盘,路由行、存档库名单、名字登记表缺了算核不全(2026-11-06 起)。有证据或核不全就不写墓碑也不删,记 ERROR `[account-role-ref] stale create ref kept without a tombstone`(带 player 和 evidence),并给 `data_service_account_role_ref_tombstone_held_total` 加一;ref 留着等人,每一轮都会再记一次。ACTIVE 而没有角色行的 ref 本来就只报告不动。它分不出来的只有一种:建成了、从没进过场、提交之后的绑定也没做完,这种仍会被写墓碑。所以分清反方向残留、以及下面第 1~3 步的 plan 和 apply,仍要在起服之前做完;第 4 步里要调 `ReleasePlayerName`、要等 `ResumeRemovals` 的那几项在起服之后做。
 
 工具是 data_service 的 `cmd/create_residual`,只连 data_service 自己的库(目录各片、名字表、存档库)。维护身份直连,不过写者闸门:每笔写在事务里先锁本库闸门行,冻结的库那一项拒绝(搬库期间不要 apply,见 [搬库手册](db-move-runbook.md) §2)。按玩家片分页扫,只做一致读,不锁表。默认只报告;修复要 `-mode apply` 加 `-repair` 选种类,每项修之前重读角色行复核,变了就拒绝,可以重放。
 
@@ -319,7 +319,7 @@ TRUNCATE TABLE role_fence;
 4. 再跑一遍 plan,退出码 0 才算干净。剩下的按 `reason` 处理:
    - `name_held_by_other`:`holder_live=false` 是占用者没有活角色。它的登记是预留态的孤儿时,带 token 调 `ReleasePlayerName` 释放之后重跑 apply。占用者是已删的角色、登记已绑定时 `ReleasePlayerName` 回 `error_code=38` 拒绝:看占用者那一片的 `account_role_removal` 里还有没有它那一行,有就等后台删角收尾(data_service 的 `ResumeRemovals`,每分钟一轮,接着做开始超过 5 分钟的那几行)放掉,没有(名字片恢复点早于删角释放)就人工核对后由 DBA 按 `(player_id, name_norm)` 删,再重跑 apply。`holder_live=true` 是一名两角,`keeper` 是该留名的一方(0 是判不出),两边都不动,记工单交负责人定。
    - `transferred_role`:建角之后过过户,存档库丢的不只是初始行。先看存档库所在集群能不能恢复到更靠近 T 的点,再按过户收据和商城订单处理,不要直接重写初始行。
-   - `legacy_role`、`partial_store_rows`、`no_route_or_placement`、`corrupt_role_row`、`name_rules_changed`、`player_holds_other_name`、`ref_hard_cap`:人工核对。`role_busy` 等交易或删角走完再跑。
+   - `legacy_role`、`partial_store_rows`、`no_route_or_placement`、`corrupt_role_row`、`name_rules_changed`、`player_holds_other_name`、`ref_hard_cap`:人工核对。`role_busy`(交易或删角令牌挡住初始行)、`role_removing`(删角进行中,名字三项只报告:补回去的名字可能赶在删角收尾放名字之后,绑在墓碑上没人放)等交易或删角走完再跑。
    - 同一个存档库报出大量 `initial_rows_missing`,说明这个集群的恢复点明显早于别的集群,先考虑把它重新恢复得更靠近 T,再跑 apply。
    - `role_changed`、`writer_gate_frozen`、`store_changed`,以及 `result=failed`:重跑 plan 再看。
 5. 补回的名字,data_service 名字负缓存(`PlayerName.NegativeCacheTTL`,默认 60 秒)过期之前按玩家查名字可能还是空。

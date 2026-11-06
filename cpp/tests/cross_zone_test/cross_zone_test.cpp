@@ -1627,6 +1627,138 @@ TEST(ConnectionLostHoldEcs, ExitingPlayerIsNotHeld)
     EXPECT_TRUE(intent.clientDisconnected) << "会话已死:改派票据作废";
 }
 
+// ── 挂机月卡离线托管(docs/design/player-connection-lost-hold.md §4.1):开通挂机的玩家离线后角色常驻、照常跟随 ──
+// 本段在全局作用域(上面的 ConnectionLostHold* 同样不在匿名命名空间里),头文件就近包含,与本文件其它段的写法一致。
+#include "player/system/afk_hosting.h"
+#include "player/system/team_follow_system.h"
+#include "proto/common/component/team_comp.pb.h"
+#include "time/system/time.h"
+
+TEST(ConnectionLostHoldAfkPass, ParseAcceptsOnlyAPassWithTimeLeft)
+{
+    constexpr uint64_t kNow = 1'800'000'000;
+    const auto lead = static_cast<uint64_t>(clh::kHostingExitLead.count());
+    uint64_t expires = 7;
+    EXPECT_EQ(clh::ParseAfkPass(false, {}, kNow, expires), clh::AfkPass::kInactive) << "键不存在";
+    EXPECT_EQ(expires, 0u);
+    EXPECT_EQ(clh::ParseAfkPass(true, "1800003600", kNow, expires), clh::AfkPass::kActive);
+    EXPECT_EQ(expires, 1'800'003'600u);
+    EXPECT_EQ(clh::ParseAfkPass(true, std::to_string(kNow + lead), kNow, expires), clh::AfkPass::kInactive)
+        << "剩下不到提前退出的余量:马上就该退了,不开始托管";
+    EXPECT_EQ(clh::ParseAfkPass(true, std::to_string(kNow + lead + 1), kNow, expires), clh::AfkPass::kActive);
+    EXPECT_EQ(clh::ParseAfkPass(true, "1700000000", kNow, expires), clh::AfkPass::kInactive) << "已到期";
+    for (const char* bad : {"", "abc", "-5", "12x", " 1800003600"})
+    {
+        EXPECT_EQ(clh::ParseAfkPass(true, bad, kNow, expires), clh::AfkPass::kInactive) << "值坏了按没有月卡:" << bad;
+        EXPECT_EQ(expires, 0u);
+    }
+}
+
+TEST(ConnectionLostHoldAfkPass, ActivePassKeepsTheHoldPastTheWindow)
+{
+    constexpr uint64_t kNow = 1'800'000'000;
+    const auto lead = static_cast<uint64_t>(clh::kHostingExitLead.count());
+    const auto grace = static_cast<uint64_t>(clh::kHostingUnconfirmedGrace.count());
+    const auto longHeld = std::chrono::hours(6);
+    EXPECT_EQ(clh::JudgeHold(longHeld, clh::AfkPass::kActive, kNow + 3600, kNow, false), clh::HoldVerdict::kKeep)
+        << "托管中:窗口早过了也不退出";
+    EXPECT_EQ(clh::JudgeHold(longHeld, clh::AfkPass::kActive, kNow + lead, kNow, false), clh::HoldVerdict::kProbe)
+        << "快到期:先查是不是续了";
+    EXPECT_EQ(clh::JudgeHold(longHeld, clh::AfkPass::kActive, kNow + lead, kNow, true), clh::HoldVerdict::kKeep)
+        << "已有查询在途就等它";
+    EXPECT_EQ(clh::JudgeHold(longHeld, clh::AfkPass::kActive, kNow - grace + 1, kNow, false), clh::HoldVerdict::kProbe)
+        << "到期后查不出来:宽限之内继续托管、继续查";
+    EXPECT_EQ(clh::JudgeHold(longHeld, clh::AfkPass::kActive, kNow - grace, kNow, false), clh::HoldVerdict::kExit)
+        << "宽限过了仍确认不了续费:按到期退出";
+}
+
+TEST(ConnectionLostHoldAfkPass, WithoutAConfirmedPassTheNormalWindowApplies)
+{
+    constexpr uint64_t kNow = 1'800'000'000;
+    const auto early = std::chrono::seconds(3);
+    EXPECT_EQ(clh::JudgeHold(early, clh::AfkPass::kUnknown, 0, kNow, false), clh::HoldVerdict::kProbe) << "还不知道:窗口内再查";
+    EXPECT_EQ(clh::JudgeHold(early, clh::AfkPass::kUnknown, 0, kNow, true), clh::HoldVerdict::kKeep);
+    EXPECT_EQ(clh::JudgeHold(early, clh::AfkPass::kInactive, 0, kNow, false), clh::HoldVerdict::kKeep);
+    EXPECT_EQ(clh::JudgeHold(clh::kHoldWindow, clh::AfkPass::kUnknown, 0, kNow, false), clh::HoldVerdict::kExit)
+        << "窗口到了仍查不出来:照原来退出,不丢数据";
+    EXPECT_EQ(clh::JudgeHold(clh::kHoldWindow, clh::AfkPass::kInactive, 0, kNow, false), clh::HoldVerdict::kExit);
+}
+
+TEST(ConnectionLostHoldAfkPassEcs, ConfirmedPassHostsTheCharacterPastTheWindow)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, /*failed=*/false, /*found=*/true, std::to_string(now + 3600), now);
+    const auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player);
+    EXPECT_EQ(held.afkPass, clh::AfkPass::kActive);
+    EXPECT_EQ(held.afkPassExpiresAtSec, now + 3600);
+    EXPECT_TRUE(held.hostingStarted);
+
+    PlayerLifecycleSystem::ExpireConnectionLostHolds(lostAt + std::chrono::minutes(10));
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "开通挂机:过了 25 秒也不退出";
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+}
+
+TEST(ConnectionLostHoldAfkPassEcs, HostingEndsWhenThePassIsNoLongerThere)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    ASSERT_TRUE(MarkPersisted(player));
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
+
+    // 托管中再查一次,键已经没了(到期被清、退款):下一次扫描按客户端断线退出,与原来同一条收尾。
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, /*found=*/false, {}, now);
+    PlayerLifecycleSystem::ExpireConnectionLostHolds(lostAt + std::chrono::minutes(10));
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "托管结束:存盘、写断线释放标记、销毁";
+    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), entt::entity{entt::null});
+}
+
+TEST(ConnectionLostHoldAfkPassEcs, LateFailedOrForeignResultsChangeNothing)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    const auto pass = std::to_string(now + 3600);
+
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt - std::chrono::seconds(1), false, true, pass, now);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).afkPass, clh::AfkPass::kUnknown)
+        << "另一次保留的迟到结果不算数";
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, /*failed=*/true, false, {}, now);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).afkPass, clh::AfkPass::kUnknown)
+        << "查询失败:状态不变,窗口照常计";
+
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kNewerSession, /*incomingLoginGeneration=*/0);
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, pass, now);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "接回之后到的结果直接丢弃";
+}
+
+TEST(ConnectionLostHoldAfkPassEcs, HostingStartTurnsOnTeamFollowWithoutTheClient)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    auto& team = tlsEcs.actorRegistry.emplace<TeamId>(player);
+    team.set_team_id(950300001);
+    team.set_membership_epoch(1);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    ASSERT_FALSE(TeamFollowSystem::WantsFollow(player));
+
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
+    EXPECT_TRUE(TeamFollowSystem::WantsFollow(player)) << "托管开始:服务器替他开启跟随,不等客户端声明";
+}
+
 // ── 严格屏障覆盖世代校验 C3 的结局分派(docs/design/mixed-version-persist-field-protection.md §5.2、§10)──────────
 
 // enforce 拒写发生在退出存盘上:不会再有落地回调,必须不存盘收尾,否则退出永远收不了尾。

@@ -235,6 +235,21 @@ protected:
         return response;
     }
 
+    // 在收件箱战斗结算域的最近结局环里记一条结局,走状态机记账同一个入口(player_inbox_rules::RecordDecision)。
+    void RecordInboxDecision(uint64_t seq, player_inbox::PlayerInboxOutcome outcome, uint64_t requestId,
+                             player_inbox::PlayerInboxMessageType msgType = player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT)
+    {
+        auto& ledger = tlsEcs.actorRegistry.get_or_emplace<PlayerInboxLedgerComp>(player);
+        auto& cursor = player_inbox_rules::MutableCursor(
+            ledger, static_cast<uint32_t>(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT));
+        PlayerInboxDecision decision;
+        decision.set_seq(seq);
+        decision.set_outcome(static_cast<uint32_t>(outcome));
+        decision.set_request_id(requestId);
+        decision.set_msg_type(static_cast<uint32_t>(msgType));
+        ASSERT_TRUE(player_inbox_rules::RecordDecision(cursor, decision));
+    }
+
     // 资产通道入口要的加载组件(与 asset_op_system_test 的夹具同一组)。
     void GiveAssetChannel()
     {
@@ -332,7 +347,8 @@ TEST_F(BattleFreezeHoldTest, CompleteNotAppliedHereKeepsTheFreezeAndExtendsTheLo
     EXPECT_EQ(1u, gTerminalQueries.size()) << "续冻一拍:下一拍再查一次";
 }
 
-// 续冻到上限仍没在本地应用:打告警计数,再按现行规则解冻(记作废局、条件删锁、摘冻结)。
+// 续冻到上限仍没在本地收尾:打告警计数,再按现行规则解冻(记作废局、条件删锁、摘冻结)。
+// 越过上限之后的处置只有解冻一种,这一拍不再查询(评审修正 2026-11-06:解冻不晚于越过上限后的第一拍,锁一定还在)。
 TEST_F(BattleFreezeHoldTest, HoldCapReleasesTheFreezeAndCountsTheAlarm)
 {
     Fight(kSyntheticDeadlineMs);
@@ -341,7 +357,7 @@ TEST_F(BattleFreezeHoldTest, HoldCapReleasesTheFreezeAndCountsTheAlarm)
     const uint64_t heldBefore = CountOf(FreezeHoldEvent::kHeldComplete);
 
     PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(pastCapMs);
-    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kComplete));
+    EXPECT_TRUE(gTerminalQueries.empty()) << "越过上限不再查询";
 
     EXPECT_FALSE(PlayerBattleSystem::IsInBattle(player)) << "到上限:按现行规则解冻";
     EXPECT_EQ(kBattleId, PlayerBattleFreezeHoldTestAccess::ExpiredFightingBattleId(player));
@@ -543,22 +559,23 @@ TEST_F(BattleFreezeHoldTest, AnswerArrivingAfterTheFreezeWasClearedDoesNothing)
     EXPECT_EQ(0u, PlayerBattleFreezeHoldTestAccess::ExpiredFightingBattleId(player));
 }
 
-// 一次丢失的回调(超过一拍加一次调用期限仍没回)不能把玩家永远冻住:按「未知」处置并计数,迟到的旧回答照样能放人。
+// 一次丢失的回调(按单调钟超过一拍加一次调用期限仍没回)不能把玩家永远冻住:按「未知」处置并计数,迟到的旧回答照样能放人。
 TEST_F(BattleFreezeHoldTest, LostQueryIsTreatedAsUnknownAndALateAnswerStillCounts)
 {
     Fight(kSyntheticDeadlineMs);
     const uint64_t sentAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0) + 1;
-    const uint64_t lostAfterMs =
-        static_cast<uint64_t>(PlayerBattleSystem::kReaperIntervalSec * 1000.0) + PlayerBattleSystem::kTerminalQueryDeadlineMs;
+    const uint64_t lostAfterMs = kReaperTickMs + PlayerBattleSystem::kTerminalQueryDeadlineMs;
     const uint64_t lostBefore = CountOf(FreezeHoldEvent::kQueryLost);
 
     PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs);
     ASSERT_EQ(1u, gTerminalQueries.size());
-    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs + lostAfterMs);
+    gSteadyNowMs += lostAfterMs;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs + kReaperTickMs);
     EXPECT_EQ(lostBefore, CountOf(FreezeHoldEvent::kQueryLost)) << "还在一拍加一次期限之内:继续等";
     EXPECT_TRUE(PlayerBattleFreezeHoldTestAccess::IsTerminalQueryInFlight(playerId, kBattleId));
 
-    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs + lostAfterMs + 1);
+    gSteadyNowMs += 1;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs + 2 * kReaperTickMs);
     EXPECT_EQ(lostBefore + 1, CountOf(FreezeHoldEvent::kQueryLost));
     EXPECT_FALSE(PlayerBattleFreezeHoldTestAccess::IsTerminalQueryInFlight(playerId, kBattleId));
     EXPECT_TRUE(PlayerBattleSystem::IsInBattle(player)) << "丢失按未知:续冻一拍";
@@ -568,22 +585,76 @@ TEST_F(BattleFreezeHoldTest, LostQueryIsTreatedAsUnknownAndALateAnswerStillCount
     EXPECT_FALSE(PlayerBattleSystem::IsInBattle(player)) << "迟到的 ABORT 照样放人";
 }
 
+// 评审修正(2026-11-06):在途多久按单调钟量,墙钟只给跨进程的截止时刻用。墙钟前跳不会把正常在途的查询误判丢失,
+// 墙钟回拨也不会让丢失的查询永远不判。修复前两样都按墙钟差判:前跳当场判丢失,回拨一直等。
+TEST_F(BattleFreezeHoldTest, LostQueryIsMeasuredOnTheMonotonicClockNotTheWallClock)
+{
+    Fight(kSyntheticDeadlineMs);
+    const uint64_t sentAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0) + 1;
+    const uint64_t lostAfterMs = kReaperTickMs + PlayerBattleSystem::kTerminalQueryDeadlineMs;
+    const uint64_t lostBefore = CountOf(FreezeHoldEvent::kQueryLost);
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+
+    gSteadyNowMs += 1'000;                                                          // 单调钟只过了 1 秒
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs + 10 * 60 * 1000); // 墙钟前跳 10 分钟(仍在上限之内)
+    EXPECT_EQ(lostBefore, CountOf(FreezeHoldEvent::kQueryLost)) << "墙钟前跳不算在途时长";
+    EXPECT_TRUE(PlayerBattleFreezeHoldTestAccess::IsTerminalQueryInFlight(playerId, kBattleId));
+    EXPECT_EQ(1u, gTerminalQueries.size()) << "在途时不另发";
+
+    gSteadyNowMs += lostAfterMs;                              // 单调钟已过一拍加一次期限
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(sentAtMs); // 墙钟回拨到发出那一刻
+    EXPECT_EQ(lostBefore + 1, CountOf(FreezeHoldEvent::kQueryLost)) << "墙钟回拨也照样判丢失";
+    EXPECT_FALSE(PlayerBattleFreezeHoldTestAccess::IsTerminalQueryInFlight(playerId, kBattleId));
+    EXPECT_TRUE(PlayerBattleSystem::IsInBattle(player)) << "丢失按未知:上限之内续冻";
+}
+
+// 评审修正(2026-11-06):越过续冻上限的那一拍直接解冻,不等在途的查询。任何路径(含查询丢失)的解冻都不晚于越过上限后的
+// 第一拍,而锁按 FreezeHoldDeadlineMs + kLockExtraTtlSec 写:解冻时锁一定还在,match 不会先放下一场。
+TEST_F(BattleFreezeHoldTest, PastTheCapReleasesOnTheFirstTickWithoutWaitingForAQueryInFlight)
+{
+    Fight(kSyntheticDeadlineMs);
+    const uint64_t holdDeadlineMs = PlayerBattleSystem::FreezeHoldDeadlineMs(kSyntheticDeadlineMs);
+    const uint64_t capBefore = CountOf(FreezeHoldEvent::kCapReached);
+
+    const uint64_t lastTickBeforeCapMs = holdDeadlineMs - 1'000;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(lastTickBeforeCapMs); // 上限前最后一拍发出查询,一直没回
+    ASSERT_EQ(1u, gTerminalQueries.size());
+
+    gSteadyNowMs += kReaperTickMs; // 只过了一拍:还没到判丢失
+    const uint64_t firstTickPastCapMs = lastTickBeforeCapMs + kReaperTickMs;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(firstTickPastCapMs);
+    EXPECT_FALSE(PlayerBattleSystem::IsInBattle(player)) << "越过上限的第一拍就解冻";
+    EXPECT_FALSE(PlayerBattleFreezeHoldTestAccess::IsTerminalQueryInFlight(playerId, kBattleId)) << "在途登记一并摘掉";
+    EXPECT_EQ(capBefore + 1, CountOf(FreezeHoldEvent::kCapReached));
+    ASSERT_EQ(1u, gLockReleases.size());
+    EXPECT_EQ(1u, gTerminalQueries.size()) << "越过上限不再发查询";
+    EXPECT_LT(firstTickPastCapMs, holdDeadlineMs + PlayerBattleSystem::kLockExtraTtlSec * 1000ULL - 1'000)
+        << "解冻早于锁过期(EX 秒级下取整最多早到 1 秒)";
+
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kComplete)) << "迟到的回答";
+    EXPECT_EQ(1u, gLockReleases.size()) << "冻结已不在:什么都不做";
+    EXPECT_EQ(capBefore + 1, CountOf(FreezeHoldEvent::kCapReached));
+}
+
 // 评审修正(2026-11-06):状态缺失(NONE)的冻结,reaper 与锁 TTL(LockTtlSecOf)都按 FIGHTING 处理,回答也必须照 FIGHTING 处置。
-// 修复前回答只认 FIGHTING:这种冻结每拍都查、回答每次都被丢掉,越过续冻上限也解不了冻。
+// 修复前回答只认 FIGHTING:每次回答都被丢掉,不计续冻,ABORT 也放不了人,只能拖到续冻上限。
 TEST_F(BattleFreezeHoldTest, StatelessFreezeIsResolvedLikeFightingAndStaysBounded)
 {
     Fight(kSyntheticDeadlineMs).set_state(IN_BATTLE_STATE_NONE);
-    const uint64_t capBefore = CountOf(FreezeHoldEvent::kCapReached);
+    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0);
+    const uint64_t unknownBefore = CountOf(FreezeHoldEvent::kHeldUnknown);
 
-    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0) + 1);
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1);
     ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kUnknown));
     EXPECT_TRUE(PlayerBattleSystem::IsInBattle(player)) << "上限之内与 FIGHTING 一样续冻";
+    EXPECT_EQ(unknownBefore + 1, CountOf(FreezeHoldEvent::kHeldUnknown)) << "回答照 FIGHTING 处置,不是被丢掉";
     EXPECT_TRUE(gLockReleases.empty());
 
-    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(PlayerBattleSystem::FreezeHoldDeadlineMs(kSyntheticDeadlineMs) + 1);
-    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kUnknown));
-    EXPECT_FALSE(PlayerBattleSystem::IsInBattle(player)) << "越过上限照样解冻,不会永远冻住";
-    EXPECT_EQ(capBefore + 1, CountOf(FreezeHoldEvent::kCapReached));
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1 + kReaperTickMs);
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_FALSE(PlayerBattleSystem::IsInBattle(player)) << "ABORT 当场解冻,不被拖到续冻上限";
     ASSERT_EQ(1u, gLockReleases.size());
     EXPECT_EQ(kBattleId, gLockReleases.front().second);
 }

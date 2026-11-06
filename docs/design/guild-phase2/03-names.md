@@ -192,6 +192,14 @@ Deleted、Absent 之后按名字删 owner 行;Bound、OutsideWindow 两边都不
 | ⑤ 之后 | 先玩家片读,再名字片写 | 目录 `bindRoleNameBestEffort`:重读角色行,确认在役、名字就是这个,再 `PlayerNameStore.Bind`:一条 `UPDATE … SET bound_ms=? WHERE name_norm=? AND player_id=? AND bound_ms=0`。名字行不在(被误释放、恢复点错开)就按原名走 Reserve 重新登记,下一轮再绑;名字在别人名下回 Taken,什么都不写 | 不改建角结局(角色已提交)。名字停在预留态,仍受下面的证明保护;同一建角的重放(预读那条路)或 `cmd/create_residual -repair name`(`name_unbound`)补上 |
 | 删角 | 玩家片 → 名字片 | `finishRemoval` 写墓碑,`account_role_removal` 那一行**留着**;收尾 `settleRemovedRole` 先核角色行确是墓碑,再按墓碑里的原名 `ReleaseRemoved`(不看状态、不看登记时刻),最后删小表那一行 | 名字片不可达时小表那一行留着,后台 `ResumeRemovals` 读到墓碑接着放。没放之前名字留在已删的角色名下,别人登记不了,不会一名两角 |
 
+**补登记撞上删角**(2026-11-06 评审补):绑定时名字行不在、按原名补登记(`BindRestored`),这一步和删角之间没有锁。复核角色在役之后、补登记提交之前,角色可能正好被删;删角收尾放名字时这一行还不在,补回去的名字就绑在墓碑上,小表那一行也删了,再没有谁会放它。两种做法里选「补登记之后复读角色行」(`undoRestoreIfRemoved`):
+
+- 已是墓碑:按条件撤掉本次写的那一行(`PlayerNameStore.UndoRestore`,`player_id`、判重键、本次的 `created_ms`、`bound_ms` 四个都对上才删,别人的行、本角色更早的行碰不到),删到了再删名字副本。
+- 还在役:留着。删角的收尾排在墓碑提交之后,墓碑又在这次复读之后,所以收尾一定看得到这一行,按删角释放放掉它。
+- 复读失败、角色行不在:什么都不撤,回错误进日志,宁可留一条要人看的名字。
+
+不选「交给删角收尾去放」:收尾只跑一次,做完就删小表那一行;排在补登记之前的话就看不到这一行。要保证收尾看得到,得让补登记和收尾在玩家片上串行,等于在名字片的写里持玩家片的锁,破坏两片分步、事务不跨库的写法。核账工具不走这条路:挂着删角令牌的角色,名字三项只报告(`role_removing`);工具又在起服之前跑(PITR 手册 §4.1a),没有并发的删角。
+
 **释放预留态**(`ReleasePlayerName`,logic 编排,顺序固定):
 
 1. **核调用方**(server):不带 `x-admin-token` 时,请求的 `auth` 必须是 login 用账号目录密钥(`MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN`)签的证明,方法名、`player_id`、名字都进签名;别的服务、没签名、签完被改过、时间戳超出 ±5 分钟一律 `PermissionDenied`,一条语句都不发。带 token 的是运维清孤儿,照旧 `authorizeAdmin`。证明只有 `serviceauth` 的 ±5 分钟时效,**不防重放**:没有一次性随机数,窗口内原样重发会被接受。重放无害:释放只针对 login 已经放弃的 id,是条件删除;第二次读不到这一行就直接回成功,不再证明,也不会碰别人后来登记的同名行。

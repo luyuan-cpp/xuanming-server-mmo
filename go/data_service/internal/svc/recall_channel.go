@@ -70,6 +70,9 @@ type RecallStore interface {
 	// ReadOpState、ResolveManuallyIfQuiet 是人工终结的两步:读行核证据,再带读到的租约与发送时刻终结。
 	ReadOpState(ctx context.Context, opID uint64) (store.RecallOpState, error)
 	ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error)
+	// SourceState、RegisterReviewHandled 是 needs_review 指令交人工处置的登记:看这些流水登记过没有,再在一个事务里按已消费登记。
+	SourceState(ctx context.Context, txIDs []uint64) (store.RecallSourceState, error)
+	RegisterReviewHandled(ctx context.Context, h store.RecallReviewHandled, nowMs uint64) (bool, error)
 }
 
 // recallLoopConfig 是回收重投循环的配置。人工终结判「安静」用的租约也从这里取(RecallLeaseDuration),不各写一份。

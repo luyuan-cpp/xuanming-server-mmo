@@ -1,7 +1,8 @@
 # 玩家断线保留与短重连回原处
 
 > 2026-11-05,Claude。代码已随用户的快照提交入库(`0f484db0d`、`6452b949d` 等),协议生成物里已有 `ExitGameReason`。**未编译、未测试**,验证步骤见 §10。Java 版待做,见 §9。
-> 2026-11-06 补:回原场景排除回收中的频道(§6 第一段),新增用例 `TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel`;服务器驱动的组队跟随已让保留中的队员原地不动(§4)。同样未编译。
+> 2026-11-06 补:回原场景排除回收中的频道(§6 第一段),新增用例 `TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel`。同样未编译。
+> 2026-11-06 再补(未编译):开通挂机(挂机月卡有效)的玩家断线后离线托管,不按 25 秒退出,保留到重连、月卡到期或被别的退出取代(§4.1);保留中的队员照常被服务器驱动的组队跟随带着走(§4),托管开始时由服务器开启跟随。
 > 2026-11-06 修正(未编译),两处判据都改为比登录身份:
 > - `EnterScene` 判「换会话」原先比会话快照,同一会话的重复路由也被拆掉重进(§5 第 3 步);
 > - 接回判据 `IsResumedBy` 原先只比会话号,gate 以同一 node_id 重启后拿回旧号的新登录摘不掉保留(§5 第 0.1 步)。
@@ -78,7 +79,7 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 为什么要摘会话:实体此刻确实没有活会话了。依赖「有没有活会话」的路径因此都自然按断线处理,不用改那些文件:
 
 - 跨节点交接不会发起(`HasLiveGateSession`);
-- 跨场景的队伍跟随跳过它(`player_team.cpp` 换场景分支的 `HasLiveSession`);同一场景里由服务器驱动的跟随不看会话,照常带着它走([team-follow-server-trail.md](team-follow-server-trail.md) §3.6);同场景的服务器驱动跟随把它当作"原地不动、仍在队形里",也不给它发跟随推送(`team_follow_system.cpp` 的 `IsHeldStill` / `HasLiveGateSession`);
+- 跨场景的队伍跟随跳过它(`player_team.cpp` 换场景分支的 `HasLiveSession`);同一场景里由服务器驱动的跟随不看会话,照常带着它走,只是不给它发跟随推送([team-follow-server-trail.md](team-follow-server-trail.md) §3.6,`team_follow_system.cpp` 的 `HasLiveGateSession`);
 - 排空、疏散只存盘不改派(`EnqueueRelocateTicket`);
 - 推送不再发往 gate。
 
@@ -94,6 +95,36 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存):`HandleExitGameNode` 入口摘掉保留组件。首次挂退出意图时,`clientDisconnected` 置位,改派票据因此作废。
 
 `PlayerConnectionLostComp` 属于「按需状态」(`ecs-component-access-rules.md`):没有它 = 连接正常或不在保留中。它是纯内存组件,不落库。
+
+### 4.1 开通挂机的玩家:离线托管(2026-11-06,用户要求「队员客户端离线,但是开通挂机应该照样跟」)
+
+"开通挂机"在代码里就是挂机月卡:玩家域 Redis 键 `player:afk_pass:{<player_id>}`,值为到期的 Unix 秒,由购买 / 开通流程写入
+(与 `go/shared/redisslot.AfkPassKey` 同形)。player_locator 的租约监视在月卡有效期间每 5 分钟给断线中的会话续一次租约
+(`go/player_locator/internal/logic/leasemonitor.go` 的 `afkPassState`,查不出来时推迟 10 秒再判);以前 scene 不看月卡,
+角色照样 25 秒后退出,只保住了重连资格。现在:
+
+- **进入保留时查一次月卡**(`AfkHostingSystem::Probe`,`player/system/afk_hosting.{h,cpp}`):异步 GET,回调按玩家号重新找实体,
+  只认同一次保留(`lostAt` 相同)的结果;接回、退出之后或下一次断线到达的迟到结果直接丢弃。
+- **判定**(纯函数 `connection_lost_hold::JudgeHold` / `ParseAfkPass`,`ExpireConnectionLostHolds` 每秒调一次):
+  - 月卡有效且离到期还超过 `kHostingExitLead`(扫描周期 1 秒 + 退出存盘余量 4 秒)→ 继续保留,不受 25 秒窗口约束。
+  - 快到期 → 再查一次:续了就按新的到期时刻继续托管;没续(键没了、到期了、剩下不到余量)→ 下一次扫描按客户端断线退出,
+    与普通保留到期同一条收尾(存盘、写断线释放标记、销毁)。
+  - 查询失败 → 状态不变。还不知道有没有月卡的,25 秒窗口照常计、窗口内每次扫描重查,窗口到了仍查不出来就照原来退出(不丢数据);
+    托管中的,快到期时查不出来先继续托管,已知的到期时刻过去 `kHostingUnconfirmedGrace`(30 秒)仍确认不了续费,按到期退出。
+  - 值解析不了(不是十进制非负整数)按没有月卡,与 player_locator 同口径,并打一行日志。
+- **托管开始**(第一次确认月卡有效):调 `PlayerTeamSystem::OnOfflineHostingStarted`,在队伍里就由服务器开启组队跟随,
+  不等客户端声明;下线前点过暂离的也照样跟,重连后客户端按自己当前的选择重新声明([team-follow-server-trail.md](team-follow-server-trail.md) §3.6、§5)。
+- **托管期间**:与普通保留相同 —— 没有活会话、周期存盘照常、战斗照常推进(自动行动)、被别的退出取代时照常收尾;
+  另外,同一场景里正被组队跟随驱动的,照常跟着队长走。
+- **结束**:新会话接回(§5,与普通保留同一判据)、月卡到期或确认不了(上面)、被别的退出取代(租约到期的会话结束释放、排空、疏散、停机、交易封存)。
+
+时序为什么成立:普通保留靠 `kHoldWindow + 1 + 4 ≤ 30` 保证保留在 login 断线租约到期前结束(§7)。托管超过 30 秒,是因为 player_locator
+在月卡有效期间一直续租;它只在看到月卡失效(到期时刻之后)才让租约到期,而 scene 在到期前 `kHostingExitLead` 就退出,
+租约到期时退出存盘已经落地、断线释放标记已写,LeaveScene 照常当场拿到证据。两台机器的墙钟差超过这 5 秒时,可能走到
+「保留拖过租约」的慢路径(§7),只是清理多等一个 claim 超时,不影响数据。
+
+没做:托管中的角色不会自己去别处(不打怪、不换图);节点排空 / 疏散时照原规则存盘退出,托管提前结束 —— 把托管中的角色搬到别的节点
+要"没有客户端的实体换场景",与离线队员跨场景跟随是同一件事(team-follow-server-trail.md §3.6 第 2 条)。
 
 ## 5. 重连接回
 
@@ -157,7 +188,7 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 4. 按 player_id 移动玩家、又不看活会话的入口:11-06 核对时没有。客户端换图要有客户端;镜像自动进场在进入保留时已撤掉;队伍跟随与跨节点交接都先看活会话;GM 传送(`TeleportRequest`)回 1006。以后新增这类入口要先看 `HasLiveGateSession`。漏看的后果是路由在 gate 被丢弃、location 指向新场景,重连按新 location 落地;不重连时与 gate 崩溃同一残余,由租约到期的会话结束释放和 `location-release-binding.md` §17 的撤销兜底。
 5. 实时场景 CD 与 Buff:保留内重连沿用实体,运行时状态还在;保留到期之后才重连仍会丢。规则未定,见审计 §9.2。
 6. 保留中的实体仍被 AOI 当作观察者计算,发给它的推送在 scene 侧因为没有会话直接丢弃。量级等于断线未归的玩家数,不处理。
-7. 月卡离线托管(ExitGame handler 里的 TODO)仍未做。login 对挂机权益会顺延租约,但实体照样 25 秒后退出,与原来一样。
+7. 月卡离线托管:2026-11-06 已做(§4.1),挂机月卡有效的玩家断线后角色常驻到重连或月卡到期。ExitGame handler 里那条 TODO 指的就是这件事;托管中的角色还不会自己活动、也不能被搬到别的节点(§4.1 末段)。
 
 ## 9. 双版本
 
@@ -176,6 +207,9 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
    - 11-06 补 5 条,同一个过滤串已包含:`ConnectionLostHold.SameSessionNumberResumesOnlyWithNewerLogin` 1 条、`ConnectionLostHoldReentry.*` 4 条。`IsResumedBy` 与 `ResumeConnectionLostHold` 多了登录代次参数,原有的 `ConnectionLostHold.OnlyANewBoundSessionResumes`、`ConnectionLostHoldEcs.OnlyANewSessionResumesTheHold` 只补了代次 0,期望不变。
    - 另跑 `--gtest_filter=EnterFenceEcs.*:SceneEntryPermissionTest.*`,确认入场栅栏与场景入场的原有用例不回归。
    - 两条回归用例各守一条判据:`SameLoginRepeatRouteStaysInScene` 守第 3 步(拿快照比时,玩家会被移出格子、`Hex` 被摘);`ReusedSessionNumberWithNewerLoginResumesHold` 守第 0.1 步(只比会话号时,保留摘不掉)。
+   - 11-06 离线托管(§4.1)补 7 条,同一个过滤串已包含:`ConnectionLostHoldAfkPass.*` 3 条(解析、托管中的判定、没有月卡时的普通窗口)、
+     `ConnectionLostHoldAfkPassEcs.*` 4 条(月卡有效过了 25 秒不退出、月卡没了按断线退出、迟到 / 失败 / 别的保留的结果不改状态、托管开始替队员开启跟随)。
+     原有 `ConnectionLostHoldEcs.*` 不回归:测试里玩家域 Redis 没连上,查询是空操作,保留仍按 25 秒到期。
 3. Go(`go/scene_manager`):
    - `go build ./...`、`go vet ./internal/logic/`;
    - `go test ./internal/logic/ -count=1 -v -run 'TestResumeSceneOf|TestEnterScene_ZeroZoneReconnect|TestEnterScene_ZeroZoneOverLocationInGateZoneBehavesLikeExplicitGateZone|TestEnterScene_SamePlacement'`,全部 PASS;
@@ -197,6 +231,8 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
   - `cpp/libs/services/scene/player/system/connection_lost_hold.h`(新增,组件 + 常量 + 纯判定);
   - `player_lifecycle.{h,cpp}`(`HandleClientConnectionLost`、`ResumeConnectionLostHold`、`ExpireConnectionLostHolds`,`HandleExitGameNode` 摘保留,`EnterScene` 第 0.1 步);
   - `player_exit_intent.h`(注释);
+  - 11-06 离线托管:`connection_lost_hold.h`(`AfkPass`、`ParseAfkPass`、`JudgeHold` 与保留组件的月卡字段)、
+    `afk_hosting.{h,cpp}`(新增,查月卡与回包)、`player_lifecycle.cpp`(进入保留时查一次、扫描改用 `JudgeHold`);
   - `cpp/nodes/scene/handler/rpc/player/player_lifecycle_handler.cpp`(按原因分流);
   - `scene.vcxproj` / `.filters`(登记新头文件)。
 - scene_manager:`go/scene_manager/internal/logic/enter_resume_scene.go`(新增)、`enterscenelogic.go`(第 3a 步与回落指标)、`enter_resume_scene_test.go`(新增)。

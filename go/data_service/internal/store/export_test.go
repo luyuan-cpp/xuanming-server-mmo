@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"shared/assetop"
 	"shared/idsegment"
 
 	"github.com/luyuancpp/proto2mysql"
@@ -181,3 +182,14 @@ func NewRouteStoreFromDBForTest(ctx context.Context, db *sql.DB, opts RouteStore
 
 // NewRecallStoreForTest 用一条现成的连接建回收存储,集成测试用管理连接,不走写者闸门。
 func NewRecallStoreForTest(db *sql.DB) *RecallStore { return &RecallStore{db: db} }
+
+// ClaimedOpForTest 是 Claim 在领取 CAS 之后的那一半(回读、核对是不是自己的未决行、毒行推迟)。
+// 真库用例在 CAS 与回读之间插入人工终结,两条语句之间的窗口在生产里没法确定地复现。
+func (s *RecallStore) ClaimedOpForTest(ctx context.Context, opID, poisonUntilMs, token uint64) (assetop.Op, bool, error) {
+	return s.claimedOp(ctx, opID, poisonUntilMs, token)
+}
+
+// DeferPoisonForTest 是毒行推迟那一条 UPDATE:用例拿它证明已终结的行不会被改写。
+func (s *RecallStore) DeferPoisonForTest(ctx context.Context, opID, token, poisonUntilMs uint64) error {
+	return s.deferPoison(ctx, opID, token, poisonUntilMs)
+}
