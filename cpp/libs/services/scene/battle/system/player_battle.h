@@ -319,7 +319,8 @@ private:
 	static void ReapExpiredFreezes(uint64_t nowMs);
 
 	// FIGHTING 冻结已到期(nowMs 严格大于 FreezeExpiresAtMs)时的处置入口,只由 ReapExpiredFreezes 调用:
-	//  - 这一局的结算在本实体已有终局(收件箱战斗域最近结局环里有它:APPLIED / REJECTED / SKIPPED)→ 照常解冻,不查;
+	//  - 这一局的结算已在本实体应用过(收件箱战斗域最近结局环里有它的 APPLIED)→ 照常解冻,不查;环里的 REJECTED / SKIPPED
+	//    不算收尾(战斗结算域里这两种都不是终局,收件箱只收 APPLIED,见 player_battle.cpp 的 IsBattleSettlementAppliedHere);
 	//  - 已越过续冻上限(nowMs > FreezeHoldDeadlineMs)→ 告警后照常解冻,不查、也不等在途的查询;
 	//  - 同一局已有查询在途 → 这一拍什么都不做;按单调钟在途超过一拍加一次调用期限仍没回 → 当作丢失,按「未知」判;
 	//  - 否则发一次 SQL 终局查询(注入点 BattleTerminalQueryFn),回答交给 OnExpiredFightingTerminalAnswer;

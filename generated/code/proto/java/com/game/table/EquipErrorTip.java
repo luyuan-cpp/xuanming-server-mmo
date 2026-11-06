@@ -123,6 +123,10 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEquipGemBagFull = 28021;</code>
      */
     kEquipGemBagFull(28021),
+    /**
+     * <code>kEquipEnhanceLevelChanged = 28022;</code>
+     */
+    kEquipEnhanceLevelChanged(28022),
     UNRECOGNIZED(-1),
     ;
 
@@ -227,6 +231,10 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEquipGemBagFull = 28021;</code>
      */
     public static final int kEquipGemBagFull_VALUE = 28021;
+    /**
+     * <code>kEquipEnhanceLevelChanged = 28022;</code>
+     */
+    public static final int kEquipEnhanceLevelChanged_VALUE = 28022;
 
 
     public final int getNumber() {
@@ -276,6 +284,7 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
         case 28019: return kEquipGemSocketEmpty;
         case 28020: return kEquipGemTypeMismatch;
         case 28021: return kEquipGemBagFull;
+        case 28022: return kEquipEnhanceLevelChanged;
         default: return null;
       }
     }
@@ -341,7 +350,7 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025equip_error_tip.proto*\360\004\n\013equip_error\022" +
+      "\n\025equip_error_tip.proto*\221\005\n\013equip_error\022" +
       "\022\n\016kEquip_errorOK\020\000\022\030\n\022kEquipItemNotFoun" +
       "d\020\340\332\001\022\030\n\022kEquipNotEquipment\020\341\332\001\022\032\n\024kEqui" +
       "pLevelNotEnough\020\342\332\001\022\031\n\023kEquipClassMismat" +
@@ -357,8 +366,9 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
       "mSocketInvalid\020\361\332\001\022\035\n\027kEquipGemSocketOcc" +
       "upied\020\362\332\001\022\032\n\024kEquipGemSocketEmpty\020\363\332\001\022\033\n" +
       "\025kEquipGemTypeMismatch\020\364\332\001\022\026\n\020kEquipGemB" +
-      "agFull\020\365\332\001B$\n\016com.game.tableZ\022generated/" +
-      "pb/tableb\006proto3"
+      "agFull\020\365\332\001\022\037\n\031kEquipEnhanceLevelChanged\020" +
+      "\366\332\001B$\n\016com.game.tableZ\022generated/pb/tabl" +
+      "eb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

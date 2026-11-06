@@ -1233,3 +1233,13 @@ Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及�
 - 只读归因：`deploy/k8s/player-inbox-alerts.yaml:59` 的注释写了 `player_inbox_rules.h`；该文件第 19–21 行明确规定表达式、注释、描述中的 `player_inbox_*` 都必须是已注册指标，契约测试据此扫描全文。最小候选只把第 59 行 `(player_inbox_rules.h 的 kHaltedDomainRelogIntervalMs)` 改为 `(收件箱规则常量 kHaltedDomainRelogIntervalMs)`，保留告警表达式和全部断言。本轮未应用、未重试，按 AGENTS.md §10.2 等待决策。
 - Match 的 build/vet/test、race、真 TiDB，以及 C++ 整解构建和三个测试程序均未执行。额外只读前置核对：Windows 当前 CGO_ENABLED=0、缺 GCC/MinGW；现有 Linux 工具镜像只有 gccgo go1.18，不能执行项目要求的官方 Go 1.27.2 race。未安装工具或拉镜像。旧本地 TiDB/PD/TiKV 仍停止，未启动。C++ 已知观战 const 引用不匹配仍能静态看到，尚无本轮编译结果。
 - 证据目录：`C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/r2/`。01–07 编号日志及退出码、生成前快照、`generation-check-reviewed.json`、`player-inbox-test-summary.json` 保留。Java 0.1.0-SNAPSHOT 状态仍待做；未改 Java、未提交、未推送、未发送跨聊天通知。
+
+### 2026-11-06 Codex：告警契约已通过，收件箱新增分片分配测试阻塞续验
+
+- 负责人授权仅改告警注释、保留表达式与断言，player_inbox 通过后继续 Match 和 C++。开始时 HEAD 已变为 `e6dff32ae`，该注释已由其他会话修为仅引用 `kHaltedDomainRelogIntervalMs`，本轮未重复改写。告警文件与 metrics 测试文件在本轮测试前后 SHA256 均相同。
+- 实际命令：`go/player_inbox` 下 `GOTOOLCHAIN=local`、`GOPROXY=off`，`go test -json -count=1 ./...`，退出 1。原 `TestAlertRulesReferenceRegisteredMetrics` 已 PASS。
+- 本轮结果：190 个顶层测试通过（含子例 326 个 PASS 事件）、1 个失败、0 跳过。唯一失败为 `internal/shardowner.TestAddingMemberOnlyMovesShardsToIt`，`shardowner_test.go:82`：`moved 0 shards: want some but not all`。与上一轮的告警契约失败不同；期间其他会话新增了分片功能及测试，不能把两轮测试数量当成同一固定输入。
+- 只读定位：该用例直接调用生产 `Owner`，向 4 个既有成员加入 `uuid-new`，遍历全部 64 个分片，要求变化只流向新成员且确有部分迁移。`shardowner.go:87` 的权重是 FNV-1a(member + NUL + 十进制分片号)；应优先核查短分片后缀的散列分布，但本轮没有计算分布、修改算法或放宽断言，尚不能宣称根因已证实。Match 的 poolowner 有相同拼接方式，是后续诊断需核对的相邻入口。
+- 按负责人要求的先后门禁及 AGENTS.md §10.2，player_inbox 尚未全绿，未重试，未进入 Match 或 C++ 构建/测试。生产分片算法不在本次“只改注释”范围内，等待下一步决策。
+- C++ 并行占用只读核对：当时另一会话的 MSBuild 正在写主仓 `lib/*`，本轮未启动争用同目录的构建；另一项构建使用独立快照。不把它们的结果作为本轮验证证据。
+- 日志、退出码和摘要：`C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/r3/`，含 `01-player-inbox-test.jsonl`、`01-player-inbox-test.exit.txt`、`player-inbox-test-summary.json`、告警与测试前后哈希/副本。前两轮原件保留；未改业务代码、未提交、未推送、未发送跨聊天通知。Java 0.1.0-SNAPSHOT 仍待做。

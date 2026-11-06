@@ -107,6 +107,11 @@ func main() {
 	if *migrateOnly {
 		os.Exit(runMigration(config.AppConfig))
 	}
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。迁移 Job 不注入这个变量,所以放在 -migrate 之后、
+	// 建任何 Redis 客户端之前。
+	if err := config.AppConfig.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
+		logx.Must(fmt.Errorf("shared Redis password: %w", err))
+	}
 	// 全局历练不能在结果topic只有单副本时先注册服务、开放开战，再后台重试。
 	if err := ensureTrialResultTopic(config.AppConfig, kafkautil.EnsureTopics); err != nil {
 		logx.Must(fmt.Errorf("guild global result topic durability: %w", err))

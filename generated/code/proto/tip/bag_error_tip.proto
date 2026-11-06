@@ -39,4 +39,10 @@ enum bag_error {
 
   kBagInsufficientBagSpace = 6014;
 
+  kBagTemporaryItemNotFound = 6015;
+
+  kBagTemporaryRetrieveBagFull = 6016;
+
+  kBagTemporaryRetrieveBusy = 6017;
+
 };

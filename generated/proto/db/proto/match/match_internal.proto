@@ -285,7 +285,7 @@ message ListStrandedFormationsResponse {
   uint64 next_retry_at_ms = 3;   // 两者都为 0 = 已到末尾
   uint64 next_battle_id = 4;
   uint64 now_ms = 5;             // TiDB 时刻
-  string target = 6;             // 服务端 GlobalMatch 的 Host/Database
+  string target = 6;             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 }
 
 message ResolveStrandedFormationRequest {
@@ -293,16 +293,16 @@ message ResolveStrandedFormationRequest {
   StrandedFormationMode mode = 2;
   // 下面四项 DRY_RUN / ABORT 必填;SHOW 忽略
   string expect_digest = 3;      // SHOW 回的 formation.digest
-  string expect_target = 4;      // SHOW 回的 target,与服务端逐字相等,防止连错环境
+  string expect_target = 4;      // 工单上写明的环境名(不从 SHOW 照抄),须与服务端的环境名逐字相等,连错环境回 target_mismatch
   string operator_name = 5;      // ≤64 字节,不含控制字符
   string reason = 6;             // ≤191 字节,不含控制字符:工单号与核对结论
   common.base.ServiceCallAuth auth = 7;
 }
 message ResolveStrandedFormationResponse {
   StrandedFormationVerdict verdict = 1;
-  StrandedFormation formation = 2;  // 处置前的核对结果;NOT_FOUND / RETRY 时可能为空
+  StrandedFormation formation = 2;  // 处置前的核对结果;NOT_FOUND / RETRY,以及 REFUSED 的 target_mismatch / formation_unreadable 时为空
   uint64 now_ms = 3;                // TiDB 时刻
-  string target = 4;                // 服务端 GlobalMatch 的 Host/Database
+  string target = 4;                // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
   string replica = 5;               // 处理本次调用的 match 副本(主机名)
   string refusal = 6;               // REFUSED 时的原因码(与 formation.refusal 相同;target_mismatch 时没有 formation)
   string audit_line = 7;            // DRY_RUN / ABORT:服务端打进日志的同一行 [FormationManual],贴进工单

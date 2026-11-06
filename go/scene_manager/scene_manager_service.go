@@ -54,6 +54,10 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):在建任何 Redis 客户端之前填好。
+	if err := c.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
+		logx.Must(fmt.Errorf("shared Redis password: %w", err))
+	}
 
 	// 再入屏障:进程起来之前先把常数与配置校验一遍(设计文档
 	// docs/design/scene-owner-reentry-barrier.md §3.2 要求的"机械校验")。

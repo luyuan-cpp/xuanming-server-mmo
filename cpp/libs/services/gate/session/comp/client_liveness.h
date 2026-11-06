@@ -169,11 +169,12 @@ public:
 		kIdle,
 	};
 
-	// lookup 返回的会话视图。verified 取自 SessionInfo::verified,liveness 指向 SessionInfo::liveness。
+	// lookup 返回的会话视图。verified 取自 SessionInfo::verified,liveness 借用 SessionInfo::liveness,
+	// 仅在本次同步扫描中有效。找不到会话由外层 optional 表示,存在的会话一定有存活状态。
 	struct SessionView
 	{
 		bool verified{false};
-		const ClientLiveness *liveness{nullptr};
+		const ClientLiveness &liveness;
 	};
 
 	struct SweepResult
@@ -246,16 +247,16 @@ public:
 				onHandshakeTimeout(checkpoint.sessionId, checkpoint.incarnation);
 				continue;
 			}
-			const ClientLiveness *liveness = view->liveness;
-			if (liveness == nullptr || !liveness->tracked)
+			const ClientLiveness &liveness = view->liveness;
+			if (!liveness.tracked)
 			{
 				++result.stale;
 				continue;
 			}
-			switch (JudgeIdle(liveness->lastInboundAt, now, result.late, policy_.idleTimeout))
+			switch (JudgeIdle(liveness.lastInboundAt, now, result.late, policy_.idleTimeout))
 			{
 			case IdleVerdict::kAlive:
-				Schedule(liveness->lastInboundAt + policy_.idleTimeout, checkpoint.sessionId, checkpoint.incarnation,
+				Schedule(liveness.lastInboundAt + policy_.idleTimeout, checkpoint.sessionId, checkpoint.incarnation,
 						 CheckKind::kIdle);
 				break;
 			case IdleVerdict::kDeferred:
@@ -264,7 +265,7 @@ public:
 				break;
 			case IdleVerdict::kDead:
 				++result.idleClosed;
-				onIdle(checkpoint.sessionId, checkpoint.incarnation, Duration(now - liveness->lastInboundAt));
+				onIdle(checkpoint.sessionId, checkpoint.incarnation, Duration(now - liveness.lastInboundAt));
 				break;
 			}
 		}

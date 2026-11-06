@@ -114,9 +114,12 @@ Windows 第一轮真实正例已通过；第二轮新测试程序在运行前被
 proto2mysql 的 `syncTableSchema` 只在表**不存在**时执行完整的 `CREATE TABLE`(索引在那条语句里);表已存在时它一条索引都不建,只 `ADD/MODIFY/CHANGE COLUMN`。所以任何一台跑过旧版 data_service 的机器,迁移之后是"列齐了、索引缺了":`player_snapshot` 少 `snapshot_guid` 索引 → 消费者每落一条快照全表扫一次,而且没有任何报错。
 
 `store/schema.go: ensureIndexes` 在每张表 `CreateOrUpdateTable` 之后补索引,幂等:
-- 想要的索引清单从 proto2mysql **生成的建表语句**里解出来(索引真源仍只有 proto 一处,名字与新库直接建出来的一致);
-- 外加 `extraIndexes`:`player_snapshot(zone_id, created_at)` —— 手写 DDL 时代的 `idx_zone_created`,收口到 proto 时漏了,而 `GetSnapshotPlayerIDsByZone` / `RollbackZone` 正按这两列过滤。长期修法是改 proto(本服务不拥有 `proto/`):把 `rollback_database_table.proto:64` 的 `option(OptionIndex) = "player_id;snapshot_guid";` 改成 `"player_id;snapshot_guid;zone_id,created_at"`;改完后 `extraIndexes` 那条会自动被判为"已覆盖",不会建重复索引;
+- 想要的索引清单只从 proto2mysql **生成的建表语句**里解出来(索引真源只有 proto 一处,名字与新库直接建出来的一致)。
+  以前另有一张 `extraIndexes` 兜底表补 `player_snapshot(zone_id, created_at)`;2026-11-06 两张审计表按时间的索引都改成
+  在时间列前插 `shard`(`zone_id,shard,created_at` 等,[审计流水链路的水平扩展](audit-pipeline-horizontal-scale-20261106.md) §2.C),
+  兜底表随之删掉,否则它会在每个库上把不分桶的单调索引补回来;
 - 覆盖判据是**前缀**不是同名:存量表的索引名是手写 DDL 起的(`idx_zone_created`),只要某条现有索引的前若干列正好是想要的列序就跳过,不重复建。
+  反过来,proto 里删掉的索引在存量库上**不会被删**:改索引形态之后已有的开发库要重建流水库(项目未上线,数据可清)。
 
 存量表的列一个 `pb:N` 注释都没有,所以升级那一次会对**每一列**发 `MODIFY COLUMN`(顺带 `longblob→mediumblob`、`varchar→mediumtext`),等于整表重写。启动路径只给这件事 5 分钟(`svc.autoMigrateTimeout`),大表会超时(进程侧三个 store 全置 nil、服务降级,MySQL 侧那条 ALTER 还在跑)。`migrateSchemaOn` 因此在同步前先检测并打一条 Error 日志点名该表。**刻意没有**把启动路径改成"拒绝重写、只许 `-migrate`":那会把所有存量 dev 库上的 data_service 一次性锁死在 fail-closed 状态,代价比它防的问题大。存量库升级请走 `data_service -f <yaml> -migrate`(不设时限)。回归用例:`store/schema_legacy_integration_test.go`(老 DDL 建表 + 种数据 → 迁移 → 数据在、新列在、索引在、二次迁移零变更)。
 
@@ -144,7 +147,6 @@ Kafka:
 `go test -tags=integration ./internal/store/... ./internal/kafka/ ./internal/logic/`:接真实 MySQL,每个用例建 `data_service_it_<pid>_<n>` 一次性库、跑完 DROP,yaml 指向的库不被触碰;MySQL 不可达或无建库权限时 Skip。本地 docker 的 `appuser` 没有 CREATE DATABASE 权,用 `DATA_SERVICE_IT_MYSQL_USER=root DATA_SERVICE_IT_MYSQL_PASSWORD=<deploy/docker-compose.yml>` 跑。
 
 ### 已知缺口
-- 表 proto `player_snapshot` 的 `OptionIndex` 还缺 `zone_id,created_at`,暂由 `store/schema.go: extraIndexes` 补(见上一节;`proto/` 归另一位负责)。
 - 本地 yaml 的 `SnapshotMySQL.DBName` 仍为 `testdb`；目标库是否存在及账号是否获授权取决于环境，不能从 yaml 推断本机实时状态。联调前应预建目标库并授权，或显式选择已获授权的全局库；迁移失败会导致相应 store 不可用，不能把服务端口已监听视为数据能力就绪。
 
 ### 已澄清(不再是缺口)

@@ -427,6 +427,11 @@ bool BattleRoomManager::OutcomeSigningKeyReady(std::string_view secret)
     return false;
 }
 
+uint64_t BattleRoomManager::CreationNowMs() const
+{
+    return creationClock_ ? creationClock_() : TimeSystem::NowMillisecondsUTC();
+}
+
 void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
                                            ::CreateBattleResponse &response)
 {
@@ -441,7 +446,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     std::string canonical;
     {google::protobuf::io::StringOutputStream sink(&canonical);google::protobuf::io::CodedOutputStream output(&sink);
      output.SetSerializationDeterministic(true);if(!request.SerializeToCodedStream(&output)){response.mutable_error_message()->set_id(kInvalidParameter);return;}}
-    const auto currentMs=TimeSystem::NowMillisecondsUTC();
+    const auto currentMs=CreationNowMs();
     // 墓碑保留覆盖所有合法迟到请求；过窗请求仍受admit_before硬拒绝。
     std::erase_if(creationOperations_,[currentMs,&rooms=rooms_](const auto& entry){return turnbattle::CreationReceiptExpired(entry.second.expiresMs,currentMs,rooms.Find(entry.first)!=nullptr);});
     if(!gNode||request.required_physical_region()==0||request.required_physical_region()!=network_probe::PhysicalRegion()||
@@ -571,7 +576,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     }
 
     // 纯构建/签票也可能耗尽准入预算，提交前再次拒绝过期的原操作。
-    if(request.admit_before_ms()<=TimeSystem::NowMillisecondsUTC())
+    if(request.admit_before_ms()<=CreationNowMs())
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
 
     // 插表 = 房间生命周期起点(EmplaceRoom 随即通知 Agones 单元已创建);此前的拒绝路径都没有副作用
@@ -665,7 +670,7 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
         const auto old=creationOperations_.find(battleId);
         if(old!=creationOperations_.end()&&old->second.operationId!=request.placement_operation_id())return;
         auto& operation=creationOperations_[battleId];operation.operationId=request.placement_operation_id();operation.aborted=true;
-        operation.expiresMs=std::max(operation.expiresMs,TimeSystem::NowMillisecondsUTC()+360000);
+        operation.expiresMs=std::max(operation.expiresMs,CreationNowMs()+360000);
     }
     // 幂等:已销毁/从未建成都视为成功
     LOG_INFO << "DestroyBattle idempotent hit: battle_id=" << battleId

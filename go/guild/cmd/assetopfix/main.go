@@ -200,6 +200,11 @@ func withStore(configPath string, readOnly bool, plan, directory, digest string,
 		fmt.Fprintf(stderr, "Failed to load configuration %s: %v\n", configPath, err)
 		return exitError
 	}
+	// 共享 Redis 口令与服务进程同一来源(SharedRedisPasswordEnv):在 guild Pod 里跑时,ConfigMap 里只有变量名,口令在容器环境变量里。
+	if err := c.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(stderr, "Failed to resolve the shared Redis password: %v\n", err)
+		return exitError
+	}
 	// 按服务 yaml 的 Log 段初始化:部署环境若把日志落文件供采集,审计行也跟着进同一条管道。
 	logConf := c.Log
 	logConf.ServiceName = logServiceName

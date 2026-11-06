@@ -10,6 +10,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 	"match/internal/metrics"
+	battlepb "proto/battle"
 	pb "proto/match"
 )
 
@@ -23,6 +24,36 @@ func recoverableOutcomeShape(f *pb.MatchFormationRecord) bool {
 	return f != nil && f.OutcomeProtocolVersion == 1 && f.PreflightSupportedVersion == 1 && f.OperationId != "" &&
 		f.TargetInstanceId != "" && f.PreflightInstanceId == f.TargetInstanceId && len(f.CreateRequest) > 0 &&
 		((!f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion == 0) || (f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion == 1))
+}
+
+// errOutsideRecoveryShape:原件过得了 supportedOutcomeOriginal,成局行却不在到期恢复的候选形状里(只剩 operation_id 为空)。
+var errOutsideRecoveryShape = errors.New("成局不在到期恢复候选形状里(operation_id为空)，终局保持UNKNOWN")
+
+// outcomeAdjudicable 是「自动路径会裁决这份成局的终局」的全部原件判据(2026-11-06):在到期恢复的候选形状里
+// (recoverableOutcomeShape,即候选 SQL),且持久 Create 原件过得了截止 ABORT 与 COMPLETE 共读的 supportedOutcomeOriginal。
+// 到期恢复、截止 ABORT(abortTerminalTx,含帮会取消)、提前 ABORT(AbortWithoutRoom)与 scene 冻结到期查询
+// (TerminalOutcomeExpected)都只调它,所以「回包说会有终局」与「恢复循环最终写终局」是同一组判据。COMPLETE 的
+// completableOriginal 比它严,且 COMPLETE 入口要求 operation 非空,过得了 COMPLETE 的一定过得了它。人工处置工具的 AUTO 类
+// (classifyStranded)与它同一口径,其余各类只能人工处置。
+// 形状合格却过不了原件核对回 ErrUnrecoverableFormation;其余不过回普通错误(旧协议、能力证据不全、operation 为空)。纯函数。
+func outcomeAdjudicable(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRequest, error) {
+	shape := recoverableOutcomeShape(f)
+	r, err := supportedOutcomeOriginal(f)
+	switch {
+	case err != nil && shape:
+		return nil, fmt.Errorf("%w: %v", ErrUnrecoverableFormation, err)
+	case err != nil:
+		return nil, err
+	case !shape:
+		return nil, errOutsideRecoveryShape
+	}
+	return r, nil
+}
+
+// formationInFlight:成局在途、尚未终结(state 2/3/4),与到期恢复候选 SQL 的 state IN(2,3,4) 同一口径。
+// 有没有持久 Create 原件另由 outcomeAdjudicable 判(state 3 也可能是还没落原件就失联的局)。
+func formationInFlight(f *pb.MatchFormationRecord) bool {
+	return f != nil && f.State >= 2 && f.State <= 4
 }
 
 // ErrUnrecoverableFormation:成局满足到期恢复的候选形状(recoverableOutcomeShape),持久 Create 原件却与成局字段对不上

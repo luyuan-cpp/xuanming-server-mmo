@@ -519,7 +519,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
       `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL`)从 `go/login/etc/login.yaml` 镜像。`Secrets` 下另写 `QueueToken.Value`(见下一条)。
     - 与开关无关:gateway ConfigMap 的 `spring.data.redis` 在 `MMORPG_REDIS_PASSWORD` 非空时写 `password`(staging / prod 必须设该变量;dev 档没设时回落空串,不写)。
       限流专用的 Lettuce 客户端只从这个属性取口令,而 release 档的 Redis 带 `--requirepass`;不写口令时限流过不了 Redis 认证,要么每次调用都 fail-open 放行,
-      要么 gateway 建连接时就起不来(取决于 Lettuce 的握手行为,未实测)。口令与 go-svc ConfigMap 一样是明文。
+      要么 gateway 建连接时就起不来(取决于 Lettuce 的握手行为,未实测)。2026-11-06 起这里写的是引用 `"${SHARED_REDIS_PASSWORD}"`,口令经 Secret `redis-auth`
+      注入容器、不进 ConfigMap,见「Go 服务与 gateway 的共享 Redis 口令」。
   - **登录排队的合入门槛(2026-10-15 更正注:上面「staging / prod 开」目前只对 `-GatewayRateLimit` 成立)**。G4b-2 的 login 段已先于合入门槛
     随 `e4ff1d165` / `ebccaf04d` 入库(越序),`k8s_deploy.ps1` 用脚本常量 `$script:LoginQueueMergeGateCleared`(当前 `$false`)机械拦截:
     - 三项门槛(`docs/handoff/launch-readiness-20261013/spec_G4b.md` §7「合入门槛」):① G1b 规格指定的多 zone 用例(L-01 验收:每个 zone 的队列都能出队)
@@ -560,7 +561,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - **切换自动滚动**:开着时 gateway 与 login 的 Pod 模板各带一条注解 `mmorpg.io/peak-shaving-hash`(gateway 的指纹输入 = 整段 `rate-limit` 文本 + Redis 口令,
     排在管理面口令指纹 `mmorpg.io/gateway-admin-api-key-hash` 之后;login 的 = `Queue` 段 + 排队密钥),关时注解消失。开关、阈值、可信代理网段、Redis 口令、
     排队密钥任一变化 → 模板变 → apply 即滚动,不需要手工 `rollout restart`(ConfigMap 只在进程启动时读,靠的就是这条注解)。
-    既有缺口:只改 Redis 口令时 login 不滚动(go-svc 的 ConfigMap 都没有内容哈希)。
+    只改 Redis 口令时,gateway、login 与其余连共享 Redis 的 Go 服务都由只哈希口令的 `mmorpg.io/shared-redis-auth-hash` 滚动(2026-11-06),与这两个开关无关。
   - **不要用 `kubectl rollout undo` 关排队或关限流**:它只退 Pod 模板(镜像与注解),不退 ConfigMap,排队 / 限流照旧开着。止血一律走下一条。
   - **① 止血要直接调 `k8s_deploy.ps1`**:`dev_tools.ps1`、`k8s_image.ps1` 都**不透传**这两个参数(它们透传 `-ReleaseProfile`,`auto` 随档位开启),
     事故时在包装入口上找不到参数。`zone-up` 会按本次参数重写该 zone 的全部工作负载,所以除了加上的 `off`,其余参数(模式、地址、Ingress、档位、镜像 tag)必须与该 zone
@@ -1035,9 +1036,14 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
 
 | 被保护 | gRPC 口 | 放行(`app` 标签) | 调用点(2026-10-16 按代码整理) |
 |---|---|---|---|
-| scene / scene-world / scene-instance(zone ns) | 50000(RPC_PORT 20000 + 30000) | scene-manager、match、player-inbox、guild、trade | `go/scene_manager` scene_node_client;`go/match` node_watcher;`go/player_inbox` notify;guild / trade 经 `go/shared/assetop` |
-| guild(infra ns) | 50300 | client-rpc-router | 路由表 `GuildNodeService` |
+| scene / scene-world / scene-instance(zone ns) | 50000(RPC_PORT 20000 + 30000) | scene-manager、match、player-inbox、guild、trade、mail、data-service | `go/scene_manager` scene_node_client;`go/match` node_watcher;`go/player_inbox` notify;guild / trade / mail / data-service 经 `go/shared/assetop` |
+| guild(infra ns) | 50300 | client-rpc-router、data-service、mail | 路由表 `GuildNodeService`;角色围栏参与者接口;mail 的 `GuildRpc`(帮会邮件可见性) |
 | match(infra ns) | 50500 | client-rpc-router、guild、gate、data-service、scene、scene-world、scene-instance | 客户端路由、历练开战、Gate 直连回退、角色围栏参与者接口、Scene 的 `TeamAuthority` 成员读取 |
+
+- **全局服务的金丝雀副本**(`infra-up -CanaryServices`,发布轨道设计 §5.3):生成策略时,两侧名单里能起金丝雀的服务各自动补一个 `<app>-canary`
+  (`Get-ReleaseTrackAppLabels`):被保护的 guild / match 同时选中 `guild-canary` / `match-canary`,放行一侧多出 `client-rpc-router-canary`、`guild-canary`、
+  `trade-canary`、`mail-canary`、`match-canary` 中名单里有原名的那几个。表与 `$script:GrpcAllowLists` 只写真实清单的标签;没起金丝雀时多出的标签选不中任何 Pod。
+  scene 的策略在 `zone-up` 时生成,各 zone 要先用同一版脚本部署过,金丝雀的 guild / trade / mail / match 才连得上 scene。操作见 `docs/ops/release-track-canary-runbook.md`。
 
 - 不经这些 gRPC 口的:gate ↔ scene 走 muduo 节点口 20000(开放);battle → scene 走 Kafka 命令;match → guild 的历练结果走 Kafka;路由表里没有 `SceneNodeService`。
 - 与 G-05 原文的出入:scene 多放了 player-inbox(收件箱上线晚于 G-05,`notify.go` 会拨 scene);match 多放了 gate(回退模式);guild 不放 match(代码里 match 不调 guild)。
@@ -1068,6 +1074,21 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
 **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(本批新增 9 条、改 1 条)与
 `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`(新增 2 条 trade 用例)。集群上(装了支持 NetworkPolicy 的网络插件):
 打开后从 scene-manager / guild Pod 能连 scene 的 50000、从 gate Pod 连不上;guild / trade 两 Pod Ready;robot `guild_smoke.yaml` 的捐献 / 兑换不再回 `kGuildAssetPending`。
+
+## 发布轨道:金丝雀 zone 与全局服务的金丝雀副本(2026-11-05~06,`-ReleaseTrack` / `-CanaryServices`)
+
+> 状态:部署脚本、契约测试、告警已落码;**未跑契约测试、未上集群**,待 Codex。规则见 `docs/design/release-track-gray-canary.md`,操作步骤见 `docs/ops/release-track-canary-runbook.md`。
+
+- `zone-up -ReleaseTrack canary`:zone 内的 gate、scene、login、scene-manager、db 写 `MMORPG_RELEASE_TRACK=canary`,Pod 模板加标签 `mmorpg.io/release-track: canary`;
+  data-service、player-locator 不重新下发(输出 `[keep-stable]`)。infra-up、all-up 带 canary 直接拒绝。
+- `infra-up -CanaryServices <svc,…> -CanaryGoSvcTag <tag> [-CanaryReplicas N]`:为点名的全局服务另起一个 `<svc>-canary` Deployment
+  (`app: <svc>-canary`,稳定版 Service 选不中;同样写 env 和轨道标签)。只收 client-rpc-router、chat、friend、trade、mail、rank、guild、match;
+  不粘滞,没列出的删掉旧的 `<svc>-canary`。写 SQL 的服务要在 boot 目录里另备 `<ns>/<svc>-canary` 条目,缺了在任何写操作之前拒绝。
+- **stable 一律不写** env 和标签,生成物与引入参数之前逐字相同,已有 zone 不会因此滚动。`zone-status` / `infra-status` 最后列出各 Pod 的轨道标签,空 = stable。
+- **告警**:`deploy/k8s/release-track-alerts.yaml`(PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装):`ReleaseTrackZoneMixedTooLong`(一个 zone 的
+  gate / scene 混轨超过 3 小时,看 `cpp_node_info`)、`ReleaseTrackCanaryForwardErrorsHigh`(路由服 `client_rpc_router_forward_by_track_total` 上
+  canary 失败率明显高于 stable)。阈值是起步值。Go 服务的指标要按轨道比较,Prometheus 要把 Pod 标签映射成目标标签,写法见手册第 1 节。
+- **契约测试**:`k8s_deploy_contract.tests.ps1` 里以「发布轨道:」开头的用例,`release_track_alerts_contract.tests.ps1`。
 
 ## 邮件 mail:全局池 + 独占库 `mmorpg_mail` + `mail-migrate` Job + MailAdmin 令牌 Secret + 告警(2026-10-16,docs/design/mail-system.md M1d)
 
@@ -2181,12 +2202,12 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
     一份同名副本在 `Apply-Zone` 开头(先于 gate / scene;Secret 不能跨 namespace 引用)。值经 `Apply-InjectedSecret` 写入:`-DryRun` 只打一行
     `# Secret redis-auth (key password; value hidden)`,不再把口令打进输出(以前 infra 那份用 here-string 直接 apply,DryRun 会打印口令)。
   - dev 档没设该变量时口令是空串:两处 Secret 都删掉残留,C++ 工作负载不注入这两个环境变量、不写指纹注解,与引入口令之前逐字相同;C++ 不发 AUTH。
-  - 各 Go 服务 / gateway 的 ConfigMap 里目前**仍有同一个口令的明文**(`Pass:` / `spring.data.redis.password`),改走 Secret 另立任务
-    (要改 Go / Java 的配置加载)。在那之前同 namespace 的暴露面没有缩小,但 C++ 这一侧不再扩大它。
+  - 各 Go 服务与 gateway 2026-11-06 起同样经这份 Secret 拿口令(环境变量 `SHARED_REDIS_PASSWORD`),ConfigMap 里不再有明文,
+    见下一节「Go 服务与 gateway 的共享 Redis 口令」。
 - **C++ 的行为(第一批)**:口令非空时每条新连接(含断线重连)先 `AUTH`,回 `+OK` 才对业务可见;被拒、发不出去或超时一律 fail-closed ——
   zone Redis 对业务保持不可用,每个重连周期重试一次并打带 `metric=zone_redis_auth_failed` 的 ERROR,进程不退出、Pod 仍 Ready
   (「zone Redis 已认证」的就绪条件另起一项)。启动日志只打 `Zone Redis auth: on|off`,不打口令。
-- **生成期保护**:非 dev 档口令为空,或口令含 `"`、`\`、换行与其它控制字符(它仍要原样写进 Go / gateway 的 ConfigMap 与哨兵配置),在任何 `kubectl`
+- **生成期保护**:非 dev 档口令为空,或口令含 `"`、`\`、换行与其它控制字符(高可用哨兵会把它原样写进自己的配置文件),在任何 `kubectl`
   写操作之前拒绝,报错只点变量名、不回显值。
 - **指纹注解**:C++ 工作负载在口令非空时,Pod 模板带 `mmorpg.io/zone-redis-auth-hash`(只哈希口令,不哈希整份 node-config —— 否则无关改动也会滚动
   gate 与 battle)。环境变量只在容器启动时读,只改 Secret 时 Pod 模板逐字节没变、apply 是 no-op;指纹把「换口令」变成 Pod 模板变化,工作负载
@@ -2205,7 +2226,8 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
      哨兵之间互认的口令 `SENTINEL CONFIG SET sentinel-pass 新口令`。
   2. 用新的 `MMORPG_REDIS_PASSWORD` 跑 `infra-up` 与各 zone 的 `zone-up`:Secret `redis-auth`(infra 与每个 zone)换成新口令,C++ 指纹变化,
      工作负载按上一条各自的方式换上新口令;旧 Pod 在退场之前继续用旧口令,不会 NOAUTH。`redis.yaml` 的 Pod 模板不含口令(Secret 引用),
-     这一步**不重启 Redis**,重启闸判 unchanged。Go / gateway 的 ConfigMap 同步换成新口令,它们怎么滚动以各自的配置指纹为准(另立的任务会改成 Secret)。
+     这一步**不重启 Redis**,重启闸判 unchanged。Go 服务、mail 与 gateway 的 ConfigMap 不变,Pod 模板上的 `mmorpg.io/shared-redis-auth-hash` 变化,
+     apply 即按各自 Deployment 的滚动策略换上新口令(见下一节)。
   3. 等所有旧 Pod 都退场:Deployment 滚动完成;Agones 的旧一代 GameServerSet 里没有 Allocated 实例
      (`kubectl -n <ns> get gs -L agones.dev/fleet,agones.dev/gameserverset`);external gate 都已排空换新。
      高可用形态的代理(haproxy)在启动时从 Secret 读健康检查用的口令,要 `kubectl -n <infra> rollout restart deployment/redis-proxy`
@@ -2250,6 +2272,37 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
 - 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 3a 节(`zone Redis 口令…`、`zone Redis 口令契约…`、`Sync-RedisAuthSecret…`)
   与 battle 段(`battle:带口令的 infra-up…`),`tools/scripts/tests/k8s_client_entry_contract.tests.ps1` 的「库:-PodAnnotations 与 sidecar 配置指纹…」
   与「库:-SecretEnv 渲染成 secretKeyRef…」。
+
+## Go 服务与 gateway 的共享 Redis 口令(2026-11-06,docs/handoff/handoff-global-singletons-p0-20261015.md §9)
+
+与上一节 C++ 用同一个口令(`MMORPG_REDIS_PASSWORD`)、同一份 Secret `redis-auth`(键 `password`),遵循同一条标准:口令不进 ConfigMap,也不进 DryRun 输出。
+「共享 Redis」指核心实例 `redis.<InfraNamespace>`,以及按用途拆出的 `redis-queue-g<N>`、`redis-ctl-g<N>`。玩家域 Redis Cluster
+(`MMORPG_PLAYER_REDIS_PASSWORD`,Secret `redis-player-auth`)和 match 独占集群不在本节。
+
+- **Go 服务**(`k8s_deploy.ps1` 的 `$script:SharedRedisAuthGoServices`:login、data-service、player-locator、scene-manager、match、trade、friend、player-inbox、guild):
+  - ConfigMap 里共享 Redis 段的口令一律写空串。涉及的段:login 的 `Node.RedisClient` / `Node.QueueRedis`;data-service 的 `NameCacheRedis` / `SharedRedis`;
+    player-locator 的 `RedisClient`;scene-manager 的 `Redis` / `CoreRedis`;match 与 friend 的 `Redis`;trade 的 `SharedRedis`;player-inbox 的 `CoreRedis`;
+    guild 的 `RedisClient` / `PlayerLocatorRedis`。口令非空时,配置末尾多一行顶层 `SharedRedisPasswordEnv: SHARED_REDIS_PASSWORD`。
+  - 容器经 `secretKeyRef`(不写 `optional`)从本 namespace 的 Secret `redis-auth` 拿 `SHARED_REDIS_PASSWORD`。全局服务在 infra namespace,Secret 由 `Apply-Infra`
+    的 Redis 分支先建好;zone 级服务在 zone namespace,`Apply-Zone` 开头先建副本。
+  - 进程启动时,`go/shared/redisauth` 把这个变量的值填进上面各段。时机是迁移分支之后、建任何 Redis 客户端之前;迁移 Job 不连 Redis,也不注入这个变量。
+    配置指名了变量但变量没有值,或某段同时写了口令字面量,进程都拒绝启动,报错只点键名与变量名。本机 `etc/*.yaml` 不写这个键,照旧用字面量。
+    guild 的运维工具 `cmd/assetopfix` 在 guild Pod 里跑时,同样从这个变量拿口令。
+  - 为什么在配置里写变量名,而不是让程序认一个固定的变量名:这与 `PasswordAuth.DSNEnv`、`PlayerRedis.PasswordEnv`、mail 的 `SharedRedisPasswordEnv` 是同一写法,
+    看 ConfigMap 就知道口令从哪来。也不用 go-zero 的 `conf.UseEnv()`:它会展开整份配置里所有的 `$`。
+- **gateway**:`spring.data.redis.password` 只写 `"${SHARED_REDIS_PASSWORD}"`,容器同样经 `secretKeyRef` 拿值。引用不带缺省值:变量缺失时 `@Value` 解析失败,
+  gateway 拒启,而不是按空口令起来、让限流静默 fail-open。口令为空时不写这一行,与之前相同。
+- **mail**:ConfigMap 里早就没有口令(`SharedRedisPasswordEnv: MMORPG_MAIL_REDIS_PASSWORD`,manifest 里对 `redis-auth` 的引用是 `optional: true`)。本批只给它补上指纹注解。
+- **换口令自动滚动**:口令非空时,上面这些工作负载的 Pod 模板都带 `mmorpg.io/shared-redis-auth-hash`(只哈希口令,`Add-SharedRedisAuthToManifest`)。
+  只改 Secret 时 ConfigMap 和 Pod 模板都不变,apply 什么也不做;有了指纹,换口令就变成模板变化,apply 即滚动。
+  轮换仍按上一节的双口令步骤做,旧 Pod 退场之前,Redis 两个口令都认。gateway 原有的削峰指纹仍把口令算在输入里(只在限流开着时有),与这条并存。
+- **dev 档没设口令**:各段写空串,不写 `SharedRedisPasswordEnv`,不注入变量,不写指纹,产物与改走 Secret 之前逐字相同。
+- **上线顺序**:项目未上线,首次部署整批起步即可。已有集群要注意:新脚本给某服务写空口令之后,该服务的镜像必须已经认 `SharedRedisPasswordEnv`,
+  否则旧镜像按空口令连 Redis,会全线 NOAUTH。所以先发 Go 镜像,再用新脚本部署。反过来,新镜像配旧脚本不受影响:配置里仍是口令字面量,照常可用。
+- **未验证**:Go 代码、部署脚本、契约测试都还没经 Codex 运行;Secret 注入、指纹滚动、Spring 嵌套占位的解析,都没有在集群上跑过。
+- 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的「Go 服务与 gateway 的共享 Redis 口令」一节,以及 3b 节的两条 gateway 用例
+  (`staging / prod 的 gateway 带 spring.data.redis.password…`、`gateway 削峰指纹随 Redis 口令变化…`)。Go 单测在 `go/shared/redisauth` 和各服务的
+  `internal/config/shared_redis_password_test.go`。
 
 ## C++ 节点的文件描述符上限(2026-10-18,A0-2 / gate 准入 G4 P0-1)
 

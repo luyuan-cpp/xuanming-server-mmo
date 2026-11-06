@@ -287,6 +287,8 @@ func TestTiDBShardedTransferAcrossShards(t *testing.T) {
 func TestTiDBShardedStaleCreateRefIsSweptAndTombstoned(t *testing.T) {
 	f := newDirectoryShardFixture(t)
 	s := f.directory(t, 5)
+	// 写墓碑之前要核名字是否已绑定:名字登记表没接上算证据核不全,不写墓碑(生产恒接)。这名角色没登记过名字,核完照常写。
+	s.ConfigurePlayerNames(nameStoreForTest(t, f))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	role := &base.AccountSimplePlayer{PlayerId: shardRoleAtOne, ZoneId: 1}

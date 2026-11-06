@@ -193,3 +193,34 @@ func (s *RecallStore) ClaimedOpForTest(ctx context.Context, opID, poisonUntilMs,
 func (s *RecallStore) DeferPoisonForTest(ctx context.Context, opID, token, poisonUntilMs uint64) error {
 	return s.deferPoison(ctx, opID, token, poisonUntilMs)
 }
+
+// RetentionShardForTest 是审计清理的一个桶会话(audit_retention.go 的 retentionShard):真库用例验证桶锁互斥与按桶删除。
+type RetentionShardForTest interface {
+	DeleteOlder(ctx context.Context, olderThan uint64, limit int) (int64, error)
+	Release()
+}
+
+type retentionShardForTest struct{ s retentionShard }
+
+func (r retentionShardForTest) DeleteOlder(ctx context.Context, olderThan uint64, limit int) (int64, error) {
+	return r.s.deleteOlder(ctx, olderThan, limit)
+}
+
+func (r retentionShardForTest) Release() { r.s.release() }
+
+func wrapRetentionShardForTest(s retentionShard, ok bool, err error) (RetentionShardForTest, bool, error) {
+	if err != nil || !ok {
+		return nil, ok, err
+	}
+	return retentionShardForTest{s: s}, true, nil
+}
+
+// ClaimRetentionShardForTest 取流水表第 shard 个桶的清理锁(生产由 RunAuditRetention 调)。
+func (s *TransactionLogStore) ClaimRetentionShardForTest(ctx context.Context, shard uint32) (RetentionShardForTest, bool, error) {
+	return wrapRetentionShardForTest(s.claimRetentionShard(ctx, shard))
+}
+
+// ClaimRetentionShardForTest 取快照表第 shard 个桶的清理锁(生产由 RunAuditRetention 调)。
+func (s *SnapshotStore) ClaimRetentionShardForTest(ctx context.Context, shard uint32) (RetentionShardForTest, bool, error) {
+	return wrapRetentionShardForTest(s.claimRetentionShard(ctx, shard))
+}

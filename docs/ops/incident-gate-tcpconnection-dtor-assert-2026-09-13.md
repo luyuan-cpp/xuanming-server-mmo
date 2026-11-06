@@ -446,7 +446,7 @@ muduo::Logger::setLogLevel(logLevel);
 
 为什么是**两跳 `queueInLoop`**而不是定时器(首版曾写成 `runAfter(0.05, quit)`,被 09-14 四视角评审 ML-1 推翻):`doPendingFunctors` 对同一队列是 FIFO —— 本趟(N)`forceCloseInLoop×k` 已在队,再排入外跳;N+1 趟 `forceCloseInLoop×k` 各自排入 `connectDestroyed`,然后外跳跑、把内跳排在它们之后;N+2 趟 `connectDestroyed×k` 先跑,内跳最后 `quit()`。**顺序由队列保证,与 poll 何时返回无关。** 定时器做不到:Windows 的 loop 是 `poll → handleEvents → timerQueue_->loop() → doPendingFunctors`,定时器若恰在 N+1 趟到期,`quit_` 先置位、本趟只跑完 `forceCloseInLoop` 就退出,`connectDestroyed` 永远不跑,`:43` 照撞 —— 它只是"通常"能跑完两趟,不是"必然"。`Shutdown()` 等待的 `shutdownComplete_` 在最后一跳执行 `quit()` 后才置位,并在完成锁内通知等待者;解锁后不再访问 Node。2026-09-14 合并评审补齐此处:提前置位会让析构 fallback 跳过两跳排空,也会让 EventLoop 外的析构提前释放回调仍在捕获的对象。Linux 的 `RequestShutdown()` 路径仍在同一函数收口(`node_entry.h:103-109` 有 `gNode` 时不直接 `quit`),使用同一完成时点。此边界尚无独立运行证据。
 
-**验证(运行时,无法单测 `Node`)**:Debug gate + ≥1 已登录客户端,对 gate 控制台按 Ctrl+C —— 修复前断在 `TcpConnection.cc:71` 或 `Channel.cc:43`;修复后退出码 0、无 assert,日志顺序 `Disconnecting N client sessions before shutdown...` → `All client sessions disconnected.` → 每个**已登录**会话一条 `HandleConnectionDisconnection` 断开记录(未登录会话不打)→ `Before-shutdown drain complete.`。**别找 `Node shutdown complete.`**,它是 `LOG_DEBUG` 且打在 `logSystem.stop()` 之后。步骤与回填模板见交接文档 §6.4 / §7.2。
+**验证(运行时,无法单测 `Node`)**:Debug gate + ≥1 已登录客户端,对 gate 控制台按 Ctrl+C —— 修复前断在 `TcpConnection.cc:71` 或 `Channel.cc:43`;修复后退出码 0、无 assert,日志顺序 `Disconnecting N client sessions before shutdown...` → `All client sessions disconnected.` → 每个**已登录**会话一条 `HandleConnectionDisconnection` 断开记录(未登录会话不打)→ `Before-shutdown work and queued Kafka callbacks joined.`(2026-11-06 按 `node.cpp` 现行日志文本更正)。**别找 `Node shutdown complete.`**,它是 `LOG_DEBUG` 且打在 `logSystem.stop()` 之后。步骤与回填模板见交接文档 §6.4 / §7.2。
 
 ### 7.12 【盘点 09-14】还有哪些地方会把"旧连接"留住 —— 全仓两轮扫描的结果
 

@@ -381,3 +381,7 @@
 380=MatchServiceGetBattleReport
 381=SceneMovementClientPlayerTeamFollow
 382=SceneMovementClientPlayerNotifyTeamFollowState
+383=ClientPlayerChatNotifyWorldChat
+384=DataServiceRegisterRecallReviewHandled
+385=DataServiceGetPlayerItemGainBlock
+386=PlayerInboxAdminGetItemGainBlocks

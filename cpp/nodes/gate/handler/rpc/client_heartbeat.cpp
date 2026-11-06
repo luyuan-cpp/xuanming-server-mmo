@@ -223,7 +223,7 @@ void SweepLiveness(const SteadyTime now)
 			{
 				return std::nullopt;
 			}
-			return LivenessSweeper::SessionView{.verified = session->verified, .liveness = &session->liveness};
+			return LivenessSweeper::SessionView{.verified = session->verified, .liveness = session->liveness};
 		},
 		[](const uint32_t sessionId, const uint64_t incarnation) { CloseHandshakeTimeout(sessionId, incarnation); },
 		[](const uint32_t sessionId, const uint64_t incarnation, const SteadyTime::duration silentFor)

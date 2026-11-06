@@ -88,7 +88,7 @@ TEST(ScenePlacementFence, MoveAwayDestroyCannotHitMoveBack)
 }
 
 // 代次 0:副本与镜像只用 0,不留记录、行为不变。世界频道的退役拆除(0)不比代次、无条件执行,也不改记录:不留退役墓碑,
-// 显式销毁之后被懒改派以新代次复活的频道照样建得回这个节点。
+// 之后以新代次放回这个节点的频道照样建得回来。
 TEST(ScenePlacementFence, GenerationZeroKeepsLegacyBehaviour)
 {
 	ScenePlacementFence fence;

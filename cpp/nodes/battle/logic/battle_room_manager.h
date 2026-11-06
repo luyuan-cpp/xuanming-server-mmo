@@ -82,7 +82,8 @@ class BattleClientEdge;
 class BattleRoomManager
 {
     // 单测直接驱动「Match 回了持久决定」并清房,不启动 match(房间按生产合同只由 Match 的决定收尾,DestroyBattle 删不掉);
-    // 停机补提交的用例另经它换终局发送口(sqlOutcomeRoute_)、改小每拍上限(sqlOutcomeSendsPerPump_)。
+    // 停机补提交的用例另经它换终局发送口(sqlOutcomeRoute_)、改小每拍上限(sqlOutcomeSendsPerPump_);
+    // 建房准入与操作墓碑的用例经它注入建房时钟(creationClock_)。
     friend class BattleRoomManagerTestAccess;
 
 public:
@@ -686,6 +687,13 @@ private:
     // 本实例操作墓碑只在loop线程访问；进程重启后精确target_instance使旧RPC失效。
     struct CreationOperation {std::string operationId;std::string canonicalRequest;uint64_t expiresMs=0;bool aborted=false;};
     std::unordered_map<uint64_t,CreationOperation> creationOperations_;
+    // 建房准入与建房操作墓碑共用的墙钟(Unix 毫秒):HandleCreateBattle 入口一次(墓碑过期清理与准入判定)、插房前复核一次,
+    // HandleDestroyBattle 写墓碑期限一次。三处读同一个钟,墓碑的写入与过期比较才在同一时间轴上。
+    // 生产恒为 TimeSystem::NowMillisecondsUTC();房间期限、票据、签名等其余时刻照旧直接读 TimeSystem。
+    uint64_t CreationNowMs() const;
+    // CreationNowMs 的替身:空 = 生产实现。只有单测经 BattleRoomManagerTestAccess 换,用来把入口与插房前两次准入判定分开、
+    // 钉住墓碑保留期,不等真实时间(2026-11-06 补,match 提前 ABORT 依赖的 battle 不变量回归)。
+    std::function<uint64_t()> creationClock_;
     // 取消先于Add时房间可能尚不存在；墓碑在manager而非room，保留到原准入截止。
     // rejectTip:本操作首次被拒的码,同 op、同请求的重放回同一结论(0 = 不是被拒关闭,而是被 Remove / 回收封闭)。
     struct SpectatorOperation { uint64_t admitBeforeMs{0}; std::string canonicalRequest; bool cancelled{true}; uint32_t rejectTip{0}; };

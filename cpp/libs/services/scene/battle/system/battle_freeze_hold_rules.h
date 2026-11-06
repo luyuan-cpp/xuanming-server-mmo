@@ -8,8 +8,8 @@
 // 那时资产通道的战斗闸(只看 InBattleComp)已经放开,迟到的结算只能按当时持有量夹紧消耗 —— 「药白喝」,可逐局刷。
 //
 // 冻结到期(nowMs 严格大于 FreezeExpiresAtMs)时 reaper 先看本实体:这一局的结算已在本地应用过
-// (收件箱战斗域最近结局环里有它),就照常解冻,不必查;否则向 match 只读查这一局的 SQL 终局
-// (MatchInternal.GetBattleTerminalDecision),按下表处置:
+// (收件箱战斗域最近结局环里有它的 APPLIED),就照常解冻,不必查;已越过续冻上限就告警后照常解冻,
+// 不查、也不等在途的查询;否则向 match 只读查这一局的 SQL 终局(MatchInternal.GetBattleTerminalDecision),按下表处置:
 //   ABORT                                   → 照常解冻(现行规则:记作废局 → 条件删锁 → 摘冻结)
 //   NO_ORIGINAL(没有终局,且没有可裁决的原件) → 照常解冻:COMPLETE 永远落不了库,这一局不会有任何结算
 //   PENDING(没有终局,但有可裁决的 v1 原件)   → 续冻一拍,锁跟着续(下面说明为什么不是终局证据)

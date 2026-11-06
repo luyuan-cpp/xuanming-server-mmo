@@ -324,3 +324,7 @@ robot/.last_stress_dir.txt
 # Claude Code 的本机权限白名单与任务锁:每台机器各一份,不是团队状态
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Redis Secret 交接比对所需的历史脚本，避免被通用 scripts/ 规则忽略。
+!/docs/handoff/shared-redis-secret-20261106/shared-redis-secret-backup/tools/scripts/
+!/docs/handoff/shared-redis-secret-20261106/shared-redis-secret-backup/tools/scripts/k8s_deploy.ps1

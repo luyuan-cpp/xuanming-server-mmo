@@ -7,14 +7,15 @@
 // 分工只省重复劳动,不承担正确性。副本增减的几秒里各副本看到的成员表可能不同:某一片可能两个副本都做,
 // 也可能暂时没人做(下一拍补上)。用它分工的工作必须在自己的 SQL 提交点用行锁、版本条件或租约保证互斥与幂等。
 //
-// 打分函数与 go/match/internal/poolowner 相同(FNV-1a 64 位,成员 + 0 字节 + 键)。match 的那一份是它自己的成员表,
-// 两边各自分工,结果互不影响;match 迁到本包之前两份并存(docs/design/jubaozhai-market.md §15.8)。
+// Owner 是后台分工的唯一 HRW 打分入口:SHA-256(成员 + 0 字节 + 键)的前 8 字节按大端序取 uint64。
+// match 的 poolowner 和 player_inbox 的 shardowner 复用此入口,各服务继续维护自己的成员表与未同步语义。
 package workshard
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
-	"hash/fnv"
 	"slices"
 	"strconv"
 	"strings"
@@ -61,11 +62,10 @@ func Owns(self, key string, members []string) bool {
 }
 
 func weight(member, key string) uint64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(member))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(key))
-	return h.Sum64()
+	// FNV-1a 对只变末尾一两位的分片键扩散不足,会让同一副本包揽整组分片。
+	// 固定摘要算法保证跨进程一致,不使用带进程随机种子的散列。
+	digest := sha256.Sum256([]byte(member + "\x00" + key))
+	return binary.BigEndian.Uint64(digest[:8])
 }
 
 // ShardKey 是 kind 这类工作第 shard 片的归属键。kind 由调用方写死,不同类的工作用不同的 kind,各自独立分工。

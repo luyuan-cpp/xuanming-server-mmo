@@ -26,6 +26,7 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
+#include "modules/gain_block/gain_block_service.h" // 资产通道续段夹具先清掉别的用例残留的全局封禁
 #include "modules/id_segment/guid_segment_registry.h"
 #include "player/system/player_inbox_rules.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
@@ -306,6 +307,52 @@ TEST(BattleFreezeHoldRules, DecisionTableAndHoldDeadline)
                   "续冻上限是编译期可求值的纯函数");
 }
 
+// 评审修正(2026-11-06):ctx 缺失时按锁剩余 TTL 反推 deadline。锁 TTL 含续冻上限,看得出是 FIGHTING 锁时扣掉锁余量、续冻上限、
+// 终局宽限与投递余量,首次查询落在原来的到期时刻:写锁时 EX 的秒级下取整、TTL 读数的四舍五入都只让它偏晚,不超过两秒。
+// 修复前直接取「现在 + TTL」,首次查询晚约 18 分钟。分不清是不是备战期的锁时照旧取「现在 + TTL」。
+TEST(BattleFreezeHoldRules, LockTtlDeadlineInferenceLandsOnTheOriginalExpiry)
+{
+    constexpr uint64_t kDeadlineMs = kSyntheticDeadlineMs;
+    const uint64_t originalExpiryMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kDeadlineMs, 0);
+    const uint64_t holdDeadlineMs = PlayerBattleSystem::FreezeHoldDeadlineMs(kDeadlineMs);
+    // 锁按 FightingLockTtlSecFor 写:EX = floor((续冻上限 - 写锁时刻) / 1000) + kLockExtraTtlSec。Redis 的 TTL 读数四舍五入到秒。
+    for (const uint64_t writtenBeforeDeadlineMs : {200'000ULL, 200'400ULL, 200'999ULL})
+    {
+        const uint64_t writtenAtMs = kDeadlineMs - writtenBeforeDeadlineMs;
+        const uint64_t exSec = (holdDeadlineMs - writtenAtMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec;
+        const uint64_t lockExpiresAtMs = writtenAtMs + exSec * 1000;
+        for (const uint64_t rebuiltAtMs :
+             {kDeadlineMs - 100'000, kDeadlineMs + 10'000, kDeadlineMs + 10'499, originalExpiryMs - 5'000})
+        {
+            SCOPED_TRACE(testing::Message() << "written_before_deadline_ms=" << writtenBeforeDeadlineMs
+                                            << " rebuilt_at_ms=" << rebuiltAtMs);
+            const auto ttlSec = static_cast<int64_t>((lockExpiresAtMs - rebuiltAtMs + 500) / 1000);
+            const uint64_t inferredMs = PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(rebuiltAtMs, ttlSec);
+            const uint64_t inferredExpiryMs = PlayerBattleSystem::FreezeExpiresAtMs(false, inferredMs, 0);
+            EXPECT_GE(inferredExpiryMs, originalExpiryMs) << "只会偏晚";
+            EXPECT_LE(inferredExpiryMs, originalExpiryMs + 2'000) << "偏晚不超过两秒";
+        }
+    }
+
+    // 剩余 TTL 不超过「续冻上限 + 锁余量」:备战期的锁(只有备战期限 + 60 秒)与续冻后段的 FIGHTING 锁分不清,照旧取「现在 + TTL」。
+    constexpr uint64_t kNowMs = 1'800'000'000'000ULL;
+    constexpr auto kAmbiguousTtlSec =
+        static_cast<int64_t>(PlayerBattleSystem::kFreezeHoldCapMs / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_EQ(kNowMs + 90'000, PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, 90)) << "备战期的锁";
+    EXPECT_EQ(kNowMs + static_cast<uint64_t>(kAmbiguousTtlSec) * 1000,
+              PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, kAmbiguousTtlSec))
+        << "恰好等于上限 + 余量:仍按保守口径";
+    EXPECT_LT(PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, kAmbiguousTtlSec + 1), kNowMs)
+        << "多一秒就看得出是 FIGHTING 锁,按精确口径:deadline 已在现在之前";
+    EXPECT_EQ(kNowMs, PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, -1)) << "锁没有过期时刻";
+    EXPECT_EQ(kNowMs, PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, -2)) << "锁已不在";
+    EXPECT_EQ(kNowMs, PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, 0));
+    EXPECT_NE(0u, PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(0, kAmbiguousTtlSec + 1))
+        << "下溢时也给非 0 的期限,reaper 一定判得到期";
+    static_assert(PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs(kNowMs, 90) == kNowMs + 90'000,
+                  "反推是编译期可求值的纯函数");
+}
+
 // ── reaper 续冻 ────────────────────────────────────────────────────────────────────────
 
 // 到期时 SQL 终局已 COMPLETE、本地还没应用:冻结保留、锁不放、不记作废局;锁跟着续到续冻上限;同一拍不重复查,下一拍再查。
@@ -546,6 +593,49 @@ TEST_F(BattleFreezeHoldTest, SettlementAlreadyAppliedHereReleasesWithoutAQuery)
     ASSERT_EQ(1u, gLockReleases.size());
 }
 
+// 评审核实(2026-11-06):战斗结算域里环中的 REJECTED / SKIPPED 都不是终局,不能当「不会再有结算」提前解冻。
+// 收件箱 Ack 对这个域只收 APPLIED(其余回 CONFLICT、行不变),VoidItem 对这个域一律拒绝,scene 的执行器从不回 kRejected,
+// 回放到非 APPLIED 的原结局时状态机直接停用该域;唯一出口是修好之后让 scene 把原件执行成功,结算之后仍可能到达。
+// 所以与没有结局一样:照旧查终局、续冻,到上限告警交人工。
+TEST_F(BattleFreezeHoldTest, RejectedOrSkippedInTheBattleRingIsNotTerminalAndStillQueries)
+{
+    for (const auto outcome : {player_inbox::PLAYER_INBOX_OUTCOME_REJECTED, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED})
+    {
+        SCOPED_TRACE(static_cast<int>(outcome));
+        tlsEcs.actorRegistry.remove<PlayerInboxLedgerComp>(player);
+        gLockReleases.clear();
+        gTerminalQueries.clear();
+        ASSERT_NO_FATAL_FAILURE(RecordInboxDecision(1, outcome, kBattleId));
+        Fight(kSyntheticDeadlineMs);
+        const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0);
+        const uint64_t heldBefore = CountOf(FreezeHoldEvent::kHeldComplete);
+
+        PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1);
+        ASSERT_EQ(1u, gTerminalQueries.size()) << "不是终局:照旧查";
+        EXPECT_TRUE(PlayerBattleSystem::IsInBattle(player)) << "回答到达之前冻结不动";
+        ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kComplete));
+        EXPECT_TRUE(PlayerBattleSystem::IsInBattle(player)) << "COMPLETE 而本地没有 APPLIED:续冻";
+        EXPECT_EQ(heldBefore + 1, CountOf(FreezeHoldEvent::kHeldComplete));
+        EXPECT_TRUE(gLockReleases.empty());
+        tlsEcs.actorRegistry.remove<InBattleComp>(player); // 下一轮从干净的冻结开始
+    }
+}
+
+// 只认这一局的战斗结算 APPLIED:别的局的 APPLIED、同一 request_id 的别的收件箱类型都不算这一局已收尾,照旧查终局续冻。
+TEST_F(BattleFreezeHoldTest, InboxDecisionsOfOtherBattlesOrTypesStillQuery)
+{
+    ASSERT_NO_FATAL_FAILURE(RecordInboxDecision(1, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, kBattleId + 1));
+    ASSERT_NO_FATAL_FAILURE(RecordInboxDecision(2, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, kBattleId,
+                                                player_inbox::PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN));
+    Fight(kSyntheticDeadlineMs);
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0) + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size()) << "不是这一局的结算终局:照旧查";
+    EXPECT_EQ(kBattleId, gTerminalQueries.front().battleId);
+    EXPECT_TRUE(PlayerBattleSystem::IsInBattle(player));
+    EXPECT_TRUE(gLockReleases.empty());
+}
+
 // 查询在途期间结算确认提交、冻结已摘(或玩家已在下一局):迟到的回答什么都不做。
 TEST_F(BattleFreezeHoldTest, AnswerArrivingAfterTheFreezeWasClearedDoesNothing)
 {
@@ -778,11 +868,16 @@ protected:
     void SetUp() override
     {
         BattleFreezeHoldTest::SetUp();
+        // 进程内前序用例(GainBlockServiceTest 等)可能留有全局物品封禁:入账会先判封禁、回终局 REJECTED,
+        // 本组用例要的 RETRY / APPLIED 就成了执行顺序的函数。先清掉,再把前提钉成断言(评审修正 2026-11-06)。
+        GainBlockService::ClearAllGlobalBlocks();
         ItemTableManager::Instance().Load();
         GiveAssetChannel();
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{playerId});
         bags.bags[kInventory].SetCapacityForRestore(20);
+        ASSERT_FALSE(GainBlockService::IsItemGainBlocked(player, kTwoPerStackItem)) << "前提:没有残留的物品封禁";
+        ASSERT_FALSE(GainBlockService::IsItemGainBlocked(player, kStackableItem)) << "前提:没有残留的物品封禁";
     }
     void TearDown() override
     {
@@ -847,6 +942,28 @@ TEST_F(AssetOpCreditGuidTopUpTest, ShortageAboveThePrefetchThresholdRequestsATop
     const auto applied = CreditItems(1, kTwoPerStackItem, 8);
     EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
     EXPECT_EQ(8u, Inventory().GetTotalItemCount(kTwoPerStackItem));
+}
+
+// 评审修正(2026-11-06):要的新实例比号段一段最多能给的(MaxStep)还多:续段永远凑不齐,回 RETRY 就是让 Go 永远重投。
+// 按资产通道「确定性失败记终局拒绝」的口径记 REJECTED + kAssetInvalidBundle:一件不发、一个号都不领;
+// 结局随账本固定,同一 seq 重投只读回放同一结局,Go 按 REJECTED 终结并做对侧账。
+TEST_F(AssetOpCreditGuidTopUpTest, BatchNeedingMoreThanTheMaxStepIsRejectedAsAnInvalidBundle)
+{
+    ASSERT_TRUE(ArmItemSegment(1, 4)); // 剩 3 个号;step = MaxStep = 100
+    ASSERT_EQ(1, gItemSegmentFetches);
+    ASSERT_EQ(101u, BagService::MaxNewInstancesFor(ItemCountMap{{kTwoPerStackItem, 202}}));
+
+    const auto rejected = CreditItems(1, kTwoPerStackItem, 202);
+    EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, rejected.outcome());
+    EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), rejected.reason().id());
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kTwoPerStackItem));
+    EXPECT_EQ(1, gItemSegmentFetches) << "终局结论不领段";
+    EXPECT_FALSE(tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().topUpPending) << "也不记续段需求";
+
+    const auto replayed = CreditItems(1, kTwoPerStackItem, 202);
+    EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, replayed.outcome()) << "结局已记账:同一 seq 只读回放";
+    EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), replayed.reason().id());
+    EXPECT_EQ(1, gItemSegmentFetches);
 }
 
 } // namespace

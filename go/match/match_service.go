@@ -104,6 +104,9 @@ func main() {
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, authority.Migrate))
 	}
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。-migrate 不连 Redis,迁移 Job 也不注入这个变量,
+	// 所以放在它之后、建任何 Redis 客户端之前。
+	logx.Must(c.ResolveSharedRedisPassword(os.LookupEnv))
 	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理路由服转来的客户端请求,不跑全局作用域的后台:
 	// 排名发布、终局发件箱、结果消费组、team 的 SQL 维护、观战恢复、撮合与恢复循环,也不登记为匹配池成员。取值非法就拒启。
 	// 前提:线上 stable 已经是「match 镜像只收 stable」的版本(discovery.NodeWatcher.StableOnly),否则落到 canary 名下的池会停摆。

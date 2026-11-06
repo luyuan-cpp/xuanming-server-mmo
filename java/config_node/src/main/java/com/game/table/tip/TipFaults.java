@@ -71,6 +71,7 @@ public final class TipFaults {
             new Fault(9000, "entity_error", "EntityTransformNotFound"),
             new Fault(14008, "guild_error", "GuildIdGenUnavailable"),
             new Fault(14041, "guild_error", "GuildTrialServiceBusy"),
+            new Fault(16004, "match_error", "MatchInternal"),
             new Fault(26016, "pet_error", "PetIdGenerateFailed"),
             new Fault(27004, "asset_error", "AssetInvalidBundle"),
             new Fault(27007, "asset_error", "AssetPartialApplied"),

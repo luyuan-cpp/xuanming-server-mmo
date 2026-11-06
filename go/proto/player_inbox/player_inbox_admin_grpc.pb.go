@@ -19,12 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlayerInboxAdmin_GmSanctionPlayer_FullMethodName = "/player_inbox.PlayerInboxAdmin/GmSanctionPlayer"
-	PlayerInboxAdmin_GetSummary_FullMethodName       = "/player_inbox.PlayerInboxAdmin/GetSummary"
-	PlayerInboxAdmin_ListItems_FullMethodName        = "/player_inbox.PlayerInboxAdmin/ListItems"
-	PlayerInboxAdmin_LookupByRequest_FullMethodName  = "/player_inbox.PlayerInboxAdmin/LookupByRequest"
-	PlayerInboxAdmin_VoidItem_FullMethodName         = "/player_inbox.PlayerInboxAdmin/VoidItem"
-	PlayerInboxAdmin_ReconcilePlayer_FullMethodName  = "/player_inbox.PlayerInboxAdmin/ReconcilePlayer"
+	PlayerInboxAdmin_GmSanctionPlayer_FullMethodName  = "/player_inbox.PlayerInboxAdmin/GmSanctionPlayer"
+	PlayerInboxAdmin_GetSummary_FullMethodName        = "/player_inbox.PlayerInboxAdmin/GetSummary"
+	PlayerInboxAdmin_ListItems_FullMethodName         = "/player_inbox.PlayerInboxAdmin/ListItems"
+	PlayerInboxAdmin_LookupByRequest_FullMethodName   = "/player_inbox.PlayerInboxAdmin/LookupByRequest"
+	PlayerInboxAdmin_VoidItem_FullMethodName          = "/player_inbox.PlayerInboxAdmin/VoidItem"
+	PlayerInboxAdmin_ReconcilePlayer_FullMethodName   = "/player_inbox.PlayerInboxAdmin/ReconcilePlayer"
+	PlayerInboxAdmin_GetItemGainBlocks_FullMethodName = "/player_inbox.PlayerInboxAdmin/GetItemGainBlocks"
 )
 
 // PlayerInboxAdminClient is the client API for PlayerInboxAdmin service.
@@ -44,6 +45,8 @@ type PlayerInboxAdminClient interface {
 	VoidItem(ctx context.Context, in *VoidPlayerInboxItemRequest, opts ...grpc.CallOption) (*VoidPlayerInboxItemResponse, error)
 	// 单个玩家比对收件箱与已落盘账本(设计 §9.3)。第 4 批实现,此前服务端回 UNIMPLEMENTED。
 	ReconcilePlayer(ctx context.Context, in *ReconcilePlayerInboxRequest, opts ...grpc.CallOption) (*ReconcilePlayerInboxResponse, error)
+	// 单玩家物品获取封禁的查询(设计 §2.2):已落盘的本人封禁表,加上还没生效的物品封禁 / 解封单。只读,不写审计。
+	GetItemGainBlocks(ctx context.Context, in *GetPlayerItemGainBlocksRequest, opts ...grpc.CallOption) (*GetPlayerItemGainBlocksResponse, error)
 }
 
 type playerInboxAdminClient struct {
@@ -114,6 +117,16 @@ func (c *playerInboxAdminClient) ReconcilePlayer(ctx context.Context, in *Reconc
 	return out, nil
 }
 
+func (c *playerInboxAdminClient) GetItemGainBlocks(ctx context.Context, in *GetPlayerItemGainBlocksRequest, opts ...grpc.CallOption) (*GetPlayerItemGainBlocksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerItemGainBlocksResponse)
+	err := c.cc.Invoke(ctx, PlayerInboxAdmin_GetItemGainBlocks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PlayerInboxAdminServer is the server API for PlayerInboxAdmin service.
 // All implementations must embed UnimplementedPlayerInboxAdminServer
 // for forward compatibility.
@@ -131,6 +144,8 @@ type PlayerInboxAdminServer interface {
 	VoidItem(context.Context, *VoidPlayerInboxItemRequest) (*VoidPlayerInboxItemResponse, error)
 	// 单个玩家比对收件箱与已落盘账本(设计 §9.3)。第 4 批实现,此前服务端回 UNIMPLEMENTED。
 	ReconcilePlayer(context.Context, *ReconcilePlayerInboxRequest) (*ReconcilePlayerInboxResponse, error)
+	// 单玩家物品获取封禁的查询(设计 §2.2):已落盘的本人封禁表,加上还没生效的物品封禁 / 解封单。只读,不写审计。
+	GetItemGainBlocks(context.Context, *GetPlayerItemGainBlocksRequest) (*GetPlayerItemGainBlocksResponse, error)
 	mustEmbedUnimplementedPlayerInboxAdminServer()
 }
 
@@ -158,6 +173,9 @@ func (UnimplementedPlayerInboxAdminServer) VoidItem(context.Context, *VoidPlayer
 }
 func (UnimplementedPlayerInboxAdminServer) ReconcilePlayer(context.Context, *ReconcilePlayerInboxRequest) (*ReconcilePlayerInboxResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReconcilePlayer not implemented")
+}
+func (UnimplementedPlayerInboxAdminServer) GetItemGainBlocks(context.Context, *GetPlayerItemGainBlocksRequest) (*GetPlayerItemGainBlocksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetItemGainBlocks not implemented")
 }
 func (UnimplementedPlayerInboxAdminServer) mustEmbedUnimplementedPlayerInboxAdminServer() {}
 func (UnimplementedPlayerInboxAdminServer) testEmbeddedByValue()                          {}
@@ -288,6 +306,24 @@ func _PlayerInboxAdmin_ReconcilePlayer_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlayerInboxAdmin_GetItemGainBlocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerItemGainBlocksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlayerInboxAdminServer).GetItemGainBlocks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlayerInboxAdmin_GetItemGainBlocks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlayerInboxAdminServer).GetItemGainBlocks(ctx, req.(*GetPlayerItemGainBlocksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PlayerInboxAdmin_ServiceDesc is the grpc.ServiceDesc for PlayerInboxAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -318,6 +354,10 @@ var PlayerInboxAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReconcilePlayer",
 			Handler:    _PlayerInboxAdmin_ReconcilePlayer_Handler,
+		},
+		{
+			MethodName: "GetItemGainBlocks",
+			Handler:    _PlayerInboxAdmin_GetItemGainBlocks_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

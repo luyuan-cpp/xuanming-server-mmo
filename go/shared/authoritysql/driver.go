@@ -55,8 +55,11 @@ func unknown(phase string, cause error) error {
 // writerGate只在本包内部接触raw；没有导出getter，也没有global连接表。
 // beforeBegin在同物理连接上强读epoch；enter在BEGIN后首锁own ACTIVE slot，
 // CURRENT核epoch/状态，再核meta/registry。实现缺失必须拒绝装配。
+// admitRead 是事务外纯读的闸门(2026-11-06):只在同物理连接上核一次 route_meta 的世代与可写,
+// 不开事务、不锁不改 writer_slot、不读注册表;冻结回 ErrWriterFrozen,世代不符回 ErrWriterDenied。
 type writerGate interface {
 	beforeBegin(context.Context, driver.Conn) (gateAttempt, error)
+	admitRead(context.Context, driver.Conn) error
 }
 type gateAttempt interface {
 	enter(context.Context, driver.Conn) error
@@ -548,7 +551,8 @@ func (c *guardedConn) queryLocked(ctx context.Context, query string, call func()
 		return nil, err
 	}
 	// 走 Query 的写(比如 SELECT ... FOR UPDATE 之外的语句)同样要先消费。纯读不消费:启动期的只读核对不烧写资格。
-	if validatePermissionStatement(query, permissionReader) != nil {
+	readOnly := validatePermissionStatement(query, permissionReader) == nil
+	if !readOnly {
 		if err := c.consumeBeforeWriteLocked(); err != nil {
 			return nil, err
 		}
@@ -561,13 +565,23 @@ func (c *guardedConn) queryLocked(ctx context.Context, query string, call func()
 		return nil, tx.ctx.Err()
 	}
 	if tx == nil && c.permission.kind == permissionWriter {
-		var err error
-		tx, err = c.beginLocked(ctx, driver.TxOptions{}, true)
-		if err != nil {
-			if !c.readPassesFrozenGateLocked(ctx, query, err) {
+		if readOnly {
+			// 事务外的纯读只过读闸门(admitRead):核一次 route_meta,不开事务、不碰 writer_slot(2026-11-06,缺口清单第 21 条)。
+			// 读不需要写资格,但要守冻结:搬库切换后读源库会读到已被目标库超过的数据,所以冻结时照旧挡回去,
+			// 例外只有启动阶段(readPassesFrozenGateLocked)。先核后读是两条自动提交语句:核的那一刻库可写、之后才冻结时,
+			// 读到的不晚于冻结那一刻的数据,线性化到核的那一刻。显式事务里的读不走这里,提交点语义不变。
+			if err := c.gate.admitRead(ctx, c.raw); err != nil {
+				NoteWriterFrozen(ctx, err)
+				if !c.readPassesFrozenGateLocked(ctx, query, err) {
+					return nil, c.preBusinessErrorLocked(err)
+				}
+			}
+		} else {
+			var err error
+			tx, err = c.beginLocked(ctx, driver.TxOptions{}, true)
+			if err != nil {
 				return nil, err
 			}
-			tx = nil
 		}
 	}
 	raw, closeStmt, err := call()

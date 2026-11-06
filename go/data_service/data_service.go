@@ -231,6 +231,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "data_service全球SQL装配拒绝: %v\n", globalErr)
 		os.Exit(1)
 	}
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。-migrate 与发号器运维入口不连 Redis,
+	// 迁移 Job 也不注入这个变量,所以放在它们之后。
+	var redisAuthErr error
+	c, redisAuthErr = c.ResolveSharedRedisPassword(os.LookupEnv)
+	if redisAuthErr != nil {
+		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", redisAuthErr)
+		os.Exit(1)
+	}
 
 	// RouteStore 段:任何一项非法都拒启;拒绝而不纠正,理由同 PlayerNameConfig.Validate。-migrate 不读它,所以放在那之后。
 	c.RouteStore = c.RouteStore.Normalize()

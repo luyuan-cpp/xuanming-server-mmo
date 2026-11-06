@@ -1941,7 +1941,7 @@ type ListStrandedFormationsResponse struct {
 	NextRetryAtMs uint64                 `protobuf:"varint,3,opt,name=next_retry_at_ms,json=nextRetryAtMs,proto3" json:"next_retry_at_ms,omitempty"` // 两者都为 0 = 已到末尾
 	NextBattleId  uint64                 `protobuf:"varint,4,opt,name=next_battle_id,json=nextBattleId,proto3" json:"next_battle_id,omitempty"`
 	NowMs         uint64                 `protobuf:"varint,5,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"` // TiDB 时刻
-	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`             // 服务端 GlobalMatch 的 Host/Database
+	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2024,7 +2024,7 @@ type ResolveStrandedFormationRequest struct {
 	Mode     StrandedFormationMode  `protobuf:"varint,2,opt,name=mode,proto3,enum=match.StrandedFormationMode" json:"mode,omitempty"`
 	// 下面四项 DRY_RUN / ABORT 必填;SHOW 忽略
 	ExpectDigest  string                `protobuf:"bytes,3,opt,name=expect_digest,json=expectDigest,proto3" json:"expect_digest,omitempty"` // SHOW 回的 formation.digest
-	ExpectTarget  string                `protobuf:"bytes,4,opt,name=expect_target,json=expectTarget,proto3" json:"expect_target,omitempty"` // SHOW 回的 target,与服务端逐字相等,防止连错环境
+	ExpectTarget  string                `protobuf:"bytes,4,opt,name=expect_target,json=expectTarget,proto3" json:"expect_target,omitempty"` // 工单上写明的环境名(不从 SHOW 照抄),须与服务端的环境名逐字相等,连错环境回 target_mismatch
 	OperatorName  string                `protobuf:"bytes,5,opt,name=operator_name,json=operatorName,proto3" json:"operator_name,omitempty"` // ≤64 字节,不含控制字符
 	Reason        string                `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                                 // ≤191 字节,不含控制字符:工单号与核对结论
 	Auth          *base.ServiceCallAuth `protobuf:"bytes,7,opt,name=auth,proto3" json:"auth,omitempty"`
@@ -2114,9 +2114,9 @@ func (x *ResolveStrandedFormationRequest) GetAuth() *base.ServiceCallAuth {
 type ResolveStrandedFormationResponse struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Verdict       StrandedFormationVerdict `protobuf:"varint,1,opt,name=verdict,proto3,enum=match.StrandedFormationVerdict" json:"verdict,omitempty"`
-	Formation     *StrandedFormation       `protobuf:"bytes,2,opt,name=formation,proto3" json:"formation,omitempty"`                  // 处置前的核对结果;NOT_FOUND / RETRY 时可能为空
+	Formation     *StrandedFormation       `protobuf:"bytes,2,opt,name=formation,proto3" json:"formation,omitempty"`                  // 处置前的核对结果;NOT_FOUND / RETRY,以及 REFUSED 的 target_mismatch / formation_unreadable 时为空
 	NowMs         uint64                   `protobuf:"varint,3,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"`            // TiDB 时刻
-	Target        string                   `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`                        // 服务端 GlobalMatch 的 Host/Database
+	Target        string                   `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`                        // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
 	Replica       string                   `protobuf:"bytes,5,opt,name=replica,proto3" json:"replica,omitempty"`                      // 处理本次调用的 match 副本(主机名)
 	Refusal       string                   `protobuf:"bytes,6,opt,name=refusal,proto3" json:"refusal,omitempty"`                      // REFUSED 时的原因码(与 formation.refusal 相同;target_mismatch 时没有 formation)
 	AuditLine     string                   `protobuf:"bytes,7,opt,name=audit_line,json=auditLine,proto3" json:"audit_line,omitempty"` // DRY_RUN / ABORT:服务端打进日志的同一行 [FormationManual],贴进工单

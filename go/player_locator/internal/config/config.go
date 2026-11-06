@@ -6,11 +6,16 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 
 	"shared/playerredis"
+	"shared/redisauth"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
 	RedisClient RedisConf `json:"RedisClient"` // 控制域:选主锁、就绪标记、代次、审计时间
+	// SharedRedisPasswordEnv 是 RedisClient 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 RedisClient.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在建任何 Redis 客户端之前填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域:会话、断线租约、gate 索引、分片登记,上线后是 Redis Cluster
 	// (docs/design/redis-player-store-cluster.md §5.7、§5.9)。整段不写时指向 RedisClient 这个单实例。
 	PlayerRedis     playerredis.Config `json:"PlayerRedis,optional"`
@@ -36,6 +41,13 @@ type RedisConf struct {
 	// 随 CPU limit 漂移;负数起服即失败(svc.NewServiceContext)。K8s 上 tools/scripts/k8s_deploy.ps1 从
 	// etc/player_locator.yaml 镜像 RedisClient.PoolSize 并要求正整数,Redis 连接总账读同一个键。
 	PoolSize int `json:"PoolSize,optional"`
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 RedisClient.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 RedisClient(svc 的 playerRedisConf),填完之后用的也是这个口令。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "RedisClient.Password", Password: &c.RedisClient.Password})
 }
 
 type KafkaConf struct {

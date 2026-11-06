@@ -10,6 +10,7 @@ import (
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
+	"shared/redisauth"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -34,6 +35,11 @@ type Config struct {
 	// player:session:{id} / battle:lock:{id})与 player:{id}:sync_digest。
 	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
+
+	// SharedRedisPasswordEnv 是 Redis 段(控制域共享单库)的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
+	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里 Redis.Pass 写空串。不写 = 照用 Pass 字面量(本机)。
+	// MatchRedis 是 match 独占集群,不归它管。由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 
 	// ZoneId:C++ 约定 etcd 注册路径用的 zone id。MatchNodeService 不是
 	// zone-scoped 节点类型,gate 连的是全 zone 的 match 实例;zone 只影响
@@ -276,6 +282,14 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
 		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
 	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass,规则见 redisauth.Apply。
+// 没写 MatchRedis.Host 时私有 key 回落到 Redis 段的共享库(svc.NewRedisHandles),玩家域没写 Addrs 时也回落到 Redis 段
+// (EffectivePlayerRedis),填完之后它们用的都是这个口令。-migrate 不连 Redis,只在常驻启动时调用(match_service.go)。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass})
 }
 
 // TeamConf 组队配置(team-system.md §D.1 / §D.3)。

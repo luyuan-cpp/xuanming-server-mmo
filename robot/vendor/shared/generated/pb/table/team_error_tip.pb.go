@@ -56,6 +56,8 @@ const (
 	TeamError_kTeamSizeExceeded            TeamError = 4028
 	TeamError_kTeamStateChanged            TeamError = 4029
 	TeamError_kTeamInternal                TeamError = 4030
+	TeamError_kTeamPvpPartySizeNotAllowed  TeamError = 4031
+	TeamError_kTeamRatingGapTooLarge       TeamError = 4032
 )
 
 // Enum value maps for TeamError.
@@ -93,6 +95,8 @@ var (
 		4028: "kTeamSizeExceeded",
 		4029: "kTeamStateChanged",
 		4030: "kTeamInternal",
+		4031: "kTeamPvpPartySizeNotAllowed",
+		4032: "kTeamRatingGapTooLarge",
 	}
 	TeamError_value = map[string]int32{
 		"kTeam_errorOK":                0,
@@ -127,6 +131,8 @@ var (
 		"kTeamSizeExceeded":            4028,
 		"kTeamStateChanged":            4029,
 		"kTeamInternal":                4030,
+		"kTeamPvpPartySizeNotAllowed":  4031,
+		"kTeamRatingGapTooLarge":       4032,
 	}
 )
 
@@ -161,7 +167,7 @@ var File_team_error_tip_proto protoreflect.FileDescriptor
 
 const file_team_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x14team_error_tip.proto*\xa3\x06\n" +
+	"\x14team_error_tip.proto*\xe2\x06\n" +
 	"\n" +
 	"team_error\x12\x11\n" +
 	"\rkTeam_errorOK\x10\x00\x12\x19\n" +
@@ -195,7 +201,9 @@ const file_team_error_tip_proto_rawDesc = "" +
 	"\x13kTeamDungeonNotOpen\x10\xbb\x1f\x12\x16\n" +
 	"\x11kTeamSizeExceeded\x10\xbc\x1f\x12\x16\n" +
 	"\x11kTeamStateChanged\x10\xbd\x1f\x12\x12\n" +
-	"\rkTeamInternal\x10\xbe\x1fB$\n" +
+	"\rkTeamInternal\x10\xbe\x1f\x12 \n" +
+	"\x1bkTeamPvpPartySizeNotAllowed\x10\xbf\x1f\x12\x1b\n" +
+	"\x16kTeamRatingGapTooLarge\x10\xc0\x1fB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

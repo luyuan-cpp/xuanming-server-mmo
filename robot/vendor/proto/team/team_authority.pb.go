@@ -1158,146 +1158,6 @@ func (x *TeamLaunchRecord) GetMode() uint32 {
 	return 0
 }
 
-type TeamLaunchRegionRecord struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ActorId        uint64                 `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	RequestHigh    uint64                 `protobuf:"varint,2,opt,name=request_high,json=requestHigh,proto3" json:"request_high,omitempty"`
-	RequestLow     uint64                 `protobuf:"varint,3,opt,name=request_low,json=requestLow,proto3" json:"request_low,omitempty"`
-	PhysicalRegion uint32                 `protobuf:"varint,4,opt,name=physical_region,json=physicalRegion,proto3" json:"physical_region,omitempty"`
-	ConfigId       uint32                 `protobuf:"varint,5,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
-	TargetSize     uint32                 `protobuf:"varint,6,opt,name=target_size,json=targetSize,proto3" json:"target_size,omitempty"`
-	MemberCount    uint32                 `protobuf:"varint,7,opt,name=member_count,json=memberCount,proto3" json:"member_count,omitempty"`
-	LocalPreferred bool                   `protobuf:"varint,8,opt,name=local_preferred,json=localPreferred,proto3" json:"local_preferred,omitempty"`
-	EnqueuedMs     uint64                 `protobuf:"varint,9,opt,name=enqueued_ms,json=enqueuedMs,proto3" json:"enqueued_ms,omitempty"`
-	ExpiresMs      uint64                 `protobuf:"varint,10,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
-	MaxRttMs       uint32                 `protobuf:"varint,11,opt,name=max_rtt_ms,json=maxRttMs,proto3" json:"max_rtt_ms,omitempty"`
-	HomeZone       uint32                 `protobuf:"varint,12,opt,name=home_zone,json=homeZone,proto3" json:"home_zone,omitempty"` // 0仅表示已允许跨home的混合unit；禁止跨home时不能入候选。
-	Mode           uint32                 `protobuf:"varint,13,opt,name=mode,proto3" json:"mode,omitempty"`                         // 与原launch的模式一致；候选扫描在LIMIT前隔离PVE/PVP。
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *TeamLaunchRegionRecord) Reset() {
-	*x = TeamLaunchRegionRecord{}
-	mi := &file_proto_team_team_authority_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TeamLaunchRegionRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TeamLaunchRegionRecord) ProtoMessage() {}
-
-func (x *TeamLaunchRegionRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_authority_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TeamLaunchRegionRecord.ProtoReflect.Descriptor instead.
-func (*TeamLaunchRegionRecord) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_authority_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *TeamLaunchRegionRecord) GetActorId() uint64 {
-	if x != nil {
-		return x.ActorId
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetRequestHigh() uint64 {
-	if x != nil {
-		return x.RequestHigh
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetRequestLow() uint64 {
-	if x != nil {
-		return x.RequestLow
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetPhysicalRegion() uint32 {
-	if x != nil {
-		return x.PhysicalRegion
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetConfigId() uint32 {
-	if x != nil {
-		return x.ConfigId
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetTargetSize() uint32 {
-	if x != nil {
-		return x.TargetSize
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetMemberCount() uint32 {
-	if x != nil {
-		return x.MemberCount
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetLocalPreferred() bool {
-	if x != nil {
-		return x.LocalPreferred
-	}
-	return false
-}
-
-func (x *TeamLaunchRegionRecord) GetEnqueuedMs() uint64 {
-	if x != nil {
-		return x.EnqueuedMs
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetExpiresMs() uint64 {
-	if x != nil {
-		return x.ExpiresMs
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetMaxRttMs() uint32 {
-	if x != nil {
-		return x.MaxRttMs
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetHomeZone() uint32 {
-	if x != nil {
-		return x.HomeZone
-	}
-	return 0
-}
-
-func (x *TeamLaunchRegionRecord) GetMode() uint32 {
-	if x != nil {
-		return x.Mode
-	}
-	return 0
-}
-
 // 仅为玩家挂起域护栏检索；必须JOIN原launch核状态，不可作为另一个权威来源。
 type TeamLaunchRoleRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1312,7 +1172,7 @@ type TeamLaunchRoleRecord struct {
 
 func (x *TeamLaunchRoleRecord) Reset() {
 	*x = TeamLaunchRoleRecord{}
-	mi := &file_proto_team_team_authority_proto_msgTypes[15]
+	mi := &file_proto_team_team_authority_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1324,7 +1184,7 @@ func (x *TeamLaunchRoleRecord) String() string {
 func (*TeamLaunchRoleRecord) ProtoMessage() {}
 
 func (x *TeamLaunchRoleRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_authority_proto_msgTypes[15]
+	mi := &file_proto_team_team_authority_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1337,7 +1197,7 @@ func (x *TeamLaunchRoleRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamLaunchRoleRecord.ProtoReflect.Descriptor instead.
 func (*TeamLaunchRoleRecord) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_authority_proto_rawDescGZIP(), []int{15}
+	return file_proto_team_team_authority_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TeamLaunchRoleRecord) GetActorId() uint64 {
@@ -1489,27 +1349,7 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\apayload\x18\x0e \x01(\fR\apayload\x12#\n" +
 	"\rowner_account\x18\x0f \x01(\tR\fownerAccount\x12%\n" +
 	"\x0eowner_revision\x18\x10 \x01(\x04R\rownerRevision\x12\x12\n" +
-	"\x04mode\x18\x11 \x01(\rR\x04mode:\xfa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01\xbe\x01state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low\"\x97\b\n" +
-	"\x16TeamLaunchRegionRecord\x12\x19\n" +
-	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
-	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
-	"\vrequest_low\x18\x03 \x01(\x04R\n" +
-	"requestLow\x12'\n" +
-	"\x0fphysical_region\x18\x04 \x01(\rR\x0ephysicalRegion\x12\x1b\n" +
-	"\tconfig_id\x18\x05 \x01(\rR\bconfigId\x12\x1f\n" +
-	"\vtarget_size\x18\x06 \x01(\rR\n" +
-	"targetSize\x12!\n" +
-	"\fmember_count\x18\a \x01(\rR\vmemberCount\x12'\n" +
-	"\x0flocal_preferred\x18\b \x01(\bR\x0elocalPreferred\x12\x1f\n" +
-	"\venqueued_ms\x18\t \x01(\x04R\n" +
-	"enqueuedMs\x12\x1d\n" +
-	"\n" +
-	"expires_ms\x18\n" +
-	" \x01(\x04R\texpiresMs\x12\x1c\n" +
-	"\n" +
-	"max_rtt_ms\x18\v \x01(\rR\bmaxRttMs\x12\x1b\n" +
-	"\thome_zone\x18\f \x01(\rR\bhomeZone\x12\x12\n" +
-	"\x04mode\x18\r \x01(\rR\x04mode:\xdb\x04\x8a\x92\xf4\x01\x12team_launch_region\x92\x92\xf4\x011actor_id,request_high,request_low,physical_regionڒ\xf4\x01\x88\x04physical_region,mode,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,mode,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low;expires_ms,actor_id,request_high,request_low,physical_region;physical_region,mode,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low;physical_region,mode,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low\"\xa5\x02\n" +
+	"\x04mode\x18\x11 \x01(\rR\x04mode:\xfa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01\xbe\x01state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low\"\xa5\x02\n" +
 	"\x14TeamLaunchRoleRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -1533,7 +1373,7 @@ func file_proto_team_team_authority_proto_rawDescGZIP() []byte {
 	return file_proto_team_team_authority_proto_rawDescData
 }
 
-var file_proto_team_team_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_proto_team_team_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_proto_team_team_authority_proto_goTypes = []any{
 	(*ReadTeamMembershipRequest)(nil),   // 0: teampb.ReadTeamMembershipRequest
 	(*ReadTeamMembershipResponse)(nil),  // 1: teampb.ReadTeamMembershipResponse
@@ -1549,37 +1389,36 @@ var file_proto_team_team_authority_proto_goTypes = []any{
 	(*TeamLaunchOriginal)(nil),          // 11: teampb.TeamLaunchOriginal
 	(*TeamLaunchData)(nil),              // 12: teampb.TeamLaunchData
 	(*TeamLaunchRecord)(nil),            // 13: teampb.TeamLaunchRecord
-	(*TeamLaunchRegionRecord)(nil),      // 14: teampb.TeamLaunchRegionRecord
-	(*TeamLaunchRoleRecord)(nil),        // 15: teampb.TeamLaunchRoleRecord
-	nil,                                 // 16: teampb.TeamLaunchOriginal.ZonesEntry
-	(*base.RoleAdmissionIdentity)(nil),  // 17: common.base.RoleAdmissionIdentity
-	(*base.ServiceCallAuth)(nil),        // 18: common.base.ServiceCallAuth
-	(*TeamRecord)(nil),                  // 19: teampb.TeamRecord
-	(*StartTeamMatchRequest)(nil),       // 20: teampb.StartTeamMatchRequest
-	(*battle.ObserverExitOriginal)(nil), // 21: ObserverExitOriginal
-	(*match.MatchSpectatorRecord)(nil),  // 22: match.MatchSpectatorRecord
+	(*TeamLaunchRoleRecord)(nil),        // 14: teampb.TeamLaunchRoleRecord
+	nil,                                 // 15: teampb.TeamLaunchOriginal.ZonesEntry
+	(*base.RoleAdmissionIdentity)(nil),  // 16: common.base.RoleAdmissionIdentity
+	(*base.ServiceCallAuth)(nil),        // 17: common.base.ServiceCallAuth
+	(*TeamRecord)(nil),                  // 18: teampb.TeamRecord
+	(*StartTeamMatchRequest)(nil),       // 19: teampb.StartTeamMatchRequest
+	(*battle.ObserverExitOriginal)(nil), // 20: ObserverExitOriginal
+	(*match.MatchSpectatorRecord)(nil),  // 21: match.MatchSpectatorRecord
 }
 var file_proto_team_team_authority_proto_depIdxs = []int32{
-	17, // 0: teampb.ReadTeamMembershipRequest.admission:type_name -> common.base.RoleAdmissionIdentity
-	18, // 1: teampb.ReadTeamMembershipRequest.auth:type_name -> common.base.ServiceCallAuth
-	19, // 2: teampb.ReadTeamMembershipResponse.record:type_name -> teampb.TeamRecord
-	18, // 3: teampb.ReadTeamMembershipResponse.auth:type_name -> common.base.ServiceCallAuth
+	16, // 0: teampb.ReadTeamMembershipRequest.admission:type_name -> common.base.RoleAdmissionIdentity
+	17, // 1: teampb.ReadTeamMembershipRequest.auth:type_name -> common.base.ServiceCallAuth
+	18, // 2: teampb.ReadTeamMembershipResponse.record:type_name -> teampb.TeamRecord
+	17, // 3: teampb.ReadTeamMembershipResponse.auth:type_name -> common.base.ServiceCallAuth
 	2,  // 4: teampb.TeamConsentOriginal.initiator:type_name -> teampb.TeamOriginalRole
 	2,  // 5: teampb.TeamConsentOriginal.recipient:type_name -> teampb.TeamOriginalRole
-	19, // 6: teampb.TeamAuthorityData.record:type_name -> teampb.TeamRecord
+	18, // 6: teampb.TeamAuthorityData.record:type_name -> teampb.TeamRecord
 	2,  // 7: teampb.TeamAuthorityData.members:type_name -> teampb.TeamOriginalRole
 	3,  // 8: teampb.TeamAuthorityData.applications:type_name -> teampb.TeamConsentOriginal
 	3,  // 9: teampb.TeamAuthorityData.invites:type_name -> teampb.TeamConsentOriginal
 	2,  // 10: teampb.TeamLaunchMember.original:type_name -> teampb.TeamOriginalRole
 	2,  // 11: teampb.TeamLaunchOriginal.actor:type_name -> teampb.TeamOriginalRole
-	20, // 12: teampb.TeamLaunchOriginal.request:type_name -> teampb.StartTeamMatchRequest
+	19, // 12: teampb.TeamLaunchOriginal.request:type_name -> teampb.StartTeamMatchRequest
 	10, // 13: teampb.TeamLaunchOriginal.members:type_name -> teampb.TeamLaunchMember
-	16, // 14: teampb.TeamLaunchOriginal.zones:type_name -> teampb.TeamLaunchOriginal.ZonesEntry
-	21, // 15: teampb.TeamLaunchOriginal.observer_exits:type_name -> ObserverExitOriginal
+	15, // 14: teampb.TeamLaunchOriginal.zones:type_name -> teampb.TeamLaunchOriginal.ZonesEntry
+	20, // 15: teampb.TeamLaunchOriginal.observer_exits:type_name -> ObserverExitOriginal
 	10, // 16: teampb.TeamLaunchData.members:type_name -> teampb.TeamLaunchMember
-	19, // 17: teampb.TeamLaunchData.team_record:type_name -> teampb.TeamRecord
+	18, // 17: teampb.TeamLaunchData.team_record:type_name -> teampb.TeamRecord
 	11, // 18: teampb.TeamLaunchData.original:type_name -> teampb.TeamLaunchOriginal
-	22, // 19: teampb.TeamLaunchData.spectator_exits:type_name -> match.MatchSpectatorRecord
+	21, // 19: teampb.TeamLaunchData.spectator_exits:type_name -> match.MatchSpectatorRecord
 	0,  // 20: teampb.TeamAuthority.ReadMembership:input_type -> teampb.ReadTeamMembershipRequest
 	1,  // 21: teampb.TeamAuthority.ReadMembership:output_type -> teampb.ReadTeamMembershipResponse
 	21, // [21:22] is the sub-list for method output_type
@@ -1601,7 +1440,7 @@ func file_proto_team_team_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_team_team_authority_proto_rawDesc), len(file_proto_team_team_authority_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

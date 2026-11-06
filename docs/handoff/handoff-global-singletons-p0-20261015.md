@@ -186,7 +186,7 @@ git worktree remove --force $wt
 |---|---|---|---|
 | 1 | AUTH 失败或超时 fail-closed,不放行未认证连接 | 认证失败 = 连接不可用,各家官方客户端都这样;放行未认证连接会被 battle 当成「已销账」 | **保持** |
 | 2 | `zoneredis.db != 0`、`Kafka.Brokers` 为空启动即失败 | 启动期配置校验 fail-fast;Redis Cluster 只支持 db 0,多库本身不推荐 | **保持** |
-| 3 | 方案 A:口令明文进 node ConfigMap + 指纹注解 | K8s 凭据走 Secret + `secretKeyRef`,口令不进 ConfigMap、不进 DryRun 输出;Secret 变了靠 checksum 注解滚动(Helm 做法) | **改**:C++ 改走 Secret(§8.3);Go / Java 的 ConfigMap 里仍有明文,另立任务 |
+| 3 | 方案 A:口令明文进 node ConfigMap + 指纹注解 | K8s 凭据走 Secret + `secretKeyRef`,口令不进 ConfigMap、不进 DryRun 输出;Secret 变了靠 checksum 注解滚动(Helm 做法) | **改**:C++ 改走 Secret(§8.3);Go 服务与 gateway 11-06 同样改走 Secret(§9) |
 | 4 | K8s 同批 `DisableLegacyPerNodeTopic: true` | 迁移完成后删掉死代码与开关 | **已由别的会话做完**:A7b(10-30 / 11-01)把旧的一节点一 topic 路径与这个开关整条删了,不再有可调的值 |
 | 5 | `KEEP_REVISIONS = 1000000`,配额 3GiB,镜像暂用 `bitnamilegacy/etcd:latest` | 用 etcd 内置的自动压缩;镜像用上游官方的,按版本 + 摘要钉死 | **改**:官方 `quay.io/coreos/etcd:v3.6.16@sha256:a9c7…a965`,CronJob 退役,补告警(§8.4)。保留量与配额不变 |
 | 6 | `maxclients = 40000`;重启闸「任何 Pod 模板变化都要确认」 | 上限按测算出的连接需求设;变更前用 `kubectl diff` 同一种服务端预演判断会不会重启 | `maxclients` **保持**;重启闸**改**为服务端预演比对(§8.2) |
@@ -263,7 +263,120 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
 
 ### 8.7 还没做 / 另立
 
-- Go 服务与 Java gateway 的 Redis 口令仍是 ConfigMap 明文(`k8s_deploy.ps1` 各 Go ConfigMap 的 `Pass:`、gateway 的 `spring.data.redis.password`),
-  改成 Secret 要动 Go 的配置加载与 Java 的占位写法,已开任务卡片。
+- Go 服务与 Java gateway 的 Redis 口令改走 Secret:11-06 已落码(未编译、未测试),见 §9。
 - 双口令轮换、Secret 下发、服务端预演都没有在集群上跑过(§8.6 第 6 步)。
 - Java 版(AGENTS.md §12):三项都是本仓库 K8s 部署侧的改动,Java 版没有 K8s 部署模板、不用 etcd,**不适用**,不往 PARITY 加行。
+
+## 9. 2026-11-06 Go 服务与 Java gateway 的共享 Redis 口令改走 Secret(§8.7 第一条)
+
+背景见 §8.1 第 3 条:C++ 11-05 已改走 Secret `redis-auth`,同一个口令在各 Go 服务与 gateway 的 ConfigMap 里仍是明文。本节把它们改成同样的 Secret 注入,
+口令离开所有 ConfigMap 与 `-DryRun` 输出。**全部未运行**:Claude 没有跑任何构建、测试、DryRun(AGENTS.md §10.1),只做了 `gofmt -l` 与 PowerShell AST 解析
+两项语法检查(均无输出 / 0 错误)。验证命令在 §9.5。
+
+### 9.1 Go 侧做法与理由
+
+- **形状**:ConfigMap 里共享 Redis 段的 `Pass` / `Password` 一律写空串;口令非空时配置末尾多一行顶层 `SharedRedisPasswordEnv: SHARED_REDIS_PASSWORD`。
+  新包 `go/shared/redisauth` 只有一个函数 `Apply(envName, lookup, targets...)`;各服务的 `config.Config` 加 `SharedRedisPasswordEnv` 字段和
+  `ResolveSharedRedisPassword(lookup)` 方法(方法里列出本服务管哪些段),main 在**迁移分支之后、建任何 Redis 客户端之前**调用一次,传 `os.LookupEnv`。
+  填完之后,建客户端与玩家域回落(`playerredis.Config.OrDefault`)读到的都是填好的值,下游代码不用动。
+- **规则(fail-closed)**:`envName` 为空 = 照用字面量(本机 `etc/*.yaml` 与 dev 档 ConfigMap);指名了变量但变量缺席或为空 = 拒启;
+  某段同时写了口令字面量 = 拒启(口令只能有一个来源,否则换了 Secret 进程还在用旧值)。出错时不改任何字段,错误只点键名与变量名,不含口令。
+- **为什么在配置里写变量名,而不是像 C++ 那样认一个固定变量名**:Go 侧既有约定都是 `*Env` 字段 —— `login.go` 的注释写明「需要从环境变量取的密钥一律写成
+  `*Env` 字段」,另有 `PlayerRedis.PasswordEnv`、mail 的 `SharedRedisPasswordEnv`、`MySQL.DataSourceEnv`、`PlayerInbox.AdminTokenEnv`。读 ConfigMap 就能看出口令从哪来;
+  本机 yaml 不写这个键,机器上残留的同名环境变量不会悄悄改掉本机行为;而且能做 fail-closed(配置写明要从变量取,变量却没有值)。
+- **为什么一个服务一个键,而不是每段一个 PasswordEnv**:go-zero 的 `redis.RedisConf`(含 `zrpc.RpcServerConf` 内嵌的 `Redis` 段)加不了字段;
+  这些段连的实例(核心、`redis-queue-g<N>`、`redis-ctl-g<N>`)部署上用同一个口令,Secret `redis-auth` 也只有一个键,分段写只会多出写错的机会。
+- **为什么不用 `conf.UseEnv()`**:它对整份配置做 `os.ExpandEnv`,任何值里的 `$` 都会被改写。
+- **变量名取 `SHARED_REDIS_PASSWORD`,没有用任务里举例的 `CORE_REDIS_PASSWORD`**:同一个口令还用于 `redis-ctl-g<N>`(scene-manager 的 `Redis` 段)
+  与 `redis-queue-g<N>`(login 的 `QueueRedis`、gateway)。本仓库里 core / `CoreRedis` 专指核心实例,叫 CORE_ 会让人以为另外两类实例另有口令;
+  README 与 mail 的键名都叫「共享 Redis」。
+- **各服务管的段**:login `Node.RedisClient`、`Node.QueueRedis`(写了才有);data-service `NameCacheRedis`、`SharedRedis`;player-locator `RedisClient`;
+  scene-manager `Redis`(控制域)、`CoreRedis`;match `Redis`(`MatchRedis` 是独占集群,不归它);trade `SharedRedis`;friend `Redis`(`FriendRedis` 是独立实例,不归它);
+  player-inbox `CoreRedis`;guild `RedisClient`、`PlayerLocatorRedis`。chat、db、rank、client-rpc-router 不连共享 Redis,不改。
+- **为什么放在迁移分支之后**:data-service、match、trade、friend、player-inbox、guild 的 `-migrate` Job 用同一份 ConfigMap,但不连 Redis,Job 也不注入这个变量;
+  放在前面会让迁移 Job 拒启。data-service 的发号器运维入口同理。
+- **运维工具**:guild 的 `cmd/assetopfix` 在 guild Pod 里读同一份 ConfigMap 并连缓存 Redis,在 `conf.Load` 之后同样调用。trade 的两个工具、data_service 与 match 的
+  各个 cmd、login 的 cmd 都不读服务配置里的共享 Redis,不改。
+- **mail 不改**:它早已写 `SharedRedisPasswordEnv: MMORPG_MAIL_REDIS_PASSWORD`,manifest 里对 `redis-auth` 的引用是 `optional: true`,ConfigMap 里没有明文。
+  它对「变量为空」的语义是不认证(dev 档 Secret 不存在),与新包的 fail-closed 不同;改成新包要让 dev 档也不写这一行,dev 产物就不再逐字不变,所以保留。
+
+### 9.2 Java gateway 与部署侧
+
+- **gateway**:`spring.data.redis.password` 只写 `"${SHARED_REDIS_PASSWORD}"`。**不带缺省值**:`RateLimitConfig` 用 `@Value("${spring.data.redis.password:}")` 取口令,
+  嵌套占位解析不了时 Spring 拒启 —— 与同一份 ConfigMap 里 `admin.api-key: "${ADMIN_APIKEY}"` 同一做法(fail-closed),不会按空口令起来、让限流静默 fail-open。
+  Java 代码不用改。口令为空时不写这一行,与之前相同。
+- **Deployment**(`tools/scripts/k8s_deploy.ps1`):
+  - `Add-SharedRedisAuthToManifest` 经 `Add-GoSvcSecretEnv` 注入 `SHARED_REDIS_PASSWORD`(`secretKeyRef` 到本 namespace 的 `redis-auth` / `password`,不写 optional),
+    再往 Pod 模板注解追加指纹 `mmorpg.io/shared-redis-auth-hash`(`Get-InjectedSecretFingerprint`,用途串 `shared-redis/client`,只哈希口令)。
+    `-HashOnly` 给 mail,只补指纹。口令为空原样返回。
+  - 新函数 `Add-PodTemplateAnnotationEntry`:Pod 模板已有块式 `annotations:` 段就追加到段末,没有就交给 `Add-PodTemplateAnnotation` 新建;段里已有同名键、
+    流式写法一律 throw。多数 Go manifest 手写了 prometheus 注解段,`Add-PodTemplateAnnotation` 遇到已有段会 throw,所以要这个函数。
+    login 与 gateway 的注解段由脚本一次写入,口令指纹追加在段末,不动第一行(契约测试按位置取削峰指纹与管理面口令指纹)。
+  - 调用点:`Apply-OneGoSvc` 里资产密钥占位处理之后、gRPC 口准入之前(条件是 `$script:SharedRedisAuthGoServices` / `$script:SharedRedisAuthHashOnlyGoServices` 两份名单,
+    `k8s_migrate_gate.tests.ps1` 不定义它们,条件恒假,不用补桩);`Apply-JavaSvcManifests` 里 gateway 的注解写入之后。
+  - ConfigMap:`New-GoSvcConfigMapYaml` 里 11 处口令行与 `New-GuildServiceConfigYaml` 那一处都改写空串,`switch` 之后对名单内的服务按口令非空追加
+    `SharedRedisPasswordEnv`;配置里已有同名顶层键即 throw。
+  - Secret:沿用 `Sync-RedisAuthSecret`。全局服务在 infra namespace(`Apply-Infra` 的 Redis 分支先建),zone 级服务与 gateway 在 zone namespace(`Apply-Zone` 开头先建)。
+  - `Get-SharedRedisClientPassword`:生成期保护同 `Get-CppZoneRedisPassword`(未解析 throw、非 dev 档为空 throw、字符集按 `Assert-RedisPasswordYamlSafe`)。
+- **换口令自动滚动**:指纹进了 Pod 模板,只改 Secret 也会滚动。顺带修了 README 记着的既有缺口「只改 Redis 口令时 login 不滚动」;mail 也随之滚动。
+  gateway 原有的削峰指纹仍把口令算在输入里,只为不改变既有产物,与新指纹并存。
+- **dev 档逐字不变**:口令为空时各段本来就是空串,不追加键、不注入、不写指纹。
+- `Assert-RedisPasswordYamlSafe` 的字符集不变,说明与报错里的理由改成「高可用哨兵原样写口令」(口令已不进任何 ConfigMap)。
+
+### 9.3 上线与兼容
+
+- 项目未上线:首次部署整批起步即可。
+- 已有集群要先发 Go 镜像,再用新脚本部署:新脚本给某服务写空口令之后,旧镜像不认 `SharedRedisPasswordEnv`,会按空口令连 Redis,全线 NOAUTH;
+  反过来新镜像配旧脚本没问题(配置里仍是口令字面量)。gateway 同理:旧脚本写明文、新脚本写引用,Java 代码两边都认。
+- 发布轨道的金丝雀(批 2b)走同一个 `Apply-OneGoSvc` 渲染,金丝雀 Deployment 带同一个 env 与指纹(发布轨道会话已确认)。
+
+### 9.4 文件
+
+- 新增:`go/shared/redisauth/{redisauth.go,redisauth_test.go}`;login、data_service、player_locator、scene_manager、match、trade、friend、player_inbox、guild
+  九个服务各一个 `internal/config/shared_redis_password_test.go`。
+- Go:上述九个服务的 `internal/config/config.go` 与 main(`login.go`、`data_service.go`、`player_locator.go`、`scene_manager_service.go`、`match_service.go`、
+  `trade.go`、`friend.go`、`player_inbox.go`、`guild.go`),以及 `go/guild/cmd/assetopfix/main.go`。
+- 部署:`tools/scripts/k8s_deploy.ps1`。测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(新节「Go 服务与 gateway 的共享 Redis 口令」,
+  改写 3b 节两条 gateway 用例,3a 两处说明文字)。
+- 文档:`deploy/k8s/README.md`(新节「Go 服务与 gateway 的共享 Redis 口令」,C++ 口令一节与削峰一节的相关句子)、`deploy/k8s/AGENTS.md`(口令来源一条改成现状)、
+  `docs/design/gateway-k8s-deployment.md`(限流那条)、本节与 §8.1 / §8.7、`docs/PROGRESS.md`。
+
+### 9.5 交验证(Codex 执行;C++ 不用重编)
+
+前置:清掉 `MMORPG_*` 环境变量(dev 基线用例假定都没设):`Get-ChildItem Env:MMORPG_* | ForEach-Object { Remove-Item "Env:$($_.Name)" }`。
+每条记下通过数 / 失败数与退出码;与本节无关的红按文件归属单独汇报(同一工作区有其他会话的在途改动)。
+
+1. 格式:仓库根 `gofmt -l go/shared/redisauth go/login go/data_service go/player_locator go/scene_manager go/match go/trade go/friend go/player_inbox go/guild` 应无输出。
+2. Go(在各模块目录分别执行,任一失败就停下报告):
+   - `go/shared`:`go vet ./redisauth/` 与 `go test ./redisauth/ -count=1 -v`,期望 7 个用例全 PASS。
+   - 九个服务(`go/login`、`go/data_service`、`go/player_locator`、`go/scene_manager`、`go/match`、`go/trade`、`go/friend`、`go/player_inbox`、`go/guild`)依次:
+     `go build ./...`,`go vet ./internal/config/`,`go test ./internal/config/ -count=1 -run 'TestResolveSharedRedisPassword' -v`(每个服务 3~4 条全 PASS),
+     再跑整个包 `go test ./internal/config/ -count=1`,不应新增失败。`go/guild` 另跑 `go build ./cmd/assetopfix`。
+3. 部署契约(仓库根,PowerShell 7):`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。本节相关用例全部 `[PASS]`:
+   - 新节 6 条,标题以「共享 Redis 口令:」「共享 Redis 口令(」「Add-PodTemplateAnnotationEntry:」「Add-SharedRedisAuthToManifest:」开头;
+   - 改写的两条:`staging / prod 的 gateway 带 spring.data.redis.password,值只是对 SHARED_REDIS_PASSWORD 的引用…`、`gateway 削峰指纹随 Redis 口令变化…`;
+   - 3a 节各条(`zone Redis 口令…`、`Sync-RedisAuthSecret…`)与 battle 段照旧通过。
+   本节新增 1 个 DryRun 子进程(带口令的 infra-up)。
+4. 回归,不应新增失败:`k8s_migrate_gate.tests.ps1`、`lobby_authority_render.tests.ps1`、`k8s_redis_split_contract.tests.ps1`、`redis_player_cluster_contract.tests.ps1`、
+   `k8s_client_entry_contract.tests.ps1`、`logical_db_deploy_contract.tests.ps1`、`login_metrics_contract.tests.ps1`、`k8s_gate_drain.tests.ps1`、
+   `k8s_login_auth_provider_guard.tests.ps1`。
+5. dev 档逐字不变的直接证据(建议做):补丁 11-06 已直接打入主工作区,打入前没有留 DryRun 基线,改用比对脚本
+   `docs/handoff/shared-redis-secret-20261106/shared-redis-secret-dev-compare.ps1`,在仓库根执行 `pwsh -NoProfile -File <该路径>`(11-06 会话 worktree 删除前已把补丁、比对脚本和它要用的 `k8s_deploy.ps1` 备份按原相对布局挪到这里)。
+   - 脚本用打入前的 `k8s_deploy.ps1` 备份,以及「备份 + 本补丁」两份脚本,各跑一次 dev zone-up 与带全局 Go 服务的 dev infra-up(只用 `-DryRun`),逐字比对输出。
+   - 两份只差本补丁,其他会话之后对主工作区的改动不会混进来。临时目录名与临时脚本名先归一。
+   - 通过的标志是两组都打印 `IDENTICAL`、退出码 0;不同时打印第一处差异的行号,两份全文留在 `%TEMP%`。
+   - 脚本、补丁及所需备份已保留在上述交接目录,删除原 worktree 不影响这一步;备份脚本已单独解除 Git 忽略,后续提交时应连同交接附件一起纳入。
+6. 可选,要拉镜像,先征得负责人同意:kind 上带 `MMORPG_REDIS_PASSWORD` 跑全新 `infra-up` 与一个 `zone-up`,核对各 Go 服务与 gateway 都能连上 Redis(无 NOAUTH),
+   并确认 `@(kubectl get cm -n <ns> -o yaml | Select-String -SimpleMatch -Pattern $env:MMORPG_REDIS_PASSWORD).Count` 为 0(口令从环境变量取,不敲在命令行上);
+   再只换口令重跑,确认各 Deployment 滚动、新 Pod 用新口令。
+
+### 9.6 还没做 / 风险
+
+- Secret 注入、指纹滚动、Spring 嵌套占位的解析都没有在集群上跑过(§9.5 第 6 步)。Spring 那一条与 `admin.api-key` 的既有先例一样,只按文档核对过。
+- Spring 会把占位解析出来的值再当占位解析一遍:口令里含 `${…}` 会被改写或解析失败。这是既有行为(以前写明文时同样如此),Go 与 C++ 不受影响。
+  字符集检查没有拦 `$`,本批不改;生成口令时不要用 `$`。
+- 同一批 ConfigMap 里还有别的明文:MySQL 口令(`MMORPG_MYSQL_PASSWORD`)、gateway 数据源口令、`GateTokenSecret`、`Secrets.InternalAuth`、排队令牌密钥。
+  属同类问题,不在本批范围,建议另立任务按同一套做法迁移。
+- 玩家域 Redis 口令(`PLAYER_REDIS_PASSWORD`)给 Go 服务注入了环境变量,但 Go 服务的 Pod 模板没有对应指纹,只换玩家域口令时 Go 服务不滚动(既有缺口,本批没动)。
+- Java 版(AGENTS.md §12):核对了 `D:\luyuan\xuanming-server-mmo`,`deploy/` 下只有 compose、docker、sql、ci,没有 K8s 清单、ConfigMap 或 `secretKeyRef`。
+  本批是本仓库 K8s 部署侧与 Go 配置加载的改动,**不适用**,不往 PARITY 加行。本仓库的 `java/gateway_node` 属于 C++/Go 版,代码不用改。

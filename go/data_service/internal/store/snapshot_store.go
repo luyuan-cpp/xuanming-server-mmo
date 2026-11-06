@@ -89,12 +89,12 @@ const (
 // 抽成常量还让真库回归用例能用**同一段文本**扮演并发写者。
 // VALUES 后面那一组占位符单独成常量(snapshotValuesTupleSQL),批量语句按行数重复它;拼出来的文本与拆分前逐字相同。
 const insertSnapshotSQL = `INSERT INTO player_snapshot
-	 (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
+	 (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source, shard)
 	 VALUES ` + snapshotValuesTupleSQL
 
-// snapshotValuesTupleSQL 是一行的十个占位符,顺序 = snapshotInsertArgs。单行与多行(批量)语句共用这一段,
+// snapshotValuesTupleSQL 是一行的十一个占位符,顺序 = snapshotInsertArgs。单行与多行(批量)语句共用这一段,
 // 列清单只在 insertSnapshotSQL 里写一次。
-const snapshotValuesTupleSQL = `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+const snapshotValuesTupleSQL = `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // onDuplicateKeepIDSQL 是唯一键形态**单行**语句的 ODKU 尾巴:撞 uk_snapshot_guid_nz 时一列不改,只把已存在那行的 id 回带。
 // 取舍见 insertSnapshotOnDuplicateKeepSQL 的注释。多行语句**不用 ODKU**,见 InsertSnapshotsIfGuidAbsent 的「为什么不是多行 ODKU」。
@@ -137,7 +137,7 @@ const onDuplicateKeepIDSQL = "\n\t ON DUPLICATE KEY UPDATE `id` = LAST_INSERT_ID
 const insertSnapshotOnDuplicateKeepSQL = insertSnapshotSQL + onDuplicateKeepIDSQL
 
 // MaxSnapshotBatchRows 是一条多行快照语句的行数硬上限(InsertSnapshotsIfGuidAbsent 拒绝更多)。
-// 10×256 = 2560 个占位符,远低于预处理语句 65535 的上限;与 config.MaxSnapshotBatchMaxRows 相等,单测钉住。
+// 11×256 = 2816 个占位符,远低于预处理语句 65535 的上限;与 config.MaxSnapshotBatchMaxRows 相等,单测钉住。
 const MaxSnapshotBatchRows = 256
 
 // insertSnapshotsSQL 拼 n(>=1)行的**普通**多行 INSERT(不带 ODKU / IGNORE);n==1 时与 insertSnapshotSQL 逐字相同。
@@ -167,8 +167,8 @@ func existingSnapshotGuidsSQL(n int) string {
 // 它的去重靠 REPEATABLE READ 下 INSERT ... SELECT 源端的**加锁读**,代价是并发写者会在
 // idx(snapshot_guid) 的同一段间隙上互等插入意向锁而成环 —— 那正是唯一键要消掉的东西。
 const insertSnapshotIfGuidAbsentLegacySQL = `INSERT INTO player_snapshot
-	 (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
-	 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+	 (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source, shard)
+	 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 	 FROM DUAL
 	 WHERE NOT EXISTS (SELECT 1 FROM player_snapshot AS existing WHERE existing.snapshot_guid = ?)`
 
@@ -192,6 +192,8 @@ const uniqueGuidKeyProbeTimeout = 5 * time.Second
 // 本 store 不碰 DDL,只在建 store 时**读一次**结构来决定用哪条去重语句。
 type SnapshotStore struct {
 	db *sql.DB
+	// dbName 是流水库名,只进清理锁的名字(auditRetentionLockName):锁名在整台服务器上共享。
+	dbName string
 
 	// uniqueGuidKey = 建 store 时探到 player_snapshot 上有 uk_snapshot_guid_nz,
 	// **且**它只覆盖完整的 snapshot_guid_nz 列，列符合对应方言的可空 uint64 生成表达式。
@@ -228,7 +230,7 @@ func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
 	}
 	logx.Infof("[SnapshotStore] connected to %s/%s", cfg.Host, cfg.DBName)
 
-	s := &SnapshotStore{db: db}
+	s := &SnapshotStore{db: db, dbName: cfg.DBName}
 	ctx, cancel := context.WithTimeout(context.Background(), uniqueGuidKeyProbeTimeout)
 	defer cancel()
 	key, isTiDB, err := nullableUniqueKeyForServer(ctx, db, snapshotGuidNullableKey)
@@ -293,10 +295,11 @@ func nextRowID(ctx context.Context, source idsegment.Source) (uint64, error) {
 }
 
 // snapshotInsertArgs 按 insertSnapshotSQL 的占位符顺序展开一行,id 是这一行的行号。
-// 两条 INSERT(普通 / NOT EXISTS)的前十个占位符完全一致,顺序只在这里定义一次。
+// 两条 INSERT(普通 / NOT EXISTS)的前十一个占位符完全一致,顺序只在这里定义一次。
+// 最后一个是分桶号 AuditShard(id)(audit_shard.go):由行号算,调用方不填。
 func snapshotInsertArgs(id uint64, row *SnapshotRow) []any {
 	return []any{id, row.PlayerID, row.ZoneID, row.SnapshotType, row.CreatedAt, row.Reason, row.Operator, row.Data,
-		row.SnapshotGuid, row.Source}
+		row.SnapshotGuid, row.Source, AuditShard(id)}
 }
 
 // guidDedupeStatement 按探到的结构给出这次写入要用的语句与实参。
@@ -699,7 +702,7 @@ func IsSnapshotBatchTooLarge(err error) bool {
 // (id=0, inserted=false, err=nil) 会记一条 duplicate 指标、打一条 `already stored as id=0` 的 INFO,
 // 然后**提交 offset** —— 这条快照就永久丢了,且全程零报错。
 // 能走到这里只有一种局面:写入语句判定"已存在"之后、这次点查之前,有人把那一行删了
-// (DeleteOldSnapshots 的 retention 清理,或迁移期的去重 DELETE)。窗口很窄但删者是真实存在的。
+// (RunAuditRetention 的过期清理,或迁移期的去重 DELETE)。窗口很窄但删者是真实存在的。
 // 报错让消费者重试:重试时那个 guid 确实不在了,写入语句会**重新插进去**并成功,所以这条错误必然收敛,
 // 不会把消费者永久卡住。宁可滞后不丢,与本文件其它路径同口径。
 func (s *SnapshotStore) lookupSnapshotIDByGuid(ctx context.Context, guid uint64, reason string) (uint64, bool, error) {
@@ -880,10 +883,11 @@ func (s *SnapshotStore) ListSnapshotsMeta(ctx context.Context, playerID, beforeT
 
 // GetSnapshotPlayerIDsByZone returns all player IDs with a source=0 snapshot in a zone
 // at or before beforeTime. Uses the zone_id stored at snapshot time.
+// 走 (zone_id, shard, created_at) 索引:带 shard IN (0..15) 按 16 段扫(audit_shard.go)。
 func (s *SnapshotStore) GetSnapshotPlayerIDsByZone(ctx context.Context, zoneID uint32, beforeTime uint64) ([]uint64, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT DISTINCT player_id FROM player_snapshot
-		 WHERE zone_id = ? AND created_at <= ? AND source = ?`, zoneID, beforeTime, SnapshotSourceDataService)
+		 WHERE zone_id = ? AND `+auditShardInSQL+` AND created_at <= ? AND source = ?`, zoneID, beforeTime, SnapshotSourceDataService)
 	if err != nil {
 		return nil, err
 	}
@@ -909,11 +913,11 @@ func (s *SnapshotStore) GetSnapshotPlayerIDsByZone(ctx context.Context, zoneID u
 // 与执行期的关系(R5):执行期 GetLatestSnapshotBefore **不带** zone_id 条件,选中的快照只会
 // 等于或晚于这里的值(玩家在别的 zone 另有更新的快照时)。计划值更早 = since 更早 = 多查,方向安全;
 // 反过来(执行期更早)只可能来自快照被并发删除,调用方据此拒绝写该玩家。
-// 走 (zone_id, created_at) 索引,与 GetSnapshotPlayerIDsByZone 同一过滤条件。
+// 走 (zone_id, shard, created_at) 索引,与 GetSnapshotPlayerIDsByZone 同一过滤条件。
 func (s *SnapshotStore) GetSnapshotPlayerTimesByZone(ctx context.Context, zoneID uint32, beforeTime uint64) (map[uint64]uint64, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT player_id, MAX(created_at) FROM player_snapshot
-		 WHERE zone_id = ? AND created_at <= ? AND source = ?
+		 WHERE zone_id = ? AND `+auditShardInSQL+` AND created_at <= ? AND source = ?
 		 GROUP BY player_id`, zoneID, beforeTime, SnapshotSourceDataService)
 	if err != nil {
 		return nil, err
@@ -987,13 +991,11 @@ func (s *SnapshotStore) InsertAuditLog(ctx context.Context, row *AuditLogRow) er
 	return err
 }
 
-// DeleteOldSnapshots 删一批早于 olderThan(Unix 秒)的快照,回实际删除行数。由 RunAuditRetention 循环调用,
-// 走 created_at 索引;分批是因为一次删太多会撞事务大小上限,也会长时间占着写入。
-func (s *SnapshotStore) DeleteOldSnapshots(ctx context.Context, olderThan uint64, limit int) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM player_snapshot WHERE created_at < ? LIMIT ?`, olderThan, limit)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+// deleteOldSnapshotsInShardSQL 删一批某个桶里早于截止时间(Unix 秒)的快照,走 (shard, created_at) 索引;
+// 分批是因为一次删太多会撞事务大小上限,也会长时间占着写入。
+const deleteOldSnapshotsInShardSQL = `DELETE FROM player_snapshot WHERE shard = ? AND created_at < ? LIMIT ?`
+
+// claimRetentionShard 取快照表第 shard 个桶的清理锁,由 RunAuditRetention 调用(audit_retention.go)。
+func (s *SnapshotStore) claimRetentionShard(ctx context.Context, shard uint32) (retentionShard, bool, error) {
+	return claimSQLRetentionShard(ctx, s.db, s.dbName, "snap", deleteOldSnapshotsInShardSQL, shard)
 }

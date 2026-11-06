@@ -47,6 +47,7 @@ const (
 	DataService_GetRecallBatch_FullMethodName                = "/data_service.DataService/GetRecallBatch"
 	DataService_CancelRecallBatch_FullMethodName             = "/data_service.DataService/CancelRecallBatch"
 	DataService_ResolveRecallOp_FullMethodName               = "/data_service.DataService/ResolveRecallOp"
+	DataService_RegisterRecallReviewHandled_FullMethodName   = "/data_service.DataService/RegisterRecallReviewHandled"
 	DataService_QueryTransactionLog_FullMethodName           = "/data_service.DataService/QueryTransactionLog"
 	DataService_AllocateIdSegment_FullMethodName             = "/data_service.DataService/AllocateIdSegment"
 	DataService_ReservePlayerName_FullMethodName             = "/data_service.DataService/ReservePlayerName"
@@ -55,6 +56,7 @@ const (
 	DataService_BatchGetPlayerDisplay_FullMethodName         = "/data_service.DataService/BatchGetPlayerDisplay"
 	DataService_GetPlayerAssetOpLedger_FullMethodName        = "/data_service.DataService/GetPlayerAssetOpLedger"
 	DataService_GetPlayerInboxLedger_FullMethodName          = "/data_service.DataService/GetPlayerInboxLedger"
+	DataService_GetPlayerItemGainBlock_FullMethodName        = "/data_service.DataService/GetPlayerItemGainBlock"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -110,11 +112,13 @@ type DataServiceClient interface {
 	// ── Snapshot ──────────────────────────────────────
 	ListPlayerSnapshots(ctx context.Context, in *ListPlayerSnapshotsRequest, opts ...grpc.CallOption) (*ListPlayerSnapshotsResponse, error)
 	// ── Batch Recall / Anomaly ──────────────────
-	// 以下四个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
+	// 以下五个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
 	BatchRecallItems(ctx context.Context, in *BatchRecallItemsRequest, opts ...grpc.CallOption) (*BatchRecallItemsResponse, error)
 	GetRecallBatch(ctx context.Context, in *GetRecallBatchRequest, opts ...grpc.CallOption) (*BatchRecallItemsResponse, error)
 	CancelRecallBatch(ctx context.Context, in *CancelRecallBatchRequest, opts ...grpc.CallOption) (*BatchRecallItemsResponse, error)
 	ResolveRecallOp(ctx context.Context, in *ResolveRecallOpRequest, opts ...grpc.CallOption) (*ResolveRecallOpResponse, error)
+	// 把一条 needs_review 指令登记为交人工处置:它此刻的全部流水按已消费记进 gm_recall_source,以后的批次不再自动扣它。
+	RegisterRecallReviewHandled(ctx context.Context, in *RegisterRecallReviewHandledRequest, opts ...grpc.CallOption) (*RegisterRecallReviewHandledResponse, error)
 	QueryTransactionLog(ctx context.Context, in *QueryTransactionLogRequest, opts ...grpc.CallOption) (*QueryTransactionLogResponse, error)
 	// ── ID segment allocation (Leaf-segment) ────────────────────
 	// 永久 ID(player_id、item guid 等)的号段经这里领取,发号器见 go/data_service/internal/idissuer。
@@ -143,6 +147,12 @@ type DataServiceClient interface {
 	// 调用方是 go/player_inbox 的对账(定时作业与运维 ReconcilePlayer),不是 scene。
 	// 设计见 docs/design/player-inbox-service.md §5.1、§9.3。
 	GetPlayerInboxLedger(ctx context.Context, in *GetPlayerInboxLedgerRequest, opts ...grpc.CallOption) (*GetPlayerInboxLedgerResponse, error)
+	// ── 单玩家物品获取封禁:已落盘封禁表只读 ──────────────────────────
+	// 读 player_store 资料行(kind=PROFILE)的 item_gain_block 子字段,和写权行出自同一条语句。只读、不鉴权,
+	// 与 GetPlayerInboxLedger 同级:内容只是物品配置号列表。调用方是 go/player_inbox 的运维查询
+	// PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token),不是 scene。
+	// 设计见 docs/design/player-inbox-service.md §2.2。
+	GetPlayerItemGainBlock(ctx context.Context, in *GetPlayerItemGainBlockRequest, opts ...grpc.CallOption) (*GetPlayerItemGainBlockResponse, error)
 }
 
 type dataServiceClient struct {
@@ -423,6 +433,16 @@ func (c *dataServiceClient) ResolveRecallOp(ctx context.Context, in *ResolveReca
 	return out, nil
 }
 
+func (c *dataServiceClient) RegisterRecallReviewHandled(ctx context.Context, in *RegisterRecallReviewHandledRequest, opts ...grpc.CallOption) (*RegisterRecallReviewHandledResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterRecallReviewHandledResponse)
+	err := c.cc.Invoke(ctx, DataService_RegisterRecallReviewHandled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dataServiceClient) QueryTransactionLog(ctx context.Context, in *QueryTransactionLogRequest, opts ...grpc.CallOption) (*QueryTransactionLogResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(QueryTransactionLogResponse)
@@ -503,6 +523,16 @@ func (c *dataServiceClient) GetPlayerInboxLedger(ctx context.Context, in *GetPla
 	return out, nil
 }
 
+func (c *dataServiceClient) GetPlayerItemGainBlock(ctx context.Context, in *GetPlayerItemGainBlockRequest, opts ...grpc.CallOption) (*GetPlayerItemGainBlockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerItemGainBlockResponse)
+	err := c.cc.Invoke(ctx, DataService_GetPlayerItemGainBlock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
@@ -556,11 +586,13 @@ type DataServiceServer interface {
 	// ── Snapshot ──────────────────────────────────────
 	ListPlayerSnapshots(context.Context, *ListPlayerSnapshotsRequest) (*ListPlayerSnapshotsResponse, error)
 	// ── Batch Recall / Anomaly ──────────────────
-	// 以下四个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
+	// 以下五个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
 	BatchRecallItems(context.Context, *BatchRecallItemsRequest) (*BatchRecallItemsResponse, error)
 	GetRecallBatch(context.Context, *GetRecallBatchRequest) (*BatchRecallItemsResponse, error)
 	CancelRecallBatch(context.Context, *CancelRecallBatchRequest) (*BatchRecallItemsResponse, error)
 	ResolveRecallOp(context.Context, *ResolveRecallOpRequest) (*ResolveRecallOpResponse, error)
+	// 把一条 needs_review 指令登记为交人工处置:它此刻的全部流水按已消费记进 gm_recall_source,以后的批次不再自动扣它。
+	RegisterRecallReviewHandled(context.Context, *RegisterRecallReviewHandledRequest) (*RegisterRecallReviewHandledResponse, error)
 	QueryTransactionLog(context.Context, *QueryTransactionLogRequest) (*QueryTransactionLogResponse, error)
 	// ── ID segment allocation (Leaf-segment) ────────────────────
 	// 永久 ID(player_id、item guid 等)的号段经这里领取,发号器见 go/data_service/internal/idissuer。
@@ -589,6 +621,12 @@ type DataServiceServer interface {
 	// 调用方是 go/player_inbox 的对账(定时作业与运维 ReconcilePlayer),不是 scene。
 	// 设计见 docs/design/player-inbox-service.md §5.1、§9.3。
 	GetPlayerInboxLedger(context.Context, *GetPlayerInboxLedgerRequest) (*GetPlayerInboxLedgerResponse, error)
+	// ── 单玩家物品获取封禁:已落盘封禁表只读 ──────────────────────────
+	// 读 player_store 资料行(kind=PROFILE)的 item_gain_block 子字段,和写权行出自同一条语句。只读、不鉴权,
+	// 与 GetPlayerInboxLedger 同级:内容只是物品配置号列表。调用方是 go/player_inbox 的运维查询
+	// PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token),不是 scene。
+	// 设计见 docs/design/player-inbox-service.md §2.2。
+	GetPlayerItemGainBlock(context.Context, *GetPlayerItemGainBlockRequest) (*GetPlayerItemGainBlockResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -680,6 +718,9 @@ func (UnimplementedDataServiceServer) CancelRecallBatch(context.Context, *Cancel
 func (UnimplementedDataServiceServer) ResolveRecallOp(context.Context, *ResolveRecallOpRequest) (*ResolveRecallOpResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveRecallOp not implemented")
 }
+func (UnimplementedDataServiceServer) RegisterRecallReviewHandled(context.Context, *RegisterRecallReviewHandledRequest) (*RegisterRecallReviewHandledResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterRecallReviewHandled not implemented")
+}
 func (UnimplementedDataServiceServer) QueryTransactionLog(context.Context, *QueryTransactionLogRequest) (*QueryTransactionLogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryTransactionLog not implemented")
 }
@@ -703,6 +744,9 @@ func (UnimplementedDataServiceServer) GetPlayerAssetOpLedger(context.Context, *G
 }
 func (UnimplementedDataServiceServer) GetPlayerInboxLedger(context.Context, *GetPlayerInboxLedgerRequest) (*GetPlayerInboxLedgerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPlayerInboxLedger not implemented")
+}
+func (UnimplementedDataServiceServer) GetPlayerItemGainBlock(context.Context, *GetPlayerItemGainBlockRequest) (*GetPlayerItemGainBlockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlayerItemGainBlock not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -1211,6 +1255,24 @@ func _DataService_ResolveRecallOp_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_RegisterRecallReviewHandled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRecallReviewHandledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).RegisterRecallReviewHandled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_RegisterRecallReviewHandled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).RegisterRecallReviewHandled(ctx, req.(*RegisterRecallReviewHandledRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DataService_QueryTransactionLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(QueryTransactionLogRequest)
 	if err := dec(in); err != nil {
@@ -1355,6 +1417,24 @@ func _DataService_GetPlayerInboxLedger_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_GetPlayerItemGainBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerItemGainBlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).GetPlayerItemGainBlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_GetPlayerItemGainBlock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).GetPlayerItemGainBlock(ctx, req.(*GetPlayerItemGainBlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1471,6 +1551,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DataService_ResolveRecallOp_Handler,
 		},
 		{
+			MethodName: "RegisterRecallReviewHandled",
+			Handler:    _DataService_RegisterRecallReviewHandled_Handler,
+		},
+		{
 			MethodName: "QueryTransactionLog",
 			Handler:    _DataService_QueryTransactionLog_Handler,
 		},
@@ -1501,6 +1585,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPlayerInboxLedger",
 			Handler:    _DataService_GetPlayerInboxLedger_Handler,
+		},
+		{
+			MethodName: "GetPlayerItemGainBlock",
+			Handler:    _DataService_GetPlayerItemGainBlock_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

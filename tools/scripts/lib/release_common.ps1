@@ -757,3 +757,46 @@ function Get-DirectoryShardPoolLimit {
     if ($LogicalShards -eq 1) { return $Base }
     return [int][Math]::Max(2, [Math]::Ceiling($Base / [double]$LogicalShards))
 }
+
+# ── 地域存档库(docs/design/player-data-tidb-scaling-plan.md §7.2)──
+# 与 go/shared/placement 的 RegionStorageID / RegionStorageDBNames 同一公式:storage_id = 1000000 + 地域码 × 1000 + 片号,
+# 库名 player_store_<storage_id>_db。部署脚本的清单核对、MySQL 预建库、连接总账都从这里取,不各写一份。
+
+# 地域码 0..63(placement.MaxRegionCode),每地域存档库数 K 在 1..1000(placement.RegionStorageStride,ValidateRegionStorage)。
+function Assert-RegionPlayerStoreShape {
+    param(
+        [Parameter(Mandatory = $true)][int]$Region,
+        [Parameter(Mandatory = $true)][int]$Shards
+    )
+    if ($Region -lt 0 -or $Region -gt 63) {
+        throw "Region $Region must be in 0..63 (placement.MaxRegionCode)."
+    }
+    if ($Shards -lt 1 -or $Shards -gt 1000) {
+        throw "Player store shards $Shards must be in 1..1000 (placement.RegionStorageStride)."
+    }
+}
+
+# 本地域全部存档库的库名,下标就是片号(placement.RegionStorageDBNames)。
+function Get-RegionPlayerStoreDbNames {
+    param(
+        [Parameter(Mandatory = $true)][int]$Region,
+        [Parameter(Mandatory = $true)][int]$Shards
+    )
+    Assert-RegionPlayerStoreShape -Region $Region -Shards $Shards
+    $first = 1000000 + $Region * 1000
+    return [string[]]@(0..($Shards - 1) | ForEach-Object { 'player_store_{0}_db' -f ($first + $_) })
+}
+
+# 每个存档库连接池的上限:服务 yaml 写的是 K=1 的预算(地域只有一个库时全部存盘都走它),K 大的时候按库摊开,
+# 规则同 Get-DirectoryShardPoolLimit,每库至少 2 条。新号按 player_id % K 落库,发号打散之后每个库分到约 1/K 的流量。
+# go/db 的 Placement.NonZoneStore* 和 data_service 的 Directory.StoragePools 都按它渲染,连接总账读同一条规则。
+function Get-PlayerStorePoolLimit {
+    param(
+        [Parameter(Mandatory = $true)][int]$Base,
+        [Parameter(Mandatory = $true)][int]$Shards
+    )
+    if ($Base -lt 1) { throw "Player store pool budget $Base must be positive." }
+    Assert-RegionPlayerStoreShape -Region 0 -Shards $Shards
+    if ($Shards -eq 1) { return $Base }
+    return [int][Math]::Max(2, [Math]::Ceiling($Base / [double]$Shards))
+}

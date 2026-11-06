@@ -27,6 +27,7 @@ import (
 	"shared/currencytype"
 	"shared/dbplacement"
 	"shared/idsegment"
+	"shared/redisauth"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -119,6 +120,11 @@ type Config struct {
 	// 只有 AssetOp.Enabled=true 时才会真的去拨它(装配层判);关着时这一段不被使用,
 	// 但仍要求填写:留着它才能一眼看出"打开开关要连哪份 Redis",也避免放松一条既有守卫。
 	SharedRedis RedisConf `json:"SharedRedis"`
+
+	// SharedRedisPasswordEnv 是 SharedRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 SharedRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
 	// SharedRedis 留给控制域(唤醒频道与去重键、选主锁)。读取走 EffectivePlayerRedis():没写 Addrs 时指向 SharedRedis 那一个实例,
@@ -396,6 +402,14 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
 		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
 	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 SharedRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 SharedRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// -migrate 不连 Redis,只在常驻启动时调用(trade.go)。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "SharedRedis.Password", Password: &c.SharedRedis.Password})
 }
 
 // MySQLConf 是 mmorpg_trade 的连接参数。

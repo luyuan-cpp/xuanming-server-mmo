@@ -1,0 +1,54 @@
+# mmorpg 逻辑库(Java 网关的区目录、公告、白名单与写者闸门)在 TiDB 上的建表 Job
+# (docs/design/no-single-node-horizontal-scaling-20261001.md §6.3)。只在 tidb 档由 k8s_deploy.ps1 的 Apply-GatewaySchemaJob 渲染、apply,
+# mysql 档不跑:infra MySQL 由 mysql-init 的 gateway_tables.sql 建这个库。
+#
+# 网关没有 Go 的 -migrate,所以:
+#   - 闸门表由 writer_authority -command prepare-schema 走与其余逻辑库同一份 authoritysql.EnsureCatalogSchema 建,不复制第三份闸门 DDL;
+#   - 业务表与种子行由同一次调用的 -ddl-file 执行网关的 schema.sql(唯一来源,脚本把它渲染进 ConfigMap gateway-schema-sql)。
+#     -ddl-file 只认 CREATE TABLE IF NOT EXISTS 与 INSERT IGNORE INTO,重跑无害。
+# 镜像是 boot 目录里 gateway 条目的 registrarImage(固定摘要,writer_authority 就在里面);DSN 与主体出自同一个 schemaPermissionSecret
+# (键 dsn、principal),是独立的 schema 身份,网关常驻账号不给 DDL 权限。名册定下来之前就能跑,zone-up -SqlSchemaOnly 也跑它。
+# mmorpg 全区共用,每个 zone 的 zone-up 各跑一次,语句都是幂等的。
+# 占位由 Apply-GatewaySchemaJob 替换,任何一个没替换都拒绝 apply。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gateway-schema
+  labels: {app: gateway-schema, tier: java-svc}
+spec:
+  # writer_authority 出错一律以 1 退出,连库失败这类暂时性错误也在其中,所以不按退出码直接判失败,留给 backoffLimit 重试。
+  backoffLimit: 4
+  podFailurePolicy:
+    rules:
+      - action: Ignore
+        onPodConditions:
+          - {type: DisruptionTarget}
+  template:
+    metadata:
+      labels: {app: gateway-schema, tier: java-svc}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: gateway-schema
+          image: PLACEHOLDER_REGISTRAR_IMAGE
+          imagePullPolicy: IfNotPresent
+          args: ["-command", "prepare-schema", "-schema", "mmorpg", "-ddl-file", "/app/gateway-schema/schema.sql", "-timeout", "60s"]
+          env:
+            - name: MMORPG_SQL_SCHEMA_DSN
+              valueFrom: {secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}}
+            - name: MMORPG_SQL_SCHEMA_PRINCIPAL
+              valueFrom: {secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: principal, optional: false}}
+            - name: MMORPG_SQL_BACKEND
+              value: "tidb"
+            - name: MMORPG_DB_PLACEMENT
+              value: 'PLACEHOLDER_DB_PLACEMENT_JSON'
+            - name: MMORPG_DB_PLACEMENT_REQUIRED
+              value: "PLACEHOLDER_DB_PLACEMENT_REQUIRED"
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: gateway-schema-sql, mountPath: /app/gateway-schema, readOnly: true}
+      volumes:
+        - name: gateway-schema-sql
+          configMap: {name: gateway-schema-sql}

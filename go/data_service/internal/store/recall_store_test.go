@@ -86,7 +86,7 @@ func TestScanRecallOp_RebuildsTheDeliveredRequest(t *testing.T) {
 	require.NoError(t, err)
 	row := func(raw []byte) recallOpScan {
 		return recallOpScan{uint64(9), uint32(assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL), uint64(3), uint64(1700), RecallTxType, raw,
-			uint32(4), uint64(0), uint32(27004), uint64(1000), uint64(2000), recallStatusPending, uint64(3000)}
+			uint32(4), uint64(0), uint32(27004), uint64(1000), uint64(2000), recallStatusPending, uint64(3000), uint64(4242)}
 	}
 
 	state, err := scanRecallOp(row(payload), 77)
@@ -94,6 +94,7 @@ func TestScanRecallOp_RebuildsTheDeliveredRequest(t *testing.T) {
 	require.NoError(t, state.OpErr)
 	assert.True(t, state.IsPending())
 	assert.Equal(t, uint64(3000), state.LeaseUntilMs)
+	assert.Equal(t, uint64(4242), state.LeaseToken, "行上的令牌,Claim 回读拿它核对")
 	op := state.Op
 	assert.Equal(t, uint64(77), op.OpID)
 	assert.Equal(t, uint64(77), op.CorrelationID, "scene 流水与收据都按 op_id 对到这一行")
@@ -110,6 +111,49 @@ func TestScanRecallOp_RebuildsTheDeliveredRequest(t *testing.T) {
 	require.Error(t, state.OpErr)
 	assert.Nil(t, state.Op.Bundle)
 	assert.Equal(t, uint64(3), state.Op.Seq, "其余列照常扣出,人工终结还要拿它们判")
+}
+
+// Claim 回读之后只下发「我刚领到的未决行」:还是 PENDING,令牌也还是自己的。终结不清令牌,所以只看令牌不够。
+func TestRecallOpState_HeldByOnlyThePendingLeaseHolder(t *testing.T) {
+	cases := []struct {
+		name   string
+		status uint32
+		token  uint64
+		held   bool
+	}{
+		{"自己领到的未决行", recallStatusPending, 77, true},
+		{"租约被别的副本接管", recallStatusPending, 78, false},
+		{"领取之后被人工终结,令牌没换", recallStatusPartial, 77, false},
+		{"领取之后被重投循环终结", recallStatusApplied, 77, false},
+		{"没人领过", recallStatusPending, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.held, RecallOpState{Status: c.status, LeaseToken: c.token}.heldBy(77))
+		})
+	}
+}
+
+// 交人工处置的登记在碰库之前就拒绝残缺的入参:db 是 nil,走到 SQL 就会 panic。
+func TestRecallRegisterReviewHandled_InvalidInputTouchesNothing(t *testing.T) {
+	s := &RecallStore{}
+	valid := RecallReviewHandled{PlayerID: 9, CorrelationID: 601, TxIDs: []uint64{11}, Operator: "tester", Reason: "工单"}
+	cases := map[string]func(*RecallReviewHandled){
+		"没有玩家":   func(h *RecallReviewHandled) { h.PlayerID = 0 },
+		"没有指令号":  func(h *RecallReviewHandled) { h.CorrelationID = 0 },
+		"没有流水":   func(h *RecallReviewHandled) { h.TxIDs = nil },
+		"流水超过上限": func(h *RecallReviewHandled) { h.TxIDs = make([]uint64, maxRecallReviewHandledSources+1) },
+		"没有操作人":  func(h *RecallReviewHandled) { h.Operator = "" },
+	}
+	for name, edit := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := valid
+			edit(&h)
+			registered, err := s.RegisterReviewHandled(context.Background(), h, 1)
+			require.ErrorContains(t, err, "invalid registration")
+			assert.False(t, registered)
+		})
+	}
 }
 
 func TestRecallManualFinal_OnlyTakesOutcomesThatClaimNothing(t *testing.T) {

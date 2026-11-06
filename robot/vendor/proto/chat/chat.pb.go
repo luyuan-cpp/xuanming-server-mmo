@@ -366,7 +366,7 @@ var File_proto_chat_chat_proto protoreflect.FileDescriptor
 
 const file_proto_chat_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/chat/chat.proto\x12\x06chatpb\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\xd0\x01\n" +
+	"\x15proto/chat/chat.proto\x12\x06chatpb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"\xd0\x01\n" +
 	"\vChatMessage\x12(\n" +
 	"\x10sender_player_id\x18\x01 \x01(\x04R\x0esenderPlayerId\x12(\n" +
 	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\x121\n" +
@@ -392,10 +392,11 @@ const file_proto_chat_chat_proto_rawDesc = "" +
 	"\x17CHAT_CHANNEL_TYPE_WORLD\x10\x01\x12\x1a\n" +
 	"\x16CHAT_CHANNEL_TYPE_TEAM\x10\x02\x12\x1d\n" +
 	"\x19CHAT_CHANNEL_TYPE_PRIVATE\x10\x03\x12\x1c\n" +
-	"\x18CHAT_CHANNEL_TYPE_SYSTEM\x10\x042\xac\x01\n" +
+	"\x18CHAT_CHANNEL_TYPE_SYSTEM\x10\x042\xe3\x01\n" +
 	"\x10ClientPlayerChat\x12=\n" +
 	"\bSendChat\x12\x17.chatpb.SendChatRequest\x1a\x18.chatpb.SendChatResponse\x12R\n" +
-	"\x0fPullChatHistory\x12\x1e.chatpb.PullChatHistoryRequest\x1a\x1f.chatpb.PullChatHistoryResponse\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0eZ\n" +
+	"\x0fPullChatHistory\x12\x1e.chatpb.PullChatHistoryRequest\x1a\x1f.chatpb.PullChatHistoryResponse\x125\n" +
+	"\x0fNotifyWorldChat\x12\x13.chatpb.ChatMessage\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0eZ\n" +
 	"proto/chat\x80\x01\x00b\x06proto3"
 
 var (
@@ -420,6 +421,7 @@ var file_proto_chat_chat_proto_goTypes = []any{
 	(*PullChatHistoryRequest)(nil),  // 4: chatpb.PullChatHistoryRequest
 	(*PullChatHistoryResponse)(nil), // 5: chatpb.PullChatHistoryResponse
 	(*base.TipInfoMessage)(nil),     // 6: TipInfoMessage
+	(*base.Empty)(nil),              // 7: Empty
 }
 var file_proto_chat_chat_proto_depIdxs = []int32{
 	0, // 0: chatpb.ChatMessage.channel:type_name -> chatpb.ChatChannelType
@@ -430,10 +432,12 @@ var file_proto_chat_chat_proto_depIdxs = []int32{
 	1, // 5: chatpb.PullChatHistoryResponse.messages:type_name -> chatpb.ChatMessage
 	2, // 6: chatpb.ClientPlayerChat.SendChat:input_type -> chatpb.SendChatRequest
 	4, // 7: chatpb.ClientPlayerChat.PullChatHistory:input_type -> chatpb.PullChatHistoryRequest
-	3, // 8: chatpb.ClientPlayerChat.SendChat:output_type -> chatpb.SendChatResponse
-	5, // 9: chatpb.ClientPlayerChat.PullChatHistory:output_type -> chatpb.PullChatHistoryResponse
-	8, // [8:10] is the sub-list for method output_type
-	6, // [6:8] is the sub-list for method input_type
+	1, // 8: chatpb.ClientPlayerChat.NotifyWorldChat:input_type -> chatpb.ChatMessage
+	3, // 9: chatpb.ClientPlayerChat.SendChat:output_type -> chatpb.SendChatResponse
+	5, // 10: chatpb.ClientPlayerChat.PullChatHistory:output_type -> chatpb.PullChatHistoryResponse
+	7, // 11: chatpb.ClientPlayerChat.NotifyWorldChat:output_type -> Empty
+	9, // [9:12] is the sub-list for method output_type
+	6, // [6:9] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name
 	6, // [6:6] is the sub-list for extension extendee
 	0, // [0:6] is the sub-list for field type_name

@@ -87,6 +87,7 @@ public:
         manager.outcomeShutdownFlush_ = false;
         manager.sqlOutcomeRoute_ = nullptr;
         manager.sqlOutcomeSendsPerPump_ = BattleRoomManager::kSqlOutcomeSendsPerPump;
+        manager.creationClock_ = nullptr;
     }
     // 观战通道心跳的一拍,时刻由用例给(生产由每秒一拍的定时器传真实时刻)。
     static void PumpSpectateKeepalive(const std::chrono::steady_clock::time_point now, const uint64_t nowMs) {
@@ -117,6 +118,13 @@ public:
         const auto* room = BattleRoomManager::Instance().FindRoom(battleId);
         if (room == nullptr) return std::nullopt;
         return OutcomeRetry{room->outcomeAttempt, room->outcomeInFlight, room->nextOutcomeAttempt};
+    }
+
+    // ---- 建房准入与操作墓碑(match 提前 ABORT 依赖的 battle 不变量)----
+    // 换掉建房时钟(CreationNowMs:HandleCreateBattle 入口与插房前各读一次,HandleDestroyBattle 写墓碑期限读一次)。
+    // nullptr = 复位成生产实现;EraseAllRooms 复位。
+    static void SetCreationClock(std::function<uint64_t()> clock) {
+        BattleRoomManager::Instance().creationClock_ = std::move(clock);
     }
 };
 
@@ -441,6 +449,7 @@ protected:
         battleId_ = nextBattleId.fetch_add(1, std::memory_order_relaxed);
         // TimeSystem没有可注入时钟。本接口测试不推进/等待时间，只在同一原件中
         // 固定一次真实准入时刻，验证失败补签、幂等与操作隔离；不声称覆盖时钟边界。
+        // 例外只有建房准入与操作墓碑:那几条用例经 ReplayCreationClock 注入建房时钟(以本时刻为基准),钉住准入期限与墓碑保留期的边界。
         originalNowMs_ = TimeSystem::NowMillisecondsUTC();
         manager().SetRoomLifecycleHooks({});
         manager().SetClientEdge(nullptr);
@@ -529,6 +538,21 @@ protected:
         QueryBattleCreationResponse state;
         manager().HandleQueryBattleCreation(query, state);
         return state;
+    }
+
+    // 建房时钟改成按读取次序回放 readings(Unix 毫秒;读完之后一直回最后一个值),不等真实时间。
+    // 读取次序跟着 manager 的实现走(见 BattleRoomManager::creationClock_ 的注释):HandleCreateBattle 入口一次、
+    // 插房前复核一次,DestroyBattle 立墓碑一次;那几处之间多读一次建房时钟,按次序回放的用例要跟着改。
+    // 只给一个值就是固定时钟;再调一次即换一段新的回放。
+    // TearDown 经 EraseAllRooms 复位成生产时钟。
+    static void ReplayCreationClock(std::vector<uint64_t> readings) {
+        ASSERT_FALSE(readings.empty());
+        BattleRoomManagerTestAccess::SetCreationClock(
+            [readings = std::move(readings), next = std::make_shared<size_t>(0)] {
+                const size_t index = *next < readings.size() ? *next : readings.size() - 1;
+                ++*next;
+                return readings[index];
+            });
     }
 
     // 夹具房间按 1 点气血建:第一回合(DriveOneRound)就分出胜负,终局冻结、开始提交 match。
@@ -1174,19 +1198,125 @@ TEST_F(BattleObserverContract, DestroyNeverEndsALiveRoomAndTombstonesAnAbsentOne
         << "实例不符回空包";
 }
 
-// 准入期限按处理那一刻的本机时钟判:过了 admit_before_ms 才处理到的 Create(排队、等分配许可或网络迟到)一律拒收、
-// 不建房、不留创建记录(查询仍回 ABSENT)。match 提前 ABORT 的证据链依赖这一条(同上 §13.3 第 7 条)。
-// 分配许可回来之后才调本入口的接线在 handler/grpc/battle_node.cpp(CreateBattleWithPermit → Proceed),不在本用例范围。
+// ---- match「可证明不会建房提前 ABORT」依赖的 battle 不变量(cross-zone-matchmaking.md §13.3「2026-11-05 修复」第 7 条,
+// 2026-11-06 补回归)。建房时钟经 ReplayCreationClock 注入,准入与墓碑的判定都不看真实时钟的走动。 ----
+
+// 准入期限按处理那一刻的本机时钟判,入口与插房前各判一次;过了 admit_before_ms 才处理到的 Create(排队、等分配许可或网络迟到)
+// 一律拒收、不建房、不留创建记录。本条钉入口那次:入口读到的时刻恰好等于期限(期限是开区间,admit_before_ms > now 才准入),
+// 插房前读到的又回到期限前 1 毫秒,只有入口判定能拒;删掉入口判定,插房前复核会放行、这里建出房间。
+// 分配许可回来之后才调本入口的接线在 handler/grpc/battle_node.cpp(CreateBattleWithPermit → Proceed),不在本工程的编译范围。
 TEST_F(BattleObserverContract, CreateProcessedAfterAdmissionDeadlineIsRefusedWithoutRoom) {
-    auto late = OriginalCreation();
-    late.set_admit_before_ms(1);  // 远早于本机此刻,与真实时钟的走动无关
+    const auto late = OriginalCreation();
+    const auto admitBefore = late.admit_before_ms();
+    ASSERT_NO_FATAL_FAILURE(ReplayCreationClock({admitBefore, admitBefore - 1}));
+    const auto roomsBefore = manager().RoomCount();
     CreateBattleResponse refused;
     manager().HandleCreateBattle(late, refused);
     EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
     EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+    EXPECT_TRUE(refused.target_instance_id().empty());
+    EXPECT_EQ(roomsBefore, manager().RoomCount()) << "没有建房";
     EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
     EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(battleId_, kRelayGate, kGateInstance).error_message().id())
         << "没有建房";
+    EXPECT_TRUE(manager().AcceptsPlacementOperation(battleId_, kSecondOperation, kInstance))
+        << "没有留下创建记录:别的放置操作照样过得了 DestroyBattle 的守卫";
+}
+
+// 插房前那次复核:入口读到期限前 1 毫秒(放行),构建与签票耗尽了准入预算,插房前读到的恰好是期限,同一个 loop 任务里拒收,
+// 房间对象随局部变量销毁:不插表、不留创建记录。删掉插房前复核,这里会建出房间。
+TEST_F(BattleObserverContract, CreateRefusedBeforeInsertWhenAdmissionDeadlinePassesDuringBuild) {
+    const auto late = OriginalCreation();
+    const auto admitBefore = late.admit_before_ms();
+    ASSERT_NO_FATAL_FAILURE(ReplayCreationClock({admitBefore - 1, admitBefore}));
+    const auto roomsBefore = manager().RoomCount();
+    CreateBattleResponse refused;
+    manager().HandleCreateBattle(late, refused);
+    EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
+    EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+    EXPECT_TRUE(refused.target_instance_id().empty());
+    EXPECT_EQ(roomsBefore, manager().RoomCount()) << "没有建房";
+    EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
+    EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(battleId_, kRelayGate, kGateInstance).error_message().id())
+        << "没有建房";
+    EXPECT_TRUE(manager().AcceptsPlacementOperation(battleId_, kSecondOperation, kInstance))
+        << "没有留下创建记录:别的放置操作照样过得了 DestroyBattle 的守卫";
+}
+
+// 对照:两次读到的都是期限前 1 毫秒,同一份请求正常建房。上面两条的拒收因此只来自准入期限,不是请求别处不合法。
+TEST_F(BattleObserverContract, CreateOneMillisecondBeforeAdmissionDeadlineIsAdmitted) {
+    const auto original = OriginalCreation();
+    ASSERT_NO_FATAL_FAILURE(ReplayCreationClock({original.admit_before_ms() - 1}));
+    const auto roomsBefore = manager().RoomCount();
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(original, created);
+    EXPECT_EQ(0u, created.error_message().id());
+    EXPECT_EQ(1u, created.adopted_outcome_protocol_version());
+    EXPECT_EQ(kInstance, created.target_instance_id());
+    EXPECT_EQ(roomsBefore + 1, manager().RoomCount());
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+}
+
+// DestroyBattle 对尚无房间的原操作立的墓碑一律拒收同一放置操作的 Create,且至少保留 360 秒(更大的时钟回拨靠它兜着):
+// 原样重放、同 op 改了正文、恰在保留期末尾(墓碑时刻 + 360000 毫秒;过期判定 CreationReceiptExpired 是严格大于,这一刻仍在期内)
+// 才到的请求都被拒,不回采用值、不建房,查询一直回 ABORTED;别的放置操作过不了 DestroyBattle 的守卫,换不掉墓碑。
+// 准入期限放在 24 小时之后,拒收只能来自墓碑。不写墓碑、Create 不认墓碑、或保留期哪怕缩短 1 毫秒,最后一次 Create 都会建出房间。
+TEST_F(BattleObserverContract, TombstoneRefusesEveryLaterCreateOfTheOperationForItsWholeRetention) {
+    const auto tombstonedAt = originalNowMs_;
+    ASSERT_NO_FATAL_FAILURE(ReplayCreationClock({tombstonedAt}));
+    ASSERT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
+    Destroy(battleId_);
+    ASSERT_EQ(BATTLE_CREATION_ABORTED, CreationState().state());
+
+    auto original = OriginalCreation();
+    original.set_admit_before_ms(tombstonedAt + 24ull * 3600 * 1000);
+    auto changed = original;
+    changed.set_seed(original.seed() + 1);
+    const auto roomsBefore = manager().RoomCount();
+    const auto expectRefused = [&](const CreateBattleRequest& request, const uint64_t processedAtMs, const char* stage) {
+        SCOPED_TRACE(stage);
+        ASSERT_NO_FATAL_FAILURE(ReplayCreationClock({processedAtMs}));
+        CreateBattleResponse refused;
+        manager().HandleCreateBattle(request, refused);
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
+        EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+        EXPECT_TRUE(refused.target_instance_id().empty());
+        EXPECT_EQ(roomsBefore, manager().RoomCount());
+        EXPECT_EQ(BATTLE_CREATION_ABORTED, CreationState().state());
+    };
+    expectRefused(original, tombstonedAt, "same request right after the tombstone");
+    expectRefused(changed, tombstonedAt + 1, "same operation with a changed body");
+    EXPECT_FALSE(manager().AcceptsPlacementOperation(battleId_, kSecondOperation, kInstance))
+        << "别的放置操作过不了 DestroyBattle 的守卫";
+    EXPECT_TRUE(manager().AcceptsPlacementOperation(battleId_, kPlacement, kInstance)) << "原操作重发 DestroyBattle 照常幂等";
+    expectRefused(original, tombstonedAt + 360000, "end of the 360 s retention");
+}
+
+// 等分配许可期间立的墓碑,许可回来之后照样拒收。CreateBattle 的守卫先等分配许可,许可回来才 Proceed 进 HandleCreateBattle,
+// 所以等许可期间 manager 里没有这一局的任何记录:match 这时查询回 ABSENT,DestroyBattle 的守卫放行原操作,墓碑是从零立的。
+// 许可回来时时钟仍在准入期限之前(同一份原件,admit_before = 准入时刻 + 30s),拒收只能来自墓碑;match 补偿重试同一份 Create 同样被拒。
+TEST_F(BattleObserverContract, TombstoneLaidWhileCreateAwaitsPermitStillRefusesItAfterPermit) {
+    const auto original = OriginalCreation();
+    ASSERT_LT(originalNowMs_, original.admit_before_ms());
+    ASSERT_NO_FATAL_FAILURE(ReplayCreationClock({originalNowMs_}));
+    // 等许可:Create 还没进 manager
+    EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
+    ASSERT_TRUE(manager().AcceptsPlacementOperation(battleId_, kPlacement, kInstance)) << "DestroyBattle 守卫放行原操作";
+    Destroy(battleId_);
+    ASSERT_EQ(BATTLE_CREATION_ABORTED, CreationState().state());
+
+    // 许可回来:同一份原件进 HandleCreateBattle,随后 match 补偿又重试一次
+    const auto roomsBefore = manager().RoomCount();
+    for (const char* attempt : {"after permit", "compensation retry"}) {
+        SCOPED_TRACE(attempt);
+        CreateBattleResponse refused;
+        manager().HandleCreateBattle(original, refused);
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
+        EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
+        EXPECT_EQ(roomsBefore, manager().RoomCount()) << "没有建房";
+        EXPECT_EQ(BATTLE_CREATION_ABORTED, CreationState().state());
+    }
+    EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
 }
 
 // Match 持久 COMPLETE:此刻才公布最后一回合与终局,观众收 BATTLE_FINISHED + 真实胜负,房间随即删除。
@@ -1325,6 +1455,46 @@ TEST_F(BattleObserverContract, ShutdownWithOnlyOngoingRoomsIsDrainedImmediately)
     EXPECT_EQ(0, outcomeRoute_.picks);
     EXPECT_TRUE(outcomeRoute_.sent.empty());
     EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+}
+
+// 停机(AbortAllRooms)之后房间留在表里,直到拿到 Match 的决定或 manager 销毁(2026-11-06 补,match 提前 ABORT 依赖的
+// battle 不变量,见 §13.3「2026-11-05 修复」第 7 条):还在打的房间与终局在等决定的房间,经过排空窗口的重放、match 提前作废
+// 发来的 DestroyBattle(房间在就忽略,立不起墓碑)、拆除前钩子(StopSqlOutcomes),都不删房、不触发移除回调,查询始终回 PRESENT。
+// 进程还在应答查询时,ABSENT / ABORTED 因此不会出现在「房间打完、终局还在路上」的局上。
+// 2026-10-23 之前 AbortAllRooms 逐个 EraseRoom,第一处断言就会变红。停止闸只升不降、移除回调捕获局部计数,放独立子进程。
+TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        std::map<uint64_t, int> removed;
+        manager().SetRoomLifecycleHooks({nullptr, [&removed](const uint64_t battleId) { ++removed[battleId]; }});
+        RouteOutcomesToFake();  // match 通道一直没就绪:冻结的终局始终拿不到决定
+        ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        ASSERT_FALSE(manager().SqlOutcomesFlushed()) << "夹具前提:终局已冻结、还没拿到决定";
+        const auto ongoing = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+        ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(ongoing, ::SPECTATE_VISIBILITY_PUBLIC));
+        const auto roomsBefore = manager().RoomCount();
+        const auto expectKept = [&](const char* stage) {
+            SCOPED_TRACE(stage);
+            EXPECT_EQ(roomsBefore, manager().RoomCount());
+            EXPECT_TRUE(removed.empty());
+            EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state()) << "终局在等决定的房间";
+            EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationStateOf(ongoing).state()) << "还在打的房间";
+        };
+
+        manager().AbortAllRooms("unit_shutdown");
+        expectKept("after AbortAllRooms");
+        Destroy(battleId_);
+        Destroy(ongoing);
+        expectKept("after DestroyBattle during the drain window");
+        for (int pump = 0; pump < 3; ++pump) BattleRoomManagerTestAccess::PumpSqlOutcomes();
+        expectKept("after drain-window pumps");
+        manager().StopSqlOutcomes();
+        BattleRoomManagerTestAccess::PumpSqlOutcomes();
+        Destroy(battleId_);
+        Destroy(ongoing);
+        expectKept("after StopSqlOutcomes");
+        EXPECT_TRUE(outcomeRoute_.sent.empty());
+    }));
 }
 
 // 拆除前钩子(StopSqlOutcomes)之后:泵不再挑通道、不再发请求;停止闸之前发出、之后才回来的回复只打日志,

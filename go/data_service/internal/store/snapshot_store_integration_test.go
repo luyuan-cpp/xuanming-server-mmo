@@ -1389,7 +1389,7 @@ func TestSnapshotMigration_DedupePointDeleteUsesPrimaryKey(t *testing.T) {
 // 这条组合出口原本是一条静默丢数据的通道:kafka.SnapshotConsumer 收到它会记一条 duplicate 指标、
 // 打一条 `already stored as id=0` 的 INFO,然后**提交 offset** —— 这条快照永久丢失且全程零报错。
 // 窗口很窄(要求写入那一刻库里有同 guid 行、点查时已被删),但删者是真实存在的:
-// DeleteOldSnapshots 的 retention 清理,以及迁移期的去重 DELETE。
+// RunAuditRetention 的过期清理,以及迁移期的去重 DELETE。
 //
 // 这个交错没法在两条语句之间稳定塞进一次删除(store 走自己的连接池、全程自动提交),
 // 所以直接对**内部出口**取证:对一个库里不存在的 guid 调用点查,断言它报错而不是回 nil。

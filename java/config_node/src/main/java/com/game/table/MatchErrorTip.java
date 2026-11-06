@@ -123,6 +123,22 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchSpectateFull = 16021;</code>
      */
     kMatchSpectateFull(16021),
+    /**
+     * <code>kMatchProbeRequired = 16022;</code>
+     */
+    kMatchProbeRequired(16022),
+    /**
+     * <code>kMatchNoRegionWithinLatency = 16023;</code>
+     */
+    kMatchNoRegionWithinLatency(16023),
+    /**
+     * <code>kMatchSpectateTicketInvalid = 16024;</code>
+     */
+    kMatchSpectateTicketInvalid(16024),
+    /**
+     * <code>kMatchBattleReportNotFound = 16025;</code>
+     */
+    kMatchBattleReportNotFound(16025),
     UNRECOGNIZED(-1),
     ;
 
@@ -227,6 +243,22 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchSpectateFull = 16021;</code>
      */
     public static final int kMatchSpectateFull_VALUE = 16021;
+    /**
+     * <code>kMatchProbeRequired = 16022;</code>
+     */
+    public static final int kMatchProbeRequired_VALUE = 16022;
+    /**
+     * <code>kMatchNoRegionWithinLatency = 16023;</code>
+     */
+    public static final int kMatchNoRegionWithinLatency_VALUE = 16023;
+    /**
+     * <code>kMatchSpectateTicketInvalid = 16024;</code>
+     */
+    public static final int kMatchSpectateTicketInvalid_VALUE = 16024;
+    /**
+     * <code>kMatchBattleReportNotFound = 16025;</code>
+     */
+    public static final int kMatchBattleReportNotFound_VALUE = 16025;
 
 
     public final int getNumber() {
@@ -276,6 +308,10 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16019: return kMatchSpectateOffline;
         case 16020: return kMatchNotInScene;
         case 16021: return kMatchSpectateFull;
+        case 16022: return kMatchProbeRequired;
+        case 16023: return kMatchNoRegionWithinLatency;
+        case 16024: return kMatchSpectateTicketInvalid;
+        case 16025: return kMatchBattleReportNotFound;
         default: return null;
       }
     }
@@ -341,7 +377,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\217\005\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\216\006\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -358,8 +394,11 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "hableBattle\020\221}\022\035\n\030kMatchBattleNotWatchab" +
       "le\020\222}\022\032\n\025kMatchSpectateOffline\020\223}\022\025\n\020kMa" +
       "tchNotInScene\020\224}\022\027\n\022kMatchSpectateFull\020\225" +
-      "}B$\n\016com.game.tableZ\022generated/pb/tableb" +
-      "\006proto3"
+      "}\022\030\n\023kMatchProbeRequired\020\226}\022 \n\033kMatchNoR" +
+      "egionWithinLatency\020\227}\022 \n\033kMatchSpectateT" +
+      "icketInvalid\020\230}\022\037\n\032kMatchBattleReportNot" +
+      "Found\020\231}B$\n\016com.game.tableZ\022generated/pb" +
+      "/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

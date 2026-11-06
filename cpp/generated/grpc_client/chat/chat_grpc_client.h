@@ -23,6 +23,14 @@ void SendClientPlayerChatPullChatHistory(entt::registry& registry, entt::entity 
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendClientPlayerChatPullChatHistoryErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region ClientPlayerChatNotifyWorldChat
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerChatNotifyWorldChatGrpcPath = "/chatpb.ClientPlayerChat/NotifyWorldChat";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerChatNotifyWorldChat(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::ChatMessage& request, GrpcDone<::Empty> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerChatNotifyWorldChatErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetChatCallDeadline(std::chrono::milliseconds deadline);
 

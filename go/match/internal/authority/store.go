@@ -47,6 +47,8 @@ type Store struct {
 	ratingCurve ratingrule.Curve
 	// workOwner 是后台工作按片分工的归属判定，BindWorkOwner 启动时写一次，之后只读；nil（单测）= 全部归本副本（见 work_owner.go）。
 	workOwner func(key string) bool
+	// 截止作废取证由 BindDeadlineAbortProbe 在启动时装配，后台与 RPC 只读。
+	deadlineProbe DeadlineAbortProbe
 }
 
 const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision"

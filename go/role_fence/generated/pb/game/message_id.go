@@ -351,3 +351,7 @@ const MatchServiceListBattleReportsMessageId = 379
 const MatchServiceGetBattleReportMessageId = 380
 const SceneMovementClientPlayerTeamFollowMessageId = 381
 const SceneMovementClientPlayerNotifyTeamFollowStateMessageId = 382
+const ClientPlayerChatNotifyWorldChatMessageId = 383
+const DataServiceRegisterRecallReviewHandledMessageId = 384
+const DataServiceGetPlayerItemGainBlockMessageId = 385
+const PlayerInboxAdminGetItemGainBlocksMessageId = 386

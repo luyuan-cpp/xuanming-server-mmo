@@ -78,7 +78,7 @@ namespace
 					{
 						return std::nullopt;
 					}
-					return LivenessSweeper::SessionView{.verified = it->second.verified, .liveness = &it->second.liveness};
+					return LivenessSweeper::SessionView{.verified = it->second.verified, .liveness = it->second.liveness};
 				},
 				[this](const uint32_t sessionId, uint64_t) { handshakeTimedOut.push_back(sessionId); },
 				[this](const uint32_t sessionId, uint64_t, const LivenessSweeper::Duration silentFor)

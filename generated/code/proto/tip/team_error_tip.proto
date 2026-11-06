@@ -71,4 +71,8 @@ enum team_error {
 
   kTeamInternal = 4030;
 
+  kTeamPvpPartySizeNotAllowed = 4031;
+
+  kTeamRatingGapTooLarge = 4032;
+
 };

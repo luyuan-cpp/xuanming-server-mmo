@@ -123,6 +123,12 @@ func main() {
 		}
 		os.Exit(runMigration(c, *allowModify, openAuthority, migrateUp))
 	}
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。-migrate 不连 Redis,迁移 Job 也不注入这个变量,
+	// 所以放在它之后。
+	if err := c.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(os.Stderr, "[friend] %v\n", err)
+		os.Exit(1)
+	}
 	if err := runFriend(c); err != nil {
 		fmt.Fprintf(os.Stderr, "[friend] %v\n", err)
 		os.Exit(1)

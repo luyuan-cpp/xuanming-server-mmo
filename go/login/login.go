@@ -103,6 +103,10 @@ func main() {
 		panic(fmt.Sprintf("HMAC 密钥配置不合格,拒绝启动: %v", err))
 	}
 	config.ActiveSecrets = secrets
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):同样要在任何外部连接之前填好。
+	if err := config.AppConfig.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
+		panic(fmt.Errorf("共享 Redis 口令配置不合格,拒绝启动: %w", err))
+	}
 
 	// 控制面命令 topic(gate-cmd_g<N> / scene-cmd_g<N>)**刻意不在这里建**:
 	// 它的分区数是不可变的寻址契约(partition = node_id % P),必须由基础设施

@@ -69,6 +69,7 @@
 #include "MysteryMerchantSpotTable.h"
 #include "PetTable.h"
 #include "PetRuleTable.h"
+#include "PlayModeTable.h"
 #include "RewardTable.h"
 #include "RoleNameRuleTable.h"
 #include "SkillTable.h"
@@ -76,6 +77,7 @@
 #include "TestTable.h"
 #include "TestMultiKeyTable.h"
 #include "WorldTable.h"
+#include "ZoneGroupTable.h"
 
 #include "ConfigSubsystem.generated.h"
 
@@ -114,7 +116,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 47;
+	static constexpr int32 TableCount = 49;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -286,6 +288,9 @@ public:
 	UPetRuleTable* GetPetRuleTable() const { return PetRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UPlayModeTable* GetPlayModeTable() const { return PlayModeTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	URewardTable* GetRewardTable() const { return RewardTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -305,6 +310,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UWorldTable* GetWorldTable() const { return WorldTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UZoneGroupTable* GetZoneGroupTable() const { return ZoneGroupTable; }
 
 private:
 	UPROPERTY(Transient)
@@ -388,6 +396,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UPetRuleTable> PetRuleTable;
 	UPROPERTY(Transient)
+	TObjectPtr<UPlayModeTable> PlayModeTable;
+	UPROPERTY(Transient)
 	TObjectPtr<URewardTable> RewardTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URoleNameRuleTable> RoleNameRuleTable;
@@ -401,6 +411,8 @@ private:
 	TObjectPtr<UTestMultiKeyTable> TestMultiKeyTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UWorldTable> WorldTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UZoneGroupTable> ZoneGroupTable;
 
 	FString ConfigDir;
 	int32 LoadVersion = 0;

@@ -53,4 +53,6 @@ enum equip_error {
 
   kEquipGemBagFull = 28021;
 
+  kEquipEnhanceLevelChanged = 28022;
+
 };

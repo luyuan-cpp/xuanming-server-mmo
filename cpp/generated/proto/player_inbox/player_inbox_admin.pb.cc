@@ -61,6 +61,12 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::ReconcilePlayerInboxResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::GetPlayerItemGainBlocksRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::PlayerItemGainSanctionPending
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::GetPlayerItemGainBlocksResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -401,6 +407,218 @@ const ::_pbi::ClassData* ReconcilePlayerInboxRequest_get_class_data() {
   return ReconcilePlayerInboxRequest_globals_.GetClassData();
 #else
   return ReconcilePlayerInboxRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PlayerItemGainSanctionPending::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PlayerItemGainSanctionPending>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_._has_bits_);
+};
+
+constexpr PlayerItemGainSanctionPending::ParseTableT_ PlayerItemGainSanctionPending::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_._has_bits_),
+      0, // no _extensions_
+      9, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966784,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      9,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::PlayerItemGainSanctionPending>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 seq = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerItemGainSanctionPending, _impl_.seq_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.seq_)}},
+      // .player_inbox.PlayerInboxMessageType msg_type = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerItemGainSanctionPending, _impl_.msg_type_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.msg_type_)}},
+      // uint32 item_config_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerItemGainSanctionPending, _impl_.item_config_id_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.item_config_id_)}},
+      // uint64 request_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerItemGainSanctionPending, _impl_.request_id_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.request_id_)}},
+      // .player_inbox.PlayerInboxDirective directive = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerItemGainSanctionPending, _impl_.directive_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.directive_)}},
+      // uint32 delivery_count = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerItemGainSanctionPending, _impl_.delivery_count_), 7>(),
+       {48, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.delivery_count_)}},
+      // uint64 created_ms = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerItemGainSanctionPending, _impl_.created_ms_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.created_ms_)}},
+      // string operator_name = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.operator_name_)}},
+      // string note = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.note_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 seq = 1;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.seq_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .player_inbox.PlayerInboxMessageType msg_type = 2;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.msg_type_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 item_config_id = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.item_config_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 request_id = 4;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.request_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .player_inbox.PlayerInboxDirective directive = 5;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.directive_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 delivery_count = 6;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.delivery_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 created_ms = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.created_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string operator_name = 8;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.operator_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string note = 9;
+      {PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.note_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\52\0\0\0\0\0\0\0\15\4\0\0\0\0\0\0"
+      "player_inbox.PlayerItemGainSanctionPending"
+      "operator_name"
+      "note"
+    }},
+  };
+}
+
+
+inline constexpr PlayerItemGainSanctionPending::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        operator_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        note_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        seq_{::uint64_t{0u}},
+        msg_type_{static_cast< ::player_inbox::PlayerInboxMessageType >(0)},
+        item_config_id_{0u},
+        request_id_{::uint64_t{0u}},
+        directive_{static_cast< ::player_inbox::PlayerInboxDirective >(0)},
+        delivery_count_{0u},
+        created_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr PlayerItemGainSanctionPending::PlayerItemGainSanctionPending(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PlayerItemGainSanctionPending::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerItemGainSanctionPending(arena);
+}
+constexpr auto PlayerItemGainSanctionPending::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerItemGainSanctionPending), alignof(PlayerItemGainSanctionPending));
+}
+constexpr auto PlayerItemGainSanctionPending::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerItemGainSanctionPending::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerItemGainSanctionPending>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerItemGainSanctionPending::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerItemGainSanctionPending>(), &PlayerItemGainSanctionPending::ByteSizeLong,
+              &PlayerItemGainSanctionPending::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[17],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerItemGainSanctionPendingGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerItemGainSanctionPendingGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerItemGainSanctionPending_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerItemGainSanctionPending::InternalGenerateClassData_(
+            _default, &PlayerItemGainSanctionPending_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerItemGainSanctionPending>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerItemGainSanctionPendingGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerItemGainSanctionPending _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerItemGainSanctionPending>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPendingGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerItemGainSanctionPendingGlobalsTypeInternal PlayerItemGainSanctionPending_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerItemGainSanctionPending_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerItemGainSanctionPending_globals_.GetClassData();
+#else
+  return PlayerItemGainSanctionPending_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1537,6 +1755,147 @@ const ::_pbi::ClassData* ListPlayerInboxItemsRequest_get_class_data() {
   return ListPlayerInboxItemsRequest_globals_.GetClassData();
 #else
   return ListPlayerInboxItemsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPlayerItemGainBlocksRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPlayerItemGainBlocksRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksRequest, _impl_._has_bits_);
+};
+
+constexpr GetPlayerItemGainBlocksRequest::ParseTableT_ GetPlayerItemGainBlocksRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::GetPlayerItemGainBlocksRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerItemGainBlocksRequest, _impl_.player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksRequest, _impl_.player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetPlayerItemGainBlocksRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GetPlayerItemGainBlocksRequest::GetPlayerItemGainBlocksRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPlayerItemGainBlocksRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPlayerItemGainBlocksRequest(arena);
+}
+constexpr auto GetPlayerItemGainBlocksRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetPlayerItemGainBlocksRequest), alignof(GetPlayerItemGainBlocksRequest));
+}
+constexpr auto GetPlayerItemGainBlocksRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPlayerItemGainBlocksRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPlayerItemGainBlocksRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPlayerItemGainBlocksRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPlayerItemGainBlocksRequest>(), &GetPlayerItemGainBlocksRequest::ByteSizeLong,
+              &GetPlayerItemGainBlocksRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[16],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPlayerItemGainBlocksRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPlayerItemGainBlocksRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPlayerItemGainBlocksRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPlayerItemGainBlocksRequest::InternalGenerateClassData_(
+            _default, &GetPlayerItemGainBlocksRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerItemGainBlocksRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPlayerItemGainBlocksRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPlayerItemGainBlocksRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerItemGainBlocksRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPlayerItemGainBlocksRequestGlobalsTypeInternal GetPlayerItemGainBlocksRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPlayerItemGainBlocksRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPlayerItemGainBlocksRequest_globals_.GetClassData();
+#else
+  return GetPlayerItemGainBlocksRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2754,6 +3113,198 @@ const ::_pbi::ClassData* GmSanctionPlayerRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPlayerItemGainBlocksResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPlayerItemGainBlocksResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_._has_bits_);
+};
+
+constexpr GetPlayerItemGainBlocksResponse::ParseTableT_ GetPlayerItemGainBlocksResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::GetPlayerItemGainBlocksResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.error_message_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerItemGainBlocksResponse, _impl_.player_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.player_id_)}},
+      // bool found = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetPlayerItemGainBlocksResponse, _impl_.found_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.found_)}},
+      // repeated uint32 blocked_item_config_ids = 4;
+      {::_pbi::TcParser::FastV32P1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.blocked_item_config_ids_)}},
+      // repeated .player_inbox.PlayerItemGainSanctionPending pending = 5;
+      {::_pbi::TcParser::FastMtR1,
+       {42, 1, 1,
+        PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.pending_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool found = 3;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.found_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // repeated uint32 blocked_item_config_ids = 4;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.blocked_item_config_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // repeated .player_inbox.PlayerItemGainSanctionPending pending = 5;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.pending_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::player_inbox::PlayerItemGainSanctionPending>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::player_inbox::PlayerItemGainSanctionPending_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetPlayerItemGainBlocksResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        blocked_item_config_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::player_inbox::GetPlayerItemGainBlocksResponse,
+            PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.blocked_item_config_ids_)>()
+         }
+        ,
+        _blocked_item_config_ids_cached_byte_size_{0},
+        pending_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::player_inbox::GetPlayerItemGainBlocksResponse,
+            PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.pending_)>()
+         }
+        ,
+        error_message_{nullptr},
+        player_id_{::uint64_t{0u}},
+        found_{false} {}
+
+template <typename>
+constexpr GetPlayerItemGainBlocksResponse::GetPlayerItemGainBlocksResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPlayerItemGainBlocksResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPlayerItemGainBlocksResponse(arena);
+}
+constexpr auto GetPlayerItemGainBlocksResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetPlayerItemGainBlocksResponse), alignof(GetPlayerItemGainBlocksResponse));
+}
+constexpr auto GetPlayerItemGainBlocksResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPlayerItemGainBlocksResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPlayerItemGainBlocksResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPlayerItemGainBlocksResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPlayerItemGainBlocksResponse>(), &GetPlayerItemGainBlocksResponse::ByteSizeLong,
+              &GetPlayerItemGainBlocksResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[18],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPlayerItemGainBlocksResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPlayerItemGainBlocksResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPlayerItemGainBlocksResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPlayerItemGainBlocksResponse::InternalGenerateClassData_(
+            _default, &GetPlayerItemGainBlocksResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerItemGainBlocksResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPlayerItemGainBlocksResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPlayerItemGainBlocksResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPlayerItemGainBlocksResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPlayerItemGainBlocksResponseGlobalsTypeInternal GetPlayerItemGainBlocksResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPlayerItemGainBlocksResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPlayerItemGainBlocksResponse_globals_.GetClassData();
+#else
+  return GetPlayerItemGainBlocksResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetPlayerInboxSummaryResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<GetPlayerInboxSummaryResponse>()._impl_._has_bits_);
@@ -3157,6 +3708,45 @@ const ::uint32_t
         3,
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksRequest, _impl_.player_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_._has_bits_),
+        12, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.seq_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.msg_type_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.item_config_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.request_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.directive_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.delivery_count_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.created_ms_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.operator_name_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::PlayerItemGainSanctionPending, _impl_.note_),
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.found_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.blocked_item_config_ids_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.pending_),
+        2,
+        3,
+        4,
+        0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -3177,6 +3767,9 @@ static const ::_pbi::MigrationSchema
         {185, sizeof(::player_inbox::PlayerInboxReconcileDiff)},
         {198, sizeof(::player_inbox::PlayerInboxReconcileCursor)},
         {207, sizeof(::player_inbox::ReconcilePlayerInboxResponse)},
+        {218, sizeof(::player_inbox::GetPlayerItemGainBlocksRequest)},
+        {223, sizeof(::player_inbox::PlayerItemGainSanctionPending)},
+        {244, sizeof(::player_inbox::GetPlayerItemGainBlocksResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3196,6 +3789,9 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::player_inbox::PlayerInboxReconcileDiff_globals_,
         &::player_inbox::PlayerInboxReconcileCursor_globals_,
         &::player_inbox::ReconcilePlayerInboxResponse_globals_,
+        &::player_inbox::GetPlayerItemGainBlocksRequest_globals_,
+        &::player_inbox::PlayerItemGainSanctionPending_globals_,
+        &::player_inbox::GetPlayerItemGainBlocksResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -3287,40 +3883,57 @@ const char descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5fa
     "\017.TipInfoMessage\022\024\n\014ledger_found\030\002 \001(\010\0229"
     "\n\007cursors\030\003 \003(\0132(.player_inbox.PlayerInb"
     "oxReconcileCursor\0225\n\005diffs\030\004 \003(\0132&.playe"
-    "r_inbox.PlayerInboxReconcileDiff*c\n\023Play"
-    "erInboxVoidMode\022!\n\035PLAYER_INBOX_VOID_MOD"
-    "E_NORMAL\020\000\022)\n%PLAYER_INBOX_VOID_MODE_FOR"
-    "CE_MISMATCH\020\001*\361\002\n\033PlayerInboxForceVoidVe"
-    "rdict\022\'\n#PLAYER_INBOX_FORCE_VOID_UNSPECI"
-    "FIED\020\000\022\"\n\036PLAYER_INBOX_FORCE_VOID_PROVEN"
-    "\020\001\022)\n%PLAYER_INBOX_FORCE_VOID_NOT_DELIVE"
-    "RED\020\002\022)\n%PLAYER_INBOX_FORCE_VOID_LEDGER_"
-    "ABSENT\020\003\022\'\n#PLAYER_INBOX_FORCE_VOID_NOT_"
-    "DECIDED\020\004\022+\n\'PLAYER_INBOX_FORCE_VOID_SEQ"
-    "_NOT_IN_RING\020\005\022-\n)PLAYER_INBOX_FORCE_VOI"
-    "D_REQUEST_IN_LEDGER\020\006\022*\n&PLAYER_INBOX_FO"
-    "RCE_VOID_LEDGER_INVALID\020\007*\253\001\n\034PlayerInbo"
-    "xReconcileDiffKind\022+\n\'PLAYER_INBOX_RECON"
-    "CILE_DIFF_UNSPECIFIED\020\000\022.\n*PLAYER_INBOX_"
-    "RECONCILE_FINAL_NOT_IN_LEDGER\020\001\022.\n*PLAYE"
-    "R_INBOX_RECONCILE_PENDING_BUT_DECIDED\020\0022"
-    "\373\004\n\020PlayerInboxAdmin\022c\n\020GmSanctionPlayer"
-    "\022%.player_inbox.GmSanctionPlayerRequest\032"
-    "&.player_inbox.GmSanctionPlayerResponse\""
-    "\000\022g\n\nGetSummary\022*.player_inbox.GetPlayer"
-    "InboxSummaryRequest\032+.player_inbox.GetPl"
-    "ayerInboxSummaryResponse\"\000\022d\n\tListItems\022"
-    ").player_inbox.ListPlayerInboxItemsReque"
-    "st\032*.player_inbox.ListPlayerInboxItemsRe"
-    "sponse\"\000\022d\n\017LookupByRequest\022&.player_inb"
-    "ox.LookupPlayerInboxRequest\032\'.player_inb"
-    "ox.LookupPlayerInboxResponse\"\000\022a\n\010VoidIt"
-    "em\022(.player_inbox.VoidPlayerInboxItemReq"
-    "uest\032).player_inbox.VoidPlayerInboxItemR"
-    "esponse\"\000\022j\n\017ReconcilePlayer\022).player_in"
-    "box.ReconcilePlayerInboxRequest\032*.player"
-    "_inbox.ReconcilePlayerInboxResponse\"\000B\036Z"
-    "\031player_inbox/player_inbox\200\001\000b\006proto3"
+    "r_inbox.PlayerInboxReconcileDiff\"3\n\036GetP"
+    "layerItemGainBlocksRequest\022\021\n\tplayer_id\030"
+    "\001 \001(\004\"\230\002\n\035PlayerItemGainSanctionPending\022"
+    "\013\n\003seq\030\001 \001(\004\0226\n\010msg_type\030\002 \001(\0162$.player_"
+    "inbox.PlayerInboxMessageType\022\026\n\016item_con"
+    "fig_id\030\003 \001(\r\022\022\n\nrequest_id\030\004 \001(\004\0225\n\tdire"
+    "ctive\030\005 \001(\0162\".player_inbox.PlayerInboxDi"
+    "rective\022\026\n\016delivery_count\030\006 \001(\r\022\022\n\ncreat"
+    "ed_ms\030\007 \001(\004\022\025\n\roperator_name\030\010 \001(\t\022\014\n\004no"
+    "te\030\t \001(\t\"\312\001\n\037GetPlayerItemGainBlocksResp"
+    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
+    "sage\022\021\n\tplayer_id\030\002 \001(\004\022\r\n\005found\030\003 \001(\010\022\037"
+    "\n\027blocked_item_config_ids\030\004 \003(\r\022<\n\007pendi"
+    "ng\030\005 \003(\0132+.player_inbox.PlayerItemGainSa"
+    "nctionPending*c\n\023PlayerInboxVoidMode\022!\n\035"
+    "PLAYER_INBOX_VOID_MODE_NORMAL\020\000\022)\n%PLAYE"
+    "R_INBOX_VOID_MODE_FORCE_MISMATCH\020\001*\361\002\n\033P"
+    "layerInboxForceVoidVerdict\022\'\n#PLAYER_INB"
+    "OX_FORCE_VOID_UNSPECIFIED\020\000\022\"\n\036PLAYER_IN"
+    "BOX_FORCE_VOID_PROVEN\020\001\022)\n%PLAYER_INBOX_"
+    "FORCE_VOID_NOT_DELIVERED\020\002\022)\n%PLAYER_INB"
+    "OX_FORCE_VOID_LEDGER_ABSENT\020\003\022\'\n#PLAYER_"
+    "INBOX_FORCE_VOID_NOT_DECIDED\020\004\022+\n\'PLAYER"
+    "_INBOX_FORCE_VOID_SEQ_NOT_IN_RING\020\005\022-\n)P"
+    "LAYER_INBOX_FORCE_VOID_REQUEST_IN_LEDGER"
+    "\020\006\022*\n&PLAYER_INBOX_FORCE_VOID_LEDGER_INV"
+    "ALID\020\007*\253\001\n\034PlayerInboxReconcileDiffKind\022"
+    "+\n\'PLAYER_INBOX_RECONCILE_DIFF_UNSPECIFI"
+    "ED\020\000\022.\n*PLAYER_INBOX_RECONCILE_FINAL_NOT"
+    "_IN_LEDGER\020\001\022.\n*PLAYER_INBOX_RECONCILE_P"
+    "ENDING_BUT_DECIDED\020\0022\357\005\n\020PlayerInboxAdmi"
+    "n\022c\n\020GmSanctionPlayer\022%.player_inbox.GmS"
+    "anctionPlayerRequest\032&.player_inbox.GmSa"
+    "nctionPlayerResponse\"\000\022g\n\nGetSummary\022*.p"
+    "layer_inbox.GetPlayerInboxSummaryRequest"
+    "\032+.player_inbox.GetPlayerInboxSummaryRes"
+    "ponse\"\000\022d\n\tListItems\022).player_inbox.List"
+    "PlayerInboxItemsRequest\032*.player_inbox.L"
+    "istPlayerInboxItemsResponse\"\000\022d\n\017LookupB"
+    "yRequest\022&.player_inbox.LookupPlayerInbo"
+    "xRequest\032\'.player_inbox.LookupPlayerInbo"
+    "xResponse\"\000\022a\n\010VoidItem\022(.player_inbox.V"
+    "oidPlayerInboxItemRequest\032).player_inbox"
+    ".VoidPlayerInboxItemResponse\"\000\022j\n\017Reconc"
+    "ilePlayer\022).player_inbox.ReconcilePlayer"
+    "InboxRequest\032*.player_inbox.ReconcilePla"
+    "yerInboxResponse\"\000\022r\n\021GetItemGainBlocks\022"
+    ",.player_inbox.GetPlayerItemGainBlocksRe"
+    "quest\032-.player_inbox.GetPlayerItemGainBl"
+    "ocksResponse\"\000B\036Z\031player_inbox/player_in"
+    "box\200\001\000b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto_deps[2] = {
@@ -3331,13 +3944,13 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto = {
     false,
     false,
-    4877,
+    5534,
     descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto,
     "proto/player_inbox/player_inbox_admin.proto",
     &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto_once,
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto_deps,
     2,
-    16,
+    19,
     schemas,
     file_message_globals,
     TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_5fadmin_2eproto::offsets,
@@ -8747,6 +9360,985 @@ void ReconcilePlayerInboxResponse::InternalSwap(ReconcilePlayerInboxResponse* PR
 }
 
 ::google::protobuf::Metadata ReconcilePlayerInboxResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetPlayerItemGainBlocksRequest::GetPlayerItemGainBlocksRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerItemGainBlocksRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.GetPlayerItemGainBlocksRequest)
+}
+GetPlayerItemGainBlocksRequest::GetPlayerItemGainBlocksRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerItemGainBlocksRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerItemGainBlocksRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerItemGainBlocksRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetPlayerItemGainBlocksRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.player_id_ = {};
+}
+GetPlayerItemGainBlocksRequest::~GetPlayerItemGainBlocksRequest() {
+  // @@protoc_insertion_point(destructor:player_inbox.GetPlayerItemGainBlocksRequest)
+  SharedDtor(*this);
+}
+inline void GetPlayerItemGainBlocksRequest::SharedDtor(MessageLite& self) {
+  GetPlayerItemGainBlocksRequest& this_ = static_cast<GetPlayerItemGainBlocksRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPlayerItemGainBlocksRequest_class_data_ =
+        GetPlayerItemGainBlocksRequest::InternalGenerateClassData_(GetPlayerItemGainBlocksRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerItemGainBlocksRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerItemGainBlocksRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPlayerItemGainBlocksRequest_class_data_.tc_table);
+  return GetPlayerItemGainBlocksRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerItemGainBlocksRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerItemGainBlocksRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPlayerItemGainBlocksRequest_globals_));
+  return GetPlayerItemGainBlocksRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPlayerItemGainBlocksRequest::ParseTableT_
+    GetPlayerItemGainBlocksRequest::_table_ =
+        GetPlayerItemGainBlocksRequest::InternalGenerateParseTable_(GetPlayerItemGainBlocksRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPlayerItemGainBlocksRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.GetPlayerItemGainBlocksRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPlayerItemGainBlocksRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPlayerItemGainBlocksRequest& this_ = static_cast<const GetPlayerItemGainBlocksRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPlayerItemGainBlocksRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPlayerItemGainBlocksRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.GetPlayerItemGainBlocksRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.GetPlayerItemGainBlocksRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPlayerItemGainBlocksRequest::ByteSizeLong(const MessageLite& base) {
+  const GetPlayerItemGainBlocksRequest& this_ = static_cast<const GetPlayerItemGainBlocksRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPlayerItemGainBlocksRequest::ByteSizeLong() const {
+  const GetPlayerItemGainBlocksRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.GetPlayerItemGainBlocksRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // uint64 player_id = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPlayerItemGainBlocksRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPlayerItemGainBlocksRequest*>(&to_msg);
+  auto& from = static_cast<const GetPlayerItemGainBlocksRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.GetPlayerItemGainBlocksRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_player_id() != 0) {
+      _this->_impl_.player_id_ = from._impl_.player_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPlayerItemGainBlocksRequest::CopyFrom(const GetPlayerItemGainBlocksRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.GetPlayerItemGainBlocksRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPlayerItemGainBlocksRequest::InternalSwap(GetPlayerItemGainBlocksRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.player_id_, other->_impl_.player_id_);
+}
+
+::google::protobuf::Metadata GetPlayerItemGainBlocksRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PlayerItemGainSanctionPending::PlayerItemGainSanctionPending(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerItemGainSanctionPending_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.PlayerItemGainSanctionPending)
+}
+PROTOBUF_NDEBUG_INLINE PlayerItemGainSanctionPending::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::player_inbox::PlayerItemGainSanctionPending& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        operator_name_(arena, from.operator_name_),
+        note_(arena, from.note_) {}
+
+PlayerItemGainSanctionPending::PlayerItemGainSanctionPending(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerItemGainSanctionPending& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerItemGainSanctionPending_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerItemGainSanctionPending* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, seq_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, seq_),
+           offsetof(Impl_, created_ms_) -
+               offsetof(Impl_, seq_) +
+               sizeof(Impl_::created_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:player_inbox.PlayerItemGainSanctionPending)
+}
+PROTOBUF_NDEBUG_INLINE PlayerItemGainSanctionPending::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        operator_name_(arena),
+        note_(arena) {}
+
+inline void PlayerItemGainSanctionPending::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, seq_),
+           0,
+           offsetof(Impl_, created_ms_) -
+               offsetof(Impl_, seq_) +
+               sizeof(Impl_::created_ms_));
+}
+PlayerItemGainSanctionPending::~PlayerItemGainSanctionPending() {
+  // @@protoc_insertion_point(destructor:player_inbox.PlayerItemGainSanctionPending)
+  SharedDtor(*this);
+}
+inline void PlayerItemGainSanctionPending::SharedDtor(MessageLite& self) {
+  PlayerItemGainSanctionPending& this_ = static_cast<PlayerItemGainSanctionPending&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.operator_name_.Destroy();
+  this_._impl_.note_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerItemGainSanctionPending_class_data_ =
+        PlayerItemGainSanctionPending::InternalGenerateClassData_(PlayerItemGainSanctionPending_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerItemGainSanctionPending::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerItemGainSanctionPending_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerItemGainSanctionPending_class_data_.tc_table);
+  return PlayerItemGainSanctionPending_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerItemGainSanctionPending::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerItemGainSanctionPending_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerItemGainSanctionPending_globals_));
+  return PlayerItemGainSanctionPending_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerItemGainSanctionPending::ParseTableT_
+    PlayerItemGainSanctionPending::_table_ =
+        PlayerItemGainSanctionPending::InternalGenerateParseTable_(PlayerItemGainSanctionPending_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PlayerItemGainSanctionPending::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.PlayerItemGainSanctionPending)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.operator_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.note_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.seq_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.delivery_count_) -
+        reinterpret_cast<char*>(&_impl_.seq_)) + sizeof(_impl_.delivery_count_));
+  }
+  _impl_.created_ms_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerItemGainSanctionPending::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerItemGainSanctionPending& this_ = static_cast<const PlayerItemGainSanctionPending&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerItemGainSanctionPending::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerItemGainSanctionPending& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.PlayerItemGainSanctionPending)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 seq = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_seq(), target);
+    }
+  }
+
+  // .player_inbox.PlayerInboxMessageType msg_type = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_msg_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_msg_type(), target);
+    }
+  }
+
+  // uint32 item_config_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_item_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_item_config_id(), target);
+    }
+  }
+
+  // uint64 request_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_request_id(), target);
+    }
+  }
+
+  // .player_inbox.PlayerInboxDirective directive = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_directive() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          5, this_._internal_directive(), target);
+    }
+  }
+
+  // uint32 delivery_count = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_delivery_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_delivery_count(), target);
+    }
+  }
+
+  // uint64 created_ms = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_created_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_created_ms(), target);
+    }
+  }
+
+  // string operator_name = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_operator_name().empty()) {
+      const ::std::string& _s = this_._internal_operator_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.PlayerItemGainSanctionPending.operator_name");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // string note = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_note().empty()) {
+      const ::std::string& _s = this_._internal_note();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.PlayerItemGainSanctionPending.note");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.PlayerItemGainSanctionPending)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerItemGainSanctionPending::ByteSizeLong(const MessageLite& base) {
+  const PlayerItemGainSanctionPending& this_ = static_cast<const PlayerItemGainSanctionPending&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerItemGainSanctionPending::ByteSizeLong() const {
+  const PlayerItemGainSanctionPending& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.PlayerItemGainSanctionPending)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string operator_name = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_operator_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_operator_name());
+      }
+    }
+    // string note = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_note().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_note());
+      }
+    }
+    // uint64 seq = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seq());
+      }
+    }
+    // .player_inbox.PlayerInboxMessageType msg_type = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_msg_type() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_msg_type());
+      }
+    }
+    // uint32 item_config_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_item_config_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_item_config_id());
+      }
+    }
+    // uint64 request_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_request_id());
+      }
+    }
+    // .player_inbox.PlayerInboxDirective directive = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_directive() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_directive());
+      }
+    }
+    // uint32 delivery_count = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_delivery_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_delivery_count());
+      }
+    }
+  }
+   {
+    // uint64 created_ms = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_created_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerItemGainSanctionPending::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PlayerItemGainSanctionPending*>(&to_msg);
+  auto& from = static_cast<const PlayerItemGainSanctionPending&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.PlayerItemGainSanctionPending)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_operator_name().empty()) {
+        _this->_internal_set_operator_name(from._internal_operator_name());
+      } else {
+        if (_this->_impl_.operator_name_.IsDefault()) {
+          _this->_internal_set_operator_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_note().empty()) {
+        _this->_internal_set_note(from._internal_note());
+      } else {
+        if (_this->_impl_.note_.IsDefault()) {
+          _this->_internal_set_note("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_seq() != 0) {
+        _this->_impl_.seq_ = from._impl_.seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_msg_type() != 0) {
+        _this->_impl_.msg_type_ = from._impl_.msg_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_item_config_id() != 0) {
+        _this->_impl_.item_config_id_ = from._impl_.item_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_request_id() != 0) {
+        _this->_impl_.request_id_ = from._impl_.request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_directive() != 0) {
+        _this->_impl_.directive_ = from._impl_.directive_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_delivery_count() != 0) {
+        _this->_impl_.delivery_count_ = from._impl_.delivery_count_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_created_ms() != 0) {
+      _this->_impl_.created_ms_ = from._impl_.created_ms_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerItemGainSanctionPending::CopyFrom(const PlayerItemGainSanctionPending& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.PlayerItemGainSanctionPending)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerItemGainSanctionPending::InternalSwap(PlayerItemGainSanctionPending* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.operator_name_, &other->_impl_.operator_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.note_, &other->_impl_.note_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.created_ms_)
+      + sizeof(PlayerItemGainSanctionPending::_impl_.created_ms_)
+      - PROTOBUF_FIELD_OFFSET(PlayerItemGainSanctionPending, _impl_.seq_)>(
+          reinterpret_cast<char*>(&_impl_.seq_),
+          reinterpret_cast<char*>(&other->_impl_.seq_));
+}
+
+::google::protobuf::Metadata PlayerItemGainSanctionPending::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetPlayerItemGainBlocksResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+GetPlayerItemGainBlocksResponse::GetPlayerItemGainBlocksResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerItemGainBlocksResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.GetPlayerItemGainBlocksResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerItemGainBlocksResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::player_inbox::GetPlayerItemGainBlocksResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        blocked_item_config_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::player_inbox::GetPlayerItemGainBlocksResponse,
+              PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.blocked_item_config_ids_)>()
+          , from.blocked_item_config_ids_
+        }
+        ,
+        _blocked_item_config_ids_cached_byte_size_{0},
+        pending_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::player_inbox::GetPlayerItemGainBlocksResponse,
+              PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.pending_)>()
+          , from.pending_
+        }
+     {}
+
+GetPlayerItemGainBlocksResponse::GetPlayerItemGainBlocksResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPlayerItemGainBlocksResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPlayerItemGainBlocksResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetPlayerItemGainBlocksResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, found_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::found_));
+
+  // @@protoc_insertion_point(copy_constructor:player_inbox.GetPlayerItemGainBlocksResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPlayerItemGainBlocksResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        blocked_item_config_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::player_inbox::GetPlayerItemGainBlocksResponse,
+            PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.blocked_item_config_ids_)>()
+         }
+        ,
+        _blocked_item_config_ids_cached_byte_size_{0},
+        pending_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::player_inbox::GetPlayerItemGainBlocksResponse,
+            PROTOBUF_FIELD_OFFSET(::player_inbox::GetPlayerItemGainBlocksResponse, _impl_.pending_)>()
+         }
+     {}
+
+inline void GetPlayerItemGainBlocksResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, found_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::found_));
+}
+GetPlayerItemGainBlocksResponse::~GetPlayerItemGainBlocksResponse() {
+  // @@protoc_insertion_point(destructor:player_inbox.GetPlayerItemGainBlocksResponse)
+  SharedDtor(*this);
+}
+inline void GetPlayerItemGainBlocksResponse::SharedDtor(MessageLite& self) {
+  GetPlayerItemGainBlocksResponse& this_ = static_cast<GetPlayerItemGainBlocksResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPlayerItemGainBlocksResponse_class_data_ =
+        GetPlayerItemGainBlocksResponse::InternalGenerateClassData_(GetPlayerItemGainBlocksResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerItemGainBlocksResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerItemGainBlocksResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPlayerItemGainBlocksResponse_class_data_.tc_table);
+  return GetPlayerItemGainBlocksResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPlayerItemGainBlocksResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPlayerItemGainBlocksResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPlayerItemGainBlocksResponse_globals_));
+  return GetPlayerItemGainBlocksResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPlayerItemGainBlocksResponse::ParseTableT_
+    GetPlayerItemGainBlocksResponse::_table_ =
+        GetPlayerItemGainBlocksResponse::InternalGenerateParseTable_(GetPlayerItemGainBlocksResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPlayerItemGainBlocksResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.GetPlayerItemGainBlocksResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.blocked_item_config_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.pending_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.found_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.found_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPlayerItemGainBlocksResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPlayerItemGainBlocksResponse& this_ = static_cast<const GetPlayerItemGainBlocksResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPlayerItemGainBlocksResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPlayerItemGainBlocksResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.GetPlayerItemGainBlocksResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // bool found = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_found() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_found(), target);
+    }
+  }
+
+  // repeated uint32 blocked_item_config_ids = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._blocked_item_config_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            4, this_._internal_blocked_item_config_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated .player_inbox.PlayerItemGainSanctionPending pending = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_pending_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_pending().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              5, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.GetPlayerItemGainBlocksResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPlayerItemGainBlocksResponse::ByteSizeLong(const MessageLite& base) {
+  const GetPlayerItemGainBlocksResponse& this_ = static_cast<const GetPlayerItemGainBlocksResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPlayerItemGainBlocksResponse::ByteSizeLong() const {
+  const GetPlayerItemGainBlocksResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.GetPlayerItemGainBlocksResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // repeated uint32 blocked_item_config_ids = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_blocked_item_config_ids(), 1,
+              this_._impl_._blocked_item_config_ids_cached_byte_size_);
+    }
+    // repeated .player_inbox.PlayerItemGainSanctionPending pending = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_pending_size();
+      for (const auto& msg : this_._internal_pending()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // bool found = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_found() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPlayerItemGainBlocksResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPlayerItemGainBlocksResponse*>(&to_msg);
+  auto& from = static_cast<const GetPlayerItemGainBlocksResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.GetPlayerItemGainBlocksResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_blocked_item_config_ids()->MergeFrom(from._internal_blocked_item_config_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_pending()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_pending());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_found() != 0) {
+        _this->_impl_.found_ = from._impl_.found_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPlayerItemGainBlocksResponse::CopyFrom(const GetPlayerItemGainBlocksResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.GetPlayerItemGainBlocksResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPlayerItemGainBlocksResponse::InternalSwap(GetPlayerItemGainBlocksResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.blocked_item_config_ids_.InternalSwap(&other->_impl_.blocked_item_config_ids_);
+  _impl_.pending_.InternalSwap(&other->_impl_.pending_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.found_)
+      + sizeof(GetPlayerItemGainBlocksResponse::_impl_.found_)
+      - PROTOBUF_FIELD_OFFSET(GetPlayerItemGainBlocksResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetPlayerItemGainBlocksResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

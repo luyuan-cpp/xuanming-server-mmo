@@ -2402,6 +2402,94 @@ void SendDataServiceResolveRecallOpErased(entt::registry& registry, entt::entity
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::ResolveRecallOpResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region DataServiceRegisterRecallReviewHandled
+namespace {
+void QueueLocalDataServiceRegisterRecallReviewHandledFailure(GrpcDone<::data_service::RegisterRecallReviewHandledResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceRegisterRecallReviewHandledCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RegisterRecallReviewHandledRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::RegisterRecallReviewHandledResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.RegisterRecallReviewHandled requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceRegisterRecallReviewHandledGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceRegisterRecallReviewHandledFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceRegisterRecallReviewHandledFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::RegisterRecallReviewHandledResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.RegisterRecallReviewHandled response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceRegisterRecallReviewHandled(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RegisterRecallReviewHandledRequest& request,
+                                            GrpcDone<::data_service::RegisterRecallReviewHandledResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceRegisterRecallReviewHandledCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceRegisterRecallReviewHandledErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.RegisterRecallReviewHandled requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::RegisterRecallReviewHandledRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.RegisterRecallReviewHandled: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::RegisterRecallReviewHandledRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.RegisterRecallReviewHandled: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceRegisterRecallReviewHandledCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::RegisterRecallReviewHandledResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region DataServiceQueryTransactionLog
 namespace {
 void QueueLocalDataServiceQueryTransactionLogFailure(GrpcDone<::data_service::QueryTransactionLogResponse> done, uint32_t code, std::string message) {
@@ -3104,6 +3192,94 @@ void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& registry, entt::e
     }
     StartDataServiceGetPlayerInboxLedgerCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::GetPlayerInboxLedgerResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceGetPlayerItemGainBlock
+namespace {
+void QueueLocalDataServiceGetPlayerItemGainBlockFailure(GrpcDone<::data_service::GetPlayerItemGainBlockResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceGetPlayerItemGainBlockCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerItemGainBlockRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::GetPlayerItemGainBlockResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.GetPlayerItemGainBlock requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceGetPlayerItemGainBlockGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceGetPlayerItemGainBlockFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceGetPlayerItemGainBlockFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::GetPlayerItemGainBlockResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.GetPlayerItemGainBlock response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceGetPlayerItemGainBlock(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerItemGainBlockRequest& request,
+                                            GrpcDone<::data_service::GetPlayerItemGainBlockResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceGetPlayerItemGainBlockCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.GetPlayerItemGainBlock requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::GetPlayerItemGainBlockRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.GetPlayerItemGainBlock: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerItemGainBlockRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.GetPlayerItemGainBlock: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceGetPlayerItemGainBlockCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::GetPlayerItemGainBlockResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
 

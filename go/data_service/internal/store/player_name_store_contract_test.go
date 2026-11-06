@@ -19,10 +19,10 @@ import (
 // 为什么要这一份(而不是只靠真库用例):终局判定是 login 建角路径的契约(Inserted / AlreadyOwned 算成功,
 // Taken 要回 owner,Conflict 是 ID 复用事故),而真库用例需要 Docker、默认 skip —— 只有它们守着的话,
 // 一次"顺手改写 SQL 或调整分支"在 `go test ./...` 全绿的情况下就能把契约改掉。这里用一个只认本 store 那
-// **十一条**语句的假驱动把这些组合钉死,不需要任何外部依赖,也不引入新的三方库。
+// **十二条**语句的假驱动把这些组合钉死,不需要任何外部依赖,也不引入新的三方库。
 //
-// 十一条语句 = 名字行四条写(playerNameReserveSQL / playerNameReleaseSQL / playerNameBindSQL /
-// playerNameReleaseRemovedSQL)+ owner 行两条写(playerNameOwnerUpsertSQL / playerNameOwnerDeleteSQL)
+// 十二条语句 = 名字行五条写(playerNameReserveSQL / playerNameReleaseSQL / playerNameBindSQL /
+// playerNameReleaseRemovedSQL / playerNameUndoRestoreSQL)+ owner 行两条写(playerNameOwnerUpsertSQL / playerNameOwnerDeleteSQL)
 // + 五条读(ownedNormOf / ownerOfNorm / nameRowStateOf / nameHoldingOf / BatchGet 的 IN 查询),
 // 对应下面七个应答队列(两张表的写各共用一个队列,按调用顺序消费)。
 //

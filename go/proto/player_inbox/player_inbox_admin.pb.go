@@ -1507,6 +1507,239 @@ func (x *ReconcilePlayerInboxResponse) GetDiffs() []*PlayerInboxReconcileDiff {
 	return nil
 }
 
+type GetPlayerItemGainBlocksRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlayerItemGainBlocksRequest) Reset() {
+	*x = GetPlayerItemGainBlocksRequest{}
+	mi := &file_proto_player_inbox_player_inbox_admin_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlayerItemGainBlocksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlayerItemGainBlocksRequest) ProtoMessage() {}
+
+func (x *GetPlayerItemGainBlocksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_admin_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlayerItemGainBlocksRequest.ProtoReflect.Descriptor instead.
+func (*GetPlayerItemGainBlocksRequest) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_admin_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetPlayerItemGainBlocksRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+// 一条还没生效的物品封禁 / 解封单(收件箱条目的运维视图,载荷已解开)。
+type PlayerItemGainSanctionPending struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Seq     uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	MsgType PlayerInboxMessageType `protobuf:"varint,2,opt,name=msg_type,json=msgType,proto3,enum=player_inbox.PlayerInboxMessageType" json:"msg_type,omitempty"` // PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN 或 PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
+	// 从载荷解出的物品配置号。0 = 载荷解不开(入箱时校验过,只可能是数据损坏):scene 会判 REJECTED,这条不会生效。
+	ItemConfigId  uint32               `protobuf:"varint,3,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	RequestId     uint64               `protobuf:"varint,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Directive     PlayerInboxDirective `protobuf:"varint,5,opt,name=directive,proto3,enum=player_inbox.PlayerInboxDirective" json:"directive,omitempty"` // VOID = 已挂作废指令,等消费方裁决
+	DeliveryCount uint32               `protobuf:"varint,6,opt,name=delivery_count,json=deliveryCount,proto3" json:"delivery_count,omitempty"`           // 0 = 还没投递过(玩家不在线,或在战斗中)
+	CreatedMs     uint64               `protobuf:"varint,7,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	OperatorName  string               `protobuf:"bytes,8,opt,name=operator_name,json=operatorName,proto3" json:"operator_name,omitempty"`
+	Note          string               `protobuf:"bytes,9,opt,name=note,proto3" json:"note,omitempty"` // 处置理由(GmSanctionPlayer 的 reason)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerItemGainSanctionPending) Reset() {
+	*x = PlayerItemGainSanctionPending{}
+	mi := &file_proto_player_inbox_player_inbox_admin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerItemGainSanctionPending) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerItemGainSanctionPending) ProtoMessage() {}
+
+func (x *PlayerItemGainSanctionPending) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_admin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerItemGainSanctionPending.ProtoReflect.Descriptor instead.
+func (*PlayerItemGainSanctionPending) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_admin_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PlayerItemGainSanctionPending) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *PlayerItemGainSanctionPending) GetMsgType() PlayerInboxMessageType {
+	if x != nil {
+		return x.MsgType
+	}
+	return PlayerInboxMessageType_PLAYER_INBOX_MSG_UNSPECIFIED
+}
+
+func (x *PlayerItemGainSanctionPending) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *PlayerItemGainSanctionPending) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
+func (x *PlayerItemGainSanctionPending) GetDirective() PlayerInboxDirective {
+	if x != nil {
+		return x.Directive
+	}
+	return PlayerInboxDirective_PLAYER_INBOX_DIRECTIVE_NONE
+}
+
+func (x *PlayerItemGainSanctionPending) GetDeliveryCount() uint32 {
+	if x != nil {
+		return x.DeliveryCount
+	}
+	return 0
+}
+
+func (x *PlayerItemGainSanctionPending) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *PlayerItemGainSanctionPending) GetOperatorName() string {
+	if x != nil {
+		return x.OperatorName
+	}
+	return ""
+}
+
+func (x *PlayerItemGainSanctionPending) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type GetPlayerItemGainBlocksResponse struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 读存档或收件箱库失败 → kPlayerInboxStoreUnavailable(可重试)
+	PlayerId     uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// false = 读不到已落盘存档(从未建角,或角色还没建完):这时 blocked_item_config_ids 为空不代表「没封」。
+	Found bool `protobuf:"varint,3,opt,name=found,proto3" json:"found,omitempty"`
+	// 已落盘的本人封禁表,按存档原样返回(写入侧保持升序、无重复)。
+	BlockedItemConfigIds []uint32 `protobuf:"varint,4,rep,packed,name=blocked_item_config_ids,json=blockedItemConfigIds,proto3" json:"blocked_item_config_ids,omitempty"`
+	// 按 seq 升序。found=false 时照样列出。
+	Pending       []*PlayerItemGainSanctionPending `protobuf:"bytes,5,rep,name=pending,proto3" json:"pending,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlayerItemGainBlocksResponse) Reset() {
+	*x = GetPlayerItemGainBlocksResponse{}
+	mi := &file_proto_player_inbox_player_inbox_admin_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlayerItemGainBlocksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlayerItemGainBlocksResponse) ProtoMessage() {}
+
+func (x *GetPlayerItemGainBlocksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_admin_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlayerItemGainBlocksResponse.ProtoReflect.Descriptor instead.
+func (*GetPlayerItemGainBlocksResponse) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_admin_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetPlayerItemGainBlocksResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetPlayerItemGainBlocksResponse) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GetPlayerItemGainBlocksResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *GetPlayerItemGainBlocksResponse) GetBlockedItemConfigIds() []uint32 {
+	if x != nil {
+		return x.BlockedItemConfigIds
+	}
+	return nil
+}
+
+func (x *GetPlayerItemGainBlocksResponse) GetPending() []*PlayerItemGainSanctionPending {
+	if x != nil {
+		return x.Pending
+	}
+	return nil
+}
+
 var File_proto_player_inbox_player_inbox_admin_proto protoreflect.FileDescriptor
 
 const file_proto_player_inbox_player_inbox_admin_proto_rawDesc = "" +
@@ -1627,7 +1860,27 @@ const file_proto_player_inbox_player_inbox_admin_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12!\n" +
 	"\fledger_found\x18\x02 \x01(\bR\vledgerFound\x12B\n" +
 	"\acursors\x18\x03 \x03(\v2(.player_inbox.PlayerInboxReconcileCursorR\acursors\x12<\n" +
-	"\x05diffs\x18\x04 \x03(\v2&.player_inbox.PlayerInboxReconcileDiffR\x05diffs*c\n" +
+	"\x05diffs\x18\x04 \x03(\v2&.player_inbox.PlayerInboxReconcileDiffR\x05diffs\"=\n" +
+	"\x1eGetPlayerItemGainBlocksRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"\xf8\x02\n" +
+	"\x1dPlayerItemGainSanctionPending\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12?\n" +
+	"\bmsg_type\x18\x02 \x01(\x0e2$.player_inbox.PlayerInboxMessageTypeR\amsgType\x12$\n" +
+	"\x0eitem_config_id\x18\x03 \x01(\rR\fitemConfigId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x04 \x01(\x04R\trequestId\x12@\n" +
+	"\tdirective\x18\x05 \x01(\x0e2\".player_inbox.PlayerInboxDirectiveR\tdirective\x12%\n" +
+	"\x0edelivery_count\x18\x06 \x01(\rR\rdeliveryCount\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\a \x01(\x04R\tcreatedMs\x12#\n" +
+	"\roperator_name\x18\b \x01(\tR\foperatorName\x12\x12\n" +
+	"\x04note\x18\t \x01(\tR\x04note\"\x88\x02\n" +
+	"\x1fGetPlayerItemGainBlocksResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x14\n" +
+	"\x05found\x18\x03 \x01(\bR\x05found\x125\n" +
+	"\x17blocked_item_config_ids\x18\x04 \x03(\rR\x14blockedItemConfigIds\x12E\n" +
+	"\apending\x18\x05 \x03(\v2+.player_inbox.PlayerItemGainSanctionPendingR\apending*c\n" +
 	"\x13PlayerInboxVoidMode\x12!\n" +
 	"\x1dPLAYER_INBOX_VOID_MODE_NORMAL\x10\x00\x12)\n" +
 	"%PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH\x10\x01*\xf1\x02\n" +
@@ -1643,7 +1896,7 @@ const file_proto_player_inbox_player_inbox_admin_proto_rawDesc = "" +
 	"\x1cPlayerInboxReconcileDiffKind\x12+\n" +
 	"'PLAYER_INBOX_RECONCILE_DIFF_UNSPECIFIED\x10\x00\x12.\n" +
 	"*PLAYER_INBOX_RECONCILE_FINAL_NOT_IN_LEDGER\x10\x01\x12.\n" +
-	"*PLAYER_INBOX_RECONCILE_PENDING_BUT_DECIDED\x10\x022\xfb\x04\n" +
+	"*PLAYER_INBOX_RECONCILE_PENDING_BUT_DECIDED\x10\x022\xef\x05\n" +
 	"\x10PlayerInboxAdmin\x12c\n" +
 	"\x10GmSanctionPlayer\x12%.player_inbox.GmSanctionPlayerRequest\x1a&.player_inbox.GmSanctionPlayerResponse\"\x00\x12g\n" +
 	"\n" +
@@ -1651,7 +1904,8 @@ const file_proto_player_inbox_player_inbox_admin_proto_rawDesc = "" +
 	"\tListItems\x12).player_inbox.ListPlayerInboxItemsRequest\x1a*.player_inbox.ListPlayerInboxItemsResponse\"\x00\x12d\n" +
 	"\x0fLookupByRequest\x12&.player_inbox.LookupPlayerInboxRequest\x1a'.player_inbox.LookupPlayerInboxResponse\"\x00\x12a\n" +
 	"\bVoidItem\x12(.player_inbox.VoidPlayerInboxItemRequest\x1a).player_inbox.VoidPlayerInboxItemResponse\"\x00\x12j\n" +
-	"\x0fReconcilePlayer\x12).player_inbox.ReconcilePlayerInboxRequest\x1a*.player_inbox.ReconcilePlayerInboxResponse\"\x00B\x17Z\x12proto/player_inbox\x80\x01\x00b\x06proto3"
+	"\x0fReconcilePlayer\x12).player_inbox.ReconcilePlayerInboxRequest\x1a*.player_inbox.ReconcilePlayerInboxResponse\"\x00\x12r\n" +
+	"\x11GetItemGainBlocks\x12,.player_inbox.GetPlayerItemGainBlocksRequest\x1a-.player_inbox.GetPlayerItemGainBlocksResponse\"\x00B\x17Z\x12proto/player_inbox\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_player_inbox_player_inbox_admin_proto_rawDescOnce sync.Once
@@ -1666,95 +1920,104 @@ func file_proto_player_inbox_player_inbox_admin_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_player_inbox_player_inbox_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_player_inbox_player_inbox_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_proto_player_inbox_player_inbox_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_proto_player_inbox_player_inbox_admin_proto_goTypes = []any{
-	(PlayerInboxVoidMode)(0),              // 0: player_inbox.PlayerInboxVoidMode
-	(PlayerInboxForceVoidVerdict)(0),      // 1: player_inbox.PlayerInboxForceVoidVerdict
-	(PlayerInboxReconcileDiffKind)(0),     // 2: player_inbox.PlayerInboxReconcileDiffKind
-	(*GmSanctionPlayerRequest)(nil),       // 3: player_inbox.GmSanctionPlayerRequest
-	(*GmSanctionPlayerResponse)(nil),      // 4: player_inbox.GmSanctionPlayerResponse
-	(*GetPlayerInboxSummaryRequest)(nil),  // 5: player_inbox.GetPlayerInboxSummaryRequest
-	(*PlayerInboxStreamSummary)(nil),      // 6: player_inbox.PlayerInboxStreamSummary
-	(*GetPlayerInboxSummaryResponse)(nil), // 7: player_inbox.GetPlayerInboxSummaryResponse
-	(*PlayerInboxItemView)(nil),           // 8: player_inbox.PlayerInboxItemView
-	(*ListPlayerInboxItemsRequest)(nil),   // 9: player_inbox.ListPlayerInboxItemsRequest
-	(*ListPlayerInboxItemsResponse)(nil),  // 10: player_inbox.ListPlayerInboxItemsResponse
-	(*LookupPlayerInboxRequest)(nil),      // 11: player_inbox.LookupPlayerInboxRequest
-	(*LookupPlayerInboxResponse)(nil),     // 12: player_inbox.LookupPlayerInboxResponse
-	(*VoidPlayerInboxItemRequest)(nil),    // 13: player_inbox.VoidPlayerInboxItemRequest
-	(*VoidPlayerInboxItemResponse)(nil),   // 14: player_inbox.VoidPlayerInboxItemResponse
-	(*ReconcilePlayerInboxRequest)(nil),   // 15: player_inbox.ReconcilePlayerInboxRequest
-	(*PlayerInboxReconcileDiff)(nil),      // 16: player_inbox.PlayerInboxReconcileDiff
-	(*PlayerInboxReconcileCursor)(nil),    // 17: player_inbox.PlayerInboxReconcileCursor
-	(*ReconcilePlayerInboxResponse)(nil),  // 18: player_inbox.ReconcilePlayerInboxResponse
-	(*GmCurrencyGainPayload)(nil),         // 19: player_inbox.GmCurrencyGainPayload
-	(*GmCurrencyDebtPayload)(nil),         // 20: player_inbox.GmCurrencyDebtPayload
-	(*GmItemGainPayload)(nil),             // 21: player_inbox.GmItemGainPayload
-	(*base.TipInfoMessage)(nil),           // 22: TipInfoMessage
-	(PlayerInboxItemState)(0),             // 23: player_inbox.PlayerInboxItemState
-	(PlayerInboxDomain)(0),                // 24: player_inbox.PlayerInboxDomain
-	(PlayerInboxMessageType)(0),           // 25: player_inbox.PlayerInboxMessageType
-	(PlayerInboxProducerKind)(0),          // 26: player_inbox.PlayerInboxProducerKind
-	(PlayerInboxDirective)(0),             // 27: player_inbox.PlayerInboxDirective
-	(PlayerInboxVoidReason)(0),            // 28: player_inbox.PlayerInboxVoidReason
-	(PlayerInboxFinalizer)(0),             // 29: player_inbox.PlayerInboxFinalizer
+	(PlayerInboxVoidMode)(0),                // 0: player_inbox.PlayerInboxVoidMode
+	(PlayerInboxForceVoidVerdict)(0),        // 1: player_inbox.PlayerInboxForceVoidVerdict
+	(PlayerInboxReconcileDiffKind)(0),       // 2: player_inbox.PlayerInboxReconcileDiffKind
+	(*GmSanctionPlayerRequest)(nil),         // 3: player_inbox.GmSanctionPlayerRequest
+	(*GmSanctionPlayerResponse)(nil),        // 4: player_inbox.GmSanctionPlayerResponse
+	(*GetPlayerInboxSummaryRequest)(nil),    // 5: player_inbox.GetPlayerInboxSummaryRequest
+	(*PlayerInboxStreamSummary)(nil),        // 6: player_inbox.PlayerInboxStreamSummary
+	(*GetPlayerInboxSummaryResponse)(nil),   // 7: player_inbox.GetPlayerInboxSummaryResponse
+	(*PlayerInboxItemView)(nil),             // 8: player_inbox.PlayerInboxItemView
+	(*ListPlayerInboxItemsRequest)(nil),     // 9: player_inbox.ListPlayerInboxItemsRequest
+	(*ListPlayerInboxItemsResponse)(nil),    // 10: player_inbox.ListPlayerInboxItemsResponse
+	(*LookupPlayerInboxRequest)(nil),        // 11: player_inbox.LookupPlayerInboxRequest
+	(*LookupPlayerInboxResponse)(nil),       // 12: player_inbox.LookupPlayerInboxResponse
+	(*VoidPlayerInboxItemRequest)(nil),      // 13: player_inbox.VoidPlayerInboxItemRequest
+	(*VoidPlayerInboxItemResponse)(nil),     // 14: player_inbox.VoidPlayerInboxItemResponse
+	(*ReconcilePlayerInboxRequest)(nil),     // 15: player_inbox.ReconcilePlayerInboxRequest
+	(*PlayerInboxReconcileDiff)(nil),        // 16: player_inbox.PlayerInboxReconcileDiff
+	(*PlayerInboxReconcileCursor)(nil),      // 17: player_inbox.PlayerInboxReconcileCursor
+	(*ReconcilePlayerInboxResponse)(nil),    // 18: player_inbox.ReconcilePlayerInboxResponse
+	(*GetPlayerItemGainBlocksRequest)(nil),  // 19: player_inbox.GetPlayerItemGainBlocksRequest
+	(*PlayerItemGainSanctionPending)(nil),   // 20: player_inbox.PlayerItemGainSanctionPending
+	(*GetPlayerItemGainBlocksResponse)(nil), // 21: player_inbox.GetPlayerItemGainBlocksResponse
+	(*GmCurrencyGainPayload)(nil),           // 22: player_inbox.GmCurrencyGainPayload
+	(*GmCurrencyDebtPayload)(nil),           // 23: player_inbox.GmCurrencyDebtPayload
+	(*GmItemGainPayload)(nil),               // 24: player_inbox.GmItemGainPayload
+	(*base.TipInfoMessage)(nil),             // 25: TipInfoMessage
+	(PlayerInboxItemState)(0),               // 26: player_inbox.PlayerInboxItemState
+	(PlayerInboxDomain)(0),                  // 27: player_inbox.PlayerInboxDomain
+	(PlayerInboxMessageType)(0),             // 28: player_inbox.PlayerInboxMessageType
+	(PlayerInboxProducerKind)(0),            // 29: player_inbox.PlayerInboxProducerKind
+	(PlayerInboxDirective)(0),               // 30: player_inbox.PlayerInboxDirective
+	(PlayerInboxVoidReason)(0),              // 31: player_inbox.PlayerInboxVoidReason
+	(PlayerInboxFinalizer)(0),               // 32: player_inbox.PlayerInboxFinalizer
 }
 var file_proto_player_inbox_player_inbox_admin_proto_depIdxs = []int32{
-	19, // 0: player_inbox.GmSanctionPlayerRequest.block_gain:type_name -> player_inbox.GmCurrencyGainPayload
-	19, // 1: player_inbox.GmSanctionPlayerRequest.unblock_gain:type_name -> player_inbox.GmCurrencyGainPayload
-	20, // 2: player_inbox.GmSanctionPlayerRequest.attach_debt:type_name -> player_inbox.GmCurrencyDebtPayload
-	21, // 3: player_inbox.GmSanctionPlayerRequest.block_item_gain:type_name -> player_inbox.GmItemGainPayload
-	21, // 4: player_inbox.GmSanctionPlayerRequest.unblock_item_gain:type_name -> player_inbox.GmItemGainPayload
-	22, // 5: player_inbox.GmSanctionPlayerResponse.error_message:type_name -> TipInfoMessage
-	23, // 6: player_inbox.GmSanctionPlayerResponse.state:type_name -> player_inbox.PlayerInboxItemState
-	24, // 7: player_inbox.PlayerInboxStreamSummary.domain:type_name -> player_inbox.PlayerInboxDomain
-	22, // 8: player_inbox.GetPlayerInboxSummaryResponse.error_message:type_name -> TipInfoMessage
+	22, // 0: player_inbox.GmSanctionPlayerRequest.block_gain:type_name -> player_inbox.GmCurrencyGainPayload
+	22, // 1: player_inbox.GmSanctionPlayerRequest.unblock_gain:type_name -> player_inbox.GmCurrencyGainPayload
+	23, // 2: player_inbox.GmSanctionPlayerRequest.attach_debt:type_name -> player_inbox.GmCurrencyDebtPayload
+	24, // 3: player_inbox.GmSanctionPlayerRequest.block_item_gain:type_name -> player_inbox.GmItemGainPayload
+	24, // 4: player_inbox.GmSanctionPlayerRequest.unblock_item_gain:type_name -> player_inbox.GmItemGainPayload
+	25, // 5: player_inbox.GmSanctionPlayerResponse.error_message:type_name -> TipInfoMessage
+	26, // 6: player_inbox.GmSanctionPlayerResponse.state:type_name -> player_inbox.PlayerInboxItemState
+	27, // 7: player_inbox.PlayerInboxStreamSummary.domain:type_name -> player_inbox.PlayerInboxDomain
+	25, // 8: player_inbox.GetPlayerInboxSummaryResponse.error_message:type_name -> TipInfoMessage
 	6,  // 9: player_inbox.GetPlayerInboxSummaryResponse.streams:type_name -> player_inbox.PlayerInboxStreamSummary
-	24, // 10: player_inbox.PlayerInboxItemView.domain:type_name -> player_inbox.PlayerInboxDomain
-	25, // 11: player_inbox.PlayerInboxItemView.msg_type:type_name -> player_inbox.PlayerInboxMessageType
-	26, // 12: player_inbox.PlayerInboxItemView.producer_kind:type_name -> player_inbox.PlayerInboxProducerKind
-	23, // 13: player_inbox.PlayerInboxItemView.state:type_name -> player_inbox.PlayerInboxItemState
-	27, // 14: player_inbox.PlayerInboxItemView.directive:type_name -> player_inbox.PlayerInboxDirective
-	28, // 15: player_inbox.PlayerInboxItemView.void_reason:type_name -> player_inbox.PlayerInboxVoidReason
-	29, // 16: player_inbox.PlayerInboxItemView.finalized_by:type_name -> player_inbox.PlayerInboxFinalizer
-	24, // 17: player_inbox.ListPlayerInboxItemsRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	23, // 18: player_inbox.ListPlayerInboxItemsRequest.state:type_name -> player_inbox.PlayerInboxItemState
-	22, // 19: player_inbox.ListPlayerInboxItemsResponse.error_message:type_name -> TipInfoMessage
+	27, // 10: player_inbox.PlayerInboxItemView.domain:type_name -> player_inbox.PlayerInboxDomain
+	28, // 11: player_inbox.PlayerInboxItemView.msg_type:type_name -> player_inbox.PlayerInboxMessageType
+	29, // 12: player_inbox.PlayerInboxItemView.producer_kind:type_name -> player_inbox.PlayerInboxProducerKind
+	26, // 13: player_inbox.PlayerInboxItemView.state:type_name -> player_inbox.PlayerInboxItemState
+	30, // 14: player_inbox.PlayerInboxItemView.directive:type_name -> player_inbox.PlayerInboxDirective
+	31, // 15: player_inbox.PlayerInboxItemView.void_reason:type_name -> player_inbox.PlayerInboxVoidReason
+	32, // 16: player_inbox.PlayerInboxItemView.finalized_by:type_name -> player_inbox.PlayerInboxFinalizer
+	27, // 17: player_inbox.ListPlayerInboxItemsRequest.domain:type_name -> player_inbox.PlayerInboxDomain
+	26, // 18: player_inbox.ListPlayerInboxItemsRequest.state:type_name -> player_inbox.PlayerInboxItemState
+	25, // 19: player_inbox.ListPlayerInboxItemsResponse.error_message:type_name -> TipInfoMessage
 	8,  // 20: player_inbox.ListPlayerInboxItemsResponse.items:type_name -> player_inbox.PlayerInboxItemView
-	26, // 21: player_inbox.LookupPlayerInboxRequest.producer_kind:type_name -> player_inbox.PlayerInboxProducerKind
-	22, // 22: player_inbox.LookupPlayerInboxResponse.error_message:type_name -> TipInfoMessage
+	29, // 21: player_inbox.LookupPlayerInboxRequest.producer_kind:type_name -> player_inbox.PlayerInboxProducerKind
+	25, // 22: player_inbox.LookupPlayerInboxResponse.error_message:type_name -> TipInfoMessage
 	8,  // 23: player_inbox.LookupPlayerInboxResponse.item:type_name -> player_inbox.PlayerInboxItemView
-	24, // 24: player_inbox.VoidPlayerInboxItemRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	28, // 25: player_inbox.VoidPlayerInboxItemRequest.reason:type_name -> player_inbox.PlayerInboxVoidReason
+	27, // 24: player_inbox.VoidPlayerInboxItemRequest.domain:type_name -> player_inbox.PlayerInboxDomain
+	31, // 25: player_inbox.VoidPlayerInboxItemRequest.reason:type_name -> player_inbox.PlayerInboxVoidReason
 	0,  // 26: player_inbox.VoidPlayerInboxItemRequest.mode:type_name -> player_inbox.PlayerInboxVoidMode
-	22, // 27: player_inbox.VoidPlayerInboxItemResponse.error_message:type_name -> TipInfoMessage
-	23, // 28: player_inbox.VoidPlayerInboxItemResponse.state:type_name -> player_inbox.PlayerInboxItemState
+	25, // 27: player_inbox.VoidPlayerInboxItemResponse.error_message:type_name -> TipInfoMessage
+	26, // 28: player_inbox.VoidPlayerInboxItemResponse.state:type_name -> player_inbox.PlayerInboxItemState
 	1,  // 29: player_inbox.VoidPlayerInboxItemResponse.force_verdict:type_name -> player_inbox.PlayerInboxForceVoidVerdict
-	24, // 30: player_inbox.ReconcilePlayerInboxRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	24, // 31: player_inbox.PlayerInboxReconcileDiff.domain:type_name -> player_inbox.PlayerInboxDomain
+	27, // 30: player_inbox.ReconcilePlayerInboxRequest.domain:type_name -> player_inbox.PlayerInboxDomain
+	27, // 31: player_inbox.PlayerInboxReconcileDiff.domain:type_name -> player_inbox.PlayerInboxDomain
 	2,  // 32: player_inbox.PlayerInboxReconcileDiff.kind:type_name -> player_inbox.PlayerInboxReconcileDiffKind
-	23, // 33: player_inbox.PlayerInboxReconcileDiff.state:type_name -> player_inbox.PlayerInboxItemState
-	24, // 34: player_inbox.PlayerInboxReconcileCursor.domain:type_name -> player_inbox.PlayerInboxDomain
-	22, // 35: player_inbox.ReconcilePlayerInboxResponse.error_message:type_name -> TipInfoMessage
+	26, // 33: player_inbox.PlayerInboxReconcileDiff.state:type_name -> player_inbox.PlayerInboxItemState
+	27, // 34: player_inbox.PlayerInboxReconcileCursor.domain:type_name -> player_inbox.PlayerInboxDomain
+	25, // 35: player_inbox.ReconcilePlayerInboxResponse.error_message:type_name -> TipInfoMessage
 	17, // 36: player_inbox.ReconcilePlayerInboxResponse.cursors:type_name -> player_inbox.PlayerInboxReconcileCursor
 	16, // 37: player_inbox.ReconcilePlayerInboxResponse.diffs:type_name -> player_inbox.PlayerInboxReconcileDiff
-	3,  // 38: player_inbox.PlayerInboxAdmin.GmSanctionPlayer:input_type -> player_inbox.GmSanctionPlayerRequest
-	5,  // 39: player_inbox.PlayerInboxAdmin.GetSummary:input_type -> player_inbox.GetPlayerInboxSummaryRequest
-	9,  // 40: player_inbox.PlayerInboxAdmin.ListItems:input_type -> player_inbox.ListPlayerInboxItemsRequest
-	11, // 41: player_inbox.PlayerInboxAdmin.LookupByRequest:input_type -> player_inbox.LookupPlayerInboxRequest
-	13, // 42: player_inbox.PlayerInboxAdmin.VoidItem:input_type -> player_inbox.VoidPlayerInboxItemRequest
-	15, // 43: player_inbox.PlayerInboxAdmin.ReconcilePlayer:input_type -> player_inbox.ReconcilePlayerInboxRequest
-	4,  // 44: player_inbox.PlayerInboxAdmin.GmSanctionPlayer:output_type -> player_inbox.GmSanctionPlayerResponse
-	7,  // 45: player_inbox.PlayerInboxAdmin.GetSummary:output_type -> player_inbox.GetPlayerInboxSummaryResponse
-	10, // 46: player_inbox.PlayerInboxAdmin.ListItems:output_type -> player_inbox.ListPlayerInboxItemsResponse
-	12, // 47: player_inbox.PlayerInboxAdmin.LookupByRequest:output_type -> player_inbox.LookupPlayerInboxResponse
-	14, // 48: player_inbox.PlayerInboxAdmin.VoidItem:output_type -> player_inbox.VoidPlayerInboxItemResponse
-	18, // 49: player_inbox.PlayerInboxAdmin.ReconcilePlayer:output_type -> player_inbox.ReconcilePlayerInboxResponse
-	44, // [44:50] is the sub-list for method output_type
-	38, // [38:44] is the sub-list for method input_type
-	38, // [38:38] is the sub-list for extension type_name
-	38, // [38:38] is the sub-list for extension extendee
-	0,  // [0:38] is the sub-list for field type_name
+	28, // 38: player_inbox.PlayerItemGainSanctionPending.msg_type:type_name -> player_inbox.PlayerInboxMessageType
+	30, // 39: player_inbox.PlayerItemGainSanctionPending.directive:type_name -> player_inbox.PlayerInboxDirective
+	25, // 40: player_inbox.GetPlayerItemGainBlocksResponse.error_message:type_name -> TipInfoMessage
+	20, // 41: player_inbox.GetPlayerItemGainBlocksResponse.pending:type_name -> player_inbox.PlayerItemGainSanctionPending
+	3,  // 42: player_inbox.PlayerInboxAdmin.GmSanctionPlayer:input_type -> player_inbox.GmSanctionPlayerRequest
+	5,  // 43: player_inbox.PlayerInboxAdmin.GetSummary:input_type -> player_inbox.GetPlayerInboxSummaryRequest
+	9,  // 44: player_inbox.PlayerInboxAdmin.ListItems:input_type -> player_inbox.ListPlayerInboxItemsRequest
+	11, // 45: player_inbox.PlayerInboxAdmin.LookupByRequest:input_type -> player_inbox.LookupPlayerInboxRequest
+	13, // 46: player_inbox.PlayerInboxAdmin.VoidItem:input_type -> player_inbox.VoidPlayerInboxItemRequest
+	15, // 47: player_inbox.PlayerInboxAdmin.ReconcilePlayer:input_type -> player_inbox.ReconcilePlayerInboxRequest
+	19, // 48: player_inbox.PlayerInboxAdmin.GetItemGainBlocks:input_type -> player_inbox.GetPlayerItemGainBlocksRequest
+	4,  // 49: player_inbox.PlayerInboxAdmin.GmSanctionPlayer:output_type -> player_inbox.GmSanctionPlayerResponse
+	7,  // 50: player_inbox.PlayerInboxAdmin.GetSummary:output_type -> player_inbox.GetPlayerInboxSummaryResponse
+	10, // 51: player_inbox.PlayerInboxAdmin.ListItems:output_type -> player_inbox.ListPlayerInboxItemsResponse
+	12, // 52: player_inbox.PlayerInboxAdmin.LookupByRequest:output_type -> player_inbox.LookupPlayerInboxResponse
+	14, // 53: player_inbox.PlayerInboxAdmin.VoidItem:output_type -> player_inbox.VoidPlayerInboxItemResponse
+	18, // 54: player_inbox.PlayerInboxAdmin.ReconcilePlayer:output_type -> player_inbox.ReconcilePlayerInboxResponse
+	21, // 55: player_inbox.PlayerInboxAdmin.GetItemGainBlocks:output_type -> player_inbox.GetPlayerItemGainBlocksResponse
+	49, // [49:56] is the sub-list for method output_type
+	42, // [42:49] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_proto_player_inbox_player_inbox_admin_proto_init() }
@@ -1776,7 +2039,7 @@ func file_proto_player_inbox_player_inbox_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_player_inbox_player_inbox_admin_proto_rawDesc), len(file_proto_player_inbox_player_inbox_admin_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   16,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

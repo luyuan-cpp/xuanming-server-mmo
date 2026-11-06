@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"shared/playerredis"
+	"shared/redisauth"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -23,6 +24,15 @@ func (c *Config) EffectiveCoreRedis() redis.RedisConf {
 		core.Type = redis.NodeType
 	}
 	return core
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass 与 CoreRedis.Pass,规则见 redisauth.Apply。
+// 没写 CoreRedis.Host 时 EffectiveCoreRedis 用 Redis 段;玩家域没写 Addrs 时回落到 Redis 段(EffectivePlayerRedis)——
+// 填完之后这几条路径用的都是这个口令。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass},
+		redisauth.Target{Field: "CoreRedis.Pass", Password: &c.CoreRedis.Pass})
 }
 
 type Config struct {
@@ -198,6 +208,11 @@ type Config struct {
 	// 上面嵌入的 Redis 段是本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),两者在部署上是不同实例。
 	// 没写 Host 时指向 Redis 段那一个实例:开发环境两者是同一个,不用改。读取走 EffectiveCoreRedis()。
 	CoreRedis redis.RedisConf `json:",optional"`
+
+	// SharedRedisPasswordEnv 是 Redis 段(控制域)与 CoreRedis 段(核心)的口令所在的环境变量名(shared/redisauth)。两个实例在部署上
+	// 用同一个口令;K8s 上口令只在 Secret redis-auth 里,经 secretKeyRef 注入,ConfigMap 里两段的 Pass 写空串。不写 = 照用 Pass 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在建任何 Redis 客户端之前填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 
 	// SceneMemberReconcile: 成员集合对账的节奏与预算(logic/scene_member_reconcile.go)。整块可缺省。
 	SceneMemberReconcile SceneMemberReconcileConfig `json:",optional"`

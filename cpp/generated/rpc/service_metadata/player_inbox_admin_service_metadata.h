@@ -26,3 +26,7 @@ constexpr uint32_t PlayerInboxAdminVoidItemIndex = 4;
 constexpr uint32_t PlayerInboxAdminReconcilePlayerMessageId = 263;
 constexpr uint32_t PlayerInboxAdminReconcilePlayerIndex = 5;
 #define PlayerInboxAdminReconcilePlayerMethod  ::PlayerInboxAdmin_Stub::descriptor()->method(5)
+
+constexpr uint32_t PlayerInboxAdminGetItemGainBlocksMessageId = 386;
+constexpr uint32_t PlayerInboxAdminGetItemGainBlocksIndex = 6;
+#define PlayerInboxAdminGetItemGainBlocksMethod  ::PlayerInboxAdmin_Stub::descriptor()->method(6)

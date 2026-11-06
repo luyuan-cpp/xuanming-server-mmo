@@ -250,6 +250,174 @@ func (TrialOccupancyReject) EnumDescriptor() ([]byte, []int) {
 	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{3}
 }
 
+type StrandedFormationClass int32
+
+const (
+	StrandedFormationClass_STRANDED_FORMATION_CLASS_UNSPECIFIED StrandedFormationClass = 0
+	// 原件合格:到期恢复 / 帮会取消会自动裁决,人工不得抢
+	StrandedFormationClass_STRANDED_FORMATION_CLASS_AUTO StrandedFormationClass = 1
+	// 到期恢复候选形状合格,持久 Create 正文与成局字段不符(到期恢复每次访问计 original_mismatch)
+	StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH StrandedFormationClass = 2
+	// 形状不合格:协议版本或能力证据缺失、预检实例与目标不符、采用回执非法(含 battle 明确采用旧协议),不进到期恢复候选
+	StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID StrandedFormationClass = 3
+)
+
+// Enum value maps for StrandedFormationClass.
+var (
+	StrandedFormationClass_name = map[int32]string{
+		0: "STRANDED_FORMATION_CLASS_UNSPECIFIED",
+		1: "STRANDED_FORMATION_CLASS_AUTO",
+		2: "STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH",
+		3: "STRANDED_FORMATION_CLASS_SHAPE_INVALID",
+	}
+	StrandedFormationClass_value = map[string]int32{
+		"STRANDED_FORMATION_CLASS_UNSPECIFIED":       0,
+		"STRANDED_FORMATION_CLASS_AUTO":              1,
+		"STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH": 2,
+		"STRANDED_FORMATION_CLASS_SHAPE_INVALID":     3,
+	}
+)
+
+func (x StrandedFormationClass) Enum() *StrandedFormationClass {
+	p := new(StrandedFormationClass)
+	*p = x
+	return p
+}
+
+func (x StrandedFormationClass) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (StrandedFormationClass) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[4].Descriptor()
+}
+
+func (StrandedFormationClass) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[4]
+}
+
+func (x StrandedFormationClass) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use StrandedFormationClass.Descriptor instead.
+func (StrandedFormationClass) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{4}
+}
+
+type StrandedFormationMode int32
+
+const (
+	StrandedFormationMode_STRANDED_FORMATION_MODE_UNSPECIFIED StrandedFormationMode = 0
+	StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW        StrandedFormationMode = 1 // 锁外只读核对:不加锁、不写
+	StrandedFormationMode_STRANDED_FORMATION_MODE_DRY_RUN     StrandedFormationMode = 2 // 与 ABORT 同一锁序、同一判据复核后整段回滚
+	StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT       StrandedFormationMode = 3 // 复核通过后写 ABORT 与审计行
+)
+
+// Enum value maps for StrandedFormationMode.
+var (
+	StrandedFormationMode_name = map[int32]string{
+		0: "STRANDED_FORMATION_MODE_UNSPECIFIED",
+		1: "STRANDED_FORMATION_MODE_SHOW",
+		2: "STRANDED_FORMATION_MODE_DRY_RUN",
+		3: "STRANDED_FORMATION_MODE_ABORT",
+	}
+	StrandedFormationMode_value = map[string]int32{
+		"STRANDED_FORMATION_MODE_UNSPECIFIED": 0,
+		"STRANDED_FORMATION_MODE_SHOW":        1,
+		"STRANDED_FORMATION_MODE_DRY_RUN":     2,
+		"STRANDED_FORMATION_MODE_ABORT":       3,
+	}
+)
+
+func (x StrandedFormationMode) Enum() *StrandedFormationMode {
+	p := new(StrandedFormationMode)
+	*p = x
+	return p
+}
+
+func (x StrandedFormationMode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (StrandedFormationMode) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[5].Descriptor()
+}
+
+func (StrandedFormationMode) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[5]
+}
+
+func (x StrandedFormationMode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use StrandedFormationMode.Descriptor instead.
+func (StrandedFormationMode) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{5}
+}
+
+type StrandedFormationVerdict int32
+
+const (
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_UNSPECIFIED StrandedFormationVerdict = 0
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_ELIGIBLE    StrandedFormationVerdict = 1 // 可处置(SHOW / DRY_RUN 未写);ABORT 时表示已提交
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED     StrandedFormationVerdict = 2 // 前置条件不满足,原因码见 formation.refusal(或 refusal);未改动
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_CHANGED     StrandedFormationVerdict = 3 // 锁内成局摘要与 expect_digest 不符;未改动,重新 SHOW
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_RESOLVED    StrandedFormationVerdict = 4 // 已有终局决定(ABORT / COMPLETE);未改动
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_NOT_FOUND   StrandedFormationVerdict = 5 // 没有这一局
+	StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_RETRY       StrandedFormationVerdict = 6 // 读库失败,或写入在提交之前失败(事务已回滚、未改动);稍后重试
+)
+
+// Enum value maps for StrandedFormationVerdict.
+var (
+	StrandedFormationVerdict_name = map[int32]string{
+		0: "STRANDED_FORMATION_VERDICT_UNSPECIFIED",
+		1: "STRANDED_FORMATION_VERDICT_ELIGIBLE",
+		2: "STRANDED_FORMATION_VERDICT_REFUSED",
+		3: "STRANDED_FORMATION_VERDICT_CHANGED",
+		4: "STRANDED_FORMATION_VERDICT_RESOLVED",
+		5: "STRANDED_FORMATION_VERDICT_NOT_FOUND",
+		6: "STRANDED_FORMATION_VERDICT_RETRY",
+	}
+	StrandedFormationVerdict_value = map[string]int32{
+		"STRANDED_FORMATION_VERDICT_UNSPECIFIED": 0,
+		"STRANDED_FORMATION_VERDICT_ELIGIBLE":    1,
+		"STRANDED_FORMATION_VERDICT_REFUSED":     2,
+		"STRANDED_FORMATION_VERDICT_CHANGED":     3,
+		"STRANDED_FORMATION_VERDICT_RESOLVED":    4,
+		"STRANDED_FORMATION_VERDICT_NOT_FOUND":   5,
+		"STRANDED_FORMATION_VERDICT_RETRY":       6,
+	}
+)
+
+func (x StrandedFormationVerdict) Enum() *StrandedFormationVerdict {
+	p := new(StrandedFormationVerdict)
+	*p = x
+	return p
+}
+
+func (x StrandedFormationVerdict) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (StrandedFormationVerdict) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[6].Descriptor()
+}
+
+func (StrandedFormationVerdict) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[6]
+}
+
+func (x StrandedFormationVerdict) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use StrandedFormationVerdict.Descriptor instead.
+func (StrandedFormationVerdict) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{6}
+}
+
 type StartActivityBattleRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(= GuildActivity.dungeon_id);非 0
@@ -548,8 +716,12 @@ type CommitBattleOutcomeRequest struct {
 	TargetInstanceId     string                 `protobuf:"bytes,3,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
 	RawResultPayload     []byte                 `protobuf:"bytes,4,opt,name=raw_result_payload,json=rawResultPayload,proto3" json:"raw_result_payload,omitempty"`
 	Auth                 *base.ServiceCallAuth  `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 战报回放(battle-report-replay.md BR-4)。空 = 本局不录,或录制被丢弃;不影响终局。
+	// 与 raw_result_payload 一起冻结:重放时逐字节相同,摘要与签名都覆盖它。
+	// 不放进 raw_result_payload:那份原件会经发件箱进 Kafka,有 960 KiB 上限。
+	Replay        *battle.BattleReplayEnvelope `protobuf:"bytes,6,opt,name=replay,proto3" json:"replay,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CommitBattleOutcomeRequest) Reset() {
@@ -613,6 +785,13 @@ func (x *CommitBattleOutcomeRequest) GetRawResultPayload() []byte {
 func (x *CommitBattleOutcomeRequest) GetAuth() *base.ServiceCallAuth {
 	if x != nil {
 		return x.Auth
+	}
+	return nil
+}
+
+func (x *CommitBattleOutcomeRequest) GetReplay() *battle.BattleReplayEnvelope {
+	if x != nil {
+		return x.Replay
 	}
 	return nil
 }
@@ -1190,11 +1369,845 @@ func (x *GetBattleCompletionResponse) GetRawPayload() []byte {
 	return nil
 }
 
+// scene 的 FIGHTING 冻结到期时查这一局的 SQL 终局(2026-11-06,数据覆写审计 R2 r2-v1#1 残余窗口;
+// docs/design/turn-battle-gap-closure.md §11)。COMPLETE 不受截止约束,Match 发件箱积压时结算可能晚于冻结到期才到:
+// scene 据此判断是续冻(COMPLETE 而本地还没应用 / 有原件而终局还没落定 / 查不到)还是照常解冻(ABORT / 这一局没有可裁决的原件)。
+// 只读 match_battle_completion(终局唯一权威),不读发件箱投影,积压时发件箱同样查不到;不加锁、不写任何行。
+// 调用方只有 scene:serviceauth 调用方 "scene",与 TeamAuthority.ReadMembership 同一把场景密钥
+// (MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE)。不复用 GetBattleCompletion:那条只放行 guild、回包不签名、还带最多 960KiB 的原字节。
+type GetBattleTerminalDecisionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 非 0
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBattleTerminalDecisionRequest) Reset() {
+	*x = GetBattleTerminalDecisionRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBattleTerminalDecisionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBattleTerminalDecisionRequest) ProtoMessage() {}
+
+func (x *GetBattleTerminalDecisionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBattleTerminalDecisionRequest.ProtoReflect.Descriptor instead.
+func (*GetBattleTerminalDecisionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetBattleTerminalDecisionRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GetBattleTerminalDecisionRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+// 回包签名与 CommitBattleOutcome 同一套:Match 以调用方 "match"、方法 + "/reply" 签整份回包(清空 auth 之后),
+// request_digest 绑定本次请求原件;scene 验不过一律按「未知」处理。
+// 读失败不回 gRPC 错误,带内 retry = true:只读查询没有结局未知,回 Unavailable 会被发布准入记成未知结局、拖住排空证明。
+type GetBattleTerminalDecisionResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// UNKNOWN = SQL 里这一局还没有终局决定(没有终局行,或只有 Kafka 归档、尚无决定),即 NONE;是不是终局证据看 terminal_expected。
+	Decision      BattleOutcomeDecision `protobuf:"varint,1,opt,name=decision,proto3,enum=match.BattleOutcomeDecision" json:"decision,omitempty"`
+	Retry         bool                  `protobuf:"varint,2,opt,name=retry,proto3" json:"retry,omitempty"`                                     // true = 这一次没读成(或读到非法持久值),decision 无意义,调用方按「未知」处理
+	RequestDigest string                `protobuf:"bytes,3,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"` // 清空请求 auth 之后的请求摘要
+	Auth          *base.ServiceCallAuth `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	// 只在 decision 为 UNKNOWN 时有意义。true = 这一局有可裁决的 v1 Create 原件(截止 ABORT 读的同一判据):终局迟早会落定,
+	// UNKNOWN 只说明还没落定 —— match 不可用,或截止 + 宽限之后的 ABORT 补写滞后 —— COMPLETE 仍可能先落库,不是终局证据;
+	// false = 没有成局行,或原件不可裁决(终局协议 0、旧局、坏形状):COMPLETE 永远落不了库,这一局不会有任何结算。
+	TerminalExpected bool `protobuf:"varint,5,opt,name=terminal_expected,json=terminalExpected,proto3" json:"terminal_expected,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetBattleTerminalDecisionResponse) Reset() {
+	*x = GetBattleTerminalDecisionResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBattleTerminalDecisionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBattleTerminalDecisionResponse) ProtoMessage() {}
+
+func (x *GetBattleTerminalDecisionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBattleTerminalDecisionResponse.ProtoReflect.Descriptor instead.
+func (*GetBattleTerminalDecisionResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetBattleTerminalDecisionResponse) GetDecision() BattleOutcomeDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN
+}
+
+func (x *GetBattleTerminalDecisionResponse) GetRetry() bool {
+	if x != nil {
+		return x.Retry
+	}
+	return false
+}
+
+func (x *GetBattleTerminalDecisionResponse) GetRequestDigest() string {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return ""
+}
+
+func (x *GetBattleTerminalDecisionResponse) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+func (x *GetBattleTerminalDecisionResponse) GetTerminalExpected() bool {
+	if x != nil {
+		return x.TerminalExpected
+	}
+	return false
+}
+
+type StrandedFormationTicket struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	State         uint32                 `protobuf:"varint,2,opt,name=state,proto3" json:"state,omitempty"`                                      // 1 排队、2 已成局、3 结果未知或待结算、4 结束
+	FormationId   uint64                 `protobuf:"varint,3,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"`       // 票当前指向的成局;不等于本局说明这名玩家已换轮
+	OwnerRevision uint64                 `protobuf:"varint,4,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"` // 原身份修订;账号本身不外发
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StrandedFormationTicket) Reset() {
+	*x = StrandedFormationTicket{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StrandedFormationTicket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StrandedFormationTicket) ProtoMessage() {}
+
+func (x *StrandedFormationTicket) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StrandedFormationTicket.ProtoReflect.Descriptor instead.
+func (*StrandedFormationTicket) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *StrandedFormationTicket) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *StrandedFormationTicket) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *StrandedFormationTicket) GetFormationId() uint64 {
+	if x != nil {
+		return x.FormationId
+	}
+	return 0
+}
+
+func (x *StrandedFormationTicket) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+// 一局成局的人工处置核对结果。只是展示投影:match_internal.proto 被 match_authority.proto 引用,不能反向引用成局表消息。
+type StrandedFormation struct {
+	state                         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId                      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	State                         uint32                 `protobuf:"varint,2,opt,name=state,proto3" json:"state,omitempty"`
+	OperationId                   string                 `protobuf:"bytes,3,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	TargetInstanceId              string                 `protobuf:"bytes,4,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	PreflightInstanceId           string                 `protobuf:"bytes,5,opt,name=preflight_instance_id,json=preflightInstanceId,proto3" json:"preflight_instance_id,omitempty"`
+	MatchMode                     uint32                 `protobuf:"varint,6,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
+	ConfigId                      uint32                 `protobuf:"varint,7,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	MemberCount                   uint32                 `protobuf:"varint,8,opt,name=member_count,json=memberCount,proto3" json:"member_count,omitempty"`
+	Activity                      bool                   `protobuf:"varint,9,opt,name=activity,proto3" json:"activity,omitempty"` // 帮会活动成局(activity_context 非空)
+	CreatedMs                     uint64                 `protobuf:"varint,10,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	DeadlineMs                    uint64                 `protobuf:"varint,11,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
+	RetryAtMs                     uint64                 `protobuf:"varint,12,opt,name=retry_at_ms,json=retryAtMs,proto3" json:"retry_at_ms,omitempty"`
+	OutcomeProtocolVersion        uint32                 `protobuf:"varint,13,opt,name=outcome_protocol_version,json=outcomeProtocolVersion,proto3" json:"outcome_protocol_version,omitempty"`
+	PreflightSupportedVersion     uint32                 `protobuf:"varint,14,opt,name=preflight_supported_version,json=preflightSupportedVersion,proto3" json:"preflight_supported_version,omitempty"`
+	AdoptedOutcomeProtocolVersion uint32                 `protobuf:"varint,15,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
+	AdoptedOutcomeObserved        bool                   `protobuf:"varint,16,opt,name=adopted_outcome_observed,json=adoptedOutcomeObserved,proto3" json:"adopted_outcome_observed,omitempty"`
+	CreateRequestBytes            uint32                 `protobuf:"varint,17,opt,name=create_request_bytes,json=createRequestBytes,proto3" json:"create_request_bytes,omitempty"`
+	CreateDecodable               bool                   `protobuf:"varint,18,opt,name=create_decodable,json=createDecodable,proto3" json:"create_decodable,omitempty"` // false 时下面四个原件字段为 0
+	CreateCreatedAtMs             uint64                 `protobuf:"varint,19,opt,name=create_created_at_ms,json=createCreatedAtMs,proto3" json:"create_created_at_ms,omitempty"`
+	CreateDeadlineMs              uint64                 `protobuf:"varint,20,opt,name=create_deadline_ms,json=createDeadlineMs,proto3" json:"create_deadline_ms,omitempty"`
+	CreateAdmitBeforeMs           uint64                 `protobuf:"varint,21,opt,name=create_admit_before_ms,json=createAdmitBeforeMs,proto3" json:"create_admit_before_ms,omitempty"`
+	CreatePlayerCount             uint32                 `protobuf:"varint,22,opt,name=create_player_count,json=createPlayerCount,proto3" json:"create_player_count,omitempty"`
+	FormationClass                StrandedFormationClass `protobuf:"varint,23,opt,name=formation_class,json=formationClass,proto3,enum=match.StrandedFormationClass" json:"formation_class,omitempty"`
+	FailedCheck                   string                 `protobuf:"bytes,24,opt,name=failed_check,json=failedCheck,proto3" json:"failed_check,omitempty"` // 第一项不通过的原件核对(ASCII 原因码);AUTO 时为空
+	// max(成局截止, 原件截止, 原件准入期限);人工 ABORT 要求 TiDB 时刻过了它加 60 秒终局宽限
+	EffectiveDeadlineMs uint64                     `protobuf:"varint,25,opt,name=effective_deadline_ms,json=effectiveDeadlineMs,proto3" json:"effective_deadline_ms,omitempty"`
+	HasTerminalRow      bool                       `protobuf:"varint,26,opt,name=has_terminal_row,json=hasTerminalRow,proto3" json:"has_terminal_row,omitempty"` // match_battle_completion 里已有这一局的行(终局或只有归档)
+	TerminalDecision    BattleOutcomeDecision      `protobuf:"varint,27,opt,name=terminal_decision,json=terminalDecision,proto3,enum=match.BattleOutcomeDecision" json:"terminal_decision,omitempty"`
+	TerminalSourceKind  uint32                     `protobuf:"varint,28,opt,name=terminal_source_kind,json=terminalSourceKind,proto3" json:"terminal_source_kind,omitempty"` // MatchBattleCompletionSourceKind 的数值(该枚举在 match_authority.proto)
+	Digest              string                     `protobuf:"bytes,29,opt,name=digest,proto3" json:"digest,omitempty"`                                                      // 成局行确定性序列化的 SHA-256(hex);DRY_RUN / ABORT 的 expect_digest 填它
+	Refusal             string                     `protobuf:"bytes,30,opt,name=refusal,proto3" json:"refusal,omitempty"`                                                    // 不可处置的原因码(ASCII);空 = 可处置
+	Tickets             []*StrandedFormationTicket `protobuf:"bytes,31,rep,name=tickets,proto3" json:"tickets,omitempty"`                                                    // 只有 ResolveStrandedFormation 填
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *StrandedFormation) Reset() {
+	*x = StrandedFormation{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StrandedFormation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StrandedFormation) ProtoMessage() {}
+
+func (x *StrandedFormation) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StrandedFormation.ProtoReflect.Descriptor instead.
+func (*StrandedFormation) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *StrandedFormation) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+func (x *StrandedFormation) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+func (x *StrandedFormation) GetPreflightInstanceId() string {
+	if x != nil {
+		return x.PreflightInstanceId
+	}
+	return ""
+}
+
+func (x *StrandedFormation) GetMatchMode() uint32 {
+	if x != nil {
+		return x.MatchMode
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetConfigId() uint32 {
+	if x != nil {
+		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetMemberCount() uint32 {
+	if x != nil {
+		return x.MemberCount
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetActivity() bool {
+	if x != nil {
+		return x.Activity
+	}
+	return false
+}
+
+func (x *StrandedFormation) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetRetryAtMs() uint64 {
+	if x != nil {
+		return x.RetryAtMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.OutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetPreflightSupportedVersion() uint32 {
+	if x != nil {
+		return x.PreflightSupportedVersion
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetAdoptedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.AdoptedOutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetAdoptedOutcomeObserved() bool {
+	if x != nil {
+		return x.AdoptedOutcomeObserved
+	}
+	return false
+}
+
+func (x *StrandedFormation) GetCreateRequestBytes() uint32 {
+	if x != nil {
+		return x.CreateRequestBytes
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetCreateDecodable() bool {
+	if x != nil {
+		return x.CreateDecodable
+	}
+	return false
+}
+
+func (x *StrandedFormation) GetCreateCreatedAtMs() uint64 {
+	if x != nil {
+		return x.CreateCreatedAtMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetCreateDeadlineMs() uint64 {
+	if x != nil {
+		return x.CreateDeadlineMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetCreateAdmitBeforeMs() uint64 {
+	if x != nil {
+		return x.CreateAdmitBeforeMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetCreatePlayerCount() uint32 {
+	if x != nil {
+		return x.CreatePlayerCount
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetFormationClass() StrandedFormationClass {
+	if x != nil {
+		return x.FormationClass
+	}
+	return StrandedFormationClass_STRANDED_FORMATION_CLASS_UNSPECIFIED
+}
+
+func (x *StrandedFormation) GetFailedCheck() string {
+	if x != nil {
+		return x.FailedCheck
+	}
+	return ""
+}
+
+func (x *StrandedFormation) GetEffectiveDeadlineMs() uint64 {
+	if x != nil {
+		return x.EffectiveDeadlineMs
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetHasTerminalRow() bool {
+	if x != nil {
+		return x.HasTerminalRow
+	}
+	return false
+}
+
+func (x *StrandedFormation) GetTerminalDecision() BattleOutcomeDecision {
+	if x != nil {
+		return x.TerminalDecision
+	}
+	return BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN
+}
+
+func (x *StrandedFormation) GetTerminalSourceKind() uint32 {
+	if x != nil {
+		return x.TerminalSourceKind
+	}
+	return 0
+}
+
+func (x *StrandedFormation) GetDigest() string {
+	if x != nil {
+		return x.Digest
+	}
+	return ""
+}
+
+func (x *StrandedFormation) GetRefusal() string {
+	if x != nil {
+		return x.Refusal
+	}
+	return ""
+}
+
+func (x *StrandedFormation) GetTickets() []*StrandedFormationTicket {
+	if x != nil {
+		return x.Tickets
+	}
+	return nil
+}
+
+// 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
+// 沿 (state,retry_at_ms) 索引按 (retry_at_ms, battle_id) 升序翻页,与到期恢复同一顺序。
+type ListStrandedFormationsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	AfterRetryAtMs uint64                 `protobuf:"varint,1,opt,name=after_retry_at_ms,json=afterRetryAtMs,proto3" json:"after_retry_at_ms,omitempty"` // 游标;两者都为 0 从头开始
+	AfterBattleId  uint64                 `protobuf:"varint,2,opt,name=after_battle_id,json=afterBattleId,proto3" json:"after_battle_id,omitempty"`
+	Limit          uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"` // 1..100
+	Auth           *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListStrandedFormationsRequest) Reset() {
+	*x = ListStrandedFormationsRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStrandedFormationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStrandedFormationsRequest) ProtoMessage() {}
+
+func (x *ListStrandedFormationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStrandedFormationsRequest.ProtoReflect.Descriptor instead.
+func (*ListStrandedFormationsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ListStrandedFormationsRequest) GetAfterRetryAtMs() uint64 {
+	if x != nil {
+		return x.AfterRetryAtMs
+	}
+	return 0
+}
+
+func (x *ListStrandedFormationsRequest) GetAfterBattleId() uint64 {
+	if x != nil {
+		return x.AfterBattleId
+	}
+	return 0
+}
+
+func (x *ListStrandedFormationsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListStrandedFormationsRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ListStrandedFormationsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Retry         bool                   `protobuf:"varint,1,opt,name=retry,proto3" json:"retry,omitempty"` // true = 这一次没读成,其余字段无意义
+	Formations    []*StrandedFormation   `protobuf:"bytes,2,rep,name=formations,proto3" json:"formations,omitempty"`
+	NextRetryAtMs uint64                 `protobuf:"varint,3,opt,name=next_retry_at_ms,json=nextRetryAtMs,proto3" json:"next_retry_at_ms,omitempty"` // 两者都为 0 = 已到末尾
+	NextBattleId  uint64                 `protobuf:"varint,4,opt,name=next_battle_id,json=nextBattleId,proto3" json:"next_battle_id,omitempty"`
+	NowMs         uint64                 `protobuf:"varint,5,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"` // TiDB 时刻
+	Target        string                 `protobuf:"bytes,6,opt,name=target,proto3" json:"target,omitempty"`             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListStrandedFormationsResponse) Reset() {
+	*x = ListStrandedFormationsResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStrandedFormationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStrandedFormationsResponse) ProtoMessage() {}
+
+func (x *ListStrandedFormationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStrandedFormationsResponse.ProtoReflect.Descriptor instead.
+func (*ListStrandedFormationsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListStrandedFormationsResponse) GetRetry() bool {
+	if x != nil {
+		return x.Retry
+	}
+	return false
+}
+
+func (x *ListStrandedFormationsResponse) GetFormations() []*StrandedFormation {
+	if x != nil {
+		return x.Formations
+	}
+	return nil
+}
+
+func (x *ListStrandedFormationsResponse) GetNextRetryAtMs() uint64 {
+	if x != nil {
+		return x.NextRetryAtMs
+	}
+	return 0
+}
+
+func (x *ListStrandedFormationsResponse) GetNextBattleId() uint64 {
+	if x != nil {
+		return x.NextBattleId
+	}
+	return 0
+}
+
+func (x *ListStrandedFormationsResponse) GetNowMs() uint64 {
+	if x != nil {
+		return x.NowMs
+	}
+	return 0
+}
+
+func (x *ListStrandedFormationsResponse) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+type ResolveStrandedFormationRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	BattleId uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 非 0
+	Mode     StrandedFormationMode  `protobuf:"varint,2,opt,name=mode,proto3,enum=match.StrandedFormationMode" json:"mode,omitempty"`
+	// 下面四项 DRY_RUN / ABORT 必填;SHOW 忽略
+	ExpectDigest  string                `protobuf:"bytes,3,opt,name=expect_digest,json=expectDigest,proto3" json:"expect_digest,omitempty"` // SHOW 回的 formation.digest
+	ExpectTarget  string                `protobuf:"bytes,4,opt,name=expect_target,json=expectTarget,proto3" json:"expect_target,omitempty"` // 工单上写明的环境名(不从 SHOW 照抄),须与服务端的环境名逐字相等,连错环境回 target_mismatch
+	OperatorName  string                `protobuf:"bytes,5,opt,name=operator_name,json=operatorName,proto3" json:"operator_name,omitempty"` // ≤64 字节,不含控制字符
+	Reason        string                `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                                 // ≤191 字节,不含控制字符:工单号与核对结论
+	Auth          *base.ServiceCallAuth `protobuf:"bytes,7,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveStrandedFormationRequest) Reset() {
+	*x = ResolveStrandedFormationRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveStrandedFormationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveStrandedFormationRequest) ProtoMessage() {}
+
+func (x *ResolveStrandedFormationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveStrandedFormationRequest.ProtoReflect.Descriptor instead.
+func (*ResolveStrandedFormationRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ResolveStrandedFormationRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *ResolveStrandedFormationRequest) GetMode() StrandedFormationMode {
+	if x != nil {
+		return x.Mode
+	}
+	return StrandedFormationMode_STRANDED_FORMATION_MODE_UNSPECIFIED
+}
+
+func (x *ResolveStrandedFormationRequest) GetExpectDigest() string {
+	if x != nil {
+		return x.ExpectDigest
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationRequest) GetExpectTarget() string {
+	if x != nil {
+		return x.ExpectTarget
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationRequest) GetOperatorName() string {
+	if x != nil {
+		return x.OperatorName
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ResolveStrandedFormationResponse struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Verdict       StrandedFormationVerdict `protobuf:"varint,1,opt,name=verdict,proto3,enum=match.StrandedFormationVerdict" json:"verdict,omitempty"`
+	Formation     *StrandedFormation       `protobuf:"bytes,2,opt,name=formation,proto3" json:"formation,omitempty"`                  // 处置前的核对结果;NOT_FOUND / RETRY,以及 REFUSED 的 target_mismatch / formation_unreadable 时为空
+	NowMs         uint64                   `protobuf:"varint,3,opt,name=now_ms,json=nowMs,proto3" json:"now_ms,omitempty"`            // TiDB 时刻
+	Target        string                   `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`                        // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
+	Replica       string                   `protobuf:"bytes,5,opt,name=replica,proto3" json:"replica,omitempty"`                      // 处理本次调用的 match 副本(主机名)
+	Refusal       string                   `protobuf:"bytes,6,opt,name=refusal,proto3" json:"refusal,omitempty"`                      // REFUSED 时的原因码(与 formation.refusal 相同;target_mismatch 时没有 formation)
+	AuditLine     string                   `protobuf:"bytes,7,opt,name=audit_line,json=auditLine,proto3" json:"audit_line,omitempty"` // DRY_RUN / ABORT:服务端打进日志的同一行 [FormationManual],贴进工单
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveStrandedFormationResponse) Reset() {
+	*x = ResolveStrandedFormationResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveStrandedFormationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveStrandedFormationResponse) ProtoMessage() {}
+
+func (x *ResolveStrandedFormationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveStrandedFormationResponse.ProtoReflect.Descriptor instead.
+func (*ResolveStrandedFormationResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ResolveStrandedFormationResponse) GetVerdict() StrandedFormationVerdict {
+	if x != nil {
+		return x.Verdict
+	}
+	return StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_UNSPECIFIED
+}
+
+func (x *ResolveStrandedFormationResponse) GetFormation() *StrandedFormation {
+	if x != nil {
+		return x.Formation
+	}
+	return nil
+}
+
+func (x *ResolveStrandedFormationResponse) GetNowMs() uint64 {
+	if x != nil {
+		return x.NowMs
+	}
+	return 0
+}
+
+func (x *ResolveStrandedFormationResponse) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationResponse) GetReplica() string {
+	if x != nil {
+		return x.Replica
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationResponse) GetRefusal() string {
+	if x != nil {
+		return x.Refusal
+	}
+	return ""
+}
+
+func (x *ResolveStrandedFormationResponse) GetAuditLine() string {
+	if x != nil {
+		return x.AuditLine
+	}
+	return ""
+}
+
 var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\n" +
-	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a)proto/common/base/service_call_auth.proto\"\x86\x02\n" +
+	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\"\x86\x02\n" +
 	"\x1aStartActivityBattleRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12*\n" +
 	"\x11member_player_ids\x18\x02 \x03(\x04R\x0fmemberPlayerIds\x12A\n" +
@@ -1216,13 +2229,14 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x0fformation_state\x18\x03 \x01(\rR\x0eformationState\x120\n" +
 	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12%\n" +
 	"\x0erequest_digest\x18\x05 \x01(\tR\rrequestDigest\x12I\n" +
-	"\x11terminal_decision\x18\x06 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\x10terminalDecision\"\xfd\x01\n" +
+	"\x11terminal_decision\x18\x06 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\x10terminalDecision\"\xac\x02\n" +
 	"\x1aCommitBattleOutcomeRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\x16placement_operation_id\x18\x02 \x01(\tR\x14placementOperationId\x12,\n" +
 	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\x12,\n" +
 	"\x12raw_result_payload\x18\x04 \x01(\fR\x10rawResultPayload\x120\n" +
-	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb0\x01\n" +
+	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12-\n" +
+	"\x06replay\x18\x06 \x01(\v2\x15.BattleReplayEnvelopeR\x06replay\"\xb0\x01\n" +
 	"\x1bCommitBattleOutcomeResponse\x128\n" +
 	"\bdecision\x18\x01 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12%\n" +
 	"\x0erequest_digest\x18\x02 \x01(\tR\rrequestDigest\x120\n" +
@@ -1260,7 +2274,89 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.TrialOccupancyRejectR\x06reject\x128\n" +
 	"\bdecision\x18\x02 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12\x1f\n" +
 	"\vraw_payload\x18\x03 \x01(\fR\n" +
-	"rawPayload*\x8e\x02\n" +
+	"rawPayload\"q\n" +
+	" GetBattleTerminalDecisionRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xf9\x01\n" +
+	"!GetBattleTerminalDecisionResponse\x128\n" +
+	"\bdecision\x18\x01 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12\x14\n" +
+	"\x05retry\x18\x02 \x01(\bR\x05retry\x12%\n" +
+	"\x0erequest_digest\x18\x03 \x01(\tR\rrequestDigest\x120\n" +
+	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12+\n" +
+	"\x11terminal_expected\x18\x05 \x01(\bR\x10terminalExpected\"\x96\x01\n" +
+	"\x17StrandedFormationTicket\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\rR\x05state\x12!\n" +
+	"\fformation_id\x18\x03 \x01(\x04R\vformationId\x12%\n" +
+	"\x0eowner_revision\x18\x04 \x01(\x04R\rownerRevision\"\xf6\n" +
+	"\n" +
+	"\x11StrandedFormation\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\rR\x05state\x12!\n" +
+	"\foperation_id\x18\x03 \x01(\tR\voperationId\x12,\n" +
+	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\x122\n" +
+	"\x15preflight_instance_id\x18\x05 \x01(\tR\x13preflightInstanceId\x12\x1d\n" +
+	"\n" +
+	"match_mode\x18\x06 \x01(\rR\tmatchMode\x12\x1b\n" +
+	"\tconfig_id\x18\a \x01(\rR\bconfigId\x12!\n" +
+	"\fmember_count\x18\b \x01(\rR\vmemberCount\x12\x1a\n" +
+	"\bactivity\x18\t \x01(\bR\bactivity\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\n" +
+	" \x01(\x04R\tcreatedMs\x12\x1f\n" +
+	"\vdeadline_ms\x18\v \x01(\x04R\n" +
+	"deadlineMs\x12\x1e\n" +
+	"\vretry_at_ms\x18\f \x01(\x04R\tretryAtMs\x128\n" +
+	"\x18outcome_protocol_version\x18\r \x01(\rR\x16outcomeProtocolVersion\x12>\n" +
+	"\x1bpreflight_supported_version\x18\x0e \x01(\rR\x19preflightSupportedVersion\x12G\n" +
+	" adopted_outcome_protocol_version\x18\x0f \x01(\rR\x1dadoptedOutcomeProtocolVersion\x128\n" +
+	"\x18adopted_outcome_observed\x18\x10 \x01(\bR\x16adoptedOutcomeObserved\x120\n" +
+	"\x14create_request_bytes\x18\x11 \x01(\rR\x12createRequestBytes\x12)\n" +
+	"\x10create_decodable\x18\x12 \x01(\bR\x0fcreateDecodable\x12/\n" +
+	"\x14create_created_at_ms\x18\x13 \x01(\x04R\x11createCreatedAtMs\x12,\n" +
+	"\x12create_deadline_ms\x18\x14 \x01(\x04R\x10createDeadlineMs\x123\n" +
+	"\x16create_admit_before_ms\x18\x15 \x01(\x04R\x13createAdmitBeforeMs\x12.\n" +
+	"\x13create_player_count\x18\x16 \x01(\rR\x11createPlayerCount\x12F\n" +
+	"\x0fformation_class\x18\x17 \x01(\x0e2\x1d.match.StrandedFormationClassR\x0eformationClass\x12!\n" +
+	"\ffailed_check\x18\x18 \x01(\tR\vfailedCheck\x122\n" +
+	"\x15effective_deadline_ms\x18\x19 \x01(\x04R\x13effectiveDeadlineMs\x12(\n" +
+	"\x10has_terminal_row\x18\x1a \x01(\bR\x0ehasTerminalRow\x12I\n" +
+	"\x11terminal_decision\x18\x1b \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\x10terminalDecision\x120\n" +
+	"\x14terminal_source_kind\x18\x1c \x01(\rR\x12terminalSourceKind\x12\x16\n" +
+	"\x06digest\x18\x1d \x01(\tR\x06digest\x12\x18\n" +
+	"\arefusal\x18\x1e \x01(\tR\arefusal\x128\n" +
+	"\atickets\x18\x1f \x03(\v2\x1e.match.StrandedFormationTicketR\atickets\"\xba\x01\n" +
+	"\x1dListStrandedFormationsRequest\x12)\n" +
+	"\x11after_retry_at_ms\x18\x01 \x01(\x04R\x0eafterRetryAtMs\x12&\n" +
+	"\x0fafter_battle_id\x18\x02 \x01(\x04R\rafterBattleId\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\x120\n" +
+	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xee\x01\n" +
+	"\x1eListStrandedFormationsResponse\x12\x14\n" +
+	"\x05retry\x18\x01 \x01(\bR\x05retry\x128\n" +
+	"\n" +
+	"formations\x18\x02 \x03(\v2\x18.match.StrandedFormationR\n" +
+	"formations\x12'\n" +
+	"\x10next_retry_at_ms\x18\x03 \x01(\x04R\rnextRetryAtMs\x12$\n" +
+	"\x0enext_battle_id\x18\x04 \x01(\x04R\fnextBattleId\x12\x15\n" +
+	"\x06now_ms\x18\x05 \x01(\x04R\x05nowMs\x12\x16\n" +
+	"\x06target\x18\x06 \x01(\tR\x06target\"\xa9\x02\n" +
+	"\x1fResolveStrandedFormationRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x120\n" +
+	"\x04mode\x18\x02 \x01(\x0e2\x1c.match.StrandedFormationModeR\x04mode\x12#\n" +
+	"\rexpect_digest\x18\x03 \x01(\tR\fexpectDigest\x12#\n" +
+	"\rexpect_target\x18\x04 \x01(\tR\fexpectTarget\x12#\n" +
+	"\roperator_name\x18\x05 \x01(\tR\foperatorName\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\x120\n" +
+	"\x04auth\x18\a \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x97\x02\n" +
+	" ResolveStrandedFormationResponse\x129\n" +
+	"\averdict\x18\x01 \x01(\x0e2\x1f.match.StrandedFormationVerdictR\averdict\x126\n" +
+	"\tformation\x18\x02 \x01(\v2\x18.match.StrandedFormationR\tformation\x12\x15\n" +
+	"\x06now_ms\x18\x03 \x01(\x04R\x05nowMs\x12\x16\n" +
+	"\x06target\x18\x04 \x01(\tR\x06target\x12\x18\n" +
+	"\areplica\x18\x05 \x01(\tR\areplica\x12\x18\n" +
+	"\arefusal\x18\x06 \x01(\tR\arefusal\x12\x1d\n" +
+	"\n" +
+	"audit_line\x18\a \x01(\tR\tauditLine*\x8e\x02\n" +
 	"\x14ActivityBattleReject\x12\x1f\n" +
 	"\x1bACTIVITY_BATTLE_REJECT_NONE\x10\x00\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT\x10\x01\x12)\n" +
@@ -1283,7 +2379,25 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x1fTRIAL_OCCUPANCY_REJECT_OCCUPIED\x10\x01\x12\x1f\n" +
 	"\x1bTRIAL_OCCUPANCY_REJECT_ROLE\x10\x02\x12!\n" +
 	"\x1dTRIAL_OCCUPANCY_REJECT_DENIED\x10\x03\x12 \n" +
-	"\x1cTRIAL_OCCUPANCY_REJECT_RETRY\x10\x042\xb0\x05\n" +
+	"\x1cTRIAL_OCCUPANCY_REJECT_RETRY\x10\x04*\xc1\x01\n" +
+	"\x16StrandedFormationClass\x12(\n" +
+	"$STRANDED_FORMATION_CLASS_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dSTRANDED_FORMATION_CLASS_AUTO\x10\x01\x12.\n" +
+	"*STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH\x10\x02\x12*\n" +
+	"&STRANDED_FORMATION_CLASS_SHAPE_INVALID\x10\x03*\xaa\x01\n" +
+	"\x15StrandedFormationMode\x12'\n" +
+	"#STRANDED_FORMATION_MODE_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cSTRANDED_FORMATION_MODE_SHOW\x10\x01\x12#\n" +
+	"\x1fSTRANDED_FORMATION_MODE_DRY_RUN\x10\x02\x12!\n" +
+	"\x1dSTRANDED_FORMATION_MODE_ABORT\x10\x03*\xb8\x02\n" +
+	"\x18StrandedFormationVerdict\x12*\n" +
+	"&STRANDED_FORMATION_VERDICT_UNSPECIFIED\x10\x00\x12'\n" +
+	"#STRANDED_FORMATION_VERDICT_ELIGIBLE\x10\x01\x12&\n" +
+	"\"STRANDED_FORMATION_VERDICT_REFUSED\x10\x02\x12&\n" +
+	"\"STRANDED_FORMATION_VERDICT_CHANGED\x10\x03\x12'\n" +
+	"#STRANDED_FORMATION_VERDICT_RESOLVED\x10\x04\x12(\n" +
+	"$STRANDED_FORMATION_VERDICT_NOT_FOUND\x10\x05\x12$\n" +
+	" STRANDED_FORMATION_VERDICT_RETRY\x10\x062\xf4\a\n" +
 	"\rMatchInternal\x12\\\n" +
 	"\x13StartActivityBattle\x12!.match.StartActivityBattleRequest\x1a\".match.StartActivityBattleResponse\x12_\n" +
 	"\x14CancelActivityBattle\x12\".match.CancelActivityBattleRequest\x1a#.match.CancelActivityBattleResponse\x12\\\n" +
@@ -1291,7 +2405,10 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x13SetSpectateFeatured\x12!.match.SetSpectateFeaturedRequest\x1a\".match.SetSpectateFeaturedResponse\x12b\n" +
 	"\x15AcquireTrialOccupancy\x12#.match.AcquireTrialOccupancyRequest\x1a$.match.AcquireTrialOccupancyResponse\x12b\n" +
 	"\x15ReleaseTrialOccupancy\x12#.match.ReleaseTrialOccupancyRequest\x1a$.match.ReleaseTrialOccupancyResponse\x12\\\n" +
-	"\x13GetBattleCompletion\x12!.match.GetBattleCompletionRequest\x1a\".match.GetBattleCompletionResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
+	"\x13GetBattleCompletion\x12!.match.GetBattleCompletionRequest\x1a\".match.GetBattleCompletionResponse\x12n\n" +
+	"\x19GetBattleTerminalDecision\x12'.match.GetBattleTerminalDecisionRequest\x1a(.match.GetBattleTerminalDecisionResponse\x12e\n" +
+	"\x16ListStrandedFormations\x12$.match.ListStrandedFormationsRequest\x1a%.match.ListStrandedFormationsResponse\x12k\n" +
+	"\x18ResolveStrandedFormation\x12&.match.ResolveStrandedFormationRequest\x1a'.match.ResolveStrandedFormationResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_match_match_internal_proto_rawDescOnce sync.Once
@@ -1305,73 +2422,104 @@ func file_proto_match_match_internal_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_internal_proto_rawDescData
 }
 
-var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
+var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_proto_match_match_internal_proto_goTypes = []any{
-	(ActivityBattleReject)(0),             // 0: match.ActivityBattleReject
-	(BattleOutcomeDecision)(0),            // 1: match.BattleOutcomeDecision
-	(SpectateFeaturedReject)(0),           // 2: match.SpectateFeaturedReject
-	(TrialOccupancyReject)(0),             // 3: match.TrialOccupancyReject
-	(*StartActivityBattleRequest)(nil),    // 4: match.StartActivityBattleRequest
-	(*StartActivityBattleResponse)(nil),   // 5: match.StartActivityBattleResponse
-	(*CancelActivityBattleRequest)(nil),   // 6: match.CancelActivityBattleRequest
-	(*CancelActivityBattleResponse)(nil),  // 7: match.CancelActivityBattleResponse
-	(*CommitBattleOutcomeRequest)(nil),    // 8: match.CommitBattleOutcomeRequest
-	(*CommitBattleOutcomeResponse)(nil),   // 9: match.CommitBattleOutcomeResponse
-	(*SetSpectateFeaturedRequest)(nil),    // 10: match.SetSpectateFeaturedRequest
-	(*SetSpectateFeaturedResponse)(nil),   // 11: match.SetSpectateFeaturedResponse
-	(*TrialOccupancyRole)(nil),            // 12: match.TrialOccupancyRole
-	(*AcquireTrialOccupancyRequest)(nil),  // 13: match.AcquireTrialOccupancyRequest
-	(*AcquireTrialOccupancyResponse)(nil), // 14: match.AcquireTrialOccupancyResponse
-	(*ReleaseTrialOccupancyRequest)(nil),  // 15: match.ReleaseTrialOccupancyRequest
-	(*ReleaseTrialOccupancyResponse)(nil), // 16: match.ReleaseTrialOccupancyResponse
-	(*GetBattleCompletionRequest)(nil),    // 17: match.GetBattleCompletionRequest
-	(*GetBattleCompletionResponse)(nil),   // 18: match.GetBattleCompletionResponse
-	(*battle.BattleActivityContext)(nil),  // 19: BattleActivityContext
-	(*base.ServiceCallAuth)(nil),          // 20: common.base.ServiceCallAuth
-	(battle.ESpectateTier)(0),             // 21: eSpectateTier
+	(ActivityBattleReject)(0),                 // 0: match.ActivityBattleReject
+	(BattleOutcomeDecision)(0),                // 1: match.BattleOutcomeDecision
+	(SpectateFeaturedReject)(0),               // 2: match.SpectateFeaturedReject
+	(TrialOccupancyReject)(0),                 // 3: match.TrialOccupancyReject
+	(StrandedFormationClass)(0),               // 4: match.StrandedFormationClass
+	(StrandedFormationMode)(0),                // 5: match.StrandedFormationMode
+	(StrandedFormationVerdict)(0),             // 6: match.StrandedFormationVerdict
+	(*StartActivityBattleRequest)(nil),        // 7: match.StartActivityBattleRequest
+	(*StartActivityBattleResponse)(nil),       // 8: match.StartActivityBattleResponse
+	(*CancelActivityBattleRequest)(nil),       // 9: match.CancelActivityBattleRequest
+	(*CancelActivityBattleResponse)(nil),      // 10: match.CancelActivityBattleResponse
+	(*CommitBattleOutcomeRequest)(nil),        // 11: match.CommitBattleOutcomeRequest
+	(*CommitBattleOutcomeResponse)(nil),       // 12: match.CommitBattleOutcomeResponse
+	(*SetSpectateFeaturedRequest)(nil),        // 13: match.SetSpectateFeaturedRequest
+	(*SetSpectateFeaturedResponse)(nil),       // 14: match.SetSpectateFeaturedResponse
+	(*TrialOccupancyRole)(nil),                // 15: match.TrialOccupancyRole
+	(*AcquireTrialOccupancyRequest)(nil),      // 16: match.AcquireTrialOccupancyRequest
+	(*AcquireTrialOccupancyResponse)(nil),     // 17: match.AcquireTrialOccupancyResponse
+	(*ReleaseTrialOccupancyRequest)(nil),      // 18: match.ReleaseTrialOccupancyRequest
+	(*ReleaseTrialOccupancyResponse)(nil),     // 19: match.ReleaseTrialOccupancyResponse
+	(*GetBattleCompletionRequest)(nil),        // 20: match.GetBattleCompletionRequest
+	(*GetBattleCompletionResponse)(nil),       // 21: match.GetBattleCompletionResponse
+	(*GetBattleTerminalDecisionRequest)(nil),  // 22: match.GetBattleTerminalDecisionRequest
+	(*GetBattleTerminalDecisionResponse)(nil), // 23: match.GetBattleTerminalDecisionResponse
+	(*StrandedFormationTicket)(nil),           // 24: match.StrandedFormationTicket
+	(*StrandedFormation)(nil),                 // 25: match.StrandedFormation
+	(*ListStrandedFormationsRequest)(nil),     // 26: match.ListStrandedFormationsRequest
+	(*ListStrandedFormationsResponse)(nil),    // 27: match.ListStrandedFormationsResponse
+	(*ResolveStrandedFormationRequest)(nil),   // 28: match.ResolveStrandedFormationRequest
+	(*ResolveStrandedFormationResponse)(nil),  // 29: match.ResolveStrandedFormationResponse
+	(*battle.BattleActivityContext)(nil),      // 30: BattleActivityContext
+	(*base.ServiceCallAuth)(nil),              // 31: common.base.ServiceCallAuth
+	(*battle.BattleReplayEnvelope)(nil),       // 32: BattleReplayEnvelope
+	(battle.ESpectateTier)(0),                 // 33: eSpectateTier
 }
 var file_proto_match_match_internal_proto_depIdxs = []int32{
-	19, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
-	20, // 1: match.StartActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	30, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
+	31, // 1: match.StartActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
 	0,  // 2: match.StartActivityBattleResponse.reject:type_name -> match.ActivityBattleReject
-	4,  // 3: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
-	20, // 4: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
-	20, // 5: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
+	7,  // 3: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
+	31, // 4: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	31, // 5: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
 	1,  // 6: match.CancelActivityBattleResponse.terminal_decision:type_name -> match.BattleOutcomeDecision
-	20, // 7: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
-	1,  // 8: match.CommitBattleOutcomeResponse.decision:type_name -> match.BattleOutcomeDecision
-	20, // 9: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
-	20, // 10: match.SetSpectateFeaturedRequest.auth:type_name -> common.base.ServiceCallAuth
-	2,  // 11: match.SetSpectateFeaturedResponse.reject:type_name -> match.SpectateFeaturedReject
-	21, // 12: match.SetSpectateFeaturedResponse.tier:type_name -> eSpectateTier
-	12, // 13: match.AcquireTrialOccupancyRequest.roster:type_name -> match.TrialOccupancyRole
-	20, // 14: match.AcquireTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
-	3,  // 15: match.AcquireTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
-	20, // 16: match.ReleaseTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
-	3,  // 17: match.ReleaseTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
-	20, // 18: match.GetBattleCompletionRequest.auth:type_name -> common.base.ServiceCallAuth
-	3,  // 19: match.GetBattleCompletionResponse.reject:type_name -> match.TrialOccupancyReject
-	1,  // 20: match.GetBattleCompletionResponse.decision:type_name -> match.BattleOutcomeDecision
-	4,  // 21: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
-	6,  // 22: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
-	8,  // 23: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
-	10, // 24: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
-	13, // 25: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
-	15, // 26: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
-	17, // 27: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
-	5,  // 28: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
-	7,  // 29: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
-	9,  // 30: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
-	11, // 31: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
-	14, // 32: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
-	16, // 33: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
-	18, // 34: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
-	28, // [28:35] is the sub-list for method output_type
-	21, // [21:28] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	31, // 7: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
+	32, // 8: match.CommitBattleOutcomeRequest.replay:type_name -> BattleReplayEnvelope
+	1,  // 9: match.CommitBattleOutcomeResponse.decision:type_name -> match.BattleOutcomeDecision
+	31, // 10: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
+	31, // 11: match.SetSpectateFeaturedRequest.auth:type_name -> common.base.ServiceCallAuth
+	2,  // 12: match.SetSpectateFeaturedResponse.reject:type_name -> match.SpectateFeaturedReject
+	33, // 13: match.SetSpectateFeaturedResponse.tier:type_name -> eSpectateTier
+	15, // 14: match.AcquireTrialOccupancyRequest.roster:type_name -> match.TrialOccupancyRole
+	31, // 15: match.AcquireTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 16: match.AcquireTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
+	31, // 17: match.ReleaseTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 18: match.ReleaseTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
+	31, // 19: match.GetBattleCompletionRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 20: match.GetBattleCompletionResponse.reject:type_name -> match.TrialOccupancyReject
+	1,  // 21: match.GetBattleCompletionResponse.decision:type_name -> match.BattleOutcomeDecision
+	31, // 22: match.GetBattleTerminalDecisionRequest.auth:type_name -> common.base.ServiceCallAuth
+	1,  // 23: match.GetBattleTerminalDecisionResponse.decision:type_name -> match.BattleOutcomeDecision
+	31, // 24: match.GetBattleTerminalDecisionResponse.auth:type_name -> common.base.ServiceCallAuth
+	4,  // 25: match.StrandedFormation.formation_class:type_name -> match.StrandedFormationClass
+	1,  // 26: match.StrandedFormation.terminal_decision:type_name -> match.BattleOutcomeDecision
+	24, // 27: match.StrandedFormation.tickets:type_name -> match.StrandedFormationTicket
+	31, // 28: match.ListStrandedFormationsRequest.auth:type_name -> common.base.ServiceCallAuth
+	25, // 29: match.ListStrandedFormationsResponse.formations:type_name -> match.StrandedFormation
+	5,  // 30: match.ResolveStrandedFormationRequest.mode:type_name -> match.StrandedFormationMode
+	31, // 31: match.ResolveStrandedFormationRequest.auth:type_name -> common.base.ServiceCallAuth
+	6,  // 32: match.ResolveStrandedFormationResponse.verdict:type_name -> match.StrandedFormationVerdict
+	25, // 33: match.ResolveStrandedFormationResponse.formation:type_name -> match.StrandedFormation
+	7,  // 34: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
+	9,  // 35: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
+	11, // 36: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
+	13, // 37: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
+	16, // 38: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
+	18, // 39: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
+	20, // 40: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
+	22, // 41: match.MatchInternal.GetBattleTerminalDecision:input_type -> match.GetBattleTerminalDecisionRequest
+	26, // 42: match.MatchInternal.ListStrandedFormations:input_type -> match.ListStrandedFormationsRequest
+	28, // 43: match.MatchInternal.ResolveStrandedFormation:input_type -> match.ResolveStrandedFormationRequest
+	8,  // 44: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
+	10, // 45: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
+	12, // 46: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
+	14, // 47: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
+	17, // 48: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
+	19, // 49: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
+	21, // 50: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
+	23, // 51: match.MatchInternal.GetBattleTerminalDecision:output_type -> match.GetBattleTerminalDecisionResponse
+	27, // 52: match.MatchInternal.ListStrandedFormations:output_type -> match.ListStrandedFormationsResponse
+	29, // 53: match.MatchInternal.ResolveStrandedFormation:output_type -> match.ResolveStrandedFormationResponse
+	44, // [44:54] is the sub-list for method output_type
+	34, // [34:44] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_internal_proto_init() }
@@ -1384,8 +2532,8 @@ func file_proto_match_match_internal_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_internal_proto_rawDesc), len(file_proto_match_match_internal_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   15,
+			NumEnums:      7,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

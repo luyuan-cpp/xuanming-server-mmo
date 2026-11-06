@@ -252,7 +252,6 @@ func TestSnapshotGuidNzSurvivesProtoSync(t *testing.T) {
 	// 3) ensureIndexes 的 wanted 清单里不该出现这个键(它不由 proto 驱动),
 	//    且清单里"真正需要的" idx(snapshot_guid) 不会被本键冒名覆盖。
 	wanted := parseWantedIndexes(ddl)
-	wanted = append(wanted, extraIndexes[PlayerSnapshotTableName]...)
 	var guidWanted bool
 	for _, w := range wanted {
 		if w.name == SnapshotGuidUniqueKey {
@@ -328,14 +327,18 @@ func TestGuidDedupeStatementFollowsProbe(t *testing.T) {
 		})
 	}
 
-	// 普通 INSERT 与 NOT EXISTS 的前十个实参必须一致:两条语句列清单相同,顺序只在 snapshotInsertArgs 定义一次。
+	// 普通 INSERT 与 NOT EXISTS 的前十一个实参必须一致:两条语句列清单相同,顺序只在 snapshotInsertArgs 定义一次。
 	base := snapshotInsertArgs(99, row)
-	if len(base) != 10 {
-		t.Fatalf("列清单是 10 列,snapshotInsertArgs 给了 %d 个", len(base))
+	if len(base) != 11 {
+		t.Fatalf("列清单是 11 列,snapshotInsertArgs 给了 %d 个", len(base))
+	}
+	// 最后一列是分桶号,由行号算(2026-11-06,audit_shard.go):99 % 16 = 3。
+	if base[len(base)-1] != any(AuditShard(99)) || AuditShard(99) != 3 {
+		t.Fatalf("最后一个实参应是 AuditShard(行号)=3,got %v", base[len(base)-1])
 	}
 	_, legacyArgs := (&SnapshotStore{}).guidDedupeStatement(99, row)
 	if len(legacyArgs) != len(base)+1 || legacyArgs[len(legacyArgs)-1] != any(row.SnapshotGuid) {
-		t.Fatalf("NOT EXISTS 形态应在十个实参之后再绑一次 guid,got %v", legacyArgs)
+		t.Fatalf("NOT EXISTS 形态应在十一个实参之后再绑一次 guid,got %v", legacyArgs)
 	}
 }
 
@@ -359,7 +362,7 @@ func TestInsertSnapshotOnDuplicateKeepSQLShape(t *testing.T) {
 		t.Fatalf("撞键时必须只写 `id` = LAST_INSERT_ID(`id`)(值不变 + 回带已有 id);"+
 			"赋成别的值就是一次真实修改,快照不再是不可变记录:\n%s", stmt)
 	}
-	// 撞键分支不许多出占位符:多一个就会与 snapshotInsertArgs 的十个实参对不上,
+	// 撞键分支不许多出占位符:多一个就会与 snapshotInsertArgs 的十一个实参对不上,
 	// 且只在"真的撞键"时才暴露成运行期 Column count doesn't match。
 	if got, want := strings.Count(stmt, "?"), strings.Count(insertSnapshotSQL, "?"); got != want {
 		t.Fatalf("ODKU 段不该引入新的占位符:got %d,want %d\n%s", got, want, stmt)

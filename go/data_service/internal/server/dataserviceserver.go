@@ -301,7 +301,7 @@ func (s *DataServiceServer) ListPlayerSnapshots(ctx context.Context, req *data_s
 
 // ── Batch Recall / Transaction Log Query ──────
 
-// 四个回收入口全部要 x-admin-token。回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
+// 五个回收入口全部要 x-admin-token。回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
 
 func (s *DataServiceServer) BatchRecallItems(ctx context.Context, req *data_service.BatchRecallItemsRequest) (*data_service.BatchRecallItemsResponse, error) {
 	if err := s.authorizeAdmin(ctx, "BatchRecallItems"); err != nil {
@@ -351,6 +351,30 @@ func (s *DataServiceServer) ResolveRecallOp(ctx context.Context, req *data_servi
 	}
 	return &data_service.ResolveRecallOpResponse{ErrorCode: result.ErrorCode, Resolved: result.Resolved,
 		Status: result.Status, Evidence: result.Evidence}, nil
+}
+
+func (s *DataServiceServer) RegisterRecallReviewHandled(ctx context.Context, req *data_service.RegisterRecallReviewHandledRequest) (*data_service.RegisterRecallReviewHandledResponse, error) {
+	if err := s.authorizeAdmin(ctx, "RegisterRecallReviewHandled"); err != nil {
+		return nil, err
+	}
+	result, err := logic.RegisterRecallReviewHandled(ctx, s.svcCtx, &logic.RecallReviewHandledReq{
+		Kind:          req.GetRecallKind(),
+		ItemConfigID:  req.GetItemConfigId(),
+		CurrencyType:  req.GetCurrencyType(),
+		PlayerID:      req.GetPlayerId(),
+		CorrelationID: req.GetCorrelationId(),
+		TxIDs:         req.GetTxIds(),
+		ReviewReason:  req.GetReviewReason(),
+		Operator:      req.GetOperator(),
+		Reason:        req.GetReason(),
+		PeerAddr:      peerAddrOf(ctx),
+	})
+	if err != nil {
+		logx.Errorf("[BatchRecall] RegisterRecallReviewHandled failed: player_id=%d correlation_id=%d caller=%s: %v",
+			req.GetPlayerId(), req.GetCorrelationId(), callerIdentity(ctx), err)
+	}
+	return &data_service.RegisterRecallReviewHandledResponse{ErrorCode: result.ErrorCode, Registered: result.Registered,
+		SourceRows: result.SourceRows, ReviewReason: result.ReviewReason}, nil
 }
 
 // batchRecallResponse 把结果翻成响应。失败走带内码,原因只进日志。

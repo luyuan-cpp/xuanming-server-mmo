@@ -607,7 +607,10 @@ type TransactionLog struct {
 	// 记录时所在的 zone,镜像 TransactionLogEntry.zone_id(transaction_log.proto 字段 15)。
 	// 表已定在全局库一处,没有这一列就分不清同一 tx 来自哪个 zone;
 	// data_service 的 Kafka 消费者按列名自动探测,老表缺列时按 0 写入,不需要迁移开关。
-	ZoneId        uint32 `protobuf:"varint,15,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	ZoneId uint32 `protobuf:"varint,15,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	// 分桶号 = tx_id % 16(go/data_service/internal/store/audit_shard.go 的 AuditShard,规则只有那一处),
+	// 由 data_service 落库时算,不在 Kafka 载荷里。只服务于上面按时间的索引与按段清理;业务含义为零。
+	Shard         uint32 `protobuf:"varint,16,opt,name=shard,proto3" json:"shard,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -747,6 +750,13 @@ func (x *TransactionLog) GetZoneId() uint32 {
 	return 0
 }
 
+func (x *TransactionLog) GetShard() uint32 {
+	if x != nil {
+		return x.Shard
+	}
+	return 0
+}
+
 // ============================================================================
 // Player snapshot table (for rollback) — 从 mysql_database_table.proto 移入:
 // 导表器按那个文件的 message 成员生成 zone 库建表清单
@@ -770,7 +780,10 @@ type PlayerSnapshot struct {
 	//       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 原字节,内含 player_database 的 proto blob;
 	//           2026-11-05 之前还有一个 player_database_1 blob,字段已 reserved)。
 	// 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
-	Source        uint32 `protobuf:"varint,10,opt,name=source,proto3" json:"source,omitempty"`
+	Source uint32 `protobuf:"varint,10,opt,name=source,proto3" json:"source,omitempty"`
+	// 分桶号 = id % 16(行号是发号器打散过的值;规则在 go/data_service/internal/store/audit_shard.go 的 AuditShard),
+	// GM 路径与 Kafka 落库路径都由 data_service 写入时算。只服务于上面按时间的索引与按段清理;业务含义为零。
+	Shard         uint32 `protobuf:"varint,11,opt,name=shard,proto3" json:"shard,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -871,6 +884,13 @@ func (x *PlayerSnapshot) GetSnapshotGuid() uint64 {
 func (x *PlayerSnapshot) GetSource() uint32 {
 	if x != nil {
 		return x.Source
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetShard() uint32 {
+	if x != nil {
+		return x.Shard
 	}
 	return 0
 }
@@ -6597,7 +6617,7 @@ var File_proto_common_database_rollback_database_table_proto protoreflect.FileDe
 
 const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\n" +
-	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\x1a&proto/common/base/role_admission.proto\"\x9f\x05\n" +
+	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\x1a&proto/common/base/role_admission.proto\"\xd2\x05\n" +
 	"\x0ftransaction_log\x12\x13\n" +
 	"\x05tx_id\x18\x01 \x01(\x04R\x04txId\x12#\n" +
 	"\rtimestamp_sec\x18\x02 \x01(\x04R\ftimestampSec\x12\x17\n" +
@@ -6615,7 +6635,8 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\rbalance_after\x18\f \x01(\x04R\fbalanceAfter\x12%\n" +
 	"\x0ecorrelation_id\x18\r \x01(\x04R\rcorrelationId\x12\x14\n" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
-	"\azone_id\x18\x0f \x01(\rR\x06zoneId:\xa4\x01\x8a\x92\xf4\x01\x0ftransaction_log\x92\x92\xf4\x01\x05tx_idڒ\xf4\x01rfrom_player,timestamp_sec;to_player,timestamp_sec;item_config_id,timestamp_sec;tx_type,timestamp_sec;timestamp_sec\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x86\x03\n" +
+	"\azone_id\x18\x0f \x01(\rR\x06zoneId\x12\x14\n" +
+	"\x05shard\x18\x10 \x01(\rR\x05shard:\xc1\x01\x8a\x92\xf4\x01\x0ftransaction_log\x92\x92\xf4\x01\x05tx_idڒ\xf4\x01\x8e\x01from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,shard,timestamp_sec;tx_type,shard,timestamp_sec;shard,timestamp_sec;item_uuid\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa8\x03\n" +
 	"\x0fplayer_snapshot\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
@@ -6628,7 +6649,8 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x04data\x18\b \x01(\fR\x04data\x12#\n" +
 	"\rsnapshot_guid\x18\t \x01(\x04R\fsnapshotGuid\x12\x16\n" +
 	"\x06source\x18\n" +
-	" \x01(\rR\x06source:d\x8a\x92\xf4\x01\x0fplayer_snapshot\x92\x92\xf4\x01\x02idڒ\xf4\x015player_id;snapshot_guid;zone_id,created_at;created_at\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x80\x04\n" +
+	" \x01(\rR\x06source\x12\x14\n" +
+	"\x05shard\x18\v \x01(\rR\x05shard:p\x8a\x92\xf4\x01\x0fplayer_snapshot\x92\x92\xf4\x01\x02idڒ\xf4\x01Aplayer_id;snapshot_guid;zone_id,shard,created_at;shard,created_at\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x80\x04\n" +
 	"\x12rollback_audit_log\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +

@@ -55,8 +55,9 @@
 - **限流按发布档位开启,ConfigMap 带 Redis 口令(G4b,2026-10-14;已落码,未编译、未测试,待 Codex 验证)**:`k8s_deploy.ps1 -GatewayRateLimit auto|on|off`
   (缺省 `auto` = staging / prod 开、dev 关)决定 gateway ConfigMap 是否在 `gate.rate-limit` 下写 `enabled: true` 与开服档阈值(zone 2000/s、突发 5000,IP 5/s、突发 20,
   冷却 5000ms,**待压测确认**),与上一条的 `trusted-proxies` 共用一个 `rate-limit:` 键;`spring.data.redis.password` 在 `MMORPG_REDIS_PASSWORD` 非空时写入
-  (staging / prod 恒写,与开关无关:Bucket4j 的 Lettuce 客户端只从这里取口令,不写就过不了 Redis 的 `--requirepass`)。开关、阈值、代理网段、Redis 口令任一变化,
-  经 Pod 模板注解 `mmorpg.io/peak-shaving-hash` 自动滚动 gateway。设计见 `docs/design/open-server-rate-limit-design.md` §十一,参数见 `deploy/k8s/README.md` Optional Flags「削峰(G4b)」。
+  (staging / prod 恒写,与开关无关:限流的 Lettuce 客户端只从这里取口令,不写就过不了 Redis 的 `--requirepass`)。2026-11-06 起写的是引用 `"${SHARED_REDIS_PASSWORD}"`,
+  口令经 Secret `redis-auth` 注入容器环境变量,不进 ConfigMap;变量缺失时 `@Value` 解析失败、gateway 拒启。开关、阈值、代理网段任一变化,经 Pod 模板注解
+  `mmorpg.io/peak-shaving-hash` 自动滚动 gateway;换 Redis 口令由只哈希口令的 `mmorpg.io/shared-redis-auth-hash` 滚动,与限流开关无关。设计见 `docs/design/open-server-rate-limit-design.md` §十一,参数见 `deploy/k8s/README.md` Optional Flags「削峰(G4b)」。
 - **管理面口令(ingress 2d 批 deploy-hardening,未运行验证)**:K8s 上 `admin.api-key` 由环境变量 `MMORPG_GATEWAY_ADMIN_API_KEY` 经 Secret `gateway-admin-api-key`
   注入(容器 env `ADMIN_APIKEY`),staging / prod 缺失、占位或短于 32 位即在任何写操作之前拒绝部署;dev 档回落占位值并告警。`X-Admin-Key` 在 K8s 上是注入值,
   不是 `application.yaml` 里的值。Spring 绑定优先级按文档核对、未经运行期验证,首次部署后需在集群内用一次 `/admin` 请求实测。

@@ -24,6 +24,71 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 服务器停止驱动的原因。
+type TeamFollowStopReason int32
+
+const (
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_UNSPECIFIED    TeamFollowStopReason = 0 // 没有停止(driven=true 时恒为它)
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW    TeamFollowStopReason = 1 // 客户端暂离
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED   TeamFollowStopReason = 2 // 离队 / 被踢 / 解散 / 换了队伍
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED TeamFollowStopReason = 3 // 队长换人;服务器随后会把自己接到新队长身后
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_BECAME_LEADER  TeamFollowStopReason = 4 // 自己成了队长
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED  TeamFollowStopReason = 5 // 自己或队长离开了这个场景
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_LEADER_GONE    TeamFollowStopReason = 6 // 队长下线、退出或离开本节点
+	TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_LEAVING        TeamFollowStopReason = 7 // 自己正在离开本节点(交接 / 退出)
+)
+
+// Enum value maps for TeamFollowStopReason.
+var (
+	TeamFollowStopReason_name = map[int32]string{
+		0: "TEAM_FOLLOW_STOP_REASON_UNSPECIFIED",
+		1: "TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW",
+		2: "TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED",
+		3: "TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED",
+		4: "TEAM_FOLLOW_STOP_REASON_BECAME_LEADER",
+		5: "TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED",
+		6: "TEAM_FOLLOW_STOP_REASON_LEADER_GONE",
+		7: "TEAM_FOLLOW_STOP_REASON_LEAVING",
+	}
+	TeamFollowStopReason_value = map[string]int32{
+		"TEAM_FOLLOW_STOP_REASON_UNSPECIFIED":    0,
+		"TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW":    1,
+		"TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED":   2,
+		"TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED": 3,
+		"TEAM_FOLLOW_STOP_REASON_BECAME_LEADER":  4,
+		"TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED":  5,
+		"TEAM_FOLLOW_STOP_REASON_LEADER_GONE":    6,
+		"TEAM_FOLLOW_STOP_REASON_LEAVING":        7,
+	}
+)
+
+func (x TeamFollowStopReason) Enum() *TeamFollowStopReason {
+	p := new(TeamFollowStopReason)
+	*p = x
+	return p
+}
+
+func (x TeamFollowStopReason) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TeamFollowStopReason) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_movement_proto_enumTypes[0].Descriptor()
+}
+
+func (TeamFollowStopReason) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_movement_proto_enumTypes[0]
+}
+
+func (x TeamFollowStopReason) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TeamFollowStopReason.Descriptor instead.
+func (TeamFollowStopReason) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_movement_proto_rawDescGZIP(), []int{0}
+}
+
 type MoveStartC2S struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	StartLocation  *component.Location    `protobuf:"bytes,1,opt,name=start_location,json=startLocation,proto3" json:"start_location,omitempty"`    // client position when input started
@@ -553,7 +618,7 @@ type TeleportS2C struct {
 	Entity        uint64                 `protobuf:"varint,1,opt,name=entity,proto3" json:"entity,omitempty"` // 被传送角色的不透明 actor 网络号，通常为接收者自身。
 	Transform     *component.Transform   `protobuf:"bytes,2,opt,name=transform,proto3" json:"transform,omitempty"`
 	InputSeq      uint32                 `protobuf:"varint,3,opt,name=input_seq,json=inputSeq,proto3" json:"input_seq,omitempty"` // discard predictions up to and including this seq
-	Reason        uint32                 `protobuf:"varint,4,opt,name=reason,proto3" json:"reason,omitempty"`                     // 0=server_correction, 1=portal, 2=skill, 3=admin, 4=respawn
+	Reason        uint32                 `protobuf:"varint,4,opt,name=reason,proto3" json:"reason,omitempty"`                     // 0=server_correction, 1=portal, 2=skill, 3=admin, 4=respawn, 5=team_regroup(组队归队 / 放进跟随槽位)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -616,6 +681,126 @@ func (x *TeleportS2C) GetReason() uint32 {
 	return 0
 }
 
+// 队员客户端声明自己跟随队长(归队)或暂离。重复发送是幂等的。
+// 客户端在以下时机发 follow=true(自己是队员且没有暂离时):入队之后、每次进入场景(含重连)之后、
+// 队伍视图里队长换人之后、玩家点"归队"时;玩家点"暂离"时发 follow=false。
+// 是否真的开始驱动以 TeamFollowStateS2C 为准(队长不在同一场景节点、战斗中等情况下不会驱动)。
+type TeamFollowC2S struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Follow        bool                   `protobuf:"varint,1,opt,name=follow,proto3" json:"follow,omitempty"` // true=跟随(归队),false=暂离
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TeamFollowC2S) Reset() {
+	*x = TeamFollowC2S{}
+	mi := &file_proto_scene_player_movement_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TeamFollowC2S) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TeamFollowC2S) ProtoMessage() {}
+
+func (x *TeamFollowC2S) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_movement_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TeamFollowC2S.ProtoReflect.Descriptor instead.
+func (*TeamFollowC2S) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_movement_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TeamFollowC2S) GetFollow() bool {
+	if x != nil {
+		return x.Follow
+	}
+	return false
+}
+
+// 服务器告知队员自己的客户端:此刻是否正被服务器驱动走位。只发给该队员本人。
+// driven=true 期间:客户端不按输入驱动本地角色,也不上报 MoveStart / MoveSync / MoveStop(服务器整条丢弃);
+// 本地角色按发给自己的 ActorMoveS2C(entity 为自己)与 TeleportS2C 显示,平滑方式与远端角色相同。
+// driven=false:恢复本地控制,从当前显示位置继续上报。
+type TeamFollowStateS2C struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Driven        bool                   `protobuf:"varint,1,opt,name=driven,proto3" json:"driven,omitempty"`
+	LeaderEntity  uint64                 `protobuf:"varint,2,opt,name=leader_entity,json=leaderEntity,proto3" json:"leader_entity,omitempty"` // 队长的不透明 actor 网络号;driven=false 时为 0
+	Slot          uint32                 `protobuf:"varint,3,opt,name=slot,proto3" json:"slot,omitempty"`                                     // 在队伍里排第几(1 起,紧跟队长的是 1);driven=false 时为 0
+	Reason        TeamFollowStopReason   `protobuf:"varint,4,opt,name=reason,proto3,enum=TeamFollowStopReason" json:"reason,omitempty"`       // driven=false 时为停止原因
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TeamFollowStateS2C) Reset() {
+	*x = TeamFollowStateS2C{}
+	mi := &file_proto_scene_player_movement_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TeamFollowStateS2C) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TeamFollowStateS2C) ProtoMessage() {}
+
+func (x *TeamFollowStateS2C) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_movement_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TeamFollowStateS2C.ProtoReflect.Descriptor instead.
+func (*TeamFollowStateS2C) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_movement_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TeamFollowStateS2C) GetDriven() bool {
+	if x != nil {
+		return x.Driven
+	}
+	return false
+}
+
+func (x *TeamFollowStateS2C) GetLeaderEntity() uint64 {
+	if x != nil {
+		return x.LeaderEntity
+	}
+	return 0
+}
+
+func (x *TeamFollowStateS2C) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *TeamFollowStateS2C) GetReason() TeamFollowStopReason {
+	if x != nil {
+		return x.Reason
+	}
+	return TeamFollowStopReason_TEAM_FOLLOW_STOP_REASON_UNSPECIFIED
+}
+
 var File_proto_scene_player_movement_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_movement_proto_rawDesc = "" +
@@ -665,7 +850,23 @@ const file_proto_scene_player_movement_proto_rawDesc = "" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
 	".TransformR\ttransform\x12\x1b\n" +
 	"\tinput_seq\x18\x03 \x01(\rR\binputSeq\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\rR\x06reason2\xaf\x03\n" +
+	"\x06reason\x18\x04 \x01(\rR\x06reason\"'\n" +
+	"\rTeamFollowC2S\x12\x16\n" +
+	"\x06follow\x18\x01 \x01(\bR\x06follow\"\x94\x01\n" +
+	"\x12TeamFollowStateS2C\x12\x16\n" +
+	"\x06driven\x18\x01 \x01(\bR\x06driven\x12#\n" +
+	"\rleader_entity\x18\x02 \x01(\x04R\fleaderEntity\x12\x12\n" +
+	"\x04slot\x18\x03 \x01(\rR\x04slot\x12-\n" +
+	"\x06reason\x18\x04 \x01(\x0e2\x15.TeamFollowStopReasonR\x06reason*\xe2\x02\n" +
+	"\x14TeamFollowStopReason\x12'\n" +
+	"#TEAM_FOLLOW_STOP_REASON_UNSPECIFIED\x10\x00\x12'\n" +
+	"#TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW\x10\x01\x12(\n" +
+	"$TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED\x10\x02\x12*\n" +
+	"&TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED\x10\x03\x12)\n" +
+	"%TEAM_FOLLOW_STOP_REASON_BECAME_LEADER\x10\x04\x12)\n" +
+	"%TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED\x10\x05\x12'\n" +
+	"#TEAM_FOLLOW_STOP_REASON_LEADER_GONE\x10\x06\x12#\n" +
+	"\x1fTEAM_FOLLOW_STOP_REASON_LEAVING\x10\a2\x99\x04\n" +
 	"\x19SceneMovementClientPlayer\x12)\n" +
 	"\tMoveStart\x12\r.MoveStartC2S\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x01\x12'\n" +
 	"\bMoveStop\x12\f.MoveStopC2S\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x01\x12'\n" +
@@ -674,7 +875,10 @@ const file_proto_scene_player_movement_proto_rawDesc = "" +
 	"\rNotifyMoveAck\x12\v.MoveAckS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12/\n" +
 	"\x0fNotifyActorMove\x12\r.ActorMoveS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x127\n" +
 	"\x13NotifyActorMoveList\x12\x11.ActorMoveListS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12-\n" +
-	"\x0eNotifyTeleport\x12\f.TeleportS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
+	"\x0eNotifyTeleport\x12\f.TeleportS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12+\n" +
+	"\n" +
+	"TeamFollow\x12\x0e.TeamFollowC2S\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x01\x12;\n" +
+	"\x15NotifyTeamFollowState\x12\x13.TeamFollowStateS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -689,63 +893,72 @@ func file_proto_scene_player_movement_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_movement_proto_rawDescData
 }
 
-var file_proto_scene_player_movement_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_scene_player_movement_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_scene_player_movement_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_scene_player_movement_proto_goTypes = []any{
-	(*MoveStartC2S)(nil),               // 0: MoveStartC2S
-	(*MoveStopC2S)(nil),                // 1: MoveStopC2S
-	(*MoveSyncC2S)(nil),                // 2: MoveSyncC2S
-	(*TeleportRequestC2S)(nil),         // 3: TeleportRequestC2S
-	(*TeleportRequestC2SResponse)(nil), // 4: TeleportRequestC2SResponse
-	(*MoveAckS2C)(nil),                 // 5: MoveAckS2C
-	(*ActorMoveS2C)(nil),               // 6: ActorMoveS2C
-	(*ActorMoveListS2C)(nil),           // 7: ActorMoveListS2C
-	(*TeleportS2C)(nil),                // 8: TeleportS2C
-	(*component.Location)(nil),         // 9: Location
-	(*component.Rotation)(nil),         // 10: Rotation
-	(*component.Velocity)(nil),         // 11: Velocity
-	(*base.TipInfoMessage)(nil),        // 12: TipInfoMessage
-	(*component.Transform)(nil),        // 13: Transform
-	(*base.Empty)(nil),                 // 14: Empty
+	(TeamFollowStopReason)(0),          // 0: TeamFollowStopReason
+	(*MoveStartC2S)(nil),               // 1: MoveStartC2S
+	(*MoveStopC2S)(nil),                // 2: MoveStopC2S
+	(*MoveSyncC2S)(nil),                // 3: MoveSyncC2S
+	(*TeleportRequestC2S)(nil),         // 4: TeleportRequestC2S
+	(*TeleportRequestC2SResponse)(nil), // 5: TeleportRequestC2SResponse
+	(*MoveAckS2C)(nil),                 // 6: MoveAckS2C
+	(*ActorMoveS2C)(nil),               // 7: ActorMoveS2C
+	(*ActorMoveListS2C)(nil),           // 8: ActorMoveListS2C
+	(*TeleportS2C)(nil),                // 9: TeleportS2C
+	(*TeamFollowC2S)(nil),              // 10: TeamFollowC2S
+	(*TeamFollowStateS2C)(nil),         // 11: TeamFollowStateS2C
+	(*component.Location)(nil),         // 12: Location
+	(*component.Rotation)(nil),         // 13: Rotation
+	(*component.Velocity)(nil),         // 14: Velocity
+	(*base.TipInfoMessage)(nil),        // 15: TipInfoMessage
+	(*component.Transform)(nil),        // 16: Transform
+	(*base.Empty)(nil),                 // 17: Empty
 }
 var file_proto_scene_player_movement_proto_depIdxs = []int32{
-	9,  // 0: MoveStartC2S.start_location:type_name -> Location
-	10, // 1: MoveStartC2S.rotation:type_name -> Rotation
-	11, // 2: MoveStartC2S.velocity:type_name -> Velocity
-	9,  // 3: MoveStartC2S.target_location:type_name -> Location
-	9,  // 4: MoveStopC2S.end_location:type_name -> Location
-	10, // 5: MoveStopC2S.rotation:type_name -> Rotation
-	9,  // 6: MoveSyncC2S.location:type_name -> Location
-	10, // 7: MoveSyncC2S.rotation:type_name -> Rotation
-	11, // 8: MoveSyncC2S.velocity:type_name -> Velocity
-	9,  // 9: TeleportRequestC2S.target_location:type_name -> Location
-	12, // 10: TeleportRequestC2SResponse.error_message:type_name -> TipInfoMessage
-	9,  // 11: MoveAckS2C.server_location:type_name -> Location
-	11, // 12: MoveAckS2C.server_velocity:type_name -> Velocity
-	13, // 13: ActorMoveS2C.transform:type_name -> Transform
-	11, // 14: ActorMoveS2C.velocity:type_name -> Velocity
-	6,  // 15: ActorMoveListS2C.moves:type_name -> ActorMoveS2C
-	13, // 16: TeleportS2C.transform:type_name -> Transform
-	0,  // 17: SceneMovementClientPlayer.MoveStart:input_type -> MoveStartC2S
-	1,  // 18: SceneMovementClientPlayer.MoveStop:input_type -> MoveStopC2S
-	2,  // 19: SceneMovementClientPlayer.MoveSync:input_type -> MoveSyncC2S
-	3,  // 20: SceneMovementClientPlayer.TeleportRequest:input_type -> TeleportRequestC2S
-	5,  // 21: SceneMovementClientPlayer.NotifyMoveAck:input_type -> MoveAckS2C
-	6,  // 22: SceneMovementClientPlayer.NotifyActorMove:input_type -> ActorMoveS2C
-	7,  // 23: SceneMovementClientPlayer.NotifyActorMoveList:input_type -> ActorMoveListS2C
-	8,  // 24: SceneMovementClientPlayer.NotifyTeleport:input_type -> TeleportS2C
-	14, // 25: SceneMovementClientPlayer.MoveStart:output_type -> Empty
-	14, // 26: SceneMovementClientPlayer.MoveStop:output_type -> Empty
-	14, // 27: SceneMovementClientPlayer.MoveSync:output_type -> Empty
-	4,  // 28: SceneMovementClientPlayer.TeleportRequest:output_type -> TeleportRequestC2SResponse
-	14, // 29: SceneMovementClientPlayer.NotifyMoveAck:output_type -> Empty
-	14, // 30: SceneMovementClientPlayer.NotifyActorMove:output_type -> Empty
-	14, // 31: SceneMovementClientPlayer.NotifyActorMoveList:output_type -> Empty
-	14, // 32: SceneMovementClientPlayer.NotifyTeleport:output_type -> Empty
-	25, // [25:33] is the sub-list for method output_type
-	17, // [17:25] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	12, // 0: MoveStartC2S.start_location:type_name -> Location
+	13, // 1: MoveStartC2S.rotation:type_name -> Rotation
+	14, // 2: MoveStartC2S.velocity:type_name -> Velocity
+	12, // 3: MoveStartC2S.target_location:type_name -> Location
+	12, // 4: MoveStopC2S.end_location:type_name -> Location
+	13, // 5: MoveStopC2S.rotation:type_name -> Rotation
+	12, // 6: MoveSyncC2S.location:type_name -> Location
+	13, // 7: MoveSyncC2S.rotation:type_name -> Rotation
+	14, // 8: MoveSyncC2S.velocity:type_name -> Velocity
+	12, // 9: TeleportRequestC2S.target_location:type_name -> Location
+	15, // 10: TeleportRequestC2SResponse.error_message:type_name -> TipInfoMessage
+	12, // 11: MoveAckS2C.server_location:type_name -> Location
+	14, // 12: MoveAckS2C.server_velocity:type_name -> Velocity
+	16, // 13: ActorMoveS2C.transform:type_name -> Transform
+	14, // 14: ActorMoveS2C.velocity:type_name -> Velocity
+	7,  // 15: ActorMoveListS2C.moves:type_name -> ActorMoveS2C
+	16, // 16: TeleportS2C.transform:type_name -> Transform
+	0,  // 17: TeamFollowStateS2C.reason:type_name -> TeamFollowStopReason
+	1,  // 18: SceneMovementClientPlayer.MoveStart:input_type -> MoveStartC2S
+	2,  // 19: SceneMovementClientPlayer.MoveStop:input_type -> MoveStopC2S
+	3,  // 20: SceneMovementClientPlayer.MoveSync:input_type -> MoveSyncC2S
+	4,  // 21: SceneMovementClientPlayer.TeleportRequest:input_type -> TeleportRequestC2S
+	6,  // 22: SceneMovementClientPlayer.NotifyMoveAck:input_type -> MoveAckS2C
+	7,  // 23: SceneMovementClientPlayer.NotifyActorMove:input_type -> ActorMoveS2C
+	8,  // 24: SceneMovementClientPlayer.NotifyActorMoveList:input_type -> ActorMoveListS2C
+	9,  // 25: SceneMovementClientPlayer.NotifyTeleport:input_type -> TeleportS2C
+	10, // 26: SceneMovementClientPlayer.TeamFollow:input_type -> TeamFollowC2S
+	11, // 27: SceneMovementClientPlayer.NotifyTeamFollowState:input_type -> TeamFollowStateS2C
+	17, // 28: SceneMovementClientPlayer.MoveStart:output_type -> Empty
+	17, // 29: SceneMovementClientPlayer.MoveStop:output_type -> Empty
+	17, // 30: SceneMovementClientPlayer.MoveSync:output_type -> Empty
+	5,  // 31: SceneMovementClientPlayer.TeleportRequest:output_type -> TeleportRequestC2SResponse
+	17, // 32: SceneMovementClientPlayer.NotifyMoveAck:output_type -> Empty
+	17, // 33: SceneMovementClientPlayer.NotifyActorMove:output_type -> Empty
+	17, // 34: SceneMovementClientPlayer.NotifyActorMoveList:output_type -> Empty
+	17, // 35: SceneMovementClientPlayer.NotifyTeleport:output_type -> Empty
+	17, // 36: SceneMovementClientPlayer.TeamFollow:output_type -> Empty
+	17, // 37: SceneMovementClientPlayer.NotifyTeamFollowState:output_type -> Empty
+	28, // [28:38] is the sub-list for method output_type
+	18, // [18:28] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_movement_proto_init() }
@@ -758,13 +971,14 @@ func file_proto_scene_player_movement_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_movement_proto_rawDesc), len(file_proto_scene_player_movement_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   9,
+			NumEnums:      1,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_scene_player_movement_proto_goTypes,
 		DependencyIndexes: file_proto_scene_player_movement_proto_depIdxs,
+		EnumInfos:         file_proto_scene_player_movement_proto_enumTypes,
 		MessageInfos:      file_proto_scene_player_movement_proto_msgTypes,
 	}.Build()
 	File_proto_scene_player_movement_proto = out.File

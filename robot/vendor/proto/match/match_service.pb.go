@@ -1491,6 +1491,368 @@ func (x *MatchTeam) GetPlayerIds() []uint64 {
 	return nil
 }
 
+// 列表里的一名真人参战者:开战时的快照,不含宝宝和怪物。
+type BattleReportMember struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	TeamIndex     uint32                 `protobuf:"varint,2,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"` // 0 = A 方(进攻),1 = B 方
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Level         uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`
+	ClassId       uint32                 `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BattleReportMember) Reset() {
+	*x = BattleReportMember{}
+	mi := &file_proto_match_match_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleReportMember) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleReportMember) ProtoMessage() {}
+
+func (x *BattleReportMember) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleReportMember.ProtoReflect.Descriptor instead.
+func (*BattleReportMember) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *BattleReportMember) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *BattleReportMember) GetTeamIndex() uint32 {
+	if x != nil {
+		return x.TeamIndex
+	}
+	return 0
+}
+
+func (x *BattleReportMember) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *BattleReportMember) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *BattleReportMember) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+// 战报列表的一条。终局提交时由 match 生成,之后不变。
+type BattleReportSummary struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	BattleId       uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Mode           MatchMode              `protobuf:"varint,2,opt,name=mode,proto3,enum=match.MatchMode" json:"mode,omitempty"`
+	BattleConfigId uint32                 `protobuf:"varint,3,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	FinishedAtMs   uint64                 `protobuf:"varint,4,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"` // 与 BattleResultEvent.finished_at_ms 同值(Unix 毫秒)
+	Outcome        battle.EBattleOutcome  `protobuf:"varint,5,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`             // 本人胜负看本人在 members 里的 team_index
+	TotalRounds    uint32                 `protobuf:"varint,6,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	Members        []*BattleReportMember  `protobuf:"bytes,7,rep,name=members,proto3" json:"members,omitempty"`                       // 按 team_index、player_id 升序
+	HasReplay      bool                   `protobuf:"varint,8,opt,name=has_replay,json=hasReplay,proto3" json:"has_replay,omitempty"` // false = 回放正文没存下来(录制被丢弃),GetBattleReport 回 kMatchBattleReportNotFound
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BattleReportSummary) Reset() {
+	*x = BattleReportSummary{}
+	mi := &file_proto_match_match_service_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleReportSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleReportSummary) ProtoMessage() {}
+
+func (x *BattleReportSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleReportSummary.ProtoReflect.Descriptor instead.
+func (*BattleReportSummary) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *BattleReportSummary) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *BattleReportSummary) GetMode() MatchMode {
+	if x != nil {
+		return x.Mode
+	}
+	return MatchMode_MATCH_MODE_UNSPECIFIED
+}
+
+func (x *BattleReportSummary) GetBattleConfigId() uint32 {
+	if x != nil {
+		return x.BattleConfigId
+	}
+	return 0
+}
+
+func (x *BattleReportSummary) GetFinishedAtMs() uint64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+func (x *BattleReportSummary) GetOutcome() battle.EBattleOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return battle.EBattleOutcome(0)
+}
+
+func (x *BattleReportSummary) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *BattleReportSummary) GetMembers() []*BattleReportMember {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+func (x *BattleReportSummary) GetHasReplay() bool {
+	if x != nil {
+		return x.HasReplay
+	}
+	return false
+}
+
+type ListBattleReportsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBattleReportsRequest) Reset() {
+	*x = ListBattleReportsRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBattleReportsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBattleReportsRequest) ProtoMessage() {}
+
+func (x *ListBattleReportsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBattleReportsRequest.ProtoReflect.Descriptor instead.
+func (*ListBattleReportsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{21}
+}
+
+type ListBattleReportsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Reports       []*BattleReportSummary `protobuf:"bytes,2,rep,name=reports,proto3" json:"reports,omitempty"` // 新的在前,最多 100 条
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBattleReportsResponse) Reset() {
+	*x = ListBattleReportsResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBattleReportsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBattleReportsResponse) ProtoMessage() {}
+
+func (x *ListBattleReportsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBattleReportsResponse.ProtoReflect.Descriptor instead.
+func (*ListBattleReportsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ListBattleReportsResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ListBattleReportsResponse) GetReports() []*BattleReportSummary {
+	if x != nil {
+		return x.Reports
+	}
+	return nil
+}
+
+type GetBattleReportRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBattleReportRequest) Reset() {
+	*x = GetBattleReportRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBattleReportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBattleReportRequest) ProtoMessage() {}
+
+func (x *GetBattleReportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBattleReportRequest.ProtoReflect.Descriptor instead.
+func (*GetBattleReportRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetBattleReportRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+type GetBattleReportResponse struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 0 = 成功;不在本人列表里 / 没存回放 / 不存在,统一回 kMatchBattleReportNotFound
+	Replay        *battle.BattleReplayEnvelope `protobuf:"bytes,2,opt,name=replay,proto3" json:"replay,omitempty"`                                 // 成功时非空,就是存库的那一份
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBattleReportResponse) Reset() {
+	*x = GetBattleReportResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBattleReportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBattleReportResponse) ProtoMessage() {}
+
+func (x *GetBattleReportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBattleReportResponse.ProtoReflect.Descriptor instead.
+func (*GetBattleReportResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GetBattleReportResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetBattleReportResponse) GetReplay() *battle.BattleReplayEnvelope {
+	if x != nil {
+		return x.Replay
+	}
+	return nil
+}
+
 var File_proto_match_match_service_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_service_proto_rawDesc = "" +
@@ -1597,7 +1959,33 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\n" +
 	"team_index\x18\x01 \x01(\rR\tteamIndex\x12\x1d\n" +
 	"\n" +
-	"player_ids\x18\x02 \x03(\x04R\tplayerIds*\xcc\x01\n" +
+	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\x95\x01\n" +
+	"\x12BattleReportMember\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
+	"\n" +
+	"team_index\x18\x02 \x01(\rR\tteamIndex\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
+	"\x05level\x18\x04 \x01(\rR\x05level\x12\x19\n" +
+	"\bclass_id\x18\x05 \x01(\rR\aclassId\"\xca\x02\n" +
+	"\x13BattleReportSummary\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12$\n" +
+	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12(\n" +
+	"\x10battle_config_id\x18\x03 \x01(\rR\x0ebattleConfigId\x12$\n" +
+	"\x0efinished_at_ms\x18\x04 \x01(\x04R\ffinishedAtMs\x12)\n" +
+	"\aoutcome\x18\x05 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x12!\n" +
+	"\ftotal_rounds\x18\x06 \x01(\rR\vtotalRounds\x123\n" +
+	"\amembers\x18\a \x03(\v2\x19.match.BattleReportMemberR\amembers\x12\x1d\n" +
+	"\n" +
+	"has_replay\x18\b \x01(\bR\thasReplay\"\x1a\n" +
+	"\x18ListBattleReportsRequest\"\x87\x01\n" +
+	"\x19ListBattleReportsResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x124\n" +
+	"\areports\x18\x02 \x03(\v2\x1a.match.BattleReportSummaryR\areports\"5\n" +
+	"\x16GetBattleReportRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"~\n" +
+	"\x17GetBattleReportResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12-\n" +
+	"\x06replay\x18\x02 \x01(\v2\x15.BattleReplayEnvelopeR\x06replay*\xcc\x01\n" +
 	"\tMatchMode\x12\x1a\n" +
 	"\x16MATCH_MODE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eMATCH_MODE_5V5\x10\x01\x12\x12\n" +
@@ -1618,7 +2006,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x11eSpectateDelivery\x12\x1a\n" +
 	"\x16SPECTATE_DELIVERY_NONE\x10\x00\x12\x1c\n" +
 	"\x18SPECTATE_DELIVERY_DIRECT\x10\x01\x12\x1b\n" +
-	"\x17SPECTATE_DELIVERY_LOBBY\x10\x022\xc9\a\n" +
+	"\x17SPECTATE_DELIVERY_LOBBY\x10\x022\xf7\b\n" +
 	"\fMatchService\x12^\n" +
 	"\x13GetNetworkProbePlan\x12!.match.GetNetworkProbePlanRequest\x1a\".match.GetNetworkProbePlanResponse\"\x00\x12[\n" +
 	"\x12CommitNetworkProbe\x12 .match.CommitNetworkProbeRequest\x1a!.match.CommitNetworkProbeResponse\"\x00\x12@\n" +
@@ -1631,7 +2019,9 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x15NotifyChallengeResult\x12\x19.match.ChallengeResultS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12F\n" +
 	"\vWatchBattle\x12\x19.match.WatchBattleRequest\x1a\x1a.match.WatchBattleResponse\"\x00\x12R\n" +
 	"\x13RequestBattleTicket\x12\x1b.RequestBattleTicketRequest\x1a\x1c.RequestBattleTicketResponse\"\x00\x12a\n" +
-	"\x14ListWatchableBattles\x12\".match.ListWatchableBattlesRequest\x1a#.match.ListWatchableBattlesResponse\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x11\x98\xd4a\x15Z\vproto/matchb\x06proto3"
+	"\x14ListWatchableBattles\x12\".match.ListWatchableBattlesRequest\x1a#.match.ListWatchableBattlesResponse\"\x00\x12X\n" +
+	"\x11ListBattleReports\x12\x1f.match.ListBattleReportsRequest\x1a .match.ListBattleReportsResponse\"\x00\x12R\n" +
+	"\x0fGetBattleReport\x12\x1d.match.GetBattleReportRequest\x1a\x1e.match.GetBattleReportResponse\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x11\x98\xd4a\x15Z\vproto/matchb\x06proto3"
 
 var (
 	file_proto_match_match_service_proto_rawDescOnce sync.Once
@@ -1646,7 +2036,7 @@ func file_proto_match_match_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_match_match_service_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_match_match_service_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_proto_match_match_service_proto_goTypes = []any{
 	(MatchMode)(0),                             // 0: match.MatchMode
 	(QueueState)(0),                            // 1: match.QueueState
@@ -1670,61 +2060,80 @@ var file_proto_match_match_service_proto_goTypes = []any{
 	(*SpectateBattleRecord)(nil),               // 19: match.SpectateBattleRecord
 	(*MatchResult)(nil),                        // 20: match.MatchResult
 	(*MatchTeam)(nil),                          // 21: match.MatchTeam
-	(*base.TipInfoMessage)(nil),                // 22: TipInfoMessage
-	(battle.ESpectateVisibility)(0),            // 23: eSpectateVisibility
-	(battle.ESpectateTier)(0),                  // 24: eSpectateTier
-	(*GetNetworkProbePlanRequest)(nil),         // 25: match.GetNetworkProbePlanRequest
-	(*CommitNetworkProbeRequest)(nil),          // 26: match.CommitNetworkProbeRequest
-	(*battle.RequestBattleTicketRequest)(nil),  // 27: RequestBattleTicketRequest
-	(*GetNetworkProbePlanResponse)(nil),        // 28: match.GetNetworkProbePlanResponse
-	(*CommitNetworkProbeResponse)(nil),         // 29: match.CommitNetworkProbeResponse
-	(*base.Empty)(nil),                         // 30: Empty
-	(*battle.RequestBattleTicketResponse)(nil), // 31: RequestBattleTicketResponse
+	(*BattleReportMember)(nil),                 // 22: match.BattleReportMember
+	(*BattleReportSummary)(nil),                // 23: match.BattleReportSummary
+	(*ListBattleReportsRequest)(nil),           // 24: match.ListBattleReportsRequest
+	(*ListBattleReportsResponse)(nil),          // 25: match.ListBattleReportsResponse
+	(*GetBattleReportRequest)(nil),             // 26: match.GetBattleReportRequest
+	(*GetBattleReportResponse)(nil),            // 27: match.GetBattleReportResponse
+	(*base.TipInfoMessage)(nil),                // 28: TipInfoMessage
+	(battle.ESpectateVisibility)(0),            // 29: eSpectateVisibility
+	(battle.ESpectateTier)(0),                  // 30: eSpectateTier
+	(battle.EBattleOutcome)(0),                 // 31: eBattleOutcome
+	(*battle.BattleReplayEnvelope)(nil),        // 32: BattleReplayEnvelope
+	(*GetNetworkProbePlanRequest)(nil),         // 33: match.GetNetworkProbePlanRequest
+	(*CommitNetworkProbeRequest)(nil),          // 34: match.CommitNetworkProbeRequest
+	(*battle.RequestBattleTicketRequest)(nil),  // 35: RequestBattleTicketRequest
+	(*GetNetworkProbePlanResponse)(nil),        // 36: match.GetNetworkProbePlanResponse
+	(*CommitNetworkProbeResponse)(nil),         // 37: match.CommitNetworkProbeResponse
+	(*base.Empty)(nil),                         // 38: Empty
+	(*battle.RequestBattleTicketResponse)(nil), // 39: RequestBattleTicketResponse
 }
 var file_proto_match_match_service_proto_depIdxs = []int32{
 	0,  // 0: match.JoinQueueRequest.mode:type_name -> match.MatchMode
-	22, // 1: match.JoinQueueResponse.error_message:type_name -> TipInfoMessage
+	28, // 1: match.JoinQueueResponse.error_message:type_name -> TipInfoMessage
 	1,  // 2: match.GetQueueStatusResponse.state:type_name -> match.QueueState
-	22, // 3: match.ChallengePlayerResponse.error_message:type_name -> TipInfoMessage
-	22, // 4: match.RespondChallengeResponse.error_message:type_name -> TipInfoMessage
-	22, // 5: match.WatchBattleResponse.error_message:type_name -> TipInfoMessage
+	28, // 3: match.ChallengePlayerResponse.error_message:type_name -> TipInfoMessage
+	28, // 4: match.RespondChallengeResponse.error_message:type_name -> TipInfoMessage
+	28, // 5: match.WatchBattleResponse.error_message:type_name -> TipInfoMessage
 	2,  // 6: match.WatchBattleResponse.delivery:type_name -> match.eSpectateDelivery
 	18, // 7: match.ListWatchableBattlesResponse.battles:type_name -> match.BattleWatchSummary
 	0,  // 8: match.BattleWatchSummary.mode:type_name -> match.MatchMode
 	18, // 9: match.SpectateBattleRecord.summary:type_name -> match.BattleWatchSummary
-	23, // 10: match.SpectateBattleRecord.visibility:type_name -> eSpectateVisibility
-	24, // 11: match.SpectateBattleRecord.tier:type_name -> eSpectateTier
+	29, // 10: match.SpectateBattleRecord.visibility:type_name -> eSpectateVisibility
+	30, // 11: match.SpectateBattleRecord.tier:type_name -> eSpectateTier
 	0,  // 12: match.MatchResult.mode:type_name -> match.MatchMode
 	21, // 13: match.MatchResult.teams:type_name -> match.MatchTeam
-	25, // 14: match.MatchService.GetNetworkProbePlan:input_type -> match.GetNetworkProbePlanRequest
-	26, // 15: match.MatchService.CommitNetworkProbe:input_type -> match.CommitNetworkProbeRequest
-	3,  // 16: match.MatchService.JoinQueue:input_type -> match.JoinQueueRequest
-	5,  // 17: match.MatchService.CancelQueue:input_type -> match.CancelQueueRequest
-	6,  // 18: match.MatchService.GetQueueStatus:input_type -> match.GetQueueStatusRequest
-	8,  // 19: match.MatchService.ChallengePlayer:input_type -> match.ChallengePlayerRequest
-	10, // 20: match.MatchService.RespondChallenge:input_type -> match.RespondChallengeRequest
-	12, // 21: match.MatchService.NotifyChallengeInvite:input_type -> match.ChallengeInviteS2C
-	13, // 22: match.MatchService.NotifyChallengeResult:input_type -> match.ChallengeResultS2C
-	14, // 23: match.MatchService.WatchBattle:input_type -> match.WatchBattleRequest
-	27, // 24: match.MatchService.RequestBattleTicket:input_type -> RequestBattleTicketRequest
-	16, // 25: match.MatchService.ListWatchableBattles:input_type -> match.ListWatchableBattlesRequest
-	28, // 26: match.MatchService.GetNetworkProbePlan:output_type -> match.GetNetworkProbePlanResponse
-	29, // 27: match.MatchService.CommitNetworkProbe:output_type -> match.CommitNetworkProbeResponse
-	4,  // 28: match.MatchService.JoinQueue:output_type -> match.JoinQueueResponse
-	30, // 29: match.MatchService.CancelQueue:output_type -> Empty
-	7,  // 30: match.MatchService.GetQueueStatus:output_type -> match.GetQueueStatusResponse
-	9,  // 31: match.MatchService.ChallengePlayer:output_type -> match.ChallengePlayerResponse
-	11, // 32: match.MatchService.RespondChallenge:output_type -> match.RespondChallengeResponse
-	30, // 33: match.MatchService.NotifyChallengeInvite:output_type -> Empty
-	30, // 34: match.MatchService.NotifyChallengeResult:output_type -> Empty
-	15, // 35: match.MatchService.WatchBattle:output_type -> match.WatchBattleResponse
-	31, // 36: match.MatchService.RequestBattleTicket:output_type -> RequestBattleTicketResponse
-	17, // 37: match.MatchService.ListWatchableBattles:output_type -> match.ListWatchableBattlesResponse
-	26, // [26:38] is the sub-list for method output_type
-	14, // [14:26] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	0,  // 14: match.BattleReportSummary.mode:type_name -> match.MatchMode
+	31, // 15: match.BattleReportSummary.outcome:type_name -> eBattleOutcome
+	22, // 16: match.BattleReportSummary.members:type_name -> match.BattleReportMember
+	28, // 17: match.ListBattleReportsResponse.error_message:type_name -> TipInfoMessage
+	23, // 18: match.ListBattleReportsResponse.reports:type_name -> match.BattleReportSummary
+	28, // 19: match.GetBattleReportResponse.error_message:type_name -> TipInfoMessage
+	32, // 20: match.GetBattleReportResponse.replay:type_name -> BattleReplayEnvelope
+	33, // 21: match.MatchService.GetNetworkProbePlan:input_type -> match.GetNetworkProbePlanRequest
+	34, // 22: match.MatchService.CommitNetworkProbe:input_type -> match.CommitNetworkProbeRequest
+	3,  // 23: match.MatchService.JoinQueue:input_type -> match.JoinQueueRequest
+	5,  // 24: match.MatchService.CancelQueue:input_type -> match.CancelQueueRequest
+	6,  // 25: match.MatchService.GetQueueStatus:input_type -> match.GetQueueStatusRequest
+	8,  // 26: match.MatchService.ChallengePlayer:input_type -> match.ChallengePlayerRequest
+	10, // 27: match.MatchService.RespondChallenge:input_type -> match.RespondChallengeRequest
+	12, // 28: match.MatchService.NotifyChallengeInvite:input_type -> match.ChallengeInviteS2C
+	13, // 29: match.MatchService.NotifyChallengeResult:input_type -> match.ChallengeResultS2C
+	14, // 30: match.MatchService.WatchBattle:input_type -> match.WatchBattleRequest
+	35, // 31: match.MatchService.RequestBattleTicket:input_type -> RequestBattleTicketRequest
+	16, // 32: match.MatchService.ListWatchableBattles:input_type -> match.ListWatchableBattlesRequest
+	24, // 33: match.MatchService.ListBattleReports:input_type -> match.ListBattleReportsRequest
+	26, // 34: match.MatchService.GetBattleReport:input_type -> match.GetBattleReportRequest
+	36, // 35: match.MatchService.GetNetworkProbePlan:output_type -> match.GetNetworkProbePlanResponse
+	37, // 36: match.MatchService.CommitNetworkProbe:output_type -> match.CommitNetworkProbeResponse
+	4,  // 37: match.MatchService.JoinQueue:output_type -> match.JoinQueueResponse
+	38, // 38: match.MatchService.CancelQueue:output_type -> Empty
+	7,  // 39: match.MatchService.GetQueueStatus:output_type -> match.GetQueueStatusResponse
+	9,  // 40: match.MatchService.ChallengePlayer:output_type -> match.ChallengePlayerResponse
+	11, // 41: match.MatchService.RespondChallenge:output_type -> match.RespondChallengeResponse
+	38, // 42: match.MatchService.NotifyChallengeInvite:output_type -> Empty
+	38, // 43: match.MatchService.NotifyChallengeResult:output_type -> Empty
+	15, // 44: match.MatchService.WatchBattle:output_type -> match.WatchBattleResponse
+	39, // 45: match.MatchService.RequestBattleTicket:output_type -> RequestBattleTicketResponse
+	17, // 46: match.MatchService.ListWatchableBattles:output_type -> match.ListWatchableBattlesResponse
+	25, // 47: match.MatchService.ListBattleReports:output_type -> match.ListBattleReportsResponse
+	27, // 48: match.MatchService.GetBattleReport:output_type -> match.GetBattleReportResponse
+	35, // [35:49] is the sub-list for method output_type
+	21, // [21:35] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_service_proto_init() }
@@ -1739,7 +2148,7 @@ func file_proto_match_match_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_service_proto_rawDesc), len(file_proto_match_match_service_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   19,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

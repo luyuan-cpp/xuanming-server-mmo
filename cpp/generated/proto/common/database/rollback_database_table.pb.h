@@ -1398,6 +1398,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED transaction_log final : public ::go
     kBalanceAfterFieldNumber = 12,
     kCorrelationIdFieldNumber = 13,
     kZoneIdFieldNumber = 15,
+    kShardFieldNumber = 16,
   };
   // string extra = 14;
   void clear_extra() ;
@@ -1554,12 +1555,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED transaction_log final : public ::go
   void _internal_set_zone_id(::uint32_t value);
 
   public:
+  // uint32 shard = 16;
+  void clear_shard() ;
+  [[nodiscard]] ::uint32_t shard() const;
+  void set_shard(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_shard() const;
+  void _internal_set_shard(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:transaction_log)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 37,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 45,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1602,6 +1613,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED transaction_log final : public ::go
     ::uint64_t balance_after_;
     ::uint64_t correlation_id_;
     ::uint32_t zone_id_;
+    ::uint32_t shard_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6925,6 +6937,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_snapshot final : public ::go
     kCreatedAtFieldNumber = 5,
     kSnapshotGuidFieldNumber = 9,
     kSourceFieldNumber = 10,
+    kShardFieldNumber = 11,
   };
   // string reason = 6;
   void clear_reason() ;
@@ -7041,11 +7054,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_snapshot final : public ::go
   void _internal_set_source(::uint32_t value);
 
   public:
+  // uint32 shard = 11;
+  void clear_shard() ;
+  [[nodiscard]] ::uint32_t shard() const;
+  void set_shard(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_shard() const;
+  void _internal_set_shard(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:player_snapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 46,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7084,6 +7107,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_snapshot final : public ::go
     ::uint64_t created_at_;
     ::uint64_t snapshot_guid_;
     ::uint32_t source_;
+    ::uint32_t shard_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -19359,6 +19383,30 @@ inline void transaction_log::_internal_set_zone_id(::uint32_t value) {
   _impl_.zone_id_ = value;
 }
 
+// uint32 shard = 16;
+inline void transaction_log::clear_shard() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t transaction_log::shard() const {
+  // @@protoc_insertion_point(field_get:transaction_log.shard)
+  return _internal_shard();
+}
+inline void transaction_log::set_shard(::uint32_t value) {
+  _internal_set_shard(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:transaction_log.shard)
+}
+inline ::uint32_t transaction_log::_internal_shard() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.shard_;
+}
+inline void transaction_log::_internal_set_shard(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // player_snapshot
@@ -19721,6 +19769,30 @@ inline ::uint32_t player_snapshot::_internal_source() const {
 inline void player_snapshot::_internal_set_source(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_ = value;
+}
+
+// uint32 shard = 11;
+inline void player_snapshot::clear_shard() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t player_snapshot::shard() const {
+  // @@protoc_insertion_point(field_get:player_snapshot.shard)
+  return _internal_shard();
+}
+inline void player_snapshot::set_shard(::uint32_t value) {
+  _internal_set_shard(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:player_snapshot.shard)
+}
+inline ::uint32_t player_snapshot::_internal_shard() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.shard_;
+}
+inline void player_snapshot::_internal_set_shard(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shard_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -8,7 +8,7 @@ import (
 
 func TestOwnerDependsOnlyOnMemberSet(t *testing.T) {
 	a := []string{"replica-a", "replica-b", "replica-c"}
-	b := []string{"replica-c", "", "replica-a", "replica-b"}
+	b := []string{"replica-c", "", "replica-a", "replica-b", "replica-a"}
 	for shard := 0; shard < Shards; shard++ {
 		key := ShardKey("trade-commerce", shard)
 		if Owner(key, a) != Owner(key, b) {
@@ -17,6 +17,48 @@ func TestOwnerDependsOnlyOnMemberSet(t *testing.T) {
 	}
 	if Owner("any", nil) != "" || Owner("any", []string{""}) != "" {
 		t.Fatal("没有成员时不应有负责者")
+	}
+}
+
+// 固定的相邻副本名和短数字后缀也应分散到各副本，不能让一份前缀分数支配整组分片。
+func TestOwnerSpreadsShortShardKeysAcrossMembers(t *testing.T) {
+	members := []string{"uuid-00", "uuid-01", "uuid-02", "uuid-03", "uuid-new"}
+	for _, prefix := range []string{"", "3:", "formation:", "team-launch:", "team-idle:", "ready-ticket:", "rank-source:3:", "trade-commerce:", "trade-receipt-ack:"} {
+		t.Run(prefix, func(t *testing.T) {
+			counts := make(map[string]int, len(members))
+			for shard := 0; shard < Shards; shard++ {
+				counts[Owner(fmt.Sprintf("%s%d", prefix, shard), members)]++
+			}
+			t.Logf("分片分布: %v", counts)
+			for _, member := range members {
+				if counts[member] == 0 {
+					t.Errorf("副本 %s 没有分到任何分片", member)
+				}
+			}
+		})
+	}
+}
+
+// 移除副本只重分配原属它的键，其余副本的已有工作不换主。
+func TestRemovingAMemberOnlyMovesItsShards(t *testing.T) {
+	before := []string{"uuid-00", "uuid-01", "uuid-02", "uuid-03", "uuid-new"}
+	after := []string{"uuid-00", "uuid-01", "uuid-03", "uuid-new"}
+	moved := 0
+	for shard := 0; shard < Shards; shard++ {
+		key := ShardKey("formation", shard)
+		was, now := Owner(key, before), Owner(key, after)
+		if now == "" || now == "uuid-02" {
+			t.Fatalf("片 %d 没有归属到存活副本: %q", shard, now)
+		}
+		if was != now {
+			if was != "uuid-02" {
+				t.Fatalf("片 %d 从存活副本 %s 换到了 %s", shard, was, now)
+			}
+			moved++
+		}
+	}
+	if moved == 0 || moved == Shards {
+		t.Fatalf("移除成员后迁移 %d 片，应只有原属它的一部分片", moved)
 	}
 }
 

@@ -50,6 +50,7 @@ const (
 	MatchError_kMatchProbeRequired          MatchError = 16022
 	MatchError_kMatchNoRegionWithinLatency  MatchError = 16023
 	MatchError_kMatchSpectateTicketInvalid  MatchError = 16024
+	MatchError_kMatchBattleReportNotFound   MatchError = 16025
 )
 
 // Enum value maps for MatchError.
@@ -81,6 +82,7 @@ var (
 		16022: "kMatchProbeRequired",
 		16023: "kMatchNoRegionWithinLatency",
 		16024: "kMatchSpectateTicketInvalid",
+		16025: "kMatchBattleReportNotFound",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":               0,
@@ -109,6 +111,7 @@ var (
 		"kMatchProbeRequired":          16022,
 		"kMatchNoRegionWithinLatency":  16023,
 		"kMatchSpectateTicketInvalid":  16024,
+		"kMatchBattleReportNotFound":   16025,
 	}
 )
 
@@ -143,7 +146,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xed\x05\n" +
+	"\x15match_error_tip.proto*\x8e\x06\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -170,7 +173,8 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x12kMatchSpectateFull\x10\x95}\x12\x18\n" +
 	"\x13kMatchProbeRequired\x10\x96}\x12 \n" +
 	"\x1bkMatchNoRegionWithinLatency\x10\x97}\x12 \n" +
-	"\x1bkMatchSpectateTicketInvalid\x10\x98}B$\n" +
+	"\x1bkMatchSpectateTicketInvalid\x10\x98}\x12\x1f\n" +
+	"\x1akMatchBattleReportNotFound\x10\x99}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

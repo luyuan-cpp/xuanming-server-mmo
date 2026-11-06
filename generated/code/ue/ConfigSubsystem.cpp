@@ -73,6 +73,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	MysteryMerchantSpotTable = NewObject<UMysteryMerchantSpotTable>(this);
 	PetTable = NewObject<UPetTable>(this);
 	PetRuleTable = NewObject<UPetRuleTable>(this);
+	PlayModeTable = NewObject<UPlayModeTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
 	RoleNameRuleTable = NewObject<URoleNameRuleTable>(this);
 	SkillTable = NewObject<USkillTable>(this);
@@ -80,6 +81,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	TestTable = NewObject<UTestTable>(this);
 	TestMultiKeyTable = NewObject<UTestMultiKeyTable>(this);
 	WorldTable = NewObject<UWorldTable>(this);
+	ZoneGroupTable = NewObject<UZoneGroupTable>(this);
 }
 
 void UConfigSubsystem::Deinitialize()
@@ -124,6 +126,7 @@ void UConfigSubsystem::Deinitialize()
 	MysteryMerchantSpotTable = nullptr;
 	PetTable = nullptr;
 	PetRuleTable = nullptr;
+	PlayModeTable = nullptr;
 	RewardTable = nullptr;
 	RoleNameRuleTable = nullptr;
 	SkillTable = nullptr;
@@ -131,6 +134,7 @@ void UConfigSubsystem::Deinitialize()
 	TestTable = nullptr;
 	TestMultiKeyTable = nullptr;
 	WorldTable = nullptr;
+	ZoneGroupTable = nullptr;
 	ConfigDir.Reset();
 	LoadVersion = 0;
 	bAllTablesCoherent = false;
@@ -180,13 +184,15 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UMysteryMerchantSpotTable::FileName(),
 		UPetTable::FileName(),
 		UPetRuleTable::FileName(),
+		UPlayModeTable::FileName(),
 		URewardTable::FileName(),
 		URoleNameRuleTable::FileName(),
 		USkillTable::FileName(),
 		USkillPermissionTable::FileName(),
 		UTestTable::FileName(),
 		UTestMultiKeyTable::FileName(),
-		UWorldTable::FileName()
+		UWorldTable::FileName(),
+		UZoneGroupTable::FileName()
 	};
 }
 
@@ -758,6 +764,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (PlayModeTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PlayMode] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!PlayModeTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (RewardTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Reward] 管理器未创建"));
@@ -848,6 +868,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!WorldTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (ZoneGroupTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ZoneGroup] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!ZoneGroupTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1690,6 +1724,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (PlayModeTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PlayMode] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UPlayModeTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PlayMode] 取不到 %s"), UPlayModeTable::FileName());
+		bAllOk = false;
+	}
+	else if (!PlayModeTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (RewardTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Reward] 管理器未创建"));
@@ -1821,6 +1875,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!WorldTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (ZoneGroupTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ZoneGroup] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UZoneGroupTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ZoneGroup] 取不到 %s"), UZoneGroupTable::FileName());
+		bAllOk = false;
+	}
+	else if (!ZoneGroupTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

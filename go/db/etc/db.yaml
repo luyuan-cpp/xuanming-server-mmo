@@ -59,11 +59,12 @@ ServerConfig:
     WriteTimeoutSeconds: 30
     SessionLockWaitSeconds: 10       # MySQL lock_wait_timeout(元数据锁);TiDB 是否接受未核实,不接受时写 -1
     SessionInnodbLockWaitSeconds: 10 # MySQL innodb_lock_wait_timeout(行锁)
-    MaxOpenConn: 60 # K8s 上所有 zone 的 go/db、data_service、gateway 与全局的 friend、trade 共用同一台库,
-                    # 本池 × 副本数(2)× zone 数是总账里最大的一项。改这个值必须重算总账:
+    MaxOpenConn: 8  # 本 zone 库 zone_<ZoneId>_db 的池。存档库和区脱钩之后(docs/design/player-data-tidb-scaling-plan.md §7.2,A17b)
+                    # 这个库不再放新号,只剩写者闸门和启动核对,存盘都走下面 Placement.NonZoneStore* 的地域存档库池,所以从 60 收到 8。
+                    # 没清库的旧环境里落点还指着本 zone 库的旧号也走这个池,只会变慢。改这个值必须重算总账:
                     # tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger(部署时打印 "MySQL connection ledger"),
                     # 契约测试钉住「规划峰值 ≤ deploy/k8s/manifests/infra/mysql.yaml 的 max_connections」。
-    MaxIdleConn: 20
+    MaxIdleConn: 2
     Net: ""
 
 # ── 玩家存储落点(docs/design/player-storage-placement.md §6)────────────────
@@ -82,15 +83,16 @@ Placement:
   # 静默建新库」的语义不变。设 false 时,本 zone 库之外的每个落点库都必须写进白名单。
   AllowStoreFamilies: true
   # 额外落点库(本 zone 库之外)的连接池,**每个库一个池**,按库所属家族分两个旋钮(本 zone 库仍用上面的 Database.MaxOpenConn):
-  #   ZoneStore*    —— zone 家族库 zone_{1..999999}_db:冷缓存访客读、合服 pin 后的源区库。最坏情形每个实例会打开其余全部
-  #                    zone 的库,预算随 zone 数平方增长(总账见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger)。
-  #   NonZoneStore* —— 非 zone 落点库 player_store_{>=1000000}_db(Phase 2)。大部分玩家搬进来后它是瓶颈,按压测单独调大,
-  #                    不连带放大访客池;调大前先重做总账规划档。
+  #   ZoneStore*    —— zone 家族库 zone_{1..999999}_db。存档库和区脱钩之后(docs/design/player-data-tidb-scaling-plan.md §7.2)
+  #                    zone 库不放新号,只有没清库的旧环境里、落点还指着别的 zone 库的旧号才会打开它,总账规划档按 0 个算。
+  #   NonZoneStore* —— 地域存档库 player_store_{>=1000000}_db,全部存盘都走它。这里写的是「本地域只有一个库」(K=1)时的预算,
+  #                    等于脱钩前本 zone 库那个池的 60 / 20;K8s 的 ConfigMap 按地域存档库数 K 摊到每个库
+  #                    (tools/scripts/k8s_deploy.ps1 Get-PlayerStorePoolLimit,每库至少 2 条),连接总账读同一条规则。调大前先重做总账规划档。
   # 旧键 ExtraStoreMaxOpenConn / ExtraStoreMaxIdleConn 仍认:新键没写时两类库都回落到它,新配置不要再写。
   ZoneStoreMaxOpenConn: 8
   ZoneStoreMaxIdleConn: 2
-  NonZoneStoreMaxOpenConn: 8
-  NonZoneStoreMaxIdleConn: 2
+  NonZoneStoreMaxOpenConn: 60
+  NonZoneStoreMaxIdleConn: 20
   # 额外落点库池里空闲超过这么多秒的连接即关闭(SetConnMaxIdleTime):冷库的池回到 0 条,不按 MaxIdleConn 常驻。
   # ConnMaxLifetime 仍是 5 分钟,本值大于 300 等于不生效。
   ExtraStoreConnMaxIdleSeconds: 60

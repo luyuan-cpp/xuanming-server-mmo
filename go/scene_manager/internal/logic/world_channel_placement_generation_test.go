@@ -25,6 +25,8 @@ package logic
 //   - G6 init 补建换回不带代次(传 0):InitEnsureCreatesAtCurrentGeneration 红。
 //   - G7 migrateWorldChannel 拆老实体换回 RequestNodeDestroyScene(不带代次):MoveCarriesOneGeneration 红。
 //   - G8 删掉 runWorldDrainTeardown / runWorldOrphanTeardown 里的 deletePlacementGeneration:TeardownDeletesHighWater 红。
+//   - G9 删掉 DestroySceneLogic 里 `membership != worldChannelNotMember` 那段拒绝:ExplicitDestroyScene_RejectsWorldChannels 红。
+//   - G10 DestroySceneLogic 把 locateWorldChannel 的读错当成「不是线」放过去:ExplicitDestroyScene_MembershipReadErrorRejects 红。
 
 import (
 	"context"
@@ -37,6 +39,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 
+	"proto/scene_manager"
+	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
 )
 
@@ -361,4 +365,73 @@ func TestPlacementGeneration_ResolveSceneReclaimCarriesItsGeneration(t *testing.
 	require.EqualValues(t, 1, c.late.fake.destroyCalls.Load())
 	require.Equal(t, tried, c.late.fake.lastDestroyGeneration.Load(), "回收按这次尝试的代次拆")
 	require.Equal(t, tried, placementGenOf(t, c.mr, c.sceneID), "回收之前把高水位抬到这次的代次")
+}
+
+// 显式 DestroyScene 只拆副本与镜像:目标是世界频道(在役或回收中)时拒绝,一个键不动、不发 C++ DestroyScene;副本照常拆。
+// 修复前:世界频道也按副本销毁,删了映射却留在在役集合里,随后被懒改派以空属主复活;那次拆除不带放置代次,晚到时会拆掉
+// 复活在同一节点上的实体(docs/design/world-channel-placement-generation.md §7)。
+func TestExplicitDestroyScene_RejectsWorldChannels(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{placementConfID}))
+	registerTypedNode(mr, testZoneId, "10", constants.SceneNodeTypeInstance, 0)
+
+	const inService, draining uint64 = 87412, 87413
+	_, err := mr.SAdd(worldChannelsKey(testZoneId, placementConfID), strconv.FormatUint(inService, 10))
+	require.NoError(t, err)
+	_, err = mr.SAdd(worldDrainingSetKey(testZoneId, placementConfID), strconv.FormatUint(draining, 10))
+	require.NoError(t, err)
+	for _, id := range []uint64{inService, draining} {
+		seedSceneOwnedBy(t, mr, testZoneId, id, "10")
+		require.NoError(t, mr.Set(sceneZoneKey(id), strconv.FormatUint(uint64(testZoneId), 10)))
+	}
+	destroysBefore := sharedFakeSceneNode.destroyCalls.Load()
+
+	for _, id := range []uint64{inService, draining} {
+		_, err := NewDestroySceneLogic(ctx, sc).DestroyScene(&scene_manager.DestroySceneRequest{SceneId: id, ZoneId: testZoneId})
+		require.ErrorIs(t, err, errWorldChannelNotDestroyable, "scene %d", id)
+		requireSceneOwner(t, sc, id, "10", "拒绝时映射一个字节都不动")
+		requireSceneIndexedOnlyOn(t, sc, testZoneId, id, "10")
+	}
+	stillListed, err := sc.Redis.Sismember(worldChannelsKey(testZoneId, placementConfID), strconv.FormatUint(inService, 10))
+	require.NoError(t, err)
+	require.True(t, stillListed, "拒绝时频道仍在役")
+	require.Equal(t, destroysBefore, sharedFakeSceneNode.destroyCalls.Load(), "拒绝时不发 C++ DestroyScene")
+
+	// 对照:副本照常拆。
+	resp, err := NewCreateSceneLogic(ctx, sc).CreateScene(&scene_manager.CreateSceneRequest{
+		SceneConfId: 2001, ZoneId: testZoneId, SceneType: scene_manager.SceneType_SCENE_TYPE_INSTANCE,
+	})
+	require.NoError(t, err)
+	require.Zero(t, resp.ErrorCode)
+	_, err = NewDestroySceneLogic(ctx, sc).DestroyScene(&scene_manager.DestroySceneRequest{SceneId: resp.SceneId, ZoneId: testZoneId})
+	require.NoError(t, err)
+	require.False(t, mr.Exists(sceneNodeKey(resp.SceneId)), "副本照常拆")
+}
+
+// 查不清目标是不是世界频道(读线集合失败)时拒绝,一个键不动;读恢复之后照常拆副本。
+func TestExplicitDestroyScene_MembershipReadErrorRejects(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{placementConfID}))
+	registerTypedNode(mr, testZoneId, "10", constants.SceneNodeTypeInstance, 0)
+	resp, err := NewCreateSceneLogic(ctx, sc).CreateScene(&scene_manager.CreateSceneRequest{
+		SceneConfId: 2001, ZoneId: testZoneId, SceneType: scene_manager.SceneType_SCENE_TYPE_INSTANCE,
+	})
+	require.NoError(t, err)
+	require.Zero(t, resp.ErrorCode)
+	owner, err := mr.Get(sceneNodeKey(resp.SceneId))
+	require.NoError(t, err)
+
+	fired := injectRedisFaultsForTest(t, mr,
+		redisFaultRule{cmd: "SISMEMBER", key: worldChannelsKey(testZoneId, placementConfID), times: 1})
+	_, err = NewDestroySceneLogic(ctx, sc).DestroyScene(&scene_manager.DestroySceneRequest{SceneId: resp.SceneId, ZoneId: testZoneId})
+	require.EqualValues(t, 1, fired.Load(), "前提:读线集合失败了一次")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errWorldChannelNotDestroyable, "读失败不是「是世界频道」")
+	requireSceneOwner(t, sc, resp.SceneId, owner, "查不清时一个键都不动")
+
+	_, err = NewDestroySceneLogic(ctx, sc).DestroyScene(&scene_manager.DestroySceneRequest{SceneId: resp.SceneId, ZoneId: testZoneId})
+	require.NoError(t, err)
+	require.False(t, mr.Exists(sceneNodeKey(resp.SceneId)))
 }

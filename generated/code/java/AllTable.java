@@ -97,6 +97,8 @@ public class AllTable {
 
         PetRuleTableManager.getInstance().load(configDir, useBinary);
 
+        PlayModeTableManager.getInstance().load(configDir, useBinary);
+
         RewardTableManager.getInstance().load(configDir, useBinary);
 
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
@@ -110,6 +112,8 @@ public class AllTable {
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
 
         WorldTableManager.getInstance().load(configDir, useBinary);
+
+        ZoneGroupTableManager.getInstance().load(configDir, useBinary);
 
         if (loadSuccessCallback != null) {
             loadSuccessCallback.run();
@@ -126,7 +130,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(47);
+        CountDownLatch latch = new CountDownLatch(49);
 
         new Thread(() -> {
             try {
@@ -530,6 +534,16 @@ public class AllTable {
 
         new Thread(() -> {
             try {
+                PlayModeTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load PlayMode table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 RewardTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Reward table", e);
@@ -593,6 +607,16 @@ public class AllTable {
                 WorldTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load World table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                ZoneGroupTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load ZoneGroup table", e);
             } finally {
                 latch.countDown();
             }
@@ -698,6 +722,8 @@ public class AllTable {
 
         PetRuleTableManager.getInstance().load(configDir, useBinary);
 
+        PlayModeTableManager.getInstance().load(configDir, useBinary);
+
         RewardTableManager.getInstance().load(configDir, useBinary);
 
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
@@ -711,6 +737,8 @@ public class AllTable {
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
 
         WorldTableManager.getInstance().load(configDir, useBinary);
+
+        ZoneGroupTableManager.getInstance().load(configDir, useBinary);
 
         if (loadSuccessCallback != null) {
             loadSuccessCallback.run();

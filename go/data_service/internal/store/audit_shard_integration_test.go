@@ -174,3 +174,60 @@ func TestAuditShard_SnapshotRowsCarryShardAndZoneQueriesSeeAllShards(t *testing.
 	assert.Len(t, times, players)
 	assert.Equal(t, uint64(1700000000+players), times[5000+players])
 }
+
+// TestAuditRetention_ShardLockIsExclusiveAndDeletesOnlyItsShard:清理按桶取会话级命名锁(audit_retention.go)。
+// 同一个桶同一时刻只有一个持有者(另一条连接拿不到,别的桶拿得到);删除只删本桶里早于截止的行,
+// 别的桶即使更老也不动;放锁之后别人就能拿到。
+func TestAuditRetention_ShardLockIsExclusiveAndDeletesOnlyItsShard(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	ts := newTxLogStore(t, db)
+	ctx := context.Background()
+
+	const n = 2 * store.AuditShardCount
+	var batch []*store.TransactionLogRow
+	for id := uint64(1); id <= n; id++ { // timestamp_sec = 1700000000 + tx_id
+		batch = append(batch, txRow(id))
+	}
+	_, err := ts.InsertBatchIgnore(ctx, batch)
+	require.NoError(t, err)
+
+	const shard = 3 // 桶 3 里是 tx 3(..03)与 tx 19(..19)
+	first, ok, err := ts.ClaimRetentionShardForTest(ctx, shard)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	_, ok, err = ts.ClaimRetentionShardForTest(ctx, shard)
+	require.NoError(t, err)
+	assert.False(t, ok, "同一个桶的清理锁同一时刻只能有一个持有者(另一条连接扮演另一个实例)")
+	other, ok, err := ts.ClaimRetentionShardForTest(ctx, shard+1)
+	require.NoError(t, err)
+	require.True(t, ok, "别的桶不受影响")
+	other.Release()
+
+	deleted, err := first.DeleteOlder(ctx, 1700000010, 100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted, "只删本桶里早于截止的行(tx 3;tx 19 还没过期)")
+	assert.EqualValues(t, 0, db.Count(t, "transaction_log", "tx_id = ?", 3))
+	assert.EqualValues(t, 1, db.Count(t, "transaction_log", "tx_id = ?", 19))
+	assert.EqualValues(t, 1, db.Count(t, "transaction_log", "tx_id = ?", 4), "别的桶不动,即使更老")
+	assert.EqualValues(t, n-1, db.Count(t, "transaction_log", ""))
+	first.Release()
+
+	again, ok, err := ts.ClaimRetentionShardForTest(ctx, shard)
+	require.NoError(t, err)
+	require.True(t, ok, "放锁之后别的实例就能拿到")
+	again.Release()
+
+	// 快照表同一套:桶锁与按桶删除。
+	ss := newSnapshotStore(t, db)
+	id, err := ss.InsertSnapshot(ctx, &store.SnapshotRow{PlayerID: 77, ZoneID: 1, CreatedAt: 1700000001, Data: []byte("{}")})
+	require.NoError(t, err)
+	snap, ok, err := ss.ClaimRetentionShardForTest(ctx, store.AuditShard(id))
+	require.NoError(t, err)
+	require.True(t, ok)
+	deleted, err = snap.DeleteOlder(ctx, 1700000002, 100)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted)
+	snap.Release()
+	assert.EqualValues(t, 0, db.Count(t, "player_snapshot", "id = ?", id))
+}

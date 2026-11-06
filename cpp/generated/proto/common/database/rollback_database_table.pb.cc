@@ -321,11 +321,11 @@ constexpr transaction_log::ParseTableT_ transaction_log::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(transaction_log, _impl_._has_bits_),
       0, // no _extensions_
-      15, 120,  // max_field_number, fast_idx_mask
+      16, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294934528,  // skipmap
+      4294901760,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      15,  // num_field_entries
+      16,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -335,7 +335,10 @@ constexpr transaction_log::ParseTableT_ transaction_log::InternalGenerateParseTa
       ::_pbi::TcParser::GetTable<::transaction_log>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 shard = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.shard_)}},
       // uint64 tx_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(transaction_log, _impl_.tx_id_), 1>(),
        {8, 1, 0,
@@ -429,10 +432,12 @@ constexpr transaction_log::ParseTableT_ transaction_log::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.extra_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 zone_id = 15;
       {PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.zone_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 shard = 16;
+      {PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.shard_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\17\0\0\0\0\0\0\0\0\0\0\0\0\0\5\0"
+      "\17\0\0\0\0\0\0\0\0\0\0\0\0\0\5\0\0\0\0\0\0\0\0\0"
       "transaction_log"
       "extra"
     }},
@@ -460,7 +465,8 @@ inline constexpr transaction_log::Impl_::Impl_(
         balance_before_{::uint64_t{0u}},
         balance_after_{::uint64_t{0u}},
         correlation_id_{::uint64_t{0u}},
-        zone_id_{0u} {}
+        zone_id_{0u},
+        shard_{0u} {}
 
 template <typename>
 constexpr transaction_log::transaction_log(::_pbi::ConstantInitialized,
@@ -3871,11 +3877,11 @@ constexpr player_snapshot::ParseTableT_ player_snapshot::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -3926,7 +3932,10 @@ constexpr player_snapshot::ParseTableT_ player_snapshot::InternalGenerateParseTa
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_snapshot, _impl_.source_), 9>(),
        {80, 9, 0,
         PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.source_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 shard = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_snapshot, _impl_.shard_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.shard_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -3954,6 +3963,8 @@ constexpr player_snapshot::ParseTableT_ player_snapshot::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.snapshot_guid_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 source = 10;
       {PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.source_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 shard = 11;
+      {PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.shard_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -3985,7 +3996,8 @@ inline constexpr player_snapshot::Impl_::Impl_(
         snapshot_type_{0u},
         created_at_{::uint64_t{0u}},
         snapshot_guid_{::uint64_t{0u}},
-        source_{0u} {}
+        source_{0u},
+        shard_{0u} {}
 
 template <typename>
 constexpr player_snapshot::player_snapshot(::_pbi::ConstantInitialized,
@@ -12015,7 +12027,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_._has_bits_),
-        18, // hasbit index offset
+        19, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.tx_id_),
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.timestamp_sec_),
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.tx_type_),
@@ -12031,6 +12043,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.correlation_id_),
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.extra_),
         PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.zone_id_),
+        PROTOBUF_FIELD_OFFSET(::transaction_log, _impl_.shard_),
         1,
         2,
         5,
@@ -12046,9 +12059,10 @@ const ::uint32_t
         13,
         0,
         14,
+        15,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.zone_id_),
@@ -12059,6 +12073,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.data_),
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.snapshot_guid_),
         PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.source_),
+        PROTOBUF_FIELD_OFFSET(::player_snapshot, _impl_.shard_),
         3,
         4,
         5,
@@ -12069,6 +12084,7 @@ const ::uint32_t
         2,
         8,
         9,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rollback_audit_log, _impl_._has_bits_),
         16, // hasbit index offset
@@ -13149,60 +13165,60 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::transaction_log)},
-        {33, sizeof(::player_snapshot)},
-        {56, sizeof(::rollback_audit_log)},
-        {85, sizeof(::gm_recall_batch)},
-        {142, sizeof(::gm_recall_op)},
-        {203, sizeof(::gm_recall_seq)},
-        {216, sizeof(::gm_recall_source)},
-        {229, sizeof(::player_debt)},
-        {252, sizeof(::rollback_audit)},
-        {281, sizeof(::player_name)},
-        {294, sizeof(::player_name_owner)},
-        {303, sizeof(::directory_shard)},
-        {312, sizeof(::player_route)},
-        {333, sizeof(::zone_merged_into)},
-        {344, sizeof(::route_meta)},
-        {359, sizeof(::account_directory)},
-        {366, sizeof(::account_role_ref)},
-        {385, sizeof(::account_role)},
-        {406, sizeof(::account_role_removal)},
-        {417, sizeof(::account_role_trade)},
-        {442, sizeof(::account_role_transfer_receipt)},
-        {465, sizeof(::account_role_admission)},
-        {488, sizeof(::account_role_trade_holder)},
-        {503, sizeof(::sql_writer_registry)},
-        {526, sizeof(::sql_writer_slot)},
-        {541, sizeof(::sql_writer_lifecycle_receipt_Request)},
-        {568, sizeof(::sql_writer_lifecycle_receipt)},
-        {587, sizeof(::sql_writer_boot_grant)},
-        {622, sizeof(::sql_writer_boot_grant_set)},
-        {629, sizeof(::sql_writer_drain_run)},
-        {654, sizeof(::sql_writer_freeze_ticket)},
-        {691, sizeof(::sql_writer_maintenance_receipt_Plan)},
-        {726, sizeof(::sql_writer_maintenance_receipt_LaunchClosure)},
-        {735, sizeof(::sql_writer_maintenance_receipt_SourcePin)},
-        {742, sizeof(::sql_writer_maintenance_receipt_IssuerClosure)},
-        {765, sizeof(::sql_writer_maintenance_receipt_KafkaPartitionClosure)},
-        {788, sizeof(::sql_writer_maintenance_receipt_RedisKeyClosure)},
-        {809, sizeof(::sql_writer_maintenance_receipt_RedisTargetClosure)},
-        {828, sizeof(::sql_writer_maintenance_receipt_PublicationEvidence)},
-        {837, sizeof(::sql_writer_maintenance_receipt_NonSqlClosureEvidence)},
-        {864, sizeof(::sql_writer_maintenance_receipt_TicketEvidence)},
-        {877, sizeof(::sql_writer_maintenance_receipt_EmergencyEvidence)},
-        {890, sizeof(::sql_writer_maintenance_receipt_ReleaseReadiness)},
-        {903, sizeof(::sql_writer_maintenance_receipt_ConsumerGroupReadiness)},
-        {924, sizeof(::sql_writer_maintenance_receipt_ManualConsumerAssignment)},
-        {959, sizeof(::sql_writer_maintenance_receipt_ManualConsumerEvidence)},
-        {980, sizeof(::sql_writer_maintenance_receipt_ConsumerReadiness)},
-        {987, sizeof(::sql_writer_maintenance_receipt_IssuerReadiness)},
-        {1008, sizeof(::sql_writer_maintenance_receipt_SourceOpenAck)},
-        {1035, sizeof(::sql_writer_maintenance_receipt_PublicationReadiness)},
-        {1046, sizeof(::sql_writer_maintenance_receipt_Evidence)},
-        {1067, sizeof(::sql_writer_maintenance_receipt)},
-        {1104, sizeof(::sql_writer_boot_roster_Entry)},
-        {1115, sizeof(::sql_writer_boot_roster_RuntimeEnvironment)},
-        {1124, sizeof(::sql_writer_boot_roster)},
+        {35, sizeof(::player_snapshot)},
+        {60, sizeof(::rollback_audit_log)},
+        {89, sizeof(::gm_recall_batch)},
+        {146, sizeof(::gm_recall_op)},
+        {207, sizeof(::gm_recall_seq)},
+        {220, sizeof(::gm_recall_source)},
+        {233, sizeof(::player_debt)},
+        {256, sizeof(::rollback_audit)},
+        {285, sizeof(::player_name)},
+        {298, sizeof(::player_name_owner)},
+        {307, sizeof(::directory_shard)},
+        {316, sizeof(::player_route)},
+        {337, sizeof(::zone_merged_into)},
+        {348, sizeof(::route_meta)},
+        {363, sizeof(::account_directory)},
+        {370, sizeof(::account_role_ref)},
+        {389, sizeof(::account_role)},
+        {410, sizeof(::account_role_removal)},
+        {421, sizeof(::account_role_trade)},
+        {446, sizeof(::account_role_transfer_receipt)},
+        {469, sizeof(::account_role_admission)},
+        {492, sizeof(::account_role_trade_holder)},
+        {507, sizeof(::sql_writer_registry)},
+        {530, sizeof(::sql_writer_slot)},
+        {545, sizeof(::sql_writer_lifecycle_receipt_Request)},
+        {572, sizeof(::sql_writer_lifecycle_receipt)},
+        {591, sizeof(::sql_writer_boot_grant)},
+        {626, sizeof(::sql_writer_boot_grant_set)},
+        {633, sizeof(::sql_writer_drain_run)},
+        {658, sizeof(::sql_writer_freeze_ticket)},
+        {695, sizeof(::sql_writer_maintenance_receipt_Plan)},
+        {730, sizeof(::sql_writer_maintenance_receipt_LaunchClosure)},
+        {739, sizeof(::sql_writer_maintenance_receipt_SourcePin)},
+        {746, sizeof(::sql_writer_maintenance_receipt_IssuerClosure)},
+        {769, sizeof(::sql_writer_maintenance_receipt_KafkaPartitionClosure)},
+        {792, sizeof(::sql_writer_maintenance_receipt_RedisKeyClosure)},
+        {813, sizeof(::sql_writer_maintenance_receipt_RedisTargetClosure)},
+        {832, sizeof(::sql_writer_maintenance_receipt_PublicationEvidence)},
+        {841, sizeof(::sql_writer_maintenance_receipt_NonSqlClosureEvidence)},
+        {868, sizeof(::sql_writer_maintenance_receipt_TicketEvidence)},
+        {881, sizeof(::sql_writer_maintenance_receipt_EmergencyEvidence)},
+        {894, sizeof(::sql_writer_maintenance_receipt_ReleaseReadiness)},
+        {907, sizeof(::sql_writer_maintenance_receipt_ConsumerGroupReadiness)},
+        {928, sizeof(::sql_writer_maintenance_receipt_ManualConsumerAssignment)},
+        {963, sizeof(::sql_writer_maintenance_receipt_ManualConsumerEvidence)},
+        {984, sizeof(::sql_writer_maintenance_receipt_ConsumerReadiness)},
+        {991, sizeof(::sql_writer_maintenance_receipt_IssuerReadiness)},
+        {1012, sizeof(::sql_writer_maintenance_receipt_SourceOpenAck)},
+        {1039, sizeof(::sql_writer_maintenance_receipt_PublicationReadiness)},
+        {1050, sizeof(::sql_writer_maintenance_receipt_Evidence)},
+        {1071, sizeof(::sql_writer_maintenance_receipt)},
+        {1108, sizeof(::sql_writer_boot_roster_Entry)},
+        {1119, sizeof(::sql_writer_boot_roster_RuntimeEnvironment)},
+        {1128, sizeof(::sql_writer_boot_roster)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -13269,7 +13285,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2frollback_5fdata
     "to\032+proto/common/rollback/transaction_lo"
     "g.proto\032+proto/common/rollback/player_sn"
     "apshot.proto\032&proto/common/base/role_adm"
-    "ission.proto\"\357\003\n\017transaction_log\022\r\n\005tx_i"
+    "ission.proto\"\233\004\n\017transaction_log\022\r\n\005tx_i"
     "d\030\001 \001(\004\022\025\n\rtimestamp_sec\030\002 \001(\004\022\017\n\007tx_typ"
     "e\030\003 \001(\r\022\023\n\013from_player\030\004 \001(\004\022\021\n\tto_playe"
     "r\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n\016item_confi"
@@ -13277,437 +13293,439 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2frollback_5fdata
     "rency_type\030\t \001(\r\022\026\n\016currency_delta\030\n \001(\003"
     "\022\026\n\016balance_before\030\013 \001(\004\022\025\n\rbalance_afte"
     "r\030\014 \001(\004\022\026\n\016correlation_id\030\r \001(\004\022\r\n\005extra"
-    "\030\016 \001(\t\022\017\n\007zone_id\030\017 \001(\r:\244\001\212\222\364\001\017transacti"
-    "on_log\222\222\364\001\005tx_id\332\222\364\001rfrom_player,timesta"
-    "mp_sec;to_player,timestamp_sec;item_conf"
-    "ig_id,timestamp_sec;tx_type,timestamp_se"
-    "c;timestamp_sec\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\251\002\n\017playe"
-    "r_snapshot\022\n\n\002id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001("
-    "\004\022\017\n\007zone_id\030\003 \001(\r\022\025\n\rsnapshot_type\030\004 \001("
-    "\r\022\022\n\ncreated_at\030\005 \001(\004\022\016\n\006reason\030\006 \001(\t\022\020\n"
-    "\010operator\030\007 \001(\t\022\014\n\004data\030\010 \001(\014\022\025\n\rsnapsho"
-    "t_guid\030\t \001(\004\022\016\n\006source\030\n \001(\r:d\212\222\364\001\017playe"
-    "r_snapshot\222\222\364\001\002id\332\222\364\0015player_id;snapshot"
-    "_guid;zone_id,created_at;created_at\250\223\364\001\001"
-    "\260\223\364\001\004\270\223\364\001\004\"\334\002\n\022rollback_audit_log\022\n\n\002id\030"
-    "\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\017\n\007zone_id\030\003 \001("
-    "\r\022\025\n\rrollback_type\030\004 \001(\r\022\030\n\020snapshot_id_"
-    "used\030\005 \001(\004\022 \n\030pre_rollback_snapshot_id\030\006"
-    " \001(\004\022\023\n\013target_time\030\007 \001(\004\022\030\n\020players_aff"
-    "ected\030\010 \001(\r\022\026\n\016players_failed\030\t \001(\r\022\016\n\006r"
-    "eason\030\n \001(\t\022\020\n\010operator\030\013 \001(\t\022\022\n\ncreated"
-    "_at\030\014 \001(\004\022\027\n\017orphans_cleaned\030\r \001(\r:-\212\222\364\001"
-    "\022rollback_audit_log\222\222\364\001\002id\250\223\364\001\001\260\223\364\001\004\270\223\364\001"
-    "\004\"\213\005\n\017gm_recall_batch\022\022\n\nrequest_id\030\001 \001("
-    "\004\022\026\n\016request_digest\030\002 \001(\014\022\023\n\013plan_digest"
-    "\030\003 \001(\014\022\023\n\013recall_kind\030\004 \001(\r\022\026\n\016item_conf"
-    "ig_id\030\005 \001(\r\022\025\n\rcurrency_type\030\006 \001(\r\022\022\n\nti"
-    "me_start\030\007 \001(\004\022\020\n\010time_end\030\010 \001(\004\022\020\n\010oper"
-    "ator\030\t \001(\t\022\016\n\006reason\030\n \001(\t\022\021\n\tpeer_addr\030"
-    "\013 \001(\t\022\r\n\005state\030\014 \001(\r\022\024\n\014player_count\030\r \001"
-    "(\r\022\020\n\010op_count\030\016 \001(\r\022\020\n\010open_ops\030\017 \001(\r\022\023"
-    "\n\013source_rows\030\020 \001(\r\022\024\n\014ops_complete\030\021 \001("
-    "\r\022\025\n\rops_shortfall\030\022 \001(\r\022\022\n\nops_failed\030\023"
-    " \001(\r\022\030\n\020amount_requested\030\024 \001(\004\022\024\n\014amount"
-    "_taken\030\025 \001(\004\022\023\n\013amount_debt\030\026 \001(\004\022\030\n\020amo"
-    "unt_shortfall\030\027 \001(\004\022\024\n\014cancelled_ms\030\030 \001("
-    "\004\022\022\n\ncreated_ms\030\031 \001(\004\022\022\n\nupdated_ms\030\032 \001("
-    "\004\022\023\n\013finished_ms\030\033 \001(\004:G\212\222\364\001\017gm_recall_b"
-    "atch\222\222\364\001\nrequest_id\332\222\364\001\020state,created_ms"
-    "\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\375\005\n\014gm_recall_op\022\r\n\005op_i"
-    "d\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\004\022\021\n\tplayer_id"
-    "\030\003 \001(\004\022\016\n\006stream\030\004 \001(\r\022\013\n\003seq\030\005 \001(\004\022\024\n\014s"
-    "tream_epoch\030\006 \001(\004\022\016\n\006status\030\007 \001(\r\022\017\n\007pay"
-    "load\030\010 \001(\014\022\017\n\007tx_type\030\t \001(\r\022\020\n\010attempts\030"
-    "\n \001(\r\022\027\n\017next_attempt_ms\030\013 \001(\004\022\026\n\016lease_"
-    "until_ms\030\014 \001(\004\022\023\n\013lease_token\030\r \001(\004\022\024\n\014l"
-    "ast_outcome\030\016 \001(\r\022\023\n\013last_reason\030\017 \001(\r\022\017"
-    "\n\007durable\030\020 \001(\r\022\023\n\013deadline_ms\030\021 \001(\004\022\022\n\n"
-    "created_ms\030\022 \001(\004\022\022\n\nupdated_ms\030\023 \001(\004\022\024\n\014"
-    "last_send_ms\030\024 \001(\004\022\023\n\013recall_kind\030\025 \001(\r\022"
-    "\025\n\rcurrency_type\030\026 \001(\r\022\026\n\016item_config_id"
-    "\030\027 \001(\r\022\021\n\trequested\030\030 \001(\004\022\r\n\005taken\030\031 \001(\004"
-    "\022\014\n\004debt\030\032 \001(\004\022\021\n\tshortfall\030\033 \001(\004\022\023\n\013res"
-    "olved_by\030\034 \001(\t\022\026\n\016resolve_reason\030\035 \001(\t:\266"
-    "\001\212\222\364\001\014gm_recall_op\222\222\364\001\005op_id\332\222\364\001astatus,"
-    "next_attempt_ms;player_id,stream,stream_"
-    "epoch,status,seq;player_id,status;reques"
-    "t_id,op_id\342\222\364\001!player_id,stream,stream_e"
-    "poch,seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\237\001\n\rgm_recall_se"
-    "q\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006stream\030\002 \001(\r\022\020\n\010"
-    "next_seq\030\003 \001(\004\022\022\n\nupdated_ms\030\004 \001(\004\022\r\n\005ep"
-    "och\030\005 \001(\004:6\212\222\364\001\rgm_recall_seq\222\222\364\001\020player"
-    "_id,stream\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\260\001\n\020gm_recall_"
-    "source\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001("
-    "\004\022\021\n\tplayer_id\030\003 \001(\004\022\r\n\005op_id\030\004 \001(\004\022\022\n\nc"
-    "reated_ms\030\005 \001(\004:C\212\222\364\001\020gm_recall_source\222\222"
-    "\364\001\005tx_id\332\222\364\001\020request_id;op_id\250\223\364\001\001\260\223\364\001\004\270"
-    "\223\364\001\004\"\220\002\n\013player_debt\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "\025\n\rcurrency_type\030\002 \001(\r\022\023\n\013owed_amount\030\003 "
-    "\001(\004\022\023\n\013paid_amount\030\004 \001(\004\022\016\n\006frozen\030\005 \001(\010"
-    "\022\016\n\006reason\030\006 \001(\t\022\023\n\013gm_operator\030\007 \001(\t\022\022\n"
-    "\ncreated_at\030\010 \001(\004\022\022\n\nexpires_at\030\t \001(\004\022\024\n"
-    "\014completed_at\030\n \001(\004::\212\222\364\001\013player_debt\222\222\364"
-    "\001\027player_id,currency_type\332\222\364\001\tplayer_id\""
-    "\323\002\n\016rollback_audit\022\020\n\010audit_id\030\001 \001(\004\022\021\n\t"
-    "player_id\030\002 \001(\004\022\023\n\013snapshot_id\030\003 \001(\004\022\023\n\013"
-    "target_time\030\004 \001(\004\022\023\n\013executed_at\030\005 \001(\004\022\023"
-    "\n\013gm_operator\030\006 \001(\t\022\016\n\006reason\030\007 \001(\t\022\r\n\005s"
-    "cope\030\010 \001(\t\022\026\n\016items_restored\030\t \001(\r\022\025\n\rit"
-    "ems_skipped\030\n \001(\r\022\033\n\023currencies_restored"
-    "\030\013 \001(\r\022\032\n\022currencies_skipped\030\014 \001(\r\022\021\n\tdi"
-    "ff_json\030\r \001(\t:.\212\222\364\001\016rollback_audit\222\222\364\001\010a"
-    "udit_id\332\222\364\001\tplayer_id\"\226\001\n\013player_name\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n\tname_n"
-    "orm\030\003 \001(\t\022\022\n\ncreated_ms\030\004 \001(\004\022\020\n\010bound_m"
-    "s\030\005 \001(\004:-\212\222\364\001\013player_name\222\222\364\001\tname_norm\250"
-    "\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"|\n\021player_name_owner\022\021\n\tp"
-    "layer_id\030\001 \001(\004\022\021\n\tname_norm\030\002 \001(\t\022\014\n\004nam"
-    "e\030\003 \001(\t:3\212\222\364\001\021player_name_owner\222\222\364\001\tplay"
-    "er_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"`\n\017directory_shard\022"
-    "\n\n\002id\030\001 \001(\r\022\026\n\016logical_shards\030\002 \001(\r\022\014\n\004s"
-    "lot\030\003 \001(\r:\033\212\222\364\001\017directory_shard\222\222\364\001\002id\"\372"
-    "\001\n\014player_route\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tho"
-    "me_zone\030\002 \001(\r\022\022\n\nstorage_id\030\003 \001(\r\022\031\n\021pla"
-    "cement_version\030\004 \001(\004\022\013\n\003rev\030\006 \001(\004\022\022\n\nupd"
-    "ated_by\030\007 \001(\t\022\025\n\rcreated_at_ms\030\010 \001(\004\022\025\n\r"
-    "updated_at_ms\030\t \001(\004\022\023\n\013route_shard\030\n \001(\r"
-    ":+\212\222\364\001\014player_route\222\222\364\001\025route_shard,play"
-    "er_idJ\004\010\005\020\006\"\200\001\n\020zone_merged_into\022\020\n\010src_"
-    "zone\030\001 \001(\r\022\020\n\010dst_zone\030\002 \001(\r\022\016\n\006run_id\030\003"
-    " \001(\t\022\024\n\014merged_at_ms\030\004 \001(\004:\"\212\222\364\001\020zone_me"
-    "rged_into\222\222\364\001\010src_zone\"\235\001\n\nroute_meta\022\n\n"
-    "\002id\030\001 \001(\r\022\022\n\ngeneration\030\002 \001(\t\022\020\n\010writabl"
-    "e\030\003 \001(\r\022\024\n\014writer_epoch\030\004 \001(\004\022\030\n\020catalog"
-    "_revision\030\005 \001(\004\022\025\n\rfreeze_run_id\030\006 \001(\014:\026"
-    "\212\222\364\001\nroute_meta\222\222\364\001\002id\"\\\n\021account_direct"
-    "ory\022\017\n\007account\030\001 \001(\t\022\022\n\ncreated_ms\030\002 \001(\004"
-    ":\"\212\222\364\001\021account_directory\222\222\364\001\007account\"\332\001\n"
-    "\020account_role_ref\022\017\n\007account\030\001 \001(\t\022\021\n\tpl"
-    "ayer_id\030\002 \001(\004\022\r\n\005state\030\003 \001(\r\022\r\n\005tx_id\030\004 "
-    "\001(\004\022\022\n\nlisting_id\030\005 \001(\004\022\021\n\thome_zone\030\006 \001"
-    "(\r\022\r\n\005nonce\030\007 \001(\004\022\022\n\ncreated_ms\030\010 \001(\004::\212"
-    "\222\364\001\020account_role_ref\222\222\364\001\021account,player_"
-    "id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\211\002\n\014account_role\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\022\n\nrole_p"
-    "roto\030\003 \001(\014\022\026\n\016owner_revision\030\004 \001(\004\022\022\n\nup"
-    "dated_ms\030\005 \001(\004\022\030\n\020trade_listing_id\030\006 \001(\004"
-    "\022\035\n\025initial_player_commit\030\007 \001(\004\022\025\n\rfence"
-    "_version\030\010 \001(\004\022\025\n\rprepare_token\030\t \001(\004:.\212"
-    "\222\364\001\014account_role\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004"
-    "\270\223\364\001\004\"\236\001\n\024account_role_removal\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_revi"
-    "sion\030\003 \001(\004\022\022\n\nstarted_ms\030\004 \001(\004:6\212\222\364\001\024acc"
-    "ount_role_removal\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001"
-    "\004\270\223\364\001\004\"\312\002\n\022account_role_trade\022\022\n\nlisting"
-    "_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_a"
-    "ccount\030\003 \001(\t\022\035\n\025seller_owner_revision\030\004 "
-    "\001(\004\022\026\n\016request_digest\030\005 \001(\014\022\r\n\005state\030\006 \001"
-    "(\r\022\027\n\017freeze_evidence\030\007 \001(\014\022\022\n\ncreated_m"
-    "s\030\010 \001(\004\022\022\n\nupdated_ms\030\t \001(\004\022\034\n\024required_"
-    "owner_epoch\030\n \001(\004\022\031\n\021required_save_seq\030\013"
-    " \001(\004:5\212\222\364\001\022account_role_trade\222\222\364\001\nlistin"
-    "g_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\276\002\n\035account_role_tra"
-    "nsfer_receipt\022\r\n\005tx_id\030\001 \001(\004\022\026\n\016request_"
-    "digest\030\002 \001(\014\022\022\n\nlisting_id\030\003 \001(\004\022\021\n\tplay"
-    "er_id\030\004 \001(\004\022\026\n\016seller_account\030\005 \001(\t\022\025\n\rb"
-    "uyer_account\030\006 \001(\t\022\035\n\025seller_owner_revis"
-    "ion\030\007 \001(\004\022\034\n\024buyer_owner_revision\030\010 \001(\004\022"
-    "\022\n\ncreated_ms\030\t \001(\004\022\022\n\nrole_proto\030\n \001(\014:"
-    ";\212\222\364\001\035account_role_transfer_receipt\222\222\364\001\005"
-    "tx_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\312\002\n\026account_role_ad"
-    "mission\022\021\n\tplayer_id\030\001 \001(\004\022\031\n\021scene_inst"
-    "ance_id\030\002 \001(\t\022\032\n\022highest_generation\030\003 \001("
-    "\004\022\026\n\016closed_through\030\004 \001(\004\022\026\n\016identity_pr"
-    "oto\030\005 \001(\014\022\026\n\016request_digest\030\006 \001(\014\022\034\n\024req"
-    "uired_owner_epoch\030\007 \001(\004\022\031\n\021required_save"
-    "_seq\030\010 \001(\004\022\024\n\014close_digest\030\t \001(\014\022\022\n\nupda"
-    "ted_ms\030\n \001(\004:;\212\222\364\001\026account_role_admissio"
-    "n\222\222\364\001\033player_id,scene_instance_id\"\330\001\n\031ac"
-    "count_role_trade_holder\022\022\n\nlisting_id\030\001 "
-    "\001(\004\022\031\n\021scene_instance_id\030\002 \001(\t\022\022\n\nseal_p"
-    "roto\030\003 \001(\014\022\017\n\007drained\030\004 \001(\r\022\022\n\nack_diges"
-    "t\030\005 \001(\014\022\022\n\nupdated_ms\030\006 \001(\004:\?\212\222\364\001\031accoun"
-    "t_role_trade_holder\222\222\364\001\034listing_id,scene"
-    "_instance_id\"\360\002\n\023sql_writer_registry\022\022\n\n"
-    "writer_key\030\001 \001(\014\022\022\n\ngeneration\030\002 \001(\t\022\023\n\013"
-    "instance_id\030\003 \001(\014\022\025\n\rsql_principal\030\004 \001(\014"
-    "\022\033\n\023registration_digest\030\005 \001(\014\022)\n\005state\030\006"
-    " \001(\0162\032.sql_writer_registry.State\022\025\n\rregi"
-    "stered_ms\030\007 \001(\004\022\035\n\025retirement_request_id"
-    "\030\010 \001(\014\022\031\n\021retirement_digest\030\t \001(\014\022\022\n\nret"
-    "ired_ms\030\n \001(\004\"3\n\005State\022\021\n\rSTATE_UNKNOWN\020"
-    "\000\022\n\n\006ACTIVE\020\001\022\013\n\007REVOKED\020\002:#\212\222\364\001\017writer_"
-    "registry\222\222\364\001\nwriter_key\"\302\001\n\017sql_writer_s"
-    "lot\022\022\n\nwriter_key\030\001 \001(\014\022\014\n\004slot\030\002 \001(\r\022\022\n"
-    "\ngeneration\030\003 \001(\t\022\024\n\014writer_epoch\030\004 \001(\004\022"
-    ")\n\005state\030\005 \001(\0162\032.sql_writer_registry.Sta"
-    "te\022\022\n\nlock_touch\030\006 \001(\r:$\212\222\364\001\013writer_slot"
-    "\222\222\364\001\017writer_key,slot\"\261\006\n\034sql_writer_life"
-    "cycle_receipt\022\022\n\nrequest_id\030\001 \001(\014\0220\n\004kin"
-    "d\030\002 \001(\0162\".sql_writer_lifecycle_receipt.K"
-    "ind\022\022\n\ngeneration\030\003 \001(\t\022\026\n\016request_diges"
-    "t\030\004 \001(\014\022\025\n\rrequest_proto\030\005 \001(\014\022\026\n\016previo"
-    "us_epoch\030\006 \001(\004\022\027\n\017resulting_epoch\030\007 \001(\004\022"
-    "\030\n\020catalog_revision\030\010 \001(\004\032\224\003\n\007Request\022\022\n"
-    "\nrequest_id\030\001 \001(\014\0220\n\004kind\030\002 \001(\0162\".sql_wr"
-    "iter_lifecycle_receipt.Kind\022$\n\006writer\030\003 "
-    "\001(\0132\024.sql_writer_registry\022\026\n\016expected_ep"
-    "och\030\004 \001(\004\022!\n\031expected_catalog_revision\030\005"
-    " \001(\004\022\030\n\020authority_schema\030\006 \001(\t\022\031\n\021protec"
-    "ted_schemas\030\007 \003(\t\022\031\n\021deployment_digest\030\010"
-    " \001(\014\022\032\n\022maintenance_run_id\030\t \001(\014\022\025\n\rdepl"
-    "oyment_id\030\n \001(\t\022<\n\016lock_primitive\030\013 \001(\0162"
-    "$.sql_writer_boot_grant.LockPrimitive\022!\n"
-    "\031lock_qualification_sha256\030\014 \001(\014\"D\n\004Kind"
-    "\022\020\n\014KIND_UNKNOWN\020\000\022\014\n\010REGISTER\020\001\022\n\n\006RETI"
-    "RE\020\002\"\004\010\003\020\003\"\004\010\004\020\004\"\004\010\005\020\005:`\212\222\364\001\030writer_life"
-    "cycle_receipt\222\222\364\001\nrequest_id\332\222\364\001/kind,re"
-    "quest_digest;catalog_revision,request_id"
-    "\"\214\004\n\025sql_writer_boot_grant\022\016\n\006format\030\001 \001"
-    "(\t\022\022\n\nwriter_key\030\002 \001(\014\022\023\n\013instance_id\030\003 "
-    "\001(\014\022\022\n\ngeneration\030\004 \001(\t\022\030\n\020authority_sch"
-    "ema\030\005 \001(\t\022\031\n\021protected_schemas\030\006 \003(\t\022\025\n\r"
-    "sql_principal\030\007 \001(\014\022\033\n\023registration_dige"
-    "st\030\010 \001(\014\022\025\n\rdeployment_id\030\t \001(\t\022\020\n\010grant"
-    "_id\030\n \001(\014\022\022\n\ngranted_ms\030\013 \001(\004\022\022\n\npermiss"
-    "ion\030\014 \001(\t\022!\n\031physical_authority_sha256\030\r"
-    " \001(\014\022\032\n\022maintenance_run_id\030\016 \001(\014\022<\n\016lock"
-    "_primitive\030\017 \001(\0162$.sql_writer_boot_grant"
-    ".LockPrimitive\022!\n\031lock_qualification_sha"
-    "256\030\020 \001(\014\"L\n\rLockPrimitive\022\032\n\026LOCK_PRIMI"
-    "TIVE_UNKNOWN\020\000\022\017\n\013SELECT_ONLY\020\001\022\016\n\nLOCK_"
-    "TOUCH\020\002\"S\n\031sql_writer_boot_grant_set\022\016\n\006"
-    "format\030\001 \001(\t\022&\n\006grants\030\002 \003(\0132\026.sql_write"
-    "r_boot_grant\"\332\004\n\024sql_writer_drain_run\022\024\n"
-    "\014operation_id\030\001 \001(\014\022\026\n\016request_digest\030\002 "
-    "\001(\014\022\022\n\ngeneration\030\003 \001(\t\022\030\n\020attempt_revis"
-    "ion\030\004 \001(\004\022\026\n\016manifest_proto\030\005 \001(\014\022\027\n\017man"
-    "ifest_digest\030\006 \001(\014\022*\n\005phase\030\007 \001(\0162\033.sql_"
-    "writer_drain_run.Phase\022\035\n\025latest_receipt"
-    "_digest\030\010 \001(\014\022\031\n\021frozen_request_id\030\t \001(\014"
-    "\022\022\n\nupdated_ms\030\n \001(\004\022\031\n\021latest_receipt_i"
-    "d\030\013 \001(\014\"\363\001\n\005Phase\022\013\n\007UNKNOWN\020\000\022\016\n\nPLAN_F"
-    "IXED\020\001\022\020\n\014ROOTS_CLOSED\020\003\022\014\n\010DRAINING\020\004\022\022"
-    "\n\016NON_SQL_CLOSED\020\005\022\025\n\021FREEZE_AUTHORIZED\020"
-    "\006\022\016\n\nSQL_FROZEN\020\007\022\021\n\rRELEASE_READY\020\010\022\020\n\014"
-    "SQL_RELEASED\020\t\022\030\n\024PUBLICATION_REOPENED\020\n"
-    "\022\022\n\016ABORTED_CLOSED\020\013\022\031\n\025EMERGENCY_FROZEN"
-    "_HOLD\020\014\"\004\010\002\020\002:*\212\222\364\001\024sql_writer_drain_run"
-    "\222\222\364\001\014operation_id\"\347\005\n\030sql_writer_freeze_"
-    "ticket\022\021\n\tticket_id\030\001 \001(\014\022\024\n\014operation_i"
-    "d\030\002 \001(\014\022\030\n\020attempt_revision\030\003 \001(\004\022\022\n\ngen"
-    "eration\030\004 \001(\t\022\027\n\017manifest_digest\030\005 \001(\014\022\036"
-    "\n\026non_sql_receipt_digest\030\006 \001(\014\022\031\n\021freeze"
-    "_request_id\030\007 \001(\014\022\035\n\025freeze_request_dige"
-    "st\030\010 \001(\014\022\025\n\rnot_before_ms\030\t \001(\004\022\022\n\nexpir"
-    "es_ms\030\n \001(\004\022.\n\005state\030\013 \001(\0162\037.sql_writer_"
-    "freeze_ticket.State\022\037\n\027consumed_receipt_"
-    "digest\030\014 \001(\014\022\031\n\021revocation_digest\030\r \001(\014\022"
-    "\022\n\nupdated_ms\030\016 \001(\004\022G\n\022authorization_kin"
-    "d\030\017 \001(\0162+.sql_writer_freeze_ticket.Autho"
-    "rizationKind\022\030\n\020grant_receipt_id\030\020 \001(\014\022\034"
-    "\n\024grant_receipt_digest\030\021 \001(\014\"D\n\005State\022\021\n"
-    "\rSTATE_UNKNOWN\020\000\022\r\n\tAVAILABLE\020\001\022\014\n\010CONSU"
-    "MED\020\002\022\013\n\007REVOKED\020\003\"b\n\021AuthorizationKind\022"
-    "\031\n\025AUTHORIZATION_UNKNOWN\020\000\022\027\n\023NORMAL_DRA"
-    "IN_FREEZE\020\001\022\031\n\025EMERGENCY_HOLD_FREEZE\020\002:+"
-    "\212\222\364\001\030sql_writer_freeze_ticket\222\222\364\001\tticket"
-    "_id\"\3456\n\036sql_writer_maintenance_receipt\022\022"
-    "\n\nrequest_id\030\001 \001(\014\022\026\n\016request_digest\030\002 \001"
-    "(\014\022\016\n\006run_id\030\003 \001(\014\022\022\n\ngeneration\030\004 \001(\t\022\024"
-    "\n\014before_epoch\030\005 \001(\004\022\023\n\013after_epoch\030\006 \001("
-    "\004\022\030\n\020catalog_revision\030\007 \001(\004\0224\n\005phase\030\010 \001"
-    "(\0162%.sql_writer_maintenance_receipt.Phas"
-    "e\022\022\n\nplan_proto\030\t \001(\014\022\024\n\014committed_ms\030\n "
-    "\001(\004\0222\n\004kind\030\013 \001(\0162$.sql_writer_maintenan"
-    "ce_receipt.Kind\022.\n\trun_phase\030\014 \001(\0162\033.sql"
-    "_writer_drain_run.Phase\022\030\n\020attempt_revis"
-    "ion\030\r \001(\004\022\030\n\020prior_receipt_id\030\016 \001(\014\022\034\n\024p"
-    "rior_receipt_digest\030\017 \001(\014\022:\n\010evidence\030\020 "
-    "\001(\0132(.sql_writer_maintenance_receipt.Evi"
-    "dence\022\026\n\016receipt_digest\030\021 \001(\014\032\255\006\n\004Plan\022!"
-    "\n\031physical_cluster_identity\030\001 \001(\014\022\030\n\020aut"
-    "hority_schema\030\002 \001(\t\022\031\n\021protected_schemas"
-    "\030\003 \003(\t\022\032\n\022active_writer_keys\030\004 \003(\014\022\024\n\014be"
-    "fore_epoch\030\005 \001(\004\022\030\n\020catalog_revision\030\006 \001"
-    "(\004\022\016\n\006run_id\030\007 \001(\014\022\037\n\027prior_freeze_reque"
-    "st_id\030\010 \001(\014\022C\n\014root_issuers\030\n \003(\0132-.sql_"
-    "writer_maintenance_receipt.IssuerClosure"
-    "\022E\n\016queue_mutators\030\013 \003(\0132-.sql_writer_ma"
-    "intenance_receipt.IssuerClosure\022O\n\020kafka"
-    "_partitions\030\014 \003(\01325.sql_writer_maintenan"
-    "ce_receipt.KafkaPartitionClosure\022I\n\rredi"
-    "s_targets\030\r \003(\01322.sql_writer_maintenance"
-    "_receipt.RedisTargetClosure\022>\n\013source_pi"
-    "ns\030\016 \003(\0132).sql_writer_maintenance_receip"
-    "t.SourcePin\022@\n\tlaunchers\030\017 \003(\0132-.sql_wri"
-    "ter_maintenance_receipt.LaunchClosure\022J\n"
-    "\023maintenance_issuers\030\020 \003(\0132-.sql_writer_"
-    "maintenance_receipt.IssuerClosure\022T\n\022man"
-    "ual_assignments\030\021 \003(\01328.sql_writer_maint"
-    "enance_receipt.ManualConsumerAssignmentJ"
-    "\004\010\t\020\n\032\200\001\n\rLaunchClosure\022\023\n\013launcher_id\030\001"
-    " \001(\014\022>\n\013source_pins\030\002 \003(\0132).sql_writer_m"
-    "aintenance_receipt.SourcePin\022\032\n\022permanen"
-    "t_fence_id\030\003 \001(\014\0322\n\tSourcePin\022\025\n\rabsolut"
-    "e_path\030\001 \001(\t\022\016\n\006sha256\030\002 \001(\014\032\317\002\n\rIssuerC"
-    "losure\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013instance_id"
-    "\030\002 \001(\014\022\033\n\023physical_writer_key\030\003 \001(\014\022\024\n\014l"
-    "ogical_role\030\004 \001(\t\022\"\n\032permanent_revival_f"
-    "ence_id\030\005 \001(\014\022\033\n\023accepting_closed_ms\030\006 \001"
-    "(\004\022\033\n\023accepted_settled_ms\030\007 \001(\004\022 \n\030accep"
-    "ted_frontier_digest\030\010 \001(\014\022\037\n\027unresolved_"
-    "publications\030\t \001(\004\022B\n\017source_evidence\030\n "
-    "\003(\0132).sql_writer_maintenance_receipt.Sou"
-    "rcePin\032\376\001\n\025KafkaPartitionClosure\022\022\n\nclus"
-    "ter_id\030\001 \001(\014\022\020\n\010topic_id\030\002 \001(\014\022\022\n\ntopic_"
-    "name\030\003 \001(\t\022\r\n\005group\030\004 \001(\t\022\021\n\tpartition\030\005"
-    " \001(\r\022!\n\031protected_committed_floor\030\006 \001(\003\022"
-    "\030\n\020initial_earliest\030\007 \001(\003\022\026\n\016final_earli"
-    "est\030\010 \001(\003\022\033\n\023final_exclusive_end\030\t \001(\003\022\027"
-    "\n\017final_committed\030\n \001(\003\032\245\001\n\017RedisKeyClos"
-    "ure\022\013\n\003key\030\001 \001(\t\022\014\n\004kind\030\002 \001(\t\022\r\n\005topic\030"
-    "\003 \001(\t\022\022\n\nredis_type\030\004 \001(\t\022\017\n\007pttl_ms\030\005 \001"
-    "(\003\022\r\n\005count\030\006 \001(\004\022\017\n\007members\030\007 \003(\014\022\016\n\006va"
-    "lues\030\010 \003(\014\022\023\n\013dump_sha256\030\t \001(\014\032\220\002\n\022Redi"
-    "sTargetClosure\022\014\n\004role\030\001 \001(\t\022\017\n\007address\030"
-    "\002 \001(\t\022\n\n\002db\030\003 \001(\005\022\025\n\rserver_run_id\030\004 \001(\014"
-    "\022\031\n\021maintenance_nonce\030\005 \001(\014\022\r\n\005zones\030\006 \003"
-    "(\r\022E\n\014observations\030\007 \003(\0132/.sql_writer_ma"
-    "intenance_receipt.RedisKeyClosure\022G\n\024sca"
-    "n_source_evidence\030\010 \003(\0132).sql_writer_mai"
-    "ntenance_receipt.SourcePin\032\300\001\n\023Publicati"
-    "onEvidence\022D\n\rlogical_roles\030\001 \003(\0132-.sql_"
-    "writer_maintenance_receipt.IssuerClosure"
-    "\022\037\n\027issuer_inventory_digest\030\002 \001(\014\022B\n\017sou"
-    "rce_evidence\030\003 \003(\0132).sql_writer_maintena"
-    "nce_receipt.SourcePin\032\367\004\n\025NonSqlClosureE"
-    "vidence\022E\n\016queue_mutators\030\001 \003(\0132-.sql_wr"
-    "iter_maintenance_receipt.IssuerClosure\022O"
-    "\n\020kafka_partitions\030\002 \003(\01325.sql_writer_ma"
-    "intenance_receipt.KafkaPartitionClosure\022"
-    "I\n\rredis_targets\030\003 \003(\01322.sql_writer_main"
-    "tenance_receipt.RedisTargetClosure\022\036\n\026ro"
-    "ot_closed_receipt_id\030\004 \001(\014\022\"\n\032root_close"
-    "d_receipt_digest\030\005 \001(\014\022!\n\031relay_quiesced"
-    "_receipt_id\030\006 \001(\014\022%\n\035relay_quiesced_rece"
-    "ipt_digest\030\007 \001(\014\022#\n\033historical_inventory"
-    "_digest\030\010 \001(\014\022\031\n\021observed_start_ms\030\t \001(\004"
-    "\022\027\n\017observed_end_ms\030\n \001(\004\022B\n\017source_evid"
-    "ence\030\013 \003(\0132).sql_writer_maintenance_rece"
-    "ipt.SourcePin\022P\n\020manual_consumers\030\014 \003(\0132"
-    "6.sql_writer_maintenance_receipt.ManualC"
-    "onsumerEvidence\032\232\001\n\016TicketEvidence\022\021\n\tti"
-    "cket_id\030\001 \001(\014\022\030\n\020bound_request_id\030\002 \001(\014\022"
-    "\034\n\024bound_request_digest\030\003 \001(\014\022\036\n\026authori"
-    "ty_operation_id\030\004 \001(\014\022\035\n\025ticket_request_"
-    "digest\030\005 \001(\014\032\350\001\n\021EmergencyEvidence\022\016\n\006re"
-    "ason\030\001 \001(\t\022\031\n\021danger_receipt_id\030\002 \001(\014\022\035\n"
-    "\025danger_receipt_digest\030\003 \001(\014\022B\n\017source_e"
-    "vidence\030\004 \003(\0132).sql_writer_maintenance_r"
-    "eceipt.SourcePin\022E\n\rauthorization\030\005 \001(\0132"
-    "..sql_writer_maintenance_receipt.TicketE"
-    "vidence\032\212\002\n\020ReleaseReadiness\022\"\n\032original"
-    "_freeze_receipt_id\030\001 \001(\014\022&\n\036original_fre"
-    "eze_receipt_digest\030\002 \001(\014\022!\n\031non_sql_clos"
-    "ed_receipt_id\030\004 \001(\014\022%\n\035non_sql_closed_re"
-    "ceipt_digest\030\005 \001(\014\022T\n\027maintenance_public"
-    "ation\030\007 \001(\01323.sql_writer_maintenance_rec"
-    "eipt.PublicationEvidenceJ\004\010\003\020\004J\004\010\006\020\007\032\320\002\n"
-    "\026ConsumerGroupReadiness\022\024\n\014operation_id\030"
-    "\001 \001(\014\022\027\n\017manifest_digest\030\002 \001(\014\022\021\n\tissuer"
-    "_id\030\003 \001(\014\022\023\n\013instance_id\030\004 \001(\014\022\r\n\005group\030"
-    "\005 \001(\t\022\025\n\rgeneration_id\030\006 \001(\005\022\021\n\tmember_i"
-    "d\030\007 \001(\t\022R\n\023expected_partitions\030\010 \003(\01325.s"
-    "ql_writer_maintenance_receipt.KafkaParti"
-    "tionClosure\022R\n\023assigned_partitions\030\t \003(\013"
-    "25.sql_writer_maintenance_receipt.KafkaP"
-    "artitionClosure\032\364\002\n\030ManualConsumerAssign"
-    "ment\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002"
-    " \001(\014\022\023\n\013consumer_id\030\003 \001(\t\022\022\n\ncluster_id\030"
-    "\004 \001(\014\022\020\n\010topic_id\030\005 \001(\014\022\022\n\ntopic_name\030\006 "
-    "\001(\t\022\027\n\017partition_count\030\007 \001(\r\022\021\n\tpartitio"
-    "n\030\010 \001(\r\022\026\n\016target_node_id\030\t \001(\r\022\032\n\022targe"
-    "t_instance_id\030\n \001(\014\022\033\n\023assignment_revisi"
-    "on\030\013 \001(\004\022\024\n\014start_offset\030\014 \001(\003\022\020\n\010positi"
-    "on\030\r \001(\003\022\020\n\010earliest\030\016 \001(\003\022\025\n\rexclusive_"
-    "end\030\017 \001(\003\022\023\n\013observed_ms\030\020 \001(\004\032\316\002\n\026Manua"
-    "lConsumerEvidence\022\024\n\014operation_id\030\001 \001(\014\022"
-    "\027\n\017manifest_digest\030\002 \001(\014\022M\n\013assignments\030"
-    "\003 \003(\01328.sql_writer_maintenance_receipt.M"
-    "anualConsumerAssignment\022\030\n\020accepting_clo"
-    "sed\030\004 \001(\010\022\030\n\020callbacks_joined\030\005 \001(\010\022\020\n\010a"
-    "ccepted\030\006 \001(\004\022\017\n\007settled\030\007 \001(\004\022\037\n\027unreso"
-    "lved_publications\030\010 \001(\004\022>\n\013source_pins\030\t"
+    "\030\016 \001(\t\022\017\n\007zone_id\030\017 \001(\r\022\r\n\005shard\030\020 \001(\r:\301"
+    "\001\212\222\364\001\017transaction_log\222\222\364\001\005tx_id\332\222\364\001\216\001fro"
+    "m_player,timestamp_sec;to_player,timesta"
+    "mp_sec;item_config_id,shard,timestamp_se"
+    "c;tx_type,shard,timestamp_sec;shard,time"
+    "stamp_sec;item_uuid\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\304\002\n\017p"
+    "layer_snapshot\022\n\n\002id\030\001 \001(\004\022\021\n\tplayer_id\030"
+    "\002 \001(\004\022\017\n\007zone_id\030\003 \001(\r\022\025\n\rsnapshot_type\030"
+    "\004 \001(\r\022\022\n\ncreated_at\030\005 \001(\004\022\016\n\006reason\030\006 \001("
+    "\t\022\020\n\010operator\030\007 \001(\t\022\014\n\004data\030\010 \001(\014\022\025\n\rsna"
+    "pshot_guid\030\t \001(\004\022\016\n\006source\030\n \001(\r\022\r\n\005shar"
+    "d\030\013 \001(\r:p\212\222\364\001\017player_snapshot\222\222\364\001\002id\332\222\364\001"
+    "Aplayer_id;snapshot_guid;zone_id,shard,c"
+    "reated_at;shard,created_at\250\223\364\001\001\260\223\364\001\004\270\223\364\001"
+    "\004\"\334\002\n\022rollback_audit_log\022\n\n\002id\030\001 \001(\004\022\021\n\t"
+    "player_id\030\002 \001(\004\022\017\n\007zone_id\030\003 \001(\r\022\025\n\rroll"
+    "back_type\030\004 \001(\r\022\030\n\020snapshot_id_used\030\005 \001("
+    "\004\022 \n\030pre_rollback_snapshot_id\030\006 \001(\004\022\023\n\013t"
+    "arget_time\030\007 \001(\004\022\030\n\020players_affected\030\010 \001"
+    "(\r\022\026\n\016players_failed\030\t \001(\r\022\016\n\006reason\030\n \001"
+    "(\t\022\020\n\010operator\030\013 \001(\t\022\022\n\ncreated_at\030\014 \001(\004"
+    "\022\027\n\017orphans_cleaned\030\r \001(\r:-\212\222\364\001\022rollback"
+    "_audit_log\222\222\364\001\002id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\213\005\n\017gm_"
+    "recall_batch\022\022\n\nrequest_id\030\001 \001(\004\022\026\n\016requ"
+    "est_digest\030\002 \001(\014\022\023\n\013plan_digest\030\003 \001(\014\022\023\n"
+    "\013recall_kind\030\004 \001(\r\022\026\n\016item_config_id\030\005 \001"
+    "(\r\022\025\n\rcurrency_type\030\006 \001(\r\022\022\n\ntime_start\030"
+    "\007 \001(\004\022\020\n\010time_end\030\010 \001(\004\022\020\n\010operator\030\t \001("
+    "\t\022\016\n\006reason\030\n \001(\t\022\021\n\tpeer_addr\030\013 \001(\t\022\r\n\005"
+    "state\030\014 \001(\r\022\024\n\014player_count\030\r \001(\r\022\020\n\010op_"
+    "count\030\016 \001(\r\022\020\n\010open_ops\030\017 \001(\r\022\023\n\013source_"
+    "rows\030\020 \001(\r\022\024\n\014ops_complete\030\021 \001(\r\022\025\n\rops_"
+    "shortfall\030\022 \001(\r\022\022\n\nops_failed\030\023 \001(\r\022\030\n\020a"
+    "mount_requested\030\024 \001(\004\022\024\n\014amount_taken\030\025 "
+    "\001(\004\022\023\n\013amount_debt\030\026 \001(\004\022\030\n\020amount_short"
+    "fall\030\027 \001(\004\022\024\n\014cancelled_ms\030\030 \001(\004\022\022\n\ncrea"
+    "ted_ms\030\031 \001(\004\022\022\n\nupdated_ms\030\032 \001(\004\022\023\n\013fini"
+    "shed_ms\030\033 \001(\004:G\212\222\364\001\017gm_recall_batch\222\222\364\001\n"
+    "request_id\332\222\364\001\020state,created_ms\250\223\364\001\001\260\223\364\001"
+    "\004\270\223\364\001\004\"\375\005\n\014gm_recall_op\022\r\n\005op_id\030\001 \001(\004\022\022"
+    "\n\nrequest_id\030\002 \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\016\n"
+    "\006stream\030\004 \001(\r\022\013\n\003seq\030\005 \001(\004\022\024\n\014stream_epo"
+    "ch\030\006 \001(\004\022\016\n\006status\030\007 \001(\r\022\017\n\007payload\030\010 \001("
+    "\014\022\017\n\007tx_type\030\t \001(\r\022\020\n\010attempts\030\n \001(\r\022\027\n\017"
+    "next_attempt_ms\030\013 \001(\004\022\026\n\016lease_until_ms\030"
+    "\014 \001(\004\022\023\n\013lease_token\030\r \001(\004\022\024\n\014last_outco"
+    "me\030\016 \001(\r\022\023\n\013last_reason\030\017 \001(\r\022\017\n\007durable"
+    "\030\020 \001(\r\022\023\n\013deadline_ms\030\021 \001(\004\022\022\n\ncreated_m"
+    "s\030\022 \001(\004\022\022\n\nupdated_ms\030\023 \001(\004\022\024\n\014last_send"
+    "_ms\030\024 \001(\004\022\023\n\013recall_kind\030\025 \001(\r\022\025\n\rcurren"
+    "cy_type\030\026 \001(\r\022\026\n\016item_config_id\030\027 \001(\r\022\021\n"
+    "\trequested\030\030 \001(\004\022\r\n\005taken\030\031 \001(\004\022\014\n\004debt\030"
+    "\032 \001(\004\022\021\n\tshortfall\030\033 \001(\004\022\023\n\013resolved_by\030"
+    "\034 \001(\t\022\026\n\016resolve_reason\030\035 \001(\t:\266\001\212\222\364\001\014gm_"
+    "recall_op\222\222\364\001\005op_id\332\222\364\001astatus,next_atte"
+    "mpt_ms;player_id,stream,stream_epoch,sta"
+    "tus,seq;player_id,status;request_id,op_i"
+    "d\342\222\364\001!player_id,stream,stream_epoch,seq\250"
+    "\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\237\001\n\rgm_recall_seq\022\021\n\tplay"
+    "er_id\030\001 \001(\004\022\016\n\006stream\030\002 \001(\r\022\020\n\010next_seq\030"
+    "\003 \001(\004\022\022\n\nupdated_ms\030\004 \001(\004\022\r\n\005epoch\030\005 \001(\004"
+    ":6\212\222\364\001\rgm_recall_seq\222\222\364\001\020player_id,strea"
+    "m\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\260\001\n\020gm_recall_source\022\r\n"
+    "\005tx_id\030\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\004\022\021\n\tplay"
+    "er_id\030\003 \001(\004\022\r\n\005op_id\030\004 \001(\004\022\022\n\ncreated_ms"
+    "\030\005 \001(\004:C\212\222\364\001\020gm_recall_source\222\222\364\001\005tx_id\332"
+    "\222\364\001\020request_id;op_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\220\002\n\013"
+    "player_debt\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rcurren"
+    "cy_type\030\002 \001(\r\022\023\n\013owed_amount\030\003 \001(\004\022\023\n\013pa"
+    "id_amount\030\004 \001(\004\022\016\n\006frozen\030\005 \001(\010\022\016\n\006reaso"
+    "n\030\006 \001(\t\022\023\n\013gm_operator\030\007 \001(\t\022\022\n\ncreated_"
+    "at\030\010 \001(\004\022\022\n\nexpires_at\030\t \001(\004\022\024\n\014complete"
+    "d_at\030\n \001(\004::\212\222\364\001\013player_debt\222\222\364\001\027player_"
+    "id,currency_type\332\222\364\001\tplayer_id\"\323\002\n\016rollb"
+    "ack_audit\022\020\n\010audit_id\030\001 \001(\004\022\021\n\tplayer_id"
+    "\030\002 \001(\004\022\023\n\013snapshot_id\030\003 \001(\004\022\023\n\013target_ti"
+    "me\030\004 \001(\004\022\023\n\013executed_at\030\005 \001(\004\022\023\n\013gm_oper"
+    "ator\030\006 \001(\t\022\016\n\006reason\030\007 \001(\t\022\r\n\005scope\030\010 \001("
+    "\t\022\026\n\016items_restored\030\t \001(\r\022\025\n\ritems_skipp"
+    "ed\030\n \001(\r\022\033\n\023currencies_restored\030\013 \001(\r\022\032\n"
+    "\022currencies_skipped\030\014 \001(\r\022\021\n\tdiff_json\030\r"
+    " \001(\t:.\212\222\364\001\016rollback_audit\222\222\364\001\010audit_id\332\222"
+    "\364\001\tplayer_id\"\226\001\n\013player_name\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\021\n\tname_norm\030\003 \001(\t"
+    "\022\022\n\ncreated_ms\030\004 \001(\004\022\020\n\010bound_ms\030\005 \001(\004:-"
+    "\212\222\364\001\013player_name\222\222\364\001\tname_norm\250\223\364\001\001\260\223\364\001\004"
+    "\270\223\364\001\004\"|\n\021player_name_owner\022\021\n\tplayer_id\030"
+    "\001 \001(\004\022\021\n\tname_norm\030\002 \001(\t\022\014\n\004name\030\003 \001(\t:3"
+    "\212\222\364\001\021player_name_owner\222\222\364\001\tplayer_id\250\223\364\001"
+    "\001\260\223\364\001\004\270\223\364\001\004\"`\n\017directory_shard\022\n\n\002id\030\001 \001"
+    "(\r\022\026\n\016logical_shards\030\002 \001(\r\022\014\n\004slot\030\003 \001(\r"
+    ":\033\212\222\364\001\017directory_shard\222\222\364\001\002id\"\372\001\n\014player"
+    "_route\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\thome_zone\030\002"
+    " \001(\r\022\022\n\nstorage_id\030\003 \001(\r\022\031\n\021placement_ve"
+    "rsion\030\004 \001(\004\022\013\n\003rev\030\006 \001(\004\022\022\n\nupdated_by\030\007"
+    " \001(\t\022\025\n\rcreated_at_ms\030\010 \001(\004\022\025\n\rupdated_a"
+    "t_ms\030\t \001(\004\022\023\n\013route_shard\030\n \001(\r:+\212\222\364\001\014pl"
+    "ayer_route\222\222\364\001\025route_shard,player_idJ\004\010\005"
+    "\020\006\"\200\001\n\020zone_merged_into\022\020\n\010src_zone\030\001 \001("
+    "\r\022\020\n\010dst_zone\030\002 \001(\r\022\016\n\006run_id\030\003 \001(\t\022\024\n\014m"
+    "erged_at_ms\030\004 \001(\004:\"\212\222\364\001\020zone_merged_into"
+    "\222\222\364\001\010src_zone\"\235\001\n\nroute_meta\022\n\n\002id\030\001 \001(\r"
+    "\022\022\n\ngeneration\030\002 \001(\t\022\020\n\010writable\030\003 \001(\r\022\024"
+    "\n\014writer_epoch\030\004 \001(\004\022\030\n\020catalog_revision"
+    "\030\005 \001(\004\022\025\n\rfreeze_run_id\030\006 \001(\014:\026\212\222\364\001\nrout"
+    "e_meta\222\222\364\001\002id\"\\\n\021account_directory\022\017\n\007ac"
+    "count\030\001 \001(\t\022\022\n\ncreated_ms\030\002 \001(\004:\"\212\222\364\001\021ac"
+    "count_directory\222\222\364\001\007account\"\332\001\n\020account_"
+    "role_ref\022\017\n\007account\030\001 \001(\t\022\021\n\tplayer_id\030\002"
+    " \001(\004\022\r\n\005state\030\003 \001(\r\022\r\n\005tx_id\030\004 \001(\004\022\022\n\nli"
+    "sting_id\030\005 \001(\004\022\021\n\thome_zone\030\006 \001(\r\022\r\n\005non"
+    "ce\030\007 \001(\004\022\022\n\ncreated_ms\030\010 \001(\004::\212\222\364\001\020accou"
+    "nt_role_ref\222\222\364\001\021account,player_id\250\223\364\001\001\260\223"
+    "\364\001\004\270\223\364\001\004\"\211\002\n\014account_role\022\021\n\tplayer_id\030\001"
+    " \001(\004\022\017\n\007account\030\002 \001(\t\022\022\n\nrole_proto\030\003 \001("
+    "\014\022\026\n\016owner_revision\030\004 \001(\004\022\022\n\nupdated_ms\030"
+    "\005 \001(\004\022\030\n\020trade_listing_id\030\006 \001(\004\022\035\n\025initi"
+    "al_player_commit\030\007 \001(\004\022\025\n\rfence_version\030"
+    "\010 \001(\004\022\025\n\rprepare_token\030\t \001(\004:.\212\222\364\001\014accou"
+    "nt_role\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\236\001\n"
+    "\024account_role_removal\022\021\n\tplayer_id\030\001 \001(\004"
+    "\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_revision\030\003 \001("
+    "\004\022\022\n\nstarted_ms\030\004 \001(\004:6\212\222\364\001\024account_role"
+    "_removal\222\222\364\001\tplayer_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\312\002"
+    "\n\022account_role_trade\022\022\n\nlisting_id\030\001 \001(\004"
+    "\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_account\030\003 "
+    "\001(\t\022\035\n\025seller_owner_revision\030\004 \001(\004\022\026\n\016re"
+    "quest_digest\030\005 \001(\014\022\r\n\005state\030\006 \001(\r\022\027\n\017fre"
+    "eze_evidence\030\007 \001(\014\022\022\n\ncreated_ms\030\010 \001(\004\022\022"
+    "\n\nupdated_ms\030\t \001(\004\022\034\n\024required_owner_epo"
+    "ch\030\n \001(\004\022\031\n\021required_save_seq\030\013 \001(\004:5\212\222\364"
+    "\001\022account_role_trade\222\222\364\001\nlisting_id\250\223\364\001\001"
+    "\260\223\364\001\004\270\223\364\001\004\"\276\002\n\035account_role_transfer_rec"
+    "eipt\022\r\n\005tx_id\030\001 \001(\004\022\026\n\016request_digest\030\002 "
+    "\001(\014\022\022\n\nlisting_id\030\003 \001(\004\022\021\n\tplayer_id\030\004 \001"
+    "(\004\022\026\n\016seller_account\030\005 \001(\t\022\025\n\rbuyer_acco"
+    "unt\030\006 \001(\t\022\035\n\025seller_owner_revision\030\007 \001(\004"
+    "\022\034\n\024buyer_owner_revision\030\010 \001(\004\022\022\n\ncreate"
+    "d_ms\030\t \001(\004\022\022\n\nrole_proto\030\n \001(\014:;\212\222\364\001\035acc"
+    "ount_role_transfer_receipt\222\222\364\001\005tx_id\250\223\364\001"
+    "\001\260\223\364\001\004\270\223\364\001\004\"\312\002\n\026account_role_admission\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022\031\n\021scene_instance_id\030\002"
+    " \001(\t\022\032\n\022highest_generation\030\003 \001(\004\022\026\n\016clos"
+    "ed_through\030\004 \001(\004\022\026\n\016identity_proto\030\005 \001(\014"
+    "\022\026\n\016request_digest\030\006 \001(\014\022\034\n\024required_own"
+    "er_epoch\030\007 \001(\004\022\031\n\021required_save_seq\030\010 \001("
+    "\004\022\024\n\014close_digest\030\t \001(\014\022\022\n\nupdated_ms\030\n "
+    "\001(\004:;\212\222\364\001\026account_role_admission\222\222\364\001\033pla"
+    "yer_id,scene_instance_id\"\330\001\n\031account_rol"
+    "e_trade_holder\022\022\n\nlisting_id\030\001 \001(\004\022\031\n\021sc"
+    "ene_instance_id\030\002 \001(\t\022\022\n\nseal_proto\030\003 \001("
+    "\014\022\017\n\007drained\030\004 \001(\r\022\022\n\nack_digest\030\005 \001(\014\022\022"
+    "\n\nupdated_ms\030\006 \001(\004:\?\212\222\364\001\031account_role_tr"
+    "ade_holder\222\222\364\001\034listing_id,scene_instance"
+    "_id\"\360\002\n\023sql_writer_registry\022\022\n\nwriter_ke"
+    "y\030\001 \001(\014\022\022\n\ngeneration\030\002 \001(\t\022\023\n\013instance_"
+    "id\030\003 \001(\014\022\025\n\rsql_principal\030\004 \001(\014\022\033\n\023regis"
+    "tration_digest\030\005 \001(\014\022)\n\005state\030\006 \001(\0162\032.sq"
+    "l_writer_registry.State\022\025\n\rregistered_ms"
+    "\030\007 \001(\004\022\035\n\025retirement_request_id\030\010 \001(\014\022\031\n"
+    "\021retirement_digest\030\t \001(\014\022\022\n\nretired_ms\030\n"
+    " \001(\004\"3\n\005State\022\021\n\rSTATE_UNKNOWN\020\000\022\n\n\006ACTI"
+    "VE\020\001\022\013\n\007REVOKED\020\002:#\212\222\364\001\017writer_registry\222"
+    "\222\364\001\nwriter_key\"\302\001\n\017sql_writer_slot\022\022\n\nwr"
+    "iter_key\030\001 \001(\014\022\014\n\004slot\030\002 \001(\r\022\022\n\ngenerati"
+    "on\030\003 \001(\t\022\024\n\014writer_epoch\030\004 \001(\004\022)\n\005state\030"
+    "\005 \001(\0162\032.sql_writer_registry.State\022\022\n\nloc"
+    "k_touch\030\006 \001(\r:$\212\222\364\001\013writer_slot\222\222\364\001\017writ"
+    "er_key,slot\"\261\006\n\034sql_writer_lifecycle_rec"
+    "eipt\022\022\n\nrequest_id\030\001 \001(\014\0220\n\004kind\030\002 \001(\0162\""
+    ".sql_writer_lifecycle_receipt.Kind\022\022\n\nge"
+    "neration\030\003 \001(\t\022\026\n\016request_digest\030\004 \001(\014\022\025"
+    "\n\rrequest_proto\030\005 \001(\014\022\026\n\016previous_epoch\030"
+    "\006 \001(\004\022\027\n\017resulting_epoch\030\007 \001(\004\022\030\n\020catalo"
+    "g_revision\030\010 \001(\004\032\224\003\n\007Request\022\022\n\nrequest_"
+    "id\030\001 \001(\014\0220\n\004kind\030\002 \001(\0162\".sql_writer_life"
+    "cycle_receipt.Kind\022$\n\006writer\030\003 \001(\0132\024.sql"
+    "_writer_registry\022\026\n\016expected_epoch\030\004 \001(\004"
+    "\022!\n\031expected_catalog_revision\030\005 \001(\004\022\030\n\020a"
+    "uthority_schema\030\006 \001(\t\022\031\n\021protected_schem"
+    "as\030\007 \003(\t\022\031\n\021deployment_digest\030\010 \001(\014\022\032\n\022m"
+    "aintenance_run_id\030\t \001(\014\022\025\n\rdeployment_id"
+    "\030\n \001(\t\022<\n\016lock_primitive\030\013 \001(\0162$.sql_wri"
+    "ter_boot_grant.LockPrimitive\022!\n\031lock_qua"
+    "lification_sha256\030\014 \001(\014\"D\n\004Kind\022\020\n\014KIND_"
+    "UNKNOWN\020\000\022\014\n\010REGISTER\020\001\022\n\n\006RETIRE\020\002\"\004\010\003\020"
+    "\003\"\004\010\004\020\004\"\004\010\005\020\005:`\212\222\364\001\030writer_lifecycle_rec"
+    "eipt\222\222\364\001\nrequest_id\332\222\364\001/kind,request_dig"
+    "est;catalog_revision,request_id\"\214\004\n\025sql_"
+    "writer_boot_grant\022\016\n\006format\030\001 \001(\t\022\022\n\nwri"
+    "ter_key\030\002 \001(\014\022\023\n\013instance_id\030\003 \001(\014\022\022\n\nge"
+    "neration\030\004 \001(\t\022\030\n\020authority_schema\030\005 \001(\t"
+    "\022\031\n\021protected_schemas\030\006 \003(\t\022\025\n\rsql_princ"
+    "ipal\030\007 \001(\014\022\033\n\023registration_digest\030\010 \001(\014\022"
+    "\025\n\rdeployment_id\030\t \001(\t\022\020\n\010grant_id\030\n \001(\014"
+    "\022\022\n\ngranted_ms\030\013 \001(\004\022\022\n\npermission\030\014 \001(\t"
+    "\022!\n\031physical_authority_sha256\030\r \001(\014\022\032\n\022m"
+    "aintenance_run_id\030\016 \001(\014\022<\n\016lock_primitiv"
+    "e\030\017 \001(\0162$.sql_writer_boot_grant.LockPrim"
+    "itive\022!\n\031lock_qualification_sha256\030\020 \001(\014"
+    "\"L\n\rLockPrimitive\022\032\n\026LOCK_PRIMITIVE_UNKN"
+    "OWN\020\000\022\017\n\013SELECT_ONLY\020\001\022\016\n\nLOCK_TOUCH\020\002\"S"
+    "\n\031sql_writer_boot_grant_set\022\016\n\006format\030\001 "
+    "\001(\t\022&\n\006grants\030\002 \003(\0132\026.sql_writer_boot_gr"
+    "ant\"\332\004\n\024sql_writer_drain_run\022\024\n\014operatio"
+    "n_id\030\001 \001(\014\022\026\n\016request_digest\030\002 \001(\014\022\022\n\nge"
+    "neration\030\003 \001(\t\022\030\n\020attempt_revision\030\004 \001(\004"
+    "\022\026\n\016manifest_proto\030\005 \001(\014\022\027\n\017manifest_dig"
+    "est\030\006 \001(\014\022*\n\005phase\030\007 \001(\0162\033.sql_writer_dr"
+    "ain_run.Phase\022\035\n\025latest_receipt_digest\030\010"
+    " \001(\014\022\031\n\021frozen_request_id\030\t \001(\014\022\022\n\nupdat"
+    "ed_ms\030\n \001(\004\022\031\n\021latest_receipt_id\030\013 \001(\014\"\363"
+    "\001\n\005Phase\022\013\n\007UNKNOWN\020\000\022\016\n\nPLAN_FIXED\020\001\022\020\n"
+    "\014ROOTS_CLOSED\020\003\022\014\n\010DRAINING\020\004\022\022\n\016NON_SQL"
+    "_CLOSED\020\005\022\025\n\021FREEZE_AUTHORIZED\020\006\022\016\n\nSQL_"
+    "FROZEN\020\007\022\021\n\rRELEASE_READY\020\010\022\020\n\014SQL_RELEA"
+    "SED\020\t\022\030\n\024PUBLICATION_REOPENED\020\n\022\022\n\016ABORT"
+    "ED_CLOSED\020\013\022\031\n\025EMERGENCY_FROZEN_HOLD\020\014\"\004"
+    "\010\002\020\002:*\212\222\364\001\024sql_writer_drain_run\222\222\364\001\014oper"
+    "ation_id\"\347\005\n\030sql_writer_freeze_ticket\022\021\n"
+    "\tticket_id\030\001 \001(\014\022\024\n\014operation_id\030\002 \001(\014\022\030"
+    "\n\020attempt_revision\030\003 \001(\004\022\022\n\ngeneration\030\004"
+    " \001(\t\022\027\n\017manifest_digest\030\005 \001(\014\022\036\n\026non_sql"
+    "_receipt_digest\030\006 \001(\014\022\031\n\021freeze_request_"
+    "id\030\007 \001(\014\022\035\n\025freeze_request_digest\030\010 \001(\014\022"
+    "\025\n\rnot_before_ms\030\t \001(\004\022\022\n\nexpires_ms\030\n \001"
+    "(\004\022.\n\005state\030\013 \001(\0162\037.sql_writer_freeze_ti"
+    "cket.State\022\037\n\027consumed_receipt_digest\030\014 "
+    "\001(\014\022\031\n\021revocation_digest\030\r \001(\014\022\022\n\nupdate"
+    "d_ms\030\016 \001(\004\022G\n\022authorization_kind\030\017 \001(\0162+"
+    ".sql_writer_freeze_ticket.AuthorizationK"
+    "ind\022\030\n\020grant_receipt_id\030\020 \001(\014\022\034\n\024grant_r"
+    "eceipt_digest\030\021 \001(\014\"D\n\005State\022\021\n\rSTATE_UN"
+    "KNOWN\020\000\022\r\n\tAVAILABLE\020\001\022\014\n\010CONSUMED\020\002\022\013\n\007"
+    "REVOKED\020\003\"b\n\021AuthorizationKind\022\031\n\025AUTHOR"
+    "IZATION_UNKNOWN\020\000\022\027\n\023NORMAL_DRAIN_FREEZE"
+    "\020\001\022\031\n\025EMERGENCY_HOLD_FREEZE\020\002:+\212\222\364\001\030sql_"
+    "writer_freeze_ticket\222\222\364\001\tticket_id\"\3456\n\036s"
+    "ql_writer_maintenance_receipt\022\022\n\nrequest"
+    "_id\030\001 \001(\014\022\026\n\016request_digest\030\002 \001(\014\022\016\n\006run"
+    "_id\030\003 \001(\014\022\022\n\ngeneration\030\004 \001(\t\022\024\n\014before_"
+    "epoch\030\005 \001(\004\022\023\n\013after_epoch\030\006 \001(\004\022\030\n\020cata"
+    "log_revision\030\007 \001(\004\0224\n\005phase\030\010 \001(\0162%.sql_"
+    "writer_maintenance_receipt.Phase\022\022\n\nplan"
+    "_proto\030\t \001(\014\022\024\n\014committed_ms\030\n \001(\004\0222\n\004ki"
+    "nd\030\013 \001(\0162$.sql_writer_maintenance_receip"
+    "t.Kind\022.\n\trun_phase\030\014 \001(\0162\033.sql_writer_d"
+    "rain_run.Phase\022\030\n\020attempt_revision\030\r \001(\004"
+    "\022\030\n\020prior_receipt_id\030\016 \001(\014\022\034\n\024prior_rece"
+    "ipt_digest\030\017 \001(\014\022:\n\010evidence\030\020 \001(\0132(.sql"
+    "_writer_maintenance_receipt.Evidence\022\026\n\016"
+    "receipt_digest\030\021 \001(\014\032\255\006\n\004Plan\022!\n\031physica"
+    "l_cluster_identity\030\001 \001(\014\022\030\n\020authority_sc"
+    "hema\030\002 \001(\t\022\031\n\021protected_schemas\030\003 \003(\t\022\032\n"
+    "\022active_writer_keys\030\004 \003(\014\022\024\n\014before_epoc"
+    "h\030\005 \001(\004\022\030\n\020catalog_revision\030\006 \001(\004\022\016\n\006run"
+    "_id\030\007 \001(\014\022\037\n\027prior_freeze_request_id\030\010 \001"
+    "(\014\022C\n\014root_issuers\030\n \003(\0132-.sql_writer_ma"
+    "intenance_receipt.IssuerClosure\022E\n\016queue"
+    "_mutators\030\013 \003(\0132-.sql_writer_maintenance"
+    "_receipt.IssuerClosure\022O\n\020kafka_partitio"
+    "ns\030\014 \003(\01325.sql_writer_maintenance_receip"
+    "t.KafkaPartitionClosure\022I\n\rredis_targets"
+    "\030\r \003(\01322.sql_writer_maintenance_receipt."
+    "RedisTargetClosure\022>\n\013source_pins\030\016 \003(\0132"
+    ").sql_writer_maintenance_receipt.SourceP"
+    "in\022@\n\tlaunchers\030\017 \003(\0132-.sql_writer_maint"
+    "enance_receipt.LaunchClosure\022J\n\023maintena"
+    "nce_issuers\030\020 \003(\0132-.sql_writer_maintenan"
+    "ce_receipt.IssuerClosure\022T\n\022manual_assig"
+    "nments\030\021 \003(\01328.sql_writer_maintenance_re"
+    "ceipt.ManualConsumerAssignmentJ\004\010\t\020\n\032\200\001\n"
+    "\rLaunchClosure\022\023\n\013launcher_id\030\001 \001(\014\022>\n\013s"
+    "ource_pins\030\002 \003(\0132).sql_writer_maintenanc"
+    "e_receipt.SourcePin\022\032\n\022permanent_fence_i"
+    "d\030\003 \001(\014\0322\n\tSourcePin\022\025\n\rabsolute_path\030\001 "
+    "\001(\t\022\016\n\006sha256\030\002 \001(\014\032\317\002\n\rIssuerClosure\022\021\n"
+    "\tissuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\033\n"
+    "\023physical_writer_key\030\003 \001(\014\022\024\n\014logical_ro"
+    "le\030\004 \001(\t\022\"\n\032permanent_revival_fence_id\030\005"
+    " \001(\014\022\033\n\023accepting_closed_ms\030\006 \001(\004\022\033\n\023acc"
+    "epted_settled_ms\030\007 \001(\004\022 \n\030accepted_front"
+    "ier_digest\030\010 \001(\014\022\037\n\027unresolved_publicati"
+    "ons\030\t \001(\004\022B\n\017source_evidence\030\n \003(\0132).sql"
+    "_writer_maintenance_receipt.SourcePin\032\376\001"
+    "\n\025KafkaPartitionClosure\022\022\n\ncluster_id\030\001 "
+    "\001(\014\022\020\n\010topic_id\030\002 \001(\014\022\022\n\ntopic_name\030\003 \001("
+    "\t\022\r\n\005group\030\004 \001(\t\022\021\n\tpartition\030\005 \001(\r\022!\n\031p"
+    "rotected_committed_floor\030\006 \001(\003\022\030\n\020initia"
+    "l_earliest\030\007 \001(\003\022\026\n\016final_earliest\030\010 \001(\003"
+    "\022\033\n\023final_exclusive_end\030\t \001(\003\022\027\n\017final_c"
+    "ommitted\030\n \001(\003\032\245\001\n\017RedisKeyClosure\022\013\n\003ke"
+    "y\030\001 \001(\t\022\014\n\004kind\030\002 \001(\t\022\r\n\005topic\030\003 \001(\t\022\022\n\n"
+    "redis_type\030\004 \001(\t\022\017\n\007pttl_ms\030\005 \001(\003\022\r\n\005cou"
+    "nt\030\006 \001(\004\022\017\n\007members\030\007 \003(\014\022\016\n\006values\030\010 \003("
+    "\014\022\023\n\013dump_sha256\030\t \001(\014\032\220\002\n\022RedisTargetCl"
+    "osure\022\014\n\004role\030\001 \001(\t\022\017\n\007address\030\002 \001(\t\022\n\n\002"
+    "db\030\003 \001(\005\022\025\n\rserver_run_id\030\004 \001(\014\022\031\n\021maint"
+    "enance_nonce\030\005 \001(\014\022\r\n\005zones\030\006 \003(\r\022E\n\014obs"
+    "ervations\030\007 \003(\0132/.sql_writer_maintenance"
+    "_receipt.RedisKeyClosure\022G\n\024scan_source_"
+    "evidence\030\010 \003(\0132).sql_writer_maintenance_"
+    "receipt.SourcePin\032\300\001\n\023PublicationEvidenc"
+    "e\022D\n\rlogical_roles\030\001 \003(\0132-.sql_writer_ma"
+    "intenance_receipt.IssuerClosure\022\037\n\027issue"
+    "r_inventory_digest\030\002 \001(\014\022B\n\017source_evide"
+    "nce\030\003 \003(\0132).sql_writer_maintenance_recei"
+    "pt.SourcePin\032\367\004\n\025NonSqlClosureEvidence\022E"
+    "\n\016queue_mutators\030\001 \003(\0132-.sql_writer_main"
+    "tenance_receipt.IssuerClosure\022O\n\020kafka_p"
+    "artitions\030\002 \003(\01325.sql_writer_maintenance"
+    "_receipt.KafkaPartitionClosure\022I\n\rredis_"
+    "targets\030\003 \003(\01322.sql_writer_maintenance_r"
+    "eceipt.RedisTargetClosure\022\036\n\026root_closed"
+    "_receipt_id\030\004 \001(\014\022\"\n\032root_closed_receipt"
+    "_digest\030\005 \001(\014\022!\n\031relay_quiesced_receipt_"
+    "id\030\006 \001(\014\022%\n\035relay_quiesced_receipt_diges"
+    "t\030\007 \001(\014\022#\n\033historical_inventory_digest\030\010"
+    " \001(\014\022\031\n\021observed_start_ms\030\t \001(\004\022\027\n\017obser"
+    "ved_end_ms\030\n \001(\004\022B\n\017source_evidence\030\013 \003("
+    "\0132).sql_writer_maintenance_receipt.Sourc"
+    "ePin\022P\n\020manual_consumers\030\014 \003(\01326.sql_wri"
+    "ter_maintenance_receipt.ManualConsumerEv"
+    "idence\032\232\001\n\016TicketEvidence\022\021\n\tticket_id\030\001"
+    " \001(\014\022\030\n\020bound_request_id\030\002 \001(\014\022\034\n\024bound_"
+    "request_digest\030\003 \001(\014\022\036\n\026authority_operat"
+    "ion_id\030\004 \001(\014\022\035\n\025ticket_request_digest\030\005 "
+    "\001(\014\032\350\001\n\021EmergencyEvidence\022\016\n\006reason\030\001 \001("
+    "\t\022\031\n\021danger_receipt_id\030\002 \001(\014\022\035\n\025danger_r"
+    "eceipt_digest\030\003 \001(\014\022B\n\017source_evidence\030\004"
     " \003(\0132).sql_writer_maintenance_receipt.So"
-    "urcePin\032\257\001\n\021ConsumerReadiness\022F\n\006groups\030"
-    "\001 \003(\01326.sql_writer_maintenance_receipt.C"
-    "onsumerGroupReadiness\022R\n\022manual_assignme"
-    "nts\030\002 \003(\01326.sql_writer_maintenance_recei"
-    "pt.ManualConsumerEvidence\032\266\002\n\017IssuerRead"
-    "iness\022\021\n\tissuer_id\030\001 \001(\014\022\023\n\013instance_id\030"
-    "\002 \001(\014\022\033\n\023physical_writer_key\030\003 \001(\014\022\024\n\014lo"
-    "gical_role\030\004 \001(\t\022\037\n\027registration_receipt"
-    "_id\030\005 \001(\014\022#\n\033registration_receipt_digest"
-    "\030\006 \001(\014\022\032\n\022prepared_closed_ms\030\007 \001(\004\022&\n\036co"
-    "nsumer_ready_frontier_digest\030\010 \001(\014\022>\n\013so"
-    "urce_pins\030\t \003(\0132).sql_writer_maintenance"
-    "_receipt.SourcePin\032\355\002\n\rSourceOpenAck\022\021\n\t"
+    "urcePin\022E\n\rauthorization\030\005 \001(\0132..sql_wri"
+    "ter_maintenance_receipt.TicketEvidence\032\212"
+    "\002\n\020ReleaseReadiness\022\"\n\032original_freeze_r"
+    "eceipt_id\030\001 \001(\014\022&\n\036original_freeze_recei"
+    "pt_digest\030\002 \001(\014\022!\n\031non_sql_closed_receip"
+    "t_id\030\004 \001(\014\022%\n\035non_sql_closed_receipt_dig"
+    "est\030\005 \001(\014\022T\n\027maintenance_publication\030\007 \001"
+    "(\01323.sql_writer_maintenance_receipt.Publ"
+    "icationEvidenceJ\004\010\003\020\004J\004\010\006\020\007\032\320\002\n\026Consumer"
+    "GroupReadiness\022\024\n\014operation_id\030\001 \001(\014\022\027\n\017"
+    "manifest_digest\030\002 \001(\014\022\021\n\tissuer_id\030\003 \001(\014"
+    "\022\023\n\013instance_id\030\004 \001(\014\022\r\n\005group\030\005 \001(\t\022\025\n\r"
+    "generation_id\030\006 \001(\005\022\021\n\tmember_id\030\007 \001(\t\022R"
+    "\n\023expected_partitions\030\010 \003(\01325.sql_writer"
+    "_maintenance_receipt.KafkaPartitionClosu"
+    "re\022R\n\023assigned_partitions\030\t \003(\01325.sql_wr"
+    "iter_maintenance_receipt.KafkaPartitionC"
+    "losure\032\364\002\n\030ManualConsumerAssignment\022\021\n\ti"
+    "ssuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\023\n\013c"
+    "onsumer_id\030\003 \001(\t\022\022\n\ncluster_id\030\004 \001(\014\022\020\n\010"
+    "topic_id\030\005 \001(\014\022\022\n\ntopic_name\030\006 \001(\t\022\027\n\017pa"
+    "rtition_count\030\007 \001(\r\022\021\n\tpartition\030\010 \001(\r\022\026"
+    "\n\016target_node_id\030\t \001(\r\022\032\n\022target_instanc"
+    "e_id\030\n \001(\014\022\033\n\023assignment_revision\030\013 \001(\004\022"
+    "\024\n\014start_offset\030\014 \001(\003\022\020\n\010position\030\r \001(\003\022"
+    "\020\n\010earliest\030\016 \001(\003\022\025\n\rexclusive_end\030\017 \001(\003"
+    "\022\023\n\013observed_ms\030\020 \001(\004\032\316\002\n\026ManualConsumer"
+    "Evidence\022\024\n\014operation_id\030\001 \001(\014\022\027\n\017manife"
+    "st_digest\030\002 \001(\014\022M\n\013assignments\030\003 \003(\01328.s"
+    "ql_writer_maintenance_receipt.ManualCons"
+    "umerAssignment\022\030\n\020accepting_closed\030\004 \001(\010"
+    "\022\030\n\020callbacks_joined\030\005 \001(\010\022\020\n\010accepted\030\006"
+    " \001(\004\022\017\n\007settled\030\007 \001(\004\022\037\n\027unresolved_publ"
+    "ications\030\010 \001(\004\022>\n\013source_pins\030\t \003(\0132).sq"
+    "l_writer_maintenance_receipt.SourcePin\032\257"
+    "\001\n\021ConsumerReadiness\022F\n\006groups\030\001 \003(\01326.s"
+    "ql_writer_maintenance_receipt.ConsumerGr"
+    "oupReadiness\022R\n\022manual_assignments\030\002 \003(\013"
+    "26.sql_writer_maintenance_receipt.Manual"
+    "ConsumerEvidence\032\266\002\n\017IssuerReadiness\022\021\n\t"
     "issuer_id\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\033\n\023"
     "physical_writer_key\030\003 \001(\014\022\024\n\014logical_rol"
     "e\030\004 \001(\t\022\037\n\027registration_receipt_id\030\005 \001(\014"
-    "\022#\n\033registration_receipt_digest\030\006 \001(\014\022\024\n"
-    "\014operation_id\030\007 \001(\014\022\027\n\017manifest_digest\030\010"
-    " \001(\014\022\021\n\topened_ms\030\t \001(\004\022\027\n\017open_request_"
-    "id\030\n \001(\014\022 \n\030accepted_frontier_digest\030\013 \001"
-    "(\014\022>\n\013source_pins\030\014 \003(\0132).sql_writer_mai"
-    "ntenance_receipt.SourcePin\032\340\001\n\024Publicati"
-    "onReadiness\022\032\n\022release_receipt_id\030\001 \001(\014\022"
-    "\036\n\026release_receipt_digest\030\002 \001(\014\022G\n\016prepa"
-    "red_boots\030\003 \003(\0132/.sql_writer_maintenance"
-    "_receipt.IssuerReadiness\022C\n\020source_open_"
-    "acks\030\004 \003(\0132).sql_writer_maintenance_rece"
-    "ipt.SourcePin\032\221\004\n\010Evidence\022\024\n\014operation_"
-    "id\030\001 \001(\014\022\027\n\017manifest_digest\030\002 \001(\014\022J\n\013pub"
-    "lication\030\n \001(\01323.sql_writer_maintenance_"
-    "receipt.PublicationEvidenceH\000\022P\n\017non_sql"
-    "_closure\030\013 \001(\01325.sql_writer_maintenance_"
-    "receipt.NonSqlClosureEvidenceH\000\022@\n\006ticke"
-    "t\030\014 \001(\0132..sql_writer_maintenance_receipt"
-    ".TicketEvidenceH\000\022F\n\temergency\030\r \001(\01321.s"
-    "ql_writer_maintenance_receipt.EmergencyE"
-    "videnceH\000\022M\n\021release_readiness\030\016 \001(\01320.s"
-    "ql_writer_maintenance_receipt.ReleaseRea"
-    "dinessH\000\022U\n\025publication_readiness\030\017 \001(\0132"
-    "4.sql_writer_maintenance_receipt.Publica"
-    "tionReadinessH\000B\010\n\006detail\"4\n\005Phase\022\021\n\rPH"
-    "ASE_UNKNOWN\020\000\022\n\n\006FROZEN\020\001\022\014\n\010RELEASED\020\002\""
-    "\245\001\n\004Kind\022\020\n\014KIND_UNKNOWN\020\000\022\n\n\006FREEZE\020\001\022\013"
-    "\n\007RELEASE\020\002\022\017\n\013PHASE_EVENT\020\003\022\017\n\013ROLE_CLO"
-    "SED\020\004\022\022\n\016RELAY_QUIESCED\020\005\022\022\n\016TICKET_GRAN"
-    "TED\020\006\022\022\n\016TICKET_REVOKED\020\007\022\024\n\020EMERGENCY_F"
-    "REEZE\020\010:2\212\222\364\001\036sql_writer_maintenance_rec"
-    "eipt\222\222\364\001\nrequest_id\"\356\002\n\026sql_writer_boot_"
-    "roster\022\016\n\006format\030\001 \001(\t\022.\n\007entries\030\002 \003(\0132"
-    "\035.sql_writer_boot_roster.Entry\032\305\001\n\005Entry"
-    "\0227\n\010requests\030\001 \003(\0132%.sql_writer_lifecycl"
-    "e_receipt.Request\022\033\n\023runtime_config_path"
-    "\030\002 \001(\t\022\035\n\025runtime_config_sha256\030\003 \001(\014\022G\n"
-    "\023runtime_environment\030\004 \003(\0132*.sql_writer_"
-    "boot_roster.RuntimeEnvironment\032L\n\022Runtim"
-    "eEnvironment\022\014\n\004name\030\001 \001(\t\022\022\n\nvalue_path"
-    "\030\002 \001(\t\022\024\n\014value_sha256\030\003 \001(\014*p\n\022GmRecall"
-    "BatchState\022\037\n\033GM_RECALL_BATCH_UNSPECIFIE"
-    "D\020\000\022\033\n\027GM_RECALL_BATCH_RUNNING\020\001\022\034\n\030GM_R"
-    "ECALL_BATCH_FINISHED\020\002*\205\002\n\020GmRecallOpSta"
-    "tus\022\034\n\030GM_RECALL_OP_UNSPECIFIED\020\000\022\030\n\024GM_"
-    "RECALL_OP_PENDING\020\001\022\030\n\024GM_RECALL_OP_APPL"
-    "IED\020\002\022\031\n\025GM_RECALL_OP_REJECTED\020\003\022\030\n\024GM_R"
-    "ECALL_OP_ABORTED\020\004\022\030\n\024GM_RECALL_OP_PARTI"
-    "AL\020\005\022\030\n\024GM_RECALL_OP_PLANNED\020\006\022\032\n\026GM_REC"
-    "ALL_OP_CANCELLED\020\007\022\032\n\026GM_RECALL_OP_ROLE_"
-    "GONE\020\010B\021Z\017common/databaseb\006proto3"
+    "\022#\n\033registration_receipt_digest\030\006 \001(\014\022\032\n"
+    "\022prepared_closed_ms\030\007 \001(\004\022&\n\036consumer_re"
+    "ady_frontier_digest\030\010 \001(\014\022>\n\013source_pins"
+    "\030\t \003(\0132).sql_writer_maintenance_receipt."
+    "SourcePin\032\355\002\n\rSourceOpenAck\022\021\n\tissuer_id"
+    "\030\001 \001(\014\022\023\n\013instance_id\030\002 \001(\014\022\033\n\023physical_"
+    "writer_key\030\003 \001(\014\022\024\n\014logical_role\030\004 \001(\t\022\037"
+    "\n\027registration_receipt_id\030\005 \001(\014\022#\n\033regis"
+    "tration_receipt_digest\030\006 \001(\014\022\024\n\014operatio"
+    "n_id\030\007 \001(\014\022\027\n\017manifest_digest\030\010 \001(\014\022\021\n\to"
+    "pened_ms\030\t \001(\004\022\027\n\017open_request_id\030\n \001(\014\022"
+    " \n\030accepted_frontier_digest\030\013 \001(\014\022>\n\013sou"
+    "rce_pins\030\014 \003(\0132).sql_writer_maintenance_"
+    "receipt.SourcePin\032\340\001\n\024PublicationReadine"
+    "ss\022\032\n\022release_receipt_id\030\001 \001(\014\022\036\n\026releas"
+    "e_receipt_digest\030\002 \001(\014\022G\n\016prepared_boots"
+    "\030\003 \003(\0132/.sql_writer_maintenance_receipt."
+    "IssuerReadiness\022C\n\020source_open_acks\030\004 \003("
+    "\0132).sql_writer_maintenance_receipt.Sourc"
+    "ePin\032\221\004\n\010Evidence\022\024\n\014operation_id\030\001 \001(\014\022"
+    "\027\n\017manifest_digest\030\002 \001(\014\022J\n\013publication\030"
+    "\n \001(\01323.sql_writer_maintenance_receipt.P"
+    "ublicationEvidenceH\000\022P\n\017non_sql_closure\030"
+    "\013 \001(\01325.sql_writer_maintenance_receipt.N"
+    "onSqlClosureEvidenceH\000\022@\n\006ticket\030\014 \001(\0132."
+    ".sql_writer_maintenance_receipt.TicketEv"
+    "idenceH\000\022F\n\temergency\030\r \001(\01321.sql_writer"
+    "_maintenance_receipt.EmergencyEvidenceH\000"
+    "\022M\n\021release_readiness\030\016 \001(\01320.sql_writer"
+    "_maintenance_receipt.ReleaseReadinessH\000\022"
+    "U\n\025publication_readiness\030\017 \001(\01324.sql_wri"
+    "ter_maintenance_receipt.PublicationReadi"
+    "nessH\000B\010\n\006detail\"4\n\005Phase\022\021\n\rPHASE_UNKNO"
+    "WN\020\000\022\n\n\006FROZEN\020\001\022\014\n\010RELEASED\020\002\"\245\001\n\004Kind\022"
+    "\020\n\014KIND_UNKNOWN\020\000\022\n\n\006FREEZE\020\001\022\013\n\007RELEASE"
+    "\020\002\022\017\n\013PHASE_EVENT\020\003\022\017\n\013ROLE_CLOSED\020\004\022\022\n\016"
+    "RELAY_QUIESCED\020\005\022\022\n\016TICKET_GRANTED\020\006\022\022\n\016"
+    "TICKET_REVOKED\020\007\022\024\n\020EMERGENCY_FREEZE\020\010:2"
+    "\212\222\364\001\036sql_writer_maintenance_receipt\222\222\364\001\n"
+    "request_id\"\356\002\n\026sql_writer_boot_roster\022\016\n"
+    "\006format\030\001 \001(\t\022.\n\007entries\030\002 \003(\0132\035.sql_wri"
+    "ter_boot_roster.Entry\032\305\001\n\005Entry\0227\n\010reque"
+    "sts\030\001 \003(\0132%.sql_writer_lifecycle_receipt"
+    ".Request\022\033\n\023runtime_config_path\030\002 \001(\t\022\035\n"
+    "\025runtime_config_sha256\030\003 \001(\014\022G\n\023runtime_"
+    "environment\030\004 \003(\0132*.sql_writer_boot_rost"
+    "er.RuntimeEnvironment\032L\n\022RuntimeEnvironm"
+    "ent\022\014\n\004name\030\001 \001(\t\022\022\n\nvalue_path\030\002 \001(\t\022\024\n"
+    "\014value_sha256\030\003 \001(\014*p\n\022GmRecallBatchStat"
+    "e\022\037\n\033GM_RECALL_BATCH_UNSPECIFIED\020\000\022\033\n\027GM"
+    "_RECALL_BATCH_RUNNING\020\001\022\034\n\030GM_RECALL_BAT"
+    "CH_FINISHED\020\002*\205\002\n\020GmRecallOpStatus\022\034\n\030GM"
+    "_RECALL_OP_UNSPECIFIED\020\000\022\030\n\024GM_RECALL_OP"
+    "_PENDING\020\001\022\030\n\024GM_RECALL_OP_APPLIED\020\002\022\031\n\025"
+    "GM_RECALL_OP_REJECTED\020\003\022\030\n\024GM_RECALL_OP_"
+    "ABORTED\020\004\022\030\n\024GM_RECALL_OP_PARTIAL\020\005\022\030\n\024G"
+    "M_RECALL_OP_PLANNED\020\006\022\032\n\026GM_RECALL_OP_CA"
+    "NCELLED\020\007\022\032\n\026GM_RECALL_OP_ROLE_GONE\020\010B\021Z"
+    "\017common/databaseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto_deps[4] = {
@@ -13720,7 +13738,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2frollback_5
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto = {
     false,
     false,
-    17753,
+    17824,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto,
     "proto/common/database/rollback_database_table.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto_once,
@@ -13840,9 +13858,9 @@ transaction_log::transaction_log(
                offsetof(Impl_, tx_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, tx_id_),
-           offsetof(Impl_, zone_id_) -
+           offsetof(Impl_, shard_) -
                offsetof(Impl_, tx_id_) +
-               sizeof(Impl_::zone_id_));
+               sizeof(Impl_::shard_));
 
   // @@protoc_insertion_point(copy_constructor:transaction_log)
 }
@@ -13857,9 +13875,9 @@ inline void transaction_log::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, tx_id_),
            0,
-           offsetof(Impl_, zone_id_) -
+           offsetof(Impl_, shard_) -
                offsetof(Impl_, tx_id_) +
-               sizeof(Impl_::zone_id_));
+               sizeof(Impl_::shard_));
 }
 transaction_log::~transaction_log() {
   // @@protoc_insertion_point(destructor:transaction_log)
@@ -13918,10 +13936,10 @@ PROTOBUF_NOINLINE void transaction_log::Clear() {
         reinterpret_cast<char*>(&_impl_.item_uuid_) -
         reinterpret_cast<char*>(&_impl_.tx_id_)) + sizeof(_impl_.item_uuid_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.item_quantity_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.zone_id_) -
-        reinterpret_cast<char*>(&_impl_.item_quantity_)) + sizeof(_impl_.zone_id_));
+        reinterpret_cast<char*>(&_impl_.shard_) -
+        reinterpret_cast<char*>(&_impl_.item_quantity_)) + sizeof(_impl_.shard_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -14082,6 +14100,15 @@ PROTOBUF_NOINLINE void transaction_log::Clear() {
     }
   }
 
+  // uint32 shard = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_shard() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_shard(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -14165,7 +14192,7 @@ PROTOBUF_NOINLINE void transaction_log::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 item_quantity = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_item_quantity() != 0) {
@@ -14213,6 +14240,13 @@ PROTOBUF_NOINLINE void transaction_log::Clear() {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
+      }
+    }
+    // uint32 shard = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_shard() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_shard());
       }
     }
   }
@@ -14279,7 +14313,7 @@ void transaction_log::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_item_quantity() != 0) {
         _this->_impl_.item_quantity_ = from._impl_.item_quantity_;
@@ -14315,6 +14349,11 @@ void transaction_log::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_shard() != 0) {
+        _this->_impl_.shard_ = from._impl_.shard_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -14337,8 +14376,8 @@ void transaction_log::InternalSwap(transaction_log* PROTOBUF_RESTRICT PROTOBUF_N
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.extra_, &other->_impl_.extra_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.zone_id_)
-      + sizeof(transaction_log::_impl_.zone_id_)
+      PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.shard_)
+      + sizeof(transaction_log::_impl_.shard_)
       - PROTOBUF_FIELD_OFFSET(transaction_log, _impl_.tx_id_)>(
           reinterpret_cast<char*>(&_impl_.tx_id_),
           reinterpret_cast<char*>(&other->_impl_.tx_id_));
@@ -14386,9 +14425,9 @@ player_snapshot::player_snapshot(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, source_) -
+           offsetof(Impl_, shard_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::source_));
+               sizeof(Impl_::shard_));
 
   // @@protoc_insertion_point(copy_constructor:player_snapshot)
 }
@@ -14405,9 +14444,9 @@ inline void player_snapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, source_) -
+           offsetof(Impl_, shard_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::source_));
+               sizeof(Impl_::shard_));
 }
 player_snapshot::~player_snapshot() {
   // @@protoc_insertion_point(destructor:player_snapshot)
@@ -14476,10 +14515,10 @@ PROTOBUF_NOINLINE void player_snapshot::Clear() {
         reinterpret_cast<char*>(&_impl_.created_at_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.created_at_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     ::memset(&_impl_.snapshot_guid_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.source_) -
-        reinterpret_cast<char*>(&_impl_.snapshot_guid_)) + sizeof(_impl_.source_));
+        reinterpret_cast<char*>(&_impl_.shard_) -
+        reinterpret_cast<char*>(&_impl_.snapshot_guid_)) + sizeof(_impl_.shard_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -14595,6 +14634,15 @@ PROTOBUF_NOINLINE void player_snapshot::Clear() {
     }
   }
 
+  // uint32 shard = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_shard() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_shard(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -14678,7 +14726,7 @@ PROTOBUF_NOINLINE void player_snapshot::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint64 snapshot_guid = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_snapshot_guid() != 0) {
@@ -14691,6 +14739,13 @@ PROTOBUF_NOINLINE void player_snapshot::Clear() {
       if (this_._internal_source() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_source());
+      }
+    }
+    // uint32 shard = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_shard() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_shard());
       }
     }
   }
@@ -14765,7 +14820,7 @@ void player_snapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_snapshot_guid() != 0) {
         _this->_impl_.snapshot_guid_ = from._impl_.snapshot_guid_;
@@ -14774,6 +14829,11 @@ void player_snapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_source() != 0) {
         _this->_impl_.source_ = from._impl_.source_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_shard() != 0) {
+        _this->_impl_.shard_ = from._impl_.shard_;
       }
     }
   }
@@ -14800,8 +14860,8 @@ void player_snapshot::InternalSwap(player_snapshot* PROTOBUF_RESTRICT PROTOBUF_N
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.operator__, &other->_impl_.operator__, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.data_, &other->_impl_.data_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.source_)
-      + sizeof(player_snapshot::_impl_.source_)
+      PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.shard_)
+      + sizeof(player_snapshot::_impl_.shard_)
       - PROTOBUF_FIELD_OFFSET(player_snapshot, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

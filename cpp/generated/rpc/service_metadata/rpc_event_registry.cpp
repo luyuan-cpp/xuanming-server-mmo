@@ -124,6 +124,7 @@ void SendBattleNodeAttachRelayGateErased(entt::registry& , entt::entity , const 
 void SendBattleNodePromoteSpectateBroadcastErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 namespace chatpb{void SendClientPlayerChatSendChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatPullChatHistoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace chatpb{void SendClientPlayerChatNotifyWorldChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace client_rpc_router{void SendClientRpcRouterForwardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReadAccountDirectoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCreateAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -152,6 +153,7 @@ namespace data_service{void SendDataServiceBatchRecallItemsErased(entt::registry
 namespace data_service{void SendDataServiceGetRecallBatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCancelRecallBatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceResolveRecallOpErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceRegisterRecallReviewHandledErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceQueryTransactionLogErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAllocateIdSegmentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReservePlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -160,6 +162,7 @@ namespace data_service{void SendDataServiceBatchGetPlayerNameErased(entt::regist
 namespace data_service{void SendDataServiceBatchGetPlayerDisplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVPutErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVDeleteRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -264,6 +267,7 @@ namespace player_inbox{void SendPlayerInboxAdminListItemsErased(entt::registry& 
 namespace player_inbox{void SendPlayerInboxAdminLookupByRequestErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAdminVoidItemErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace player_inbox{void SendPlayerInboxAdminReconcilePlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace player_inbox{void SendPlayerInboxAdminGetItemGainBlocksErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace playerlocator{void SendPlayerLocatorSetLocationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace playerlocator{void SendPlayerLocatorGetLocationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace playerlocator{void SendPlayerLocatorMarkOfflineErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -350,7 +354,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 383,
+static_assert(kMaxRpcMethodCount == 387,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -476,6 +480,11 @@ void InitMessageInfo()
         std::make_unique<::chatpb::PullChatHistoryRequest>(),
         std::make_unique<::chatpb::PullChatHistoryResponse>(),
         1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatPullChatHistoryErased, "/chatpb.ClientPlayerChat/PullChatHistory"};
+    gRpcMethodRegistry[ClientPlayerChatNotifyWorldChatMessageId] = RpcMethodMeta{
+        "ClientPlayerChat", "NotifyWorldChat",
+        std::make_unique<::chatpb::ChatMessage>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatNotifyWorldChatErased, "/chatpb.ClientPlayerChat/NotifyWorldChat"};
 
     // --- ClientRpcRouter ---
     gRpcMethodRegistry[ClientRpcRouterForwardMessageId] = RpcMethodMeta{
@@ -620,6 +629,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::ResolveRecallOpRequest>(),
         std::make_unique<::data_service::ResolveRecallOpResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceResolveRecallOpErased, "/data_service.DataService/ResolveRecallOp"};
+    gRpcMethodRegistry[DataServiceRegisterRecallReviewHandledMessageId] = RpcMethodMeta{
+        "DataService", "RegisterRecallReviewHandled",
+        std::make_unique<::data_service::RegisterRecallReviewHandledRequest>(),
+        std::make_unique<::data_service::RegisterRecallReviewHandledResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRegisterRecallReviewHandledErased, "/data_service.DataService/RegisterRecallReviewHandled"};
     gRpcMethodRegistry[DataServiceQueryTransactionLogMessageId] = RpcMethodMeta{
         "DataService", "QueryTransactionLog",
         std::make_unique<::data_service::QueryTransactionLogRequest>(),
@@ -660,6 +674,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::GetPlayerInboxLedgerRequest>(),
         std::make_unique<::data_service::GetPlayerInboxLedgerResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerInboxLedgerErased, "/data_service.DataService/GetPlayerInboxLedger"};
+    gRpcMethodRegistry[DataServiceGetPlayerItemGainBlockMessageId] = RpcMethodMeta{
+        "DataService", "GetPlayerItemGainBlock",
+        std::make_unique<::data_service::GetPlayerItemGainBlockRequest>(),
+        std::make_unique<::data_service::GetPlayerItemGainBlockResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerItemGainBlockErased, "/data_service.DataService/GetPlayerItemGainBlock"};
 
     // --- KV ---
     gRpcMethodRegistry[KVRangeMessageId] = RpcMethodMeta{
@@ -1264,6 +1283,11 @@ void InitMessageInfo()
         std::make_unique<::player_inbox::ReconcilePlayerInboxRequest>(),
         std::make_unique<::player_inbox::ReconcilePlayerInboxResponse>(),
         1, common::base::eNodeType::PlayerInboxNodeService, player_inbox::SendPlayerInboxAdminReconcilePlayerErased, "/player_inbox.PlayerInboxAdmin/ReconcilePlayer"};
+    gRpcMethodRegistry[PlayerInboxAdminGetItemGainBlocksMessageId] = RpcMethodMeta{
+        "PlayerInboxAdmin", "GetItemGainBlocks",
+        std::make_unique<::player_inbox::GetPlayerItemGainBlocksRequest>(),
+        std::make_unique<::player_inbox::GetPlayerItemGainBlocksResponse>(),
+        1, common::base::eNodeType::PlayerInboxNodeService, player_inbox::SendPlayerInboxAdminGetItemGainBlocksErased, "/player_inbox.PlayerInboxAdmin/GetItemGainBlocks"};
 
     // --- PlayerLocator ---
     gRpcMethodRegistry[PlayerLocatorSetLocationMessageId] = RpcMethodMeta{

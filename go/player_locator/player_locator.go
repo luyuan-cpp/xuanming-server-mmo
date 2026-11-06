@@ -44,6 +44,10 @@ func main() {
 		return
 	}
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):在建任何 Redis 客户端之前填好。
+	if err := config.AppConfig.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
+		logx.Must(fmt.Errorf("shared Redis password: %w", err))
+	}
 
 	svcCtx := svc.NewServiceContext(config.AppConfig)
 	defer svcCtx.Stop()

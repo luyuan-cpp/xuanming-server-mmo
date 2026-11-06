@@ -111,7 +111,8 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
   断线保留进场时 `StopMotionForExit` 会清一次速度并给观察者发停步,下一 tick 队形把他当作重新起步立刻补发移动广播,
   路人屏幕上不会停顿。发给本人的移动广播与 `TeamFollowStateS2C` 在没有活会话时不发。
 - **同场景里接上不要求活会话**:`player_team.cpp` 的 `CanFollow` 不再看会话。离线队员在队长换人、队长回到这个场景
-  (扇出)时照样接到队长身后。前提是他断线前声明过跟随(意图挂在实体上,断线不摘);暂离中下线的不跟。
+  (扇出)时照样接到队长身后。前提是有跟随意图:断线前声明过跟随(意图挂在实体上,断线不摘),或开通了挂机、托管开始时
+  由服务器挂上(下面第 3 条);没开通挂机、暂离中下线的不跟。
   这一步要先读组队权威,组队服务每次都核对入场身份;断线保留期间入场身份仍应有效(实体还持有这次登录),**未核实**。
   读不成时只是这次不接上,已在队形里的不受影响。
 - **仍要活会话的两条路径**:
@@ -121,14 +122,13 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
 
 **用户要求(2026-11-06)**:开通了挂机的队员,客户端离线后照样跟。
 
-**现在的上限**:断线保留只有 25 秒(`connection_lost_hold::kHoldWindow`),到期就存盘退出,队形随之摘掉他。
-"开通挂机"在代码里已有的是挂机月卡:玩家域 Redis 键 `player:afk_pass:{<player_id>}`,值为到期的 Unix 秒
+没开通挂机的,断线保留只有 25 秒(`connection_lost_hold::kHoldWindow`),到期就存盘退出,队形随之摘掉他。
+"开通挂机"在代码里就是挂机月卡:玩家域 Redis 键 `player:afk_pass:{<player_id>}`,值为到期的 Unix 秒
 (由购买 / 开通流程写入);player_locator 的租约监视在月卡有效期间每 5 分钟给断线中的会话续一次租约
-(`go/player_locator/internal/logic/leasemonitor.go` `afkPassState`)。但 scene 不看月卡,角色照样 25 秒后退出
-(`player-connection-lost-hold.md` §7 第 7 条「月卡离线托管仍未做」)。要做到"开通挂机离线照样跟",分三块:
+(`go/player_locator/internal/logic/leasemonitor.go` `afkPassState`)。要做到"开通挂机离线照样跟",分三块:
 
-1. **离线托管本身(scene 的断线保留规则,待做,单独立项)**:月卡有效的玩家断线后不按 25 秒退出,
-   保留到重连、月卡到期或租约结束释放;托管开始时调下面第 3 条的入口。跟随代码不用为此改 —— 它只看实体在不在、
+1. **离线托管本身(已写,`player-connection-lost-hold.md` §4.1)**:断线保留时查月卡,有效就不按 25 秒退出,
+   保留到重连、月卡到期或被别的退出取代;第一次确认月卡有效时调下面第 3 条的入口。跟随代码不用为此改 —— 它只看实体在不在、
    在不在同一场景、有没有跟随意图,不看会话。
 2. **离线队员跨场景跟随(待做,随离线挂机一起做)**:`FollowLeaderAsync` 换场景分支前的 `HasLiveSession` 判断,
    换成"离线时发不带 gate 的 EnterScene"。scene_manager 已经接受 `GateId` 为空的请求(第 6 步落点即提交,
@@ -136,7 +136,7 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
    (同节点换图),以及跨节点时目标节点在没有客户端的情况下载入实体。
 3. **托管开始时由服务器开启跟随(已写)**:`PlayerTeamSystem::OnOfflineHostingStarted(player)` —— 在队伍里就挂跟随意图,
    没接上就走一遍跟随检查,不依赖客户端声明;下线前暂离的也照样跟,重连后客户端按自己当前的选择重新声明(§5)。
-   目前没有调用方,等第 1 条的托管入口接上。
+   调用方是第 1 条的 `AfkHostingSystem::ApplyProbeResult`(第一次确认月卡有效时)。
 
 ## 4. 同步
 
@@ -222,7 +222,7 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 - **Java 版(AGENTS §12)**:待做,已登记 `PARITY.md`。需要对齐的客户端可见行为:`TeamFollowC2S` / `TeamFollowStateS2C`、
   服务器驱动队员沿队长轨迹走位并广播(含发给本人)、被驱动期间丢弃移动上报、队长换人时给全员发刷新。
 - 跨节点、跨 zone 仍不跟(DV-6 不变)。
-- 离线队员不跨场景跟随,断线保留到期(25 秒)就退出;离线挂机要补的见 §3.6。
+- 离线队员不跨场景跟随(§3.6 第 2 条);没开通挂机的,断线保留到期(25 秒)就退出,开通了的托管到月卡到期。
 - 掉头时队员互相穿过;绕比间距大的圈时队员跟着绕(§3.3)。
 - `ViewSystem::LookAtPosition` 写 NPC 朝向用的是弧度、x 当俯仰,与客户端口径(`Rotation.z` = 偏航角,度)不一致(§4),不在本次范围。
 - 可以进一步省的:同一支队伍同一 tick 的移动合成一条 `ActorMoveListS2C`;等压测证明广播是瓶颈再做。

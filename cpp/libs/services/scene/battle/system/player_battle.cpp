@@ -161,12 +161,8 @@ namespace
 
 	// 终局查询「在途多久算丢失」用的单调钟(毫秒,原点任意,只取差值)。墙钟只给跨进程的截止时刻(deadline、续冻上限)用;
 	// 在途时长是进程内耗时(AGENTS §11.3),墙钟回拨会让在途查询永远不判丢失,前跳会把正常在途的查询误判丢失。
-	uint64_t SteadyNowMs()
-	{
-		return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-										 std::chrono::steady_clock::now().time_since_epoch())
-										 .count());
-	}
+	// 生产实现与锁写入重试预算共用同一个 SteadyNowMs(定义在下面,steady_clock)。
+	uint64_t SteadyNowMs();
 	PlayerBattleSystem::TerminalQueryClockFn gTerminalQueryClock = &SteadyNowMs;
 
 	// SQL 终局查询的在途登记,键 = (player_id, battle_id)。queryId 认出「这一次」查询(进程内递增,判丢失之后再发的
@@ -389,59 +385,30 @@ namespace
 		return expired != nullptr ? expired->battleId : 0;
 	}
 
-	// 这一局的结算在本实体是否已有终局,有就返回那个结局(PlayerInboxOutcome),没有返回 0。
-	// 判据:收件箱战斗结算域的最近结局环里有 request_id(= battle_id)相同、msg_type 为 BATTLE_SETTLEMENT 的条目。
-	// 环里只存可记账结局(player_inbox_rules::IsRecordableOutcome:APPLIED / REJECTED / SKIPPED),三种都是这一条收件箱条目的
-	// 终局:状态机按 seq 记账即确认,服务端不再投递同一条,也不会回到可重试的中间态(评审修正 2026-11-06 逐项核过):
-	//  - APPLIED:已应用,消耗已扣;
-	//  - REJECTED:执行器对这份原件的确定拒绝(PlayerInboxExecKind::kRejected),同一原件再投结果不变;
-	//  - SKIPPED:运维作废(VoidItem),不执行。
-	// 后两种都不会再有这一局的结算到达本实体,冻结留着只会白白续到上限再误报 ERROR,所以与 APPLIED 一样照常解冻。
-	// 可重试的中间态都不记账、不在环里:执行器 DEFER、版本错位停用(kVersionSkew)、未知类型停用 —— 那些仍是「结算还会来」,
-	// 照旧查终局续冻。收件箱状态机与效果同帧记入,随同一份快照提交;环只有 32 条,但冻结期间玩家进不了别的局,这一局总在环里。
-	// 账本组件缺失(加载不变量被破坏)按「没有终局」处理,交给 SQL 终局查询决定。只读。
-	uint32_t BattleSettlementOutcomeHere(entt::entity player, const uint64_t battleId)
+	// 这一局的结算是否已在本实体应用过:收件箱战斗结算域的最近结局环里有 request_id(= battle_id)相同、结局 APPLIED 的条目
+	// (player_inbox_rules::HasRecentAppliedBattleSettlement,收件箱状态机与效果同帧记入,随同一份快照提交)。
+	// 冻结到期时据此判「本地已收尾」(turn-battle-gap-closure.md §11):环只有 32 条,但冻结期间玩家进不了别的局,
+	// 这一局总在环里。账本组件缺失(加载不变量被破坏)按「没应用」处理,交给 SQL 终局查询决定。只读。
+	//
+	// 只认 APPLIED,REJECTED / SKIPPED 不算收尾(2026-11-06 评审核实,不是遗漏):战斗结算域里这两种都不是终局。
+	//  - 收件箱 Ack 对这个域只收 APPLIED,报 REJECTED / SKIPPED 回 CONFLICT、行不变;VoidItem 对这个域一律拒绝
+	//    (runbook §6.1「Battle 域条目卡住」);Match 只凭 APPLIED 收据放票。
+	//  - scene 的执行器从不回 kRejected(坏载荷也只 DEFER 或按版本错位停用该域,ApplyInboxSettlement);条目带指令、
+	//    或回放到非 APPLIED 的原结局,状态机直接停用该域(player_inbox_system.cpp「battle outcome requires original APPLIED decision」)。
+	// 环里真出现这两种只能是旧版本或缺陷留下的异常,唯一出口是修好之后让 scene 真正把原件执行成功 —— 结算之后仍可能到达,
+	// 所以照旧查终局、续冻,到上限告警交人工,不能当成「不会再有结算」提前解冻。
+	bool IsBattleSettlementAppliedHere(entt::entity player, const uint64_t battleId)
 	{
 		if (!tlsEcs.actorRegistry.valid(player) || battleId == 0)
 		{
-			return 0;
+			return false;
 		}
 		const auto* ledger = tlsEcs.actorRegistry.try_get<PlayerInboxLedgerComp>(player);
-		const auto* cursor = ledger == nullptr
-								 ? nullptr
-								 : player_inbox_rules::FindCursor(
-									   *ledger, static_cast<uint32_t>(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT));
-		if (cursor == nullptr)
-		{
-			return 0;
-		}
-		const auto battleSettlement = static_cast<uint32_t>(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT);
-		uint32_t outcome = 0;
-		for (const auto& decision : cursor->recent()) // 按 seq 升序:同一局有多条时取最近的一条(只进日志)
-		{
-			if (decision.request_id() == battleId && decision.msg_type() == battleSettlement &&
-				player_inbox_rules::IsRecordableOutcome(decision.outcome()))
-			{
-				outcome = decision.outcome();
-			}
-		}
-		return outcome;
-	}
-
-	// 日志名:BattleSettlementOutcomeHere 的非 0 结局。
-	const char* SettledHereTerminalName(const uint32_t outcome)
-	{
-		switch (outcome)
-		{
-		case static_cast<uint32_t>(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED):
-			return "applied_here";
-		case static_cast<uint32_t>(player_inbox::PLAYER_INBOX_OUTCOME_REJECTED):
-			return "rejected_here";
-		case static_cast<uint32_t>(player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED):
-			return "skipped_here";
-		default:
-			return "decided_here";
-		}
+		return ledger != nullptr &&
+			   player_inbox_rules::HasRecentAppliedBattleSettlement(
+				   player_inbox_rules::FindCursor(*ledger,
+												  static_cast<uint32_t>(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT)),
+				   battleId);
 	}
 
 	// 按锁重建两个入口(RestoreBattleFreezeOnLogin、RebuildBattleFreezeFromLock)共用的裁决接线:
@@ -2514,8 +2481,8 @@ void PlayerBattleSystem::ReleaseExpiredFightingFreeze(entt::entity player, const
 	RememberExpiredFightingBattle(player, battleId);
 	// 按 battle_id 条件删锁:作废判定与锁值同源,不会误删别的战斗。
 	// 走到这里只有这几种情形(ResolveExpiredFightingFreeze / OnExpiredFightingTerminalAnswer):SQL 终局是 ABORT、这一局没有
-	// 可裁决的 SQL 原件(永远不会有结算)、收件箱在本实体已对这一局下了终局(APPLIED / REJECTED / SKIPPED)、续冻到了上限,
-	// 以及组件缺身份。续冻到上限的那一局,结算若之后才到,照常应用(结算不需要冻结在场),消耗按当时持有量夹紧。
+	// 可裁决的 SQL 原件(永远不会有结算)、结算已在本实体应用过、续冻到了上限,以及组件缺身份。
+	// 续冻到上限的那一局,结算若之后才到,照常应用(结算不需要冻结在场),消耗按当时持有量夹紧。
 	ClearBattleFreeze(player, playerId, battleId);
 }
 
@@ -2625,16 +2592,14 @@ void PlayerBattleSystem::ResolveExpiredFightingFreeze(entt::entity player, const
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
 		return;
 	}
-	// 这一局的结算在本实体已有终局(BattleSettlementOutcomeHere 的说明):
-	//  - APPLIED:还在等提交确认,或已提交而删锁没落地、玩家重登后按锁重建了冻结。消耗已经扣过,解冻不会让药白喝;
-	//    结算路径上的放锁(CompleteInboxSettlement)晚到也照常收尾。
-	//  - REJECTED / SKIPPED:收件箱已对这一局下了终局(确定拒绝 / 运维作废),不会再有这一局的结算到达本实体。
-	// 都不必查、不续冻、不告警(评审修正 2026-11-06:原先只认 APPLIED,后两种会续到上限再误报 ERROR)。
-	if (const uint32_t settledHere = BattleSettlementOutcomeHere(player, battleId); settledHere != 0)
+	// 这一局的结算已在本实体应用过(还在等提交确认,或已提交而删锁没落地、玩家重登后按锁重建了冻结):
+	// 消耗已经扣过,解冻不会让药白喝;结算路径上的放锁(CompleteInboxSettlement)晚到也照常收尾。不必查。
+	// 环里的 REJECTED / SKIPPED 不算收尾,照旧往下查(IsBattleSettlementAppliedHere 的说明)。
+	if (IsBattleSettlementAppliedHere(player, battleId))
 	{
 		LOG_WARN << "[PlayerBattle] metric=battle_freeze_expired player_id=" << playerId << " battle_id=" << battleId
-				 << " terminal=" << SettledHereTerminalName(settledHere) << " now_ms=" << nowMs
-				 << ",settlement of this battle is already decided by the inbox on this entity;freeze released without a terminal query";
+				 << " terminal=applied_here now_ms=" << nowMs
+				 << ",settlement of this battle is already applied on this entity;freeze released without a terminal query";
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
 		return;
 	}

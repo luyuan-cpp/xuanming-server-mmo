@@ -222,6 +222,7 @@ Deleted、Absent 之后按名字删 owner 行;Bound、OutsideWindow 两边都不
 - 删角之后放掉的名字在 Redis 名字缓存里最多留 `CacheTTL`(24 小时):只是已删角色的展示名,唯一性只看库。
 - 名字片恢复点早于删角释放(多集群 PITR):名字行还绑在已删的角色名下,小表那一行已经删了,没有自动重试。不会一名两角,只是这个名字暂时没人能用;核账工具目前只扫活角色,要靠人按 player_id 核对。
 - 绑定和删角释放的失败只有 ERROR 日志,没有单独的指标。
+- 后台判陈旧(账号 ref 还是 PENDING、角色行不在)写墓碑之前会看名字是否已绑定、存档是否进过场或存过盘,有就只报告不写(2026-11-06 评审补,`data_service_account_role_ref_tombstone_held_total`)。分不出来的只有「建成了、从没进过场、提交之后的绑定也没做完」这一种,仍会被写墓碑;所以 PITR 手册 §4.1a 要求核账在起服之前做完。
 
 代码:`go/data_service/internal/store/player_name_store.go`(Bind、NameRowState、Release、ReleaseRemoved)、`account_role_name.go`(绑定、证明、删角释放)、`account_role_removal.go`(收尾)、`logic/player_name_logic.go`、`server/dataserviceserver.go`(核调用方);login `pkg/playernamereg`(`NewSigned` 签名)。
 

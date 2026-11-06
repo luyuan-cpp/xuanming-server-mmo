@@ -75,6 +75,8 @@ var txLogInsertColumns = func() []string {
 // TransactionLogStore provides query access to the transaction_log table.
 type TransactionLogStore struct {
 	db *sql.DB
+	// dbName 是流水库名,只进清理锁的名字(auditRetentionLockName):锁名在整台服务器上共享。
+	dbName string
 }
 
 // NewTransactionLogStore opens the pool. It does NOT create tables — see schema.go.
@@ -88,17 +90,16 @@ func NewTransactionLogStore(cfg MySQLConfig) (*TransactionLogStore, error) {
 			"TransactionLogEntry.zone_id from Kafka will be dropped until the table proto gains the field")
 	}
 	logx.Infof("[TransactionLogStore] connected to %s/%s", cfg.Host, cfg.DBName)
-	return &TransactionLogStore{db: db}, nil
+	return &TransactionLogStore{db: db, dbName: cfg.DBName}, nil
 }
 
-// DeleteOldLogs 删一批早于 olderThan(Unix 秒)的流水,回实际删除行数。由 RunAuditRetention 循环调用,走 timestamp_sec 索引。
-func (s *TransactionLogStore) DeleteOldLogs(ctx context.Context, olderThan uint64, limit int) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM transaction_log WHERE timestamp_sec < ? LIMIT ?`, olderThan, limit)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+// deleteOldLogsInShardSQL 删一批某个桶里早于截止时间(Unix 秒)的流水,走 (shard, timestamp_sec) 索引;
+// 分批是因为一次删太多会撞事务大小上限,也会长时间占着写入。
+const deleteOldLogsInShardSQL = `DELETE FROM transaction_log WHERE shard = ? AND timestamp_sec < ? LIMIT ?`
+
+// claimRetentionShard 取流水表第 shard 个桶的清理锁,由 RunAuditRetention 调用(audit_retention.go)。
+func (s *TransactionLogStore) claimRetentionShard(ctx context.Context, shard uint32) (retentionShard, bool, error) {
+	return claimSQLRetentionShard(ctx, s.db, s.dbName, "txlog", deleteOldLogsInShardSQL, shard)
 }
 
 // Close releases the database connection.

@@ -49,6 +49,12 @@ public:
 	// 停止驱动 follower(不在任何队形里时什么都不做):移出队形、清零速度、补一条停步广播、通知其客户端。
 	static void Detach(entt::entity follower, TeamFollowStopReason reason);
 
+	// 客户端刚收到入场通知(新登录接回断线保留 / 托管中的角色,或同一会话重新入场):它把跟随状态清成了
+	// "没被驱动",仍接在队长身后的就当场补推一次 driven=true。不等组队读回来 —— 那条读可能失败或被别的
+	// 守卫挡住,客户端就会以为自己能走,而服务器其实还在带着他走。换了场景实例的(队形还记着旧场景)不推:
+	// 下一 tick 会按换场景停止驱动,接下来的跟随检查再重新接上。
+	static void ResendStateAfterEntry(entt::entity player);
+
 	// 成员关系里的 TeamId 变了:作为队员停止驱动,作为队长解散队形。
 	static void OnTeamChanged(entt::entity player);
 	// 读到自己是队长:不再被驱动。

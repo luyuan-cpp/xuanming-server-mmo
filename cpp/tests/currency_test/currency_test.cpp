@@ -581,7 +581,7 @@ TEST(CurrencyTest, PlayerStoreDirectPathSourceContract)
     ASSERT_NE(std::string::npos, save);
     const auto marshal = source.find("MarshalPlayerForSave(player, playerId, *message)", save);
     const auto handoffSkip = source.find("return SaveResult::kHandoffAlreadyRequested;", save);
-    const auto divert = source.find("return SubmitPlayerSave(player, playerId, message, allowSkipWhenPersisted);", save);
+    const auto divert = source.find("return SubmitPlayerSave(player, playerId, message, allowSkipWhenPersisted, trigger);", save);
     ASSERT_NE(std::string::npos, divert);
     EXPECT_LT(marshal, handoffSkip);
     EXPECT_LT(handoffSkip, divert);

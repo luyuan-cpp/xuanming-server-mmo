@@ -72,6 +72,10 @@ message CreateSceneRequest
   uint32 mirror_config_id = 3;  // Mirror config ID (0 = not a mirror instance)
   uint32 dungeon_config_id = 4; // Dungeon config ID (0 = not a dungeon instance)
   repeated uint64 creator_ids = 5; // Creator player IDs (for instance access control)
+  // 放置代次(docs/design/world-channel-placement-generation.md)。scene_manager 每次把世界频道放到某个节点上时从本 zone 的
+  // 计数器分配,同一次放置的建场景、拆场景带同一个值;init 向属主补建时带频道当前的代次。0 = 不带代次(副本、镜像、从没换过
+  // 节点的频道)。scene 节点已按 >= 本值的代次拆过这个场景时拒收:不建、不复用,回空应答。
+  uint64 placement_generation = 6;
 }
 
 message CreateSceneResponse
@@ -82,6 +86,9 @@ message CreateSceneResponse
 message DestroySceneRequest
 {
   uint64 scene_id = 1;
+  // 放置代次,见 CreateSceneRequest.placement_generation。scene 节点已按更新的代次(> 本值)建过这个场景时忽略这次拆除:
+  // 那是之后一次合法的放置,晚到的旧拆除不能拆它。0 = 退役拆除(排空、孤儿清理、副本与镜像的销毁),无条件执行。
+  uint64 placement_generation = 2;
 }
 
 // ---- 回合制战斗备战(match -> scene,gather 协议;设计文档 turn-based-battle-server.md §3.1)----

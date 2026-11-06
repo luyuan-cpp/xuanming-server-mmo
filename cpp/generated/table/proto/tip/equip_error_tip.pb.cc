@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_equip_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025equip_error_tip.proto*\360\004\n\013equip_error\022"
+    "\n\025equip_error_tip.proto*\221\005\n\013equip_error\022"
     "\022\n\016kEquip_errorOK\020\000\022\030\n\022kEquipItemNotFoun"
     "d\020\340\332\001\022\030\n\022kEquipNotEquipment\020\341\332\001\022\032\n\024kEqui"
     "pLevelNotEnough\020\342\332\001\022\031\n\023kEquipClassMismat"
@@ -51,14 +51,15 @@ const char descriptor_table_protodef_equip_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "mSocketInvalid\020\361\332\001\022\035\n\027kEquipGemSocketOcc"
     "upied\020\362\332\001\022\032\n\024kEquipGemSocketEmpty\020\363\332\001\022\033\n"
     "\025kEquipGemTypeMismatch\020\364\332\001\022\026\n\020kEquipGemB"
-    "agFull\020\365\332\001B$\n\016com.game.tableZ\022generated/"
-    "pb/tableb\006proto3"
+    "agFull\020\365\332\001\022\037\n\031kEquipEnhanceLevelChanged\020"
+    "\366\332\001B$\n\016com.game.tableZ\022generated/pb/tabl"
+    "eb\006proto3"
 };
 static ::absl::once_flag descriptor_table_equip_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_equip_5ferror_5ftip_2eproto = {
     false,
     false,
-    696,
+    729,
     descriptor_table_protodef_equip_5ferror_5ftip_2eproto,
     "equip_error_tip.proto",
     &descriptor_table_equip_5ferror_5ftip_2eproto_once,
@@ -77,7 +78,7 @@ equip_error_descriptor() {
   return file_level_enum_descriptors_equip_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t equip_error_internal_data_[] = {
-    65536u, 1441792u, 28014u, 28007u, 28018u, 28003u, 28011u, 28016u, 28020u, 28001u, 28005u, 28009u, 28013u, 28015u, 28017u, 28019u, 28021u, 28000u, 28002u, 28004u, 28006u, 28008u, 28010u, 28012u, };
+    65536u, 1507328u, 28015u, 28007u, 28019u, 28003u, 28011u, 28017u, 28021u, 28001u, 28005u, 28009u, 28013u, 28016u, 28018u, 28020u, 28022u, 28000u, 28002u, 28004u, 28006u, 28008u, 28010u, 28012u, 28014u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

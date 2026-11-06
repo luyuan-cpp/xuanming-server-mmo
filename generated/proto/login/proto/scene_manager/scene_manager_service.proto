@@ -21,7 +21,9 @@ service SceneManager {
   // Create a scene on a specific node (implemented by the Scene node)
   rpc CreateScene(CreateSceneRequest) returns (CreateSceneResponse) {}
 
-  // Destroy a scene
+  // 销毁一个副本或镜像,不看人数(在场玩家由 scene 节点改派回大世界)。目标是大世界频道时拒绝(回错误,一个键不动):
+  // 频道只由缩容排空与孤儿清理下线,要下掉一个频道就调低这张图的期望频道数
+  // (docs/design/world-channel-placement-generation.md §7)。
   rpc DestroyScene(DestroySceneRequest) returns (Empty) {}
 
   // Login/player_locator requests a player to enter a scene

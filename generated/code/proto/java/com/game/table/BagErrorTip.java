@@ -95,6 +95,18 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kBagInsufficientBagSpace = 6014;</code>
      */
     kBagInsufficientBagSpace(6014),
+    /**
+     * <code>kBagTemporaryItemNotFound = 6015;</code>
+     */
+    kBagTemporaryItemNotFound(6015),
+    /**
+     * <code>kBagTemporaryRetrieveBagFull = 6016;</code>
+     */
+    kBagTemporaryRetrieveBagFull(6016),
+    /**
+     * <code>kBagTemporaryRetrieveBusy = 6017;</code>
+     */
+    kBagTemporaryRetrieveBusy(6017),
     UNRECOGNIZED(-1),
     ;
 
@@ -171,6 +183,18 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kBagInsufficientBagSpace = 6014;</code>
      */
     public static final int kBagInsufficientBagSpace_VALUE = 6014;
+    /**
+     * <code>kBagTemporaryItemNotFound = 6015;</code>
+     */
+    public static final int kBagTemporaryItemNotFound_VALUE = 6015;
+    /**
+     * <code>kBagTemporaryRetrieveBagFull = 6016;</code>
+     */
+    public static final int kBagTemporaryRetrieveBagFull_VALUE = 6016;
+    /**
+     * <code>kBagTemporaryRetrieveBusy = 6017;</code>
+     */
+    public static final int kBagTemporaryRetrieveBusy_VALUE = 6017;
 
 
     public final int getNumber() {
@@ -213,6 +237,9 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
         case 6012: return kBagDelItemSize;
         case 6013: return kBagItemDeletionSizeMismatch;
         case 6014: return kBagInsufficientBagSpace;
+        case 6015: return kBagTemporaryItemNotFound;
+        case 6016: return kBagTemporaryRetrieveBagFull;
+        case 6017: return kBagTemporaryRetrieveBusy;
         default: return null;
       }
     }
@@ -278,7 +305,7 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023bag_error_tip.proto*\300\003\n\tbag_error\022\020\n\014k" +
+      "\n\023bag_error_tip.proto*\243\004\n\tbag_error\022\020\n\014k" +
       "Bag_errorOK\020\000\022\033\n\026kBagDeleteItemFindGuid\020" +
       "\360.\022!\n\034kBagDeleteItemAlreadyHasGuid\020\361.\022#\n" +
       "\036kBagAddItemHasNotBaseComponent\020\362.\022\033\n\026kB" +
@@ -289,8 +316,11 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
       "DelItemConfig\020\371.\022\024\n\017kBagDelItemGuid\020\372.\022\030" +
       "\n\023kBagDelItemFindItem\020\373.\022\024\n\017kBagDelItemS" +
       "ize\020\374.\022!\n\034kBagItemDeletionSizeMismatch\020\375" +
-      ".\022\035\n\030kBagInsufficientBagSpace\020\376.B$\n\016com." +
-      "game.tableZ\022generated/pb/tableb\006proto3"
+      ".\022\035\n\030kBagInsufficientBagSpace\020\376.\022\036\n\031kBag" +
+      "TemporaryItemNotFound\020\377.\022!\n\034kBagTemporar" +
+      "yRetrieveBagFull\020\200/\022\036\n\031kBagTemporaryRetr" +
+      "ieveBusy\020\201/B$\n\016com.game.tableZ\022generated" +
+      "/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

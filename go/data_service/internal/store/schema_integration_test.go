@@ -37,11 +37,11 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 			"tx_id", "timestamp_sec", "tx_type", "from_player", "to_player",
 			"item_uuid", "item_config_id", "item_quantity",
 			"currency_type", "currency_delta", "balance_before", "balance_after",
-			"correlation_id", "extra",
+			"correlation_id", "extra", "shard",
 		},
 		"player_snapshot": {
 			"id", "player_id", "zone_id", "snapshot_type", "created_at", "reason", "operator", "data",
-			"snapshot_guid", "source",
+			"snapshot_guid", "source", "shard",
 		},
 		"rollback_audit_log": {
 			"id", "player_id", "zone_id", "rollback_type", "snapshot_id_used", "pre_rollback_snapshot_id",
@@ -72,10 +72,9 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 		  LIMIT 1`, db.Name).Scan(&nonUnique), "player_snapshot.snapshot_guid must be indexed")
 	assert.Equal(t, 1, nonUnique, "snapshot_guid index must be non-unique")
 
-	// (zone_id, created_at):GetSnapshotPlayerIDsByZone / RollbackZone 的过滤条件。
-	// proto 的 OptionIndex 目前只有 "player_id;snapshot_guid",这条由 schema.go 的
-	// extraIndexes 补(见那里的注释:proto 补上之后这条会自动被判为已覆盖)。
-	// 少了它,回滚一个 zone 要扫完全服快照表,而且没有任何报错。
+	// (zone_id, shard, created_at):GetSnapshotPlayerIDsByZone / RollbackZone 的过滤条件(带 shard IN (0..15),
+	// 2026-11-06 时间索引按桶打散)。真源是 proto 的 OptionIndex;少了它,回滚一个 zone 要扫完全服快照表,而且没有任何报错。
+	// 全部按桶打散的索引形态见 audit_shard_integration_test.go。
 	var zoneIdxCols int
 	require.NoError(t, db.Raw.QueryRow(
 		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
@@ -84,9 +83,9 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 		      SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
 		       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'player_snapshot'
 		         AND COLUMN_NAME = 'zone_id' AND SEQ_IN_INDEX = 1)
-		    AND COLUMN_NAME = 'created_at' AND SEQ_IN_INDEX = 2`,
+		    AND ((COLUMN_NAME = 'shard' AND SEQ_IN_INDEX = 2) OR (COLUMN_NAME = 'created_at' AND SEQ_IN_INDEX = 3))`,
 		db.Name, db.Name).Scan(&zoneIdxCols))
-	assert.Positive(t, zoneIdxCols, "player_snapshot must have a (zone_id, created_at) index")
+	assert.Equal(t, 2, zoneIdxCols, "player_snapshot must have a (zone_id, shard, created_at) index")
 
 	// transaction_log 的主键是 tx_id(INSERT IGNORE 幂等的根基)。
 	var txPK string

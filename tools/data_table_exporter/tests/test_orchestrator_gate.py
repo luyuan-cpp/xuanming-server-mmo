@@ -194,6 +194,25 @@ def test_deploy_orphan_is_fail_closed_and_not_deleted(cfg, tmp_path):
     assert stale.read_text(encoding="utf-8") == "parallel work"
 
 
+def test_deploy_preserves_clientrpc_owned_by_proto_generator(cfg, tmp_path):
+    """共享生成目录里的 proto-gen 产物不归导表器裁决陈旧。"""
+    _disable_languages(cfg)
+    cfg.go.enabled = True
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    (source / "current.go").write_text("package table", encoding="utf-8")
+    (target / "clientrpc").mkdir(parents=True)
+    methods = target / "clientrpc" / "methods.go"
+    methods.write_text("package clientrpc", encoding="utf-8")
+    cfg.go.deploy = [{"src": source, "dst": target}]
+
+    _deploy(cfg)
+
+    assert methods.read_text(encoding="utf-8") == "package clientrpc"
+    assert (target / "current.go").read_text(encoding="utf-8") == "package table"
+
+
 def test_java_code_source_orphan_is_fail_closed(cfg, tmp_path):
     """生成源里的旧 Manager/Comp 不得伪装成当前部署输入。"""
     cfg.java.enabled = True

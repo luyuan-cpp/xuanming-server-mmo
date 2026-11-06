@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 47;
+        public const int TableCount = 49;
 
         private static Action s_loadSuccessCallback;
 
@@ -78,6 +78,7 @@ namespace MmorpgClient.Table
                 MysteryMerchantSpotTableManager.FileName(useBinary),
                 PetTableManager.FileName(useBinary),
                 PetRuleTableManager.FileName(useBinary),
+                PlayModeTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
                 RoleNameRuleTableManager.FileName(useBinary),
                 SkillTableManager.FileName(useBinary),
@@ -85,6 +86,7 @@ namespace MmorpgClient.Table
                 TestTableManager.FileName(useBinary),
                 TestMultiKeyTableManager.FileName(useBinary),
                 WorldTableManager.FileName(useBinary),
+                ZoneGroupTableManager.FileName(useBinary),
             };
         }
 
@@ -132,6 +134,7 @@ namespace MmorpgClient.Table
             MysteryMerchantSpotTableManager.Instance.Load(configDir, useBinary);
             PetTableManager.Instance.Load(configDir, useBinary);
             PetRuleTableManager.Instance.Load(configDir, useBinary);
+            PlayModeTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
             RoleNameRuleTableManager.Instance.Load(configDir, useBinary);
             SkillTableManager.Instance.Load(configDir, useBinary);
@@ -139,6 +142,7 @@ namespace MmorpgClient.Table
             TestTableManager.Instance.Load(configDir, useBinary);
             TestMultiKeyTableManager.Instance.Load(configDir, useBinary);
             WorldTableManager.Instance.Load(configDir, useBinary);
+            ZoneGroupTableManager.Instance.Load(configDir, useBinary);
             InvokeLoadSuccess();
         }
 
@@ -243,6 +247,8 @@ namespace MmorpgClient.Table
                 PetTableManager.Instance.LoadFromBytes, PetTableManager.Instance.LoadFromJson);
             LoadOne(PetRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 PetRuleTableManager.Instance.LoadFromBytes, PetRuleTableManager.Instance.LoadFromJson);
+            LoadOne(PlayModeTableManager.FileName(useBinary), byteProvider, useBinary,
+                PlayModeTableManager.Instance.LoadFromBytes, PlayModeTableManager.Instance.LoadFromJson);
             LoadOne(RewardTableManager.FileName(useBinary), byteProvider, useBinary,
                 RewardTableManager.Instance.LoadFromBytes, RewardTableManager.Instance.LoadFromJson);
             LoadOne(RoleNameRuleTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -257,6 +263,8 @@ namespace MmorpgClient.Table
                 TestMultiKeyTableManager.Instance.LoadFromBytes, TestMultiKeyTableManager.Instance.LoadFromJson);
             LoadOne(WorldTableManager.FileName(useBinary), byteProvider, useBinary,
                 WorldTableManager.Instance.LoadFromBytes, WorldTableManager.Instance.LoadFromJson);
+            LoadOne(ZoneGroupTableManager.FileName(useBinary), byteProvider, useBinary,
+                ZoneGroupTableManager.Instance.LoadFromBytes, ZoneGroupTableManager.Instance.LoadFromJson);
             InvokeLoadSuccess();
         }
 

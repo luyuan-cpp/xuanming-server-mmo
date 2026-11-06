@@ -915,32 +915,36 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fchat_2fchat_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\025proto/chat/chat.proto\022\006chatpb\032\033proto/d"
-    "b/proto_option.proto\032\033proto/common/base/"
-    "tip.proto\"\222\001\n\013ChatMessage\022\030\n\020sender_play"
-    "er_id\030\001 \001(\004\022\030\n\020target_player_id\030\002 \001(\004\022(\n"
-    "\007channel\030\003 \001(\0162\027.chatpb.ChatChannelType\022"
-    "\017\n\007content\030\004 \001(\t\022\024\n\014send_time_ms\030\005 \001(\003\"K"
-    "\n\017SendChatRequest\022$\n\007message\030\001 \001(\0132\023.cha"
-    "tpb.ChatMessage\022\022\n\nrequest_id\030\002 \001(\t\":\n\020S"
-    "endChatResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\"i\n\026PullChatHistoryReques"
-    "t\022(\n\007channel\030\001 \001(\0162\027.chatpb.ChatChannelT"
-    "ype\022\026\n\016peer_player_id\030\002 \001(\004\022\r\n\005limit\030\003 \001"
-    "(\r\"h\n\027PullChatHistoryResponse\022&\n\rerror_m"
-    "essage\030\001 \001(\0132\017.TipInfoMessage\022%\n\010message"
-    "s\030\002 \003(\0132\023.chatpb.ChatMessage*\252\001\n\017ChatCha"
-    "nnelType\022!\n\035CHAT_CHANNEL_TYPE_UNSPECIFIE"
-    "D\020\000\022\033\n\027CHAT_CHANNEL_TYPE_WORLD\020\001\022\032\n\026CHAT"
-    "_CHANNEL_TYPE_TEAM\020\002\022\035\n\031CHAT_CHANNEL_TYP"
-    "E_PRIVATE\020\003\022\034\n\030CHAT_CHANNEL_TYPE_SYSTEM\020"
-    "\0042\254\001\n\020ClientPlayerChat\022=\n\010SendChat\022\027.cha"
-    "tpb.SendChatRequest\032\030.chatpb.SendChatRes"
-    "ponse\022R\n\017PullChatHistory\022\036.chatpb.PullCh"
-    "atHistoryRequest\032\037.chatpb.PullChatHistor"
-    "yResponse\032\005\210\250\303\001\001B\rZ\004chat\200\001\000\230\324a\016b\006proto3"
+    "b/proto_option.proto\032\035proto/common/base/"
+    "empty.proto\032\033proto/common/base/tip.proto"
+    "\"\222\001\n\013ChatMessage\022\030\n\020sender_player_id\030\001 \001"
+    "(\004\022\030\n\020target_player_id\030\002 \001(\004\022(\n\007channel\030"
+    "\003 \001(\0162\027.chatpb.ChatChannelType\022\017\n\007conten"
+    "t\030\004 \001(\t\022\024\n\014send_time_ms\030\005 \001(\003\"K\n\017SendCha"
+    "tRequest\022$\n\007message\030\001 \001(\0132\023.chatpb.ChatM"
+    "essage\022\022\n\nrequest_id\030\002 \001(\t\":\n\020SendChatRe"
+    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
+    "essage\"i\n\026PullChatHistoryRequest\022(\n\007chan"
+    "nel\030\001 \001(\0162\027.chatpb.ChatChannelType\022\026\n\016pe"
+    "er_player_id\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"h\n\027Pul"
+    "lChatHistoryResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\022%\n\010messages\030\002 \003(\0132\023"
+    ".chatpb.ChatMessage*\252\001\n\017ChatChannelType\022"
+    "!\n\035CHAT_CHANNEL_TYPE_UNSPECIFIED\020\000\022\033\n\027CH"
+    "AT_CHANNEL_TYPE_WORLD\020\001\022\032\n\026CHAT_CHANNEL_"
+    "TYPE_TEAM\020\002\022\035\n\031CHAT_CHANNEL_TYPE_PRIVATE"
+    "\020\003\022\034\n\030CHAT_CHANNEL_TYPE_SYSTEM\020\0042\343\001\n\020Cli"
+    "entPlayerChat\022=\n\010SendChat\022\027.chatpb.SendC"
+    "hatRequest\032\030.chatpb.SendChatResponse\022R\n\017"
+    "PullChatHistory\022\036.chatpb.PullChatHistory"
+    "Request\032\037.chatpb.PullChatHistoryResponse"
+    "\0225\n\017NotifyWorldChat\022\023.chatpb.ChatMessage"
+    "\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\rZ\004chat\200\001\000\230\324a\016b\006p"
+    "roto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fchat_2fchat_2eproto_deps[2] = {
+    descriptor_table_proto_2fchat_2fchat_2eproto_deps[3] = {
+        &::descriptor_table_proto_2fcommon_2fbase_2fempty_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
 };
@@ -948,12 +952,12 @@ static ::absl::once_flag descriptor_table_proto_2fchat_2fchat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fchat_2fchat_2eproto = {
     false,
     false,
-    959,
+    1045,
     descriptor_table_protodef_proto_2fchat_2fchat_2eproto,
     "proto/chat/chat.proto",
     &descriptor_table_proto_2fchat_2fchat_2eproto_once,
     descriptor_table_proto_2fchat_2fchat_2eproto_deps,
-    2,
+    3,
     5,
     schemas,
     file_message_globals,

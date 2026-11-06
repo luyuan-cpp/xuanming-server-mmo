@@ -518,13 +518,15 @@ v1 **不做自动隔离**。
 | 产出封禁(全服 GainBlock 封了某物品 / 币种,或玩家被 GM 封锁了该币种的获取) | 与资产通道、旧路径同一口径(2026-11-05):**只跳过被封的币种 / 掉落,其余效果照常应用,结局 APPLIED**;被封部分这一局永久不入账、不抵欠款,解封后不补发。日志 `metric=battle_settlement_currency_blocked` / `battle_settlement_item_blocked`(source=inbox)。不会因封禁卡住条目,无需处置 |
 | 持久数据损坏或含未知字段(玩家背包实例 / 宠物 / 欠款带本版本不认识的字段,数量实例不可计数,或持久组件缺失) | 未知字段与不可计数实例判**版本错位、停用该域**;组件缺失则整笔延后 | 未知字段来自更新版本的 scene 写下的数据:把全网 scene 滚动到认识这些字段的版本(同 §5.2 A′),玩家重新落地即应用。确属损坏(没有任何版本认识):按事故上报负责人,走存档修复 / 回档流程(§9、`docs/ops/online-debug-data-fetch.md`),不要手改存档 |
 | 载荷坏值(结算原件解不开、带未知字段、终局值非法;或币种越界、同币种重复、金额超过 INT64_MAX) | 前三种判**版本错位、停用该域**,后三种**整笔延后**。原件不可变,重试永远是同一个结果 | 先查是不是更新版本的 battle 写出的字段(升级 scene 即可)。否则是 battle / match 的缺陷:按事故上报,修复只能靠能安全处理这份原件的新版本 scene;**不能**改载荷、作废或另发一份结算 |
-| 主包与临时格都满(主包放不下整批掉落,转临时格也放不下;2026-11-05 起临时格满了**不再挤掉旧物**,新到的整批一律拒绝,scene 打 WARN `metric=bag_grant_overflow_rejected`,首次与每连续 8 次一条、不带调用栈),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试;同一玩家收件箱后面的局按序也停在这里 | 让玩家把临时格的东西取回人物背包(客户端「临时格」页签的取回 / 全部取回,协议 `RetrieveTemporaryItems`,`docs/design/bag-rule-policy-layering.md` §6.6;这一局的战斗冻结还挂着时照样能取回)或整理背包腾出空间(整理要等冻结解开)。取回成功会经 `PlayerInboxSystem::OnBagSpaceFreed` 把这一条的下一次尝试提到现在,下一个 tick(约 1 秒)就重试,放得下即应用;整理等其它腾位方式不唤醒,照常等退避(最长约 60 秒)再重试(2026-11-06 起);号段不足时 scene 已自动请号段客户端续一段(日志带 `top_up=fetching`,2026-11-06 起),续上即自愈;`top_up=buffers_full` / `unavailable` 打 ERROR,说明这一批比号段双 buffer 还大或 item 号段未启用,查 `IdSegments` 的 step 与发号器。不需要服务端操作,**不要**作废或改原件 |
+| 主包与临时格都满(主包放不下整批掉落,转临时格也放不下;2026-11-05 起临时格满了**不再挤掉旧物**,新到的整批一律拒绝,scene 打 WARN `metric=bag_grant_overflow_rejected`,首次与每连续 8 次一条、不带调用栈),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试;同一玩家收件箱后面的局按序也停在这里 | 让玩家把临时格的东西取回人物背包(客户端「临时格」页签的取回 / 全部取回,协议 `RetrieveTemporaryItems`,`docs/design/bag-rule-policy-layering.md` §6.6;这一局的战斗冻结还挂着时照样能取回)或整理背包腾出空间(整理要等冻结解开)。取回成功会经 `PlayerInboxSystem::OnBagSpaceFreed` 把这一条的下一次尝试提到现在,下一个 tick(约 1 秒)就重试,放得下即应用;整理等其它腾位方式不唤醒,照常等退避(最长约 60 秒)再重试(2026-11-06 起);号段不足时 scene 已自动请号段客户端续一段(日志带 `top_up=fetching`,2026-11-06 起),续上即自愈;`top_up=exceeds_max_step` / `unavailable` 打 ERROR,说明这一批要的新实例比一段最多能给的号(`IdSegments` 的 `MaxStep`)还多,或 item 号段未启用 / 已停机,查 `IdSegments` 的 `MaxStep` / `Enabled` 与发号器;结算照样只延后、不拒收,改好配置后下一次重试自愈。不需要服务端操作,**不要**作废或改原件 |
 
 **战斗冻结续冻(2026-11-06,`docs/design/turn-battle-gap-closure.md` §11)**:FIGHTING 冻结到期时 scene 先向 match 查这一局的 SQL 终局,
 COMPLETE 而结算还没到本地、有可裁决原件而终局还没落定(NONE)、或者查不到,就续冻(每 30 秒一行 WARN
-`metric=battle_freeze_held terminal=COMPLETE|PENDING|UNKNOWN`),最多续 15 分钟;没有可裁决原件的局(`terminal=NO_ORIGINAL`)与 ABORT 到期照常解冻。
+`metric=battle_freeze_held terminal=COMPLETE|PENDING|UNKNOWN`),最多续 15 分钟;没有可裁决原件的局(`terminal=NO_ORIGINAL`)与 ABORT 到期照常解冻;
+这一局的结算已在本玩家身上 APPLIED(`terminal=applied_here`)也照常解冻、不查 match。scene 账本里这一局若是 REJECTED / SKIPPED
+(只可能是旧版本或缺陷留下的异常,这一域本来只收 APPLIED),不算收尾,照旧续冻到上限再告警,按本节处置让原件真正执行成功。
 FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直不来的局,这名玩家最多约 15 分钟内排不了队。
-续到上限打 ERROR `metric=battle_freeze_hold_cap_reached` 后照常解冻:按日志里的 `battle_id` 走上面的步骤查这一局的收件箱条目与 Match 侧
+续到上限打 ERROR `metric=battle_freeze_hold_cap_reached terminal=not_queried_past_cap` 后照常解冻(越过上限的那一拍不再查询):按日志里的 `battle_id` 走上面的步骤查这一局的收件箱条目与 Match 侧
 `match_battle_settlement_source`,结算之后再到会按当时持有量夹紧消耗。`terminal=UNKNOWN` 持续出现(`metric=battle_terminal_query_unknown`)
 先查 scene 的 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`、match 节点发现与 match 是否可达。
 

@@ -101,7 +101,7 @@ func TestNilAssetChannelIsSafe(t *testing.T) {
 	if ch.Enabled() {
 		t.Error("nil 通道不能报告为可用")
 	}
-	ch.Start(context.Background(), nil)
+	ch.Start(context.Background(), nil, true)
 	ch.WarmAssetOpIDSegment()
 	ch.Close()
 

@@ -223,7 +223,7 @@ func TestAssetChannelStartThenCloseReturns(t *testing.T) {
 		Watcher:  scenenode.NewWatcher(sceneWatcherName, scenenode.SceneNodeRpcPrefix, nil, nil),
 		Pipeline: p,
 	}
-	ch.Start(context.Background(), nil)
+	ch.Start(context.Background(), nil, true)
 	if ch.stopLoops == nil {
 		t.Fatal("Start 应当起了后台 goroutine")
 	}
@@ -245,7 +245,7 @@ func TestAssetChannelStartThenCloseReturns(t *testing.T) {
 func TestAssetChannelStartAfterCloseIsNoop(t *testing.T) {
 	ch := &AssetChannel{}
 	ch.Close()
-	ch.Start(context.Background(), nil)
+	ch.Start(context.Background(), nil, true)
 	if ch.stopLoops != nil {
 		t.Error("Close 之后 Start 不得再起任何后台 goroutine")
 	}

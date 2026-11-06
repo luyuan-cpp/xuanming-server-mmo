@@ -40,6 +40,9 @@ const (
 	BagError_kBagDelItemSize                BagError = 6012
 	BagError_kBagItemDeletionSizeMismatch   BagError = 6013
 	BagError_kBagInsufficientBagSpace       BagError = 6014
+	BagError_kBagTemporaryItemNotFound      BagError = 6015
+	BagError_kBagTemporaryRetrieveBagFull   BagError = 6016
+	BagError_kBagTemporaryRetrieveBusy      BagError = 6017
 )
 
 // Enum value maps for BagError.
@@ -61,6 +64,9 @@ var (
 		6012: "kBagDelItemSize",
 		6013: "kBagItemDeletionSizeMismatch",
 		6014: "kBagInsufficientBagSpace",
+		6015: "kBagTemporaryItemNotFound",
+		6016: "kBagTemporaryRetrieveBagFull",
+		6017: "kBagTemporaryRetrieveBusy",
 	}
 	BagError_value = map[string]int32{
 		"kBag_errorOK":                   0,
@@ -79,6 +85,9 @@ var (
 		"kBagDelItemSize":                6012,
 		"kBagItemDeletionSizeMismatch":   6013,
 		"kBagInsufficientBagSpace":       6014,
+		"kBagTemporaryItemNotFound":      6015,
+		"kBagTemporaryRetrieveBagFull":   6016,
+		"kBagTemporaryRetrieveBusy":      6017,
 	}
 )
 
@@ -113,7 +122,7 @@ var File_bag_error_tip_proto protoreflect.FileDescriptor
 
 const file_bag_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x13bag_error_tip.proto*\xc0\x03\n" +
+	"\x13bag_error_tip.proto*\xa3\x04\n" +
 	"\tbag_error\x12\x10\n" +
 	"\fkBag_errorOK\x10\x00\x12\x1b\n" +
 	"\x16kBagDeleteItemFindGuid\x10\xf0.\x12!\n" +
@@ -130,7 +139,10 @@ const file_bag_error_tip_proto_rawDesc = "" +
 	"\x13kBagDelItemFindItem\x10\xfb.\x12\x14\n" +
 	"\x0fkBagDelItemSize\x10\xfc.\x12!\n" +
 	"\x1ckBagItemDeletionSizeMismatch\x10\xfd.\x12\x1d\n" +
-	"\x18kBagInsufficientBagSpace\x10\xfe.B$\n" +
+	"\x18kBagInsufficientBagSpace\x10\xfe.\x12\x1e\n" +
+	"\x19kBagTemporaryItemNotFound\x10\xff.\x12!\n" +
+	"\x1ckBagTemporaryRetrieveBagFull\x10\x80/\x12\x1e\n" +
+	"\x19kBagTemporaryRetrieveBusy\x10\x81/B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

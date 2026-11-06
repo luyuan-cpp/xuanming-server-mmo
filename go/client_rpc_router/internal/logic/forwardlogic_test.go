@@ -431,6 +431,42 @@ func TestForwardInvalidReleaseTrackIsInvalidParameter(t *testing.T) {
 	require.Equal(t, 0, calls, "轨道无法识别的请求不能转发到任何实例")
 }
 
+// forward_by_track_total 按会话轨道记同一批终态(发布轨道设计 §2.7 的金丝雀观察项):空串记 stable,认不出记 unknown;
+// 早于轨道检查的拒绝(未知消息号)也记在会话自己的轨道上,两条轨道的错误率才能直接比。
+func TestForwardCountsOutcomeBySessionTrack(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
+	dialer := newBufDialer(t)
+	dialer.add("match-stable", startEchoTarget(t, "match-stable", route.FullMethod))
+	dialer.add("match-canary", startEchoTarget(t, "match-canary", route.FullMethod))
+	sc := newSvcCtx(t, dialer, 2000)
+	addNodeOnTrack(sc, base.ENodeType_MatchNodeService, 1, 1, "match-stable", releasetrack.Stable)
+	addNodeOnTrack(sc, base.ENodeType_MatchNodeService, 2, 1, "match-canary", releasetrack.Canary)
+
+	const unknownId = uint32(4_000_000_000)
+	_, known := game.LookupRoute(unknownId)
+	require.False(t, known, "测试前提:该消息号不在路由表")
+	cases := []struct {
+		messageId uint32
+		track     string
+		label     string
+		outcome   string
+	}{
+		{messageId: game.MatchServiceJoinQueueMessageId, track: "", label: "stable", outcome: metrics.OutcomeOK},
+		{messageId: game.MatchServiceJoinQueueMessageId, track: "stable", label: "stable", outcome: metrics.OutcomeOK},
+		{messageId: game.MatchServiceJoinQueueMessageId, track: "canary", label: "canary", outcome: metrics.OutcomeOK},
+		{messageId: game.MatchServiceJoinQueueMessageId, track: "beta", label: metrics.TrackLabelUnknown, outcome: metrics.OutcomeInvalidReleaseTrack},
+		{messageId: unknownId, track: "canary", label: "canary", outcome: metrics.OutcomeUnknownMessage},
+	}
+	for i, tc := range cases {
+		before := metrics.ForwardByTrackValue(tc.label, tc.outcome)
+		_, err := logic.NewForwardLogic(ctxWithSession(), sc).
+			Forward(forwardReqOnTrack(tc.messageId, uint64(100+i), 1, []byte("q"), tc.track))
+		require.NoError(t, err)
+		require.Equal(t, before+1, metrics.ForwardByTrackValue(tc.label, tc.outcome),
+			"message_id=%d track=%q 应当记在 (%s, %s) 上", tc.messageId, tc.track, tc.label, tc.outcome)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 目标出错 / 超时 → kServiceUnavailable。
 // ---------------------------------------------------------------------------

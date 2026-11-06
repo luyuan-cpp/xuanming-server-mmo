@@ -104,6 +104,7 @@ def md5_copy(src: str | Path, dst: str | Path) -> None:
 _DEPLOY_KEEP: frozenset[str] = frozenset({
     "table/table_test.go",  # 手写的表加载冒烟测试
     "persistschema/persistschema.go",  # proto-gen 按 proto/persist_schema_gen.txt 生成
+    "clientrpc/methods.go",  # proto-gen 按客户端协议服务与方法选项生成
 })
 
 # 只对这些后缀查陈旧产物(编译单元;.json/.pb 等数据产物由 manifest 与业务自行管理)。

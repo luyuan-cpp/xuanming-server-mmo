@@ -223,6 +223,14 @@ void SendDataServiceResolveRecallOp(entt::registry& registry, entt::entity nodeE
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendDataServiceResolveRecallOpErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region DataServiceRegisterRecallReviewHandled
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceRegisterRecallReviewHandledGrpcPath = "/data_service.DataService/RegisterRecallReviewHandled";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceRegisterRecallReviewHandled(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RegisterRecallReviewHandledRequest& request, GrpcDone<::data_service::RegisterRecallReviewHandledResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceRegisterRecallReviewHandledErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region DataServiceQueryTransactionLog
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kDataServiceQueryTransactionLogGrpcPath = "/data_service.DataService/QueryTransactionLog";
@@ -286,6 +294,14 @@ inline constexpr std::string_view kDataServiceGetPlayerInboxLedgerGrpcPath = "/d
 void SendDataServiceGetPlayerInboxLedger(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerInboxLedgerRequest& request, GrpcDone<::data_service::GetPlayerInboxLedgerResponse> done, const GrpcCallOptions& options = {});
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceGetPlayerItemGainBlock
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceGetPlayerItemGainBlockGrpcPath = "/data_service.DataService/GetPlayerItemGainBlock";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceGetPlayerItemGainBlock(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerItemGainBlockRequest& request, GrpcDone<::data_service::GetPlayerItemGainBlockResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetDataServiceCallDeadline(std::chrono::milliseconds deadline);

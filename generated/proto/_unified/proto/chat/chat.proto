@@ -2,6 +2,7 @@ syntax = "proto3";
 option go_package = "proto/chat";
 
 import "proto/db/proto_option.proto";
+import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
 
 package chatpb;
@@ -50,4 +51,12 @@ service ClientPlayerChat {
 
   rpc SendChat (SendChatRequest) returns (SendChatResponse);
   rpc PullChatHistory (PullChatHistoryRequest) returns (PullChatHistoryResponse);
+
+  // 世界频道推送(S2C,docs/design/chat-world-channel-fanout.md §4):世界频道的一条发送首次提交成功后,
+  // chat 往 Kafka chat-world-bcast_g<N> 发一条,每台 gate 推给本机全部已绑定的会话。消息体就是历史里的同一份显示原件。
+  // 至多一次:推送失败或玩家刚好掉线时这一条会丢,真相仍是 PullChatHistory。客户端打开聊天面板与重连时拉一次历史,
+  // 按 (sender_player_id, send_time_ms) 去重、按 send_time_ms 排序;不再需要定时轮询。
+  // 推送方法必须声明在这个客户端服务里并标 CLIENT_RPC_PUSH(同 friend.proto 的 NotifyFriendEvent):
+  // 生成器据此把它排除在客户端可调方法集合之外,客户端主动调它在入口准入就被挡住;服务端不实现(内嵌 Unimplemented)。
+  rpc NotifyWorldChat (ChatMessage) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }

@@ -27,6 +27,7 @@ const (
 	recallApplied   = uint32(2)
 	recallRejected  = uint32(3)
 	recallAborted   = uint32(4)
+	recallPartial   = uint32(5)
 	recallPlanned   = uint32(6)
 	recallCancelled = uint32(7)
 	recallRoleGone  = uint32(8)
@@ -512,6 +513,7 @@ func TestRecallStore_ReadOpStateIsTheClaimedRequest(t *testing.T) {
 	require.NoError(t, state.OpErr)
 	assert.True(t, state.IsPending())
 	assert.Equal(t, uint64(4000), state.LeaseUntilMs, "租约是 claim 写下的")
+	assert.Equal(t, uint64(77), state.LeaseToken, "行上的令牌是 claim 写下的;Op.LeaseToken 只属于领取方")
 	assert.True(t, proto.Equal(claimed.Bundle, state.Op.Bundle))
 	claimed.Bundle, claimed.LeaseToken, state.Op.Bundle = nil, 0, nil
 	assert.Equal(t, claimed, state.Op)
@@ -540,4 +542,120 @@ func TestRecallStore_DispatchInitializesLastSendMs(t *testing.T) {
 	assert.True(t, quiet, "从没投出去、过了安全间隔、没人持租约:应判安静(%s)", why)
 	quiet, _ = assetop.RowQuiet(state.Op.LastSendMs, state.LeaseUntilMs, 2000+gapMs-1, assetop.ManualQuietFloor)
 	assert.False(t, quiet, "离派发不足安全间隔:仍不安静")
+}
+
+// needs_review 指令交人工处置的登记:全部流水在一个事务里按已消费写进 gm_recall_source(op_id = 0,request_id = 审计行号),
+// 同一事务写一行审计(操作人、理由、指令)。再登记一次幂等,不重复写。
+func TestRecallStore_RegisterReviewHandledConsumesSourcesOnce(t *testing.T) {
+	f := newRecallFixture(t)
+	handled := store.RecallReviewHandled{PlayerID: 901, CorrelationID: 601, TxIDs: []uint64{700001, 700002},
+		Operator: "tester", Reason: "工单 123 已挂欠款", Detail: "kind=1 item=0 currency=0"}
+	registered, err := f.store.RegisterReviewHandled(f.ctx, handled, 5000)
+	require.NoError(t, err)
+	assert.True(t, registered)
+
+	consumed, err := f.store.ConsumedSources(f.ctx, handled.TxIDs)
+	require.NoError(t, err)
+	assert.Equal(t, map[uint64]bool{700001: true, 700002: true}, consumed, "登记之后按已消费算,以后的批次和预览都剔除这条指令")
+	state, err := f.store.SourceState(f.ctx, handled.TxIDs)
+	require.NoError(t, err)
+	assert.Equal(t, store.RecallSourceState{Manual: true}, state)
+	audit := "operator = 'tester' AND reason LIKE '%REVIEW_HANDLED player=901 correlation=601 sources=2%'"
+	assert.EqualValues(t, 1, f.db.Count(t, "rollback_audit_log", audit))
+	assert.EqualValues(t, 2, f.db.Count(t, "gm_recall_source",
+		"op_id = 0 AND player_id = 901 AND request_id = (SELECT id FROM rollback_audit_log WHERE "+audit+")"),
+		"request_id 是审计行号,按它找得到操作人和理由")
+
+	registered, err = f.store.RegisterReviewHandled(f.ctx, handled, 6000)
+	require.NoError(t, err)
+	assert.False(t, registered, "已登记过:幂等")
+	assert.EqualValues(t, 1, f.db.Count(t, "rollback_audit_log", "reason LIKE '%REVIEW_HANDLED%'"), "幂等不重复写审计")
+}
+
+// 已被回收批次消费的流水不能再登记:整笔回滚,一条都不写,也不写审计。
+func TestRecallStore_RegisterReviewHandledRefusesSourcesOfABatch(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	handled := store.RecallReviewHandled{PlayerID: 901, CorrelationID: 601, TxIDs: []uint64{ops[0].SourceTxIDs[0], 700003},
+		Operator: "tester", Reason: "工单"}
+	registered, err := f.store.RegisterReviewHandled(f.ctx, handled, 5000)
+	require.ErrorIs(t, err, store.ErrRecallSourceConsumed)
+	assert.False(t, registered)
+	assert.Zero(t, f.db.Count(t, "gm_recall_source", "tx_id = ?", 700003), "整笔回滚")
+	assert.Zero(t, f.db.Count(t, "rollback_audit_log", "reason LIKE '%REVIEW_HANDLED%'"))
+	state, err := f.store.SourceState(f.ctx, handled.TxIDs)
+	require.NoError(t, err)
+	assert.Equal(t, store.RecallSourceState{Batch: true}, state)
+}
+
+// 人工登记的流水没有放回路径:批次的行被拒绝(放回它自己的流水)、批次被取消(放回没派发的行的流水),都碰不到它。
+func TestRecallStore_ReviewHandledSourcesAreNeverReleased(t *testing.T) {
+	f := newRecallFixture(t)
+	registered, err := f.store.RegisterReviewHandled(f.ctx, store.RecallReviewHandled{PlayerID: 901, CorrelationID: 601,
+		TxIDs: []uint64{700011}, Operator: "tester", Reason: "工单"}, 1000)
+	require.NoError(t, err)
+	require.True(t, registered)
+
+	ops := f.createBatch(t, 1, 5, 901, 902)
+	rejected := f.claim(t, ops[0])
+	_, err = f.store.Finalize(f.ctx, rejected, assetop.StatusRejected,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_REJECTED, Durable: true, SQLCommitted: true}, 6000)
+	require.NoError(t, err)
+	require.NoError(t, f.store.CancelBatch(f.ctx, 1, "tester", "误操作", 7000))
+
+	consumed, err := f.store.ConsumedSources(f.ctx, []uint64{700011, ops[0].SourceTxIDs[0], ops[1].SourceTxIDs[0]})
+	require.NoError(t, err)
+	assert.Equal(t, map[uint64]bool{700011: true}, consumed, "批次的流水放回去了,人工登记的还在")
+}
+
+// 领取的 CAS 之后、回读之前这一行被人工终结了(settle 不换令牌):回读看到的不再是自己的未决行,不下发。
+// 租约被别的副本接管(令牌不是自己的)同样不下发。两条语句之间的窗口用 ClaimedOpForTest 确定地复现。
+func TestRecallStore_ClaimDeliversOnlyItsOwnPendingRow(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901, 902)
+	f.claim(t, ops[0])
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAppliedPartial,
+		Operator: "tester", Reason: "账本判不了"}, f.witness(t, ops[0].OpID), 5000)
+	require.NoError(t, err)
+	require.True(t, resolved)
+	op, delivered, err := f.store.ClaimedOpForTest(f.ctx, ops[0].OpID, 9000, 77)
+	require.NoError(t, err)
+	assert.False(t, delivered, "已终结的行不再下发")
+	assert.Zero(t, op.OpID)
+
+	f.claim(t, ops[1])
+	_, delivered, err = f.store.ClaimedOpForTest(f.ctx, ops[1].OpID, 9000, 78)
+	require.NoError(t, err)
+	assert.False(t, delivered, "令牌不是自己的:租约已被别的副本接管")
+	op, delivered, err = f.store.ClaimedOpForTest(f.ctx, ops[1].OpID, 9000, 77)
+	require.NoError(t, err)
+	assert.True(t, delivered)
+	assert.Equal(t, uint64(77), op.LeaseToken)
+	assert.Equal(t, ops[1].OpID, op.CorrelationID)
+}
+
+// 载荷解不开的行推迟成毒行:只清租约,last_send_ms 不动。推迟带 status = PENDING:回读之后、推迟之前这一行若被人工终结
+// (令牌没换),推迟落空,终态行的 next_attempt_ms 不被改写。
+func TestRecallStore_PoisonDeferOnlyTouchesThePendingLease(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	_, err := f.db.Raw.ExecContext(f.ctx, "UPDATE gm_recall_op SET payload=? WHERE op_id=?", []byte{0xff, 0xff}, ops[0].OpID)
+	require.NoError(t, err)
+	result, err := f.store.Dispatch(f.ctx, store.RecallPlanned{OpID: ops[0].OpID, PlayerID: 901}, 2000)
+	require.NoError(t, err)
+	require.Equal(t, store.RecallDispatched, result)
+
+	_, claimed, err := f.store.Claim(f.ctx, ops[0].OpID, 3000, 4000, 9000, 77)
+	require.ErrorIs(t, err, assetop.ErrPoisonRow)
+	assert.False(t, claimed)
+	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op",
+		"op_id = ? AND status = ? AND next_attempt_ms = 9000 AND lease_until_ms = 0 AND last_send_ms = 2000", ops[0].OpID, recallPending))
+
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAppliedPartial,
+		Operator: "tester", Reason: "载荷坏,账本判不了"}, f.witness(t, ops[0].OpID), 10000)
+	require.NoError(t, err)
+	require.True(t, resolved)
+	require.NoError(t, f.store.DeferPoisonForTest(f.ctx, ops[0].OpID, 77, 12000))
+	assert.EqualValues(t, 1, f.db.Count(t, "gm_recall_op", "op_id = ? AND status = ? AND next_attempt_ms = 9000", ops[0].OpID, recallPartial),
+		"终态行不被推迟改写")
 }

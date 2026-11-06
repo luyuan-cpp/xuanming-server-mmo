@@ -73,3 +73,7 @@ func (b *writerBoot) noteAdmitted() {
 		b.admitted.Store(true)
 	}
 }
+
+// noteReadable 在事务外纯读看到闸门可写时调:冻结已经结束,清掉冻结计时。不算过过闸门(admitted 只由写事务置上),
+// 启动阶段「读在冻结时放行」的规则因此不受只读流量影响。
+func (b *writerBoot) noteReadable() { b.frozen.clear() }

@@ -113,9 +113,9 @@ initWorldScenesForZone 对每个在役频道向属主补发 CreateScene。属主
 | DestroyScene(0) | 从不过期 | — | 不改记录 |
 
 - 代次 0 的建场景按最旧的代次判(受「已按代次拆过」挡);代次 0 的拆场景与没有代次时完全一样。
-- 退役拆除(代次 0)不留「已退役」墓碑。显式 DestroyScene 走副本的销毁路径,拆世界频道时不把它摘出在役集合,
-  之后会被懒改派以新的代次复活(既有行为,见 §7);墓碑会让它永远建不回这个节点。代价是退役之后晚到的旧建场景
-  可能建出孤儿,由归属对账收。
+- 退役拆除(代次 0)不留「已退役」墓碑。墓碑一旦记错(比如以后再出现一条像旧的显式 DestroyScene 那样、拆了却不摘在役
+  集合的路径,频道随后以新代次复活),这个场景就永远建不回这个节点;不留墓碑时最坏是退役之后晚到的旧建场景建出孤儿,
+  由归属对账收。
 
 - 两个入口都判定:gRPC `SceneNodeGrpcImpl::HandleCreateScene` / `HandleDestroyScene`,muduo `SceneHandler::CreateScene` /
   `DestroyScene`。建场景在按 scene_id 去重之前、参数与 Agones 许可的拒绝之后判定,所以「放行」就等于建成或复用;
@@ -148,7 +148,8 @@ initWorldScenesForZone 对每个在役频道向属主补发 CreateScene。属主
 **晚到的建场景不复活被回收的放置。** 回收 Destroy(g) 处理之后,同一次尝试晚到的 Create(g) 遇到 destroyedThrough ≥ g,拒收。
 
 **退役拆除(代次 0)拆不到合法放置。** 排空与孤儿清理开始时频道已摘出在役集合,拆除认领再删映射,之后四条改派路径的 CAS
-都落不了地(要比属主,懒改派还核对在役),频道不会再被放置。例外见 §7 显式销毁。
+都落不了地(要比属主,懒改派还核对在役),频道不会再被放置。显式 DestroyScene 拒绝拆世界频道(§7),不会留下「删了映射、
+还在役」的频道。
 
 ## 6. 取代 60 秒回收栅栏
 
@@ -164,9 +165,12 @@ initWorldScenesForZone 对每个在役频道向属主补发 CreateScene。属主
 
 - **孤儿实体**:建场景超时(本端放弃、请求晚到后又建成)、改派者预建之后崩溃、退役之后晚到的旧建场景,都会在节点上
   留下没有映射指向的实体。它们不影响路由。代次只保证「不拆合法的实体」,不负责收孤儿;孤儿由节点的归属对账器过宽限期后拆掉。
-- **显式 DestroyScene 拆世界频道**(既有行为,不在本次范围):它走副本的销毁路径(`destroyInstanceForce`),删映射但不把
-  频道摘出在役集合,之后懒改派会以空属主把频道复活到某个节点。那次拆除不带代次;它若晚到、而频道恰好复活在同一个节点上,
-  会拆掉复活后的实体。根治要让显式销毁按退役处理(同一步摘出在役集合),或拒绝拆世界频道。
+- **显式 DestroyScene 不再拆世界频道**(2026-11-06 同日补):它走副本的销毁路径(`destroyInstanceForce`),删映射但不把
+  频道摘出在役集合,频道会以「在役、没有属主」留下,随后被懒改派或 rebalance 以空属主复活;那次拆除不带代次,晚到时会拆掉
+  复活在同一个节点上的实体。现在 `DestroySceneLogic` 在任何写之前用 `locateWorldChannel` 查这个场景是不是本 zone 某张图的
+  在役或回收中的线,是就拒绝(`errWorldChannelNotDestroyable`),查不清也拒绝。世界频道只由缩容排空与孤儿清理下线;要下掉
+  一个频道就调低这张图的期望频道数。生产里没有调用方用它拆世界频道(DestroyScene RPC 只有副本、镜像的调用方)。
+  地图已不在 World 表里的孤儿频道查不到,照副本销毁;它的集合由孤儿清理按「映射已不在」收掉,改派路径只处理 World 表里的图。
 - **控制域 Redis 丢数据**:计数器或高水位回退时,新分配的代次可能不比节点记录的新:建场景被拒、拆场景被忽略
   (fail-closed,不会拆错),计数器涨过去之后恢复。属主映射在同一个实例里,丢数据时本来就一起不可信。
 - **混跑**:项目尚未上线(AGENTS.md「上线状态」),不考虑新旧版本混跑。新字段对旧版本是未知字段,按 0 处理,即原来的行为。
@@ -182,6 +186,7 @@ initWorldScenesForZone 对每个在役频道向属主补发 CreateScene。属主
 | `go/scene_manager/internal/logic/enterscenelogic.go` | resolveScene 死节点自愈分配代次;落空后的重读属主并进回收脚本 |
 | `go/scene_manager/internal/logic/scene_node_client.go` | `RequestNodeCreateSceneAtGeneration`、`RequestNodeDestroySceneAtGeneration` |
 | `go/scene_manager/internal/logic/world_autoscale.go`、`orphan_cleanup.go` | 拆除任务删高水位 |
+| `go/scene_manager/internal/logic/destroyscenelogic.go`、`proto/scene_manager/scene_manager_service.proto`(注释) | 显式 DestroyScene 拒绝拆世界频道(§7) |
 | `cpp/libs/services/scene/world/scene_placement_fence.h` | 纯规则 |
 | `cpp/libs/services/scene/world/scene_lifecycle.{h,cpp}` | `PlacementFence()` |
 | `cpp/nodes/scene/handler/grpc/scene_node_service.cpp`、`cpp/nodes/scene/handler/rpc/scene_handler.cpp` | 两个入口的判定 |

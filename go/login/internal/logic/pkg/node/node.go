@@ -138,7 +138,7 @@ func (n *Node) Close() error {
 
 	// Revoke the lease — defense in depth: even if the deletes above are
 	// partially observed, lease revoke removes any leftovers.
-	err := n.reg.RevokeLease()
+	err = n.reg.RevokeLease()
 	if err != nil {
 		logx.Errorf("Failed to revoke lease: %v", err)
 		return fmt.Errorf("failed to revoke lease: %v", err)

@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_bag_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023bag_error_tip.proto*\300\003\n\tbag_error\022\020\n\014k"
+    "\n\023bag_error_tip.proto*\243\004\n\tbag_error\022\020\n\014k"
     "Bag_errorOK\020\000\022\033\n\026kBagDeleteItemFindGuid\020"
     "\360.\022!\n\034kBagDeleteItemAlreadyHasGuid\020\361.\022#\n"
     "\036kBagAddItemHasNotBaseComponent\020\362.\022\033\n\026kB"
@@ -46,14 +46,17 @@ const char descriptor_table_protodef_bag_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_
     "DelItemConfig\020\371.\022\024\n\017kBagDelItemGuid\020\372.\022\030"
     "\n\023kBagDelItemFindItem\020\373.\022\024\n\017kBagDelItemS"
     "ize\020\374.\022!\n\034kBagItemDeletionSizeMismatch\020\375"
-    ".\022\035\n\030kBagInsufficientBagSpace\020\376.B$\n\016com."
-    "game.tableZ\022generated/pb/tableb\006proto3"
+    ".\022\035\n\030kBagInsufficientBagSpace\020\376.\022\036\n\031kBag"
+    "TemporaryItemNotFound\020\377.\022!\n\034kBagTemporar"
+    "yRetrieveBagFull\020\200/\022\036\n\031kBagTemporaryRetr"
+    "ieveBusy\020\201/B$\n\016com.game.tableZ\022generated"
+    "/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_bag_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_bag_5ferror_5ftip_2eproto = {
     false,
     false,
-    518,
+    617,
     descriptor_table_protodef_bag_5ferror_5ftip_2eproto,
     "bag_error_tip.proto",
     &descriptor_table_bag_5ferror_5ftip_2eproto_once,
@@ -72,7 +75,7 @@ bag_error_descriptor() {
   return file_level_enum_descriptors_bag_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t bag_error_internal_data_[] = {
-    65536u, 983040u, 6007u, 6003u, 6011u, 6001u, 6005u, 6009u, 6013u, 6000u, 6002u, 6004u, 6006u, 6008u, 6010u, 6012u, 6014u, };
+    65536u, 1179648u, 6010u, 6006u, 6014u, 6003u, 6008u, 6012u, 6016u, 6001u, 6005u, 6007u, 6009u, 6011u, 6013u, 6015u, 6017u, 6000u, 6002u, 6004u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

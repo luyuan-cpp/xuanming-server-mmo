@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	base "proto/common/base"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -21,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	ClientPlayerChat_SendChat_FullMethodName        = "/chatpb.ClientPlayerChat/SendChat"
 	ClientPlayerChat_PullChatHistory_FullMethodName = "/chatpb.ClientPlayerChat/PullChatHistory"
+	ClientPlayerChat_NotifyWorldChat_FullMethodName = "/chatpb.ClientPlayerChat/NotifyWorldChat"
 )
 
 // ClientPlayerChatClient is the client API for ClientPlayerChat service.
@@ -29,6 +31,13 @@ const (
 type ClientPlayerChatClient interface {
 	SendChat(ctx context.Context, in *SendChatRequest, opts ...grpc.CallOption) (*SendChatResponse, error)
 	PullChatHistory(ctx context.Context, in *PullChatHistoryRequest, opts ...grpc.CallOption) (*PullChatHistoryResponse, error)
+	// 世界频道推送(S2C,docs/design/chat-world-channel-fanout.md §4):世界频道的一条发送首次提交成功后,
+	// chat 往 Kafka chat-world-bcast_g<N> 发一条,每台 gate 推给本机全部已绑定的会话。消息体就是历史里的同一份显示原件。
+	// 至多一次:推送失败或玩家刚好掉线时这一条会丢,真相仍是 PullChatHistory。客户端打开聊天面板与重连时拉一次历史,
+	// 按 (sender_player_id, send_time_ms) 去重、按 send_time_ms 排序;不再需要定时轮询。
+	// 推送方法必须声明在这个客户端服务里并标 CLIENT_RPC_PUSH(同 friend.proto 的 NotifyFriendEvent):
+	// 生成器据此把它排除在客户端可调方法集合之外,客户端主动调它在入口准入就被挡住;服务端不实现(内嵌 Unimplemented)。
+	NotifyWorldChat(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type clientPlayerChatClient struct {
@@ -59,12 +68,29 @@ func (c *clientPlayerChatClient) PullChatHistory(ctx context.Context, in *PullCh
 	return out, nil
 }
 
+func (c *clientPlayerChatClient) NotifyWorldChat(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, ClientPlayerChat_NotifyWorldChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerChatServer is the server API for ClientPlayerChat service.
 // All implementations must embed UnimplementedClientPlayerChatServer
 // for forward compatibility.
 type ClientPlayerChatServer interface {
 	SendChat(context.Context, *SendChatRequest) (*SendChatResponse, error)
 	PullChatHistory(context.Context, *PullChatHistoryRequest) (*PullChatHistoryResponse, error)
+	// 世界频道推送(S2C,docs/design/chat-world-channel-fanout.md §4):世界频道的一条发送首次提交成功后,
+	// chat 往 Kafka chat-world-bcast_g<N> 发一条,每台 gate 推给本机全部已绑定的会话。消息体就是历史里的同一份显示原件。
+	// 至多一次:推送失败或玩家刚好掉线时这一条会丢,真相仍是 PullChatHistory。客户端打开聊天面板与重连时拉一次历史,
+	// 按 (sender_player_id, send_time_ms) 去重、按 send_time_ms 排序;不再需要定时轮询。
+	// 推送方法必须声明在这个客户端服务里并标 CLIENT_RPC_PUSH(同 friend.proto 的 NotifyFriendEvent):
+	// 生成器据此把它排除在客户端可调方法集合之外,客户端主动调它在入口准入就被挡住;服务端不实现(内嵌 Unimplemented)。
+	NotifyWorldChat(context.Context, *ChatMessage) (*base.Empty, error)
 	mustEmbedUnimplementedClientPlayerChatServer()
 }
 
@@ -80,6 +106,9 @@ func (UnimplementedClientPlayerChatServer) SendChat(context.Context, *SendChatRe
 }
 func (UnimplementedClientPlayerChatServer) PullChatHistory(context.Context, *PullChatHistoryRequest) (*PullChatHistoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PullChatHistory not implemented")
+}
+func (UnimplementedClientPlayerChatServer) NotifyWorldChat(context.Context, *ChatMessage) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyWorldChat not implemented")
 }
 func (UnimplementedClientPlayerChatServer) mustEmbedUnimplementedClientPlayerChatServer() {}
 func (UnimplementedClientPlayerChatServer) testEmbeddedByValue()                          {}
@@ -138,6 +167,24 @@ func _ClientPlayerChat_PullChatHistory_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerChat_NotifyWorldChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChatMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerChatServer).NotifyWorldChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerChat_NotifyWorldChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerChatServer).NotifyWorldChat(ctx, req.(*ChatMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerChat_ServiceDesc is the grpc.ServiceDesc for ClientPlayerChat service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +199,10 @@ var ClientPlayerChat_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PullChatHistory",
 			Handler:    _ClientPlayerChat_PullChatHistory_Handler,
+		},
+		{
+			MethodName: "NotifyWorldChat",
+			Handler:    _ClientPlayerChat_NotifyWorldChat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1900,6 +1900,9 @@ type GuildTrialLaunchRecord struct {
 	CreatedMs     uint64                 `protobuf:"varint,6,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
 	UpdatedMs     uint64                 `protobuf:"varint,7,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
 	CancelReceipt []byte                 `protobuf:"bytes,8,opt,name=cancel_receipt,json=cancelReceipt,proto3" json:"cancel_receipt,omitempty"` // 提交时已核签且绑定原请求的CancelActivityBattleResponse原字节
+	// 恢复器调度(2026-11-05,r2-guild#1 评审;go/guild/internal/data/trial_launch_repo.go「恢复器的到期认领」)。只决定何时、由哪个副本去查,不参与释放判定。
+	NextCheckMs   uint64 `protobuf:"varint,9,opt,name=next_check_ms,json=nextCheckMs,proto3" json:"next_check_ms,omitempty"`      // 下一次检查时刻(SQL 时钟毫秒):新原件 = max(开局截止, Prepare 提交) + 30s;每次认领改成 SQL 现在 + 退避间隔
+	CheckAttempts uint32 `protobuf:"varint,10,opt,name=check_attempts,json=checkAttempts,proto3" json:"check_attempts,omitempty"` // 认领次数(只增不减),决定退避间隔
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1988,6 +1991,20 @@ func (x *GuildTrialLaunchRecord) GetCancelReceipt() []byte {
 		return x.CancelReceipt
 	}
 	return nil
+}
+
+func (x *GuildTrialLaunchRecord) GetNextCheckMs() uint64 {
+	if x != nil {
+		return x.NextCheckMs
+	}
+	return 0
+}
+
+func (x *GuildTrialLaunchRecord) GetCheckAttempts() uint32 {
+	if x != nil {
+		return x.CheckAttempts
+	}
+	return 0
 }
 
 // 原件的可索引投影；与launch同事务写入/终结，防止角色过户漏过尚未发奖的对局。
@@ -2452,7 +2469,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"dungeon_id\x18\a \x01(\rR\tdungeonId\x127\n" +
 	"\x06roster\x18\b \x03(\v2\x1f.guildpb.GuildTrialRoleIdentityR\x06roster\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\t \x01(\x04R\tcreatedMs\"\xf3\x02\n" +
+	"created_ms\x18\t \x01(\x04R\tcreatedMs\"\xd2\x03\n" +
 	"\x16GuildTrialLaunchRecord\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1b\n" +
@@ -2464,8 +2481,11 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"created_ms\x18\x06 \x01(\x04R\tcreatedMs\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\a \x01(\x04R\tupdatedMs\x12%\n" +
-	"\x0ecancel_receipt\x18\b \x01(\fR\rcancelReceipt:T\x8a\x92\xf4\x01\x12guild_trial_launch\x92\x92\xf4\x01\n" +
-	"request_idڒ\xf4\x01\x1astate,updated_ms;battle_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa9\x02\n" +
+	"\x0ecancel_receipt\x18\b \x01(\fR\rcancelReceipt\x12\"\n" +
+	"\rnext_check_ms\x18\t \x01(\x04R\vnextCheckMs\x12%\n" +
+	"\x0echeck_attempts\x18\n" +
+	" \x01(\rR\rcheckAttempts:h\x8a\x92\xf4\x01\x12guild_trial_launch\x92\x92\xf4\x01\n" +
+	"request_idڒ\xf4\x01.state,updated_ms;battle_id;state,next_check_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa9\x02\n" +
 	"\x1aGuildTrialLaunchRoleRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +

@@ -1110,7 +1110,7 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	}
 
 	auto &session = sessionIt->second;
-	// 任何一帧都说明客户端还活着,随后被拒的也算(docs/design/gate-client-heartbeat.md §5.2)。没发过心跳的连接不读时钟。
+	// 任何一帧都说明客户端还活着,随后被拒的也算(docs/design/gate-client-heartbeat.md §5.3)。尚未开始跟踪的连接不读时钟。
 	gate_client_heartbeat::NoteInboundFrame(session);
 
 	// Reject all game messages until the client passes token verification.

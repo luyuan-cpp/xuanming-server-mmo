@@ -39,7 +39,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
 
-全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与三批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05，未落码）。
+全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a 已落码未编译，战斗按整局的批 3b 待做），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
 
 ## 索引
 
@@ -156,6 +156,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 玩家数据与存储
 
 - [async-load-disconnect-reconnect-race.md](design/async-load-disconnect-reconnect-race.md) — 异步加载竞态：Redis 加载期间的断线与重连
+- [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展:审计 topic 只许加分区、流水按分区并行落库、时间索引按桶打散、清理按桶分工(缺口清单第 15 条)
 - [data_service_role_and_scope.md](design/data_service_role_and_scope.md) — data_service 定位与边界
 - [db-consumer-group-per-zone.md](design/db-consumer-group-per-zone.md) — go/db 存盘消费组按 zone 拆分与不停服交接
 - [db-retry-owner-routing.md](design/db-retry-owner-routing.md) — go/db 重试只交给分区属主（④）与 Kafka 源入队的落盘确认（WAITAOF）
@@ -179,6 +180,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [redis-async-client-retry-fix.md](design/redis-async-client-retry-fix.md) — Redis 异步客户端重试、重连与生命周期
 - [reliable-player-inbox-20261014.md](design/reliable-player-inbox-20261014.md) — 重要玩家消息：持久收件箱、拉取恢复与迁移围栏（2026-10-14）
 - [tidb-phase1-and-launch-readiness.md](design/tidb-phase1-and-launch-readiness.md) — TiDB Phase 1 设计与实施清单（含开服准备）
+- [writer-roster-exhaustion-20261106.md](design/writer-roster-exhaustion-20261106.md) — 写者名册会用完、死写者会堆积:方案对比与待拍板项(缺口清单第 22 条)
 
 #### 跨服、合服与回档
 
@@ -245,7 +247,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [docker_k8s_build_deploy.md](design/docker_k8s_build_deploy.md) — Docker & K8s Build/Deploy Guide (Windows) · [EN](design/docker_k8s_build_deploy_en.md) · [中文](design/docker_k8s_build_deploy_zh.md)
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
-- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05，未落码）
+- [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05；批 1、2、2b、3a 已落码未编译，批 3b 待做）
 - [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧已落码未编译，批 B gate 待做）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
@@ -303,7 +305,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 运维手册
 
-- [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 离线换代 Runbook(player_snapshot / transaction_log 改分区数)
+- [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 加分区(在线原地加)与离线换代 Runbook(player_snapshot / transaction_log)
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 - [db-move-runbook.md](ops/db-move-runbook.md) — 不停服搬逻辑库操作手册
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook
@@ -324,6 +326,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player-inbox-runbook.md](ops/player-inbox-runbook.md) — 玩家持久收件箱(player_inbox)运维手册
 - [redis-player-cluster-runbook.md](ops/redis-player-cluster-runbook.md) — 玩家域 Redis Cluster 运维手册
 - [release-checklist.md](ops/release-checklist.md) — 服务端发布清单
+- [release-track-canary-runbook.md](ops/release-track-canary-runbook.md) — 灰度与金丝雀发布手册（开金丝雀 zone、全局服务金丝雀副本、观察、晋升、中止）
 - [run-directory.md](ops/run-directory.md) — `run/` — Runtime Artifacts
 - [stress-3zone-runbook.md](ops/stress-3zone-runbook.md) — 3 Zone × 15000 压测 — Runbook(2026-05)
 - [trade-commerce-quarantine-runbook.md](ops/trade-commerce-quarantine-runbook.md) — 交易合同隔离与角色冲突处置手册
@@ -409,6 +412,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（2026-10-19）
 - [redis-horizontal-scaling-requirements-20261022.md](handoff/redis-horizontal-scaling-requirements-20261022.md) — 交接：Redis 物理水平扩展需求与当前存盘链问题（2026-10-22）
 - [redis-player-store-batch2-brief-20261023.md](handoff/redis-player-store-batch2-brief-20261023.md) — 交接：玩家态 Redis 集群化第 2 批（2a–2d）落码简报（2026-10-23）
+- [shared-redis-secret-README.md](handoff/shared-redis-secret-20261106/shared-redis-secret-README.md) — 共享 Redis 口令迁入 Secret 的补丁、比对脚本与必要备份（2026-11-06）
 - [remaining-two-handoff-20261102-r1.md](handoff/remaining-two-handoff-20261102-r1.md) — 剩余两项验收交接（2026-11-02 晚，America/New_York）
 - [repo-layout-20261007.md](handoff/repo-layout-20261007.md) — 仓库目录整理:交接说明(2026-10-07)
 - [rpc-channel-batch7-handoff-20261015.md](handoff/rpc-channel-batch7-handoff-20261015.md) — 交接:RpcChannel 改造收尾——第 7 批、剩余调用点迁移与玩家级延后完成(2026-10-15)

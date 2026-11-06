@@ -266,8 +266,12 @@ type CreateBattleRequest struct {
 	// 观战可见性,由 match 按 spectateVisibilityFor 决定后冻结进本原件(全局模式随 formation 的
 	// create_request 持久)。battle 存进房间,AddObserver 对非 PUBLIC 一律拒绝(第二道闸)。
 	SpectateVisibility ESpectateVisibility `protobuf:"varint,15,opt,name=spectate_visibility,json=spectateVisibility,proto3,enum=ESpectateVisibility" json:"spectate_visibility,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 本局录不录战报回放(battle-report-replay.md BR-8)。match 按 recordReplayFor 决定、随原件冻结,battle 只认它。
+	// 缺省 false = 不录,老发送方和漏填一律不录。只有 match 让录,battle 才在终局请求里带 replay:
+	// match 把带未知字段的终局请求当永久冲突拒收。
+	RecordReplay  bool `protobuf:"varint,16,opt,name=record_replay,json=recordReplay,proto3" json:"record_replay,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateBattleRequest) Reset() {
@@ -405,6 +409,13 @@ func (x *CreateBattleRequest) GetSpectateVisibility() ESpectateVisibility {
 	return ESpectateVisibility_SPECTATE_VISIBILITY_UNSPECIFIED
 }
 
+func (x *CreateBattleRequest) GetRecordReplay() bool {
+	if x != nil {
+		return x.RecordReplay
+	}
+	return false
+}
+
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
 // battle 保证没有建房、没有推送、没有发确认事件,match 按通用补偿回滚(DestroyBattle 幂等 → CancelBattlePrepare)。
 type CreateBattleResponse struct {
@@ -413,8 +424,12 @@ type CreateBattleResponse struct {
 	ErrorMessage                  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	AdoptedOutcomeProtocolVersion uint32                 `protobuf:"varint,3,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
 	TargetInstanceId              string                 `protobuf:"bytes,4,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
+	// 负载随应答捎回（R6，docs/design/global-match-hierarchical-pools.md §5.1）：成功应答（含幂等命中）带本节点此刻的房间数，
+	// 含这次建成的这一间；失败应答不填。0 = 未上报（旧节点）。match 只拿它比较同机房节点的负载，不另发上报流量；
+	// 读数会过期（go/match/internal/battleplace DefaultReportTTL），不作容量或准入判定。字段号 5 上线后不复用。
+	RoomCount     uint32 `protobuf:"varint,5,opt,name=room_count,json=roomCount,proto3" json:"room_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateBattleResponse) Reset() {
@@ -473,6 +488,13 @@ func (x *CreateBattleResponse) GetTargetInstanceId() string {
 		return x.TargetInstanceId
 	}
 	return ""
+}
+
+func (x *CreateBattleResponse) GetRoomCount() uint32 {
+	if x != nil {
+		return x.RoomCount
+	}
+	return 0
 }
 
 type DestroyBattleRequest struct {
@@ -611,8 +633,13 @@ type QueryBattleCreationResponse struct {
 	// ABSENT 也回显节点能力；PRESENT 的 adopted 只取原创建原件，不按现能力追认。
 	SupportedOutcomeProtocolVersion uint32 `protobuf:"varint,3,opt,name=supported_outcome_protocol_version,json=supportedOutcomeProtocolVersion,proto3" json:"supported_outcome_protocol_version,omitempty"`
 	AdoptedOutcomeProtocolVersion   uint32 `protobuf:"varint,4,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
-	unknownFields                   protoimpl.UnknownFields
-	sizeCache                       protoimpl.SizeCache
+	// 节点此刻会拒绝新建房：建房准入闸未开或已关、Agones 排空中、lifecycle 正在停机。只在回显了本实例时填。
+	// match 在把建房原件落库之前读它：为真就本局干净失败、全员回队，不必等落库后被 battle_not_allocatable 拒、
+	// 再等唯一 SQL 终局。只是预检：预检之后节点仍可能开始排空，CreateBattle 的准入仍是唯一判定。
+	// 缺省 false = 旧节点照旧按"接新房"处理。
+	RejectsNewBattles bool `protobuf:"varint,5,opt,name=rejects_new_battles,json=rejectsNewBattles,proto3" json:"rejects_new_battles,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *QueryBattleCreationResponse) Reset() {
@@ -671,6 +698,13 @@ func (x *QueryBattleCreationResponse) GetAdoptedOutcomeProtocolVersion() uint32 
 		return x.AdoptedOutcomeProtocolVersion
 	}
 	return 0
+}
+
+func (x *QueryBattleCreationResponse) GetRejectsNewBattles() bool {
+	if x != nil {
+		return x.RejectsNewBattles
+	}
+	return false
 }
 
 // ---- 二期:观战(match → battle,设计文档 §10) ----
@@ -768,9 +802,10 @@ func (x *AddObserverRequest) GetTargetInstanceId() string {
 	return ""
 }
 
-// 房间不存在(kEntityIsNull)/观众已满/观众是参战者/签不出观战票据(kServiceUnavailable)。
+// 房间不存在(kEntityIsNull)/直连席已满(单房间或节点配额,kMatchSpectateFull)/观众是参战者或非公开局(kInvalidParameter)/
+// 签不出观战票据或节点已停机排空(kServiceUnavailable)。
 // 签票失败时 battle 保证该观众不在名单里(新观众不登记;幂等重推路径摘除已登记的观众并关其直连,
-// turn-based §22 D70),与 match 收到任何错误即 DEL 观战标记的回滚一致。
+// turn-based §22 D70)。同 op、同请求的重放回该 op 首次被拒的码,不重新判定(没有记录时回 kInvalidParameter)。
 type AddObserverResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
@@ -1213,8 +1248,9 @@ func (x *IssueBattleTicketResponse) GetAssignment() *BattleAssignedS2C {
 
 // ---- 观战 L1 / L2(battle-spectate-tiered-fanout.md §15.4)----
 // 把一台 gate 挂进本场的中继扇出集合。幂等;同 gate_node_id 新实例覆盖旧实例。新挂的 gate 立即收到一帧
-// STATE 关键帧。target_instance_id 不是本实例回 kInvalidParameter;房间不存在回 kEntityIsNull;
-// 非公开局回 kInvalidParameter。已是广播档时不挂 gate,回 broadcast = true(match 据此把档位同步成 L2)。
+// STATE 关键帧。target_instance_id 不是本实例回 kInvalidParameter;房间不存在回 kEntityIsNull;节点已停机排空回
+// kServiceUnavailable;非公开局回 kInvalidParameter。已是广播档时不挂 gate,回 broadcast = true(match 据此把档位同步成 L2)。
+// 开了通道的房间,距上一次往全部通道发帧满 10s 就补一帧 STATE(心跳,gate 30s 收不到任何帧才判源站失联)。
 type AttachRelayGateRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
@@ -1351,7 +1387,8 @@ func (x *AttachRelayGateResponse) GetBroadcast() bool {
 	return false
 }
 
-// 本场升为全服广播(单向、幂等):此后每回合只发广播 topic,不再逐 gate 中继;升档时先发一帧 STATE。
+// 本场升为全服广播(单向、幂等):此后每回合、心跳与终局帧都只发广播 topic,不再逐 gate 中继(END 与最后一回合 TURN
+// 同分区保序);升档时先发一帧 STATE。
 // 错误口径同 AttachRelayGate。
 type PromoteSpectateBroadcastRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -1482,7 +1519,7 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\anode_id\x18\t \x01(\rR\x06nodeId\x12\x1f\n" +
 	"\vinstance_id\x18\n" +
 	" \x01(\tR\n" +
-	"instanceId\"\xbc\x05\n" +
+	"instanceId\"\xe1\x05\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -1501,12 +1538,15 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x12target_instance_id\x18\f \x01(\tR\x10targetInstanceId\x12&\n" +
 	"\x0fadmit_before_ms\x18\r \x01(\x04R\radmitBeforeMs\x128\n" +
 	"\x18outcome_protocol_version\x18\x0e \x01(\rR\x16outcomeProtocolVersion\x12E\n" +
-	"\x13spectate_visibility\x18\x0f \x01(\x0e2\x14.eSpectateVisibilityR\x12spectateVisibility\"\xe0\x01\n" +
+	"\x13spectate_visibility\x18\x0f \x01(\x0e2\x14.eSpectateVisibilityR\x12spectateVisibility\x12#\n" +
+	"\rrecord_replay\x18\x10 \x01(\bR\frecordReplay\"\xff\x01\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12G\n" +
 	" adopted_outcome_protocol_version\x18\x03 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12,\n" +
-	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\"\xaf\x01\n" +
+	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\x12\x1d\n" +
+	"\n" +
+	"room_count\x18\x05 \x01(\rR\troomCount\"\xaf\x01\n" +
 	"\x14DestroyBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x124\n" +
@@ -1515,12 +1555,13 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x1aQueryBattleCreationRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\x16placement_operation_id\x18\x02 \x01(\tR\x14placementOperationId\x12,\n" +
-	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"\x8d\x02\n" +
+	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"\xbd\x02\n" +
 	"\x1bQueryBattleCreationResponse\x12*\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x14.BattleCreationStateR\x05state\x12,\n" +
 	"\x12target_instance_id\x18\x02 \x01(\tR\x10targetInstanceId\x12K\n" +
 	"\"supported_outcome_protocol_version\x18\x03 \x01(\rR\x1fsupportedOutcomeProtocolVersion\x12G\n" +
-	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\"\xba\x02\n" +
+	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12.\n" +
+	"\x13rejects_new_battles\x18\x05 \x01(\bR\x11rejectsNewBattles\"\xba\x02\n" +
 	"\x12AddObserverRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
 	"\x12observer_player_id\x18\x02 \x01(\x04R\x10observerPlayerId\x12(\n" +

@@ -92,12 +92,19 @@ func (c *counterSet) Add(key string) uint64 {
 
 func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, error) {
 	start := time.Now()
+	// 会话的发布轨道是 gate 自报的(docs/design/release-track-gray-canary.md §2.3),空串 = stable。
+	// 这里只解析一次,先定下 forward_by_track_total 的 label(认不出记 unknown);认不出的拒绝仍在第 3 步,检查顺序不变。
+	sessionTrack, trackErr := releasetrack.Parse(in.GetReleaseTrack())
+	trackLabel := metrics.TrackLabelUnknown
+	if trackErr == nil {
+		trackLabel = sessionTrack.String()
+	}
 
 	// 1) 会话元数据:gate 一定会带;缺失说明不是 gate 打来的,直接 UNAUTHENTICATED。
 	incoming, _ := metadata.FromIncomingContext(l.ctx)
 	sessionValues := incoming.Get(SessionMetaKey)
 	if len(sessionValues) == 0 {
-		metrics.ObserveForward(metrics.MessageIdLabel(in.GetRequest().GetMessageId(), false),
+		metrics.ObserveForward(metrics.MessageIdLabel(in.GetRequest().GetMessageId(), false), trackLabel,
 			metrics.OutcomeMissingSession, time.Since(start))
 		return nil, status.Error(codes.Unauthenticated, "Missing "+SessionMetaKey+" session metadata")
 	}
@@ -107,7 +114,7 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 
 	request := in.GetRequest()
 	if request == nil {
-		metrics.ObserveForward(metrics.MessageIdLabel(0, false), metrics.OutcomeInvalidRequest, time.Since(start))
+		metrics.ObserveForward(metrics.MessageIdLabel(0, false), trackLabel, metrics.OutcomeInvalidRequest, time.Since(start))
 		return rejected(request, constants.ErrInvalidParameter), nil
 	}
 
@@ -115,7 +122,7 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	route, known := game.LookupRoute(request.MessageId)
 	messageIdLabel := metrics.MessageIdLabel(request.MessageId, known)
 	finish := func(outcome string) {
-		metrics.ObserveForward(messageIdLabel, outcome, time.Since(start))
+		metrics.ObserveForward(messageIdLabel, trackLabel, outcome, time.Since(start))
 	}
 	if !known {
 		finish(metrics.OutcomeUnknownMessage)
@@ -137,14 +144,12 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
 
-	// 3) 选实例。会话的发布轨道是 gate 自报的(docs/design/release-track-gray-canary.md §2.3),
-	//    空串 = stable;认不出的取值是 gate 的契约违例,不论目标类型一律拒绝,不猜它属于哪条轨道。
-	sessionTrack, err := releasetrack.Parse(in.GetReleaseTrack())
-	if err != nil {
+	// 3) 选实例。会话轨道认不出是 gate 的契约违例,不论目标类型一律拒绝,不猜它属于哪条轨道。
+	if trackErr != nil {
 		finish(metrics.OutcomeInvalidReleaseTrack)
 		sampledErrorf(metrics.OutcomeInvalidReleaseTrack,
 			"[forward] gate 自报的发布轨道无法识别,拒绝 zone_id=%d message_id=%d id=%d: %v",
-			in.ZoneId, request.MessageId, request.Id, err)
+			in.ZoneId, request.MessageId, request.Id, trackErr)
 		return rejected(request, constants.ErrInvalidParameter), nil
 	}
 	nodeTypeName := base.ENodeType_name[int32(route.NodeType)]

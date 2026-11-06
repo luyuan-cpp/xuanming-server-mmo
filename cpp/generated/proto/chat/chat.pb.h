@@ -32,6 +32,7 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/db/proto_option.pb.h"
+#include "proto/common/base/empty.pb.h"
 #include "proto/common/base/tip.pb.h"
 // @@protoc_insertion_point(includes)
 

@@ -1516,7 +1516,7 @@ FinalizeShutdownInLoop(阶段 0)
    - Linux 上 `for t in /proc/<pid>/task/*; do cat $t/comm; done | sort | uniq -c` 不得出现 grpc 相关线程名(名单以改前采样为准)。不满足就不宣称「线程归零」。
 9. **关机**:有流量时分别对 scene / battle 按 Ctrl+C(K8s 下为 SIGTERM)。
    - 无断言;
-   - 日志依次出现 `gRPC server draining`、`gRPC server drained. drain_ms=`、`Before-shutdown drain complete`;
+   - 日志依次出现 `gRPC server draining`、`gRPC server drained. drain_ms=`、`Before-shutdown work and queued Kafka callbacks joined.`(2026-11-06 按 `node.cpp` 现行日志文本更正);
    - 停机窗口里 CreateBattle 只出现 `battle_not_allocatable` 或连接被拒,CreateScene 只出现 `scene_node_shutting_down` 或连接被拒。
 10. **探针**:对 gRPC 端口执行 `nc -z` 100 次。不得出现 WARN / ERROR,`closed_before_preface` 递增,`protocol_errors` 为 0。
 

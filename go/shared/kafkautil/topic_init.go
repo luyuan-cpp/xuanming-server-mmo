@@ -285,7 +285,9 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 }
 
 // growPartitions 给 AllowPartitionGrowth 的 topic 把分区数补到配置值(2026-11-06)。current 是 broker 上的现值。
-//   - 已不少于配置:什么都不做;多于配置时记一行 Info(Kafka 不能减分区,多出来的分区照样被消费组分走)。
+//   - 已不少于配置:什么都不做。多于配置时照收(Kafka 不能减分区,多出来的分区照样被消费组分走,不丢消息),
+//     但记一行 Error:按配置值算的东西(lag 探针逐分区取位点、K8s 的 Kafka 盘预算)会漏掉多出来的那些分区,
+//     要把配置调成 broker 上的实际值。
 //   - 少于配置:原地 CreatePartitions 加到配置值。
 //
 // 多个副本同时启动会各自去加,后到的那个被 Kafka 以 INVALID_PARTITIONS(分区数不大于当前值)拒绝;所以加失败之后
@@ -293,8 +295,9 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 func growPartitions(admin topicAdmin, spec TopicSpec, current int32) error {
 	if current >= spec.Partitions {
 		if current > spec.Partitions {
-			logx.Infof("kafka topic %s has %d partitions, more than the configured %d; keeping them (partitions only grow)",
-				spec.Name, current, spec.Partitions)
+			logx.Errorf("kafka topic %s has %d partitions, more than the configured %d; consuming all of them (partitions only grow), "+
+				"but anything sized by the configured value (per-partition lag probe, Kafka disk budget) misses the extra ones: set the configured partition count to %d",
+				spec.Name, current, spec.Partitions, current)
 		}
 		return nil
 	}

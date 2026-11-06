@@ -11,6 +11,7 @@ import (
 	"shared/idsegment"
 	"shared/placement"
 	"shared/playerredis"
+	"shared/redisauth"
 	"shared/serviceauth"
 )
 
@@ -18,6 +19,10 @@ import (
 type Config struct {
 	zrpc.RpcServerConf            // Embedded go-zero RPC config (ListenOn, Etcd, etc.)
 	Node               NodeConfig `json:"Node"`
+	// SharedRedisPasswordEnv 是 Node.RedisClient 与 Node.QueueRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
+	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的 Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在任何外部连接之前填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域(player_locker、login_idempotent、login_generation),LoginRedis 是登录域(连接栅栏、登录态、设备集、
 	// 账号索引、令牌、令牌家族、口令配额;docs/design/redis-player-store-cluster.md §10.2)。结构相同,部署上可以共用一个 Redis Cluster。
 	// 没写 Addrs 时都指向 Node.RedisClient 那一个实例,开发环境不用改(EffectivePlayerRedis / EffectiveLoginRedis)。
@@ -245,6 +250,16 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 // EffectiveLoginRedis 返回生效的登录域配置:写了 LoginRedis.Addrs 就用它,否则指向 Node.RedisClient 那一个实例。
 func (c *Config) EffectiveLoginRedis() playerredis.Config {
 	return c.LoginRedis.OrDefault(c.redisDomainFallback())
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Node.RedisClient 与 Node.QueueRedis(写了才有)的口令,规则见 redisauth.Apply。
+// 玩家域与登录域没写 Addrs 时回落到 Node.RedisClient(redisDomainFallback),填完之后它们用的也是这个口令。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	targets := []redisauth.Target{{Field: "Node.RedisClient.Password", Password: &c.Node.RedisClient.Password}}
+	if c.Node.QueueRedis != nil {
+		targets = append(targets, redisauth.Target{Field: "Node.QueueRedis.Password", Password: &c.Node.QueueRedis.Password})
+	}
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup, targets...)
 }
 
 func (c *Config) redisDomainFallback() playerredis.Config {

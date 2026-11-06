@@ -1555,23 +1555,10 @@ type wantedIndex struct {
 	cols []string
 }
 
-// extraIndexes 是 proto 的 OptionIndex **还没有**、但读路径确实需要的索引。
-//
-// 唯一一条:player_snapshot(zone_id, created_at)。手写 DDL 时代它叫 idx_zone_created,
-// 收口到 proto 时漏了,于是新建的库上 GetSnapshotPlayerIDsByZone / RollbackZone 的
-// `WHERE zone_id = ? AND created_at <= ?` 变成全表扫 —— 回滚一个 zone 要扫完全服快照。
-//
-// 正确的长期修法是改 proto(本服务不拥有 proto/,由该目录的负责人来做):
-//
-//	proto/common/database/rollback_database_table.proto:64
-//	  option(OptionIndex) = "player_id;snapshot_guid";
-//	→  option(OptionIndex) = "player_id;snapshot_guid;zone_id,created_at";
-//
-// 改完这里这条会被"已被现有索引覆盖"的判断自动跳过(proto2mysql 会把它建成
-// idx_player_snapshot_2),不需要再回来删,留着也不会建重复索引。
-var extraIndexes = map[string][]wantedIndex{
-	"player_snapshot": {{name: "idx_player_snapshot_zone_created", cols: []string{"zone_id", "created_at"}}},
-}
+// 索引的真源只有 proto 的 OptionIndex。以前这里有一张 extraIndexes 兜底表,补 proto 漏掉的
+// player_snapshot(zone_id, created_at);proto 补上之后它只剩副作用,2026-11-06 改成 (zone_id, shard, created_at)
+// (时间索引按桶打散,docs/design/audit-pipeline-horizontal-scale-20261106.md §2.C)时随之删掉 ——
+// 留着它会在每个库上把不分桶的单调索引再补回来。
 
 // ensureIndexes 给**存量表**补索引,幂等。
 //
@@ -1586,7 +1573,6 @@ var extraIndexes = map[string][]wantedIndex{
 // 想要的列序,优化器就能用,再建一条只是白占写入代价和空间。
 func ensureIndexes(ctx context.Context, db *sql.DB, dbName, tableName, createDDL string) error {
 	wanted := parseWantedIndexes(createDDL)
-	wanted = append(wanted, extraIndexes[tableName]...)
 	if len(wanted) == 0 {
 		return nil
 	}

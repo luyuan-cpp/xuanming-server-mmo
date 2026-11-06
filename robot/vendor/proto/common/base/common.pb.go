@@ -21,6 +21,57 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 节点可分配状态（NodeInfo.admission，R6，docs/design/global-match-hierarchical-pools.md §5.1）。
+// 取值上线后不复用；废弃时写 `reserved` 并注明原因（AGENTS.md §4.3）。
+type NodeAdmission int32
+
+const (
+	NodeAdmission_NODE_ADMISSION_UNSPECIFIED NodeAdmission = 0 // 未上报：非 battle 节点，或不认识本字段的旧版本
+	NodeAdmission_NODE_ADMISSION_OPEN        NodeAdmission = 1 // 接新房间（仍须过 battle 的建房准入闸与 Agones 分配许可）
+	NodeAdmission_NODE_ADMISSION_CLOSED      NodeAdmission = 2 // 不接新房间：启动未完成、Agones 排空或未就绪、停机或维护关闸
+)
+
+// Enum value maps for NodeAdmission.
+var (
+	NodeAdmission_name = map[int32]string{
+		0: "NODE_ADMISSION_UNSPECIFIED",
+		1: "NODE_ADMISSION_OPEN",
+		2: "NODE_ADMISSION_CLOSED",
+	}
+	NodeAdmission_value = map[string]int32{
+		"NODE_ADMISSION_UNSPECIFIED": 0,
+		"NODE_ADMISSION_OPEN":        1,
+		"NODE_ADMISSION_CLOSED":      2,
+	}
+)
+
+func (x NodeAdmission) Enum() *NodeAdmission {
+	p := new(NodeAdmission)
+	*p = x
+	return p
+}
+
+func (x NodeAdmission) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NodeAdmission) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_base_common_proto_enumTypes[0].Descriptor()
+}
+
+func (NodeAdmission) Type() protoreflect.EnumType {
+	return &file_proto_common_base_common_proto_enumTypes[0]
+}
+
+func (x NodeAdmission) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NodeAdmission.Descriptor instead.
+func (NodeAdmission) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_base_common_proto_rawDescGZIP(), []int{0}
+}
+
 type EndpointComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ip            string                 `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
@@ -98,8 +149,26 @@ type NodeInfo struct {
 	ClientEndpoint *EndpointComp `protobuf:"bytes,11,opt,name=client_endpoint,json=clientEndpoint,proto3" json:"client_endpoint,omitempty"`
 	// 真实机房身份，由部署注入。0 = 未声明，不能用于跨地域匹配。
 	PhysicalRegion uint32 `protobuf:"varint,12,opt,name=physical_region,json=physicalRegion,proto3" json:"physical_region,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 客户端连接上限：gate 启动时自报它的 GateMaxConnections（etc/base_deploy_config.yaml），与 player_count 同一单位。
+	// 0 = 未声明（非 gate 节点、dev 下不设上限的 gate），消费方不按上限过滤。
+	// login 挑 gate 时剔除人数到上限 90% 的 gate（docs/design/gate-load-balancing-design.md「满载与停写的 gate」）。
+	// 字段号 13 上线后不复用；废弃时写 `reserved 13;`（AGENTS.md §4.3）。
+	MaxConnections uint32 `protobuf:"varint,13,opt,name=max_connections,json=maxConnections,proto3" json:"max_connections,omitempty"`
+	// 可分配状态（R6）：此刻接不接新房间。只由 battle 填写，其它节点留 0（UNSPECIFIED）。
+	// battle 在 etcd 首次发布前填 CLOSED；建房准入闸打开且 Agones 放行许可后改 OPEN；排空、停机或维护关闸时改回 CLOSED。
+	// 只在变化时写 etcd，并按 watch 回读到的自身登记对账（cpp/nodes/battle/battle_admission_advertise.h），稳态零写入。
+	// 负载不放这里：房间数随 CreateBattleResponse.room_count 捎回，不周期写注册信息（写放大与读量随进程数平方增长）。
+	// match 选点排除 CLOSED；UNSPECIFIED 视为可选（旧节点 / 未上报）。只是提示，能否建房仍由 battle 的准入判定。
+	// 字段号 14 上线后不复用；废弃时写 `reserved 14;`（AGENTS.md §4.3）。
+	Admission NodeAdmission `protobuf:"varint,14,opt,name=admission,proto3,enum=NodeAdmission" json:"admission,omitempty"`
+	// 发布轨道（docs/design/release-track-gray-canary.md §2.1）："stable" 或 "canary"。
+	// 由部署经环境变量 MMORPG_RELEASE_TRACK 注入，进程存续期间不变；生产者只写这两个值。
+	// 消费方把空串（没写轨道的节点）当 stable，其他值当无效节点跳过。
+	// 用字符串不用枚举：发现方按 protojson 宽松解析，未知的枚举名会被静默丢成 0，将来新增的轨道会被误当成 stable。
+	// 字段号 15 上线后不复用；废弃时写 `reserved 15;`（AGENTS.md §4.3）。
+	ReleaseTrack  string `protobuf:"bytes,15,opt,name=release_track,json=releaseTrack,proto3" json:"release_track,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -216,6 +285,27 @@ func (x *NodeInfo) GetPhysicalRegion() uint32 {
 	return 0
 }
 
+func (x *NodeInfo) GetMaxConnections() uint32 {
+	if x != nil {
+		return x.MaxConnections
+	}
+	return 0
+}
+
+func (x *NodeInfo) GetAdmission() NodeAdmission {
+	if x != nil {
+		return x.Admission
+	}
+	return NodeAdmission_NODE_ADMISSION_UNSPECIFIED
+}
+
+func (x *NodeInfo) GetReleaseTrack() string {
+	if x != nil {
+		return x.ReleaseTrack
+	}
+	return ""
+}
+
 type NetworkAddress struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ip            string                 `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
@@ -275,7 +365,7 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\x1eproto/common/base/common.proto\"2\n" +
 	"\fEndpointComp\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\rR\x04port\"\xc7\x03\n" +
+	"\x04port\x18\x02 \x01(\rR\x04port\"\xc3\x04\n" +
 	"\bNodeInfo\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12\x1b\n" +
 	"\tnode_type\x18\x02 \x01(\rR\bnodeType\x12\x1f\n" +
@@ -290,10 +380,17 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\rgrpc_endpoint\x18\n" +
 	" \x01(\v2\r.EndpointCompR\fgrpcEndpoint\x126\n" +
 	"\x0fclient_endpoint\x18\v \x01(\v2\r.EndpointCompR\x0eclientEndpoint\x12'\n" +
-	"\x0fphysical_region\x18\f \x01(\rR\x0ephysicalRegion\"4\n" +
+	"\x0fphysical_region\x18\f \x01(\rR\x0ephysicalRegion\x12'\n" +
+	"\x0fmax_connections\x18\r \x01(\rR\x0emaxConnections\x12,\n" +
+	"\tadmission\x18\x0e \x01(\x0e2\x0e.NodeAdmissionR\tadmission\x12#\n" +
+	"\rrelease_track\x18\x0f \x01(\tR\freleaseTrack\"4\n" +
 	"\x0eNetworkAddress\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\rR\x04portB\x13Z\x11proto/common/baseb\x06proto3"
+	"\x04port\x18\x02 \x01(\rR\x04port*c\n" +
+	"\rNodeAdmission\x12\x1e\n" +
+	"\x1aNODE_ADMISSION_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13NODE_ADMISSION_OPEN\x10\x01\x12\x19\n" +
+	"\x15NODE_ADMISSION_CLOSED\x10\x02B\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_common_proto_rawDescOnce sync.Once
@@ -307,21 +404,24 @@ func file_proto_common_base_common_proto_rawDescGZIP() []byte {
 	return file_proto_common_base_common_proto_rawDescData
 }
 
+var file_proto_common_base_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_common_base_common_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_common_base_common_proto_goTypes = []any{
-	(*EndpointComp)(nil),   // 0: EndpointComp
-	(*NodeInfo)(nil),       // 1: NodeInfo
-	(*NetworkAddress)(nil), // 2: NetworkAddress
+	(NodeAdmission)(0),     // 0: NodeAdmission
+	(*EndpointComp)(nil),   // 1: EndpointComp
+	(*NodeInfo)(nil),       // 2: NodeInfo
+	(*NetworkAddress)(nil), // 3: NetworkAddress
 }
 var file_proto_common_base_common_proto_depIdxs = []int32{
-	0, // 0: NodeInfo.endpoint:type_name -> EndpointComp
-	0, // 1: NodeInfo.grpc_endpoint:type_name -> EndpointComp
-	0, // 2: NodeInfo.client_endpoint:type_name -> EndpointComp
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	1, // 0: NodeInfo.endpoint:type_name -> EndpointComp
+	1, // 1: NodeInfo.grpc_endpoint:type_name -> EndpointComp
+	1, // 2: NodeInfo.client_endpoint:type_name -> EndpointComp
+	0, // 3: NodeInfo.admission:type_name -> NodeAdmission
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_common_proto_init() }
@@ -334,13 +434,14 @@ func file_proto_common_base_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_base_common_proto_rawDesc), len(file_proto_common_base_common_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_common_base_common_proto_goTypes,
 		DependencyIndexes: file_proto_common_base_common_proto_depIdxs,
+		EnumInfos:         file_proto_common_base_common_proto_enumTypes,
 		MessageInfos:      file_proto_common_base_common_proto_msgTypes,
 	}.Build()
 	File_proto_common_base_common_proto = out.File

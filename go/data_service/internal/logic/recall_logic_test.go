@@ -746,6 +746,19 @@ func TestRecallResultOf_OnlyFullyCoveredRowsSucceed(t *testing.T) {
 	}
 }
 
+// PARTIAL 的提示指向已提交账本里这一行的回收收据,不再让人查流水:人工关成 PARTIAL 时 taken 记 0,
+// 扣过的可能没有流水,照「流水里没有」去补挂欠款会多扣。
+func TestRecallResultOf_PartialPointsAtTheCommittedLedger(t *testing.T) {
+	const partial = 5
+	result := recallResultOf(&store.RecallOpRow{OpID: 7001, PlayerID: 9001, Status: partial, Requested: 5, Shortfall: 5})
+	assert.False(t, result.Success)
+	for _, want := range []string{"GetPlayerAssetOpLedger(player_id=9001)", "GM_RECALL", "correlation_id=7001",
+		"manually resolved PARTIAL records taken=0", "never add debt"} {
+		assert.Contains(t, result.ErrorDetail, want)
+	}
+	assert.NotContains(t, result.ErrorDetail, "check transaction_log")
+}
+
 func TestCancelRecallBatch_RequiresOperatorAndKnownBatch(t *testing.T) {
 	svcCtx, recall, _ := newRecallSvcCtx(t, nil)
 	resp, err := CancelRecallBatch(context.Background(), svcCtx, 55, "", "理由", "peer")

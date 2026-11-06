@@ -3,7 +3,7 @@ package pkg
 // gate 应用层心跳的客户端一侧(C++ 仓 docs/design/gate-client-heartbeat.md §3、§9)。
 //
 // 契约:验签成功、gate 在回包里通告了非 0 的 heartbeat_interval_ms 之后,立即发第一条 ClientHeartbeatRequest,
-// 之后每个间隔一条,不看别的流量。gate 对发过心跳的连接按读空闲 heartbeat_timeout_ms 判死并强关,随后照常走断线保留。
+// 之后每个间隔一条,不看别的流量。gate 从验签成功回包起按读空闲 heartbeat_timeout_ms 判死并强关,随后照常走断线保留。
 // 没有通告(旧 gate、Java 版尚未实现)就一条都不发:旧 gate 不认识心跳类型,发了会被当非法帧强关。
 //
 // 只往「验签成功的那条连接」发:跟随 gate 重定向时 SwapConn 先换上一条还没验签的新连接(redirect.go),
@@ -68,7 +68,7 @@ func (gc *GameClient) onGateVerified(c *muduo.Client, resp *base.ClientTokenVeri
 	}
 	hb.mu.Unlock()
 
-	// 验签成功后立即发第一条,不等满一个间隔:gate 从收到第一条心跳起才对这条连接按空闲超时判死。
+	// 验签成功后立即发第一条,不等满一个间隔:gate 已从验签成功回包起对这条连接按空闲超时判死。
 	gc.heartbeatTick()
 	if stop != nil {
 		go gc.heartbeatLoop(stop)

@@ -350,6 +350,8 @@ void PlayerTeamFollowScope::Start(entt::entity player, uint64_t playerId, uint64
 
 void PlayerTeamSystem::OnEnteredScene(entt::entity player)
 {
+	// 入场通知已经发出,客户端把跟随状态清成了"没被驱动":仍接在队长身后的先补推一次,不等下面的组队读。
+	TeamFollowSystem::ResendStateAfterEntry(player);
 	RefreshMembership(player, FollowMode::kFollowLeaderAndFanout);
 }
 

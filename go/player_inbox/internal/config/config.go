@@ -20,6 +20,7 @@ import (
 	"shared/authoritysql"
 	"shared/dbplacement"
 	"shared/playerredis"
+	"shared/redisauth"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -94,6 +95,11 @@ type Config struct {
 	// CoreRedis:控制域 Redis,只放维护选主锁 player_inbox:maintenance:leader(清理 / 补发提醒 / gauge / 对账只在领导者上跑)。
 	// 没写 PlayerRedis.Addrs 时玩家键也在这一实例上,所以 Validate 拒绝空 Host。
 	CoreRedis RedisConf `json:"CoreRedis"`
+
+	// SharedRedisPasswordEnv 是 CoreRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在 Secret redis-auth 里,
+	// 经 secretKeyRef 注入;ConfigMap 里 CoreRedis.Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8),只读两类东西:
 	//   - player:{id}:owner_epoch:仅STALE分类诊断，不是消费授权上界；
@@ -177,6 +183,14 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
 		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
 	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 CoreRedis.Password,规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 CoreRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// -migrate 不连 Redis,只在常驻启动时调用(player_inbox.go)。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "CoreRedis.Password", Password: &c.CoreRedis.Password})
 }
 
 // KafkaConf 是在线提醒用的 Kafka 生产者参数。

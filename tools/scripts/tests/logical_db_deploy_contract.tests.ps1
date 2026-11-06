@@ -135,6 +135,8 @@ $ProdZoneArgs = $ZoneArgs + @('-ReleaseProfile', 'prod', '-SkipPreflight', '-Nod
 $StagingZoneArgs = $ZoneArgs + @('-ReleaseProfile', 'staging', '-SkipPreflight', '-NodeImage', 'ghcr.io/luyuancpp/mmorpg-node:0123456789ab')
 
 $devZoneRun = Invoke-LogicalDbDryRun -Arguments $ZoneArgs
+# 同一个显式入口按 mysql 档部署(dev 才允许网关用 mysql 档,Resolve-GatewaySqlMode)。
+$devMysqlZoneRun = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-DatabaseBackend', 'mysql'))
 $prodZoneRun = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7')) -Env $ProdEnv
 $devInfraRun = Invoke-LogicalDbDryRun -Arguments $InfraArgs -Env $InfraEnv
 $shardedInfraRun = Invoke-LogicalDbDryRun -Arguments ($InfraArgs + @('-DirectoryLogicalShards', '64')) -Env $InfraEnv
@@ -419,8 +421,9 @@ Test-Case '-SqlClusters 进全部写者的 DbPlacement 段' {
     Assert-NotMatch -Text $bad.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
 }
 
-Test-Case 'MMORPG_DB_PLACEMENT 进写者的 registrar init,只进 init;login 和 gateway 写区域 MySQL 上的 mmorpg,不进' {
-    foreach ($service in @('data-service', 'db')) {
+Test-Case 'MMORPG_DB_PLACEMENT 进全部 zone 写者的 registrar init,只进 init;login 和 gateway 的 mmorpg 同样按映射拨号' {
+    # login、gateway 登记在 mmorpg 上,这个库 2026-11-05 起和其余逻辑库一样在 TiDB、按库映射连(docs/design/no-single-node-horizontal-scaling-20261001.md §6)。
+    foreach ($service in @('data-service', 'db', 'login', 'gateway')) {
         $block = Get-DeploymentBlock -Output $devZoneRun.Output -Name $service
         $at = $block.IndexOf('- name: MMORPG_DB_PLACEMENT')
         Assert-True -Condition ($at -ge 0) -Because "$service 的 writer_authority 要按映射拨号"
@@ -433,11 +436,9 @@ Test-Case 'MMORPG_DB_PLACEMENT 进写者的 registrar init,只进 init;login 和
         Assert-Equal -Expected $AuthorityHost -Actual $json.SqlClusters.main.Hosts -Because "${service}:默认集群是权威入口"
         Assert-NotMatch -Text $value -Pattern '@tcp|password' -Because "${service}:只有地址,没有凭据"
     }
-    foreach ($service in @('login', 'gateway')) {
-        $block = Get-DeploymentBlock -Output $devZoneRun.Output -Name $service
-        Assert-True -Condition ($block.Contains('MMORPG_SQL_REGISTRAR_DSN')) -Because "$service 同样有 registrar(本断言的前提)"
-        Assert-True -Condition (-not $block.Contains('MMORPG_DB_PLACEMENT')) -Because "$service 的库不在 SqlClusters 里,按连接串的地址连(手册 §9)"
-    }
+    # 网关的 init 由 Java 版的 registrar 注入(RuntimeKind java),锚点同一个 MMORPG_SQL_REGISTRAR_DSN;不能落进主容器。
+    $gateway = Get-DeploymentBlock -Output $devZoneRun.Output -Name 'gateway'
+    Assert-True -Condition ($gateway.IndexOf('- name: MMORPG_DB_PLACEMENT') -gt $gateway.IndexOf("`n      initContainers:")) -Because 'gateway:在 init 段里'
     Assert-Match -Text (Read-RepoText 'go/shared/dbplacement/placement.go') -Pattern 'EnvConfig = "MMORPG_DB_PLACEMENT"' -Because '变量名和 Go 一致'
 }
 
@@ -685,7 +686,7 @@ Test-Case '写者的控制文件都在 emptyDir 挂载根下的私有子目录(�
     Assert-Match -Text (Read-RepoText 'java/authority_jdbc/src/main/java/com/game/authority/WriterAuthority.java') -Pattern 'value\.owner\(\)\.equals\(current\)' -Because 'Java 要求属主是自己,子目录由容器自己建才满足'
 }
 
-Test-Case 'registrar 带 MMORPG_SQL_BACKEND:login、gateway 固定 mysql,其余跟 -DatabaseBackend,只进 init' {
+Test-Case 'registrar 带 MMORPG_SQL_BACKEND:全部写者跟 -DatabaseBackend(login、gateway 不再固定 mysql),只进 init' {
     Assert-Match -Text (Read-RepoText 'go/shared/authoritysql/backend.go') -Pattern 'MMORPG_SQL_BACKEND' -Because '变量名和 Go 一致'
     function Get-RegistrarBackend([string]$Block) {
         $found = [regex]::Matches($Block, 'name: MMORPG_SQL_BACKEND\s+value: "(?<v>[a-z]+)"')
@@ -693,18 +694,84 @@ Test-Case 'registrar 带 MMORPG_SQL_BACKEND:login、gateway 固定 mysql,其余�
         Assert-True -Condition ($found[0].Index -lt $Block.IndexOf("`n      containers:")) -Because '只进 init,常驻进程的档位在自己的配置里'
         return $found[0].Groups['v'].Value
     }
-    foreach ($service in @('data-service', 'db')) {
-        Assert-Equal -Expected 'tidb' -Actual (Get-RegistrarBackend (Get-DeploymentBlock -Output $devZoneRun.Output -Name $service)) -Because "$service 跟 -DatabaseBackend,缺省 tidb"
-    }
-    foreach ($service in @('login', 'gateway')) {
-        Assert-Equal -Expected 'mysql' -Actual (Get-RegistrarBackend (Get-DeploymentBlock -Output $devZoneRun.Output -Name $service)) -Because "$service 写区域 MySQL 上的 mmorpg"
+    foreach ($service in @('data-service', 'db', 'login', 'gateway')) {
+        Assert-Equal -Expected 'tidb' -Actual (Get-RegistrarBackend (Get-DeploymentBlock -Output $devZoneRun.Output -Name $service)) -Because "$service 跟 -DatabaseBackend,缺省 tidb(mmorpg 在 TiDB 上,§6)"
     }
     Assert-Equal -Expected 'tidb' -Actual (Get-RegistrarBackend (Get-DeploymentBlock -Output $devInfraRun.Output -Name 'guild')) -Because '全局服务同样跟 -DatabaseBackend'
-    $mysqlRun = Invoke-LogicalDbDryRun -Arguments ($ZoneArgs + @('-DatabaseBackend', 'mysql'))
-    Assert-Equal -Expected 0 -Actual $mysqlRun.ExitCode -Because "输出: $($mysqlRun.Output)"
+    Assert-Equal -Expected 0 -Actual $devMysqlZoneRun.ExitCode -Because "输出: $($devMysqlZoneRun.Output)"
     foreach ($service in @('data-service', 'db', 'login', 'gateway')) {
-        Assert-Equal -Expected 'mysql' -Actual (Get-RegistrarBackend (Get-DeploymentBlock -Output $mysqlRun.Output -Name $service)) -Because "mysql 档 $service 也是 mysql"
+        Assert-Equal -Expected 'mysql' -Actual (Get-RegistrarBackend (Get-DeploymentBlock -Output $devMysqlZoneRun.Output -Name $service)) -Because "mysql 档 $service 也是 mysql"
     }
+}
+
+# ──────────────────────────────────────────────
+# 8b. mmorpg 在全球权威入口上(docs/design/no-single-node-horizontal-scaling-20261001.md §6)
+# ──────────────────────────────────────────────
+Test-Case '网关的 mmorpg 跟全球权威入口:tidb 档开 TiDB 强核验,dev 的 mysql 档关;不给入口、staging/prod 的 mysql 档都在写之前拒绝' {
+    $source = Read-RepoText 'java/gateway_node/src/main/java/com/game/gateway/config/AuthorityDatabaseConfiguration.java'
+    Assert-Match -Text $source -Pattern 'getProperty\("mmorpg\.sql\.require-tidb",Boolean\.class,true\)' -Because '键名和缺省值以网关为准(前提)'
+    Assert-Match -Text $source -Pattern '!required&&!Set\.of\("dev","test"\)\.contains\(mode\)' -Because '只有 dev / test 能关强核验,这是非 dev 的 mysql 档要拒绝的理由'
+    foreach ($case in @(
+            @{ Label = 'tidb 档'; Run = $devZoneRun; RequireTidb = 'true'; RunMode = 'prod' }
+            @{ Label = 'dev 的 mysql 档'; Run = $devMysqlZoneRun; RequireTidb = 'false'; RunMode = 'dev' }
+        )) {
+        Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label) 输出: $($case.Run.Output)"
+        $flat = Get-ConfigFlat -Output $case.Run.Output -ConfigMap 'java-svc-gateway-config'
+        $url = Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.spring.datasource.url'
+        Assert-True -Condition ($url.StartsWith("jdbc:mysql://$AuthorityHost/mmorpg?")) -Because "$($case.Label):网关连的就是 login 登记的那个 mmorpg,实际 $url"
+        Assert-Equal -Expected $case.RequireTidb -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because "$($case.Label) 的强核验"
+        Assert-Equal -Expected $case.RunMode -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because "$($case.Label) 的 run-mode"
+    }
+    $prodFlat = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because 'prod 的 tidb 档同样开强核验'
+
+    # 不给入口:Go 服务那边早就所有档位都要显式入口;只部署网关(-SkipGoSvc)时同样拒绝,不回落 infra MySQL,否则 mmorpg 分成两份。
+    $hostAt = [array]::IndexOf($ZoneArgs, '-GlobalAuthorityTiDBHost')
+    Assert-True -Condition ($hostAt -gt 0 -and $ZoneArgs[$hostAt + 1] -ceq $AuthorityHost) -Because '夹具前提:$ZoneArgs 带入口'
+    $noHostArgs = @($ZoneArgs[0..($hostAt - 1)]) + @($ZoneArgs[($hostAt + 2)..($ZoneArgs.Count - 1)]) + @('-SkipGoSvc')
+    $noHost = Invoke-LogicalDbDryRun -Arguments $noHostArgs
+    Assert-True -Condition ($noHost.ExitCode -ne 0) -Because "dev 不给入口也要拒绝。输出: $($noHost.Output)"
+    Assert-Match -Text $noHost.Output -Pattern 'every release profile needs -GlobalAuthorityTiDBHost' -Because '点名缺的参数'
+    Assert-NotMatch -Text $noHost.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
+
+    $prodMysql = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql')) -Env $ProdEnv
+    Assert-True -Condition ($prodMysql.ExitCode -ne 0) -Because "prod 的 mysql 档网关起不来,要拒绝。输出: $($prodMysql.Output)"
+    Assert-Match -Text $prodMysql.Output -Pattern 'needs the mmorpg database on TiDB' -Because '点名原因'
+    Assert-NotMatch -Text $prodMysql.Output -Pattern '--- BEGIN MANIFEST ---' -Because 'gate、scene、Go 服务都不能已经 apply 了才失败'
+}
+
+Test-Case 'tidb 档网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql,先于网关 Deployment;mysql 档不渲染' {
+    Assert-Match -Text (Read-RepoText 'go/data_service/cmd/writer_authority/main.go') -Pattern 'flags\.String\("ddl-file"' -Because 'writer_authority 有 -ddl-file(前提)'
+    $jobs = @(Get-ManifestBlocks -Output $devZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $jobs.Count -Because 'tidb 档恰好一份'
+    $job = $jobs[0]
+    Assert-NotMatch -Text $job -Pattern 'PLACEHOLDER_' -Because '占位全部替换'
+    Assert-Match -Text $job -Pattern ('(?m)^\s+image: ' + [regex]::Escape('fixture.invalid/registrar@sha256:' + ('a' * 64)) + '\s*$') -Because '镜像是 boot 目录 gateway 条目的 registrarImage,按摘要固定'
+    Assert-Match -Text $job -Pattern 'args: \["-command", "prepare-schema", "-schema", "mmorpg", "-ddl-file", "/app/gateway-schema/schema\.sql"' -Because '闸门表和业务表一次建完'
+    foreach ($key in @('dsn', 'principal')) {
+        Assert-Match -Text $job -Pattern ('valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: ' + $key + ', optional: false\}\}') -Because "schema 身份的 $key 来自 schemaPermissionSecret,不用网关常驻账号"
+    }
+    Assert-Match -Text $job -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "tidb"' -Because 'TiDB 档'
+    $placement = [regex]::Match($job, "name: MMORPG_DB_PLACEMENT\s+value: '(?<json>[^'\r\n]+)'").Groups['json'].Value | ConvertFrom-Json
+    Assert-Equal -Expected $AuthorityHost -Actual $placement.SqlClusters.main.Hosts -Because '按库映射拨号,默认集群是权威入口'
+    Assert-Match -Text $job -Pattern 'name: MMORPG_DB_PLACEMENT_REQUIRED\s+value: ""' -Because 'dev 不要求映射'
+    $prodJob = @(Get-ManifestBlocks -Output $prodZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $prodJob.Count -Because 'prod 同样渲染'
+    Assert-Match -Text $prodJob[0] -Pattern 'name: MMORPG_DB_PLACEMENT_REQUIRED\s+value: "1"' -Because 'staging、prod 要求映射,同其余 schema Job'
+    Assert-Match -Text $job -Pattern 'mountPath: /app/gateway-schema, readOnly: true' -Because '-ddl-file 读挂载的 ConfigMap'
+    Assert-Match -Text $job -Pattern 'configMap: \{name: gateway-schema-sql\}' -Because '挂的就是渲染出的 DDL ConfigMap'
+
+    # ConfigMap 的内容逐行等于 schema.sql:业务表只有这一份来源。
+    $configMap = Get-ConfigBlock -Output $devZoneRun.Output -ConfigMap 'gateway-schema-sql'
+    $body = [regex]::Match(($configMap -replace "`r`n", "`n"), '(?ms)^  schema\.sql: \|\n(?<body>.*)$').Groups['body'].Value
+    $rendered = @($body.TrimEnd("`n") -split "`n" | ForEach-Object { $_ -replace '^    ', '' }) -join "`n"
+    $expected = ((Read-RepoText 'java/gateway_node/src/main/resources/schema.sql') -replace "`r`n", "`n").TrimEnd("`n")
+    Assert-Equal -Expected $expected -Actual $rendered -Because 'DDL ConfigMap 就是网关的 schema.sql'
+
+    $applied = $devZoneRun.Output.IndexOf('[applied] gateway-schema -> fixture.invalid/registrar@sha256:')
+    Assert-True -Condition ($applied -ge 0) -Because '打印镜像'
+    Assert-True -Condition ($applied -lt $devZoneRun.Output.IndexOf('[applied] gateway -> ')) -Because 'Job 先于网关 Deployment:网关按 ddl-auto: validate 启动,表要先在'
+    Assert-NotMatch -Text $devMysqlZoneRun.Output -Pattern '(?m)^  name: gateway-schema(-sql)?\s*$' -Because 'mysql 档(dev,infra MySQL)由 mysql-init 建这个库,不跑 Job'
 }
 
 Test-Case '-Region 注入 data-service 主容器,所有档位都写;go/db 注入 POD_IP;dev 的 Schema.AutoMigrate 也是 false' {

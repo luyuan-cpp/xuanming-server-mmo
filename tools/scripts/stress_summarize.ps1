@@ -1482,10 +1482,10 @@ function Get-SeriesLabelValues {
 # 缺序列 / 没有桶 → n/a;没有样本 → "-";落在 +Inf 桶 → 前缀 '>'(至少这么大)。
 function Get-QuantileSecondsCell {
     param($Hist, [double]$Q)
-    $q = Get-HistogramQuantile -Hist $Hist -Q $Q
-    if ($null -eq $q) { return 'n/a' }
-    if ($q -is [double]) { return '-' }
-    return $(if ($q.Overflow) { '>' } else { '' }) + (Format-DecimalCell $q.Value 1 's')
+    $quantile = Get-HistogramQuantile -Hist $Hist -Q $Q
+    if ($null -eq $quantile) { return 'n/a' }
+    if ($quantile -is [double]) { return '-' }
+    return $(if ($quantile.Overflow) { '>' } else { '' }) + (Format-DecimalCell $quantile.Value 1 's')
 }
 
 $matchNoSnapshot = "没有 *_match 快照(2026-11-05 之前的 stress_snap.ps1 不抓 :9170,或本机没起 match)"

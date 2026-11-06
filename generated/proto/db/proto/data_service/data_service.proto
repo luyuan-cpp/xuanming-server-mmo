@@ -8,6 +8,8 @@ import "google/protobuf/empty.proto";
 import "proto/common/component/asset_op_ledger_comp.proto";
 // 玩家收件箱对账读已落盘账本(docs/design/player-inbox-service.md §5.1、§9.3);生成链口径同上一行。
 import "proto/common/component/player_inbox_ledger_comp.proto";
+// 运维查询单玩家物品获取封禁表(docs/design/player-inbox-service.md §2.2);生成链口径同上一行。
+import "proto/common/component/player_item_gain_block_comp.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/base/service_call_auth.proto";
 import "proto/common/base/role_admission.proto";
@@ -67,11 +69,13 @@ service DataService {
   rpc ListPlayerSnapshots(ListPlayerSnapshotsRequest) returns (ListPlayerSnapshotsResponse) {}
 
   // ── Batch Recall / Anomaly ──────────────────
-  // 以下四个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
+  // 以下五个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
   rpc BatchRecallItems(BatchRecallItemsRequest) returns (BatchRecallItemsResponse) {}
   rpc GetRecallBatch(GetRecallBatchRequest) returns (BatchRecallItemsResponse) {}
   rpc CancelRecallBatch(CancelRecallBatchRequest) returns (BatchRecallItemsResponse) {}
   rpc ResolveRecallOp(ResolveRecallOpRequest) returns (ResolveRecallOpResponse) {}
+  // 把一条 needs_review 指令登记为交人工处置:它此刻的全部流水按已消费记进 gm_recall_source,以后的批次不再自动扣它。
+  rpc RegisterRecallReviewHandled(RegisterRecallReviewHandledRequest) returns (RegisterRecallReviewHandledResponse) {}
   rpc QueryTransactionLog(QueryTransactionLogRequest) returns (QueryTransactionLogResponse) {}
 
   // ── ID segment allocation (Leaf-segment) ────────────────────
@@ -104,6 +108,13 @@ service DataService {
   // 调用方是 go/player_inbox 的对账(定时作业与运维 ReconcilePlayer),不是 scene。
   // 设计见 docs/design/player-inbox-service.md §5.1、§9.3。
   rpc GetPlayerInboxLedger(GetPlayerInboxLedgerRequest) returns (GetPlayerInboxLedgerResponse) {}
+
+  // ── 单玩家物品获取封禁:已落盘封禁表只读 ──────────────────────────
+  // 读 player_store 资料行(kind=PROFILE)的 item_gain_block 子字段,和写权行出自同一条语句。只读、不鉴权,
+  // 与 GetPlayerInboxLedger 同级:内容只是物品配置号列表。调用方是 go/player_inbox 的运维查询
+  // PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token),不是 scene。
+  // 设计见 docs/design/player-inbox-service.md §2.2。
+  rpc GetPlayerItemGainBlock(GetPlayerItemGainBlockRequest) returns (GetPlayerItemGainBlockResponse) {}
 }
 
 message AccountDirectoryResponse {
@@ -498,6 +509,32 @@ message ResolveRecallOpResponse {
   string evidence = 4;                 // 证据说明(读过账本才有):recall_accepts = 这条证据下能收的结局,其后是结论、来源和原因
 }
 
+// 把一条 needs_review 指令登记为交人工处置(exploit_loss_prevention_zh.md「待人工核对的流水」)。先登记、再处置:
+// 登记之后这条指令的全部流水按已消费记进 gm_recall_source,以后的批次与预览都把它剔除,人工扣过的不会再被自动扣一次。
+// 只收此刻确实在 needs_review 里的指令:tx_ids 与 review_reason 要和服务端按同一份计划代码重算的一致。
+// 资产按 recall_kind 与 item_config_id / currency_type 区分,一条指令发了几种资产就分别登记。
+message RegisterRecallReviewHandledRequest {
+  RecallKind recall_kind = 1;              // 必填,与预览同
+  uint32 item_config_id = 2;               // recall_kind=ITEM 时必填
+  uint32 currency_type = 3;                // recall_kind=CURRENCY 时的币种,0 是银两
+  uint64 player_id = 4;                    // needs_review 行的 player_id(收到这笔收益的玩家)
+  uint64 correlation_id = 5;               // needs_review 行的 correlation_id,必须非 0:没有指令号的流水不会进自动回收,不用登记
+  repeated uint64 tx_ids = 6;              // 预览 needs_review 里这条指令的全部 tx_id,不重复,上限 10000
+  RecallReviewReason review_reason = 7;    // 预览里这条指令的原因
+  string operator = 8;                     // 必填,≤ 64 字
+  string reason = 9;                       // 必填,≤ 191 字:工单号与处置方式(例如 GmSanctionPlayer 挂了多少欠款)
+}
+
+// error_code:0 且 registered = 本次登记;0 且未 registered = 这条指令早已登记过,什么都没改;
+// 32 = 它此刻不在 needs_review 里(账本已证实、能自动扣,已被回收批次消费,或 tx_ids / review_reason 与重算的对不上),重新预览;
+// 34 = 没有这条指令的收益流水;17 = 流水超过上限;11 = 读不到账本或库故障。除 0 且 registered 外都没改数据。
+message RegisterRecallReviewHandledResponse {
+  uint32 error_code = 1;
+  bool registered = 2;                     // true = 本次登记
+  uint32 source_rows = 3;                  // 本次按已消费写进 gm_recall_source 的流水条数
+  RecallReviewReason review_reason = 4;    // 服务端重算的原因;账本已证实、能自动扣时为 0
+}
+
 // ── Transaction Log Query ──────────────────────────────────────
 //
 // PostCrashReplay usage (cross-server-rollback-gap-fixes.md §2.4 B2):
@@ -653,4 +690,17 @@ message GetPlayerInboxLedgerRequest { uint64 player_id = 1; }
 message GetPlayerInboxLedgerResponse {
   bool found = 1;                          // false = 这个玩家没有写权行(从未建角)
   PlayerInboxLedgerComp ledger = 2;        // found=true 且玩家从未消费过收件箱时为空消息(不是缺席)
+}
+
+// ── 单玩家物品获取封禁:已落盘封禁表 ───────────────────────────────
+//
+// 语义与错误口径同上面两本账本,只是读的是资料行(kind=PROFILE)里的 item_gain_block。封禁表与收件箱账本
+// 不在同一行,但由 scene 的同一次存盘、同一个事务提交(docs/design/player-save-direct-commit.md §1.1)。
+// 响应形状同 GetPlayerInboxLedgerResponse:只有 found 与封禁表,不带 error_code 也不带 tip。
+
+message GetPlayerItemGainBlockRequest { uint64 player_id = 1; }
+
+message GetPlayerItemGainBlockResponse {
+  bool found = 1;                          // false = 这个玩家没有写权行(从未建角)
+  PlayerItemGainBlockComp block = 2;       // found=true 且从未被封过时为空消息(不是缺席)
 }

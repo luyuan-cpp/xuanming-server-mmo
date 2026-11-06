@@ -1,5 +1,8 @@
 // Package metrics 暴露路由服的 Prometheus 指标(设计文档 §6):
 //   - client_rpc_router_forward_total{message_id, outcome}   每次 Forward 的终态;
+//   - client_rpc_router_forward_by_track_total{release_track, outcome}
+//     同一批终态按 gate 自报的会话轨道再记一份,金丝雀观察拿两条轨道的整体错误率比较
+//     (docs/design/release-track-gray-canary.md §2.7)。不带 message_id,基数固定为 3 × 终态数;
 //   - client_rpc_router_forward_seconds{message_id}          Forward 端到端耗时;
 //   - client_rpc_router_targets{node_type}                   各目标类型当前发现到的实例数。
 //
@@ -42,12 +45,22 @@ const (
 // UnknownMessageIdLabel 是不在路由表里的消息号统一使用的 label 值。
 const UnknownMessageIdLabel = "unknown"
 
+// TrackLabelUnknown:gate 自报的会话轨道认不出时 release_track label 的取值(这类请求按 invalid_release_track 拒绝)。
+// 其余请求的 label 是 releasetrack.Track 的 String(),只有 stable、canary 两个值。
+const TrackLabelUnknown = "unknown"
+
 var (
 	forwardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "forward_total",
 		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|invalid_release_track|no_target|dial_error|upstream_timeout|upstream_error).",
 	}, []string{"message_id", "outcome"})
+
+	forwardByTrackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "forward_by_track_total",
+		Help:      "Forward calls by the session release track reported by the gate (stable|canary|unknown) and outcome (same values as forward_total).",
+	}, []string{"release_track", "outcome"})
 
 	forwardSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: subsystem,
@@ -67,7 +80,7 @@ var registerOnce sync.Once
 
 func register() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(forwardTotal, forwardSeconds, targets)
+		prometheus.MustRegister(forwardTotal, forwardByTrackTotal, forwardSeconds, targets)
 	})
 }
 
@@ -80,17 +93,28 @@ func MessageIdLabel(messageId uint32, known bool) string {
 	return strconv.FormatUint(uint64(messageId), 10)
 }
 
-// ObserveForward 记录一次 Forward 的终态与耗时。
-func ObserveForward(messageIdLabel string, outcome string, elapsed time.Duration) {
+// ObserveForward 记录一次 Forward 的终态与耗时。trackLabel 是会话轨道(stable / canary,认不出时为 TrackLabelUnknown),
+// 两个计数器在这里一起记,每次 Forward 恰好各记一次,按轨道求和与 forward_total 的总数相等。
+func ObserveForward(messageIdLabel string, trackLabel string, outcome string, elapsed time.Duration) {
 	forwardTotal.WithLabelValues(messageIdLabel, outcome).Inc()
+	forwardByTrackTotal.WithLabelValues(trackLabel, outcome).Inc()
 	forwardSeconds.WithLabelValues(messageIdLabel).Observe(elapsed.Seconds())
 }
 
 // ForwardTotalValue 读回某 (message_id, outcome) 的计数(单测断言用;计数器本身
 // 不导出,避免业务代码绕过 Observe* 直接改指标)。
 func ForwardTotalValue(messageIdLabel string, outcome string) float64 {
+	return counterValue(forwardTotal, messageIdLabel, outcome)
+}
+
+// ForwardByTrackValue 读回某 (release_track, outcome) 的计数(单测断言用,同上)。
+func ForwardByTrackValue(trackLabel string, outcome string) float64 {
+	return counterValue(forwardByTrackTotal, trackLabel, outcome)
+}
+
+func counterValue(vec *prometheus.CounterVec, labels ...string) float64 {
 	var m dto.Metric
-	if err := forwardTotal.WithLabelValues(messageIdLabel, outcome).Write(&m); err != nil {
+	if err := vec.WithLabelValues(labels...).Write(&m); err != nil {
 		return 0
 	}
 	return m.GetCounter().GetValue()

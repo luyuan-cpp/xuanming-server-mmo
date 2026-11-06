@@ -250,10 +250,6 @@ func ticketViews(tickets []*pb.MatchAuthorityTicketRecord) []*pb.StrandedFormati
 	return out
 }
 
-type rowQuerier interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
 // terminalSourceKind 读已有终局行的来源种类(readTerminal 不读这一列,只给展示用)。
 func terminalSourceKind(ctx context.Context, q rowQuerier, battle uint64) (uint32, error) {
 	var source uint32

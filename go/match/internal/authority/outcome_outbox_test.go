@@ -242,13 +242,6 @@ func insertDueSource(t *testing.T, s *Store, battle, player uint64, waiting bool
 	require.NoError(t, err)
 }
 
-func countRows(t *testing.T, s *Store, query string) int {
-	t.Helper()
-	var n int
-	require.NoError(t, s.DB.QueryRowContext(context.Background(), query).Scan(&n))
-	return n
-}
-
 // N 行在 ceil(N/批量) 轮内投完:每轮只认领本类批量那么多行,三类各自独立计名额。
 func TestOutcomeTiDBOutboxDrainsWithinCeilRounds(t *testing.T) {
 	const rows, batch = 5, 2

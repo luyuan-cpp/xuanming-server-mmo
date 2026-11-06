@@ -59,4 +59,6 @@ enum match_error {
 
   kMatchSpectateTicketInvalid = 16024;
 
+  kMatchBattleReportNotFound = 16025;
+
 };

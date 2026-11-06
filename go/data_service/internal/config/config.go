@@ -9,6 +9,7 @@ import (
 	"shared/dbplacement"
 	"shared/dirshard"
 	"shared/playerredis"
+	"shared/redisauth"
 	"shared/rolefence"
 
 	"github.com/zeromicro/go-zero/core/discov"
@@ -35,6 +36,10 @@ type Config struct {
 	// SharedRedis 是控制域:落地唤醒频道 assetop:wake 和去重键,必须和 scene 发布的是同一实例。实例指错的表现是永远收不到唤醒,且不报错。
 	// 只有 Recall.Enabled=true 时才连。
 	SharedRedis SharedRedisConf `json:",optional"`
+	// SharedRedisPasswordEnv 是 NameCacheRedis 与 SharedRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
+	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的口令写空串。不写 = 照用字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 SharedRedis。只有 Recall.Enabled=true 时才连。
 	PlayerRedis playerredis.Config `json:",optional"`
 
@@ -216,6 +221,19 @@ func (c Config) EffectivePlayerRedis() playerredis.Config {
 		ReadTimeoutMs:   recallPlayerRedisFallbackIOTimeoutMs,
 		WriteTimeoutMs:  recallPlayerRedisFallbackIOTimeoutMs,
 	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 NameCacheRedis.Pass 与 SharedRedis.Password,返回填好的副本;规则见 redisauth.Apply。
+// 玩家域没写 Addrs 时回落到 SharedRedis(EffectivePlayerRedis),填完之后用的也是这个口令。
+// -migrate 与发号器运维入口不连 Redis,只在常驻启动时调用(data_service.go)。
+func (c Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) (Config, error) {
+	err := redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "NameCacheRedis.Pass", Password: &c.NameCacheRedis.Pass},
+		redisauth.Target{Field: "SharedRedis.Password", Password: &c.SharedRedis.Password})
+	if err != nil {
+		return Config{}, err
+	}
+	return c, nil
 }
 
 // RoleFenceConfig 是角色护栏协调者的配置(docs/design/horizontal-scale-logical-db.md §3.5)。

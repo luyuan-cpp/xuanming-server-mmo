@@ -92,13 +92,18 @@ func TestEtcYamlPlacementBlockMatchesDefaults(t *testing.T) {
 		t.Fatal("etc/db.yaml must ship the default semantics: store families allowed")
 	}
 	if c.Placement.ZoneStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn ||
-		c.Placement.ZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn ||
-		c.Placement.NonZoneStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn ||
-		c.Placement.NonZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
-		t.Fatalf("etc/db.yaml pools = zone %d/%d nonZone %d/%d, want both %d/%d",
+		c.Placement.ZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
+		t.Fatalf("etc/db.yaml zone store pool = %d/%d, want the default %d/%d",
 			c.Placement.ZoneStoreMaxOpenConn, c.Placement.ZoneStoreMaxIdleConn,
-			c.Placement.NonZoneStoreMaxOpenConn, c.Placement.NonZoneStoreMaxIdleConn,
 			DefaultPlacementExtraStoreMaxOpenConn, DefaultPlacementExtraStoreMaxIdleConn)
+	}
+	// 地域存档库池写的是「本地域只有一个库」时的预算(docs/design/player-data-tidb-scaling-plan.md §7.2,A17b):
+	// 存档库和区脱钩之后全部存盘都走它,所以等于脱钩前本 zone 库那个池的 60 / 20,不是默认的 8 / 2。
+	// K8s 的 ConfigMap 按存档库数摊到每个库(k8s_deploy.ps1 Get-PlayerStorePoolLimit),连接总账读同一个键。
+	const wantNonZoneOpen, wantNonZoneIdle = 60, 20
+	if c.Placement.NonZoneStoreMaxOpenConn != wantNonZoneOpen || c.Placement.NonZoneStoreMaxIdleConn != wantNonZoneIdle {
+		t.Fatalf("etc/db.yaml non-zone store pool = %d/%d, want the single-store budget %d/%d",
+			c.Placement.NonZoneStoreMaxOpenConn, c.Placement.NonZoneStoreMaxIdleConn, wantNonZoneOpen, wantNonZoneIdle)
 	}
 	if c.Placement.ExtraStoreConnMaxIdleSeconds != DefaultPlacementExtraStoreConnMaxIdleSeconds {
 		t.Fatalf("etc/db.yaml ExtraStoreConnMaxIdleSeconds = %d, want %d",

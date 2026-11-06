@@ -47,6 +47,7 @@ const (
 	EquipError_kEquipGemSocketEmpty           EquipError = 28019
 	EquipError_kEquipGemTypeMismatch          EquipError = 28020
 	EquipError_kEquipGemBagFull               EquipError = 28021
+	EquipError_kEquipEnhanceLevelChanged      EquipError = 28022
 )
 
 // Enum value maps for EquipError.
@@ -75,6 +76,7 @@ var (
 		28019: "kEquipGemSocketEmpty",
 		28020: "kEquipGemTypeMismatch",
 		28021: "kEquipGemBagFull",
+		28022: "kEquipEnhanceLevelChanged",
 	}
 	EquipError_value = map[string]int32{
 		"kEquip_errorOK":                 0,
@@ -100,6 +102,7 @@ var (
 		"kEquipGemSocketEmpty":           28019,
 		"kEquipGemTypeMismatch":          28020,
 		"kEquipGemBagFull":               28021,
+		"kEquipEnhanceLevelChanged":      28022,
 	}
 )
 
@@ -134,7 +137,7 @@ var File_equip_error_tip_proto protoreflect.FileDescriptor
 
 const file_equip_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15equip_error_tip.proto*\xf0\x04\n" +
+	"\x15equip_error_tip.proto*\x91\x05\n" +
 	"\vequip_error\x12\x12\n" +
 	"\x0ekEquip_errorOK\x10\x00\x12\x18\n" +
 	"\x12kEquipItemNotFound\x10\xe0\xda\x01\x12\x18\n" +
@@ -158,7 +161,8 @@ const file_equip_error_tip_proto_rawDesc = "" +
 	"\x17kEquipGemSocketOccupied\x10\xf2\xda\x01\x12\x1a\n" +
 	"\x14kEquipGemSocketEmpty\x10\xf3\xda\x01\x12\x1b\n" +
 	"\x15kEquipGemTypeMismatch\x10\xf4\xda\x01\x12\x16\n" +
-	"\x10kEquipGemBagFull\x10\xf5\xda\x01B$\n" +
+	"\x10kEquipGemBagFull\x10\xf5\xda\x01\x12\x1f\n" +
+	"\x19kEquipEnhanceLevelChanged\x10\xf6\xda\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

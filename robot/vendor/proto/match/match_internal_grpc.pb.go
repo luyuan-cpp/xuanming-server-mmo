@@ -19,13 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchInternal_StartActivityBattle_FullMethodName   = "/match.MatchInternal/StartActivityBattle"
-	MatchInternal_CancelActivityBattle_FullMethodName  = "/match.MatchInternal/CancelActivityBattle"
-	MatchInternal_CommitBattleOutcome_FullMethodName   = "/match.MatchInternal/CommitBattleOutcome"
-	MatchInternal_SetSpectateFeatured_FullMethodName   = "/match.MatchInternal/SetSpectateFeatured"
-	MatchInternal_AcquireTrialOccupancy_FullMethodName = "/match.MatchInternal/AcquireTrialOccupancy"
-	MatchInternal_ReleaseTrialOccupancy_FullMethodName = "/match.MatchInternal/ReleaseTrialOccupancy"
-	MatchInternal_GetBattleCompletion_FullMethodName   = "/match.MatchInternal/GetBattleCompletion"
+	MatchInternal_StartActivityBattle_FullMethodName       = "/match.MatchInternal/StartActivityBattle"
+	MatchInternal_CancelActivityBattle_FullMethodName      = "/match.MatchInternal/CancelActivityBattle"
+	MatchInternal_CommitBattleOutcome_FullMethodName       = "/match.MatchInternal/CommitBattleOutcome"
+	MatchInternal_SetSpectateFeatured_FullMethodName       = "/match.MatchInternal/SetSpectateFeatured"
+	MatchInternal_AcquireTrialOccupancy_FullMethodName     = "/match.MatchInternal/AcquireTrialOccupancy"
+	MatchInternal_ReleaseTrialOccupancy_FullMethodName     = "/match.MatchInternal/ReleaseTrialOccupancy"
+	MatchInternal_GetBattleCompletion_FullMethodName       = "/match.MatchInternal/GetBattleCompletion"
+	MatchInternal_GetBattleTerminalDecision_FullMethodName = "/match.MatchInternal/GetBattleTerminalDecision"
+	MatchInternal_ListStrandedFormations_FullMethodName    = "/match.MatchInternal/ListStrandedFormations"
+	MatchInternal_ResolveStrandedFormation_FullMethodName  = "/match.MatchInternal/ResolveStrandedFormation"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -39,6 +42,10 @@ type MatchInternalClient interface {
 	AcquireTrialOccupancy(ctx context.Context, in *AcquireTrialOccupancyRequest, opts ...grpc.CallOption) (*AcquireTrialOccupancyResponse, error)
 	ReleaseTrialOccupancy(ctx context.Context, in *ReleaseTrialOccupancyRequest, opts ...grpc.CallOption) (*ReleaseTrialOccupancyResponse, error)
 	GetBattleCompletion(ctx context.Context, in *GetBattleCompletionRequest, opts ...grpc.CallOption) (*GetBattleCompletionResponse, error)
+	GetBattleTerminalDecision(ctx context.Context, in *GetBattleTerminalDecisionRequest, opts ...grpc.CallOption) (*GetBattleTerminalDecisionResponse, error)
+	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
+	ListStrandedFormations(ctx context.Context, in *ListStrandedFormationsRequest, opts ...grpc.CallOption) (*ListStrandedFormationsResponse, error)
+	ResolveStrandedFormation(ctx context.Context, in *ResolveStrandedFormationRequest, opts ...grpc.CallOption) (*ResolveStrandedFormationResponse, error)
 }
 
 type matchInternalClient struct {
@@ -119,6 +126,36 @@ func (c *matchInternalClient) GetBattleCompletion(ctx context.Context, in *GetBa
 	return out, nil
 }
 
+func (c *matchInternalClient) GetBattleTerminalDecision(ctx context.Context, in *GetBattleTerminalDecisionRequest, opts ...grpc.CallOption) (*GetBattleTerminalDecisionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBattleTerminalDecisionResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_GetBattleTerminalDecision_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) ListStrandedFormations(ctx context.Context, in *ListStrandedFormationsRequest, opts ...grpc.CallOption) (*ListStrandedFormationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStrandedFormationsResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_ListStrandedFormations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) ResolveStrandedFormation(ctx context.Context, in *ResolveStrandedFormationRequest, opts ...grpc.CallOption) (*ResolveStrandedFormationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveStrandedFormationResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_ResolveStrandedFormation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
@@ -130,6 +167,10 @@ type MatchInternalServer interface {
 	AcquireTrialOccupancy(context.Context, *AcquireTrialOccupancyRequest) (*AcquireTrialOccupancyResponse, error)
 	ReleaseTrialOccupancy(context.Context, *ReleaseTrialOccupancyRequest) (*ReleaseTrialOccupancyResponse, error)
 	GetBattleCompletion(context.Context, *GetBattleCompletionRequest) (*GetBattleCompletionResponse, error)
+	GetBattleTerminalDecision(context.Context, *GetBattleTerminalDecisionRequest) (*GetBattleTerminalDecisionResponse, error)
+	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
+	ListStrandedFormations(context.Context, *ListStrandedFormationsRequest) (*ListStrandedFormationsResponse, error)
+	ResolveStrandedFormation(context.Context, *ResolveStrandedFormationRequest) (*ResolveStrandedFormationResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -160,6 +201,15 @@ func (UnimplementedMatchInternalServer) ReleaseTrialOccupancy(context.Context, *
 }
 func (UnimplementedMatchInternalServer) GetBattleCompletion(context.Context, *GetBattleCompletionRequest) (*GetBattleCompletionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBattleCompletion not implemented")
+}
+func (UnimplementedMatchInternalServer) GetBattleTerminalDecision(context.Context, *GetBattleTerminalDecisionRequest) (*GetBattleTerminalDecisionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBattleTerminalDecision not implemented")
+}
+func (UnimplementedMatchInternalServer) ListStrandedFormations(context.Context, *ListStrandedFormationsRequest) (*ListStrandedFormationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListStrandedFormations not implemented")
+}
+func (UnimplementedMatchInternalServer) ResolveStrandedFormation(context.Context, *ResolveStrandedFormationRequest) (*ResolveStrandedFormationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveStrandedFormation not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -308,6 +358,60 @@ func _MatchInternal_GetBattleCompletion_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_GetBattleTerminalDecision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBattleTerminalDecisionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).GetBattleTerminalDecision(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_GetBattleTerminalDecision_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).GetBattleTerminalDecision(ctx, req.(*GetBattleTerminalDecisionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_ListStrandedFormations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStrandedFormationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).ListStrandedFormations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_ListStrandedFormations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).ListStrandedFormations(ctx, req.(*ListStrandedFormationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_ResolveStrandedFormation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveStrandedFormationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).ResolveStrandedFormation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_ResolveStrandedFormation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).ResolveStrandedFormation(ctx, req.(*ResolveStrandedFormationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -342,6 +446,18 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBattleCompletion",
 			Handler:    _MatchInternal_GetBattleCompletion_Handler,
+		},
+		{
+			MethodName: "GetBattleTerminalDecision",
+			Handler:    _MatchInternal_GetBattleTerminalDecision_Handler,
+		},
+		{
+			MethodName: "ListStrandedFormations",
+			Handler:    _MatchInternal_ListStrandedFormations_Handler,
+		},
+		{
+			MethodName: "ResolveStrandedFormation",
+			Handler:    _MatchInternal_ResolveStrandedFormation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

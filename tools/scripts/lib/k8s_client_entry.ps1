@@ -219,6 +219,9 @@ function Get-ClientEntryContract {
 		# 该脚本自己的两个模板(New-CppReleaseTrackEnvLines)与 Go 服务也取这里的名字。只认小写;stable 不写(不设 = stable)。
 		ReleaseTrackEnv            = 'MMORPG_RELEASE_TRACK'
 		ReleaseTracks              = @('stable', 'canary')
+		# 金丝雀 Pod 的标签(发布轨道设计 §5.3):和上面的 env 同一判据,只有 canary 才写,stable 不写(模板逐字不变,不触发滚动)。
+		# 用来 kubectl -l 筛金丝雀 Pod,以及 Prometheus 把它映射成目标标签(没有这个标签 = stable,见 docs/ops/release-track-canary-runbook.md)。
+		ReleaseTrackPodLabel       = 'mmorpg.io/release-track'
 		# gate 出站调用的内部身份签名密钥(cpp/libs/engine/core/security/caller_auth.h kSecretEnv)。gate main.cpp 在它缺失
 		# 或不足 32 字节时拒绝启动,所以两种入口形态都必须带:本库 New-GateStatefulSetYaml(external)与 k8s_deploy.ps1
 		# New-NodeDeploymentYaml 的 gate 分支(podip)都按这三个名字写 secretKeyRef,Apply-Zone 按同名先于 gate 建 Secret。
@@ -811,6 +814,21 @@ function Get-ClientEntryNodeBaseEnv {
 	return ,$entries
 }
 
+# 金丝雀 Pod 的轨道标签行(契约 ReleaseTrackPodLabel),接在调用方 Pod 模板 labels 段最后一行之后(带前导换行)。
+# 与 Get-ClientEntryNodeBaseEnv 写 MMORPG_RELEASE_TRACK 同一判据:只有 canary 才写,缺成员、空串或 stable 返回空串(生成物逐字不变)。
+# 取值校验在 Get-ClientEntryNodeBaseEnv,同一个 PodCommon 两处都会走到。现在只有 gate 的 StatefulSet 用:battle 只在 infra-up 渲染,只会是 stable。
+function Get-ClientEntryReleaseTrackPodLabelLine {
+	param(
+		[Parameter(Mandatory = $true)]$PodCommon,
+		[Parameter(Mandatory = $true)][string]$ItemIndent
+	)
+	$releaseTrack = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ReleaseTrack'))
+	if ($releaseTrack -cne 'canary') {
+		return ''
+	}
+	return "`n${ItemIndent}$((Get-ClientEntryContract).ReleaseTrackPodLabel): canary"
+}
+
 # PodCommon.MetricsPort;缺成员或非正数按 0(不开)。
 function Get-ClientEntryMetricsPort {
 	param([Parameter(Mandatory = $true)]$PodCommon)
@@ -1022,6 +1040,7 @@ function New-GateStatefulSetYaml {
 	$sidecar = Get-ClientEntrySidecarBlocks -PodCommon $PodCommon -KeyIndent '      '
 	# OnDelete:注解(含 zone Redis 口令指纹)变了也不会自动重建 Pod,按 k8s_gate_drain.ps1 逐个排空删 Pod 才换上新模板。
 	$annotationBlock = Get-ClientEntryPodAnnotationBlock -PodCommon $PodCommon -KeyIndent '      '
+	$releaseTrackLabelLine = Get-ClientEntryReleaseTrackPodLabelLine -PodCommon $PodCommon -ItemIndent '        '
 
 	# 就绪探针同 Deployment 版(推导见 New-NodeDeploymentYaml):gate 只有 RpcPort 一个监听口,不加 startup / liveness。
 	return ConvertTo-ClientEntryLf -Text @"
@@ -1041,7 +1060,7 @@ spec:
   template:
     metadata:$annotationBlock
       labels:
-        app: gate
+        app: gate$releaseTrackLabelLine
     spec:
       terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$($sidecar.InitBlock)
       containers:

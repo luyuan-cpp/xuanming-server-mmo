@@ -738,6 +738,30 @@ void TeamFollowSystem::Detach(entt::entity follower, const TeamFollowStopReason 
 	ReleaseFollower(follower, reason);
 }
 
+void TeamFollowSystem::ResendStateAfterEntry(entt::entity player)
+{
+	auto& registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return;
+	}
+	const auto* driven = registry.try_get<TeamFollowerComp>(player);
+	if (driven == nullptr || !registry.valid(driven->leader))
+	{
+		return;
+	}
+	const auto* comp = registry.try_get<TeamFollowFormationComp>(driven->leader);
+	if (comp == nullptr || comp->scene != SceneOf(player))
+	{
+		return;
+	}
+	if (const auto rank = comp->formation.RankOf(GuidOf(player)))
+	{
+		SendFollowState(player, true, driven->leader, static_cast<uint32_t>(*rank + 1),
+			TEAM_FOLLOW_STOP_REASON_UNSPECIFIED);
+	}
+}
+
 void TeamFollowSystem::OnTeamChanged(entt::entity player)
 {
 	if (!tlsEcs.actorRegistry.valid(player))

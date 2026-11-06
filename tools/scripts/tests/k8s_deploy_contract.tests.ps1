@@ -304,9 +304,14 @@ Test-Case '发布轨道:缺省 stable 不写 MMORPG_RELEASE_TRACK,生成物与�
     # 进程不设即 stable(Go shared/releasetrack、C++ release_track.h),stable 一律不写:已有 zone 不会因为引入参数而滚动。
     Assert-NotMatch -Text $devOut -Pattern 'MMORPG_RELEASE_TRACK' -Because 'stable 是缺省,Deployment 模板与 Go 服务都不应写出发布轨道 env'
     Assert-NotMatch -Text $agonesOut -Pattern 'MMORPG_RELEASE_TRACK' -Because 'Agones Fleet 模板同样不应写出'
+    # 轨道标签同一判据(§5.3):stable 不写,Pod 模板不变,已有 zone 不会因为引入标签而滚动。status 命令的 -L 列名不在部署产物里。
+    Assert-NotMatch -Text $devOut -Pattern 'mmorpg\.io/release-track:' -Because 'stable 的 Pod 模板不带轨道标签'
+    Assert-NotMatch -Text $agonesOut -Pattern 'mmorpg\.io/release-track:' -Because 'stable 的 Fleet 同样不带'
 }
 
 $releaseTrackCanaryEnv = '- name: MMORPG_RELEASE_TRACK\s+value: "canary"'
+# C++ 模板与 external gate:轨道标签紧跟在 Pod 模板 labels 的 app 行后面(selector 里的 app 后面不跟它)。
+$releaseTrackCanaryPodLabel = '(?m)^([ \t]+)app: [a-z-]+[ \t]*\n\1mmorpg\.io/release-track: canary[ \t]*$'
 $canaryZoneRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-ReleaseTrack', 'canary'))
 
 Test-Case '发布轨道:zone-up -ReleaseTrack canary 给 gate / scene 与 zone 内 Go 服务写 canary,data-service、player-locator 不重新下发' {
@@ -315,6 +320,7 @@ Test-Case '发布轨道:zone-up -ReleaseTrack canary 给 gate / scene 与 zone �
         $block = Select-CppWorkloadBlock -Output $canaryZoneRun.Output -Kind 'Deployment' -Name $name -Label "canary $name"
         Assert-Match -Text $block -Pattern $releaseTrackCanaryEnv -Because "$name 是 zone 内工作负载,金丝雀 zone 里必须是 canary"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: MMORPG_RELEASE_TRACK').Count) -Because "$name 只能写一份"
+        Assert-Match -Text $block -Pattern $releaseTrackCanaryPodLabel -Because "$name 的 Pod 模板要带轨道标签,紧跟 app 标签"
     }
     foreach ($name in @('login', 'scene-manager', 'db')) {
         $block = @(Get-ManifestBlocks -Output $canaryZoneRun.Output | Where-Object {
@@ -323,6 +329,7 @@ Test-Case '发布轨道:zone-up -ReleaseTrack canary 给 gate / scene 与 zone �
         Assert-True -Condition ($null -ne $block) -Because "金丝雀 zone 的 DryRun 输出里应当有 $name 的 Deployment"
         Assert-Match -Text $block -Pattern $releaseTrackCanaryEnv -Because "$name 跟着 zone 的轨道走"
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: MMORPG_RELEASE_TRACK').Count) -Because "$name 只能注入一份"
+        Assert-Match -Text $block -Pattern '(?m)^      labels:[ \t]*\n        mmorpg\.io/release-track: canary[ \t]*$' -Because "$name 的 Pod 模板 labels 第一行是轨道标签"
     }
     foreach ($name in @('data-service', 'player-locator')) {
         $blocks = @(Get-ManifestBlocks -Output $canaryZoneRun.Output | Where-Object {
@@ -339,8 +346,10 @@ Test-Case '发布轨道:金丝雀 zone 的 Agones Fleet 与 external gate Statef
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "金丝雀 zone(Agones + external)的 DryRun 必须成功。输出: $($run.Output)"
     $fleet = Select-CppWorkloadBlock -Output $run.Output -Kind 'Fleet' -Name 'scene' -Label 'canary scene Fleet'
     Assert-Match -Text $fleet -Pattern $releaseTrackCanaryEnv -Because 'scene Fleet 走本脚本自己的模板,同样要写 canary'
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($fleet, '(?m)^[ \t]+mmorpg\.io/release-track: canary[ \t]*$').Count) -Because 'Fleet 的 GameServer 模板与 Pod 模板各带一处轨道标签,Fleet 自己的 labels 不加'
     $gate = Select-CppWorkloadBlock -Output $run.Output -Kind 'StatefulSet' -Name 'gate' -Label 'canary gate StatefulSet'
     Assert-Match -Text $gate -Pattern $releaseTrackCanaryEnv -Because 'external gate 走 lib 的生成器(PodCommon.ReleaseTrack),同样要写 canary'
+    Assert-Match -Text $gate -Pattern $releaseTrackCanaryPodLabel -Because 'external gate 的 Pod 模板同样带轨道标签'
 }
 
 Test-Case '发布轨道:canary 只能用于 zone-up,取值区分大小写' {
@@ -360,8 +369,9 @@ $canaryInfraArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-Skip
     '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab', '-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
 $canaryInfraEnv = @{ MMORPG_BATTLE_TOKEN_SECRET = 'contract-battle-ticket-0123456789abcdef012345'; MMORPG_GATE_TOKEN_SECRET = 'contract-gate-ticket-0123456789abcdef012345' }
 
-# 带 <ns>/chat-canary 条目的 boot 目录跑一次 DryRun。目录照 Invoke-DeployDryRun 的夹具,给 infra namespace 里写 SQL 的全局服务各一条;
-# 另加 chat-canary:三个 Secret 名与稳定版都不同、副本 1,用来证明金丝雀副本按自己的条目注入,不借稳定版那份。
+# 带 <ns>/chat-canary、<ns>/guild-canary 条目的 boot 目录跑一次 DryRun。目录照 Invoke-DeployDryRun 的夹具,给 infra namespace 里写 SQL 的
+# 全局服务各一条;另加两条金丝雀:三个 Secret 名与稳定版都不同、副本 1,用来证明金丝雀副本按自己的条目注入,不借稳定版那份。
+# chat 的 Pod 模板 labels 是块式,guild 是行内式,两种写法都要覆盖到。
 function Invoke-CanaryCatalogDryRun {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
     $root = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-canary-catalog-' + [Guid]::NewGuid().ToString('N'))
@@ -377,8 +387,10 @@ function Invoke-CanaryCatalogDryRun {
             $catalog["$canaryInfraNamespace/$svc"] = $pinned + @{ requestSecret = 'fixture-request'; registrarSecret = 'fixture-registrar'; runtimeConfigSecret = 'fixture-runtime'
                 replicas = 2; schemaConfigSecret = 'fixture-schema-config'; schemaPermissionSecret = 'fixture-schema-permission' }
         }
-        $catalog["$canaryInfraNamespace/chat-canary"] = $pinned + @{ requestSecret = 'chat-canary-request'; registrarSecret = 'chat-canary-registrar'
-            runtimeConfigSecret = 'chat-canary-runtime'; replicas = 1 }
+        foreach ($svc in @('chat', 'guild')) {
+            $catalog["$canaryInfraNamespace/$svc-canary"] = $pinned + @{ requestSecret = "$svc-canary-request"; registrarSecret = "$svc-canary-registrar"
+                runtimeConfigSecret = "$svc-canary-runtime"; replicas = 1 }
+        }
         $catalogPath = Join-Path $root 'catalog.json'
         [IO.File]::WriteAllText($catalogPath, ($catalog | ConvertTo-Json -Depth 8 -Compress), [Text.UTF8Encoding]::new($false))
         return Invoke-DeployDryRun -Arguments $Arguments -Env ($canaryInfraEnv + @{ MMORPG_SQL_K8S_BOOT_CATALOG = $catalogPath })
@@ -396,11 +408,11 @@ function Select-CanaryTestDeployment {
     })
 }
 
-$canaryGlobalRun = Invoke-CanaryCatalogDryRun -Arguments ($canaryInfraArgs + @('-CanaryServices', 'client-rpc-router,chat', '-CanaryGoSvcTag', 'fedcba987654'))
+$canaryGlobalRun = Invoke-CanaryCatalogDryRun -Arguments ($canaryInfraArgs + @('-CanaryServices', 'client-rpc-router,chat,guild', '-CanaryGoSvcTag', 'fedcba987654'))
 
 Test-Case '发布轨道:infra-up -CanaryServices 给全局服务起 <svc>-canary,换镜像、换 app 标签、写 canary,稳定版不变' {
     Assert-Equal -Expected 0 -Actual $canaryGlobalRun.ExitCode -Because "带金丝雀副本的 infra-up DryRun 必须成功。输出: $($canaryGlobalRun.Output)"
-    foreach ($svc in @('client-rpc-router', 'chat')) {
+    foreach ($svc in @('client-rpc-router', 'chat', 'guild')) {
         $canary = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name "$svc-canary")
         Assert-Equal -Expected 1 -Actual $canary.Count -Because "应当恰好渲染一份 $svc-canary"
         Assert-Match -Text $canary[0] -Pattern "image: registry\.invalid/test/mmorpg-$([regex]::Escape($svc)):fedcba987654" -Because "$svc-canary 跑 -CanaryGoSvcTag 的镜像"
@@ -410,27 +422,31 @@ Test-Case '发布轨道:infra-up -CanaryServices 给全局服务起 <svc>-canary
         Assert-True -Condition ([regex]::Matches($canary[0], "\bapp:[ \t]*$([regex]::Escape($svc))-canary\b").Count -ge 2) -Because "selector 与 Pod 模板都要换成 app: $svc-canary"
         Assert-NotMatch -Text $canary[0] -Pattern "(?m)\bapp:[ \t]*$([regex]::Escape($svc))[ \t]*(\r?$|[,}])" -Because "$svc-canary 不能带稳定版的 app 标签,否则稳定版 Service 会选中它"
         Assert-NotMatch -Text $canary[0] -Pattern '(?m)^kind:[ \t]*(Service|PodDisruptionBudget)[ \t]*$' -Because 'Service、PDB 归稳定版,金丝雀副本只 apply 自己的 Deployment'
+        Assert-Match -Text $canary[0] -Pattern '(?m)(^[ \t]+|[{,][ \t]*)mmorpg\.io/release-track: canary\b' -Because "$svc-canary 的 Pod 模板要带轨道标签(块式与行内式 labels 都要加上)"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($canary[0], 'mmorpg\.io/release-track:').Count) -Because "$svc-canary 只加一处标签,selector 不动"
         $stable = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name $svc)
         Assert-Equal -Expected 1 -Actual $stable.Count -Because "$svc 的稳定版照常渲染"
-        Assert-NotMatch -Text $stable[0] -Pattern 'MMORPG_RELEASE_TRACK|-canary\b' -Because "$svc 的稳定版不写发布轨道 env,也不引用金丝雀的任何东西"
+        Assert-NotMatch -Text $stable[0] -Pattern 'MMORPG_RELEASE_TRACK|mmorpg\.io/release-track|-canary\b' -Because "$svc 的稳定版不写发布轨道 env 与标签,也不引用金丝雀的任何东西"
     }
 }
 
 Test-Case '发布轨道:写 SQL 的服务的金丝雀副本用 <ns>/<svc>-canary 自己的 boot 条目,不借稳定版的 Secret 与名册' {
-    $canary = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name 'chat-canary')
-    Assert-Equal -Expected 1 -Actual $canary.Count -Because '应当恰好渲染一份 chat-canary'
-    foreach ($secret in @('chat-canary-request', 'chat-canary-registrar', 'chat-canary-runtime')) {
-        Assert-Match -Text $canary[0] -Pattern ([regex]::Escape($secret)) -Because "chat-canary 要用自己条目里的 Secret $secret"
+    foreach ($svc in @('chat', 'guild')) {
+        $canary = @(Select-CanaryTestDeployment -Output $canaryGlobalRun.Output -Name "$svc-canary")
+        Assert-Equal -Expected 1 -Actual $canary.Count -Because "应当恰好渲染一份 $svc-canary"
+        foreach ($secret in @("$svc-canary-request", "$svc-canary-registrar", "$svc-canary-runtime")) {
+            Assert-Match -Text $canary[0] -Pattern ([regex]::Escape($secret)) -Because "$svc-canary 要用自己条目里的 Secret $secret"
+        }
+        Assert-NotMatch -Text $canary[0] -Pattern 'fixture-(request|registrar|runtime)\b' -Because '两个 Deployment 共用一份名册会领到同一条 boot,金丝雀不能借稳定版的条目'
+        Assert-Match -Text $canary[0] -Pattern 'mmorpg\.io/sql-writer: "true"' -Because "$svc-canary 的写者 Pod 同样要带回收 CronJob 认的 label"
     }
-    Assert-NotMatch -Text $canary[0] -Pattern 'fixture-(request|registrar|runtime)\b' -Because '两个 Deployment 共用一份名册会领到同一条 boot,金丝雀不能借稳定版的条目'
-    Assert-Match -Text $canary[0] -Pattern '(?m)^\s+mmorpg\.io/sql-writer: "true"\s*$' -Because '金丝雀写者 Pod 同样要带回收 CronJob 认的 label'
 }
 
 Test-Case '发布轨道:可金丝雀却没列出的服务,删掉以前留下的 <svc>-canary(不粘滞)' {
-    foreach ($svc in @('friend', 'guild', 'mail', 'match', 'rank', 'trade')) {
+    foreach ($svc in @('friend', 'mail', 'match', 'rank', 'trade')) {
         Assert-Match -Text $canaryGlobalRun.Output -Pattern "kubectl delete deployment $([regex]::Escape($svc))-canary -n $canaryInfraNamespace --ignore-not-found" -Because "$svc 没列在 -CanaryServices 里,要删掉旧的 $svc-canary"
     }
-    foreach ($svc in @('client-rpc-router', 'chat')) {
+    foreach ($svc in @('client-rpc-router', 'chat', 'guild')) {
         Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern "kubectl delete deployment $([regex]::Escape($svc))-canary\b" -Because "$svc 这次列出了,不能删"
     }
     Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern 'player-inbox-canary' -Because 'player-inbox 不提供金丝雀,不起也不删'
@@ -449,12 +465,38 @@ Test-Case '发布轨道:金丝雀写者缺 <ns>/<svc>-canary 条目或副本数�
     Assert-Equal -Expected 0 -Actual @(Get-ManifestBlocks -Output $mismatch.Output).Count -Because '副本数对不上同样在写操作之前拒绝'
 }
 
-Test-Case '发布轨道:-CanaryServices 只用于部署全局 Go 服务的 infra-up,只收已接好的服务,要带 -CanaryGoSvcTag,不能与 -NetworkPolicies on 同用' {
+Test-Case '发布轨道:Add-PodTemplateLabel 认块式和行内式两种 Pod 模板 labels,清单里已经写了这个键或形状不对就拒绝' {
+    # 纯函数按 AST 抽出来直接调(本文件后面的 $deadlineDeployAst 这时还没解析,这里自己解析一次)。
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
+    Assert-Equal -Expected 0 -Actual $parseErrors.Count -Because '夹具前提:部署脚本能解析'
+    $fn = $ast.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -ceq 'Add-PodTemplateLabel' }, $true)
+    Assert-True -Condition ($null -ne $fn) -Because '部署脚本要有 Add-PodTemplateLabel'
+    Set-Item -Path 'Function:script:Add-PodTemplateLabel' -Value $fn.Body.GetScriptBlock()
+
+    $block = "spec:`n  template:`n    metadata:`n      labels:`n        app: chat`n    spec: {}`n"
+    $out = Add-PodTemplateLabel -SvcName 'chat' -ManifestContent $block -Key 'mmorpg.io/release-track' -Value 'canary'
+    Assert-Match -Text $out -Pattern '(?m)^      labels:\n        mmorpg\.io/release-track: canary\n        app: chat$' -Because '块式:新标签写在 labels 下第一行'
+    $inline = "spec:`n  template:`n    metadata:`n      labels: {app: guild, tier: go-svc}`n    spec: {}`n"
+    $out = Add-PodTemplateLabel -SvcName 'guild' -ManifestContent $inline -Key 'mmorpg.io/release-track' -Value 'canary'
+    Assert-Match -Text $out -Pattern '(?m)^      labels: \{app: guild, tier: go-svc, mmorpg\.io/release-track: canary\}$' -Because '行内式:追加在花括号里'
+    $bad = @(
+        @{ Text = $block.Replace('        app: chat', "        app: chat`n        mmorpg.io/release-track: canary"); Pattern = '已经写了标签'; Why = '块式里已有这个键' }
+        @{ Text = $inline.Replace('tier: go-svc}', 'tier: go-svc, mmorpg.io/release-track: stable}'); Pattern = '已经写了标签'; Why = '行内式里已有这个键' }
+        @{ Text = "spec:`n  template:`n    metadata:`n      annotations: {}`n      labels:`n        app: chat`n"; Pattern = '恰好有一处'; Why = 'labels 不紧跟 template.metadata' }
+    )
+    foreach ($case in $bad) {
+        $message = ''
+        try { $null = Add-PodTemplateLabel -SvcName 'chat' -ManifestContent $case.Text -Key 'mmorpg.io/release-track' -Value 'canary' } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern $case.Pattern -Because "必须拒绝:$($case.Why)"
+    }
+}
+
+Test-Case '发布轨道:-CanaryServices 只用于部署全局 Go 服务的 infra-up,只收已接好的服务,要带 -CanaryGoSvcTag' {
     $cases = @(
         @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'player-inbox', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '还不能起金丝雀副本'; Why = 'player-inbox 没有客户端路由,不提供金丝雀' }
         @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'chat')); Pattern = '需要 -CanaryGoSvcTag'; Why = '金丝雀副本不能沿用稳定版的 tag' }
         @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'chat,chat', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '有重复的服务'; Why = '重复的服务要拒绝' }
-        @{ Args = ($canaryInfraArgs + @('-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654', '-NetworkPolicies', 'on')); Pattern = '不能与 -NetworkPolicies on 同用'; Why = '准入名单还没给 <svc>-canary 打通' }
         @{ Args = ($canaryInfraArgs + @('-SkipGoSvc', '-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '需要本次部署全局 Go 服务'; Why = '不部署全局 Go 服务时金丝雀副本不起也不删,参数等于没生效' }
         @{ Args = ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-CanaryServices', 'chat', '-CanaryGoSvcTag', 'fedcba987654')); Pattern = '只能用于 infra-up'; Why = '全局服务的金丝雀副本部署在 infra namespace' }
     )
@@ -1571,7 +1613,7 @@ Test-Case 'zone Redis 口令生成期保护:未解析 / 非 dev 档为空 / 含�
             )) {
                 $message = ''
                 try { & $probe.Call } catch { $message = $_.Exception.Message }
-                Assert-Match -Text $message -Pattern '含双引号、反斜杠、换行或其它控制字符' -Because "$($bad.Why) / $($probe.Name):值要原样嵌进 YAML 双引号标量,会把 YAML 写坏或被转义静默改写,必须 throw"
+                Assert-Match -Text $message -Pattern '含双引号、反斜杠、换行或其它控制字符' -Because "$($bad.Why) / $($probe.Name):高可用哨兵会把口令原样写进自己的配置文件,这些字符会把它写坏或被转义静默改写,必须 throw"
                 Assert-Match -Text $message -Pattern 'MMORPG_REDIS_PASSWORD' -Because "$($bad.Why) / $($probe.Name):报错要点名变量"
                 Assert-True -Condition (-not $message.Contains($bad.Value)) -Because "$($bad.Why) / $($probe.Name):拒绝路径只点变量名,不回显口令值"
             }
@@ -1781,7 +1823,7 @@ Test-Case '负向:MMORPG_REDIS_PASSWORD 含双引号时在任何写操作之前�
     $env2 = @{} + $ProdEnv
     $env2['MMORPG_REDIS_PASSWORD'] = $badPassword
     $run = Invoke-DeployDryRun -Arguments $ProdArgs -Env $env2
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because '口令含双引号必须阻断:它要原样写进多份 YAML 双引号标量'
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because '口令含双引号必须阻断:高可用哨兵会把口令原样写进自己的配置文件'
     Assert-Match -Text $run.Output -Pattern '含双引号、反斜杠、换行或其它控制字符' -Because '错误要说清是字符集问题'
     Assert-Match -Text $run.Output -Pattern 'MMORPG_REDIS_PASSWORD' -Because '错误要点名变量'
     Assert-True -Condition (-not ([string]$run.Output).Contains($badPassword)) -Because '拒绝路径不回显口令值'
@@ -2010,13 +2052,16 @@ Test-Case '「不写即关」的前提:jar 内 gate.rate-limit.enabled 与 login
     Assert-True -Condition ($queueConf.Groups['body'].Value -cmatch ('(?m)^\s*Enabled\s+bool\s+' + [regex]::Escape('`json:"Enabled,default=false"`'))) -Because 'QueueConf.Enabled 的 go-zero 缺省必须是 false'
 }
 
-Test-Case 'staging / prod 的 gateway 带 spring.data.redis.password 且 == MMORPG_REDIS_PASSWORD;dev 无 Redis 口令时不写' {
-    # Bucket4j 的 Lettuce 客户端只从 spring.data.redis.password 取口令;release 档 Redis 带 --requirepass,不写口令 = 限流的 Redis
-    # 调用过不了认证(见 k8s_deploy.ps1 New-JavaSvcConfigMapYaml)。只看口令是否非空,与限流开关无关。测试不回显口令值。
+Test-Case 'staging / prod 的 gateway 带 spring.data.redis.password,值只是对 SHARED_REDIS_PASSWORD 的引用;dev 无 Redis 口令时不写' {
+    # 限流专用的 Lettuce 客户端只从 spring.data.redis.password 取口令;release 档 Redis 带 --requirepass,不写 = 限流的 Redis 调用过不了认证
+    # (见 k8s_deploy.ps1 New-JavaSvcConfigMapYaml)。2026-11-06 起只写对容器环境变量的引用,口令经 Secret redis-auth 注入(注入与指纹由本文件
+    # 「Go 服务与 gateway 的共享 Redis 口令」一节核)。只看口令是否非空,与限流开关无关。测试不回显口令值。
     foreach ($case in @(@{ Label = 'staging'; Run = $peakStagingRun }, @{ Label = 'prod'; Run = $prodRun })) {
-        $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Run.Output -Name 'java-svc-gateway-config')
+        $block = Select-ManifestByName -Output $case.Run.Output -Name 'java-svc-gateway-config'
+        $flat = ConvertTo-FlatManifest -Block $block
         $password = Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.spring.data.redis.password'
-        Assert-True -Condition ($password -ceq $ProdEnv.MMORPG_REDIS_PASSWORD) -Because "$($case.Label) 档 gateway 的 Redis 口令必须来自 MMORPG_REDIS_PASSWORD(与 go-svc ConfigMap 同一个值)"
+        Assert-True -Condition ($password -ceq '${SHARED_REDIS_PASSWORD}') -Because "$($case.Label) 档 gateway 的 spring.data.redis.password 只能逐字(区分大小写)是对容器环境变量 SHARED_REDIS_PASSWORD 的引用"
+        Assert-True -Condition (-not $block.Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because "$($case.Label) 档 gateway 的 ConfigMap 里不得出现 Redis 口令明文"
     }
     Assert-Equal -Expected 0 -Actual $peakDevOnRun.ExitCode -Because "dev 档显式开削峰的 DryRun 应当成功。输出: $($peakDevOnRun.Output)"
     $devFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $peakDevOnRun.Output -Name 'java-svc-gateway-config')
@@ -2253,8 +2298,16 @@ Test-Case 'gateway 削峰指纹随 Redis 口令变化(轮换口令自动滚动 g
     $baseline = Get-PeakShavingAnnotation -Output $prodRun.Output -Workload 'gateway' -Label 'prod 基线'
     Assert-True -Condition ($rotated.Peak -ne $baseline.Peak) -Because "Redis 口令变了,gateway 削峰指纹必须变(两者都是 $($baseline.Peak))"
     Assert-Equal -Expected $baseline.AdminKey -Actual $rotated.AdminKey -Because '管理面口令没变,口令指纹必须不变(两条注解各管各的输入)'
-    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $peakGwRedisRotRun.Output -Name 'java-svc-gateway-config')
-    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.spring.data.redis.password') -ceq $PeakRotatedRedisPassword) -Because 'ConfigMap 里的 Redis 口令必须是换过的新值(与指纹同一份输入)'
+    # 2026-11-06 起口令不进 ConfigMap:只换口令时 gateway 的 ConfigMap 逐字不变,gateway 换上新口令只靠 Pod 模板上的指纹 —— 上面的削峰指纹
+    # (输入含口令,只在限流开时有)与只哈希口令的 mmorpg.io/shared-redis-auth-hash(与限流开关无关)。
+    $rotatedCm = Select-ManifestByName -Output $peakGwRedisRotRun.Output -Name 'java-svc-gateway-config'
+    Assert-True -Condition (-not $rotatedCm.Contains($PeakRotatedRedisPassword)) -Because 'gateway ConfigMap 里不得出现新口令明文'
+    Assert-True -Condition (($rotatedCm -replace "`r`n", "`n") -ceq ((Select-ManifestByName -Output $prodRun.Output -Name 'java-svc-gateway-config') -replace "`r`n", "`n")) -Because '只换口令时 gateway ConfigMap 与换之前逐字相同:滚动只能来自 Pod 模板上的指纹'
+    $sharedHashPattern = 'mmorpg\.io/shared-redis-auth-hash: "(?<h>[0-9a-f]{12})"'
+    $rotatedShared = [regex]::Match((Select-ManifestByName -Output $peakGwRedisRotRun.Output -Name 'gateway'), $sharedHashPattern)
+    $baselineShared = [regex]::Match((Select-ManifestByName -Output $prodRun.Output -Name 'gateway'), $sharedHashPattern)
+    Assert-True -Condition ($rotatedShared.Success -and $baselineShared.Success) -Because '带口令时 gateway 的 Pod 模板必须带共享 Redis 口令指纹'
+    Assert-True -Condition ($rotatedShared.Groups['h'].Value -ne $baselineShared.Groups['h'].Value) -Because "共享 Redis 口令指纹必须随口令变(两者都是 $($baselineShared.Groups['h'].Value)):限流关着时它是唯一让 gateway 换上新口令的信号"
 }
 
 Test-Case 'gateway 削峰指纹随 rate-limit 段文本变化(只改 -GatewayTrustedProxies,密钥不变,也要自动滚动 gateway)' {
@@ -6293,7 +6346,7 @@ Test-Case 'scene 的 gRPC 口准入:目标 = 三种 scene 池,放行名单逐字
     Assert-True -Condition ($null -ne $policy) -Because '打开时 zone 里要有 scene-grpc-allowlist'
     $shape = Get-GrpcAllowListShape -Block $policy
     Assert-Equal -Expected 'scene,scene-world,scene-instance' -Actual ($shape.TargetApps -join ',') -Because 'legacy 单池与拆分两池都要被选中'
-    Assert-Equal -Expected 'scene-manager,match,player-inbox,guild,trade,mail,data-service' -Actual ($shape.AllowedApps -join ',') -Because '调用方名单(k8s_deploy.ps1 $script:GrpcAllowLists 注释里的调用点);增删要同时改这里'
+    Assert-Equal -Expected 'scene-manager,match,player-inbox,guild,trade,mail,data-service,match-canary,guild-canary,trade-canary,mail-canary' -Actual ($shape.AllowedApps -join ',') -Because '调用方名单(k8s_deploy.ps1 $script:GrpcAllowLists 注释里的调用点),后面固定补上能起金丝雀的调用方的 <app>-canary(Get-ReleaseTrackAppLabels);增删要同时改这里'
     $scene = Select-ManifestByName -Output $devOut -Name 'scene'
     $grpcDeclared = [regex]::Match($scene, 'containerPort: (?<p>\d+)\s+name: grpc')
     Assert-True -Condition $grpcDeclared.Success -Because '夹具前提:scene Deployment 声明了 grpc 口'
@@ -6337,14 +6390,15 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
     Assert-Match -Text $tradeEmbedded -Pattern '(?m)^  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE\s*$' -Because 'SecretEnv 必须是部署侧注入的变量名'
     $policies = @(
         # data-service 是协调者(PrepareRoleFreeze、ApplyRoleFence),mail 读玩家所在的帮(GuildRpc)。
-        @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail'; Port = 50300 }
-        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance'; Port = 50500 }
+        # 名单后面固定补上能起金丝雀的调用方的 <app>-canary(发布轨道设计 §5.3,Get-ReleaseTrackAppLabels)。
+        @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail,client-rpc-router-canary,mail-canary'; Port = 50300 }
+        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance,client-rpc-router-canary,guild-canary'; Port = 50500 }
     )
     foreach ($p in $policies) {
         $policy = Select-ManifestByName -Output $out -Name $p.Name
         Assert-True -Condition ($null -ne $policy) -Because "打开时 infra 里要有 $($p.Name)"
         $shape = Get-GrpcAllowListShape -Block $policy
-        Assert-Equal -Expected $p.Svc -Actual ($shape.TargetApps -join ',') -Because '策略只选中本服务'
+        Assert-Equal -Expected "$($p.Svc),$($p.Svc)-canary" -Actual ($shape.TargetApps -join ',') -Because '策略只选中本服务和它的金丝雀副本'
         Assert-Equal -Expected $p.Allowed -Actual ($shape.AllowedApps -join ',') -Because "$($p.Svc) 的 gRPC 调用方名单;增删要同时改这里"
         Assert-Equal -Expected $p.Port -Actual $shape.GrpcPort -Because 'gRPC 口取 $GoSvcCatalogue 的 Port'
         $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) "deploy/k8s/manifests/go-svc/$($p.Svc).yaml"))
@@ -6353,6 +6407,17 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         $policyAt = $out.IndexOf("name: $($p.Name)")
         $deployAt = Get-WorkloadOffset -Output $out -Kind 'Deployment' -Name $p.Svc
         Assert-True -Condition ($policyAt -ge 0 -and $deployAt -ge 0 -and $policyAt -lt $deployAt) -Because '策略先于 Deployment'
+    }
+}
+
+Test-Case '发布轨道:-NetworkPolicies on 时也能起全局服务的金丝雀副本,准入策略选中并放行 <svc>-canary' {
+    $run = Invoke-DeployDryRun -Arguments ($guildInfraArgs + $assetOpBoth + @('-CanaryServices', 'client-rpc-router', '-CanaryGoSvcTag', 'fedcba987654')) -Env $assetInfraEnv
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "开着准入策略起金丝雀副本必须成功。输出: $($run.Output)"
+    $canary = @(Get-ManifestBlocks -Output $run.Output | Where-Object { $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch '(?m)^  name: client-rpc-router-canary\s*$' })
+    Assert-Equal -Expected 1 -Actual $canary.Count -Because '应当恰好渲染一份 client-rpc-router-canary'
+    foreach ($name in @('guild-grpc-allowlist', 'match-grpc-allowlist')) {
+        $shape = Get-GrpcAllowListShape -Block (Select-ManifestByName -Output $run.Output -Name $name)
+        Assert-True -Condition ($shape.AllowedApps -ccontains 'client-rpc-router-canary') -Because "$name 要放行路由服的金丝雀副本,金丝雀会话的请求才进得来"
     }
 }
 
@@ -6644,6 +6709,318 @@ Test-Case 'Java 服务缺 manifest(目录里的 auth)时连 ConfigMap 也不 app
     foreach ($case in @(@{ Label = 'dev'; Output = $devOut }, @{ Label = 'prod'; Output = $prodRun.Output })) {
         Assert-NotMatch -Text $case.Output -Pattern 'java-svc-auth-config' -Because "$($case.Label):没有 Deployment 消费的孤儿 ConfigMap 不该 apply(与 Apply-OneGoSvc 同口径)"
     }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Go 服务与 gateway 的共享 Redis 口令(2026-11-06 起经 Secret 下发,与 3a 节 C++ 节点同一条标准)
+# ─────────────────────────────────────────────────────────────────
+# 设计:docs/handoff/handoff-global-singletons-p0-20261015.md §9。Go 服务 ConfigMap 里共享 Redis 段(核心 / queue / ctl 实例,同一个口令)
+# 的 Pass / Password 恒写空串;口令非空时末尾多一行顶层 SharedRedisPasswordEnv: SHARED_REDIS_PASSWORD,服务启动时 go/shared/redisauth
+# 据此填各段。容器经 secretKeyRef 从本 namespace 的 Secret redis-auth 拿 SHARED_REDIS_PASSWORD(不写 optional),Pod 模板带只哈希口令的
+# 指纹注解 mmorpg.io/shared-redis-auth-hash(换口令即滚动)。gateway 的 spring.data.redis.password 只写 "${SHARED_REDIS_PASSWORD}";
+# mail 早已走 Secret,只补指纹。dev 不注入口令时这些都不写,产物与改动前逐字相同。
+# 复用 $prodRun(zone 级服务与 gateway,prod 带口令)、$devOut 与 $guildInfraRun(dev 无口令);另起 1 个 DryRun:dev 档带口令的 infra-up
+# (参数同 $guildInfraArgs),覆盖全局服务 —— infra-up 的 DryRun 按「已有 zone」把它们的 Deployment 一并渲染。换口令后 gateway 的滚动在 3b 节
+# 「gateway 削峰指纹随 Redis 口令变化」里断言。注入与注解的函数按 AST 抽出来直接调(同 3a)。断言一律不回显口令值(比较用 -ceq / Contains)。
+$sharedRedisFunctionNames = @('Add-PodTemplateAnnotation', 'Add-PodTemplateAnnotationEntry', 'Get-SharedRedisClientPassword',
+    'Add-SharedRedisAuthToManifest', 'Add-GoSvcSecretEnv', 'Get-SqlRuntimeManifestRange')
+foreach ($sharedRedisFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    if ($sharedRedisFunctionNames -contains $sharedRedisFnAst.Name) {
+        Set-Item -Path "Function:script:$($sharedRedisFnAst.Name)" -Value $sharedRedisFnAst.Body.GetScriptBlock()
+    }
+}
+foreach ($sharedRedisFnName in $sharedRedisFunctionNames) {
+    if (-not (Test-Path "Function:$sharedRedisFnName")) { throw "k8s_deploy.ps1 缺少函数 $sharedRedisFnName(共享 Redis 口令的注入 / 指纹被删了?后续断言无意义)" }
+}
+# 被抽出来的函数按 $script: 读这两个常量(Secret 名 / 键与 Get-InjectedSecretFingerprint、Assert-RedisPasswordYamlSafe 已由 3a 装好)。
+$SharedRedisVars = [ordered]@{}
+foreach ($sharedRedisVarName in @('SharedRedisPasswordEnv', 'SharedRedisAuthHashAnnotation')) {
+    $SharedRedisVars[$sharedRedisVarName] = Get-ZoneRedisScriptVar -Name $sharedRedisVarName
+    Set-Variable -Name $sharedRedisVarName -Value $SharedRedisVars[$sharedRedisVarName] -Scope Script
+}
+$SharedRedisEnvName = $SharedRedisVars.SharedRedisPasswordEnv
+$SharedRedisHashKey = $SharedRedisVars.SharedRedisAuthHashAnnotation
+
+# k8s_deploy.ps1 里 `$script:<名字> = @('a', 'b')` 的元素(按 AST 读,不在测试里抄一遍)。找不到或右边没有字符串字面量即 throw。
+function Get-SharedRedisScriptList {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    $assigns = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq "`$script:$Name" }, $true))
+    if ($assigns.Count -ne 1) { throw "k8s_deploy.ps1 里 `$script:$Name 应恰好赋值 1 次,实际 $($assigns.Count) 次" }
+    $items = @($assigns[0].Right.FindAll({ param($a) $a -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true) | ForEach-Object { $_.Value })
+    if ($items.Count -eq 0) { throw "`$script:$Name 的右边不是字符串数组" }
+    return $items
+}
+
+# 有共享 Redis 段的 Go 服务,与各段在 ConfigMap(data.<文件名>. 之下)里的口令键。这张表是契约:与 k8s_deploy.ps1 的 $script:SharedRedisAuthGoServices
+# 逐项一致(下面第一条用例核);新增连共享 Redis 的服务要两边同加,并在 go/<服务> 里接 shared/redisauth。Zone = $true 的在 zone-up($prodRun)里渲染,
+# 其余是全局服务,在 infra-up 里渲染。OptionalKeys 只在特定参数下出现(login 的 Node.QueueRedis 只在 -RedisSplit queue 时写),出现了同样核。
+$SharedRedisServices = [ordered]@{
+    'login'          = [pscustomobject]@{ Zone = $true;  File = 'login.yaml';                 PasswordKeys = @('Node.RedisClient.Password'); OptionalKeys = @('Node.QueueRedis.Password') }
+    'data-service'   = [pscustomobject]@{ Zone = $true;  File = 'data_service.yaml';          PasswordKeys = @('NameCacheRedis.Pass', 'SharedRedis.Password'); OptionalKeys = @() }
+    'player-locator' = [pscustomobject]@{ Zone = $true;  File = 'player_locator.yaml';        PasswordKeys = @('RedisClient.Password'); OptionalKeys = @() }
+    'scene-manager'  = [pscustomobject]@{ Zone = $true;  File = 'scene_manager_service.yaml'; PasswordKeys = @('Redis.Pass', 'CoreRedis.Pass'); OptionalKeys = @() }
+    'match'          = [pscustomobject]@{ Zone = $false; File = 'match_service.yaml';         PasswordKeys = @('Redis.Pass'); OptionalKeys = @() }
+    'trade'          = [pscustomobject]@{ Zone = $false; File = 'trade.yaml';                 PasswordKeys = @('SharedRedis.Password'); OptionalKeys = @() }
+    'friend'         = [pscustomobject]@{ Zone = $false; File = 'friend.yaml';                PasswordKeys = @('Redis.Pass'); OptionalKeys = @() }
+    'player-inbox'   = [pscustomobject]@{ Zone = $false; File = 'player_inbox.yaml';          PasswordKeys = @('CoreRedis.Password'); OptionalKeys = @() }
+    'guild'          = [pscustomobject]@{ Zone = $false; File = 'guild.yaml';                 PasswordKeys = @('RedisClient.Password', 'PlayerLocatorRedis.Password'); OptionalKeys = @() }
+}
+
+# DryRun 输出里 kind: Deployment、metadata.name = -Name 的那一份文档(manifest 块按 --- 切开)。不是恰好 1 份即 throw。
+function Select-SharedRedisDeploymentDoc {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $namePattern = '(?m)^  name:[ \t]*' + [regex]::Escape($Name) + '[ \t]*$'
+    $docs = @(foreach ($block in (Get-ManifestBlocks -Output $Output)) {
+            foreach ($doc in (($block -replace "`r`n", "`n") -split '(?m)^---[ \t]*$')) {
+                if ($doc -cmatch '(?m)^kind:[ \t]*Deployment[ \t]*$' -and $doc -cmatch $namePattern) { $doc }
+            }
+        })
+    if ($docs.Count -ne 1) { throw "${Label}:DryRun 输出里 Deployment/$Name 应恰好 1 份,实际 $($docs.Count) 份" }
+    return $docs[0]
+}
+
+# Pod 模板上的共享 Redis 口令指纹。没有该注解返回 $null;有则必须恰好 1 处,在 Pod 模板 metadata 下唯一的 annotations: 段里(Deployment 的
+# Pod 模板 metadata 子键在第 6 列,注解在第 8 列;段内其余行可以是别的注解或生成说明注释),值为加双引号的 12 位小写十六进制,否则 throw。
+function Get-SharedRedisAuthHash {
+    param(
+        [Parameter(Mandatory = $true)][string]$Doc,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $text = $Doc -replace "`r`n", "`n"
+    $count = [regex]::Matches($text, [regex]::Escape($SharedRedisHashKey)).Count
+    if ($count -eq 0) { return $null }
+    if ($count -ne 1) { throw "${Label}:共享 Redis 口令指纹注解应恰好 1 处,实际 $count 处" }
+    if ([regex]::Matches($text, '(?m)^      annotations:[ ]*$').Count -ne 1) { throw "${Label}:Pod 模板只能有一个 annotations: 段(重复的键各解析器行为不一)" }
+    $m = [regex]::Match($text, '(?m)^      annotations:[ ]*\n(?:        [^\n]*\n)*?        ' + [regex]::Escape($SharedRedisHashKey) + ': "(?<hash>[0-9a-f]{12})"[ ]*$')
+    if (-not $m.Success) { throw "${Label}:共享 Redis 口令指纹必须在 Pod 模板的 annotations: 段里,值为加双引号的 12 位小写十六进制" }
+    return $m.Groups['hash'].Value
+}
+
+# Deployment 里 SHARED_REDIS_PASSWORD 的注入:恰好一条,经 secretKeyRef 引用本 namespace 的 Secret redis-auth 的 password 键,
+# 不写 optional(缺 Secret 要卡在 CreateContainerConfigError,不能带着空口令起来),也不写明文 value。
+function Assert-SharedRedisEnvRef {
+    param(
+        [Parameter(Mandatory = $true)][string]$Doc,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $text = $Doc -replace "`r`n", "`n"
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, '(?m)^[ ]*- name: ' + $SharedRedisEnvName + '[ ]*$').Count) -Because "${Label}:$SharedRedisEnvName 只能注入一份"
+    $pattern = '(?m)^[ ]*- name: ' + $SharedRedisEnvName + '[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef:[ ]*\n[ ]+name: ' +
+        [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + '[ ]*\n[ ]+key: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '[ ]*\n(?![ ]+optional:)'
+    Assert-True -Condition ($text -cmatch $pattern) -Because "${Label}:$SharedRedisEnvName 必须 secretKeyRef 到本 namespace 的 Secret $($ZoneRedisSecretVars.RedisAuthSecretName) 的 $($ZoneRedisSecretVars.RedisAuthSecretKey) 键,且不写 optional"
+}
+
+# 一个服务 ConfigMap 里的共享 Redis 段:口令键全是空串;-EnvName 为空 = 不该有顶层 SharedRedisPasswordEnv,否则必须逐字等于它。
+function Assert-SharedRedisConfigMap {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory = $true)][string]$SvcName,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$EnvName,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $spec = $SharedRedisServices[$SvcName]
+    $prefix = "data.$($spec.File)."
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $Output -Name "go-svc-$SvcName-config")
+    $keys = @($spec.PasswordKeys) + @($spec.OptionalKeys | Where-Object { $flat.Scalars.Contains($prefix + $_) })
+    foreach ($key in $keys) {
+        Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath ($prefix + $key)) -ceq '') -Because "${Label}:$SvcName 的 $key 必须是空串,口令不进 ConfigMap"
+    }
+    $envKey = $prefix + 'SharedRedisPasswordEnv'
+    if ([string]::IsNullOrEmpty($EnvName)) {
+        Assert-True -Condition (-not $flat.Scalars.Contains($envKey)) -Because "${Label}:$SvcName 口令为空时不写 SharedRedisPasswordEnv(产物与改动前逐字相同)"
+    }
+    else {
+        Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath $envKey) -ceq $EnvName) -Because "${Label}:$SvcName 的 SharedRedisPasswordEnv 必须指名 Deployment 注入的 $EnvName"
+    }
+}
+
+# 一份最小 manifest(Pod 模板手写了注解段,同 data-service / match 等):给 Add-SharedRedisAuthToManifest 的单测与期望指纹用。
+# 期望指纹在它上面算,DryRun 里各服务与 gateway 的指纹都等于它,就说明指纹只由口令决定、与真实 manifest 的其余内容无关。
+$SharedRedisSampleManifest = (@(
+        'apiVersion: apps/v1'
+        'kind: Deployment'
+        'metadata:'
+        '  name: sample'
+        'spec:'
+        '  template:'
+        '    metadata:'
+        '      labels:'
+        '        app: sample'
+        '      annotations:'
+        '        prometheus.io/scrape: "true"'
+        '        prometheus.io/path: /metrics'
+        '    spec:'
+        '      containers:'
+        '        - name: sample'
+        '          image: registry.invalid/sample:1'
+        '          env:'
+        '            - name: POD_IP'
+        '              valueFrom:'
+        '                fieldRef: {fieldPath: status.podIP}'
+    ) -join "`n") + "`n"
+
+# 在 -ReleaseProfileValue 档、口令 -Password 下调抽出来的 Add-SharedRedisAuthToManifest。脚本级口令用完即删(同 3a 的 Get-ExpectedZoneRedisAuthHash);
+# $ReleaseProfile 按动态作用域给。
+function Invoke-SharedRedisAuthRender {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Password,
+        [Parameter(Mandatory = $true)][string]$ReleaseProfileValue,
+        [Parameter(Mandatory = $true)][string]$Manifest,
+        [switch]$HashOnly
+    )
+    try {
+        $script:RedisPassword = $Password
+        $ReleaseProfile = $ReleaseProfileValue
+        return Add-SharedRedisAuthToManifest -SvcName 'sample' -ManifestContent $Manifest -HashOnly:$HashOnly
+    }
+    finally {
+        Remove-Variable -Name RedisPassword -Scope Script -ErrorAction SilentlyContinue
+    }
+}
+
+# dev 档带口令的 infra-up(参数同 $guildInfraArgs):全局服务的 ConfigMap 与 Deployment 都在里面。
+$SharedRedisInfraPassword = 'contract-shared-redis-pw-11'
+$sharedRedisInfraRun = Invoke-DeployDryRun -Arguments $guildInfraArgs -Env ($BattleTestEnv + @{ MMORPG_REDIS_PASSWORD = $SharedRedisInfraPassword })
+
+Test-Case '共享 Redis 口令:契约表与 k8s_deploy.ps1 的两份服务名单一致(新增连共享 Redis 的服务要两边同加)' {
+    Assert-Equal -Expected (@($SharedRedisServices.Keys | Sort-Object) -join ',') -Actual (@(Get-SharedRedisScriptList -Name 'SharedRedisAuthGoServices' | Sort-Object) -join ',') -Because '注入名单与本节的口令键契约表必须是同一批服务:漏一个,它的 ConfigMap 写了空口令却没人给它注入'
+    Assert-Equal -Expected 'mail' -Actual (@(Get-SharedRedisScriptList -Name 'SharedRedisAuthHashOnlyGoServices') -join ',') -Because '只补指纹的只有 mail:它的 manifest 自带对 redis-auth 的可选引用'
+}
+
+Test-Case 'Add-PodTemplateAnnotationEntry:已有 annotations: 段就追加到段末,没有就新建;同名键、流式写法拒绝;CRLF 保持' {
+    $lf = $SharedRedisSampleManifest
+    $out = Add-PodTemplateAnnotationEntry -SvcName 'sample' -ManifestContent $lf -Key 'mmorpg.io/sample-hash' -Value 'abc123abc123'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, '(?m)^      annotations:[ ]*$').Count) -Because '追加不能另起第二个 annotations: 段'
+    Assert-True -Condition ($out -cmatch '(?m)^        prometheus\.io/path: /metrics\n        #[^\n]*\n        mmorpg\.io/sample-hash: "abc123abc123"\n    spec:') -Because '新键追加在段内最后一行之后(前面一行生成说明),与段内已有的键同缩进,值加双引号'
+    $stripped = (@($out -split "`n") | Where-Object { $_ -notmatch 'mmorpg\.io/sample-hash|Add-PodTemplateAnnotationEntry' }) -join "`n"
+    Assert-True -Condition ($stripped -ceq $lf) -Because '除新增的说明行与注解行外,原文逐字不变'
+
+    $noBlock = $lf -replace '(?m)^      annotations:\n(?:        [^\n]*\n)+', ''
+    Assert-True -Condition ($noBlock -notmatch 'annotations:') -Because '夹具前提:这一份没有 annotations: 段'
+    $created = Add-PodTemplateAnnotationEntry -SvcName 'sample' -ManifestContent $noBlock -Key 'mmorpg.io/sample-hash' -Value 'abc123abc123'
+    Assert-True -Condition ($created -cmatch '(?m)^      annotations:\n        mmorpg\.io/sample-hash: "abc123abc123"$') -Because '没有段时交给 Add-PodTemplateAnnotation 新建一段,新键在 annotations: 的下一行'
+
+    $message = $null
+    try { Add-PodTemplateAnnotationEntry -SvcName 'sample' -ManifestContent $out -Key 'mmorpg.io/sample-hash' -Value 'def456def456' | Out-Null } catch { $message = $_.Exception.Message }
+    Assert-True -Condition ($null -ne $message -and $message.Contains('mmorpg.io/sample-hash')) -Because '段里已有同名键必须拒绝并点名(一处真相),不能写出重复键'
+    $flow = $lf -replace '(?m)^      annotations:\n(?:        [^\n]*\n)+', "      annotations: {prometheus.io/scrape: `"true`"}`n"
+    $message = $null
+    try { Add-PodTemplateAnnotationEntry -SvcName 'sample' -ManifestContent $flow -Key 'mmorpg.io/sample-hash' -Value 'abc123abc123' | Out-Null } catch { $message = $_.Exception.Message }
+    Assert-True -Condition ($null -ne $message -and $message.Contains('块式')) -Because '流式写法的 annotations 不猜怎么合并,直接拒绝'
+
+    $crlfOut = Add-PodTemplateAnnotationEntry -SvcName 'sample' -ManifestContent ($lf -replace "`n", "`r`n") -Key 'mmorpg.io/sample-hash' -Value 'abc123abc123'
+    Assert-True -Condition (-not ($crlfOut -replace "`r`n", '').Contains("`n")) -Because 'CRLF 的 manifest 里新增的行同样用 CRLF'
+}
+
+Test-Case 'Add-SharedRedisAuthToManifest:口令为空原样返回;有口令注入 secretKeyRef 与指纹,-HashOnly 只写指纹;指纹只由口令决定;生成期保护 fail-closed' {
+    $lf = $SharedRedisSampleManifest
+    Assert-True -Condition ((Invoke-SharedRedisAuthRender -Password '' -ReleaseProfileValue 'dev' -Manifest $lf) -ceq $lf) -Because 'dev 未注入:manifest 逐字不变(不注入、不写指纹)'
+    $password = 'contract-shared-redis-unit-01'
+    $out = Invoke-SharedRedisAuthRender -Password $password -ReleaseProfileValue 'prod' -Manifest $lf
+    Assert-SharedRedisEnvRef -Doc $out -Label '最小 manifest'
+    $hash = Get-SharedRedisAuthHash -Doc $out -Label '最小 manifest'
+    Assert-True -Condition ($null -ne $hash) -Because '有口令必须写指纹'
+    Assert-True -Condition (-not $out.Contains($password)) -Because 'manifest 里只有 Secret 引用与指纹,不出现口令明文'
+    $otherManifest = $lf.Replace('prometheus.io/path: /metrics', 'prometheus.io/path: /other')
+    Assert-Equal -Expected $hash -Actual (Get-SharedRedisAuthHash -Doc (Invoke-SharedRedisAuthRender -Password $password -ReleaseProfileValue 'dev' -Manifest $otherManifest) -Label '同口令另一份 manifest') -Because '指纹只由口令决定:与档位、manifest 其余内容无关(否则无关改动也会滚动)'
+    $rotated = Get-SharedRedisAuthHash -Doc (Invoke-SharedRedisAuthRender -Password 'contract-shared-redis-unit-02' -ReleaseProfileValue 'prod' -Manifest $lf) -Label '换口令'
+    Assert-True -Condition ($rotated -ne $hash) -Because "换口令指纹必须变(两者都是 $hash),否则只改 Secret 不会滚动"
+    $hashOnly = Invoke-SharedRedisAuthRender -Password $password -ReleaseProfileValue 'prod' -Manifest $lf -HashOnly
+    Assert-True -Condition (-not $hashOnly.Contains("name: $SharedRedisEnvName")) -Because '-HashOnly(mail)不注入 SHARED_REDIS_PASSWORD'
+    Assert-Equal -Expected $hash -Actual (Get-SharedRedisAuthHash -Doc $hashOnly -Label '-HashOnly') -Because '-HashOnly 写同一个指纹'
+    # 生成期保护(纵深防御,写路径入口的 Resolve-InjectedSecret 已先拒):未解析、非 dev 档为空、字符集不合格一律 throw,报错点名、不回显值。
+    foreach ($bad in @(
+            @{ Why = '未解析'; Value = $null; Profile = 'dev'; Pattern = '未解析' }
+            @{ Why = 'prod 空口令'; Value = ''; Profile = 'prod'; Pattern = 'MMORPG_REDIS_PASSWORD' }
+            @{ Why = '含双引号'; Value = 'contract"shared-redis-03'; Profile = 'prod'; Pattern = 'MMORPG_REDIS_PASSWORD' }
+        )) {
+        $message = $null
+        try {
+            $script:RedisPassword = $bad.Value
+            $ReleaseProfile = $bad.Profile
+            Get-SharedRedisClientPassword | Out-Null
+        }
+        catch { $message = $_.Exception.Message }
+        finally { Remove-Variable -Name RedisPassword -Scope Script -ErrorAction SilentlyContinue }
+        Assert-True -Condition ($null -ne $message -and $message.Contains($bad.Pattern)) -Because "$($bad.Why):必须 throw 并点名($($bad.Pattern))"
+        Assert-True -Condition ($null -eq $message -or -not $message.Contains('shared-redis-03')) -Because "$($bad.Why):报错不回显口令"
+    }
+}
+
+Test-Case '共享 Redis 口令(prod zone-up):整份 DryRun 输出不含口令;zone 级 Go 服务 ConfigMap 口令为空串并指名变量,Deployment 经 Secret 注入、带只哈希口令的指纹;gateway 只写引用;db 不连' {
+    Assert-Equal -Expected 0 -Actual $prodRun.ExitCode -Because "prod DryRun 应当成功。输出: $($prodRun.Output)"
+    Assert-True -Condition (-not ([string]$prodRun.Output).Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because 'prod DryRun 整份输出(ConfigMap、Deployment、Secret 意图行、计划行)里不得出现共享 Redis 口令明文'
+    $expected = Get-SharedRedisAuthHash -Doc (Invoke-SharedRedisAuthRender -Password $ProdEnv.MMORPG_REDIS_PASSWORD -ReleaseProfileValue 'prod' -Manifest $SharedRedisSampleManifest) -Label '期望指纹(prod 口令)'
+    foreach ($svc in @($SharedRedisServices.Keys | Where-Object { $SharedRedisServices[$_].Zone })) {
+        Assert-SharedRedisConfigMap -Output $prodRun.Output -SvcName $svc -EnvName $SharedRedisEnvName -Label 'prod'
+        $doc = Select-SharedRedisDeploymentDoc -Output $prodRun.Output -Name $svc -Label "prod $svc"
+        Assert-SharedRedisEnvRef -Doc $doc -Label "prod $svc"
+        Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $doc -Label "prod $svc") -Because "prod ${svc}:Pod 模板的口令指纹只由口令决定,与最小 manifest 上算出的一致"
+    }
+    # gateway:ConfigMap 只写对容器环境变量的引用(-ceq 区分大小写,钉的是生成器写出的字面量,与注入的 env 名逐字一致),Deployment 同样注入、带同一个指纹。
+    $gatewayFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'java-svc-gateway-config')
+    $gatewayRef = Get-FlatValue -Flat $gatewayFlat -KeyPath 'data.application.yaml.spring.data.redis.password'
+    Assert-True -Condition ($gatewayRef -ceq ('${' + $SharedRedisEnvName + '}')) -Because "gateway 的 spring.data.redis.password 只能是对 $SharedRedisEnvName 的引用(不带缺省值:变量缺失时 @Value 解析失败,gateway 拒启)"
+    $gatewayDoc = Select-SharedRedisDeploymentDoc -Output $prodRun.Output -Name 'gateway' -Label 'prod gateway'
+    Assert-SharedRedisEnvRef -Doc $gatewayDoc -Label 'prod gateway'
+    Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $gatewayDoc -Label 'prod gateway') -Because 'gateway 与 Go 服务是同一个口令、同一个指纹'
+    # db 不连共享 Redis:ConfigMap 不指名变量,Deployment 不注入、不带指纹。
+    $dbFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'go-svc-db-config')
+    Assert-True -Condition (-not $dbFlat.Scalars.Contains('data.db.yaml.SharedRedisPasswordEnv')) -Because 'db 不连共享 Redis,不写 SharedRedisPasswordEnv'
+    $dbDoc = Select-SharedRedisDeploymentDoc -Output $prodRun.Output -Name 'db' -Label 'prod db'
+    Assert-True -Condition (-not $dbDoc.Contains($SharedRedisEnvName) -and -not $dbDoc.Contains($SharedRedisHashKey)) -Because 'db 的 Deployment 不注入共享 Redis 口令、不带它的指纹'
+    # zone namespace 的 Secret redis-auth 副本(Apply-Zone 开头)先于第一个引用它的工作负载。
+    $secretLine = [regex]::Match($prodRun.Output, '(?m)^\[dry-run\] kubectl apply -n mmorpg-zone-contract-test -f -   # Secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
+    $firstRef = ([string]$prodRun.Output).IndexOf("- name: $SharedRedisEnvName")
+    Assert-True -Condition ($secretLine.Success -and $firstRef -gt $secretLine.Index) -Because 'zone namespace 的 Secret redis-auth 必须先于引用它的 Go 服务 / gateway 落地(secretKeyRef 不是 optional)'
+}
+
+Test-Case '共享 Redis 口令(dev 基线,不注入):ConfigMap 各段口令为空串、不写 SharedRedisPasswordEnv,Deployment 不注入、不带指纹(产物与改动前逐字相同)' {
+    # 跑测进程不设 MMORPG_REDIS_PASSWORD(同 3a 的 dev 基线约定);设了的话下面会红,而不是静默放过。
+    foreach ($case in @(@{ Label = 'dev zone-up'; Output = [string]$devOut; Zone = $true }, @{ Label = 'dev infra-up'; Output = [string]$guildInfraRun.Output; Zone = $false })) {
+        Assert-True -Condition (-not $case.Output.Contains($SharedRedisHashKey)) -Because "$($case.Label):口令为空不写共享 Redis 口令指纹"
+        Assert-NotMatch -Text $case.Output -Pattern ('(?m)^[ ]*- name: ' + $SharedRedisEnvName + '[ ]*\r?$') -Because "$($case.Label):口令为空不注入 $SharedRedisEnvName(Secret redis-auth 已被删,引用它的 Pod 会起不来)"
+        Assert-NotMatch -Text $case.Output -Pattern ('SharedRedisPasswordEnv: ' + $SharedRedisEnvName) -Because "$($case.Label):口令为空不写 SharedRedisPasswordEnv"
+        foreach ($svc in @($SharedRedisServices.Keys | Where-Object { [bool]$SharedRedisServices[$_].Zone -eq $case.Zone })) {
+            Assert-SharedRedisConfigMap -Output $case.Output -SvcName $svc -EnvName '' -Label $case.Label
+        }
+    }
+}
+
+Test-Case '共享 Redis 口令(带口令的 infra-up):全局服务只写变量名、经 Secret 注入并带指纹;mail 只补指纹;chat / rank / 路由服不连共享 Redis;整份输出不含口令' {
+    Assert-Equal -Expected 0 -Actual $sharedRedisInfraRun.ExitCode -Because "带口令的 infra-up DryRun 应当成功。输出: $($sharedRedisInfraRun.Output)"
+    $out = [string]$sharedRedisInfraRun.Output
+    Assert-True -Condition (-not $out.Contains($SharedRedisInfraPassword)) -Because 'infra-up DryRun 整份输出里不得出现共享 Redis 口令明文'
+    $expected = Get-SharedRedisAuthHash -Doc (Invoke-SharedRedisAuthRender -Password $SharedRedisInfraPassword -ReleaseProfileValue 'dev' -Manifest $SharedRedisSampleManifest) -Label '期望指纹(infra 口令)'
+    foreach ($svc in @($SharedRedisServices.Keys | Where-Object { -not $SharedRedisServices[$_].Zone })) {
+        Assert-SharedRedisConfigMap -Output $out -SvcName $svc -EnvName $SharedRedisEnvName -Label 'infra-up'
+        $doc = Select-SharedRedisDeploymentDoc -Output $out -Name $svc -Label "infra-up $svc"
+        Assert-SharedRedisEnvRef -Doc $doc -Label "infra-up $svc"
+        Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $doc -Label "infra-up $svc") -Because "infra-up ${svc}:Pod 模板的口令指纹只由口令决定"
+    }
+    # mail:ConfigMap 仍写它自己的 SharedRedisPasswordEnv: MMORPG_MAIL_REDIS_PASSWORD,manifest 里对 redis-auth 的可选引用不变,只多一条指纹。
+    $mailFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-mail-config')
+    Assert-Equal -Expected 'MMORPG_MAIL_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $mailFlat -KeyPath 'data.mail.yaml.SharedRedisPasswordEnv') -Because 'mail 的口令来源不变'
+    $mailDoc = Select-SharedRedisDeploymentDoc -Output $out -Name 'mail' -Label 'infra-up mail'
+    Assert-True -Condition (-not $mailDoc.Contains("name: $SharedRedisEnvName")) -Because 'mail 不再多注入一份 SHARED_REDIS_PASSWORD'
+    $mailRef = '(?m)^[ ]*- name: MMORPG_MAIL_REDIS_PASSWORD[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef: \{name: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ', key: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + ', optional: true\}'
+    Assert-True -Condition ($mailDoc -cmatch $mailRef) -Because 'mail 仍经 manifest 自带的可选引用拿口令'
+    Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $mailDoc -Label 'infra-up mail') -Because 'mail 补上同一个口令指纹,换口令时一起滚动'
+    # 不连共享 Redis 的全局服务:ConfigMap 不指名变量,Deployment 不注入、不带指纹。
+    foreach ($svc in @('chat', 'rank', 'client-rpc-router')) {
+        $doc = Select-SharedRedisDeploymentDoc -Output $out -Name $svc -Label "infra-up $svc"
+        Assert-True -Condition (-not $doc.Contains($SharedRedisEnvName) -and -not $doc.Contains($SharedRedisHashKey)) -Because "${svc} 不连共享 Redis,Deployment 不注入口令、不带指纹"
+        $cm = Select-ManifestByName -Output $out -Name "go-svc-$svc-config"
+        Assert-True -Condition ($null -ne $cm -and -not $cm.Contains('SharedRedisPasswordEnv')) -Because "${svc} 的 ConfigMap 不写 SharedRedisPasswordEnv"
+    }
+    # infra namespace 的 Secret redis-auth(Apply-Infra 的 Redis 分支)先于第一个引用它的全局服务。
+    $secretLine = [regex]::Match($out, '(?m)^\[dry-run\] kubectl apply -n contract-battle-infra -f -   # Secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
+    $firstRef = $out.IndexOf("- name: $SharedRedisEnvName")
+    Assert-True -Condition ($secretLine.Success -and $firstRef -gt $secretLine.Index) -Because 'infra 的 Secret redis-auth 必须先于引用它的全局 Go 服务落地(secretKeyRef 不是 optional)'
 }
 
 # ─────────────────────────────────────────────────────────────────

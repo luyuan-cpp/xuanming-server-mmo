@@ -13,11 +13,13 @@ message transaction_log
 {
   option(OptionTableName) = "transaction_log";
   option(OptionPrimaryKey) = "tx_id";
-  // 与 data_service 手写 DDL(transaction_log_store.go)逐条对齐的四条联合索引。
-  // proto2mysql 语义:分号分隔多索引、逗号 = 联合索引;原来的单串
-  // "from_player,to_player,item_uuid,timestamp" 会被解释成一条 4 列联合索引,
-  // 对按 to_player / tx_type 单独过滤的查询没用。
-  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,timestamp_sec;tx_type,timestamp_sec;timestamp_sec";
+  // proto2mysql 语义:分号分隔多索引、逗号 = 联合索引。
+  // 按时间写的索引在时间列前插 shard(字段 16,2026-11-06,docs/design/audit-pipeline-horizontal-scale-20261106.md §2.C):
+  // timestamp_sec 单调增长,单列时间索引和 tx_type / item_config_id 这类低基数前缀 + 时间的索引,全服的追加写都落在
+  // 索引末尾同一个 TiKV Region;插了 shard 就分成 16 段各自的末尾。没有玩家条件的查询带 shard IN (0..15) 按段扫
+  // (store.auditShardInSQL)。按玩家的两条不分桶:玩家号本身打散。
+  // item_uuid 给 QueryByItemUUID(追物品流向)用,以前没有索引,对全服流水表做全表扫。
+  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,shard,timestamp_sec;tx_type,shard,timestamp_sec;shard,timestamp_sec;item_uuid";
   // 雪花主键 + 全服最高频追加写,按 §D3 处方 NONCLUSTERED + 打散(global-data-layer-tidb-decision.md)
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
@@ -44,6 +46,9 @@ message transaction_log
   // 表已定在全局库一处,没有这一列就分不清同一 tx 来自哪个 zone;
   // data_service 的 Kafka 消费者按列名自动探测,老表缺列时按 0 写入,不需要迁移开关。
   uint32 zone_id = 15;
+  // 分桶号 = tx_id % 16(go/data_service/internal/store/audit_shard.go 的 AuditShard,规则只有那一处),
+  // 由 data_service 落库时算,不在 Kafka 载荷里。只服务于上面按时间的索引与按段清理;业务含义为零。
+  uint32 shard = 16;
 }
 
 // ============================================================================
@@ -61,11 +66,12 @@ message player_snapshot
   // proto2mysql 的 nullable 选项只去掉 NOT NULL、仍保留 DEFAULT 0,且写入路径对未设置的
   // 标量一律绑 0 —— UNIQUE 会让第二条 GM 行就撞键。去重责任在消费者:落库前按
   // snapshot_guid 先查后插(check-then-insert),见 docs/design/node-id-overhaul-plan-20260908.md §2.0c。
-  // (zone_id, created_at) 是 RollbackZone 的扫描键(GetSnapshotPlayerIDsByZone:
-  // WHERE zone_id=? AND created_at<=?)。此前只存在于手写 DDL,proto 里漏了,
-  // 于是 store 侧靠 extraIndexes 兜底建它 —— 补进来之后那段兜底会自行失效
-  // (它按"想要的索引已被覆盖"判断)。
-  option(OptionIndex) = "player_id;snapshot_guid;zone_id,created_at;created_at";
+  // (zone_id, shard, created_at) 是 RollbackZone 的扫描键(GetSnapshotPlayerIDsByZone / GetSnapshotPlayerTimesByZone:
+  // WHERE zone_id=? AND shard IN (0..15) AND created_at<=?);(shard, created_at) 给按时间的清理。
+  // 时间列前的 shard(字段 11)同 transaction_log:created_at 单调增长,不分桶时全服快照写都落在索引末尾同一个
+  // TiKV Region(2026-11-06,docs/design/audit-pipeline-horizontal-scale-20261106.md §2.C)。
+  // snapshot_guid 同样随 SnowFlake 单调增长,但它是去重键,分桶要连去重路径一起重做,先看压测热点再定(设计 §2.C「没做」)。
+  option(OptionIndex) = "player_id;snapshot_guid;zone_id,shard,created_at;shard,created_at";
   // 主键是应用向发号器申请的打散行号(player-data-tidb-scaling-plan.md §6.4),不依赖库的自增。
   // 行数据按 _tidb_rowid 存,所以 §D3 的 NONCLUSTERED + 打散照旧保留。
   option(OptionTiDBNonclusteredPK) = true;
@@ -88,6 +94,9 @@ message player_snapshot
   //           2026-11-05 之前还有一个 player_database_1 blob,字段已 reserved)。
   // 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
   uint32 source = 10;
+  // 分桶号 = id % 16(行号是发号器打散过的值;规则在 go/data_service/internal/store/audit_shard.go 的 AuditShard),
+  // GM 路径与 Kafka 落库路径都由 data_service 写入时算。只服务于上面按时间的索引与按段清理;业务含义为零。
+  uint32 shard = 11;
 }
 
 // ============================================================================

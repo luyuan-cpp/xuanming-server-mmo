@@ -32,9 +32,8 @@ const (
 func newMemberReconcileCase(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	t.Helper()
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
-	_, err := mr.SetAdd(sceneManagerZonesKey, strconv.FormatUint(uint64(testZoneId), 10))
-	require.NoError(t, err)
-	_, err = mr.ZAdd(nodeLoadKey(testZoneId), 0, reconcileMemberNode)
+	// 公共夹具已将 Config.ZoneId 设为 testZoneId，对账只处理本进程的 zone，不再登记全局 zone 集合。
+	_, err := mr.ZAdd(nodeLoadKey(testZoneId), 0, reconcileMemberNode)
 	require.NoError(t, err)
 	_, err = mr.SetAdd(nodeScenesKey(testZoneId, reconcileMemberNode), strconv.FormatUint(reconcileMemberScene, 10))
 	require.NoError(t, err)

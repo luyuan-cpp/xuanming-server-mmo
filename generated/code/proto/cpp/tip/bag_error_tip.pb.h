@@ -78,6 +78,9 @@ enum bag_error : int {
   kBagDelItemSize = 6012,
   kBagItemDeletionSizeMismatch = 6013,
   kBagInsufficientBagSpace = 6014,
+  kBagTemporaryItemNotFound = 6015,
+  kBagTemporaryRetrieveBagFull = 6016,
+  kBagTemporaryRetrieveBusy = 6017,
   bag_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   bag_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -88,11 +91,11 @@ extern const uint32_t bag_error_internal_data_[];
 inline constexpr bag_error bag_error_MIN =
     static_cast<bag_error>(0);
 inline constexpr bag_error bag_error_MAX =
-    static_cast<bag_error>(6014);
+    static_cast<bag_error>(6017);
 [[nodiscard]] inline bool bag_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, bag_error_internal_data_);
 }
-inline constexpr int bag_error_ARRAYSIZE = 6014 + 1;
+inline constexpr int bag_error_ARRAYSIZE = 6017 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 bag_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(bag_error) {

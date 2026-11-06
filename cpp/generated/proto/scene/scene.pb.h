@@ -1275,6 +1275,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DestroySceneRequest final : public 
   // accessors -------------------------------------------------------
   enum : int {
     kSceneIdFieldNumber = 1,
+    kPlacementGenerationFieldNumber = 2,
   };
   // uint64 scene_id = 1;
   void clear_scene_id() ;
@@ -1286,11 +1287,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DestroySceneRequest final : public 
   void _internal_set_scene_id(::uint64_t value);
 
   public:
+  // uint64 placement_generation = 2;
+  void clear_placement_generation() ;
+  [[nodiscard]] ::uint64_t placement_generation() const;
+  void set_placement_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_generation() const;
+  void _internal_set_placement_generation(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:DestroySceneRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1320,6 +1331,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DestroySceneRequest final : public 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t scene_id_;
+    ::uint64_t placement_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1479,6 +1491,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
     kSceneIdFieldNumber = 2,
     kConfigIdFieldNumber = 1,
     kMirrorConfigIdFieldNumber = 3,
+    kPlacementGenerationFieldNumber = 6,
     kDungeonConfigIdFieldNumber = 4,
   };
   // repeated uint64 creator_ids = 5;
@@ -1531,6 +1544,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
   void _internal_set_mirror_config_id(::uint32_t value);
 
   public:
+  // uint64 placement_generation = 6;
+  void clear_placement_generation() ;
+  [[nodiscard]] ::uint64_t placement_generation() const;
+  void set_placement_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_placement_generation() const;
+  void _internal_set_placement_generation(::uint64_t value);
+
+  public:
   // uint32 dungeon_config_id = 4;
   void clear_dungeon_config_id() ;
   [[nodiscard]] ::uint32_t dungeon_config_id() const;
@@ -1545,7 +1568,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1579,6 +1602,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateSceneRequest final : public :
     ::uint64_t scene_id_;
     ::uint32_t config_id_;
     ::uint32_t mirror_config_id_;
+    ::uint64_t placement_generation_;
     ::uint32_t dungeon_config_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -4016,7 +4040,7 @@ inline void CreateSceneRequest::_internal_set_mirror_config_id(::uint32_t value)
 inline void CreateSceneRequest::clear_dungeon_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.dungeon_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t CreateSceneRequest::dungeon_config_id() const {
   // @@protoc_insertion_point(field_get:CreateSceneRequest.dungeon_config_id)
@@ -4024,7 +4048,7 @@ inline ::uint32_t CreateSceneRequest::dungeon_config_id() const {
 }
 inline void CreateSceneRequest::set_dungeon_config_id(::uint32_t value) {
   _internal_set_dungeon_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:CreateSceneRequest.dungeon_config_id)
 }
 inline ::uint32_t CreateSceneRequest::_internal_dungeon_config_id() const {
@@ -4085,6 +4109,30 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
 CreateSceneRequest::_internal_mutable_creator_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.creator_ids_;
+}
+
+// uint64 placement_generation = 6;
+inline void CreateSceneRequest::clear_placement_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t CreateSceneRequest::placement_generation() const {
+  // @@protoc_insertion_point(field_get:CreateSceneRequest.placement_generation)
+  return _internal_placement_generation();
+}
+inline void CreateSceneRequest::set_placement_generation(::uint64_t value) {
+  _internal_set_placement_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:CreateSceneRequest.placement_generation)
+}
+inline ::uint64_t CreateSceneRequest::_internal_placement_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.placement_generation_;
+}
+inline void CreateSceneRequest::_internal_set_placement_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_generation_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4210,6 +4258,30 @@ inline ::uint64_t DestroySceneRequest::_internal_scene_id() const {
 inline void DestroySceneRequest::_internal_set_scene_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_id_ = value;
+}
+
+// uint64 placement_generation = 2;
+inline void DestroySceneRequest::clear_placement_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t DestroySceneRequest::placement_generation() const {
+  // @@protoc_insertion_point(field_get:DestroySceneRequest.placement_generation)
+  return _internal_placement_generation();
+}
+inline void DestroySceneRequest::set_placement_generation(::uint64_t value) {
+  _internal_set_placement_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:DestroySceneRequest.placement_generation)
+}
+inline ::uint64_t DestroySceneRequest::_internal_placement_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.placement_generation_;
+}
+inline void DestroySceneRequest::_internal_set_placement_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.placement_generation_ = value;
 }
 
 // -------------------------------------------------------------------

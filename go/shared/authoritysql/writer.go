@@ -152,7 +152,8 @@ type passGate struct{}
 func (passGate) beforeBegin(context.Context, driver.Conn) (gateAttempt, error) {
 	return passGate{}, nil
 }
-func (passGate) enter(context.Context, driver.Conn) error { return nil }
+func (passGate) enter(context.Context, driver.Conn) error     { return nil }
+func (passGate) admitRead(context.Context, driver.Conn) error { return nil }
 
 // 每条物理连接只读核永久REGISTER全文；复位后也重核，不以可读UUID替代boot绑定。
 func verifyBootRegistration(ctx context.Context, conn driver.Conn, grant *databasepb.SqlWriterBootGrant) error {
@@ -206,6 +207,31 @@ func (g runtimeGate) beforeBegin(ctx context.Context, conn driver.Conn) (gateAtt
 	}
 	slot := uint32((g.config.boot.next.Add(1) - 1) % WriterSlotCount)
 	return &runtimeAttempt{config: g.config, before: meta, slot: slot}, nil
+}
+
+// admitRead 是事务外纯读的闸门(2026-11-06,缺口清单第 21 条)。只核本逻辑库 route_meta 的世代与可写:
+//   - 读不需要写资格:主体、注册、slot 是写的前提;读的数据都在主库上,谁读到的都是同一份已提交数据,
+//     所以不开事务、不锁不改 writer_slot(LOCK_TOUCH 档下那是一次写,所有实例的读都会改写这张小表)、不读注册表;
+//   - 冻结照旧挡回去(ErrWriterFrozen):搬库切换之后源库冻结,还连着源库的读会读到已被目标库超过的数据;
+//     启动阶段放不放行由连接层定(readPassesFrozenGateLocked),与写事务被挡时同一条规则;
+//   - 世代不符、写资格已关闭回 ErrWriterDenied,与 beforeBegin 相同。
+func (g runtimeGate) admitRead(ctx context.Context, conn driver.Conn) error {
+	if g.config.boot == nil || g.config.boot.closed.Load() {
+		return ErrWriterDenied
+	}
+	meta, err := readRawMeta(ctx, conn, g.config.AuthoritySchema())
+	if err != nil {
+		return err
+	}
+	if meta.Generation != g.config.Generation() || meta.WriterEpoch == 0 {
+		return ErrWriterDenied
+	}
+	if meta.Writable != 1 {
+		g.config.boot.noteFrozen()
+		return ErrWriterFrozen
+	}
+	g.config.boot.noteReadable()
+	return nil
 }
 func (a *runtimeAttempt) enter(ctx context.Context, conn driver.Conn) error {
 	grant := a.config.boot.grant

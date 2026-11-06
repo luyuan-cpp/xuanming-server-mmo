@@ -139,7 +139,9 @@
         "TeamDungeonNotOpen": 4027,
         "TeamSizeExceeded": 4028,
         "TeamStateChanged": 4029,
-        "TeamInternal": 4030
+        "TeamInternal": 4030,
+        "TeamPvpPartySizeNotAllowed": 4031,
+        "TeamRatingGapTooLarge": 4032
       }
     },
     "mission_error": {
@@ -173,7 +175,10 @@
         "BagDelItemFindItem": 6011,
         "BagDelItemSize": 6012,
         "BagItemDeletionSizeMismatch": 6013,
-        "BagInsufficientBagSpace": 6014
+        "BagInsufficientBagSpace": 6014,
+        "BagTemporaryItemNotFound": 6015,
+        "BagTemporaryRetrieveBagFull": 6016,
+        "BagTemporaryRetrieveBusy": 6017
       }
     },
     "skill_error": {
@@ -331,7 +336,8 @@
         "MatchSpectateFull": 16021,
         "MatchProbeRequired": 16022,
         "MatchNoRegionWithinLatency": 16023,
-        "MatchSpectateTicketInvalid": 16024
+        "MatchSpectateTicketInvalid": 16024,
+        "MatchBattleReportNotFound": 16025
       }
     },
     "attribute_error": {
@@ -440,7 +446,8 @@
         "EquipGemSocketOccupied": 28018,
         "EquipGemSocketEmpty": 28019,
         "EquipGemTypeMismatch": 28020,
-        "EquipGemBagFull": 28021
+        "EquipGemBagFull": 28021,
+        "EquipEnhanceLevelChanged": 28022
       }
     },
     "player_inbox_error": {

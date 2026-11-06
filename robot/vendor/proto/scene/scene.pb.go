@@ -399,8 +399,12 @@ type CreateSceneRequest struct {
 	MirrorConfigId  uint32                 `protobuf:"varint,3,opt,name=mirror_config_id,json=mirrorConfigId,proto3" json:"mirror_config_id,omitempty"`    // Mirror config ID (0 = not a mirror instance)
 	DungeonConfigId uint32                 `protobuf:"varint,4,opt,name=dungeon_config_id,json=dungeonConfigId,proto3" json:"dungeon_config_id,omitempty"` // Dungeon config ID (0 = not a dungeon instance)
 	CreatorIds      []uint64               `protobuf:"varint,5,rep,packed,name=creator_ids,json=creatorIds,proto3" json:"creator_ids,omitempty"`           // Creator player IDs (for instance access control)
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 放置代次(docs/design/world-channel-placement-generation.md)。scene_manager 每次把世界频道放到某个节点上时从本 zone 的
+	// 计数器分配,同一次放置的建场景、拆场景带同一个值;init 向属主补建时带频道当前的代次。0 = 不带代次(副本、镜像、从没换过
+	// 节点的频道)。scene 节点已按 >= 本值的代次拆过这个场景时拒收:不建、不复用,回空应答。
+	PlacementGeneration uint64 `protobuf:"varint,6,opt,name=placement_generation,json=placementGeneration,proto3" json:"placement_generation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CreateSceneRequest) Reset() {
@@ -468,6 +472,13 @@ func (x *CreateSceneRequest) GetCreatorIds() []uint64 {
 	return nil
 }
 
+func (x *CreateSceneRequest) GetPlacementGeneration() uint64 {
+	if x != nil {
+		return x.PlacementGeneration
+	}
+	return 0
+}
+
 type CreateSceneResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SceneInfo     *SceneInfoComp         `protobuf:"bytes,1,opt,name=scene_info,json=sceneInfo,proto3" json:"scene_info,omitempty"`
@@ -513,10 +524,13 @@ func (x *CreateSceneResponse) GetSceneInfo() *SceneInfoComp {
 }
 
 type DestroySceneRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SceneId       uint64                 `protobuf:"varint,1,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	SceneId uint64                 `protobuf:"varint,1,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"`
+	// 放置代次,见 CreateSceneRequest.placement_generation。scene 节点已按更新的代次(> 本值)建过这个场景时忽略这次拆除:
+	// 那是之后一次合法的放置,晚到的旧拆除不能拆它。0 = 退役拆除(排空、孤儿清理、副本与镜像的销毁),无条件执行。
+	PlacementGeneration uint64 `protobuf:"varint,2,opt,name=placement_generation,json=placementGeneration,proto3" json:"placement_generation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *DestroySceneRequest) Reset() {
@@ -552,6 +566,13 @@ func (*DestroySceneRequest) Descriptor() ([]byte, []int) {
 func (x *DestroySceneRequest) GetSceneId() uint64 {
 	if x != nil {
 		return x.SceneId
+	}
+	return 0
+}
+
+func (x *DestroySceneRequest) GetPlacementGeneration() uint64 {
+	if x != nil {
+		return x.PlacementGeneration
 	}
 	return 0
 }
@@ -833,19 +854,21 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x1cRegisterPlayerSessionRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\"\xc3\x01\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\"\xf6\x01\n" +
 	"\x12CreateSceneRequest\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12(\n" +
 	"\x10mirror_config_id\x18\x03 \x01(\rR\x0emirrorConfigId\x12*\n" +
 	"\x11dungeon_config_id\x18\x04 \x01(\rR\x0fdungeonConfigId\x12\x1f\n" +
 	"\vcreator_ids\x18\x05 \x03(\x04R\n" +
-	"creatorIds\"D\n" +
+	"creatorIds\x121\n" +
+	"\x14placement_generation\x18\x06 \x01(\x04R\x13placementGeneration\"D\n" +
 	"\x13CreateSceneResponse\x12-\n" +
 	"\n" +
-	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"0\n" +
+	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"c\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
-	"\bscene_id\x18\x01 \x01(\x04R\asceneId\"\xc7\x01\n" +
+	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x121\n" +
+	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\xc7\x01\n" +
 	"\x14PrepareBattleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12$\n" +

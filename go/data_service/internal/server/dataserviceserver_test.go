@@ -929,7 +929,7 @@ func TestBatchGetPlayerName_SqlErrorReturnsNoPartialResult(t *testing.T) {
 	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
 }
 
-// 四个回收入口全部要 x-admin-token:回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
+// 五个回收入口全部要 x-admin-token:回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
 func TestRecallRPCsRequireAdminToken(t *testing.T) {
 	calls := map[string]func(*DataServiceServer, context.Context) error{
 		"BatchRecallItems": func(s *DataServiceServer, ctx context.Context) error {
@@ -946,6 +946,10 @@ func TestRecallRPCsRequireAdminToken(t *testing.T) {
 		},
 		"ResolveRecallOp": func(s *DataServiceServer, ctx context.Context) error {
 			_, err := s.ResolveRecallOp(ctx, &data_service.ResolveRecallOpRequest{})
+			return err
+		},
+		"RegisterRecallReviewHandled": func(s *DataServiceServer, ctx context.Context) error {
+			_, err := s.RegisterRecallReviewHandled(ctx, &data_service.RegisterRecallReviewHandledRequest{})
 			return err
 		},
 	}

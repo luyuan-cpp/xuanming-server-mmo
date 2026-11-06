@@ -32,6 +32,8 @@ service PlayerInboxAdmin {
   rpc VoidItem(VoidPlayerInboxItemRequest) returns (VoidPlayerInboxItemResponse) {}
   // 单个玩家比对收件箱与已落盘账本(设计 §9.3)。第 4 批实现,此前服务端回 UNIMPLEMENTED。
   rpc ReconcilePlayer(ReconcilePlayerInboxRequest) returns (ReconcilePlayerInboxResponse) {}
+  // 单玩家物品获取封禁的查询(设计 §2.2):已落盘的本人封禁表,加上还没生效的物品封禁 / 解封单。只读,不写审计。
+  rpc GetItemGainBlocks(GetPlayerItemGainBlocksRequest) returns (GetPlayerItemGainBlocksResponse) {}
 }
 
 // ── GmSanctionPlayer ─────────────────────────────────────────────────────
@@ -222,4 +224,44 @@ message ReconcilePlayerInboxResponse {
   bool ledger_found = 2;                // false = 读不到已落盘存档,结论为 unknown,不比对
   repeated PlayerInboxReconcileCursor cursors = 3;
   repeated PlayerInboxReconcileDiff diffs = 4;
+}
+
+// ── GetItemGainBlocks ────────────────────────────────────────────────────
+//
+// 回答「这名玩家今后哪些物品拿不到」里单人封禁的那一部分(设计 §2.2)。两份来源,不是同一时刻的快照:
+//   - blocked_item_config_ids:玩家**已落盘**存档里的本人封禁表,经 data_service.GetPlayerItemGainBlock 读,
+//     和 scene 下一次加载这名玩家时拿到的是同一份;
+//   - pending:收件箱 SCENE_GM_SANCTION 域里仍 PENDING 的物品封禁 / 解封单,scene 会按 seq 升序执行。
+//     已投递(delivery_count > 0)的单可能已在 scene 内存里执行、正等落盘之后确认,这时它的效果也可能已经出现在
+//     blocked_item_config_ids 里;封禁与解封天然幂等,两边同时出现不矛盾。
+// 刚下的封禁单在玩家上线并出战斗之前只出现在 pending 里:只看封禁表会误以为「没封上」。
+// 不含全服封禁:那是 scene 节点上的线程级集合(GainBlockService 的全服集合),不在玩家存档里。
+
+message GetPlayerItemGainBlocksRequest {
+  uint64 player_id = 1;
+}
+
+// 一条还没生效的物品封禁 / 解封单(收件箱条目的运维视图,载荷已解开)。
+message PlayerItemGainSanctionPending {
+  uint64 seq = 1;
+  PlayerInboxMessageType msg_type = 2;  // PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN 或 PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
+  // 从载荷解出的物品配置号。0 = 载荷解不开(入箱时校验过,只可能是数据损坏):scene 会判 REJECTED,这条不会生效。
+  uint32 item_config_id = 3;
+  uint64 request_id = 4;
+  PlayerInboxDirective directive = 5;   // VOID = 已挂作废指令,等消费方裁决
+  uint32 delivery_count = 6;            // 0 = 还没投递过(玩家不在线,或在战斗中)
+  uint64 created_ms = 7;
+  string operator_name = 8;
+  string note = 9;                      // 处置理由(GmSanctionPlayer 的 reason)
+}
+
+message GetPlayerItemGainBlocksResponse {
+  TipInfoMessage error_message = 1;     // 读存档或收件箱库失败 → kPlayerInboxStoreUnavailable(可重试)
+  uint64 player_id = 2;
+  // false = 读不到已落盘存档(从未建角,或角色还没建完):这时 blocked_item_config_ids 为空不代表「没封」。
+  bool found = 3;
+  // 已落盘的本人封禁表,按存档原样返回(写入侧保持升序、无重复)。
+  repeated uint32 blocked_item_config_ids = 4;
+  // 按 seq 升序。found=false 时照样列出。
+  repeated PlayerItemGainSanctionPending pending = 5;
 }

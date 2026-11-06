@@ -24,7 +24,6 @@ package shardowner
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"slices"
 	"strconv"
 	"strings"
@@ -36,6 +35,7 @@ import (
 	"shared/inboxshard"
 	"shared/nodeinfo"
 	"shared/releasetrack"
+	"shared/workshard"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -56,18 +56,7 @@ const (
 
 // Owner 返回 shard 的负责副本;members 为空返回空串。结果只取决于成员集合,与顺序无关。
 func Owner(shard uint32, members []string) string {
-	var owner string
-	var best uint64
-	for _, member := range members {
-		if member == "" {
-			continue
-		}
-		score := weight(member, shard)
-		if owner == "" || score > best || (score == best && member < owner) {
-			owner, best = member, score
-		}
-	}
-	return owner
+	return workshard.Owner(strconv.FormatUint(uint64(shard), 10), members)
 }
 
 // Owned 返回 self 负责的分片,升序。self 为空或不在 members 里时返回空:尚未注册或已注销的进程不负责任何分片。
@@ -82,14 +71,6 @@ func Owned(self string, members []string) []uint32 {
 		}
 	}
 	return owned
-}
-
-func weight(member string, shard uint32) uint64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(member))
-	_, _ = h.Write([]byte{0})
-	_, _ = h.Write([]byte(strconv.FormatUint(uint64(shard), 10)))
-	return h.Sum64()
 }
 
 // Tracker 用 etcd 维护本服务 stable 副本的成员表,给出本副本负责的分片。并发安全:Run 一条 goroutine 写,

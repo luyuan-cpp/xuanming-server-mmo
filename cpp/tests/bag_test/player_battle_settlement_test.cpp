@@ -2124,14 +2124,15 @@ TEST_F(PlayerBattleSettlementItemTest, ExactItemGuidCapacityCoversTemporaryFallb
 }
 
 // 领段请求只计数、不自动回包的 item 号段(r2-battle#3 用例):Warm 的首段请求随即落下 [lo, hi)。
+// step 同时是 MaxStep(minStep / maxStep 留 0 = 钉在初值上)。
 int gSettlementSegmentFetches = 0;
-bool ArmCountingItemSegment(uint64_t lo, uint64_t hi) {
+bool ArmCountingItemSegment(uint64_t lo, uint64_t hi, uint32_t step = 100000) {
     auto& client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
     client.Reset();
     GuidSegmentClient::Options options;
     options.mixIds = false;
     options.kindName = "item";
-    options.initialStep = 100000;
+    options.initialStep = step;
     gSettlementSegmentFetches = 0;
     if (!client.Enable(options, [](const std::string&, uint32_t) { ++gSettlementSegmentFetches; return true; },
         [](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; })) return false;
@@ -2161,6 +2162,25 @@ TEST_F(PlayerBattleSettlementItemTest, ItemGuidShortageAboveThePrefetchThreshold
     EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementNonStackItem), 3u);
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
     EXPECT_EQ(KillProgress(), 2u);
+}
+
+// 评审修正(2026-11-06):掉落要的新实例比号段一段最多能给的(MaxStep)还多,续段永远凑不齐(kExceedsMaxStep)。
+// 战斗结算不能拒收:奖励与消耗都在这一笔里,拒了就丢奖励或白喝药。所以整笔 DEFER(打 ERROR)、原件留在收件箱,
+// 一点效果都不落、一个号都不领;与资产通道记终局拒绝不同。调大 IdSegments 的 MaxStep 之后下一次重试自愈。
+TEST_F(PlayerBattleSettlementItemTest, ItemGuidNeedAboveTheMaxStepDefersTheWholeSettlementWithoutFetching) {
+    ScopedItemSegmentBaseline restoreBaseline;
+    SetGained(kSettlementNonStackItem, 3);  // 3 个新实例
+    ASSERT_TRUE(ArmCountingItemSegment(99700000, 99700002, /*step=*/2));  // 剩 2 个号;一段最多 2 个
+    ASSERT_EQ(1, gSettlementSegmentFetches);
+
+    EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement)) << "续段凑不齐也只延后,不拒收";
+    EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(1, gSettlementSegmentFetches) << "终局结论不领段";
+    EXPECT_FALSE(tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().topUpPending);
+    EXPECT_EQ(tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available(), 2u) << "一个号都没发";
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementNonStackItem), 0u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
+    EXPECT_EQ(0u, KillProgress());
 }
 
 // 上界口径:不可叠加按件计,可叠加按满堆向上取整;查不到配置行的项按 0 计

@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -17,6 +18,10 @@ import (
 // 的扫描在租期之后补(scene_teardown_job.go;补也补得上,只是慢)。预算留得比 zrpc 服务端超时(8s)宽,级联多个
 // 镜像时每个子场景各要一次 dial + RPC + ReleaseRoom。
 const explicitDestroyFollowUpTimeout = 10 * time.Second
+
+// errWorldChannelNotDestroyable 表示显式 DestroyScene 的目标是世界频道,一个键都没动。世界频道只由缩容排空
+// (world_autoscale.go)与孤儿清理(orphan_cleanup.go)下线,要下掉一个频道就调低这张图的期望频道数。
+var errWorldChannelNotDestroyable = errors.New("world channels are taken down by scale-in draining or orphan cleanup, not by DestroyScene")
 
 type DestroySceneLogic struct {
 	ctx    context.Context
@@ -53,6 +58,11 @@ func NewDestroySceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Dest
 //   - 只拆本 zone 的场景(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):请求的 zone 不是本进程的
 //     zone 时在任何读写之前拒绝,与 CreateScene 同一条路由不变量;zone_id 没填(0)按本进程的 zone。场景登记在别的
 //     zone(请求填的 zone 与场景不符)时认领脚本一个键都不动,回错误。
+//   - 只拆副本与镜像(2026-11-06):目标是本 zone 某张大世界地图的线(在役或回收中)时在任何写之前拒绝,回
+//     errWorldChannelNotDestroyable;查不清是不是线(读失败)时同样拒绝。这里走副本的销毁脚本,只删映射、不摘频道集合,
+//     拆世界频道会留下「在役、没有属主」的频道,随后被懒改派或 rebalance 以空属主复活;这次拆除又不带放置代次,晚到时会
+//     拆掉复活在同一节点上的实体(docs/design/world-channel-placement-generation.md §7)。地图已不在 World 表里的孤儿
+//     频道查不到,照副本销毁:它的集合由孤儿清理按「映射已不在」收掉,改派路径只处理 World 表里的图。
 func (l *DestroySceneLogic) DestroyScene(in *scene_manager.DestroySceneRequest) (*base.Empty, error) {
 	zoneID := in.ZoneId
 	if zoneID == 0 {
@@ -62,6 +72,16 @@ func (l *DestroySceneLogic) DestroyScene(in *scene_manager.DestroySceneRequest) 
 		err := fmt.Errorf("destroy scene %d: zone %d is served by its own scene_manager (this process serves zone %d)",
 			in.SceneId, zoneID, l.svcCtx.Config.ZoneId)
 		l.Logger.Errorf("[DestroyScene] %v; rejected without any read or write", err)
+		return nil, err
+	}
+	confID, membership, err := locateWorldChannel(l.svcCtx, zoneID, in.SceneId, 0)
+	if err != nil {
+		l.Logger.Errorf("[DestroyScene] scene %d: could not tell whether it is a world channel; rejected without any write: %v", in.SceneId, err)
+		return nil, fmt.Errorf("destroy scene %d: look up world channel membership: %w", in.SceneId, err)
+	}
+	if membership != worldChannelNotMember {
+		err := fmt.Errorf("destroy scene %d (a channel of world map %d in zone %d): %w", in.SceneId, confID, zoneID, errWorldChannelNotDestroyable)
+		l.Logger.Errorf("[DestroyScene] %v; rejected without any write", err)
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), explicitDestroyFollowUpTimeout)

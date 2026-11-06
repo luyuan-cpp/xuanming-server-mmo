@@ -17,6 +17,7 @@ import (
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
+	"shared/redisauth"
 )
 
 // MaxRpcTimeoutMs:帮会二期契约 §2,Timeout ≤ 路由服 ForwardTimeoutMs(5000)− 1000。
@@ -51,6 +52,10 @@ type Config struct {
 	RedisClient RedisConf `json:"RedisClient"`
 	// PlayerLocatorRedis 现在只承担控制域:scene 发布的 assetop:wake 频道与它的跨副本去重键。键名留着,部署配置不用跟着改。
 	PlayerLocatorRedis RedisConf `json:"PlayerLocatorRedis"`
+	// SharedRedisPasswordEnv 是 RedisClient 与 PlayerLocatorRedis 的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
+	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里两段的 Password 写空串。不写 = 照用 Password 字面量(本机)。
+	// 由 ResolveSharedRedisPassword 在建 Redis 客户端之前填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):会话、位置、战斗锁、同步摘要。
 	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 PlayerLocatorRedis 那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
@@ -707,6 +712,15 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 		ReadTimeoutMs:   playerRedisFallbackIOTimeout,
 		WriteTimeoutMs:  playerRedisFallbackIOTimeout,
 	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 RedisClient.Password 与 PlayerLocatorRedis.Password,规则见 redisauth.Apply。
+// PlayerLocatorRedis 没写 Host 时回落 RedisClient,玩家域没写 Addrs 时回落 PlayerLocatorRedis(EffectivePlayerRedis),
+// 填完之后它们用的都是这个口令。-migrate 不连 Redis;常驻启动(guild.go)与 cmd/assetopfix 在建 Redis 客户端之前调用。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "RedisClient.Password", Password: &c.RedisClient.Password},
+		redisauth.Target{Field: "PlayerLocatorRedis.Password", Password: &c.PlayerLocatorRedis.Password})
 }
 
 type RedisConf struct {

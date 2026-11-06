@@ -504,11 +504,18 @@ Java 版:`PARITY.md`「战斗锁不再是销账证据」一行已更正(Java 待
 
 | 位置 | 改动 |
 |---|---|
-| `cpp/libs/modules/id_segment/guid_segment_client.{h,cpp}` | 新增 `RequestTopUp(needed)`:够了回 `kEnough`;未启用 / 停机回 `kUnavailable`;当前段已发完而下一段已落下时先把下一段换成当前段(与 `TryNext` 开头同一步,不发号;评审修正:不换会把「只有一段在手」误报成两段都满,多于一段的批次在空闲节点上永远等不来第二段);当前段没发完、下一段也已在手里回 `kBuffersFull`(批次大于双 buffer,续段帮不上忙);否则记下需求,没有在途、不在退避就立刻领一段(与预取同一条单飞路径),回 `kFetching`。需求在下一次校验通过的段落下时清掉。退避到期的重试见到需求照发,不再因为「剩余高于阈值」跳过。`Stats` 加 `topUpFetches` / `topUpPending` |
-| `player_battle.cpp` `HasItemGuidsForDrops` | 判出不足先 `RequestTopUp` 再整笔 DEFER;`kBuffersFull` / `kUnavailable` 打 ERROR(要人看 IdSegments 的 step) |
-| `asset_op_system.cpp` `ApplyCredit` (b) | 需要量改用 `BagService::MaxNewInstancesFor`(与战斗结算同口径),判出不足先 `RequestTopUp` 再回 RETRY |
+| `cpp/libs/modules/id_segment/guid_segment_client.{h,cpp}` | 新增 `RequestTopUp(needed)`,按序判:未启用 / 停机回 `kUnavailable`;够了回 `kEnough`;`needed` 大于 `maxStep` 回 `kExceedsMaxStep`(终局:一段最多 `maxStep` 个号,只靠续段永远凑不齐;不记需求、不发请求、不作废号);下一段已在手里而两段合计仍不够时腾出一个 buffer —— 当前段剩下的号作废(从未发出,发号器不会再发,不会撞号;计入 `topUpAbandonedIds`),下一段换成当前段;然后记下需求,续段那一次的 step 抬到 `max(当前 step, needed)`(不超过 `maxStep`,动态 step 本身不变),没有在途、不在退避就立刻领一段(与预取同一条单飞路径),回 `kFetching`。需求(连同抬高的 step)在下一次校验通过的段落下时清掉。退避到期的重试见到需求照发、也按抬高的 step 领,不再因为「剩余高于阈值」跳过。`Stats` 加 `topUpFetches` / `topUpPending` / `topUpStep` / `topUpAbandonedIds` |
+| `player_battle.cpp` `HasItemGuidsForDrops` | 判出不足先 `RequestTopUp` 再整笔 DEFER;`kExceedsMaxStep` / `kUnavailable` 打 ERROR(要人看 IdSegments 的 `MaxStep` / `Enabled`),**照样只 DEFER**:结算不能拒收,奖励与消耗都在这一笔里,原件留在收件箱,改配置后自愈 |
+| `asset_op_system.cpp` `ApplyCredit` (b) | 需要量改用 `BagService::MaxNewInstancesFor`(与战斗结算同口径),判出不足先 `RequestTopUp` 再回 RETRY;`kExceedsMaxStep` 按第 8 步包校验同一口径记终局拒绝(REJECTED + `kAssetInvalidBundle`,`metric=asset_credit_exceeds_guid_segment_max_step`),结局随账本固定、同一 seq 只读回放;Go 侧(`shared/assetop` 的 Decide → FinalStatus)按 REJECTED 终结做对侧账:帮会退次数 / 帮贡 / 限购,邮件把附件退回未领取,交易记 REJECTED 终态;上游要发就拆成更小的批次 |
 
-**代价。** 有需求时会比阈值预取早领一段(号段本来允许浪费,一段最多 `maxStep` 个号);`kBuffersFull` 只能靠调大 step 解决。
+**评审修正(2026-11-06)。** 原先「下一段已在手里还不够」回 `kBuffersFull`、调用方一直等:空闲节点的动态 step 会缩到 `MinStep`(1000),
+预取过一次之后的常态正是「当前段剩不多、下一段一整段」,资产通道单笔最多 4096 件不可叠加物,这种批次永远 RETRY。改成上面的腾 buffer
+加抬 step 之后,`needed ≤ maxStep` 的批次一次续段就够;只有比一段最多能给的号还多(生产 `MaxStep` 1,000,000,只会是配置写错)才是终局。
+选「资产通道记终局拒绝、战斗结算只延后」的理由:资产通道对确定性失败一律记 REJECTED 免得 Go 无限重投同一个包(第 8 步),上游已有
+REJECTED 的处置路径;战斗结算没有可退的对侧,拒收就是丢奖励或白喝药,只能留着原件等配置修好。
+
+**代价。** 有需求时会比阈值预取早领一段、可能比当前 step 大(号段本来允许浪费,一段最多 `maxStep` 个号);腾 buffer 时作废当前段剩下的号
+(批次大于两段合计时才发生,生产 step 下极少)。
 
 ### 11.2 FIGHTING 冻结到期先查 SQL 终局(r2-v1#1 残余窗口)
 
@@ -519,10 +526,19 @@ match 的宽限只推迟 ABORT(`completion.go` 的 `terminalOutcomeGraceMs`);发
 
 **修法。** reaper 判出 FIGHTING 到期(`nowMs > FreezeExpiresAtMs`)后不再直接解冻,交给 `ResolveExpiredFightingFreeze`:
 
-1. 这一局的结算已在本实体应用过(收件箱战斗域最近结局环里有它,`HasRecentAppliedBattleSettlement`)→ 照常解冻,不查。
+1. 这一局的结算已在本实体应用过(收件箱战斗域最近结局环里有它的 APPLIED,`HasRecentAppliedBattleSettlement`)→ 照常解冻,不查。
    典型场景:结算提交之后删锁没落地,玩家重登按锁重建了冻结。
-2. 同一局已有查询在途 → 这一拍不动。在途超过一拍加一次调用期限(36 秒)仍没回 → 当作丢失(`metric=battle_terminal_query_lost`),按未知处置。
-3. 否则向 match 发一次只读查询 `MatchInternal.GetBattleTerminalDecision`,按 `battle_freeze_hold_rules.h` 的判定表处置:
+   **环里的 REJECTED / SKIPPED 不算收尾(2026-11-06 评审核实)**:战斗结算域里这两种都不是终局。收件箱 Ack 对这个域只收 APPLIED,
+   报 REJECTED / SKIPPED 回 CONFLICT、行不变;`VoidItem` 对这个域一律拒绝;Match 只凭 APPLIED 收据放票(runbook §6.1)。scene 的执行器
+   从不回 `kRejected`(坏载荷也只 DEFER 或按版本错位停用该域),条目带指令或回放到非 APPLIED 的原结局时状态机直接停用该域。
+   环里真出现这两种只能是旧版本或缺陷留下的异常,唯一出口是修好之后让 scene 把原件执行成功,结算之后仍可能到达,
+   所以照旧查终局、续冻,到上限告警交人工(用例 `RejectedOrSkippedInTheBattleRingIsNotTerminalAndStillQueries`)。
+2. 已越过续冻上限(`nowMs > FreezeHoldDeadlineMs`)→ 告警 `metric=battle_freeze_hold_cap_reached`(ERROR,`terminal=not_queried_past_cap`)后
+   照常解冻,不再查询、也不等在途的查询:越过上限之后的处置只有解冻一种(评审修正 2026-11-06,原先越过上限那一拍照样发查询、等回答)。
+3. 同一局已有查询在途 → 这一拍不动。按**单调钟**在途超过一拍加一次调用期限(36 秒)仍没回 → 当作丢失(`metric=battle_terminal_query_lost`),
+   按未知处置。在途时长是进程内耗时(AGENTS §11.3),墙钟只用于跨进程的截止时刻(deadline、续冻上限);原先按墙钟差判,
+   墙钟前跳会把正常在途的查询误判丢失,回拨会让丢失的查询一直不判。
+4. 否则向 match 发一次只读查询 `MatchInternal.GetBattleTerminalDecision`,按 `battle_freeze_hold_rules.h` 的判定表处置:
 
 | SQL 终局 | 处置 |
 |---|---|
@@ -531,7 +547,7 @@ match 的宽限只推迟 ABORT(`completion.go` 的 `terminalOutcomeGraceMs`);发
 | NONE,但有可裁决的 v1 原件(`terminal_expected=true`) | 按「结果未知」续冻一拍,锁跟着续(`metric=battle_freeze_held terminal=PENDING`) |
 | COMPLETE(本地还没应用) | 续冻一拍,锁跟着续(`metric=battle_freeze_held terminal=COMPLETE`) |
 | 未知:没发出去 / 传输失败 / 回包验签不过 / match 带内 retry / 取值不认识 | 同样续冻一拍(`metric=battle_freeze_held terminal=UNKNOWN`) |
-| 续冻到 `FreezeHoldDeadlineMs` = FreezeExpiresAtMs + 15 分钟之后仍是 COMPLETE、PENDING 或未知 | 告警 `metric=battle_freeze_hold_cap_reached`(ERROR)后照常解冻 |
+| 续冻到 `FreezeHoldDeadlineMs` = FreezeExpiresAtMs + 15 分钟之后仍是 COMPLETE、PENDING 或未知 | 越过上限的那一拍(第 2 步)告警 `metric=battle_freeze_hold_cap_reached`(ERROR)后照常解冻,不再查询 |
 
 **NONE 为什么分两种(2026-11-06 负责人定)。** 冻结到期 = 截止 + 60s 宽限 + 60s 余量,晚于 match 补写 ABORT 的时刻(截止 + 60s,
 `ready_recovery` 的到期恢复)。有原件的局到期还是 NONE,只说明 ABORT 还没写成(match 不可用或恢复任务滞后),而 COMPLETE 不判截止、
@@ -549,7 +565,17 @@ battle 明确采用旧协议的成局、原件坏形状的成局,以及锁值对
 不分到期之前还是续冻之中:开局确认、续冻一拍、重登或迟到确认按锁重建时的复核都走它。玩家在冻结到期之前下线、超过到期点才重登,
 锁还在,登录按锁重建冻结,到期处理照常查终局;match 也不会提前放下一场。代价:结算一直不来的局,锁最多多留约 15 分钟,
 这段时间 match 按 `battle:lock` 拒绝排队,有界;正常结算、取消、到期解冻都照旧按条件删锁,不受影响。
-越过上限之后那一拍发出的查询在途期间,锁不会先过期:一拍 30s 加调用期限 6s 小于 60s 余量(`static_assert`)。
+解冻一定早于锁过期(评审修正 2026-11-06,含查询丢失的路径):越过上限的那一拍直接解冻、不等在途查询,所以任何路径的解冻都不晚于
+越过上限后的第一拍,即上限之后至多一拍(30s);锁到期 = 上限 + 60s,写锁时 EX 秒级下取整最多早到 1 秒。30s + 1s 小于 60s(`static_assert`)。
+原先越过上限那一拍照样发查询,丢失路径要再等两拍才判丢失,解冻最晚可到上限 + 90s,晚于锁过期。
+
+**ctx 缺失时按锁 TTL 反推期限(评审修正 2026-11-06,`PlayerBattleSystem::InferFightingDeadlineFromLockTtlMs`)。** 锁与 ctx 同一条 Lua 写入,
+ctx 缺失或不可信只在数据损坏时出现。锁到期 = deadline + 终局宽限 + 投递余量 + 续冻上限 + 锁余量;原先按「现在 + 剩余 TTL」反推,
+TTL 里含 15 分钟续冻上限,首次查询晚约 18 分钟。现在剩余 TTL 大于「续冻上限 + 锁余量」(960 秒)时,这把锁一定是 FIGHTING 的、原到期时刻还在后面
+(备战期的锁 TTL 只有备战期限 + 60 秒,备战期限受 match 工作租约约束,远短于 15 分钟),扣掉四项后首次查询落在原来的到期时刻,
+另加 1.5 秒盖住 EX 下取整与 TTL 读数四舍五入,只会偏晚、不超过两秒。剩余 TTL 不超过 960 秒时分不清是备战期的锁还是续冻后段的 FIGHTING 锁,
+照旧取「现在 + TTL」:按 FIGHTING 精确反推会把备战期的锁当场判到期,备战期 match 还没落 v1 原件,查询回 NO_ORIGINAL 就会解冻、删锁,
+这一局随后照常开打时冻结与锁都已不在。代价:续冻后段才重登且 ctx 损坏的局,首次查询仍会推迟(最多约 18 分钟),只影响活性。
 
 **新 RPC `MatchInternal.GetBattleTerminalDecision`**(`proto/match/match_internal.proto` 只追加;`go/match/internal/logic/battle_terminal_decision.go`):
 
@@ -568,9 +594,11 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 
 **不变量。**
 
-1. 只有「本地已应用」「ABORT」「没有可裁决原件」「越过上限」四种情形解冻 FIGHTING 冻结;COMPLETE 未应用、有原件的 NONE 与未知都续冻,
-   资产通道在续冻期间回 RETRY。FIGHTING 锁活到续冻上限 + 60s,冻结活着的时候锁一定在。
-2. 续冻有界:判定时刻用发出查询那一拍的时刻,上限锚定在本局 deadline 上,与重登、换节点无关;丢一次回调不会把玩家永远冻住。
+1. 只有「本地已应用(收件箱环里的 APPLIED)」「ABORT」「没有可裁决原件」「越过上限」四种情形解冻 FIGHTING 冻结
+   (另有组件缺身份的兜底);COMPLETE 未应用、有原件的 NONE 与未知都续冻,环里的 REJECTED / SKIPPED 也按「结算还会来」续冻;
+   资产通道在续冻期间回 RETRY。FIGHTING 锁活到续冻上限 + 60s,解冻不晚于越过上限后的第一拍,冻结活着的时候锁一定在。
+2. 续冻有界:判上限用这一拍的墙钟时刻(上限锚定在本局 deadline 上,与重登、换节点无关);判查询丢失用单调钟;
+   丢一次回调不会把玩家永远冻住,越过上限的那一拍不等任何查询。
 3. 回答到达时按 player_id 现取实体,这一局的冻结还在才动手;「是不是 FIGHTING」与 reaper、`LockTtlSecOf` 同一口径(不是 PREPARING 就按 FIGHTING,
    state 缺失的组件也算;评审修正:只认 FIGHTING 会让这种冻结每拍都查、回答被丢、永远解不了冻);回调只捕获 id 与时刻,不捕获实体句柄(AGENTS §11.7)。
 4. 查询只读,多副本并发安全:任一 match 副本读同一份 SQL;每个玩家的冻结只由持有它的 scene 节点处置(单写者)。
@@ -626,16 +654,23 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 ### 11.3 用例与验证(全部未执行,待 Codex)
 
 - `cpp/tests/bag_test/bag_test.cpp`:`GuidSegmentClientTest.TopUpFetchesWhenABatchNeedsMoreThanIsLeftAboveThePrefetchThreshold`、
-  `TopUpReportsEnoughFullOrUnavailableWithoutSending`、`TopUpThatFailedIsRetriedAfterBackoffEvenAboveThePrefetchThreshold`、
-  `TopUpPromotesTheWaitingSegmentWhenTheCurrentOneIsSpent`(评审补);
-- `cpp/tests/bag_test/player_battle_settlement_test.cpp`:`PlayerBattleSettlementItemTest.ItemGuidShortageAboveThePrefetchThresholdRequestsATopUp`;
+  `TopUpReportsEnoughExceedsMaxStepOrUnavailableWithoutSending`(评审改名,原 `TopUpReportsEnoughFullOrUnavailableWithoutSending`)、
+  `TopUpThatFailedIsRetriedAfterBackoffEvenAboveThePrefetchThreshold`(评审补:重试也按抬高的 step 领),评审补
+  `TopUpPromotesTheWaitingSegmentWhenTheCurrentOneIsSpent`、`TopUpRaisesTheStepToCoverTheWholeBatchWithoutChangingTheDynamicStep`、
+  `TopUpAbandonsTheCurrentRemainderWhenBothBuffersCannotCoverTheBatch`;
+- `cpp/tests/bag_test/player_battle_settlement_test.cpp`:`PlayerBattleSettlementItemTest.ItemGuidShortageAboveThePrefetchThresholdRequestsATopUp`,
+  评审补 `ItemGuidNeedAboveTheMaxStepDefersTheWholeSettlementWithoutFetching`;
   夹具注入终局查询一律回 NO_ORIGINAL(这些局没有 SQL 原件),原有的到期用例照旧成立;`FirstConfirmUpgradesToFightingAndRenewsFromFreezeExpiry`
   与 `RepeatedConfirmRenewsLockOnceFromComponentStateWithoutChangingIt` 的 TTL 断言改按 FreezeHoldDeadlineMs;
 - `cpp/tests/bag_test/battle_freeze_hold_test.cpp`(新):`BattleFreezeHoldRules.DecisionTableAndHoldDeadline`、
-  `BattleFreezeHoldTest.*` 11 条(COMPLETE 未应用续冻、到上限解冻计数、查询失败续冻一拍、ABORT 照常解冻、有原件的 NONE 续冻、
+  `BattleFreezeHoldRules.LockTtlDeadlineInferenceLandsOnTheOriginalExpiry`(评审补)、
+  `BattleFreezeHoldTest.*` 11 条(COMPLETE 未应用续冻、到上限解冻计数(评审改:越过上限不再查询)、查询失败续冻一拍、ABORT 照常解冻、有原件的 NONE 续冻、
   没有 SQL 原件的局到期照常解冻、开局确认的锁活过续冻上限(到期后重登可重建)、续冻期间资产通道 RETRY、本地已应用不查、迟到回答不动、
-  丢失按未知),评审补 `StatelessFreezeIsResolvedLikeFightingAndStaysBounded` 共 12 条;`BattleTerminalQueryReply.ClassifiesOnlySignedRepliesBoundToTheRequest`、
-  `AssetOpCreditGuidTopUpTest.*` 2 条;
+  丢失按未知(评审改:按单调钟拨)),评审补 `StatelessFreezeIsResolvedLikeFightingAndStaysBounded`、
+  `LostQueryIsMeasuredOnTheMonotonicClockNotTheWallClock`、`PastTheCapReleasesOnTheFirstTickWithoutWaitingForAQueryInFlight`、
+  `RejectedOrSkippedInTheBattleRingIsNotTerminalAndStillQueries`、`InboxDecisionsOfOtherBattlesOrTypesStillQuery` 共 16 条;
+  `BattleTerminalQueryReply.ClassifiesOnlySignedRepliesBoundToTheRequest`、`AssetOpCreditGuidTopUpTest.*` 3 条
+  (评审补 `BatchNeedingMoreThanTheMaxStepIsRejectedAsAnInvalidBundle`;夹具先清残留的全局封禁);
 - `go/match/internal/logic/battle_terminal_decision_test.go`(新)4 个用例;`go/match/internal/authority/terminal_read_test.go`(新):
   `TestTerminalOutcomeExpectedOnlyForAdjudicableOriginals`(纯判据)、`TestTerminalTiDBBattleTerminalStateTellsPendingFromNoOriginal`(真 TiDB)。
 

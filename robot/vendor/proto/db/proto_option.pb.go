@@ -220,6 +220,58 @@ func (ClientRpcKind) EnumDescriptor() ([]byte, []int) {
 	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{1}
 }
 
+// 玩家存档一行的存盘方式(docs/design/player-save-direct-commit.md §1.1),声明在 playerstore.PlayerStoreKind 的每个数据行上。
+// 它只决定「这一行单独变了要不要触发一次存盘」;一旦决定存盘,所有和上次确认提交不同的行都写,不按方式挑行。
+type PersistRowSavePolicy int32
+
+const (
+	PersistRowSavePolicy_PERSIST_ROW_SAVE_UNSPECIFIED PersistRowSavePolicy = 0 // 未声明:scene 拒绝启动
+	PersistRowSavePolicy_PERSIST_ROW_SAVE_PERIODIC    PersistRowSavePolicy = 1 // 有变化就随下一次定时存盘写入
+	// 只顺带:单独有变化不触发存盘。别的行要写、最终存盘(下线、交接、停机)、或者这一行已经脏了超过兜底间隔时一起写
+	PersistRowSavePolicy_PERSIST_ROW_SAVE_PIGGYBACK PersistRowSavePolicy = 2
+)
+
+// Enum value maps for PersistRowSavePolicy.
+var (
+	PersistRowSavePolicy_name = map[int32]string{
+		0: "PERSIST_ROW_SAVE_UNSPECIFIED",
+		1: "PERSIST_ROW_SAVE_PERIODIC",
+		2: "PERSIST_ROW_SAVE_PIGGYBACK",
+	}
+	PersistRowSavePolicy_value = map[string]int32{
+		"PERSIST_ROW_SAVE_UNSPECIFIED": 0,
+		"PERSIST_ROW_SAVE_PERIODIC":    1,
+		"PERSIST_ROW_SAVE_PIGGYBACK":   2,
+	}
+)
+
+func (x PersistRowSavePolicy) Enum() *PersistRowSavePolicy {
+	p := new(PersistRowSavePolicy)
+	*p = x
+	return p
+}
+
+func (x PersistRowSavePolicy) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PersistRowSavePolicy) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_db_proto_option_proto_enumTypes[2].Descriptor()
+}
+
+func (PersistRowSavePolicy) Type() protoreflect.EnumType {
+	return &file_proto_db_proto_option_proto_enumTypes[2]
+}
+
+func (x PersistRowSavePolicy) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PersistRowSavePolicy.Descriptor instead.
+func (PersistRowSavePolicy) EnumDescriptor() ([]byte, []int) {
+	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{2}
+}
+
 // Database operation type
 type OPERATE_TYPE int32
 
@@ -272,11 +324,11 @@ func (x OPERATE_TYPE) String() string {
 }
 
 func (OPERATE_TYPE) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_db_proto_option_proto_enumTypes[2].Descriptor()
+	return file_proto_db_proto_option_proto_enumTypes[3].Descriptor()
 }
 
 func (OPERATE_TYPE) Type() protoreflect.EnumType {
-	return &file_proto_db_proto_option_proto_enumTypes[2]
+	return &file_proto_db_proto_option_proto_enumTypes[3]
 }
 
 func (x OPERATE_TYPE) Number() protoreflect.EnumNumber {
@@ -285,7 +337,7 @@ func (x OPERATE_TYPE) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OPERATE_TYPE.Descriptor instead.
 func (OPERATE_TYPE) EnumDescriptor() ([]byte, []int) {
-	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{2}
+	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{3}
 }
 
 // Business operation result type
@@ -322,11 +374,11 @@ func (x BS_RESULT_TYPE) String() string {
 }
 
 func (BS_RESULT_TYPE) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_db_proto_option_proto_enumTypes[3].Descriptor()
+	return file_proto_db_proto_option_proto_enumTypes[4].Descriptor()
 }
 
 func (BS_RESULT_TYPE) Type() protoreflect.EnumType {
-	return &file_proto_db_proto_option_proto_enumTypes[3]
+	return &file_proto_db_proto_option_proto_enumTypes[4]
 }
 
 func (x BS_RESULT_TYPE) Number() protoreflect.EnumNumber {
@@ -335,7 +387,7 @@ func (x BS_RESULT_TYPE) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BS_RESULT_TYPE.Descriptor instead.
 func (BS_RESULT_TYPE) EnumDescriptor() ([]byte, []int) {
-	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{3}
+	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{4}
 }
 
 // RPC message priority (for cross-scene/cross-node delivery strategy)
@@ -369,11 +421,11 @@ func (x MessagePriority) String() string {
 }
 
 func (MessagePriority) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_db_proto_option_proto_enumTypes[4].Descriptor()
+	return file_proto_db_proto_option_proto_enumTypes[5].Descriptor()
 }
 
 func (MessagePriority) Type() protoreflect.EnumType {
-	return &file_proto_db_proto_option_proto_enumTypes[4]
+	return &file_proto_db_proto_option_proto_enumTypes[5]
 }
 
 func (x MessagePriority) Number() protoreflect.EnumNumber {
@@ -382,7 +434,7 @@ func (x MessagePriority) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MessagePriority.Descriptor instead.
 func (MessagePriority) EnumDescriptor() ([]byte, []int) {
-	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{4}
+	return file_proto_db_proto_option_proto_rawDescGZIP(), []int{5}
 }
 
 var file_proto_db_proto_option_proto_extTypes = []protoimpl.ExtensionInfo{
@@ -674,6 +726,14 @@ var file_proto_db_proto_option_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "varint,600041,opt,name=OptionPersistGroup",
 		Filename:      "proto/db/proto_option.proto",
 	},
+	{
+		ExtendedType:  (*descriptorpb.EnumValueOptions)(nil),
+		ExtensionType: (*PersistRowSavePolicy)(nil),
+		Field:         700000,
+		Name:          "OptionPersistRowSavePolicy",
+		Tag:           "varint,700000,opt,name=OptionPersistRowSavePolicy,enum=PersistRowSavePolicy",
+		Filename:      "proto/db/proto_option.proto",
+	},
 }
 
 // Extension fields to descriptorpb.FileOptions.
@@ -789,12 +849,20 @@ var (
 	//
 	// optional bool OptionPersistUncarried = 600040;
 	E_OptionPersistUncarried = &file_proto_db_proto_option_proto_extTypes[34]
-	// 玩家表字段属于 player_store 的哪一组,取值是 playerstore.PlayerStoreKind 的数值;0 表示元数据,不进片段
+	// 玩家表字段属于 player_store 的哪一行,取值是 playerstore.PlayerStoreKind 的数值;0 表示元数据,不进片段
 	// (docs/design/player-save-direct-commit.md §1.1)。player_database 每个字段都必须声明,
-	// 漏标 scene 拒绝启动,不会静默丢数据。用 uint32 而不是枚举:这个文件被全部 proto 依赖,不能反过来依赖业务 proto。
+	// 漏标或标到退役、不存在的行,scene 拒绝启动,不会静默丢数据。用 uint32 而不是枚举:这个文件被全部 proto 依赖,不能反过来依赖业务 proto。
 	//
 	// optional uint32 OptionPersistGroup = 600041;
 	E_OptionPersistGroup = &file_proto_db_proto_option_proto_extTypes[35]
+)
+
+// Extension fields to descriptorpb.EnumValueOptions.
+var (
+	// 写在 playerstore.PlayerStoreKind 的每个数据行上;写权行(0)不写。漏标 scene 拒绝启动。
+	//
+	// optional PersistRowSavePolicy OptionPersistRowSavePolicy = 700000;
+	E_OptionPersistRowSavePolicy = &file_proto_db_proto_option_proto_extTypes[36]
 )
 
 var File_proto_db_proto_option_proto protoreflect.FileDescriptor
@@ -846,7 +914,11 @@ const file_proto_db_proto_option_proto_rawDesc = "" +
 	"\x12CLIENT_RPC_REQUEST\x10\x00\x12\x16\n" +
 	"\x12CLIENT_RPC_ONE_WAY\x10\x01\x12\x13\n" +
 	"\x0fCLIENT_RPC_PUSH\x10\x02\x12\x1a\n" +
-	"\x16CLIENT_RPC_SERVER_ONLY\x10\x03*\xcf\x01\n" +
+	"\x16CLIENT_RPC_SERVER_ONLY\x10\x03*w\n" +
+	"\x14PersistRowSavePolicy\x12 \n" +
+	"\x1cPERSIST_ROW_SAVE_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19PERSIST_ROW_SAVE_PERIODIC\x10\x01\x12\x1e\n" +
+	"\x1aPERSIST_ROW_SAVE_PIGGYBACK\x10\x02*\xcf\x01\n" +
 	"\fOPERATE_TYPE\x12\x10\n" +
 	"\fOPERATE_NONE\x10\x00\x12\x12\n" +
 	"\x0eOPERATE_INSERT\x10\x01\x12\x12\n" +
@@ -899,7 +971,8 @@ const file_proto_db_proto_option_proto_rawDesc = "" +
 	"\vOptionTable\x12\x1d.google.protobuf.FieldOptions\x18\xc8\xcf$ \x01(\tR\vOptionTable\x88\x01\x01:P\n" +
 	"\x11OptionBackUpTabel\x12\x1d.google.protobuf.FieldOptions\x18\xc9\xcf$ \x01(\tR\x11OptionBackUpTabel\x88\x01\x01:Z\n" +
 	"\x16OptionPersistUncarried\x12\x1d.google.protobuf.FieldOptions\x18\xe8\xcf$ \x01(\bR\x16OptionPersistUncarried\x88\x01\x01:R\n" +
-	"\x12OptionPersistGroup\x12\x1d.google.protobuf.FieldOptions\x18\xe9\xcf$ \x01(\rR\x12OptionPersistGroup\x88\x01\x01B\fH\x01Z\bproto/dbb\x06proto3"
+	"\x12OptionPersistGroup\x12\x1d.google.protobuf.FieldOptions\x18\xe9\xcf$ \x01(\rR\x12OptionPersistGroup\x88\x01\x01:}\n" +
+	"\x1aOptionPersistRowSavePolicy\x12!.google.protobuf.EnumValueOptions\x18\xe0\xdc* \x01(\x0e2\x15.PersistRowSavePolicyR\x1aOptionPersistRowSavePolicy\x88\x01\x01B\fH\x01Z\bproto/dbb\x06proto3"
 
 var (
 	file_proto_db_proto_option_proto_rawDescOnce sync.Once
@@ -913,64 +986,68 @@ func file_proto_db_proto_option_proto_rawDescGZIP() []byte {
 	return file_proto_db_proto_option_proto_rawDescData
 }
 
-var file_proto_db_proto_option_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_proto_db_proto_option_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
 var file_proto_db_proto_option_proto_goTypes = []any{
-	(NodeType)(0),                       // 0: NodeType
-	(ClientRpcKind)(0),                  // 1: ClientRpcKind
-	(OPERATE_TYPE)(0),                   // 2: OPERATE_TYPE
-	(BS_RESULT_TYPE)(0),                 // 3: BS_RESULT_TYPE
-	(MessagePriority)(0),                // 4: MessagePriority
-	(*descriptorpb.FileOptions)(nil),    // 5: google.protobuf.FileOptions
-	(*descriptorpb.ServiceOptions)(nil), // 6: google.protobuf.ServiceOptions
-	(*descriptorpb.MethodOptions)(nil),  // 7: google.protobuf.MethodOptions
-	(*descriptorpb.MessageOptions)(nil), // 8: google.protobuf.MessageOptions
-	(*descriptorpb.FieldOptions)(nil),   // 9: google.protobuf.FieldOptions
+	(NodeType)(0),                         // 0: NodeType
+	(ClientRpcKind)(0),                    // 1: ClientRpcKind
+	(PersistRowSavePolicy)(0),             // 2: PersistRowSavePolicy
+	(OPERATE_TYPE)(0),                     // 3: OPERATE_TYPE
+	(BS_RESULT_TYPE)(0),                   // 4: BS_RESULT_TYPE
+	(MessagePriority)(0),                  // 5: MessagePriority
+	(*descriptorpb.FileOptions)(nil),      // 6: google.protobuf.FileOptions
+	(*descriptorpb.ServiceOptions)(nil),   // 7: google.protobuf.ServiceOptions
+	(*descriptorpb.MethodOptions)(nil),    // 8: google.protobuf.MethodOptions
+	(*descriptorpb.MessageOptions)(nil),   // 9: google.protobuf.MessageOptions
+	(*descriptorpb.FieldOptions)(nil),     // 10: google.protobuf.FieldOptions
+	(*descriptorpb.EnumValueOptions)(nil), // 11: google.protobuf.EnumValueOptions
 }
 var file_proto_db_proto_option_proto_depIdxs = []int32{
-	5,  // 0: OptionFileDefaultNode:extendee -> google.protobuf.FileOptions
-	6,  // 1: OptionIsPlayerService:extendee -> google.protobuf.ServiceOptions
-	6,  // 2: OptionIsClientProtocolService:extendee -> google.protobuf.ServiceOptions
-	7,  // 3: OptionMessagePriority:extendee -> google.protobuf.MethodOptions
-	7,  // 4: OptionClientRpcKind:extendee -> google.protobuf.MethodOptions
-	8,  // 5: OptionTableId:extendee -> google.protobuf.MessageOptions
-	8,  // 6: OptionTableName:extendee -> google.protobuf.MessageOptions
-	8,  // 7: OptionPrimaryKey:extendee -> google.protobuf.MessageOptions
-	8,  // 8: OptionForeignKey:extendee -> google.protobuf.MessageOptions
-	8,  // 9: OptionForeignReferences:extendee -> google.protobuf.MessageOptions
-	8,  // 10: OptionAutoIncrementKey:extendee -> google.protobuf.MessageOptions
-	8,  // 11: OptionBackupTableName:extendee -> google.protobuf.MessageOptions
-	8,  // 12: OptionLoadOnly:extendee -> google.protobuf.MessageOptions
-	8,  // 13: OptionProcedureName:extendee -> google.protobuf.MessageOptions
-	8,  // 14: OptionProcedureResult:extendee -> google.protobuf.MessageOptions
-	8,  // 15: OptionIndex:extendee -> google.protobuf.MessageOptions
-	8,  // 16: OptionUniqueKey:extendee -> google.protobuf.MessageOptions
-	8,  // 17: OptionIsPlayerDatabase:extendee -> google.protobuf.MessageOptions
-	8,  // 18: OptionOperateType:extendee -> google.protobuf.MessageOptions
-	8,  // 19: OptionTiDBNonclusteredPK:extendee -> google.protobuf.MessageOptions
-	8,  // 20: OptionTiDBShardRowIDBits:extendee -> google.protobuf.MessageOptions
-	8,  // 21: OptionTiDBPreSplitRegions:extendee -> google.protobuf.MessageOptions
-	8,  // 22: OptionTiDBAutoIDCacheOne:extendee -> google.protobuf.MessageOptions
-	8,  // 23: OptionPersistFrozen:extendee -> google.protobuf.MessageOptions
-	9,  // 24: OptionRepeatLimit:extendee -> google.protobuf.FieldOptions
-	9,  // 25: OptionDBFieldExtra:extendee -> google.protobuf.FieldOptions
-	9,  // 26: OptionDBReadOnly:extendee -> google.protobuf.FieldOptions
-	9,  // 27: OptionDBNamePrefix:extendee -> google.protobuf.FieldOptions
-	9,  // 28: OptionDBLoadSql:extendee -> google.protobuf.FieldOptions
-	9,  // 29: OptionDBNeedEscape:extendee -> google.protobuf.FieldOptions
-	9,  // 30: OptionDBProcParam:extendee -> google.protobuf.FieldOptions
-	9,  // 31: OptionOldName:extendee -> google.protobuf.FieldOptions
-	9,  // 32: OptionTable:extendee -> google.protobuf.FieldOptions
-	9,  // 33: OptionBackUpTabel:extendee -> google.protobuf.FieldOptions
-	9,  // 34: OptionPersistUncarried:extendee -> google.protobuf.FieldOptions
-	9,  // 35: OptionPersistGroup:extendee -> google.protobuf.FieldOptions
-	0,  // 36: OptionFileDefaultNode:type_name -> NodeType
-	4,  // 37: OptionMessagePriority:type_name -> MessagePriority
-	1,  // 38: OptionClientRpcKind:type_name -> ClientRpcKind
-	2,  // 39: OptionOperateType:type_name -> OPERATE_TYPE
-	40, // [40:40] is the sub-list for method output_type
-	40, // [40:40] is the sub-list for method input_type
-	36, // [36:40] is the sub-list for extension type_name
-	0,  // [0:36] is the sub-list for extension extendee
+	6,  // 0: OptionFileDefaultNode:extendee -> google.protobuf.FileOptions
+	7,  // 1: OptionIsPlayerService:extendee -> google.protobuf.ServiceOptions
+	7,  // 2: OptionIsClientProtocolService:extendee -> google.protobuf.ServiceOptions
+	8,  // 3: OptionMessagePriority:extendee -> google.protobuf.MethodOptions
+	8,  // 4: OptionClientRpcKind:extendee -> google.protobuf.MethodOptions
+	9,  // 5: OptionTableId:extendee -> google.protobuf.MessageOptions
+	9,  // 6: OptionTableName:extendee -> google.protobuf.MessageOptions
+	9,  // 7: OptionPrimaryKey:extendee -> google.protobuf.MessageOptions
+	9,  // 8: OptionForeignKey:extendee -> google.protobuf.MessageOptions
+	9,  // 9: OptionForeignReferences:extendee -> google.protobuf.MessageOptions
+	9,  // 10: OptionAutoIncrementKey:extendee -> google.protobuf.MessageOptions
+	9,  // 11: OptionBackupTableName:extendee -> google.protobuf.MessageOptions
+	9,  // 12: OptionLoadOnly:extendee -> google.protobuf.MessageOptions
+	9,  // 13: OptionProcedureName:extendee -> google.protobuf.MessageOptions
+	9,  // 14: OptionProcedureResult:extendee -> google.protobuf.MessageOptions
+	9,  // 15: OptionIndex:extendee -> google.protobuf.MessageOptions
+	9,  // 16: OptionUniqueKey:extendee -> google.protobuf.MessageOptions
+	9,  // 17: OptionIsPlayerDatabase:extendee -> google.protobuf.MessageOptions
+	9,  // 18: OptionOperateType:extendee -> google.protobuf.MessageOptions
+	9,  // 19: OptionTiDBNonclusteredPK:extendee -> google.protobuf.MessageOptions
+	9,  // 20: OptionTiDBShardRowIDBits:extendee -> google.protobuf.MessageOptions
+	9,  // 21: OptionTiDBPreSplitRegions:extendee -> google.protobuf.MessageOptions
+	9,  // 22: OptionTiDBAutoIDCacheOne:extendee -> google.protobuf.MessageOptions
+	9,  // 23: OptionPersistFrozen:extendee -> google.protobuf.MessageOptions
+	10, // 24: OptionRepeatLimit:extendee -> google.protobuf.FieldOptions
+	10, // 25: OptionDBFieldExtra:extendee -> google.protobuf.FieldOptions
+	10, // 26: OptionDBReadOnly:extendee -> google.protobuf.FieldOptions
+	10, // 27: OptionDBNamePrefix:extendee -> google.protobuf.FieldOptions
+	10, // 28: OptionDBLoadSql:extendee -> google.protobuf.FieldOptions
+	10, // 29: OptionDBNeedEscape:extendee -> google.protobuf.FieldOptions
+	10, // 30: OptionDBProcParam:extendee -> google.protobuf.FieldOptions
+	10, // 31: OptionOldName:extendee -> google.protobuf.FieldOptions
+	10, // 32: OptionTable:extendee -> google.protobuf.FieldOptions
+	10, // 33: OptionBackUpTabel:extendee -> google.protobuf.FieldOptions
+	10, // 34: OptionPersistUncarried:extendee -> google.protobuf.FieldOptions
+	10, // 35: OptionPersistGroup:extendee -> google.protobuf.FieldOptions
+	11, // 36: OptionPersistRowSavePolicy:extendee -> google.protobuf.EnumValueOptions
+	0,  // 37: OptionFileDefaultNode:type_name -> NodeType
+	5,  // 38: OptionMessagePriority:type_name -> MessagePriority
+	1,  // 39: OptionClientRpcKind:type_name -> ClientRpcKind
+	3,  // 40: OptionOperateType:type_name -> OPERATE_TYPE
+	2,  // 41: OptionPersistRowSavePolicy:type_name -> PersistRowSavePolicy
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	37, // [37:42] is the sub-list for extension type_name
+	0,  // [0:37] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
 }
 
@@ -984,9 +1061,9 @@ func file_proto_db_proto_option_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_db_proto_option_proto_rawDesc), len(file_proto_db_proto_option_proto_rawDesc)),
-			NumEnums:      5,
+			NumEnums:      6,
 			NumMessages:   0,
-			NumExtensions: 36,
+			NumExtensions: 37,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_db_proto_option_proto_goTypes,

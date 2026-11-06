@@ -1,0 +1,70 @@
+# 发布轨道(灰度 / 金丝雀)的告警(docs/design/release-track-gray-canary.md §2.7、§5.3)。处置见 docs/ops/release-track-canary-runbook.md。
+# 安装方式与 owner-epoch-alerts.yaml 相同:
+#   kubectl apply -n observability -f deploy/k8s/release-track-alerts.yaml
+# 抓取前提:C++ 节点的 /metrics(k8s_deploy.ps1 -CppMetricsPort)与 client-rpc-router 的 :9200(Pod 模板 prometheus.io/port 注解)都在抓。
+# 没有序列时规则不触发,和「一切正常」长得一样。
+# 阈值是起步值:负责人没有给观察窗口与门槛的数(设计文档 §2.7),依据写在各条规则的 description 里,首次金丝雀之后按实测调。
+# label 只用 zone_id、node_type、release_track 与有限的 outcome 枚举,不含玩家号、会话号。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: release-track-alerts
+  labels:
+    app: release-track
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: release-track.zone
+      interval: 30s
+      rules:
+        - alert: ReleaseTrackZoneMixedTooLong
+          expr: |
+            count by (zone_id) (
+              count by (zone_id, release_track) (cpp_node_info{node_type=~"3|4", release_track=~"stable|canary"})
+            ) > 1
+          for: 3h
+          labels:
+            severity: warning
+          annotations:
+            summary: "zone {{ $labels.zone_id }} 的 gate / scene 同时跑着 stable 和 canary 超过 3 小时"
+            description: >-
+              一个 zone 只该有一条轨道(设计 §2.2)。换轨时 gate 逐台排空,新旧 gate 短时并存是正常的;
+              每台 gate 的排空预算约 35 分钟(k8s_gate_drain.ps1 的 WaitTimeoutSeconds 1800 加 ReadyTimeoutSeconds 300),
+              3 小时按 5 台顺序排空留出余量,gate 更多的 zone 按台数调。一直不收敛,通常是排空脚本中途停了,
+              或者 zone-up 换了轨道却没有排空旧 gate(gate 是 OnDelete,不删 Pod 不会换模板)。
+              node_type 3 是 SceneNodeService、4 是 GateNodeService(proto/common/base/node.proto)。
+            runbook_url: docs/ops/release-track-canary-runbook.md
+
+    - name: release-track.canary
+      interval: 30s
+      rules:
+        - alert: ReleaseTrackCanaryForwardErrorsHigh
+          expr: |
+            (
+              sum(rate(client_rpc_router_forward_by_track_total{release_track="canary", outcome=~"no_target|dial_error|upstream_timeout|upstream_error"}[10m]))
+                /
+              sum(rate(client_rpc_router_forward_by_track_total{release_track="canary"}[10m]))
+            )
+            >
+            (
+              2 * (
+                sum(rate(client_rpc_router_forward_by_track_total{release_track="stable", outcome=~"no_target|dial_error|upstream_timeout|upstream_error"}[10m]))
+                  /
+                sum(rate(client_rpc_router_forward_by_track_total{release_track="stable"}[10m]))
+              ) + 0.01
+            )
+            and
+            sum(rate(client_rpc_router_forward_by_track_total{release_track="canary"}[10m])) > 0.1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "金丝雀会话经路由服的请求失败率明显高于 stable"
+            description: >-
+              按会话轨道比较路由服转发的失败率(目标不可用、连不上、超时、目标报错):canary 超过 stable 的 2 倍再加 1 个百分点,
+              并且 canary 的请求量在每秒 0.1 次以上,持续 10 分钟。这是常见的金丝雀判据(和基线比相对倍数,再加绝对下限,
+              两边都接近 0 时不响)。受影响的是真实的金丝雀玩家,先按手册「中止」停掉新流量,再查原因。
+              这个比较只覆盖经路由服的全局服务请求;zone 内的登录、场景、存盘要按 zone_id 对比金丝雀 zone 与其它 zone,见手册「观察」。
+            runbook_url: docs/ops/release-track-canary-runbook.md

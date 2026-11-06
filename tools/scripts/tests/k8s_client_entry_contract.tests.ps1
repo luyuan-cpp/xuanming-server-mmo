@@ -1522,6 +1522,9 @@ function Invoke-DeployWithFakeKubectl {
     $all.NodeImage = $NodeImageRef
     $all.KubeContext = $FakeKubeContext
     $all.KubeConfig = $FakeKubeConfig
+    # 网关的 mmorpg 在全球权威入口上,和 Go 服务一样所有档位都要显式给(Resolve-GatewaySqlMode,在 Assert-LogicalDbPreflight 里核);
+    # 本节测的不是这条闸,同 Invoke-EntryDryRun 补虚构入口。用例自己给了就用它的。
+    if (-not $all.ContainsKey('GlobalAuthorityTiDBHost')) { $all.GlobalAuthorityTiDBHost = 'tidb.invalid:4000' }
     # 非 dev 档必须给 -PlayerRedisMasters,非 DryRun 还要读线上的 statefulset/redis-player(Assert-RedisPlayerPreflight)。本节用例测的不是这条闸:
     # 补上参数与口令,让假 kubectl 答集群已在。用例自己的规则不匹配这条调用,放在最前不影响它们。
     if ([string]$DeployArgs.ReleaseProfile -in @('staging', 'prod')) {

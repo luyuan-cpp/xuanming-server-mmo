@@ -19,6 +19,7 @@ import (
 	"shared/authoritysql"
 	"shared/dbplacement"
 	"shared/playerredis"
+	"shared/redisauth"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -106,6 +107,11 @@ type Config struct {
 	// 在线目录)与 player:{id}:sync_digest。读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
 
+	// SharedRedisPasswordEnv 是 Redis 段(控制域共享单库)的口令所在的环境变量名(shared/redisauth)。K8s 上口令只在
+	// Secret redis-auth 里,经 secretKeyRef 注入;ConfigMap 里 Redis.Pass 写空串。不写 = 照用 Pass 字面量(本机)。
+	// FriendRedis 是独立实例,口令照它自己的 Pass,不归它管。由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。
+	SharedRedisPasswordEnv string `json:",optional"`
+
 	// Kafka:S2C 推送(kafkautil.PushToPlayer → gate-cmd_g<N>)的 broker 地址。
 	//
 	// ⚠ 本字段不在 F1 规格 §3.1 的结构清单里,但 §3.6 要求 svc 继续按现有写法建
@@ -147,6 +153,14 @@ func (c *Config) EffectivePlayerRedis() playerredis.Config {
 		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
 		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
 	})
+}
+
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass,规则见 redisauth.Apply。
+// 没配 FriendRedis 时私有 key 回落到 c.Redis.RedisConf,玩家域没写 Addrs 时也回落到 Redis 段(EffectivePlayerRedis),
+// 填完之后它们用的都是这个口令。-migrate 不连 Redis,只在常驻启动时调用(friend.go)。
+func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass})
 }
 
 // MySQLConf 是 mmorpg_friend 的连接参数。

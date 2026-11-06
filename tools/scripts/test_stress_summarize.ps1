@@ -529,12 +529,6 @@ Assert-Contains -Haystack $outputLines `
     -Needle "75.0" `
     -Reason "expected skip_pct=75.0 (latest sample)"
 
-# 2026-11-05 起两处日志目录都扫(bin\logs\cpp_nodes 是节点日志的实际落点),旧路径的文件名前加 run/。夹具在旧路径,
-# 这里整行断言,本机 bin\logs 里的真实日志不影响结论。夹具是老格式、没有 piggyback_deferred,这一格打 "-"。
-Assert-SectionRow -Lines $outputLines -SectionMarker 'Dirty-save skip rate' -SnapshotName 'run/scene_1.log' `
-    -Pattern '^\s*run/scene_1\.log\s+360\s+270\s+75\.0%\s+-\s*$' `
-    -Reason "the fixture row must carry the latest sample; a line without piggyback_deferred prints -"
-
 # Earlier samples must NOT appear as the displayed row — that would
 # mean the parser kept the FIRST match instead of the LAST.
 $rendered = ($outputLines -join "`n")
@@ -607,6 +601,13 @@ function Assert-HeaderMatches {
     }
     Write-Host "  ok: header $Pattern" -ForegroundColor DarkGreen
 }
+
+# 2026-11-05 起两处日志目录都扫(bin\logs\cpp_nodes 是节点日志的实际落点),旧路径的文件名前加 run/。夹具在旧路径,
+# 这里整行断言,本机 bin\logs 里的真实日志不影响结论。夹具是老格式、没有 piggyback_deferred,这一格打 "-"。
+# PowerShell 按顺序定义函数,这条断言必须在 Assert-SectionRow 定义之后执行。
+Assert-SectionRow -Lines $outputLines -SectionMarker 'Dirty-save skip rate' -SnapshotName 'run/scene_1.log' `
+    -Pattern '^\s*run/scene_1\.log\s+360\s+270\s+75\.0%\s+-\s*$' `
+    -Reason "the fixture row must carry the latest sample; a line without piggyback_deferred prints -"
 
 # EnterGame 表:pool_saturated 是最后一列。
 Assert-HeaderMatches -Lines $outputLines -Pattern 'success\s+apply_failed\s+lock_lost\s+fail%\s+total\{ok\}avg\s+apply avg\s+pool_saturated\s*$' `
