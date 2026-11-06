@@ -508,6 +508,9 @@ func TestHandleWatchPut_ZoneFlipRetiresOldZoneIdentity(t *testing.T) {
 
 	t.Run("leader_marks_death_before_detaching", func(t *testing.T) {
 		sc, mr, faults := setup(t)
+		// 本区前缀下声明别区的注册只按注销处理，别区已有负载集必须原样保留。
+		_, err := mr.ZAdd(nodeLoadKey(newZone), 7, "99")
+		require.NoError(t, err)
 		flip(sc)
 
 		require.True(t, isZoneGoneFromRegistry(testZoneId), "前提:换走之后 zone 1 在注册表里一个节点都没有")
@@ -524,7 +527,7 @@ func TestHandleWatchPut_ZoneFlipRetiresOldZoneIdentity(t *testing.T) {
 		scope, ok := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		require.True(t, ok, "旧 zone 名下的孤儿实例要交给屏障后的收尾队列")
 		assert.Equal(t, []string{"7001"}, scope)
-		assert.Contains(t, loadSetMembersForTest(t, mr, newZone), "10", "新 zone 身份照常进负载集")
+		assert.Equal(t, []string{"99"}, loadSetMembersForTest(t, mr, newZone), "不登记越区身份，也不修改别区已有节点")
 		assert.True(t, localGoneBarrierBlocks(sc, testZoneId, "10"), "每个副本都要记下旧身份消失的时刻")
 
 		logic := NewEnterSceneLogic(context.Background(), sc)

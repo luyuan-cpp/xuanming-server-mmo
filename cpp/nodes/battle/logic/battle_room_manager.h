@@ -571,7 +571,8 @@ private:
     // 往本场全部观战通道发一帧:已升广播只发广播 1 条(升档之前挂的 gate 也不再单发);否则每台中继 gate 各 1 条。
     // 升档后不能再发中继:两条 topic 之间没有顺序,中继帧越过广播上的帧时 gate 会把后者丢掉(最后一回合 TURN 被 END 越过,
     // 观众就看不到最后一回合)。本场在心跳名单里时把名单上的时刻刷成 at:心跳从最近一次全通道发帧起算。
-    void PublishToAllSpectateChannels(const BattleRoom &room, const ::contracts::kafka::SpectateFrameEvent &frame,
+    // 接管调用方构造的临时帧,逐通道改写目标字段,避免每台 gate 再复制一份正文。
+    void PublishToAllSpectateChannels(const BattleRoom &room, ::contracts::kafka::SpectateFrameEvent frame,
                                       std::chrono::steady_clock::time_point at);
 
     // 本场开出通道时(中继 gate 挂接 / 升广播)登记进心跳名单(已在名单里不动时刻),并保证心跳定时器在跑。

@@ -2609,7 +2609,7 @@ void BattleRoomManager::PublishSpectateEnd(const BattleRoom &room, const ::Messa
 }
 
 void BattleRoomManager::PublishToAllSpectateChannels(const BattleRoom &room,
-                                                     const ::contracts::kafka::SpectateFrameEvent &frame,
+                                                     ::contracts::kafka::SpectateFrameEvent frame,
                                                      const std::chrono::steady_clock::time_point at)
 {
     if (const auto tracked = spectateChannelFrameAt_.find(room.battleId); tracked != spectateChannelFrameAt_.end())

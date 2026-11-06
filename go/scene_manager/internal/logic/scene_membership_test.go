@@ -266,6 +266,8 @@ func TestRemoveSceneMember_KeepsWhatLocationStillPointsAt(t *testing.T) {
 	})
 	t.Run("location 记的 zone 不同:节点号相同也是两个进程,不加回", func(t *testing.T) {
 		sc, mr := seed(t)
+		// 由旧成员集合所属区执行清理；玩家的新 location 已在 testZoneId。
+		sc.Config.ZoneId = 77
 		seedNodeMembers(mr, 77, "10", 2, playerID)
 		require.NoError(t, removeSceneMember(sc, playerID, other, 77, "10"))
 		assert.Equal(t, "1", nodeMemberCount(mr, 77, "10"))

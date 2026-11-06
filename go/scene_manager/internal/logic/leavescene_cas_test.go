@@ -40,7 +40,7 @@ func leaveCasValue(t *testing.T, mr *miniredis.Miniredis, key string) string {
 }
 
 // seedLeaveCasFixture:location 写 raw,场景与节点 10 的成员集合都铺成 count 人(count 非 0 时含这名玩家),
-// scene:{id}:node 指向 "10"。
+// scene:{id}:node 指向 "10"，scene:{id}:zone 属于 testZoneId，供 location 已删除后的重试确认本区归属。
 //
 // raw 能解析且记着非 0 的 owner_epoch 时,另外摆上当前代的释放证据(owner_epoch 键 + handoff 标记 "E:100"):
 // LeaveScene 删 location 之前要求持有者已释放(docs/design/location-release-binding.md §3.2),而用这个夹具的用例
@@ -55,6 +55,7 @@ func seedLeaveCasFixture(t *testing.T, mr *miniredis.Miniredis, playerID, sceneI
 	seedSceneMembers(mr, sceneID, mustAtoi(count), members...)
 	seedNodeMembers(mr, testZoneId, "10", mustAtoi(count), members...)
 	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "10"))
+	require.NoError(t, mr.Set(sceneZoneKey(sceneID), strconv.FormatUint(uint64(testZoneId), 10)))
 	loc := &scene_manager.PlayerLocation{}
 	if err := gproto.Unmarshal([]byte(raw), loc); err == nil && loc.GetOwnerEpoch() != 0 {
 		epoch := strconv.FormatUint(loc.GetOwnerEpoch(), 10)
