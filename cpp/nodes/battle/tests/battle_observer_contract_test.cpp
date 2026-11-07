@@ -1409,7 +1409,8 @@ TEST_F(BattleObserverContract, OutcomeRetryIsNotDeferredWhileNoMatchChannelIsRea
 // 排空、不发提交,留到进程退出(查询仍回 PRESENT)。修复前 AbortAllRooms 那一拍没发出去也推后 5s,就绪后的下一拍发不出。
 // 生命周期回调捕获本用例的局部计数,放在独立子进程里。
 TEST_F(BattleObserverContract, ShutdownFlushHoldsDrainUntilFrozenOutcomeIsDecided) {
-    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+    // 回调在宏外定义，避免 MSVC 将内层断言的 __LINE__ 折叠成相同跳转标签。
+    const auto checkShutdown = [&] {
         std::map<uint64_t, int> removed;
         manager().SetRoomLifecycleHooks({nullptr, [&removed](const uint64_t battleId) { ++removed[battleId]; }});
         RouteOutcomesToFake();  // 打完那一刻 match 通道还没就绪,终局没发出去
@@ -1439,7 +1440,8 @@ TEST_F(BattleObserverContract, ShutdownFlushHoldsDrainUntilFrozenOutcomeIsDecide
         EXPECT_EQ(0u, removed.count(ongoing)) << "还在打的房间不删";
         EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationStateOf(ongoing).state());
         EXPECT_EQ(1u, outcomeRoute_.sent.size());
-    }));
+    };
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess(checkShutdown));
 }
 
 // 停机时没有已冻结的终局(房间都还在打):排空谓词立即为真,不为补提交多等,也不挑通道、不发提交;
@@ -1463,7 +1465,7 @@ TEST_F(BattleObserverContract, ShutdownWithOnlyOngoingRoomsIsDrainedImmediately)
 // 进程还在应答查询时,ABSENT / ABORTED 因此不会出现在「房间打完、终局还在路上」的局上。
 // 2026-10-23 之前 AbortAllRooms 逐个 EraseRoom,第一处断言就会变红。停止闸只升不降、移除回调捕获局部计数,放独立子进程。
 TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown) {
-    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+    const auto checkShutdown = [&] {
         std::map<uint64_t, int> removed;
         manager().SetRoomLifecycleHooks({nullptr, [&removed](const uint64_t battleId) { ++removed[battleId]; }});
         RouteOutcomesToFake();  // match 通道一直没就绪:冻结的终局始终拿不到决定
@@ -1494,7 +1496,8 @@ TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown
         Destroy(ongoing);
         expectKept("after StopSqlOutcomes");
         EXPECT_TRUE(outcomeRoute_.sent.empty());
-    }));
+    };
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess(checkShutdown));
 }
 
 // 拆除前钩子(StopSqlOutcomes)之后:泵不再挑通道、不再发请求;停止闸之前发出、之后才回来的回复只打日志,
@@ -1502,7 +1505,7 @@ TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown
 // 最后一段在停止闸之后再冻结一局,把「泵的停止闸」与「待提交集合已被清空」分开:那一局进了待提交集合,泵仍不发。
 // 停止闸只升不降,放在独立子进程里。
 TEST_F(BattleObserverContract, StoppedOutcomesSendNothingAndLateRepliesHaveNoEffect) {
-    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+    const auto checkShutdown = [&] {
         std::map<uint64_t, int> removed;
         manager().SetRoomLifecycleHooks({nullptr, [&removed](const uint64_t battleId) { ++removed[battleId]; }});
         RouteOutcomesToFake();
@@ -1534,7 +1537,8 @@ TEST_F(BattleObserverContract, StoppedOutcomesSendNothingAndLateRepliesHaveNoEff
         BattleRoomManagerTestAccess::PumpSqlOutcomes();
         EXPECT_EQ(picksAtStop, outcomeRoute_.picks) << "待提交集合不空,停止闸照样拦住泵";
         EXPECT_EQ(1u, outcomeRoute_.sent.size());
-    }));
+    };
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess(checkShutdown));
 }
 
 // 恢复时的积压按每拍上限摊开(2026-11-05 第二轮评审补):match 全部不可达期间积下的终局,通道恢复后每拍至多发

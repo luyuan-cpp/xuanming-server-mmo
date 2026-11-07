@@ -1243,3 +1243,63 @@ Root按DC251FB9原子交还重读了两实际pin、0退出、当前native空及�
 - 按负责人要求的先后门禁及 AGENTS.md §10.2，player_inbox 尚未全绿，未重试，未进入 Match 或 C++ 构建/测试。生产分片算法不在本次“只改注释”范围内，等待下一步决策。
 - C++ 并行占用只读核对：当时另一会话的 MSBuild 正在写主仓 `lib/*`，本轮未启动争用同目录的构建；另一项构建使用独立快照。不把它们的结果作为本轮验证证据。
 - 日志、退出码和摘要：`C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/r3/`，含 `01-player-inbox-test.jsonl`、`01-player-inbox-test.exit.txt`、`player-inbox-test-summary.json`、告警与测试前后哈希/副本。前两轮原件保留；未改业务代码、未提交、未推送、未发送跨聊天通知。Java 0.1.0-SNAPSHOT 仍待做。
+
+### 2026-11-06 Codex：获准修复后的第四轮验证（Go 普通回归通过，C++ 与专项续验中）
+
+- **授权与修复**：负责人允许修复验证发现的问题，并再次明确全球 Match 坏结果「保留位点并告警」。没有改告警表达式、原损坏消息位点断言或封禁语义；没有提交、推送或修改 Java 业务代码。
+- **HRW 根因与修复**：FNV-1a 对短数字后缀扩散不足，新增分布回归在修复前真实失败（最初 7 组前缀均红，部分 64 片全集中同一成员）。`shared/workshard.Owner` 改为 SHA-256(成员 + NUL + 键) 前 8 字节的大端 uint64，player_inbox 与 Match 委托同一入口，Trade 既有调用同步受益。保留成员生命周期、空表策略、重复成员和同分裁决。增加成员/删除成员只迁移相应键及固定短键样本分散由接口测试覆盖，不宣称任意样本均衡。算法切换会重新分工，项目未上线且归属不持久化；三份服务设计和 Java PARITY 已说明边界。
+- **C++ 最小编译修复**：`BattleRoomManager::PublishToAllSpectateChannels` 接收按值 `SpectateFrameEvent`，接管四个调用点传来的临时帧，允许逐 gate 填目标字段。发送先同步序列化、Kafka 使用 RK_MSG_COPY，不会被下一目标修改污染；没有使用 const_cast，没有混入其他会话的 CreationNowMs 改动。仍须等新构建和观战回归验证。
+- **Match 位点修复**：解码失败及 `ErrCompletionOriginalConflict` 立即返回错误，单轮不做无效业务重试；外层 consumer owner 保留原消息并按既有退避恢复。日志、decode_error/original_conflict 指标与提交停滞告警保留。原 `TestGlobalMalformedResultCannotAdvanceOffset` 未改，两个新增的跳过测试改为拒绝，另补原件冲突不推进位点用例。4 条定向测试真实 4 FAIL → 4 PASS，规范冲突已在两份设计文档及 Java PARITY 收口。
+- **已通过的当前源码普通验证**（Windows Go 1.27.2；括号中为含子例事件）：shared/workshard + inboxcontract 的 test/vet 均 0，11（20）PASS、0 FAIL/0 SKIP；player_inbox build/vet/test 均 0，191（327）PASS、0 FAIL/0 SKIP；Match build/vet/test 均 0，438（869）PASS、0 FAIL、178（264）SKIP；Trade build/vet/test 均 0，251（600）PASS、0 FAIL、70（81）SKIP。无测试文件的 package skip 不计跳过用例；外部环境 SKIP 不计真库验收。现存 14 步日志、退出码和重计摘要见 `go-verified-summary.json`。
+- **真 TiDB 首轮未通过**：启动并核实原本停止的 PD/TiKV/TiDB 三容器，端口 127.0.0.1:24000，TiDB v8.5.8-20261021-849a85c。35 条选集中 7 顶层 PASS，DeadlineGrace 的一个子例在夹具 catalog 提交遇 3 秒读取超时，OfflineRecipient 被默认 10 分钟总预算中断，26 条未启动。只读复查表明主库注册事务已完整落下（1 active writer、64 slots、kind=1 receipt），客户端未知结果保持未知；没有重放或清理。遗留 matchit_76de0bae / _writer、matchit_0658e1ec / _writer 与私有收据保留。现场未发现锁等待、OOM 或容器重启；不能将宿主/Docker调度延迟直接归为业务缺陷。
+- **宿主重启与 C++ 状态**：第一条串行 game.sln 构建退出 1，0 warning / 5 error，均为静态检查进程终止或 DLL 初始化失败。Windows 04:06:37 EST 发起正常 restart，04:07:38 启动；并非源码编译通过。PowerShell/MSBuild 重启后探测均 0，已用原 `/m:1 /nr:false /p:CL_MPCount=1` 参数恢复 18 号构建，未跳门禁。TiDB 三容器已随重启停止，续验前须重新按原身份启动并探活。
+- **race**：本机只有 Windows Go，现有 Linux builder 中是 gccgo 1.18。负责人已批准下载官方 Go 1.27.2 Linux amd64 归档并校验，只放本任务忽略目录、复用原镜像断网执行两组共 13 条用例；当前尚未运行。Linux 所需 110 个外部模块的本地 zip/mod/info 均已核齐。
+- **原件与丢失说明**：本轮长期证据统一放 `build/verification/battle-handoff-20261106-r4/`：31–38 普通 Go 验证、match-final-*、12b-trade-*、14/15/16 位点红绿、10-match-tidb-*、tidb-fixture、host-recovery、13/18 C++ 日志。前轮工具环境重载后，旧 TEMP 的 r1–r3 及早期 r4 部分文件已丢失，历史运行结果仍在聊天记录，但不能再声称这些旧原件仍存在；本轮已补当前源码可复查的 Go 原件，没有伪造旧日志。13 号中断日志与退出码已另存，18 号仍在写入。
+- **尚未完成**：C++ 整解、三个指定测试程序的定向及完整套件、rpc_controller_test 中 BattleSpectateRelay 与四个 BattleObserverContract 入口；两组 race；真 TiDB 全部 35 项零 SKIP。Java 0.1.0-SNAPSHOT 只补 PARITY 待做，未编译测试。最终验证后继续追加记录。
+
+### 2026-11-06 Codex：三个 C++ 主套件已复验，真库与 race 尚待完成
+
+- **编译证据边界**：18 号串行 `game.sln` 已结束，exit 1、121 warning / 1 error；唯一失败是 configuration_table_test 静态检查已打印 PASS 后，系统 TEMP 下的 MSBuild 临时 `.exec.cmd` 消失（MSB5018/MSB3073）。其余工程包括三个指定测试程序均已生成。把 TEMP/TMP 仅在构建进程中指向本任务 `msbuild-temp` 后，19 号单独补编 configuration_table_test 退出 0（1 warning），未关闭任何静态门禁。因此是「整解其余目标完成 + 唯一失败目标补编通过」，不是一次整解退出 0；既有第三方告警仍存在。
+- **背包夹具修复**：50 号专项首次 156 条中 1 FAIL，`InboxMissionRewardFailureRetainsClaimableEntitlement` 恢复容量后仍返回 kInvalidTableData。根因是该夹具未加载 RewardTable，依赖全量套件中其他夹具的初始化顺序。只在 `PlayerBattleSettlementItemTest::SetUp` 显式加载奖励表并断言非空；原用例增加奖励行存在、失败后仍可领取及零物品部分入账断言，共增加 6 行，保留原成功领取、消耗权益及货币断言，未修改生产逻辑。56 号串行补编 exit 0（7 warning / 0 error）；57 号原失败用例单跑 1 PASS，58 号同一专项 156/156 PASS、0 SKIP。
+- **三个指定程序结果**：bag_test 全量（59）934 条，932 PASS、2 SKIP、0 FAIL；currency_test 专项（51）92/92，全量（53）327 条、324 PASS、3 SKIP、0 FAIL；turn_battle_engine_test 专项（52）21/21，全量（54）306/306、0 SKIP。5 条跳过均因未配置专用 MMORPG_TEST_REDIS_ADDR，不能当真实 Redis 验收通过。每步退出码均 0，原始日志、gtest XML 与退出码在同一证据目录。
+- **观战程序需要单独编译**：rpc_controller_test 不在 game.sln。55 号虽有 8 PASS，但当时 EXE 时间为 11 月 5 日，缺少当前 Keepalive 用例，因此明确排除这条旧产物结果。60 号已按 `/m:1 /nr:false /p:CL_MPCount=1` 独立重编，待新程序运行 5 个 BattleSpectateRelay 及 4 个指定 BattleObserverContract 用例。
+- **新 TiDB 夹具已获授权**：旧 TiKV 恢复时使宿主可用内存降至约 0.74 GiB，已正常停止本轮启动的旧 PD/TiKV，旧 TiDB 未再次启动；旧卷、随机库、unknown 收据均保留。负责人批准复用三个固定本地镜像，新空卷、独立网络、127.0.0.1:24406，总上限 3.5 GiB 的隔离夹具；创建及身份/资源复核完成，按 4 GiB 启动门槛逐步探活，尚无新的 35 项通过结果。
+- **race 下载阻塞**：官方 Go 1.27.2 Linux amd64 归档已核官方 SHA-256；本地 TLS 下载在完整响应或 Range 响应正文中提前 EOF，所有不完整文件保留且未解压。官方和镜像路径的失败原件见 42–46 号目录及 `race-toolchain-status.json`。未关闭证书校验、未安装不完整工具链，两组 13 条 race 尚未执行，正在只读核查其他已授权路径。
+- **通知与原件**：已向「将 C++ 功能移植到 Java 服务器」发送口径和当前验证边界，Java 业务代码仍未修改。全部本轮新证据位于 `build/verification/battle-handoff-20261106-r4/`。未提交或推送；这条记录不是整体验收完成，真 TiDB、race 与当前观战程序结果继续追加。
+
+### 2026-11-06 Codex：当前 C++ 验证收齐，真 TiDB 恢复被自动审批拒绝
+
+- **观战编译修复与红绿**：60 号当前 rpc_controller_test 编译真实失败（7 errors / 206 warnings）。三个停机测试把含多处 `ASSERT_NO_FATAL_FAILURE` 的 lambda 作为外层同一宏的参数，MSVC 将内层行号折叠，出现重复 gtest 标签及跨越局部初始化的 C2045/C2362。仅把这三个 lambda 先定义为 `checkShutdown`，再传给原 `AssertInFreshOutcomeProcess`；独立复核去除包装后正文逐字相同，断言数仍为 20 / 10 / 17，threadsafe 子进程与退出码传递不变。没有改 gtest、生产逻辑或弱化断言。
+- **当前观战验证已通过**：61 号串行重编 exit 0、46 warning / 0 error；62 号新 EXE 跑原定 9 条观战用例加上述 3 条修复用例，12 PASS / 0 FAIL / 0 SKIP。63 号摘要记录精确用例集合和二进制/XML SHA。55 号旧 EXE 的 8 PASS 永久排除；61 号仍含第三方告警与 infra.pdb 相关 LNK4020，不能宣称零告警或调试符号完整。
+- **已完成范围的独立复核**：`cpp-go-evidence-audit-final.json` 再核 Go 14 步原件/哈希/退出码、三个 C++ 主套件及当前观战结果，均一致。C++ 三主套件全量合计 1,562 PASS、5 个真实 Redis SKIP、0 FAIL，专项通过；整解仍按上条「18 号其他目标完成 + 19 号失败目标补编通过」陈述，不把 18 号 exit 1 改写为 0。
+- **TiDB 续验的当前阻塞**：宿主第二次启动时间为 2026-11-06 06:02:38 EST（11:02:38Z），新 PD/TiKV 随后同刻退出（255，OOMKilled=false），新 TiDB 一直 Created。资源窗口后来恢复至 4 GiB 以上，完整 CID、镜像、owner labels、只读配置、卷与资源限制的字段级校验通过。按完整 CID 恢复新 PD 的命令被自动审批拒绝，原文只有 `rejected: blocked by policy`，没有更具体原因；命令未创建进程、未启动节点，未换工具绕过。原始命令、拒绝反馈和最终保留状态见 `tidb-fresh-execution/10-pd-recovery-rejected-*`、`11-final-preserved-state.json`。35 项新夹具测试未执行；旧 unknown 提交及新旧所有数据均保留。
+- **race 仍未完成**：下载残件均未通过官方 SHA-256，未安装；独立复核也未找到可用本地 Linux Go 缓存。原计划固定的 fc6fad59… builder 当前已不在本机，不能直接沿用旧计划。新 SDK 已用断网、只读短命容器核验：GCC 13.4.0 可用，但 Go 仍是 gccgo 1.18，没有官方 Linux Go 1.27.2；探测退出 0，按完整 ID 清理成功且确认无残留。Windows Go 虽附 Linux race 对象，跨容器 C 编译仍需另外的 CC/路径适配，未实施。`48-race-download-independent-audit.json` 与 `49-race-builder-probe/summary.json` 保留此环境变化及探测证据。两组 13 条 race 不能标为通过。
+- **通知与收尾**：已向「将 C++ 功能移植到 Java 服务器」通知口径、验证边界及本机资源协调，向「编译服务器并配置远程调试」通知 C++ 当前结果和修复；未把消息送达冒充对方已处理。当前可列出的聊天未找到原「数据覆写审计 R2 交接」，其后续仍以仓内设计/交接记录为准。B-5 源枚举及生成绑定仍在，runbook 产出封禁行已采用只跳过被封部分且不抵欠款、不补发的口径。未改 Java 业务代码、未 commit/push。整体验收尚差真 TiDB、race，以及普通套件显式列出的外部环境跳过项。
+
+### 2026-11-06 Codex：再次续验，Redis 跳过项补齐，TiKV OOM 待调整授权
+
+- 用户再次明确「继续」后，复核新夹具身份、挂载及资源均与原方案一致；宿主 09:45:11 EST 再次启动，可用内存恢复到约 12 GiB。按完整 CID 单独提交 PD 恢复命令，本次正常审批放行、exit 0，上一轮拒绝原件保留；不再把审批拒绝列为当前阻塞。
+- **真实 Redis 已补齐**：使用固定现有 Redis 7.2.16 镜像创建独立本机夹具，128 MiB、0.5 CPU、仅 127.0.0.1:24407、无持久卷、关闭持久化。对原 5 条 SKIP 精确补跑：currency 3/3、bag 2/2，全部 exit 0 / 0 SKIP，XML 用例集合与原跳过集合一致；测试前后 DBSIZE 均为 0，EXE 前后 SHA 不变。容器已按完整 ID 正常停止并删除，端口无残留。主套件的 1,562 个通过结果加这 5 条补跑覆盖原 1,567 条用例，但没有声称重新执行过整套零 SKIP。证据 `64-resume/redis/summary.json`。
+- **TiDB 的新阻塞有明确运行证据**：新 TiKV 恢复启动约 32 秒后退出 137，Docker OOMKilled=true；宿主仍约 13 GiB 空闲，PD 只有 5 个 region。实际生效的 TiKV cgroup 为 2 GiB / 2 CPU，内部 memory-usage-limit=1536MiB、block-cache=256MiB 已读到。内部阈值不等于 RSS 硬上限；尚未定位具体分配子系统，不能把配置上限当实测内存归因。已正常停止本任务 PD，新 TiKV 停止、新 TiDB 仍 Created，所有数据保留，35 条尚未启动。
+- 最小候选仅把该隔离 TiKV 的硬上限及 swap 同时改为 4 GiB，夹具总上限从 3.5 增至 5.5 GiB，启动前宿主空闲至少 8 GiB；其他缓存、CPU、GC、单调用预算不变。`64-resume/tidb/12-memory-recovery-proposal.json` 已形成，因超出之前批准的总限额，按 AGENTS.md §10.2 向负责人请求确认，未实施资源改动。
+- **Linux 工具链下载阻塞已解除**：本次标准 TLS 官方下载在 180 秒预算结束时已持续收到 27,262,976 字节；随后唯一一次续传返回精确 HTTP 206/Content-Range，约 7 分 36 秒内得到 70,590,635 字节，官方 SHA-256 完全匹配。已仅解压本任务目录，实际运行 `go version` 为 go1.27.2 linux/amd64。新 SDK 固定 ID、断网、只读源码/工具链/模块代理、2 CPU / 2 GiB；两组 13 条 race 正在执行，未提前记为通过。下载原件在 `64-race-resume-download/`，执行证据在 `linux-race-20261106T145932Z-7962d6bd/`。
+
+### 2026-11-06 Codex：13 条 race 全通过，TiKV 4 GiB 方案已获批准
+
+- 官方 Linux Go 1.27.2 的两组原选集已实际执行通过：authority 6 个顶层 PASS（含子例 8），logic 7 个顶层 PASS（含子例 10），均 exit 0 / 0 FAIL / 0 SKIP，无 race 报告。主会话独立重计原始 JSONL、核退出码及日志 SHA，结果为 `linux-race-20261106T145932Z-7962d6bd/root-race-audit.json`。这两组只验证交接指定的内存测试，不能替代真 TiDB。
+- 负责人已明确选择「允许提高上限并续验」，批准 `64-resume/tidb/12-memory-recovery-proposal.json`：仅该新隔离 TiKV 的 memory / memory-swap 从 2 增至 4 GiB，夹具总上限 5.5 GiB，初次启动前宿主空闲至少 8 GiB。正在按完整 ID 复核、单次更新并逐节点启动；35 项尚待实际结果，不能把批准计作通过。
+- 本轮依旧只操作本任务本地隔离资源；原旧夹具及 unknown 收据保留，未改业务源码或提交。
+
+### 2026-11-06 Codex：真 TiDB 首轮定位旧夹具缺 home zone，已补最小修复
+
+- 已按批准将唯一新 TiKV 的硬上限改为 4 GiB；新三节点真实运行无 OOM、无重启。Docker 内部网络没有网关，原请求的 24406 端口实际未发布；Windows SQL 探测仅连接拒绝，未开始测试。随后使用固定本地 SDK 的独立 Linux 客户端共享该 TiDB 的网络命名空间，以数值 loopback `127.0.0.1:4000` 访问；没有扩大网络、发布新端口或新增外部连接。
+- `67-tidb-linux-client/execution-r1/` 保存真实原 35 项的首次结果：12 个顶层 PASS、1 FAIL、22 未执行，含子例 20 PASS、0 SKIP；客户端 exit 1。私有目录/fsync 和 TiDB 三成员身份前置检查通过，910 份源输入前后未变。原客户端、Linux 卷和 55 个私有收据副本保留；本轮三服务器已按 TiDB→TiKV→PD 正常停止、均 exit 0。旧夹具未知提交收据和数据完全保留。
+- 首失败 `TestFormationExitTiDBUnlaunchedFormationReleasesWithoutTargetBattle` 在 `exitFormationFixture` 的 `s.Claim` 被 `ErrScopeWait` 拒绝。只读追踪确认共用 `testJoin` 漏填 `ZoneId`，SQL 原票为 0，`scope.CommonLevel` 对缺 home zone 无条件拒绝；此处不是等得不够，也不是资源失败。只在 `store_test.go` 的有效票装配补 `ZoneId: 1` 和一行说明；生产门禁、阈值、原业务断言全部保留，独立审查一致。
+- 修后本机普通验证实际通过：authority 64 顶层 PASS（含子例 143）、scope 11 PASS，0 FAIL；authority 134 顶层外部 SKIP（含子例 218）不能算真库验证。gofmt 与模块内 vet 通过；首次 vet 误在仓根执行而未找到模块，原失败输出单独保留，纠正工作目录后 exit 0。
+- 真库修后绿证据仍待执行：正在准备新独立源快照，计划先原失败单例，再原 35 项，最后补 `TestAuthorityTiDBImmutableIntentAndFailedQueueKeepsWait`；不复用失败收据、不覆盖原日志。恢复前仍要求宿主空闲至少 8 GiB，当前等待资源窗口。当前证据位于 `build/verification/battle-handoff-20261106-r4/`，不能将此条记作验收完成。
+
+### 2026-11-06 Codex：修后真库候选审查完成，资源门槛未满足
+
+- `68-tidb-fixture-fix/` 的新快照共 910 文件，与上一轮只差 `store_test.go` 的 `ZoneId: 1` 和中文注释。Plan、允许停态的只读 Verify、PowerShell AST、gofmt 与独立审查均通过，正式 Execute 仍强制三服务就绪、原内部网络及客户端 4 GiB 门槛。三阶段固定为原失败单例 → 原 35 项 → `TestAuthorityTiDBImmutableIntentAndFailedQueueKeepsWait`，逐步核精确名单、退出码、0 FAIL / 0 SKIP，失败立即停；每步独立日志和私有收据目录，旧卷不复用。
+- 15:52Z 起多次宿主可用内存观察均不足原批准的 8 GiB，最近约 3.2 GiB；本任务运行中容器为 0，三数据库节点保持停止，68 客户端与卷尚未创建。其他聊天仍有验证占用，已做资源协调，没有停止别人的容器或应用、降低门槛或修改系统配置。本轮条件自动启动已撤销，等待资源释放后在当前输入上重新核对并执行，不承诺交回后后台继续。
+- 现有绿证据仍有效于各自封存输入：13 条 race、5 条真实 Redis 补验及先前普通 Go/C++ 结果；修后真 TiDB 尚无绿结果，不能称整体完成。旧未知提交原件、67 本轮失败证据和 55 份收据副本保留。根审查入口为 `68-tidb-fixture-fix/root-candidate-review.json`，实际失败独立重计为 `independent-red-audit.json`；未读取或打印私有收据正文，因此不宣称不存在未知事务。

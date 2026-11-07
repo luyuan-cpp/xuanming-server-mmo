@@ -24703,3 +24703,80 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - **真实 Redis 本轮重验**：现有本地镜像实际 Redis 7.2.16、8.10.2 各 **8/8 PASS，共 16/16**；登记先到、回滚先到、缺失/旧代/同代 H/同代 R/更高代/坏原件全部通过。生产 Go/C++ Lua 的三项逐字关系通过，四份源文件前后 SHA-256 不变，脚本哈希与前轮摘要一致。仅使用自建的无网络、无端口、无挂载卷、关闭持久化的临时容器，完成后按完整 ID 删除并确认无残留。证据 `build/verification/consistency-20261106-afca/evidence/real-redis-repeat/{result.json,commands.jsonl,validate_real_redis.py}`，明确标为本轮重验；只证明 Lua 层，不替代 Kafka 故障注入、Redis Cluster 或服务端端到端验证。
 - **C++ 当前状态（尚非通过）**：主仓整解在 `no_raw_pointer_project.ps1:66` 的 Test-Path/Remove-Item 之间发现缓存戳消失，继而 MSB3073；不是裸指针违规，也不是缺目录。同时发现另一会话主仓整解在本轮启动后加入，疑似共享缓存删除竞态，尚无文件级追踪确证。停止了仅本轮构建树，未干预其他进程、未改门禁。随后把当前输入复制到已忽略的 `run/consistency-20261106-afca/source`，9,785 文件、215,305,560 字节，逐文件 hash 校验且关键 C++ 输入漂移 0；52 个工程的 Debug 输出均实际求值确认落在隔离目录，未复用业务库或旧测试 EXE。正在独立执行 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`，成功后再串行重编并运行测试；最终结果另追加。证据在 `build/verification/consistency-20261106-afca/cpp-isolated/`。
 - **仍未验证**：真实 MySQL 条件写竞态、本地跨节点换图、流水提交时序、etcd 断连和 Kafka 投递故障演练；本机无 promtool，告警规则未运行该检查。Java `0.1.0-SNAPSHOT` 状态仍按原交接只登记待办，未改 Java、未验证 Java。
+
+## 2026-11-06 Codex：历练交接获准修复，Go 普通回归通过，专项与 C++ 续验中
+
+- 已修 shared HRW 短数字键集中问题，player_inbox/Match 收口到共享 SHA-256 打分，Trade 同步受益；未放宽旧分片断言。C++ 观战帧只改为按值接管临时值，保留其他会话修改。用户明确选择 Match 坏结果保留位点并告警，已修两个错误分支和相反的新测试，原损坏消息 offset 断言未动，定向 4 红转 4 绿。三份服务设计、重连/Match 设计与 Java PARITY 同步。
+- Go 当前普通验证均 exit 0：shared 两包 test/vet 11 顶层 PASS；player_inbox build/vet/test 191 PASS、0 SKIP；Match build/vet/test 438 PASS、178 外部 SKIP；Trade build/vet/test 251 PASS、81 外部 SKIP。含子例数量与原件见交接文档，不把 SKIP 当真库通过。
+- 真 TiDB 35 项首轮：7 顶层通过、1 夹具 catalog 提交未知失败、1 被默认 10 分钟总超时打断、26 未启动。只读确认超时前主库注册已落下，两个本轮随机库组及收据保留，未重放/清理。宿主 04:06–04:07 EST 正常重启后原三容器停止，续验须重新探活。
+- C++ 首次整解因重启产生 5 个进程终止/DLL 初始化错误、exit 1；启动探测已恢复，18 号原参数串行构建在途，不跳静态检查。用户已批准临时 Linux Go 1.27.2 工具链方案，两组 race 待执行；三个 C++ 测试程序及观战相关回归仍待新构建。
+- 证据改存仓库忽略目录 `build/verification/battle-handoff-20261106-r4/`。旧 TEMP r1–r3 及早期 r4 部分日志因工具环境重载丢失，历史结果不冒充原件仍存；本轮补留了当前 Go 验证原件。详见交接末尾第四轮记录。未提交/推送，Java 仅 PARITY 待做，整体尚未验收完成。
+
+## 2026-11-06 Codex：第四轮普通验证统计补充
+
+- 复核现存原始 JSON 后明确：上条 Trade 的 81 个 SKIP 是含子例事件，顶层为 70 个；251 个顶层 PASS / 600 个含子例 PASS 不变。其余 Go 统计一致，14 步日志与退出码实际齐全，带 SHA 的重计总汇为 `build/verification/battle-handoff-20261106-r4/go-verified-summary.json`。不改写历史条目，不将外部 SKIP 计为通过。
+
+## 2026-11-06 Codex：历练交接 C++ 三主套件复验，专项仍在续验
+
+- game.sln 的 18 号串行构建结束（exit 1、121 warning、1 个系统 TEMP 文件消失错误），唯一失败的 configuration_table_test 改用进程内任务 TEMP 后 19 号补编 exit 0；未跳静态检查，不能称一次整解 exit 0。
+- 修复背包定向测试夹具漏加载 RewardTable，只增 6 行装配和断言，原业务断言保留。原失败用例单跑通过；背包专项 156/156、全量 932 PASS / 2 Redis SKIP；货币专项 92/92、全量 324 PASS / 3 Redis SKIP；战斗引擎专项 21/21、全量 306/306。5 条真实 Redis SKIP 不算通过。rpc_controller_test 不在整解，55 号旧 EXE 结果排除，当前单独重编待验证。
+- 负责人已批准新隔离 TiDB 空卷夹具（原三镜像、127.0.0.1:24406、总 3.5 GiB），旧容器数据和 unknown 收据保留，新夹具正逐步探活。Linux Go 下载遇正文 EOF，未安装、未跑 13 条 race；正在只读核查替代路径。35 条真 TiDB 尚未得出续验结果。
+- 证据在 `build/verification/battle-handoff-20261106-r4/`，交接文档已追加本轮修复、构建边界与逐项结果；已通知 Java 移植会话当前口径，未改 Java 业务代码、未提交或推送，整体尚未验收。
+
+## 2026-11-06 Codex：历练 C++ 当前结果收齐，真 TiDB 恢复被自动审批拒绝
+
+- rpc_controller_test 的三个停机测试修复 MSVC 下嵌套 gtest 宏的标签冲突：lambda 先定义后传入断言，原正文、全部断言与子进程隔离保持。60 号编译 7 错误转为 61 号 exit 0 / 0 error，62 号当前观战及修复用例 12/12 PASS；55 号旧程序结果排除。46 条构建告警含 infra.pdb 的 LNK4020，未声称无告警或符号完整。
+- 三个 C++ 主程序全量共 1,562 PASS / 5 真实 Redis SKIP / 0 FAIL，专项全部通过；Go 普通 14 步原件再核一致。独立总审计为 `build/verification/battle-handoff-20261106-r4/cpp-go-evidence-audit-final.json`，保留整解 18 号 exit 1 与 19 号单目标补编通过的真实边界。
+- 宿主 06:02:38 EST 再次启动，新 TiDB 夹具 PD/TiKV 退出 255、TiDB 未启动。内存与归属重新满足门槛后，精确 CID 的 PD 恢复命令仍被自动审批拒绝（仅 `blocked by policy`），未绕过；35 项真库续验未执行，所有新旧数据和 unknown 收据保留。race 工具链下载未完成，原 builder 已不在，本轮 13 条 race 仍未执行。
+- 已通知 Java 移植及服务器 Docker 编译聊天；原 R2 交接聊天未在当前清单找到。具体修复、证据、阻塞及未验证项均追加到历练交接文档末尾。未提交、未推送，未改 Java 业务代码，整体仍未验收完成。
+
+## 2026-11-06 Codex：Docker 当前调试批次 SDK、C++ 与 Go 构建通过，Java reactor 真库验证待决
+
+- **已完成构建**：Linux SDK build/install 已通过，当前镜像 `sha256:18c860153e399fb9b2a4d2a3e204e368bae0119fa07c15dcecf883968740400a`。Windows 发布成功回执时出现 `WinError 5`，之后基于独立安装与镜像证据补录成功；补录不掩盖原发布失败，证据见 [SDK 回执](../build/verification/docker-debug-refresh-20261106/sdk/run.actual.json) 与 [独立补录证据](../build/verification/docker-debug-refresh-20261106/sdk/receipt-reconcile-r1/proof.json)。
+- **C++ / Go 本轮结果**：gate、scene、battle 同批 Debug 镜像为 `sha256:1498e519b37887dcc79cec93bb789ae84169cb76ec89c95eddc1fad9a6197bb2`；login、db、data-service、scene-manager、player-locator、client-rpc-router、match、player-inbox、sql-boot、db-migrate 共 10 个 Go 构建目标真实通过。当前运行输入只读复核：三个 C++ 节点共用同一份 21,844 文件清单，逐节点比对均零差异；10 个 Go 目标均零差异。此处是构建与输入一致性证据，不代替运行容器、调试附加或真实进场验证。结果见 [C++ 构建回执](../build/verification/docker-debug-refresh-20261106/cpp/result.json)、[Go 构建回执](../build/verification/docker-debug-refresh-20261106/go/result.json)。
+- **Java 阻塞与不可复用边界**：现行 `build_docker_java_debug.py` 只封存 gateway 单模块，离线 `package` 因缺少本仓 `authority-jdbc` 依赖失败，本轮未生成 Java 镜像。旧网关与当前源码有 32 个输入变化，旧 authority descriptor 的 6 个输入中有 3 个变化，不能复用旧 JAR。串行流程停在 Java，原失败状态保留于 [本轮串行构建回执](../build/verification/docker-debug-refresh-20261106/serial-build.actual.json) 和 [Java 结果](../build/verification/docker-debug-refresh-20261106/java/result.json)，没有改写为整体成功。
+- **候选与待决事项**：已在 [Java reactor 准备目录](../build/verification/docker-debug-refresh-20261106/java-reactor-prep/) 准备正式脚本候选与差异，改为从本仓 reactor 执行 `-f java/pom.xml -pl gateway_node -am -o -B -T1 clean package`，补齐 authority/gateway、各模块 POM、descriptor proto 闭包与显式固定摘要的 protoc；目前仅静态及语法检查通过，尚未执行候选构建或测试。`AuthorityHikariTiDbTest` 必须用真实 TiDB 的 NORMAL 启动原件与受限主体运行，不跳过、不替换为旧产物。原 24000 端口由另一项目占用，未停止该项目；是否另建隔离 TiDB 及可用隔离窗口仍待本聊天用户决定，不能将其他聊天的授权套用到本轮。
+- **当前运行状态**：本轮尚无游戏服务运行，未部署、未真实进游戏；43 个项目卷全部保留。没有清理数据、提交或推送。下一步须先取得隔离夹具决策及真实 Java reactor 绿色证据，再继续候选资格核验、创建、串行启动和真实进场；不得把已准备的部署助手或语法通过当成这些步骤已经执行。其余本轮材料集中在 [Docker 调试刷新证据目录](../build/verification/docker-debug-refresh-20261106/)。
+
+## 2026-11-06 Codex：历练交接续验，5 条真实 Redis 全通过，TiKV OOM 待授权
+
+- 此前 C++ 主套件 5 条真实 Redis SKIP 已在独立 128 MiB 无持久化夹具补跑全 PASS / 0 SKIP；EXE 未变，测试前后零遗留键，临时容器与端口已清理。没有重跑整套；证据 `build/verification/battle-handoff-20261106-r4/64-resume/redis/summary.json`。
+- 用户再次继续后，精确 CID 的新 PD 恢复本次审批已放行。新 TiKV 在 2 GiB 硬上限下启动 32 秒后 OOM 137，宿主仍有约 13 GiB 空闲、仅 5 个 region、缓存限制生效；PD 已停止、TiDB 未启动，35 项未跑。已备仅增 TiKV 至 4 GiB、夹具总 5.5 GiB 的方案，因超出原批准上限，正在等负责人确认，未擅自调整。
+- 官方 Linux Go 1.27.2 归档已完整下载并核官方 SHA，临时解压及真实版本检查通过；原两组 13 条 race 正在固定既有 SDK 中断网执行，暂不计通过。详情与证据路径追加在历练交接末尾。
+
+## 2026-11-06 Codex：Docker 续跑恢复，Java 真库夹具辅助编译失败待决
+
+- 09:45 宿主重启后 Docker 已恢复；本轮 12 个 SDK／C++／Go 镜像与 43 个旧卷仍在，没有以重建成功阶段替代续跑。机器人已真实编译并提升到调试入口，尚未运行，见[机器人实际回执](../build/verification/docker-debug-refresh-20261106/robot/result.json)。游戏仍未部署、未登录，原游戏调试栈 Compose 使用 MySQL，另备 TiDB 只用于 Java 真实资格验证。
+- 正式 Java 调试构建器已提升为 reactor，封存 authority／gateway、协议闭包与固定摘要的 protoc，核验真实 NORMAL TiDB 用例、descriptor、内嵌 authority JAR 和来源证据；尚未执行 Maven。authority 默认测试不准跳过；gateway 仅保留源码已声明的 14 个可选外部用例中断，并明确记录为未验证。旧 Java 失败和原串行失败回执仍保留，见[原 Java 结果](../build/verification/docker-debug-refresh-20261106/java/result.json)、[原串行结果](../build/verification/docker-debug-refresh-20261106/serial-build.actual.json)。
+- 24000 端口随后被另一 Java test v858 项目恢复占用，本轮前置检查退出码 1，尚未创建新资源。已准备 [r2 独占夹具候选](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/)使用 24900，但未创建容器。正式生产器增加的仅夹具临时端点功能已变更；[恢复生产器脚本](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/restore-runtime-producer.py)仅准备、未执行，不能称已回收。
+- 外置 surface 副本第一次实际 Go 编译选择 shared 模块，解析到 mysql v1.9.0，因缺少 Charset 退出 1；[实际失败结果](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/surface-build-r2.result.json)及[原日志](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/surface-build-r2.log)保留。后续只读核实正确 data_service 模块使用 mysql v1.9.3，349 包离线依赖齐全；未据此声称编译通过，按 AGENTS.md §10.2 等待用户决定是否用正确模块补编。Java 真库验证、镜像资格、部署和真实登录均未完成。
+
+## 2026-11-06 Codex：历练 13 条 race 全通过，获准按 5.5 GiB 夹具续验真库
+
+- 官方临时 Linux Go 1.27.2、固定既有 SDK、断网只读源码与依赖挂载下，authority 6 条、logic 7 条顶层 race 全 PASS；含子例共 18 PASS，0 FAIL / 0 SKIP，两命令均 exit 0。根独立重计及 SHA 证据为 `build/verification/battle-handoff-20261106-r4/linux-race-20261106T145932Z-7962d6bd/root-race-audit.json`。
+- 用户已批准仅新隔离 TiKV 提高至 4 GiB、夹具总 5.5 GiB，起前宿主空闲至少 8 GiB。正在按准备好的精确 ID 与原预算恢复并续跑 35 项真 TiDB；尚未得出结果。旧数据/unknown 收据保留，无源码改动或提交。
+
+## 2026-11-06 Codex：Java 真 TiDB 夹具已就绪，reactor 根目录修复后停在恢复确认
+
+- 经用户同意，改用 `go/data_service` 模块离线补编本轮外置夹具 surface；实际采用 mysql 驱动 v1.9.3，退出码 0，二进制 SHA256 为 `51985832ce709790d4da0b8145213c75dcf3fa710ca76579c0bee76687ff63f4`，见[补编实际回执](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/surface-build-r2-data-service.result.json)。此前 shared 模块编译失败证据保留，没有改写。
+- 本轮自有 TiDB v8.5.8 的 PD／TiKV／TiDB 三节点已实际启动，SQL 仅发布到本机 24900；真实 TiDB 能力探测通过，正式生产器已发出一份 NORMAL 授权，见[基础设施回执](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2/infra.completed.json)、[真实探测回执](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2/probe.completed.json)、[授权创建回执](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2/create.completed.json)。这套夹具用于 Java 资格验证，不代表游戏部署完成。
+- `java-reactor-r1` 实际退出 1：构建器向上寻找最近的 `AGENTS.md`，误将 `tools/` 当作仓库根，访问不存在的 `tools/java/pom.xml`，失败发生在 Maven 启动前。已将根定位改为脚本固定层级 `parents[2]`，未降低测试、来源或哈希门禁；只读核对源码闭包 133 文件、proto 闭包 6 文件、拟封存路径、AST 与差异空白检查通过，修正后未执行 Maven。见[原失败结果](../build/verification/docker-debug-refresh-20261106/java-reactor-r1/result.json)、[原构建明细](../build/verification/docker-debug-refresh-20261106/java-reactor-r1/build-details.json)、[夹具构建退出回执](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2/build.finished.json)。
+- 对旧 grant 的只读核查发现消费元数据仅有 1 个空目录、0 个消费标记；没有将此核查等同于构建成功，见[未启动 Maven 与消费状态核查](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2/java-r1-pre-maven-readonly.json)。全部旧失败证据、私密原件及实际自有夹具继续保留。
+- 已准备[显式恢复助手](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/recovery.ps1)，计划按新 grant → `java-reactor-r2` → 成功后 close 串行执行，再用[生产器回收助手](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2-tools/restore-runtime-producer.py)的 `--recovered` 分支回收临时端点修改，并由[恢复补录助手](../build/verification/docker-debug-refresh-20261106/record_java_recovery.py)记录新成功证据。以上恢复、r2 构建、关闭、回收与补录均未执行；按 AGENTS.md §10.2 等待用户确认。游戏尚未部署，双客户端尚未登录或进场。
+
+## 2026-11-06 Codex：历练真 TiDB 失败已定位夹具缺 zone，最小修复待真库复验
+
+- 获准 4 GiB TiKV / 5.5 GiB 三节点夹具实际稳定运行；内部网络未发布原请求的宿主端口，改用固定本地 SDK 客户端共享 TiDB 网络命名空间，经 loopback 验证，未扩大网络或增加端口。
+- 原 35 项本次真实结果为 12 顶层 PASS、1 FAIL、22 未执行、0 SKIP；失败停在共用 `testJoin` 漏填 `ZoneId` 导致的范围校验，非 OOM。55 个私有收据副本、原客户端和全部新旧数据均保留，三个服务器正常停止。证据 `build/verification/battle-handoff-20261106-r4/67-tidb-linux-client/execution-r1/final-audit.json`。
+- 已仅给共用有效票夹具补 `ZoneId: 1` 和注释，生产校验及原断言不变。修后普通 scope 11、authority 64 顶层 PASS，模块内 vet/gofmt 通过；外部 134 顶层 SKIP 不算真库证据。修后原单例、35 项和额外共用夹具回归尚待 8 GiB 空闲内存窗口，不提前计通过；详情追加在原历练交接文档。
+## 2026-11-06 Codex：历练修后真库候选齐备，停在宿主内存门槛
+
+- 68 候选已完成新 910 文件快照、Plan/停态 Verify、语法/格式和两份审查，唯一源码差异为公共有效票补 home zone。固定原失败单例→原35→额外1项，失败即停、精确名单、0跳过，各阶段独立证据与收据，尚未执行或创建新客户端。
+- 本任务三数据库节点已正常停止，运行容器0；宿主空闲持续约3～5 GiB，低于已批准的8 GiB启动门槛。已通知相关聊天协调资源，未触碰他们的容器、未降门槛。撤销本轮条件自动启动，待资源满足后重新核当前输入并续验；不能称整体验收完成。详情与可执行候选在原历练交接文档末尾，未提交/推送。
+
+## 2026-11-06 Codex：Docker 调试服务器实际启动完成，客户端交由用户自行启动
+
+- **Java 资格验证与回收已完成**：本轮 reactor 共 302 例，288 通过、14 个可选外部条件用例未运行、0 错误、0 失败；authority 21/21 通过，包含真实 TiDB 验证。新授权已通过正式流程回收，本轮自有三个测试容器已停止，两份数据卷保留；临时生产器修改按原 SHA 恢复。Java 镜像构建成功，并补录整套候选恢复回执；旧失败证据保留，未改写原串行结果。见 [Java 构建结果](../build/verification/docker-debug-refresh-20261106/java-reactor-r2/result.json)、[测试汇总](../build/verification/docker-debug-refresh-20261106/java-reactor-r2/test-summary.json)、[候选恢复回执](../build/verification/docker-debug-refresh-20261106/serial-build.recovery.json)及[夹具证据目录](../build/verification/docker-debug-refresh-20261106/authority-fixture-r2/)。
+- **实际部署与启动**：首次 Compose 预检将 `x-cpp.image`、`x-sql-boot.image` 两个扩展锚点误判为未授权变化；仅规范对应同源候选镜像后，新预检通过。实际创建 28 个容器、18 个新数据卷，原卷保留。首次启动预检又将镜像默认参数及 Compose 美元符号转义误判为调用变化；修复后先通过完整 Created 状态预检，再实际串行启动成功：16 个常驻服务运行，13 个初始化任务成功（含独立存储迁移）。见[原部署失败](../build/verification/docker-debug-refresh-20261106/deployment-r1/result.json)、[新部署预检](../build/verification/docker-debug-refresh-20261106/deployment-preflight-r2/result.json)、[创建回执](../build/verification/docker-debug-refresh-20261106/deployment-execute-r2/created.json)、[启动预检](../build/verification/docker-debug-refresh-20261106/serial-start-preflight-r2/result.json)、[实际启动成功回执](../build/verification/docker-debug-refresh-20261106/serial-start-recovery-r1/result.json)。
+- **服务入口与交回范围**：实际探测 gateway 健康为 `UP`；`http://127.0.0.1:18085/api/server-list` 返回 HTTP 200，包含 1 个 `OPEN` 区；Gate `127.0.0.1:28000` TCP 连接成功。用户明确要求自行启动真实客户端，本轮没有运行客户端或机器人登录，不能据服务器就绪声称真实登录、双玩家进场或战斗已验证。
+- **调试证据边界**：仅服务端辅助验收在实际调试器附加之前，将 Login 的主机端口 2345 误当成容器目标端口而退出。已将校验修正为 `127.0.0.1:2345 → 40000/tcp`，仅完成 AST 静态检查，未重跑该验收，因此没有本轮新的调试附加或断点命中证据。保留[辅助验收原失败回执](../build/verification/docker-debug-refresh-20261106/acceptance-server-r1/result.json)；服务已启动的实际结果以独立启动成功回执为准。

@@ -96,7 +96,8 @@ func testJoin(t *testing.T, s *Store, pid uint64) *pb.MatchAuthorityTicketRecord
 	plan := fmt.Sprintf("plan-%d", pid)
 	p := &pb.MatchNetworkProfile{PlanId: plan, SessionBinding: "bound", Receipts: []*pb.NetworkProbeReceipt{{Grant: &pb.NetworkProbeGrant{PlayerId: pid, PlanId: plan, SessionBinding: "bound", PhysicalRegion: 1, ExpiresAtMs: n + 120000}, RttMs: 50, SampleCount: 3, MeasuredAtMs: n, ExpiresAtMs: n + 120000}}}
 	require.NoError(t, s.SavePlan(ctx, pid, p, n+120000))
-	ticket, created, e := s.Join(ctx, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: uuid.NewString(), RequestId: uuid.NewString(), Mode: 3, ConfigId: 1, TeamSize: 2, RatingCenti: 150000}, plan, "bound")
+	// 通用有效票必须带 home zone；零值会被排队成局的范围校验拒绝，不能用于终局恢复夹具。
+	ticket, created, e := s.Join(ctx, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: uuid.NewString(), RequestId: uuid.NewString(), Mode: 3, ConfigId: 1, TeamSize: 2, ZoneId: 1, RatingCenti: 150000}, plan, "bound")
 	require.NoError(t, e)
 	require.True(t, created)
 	return ticket

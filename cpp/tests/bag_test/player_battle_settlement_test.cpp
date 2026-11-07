@@ -953,6 +953,9 @@ protected:
     void SetUp() override {
         PlayerBattleSettlementTest::SetUp();
         ItemTableManager::Instance().Load();
+        // 定向运行结算用例时也要装配任务奖励表，不能依赖其他夹具先加载。
+        RewardTableManager::Instance().Load();
+        ASSERT_GT(RewardTableManager::Instance().Count(), 0u);
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{playerId});
         bags.bags[kInventory].ExpandCapacity(20);
@@ -1930,12 +1933,15 @@ TEST_F(PlayerBattleSettlementItemTest, InboxMissionRewardFailureRetainsClaimable
     ASSERT_TRUE(segments.Install());
     auto* row = const_cast<MissionTable*>(MissionTableManager::Instance().FindByIdSilent(4).first);
     ASSERT_NE(nullptr, row);
+    ASSERT_NE(nullptr, RewardTableManager::Instance().FindByIdSilent(row->reward_id()).first);
     row->set_target_count(0, 1); row->set_target_count(1, 1);
     Inventory().SetCapacityForRestore(0); Temporary().SetCapacityForRestore(0);
     EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
     auto& missions = tlsEcs.actorRegistry.get<MissionsContainerComp>(player).map.at(MissionListComp::kPlayerMission);
     EXPECT_TRUE(missions.IsComplete(4)); EXPECT_TRUE(missions.IsClaimable(4));
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    ASSERT_EQ(kSuccess, PlayerMissionSystem::CheckClaim(player, MissionListComp::kPlayerMission, 4));
+    EXPECT_EQ(0u, Inventory().OccupiedGridCount()) << "容量不足时自动任务奖励没有部分入包";
     Inventory().SetCapacityForRestore(20);
     EXPECT_EQ(kSuccess, PlayerMissionSystem::ClaimReward(player, MissionListComp::kPlayerMission, 4));
     EXPECT_FALSE(missions.IsClaimable(4));
