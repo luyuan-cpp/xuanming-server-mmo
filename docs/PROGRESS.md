@@ -24780,3 +24780,13 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - **实际部署与启动**：首次 Compose 预检将 `x-cpp.image`、`x-sql-boot.image` 两个扩展锚点误判为未授权变化；仅规范对应同源候选镜像后，新预检通过。实际创建 28 个容器、18 个新数据卷，原卷保留。首次启动预检又将镜像默认参数及 Compose 美元符号转义误判为调用变化；修复后先通过完整 Created 状态预检，再实际串行启动成功：16 个常驻服务运行，13 个初始化任务成功（含独立存储迁移）。见[原部署失败](../build/verification/docker-debug-refresh-20261106/deployment-r1/result.json)、[新部署预检](../build/verification/docker-debug-refresh-20261106/deployment-preflight-r2/result.json)、[创建回执](../build/verification/docker-debug-refresh-20261106/deployment-execute-r2/created.json)、[启动预检](../build/verification/docker-debug-refresh-20261106/serial-start-preflight-r2/result.json)、[实际启动成功回执](../build/verification/docker-debug-refresh-20261106/serial-start-recovery-r1/result.json)。
 - **服务入口与交回范围**：实际探测 gateway 健康为 `UP`；`http://127.0.0.1:18085/api/server-list` 返回 HTTP 200，包含 1 个 `OPEN` 区；Gate `127.0.0.1:28000` TCP 连接成功。用户明确要求自行启动真实客户端，本轮没有运行客户端或机器人登录，不能据服务器就绪声称真实登录、双玩家进场或战斗已验证。
 - **调试证据边界**：仅服务端辅助验收在实际调试器附加之前，将 Login 的主机端口 2345 误当成容器目标端口而退出。已将校验修正为 `127.0.0.1:2345 → 40000/tcp`，仅完成 AST 静态检查，未重跑该验收，因此没有本轮新的调试附加或断点命中证据。保留[辅助验收原失败回执](../build/verification/docker-debug-refresh-20261106/acceptance-server-r1/result.json)；服务已启动的实际结果以独立启动成功回执为准。
+
+### 2026-11-08 Codex：Muduo Windows 最小改动的跨平台及双向联机验收
+- 原生验收使用 `f6fddb466e` 的私有快照，附带两处修复。场景文件去掉未使用的 `defer.h` 引用，货币源码契约在原保存顺序断言中匹配实际的 `trigger` 参数。验收结束时共享工作区的本地 HEAD 为 `c17837c9cb`，其并发改动不在本轮原生覆盖内。
+- Windows Debug x64：核验 21 个工程，其中 20 个由私有快照构建，1 个复用已逐字节核对构建输入的归档。保留两次停止的原始收据，另行核验 core 的原生退出、NoRaw 和归档，修复后从 scene 续跑 7 个工程。定时器 54 项、RPC 328 项通过，另有 2 项既有禁用基准。
+- Linux Debug：固定上游 Muduo 加主仓覆盖层，以 ASan、UBSan、泄漏检查及断言执行。定时器 53 项、Redis 生命周期 122 项通过，零跳过。保留原范围检查收据；另核实际编译、配置与链接输入在本轮提交等价。
+- 货币源码契约首轮为 325/326，通过修复后只重编货币测试。完整 currency 326 项、完整 muduo_grpc 205 项通过。C++ 到正式 Go Router 的 4 项包含 6 分钟闲置后重连，grpc-go 到 C++ 为 11 子例加 1 顶层。Redis 和 etcd 隔离运行，原生退出、XML、程序哈希和资源清理均已核对。
+- 已按原始构建清单，在联机执行中及原生程序全部结束后逐一复核两份私有快照的完整源码路径集合与字节，均无变化。此证据绑定冻结快照，不扩大为当时最新 main 的并发代码验收。
+- 独立 Muduo Windows 库 `62bd8b6a8b` 已交付，保留同一提交的 7 项基础、15 项网络实测。未重验完整 game.sln、旧 VS 入口或可选 Protobuf 构建；Linux 未覆盖独立 Windows 库的 Linux CMake。
+- Java 版无对应 Muduo 内部基础库与 C++ 源码断言层，本轮无共享客户端契约变化，跨版同步不适用；未修改 Java 实现。
+- 本机原始证据：`build/verification/muduo-minimal-linux-interop-20261022/resume-20261106T025137191Z/final-verification.json`。
