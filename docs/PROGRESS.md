@@ -24780,3 +24780,11 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - **实际部署与启动**：首次 Compose 预检将 `x-cpp.image`、`x-sql-boot.image` 两个扩展锚点误判为未授权变化；仅规范对应同源候选镜像后，新预检通过。实际创建 28 个容器、18 个新数据卷，原卷保留。首次启动预检又将镜像默认参数及 Compose 美元符号转义误判为调用变化；修复后先通过完整 Created 状态预检，再实际串行启动成功：16 个常驻服务运行，13 个初始化任务成功（含独立存储迁移）。见[原部署失败](../build/verification/docker-debug-refresh-20261106/deployment-r1/result.json)、[新部署预检](../build/verification/docker-debug-refresh-20261106/deployment-preflight-r2/result.json)、[创建回执](../build/verification/docker-debug-refresh-20261106/deployment-execute-r2/created.json)、[启动预检](../build/verification/docker-debug-refresh-20261106/serial-start-preflight-r2/result.json)、[实际启动成功回执](../build/verification/docker-debug-refresh-20261106/serial-start-recovery-r1/result.json)。
 - **服务入口与交回范围**：实际探测 gateway 健康为 `UP`；`http://127.0.0.1:18085/api/server-list` 返回 HTTP 200，包含 1 个 `OPEN` 区；Gate `127.0.0.1:28000` TCP 连接成功。用户明确要求自行启动真实客户端，本轮没有运行客户端或机器人登录，不能据服务器就绪声称真实登录、双玩家进场或战斗已验证。
 - **调试证据边界**：仅服务端辅助验收在实际调试器附加之前，将 Login 的主机端口 2345 误当成容器目标端口而退出。已将校验修正为 `127.0.0.1:2345 → 40000/tcp`，仅完成 AST 静态检查，未重跑该验收，因此没有本轮新的调试附加或断点命中证据。保留[辅助验收原失败回执](../build/verification/docker-debug-refresh-20261106/acceptance-server-r1/result.json)；服务已启动的实际结果以独立启动成功回执为准。
+
+
+## 2026-11-08 Codex：按当前 main 结束旧战斗结算恢复任务
+
+- 用户明确要求直接提交 main，并清理旧任务分支及本地目录。本轮核实 main 已包含 65c69f4a9 的 match SQL + player_inbox 结算替代方案，当前实现及旧恢复决策的逐项去向以 turn-battle-gap-closure.md §10 为准；按现行实现收尾。
+- 两条旧任务分支 codex/battle-settlement-integration、claude/recover-battle-settlement-f39089db，以及 D:/luyuan/wt-recover-battle-settlement 目录和 worktree 登记，本轮检查时均已不存在。未新建分支，未清理其他 worktree 或子模块。
+- 已通过 Codex 应用工具删除本聊天原有、处于暂停状态的 automation-2（战斗结算验证自动续跑），避免旧任务继续触发。
+- 本轮仅提交这条收尾记录；已有其他聊天的 PROGRESS.md 增量和四个子模块工作区改动保留，未夹带进本提交。没有重新执行构建或测试，10-30 的历史红项及 Java 待做状态不因此改判通过；未执行 push 或 tag。
