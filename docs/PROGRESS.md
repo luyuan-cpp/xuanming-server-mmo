@@ -24790,3 +24790,9 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - 独立 Muduo Windows 库 `62bd8b6a8b` 已交付，保留同一提交的 7 项基础、15 项网络实测。未重验完整 game.sln、旧 VS 入口或可选 Protobuf 构建；Linux 未覆盖独立 Windows 库的 Linux CMake。
 - Java 版无对应 Muduo 内部基础库与 C++ 源码断言层，本轮无共享客户端契约变化，跨版同步不适用；未修改 Java 实现。
 - 本机原始证据：`build/verification/muduo-minimal-linux-interop-20261022/resume-20261106T025137191Z/final-verification.json`。
+
+
+## 2026-11-09 Codex：移除雷法少年外观
+
+- 创角禁止 06，并在账号列表投影隐藏，入场按 SQL 目录外观拒绝；其他外观、旧空值和 07/14/20 精确重试兼容保留。角色数据库存档未物理删除。
+- 同步先前已验证的退休外观精确重试及两处测试编译修复；使用远端 c596 基线隔离测试，定向 Go 登录包测试通过。Java 对应入口和投影同步。

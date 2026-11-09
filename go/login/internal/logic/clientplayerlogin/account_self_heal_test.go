@@ -56,7 +56,7 @@ func TestHealAccountRole_SQLReadPreservesIdentityUnknownFieldsAndOtherRoles(t *t
 	directory := newTestDirectory()
 	state := sqlHealState()
 	role := sqlHealRole()
-	directory.seed(state.account, role, &base.AccountSimplePlayer{PlayerId: 7002, Name: "并发建角", AppearanceId: "06_thunder_caster_boy"})
+	directory.seed(state.account, role, &base.AccountSimplePlayer{PlayerId: 7002, Name: "并发建角", AppearanceId: "08_alchemy_prodigy_boy"})
 	before := snapshotHealOwners(directory)
 	// 不装配 Redis，SQL 原归属是唯一授权来源；传入的注册表名不能覆盖已存名字。
 	logic := NewEnterGameLogic(context.Background(), &svc.ServiceContext{AccountDirectory: directory})

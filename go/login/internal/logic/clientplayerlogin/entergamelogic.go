@@ -188,6 +188,10 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginEnterGameGuid)
 		return resp, nil
 	}
+	if removedCharacterAppearance(ownership.GetRole().GetAppearanceId()) {
+		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginEnterGameGuid)
+		return resp, nil
+	}
 	if ownership.TradeListingId != 0 {
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginInProgress)
 		return resp, nil
