@@ -240,6 +240,13 @@ daemon 未运行,且 `bin/gate.exe`、`bin/scene.exe`、`bin/battle.exe` 缺失�
 
 ## 11. 2026-11-09 九张节庆地图开发接入
 
+本机交付状态：隔离栈 `festival-maps-20261109` 已运行新镜像，场景日志确认全部九图导航
+实际加载并注册；网关 `http://127.0.0.1:18185/api/server-list` 返回 zone 1 OPEN。
+对应记录为 `build/festival-maps-20261109/stack/festival-integration-status.json`、
+`festival-nav-registration.log` 与 `node-runtime-identities.txt`。
+用户决定自行手动验收，因此本次自动 Unity 验证在进入 Play 前停止；脚本编译通过，
+尚无双端实机验收结果。测试服保持运行，客户端用 Editor 启动，无需打包。
+
 本批外部 ID 保留 `01001`、`01002`、`05008`、`10000`、`19004`、`21003`、`23006`、
 `28007`、`35004`；服务器模板号取交接的 `numericSceneId`，不作为运行实例号使用。
 15 套 `spring` / `mid-autumn` 外观仍共享各图的同一导航，客户端 `clientOnly=true` 和正式
@@ -298,8 +305,8 @@ LoadNavBins、NavQuery、入场预检和统一瞬移入口，实际 **15/15 通�
 48 格、越界、缺/坏 bin/mask/checksum、地面高度容差和跨平台归队瞬移拒绝；另有 7 项
 既有 SceneSpawn 回归（含原 21 个场景导航与出生点）通过。
 日志与 XML 为 `native-navigation.log` / `native-navigation.xml`，汇总为
-`server-navigation-validation.json`。Linux 节点构建、隔离客户端联调仍须由本次执行记录
-继续补充，不能把上述离线证据当作实机通过。
+`server-navigation-validation.json`。Linux 节点构建见下述 r3 回执；隔离客户端联调仍须由
+本次执行记录继续补充，不能把上述离线证据当作实机通过。
 `10000` 画面接缝仍为待修；所有地图均未据此解除 `clientOnly` 或开放生产传送。
 
 ### 隔离配置与本机测试栈
@@ -350,7 +357,31 @@ python -B tools/navmesh_baker/configure_festival_local_stack.py `
 客户端 gate 为 `127.0.0.1:28100`，battle 端口 28110；Compose 项目
 `festival-maps-20261109` 使用 `172.29.222.0/24`。原 `xuanming-debug-*` 栈继续使用自己的
 配置与数据，不作为本轮已更新的证明。配置快照、镜像构建成功和容器启动分别记录，均不能
-代替真实入场和移动验收；本节编写时 Linux 构建及本轮 E2E 仍待结果。
+代替真实入场和移动验收。本轮 Linux r3 与配置快照已成功，三个节点使用同一镜像
+`local/xuanming-node:debug-20261109t100006.210999z`，不可变 ID 为
+`sha256:201b6eb9ef333201e1cd21971a3ef4008ce4874714078498697cfb77a017401b`；
+`festival-runtime-manifest.json` 此时仍记 `liveVerified=false`，本轮 E2E 仍待结果。
+
+首次启动还需完成落点库迁移：当前 `compose.game.yml` 的 `db-migrate` 默认只迁
+`zone_1_db`。`DB_ALLOWED_DATABASES` 中包含 `player_store_1000000_db` 只表示准入，
+不会自动遍历该库。隔离 MySQL、`sql-boot` 准备及常规迁移成功后，写者注册和业务启动前，
+需额外执行正式迁移入口（使用同一新栈环境与 Compose 文件）：
+
+```powershell
+docker compose -p festival-maps-20261109 `
+  --env-file build/festival-maps-20261109/stack/.env `
+  -f deploy/debug/compose.game.yml `
+  -f build/festival-maps-20261109/stack/compose.migrations.json `
+  -f build/festival-maps-20261109/stack/compose.festival.json `
+  run --rm --no-deps db-migrate -f /app/etc/service.yaml -command up -storage-id 1000000
+```
+
+缺少此步会使 `data-service-sql-boot` 因落点库没有 `route_meta` 拒绝注册。本轮已实际补跑
+成功，exit 0、applied 1，日志在 `stack/player-store-migration.log`。若 `db-sql-boot` 已在
+补迁移前成功，它当时只会登记已有闸门表的库，须在启动 db 业务前与失败的
+`data-service-sql-boot` 一起重建一次（沿用上述 Compose 参数，命令改为
+`up -d --no-deps --force-recreate db-sql-boot data-service-sql-boot`），再确认注册完成并
+继续新栈业务启动。其它已成功且未消费的写者授权不因这次落点库补迁移而重建。
 
 ### Unity Editor 联调入口
 
