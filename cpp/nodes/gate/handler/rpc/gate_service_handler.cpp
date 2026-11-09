@@ -150,7 +150,7 @@ void GateHandler::NodeHandshake(::google::protobuf::RpcController* controller, c
 	::google::protobuf::Closure* done)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	gNode->GetNodeRegistrationManager().OnNodeHandshake(RpcController::From(controller), *request, *response);
+	gNode->GetNodeHandshakeManager().OnNodeHandshake(RpcController::From(controller), *request, *response);
 ///<<< END WRITING YOUR CODE
 
 }

@@ -334,7 +334,7 @@ private:
 
 	static bool IsConnected(const Node& node)
 	{
-		const RedisManager::HiredisPtr& connection = node.manager->GetZoneRedis();
+		const RedisManager::HiredisPtr& connection = node.manager->GetConnection();
 		return connection && connection->connected();
 	}
 
@@ -454,7 +454,7 @@ private:
 			// slot 暂时没有主(故障转移中的拓扑空洞)或全部节点都断了。命令没发出,在预算内等。
 			return BackoffHead(queue, now);
 		}
-		const RedisManager::HiredisPtr& connection = node->manager->GetZoneRedis();
+		const RedisManager::HiredisPtr& connection = node->manager->GetConnection();
 		if (!connection || !connection->connected())
 		{
 			if (node->everConnected && !askTarget)
@@ -674,7 +674,7 @@ private:
 		{
 			return; // 请求留着,下一拍再试
 		}
-		const int ret = node->manager->GetZoneRedis()->formattedCommand(
+		const int ret = node->manager->GetConnection()->formattedCommand(
 			[weak = weak_from_this()](hiredis::Hiredis*, redisReply* reply)
 			{
 				if (const auto self = weak.lock())

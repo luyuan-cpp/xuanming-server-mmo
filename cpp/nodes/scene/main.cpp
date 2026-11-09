@@ -232,7 +232,7 @@ int main(int argc, char *argv[])
 					continue;
 				}
 				context->shutdownPlayerIds.insert(playerId->value);
-				if (!PlayerLifecycleSystem::IsSaveInFlight(playerId->value))
+				if (!PlayerLifecycleSystem::IsPlayerExitPending(playerId->value))
 				{
 					playersNeedingExit.push_back(entity);
 				}
@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
 			std::size_t pendingPlayerSaves = 0;
 			for (const Guid playerId : context->shutdownPlayerIds)
 			{
-				if (PlayerLifecycleSystem::IsSaveInFlight(playerId))
+				if (PlayerLifecycleSystem::IsPlayerExitPending(playerId))
 				{
 					++pendingPlayerSaves;
 				}

@@ -259,8 +259,8 @@ type queueTokenBody struct {
 //   - Self-validating: server can reject expired/forged tokens before
 //     touching Redis.
 //   - No extra Redis key per token (the queue:token:{token} index is for
-//     fast Lookup, but we could fall back to parse-only if Redis evicted
-//     the index — Lookup currently relies on the index, kept for clarity).
+//     fast Poll, but we could fall back to parse-only if Redis evicted
+//     the index — Poll currently relies on the index, kept for clarity).
 func signQueueToken(secret []byte, queueID string, zoneID uint32, expireTS int64) (string, error) {
 	body := queueTokenBody{Kind: "queue", QueueID: queueID, ZoneID: zoneID, ExpireTS: expireTS}
 	bodyBytes, err := json.Marshal(body)
@@ -341,7 +341,7 @@ func ParseAndVerifyQueueTokenMulti(secrets [][]byte, token string) (queueID stri
 }
 
 // splitQueueToken 把排队令牌拆成 JSON 正文与签名:base64url(正文 | "." | hex(HMAC)),见 signQueueToken。只拆格式、
-// 不验签。令牌格式只在 signQueueToken 与这里两处出现:验签(ParseAndVerifyQueueTokenMulti)与 Lookup 取 queueId
+// 不验签。令牌格式只在 signQueueToken 与这里两处出现:验签(ParseAndVerifyQueueTokenMulti)与 Poll 取 queueId
 // (queueIDOfVerifiedToken)共用这一份拆法(2026-11-06 抽出,错误串与抽出前相同)。
 func splitQueueToken(token string) (bodyBytes, sig []byte, err error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
@@ -361,11 +361,11 @@ func splitQueueToken(token string) (bodyBytes, sig []byte, err error) {
 	return raw[:dot], raw[dot+1:], nil
 }
 
-// queueIDOfVerifiedToken 取排队令牌里的 queueId,不验签、不看过期(2026-11-06,只给 Queue.Lookup 用)。
+// queueIDOfVerifiedToken 取排队令牌里的 queueId,不验签、不看过期(2026-11-06,只给 Queue.Poll 用)。
 //
-// Lookup 的约定是令牌已由调用方经 ParseAndVerifyQueueTokenMulti 验过签;这里取出 queueId 只为拼 meta、放行槽的键,
+// Poll 的约定是令牌已由调用方经 ParseAndVerifyQueueTokenMulti 验过签;这里取出 queueId 只为拼 meta、放行槽的键,
 // 「这张令牌是不是这个条目的」仍由读状态脚本拿 token 索引核对:索引按令牌全文建、值是 queueId,只有 Enqueue 签出的
-// 原令牌有索引,改写过正文的令牌对不上,回 meta_gone。拆不开或正文里没有 queueId 时回 false,Lookup 同样按 meta_gone 处理
+// 原令牌有索引,改写过正文的令牌对不上,回 meta_gone。拆不开或正文里没有 queueId 时回 false,Poll 同样按 meta_gone 处理
 // (与合并之前「GET token 索引落空」同一结果)。
 func queueIDOfVerifiedToken(token string) (string, bool) {
 	bodyBytes, _, err := splitQueueToken(token)

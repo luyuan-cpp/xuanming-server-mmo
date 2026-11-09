@@ -264,7 +264,7 @@ NodeLoadWeightPlayerCount: 0.01
 # Bound on world-channel migrations per rebalance tick. Rebalance runs when
 # a world-hosting node joins or leaves the zone. Only empty channels are
 # moved (no members); hot channels stay put. Set 0 to disable
-# proactive rebalancing — on-demand lazy-reassign in GetBestWorldChannel
+# proactive rebalancing — on-demand lazy-reassign in SelectOrRecoverWorldChannel
 # will still repair mappings to dead nodes.
 MaxRebalanceMigrationsPerTick: 10
 

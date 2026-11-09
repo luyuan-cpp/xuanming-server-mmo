@@ -35,7 +35,7 @@ uint32_t GetZoneId();
 //   落到兜底级时可能写一行告警日志。
 // - 只在节点主循环线程调用(读 thread_local 注册表,告警节流状态也是 thread_local;
 //   muduo_grpc::Channel::GetState 还断言在通道所属 loop 线程);不在 per-tick 路径上。
-entt::entity GetSceneManagerEntity(Guid playerId);
+entt::entity SelectSceneManagerEntity(Guid playerId);
 
 namespace scene_manager_selector
 {

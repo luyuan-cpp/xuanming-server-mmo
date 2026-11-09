@@ -81,7 +81,7 @@ public:
     Node(muduo::net::EventLoop *loop,
          uint32_t nodeType,
          CanConnectNodeTypeList connectTo,
-         ::google::protobuf::Service *replyService = nullptr);
+         ::google::protobuf::Service *rpcService = nullptr);
 
     virtual ~Node();
 
@@ -95,10 +95,10 @@ public:
     // 仅供启动、注册链路与 gate 人数上报写入;不会向 ECS 补默认组件。
     NodeInfo &MutableNodeInfo();
     KafkaManager &GetKafkaManager() { return kafkaManager; }
-    virtual google::protobuf::Service *GetNodeReplyService() { return replyService_ ? &replyService_->get() : nullptr; }
+    virtual google::protobuf::Service *GetNodeRpcService() { return rpcService_ ? &rpcService_->get() : nullptr; }
     muduo::AsyncLogging &Log() { return logSystem; }
     CanConnectNodeTypeList &GetTargetNodeTypeWhitelist() { return targetNodeTypeWhitelist; }
-    NodeHandshakeManager &GetNodeRegistrationManager() { return nodeRegistrationManager; }
+    NodeHandshakeManager &GetNodeHandshakeManager() { return nodeHandshakeManager; }
     ServiceDiscoveryManager &GetServiceDiscoveryManager() { return serviceDiscoveryManager; }
     EtcdManager &GetEtcdManager() { return etcdManager; }
 
@@ -315,7 +315,7 @@ protected:
     boost::uuids::random_generator uuidGenerator;
     KafkaManager kafkaManager;
     EtcdManager etcdManager;
-    NodeHandshakeManager nodeRegistrationManager;
+    NodeHandshakeManager nodeHandshakeManager;
     ServiceDiscoveryManager serviceDiscoveryManager;
     std::atomic<bool> shutdownStarted{false};
     std::mutex shutdownCompletionMutex_;
@@ -333,7 +333,7 @@ protected:
     std::unordered_map<std::string, std::unique_ptr<PendingNodeRemoval>> pendingNodeRemovals_;
 
     // 调用者拥有服务，必须活过 Node 及其注册通道；空值表示不额外注册该服务。
-    std::optional<std::reference_wrapper<::google::protobuf::Service>> replyService_;
+    std::optional<std::reference_wrapper<::google::protobuf::Service>> rpcService_;
     AfterStartFn afterStartFn_;
     KafkaHandlersFn kafkaHandlersFn_;
     BeforeShutdownFn beforeShutdownFn_;

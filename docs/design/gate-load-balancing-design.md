@@ -186,7 +186,7 @@ dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `A
   重挑与 `unchecked` 各一条节流日志（30s 至多一条）。复核经 `eligibleGates`，`login_gate_pick_excluded_total` 与 `fallback_total`
   也按每次取走计入。`unchecked` 持续不为 0 说明取走请求打到了看不见本 zone gate 的 login，或 etcd 不可达。
 - 测试：`admit_recheck_test.go`（保留、四种重挑、换 node_id、整区排空与「排空中胜过停写」时保留、全部停写时保留、签出的票绑新 gate、
-  读不到候选照签、经 `Queue.Lookup` 的端到端）。
+  读不到候选照签、经 `Queue.Poll` 的端到端）。
 
 - Java 版（`game-discovery` 的 `GatePicker`）三项都未做，记在 Java 仓 `PARITY.md` 待做；做的时候按同一分档（排空并入，不先行剔除）。
 

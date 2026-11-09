@@ -126,7 +126,7 @@ void BattleClientEdge::DisconnectAll(const char *reason)
     for (auto &[connId, session] : sessions_)
     {
         session.handshakeTimer.Cancel();
-        // AbortAllRooms 已对有房间的直连 shutdown()(终局包排空后 FIN)+ 延迟强关;
+        // BeginRoomShutdown 已对有房间的直连 shutdown()(终局包排空后 FIN)+ 延迟强关;
         // 这些连接 connected()==false,再 forceClose 会立刻关 fd,把还在用户态输出缓冲里
         // 的 SpectateEnd 字节丢掉。只强关仍 connected 的(未验证 / 空闲)连接。
         if (const auto conn = session.conn.lock(); conn && conn->connected())
@@ -489,7 +489,7 @@ void BattleClientEdge::OnClientRequest(const muduo::net::TcpConnectionPtr &conn,
 
     // 闸 5b:每消息号限速(gate CheckMessageLimit 同款)。持合法票据的玩家也不能用
     // 线速 GetBattleState 打满单线程的房间管理器 —— 每条都在主 loop 上做全量快照序列化。
-    if (const auto err = session->messageLimiter.CanSend(request->message_id()); err != kSuccess)
+    if (const auto err = session->messageLimiter.TryConsumeRequestQuota(request->message_id()); err != kSuccess)
     {
         SendEnvelopeError(conn, *request, err);
         RegisterIllegalPacket(*session, conn, "rate_limited");

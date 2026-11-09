@@ -1523,7 +1523,7 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 	}
 
 	// Case 2: auto-select least-loaded channel.
-	sid, nid, err := GetBestWorldChannel(l.ctx, l.svcCtx, sceneConfId, zoneId)
+	sid, nid, err := SelectOrRecoverWorldChannel(l.ctx, l.svcCtx, sceneConfId, zoneId)
 	if err != nil || sid == 0 {
 		return 0, "", fmt.Errorf("no available channel for conf %d in zone %d", sceneConfId, zoneId)
 	}

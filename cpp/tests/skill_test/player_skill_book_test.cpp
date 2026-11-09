@@ -119,12 +119,12 @@ protected:
 // 旧实现遍历所有职业的种子,每个号都拿到 1 / 2 / 13;现在只按本职业 Class.skill 发首个主动 + 首个被动(1 重)
 TEST_F(PlayerSkillBookTest, RegisterPlayerSeedsOnlyCurrentClassInitialSkills) {
     const auto player = NewPlayer(2, 1, 0);
-    PlayerSkillSystem::RegisterPlayer(player);
+    PlayerSkillSystem::EnsureInitialSkills(player);
     EXPECT_EQ(OwnedIds(player), (std::vector<uint32_t>{kXuanFuLuoYao, kLingTaiNingYuan}));
     EXPECT_EQ(StoredRank(player, kXuanFuLuoYao), 1u);
     EXPECT_EQ(StoredRank(player, kLingTaiNingYuan), 1u);
 
-    PlayerSkillSystem::RegisterPlayer(player);  // 幂等
+    PlayerSkillSystem::EnsureInitialSkills(player);  // 幂等
     EXPECT_EQ(OwnedIds(player).size(), 2u);
 }
 
@@ -501,7 +501,7 @@ TEST_F(PlayerSkillBookTest, RankZeroClassSeedIsRegrantedInPlace) {
 
     const auto settled = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString();
     PlayerSkillSystem::InitializeOnLoad(player);
-    PlayerSkillSystem::RegisterPlayer(player);
+    PlayerSkillSystem::EnsureInitialSkills(player);
     EXPECT_EQ(settled, tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString()) << "幂等";
 }
 
@@ -609,11 +609,11 @@ TEST_F(PlayerSkillBookTest, MissingLevelComponentLeavesNoUsableSkillsAndGrantsNo
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "读路径不补建持久组件";
 
     const auto control = NewPlayer(1, 1, 0);
-    PlayerSkillSystem::RegisterPlayer(control);
+    PlayerSkillSystem::EnsureInitialSkills(control);
     ASSERT_FALSE(OwnedIds(control).empty()) << "夹具前提:组件齐全时 1 级新号补得到初始技能";
     const auto fresh = NewPlayer(1, 1, 0);
     tlsEcs.actorRegistry.remove<LevelComp>(fresh);
-    PlayerSkillSystem::RegisterPlayer(fresh);
+    PlayerSkillSystem::EnsureInitialSkills(fresh);
     PlayerSkillSystem::InitializeOnLoad(fresh);
     EXPECT_TRUE(OwnedIds(fresh).empty()) << "缺等级时一条初始技能也不补";
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(fresh));

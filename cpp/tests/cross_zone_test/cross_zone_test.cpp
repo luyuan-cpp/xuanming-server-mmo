@@ -113,7 +113,7 @@ class LocalNodeInfoResetListener : public ::testing::EmptyTestEventListener
 //                                 snapshot (mixed-version §12, batch 5),
 //                                 not dropped, not crashed.
 //   6. FrozenCompMarker         — PlayerFrozenComp emplace/remove +
-//                                 IsCrossZoneFrozen() semantics.
+//                                 IsPlayerFrozen() semantics.
 //   7. HandoffMarkWithdrawQueue — the pending-withdrawal table for handoff
 //                                 marks (handoff_mark_withdraw.h): dedup,
 //                                 retry pacing, deadline expiry, exact-value
@@ -509,22 +509,22 @@ TEST(CrossZoneBagMarshal, UnmarshalCarriesOutOfRangeBagTypeVerbatim)
 // ============================================================================
 #include "player/system/player_lifecycle.h"
 
-TEST(CrossZoneFrozen, IsCrossZoneFrozenReflectsComponent)
+TEST(CrossZoneFrozen, IsPlayerFrozenReflectsComponent)
 {
     tlsEcs.actorRegistry.clear();
 
     const auto player = tlsEcs.actorRegistry.create();
-    EXPECT_FALSE(PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+    EXPECT_FALSE(PlayerLifecycleSystem::IsPlayerFrozen(player))
         << "fresh entity is not frozen";
 
     auto& frozen = tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
     frozen.frozenAtMs = 12345;
     frozen.toZoneId = 42;
     frozen.migrateAttempts = 1;
-    EXPECT_TRUE(PlayerLifecycleSystem::IsCrossZoneFrozen(player));
+    EXPECT_TRUE(PlayerLifecycleSystem::IsPlayerFrozen(player));
 
     tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
-    EXPECT_FALSE(PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+    EXPECT_FALSE(PlayerLifecycleSystem::IsPlayerFrozen(player))
         << "removing the component must clear Frozen state immediately so "
         << "business systems unblock writes on the same tick.";
 }
@@ -533,7 +533,7 @@ TEST(CrossZoneFrozen, InvalidEntityIsNotFrozen)
 {
     tlsEcs.actorRegistry.clear();
 
-    EXPECT_FALSE(PlayerLifecycleSystem::IsCrossZoneFrozen(entt::null))
+    EXPECT_FALSE(PlayerLifecycleSystem::IsPlayerFrozen(entt::null))
         << "entt::null must return false, not crash. Defensive contract "
         << "matches the implementation in player_lifecycle.cpp.";
 }
@@ -5420,7 +5420,7 @@ TEST(RelocateConfirmIntent, HandoffEnterSceneMayBeInFlightCoversBothExitWinsBran
 }
 
 // ── ECS 级接缝:直接驱动排空(BeginSceneDrain)、退出收尾、进场 Reconcile、定时扫描与两个 Dispatch ──
-// 宿主里没有 scene_manager(GetSceneManagerEntity 返回 null:改派没发出去)、没有 gate(按会话推送 = push_gate_gone)、
+// 宿主里没有 scene_manager(SelectSceneManagerEntity 返回 null:改派没发出去)、没有 gate(按会话推送 = push_gate_gone)、
 // 没有 zone Redis(改派标记不写;核实读发不出去 = verify_deferred)。所以这里走得到的是:登记 → 没发出去 → 核实推迟 →
 // 读不到时的处置,以及落回本节点的各条路径;kAwaitingReply 之后的路径只有上面的纯函数 / Table 用例(见文件头)。
 // 本节不构造 ScopedFakeSceneManagerNode:需要明确走"没有可派发节点"的分支,不能意外发起真实 RPC。
@@ -5644,7 +5644,7 @@ TEST(PlayerLifecycleEcs, DestroyPlayerWithoutDetachLeavesNoAoiResidue)
         { return entry.second.entities.contains(target); }));
     const auto* beforeAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(beforeAoi, nullptr);
-    ASSERT_TRUE(beforeAoi->Contains(target));
+    ASSERT_TRUE(beforeAoi->IsVisible(target));
 
     PlayerLifecycleSystem::DestroyPlayer(kExitPlayerId);
 
@@ -5653,7 +5653,7 @@ TEST(PlayerLifecycleEcs, DestroyPlayerWithoutDetachLeavesNoAoiResidue)
     ASSERT_TRUE(tlsEcs.actorRegistry.valid(watcher));
     const auto* afterAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(afterAoi, nullptr);
-    EXPECT_FALSE(afterAoi->Contains(target));
+    EXPECT_FALSE(afterAoi->IsVisible(target));
     const auto* afterGrids = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(scene);
     ASSERT_NE(afterGrids, nullptr);
     for (const auto& [gridId, grid] : *afterGrids)
@@ -6658,7 +6658,7 @@ protected:
         ASSERT_TRUE(registry.all_of<Hex>(player));
         const auto* interests = registry.try_get<AoiListComp>(watcher);
         ASSERT_NE(nullptr, interests);
-        ASSERT_TRUE(interests->Contains(player));
+        ASSERT_TRUE(interests->IsVisible(player));
     }
     void ExpectStillInSource()
     {
@@ -6667,7 +6667,7 @@ protected:
         EXPECT_EQ(source, tlsEcs.actorRegistry.get<SceneEntityComp>(player).sceneEntity);
         const auto* interests = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
         ASSERT_NE(nullptr, interests);
-        EXPECT_TRUE(interests->Contains(player));
+        EXPECT_TRUE(interests->IsVisible(player));
         const auto* grids = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(source);
         ASSERT_NE(nullptr, grids);
         EXPECT_TRUE(std::any_of(grids->begin(), grids->end(), [this](const auto& entry)
@@ -6692,7 +6692,7 @@ TEST_F(SceneEntryPermissionTest, PublicSceneSwitchesWithoutBusinessSinkAndCleans
     EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Hex>(player));
     const auto* interests = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(nullptr, interests);
-    EXPECT_FALSE(interests->Contains(player));
+    EXPECT_FALSE(interests->IsVisible(player));
     const auto* grids = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(source);
     ASSERT_NE(nullptr, grids);
     for (const auto& [id, grid] : *grids) EXPECT_FALSE(grid.entities.contains(player));
@@ -6707,7 +6707,7 @@ TEST_F(SceneEntryPermissionTest, LeaveCurrentSceneClearsBindingHexAndWatchers)
         EXPECT_FALSE((tlsEcs.actorRegistry.any_of<SceneEntityComp, Hex>(player)));
         const auto* interests = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
         ASSERT_NE(nullptr, interests);
-        EXPECT_FALSE(interests->Contains(player));
+        EXPECT_FALSE(interests->IsVisible(player));
         const auto* grids = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(source);
         ASSERT_NE(nullptr, grids);
         for (const auto& [id, grid] : *grids) EXPECT_FALSE(grid.entities.contains(player));
@@ -6862,7 +6862,7 @@ protected:
         EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Hex>(player)) << "先离场:旧连接的 AOI 状态清掉,下一拍按新连接重建";
         const auto* interests = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
         ASSERT_NE(nullptr, interests);
-        EXPECT_FALSE(interests->Contains(player)) << "邻居先看到他离开,下一拍 AOI 再看到他进来";
+        EXPECT_FALSE(interests->IsVisible(player)) << "邻居先看到他离开,下一拍 AOI 再看到他进来";
         const auto* grids = tlsEcs.sceneRegistry.try_get<SceneGridListComp>(source);
         ASSERT_NE(nullptr, grids);
         for (const auto& [id, grid] : *grids) EXPECT_FALSE(grid.entities.contains(player));
@@ -7701,7 +7701,7 @@ public:
                 GrpcDone<::scene_manager::CreateSceneResponse> done)
             {
                 EXPECT_TRUE(HasMirrorCreate(player)) << "RPC 提交前必须登记镜像槽";
-                EXPECT_EQ(sceneManager, GetSceneManagerEntity(kExitPlayerId));
+                EXPECT_EQ(sceneManager, SelectSceneManagerEntity(kExitPlayerId));
                 EXPECT_EQ(request.scene_conf_id(), kSourceConfig);
                 EXPECT_EQ(request.scene_type(), ::scene_manager::SCENE_TYPE_INSTANCE);
                 EXPECT_EQ(request.zone_id(), GetZoneId());
@@ -8001,7 +8001,7 @@ TEST(MirrorCreateInFlightEcs, CreatedWithoutSceneManagerReleasesTheSlot)
     mirror.PlaceAtSource(player);
     ASSERT_TRUE(mirror.Start(player));
     mirror.sceneManager.Disconnect();
-    ASSERT_EQ(GetSceneManagerEntity(kExitPlayerId), entt::entity{entt::null}) << "前置:宿主没有 scene_manager 节点,不会发真实 RPC";
+    ASSERT_EQ(SelectSceneManagerEntity(kExitPlayerId), entt::entity{entt::null}) << "前置:宿主没有 scene_manager 节点,不会发真实 RPC";
     const auto created = MakeCreateReply(/*errorCode=*/0, /*sceneId=*/9001);
 
     mirror.Reply(OkOutcome(), &created);

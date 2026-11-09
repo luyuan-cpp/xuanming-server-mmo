@@ -148,7 +148,7 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity player, entt::entity manage
 // 不在核心 zoneredis 里。
 bool SceneControlRedisReady()
 {
-	auto& redis = tlsSceneControlRedis.GetZoneRedis();
+	auto& redis = tlsSceneControlRedis.GetConnection();
 	return redis && redis->connected();
 }
 
@@ -462,7 +462,7 @@ bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mi
 	{
 		return false;
 	}
-	const auto smEntity = GetSceneManagerEntity(playerSessionPB->player_id());
+	const auto smEntity = SelectSceneManagerEntity(playerSessionPB->player_id());
 	if (smEntity == entt::null)
 	{
 		LOG_WARN << "RequestEnterMirrorScene: no SceneManager node available";
@@ -581,7 +581,7 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entit
 	// 交接在途时不提示:交接自己会给结局,补一条"进入场景失败"会让客户端提前结束等待。
 	if (PlayerLifecycleSystem::IsSceneChangeBusy(player))
 	{
-		const bool handoffInFlight = PlayerLifecycleSystem::IsCrossZoneFrozen(player);
+		const bool handoffInFlight = PlayerLifecycleSystem::IsPlayerFrozen(player);
 		LOG_WARN << "CreateScene done: player " << playerId << " has another scene change / handoff in flight,"
 				 << " skipping auto-enter for mirror_scene=" << mirrorSceneId << " handoff_in_flight=" << handoffInFlight;
 		if (!handoffInFlight)
@@ -598,7 +598,7 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entit
 				  << ", skipping auto-enter for mirror_scene=" << mirrorSceneId;
 		co_return;
 	}
-	const auto smEntity = GetSceneManagerEntity(playerId);
+	const auto smEntity = SelectSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
 	{
 		// 与 EnterSceneC2S 找不到 SceneManager 时同一个提示:服务端暂时不可用,不是客户端的错。
@@ -670,7 +670,7 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 	// 捕获一律用 init-capture:MSVC 对 entt::entity 的简单捕获有 C3495(.github/copilot-instructions.md)。
 	const uint64_t sceneId = sceneInfo->scene_id();
 	const uint32_t sceneConfigId = sceneInfo->scene_config_id();
-	const int ret = tlsSceneControlRedis.GetZoneRedis()->command(
+	const int ret = tlsSceneControlRedis.GetConnection()->command(
 		[player = player, playerId = playerId, sceneId = sceneId, sceneConfigId = sceneConfigId,
 		 sceneInfoCopy = *sceneInfo](hiredis::Hiredis*, redisReply* reply) {
 			if (!IsSamePlayer(player, playerId))

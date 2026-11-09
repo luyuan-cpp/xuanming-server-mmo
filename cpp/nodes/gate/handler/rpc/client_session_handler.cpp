@@ -419,7 +419,7 @@ bool GateClientSessionHandler::CheckMessageSize(SessionInfo &session, const RpcC
 
 bool GateClientSessionHandler::CheckMessageLimit(SessionInfo &session, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const
 {
-	if (const auto err = session.messageLimiter.CanSend(request->message_id()); err != kSuccess)
+	if (const auto err = session.messageLimiter.TryConsumeRequestQuota(request->message_id()); err != kSuccess)
 	{
 		LOG_ERROR << "Failed to send message. Message ID: " << request->message_id() << ", Error: " << err;
 		MessageContent errResponse;

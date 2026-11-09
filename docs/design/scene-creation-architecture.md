@@ -73,7 +73,7 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
 ├─ resolveSceneType (auto-detect or explicit)
 │
 ├─ Main World path:
-│  ├─ GetBestWorldChannel: SMEMBERS world_channels:zone:{zoneId}:{confId}
+│  ├─ SelectOrRecoverWorldChannel: SMEMBERS world_channels:zone:{zoneId}:{confId}
 │  │    └─ 已有可用频道 → 返回当前人数最少的频道
 │  ├─ 无可用频道 → initWorldScenesForZone（持 zone 补建锁）
 │  │    ├─ DesiredWorldChannelCount + SMEMBERS → 只分配缺少的频道
@@ -81,7 +81,7 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
 │  │    ├─ registerWorldChannel：一段脚本写 scene:{id}:node / zone / agones_gs、节点计数与节点场景集合，
 │  │    │    SADD world_channels:zone:{zoneId}:{confId} sceneId
 │  │    └─ 对全部频道发 CreateScene(scene_id, config_id)，C++ 按 scene_id 幂等
-│  └─ 再次 GetBestWorldChannel → 返回可用频道，否则回错误
+│  └─ 再次 SelectOrRecoverWorldChannel → 返回可用频道，否则回错误
 │
 └─ Instance path:
    ├─ pickInstanceNode:
@@ -528,7 +528,7 @@ Failure mode coverage:
 | Both sides racing under retries | Bounded: every retry goes through the same Lua, Redis serialises |
 
 Regression: `TestAtomicAddSceneMember_{SceneExists,SceneGone}`,
-`TestAtomicDestroyIfIdle_{AbortsOnPlayers,DestroysWhenIdle}`,
+`TestClaimIdleSceneTeardown_{AbortsOnPlayers,DestroysWhenIdle}`,
 `TestDestroyInstance_CAS_AbortsWhenPlayersPresent`,
 `TestEnterScene_AtomicAdd_NoOrphanMembers`.
 

@@ -90,7 +90,7 @@ func mustNewDispatcher(t *testing.T, q *Queue, prov CapacityProvider, rdb *redis
 }
 
 // stubSignFn is the test-side gate-token signer. The Dispatcher (in the
-// fixture above) writes AdmitSlot into admit:{queueId}; Lookup needs a
+// fixture above) writes AdmitSlot into admit:{queueId}; Poll needs a
 // SignAdmitFn to turn that slot into an AdmitToken at consume time. The
 // stub copies slot fields straight through and stamps a fixed deadline,
 // matching what production handlers do via SignGateToken.
@@ -153,7 +153,7 @@ func TestIntegration_QueueDrainAdmits(t *testing.T) {
 			if _, ok := admitted[tok]; ok {
 				continue
 			}
-			st, err := q.Lookup(ctx, tok, 1, stubSignFn)
+			st, err := q.Poll(ctx, tok, 1, stubSignFn)
 			if err != nil {
 				continue
 			}
@@ -202,7 +202,7 @@ func TestIntegration_DispatcherRespectsCapacity(t *testing.T) {
 	// was admitted — capacity is full, queue must hold.
 	time.Sleep(500 * time.Millisecond)
 	for _, tok := range stuck {
-		st, err := q.Lookup(ctx, tok, 1, stubSignFn)
+		st, err := q.Poll(ctx, tok, 1, stubSignFn)
 		if err != nil {
 			t.Fatalf("lookup: %v", err)
 		}
@@ -223,7 +223,7 @@ func TestIntegration_DispatcherRespectsCapacity(t *testing.T) {
 	waitFor(t, 2*time.Second, "exactly 2 admitted after capacity opened", func() bool {
 		admittedCount = 0
 		for _, tok := range stuck {
-			st, err := q.Lookup(ctx, tok, 1, stubSignFn)
+			st, err := q.Poll(ctx, tok, 1, stubSignFn)
 			if err == nil && st.Status == StatusAdmitted {
 				admittedCount++
 			}
@@ -619,7 +619,7 @@ func TestDispatchOnce_BatchSpreadsAcrossGatesWithOneCandidateRead(t *testing.T) 
 			// 客户端取走放行时拿到的 gate 地址,就是放行时挑中的那台。
 			got := make(map[string]int, len(tc.gates))
 			for _, token := range tokens {
-				st, err := q.Lookup(ctx, token, 1, stubSignFn)
+				st, err := q.Poll(ctx, token, 1, stubSignFn)
 				if err != nil || st.Status != StatusAdmitted {
 					t.Fatalf("lookup = (%+v, %v), want ADMITTED", st, err)
 				}
@@ -668,7 +668,7 @@ func TestBatchPickFn_NoCandidatesKeepsEntryQueued(t *testing.T) {
 		t.Fatalf("queue score = %.0f err=%v, want %.0f (unchanged)", got, err, score)
 	}
 	mustAdmittedCount(t, q, 0, "no gate picked")
-	if st, err := q.Lookup(ctx, res.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusQueueing {
+	if st, err := q.Poll(ctx, res.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusQueueing {
 		t.Fatalf("lookup = (%+v, %v), want QUEUEING", st, err)
 	}
 }
@@ -678,7 +678,7 @@ func TestBatchPickFn_NoCandidatesKeepsEntryQueued(t *testing.T) {
 // 修复前红:队列长度 0(旧代码 ZPOPMIN 弹出后写入出错即丢);日志是 "dropped entries after zpopmin",不是
 // "PopAdmit zone=1 err="。
 func TestDispatchOnce_PartialBatchError_CountsAdmittedAndLogsOnce(t *testing.T) {
-	gzprom.Enable() // 计数器要指标开关打开才写,见 TestLookup_AdmitSlotExpiredUnclaimed_ReturnsExpired
+	gzprom.Enable() // 计数器要指标开关打开才写,见 TestPoll_AdmitSlotExpiredUnclaimed_ReturnsExpired
 	logs := logtest.NewCollector(t)
 	mr, err := miniredis.Run()
 	if err != nil {
@@ -728,7 +728,7 @@ func TestDispatchOnce_PartialBatchError_CountsAdmittedAndLogsOnce(t *testing.T) 
 	if has, err := rdb.HExists(ctx, metaKey(left[0]), metaFieldAdmittedAt).Result(); err != nil || has {
 		t.Fatalf("meta of the remaining entry has %s=%v err=%v, want absent", metaFieldAdmittedAt, has, err)
 	}
-	if st, err := q.Lookup(ctx, tokens[left[0]], 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {
+	if st, err := q.Poll(ctx, tokens[left[0]], 1, signMustNotRun(t)); err != nil || st.Status != StatusQueueing {
 		t.Fatalf("lookup the remaining entry = (%+v, %v), want QUEUEING", st, err)
 	}
 	var errLines []string
@@ -841,7 +841,7 @@ func TestDispatchOnce_ConsumedAdmitsHoldCapacityForHandoffGrace(t *testing.T) {
 
 	taken := 0
 	for _, token := range tokens {
-		st, err := q.Lookup(ctx, token, 1, stubSignFn)
+		st, err := q.Poll(ctx, token, 1, stubSignFn)
 		if err != nil {
 			t.Fatalf("lookup: %v", err)
 		}

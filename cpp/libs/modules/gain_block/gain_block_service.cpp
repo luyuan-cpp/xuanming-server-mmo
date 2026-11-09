@@ -84,15 +84,6 @@ void GainBlockService::ClearAllGlobalBlocks()
 }
 
 // ---------------------------------------------------------------------------
-// Global-only facade (currency callers pair it with CurrencySystem::IsCurrencyBlocked)
-// ---------------------------------------------------------------------------
-
-bool GainBlockService::IsGainBlocked(GainType type, uint32_t id)
-{
-    return IsGloballyBlocked(type, id);
-}
-
-// ---------------------------------------------------------------------------
 // 物品获得:全服 + 单玩家(docs/design/player-inbox-service.md §2.2)
 // ---------------------------------------------------------------------------
 

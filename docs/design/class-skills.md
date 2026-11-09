@@ -10,7 +10,7 @@
 
 - 玩家技能书里的 32 个职业技能(ID 1101–1408)进了服务端权威表(`data/Skill.xlsx`),可查询(ListSkills 回完整技能书)、
   可学习 / 修习(新 RPC `UpgradeSkill`,消息号 317)、进战斗能施放(快照带等级,回合引擎按职业技能规则执行)。
-- 旧的"每个号都塞 1 / 2 / 13 号占位技能"修掉了:`RegisterPlayer` 只按**当前职业**的 `Class.skill` 发初始技能
+- 旧的"每个号都塞 1 / 2 / 13 号占位技能"修掉了:`EnsureInitialSkills` 只按**当前职业**的 `Class.skill` 发初始技能
   (职业 1~4 = 本职业首个主动 + 首个被动,1 重)。存量号在加载时自动补初始技能;旧占位技能留档但不再生效。
 - 被动加成只有一个消费者:六项二级属性与暴击由 scene 属性重算吃进去,战斗用快照里的结果,不会重复叠加;
   治疗加成是战斗专用被动,只由引擎消费。
@@ -83,7 +83,7 @@
   - 查不到表的数量与超上限重数的数量,每次加载汇总打一行 WARN;
 - **不生效但保留**:别的职业的职业技能(将来转职)、当前职业已有职业技能时的旧占位技能(旧 RegisterPlayer 遍历所有职业种子发下的 1 / 2 / 13)。
   它们留在存档里,但 `HasSkill` / 技能书 / 战斗快照 / 被动全部看不见 —— 不静默删除玩家数据,转职 / 返还上线时再定处置。
-- 消费侧(`HasSkill`、`BuildSkillBook`、战斗快照、被动加成)各自按 `FindSkillRow` 查表,查不到即跳过,与 `IsActiveSkill` 同口径。
+- 消费侧(`HasSkill`、`BuildSkillBook`、战斗快照、被动加成)各自按 `FindSkillRow` 查表,查不到即跳过,与 `IsConfiguredSkill` 同口径。
 
 补初始技能(`GrantInitialSkills`):种子不在列表里时追加 1 重;已有 `rank = 0` 的种子条目时**原地补到 1 重**(复用条目,位置与未知字段不动)。
 
@@ -237,4 +237,4 @@ NoRaw 静态检查因工具缺失跳过；未运行 scene 技能书测试与联�
 | 挂机选技 23 条(单体 / 群攻取舍、手动不被覆盖、过滤非法候选、蓝不够 / 沉默回落、冷却、不强于普攻不放、四档优先级、回蓝门槛、防御增益门槛与不重复、减速 / 加速要改变先后、同分决胜与不耗随机数、气血封顶、抗性分流、连击基线、物攻 0、无减益不驱散、PVE)。**未运行** | 同上 `AutoClassSkillEngineTest.*` |
 | 真表契约(32 行形状、增减益行、职业种子) | `table_battle_data_provider_test.cpp` `ClassSkillCatalogMatchesContentBaseline` |
 | scene 技能书 13 条(注册只发本职业、加载整理、5~9 职业保留旧技能、学习扣价、被动修习、10 次停在等级 / 余额、拒绝不扣钱、重放只扣一次、无钱 / 满重 / 等级不足、战斗 / 冻结窗口、快照、被动按生效等级) | `cpp/tests/skill_test/player_skill_book_test.cpp` |
-| 既有 `PlayerSkillSystemTest.*`(SanitizeSkillList / RegisterPlayer 不补建组件) | `cpp/tests/skill_test/skill_test.cpp`(行为不变,需复跑) |
+| 既有 `PlayerSkillSystemTest.*`(SanitizeSkillList / EnsureInitialSkills 不补建组件) | `cpp/tests/skill_test/skill_test.cpp`(行为不变,需复跑) |

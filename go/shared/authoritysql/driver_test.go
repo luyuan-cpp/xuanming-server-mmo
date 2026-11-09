@@ -136,8 +136,8 @@ func (r *writerFakeRows) NextResultSet() error {
 }
 
 type writerFakeGate struct {
-	wire                *writerFakeWire
-	beforeErr, enterErr error
+	wire                         *writerFakeWire
+	beforeErr, enterErr, readErr error
 }
 
 func (g *writerFakeGate) beforeBegin(context.Context, driver.Conn) (gateAttempt, error) {
@@ -150,6 +150,10 @@ func (g *writerFakeGate) beforeBegin(context.Context, driver.Conn) (gateAttempt,
 func (g *writerFakeGate) enter(context.Context, driver.Conn) error {
 	g.wire.record("slot-current-ACTIVE")
 	return g.enterErr
+}
+func (g *writerFakeGate) admitRead(context.Context, driver.Conn) error {
+	g.wire.record("read-meta")
+	return g.readErr
 }
 
 type writerFakeSession struct{ wire *writerFakeWire }
@@ -332,13 +336,26 @@ func TestWriterDriverBadConnOverridesOptimisticClassifier(t *testing.T) {
 	}
 }
 
+// 以下非读 Query 用例验证驱动返回 fake Rows 时的自动事务契约，不表示真实 MySQL 的 UPDATE 返回业务数据。
+func assertWriterAutoQueryAdmission(t *testing.T, w *writerFakeWire) {
+	t.Helper()
+	want := []string{"pre-BEGIN", "begin", "slot-current-ACTIVE", "query"}
+	if len(w.events) < len(want) || !reflect.DeepEqual(w.events[len(w.events)-len(want):], want) {
+		t.Fatalf("automatic query admission events = %v, want suffix %v", w.events, want)
+	}
+	if w.begins != 1 || w.queries != 1 || w.commits != 0 || w.rollbacks != 0 {
+		t.Fatalf("automatic query must retain its transaction until rows finish: begins=%d queries=%d commits=%d rollbacks=%d", w.begins, w.queries, w.commits, w.rollbacks)
+	}
+}
+
 func TestWriterDriverAutoRowsWaitForAllResultSets(t *testing.T) {
 	w := &writerFakeWire{sets: 2}
 	c := writerFixture(w)
-	raw, err := c.QueryContext(context.Background(), "SELECT n FROM t", nil)
+	raw, err := c.QueryContext(context.Background(), "UPDATE t SET n=n+1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertWriterAutoQueryAdmission(t, w)
 	r := raw.(*guardedRows)
 	values := make([]driver.Value, 1)
 	if err = r.Next(values); err != nil {
@@ -376,10 +393,11 @@ func TestWriterDriverRowsCommitFailureVisibleThroughSQLRowsErr(t *testing.T) {
 	}
 	db := sql.OpenDB(connector)
 	defer db.Close()
-	rows, err := db.QueryContext(context.Background(), "SELECT n FROM t")
+	rows, err := db.QueryContext(context.Background(), "UPDATE t SET n=n+1")
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertWriterAutoQueryAdmission(t, w)
 	for rows.Next() {
 		var n int64
 		if err = rows.Scan(&n); err != nil {
@@ -398,10 +416,11 @@ func TestWriterDriverCanceledRowsRollbackAndQuarantine(t *testing.T) {
 	w := &writerFakeWire{}
 	c := writerFixture(w)
 	ctx, cancel := context.WithCancel(context.Background())
-	rows, err := c.QueryContext(ctx, "SELECT n FROM t", nil)
+	rows, err := c.QueryContext(ctx, "UPDATE t SET n=n+1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertWriterAutoQueryAdmission(t, w)
 	cancel()
 	err = rows.Close()
 	if !errors.Is(err, ErrOutcomeUnknown) || errors.Is(err, context.Canceled) || errors.Is(err, driver.ErrBadConn) {
@@ -459,6 +478,53 @@ func TestWriterDriverAdmissionDenialPreventsBusiness(t *testing.T) {
 		if before && w.begins != 0 || !before && w.rollbacks != 1 {
 			t.Fatal("预读/锁后拒绝边界错误")
 		}
+	}
+}
+
+// 事务外纯读必须经过独立读闸门；不能拿写事务的 slot 路径或启动豁免掩盖拒绝。
+func TestWriterDriverReadAdmissionWithoutTransaction(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{name: "allowed"},
+		{name: "denied", err: ErrWriterDenied},
+		{name: "frozen", err: ErrWriterFrozen},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			w := &writerFakeWire{}
+			c := writerFixture(w)
+			c.permission.writer.boot.noteAdmitted()
+			c.gate.(*writerFakeGate).readErr = test.err
+			ctx, frozen := ObserveWriterFrozen(context.Background())
+			rows, err := c.QueryContext(ctx, "SELECT n FROM t", nil)
+			if err != test.err {
+				t.Fatalf("read admission error = %v, want %v", err, test.err)
+			}
+			wantEvents := []string{"read-meta"}
+			wantQueries := 0
+			if test.err == nil {
+				if rows == nil {
+					t.Fatal("admitted read returned no rows")
+				}
+				if err = rows.Close(); err != nil {
+					t.Fatalf("close admitted read: %v", err)
+				}
+				wantEvents = append(wantEvents, "query", "rows-close")
+				wantQueries = 1
+			} else if rows != nil {
+				t.Fatal("denied read returned rows")
+			}
+			if !reflect.DeepEqual(w.events, wantEvents) || w.queries != wantQueries {
+				t.Fatalf("read events = %v, queries = %d, want %v and %d", w.events, w.queries, wantEvents, wantQueries)
+			}
+			if w.begins != 0 || w.commits != 0 || w.rollbacks != 0 || w.execs != 0 || !c.IsValid() {
+				t.Fatalf("read touched transaction or invalidated connection: begins=%d commits=%d rollbacks=%d execs=%d valid=%v", w.begins, w.commits, w.rollbacks, w.execs, c.IsValid())
+			}
+			if frozen() != (test.err == ErrWriterFrozen) {
+				t.Fatalf("frozen observation = %v, admission error = %v", frozen(), test.err)
+			}
+		})
 	}
 }
 
@@ -720,10 +786,11 @@ func TestWriterDriverResetFailureDiscardsConnectionWithBadConn(t *testing.T) {
 func TestWriterDriverRowsMetadataFallbackAndCloseError(t *testing.T) {
 	w := &writerFakeWire{rowsCloseErr: driver.ErrBadConn}
 	c := writerFixture(w)
-	raw, err := c.QueryContext(context.Background(), "SELECT n FROM t", nil)
+	raw, err := c.QueryContext(context.Background(), "UPDATE t SET n=n+1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertWriterAutoQueryAdmission(t, w)
 	if got := raw.(driver.RowsColumnTypeScanType).ColumnTypeScanType(0); got != reflect.TypeOf((*any)(nil)).Elem() {
 		t.Fatal("ScanType fallback错误")
 	}

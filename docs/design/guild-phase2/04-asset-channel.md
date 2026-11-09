@@ -605,7 +605,7 @@ if (!IsClientGmAllowed()) {
 ### 4.14.3 `currency_test.cpp` 追加与修正
 
 - `DeductInsufficientReturnsAssetCode`:余额 10 扣 20 → `kAssetCurrencyInsufficient`。
-- `DeductFrozenReturnsAssetFrozen`、`AddFrozenReturnsAssetFrozen`:emplace `PlayerFrozenComp` 后断言。前提是 `IsCrossZoneFrozen` 基于该组件,落码时核对 `player_lifecycle.h:67` 的实现。
+- `DeductFrozenReturnsAssetFrozen`、`AddFrozenReturnsAssetFrozen`:emplace `PlayerFrozenComp` 后断言。前提是 `IsPlayerFrozen` 基于该组件,落码时核对 `player_lifecycle.h:67` 的实现。
 - `AddBlockedReturnsAssetBlocked`。
 - `ClientGmGateValue`:`nullptr` / `"0"` / `"true"` → false;`"1"` → true。
 - 修正既有用例里余额不足、冻结、封禁的期望值(原 `kInvalidParameter`)。
@@ -1317,7 +1317,7 @@ func (s *Signer) Sign(rpc RPC, req *assetpb.AssetOpRequest, nowMs uint64) // 就
 **问题**:原稿物品只发一半、或预检后 AddCurrency 仍失败时"LOG_ERROR 后继续、记 APPLIED",Go 照常终结,玩家永久少拿且无补偿线索。违反 AGENTS §11.3"错误不得伪装成功;玩家资产默认 fail-closed"。
 
 **新第 10 步**(Credit 应用,顺序固定;`anyMutated` 初值 false):
-- (a) **货币预检**:任一 `GainBlockService::IsGainBlocked(kCurrency, type)` 或 `CurrencySystem::IsCurrencyBlocked(player, type)` → `Record(kRejected, kAssetBlocked)` → REJECTED。
+- (a) **货币预检**:任一 `GainBlockService::IsGloballyBlocked(kCurrency, type)` 或 `CurrencySystem::IsCurrencyBlocked(player, type)` → `Record(kRejected, kAssetBlocked)` → REJECTED。
 - (a') **物品获得封禁预检**(2026-11-05,`player-inbox-service.md` §2.2):`bundle.items` 与 `bundle.item_instances` 的任一配置 `GainBlockService::IsItemGainBlocked(player, config)`(全服 + 本人)→ `Record(kRejected, kAssetBlocked)` → REJECTED。排在 (b) 与背包空间两道 RETRY 预检之前:被封禁的物品无论背包满不满都是终局拒绝,不回「背包满、稍后重试」。
 - (b) **物品 guid 余量预检**(有物品时):`tlsGuidSegmentRegistry.Get(GuidKind::kItem).Available()`(`guid_segment_client.h:158`;取法同 `item_store.cpp:375-377`)< Σcount → `RETRY`,reason 0,WARN,不记账。Σcount 是新实例数的上界(每堆至少 1 个),只会偏严。
 - (c) **物品**：`AddItems(...)`。2026-10-15 起 Bag 候选提交，mutated 出参已删，物品失败恒零改动。

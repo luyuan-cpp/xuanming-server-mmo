@@ -72,7 +72,7 @@ message_content: msg_id=70, serialized_message ~20 bytes
 |-----------|-----------|----------|
 | `kafkautil.BroadcastToPlayers()` + `BuildBroadcastCommand()` | Kafka per gate | 玩家子集 (自动 bitmap) |
 | `kafkautil.BroadcastToScene()` + `BuildBroadcastToSceneCommand()` | Kafka per gate | 场景全员 |
-| `kafkautil.BroadcastToAll()` + `BuildBroadcastToAllCommand()` | Kafka to all gates | 全服 |
+| `kafkautil.BroadcastToGateClients()` + `BuildBroadcastToAllCommand()` | 每个指定 Gate 一条 Kafka 消息 | 指定 Gate 上的客户端，不保证全服覆盖 |
 
 ## 关键文件
 
@@ -90,7 +90,7 @@ message_content: msg_id=70, serialized_message ~20 bytes
 - `cpp/nodes/gate/handler/event/gate_event_handler.cpp` — Kafka 入口：同上 + `PushToPlayerEventHandler`（2026-10-30 之前 Kafka 版场景 / 全服广播 handler 是空实现，消息被静默吞掉）
 
 **Go 共享工具:**
-- `go/shared/kafkautil/gate_push.go` — `GateCommandBuilder` 接口, `BroadcastToScene()`, `BroadcastToAll()`, `EncodeBroadcastTargets()`（session 与 player 成对编码，与 C++ `broadcast_target_codec.h` 用 `testdata/broadcast_target_vectors.json` 对拍）
+- `go/shared/kafkautil/gate_push.go` — `GateCommandBuilder` 接口, `BroadcastToScene()`, `BroadcastToGateClients()`, `EncodeBroadcastTargets()`（session 与 player 成对编码，与 C++ `broadcast_target_codec.h` 用 `testdata/broadcast_target_vectors.json` 对拍）
 
 **Go 服务 Builder:**
 - `go/guild/internal/kafka/gate_command_builder.go`

@@ -95,7 +95,7 @@ type Dispatcher struct {
 // 也就是 provider 看得见 gate 的那个 zone;否则抢到了锁也出不了队。
 //
 // zoneID 为 0 或 lockKeyBase 为空时返回错误,并且不起任何 goroutine:zone 0 的队列条目
-// 在 Lookup 里被当成损坏数据(queue.go 的 Lookup),空前缀会让锁键和别的业务键挤在一起。
+// 在 Poll 里被当成损坏数据(queue.go 的 Poll),空前缀会让锁键和别的业务键挤在一起。
 // interval 或 lockTTL 非正同样返回错误:interval <= 0 时 drainLoop 的 time.NewTicker 在拿到锁之后
 // 才 panic,起服零报错;lockTTL <= 0 时 TryLock 走不带过期的 SETNX、心跳不启动,leader 进程异常
 // 退出后锁键永不过期,该 zone 永久没有 leader。两者与 zone 0 同级:开了排队却出不了队。

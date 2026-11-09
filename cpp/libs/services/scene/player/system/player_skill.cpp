@@ -292,17 +292,17 @@ bool PlayerSkillSystem::IsTurnBattleCastable(const SkillTable &row)
 	return true;
 }
 
-bool PlayerSkillSystem::IsActiveSkill(const uint32_t skillTableId)
+bool PlayerSkillSystem::IsConfiguredSkill(const uint32_t skillTableId)
 {
 	return skillTableId != 0 && SkillTableManager::Instance().Exists(skillTableId);
 }
 
-void PlayerSkillSystem::RegisterPlayer(entt::entity player)
+void PlayerSkillSystem::EnsureInitialSkills(entt::entity player)
 {
 	auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
 	if (list == nullptr)
 	{
-		LOG_ERROR << "[PlayerSkill] RegisterPlayer: PlayerSkillListComp missing (load path incomplete?), player_id="
+		LOG_ERROR << "[PlayerSkill] EnsureInitialSkills: PlayerSkillListComp missing (load path incomplete?), player_id="
 				  << GuidForLog(player);
 		return;
 	}
@@ -422,7 +422,7 @@ void PlayerSkillSystem::SanitizeSkillList(entt::entity player)
 		// 本版本技能表查不到的技能**保留但不生效**(docs/design/mixed-version-persist-field-protection.md §12,第 5 批):
 		// 新版本加了技能后回滚 scene,旧表里没有这一行;以前这里直接删掉,旧版本一存盘玩家就永久失去这个技能。
 		// 生效与否由消费侧各自按表判定:HasSkill、BuildSkillBook、战斗快照、被动加成都用 FindSkillRow 查不到即跳过,
-		// 与 IsActiveSkill 同一口径。
+		// 与 IsConfiguredSkill 同一口径。
 		const auto *row = FindSkillRow(skillId);
 		if (row == nullptr)
 		{

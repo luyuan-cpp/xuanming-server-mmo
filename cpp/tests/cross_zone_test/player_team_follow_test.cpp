@@ -76,7 +76,7 @@ constexpr uint64_t kTeamId = 950200100;
 
 SessionId SessionOnGate(uint32_t gateId)
 {
-    return (gateId << SessionIdGenerator::node_bit()) | 1;
+    return (gateId << SessionIdGenerator::sequence_bit_count()) | 1;
 }
 
 void Deliver(RedisReplyHandler callback, int type, std::string bytes = {})

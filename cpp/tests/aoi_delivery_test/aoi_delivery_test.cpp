@@ -215,7 +215,7 @@ TEST_F(AoiDeliveryTest, SpatialLeaveBroadcastExcludesFollowersAndUninterestedObs
     EXPECT_EQ(0, DestroysFor(uninterestedObserver, mover));
     EXPECT_EQ(1, DestroysFor(mover, firstObserver));
     EXPECT_EQ(1, DestroysFor(mover, secondObserver));
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(pinnedObserver).Contains(mover));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(pinnedObserver).IsVisible(mover));
 }
 
 TEST_F(AoiDeliveryTest, VisibilityResetBroadcastsRemovalAndNextUpdateRebuildsObservers) {
@@ -240,7 +240,7 @@ TEST_F(AoiDeliveryTest, VisibilityResetBroadcastsRemovalAndNextUpdateRebuildsObs
     EXPECT_EQ(1, DestroysFor(mover, firstObserver));
     EXPECT_EQ(1, DestroysFor(mover, secondObserver));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<Hex>(mover));
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(pinnedObserver).Contains(mover));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(pinnedObserver).IsVisible(mover));
 
     deliveries.clear();
     broadcasts.clear();
@@ -437,7 +437,7 @@ TEST_F(AoiDeliveryTest, ExplicitFollowKeepsTargetAcrossGridEntryAndExit) {
     AoiSystem::Update(0);
     EXPECT_EQ(0, DestroysFor(watcher, target)) << "显式来源仍在,走出邻格不移除";
     EXPECT_EQ(1, DestroysFor(target, watcher));
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).Contains(target));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).IsVisible(target));
     EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target).spatial);
     EXPECT_EQ((EntityUnorderedSet{watcher}), VisibleWatchersOf(target)) << "范围外继续收移动";
 }
@@ -481,7 +481,7 @@ TEST_F(AoiDeliveryTest, UnfollowKeepsNearbyTargetAndRemovesDistantOne) {
     AoiSystem::Unfollow(watcher, distant, AoiFollowSource{AoiFollowKind::kSkill, 2});
 
     EXPECT_EQ(0, DestroysFor(watcher, nearby));
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).Contains(nearby));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).IsVisible(nearby));
     EXPECT_EQ(1, DestroysFor(watcher, distant));
     EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(distant));
 }
@@ -493,7 +493,7 @@ TEST_F(AoiDeliveryTest, StealthPausesFollowersAndRecreatesWithLatestStateOnRevea
     const auto nearby = Spawn(501, 500);
     const auto target = Spawn(500, 500);
     AoiSystem::Update(0);
-    ASSERT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(nearby).Contains(target));
+    ASSERT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(nearby).IsVisible(target));
     ASSERT_TRUE(AoiSystem::Follow(follower, target, SkillGrant(1)));
     ASSERT_TRUE(AoiSystem::Follow(detector, target, SkillGrant(2, /*revealsStealth=*/true)));
     deliveries.clear();
@@ -538,7 +538,7 @@ TEST_F(AoiDeliveryTest, OutOfRangeLeaveWithoutGridStateNotifiesFollowerOnce) {
 
     EXPECT_EQ(1, ActorDestroysFor(watcher, target));
     EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(target));
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).Contains(other)) << "与离场者无关的关系不受影响";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).IsVisible(other)) << "与离场者无关的关系不受影响";
     EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(target).entries.empty());
     EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiWatchersComp>(target).watchers.empty());
     const auto& otherWatchers = tlsEcs.actorRegistry.get<AoiWatchersComp>(other).watchers;
@@ -562,14 +562,14 @@ TEST_F(AoiDeliveryTest, CapacityEvictionIsPerWatcherAndHiddenFollowIsPromotedLat
     for (uint32_t i = 1; i < kAoiListCapacityMin; ++i) {
         ASSERT_TRUE(InterestSystem::AddAoiEntity(watcher, tlsEcs.actorRegistry.create(), AoiPriority::kPinned));
     }
-    ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size());
+    ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(watcher).VisibleCount());
     deliveries.clear();
 
     ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
     EXPECT_EQ(1, DestroysFor(watcher, neighbor)) << "被淘汰者通知到观察者本人";
     EXPECT_EQ(1, CreatesFor(watcher, target));
     EXPECT_EQ(0, DestroysFor(neighbor, watcher)) << "淘汰按观察者独立判断,不要求互相占位";
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(neighbor).Contains(watcher));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(neighbor).IsVisible(watcher));
 
     deliveries.clear();
     ASSERT_TRUE(AoiSystem::Follow(watcher, teammate, TeamGrant(42)));

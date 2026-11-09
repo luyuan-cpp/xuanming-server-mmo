@@ -18,7 +18,7 @@
 // 新规则只在"有更好的选择"时避开坏通道,底线不变:候选非空就一定挑出一个,null 只留给空表
 // (调用方拿到 null 走的立即失败分支比"挑一个坏实例、让那次调用失败"更伤,见 node_utils.cpp)。
 // 选择规则拆成纯函数,这里直接喂 (实体, 通道状态) 表,不起 gRPC;通道状态为 std::nullopt 表示实体没挂通道。
-// GetSceneManagerEntity 本身只是"从注册表拼候选表 + GetState(true) + 兜底告警节流"的薄适配,不在本文件覆盖。
+// SelectSceneManagerEntity 本身只是"从注册表拼候选表 + GetState(true) + 兜底告警节流"的薄适配,不在本文件覆盖。
 // ---------------------------------------------------------------------------
 
 namespace
@@ -230,7 +230,7 @@ TEST(SceneManagerSelector, ChannellessEntityIsPickedOnlyWhenNothingElseIsRegiste
 	}
 
 	// 候选表里只有它:纯选择器照样挑中,不返回 null(生产适配层不把无通道实体放进候选,那时
-	// GetSceneManagerEntity 拿到空表、返回 null)。
+	// SelectSceneManagerEntity 拿到空表、返回 null)。
 	const std::vector<Candidate> onlyChannelless{
 		{Instance(1), std::nullopt},
 	};

@@ -40,8 +40,8 @@ func TestRunAfterFires(t *testing.T) {
 		if task.IsActive() {
 			t.Error("one-shot should be inactive after firing")
 		}
-		if task.EndTime() != 0 {
-			t.Error("EndTime should be 0 after firing")
+		if task.DeadlineUnixSeconds() != 0 {
+			t.Error("DeadlineUnixSeconds should be 0 after firing")
 		}
 	})
 }

@@ -351,7 +351,7 @@ TEST_F(AssetOpSystemTest, FrozenRetryNotRecorded)
 }
 
 // 传送/换节点交接在途:PlayerFrozenComp 与 PlayerTravelHandoffComp 成对挂,但只挂了 handoff
-// (或先后顺序错开)时也必须拒。复用 IsCrossZoneFrozen 会漏掉这一格 —— 那时 SavePlayer
+// (或先后顺序错开)时也必须拒。复用 IsPlayerFrozen 会漏掉这一格 —— 那时 SavePlayer
 // 会跳过写盘并返回 false,结局会被误报成 durable。
 TEST_F(AssetOpSystemTest, TravelHandoffRetryNotRecorded)
 {

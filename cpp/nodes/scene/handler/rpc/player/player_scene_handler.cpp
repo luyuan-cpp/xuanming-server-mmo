@@ -126,7 +126,7 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	}
 
 	// Find a SceneManager gRPC node
-	auto smEntity = GetSceneManagerEntity(playerSessionPB->player_id());
+	auto smEntity = SelectSceneManagerEntity(playerSessionPB->player_id());
 	if (smEntity == entt::null)
 	{
 		LOG_ERROR << "EnterSceneC2S: No SceneManager node available for player " << playerSessionPB->player_id();

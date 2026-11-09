@@ -76,7 +76,7 @@ uint64_t TransactionLogSystem::ResolvePlayerId(entt::entity player)
 
 // tx_id 走 txlog 种类的号段(docs/design/node-id-overhaul-plan-20260908.md §7.5 第 1 条):它只是
 // Kafka / transaction_log 表的去重键与主键,不需要时间序 —— 时间在 timestamp 列里。
-// 拿不到号(种类未启用 / 两段耗尽且续段未到)返回 kInvalidGuid,SendEntry 据此 fail-closed。
+// 拿不到号(种类未启用 / 两段耗尽且续段未到)返回 kInvalidGuid,RecordEntry 据此 fail-closed。
 uint64_t TransactionLogSystem::GenerateTxId()
 {
     Guid txId = kInvalidGuid;
@@ -96,10 +96,10 @@ static uint64_t NowUnixSeconds()
 }
 
 // ---------------------------------------------------------------------------
-// SendEntry — 开了提交闸门时先按玩家排队,否则立即发 Kafka
+// RecordEntry — 开了提交闸门时先按玩家排队,否则立即发 Kafka
 // ---------------------------------------------------------------------------
 
-void TransactionLogSystem::SendEntry(const TransactionLogEntry &entry)
+void TransactionLogSystem::RecordEntry(const TransactionLogEntry &entry)
 {
     if (entry.tx_id() == kInvalidGuid || entry.tx_id() == 0)
     {
@@ -263,7 +263,7 @@ void TransactionLogSystem::LogCurrencyAdd(
     entry.set_balance_before(balanceBefore);
     entry.set_balance_after(balanceAfter);
     entry.set_correlation_id(correlationId);
-    SendEntry(entry);
+    RecordEntry(entry);
 }
 
 void TransactionLogSystem::LogCurrencyDeduct(
@@ -285,7 +285,7 @@ void TransactionLogSystem::LogCurrencyDeduct(
     entry.set_balance_before(balanceBefore);
     entry.set_balance_after(balanceAfter);
     entry.set_correlation_id(correlationId);
-    SendEntry(entry);
+    RecordEntry(entry);
 }
 
 void TransactionLogSystem::LogClawbackDeduction(
@@ -302,7 +302,7 @@ void TransactionLogSystem::LogClawbackDeduction(
     entry.set_currency_type(static_cast<uint32_t>(type));
     entry.set_currency_delta(-static_cast<int64_t>(deductedAmount));
     entry.set_extra("{\"debt_remaining\":" + std::to_string(debtRemaining) + "}");
-    SendEntry(entry);
+    RecordEntry(entry);
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +331,7 @@ void TransactionLogSystem::LogItemTransfer(
     {
         entry.set_correlation_id(correlationId);
     }
-    SendEntry(entry);
+    RecordEntry(entry);
 }
 
 void TransactionLogSystem::LogItemCreate(
@@ -359,7 +359,7 @@ void TransactionLogSystem::LogItemCreate(
     {
         entry.set_extra(extra);
     }
-    SendEntry(entry);
+    RecordEntry(entry);
 }
 
 void TransactionLogSystem::LogItemDestroy(
@@ -387,5 +387,5 @@ void TransactionLogSystem::LogItemDestroy(
     {
         entry.set_extra(extra);
     }
-    SendEntry(entry);
+    RecordEntry(entry);
 }

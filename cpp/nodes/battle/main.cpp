@@ -502,7 +502,7 @@ int main(int argc, char *argv[])
                 {
                     ReconcileAdvertisedAdmission(n, gate->Phase(), *context.admissionAdvertise);
                 }
-                BattleRoomManager::Instance().AbortAllRooms("node_shutdown");
+                BattleRoomManager::Instance().BeginRoomShutdown("node_shutdown");
                 if (context.clientEdge)
                 {
                     context.clientEdge->DisconnectAll("node_shutdown");
@@ -518,7 +518,7 @@ int main(int argc, char *argv[])
             // 覆盖这段等待。没有待提交终局时立即为真。
             // 单例寿命覆盖 loop,回调不捕获任何对象。
             node.SetShutdownDrainComplete([&context](Node &)
-                                          { return (!context.clientEdge || context.clientEdge->ConnectionCount() == 0) && BattleRoomManager::Instance().SqlOutcomesFlushed(); });
+                                          { return (!context.clientEdge || context.clientEdge->ConnectionCount() == 0) && BattleRoomManager::Instance().CanFinishShutdownOutcomeFlush(); });
             // 拆除前钩子:出站通道已关,但停止闸之后仍可能有在途调用的失败回调到达(FinalizeTeardownInLoop 先调本钩子、后等
             // 本地完成排空),由 outcomeStopping_ 吞掉,不产生副作用(2026-11-05 更正)。停止闸在这里才装,
             // 并把排空预算内仍没落定的终局逐局打进日志(match 在权威截止后判 ABORT)。

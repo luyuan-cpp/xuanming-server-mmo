@@ -981,7 +981,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
-    // 停机排空之后不再接纳新观众(AbortAllRooms 置位):房间定时器已停、直连面不再接新连接,接进来的观众永远等不到下一帧,
+    // 停机排空之后不再接纳新观众(BeginRoomShutdown 置位):房间定时器已停、直连面不再接新连接,接进来的观众永远等不到下一帧,
     // match 还会为它开一份要等实例消失才关得掉的原件。回 kServiceUnavailable(与签不出票同码:match 落 16018、不剔索引);
     // 墓碑沿用上面已封闭的状态,首次拒绝码照常记下。已登记观众的幂等重放在上面照常放行(观战第二轮评审 R2-BATTLE 一般-2)。
     if (spectateAdmissionClosed_)
@@ -1872,12 +1872,12 @@ void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
     ArmObserverSeatTimer(*room);
 }
 
-void BattleRoomManager::AbortAllRooms(const std::string &reason)
+void BattleRoomManager::BeginRoomShutdown(const std::string &reason)
 {
     // 观战准入先关:下面冻结的房间此后不会再出帧,排空期间到达的 AddObserver / Attach / Promote 一律回 kServiceUnavailable
     spectateAdmissionClosed_ = true;
     // 终局在这里不停(2026-10-23 修复,审计 r2-battle#2):已经算出、还没拿到 SQL 决定的终局,在停机排空窗口内立即再提交,
-    // main.cpp 的 SetShutdownDrainComplete(SqlOutcomesFlushed)等它们拿到 COMPLETE / ABORT,有界于 Node 的排空预算;
+    // main.cpp 的 SetShutdownDrainComplete(CanFinishShutdownOutcomeFlush)等它们拿到 COMPLETE / ABORT,有界于 Node 的排空预算;
     // 停止闸到拆除前钩子(StopSqlOutcomes)才装。原来这里直接装停止闸、清空待提交集合:除了恰好在途的那一次,
     // 停机前一刻打完的局再没有机会提交,只能等 match 截止后判 ABORT,全员白打一局。
     // 从这里起是停机排空窗口(outcomeShutdownFlush_,只升不降):补提交不受每拍上限约束,没拿到决定就下一拍重发
@@ -1928,7 +1928,7 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
     }
 }
 
-bool BattleRoomManager::SqlOutcomesFlushed() const
+bool BattleRoomManager::CanFinishShutdownOutcomeFlush() const
 {
     for (const auto battleId : sqlOutcomeRooms_)
     {

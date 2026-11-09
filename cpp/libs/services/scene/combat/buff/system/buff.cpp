@@ -171,7 +171,7 @@ std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuffWithOwner(
 
     LookupBuffOrReturn(buffTableId, (std::make_tuple(buffResult, UINT64_MAX)));
 
-    if (const auto result = CanCreateBuff(parent, buffTableId); result != kSuccess) {
+    if (const auto result = CheckBuffCreation(parent, buffTableId); result != kSuccess) {
         return {result, UINT64_MAX};
     }
 
@@ -274,7 +274,7 @@ void BuffSystem::RemoveBuff(const entt::entity parent, const UInt64Set& removeBu
     }
 }
 
-void BuffSystem::RemoveSubBuff(BuffEntry& buffComp, UInt64Set& buffsToRemove)
+void BuffSystem::CollectAndClearSubBuffIds(BuffEntry& buffComp, UInt64Set& buffsToRemove)
 {
     for (auto& [subBuffId, _] : buffComp.buffPb.sub_buff_list_id())
     {
@@ -307,7 +307,7 @@ void BuffSystem::OnBuffExpire(const entt::entity parent, const uint64_t buffId)
     UInt64Set bonusSubBuffs;
     if (buffRow->buff_type() == kBuffTypeNoDamageOrSkillHitInLastSeconds) {
         // 脱战加成以父 Buff 存活为前提；父被驱散或到期后，永久子 Buff 也必须撤销。
-        BuffSystem::RemoveSubBuff(buffIt->second, bonusSubBuffs);
+        BuffSystem::CollectAndClearSubBuffIds(buffIt->second, bonusSubBuffs);
     }
     OnBuffRemove(parent, buffIt->second, buffRow);
     buffList.erase(buffId);
@@ -320,7 +320,7 @@ void BuffSystem::OnBuffExpire(const entt::entity parent, const uint64_t buffId)
 }
 
 // Check if buff can be created
-uint32_t BuffSystem::CanCreateBuff(const entt::entity parentEntity, const uint32_t buffTableId)
+uint32_t BuffSystem::CheckBuffCreation(const entt::entity parentEntity, const uint32_t buffTableId)
 {
     LookupBuffOrReturnError(buffTableId);
 
@@ -564,7 +564,7 @@ bool BuffSystem::AddSubBuffs(entt::entity parent,
     }
 
     buffComp.buffPb.set_has_added_sub_buff(true);
-    AddSubBuffsWithoutCheck(parent, buffTable, buffComp);
+    AddConfiguredSubBuffs(parent, buffTable, buffComp);
     return true;
 }
 
@@ -582,7 +582,7 @@ void BuffSystem::AddTargetSubBuffs(const entt::entity targetEntity,
     }
 }
 
-void BuffSystem::AddSubBuffsWithoutCheck(entt::entity parent,
+void BuffSystem::AddConfiguredSubBuffs(entt::entity parent,
     const BuffTable* buffTable,
     BuffEntry& buffComp)
 {

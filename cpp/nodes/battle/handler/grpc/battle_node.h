@@ -28,7 +28,7 @@ public:
     // (闸已关,不会再开),或重复调用(已经是打开的)。
     bool OpenAdmission();
 
-    // SetBeforeShutdown 第一句调用(先于 AbortAllRooms)。终态,幂等。
+    // SetBeforeShutdown 第一句调用(先于 BeginRoomShutdown)。终态,幂等。
     void CloseAdmission();
 
     // ---- 可分配状态发布(R6,battle_admission_advertise.h;main.cpp 的对账定时器与关闸当场用) ----

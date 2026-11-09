@@ -113,28 +113,28 @@ void ActorStateAttributeSyncSystem::Update(const double delta)
 	}
 }
 
-void ActorStateAttributeSyncSystem::SyncAttributes(entt::entity entity, const EntityVector& nearbyEntities, uint32_t syncFrequency) {
-    if (nearbyEntities.empty()) return;
+void ActorStateAttributeSyncSystem::SyncAttributes(entt::entity entity, const EntityVector& receivingObservers, uint32_t syncFrequency) {
+    if (receivingObservers.empty()) return;
 
     switch (syncFrequency) {
     case eAttributeSyncFrequency::kSyncEvery2Frames: {
-		AttributeDelta2FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute2FramesMessageId, nearbyEntities);
+		AttributeDelta2FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute2FramesMessageId, receivingObservers);
         break;
     }
     case eAttributeSyncFrequency::kSyncEvery5Frames: {
-		AttributeDelta5FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute5FramesMessageId, nearbyEntities);
+		AttributeDelta5FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute5FramesMessageId, receivingObservers);
         break;
     }
     case eAttributeSyncFrequency::kSyncEvery10Frames: {
-		AttributeDelta10FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute10FramesMessageId, nearbyEntities);
+		AttributeDelta10FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute10FramesMessageId, receivingObservers);
         break;
     }
     case eAttributeSyncFrequency::kSyncEvery30Frames: {
-		AttributeDelta30FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute30FramesMessageId, nearbyEntities);
+		AttributeDelta30FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute30FramesMessageId, receivingObservers);
         break;
     }
     case eAttributeSyncFrequency::kSyncEvery60Frames: {
-		AttributeDelta60FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute60FramesMessageId, nearbyEntities);
+		AttributeDelta60FramesS2CSyncAttributes(entity, ScenePlayerSyncSyncAttribute60FramesMessageId, receivingObservers);
         break;
     }
     default:

@@ -125,7 +125,7 @@ class SyncOnlyPlayerCallContext final : public PlayerCallContext { /* DeferImpl 
 
 `FindLivePlayerForCall(identity)`:`GetPlayer` + `valid` + `GuidOf == playerId`(把 `player_landing.cpp` 的 `FindSamePlayer` 上提为共享
 helper,不复制)、会话快照的 `gate_session_id == sessionId`、`!any_of<UnregisterPlayer>`。已离开写 1012、退出中写 1006 再 Run;
-写类续延还须重查 `IsCrossZoneFrozen` 与 `InBattleComp`。
+写类续延还须重查 `IsPlayerFrozen` 与 `InBattleComp`。
 
 ### 3.7 预算(随首个调用方加)
 

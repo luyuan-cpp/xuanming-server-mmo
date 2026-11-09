@@ -5,7 +5,7 @@
 //  1. 口令为空:不发 AUTH,连上即对业务可见,行为与改动前相同;
 //  2. 口令非空:每条新连接(首次建连与每次重连)上的第一条命令就是 AUTH;只有 AUTH 回 +OK 后连接才对业务可见、
 //     重连回调才被调用,所以回调里发出的命令排在 AUTH 之后;
-//  3. AUTH 被拒或一个重连间隔内没有应答:连接不对业务可见(GetZoneRedis() 非空但 connected()==false)、
+//  3. AUTH 被拒或一个重连间隔内没有应答:连接不对业务可见(GetConnection() 非空但 connected()==false)、
 //     不调重连回调、握手连接上不出现 AUTH 以外的命令,并在回调栈外重建握手连接重试;
 //     被拒当场、没有应答在截止时各打一条带 metric=zone_redis_auth_failed 的 ERROR;
 //  4. 日志里永远不出现口令原文,服务端回显口令时只保留错误码、其余遮掉;
@@ -357,8 +357,8 @@ struct Snapshot
     int businessReplies = 0;
     int businessNullReplies = 0;
     int businessSendFailures = 0;
-    bool zoneRedisPresent = false;     // GetZoneRedis() 非空
-    bool zoneRedisConnected = false;   // GetZoneRedis() 非空且 connected():即对业务可用
+    bool zoneRedisPresent = false;     // GetConnection() 非空
+    bool zoneRedisConnected = false;   // GetConnection() 非空且 connected():即对业务可用
 };
 
 class RedisManagerAuth : public ::testing::Test
@@ -544,12 +544,12 @@ protected:
 
     bool ZoneRedisPresent() const
     {
-        return manager_ && manager_->GetZoneRedis();
+        return manager_ && manager_->GetConnection();
     }
 
     bool ZoneRedisConnected() const
     {
-        return ZoneRedisPresent() && manager_->GetZoneRedis()->connected();
+        return ZoneRedisPresent() && manager_->GetConnection()->connected();
     }
 
     // 收到过至少一条命令的连接数:被截止定时器拆掉的半成品连接(建连都没完成)不计。
@@ -582,10 +582,10 @@ protected:
         return std::nullopt;
     }
 
-    // 照业务用法往 GetZoneRedis() 上发一条命令,记下它最后拿到的是非空应答、空应答,还是根本没发出去。
+    // 照业务用法往 GetConnection() 上发一条命令,记下它最后拿到的是非空应答、空应答,还是根本没发出去。
     void SendBusinessCommand()
     {
-        const RedisManager::HiredisPtr& redis = manager_->GetZoneRedis();
+        const RedisManager::HiredisPtr& redis = manager_->GetConnection();
         if (!redis)
         {
             ++businessSendFailures_;
@@ -613,7 +613,7 @@ protected:
     void OnManagerReconnected()
     {
         ++reconnectCalls_;
-        const RedisManager::HiredisPtr& redis = manager_->GetZoneRedis();
+        const RedisManager::HiredisPtr& redis = manager_->GetConnection();
         if (!redis)
         {
             ++pingSendFailures_;
@@ -881,7 +881,7 @@ TEST_F(RedisManagerAuth, ReconnectCallbackCanStartNewAuthenticatedConnection)
                 return;
             }
             ASSERT_EQ(promotions, 2);
-            ASSERT_EQ(manager_->GetZoneRedis()->command([&](hiredis::Hiredis*, redisReply* reply) {
+            ASSERT_EQ(manager_->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
                 if (reply) ++replies;
             }, "PING"), REDIS_OK);
         });
@@ -911,7 +911,7 @@ TEST_F(RedisManagerAuth, PendingNullReplyCanDestroyManagerDuringShutdownOrNewCon
         int nullReplies = 0;
         RunInLoopAndWait([&] {
             connections_.back().stalled = true;
-            ASSERT_EQ(manager_->GetZoneRedis()->command([&](hiredis::Hiredis*, redisReply* reply) {
+            ASSERT_EQ(manager_->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
                 EXPECT_EQ(reply, nullptr);
                 if (!reply) ++nullReplies;
                 manager_.reset();
@@ -942,7 +942,7 @@ TEST_F(RedisManagerLiveness, DroppedConnectionNullReplyCanDestroyManager)
     int nullReplies = 0;
     RunInLoopAndWait([&] {
         connections_.back().stalled = true;
-        ASSERT_EQ(manager_->GetZoneRedis()->command([&](hiredis::Hiredis*, redisReply* reply) {
+        ASSERT_EQ(manager_->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
             EXPECT_EQ(reply, nullptr);
             if (!reply) ++nullReplies;
             manager_.reset();
@@ -972,8 +972,8 @@ TEST_F(RedisManagerAuth, RejectedAuthKeepsZoneRedisUnavailableAndRetries)
 
     const Snapshot snap = TakeSnapshot();
     EXPECT_EQ(snap.reconnectCalls, 0) << "a connection whose AUTH was rejected must never be handed to the business";
-    EXPECT_TRUE(snap.zoneRedisPresent) << "GetZoneRedis() must stay non-null after Connect";
-    EXPECT_FALSE(snap.zoneRedisConnected) << "GetZoneRedis() must report not connected while AUTH keeps failing";
+    EXPECT_TRUE(snap.zoneRedisPresent) << "GetConnection() must stay non-null after Connect";
+    EXPECT_FALSE(snap.zoneRedisConnected) << "GetConnection() must report not connected while AUTH keeps failing";
     EXPECT_EQ(snap.pingSendFailures, 0);
     EXPECT_EQ(snap.malformedFrames, 0);
     for (std::size_t i = 0; i < snap.connections.size(); ++i)
@@ -1098,7 +1098,7 @@ TEST_F(RedisManagerAuth, ShutdownDuringHandshakeIsQuiet)
         manager_->Shutdown();
         connectionsAtShutdown = connections_.size();
     });
-    EXPECT_TRUE(presentDuringHandshake) << "GetZoneRedis() must stay non-null while the handshake is in flight";
+    EXPECT_TRUE(presentDuringHandshake) << "GetConnection() must stay non-null while the handshake is in flight";
     EXPECT_FALSE(connectedDuringHandshake) << "the connection must not be usable before AUTH succeeds";
 
     const Snapshot snap = TakeSnapshot();
@@ -1198,7 +1198,7 @@ TEST_F(RedisManagerAuth, ServerClosingBeforeAuthReplyIsRetried)
 
     const Snapshot snap = TakeSnapshot();
     EXPECT_EQ(snap.reconnectCalls, 0) << "a connection lost before the AUTH reply must never be handed to the business";
-    EXPECT_TRUE(snap.zoneRedisPresent) << "GetZoneRedis() must stay non-null after Connect";
+    EXPECT_TRUE(snap.zoneRedisPresent) << "GetConnection() must stay non-null after Connect";
     EXPECT_FALSE(snap.zoneRedisConnected);
     EXPECT_EQ(snap.pingSendFailures, 0);
     EXPECT_EQ(snap.malformedFrames, 0);
@@ -1240,7 +1240,7 @@ TEST_F(RedisManagerAuth, ServerClosingAfterRejectedAuthIsRetried)
 
     const Snapshot snap = TakeSnapshot();
     EXPECT_EQ(snap.reconnectCalls, 0) << "a connection whose AUTH was rejected must never be handed to the business";
-    EXPECT_TRUE(snap.zoneRedisPresent) << "GetZoneRedis() must stay non-null after Connect";
+    EXPECT_TRUE(snap.zoneRedisPresent) << "GetConnection() must stay non-null after Connect";
     EXPECT_FALSE(snap.zoneRedisConnected);
     EXPECT_EQ(snap.pingSendFailures, 0);
     EXPECT_EQ(snap.malformedFrames, 0);

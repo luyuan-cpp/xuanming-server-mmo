@@ -236,15 +236,15 @@ func BroadcastToScene(ctx context.Context, w *kafkago.Writer, builder GateComman
 	return firstErr
 }
 
-// BroadcastToAll sends a server-wide broadcast to all provided gates via Kafka.
-func BroadcastToAll(ctx context.Context, w *kafkago.Writer, builder GateCommandBuilder,
+// BroadcastToGateClients 经 Kafka 向给定 Gate 上的客户端广播，覆盖范围由 gates 决定，不保证全服覆盖。
+func BroadcastToGateClients(ctx context.Context, w *kafkago.Writer, builder GateCommandBuilder,
 	gates []GateInfo, messageID uint32, body []byte,
 ) error {
 	var firstErr error
 	for _, g := range gates {
 		// 不变量 2:理由见 PushToPlayer。
 		if g.GateInstanceID == "" {
-			logx.Errorf("BroadcastToAll: gate-%s dropped: empty gate_instance_id", g.GateID)
+			logx.Errorf("BroadcastToGateClients: gate-%s dropped: empty gate_instance_id", g.GateID)
 			if firstErr == nil {
 				firstErr = fmt.Errorf("gate %s has empty gate_instance_id", g.GateID)
 			}
@@ -252,7 +252,7 @@ func BroadcastToAll(ctx context.Context, w *kafkago.Writer, builder GateCommandB
 		}
 		gateNodeID, err := kafkacmd.ParseNodeID(g.GateID)
 		if err != nil {
-			logx.Errorf("BroadcastToAll: gate %q dropped: %v", g.GateID, err)
+			logx.Errorf("BroadcastToGateClients: gate %q dropped: %v", g.GateID, err)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -260,7 +260,7 @@ func BroadcastToAll(ctx context.Context, w *kafkago.Writer, builder GateCommandB
 		}
 		cmdBytes, err := builder.BuildBroadcastToAllCommand(uint32(gateNodeID), g.GateInstanceID, messageID, body)
 		if err != nil {
-			logx.Errorf("BroadcastToAll: build command for gate %s: %v", g.GateID, err)
+			logx.Errorf("BroadcastToGateClients: build command for gate %s: %v", g.GateID, err)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -273,7 +273,7 @@ func BroadcastToAll(ctx context.Context, w *kafkago.Writer, builder GateCommandB
 			Key:       []byte(g.GateID),
 			Value:     cmdBytes,
 		}); err != nil {
-			logx.Errorf("BroadcastToAll: send to gate %s (%s/%d) failed: %v",
+			logx.Errorf("BroadcastToGateClients: send to gate %s (%s/%d) failed: %v",
 				g.GateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)
 			if firstErr == nil {
 				firstErr = err

@@ -507,13 +507,13 @@ TEST_F(GrpcClientLoopbackTest, SceneManagerSelectionRejectsSnapshotOnlyAndClosin
     ASSERT_EQ(registry.view<NodeInfo>().size(), 0u) << "本例不覆盖其他测试遗留的节点";
     const auto snapshotOnly = registry.create();
     registry.emplace<NodeInfo>(snapshotOnly).set_node_type(type);
-    EXPECT_EQ(GetSceneManagerEntity(77), static_cast<entt::entity>(entt::null));
+    EXPECT_EQ(SelectSceneManagerEntity(77), static_cast<entt::entity>(entt::null));
     const auto connected = registry.create();
     registry.emplace<NodeInfo>(connected).set_node_type(type);
     registry.emplace<MuduoGrpcChannelPtr>(connected, channel_);
-    EXPECT_EQ(GetSceneManagerEntity(77), connected);
+    EXPECT_EQ(SelectSceneManagerEntity(77), connected);
     registry.remove<MuduoGrpcChannelPtr>(connected);
-    EXPECT_EQ(GetSceneManagerEntity(77), static_cast<entt::entity>(entt::null));
+    EXPECT_EQ(SelectSceneManagerEntity(77), static_cast<entt::entity>(entt::null));
     // 本例创建后不用 ASSERT,三个生产查询无论成功与否都只清理本例两实体。
     registry.destroy(connected);
     registry.destroy(snapshotOnly);

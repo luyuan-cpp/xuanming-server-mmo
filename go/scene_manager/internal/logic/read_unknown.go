@@ -24,7 +24,7 @@ const (
 	// 或补发 CreateScene 之前读频道集合 / 属主(这一组或这个频道本轮不补发),
 	// 或死节点改派动手之前重读属主(moveWorldChannelOffDeadNode,本轮不改派)。
 	readUnknownSiteWorldInit = "world_init"
-	// GetBestWorldChannel / ReserveBestWorldChannelForEnter 读频道属主:该频道本次不当候选也不当陈旧。
+	// SelectOrRecoverWorldChannel / ReserveBestWorldChannelForEnter 读频道属主:该频道本次不当候选也不当陈旧。
 	readUnknownSiteWorldPick = "world_channel_pick"
 	// 懒改派写归属之前重读属主。
 	readUnknownSiteWorldLazy = "world_channel_lazy"

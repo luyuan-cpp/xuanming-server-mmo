@@ -259,7 +259,7 @@ type Config struct {
 	// distribution; large values can thrash the cluster on scale events,
 	// small values slow convergence. Default 10 balances responsiveness
 	// with safety. Set to 0 to disable proactive rebalancing (channels on
-	// dead nodes are still re-homed by GetBestWorldChannel on demand).
+	// dead nodes are still re-homed by SelectOrRecoverWorldChannel on demand).
 	MaxRebalanceMigrationsPerTick int `json:",default=10"`
 
 	// RebalanceCheckIntervalSeconds: how often the LoadReporter runs a

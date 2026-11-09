@@ -60,7 +60,7 @@ namespace player_mutability
 
 	// 该实体此刻为什么不能被改(不变量 I1 单写者的本地一侧)。
 	//
-	// **刻意不复用 PlayerLifecycleSystem::IsCrossZoneFrozen**:它只看 PlayerFrozenComp,
+	// **刻意不复用 PlayerLifecycleSystem::IsPlayerFrozen**:它只看 PlayerFrozenComp,
 	// 漏掉"归属交接已挂但存盘还没落地"的窗口。而 SavePlayer 在
 	// `PlayerTravelHandoffComp.requestedAtMs != 0` 时直接跳过写盘并返回 false
 	// (player_lifecycle.cpp 的 SavePlayer 开头,日志 "skip: zone travel handoff already

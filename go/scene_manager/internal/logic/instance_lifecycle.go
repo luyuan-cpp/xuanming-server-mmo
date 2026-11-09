@@ -102,7 +102,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 			continue
 		}
 
-		// Check player count. 读失败当 0:下面的 AtomicDestroyIfIdle 在脚本里再判一次 SCARD。
+		// Check player count. 读失败当 0:下面的 ClaimIdleSceneTeardown 在脚本里再判一次 SCARD。
 		playerCount := readScenePlayerCount(svcCtx, sceneId)
 
 		if playerCount > 0 {
@@ -153,7 +153,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 // destroyInstance removes all Redis state for an instance and notifies
 // the C++ scene node to destroy the ECS entity. Idempotent and
 // concurrency-safe:
-//   - Uses AtomicDestroyIfIdle (Lua CAS) to prevent the destroy-while-
+//   - Uses ClaimIdleSceneTeardown (Lua CAS) to prevent the destroy-while-
 //     entering race: if a player entered between the caller's "idle"
 //     check and this call, the script leaves the scene untouched and we
 //     return early without issuing the C++ DestroyScene RPC.
@@ -258,7 +258,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	// 其余静默退出。是否认领只看 Claimed:空闲回收清扫残留时认领成功而属主为空。
 	var claim sceneClaim
 	if !force {
-		claim, err = AtomicDestroyIfIdle(svcCtx, zoneId, sceneId)
+		claim, err = ClaimIdleSceneTeardown(svcCtx, zoneId, sceneId)
 		if err != nil {
 			logx.Errorf("[InstanceLifecycle] AtomicDestroy failed for scene %d: %v", sceneId, err)
 			return false, err

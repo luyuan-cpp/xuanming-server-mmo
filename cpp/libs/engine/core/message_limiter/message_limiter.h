@@ -9,7 +9,8 @@ public:
 
     MessageLimiter(uint8_t defaultMaxRequests, uint32_t defaultTimeWindow);
 
-    uint32_t CanSend(uint32_t messageId);
+    // 成功时记录本次请求并消耗窗口额度；返回成功码或拒绝的 tip 错误码。
+    uint32_t TryConsumeRequestQuota(uint32_t messageId);
     
 private:
     uint8_t defaultMaxRequests{3};  // max requests per window

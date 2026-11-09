@@ -27,7 +27,7 @@
 #include "engine/core/time/system/time.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
-#include "player/comp/player_frozen_comp.h" // 冻结用例:IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>
+#include "player/comp/player_frozen_comp.h" // 冻结用例:IsPlayerFrozen 就是 any_of<PlayerFrozenComp>
 #include "battle/system/battle_lock_rules.h" // 玩家域键形金样:战斗锁与上下文的格式串
 #include "player/comp/player_ownership_comp.h" // 玩家域键形金样
 #include "player/system/player_landing.h" // 玩家域键形金样:同步摘要的格式串
@@ -929,7 +929,7 @@ TEST(CurrencyTest, DeductFrozenReturnsAssetFrozen)
     auto player = CreateTestPlayer();
 
     CurrencySystem::AddCurrency(player, kCurrencyGold, 100);
-    // PlayerLifecycleSystem::IsCrossZoneFrozen 就是 valid() + any_of<PlayerFrozenComp>
+    // PlayerLifecycleSystem::IsPlayerFrozen 就是 valid() + any_of<PlayerFrozenComp>
     // (player_lifecycle.cpp,函数名定位;那个文件正被跨 zone 会话改着,行号写下来就过期)。
     tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 

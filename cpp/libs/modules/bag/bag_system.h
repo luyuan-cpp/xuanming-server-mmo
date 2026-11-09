@@ -482,10 +482,10 @@ public:
     // 那条通道会被同一发号器铸出的 tx_id / snapshot_id 覆盖,且不铸号的路径读到的是上一件
     // 物品的残值。新增代码一律用回执,不要再引入任何"发完再回读"的隐式通道。
 
-    // 名字保留给既有调用方;实现已下沉到实例层的 ItemStore::StacksNeededFor。
+    // 实例数量的桥接入口,委托实例层的 ItemStore::StacksNeededFor。
     // 它算的是"这批数量要拆成几个实例",不是"占几格" —— 在扁平布局下两者恰好
     // 相等,格子布局下就不等了。
-    static std::size_t GridsNeededFor(std::size_t totalSize, std::size_t maxStackSize);
+    static std::size_t StacksNeededFor(std::size_t totalSize, std::size_t maxStackSize);
 
     // ── Persistence/migration accessors ───────────────────────────────
     // Added 2026-05-17 to let bag_marshal serialize/restore the bag's

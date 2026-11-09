@@ -382,7 +382,7 @@ TEST(RedisManagerEventBatch, AuthSuccessAfterDeadlineTickInSameBatchKeepsOrigina
     {
         ++observation.promotions;
         observation.promotionIteration = loop.iteration();
-        const auto original = manager.GetZoneRedis().get();
+        const auto original = manager.GetConnection().get();
         observation.pingSubmitResult = original->command(
             [&, original](hiredis::Hiredis* connection, redisReply* reply)
             {
@@ -390,7 +390,7 @@ TEST(RedisManagerEventBatch, AuthSuccessAfterDeadlineTickInSameBatchKeepsOrigina
                 ++observation.pingReplies;
                 observation.pingWasPong = reply->type == REDIS_REPLY_STATUS && reply->str &&
                     std::string_view(reply->str, reply->len) == "PONG";
-                observation.originalConnectionHeld = connection == original && manager.GetZoneRedis().get() == original;
+                observation.originalConnectionHeld = connection == original && manager.GetConnection().get() == original;
                 // 再观察一个以上重连周期，确认旧 tick 没有在稍后拆掉已认证连接。
                 loop.runAfter(0.15, [&] { loop.queueInLoop([&] { loop.quit(); }); });
             }, "PING");
@@ -408,7 +408,7 @@ TEST(RedisManagerEventBatch, AuthSuccessAfterDeadlineTickInSameBatchKeepsOrigina
     });
     loop.loop();
 
-    const bool stillConnected = manager.GetZoneRedis() && manager.GetZoneRedis()->connected();
+    const bool stillConnected = manager.GetConnection() && manager.GetConnection()->connected();
     server->Stop();
     // loop 外安全释放，随后排空适配器持有 Channel 的 pending functor，最后才析构 EventLoop。
     manager.Shutdown();
@@ -515,7 +515,7 @@ TEST(RedisManagerEventBatch, ConnectSuccessRearmingAuthDeadlineInvalidatesPrevio
     {
         ++observation.promotions;
         observation.promotionIteration = loop.iteration();
-        const auto original = manager.GetZoneRedis().get();
+        const auto original = manager.GetConnection().get();
         observation.pingSubmitResult = original->command(
             [&, original](hiredis::Hiredis* connection, redisReply* reply)
             {
@@ -523,7 +523,7 @@ TEST(RedisManagerEventBatch, ConnectSuccessRearmingAuthDeadlineInvalidatesPrevio
                 ++observation.pingReplies;
                 observation.pingWasPong = reply->type == REDIS_REPLY_STATUS && reply->str &&
                     std::string_view(reply->str, reply->len) == "PONG";
-                observation.originalConnectionHeld = connection == original && manager.GetZoneRedis().get() == original;
+                observation.originalConnectionHeld = connection == original && manager.GetConnection().get() == original;
                 loop.runAfter(0.15, [&] { loop.queueInLoop([&] { loop.quit(); }); });
             }, "PING");
     });
@@ -571,7 +571,7 @@ TEST(RedisManagerEventBatch, ConnectSuccessRearmingAuthDeadlineInvalidatesPrevio
         });
     });
     loop.loop();
-    const bool stillConnected = manager.GetZoneRedis() && manager.GetZoneRedis()->connected();
+    const bool stillConnected = manager.GetConnection() && manager.GetConnection()->connected();
     server->Stop();
     manager.Shutdown();
     DrainPending(loop);

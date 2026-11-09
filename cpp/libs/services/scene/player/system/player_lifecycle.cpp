@@ -561,7 +561,7 @@ namespace
 	// scene 进程内 EnterScene 的唯一发送出口:发送前确保非 0 关联号,由闭包按值带回 DispatchEnterSceneReply;
 	// 回显只作核对,即便旧版 SM 不回显也按发送时的号认领。有等待者的发送走 RequestSceneChange 或
 	// PublishAndEnterTravel;疏散 / 排空的等待者由 SendEmergencyRelocateEnterScene 先 MarkSent、再发出。
-	// 前置条件:调用方先把 correlationId 记到等待者上,且 sceneManagerEntity 非空(已查 GetSceneManagerEntity)。
+	// 前置条件:调用方先把 correlationId 记到等待者上,且 sceneManagerEntity 非空(已查 SelectSceneManagerEntity)。
 	void SendCorrelatedEnterScene(entt::entity sceneManagerEntity, ::scene_manager::EnterSceneRequest &request, uint64_t correlationId,
 								  GrpcDone<::scene_manager::EnterSceneResponse> done = {})
 	{
@@ -2642,7 +2642,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 			case player_exit::AfterPersistDecision::kRetainExhausted:
 			default:
 				// 重存到上限仍不收敛:还有别的东西在持续改这个实体。fail-closed 保留实体与两件退出标记,
-				// 不销毁、不丢差额;IsSaveInFlight 保持为真。出口:之后的任何一次落地(例如周期存盘)只要收敛了
+				// 不销毁、不丢差额;IsPlayerExitPending 保持为真。出口:之后的任何一次落地(例如周期存盘)只要收敛了
 				// 照样收尾;再来一次退出请求(停机 exitAllPlayers / s2s LeaveScene / 排空)会补发一次存盘
 				// (HandleExitGameNode 的"已在退出中"分支);都不收敛时停机由 Node 的有界 drain 看门狗裁决;
 				// 保留期间玩家若在别处玩过又被派回本节点,由 DiscardDeposedEntityOnReentry 丢弃重载、不复用。
@@ -3767,7 +3767,7 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 	//      logout_initiated_ms; ops watch the warning and follow up if
 	//      it's not just a one-off spike.
 	//
-	// IsSaveInFlight() exposes layers 1–2 for callers that want to query
+	// IsPlayerExitPending() exposes layers 1–2 for callers that want to query
 	// rather than rely on the implicit ECS-marker convention.
 }
 
@@ -4317,11 +4317,11 @@ uint64_t PlayerLifecycleSystem::TrackRelocateDispatch(Guid playerId, uint64_t se
 uint64_t PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket,
 																uint64_t trackSeq, EnterSceneDone done)
 {
-	// GetSceneManagerEntity 只在 scene_manager 注册表为空时返回 null;"全是坏通道"时照样挑出一个,请求随后以传输失败
+	// SelectSceneManagerEntity 只在 scene_manager 注册表为空时返回 null;"全是坏通道"时照样挑出一个,请求随后以传输失败
 	// 收场(由待确认表按结果未知处理)。所以本函数判得出的"没发出去"只有注册表为空这一种。
 	// 它的最末一级还会挑出"挂了 NodeInfo、通道还没建"的实体,而生成的发送函数对实体上的通道组件没有保护 ——
 	// 这是所有 EnterScene 发送点共有的既有风险(正常路径下通道先于 NodeInfo 挂上),不是改派特有的,这里不处理。
-	const auto smEntity = GetSceneManagerEntity(playerId);
+	const auto smEntity = SelectSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
 	{
 		if (trackSeq != 0)
@@ -4627,7 +4627,7 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 		tlsEcs.actorRegistry.get<LevelComp>(player).set_level(1);
 
 		// 默认技能由加载链直接初始化。
-		PlayerSkillSystem::RegisterPlayer(player);
+		PlayerSkillSystem::EnsureInitialSkills(player);
 	}
 
 	tlsEcs.actorRegistry.emplace<ViewRadius>(player).set_radius(10);
@@ -5172,7 +5172,7 @@ void PlayerLifecycleSystem::HandlePlayerSaveRejected(Guid playerId, const std::s
 				return;
 			}
 			// 退出中的实体却不是:被拒的那笔若就是它的退出存盘,不写盘就没有落地回调,退出永远收不了尾
-			// (UnregisterPlayer 一直挂着、IsSaveInFlight 恒真、客户端消息一直被拒)。与 HandleExitGameNode
+			// (UnregisterPlayer 一直挂着、IsPlayerExitPending 恒真、客户端消息一直被拒)。与 HandleExitGameNode
 			// 快路径同一规则:还有未落地的存盘就等它落地走退出分支;没有就说明盘上已是当前内存,直接收尾。
 			if ((saveResult == SaveResult::kAlreadyPersisted || saveResult == SaveResult::kHandoffAlreadyRequested) &&
 				tlsEcs.actorRegistry.any_of<UnregisterPlayer>(playerEntity) && !HasUnsettledPlayerSave(playerId))
@@ -5494,7 +5494,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	// scene_manager 必须可达。handoff 标记的 SET 一旦发出就不许解冻(骨架),SET 之后才发现没有 SM 只能按
 	// "标记已发出"销毁并踢线(ConcludeHandoffAfterMarkSent)。所以在改任何状态之前先挡住常见情形(请求时 SM
 	// 就不在),仍然只回失败 tip;剩下的只有"SM 恰好在 SET 往返那几毫秒里消失"的极窄窗口。
-	if (GetSceneManagerEntity(playerId) == entt::null)
+	if (SelectSceneManagerEntity(playerId) == entt::null)
 	{
 		LOG_WARN << "[ZoneTravel] handoff not started for player " << playerId << ": no SceneManager node reachable";
 		return genericFailTip;
@@ -6421,7 +6421,7 @@ boost::cobalt::task<void> PlayerLifecycleSystem::PublishAndEnterTravel(TravelMar
 			ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kNoGateSession, now);
 			co_return;
 		}
-		smEntity = GetSceneManagerEntity(playerId);
+		smEntity = SelectSceneManagerEntity(playerId);
 		if (smEntity == entt::null)
 		{
 			LOG_WARN << "[ZoneTravel] no SceneManager node reachable for player " << playerId
@@ -7488,15 +7488,10 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 								  {});
 }
 
-bool PlayerLifecycleSystem::IsSaveInFlight(Guid playerId)
+bool PlayerLifecycleSystem::IsPlayerExitPending(Guid playerId)
 {
-	// "In flight" == HandleExitGameNode has stamped the UnregisterPlayer marker
-	// AND HandlePlayerAsyncSaved has not yet fired (which would either drop the
-	// marker on a reconnect-superseded entity, or destroy the entity outright).
-	//
-	// Once the entity is destroyed, tlsEcs.GetPlayer(playerId) returns
-	// entt::null and any_of<UnregisterPlayer> on null returns false — so the
-	// "save complete" terminal state is naturally represented by "no entity".
+	// 这里只观察退出标记，不把普通存盘状态与退出流程混为一谈。
+	// 实体销毁或重连接回摘掉标记后，退出不再处于待收尾状态。
 	const auto playerEntity = tlsEcs.GetPlayer(playerId);
 	if (!tlsEcs.actorRegistry.valid(playerEntity))
 	{
@@ -7506,11 +7501,10 @@ bool PlayerLifecycleSystem::IsSaveInFlight(Guid playerId)
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 归属交接冻结态查询。
+// 玩家冻结标记查询。
 //
-// PlayerFrozenComp 由 StartTravelHandoff 挂、由 AbortTravelHandoff / DestroyDeposedPlayer /
-// "退出优先"分支摘。它最早属于 player_migrate 搬数据链(Kafka 搬 PlayerAllData + ACK + reaper),
-// 那条链已按 cross-zone-scene-travel.md CZ-1 下线,只留下这个组件与业务侧的拦写闸。
+// PlayerFrozenComp 由归属交接和角色交易封存复用，具体挂载与清理由各自生命周期负责。
+// 这里只查询该标记；完整可写性判定仍经 IsPlayerMutable 进入。
 // ─────────────────────────────────────────────────────────────────────
 
 bool PlayerLifecycleSystem::IsPlayerMutable(entt::entity player)
@@ -7518,7 +7512,7 @@ bool PlayerLifecycleSystem::IsPlayerMutable(entt::entity player)
 	return tlsEcs.actorRegistry.valid(player) && player_mutability::IsPlayerMutable(player);
 }
 
-bool PlayerLifecycleSystem::IsCrossZoneFrozen(entt::entity player)
+bool PlayerLifecycleSystem::IsPlayerFrozen(entt::entity player)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{

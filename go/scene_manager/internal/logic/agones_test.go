@@ -611,7 +611,7 @@ func TestDestroyInstance_ReleasesRoomOnceAndIsIdempotent(t *testing.T) {
 
 // 原子销毁脚本必须把 scene:{id}:agones_gs 一起删掉,并把值返回给调用方。
 // 不返回 = 删完就再也不知道该向谁归还名额。
-func TestAtomicDestroyIfIdle_ReturnsAndWipesAgonesMapping(t *testing.T) {
+func TestClaimIdleSceneTeardown_ReturnsAndWipesAgonesMapping(t *testing.T) {
 	sc, _ := newTestSvcCtx(t, "node-1")
 	sceneId := uint64(4242)
 
@@ -619,7 +619,7 @@ func TestAtomicDestroyIfIdle_ReturnsAndWipesAgonesMapping(t *testing.T) {
 	seedSceneMembersVia(sc, sceneId, 0)
 	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
 
-	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 	require.NoError(t, err)
 	assert.True(t, claim.Claimed)
 	assert.Equal(t, "10", claim.NodeID)
@@ -630,7 +630,7 @@ func TestAtomicDestroyIfIdle_ReturnsAndWipesAgonesMapping(t *testing.T) {
 }
 
 // 有玩家时中止:什么都不能动,名额也不能还。
-func TestAtomicDestroyIfIdle_AbortKeepsAgonesMapping(t *testing.T) {
+func TestClaimIdleSceneTeardown_AbortKeepsAgonesMapping(t *testing.T) {
 	sc, _ := newTestSvcCtx(t, "node-1")
 	sceneId := uint64(4243)
 
@@ -638,7 +638,7 @@ func TestAtomicDestroyIfIdle_AbortKeepsAgonesMapping(t *testing.T) {
 	seedSceneMembersVia(sc, sceneId, 3)
 	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
 
-	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 	require.NoError(t, err)
 	assert.True(t, claim.Busy)
 	assert.False(t, claim.Claimed)

@@ -69,7 +69,7 @@ func WorkerOf(id uint64) uint64 {
 }
 
 // DecodeID 把一个 shared/snowflake 布局的 id 拆成 (自 snowflake.Epoch 起的秒, cluster, slot, step),
-// worker 段按默认的 ClusterBits / SlotBits 切。这是 C++ ParseGuid 的等价物,两端用同一组
+// worker 段按默认的 ClusterBits / SlotBits 切。这是 C++ ParseSnowflakeGuid 的等价物,两端用同一组
 // 向量对拍。只用发号器的公开常量(NodeBits / StepBits),不依赖它的内部布局。
 //
 // login 的 bwmarrin PlayerId 是另一种 id 布局(毫秒时间 / 13 位 node),不能用这个拆。

@@ -9,24 +9,24 @@ TEST(MessageLimiterTest, AllowInitialRequests) {
     uint32_t messageId = 12345;
 
     for (int i = 0; i < 5; ++i) {
-        EXPECT_EQ(kSuccess, limiter.CanSend(messageId)) << "request #" << i + 1 << " should be allowed";
+        EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId)) << "request #" << i + 1 << " should be allowed";
     }
 
-    EXPECT_EQ(kRateLimitExceeded, limiter.CanSend(messageId)) << "request #6 should be rejected";
+    EXPECT_EQ(kRateLimitExceeded, limiter.TryConsumeRequestQuota(messageId)) << "request #6 should be rejected";
 }
 
 TEST(MessageLimiterTest, ClearExpiredRequests) {
     MessageLimiter limiter(2, 2);  // allow 2 requests per 2 seconds
     uint32_t messageId = 67890;
 
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId));
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId));
-    EXPECT_EQ(kRateLimitExceeded, limiter.CanSend(messageId)) << "rate limit exceeded, should be rejected";
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId));
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId));
+    EXPECT_EQ(kRateLimitExceeded, limiter.TryConsumeRequestQuota(messageId)) << "rate limit exceeded, should be rejected";
 
     // wait 3 seconds for the rate limit window to expire
     std::this_thread::sleep_for(std::chrono::seconds(3));
 
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId)) << "should be allowed after window expires";
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId)) << "should be allowed after window expires";
 }
 
 TEST(MessageLimiterTest, DifferentMessageIDs) {
@@ -34,12 +34,12 @@ TEST(MessageLimiterTest, DifferentMessageIDs) {
     uint32_t messageId1 = 11111;
     uint32_t messageId2 = 22222;
 
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId1));
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId2));
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId1));
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId2));
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId1));
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId1));
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId2));
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId1));
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId2));
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId1));
 
-    EXPECT_EQ(kRateLimitExceeded, limiter.CanSend(messageId1)) << "messageId1 exceeded limit, should be rejected";
-    EXPECT_EQ(kSuccess, limiter.CanSend(messageId2)) << "messageId2 within limit, should be allowed";
+    EXPECT_EQ(kRateLimitExceeded, limiter.TryConsumeRequestQuota(messageId1)) << "messageId1 exceeded limit, should be rejected";
+    EXPECT_EQ(kSuccess, limiter.TryConsumeRequestQuota(messageId2)) << "messageId2 within limit, should be allowed";
 }

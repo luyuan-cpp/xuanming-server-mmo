@@ -23,7 +23,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/mission_error_tip.pb.h"
 #include "services/scene/player/system/player_equip.h"
-#include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen:临时格取回的交接冻结闸
+#include "services/scene/player/system/player_lifecycle.h" // IsPlayerFrozen:临时格取回的交接冻结闸
 #include "services/scene/player/system/player_inbox_system.h" // OnBagSpaceFreed:取回之后提前重试延后的结算
 #include "services/scene/player/system/player_mission.h"
 #include "services/scene/player/system/player_activity_schedule.h"
@@ -200,7 +200,7 @@ uint32_t PlayerBagSystem::RetrieveTemporary(entt::entity player, uint64_t itemId
     // 才摘(CompleteInboxSettlement)。战斗中也拒的话,玩家在冻结到期之前取不回、腾不出位置,延后的结算就一直补不上。
     // 放行是安全的:人物背包只进不出(冻结清单「只增不减,方向安全」),战斗快照与结算扣消耗都只看人物背包,
     // 结算按持有夹紧时持有只会更多、不会少扣;临时格不参战;人物背包里已有的实例一个都不退役(整理在局中拒,正因为它会)。
-    if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+    if (PlayerLifecycleSystem::IsPlayerFrozen(player))
         return kBagTemporaryRetrieveBusy;
 
     std::vector<Guid> guids;

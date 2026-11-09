@@ -85,7 +85,7 @@ sarama 只读探针按 broker 视角报消费组 lag(全部分区合计与单分
 ### `player_snapshot.source` 列契约
 - `source=0`:GM / data_service 自己写入。`snapshot_type` 是 data_service 的 `SnapshotType`,`data` 是 JSON 字段图 `{fields: map[string][]byte}`,`snapshot_guid=0`。
 - `source=1`:C++ scene 经 Kafka 落库。`snapshot_type` 存 C++ `SnapshotTrigger` **原值**,`data` 存收到的整条 `PlayerSnapshotEntry` 序列化字节(含两个 player_database blob),`snapshot_guid` = C++ `snapshot_id`,`operator="scene-node"`,`zone_id`/`created_at` 取自载荷。
-- **现有 GM 读路径一律只看 `source=0`**(`GetSnapshotByID` / `GetLatestSnapshotBefore` / `ListSnapshotsMeta` / `GetSnapshotPlayerIDsByZone`),直到回滚路径学会解 proto blob;`ListSceneSnapshotsByPlayer` 是 `source=1` 的专用读路径(尚未接 RPC)。`DeleteOldSnapshots` 两种 source 都删。
+- **现有 GM 读路径一律只看 `source=0`**(`GetSnapshotByID` / `GetLatestSnapshotAtOrBefore` / `ListSnapshotsMeta` / `GetSnapshotPlayerIDsByZone`),直到回滚路径学会解 proto blob;`ListSceneSnapshotsByPlayer` 是 `source=1` 的专用读路径(尚未接 RPC)。`DeleteOldSnapshots` 两种 source 都删。
 
 ### `snapshot_guid` 去重规则
 `snapshot_guid` 的普通索引用于查询；非零 GUID 的唯一性由额外的可空生成列 `snapshot_guid_nz` 和其单列完整唯一键 `uk_snapshot_guid_nz` 约束。生成列是可空 `BIGINT UNSIGNED`：零值映射为 `NULL`，其他值保持原 uint64 GUID。因此多个 GM 快照（`guid=0`）可以共存，同一非零 GUID 最多一行。生成列不进入 proto，列注释不使用 `pb:N`，避免与 proto2mysql 的列同步争夺所有权。

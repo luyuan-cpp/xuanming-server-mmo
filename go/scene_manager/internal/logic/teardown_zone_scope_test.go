@@ -40,7 +40,7 @@ func TestSceneClaim_SceneInAnotherZoneIsNotClaimed(t *testing.T) {
 	require.True(t, force.Foreign, "force 认领")
 	require.False(t, force.Claimed)
 
-	idle, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
+	idle, err := ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.NoError(t, err)
 	require.True(t, idle.Foreign, "空闲认领")
 	require.False(t, idle.Claimed)

@@ -472,7 +472,7 @@ func TestIsDupEntryMySQL(t *testing.T) {
 //   - 多行写是**普通 INSERT**:不许带 ON DUPLICATE KEY UPDATE(撞已存在行会在主键上留下间隙锁直到语句结束,
 //     rebalance 重叠时成环),也不许带 IGNORE(会把 1062 吞成 warning,
 //     「撞键 → 整条回滚 → 逐行」这条兜底就失效了);n=1 与 insertSnapshotSQL 逐字相同,列清单只定义一次;
-//   - n 行就有 10n 个占位符;行数上限的占位符总数低于预处理语句 65535 的硬上限;
+//   - n 行就有 11n 个占位符;行数上限的占位符总数低于预处理语句 65535 的硬上限;
 //   - 预读按唯一键 snapshot_guid_nz 走等值 IN,且是**普通读**:不许 FOR UPDATE / FOR SHARE / LOCK IN SHARE MODE。
 //   - 单行 ODKU 仍是同一个 INSERT 主体 + 回带 id 的尾巴(单行路径不受影响)。
 //
@@ -489,11 +489,11 @@ func TestInsertSnapshotsSQLShape(t *testing.T) {
 	if !strings.HasPrefix(stmt, insertSnapshotSQL) {
 		t.Fatalf("批量语句必须由 insertSnapshotSQL 接出来(列清单只定义一次):\n%s", stmt)
 	}
-	if got := strings.Count(stmt, "?"); got != 30 {
-		t.Fatalf("3 行应有 30 个占位符,got %d:\n%s", got, stmt)
+	if got := strings.Count(stmt, "?"); got != 33 {
+		t.Fatalf("3 rows require 33 placeholders, got %d:\n%s", got, stmt)
 	}
-	if MaxSnapshotBatchRows*10 >= 65535 {
-		t.Fatalf("MaxSnapshotBatchRows=%d 时占位符 %d 个,超过预处理语句 65535 的上限", MaxSnapshotBatchRows, MaxSnapshotBatchRows*10)
+	if MaxSnapshotBatchRows*11 >= 65535 {
+		t.Fatalf("MaxSnapshotBatchRows=%d produces %d placeholders, exceeding the prepared statement limit 65535", MaxSnapshotBatchRows, MaxSnapshotBatchRows*11)
 	}
 	pre := existingSnapshotGuidsSQL(3)
 	if want := "SELECT snapshot_guid_nz FROM player_snapshot WHERE snapshot_guid_nz IN (?,?,?)"; pre != want {

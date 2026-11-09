@@ -949,12 +949,12 @@ Node::Node(muduo::net::EventLoop *loop, const std::string &logFilePath)
 Node::Node(muduo::net::EventLoop *loop,
 		   uint32_t nodeType,
 		   CanConnectNodeTypeList connectTo,
-		   ::google::protobuf::Service *replyService)
+		   ::google::protobuf::Service *rpcService)
 	: Node(loop, "logs/cpp_nodes/" + NodeUtils::NodeTypeToShortName(nodeType))
 {
-	if (replyService != nullptr)
+	if (rpcService != nullptr)
 	{
-		replyService_ = std::ref(*replyService);
+		rpcService_ = std::ref(*rpcService);
 	}
 	MutableNodeInfo().set_node_type(nodeType);
 	targetNodeTypeWhitelist = std::move(connectTo);
@@ -1546,10 +1546,10 @@ void Node::StartRpcServer()
 	// gate / battle 的这个端口给客户端与战斗边缘,SetAfterStart 会换掉 RpcServer 的回调,实际只有 scene 的入站节点链路用到。
 	rpcServer->setLinkHeartbeat(kNodeLinkHeartbeat);
 	if(!maintenancePrepareBoot_)rpcServer->start();
-	auto *nodeReplyService = GetNodeReplyService();
-	if (nodeReplyService != nullptr)
+	auto *nodeRpcService = GetNodeRpcService();
+	if (nodeRpcService != nullptr)
 	{
-		rpcServer->registerService(nodeReplyService);
+		rpcServer->registerService(nodeRpcService);
 	}
 	else
 	{

@@ -149,7 +149,7 @@ func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneReq
 	// 读频道集合 / 属主出错(2026-10-23)不等于「还没有频道」:不走下面的按需补建 —— 那会在 zone 锁上
 	// 忙等最多 10s 并对整组频道各发一次 CreateScene,把一次 Redis 抖动放大成多秒延迟与一串节点 RPC。
 	// 回 ErrRedis,调用方退避重试。
-	sceneId, nodeId, err := GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
+	sceneId, nodeId, err := SelectOrRecoverWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
 	if err != nil {
 		l.Logger.Errorf("[MainWorld] Cannot read world channels for conf %d in zone %d: %v", in.SceneConfId, in.ZoneId, err)
 		return &scene_manager.CreateSceneResponse{
@@ -168,7 +168,7 @@ func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneReq
 	l.Logger.Infof("[MainWorld] No channels for conf %d in zone %d, creating on demand", in.SceneConfId, in.ZoneId)
 	initWorldScenesForZone(l.ctx, l.svcCtx, in.ZoneId, []uint64{in.SceneConfId}, true)
 
-	sceneId, nodeId, err = GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
+	sceneId, nodeId, err = SelectOrRecoverWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
 	if err != nil {
 		l.Logger.Errorf("[MainWorld] Cannot read world channels for conf %d in zone %d after on-demand init: %v", in.SceneConfId, in.ZoneId, err)
 		return &scene_manager.CreateSceneResponse{

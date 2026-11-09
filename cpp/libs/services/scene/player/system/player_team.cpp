@@ -628,7 +628,7 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 		}
 	}
 
-	const auto smEntity = GetSceneManagerEntity(playerId);
+	const auto smEntity = SelectSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
 	{
 		LOG_WARN << "[PlayerTeam] No available SceneManager node;follow abandoned, player_id=" << playerId
@@ -699,8 +699,8 @@ void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)
 	const auto* ownAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(player);
 	const auto* leaderAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(leader);
 	const bool mutuallyVisible = !visibilityEvaluated ||
-								 (ownAoi != nullptr && ownAoi->Contains(leader) && leaderAoi != nullptr &&
-								  leaderAoi->Contains(player));
+								 (ownAoi != nullptr && ownAoi->IsVisible(leader) && leaderAoi != nullptr &&
+								  leaderAoi->IsVisible(player));
 	// 服务器坐标的水平面是 x/y(z 为高度)
 	const double dx = transform->location().x() - leaderTransform->location().x();
 	const double dy = transform->location().y() - leaderTransform->location().y();

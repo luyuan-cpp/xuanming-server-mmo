@@ -33,7 +33,7 @@
 | C++ watch | `etcd_service.cpp:158-167`、`:331-345` | 每个前缀一个 watch,前缀不带 zone;断流后逐前缀重拉;非压缩原因的取消等下一次 2 秒 Range 重建 |
 | zone-scoped 判定 | `node_util.cpp:120-136` | Gate、Scene、Login、PlayerLocator、PlayerStore;别的 zone 的这几类节点拉回来后在 `AddServiceNode` 丢掉,白拉 |
 | gate 人数写 etcd | `cpp/nodes/gate/main.cpp:557-562` | 每 10 秒 `UpdateNodeInfo`;watch 的人全服都收 |
-| scene / gate 连 scene_manager | `cpp/nodes/scene/main.cpp:107-109`、`cpp/nodes/gate/main.cpp:376-378`、`node_utils.cpp` 的 `GetSceneManagerEntity` | SceneManager 不是 zone-scoped,连全服全部实例,按 player_id 取模挑一个 |
+| scene / gate 连 scene_manager | `cpp/nodes/scene/main.cpp:107-109`、`cpp/nodes/gate/main.cpp:376-378`、`node_utils.cpp` 的 `SelectSceneManagerEntity` | SceneManager 不是 zone-scoped,连全服全部实例,按 player_id 取模挑一个 |
 | scene_manager 选主 | `scene_manager_service.go:94-97` | 一把全服锁 `scene_manager:leader:lock` |
 | scene_manager watch | `load_reporter.go:31`、`:708`、`:899` | `SceneNodeService.rpc/` 全服前缀,`knownNodes` 是全服镜像 |
 | 领导者循环 | `load_reporter.go:810-815`、`:974`;各循环的 `GetActiveZones()` | 对镜像里出现的全部 zone 跑 |

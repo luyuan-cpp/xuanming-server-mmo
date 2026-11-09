@@ -169,7 +169,7 @@ func TestSceneTeardown_ConcurrentRunsReleaseTheRoomOnce(t *testing.T) {
 	const sceneID uint64 = 89624
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-two", 0)
 
-	claim, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
+	claim, err := ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.NoError(t, err)
 	require.True(t, claim.Claimed)
 	job := sceneTeardownJob{ZoneID: claimTestZone, SceneID: sceneID, Kind: teardownKindInstance, Reason: "idle", Claim: claim}

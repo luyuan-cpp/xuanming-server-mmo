@@ -20,7 +20,7 @@
 //	                           G4b-G 之前是 SET admitted:zone:{zoneId} + 整键滑动 TTL,新版本不再读写旧键)
 //	queue:meta:{queueId}       HASH   {account, device, zone_id, createdAt, admitted_at}
 //	                           (admitted_at:放行时刻 unix 毫秒,PopAdmit 与放行槽同一个 MULTI 写入,
-//	                           入队时没有;Lookup 靠它区分「放行窗口已过」与「在途窗口」,2026-10-15 起)
+//	                           入队时没有;Poll 靠它区分「放行窗口已过」与「在途窗口」,2026-10-15 起)
 //	queue:token:{queueToken}   STRING queueId  (token → queueId reverse index)
 //
 // Lifecycle:
@@ -32,9 +32,9 @@
 //	FastPath  → 一段 Lua:清过期 + 计数 < budget + 占位(到期 = 现在 + handoffGrace)
 //
 // 放行之后客户端拿到的是确定的终态:放行槽被取走一次即 ADMITTED;之后再查(重复轮询、回包丢失后重试),
-// 或放行槽没人来取、按 AdmitTTL 过期之后再查,Lookup 看到 meta.admitted_at 而放行槽已不在,回 EXPIRED
+// 或放行槽没人来取、按 AdmitTTL 过期之后再查,Poll 看到 meta.admitted_at 而放行槽已不在,回 EXPIRED
 // (gateway 映射 410),客户端丢掉 token 重走 /assign-gate。2026-10-15 之前这里写的是「dropped admit
-// 只是让客户端重新入队」,实际 Lookup 回的是「排队中、名次 0」,客户端一直轮询到 meta 按 QueueEntryTTL
+// 只是让客户端重新入队」,实际 Poll 回的是「排队中、名次 0」,客户端一直轮询到 meta 按 QueueEntryTTL
 // (1h)过期。PopAdmit 在写放行槽之前丢掉的条目(写放行槽的 MULTI 失败等)没有 admitted_at,仍回名次 0
 // 直到 meta 过期,这是既有边角(login-queue-2026-05.md §14 第 7 条)。queue:meta TTL is the global ceiling.
 //
@@ -58,13 +58,13 @@
 //     上文「queue:meta TTL is the global ceiling」改读:单张票的绝对上限是令牌的 24h,meta 只管空闲。
 //   - 上一段(2026-10-15 更正)末尾列出的「仍会丢条目、停在名次 0 的路径」已全部消除:条目在放行脚本写成之前
 //     从不离开队列,任何 Redis 错误(含 noeviction 写满)、取消、进程退出之后,它要么仍在队列,要么已放行可取;
-//     popAdmitWriteBudget 随之删除。「在途窗口」不复存在:Lookup 看到 meta 在、没有 admitted_at、又不在队列时
+//     popAdmitWriteBudget 随之删除。「在途窗口」不复存在:Poll 看到 meta 在、没有 admitted_at、又不在队列时
 //     回 EXPIRED(queue_gone)。
 //   - 发布约束:本版本以及从它回滚,都必须在 Queue.Enabled=false 下滚完。排队开着混跑时,旧版 leader 已 ZPOPMIN、
 //     尚未写完放行的条目会被新版判成 queue_gone、打回队尾。K8s 部署依赖 tools/scripts/k8s_deploy.ps1 的
 //     $script:LoginQueueMergeGateCleared 拦截(未清门槛时各档位排队都关)。
 //
-// 残余风险逐条写在 admitEntryScript、lookupScript、PopAdmit、Lookup 与 queueTokenMaxAge 的注释里。
+// 残余风险逐条写在 admitEntryScript、lookupScript、PopAdmit、Poll 与 queueTokenMaxAge 的注释里。
 package loginqueue
 
 import (
@@ -142,7 +142,7 @@ type EnqueueResult struct {
 	Total      uint32
 }
 
-// QueueState is the snapshot returned by Lookup, used by QueryQueueStatus.
+// QueueState is the snapshot returned by Poll, used by QueryQueueStatus.
 type QueueState struct {
 	Status Status
 	Admit  *AdmitToken // populated when Status == StatusAdmitted
@@ -249,7 +249,7 @@ func New(rdb *redis.Client, entryTTL, admitTTL time.Duration, hmacSecret []byte)
 //
 // (2026-10-18 补注)entryTTL 收紧为 ∈ [1s, queueTokenMaxAge],上一段「entryTTL 不加这条下界」作废。1s 下界与
 // Enqueue 走 go-redis 秒级 EXPIRE 对齐,也保证 entryRenewTTL 的毫秒值为正(读状态脚本的 PEXPIRE 不会写出 0、
-// 当场删键);上界的理由是排队令牌 24h 先到期,再大的空闲 TTL 没有意义。Lookup 在碰 Redis 之前也调本函数。
+// 当场删键);上界的理由是排队令牌 24h 先到期,再大的空闲 TTL 没有意义。Poll 在碰 Redis 之前也调本函数。
 // 第一条里「弹出的条目会全部丢失」「在弹出之前也调本函数,不出队」改读:PopAdmit 在 ZRANGE 之前调本函数,一个都不
 // 放行;放行脚本出错时条目本来就留在队列,不再丢失(见 PopAdmit)。
 func ValidateTTLs(entryTTL, admitTTL time.Duration) error {
@@ -270,9 +270,9 @@ func admitKey(queueID string) string       { return "admit:" + queueID }
 func metaKey(queueID string) string        { return "queue:meta:" + queueID }
 func tokenIndexKey(token string) string    { return "queue:token:" + token }
 
-// metaFieldAdmittedAt 是 meta 里的放行时刻字段(unix 毫秒)。PopAdmit 写、Lookup 读,只看有没有,不看值。
+// metaFieldAdmittedAt 是 meta 里的放行时刻字段(unix 毫秒)。PopAdmit 写、Poll 读,只看有没有,不看值。
 // (2026-10-18 补注)放行脚本的 REPLAYED 判定会看值:成员已不在队列、admitted_at 恰等于本次的放行时刻,即 go-redis
-// 重发了本次已执行成功的同一条命令(见 admitEntryScript)。Lookup 仍只看有没有。
+// 重发了本次已执行成功的同一条命令(见 admitEntryScript)。Poll 仍只看有没有。
 const metaFieldAdmittedAt = "admitted_at"
 
 // metaFieldZoneID 是 meta 里的 zone 字段(十进制)。Enqueue 写;consumeAdmitAndSign 读来记占位与等待时长;
@@ -366,9 +366,9 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 	}, nil
 }
 
-// ── Lookup (QueryQueueStatus) ─────────────────────────────────────────
+// ── Poll (QueryQueueStatus) ─────────────────────────────────────────
 
-// SignAdmitFn is the consume-time gate-token signer. Lookup invokes it
+// SignAdmitFn is the consume-time gate-token signer. Poll invokes it
 // after GetDel admit:{queueId} succeeds, so the resulting AdmitToken's
 // HMAC + expire begin at consume time rather than admit time. This is
 // the heart of the R17 R1 fix: a 5-min token TTL must mean "5 min after
@@ -376,7 +376,7 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 // gate".
 //
 // The slot argument is whatever AdmitSlot the dispatcher stored at admit
-// time (gate IP/Port/NodeID/ZoneID). Returning (nil, err) makes Lookup
+// time (gate IP/Port/NodeID/ZoneID). Returning (nil, err) makes Poll
 // surface the error to the caller; returning (nil, nil) is not allowed —
 // either we sign successfully or we have an error.
 //
@@ -384,7 +384,7 @@ func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID st
 // 复核读不到候选时照签 slot 里的 gate,复核本身不产生错误(见 admit_recheck.go)。
 type SignAdmitFn func(slot *AdmitSlot) (*AdmitToken, error)
 
-// Lookup translates a queue token to its current state. signFn 只在取到放行槽时调用,调用方必须传非 nil
+// Poll 轮询排队状态，仍排队时按需续期，取到放行槽时消费并签票。signFn 只在取到放行槽时调用，必须非 nil
 // (queuestatuslogic / assigngatelogic 传 NewAdmitSigner)。
 //
 // token 必须是调用方已验签的排队令牌,zoneID 取自同一次验签(ParseAndVerifyQueueTokenMulti 的第二个返回值),0 视为损坏
@@ -402,11 +402,11 @@ type SignAdmitFn func(slot *AdmitSlot) (*AdmitToken, error)
 //     - 取到放行槽(GETDEL,只成功一次):现签 gate 票(consumeAdmitAndSign),ADMITTED;
 //     - meta 不在、不是 hash,或 zone 不符:EXPIRED(meta_gone);
 //     - meta 有 admitted_at 而放行槽不在:放行过,放行槽已被取走或已按 AdmitTTL 过期,EXPIRED(admit_window_passed)。
-//       放行脚本在同一段里写 admitted_at 与放行槽,本脚本在同一段里读两者,不会是「放行还没落地」,不用再取一次;
-//       不改占位,重复轮询不给它续期;
+//     放行脚本在同一段里写 admitted_at 与放行槽,本脚本在同一段里读两者,不会是「放行还没落地」,不用再取一次;
+//     不改占位,重复轮询不给它续期;
 //     - 仍在队列:QUEUEING + 名次 + 总数,按需续空闲 TTL;
 //     - meta 在、没有 admitted_at、又不在队列:EXPIRED(queue_gone),来源见 lookupScript;它依赖发布约束
-//       (排队开着时不得混跑新旧版本)。
+//     (排队开着时不得混跑新旧版本)。
 //
 // 往返:排队中一次轮询 = 一次 EVALSHA(进程内首次调用多一次 NOSCRIPT 回退的 EVAL);取到放行槽的那一次另有签票之后的
 // 读 meta 与改占位(各一次往返,每个条目只有一次,见 consumeAdmitAndSign)。轮询从纯读变为「偶尔带写」(续期),
@@ -417,12 +417,12 @@ type SignAdmitFn func(slot *AdmitSlot) (*AdmitToken, error)
 //     meta_gone 都可能出现,都是 EXPIRED,客户端照常重排。
 //   - 客户端空闲接近 E 时恰好被放行:meta 或 token 索引先到期,回 meta_gone,放行槽白占至多一个 AdmitTTL。
 //   - 持续轮询超过 24h:见 queueTokenMaxAge。
-func (q *Queue) Lookup(ctx context.Context, token string, zoneID uint32, signFn SignAdmitFn) (*QueueState, error) {
+func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn SignAdmitFn) (*QueueState, error) {
 	if err := ValidateTTLs(q.entryTTL, q.admitTTL); err != nil {
 		return nil, err
 	}
 	if signFn == nil {
-		return nil, errors.New("loginqueue: Lookup needs a non-nil signFn (caller bug)")
+		return nil, errors.New("loginqueue: Poll needs a non-nil signFn (caller bug)")
 	}
 	if zoneID == 0 {
 		recordExpired(0, ExpireReasonMetaGone)
@@ -548,7 +548,7 @@ type lookupResult struct {
 	slotJSON    []byte
 }
 
-// lookupEntry 对一个条目跑一次 lookupScript。只由 Lookup 调用。用 Script.Run(先 EVALSHA,NOSCRIPT 时回退 EVAL:
+// lookupEntry 对一个条目跑一次 lookupScript。只由 Poll 调用。用 Script.Run(先 EVALSHA,NOSCRIPT 时回退 EVAL:
 // EVALSHA 撞上 NOSCRIPT 时脚本没有执行,回退不会重复取走放行槽)。返回值不是 4 个元素、类型不对或 code 未知时回错误。
 func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID uint32) (lookupResult, error) {
 	vals, err := lookupScript.Run(ctx, q.rdb,
@@ -584,7 +584,7 @@ func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID u
 
 // consumeAdmitAndSign 把 lookupScript 已经取走(GETDEL)的放行槽签成 gate 票:解析放行槽 → signFn 现签 → 读 meta →
 // 在途占位改为「现在 + handoffGrace」到期 → 记等待时长。(2026-11-06 起 GETDEL 挪进 lookupScript,本函数从取到的放行槽
-// 开始;此前本函数自己 GETDEL,取不到回 (nil, nil),由 Lookup 再读状态。)
+// 开始;此前本函数自己 GETDEL,取不到回 (nil, nil),由 Poll 再读状态。)
 //
 // The signFn argument is what makes the R17 R1 fix work: the gate token's
 // HMAC + expire are computed HERE, at consume time, so the token TTL window
@@ -905,7 +905,7 @@ const (
 // 已写,成员仍在队列。客户端仍能取走放行槽(ADMITTED),或在 AdmitTTL 后得到 EXPIRED(admit_window_passed),不会
 // 双签。同一个键也会让 FreeSlots 的 AdmittedCount 报错,所以修复之前不会再放行;修好之后的下一拍走 ALREADY,ZREM
 // 掉成员。这个人没有占位,至多多放 1 人、持续一个 AdmitTTL。SET 只会因 PX ≤ 0 失败,已被 ValidateTTLs 挡住;
-// 理论上若失败,Lookup 会回 EXPIRED(admit_window_passed),客户端重排,下一拍走 ALREADY 清理。
+// 理论上若失败,Poll 会回 EXPIRED(admit_window_passed),客户端重排,下一拍走 ALREADY 清理。
 //
 // (e) 占位两步「先 ZADD、PTTL < W 才 PEXPIRE W」与 admittedHoldScript、reserveFastPathSlotScript 同一写法,改一处要
 // 三处同步(两个陷阱见 admittedKeyTTL)。HSET 只在 meta 已是 hash 时执行,不改 meta 的 TTL;SET 带 PX;ZREM 不建键。

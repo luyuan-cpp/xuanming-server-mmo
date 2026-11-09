@@ -502,12 +502,12 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 	return winner.SceneID, winner.NodeID, count, nil
 }
 
-// AtomicDestroyIfIdle 是空闲回收的认领。场景里有人时回 Busy,除重置空闲时钟外什么都不动;否则拆掉场景、写下拆除
-// 任务,回 Claimed,同一步扣属主的 scene_count。
+// ClaimIdleSceneTeardown 是空闲回收的认领。场景里有人时回 Busy,除重置空闲时钟外什么都不动;否则删除场景映射、
+// 写下拆除任务并回 Claimed,同一步扣属主的 scene_count。节点实体销毁等副作用由后续拆除任务推进。
 //
 // 属主先读一次,按读到的值认领。映射已经不在时按「必须仍不在」认领,收掉 active 集合里的残留:NodeID 为空,
 // agones_gs 还在就由副作用归还,不当成有人进场再加回去。属主在读与认领之间变了就回未认领,下一拍重判。
-func AtomicDestroyIfIdle(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (sceneClaim, error) {
+func ClaimIdleSceneTeardown(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (sceneClaim, error) {
 	owner, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
 	if err != nil {
 		return sceneClaim{}, err

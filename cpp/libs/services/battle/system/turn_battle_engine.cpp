@@ -2517,7 +2517,7 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
         entry->set_remain_rounds(1);
     }
     // 下面的子 buff 递归会往同一张 buff 列表增删条目,可能把本条目驱散掉;
-    // 不能端着 entry 指针跨递归(镜像实时 AddSubBuffsWithoutCheck 的收口注释),
+    // 不能端着 entry 指针跨递归(镜像实时 AddConfiguredSubBuffs 的收口注释),
     // 之后一律用 newBuffId 重查
     entry = nullptr;
 
@@ -2525,7 +2525,7 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
     addEvent->set_buff_table_id(buffTableId);
     addEvent->set_value(1);  // value 携带当前叠层数
 
-    // 子 buff 挂给持有者本人(镜像 AddSubBuffsWithoutCheck 的宿主语义)
+    // 子 buff 挂给持有者本人(镜像 AddConfiguredSubBuffs 的宿主语义)
     for (const auto subBuffId : buffRow->sub_buff()) {
         AddBuffToActor(target, subBuffId, casterId, depth + 1, result);
     }

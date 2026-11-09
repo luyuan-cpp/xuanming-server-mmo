@@ -398,7 +398,7 @@ scene_ownership::SweepOutcome SceneOwnershipReconciler::Sweep(const std::shared_
 	{
 		return finish(SweepOutcome::kIdentityUnconfirmed);
 	}
-	auto &redis = tlsSceneControlRedis.GetZoneRedis();
+	auto &redis = tlsSceneControlRedis.GetConnection();
 	if (!redis || !redis->connected())
 	{
 		return finish(SweepOutcome::kRedisUnavailable);

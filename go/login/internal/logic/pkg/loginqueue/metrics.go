@@ -8,7 +8,7 @@
 //
 //	login_queue_size              Gauge       per zone     ZCARD snapshot
 //	login_queue_admitted_inflight Gauge       per zone     in-flight placeholders (ZCARD after dropping expired)
-//	login_queue_wait_seconds      Histogram   per zone     time from Enqueue to Lookup-admit
+//	login_queue_wait_seconds      Histogram   per zone     time from Enqueue to Poll-admit
 //	login_queue_admit_total       Counter     per zone     dispatcher PopAdmit results
 //	login_queue_expired_total     Counter     per zone+reason  EXPIRED responses (token invalid / meta gone / etc.)
 //	login_queue_dispatcher_is_leader  Gauge   per pod+zone  1 = this pod leads its zone, 0 = standby
@@ -16,7 +16,7 @@
 // Why only these six (and not, say, "rank histogram" or "per-gate admit
 // distribution"):
 //   - rank already shows up in the periodic robot stats line; on the server
-//     side ZRANK is O(log N) per call, recording it for every Lookup is
+//     side ZRANK is O(log N) per call, recording it for every Poll is
 //     wasteful when the queue length itself (login_queue_size) tells the
 //     same story.
 //   - per-gate admit distribution is interesting for capacity planning but
@@ -47,7 +47,7 @@ const metricNamespace = "login_queue"
 
 var (
 	// queueSizeGauge mirrors ZCARD queue:zone:{zone}. Updated periodically
-	// by the dispatcher (every drain tick) and on Enqueue/Lookup paths so
+	// by the dispatcher (every drain tick) and on Enqueue/Poll paths so
 	// scrape granularity matches dispatcher granularity.
 	queueSizeGauge = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: metricNamespace,
@@ -75,14 +75,14 @@ var (
 	})
 
 	// waitSecondsHistogram measures end-to-end queue wait per admitted
-	// entry. Recorded in Lookup() when status flips QUEUEING → ADMITTED.
+	// entry. Recorded in Poll() when status flips QUEUEING → ADMITTED.
 	waitSecondsHistogram = metric.NewHistogramVec(&metric.HistogramVecOpts{
 		Namespace: metricNamespace,
 		Subsystem: "",
 		Name:      "wait_seconds",
 		Help: "End-to-end wait time for queue entries that were admitted, " +
 			"measured from Enqueue (queue:meta:{queueId} createdAt) to the " +
-			"Lookup call that consumed admit:{queueId}. p99 > 300s is a red " +
+			"Poll call that consumed admit:{queueId}. p99 > 300s is a red " +
 			"flag — dispatcher can't keep up with EnterGame.",
 		Labels:  []string{"zone"},
 		Buckets: []float64{0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600},
@@ -103,7 +103,7 @@ var (
 	// the failure modes that share the same status code on the wire:
 	//   "bad_signature" — HMAC mismatch / malformed token
 	//   "ttl"           — body.ExpireTS in the past
-	//   "meta_gone"     — Lookup found token but meta TTL'd before admit
+	//   "meta_gone"     — Poll found token but meta TTL'd before admit
 	//   "queue_disabled" — Queue.Enabled=false but client polled QueryQueueStatus
 	//   "admit_window_passed" — 放行过(meta 有 admitted_at),放行槽却已被取走或已按 AdmitTTL 过期(2026-10-15 起;
 	//                     此前这两种情况回「排队中、名次 0」,不计数)。持续升高 = 客户端轮询慢于 AdmitTTL,
@@ -157,10 +157,10 @@ const (
 	ExpireReasonMetaGone      = "meta_gone"
 	ExpireReasonQueueDisabled = "queue_disabled"
 
-	// ExpireReasonAdmitWindowPassed:放行槽已被取走或已过期之后再查(见 Queue.Lookup)。
+	// ExpireReasonAdmitWindowPassed:放行槽已被取走或已过期之后再查(见 Queue.Poll)。
 	ExpireReasonAdmitWindowPassed = "admit_window_passed"
 
-	// ExpireReasonQueueGone:meta 在、没有 admitted_at、又不在队列(2026-10-18 起,见 Queue.Lookup 与 lookupScript)。
+	// ExpireReasonQueueGone:meta 在、没有 admitted_at、又不在队列(2026-10-18 起,见 Queue.Poll 与 lookupScript)。
 	// 此前这种形状回「排队中、名次 0」的在途窗口。
 	ExpireReasonQueueGone = "queue_gone"
 )
@@ -224,7 +224,7 @@ func recordWait(zoneID uint32, d time.Duration) {
 // publishGaugeSnapshot updates queue_size and admitted_inflight gauges
 // for the given zone by reading Redis directly. Called by the dispatcher
 // once per drain tick — that cadence (1s) is the right granularity for
-// these metrics; doing it inline on every Enqueue/Lookup would drown
+// these metrics; doing it inline on every Enqueue/Poll would drown
 // Redis in extra ZCARD / EVAL calls for marginal accuracy gain.
 //
 // The dispatcher invokes this even for zones where it admits nothing,

@@ -9,7 +9,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "core/utils/registry/game_registry.h"
 #include "player_gm_guard.h" // P0-a:GM 客户端指令的 scene 侧第二道锁
-#include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen — cross-zone-readiness-audit.md §11.1
+#include "services/scene/player/system/player_lifecycle.h" // IsPlayerFrozen — cross-zone-readiness-audit.md §11.1
 
 namespace
 {
@@ -101,7 +101,7 @@ void SceneCurrencyClientPlayerHandler::GmBlockCurrency(entt::entity player,const
 	// side block here would diverge from the destination — when the
 	// destination zone unfreezes the player, the block we just stamped
 	// is gone. Reject early.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(player))
 	{
 		LOG_WARN << "GmBlockCurrency rejected: player frozen for cross-zone migration. "
 		         << "currency_type=" << request->currency_type()
@@ -128,7 +128,7 @@ void SceneCurrencyClientPlayerHandler::GmUnblockCurrency(entt::entity player,con
 	// Frozen check (cross-zone-readiness-audit.md §11.1): same rationale
 	// as GmBlockCurrency above — unblocking on the source side would not
 	// reach the destination's snapshot. Reject early.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(player))
 	{
 		LOG_WARN << "GmUnblockCurrency rejected: player frozen for cross-zone migration. "
 		         << "currency_type=" << request->currency_type()

@@ -56,7 +56,7 @@
 #include "player/comp/player_frozen_comp.h"
 // PlayerTravelHandoffComp:交接一挂上 SavePlayer 就硬性跳过写盘,此刻应用等于落不了盘。
 #include "player/comp/player_ownership_comp.h"
-#include "player/system/player_lifecycle.h"  // IsCrossZoneFrozen / IsSceneChangeBusy
+#include "player/system/player_lifecycle.h"  // IsPlayerFrozen / IsSceneChangeBusy
 #include "player/system/role_admission_system.h"
 #include "player/system/player_mission.h"
 #include "player/system/player_pet.h"
@@ -585,12 +585,12 @@ namespace
 	}
 
 	// 整笔结算此刻能不能应用。**必须是 BagService / CurrencySystem 内部闸的超集**:
-	//  - IsCrossZoneFrozen:与那两个入口同判据;
+	//  - IsPlayerFrozen:与那两个入口同判据;
 	//  - PlayerTravelHandoffComp / UnregisterPlayer:这两个窗口里存盘入口开头直接跳过写盘,应用了也落不了盘。
 	// 不应用就回 DEFER,条目留在收件箱,由本节点续做或目的地节点重拉。
 	bool IsSettlementApplicable(entt::entity player)
 	{
-		return !PlayerLifecycleSystem::IsCrossZoneFrozen(player) &&
+		return !PlayerLifecycleSystem::IsPlayerFrozen(player) &&
 			   !tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, UnregisterPlayer>(player);
 	}
 
@@ -1806,7 +1806,7 @@ SettlementCurrencyVerdict CollectSettlementCurrencyGains(const ::BattleSettlemen
 // 共用这一个判定,两处对同一币种不会给出不同结论。
 bool IsSettlementCurrencyGainBlocked(entt::entity player, CurrencyType type)
 {
-    return GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(type)) ||
+    return GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, static_cast<uint32_t>(type)) ||
            CurrencySystem::IsCurrencyBlocked(player, type);
 }
 

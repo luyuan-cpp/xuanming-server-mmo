@@ -171,7 +171,7 @@ void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32
 	const auto &whitelist = gNode->GetTargetNodeTypeWhitelist();
 	if (!whitelist.contains(nodeType))
 		return;
-	if (NodeUtils::IsNodeConnected(nodeType, discoveredNode))
+	if (NodeUtils::IsNodeTracked(nodeType, discoveredNode))
 	{
 		LOG_TRACE << "Node already connected, skip reconnect. uuid=" << discoveredNode.node_uuid();
 		return;

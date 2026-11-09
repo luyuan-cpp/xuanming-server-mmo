@@ -24,7 +24,7 @@
 #include "modules/mission/mission_events.h"
 #include <condition/condition_type.h>
 
-uint32_t MissionSystem::GetMissionReward(const GetRewardParam &param, MissionsComp &missionComp)
+uint32_t MissionSystem::ConsumeRewardClaim(const RewardClaimParam &param, MissionsComp &missionComp)
 {
 	// 先确认实体存活,再读取玩家身份组件;缺失时拒绝领取,不补默认身份。
 	if (!tlsEcs.actorRegistry.valid(param.playerEntity))

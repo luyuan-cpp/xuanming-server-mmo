@@ -35,10 +35,11 @@ public:
 
     static void RemoveBuff(entt::entity parent, const UInt64Set& removeBuffIdList);
 
-    static void RemoveSubBuff(BuffEntry& buffComp, UInt64Set& buffsToRemove);
+    // 收集并清空父记录的子 Buff 号，子 Buff 实例由调用方随后移除。
+    static void CollectAndClearSubBuffIds(BuffEntry& buffComp, UInt64Set& buffsToRemove);
 
-    // Check if buff can be created (checks target immunity)
-    static uint32_t CanCreateBuff(entt::entity parentEntity, uint32_t buffTableId);
+    // 检查配置与目标免疫；返回 tip 错误码，kSuccess 表示通过。
+    static uint32_t CheckBuffCreation(entt::entity parentEntity, uint32_t buffTableId);
 
     // 同表、同「处理后的施法者」(no_caster 时不区分施法者)的条目已存在时叠层 / 刷新并返回 true。
     // 不改变实体的组件集合;没有 BuffListComp(身上没有 buff)时返回 false。
@@ -106,7 +107,8 @@ public:
         uint64_t caster
     );
 
-    static void AddSubBuffsWithoutCheck(
+    // 按配置施加子 Buff，每项仍经 AddOrUpdateBuff 正常校验；一次性触发门由 AddSubBuffs 负责。
+    static void AddConfiguredSubBuffs(
         entt::entity parent,
         const BuffTable* buffTable,
         BuffEntry& buffComp

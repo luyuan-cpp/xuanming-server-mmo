@@ -624,7 +624,7 @@ gate 不重编、不重启。
 
 - **安全**：限流键无界、没有在途上限 → §12.3、§12.4；段内未知号不计数、踢线可被票据重放绕过 → 聚合桶加在途上限为主防线，踢线为辅；路由服代签会变成签名预言机 → §15 顺序；可见性过渡规则 fail-open → 缺 option 就报错；登录态判据要兼容 UINT64_MAX → §13.2、阶段 0b。
 - **兼容**：空槽 `find(nullptr)` UB → 阶段 0a；断线通知新旧并存 → 改走专用 RPC，并存窗口消失；旧 gate 遇到段内号静默丢包并踢线 → 停服切换加版本信号；段满只能重排 → 多 extent；发号器并发与旧二进制 → §11.2。
-- **管线**：battle 需要单独一种结果 → BattleViaGate；ROUTER 号不得进 `CanSend`；回包桥接要有身份栅栏 → session_incarnation；失败回执带 id → 阶段 0d。
+- **管线**：battle 需要单独一种结果 → BattleViaGate；ROUTER 号不得进 `TryConsumeRequestQuota`；回包桥接要有身份栅栏 → session_incarnation；失败回执带 id → 阶段 0d。
 
 ### A.3 定稿核验时修正的问题
 

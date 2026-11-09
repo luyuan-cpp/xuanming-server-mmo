@@ -116,8 +116,8 @@ func (t *TimerTask) IsActive() bool {
 // 对应源文件里那一大段注释）——这里自己记，问题从根上不存在。
 func (t *TimerTask) Deadline() time.Time { return t.deadline }
 
-// EndTime 对应 C++ 的 GetEndTime()：epoch 秒，未武装时为 0。
-func (t *TimerTask) EndTime() int64 {
+// DeadlineUnixSeconds 对应 C++ 的 GetEndTime()：epoch 秒，未武装时为 0。
+func (t *TimerTask) DeadlineUnixSeconds() int64 {
 	if t.deadline.IsZero() {
 		return 0
 	}

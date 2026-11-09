@@ -805,14 +805,14 @@ func (s *SnapshotStore) GetSnapshotByID(ctx context.Context, id uint64) (*Snapsh
 	return row, err
 }
 
-// GetLatestSnapshotBefore returns the most recent source=0 snapshot for a player before the given time.
-func (s *SnapshotStore) GetLatestSnapshotBefore(ctx context.Context, playerID, beforeTime uint64) (*SnapshotRow, error) {
+// GetLatestSnapshotAtOrBefore 返回玩家在给定 Unix 秒上界之前或恰好该时刻的最新 source=0 快照。
+func (s *SnapshotStore) GetLatestSnapshotAtOrBefore(ctx context.Context, playerID, atOrBeforeUnixSeconds uint64) (*SnapshotRow, error) {
 	row := &SnapshotRow{}
 	err := s.db.QueryRowContext(ctx,
 		`SELECT id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source
 		 FROM player_snapshot
 		 WHERE player_id = ? AND created_at <= ? AND source = ?
-		 ORDER BY created_at DESC LIMIT 1`, playerID, beforeTime, SnapshotSourceDataService,
+		 ORDER BY created_at DESC LIMIT 1`, playerID, atOrBeforeUnixSeconds, SnapshotSourceDataService,
 	).Scan(&row.ID, &row.PlayerID, &row.ZoneID, &row.SnapshotType, &row.CreatedAt,
 		&row.Reason, &row.Operator, &row.Data, &row.SnapshotGuid, &row.Source)
 	if err == sql.ErrNoRows {
@@ -910,7 +910,7 @@ func (s *SnapshotStore) GetSnapshotPlayerIDsByZone(ctx context.Context, zoneID u
 // 用途是 zone / 全服回档的"计划"(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.3-1):
 // 一条 SQL 拿到清单与每人的快照时刻,作为帮会检查的 since 起点,替代逐人读整份快照 blob。
 //
-// 与执行期的关系(R5):执行期 GetLatestSnapshotBefore **不带** zone_id 条件,选中的快照只会
+// 与执行期的关系(R5):执行期 GetLatestSnapshotAtOrBefore **不带** zone_id 条件,选中的快照只会
 // 等于或晚于这里的值(玩家在别的 zone 另有更新的快照时)。计划值更早 = since 更早 = 多查,方向安全;
 // 反过来(执行期更早)只可能来自快照被并发删除,调用方据此拒绝写该玩家。
 // 走 (zone_id, shard, created_at) 索引,与 GetSnapshotPlayerIDsByZone 同一过滤条件。

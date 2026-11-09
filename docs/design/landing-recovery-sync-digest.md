@@ -194,7 +194,7 @@ message SyncDigestS2C {
 新系统 `PlayerLandingSystem`（`cpp/libs/services/scene/player/system/player_landing.{h,cpp}`）：
 
 - `static void SendSyncDigest(entt::entity player)`：
-  1. Redis 未就绪（`tlsRedis.GetZoneRedis()` 为空或未连接）→ 立即推 `UNAVAILABLE`。
+  1. Redis 未就绪（`tlsRedis.GetConnection()` 为空或未连接）→ 立即推 `UNAVAILABLE`。
   2. 按值捕获 `playerId` 发 `HGETALL player:%llu:sync_digest`；返回值 `!= REDIS_OK` 时回调不会被调，就地推 `UNAVAILABLE`。
   3. 回调里按 playerId 重新找实体（实体可能已销毁或换人），找不到就丢弃（客户端会超时重试）。
   4. 解析：`g` → generation；其余字段名能解析成已知 `SyncDomain` 值的进 entries，未知字段跳过（新服务端先上、旧 scene 未升级时字段会多于枚举）。应答类型不是数组、字段值不是十进制无符号整数 → `UNAVAILABLE`，打 ERROR。
@@ -244,7 +244,7 @@ message SyncDigestS2C {
 
 - 实体带 `PlayerFrozenComp`（交接在途）时跳过：资产写路径此时本来就会拒绝；交接结果若是销毁实体，新节点进场时会再唤醒；若是解冻，则退回原退避（≤60 秒）。
 - 合并窗口：同一实体 5 秒内只发一次，只对进场来源生效（纯运行时组件 `PlayerLandingWakeComp{ uint64_t lastWakeMs; }`，不入库，单调时钟）。目的是同 zone 频繁换图、gate 补发重复路由时避免刷屏。
-- 命令：`PUBLISH assetop:wake <player_id 十进制>`，经 `tlsRedis.GetZoneRedis()->command(...)`，回调只在出错时打 WARN。
+- 命令：`PUBLISH assetop:wake <player_id 十进制>`，经 `tlsRedis.GetConnection()->command(...)`，回调只在出错时打 WARN。
 - 额外发出点：战斗冻结解除，覆盖 `kAssetInBattle` 的 RETRY [C]（`asset_op_system.cpp` 资产 RPC 在战斗中回 RETRY）。
   - 实现挂在 `player_battle.cpp` 的 `RemoveInBattleComp`，这是摘 InBattleComp 的唯一入口。最常见的解冻是结算应用，走的是 `ReleaseFreezeKeepLock`，并不经过 `ClearBattleFreeze`；挂在唯一入口上才不会漏。
   - 这一来源以 `AssetWakeReason::kBattleFreezeCleared` 发出，不受合并窗口限制。典型场景是重连复用实体时玩家仍在战斗中：进场唤醒撞上 RETRY，几秒后战斗结束。如果解冻唤醒被同一个窗口吞掉，它就失去了唯一要覆盖的场景。

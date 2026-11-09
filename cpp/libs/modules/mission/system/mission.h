@@ -8,7 +8,7 @@
 
 class ConditionTable;
 
-struct GetRewardParam {
+struct RewardClaimParam {
 	entt::entity playerEntity{ entt::null };
 	uint32_t missionId{ 0 };
 };
@@ -34,7 +34,8 @@ struct MissionFollowUps {
 /// accept, abandon, progress, complete, and reward.
 class MissionSystem {
 public:
-	static uint32_t GetMissionReward(const GetRewardParam& param, MissionsComp& missionComp);
+	// 只校验并消耗领取权，不发放奖励；生产发奖由玩家任务入口编排。
+	static uint32_t ConsumeRewardClaim(const RewardClaimParam& param, MissionsComp& missionComp);
 	static uint32_t AcceptMission(const AcceptMissionEvent& acceptEvent, MissionsComp& missionComp, const IMissionConfig& config);
 	static uint32_t AbandonMission(const AbandonParam& param, MissionsComp& missionComp, const IMissionConfig& config);
 	static void CompleteAllMissions(entt::entity player, MissionsComp& missionComp);

@@ -49,7 +49,7 @@ static entt::entity CreateAoiActor()
 static bool IsInAoiList(entt::entity observer, entt::entity target)
 {
     const auto* aoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(observer);
-    return aoiList && aoiList->Contains(target);
+    return aoiList && aoiList->IsVisible(target);
 }
 
 // 技能追踪类显式来源:最高淘汰权重,默认不授予侦测。
@@ -142,7 +142,7 @@ TEST_F(AoiGridTest, RandomSpawnAssignsCorrectGrid)
         }
     }
 
-    GridSystem::UpdateLogGridSize();
+    GridSystem::LogEmptyGridErrors();
 }
 
 // Move a single player from the origin hex to each of its 6 neighbors and
@@ -240,7 +240,7 @@ TEST_F(AoiGridTest, SpatialQueryOnEmptySceneDoesNotCreateGridList)
 
     EntityUnorderedSet nearby;
     GridSystem::GetEntitiesInGridAndNeighbors(playerEntity, nearby, true);
-    GridSystem::GetEntitiesInViewAndNearby(playerEntity, nearby);
+    GridSystem::CollectNearbyObserversInRange(playerEntity, nearby);
 
     EXPECT_FALSE(tlsEcs.sceneRegistry.any_of<SceneGridListComp>(sceneEntity));
     EXPECT_TRUE(nearby.empty());
@@ -282,7 +282,7 @@ TEST_F(AoiGridTest, SpatialQueryOnDestroyedSceneDoesNotCreateGridList)
 
     EntityUnorderedSet nearby;
     GridSystem::GetEntitiesInGridAndNeighbors(observer, nearby, true);
-    GridSystem::GetEntitiesInViewAndNearby(observer, nearby);
+    GridSystem::CollectNearbyObserversInRange(observer, nearby);
     EXPECT_TRUE(nearby.empty());
     EXPECT_EQ(tlsEcs.sceneRegistry.try_get<SceneGridListComp>(sceneEntity), nullptr)
         << "只读查询不得在已销毁的场景句柄上挂组件";
@@ -582,18 +582,18 @@ TEST_F(AoiPriorityTest, CapacityEvictsLowestPriority)
 
     auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(comp, nullptr);
-    EXPECT_EQ(comp->Size(), kAoiListCapacityDefault);
+    EXPECT_EQ(comp->VisibleCount(), kAoiListCapacityDefault);
 
     // Try to add another kNormal entity — should fail (same priority, no eviction).
     auto lowEntity = CreateAoiActor();
     EXPECT_FALSE(InterestSystem::AddAoiEntity(watcher, lowEntity, AoiPriority::kNormal));
-    EXPECT_EQ(comp->Size(), kAoiListCapacityDefault);
+    EXPECT_EQ(comp->VisibleCount(), kAoiListCapacityDefault);
 
     // Add a kTeammate entity — should succeed by evicting a kNormal one.
     auto teammateEntity = CreateAoiActor();
     EXPECT_TRUE(InterestSystem::AddAoiEntity(watcher, teammateEntity, AoiPriority::kTeammate));
-    EXPECT_EQ(comp->Size(), kAoiListCapacityDefault);
-    EXPECT_TRUE(comp->Contains(teammateEntity));
+    EXPECT_EQ(comp->VisibleCount(), kAoiListCapacityDefault);
+    EXPECT_TRUE(comp->IsVisible(teammateEntity));
 }
 
 // Teammates get kTeammate priority when both have the same TeamId.
@@ -612,7 +612,7 @@ TEST_F(AoiPriorityTest, TeammatesGetHigherPriority)
 
     auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(player1);
     ASSERT_NE(comp, nullptr);
-    ASSERT_TRUE(comp->Contains(player2));
+    ASSERT_TRUE(comp->IsVisible(player2));
     EXPECT_EQ(comp->entries.at(player2).priority, AoiPriority::kTeammate);
 }
 
@@ -681,7 +681,7 @@ TEST_F(AoiPriorityTest, FollowRegistersBothIndexesOneWay)
     ASSERT_TRUE(InterestSystem::Follow(watcher, target, SkillGrant(1)));
 
     EXPECT_TRUE(IsInAoiList(watcher, target));
-    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size());
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).VisibleCount());
     EXPECT_EQ((std::unordered_map<entt::entity, bool>{{watcher, true}}), WatchersOf(target));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(target));
     EXPECT_TRUE(WatchersOf(watcher).empty());
@@ -706,7 +706,7 @@ TEST_F(AoiPriorityTest, SameSourceIsUpdatedInPlaceAndSourcesAreRevokedIndividual
     InterestSystem::Unfollow(watcher, target, team);
     EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).HasRelation(target));
     EXPECT_TRUE(WatchersOf(target).empty());
-    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size());
+    EXPECT_EQ(0u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).VisibleCount());
 }
 
 // 空间来源与显式来源合并在同一条目里;撤空间来源不影响显式来源,反之亦然。
@@ -717,7 +717,7 @@ TEST_F(AoiPriorityTest, SpatialAndExplicitSourcesMergeIntoOneEntry)
 
     ASSERT_TRUE(InterestSystem::AddAoiEntity(watcher, target));
     ASSERT_TRUE(InterestSystem::Follow(watcher, target, SkillGrant(1)));
-    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).Size()) << "只占一个容量名额";
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(watcher).VisibleCount()) << "只占一个容量名额";
 
     InterestSystem::RemoveAoiEntity(watcher, target);
     EXPECT_TRUE(IsInAoiList(watcher, target)) << "显式来源仍在";
@@ -759,7 +759,7 @@ TEST_F(AoiPriorityTest, ClearRelationsRemovesEveryEdgeAndIsIdempotent)
     EXPECT_FALSE(WatchersOf(nearWatcher).contains(leaver));
     EXPECT_EQ((std::unordered_map<entt::entity, bool>{{farWatcher, true}}), WatchersOf(followedByLeaver))
         << "其他实体之间的关系不受影响";
-    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(farWatcher).Size());
+    EXPECT_EQ(1u, tlsEcs.actorRegistry.get<AoiListComp>(farWatcher).VisibleCount());
 }
 
 // 跨场景、自身或已销毁的目标不能建立显式关注,也不留下组件。
@@ -925,7 +925,7 @@ TEST_F(AoiDynamicCapacityTest, AddAoiEntityRespectsReducedCapacity)
 
     auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
     ASSERT_NE(comp, nullptr);
-    EXPECT_EQ(comp->Size(), 30u);
+    EXPECT_EQ(comp->VisibleCount(), 30u);
 }
 
 // ScenePressureComp default (no pressure) returns max capacity.

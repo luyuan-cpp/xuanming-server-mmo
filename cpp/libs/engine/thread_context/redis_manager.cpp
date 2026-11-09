@@ -165,7 +165,7 @@ void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAd
 	// 旧连接留在局部变量中，等新周期完整建立后再收尾。旧业务命令的空应答允许重入 Connect / Shutdown
 	// 或销毁管理器，因此释放旧业务连接之后，当前调用栈不能再访问任何成员。
 	HiredisPtr oldHandshake = std::move(handshakeRedis_);
-	HiredisPtr oldZone = std::move(zoneRedis_);
+	HiredisPtr oldZone = std::move(connection_);
 	authAwaitingReply_ = false;
 	ResetLivenessProbe();
 	loop_ = ToLoopRef(loop);
@@ -181,9 +181,9 @@ void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAd
 	lifetimeToken_ = std::make_shared<LifetimeToken>();
 
 	// 占位对象:只构造、从不 connect()。它的 connected() 恒为 false、command() 直接返回 REDIS_ERR 且不调回调,
-	// context 为空,析构什么也不做(Hiredis.cc 的 connected() / command() / ~Hiredis)。有了它,GetZoneRedis()
-	// 在第一次握手完成前就非空,直接 `GetZoneRedis()->command(` 的调用点不会解引用空指针。
-	zoneRedis_ = hiredis::Hiredis::Create(loop, redisAddr_);
+	// context 为空,析构什么也不做(Hiredis.cc 的 connected() / command() / ~Hiredis)。有了它,GetConnection()
+	// 在第一次握手完成前就非空,直接 `GetConnection()->command(` 的调用点不会解引用空指针。
+	connection_ = hiredis::Hiredis::Create(loop, redisAddr_);
 	StartLivenessTimer();
 	StartHandshake();
 	ReleaseConnection(oldHandshake);
@@ -320,9 +320,9 @@ void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
 void RedisManager::PromoteHandshake()
 {
 	CancelReconnectTimer();
-	// shared_ptr 移动赋值:先让 zoneRedis_ 指向握手连接,再释放被替换的对象。被替换的只会是占位对象或已断开的旧连接
+	// shared_ptr 移动赋值:先让 connection_ 指向握手连接,再释放被替换的对象。被替换的只会是占位对象或已断开的旧连接
 	// (见头文件不变量),析构不触发任何回调。握手连接本身没有被销毁,所以在它自己的连接 / 命令回调栈里移交是安全的。
-	zoneRedis_ = std::move(handshakeRedis_);
+	connection_ = std::move(handshakeRedis_);
 	// 新连接从零开始探测;旧连接上迟到的 PING 回调因代号不符被忽略。
 	ResetLivenessProbe();
 	const ReconnectCallback callback = reconnectCb_;
@@ -402,7 +402,7 @@ void RedisManager::DoReconnect()
 	LOG_INFO << "Attempting Redis reconnect to " << redisAddr_.toIpPort();
 
 	// 只重建握手连接:建连失败、握手超时或 AUTH 被拒的旧握手连接在这里(pending 阶段)销毁,
-	// 挂起的 AUTH 以空应答回调,OnAuthReply 开头就返回。zoneRedis_ 里已断开的旧连接(或占位对象)保持不动,
+	// 挂起的 AUTH 以空应答回调,OnAuthReply 开头就返回。connection_ 里已断开的旧连接(或占位对象)保持不动,
 	// 业务继续看到 connected()==false,直到新连接完成握手、移交时才被替换。每条新连接都会重新 AUTH。
 	ReleaseConnection(handshakeRedis_);
 	StartHandshake();
@@ -412,7 +412,7 @@ void RedisManager::ResetConnections()
 {
 	// 先清空成员，再释放局部连接：业务空应答即使重入或销毁管理器，也不会再次拆掉同一条连接。
 	HiredisPtr oldHandshake = std::move(handshakeRedis_);
-	HiredisPtr oldZone = std::move(zoneRedis_);
+	HiredisPtr oldZone = std::move(connection_);
 	authAwaitingReply_ = false;
 	ResetLivenessProbe();
 	// 显式拆除不是握手失败，不报 AUTH 超时。释放 oldZone 以后不得再访问管理器成员。
@@ -450,9 +450,9 @@ void RedisManager::CancelLivenessTimer()
 
 void RedisManager::OnLivenessTick()
 {
-	// 只探测对业务可见、仍连着的连接。握手中、断线待重连期间 zoneRedis_ 是占位对象或已断开的旧连接,
+	// 只探测对业务可见、仍连着的连接。握手中、断线待重连期间 connection_ 是占位对象或已断开的旧连接,
 	// 由 AUTH 截止与重连定时器负责;握手连接上绝不发 PING(AUTH 必须是它唯一的命令)。
-	if (!zoneRedis_ || !zoneRedis_->connected())
+	if (!connection_ || !connection_->connected())
 	{
 		return;
 	}
@@ -469,7 +469,7 @@ void RedisManager::OnLivenessTick()
 	}
 
 	const std::uint64_t generation = livenessGeneration_;
-	const int ret = zoneRedis_->formattedCommand(
+	const int ret = connection_->formattedCommand(
 		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation](hiredis::Hiredis *, redisReply *reply)
 		{
 			if (!token.lock()) return;
@@ -519,7 +519,7 @@ void RedisManager::QueueDropUnresponsive()
 void RedisManager::DropUnresponsive(std::uint64_t generation)
 {
 	// 排队期间情况可能已经变了:这条连接自己断开了(断线回调已接手重连),或已被移交 / 显式拆除替换。都不再处理。
-	if (!loop_ || generation != livenessGeneration_ || !zoneRedis_ || !zoneRedis_->connected())
+	if (!loop_ || generation != livenessGeneration_ || !connection_ || !connection_->connected())
 	{
 		return;
 	}
@@ -533,11 +533,11 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 	// 并被执行(第二轮审计 r2-lc#1 / r2-lc#2)。上层不得假设"摘连接前发出的命令先于重连后发出的命令";需要这种保证的写
 	// 必须在 Redis 端用围栏令牌原子判定(例:scene 的 handoff 标记围栏 handoff_fence)。
 
-	// 先换上占位对象再释放:释放时在途命令以空应答回调,回调里若再取 GetZoneRedis(),看到的是 connected()==false 的
+	// 先换上占位对象再释放:释放时在途命令以空应答回调,回调里若再取 GetConnection(),看到的是 connected()==false 的
 	// 占位对象,新命令当场 REDIS_ERR,不会发到正在释放的连接上。释放发生在本类的成员函数里、不在任何 hiredis 回调栈内;
 	// 被摘下连接的断线回调先被清掉,不会再走一遍断线日志与 ScheduleReconnect。
-	HiredisPtr unresponsive = std::move(zoneRedis_);
-	zoneRedis_ = hiredis::Hiredis::Create(&loop_->get(), redisAddr_);
+	HiredisPtr unresponsive = std::move(connection_);
+	connection_ = hiredis::Hiredis::Create(&loop_->get(), redisAddr_);
 	const std::weak_ptr<LifetimeToken> oldCycle = lifetimeToken_;
 	ReleaseConnection(unresponsive);
 	// 空应答业务回调可能销毁管理器或开始新 Connect 周期；只检查局部弱令牌，失效后不能再碰 this。
@@ -545,7 +545,7 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 	{
 		return;
 	}
-	// 走既有重连:此刻 zoneRedis_ 是占位对象,满足「重连定时器只在 zoneRedis_ 不可用时运行」。
+	// 走既有重连:此刻 connection_ 是占位对象,满足「重连定时器只在 connection_ 不可用时运行」。
 	ScheduleReconnect();
 }
 

@@ -39,7 +39,7 @@ initWorldScenesForZone(zoneId, confIds)
 
 ### 玩家选线
 ```
-GetBestWorldChannel(confId, zoneId)
+SelectOrRecoverWorldChannel(confId, zoneId)
   members = SMEMBERS(world_channels:zone:{zoneId}:{confId})
   for each sceneId in members:
     count = SCARD(instance:{sceneId}:members)
@@ -87,8 +87,8 @@ message CreateSceneRequest {
 |---------|---------|
 | `TestInitWorldScenes_MultipleLines` | 3 条线各有独立 sceneId |
 | `TestInitWorldScenes_MultipleLines_Idempotent` | 重复初始化不产生多余线 |
-| `TestGetBestWorldChannel_SelectsLowestPlayerCount` | 选择人数最少的线 |
-| `TestGetBestWorldChannel_AllEmpty` | 所有线为空时仍能返回 |
+| `TestSelectOrRecoverWorldChannel_SelectsLowestPlayerCount` | 选择人数最少的线 |
+| `TestSelectOrRecoverWorldChannel_AllEmpty` | 所有线为空时仍能返回 |
 | `TestCreateScene_MainWorld_MultipleLines_ReturnsLeastLoaded` | 高负载线→自动切换 |
 | `TestCreateScene_MainWorld_ChannelCountDefault1_BackwardCompat` | LineCount=1 等同旧行为 |
 

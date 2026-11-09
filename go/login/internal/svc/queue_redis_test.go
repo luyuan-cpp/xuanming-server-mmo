@@ -83,26 +83,48 @@ func TestInitLoginQueue_QueueKeysLandOnQueueRedis(t *testing.T) {
 	}
 }
 
-// gate 排空标记留在核心:k8s_gate_drain.ps1 与 scene_manager 都读核心上的那一份,
-// login 的 AssignGate 过滤(gateWatcherCapacityProvider.rdb)必须同样读核心。
+// gate 排空标记留在核心：用两份 Redis 上相反的标记验证实际读源，每个场景使用首次读取的独立缓存。
 func TestInitLoginQueue_DrainFilterStaysOnCoreRedis(t *testing.T) {
 	previous := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = previous })
-	coreRdb, _ := newSvcTestRedis(t)
-	queueRdb, _ := newSvcTestRedis(t)
-
 	config.AppConfig = config.Config{}
 	config.AppConfig.Node.ZoneId = 7
 	config.AppConfig.Queue = loginQueueTestConf("dispatcher:lock:login_queue")
-	config.AppConfig.Queue.Enabled = false // 只看容量提供者的装配,它不论排队开关都会装
+	config.AppConfig.Queue.Enabled = false // 容量提供者不依赖排队开关。
 
-	s := &ServiceContext{RedisClient: coreRdb, QueueRedis: queueRdb}
-	s.initLoginQueue()
-	provider, ok := s.queueCapProvider.(*gateWatcherCapacityProvider)
-	if !ok {
-		t.Fatalf("queueCapProvider 类型变了: %T", s.queueCapProvider)
-	}
-	if provider.rdb != coreRdb {
-		t.Fatal("排空过滤必须读核心实例:gate 排空标记不随 queue 拆分")
+	const gateID uint32 = 41
+	for _, test := range []struct {
+		name                    string
+		coreMarked, queueMarked bool
+		wantCount               int
+	}{
+		{name: "core_mark_only", coreMarked: true, wantCount: 1},
+		{name: "queue_mark_only", queueMarked: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			coreRdb, _ := newSvcTestRedis(t)
+			queueRdb, _ := newSvcTestRedis(t)
+			ctx := context.Background()
+			if test.coreMarked {
+				if err := loginqueue.MarkGateDraining(ctx, coreRdb, gateID, 1000, 60); err != nil {
+					t.Fatalf("mark gate draining in core Redis: %v", err)
+				}
+			}
+			if test.queueMarked {
+				if err := loginqueue.MarkGateDraining(ctx, queueRdb, gateID, 1000, 60); err != nil {
+					t.Fatalf("mark gate draining in queue Redis: %v", err)
+				}
+			}
+			s := &ServiceContext{RedisClient: coreRdb, QueueRedis: queueRdb}
+			s.initLoginQueue()
+			provider, ok := s.queueCapProvider.(*gateWatcherCapacityProvider)
+			if !ok || provider == nil || provider.drain == nil {
+				t.Fatalf("queue capacity provider has no drain cache: %T", s.queueCapProvider)
+			}
+			draining := provider.drain.Draining(ctx, 7, []loginqueue.GateCandidate{{NodeID: gateID}})
+			if len(draining) != test.wantCount || draining[gateID] != test.coreMarked {
+				t.Fatalf("draining gates = %v, want count=%d core mark=%v; queue mark=%v must not affect selection", draining, test.wantCount, test.coreMarked, test.queueMarked)
+			}
+		})
 	}
 }

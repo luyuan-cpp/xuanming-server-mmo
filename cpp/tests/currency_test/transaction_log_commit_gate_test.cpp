@@ -58,7 +58,7 @@ namespace
 
     TEST_F(TransactionLogCommitGateTest, WithoutGatingEntriesArePublishedImmediately)
     {
-        TransactionLogSystem::SendEntry(Gain(1, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(1, kPlayerA));
 
         EXPECT_EQ(published, (std::vector<uint64_t>{1}));
         EXPECT_EQ(TransactionLogSystem::PendingCount(kPlayerA), 0u);
@@ -67,11 +67,11 @@ namespace
     TEST_F(TransactionLogCommitGateTest, GatedEntriesWaitForTheCommitThatContainsThem)
     {
         TransactionLogSystem::EnableCommitGating(true);
-        TransactionLogSystem::SendEntry(Gain(1, kPlayerA));
-        TransactionLogSystem::SendEntry(Spend(2, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(1, kPlayerA));
+        TransactionLogSystem::RecordEntry(Spend(2, kPlayerA));
         const uint64_t snapshotMark = TransactionLogSystem::CommitMark();
         // 取快照之后才发生的改动不在这份快照里,这份快照提交了也不能放它。
-        TransactionLogSystem::SendEntry(Gain(3, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(3, kPlayerA));
 
         EXPECT_TRUE(published.empty());
         EXPECT_EQ(TransactionLogSystem::PendingCount(kPlayerA), 3u);
@@ -90,8 +90,8 @@ namespace
     TEST_F(TransactionLogCommitGateTest, ACommitOfOnePlayerDoesNotReleaseAnother)
     {
         TransactionLogSystem::EnableCommitGating(true);
-        TransactionLogSystem::SendEntry(Gain(1, kPlayerA));
-        TransactionLogSystem::SendEntry(Gain(2, kPlayerB));
+        TransactionLogSystem::RecordEntry(Gain(1, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(2, kPlayerB));
 
         TransactionLogSystem::PublishThrough(kPlayerA, TransactionLogSystem::CommitMark());
 
@@ -102,15 +102,15 @@ namespace
     TEST_F(TransactionLogCommitGateTest, DiscardDropsChangesThatNeverCommitted)
     {
         TransactionLogSystem::EnableCommitGating(true);
-        TransactionLogSystem::SendEntry(Gain(1, kPlayerA));
-        TransactionLogSystem::SendEntry(Gain(2, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(1, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(2, kPlayerA));
         const uint64_t staleMark = TransactionLogSystem::CommitMark();
 
         EXPECT_EQ(TransactionLogSystem::DiscardPending(kPlayerA, "deposed"), 2u);
         EXPECT_EQ(TransactionLogSystem::PendingCount(kPlayerA), 0u);
 
         // 实体重建之后的新改动拿到更大的水位:旧快照迟到的放行盖不到它。
-        TransactionLogSystem::SendEntry(Gain(3, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(3, kPlayerA));
         TransactionLogSystem::PublishThrough(kPlayerA, staleMark);
 
         EXPECT_TRUE(published.empty());
@@ -127,8 +127,8 @@ namespace
         system.set_tx_id(2);
         system.set_tx_type(TX_CURRENCY_ADD);
 
-        TransactionLogSystem::SendEntry(transfer);
-        TransactionLogSystem::SendEntry(system);
+        TransactionLogSystem::RecordEntry(transfer);
+        TransactionLogSystem::RecordEntry(system);
 
         EXPECT_EQ(published, (std::vector<uint64_t>{1, 2}));
         EXPECT_EQ(TransactionLogSystem::PendingCount(kPlayerA), 0u);
@@ -138,7 +138,7 @@ namespace
     TEST_F(TransactionLogCommitGateTest, InvalidTxIdIsStillRefusedBeforeQueueing)
     {
         TransactionLogSystem::EnableCommitGating(true);
-        TransactionLogSystem::SendEntry(Gain(0, kPlayerA));
+        TransactionLogSystem::RecordEntry(Gain(0, kPlayerA));
 
         EXPECT_EQ(TransactionLogSystem::PendingCount(kPlayerA), 0u);
         EXPECT_TRUE(published.empty());
@@ -151,7 +151,7 @@ namespace
         constexpr uint64_t kCap = 4096;
         for (uint64_t txId = 1; txId <= kCap + 2; ++txId)
         {
-            TransactionLogSystem::SendEntry(Gain(txId, kPlayerA));
+            TransactionLogSystem::RecordEntry(Gain(txId, kPlayerA));
         }
 
         EXPECT_TRUE(published.empty());

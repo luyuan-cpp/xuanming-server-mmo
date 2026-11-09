@@ -33,7 +33,7 @@ namespace
 	// 唤醒频道在控制域(玩家域不用 PUBLISH,redis-player-store-cluster.md §5.12)。同步摘要在玩家域,直接看 tlsPlayerRedis。
 	bool ControlRedisReady()
 	{
-		auto &redis = tlsRedis.GetZoneRedis();
+		auto &redis = tlsRedis.GetConnection();
 		return redis && redis->connected();
 	}
 
@@ -252,7 +252,7 @@ void PlayerLandingSystem::PublishAssetWake(entt::entity player, AssetWakeReason 
 		return;
 	}
 
-	const int ret = tlsRedis.GetZoneRedis()->command(
+	const int ret = tlsRedis.GetConnection()->command(
 		[playerId = playerId](hiredis::Hiredis *, redisReply *reply) {
 			// 只在出错时打日志:PUBLISH 的正常应答是收到的订阅者数(整数),0 个订阅者也不算错
 			// (guild / trade 的资产通道可能未开启)。

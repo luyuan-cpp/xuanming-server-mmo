@@ -68,7 +68,7 @@ struct AoiListComp
     std::size_t visibleCount = 0;  // visible 为真的条目数,即已占用的容量
 
     // 观察者客户端当前是否显示 target。
-    [[nodiscard]] bool Contains(entt::entity target) const
+    [[nodiscard]] bool IsVisible(entt::entity target) const
     {
         const auto it = entries.find(target);
         return it != entries.end() && it->second.visible;
@@ -78,7 +78,7 @@ struct AoiListComp
     [[nodiscard]] bool HasRelation(entt::entity target) const { return entries.contains(target); }
 
     // 当前显示中的目标数(占用的容量)。
-    [[nodiscard]] std::size_t Size() const { return visibleCount; }
+    [[nodiscard]] std::size_t VisibleCount() const { return visibleCount; }
 };
 
 // 反向索引:关注本实体的观察者 → 该关系当前是否可见。与各观察者 AoiListComp 的条目一一对应。

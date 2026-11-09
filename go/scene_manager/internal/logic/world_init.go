@@ -129,7 +129,7 @@ func worldChannelsKey(zoneID uint32, confId uint64) string {
 func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint64, waitForLock bool) {
 	// zone 级互斥:见 worldInitLockKeyFmt 的注释。拿不到锁就跳过本轮 ——
 	// 等到锁的一方会重查集合、只补真正缺的;拿不到的调用方靠自身重试
-	// (RPC 兜底会重查 GetBestWorldChannel)或下一拍后台循环收敛。
+	// (RPC 兜底会重查 SelectOrRecoverWorldChannel)或下一拍后台循环收敛。
 	maxWait := time.Duration(0)
 	if waitForLock {
 		maxWait = worldInitLockWait
@@ -386,17 +386,15 @@ func moveWorldChannelOffDeadNode(ctx context.Context, svcCtx *svc.ServiceContext
 	return true, nil
 }
 
-// GetBestWorldChannel returns the (sceneId, nodeId) of the least-loaded channel
-// for the given world confId in the zone. Returns (0, "", nil) if no channels exist.
+// SelectOrRecoverWorldChannel 返回该 zone 内指定 world confId 人数最少频道的 (sceneId, nodeId)。
+// 没有频道时返回 (0, "", nil)。
 //
-// Self-healing: if all channels are mapped to dead nodes (e.g. the old scene node
-// crashed and a new one just registered), it lazily reassigns stale channels to
-// live nodes instead of returning "no channel". This covers the race window between
-// a new node's etcd PUT event and initWorldScenesForZone completing reassignment.
+// 没有可选的存活频道时，尝试向存活节点建场景并原子改派已确认失效的频道；因此本函数会写入并调用下游 RPC。
+// 这覆盖新节点的 etcd PUT 与 initWorldScenesForZone 完成改派之间的竞态窗口。
 //
 // 属主(scene:{id}:node)读不到的频道既不当候选也不当陈旧,本轮跳过;一个频道都没选出来、
 // 且有被跳过的,回可重试的 error(见 worldChannelOwnersUnknownError)。
-func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32) (uint64, string, error) {
+func SelectOrRecoverWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32) (uint64, string, error) {
 	channelSetKey := worldChannelsKey(zoneId, confId)
 	members, err := svcCtx.Redis.Smembers(channelSetKey)
 	if err != nil || len(members) == 0 {
@@ -478,7 +476,7 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 }
 
 // lazyReassignStaleWorldChannel 把一个已判陈旧的世界频道懒改派到 targetNode,返回 true 表示频道已经由
-// targetNode 承载(实体已建、归属已改)。两个懒改派调用方(GetBestWorldChannel / ReserveBestWorldChannelForEnter)
+// targetNode 承载(实体已建、归属已改)。两个懒改派调用方(SelectOrRecoverWorldChannel / ReserveBestWorldChannelForEnter)
 // 共用它,顺序与 rebalance 的 migrateWorldChannel、resolveScene 的死节点自愈一致:先建后改(2026-10-23)。
 //  1. staleWorldChannelOwner:重读属主并复核存活、身份歧义与再入屏障,廉价的判断都在发 RPC 之前做完 ——
 //     刚判死的节点在屏障窗口里会挡住每一个进场请求,不能让每个请求都白建白拆一次。
@@ -582,7 +580,7 @@ func staleWorldChannelOwner(svcCtx *svc.ServiceContext, zoneId uint32, sceneId u
 }
 
 // ReserveBestWorldChannelForEnter selects and reserves a world channel for an
-// EnterScene request. It preserves GetBestWorldChannel's stale-channel healing,
+// EnterScene request. It preserves SelectOrRecoverWorldChannel's stale-channel healing,
 // then performs the final least-loaded choice and member reservation in
 // one Redis Lua script.
 func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32, playerId uint64) (uint64, string, error) {
@@ -594,7 +592,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 
 	var candidates []WorldChannelCandidate
 	var staleSceneIds []uint64
-	// 同 GetBestWorldChannel:属主读不到的频道既不是候选也不算陈旧。
+	// 同 SelectOrRecoverWorldChannel:属主读不到的频道既不是候选也不算陈旧。
 	unknownOwners := 0
 
 	for _, m := range members {
@@ -606,7 +604,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 		nid, getErr := svcCtx.Redis.Get(nodeKey)
 		if getErr != nil {
-			// 同 GetBestWorldChannel:读错不当陈旧,否则可能把活属主的频道懒改派走。
+			// 同 SelectOrRecoverWorldChannel:读错不当陈旧,否则可能把活属主的频道懒改派走。
 			noteReadUnknown(zoneId, readUnknownSiteWorldPick, fmt.Sprintf("owner of scene %d", sceneId), getErr)
 			unknownOwners++
 			continue
@@ -637,7 +635,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 
 		for i, sceneId := range staleSceneIds {
 			targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
-			// 同 GetBestWorldChannel:重读属主并复核、CreateScene、CAS(落空回收预建实体)、转名额。
+			// 同 SelectOrRecoverWorldChannel:重读属主并复核、CreateScene、CAS(落空回收预建实体)、转名额。
 			if !lazyReassignStaleWorldChannel(ctx, svcCtx, zoneId, confId, sceneId, targetNode) {
 				continue
 			}
@@ -685,6 +683,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 //     重发时重新判定就是对的。
 //   - Eval 最终回错时调用方用 luaResolveCasReceipt 问清结局:还没执行就写下 'aborted',这个 token 的 EVAL
 //     之后即使晚到也回 0、一个键不动。
+//
 // 回执键按 token 分开,不与同一场景的其它改派共用一把键:共用的话,并发的另一次改派会覆盖掉本次的回执。
 //
 // 放置代次(2026-11-06,docs/design/world-channel-placement-generation.md):ARGV[5] 必须比高水位新,落地时同一步把
@@ -827,6 +826,7 @@ end
 //   - 要回收时:之后落地的改派必须用比这次回收更新的代次,节点就会把晚到的这次 DestroyScene 当成过期的忽略;
 //   - node 就是属主时:node 上的实体可能正是这次按 ARGV[2] 建的(别的写者以更旧的代次把频道派到了同一个节点、
 //     它的 CreateScene 复用了这份实体)。高水位不低于它,之后迁出时按更新代次发的拆除才拆得到它。
+//
 // 频道已被拆除(没有属主,也不在在役集合)时不写:拆除任务已经删过高水位,再写就没人删;此后也不会再有改派落地。
 // 重发时再抬一次,幂等。
 const luaFenceReclaim = luaPlacementGenerationAfter + `
@@ -929,7 +929,7 @@ func resolveCasReceipt(svcCtx *svc.ServiceContext, receiptKey string) (string, e
 //
 // 写入是比较并交换。改派者不止一个,彼此也不共用锁:领导者的 rebalance
 // (migrateWorldChannel,不持 zone 锁)、任意副本上的 initWorldScenesForZone(持 zone 锁)、
-// EnterScene 路径上的懒改派(GetBestWorldChannel / ReserveBestWorldChannelForEnter),以及
+// EnterScene 路径上的懒改派(SelectOrRecoverWorldChannel / ReserveBestWorldChannelForEnter),以及
 // EnterScene 指定场景时的死节点自愈(enterscenelogic.go reassignSceneOffDeadNode,2026-10-22 起,
 // 2026-10-23 起经带在役核对的 reassignWorldChannelNode)。
 // 它们选新节点的依据不同(前三者按各自的哈希输入,死节点自愈按最低负载),同时判定老节点

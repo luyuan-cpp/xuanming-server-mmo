@@ -117,13 +117,13 @@ func seedLiveWorldChannelForReadUnknown(t *testing.T) (*svc.ServiceContext, *min
 
 // 属主读错不是「陈旧」:旧代码把 501 判陈旧,懒改派时重读成功拿到活属主 "10",CAS 10→20 落地,
 // 在 20 上再建一份同 scene_id 的实体。现在这一轮回可重试错误,归属不动。
-func TestGetBestWorldChannel_OwnerReadErrorIsNotStale(t *testing.T) {
+func TestSelectOrRecoverWorldChannel_OwnerReadErrorIsNotStale(t *testing.T) {
 	sc, mr := seedLiveWorldChannelForReadUnknown(t)
 	ctx := context.Background()
 	before := readUnknownCount(t, testZoneId, readUnknownSiteWorldPick)
 	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneNodeKey(501), times: 1})
 
-	sid, nid, err := GetBestWorldChannel(ctx, sc, readUnknownWorldConf, testZoneId)
+	sid, nid, err := SelectOrRecoverWorldChannel(ctx, sc, readUnknownWorldConf, testZoneId)
 	require.EqualValues(t, 1, fired.Load())
 	require.Error(t, err, "属主读不到时不能回「没有频道」,更不能改派")
 	assert.Zero(t, sid)
@@ -132,7 +132,7 @@ func TestGetBestWorldChannel_OwnerReadErrorIsNotStale(t *testing.T) {
 	assert.Equal(t, before+1, readUnknownCount(t, testZoneId, readUnknownSiteWorldPick))
 
 	// 故障过去:照常选中活属主上的 501。
-	sid, nid, err = GetBestWorldChannel(ctx, sc, readUnknownWorldConf, testZoneId)
+	sid, nid, err = SelectOrRecoverWorldChannel(ctx, sc, readUnknownWorldConf, testZoneId)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(501), sid)
 	assert.Equal(t, "10", nid)
@@ -355,7 +355,7 @@ func TestInitWorldScenes_DesiredCountReadErrorDoesNotRecreateScaledInChannels(t 
 
 // 懒改派要把 Agones 名额跟着转到新节点(reassignSceneNode 的契约交给调用方的副作用)。
 // 旧代码:懒改派只改归属、发 CreateScene,agones_gs 仍指向老 GameServer,新节点的 rooms 不记账。
-func TestGetBestWorldChannel_LazyReassignTransfersAgonesRoom(t *testing.T) {
+func TestSelectOrRecoverWorldChannel_LazyReassignTransfersAgonesRoom(t *testing.T) {
 	clearKnownNodesForTest()
 	t.Cleanup(clearKnownNodesForTest)
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
@@ -371,7 +371,7 @@ func TestGetBestWorldChannel_LazyReassignTransfersAgonesRoom(t *testing.T) {
 	seedWorldChannel(sc, testZoneId, readUnknownWorldConf, 503, "10")
 	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(503), "gs-old"))
 
-	sid, nid, err := GetBestWorldChannel(context.Background(), sc, readUnknownWorldConf, testZoneId)
+	sid, nid, err := SelectOrRecoverWorldChannel(context.Background(), sc, readUnknownWorldConf, testZoneId)
 	require.NoError(t, err)
 	require.Equal(t, uint64(503), sid)
 	require.Equal(t, "20", nid)

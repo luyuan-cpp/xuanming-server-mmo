@@ -99,7 +99,7 @@ void GridSystem::GetEntitiesInGridAndNeighbors(entt::entity entity, EntityUnorde
     }
 }
 
-void GridSystem::GetEntitiesInViewAndNearby(entt::entity entity, EntityUnorderedSet& entities)
+void GridSystem::CollectNearbyObserversInRange(entt::entity entity, EntityUnorderedSet& entities)
 {
     if (!tlsEcs.actorRegistry.valid(entity)) {
         LOG_ERROR << "Entity not found in scene";
@@ -151,7 +151,7 @@ void GridSystem::GetEntitiesInViewAndNearby(entt::entity entity, EntityUnordered
     }
 }
 
-void GridSystem::UpdateLogGridSize() {
+void GridSystem::LogEmptyGridErrors() {
     for (auto&& [sceneEntity, gridList] : tlsEcs.sceneRegistry.view<SceneGridListComp>().each()) {
         for (const auto& [gridId, entityList] : gridList) {
             if (entityList.entities.empty()) {

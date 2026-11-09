@@ -32,7 +32,7 @@ namespace
 	void FixTeammateEntry(entt::entity watcher, entt::entity target, bool sameTeam)
 	{
 		const auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
-		if (list == nullptr || !list->Contains(target))
+		if (list == nullptr || !list->IsVisible(target))
 		{
 			return;
 		}

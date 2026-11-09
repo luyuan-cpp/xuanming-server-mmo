@@ -155,7 +155,7 @@ scene_manager 的拒绝码(§4.4)在 C++ 侧一律变成 3023(`player_lifecycle.
   2. 两个集合都空 → 不发布(旧目录自然过期)。
   3. 线号分配(§4.2)。
   4. 逐线读 `SCARD instance:<id>:members` 与 `scene:{id}:node`,判定状态(下表)。**只读**:
-     不调用 `GetBestWorldChannel` / `ReserveBestWorldChannelForEnter`(它们会懒改派并发 CreateScene)。
+     不调用 `SelectOrRecoverWorldChannel` / `ReserveBestWorldChannelForEnter`(它们会懒改派并发 CreateScene)。
   5. 按线号升序组 `SceneChannelDirectory`,`SETEX`。
   6. 每张图记一次 `scene_manager_world_channel_directory_publish_total{zone_id, outcome=ok|empty|error}`
      (按 zone 的发布结果计数,低基数;不是按线指标)。领导者在位而 `ok` 速率为 0 = 目录停摆。

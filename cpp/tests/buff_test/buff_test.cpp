@@ -372,7 +372,7 @@ TEST_F(BuffListLifecycleTest, HandleExistingBuff_DoesNotCreateBuffList)
 TEST_F(BuffListLifecycleTest, ReadPathsOnBareEntityDoNotCreateBuffState)
 {
 	const auto bare = tlsEcs.actorRegistry.create();
-	EXPECT_EQ(kSuccess, BuffSystem::CanCreateBuff(bare, kPlainSubBuff));
+	EXPECT_EQ(kSuccess, BuffSystem::CheckBuffCreation(bare, kPlainSubBuff));
 	EXPECT_FALSE(BuffSystem::DispelBuffsOnAwake(bare, kPlainSubBuff));
 	BuffSystem::OnIntervalThink(bare, 12345);
 	BuffSystem::Update(0.0);

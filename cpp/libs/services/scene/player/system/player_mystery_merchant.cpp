@@ -347,7 +347,7 @@ void OnStateReply(const redisReply *reply, uint64_t nowMs)
 // 读模型在本 zone 的场景控制域实例里(scene_manager 写,docs/design/control-plane-zone-scoping-20261105.md §4.5)。
 void RequestRefresh()
 {
-	auto &redis = tlsSceneControlRedis.GetZoneRedis();
+	auto &redis = tlsSceneControlRedis.GetConnection();
 	if (!redis || !redis->connected())
 	{
 		return;
@@ -556,7 +556,7 @@ uint32_t PlayerMysteryMerchantSystem::Buy(entt::entity player, const ::BuyMyster
 	}
 	// 冻结 / 战斗两道闸与装备穿脱同口径(player_equip.cpp CheckWritable);冻结用的判定函数与
 	// BagService / CurrencySystem 内部用的是同一个,所以这里放行的请求不会在后面被它们以「冻结」拒绝。
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(player))
 	{
 		return kMysteryMerchantFrozen;
 	}

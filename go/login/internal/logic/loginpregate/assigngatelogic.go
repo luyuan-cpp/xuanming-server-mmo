@@ -43,10 +43,10 @@ func NewAssignGateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Assign
 // Decision tree (top to bottom; first match wins):
 //
 //  1. Reentry: req.queue_token already in queue
-//     → ParseAndVerifyQueueToken, Lookup, return current state
+//     → ParseAndVerifyQueueToken, Poll, return current state
 //     (returns ADMITTED if dispatcher already promoted, else QUEUEING).
 //     (2026-10-18 补注:也可能回 EXPIRED——admit_window_passed / meta_gone / queue_gone,
-//     判定顺序见 loginqueue.Queue.Lookup;传给 Lookup 的 zone 一律取自已验签的令牌。)
+//     判定顺序见 loginqueue.Queue.Poll;传给 Poll 的 zone 一律取自已验签的令牌。)
 //  2. Reconnect/replace exemption: caller already has a live PlayerSession
 //     → bypass queue, sign gate token bound to the existing gate.
 //     (Disabled when Queue.Enabled=false; reconnect handling is unchanged.)
@@ -148,7 +148,7 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 // verification map to EXPIRED so the client falls back to a fresh
 // /assign-gate call.
 func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateResponse, error) {
-	// zoneID 必须取自已验签的排队令牌:Lookup 拿它拼队列键并核对 meta.zone_id(2026-10-18),
+	// zoneID 必须取自已验签的排队令牌:Poll 拿它拼队列键并核对 meta.zone_id(2026-10-18),
 	// 不得用请求里的 zone 或常量代替;传 0 会被当成损坏、回 EXPIRED(meta_gone)。
 	_, zoneID, err := loginqueue.ParseAndVerifyQueueTokenMulti(l.svcCtx.QueueTokenVerifySecrets(), token)
 	if err != nil {
@@ -158,7 +158,7 @@ func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateRespon
 	// 取走时现签(R17 R1),TTL 从这次回包起算,而不是从 dispatcher 几分钟前挑 gate 时算。签之前复核放行时选定的 gate,
 	// 它已停写、满载或不在候选里就按快速通道的规则重挑(loginqueue.NewAdmitSigner,与 QueryQueueStatus 同一份)。
 	signFn := loginqueue.NewAdmitSigner(l.ctx, l.svcCtx.QueueCapacityProvider(), l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
-	state, err := l.svcCtx.LoginQueue.Lookup(l.ctx, token, zoneID, signFn)
+	state, err := l.svcCtx.LoginQueue.Poll(l.ctx, token, zoneID, signFn)
 	if err != nil {
 		return &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "queue lookup failed"}, nil
 	}

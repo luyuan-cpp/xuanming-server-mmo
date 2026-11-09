@@ -87,7 +87,7 @@ func newScheduler(loop *Loop) *Scheduler {
 //   - 没有拷贝/移动构造。C++ 用"拷贝出空对象 + 移动时取消源"来防止两个对象
 //     共享同一个捕获了 this 的回调；Go 无移动语义，改为 noCopy 禁止值拷贝，
 //     一律用 *Task。
-//   - IsActive/EndTime 读本结构体自存的 deadline，不去问底层定时器。
+//   - IsActive/DeadlineUnixSeconds 读本结构体自存的 deadline，不去问底层定时器。
 //     C++ 那边要读 timerId.GetTimer()->expiration()，所以才有 OwningLoopAlive()
 //     那一大段防悬垂指针的注释；Go 无此问题，那段没有对应物。
 type Task struct {
@@ -184,12 +184,12 @@ func (t *Task) Run() {
 }
 
 // 对照 C++：TimerTaskComp::IsActive / GetEndTime / SetCallBack。
-// EndTime 取 epoch 秒并在未武装时返回 0，与 C++ 侧保持一致；Deadline 是
+// DeadlineUnixSeconds 取 epoch 秒并在未武装时返回 0，与 C++ 侧保持一致；Deadline 是
 // Go 侧新增的、无损的形式，新代码优先用它。
 func (t *Task) IsActive() bool        { return t.index >= 0 && time.Now().Before(t.deadline) }
 func (t *Task) Deadline() time.Time   { return t.deadline }
 func (t *Task) SetCallback(cb func()) { t.cb = cb }
-func (t *Task) EndTime() int64 {
+func (t *Task) DeadlineUnixSeconds() int64 {
 	if t.deadline.IsZero() {
 		return 0
 	}

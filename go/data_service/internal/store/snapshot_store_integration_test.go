@@ -137,14 +137,14 @@ func TestSnapshotStore_GmReadersExcludeSceneRows(t *testing.T) {
 	assert.Equal(t, store.SnapshotSourceDataService, got.Source)
 	assert.Equal(t, uint64(0), got.SnapshotGuid)
 
-	// GetLatestSnapshotBefore:最新的是 scene 行,但必须返回最新的 GM 行。
-	latest, err := ss.GetLatestSnapshotBefore(ctx, 100, 1800000000)
+	// GetLatestSnapshotAtOrBefore:最新的是 scene 行,但必须返回最新的 GM 行。
+	latest, err := ss.GetLatestSnapshotAtOrBefore(ctx, 100, 1800000000)
 	require.NoError(t, err)
 	require.NotNil(t, latest)
 	assert.Equal(t, gm2, latest.ID)
 	assert.Equal(t, store.SnapshotSourceDataService, latest.Source)
 	// 玩家 200 只有 scene 行 → GM 视角没有快照。
-	latest, err = ss.GetLatestSnapshotBefore(ctx, 200, 1800000000)
+	latest, err = ss.GetLatestSnapshotAtOrBefore(ctx, 200, 1800000000)
 	require.NoError(t, err)
 	assert.Nil(t, latest)
 

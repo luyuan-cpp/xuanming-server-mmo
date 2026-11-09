@@ -113,11 +113,11 @@ TEST(SnowFlakeTest, ClockRollback_SingleThread) {
 	sf.set_mock_now(1000);  // current time is 1000
 
 	auto id1 = sf.Generate();
-	auto c1 = ParseGuid(id1);
+	auto c1 = ParseSnowflakeGuid(id1);
 
 	sf.set_mock_now(990);  // simulate clock rollback
 	auto id2 = sf.Generate();
-	auto c2 = ParseGuid(id2);
+	auto c2 = ParseSnowflakeGuid(id2);
 
 	EXPECT_GE(c2.timestamp, c1.timestamp);  // ID timestamp must not be earlier than previous
 }
@@ -128,11 +128,11 @@ TEST(SnowFlakeTest, ClockRollbackSingleThread) {
 
 	sf.set_mock_now(1000);
 	Guid id1 = sf.Generate();
-	auto c1 = ParseGuid(id1);
+	auto c1 = ParseSnowflakeGuid(id1);
 
 	sf.set_mock_now(990); // simulate clock rollback
 	Guid id2 = sf.Generate();
-	auto c2 = ParseGuid(id2);
+	auto c2 = ParseSnowflakeGuid(id2);
 
 	// ID generated after rollback must not be less than previous
 	EXPECT_GE(c2.timestamp, c1.timestamp);
@@ -364,8 +364,8 @@ TEST(SnowFlakeTest, IdParsing) {
 	SnowFlake gen;
 	gen.set_node_id(3);
 	Guid id = gen.Generate();
-	auto components = ParseGuid(id);
-	auto real_time = GetRealTimeFromGuid(id);
+	auto components = ParseSnowflakeGuid(id);
+	auto real_time = GetSnowflakeUnixSeconds(id);
 
 	ASSERT_EQ(components.node_id, 3);
 	ASSERT_LT(components.sequence, (1ULL << kStepBits));
@@ -412,7 +412,7 @@ TEST(SnowFlakeTest, GuidParsing)
 	generator.set_node_id(42);
 	Guid id = generator.Generate();
 
-	auto parsed = ParseGuid(id);
+	auto parsed = ParseSnowflakeGuid(id);
 
 	EXPECT_EQ(parsed.node_id, 42);
 	EXPECT_LT(parsed.sequence, (1U << kStepBits));
@@ -426,8 +426,8 @@ TEST(SnowFlakeTest, AtomicGuidParsingUsesDefaultEpoch)
 	generator.set_epoch(kEpoch);
 
 	Guid id = generator.Generate();
-	auto parsed = ParseGuid(id);
-	auto real_time = GetRealTimeFromGuid(id);
+	auto parsed = ParseSnowflakeGuid(id);
+	auto real_time = GetSnowflakeUnixSeconds(id);
 
 	EXPECT_EQ(parsed.node_id, 7);
 	EXPECT_LT(parsed.sequence, (1U << kStepBits));
@@ -446,8 +446,8 @@ TEST(SnowFlakeTest, AtomicSupportsBeyondUint32Timestamp)
 	Guid id1 = generator.Generate();
 	Guid id2 = generator.Generate();
 
-	auto p1 = ParseGuid(id1);
-	auto p2 = ParseGuid(id2);
+	auto p1 = ParseSnowflakeGuid(id1);
+	auto p2 = ParseSnowflakeGuid(id2);
 
 	EXPECT_NE(id1, id2);
 	EXPECT_EQ(p1.timestamp, p2.timestamp);

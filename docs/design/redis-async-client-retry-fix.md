@@ -12,7 +12,7 @@ Scene 的定时驱动与装配见 [redis.cpp](../../cpp/libs/services/scene/core
 
 管理器入口为 `Connect(loop, addr, RedisConnectOptions)`，内部 StartHandshake 先安装回调再 connect，
 避免冷启动连接失败发生在回调安装之前。`SetupReconnect`、`InstallCallbacks` 已退役。
-Hiredis 通过工厂创建并使用 shared_ptr；从 Connect 到 Shutdown 之间 GetZoneRedis 保持非空，
+Hiredis 通过工厂创建并使用 shared_ptr；从 Connect 到 Shutdown 之间 GetConnection 保持非空，
 握手或断线期间为不可用对象，成功后移交已完成握手的连接。不能继续按旧 unique_ptr 临时置空的模型理解。
 调用仍要区分已建连、已认证与业务可用状态。
 

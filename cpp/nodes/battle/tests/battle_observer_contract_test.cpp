@@ -74,7 +74,7 @@ public:
         if (auto* room = manager.FindRoom(battleId); room != nullptr) manager.OnSqlOutcomeAbort(*room);
     }
     // 清掉全部房间与节点级定时器:管理器是进程级单例,房间(连同观众)不能漏到后面的用例,定时器不能挂在已析构的 loop 上。
-    // 停机关掉的观战准入也复位(AbortAllRooms 只升不降,生产上进程随后退出)。只能在 loop 线程、loop 析构之前调用。
+    // 停机关掉的观战准入也复位(BeginRoomShutdown 只升不降,生产上进程随后退出)。只能在 loop 线程、loop 析构之前调用。
     static void EraseAllRooms() {
         auto& manager = BattleRoomManager::Instance();
         for (const auto battleId : manager.rooms_.Ids()) manager.EraseRoom(battleId);
@@ -1404,9 +1404,9 @@ TEST_F(BattleObserverContract, OutcomeRetryIsNotDeferredWhileNoMatchChannelIsRea
 }
 
 // 停机时已分出胜负、终局在等 Match 决定的房间:停机那一刻 match 通道还没就绪(刚滚动重启,还在 CONNECTING),
-// 通道一就绪,下一拍就补发,不等 5s;排空谓词(SqlOutcomesFlushed)在拿到决定之前为假、房间留在表里;Match 回 COMPLETE
+// 通道一就绪,下一拍就补发,不等 5s;排空谓词(CanFinishShutdownOutcomeFlush)在拿到决定之前为假、房间留在表里;Match 回 COMPLETE
 // 后照常收尾删房,房间移除回调(main.cpp 接到 Agones OnUnitDestroyed)恰好一次,排空谓词转真。同节点还在打的房间不阻塞
-// 排空、不发提交,留到进程退出(查询仍回 PRESENT)。修复前 AbortAllRooms 那一拍没发出去也推后 5s,就绪后的下一拍发不出。
+// 排空、不发提交,留到进程退出(查询仍回 PRESENT)。修复前 BeginRoomShutdown 那一拍没发出去也推后 5s,就绪后的下一拍发不出。
 // 生命周期回调捕获本用例的局部计数,放在独立子进程里。
 TEST_F(BattleObserverContract, ShutdownFlushHoldsDrainUntilFrozenOutcomeIsDecided) {
     // 回调在宏外定义，避免 MSVC 将内层断言的 __LINE__ 折叠成相同跳转标签。
@@ -1419,22 +1419,22 @@ TEST_F(BattleObserverContract, ShutdownFlushHoldsDrainUntilFrozenOutcomeIsDecide
         ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(ongoing, ::SPECTATE_VISIBILITY_PUBLIC));
         ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
         ASSERT_TRUE(outcomeRoute_.sent.empty());
-        EXPECT_FALSE(manager().SqlOutcomesFlushed()) << "终局已冻结、还没拿到决定";
+        EXPECT_FALSE(manager().CanFinishShutdownOutcomeFlush()) << "终局已冻结、还没拿到决定";
 
-        manager().AbortAllRooms("unit_shutdown");
+        manager().BeginRoomShutdown("unit_shutdown");
         EXPECT_TRUE(outcomeRoute_.sent.empty()) << "停机那一刻通道还没就绪";
-        EXPECT_FALSE(manager().SqlOutcomesFlushed());
+        EXPECT_FALSE(manager().CanFinishShutdownOutcomeFlush());
 
         outcomeRoute_.ready = true;
         BattleRoomManagerTestAccess::PumpSqlOutcomes();
         ASSERT_EQ(1u, outcomeRoute_.sent.size()) << "通道一就绪,下一拍就补发(不等 5s),只发已冻结终局的那一局";
         EXPECT_EQ(battleId_, outcomeRoute_.sent[0].request.battle_id());
-        EXPECT_FALSE(manager().SqlOutcomesFlushed());
+        EXPECT_FALSE(manager().CanFinishShutdownOutcomeFlush());
         EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state()) << "拿到决定之前房间留在表里";
         EXPECT_TRUE(removed.empty());
 
         ASSERT_NO_FATAL_FAILURE(ReplyToOutcome(0, match::BATTLE_OUTCOME_DECISION_COMPLETE));
-        EXPECT_TRUE(manager().SqlOutcomesFlushed());
+        EXPECT_TRUE(manager().CanFinishShutdownOutcomeFlush());
         EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state()) << "COMPLETE 收尾删房";
         EXPECT_EQ(1, removed[battleId_]);
         EXPECT_EQ(0u, removed.count(ongoing)) << "还在打的房间不删";
@@ -1452,18 +1452,18 @@ TEST_F(BattleObserverContract, ShutdownWithOnlyOngoingRoomsIsDrainedImmediately)
     ASSERT_NO_FATAL_FAILURE(Create());
     RouteOutcomesToFake();
     outcomeRoute_.ready = true;
-    manager().AbortAllRooms("unit_shutdown");
-    EXPECT_TRUE(manager().SqlOutcomesFlushed());
+    manager().BeginRoomShutdown("unit_shutdown");
+    EXPECT_TRUE(manager().CanFinishShutdownOutcomeFlush());
     EXPECT_EQ(0, outcomeRoute_.picks);
     EXPECT_TRUE(outcomeRoute_.sent.empty());
     EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
 }
 
-// 停机(AbortAllRooms)之后房间留在表里,直到拿到 Match 的决定或 manager 销毁(2026-11-06 补,match 提前 ABORT 依赖的
+// 停机(BeginRoomShutdown)之后房间留在表里,直到拿到 Match 的决定或 manager 销毁(2026-11-06 补,match 提前 ABORT 依赖的
 // battle 不变量,见 §13.3「2026-11-05 修复」第 7 条):还在打的房间与终局在等决定的房间,经过排空窗口的重放、match 提前作废
 // 发来的 DestroyBattle(房间在就忽略,立不起墓碑)、拆除前钩子(StopSqlOutcomes),都不删房、不触发移除回调,查询始终回 PRESENT。
 // 进程还在应答查询时,ABSENT / ABORTED 因此不会出现在「房间打完、终局还在路上」的局上。
-// 2026-10-23 之前 AbortAllRooms 逐个 EraseRoom,第一处断言就会变红。停止闸只升不降、移除回调捕获局部计数,放独立子进程。
+// 2026-10-23 之前 BeginRoomShutdown 逐个 EraseRoom,第一处断言就会变红。停止闸只升不降、移除回调捕获局部计数,放独立子进程。
 TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown) {
     const auto checkShutdown = [&] {
         std::map<uint64_t, int> removed;
@@ -1471,7 +1471,7 @@ TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown
         RouteOutcomesToFake();  // match 通道一直没就绪:冻结的终局始终拿不到决定
         ASSERT_NO_FATAL_FAILURE(CreateDecidedOnFirstRound());
         ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
-        ASSERT_FALSE(manager().SqlOutcomesFlushed()) << "夹具前提:终局已冻结、还没拿到决定";
+        ASSERT_FALSE(manager().CanFinishShutdownOutcomeFlush()) << "夹具前提:终局已冻结、还没拿到决定";
         const auto ongoing = nextBattleId.fetch_add(1, std::memory_order_relaxed);
         ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(ongoing, ::SPECTATE_VISIBILITY_PUBLIC));
         const auto roomsBefore = manager().RoomCount();
@@ -1483,8 +1483,8 @@ TEST_F(BattleObserverContract, ShutdownKeepsEveryRoomPresentUntilManagerTeardown
             EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationStateOf(ongoing).state()) << "还在打的房间";
         };
 
-        manager().AbortAllRooms("unit_shutdown");
-        expectKept("after AbortAllRooms");
+        manager().BeginRoomShutdown("unit_shutdown");
+        expectKept("after BeginRoomShutdown");
         Destroy(battleId_);
         Destroy(ongoing);
         expectKept("after DestroyBattle during the drain window");
@@ -1514,7 +1514,7 @@ TEST_F(BattleObserverContract, StoppedOutcomesSendNothingAndLateRepliesHaveNoEff
         ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
         ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
         ASSERT_EQ(1u, outcomeRoute_.sent.size()) << "打完立即提交一次";
-        manager().AbortAllRooms("unit_shutdown");
+        manager().BeginRoomShutdown("unit_shutdown");
         EXPECT_EQ(1u, outcomeRoute_.sent.size()) << "在途的那次不打断、不重发";
         (void)TakeFrames();
 
@@ -1523,7 +1523,7 @@ TEST_F(BattleObserverContract, StoppedOutcomesSendNothingAndLateRepliesHaveNoEff
         BattleRoomManagerTestAccess::PumpSqlOutcomes();
         EXPECT_EQ(picksAtStop, outcomeRoute_.picks) << "停止闸之后不再挑通道";
         EXPECT_EQ(1u, outcomeRoute_.sent.size()) << "也不再发请求";
-        EXPECT_TRUE(manager().SqlOutcomesFlushed()) << "待提交集合已清空";
+        EXPECT_TRUE(manager().CanFinishShutdownOutcomeFlush()) << "待提交集合已清空";
 
         ASSERT_NO_FATAL_FAILURE(ReplyToOutcome(0, match::BATTLE_OUTCOME_DECISION_COMPLETE));
         EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state()) << "停止闸之后到达的 COMPLETE 不收尾";
@@ -1591,7 +1591,7 @@ TEST_F(BattleObserverContract, ShutdownFlushIsUncappedAndResendsAFailedAttemptOn
     ASSERT_EQ(1u, outcomeRoute_.sent.size());
 
     outcomeRoute_.ready = true;
-    manager().AbortAllRooms("unit_shutdown");
+    manager().BeginRoomShutdown("unit_shutdown");
     ASSERT_EQ(3u, outcomeRoute_.sent.size()) << "排空窗口内不设每拍上限,没发出去的两局一拍发完";
     EXPECT_EQ(std::set<uint64_t>(unsent.begin(), unsent.end()),
               (std::set<uint64_t>{outcomeRoute_.sent[1].request.battle_id(), outcomeRoute_.sent[2].request.battle_id()}));
@@ -1611,7 +1611,7 @@ TEST_F(BattleObserverContract, ShutdownFlushIsUncappedAndResendsAFailedAttemptOn
     for (const auto battleId : {battleId_, unsent[0], unsent[1]}) {
         ASSERT_NO_FATAL_FAILURE(ReplyToOutcome(LatestOutcomeOf(battleId), match::BATTLE_OUTCOME_DECISION_COMPLETE));
     }
-    EXPECT_TRUE(manager().SqlOutcomesFlushed()) << "三局都拿到决定";
+    EXPECT_TRUE(manager().CanFinishShutdownOutcomeFlush()) << "三局都拿到决定";
     EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
 }
 
@@ -2010,7 +2010,7 @@ TEST_F(BattleObserverContract, ShutdownTellsEveryChannelTheSourceIsLostForRoomsS
     ASSERT_EQ(0u, Promote(promotedBattle).error_message().id());
     (void)TakeFrames();
 
-    manager().AbortAllRooms("unit_shutdown");
+    manager().BeginRoomShutdown("unit_shutdown");
 
     const auto frames = TakeFrames();
     ASSERT_EQ(2u, frames.size());
@@ -2040,7 +2040,7 @@ TEST_F(BattleObserverContract, ShutdownTellsEveryChannelTheSourceIsLostForRoomsS
 TEST_F(BattleObserverContract, ShutdownClosesSpectateAdmission) {
     ASSERT_NO_FATAL_FAILURE(Create());
     ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
-    manager().AbortAllRooms("unit_shutdown");
+    manager().BeginRoomShutdown("unit_shutdown");
     (void)TakeFrames();
 
     const auto late = Original(kFirstOperation);
@@ -2073,7 +2073,7 @@ TEST_F(BattleObserverContract, ShutdownKeepsUndecidedOutcomeRoomsOnKeepaliveUnti
         ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
         (void)TakeFrames();
 
-        manager().AbortAllRooms("unit_shutdown");
+        manager().BeginRoomShutdown("unit_shutdown");
         EXPECT_TRUE(TakeFrames().empty()) << "终局还在等决定,不能抢先收尾";
         const auto later = std::chrono::steady_clock::now() + node::kafka::kSpectateChannelKeepalive;
         BattleRoomManagerTestAccess::PumpSpectateKeepalive(later, TimeSystem::NowMillisecondsUTC());

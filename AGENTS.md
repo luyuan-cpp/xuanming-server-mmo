@@ -127,9 +127,9 @@
 1. **SnowFlake 节点隔离**：每种 SnowFlake ID 只能由一种 node 类型生产（不同 node 类型共享 node_id 范围会撞）。
    注意**全系统有三种互不兼容的 ID**，不要混用解析函数：
    - `shared/snowflake` 与 C++ `SnowFlake`：**17-bit** worker / 15-bit step / **秒**级 epoch（1773446400）。
-     仍由这套号源生成的 scene_id 等值可用 C++ `ParseGuid` 解，不能仅凭字段名选择解析器。
+     仍由这套号源生成的 scene_id 等值可用 C++ `ParseSnowflakeGuid` 解，不能仅凭字段名选择解析器。
    - `bwmarrin/snowflake`：**13-bit** node / 9-bit step / **毫秒**级 epoch。只有 login 的旧号源是这套，新角色已不用它。
-   - **发号器发的永久 ID**（player_id、guild_id、物品 guid、流水号、battle_id、challenge_id、team_id 等，`data_service.AllocateIdSegment`）：打散过的计数器值，63 位以内，不单调、不连续、没有位布局。**不能用 `ParseGuid` 解析，不能靠大小判断先后**（排序和翻页用时间列），Lua 里只当字符串，不进有序集合的分数。没有回退号源，发号失败就是操作失败。详见 [发号器设计](docs/design/player-data-tidb-scaling-plan.md) §6 与 [运维手册](docs/ops/id-issuer-runbook.md)。
+   - **发号器发的永久 ID**（player_id、guild_id、物品 guid、流水号、battle_id、challenge_id、team_id 等，`data_service.AllocateIdSegment`）：打散过的计数器值，63 位以内，不单调、不连续、没有位布局。**不能用 `ParseSnowflakeGuid` 解析，不能靠大小判断先后**（排序和翻页用时间列），Lua 里只当字符串，不进有序集合的分数。没有回退号源，发号失败就是操作失败。详见 [发号器设计](docs/design/player-data-tidb-scaling-plan.md) §6 与 [运维手册](docs/ops/id-issuer-runbook.md)。
    **强规定(负责人 2026-10-31 定)**:发号器的预留记录必须写两套独立的 etcd,两份都写成功才发号。任何生产环境、任何预算档都不许省掉第二套,也不许把两份放在同一套;只有 `Mode=dev`、`test` 例外。
    2026-11-05 起另有第三份记录在全世界共用的全局号源登记处,三份都写成功才发号;它同时把每个地域码唯一绑定到一对本地 etcd。登记处不许从备份恢复,首次初始化和事故恢复是两个入口,见[发号器运维手册](docs/ops/id-issuer-runbook.md)。
 2. **Kafka 防僵尸**：发往 `{type}-{id}` topic 的消息必须填 `target_instance_id`（目标节点 UUID），空值则关闭过滤

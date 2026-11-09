@@ -1298,7 +1298,7 @@ battle 的 `grpc.CreateBattle.guard`:
                 call->Reject(NotAllocatable());
                 return;
             }
-            // 3) 许可回到 loop 后复核准入闸:等许可期间 SetBeforeShutdown 可能已关闸并作废全部房间(关闸与 AbortAllRooms
+            // 3) 许可回到 loop 后复核准入闸:等许可期间 SetBeforeShutdown 可能已关闸并开始房间停机(关闸与 BeginRoomShutdown
             //    在同一个 loop 任务里,排在后面的本回调必然看到 kClosed);放行的话房间会在进程退出时无声丢失。
             if (!AdmissionOpen(gate))
             {
@@ -1403,7 +1403,7 @@ void StopImpl(bool deliverRejections);                           // Stop() = Sto
 ShutdownInLoop(loop 任务 T0,顺序不变)
   1 kafkaManager.StopConsumers()
   2 beforeShutdownFn_
-      battle:CloseAdmission → AbortAllRooms → DisconnectAll → lifecycle.Stop()
+      battle:CloseAdmission → BeginRoomShutdown → DisconnectAll → lifecycle.Stop()
       scene :guid 号段停 → lifecycle.Stop() → 停定时器 → HandleExitGameNode(全部在线玩家)
       Stop() 把等许可的调用以「拒绝」投进队列(T0 之后执行)
   3 StartShutdownDrainWatchdog()(15s,100ms,不变)

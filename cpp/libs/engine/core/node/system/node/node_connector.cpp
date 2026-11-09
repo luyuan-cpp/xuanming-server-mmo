@@ -135,10 +135,10 @@ void NodeConnector::ConnectToTcpNode(const NodeInfo &nodeInfo)
 		createdId,
 		std::make_shared<RpcClient>(gNode->GetLoop(), remoteEndpoint, RpcClient::Readiness::kAfterHandshake));
 
-	auto *replyService = gNode->GetNodeReplyService();
-	if (replyService != nullptr)
+	auto *rpcService = gNode->GetNodeRpcService();
+	if (rpcService != nullptr)
 	{
-		client->registerService(replyService);
+		client->registerService(rpcService);
 	}
 	else
 	{
@@ -180,7 +180,7 @@ void NodeConnector::ConnectAllNodes()
 
 		for (const auto &serviceNode : serviceNodes.NodesOfType(nodeType))
 		{
-			if (NodeUtils::IsNodeConnected(nodeType, serviceNode))
+			if (NodeUtils::IsNodeTracked(nodeType, serviceNode))
 				continue;
 
 			ConnectToNode(serviceNode);

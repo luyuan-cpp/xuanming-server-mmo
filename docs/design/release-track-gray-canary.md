@@ -20,7 +20,7 @@
 |---|---|---|
 | 1 | `NodeInfo`（`proto/common/base/common.proto`）没有发布轨道字段，所有选点函数都分不清新旧实例 | 新版实例和稳定实例一起被选中，比例不受控 |
 | 2 | 有状态层按负载选点：login 快路径 `PickGate` 随机抽两台取人少的，排队 dispatcher 取负载最少；scene_manager `GetBestNodeForPurpose` 取负载分最低的节点 | 新起的金丝雀实例是空的，每次比较都赢。快路径下它拿到约 2/N 的新连接而不是 1/N，排队路径会先把它填平；新建的场景和副本在负载分追平之前全落到它上面。所以对 gate、scene 来说，「加一个新版实例」不是受控的金丝雀 |
-| 3 | scene_manager 的 `LeaderEligible=false` 只让副本不参选。数据面流量有两个来源：C++ scene 经 `GetSceneManagerEntity` 按 `SpreadPlayerId(playerId) % 实例数` 选，login 经 `zrpc.MustNewClient`（go-zero 的 etcd 解析加 p2c）选 | 前一半是「1/N 的玩家」，实例数一变就几乎全部换绑；后一半按延迟和在途数分，与玩家无关。合起来不是稳定的玩家分组，同一玩家的换图和登录可能落在不同版本上 |
+| 3 | scene_manager 的 `LeaderEligible=false` 只让副本不参选。数据面流量有两个来源：C++ scene 经 `SelectSceneManagerEntity` 按 `SpreadPlayerId(playerId) % 实例数` 选，login 经 `zrpc.MustNewClient`（go-zero 的 etcd 解析加 p2c）选 | 前一半是「1/N 的玩家」，实例数一变就几乎全部换绑；后一半按延迟和在途数分，与玩家无关。合起来不是稳定的玩家分组，同一玩家的换图和登录可能落在不同版本上 |
 | 4 | 全局服务之间的内部调用走共享的 go-zero etcd key（例如 guild 的 `MatchRpc` 连 `matchservice.rpc`）；C++ 节点按 `NodeInfo` 前缀发现全局服务；router 对全局类型 `PickRandom()` | 全局服务的金丝雀副本会收到稳定 zone 的内部调用和客户端请求，还会照常参加 Kafka 消费、租约和后台清理，影响面不受控 |
 | 5 | 没有按轨道的观测，也没有固定的晋升和中止步骤；`ForwardRequest` 只带 `zone_id` | 新旧版本没法比较，也没法只停新版本的新流量 |
 

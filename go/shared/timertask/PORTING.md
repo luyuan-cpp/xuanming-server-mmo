@@ -44,7 +44,8 @@ C++ 侧的事，与本包无关，但说明 generation 那一层是承重的，�
 | `Task.schedule` | `TimerTaskComp::ScheduleTimer()` | 同样"先 Cancel 再武装" |
 | `Task.Cancel` | `TimerTaskComp::Cancel()` + `TimerQueue::cancelInLoop()` | 两边职责在 Go 侧合并 |
 | `Task.generation` / `firing.gen` | `TimerTaskComp::generation` + `cancelingTimers_` | 两处合成一处，见下 |
-| `Task.IsActive/EndTime/SetCallback/Run` | 同名方法 | |
+| `Task.IsActive/SetCallback/Run` | 同名方法 | |
+| `Task.DeadlineUnixSeconds` | `TimerTaskComp::GetEndTime()` | 返回 Unix 秒，未武装时为 0 |
 | `noCopy` | 拷贝构造 + 移动构造 | 见下 |
 
 ## 刻意差异 —— 合并时**不要**改回去
@@ -74,7 +75,7 @@ C++ 侧的事，与本包无关，但说明 generation 那一层是承重的，�
    不能等执行时再读 `t.generation` —— 那时它已经被同批前序回调改过，守卫形同虚设。
    （移植时第一版就写错在这里，被 `TestSched_StaleFiringInSameBatchIsDropped` 抓出。）
 
-5. **`IsActive`/`EndTime` 读自存的 `deadline`，不问底层定时器。** C++ 那边要读
+5. **`IsActive`/`DeadlineUnixSeconds` 读自存的 `deadline`，不问底层定时器。** C++ 那边要读
    `timerId.GetTimer()->expiration()`，所以才有 `OwningLoopAlive()` 上方那一大段
    防悬垂指针的注释。Go 无此问题，**那段注释在本包没有对应物**，上游若继续加固
    那条路径，Go 侧不需要跟。

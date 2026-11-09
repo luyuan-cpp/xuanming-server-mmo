@@ -12,7 +12,7 @@
 #include <optional>
 #include <string>
 
-// zone Redis 的建连参数。
+// 单个 Redis 实例的建连参数。
 struct RedisConnectOptions
 {
 	// 重连间隔的默认值;Connect 收到非正数时也回落到它。
@@ -48,24 +48,24 @@ public:
 	RedisManager(RedisManager &&) = delete;
 	RedisManager &operator=(RedisManager &&) = delete;
 
-	// 业务使用的 zone Redis 连接。Connect 之后、Shutdown 之前恒非空(Connect 之前与 Shutdown 之后为空,同改动前)。
+	// 本管理器向业务暴露的连接。Connect 之后、Shutdown 之前恒非空(Connect 之前与 Shutdown 之后为空,同改动前)。
 	// 只有完成握手的连接(空口令 = 连上;非空口令 = AUTH 回 +OK)才会放到这里。握手中、AUTH 失败、断线待重连
 	// (含存活探测判定无应答、已被摘下)期间,
 	// 这里是一个 connected()==false 的对象 —— 从不建连的占位对象,或已断开的旧连接 —— 它的 command() 直接返回
 	// REDIS_ERR、不调回调,所以调用点既有的 `redis && redis->connected()` 判断与 REDIS_ERR 分支照常生效,不需要改。
-	HiredisPtr &GetZoneRedis()
+	HiredisPtr &GetConnection()
 	{
-		return zoneRedis_;
+		return connection_;
 	}
 
-	// 建立 zone Redis 连接并在断线后自动重连。必须在 loop 线程上调用;可重复调用(先拆掉已有连接)。
+	// 建立本实例的 Redis 连接并在断线后自动重连。必须在 loop 线程上调用;可重复调用(先拆掉已有连接)。
 	// Hiredis 工厂负责把 I/O 分发期间的最终释放排到 pending 阶段，回调内可重复 Connect 或 Shutdown。
 	// options 刻意不给默认值:调用方必须显式说明这条连接要不要认证。
 	//
 	// 认证契约(2026-10 起,docs/handoff/global-singletons-p0-findings-20261014.md P0-A,fail-closed):
 	// - 每条新连接(首次建连与每次重连)先放在私有的握手位上,对业务不可见。password 非空时,
 	//   连上后发出的第一条命令就是 AUTH,握手连接上不会出现任何其它命令。
-	// - 空口令连上即移交;非空口令只在 AUTH 回 +OK 后移交给 GetZoneRedis(),并在同一调用栈里同步调用重连回调。
+	// - 空口令连上即移交;非空口令只在 AUTH 回 +OK 后移交给 GetConnection(),并在同一调用栈里同步调用重连回调。
 	//   所以重连回调补发的命令是这条连接上 AUTH 之后的第一批业务命令;scene 的 1s 重试定时器与各直发点在移交前
 	//   只看得到 connected()==false,抢不到它们前面。
 	// - AUTH 被拒(口令错、服务端没开口令、服务端在 AUTH 前报错等)、发不出去,或从连上起一个重连间隔内没有应答
@@ -86,7 +86,7 @@ public:
 	// - 每 livenessProbeIntervalSec 秒检查一次:没有探测 PING 在途就发一条(同一时刻最多一条,不叠加)。
 	//   这条 PING 的任何非空应答(+PONG,或 -BUSY 之类的错误应答)都算连接活着。
 	// - PING 发出满 livenessTimeoutSec 秒仍没有应答:打一条带 metric=zone_redis_liveness_timeout 的 ERROR,把连接从
-	//   GetZoneRedis() 摘下(换成占位对象)并释放,然后走既有重连(每个重连间隔重建握手连接,有口令照常先 AUTH)。
+	//   GetConnection() 摘下(换成占位对象)并释放,然后走既有重连(每个重连间隔重建握手连接,有口令照常先 AUTH)。
 	//   释放时在途命令(含这条 PING)全部以空应答回调 —— 对业务的效果与 Redis 主切换时代理掐断连接完全相同,
 	//   调用方的空应答路径必须本来就能承受断线。
 	// - Redis 按序应答,PING 排在它之前发出的所有命令后面。所以「Redis 卡住超过截止」(长 Lua 脚本、大 KEYS、
@@ -101,7 +101,7 @@ public:
 	// I/O 分发内调用后还须排空 pending，让延迟的最终析构完成。幂等,Node 正常停机与入口函数兜底可以重复执行。
 	void Shutdown();
 
-	// 每次有连接完成握手、移交给 GetZoneRedis() 之后(首次建连与每次重连)在同一调用栈里同步调用。
+	// 每次有连接完成握手、移交给 GetConnection() 之后(首次建连与每次重连)在同一调用栈里同步调用。
 	// 配了口令时此刻 AUTH 已经成功,回调里发的命令排在 AUTH 之后。
 	// 回调运行在被移交连接自己的 hiredis 回调栈内。Channel tie 保住整次分发，回调局部副本保住执行中的函数；
 	// 因此回调内同步 Connect / Shutdown 或释放连接时，旧连接在分发结束后的 pending 阶段才真正销毁。
@@ -139,14 +139,14 @@ private:
 	// 销毁也不能再访问管理器。释放前清连接与断线回调；在途业务命令仍由 hiredis 以空应答收尾。
 	// 重连与存活探测的定时器、排队任务都先锁 lifetimeToken_ 再访问 this；Shutdown 仍须在 EventLoop 析构前执行，
 	// 以取消定时器并释放 Hiredis Channel。tlsRedis 是 thread_local，不能指望其析构晚于 loop 时再兜底。
-	// 不变量:重连定时器只在 zoneRedis_ 不可用时运行,所以移交时被替换掉的只会是占位对象或已断开的旧连接
+	// 不变量:重连定时器只在 connection_ 不可用时运行,所以移交时被替换掉的只会是占位对象或已断开的旧连接
 	// (二者 context 都已为空,析构不触发任何回调)。存活探测摘下连接时先换上占位对象再 ScheduleReconnect,不破坏它。
 	//
 	// Linux 的 timerfd 与 Hiredis socket 可能同批就绪；定时器内直接重建会销毁尚待分发的 Channel。
 	// 重连与存活摘下均经 lifetimeToken_ 守护的 queueInLoop 在 pending 阶段执行，此时本轮 I/O 已全部分发完。
 	// 重连任务还复核 reconnectGeneration_：同批 AUTH 成功、建连后重新安排 AUTH 截止或显式取消都会使旧任务失效。
 	// Hiredis 自己的事件回调由 tie 保活；最后一个共享引用若在 I/O 分发中释放，工厂删除器把整个对象延迟销毁。
-	HiredisPtr zoneRedis_;      // 对业务可见:已完成握手的连接、已断开的旧连接或占位对象
+	HiredisPtr connection_;      // 对业务可见:已完成握手的连接、已断开的旧连接或占位对象
 	HiredisPtr handshakeRedis_; // 正在建连或等 AUTH 应答的连接;没有握手在进行时为空
 	// 不拥有 EventLoop。用 reference_wrapper 而非裸 EventLoop*,满足 no-raw-pointer-member 检查
 	// (与 RedisSystem / KafkaManager 同一写法);未 Connect 或已 Shutdown 时为空。
@@ -180,7 +180,7 @@ extern thread_local RedisManager tlsRedis;
 
 // 本 zone 的场景控制域句柄(game_config.yaml 的 scene_control_redis,docs/design/control-plane-zone-scoping-20261105.md §4.5):
 // scene_manager 写进本 zone 所属组控制域实例(redis-ctl-g<N>)的读模型 —— 世界分线目录、神秘商人。只有 scene 在
-// RedisSystem::Initialize 里建连;gate、battle 不连,这里恒未连接(GetZoneRedis() 为空,调用点按「Redis 不可用」处理)。
+// RedisSystem::Initialize 里建连;gate、battle 不连,这里恒未连接(GetConnection() 为空,调用点按「Redis 不可用」处理)。
 // 配置缺省时与 zoneredis 指向同一个实例(开发环境不用改)。
 extern thread_local RedisManager tlsSceneControlRedis;
 

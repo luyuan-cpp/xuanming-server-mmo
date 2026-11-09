@@ -180,7 +180,7 @@ namespace
 	// 异步失败)。全挂期间每次换图都会走到这里,所以要节流:每 10s 最多一行,期间压掉的次数带在下一行里,
 	// 排障时仍能看出频率。
 	//
-	// 线程模型:GetSceneManagerEntity 读的是 thread_local 的 tlsNodeContextManager,只在拥有它的节点主循环线程上
+	// 线程模型:SelectSceneManagerEntity 读的是 thread_local 的 tlsNodeContextManager,只在拥有它的节点主循环线程上
 	// 调用(调用方都是 scene 主循环里的换图 / 跨 zone 交接 / 组队跟随 / RPC 应答处理;gRPC 应答由节点实体上的
 	// muduo_grpc 通道在节点 EventLoop 上经 queueInLoop 投递,同样在这个线程)。节流状态与注册表同样做成 thread_local,
 	// 不需要锁;每个进程只有这一个线程调它,"每线程 10s 一行"就是"每进程 10s 一行"。
@@ -261,7 +261,7 @@ namespace scene_manager_selector
 	}
 }
 
-entt::entity GetSceneManagerEntity(Guid playerId)
+entt::entity SelectSceneManagerEntity(Guid playerId)
 {
 	auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
 

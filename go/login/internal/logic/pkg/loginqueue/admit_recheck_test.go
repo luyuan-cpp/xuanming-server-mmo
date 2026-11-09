@@ -4,7 +4,7 @@ package loginqueue
 //   - 纯逻辑 chooseAdmitGate:仍在分档选出的那一档里就签它(地址取此刻的候选),停写 / 排空 / 满载 / 不在候选里就重挑,
 //     没有更好的 gate 时留着它;
 //   - NewAdmitSigner:签出的票绑复核之后的 gate;读不到候选时照签放行槽里的 gate,复核本身不回错误;
-//   - 经 Queue.Lookup 的端到端:放行之后选定的 gate 卡住,取走时拿到的票绑另一台。
+//   - 经 Queue.Poll 的端到端:放行之后选定的 gate 卡住,取走时拿到的票绑另一台。
 
 import (
 	"context"
@@ -188,7 +188,7 @@ func TestNewAdmitSigner_SignsForRepickedGate(t *testing.T) {
 
 // 读不到此刻的候选(出错、为空、没有候选源)时照签放行槽里的 gate,与没有复核时相同;复核本身不回错误。
 func TestNewAdmitSigner_UncheckedSignsOriginal(t *testing.T) {
-	gzprom.Enable() // 计数器要指标开关打开才写,见 TestLookup_AdmitSlotExpiredUnclaimed_ReturnsExpired
+	gzprom.Enable() // 计数器要指标开关打开才写,见 TestPoll_AdmitSlotExpiredUnclaimed_ReturnsExpired
 	cases := map[string]GateCandidateSource{
 		"read error": &recheckSource{err: errors.New("etcd unavailable")},
 		"no gates":   &recheckSource{},
@@ -220,7 +220,7 @@ func TestNewAdmitSigner_NilSlotIsAnError(t *testing.T) {
 
 // 端到端:放行时选的是 1 号,放行之后 1 号停写;玩家取走时拿到的票绑 2 号,并计一次 stale。
 // 变异取红:NewAdmitSigner 里的 recheckAdmitGate(ctx, source, slot) 换成 slotGate(slot),这条与上面两条签票用例红。
-func TestLookup_ConsumeRepicksGateThatWentStaleAfterAdmit(t *testing.T) {
+func TestPoll_ConsumeRepicksGateThatWentStaleAfterAdmit(t *testing.T) {
 	gzprom.Enable()
 	q, _, _, cleanup := newTestQueue(t)
 	defer cleanup()
@@ -239,7 +239,7 @@ func TestLookup_ConsumeRepicksGateThatWentStaleAfterAdmit(t *testing.T) {
 	}}
 
 	before := admitRecheckValue(t, admitRecheckStale)
-	st, err := q.Lookup(ctx, res.QueueToken, 1, NewAdmitSigner(ctx, src, recheckSecret, time.Minute))
+	st, err := q.Poll(ctx, res.QueueToken, 1, NewAdmitSigner(ctx, src, recheckSecret, time.Minute))
 	if err != nil || st.Status != StatusAdmitted {
 		t.Fatalf("lookup = (%+v, %v), want ADMITTED", st, err)
 	}

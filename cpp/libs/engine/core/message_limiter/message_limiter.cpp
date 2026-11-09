@@ -8,7 +8,7 @@
 MessageLimiter::MessageLimiter(uint8_t defaultMaxRequests, uint32_t defaultTimeWindow)
     : defaultMaxRequests(defaultMaxRequests), defaultTimeWindow(defaultTimeWindow) {}
 
-uint32_t MessageLimiter::CanSend(uint32_t messageId)
+uint32_t MessageLimiter::TryConsumeRequestQuota(uint32_t messageId)
 {
     const auto currentTime = TimeSystem::NowSeconds();
 

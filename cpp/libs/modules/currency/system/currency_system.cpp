@@ -15,7 +15,7 @@
 #include "modules/transaction_log/anomaly_detector.h"
 #include "modules/transaction_log/transaction_log_system.h"
 #include "proto/common/component/currency_comp.pb.h"
-#include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen — see cross-zone-readiness-audit.md §11.1
+#include "services/scene/player/system/player_lifecycle.h" // IsPlayerFrozen — see cross-zone-readiness-audit.md §11.1
 #include <ecs_context.h>
 
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     // 跳过,scene_manager 放行后实体随 DestroyDeposedPlayer 不存盘销毁,目标节点永远读不到。
     // 交接未成则由 AbortTravelHandoff 解冻,之后可正常写。
     // 写入类拦截目录见 docs/design/cross-zone-readiness-audit.md §11.1(该文只有 §11 仍有效)。
-    if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+    if (PlayerLifecycleSystem::IsPlayerFrozen(player))
     {
         LOG_WARN << "CurrencySystem::AddCurrency rejected: player frozen for cross-zone migration. "
                  << "CurrencyType=" << static_cast<uint32_t>(type)
@@ -140,7 +140,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     }
 
     // ── Global (server-wide) block check ────────────────────────────────
-    if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency,
+    if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
                                         static_cast<uint32_t>(type)))
     {
         LOG_WARN << "CurrencySystem::AddCurrency: currency GLOBALLY blocked. CurrencyType="
@@ -287,7 +287,7 @@ uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, 
     // ── Cross-zone Frozen check (Single Writer guarantee) ───────────────
     // 理由同上面的 AddCurrency:归属交接在途,这笔扣款到不了目标节点 —— 放行后源端实体
     // 由 DestroyDeposedPlayer 不存盘销毁(已没有 ACK)。
-    if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+    if (PlayerLifecycleSystem::IsPlayerFrozen(player))
     {
         LOG_WARN << "CurrencySystem::DeductCurrency rejected: player frozen for cross-zone migration. "
                  << "CurrencyType=" << static_cast<uint32_t>(type)

@@ -77,7 +77,7 @@ void BuffImplSystem::ResetCombatIdleBuff(entt::entity caster, entt::entity victi
         if (const auto data = std::dynamic_pointer_cast<BuffNoDamageOrSkillHitInLastSecondsComp>(buff.dataPbPtr)) {
             data->set_last_time(nowMilliseconds);
         }
-        BuffSystem::RemoveSubBuff(buff, buffsToRemove);
+        BuffSystem::CollectAndClearSubBuffIds(buff, buffsToRemove);
         buff.buffPb.set_has_added_sub_buff(false);
     }
 }

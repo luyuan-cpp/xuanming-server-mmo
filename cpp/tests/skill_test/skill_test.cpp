@@ -1178,7 +1178,7 @@ TEST(PlayerSkillSystemTest, RegisterPlayerDoesNotCreateMissingSkillList)
 {
     const auto player = tlsEcs.actorRegistry.create();
 
-    PlayerSkillSystem::RegisterPlayer(player);
+    PlayerSkillSystem::EnsureInitialSkills(player);
 
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSkillListComp>(player));
     tlsEcs.actorRegistry.destroy(player);
@@ -1218,9 +1218,9 @@ TEST(PlayerSkillSystemTest, SanitizeSkillListKeepsUnknownSkillsInactiveAndRemove
     EXPECT_EQ(unknownBefore, skillList.skill_list(1).SerializeAsString());
     EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, 1));
     EXPECT_FALSE(PlayerSkillSystem::HasSkill(player, 1001)) << "kept but inactive";
-    EXPECT_TRUE(PlayerSkillSystem::IsActiveSkill(1));
-    EXPECT_FALSE(PlayerSkillSystem::IsActiveSkill(1001));
-    EXPECT_FALSE(PlayerSkillSystem::IsActiveSkill(0));
+    EXPECT_TRUE(PlayerSkillSystem::IsConfiguredSkill(1));
+    EXPECT_FALSE(PlayerSkillSystem::IsConfiguredSkill(1001));
+    EXPECT_FALSE(PlayerSkillSystem::IsConfiguredSkill(0));
 }
 
 // 列表里没有 0 与重复项时不整体替换(查不到表的技能也不算要改):组件本层未知字段与逐条技能都原样不动。

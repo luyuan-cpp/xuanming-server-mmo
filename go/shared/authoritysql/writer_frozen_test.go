@@ -252,6 +252,7 @@ func TestFrozenGateLetsStartupReadsThrough(t *testing.T) {
 	w := &writerFakeWire{}
 	c := writerFixture(w)
 	c.gate.(*writerFakeGate).beforeErr = ErrWriterFrozen
+	c.gate.(*writerFakeGate).readErr = ErrWriterFrozen
 	rows, err := c.QueryContext(ctx, "SELECT n FROM t", nil)
 	if err != nil {
 		t.Fatalf("启动阶段的读要放行: %v", err)
@@ -298,7 +299,7 @@ func TestVerifyPoolSessionSurvivesFrozenGate(t *testing.T) {
 	wire := &writerFakeWire{}
 	permission := writerUnitPermission()
 	permission.writer.boot.noteAdmitted()
-	guarded, err := newGuardedConnector(&backendFakeConnector{conn: conn}, &writerFakeGate{wire: wire, beforeErr: ErrWriterFrozen}, writerFakeSession{wire: wire}, mysqlStatementPolicy{}, permission)
+	guarded, err := newGuardedConnector(&backendFakeConnector{conn: conn}, &writerFakeGate{wire: wire, beforeErr: ErrWriterFrozen, readErr: ErrWriterFrozen}, writerFakeSession{wire: wire}, mysqlStatementPolicy{}, permission)
 	if err != nil {
 		t.Fatal(err)
 	}

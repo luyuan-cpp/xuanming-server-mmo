@@ -79,7 +79,7 @@ flowchart LR
     UI[TeamUiState / TeamWindow]
   end
   subgraph Gate[C++ gate · GATE_CLIENT_RPC_ROUTER=1]
-    G1[限流 CanSend → IsClientMessageId 白名单 → PROTOCOL_GRPC → HandleRouterForward]
+    G1[限流 TryConsumeRequestQuota → IsClientMessageId 白名单 → PROTOCOL_GRPC → HandleRouterForward]
   end
   subgraph Router[go/client_rpc_router]
     R1[route_table: ClientPlayerTeam* → TeamNodeService<br/>PickRandom 全局池]

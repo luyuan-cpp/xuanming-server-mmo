@@ -163,7 +163,7 @@ TEST(BattleRoomTable, EraseUnknownIdIsNoOpWithoutHook)
 
 TEST(BattleRoomTable, BulkEraseViaIdsSnapshotFiresOncePerRoom)
 {
-	// AbortAllRooms 的形状:先抄 id,再逐个 Erase
+	// 批量清理房间时先抄 id，再逐个 Erase，避免迭代器失效。
 	RoomTable<FakeRoom> table;
 	HookRecorder recorder;
 	table.SetHooks(recorder.MakeHooks());

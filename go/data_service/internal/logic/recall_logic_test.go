@@ -79,7 +79,7 @@ func (f *fakeSnapshotStore) InsertSnapshotsIfGuidAbsent(context.Context, []*stor
 func (f *fakeSnapshotStore) GetSnapshotByID(_ context.Context, id uint64) (*store.SnapshotRow, error) {
 	return f.snapshotByID[id], nil
 }
-func (f *fakeSnapshotStore) GetLatestSnapshotBefore(context.Context, uint64, uint64) (*store.SnapshotRow, error) {
+func (f *fakeSnapshotStore) GetLatestSnapshotAtOrBefore(context.Context, uint64, uint64) (*store.SnapshotRow, error) {
 	return f.latest, nil
 }
 func (f *fakeSnapshotStore) ListSnapshotsMeta(context.Context, uint64, uint64, uint32) ([]*store.SnapshotMeta, error) {
@@ -864,7 +864,9 @@ func TestResolveRecallOp_EvidenceDecidesWhichFinalIsAccepted(t *testing.T) {
 	partial := &assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true, Partial: true, Snapshot: recallLine(100)}
 	rejected := &assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_REJECTED, Durable: true, Reason: 27004}
 	committed := func(released bool, res *assetop.Result) func(*testing.T, assetop.Op) *fakeRecallLedgers {
-		return func(t *testing.T, op assetop.Op) *fakeRecallLedgers { return manualLedgers(released, committedRecall(t, op, res)) }
+		return func(t *testing.T, op assetop.Op) *fakeRecallLedgers {
+			return manualLedgers(released, committedRecall(t, op, res))
+		}
 	}
 	// 同一个 seq 上记的是另一笔请求(数额不同),收据摘要对不上。
 	otherRequest := func(t *testing.T, op assetop.Op) *fakeRecallLedgers {

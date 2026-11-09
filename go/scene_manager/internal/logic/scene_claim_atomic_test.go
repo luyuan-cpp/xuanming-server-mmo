@@ -98,7 +98,7 @@ func TestSceneClaim_IdleReplyLostLeavesTheTeardownJob(t *testing.T) {
 	const sceneID uint64 = 89602
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 0)
 
-	_, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
+	_, err := ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.Error(t, err)
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)
@@ -146,14 +146,14 @@ func TestSceneClaim_SameTokenReplaysAndOtherTokenDoesNot(t *testing.T) {
 }
 
 // 映射缺失不是有人进场:旧代码 ZADD 回 active 集合并丢掉 agones_gs。现在摘掉条目、交回 gs,之后不再出现。
-func TestAtomicDestroyIfIdle_MappingMissingIsCleanedNotReseeded(t *testing.T) {
+func TestClaimIdleSceneTeardown_MappingMissingIsCleanedNotReseeded(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 89604
 	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-left"))
 	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 
-	claim, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
+	claim, err := ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.NoError(t, err)
 	require.True(t, claim.Claimed)
 	require.Empty(t, claim.NodeID)
@@ -176,13 +176,13 @@ func TestDestroyInstance_IdleMappingMissingStaysOutOfActiveSet(t *testing.T) {
 }
 
 // 有人时重置空闲时钟,但不能把已经摘掉的实例加回去。
-func TestAtomicDestroyIfIdle_BusyReseedsOnlyListedScene(t *testing.T) {
+func TestClaimIdleSceneTeardown_BusyReseedsOnlyListedScene(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID uint64 = 89606
 	member := strconv.FormatUint(sceneID, 10)
 	seedClaimScene(t, mr, sceneID, "node-a", "gs-a", 1)
 
-	claim, err := AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
+	claim, err := ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.NoError(t, err)
 	require.True(t, claim.Busy)
 	score, err := mr.ZScore(activeInstancesKey(claimTestZone), member)
@@ -193,7 +193,7 @@ func TestAtomicDestroyIfIdle_BusyReseedsOnlyListedScene(t *testing.T) {
 
 	_, err = mr.ZRem(activeInstancesKey(claimTestZone), member)
 	require.NoError(t, err)
-	claim, err = AtomicDestroyIfIdle(sc, claimTestZone, sceneID)
+	claim, err = ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.NoError(t, err)
 	require.True(t, claim.Busy)
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)

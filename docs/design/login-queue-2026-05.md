@@ -1,5 +1,7 @@
 # Login Queue (AssignGate Real Queue) — 2026-05
 
+> **接口名同步（2026-11-08）**：现行入口为 `Queue.Poll`，轮询可续期、消费放行槽并签票；下文带日期的历史 `Lookup` 记录保留原名。
+
 > **决策**: ARCH.md §11 #14
 > **代码**: `go/login/internal/logic/pkg/loginqueue/`, `java/gateway_node/.../service/AssignGateService.java`
 > **运维**: [docs/ops/login-queue-stress-runbook.md](../ops/login-queue-stress-runbook.md)
@@ -55,14 +57,14 @@ Client ── POST ───►│ /api/assign-gate                             
                    ┌─────────────────────── go-zero login ────────────────────┐│
                    │                                                          ││
                    │ AssignGate handler:                                      ◄┘
-                   │   1. queue_token 非空 → 验签 + Lookup(Redis)            │
+                   │   1. queue_token 非空 → 验签 + Poll(Redis)            │
                    │   2. account 非空 + 有 PlayerSession → 重连豁免         │
                    │   3. Queue.Enabled=false → 直接签 gate token             │
                    │   4. FreeSlots>0 且队列空 → 直接签 gate token            │
                    │   5. 其它 → Enqueue + 返回 queue_token+rank              │
                    │                                                          │
                    │ QueryQueueStatus handler:                                │
-                   │   验签 + Lookup → ADMITTED 或 QUEUEING                   │
+                   │   验签 + Poll → ADMITTED 或 QUEUEING                   │
                    │                                                          │
                    │ Dispatcher goroutine(每 zone 一个 leader,1s 一拍):       │
                    │   只出本 zone(Node.ZoneId):                              │
@@ -159,7 +161,7 @@ service LoginPreGate {
 ```
 1. queue_token 非空
      ├─ ParseAndVerifyQueueToken 失败 → status=EXPIRED
-     ├─ Lookup 命中 admit → status=ADMITTED + gate token(consumeAdmit 一次性消费)
+     ├─ Poll 命中 admit → status=ADMITTED + gate token(consumeAdmit 一次性消费)
      └─ 未命中 → status=QUEUEING + 当前 rank
 
 2. account 非空
@@ -230,14 +232,14 @@ service LoginPreGate {
 >   - 写满期间:dispatcher 停止放行,每拍一行含 `OOM` 的 ERROR;排队中的轮询与续期照常(读状态脚本里没有 DENYOOM 命令);新入队整体失败(`StatusError`)。所以需要 redis-queue 的内存水位告警。
 >   - 这段语义的证据只有 miniredis 单测(用钩子模拟 OOM 回包)与对 Redis 源码判定条件的推理。真实 Redis 上的证据待 `spec_G4b-G.md` §8.4 的 2026-10-18 补注第 1 项。
 >
-> **二、查询(`Lookup`)**
+> **二、查询(`Poll`)**
 >
-> - **签名。** 改为 `Lookup(ctx, token, zoneID, signFn)`。`zoneID` 必须取自已验签的排队令牌(`ParseAndVerifyQueueTokenMulti` 的第二个返回值),0 视为损坏。仓内的调用方只有 assign-gate 重入、queue-status 两个 handler 与测试。
+> - **签名。** 改为 `Poll(ctx, token, zoneID, signFn)`。`zoneID` 必须取自已验签的排队令牌(`ParseAndVerifyQueueTokenMulti` 的第二个返回值),0 视为损坏。仓内的调用方只有 assign-gate 重入、queue-status 两个 handler 与测试。
 > - **判定顺序(2026-11-06 起全在一段 `lookupScript` 里,一次往返;缺口清单第 14 条)。** 此前是 `GET queue:token:{token}`、`GETDEL admit:{queueId}`、再跑读状态脚本 `lookupStateScript` 三次往返,读状态脚本看到 `admitted_at` 时还要再 `GETDEL` 一次。
 >   1. TTL 不合法(`ValidateTTLs`)或 `signFn` 为 nil:回错误,不碰 Redis。前者是纵深防御,挡住绕过起服装配直接 `New` 的调用方,免得续期写出 `PEXPIRE 0` 当场删键。
 >   2. zone 为 0,或令牌拆不出 queueId:EXPIRED(`meta_gone`),不碰 Redis。queueId 从令牌正文取(`queueIDOfVerifiedToken`,与验签共用 `splitQueueToken` 的拆法),此前是 `GET` token 索引读出来的。
 >   3. 跑一次 `lookupScript`,KEYS 是 meta、`queue:zone:{令牌里的 zone}`、token 索引与放行槽:
->      - `GET` token 索引不在,或值不是这个 queueId:EXPIRED(`meta_gone`)。空闲超过 `QueueEntryTTL` 的条目走这里。索引按令牌全文建、值是 queueId,只有 `Enqueue` 签出的原令牌有索引,所以改写过正文的令牌取不到别人的放行槽(Lookup 本身不验签,验签在调用方)。
+>      - `GET` token 索引不在,或值不是这个 queueId:EXPIRED(`meta_gone`)。空闲超过 `QueueEntryTTL` 的条目走这里。索引按令牌全文建、值是 queueId,只有 `Enqueue` 签出的原令牌有索引,所以改写过正文的令牌取不到别人的放行槽(Poll 本身不验签,验签在调用方)。
 >      - `GETDEL admit:{queueId}` 取到:现签 gate 票,ADMITTED(签票之后读 meta、改占位各一次往返,每个条目只有这一次)。
 >      - meta 不在或不是 hash、meta 的 `zone_id` 与令牌不符:EXPIRED(`meta_gone`)。
 >      - meta 有 `admitted_at` 而放行槽不在:EXPIRED(`admit_window_passed`)。放行脚本在同一段里写 `admitted_at` 与放行槽,本脚本在同一段里读两者,不会是「放行还没落地」,不再需要第二次 `GETDEL`(此前为它准备的测试注入点 `afterAdmitMiss` 已删)。
@@ -298,8 +300,8 @@ service LoginPreGate {
 > **七、用例**(待 Codex 执行,`queue_test.go` / `dispatcher_test.go`)
 > - 写满与出错:`TestPopAdmit_OOMOnAdmitScript_EntriesStayQueued`、`TestPopAdmit_ScriptErrorStopsBatch_PartialWriteCleanedAsAlready`、`TestPopAdmit_PickFailure_EntryNeverLeavesQueue`、`TestPopAdmit_CtxCanceledMidBatch_RestStayQueued`、`TestDispatchOnce_PartialBatchError_CountsAdmittedAndLogsOnce`、`TestDispatchOnce_CanceledDuringPopAdmit_NoErrorLog`。
 > - 只写一次与毒丸:`TestPopAdmit_OverlappingLeaders_SameEntryAdmittedOnce`、`TestPopAdmit_MetaNotHash_CleanedWithoutStallingZone`、`TestPopAdmit_EmptyMemberAtHead_Removed`。
-> - 空闲 TTL:`TestLookup_ContinuousPollingOutlivesEntryTTL`、`TestLookup_RenewalIsLazy_OnlyBelowEntryTTL`、`TestLookup_IdleBeyondIdleTTL_Expires`、`TestLookup_NoRenewalAfterAdmit`。
-> - 判定分支:`TestLookup_MetaPresentNotQueuedNotAdmitted_ReturnsQueueGone`、`TestLookup_ZoneMismatchOrZero_ReturnsMetaGone`、`TestLookup_InvalidEntryTTL_FailsWithoutTouchingRedis`。
+> - 空闲 TTL:`TestPoll_ContinuousPollingOutlivesEntryTTL`、`TestPoll_RenewalIsLazy_OnlyBelowEntryTTL`、`TestPoll_IdleBeyondIdleTTL_Expires`、`TestPoll_NoRenewalAfterAdmit`。
+> - 判定分支:`TestPoll_MetaPresentNotQueuedNotAdmitted_ReturnsQueueGone`、`TestPoll_ZoneMismatchOrZero_ReturnsMetaGone`、`TestPoll_InvalidEntryTTL_FailsWithoutTouchingRedis`。
 > - 入队与令牌:`TestEnqueue_QueueTokenExpiresAtMaxAge`、`TestEnqueue_QueueKeyTTLNeverShortened`。
 > - 删除了 `TestPopAdmit_NoCancel_LongBatchNotCutByWriteBudget` 与 `TestPopAdmit_CtxCanceledMidBatch_WriteBudgetExhausted_DropsRest`,它们只验证已删除的写入预算。
 >
@@ -473,7 +475,7 @@ queue_token = base64url( JSON{kind:"queue", q:queueId, z:zoneId, e:expireTs} | "
   - **令牌过期改为 24h。** 令牌里的 `e` 现在是入队时刻 + 24h(`loginqueue.queueTokenMaxAge`,代码常量,不是配置),不再等于 `QueueEntryTTL`。超过它时 handler 在查 Redis 之前回 EXPIRED(`ttl`)。
   - **空闲过期改由 Redis 管。** 由 meta、token 索引与队列键的空闲 TTL 判定(至少 `QueueEntryTTL`、至多 1.25 倍,§5 决策树后的 2026-10-18 更正)。
   - **伪造防御不变。** 令牌离开 Redis 里的条目就没用,实际可用期 = min(24h, 条目存活),所以延长令牌过期不扩大被截获令牌的危害面。
-  - **zone 来自令牌。** `Lookup` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账,不符回 EXPIRED(`meta_gone`)。
+  - **zone 来自令牌。** `Poll` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账,不符回 EXPIRED(`meta_gone`)。
   - **要同步的地方。** 改 `queueTokenMaxAge` 时,要同步改 `ValidateTTLs` 的上界与本节。
   - **密钥轮换的第 ③ 步要多等(2026-10-18 补注)。** 令牌只在入队时签一次,排队期间不换签。此前第 ③ 步(摘掉旧密钥)在第 ② 步(提升新密钥开始签)全量生效后等一个 `QueueEntryTTL` 即可;现在持续轮询的人能拿着旧密钥签的令牌排到 24h,第 ③ 步须在第 ② 步全量生效后至少等 `queueTokenMaxAge`(24h)。要提前,须确认各 zone 队首的入队时刻(`ZRANGE queue:zone:<z> 0 0 WITHSCORES`,分数 = 入队毫秒)都晚于第 ② 步全量生效时刻,且已过一个 `AdmitTTL`(已放行、未取走放行槽的人也持旧令牌)。否则在排玩家会按 `bad_signature` 回 EXPIRED(410)、丢掉排位,指标上记在 zone=unknown 下,与伪造流量混在一起。K8s 档位是单步轮换(只写 `Value`),本来就会让在排玩家重新入队(`open-server-rate-limit-design.md` §11.3 第 7 条),不受此条影响。`config/secrets.go` 包注释、`login.yaml` 的 Secrets 段与 `ParseAndVerifyQueueTokenMulti` 注释里的轮换说明尚未同步这一句,登记为后续项。
 
@@ -720,11 +722,11 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
        - 续期区间。
        - 入队的 NX/GT。
        - 毒丸 meta。
-       - RESP3 下的各 `Lookup` 分支。
+       - RESP3 下的各 `Poll` 分支。
 9. **排队超过 `QueueEntryTTL` 会被弹回队尾**(2026-10-15 登记,既有,**待负责人定**):meta、token 索引、排队令牌只在 `Enqueue` 时设一次 `QueueEntryTTL`(1h),等待中不续期。等待超过 1h 的玩家下一次查询回 EXPIRED(handler 在 `Lookup` 之前先校验排队令牌的 HMAC 过期时刻,令牌与 meta 同时到期,所以原因通常是 `ttl`,只有令牌按秒取整多出的不到 1s 内才是 `meta_gone`;监控看 `login_queue_expired_total{reason="ttl"}`),丢 token 从队尾重排;他原来的队列成员留在 ZSET 里,轮到时被 `admitEntryScript` 按 meta 不在丢弃(不再白占名额)。开服首日若等待可能超过 1h,要么调大 `QueueEntryTTL`,要么在查询时续期 meta / token 索引 / 令牌(需同步改令牌过期语义,Java 版对齐),由负责人决定。
    - **(2026-10-18 更正:已修,空闲 TTL + 24h 令牌;原文保留;已落码,未编译、未测试,待 Codex 验证)** 做法见 §5 决策树后的 2026-10-18 更正「三、空闲 TTL 与令牌」。
      - **怎么修的。** 排队中的查询在剩余 TTL 不足 `QueueEntryTTL` 时,把 meta、token 索引与队列键续到 1.25 倍。排队令牌的签名过期与 `QueueEntryTTL` 脱钩,固定 24h。
-     - **效果。** 持续轮询的人不会因为等满 `QueueEntryTTL` 被弹回队尾(`TestLookup_ContinuousPollingOutlivesEntryTTL`:轮询 2h 仍在排队并被放行)。空闲超过 `QueueEntryTTL`(至多 1.25 倍)的条目回 EXPIRED,原因记 `meta_gone`(此前通常记 `ttl`);`ttl` 只在令牌超过 24h 时出现。
+     - **效果。** 持续轮询的人不会因为等满 `QueueEntryTTL` 被弹回队尾(`TestPoll_ContinuousPollingOutlivesEntryTTL`:轮询 2h 仍在排队并被放行)。空闲超过 `QueueEntryTTL`(至多 1.25 倍)的条目回 EXPIRED,原因记 `meta_gone`(此前通常记 `ttl`);`ttl` 只在令牌超过 24h 时出现。
      - **孤儿条目。** 不再轮询的条目,轮到时由放行脚本的 META_GONE 分支 `ZREM`。
      - **Java 版。** 上文「需同步改令牌过期语义,Java 版对齐」:本仓库已改,Java 版待做(由主会话在 `PARITY.md` 登记)。
 10. **放行速率约等于 1 / Redis 往返,轮询每次三次往返**(2026-11-05 全链路水平扩展盘点第 14 条)。**2026-11-06 已落码,未编译、未测试,待 Codex 验证**,做法见 §5 决策树后 2026-10-18 更正里「一、出队」的「按块发」与「二、查询」的判定顺序:

@@ -32,7 +32,7 @@ uint32_t CheckPlayer(entt::entity player, uint32_t scope) {
     if (scope != MissionListComp::kPlayerMission) return kInvalidParameter;
     const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
     if (guid == nullptr || guid->value == 0 || guid->value == kInvalidGuid) return kInvalidParameter;
-    if (PlayerLifecycleSystem::IsCrossZoneFrozen(player)) return kInvalidParameter;
+    if (PlayerLifecycleSystem::IsPlayerFrozen(player)) return kInvalidParameter;
     if (tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player) == nullptr) return kServiceUnavailable;
     return kSuccess;
 }
@@ -224,7 +224,7 @@ uint32_t PlayerMissionSystem::Accept(entt::entity player, uint32_t scope,
 }
 
 void PlayerMissionSystem::OnCondition(entt::entity player, const ConditionEvent& fact) {
-    if (!tlsEcs.actorRegistry.valid(player) || PlayerLifecycleSystem::IsCrossZoneFrozen(player)) return;
+    if (!tlsEcs.actorRegistry.valid(player) || PlayerLifecycleSystem::IsPlayerFrozen(player)) return;
     auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
     if (container == nullptr) {
         LOG_ERROR << "任务条件推进失败:缺少持久任务组件 entity=" << entt::to_integral(player);

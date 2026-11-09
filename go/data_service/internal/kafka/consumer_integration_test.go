@@ -123,7 +123,7 @@ func TestSnapshotConsumer_RealStore_DedupsBySnapshotGuidAndStaysInvisibleToGm(t 
 	metas, err := ss.ListSnapshotsMeta(context.Background(), 100, 0, 10)
 	require.NoError(t, err)
 	assert.Empty(t, metas)
-	latest, err := ss.GetLatestSnapshotBefore(context.Background(), 100, 1800000000)
+	latest, err := ss.GetLatestSnapshotAtOrBefore(context.Background(), 100, 1800000000)
 	require.NoError(t, err)
 	assert.Nil(t, latest)
 	scene, err := ss.ListSceneSnapshotsByPlayer(context.Background(), 100, 10)

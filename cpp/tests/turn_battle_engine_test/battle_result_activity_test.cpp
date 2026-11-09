@@ -253,7 +253,7 @@ TEST(BattleResultCommit, OversizedCompleteSourceNeverPublishesATruncatedRecord)
 }
 
 // 2026-10-23 修复(审计 r2-battle#2):停机时只有「终局已冻结、还没拿到 SQL 决定、也没判用尽」的房间要在排空窗口内
-// 再提交一轮,AbortAllRooms(立即续发)、SqlOutcomesFlushed(排空谓词)、StopSqlOutcomes(未落定留痕)三处都按它判。
+// 再提交一轮,BeginRoomShutdown(立即续发)、CanFinishShutdownOutcomeFlush(排空谓词)、StopSqlOutcomes(未落定留痕)三处都按它判。
 // 修复前停机直接装停止闸、清空待提交集合,这类房间再没有提交机会,只能等 match 截止后判 ABORT。
 // 还在打的房间没有终局可交,不能让停机多等。
 TEST(BattleShutdownOutcomeFlush, OnlyFrozenUnconfirmedOutcomesAreFlushed)

@@ -219,7 +219,7 @@ void Answer(::AssetOpResponse& response, ::AssetOpOutcome outcome, uint32_t tipI
 // ── 可改判定 ────────────────────────────────────────────────────────────────
 
 // HasFencedOwnership / IsPlayerMutable 已原样抽到 player/system/player_mutability.h(D12,与玩家收件箱共用,
-// 行为零变化)。判定依据、"为什么刻意不复用 IsCrossZoneFrozen"的论证都在那个头文件里。
+// 行为零变化)。判定依据、"为什么刻意不复用 IsPlayerFrozen"的论证都在那个头文件里。
 //
 // IsPlayerMutable 在本文件的调用点只有 AnswerSeenSeq 的补存。Decide 第 5 步的改动闸**不**调用它,而是逐条
 // 内联同样的判定(为了按原因回不同的 reason:kAssetFrozen / kAssetPlayerNotHere);新增可改判定时,
@@ -1032,7 +1032,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 	for (const auto& currency : bundle.currencies())
 	{
 		const auto type = static_cast<CurrencyType>(currency.currency_type());
-		if (GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, currency.currency_type()) ||
+		if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, currency.currency_type()) ||
 			CurrencySystem::IsCurrencyBlocked(player, type))
 		{
 			RejectAndRecord(player, ledgerComp, request, kAssetBlocked, nowMs, response);

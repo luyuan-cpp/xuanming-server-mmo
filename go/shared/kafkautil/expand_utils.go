@@ -59,42 +59,42 @@ func GetExpandStatus(ctx context.Context, redisClient redis.Cmdable, topic strin
 	return &data, nil
 }
 
-// WaitOldPartitionsConsumed waits until all old partitions are fully consumed.
-func WaitOldPartitionsConsumed(ctx context.Context, client sarama.Client, topic string, oldPartitionCount int32) error {
-	logx.Infof("waiting old partitions consumed: topic=%s, oldCount=%d", topic, oldPartitionCount)
+// WaitOldPartitionsEmpty 等待旧分区不再保留记录，不读取或证明消费者组的消费进度。
+func WaitOldPartitionsEmpty(ctx context.Context, client sarama.Client, topic string, oldPartitionCount int32) error {
+	logx.Infof("waiting for old partitions to become empty: topic=%s, oldCount=%d", topic, oldPartitionCount)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("wait old partitions canceled: %w", ctx.Err())
+			return fmt.Errorf("wait for empty old partitions canceled: %w", ctx.Err())
 		case <-ticker.C:
-			allConsumed := true
+			allEmpty := true
 			for i := int32(0); i < oldPartitionCount; i++ {
-				maxOffset, err := client.GetOffset(topic, i, sarama.OffsetNewest)
+				newestOffset, err := client.GetOffset(topic, i, sarama.OffsetNewest)
 				if err != nil {
-					logx.Errorf("get max offset failed: topic=%s, partition=%d, err=%v", topic, i, err)
-					allConsumed = false
+					logx.Errorf("get newest offset failed: topic=%s, partition=%d, err=%v", topic, i, err)
+					allEmpty = false
 					break
 				}
-				currentOffset, err := client.GetOffset(topic, i, sarama.OffsetOldest)
+				oldestOffset, err := client.GetOffset(topic, i, sarama.OffsetOldest)
 				if err != nil {
-					logx.Errorf("get current offset failed: topic=%s, partition=%d, err=%v", topic, i, err)
-					allConsumed = false
+					logx.Errorf("get oldest offset failed: topic=%s, partition=%d, err=%v", topic, i, err)
+					allEmpty = false
 					break
 				}
 
-				if currentOffset < maxOffset {
-					logx.Debugf("partition not consumed: topic=%s, partition=%d, current=%d, max=%d",
-						topic, i, currentOffset, maxOffset)
-					allConsumed = false
+				if oldestOffset < newestOffset {
+					logx.Debugf("partition retains records: topic=%s, partition=%d, oldest=%d, newest=%d",
+						topic, i, oldestOffset, newestOffset)
+					allEmpty = false
 					break
 				}
 			}
 
-			if allConsumed {
-				logx.Infof("all old partitions consumed: topic=%s, oldCount=%d", topic, oldPartitionCount)
+			if allEmpty {
+				logx.Infof("all old partitions are empty: topic=%s, oldCount=%d", topic, oldPartitionCount)
 				return nil
 			}
 		}

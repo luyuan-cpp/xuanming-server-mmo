@@ -200,7 +200,7 @@ bool NodeUtils::IsSameNode(const std::string &uuid1, const std::string &uuid2)
 	return uuid1 == uuid2;
 }
 
-bool NodeUtils::IsNodeConnected(uint32_t nodeType, const NodeInfo &info)
+bool NodeUtils::IsNodeTracked(uint32_t nodeType, const NodeInfo &info)
 {
 	switch (info.protocol_type())
 	{

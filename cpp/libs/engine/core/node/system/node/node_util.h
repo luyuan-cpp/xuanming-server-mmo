@@ -93,7 +93,8 @@ namespace NodeUtils
 	std::string GetRegistryName(const entt::registry &registry);
 	eNodeType GetRegistryType(const entt::registry &registry);
 	bool IsSameNode(const std::string &uuid1, const std::string &uuid2);
-	bool IsNodeConnected(uint32_t nodeType, const NodeInfo &info);
+	// 仅查本线程登记：TCP 要有客户端组件，gRPC 要有节点记录；不表示连接已建立或业务就绪。
+	bool IsNodeTracked(uint32_t nodeType, const NodeInfo &info);
 
 	// 摘掉所有(任意节点类型注册表里)仍引用这条 TcpConnection 的 RpcSession 组件,返回摘掉的个数。
 	// 给 RpcServer 的 DOWN 回调用。RpcSession::connection 是 weak_ptr,不摘也不会钉住连接对象;

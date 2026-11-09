@@ -32,10 +32,10 @@ class UpgradeSkillResponse;
 class PlayerSkillSystem {
 public:
 	// 新号创建入口:按当前职业补初始技能。与 InitializeOnLoad 共用同一段逻辑,幂等。
-	static void RegisterPlayer(entt::entity player);
-	// 技能列表里的这一项在本版本是否生效:非 0 且技能表查得到。消费 PlayerSkillListComp 的路径
-	// (施放、下发客户端、战斗快照……)一律只认生效的项 —— 列表里可能留着新版本技能表才有的技能。
-	static bool IsActiveSkill(uint32_t skillTableId);
+	static void EnsureInitialSkills(entt::entity player);
+	// 非零技能表 ID 是否在本版本配置中存在；主动、被动均包含。
+	// 不表示玩家已学习或满足职业、等级等使用条件，这些由 CheckSkillUsable 判定。
+	static bool IsConfiguredSkill(uint32_t skillTableId);
 
 	// 加载期整理,必须在职业与等级组件挂上之后、属性重算(PlayerAttributeSystem::InitializeOnLoad)之前调用:
 	// 先 SanitizeSkillList,再按 Class.skill 补初始技能(职业技能 1 重;已有 rank 0 的种子条目原地补 1 重)。

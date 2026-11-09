@@ -821,7 +821,7 @@ void Bag::ExpandCapacity(std::size_t sz)
 	AssertLayerConsistency();
 }
 
-std::size_t Bag::GridsNeededFor(std::size_t totalSize, std::size_t maxStackSize)
+std::size_t Bag::StacksNeededFor(std::size_t totalSize, std::size_t maxStackSize)
 {
 	return ItemStore::StacksNeededFor(totalSize, maxStackSize);
 }

@@ -454,10 +454,10 @@ TEST(MissionsComp, MissionRewardList)
 	EXPECT_EQ(kSuccess, MissionSystem::AcceptMission(acceptEv, missions, MissionConfig::GetSingleton()));
 
 	// Not yet claimable before completion
-	GetRewardParam param;
+	RewardClaimParam param;
 	param.missionId = missionId;
 	param.playerEntity = player;
-	EXPECT_EQ(kMissionIdNotInRewardList, MissionSystem::GetMissionReward(param, missions));
+	EXPECT_EQ(kMissionIdNotInRewardList, MissionSystem::ConsumeRewardClaim(param, missions));
 	EXPECT_TRUE(missions.IsAccepted(missionId));
 
 	// Complete the mission
@@ -468,8 +468,8 @@ TEST(MissionsComp, MissionRewardList)
 	EXPECT_TRUE(missions.IsComplete(missionId));
 
 	// Claim once OK, second claim fails
-	EXPECT_EQ(kSuccess, MissionSystem::GetMissionReward(param, missions));
-	EXPECT_EQ(kMissionIdNotInRewardList, MissionSystem::GetMissionReward(param, missions));
+	EXPECT_EQ(kSuccess, MissionSystem::ConsumeRewardClaim(param, missions));
+	EXPECT_EQ(kMissionIdNotInRewardList, MissionSystem::ConsumeRewardClaim(param, missions));
 	EXPECT_EQ(0, missions.CanGetRewardSize());
 }
 

@@ -226,7 +226,7 @@ TEST(BagTest, AddStackItem12121212)
         // 溢出时是新开的那一格),正是下面按 lastIdx 断言的实例。
         const Guid lastWritten = written.back();
 
-        auto gridSize = Bag::GridsNeededFor(totalSize, maxStack);
+        auto gridSize = Bag::StacksNeededFor(totalSize, maxStack);
         uint32_t lastIdx = uint32_t(gridSize - 1);
 
         EXPECT_EQ(gridSize, bag.OccupiedGridCount());
@@ -1055,11 +1055,11 @@ TEST(GainBlockServiceTest, GlobalCurrencyBlockCheck)
 {
     GainBlockService::ClearAllGlobalBlocks();
 
-    EXPECT_FALSE(GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, 0));
+    EXPECT_FALSE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, 0));
 
     GainBlockService::BlockGlobal(GainBlockService::GainType::kCurrency, 0);
-    EXPECT_TRUE(GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, 0));
-    EXPECT_FALSE(GainBlockService::IsGainBlocked(GainBlockService::GainType::kCurrency, 1));
+    EXPECT_TRUE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, 0));
+    EXPECT_FALSE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, 1));
 
     GainBlockService::ClearAllGlobalBlocks();
 }

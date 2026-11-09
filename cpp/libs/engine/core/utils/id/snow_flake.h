@@ -453,7 +453,7 @@ struct SnowFlakeComponents {
 	uint64_t sequence;
 };
 
-inline SnowFlakeComponents ParseGuid(Guid id, uint64_t epoch = kEpoch)
+inline SnowFlakeComponents ParseSnowflakeGuid(Guid id, uint64_t epoch = kEpoch)
 {
 	SnowFlakeComponents components;
 	components.timestamp = (id >> kTimeShift);
@@ -462,7 +462,7 @@ inline SnowFlakeComponents ParseGuid(Guid id, uint64_t epoch = kEpoch)
 	return components;
 }
 
-inline std::time_t GetRealTimeFromGuid(Guid id, uint64_t epoch = kEpoch)
+inline std::time_t GetSnowflakeUnixSeconds(Guid id, uint64_t epoch = kEpoch)
 {
 	uint64_t seconds_since_epoch = (id >> kTimeShift);
 	return static_cast<std::time_t>(seconds_since_epoch + epoch);

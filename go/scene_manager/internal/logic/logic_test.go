@@ -496,11 +496,11 @@ func TestIsWorldConf(t *testing.T) {
 	assert.False(t, IsWorldConf(0))
 }
 
-func TestGetBestWorldChannel_NotFound(t *testing.T) {
+func TestSelectOrRecoverWorldChannel_NotFound(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	ctx := context.Background()
 
-	id, nodeId, _ := GetBestWorldChannel(ctx, sc, 9999, testZoneId)
+	id, nodeId, _ := SelectOrRecoverWorldChannel(ctx, sc, 9999, testZoneId)
 	assert.Equal(t, uint64(0), id)
 	assert.Equal(t, "", nodeId)
 }
@@ -1757,7 +1757,7 @@ func TestInitWorldScenes_MultipleChannels_Idempotent(t *testing.T) {
 	assert.Len(t, linesAfter, 3, "re-init must not create extra channels")
 }
 
-func TestGetBestWorldChannel_SelectsLowestPlayerCount(t *testing.T) {
+func TestSelectOrRecoverWorldChannel_SelectsLowestPlayerCount(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	confIds := []uint64{1001}
 	sc.Config.WorldChannelCount = 3
@@ -1775,13 +1775,13 @@ func TestGetBestWorldChannel_SelectsLowestPlayerCount(t *testing.T) {
 	seedSceneMembersVia(sc, lines[1], 2)
 	seedSceneMembersVia(sc, lines[2], 5)
 
-	bestId, bestNode, err := GetBestWorldChannel(ctx, sc, 1001, testZoneId)
+	bestId, bestNode, err := SelectOrRecoverWorldChannel(ctx, sc, 1001, testZoneId)
 	require.NoError(t, err)
 	assert.Equal(t, lines[1], bestId, "should pick channel with lowest player count")
 	assert.NotEmpty(t, bestNode)
 }
 
-func TestGetBestWorldChannel_AllEmpty(t *testing.T) {
+func TestSelectOrRecoverWorldChannel_AllEmpty(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	confIds := []uint64{1001}
 	sc.Config.WorldChannelCount = 3
@@ -1792,7 +1792,7 @@ func TestGetBestWorldChannel_AllEmpty(t *testing.T) {
 	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 
 	// All channels are empty (initialized by init).
-	bestId, _, err := GetBestWorldChannel(ctx, sc, 1001, testZoneId)
+	bestId, _, err := SelectOrRecoverWorldChannel(ctx, sc, 1001, testZoneId)
 	require.NoError(t, err)
 	assert.NotEqual(t, uint64(0), bestId, "should return some channel even when all empty")
 }
@@ -2616,9 +2616,9 @@ func TestAtomicAddSceneMember_SceneGone(t *testing.T) {
 	assert.False(t, exists, "orphan node members key must not be created")
 }
 
-// TestAtomicDestroyIfIdle_AbortsOnPlayers ensures the destroy-while-
+// TestClaimIdleSceneTeardown_AbortsOnPlayers ensures the destroy-while-
 // entering race cannot wipe a scene that picked up a player.
-func TestAtomicDestroyIfIdle_AbortsOnPlayers(t *testing.T) {
+func TestClaimIdleSceneTeardown_AbortsOnPlayers(t *testing.T) {
 	sc, _ := newTestSvcCtx(t, "node-1")
 	sceneId := uint64(42)
 
@@ -2626,7 +2626,7 @@ func TestAtomicDestroyIfIdle_AbortsOnPlayers(t *testing.T) {
 	seedSceneMembersVia(sc, sceneId, 1)
 	sc.Redis.Zadd(activeInstancesKey(testZoneId), nowUnix(), fmt.Sprintf("%d", sceneId))
 
-	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 	require.NoError(t, err)
 	assert.True(t, claim.Busy, "must abort when the scene has members")
 	assert.Equal(t, "", claim.NodeID)
@@ -2638,9 +2638,9 @@ func TestAtomicDestroyIfIdle_AbortsOnPlayers(t *testing.T) {
 	assert.Equal(t, "1", pc)
 }
 
-// TestAtomicDestroyIfIdle_DestroysWhenIdle checks the success path wipes
+// TestClaimIdleSceneTeardown_DestroysWhenIdle checks the success path wipes
 // all scene-scoped keys and returns the nodeId.
-func TestAtomicDestroyIfIdle_DestroysWhenIdle(t *testing.T) {
+func TestClaimIdleSceneTeardown_DestroysWhenIdle(t *testing.T) {
 	sc, _ := newTestSvcCtx(t, "node-1")
 	sceneId := uint64(42)
 
@@ -2651,7 +2651,7 @@ func TestAtomicDestroyIfIdle_DestroysWhenIdle(t *testing.T) {
 	sc.Redis.Set(sceneZoneKey(sceneId), "1")
 	sc.Redis.Zadd(activeInstancesKey(testZoneId), nowUnix(), fmt.Sprintf("%d", sceneId))
 
-	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 	require.NoError(t, err)
 	assert.Equal(t, "10", claim.NodeID)
 
@@ -3275,7 +3275,7 @@ func TestStress_EnterDestroyRace_NoOrphanMembers(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			_, _ = AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+			_, _ = ClaimIdleSceneTeardown(sc, testZoneId, sceneId)
 		}()
 	}
 	wg.Wait()

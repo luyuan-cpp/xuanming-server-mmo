@@ -20,7 +20,7 @@
 #include "thread_context/ecs_context.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "modules/transaction_log/transaction_log_system.h"
-#include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen — cross-zone-readiness-audit.md §11.1
+#include "services/scene/player/system/player_lifecycle.h" // IsPlayerFrozen — cross-zone-readiness-audit.md §11.1
 
 // ---------------------------------------------------------------------------
 // BagService
@@ -114,7 +114,7 @@ uint32_t BagService::AddItem(
 	// avoids polluting transaction_log with TX_SYSTEM_GRANT entries for items
 	// that effectively don't exist.
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::AddItem rejected: player frozen for cross-zone migration. "
 				 << "config_id=" << configId << " player=" << bag.PlayerGuid();
@@ -167,7 +167,7 @@ uint32_t BagService::AddItems(
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::AddItems rejected: player frozen for cross-zone migration. "
 				 << "player=" << bag.PlayerGuid();
@@ -399,7 +399,7 @@ uint32_t BagService::AddItems(
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::AddItems rejected: player frozen for cross-zone migration. "
 				 << "player=" << bag.PlayerGuid();
@@ -443,7 +443,7 @@ uint32_t BagService::RemoveItem(
 	// 加载到的仍是冻结那一次存盘(里面还有这件物品)—— 等于多出一件,
 	// 比拒绝这次删除更糟。
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::RemoveItem rejected: player frozen for cross-zone migration. "
 				 << "guid=" << guid << " player=" << bag.PlayerGuid();
@@ -483,7 +483,7 @@ uint32_t BagService::RemoveItemsClamped(
 	// 冻结期一件都不扣:理由同 RemoveItem —— 归属交接在途时源端扣数,目标节点从盘上加载到的
 	// 快照里那笔数量还在,等于凭空多出来。调用方必须把这个返回值当"没扣成",
 	// 而不是"扣了 0 个"。
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::RemoveItemsClamped rejected: player frozen for cross-zone "
 				 << "migration. player=" << bag.PlayerGuid()
@@ -546,7 +546,7 @@ uint32_t BagService::RemoveItemsExact(
 	// 冻结期一件都不扣,理由同 RemoveItem:归属交接在途时源端扣数,目标节点从盘上加载到的
 	// 快照里那笔数量还在,等于凭空多出来。玩法入口(PlayerEquipSystem 的写入口)会先挡掉
 	// 冻结,正常走不到这里;留着它是因为本函数不能假设每个调用方都记得挡。
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::RemoveItemsExact rejected: player frozen for cross-zone "
 				 << "migration. player=" << bag.PlayerGuid()
@@ -602,7 +602,7 @@ uint32_t BagService::RemoveItemsByGuid(
 	// 的条件,调用方(资产通道)据此回 RETRY 重投;回 kInvalidParameter 会被当成
 	// 终局拒绝,玩家过图的那几百毫秒里发起的寄售就被永久拒掉了。本函数是新增的,
 	// 没有既有调用点会因这个取值变化而受影响。
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::RemoveItemsByGuid rejected: player frozen for cross-zone "
 				 << "migration. player=" << bag.PlayerGuid() << " guids=" << guids.size();
@@ -678,7 +678,7 @@ uint32_t BagService::MergeAndCompact(
 	// 等于在源端造出一份与盘上快照(冻结那一次存盘)不一致的布局,放行后源端实体由
 	// DestroyDeposedPlayer 不存盘销毁,这次整理就白做了(更糟的是流水已经写了)。理由同 AddItem。
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::MergeAndCompact rejected: player frozen for cross-zone migration. "
 				 << "player=" << bag.PlayerGuid();
@@ -724,7 +724,7 @@ uint32_t BagService::RetrieveFromTemporary(
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// 搬运改的是两个要随存盘落盘的包。归属交接在途时动它,放行后源端实体不存盘销毁,这次搬运就白做了;
 	// 理由同 MergeAndCompact。玩法入口已先判过、回了玩家看得懂的码,这里是本函数不依赖调用方的那一道。
-	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	if (PlayerLifecycleSystem::IsPlayerFrozen(playerEntity))
 	{
 		LOG_WARN << "BagService::RetrieveFromTemporary rejected: player frozen for cross-zone migration. player_id="
 				 << tlsEcs.GetPlayerId(playerEntity);

@@ -418,7 +418,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 - **每回合**（`BroadcastTurnResult`）：观众版 158 编码一次。L0 直连照旧；广播档往广播 topic 发 1 条；否则给每台中继 gate 各发 1 条（`PublishToAllSpectateChannels`，TURN、END 与心跳共用这一个出口）。
 - **心跳**（2026-11-05 第二轮评审补）：开了通道的房间，距上一次往全部通道发帧满 `kSpectateChannelKeepalive`（10 s），就按当前档位补发一帧 STATE；等结果回执期间这一帧是冻结的可见状态，不提前泄露终局。过了 `deadline_ms + kSpectateDeadlineGraceMs`、发过 END、房间删除或拆除前（`StopSqlOutcomes`）就停。gate 的失联判定 `T_idle` 因此与回合节奏、结果提交等待无关；两个数与期限宽限都在 `node_command_topic.h`，静态断言 `T_idle ≥ 3 × 心跳间隔`。
 - **结束 / 作废**：发 END（编码好的 166）：未升档时发给每台中继 gate；已升档时**只发广播 topic**（与最后一回合 TURN 同分区保序；两条 topic 之间没有顺序，中继 END 可能越过广播 TURN，观众就看不到最后一回合）。
-- **停机**（`AbortAllRooms`，2026-11-05 第二轮评审定）：先关观战准入，此后 AddObserver、AttachRelayGate、PromoteSpectateBroadcast 一律回 `kServiceUnavailable`（已登记观众的幂等重放照常放行）。还在打的房间（没有待提交终局）向全部观众发 166 `SOURCE_LOST` 并清退；不发 ABORTED（作废只由 match 的持久 ABORT 宣布）。有待提交终局的房间不发 END，排空窗口内拿到决定照常发真 END，心跳持续到拆除前，之后由 gate 的空闲超时收尾（§5.3）。
+- **停机**（`BeginRoomShutdown`，2026-11-05 第二轮评审定）：先关观战准入，此后 AddObserver、AttachRelayGate、PromoteSpectateBroadcast 一律回 `kServiceUnavailable`（已登记观众的幂等重放照常放行）。还在打的房间（没有待提交终局）向全部观众发 166 `SOURCE_LOST` 并清退；不发 ABORTED（作废只由 match 的持久 ABORT 宣布）。有待提交终局的房间不发 END，排空窗口内拿到决定照常发真 END，心跳持续到拆除前，之后由 gate 的空闲超时收尾（§5.3）。
 - 帧的 `round_index` 取 `TurnResultS2C.round_index`；STATE 取快照的 `round_index`；END 取最后一回合的 `round_index`。
 
 ### 15.5 gate（`SpectateHub`，C++；Java 同语义）
@@ -548,7 +548,7 @@ FIX-CPP / FIX-GO 交付之后的第二轮语义评审（`reports/review2-gate.md
 | R2-GO 一般-6 | 观战列表逐条读成局，用的是 `context.Background()`：客户端取消后仍跑完，占权威库连接 | `loadSpectateBattle` 接请求 ctx，列表循环每条先查 ctx | `TestListWatchableBattlesStopsWhenRequestCancelled` |
 | R2-GO 测试 | `TestReleaseSpectateOnOutcomeSkipsWhenDraining` 断言紧跟异步发射，测不出排空时仍发任务 | 断言前 `WaitIdle` | 原用例 |
 | R2-BATTLE 一般-1（R2-GATE 观察同） | 等 SQL 决定期间不出观战帧：手动窗口 25 s 拖满再赶上提交重试，gate 30 s 空闲收尾抢在最后一回合与真实终局之前 | 通道心跳（§15.4），常量与静态断言收进 `node_command_topic.h`，gate `HubLimits` 引用同一份 | `ChannelKeepaliveRepublishesStateAfterTheKeepaliveInterval`、`OutcomeWaitKeepaliveCarriesFrozenStateAndPromotedCompleteOnlyBroadcasts` |
-| R2-BATTLE 一般-2 | 停机 / 维护排空后冻结的房间仍接纳 AddObserver、Attach、Promote：新观众拿到用不上的票，Promote 白占 L2 配额 | `AbortAllRooms` 关观战准入，三处入口回 `kServiceUnavailable` | `ShutdownClosesSpectateAdmission` |
+| R2-BATTLE 一般-2 | 停机 / 维护排空后冻结的房间仍接纳 AddObserver、Attach、Promote：新观众拿到用不上的票，Promote 白占 L2 配额 | `BeginRoomShutdown` 关观战准入，三处入口回 `kServiceUnavailable` | `ShutdownClosesSpectateAdmission` |
 | R2-BATTLE 拍板项 | 停机时还在打的房间，Java 推 166 ABORTED、C++ 什么都不发，两版客户端可见行为不一致 | 定为两版都发 166 `SOURCE_LOST` 并清退观众；不发 ABORTED（作废只由 match 的持久 ABORT 宣布）；有待提交终局的房间不发，心跳持续到拆除前。Java 改 reason 登记为待做 | `ShutdownTellsEveryChannelTheSourceIsLostForRoomsStillInProgress`、`ShutdownKeepsUndecidedOutcomeRoomsOnKeepaliveUntilTeardown`（取代 `ShutdownSendsNoEndFrameWhileOutcomeIsUndecided`） |
 | R2-BATTLE 测试 | 签票失败后同 op 重放回 `kServiceUnavailable` 没有用例；升档后的 COMPLETE 路径没有用例 | 补断言与用例 | `AssignmentFailureRemovesOriginalOperationAndNewOperationRecovers`（加重放断言）、`OutcomeWaitKeepaliveCarriesFrozenStateAndPromotedCompleteOnlyBroadcasts` |
 | R2-GATE 一般-1 | LeaveGame 之后会话留着旧角色号：拿旧角色凭证订上的帧在换角之后继续发给这个会话 | 订阅身份改为 `SpectateIdentityOf`（只认被接受的 Bind 写入的认证绑定） | `SpectateSessionIdentity.LeaveGameClearsTheIdentityUntilTheNextBind`、`RouteOnlyPlayerIsNotASubscriber`（走真实 Bind 与 LeaveGame 重置） |

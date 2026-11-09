@@ -120,7 +120,7 @@ public:
     // ── Generic / low-level ──────────────────────────────────────────────
 
     // Build and send a fully custom entry. 开了提交闸门时,只涉及一名玩家的流水先排队(见类注释)。
-    static void SendEntry(const TransactionLogEntry &entry);
+    static void RecordEntry(const TransactionLogEntry &entry);
 
     // ── 提交闸门(见类注释)──────────────────────────────────────────────
 
@@ -152,6 +152,6 @@ private:
     static uint64_t ResolvePlayerId(entt::entity player);
 
     // Generate a unique tx_id from the txlog id segment; kInvalidGuid when the segment
-    // has no id in hand (SendEntry then drops the entry, fail-closed).
+    // has no id in hand (RecordEntry then drops the entry, fail-closed).
     static uint64_t GenerateTxId();
 };

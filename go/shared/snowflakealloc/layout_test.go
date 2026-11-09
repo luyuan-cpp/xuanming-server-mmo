@@ -25,7 +25,7 @@ func TestLayout_ClusterAndSlotFillNodeBits(t *testing.T) {
 }
 
 // (cluster, slot) → worker → (cluster, slot) 往返,含边界值。
-// 与 C++ ParseGuid / ComposeID 用同一组向量对拍(设计稿 §5 / §3.7 第 6 条)。
+// 与 C++ ParseSnowflakeGuid / ComposeID 用同一组向量对拍(设计稿 §5 / §3.7 第 6 条)。
 func TestComposeDecodeWorkerID_RoundTrip(t *testing.T) {
 	cases := []struct {
 		cluster uint32

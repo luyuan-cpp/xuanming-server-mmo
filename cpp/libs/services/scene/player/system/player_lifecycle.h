@@ -1287,12 +1287,10 @@ public:
 	// A1′ 一律不写(fail-closed)。探针只在 scene 逻辑线程上调用。
 	static void SetNodeIdentityProbe(std::function<bool()> probe);
 
-	// 该玩家是否处于"归属交接在途"的冻结态(PlayerFrozenComp 存在)。
-	// 业务系统(AOI / 战斗 / 货币 / 背包 / 聊天 / 移动)写之前必须查它,为真就跳过:冻结中的实体
-	// 虽然 entt 实体还在,但盘上那份才是要交给目标节点的真值,本节点再写就是制造分叉。
-	// 名字里的 CrossZone 是历史遗留(最早只服务 player_migrate 搬数据链,该链已按
-	// cross-zone-scene-travel.md CZ-1 下线);现在跨 zone 传送与同 zone 跨节点换图都走它。
-	// 调用点有二十来处,不为改名去动它们。
+	// 只读查询有效玩家实体是否带有 PlayerFrozenComp。该标记用于同 zone / 跨 zone 的归属交接，
+	// 也用于角色交易封存；业务修改必须保护已冻结的交接或交易原件，不能继续制造分叉。
+	// 这里只查询这一种冻结标记，不涵盖 InBattleComp、UnregisterPlayer 等其他不可写原因，
+	// 不等价于 IsPlayerMutable 的取反。player_migrate 旧搬数据链已按 cross-zone-scene-travel.md CZ-1 下线。
 	//
 	// 不变量 I3(Battle 结算闸 player_battle.cpp IsSettlementApplicable 依赖它,签名与语义不改):对不在退出中的实体,
 	// 本函数为 false 的任何时刻,本节点一定仍是属主。能摘掉 PlayerFrozenComp 又保留实体的出口只有三类
@@ -1303,7 +1301,7 @@ public:
 	//       —— 采纳回滚后的 epoch 与解冻在同一回调里完成。
 	// 其余摘冻结的路径(DestroyDeposedPlayer、ConcludeHandoffAfterMarkSent、存盘被 CAS 拒、B7–B11)都同时销毁实体;
 	// "退出优先"只作用于带 UnregisterPlayer 的实体,战斗侧把它视同离线。新增任何解冻路径都必须重过这条论证。
-	static bool IsCrossZoneFrozen(entt::entity player);
+	static bool IsPlayerFrozen(entt::entity player);
 
 	// 场景循环只读可写性入口；实体不存在或缺归属资格均拒绝，不创建组件。
 	// 复用 player_mutability 唯一判据，使低层模块无需包含场景内部组件头。
@@ -1476,7 +1474,7 @@ public:
 	// 返回号(只供调用方打日志)。应答回来时 DispatchEnterSceneReply 只把号相等的那条交给普通换图收尾
 	// (18 起同 zone 交接 / 失败回 tip);旧版 scene_manager 不回显也按发送时捕获的号认领。
 	// 在途目标直接取自 req(scene_id、scene_conf_id 窄化成 uint32):"记下的目标"与"发出的目标"只有一个来源。
-	// 前置条件(入口内不重复判):调用方已过 IsSceneChangeBusy,且 smEntity 非空(已查 GetSceneManagerEntity)。
+	// 前置条件(入口内不重复判):调用方已过 IsSceneChangeBusy,且 smEntity 非空(已查 SelectSceneManagerEntity)。
 	// 实体无效时不登记、照样发出(与旧的"登记函数 + 直调生成发送函数"两步写法行为一致)。req 会被写入 correlation_id。
 	// playerRequested = false:服务器替玩家发的(队伍跟随),被拒只记日志,不起交接、不回 tip
 	// (见 PlayerSceneChangeInFlightComp)。
@@ -1658,24 +1656,11 @@ public:
 	// 只读:取某个玩家当前条目的副本,没有则为空。只供单测与排障(先例:GetPendingEnterMap),业务代码不要依赖它。
 	static std::optional<relocate_confirm::Entry> PeekRelocateConfirm(Guid playerId);
 
-	// True iff this player has an in-flight HandleExitGameNode → SavePlayer
-	// cycle that has not yet seen its HandlePlayerAsyncSaved completion. Detected
-	// by the presence of the UnregisterPlayer ECS marker on the player's entity.
-	//
-	// See todo.md #280 / NOTES Part 2 P0. Same-node reconnect is already handled
-	// by EnterScene clearing the marker; cross-node reconnect is gated by the
-	// player_locator 30s lease. This method exposes the saving state for callers
-	// that want to log / reject / wait when the save outruns those mechanisms.
-	//
-	// THREADING (Review O3, 2026-05-17): MUST be called from the ECS thread
-	// only. Internally does tlsEcs.GetPlayer(playerId) +
-	// tlsEcs.actorRegistry.any_of<UnregisterPlayer>(...), both of which touch
-	// entt's registry. entt is NOT thread-safe; calling this from a Kafka
-	// consumer thread, a gRPC handler thread, or a GM tool background thread
-	// is a data race against any ECS mutation happening on the loop thread.
-	// If you need cross-thread access, post a task to the EventLoop and read
-	// the result back via a future / channel.
-	static bool IsSaveInFlight(Guid playerId);
+	// 玩家是否正在等待退出收尾：只查询有效实体上的 UnregisterPlayer 标记。
+	// 退出存盘、释放及改派等收尾完成前，该标记可能持续存在；实体销毁或重连接回后为 false。
+	// 它不表示所有存盘是否在途，周期或资产存盘的未落定状态应查询 IsPlayerSaveUnsettled。
+	// 只允许在所属 scene EventLoop 线程调用；其他线程须投递到该线程再读取，不能并发访问 ECS。
+	static bool IsPlayerExitPending(Guid playerId);
 
 private:
 	// 仅供内存回归驱动真实取证应答入口,不增加产品调用面或替换归属判定。

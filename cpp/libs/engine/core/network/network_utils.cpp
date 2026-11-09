@@ -10,7 +10,7 @@
 
 NodeId GetGateNodeId(SessionId session_id)
 {
-	return static_cast<NodeId>(session_id >> SessionIdGenerator::node_bit());
+	return static_cast<NodeId>(session_id >> SessionIdGenerator::sequence_bit_count());
 }
 
 std::optional<entt::entity> ResolveLocalZoneGateEntity(SessionId sessionId)

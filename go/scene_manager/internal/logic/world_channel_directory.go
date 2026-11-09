@@ -28,7 +28,7 @@ import (
 // EnterScene 的选线预检(channel_pick.go)重新校验。
 //
 // 本文件对既有状态全程只读:只读 world_channels / draining 集合、scene:{id}:node、人数键和节点
-// 负载集;写的只有自己的两把键(线号表、目录)。刻意不调用 GetBestWorldChannel /
+// 负载集;写的只有自己的两把键(线号表、目录)。刻意不调用 SelectOrRecoverWorldChannel /
 // ReserveBestWorldChannelForEnter —— 它们在线全部陈旧时会懒改派并发 CreateScene,而列线每 2 秒
 // 跑一次,不能带这种副作用。也不调用 reentryBarrierBlocks:它每次被挡都会记
 // reentry_barrier_blocked_total 并打一条 Error,放进周期循环会把那条「稳态恒 0」的指标刷脏。
