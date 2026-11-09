@@ -55,8 +55,9 @@ public:
     //   4. AoiSystem::ResetEntityVisibility:旧位置的空间观察者收到销毁,新位置的可见性在下一次
     //      AoiSystem::Update 重建;
     //   5. BroadcastMove:仍显示它的显式关注者(网格范围外)立即收到新位置。
-    // 没有 Transform 的实体直接返回。只能在 scene 节点 loop 线程调用。
-    static void TeleportWithinScene(entt::entity entity, const Vector3& location, const Rotation& rotation,
+    // 严格节庆地图要求导航可用、终点合法且同域可达；拒绝时返回 false 且不写任何位置状态。
+    // 没有 Transform 的实体返回 false。只能在 scene 节点 loop 线程调用。
+    static bool TeleportWithinScene(entt::entity entity, const Vector3& location, const Rotation& rotation,
                                     uint32_t reason);
 
     // 移动上报(MoveStart / MoveSync / MoveStop)在裁决之前先问这一句:返回 true 表示这条上报是

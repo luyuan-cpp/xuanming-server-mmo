@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0,
+    "y": 0,
+    "width": 307.20000000000005,
+    "height": 204.8
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 32.00000000000001,
+    "width": 307.20000000000005,
+    "height": 172.80000000000004
+  },
+  "cellSize": 2,
+  "imageRect": {
+    "x": 0,
+    "y": 0,
+    "width": 3072,
+    "height": 1728
+  },
+  "referenceWidth": 1920,
+  "referenceHeight": 1080,
+  "walkmaskColumns": 154,
+  "walkmaskRows": 103,
+  "spawnWorld": {
+    "x": 192.00000000000003,
+    "y": 0.0,
+    "z": 88.80000000000001
+  },
+  "schemaVersion": 2,
+  "key": "map19004",
+  "sceneId": 19004,
+  "name": "地图 19004",
+  "revision": "festival20261107",
+  "appearance": "mid-autumn",
+  "resourceRoot": "World/QdaoMaps20261102/map19004/festival20261107/mid-autumn/b742f5282b9f6109ee5f87d024efaa4d4cd9143731e1e1f98587cb5d98282a63/",
+  "clientOnly": true,
+  "authoritativeServerRegistered": false,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 3072,
+    "height": 2048
+  },
+  "layoutSha256": "b742f5282b9f6109ee5f87d024efaa4d4cd9143731e1e1f98587cb5d98282a63",
+  "sourceSelectionPath": "Docs/VerificationEvidence/festival-maps-20261107/selection.json",
+  "sourceSelectionSha256": "1c4ac495a0e617a9d2e92a92b44a66d7ae9fb712834ef3ffa4b6b2c4607c2c5d",
+  "sourceEvidencePath": "Docs/VerificationEvidence/festival-maps-20261107/source-evidence/map19004/mid-autumn/delivery.json",
+  "sourceEvidenceSha256": "7e351d63627f965dc4347d735442bfbac1a525aed5be80d620e698c052218ec1",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "navigationSha256": "adbbbd9935a7388508b6b57ee429ab77eeed0d10812dca5b00abef25472257d3",
+  "walkmaskSha256": "952c1f9f03c2f5c25f6600153b967d250298f2b4b6a0d52d26659244abf38582",
+  "walkmaskPackedSha256": "96ae60eb9b0c3ba450723465b82021dc64f945cad0536853bc84f7447d460555",
+  "navigationStatus": "conservative_visible_ground_client_only",
+  "runtimeEngineAcceptance": false
+}

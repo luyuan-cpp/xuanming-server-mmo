@@ -60,8 +60,9 @@ void WriteLocation(Vector3& dst, const Location& src)
 void ApplyReportedVelocity(const entt::entity player, const Velocity& reported)
 {
 	Velocity clamped = reported;
-	const double speed = std::sqrt(reported.x() * reported.x() +
-		reported.y() * reported.y() + reported.z() * reported.z());
+	if (NavQuerySystem::MissingRequiredNavigation(player)) clamped.Clear();
+	const double speed = std::sqrt(clamped.x() * clamped.x() +
+		clamped.y() * clamped.y() + clamped.z() * clamped.z());
 	if (speed > kMaxTrustedClientSpeed)
 	{
 		const double scale = kMaxTrustedClientSpeed / speed;
@@ -99,7 +100,7 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 	const char* verdict = "accepted";
 	if (auto* nav = NavQuerySystem::GetNavForPlayer(player))
 	{
-		Location clamped;
+		Location clamped = current;
 		if (NavQuerySystem::ValidateMove(*nav, current, reported, clamped))
 		{
 			accepted = clamped;
@@ -118,7 +119,7 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 				// 起点不在网格上:引导落位到上报点的吸附结果;
 				// 两头都不在网格 → 落到场景出生点(原位是非法点,不能回给客户端)。
 				Location snappedReported;
-				if (NavQuerySystem::SnapToMesh(*nav, reported, snappedReported))
+				if (!nav->strictMask && NavQuerySystem::SnapToMesh(*nav, reported, snappedReported))
 				{
 					accepted = snappedReported;
 					verdict = "guided";
@@ -130,6 +131,12 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 				}
 			}
 		}
+	}
+	else if (NavQuerySystem::MissingRequiredNavigation(player))
+	{
+		accepted = current;
+		verdict = "navigation unavailable";
+		if (auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(player)) velocity->Clear();
 	}
 
 	WriteLocation(*transform->mutable_location(), accepted);

@@ -67,6 +67,7 @@
 #include <string>
 #include <vector>
 
+#include "../../cpp/libs/services/scene/spatial/comp/nav_mask.h"
 #include "Recast/Recast.h"
 #include "Detour/DetourNavMesh.h"
 #include "Detour/DetourNavMeshBuilder.h"
@@ -223,7 +224,7 @@ bool ExtractWalkMask(const std::string& csPath, std::vector<uint8_t>& mask)
 }
 
 // 独立地图资源使用同一 150×150、MSB-first 位图契约,避免伪造 C# 源文件。
-bool LoadMaskBase64(const std::string& path, std::vector<uint8_t>& mask)
+bool LoadMaskBase64(const std::string& path, std::vector<uint8_t>& mask, const NavMask& grid)
 {
 	std::ifstream file(path, std::ios::binary);
 	if (!file)
@@ -233,33 +234,35 @@ bool LoadMaskBase64(const std::string& path, std::vector<uint8_t>& mask)
 	}
 	std::stringstream text;
 	text << file.rdbuf();
-	const size_t expected = (kMaskResolution * kMaskResolution + 7) / 8;
+	const size_t cells = static_cast<size_t>(grid.columns) * grid.rows;
+	const size_t expected = (cells + 7) / 8;
 	std::string encoded;
 	for (const char c : text.str())
-	{
 		if (!std::isspace(static_cast<unsigned char>(c))) encoded.push_back(c);
-	}
-	// 2813 字节编码恰好一个末尾 '=';不接受中间 padding 或截断数据。
 	const size_t encodedSize = ((expected + 2) / 3) * 4;
-	if (encoded.size() != encodedSize || encoded.find('=') != encodedSize - 1 ||
-		!DecodeBase64(encoded, mask) || mask.size() != expected)
+	const size_t padding = (3 - expected % 3) % 3;
+	if (encoded.size() != encodedSize ||
+		encoded.substr(encodedSize - padding) != std::string(padding, '=') ||
+		encoded.substr(0, encodedSize - padding).find('=') != std::string::npos ||
+		!DecodeBase64(encoded, mask) || mask.size() != expected ||
+		(mask.back() & ((1 << ((8 - cells % 8) % 8)) - 1)) != 0)
 	{
-		std::fprintf(stderr, "error: mask must be valid base64 for exactly %zu bytes\n", expected);
+		std::fprintf(stderr, "error: mask must be valid base64 for exactly %zu bytes with zero tail bits\n", expected);
 		return false;
 	}
 	return true;
 }
 
-inline bool MaskWalkable(const std::vector<uint8_t>& mask, int cx, int cy)
+inline bool MaskWalkable(const std::vector<uint8_t>& mask, int cx, int cy, int columns)
 {
-	const int i = cy * kMaskResolution + cx;
+	const int i = cy * columns + cx;
 	return (mask[i >> 3] & 0x80 >> (i & 7)) != 0;
 }
 
 // 可走格 → 地面三角面。同一行的连续可走格合并成一个 quad 降三角数。
 // 顶点绕序保证 recast 三角法线朝 +Y(cross(v1-v0, v2-v0) 的 y 分量为正),
 // 这样 rcMarkWalkableTriangles 会把它们标成可走面。
-TriMesh BuildMaskGeometry(const std::vector<uint8_t>& mask)
+TriMesh BuildMaskGeometry(const std::vector<uint8_t>& mask, const NavMask& grid)
 {
 	TriMesh mesh;
 	auto addQuad = [&mesh](double x0, double x1, double z0, double z1) {
@@ -282,24 +285,25 @@ TriMesh BuildMaskGeometry(const std::vector<uint8_t>& mask)
 	};
 
 	int quadCount = 0;
-	for (int cy = 0; cy < kMaskResolution; ++cy)
+	for (int cy = 0; cy < grid.rows; ++cy)
 	{
 		// 画面 y 向下:cy 行覆盖 z∈[maxZ-(cy+1)*cell, maxZ-cy*cell]。
-		const double z0 = kPaintingMaxZ - (cy + 1) * kMaskCellSize;
-		const double z1 = kPaintingMaxZ - cy * kMaskCellSize;
+		const double z0 = std::max(grid.minZ + (grid.rows - 1 - cy) * grid.cellSize, grid.effectiveZ);
+		const double z1 = std::min(grid.minZ + (grid.rows - cy) * grid.cellSize, grid.effectiveZ + grid.effectiveHeight);
+		if (z0 >= z1) continue;
 		int runStart = -1;
-		for (int cx = 0; cx <= kMaskResolution; ++cx)
+		for (int cx = 0; cx <= grid.columns; ++cx)
 		{
-			const bool walkable = cx < kMaskResolution && MaskWalkable(mask, cx, cy);
+			const bool walkable = cx < grid.columns && MaskWalkable(mask, cx, cy, grid.columns);
 			if (walkable && runStart < 0)
 			{
 				runStart = cx;
 			}
 			else if (!walkable && runStart >= 0)
 			{
-				const double x0 = kPaintingMinX + runStart * kMaskCellSize;
-				const double x1 = kPaintingMinX + cx * kMaskCellSize;
-				addQuad(x0, x1, z0, z1);
+				const double x0 = std::max(grid.minX + runStart * grid.cellSize, grid.effectiveX);
+				const double x1 = std::min(grid.minX + cx * grid.cellSize, grid.effectiveX + grid.effectiveWidth);
+				if (x0 < x1) addQuad(x0, x1, z0, z1);
 				++quadCount;
 				runStart = -1;
 			}
@@ -718,19 +722,21 @@ bool ProbeNavMesh(const dtNavMesh& navMesh, const std::vector<ProbePoint>& probe
 
 // 独立位图的每一个格心都要与最终 Detour 网格一致,不仅验证出生点。
 // 小区域被 Recast 丢弃、阻挡边缘扩大等问题在写正式产物之前直接拒绝。
-bool VerifyMaskCells(const dtNavMesh& navMesh, const std::vector<uint8_t>& mask)
+bool VerifyMaskCells(const dtNavMesh& navMesh, const std::vector<uint8_t>& mask, const NavMask& grid)
 {
 	dtNavMeshQuery query;
 	if (dtStatusFailed(query.init(&navMesh, 2048))) return false;
 	const dtReal extents[3] = {2.0, 4.0, 2.0};
 	const dtQueryFilter filter;
 	int mismatches = 0;
-	for (int row = 0; row < kMaskResolution; ++row)
+	for (int row = 0; row < grid.rows; ++row)
 	{
-		for (int col = 0; col < kMaskResolution; ++col)
+		for (int col = 0; col < grid.columns; ++col)
 		{
-			const dtReal center[3] = {kPaintingMinX + (col + 0.5) * kMaskCellSize,
-				0, kPaintingMaxZ - (row + 0.5) * kMaskCellSize};
+			double x0, x1, z0, z1;
+			const bool inContent = grid.CellBounds(col, row, x0, x1, z0, z1);
+			const dtReal center[3] = {inContent ? (x0 + x1) / 2 : grid.minX + (col + 0.5) * grid.cellSize,
+				0, inContent ? (z0 + z1) / 2 : grid.minZ + (grid.rows - row - 0.5) * grid.cellSize};
 			dtReal nearest[3] = {0, 0, 0};
 			dtPolyRef ref = 0;
 			const auto status = query.findNearestPoly(center, extents, &filter, &ref, nearest);
@@ -738,17 +744,71 @@ bool VerifyMaskCells(const dtNavMesh& navMesh, const std::vector<uint8_t>& mask)
 				std::fabs(nearest[0] - center[0]) <= 0.02 &&
 				std::fabs(nearest[1] - center[1]) <= 0.02 &&
 				std::fabs(nearest[2] - center[2]) <= 0.02;
-			if (onMesh != MaskWalkable(mask, col, row))
+			if (onMesh != MaskWalkable(mask, col, row, grid.columns))
 			{
 				if (mismatches < 8)
 					std::fprintf(stderr, "mask mismatch col=%d row=%d expected=%d actual=%d\n",
-						col, row, MaskWalkable(mask, col, row), onMesh);
+						col, row, MaskWalkable(mask, col, row, grid.columns), onMesh);
 				++mismatches;
 			}
 		}
 	}
-	std::printf("mask cells checked=%d mismatches=%d\n", kMaskResolution * kMaskResolution, mismatches);
+	std::printf("mask cells checked=%d mismatches=%d\n", grid.columns * grid.rows, mismatches);
 	return mismatches == 0;
+}
+
+// 四邻接分域与禁止穿角的八邻接具有相同连通分量；逐格检查最终 Detour 路径。
+bool VerifyMaskConnectivity(const dtNavMesh& mesh, const NavMask& grid)
+{
+	dtNavMeshQuery query;
+	if (dtStatusFailed(query.init(&mesh, 8192))) return false;
+	std::vector<int> component(grid.columns * grid.rows, -1), representatives;
+	std::vector<dtPolyRef> refs(component.size(), 0);
+	std::vector<ProbePoint> positions(component.size());
+	const dtQueryFilter filter;
+	const dtReal extents[3] = {2,4,2};
+	for (int i = 0; i < component.size(); ++i)
+	{
+		if (!grid.Cell(i % grid.columns, i / grid.columns)) continue;
+		double x0,x1,z0,z1;
+		if (!grid.CellBounds(i % grid.columns, i / grid.columns,x0,x1,z0,z1)) return false;
+		auto& p = positions[i]; p.v[0]=(x0+x1)/2; p.v[1]=0; p.v[2]=(z0+z1)/2;
+		dtReal nearest[3];
+		if (dtStatusFailed(query.findNearestPoly(p.v,extents,&filter,&refs[i],nearest)) || refs[i]==0) return false;
+		if (component[i] != -1) continue;
+		int label=static_cast<int>(representatives.size()); representatives.push_back(i);
+		std::vector<int> queue{i}; component[i]=label;
+		for (size_t q=0; q<queue.size(); ++q)
+		{
+			int cell=queue[q], col=cell%grid.columns, row=cell/grid.columns;
+			const int dx[]={-1,1,0,0}, dy[]={0,0,-1,1};
+			for (int n=0;n<4;++n) if (grid.Cell(col+dx[n],row+dy[n]))
+			{
+				int next=(row+dy[n])*grid.columns+col+dx[n];
+				if (component[next]==-1) { component[next]=label; queue.push_back(next); }
+			}
+		}
+	}
+	auto reachable = [&](int from, int to) {
+		dtQueryResult path;
+		auto status=query.findPath(refs[from],refs[to],positions[from].v,positions[to].v,
+			1e30,&filter,path,nullptr);
+		if (dtStatusFailed(status) || (status & DT_PARTIAL_RESULT) || path.size()==0) return false;
+		std::vector<dtPolyRef> route(path.size()); path.copyRefs(route.data(),static_cast<int>(route.size()));
+		return route.back()==refs[to];
+	};
+	int checked=0;
+	for (int i=0;i<component.size();++i) if (component[i]>=0)
+	{
+		if (!reachable(representatives[component[i]],i))
+		{ std::fprintf(stderr,"error: disconnected walkable cell %d\n",i); return false; }
+		++checked;
+	}
+	for (int a=0;a<representatives.size();++a) for(int b=a+1;b<representatives.size();++b)
+		if (reachable(representatives[a],representatives[b]))
+		{ std::fprintf(stderr,"error: disconnected mask components were joined\n"); return false; }
+	std::printf("mask connectivity components=%zu reachable_cells=%d cross_component_bridges=0\n",representatives.size(),checked);
+	return true;
 }
 
 }  // namespace
@@ -760,6 +820,8 @@ int main(int argc, char** argv)
 	std::string objPath;
 	std::string outPath;
 	BakeConfig bake;
+	NavMask grid;
+	bool customGrid = false;
 	std::vector<ProbePoint> probes;
 	bool defaultProbe = true;
 	int filterLedgesArg = -1;  // -1 = 按模式默认(painted-city 关,obj 开)
@@ -771,6 +833,21 @@ int main(int argc, char** argv)
 		if (arg == "--filter-ledges") filterLedgesArg = std::atoi(next());
 		else if (arg == "--painted-city") paintedCityPath = next();
 		else if (arg == "--mask-base64") maskBase64Path = next();
+		else if (arg == "--mask-grid")
+		{
+			std::string value = next(); int n = 0;
+			if (std::sscanf(value.c_str(), "%d,%d,%lf,%lf,%lf,%lf,%lf%n", &grid.columns, &grid.rows,
+				&grid.cellSize, &grid.minX, &grid.minZ, &grid.width, &grid.height, &n) != 7 || n != value.size())
+			{ std::fprintf(stderr, "error: invalid --mask-grid\n"); return 1; }
+			customGrid = true;
+		}
+		else if (arg == "--effective-rect")
+		{
+			std::string value = next(); int n = 0;
+			if (std::sscanf(value.c_str(), "%lf,%lf,%lf,%lf%n", &grid.effectiveX, &grid.effectiveZ,
+				&grid.effectiveWidth, &grid.effectiveHeight, &n) != 4 || n != value.size())
+			{ std::fprintf(stderr, "error: invalid --effective-rect\n"); return 1; }
+		}
 		else if (arg == "--obj") objPath = next();
 		else if (arg == "--out") outPath = next();
 		else if (arg == "--cs") bake.cellSize = std::atof(next());
@@ -813,6 +890,13 @@ int main(int argc, char** argv)
 		std::fprintf(stderr, "error: --mask-base64 requires at least one explicit --probe x,y,z (scene spawn)\n");
 		return 1;
 	}
+	if (!grid.ValidGeometry() || (customGrid && maskBase64Path.empty()) ||
+		!std::isfinite(bake.cellSize) || bake.cellSize <= 0 || bake.cellHeight != 0.2 ||
+		!std::isfinite(bake.agentRadius) || bake.agentRadius < 0 ||
+		!std::isfinite(bake.agentHeight) || bake.agentHeight <= 0 ||
+		!std::isfinite(bake.agentMaxClimb) || bake.agentMaxClimb < 0 ||
+		bake.tileSizeVx < 16 || bake.tileSizeVx > 1024)
+	{ std::fprintf(stderr, "error: invalid mask geometry or bake parameters\n"); return 1; }
 	bake.filterLedges = filterLedgesArg >= 0 ? filterLedgesArg != 0 :
 		(paintedCityPath.empty() && maskBase64Path.empty());
 	std::printf("ledge filter: %s\n", bake.filterLedges ? "on" : "off (mesh boundary flush with mask)");
@@ -832,12 +916,13 @@ int main(int argc, char** argv)
 	{
 		std::vector<uint8_t> mask;
 		if (!ExtractWalkMask(paintedCityPath, mask)) return 1;
-		mesh = BuildMaskGeometry(mask);
+		mesh = BuildMaskGeometry(mask, grid);
 	}
 	else if (!maskBase64Path.empty())
 	{
-		if (!LoadMaskBase64(maskBase64Path, independentMask)) return 1;
-		mesh = BuildMaskGeometry(independentMask);
+		if (!LoadMaskBase64(maskBase64Path, independentMask, grid)) return 1;
+		mesh = BuildMaskGeometry(independentMask, grid);
+		grid.packed = independentMask;
 	}
 	else if (!LoadObj(objPath, mesh))
 	{
@@ -929,10 +1014,13 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	if (!independentMask.empty() && !VerifyMaskCells(navMesh, independentMask))
+	if (!independentMask.empty() && !VerifyMaskCells(navMesh, independentMask, grid))
 	{
 		std::fprintf(stderr, "error: mask/navmesh cell contract broken, refusing to write %s\n", outPath.c_str());
 		return 1;
 	}
-	return SaveNavMesh(outPath, navMesh) ? 0 : 1;
+	if (customGrid && !VerifyMaskConnectivity(navMesh, grid)) return 1;
+	if (!SaveNavMesh(outPath, navMesh)) return 1;
+	if (customGrid && !grid.Save(outPath + ".mask")) return 1;
+	return 0;
 }

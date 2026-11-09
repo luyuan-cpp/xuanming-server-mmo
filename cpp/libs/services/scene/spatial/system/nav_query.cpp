@@ -9,6 +9,7 @@
 #include "spatial/comp/nav_comp.h"
 #include "spatial/manager/scene_nav.h"
 #include "thread_context/ecs_context.h"
+#include "table/code/basescene_table.h"
 
 namespace
 {
@@ -25,6 +26,9 @@ constexpr int kMaxRaycastPolys = 256;
 // 撞墙后从阻挡点往回缩的距离,避免 clamp 出的位置恰好骑在网格边缘、
 // 下一次吸附落到墙对面。
 constexpr dtReal kHitPullback = 0.05;
+// Unity 碰撞地面顶面 -0.05m 加 CharacterController skinWidth 会改变脚底 Y；
+// 只容忍有限地面偏移，接受后统一投影为服务器地平面，水平精度仍为 2cm。
+constexpr dtReal kFestivalGroundTolerance = 0.2;
 
 struct NavVec
 {
@@ -46,14 +50,37 @@ void ToServer(const dtReal* nav, Location& out)
 
 bool SnapNav(NavComp& nav, const NavVec& in, dtPolyRef& outRef, NavVec& outPos)
 {
+	if (!std::isfinite(in.v[0]) || !std::isfinite(in.v[1]) || !std::isfinite(in.v[2]) ||
+		(nav.strictMask && (!nav.mask.Contains(in.v[0], in.v[2]) ||
+		 std::abs(in.v[1]) > kFestivalGroundTolerance))) return false;
 	const dtQueryFilter filter;
 	outRef = 0;
 	const dtStatus status = nav.navQuery.findNearestPoly(
 		in.v, kSnapExtents, &filter, &outRef, outPos.v);
-	return dtStatusSucceed(status) && outRef != 0;
+	const bool accepted = dtStatusSucceed(status) && outRef != 0 && (!nav.strictMask ||
+		(nav.mask.Contains(outPos.v[0], outPos.v[2]) && std::abs(outPos.v[0] - in.v[0]) <= 0.02 &&
+		 std::abs(outPos.v[2] - in.v[2]) <= 0.02 && std::abs(outPos.v[1]) <= 0.02));
+	if (accepted && nav.strictMask) outPos.v[1] = 0;
+	return accepted;
 }
 
 }  // namespace
+
+bool NavQuerySystem::RequiresNavigation(const uint32_t sceneConfigId)
+{
+	const auto* row = BaseSceneTableManager::Instance().FindByIdSilent(sceneConfigId).first;
+	// 本批严格合同显式按目录声明；旧图的无导航兼容行为保持原状。
+	return row != nullptr && row->nav_bin_file().starts_with("data/scene_nav_bin/festival_maps/");
+}
+
+bool NavQuerySystem::MissingRequiredNavigation(const entt::entity player)
+{
+	const auto* binding = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+	if (!binding || binding->sceneEntity == entt::null) return false;
+	const auto* scene = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(binding->sceneEntity);
+	return scene && RequiresNavigation(scene->scene_config_id()) &&
+		SceneNavManager::Instance().Get(scene->scene_config_id()) == nullptr;
+}
 
 NavComp* NavQuerySystem::GetNavForPlayer(const entt::entity player)
 {
@@ -86,6 +113,9 @@ bool NavQuerySystem::SnapToMesh(NavComp& nav, const Location& in, Location& out)
 bool NavQuerySystem::ValidateMove(NavComp& nav, const Location& from, const Location& to,
 	Location& clamped)
 {
+	clamped = from;
+	if (nav.strictMask && (!std::isfinite(to.z()) || std::abs(to.z()) > kFestivalGroundTolerance ||
+		!nav.mask.Segment(from.y(), from.x(), to.y(), to.x()))) return false;
 	dtPolyRef startRef = 0;
 	NavVec startPos{};
 	if (!SnapNav(nav, ToNav(from), startRef, startPos))
@@ -101,7 +131,7 @@ bool NavQuerySystem::ValidateMove(NavComp& nav, const Location& from, const Loca
 	int visitedCount = 0;
 	const dtStatus status = nav.navQuery.raycast(startRef, startPos.v, endPos.v,
 		&filter, &t, hitNormal, visited, &visitedCount, kMaxRaycastPolys);
-	if (dtStatusFailed(status))
+	if (dtStatusFailed(status) || (status & DT_BUFFER_TOO_SMALL))
 	{
 		// 查询本身失败(含 buffer 溢出):保守当作从起点就被挡。
 		ToServer(startPos.v, clamped);
@@ -177,6 +207,7 @@ bool NavQuerySystem::FindPath(NavComp& nav, const Location& from, const Location
 
 	std::vector<dtPolyRef> polys(pathResult.size());
 	pathResult.copyRefs(polys.data(), static_cast<int>(polys.size()));
+	if (nav.strictMask && ((pathStatus & DT_PARTIAL_RESULT) || polys.back() != endRef)) return false;
 
 	dtQueryResult straight;
 	const dtStatus straightStatus = nav.navQuery.findStraightPath(
@@ -192,6 +223,12 @@ bool NavQuerySystem::FindPath(NavComp& nav, const Location& from, const Location
 		Location point;
 		ToServer(straight.getPos(i), point);
 		outPath.push_back(point);
+	}
+	if (nav.strictMask)
+	{
+		for (size_t i = 1; i < outPath.size(); ++i)
+			if (!nav.mask.Segment(outPath[i-1].y(), outPath[i-1].x(), outPath[i].y(), outPath[i].x()))
+			{ outPath.clear(); return false; }
 	}
 	return true;
 }

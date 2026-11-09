@@ -13,7 +13,7 @@ func TestCharacterAppearanceRejectsRemovedAndMalformedIDs(t *testing.T) {
 	for _, id := range []string{
 		"", "00_reference_topright_boy", "01_ice_sword_girl", "02_fire_talisman_boy",
 		"03_lotus_healer_girl", "04_mountain_guardian_boy", "05_celestial_musician_girl",
-		"06_thunder_caster_boy", "08_alchemy_prodigy_boy", "09_bamboo_archer_girl",
+		"08_alchemy_prodigy_boy", "09_bamboo_archer_girl",
 		"10_crimson_spear_girl", "15_water_dragon_scholar_boy", "17_ghost_script_calligrapher_boy",
 	} {
 		if !validCharacterAppearance(id) {
@@ -21,12 +21,15 @@ func TestCharacterAppearanceRejectsRemovedAndMalformedIDs(t *testing.T) {
 		}
 	}
 	for _, id := range []string{
-		"07_moon_shadow_assassin_girl", "14_short_hair_snow_summoner_girl", "20_star_formation_master_girl",
+		"06_thunder_caster_boy", "07_moon_shadow_assassin_girl", "14_short_hair_snow_summoner_girl", "20_star_formation_master_girl",
 		"11_removed", "04", "04_mountain_guardian_boy/../other", " 04_mountain_guardian_boy",
 	} {
 		if validCharacterAppearance(id) {
 			t.Fatalf("非法或删除身份被放行: %q", id)
 		}
+	}
+	if retiredCharacterAppearance("06_thunder_caster_boy") {
+		t.Fatal("彻底删除的外观不能通过退役角色重试入口恢复")
 	}
 }
 

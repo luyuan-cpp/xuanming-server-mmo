@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "key": "map01001",
+  "sceneId": 1001,
+  "revision": "festival20261107",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 204.8,
+      "height": 102.4
+    },
+    "effectiveWorldRect": {
+      "x": 34.13333333333333,
+      "y": 0.0,
+      "width": 136.53333333333333,
+      "height": 102.4
+    },
+    "cellSize": 2,
+    "imageRect": {
+      "x": 341.3333333333333,
+      "y": 0,
+      "width": 1365.3333333333333,
+      "height": 1024
+    },
+    "referenceWidth": 900,
+    "referenceHeight": 675,
+    "walkmaskColumns": 103,
+    "walkmaskRows": 52,
+    "spawnWorld": {
+      "x": 80.0,
+      "y": 0.0,
+      "z": 30.400000000000002
+    }
+  },
+  "stats": {
+    "walkableCells": 250,
+    "totalCells": 5356,
+    "componentCount": 1,
+    "componentSizes": [
+      250
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "entrance": {
+        "pixel": [
+          720,
+          710
+        ],
+        "world": {
+          "x": 72.0,
+          "y": 0.0,
+          "z": 31.400000000000002
+        },
+        "component": 0
+      },
+      "floor": {
+        "pixel": [
+          920,
+          720
+        ],
+        "world": {
+          "x": 92.0,
+          "y": 0.0,
+          "z": 30.400000000000002
+        },
+        "component": 0
+      },
+      "counter_approach": {
+        "pixel": [
+          1040,
+          650
+        ],
+        "world": {
+          "x": 104.0,
+          "y": 0.0,
+          "z": 37.4
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "counter",
+      "screen",
+      "mannequin",
+      "exterior",
+      "fabric_shelf"
+    ],
+    "connectedRoutes": [
+      [
+        "entrance",
+        "floor"
+      ],
+      [
+        "floor",
+        "counter_approach"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "entrance",
+        "to": "floor",
+        "gridDistanceWorldUnits": 20.0
+      },
+      {
+        "from": "floor",
+        "to": "counter_approach",
+        "gridDistanceWorldUnits": 14.48528137423857
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 1.1111111111111112,
+    "separatedRoutes": [],
+    "maskSha256": "e45cb03b7b55b315c57ea00e16a9118a6786f37e646c0bb7c0aeefbaf3f57234",
+    "maskBytes": 670,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": false
+}

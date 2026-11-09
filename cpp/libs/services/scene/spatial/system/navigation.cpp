@@ -3,6 +3,10 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include "core/utils/encode/sha256.h"
 
 #include "muduo/base/Logging.h"
 
@@ -34,6 +38,25 @@ int CountLoadedTiles(const dtNavMesh& navMesh)
 // 同一文件只加载与初始化一次;每个场景自己的出生点在注册前单独验证。
 std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 {
+	const bool festival = navPath.find("/festival_maps/") != std::string::npos ||
+		navPath.find("\\festival_maps\\") != std::string::npos;
+	if (festival)
+	{
+		std::ifstream checksums(navPath + ".sha256");
+		std::string expectedNav, expectedMask, extra;
+		if (!(checksums >> expectedNav >> expectedMask) || (checksums >> extra) ||
+			expectedNav.size() != 64 || expectedMask.size() != 64)
+		{ LOG_ERROR << "skip nav registration (missing checksums): " << navPath; return nullptr; }
+		auto matches = [](const std::string& path, const std::string& expected) {
+			std::ifstream input(path, std::ios::binary | std::ios::ate);
+			if (!input || input.tellg() <= 0 || input.tellg() > 64 * 1024 * 1024) return false;
+			input.seekg(0); std::ostringstream bytes; bytes << input.rdbuf();
+			return Sha256::HashToHex(bytes.str()) == expected;
+		};
+		// 在 Detour 解析前核 SHA，损坏的长度/索引不能进入旧 ABI 原生装载器。
+		if (!matches(navPath, expectedNav) || !matches(navPath + ".mask", expectedMask))
+		{ LOG_ERROR << "skip nav registration (checksum mismatch): " << navPath; return nullptr; }
+	}
 	// 堆上就地构造:navQuery.init 会把 &navMesh 存进内部裸指针,
 	// 对象必须先落在最终地址上再做加载/初始化(旧写法先在栈上装好
 	// 再 emplace,浅拷贝进 map 后栈局部析构,map 里全是悬垂指针,
@@ -51,6 +74,32 @@ std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 	{
 		LOG_ERROR << "skip nav registration (navQuery init failed): " << navPath;
 		return nullptr;
+	}
+	if (festival || std::filesystem::exists(navPath + ".mask"))
+	{
+		if (!nav->mask.Load(navPath + ".mask"))
+		{
+			LOG_ERROR << "skip nav registration (missing or invalid exact mask): " << navPath;
+			return nullptr;
+		}
+		// 对真实运行端载入后的 Detour 逐格核对；损坏、错配伴随文件不能变成放行依据。
+		const dtQueryFilter filter;
+		const dtReal extents[3] = {2, 4, 2};
+		for (int row = 0; row < nav->mask.rows; ++row)
+			for (int col = 0; col < nav->mask.columns; ++col)
+			{
+				double x0, x1, z0, z1;
+				const bool inside = nav->mask.CellBounds(col, row, x0, x1, z0, z1);
+				const dtReal p[3] = {inside ? (x0+x1)/2 : nav->mask.minX + (col+0.5)*nav->mask.cellSize,
+					0, inside ? (z0+z1)/2 : nav->mask.minZ + (nav->mask.rows-row-0.5)*nav->mask.cellSize};
+				dtPolyRef ref = 0; dtReal nearest[3]{};
+				const auto status = nav->navQuery.findNearestPoly(p, extents, &filter, &ref, nearest);
+				const bool found = dtStatusSucceed(status) && ref != 0 &&
+					std::abs(nearest[0]-p[0]) <= 0.02 && std::abs(nearest[1]) <= 0.02 && std::abs(nearest[2]-p[2]) <= 0.02;
+				if (found != nav->mask.Cell(col,row))
+				{ LOG_ERROR << "skip nav registration (exact mask mismatch): " << navPath; return nullptr; }
+			}
+		nav->strictMask = true;
 	}
 
 	return nav;

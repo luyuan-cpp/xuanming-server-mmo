@@ -28,6 +28,8 @@
 #include "node/system/node/node_util.h"
 #include "battle/system/player_battle.h"
 #include "spatial/system/scene_spawn.h"
+#include "spatial/system/nav_query.h"
+#include "spatial/manager/scene_nav.h"
 #include "spatial/system/view.h"
 #include "spatial/system/aoi.h"
 #include "player/comp/player_ownership_comp.h"
@@ -286,6 +288,8 @@ uint32_t PlayerSceneSystem::CheckEnterScene(Guid playerId, SceneEntity scene)
 	if (!tlsEcs.sceneRegistry.valid(scene)) return kEnterSceneNotFound;
 	const auto* info = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(scene);
 	if (info == nullptr) return kEnterSceneNotFound;
+	if (NavQuerySystem::RequiresNavigation(info->scene_config_id()) &&
+		SceneNavManager::Instance().Get(info->scene_config_id()) == nullptr) return kServiceUnavailable;
 	return playerId != 0 ? kSuccess : kInvalidParameter;
 }
 

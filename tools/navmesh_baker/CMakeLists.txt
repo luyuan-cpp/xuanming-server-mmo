@@ -16,6 +16,11 @@ project(navmesh_baker CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+add_executable(nav_mask_contract_test nav_mask_contract_test.cpp)
+if(MSVC)
+    target_compile_options(nav_mask_contract_test PRIVATE /utf-8)
+endif()
+
 set(UE5NAVMESH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ue5navmesh)
 
 file(GLOB RECAST_SOURCES ${UE5NAVMESH_DIR}/Private/Recast/*.cpp)

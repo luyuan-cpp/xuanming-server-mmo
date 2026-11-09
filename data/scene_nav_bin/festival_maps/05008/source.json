@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0,
+    "y": 0,
+    "width": 307.20000000000005,
+    "height": 204.8
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 21.050000000000004,
+    "width": 294.00000000000006,
+    "height": 183.75000000000003
+  },
+  "cellSize": 2,
+  "imageRect": {
+    "x": 0,
+    "y": 0,
+    "width": 2940,
+    "height": 1837.5
+  },
+  "referenceWidth": 2400,
+  "referenceHeight": 1500,
+  "walkmaskColumns": 154,
+  "walkmaskRows": 103,
+  "spawnWorld": {
+    "x": 91.2,
+    "y": 0.0,
+    "z": 64.0
+  },
+  "schemaVersion": 2,
+  "key": "map05008",
+  "sceneId": 5008,
+  "name": "地图 05008",
+  "revision": "festival20261107",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/map05008/festival20261107/spring/8354773b1551544ce0f9b2db93285cceec17f49225830fe89ca43bf7ef2ddc88/",
+  "clientOnly": true,
+  "authoritativeServerRegistered": false,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 3072,
+    "height": 2048
+  },
+  "layoutSha256": "8354773b1551544ce0f9b2db93285cceec17f49225830fe89ca43bf7ef2ddc88",
+  "sourceSelectionPath": "Docs/VerificationEvidence/festival-maps-20261107/selection.json",
+  "sourceSelectionSha256": "1c4ac495a0e617a9d2e92a92b44a66d7ae9fb712834ef3ffa4b6b2c4607c2c5d",
+  "sourceEvidencePath": "Docs/VerificationEvidence/festival-maps-20261107/source-evidence/map05008/spring/delivery.json",
+  "sourceEvidenceSha256": "802b15689c8d8049db5a110af14d4f7bb3193fa1479a3dbd099ea4f87979b950",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "navigationSha256": "c50eea538bae520fc1b3dd862ab8c36eb5bc9974e6f7090e5f37845c699ed2ec",
+  "walkmaskSha256": "f231f5d0d6499ed3aa72bd88519d9737823b6118ee98d21cb65a25288af6df38",
+  "walkmaskPackedSha256": "6c8adbc9ae3dc09a94f933e30f53e8820d7151eeb7226592c409882a16c8525e",
+  "navigationStatus": "conservative_visible_ground_client_only",
+  "runtimeEngineAcceptance": false
+}

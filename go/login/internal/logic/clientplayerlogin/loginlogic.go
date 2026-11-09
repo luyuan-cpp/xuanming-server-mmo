@@ -258,6 +258,9 @@ func buildRoleList(ctx context.Context, resolver *homezone.Resolver, disabled bo
 	}
 	out := make([]*login_proto.AccountSimplePlayerWrapper, 0, len(players))
 	for _, v := range players {
+		if removedCharacterAppearance(v.GetAppearanceId()) {
+			continue
+		}
 		out = append(out, &login_proto.AccountSimplePlayerWrapper{Player: v})
 	}
 	return out

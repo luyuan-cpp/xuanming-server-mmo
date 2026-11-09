@@ -311,6 +311,9 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 // 正常建角与 6c'(丢响应后的重试)两条成功路径共用。
 func appendRoleList(resp *login_proto.CreatePlayerResponse, userAccount *login_data_base.UserAccounts) {
 	for _, p := range userAccount.GetSimplePlayers().GetPlayers() {
+		if removedCharacterAppearance(p.GetAppearanceId()) {
+			continue
+		}
 		resp.Players = append(resp.Players, &login_proto.AccountSimplePlayerWrapper{Player: p})
 	}
 }

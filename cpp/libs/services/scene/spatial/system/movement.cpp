@@ -108,6 +108,13 @@ void MovementSystem::Update(const double delta)
 			}
 			target = clamped;
 		}
+		else if (NavQuerySystem::MissingRequiredNavigation(entity))
+		{
+			target = current;
+			velocity.Clear();
+			SetActorBaseAttributesS2CAttrDirtyBit(entity, ActorBaseAttributesS2C::kVelocityFieldNumber);
+			stoppedByWall = true;
+		}
 
 		WriteLocation(*transform.mutable_location(), target);
 		SetActorBaseAttributesS2CAttrDirtyBit(
@@ -174,16 +181,26 @@ void MovementSystem::BroadcastMove(const entt::entity entity, const bool include
 }
 
 
-void MovementSystem::TeleportWithinScene(const entt::entity entity, const Vector3& location,
+bool MovementSystem::TeleportWithinScene(const entt::entity entity, const Vector3& location,
 	const Rotation& rotation, const uint32_t reason)
 {
 	auto* transform = tlsEcs.actorRegistry.try_get<Transform>(entity);
 	if (transform == nullptr)
 	{
-		return;
+		return false;
+	}
+	if (NavQuerySystem::MissingRequiredNavigation(entity)) return false;
+	Vector3 acceptedLocation = location;
+	if (auto* nav = NavQuerySystem::GetNavForPlayer(entity); nav != nullptr && nav->strictMask)
+	{
+		std::vector<Location> path;
+		Location destination;
+		if (!NavQuerySystem::SnapToMesh(*nav, ToLocation(location), destination) ||
+			!NavQuerySystem::FindPath(*nav, ToLocation(transform->location()), destination, path)) return false;
+		WriteLocation(acceptedLocation, destination);
 	}
 
-	*transform->mutable_location() = location;
+	*transform->mutable_location() = acceptedLocation;
 	*transform->mutable_rotation() = rotation;
 	SetActorBaseAttributesS2CAttrDirtyBit(entity, ActorBaseAttributesS2C::kTransformFieldNumber);
 
@@ -219,6 +236,7 @@ void MovementSystem::TeleportWithinScene(const entt::entity entity, const Vector
 	AoiSystem::ResetEntityVisibility(entity);
 	// 重置只撤空间来源,网格外的显式关注者仍显示它:立即把新位置发给它们,不必等它下一次移动上报。
 	BroadcastMove(entity);
+	return true;
 }
 
 bool MovementSystem::ShouldDropReportAfterTeleport(const entt::entity entity, const Location& reported)

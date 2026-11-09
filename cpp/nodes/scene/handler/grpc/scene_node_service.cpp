@@ -9,6 +9,8 @@
 #include "player/system/player_scene.h"
 #include "world/scene_lifecycle.h"
 #include "world/scene_placement_fence.h"
+#include "spatial/system/nav_query.h"
+#include "spatial/manager/scene_nav.h"
 #include "thread_context/ecs_context.h"
 #include "muduo/base/Logging.h"
 #include "battle/system/player_battle.h"
@@ -60,6 +62,13 @@ void SceneNodeGrpcImpl::HandleCreateScene(const ::CreateSceneRequest* request,
     if (request->scene_id() == 0)
     {
         LOG_ERROR << "[gRPC] CreateScene: scene_id is 0";
+        return;
+    }
+
+    if (NavQuerySystem::RequiresNavigation(request->config_id()) &&
+        SceneNavManager::Instance().Get(request->config_id()) == nullptr)
+    {
+        LOG_ERROR << "[gRPC] CreateScene rejected: required navigation unavailable, config_id=" << request->config_id();
         return;
     }
 

@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0,
+    "y": 0,
+    "width": 307.2,
+    "height": 204.8
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 10.2,
+    "width": 307.2,
+    "height": 184.39999999999998
+  },
+  "cellSize": 2,
+  "imageRect": {
+    "x": 0,
+    "y": 102,
+    "width": 3072,
+    "height": 1844
+  },
+  "referenceWidth": 2200,
+  "referenceHeight": 1320,
+  "walkmaskColumns": 154,
+  "walkmaskRows": 103,
+  "spawnWorld": {
+    "x": 100.8,
+    "y": 0.0,
+    "z": 41.92000000000001
+  },
+  "schemaVersion": 2,
+  "key": "map28007",
+  "sceneId": 28007,
+  "name": "地图 28007",
+  "revision": "festival20261106",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/map28007/festival20261106/spring/b805724549fd5ae2dc843ba4b1b2cccddcf7056d1af0fd4e5e15974e9a3708f4/",
+  "clientOnly": true,
+  "authoritativeServerRegistered": false,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 3072,
+    "height": 2048
+  },
+  "layoutSha256": "b805724549fd5ae2dc843ba4b1b2cccddcf7056d1af0fd4e5e15974e9a3708f4",
+  "sourceSelectionPath": "Docs/VerificationEvidence/festival-maps-20261106/selection.json",
+  "sourceSelectionSha256": "7ee901253a002db7c791c476a5969847e82a884132facaa8db831b9d220cc0ad",
+  "sourceEvidencePath": "Docs/VerificationEvidence/festival-maps-20261106/source-evidence/map28007/spring/delivery.json",
+  "sourceEvidenceSha256": "36727153d3a9daffa495a9ac05a79ea463e1b9afbfdd8990a9045b0eefe2fff1",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261106/navigation-plan.json",
+  "navigationPlanSha256": "8227290fed9c00bd1a3479af1f643c5d7f0ac110dc391776397aaeec02871ed7",
+  "navigationSha256": "4d34b27364be63953724cea18ad4322bf64f5a96c86d57eda4f731092ca7b47b",
+  "walkmaskSha256": "e2269d9de5bd8e6e515461cee19dc603df2fc0e6228f958b46a5ae68b43e5d26",
+  "walkmaskPackedSha256": "5debef8b21448ea62465ca42695a7b598115350103f98689c0071b45699c19d2",
+  "navigationStatus": "conservative_visible_ground_client_only",
+  "runtimeEngineAcceptance": false
+}

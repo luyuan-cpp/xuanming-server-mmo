@@ -193,6 +193,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="scene_spawn_test.cpp" />
+    <ClCompile Include="festival_navigation_test.cpp" />
     <ClCompile Include="player_save_cost_test.cpp" />
     <ClCompile Include="player_save_metrics_test.cpp" />
   </ItemGroup>

@@ -11,6 +11,8 @@
 #include "player/system/player_scene.h"
 #include "world/scene_lifecycle.h"
 #include "world/scene_placement_fence.h"
+#include "spatial/system/nav_query.h"
+#include "spatial/manager/scene_nav.h"
 #include "player/player_gm_guard.h" // 客户端 GM 指令统一闸门(guild-phase2 §S4 4.34)
 #include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
@@ -433,6 +435,13 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 		LOG_WARN << "CreateScene: scene_id=" << request->scene_id()
 				 << " placement_generation=" << request->placement_generation()
 				 << " is stale (destroyed through " << fence.Find(request->scene_id())->destroyedThrough << "), rejected";
+		return;
+	}
+
+	if (NavQuerySystem::RequiresNavigation(request->config_id()) &&
+		SceneNavManager::Instance().Get(request->config_id()) == nullptr)
+	{
+		LOG_ERROR << "CreateScene rejected: required navigation unavailable, config_id=" << request->config_id();
 		return;
 	}
 

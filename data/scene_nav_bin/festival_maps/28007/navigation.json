@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "key": "map28007",
+  "sceneId": 28007,
+  "revision": "festival20261106",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261106/navigation-plan.json",
+  "navigationPlanSha256": "8227290fed9c00bd1a3479af1f643c5d7f0ac110dc391776397aaeec02871ed7",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 307.2,
+      "height": 204.8
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 10.2,
+      "width": 307.2,
+      "height": 184.39999999999998
+    },
+    "cellSize": 2,
+    "imageRect": {
+      "x": 0,
+      "y": 102,
+      "width": 3072,
+      "height": 1844
+    },
+    "referenceWidth": 2200,
+    "referenceHeight": 1320,
+    "walkmaskColumns": 154,
+    "walkmaskRows": 103,
+    "spawnWorld": {
+      "x": 100.8,
+      "y": 0.0,
+      "z": 41.92000000000001
+    }
+  },
+  "stats": {
+    "walkableCells": 1481,
+    "totalCells": 15862,
+    "componentCount": 1,
+    "componentSizes": [
+      1481
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          1008.0,
+          1628.8
+        ],
+        "world": {
+          "x": 100.8,
+          "y": 0.0,
+          "z": 41.92000000000001
+        },
+        "component": 0
+      },
+      "entry": {
+        "pixel": [
+          880.0,
+          1715.2
+        ],
+        "world": {
+          "x": 88.0,
+          "y": 0.0,
+          "z": 33.279999999999994
+        },
+        "component": 0
+      },
+      "west_corridor": {
+        "pixel": [
+          1088.0,
+          1443.2
+        ],
+        "world": {
+          "x": 108.8,
+          "y": 0.0,
+          "z": 60.48
+        },
+        "component": 0
+      },
+      "stage_south": {
+        "pixel": [
+          1904.0,
+          1321.6
+        ],
+        "world": {
+          "x": 190.39999999999998,
+          "y": 0.0,
+          "z": 72.64000000000001
+        },
+        "component": 0
+      },
+      "stage_center": {
+        "pixel": [
+          1896.0,
+          1160.0
+        ],
+        "world": {
+          "x": 189.6,
+          "y": 0.0,
+          "z": 88.80000000000001
+        },
+        "component": 0
+      },
+      "east_floor": {
+        "pixel": [
+          2328.0,
+          1382.4
+        ],
+        "world": {
+          "x": 232.79999999999998,
+          "y": 0.0,
+          "z": 66.55999999999999
+        },
+        "component": 0
+      },
+      "south_floor": {
+        "pixel": [
+          1520.0,
+          1595.2
+        ],
+        "world": {
+          "x": 152.0,
+          "y": 0.0,
+          "z": 45.28
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "outside_black",
+      "closed_bedroom",
+      "offering_table",
+      "east_stairs",
+      "foyer_table",
+      "foyer_flower",
+      "entry_bollard_west",
+      "entry_bollard_east",
+      "dais_bolster"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "entry"
+      ],
+      [
+        "spawn",
+        "west_corridor"
+      ],
+      [
+        "west_corridor",
+        "stage_center"
+      ],
+      [
+        "stage_center",
+        "stage_south"
+      ],
+      [
+        "stage_south",
+        "east_floor"
+      ],
+      [
+        "spawn",
+        "south_floor"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "entry",
+        "gridDistanceWorldUnits": 15.31370849898476
+      },
+      {
+        "from": "spawn",
+        "to": "west_corridor",
+        "gridDistanceWorldUnits": 23.31370849898476
+      },
+      {
+        "from": "west_corridor",
+        "to": "stage_center",
+        "gridDistanceWorldUnits": 95.11269837220804
+      },
+      {
+        "from": "stage_center",
+        "to": "stage_south",
+        "gridDistanceWorldUnits": 16.82842712474619
+      },
+      {
+        "from": "stage_south",
+        "to": "east_floor",
+        "gridDistanceWorldUnits": 44.48528137423857
+      },
+      {
+        "from": "spawn",
+        "to": "south_floor",
+        "gridDistanceWorldUnits": 53.65685424949238
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 5.284038798456002,
+    "separatedRoutes": [],
+    "maskSha256": "5debef8b21448ea62465ca42695a7b598115350103f98689c0071b45699c19d2",
+    "maskBytes": 1983,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": false
+}

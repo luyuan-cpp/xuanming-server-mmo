@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "key": "map05008",
+  "sceneId": 5008,
+  "revision": "festival20261107",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 307.20000000000005,
+      "height": 204.8
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 21.050000000000004,
+      "width": 294.00000000000006,
+      "height": 183.75000000000003
+    },
+    "cellSize": 2,
+    "imageRect": {
+      "x": 0,
+      "y": 0,
+      "width": 2940,
+      "height": 1837.5
+    },
+    "referenceWidth": 2400,
+    "referenceHeight": 1500,
+    "walkmaskColumns": 154,
+    "walkmaskRows": 103,
+    "spawnWorld": {
+      "x": 91.2,
+      "y": 0.0,
+      "z": 64.0
+    }
+  },
+  "stats": {
+    "walkableCells": 2313,
+    "totalCells": 15862,
+    "componentCount": 1,
+    "componentSizes": [
+      2313
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          912,
+          1408
+        ],
+        "world": {
+          "x": 91.2,
+          "y": 0.0,
+          "z": 64.0
+        },
+        "component": 0
+      },
+      "lower_medallion": {
+        "pixel": [
+          816,
+          1312
+        ],
+        "world": {
+          "x": 81.60000000000001,
+          "y": 0.0,
+          "z": 73.60000000000001
+        },
+        "component": 0
+      },
+      "stair_landing": {
+        "pixel": [
+          1344,
+          1152
+        ],
+        "world": {
+          "x": 134.4,
+          "y": 0.0,
+          "z": 89.60000000000001
+        },
+        "component": 0
+      },
+      "central_rug": {
+        "pixel": [
+          1776,
+          912
+        ],
+        "world": {
+          "x": 177.60000000000002,
+          "y": 0.0,
+          "z": 113.60000000000001
+        },
+        "component": 0
+      },
+      "west_floor": {
+        "pixel": [
+          1136,
+          824
+        ],
+        "world": {
+          "x": 113.60000000000002,
+          "y": 0.0,
+          "z": 122.4
+        },
+        "component": 0
+      },
+      "east_floor": {
+        "pixel": [
+          2320,
+          944
+        ],
+        "world": {
+          "x": 232.00000000000003,
+          "y": 0.0,
+          "z": 110.4
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "wall_and_weapon_rack",
+      "throne_and_dais",
+      "spring_pot_or_midautumn_offering",
+      "outside_black"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "central_rug"
+      ],
+      [
+        "west_floor",
+        "east_floor"
+      ],
+      [
+        "lower_medallion",
+        "stair_landing"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "central_rug",
+        "gridDistanceWorldUnits": 105.88225099390851
+      },
+      {
+        "from": "west_floor",
+        "to": "east_floor",
+        "gridDistanceWorldUnits": 124.97056274847711
+      },
+      {
+        "from": "lower_medallion",
+        "to": "stair_landing",
+        "gridDistanceWorldUnits": 60.62741699796953
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 6.942809041582062,
+    "separatedRoutes": [],
+    "maskSha256": "6c8adbc9ae3dc09a94f933e30f53e8820d7151eeb7226592c409882a16c8525e",
+    "maskBytes": 1983,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": false
+}

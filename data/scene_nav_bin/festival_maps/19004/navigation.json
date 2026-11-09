@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "key": "map19004",
+  "sceneId": 19004,
+  "revision": "festival20261107",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 307.20000000000005,
+      "height": 204.8
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 32.00000000000001,
+      "width": 307.20000000000005,
+      "height": 172.80000000000004
+    },
+    "cellSize": 2,
+    "imageRect": {
+      "x": 0,
+      "y": 0,
+      "width": 3072,
+      "height": 1728
+    },
+    "referenceWidth": 1920,
+    "referenceHeight": 1080,
+    "walkmaskColumns": 154,
+    "walkmaskRows": 103,
+    "spawnWorld": {
+      "x": 192.00000000000003,
+      "y": 0.0,
+      "z": 88.80000000000001
+    }
+  },
+  "stats": {
+    "walkableCells": 48,
+    "totalCells": 15862,
+    "componentCount": 1,
+    "componentSizes": [
+      48
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          1920,
+          1160
+        ],
+        "world": {
+          "x": 192.00000000000003,
+          "y": 0.0,
+          "z": 88.80000000000001
+        },
+        "component": 0
+      },
+      "west_safe_lane": {
+        "pixel": [
+          1860,
+          1180
+        ],
+        "world": {
+          "x": 186.00000000000003,
+          "y": 0.0,
+          "z": 86.80000000000001
+        },
+        "component": 0
+      },
+      "east_safe_lane": {
+        "pixel": [
+          2020,
+          1160
+        ],
+        "world": {
+          "x": 202.00000000000003,
+          "y": 0.0,
+          "z": 88.80000000000001
+        },
+        "component": 0
+      },
+      "south_safe_lane": {
+        "pixel": [
+          1940,
+          1210
+        ],
+        "world": {
+          "x": 194.00000000000003,
+          "y": 0.0,
+          "z": 83.80000000000001
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "central_rock_bank",
+      "discarded_south_approach_rock_ridge",
+      "south_rock_wall",
+      "rabbit_stone_altar",
+      "osmanthus_tree_and_tea_table",
+      "forest_canopy",
+      "outer_mist"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "west_safe_lane"
+      ],
+      [
+        "west_safe_lane",
+        "east_safe_lane"
+      ],
+      [
+        "spawn",
+        "south_safe_lane"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "west_safe_lane",
+        "gridDistanceWorldUnits": 6.82842712474619
+      },
+      {
+        "from": "west_safe_lane",
+        "to": "east_safe_lane",
+        "gridDistanceWorldUnits": 16.82842712474619
+      },
+      {
+        "from": "spawn",
+        "to": "south_safe_lane",
+        "gridDistanceWorldUnits": 6.82842712474619
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 0.9349126180414551,
+    "separatedRoutes": [],
+    "maskSha256": "96ae60eb9b0c3ba450723465b82021dc64f945cad0536853bc84f7447d460555",
+    "maskBytes": 1983,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": false
+}

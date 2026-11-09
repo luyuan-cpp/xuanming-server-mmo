@@ -86,5 +86,35 @@ class BakerContractTest(unittest.TestCase):
             self.assertIn("bad --probe", result.stderr)
             self.assertFalse(self.out.exists())
 
+    def test_rectangular_mask_keeps_partial_north_row_and_effective_crop(self):
+        # 13 列、7 行；最北行只有 1.5m，行号从南边界倒置，不能用图高减整格。
+        columns, rows = 13, 7
+        bits = bytearray((columns * rows + 7) // 8)
+        for row in range(rows):
+            for col in range(1, 12):
+                i = row * columns + col
+                bits[i // 8] |= 0x80 >> (i % 8)
+        self.mask.write_text(base64.b64encode(bits).decode('ascii'), encoding='ascii')
+        result = self.invoke('--mask-base64', self.mask, '--mask-grid', '13,7,2,10,20,25.5,13.5',
+                             '--effective-rect', '12,20,22,13.5', '--probe', '15,0,32.75')
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn('mask cells checked=91 mismatches=0', result.stdout)
+        self.assertIn('mask connectivity components=1 reachable_cells=77 cross_component_bridges=0', result.stdout)
+        self.assertTrue(Path(str(self.out) + '.mask').is_file())
+
+    def test_wrong_grid_dimension_and_nonzero_tail_are_rejected(self):
+        for dimensions in ('13,7,2,10,20,26.1,13.5', '13,7,0,10,20,25.5,13.5',
+                           '13,7,2,nan,20,25.5,13.5'):
+            result = self.invoke('--mask-base64', self.mask, '--mask-grid', dimensions,
+                                 '--effective-rect', '12,20,22,13.5', '--probe', '15,0,32.75')
+            self.assertNotEqual(0, result.returncode)
+            self.assertFalse(self.out.exists())
+        bits = bytearray(2813)
+        bits[-1] = 1
+        self.mask.write_text(base64.b64encode(bits).decode('ascii'), encoding='ascii')
+        result = self.invoke('--mask-base64', self.mask, '--probe', '250,0,100')
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('zero tail bits', result.stderr)
+
 if __name__ == "__main__":
     unittest.main()

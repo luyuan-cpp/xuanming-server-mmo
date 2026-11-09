@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0,
+    "y": 0,
+    "width": 204.8,
+    "height": 204.8
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 28.900000000000002,
+    "width": 204.8,
+    "height": 147.1
+  },
+  "cellSize": 2,
+  "imageRect": {
+    "x": 0,
+    "y": 288,
+    "width": 2048,
+    "height": 1471
+  },
+  "referenceWidth": 1200,
+  "referenceHeight": 862,
+  "walkmaskColumns": 103,
+  "walkmaskRows": 103,
+  "spawnWorld": {
+    "x": 131.84,
+    "y": 0.0,
+    "z": 66.55999999999999
+  },
+  "schemaVersion": 2,
+  "key": "map23006",
+  "sceneId": 23006,
+  "name": "地图 23006",
+  "revision": "festival20261107",
+  "appearance": "mid-autumn",
+  "resourceRoot": "World/QdaoMaps20261102/map23006/festival20261107/mid-autumn/af9f2169700bb409e2d148011067e9a045ddf21b4ab443bb284c1817621932e1/",
+  "clientOnly": true,
+  "authoritativeServerRegistered": false,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 2048,
+    "height": 2048
+  },
+  "layoutSha256": "af9f2169700bb409e2d148011067e9a045ddf21b4ab443bb284c1817621932e1",
+  "sourceSelectionPath": "Docs/VerificationEvidence/festival-maps-20261107/selection.json",
+  "sourceSelectionSha256": "1c4ac495a0e617a9d2e92a92b44a66d7ae9fb712834ef3ffa4b6b2c4607c2c5d",
+  "sourceEvidencePath": "Docs/VerificationEvidence/festival-maps-20261107/source-evidence/map23006/mid-autumn/delivery.json",
+  "sourceEvidenceSha256": "a110be36f68b5b9fc60f190bdd5aeccbdaa053036564747f74dc95758af418e9",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "navigationSha256": "6888e5520431d6ca492dfbed2ba8b0a7c708c4af10ee643cff503e8cab2deae7",
+  "walkmaskSha256": "d6bfb266aeeeab1ca17bbecf30fcf22bcc987e5def2362591d59d7ca33010c3d",
+  "walkmaskPackedSha256": "19895be237f85eb08868bf176960d44c076cebe72623da326af5a951f55cfa05",
+  "navigationStatus": "conservative_visible_ground_client_only",
+  "runtimeEngineAcceptance": false
+}

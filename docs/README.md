@@ -81,7 +81,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [open-server-rate-limit-design.md](design/open-server-rate-limit-design.md) — 开服登录削峰与排队入口
 - [player-locator-gate-session-index.md](design/player-locator-gate-session-index.md) — player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 - [player_login_flow.md](design/player_login_flow.md) — 玩家登录/断线/重连/替换登录/超时清理 — 最终态事件流 · [EN](design/player_login_flow_en.md) · [中文](design/player_login_flow_zh.md)
-- [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — Server-List 静态发布架构 (Static Publish via OSS + CDN) — 2026-05
+- [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — 区服列表：现行 Gateway 接口与静态发布提案
 - [third-party-login-end-to-end-design.md](design/third-party-login-end-to-end-design.md) — QQ / 微信第三方登录端到端联调设计
 
 #### 场景、AOI 与分线

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "key": "map01002",
+  "sceneId": 1002,
+  "revision": "festival20261107",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 204.8,
+      "height": 102.4
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 136.53333333333333,
+      "height": 102.4
+    },
+    "cellSize": 2,
+    "imageRect": {
+      "x": 0,
+      "y": 0,
+      "width": 1365.3333333333333,
+      "height": 1024
+    },
+    "referenceWidth": 1000,
+    "referenceHeight": 750,
+    "walkmaskColumns": 103,
+    "walkmaskRows": 52,
+    "spawnWorld": {
+      "x": 46.0,
+      "y": 0.0,
+      "z": 28.900000000000002
+    }
+  },
+  "stats": {
+    "walkableCells": 309,
+    "totalCells": 5356,
+    "componentCount": 1,
+    "componentSizes": [
+      309
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "entrance": {
+        "pixel": [
+          420,
+          800
+        ],
+        "world": {
+          "x": 42.0,
+          "y": 0.0,
+          "z": 22.400000000000002
+        },
+        "component": 0
+      },
+      "floor": {
+        "pixel": [
+          500,
+          680
+        ],
+        "world": {
+          "x": 50.0,
+          "y": 0.0,
+          "z": 34.4
+        },
+        "component": 0
+      },
+      "counter_approach": {
+        "pixel": [
+          700,
+          630
+        ],
+        "world": {
+          "x": 70.0,
+          "y": 0.0,
+          "z": 39.400000000000006
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "counter",
+      "furnace",
+      "armor",
+      "tools",
+      "exterior"
+    ],
+    "connectedRoutes": [
+      [
+        "entrance",
+        "floor"
+      ],
+      [
+        "floor",
+        "counter_approach"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "entrance",
+        "to": "floor",
+        "gridDistanceWorldUnits": 15.31370849898476
+      },
+      {
+        "from": "floor",
+        "to": "counter_approach",
+        "gridDistanceWorldUnits": 21.65685424949238
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 1.2031585694162432,
+    "separatedRoutes": [],
+    "maskSha256": "8da12659eeca9d11b06d0f2076057a4612f10631435138670161da9411f3cbc6",
+    "maskBytes": 670,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": false
+}

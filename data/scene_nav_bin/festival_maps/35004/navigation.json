@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "key": "map35004",
+  "sceneId": 35004,
+  "revision": "festival20261106",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261106/navigation-plan.json",
+  "navigationPlanSha256": "8227290fed9c00bd1a3479af1f643c5d7f0ac110dc391776397aaeec02871ed7",
+  "source": {
+    "worldRect": {
+      "x": 0,
+      "y": 0,
+      "width": 307.2,
+      "height": 204.8
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 6.3999999999999995,
+      "width": 306.79999999999995,
+      "height": 191.99999999999997
+    },
+    "cellSize": 2,
+    "imageRect": {
+      "x": 0,
+      "y": 64,
+      "width": 3068,
+      "height": 1920
+    },
+    "referenceWidth": 1585,
+    "referenceHeight": 992,
+    "walkmaskColumns": 154,
+    "walkmaskRows": 103,
+    "spawnWorld": {
+      "x": 140.79999999999998,
+      "y": 0.0,
+      "z": 91.2
+    }
+  },
+  "stats": {
+    "walkableCells": 2566,
+    "totalCells": 15862,
+    "componentCount": 3,
+    "componentSizes": [
+      20,
+      82,
+      2464
+    ],
+    "spawnComponent": 2,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          1408.0,
+          1136.0
+        ],
+        "world": {
+          "x": 140.79999999999998,
+          "y": 0.0,
+          "z": 91.2
+        },
+        "component": 2
+      },
+      "main_west": {
+        "pixel": [
+          608.0,
+          1152.0
+        ],
+        "world": {
+          "x": 60.800000000000004,
+          "y": 0.0,
+          "z": 89.60000000000001
+        },
+        "component": 2
+      },
+      "main_east": {
+        "pixel": [
+          2208.0,
+          1200.0
+        ],
+        "world": {
+          "x": 220.79999999999998,
+          "y": 0.0,
+          "z": 84.80000000000001
+        },
+        "component": 2
+      },
+      "main_north": {
+        "pixel": [
+          1344.0,
+          752.0
+        ],
+        "world": {
+          "x": 134.4,
+          "y": 0.0,
+          "z": 129.6
+        },
+        "component": 2
+      },
+      "main_south": {
+        "pixel": [
+          1536.0,
+          1448.0
+        ],
+        "world": {
+          "x": 153.6,
+          "y": 0.0,
+          "z": 60.0
+        },
+        "component": 2
+      },
+      "west_platform": {
+        "pixel": [
+          520.0,
+          392.0
+        ],
+        "world": {
+          "x": 52.0,
+          "y": 0.0,
+          "z": 165.60000000000002
+        },
+        "component": 1
+      },
+      "east_platform": {
+        "pixel": [
+          2192.0,
+          324.8
+        ],
+        "world": {
+          "x": 219.20000000000002,
+          "y": 0.0,
+          "z": 172.32000000000002
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "cloud_gap_west",
+      "cloud_gap_east",
+      "outside_cloud",
+      "spring_golden_toad",
+      "midautumn_tea",
+      "back_couplet"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "main_west"
+      ],
+      [
+        "spawn",
+        "main_east"
+      ],
+      [
+        "main_north",
+        "main_south"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "main_west",
+        "gridDistanceWorldUnits": 80.82842712474618
+      },
+      {
+        "from": "spawn",
+        "to": "main_east",
+        "gridDistanceWorldUnits": 82.48528137423855
+      },
+      {
+        "from": "main_north",
+        "to": "main_south",
+        "gridDistanceWorldUnits": 75.45584412271569
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 4.582515631902142,
+    "separatedRoutes": [
+      [
+        "spawn",
+        "west_platform"
+      ],
+      [
+        "spawn",
+        "east_platform"
+      ],
+      [
+        "west_platform",
+        "east_platform"
+      ]
+    ],
+    "maskSha256": "8692c2adcae9572e79152137d639911ce12676d7dbf171211cfd40639888a042",
+    "maskBytes": 1983,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": false
+}

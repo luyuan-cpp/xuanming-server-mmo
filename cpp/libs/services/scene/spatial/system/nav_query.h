@@ -20,9 +20,12 @@ class NavQuerySystem
 {
 public:
 	// 玩家实体 → 所在场景的导航(SceneEntityComp → SceneInfoComp.scene_config_id
-	// → SceneNavManager)。返回 nullptr 表示该场景没有烘焙导航(fail-open:
-	// 调用方应放行移动并降级为无校验,不能把玩家卡死)。
+	// → SceneNavManager)。返回 nullptr 时，先检查 MissingRequiredNavigation，
+	// 新节庆地图必须拒绝移动；只有旧图保留无导航兼容。
 	static NavComp* GetNavForPlayer(entt::entity player);
+	// 源表路径声明 festival_maps 严格合同，加载失败不得放行移动或创建。
+	static bool RequiresNavigation(uint32_t sceneConfigId);
+	static bool MissingRequiredNavigation(entt::entity player);
 
 	// 把服务器坐标点吸附到导航网格最近可走面。false = 点不在任何可走面附近
 	// (搜索范围:水平 ±2m,垂直 ±4m)。

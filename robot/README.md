@@ -26,7 +26,7 @@ zone_id: 0
 
 显式配置非零 `zone_id` 时直接向该区分配，不请求 server-list；配置为 0 时先以 5 秒超时读取
 `GET /api/server-list`，选择响应中第一个推荐区，否则取第一项。请求、读取、解码失败或列表为空时，
-本次分配回退为传 0，由服务端继续决定；这不保证一定获得 Gate。当前自动选择不筛区服状态、不按负载排序，
+机器人仍会尝试传 0，但当前 Gateway 在调用 login 前要求正区号，这个回退无法取得 Gate 票据；已知目标区时可显式指定区号，避开列表读取。当前自动选择不筛区服状态、不按负载排序，
 也不单独检查 server-list 的 HTTP 状态，不能解释成“选择首个可进入区服”。默认样例实际为 `zone_id: 1`。
 
 通用登录与选区入口是 `main.go` 的 `resolveGateAddrLocal` / `resolveGateViaHTTPLocal`；选区只保存在本次局部变量，

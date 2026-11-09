@@ -237,3 +237,167 @@ MSVC Release 烘焙器编译、13 项合同测试、重烘焙字节一致和 sch
 本次没有运行完整 scene/gate 服务或 Unity 联机验收:本机固件虚拟化关闭、Docker
 daemon 未运行,且 `bin/gate.exe`、`bin/scene.exe`、`bin/battle.exe` 缺失。
 上述 9/13 的联机成功记录属于旧地图,不能作为这次新地图的联机验收证据。
+
+## 11. 2026-11-09 九张节庆地图开发接入
+
+本批外部 ID 保留 `01001`、`01002`、`05008`、`10000`、`19004`、`21003`、`23006`、
+`28007`、`35004`；服务器模板号取交接的 `numericSceneId`，不作为运行实例号使用。
+15 套 `spring` / `mid-autumn` 外观仍共享各图的同一导航，客户端 `clientOnly=true` 和正式
+World 入口保持关闭。`prepare_festival_test_tables.py` 只在指定输出目录生成隔离测试表。
+
+### 导航合同与生成
+
+`sync_festival_maps.py` 固定核对交接 JSON 的 SHA 和每套文本资源 SHA，调用同源
+ue5navmesh 烘焙器生成 `data/scene_nav_bin/festival_maps/<五位 ID>/`：
+
+- `source.json`、`walkmask.txt`、`navigation.json` 为已交付 canonicalAppearance 的原字节。
+- `scene.bin` 保持 MSET v1、`dtReal=double`，不直接把客户端位图当 MSET。
+- `scene.bin.mask` 是 `FMASK 1` 合同：列/行、cellSize、worldRect、effectiveWorldRect、MSB 位图十六进制。
+  这一附加合同约束 Recast 体素边缘；其北南行序按 `rows-1-floor((z-minZ)/cellSize)`，
+  格心用实际格与有效内容区域的交集，最北行不足整格时不发生偏移。
+- `scene.bin.sha256` 两行分别绑定 MSET 和 FMASK；运行端在 Detour 解析之前检查，
+  文件缺失、截断、位翻转或伴随合同不匹配均不注册。
+- 批次清单 `festival_maps_20261109.json` 记录场景映射、外观、出生点、SHA 与未解除限制。
+
+烘焙器新增显式 `--mask-grid columns,rows,cellSize,minX,minZ,width,height` 与
+`--effective-rect x,z,width,height`；旧 `--painted-city` 与默认 150×150 入口保持兼容。
+生成前核对所有格心及全部可走格的域内可达性，域间路径必须不可达，再落盘。
+`19004` 仍只有 48 格；`10000` 两域及 `35004` 三域均没有自动连桥。
+
+### 运行端门禁
+
+`BaseScene.nav_bin_file` 使用 `data/scene_nav_bin/festival_maps/` 前缀即声明严格导航合同。
+`NavigationSystem::LoadNavBins` 在 SHA、FMASK 解析、真实 Detour 逐格比对和出生探针均成功后注册。
+`NavQuerySystem` 在原有唯一换轴点使用严格半开边界/位图/禁止对角穿角规则，并拒绝部分路径
+冒充跨域成功。缺导航时 gRPC/RPC 两个 CreateScene 入口、入场预检、客户端位置报告、速度积分和
+组队跟随均拒绝。统一同场景瞬移入口同样验证可用导航、合法终点与同域可达性；归队瞬移失败会撤销
+驱动状态，玩家可自行控制与重试，不能由跟随 fallback 跨岛。逐步跟随也经过严格移动裁决。
+旧地图的无导航兼容分支没有扩大修改。
+
+水平误差上限仍为 0.02m；垂直单独允许地面 ±0.2m 内脚底偏移（Unity floor 顶面和
+CharacterController skinWidth 的实际合同），接受后归零，不允许扩大 X/Z mask 或吸附进障碍。
+混合方向过格角的相同参数时刻先去重，避免零长度区间被当作额外正交中转格；四方向单侧阻挡均有回归。
+
+```powershell
+cmake --build tools/navmesh_baker/build --config Release -- /m:1
+python -B tools/navmesh_baker/sync_festival_maps.py
+python -B tools/navmesh_baker/test_baker.py
+python -B tools/navmesh_baker/test_current_maps.py
+tools/navmesh_baker/build/Release/nav_mask_contract_test.exe data/scene_nav_bin/festival_maps
+# 冻结发布输入期间，重烘焙必须写隔离输出，不覆盖正在构建的 data：
+python -B tools/navmesh_baker/sync_festival_maps.py --output build/verification/festival-server-20261109/rebake
+```
+
+本轮已实际取得：baker MSVC Release 构建通过，九图 **140055 格心、18286 可走格** 的真实
+Detour 几何/连通验证通过；重烘焙 54 个文件逐字节一致；baker 10 项、旧图合同 5 项通过；
+独立 `NavMask` 接口检查 36616 项通过（混合方向穿角回归先检出两次失败，再修复为零失败）。日志和逐文件 SHA 证据位于
+`build/verification/festival-server-20261109/`。
+
+Windows Debug `scene.lib`、`bag_test.exe` 已实际构建通过。运行端测试直接调用正式
+LoadNavBins、NavQuery、入场预检和统一瞬移入口，实际 **15/15 通过**：新增 8 项覆盖
+48 格、越界、缺/坏 bin/mask/checksum、地面高度容差和跨平台归队瞬移拒绝；另有 7 项
+既有 SceneSpawn 回归（含原 21 个场景导航与出生点）通过。
+日志与 XML 为 `native-navigation.log` / `native-navigation.xml`，汇总为
+`server-navigation-validation.json`。Linux 节点构建、隔离客户端联调仍须由本次执行记录
+继续补充，不能把上述离线证据当作实机通过。
+`10000` 画面接缝仍为待修；所有地图均未据此解除 `clientOnly` 或开放生产传送。
+
+### 隔离配置与本机测试栈
+
+以下命令在 `D:\luyuan\xuanming-server-mmo-cpp` 运行。客户端是同级目录
+`D:\luyuan\mmorpg-client`；同级 `xuanming-server-mmo` 是 Java 仓库，不是本节 C++ 栈目录。
+本轮使用 `build/festival-maps-20261109/` 保存私有配置、编译证据和运行快照：
+
+| 产物 | 本轮路径 |
+| --- | --- |
+| 隔离源表、正式导表器输出与核对回执 | `tables-r2/festival-test-tables.json` |
+| 同批 gate / scene / battle Linux 构建回执 | `cpp-build-r3/result.json` |
+| Compose 私有配置 | `stack/.env`、`stack/config/` |
+| 绑定已核验表和导航的 Compose overlay | `stack/compose.festival.json` |
+| 运行快照及 SHA 回执 | `stack/tables/`、`stack/navigation/`、`stack/festival-runtime-manifest.json` |
+
+`prepare_festival_test_tables.py` 复制正式源表到新的忽略目录，校验九图与 15 外观，
+调用仓库正式导表器；仅 `basescene.json/pb`、`world.json/pb` 和 `manifest.json` 应变化。
+原 21 个 BaseScene 保留，新增九个场景模板与隔离 World 入口，正式 `data/*.xlsx` 不变。
+输出目录必须尚不存在；下面是本轮对应的取值，复跑应选择新的输出目录并同步后续引用：
+
+```powershell
+python -B tools/navmesh_baker/prepare_festival_test_tables.py `
+  --client-root ../mmorpg-client `
+  --output build/festival-maps-20261109/tables-r2
+
+# 独立项目、网络和端口；仅准备配置，不启动或重启服务。
+python -B tools/scripts/prepare_docker_debug.py `
+  --output build/festival-maps-20261109/stack `
+  --project festival-maps-20261109 --subnet 172.29.222.0/24 `
+  --gateway-port 18185 --gateway-client-port 18186 `
+  --gate-port 28100 --battle-port 28110
+
+# 仅在本批 Linux 构建 result.json 的 success=true 后执行。
+python -B tools/navmesh_baker/configure_festival_local_stack.py `
+  --run-dir build/festival-maps-20261109/stack `
+  --tables-report build/festival-maps-20261109/tables-r2/festival-test-tables.json `
+  --node-build build/festival-maps-20261109/cpp-build-r3/result.json `
+  --image-env build/docker-debug-current/.env
+```
+
+`configure_festival_local_stack.py` 要求项目名以 `festival-maps-` 开头，核验导表 SHA、
+导航两行 SHA 与三个节点的同批镜像 ID，再生成只读挂载快照。`--image-env` 只提供既有
+辅助服务镜像引用，不复制原栈账号、口令、端口、网络或数据卷。已存在快照会拒绝覆盖；
+`.env` 含私有开发口令，不打印、上传或提交。上述两个节庆工具均不启动容器。
+
+本轮 HTTP 网关为 `http://127.0.0.1:18185`（另一个同网关宿主映射为 18186），
+客户端 gate 为 `127.0.0.1:28100`，battle 端口 28110；Compose 项目
+`festival-maps-20261109` 使用 `172.29.222.0/24`。原 `xuanming-debug-*` 栈继续使用自己的
+配置与数据，不作为本轮已更新的证明。配置快照、镜像构建成功和容器启动分别记录，均不能
+代替真实入场和移动验收；本节编写时 Linux 构建及本轮 E2E 仍待结果。
+
+### Unity Editor 联调入口
+
+隔离服务器就绪后，在客户端仓库通过 Editor 打开正式 Bootstrap 并进入 Play，无需打包：
+
+```powershell
+Set-Location D:/luyuan/mmorpg-client
+# 手动登录本机测试账号。
+pwsh -File tools/run_festival_maps_local.ps1 -Editor -Gateway http://127.0.0.1:18185
+
+# 或仅向新启动的 Editor 子进程注入隔离开发账号口令。
+pwsh -File tools/run_festival_maps_local.ps1 -Editor `
+  -LocalServerEnvFile ../xuanming-server-mmo-cpp/build/festival-maps-20261109/stack/.env
+
+# 自动游历九图、切换 15 外观、移动、越界报告裁决并返回主城。
+pwsh -File tools/run_festival_maps_local.ps1 -Editor `
+  -LocalServerEnvFile ../xuanming-server-mmo-cpp/build/festival-maps-20261109/stack/.env `
+  -Account dev_festival_verify -AutoVerify
+```
+
+这些是可选启动方式，不要同时打开同一主工程；脚本发现主工程已打开会拒绝，不关闭其它
+编辑器副本。开发入口只接受回环 HTTP 网关与 gate，正式地图窗口的传送门禁仍保持关闭。
+运行日志位于客户端 `Logs/festival-local-player-*.log`；自动模式另写
+`.codex-artifacts/festival-local-verify-*/festival-local-verification.json` 和截图。
+详细检查项见客户端 `Docs/FestivalMapsLocalTest20261109.md`。应逐图记录服务端入场通知、
+场景模板/实例、外观与可见分片、权威移动终点、非法输入裁决和返回主城；请求日志或画面出现
+都不单独作为通过证据。未遍历的视域外分片、故障注入、重连、跨区与人工画面验收另列未完成项。
+
+### 逐地图结果登记
+
+下表的已完成列来自 `festival_maps_20261109.json` 与本节离线证据，所有九图均已通过
+真实 Detour 全格心比对、域内可达及域间不连桥检查。原生 15/15 是整批测试套件结果，
+其中缺坏文件/48 格用例使用 `19004`、跨岛瞬移用例使用 `10000`，不冒充逐图网络验收。
+E2E 列待本轮真实运行回执补充；所有行仍为 `clientOnly=true`。
+
+| 地图 ID → 场景模板 | 已交付外观 | 可走格 / 平台域大小 | 导航产物 | 本轮 E2E / 特别未解决项 |
+| --- | --- | --- | --- | --- |
+| `01001` → 1001 | `spring`、`mid-autumn` | 250 / 250 | 已生成并核验 | 待双端实测 |
+| `01002` → 1002 | `spring`、`mid-autumn` | 309 / 309 | 已生成并核验 | 待双端实测 |
+| `05008` → 5008 | `spring`、`mid-autumn` | 2313 / 2313 | 已生成并核验 | 待双端实测 |
+| `10000` → 10000 | `spring`、`mid-autumn` | 7268 / 2317、4951 | 已生成并核验 | 待双端实测；两域不通、画面接缝待修 |
+| `19004` → 19004 | `mid-autumn` | 48 / 48 | 已生成并核验 | 待双端实测；仅此 48 个安全格 |
+| `21003` → 21003 | `spring`、`mid-autumn` | 3218 / 3218 | 已生成并核验 | 待双端实测 |
+| `23006` → 23006 | `mid-autumn` | 833 / 833 | 已生成并核验 | 待双端实测 |
+| `28007` → 28007 | `spring` | 1481 / 1481 | 已生成并核验 | 待双端实测 |
+| `35004` → 35004 | `spring`、`mid-autumn` | 2566 / 20、82、2464 | 已生成并核验 | 待双端实测；三个域不自动连桥 |
+
+本轮改动尚未提交，不能把基础 HEAD 当作配套交付提交号。最终记录需同时填写客户端和
+服务器实际提交号（未提交则明确注明）、构建输入摘要、镜像 ID、运行配置/导航 SHA、
+逐图 E2E 回执和未解决项；不得仅用 Pull 成功或镜像标签代替这些身份信息。

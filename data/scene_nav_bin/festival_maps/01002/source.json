@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0,
+    "y": 0,
+    "width": 204.8,
+    "height": 102.4
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 136.53333333333333,
+    "height": 102.4
+  },
+  "cellSize": 2,
+  "imageRect": {
+    "x": 0,
+    "y": 0,
+    "width": 1365.3333333333333,
+    "height": 1024
+  },
+  "referenceWidth": 1000,
+  "referenceHeight": 750,
+  "walkmaskColumns": 103,
+  "walkmaskRows": 52,
+  "spawnWorld": {
+    "x": 46.0,
+    "y": 0.0,
+    "z": 28.900000000000002
+  },
+  "schemaVersion": 2,
+  "key": "map01002",
+  "sceneId": 1002,
+  "name": "地图 01002",
+  "revision": "festival20261107",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/map01002/festival20261107/spring/0f4f6b00fea4c0bf9d08710bb1f60fa9f2a3f1fa13efb647b6d5abcbad4a7e06/",
+  "clientOnly": true,
+  "authoritativeServerRegistered": false,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 2048,
+    "height": 1024
+  },
+  "layoutSha256": "0f4f6b00fea4c0bf9d08710bb1f60fa9f2a3f1fa13efb647b6d5abcbad4a7e06",
+  "sourceSelectionPath": "Docs/VerificationEvidence/festival-maps-20261107/selection.json",
+  "sourceSelectionSha256": "1c4ac495a0e617a9d2e92a92b44a66d7ae9fb712834ef3ffa4b6b2c4607c2c5d",
+  "sourceEvidencePath": "Docs/VerificationEvidence/festival-maps-20261107/source-evidence/map01002/spring/delivery.json",
+  "sourceEvidenceSha256": "b4cb835da67b142579a8ee57f67ece1c3a90f13f3416e228eae48ba74faba21b",
+  "navigationPlanPath": "Docs/VerificationEvidence/festival-maps-20261107/navigation-plan.json",
+  "navigationPlanSha256": "c2326bdb61729cc95a5e7d9c759ea01c4a90d78e7602d82ad6c6d1199d8eab03",
+  "navigationSha256": "0591e1a9bb3e16e509c467003ef3b25e593defbd3546f0842b4a214d7be10db8",
+  "walkmaskSha256": "5e53afc10b01dc2e2d029fcb3361ecd8a0d407133c77143d4676812b8f12717a",
+  "walkmaskPackedSha256": "8da12659eeca9d11b06d0f2076057a4612f10631435138670161da9411f3cbc6",
+  "navigationStatus": "conservative_visible_ground_client_only",
+  "runtimeEngineAcceptance": false
+}

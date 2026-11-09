@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 1,
+  "handoffSha256": "8c8678bf19ad568feda870834e23ea8fa7ffc2d51fb7ee90139c87e970bf0b51",
+  "status": "DEVELOPMENT_NAVIGATION_ONLY",
+  "maps": [
+    {
+      "paddedMapId": "01001",
+      "sceneId": 1001,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring",
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/01001/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/01001/scene.bin.mask",
+      "sourceSha256": "e91225281ce556e67cd6e591a1699756769de316082d3f5d0df634f9ae4bee98",
+      "navSha256": "df5e36c034a45a1f4a982b6b1a8502796623242451c4a1ca4561f53b49621d4e",
+      "maskSha256": "d46d55b5ff8837569cf76dae8614537124d8540e1c8b3a1b34596e05c32a521f",
+      "packedSha256": "e45cb03b7b55b315c57ea00e16a9118a6786f37e646c0bb7c0aeefbaf3f57234",
+      "walkableCells": 250,
+      "componentSizes": [
+        250
+      ],
+      "checkedCells": 5356,
+      "spawnServer": {
+        "x": 30.400000000000002,
+        "y": 80.0,
+        "z": 0.0
+      },
+      "restrictions": []
+    },
+    {
+      "paddedMapId": "01002",
+      "sceneId": 1002,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring",
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/01002/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/01002/scene.bin.mask",
+      "sourceSha256": "d0ad450b7c1c814b20f08b9093c32c30ed0d3ae479ccee0f8dc70967ebe7e419",
+      "navSha256": "4f52fd82587ab23b064367aa5c2e4b88c344b7e9b47fa2d6e507245ee0fe8a0a",
+      "maskSha256": "5a9149ebab2f0f3b1f53e5354213d33c8f3b3441b769e477b3193b47f4db7d2e",
+      "packedSha256": "8da12659eeca9d11b06d0f2076057a4612f10631435138670161da9411f3cbc6",
+      "walkableCells": 309,
+      "componentSizes": [
+        309
+      ],
+      "checkedCells": 5356,
+      "spawnServer": {
+        "x": 28.900000000000002,
+        "y": 46.0,
+        "z": 0.0
+      },
+      "restrictions": []
+    },
+    {
+      "paddedMapId": "05008",
+      "sceneId": 5008,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring",
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/05008/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/05008/scene.bin.mask",
+      "sourceSha256": "7faa2069bfd41748307907fc370c8a18749e93b3854d65ffdb4530f7060bb46e",
+      "navSha256": "8838fd612fb46de5069c838b7a4a4a01f9e0f0d9a23368292f231420f938631e",
+      "maskSha256": "2664cb8272f7978243ba1fa5a6f7588225df6c5175b59c1cd3d49839cfa5ffaf",
+      "packedSha256": "6c8adbc9ae3dc09a94f933e30f53e8820d7151eeb7226592c409882a16c8525e",
+      "walkableCells": 2313,
+      "componentSizes": [
+        2313
+      ],
+      "checkedCells": 15862,
+      "spawnServer": {
+        "x": 64.0,
+        "y": 91.2,
+        "z": 0.0
+      },
+      "restrictions": []
+    },
+    {
+      "paddedMapId": "10000",
+      "sceneId": 10000,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring",
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/10000/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/10000/scene.bin.mask",
+      "sourceSha256": "cb34f10809a3bab290f9b2c3b8563f026d561aeed4d39b91c23ce01613783a74",
+      "navSha256": "9093ca53d0cea7213722daa7212ca4d45a0771419403cb4a0b87f0cc0007a8c5",
+      "maskSha256": "4f35f55b733f5698d4f83a29e2c6d975627d59f1f97ca68f6ed36f6658d4884c",
+      "packedSha256": "130f54f4df3fdcdf5b8623827975ffcafa08ebf68ddfc45eb5b992ec2e0865dd",
+      "walkableCells": 7268,
+      "componentSizes": [
+        2317,
+        4951
+      ],
+      "checkedCells": 31570,
+      "spawnServer": {
+        "x": 82.60000000000001,
+        "y": 116.80000000000001,
+        "z": 0.0
+      },
+      "restrictions": [
+        "Two disconnected platform components; no dragon-body/cloud bridge. Block color differences and actual rendered seams remain pending."
+      ]
+    },
+    {
+      "paddedMapId": "19004",
+      "sceneId": 19004,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/19004/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/19004/scene.bin.mask",
+      "sourceSha256": "40f4df3d2ba34b7690ae14b8c2a2fdc6b05bb84a829a0c9f13bf3fd18c243302",
+      "navSha256": "f53afc83d4c8e143d61cfabd4ce8eb9260e0b1c833491c716fdf49285f0c2959",
+      "maskSha256": "61e5a0ade91877135835520c984f58a576300fd1eaeaf7d85107c29c42dc22af",
+      "packedSha256": "96ae60eb9b0c3ba450723465b82021dc64f945cad0536853bc84f7447d460555",
+      "walkableCells": 48,
+      "componentSizes": [
+        48
+      ],
+      "checkedCells": 15862,
+      "spawnServer": {
+        "x": 88.80000000000001,
+        "y": 192.00000000000003,
+        "z": 0.0
+      },
+      "restrictions": [
+        "Only48 conservative safe cells at the central verified opening. Full forest network and rejected rock-ridge crossing remain closed."
+      ]
+    },
+    {
+      "paddedMapId": "21003",
+      "sceneId": 21003,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring",
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/21003/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/21003/scene.bin.mask",
+      "sourceSha256": "1ea4b27d26c3e743d8e94b4b7e9028e202ed06d37f4acad8a3d1825f38abdc36",
+      "navSha256": "2ba1bd77062d6e5f753aca0c4f5db2a2e53166af4501013d1f0a8cbbdde61813",
+      "maskSha256": "2b9e1871c764e50f62078edb93972c59a6605188bc305fa093043f1485baef29",
+      "packedSha256": "7eb599cacae37be5ad7297b287fd41fe49bb15f9fce8269c9e32201bfe6d46a1",
+      "walkableCells": 3218,
+      "componentSizes": [
+        3218
+      ],
+      "checkedCells": 23716,
+      "spawnServer": {
+        "x": 107.19999999999999,
+        "y": 153.6,
+        "z": 0.0
+      },
+      "restrictions": []
+    },
+    {
+      "paddedMapId": "23006",
+      "sceneId": 23006,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/23006/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/23006/scene.bin.mask",
+      "sourceSha256": "f0a9c4a85b90c8d9bc8d11bf1866f36f662b4d2830a3e64feff7dc95c54e7e8f",
+      "navSha256": "1ab2c7e467910d0755d0a062a20d9283f13fa169d874ebb427282363dba1f8d9",
+      "maskSha256": "f85e0fb721e6be26078409f8f39ece89ae410e077af991230032dd65e3eaa126",
+      "packedSha256": "19895be237f85eb08868bf176960d44c076cebe72623da326af5a951f55cfa05",
+      "walkableCells": 833,
+      "componentSizes": [
+        833
+      ],
+      "checkedCells": 10609,
+      "spawnServer": {
+        "x": 66.55999999999999,
+        "y": 131.84,
+        "z": 0.0
+      },
+      "restrictions": []
+    },
+    {
+      "paddedMapId": "28007",
+      "sceneId": 28007,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/28007/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/28007/scene.bin.mask",
+      "sourceSha256": "932c3d2f0224181b5b0cf887893daed910d33b9a440740ab59ad382531b45b89",
+      "navSha256": "b488ce66b23c73e6e9e901a50122799be593f480996442c7993b992620993742",
+      "maskSha256": "55ce2da461ba008f484eccfc44adbd3b69e966b4b77c0fdf3aa15602699f59ef",
+      "packedSha256": "5debef8b21448ea62465ca42695a7b598115350103f98689c0071b45699c19d2",
+      "walkableCells": 1481,
+      "componentSizes": [
+        1481
+      ],
+      "checkedCells": 15862,
+      "spawnServer": {
+        "x": 41.92000000000001,
+        "y": 100.8,
+        "z": 0.0
+      },
+      "restrictions": [
+        "Unproven side/back rooms and stairs without a height contract remain blocked."
+      ]
+    },
+    {
+      "paddedMapId": "35004",
+      "sceneId": 35004,
+      "clientOnly": true,
+      "productionTravelEnabled": false,
+      "appearances": [
+        "spring",
+        "mid-autumn"
+      ],
+      "navPath": "data/scene_nav_bin/festival_maps/35004/scene.bin",
+      "maskPath": "data/scene_nav_bin/festival_maps/35004/scene.bin.mask",
+      "sourceSha256": "fdd34f9117bd20df408ca70f97df69ce9ac12682a1ee426ef6446d69ae568107",
+      "navSha256": "89de37def6f622618f717f1bda8421b154f31fd947b4245de0e1041b579270cc",
+      "maskSha256": "b71dc6042d433a06d6d31d58888d6da83abc8008ecc6310b0c5bb9e5b6498b81",
+      "packedSha256": "8692c2adcae9572e79152137d639911ce12676d7dbf171211cfd40639888a042",
+      "walkableCells": 2566,
+      "componentSizes": [
+        20,
+        82,
+        2464
+      ],
+      "checkedCells": 15862,
+      "spawnServer": {
+        "x": 91.2,
+        "y": 140.79999999999998,
+        "z": 0.0
+      },
+      "restrictions": [
+        "Preserve3 separate cloud platforms; no invented bridges."
+      ]
+    }
+  ]
+}

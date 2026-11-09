@@ -157,7 +157,7 @@ namespace
 			NavComp* nav = NavQuerySystem::GetNavForPlayer(leader);
 			if (nav == nullptr)
 			{
-				return true;
+				return !NavQuerySystem::MissingRequiredNavigation(leader);
 			}
 			Location clamped;
 			return NavQuerySystem::ValidateMove(*nav, ToLocation(from), ToLocation(to), clamped);
@@ -185,25 +185,35 @@ namespace
 	}
 
 	// 把一步走位写进 Transform / Velocity,按节流规则广播(观察者 + 本人)。
-	void ApplyWalkStep(entt::entity follower, TeamFollowerComp& driven, const TeamFollowStep& step,
+	bool ApplyWalkStep(entt::entity follower, TeamFollowerComp& driven, const TeamFollowStep& step,
 		double deltaSeconds)
 	{
 		auto& registry = tlsEcs.actorRegistry;
 		auto* transform = registry.try_get<Transform>(follower);
 		if (transform == nullptr)
 		{
-			return;
+			return true;
 		}
 		if (step.moved <= 0.0 || deltaSeconds <= 0.0)
 		{
 			StopMotion(follower, driven);
-			return;
+			return true;
+		}
+
+		FollowPoint target = step.position;
+		if (NavQuerySystem::MissingRequiredNavigation(follower)) return false;
+		if (auto* nav = NavQuerySystem::GetNavForPlayer(follower); nav != nullptr && nav->strictMask)
+		{
+			Location accepted;
+			if (!NavQuerySystem::ValidateMove(*nav, ToLocation(ToFollowPoint(transform->location())),
+				ToLocation(target), accepted)) return false;
+			target = ToFollowPoint(accepted);
 		}
 
 		const FollowPoint from = ToFollowPoint(transform->location());
-		const double dx = step.position.x - from.x;
-		const double dy = step.position.y - from.y;
-		const double dz = step.position.z - from.z;
+		const double dx = target.x - from.x;
+		const double dy = target.y - from.y;
+		const double dz = target.z - from.z;
 		// 别的系统在两 tick 之间把他停下过(断线保留进场时的 StopMotionForExit 会清速度并给观察者发停步):
 		// 观察者手里最后一条已经是"停",这一 tick 要当作重新起步立刻补发,而不是等周期校正。
 		const auto* before = registry.try_get<Velocity>(follower);
@@ -211,9 +221,9 @@ namespace
 			(before == nullptr || (before->x() == 0.0 && before->y() == 0.0 && before->z() == 0.0));
 
 		auto* location = transform->mutable_location();
-		location->set_x(step.position.x);
-		location->set_y(step.position.y);
-		location->set_z(step.position.z);
+		location->set_x(target.x);
+		location->set_y(target.y);
+		location->set_z(target.z);
 		if (dx * dx + dy * dy > 1e-12)
 		{
 			// 朝向沿行进方向,与客户端上报同一口径(客户端 WorldCoordinateConverter):Rotation.z 是 Unity 的偏航角,
@@ -247,10 +257,11 @@ namespace
 			driven.broadcastVelocityY = now.velocityY;
 			driven.broadcastFrame = frame;
 		}
+		return true;
 	}
 
 	// 直接放进槽位:同场景瞬移(TeleportS2C 给本人,AOI 按新位置重建)。朝向取队长的朝向。
-	void TeleportIntoSlot(entt::entity follower, TeamFollowerComp& driven, entt::entity leader,
+	bool TeleportIntoSlot(entt::entity follower, TeamFollowerComp& driven, entt::entity leader,
 		const FollowPoint& slot)
 	{
 		auto& registry = tlsEcs.actorRegistry;
@@ -263,12 +274,13 @@ namespace
 		{
 			rotation = leaderTransform->rotation();
 		}
-		MovementSystem::TeleportWithinScene(follower, location, rotation, kTeleportReasonTeamRegroup);
+		if (!MovementSystem::TeleportWithinScene(follower, location, rotation, kTeleportReasonTeamRegroup)) return false;
 		// TeleportWithinScene 已清零速度并广播过新位置。
 		driven.broadcastMoving = false;
 		driven.broadcastVelocityX = 0.0;
 		driven.broadcastVelocityY = 0.0;
 		driven.broadcastFrame = tlsFrameTimeManager.frameTime.current_frame();
+		return true;
 	}
 
 	// 摘掉驱动的副作用(不碰队形;调用方已把他移出队形,或队形已不存在)。
@@ -401,6 +413,7 @@ namespace
 		else
 		{
 			// 场景没有导航数据:直线(与移动裁决的 fail-open 同口径)。
+			if (NavQuerySystem::MissingRequiredNavigation(follower)) return false;
 			path = {position, tail};
 		}
 
@@ -418,7 +431,7 @@ namespace
 	}
 
 	// 把 follower 放进 leader 的队形(调用方已确认他不在任何队形里、队形未满)。
-	void PlaceMember(entt::entity leader, TeamFollowFormationComp& comp, entt::entity follower, bool walkAllowed)
+	bool PlaceMember(entt::entity leader, TeamFollowFormationComp& comp, entt::entity follower, bool walkAllowed)
 	{
 		auto& registry = tlsEcs.actorRegistry;
 		auto& formation = comp.formation;
@@ -459,7 +472,13 @@ namespace
 		driven.broadcastFrame = tlsFrameTimeManager.frameTime.current_frame();
 		if (teleport)
 		{
-			TeleportIntoSlot(follower, driven, leader, formation.Trail().PointAt(member.cursorOdo));
+			if (!TeleportIntoSlot(follower, driven, leader, formation.Trail().PointAt(member.cursorOdo)))
+			{
+				formation.Remove(followerId);
+				ReleaseFollower(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
+				LOG_WARN << "[TeamFollow] placement rejected by strict navigation, player_id=" << followerId;
+				return false;
+			}
 		}
 
 		const auto finalRank = formation.RankOf(followerId).value_or(rank);
@@ -467,6 +486,7 @@ namespace
 		LOG_INFO << "[TeamFollow] metric=team_follow_attached placement=" << placement << " player_id=" << followerId
 				 << " leader_id=" << GuidOf(leader) << " slot=" << (finalRank + 1)
 				 << " trail_points=" << formation.Trail().PointCount();
+		return true;
 	}
 
 	// 队长不连续(被瞬移、被裁决拉回到远处):轨迹从新位置重来,全体按加入规则重新落位。
@@ -598,10 +618,12 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 			{
 				LOG_INFO << "[TeamFollow] metric=team_follow_placed reason=fell_behind player_id=" << step.playerId
 						 << " leader_id=" << GuidOf(leader);
-				TeleportIntoSlot(follower, *driven, leader, step.position);
+				if (!TeleportIntoSlot(follower, *driven, leader, step.position))
+					TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
 				continue;
 			}
-			ApplyWalkStep(follower, *driven, step, deltaSeconds);
+			if (!ApplyWalkStep(follower, *driven, step, deltaSeconds))
+				TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
 		}
 	}
 
@@ -712,8 +734,7 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 		return false;
 	}
 
-	PlaceMember(leader, *comp, follower, walkAllowed);
-	return true;
+	return PlaceMember(leader, *comp, follower, walkAllowed);
 }
 
 void TeamFollowSystem::Detach(entt::entity follower, const TeamFollowStopReason reason)
