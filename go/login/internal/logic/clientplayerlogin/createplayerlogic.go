@@ -142,9 +142,11 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		logx.Errorf("CreatePlayer rejected: gender=%d invalid (account=%s)", in.Gender, account)
 		return resp, nil
 	}
-	if !validCharacterAppearance(in.GetAppearanceId()) {
+	appearanceID := in.GetAppearanceId()
+	retiredAppearance := retiredCharacterAppearance(appearanceID)
+	if !validCharacterAppearance(appearanceID) && !retiredAppearance {
 		resp.ErrorMessage = loginTip(table.LoginError_kLoginUnknownError)
-		logx.Infof("CreatePlayer rejected: invalid appearance_id (bytes=%d)", len(in.GetAppearanceId()))
+		logx.Infof("CreatePlayer rejected: invalid appearance_id (bytes=%d)", len(appearanceID))
 		return resp, nil
 	}
 
@@ -159,6 +161,18 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 	display, _, verdict := playername.Normalize(in.GetName(), rules)
+	if retiredAppearance {
+		// 目录已强读，建角时的展示名与完整身份一起提交。只读回本账号的完全匹配记录，
+		// 因此满额时也能恢复丢失的回包，且退役外观永远不会进入后续写路径。
+		if verdict == playername.VerdictOK &&
+			matchesRetiredAppearanceRetry(userAccount.GetSimplePlayers().GetPlayers(), display, classId, gender, appearanceID) {
+			appendRoleList(resp, userAccount)
+			return resp, nil
+		}
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginUnknownError)
+		logx.Info("CreatePlayer rejected: retired appearance_id")
+		return resp, nil
+	}
 	requested := ""
 	switch verdict {
 	case playername.VerdictOK:
@@ -206,7 +220,7 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		// 不出新 id 时取最后一个角色,正好进入那个已经建好的角色。
 		// owner 只在这里用于比对,**不下发客户端**。本次铸出的 id 已经烧掉,无害。
 		if tip.Id == uint32(table.LoginError_kRoleNameTaken) &&
-			isLostResponseRetry(userAccount.SimplePlayers.Players, owner, classId, gender, in.GetAppearanceId()) {
+			isLostResponseRetry(userAccount.SimplePlayers.Players, owner, classId, gender, appearanceID) {
 			logx.Infof("[player-name] create retry matched existing player_id=%d (burned id=%d) account=%s",
 				owner, newPlayerId, account)
 			appendRoleList(resp, userAccount)
@@ -267,7 +281,7 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		Gender:       gender,
 		ZoneId:       config.AppConfig.Node.ZoneId,
 		Name:         name,
-		AppearanceId: in.GetAppearanceId(),
+		AppearanceId: appearanceID,
 	}
 	userAccount.SimplePlayers.Players = append(userAccount.SimplePlayers.Players, newPlayer)
 
@@ -322,6 +336,16 @@ func isLostResponseRetry(players []*login_proto_common.AccountSimplePlayer, owne
 	for _, p := range players {
 		if p.GetPlayerId() == owner {
 			return p.GetClassId() == classID && p.GetGender() == gender && p.GetAppearanceId() == appearanceID
+		}
+	}
+	return false
+}
+
+func matchesRetiredAppearanceRetry(players []*login_proto_common.AccountSimplePlayer, name string, classID, gender uint32, appearanceID string) bool {
+	for _, p := range players {
+		if p.GetPlayerId() != 0 && p.GetName() == name && p.GetClassId() == classID &&
+			p.GetGender() == gender && p.GetAppearanceId() == appearanceID {
+			return true
 		}
 	}
 	return false

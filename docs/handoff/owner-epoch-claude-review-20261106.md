@@ -1,5 +1,7 @@
 # owner_epoch 铸造持久化：交 Claude Code 独立审核
 
+最新状态（2026-11-08）：当前主仓 Debug/x64 串行增量整解通过，exit 0，日志汇总 0 warning / 0 error。随后用主仓产物重跑归属定向 10/10、真实 Redis 7.2.16 与 8.10.2 各 3/3，全部零失败、零跳过。本次沿用已验证的任务专属 TEMP，未新增生产代码修改；仍未压测，Claude 独立审核待进行。
+
 ## 用户要求与范围
 
 负责人要求 Codex 修复验证阻塞，再交 Claude Code「按他的想法去审核」。请独立选择审核方法和重点，可以质疑已有设计、实现和 Codex 的判断；本文提供事实与证据入口，不预设审核结论。
@@ -16,7 +18,7 @@
 - Go 证据入口：`owner_epoch_mint_test.go`（logic 与 svc 各一份）、`owner_epoch_crosslang_test.go`，以及同目录 `owner_epoch_test.go`。
 - C++：`cpp/libs/services/scene/player/system/player_lifecycle.h`、`.cpp`、`handoff_sql_barrier.h`；`cpp/tests/cross_zone_test/cross_zone_test.cpp` 的 `TravelOwnership.*`；`cpp/tests/currency_test/currency_test.cpp` 的三个 `*AgainstRealRedis` 用例。
 
-审核开始时请重新检查工作区和源码；本仓有多个会话并行修改，不能将某个时点的验证泛化为任意后续 HEAD。Codex 本轮取样 HEAD 为 `bc24d18027d3478ebbc5c9381a0a5709ff7c58e7`，文件级 SHA-256 在 `build/owner-epoch-review-20261106/source-before.json`。
+审核开始时请重新检查工作区和源码；本仓有多个会话并行修改，不能将某个时点的验证泛化为任意后续 HEAD。2026-11-06 取样 HEAD 为 `bc24d18027d3478ebbc5c9381a0a5709ff7c58e7`，文件级 SHA-256 在 `build/owner-epoch-review-20261106/source-before.json`。11 月 8 日续验入口与结果另见下节。
 
 ## 上轮阻塞与本轮核对
 
@@ -39,9 +41,9 @@
 
 - `build/player-store-verify-20261101-r2/commands.jsonl`：scene_manager build、vet、全量 test 均退出 0，发生于 2026-11-02 UTC。它覆盖当时的 G3a/G3b，不代表当前整个服务全绿。
 - `build/player-store-verify-20261102-r3-prep/06-cpp-tests/cross_zone_test.stdout.log`：`TravelOwnership.*` 8/8 通过，包括 `WallClockFloorRollbackIsAdopted`。同次其他 suite 有失败，不能称 cross_zone 全量通过。
-- 同目录 `currency_test.stdout.log`：当时全量 299/299 通过，含真 Redis 三例；`06-cpp-tests-redis8/currency_test.stdout.log` 及 `result.json` 记录 Redis 8 三例通过。
+- 同目录 `currency_test.stdout.log`：当时全量 299/299 通过，含真 Redis 三例；`06-cpp-tests-redis8/currency_test.stdout.log` 及 `currency_test.result.json` 记录 Redis 8 三例通过。
 
-### 2026-11-06 本轮
+### 2026-11-06 定向复验
 
 本轮证据集中于 `build/owner-epoch-review-20261106/`。
 
@@ -63,10 +65,53 @@ C++ 使用其他会话完成构建的 APS **隔离快照**，固定复制 EXE/DL
 
 Redis 两轮均为本地现有镜像、唯一容器名、任务标签、随机 loopback 端口、无共享卷；设置 `MMORPG_TEST_REDIS_ADDR` 后运行 `CurrencyTest.*AgainstRealRedis`。两轮清理均 exit 0，任务标签下无残留容器。常驻数据栈未清空。本轮没有真实 Redis Cluster 切主/迁槽演练，也没有 R-b 性能证据。
 
-主仓 `game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64` 由另一会话执行，本轮观察时仍未结束；日志为 `C:/Users/luyua/AppData/Local/Temp/battle-handoff-verify-20261106-3c90dc8e/r4/13-cpp-msbuild.log`。没有为抢占共享产物启动第二条整解。它不计作本线已通过证据。
+当时另一会话的主仓串行整解仍在途，本线没有抢占共享输出。2026-11-08 已确认其最终结果为失败，具体见下一节，不能继续将它描述为仍在运行。旧 TEMP 日志和 APS 源码目录现已不存在；13 号构建日志已迁到 `build/verification/battle-handoff-20261106-r4/`，11-06 本线固定二进制、哈希、XML 和回执仍保留。
+
+### 2026-11-08 主仓整解续验
+
+负责人要求检查主仓整解、有错误就修复复验、更新本交接，仍不压测。开始时 HEAD 为 `c17837c9c`，没有在途 MSBuild；工作区已有他方 `docs/PROGRESS.md` 增量及四个脏子模块，全部保留。
+
+旧构建的实际终态如下，原件均在 `build/verification/battle-handoff-20261106-r4/`：
+
+| 运行 | 最终状态 | 原件 |
+|---|---|---|
+| 13 号主仓整解 | exit 1，5 项进程终止 / DLL 初始化错误，与宿主重启记录一致 | `13-cpp-msbuild.log`、`13-cpp-msbuild.exit.txt` |
+| 18 号主仓串行整解 | exit 1，121 warning、1 error | `18-cpp-build-start.json`、`18-cpp-msbuild.log`、`18-cpp-msbuild.exit.txt` |
+| 19 号 configuration_table_test 补编 | exit 0，1 warning、0 error | `19-cpp-configuration-table-msbuild.log`、`19-cpp-configuration-table.exit.txt` |
+
+18 号在 configuration_table_test 的 AST 门禁打印 PASSED 后，系统 TEMP 内的 MSBuild `*.exec.cmd` 消失，产生 MSB5018 / MSB3073。19 号用任务专属 TEMP/TMP 补编通过。这是临时文件执行失败，不能归因为裸指针违规，也不能把单目标补编写成整解成功。
+
+本次沿用这个已验证的环境处置，仅在构建进程内设置 TEMP/TMP 到 `build/owner-epoch-review-20261108/temp/`；执行当前主仓 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64 /p:CL_MPCount=1`，未修改系统环境、未绕过门禁。09:36:43Z—09:56:49Z（纽约时间 04:36—04:56），本次完整 Build 命令 exit 0，日志汇总 0 warning / 0 error；configuration_table_test 的原失败点已通过。此处为增量整解 Build，未执行 `/t:Rebuild`。本次没有复现新的源码错误，也没有新增生产代码或测试修改。
+
+本轮实际结果如下，所有路径以 `build/owner-epoch-review-20261108/` 为根：
+
+| 检查 | 实际结果 | 原件 |
+|---|---|---|
+| 主仓串行 `game.sln` Debug/x64 Build | exit 0，0 warning、0 error | `01-game-start.json`、`01-game-result.json`、`01-game-msbuild.log` |
+| 主仓 `cross_zone_test` 定向 | 10/10 PASS，0 FAIL / SKIP；精确测试名与预期名单一致 | `cross-zone.result.json`、`cross-zone.xml`、`cross-zone.log` |
+| 主仓 `currency_test`，Redis 7.2.16 | 3/3 PASS，0 FAIL / SKIP，exit 0 | `currency-redis72.result.json`、`currency-redis72.xml`、`currency-redis72.log` |
+| 主仓 `currency_test`，Redis 8.10.2 | 3/3 PASS，0 FAIL / SKIP，exit 0 | `currency-redis8.result.json`、`currency-redis8.xml`、`currency-redis8.log` |
+| 构建输入比对 | 2151/2151 份记录文件 SHA-256 未变，HEAD 未变 | `inputs-before.json`、`inputs-after.json`、`source-comparison.json` |
+
+独立只读复核见 `final-audit.json`：重算记录输入与产物哈希、逐名解析三份 XML、核对最终回执与日志，结论一致；`cleanup-final.json` 记录本轮任务标签下无残留容器。2151 份是本轮记录的源码输入，不代表所有外部依赖均被封存。
+
+本次使用的是主仓产物，整解确认它们为最新；因增量检查无需重编，EXE 的修改时间仍可早于本次命令。`cross_zone_test.exe` 的 SHA-256 为 `E4D49E80141AF2C2CC10FD58CA7558272FA4FE1A78A5B57A1ACA1439E63AAE97`，`currency_test.exe` 为 `B8F0D50EACFF680C3185D05FF6BD9B96A521490BE6298414EF935973E288EAE0`，各次测试运行前后均一致。本次证据不再依赖 APS TEMP 快照。
+
+可复验命令（工作目录为仓库根）：
+
+```powershell
+build/cpp/tests/cross_zone_test.exe --gtest_filter=TravelOwnership.*:TravelOwnershipEcs.*:PlayerStoreDirectEcs.ClaimFillsTheMetadataBackIntoTheLoad
+# 每轮指向专用的 Redis 7.2 / 8.x 测试实例，不能省略该环境变量，否则用例会跳过。
+$env:MMORPG_TEST_REDIS_ADDR='127.0.0.1:<本轮专用端口>'
+build/cpp/tests/currency_test.exe --gtest_filter=CurrencyTest.*AgainstRealRedis
+```
+
+本轮 10 项含 `WallClockFloorRollbackIsAdopted`，与上轮相同的 8 项归属判定、1 项缺组件保持冻结、1 项载入元数据组成；两轮 currency 各为同一份三个真实围栏用例。Redis 使用本地已有镜像、唯一任务标签、随机 loopback 端口、128 MiB 容器上限、开启 AOF 且无共享卷；每轮结束均核标签后按完整 ID 删除，清理 exit 0。常驻数据栈未清空。这些围栏用例不证明 G3b 在真实 Cluster 切主或迁槽时的刷盘保证。
+
+11-06 的 11 个核心文件和 C++ 快照比对中的 17 份主仓输入，在本次开始时哈希均未变；原 10/3/3 份 C++ 与 Redis XML 重新解析均无失败或跳过，详见 `prior-evidence-audit.json`。Go 已通过范围继续按原 75 项记录，本次没有重复运行或扩大为全服务验证。未运行全部 C++ 测试、真实 Cluster 故障演练、R-b 或连接池定容；Java 仍因采用 SQL owner_epoch 而不适用本线。本次只更新本交接及 PROGRESS，无提交、推送或客户端操作。
 
 ## 审核交付
 
 请按你自己的推理审核源码、契约和证据适用范围。报告实质问题、理由和可定位的源码行；若未发现问题，也请明确实际审阅范围与未覆盖项。需要修复或补测的内容交回 Codex，不要仅依据本文已有结论判定通过。
 
-Claude Code 桌面在本轮观察时显示本周额度 100%，恢复时间为 11 月 12 日 15:00。输入框中还有其他任务草稿，Codex 未覆盖；当前仅准备交接材料，尚不能称 Claude 已接手或审核完成。
+2026-11-06 的 Claude Code 桌面观察显示周额度 100%，恢复时间为 11 月 12 日 15:00；当时输入框有其他任务草稿，Codex 未覆盖，也未成功发送本线审核。11 月 8 日仅更新本地交接，未重新查看桌面或发送消息；上述额度信息不是实时状态，仍不能称 Claude 已接手或审核完成。

@@ -24781,6 +24781,21 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - **服务入口与交回范围**：实际探测 gateway 健康为 `UP`；`http://127.0.0.1:18085/api/server-list` 返回 HTTP 200，包含 1 个 `OPEN` 区；Gate `127.0.0.1:28000` TCP 连接成功。用户明确要求自行启动真实客户端，本轮没有运行客户端或机器人登录，不能据服务器就绪声称真实登录、双玩家进场或战斗已验证。
 - **调试证据边界**：仅服务端辅助验收在实际调试器附加之前，将 Login 的主机端口 2345 误当成容器目标端口而退出。已将校验修正为 `127.0.0.1:2345 → 40000/tcp`，仅完成 AST 静态检查，未重跑该验收，因此没有本轮新的调试附加或断点命中证据。保留[辅助验收原失败回执](../build/verification/docker-debug-refresh-20261106/acceptance-server-r1/result.json)；服务已启动的实际结果以独立启动成功回执为准。
 
+## 2026-11-07 Codex：客户端从 Hub 启动后选服失败，新增持久网关设置入口
+
+- 实时只读核对 desktop-linux 的 xuanming-debug-current 常驻服务仍运行；18085 与 18086 的 `/api/server-list` 均返回 HTTP 200、1 个 OPEN 区，宿主 8081 不可连接。
+- 实际客户端项目日志 `D:/luyuan/mmorpg-client/Logs/Editor.log` 记录运行进程 38676 访问 127.0.0.1:8081 失败。该 Unity 主窗口由 Hub 启动且没有网关覆盖；另一个带 18085 参数的进程停在 Error 窗口，不能以它的参数代表实际运行窗口。精确 gateway PlayerPrefs 键当时不存在。
+- 在用户授权的同级客户端仅新增 `Assets/Editor/LocalDockerGatewayMenu.cs` 及 meta。菜单“MMORPG / 本地联调 / 使用 Docker 网关（18085）”复用现有 `ClientSettings.GatewayBaseUrl` setter 保存非敏感地址，仅在 Edit Mode 可选。由用户停止 Play 后点击菜单、再 Play 应用，之后从 Hub 启动也可读取已保存地址。
+- 新 Editor 菜单使用项目当前 347 个实际引用离线 Roslyn 编译通过，源码前后 SHA 一致、退出 0；证据在客户端 `.codex-artifacts/local-docker-gateway-20261107/editor-compile-r1/result.json`。未执行菜单或启动客户端，当前 Unity 界面获取列表仍待用户操作后复核。原客户端其他未提交字体、UI 验证改动保留，未提交推送。
+
+## 2026-11-08 Codex：宿主重启后恢复原 Docker 调试栈，服务就绪，客户端由用户启动
+
+- **范围与原件**：用户要求重启后继续，启动 Docker Desktop 后按两阶段预检和串行助手恢复 `xuanming-debug-current`。保留原 29 个容器 ID、原镜像、43 个旧项目卷及 18 个本批数据卷；未重建镜像或容器、未拉取镜像、未清空业务数据。规范环境文件和两份 Compose 摘要与创建回执一致，既有 staged 挂载文件只核摘要，不输出秘密。
+- **启动授权**：`db`、`data-service`、`match`、`player-inbox`、`gateway` 的旧启动授权已消费，本轮逐个重新启动各自原有注册容器，均 exit 0，再启动原常驻容器；沿用正式注册逻辑生成新 boot 并从原挂载卷读取运行配置，没有绕过单次授权门禁。不消费 SQL 授权的 login 未重复注册；其他已成功初始化任务及独立存储迁移全部跳过，没有重放迁移。
+- **实际结果**：恢复助手 exit 0、`passed=true`、`phase=complete`；16 个常驻服务运行，其中 12 个 Docker 健康检查均 healthy，三个 C++ 节点 PID 1 与内部监听端口均通过，Java 网关宿主 18085、18086 的健康接口均 UP。两个端口的 `/api/server-list` 分别实际返回 1 个 OPEN 区；Gate `127.0.0.1:28000` TCP 探测通过。5 个注册容器与 16 个常驻服务共 21 个本轮 ready 事件，所有成功初始化保留原状态。证据在 `build/verification/docker-reboot-recovery-20261108-r1/` 的 `initial.json`、`desktop-start.json`、`preflight.json`、`events.jsonl` 和 `result.json`。
+- **额外复核失败边界**：助手成功之后，另一次可选只读复核在 HTTP 探测前因局部变量 `http=[]` 遮蔽同名模块，报 `AttributeError: 'list' object has no attribute 'client'`。该额外复核未通过、未生成成功证据、未修改服务、未重跑；按真实失败补录 `supplemental-probe-failure.json`。它不覆盖恢复助手已经执行并成功的健康及入口探测，也不算第二份成功复核。
+- **交回与未验证项**：客户端仍由用户自行启动，本轮未运行客户端或机器人真实登录，未验证进场、战斗或调试器断点。未执行新构建、测试、压测、提交或推送；独立 Java 版本不属于本次原栈恢复范围，未修改或验证。
+
 
 ## 2026-11-08 Codex：按当前 main 结束旧战斗结算恢复任务
 
@@ -24788,6 +24803,16 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - 两条旧任务分支 codex/battle-settlement-integration、claude/recover-battle-settlement-f39089db，以及 D:/luyuan/wt-recover-battle-settlement 目录和 worktree 登记，本轮检查时均已不存在。未新建分支，未清理其他 worktree 或子模块。
 - 已通过 Codex 应用工具删除本聊天原有、处于暂停状态的 automation-2（战斗结算验证自动续跑），避免旧任务继续触发。
 - 本轮仅提交这条收尾记录；已有其他聊天的 PROGRESS.md 增量和四个子模块工作区改动保留，未夹带进本提交。没有重新执行构建或测试，10-30 的历史红项及 Java 待做状态不因此改判通过；未执行 push 或 tag。
+
+## 2026-11-08 Codex：owner_epoch 主仓整解与真实 Redis 复验通过（未压测）
+
+- **范围与授权**：负责人要求检查主仓整解，有错误则修复复验，更新 Claude Code 交接文档，仍先不压测。续接同一构建，没有因用户中断重启第二条整解；保留他方 PROGRESS 增量和四个脏子模块，未提交、推送或操作独立客户端。
+- **旧整解终态核实**：原 TEMP 日志已迁到 `build/verification/battle-handoff-20261106-r4/`。13 号主仓整解因进程终止 / DLL 初始化错误退出 1；18 号整解退出 1，121 warning / 1 error，唯一错误是 configuration_table_test 的 AST 门禁 PASSED 后系统 TEMP 内 MSBuild `*.exec.cmd` 消失（MSB5018 / MSB3073）；19 号使用任务专属 TEMP 单目标补编退出 0。旧记录不改判为整解成功。
+- **本轮主仓整解实际通过**：仅本次构建进程的 TEMP/TMP 指向本仓忽略目录 `build/owner-epoch-review-20261108/temp/`，执行 `msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64 /p:CL_MPCount=1 /nologo /v:minimal`。UTC 09:36:43—09:56:49（纽约 04:36—04:56），exit 0，日志汇总 0 warning / 0 error；原 configuration_table_test 失败点已通过。是增量完整 Build，不是 `/t:Rebuild`，未绕过门禁，未修改系统环境。本轮未复现新的源码错误，没有新增生产代码或测试修改。
+- **主仓产物复验**：从仓库根运行 `cross_zone_test --gtest_filter=TravelOwnership.*:TravelOwnershipEcs.*:PlayerStoreDirectEcs.ClaimFillsTheMetadataBackIntoTheLoad`，实际 10/10 PASS、0 FAIL / SKIP，含 `WallClockFloorRollbackIsAdopted`。以专用 `MMORPG_TEST_REDIS_ADDR` 分别连接本地 Redis 7.2.16、8.10.2，主仓 `currency_test --gtest_filter=CurrencyTest.*AgainstRealRedis` 各 3/3 PASS、0 FAIL / SKIP、exit 0；逐名核对用例，EXE 前后 SHA-256 一致。使用的是整解确认最新的主仓产物，不依赖已失效的 APS TEMP 源码。
+- **输入与清理**：HEAD 为 `c17837c9cbdf37325e2139e6325fde00949386ba`，2151/2151 份已记录构建输入 SHA-256 前后不变；11-06 本线 11 个核心文件与 17 份相关 C++ 输入也无变化。两轮 Redis 仅用本地已有镜像、新建唯一任务标签、随机 loopback 端口、128 MiB 上限、开启 AOF、无共享卷；均按完整 ID 与标签清理成功，最终任务标签下无残留容器。未清空或重启常驻数据栈。
+- **证据**：`build/owner-epoch-review-20261108/` 保存 `01-game-start.json`、`01-game-result.json`、完整 MSBuild 日志、cross-zone 与两版 currency 的 XML/退出回执、源码输入前后哈希、`prior-evidence-audit.json` 及历史路径复核。历史 Redis 8 回执实际文件名为 `currency_test.result.json`，交接中已纠正。
+- **交接与未验证范围**：已更新 [Claude Code 独立审核入口](handoff/owner-epoch-claude-review-20261106.md) 的最新状态、旧失败终态、当前主仓成功原件、执行命令、证据边界和未验项，仍由 Claude 自行选择审核方法和重点。本次未查看 Claude UI、未发送审核消息，没有 Claude 审核结论。Go 沿用源码未变的原 75 项通过证据，本次未重复；未执行全部 C++ 测试、真实 Cluster 切主/迁槽、R-b 或连接池定容。Java 的 SQL 事务内 owner_epoch 不适用本线，无新增待办。
 
 ## 2026-11-08 Codex：C++ / Go 命名审查实施，验证进行中
 
@@ -24816,3 +24841,9 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - **证据与一致性**：`remaining-baseline-approved-adaptation.json`、`go-r9-data-shared-results.json`、`go-r10-login-results.json`、`go-validation-summary.json`、导入清理与两份独立复核 JSON 保留命令、退出码、原失败和恢复证据。144 份记录输入前后无漂移，18 份生产守卫无变化，40 个已修改 Go 源文件 gofmt 检查及全工作区 `git diff --check` 通过。实际本任务现为 157 个路径（83 个 C++、42 个 Go 相关路径、32 个规范／设计／进度路径），比上一阶段增加三份获准测试和一份仅删除导入的测试；原有进度字节、handoff 和四个脏子模块保留。
 - **C++ 与验收边界**：C++ 输入未变，沿用已实际通过的完整增量整解及 14 套测试（2935 PASS／5 SKIP／2 原有 DISABLED／0 FAIL），没有为 Go 测试适配重复构建。身份新用例属于真实 Go 签名／验签接缝的单元验证，实际 Gate 清空由已运行的 C++ 路由身份套件覆盖，不声称真实 Gate／Kafka／Match 跨语言端到端或跨服务原子撤销。真实数据库／Kafka 夹具跳过、Linux 专用套件和禁用用例仍保持未执行状态；未压测或宣称性能收益。
 - **交付状态**：33 组命名实施、所有已获授权的基线测试适配和相关复验已完成，当前无剩余检查失败或待授权补丁。完整证据在 `build/verification/naming-audit-20261108/`，最终状态以 `implementation-summary.json` 为准。未提交、推送、打标签，未改客户端、Java 或生产环境。
+
+## 2026-11-08 角色创角外观名单与兼容
+
+- Login 新建允许 12 个正式外观 ID。旧客户端和机器人仍可省略外观。退役的 07、14、20 只可通过本账号 SQL 目录中角色名、职业、性别和外观完全相同的已提交记录恢复丢失回包，满额也可恢复。退役请求不会发号、登记名字或写角色数据。
+- 新建沿用 `CreateWithInitialCommit`。选角、玩家 profile、场景和战斗仍沿用原外观字段，协议及消息号未变。旧版 Redis 账号目录的记录是历史说明，当前建角权威来源为全局 SQL 目录。
+- Go 创角逻辑包 128 个顶层用例通过。Linux login 调试镜像已构建，基线 `74b09788878fac2c9f929eafdd0b1c80cba16066` 加本次生产改动，二进制 SHA-256 `8fd5418198287d25245ff6142b90a33fe84ad23fda490e7aa9e3acd392101849`。Java `0.1.0-SNAPSHOT` 已对齐同一策略，定向 Maven 验证及构建通过，见 Java 仓 `PARITY.md`。上述为服务端代码和构建证据，真实地图中的双客户端验收单独记录。
