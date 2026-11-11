@@ -8,6 +8,7 @@ constexpr bool IsSceneCommandEvent(uint32_t eventId)
     case 45u: // BattleConfirmedEvent
     case 48u: // PlayerTeamRefreshEvent
     case 49u: // PlayerInboxNotifyEvent
+    case 53u: // PlayerHostedPlacementEvent
         return true;
     default: return false;
     }

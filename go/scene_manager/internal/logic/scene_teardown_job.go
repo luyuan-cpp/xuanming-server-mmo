@@ -13,7 +13,6 @@ import (
 	"scene_manager/internal/svc"
 	"shared/safego"
 
-	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -32,10 +31,9 @@ import (
 //   - 没做完的(进程退出、某一步失败、Eval 回错让调用方以为没认领到)留在待办里。本 zone 的领导者每
 //     sceneTeardownSweepInterval 扫一次,认领超过 sceneTeardownJobLease 的任务按同一份做法重做。
 //   - 副作用都能重跑:级联、DestroyScene(C++ 找不到实体只打日志)、SREM、DEL、摘成员本来就幂等。
-//     不幂等的只有 Agones 归还,由 takeTeardownRoom 在任务上原子置位,一个任务至多还一次。
-//   - Agones 是「至多一次」:先置位再调 K8s。置位之后、调用之前进程退出,这份名额不还;这时 scene_count 已经在认领时
-//     减了,两数对不上,Agones 对账(agones_reconcile.go)会告警。反过来「至少一次」会在置位丢失时还两次,把容量算少、
-//     让 FleetAutoscaler 超卖。与 TransferAgonesRoomForScene 结局未知时「两边都不还」是同一取舍。
+//     Agones 归还是按条目删(agones_room_ledger.go,2026-11-10),也幂等:失败时任务留着,扫描重做到成功。
+//     2026-11-10 之前名额是一个计数,归还只能「至多一次」(先在任务上置位再调 K8s),置位之后进程退出或调用失败,
+//     那一份就永远不还。
 //
 // 任务做完之前,别的认领对这个场景一律落空,同一个 scene_id 被重新登记时(号源出错)也认领不到,直到旧任务做完。
 
@@ -61,7 +59,7 @@ const (
 	sceneTeardownJobLease = 90 * time.Second
 	// sceneTeardownSweepBatch 是一次扫描最多接手的任务数,剩下的下一拍再做。
 	sceneTeardownSweepBatch = 100
-	// sceneTeardownJobTimeout 是扫描接手一个任务的预算:级联、DestroyScene、ReleaseRoom 都在里面。
+	// sceneTeardownJobTimeout 是扫描接手一个任务的预算:级联、DestroyScene、删 Agones 名额条目都在里面。
 	sceneTeardownJobTimeout = 10 * time.Second
 )
 
@@ -86,25 +84,6 @@ type sceneTeardownJob struct {
 func newSceneTeardownJob(req sceneTeardownRequest, claim sceneClaim) sceneTeardownJob {
 	return sceneTeardownJob{ZoneID: req.ZoneID, SceneID: req.SceneID, Kind: req.Kind, Reason: req.Reason, Claim: claim}
 }
-
-// luaTakeTeardownRoom 拿「还 Agones 名额」这一步:一个任务只交给一个调用方。
-// KEYS[1] = scene:{id}:teardown。ARGV[1] = 任务 token,ARGV[2] = 这次调用的 id。
-// 回 1:这次调用拿到了,应当去还;回 0:任务不在、token 不符(已做完,或已换成别的任务),或已被别的调用拿过。
-// 同一个调用 id 重发(go-redis 读超时之后原样重发)仍回 1,不会被自己第一次的置位挡在外面。
-const luaTakeTeardownRoom = `
-if redis.call('HGET', KEYS[1], 'token') ~= ARGV[1] then
-    return 0
-end
-local taker = redis.call('HGET', KEYS[1], 'room')
-if taker then
-    if taker == ARGV[2] then
-        return 1
-    end
-    return 0
-end
-redis.call('HSET', KEYS[1], 'room', ARGV[2])
-return 1
-`
 
 // luaFinishSceneTeardown 删掉做完的任务。KEYS[1] = 任务,KEYS[2] = 本 zone 的待办集合。ARGV[1] = sceneId,
 // ARGV[2] = 任务 token。token 不符时不动(任务已被别人做完删掉,或已换成别的任务),回 0。
@@ -137,22 +116,13 @@ func teardownDeferred(steps []string) error {
 	return fmt.Errorf("%w: %s", errTeardownDeferred, strings.Join(steps, ", "))
 }
 
-// releaseTeardownRoom 还这个任务占的 Agones 名额,一个任务至多还一次,见 luaTakeTeardownRoom。
-// 回错误只在「拿这一步」本身结局未知时:任务留给扫描,扫描拿不到(已被这次拿过)就不还 —— 至多一次。
-// 拿到之后 ReleaseRoom 失败只记日志与指标(ReleaseAgonesRoom 里),不重试:结局未知,重试可能还两次。
+// releaseTeardownRoom 还这个任务占的 Agones 名额:按认领快照里的记录删 GameServer 上的那一条
+// (agones_room_ledger.go)。删除是幂等的,条目已不在、GameServer 已不存在都算成功,所以失败时回错误,
+// 任务留着由扫描重做,认领方与扫描同时做也只还一次。
+//
+// 节点已经死了的情况同样要还:GameServer 对象可能还在(Agones 还没判 Unhealthy),它身上的条目不删就会一直占着容量。
 func releaseTeardownRoom(ctx context.Context, svcCtx *svc.ServiceContext, job sceneTeardownJob) error {
-	if job.Claim.AgonesGs == "" || GetAgonesAllocator() == nil {
-		return nil
-	}
-	raw, err := svcCtx.Redis.Eval(luaTakeTeardownRoom, []string{sceneTeardownJobKey(job.SceneID)}, job.Claim.Token, uuid.NewString())
-	if err != nil {
-		return err
-	}
-	if toInt64(raw) != 1 {
-		return nil
-	}
-	ReleaseAgonesRoomForScene(ctx, svcCtx, job.SceneID, job.Claim.AgonesGs, job.Reason)
-	return nil
+	return releaseAgonesRoom(ctx, svcCtx, agonesNamespace(svcCtx), parseAgonesRoom(job.Claim.AgonesGs), job.Reason)
 }
 
 // unlinkFromSourceMirrors 把场景从它的镜像源的子集合 scene:{源}:mirrors 里摘掉。source 是认领快照里的镜像源

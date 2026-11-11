@@ -118,7 +118,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
-		panic(fmt.Errorf("trade SQL boot 装配失败: %w", err))
+		panic(fmt.Errorf("trade SQL boot wiring failed: %w", err))
 	}
 	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
 }
@@ -126,7 +126,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 新 boot 的 prepared 门禁在构造时显式传入，不能在后台或 handler 已持有门禁后替换它。
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
-		panic("trade SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+		panic("trade SQL boot or SOURCE/RELAY wiring missing, or roles reused")
 	}
 	// keepalive:场景节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
 	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
@@ -167,8 +167,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		if c.AssetOp.SecretEnv != AssetOpSecretEnv {
 			// **不回显配置里那个值**:这条不一致最常见的成因就是有人把密钥本身贴进了 SecretEnv,
 			// 回显等于把它抄进启动日志(AGENTS §11.3)。只报本服务期望的变量名,足够定位。
-			panic(fmt.Errorf("trade: AssetOp.SecretEnv 与本服务实际读取的 %s 不一致"+
-				"(得到一个长度 %d 的值,此处刻意不回显内容):yaml / config.go / ConfigMap 三处必须逐字一致",
+			panic(fmt.Errorf("trade: AssetOp.SecretEnv does not match %s, the variable this service actually reads"+
+				" (got a value of length %d; its content is deliberately not echoed): yaml / config.go / ConfigMap must match exactly",
 				AssetOpSecretEnv, len(c.AssetOp.SecretEnv)))
 		}
 		// Enabled=true 但密钥缺失 / 去空白后不足 32 字节 → **拒启**,不降级。
@@ -176,14 +176,14 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		// 托管都写进 outbox 再永远投不出去,商品永久卡在 ESCROWING,比起不来难查得多。
 		// NewAssetOpSigner 的错误文本不含密钥值,可以原样进启动日志。
 		if _, err := NewAssetOpSigner(); err != nil {
-			panic(fmt.Errorf("trade: AssetOp.Enabled=true 但签名密钥不可用: %w"+
-				" —— 本机用 tools/scripts/start_game.ps1 注入开发值(仅限本机 dev),"+
-				"预发 / 生产由部署侧注入;不打算开通道就把 AssetOp.Enabled 改回 false", err))
+			panic(fmt.Errorf("trade: AssetOp.Enabled=true but the signing secret is unavailable: %w"+
+				" -- locally tools/scripts/start_game.ps1 injects a dev value (local dev only); "+
+				"staging / production inject it at deployment; if the channel is not meant to be enabled, set AssetOp.Enabled back to false", err))
 		}
 		// 共享 Redis 连不上即启动致命(理由见 newAssetChannel)。
 		assets, err = newAssetChannel(c, db, dsClient, relay)
 		if err != nil {
-			panic(fmt.Errorf("trade: 资产通道装配失败: %w", err))
+			panic(fmt.Errorf("trade: asset channel wiring failed: %w", err))
 		}
 	} else {
 		logx.Infof("[trade] Asset channel disabled (AssetOp.Enabled=false, default): no shared Redis dial, "+
@@ -199,7 +199,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		for key, value := range c.Commerce.ItemTitles {
 			id, parseErr := strconv.ParseUint(key, 10, 32)
 			if parseErr != nil || id == 0 || strconv.FormatUint(id, 10) != key {
-				panic("商城道具名称目录配置号非法")
+				panic("invalid item id in the mall item title catalog")
 			}
 			titles[uint32(id)] = value
 		}
@@ -208,11 +208,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			Applier: assets.Caller, Ledger: persistedLedger(dsClient), Now: time.Now}
 		reader, roleErr := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
 		if roleErr != nil {
-			panic(fmt.Errorf("交易角色护栏的调用方密钥 %s 不可用: %w", rolefence.SecretEnv(RoleFenceCaller), roleErr))
+			panic(fmt.Errorf("trade role fence caller secret %s unavailable: %w", rolefence.SecretEnv(RoleFenceCaller), roleErr))
 		}
 		roles, roleErr := commerce.NewRoleAuthority(db, reader)
 		if roleErr != nil {
-			panic(fmt.Errorf("交易角色护栏装配失败: %w", roleErr))
+			panic(fmt.Errorf("trade role fence wiring failed: %w", roleErr))
 		}
 		commerceEngine.Roles = roles
 		// 合同推进与收据 ACK 按片分工(缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8)。成员表只圈本 zone:
@@ -220,11 +220,16 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		members := workshard.NewMembership(noderegistry.RpcZonePrefix(TradeNodeRpcPrefix(), c.ZoneId))
 		commerceEngine.Owns = members.Owns
 		assets.Members = members
+		// 资产指令重投的到期扫描按玩家分片,用同一份成员表(缺口清单第 25 条,
+		// docs/design/assetop-redelivery-sharding-20261110.md)。绑不上就拒启:绑了分工却扫全部行,扩副本时看不出来。
+		if err := assets.Pipeline.BindWorkOwner(members.Owns); err != nil {
+			panic(fmt.Errorf("trade: bind asset redelivery work owner: %w", err))
+		}
 		assets.Commerce = commerceEngine
 		if c.Mall.URL != "" {
 			mall, err = commerce.NewMall(c.Mall.URL, os.Getenv(c.Mall.GatewaySecretEnv), os.Getenv(c.Mall.DeliverySecretEnv), commerceEngine)
 			if err != nil {
-				panic(fmt.Errorf("商城装配失败: %w", err))
+				panic(fmt.Errorf("mall wiring failed: %w", err))
 			}
 			assets.Mall = mall
 		}
@@ -293,7 +298,7 @@ func (sc *ServiceContext) StartAssetChannel(ctx context.Context, globalBackgroun
 	sc.Assets.Start(ctx, sc.Etcd, globalBackground)
 }
 
-// BindWorkMember 在 etcd 注册成功之后记下本副本的 node_uuid,合同推进从此按片分工(缺口清单第 16 条)。
+// BindWorkMember 在 etcd 注册成功之后记下本副本的 node_uuid,合同推进与资产指令重投从此按片分工(缺口清单第 16、25 条)。
 // 注册之前成员表若已有别的副本,本副本不负责任何片;通道没装配(AssetOp.Enabled=false)时是空操作。
 func (sc *ServiceContext) BindWorkMember(nodeUUID string) {
 	if sc.Assets != nil {
@@ -504,7 +509,7 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 }
 func (sc *ServiceContext) Stop() {
 	if err := sc.StopAndReport(context.Background()); err != nil {
-		logx.Errorf("trade 排空 HOLD: %v", err)
+		logx.Errorf("trade drain HOLD: %v", err)
 	}
 }
 
@@ -514,7 +519,7 @@ func bindAllocationOwner(allocate idsegment.AllocateFunc, roles ...*drainproof.S
 		return allocate
 	}
 	if len(roles) != 1 || roles[0] == nil {
-		panic("trade 号段 RELAY owner 缺失")
+		panic("trade id segment RELAY owner missing")
 	}
 	owner := roles[0]
 	return func(ctx context.Context, tag string, step uint32) (lo, hi uint64, resultErr error) {

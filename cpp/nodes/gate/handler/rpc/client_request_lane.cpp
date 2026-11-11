@@ -23,6 +23,7 @@
 #include <session/manager/session_manager.h>
 #include "session/comp/router_lane.h"
 #include "session/comp/router_lane_item.h"
+#include "thread_context/trace_context_tls.h"
 
 namespace gate_lane
 {
@@ -122,6 +123,9 @@ void Pump(SessionId sessionId, SessionInfo &session)
 	auto &lane = session.routerLane;
 	while (auto item = lane.TakeNextIfIdle())
 	{
+		// 每条按它自己入队时的 trace 处理:Pump 可能在上一条的完成回调或过期扫描里跑,那时线程上是别的上下文
+		// (docs/design/distributed-tracing.md §5.5)。回给客户端的拒绝信封和发出的 gRPC 都落在这条请求的 trace 上。
+		const tracing::ScopedSpan itemTrace(item->trace);
 		if (QueueWaitExceeded(item->enqueuedAt, now, kMaxLaneWait))
 		{
 			++tlsCounters.expiredInQueue;
@@ -250,6 +254,7 @@ void Admit(SessionId sessionId, SessionInfo &session, const std::shared_ptr<Clie
 	RouterLaneItem item;
 	item.request = request;
 	item.sessionDetailsBin = details.SerializeAsString();
+	item.trace = tracing::Current();
 	item.seq = seq;
 	item.enqueuedAt = std::chrono::steady_clock::now();
 	item.clientRequestId = clientRequestId;

@@ -559,6 +559,10 @@ func (gc *GameClient) VerifyBattleToken(payload, signature []byte) (uint64, erro
 	c.Send(req)
 
 	msg, err := c.Recv()
+	// 同一条直连上再次握手时,上一次握手起的心跳可能还有回包在路上:认领后接着读(同 VerifyGateToken)。
+	for err == nil && gc.takeHeartbeatReply(msg) {
+		msg, err = c.Recv()
+	}
 	if err != nil {
 		return 0, fmt.Errorf("recv battle token verify response: %w", err)
 	}
@@ -568,6 +572,8 @@ func (gc *GameClient) VerifyBattleToken(payload, signature []byte) (uint64, erro
 		if !m.Success {
 			return 0, fmt.Errorf("battle ticket rejected: %s", m.Error)
 		}
+		// battle 通告了心跳就从这一刻在本直连上发(heartbeat.go):它从握手成功应答起按读空闲判死这条直连。
+		gc.onBattleVerified(c, m)
 		return m.BattleId, nil
 	default:
 		return 0, fmt.Errorf("unexpected response type for battle token verify: %T", msg)

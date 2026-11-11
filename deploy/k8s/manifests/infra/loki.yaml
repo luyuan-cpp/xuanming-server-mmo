@@ -6,8 +6,9 @@
 # 所以按"读容器 stdout"的常规做法(DaemonSet 读 /var/log/pods)采不到 C++ 的业务日志,
 # 必须由与业务容器共享同一个 node-logs 卷的 sidecar 直接读文件 —— 那个 sidecar 把日志写到这里。
 #
-# 规模定位:单副本 single-binary + 文件存储,够本地 kind 和小规模 dev/staging 用。
-# 生产要换对象存储 + 多副本(读写分离),见 docs/ops/log-management.md「Production (K8s)」。
+# 规模定位:单副本 single-binary + 文件存储,只给本地 kind 和 dev 用(-LokiReplicas 1)。
+# staging、prod 缺省是单体模式 3 副本加外部 S3(loki-ha.yaml,-LokiReplicas 3),见 docs/design/no-single-node-horizontal-scaling-20261001.md §10。
+# 两份清单的 Service loki 与 ConfigMap loki-config 同名,同一时刻只 apply 其中一份。
 apiVersion: v1
 kind: Service
 metadata:

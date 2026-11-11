@@ -2,10 +2,12 @@ package authority
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	kafkapb "proto/contracts/kafka"
+	inboxpb "proto/player_inbox"
 	rankpb "proto/rank"
 )
 
@@ -82,4 +84,69 @@ func TestWorkTiDBRankPublisherSendsOnlyOwnedShards(t *testing.T) {
 	var committed uint64
 	require.NoError(t, s.DB.QueryRow("SELECT committed_cursor FROM match_rank_source WHERE source_epoch=1 AND mode=? AND shard=?", mode1v1, rankSourceShard(other)).Scan(&committed))
 	require.Equal(t, uint64(1), committed)
+}
+
+// 终局发件箱按片分工(缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md §2.5):整局结果按 battle_id、
+// 个人结算按 player_id(首投与等待两页共用一个键),条件在 SQL 的 LIMIT 之前。本副本只投自己负责的片,别的片原样留给
+// 负责它的副本;一片都不负责时什么都不投;不分工时其余行投出,已投的不再投。
+func TestWorkTiDBOutcomeOutboxDeliversOnlyOwnedShards(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	const (
+		ownedBattle, otherBattle = uint64(64*130 + 5), uint64(64*130 + 6) // 结果片 5 与片 6
+		firstBattle, waitBattle  = uint64(64*131 + 9), uint64(64*132 + 9) // 个人结算所在的两局(首投、等待)
+		ownedPlayer, otherPlayer = uint64(64*140 + 7), uint64(64*140 + 8) // 个人片 7 与片 8
+	)
+	insertDueResult(t, s, ownedBattle)
+	insertDueResult(t, s, otherBattle)
+	for _, player := range []uint64{ownedPlayer, otherPlayer} {
+		insertDueSource(t, s, firstBattle, player, false)
+		insertDueSource(t, s, waitBattle, player, true)
+	}
+	inbox := &lockedInbox{inner: &terminalInboxFixture{state: inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_APPLIED}}
+	resolve := func(context.Context) (inboxpb.PlayerInboxClient, error) { return inbox, nil }
+	var mu sync.Mutex
+	published := map[uint64]int{}
+	publish := func(_ context.Context, battle uint64, _ []byte) error {
+		mu.Lock()
+		defer mu.Unlock()
+		published[battle]++
+		return nil
+	}
+	publishedSnapshot := func() map[uint64]int {
+		mu.Lock()
+		defer mu.Unlock()
+		out := make(map[uint64]int, len(published))
+		for battle, n := range published {
+			out[battle] = n
+		}
+		return out
+	}
+	round := func() {
+		t.Helper()
+		require.NoError(t, s.PublishBattleOutcomesOnce(ctx, resolve, terminalFixtureSecret, publish))
+	}
+
+	s.BindWorkOwner(func(key string) bool {
+		return key == workShardKey(workOutcomeResult, int(ownedBattle%WorkShards)) ||
+			key == workShardKey(workOutcomeSettlement, int(ownedPlayer%WorkShards))
+	})
+	round()
+	require.Equal(t, map[uint64]int{ownedBattle: 1}, publishedSnapshot(), "结果只投本副本负责的 battle 片")
+	require.Equal(t, map[uint64]int{ownedPlayer: 2}, inbox.seenPerPlayer(), "个人结算的首投与等待两页都只投本副本负责的玩家片")
+	require.Equal(t, 1, countRows(t, s, "SELECT COUNT(*) FROM match_battle_completion WHERE result_published=0"))
+	require.Equal(t, 2, countRows(t, s, "SELECT COUNT(*) FROM match_battle_settlement_source WHERE dispatch_state=1 AND player_id=?", otherPlayer),
+		"别的片原样留给负责它的副本")
+
+	s.BindWorkOwner(func(string) bool { return false })
+	round()
+	require.Len(t, publishedSnapshot(), 1, "一片都不负责:什么都不投")
+	require.Equal(t, map[uint64]int{ownedPlayer: 2}, inbox.seenPerPlayer())
+
+	s.BindWorkOwner(nil)
+	round()
+	require.Equal(t, map[uint64]int{ownedBattle: 1, otherBattle: 1}, publishedSnapshot(), "不分工时另一片也投出,已投的不再投")
+	require.Equal(t, map[uint64]int{ownedPlayer: 2, otherPlayer: 2}, inbox.seenPerPlayer())
+	require.Zero(t, countRows(t, s, "SELECT COUNT(*) FROM match_battle_completion WHERE result_published=0"))
+	require.Zero(t, countRows(t, s, "SELECT COUNT(*) FROM match_battle_settlement_source WHERE dispatch_state=1"))
 }

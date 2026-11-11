@@ -34,17 +34,17 @@ func main() {
 	timeout := flag.Duration("timeout", 5*time.Second, "调用超时")
 	flag.Parse()
 	if *endpoint == "" || *battle == 0 {
-		fmt.Fprintln(os.Stderr, "必须指定 -endpoint 与 -battle")
+		fmt.Fprintln(os.Stderr, "-endpoint and -battle are required")
 		os.Exit(2)
 	}
 	request, err := newSignedRequest(*battle, *featured, os.Getenv(opsCallerSecretEnv), time.Now())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "签名失败(检查环境变量 %s,至少 32 字节): %v\n", opsCallerSecretEnv, err)
+		fmt.Fprintf(os.Stderr, "Signing failed (check environment variable %s, at least 32 bytes): %v\n", opsCallerSecretEnv, err)
 		os.Exit(2)
 	}
 	reply, err := call(*endpoint, *timeout, request)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "调用失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Call failed: %v\n", err)
 		os.Exit(1)
 	}
 	if code := reportReply(os.Stdout, os.Stderr, reply); code != 0 {
@@ -59,7 +59,7 @@ func reportReply(stdout, stderr io.Writer, reply *matchpb.SetSpectateFeaturedRes
 	case matchpb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NONE:
 		return 0
 	case matchpb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_DENIED:
-		fmt.Fprintf(stderr, "match 拒绝了这次调用:运营入口未开启,或签名无效。检查 match 配置 Spectate.OpsCallerSecret、环境变量 %s,以及本机时钟(偏差不能超过 5 分钟)\n", opsCallerSecretEnv)
+		fmt.Fprintf(stderr, "match rejected this call: the ops entry is disabled or the signature is invalid. Check match config Spectate.OpsCallerSecret, environment variable %s, and the local clock (skew must not exceed 5 minutes)\n", opsCallerSecretEnv)
 		return 1
 	default:
 		return 1

@@ -1,6 +1,6 @@
 # 回合制战斗战报回放
 
-> **状态(2026-11-10)**:服务端 C++ / Go 已落码。已有的运行证据:proto 与 tip 码已生成(`kMatchBattleReportNotFound = 16025`,消息号 `ListBattleReports = 379`、`GetBattleReport = 380`);C++ 在 Codex 11-08 的命名审查整解里编译通过,录制器 6 个用例与战斗节点 2 个用例全部通过(`build/verification/naming-audit-20261108/cpp-tests/`);Go match 在 11-06 编译通过,纯逻辑用例通过,4 个真 TiDB 用例当时没设 `MATCH_IT_TIDB` 被跳过,**还没在真库上跑过**。11-10 补了限频配置、体积实测用例和 robot 冒烟核对,**这三项未编译、未运行**。剩余验证见 §17。客户端未做,交接见 [battle-report-replay-client.md](../handoff/battle-report-replay-client.md)。Java 版待做(§16)。
+> **状态(2026-11-10,Codex 续验)**:服务端 C++ / Go 已落码。协议与 tip 码已生成(`kMatchBattleReportNotFound = 16025`,消息号 379 / 380);限频已导表并落入服务端产物,批次 34。Debug battle 库编译通过,`turn_battle_engine_test` 307/307、0 跳过,三组体积数字见 §9;robot build / vet 与 3 个解码用例通过。match build / vet 在本轮记录的输入版本通过。**4 个战报真 TiDB 用例、15 个终局真库回归及跨区冒烟尚未执行**:最新可用内存约 2.29 GiB,低于既有 4 GiB 启动门槛;冒烟还需重建当前 Go 配套镜像。首轮失败、输入版本与准备边界见 §17.1。客户端未做,见 [客户端交接](../handoff/battle-report-replay-client.md);Java 版待做(§16)。
 > **负责人决定**:§13 五项 2026-11-06 按建议拍板;同日又改了两项:**只录 PVP**、**每名玩家保留最近 100 条**(取代原来的「活动局也录」和「保留 7 天」)。因此 match 自己维护按玩家的 PVP 战报列表,不再有按天数的定时清理。
 > **依据**:本仓 C++ battle、Go match 与 Java 版只读调研;[SLG 战斗笔记 Q5 / Q15](../notes/slg/slg-battle-interview-qa.md) 的事件日志式战报(该笔记是「率土风格」的面试笔记,不代表任何游戏的真实架构)。
 > **和近期战斗结果的关系**:[战斗结果重登恢复](battle-result-recovery.md)存在玩家存档里,最多 10 局、各种模式都有、带本人实际到账的奖励,用来在重登后补弹结果。本文的 PVP 战报列表存在 match 库里,最多 100 局、只有 PVP、带回放。两份列表的用途不同,都带 `battle_id`;近期战斗结果里的 PVP 局同样能凭 `battle_id` 取回放。2026-11-05 / 11-06 与该文档作者经会话间沟通对齐过。
@@ -254,7 +254,7 @@ message GetBattleReportResponse {
 - `GetBattleReport`:`battle_id` 为 0 直接回 `kMatchBattleReportNotFound`;`Store.BattleReport` 先在本人主键前缀内查这一局,再按主键读正文。列表里没有、正文不存在都回 `kMatchBattleReportNotFound`。
 - 都不开事务、不加锁,存储错误回 `kMatchInternal`,不在服务端重试。
 
-**限频**:gate 的按消息限频(`CheckMessageLimit` → `MessageLimiter` 表,没有配置行时用默认额度)。`data/MessageLimiter.xlsx` 已加两行(11-10):`380`(`GetBattleReport`)每秒 1 次、`379`(`ListBattleReports`)每 2 秒 1 次,`tip_message` 与同表其他行相同(1000);导表后生效(§17 第 1 步)。单次回包最大约 512 KiB,即使连发几次也到不了 gate 2 MiB 的高水位(`client_session_handler.cpp` `kClientHighWaterMark`)。
+**限频**:gate 的按消息限频(`CheckMessageLimit` → `MessageLimiter` 表,没有配置行时用默认额度)。`data/MessageLimiter.xlsx` 已加两行(11-10):`380`(`GetBattleReport`)每秒 1 次、`379`(`ListBattleReports`)每 2 秒 1 次,`tip_message` 与同表其他行相同(1000);11-10 已隔离导表并落入 `generated/tables/`,批次 34;运行中 gate 加载效果仍待冒烟(§17 第 5 步)。单次回包最大约 512 KiB,即使连发几次也到不了 gate 2 MiB 的高水位(`client_session_handler.cpp` `kClientHighWaterMark`)。
 
 ### 7.4 依赖与跨库
 
@@ -296,7 +296,15 @@ message GetBattleReportResponse {
 
 **存储**:正文行数 ≈ 每天 PVP 局数 × 正文平均存活天数;列表行数 ≤ 有过 PVP 的玩家数 × 100。玩家打满 100 局之前正文一直留着,打得少的玩家的战报会存得很久,这是「保留 100 条」的本意。上线前按 PVP 局数与实测平均大小算一次,写回本节。
 
-**实测用例(11-10 已写,待 Codex 运行)**:`turn_battle_engine_test.cpp` 末尾的 `BattleReplaySize.AutoBattlesStayWithinReplayLimits`,用内存数据源跑 1v1 带宝宝 150 回合、5v5 120 回合、5v5 带宝宝 60 回合三种全自动局,逐回合录观众版帧,每种打印一行 `[replay-size] case=… rounds=… truncated=… raw_bytes=… payload_bytes=… freeze_us=…`,并断言不超过两个上限、压缩后更小。Codex 跑出的数字写回本节,再确认 BR-5 的两个上限和压缩级别;数字是 Debug 构建下的量级,不作性能结论。
+**实测(2026-11-10,Debug 构建)**:`BattleReplaySize.AutoBattlesStayWithinReplayLimits` 已通过,同工程全集 307/307、0 跳过。原始输出在 `build/verification/battle-report-20261110/cpp-tests-after-fix/turn_battle_engine_test.stdout.log`。
+
+| 场景 | 回合数 | 原始字节 | gzip 字节(级别 1) | 冻结耗时(微秒) | 截断 |
+|---|---:|---:|---:|---:|---|
+| 1v1 带宝宝 | 150 | 66,821 | 6,787 | 5,886 | 否 |
+| 5v5 | 120 | 109,783 | 15,479 | 10,337 | 否 |
+| 5v5 带宝宝 | 60 | 132,107 | 19,561 | 13,088 | 否 |
+
+三种场景均成功冻结,低于原始 1 MiB、压缩后 512 KiB 上限,本轮保留 BR-5 上限和 gzip 级别 1。这是内存数据源的全员挂机场景,不覆盖真实技能、buff 组合的最大帧,也不测 Protobuf 对象的常驻内存;冻结耗时仅为本机 Debug 单次样本,不作 Release 性能或吞吐结论。
 
 ## 10. 失败与一致性
 
@@ -398,13 +406,43 @@ player_id、battle_id 只进日志字段,不进任何指标 label。
 
 ## 17. 验证(交 Codex,AGENTS §10.1)
 
-任一步失败即停,保留完整输出,不改断言、不跳过。下面每一条 Claude 都没有运行过。已有的运行证据见文首状态,这里只列还没跑的部分。
+任一步失败即停,保留完整输出,不改断言、不跳过。以下保留原验证顺序,2026-11-10 Codex 续验的实际结果与未执行项见 §17.1。
 
 1. **导表**:在仓库根目录跑导表器,确认 `MessageLimiter` 的生成结果里有 `379`、`380` 两行。proto 与 tip 码已经生成过(消息号 379 / 380、`kMatchBattleReportNotFound = 16025`),之后没有再改战报相关的 proto,不用重跑 `proto-gen-run`;如果有人又改了 proto,按 AGENTS §4 用 `-ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml` 重新生成。
 2. **C++(串行 `/m:1`)**:先编 battle 库(`cpp/libs/services/battle/battle.vcxproj`),再编并运行 `turn_battle_engine_test`(`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle`;测试工程链接预编好的库,改了库要先编库)。重点看 `BattleReplaySize.AutoBattlesStayWithinReplayLimits`:通过,并保留它打印的三行 `[replay-size]`,数字写回 §9。录制器与战斗节点用例 11-08 已通过,源码没变,`rpc_controller_test` 不必为本项重跑。
 3. **Go 真 TiDB**:在 `go/match` 下用现有的隔离 TiDB 夹具设好 `MATCH_IT_TIDB`(做法与内存门槛参照 `build/verification/battle-handoff-20261106-r4/` 的真库续验),跑 `go test ./internal/authority/... -run 'BattleReport' -count=1 -v`,四个 `TestBattleReportTiDB*` 不许 SKIP;再跑 `-run 'TerminalTiDB|CompletionTiDB'`,确认终局事务加了战报之后原有真库用例不受影响,并记录 `CommitBattleOutcome` 的耗时。match 的 build / vet / 纯逻辑用例 11-06 已通过;本次 `battle_report.go` 只把日志与错误文案改成英文,顺手跑一次 `go build ./... && go vet ./...` 即可。
 4. **robot**:在 `robot` 下跑 `go build ./...`、`go vet ./...`、`go test -run 'DecodeBattleReplay' -count=1 .`。
-5. **冒烟**:起本地栈(match 接流前要先迁移出两张新表;玩家数据可以清空,常规启动流程里的迁移会建表),跑 battle-smoke 的 cross_zone 子模式(1V1):日志里先出现 `BATTLE_REPORT_OK battle_id=…`,再出现 `CROSS_ZONE_MATCH_OK`。失败时按 `CROSS_ZONE_MATCH_FAIL step=a-battle-report / b-battle-report` 的原因排查,保留 match 日志里的 `metric=match_battle_report_*` 与 battle 日志里的 `metric=battle_replay_*`。PVE 局不录由 `TestRecordReplayOnlyPVP` 覆盖,冒烟不另查。
+5. **冒烟**:起隔离本地栈(match 接流前须用独立迁移身份显式迁移两张新表;常驻启动只检查 schema,不执行 DDL;只操作本任务隔离库),跑 battle-smoke 的 cross_zone 子模式(1V1):日志里先出现 `BATTLE_REPORT_OK battle_id=…`,再出现 `CROSS_ZONE_MATCH_OK`。失败时按 `CROSS_ZONE_MATCH_FAIL step=a-battle-report / b-battle-report` 的原因排查,保留 match 日志里的 `metric=match_battle_report_*` 与 battle 日志里的 `metric=battle_replay_*`。PVE 局不录由 `TestRecordReplayOnlyPVP` 覆盖,冒烟不另查。
+
+### 17.1 2026-11-10 Codex 续验结果
+
+证据根目录:`build/verification/battle-report-20261110/`。没有提交、推送、操作客户端或运行压测。
+
+| 项目 | 实际结果 | 证据 |
+|---|---|---|
+| 限频导表 | 完整隔离导表 exit 0;379 = 每 2 秒 1 次,380 = 每秒 1 次。与原产物仅表 JSON、PB、清单三份不同,已落回服务端;清单由原生成器按 33→34 生成,全部数据文件 SHA256 与清单一致 | `01-export.log`、`01-limiter-rows.json`、`01-table-publication.json` |
+| 配表索引 | 已运行 `gen_schema_index.py`,更新自动索引块;手写规则保持原样 | `05-schema-index.log` |
+| C++ | battle 库编译 exit 0;测试工程修复后编译与全集 exit 0,307 PASS、0 FAIL、0 SKIP;41 份相关输入前后哈希一致 | `02-battle-build.log`、`cpp-tests-after-fix/`、`04-inputs-diff.json` |
+| match 编译 / vet | 首轮编译失败;用户授权后基于更新绑定补跑,build / vet 均 exit 0,928 份输入前后哈希一致 | `match/build.log`、`match/attempt2/` |
+| 真 TiDB | 未执行 4 个 `TestBattleReportTiDB*` 与 15 个 `TerminalTiDB\|CompletionTiDB` 顶层用例,没有提交耗时样本。已固定 49 个本地依赖包、440 份实际测试输入;未创建任何容器、卷或网络 | `match/tidb-r1/readiness-summary.json` |
+| robot | build / vet / 定向解码测试均 exit 0,3 个顶层用例通过、0 跳过;坏外壳覆盖 8 个循环场景;1,396 份输入前后哈希一致 | `robot/summary.json`、`robot/test.stdout.log` |
+| 跨区 1v1 冒烟 | 未执行,尚无 `BATTLE_REPORT_OK` 或 `CROSS_ZONE_MATCH_OK` 运行证据;离线准备脚本首次退出 1,实际二区配置未生成 | `smoke-readiness.json`、`smoke/preparation-status.json`、`smoke/prepare-failure.txt` |
+
+**首轮失败与修复**:
+
+- match 首错:`shared/authoritysql/catalog.go:293` 引用的 `BootSeq` 不在当时的 Go 绑定中,另缺 `SuccessorRequestId`。编译结束后另一会话更新了 `go/proto/common/database/rollback_database_table.pb.go`;用户明确授权后才补跑。首轮没有有效的运行前哈希清单,`inputs-during-build.json` 实际采于失败后,不能作运行期间固定证据。补跑的前后清单独立有效。
+- C++ 测试工程首轮由裸指针成员检查拦在 `SizeCase.name` 的 `const char*` 声明上,未运行旧 EXE。用户授权后只加 `<string_view>`、改为 `std::string_view name`、打印时取 `.data()`,断言和门禁均未改。首轮日志在 `cpp-tests/`,成功轮在 `cpp-tests-after-fix/`。
+
+- 冒烟离线准备首次失败:`prepare-isolated-smoke.py:23` 报 `RuntimeError: Read-only preparation command failed: 1`。准备包装器没有保留子进程 stderr,底层 `prepare_docker_debug.py` 首错无法恢复,因此没有判断根因、没有重试。`stack` 为空,`.env`、二区 compose、base-images 和 robot 配置均未生成;builder 包装器只落盘未执行,依赖缓存未验证。继续前应先补齐子进程 stdout / stderr 留存,再诊断准备失败;`smoke/resume-commands.txt` 是未验证入口,不能当作已跑通流程。
+- 本轮代码、自动表产物、设计稿与客户端交接的 `git diff --check` exit 0。包含整份 `docs/PROGRESS.md` 时 exit 2,两处行尾空白位于本轮追加之前的其他会话内容(检查时第 26337、26349 行),按协作边界保留;日志见 `06-progress-existing-whitespace.log`。
+
+**资源与版本边界**:
+
+- 本地已缓存 PD / TiKV / TiDB v8.5.2,隔离配置仅绑定 `127.0.0.1:24411`,配额为 512 MiB / 4 GiB / 1 GiB,不加 Linux 客户端。内存曾短暂满足 4 GiB 门槛,但每次真正创建前复核均已跌回门槛以下;最后为 2,401,656 KiB(约 2.29 GiB),因此没有启动数据库、没有运行会被跳过的真库命令。后续继续时先复核内存,用新隔离资源与正式 `sql_fixture_env.ps1` 收据目录,不复用旧收据。
+- 原工作区持续被其他会话修改。match build / vet 只覆盖 `attempt2` 记录的 928 份输入版本;之后的终局、追踪等改动已纳入真库准备副本,但尚未得到真库运行证据。计时仅加在忽略目录副本的 `CommitBattleOutcome` 中,没有改工作区业务代码。
+- 当前没有可直接复用的双区运行栈。缓存 C++ 镜像中的录制器、战斗房间接入四份源码及战报协议与当前相同,可作战报配套节点;它不代表最新整栈。缓存 Go 镜像与当前 SQL 写者及协议已不同,准备新的隔离双区栈需重建 10 个 Go 镜像。二区 db/login 的写者身份与一次性 grant 必须独立,不得复用一区 grant。
+
+仍需完成:资源充足后运行真 TiDB 4+15 用例并记录终局提交耗时,再构建配套镜像、显式迁移新隔离库、跑跨区 1v1 冒烟。客户端与 Java 版仍待做。
 
 **用例覆盖**
 
@@ -416,5 +454,5 @@ player_id、battle_id 只进日志字段,不进任何指标 label。
 | 挤出 | 第 101 局挤掉最旧一条;另一名参战者还列着时正文保留、引用减一;最后一个人挤掉时正文删除;没有正文的局被挤出不报错 |
 | match 查询 | 参战者取得到;非参战者 NotFound(在 `TestBattleReportTiDBCommitStoresReportWithOutcome` 里) |
 | 策略 | 每个 `MatchMode` 都在表里;只录 PVP;开关关闭或表外模式不录 |
-| 体积 | `BattleReplaySize.AutoBattlesStayWithinReplayLimits`(11-10 已写,待运行),数字写回 §9 |
+| 体积 | `BattleReplaySize.AutoBattlesStayWithinReplayLimits` 已通过,三组数字见 §9 |
 | robot | 解码:gzip 往返、未压缩、未知格式 / 编码、长度不符、截断、不是 gzip、超上限;冒烟:双方列表有这一局、`has_replay`、回放 battle_id 与回合数、结局与列表一致 |

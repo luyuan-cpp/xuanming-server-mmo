@@ -98,6 +98,7 @@
 #include "contracts_kafka_match_event_event_id.h"
 #include "contracts_kafka_gate_event_event_id.h"
 #include "contracts_kafka_player_event_event_id.h"
+#include "common_event_player_placement_event_event_id.h"
 #include "common_event_player_inbox_event_event_id.h"
 #include "common_event_team_event_event_id.h"
 

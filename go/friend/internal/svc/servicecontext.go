@@ -136,7 +136,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
-		panic(fmt.Errorf("friend SQL boot 装配失败: %w", err))
+		panic(fmt.Errorf("friend SQL boot setup failed: %w", err))
 	}
 	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
 }
@@ -145,7 +145,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 新 boot 的 prepared 门禁也在这里传入，不能在 handler 已持有门禁后替换它。
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
-		panic("friend SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+		panic("friend SQL boot and SOURCE/RELAY setup missing or roles reused")
 	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
@@ -195,7 +195,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		_ = directoryConn.Close()
 		_ = db.Close()
 		_ = etcdCli.Close()
-		panic(fmt.Errorf("friend 申请号源装配失败: %w", err))
+		panic(fmt.Errorf("friend request id source setup failed: %w", err))
 	}
 
 	kafkaWriter := newKafkaWriter(c)
@@ -551,6 +551,6 @@ func (e relayDigestEvaler) Eval(ctx context.Context, script string, keys []strin
 
 func (sc *ServiceContext) Stop() {
 	if err := sc.StopAndReport(context.Background()); err != nil {
-		logx.Errorf("friend 排空 HOLD，保留同 boot SQL/RELAY 资源: %v", err)
+		logx.Errorf("friend drain HOLD, retaining same-boot SQL/RELAY resources: %v", err)
 	}
 }

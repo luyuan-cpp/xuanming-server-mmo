@@ -35,6 +35,7 @@ import (
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
+	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/discov"
@@ -228,7 +229,7 @@ func main() {
 	var globalErr error
 	c, globalErr = c.ResolveGlobalAuthority(os.Getenv)
 	if globalErr != nil {
-		fmt.Fprintf(os.Stderr, "data_service全球SQL装配拒绝: %v\n", globalErr)
+		fmt.Fprintf(os.Stderr, "data_service global SQL setup rejected: %v\n", globalErr)
 		os.Exit(1)
 	}
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。-migrate 与发号器运维入口不连 Redis,
@@ -428,6 +429,8 @@ func runDataService(c config.Config) (runErr error) {
 	// 误记成一次业务故障。
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
 	s.AddUnaryInterceptors(ks.UnaryServerInterceptor())
+	// 请求顶层带 player_id 的方法,之后各层与 handler 的日志都带上它(docs/design/distributed-tracing.md §6.2)。
+	s.AddUnaryInterceptors(tracing.PlayerFieldInterceptor())
 	relayMethods := dataServiceRelayMethods()
 	s.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, relayMethods, svcCtx.RelayIngress))
 	s.AddUnaryInterceptors(holdDataServiceFaults(root, relay, relayMethods))
@@ -803,7 +806,7 @@ func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc
 			if err == nil {
 				return
 			}
-			logx.Errorf("[kafka] 启动失败 attempt=%d，%s 后重试: %v", attempt, kafkaStartRetryInterval, err)
+			logx.Errorf("[kafka] Start failed attempt=%d, retrying in %s: %v", attempt, kafkaStartRetryInterval, err)
 			timer := time.NewTimer(kafkaStartRetryInterval)
 			select {
 			case <-retryCtx.Done():
@@ -949,7 +952,7 @@ func (r *nodeRegistrar) fail(err error) {
 }
 func (r *nodeRegistrar) close() {
 	if err := r.closeAndReport(context.Background()); err != nil {
-		logx.Errorf("节点注册关闭 HOLD: %v", err)
+		logx.Errorf("node registration shutdown HOLD: %v", err)
 	}
 }
 

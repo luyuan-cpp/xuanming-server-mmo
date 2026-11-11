@@ -43,8 +43,9 @@ type Metrics struct {
 	abandonSkippedTotal   *prometheus.CounterVec
 
 	// ownedShards 是缺口清单第 25 条追加(docs/design/assetop-redelivery-sharding-20261110.md):本副本此刻负责的
-	// 到期扫描片数。用不带可变 label 的 GaugeVec 而不是 Gauge:Gauge 一注册就报 0,没绑分工的循环(mail、回收)
+	// 到期扫描片数。用不带可变 label 的 GaugeVec 而不是 Gauge:Gauge 一注册就报 0,没绑分工的循环(单测、离线工具)
 	// 会显得「一片都不负责」,实际它们扫的是全部行;GaugeVec 在第一次 Set 之前没有序列。
+	// 告警(deploy/k8s/asset-channel-alerts.yaml 的 asset-channel.work-shards 组)按 sum by (namespace, service) 判它是否为 64。
 	ownedShards *prometheus.GaugeVec
 }
 

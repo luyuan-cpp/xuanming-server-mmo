@@ -15,6 +15,7 @@ import (
 
 	"shared/assetop"
 	"shared/safego"
+	"shared/workshard"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
@@ -69,6 +70,8 @@ var (
 	_ assetop.PlayerPendingLister = (*AssetOpRepo)(nil)
 	_ assetop.PendingClassCounter = (*AssetOpRepo)(nil)
 	_ assetop.Abandoner           = (*AssetOpRepo)(nil)
+	// 到期扫描按玩家分片(缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md),与 guild 同口径。
+	_ assetop.OwnedDueLister = (*AssetOpRepo)(nil)
 )
 
 // NewAssetOpRepo。opTimeout 是每次调用的上限(constants.StoreOpTimeout),必须 > 0。
@@ -491,7 +494,13 @@ const (
 	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ?"
 )
 
-// ListDue 非加锁一致性读,只取主键,走 (status, next_attempt_ms) 索引。
+// ListDue 扫全部片的到期行,即不带分片条件的 ListDueOwned。重投循环绑了按片分工(assetop.Loop.BindWorkOwner,
+// reconcile.Pipeline.BindWorkOwner)之后不再调它。
+func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+	return r.ListDueOwned(ctx, nowMs, limit, workshard.Filter{})
+}
+
+// ListDueOwned 非加锁一致性读,只取主键,走 (status, next_attempt_ms) 索引。
 // 不用范围 UPDATE 领取:那会在 RR 下加 next-key 锁,与业务事务里 AllocateSeq 的
 // FOR UPDATE + 插入新 op 行互相等待,被判死锁牺牲的是玩家的请求(§4.37)。
 //
@@ -502,14 +511,18 @@ const (
 //
 // 两段谓词互斥,但这是**两次独立的非锁读**,期间某行的 attempts 可能刚好从 2 跳到 3 而被两段
 // 都取到,所以仍要按 op_id 去重。第一段的 id 排在前面,让 Claim 先抢新行。
-func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+//
+// owned 是本副本负责的片(片号 = player_id % 64,assetop.OwnedDueLister;缺口清单第 25 条),两段都接在 WHERE 里、
+// LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。索引不含 player_id,分片条件和 lease_until_ms、
+// attempts 一样在回表那一步判(docs/design/assetop-redelivery-sharding-20261110.md §2.4)。
+func (r *AssetOpRepo) ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
 
-	fresh, err := r.listDueSegment(ctx, nowMs, limit, true)
+	fresh, err := r.listDueSegment(ctx, nowMs, limit, true, owned)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +530,7 @@ func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 		return fresh, nil
 	}
 
-	aged, err := r.listDueSegment(ctx, nowMs, limit-len(fresh), false)
+	aged, err := r.listDueSegment(ctx, nowMs, limit-len(fresh), false, owned)
 	if err != nil {
 		return nil, err
 	}
@@ -534,20 +547,22 @@ func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 	return fresh, nil
 }
 
-// listDueSegment 跑 ListDue 的其中一段。freshOnly=true 取 attempts < FreshAttemptLimit 的新行,
-// false 取 >= 的老行;两段共用同样的到期条件与排序。
+// listDueSegment 跑 ListDueOwned 的其中一段。freshOnly=true 取 attempts < FreshAttemptLimit 的新行,
+// false 取 >= 的老行;两段共用同样的到期条件、分片条件与排序。
 // 排序带 op_id 是为了确定性:同毫秒到期的行在多个副本上顺序一致,减少抢同一行的概率。
-func (r *AssetOpRepo) listDueSegment(ctx context.Context, nowMs uint64, limit int, freshOnly bool) ([]uint64, error) {
+// 分片条件的文本只来自 workshard.SQLFilter(列名写死、片号只走绑定参数),实参按占位符顺序接在到期条件之后、LIMIT 之前。
+func (r *AssetOpRepo) listDueSegment(ctx context.Context, nowMs uint64, limit int, freshOnly bool, owned workshard.Filter) ([]uint64, error) {
 	cmp := ">="
 	if freshOnly {
 		cmp = "<"
 	}
+	args := append([]any{PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit}, owned.Args()...)
 	rows, err := r.db.QueryContext(ctx,
 		"SELECT `op_id` FROM "+AssetOpTableName+
 			" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ?"+
-			" AND `attempts` "+cmp+" ?"+
+			" AND `attempts` "+cmp+" ? AND "+owned.SQL()+
 			" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?",
-		PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit, limit)
+		append(args, limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("list due %s (fresh=%v): %w", AssetOpTableName, freshOnly, err)
 	}
@@ -732,7 +747,37 @@ func (r *AssetOpRepo) Finalize(ctx context.Context, op assetop.Op, status asseto
 	if err != nil {
 		return false, err
 	}
+	if finalized {
+		r.wakeContractOf(ctx, op.OpID, nowMs)
+	}
 	return finalized, nil
+}
+
+// wakeContractOf 在一条资产指令终结(自动终结、自动放弃、人工终结)提交之后,把它所属的交易合同提前到现在到期
+// (缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8 第 3 点)。合同推进只在锁住合同行之后读腿的结局,
+// 看不到这张表的变化;以前在途腿的合同靠每轮复查才发现结局,现在由终结这一侧唤醒,合同那边按兜底间隔复查。
+//
+// 必须在终结事务提交之后单独执行:合同推进的锁序是「合同行 → op 行」,在 op 行锁里再锁合同行会成环。
+// 尽力而为:读归属或唤醒失败只记日志,合同最晚在在途兜底复查时自己到期(commerce 的 inFlightRecheck)。
+// 只唤醒 ref_kind=ORDER(交易合同的腿);旧 P1 商品(LISTING)不归合同引擎。
+func (r *AssetOpRepo) wakeContractOf(ctx context.Context, opID, nowMs uint64) {
+	if ctx.Err() != nil {
+		return // 本次调用的预算已用完(多半是关停):不唤醒,合同按兜底复查
+	}
+	var refKind uint32
+	var refID uint64
+	if err := r.db.QueryRowContext(ctx, "SELECT ref_kind,ref_id FROM "+AssetOpTableName+" WHERE op_id=?", opID).Scan(&refKind, &refID); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			logx.Errorf("[TradeAsset] Could not read the owning contract of finalized asset op op_id=%d, the contract rechecks on its own schedule: %v", opID, err)
+		}
+		return
+	}
+	if refKind != uint32(tradepb.TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_ORDER) || refID == 0 {
+		return
+	}
+	if err := wakeCommerce(ctx, r.db, refID, nowMs); err != nil {
+		logx.Errorf("[TradeAsset] Could not wake commerce contract %d after asset op %d was finalized, it rechecks on its own schedule: %v", refID, opID, err)
+	}
 }
 
 // ResolveManually 是 §4.38 的人工终结通道:把一行卡死的 outbox 按人工判定直接落成终局,
@@ -801,6 +846,9 @@ func (r *AssetOpRepo) resolveManually(ctx context.Context, m assetop.ManualResol
 	})
 	if err != nil {
 		return false, err
+	}
+	if resolved {
+		r.wakeContractOf(ctx, m.OpID, nowMs)
 	}
 	return resolved, nil
 }
@@ -1035,7 +1083,7 @@ func (r *AssetOpRepo) Abandon(ctx context.Context, op assetop.Op, nowMs uint64) 
 	}
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
-	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
 		found, err := lockAssetOpRow(ctx, tx, op.OpID)
 		if err != nil {
 			return fmt.Errorf("abandon %s %d: %w", AssetOpTableName, op.OpID, err)
@@ -1068,9 +1116,15 @@ func (r *AssetOpRepo) Abandon(ctx context.Context, op assetop.Op, nowMs uint64) 
 		// 交易合同的扣款腿(ref_kind=ORDER)不等这条 TODO(2026-10-20,第一轮审计 §2.5 go-asset-services#1):
 		// 合同引擎在锁住合同行的事务里读到 ABANDONED,按"没扣到"走与 scene 判拒同一条补偿(退回另一方已托管的资产、
 		// 寄售重新开放),见 commerce.Engine.advance。补偿不在本事务里做:本方法只锁 op 行、合同推进只锁合同行再普通读 op 行,
-		// 两边不成环;终态不再变化,合同下一轮必然读到。上面三行 TODO 只剩旧 P1 商品(ref_kind=LISTING)。
+		// 两边不成环;终态不再变化,合同下一次推进必然读到。上面三行 TODO 只剩旧 P1 商品(ref_kind=LISTING)。
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	// 提交之后唤醒合同,让它尽快读到 ABANDONED(缺口清单第 16 条,见 wakeContractOf)。
+	r.wakeContractOf(ctx, op.OpID, nowMs)
+	return nil
 }
 
 // ReleaseLease 实现 assetop.Abandoner:判定"这一轮不放弃"之后归还租约(sqlReleaseAssetOpLease)。

@@ -3,6 +3,7 @@
 > 2026-11-06,Claude。负责人 2026-11-05 要求补齐断线重连的应用层,本文是其中「gate 及时发现客户端掉线」这一块。
 > 2026-11-06 Codex 续接：C++/Go、Unity 与 Java 心跳实现均已落码，协议已通过正式生成器同步。分层验证状态见 §11；真实服务器冒烟以该节的实际结果为准。
 > 同日负责人确认项目未上线、玩家数据可以清空、不考虑旧客户端,所以按标准做法:验签成功即开始判死,未验签连接有握手期限(§6)。
+> 2026-11-10,Claude:负责人要求战斗直连也接上心跳。battle 节点的客户端直连面按同一份契约与参数实现,纯逻辑从 gate 挪到 core 共用,见 §14(C++ 未编译,Unity 交 Codex,Java 待做)。
 
 ## 0. 一句话
 
@@ -36,7 +37,7 @@ gate 对每条客户端连接设两道期限,到了都只调 `forceClose()`:
 
 - 客户端怎么发现 gate 已死、怎么自动重连。属于客户端仓,本文只写协议约定(§9)。
 - 未认证连接的独立预算、LRU 淘汰、按概率早拒(`gate-connection-admission-control.md` P0-2 的其余部分)。理由见 §12。
-- 节点链路的心跳(`muduo-rpc-channel.md` §21,已做完)、战斗直连 battle 的客户端连接(battle 自有 10 秒握手期限)。
+- 节点链路的心跳(`muduo-rpc-channel.md` §21,已做完)。战斗直连 battle 的客户端连接原先也在这里,2026-11-10 起按本文同一份契约实现,见 §14。
 - 调系统 TCP keepalive 参数。它保持开启,作为最后一道兜底。
 
 ## 3. 协议(客户端可见,两版服务器同批改)
@@ -64,7 +65,7 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 - **`seq`** 由客户端自选,gate 原样回显。客户端用它把回包对上请求、测往返时延。gate 不解读它。
 - **字段号**:项目未上线,3、4 是 `ClientTokenVerifyResponse` 的新号;上线后照 AGENTS §4 不复用。
 
-## 4. 取值(`session/comp/client_liveness.h` 的 `kClientLiveness`)
+## 4. 取值(core `network/client_liveness.h` 的 `client_liveness::kClientLiveness`,gate 与 battle 直连共用)
 
 | 常量 | 值 | 理由 |
 |---|---|---|
@@ -145,7 +146,7 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 ### 5.6 代码结构
 
-- 纯逻辑 `cpp/libs/services/gate/session/comp/client_liveness.h`:参数 `ClientLivenessPolicy` 与 `static_assert`、每会话状态 `ClientLiveness`、心跳准入 `AdmitHeartbeat`、判死 `JudgeIdle`、检查点堆与扫描 `LivenessSweeper`。只依赖 STL,不读时钟,时刻由调用方传入;验签与否取自 `SessionInfo::verified`,不另存一份。
+- 纯逻辑 `cpp/libs/engine/core/network/client_liveness.h`(命名空间 `client_liveness`;2026-11-10 从 gate 的 `session/comp/` 挪到 core,battle 直连共用):参数 `ClientLivenessPolicy` 与 `static_assert`、每会话状态 `ClientLiveness`、心跳准入 `AdmitHeartbeat`、判死 `JudgeIdle`、检查点堆与扫描 `LivenessSweeper`(gate 用),以及每连接定时器的判定 `DecideIdleCheck`(battle 直连用,§14)。只依赖 STL,不读时钟,时刻由调用方传入;验签与否取自各自会话的 `verified`,不另存一份。
 - 装配 `cpp/nodes/gate/handler/rpc/client_heartbeat.{h,cpp}`:`ExpectHandshake`、`OnTokenVerified`、收心跳、`SweepLiveness`、计数与日志。状态是 gate loop 线程上的 thread_local,与路由 lane 同一做法;定时器回调不捕获任何对象(AGENTS §11.7)。
 - 接线:
   - `SessionInfo::liveness`;
@@ -187,7 +188,7 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 ## 8. 测试
 
-- **纯逻辑 `ClientLiveness*`**(`cpp/nodes/gate/tests/client_liveness_test.cpp`,`routing_identity_test` 工程,合成时刻,22 个):
+- **纯逻辑 `ClientLiveness*`**(`cpp/nodes/gate/tests/client_liveness_test.cpp`,`routing_identity_test` 工程,合成时刻,22 个;2026-11-10 加 battle 直连用的 `ClientLivenessIdleCheck` 4 个,共 26 个):
   - 参数合法性;开始跟踪只一次,未跟踪不记时刻;
   - 心跳准入:验签前拒绝;已跟踪的只回答;没跟踪的第一条开始跟踪;窗口内第 4 条超频,窗口满 interval 后重置;正常节奏、两倍速、积压 3 条都不超频;
   - 判死边界:差 1ns 不满 30 秒为活着,恰好 30 秒为判死,迟到的扫描推迟;
@@ -260,17 +261,13 @@ Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项�
 - 判死之前 30 秒内推给死连接的数据照样丢失,由断线保留、重连后的完整入场画面和各业务有主协议兜底(`player-connection-lost-hold.md` §2 非目标)。
 - robot 只做了发送一侧,不判 gate 已死:vendored muduo 断线后静默重拨、`Recv` 不报错,拿不到可靠的断线信号。robot 的会话失败仍靠各请求自己的超时;要做,得先改 muduo 客户端(Close 时关 incoming、断线不自动重拨),另起一项。
 - gate 卡顿恢复之后,如果 1 秒内还没读完积压的输入(积压的连接极多),仍可能误判一次。同节点链路 §21.9。
-- **战斗直连(客户端 ↔ battle,`BattleClientEdge`)验签之后没有心跳与空闲超时**(2026-11-10 核对,两版服务器相同:C++ 只有 `kHandshakeTimeoutSec` 10 秒握手期限,Java `game.battle.handshake-timeout` 同为 10 秒)。直连面没有注册 `ClientHeartbeatRequest`,客户端在这条连接上发心跳会落进未知消息处理。后果:
-  - 半开的直连要等 TCP 重传耗尽(Linux 缺省十几分钟)或这场战斗结束才释放;这段时间里观众占着席位,不进重连宽限;
-  - 玩家一侧掉线不卡战斗(回合 25 秒超时自动出招,`kActionTimeoutMs`);
-  - battle 主机掉电或网络分区时,参战客户端要等 TCP 自己报错才知道。
-  要补就照本文做:`BattleTokenVerifyResponse` 通告同样的两个参数;直连面收心跳、限频、按完整帧 30 秒判死,只 `forceClose`,断开走既有 `DetachDirectConnection`;Unity 与 robot 的战斗连接同批发心跳,否则验签后 30 秒没有上行就会被关;Java 版同批对齐或登记待做。尚未排期。
+- **战斗直连的心跳 C++ 已补(§14),Java 版还没有**:Java battle 的直连仍只有 10 秒握手期限(`game.battle.handshake-timeout`),不通告参数,客户端在那边不发心跳。Java 补上之前,Java 版战斗直连的半开连接要等 TCP 重传耗尽(Linux 缺省十几分钟)或战斗结束才释放。登记在 Java 仓 `PARITY.md`。
 
 ## 13. 改动清单
 
 - proto:`proto/common/base/message.proto`。生成物已通过正式生成器同步。
 - gate 新增:
-  - `cpp/libs/services/gate/session/comp/client_liveness.h`;
+  - `cpp/libs/services/gate/session/comp/client_liveness.h`(2026-11-10 挪到 `cpp/libs/engine/core/network/client_liveness.h`,命名空间 `gate_liveness` 改名 `client_liveness`);
   - `cpp/nodes/gate/handler/rpc/client_heartbeat.h`、`client_heartbeat.cpp`;
   - `cpp/nodes/gate/tests/client_liveness_test.cpp`、`client_heartbeat_test.cpp`。
 - gate 修改:
@@ -286,3 +283,78 @@ Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项�
   - 新增 `robot/pkg/heartbeat.go`、`robot/pkg/heartbeat_test.go`、`robot/heartbeat_idle_smoke_scenario.go`、`robot/etc/heartbeat_idle_smoke.yaml`;
   - 修改 `robot/pkg/client.go`(验签成功起心跳、`VerifyGateToken` / `RecvOne` / `RecvLoop` 认领回包、`Close` 停心跳)、`robot/main.go`(分发)、`robot/config/config.go`(模式白名单)、`robot/README.md`(模式表)。
 - 文档:本文;`docs/README.md` 登记;`docs/PROGRESS.md` 三条;Java 仓 `PARITY.md` 末尾一条。
+- 战斗直连(2026-11-10,§14):
+  - proto:`proto/battle/player_battle.proto`(`BattleTokenVerifyResponse` 加 4、5 两个字段);
+  - 纯逻辑挪到 `cpp/libs/engine/core/network/client_liveness.h`(加 `DecideIdleCheck`),登记进 `core.vcxproj` / `.filters`,从 gate lib 的 `.vcxproj` / `.filters` 摘掉;
+  - gate 只改引用:`session_info_comp.h`、`client_heartbeat.{h,cpp}`、`client_liveness_test.cpp`、`client_heartbeat_test.cpp`;
+  - battle:`cpp/nodes/battle/client/battle_client_edge.{h,cpp}`;
+  - 测试:`client_liveness_test.cpp` 加 `ClientLivenessIdleCheck` 4 个;`robot/pkg/heartbeat_test.go` 加 2 个;
+  - robot:`robot/pkg/heartbeat.go`(`onVerified` / `onBattleVerified`)、`robot/pkg/client.go`(`VerifyBattleToken` 起心跳、跳过心跳回包);
+  - 文档:本文 §14;`turn-based-battle-server.md` §18.2、§18.6。
+
+## 14. 战斗直连(battle 节点的客户端面,2026-11-10)
+
+战斗时客户端开第二条长连接直连 battle(`turn-based-battle-server.md` §18;§22 D66 起是战斗唯一通路)。原先这条连接只有 10 秒握手期限,验签后没有存活检测,两版服务器相同。后果:
+
+- 半开的直连要等 TCP 重传耗尽(Linux 缺省十几分钟)或这场战斗结束才释放,这段时间里观众占着席位、不进重连宽限;
+- battle 主机掉电或网络分区时,参战客户端要等 TCP 自己报错才知道。
+
+做法与大厅连接同一份契约、同一份参数,只是装配在 battle 的直连面上。
+
+### 14.1 契约(客户端可见)
+
+- `BattleTokenVerifyResponse` 新增 `heartbeat_interval_ms = 4`、`heartbeat_timeout_ms = 5`,与 `ClientTokenVerifyResponse` 同义同值(10000 / 30000)。成功应答填,失败应答不填;已验证连接重发握手时,成功应答照样带。
+- 心跳复用 `ClientHeartbeatRequest` / `ClientHeartbeatResponse`(`message.proto`)。直连与 gate 是同一个 codec,按类型名派发;心跳不进消息号白名单,不占 `MessageLimiter`。
+- 客户端:
+  1. 收到非 0 的间隔,就在这条直连上立即发第一条心跳,之后每个间隔一条;用单调时钟、在网络线程上发。
+  2. 直连与大厅连接各自计时、各自发心跳,不能共用:两条连接分别被各自的服务端判死。
+  3. 连续 `heartbeat_timeout_ms` 收不到 battle 的任何字节,就关掉直连,按 `turn-based-battle-server.md` §18.2 的重连流程处理:票据未过期直接重连握手,否则经大厅 `MatchService.RequestBattleTicket` 补签。
+  4. 间隔为 0(Java 版 battle 还没实现)就不发:那边会把心跳当未知消息断开直连。
+
+### 14.2 battle 行为(`battle_client_edge.h` 闸 6)
+
+- **开始跟踪**:握手成功的应答发出后调 `StartLivenessTracking`,武装第一次空闲检查(应答时刻 + 30s)。重复握手不重复武装。
+- **任何一帧都算活着**:握手包、`ClientRequest`、心跳三个入口找到会话后各记一次。被拒的帧也算,理由同 §5.3。网络探测消息只在握手之前有效,那时还没跟踪。
+- **收心跳**:找不到会话或握手之前:`forceClose`(与闸 4 同一处置)。本窗口已回满 3 条:不回,计一次非法包,阈值与 gate 同源。其余回 `ClientHeartbeatResponse{seq}`。
+- **判死**:每条跟踪中的直连一个 `TimerTaskComp idleTimer`,到期调 `client_liveness::DecideIdleCheck`:
+  - 距上一帧不足 30s:按「上一帧 + 30s」重新武装;
+  - 定时器比到期时刻晚两个节拍(2s)以上,说明本端 loop 卡过:推迟 1s 再判,口径同 §5.4;
+  - 静默满 30s:连接仍 connected 才 `forceClose`。房间收尾时已 `shutdown()` 的直连正在排空终局包,不打断它,规则同 `DisconnectAll`。
+- **关闭之后不加任何战斗逻辑**:照常走 `HandleClosed → DetachDirectConnection`。
+  - 参战者:回合按 25s 超时自动出手(`kActionTimeoutMs`);客户端恢复后凭票重连,再 `GetBattleState` 补拉全量。
+  - 观众:进既有的席位重连宽限,到期回收席位。
+- **为什么不用 gate 的检查点堆**:battle 直连面本来就是每会话一个 `TimerTaskComp`(握手期限),连接数以 `battle_max_connections` 为界;定时器回调只持 weak 自己与 connId,不持连接(AGENTS §11.7)。gate 用堆,是因为 2 万连接时既不该每秒遍历会话表,也不该起 2 万个定时器。两边的判定是同一份纯函数。
+- **参数**:共用 `client_liveness::kClientLiveness`。`kHandshakeTimeoutSec` 改为从 `handshakeTimeout` 派生,值不变,仍是 10s。
+
+### 14.3 兼容
+
+- 项目未上线,不考虑旧客户端。不发心跳的客户端连新 battle,验签后 30s 没有上行就会被关。等对手出手、自动战斗、播放动画时都可能 30s 不上行,所以 **Unity 必须与服务器同批升级**。
+- robot 已带上:`VerifyBattleToken` 握手成功后调 `onBattleVerified`,与大厅连接同一套心跳 goroutine;直连的 `RecvLoop` 本来就认领心跳回包。
+- 新客户端连 Java battle(不通告):不发,行为与现在相同。
+
+### 14.4 可观测性
+
+- 判死:`battle direct connection idle timeout;disconnecting: battle_id=… player_id=… role=… silent_ms=… heartbeat_timeout_ms=30000`,INFO,逐条。只有验证过的直连会走到这里,条数以参战与观战人数为界。
+- 推迟:`battle direct connection liveness verdict deferred, local loop stalled(sampled): late_ms=… deferred_total=…`,WARN,每 1024 次一条,首条必打。
+- 拒绝:`heartbeat_missing_session`、`heartbeat_before_verify`、`heartbeat_over_rate` 走既有的拒绝采样日志(每种原因首条必打,之后每 1024 次一条)。
+- 没有新增汇总行与指标:直连数量远小于 gate,逐条的判死行就是计数。要压测时再加。
+
+### 14.5 测试
+
+- 纯逻辑 `ClientLivenessIdleCheck`(`client_liveness_test.cpp`,4 个):
+  - 准时检查判死,有过一帧就按上一帧重排;
+  - 晚到两个节拍以内照常判,超过就推迟一个节拍,下一次准时检查再判;
+  - 卡顿恢复后读到积压的帧,不误关;
+  - 按节奏发心跳的连接每次检查都活着。
+- robot:`TestBattleVerifyStartsHeartbeatOnTheDirectConnection`、`TestBattleWithoutAdvertSendsNoHeartbeat`。
+- 不覆盖 `BattleClientEdge` 的接线:注册回调、三处记帧、应答通告、定时器。走到这些代码要真实的票据握手(节点身份、房间名单),现有测试工程起不来,由 `docs/PROGRESS.md` 2026-11-10 条的冒烟覆盖。
+
+### 14.6 Java 版(0.1.0-SNAPSHOT 待做)
+
+`BattleTokenVerifyResponse` 通告同值;直连 pipeline 收 `ClientHeartbeatRequest`、限频、按完整帧 30s 读空闲判死,只关连接;Java robot 的战斗连接按通告发。已登记 Java 仓 `PARITY.md`。
+
+### 14.7 残余
+
+- 判死之前 30s 内推给死直连的战斗帧丢失。参战者重连后 `GetBattleState` 补拉全量,观众重连后收握手快照。
+- battle 卡顿恢复之后,如果 1s 内还没读完积压的输入,仍可能误判一次,同 §12。
+- Unity 客户端没改(交 Codex,按 §14.1)。同批升级之前,Unity 的战斗直连 30s 没有上行就会被 battle 关掉。

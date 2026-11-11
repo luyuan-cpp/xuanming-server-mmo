@@ -790,4 +790,20 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_item_hold_comp.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="common\component\player_item_hold_comp.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\event\player_placement_event.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="common\event\player_placement_event.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

@@ -23,6 +23,7 @@
 #include "engine/core/type_define/player_guid_comp.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/bag/item_hold.h" // 战斗道具预留(battle-item-reservation.md)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
@@ -33,7 +34,9 @@
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/event/battle_event.pb.h" // BattleConfirmedEvent:开局确认写锁
+#include "proto/scene/scene.pb.h"               // CancelBattlePrepareRequest:取消备战释放预留
 #include "proto/match/match_internal.pb.h"
 #include "proto/player_inbox/player_inbox.pb.h"
 #include "security/token_security.h"
@@ -964,6 +967,202 @@ TEST_F(AssetOpCreditGuidTopUpTest, BatchNeedingMoreThanTheMaxStepIsRejectedAsAnI
     EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, replayed.outcome()) << "结局已记账:同一 seq 只读回放";
     EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), replayed.reason().id());
     EXPECT_EQ(1, gItemSegmentFetches);
+}
+
+// ── 战斗道具预留(2026-11-10,docs/design/battle-item-reservation.md)──────────────────────────
+// 冻结管「人在不在战斗里」,预留管「这一局带进战斗的道具还押着」:续冻到上限只解冻,不放预留;
+// 预留只在不会再从它扣的时刻释放(结算应用、备战取消、ABORT、没有可裁决原件)。冻结已不在的预留由 reaper 按 SQL 终局收尾。
+
+// 纯判定:只有「不会再有结算」的两种回答放预留;超期 ERROR 每 10 分钟一行。
+TEST(BattleItemHoldRules, ReleasableAnswersAndOverdueCadence)
+{
+    EXPECT_TRUE(battle_freeze_hold::IsBattleHoldReleasable(TerminalAnswer::kAbort));
+    EXPECT_TRUE(battle_freeze_hold::IsBattleHoldReleasable(TerminalAnswer::kNoOriginal));
+    EXPECT_FALSE(battle_freeze_hold::IsBattleHoldReleasable(TerminalAnswer::kComplete)) << "结算迟早到,到了从预留里扣";
+    EXPECT_FALSE(battle_freeze_hold::IsBattleHoldReleasable(TerminalAnswer::kPending));
+    EXPECT_FALSE(battle_freeze_hold::IsBattleHoldReleasable(TerminalAnswer::kUnknown));
+    EXPECT_FALSE(battle_freeze_hold::IsBattleHoldReleasable(TerminalAnswer::kCount)) << "越界取值按留着";
+
+    constexpr uint64_t kWindowMs = battle_freeze_hold::kHoldOverdueLogEveryMs;
+    EXPECT_TRUE(battle_freeze_hold::IsHoldOverdueLogDue(0, kReaperTickMs));
+    EXPECT_TRUE(battle_freeze_hold::IsHoldOverdueLogDue(kReaperTickMs - 1, kReaperTickMs));
+    EXPECT_FALSE(battle_freeze_hold::IsHoldOverdueLogDue(kReaperTickMs, kReaperTickMs));
+    EXPECT_TRUE(battle_freeze_hold::IsHoldOverdueLogDue(kWindowMs + 5, kReaperTickMs));
+    EXPECT_FALSE(battle_freeze_hold::IsHoldOverdueLogDue(kWindowMs / 2, kReaperTickMs));
+    EXPECT_FALSE(battle_freeze_hold::IsHoldOverdueLogDue(0, 0)) << "节拍为 0 恒为假";
+}
+
+constexpr uint32_t kHoldPotion = 10; // generated/tables/item.json:可叠加、battle_usable
+constexpr Guid kHoldPotionStack = (uint64_t{1} << 60) + 9601;
+
+class BattleItemHoldTest : public BattleFreezeHoldTest
+{
+protected:
+    void SetUp() override
+    {
+        BattleFreezeHoldTest::SetUp();
+        ItemTableManager::Instance().Load();
+        GiveAssetChannel(); // 含归属围栏:预留复核只在玩家可改时动手
+        auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
+        for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{playerId});
+        bags.bags[kInventory].SetCapacityForRestore(20);
+        bags.bags[kInventory].InsertItemForRestore(kHoldPotionStack, kHoldPotion, /*stackSize=*/5, /*pos=*/0);
+        tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 持久数据,生产里由加载创建
+    }
+
+    Bag& Inventory() { return tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory]; }
+
+    void HoldPotions(uint64_t count, uint64_t reviewAfterMs)
+    {
+        ASSERT_EQ(kSuccess, BagService::PlaceHold(player, kBattleId, item_hold::ItemHoldKind::kBattle,
+                                                  item_hold::HoldLines{{kHoldPotion, count}}, 1, reviewAfterMs));
+    }
+
+    bool Held() const { return item_hold::Find(tlsEcs.actorRegistry.get<PlayerItemHoldComp>(player), kBattleId) != nullptr; }
+
+    // 交易托管扣物品(TRADE_DEBIT / TX_TRADE,caller = trade),真实入口 + 签名。
+    ::AssetOpResponse TradeDebitPotions(uint64_t seq, uint32_t count)
+    {
+        ::AssetOpRequest request;
+        request.set_player_id(playerId);
+        request.set_stream(ASSET_OP_STREAM_TRADE_DEBIT);
+        request.set_seq(seq);
+        request.set_correlation_id(79);
+        request.set_tx_type(static_cast<uint32_t>(TX_TRADE));
+        request.set_stream_epoch(100);
+        auto* item = request.mutable_bundle()->add_items();
+        item->set_config_id(kHoldPotion);
+        item->set_count(count);
+        auto* auth = request.mutable_auth();
+        auth->set_caller("trade");
+        auth->set_timestamp_ms(static_cast<uint64_t>(gAssetOpNowMs));
+        auth->set_signature_hex(token_security::HmacSha256Hex(kHoldAssetOpSecret, AssetOpCanonical("debit", request)));
+        ::AssetOpResponse response;
+        PlayerAssetOpSystem::Debit(request, response);
+        return response;
+    }
+};
+
+// 核心回归:续冻到上限照常解冻,但这一局带进战斗的道具仍押着 —— 交易转不走,晚到的结算照样扣得出(不再「药白喝」)。
+// 同一拍里预留复核接手,向 match 查终局;COMPLETE 留着。
+TEST_F(BattleItemHoldTest, CapReleaseFreesTheFreezeButKeepsTheBattleItemsHeld)
+{
+    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0);
+    Fight(kSyntheticDeadlineMs);
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(3, expiresAtMs));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(PlayerBattleSystem::FreezeHoldDeadlineMs(kSyntheticDeadlineMs) + 1);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player)) << "冻结按上限解开";
+    EXPECT_TRUE(Held()) << "预留留着";
+    ASSERT_EQ(1u, gTerminalQueries.size()) << "预留复核同一拍就接手";
+    EXPECT_EQ(kBattleId, gTerminalQueries.front().battleId);
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kComplete));
+    EXPECT_TRUE(Held()) << "COMPLETE:结算迟早到,继续押着";
+
+    const auto refused = TradeDebitPotions(1, 3);
+    EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, refused.outcome());
+    EXPECT_EQ(static_cast<uint32_t>(kAssetInBattle), refused.reason().id());
+    EXPECT_EQ(5u, Inventory().GetTotalItemCount(kHoldPotion)) << "押着的一瓶都没被转走";
+
+    const auto applied = TradeDebitPotions(1, 2);
+    EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome()) << "没押着的两瓶照常能转";
+    EXPECT_EQ(3u, Inventory().GetTotalItemCount(kHoldPotion));
+}
+
+TEST_F(BattleItemHoldTest, AbortAtExpiryReleasesTheFreezeAndTheHold)
+{
+    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0);
+    Fight(kSyntheticDeadlineMs);
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(3, expiresAtMs));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size()) << "冻结还在时只有冻结那条路问,预留复核不重复问";
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+    EXPECT_FALSE(Held()) << "不会再有结算:预留一并释放";
+    EXPECT_EQ(5u, BagService::RemovableCount(player, Inventory(), kHoldPotion));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1 + kReaperTickMs);
+    EXPECT_TRUE(gTerminalQueries.empty());
+}
+
+// 冻结已不在的预留(备战到期、重登时锁已过期、离线时被取消……):只有 ABORT / 没有可裁决原件才放,没有上限。
+TEST_F(BattleItemHoldTest, OrphanHoldIsReleasedOnlyByAbortOrNoOriginal)
+{
+    constexpr uint64_t kReviewAfterMs = kSyntheticDeadlineMs;
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(4, kReviewAfterMs));
+    uint64_t nowMs = kReviewAfterMs + 1;
+    for (const auto answer : {TerminalAnswer::kComplete, TerminalAnswer::kPending, TerminalAnswer::kUnknown})
+    {
+        PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+        ASSERT_EQ(1u, gTerminalQueries.size()) << battle_freeze_hold::TerminalAnswerName(answer);
+        ASSERT_TRUE(AnswerOldestQuery(answer));
+        EXPECT_TRUE(Held()) << battle_freeze_hold::TerminalAnswerName(answer) << " 不放";
+        nowMs += kReaperTickMs;
+    }
+    // 远超续冻上限照样留着(只占住这几瓶,不卡人)。
+    nowMs += PlayerBattleSystem::kFreezeHoldCapMs * 4;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kComplete));
+    EXPECT_TRUE(Held()) << "没有上限";
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs + kReaperTickMs);
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kNoOriginal));
+    EXPECT_FALSE(Held()) << "没有可裁决原件:永远不会有结算";
+    EXPECT_EQ(5u, BagService::RemovableCount(player, Inventory(), kHoldPotion));
+}
+
+TEST_F(BattleItemHoldTest, OrphanHoldWaitsForItsReviewTimeAndForAMutablePlayer)
+{
+    constexpr uint64_t kReviewAfterMs = kSyntheticDeadlineMs;
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(2, kReviewAfterMs));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kReviewAfterMs);
+    EXPECT_TRUE(gTerminalQueries.empty()) << "复核时刻之前(含当刻)不问";
+
+    tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 0; // 没有归属围栏:本节点此刻不改这名玩家
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kReviewAfterMs + 1);
+    EXPECT_TRUE(gTerminalQueries.empty()) << "不可改的玩家不复核";
+
+    tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 1;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kReviewAfterMs + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kReviewAfterMs + 1 + kReaperTickMs);
+    EXPECT_EQ(1u, gTerminalQueries.size()) << "在途的查询不重发";
+    EXPECT_TRUE(PlayerBattleFreezeHoldTestAccess::IsTerminalQueryInFlight(playerId, kBattleId));
+}
+
+// 这一局的冻结还在(没到期):预留归冻结那条路,复核不插手。回答在途期间冻结又挂上了,回答同样交给冻结那条路。
+TEST_F(BattleItemHoldTest, HoldOfABattleStillFrozenIsLeftToTheFreezePath)
+{
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(2, /*reviewAfterMs=*/1));
+    Fight(kSyntheticDeadlineMs);
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs - 1);
+    EXPECT_TRUE(gTerminalQueries.empty());
+
+    tlsEcs.actorRegistry.remove<InBattleComp>(player);
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs - 1);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    Fight(kSyntheticDeadlineMs); // 迟到的确认 / 按锁重建:冻结又挂上了
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_TRUE(Held()) << "交给冻结那条路处置,预留复核的回答不动它";
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+}
+
+TEST_F(BattleItemHoldTest, CancelledPreparationReleasesTheHold)
+{
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(5, kSyntheticDeadlineMs));
+    auto& inBattle = Fight(kSyntheticDeadlineMs);
+    inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+    inBattle.set_prepare_deadline_ms(kSyntheticDeadlineMs);
+
+    ::CancelBattlePrepareRequest cancel;
+    cancel.set_player_id(playerId);
+    cancel.set_battle_id(kBattleId);
+    PlayerBattleSystem::CancelBattlePrepare(cancel);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+    EXPECT_FALSE(Held()) << "match 取消备战 = 这一局不会开打:预留一并释放";
+    EXPECT_EQ(5u, BagService::RemovableCount(player, Inventory(), kHoldPotion));
 }
 
 } // namespace

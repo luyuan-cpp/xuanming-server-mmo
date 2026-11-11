@@ -169,7 +169,7 @@ What to do with the numbers:
   - "ok_200" / duration_s = Gateway+login sustained req/s for this tier.
     Linux staging will beat this number (no Hyper-V port reservations,
     real keep-alive HTTP clients). Take this as a floor.
-  - "429" climbing = Bucket4j limiter is kicking in. That's working
+  - "429" climbing = the gateway Redis rate limiter is kicking in. That's working
     as designed; tighten zone-rps in application.yaml to test queueing
     threshold separately.
   - "100" (QUEUEING) requires the wave schedule to be active. By default

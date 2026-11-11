@@ -589,7 +589,7 @@ message sql_writer_registry {
   bytes writer_key = 1;
   string generation = 2;
   bytes instance_id = 3;
-  bytes sql_principal = 4; // VARBINARY(288)，永久UNIQUE；每boot主体不得重用。
+  bytes sql_principal = 4; // VARBINARY(288)。槽位账号:同一槽位(StatefulSet 序号)的各代共用,同一时刻至多一代 ACTIVE。
   bytes registration_digest = 5;
   enum State { STATE_UNKNOWN = 0; ACTIVE = 1; REVOKED = 2; }
   State state = 6;
@@ -597,6 +597,9 @@ message sql_writer_registry {
   bytes retirement_request_id = 8;
   bytes retirement_digest = 9;
   uint64 retired_ms = 10;
+  // 这个账号上第几次启动(代次),从 1 起严格递增,允许空洞;(sql_principal, boot_seq) 唯一。
+  // 注册事务要求新一代的号大于这个账号已有的全部号(CAS),见 docs/design/writer-roster-exhaustion-20261106.md §5。
+  uint64 boot_seq = 11;
 }
 message sql_writer_slot {
   option(OptionTableName) = "writer_slot";
@@ -634,6 +637,9 @@ message sql_writer_lifecycle_receipt {
     string deployment_id = 10; // 必须非空且进入永久请求摘要；init绑定真实PodUID，重放不得换部署。
     sql_writer_boot_grant.LockPrimitive lock_primitive = 11;
     bytes lock_qualification_sha256 = 12; // 同REGISTER原件永久绑定，必须精确等boot grant15/16；无I3资格不发grant。
+    // 只用于换代退休:同一槽位的新一代在注册事务里退休上一代时,填那份 REGISTER 的 request_id。
+    // REGISTER、人工退休、排空退休都必须为空;换代退休没有维护 run。
+    bytes successor_request_id = 13;
   }
 }
 // 本地启动授权文件的唯一正规消息；不是SQL表。proto JSON用lowerCamelCase，bytes用标准base64。
@@ -978,12 +984,16 @@ message sql_writer_maintenance_receipt {
   }
 }
 
-// init受限有限授权roster；每entry的身份/主体全预固定，不铸新UUID或复制runtime秘密进grant。
+// 写者槽位名册(init 只读,按原字节 SHA 批准)。一条 entry 是一个槽位,下标就是 StatefulSet 序号;
+// 账号与逻辑库预先固定,每次启动的 writer 身份由注册器现场生成,不复制 runtime 秘密进 grant。
+// 同一个消息也是注册器的启动记录:身份填好之后写进本 Pod 私有目录,init 重跑时原样重发。
 message sql_writer_boot_roster {
-  string format = 1; // SQL_WRITER_BOOT_ROSTER_V1。
-  repeated Entry entries = 2; // 至多现有issuer预算1024，duplicate key/instance/principal/request拒绝。
+  string format = 1; // SQL_WRITER_BOOT_ROSTER_V2。
+  repeated Entry entries = 2; // 槽位数 = 副本数上限,至多 1024;各槽位账号互不相同。
   message Entry {
-    repeated sql_writer_lifecycle_receipt.Request requests = 1; // 这个boot要写的每个逻辑库各一份，同一账号；任一份已被别的boot消费，整条entry就算用掉。
+    // 这个槽位要写的每个逻辑库各一份 REGISTER 模板,同一账号。名册里身份字段(request_id、writer_key、instance_id、
+    // registration_digest、registered_ms、boot_seq、deployment_id)必须为空;启动记录里由注册器填好。
+    repeated sql_writer_lifecycle_receipt.Request requests = 1;
     string runtime_config_path = 2; // 只在受限init input-root内解析，normal只挂选中副本。
     bytes runtime_config_sha256 = 3;
     repeated RuntimeEnvironment runtime_environment = 4; // 仅固定SQL环境变量白名单；原件只存私有文件路径/SHA，不存秘密值。

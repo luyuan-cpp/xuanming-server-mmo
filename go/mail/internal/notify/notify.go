@@ -47,7 +47,7 @@ func (n *Notifier) Personal(ctx context.Context, player, mail uint64) {
 	if err != nil {
 		outcomes.WithLabelValues("error").Inc()
 		metrics.ObservePush(metrics.PushError)
-		logx.WithContext(ctx).Errorf("[mail] 提醒未发布，权威邮件已保留 failure=%T", err)
+		logx.WithContext(ctx).Errorf("[mail] notification not published; the authoritative mail is kept failure=%T", err)
 		return
 	}
 	outcomes.WithLabelValues(result).Inc()

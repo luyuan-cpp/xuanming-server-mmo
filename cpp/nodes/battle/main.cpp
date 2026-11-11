@@ -130,8 +130,9 @@ namespace
         }
     }
 
-    // etcd 回读:发现快照里本节点(同 uuid)的登记。battle watch 自己的前缀(劫持检测与注册自检),快照里的自身登记
-    // 就是 etcd 里此刻的值;回读里还看不到自己的键(首发未回、已失租)返回 nullopt。只在 loop 线程调用。
+    // etcd 回读:发现快照里本节点(同 uuid)的登记。battle 只 watch 自己那一条发现键(劫持检测与注册自检,
+    // ServiceDiscoveryManager::WatchOwnRegistrationKey),快照里的自身登记就是 etcd 里此刻的值;回读里还看不到自己的键
+    // (首发未回、已失租)返回 nullopt。只在 loop 线程调用。
     std::optional<battle_admission::Advertised> ObservedAdvertised(Node &node)
     {
         for (const auto &registered : node.GetServiceDiscoveryManager().ServiceNodes().NodesOfType(node.GetNodeType()))
@@ -212,7 +213,7 @@ namespace
         }
         const auto mode = resolution.mode;
         if(mode==battle_security::RunMode::kProd&&!network_probe::Enabled())
-            LOG_FATAL << "生产battle必须开启GLOBAL_MATCH_ENABLED并使用全球事务权威放置";
+            LOG_FATAL << "Production battle must enable GLOBAL_MATCH_ENABLED and use global transactional authority placement";
         const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
 
         switch (battle_security::ClassifyTokenSecret(deploy.battle_token_secret(), mode))
@@ -369,6 +370,10 @@ int main(int argc, char *argv[])
         // Match是全局SQL终局权威，按框架全局池发现，不限当前zone；个人奖励只由其持久Inbox重投。
         // gate/scene旧路由仍来自快照，不在这里新增玩家位置查询。
         Node::CanConnectNodeTypeList{common::base::MatchNodeService},
+        // 只发现 Match(docs/design/connection-fanout-subsetting-20261106.md §3.4)。自身类型 Battle 不在里面:battle 是全服
+        // 一个池,按前缀看同类每台都要看全部 battle(B² 项);这里只看本节点自己那一条发现键,劫持检测、注册自检与
+        // ObservedAdvertised 的回读都只找自己。选号读全服分配清单,不靠同类快照。
+        Node::DiscoveryNodeTypeList{common::base::MatchNodeService},
         [](Node &node, BattleRuntimeContext &context)
         {
             node.MutableNodeInfo().set_physical_region(network_probe::PhysicalRegion());
@@ -378,7 +383,7 @@ int main(int argc, char *argv[])
             if(network_probe::Enabled())
             {
                 if(network_probe::PhysicalRegion()==0||network_probe::Secret().size()<32)
-                    LOG_FATAL << "全球匹配要求非零 PHYSICAL_REGION 及至少32字节 MATCH_PROBE_SECRET";
+                    LOG_FATAL << "Global matching requires a nonzero PHYSICAL_REGION and a MATCH_PROBE_SECRET of at least 32 bytes";
             }
             // gRPC 服务要在 etcd 端口分配之前注册:框架看到 HasGrpcServices()
             // 为真才会派生 gRPC 端口(TCP + 30000)并在 server 就绪后发布服务发现

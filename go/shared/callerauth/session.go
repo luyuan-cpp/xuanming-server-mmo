@@ -132,7 +132,7 @@ func GateInterceptor(getenv func(string) string) (grpc.UnaryServerInterceptor, e
 		// 超限提前翻代只会缩短重放窗口、不会放行验签失败的请求；必须看得见，才知道该调上限还是有异常流量。
 		OnNonceOverflow: func() {
 			sessionNonceOverflowTotal.Inc()
-			logx.Error("callerauth: nonce 表超过上限被迫提前翻代，本进程重放窗口临时缩短")
+			logx.Error("callerauth: nonce table exceeded its limit and was forced to rotate early; this process's replay window is temporarily shortened")
 		},
 	})), nil
 }

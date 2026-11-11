@@ -12,6 +12,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "constants/turn_battle_constants.h"
@@ -4158,7 +4159,7 @@ ReplaySizeReport MeasureAutoBattleReplay(const uint64_t battleId, const int play
 
 TEST(BattleReplaySize, AutoBattlesStayWithinReplayLimits) {
     struct SizeCase {
-        const char* name;
+        std::string_view name;
         uint64_t battleId;
         int playersPerSide;
         bool withPets;
@@ -4172,7 +4173,7 @@ TEST(BattleReplaySize, AutoBattlesStayWithinReplayLimits) {
     for (const auto& c : cases) {
         const auto report = MeasureAutoBattleReplay(c.battleId, c.playersPerSide, c.withPets, c.rounds);
         std::printf("[replay-size] case=%s rounds=%d truncated=%d frozen=%d raw_bytes=%u payload_bytes=%zu freeze_us=%lld\n",
-                    c.name, report.rounds, report.truncated ? 1 : 0, report.frozen ? 1 : 0, report.rawBytes,
+                    c.name.data(), report.rounds, report.truncated ? 1 : 0, report.frozen ? 1 : 0, report.rawBytes,
                     report.payloadBytes, report.freezeUs);
         RecordProperty(std::string(c.name) + "_raw_bytes", static_cast<int>(report.rawBytes));
         RecordProperty(std::string(c.name) + "_payload_bytes", static_cast<int>(report.payloadBytes));

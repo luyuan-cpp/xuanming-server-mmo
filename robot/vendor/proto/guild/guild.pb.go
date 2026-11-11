@@ -591,11 +591,10 @@ func (x *GuildInfo) GetPendingApplicationCount() uint32 {
 	return 0
 }
 
+// 建帮者与所在区一律取会话与服务端归属,请求体不带身份(docs/design/gate-online-identity.md §9.6)。
 type CreateGuildRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	ZoneId        uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // Zone where the guild is created
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -630,25 +629,11 @@ func (*CreateGuildRequest) Descriptor() ([]byte, []int) {
 	return file_proto_guild_guild_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CreateGuildRequest) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
-}
-
 func (x *CreateGuildRequest) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
-}
-
-func (x *CreateGuildRequest) GetZoneId() uint32 {
-	if x != nil {
-		return x.ZoneId
-	}
-	return 0
 }
 
 type CreateGuildResponse struct {
@@ -897,7 +882,6 @@ func (x *GetPlayerGuildResponse) GetGuild() *GuildInfo {
 
 type LeaveGuildRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId        uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	ExpectedGuildId uint64                 `protobuf:"varint,2,opt,name=expected_guild_id,json=expectedGuildId,proto3" json:"expected_guild_id,omitempty"` // 见上方 expected_guild_id 说明
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -931,13 +915,6 @@ func (x *LeaveGuildRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use LeaveGuildRequest.ProtoReflect.Descriptor instead.
 func (*LeaveGuildRequest) Descriptor() ([]byte, []int) {
 	return file_proto_guild_guild_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *LeaveGuildRequest) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
 }
 
 func (x *LeaveGuildRequest) GetExpectedGuildId() uint64 {
@@ -993,7 +970,6 @@ func (x *LeaveGuildResponse) GetErrorMessage() *base.TipInfoMessage {
 
 type DisbandGuildRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId        uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	ExpectedGuildId uint64                 `protobuf:"varint,2,opt,name=expected_guild_id,json=expectedGuildId,proto3" json:"expected_guild_id,omitempty"` // 见上方 expected_guild_id 说明
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -1027,13 +1003,6 @@ func (x *DisbandGuildRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use DisbandGuildRequest.ProtoReflect.Descriptor instead.
 func (*DisbandGuildRequest) Descriptor() ([]byte, []int) {
 	return file_proto_guild_guild_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *DisbandGuildRequest) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
 }
 
 func (x *DisbandGuildRequest) GetExpectedGuildId() uint64 {
@@ -1090,7 +1059,6 @@ func (x *DisbandGuildResponse) GetErrorMessage() *base.TipInfoMessage {
 type SetAnnouncementRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GuildId       uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
-	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Announcement  string                 `protobuf:"bytes,3,opt,name=announcement,proto3" json:"announcement,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1129,13 +1097,6 @@ func (*SetAnnouncementRequest) Descriptor() ([]byte, []int) {
 func (x *SetAnnouncementRequest) GetGuildId() uint64 {
 	if x != nil {
 		return x.GuildId
-	}
-	return 0
-}
-
-func (x *SetAnnouncementRequest) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
 	}
 	return 0
 }
@@ -4322,7 +4283,7 @@ type UpdateGuildScoreRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GuildId       uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
 	Score         int64                  `protobuf:"varint,2,opt,name=score,proto3" json:"score,omitempty"`                 // New ranking score
-	ZoneId        uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // Zone for per-zone ranking (0 = update global only)
+	ZoneId        uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // 调用方认为的区,只用于不一致日志;进哪张分区榜以 MySQL 里帮会的区为准(没有全服榜)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4422,11 +4383,11 @@ func (x *UpdateGuildScoreResponse) GetErrorMessage() *base.TipInfoMessage {
 	return nil
 }
 
+// 帮会榜只有本区榜:区取请求者的归属区,没有全服榜(docs/design/gate-online-identity.md §9.6)。
 type GetGuildRankRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          uint32                 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`                         // Page number (1-based)
-	PageSize      uint32                 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // Items per page
-	ZoneId        uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`       // 0 = global ranking, >0 = per-zone ranking
+	PageSize      uint32                 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // Items per page, clamped to MaxRankPageSize
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4471,13 +4432,6 @@ func (x *GetGuildRankRequest) GetPage() uint32 {
 func (x *GetGuildRankRequest) GetPageSize() uint32 {
 	if x != nil {
 		return x.PageSize
-	}
-	return 0
-}
-
-func (x *GetGuildRankRequest) GetZoneId() uint32 {
-	if x != nil {
-		return x.ZoneId
 	}
 	return 0
 }
@@ -4558,10 +4512,10 @@ func (x *GetGuildRankResponse) GetPageSize() uint32 {
 	return 0
 }
 
+// 查的是请求者归属区榜上的名次;别区的帮会在本区榜上不存在。
 type GetGuildRankByGuildRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GuildId       uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
-	ZoneId        uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"` // 0 = global ranking, >0 = per-zone ranking
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4599,13 +4553,6 @@ func (*GetGuildRankByGuildRequest) Descriptor() ([]byte, []int) {
 func (x *GetGuildRankByGuildRequest) GetGuildId() uint64 {
 	if x != nil {
 		return x.GuildId
-	}
-	return 0
-}
-
-func (x *GetGuildRankByGuildRequest) GetZoneId() uint32 {
-	if x != nil {
-		return x.ZoneId
 	}
 	return 0
 }
@@ -4695,11 +4642,9 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x12upgrade_cost_funds\x18\r \x01(\x04R\x10upgradeCostFunds\x12\x1f\n" +
 	"\vleader_name\x18\x0e \x01(\tR\n" +
 	"leaderName\x12:\n" +
-	"\x19pending_application_count\x18\x0f \x01(\rR\x17pendingApplicationCount\"^\n" +
-	"\x12CreateGuildRequest\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
-	"\azone_id\x18\x03 \x01(\rR\x06zoneId\"u\n" +
+	"\x19pending_application_count\x18\x0f \x01(\rR\x17pendingApplicationCount\"4\n" +
+	"\x12CreateGuildRequest\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04nameJ\x04\b\x01\x10\x02J\x04\b\x03\x10\x04\"u\n" +
 	"\x13CreateGuildResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12(\n" +
 	"\x05guild\x18\x02 \x01(\v2\x12.guildpb.GuildInfoR\x05guild\",\n" +
@@ -4712,21 +4657,18 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"x\n" +
 	"\x16GetPlayerGuildResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12(\n" +
-	"\x05guild\x18\x02 \x01(\v2\x12.guildpb.GuildInfoR\x05guild\"\\\n" +
-	"\x11LeaveGuildRequest\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12*\n" +
-	"\x11expected_guild_id\x18\x02 \x01(\x04R\x0fexpectedGuildId\"J\n" +
+	"\x05guild\x18\x02 \x01(\v2\x12.guildpb.GuildInfoR\x05guild\"E\n" +
+	"\x11LeaveGuildRequest\x12*\n" +
+	"\x11expected_guild_id\x18\x02 \x01(\x04R\x0fexpectedGuildIdJ\x04\b\x01\x10\x02\"J\n" +
 	"\x12LeaveGuildResponse\x124\n" +
-	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"^\n" +
-	"\x13DisbandGuildRequest\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12*\n" +
-	"\x11expected_guild_id\x18\x02 \x01(\x04R\x0fexpectedGuildId\"L\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"G\n" +
+	"\x13DisbandGuildRequest\x12*\n" +
+	"\x11expected_guild_id\x18\x02 \x01(\x04R\x0fexpectedGuildIdJ\x04\b\x01\x10\x02\"L\n" +
 	"\x14DisbandGuildResponse\x124\n" +
-	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"t\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"]\n" +
 	"\x16SetAnnouncementRequest\x12\x19\n" +
-	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\"\n" +
-	"\fannouncement\x18\x03 \x01(\tR\fannouncement\"y\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\"\n" +
+	"\fannouncement\x18\x03 \x01(\tR\fannouncementJ\x04\b\x02\x10\x03\"y\n" +
 	"\x17SetAnnouncementResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12(\n" +
 	"\x05guild\x18\x02 \x01(\v2\x12.guildpb.GuildInfoR\x05guild\"\x85\x01\n" +
@@ -4991,21 +4933,19 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x05score\x18\x02 \x01(\x03R\x05score\x12\x17\n" +
 	"\azone_id\x18\x03 \x01(\rR\x06zoneId\"P\n" +
 	"\x18UpdateGuildScoreResponse\x124\n" +
-	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"_\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"L\n" +
 	"\x13GetGuildRankRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\rR\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x02 \x01(\rR\bpageSize\x12\x17\n" +
-	"\azone_id\x18\x03 \x01(\rR\x06zoneId\"\xd1\x01\n" +
+	"\tpage_size\x18\x02 \x01(\rR\bpageSizeJ\x04\b\x03\x10\x04\"\xd1\x01\n" +
 	"\x14GetGuildRankResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\aentries\x18\x02 \x03(\v2\x17.guildpb.GuildRankEntryR\aentries\x12\x1f\n" +
 	"\vtotal_count\x18\x03 \x01(\rR\n" +
 	"totalCount\x12\x12\n" +
 	"\x04page\x18\x04 \x01(\rR\x04page\x12\x1b\n" +
-	"\tpage_size\x18\x05 \x01(\rR\bpageSize\"P\n" +
+	"\tpage_size\x18\x05 \x01(\rR\bpageSize\"=\n" +
 	"\x1aGetGuildRankByGuildRequest\x12\x19\n" +
-	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x17\n" +
-	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\x82\x01\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildIdJ\x04\b\x02\x10\x03\"\x82\x01\n" +
 	"\x1bGetGuildRankByGuildResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12-\n" +
 	"\x05entry\x18\x02 \x01(\v2\x17.guildpb.GuildRankEntryR\x05entry*\xa6\x04\n" +

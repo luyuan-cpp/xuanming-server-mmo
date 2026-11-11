@@ -781,8 +781,10 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 		logx.Info("[LoadReporter] became leader during this full sync; leader actions wait for the resync requested by the leadership change")
 	}
 	if leaderView && isLeader() {
-		// 节点号持有者:补上 watch 可能漏掉的 PUT,并给在册节点续 TTL。按修订号单调写,与副本的 PUT 写入先后无关(node_holder.go)。
-		publishNodeHolders(svcCtx, holders)
+		// 节点号持有者:补上 watch 可能漏掉的 PUT,并给在册节点续 TTL。同一个 etcd 纪元里按修订号单调写,与副本的 PUT
+		// 写入先后无关;etcd 修订号倒退(换集群、从备份恢复)时先换纪元,倒退之前的记录让位给新登记(node_holder.go)。
+		// 倒退按线性一致读到的当前修订号判断,不用快照头 revision。只发已过存活集闸门的快照。
+		publishSnapshotHolders(ctx, svcCtx, svcCtx.Config.ZoneId, holders)
 
 		// 中途失去领导权:降级即停,新领导者的 resync fullSync 会重扫同一批(与旧写法一致,
 		// 后面的 drain / init / rebalance / 孤儿清理本轮都不做)。
@@ -1037,9 +1039,9 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 			}
 		}
 
-		// 节点(重新)注册 = 它此刻是活的,上一次的死亡标记必须抹掉,否则
-		// IsNodeAlive 说活、再入屏障却还压着它名下的场景,两个判定自相矛盾。
-		clearNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
+		// 节点(重新)注册 = 它此刻是活的,上一次的死亡标记要抹掉,否则 IsNodeAlive 说活、再入屏障却还压着它名下的场景。
+		// 只在回来的就是判死的那一代进程时才抹:同号换了新进程,老实例的屏障要照常走完(R15,见 clearNodeDeathForInstance)。
+		clearNodeDeathForInstance(svcCtx, entry.reg.ZoneId, entry.nodeID, entry.reg.NodeUuid)
 		// 这个节点号此刻由这一代进程持有。失联之后号被接走的老进程靠它认出自己已不是这个号(node_holder.go)。
 		publishNodeHolder(svcCtx, nodeHolderRecord{
 			ZoneID: entry.reg.ZoneId, NodeID: entry.nodeID, NodeUUID: entry.reg.NodeUuid, ModRevision: ev.Kv.ModRevision,

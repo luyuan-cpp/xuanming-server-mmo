@@ -651,23 +651,32 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	// 错位先记下,等下面与版本无关的确定性校验(按 guid、宝宝)都跑完再回 RETRY:那些坏包在任何版本上都不会成功,
 	// 不能因为同包里有一项错位,就把它重投到截止时刻、占着这条流的未决窗口。
 	bool quantityVersionSkew = false;
+	// 战斗道具预留(docs/design/battle-item-reservation.md):要扣的物品还押在一局未结算的战斗里。这是会自己消失的条件
+	// (结算或作废之后释放),与版本错位同一处理:记下来,等确定性校验都跑完再回 RETRY、不记账;记成终态会让对侧白白退款或中止。
+	bool quantityHeld = false;
 	if (!quantities.empty() || !guids.empty())
 	{
 		if (bags == nullptr) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere); return; }
 		auto& bag = bags->bags[kInventory];
-		switch (bag.CheckQuantities(quantities))
+		switch (BagService::CheckRemovable(player, bag, quantities))
 		{
-		case ItemStore::QuantityVerdict::kEnough:
+		case BagService::RemovalVerdict::kEnough:
 			break;
-		case ItemStore::QuantityVerdict::kVersionSkew:
+		case BagService::RemovalVerdict::kHeld:
+			quantityHeld = true;
+			break;
+		case BagService::RemovalVerdict::kVersionSkew:
 			quantityVersionSkew = true;
 			break;
-		case ItemStore::QuantityVerdict::kInsufficient:
+		case BagService::RemovalVerdict::kInsufficient:
+		case BagService::RemovalVerdict::kCount:
 			RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 			return;
 		}
 		if (!guids.empty() && bag.ReserveForBatchRemove(guids) != kSuccess)
 		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
+		if (!guids.empty() && BagService::CheckRemovableInstances(player, bag, guids) == BagService::RemovalVerdict::kHeld)
+			quantityHeld = true;
 		for (auto guid : guids)
 		{
 			const auto* item = bag.GetItemCompByGuid(guid);
@@ -700,6 +709,14 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
 				 << "; items carrying newer-version fields are not debited by quantity, answering RETRY";
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+	if (quantityHeld)
+	{
+		LOG_WARN << "[AssetOp] metric=asset_debit_items_held player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+				 << "; items are held for an unsettled battle, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetInBattle);
 		return;
 	}
 	if (!HasReceiptRoom(ledgerComp, request, snapshot)) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
@@ -890,11 +907,20 @@ struct RecallPick
 
 // 选出要销毁的不可叠加实例,不改任何状态。只认流水点名的实例:同配置的别的实例可能是玩家正当得来、强化过的,销毁了恢复不了。
 // 点不到的数量记缺口,让 GM 看见。同一实例来回交易时流水有两条,这里只扣一件,多出来的也进缺口,这是往少扣的方向错。
-std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, const ::AssetOpRequest& request, uint32_t configId, uint64_t requested)
+// 每个包至多挑「可出包数量」件(BagService::RemovableCount):人物背包里被战斗道具预留占住的件数不挑,
+// 否则 RemoveItemsByGuid 会整批拒(battle-item-reservation.md);其余包没有预留,上限就是总数。
+std::vector<RecallPick> PickRecallInstances(entt::entity player, const std::vector<Bag*>& order, const ::AssetOpRequest& request,
+	uint32_t configId, uint64_t requested)
 {
 	std::vector<RecallPick> picks;
+	std::vector<uint64_t> caps;
 	picks.reserve(order.size());
-	for (std::size_t index = 0; index < order.size(); ++index) picks.push_back(RecallPick{index, {}});
+	caps.reserve(order.size());
+	for (std::size_t index = 0; index < order.size(); ++index)
+	{
+		picks.push_back(RecallPick{index, {}});
+		caps.push_back(BagService::RemovableCount(player, *order[index], configId));
+	}
 
 	uint64_t chosen = 0;
 	for (const auto hint : request.bundle().item_uuids())
@@ -906,6 +932,7 @@ std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, cons
 			const auto* item = bag.ContainsGuid(hint) ? bag.GetItemCompByGuid(hint) : nullptr;
 			if (item != nullptr && IsRecallableInstance(*item, configId))
 			{
+				if (pick.guids.size() >= caps[pick.orderIndex]) break; // 这件在这个包里,但可出包的件数已经挑满
 				pick.guids.push_back(hint);
 				++chosen;
 				break;
@@ -936,12 +963,17 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 		return;
 	}
 	// 可计单位不够、又有带新版本字段的单位:差额可能就在它们身上。版本错位不是确定性结果,回 RETRY、不记账。
+	// 可计单位按「可出包数量」算(BagService::RemovableCount):人物背包里被战斗道具预留占住的那部分不收
+	// (battle-item-reservation.md)。不够而差额就在预留里时同理回 RETRY:预留在那一局结算或作废之后释放,
+	// 到时候能收全;此刻按缺口记终态,剩下的那部分就再也收不回来了。
 	uint64_t countable = 0;
 	bool uncountable = false;
+	bool held = false;
 	for (const auto* bag : order)
 	{
-		countable += bag->GetTotalItemCount(configId);
+		countable += BagService::RemovableCount(player, *bag, configId);
 		uncountable = uncountable || HasUncountableUnits(*bag, configId);
+		held = held || BagService::HeldCount(player, *bag, configId) > 0;
 	}
 	if (countable < requested && uncountable)
 	{
@@ -949,6 +981,14 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
 				 << " config_id=" << configId << "; items carrying newer-version fields are not recalled, answering RETRY";
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+	if (countable < requested && held)
+	{
+		LOG_WARN << "[AssetOp] metric=asset_recall_items_held player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+				 << " config_id=" << configId << "; part of the requested items is held for an unsettled battle, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetInBattle);
 		return;
 	}
 
@@ -961,7 +1001,7 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 		for (auto* bag : order)
 		{
 			const uint64_t remaining = requested - taken;
-			const uint64_t want = std::min<uint64_t>(bag->GetTotalItemCount(configId), remaining);
+			const uint64_t want = std::min<uint64_t>(BagService::RemovableCount(player, *bag, configId), remaining);
 			if (want == 0) continue;
 			error = BagService::RemoveItemsExact(player, *bag, ItemCountMap{{configId, static_cast<uint32_t>(want)}}, txType, request.correlation_id());
 			if (error != kSuccess) break;
@@ -972,7 +1012,7 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 	}
 	else
 	{
-		for (const auto& pick : PickRecallInstances(order, request, configId, requested))
+		for (const auto& pick : PickRecallInstances(player, order, request, configId, requested))
 		{
 			if (pick.guids.empty()) continue;
 			Bag& bag = *order[pick.orderIndex];

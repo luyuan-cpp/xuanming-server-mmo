@@ -2,13 +2,17 @@
 
 2026-11-04。需求已确认，尚未落码。此前的 AOI 草稿已还原，从当前仓库实现开始。以下三项分批处理，复用现有接口、存盘和测试设施。
 
-## 落码状态（2026-11-05，Claude，未编译）
+## 落码与验证状态（2026-11-10 核对，Claude）
+
+三项服务端代码都已进 main，协议已生成并提交。下表的「已验证」都是 Codex 的运行原件，路径相对 `build/verification/`。
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| 1. AOI 单向关注 | 服务端已落码，待 Codex 验证 | 实现与验证命令见[设计文档](../design/aoi-directed-interest.md)「实现」 |
-| 2. 单玩家物品封禁 | 服务端已落码，待 Codex 先跑协议生成再验证 | 判定唯一入口 `GainBlockService::IsItemGainBlocked`；封禁表 `PlayerItemGainBlockComp` 存档字段 24（PROFILE 行），与收件箱账本同一次存盘、同一事务提交；GM 类型 5 / 6 与载荷 `GmItemGainPayload`。2026-11-06 补 GM 查询 `PlayerInboxAdmin.GetItemGainBlocks`（data_service 新增只读 `GetPlayerItemGainBlock`），同样未编译。设计与运维见 [player-inbox-service.md](../design/player-inbox-service.md) §2.2、[player-inbox-runbook.md](../ops/player-inbox-runbook.md) §4.1 |
-| 3. 异常收益窗口重置 | 服务端已落码，待 Codex 验证 | `AnomalyDetector::ClearPlayer` 与 `anomaly_detector_test.cpp` 四个新用例；跑 `currency_test` |
+| 1. AOI 单向关注 | 已验证 | 11-08 `naming-audit-20261108/cpp-tests`：`aoi_test` 84 条、`aoi_delivery_test` 32 条、`buff_test` 37 条、`skill_test` 80 条、`cross_zone_test` 458 条全过。实现见[设计文档](../design/aoi-directed-interest.md)「实现」 |
+| 2. 单玩家物品封禁 | 已验证，剩查询接口的两条真库用例 | 判定唯一入口 `GainBlockService::IsItemGainBlocked`；封禁表 `PlayerItemGainBlockComp` 存档字段 24（PROFILE 行），与收件箱账本同一次存盘、同一事务提交；GM 类型 5 / 6 与载荷 `GmItemGainPayload`。11-06 `aps-1106-014851`：协议生成两轮摘要无差异，player_inbox 单测、vet、gofmt 与真库集成 38 条全过（含 `TestIntegrationItemGainSanctionsShareTheGmStreamInOrder`）。11-08 `naming-audit-20261108`：`bag_test` 932 条全过（物品封禁 12 条），`currency_test` 324 条全过（GM 执行器与收件箱的物品封禁 8 条）。GM 查询 `PlayerInboxAdmin.GetItemGainBlocks`（data_service 新增只读 `GetPlayerItemGainBlock`）：11-06 `battle-handoff-20261106-r4` player_inbox 单测 191 条全过（含本功能 6 条），11-08 data_service 的 `TestGetPlayerItemGainBlock_*` 5 条与 `TestReadPlayerStoreProfile*` 3 条通过。**还没跑**：`TestIntegrationItemGainBlocksListsPendingItemSanctions`（晚于 aps 那轮写的）与 `TestTiDBReadPlayerStoreProfile`（没配专用 TiDB 时跳过）。设计与运维见 [player-inbox-service.md](../design/player-inbox-service.md) §2.2、[player-inbox-runbook.md](../ops/player-inbox-runbook.md) §4.1 |
+| 3. 异常收益窗口重置 | 已验证 | `AnomalyDetector::ClearPlayer` 与 `anomaly_detector_test.cpp` 四个新用例，随 11-08 `currency_test` 324 条全过 |
+
+11-10 只改了日志与错误文案（AGENTS §2 要求日志用英文）和三处过时文档，要补跑的命令见下面「Codex 验证顺序」第 6 步。
 
 Java 版三项均登记为 `PARITY.md`「Java 待做」，本轮不写 Java 代码。
 
@@ -29,6 +33,11 @@ Java 版三项均登记为 `PARITY.md`「Java 待做」，本轮不写 Java 代�
 3. C++ 测试：`pwsh tools/scripts/run_cpp_tests.ps1 -Filter <工程> -LogDir build/verification/cpp-tests`，依次跑 `currency_test`、`bag_test`、`cross_zone_test`、`aoi_test`、`aoi_delivery_test`、`buff_test`、`skill_test`，全部用例通过。资产通道的三个物品用例要求 `bin/etc` 的物品表可读，读不到算环境问题，要报告。
 4. Go：在 `go/player_inbox` 下跑 `gofmt -l .`（无输出）、`go vet ./...`、`go test ./... -count=1`；集成测试用自起的一次性 MySQL/TiDB（库名 `player_inbox_it`，不要借 `codex-*` 容器），设 `PLAYER_INBOX_TEST_MYSQL_DSN` 与 `PLAYER_INBOX_REQUIRE_MYSQL_TESTS=1` 后跑 `go test -tags integration ./internal/inbox/... -count=1 -v`，`TestIntegrationItemGainSanctionsShareTheGmStreamInOrder` 与 `TestIntegrationItemGainBlocksListsPendingItemSanctions` 必须 PASS，SKIP 不算；Access denied 时改 `go test -c` 编出再跑。在 `go/shared` 下跑 `go vet ./inboxcontract/...` 与 `go test ./inboxcontract/... -count=1`。在 `go/data_service` 下跑 `gofmt -l ./internal ./data_service.go`（无输出）、`go vet ./...`、`go test ./internal/logic/... ./internal/server/... ./internal/store/... -count=1`，新增 `TestGetPlayerItemGainBlock_*` 五个与 `TestReadPlayerStoreProfile*` 三个必须 PASS；有专用 TiDB 时 `TestTiDBReadPlayerStoreProfile` 也要 PASS（未配置时 SKIP，按环境缺失报告）。player_inbox 的新单测是 `TestItemGainSanctionDomainIsTheGmDomain`、`TestItemGainBlocksRejectsBeforeTouchingStores`、`TestItemGainPendingViews`、`TestDataServiceItemGainBlocks`，以及 `TestAdminServerFoldsStoreFaultsInBand` / `TestAdminServerPassesThroughAndWires` 里新增的断言。
 5. 失败时保留 MSBuild 错误摘要（文件、行号、错误码）、gtest 失败用例名与断言输出、`go test -v` 完整输出，回报后等待决策，不要自行改断言或跳过用例。
+6. **2026-11-10 补跑（前 1~4 步其余部分已有原件，见开头状态表）**，在仓库根目录用 PowerShell，按序：
+   1. data_service（只改了 `readOwnerAndRow` 的错误文案）：`cd go/data_service; gofmt -l ./internal/store; go vet ./internal/store/...; go test ./internal/store/... -run 'TestReadPlayerStore' -count=1 -v`。通过标准：gofmt 无输出，`TestReadPlayerStoreAssetReportsABadStorage`、`TestReadPlayerStoreAssetReadsOwnerAndAsset` 与三条 `TestReadPlayerStoreProfile*` 全 PASS。
+   2. data_service 真库用例：有专用 TiDB 时设 `ACCOUNT_DIRECTORY_TEST_DSN`（只能指一次性实例，用例会建随机库）与 `ACCOUNT_DIRECTORY_REQUIRE_TIDB=1`，跑 `go test ./internal/store/... -run 'TestTiDBReadPlayerStore' -count=1 -v`，`TestTiDBReadPlayerStoreAsset` 与 `TestTiDBReadPlayerStoreProfile` 必须 PASS，SKIP 不算；没有专用 TiDB 就如实报告「环境缺失、未跑」。
+   3. player_inbox 真库集成：同第 4 步的一次性库与两个环境变量，跑 `cd go/player_inbox; go test -tags integration ./internal/inbox/... -run 'TestIntegrationItemGain' -count=1 -v`，`TestIntegrationItemGainSanctionsShareTheGmStreamInOrder` 与 `TestIntegrationItemGainBlocksListsPendingItemSanctions` 都必须 PASS。
+   4. C++（`player_equip.cpp` 只改了一条 WARN 的文案）：`MSBuild cpp/libs/services/scene/scene.vcxproj /m:1 /p:Configuration=Debug /p:Platform=x64 /nologo /v:minimal`，再编 `cpp/tests/bag_test/bag_test.vcxproj`（测试链接预编好的 lib，库必须先编），然后 `build\cpp\tests\bag_test.exe --gtest_filter=PlayerEquipTest.RemoveGem*:PlayerItemGainBlockTest.*`。通过标准 0 error、用例全过。
 
 ## 1. 补完整 AOI 通用单向关注
 

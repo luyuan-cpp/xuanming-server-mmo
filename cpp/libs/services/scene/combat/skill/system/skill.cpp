@@ -11,6 +11,7 @@
 #include "actor/action_state/system/actor_action_state.h"
 #include "combat_state/system/combat_state.h"
 #include "combat/buff/system/buff.h"
+#include "combat/engagement/system/combat_engagement.h"  // 交手关系:伤害登记双方战斗关注,死亡时结束
 #include "combat/skill/comp/skill_comp.h"
 #include "combat/skill/constants/skill.h"
 #include "player/comp/player_frozen_comp.h"  // cross-zone-readiness-audit.md §11.3 / §11.4
@@ -814,8 +815,10 @@ void TriggerAfterDamageEvents(const entt::entity casterEntity, const entt::entit
 }
 
 void HandleTargetDeath(const entt::entity casterEntity, const entt::entity target, const DamageEventComp& damageEvent) {
-    BuffSystem::OnBeforeDead(target); 
+    BuffSystem::OnBeforeDead(target);
     BuffSystem::OnAfterDead(target);
+    // 死者的交手关系立即结束:双方撤销战斗关注,远处的交手对象不再看见它。
+    CombatEngagementSystem::OnDeath(target);
 
     // Trigger kill event if not self-damage
     if (casterEntity != target) {
@@ -831,12 +834,15 @@ void DealDamage(DamageEventComp& damageEvent, const entt::entity caster, const e
 		return;
 	}
 
-	damageEvent.set_target(entt::to_integral(target)); 
+	damageEvent.set_target(entt::to_integral(target));
 	TriggerBeforeDamageEvents(caster, target, damageEvent);
 	ApplyDamage(*baseAttributesPBComponent, damageEvent);
 
 	if (IsTargetDead(target)) {
 		HandleTargetDeath(caster, target, damageEvent);
+	} else {
+		// 一次伤害算一次交手:双方登记或续期战斗关注。致死的一击不再登记,死亡已结束它的全部交手关系。
+		CombatEngagementSystem::RecordInteraction(caster, target);
 	}
 
 	TriggerAfterDamageEvents(caster, target, damageEvent);

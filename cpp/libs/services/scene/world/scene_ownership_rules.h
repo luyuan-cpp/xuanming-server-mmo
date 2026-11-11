@@ -170,13 +170,17 @@ inline std::optional<HolderRecord> ParseHolderRecord(std::string_view value)
 // 判定本节点号是不是已被别的进程接走,跨多次读数记着本进程自己那次登记的修订号。
 //
 // 判据:持有者不是本进程,而且它的修订号比本进程那次登记更新。etcd 修订号全局单调,同一个号的新进程只能在本进程的分配键
-// 过期之后登记,所以「别人、更新」就是证明。下面两种情况一律按映射判(kThisProcessOrUnknown),只会少拆、不会多拆:
+// 过期之后登记,所以「别人、更新」就是证明;比修订号而不只比 uuid,是因为 scene_manager 处理新登记之前,控制域里还是更旧的记录。
+// 下面两种情况一律按映射判(kThisProcessOrUnknown),只会少拆、不会多拆:
 //   - 本节点 etcd 身份确认有效:本进程此刻持有分配键,别的记录只能是登记之前留下的旧值;
 //   - 还没见过本进程自己的记录(ownRevision == 0):比不出谁更新。scene_manager 处理本进程的 PUT 之后就会有。
 // 读不到、记录不存在、记录损坏:没有信息。
+// ownRevision 记的是最近一次见到的本进程记录,而不是历史最大值:控制域里的记录单调写,本进程的记录只会变新;
+// 唯一会变小的情形是 etcd 换成新集群、修订号从头计,scene_manager 的全量同步把记录改写成新集群里的登记,
+// 这时要跟着用新集群的修订号比,否则新集群里接走这个号的进程永远比不过旧集群的大修订号。
 struct HolderTracker
 {
-	std::uint64_t ownRevision{0}; // 见到过的本进程登记里最大的修订号;0 = 还没见到
+	std::uint64_t ownRevision{0}; // 最近一次见到的本进程记录的修订号;0 = 还没见到
 
 	SlotHolder Observe(const OwnerReading &reading, std::string_view selfUuid, bool identityConfirmed)
 	{
@@ -191,7 +195,7 @@ struct HolderTracker
 		}
 		if (record->uuid == selfUuid)
 		{
-			ownRevision = std::max(ownRevision, record->revision);
+			ownRevision = record->revision;
 			return SlotHolder::kThisProcessOrUnknown;
 		}
 		if (identityConfirmed || ownRevision == 0 || record->revision <= ownRevision)

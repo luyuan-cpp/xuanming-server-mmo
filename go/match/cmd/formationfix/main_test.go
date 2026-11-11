@@ -190,7 +190,7 @@ func TestFormationfixAbortExitCodes(t *testing.T) {
 	require.Contains(t, h.stderr.String(), "deadline_not_due", "拒绝要打出原因码")
 }
 
-// list 打印目标环境、分类与下一页游标;show 打印摘要与「能否处理」,NOT_FOUND 回 2、RETRY 回 1。
+// list 打印目标环境、分类与下一页游标;show 打印摘要与「actionable」一行,NOT_FOUND 回 2、RETRY 回 1。
 func TestFormationfixListAndShow(t *testing.T) {
 	h := newHarness()
 	h.client.list = &pb.ListStrandedFormationsResponse{Target: fixtureTarget, NowMs: 9, NextRetryAtMs: 7, NextBattleId: 42,
@@ -213,7 +213,7 @@ func TestFormationfixListAndShow(t *testing.T) {
 	require.Equal(t, exitOK, h.run("-endpoint", "127.0.0.1:1", "show", "-battle", "42"))
 	require.Equal(t, pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW, h.client.resolves[0].GetMode())
 	require.Contains(t, h.stdout.String(), "digest="+fixtureDigest)
-	require.Contains(t, h.stdout.String(), "能否处理: no (auto_recoverable)")
+	require.Contains(t, h.stdout.String(), "actionable: no (auto_recoverable)")
 
 	for v, want := range map[pb.StrandedFormationVerdict]int{
 		pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_NOT_FOUND: exitRejected,
@@ -224,10 +224,10 @@ func TestFormationfixListAndShow(t *testing.T) {
 		require.Equal(t, want, h.run("-endpoint", "127.0.0.1:1", "show", "-battle", "42"), v.String())
 	}
 
-	// 拒绝却没有核对清单(成局行本身解不开):回 2、报原因码,不打印一份全是 0 的清单,更不能显示「能否处理: yes」。
+	// 拒绝却没有核对清单(成局行本身解不开):回 2、报原因码,不打印一份全是 0 的清单,更不能显示「actionable: yes」。
 	h = newHarness()
 	h.client.resolve = &pb.ResolveStrandedFormationResponse{Verdict: pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED, Target: fixtureTarget, Refusal: "formation_unreadable"}
 	require.Equal(t, exitRejected, h.run("-endpoint", "127.0.0.1:1", "show", "-battle", "42"))
 	require.Contains(t, h.stderr.String(), "formation_unreadable")
-	require.NotContains(t, h.stdout.String(), "能否处理")
+	require.NotContains(t, h.stdout.String(), "actionable:")
 }

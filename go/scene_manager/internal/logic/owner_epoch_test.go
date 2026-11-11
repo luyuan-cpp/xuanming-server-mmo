@@ -650,6 +650,8 @@ func TestEnterScene_AwaitingPlacementCrossZoneAgainIsAllowedWithoutMarker(t *tes
 
 // 同 zone 跨节点交接凭标记铸出 2 后推路由失败(GO-2 根治):epoch 前进到 3(既不是 1 也不是 2),location
 // 回到源节点并带回执,标记转写成 "3:…" 且带 TTL;人数照旧全部退回。源 scene 凭回执采纳 3 才能继续存盘。
+// 回执两段(zone-redis-regression-guard-20261022.md §4.3.4):回滚之后经铸造通道确认落盘才是正式回执,替身缺省确认;
+// 确认不到时停在待确认形态,见 TestEnterScene_RouteFailureRollbackWithoutConfirmationLeavesPendingReceipt。
 func TestEnterScene_RouteFailureAfterHandoffBumpsEpochAndLeavesReceipt(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	sc.Kafka = &countingKafkaWriter{err: errors.New("broker unavailable")}

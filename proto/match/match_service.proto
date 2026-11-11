@@ -239,6 +239,8 @@ message SpectateBattleRecord {
   eSpectateTier tier = 4;
   string battle_instance_id = 5;
   uint64 deadline_ms = 6;
+  // 取自成局原件 MatchFormationRecord.release_track:这场所在 battle 节点的发布轨道,观战列表按它给 stable 观众过滤。
+  string release_track = 7;
 }
 
 // ----- Server-internal: match result (used between MatchService and SceneManager) -----

@@ -186,7 +186,8 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 	if e != nil {
 		return nil, nil, e
 	}
-	f := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: target.PhysicalRegion, TargetNodeId: target.NodeId, TargetInstanceId: target.NodeUuid, TargetEndpoint: target.Endpoint, Mode: uint32(mode), ConfigId: config}
+	// ReleaseTrack 记选中节点的轨道:canary 局退回 stable 节点时就是 stable,观战按它判(发布轨道设计 §2.6)。
+	f := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: target.PhysicalRegion, TargetNodeId: target.NodeId, TargetInstanceId: target.NodeUuid, TargetEndpoint: target.Endpoint, Mode: uint32(mode), ConfigId: config, ReleaseTrack: target.Track.String()}
 	if opts.activityContext != nil {
 		f.ActivityContext, e = proto.Marshal(opts.activityContext)
 		if e != nil {
@@ -221,7 +222,7 @@ func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
 	// (global_outcome_recover.go,2026-10-30):撮合轮不再调用它,也不碰它的翻页游标。
 	pending, e := s.Authority.Pending(ctx)
 	if e != nil {
-		logx.Error("全球匹配恢复查询失败")
+		logx.Error("global match recovery query failed")
 		return
 	}
 	// Pending 只回本副本负责的片(按 battle_id 分片,在 SQL 里过滤,见 authority/work_owner.go),副本之间不再抢同一批,
@@ -562,7 +563,7 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culp
 	if e := s.Authority.FinishFailed(finishCtx, f, culprits); e != nil {
 		s.HoldRelay(e)
 		metrics.ObserveGlobalFlow("abort", "no_create_intent_unconfirmed")
-		logx.Error("全球匹配中止提交未确认")
+		logx.Error("global match abort commit unconfirmed")
 		return
 	}
 	metrics.ObserveGlobalFlow("abort", "no_create_intent_released")

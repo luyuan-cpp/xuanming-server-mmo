@@ -84,10 +84,10 @@ func main() {
 		var err error
 		maintenanceRuntime, err = drainproof.LoadRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 		if err != nil {
-			panic(fmt.Sprintf("维护runtime原件拒绝: %v", err))
+			panic(fmt.Sprintf("maintenance runtime artifact rejected: %v", err))
 		}
 	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
-		panic("维护参数必须完整提供")
+		panic("maintenance parameters must be provided in full")
 	}
 	ctx := svc.NewServiceContext()
 
@@ -108,7 +108,7 @@ func main() {
 	}
 	defer func() {
 		if err := stores.Close(); err != nil {
-			logx.Errorf("DB物理池关闭失败，不能据此宣称UNKNOWN撤销: %v", err)
+			logx.Errorf("Failed to close DB physical pools; UNKNOWN cannot be declared withdrawn on this basis: %v", err)
 		}
 	}()
 	// 连接池指标(mmorpg_sql_pool_*{sql_client="db"},G2b):按本 zone 库 / 额外 zone 家族库 / 非 zone 落点库三类聚合,
@@ -120,17 +120,17 @@ func main() {
 	if maintenanceRuntime != nil {
 		writerConfigs, err := proto_sql.CurrentWriterConfigs()
 		if err != nil {
-			panic(fmt.Sprintf("维护writer身份HOLD: %v", err))
+			panic(fmt.Sprintf("maintenance writer identity HOLD: %v", err))
 		}
 		if err = bindMaintenanceRuntime(maintenanceRuntime, writerConfigs); err != nil {
-			panic(fmt.Sprintf("维护同boot身份HOLD: %v", err))
+			panic(fmt.Sprintf("maintenance same-boot identity HOLD: %v", err))
 		}
 	}
 	if maintenanceRuntime != nil && maintenanceRuntime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
 		maintenanceCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := dbdrain.Run(maintenanceCtx, maintenanceRuntime, stores); err != nil {
-			panic(fmt.Sprintf("维护排空HOLD: %v", err))
+			panic(fmt.Sprintf("maintenance drain HOLD: %v", err))
 		}
 		return
 	}
@@ -223,7 +223,7 @@ func main() {
 			digest := sha256.Sum256([]byte("DB_PLAYER_STORE_READY_V1"))
 			ready, err := maintenanceRuntime.Readiness("SOURCE", digest[:])
 			if err != nil {
-				logx.Errorf("维护新boot正式身份HOLD: %v", err)
+				logx.Errorf("maintenance new-boot formal identity HOLD: %v", err)
 				return
 			}
 			if err = maintenanceRuntime.AwaitOpen(context.Background(), ready, func(ctx context.Context) ([]byte, error) {
@@ -235,7 +235,7 @@ func main() {
 				}
 				return rootAdmission.SnapshotDigest(), nil
 			}); err != nil {
-				logx.Errorf("维护新boot开放HOLD: %v", err)
+				logx.Errorf("maintenance new-boot open HOLD: %v", err)
 			}
 		}()
 	}
@@ -246,7 +246,7 @@ func main() {
 			if err != nil {
 				if controlCtx.Err() == nil {
 					rootAdmission.CloseAdmission()
-					logx.Errorf("维护控制输入HOLD: %v", err)
+					logx.Errorf("maintenance control input HOLD: %v", err)
 				}
 				return
 			}
@@ -256,7 +256,7 @@ func main() {
 			}
 			if err != nil {
 				rootAdmission.CloseAdmission()
-				logx.Errorf("维护同boot控制身份HOLD: %v", err)
+				logx.Errorf("maintenance same-boot control identity HOLD: %v", err)
 				return
 			}
 			if err = dbdrain.RunExisting(controlCtx, runtime, stores, func(ctx context.Context) ([]byte, error) {
@@ -267,7 +267,7 @@ func main() {
 				return rootAdmission.SettledDigest(ctx)
 			}); err != nil {
 				rootAdmission.CloseAdmission()
-				logx.Errorf("维护同boot排空HOLD: %v", err)
+				logx.Errorf("maintenance same-boot drain HOLD: %v", err)
 			}
 		}()
 	}

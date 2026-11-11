@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -33,12 +34,16 @@ import (
 // fake allocator
 // ---------------------------------------------------------------------------
 
+// fakeGameServer 是一台假 GameServer,rooms 是按条目的列表(docs/design/agones-scene-node-high-density.md §13)。
 type fakeGameServer struct {
-	name     string
-	podIP    string
-	state    string
+	name  string
+	podIP string
+	state string
+	// count 是起始名额数:newFakeAllocator 把它展开成同样多的占位条目,给只关心数量的用例用。
+	// 占位条目不是 newAgonesRoomEntry 的格式,对账把它当成认不出的条目留着。
 	count    int64
 	capacity int64
+	entries  []string
 }
 
 type fakeAllocator struct {
@@ -47,22 +52,44 @@ type fakeAllocator struct {
 	servers []*fakeGameServer
 
 	// 脚本化失败。
-	allocateErr    error
-	releaseErr     error
-	listErr        error
-	acquireOnGsErr error
+	allocateErr error
+	removeErr   error
+	listErr     error
+	addErr      error
 
-	// 调用计数,用来断言"回滚发生了 / 没发生"。
-	allocateCalls    int
-	releaseCalls     int
-	acquireOnGsCalls int
-	releasedNames    []string
+	// 调用计数,用来断言"归还发生了 / 没发生"。
+	allocateCalls int
+	removeCalls   int
+	addCalls      int
+	// removed 是每次删除调用的「GameServer/条目」,按调用顺序。
+	removed []string
 }
 
 func newFakeAllocator(servers ...*fakeGameServer) *fakeAllocator {
+	for _, gs := range servers {
+		for i := int64(0); i < gs.count; i++ {
+			gs.entries = append(gs.entries, fmt.Sprintf("seed-%s-%d", gs.name, i))
+		}
+	}
 	return &fakeAllocator{servers: servers}
 }
 
+func (f *fakeAllocator) find(name string) *fakeGameServer {
+	for _, gs := range f.servers {
+		if gs.name == name {
+			return gs
+		}
+	}
+	return nil
+}
+
+func (gs *fakeGameServer) full() bool {
+	return gs.capacity > 0 && int64(len(gs.entries)) >= gs.capacity
+}
+
+// Allocate 与真实 GSA 的 selector 顺序一致:优先 Allocated 且有空位,其次 Ready 且有空位 ——
+// 这样"高密度优先复用已用进程"的语义在测试里也是被验证的。成功时条目一定已在列表里(同 K8sAllocator 的核对)。
+// 条目为空(非高密度模式)时不记名额。
 func (f *fakeAllocator) Allocate(_ context.Context, req agones.AllocationRequest) (*agones.AllocationResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -70,23 +97,19 @@ func (f *fakeAllocator) Allocate(_ context.Context, req agones.AllocationRequest
 	if f.allocateErr != nil {
 		return nil, f.allocateErr
 	}
-	// 优先 Allocated 且有余量,其次 Ready 且有余量 —— 与真实 GSA 的
-	// selector 顺序保持一致,这样"高密度优先复用已用进程"的语义在测试
-	// 里也是被验证的。
 	for _, wanted := range []string{"Allocated", "Ready"} {
 		for _, gs := range f.servers {
-			if gs.state != wanted {
+			if gs.state != wanted || gs.full() {
 				continue
 			}
-			if gs.capacity > 0 && gs.count >= gs.capacity {
-				continue
+			if req.Entry != "" && !slices.Contains(gs.entries, req.Entry) {
+				gs.entries = append(gs.entries, req.Entry)
 			}
-			gs.count += req.RoomsAmount
 			gs.state = "Allocated"
 			return &agones.AllocationResult{
 				GameServerName: gs.name,
 				PodIP:          gs.podIP,
-				RoomsCount:     gs.count,
+				RoomsCount:     int64(len(gs.entries)),
 				RoomsCapacity:  gs.capacity,
 			}, nil
 		}
@@ -94,48 +117,50 @@ func (f *fakeAllocator) Allocate(_ context.Context, req agones.AllocationRequest
 	return nil, fmt.Errorf("%w (fake: all full)", agones.ErrNoCapacity)
 }
 
-func (f *fakeAllocator) AcquireRoomOnGameServer(_ context.Context, _, gameServerName string, delta int64) error {
+func (f *fakeAllocator) AddRoomEntry(_ context.Context, _, gameServerName, entry string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.acquireOnGsCalls++
-	if f.acquireOnGsErr != nil {
-		return f.acquireOnGsErr
+	f.addCalls++
+	if f.addErr != nil {
+		return f.addErr
 	}
-	for _, gs := range f.servers {
-		if gs.name != gameServerName {
-			continue
-		}
-		if gs.capacity > 0 && gs.count+delta > gs.capacity {
-			return fmt.Errorf("%w (fake: %s full)", agones.ErrNoCapacity, gameServerName)
-		}
-		gs.count += delta
-		gs.state = "Allocated"
+	if entry == "" {
 		return nil
 	}
-	return fmt.Errorf("%w (fake: %s not found)", agones.ErrNoCapacity, gameServerName)
+	gs := f.find(gameServerName)
+	if gs == nil {
+		return fmt.Errorf("%w (fake: %s not found)", agones.ErrNoCapacity, gameServerName)
+	}
+	if slices.Contains(gs.entries, entry) {
+		return nil
+	}
+	if gs.full() {
+		return fmt.Errorf("%w (fake: %s full)", agones.ErrNoCapacity, gameServerName)
+	}
+	gs.entries = append(gs.entries, entry)
+	gs.state = "Allocated"
+	return nil
 }
 
-func (f *fakeAllocator) ReleaseRoom(_ context.Context, _, gameServerName string, delta int64) error {
+func (f *fakeAllocator) RemoveRoomEntry(_ context.Context, _, gameServerName, entry string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.releaseCalls++
-	f.releasedNames = append(f.releasedNames, gameServerName)
-	if f.releaseErr != nil {
-		return f.releaseErr
+	f.removeCalls++
+	f.removed = append(f.removed, gameServerName+agonesRoomRecordSep+entry)
+	if f.removeErr != nil {
+		return f.removeErr
 	}
-	for _, gs := range f.servers {
-		if gs.name == gameServerName {
-			gs.count -= delta
-			if gs.count < 0 {
-				gs.count = 0
-			}
-			if gs.count == 0 {
-				gs.state = "Ready"
-			}
-			return nil
-		}
+	gs := f.find(gameServerName)
+	if gs == nil || entry == "" {
+		// GameServer 已经消失:真实实现把它当成功(没有可删的东西)。
+		return nil
 	}
-	// GameServer 已经消失:真实实现把它当成功(没有可回滚的东西)。
+	if i := slices.Index(gs.entries, entry); i >= 0 {
+		gs.entries = slices.Delete(gs.entries, i, i+1)
+	}
+	if len(gs.entries) == 0 {
+		gs.state = "Ready"
+	}
 	return nil
 }
 
@@ -149,27 +174,79 @@ func (f *fakeAllocator) ListGameServerRooms(_ context.Context, _, _ string) ([]a
 	for _, gs := range f.servers {
 		out = append(out, agones.GameServerRooms{
 			Name: gs.name, PodIP: gs.podIP, State: gs.state,
-			Count: gs.count, Capacity: gs.capacity,
+			Entries: slices.Clone(gs.entries), Capacity: gs.capacity,
 		})
 	}
 	return out, nil
 }
 
+// roomsOf 是 GameServer 上的名额数;没有这台时回 -1。
 func (f *fakeAllocator) roomsOf(name string) int64 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, gs := range f.servers {
-		if gs.name == name {
-			return gs.count
-		}
+	if gs := f.find(name); gs != nil {
+		return int64(len(gs.entries))
 	}
 	return -1
 }
 
-func (f *fakeAllocator) stats() (allocate, release, acquireOnGs int) {
+// entriesOf 是 GameServer 上的全部条目。
+func (f *fakeAllocator) entriesOf(name string) []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.allocateCalls, f.releaseCalls, f.acquireOnGsCalls
+	if gs := f.find(name); gs != nil {
+		return slices.Clone(gs.entries)
+	}
+	return nil
+}
+
+// addEntryForTest 直接往 GameServer 上放一个条目,模拟「名额已占上」(包括崩溃留下的孤儿)。
+func (f *fakeAllocator) addEntryForTest(name, entry string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if gs := f.find(name); gs != nil {
+		gs.entries = append(gs.entries, entry)
+		gs.state = "Allocated"
+	}
+}
+
+// stats 回 Allocate、RemoveRoomEntry、AddRoomEntry 的调用次数。
+func (f *fakeAllocator) stats() (allocate, remove, add int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.allocateCalls, f.removeCalls, f.addCalls
+}
+
+// seedAgonesRoom 在假 GameServer gsName 上放一个属于 sceneID 的名额条目,并把记录写进 scene:{id}:agones_gs,回记录。
+func seedAgonesRoom(t *testing.T, sc *svc.ServiceContext, alloc *fakeAllocator, sceneID uint64, gsName string) string {
+	t.Helper()
+	room := agonesRoom{GameServer: gsName, Entry: newAgonesRoomEntry(sceneID)}
+	alloc.addEntryForTest(gsName, room.Entry)
+	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(sceneID), room.record()))
+	return room.record()
+}
+
+// requireAgonesRecordOn 断言 scene:{id}:agones_gs 记的是 gsName 上一个属于这个场景的条目,而且这个条目确实在那台
+// 假 GameServer 上,回条目。
+func requireAgonesRecordOn(t *testing.T, sc *svc.ServiceContext, alloc *fakeAllocator, sceneID uint64, gsName string) string {
+	t.Helper()
+	record, err := sc.Redis.Get(sceneAgonesGsKey(sceneID))
+	require.NoError(t, err)
+	room := parseAgonesRoom(record)
+	require.Equal(t, gsName, room.GameServer, "记录 %q 应当在 %s 上", record, gsName)
+	owner, ok := agonesRoomEntrySceneID(room.Entry)
+	require.True(t, ok, "记录 %q 里的条目格式不对", record)
+	require.Equal(t, sceneID, owner, "条目里的 scene_id")
+	require.Contains(t, alloc.entriesOf(gsName), room.Entry, "记录指向的条目必须真的在 GameServer 上")
+	return room.Entry
+}
+
+// agonesHoldsOf 回本 zone 在途占用里的全部条目。
+func agonesHoldsOf(t *testing.T, sc *svc.ServiceContext, zoneID uint32) []string {
+	t.Helper()
+	holds, err := sc.Redis.Zrange(agonesRoomHoldsKey(zoneID), 0, -1)
+	require.NoError(t, err)
+	return holds
 }
 
 // ---------------------------------------------------------------------------
@@ -289,12 +366,17 @@ func TestAgones_PrefersAllocatedNodeOverReady(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeInstance)
 
-	placement, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, constants.NodePurposeInstance)
+	placement, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, 9101, constants.NodePurposeInstance)
 	require.NoError(t, err)
 	assert.Equal(t, "gs-hot", placement.GameServerName)
 	assert.Equal(t, "10", placement.NodeID)
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-hot"))
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-ready"), "ready node must stay cold")
+	owner, ok := agonesRoomEntrySceneID(placement.Entry)
+	require.True(t, ok)
+	assert.EqualValues(t, 9101, owner, "条目里带 scene_id,对账才能找到它的记录")
+	assert.Contains(t, alloc.entriesOf("gs-hot"), placement.Entry)
+	assert.Equal(t, []string{placement.Entry}, agonesHoldsOf(t, sc, testZoneId), "登记之前在途占用一直在,对账不会收")
 }
 
 // 已 Allocated 的都满了,才回落到 Ready。
@@ -309,7 +391,7 @@ func TestAgones_FallsBackToReadyWhenAllocatedIsFull(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "11", "10.0.0.9", testZoneId, constants.SceneNodeTypeInstance)
 
-	placement, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, constants.NodePurposeInstance)
+	placement, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, 9102, constants.NodePurposeInstance)
 	require.NoError(t, err)
 	assert.Equal(t, "gs-ready", placement.GameServerName)
 	assert.EqualValues(t, 4, alloc.roomsOf("gs-full"), "full node must not be oversold")
@@ -325,10 +407,11 @@ func TestAgones_NoCapacityIsFailClosed(t *testing.T) {
 	)
 	withAgones(t, sc, alloc, true)
 
-	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, constants.NodePurposeInstance)
+	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, 9103, constants.NodePurposeInstance)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, agones.ErrNoCapacity))
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-full"))
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "没占到名额就不留在途占用")
 }
 
 // GSA 成功但那个 Pod 还没注册进 etcd(启动竞态):必须把名额还回去并拒绝。
@@ -343,13 +426,14 @@ func TestAgones_AllocationSucceedsButNodeNotRegistered_RollsBack(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	// 刻意不 bindPodIP。
 
-	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, constants.NodePurposeInstance)
+	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, 9104, constants.NodePurposeInstance)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a registered scene node")
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-1"), "room must be returned")
 
 	_, release, _ := alloc.stats()
 	assert.Equal(t, 1, release)
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "放弃时在途占用一起删")
 }
 
 // zone 对不上:同样还名额 + 拒绝。
@@ -362,10 +446,11 @@ func TestAgones_ZoneMismatchRollsBack(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId+777, constants.SceneNodeTypeInstance)
 
-	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, constants.NodePurposeInstance)
+	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, 9105, constants.NodePurposeInstance)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "belongs to zone")
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-1"))
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId))
 }
 
 // role 对不上(Fleet 标签写的是 instance,但 C++ 报的是 world):
@@ -379,10 +464,11 @@ func TestAgones_RoleMismatchRollsBack(t *testing.T) {
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 
-	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, constants.NodePurposeInstance)
+	_, err := AcquireAgonesPlacement(context.Background(), sc, testZoneId, 9106, constants.NodePurposeInstance)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not match purpose")
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-1"))
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId))
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +499,7 @@ func TestCreateScene_AgonesEnabled_NoCapacity_FailsClosed(t *testing.T) {
 
 	members, _ := sc.Redis.ZrangeWithScores(activeInstancesKey(testZoneId), 0, -1)
 	assert.Empty(t, members, "no phantom scene may be tracked")
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId))
 }
 
 // C++ CreateScene RPC 失败 -> Redis 状态和 Agones 计数都要回滚,
@@ -439,8 +526,9 @@ func TestCreateScene_NodeRpcFails_RollsBackRedisAndCounter(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, uint32(0), resp.ErrorCode, "must not report success for a scene the node rejected")
 
-	// Agones 名额还回去了。
+	// Agones 名额还回去了(回滚的拆除任务按记录删掉那一条);在途占用登记时已经消费。
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-1"))
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId))
 
 	// Redis 里不能留下任何 phantom 状态。
 	members, _ := sc.Redis.ZrangeWithScores(activeInstancesKey(testZoneId), 0, -1)
@@ -495,9 +583,9 @@ func TestCreateScene_AgonesSuccess_RecordsGameServerMapping(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), resp.ErrorCode)
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(resp.SceneId))
-	assert.Equal(t, "gs-1", gs)
+	requireAgonesRecordOn(t, sc, alloc, resp.SceneId, "gs-1")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-1"))
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "登记在同一步消费了在途占用")
 }
 
 // 镜像仍然与源 Scene 共置:Agones 模式下走的是"对指定 GameServer 预占",
@@ -530,8 +618,7 @@ func TestCreateScene_Mirror_StillColocatesUnderAgones(t *testing.T) {
 	require.Equal(t, uint32(0), resp.ErrorCode)
 	assert.Equal(t, "10", resp.NodeId, "mirror must stay on the source node")
 
-	gs, _ := sc.Redis.Get(sceneAgonesGsKey(resp.SceneId))
-	assert.Equal(t, "gs-source", gs)
+	requireAgonesRecordOn(t, sc, alloc, resp.SceneId, "gs-source")
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-source"))
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-other"))
 
@@ -571,6 +658,8 @@ func TestCreateScene_Mirror_SourceFull_FallsBackToFreeAllocation(t *testing.T) {
 	assert.Equal(t, "20", resp.NodeId)
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-source"), "full source must not be oversold")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-other"))
+	requireAgonesRecordOn(t, sc, alloc, resp.SceneId, "gs-other")
+	assert.Empty(t, agonesHoldsOf(t, sc, testZoneId), "共置失败那一次的在途占用已放弃,回落分配的那次已被登记消费")
 }
 
 // ---------------------------------------------------------------------------
@@ -649,68 +738,27 @@ func TestClaimIdleSceneTeardown_AbortKeepsAgonesMapping(t *testing.T) {
 	assert.Equal(t, "gs-77", left, "aborted destroy must not touch the mapping")
 }
 
-// 归还失败不能把异常吞掉当成功 —— 计数从此漂移,只有 reconcile 能发现。
-// 这里只验证"不 panic、不误报成功";告警靠
-// scene_manager_agones_counter_rollback_total{outcome="failed"}。
-func TestReleaseAgonesRoom_FailureIsSurfacedNotSwallowed(t *testing.T) {
+// 归还失败不能吞掉当成功:回错误给调用方重试(拆除任务就重做到成功),并记
+// scene_manager_agones_counter_rollback_total{outcome="failed"}。按条目删是幂等的,重试只还一次。
+// 2026-11-10 之前归还是计数减一,失败了不敢重试(可能还两次),这一份就永远漏掉。
+func TestReleaseAgonesRoom_FailureIsReturnedAndRetryReleasesOnce(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 
 	alloc := newFakeAllocator(&fakeGameServer{name: "gs-1", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4})
-	alloc.releaseErr = errors.New("apiserver down")
 	withAgones(t, sc, alloc, true)
+	entry := newAgonesRoomEntry(9107)
+	alloc.addEntryForTest("gs-1", entry)
+	room := agonesRoom{GameServer: "gs-1", Entry: entry}
 
-	ReleaseAgonesRoom(context.Background(), sc, "ns", "gs-1", "test")
+	alloc.removeErr = errors.New("apiserver down")
+	require.Error(t, releaseAgonesRoom(context.Background(), sc, "ns", room, "test"))
+	assert.EqualValues(t, 2, alloc.roomsOf("gs-1"), "失败时条目还在")
 
-	_, release, _ := alloc.stats()
-	assert.Equal(t, 1, release)
-	assert.EqualValues(t, 1, alloc.roomsOf("gs-1"), "count stays drifted; reconcile must catch it")
-}
-
-// ---------------------------------------------------------------------------
-// reconcile
-// ---------------------------------------------------------------------------
-
-// Agones 说有 3 个房间,Redis 说 1 个 -> 必须报漂移。
-func TestReconcile_DetectsCounterDrift(t *testing.T) {
-	sc, _ := newTestSvcCtxWithWorldScenes(t)
-
-	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-1", podIP: "10.0.0.8", state: "Allocated", count: 3, capacity: 8},
-	)
-	withAgones(t, sc, alloc, true)
-	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeInstance)
-	sc.Redis.Set(nodeSceneCountKey(testZoneId, "10"), "1")
-
-	drift := ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId)
-	assert.Equal(t, 1, drift)
-}
-
-// 两边一致 -> 零漂移。
-func TestReconcile_NoDriftWhenConsistent(t *testing.T) {
-	sc, _ := newTestSvcCtxWithWorldScenes(t)
-
-	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-1", podIP: "10.0.0.8", state: "Allocated", count: 2, capacity: 8},
-	)
-	withAgones(t, sc, alloc, true)
-	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeInstance)
-	sc.Redis.Set(nodeSceneCountKey(testZoneId, "10"), "2")
-
-	assert.Equal(t, 0, ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId))
-}
-
-// 节点死亡:Agones 还认为它有房间,但 SceneManager 已经不认识这个 Pod。
-// 这正是要暴露的漂移,不能静默。
-func TestReconcile_DeadNodeWithRoomsIsDrift(t *testing.T) {
-	sc, _ := newTestSvcCtxWithWorldScenes(t)
-
-	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-dead", podIP: "10.0.0.250", state: "Allocated", count: 2, capacity: 8},
-	)
-	withAgones(t, sc, alloc, true)
-	// 不 bindPodIP == 节点没注册/已死。
-
-	assert.Equal(t, 1, ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId))
+	alloc.removeErr = nil
+	require.NoError(t, releaseAgonesRoom(context.Background(), sc, "ns", room, "test"))
+	require.NoError(t, releaseAgonesRoom(context.Background(), sc, "ns", room, "test"), "重试已删的条目也成功")
+	assert.EqualValues(t, 1, alloc.roomsOf("gs-1"), "只删了这一条,别的名额不动")
+	assert.NotContains(t, alloc.entriesOf("gs-1"), entry)
 }
 
 // 关掉 Agones 时,reconcile 与所有分配动作都必须是 no-op。

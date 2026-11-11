@@ -7,6 +7,7 @@
 #include "engine/core/async/coroutine_callback.h"
 #include "engine/core/async/loop_task_scope.h"
 #include "core/system/scene_task_scope.h"
+#include "thread_context/trace_context_tls.h"
 #include <boost/cobalt/task.hpp>
 
 namespace
@@ -209,6 +210,84 @@ TEST(LoopTaskScope, SceneShutdownSeparatesGameplayFromDurableDrain)
     durableReply(2);
     gameplayReply(1);
     EXPECT_EQ(durable, (std::vector<int>{0, 1, -2}));
+    Drain(loop);
+}
+
+// 链路追踪(docs/design/distributed-tracing.md §5.6):协程挂起时记下 trace,完成回调里装回。
+// 回包可能在另一条 trace 里到达,也可能像 Redis、etcd 回包那样根本没有 trace;协程都应回到自己的 trace。
+boost::cobalt::task<void> RecordTracesAroundAwait(muduo::net::EventLoop& loop, Submit submit,
+    std::vector<tracing::TraceContext>& seen)
+{
+    seen.push_back(tracing::Current());
+    const auto result = co_await loop_async::AwaitCallback<int>(loop, submit, -1);
+    (void)result;
+    seen.push_back(tracing::Current());
+}
+
+TEST(LoopTaskScope, CoroutineResumesOnTheTraceItSuspendedWith)
+{
+    tracing::Set(tracing::TraceContext{});
+    muduo::net::EventLoop loop;
+    LoopTaskScope tasks(loop);
+    std::vector<Reply> replies;
+    std::vector<tracing::TraceContext> seen;
+    tracing::TraceContext request;
+    {
+        tracing::ScopedRoot requestTrace;
+        request = tracing::Current();
+        ASSERT_TRUE(tasks.Start(RecordTracesAroundAwait(loop, [&](Reply done) { replies.push_back(std::move(done)); return true; }, seen), "trace-resume"));
+    }
+    ASSERT_EQ(replies.size(), 1u);
+    ASSERT_EQ(seen.size(), 1u);
+    EXPECT_EQ(seen[0].trace_id.bytes, request.trace_id.bytes);
+    {
+        tracing::ScopedRoot unrelated;   // 回包在另一条 trace 里到达
+        replies[0](1);
+    }
+    ASSERT_EQ(seen.size(), 2u);
+    EXPECT_EQ(seen[1].trace_id.bytes, request.trace_id.bytes);
+    EXPECT_FALSE(tracing::Current().IsValid());
+    Drain(loop);
+}
+
+TEST(LoopTaskScope, CoroutineWithoutTraceDoesNotPickUpTheWakersTrace)
+{
+    tracing::Set(tracing::TraceContext{});
+    muduo::net::EventLoop loop;
+    LoopTaskScope tasks(loop);
+    std::vector<Reply> replies;
+    std::vector<tracing::TraceContext> seen;
+    ASSERT_TRUE(tasks.Start(RecordTracesAroundAwait(loop, [&](Reply done) { replies.push_back(std::move(done)); return true; }, seen), "trace-none"));
+    ASSERT_EQ(replies.size(), 1u);
+    {
+        tracing::ScopedRoot waker;
+        replies[0](1);
+    }
+    ASSERT_EQ(seen.size(), 2u);
+    EXPECT_FALSE(seen[0].IsValid());
+    EXPECT_FALSE(seen[1].IsValid());   // 宁可丢,不可错:不接上唤醒方的 trace
+    Drain(loop);
+}
+
+TEST(LoopTaskScope, StoppedCoroutineFinishesOnItsOwnTrace)
+{
+    tracing::Set(tracing::TraceContext{});
+    muduo::net::EventLoop loop;
+    LoopTaskScope tasks(loop);
+    std::vector<Reply> replies;
+    std::vector<tracing::TraceContext> seen;
+    tracing::TraceContext request;
+    {
+        tracing::ScopedRoot requestTrace;
+        request = tracing::Current();
+        ASSERT_TRUE(tasks.Start(RecordTracesAroundAwait(loop, [&](Reply done) { replies.push_back(std::move(done)); return true; }, seen), "trace-stop"));
+    }
+    {
+        tracing::ScopedRoot shutdown;   // 发起停止的一方
+        tasks.Stop();
+    }
+    ASSERT_EQ(seen.size(), 2u);
+    EXPECT_EQ(seen[1].trace_id.bytes, request.trace_id.bytes);   // 收尾日志挂回原请求
     Drain(loop);
 }
 }

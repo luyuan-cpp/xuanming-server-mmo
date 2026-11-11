@@ -1,6 +1,6 @@
 # 交接：帮会捐献 / 兑换恢复记录的两个出口（2026-10-23）
 
-> **当前状态（2026-11-05）**：客户端前两个出口已实现并通过完整帮会 EditMode 263/263；Go 隔离 HEAD 单测、vet、构建与独立 MySQL 集成 10/10 通过，Java 定向单测 36/36 通过，见 §4。随后负责人要求补齐损坏记录出口，新增契约及验证见 §5。下文保留原交接规格；[参考补丁](guild-economy-recovery-client-20261023.patch) 基于历史客户端 `242e35060`，当前客户端已落地，不要再次应用。
+> **当前状态（2026-11-10）**：客户端前两个出口已实现并通过完整帮会 EditMode 263/263；Go 隔离 HEAD 单测、vet、构建与独立 MySQL 集成 10/10 通过，Java 定向单测 36/36 通过，见 §4。随后负责人要求补齐损坏记录出口，新增契约及验证见 §5，真实联网冒烟见 §6。11-10 Claude Code 两路只读审核见 §8 与 §8.1：资产安全未发现问题；第 1 条（停在捐献 / 商店页时恢复结论被进页自动读取覆盖）已改客户端、未编译，Codex 按 §8.2 验证；低危 2 条与协议第 4 批的客户端跟进 1 条待改，都在客户端；「双击即确认」负责人已定加 1 秒间隔，待改客户端（§8.3）。客户端侧原始测试证据已随 `Logs/` 丢失，见 §8 第 3 条。下文保留原交接规格；[参考补丁](guild-economy-recovery-client-20261023.patch) 基于历史客户端 `242e35060`，当前客户端已落地，不要再次应用。
 >
 > **规格**：[05-economy.md §5.44.1](../design/guild-phase2/05-economy.md)。负责人 2026-10-22 拍板：超窗记录「玩家确认后作废」。项目未上线，不涉及存量兼容。
 >
@@ -154,3 +154,117 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 负责人继续授权“可以修复，然后交接给 Claude Code 审核”。本次只读复核没有发现本任务新增待修项：帮会恢复生产代码、相关 EditMode 测试，以及新增 GuildNetwork 用例与程序集均与其已保存验证摘要一致。客户端当前核对 HEAD 为 `f8076ce9596f84c745a5b86fdf9c4de5dad414e0`；其他会话已改过 `GameClient.cs`、`GateTcpClient.cs`、`AppBootstrap.cs`，没有审改或回退这些变化。因此 501/501 与 attempt-4 的 1/1 仍是当时源码的真实证据，不能扩大为当前 HEAD 整条联网链已经复验。本次没有重跑构建或测试。逐项 SHA 与适用范围保存在客户端 `Logs/guild-corrupt-online-20261106/review-current-scope.json`。
 
 限定范围的只读审核说明已更新到同目录 `claude-review-prompt.txt`，并填入 Claude Code 的独立新会话草稿。桌面明确显示 `Weekly limit reached`（所有模型周用量 100%，界面显示 11 月 12 日 15:00 重置）；发送点击被系统通知遮挡，后续窗口操作也未能完成，未观察到已发送消息或审核开始，故状态仍为**草稿已准备、未发送、未取得 Claude 审核结果**。没有改付费、权限或登录设置，没有用其他代理冒充 Claude 审核。本次未修改业务源码、未提交或推送，待该外部限制解除后继续发送审核。
+
+## 8. 2026-11-10 Claude Code 审核结论
+
+**范围**：原审核材料（客户端 `Logs/guild-corrupt-online-20261106/` 下的 `claude-review-prompt.txt`、限定范围补丁与 `review-current-scope.json`）在本机已不存在，按本文 §5–§7 与 `05-economy.md` §5.44.1–§5.44.2 重建范围：客户端提交 `1dfb7943`（`GuildClient.cs`、`DurableRequestFileStore.cs`、`GuildEconomyRecoveryTests.cs`、`DurableRequestFileStoreTests.cs`、`Docs/GuildUI.md`）与 `dc6229f7`（`Assets/Tests/PlayMode/GuildNetwork/` 的用例、程序集与说明），并顺查 `GuildWindow`、`GuildUiRoot` 的调用方式。这些文件从 `dc6229f7` 到当前客户端 HEAD `fca37261` 未再改动，审的就是 §5、§6 实测时的代码。只读审核：未改客户端，未编译，未运行测试。
+
+**资产安全部分未发现问题**：损坏与超窗记录都要两次点击才清；损坏记录的清除在写者锁内复核原始长度与 SHA-256，令牌绑定角色、存储实例与路径；读取、锁、删除失败一律保留记录并撤销确认；确认期间槽位换成合法新记录时只提示变化，不借确认重发；换角（`GuildUiRoot` 在 `PlayerId` 变化时调 `Reset`）、重连、文案变化都要求重新警告。超窗作废带着结论重拉对应本页、不清另一页快照，不受下面第 1 条影响。联网用例的启动门控可靠：测试宿主在 `BeforeSceneLoad` 挂上禁用的沙盒组件，`AppBootstrap.AutoSpawn` 在 `AfterSceneLoad` 看到它即退出；口令只走环境变量，证据目录限定在 `Logs` 内且必须全新，收尾恢复选角偏好。
+
+**发现**：
+
+1. **已改未编译（中，见 §8.2）：停在捐献 / 商店页时，恢复结论会被窗口的进页自动补拉立刻覆盖。** `GuildWindow.Render` 最后一行 `MaybeAutoRequest` 看到本页快照为空，就同步发一次本页读取；`Request` 当场把状态栏写成「正在读取帮会，请稍候…」，回包再写成「捐献信息已更新 / 帮会商店已更新」或结算中文案。
+   - 损坏记录作废：`RecoverCorruptEconomyRequest` 先 `ClearEconomy()` 再 `Refresh(结论)`；刷新回包写下结论后紧接着 `Changed → SetClient → Render`，结论一帧都显示不出来。
+   - §5.44.1 出口 ①、预读发现已在别的帮：`Apply(新帮)` 因换帮清空经济与活动快照，「…（原帮会）」或「已不在原帮会，原请求未执行…」同样被本页读取覆盖（活动页经排队重拉，`RefreshActivities` 也会改写状态栏）。`ConcludedOutsideOriginalGuild` 注释里的「不重拉本页」只约束了 `GuildClient` 自己。
+   - 玩家多半是在捐献 / 商店页被「已有待确认的捐献或兑换」挡住后才点「恢复原请求」，这是最常见的路径。资产不受影响（记录照常清除、不重发），但规格要求保留的结论丢了。现有恢复用例与联网冒烟都只驱动 `GuildClient`、不挂窗口，所以 501/501 和 1/1 都没覆盖到。
+   - 修法建议：把 §5.44.1 已有的「本人申请列表首读保留结论一次」推广到恢复结论之后的第一次本页读取（`RefreshDonations()`、`RefreshShop()`，换帮时含 `RefreshActivities()`；后者已有 `_activityResult` 跨一次重拉保留文案的同类做法），损坏作废与「已在别的帮」两种结论都登记这次保留；补挂 `GuildWindow`（照 `GuildUiRoot` 接 `Changed`）、分别停在捐献页与商店页的 EditMode 回归用例，覆盖损坏作废与换帮重放两条路。
+2. **已定（负责人 11-10：加 1 秒间隔，待改客户端，见 §8.3）：双击即完成二次确认。** 第一次点击只改状态栏、不进 Busy，「恢复原请求」按钮保持可点；连点两下时第二下看到的仍是那句警告，直接作废。这符合「仍显示该警告时再点一次」的字面规则，但玩家来不及读警告。如要加固，可要求警告显示满 1 秒（用已注入的单调时钟）之后的点击才算确认，不改布局与按钮。
+3. **证据：客户端侧原始证据已不在本机。** 客户端 `Logs/` 是忽略目录，现只剩 11-08~11-09 的 Unity 与节庆日志；`Logs/guild-economy-recovery-20261105/`、`Logs/guild-corrupt-recovery-20261105/`、`Logs/guild-corrupt-online-20261106/`（含 attempt-1~4、`run-live-smoke.ps1` 与审核材料）都已没有。§4–§6、`05-economy.md` §5.44.1–§5.44.2 与客户端 `Docs/GuildUI.md` 引用的 263/263、501/501、联网 1/1 的结果文件已无法复查，只剩各处摘要；服务端 `build/verification/guild-economy-recovery-20261105/`、`guild-corrupt-online-20261106/` 两份后端证据仍在。以后客户端验证的小件证据（结果 XML、摘要、源码摘要）建议同时存一份到服务端 `build/verification/<运行>/`。
+
+**未做**：第 1 条已在 §8.2 修复（未编译）；客户端 `Docs/GuildUI.md` 两处「审核尚未发送」已随之改正。修复后由 Codex 跑 Unity EditMode 的帮会恢复、文件存储与窗口相关组，加上新增回归用例；联网冒烟可按 §6 复跑（可选）。两版服务端无改动，Java 版不涉及。本次未提交。
+
+### 8.1 同日第二路只读审核的补充
+
+**范围**：同一份审核请求在另一个会话里独立审了一遍，范围同上（6 个文件全文，另看 `GuildWindow`、`GuildUiRoot` 的调用方式），只读，未编译、未运行测试。git 核对这 6 个文件在 `f8076ce9`（§7 的核对 HEAD）与当前客户端 HEAD `fca37261` 之间无差异。原 `review-current-scope.json` 已不在，下表是 11-10 客户端工作区文件的 SHA-256，作为之后复验的基线：
+
+| 客户端文件 | SHA-256 |
+|---|---|
+| `Assets/Scripts/Game/Guild/GuildClient.cs` | `877d906354972e3eb38f05fb1b1325c1c388e69352c5ca00615027e9be39ca39` |
+| `Assets/Scripts/Net/DurableRequestFileStore.cs` | `e8ceef6ac71922ebaa76887710ba192e18f90cb9e0df75f963faa0c5cfedf4b6` |
+| `Assets/Tests/EditMode/Guild/GuildEconomyRecoveryTests.cs` | `6e070b3ca9c5ab1b3d039692bd6a7ee5d7d74afe4aba402068f30d449a6ef6a5` |
+| `Assets/Tests/EditMode/Net/DurableRequestFileStoreTests.cs` | `2778703ffe852143eee1692dd3ce647f6e593c8aa500876814b5f39cbb5a0868` |
+| `Assets/Tests/PlayMode/GuildNetwork/GuildEconomyNetworkSmokeTests.cs` | `5ad040e08ed4f19d50bb6f2c8df0fbd980105767d51f5a57d694885ca5033720` |
+| `Assets/Tests/PlayMode/GuildNetwork/MmorpgClient.Tests.PlayMode.GuildNetwork.asmdef` | `06c18e42ad320e6490196f852473f942099330584958e55046c7f252fbebdbb6` |
+
+**复核上文第 1、2 条**：第二路起初漏了这两条，按代码复核后都成立。第 1 条：刷新回包落定后经 `Changed → SetClient → Render`，`Render` 末行 `MaybeAutoRequest()`（客户端 `GuildWindow.cs:257`）在捐献 / 商店页、`Busy` 已清、本页快照为空（`DonationsNeedReload` / `ShopNeedsReload` 返回真，`GuildClient.cs:148-152`）时同步发本页读取（`GuildWindow.cs:288-291`）。第 2 条：首击只写警告、不进 `Busy`，`RefreshCurrentPage`（`GuildWindow.cs:167-170`）照常放行第二击。
+
+**补充发现**（接上文编号）：
+
+4. **低（测试强度）：联网用例的扣款断言在零余额路径上可以空过。** `GuildEconomyNetworkSmokeTests.cs:434-440` 的 `Silver()` 把空的 `Currency.Values` 一律读成 0，用于 `:169`（捐献后应为补足额减 100000）与 `:201`（兑换后银两不变）。§6 走的是新角色 GM 补足路径，捐献后的期望值正好是 0；扣款时若货币槽位丢失或被清空，这两条照样通过。服务端契约下首写后槽位必在：GM 补足经 `ResolveCurrencyField` 调 `EnsureCurrencySlots` 补齐到 `kCurrencyMax`（`cpp/libs/modules/currency/system/currency_system.cpp:65-72、91`），背包快照原样拷贝 `CurrencyComp`（`cpp/libs/services/scene/player/system/player_feature_snapshot.cpp:159-160`）。修法：空列表读零只留给补足前那一次；之后的读取先断言 `Values.Count > 0`（最好不少于上一次）再取下标 0。APPLIED 断言本身没问题：`:345-377` 要求终态恰为 APPLIED，帮会资金、帮贡、次数与物品 +5 都是精确值。
+5. **低：替换竞态按存储故障提示，与 §5.44.2「提示变化」不符（不会多扣）。** 确认那一击读完快照之后、`ClearSnapshot` 持锁复核之前，若槽位被另一进程换掉，`ClearSnapshot` 抛 `InvalidOperationException`（`DurableRequestFileStore.cs:74`），`GuildClient.cs:1049-1051` 提示「本机待确认记录未能作废，请检查本机存储后重新确认」。`:1049` 已撤销确认，若换进来的是窗口内合法记录，玩家照提示再点就会重发这条新记录。新记录保留，重发用它自己的键，服务端去重，所以不会多扣；但规格要求这次只「提示变化」，现在的文案反而引导一次会发包的点击。超窗路径 `:1079-1080` 同形。只有遵守 `.lock` 的另一进程恰在同一击的两段锁之间写入才会触发，客户端层没有用例（存储层的 CAS 有）。修法：两处单独捕获 `InvalidOperationException`，沿用 `:1216` 的「待确认记录已变化，本次未作废也未重发；请重新读取后恢复。」
+6. **协调（不属本功能）：协议第 4 批会改到本次审核的文件。** 服务端工作区未提交的 `proto/guild/guild.proto`（Gate 在线身份简化第 4 批）把 6 个请求里的 `player_id` / `zone_id` 改成 `reserved`，`GuildClient.cs` 仍有 5 处赋值：`:580` `GetGuildRankRequest.ZoneId`、`:642` `CreateGuildRequest.PlayerId` / `ZoneId`、`:743` `SetAnnouncementRequest.PlayerId`、`:751` `LeaveGuildRequest.PlayerId`、`:759` `DisbandGuildRequest.PlayerId`。按 `docs/handoff/gate-online-identity-simplify-20261105/CODEX.md` §8 生成客户端协议后必须删掉这些赋值，否则客户端程序集编译不过；删完后上表 SHA 与 501/501、联网 1/1 都不再对应当前源码。联网用例调用 `_guild.Create(…, _zone)` 与 `_guild.Disband`，若随之改签名要同步。
+
+**服务端与 Java**：本项没有服务端新增工作。§5.44.1 的服务端前提在当前 HEAD 仍在：`go/guild/internal/logic/economy_logic.go:720-728` 第 3 道查重失败回 `codes.Unavailable`，`TestWithClientRequestLookupFailure` 与 `TestEconomyFlowClientRequestOriginalBytesAfterLeavingGuild` 仍在；本次未重跑。Java 版不涉及，不加 `PARITY.md` 行。
+
+**给 Codex**：第 1 条已在 §8.2 改完；第 2 条（§8.3）、第 4、5 条与第 6 条的客户端跟进可放在同一轮，都叠在 §8.2 的改动之上。11-05 的 14 组筛选器 `green-filters.txt` 已随 `Logs/` 丢失，复验至少跑帮会与网络两个 EditMode 程序集（含第 1 条新增的挂窗口用例）：
+
+```
+Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests -testPlatform EditMode -assemblyNames "MmorpgClient.Tests.EditMode.Guild;MmorpgClient.Tests.EditMode.Net" -testResults <out>\guild-net-editmode.xml -logFile <out>\guild-net-editmode.log
+```
+
+通过标准：零失败、零跳过、退出 0。再按客户端 `Docs/GuildUI.md` 的联网验收节（环境变量与命令，原运行器 `run-live-smoke.ps1` 已丢）复跑联网冒烟：第 4 条改的正是这个用例，改完要重新拿到一次通过。结果 XML、摘要与源码 SHA 同时存一份到服务端 `build/verification/<运行>/`（见上文第 3 条）。
+
+**文档整理**：上文插入本节时，§7 的末段（11-06 发送审核未成功的记录）被挤到了文件末尾，已原样移回 §7。本次只改文档，未提交。
+
+### 8.2 第 1 条的修复（2026-11-10，Claude Code，未编译）
+
+**改法**：只改客户端 `Assets/Scripts/Game/Guild/GuildClient.cs`，窗口、布局、协议与两版服务端都不动。把「离帮后本人申请列表首读保留结论一次」推广成一条规则（规格已同步改 `05-economy.md` §5.44.1 的客户端实现补充与 §5.44.2）：
+
+- **登记**：以下结论写进 `_economyRecoveryNotice`。
+  - 作废损坏记录：`Refresh(结论)` 回包落定后登记，有效快照与「不在帮」两支都登记。
+  - 不在帮时作废超窗记录：原有。
+  - 恢复预读之后的每个结局：`SendDonation` / `SendShopOrder` 新增 `recovering` 参数，只有 `RecoverEconomyRequest` 传 `true`。`OwnsEconomyRequest` 失败、`ConfirmEconomyReply` 不放行、业务拒绝、成功文案都登记。业务拒绝由 `AfterEconomyReject` 在改写成 1005 文案之后、带文案重拉之前登记；成功文案在带文案重拉本页之前登记。
+  - `ConcludedOutsideOriginalGuild`：由只在不在帮时登记改为总是登记。
+  - 普通捐献 / 兑换 `recovering` 为假，不登记，行为不变。
+- **沿用**：本人申请列表、捐献页、商店页、活动页的无文案读取，发出前用 `TakeRecoveryNotice()` 取一次。状态栏仍是这句才算数，取完即清，不论这次读取发没发出去、成没成功。回包时 `KeptRecoveryNotice()` 只在状态栏仍是「正在读取」（在途期间没有推送改写）时沿用。优先级：调用方带的文案 > 恢复结论 > 刚结算完的那条 > 默认文案；活动页排在 `_activityResult` 沿用之后。带文案的本页重拉不取结论，重拉完对另一页的补拉仍能沿用一次。
+- **比审核建议多覆盖的同根结局**：重连后在原帮会重发被拒或拿不到订单视图（最常见的恢复路径，重连已清空两页），以及预读后才发现超窗的警告与「记录已变化」。超窗警告被保留后，玩家下一击仍能按「状态栏还是那句警告」完成确认。
+
+**残余**：沿用的是「下一次无文案读取」，不只是自动补拉。停在已加载的页上、之后主动点「刷新」时，若状态栏仍是这句结论，会再显示一次，与原申请列表规则相同。
+
+**用例**：`GuildEconomyRecoveryTests` 新增 8 条，原有用例未改。
+
+| 用例 | 覆盖 |
+|---|---|
+| `CorruptRetirementConclusionSurvivesTheVisiblePageReload(true/false)` | 照 `GuildUiRoot` 接线停在捐献 / 商店页，两击作废损坏记录；刷新回包后窗口当场补拉本页，回包后仍是作废结论；之后玩家点刷新只得到默认文案 |
+| `AnotherGuildReplayConclusionSurvivesTheVisiblePageReload(true/false)` | 预读发现已在别的帮，原帮会那一笔回 14002；窗口补拉现帮会本页后结论仍在 |
+| `RejectedReplayAfterReconnectKeepsItsReasonThroughTheVisiblePageReload(true/false)` | 写请求超时、重连、在原帮会重发被拒（次数 / 限购已满）；补拉后状态栏仍是拒绝原因 |
+| `AnotherGuildReplayConclusionSurvivesTheFirstActivitiesReload` | 换帮后活动页的首次排队重拉沿用结论，第二次不沿用 |
+| `APushDuringTheFirstPageReloadSupersedesTheRecoveryConclusion` | 补拉在途期间推送改写了状态栏，回包后不再恢复旧结论 |
+
+在旧代码上前 7 条应为红（补拉后变成默认文案），推送一条新旧代码都应绿（守住新规则不越界）。
+
+**改后 SHA-256**（取代 §8.1 表中对应两行）：
+
+| 客户端文件 | SHA-256 |
+|---|---|
+| `Assets/Scripts/Game/Guild/GuildClient.cs` | `9328157d884b887f12bbeee3fc21eb44163f5228d5129b4335c228c4c8679f44` |
+| `Assets/Tests/EditMode/Guild/GuildEconomyRecoveryTests.cs` | `84590fc914a1302053c9d265dd41a37ca55d7aead62edbc359e7d7c18157c9e4` |
+
+**给 Codex**（客户端仓 `D:\luyuan\mmorpg-client`；先关掉占用该工程的 Unity；Unity 为 `D:\luyuan\tools\Unity\6000.6.0f1\Editor\Unity.exe`）：
+
+1. 绿：跑 §8.1 的命令（帮会与网络两个 EditMode 程序集）。通过标准：零失败、零跳过、退出 0，结果 XML 里能按名字找到上表 8 条且全部通过。
+2. 红（可选，验证用例有效）：先 `git -C D:\luyuan\mmorpg-client diff -- Assets/Scripts/Game/Guild/GuildClient.cs > <out>\fix.patch`，再 `git -C D:\luyuan\mmorpg-client apply -R <out>\fix.patch`，然后只跑新增用例：`-assemblyNames MmorpgClient.Tests.EditMode.Guild -testFilter "VisiblePageReload;FirstActivitiesReload;FirstPageReloadSupersedes"`（这三个片段只匹配上表 5 个方法）。预期 7 条失败、推送那条通过。之后 `git -C D:\luyuan\mmorpg-client apply <out>\fix.patch` 恢复，确认 `GuildClient.cs` 的 SHA 回到上表的值。
+3. 失败时保留：结果 XML，以及 Unity 日志里第一条编译错误或失败用例的断言原文。
+4. 结果 XML、日志与上表两份文件的 SHA 存一份到服务端 `build/verification/guild-recovery-notice-20261110/`（客户端 `Logs/` 会被清）。
+5. §8.1 第 4、5、6 条若在同一轮改，注意它们也会改 `GuildClient.cs` 或联网用例，改完以新 SHA 为准。
+
+本次未提交；Java 版不涉及（只改两版共用的客户端），不加 `PARITY.md` 行。
+
+### 8.3 第 2 条：负责人定加 1 秒间隔（2026-11-10，待改客户端）
+
+**决定**：负责人 2026-11-10 选「加 1 秒间隔」。规格已写进 `05-economy.md` §5.44.1 出口 ②、§5.44.2 首段与末段：超窗与损坏记录的作废确认，除「状态栏仍是那句警告、记录内容未变」之外，还须距这句警告写出满 1 秒（客户端单调时钟）。不满 1 秒的点击不算确认：不作废、不发包、不重新计时、不改状态栏；满 1 秒后的下一击照常确认。不改布局、按钮与文案。
+
+**实现要点**（客户端 `Assets/Scripts/Game/Guild/GuildClient.cs`，叠在 §8.2 未提交的改动之上）：
+
+- 新增 `public const long EconomyRetireConfirmDelayMs = 1000;` 与字段 `_economyWarningShownAtMs`。
+- 写警告时记时刻：`RecoverCorruptEconomyRequest` 的警告分支与 `WarnStaleEconomyRequest` 各记一次 `_monotonicMs()`。`OwnsEconomyRequest` 预读后才发现超窗时走后者，同样从写出时起算。§8.2 的结论沿用只是把同一句警告放回状态栏，不重新计时。
+- 两处确认分支再判 `_monotonicMs() - _economyWarningShownAtMs >= EconomyRetireConfirmDelayMs`：损坏记录在「匹配同一快照且状态栏仍是警告」之后、`ClearSnapshot` 之前；超窗记录在 `_staleEconomyRecord == saved && Status == StaleEconomyText(clockBehind)` 成立时。不满足就直接返回，不碰确认状态、不调 `Reject`。
+- 读取失败、内容被替换、换角、重连的处理不变；`Reset` 把这个时刻随确认状态一起清零。
+
+**用例**：
+
+- EditMode `GuildEconomyRecoveryTests`：`CreateClient()` 注入假单调时钟（构造参数 `monotonicMs`）。所有期望「两击即作废」的用例（含 §8.2 新增用例里的作废路径）在确认那一击之前把时钟拨过 `EconomyRetireConfirmDelayMs`，建议收成一个 helper；不改的话它们在默认的 `Stopwatch` 时钟下会全部变红。新增损坏、超窗各一组：警告后第 999 ms 的点击保留原记录、零网络、状态栏不变；第 1000 ms 的点击作废；中途一次早点击不重新计时；文案变化后重新警告从新时刻起算。
+- 窗口层：在 §8.2 挂窗口的用例里连调两次 `RefreshGuild` 按钮的 `onClick`，断言记录保留、零网络。
+- PlayMode `GuildEconomyNetworkSmokeTests.RetireCorruptRecord`：首击后立即再点一次，断言原字节保留、零帮会请求；等满 1 秒真实时间后再点，才走现有的作废断言。该用例用默认单调时钟，不改会失败。可与 §8.1 第 4 条同一次改。
+
+**给 Codex**：在 §8.2 的改动之上实现，不要和正在改 `GuildClient.cs` 的会话同时改。验证用 §8.1 的 EditMode 命令，通过标准同 §8.2 第 1 步，另须按名字找到本节新增用例且全部通过；再按客户端 `Docs/GuildUI.md` 复跑联网冒烟。结果 XML、日志与改后 SHA 存进服务端 `build/verification/<运行>/`。两版服务端无改动，Java 版不涉及，不加 `PARITY.md` 行。本次只改文档，未提交。

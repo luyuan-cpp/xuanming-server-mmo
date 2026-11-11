@@ -259,7 +259,7 @@ func (c *TrialResultConsumer) Run(ctx context.Context) {
 		// 不变量破坏、提交点越过保留期，或终止时仍有没结清的记录。此后不再取新，修复后重启进程。
 		if err := c.bound.Run(ctx); err != nil {
 			c.cfg.RelayAdmission.Hold()
-			logx.Errorf("历练结果消费者 HOLD: %v", err)
+			logx.Errorf("[GuildTrial] Trial result consumer HOLD: %v", err)
 		}
 		return
 	}
@@ -276,7 +276,7 @@ func (c *TrialResultConsumer) Run(ctx context.Context) {
 		}
 	}()
 	// 这一行是部署验收的判据(06 §6.46 B6b-srv2):topic 与 group 都**不带** _zN 后缀。改文案要同步改文档。
-	logx.Infof("[GuildTrial] 历练结果消费者启动 topic=%s group=%s partitions=%d brokers=%v",
+	logx.Infof("[GuildTrial] Trial result consumer started topic=%s group=%s partitions=%d brokers=%v",
 		c.cfg.Topic, c.cfg.GroupID, c.cfg.Partitions, c.cfg.Brokers)
 	c.consume(ctx, reader)
 	logx.Info("[GuildTrial] Trial result consumer stopped")

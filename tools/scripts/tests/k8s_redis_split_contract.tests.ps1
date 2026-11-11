@@ -137,7 +137,7 @@ Test-Case '-RedisSplit queue:login 整段写 QueueRedis(Host = redis-queue-g0,�
 
 Test-Case '-RedisSplit queue:gateway 的 spring.data.redis.host = redis-queue-g0.<infra>,端口不变' {
     $out = $queueZoneRun.Output
-    Assert-Equal -Expected "redis-queue-g0.$Infra" -Actual (Get-ConfigValue -Output $out -ConfigMap 'java-svc-gateway-config' -KeyPath 'data.application.yaml.spring.data.redis.host') -Because 'gateway 的 Redis 只用于 Bucket4j 限流,跟着排队实例走'
+    Assert-Equal -Expected "redis-queue-g0.$Infra" -Actual (Get-ConfigValue -Output $out -ConfigMap 'java-svc-gateway-config' -KeyPath 'data.application.yaml.spring.data.redis.host') -Because 'gateway 的 Redis 只用于 Lua 限流(RedisRateLimitStore),跟着排队实例走'
     Assert-Equal -Expected '6379' -Actual (Get-ConfigValue -Output $out -ConfigMap 'java-svc-gateway-config' -KeyPath 'data.application.yaml.spring.data.redis.port') -Because '端口行不变'
 }
 
@@ -463,7 +463,7 @@ Test-Case 'redis-wipe DryRun:非压测 namespace 或缺确认即拒绝;两条都
 Test-Case 'redis-split-status DryRun:按 zones 配置逐 zone 打出将要读的 ConfigMap 与 rollout,不连集群' {
     $run = Invoke-SplitDryRun -Arguments @('-Command', 'redis-split-status', '-DryRun', '-ZonesConfigPath', $SplitZonesPath)
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "DryRun 必须成功。输出: $($run.Output)"
-    Assert-Match -Text $run.Output -Pattern '\[dry-run\] would read ConfigMaps go-svc-login-config / java-svc-gateway-config and rollout status of deployment/login / deployment/gateway in namespace mmorpg-zone-split-test' -Because '对每个 zone 打出要读的对象'
+    Assert-Match -Text $run.Output -Pattern '\[dry-run\] would read ConfigMaps go-svc-login-config / java-svc-gateway-config and rollout status of statefulset/login / statefulset/gateway in namespace mmorpg-zone-split-test' -Because '对每个 zone 打出要读的对象;login、gateway 是 SQL 写者,线上是 StatefulSet'
     Assert-Match -Text $run.Output -Pattern '\[dry-run\] would also read statefulset, proxy deployment and service of every redis-queue-g<N> those ConfigMaps point at' -Because '实例的形态与就绪状态同样只打计划'
     Assert-Match -Text $run.Output -Pattern '\[dry-run\] would read ConfigMaps go-svc-scene-manager-config / node-config and rollout status of deployment/scene-manager in namespace mmorpg-zone-split-test, expecting control Redis redis-ctl-g0\.[a-z0-9-]+:6379' `
         -Because 'the control domain is checked for every zone, independent of -RedisSplit'
@@ -1230,6 +1230,8 @@ Test-Case 'Show-RedisSplitStatus(线上事实注入):打印 zone 实际指向的
         if ($Joined -like 'get deployment redis-ctl-g0-proxy -n ns *') { return New-KubectlReply }
         if ($Joined -like 'get service redis-ctl-g0 -n ns *') { return New-KubectlReply -Stdout '{"spec":{"selector":{"app":"redis-ctl-g0"}}}' }
         if ($Joined -like 'get deployment * -o name') { return New-KubectlReply -Stdout 'deployment.apps/x' }
+        # login、gateway 是 SQL 写者,按 StatefulSet 查(Get-RedisSplitRolloutState -Kind statefulset)。
+        if ($Joined -like 'get statefulset * -o name') { return New-KubectlReply -Stdout 'statefulset.apps/x' }
         if ($Joined -like 'rollout status *') { return New-KubectlReply }
         throw "kubectl 替身没想到的调用:$Joined"
     }

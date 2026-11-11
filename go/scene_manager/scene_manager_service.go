@@ -65,7 +65,7 @@ func main() {
 	// 常数之间劈叉是**代码错误**,而且后果是静默的双写窗口 —— 直接 panic 让
 	// Pod 起不来(K8s 会 CrashLoopBackOff 并告警),远好过带着一个假屏障跑。
 	if err := constants.ValidateSceneReentryBarrier(); err != nil {
-		panic(fmt.Sprintf("再入屏障常数自检失败: %v", err))
+		panic(fmt.Sprintf("scene re-entry barrier constant self-check failed: %v", err))
 	}
 	// 配置低于安全下限是**运维错误**,但安全值是已知的:钳回下限并大声报出来,
 	// 比让进程起不来更合适(屏障调高永远是安全的,进程停摆不是)。

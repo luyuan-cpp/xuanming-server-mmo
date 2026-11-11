@@ -40,7 +40,10 @@ message GuildRecord {
   int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
   uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
   string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
-  // 追加区:从 12 起。
+  // score 的版本:建帮写 0,UpdateGuildScore 在写 score 的同一事务里 +1。Redis 分区榜按它做条件写入,
+  // 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
+  uint64 score_version = 12;
+  // 追加区:从 13 起。
 }
 
 message GuildPlayerStateRecord {

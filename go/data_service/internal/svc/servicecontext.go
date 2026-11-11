@@ -279,11 +279,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 门禁必须在构造前确定；prepared SOURCE 与正常服务复用同一 SQL boot，不能运行中换 gate。
 func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Session) *ServiceContext {
 	if root == nil || relay == nil || root == relay {
-		panic("data_service 缺独立 SOURCE/RELAY 门禁")
+		panic("data_service missing independent SOURCE/RELAY admission gates")
 	}
 	resolved, err := c.ResolveGlobalAuthority(os.Getenv)
 	if err != nil {
-		panic(fmt.Sprintf("全球SQL装配拒绝: %v", err))
+		panic(fmt.Sprintf("global SQL setup rejected: %v", err))
 	}
 	c = resolved
 	if err := validateGlobalCallerSecrets(os.Getenv); err != nil {
@@ -304,23 +304,23 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	// 常驻进程没有 schema 凭据。历史上缺省启动迁移的行为在这里收口，
 	// 显式要求自动迁移则拒启；未配置时仅使用部署阶段已准备的表。
 	if c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate {
-		panic("常驻 data_service 禁止 Schema.AutoMigrate，请使用独立 -migrate 部署入口")
+		panic("resident data_service forbids Schema.AutoMigrate; use the standalone -migrate deployment entry")
 	}
 	if mysqlCfg.Host != "" {
 		// 全部 store 共用一个映射 Watcher,先于消费一次性写资格:etcd 读不到时不白烧 boot grant。
 		dbPlacement, err := dbplacement.Start(context.Background(), c.SnapshotMySQL.DbPlacement)
 		if err != nil {
-			panic(fmt.Sprintf("data_service 逻辑库映射读取失败: %v", err))
+			panic(fmt.Sprintf("data_service failed to read logical database placement: %v", err))
 		}
 		mysqlCfg.PoolOptions = dbPlacement.OpenOptions()
 		// 目录各片、流水库、存档库各一份写资格。
 		writers, err := authoritysql.LoadWriterConfigs(os.Getenv)
 		if err != nil {
-			panic(fmt.Sprintf("data_service 写者启动授权拒绝: %v", err))
+			panic(fmt.Sprintf("data_service writer boot authorization rejected: %v", err))
 		}
 		schemas, err := c.WriterSchemas()
 		if err != nil {
-			panic(fmt.Sprintf("data_service 逻辑库清单无效: %v", err))
+			panic(fmt.Sprintf("data_service invalid logical database list: %v", err))
 		}
 		if err := checkWriterSchemas(writers, schemas); err != nil {
 			panic(fmt.Sprintf("data_service %v", err))
@@ -338,7 +338,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		}
 	}
 	schemaReady := true
-	logx.Info("[ServiceContext] 常驻启动只读核对表形状；schema 必须由独立 -migrate 入口预建")
+	logx.Info("[ServiceContext] Resident startup only verifies table shapes read-only; schema must be pre-created by the standalone -migrate entry")
 
 	var (
 		snapshotStore       SnapshotStore
@@ -491,7 +491,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		s.AccountRoleTrades = store.NewAccountRoleTradeStore(directory, verifier)
 		s.RoleAdmissions = store.NewAccountRoleAdmissionStore(directory)
 		if auth, err := serviceauth.New(map[string]string{"scene_manager": os.Getenv("MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER")}); err != nil {
-			logx.Error("[account-directory] scene_manager独立只读密钥不可用；仅其Lookup关闭")
+			logx.Error("[account-directory] scene_manager dedicated read-only key unavailable; only its Lookup is disabled")
 		} else {
 			s.SceneManagerDirectoryAuth = auth
 		}
@@ -627,7 +627,7 @@ func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig, directory 
 	}
 	if err := checkEmptyRouteBootstrap(context.Background(), rs, directory, c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
 		_ = rs.Close()
-		logx.Errorf("[route-bootstrap] 全球路由启动拒绝: %v", err)
+		logx.Errorf("[route-bootstrap] global route startup rejected: %v", err)
 		return nil
 	}
 	logx.Infof("[ServiceContext] route store ready: max_open_conn=%d max_idle_conn=%d", c.RouteStore.MaxOpenConn, c.RouteStore.MaxIdleConn)
@@ -769,7 +769,7 @@ func (s *ServiceContext) CloseRootAndRelayIngress() {
 // Close 保留旧入口，但不能把未完成的关闭结果吞成成功或提前销毁 SQL。
 func (s *ServiceContext) Close() {
 	if err := s.CloseAndReport(); err != nil {
-		logx.Errorf("data_service 关闭 HOLD，保留未决 owner/SQL: %v", err)
+		logx.Errorf("data_service shutdown HOLD, retaining pending owner/SQL: %v", err)
 	}
 }
 

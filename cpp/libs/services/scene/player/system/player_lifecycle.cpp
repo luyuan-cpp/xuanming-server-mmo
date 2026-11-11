@@ -475,6 +475,7 @@ namespace
 		uint64_t expired{0};
 		uint64_t supersededByExit{0};
 		uint64_t exitNow{0};
+		uint64_t hostedArrived{0}; // 托管落点到了本节点、按断线托管重建了保留(player-connection-lost-hold.md §4.2)
 	};
 	thread_local ConnectionLostHoldCounters tlsConnectionLostHoldCounters;
 
@@ -1553,8 +1554,9 @@ namespace
 		exit_release_stats::Inc(exit_release_stats::Get().inheritRefused);
 		LOG_ERROR << "[ExitRelease][InheritClear] refusing entry player=" << playerId << " owner_epoch=" << ownerEpoch
 				  << " session=" << sessionId << " reason=" << reason << " attempts=" << state.attemptsSent
-				  << " (metric=inherit_refused)";
-		if (sessionId != 0)
+				  << " hosted=" << context.hostedPlacement << " (metric=inherit_refused)";
+		// 托管落点没有在场的客户端,也没有预登记会话(HandleEnterGameNode 第 5 步不登记):不推、不擦。
+		if (sessionId != 0 && !context.hostedPlacement)
 		{
 			// Best-effort tip; safe even if the gate session is already gone.
 			SendTipToPendingSession(sessionId, playerId, tipId);
@@ -2335,7 +2337,14 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId, PlayerLoa
 	if (pendingIt != tlsPendingEnterMap.end())
 	{
 		const SessionId sessionId = pendingIt->second.enterInfo.session_id();
-		if (sessionId != 0)
+		// 托管落点没有在场的客户端,也没有预登记会话:不推、不擦。载入放弃后角色不在任何节点上,数据还在盘上,
+		// 重新登录照常载入,月卡到期后由租约到期的会话结束释放收尾(player-connection-lost-hold.md §4.2)。
+		if (pendingIt->second.hostedPlacement)
+		{
+			LOG_WARN << "[HostedPlacement] load of hosted player " << playerId
+					 << " failed; the character is not on any node until the next login (data stays on disk)";
+		}
+		else if (sessionId != 0)
 		{
 			// Best-effort tip; safe even if the gate session is already gone.
 			SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
@@ -2372,9 +2381,11 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoaded(Guid playerId, const PlayerA
 	// 还要求映射到本玩家(scene-enter-session-fence.md §5.4):gate 重启后同号会话可能已被别的玩家占用,
 	// 那时预登记已被覆盖,这次载入同样作废。待入场上下文只会被入场栅栏放行的请求覆盖,所以走到下面的
 	// 永远是已放行的最高代次;建出的实体随后在 EnterScene 里再复核一次。
+	// 托管落点不预登记会话(没有客户端,不存在"载入期间断线"),跳过这一步:它的上下文只会被入场栅栏放行的更新的登录覆盖。
 	const SessionId pendingSessionId = pendingIt->second.enterInfo.session_id();
 	const auto pendingSessionIt = SessionMap().find(pendingSessionId);
-	if (pendingSessionId != 0 && (pendingSessionIt == SessionMap().end() || pendingSessionIt->second != playerId))
+	if (!pendingIt->second.hostedPlacement && pendingSessionId != 0 &&
+		(pendingSessionIt == SessionMap().end() || pendingSessionIt->second != playerId))
 	{
 		LOG_INFO << "HandlePlayerAsyncLoaded: session " << pendingSessionId
 		         << " cancelled during async load for player " << playerId << ", skipping";
@@ -2389,7 +2400,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoaded(Guid playerId, const PlayerA
 	// 否则损坏的旧存档会进入 registration_timestamp 首次注册分支并覆盖真实资产。
 	if (playerId == kInvalidGuid || message.player_database_data().player_id() != playerId)
 	{
-		LOG_ERROR << "HandlePlayerAsyncLoaded: 存档身份与当前玩家不符,拒绝载入 player=" << playerId;
+		LOG_ERROR << "HandlePlayerAsyncLoaded: save identity does not match the current player, refusing to load player=" << playerId;
 		HandlePlayerAsyncLoadFailed(playerId, PlayerLoadFailureReason::kStoreError);
 		return;
 	}
@@ -2758,6 +2769,46 @@ namespace
 		}
 		return text;
 	}
+
+	// 托管落点入场之后重建断线托管(docs/design/player-connection-lost-hold.md §4.2),只由 EnterScene 第 3.0 步调用。
+	// 与 HandleClientConnectionLost 判定为 kHold 时的动作同一组,少两步:不停步(刚放进场景,队形下一 tick 再驱动)、
+	// 不请求关键进度存盘(新实体刚从盘上认领载入;同节点换图的实体本来就在保留中,不走到这里)。
+	// 已在保留中的不动:同节点换图时保留随实体留着,计时与月卡状态不重来。
+	// 实体绑着活会话时不建(纵深防御,按构造走不到:入场栅栏只放行与实体同一次登录的托管落点,而有活会话的实体
+	// 登录身份比断开的那次新)—— 有客户端在场就不是离线托管。
+	void EnterHostedHold(entt::entity player, SessionId lostSessionId, uint64_t lostLoginGeneration)
+	{
+		auto &registry = tlsEcs.actorRegistry;
+		if (!registry.valid(player) || registry.any_of<PlayerConnectionLostComp>(player))
+		{
+			return;
+		}
+		const auto *guid = registry.try_get<PlayerGuidComp>(player);
+		const Guid playerId = guid != nullptr ? guid->value : kInvalidGuid;
+		if (playerId == kInvalidGuid)
+		{
+			return;
+		}
+		if (HasLiveGateSession(player, playerId))
+		{
+			LOG_WARN << "[HostedPlacement] player " << playerId
+					 << " has a live gate session; not rebuilding the offline hold (session=" << lostSessionId << ")";
+			return;
+		}
+		// 断线时还在等的建镜像不再自动进场,与 HandleClientConnectionLost 同口径(新实体不会有,同节点的已摘)。
+		registry.remove<PlayerMirrorCreateInFlightComp>(player);
+		registry.emplace<PlayerConnectionLostComp>(
+			player, PlayerConnectionLostComp{connection_lost_hold::Clock::now(), lostSessionId, lostLoginGeneration});
+		EnsureConnectionLostHoldTimer();
+		// 查挂机月卡:有效就接着托管(不按 25 秒窗口退出),第一次确认时由服务器开启组队跟随;结果回来之前按普通窗口计。
+		AfkHostingSystem::Probe(player);
+
+		auto &counters = tlsConnectionLostHoldCounters;
+		++counters.hostedArrived;
+		LOG_INFO << "[ConnectionLostHold] hosted placement arrived for player " << playerId
+				 << "; holding it as an offline character (lost_session=" << lostSessionId
+				 << " lost_login_generation=" << lostLoginGeneration << " hosted_arrived_total=" << counters.hostedArrived << ")";
+	}
 } // namespace
 
 enter_fence::Verdict PlayerLifecycleSystem::JudgeEnter(Guid playerId, SessionId sessionId, uint64_t loginGeneration)
@@ -2805,9 +2856,11 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 																					   PlayerEnterContext ctx)
 {
 	const SessionId sessionId = ctx.enterInfo.session_id();
+	// 托管落点(ctx.hostedPlacement)的会话号只是断开那次登录的身份:栅栏照常拿它比,提示一律不推(没有在场的客户端)。
+	const SessionId notifySessionId = ctx.NotifiableSessionId();
 	if (!RoleAdmissionSystem::Allows(playerId, ctx.roleAdmissionGeneration, ctx.ownerRevision))
 	{
-		RejectRoleAdmission(playerId, sessionId);
+		RejectRoleAdmission(playerId, notifySessionId);
 		return EnterGameNodeOutcome::kRejected;
 	}
 
@@ -2823,10 +2876,10 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 		LOG_WARN << "[EnterFence] rejected enter player=" << playerId << " session=" << sessionId
 				 << " login_generation=" << ctx.loginGeneration << " enter_gs_type=" << ctx.enterInfo.enter_gs_type()
 				 << " owner_epoch=" << ctx.ownerEpoch << " verdict=" << enter_fence::VerdictName(verdict)
-				 << " current: " << FormatEnterIdentities(CollectEnterIdentities(playerId));
-		if (player_exit::IsBoundSession(sessionId))
+				 << " hosted=" << ctx.hostedPlacement << " current: " << FormatEnterIdentities(CollectEnterIdentities(playerId));
+		if (player_exit::IsBoundSession(notifySessionId))
 		{
-			SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
+			SendTipToPendingSession(notifySessionId, playerId, kEnterSceneFailed);
 		}
 		return EnterGameNodeOutcome::kRejected;
 	}
@@ -2845,9 +2898,18 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 		// SceneHandler::PlayerEnterGameNode 先经 RoleAdmissionSystem::RequestEnter 用同一个 CheckEnterScene 预检,
 		// 失败时 RejectRoleAdmission 推的就是 3023;这里覆盖的是登记窗口里场景消失的竞态,口径与它对齐。
 		LOG_WARN << "[EnterGameNode] target scene check refused entry player=" << playerId << " session=" << sessionId
-				 << " scene_id=" << ctx.enterInfo.scene_id() << " code=" << entryResult
+				 << " scene_id=" << ctx.enterInfo.scene_id() << " code=" << entryResult << " hosted=" << ctx.hostedPlacement
 				 << "; pushing kEnterSceneFailed to the client";
-		SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
+		SendTipToPendingSession(notifySessionId, playerId, kEnterSceneFailed);
+		return EnterGameNodeOutcome::kRejected;
+	}
+	// 托管落点撞上仍绑着活会话的实体:有客户端在场就不是离线托管(纵深防御,按构造走不到 —— 入场栅栏只放行与实体
+	// 同一次登录的托管落点,而活会话一定属于更新的一次登录)。必须排在第 2 步之前:那一步会摘掉实体的会话,托管落点
+	// 又不会重新绑定,在线的玩家就被无声地断开了。什么都不碰,直接拒。
+	if (ctx.hostedPlacement && existingPlayer != entt::null && HasLiveGateSession(existingPlayer, playerId))
+	{
+		LOG_WARN << "[HostedPlacement] player " << playerId << " has a live gate session; hosted placement into scene "
+				 << ctx.enterInfo.scene_id() << " refused without touching the session";
 		return EnterGameNodeOutcome::kRejected;
 	}
 
@@ -2861,7 +2923,8 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	//    排在栅栏放行之后:一条陈旧路由带着别的会话到达,会把条目误结清、玩家不被踢 —— 栅栏把条目当作一处当前身份,
 	//    这样的请求在第 0 步就被拒了。排在第 2 步擦旧会话、第 3 步销毁旧实体(那里也会删票据,排在后面就分不清是谁删的)、
 	//    第 5 步登记待入场条目之前 —— 它靠"此刻待入场表里有没有他"区分同一条路由被 gate 补发与真正的第二次进场。
-	ReconcileRelocateOnReentry(playerId, sessionId);
+	//    托管落点按"会话为 0"对账:它不是本节点替他发的改派的去向(离线托管的角色不发改派票据),有条目就按已被取代结清、不踢。
+	ReconcileRelocateOnReentry(playerId, notifySessionId);
 
 	// 2. Clear existing player session (handles rapid reconnect / account takeover).
 	//    只擦仍映射到本玩家的那一条(RemovePlayerSession → EraseSessionMappingIfOwned,§5.6);登录身份组件不动。
@@ -2906,7 +2969,8 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	//    Pre-register session so that client messages arriving during async load
 	//    hit the "player not loaded" guard instead of "session id not found".
 	//    insert_or_assign defends against unlikely session_id reuse (snowflake collision).
-	if (sessionId != 0)
+	//    托管落点不登记:会话早已断开,不会有它的客户端消息;登记了反而会让死会话号映射到这名玩家。
+	if (sessionId != 0 && !ctx.hostedPlacement)
 	{
 		SessionMap().insert_or_assign(sessionId, playerId);
 	}
@@ -3001,8 +3065,16 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 		// 进来之前都做过同一个检查,这里是纵深防御;复用实体那条路(HandleEnterGameNode 第 4 步)失败时只有这一条 tip。
 		LOG_WARN << "[EnterScene] target scene check refused entry player=" << playerId
 				 << " session=" << enterInfo.session_id() << " scene_id=" << enterInfo.scene_id() << " code=" << result
-				 << "; pushing kEnterSceneFailed to the client";
-		SendTipToPendingSession(enterInfo.session_id(), playerId, kEnterSceneFailed);
+				 << " hosted=" << ctx.hostedPlacement << "; pushing kEnterSceneFailed to the client";
+		SendTipToPendingSession(ctx.NotifiableSessionId(), playerId, kEnterSceneFailed);
+		return false;
+	}
+	// 托管落点不取消退出(player-connection-lost-hold.md §4.2):离线的角色已在退出中(托管到期、被别的退出取代),这条落点
+	// 来晚了,让退出照常收尾。重连能取消退出是因为有一条活着的新会话要接回,托管落点没有。实体与会话都没动过。
+	if (ctx.hostedPlacement && tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
+	{
+		LOG_INFO << "[HostedPlacement] player " << playerId << " is already exiting; hosted placement into scene "
+				 << enterInfo.scene_id() << " dropped, the exit finishes as before";
 		return false;
 	}
 
@@ -3074,8 +3146,19 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	// 1. Bind session: map session_id -> player_id on this Scene node
 	//    so session-addressed client messages (ProcessClientPlayerMessage) can find the player, and
 	//    SendToPlayerClient can find the gate node.
+	//    托管落点不绑:它的会话号是断开那次登录的身份,快照会话保持无效(与断线保留里的实体同一形态),
+	//    下面照常把身份记进登录身份组件。没有换会话(同一次登录),已在目标场景时照常幂等。
 	bool sessionChanged = false;
-	if (enterInfo.session_id() != 0)
+	if (ctx.hostedPlacement)
+	{
+		auto &snapshot = tlsEcs.actorRegistry.get_or_emplace<PlayerSessionSnapshotComp>(player);
+		if (!player_exit::IsBoundSession(snapshot.gate_session_id()))
+		{
+			snapshot.set_gate_session_id(kInvalidSessionId);
+		}
+		snapshot.set_player_id(playerId);
+	}
+	else if (enterInfo.session_id() != 0)
 	{
 		// Clean up old session mapping if player already had a different session
 		// (e.g. reconnect with new Gate connection). Prevents orphaned entries.
@@ -3145,10 +3228,20 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	{
 		LOG_ERROR << "EnterScene: scene transition interrupted, player_id=" << playerId;
 		if (ownership.IsCurrent() && tlsEcs.GetPlayer(playerId) == player)
-			SendTipToPendingSession(enterInfo.session_id(), playerId, kEnterSceneFailed);
+			SendTipToPendingSession(ctx.NotifiableSessionId(), playerId, kEnterSceneFailed);
 		return stopEntry();
 	}
 	if (!canContinueEntry()) return stopEntry();
+
+	// 3.0 托管落点:角色已经在新场景里了,按断线托管把保留状态建起来(player-connection-lost-hold.md §4.2)。同节点换图的实体
+	//     本来就在保留中,原样留着;从别的节点搬来的新实体在本节点从没有过活会话,按"断开的那次登录"重建保留并查一次月卡 ——
+	//     确认有效时算托管开始,由服务器开启组队跟随(OnOfflineHostingStarted),接到队长身后。排在组队刷新(3.5)之前:
+	//     跟随检查读到的已是"离线托管中"。
+	if (ctx.hostedPlacement)
+	{
+		EnterHostedHold(player, enterInfo.session_id(), ctx.loginGeneration);
+		if (!canContinueEntry()) return stopEntry();
+	}
 
 	// 3.1 玩家已经被路由放进了场景:此前记下的"换图在途"(PlayerSceneChangeInFlightComp)到此兑现。
 	//     不等 scene_manager 的 gRPC 应答来摘:路由(Kafka → gate → 本节点)与应答(gRPC)是两条
@@ -3206,7 +3299,7 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 		// 5. 只记录首次提交的登录态;重复入场不重复记录。
 		if (!alreadyLoggedIn)
 		{
-			LOG_INFO << "玩家登录 entity=" << entt::to_integral(player)
+			LOG_INFO << "Player logged in entity=" << entt::to_integral(player)
 					 << " enter_gs_type=" << EnterGsType_Name(static_cast<EnterGsType>(enterInfo.enter_gs_type()));
 		}
 	}
@@ -3488,6 +3581,68 @@ void PlayerLifecycleSystem::ResumeConnectionLostHold(entt::entity player, Sessio
 			 << " resumed by a new session after " << heldMs << "ms (lost_session=" << lostSessionId
 			 << " lost_login_generation=" << lostLoginGeneration << " new_session=" << incomingSessionId
 			 << " new_login_generation=" << incomingLoginGeneration << " resumed_total=" << counters.resumed << ")";
+}
+
+std::optional<PlayerLifecycleSystem::HostedIdentity> PlayerLifecycleSystem::OfflineHostedIdentity(entt::entity player)
+{
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player) || registry.any_of<UnregisterPlayer>(player))
+	{
+		return std::nullopt;
+	}
+	const auto *held = registry.try_get<PlayerConnectionLostComp>(player);
+	if (held == nullptr ||
+		!connection_lost_hold::IsHosting(held->hostingStarted, held->afkPass, held->afkPassExpiresAtSec,
+										 TimeSystem::NowSecondsUTC()))
+	{
+		return std::nullopt;
+	}
+	// 断开的那次登录:进入保留时实体的快照会话与登录代次(保留期间不变)。没有代次的旧实体给不出完整身份。
+	if (!player_exit::IsBoundSession(held->sessionId) || held->loginGeneration == 0)
+	{
+		return std::nullopt;
+	}
+	return HostedIdentity{held->sessionId, held->loginGeneration};
+}
+
+std::optional<PlayerEnterContext> PlayerLifecycleSystem::HostedPlacementContext(const HostedPlacement &placement)
+{
+	// 字段都由 scene_manager 填(enter_hosted_placement.go):缺一个就组不出能过角色登记与入场栅栏的上下文。
+	if (placement.playerId == kInvalidGuid || placement.sceneId == 0 || placement.ownerEpoch == 0 ||
+		!player_exit::IsBoundSession(placement.sessionId) || placement.loginGeneration == 0 || placement.ownerRevision == 0)
+	{
+		return std::nullopt;
+	}
+	PlayerEnterContext ctx;
+	ctx.enterInfo.set_session_id(placement.sessionId);
+	// 与 0 型换图路由同口径:不是一次登录,不改登录态(EnterScene 第 4 步只在非 0 时写)。
+	ctx.enterInfo.set_enter_gs_type(0);
+	ctx.enterInfo.set_scene_id(placement.sceneId);
+	ctx.homeZoneId = placement.homeZoneId;
+	ctx.ownerEpoch = placement.ownerEpoch;
+	ctx.loginGeneration = placement.loginGeneration;
+	ctx.ownerRevision = placement.ownerRevision;
+	ctx.hostedPlacement = true;
+	return ctx;
+}
+
+void PlayerLifecycleSystem::HandleHostedPlacement(const HostedPlacement &placement)
+{
+	auto ctx = HostedPlacementContext(placement);
+	if (!ctx)
+	{
+		LOG_ERROR << "[HostedPlacement] malformed hosted placement dropped: player=" << placement.playerId
+				  << " scene=" << placement.sceneId << " owner_epoch=" << placement.ownerEpoch
+				  << " session=" << placement.sessionId << " login_generation=" << placement.loginGeneration
+				  << " owner_revision=" << placement.ownerRevision;
+		return;
+	}
+	LOG_INFO << "[HostedPlacement] hosted placement received: player=" << placement.playerId
+			 << " scene=" << placement.sceneId << " owner_epoch=" << placement.ownerEpoch
+			 << " session=" << placement.sessionId << " login_generation=" << placement.loginGeneration
+			 << " existing_entity=" << (tlsEcs.GetPlayer(placement.playerId) != entt::null);
+	// 与 gate 路由同一条入场链:先在全局 SQL 登记角色入场、注册交接栅栏,再复用实体或认领载入(RoleAdmissionSystem 激活)。
+	RoleAdmissionSystem::RequestEnter(placement.playerId, std::move(*ctx));
 }
 
 void PlayerLifecycleSystem::ExpireConnectionLostHolds(connection_lost_hold::Clock::time_point now)
@@ -4577,7 +4732,7 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 		// 原码只进日志,推给客户端的走 RefuseInheritedEntry 的缺省 kEnterSceneFailed,理由同 HandleEnterGameNode 的场景预检。
 		LOG_WARN << "[InitPlayerFromAllData] target scene check refused entry player=" << playerId
 				 << " scene_id=" << ctx.enterInfo.scene_id() << " code=" << result;
-		RefuseInheritedEntry(playerId, "目标场景不存在或无入场权限", ctx);
+		RefuseInheritedEntry(playerId, "target scene missing or entry not permitted", ctx);
 		return entt::null;
 	}
 	auto player = tlsEcs.actorRegistry.create();
@@ -4653,7 +4808,7 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 			}
 		}
 		if (tlsEcs.GetPlayer(playerId) == entt::null)
-			RefuseInheritedEntry(playerId, "新建玩家入场未完成", ctx);
+			RefuseInheritedEntry(playerId, "new player entry did not complete", ctx);
 		return entt::null;
 	}
 
@@ -5443,7 +5598,7 @@ uint32_t PlayerLifecycleSystem::RequestZoneTravel(entt::entity player, uint32_t 
 }
 
 uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t targetZoneId, uint64_t sceneId,
-													uint32_t sceneConfigId)
+													uint32_t sceneConfigId, TravelInitiator initiator)
 {
 	// ── 校验段:任何一条不满足都直接返回 tip,此前不得改任何状态 ──
 	if (targetZoneId == 0)
@@ -5487,7 +5642,11 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	}
 	// gate 会话必须活着:交接的 EnterScene 要用它路由 / 重定向;断线宽限期内的实体拿旧会话去请求,
 	// 会改写离线玩家的 location(与 player_team.cpp HasLiveSession 同一判法)。
-	if (!HasLiveGateSession(player, playerId))
+	// 例外是服务器发起的同 zone 交接(组队跟随)替离线托管中的角色发:重发改为托管落点(不带 gate、带断开那次登录的身份,
+	// PublishAndEnterTravel),scene_manager 放行后直接通知目标节点载入(player-connection-lost-hold.md §4.2)。
+	// 跨 zone 没有托管落点(没有 gate 可重定向),仍要活会话。
+	const bool hostedTravel = initiator == TravelInitiator::kServer && !crossZone && OfflineHostedIdentity(player).has_value();
+	if (!HasLiveGateSession(player, playerId) && !hostedTravel)
 	{
 		return genericFailTip;
 	}
@@ -5528,6 +5687,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
     travel.targetZoneId = targetZoneId;
 	travel.sceneId = sceneId;
 	travel.sceneConfigId = sceneConfigId;
+	travel.serverInitiated = initiator == TravelInitiator::kServer;
 	travel.requestedAtMs = 0; // 0 = 等这次存盘落地;BeginTravelHandoff 写标记时才占代际
 	// 冻结硬上限 / 晚发窗口从这一刻起算(单调时钟,与下面挂 PlayerFrozenComp 同一刻),之后不改。
 	travel.frozenAtSteady = travel_freeze_cap::Clock::now();
@@ -5554,7 +5714,9 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 
 	LOG_INFO << "[ZoneTravel] handoff started for player " << playerId
 			 << " target_zone=" << targetZoneId << (crossZone ? " (cross-zone)" : " (same-zone cross-node)")
-			 << " scene_id=" << sceneId << " scene_conf_id=" << sceneConfigId;
+			 << " scene_id=" << sceneId << " scene_conf_id=" << sceneConfigId
+			 << " initiator=" << (initiator == TravelInitiator::kServer ? "server" : "player")
+			 << " hosted=" << (hostedTravel && !HasLiveGateSession(player, playerId));
 
 	// 已排队由落地回调接手;只有已确认落盘相等才直接交接。拒绝保存不能借无回调分支写标记。
 	// BeginTravelHandoff 内部的失败分支(无 epoch / Redis 断连)会同步解冻并回 tip,这里仍返回
@@ -6413,8 +6575,16 @@ boost::cobalt::task<void> PlayerLifecycleSystem::PublishAndEnterTravel(TravelMar
 		}
 
 		// 已写标记后不能解冻。会话已更换或解绑时不改绑旧会话，沿用销毁和现有踢线判据。
+		// 服务器发起的同 zone 交接(组队跟随)替离线托管中的角色发托管落点:不带 gate,带断开那次登录的身份,scene_manager
+		// 放行后直接通知目标节点载入(player-connection-lost-hold.md §4.2)。重新登录接回了(有活会话)就照常带 gate 发。
 		const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(attempt.player);
-		if (session == nullptr || !HasLiveGateSession(attempt.player, playerId))
+		const bool liveSession = session != nullptr && HasLiveGateSession(attempt.player, playerId);
+		std::optional<HostedIdentity> hostedIdentity;
+		if (!liveSession && travel->serverInitiated && travel->targetZoneId == GetZoneId())
+		{
+			hostedIdentity = OfflineHostedIdentity(attempt.player);
+		}
+		if (!liveSession && !hostedIdentity)
 		{
 			LOG_WARN << "[ZoneTravel] no live gate session for player " << playerId
 					 << " after the handoff mark was written; not sending EnterScene";
@@ -6430,17 +6600,26 @@ boost::cobalt::task<void> PlayerLifecycleSystem::PublishAndEnterTravel(TravelMar
 			co_return;
 		}
 
-		const SessionId sessionId = session->gate_session_id();
 		request.set_player_id(playerId);
 		// 跨 zone 由目标 SceneManager 选实例，同 zone 保留原镜像或副本场景 ID。
 		request.set_scene_id(travel->sceneId);
 		request.set_scene_conf_id(travel->sceneConfigId);
-		request.set_session_id(sessionId);
-		request.set_gate_id(std::to_string(GetGateNodeId(sessionId)));
-		request.set_gate_instance_id(ResolveGateInstanceId(sessionId));
 		request.set_gate_zone_id(GetZoneId());
-		request.set_login_generation(enter_fence::ActingLoginGeneration(
-			tlsEcs.actorRegistry.try_get<PlayerLoginIdentityComp>(attempt.player), sessionId));
+		if (hostedIdentity)
+		{
+			request.set_session_id(hostedIdentity->sessionId);
+			request.set_login_generation(hostedIdentity->loginGeneration);
+			request.set_hosted_placement(true);
+		}
+		else
+		{
+			const SessionId sessionId = session->gate_session_id();
+			request.set_session_id(sessionId);
+			request.set_gate_id(std::to_string(GetGateNodeId(sessionId)));
+			request.set_gate_instance_id(ResolveGateInstanceId(sessionId));
+			request.set_login_generation(enter_fence::ActingLoginGeneration(
+				tlsEcs.actorRegistry.try_get<PlayerLoginIdentityComp>(attempt.player), sessionId));
+		}
 		request.set_zone_id(travel->targetZoneId);
 		// 不填 request_id，避免短时间内后一次合法传送被 60s 去重吞掉。
 		correlationId = NextEnterSceneCorrelationId();
@@ -6454,7 +6633,8 @@ boost::cobalt::task<void> PlayerLifecycleSystem::PublishAndEnterTravel(TravelMar
 			ArmTravelReplyWatchdog(playerId, nowMs, travel_outcome::Evidence::kNoReply, "EnterScene reply timed out");
 			LOG_INFO << "[ZoneTravel] requested EnterScene for player " << playerId << " target_zone=" << request.zone_id()
 					 << " scene_id=" << request.scene_id() << " scene_conf_id=" << request.scene_conf_id()
-					 << " session=" << request.session_id() << " corr=" << correlationId;
+					 << " session=" << request.session_id() << " hosted=" << request.hosted_placement()
+					 << " corr=" << correlationId;
 			return true;
 		}, {});
 	if (!enter || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none)
@@ -6691,6 +6871,11 @@ void PlayerLifecycleSystem::JudgeTravelOutcomeReply(Guid playerId, uint64_t requ
 		facts.receiptIsMine = !location.rollback_receipt().empty() && current->markEpoch != 0 &&
 							  location.rollback_receipt() ==
 								  player_ownership::HandoffRedisValue(current->markEpoch, requestedAtMs);
+		// 同一份回执的待确认形态(两段回执,zone-redis-regression-guard-20261022.md §4.3.4):这次回滚还没确认落盘,
+		// 只用来判 B5′,绝不采纳。与 receiptIsMine 互斥(待确认形态带前缀,不可能等于标记原文)。
+		facts.pendingReceiptIsMine = current->markEpoch != 0 &&
+									 location.rollback_receipt() ==
+										 player_ownership::PendingRollbackReceiptValue(current->markEpoch, requestedAtMs);
 	}
 	const Ownership ownership = travel_outcome::ClassifyOwnership(facts);
 
@@ -6745,6 +6930,25 @@ void PlayerLifecycleSystem::JudgeTravelOutcomeReply(Guid playerId, uint64_t requ
             std::string(reply->element[1]->str, reply->element[1]->len), reasonText, evidence);
 		return;
 	}
+
+	case Ownership::kRollbackUnconfirmed:
+		// B5′ 回执是本次标记原文的待确认形态:scene_manager 把交接回滚到本节点(推路由失败或铸造没确认落盘),回滚本身还没确认落盘
+		// (两段回执,zone-redis-regression-guard-20261022.md §4.3.4)。采纳它 = 拿着一个可能随切主消失的值继续持有,再随
+		// 强制存盘把写权行抬上去,Redis 一旦丢掉它,本节点就成了 Redis 不认识的持有者(之后写不出交接标记)。所以不采纳、
+		// 不解冻,与 B6 同样按"标记已发出"收口(tip + 踢线 34 + 不存盘销毁;冻结那一刻的状态已经落盘,销毁不丢数据)。
+		// 踢线的理由同 B6:回执是本次原文,回滚之后没有任何新落点。玩家重登落回本节点时,scene_manager 先确认那次回滚
+		// 落盘、把回执改成正式回执,再下发 epoch;挑到别的节点会回 ErrHandoffPending,直到 location 被 LeaveScene 清掉。
+		LOG_WARN << "[ZoneTravel][RollbackAdopt] player " << playerId << " was rolled back to this node with a pending receipt ("
+				 << location.rollback_receipt() << "): the rollback is not confirmed durable yet; not adopting owner_epoch "
+				 << redisEpoch << " (cached_epoch=" << cachedEpoch << ", " << reasonText
+				 << ", evidence=" << travel_outcome::EvidenceName(evidence) << ", metric=rollback_unconfirmed)";
+		// 推迟销毁(有未落地存盘)时不计数,由看门狗 / 冻结上限重判(同 B6 的写法)。
+		if (ConcludeHandoffAfterMarkSent(playerId, travel_freeze_cap::MarkSentSite::kRollbackUnconfirmed,
+										 travel_freeze_cap::Clock::now()))
+		{
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().rollbackUnconfirmed);
+		}
+		return;
 
 	case Ownership::kReceiptAnomaly:
 		// B6 回执是本次标记原文,但"回滚之后再无新落点"的交叉校验不成立:owner_epoch 键被淘汰后补种、新旧 scene_manager
@@ -6854,8 +7058,26 @@ void PlayerLifecycleSystem::HandleSceneChangeEnterSceneReply(entt::entity player
 {
 	if (!target.playerRequested)
 	{
-		// 服务器替他发的队伍跟随:玩家没在等结果。被拒(含理论上不该出现的 18:跟随只发本节点上的
-		// 场景)只记日志、队员留在原场景,不起交接、不回 tip —— 跟随不跨节点拉人(team-system.md DV-6)。
+		// 服务器替他发的队伍跟随:玩家没在等结果,一律不回 tip。
+		if (resp.error_code() == kSmErrHandoffPending)
+		{
+			// 队长在本 zone 的别的节点(team-follow-server-trail.md §3.7,2026-11-10 起取代 team-system.md DV-6):
+			// 按同一个目标起服务器发起的同 zone 交接,与玩家自己换图到别的节点同一条链(冻结 → 存盘 → 写标记 → 重发)。
+			// 在线的队员随 gate 路由过去;离线托管的队员重发托管落点,scene_manager 放行后直接通知目标节点载入。
+			LOG_INFO << "[ZoneTravel] team-follow EnterScene for player " << playerId
+					 << " needs a cross-node handoff (scene_manager code=" << resp.error_code()
+					 << "); starting a server-initiated same-zone handoff scene_id=" << target.sceneId
+					 << " corr=" << resp.correlation_id();
+			if (const uint32_t tip = StartTravelHandoff(playerEntity, GetZoneId(), target.sceneId, target.sceneConfigId,
+														TravelInitiator::kServer);
+				tip != kTravelAccepted)
+			{
+				// 起不了交接(刚进战斗 / 刚变成没有月卡的普通断线 / 没有 scene_manager …):留在原场景,下一次跟随检查再试。
+				LOG_INFO << "[ZoneTravel] team-follow handoff not started for player " << playerId << " tip=" << tip
+						 << "; player stays in the current scene";
+			}
+			return;
+		}
 		if (resp.error_code() != 0)
 		{
 			LOG_INFO << "[ZoneTravel] team-follow EnterScene for player " << playerId
@@ -7460,6 +7682,8 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 	// 摘掉组件就无从知道了。
 	const bool crossZone = (travel->targetZoneId != GetZoneId());
 	const uint64_t handoffRequestedAtMs = travel->requestedAtMs;
+	// 服务器发起的交接(组队跟随):玩家没在等结果,未成只记日志、不回失败 tip(计数口径不变)。
+	const bool serverInitiated = travel->serverInitiated;
 	tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(playerEntity);
 
 	if (notifyFailure)
@@ -7482,7 +7706,7 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 
     // 上方已确认同一原资格的H/R转换和标记清理，这里不再发best-effort撤回。
 
-	if (!notifyFailure)
+	if (!notifyFailure || serverInitiated)
 	{
 		return;
 	}

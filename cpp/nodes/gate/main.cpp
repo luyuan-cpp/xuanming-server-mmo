@@ -427,7 +427,7 @@ int main(int argc, char *argv[])
 	const auto* internalAuthSecret = std::getenv(caller_auth::kSecretEnv);
 	if (internalAuthSecret == nullptr || std::string_view(internalAuthSecret).size() < 32)
 	{
-		LOG_ERROR << "内部会话签名密钥缺失或不足32字节，拒绝启动";
+		LOG_ERROR << "Internal session signing secret is missing or shorter than 32 bytes, refusing to start";
 		return EXIT_FAILURE;
 	}
     // 启动首行。事故复盘第一个问题永远是"线上跑的到底是哪一版",这一行直写
@@ -477,12 +477,18 @@ int main(int argc, char *argv[])
     const Node::CanConnectNodeTypeList connectTo = routerMode
         ? Node::CanConnectNodeTypeList{SceneNodeService, eNodeType::ClientRpcRouterNodeService}
         : Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, MatchNodeService};
+    // 从 etcd 发现的类型(docs/design/connection-fanout-subsetting-20261106.md §3.4)= 建连白名单 + 自身 Gate(本 zone;
+    // 注册自检、劫持检测与选号要看)。gate 读注册表与发现快照的地方只有这几类:不看 DataService、PlayerInbox、
+    // PlayerStore、Team、Battle、Friend、Guild;路由模式也不看 Login、SceneManager、Match。
+    Node::DiscoveryNodeTypeList discover(connectTo.begin(), connectTo.end());
+    discover.insert(GateNodeService);
 
     // 检查旧的 NODE_ETCD_TRANSPORT 环境变量(etcd 只剩 muduo_h2 传输;设成 grpc 会打 WARN),须在 Node 构造前调用。
     etcd_transport::InstallFromEnv();
     return node::entry::RunSimpleNodeMainWithOwnedContext<GateHandler, GateRuntimeContext, GateNodeHooks>(
         GateNodeService,
         connectTo,
+        discover,
         [connectTo, routerMode](Node &node, GateRuntimeContext &context)
         {
             // 先过安全门禁,再做任何别的初始化:配置有问题就不该把服务拉起来。

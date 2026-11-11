@@ -267,6 +267,66 @@
 
 **附带观察：** 活跃度账本（`player_activity.cpp`）的领取记录永不清理，满 4096 条后该功能对这名玩家永久回 `kServiceUnavailable`，按日周期约 800 天；仓内 `game_config.yaml` 的 `consumer_enabled=false` 与 `player_inbox.yaml` 的 `EnqueueTypes` 组合，本地按这份配置起服时全球结算不会被应用（K8s 部署门禁会拒绝这种组合）。
 
+### 3.10 第四波：换视角查找第 2 轮（2026-11-10，基线 HEAD `e0790ad40` 加工作区）
+
+三路，即脚本 `D_ROUNDS[1]`：按资产追踪物品、装备、宠物；按故障查 Kafka 重投、乱序、再均衡、位点回退和两步之间崩溃；按入口查 Go 服务的 gRPC / HTTP 与 admin / GM 接口。查找重点是 10-31 之后的新路径：player_store 认领与写权行、`player:{id}:handoff_fence`、别名合服、player_inbox、BoundConsumerGroup、发号器、GM 回收与资产人工终结。
+
+- 去重清单 97 条，取自本文 §3 各表、§5.0 末尾和一致性保证图 §2、§6.2，存在交接目录 `dsweep-round2-args.json`；三路原始返回存在同目录 `dsweep-round2-results/`。
+- 起跑时工作区约 70 个文件有未提交改动，结束时约 300 个（其他会话并行在改）。代理按工作区读，读到在途改动都注明了。
+- 脚本 `PRE` 的 HEAD、在途文件说明与本轮三个视角已按 11-09 的机制改写。
+
+结果：没有 high，没有 medium；新 low 2 条，其中 r2-doc#1 只是注释与日志漂移。r2-trade#1 是行为问题，按"连续两轮无新发现才停"还要跑第 3 轮（交接 §4.2 的缺省上限是 3 轮）。
+
+**low：**
+
+| 编号 | 问题 | 位置 | 可达性 | 已登记 | 自信度 |
+|---|---|---|---|---|---|
+| r2-trade#1 | 单玩家物品或货币获取封禁，让交易托管的交付腿和退回腿都记 REJECTED，合同整单转人工，人工退款又被已到账的腿挡住。买家被封某物品时，货款已到卖家，物品停在 trade 库。卖家被封自己托管的物品时，过期或撤单的退回腿也被当成「新增获得」拒掉，物品一直停在托管里。货币封禁同理 | 封禁判据对所有转入一律生效：`cpp/libs/services/scene/player/system/asset_op_system.cpp` 的 `ApplyCredit`（(a) 货币、(a′) 物品与完整实例，约 :1031-1062）；退回腿：`go/trade/internal/commerce/engine.go` 约 :616-628、:733-752；有腿没到账就转人工：约 :754-758；人工退款遇已到账的腿拒绝：`manual.go` 约 :352-364；设计说法：`docs/design/jubaozhai-market.md:142`（「GM 封禁 → 终局拒绝 → 退款 + 告警」） | 门控：单玩家封禁只经收件箱 GM 域下达。`go/player_inbox/etc/player_inbox.yaml:130` 缺省只开 BATTLE_SETTLEMENT，GM 封禁四类在 :122-126 的注释里，按上线顺序以后一次性填入；部署按 git 里这份 yaml 渲染。打开之后，被封玩家只要参与相关交易就触发，不需要故障。不丢、不复制，资产冻在托管里等人工 | 部分登记：`player-inbox-service.md:317` 只写了交付腿 REJECTED，没写整单转人工、钱货分离、退回腿也被拒；`jubaozhai-market.md:142` 与引擎行为不符 | 很可能。主会话抽查：判据、转人工、退款拒绝与 yaml 缺省都属实 |
+| r2-doc#1 | 结果主题、资产流水与 guild 发号的注释和日志还按旧机制写。两个结果消费者的文件头说 battle 直发 `match-results`，实际唯一的生产者是 match 终局发件箱，只发 COMPLETE，ABORT 不进 topic。`recall_plan.go` 文件头与 `exploit_loss_prevention_zh.md:117` 仍说 scene 在提交前发流水，11-05 起提交闸门放行之后才发（同文 :157 已改）。guild `IdSegment.Enabled=false` 时日志写 snowflake-only，实际建帮全部失败 | `go/guild/internal/kafka/trial_result_consumer.go:5`、`:77`；`go/match/internal/kafka/result_consumer.go:27`、`:182`；`go/data_service/internal/logic/recall_plan.go:24`；`docs/design/exploit_loss_prevention_zh.md:117`；`go/guild/internal/svc/guild_id_minter.go:37` | 只影响阅读与排障，不改任何数据结局 | 未登记 | 确定 |
+
+**排除与覆盖要点**（各路原文在 `dsweep-round2-results/*.json`，共排除约 70 项）：
+
+- **物品**：查了号段客户端的迟到响应、发号器三份记录、MixGuid 与 MixID 双射、临时格取回、`ConsumeInventoryAndGrant`、资产通道收据与废黜后重放、player_store 整笔快照、GM 回收物品的口径，以及别名合服下的 guid 归属。没有找到重号、一物两处或数量不守恒。
+- **Kafka 与崩溃**：逐个 topic 列了生产者、消费者、key 和幂等闸门（match-results、gate-cmd、scene-cmd、transaction_log、player_snapshot 等）。下面这些情形都被同事务收据、行锁或写权判定挡住：match 发件箱重投；位点回退后重放 7 天；BoundConsumerGroup 再均衡时有消息在途；流水消费者拿旧代次提交；player_store 回包丢失、旧请求晚到；判死释放与无资格撤销中途崩溃；发号器只写成一部分；收件箱已应用未确认；GM 回收冻结中途崩溃。AGENTS §7 第 2、3 条（`target_instance_id`、key 是业务实体 id）都满足。
+- **Go 入口**：按「方法 → 调用方 → 写什么 → 幂等键 → 超时后实际已成功时的结果」核了 data_service、go/db、player_inbox、login、mail、rank、trade、guild、match 的全部入口，以及本仓 Java 网关的 admin 接口。不鉴权的写入口有 RegisterPlayerZone、ReservePlayerName、AllocateIdSegment，三个都不覆盖已有数据，恶意调用最多让建角失败。go/db 签名有 ±5 分钟的重放窗口，重放会被序号与代次判定挡住。
+- **文档说法不准，不算数据问题**：
+  - `horizontal-scale-logical-db.md:83` 写写者池「启动阶段」事务外纯读遇冻结放行，实际一直持续到本 boot 第一个写事务过闸门。数据侧推翻了：放弃与人工终结都要安静间隔和见证 CAS，读到旧数据只会更保守。
+  - `player_bag_handler.cpp:273` 注释说临时格取回在战斗中拒绝，实际放行。
+  - `QueryTransactionLog`、`ListPlayerSnapshots` 不要求运维口令。它们只读，属于隐私面。
+- **新路径里本轮没读到的**（第 3 轮按视角补了一部分）：trade 的 `rmb.go` / `auction.go`；player_inbox 的 `store_consume.go` / `reconcile.go` / `shardowner`；C++ 交接段与 `handoff_sql_barrier.h`；别名合服的 `route_store.go` / `directory_shards.go`；发号器的 `etcd_store.go` 与 C++ `guid_segment_client.cpp`；assetop 的 `manual_evidence.go` / `abandon.go`。
+- **只读核对**：三路转录里没有 Edit / Write 调用，`git show` 没有重定向，%TEMP% 里没有仓库文件副本。
+
+### 3.11 第四波：换视角查找第 3 轮（2026-11-10，基线同 §3.10）
+
+三路，即脚本 `D_ROUNDS[2]`：按资产追踪帮会资金与帮贡、邮件附件、任务 / 成就 / 活跃度奖励；按故障查时钟回拨与跳变、滚动升级混版；按入口查周期任务与多副本分工（Kafka 消费者第 2 轮已逐个过）。交接 §4.2 规定换视角查找缺省最多 3 轮，这是最后一轮。
+
+- 去重清单 100 条：第 2 轮的 97 条，加 r2-trade#1、r2-doc#1 与三条文档类观察。存在交接目录 `dsweep-round3-args.json`；三路原始返回在 `dsweep-round3-results/`。
+- 为省额度，本轮提示不再要求通读四份审计文档，改为读去重清单和 §5.0，报之前按关键词 grep。
+- 审计期间工作区约 300 个文件有其他会话的在途改动（match 终局作废、assetop 重投分片、guild / mail、发布轨道等），代理按工作区读、注明未提交；半成品不作为缺陷报。
+
+结果：没有 high；新 medium 1 条（r2-ps#11，仅混版窗口，已对抗复核），新 low 1 条（r2-doc#2，文档）。本轮仍有新发现，**因轮数上限停止**，换视角查找没有达到「连续两轮无新发现」。是否续跑由负责人定：若要续，r2-ps#11 修完后按 `D_ROUNDS[3]` 跑一轮（跨区与号段、网络分区与租约、运维 CLI）。
+
+**medium（仅混版窗口）：**
+
+| 编号 | 问题 | 位置 | 触发时序 | 可达性 | 已登记 | 自信度 |
+|---|---|---|---|---|---|---|
+| r2-ps#11 | **scene 比 go/db 新时，认领不核对 go/db 认识的世代，照常抬代次；带新行种的存盘被旧 go/db 判成 INVALID，走不到 SCHEMA_TOO_NEW，玩家下线时不存盘就销毁，认领以来的进度（含资产）全丢** | 认领判定只比库里世代与 scene 世代、不比 go/db 的 `knownGen`：`go/db/internal/playerstore/decide.go` 的 `decideClaim`，调用处 `store.go` 的 LoadAndClaim；未知行种在判世代之前就回 INVALID：`store.go` 的 `validateSave`（按本二进制编译进来的 `PlayerStoreKind_name` 判），`decideSave` 的 TOO_NEW 走不到；C++ 只有 NO_OWNER、TOO_NEW、UNSPECIFIED 重试，其余按确定性拒绝并把发过的行种并入 uncertain：`player_store_client.cpp` 处理存盘回包的 switch；退出中被拒直接 `DestroyDeposedPlayer`：`player_lifecycle.cpp` 的 `HandlePlayerSaveRefused` → `DisposeRefusedSave`；默认发布先发 scene 后发 go/db：`tools/scripts/k8s_deploy.ps1` zone-up 主流程先 apply scene 清单（约 :14870-14880），再 `Apply-GoSvcManifests`（约 :14916），Agones 模式下不等 Fleet 就绪（约 :9954-9963）；Go 服务 tag 缺省跟随 NodeImage（约 :853-859）；设计反而写「不丢数据」：`mixed-version-persist-field-protection.md` §8.2、§8.3 go/db 行 | ① 版本 R2 新增持久字段并放进新行种 K（`player-save-direct-commit.md` §1.1「新加一行取下一个空闲号」），世代 N → N+1。② 按默认 `zone-up` 发布，zone z 的新 scene 先起来，服务它的 go/db 还是 R1。③ 玩家 P 登录到 R2 scene，认领落到 R1 go/db，判 CLAIMED，写权行抬到这个实例。④ 此后每笔存盘都带世代 N+1：不含 K 的回 SCHEMA_TOO_NEW，按重试保留；P 用了新功能、K 变脏后，存盘回 INVALID，K 并入 uncertain，之后每一笔都是 INVALID。⑤ P 在 go/db 换完之前下线：退出存盘 INVALID，不存盘销毁，认领以来的进度全丢。没碰 K 的玩家下线时是 TOO_NEW，实体保留到 go/db 升级后落盘，不丢；scene 进程在那之前退出则同样丢 | 仅混版窗口，没有开关。默认发布流程即可触发：任何一次带新行种的版本按默认 `zone-up` 发布，scene 先于 go/db 换版本。`release-checklist.md` 没有「先只升 go/db」的步骤，`k8s_deploy.ps1` 没有世代预检（§8.2「可选项（第 4 批）」未做）；文档里的发布顺序只是人工前提。按 r2-ps#1 的先例，滚动发布里默认可达的丢资产本应 high，只在混版窗口出现降一级，定 medium。项目未上线，首次上线整批起步不触发；上线后第一次带新行种的发布前必修 | 未登记；§8.2「顺序如果被违反，C1 / C2 只会延后或失败，不会丢数据」与 §8.3「go/db 回滚更低不丢数据」是旧 Redis 路径（有父快照兜底）的结论，在 player_store 路径上不成立 | 很可能。查找员原报 low（按「人为违反顺序」）；主会话核对后补了默认发布先 scene 后 go/db 的证据，暂定 medium。对抗复核：待填 |
+
+**low：**
+
+| 编号 | 问题 | 位置 | 可达性 | 已登记 | 自信度 |
+|---|---|---|---|---|---|
+| r2-doc#2 | 收件箱终态行已改为永久收据（`SweepTerminal` 是空操作），但同一份设计的 §9.1、状态表、判重推导，`loops.go` 头注释与 `player_inbox.yaml` 注释仍写「终态行 30 天后物理删除、清理循环逐行 DELETE」；设计 :48 的容量说明只算 GM 处置，漏了战斗结算域每局每人永久一行；`ReconcilePlayer` 单玩家读上限 5000 行，老玩家会被截断成部分核对。有人照 §9.1 把删除恢复回去，就会重新打开换主后同一 request_id 再次入箱的口子 | `go/player_inbox/internal/inbox/store_maintenance.go:16-23`；`loops.go:22-26`（另 :128-130、:177、:346-378 仍校验保留期、照常起空转的清理循环）；`docs/design/player-inbox-service.md:48`（已改）与 :491、:532、:831、:1247（未改）；`go/player_inbox/etc/player_inbox.yaml:131-133` | 只是文档与注释，没有资产后果：全仓没有删 `player_inbox_item` 的语句，判重先于签发时间窗，永久保留只会让判重更严 | 未登记（:48 记了改为永久收据，正文与注释没跟着改） | 确定。主会话抽查属实 |
+
+**排除与覆盖要点**（各路原文在 `dsweep-round3-results/*.json`，共排除约 70 项）：
+
+- **帮会、邮件与奖励**：逐类列了「产出点 → 落在哪个库或哪一行 → 幂等键 → 与玩家存档是否同一次提交 → 失败时谁兜底」。捐献、帮会商店、点灯 / 团圆、历练奖励、退帮与解散、邮件领取、rank 封榜奖励、C++ 任务与活跃度领奖、GM 回收，都由同事务 CAS、帮会行锁、SETTLED 闸门、已提交账本收据或同一份 player_store 快照保证恰好一次。assetopfix 人工终结与 180 天自动放弃推演过两种交错，都不会一物两得。成就没有领奖入口。
+- **时钟**：列了「比较点 → 两边时钟各出自哪台机器 → 偏差或回拨时的后果」。owner_epoch 墙钟地板、handoff_fence（无时间字段）、save_seq、发号器时间下限、收件箱 seq 与签发窗、assetop 租约与安静间隔、match 全用 TiDB 钟、FIGHTING 续冻、再入屏障、LeaveScene（已改 Redis TIME）、guild 历练、限购周期键、神秘商人轮次、mail / rank 过期，偏差或回拨只造成延迟、拒绝或少扣。B1 同类（本机钟与 TiDB 钟混比）只在 trade 合同过期处找到一处，没有数据后果。
+- **混版其余三条线**：收件箱遇未知类型停域、不记终态；match 终局协议遇未知字段一律拒；资产通道遇未知流号 Alert、未知币种 RETRY、未知字段保留。旧 scene 认领新世代行被 `decideClaim` 拒掉，方向安全，代价是金丝雀 zone 回退后或跨 zone 去 stable zone 会被挡住（可用性）。这与 `release-track-gray-canary.md:124`「不会出现一段有状态流程跨两个版本」的说法不符，只是文档问题。
+- **周期任务与多副本**：列了「任务 → 谁在跑 → 改什么 → 换主或并发时靠什么互斥 → 和玩家在线写的先后」，覆盖 player_inbox 对账与清理、assetop 重投、放弃与日对账、guild 待入队物品、各服务清扫、rank 奖励投递、match 发件箱与按池撮合、data_service 回收派发与角色收尾、trade 合同推进、scene_manager 领导者任务与判死释放、player_locator 会话对账、C++ 定时存盘与只顺带推迟、身份不确认补存、收件箱 Tick、战斗 reaper、scene 归属核对。提交点都有行锁、版本、租约令牌或 CAS，换主重叠最多重复扫一次。
+- **文档说法不准，不算数据问题**：`player_exit_intent.h` 注释仍说「MySQL 补齐由存盘意图补投承担」，引用的是已删的 saveoutbox。第 2 轮 `fault-kafka-crash.json` 排除项里「收件箱终态行保留 30 天」的说法也已过时，以 r2-doc#2 为准。
+- **只读核对**：三路转录里没有 Edit / Write 调用，`git show` 没有重定向，%TEMP% 里没有仓库文件副本。其中一路的 grep 超时被工具转入后台，在会话的 tasks 目录生成过一个空输出文件，已停掉。
+
 ## 4. 已排除（尝试推翻成功）
 
 

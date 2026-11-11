@@ -393,7 +393,7 @@ func runTrade(c config.Config) (runErr error) {
 			// 交易没有持久 Kafka consumer；Mall 拉新订单与清理都受 prepared SOURCE 拦截。
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("trade 排空 HOLD: %v", err)
+			logx.Errorf("trade drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -596,17 +596,17 @@ func logReport(stage string, r schemamigrate.Report) {
 // (fail-closed),进程走不到横幅 —— 所以这里不再有"开着但不可用"的第三种说法。
 func assetChannelLabel(svcCtx *svc.ServiceContext) string {
 	if svcCtx.Assets.Enabled() {
-		return "启用 (caller=" + svc.AssetOpCaller + ",密钥来自环境变量 " + svc.AssetOpSecretEnv +
-			";scene 节点镜像 + outbox 重投循环已起)"
+		return "enabled (caller=" + svc.AssetOpCaller + ", secret from environment variable " + svc.AssetOpSecretEnv +
+			"; scene node mirror + outbox redelivery loop started)"
 	}
-	return "关闭 (AssetOp.Enabled=false;不拨共享 Redis、不建 scene 节点镜像、不起重投循环;" +
-		"浏览 / 详情 / 收藏照常,上架托管与交付一律被拒)"
+	return "disabled (AssetOp.Enabled=false; no shared Redis dial, no scene node mirror, no redelivery loop; " +
+		"browse / detail / favorites unaffected, listing escrow and delivery are all rejected)"
 }
 
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "拒绝常驻自动迁移；请先执行独立 -migrate"
+		return "resident auto-migration refused; run standalone -migrate first"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
 }

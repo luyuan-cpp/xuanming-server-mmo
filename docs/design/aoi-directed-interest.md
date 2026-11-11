@@ -1,6 +1,6 @@
 # AOI 单向关注与范围外同步
 
-状态：服务端已落码（2026-11-05），未编译，待 Codex 按文末「验证」执行；Java 版待做。2026-11-10 空间关注改为任一方位置变化后按距离重判（见「空间关注的评估时机」），同样未编译；这部分 Java 版早已按同一口径实现。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
+状态：服务端已落码（2026-11-05），未编译，待 Codex 按文末「验证」执行；Java 版待做。2026-11-10 空间关注改为任一方位置变化后按距离重判（见「空间关注的评估时机」），这部分 Java 版早已按同一口径实现；同日加了战斗关注与名额空出后补回附近的人（见「战斗关注」「名额空出后补回附近的人」），Java 版待做。2026-11-10 的改动都未编译。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
 
 ## 前言
 
@@ -49,6 +49,54 @@
 - **隐身结束不等位移。** `RefreshTargetVisibility` 当场让附近能看见它的实体补上空间来源。
 - 口径常量集中在 `spatial/constants/view.h`：`kMaxViewRadius`、`kAoiLeaveRadiusFactor`、`kAoiReevaluateDistance`、`kAoiHexSize`。上次评估位置存在按需组件 `AoiEvaluatedAtComp`。
 
+## 关注列表优先于格子
+
+关注列表是结果，格子只是手段。格子和距离只负责找附近的候选；客户端显示谁，由关注列表决定。名额满了、服务器压力上来时，比的是「我现在有多在意它」，不是谁离得近：
+
+- 每条关注记着它的来源，权重取各来源标签里最高的一个（标签与权重表见 [AOI 优先级设计](aoi_priority_design_zh.md)）。
+- 满表时新来的只有权重严格更高才能挤掉最低的那条；被挤掉的只剩空间来源时整条删除，有显式来源时暂隐、关系保留。
+- 显式来源不看距离：交手对象、技能追踪的目标在视野外也照常显示和同步。
+
+## 战斗关注
+
+战斗时先看交手的人，包括敌人和友方；不在战斗时，任务 NPC 排在前面。兴趣随时在变，实现方式是**来源有寿命，权重表不变**：
+
+| 规则 | 口径 |
+| --- | --- |
+| 什么算交手 | 一次伤害（`SkillSystem` 的 `DealDamage`，目标没死时）或一跳真回了血的治疗（`kBuffTypeHealthRegenerationBasedOnLostHealth`，施法者是别人时）。第一步只做直接交手：我打的、打我的、我治疗的、治疗我的 |
+| 交手时做什么 | 双方互相登记显式来源 `AoiFollowKind::kCombat`（每对最多一份，id 恒为 0），标签 `AoiPriority::kCombat`，脱战计时重新开始。离得再远也互相看得见、收得到对方的移动与技能 |
+| 权重 | `kCombat` 在每张权重表里都高于除 `kPinned` 外的所有标签（`aoi_priority.h` 用 `static_assert` 守住）。满表时交手对象先挤掉别的 |
+| 脱战 | 一对实体 `kCombatDisengageSeconds`（10 秒）没有再交手，双方撤销交手来源，这就是知乎原文的 lazy time。对方仍在附近就照旧按空间来源显示，不发移除 |
+| 死亡 | 死者的全部交手关系立即结束（`HandleTargetDeath` 调 `CombatEngagementSystem::OnDeath`）；致死的一击不再登记交手 |
+| 离场 | `AoiSystem::OnLeaveScene` 照常清掉全部关注并发一次移除；交手记录在下一次脱战计时里因为不在同一场景而清掉，不再发消息 |
+
+于是「战斗中交手对象排在最前、脱战后任务 NPC 自然回到最前」不需要任何人去切换表：交手来源只在交手期间存在，它一撤，原来被挤成暂隐的任务 NPC 由 `FillFreeSlots` 补回，被挤掉的附近的人由下一节补回。
+
+实现在 `combat/engagement/`：`CombatEngagementSystem`（`RecordInteraction` / `Update` / `OnDeath`）与按需组件 `CombatEngagementComp`（对方 → 距脱战还剩的秒数，两边各记一份、互为镜像）。`World::Update` 每个模拟步在 `BuffSystem::Update` 之后调一次 `CombatEngagementSystem::Update`。
+
+**第二步（未做）**：「和我打同一个怪的其他人」也算友方交手，要靠 NPC 的仇恨列表（谁打过它）推出来；仇恨列表本身还没有，等它落地时在同一个入口登记。
+
+## 名额空出后补回附近的人
+
+被拒或被挤掉的附近候选不留条目（空间来源以「在显示」为前提），所以名额空出时 `FillFreeSlots` 只能补回暂隐的显式关注，补不回附近的人。打完架站着不动时，战斗期间被挤掉的 NPC 会一直不回来。规则：
+
+- `InterestSystem` 拒收附近候选、或挤掉只剩空间来源的条目时，给观察者打上空标记 `AoiNearbyRefillComp`。
+- `AoiSystem::Update` 发现带标记的观察者又有空名额，就对它做一次完整重判（同位移重判），并在重判开始时摘掉标记；重判中再被拒会重新打上。
+- 只有真被拒过的观察者才会重扫，名额没空不重扫，开销有界。
+
+**压力收缩时裁表（未做）**：容量按服务器压力调小时，应按权重裁掉超出的最低条目。`ScenePressureComp` 现在没人写，容量实际固定为 100；等压力监控接上时一起做。
+
+## 被否掉的做法：按观察者状态切换权重表
+
+另一种思路是让权重本身随观察者状态变化：给每种场景配「平时」「战斗中」等几张表，观察者进战、脱战时换表并整表重排。负责人 2026-11-10 讨论时提出过，比较后定为不用，作为反例记在这里：
+
+- **两份真相**。「我在和谁交手」本身就是事实；换表还得再维护一个「观察者处于什么状态」，两者要时时对齐。换了表也照样要知道具体在和谁交手，模式替代不了逐个目标的来源，只是在上面又叠了一层。
+- **整表重排、来回闪**。一次换表会同时改变表里所有条目的权重，进战、脱战在混战里来回切，每次都整表重排，客户端收到成批的创建、移除。来源有寿命只影响来源真有变化的那几条，10 秒的寿命本身就是防抖。
+- **组合爆炸**。边打架边做任务、PvP 里有 Boss、组队又被别人打，该用哪张表？状态一多，表就要按组合配。来源模型里这些只是同一条目上多了几个来源，取最高的那个。
+- **难测、难讲清**。静态表下一条关注的权重只取决于它有哪些来源，是纯函数；换表之后还取决于观察者此刻的模式和切换顺序。
+
+以后加新的兴趣（选中目标、交易对象、任务追踪目标），做法都一样：加一种有寿命的来源，在权重表里给它的标签排个位置，不改流程。
+
 ## 离场和销毁
 
 玩家、NPC 或其他实体离场、换场景或销毁时，从该实体的两张索引清理所有入边和出边，并通知仍需收到移除消息的观察者。清理只访问与该实体直接关联的关系，不遍历全节点的 `AoiListComp`，也不依赖实体仍有网格组件。清理应可重复调用，旧实体关系不能泄漏给复用的实体句柄。需要在新场景继续关注的关系，由玩法在双方重新满足场景条件后建立。
@@ -66,7 +114,12 @@
 | A、B 同在一格相距 14 m，B 走到 5 m（不跨格）；或 B 跨进以 A 所在格为邻格的格子后再走近 | 走进 10 m 后双方各收一次创建；位置不再变时不重复发送 |
 | A、B 互相可见，B 走到 15 m 再到 21 m（仍在邻格内），再回到 15 m、10 m | 15 m 保持显示；21 m 双方各收一次移除；回到 15 m 不重新创建，10 m（含等号）重新创建 |
 | B 移动中走进视野半径但累计位移不足 1 m，随后停步 | 不足 1 m 时先不评估；停步当帧按精确位置评估并创建 |
-| A 满表拒收 B，之后 A 空出名额 | 任一方下一次重判时补上 A 对 B 的关注 |
+| A 满表拒收 B，之后 A 空出名额 | 下一帧补上 A 对 B 的关注，不用等谁走动；名额没空时不重扫 |
+| A、B 相距 120 m，A 打了 B 一下 | 双方各收一次创建，互相收得到移动；再打只续期，不重复创建 |
+| 交手后 10 秒没再交手 | 双方各收一次移除；对方仍在附近就继续显示，不发移除 |
+| A 的表满了全是任务 NPC，A 被远处的敌人打 | 敌人挤掉一个任务 NPC（转暂隐）；脱战后敌人移除、那个任务 NPC 重新创建 |
+| 打架时附近的 NPC 被交手对象挤掉，脱战后 A 站着不动 | 下一帧把附近的 NPC 补回来 |
+| B 被打死；或 B 离场 | 死亡：交手双方立即各收一次移除；离场：只收离场那一次移除，交手记录随后清掉 |
 
 ## 实现
 
@@ -90,7 +143,9 @@
 | `AoiSystem::Follow(watcher, target, grant)` / `Unfollow(watcher, target, source)` | 玩法建立和撤销显式关注，必要时立即下发创建或移除 |
 | `AoiSystem::RefreshTargetVisibility(target)` | `BuffSystem` 在隐身标签出现、消失时调用 |
 | `AoiSystem::OnLeaveScene(entity)` | 离场、换场景、销毁前的唯一 AOI 清理入口；`DestroyPlayer` 兜底补调 `LeaveCurrentScene` |
-| `AoiSystem::Update` | 更新格子成员；首次入格或位置变化到了重判时机时，按距离重判空间来源（两个方向），只增删空间来源 |
+| `AoiSystem::Update` | 更新格子成员；首次入格、位置变化到了重判时机、或有待补回的附近候选且有空名额时，按距离重判空间来源（两个方向），只增删空间来源 |
+| `CombatEngagementSystem::RecordInteraction(source, target)` | 一次伤害或一跳治疗：双方登记或续期交手来源 |
+| `CombatEngagementSystem::Update(delta)` / `OnDeath(entity)` | 脱战计时到时、死亡时撤销交手来源 |
 | `InterestSystem::GetVisibleWatchers(target, out)` | 移动、属性、技能广播的接收者 |
 
 `InterestSystem` 的写函数把可见性变化按发生顺序写进 `AoiVisibilityChanges`。`AoiSystem::SendVisibilityChanges` 求出每对（观察者，目标）的净变化，同一批里显示又隐藏的不发；只涉及一个目标的观察者按目标合并成一次广播，涉及多个目标的收一条列表消息；离场者的移除用 `ActorDestroyS2C`。消息号、消息体与客户端契约不变。
@@ -113,7 +168,7 @@
 未编译。交给 Codex，在仓库根目录用 VS 2026 Developer PowerShell 串行执行：
 
 1. 先编库：`msbuild cpp/libs/modules/modules.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`，再 `msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`。测试工程链接预编好的库，改了库不先编库就会跑旧代码。
-2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、满表自愈、显式关注不随距离移除、隐身）。
+2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。
 3. 编 Scene 节点，确认 `actor_state_attribute_sync.cpp`、`buff.cpp`、`movement.cpp` 链接无误。
 
 旧 `Pin/Unpin` 的删除见[第六批修复记录](../handoff/ecs-refactor/batch6-review-fixes.md) T3.4，那次删掉的是只在离场时全节点扫描的远端清理；现在由反向索引承担同一职责。

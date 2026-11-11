@@ -296,7 +296,7 @@ func runWorldOrphanTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job
 		removeResidualSceneMembers(svcCtx, sceneID, zone, nodeID, job.Claim.Members)
 	}
 	if err := releaseTeardownRoom(ctx, svcCtx, job); err != nil {
-		deferred = append(deferred, "take the Agones release step")
+		deferred = append(deferred, "release the Agones room")
 	}
 	return teardownDeferred(deferred)
 }

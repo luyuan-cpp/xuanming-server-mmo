@@ -111,12 +111,42 @@ func markNodeDeath(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) err
 // 不清的话,一个「死了又活过来」的 node_id 会被上一次死亡时刻继续压着 ——
 // 虽然屏障总会走完,但那段时间里它作为**老属主**的场景无法被改派,而它此刻
 // 其实是活的,IsNodeAlive 也说活,判定结果自相矛盾。
-func clearNodeDeath(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) {
+// clearNodeDeathForInstanceScript:只有这次注册的 node_uuid 等于判死那一代时才删 death_at。
+// KEYS[1] = node:zone:{z}:{n}:death_at,KEYS[2] = node:zone:{z}:{n}:reconcile_instance(同一个 zone,同一个控制域实例,
+// 与收尾入队脚本同一口径);ARGV[1] = 这次注册的 node_uuid。
+// 返回 1 = 删了;0 = 判死的不是这一代或不知道是谁,屏障留着;-1 = 本来就没有 death_at。重放安全。
+const clearNodeDeathForInstanceScript = `
+if redis.call('EXISTS', KEYS[1]) == 0 then
+  return -1
+end
+local dead = redis.call('GET', KEYS[2])
+if dead and dead ~= '' and dead == ARGV[1] then
+  redis.call('DEL', KEYS[1])
+  return 1
+end
+return 0
+`
+
+// clearNodeDeathForInstance 在节点(重新)注册时抹掉死亡标记,但只在回来的就是判死的那一代进程(node_uuid 相同)时抹
+// (docs/design/infra-reconnect-overview.md §4.1 R15)。
+// 新进程按「最小空闲号」接走同一个 node_id 时,它的注册不能删老实例的 death_at:否则 CanReclaimDeadNode 走
+// 「没有 death_at ⇒ 放行」,老实例 20 秒的再入屏障对死节点收尾、world_init、改派、rebalance、孤儿清理全部失效,
+// 老进程最后几秒的存盘会被 owner_epoch 挡掉 —— 这正是屏障(GO-6)要防的情形。
+// 不知道判死那一代是谁(没有 reconcile_instance 记录)时同样留着:屏障只会让接管多等一会儿,删错了才会丢进度。
+// 留着时 IsNodeAlive 说新进程活着、而老实例名下的场景还被屏障压着,这两个判定针对的是两代进程,不矛盾。
+func clearNodeDeathForInstance(svcCtx *svc.ServiceContext, zoneID uint32, nodeID, nodeUUID string) {
 	if nodeID == "" {
 		return
 	}
-	if _, err := svcCtx.Redis.Del(nodeDeathAtKey(zoneID, nodeID)); err != nil {
+	res, err := svcCtx.Redis.Eval(clearNodeDeathForInstanceScript,
+		[]string{nodeDeathAtKey(zoneID, nodeID), nodeReconcileInstanceKey(zoneID, nodeID)}, nodeUUID)
+	if err != nil {
 		logx.Errorf("[ReentryBarrier] Failed to clear death_at: zone=%d node=%s err=%v", zoneID, nodeID, err)
+		return
+	}
+	if kept, _ := res.(int64); kept == 0 {
+		logx.Infof("[ReentryBarrier] Kept death_at on re-registration: zone=%d node=%s uuid=%s is not the instance that was declared dead; its reentry barrier still applies",
+			zoneID, nodeID, nodeUUID)
 	}
 }
 

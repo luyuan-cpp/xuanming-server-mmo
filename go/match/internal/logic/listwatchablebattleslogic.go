@@ -8,6 +8,7 @@ import (
 	"match/internal/svc"
 
 	matchpb "proto/match"
+	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -49,7 +50,20 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		limit = maxWatchableListLimit
 	}
 
-	pairs, err := l.svcCtx.MatchRedis.ZrevrangeWithScores(spectateBattlesActiveKey, 0, int64(limit)-1)
+	// 发布轨道(设计 §2.6):stable 观众看不到 canary 对局(赛事局也一样),按成局原件记的轨道过滤,不摘索引(canary 观众照样能看)。
+	// canary 镜像里有节点时多读一倍候选,被滤掉的场不至于让这一页变短;镜像为空时不多读,残留的 canary 场照样滤掉,
+	// 只是这一页可能短一点(与懒剔除不回填同口径)。轨道读不出是内部链路故障。
+	viewerTrack, err := sessionReleaseTrack(l.ctx)
+	if err != nil {
+		l.Errorf("[spectate] Failed to read the viewer release track: %v", err)
+		return nil, err
+	}
+	scan := limit
+	if !viewerTrack.IsCanary() && canaryBattlesMayExist(l.svcCtx) {
+		scan = 2 * limit
+	}
+
+	pairs, err := l.svcCtx.MatchRedis.ZrevrangeWithScores(spectateBattlesActiveKey, 0, int64(scan)-1)
 	if err != nil {
 		l.Errorf("[spectate] Failed to read spectator index: %v", err)
 		return nil, err
@@ -63,7 +77,7 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		if err := l.ctx.Err(); err != nil {
 			return nil, err
 		}
-		if summary := l.watchableSummary(battleId); summary != nil {
+		if summary := l.watchableSummary(battleId, viewerTrack); summary != nil {
 			summary.Featured = true
 			battles = append(battles, summary)
 			listed[battleId] = true
@@ -91,7 +105,7 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 			removeSpectateBattle(l.svcCtx, battleId)
 			continue
 		}
-		if summary := l.watchableSummary(battleId); summary != nil {
+		if summary := l.watchableSummary(battleId, viewerTrack); summary != nil {
 			battles = append(battles, summary)
 		}
 	}
@@ -123,7 +137,8 @@ func (l *ListWatchableBattlesLogic) featuredBattleIds(limit uint32) []uint64 {
 
 // watchableSummary 读一场的摘要;不能列出时返回 nil,并按原因清理索引:成局不存在或终局已落定即残留,这场的观战数据一起删;
 // 私密局只摘活跃集合成员;读失败(SQL 抖动 / 原件损坏)跳过本条,不剔除,下次可能恢复。
-func (l *ListWatchableBattlesLogic) watchableSummary(battleId uint64) *matchpb.BattleWatchSummary {
+// 这个观众按轨道看不了的场(viewerMayWatch)也返回 nil,但不动索引:换一个观众它照样能列出。
+func (l *ListWatchableBattlesLogic) watchableSummary(battleId uint64, viewer releasetrack.Track) *matchpb.BattleWatchSummary {
 	record, err := loadSpectateBattleFn(l.ctx, l.svcCtx, battleId)
 	if err != nil {
 		l.Errorf("[spectate] Failed to read spectator record battle=%d: %v", battleId, err)
@@ -137,6 +152,9 @@ func (l *ListWatchableBattlesLogic) watchableSummary(battleId uint64) *matchpb.B
 		l.Infof("[spectate] Non-public battle found in spectator index; removing member only battle=%d visibility=%s",
 			battleId, record.GetVisibility().String())
 		removeSpectateActiveMember(l.svcCtx, battleId)
+		return nil
+	}
+	if !viewerMayWatch(viewer, record.GetReleaseTrack()) {
 		return nil
 	}
 	return record.GetSummary()

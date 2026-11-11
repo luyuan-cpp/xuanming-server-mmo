@@ -217,14 +217,14 @@ func (w *txLogPartitionWorker) add(b *txBatch, msg kafkago.Message) {
 func decodeTxLog(msg kafkago.Message) (*store.TransactionLogRow, bool) {
 	entry := &rollbackpb.TransactionLogEntry{}
 	if err := proto.Unmarshal(msg.Value, entry); err != nil {
-		logx.Errorf("[%s] undecodable message skipped partition=%d offset=%d key=%s: %v",
+		messageLogger(msg).Errorf("[%s] undecodable message skipped partition=%d offset=%d key=%s: %v",
 			ConsumerTxLog, msg.Partition, msg.Offset, string(msg.Key), err)
 		metrics.ObserveKafkaConsumerMessages(ConsumerTxLog, "decode_error", 1)
 		return nil, false
 	}
 	if entry.GetTxId() == 0 {
 		// 生产者对 tx_id=0 是 fail-closed 的,走到这里说明上游坏了;0 做主键会让所有坏行互撞。
-		logx.Errorf("[%s] tx_id=0 message skipped partition=%d offset=%d key=%s",
+		messageLogger(msg).Errorf("[%s] tx_id=0 message skipped partition=%d offset=%d key=%s",
 			ConsumerTxLog, msg.Partition, msg.Offset, string(msg.Key))
 		metrics.ObserveKafkaConsumerMessages(ConsumerTxLog, "invalid", 1)
 		return nil, false

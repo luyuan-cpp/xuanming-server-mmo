@@ -120,13 +120,15 @@ type ServiceContext struct {
 	gateDrainStop context.CancelFunc
 	// gateWatchStop 取消 startGateWatcher 起的 gate 目录 list-watch;nil = 没起。
 	gateWatchStop context.CancelFunc
+	// gateStaleStop 取消 startGateStalePublisher 起的停写标记发布循环(gate_stale_publisher.go);nil = 没起。
+	gateStaleStop context.CancelFunc
 	// authCleanup 只拥有生产口令的专用 Redis 池与只读 SQL 连接。
 	authCleanup func()
 }
 
 func NewServiceContext() *ServiceContext {
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
-		panic(fmt.Errorf("全球Login配置拒绝启动: %w", err))
+		panic(fmt.Errorf("global Login configuration rejected; refusing to start: %w", err))
 	}
 	if err := config.AppConfig.ValidateRedisDomains(); err != nil {
 		panic(fmt.Errorf("invalid redis domain config: %w", err))
@@ -617,6 +619,7 @@ func (s *ServiceContext) Start() {
 	}
 	s.startGateWatcher()
 	s.startGateDrainMonitor()
+	s.startGateStalePublisher()
 }
 
 // startGateWatcher 起 gate 目录的 list-watch,让 AssignGate 与排队 dispatcher 读进程内镜像,
@@ -673,7 +676,7 @@ func (s *ServiceContext) startGateDrainMonitor() {
 				safego.Run("login.gate_drain_monitor", func() {
 					gates, err := snapshot(ctx)
 					if err != nil {
-						logx.Errorf("gate drain snapshot失败: %v", err)
+						logx.Errorf("gate drain snapshot failed: %v", err)
 						return
 					}
 					loginqueue.EvaluateDrainingGates(ctx, s.RedisClient, gates, policy, time.Now().Unix())
@@ -823,7 +826,7 @@ func (s *ServiceContext) EnterRoot() (func(), error) {
 }
 func (s *ServiceContext) Stop() {
 	if err := s.StopAndReport(context.Background()); err != nil {
-		logx.Errorf("login排空HOLD: %v", err)
+		logx.Errorf("login drain HOLD: %v", err)
 	}
 }
 
@@ -851,6 +854,9 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		}
 		if s.gateWatchStop != nil {
 			s.gateWatchStop()
+		}
+		if s.gateStaleStop != nil {
+			s.gateStaleStop()
 		}
 		if s.preloadStatsStop != nil {
 			close(s.preloadStatsStop)
@@ -1083,7 +1089,7 @@ func (s *ServiceContext) OpenPreparedRoot(ctx context.Context) ([]byte, error) {
 // StartForDrain不warm号段，也不启动会发新根命令的登录队列。
 func (s *ServiceContext) StartForDrain() {
 	if !s.idSegmentNeverUsed {
-		panic("专用排空启动必须是从未serve的固定boot")
+		panic("dedicated drain startup must be a fixed boot that has never served")
 	}
 }
 

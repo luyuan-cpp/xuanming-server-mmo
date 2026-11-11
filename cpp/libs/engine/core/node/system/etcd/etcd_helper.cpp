@@ -97,6 +97,36 @@ void EtcdHelper::StartWatchingPrefix(const std::string &prefix, int64_t revision
 	}
 }
 
+void EtcdHelper::RangeKey(const std::string &key)
+{
+	etcdserverpb::RangeRequest request;
+	request.set_key(key); // range_end 留空 = 只这一个键
+
+	if (auto *transport = ActiveTransport("Range"))
+	{
+		transport->Range(request);
+	}
+}
+
+void EtcdHelper::StartWatchingKey(const std::string &key, int64_t revision)
+{
+	etcdserverpb::WatchRequest request;
+	auto &createReq = *request.mutable_create_request();
+
+	createReq.set_prev_kv(true);
+	createReq.set_key(key); // range_end 留空 = 只这一个键
+
+	if (revision > 0)
+	{
+		createReq.set_start_revision(revision);
+	}
+
+	if (auto *transport = ActiveTransport("Watch"))
+	{
+		transport->WatchWrite(request);
+	}
+}
+
 void EtcdHelper::StopAllWatching()
 {
 	// TODO: Add cancel_request implementation if needed
@@ -265,6 +295,43 @@ void EtcdHelper::PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, i
 	}
 
 	PutIfAbsent(key, jsonValue, 0, lease, std::move(done), checkSameLease);
+}
+
+void EtcdHelper::PutIfAbsentListingOnConflict(const std::string &key, const std::string &value, int64_t lease,
+											  const std::string &listPrefix, TxnCompletion done)
+{
+	etcdserverpb::TxnRequest txn;
+
+	// Compare: version == 0 means key does not exist
+	auto &compare = *txn.add_compare();
+	compare.set_key(key);
+	compare.set_target(etcdserverpb::Compare::VERSION);
+	compare.set_result(etcdserverpb::Compare::EQUAL);
+	compare.set_version(0);
+
+	auto &successOp = *txn.add_success()->mutable_request_put();
+	successOp.set_key(key);
+	successOp.set_value(value);
+	successOp.set_lease(lease);
+
+	// 失败分支:只取键列出整个前缀。键里就是号,不要值(NodeInfo / uuid),应答按键数线性增长。
+	auto &listing = *txn.add_failure()->mutable_request_range();
+	listing.set_key(listPrefix);
+	std::string rangeEnd = listPrefix;
+	rangeEnd.back() += 1; // last char + 1
+	listing.set_range_end(rangeEnd);
+	listing.set_keys_only(true);
+
+	SendRegistrationTxn(txn, std::move(done));
+}
+
+const etcdserverpb::RangeResponse *EtcdHelper::TxnConflictListing(const etcdserverpb::TxnResponse &reply)
+{
+	if (reply.succeeded() || reply.responses_size() != 1 || !reply.responses(0).has_response_range())
+	{
+		return nullptr;
+	}
+	return &reply.responses(0).response_range();
 }
 
 void EtcdHelper::RevokeLeaseAndCleanup(int64_t leaseId)

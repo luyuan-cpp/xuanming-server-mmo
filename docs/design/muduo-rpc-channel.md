@@ -99,7 +99,7 @@ message GameRpcMessage {
   不用 fixed64 是因为本仓不做 balancer_raw 式原地改写 id,varint 小号只占 1–3 字节;id=0 时 proto3 不序列化,单向推送(AOI 广播是最大流量路径)零开销。
 - 字段 7–10(2026-11-10 起,未编译验证):W3C trace-context 的二进制形态,读写只经 `network/rpc_trace_envelope.h`。
   - 发送方(`CallMethodWithResponseType`、`SendRequest`)在 REQUEST 上写发起时的当前 trace;RESPONSE / RPC_ERROR / HEARTBEAT 不写,回包由调用方恢复自己捕获的上下文。
-  - 服务端派发(`ScopedDispatchTrace`)时,合法就在它下面建子 span;不合法(trace_id 全 0 或 parent_span_id 为 0)就开新根,照常派发,绝不据此拒绝。
+  - 服务端派发(`CallServiceMethod` 开头的 `tracing::ScopedIncoming`)时,合法就在它下面建子 span;不合法(trace_id 全 0 或 parent_span_id 为 0)就开新根,照常派发,绝不据此拒绝。
   - 开销:全 0 时 proto3 不编码,没有 trace 的帧不多一个字节;有 trace 时多 29 字节。这里用 fixed64,与上一条 id 用 varint 的理由相反:trace 是随机值,varint 要 9–10 字节,fixed64 恒为 8 字节。
   - 细节见 [distributed-tracing.md](distributed-tracing.md) §5.2。
 - **REQUEST `id != 0`:服务端必须恰好回一帧**——成功回 RESPONSE(同 id、同 message_id;Empty / 0 字节响应也回),失败回 RPC_ERROR(同 id、同 message_id + error)。

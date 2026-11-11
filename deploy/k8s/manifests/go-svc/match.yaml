@@ -24,7 +24,7 @@ spec:
       targetPort: 50500
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: match
   labels:
@@ -33,6 +33,12 @@ metadata:
 spec:
   # 多实例由TiDB行锁/租约及原请求回执恢复；Redis不是排队与开局的唯一权威。
   replicas: 2
+  # SQL 写者是 StatefulSet:Pod 序号就是写者名册的槽位,每次启动在同一槽位上换代,名册不随启动次数消耗
+  # (docs/design/writer-roster-exhaustion-20261106.md §5.5)。滚动一次换一个副本,不能 maxSurge。
+  serviceName: match
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       app: match
@@ -57,7 +63,7 @@ spec:
                   matchLabels:
                     app: match
                 topologyKey: kubernetes.io/hostname
-      # 独立registrar只在init读取有限预批准roster与控制凭据；normal只见本Pod选中配置。
+      # 独立registrar只在init读取槽位名册与控制凭据,按 Pod 序号选槽位、现场生成这一代的身份;normal只见本Pod选中配置。
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -67,10 +73,12 @@ spec:
         - name: sql-writer-registrar
           image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
           command: ["/bin/sh", "-ec"]
-          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/match_service.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/match_service.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)","-pod-name","$(POD_NAME)"]
           env:
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
             - name: MMORPG_SQL_OPERATOR_PRINCIPAL
               valueFrom:
                 secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: principal, optional: false}

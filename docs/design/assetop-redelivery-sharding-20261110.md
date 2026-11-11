@@ -20,7 +20,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - **`assetop.OwnedDueLister`**(Store 的可选能力):`ListDueOwned(ctx, nowMs, limit, owned workshard.Filter)`。契约与 `ListDue` 相同(两段读、只回主键、不加锁、按 op_id 去重、总条数 ≤ limit),只多一个条件:`owned` 用 AND 接进**两段** SQL 的 WHERE,放在 `ORDER BY … LIMIT` 之前。零值 `owned` 不过滤。guild 的 `GuildAssetStore`、trade 的 `AssetOpRepo` 实现它;两边的 `ListDue` 改为委托 `ListDueOwned(…, workshard.Filter{})`,SQL 只多一个恒真的 `1=1`,不另写一份。
 - **`Loop.BindWorkOwner(kind, owns)`**:`Run` 之前调用一次。Store 没实现 `OwnedDueLister`、`kind` 为空或 `owns` 为 nil 时回错误,装配方拒启:绑了分工却悄悄扫全部行,扩副本时看不出分工没生效。绑上之后 `Tick` 每轮用 `workshard.SQLFilter(owns, kind, "player_id")` 生成条件交给 `ListDueOwned`;没绑照旧调 `ListDue`。
 - **只影响 `Tick`**。同步投递(`ProcessOne`)、落地唤醒(`WakePlayer`)、日对账与自动放弃(`RunMaintenance`,本来就选主)、最老未决年龄 gauge 都不看归属。落地唤醒由抢到去重键的任一副本处理某个玩家的全部未决行,与分片无关,保持不变。
-- **为什么做成可选能力,而不是改 `Store.ListDue` 的签名**:`assetop.Store` 的生产实现除 guild、trade 外还有 mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`),另有 3 个测试替身。改签名要同批改 7 处,而 mail 与回收不在本条范围,它们的成员表怎么圈要另行确认(§5 第 1 条)。本包已有同样做法的可选能力(`PlayerPendingLister`、`PendingAgeReader` 等)。代价是 Store 上有两个列到期行的入口,两个实现里 `ListDue` 都只是一行委托。
+- **为什么做成可选能力,而不是改 `Store.ListDue` 的签名**:`assetop.Store` 的生产实现除 guild、trade 外还有 mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`),另有 4 个测试替身(assetop 的 `fakeStore`、assetoptest 的 `singleRowStore`、guild 的 `countingAssetStore` 与 `stubAssetStore`)。改签名要同批改 8 处,而 mail 与回收不在本条范围,它们的成员表怎么圈要另行确认(§5 第 1 条)。本包已有同样做法的可选能力(`PlayerPendingLister`、`PendingAgeReader` 等)。代价是 Store 上有两个列到期行的入口,两个实现里 `ListDue` 都只是一行委托。
 - **新指标 `assetop_owned_shards`**(gauge,只带 `service` 常量 label):本副本本轮负责的片数(0..64)。只有绑了分工的循环才报,没绑 = 没有序列。各 stable 副本加起来应为 64;成员表变化的几秒里会多或少几片;长期少于 64 说明有登记着却不跑循环的副本(§3)。
 - assetop 包头「不引 etcd 客户端」的边界不变:本包只用 `workshard` 的纯函数拼条件,成员表由装配方经 `owns` 注入,本包不读 etcd。
 
@@ -95,6 +95,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 5. 已建房票巡检(`ReadyAfter`)按 2026-11-06 的约定由数据覆盖审计会话接分片([全服匹配设计](global-match-hierarchical-pools.md) §5.2),本条不碰。
 6. trade `asset_op_repo.go` 的 `Finalize`、`Abandon`、`ResolveManually` 由另一项改,本条只动 `ListDue` 一段。
 7. 没有新增告警规则。可以加 `sum by (service) (assetop_owned_shards) < 64` 持续 5 分钟,等多副本冒烟确认读数之后再加。
+8. 顺带看到、不在本条范围:终态行清理每个 stable 副本都跑(guild `guild.go` 的 `startAssetOpCleanup`、trade `svc.StartAssetOpCleanup`),各副本读同一批候选、逐行点锁点删,重复的只是删除且按周期跑(`CleanupIntervalMinutes`),量小。要分时可以照本条按 `player_id` 分片,或者并进维护选主;是否登记成新缺口由清单维护者定。
 
 ## 6. 改动清单
 
@@ -112,6 +113,10 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 | `go/trade/internal/svc/assetchannel.go` | 成员表整表读不再只在合同引擎分支里起 |
 | `go/match/internal/authority/work_owner.go` | 类别键 `outcome-result`、`outcome-settlement` |
 | `go/match/internal/authority/outcome_outbox.go` | 两个到期读接分片条件 |
+| `docs/design/global-match-hierarchical-pools.md` §5.2 | 终局发件箱从「不在这条规则里」改为按片分工的一项 |
+| `docs/design/jubaozhai-market.md` §15.8 | 成员表一节补一句:资产指令重投复用同一份成员表 |
+
+测试文件见 §7。
 
 ## 7. 测试清单
 

@@ -117,10 +117,16 @@ int main(int argc, char *argv[])
         // TeamNodeService:队伍成员权威读取由 Match 同端口提供，只在需要刷新队伍时使用。
         // MatchNodeService:FIGHTING 冻结到期时只读查这一局的 SQL 终局(MatchInternal.GetBattleTerminalDecision,
         // 全局池,不限当前 zone;docs/design/turn-battle-gap-closure.md §11)。只在 reaper 判出冻结到期时调用。
+        // 发现集合(docs/design/connection-fanout-subsetting-20261106.md §3.4)= 建连白名单 + Gate + 自身 Scene。
+        // Gate:gate 主动连进来,入站登记(registration_manager.cpp)查快照里的 gate 登记,广播用 ResolveLocalZoneGateEntity;
+        // Scene:本 zone 的同类,注册自检、劫持检测与选号要看。scene 不读 Battle、ClientRpcRouter、Login、Friend、Guild,不再看它们。
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
                                                 PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
                                                 MatchNodeService },
+                  Node::DiscoveryNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
+                                               PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
+                                               MatchNodeService, GateNodeService, SceneNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);

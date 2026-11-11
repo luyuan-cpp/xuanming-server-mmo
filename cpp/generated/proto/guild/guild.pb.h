@@ -2097,7 +2097,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetAnnouncementRequest final : publ
   enum : int {
     kAnnouncementFieldNumber = 3,
     kGuildIdFieldNumber = 1,
-    kPlayerIdFieldNumber = 2,
   };
   // string announcement = 3;
   void clear_announcement() ;
@@ -2124,21 +2123,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetAnnouncementRequest final : publ
   void _internal_set_guild_id(::uint64_t value);
 
   public:
-  // uint64 player_id = 2;
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:guildpb.SetAnnouncementRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 2,
                           0, 51,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2169,7 +2158,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetAnnouncementRequest final : publ
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr announcement_;
     ::uint64_t guild_id_;
-    ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3228,19 +3216,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kExpectedGuildIdFieldNumber = 2,
   };
-  // uint64 player_id = 1;
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 expected_guild_id = 2;
   void clear_expected_guild_id() ;
   [[nodiscard]] ::uint64_t expected_guild_id() const;
@@ -3255,7 +3232,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3284,7 +3261,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveGuildRequest final : public ::
         const LeaveGuildRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t expected_guild_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -7350,7 +7326,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankRequest final : public 
   enum : int {
     kPageFieldNumber = 1,
     kPageSizeFieldNumber = 2,
-    kZoneIdFieldNumber = 3,
   };
   // uint32 page = 1;
   void clear_page() ;
@@ -7372,21 +7347,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankRequest final : public 
   void _internal_set_page_size(::uint32_t value);
 
   public:
-  // uint32 zone_id = 3;
-  void clear_zone_id() ;
-  [[nodiscard]] ::uint32_t zone_id() const;
-  void set_zone_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_zone_id() const;
-  void _internal_set_zone_id(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:guildpb.GetGuildRankRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7417,7 +7382,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankRequest final : public 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t page_;
     ::uint32_t page_size_;
-    ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7574,7 +7538,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildRequest final : 
   // accessors -------------------------------------------------------
   enum : int {
     kGuildIdFieldNumber = 1,
-    kZoneIdFieldNumber = 2,
   };
   // uint64 guild_id = 1;
   void clear_guild_id() ;
@@ -7586,21 +7549,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildRequest final : 
   void _internal_set_guild_id(::uint64_t value);
 
   public:
-  // uint32 zone_id = 2;
-  void clear_zone_id() ;
-  [[nodiscard]] ::uint32_t zone_id() const;
-  void set_zone_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_zone_id() const;
-  void _internal_set_zone_id(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:guildpb.GetGuildRankByGuildRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7630,7 +7583,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildRequest final : 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t guild_id_;
-    ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8287,19 +8239,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public 
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPlayerIdFieldNumber = 1,
     kExpectedGuildIdFieldNumber = 2,
   };
-  // uint64 player_id = 1;
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
   // uint64 expected_guild_id = 2;
   void clear_expected_guild_id() ;
   [[nodiscard]] ::uint64_t expected_guild_id() const;
@@ -8314,7 +8255,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -8343,7 +8284,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DisbandGuildRequest final : public 
         const DisbandGuildRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint64_t player_id_;
     ::uint64_t expected_guild_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -8501,8 +8441,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateGuildRequest final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kNameFieldNumber = 2,
-    kPlayerIdFieldNumber = 1,
-    kZoneIdFieldNumber = 3,
   };
   // string name = 2;
   void clear_name() ;
@@ -8519,31 +8457,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateGuildRequest final : public :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
-  // uint64 player_id = 1;
-  void clear_player_id() ;
-  [[nodiscard]] ::uint64_t player_id() const;
-  void set_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_player_id() const;
-  void _internal_set_player_id(::uint64_t value);
-
-  public:
-  // uint32 zone_id = 3;
-  void clear_zone_id() ;
-  [[nodiscard]] ::uint32_t zone_id() const;
-  void set_zone_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_zone_id() const;
-  void _internal_set_zone_id(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:guildpb.CreateGuildRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 39,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -8573,8 +8491,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateGuildRequest final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
-    ::uint64_t player_id_;
-    ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -17399,30 +17315,6 @@ inline void GuildInfo::_internal_set_pending_application_count(::uint32_t value)
 
 // CreateGuildRequest
 
-// uint64 player_id = 1;
-inline void CreateGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t CreateGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.CreateGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void CreateGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:guildpb.CreateGuildRequest.player_id)
-}
-inline ::uint64_t CreateGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void CreateGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // string name = 2;
 inline void CreateGuildRequest::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
@@ -17485,30 +17377,6 @@ inline void CreateGuildRequest::set_allocated_name(::std::string* PROTOBUF_NULLA
     _impl_.name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:guildpb.CreateGuildRequest.name)
-}
-
-// uint32 zone_id = 3;
-inline void CreateGuildRequest::clear_zone_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint32_t CreateGuildRequest::zone_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.CreateGuildRequest.zone_id)
-  return _internal_zone_id();
-}
-inline void CreateGuildRequest::set_zone_id(::uint32_t value) {
-  _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:guildpb.CreateGuildRequest.zone_id)
-}
-inline ::uint32_t CreateGuildRequest::_internal_zone_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.zone_id_;
-}
-inline void CreateGuildRequest::_internal_set_zone_id(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.zone_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -18156,35 +18024,11 @@ inline void GetPlayerGuildResponse::set_allocated_guild(::guildpb::GuildInfo* PR
 
 // LeaveGuildRequest
 
-// uint64 player_id = 1;
-inline void LeaveGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t LeaveGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.LeaveGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void LeaveGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:guildpb.LeaveGuildRequest.player_id)
-}
-inline ::uint64_t LeaveGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void LeaveGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 expected_guild_id = 2;
 inline void LeaveGuildRequest::clear_expected_guild_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_guild_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t LeaveGuildRequest::expected_guild_id() const {
   // @@protoc_insertion_point(field_get:guildpb.LeaveGuildRequest.expected_guild_id)
@@ -18192,7 +18036,7 @@ inline ::uint64_t LeaveGuildRequest::expected_guild_id() const {
 }
 inline void LeaveGuildRequest::set_expected_guild_id(::uint64_t value) {
   _internal_set_expected_guild_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:guildpb.LeaveGuildRequest.expected_guild_id)
 }
 inline ::uint64_t LeaveGuildRequest::_internal_expected_guild_id() const {
@@ -18305,35 +18149,11 @@ inline void LeaveGuildResponse::set_allocated_error_message(::TipInfoMessage* PR
 
 // DisbandGuildRequest
 
-// uint64 player_id = 1;
-inline void DisbandGuildRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint64_t DisbandGuildRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.DisbandGuildRequest.player_id)
-  return _internal_player_id();
-}
-inline void DisbandGuildRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:guildpb.DisbandGuildRequest.player_id)
-}
-inline ::uint64_t DisbandGuildRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void DisbandGuildRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
-}
-
 // uint64 expected_guild_id = 2;
 inline void DisbandGuildRequest::clear_expected_guild_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_guild_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint64_t DisbandGuildRequest::expected_guild_id() const {
   // @@protoc_insertion_point(field_get:guildpb.DisbandGuildRequest.expected_guild_id)
@@ -18341,7 +18161,7 @@ inline ::uint64_t DisbandGuildRequest::expected_guild_id() const {
 }
 inline void DisbandGuildRequest::set_expected_guild_id(::uint64_t value) {
   _internal_set_expected_guild_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:guildpb.DisbandGuildRequest.expected_guild_id)
 }
 inline ::uint64_t DisbandGuildRequest::_internal_expected_guild_id() const {
@@ -18476,30 +18296,6 @@ inline ::uint64_t SetAnnouncementRequest::_internal_guild_id() const {
 inline void SetAnnouncementRequest::_internal_set_guild_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = value;
-}
-
-// uint64 player_id = 2;
-inline void SetAnnouncementRequest::clear_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint64_t SetAnnouncementRequest::player_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.SetAnnouncementRequest.player_id)
-  return _internal_player_id();
-}
-inline void SetAnnouncementRequest::set_player_id(::uint64_t value) {
-  _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:guildpb.SetAnnouncementRequest.player_id)
-}
-inline ::uint64_t SetAnnouncementRequest::_internal_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.player_id_;
-}
-inline void SetAnnouncementRequest::_internal_set_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.player_id_ = value;
 }
 
 // string announcement = 3;
@@ -26361,30 +26157,6 @@ inline void GetGuildRankRequest::_internal_set_page_size(::uint32_t value) {
   _impl_.page_size_ = value;
 }
 
-// uint32 zone_id = 3;
-inline void GetGuildRankRequest::clear_zone_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint32_t GetGuildRankRequest::zone_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.GetGuildRankRequest.zone_id)
-  return _internal_zone_id();
-}
-inline void GetGuildRankRequest::set_zone_id(::uint32_t value) {
-  _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:guildpb.GetGuildRankRequest.zone_id)
-}
-inline ::uint32_t GetGuildRankRequest::_internal_zone_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.zone_id_;
-}
-inline void GetGuildRankRequest::_internal_set_zone_id(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.zone_id_ = value;
-}
-
 // -------------------------------------------------------------------
 
 // GetGuildRankResponse
@@ -26635,30 +26407,6 @@ inline ::uint64_t GetGuildRankByGuildRequest::_internal_guild_id() const {
 inline void GetGuildRankByGuildRequest::_internal_set_guild_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = value;
-}
-
-// uint32 zone_id = 2;
-inline void GetGuildRankByGuildRequest::clear_zone_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint32_t GetGuildRankByGuildRequest::zone_id() const {
-  // @@protoc_insertion_point(field_get:guildpb.GetGuildRankByGuildRequest.zone_id)
-  return _internal_zone_id();
-}
-inline void GetGuildRankByGuildRequest::set_zone_id(::uint32_t value) {
-  _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:guildpb.GetGuildRankByGuildRequest.zone_id)
-}
-inline ::uint32_t GetGuildRankByGuildRequest::_internal_zone_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.zone_id_;
-}
-inline void GetGuildRankByGuildRequest::_internal_set_zone_id(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.zone_id_ = value;
 }
 
 // -------------------------------------------------------------------

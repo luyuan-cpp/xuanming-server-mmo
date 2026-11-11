@@ -48,7 +48,7 @@ SceneManager (Go)                 Agones                       C++ Scene Node
 instance。原因是镜像 Scene 会**有意绕过**节点角色过滤与源 Scene 共置
 (`pickInstanceNode` 的 mirror 分支)。如果 world 还是普通 Deployment,
 镜像房间就会落到不受 Agones 管理的 world 进程上,容量统计出现两套语义 ——
-阶段 C 的 `rooms` Counter 会从第一天就是错的。
+阶段 C 的 `rooms` 名额(2026-11-10 起是 List 条目,§13)会从第一天就是错的。
 
 | Fleet | SCENE_NODE_TYPE | 承载 | 副本策略(第一版) |
 |---|---|---|---|
@@ -221,16 +221,16 @@ Fleet。注意 `kubectl apply` **不会**跨 kind 回收同名对象,Deployment 
   Allocator,证明的是"上层逻辑在给定 Agones 行为下是对的",不是"Agones
   真的这么行为"。见 §8.9。
 
-## 8. 阶段 C:rooms Counter 与 GameServerAllocation(已落码,未上集群)
+## 8. 阶段 C:rooms 名额与 GameServerAllocation(已落码,未上集群;2026-11-10 起 rooms 是按条目的 List,见 §13)
 
 ### 8.1 开关
 
 | 配置 | 默认 | 含义 |
 |---|---|---|
 | `Agones.Enabled` | `false` | 关:选节点完全走原来的 Redis 负载分数,不碰 Agones |
-| `Agones.HighDensityEnabled` | `false` | 关:走 GSA 但不用 Counters(一个进程一次一个房间) |
-| `Agones.RoomCapacity` | `0` | 仅作配置留痕,运行时容量以 GameServer 上的 `capacity` 为准 |
-| `-AgonesHighDensity` + `-AgonesRoomCapacity N` | 关 | 部署生成器给 Fleet 挂 `counters.rooms` |
+| `Agones.HighDensityEnabled` | `false` | 关:走 GSA 但不用 Counters and Lists(一个进程一次一个房间,不记名额) |
+| `Agones.RoomCapacity` | `0` | 仅作配置留痕,运行时容量以 GameServer 上 `status.lists.rooms.capacity` 为准 |
+| `-AgonesHighDensity` + `-AgonesRoomCapacity N` | 关 | 部署生成器给 Fleet 挂 `lists.rooms`(2026-11-10 前是 `counters.rooms`,§13) |
 
 Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开
 `CountsAndLists` FeatureGate,所以默认关。
@@ -244,25 +244,26 @@ Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开
 `createInstance` 在 Agones 模式下的顺序是刻意的:
 
 ```
-1. GSA:选 GameServer + rooms 原子 +1        （选中与计数是同一个操作,不留超卖窗口）
-2. status.state 必须是 Allocated
-3. 取 gameServerName / PodIP / counter 结果
-4. PodIP -> knownNodes 反查 nodeID
-5. 校验 zone 与 role                        （Fleet label 与 C++ SCENE_NODE_TYPE 是两条独立链路）
-6. 分配 scene_id
-7. 写 Redis scene 状态 + scene:{id}:agones_gs
-8. 调 C++ CreateScene
-9. 只有 8 成功才向调用方返回成功
+1. 分配 scene_id                            （名额条目里要有它,§13.2;分配失败浪费一个号,无害）
+2. 写在途占用 agones_rooms:zone:{z}:holds    （§13.3;写不进就不去要名额）
+3. GSA:选 GameServer + 加条目               （选中与占位是同一个操作,不留超卖窗口）
+4. status.state 必须是 Allocated,条目确实在 status.lists.rooms.values 里
+5. 取 gameServerName / PodIP
+6. PodIP -> knownNodes 反查 nodeID
+7. 校验 zone 与 role                        （Fleet label 与 C++ SCENE_NODE_TYPE 是两条独立链路）
+8. 登记脚本:写 Redis scene 状态 + scene:{id}:agones_gs = "GameServer/条目",同一步消费在途占用
+9. 调 C++ CreateScene
+10. 只有 9 成功才向调用方返回成功
 ```
 
-4/5 任一步失败都会把刚预占的名额还回去并拒绝请求。**不允许**"找不到就放行":
+4~7 任一步失败都会放弃这次占的条目(删在途占用、删条目)并拒绝请求。**不允许**"找不到就放行":
 那等于绕过容量约束。
 
 PodIP 反查必须唯一命中一条 `(zoneId,nodeId)` 注册；同一身份有重复 etcd
 记录时也按映射失败处理，不能任取一个同号进程。gRPC 连接缓存使用同一复合身份。
 
-`scene:{id}:agones_gs` 必须在第 8 步**之前**写。放到 RPC 成功之后写,进程正好
-在中间崩溃就永远找不回该减哪个 GameServer 的计数。
+`scene:{id}:agones_gs` 必须在第 9 步**之前**写。放到 RPC 成功之后写,进程正好
+在中间崩溃就找不回该删哪台 GameServer 上的哪一条。
 
 ### 8.3 修掉的既有 bug:phantom scene
 
@@ -280,8 +281,8 @@ Agones 名额)并返回错误码。**这一条与 Agones 无关**,非 Agones 模
 
 镜像必须与源 Scene 同进程(复用已驻留的地图/AI/spawn),这条业务约束优先于
 "让 Agones 自由挑进程"。GSA 只能按标签选、不能点名,所以共置路径走的是
-`AcquireRoomOnGameServer`:`nodeID -> PodIP -> GameServer 名字 -> 对该
-GameServer 的 rooms 做带 CAS 的 +1`。
+`AddRoomEntry`:`nodeID -> PodIP -> GameServer 名字 -> 写在途占用 -> 在该
+GameServer 的 rooms 列表里加条目(带 CAS,满了拒绝)`。
 
 源节点满了 / 反查不到(老版本 Agones 的 GameServer status 里没有 Pod 地址)
 时,回落到自由分配 —— 镜像失去共置优化但玩家不会卡死。
@@ -289,31 +290,29 @@ GameServer 的 rooms 做带 CAS 的 +1`。
 ### 8.5 回滚与漂移
 
 - 销毁:`scene:{id}:agones_gs` 与其余 scene 状态在**同一个 Lua 脚本**里读出并
-  删除,脚本把它返回给调用方去精确归还名额。先删后读会永久丢失回滚依据。
-- 重复 Destroy:第二次在脚本里读不到 `scene:{id}:node`,拿不到 gs 名字,
-  不会重复减。
+  删除,写进拆除任务的快照,拆除任务按它精确删掉那一条。先删后读会永久丢失归还依据。
+- 重复 Destroy:第二次认领落空,不会再删;就算再删一次,按条目删也是幂等的。
 - 节点死亡:GameServer 可能还在(Agones 还没判 Unhealthy),名额照样要还。
-  `ReleaseRoom` 对"GameServer 已消失"返回成功,所以无脑调用是安全的。
-- 归还最终失败:记
-  `scene_manager_agones_counter_rollback_total{outcome="failed"}` + ERROR 日志。
-  **这类漂移不会自愈**,必须对这个指标配告警。
+  `RemoveRoomEntry` 对"GameServer 已消失"返回成功,所以无脑调用是安全的。
+- 归还失败:记 `scene_manager_agones_counter_rollback_total{outcome="failed"}` + ERROR 日志;
+  拆除任务留着由扫描重做到成功,其余不重试的调用方留下的条目没有记录、也没有在途占用,由对账收(§13.5)。
 
-### 8.6 reconcile 只告警,不自动改
+### 8.6 对账:逐条收敛(2026-11-10 起)
 
-`StartAgonesReconcile` 周期性比对 Agones `rooms.count` 与 Redis
-`node:zone:{zoneId}:{nodeId}:scene_count`,把差异写进 `scene_manager_agones_counter_drift{zone}`。
-
-**第一版不自动改写任何一方。** 三方任意一方都可能是错的那个;在证据不完整时
-自动"修正"很可能把对的一方改错,还会掩盖真正的 bug。先让漂移可见。
+原来的第一版只比 Agones `rooms.count` 与 Redis `node:zone:{zoneId}:{nodeId}:scene_count`、只告警:
+计数没有逐个名额的身份,分不清哪一份是漏的,自动"修正"很可能把对的一方改错。2026-11-10 起名额是按身份的条目,
+`StartAgonesReconcile` 逐条判、两个方向都改(删孤儿条目、取消过期在途占用、补缺失条目、把改派时没转过来的名额
+转过来),做法见 §13.5;`scene_manager_agones_counter_drift{zone}` 改为一轮结束时仍没收敛的条目与场景数。
 
 ### 8.7 指标
 
 ```
 scene_manager_agones_allocation_total{zone,role,outcome}      ok|no_capacity|error|mapping_failed
 scene_manager_agones_allocation_latency_seconds{zone,role}
-scene_manager_agones_counter_rollback_total{outcome}          ok|failed
+scene_manager_agones_counter_rollback_total{outcome}          ok|failed(一次归还 = 删一个条目)
 scene_manager_agones_mapping_failure_total{zone,reason}        no_pod_ip|unknown_pod_ip|zone_mismatch|role_mismatch
-scene_manager_agones_counter_drift{zone}
+scene_manager_agones_counter_drift{zone}                       一轮对账结束时仍没收敛的条目与场景数
+scene_manager_agones_rooms_reconciled_total{zone,action}       orphan_removed|hold_expired_removed|hold_canceled|missing_added|missing_no_capacity|rehomed|rehome_no_capacity
 ```
 
 标签全是低基数维度。`scene_id` / `player_id` 绝不进 label(`CLAUDE.md §9`)。
@@ -331,11 +330,11 @@ RBAC 见 `deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml`:
 
 这些是按 Agones 文档写的,**没有跑过真集群**:
 
-1. `GameServerAllocation` 的 `spec.selectors[].counters.rooms.minAvailable`
-   与 `spec.counters.rooms.{action:Increment, amount}` 字段形状。
-2. `status.counters.rooms.{count,capacity}` 在 GSA 返回对象里的位置。
-3. 通过 `gameservers/status` 子资源直接改 `counters.rooms.count` 是否被
-   Agones 接受(还是必须走 SDK)。这一条影响回滚与共置预占两条路径。
+1. `GameServerAllocation` 的 `spec.selectors[].lists.rooms.minAvailable`
+   与 `spec.lists.rooms.addValues` 字段形状(2026-11-10 前是 counters,§13.8)。
+2. `status.lists.rooms.{values,capacity}` 在 GSA 返回对象里的位置(拿不到时代码会 GET 这台 GameServer 核对)。
+3. 直接 Update GameServer 改 `status.lists.rooms.values` 是否被 Agones 接受(还是必须走 SDK)。
+   这一条影响归还、共置、改派与对账所有按条目增删的路径。
 4. `status.addresses` 里 `type: "Pod"` 条目的可用性(老版本没有,代码会退化
    成 GET 同名 Pod)。
 

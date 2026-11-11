@@ -184,7 +184,7 @@ func TestDriftReportsTypeMismatchInsteadOfModifying(t *testing.T) {
 	}
 	var found bool
 	for _, w := range warnings {
-		if strings.Contains(w, "列类型漂移") && strings.Contains(w, "player_store.player_id") {
+		if strings.Contains(w, "column type drift") && strings.Contains(w, "player_store.player_id") {
 			found = true
 		}
 	}
@@ -229,10 +229,10 @@ func TestDriftReportsMissingPrimaryKeyAndExtraColumns(t *testing.T) {
 		t.Fatalf("drift: %v", err)
 	}
 	joined := strings.Join(warnings, "\n")
-	if !strings.Contains(joined, "缺主键") || !strings.Contains(joined, "player_store") {
+	if !strings.Contains(joined, "missing primary key") || !strings.Contains(joined, "player_store") {
 		t.Fatalf("missing primary key must be reported, got %v", warnings)
 	}
-	if !strings.Contains(joined, "多余列") || !strings.Contains(joined, "legacy_column") {
+	if !strings.Contains(joined, "extra column") || !strings.Contains(joined, "legacy_column") {
 		t.Fatalf("extra columns must be reported (and never dropped), got %v", warnings)
 	}
 }

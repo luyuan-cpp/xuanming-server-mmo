@@ -35,7 +35,7 @@ void SceneScenePlayerHandler::EnterScene(entt::entity player,const ::GsEnterScen
 	const SceneEntity sceneEntity = PlayerSceneSystem::FindSceneById(request->scene_id());
 	if (const auto result = PlayerSceneSystem::CheckEnterScene(player, sceneEntity); result != kSuccess)
 	{
-		LOG_ERROR << "拒绝入场 scene_id=" << request->scene_id() << " tip=" << result
+		LOG_ERROR << "Scene entry rejected scene_id=" << request->scene_id() << " tip=" << result
 				  << " player=" << tlsEcs.GetPlayerId(player)
 				  << " entity=" << entt::to_integral(player);
 		PlayerTipSystem::SendToPlayer(player, result, {});

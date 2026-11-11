@@ -330,11 +330,9 @@ func runInstanceTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job sc
 		removeResidualSceneMembers(svcCtx, sceneId, zoneId, nodeId, claim.Members)
 	}
 
-	// 归还 Agones 房间名额,一个任务至多一次(releaseTeardownRoom)。节点已经死了的情况同样要还:GameServer 对象可能
-	// 还在(Agones 还没判 Unhealthy),它身上的 rooms 计数不减就会一直占着容量。ReleaseRoom 对 "GameServer 已消失"
-	// 返回成功。
+	// 归还 Agones 房间名额:按快照里的记录删那一条,幂等,失败时任务留着由扫描重做(releaseTeardownRoom)。
 	if err := releaseTeardownRoom(ctx, svcCtx, job); err != nil {
-		deferred = append(deferred, "take the Agones release step")
+		deferred = append(deferred, "release the Agones room")
 	}
 	return teardownDeferred(deferred)
 }

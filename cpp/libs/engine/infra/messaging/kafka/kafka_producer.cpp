@@ -1,9 +1,12 @@
 ﻿#include "kafka_producer.h"
 #include "muduo/base/Logging.h"
+#include "messaging/kafka/kafka_trace_header.h"
+#include "thread_context/trace_context_tls.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <utility>
 
 namespace {
@@ -161,12 +164,18 @@ KafkaProducer::~KafkaProducer() {
 }
 
 RdKafka::ErrorCode KafkaProducer::produceOnce(const std::string& topic, const std::string& message,
-	const std::string& key, int32_t partition) {
+	const std::string& key, int32_t partition, const std::string& traceparent) {
 	if (!producer_) {
 		return RdKafka::ERR__STATE;
 	}
 
-	return producer_->produce(
+	// 有 trace 才建 headers(docs/design/distributed-tracing.md §5.4);没有时与改动前逐字节相同。
+	std::unique_ptr<RdKafka::Headers> headers;
+	if (!traceparent.empty()) {
+		headers.reset(RdKafka::Headers::create());
+		headers->add(std::string(kafka_trace::kTraceparentHeader), traceparent);
+	}
+	const RdKafka::ErrorCode resp = producer_->produce(
 		topic,
 		partition,
 		RdKafka::Producer::RK_MSG_COPY,
@@ -175,7 +184,12 @@ RdKafka::ErrorCode KafkaProducer::produceOnce(const std::string& topic, const st
 		key.empty() ? nullptr : const_cast<char*>(key.c_str()),
 		key.size(),
 		0,
-		nullptr, nullptr);
+		headers.get(), nullptr);
+	if (resp == RdKafka::ERR_NO_ERROR) {
+		// produce 成功时 headers 归 librdkafka(随消息释放);失败时仍归调用方,由 unique_ptr 析构释放。
+		(void)headers.release();
+	}
+	return resp;
 }
 
 RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::string& message,
@@ -200,7 +214,9 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 		return RdKafka::ERR__STATE;
 	}
 
-	RdKafka::ErrorCode resp = produceOnce(topic, message, key, partition);
+	// trace 在调用方线程上取一次,同一次 send 里的重试带同一个值(docs/design/distributed-tracing.md §5.4)。
+	const std::string traceparent = kafka_trace::TraceparentOf(tracing::Current());
+	RdKafka::ErrorCode resp = produceOnce(topic, message, key, partition, traceparent);
 	switch (kafka_producer_policy::ClassifyProduceResult(resp)) {
 	case ProduceAction::kAccepted:
 		break;
@@ -208,13 +224,13 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 		// 队列满:非阻塞地取走已有结果的回执腾位置,再原样重试一次(见 kafka_producer_policy.h)。
 		// 这次 poll 派发的是**别的**消息的回执:本条还没入队。
 		producer_->poll(0);
-		resp = produceOnce(topic, message, key, partition);
+		resp = produceOnce(topic, message, key, partition, traceparent);
 		break;
 	case ProduceAction::kRebuildProducer:
 		// 这个实例已经作废。重建成功就把当前这条在新实例上重试一次;
 		// 处于重建冷却期或重建失败时 resp 保持 ERR__FATAL,由调用方按失败处理。
 		if (rebuildAfterFatal("produce")) {
-			resp = produceOnce(topic, message, key, partition);
+			resp = produceOnce(topic, message, key, partition, traceparent);
 		}
 		break;
 	case ProduceAction::kReject:

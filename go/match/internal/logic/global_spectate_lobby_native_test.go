@@ -32,6 +32,7 @@ import (
 	"schemamigrate"
 	"shared/authoritysql/sqltest"
 	"shared/generated/pb/table"
+	"shared/releasetrack"
 	"shared/rolefence"
 	"shared/rolefence/fencetest"
 	"shared/roleidentity"
@@ -43,6 +44,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -666,6 +668,22 @@ func (f *globalLobbyFixture) registerBattleNode(instance string) {
 	f.svcCtx.BattleNodes.Upsert(svc.BattleNodeRpcPrefix+"7", discovery.NodeEntry{NodeId: 7, NodeUuid: instance, Endpoint: f.addr})
 }
 
+// setFormationTrack 改成局原件上记的发布轨道(选点时按选中节点写入,之后不变)。夹具插入的行不写这一列,读出空串按 stable。
+func (f *globalLobbyFixture) setFormationTrack(t *testing.T, battleId uint64, track string) {
+	t.Helper()
+	_, err := f.db.Exec("UPDATE match_formation SET release_track=? WHERE battle_id=?", track, battleId)
+	require.NoError(t, err)
+}
+
+// watchOnTrack 同 watch,只是请求带着路由服转来的会话轨道 metadata(发布轨道设计 §2.6)。
+func (f *globalLobbyFixture) watchOnTrack(t *testing.T, player uint64, track string, request *pb.WatchBattleRequest) *pb.WatchBattleResponse {
+	t.Helper()
+	ctx := metadata.NewIncomingContext(f.actor(t, player), metadata.Pairs(releasetrack.MetadataKey, track))
+	resp, err := NewWatchBattleLogic(ctx, f.svcCtx).WatchBattle(request)
+	require.NoError(t, err)
+	return resp
+}
+
 // intentState 读意图行的 state(原件关闭之后读 match_spectator 可能已是下一个 op 的行,判定要看意图)。
 func (f *globalLobbyFixture) intentState(t *testing.T, player uint64, request *pb.WatchBattleRequest) uint32 {
 	t.Helper()
@@ -943,4 +961,56 @@ func TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone(t *testing.T) {
 	require.NoError(t, cancelGlobalSpectator(context.Background(), f.svcCtx, stale, ""), "已证实关闭就是取消要的结果")
 	_, removesAfter, _, _ := f.battle.counts()
 	require.Equal(t, removes, removesAfter, "不再发 Remove")
+}
+
+// 发布轨道(设计 §2.6):成局原件记着 canary 的场,stable 观众点名观战按不可观战结案,不发任何 battle RPC、不落原件,也不摘观战索引;
+// canary 观众同一场照常直连。判定只看原件上的轨道:夹具没装配任何 battle 镜像,开局时不论镜像里有没有这台节点都一样拦。
+func TestGlobalWatchTiDBStableViewerCannotWatchCanaryBattle(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const stableViewer, canaryViewer, battleId = uint64(92), uint64(93), uint64(910033)
+	f.addFormation(t, battleId)
+	f.setFormationTrack(t, battleId, "canary")
+	f.addViewer(t, stableViewer)
+	f.addViewer(t, canaryViewer)
+	addSpectateActive(f.svcCtx, battleId, nowMs(), visPublic)
+
+	request := &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId}
+	resp := f.watch(t, stableViewer, request)
+
+	require.Equal(t, constants.ErrBattleNotWatchable, resp.GetErrorMessage().GetId())
+	require.Empty(t, resp.GetSpectateTicket())
+	f.requireIntentRow(t, stableViewer, request, 5, constants.ErrBattleNotWatchable, 0)
+	require.Zero(t, f.spectatorRows(t, stableViewer), "不落 L0 原件")
+	adds, removes, attaches, promotes := f.battle.counts()
+	require.Zero(t, adds+removes+attaches+promotes, "stable 观众不会被连到 canary battle 上")
+	_, err := f.svcCtx.MatchRedis.Zscore(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10))
+	require.NoError(t, err, "这场对 canary 观众仍可看,不摘观战索引")
+
+	direct := f.watchOnTrack(t, canaryViewer, "canary", &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId})
+	require.Zero(t, direct.GetErrorMessage().GetId(), "tip=%v", direct.GetErrorMessage())
+	require.Equal(t, deliveryDirect, direct.GetDelivery())
+}
+
+// 随机观战同一规则:索引里只有 canary 对局时 stable 观众随机不到它,按没有可看的场结案,不发 RPC、不摘索引;
+// canary 观众随机到它照常直连。
+func TestGlobalWatchTiDBRandomPickSkipsCanaryBattleForStableViewer(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const stableViewer, canaryViewer, battleId = uint64(94), uint64(95), uint64(910034)
+	f.addFormation(t, battleId)
+	f.setFormationTrack(t, battleId, "canary")
+	f.addViewer(t, stableViewer)
+	f.addViewer(t, canaryViewer)
+	addSpectateActive(f.svcCtx, battleId, nowMs(), visPublic)
+
+	resp := f.watch(t, stableViewer, &pb.WatchBattleRequest{RequestId: uuid.NewString()})
+
+	require.Equal(t, constants.ErrNoWatchableBattle, resp.GetErrorMessage().GetId())
+	adds, removes, attaches, promotes := f.battle.counts()
+	require.Zero(t, adds+removes+attaches+promotes)
+	require.Equal(t, 1, activeIndexSize(t, f.svcCtx), "跳过的场不摘索引")
+
+	direct := f.watchOnTrack(t, canaryViewer, "canary", &pb.WatchBattleRequest{RequestId: uuid.NewString()})
+	require.Zero(t, direct.GetErrorMessage().GetId(), "tip=%v", direct.GetErrorMessage())
+	require.Equal(t, deliveryDirect, direct.GetDelivery())
+	require.Equal(t, battleId, direct.GetBattleId())
 }

@@ -2,6 +2,8 @@ package logic
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"match/internal/authority"
@@ -90,16 +92,53 @@ func battleEntryOfNode(s *svc.ServiceContext, node uint32) (discovery.NodeEntry,
 	return entry, err
 }
 
-// battleOnCanaryNode 判定这局固化的落点(node_id + 实例 uuid)此刻在 canary 镜像里有唯一、同一实例的登记。只读内存镜像。
-// 观战入口据此拦 stable 会话(stable 会话永远不进 canary,设计文档 §3)。正面确认是 canary 才拦,拦了就是永久结论(16018)。
-// 查不到不拦,交给原有判定:不存在、已换实例、L0 确认不到实例都按原口径处理(其中 L0 是可重试的失败)。
-// 代价是一个很窄的放过窗口:canary 镜像还没同步到这台节点(match 刚启动)时,stable 会话可能看到 canary 对局。
-// etcd 断开时镜像保留最后一次的登记,不会因此放过;反过来,要求「正面确认是 stable 才放行」会把镜像暂缺时可重试的情形
-// 变成永久拒绝,所以不那样做。
-func battleOnCanaryNode(s *svc.ServiceContext, node uint32, instance string) bool {
-	if s.CanaryBattleNodes == nil {
-		return false
+// battleRunsOnStable 判定成局原件(或由它组出的观战记录)上记的轨道是 stable。轨道在选点时按选中节点写进原件,之后不变,
+// 所以观战判定不看实时节点镜像,结论只取决于原件。空串是本字段之前的原件(迁移补列后读出 NULL),按 stable;
+// 认不出的取值不算 stable:观战拦截据此 fail-closed,宁可让 stable 观众看不到这场,也不把它连到不明轨道的节点上。
+func battleRunsOnStable(recordedTrack string) bool {
+	track, err := releasetrack.Parse(recordedTrack)
+	return err == nil && !track.IsCanary()
+}
+
+// viewerMayWatch 是观战的轨道规则:stable 观众只看 stable 对局(stable 会话永远不进 canary,设计文档 §3),
+// canary 观众两条轨道都能看。观战入口、观战列表和随机选场都用这一条。
+func viewerMayWatch(viewer releasetrack.Track, recordedTrack string) bool {
+	return viewer.IsCanary() || battleRunsOnStable(recordedTrack)
+}
+
+// canaryBattlesMayExist:canary battle 镜像里有节点时才可能有活着的 canary 对局。只用来决定 stable 观众的列表多读几条候选,
+// 不参与判定:镜像暂时为空而原件其实是 canary 的场,照样按原件滤掉,只是这一页可能短一点。
+func canaryBattlesMayExist(s *svc.ServiceContext) bool {
+	return s.CanaryBattleNodes != nil && len(s.CanaryBattleNodes.Snapshot()) > 0
+}
+
+// spectateRandomTrackAttempts 是 stable 观众随机选场时最多换几次场:canary 对局占比 p 时选不到的概率是 p 的这个次方。
+const spectateRandomTrackAttempts = 8
+
+// pickRandomBattleFor 给一个观众随机挑一场能看的战斗。canary 观众两条轨道都能看,直接用 pickRandomBattle;
+// stable 观众每挑一场都读成局原件,挑到原件记着 canary 的场就换一场,最多 spectateRandomTrackAttempts 次,都挑不到返回 (0, nil),
+// 与没有可观战的战斗同口径。判定只看原件,不看节点镜像:金丝雀池撤掉之后残留的 canary 场也不会随机给 stable 观众。
+// 被跳过的场不摘索引(canary 观众照样能看);挑中的场在 SQL 里已经没有时原样返回,交给观战入口按残留摘索引(与原有随机选场同一出口)。
+// 代价是 stable 观众每次随机多一次按主键读原件。
+func pickRandomBattleFor(ctx context.Context, s *svc.ServiceContext, viewer releasetrack.Track) (uint64, error) {
+	if viewer.IsCanary() {
+		return pickRandomBattle(s)
 	}
-	entry, err := s.CanaryBattleNodes.EntryOfNode(node)
-	return err == nil && entry.NodeUuid != "" && entry.NodeUuid == instance
+	for attempt := 0; attempt < spectateRandomTrackAttempts; attempt++ {
+		battle, err := pickRandomBattle(s)
+		if err != nil || battle == 0 {
+			return battle, err
+		}
+		formation, err := s.Authority.Formation(ctx, battle)
+		if errors.Is(err, sql.ErrNoRows) {
+			return battle, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		if viewerMayWatch(viewer, formation.GetReleaseTrack()) {
+			return battle, nil
+		}
+	}
+	return 0, nil
 }

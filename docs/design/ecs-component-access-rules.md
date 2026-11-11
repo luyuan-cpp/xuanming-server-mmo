@@ -56,6 +56,8 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
 | `SceneGridListComp` | `AoiSystem::UpdateGridMembership`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
 | `AoiEvaluatedAtComp` | `AoiSystem::ReevaluateVisibility`,实体第一次做空间关注评估(首次入格)时;之后只覆盖位置 | 不摘:实体销毁自然清理;换场景、同场景瞬移后按首次入格重新评估并覆盖。`Update` 的重判判断只用 `try_get` 读,缺失 = 还没评估过、立即评估 |
+| `AoiNearbyRefillComp`(空标记) | `interest.cpp` 的 `MarkNearbyRefill`:附近候选因名额被拒收、或只剩空间来源的条目被挤掉时(2026-11-10) | `AoiSystem::ReevaluateVisibility` 开始时摘掉,重扫中再被拒会重新打上;`Update` 只用 `any_of` 判,缺失 = 名额空出后不用重扫 |
+| `CombatEngagementComp` | `CombatEngagementSystem::RecordInteraction` 的 `Engage`,一次伤害或一跳治疗、双方都存活且同场景时(2026-11-10,[AOI 单向关注](aoi-directed-interest.md)「战斗关注」) | 最后一份交手关系结束(脱战、死亡、对方离场)时摘除;实体销毁自然清理。缺失 = 没有在交手 |
 | `CastingTimerComp` | `SetupCastingTimer`,进入前摇时 | 前摇结束 / 打断时摘除 |
 | `RecoveryTimerComp` | `SkillSystem::HandleSkillRecovery`,进入后摇时 | 后摇结束 / 打断时摘除 |
 | `ChannelFinishTimerComp`、`ChannelIntervalTimerComp` | `SkillSystem::HandleChannelSkillSpell`,开始引导时 | 引导结束 / 打断时一起摘除 |
@@ -65,7 +67,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `BattleFreezeExpiredComp`(`player_battle.cpp` 内部,单槽 battle_id) | `RememberExpiredFightingBattle`,reaper 判定 FIGHTING 到期的收尾 `ReleaseExpiredFightingFreeze` 里、条件删锁之前(2026-10-19) | 不摘:下一次 FIGHTING 到期覆盖;实体销毁自然清理。按锁重建的两个入口只读它 |
 | `BattleLoginRecheckComp`(`player_battle.cpp` 内部空标记) | `MarkLoginRecheck`,登录钩子读挂起结算 / 读战斗锁没问到时(空应答、读记录 ERROR、命令没发出去、Redis 不可用;2026-10-16) | reaper 的 `RunLoginRechecks` 在 Redis 可用时摘除并重跑登录检查,又没问到就重新挂上;实体销毁自然清理 |
 | `BattleResultAwaitingCommitComp`(`player_battle.cpp` 内部,待公开的 battle_id) | `RecordBattleResult`,`ApplySettlementToEntity` 把本人结果写进近期结果的同一帧(2026-11-05,[战斗结果重登恢复](battle-result-recovery.md) §4.3) | `CompleteInboxSettlement` 在存档确认提交之后摘对应 battle_id,空了摘组件;结果被淘汰时一并摘。查询与确认只读它;缺失 = 没有待公开的结果。同功能的持久组件 `PlayerBattleResultComp` 属持久数据,只在加载时创建 |
-| `PlayerConnectionLostComp`(`connection_lost_hold.h`) | `PlayerLifecycleSystem::HandleClientConnectionLost`,gate 报连接意外断开、判定可以保留时(先 valid;2026-11-05,[断线保留](player-connection-lost-hold.md) §4) | 新会话接回(`EnterScene` 第 0.1 步 `ResumeConnectionLostHold`)、保留到期(`ExpireConnectionLostHolds`)、任何退出发起(`HandleExitGameNode` 入口)时摘;实体销毁自然清理。读路径只用 `try_get` / `any_of`,缺失 = 连接正常或不在保留中 |
+| `PlayerConnectionLostComp`(`connection_lost_hold.h`) | `PlayerLifecycleSystem::HandleClientConnectionLost`,gate 报连接意外断开、判定可以保留时(先 valid;2026-11-05,[断线保留](player-connection-lost-hold.md) §4);托管落点入场之后 `EnterHostedHold`(`EnterScene` 第 3.0 步,实体没有保留、也没有活会话时按"断开的那次登录"重建;2026-11-10,同文 §4.2) | 新会话接回(`EnterScene` 第 0.1 步 `ResumeConnectionLostHold`)、保留到期(`ExpireConnectionLostHolds`)、任何退出发起(`HandleExitGameNode` 入口)时摘;实体销毁自然清理。读路径只用 `try_get` / `any_of`,缺失 = 连接正常或不在保留中 |
 | `SceneOwnershipCheckComp`(scene 实体,`world/scene_ownership_reconciler.h`) | `scene_ownership::CollectChecks`,归属对账第一次核对到这个场景实体时(2026-11-06,[场景归属对账](scene-node-ownership-reconcile.md) §4.2) | CreateScene 按号命中已有实体时 `SceneLifecycle::ReuseExistingScene` 摘掉、下一轮重新登记;实体销毁自然清理。应答回来与指标采集只用 `try_get` / 视图读,缺失 = 还没核对过 |
 
 `PlayerMirrorCreateInFlightComp` 是按需状态。由 `RequestEnterMirrorScene` 发起的 `CreateMirrorAndEnter` 任务在发送之前登记，恢复后按令牌认领。`IsSceneChangeBusy` 只读它，缺失或过 TTL 表示没有建镜像在途。过期、UTC 回拨或本地停止只摘本次令牌并丢弃结果。普通换图、交接、退出提交或权威落点成功时也主动摘掉旧镜像组件，永久取消旧请求的提示和自动进场资格。

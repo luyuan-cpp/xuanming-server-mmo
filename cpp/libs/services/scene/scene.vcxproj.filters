@@ -19,6 +19,8 @@
     <ClInclude Include="combat\buff\system\buff_impl.h" />
     <ClInclude Include="combat\buff\system\modifier_buff_impl.h" />
     <ClInclude Include="combat\buff\system\motion_modifier_impl.h" />
+    <ClInclude Include="combat\engagement\comp\combat_engagement_comp.h" />
+    <ClInclude Include="combat\engagement\system\combat_engagement.h" />
     <ClInclude Include="combat\skill\comp\skill_comp.h" />
     <ClInclude Include="combat\skill\constants\skill.h" />
     <ClInclude Include="combat\skill\system\skill.h" />
@@ -120,6 +122,7 @@
     <ClCompile Include="combat\buff\system\buff_impl.cpp" />
     <ClCompile Include="combat\buff\system\modifier_buff_impl.cpp" />
     <ClCompile Include="combat\buff\system\motion_modifier_impl.cpp" />
+    <ClCompile Include="combat\engagement\system\combat_engagement.cpp" />
     <ClCompile Include="combat\skill\system\skill.cpp" />
     <ClCompile Include="combat_state\system\combat_state.cpp" />
     <ClCompile Include="core\config\config.cpp" />

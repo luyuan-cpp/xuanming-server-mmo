@@ -244,7 +244,7 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
     // 在途创建才能阻止提前回到 Ready。任务由服务对象持有，传输回调不捕获 this(AGENTS §11.7)。
     //
     // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
-    if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "场景创建许可"))
+    if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "SceneCreationPermit"))
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
     return;
     ///<<< END WRITING YOUR CODE

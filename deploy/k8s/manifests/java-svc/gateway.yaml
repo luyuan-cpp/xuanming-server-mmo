@@ -14,7 +14,7 @@ spec:
       targetPort: 8081
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: gateway
   labels:
@@ -22,6 +22,12 @@ metadata:
     tier: java-svc
 spec:
   replicas: 2
+  # SQL 写者是 StatefulSet:Pod 序号就是写者名册的槽位,每次启动在同一槽位上换代,名册不随启动次数消耗
+  # (docs/design/writer-roster-exhaustion-20261106.md §5.5)。滚动一次换一个副本,不能 maxSurge。
+  serviceName: gateway
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       app: gateway

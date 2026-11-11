@@ -25,6 +25,7 @@
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
+#include "proto/common/component/player_item_hold_comp.pb.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
@@ -157,6 +158,7 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerMysteryMerchantComp>(player);
     EmplaceIfAbsent<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
     EmplaceIfAbsent<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
+    EmplaceIfAbsent<PlayerItemHoldComp>(player); // 物品数量预留(battle-item-reservation.md)
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
@@ -692,6 +694,8 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerBattleResultComp>("PlayerBattleResultComp");
     // 幂等键账本缺失同样整份拒绝:补一本空账本落盘,等于让已经执行过的请求在重发时再执行一次。
     ExpectMarshalRefusedWithout<ClientRequestLedgerComp>("ClientRequestLedgerComp");
+    // 预留缺失同样整份拒绝:补一份空表落盘,等于把还押在未结算战斗里的道具放出去。
+    ExpectMarshalRefusedWithout<PlayerItemHoldComp>("PlayerItemHoldComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
     ExpectMarshalRefusedWithout<PlayerCurrencyComp>("PlayerCurrencyComp");
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。

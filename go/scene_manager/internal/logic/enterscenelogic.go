@@ -197,6 +197,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				"missing gate_instance_id (required for gate anti-zombie filtering)"), nil
 		}
 	}
+	// 托管落点(enter_hosted_placement.go):不带 gate、要带断开那次登录的身份,同样在任何写之前判掉。
+	if resp := l.rejectMalformedHostedPlacement(in); resp != nil {
+		return resp, nil
+	}
 	// 路由不变量(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):C++ gate / scene 与 login 只连本 zone 的
 	// scene_manager,请求的 gate zone 恒是本进程的 zone。不是的话是调用方连错了实例(发现键或前缀配错):本进程不能替
 	// 别的 zone 解析场景、预占人数、改成员 —— 那些都是别的 zone 的控制域键。在任何写入之前、一个字节都不改地拒绝。
@@ -459,6 +463,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//    ErrNoAvailableNode 上,玩家永远到不了目标区 —— 这正是合服后源区
 	//    玩家登录卡死的路径。这里不做任何预占,所以也没有需要成对释放的人数。
 	crossZoneRedirect := in.GateZoneId != 0 && targetZoneId != 0 && in.GateZoneId != targetZoneId
+	if crossZoneRedirect && in.HostedPlacement {
+		// 托管落点没有 gate 可重定向,第二条腿也没有客户端去连:只限本 zone。此刻还没有任何预占与写入。
+		return l.rejectHostedPlacementAcrossZones(in, targetZoneId), nil
+	}
 	if crossZoneRedirect {
 		// 重定向分两种,只有第二种动归属:
 		//  a) 目标 zone 就是玩家现在所在的 zone(访客掉线后从别区 gate 登录、或等待
@@ -507,7 +515,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		guard := placementGuard{observedEpoch: observedEpoch, mint: true, pendingSceneConfID: in.SceneConfId,
 			identity: identityRecord, expectLoc: expectObservedLocation(observedLocRaw), ownerRevision: in.OwnerRevision, observedTag: currentLocTag}
 		if leavingZone && !awaitingPlacement {
-			resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "跨区重定向")
+			resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "cross-zone redirect")
 			if resp != nil {
 				return resp, nil
 			}
@@ -617,6 +625,18 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				fmt.Sprintf("invalid scene node id %q: %v", nodeId, parseErr)), nil
 		}
 	}
+	// 托管落点的事件要带目标节点的实例号(防僵尸);拿不到就在任何落点写之前可重试地拒绝(enter_hosted_placement.go)。
+	hostedInstance := ""
+	if in.HostedPlacement {
+		instance, instanceResp := l.resolveHostedPlacementInstance(in, targetZoneId, nodeId)
+		if instanceResp != nil {
+			if reserved {
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
+			}
+			return instanceResp, nil
+		}
+		hostedInstance = instance
+	}
 
 	// 在任何旧场景扣减、ReleasePlayer、位置写入或 Gate 路由之前过换手门:跨节点
 	// 进入新场景时旧节点可能仍在存盘,新节点会读到陈旧快照。放行凭据是源 scene
@@ -644,7 +664,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 换手门仍在 3b 之前:跨节点换图的第一跳注定拿 18,没理由先为它查一次归属。
 	var handoffGrant handoffVerdict
 	if crossNodeHandoff {
-		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "场景交接")
+		resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "scene handoff")
 		if resp != nil {
 			// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
 			// 请求时必须成对释放，不能让失败请求污染调度负载。
@@ -679,11 +699,12 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//     下线(注册表里没有任何节点)时 currentLoc 已是 nil,这里按首次落点回落 gate zone(该旁路只对未映射且已有
 	//     等待落点的玩家可达,即旧版本遗留 / 映射丢失)。
 	//     走到这里之前本请求只动过去重占位与场景预占(下面成对释放),location / owner_epoch 一个字节都没写。
-	//     上面「拒绝先于任何写」只对带 GateId 的请求成立:没有 GateId 的请求不查归属,下面的第 6 步
+	//     上面「拒绝先于任何写」只对要发路由的请求成立:既没有 GateId、也不是托管落点的请求不查归属,下面的第 6 步
 	//     (铸 epoch + CAS 写 location)、第 6b 步(扣旧场景人数)与第 7b 步(跨节点时派发 ReleasePlayer)
 	//     照常执行。TestEnterScene_HomeZoneNotQueriedWithoutGateRoute 钉住「不带 GateId 不发归属 RPC」。
+	//     托管落点(hosted_placement)同样要发路由 —— 发给目标 scene 节点,它建实体要 home_zone —— 所以照查。
 	var homeZoneID uint32
-	if in.GateId != "" {
+	if in.GateId != "" || in.HostedPlacement {
 		unmappedPolicy := homeZoneUnmappedFallsBackToGateZone
 		if awaitingPlacement {
 			unmappedPolicy = homeZoneUnmappedRejectsTravel
@@ -771,6 +792,24 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		guard.mint, guard.requiredMarker = handoffGrant.committed, handoffGrant.marker
 	}
 
+	// 3d. 待确认回执(两段回执,zone-redis-regression-guard-20261022.md §4.3.4):location 记的 epoch 是一次回滚写下的值
+	//     (推路由失败或铸造没确认落盘之后),回滚本身的落盘还没确认。不铸造就要把这个值交出去的落点(同落点重连、同物理节点换图、dev 旁路)先确认它
+	//     落盘、把回执改成正式回执,再以改写后的 location 作为本次观察继续;确认不了就不下发(7 / 19 / 3 / ErrRedis,
+	//     都在任何人数扣减与落点写之前)。铸造的落点不需要:新铸的值比它大,确认的是新值。
+	//     典型来源:源端见到待确认回执按 B5′ 踢线之后,玩家重登落回原场景 —— 不在这里拦,重登就会原样下发那个没确认的值。
+	if currentLoc != nil && !guard.mint && ownerepoch.IsPendingRollbackReceipt(currentLoc.GetRollbackReceipt()) {
+		confirmedLoc, confirmedRaw, confirmedTag, confirmErr := confirmPendingRollbackLocation(l.ctx, l.svcCtx, l.Logger,
+			in.PlayerId, currentLoc, currentLocRaw, currentLocTag, observedEpoch)
+		if confirmErr != nil {
+			if reserved {
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
+			}
+			return l.rejectUnconfirmedPendingRollback(in, targetZoneId, confirmErr), nil
+		}
+		currentLoc, currentLocRaw, currentLocTag, observedLocRaw = confirmedLoc, confirmedRaw, confirmedTag, confirmedRaw
+		guard.expectLoc, guard.observedTag = expectObservedLocation(observedLocRaw), currentLocTag
+	}
+
 	// 4. IDEMPOTENCY CHECK: Is player already in the same scene on the same node?
 	//    Location is unchanged, but we must still route the gate so the new
 	//    session/connection is wired to the correct scene node.
@@ -812,6 +851,13 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, observedEpoch); err != nil {
 					l.Logger.Errorf("Failed to route reconnecting player %d to gate: %v", in.PlayerId, err)
 					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
+				}
+			} else if in.HostedPlacement {
+				// 托管角色的 location 已经指向这个场景:通常是上一条托管落点的事件还没被目标节点消费。照样再发一次,
+				// 让实体收敛到 location(scene 侧对"已在目标场景"幂等);失败只回 7,理由同上,不回滚。
+				if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, observedEpoch); err != nil {
+					l.Logger.Errorf("[HostedPlacement] failed to re-deliver same-placement hosted route for player %d: %v", in.PlayerId, err)
+					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route hosted player to scene node failed: %v", err)), nil
 				}
 			}
 			return &scene_manager.EnterSceneResponse{ErrorCode: 0}, nil
@@ -876,8 +922,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	}
 
 	// 6c. 铸造没确认落盘(上面第 6 步的 errOwnerEpochMintNotDurable):新 epoch 不交给任何节点,不推路由,按推路由失败
-	//     回滚并回 ErrKafkaRoute(可重试,C++ 源端走与推路由失败相同的取证 / 回执采纳路径)。不看 GateId:没有 gate
-	//     的请求也不能把一个可能随 Redis 崩溃消失的 epoch 留在 location 里,让之后的同落点重连原样下发。
+	//     回滚并回 ErrKafkaRoute(可重试,C++ 源端走与推路由失败相同的取证路径)。回滚写下的 epoch 同样要确认落盘之后才许
+	//     源端采纳,所以走两段回执(rollbackPlacementAfterPushFailure,zone-redis-regression-guard-20261022.md §4.3.4)。
+	//     不看 GateId:没有 gate 的请求也不能把一个可能随 Redis 崩溃消失的 epoch 留在 location 里,让之后的同落点重连原样下发。
 	if mintNotDurable {
 		l.Logger.Errorf("[OwnerEpochMint] Minted owner_epoch not confirmed durable; not routing, rolling back location/epoch/counts: player=%d epoch=%d target_scene=%d target_node=%s err=%v",
 			in.PlayerId, placed.epoch, sceneId, nodeId, updateErr)
@@ -890,13 +937,17 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 
 	// 7. Send Route Command to Gate. Broker ACK is the transaction commit
 	// point: only after it succeeds may the response be cached as successful.
-	if in.GateId != "" {
+	// 托管落点(hosted_placement)没有 gate:路由直接发给目标 scene 节点(PlayerHostedPlacementEvent),
+	// 提交点与失败回滚和推 gate 路由完全相同(routePlacement,enter_hosted_placement.go)。
+	if in.GateId != "" || in.HostedPlacement {
 		routeStart := time.Now()
-		if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, placed.epoch); err != nil {
-			l.Logger.Errorf("Failed to route player %d to gate, rolling back location/epoch/counts: %v", in.PlayerId, err)
+		if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, placed.epoch); err != nil {
+			l.Logger.Errorf("Failed to route player %d to its new placement, rolling back location/epoch/counts: %v", in.PlayerId, err)
 			// 回滚:location 退回本次之前的值,epoch 只进不退(GO-2,cross-zone-scene-travel.md §12.8)。
-			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记,
-			// 源 scene 凭回执采纳新值;标记已被目标节点消费 / 源端取走时保留本次落点(marker_gone)。
+			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记。
+			// 回执先写待确认形态,回滚确认落盘之后才改成正式回执,源 scene 只凭正式回执采纳新值(两段回执,
+			// zone-redis-regression-guard-20261022.md §4.3.4:铸造确认过,回滚写下的是另一个值,要单独确认);
+			// 标记已被目标节点消费 / 源端取走时保留本次落点(marker_gone)。
 			// 同节点 epoch 0 的铸造走 keep(sameNodeZeroMint:epoch 保留铸出值,只退 location):路由的目标
 			// 就是持有节点本身。没投递到 —— 持有节点缓存仍是 0,存盘不带 guard,1 拒不了它;kafka-go 报错但
 			// broker 其实已投递 —— 缓存已是 1,再 INCR 会让它之后带 guard 的存盘被拒、实体被当废黜销毁。
@@ -917,8 +968,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// it persists state and tears down the entity. Same-node switches skip this
 	// because the C++ node reuses the in-memory entity directly.
 	//
-	// 只在本请求**提交之后**派发(scene-enter-chain-residuals.md §4.2 ①):带 GateId 的请求以第 7 步路由
-	// broker ACK 为提交点,不带 GateId 的以第 6 步落点成功为提交点,两种情形都走到这里。第 6 步的各个失败
+	// 只在本请求**提交之后**派发(scene-enter-chain-residuals.md §4.2 ①):带 GateId 的请求与托管落点以第 7 步路由
+	// broker ACK 为提交点,其余不带 GateId 的以第 6 步落点成功为提交点,几种情形都走到这里。第 6 步的各个失败
 	// 返回、第 7 步路由失败与回滚的返回都不派发 —— 以前派发排在落点之前,落点失败(B4)或路由回滚(B5 采纳
 	// 回滚后的 epoch)之后迟到的释放会把仍持有归属的实体退掉,玩家挂在哑连接上只能重登。
 	//
@@ -1239,9 +1290,9 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 // etcd 读失败按放行处理(fail-open):这道检查只为给玩家一个更早、更准的拒绝,不是安全门;
 // 归属安全由后面的换手门与 epoch CAS 保证。
 func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterSceneRequest, targetZoneId uint32) *scene_manager.EnterSceneResponse {
-	confID, mapKind := in.SceneConfId, "指定地图"
+	confID, mapKind := in.SceneConfId, "requested map"
 	if confID == 0 {
-		mapKind = "默认大世界"
+		mapKind = "default world"
 		var ok bool
 		if confID, ok = defaultWorldConfID(); !ok {
 			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonTravelMapUnavailable)
@@ -1309,8 +1360,9 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 	// 第一条腿不存在同节点 epoch 0 的铸造,keepMintedEpoch 恒 false(dev 旁路不铸造,自然走 keep)。
 	// 回滚、还人数、回显三件事分开写:回显只看 echo,不能像以前串在一个 && 里那样被旧场景的
 	// SceneId 条件短路掉(等待落点再次重定向时旧 location 的 SceneId 就是 0)。
+	// 凭标记的 bump 走两段回执(rollbackPlacementAfterPushFailure),理由同同 zone 第 6c 步。
 	rollbackPlaced := func(resp *scene_manager.EnterSceneResponse) {
-		restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, in.PlayerId,
+		restored, echo := rollbackPlacementAfterPushFailure(l.ctx, l.svcCtx, l.Logger, in.PlayerId,
 			currentLoc, currentLocRaw, currentZoneID, placed, placement.guard.requiredMarker, false)
 		if restored && currentLoc != nil && currentLoc.SceneId != 0 {
 			l.commitSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
@@ -1382,6 +1434,23 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 	}, nil
 }
 
+// rejectUnconfirmedPendingRollback 把第 3d 步 confirmPendingRollbackLocation 的失败翻成应答(错误清单见该函数)。
+// 这些拒绝都发生在任何人数扣减、落点写与路由之前:确认脚本只把 owner_epoch 原值写回,状态一个字节都没变。
+func (l *EnterSceneLogic) rejectUnconfirmedPendingRollback(in *scene_manager.EnterSceneRequest, zoneID uint32, err error) *scene_manager.EnterSceneResponse {
+	switch {
+	case errors.Is(err, errOwnerEpochConflict):
+		metrics.ObserveEnterSceneRejected(zoneID, "epoch_conflict")
+		return errResp(constants.ErrOwnerEpochConflict, "owner epoch or location advanced concurrently while confirming a pending rollback receipt; retry")
+	case errors.Is(err, errPendingRollbackNotDurable):
+		return errResp(constants.ErrKafkaRoute, fmt.Sprintf("pending rollback receipt not confirmed durable; owner epoch not routed: %v", err))
+	case errors.Is(err, svc.ErrOwnerEpochMintNotSent), errors.Is(err, errOwnerEpochMinterMissing):
+		return errResp(constants.ErrUpdateLocation, "pending rollback receipt confirmation not sent; retry")
+	default:
+		l.Logger.Errorf("[RollbackReceipt] Pending rollback receipt confirmation failed: player=%d err=%v", in.PlayerId, err)
+		return errResp(constants.ErrRedis, fmt.Sprintf("pending rollback receipt confirmation failed: %v", err))
+	}
+}
+
 // rollbackEnterSceneAfterRouteFailure 撤掉同 zone 第 7 步推路由失败的落点,并在回滚确认生效后把人数退回去
 // (目标场景的预占退回、旧场景的人数还回去)。Redis 操作尽力而为:路由失败本身才是主错误,回滚的每一种
 // 失败都已记日志供修复。
@@ -1391,10 +1460,12 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 // 返回 (restored, echo):restored 为 false(marker_gone / target_registered / fence_not_proof / superseded /
 // redis_error / plan_error)时人数一个都不动 —— 本次落点仍在 Redis 里,目标场景的预占与旧场景的扣减正对应它;echo 由调用方填进
 // EnterSceneResponse.owner_epoch_after_rollback。
+//
+// 第 6c 步(铸造没确认落盘)与第 7 步(推路由失败)共用;凭标记的 bump 都走两段回执(rollbackPlacementAfterPushFailure)。
 func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
 	oldZoneID uint32, placed placedLocation, requiredMarker string, keepMintedEpoch bool,
 	newZoneID uint32, newSceneID uint64, newNodeID string) (bool, uint64) {
-	restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, playerID, old, oldRaw, oldZoneID,
+	restored, echo := rollbackPlacementAfterPushFailure(l.ctx, l.svcCtx, l.Logger, playerID, old, oldRaw, oldZoneID,
 		placed, requiredMarker, keepMintedEpoch)
 	if !restored {
 		return false, echo

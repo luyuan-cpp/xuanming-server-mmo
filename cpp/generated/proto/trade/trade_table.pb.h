@@ -1667,6 +1667,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceRecord final : public 
     kVersionFieldNumber = 18,
     kParentIdFieldNumber = 20,
     kCounterpartyIdFieldNumber = 21,
+    kOnBookFieldNumber = 22,
   };
   // string request_key = 2;
   void clear_request_key() ;
@@ -1893,11 +1894,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceRecord final : public 
   void _internal_set_counterparty_id(::uint64_t value);
 
   public:
+  // bool on_book = 22;
+  void clear_on_book() ;
+  [[nodiscard]] bool on_book() const;
+  void set_on_book(bool value);
+
+  private:
+  bool _internal_on_book() const;
+  void _internal_set_on_book(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:trade.TradeCommerceRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
+      ::google::protobuf::internal::TcParseTable<5, 22,
                           0, 61,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1947,6 +1958,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceRecord final : public 
     ::uint64_t version_;
     ::uint64_t parent_id_;
     ::uint64_t counterparty_id_;
+    bool on_book_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6913,6 +6925,30 @@ inline ::uint64_t TradeCommerceRecord::_internal_counterparty_id() const {
 inline void TradeCommerceRecord::_internal_set_counterparty_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.counterparty_id_ = value;
+}
+
+// bool on_book = 22;
+inline void TradeCommerceRecord::clear_on_book() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.on_book_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline bool TradeCommerceRecord::on_book() const {
+  // @@protoc_insertion_point(field_get:trade.TradeCommerceRecord.on_book)
+  return _internal_on_book();
+}
+inline void TradeCommerceRecord::set_on_book(bool value) {
+  _internal_set_on_book(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:trade.TradeCommerceRecord.on_book)
+}
+inline bool TradeCommerceRecord::_internal_on_book() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.on_book_;
+}
+inline void TradeCommerceRecord::_internal_set_on_book(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.on_book_ = value;
 }
 
 // -------------------------------------------------------------------

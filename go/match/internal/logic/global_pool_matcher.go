@@ -248,7 +248,7 @@ func claimGroup(ctx context.Context, s *svc.ServiceContext, claim poolClaim, nod
 		return metrics.PoolClaimIDError
 	}
 	f := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: claim.group.Region,
-		TargetNodeId: node.NodeId, TargetInstanceId: node.NodeUuid, TargetEndpoint: node.Endpoint,
+		TargetNodeId: node.NodeId, TargetInstanceId: node.NodeUuid, TargetEndpoint: node.Endpoint, ReleaseTrack: node.Track.String(),
 		Mode: uint32(claim.pool.Mode), ConfigId: claim.pool.ConfigId, RequeueOnFailure: true}
 	var tickets []*pb.MatchAuthorityTicketRecord
 	var launches []*teampb.TeamLaunchRecord

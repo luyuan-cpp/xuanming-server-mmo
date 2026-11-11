@@ -1,7 +1,7 @@
 package main
 
 // pvp-team-smoke 场景:人数档真人 PVP(PVP_TEAM,1V1～5V5)计分组排的端到端冒烟,覆盖
-// docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP 与计分组排」第 1～10 条的全部情况(§12.5 第 4 步)。
+// docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP 与计分组排」第 1～10 条的全部情况(§12.5 第 5 步)。
 //
 // 两个阶段(pvp_team_smoke.phase):
 //
@@ -896,12 +896,15 @@ func (r *pvpSmokeCaseRun) checkSettlement(before map[uint64]*rankpb.RankEntry, s
 	decided, draw := pvpSmokeExpectedRatings(ratings, players, scoreA), pvpSmokeExpectedRatings(ratings, players, 0.5)
 	matchesDecided, matchesDraw := true, true
 	for _, bot := range r.allBots() {
-		after, err := pvpSmokeWaitRanked(bot, before[bot.gc.PlayerId])
+		player := bot.gc.PlayerId
+		// 已在榜上、按平局结算又不改分的人,入账后分数与 achieved_ms 都不变,榜上看不出新记了一局。
+		unchangedAllowed := before[player].GetRank() != 0 && draw[player] == ratings[player]
+		after, err := pvpSmokeWaitRanked(bot, before[player], unchangedAllowed)
 		if err != nil {
 			return err
 		}
-		matchesDecided = matchesDecided && after.GetScore() == decided[bot.gc.PlayerId]
-		matchesDraw = matchesDraw && after.GetScore() == draw[bot.gc.PlayerId]
+		matchesDecided = matchesDecided && after.GetScore() == decided[player]
+		matchesDraw = matchesDraw && after.GetScore() == draw[player]
 		oneVOne, err := pvpSmokeRankSelf(bot, pvpSmokeBoardOneVOne)
 		if err != nil {
 			return err
@@ -939,7 +942,8 @@ func pvpSmokeExpectedRatings(ratings map[uint64]int64, sides map[uint64]uint32, 
 }
 
 // pvpSmokeWaitRanked 轮询 PVP_TEAM 榜上的 self,直到比 before 新记了一局(写榜是异步的)。
-func pvpSmokeWaitRanked(bot *teamSmokeBot, before *rankpb.RankEntry) (*rankpb.RankEntry, error) {
+// unchangedAllowed:这个人这局可能按不改分结算(榜上看不出来),超时时分数没变就按已结算返回,由调用方核对分数。
+func pvpSmokeWaitRanked(bot *teamSmokeBot, before *rankpb.RankEntry, unchangedAllowed bool) (*rankpb.RankEntry, error) {
 	deadline := time.Now().Add(pvpSmokeRankTimeout)
 	for {
 		after, err := pvpSmokeRankSelf(bot, pvpSmokeBoardPvpTeam)
@@ -947,6 +951,9 @@ func pvpSmokeWaitRanked(bot *teamSmokeBot, before *rankpb.RankEntry) (*rankpb.Ra
 			return nil, err
 		}
 		if rankSmokePlayedOneMore(before, after) {
+			return after, nil
+		}
+		if !time.Now().Before(deadline) && unchangedAllowed && after.GetRank() != 0 && after.GetScore() == before.GetScore() {
 			return after, nil
 		}
 		if !time.Now().Before(deadline) {

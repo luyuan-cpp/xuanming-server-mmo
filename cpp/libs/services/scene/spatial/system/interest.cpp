@@ -139,6 +139,16 @@ bool IsValidPair(entt::entity watcher, entt::entity target, const char* caller)
 // 容量
 // ---------------------------------------------------------------------------
 
+// AoiNearbyRefillComp 的唯一创建点:附近候选因名额被拒收、或只有空间来源的条目被挤掉时打上,
+// 名额空出后由 AoiSystem 重扫一次附近候选补回。调用方保证 watcher 存活。
+void MarkNearbyRefill(entt::entity watcher)
+{
+    if (!tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(watcher))
+    {
+        tlsEcs.actorRegistry.emplace<AoiNearbyRefillComp>(watcher);
+    }
+}
+
 // 已显示条目里权重最低的一个(不含 exclude);没有返回 end。
 EntryIterator FindLowestVisible(AoiListComp& list, const AoiPriorityPolicy& policy, entt::entity exclude)
 {
@@ -161,7 +171,8 @@ EntryIterator FindLowestVisible(AoiListComp& list, const AoiPriorityPolicy& poli
 }
 
 // 容量已满时,为权重 weight 的 incoming 让出一个名额:只淘汰权重严格更低的已显示条目。
-// 被淘汰者只剩空间来源时整条删除(任一方位置变化后重新评估);有显式来源时转为暂隐,名额空出后补回。
+// 被淘汰者只剩空间来源时整条删除,观察者打上重扫标记,名额空出后由 AoiSystem 补回附近候选;
+// 有显式来源时转为暂隐,名额空出后由 FillFreeSlots 补回。
 // 淘汰只改本观察者的表,目标那一侧的关系各自独立,不要求互相占位。
 bool EvictForWeight(entt::entity watcher, AoiListComp& list, uint8_t weight, entt::entity incoming,
                     const AoiPriorityPolicy& policy, AoiVisibilityChanges* changes)
@@ -181,6 +192,7 @@ bool EvictForWeight(entt::entity watcher, AoiListComp& list, uint8_t weight, ent
     if (lowest->second.follows.empty())
     {
         EraseEntry(watcher, list, lowest, changes);
+        MarkNearbyRefill(watcher);
     }
     else
     {
@@ -375,6 +387,8 @@ bool InterestSystem::AddAoiEntity(entt::entity watcher, entt::entity target, Aoi
     if (list != nullptr && list->visibleCount >= capacity &&
         !EvictForWeight(watcher, *list, policy.GetWeight(priority), target, policy, changes))
     {
+        // 被拒的是附近候选,不留条目:名额空出后由 AoiSystem 重扫补回。
+        MarkNearbyRefill(watcher);
         return false;
     }
     if (list == nullptr)

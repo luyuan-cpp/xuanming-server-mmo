@@ -161,7 +161,8 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
     - **闲置队伍到期**：片号 = `team_id`。
     - **投榜**（`PublishRankOnce`）：每个 (计分模式, 来源片) 一个键。原先每个副本串行投全部 64 片；两个副本偶尔同投一片也安全，rank 按 (榜, 片, 游标) 幂等。
     - **已建房票巡检**（`ReadyAfter`）：同类问题，每个副本都扫全部 state=3 的票、逐张开事务。片号 = `player_id`，键常量 `workReadyTicket` 已定义；`ready_recovery.go` 正由数据覆盖审计会话改，约定在它的下一批里接上同一分片条件（2026-11-06）。
-  - **不在这条规则里**：到期终局恢复（`RecoverExpiredOutcomeLane`）由数据覆盖审计会话按车道轮转，所有副本都跑，同一成局靠行锁只写一份终局（两套做法互不依赖）；终局发件箱按缺口清单第 25 条另行处理。
+    - **终局发件箱**（`PublishBattleOutcomes`，2026-11-10 落码，未编译；缺口清单第 25 条）：整局结果（`match_battle_completion`，一局一行、没有 `player_id` 列）片号 = `battle_id`，键 `outcome-result`；个人结算（`match_battle_settlement_source`，首投与等待两页共用）片号 = `player_id`，键 `outcome-settlement`。条件在 `LIMIT` 之前，分片列都在扫描索引里。原先每个副本每 2 秒读同一个到期队头、在 `next_retry_ms` 认领 CAS 上空撞。积压读数与按票的 `SettlementLookupDue` 不分片。设计与验证见 [assetop-redelivery-sharding-20261110.md](assetop-redelivery-sharding-20261110.md) §2.5、§8。
+  - **不在这条规则里**：到期终局恢复（`RecoverExpiredOutcomeLane`）由数据覆盖审计会话按车道轮转，所有副本都跑，同一成局靠行锁只写一份终局（两套做法互不依赖）。
 - 原计划的 `recovery_shard` 列与"提交前核对租约"的软围栏随租约表一起不做；成局推进改用 `battle_id` 取模，不需要新列。
 - **热池仍是单写者**：一个池只归一个副本，热池上限就是单副本能力（每轮一页、至多 8 个提交事务并发）。拆法（按首选机房拆本机房阶段、跨机房阶段单写）要有压测证据再做，见 §5.6 第 1 条。
 
@@ -397,10 +398,39 @@ Claude 只跑过 `gofmt -l`（改动的文件全部无输出），没有编译�
    MATCH_IT_TIDB=127.0.0.1:<端口> MATCH_IT_REQUIRE_TIDB=1 go test ./internal/authority/... ./internal/team/... -count=1
    ```
    重点用例：`TestAuthorityTiDBQueueRatingSnapshot`（整队入队按模式读分、没有记录按 1500、非计分模式为 0）；`TestAuthorityTiDBPartyRatingGap`（成员分差超过上限回 `ErrPartyRatingGap`，恰好等于上限、上限为 0、非计分模式都放行）；`TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRules`（新增 `party-bonus`、`party-gap` 子用例，改车队差步长仍应准入）；team 包的整队入队与成局用例（PVE_TEAM 整队票的 `rating_centi` 仍为 0），以及 `pvp_party_rules_integration_test.go` 的 `TestTeamTiDBPvpFiveSideRejectsFourStack`（4 人队开 5V5 被拒、名册与开战锁不动，同一队开 4V4 直接进队列）与 `TestTeamTiDBPvpRatingGapRejectsBeforeLaunch`（队员分差 600 被拒、不留开战原件；差 500 放行，成员票带本模式评分快照）。team 夹具的建表列表加了 `match_rating`。
-4. **冒烟**（本机全局路径，清空 redis / mysql / etcd 后起服；PVP_TEAM 用 `battle_config_id=1`）。robot 现有的组队冒烟（`team_smoke`、`team_backfill_smoke`）只开 PVE，没有组队开 PVP_TEAM 的场景；组队路径（双排同侧、车队对等、4 人队、组队评分差）由第 2、3 步的单测与真库用例覆盖。能用现有 robot 跑的是单人路径：
-   - 复制一份 `robot/etc/robot.match-stress-100.yaml`，把 `match_queue.mode` 改成 `MATCH_MODE_PVP_TEAM`、`team_size` 改成 2（2V2）跑一轮：成局正常，两侧各 2 人；
-   - 打完的局里，这些人在 `match_rating` 里 `mode=7` 的行按胜负变化，`mode=3`（1V1）的行不动（R5 的口径）；
-   - match 日志里没有 `Rating spread rejected at commit`：撮合与提交点按同一份规则判同一批票，出现就说明两边的规则或配置不一致，保留日志上报。
+4. **robot 与夹具工具的编译、静态检查和单测**（在第 0 步导表之后）：robot 用 `-mod=vendor` 引 `go/shared`，先同步 vendor，再检查全部包，并生成下一步使用的 `robot.exe`。在仓库的 `robot/` 目录执行：
+   ```powershell
+   go mod vendor
+   go build ./...
+   go build -o robot.exe .
+   go vet ./...
+   go test . ./config/... -count=1
+   ```
+   然后切到仓库的 `go/match/` 目录执行：
+   ```powershell
+   go test ./cmd/ratingfixture/... -count=1
+   ```
+   重点用例：robot 的 `TestPvpSmoke*`（情况表自洽、评分夹具跟着配置走、Elo 预言、等待窗口、夹具读写）与 `config` 的 `TestPvpTeamSmokeConfig*`；`ratingfixture` 的 `TestParseFixture*`、`TestCheckTargetOnlyAllowsDirectDevOrTestDatabases`。通过标准：各命令退出码为 0、全部用例 PASS，并产出 `robot/robot.exe`。任一步失败即停止后续步骤，保留完整输出，不用旧二进制继续冒烟。
+5. **冒烟：robot `pvp-team-smoke`，覆盖开头第 1～10 条的全部情况**（本机全局路径，清空 redis / mysql / etcd 后起服，match 用缺省的计分组排参数；前置条件全文在 `robot/etc/pvp_team_smoke.yaml` 文件头：rank 链路就绪、gate 路由服模式、MessageLimiter 有 team 与 rank 额度、PVP_TEAM 的池里没有别人）。三步，每轮都按顺序做：
+   第一步在仓库的 `robot/` 目录执行（yaml 保持 `phase: prepare`）：
+   ```powershell
+   .\robot.exe -c etc/pvp_team_smoke.yaml
+   ```
+   登录要写评分的 9 个账号，日志出现 `PVP_TEAM_SMOKE_PREPARED`，写出 `robot/logs/pvp_team_smoke_fixture.json`。
+   第二步在仓库的 `go/match/` 目录执行；`-f` 必须指向正在运行的 match 实例所用配置，沿用它的数据库口令环境变量。下面的路径只适用于实例确实使用仓库默认配置的情况；本地启动脚本派生 MySQL 配置时，改填该派生配置路径：
+   ```powershell
+   go run ./cmd/ratingfixture -f etc/match_service.yaml -in ../../robot/logs/pvp_team_smoke_fixture.json
+   ```
+   把夹具写进 `match_rating`（只认 dev / test 配置），输出 `applied 9 ratings for mode 7`。
+   第三步把 yaml 里的 `phase` 改成 `run`，切回 `robot/` 目录，再跑一次第一步的命令。通过标准：日志出现 `PVP_TEAM_SMOKE_OK cases=14 battles=12`，退出码 0；失败时是 `PVP_TEAM_SMOKE_FAIL case=… reason=…`、退出码 1，保留整份 robot 日志与 match 日志。14 种情况（单测之外再跑一遍真链路）：
+   - 1 人档：`1v1`；`1v1-rating-window`（1500 对 1700，前 3 秒不成局，锚点等满 5 秒后成局）；
+   - 2 人档：`2v2-duo-plus-solos`（双排同侧；打完全员在 PVP_TEAM 榜 board_type 3 上按 Elo 结算，1V1 榜上没有他们）、`2v2-duo-vs-duo`、`2v2-party-too-big`（`TeamSizeExceeded`）、`2v2-rating-gap`（1200 / 1800 回 `TeamRatingGapTooLarge`；1200 / 1700 可以排队；排队中队员离队，队长收到整队撤单 `TeamStateChanged`）、`2v2-rated-balance`（1500 / 1600 / 1400 / 1500 等满一档成局，两个 1500 同侧）；
+   - 3 人档：`3v3-duo-solo-vs-solos`（立即成局）、`3v3-trio-waits-for-solos`（单人入队后前 8 秒不成局，10 秒后成局）；
+   - 4 人档：`4v4-four-stack`（开 5V5 回 `TeamPvpPartySizeNotAllowed`、队伍保持空闲；开 4V4 排队，前 18 秒不成局，20 秒后成局）；
+   - 5 人档：`5v5-trio-duo-vs-trio-duo`（每侧一个 3 人队加一支双排）、`5v5-duos-split`（两支双排分在两侧）、`5v5-stack-vs-stack`、`5v5-stack-waits-for-solos`（前 28 秒不成局，30 秒后成局）。
+   每种成局的情况都核对全员进同一局、每支队伍整体同侧、两侧各 N 人，再全员直连自动战斗打到终局。不同人数档并发跑，整轮约 5 分钟。
+   当前验证边界：夹具只重置 9 人，其余 73 人的初始 1500 分依赖本轮清库；不清库反复跑会保留他们上一轮的评分，不能保证相同撮合条件。结算轮询允许平局不改分的旧榜条目通过，客户端榜单没有局数或结算版本，因此该分支只能证明分值相符，不能单独证明本局已入账。
+   另核对 match 日志里没有 `Rating spread rejected at commit`：撮合与提交点按同一份规则判同一批票，出现就说明两边的规则或配置不一致，保留日志上报。
 
 ### 12.6 R5（2026-11-05：评分按模式分开、榜按模式、平局判定）
 

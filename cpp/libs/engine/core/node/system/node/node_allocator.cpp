@@ -1,4 +1,5 @@
 #include "node_allocator.h"
+#include "node_id_selection.h"
 #include <muduo/base/Logging.h>
 #include "node.h"
 #include "node/system/etcd/etcd_manager.h"
@@ -30,64 +31,57 @@ void NodeAllocator::RecordLostId(uint32_t id)
 	lostIds().insert(id);
 }
 
+std::unordered_set<uint32_t>& NodeAllocator::allocatedIds()
+{
+	static std::unordered_set<uint32_t> ids;
+	return ids;
+}
+
+void NodeAllocator::RecordAllocatedIds(std::string_view allocationPrefix, const std::vector<std::string_view> &allocatedKeys)
+{
+	static constexpr uint32_t kMaxNodeId = static_cast<uint32_t>(kNodeMask);
+	std::unordered_set<uint32_t> ids;
+	for (const auto key : allocatedKeys)
+	{
+		if (const auto id = node_id_selection::ParseAllocatedId(allocationPrefix, key, kMaxNodeId))
+		{
+			ids.insert(*id);
+		}
+	}
+	LOG_INFO << "Node-id allocation conflict: " << ids.size() << " ids of this node type are allocated cluster-wide;"
+			 << " the next attempt skips them";
+	allocatedIds() = std::move(ids);
+}
+
 void NodeAllocator::SelectNodeId()
 {
 	const uint32_t nodeType = gNode->GetNodeType();
 	LOG_INFO << "Acquiring node ID for node type: " << nodeType;
 
-	// All services pick next free ID in local snapshot,
-	// then rely on etcd PutIfAbsent CAS to enforce same-type uniqueness.
-	const auto &existingNodes = gNode->GetServiceDiscoveryManager().ServiceNodes().NodesOfType(nodeType);
-
+	// 选最小空闲号,再由分配键的 PutIfAbsent CAS 保证同类型全服唯一。已占的号有三个来源:
+	//   * 发现快照里的同类节点:只是本节点看得到的那部分(zone-scoped 类型只看本 zone,battle 只看自己的键),
+	//     第一次选号时也只有它;
+	//   * 本次启动输掉 CAS 的号:冷启动时快照可能落后 watch 数百毫秒,不合入会反复撞同一个号;
+	//   * CAS 失败时读回的全服分配清单(RecordAllocatedIds):多 zone 部署里第一次多半撞上别的 zone 的号,
+	//     有了清单下一次就直接跳过,不再逐个去撞(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+	// 号空出来之后照样能被重新用上:快照与清单都会更新,lostIds 只在本次启动内有效。
 	std::unordered_set<uint32_t> usedIds;
-	uint32_t maxUsedId = 0;
-
-	for (const auto &node : existingNodes)
+	for (const auto &node : gNode->GetServiceDiscoveryManager().ServiceNodes().NodesOfType(nodeType))
 	{
 		usedIds.insert(node.node_id());
-		if (node.node_id() > maxUsedId)
-		{
-			maxUsedId = node.node_id();
-		}
 	}
-
-	// 合入本次启动中已经输掉 CAS 的 ID:冷启动时本地发现快照可能落后 Watch 数百毫秒,
-	// 否则事件尚未分发时快照仍为空,每次都会重试同一个失败 ID。
-	for (uint32_t id : lostIds())
-	{
-		usedIds.insert(id);
-		if (id > maxUsedId)
-		{
-			maxUsedId = id;
-		}
-	}
+	usedIds.insert(lostIds().begin(), lostIds().end());
+	usedIds.insert(allocatedIds().begin(), allocatedIds().end());
 
 	static constexpr uint32_t kMaxNodeId = static_cast<uint32_t>(kNodeMask);
-	uint32_t nextNodeId;
-
-	// Always scan upward through gaps so a previously-lost id slot becomes
-	// reusable as soon as its lease drops (existingNodes-derived usedIds
-	// gets cleaned up by the discovery layer; lostIds is process-local and
-	// only matters for the same boot).
-	bool found = false;
-	for (uint32_t id = 1; id <= kMaxNodeId; ++id)
-	{
-		if (usedIds.find(id) == usedIds.end())
-		{
-			nextNodeId = id;
-			found = true;
-			break;
-		}
-	}
-	if (!found)
+	const auto nextNodeId = node_id_selection::SmallestFreeId(usedIds, kMaxNodeId);
+	if (!nextNodeId)
 	{
 		LOG_FATAL << "No available node ID (max " << kMaxNodeId << ")";
 		throw std::runtime_error("Node ID space exhausted");
 	}
 
-	(void)maxUsedId; // retained for log/debug parity; iteration starts at 0
-
-	gNode->MutableNodeInfo().set_node_id(nextNodeId);
+	gNode->MutableNodeInfo().set_node_id(*nextNodeId);
 }
 
 bool IsGateNodeType(uint32_t type)

@@ -102,9 +102,9 @@ void Channel::handleEventWithGuard(Timestamp receiveTime)
     // 停在 kConnecting,水平触发的 WSAPoll 还会每轮立即返回而空转。
     // 所以没设 closeCallback、设了 errorCallback 的 channel(本仓只有 Connector)不提前返回,
     // 挂断按错误投递(没带 POLLERR 也投递,只投一次),由 handleError 读 SO_ERROR 走 retry;
-    // Hiredis 只设 read / write 回调。WSAPoll 对纯 FIN 可能只报 POLLHUP,
-    // 必须投递一次 read 让消费者读取 EOF 并清理连接。该读回调可能已释放 context,
-    // 因此随后直接返回,不能再落到 write 回调。
+    // 只设 read / write 回调、没设 errorCallback 的 channel(例如 HupChannelContract 用例;Hiredis 早期也是):
+    // WSAPoll 对纯 FIN 可能只报 POLLHUP,必须投递一次 read 让消费者读取 EOF 并清理连接。该读回调可能已释放
+    // 消费者的状态,因此随后直接返回,不能再落到 write 回调。Hiredis 现在另设了 closeCallback(内部同样走读处理),走 closeCallback 那一支。
     if (closeCallback_ || !errorCallback_)
     {
       if (closeCallback_) closeCallback_();

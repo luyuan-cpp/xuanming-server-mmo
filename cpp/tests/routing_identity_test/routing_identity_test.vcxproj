@@ -214,6 +214,12 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_drain_migration\</ObjectFileName>
     </ClCompile>
+    <!-- gate 路由服子集(handler/rpc/router_subset_policy.h,docs/design/connection-fanout-subsetting-20261106.md §3.2):
+         只测纯计算头,不编 router_subset.cpp(它拖着节点注册表与 gRPC 通道)。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/tests/router_subset_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_router_subset\</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

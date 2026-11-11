@@ -4365,6 +4365,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
   // accessors -------------------------------------------------------
   enum : int {
     kBattleInstanceIdFieldNumber = 5,
+    kReleaseTrackFieldNumber = 7,
     kSummaryFieldNumber = 1,
     kBattleNodeIdFieldNumber = 2,
     kVisibilityFieldNumber = 3,
@@ -4384,6 +4385,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
   const ::std::string& _internal_battle_instance_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_battle_instance_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_instance_id();
+
+  public:
+  // string release_track = 7;
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
 
   public:
   // .match.BattleWatchSummary summary = 1;
@@ -4446,8 +4462,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          1, 53,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          1, 66,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4476,6 +4492,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr battle_instance_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::match::BattleWatchSummary* PROTOBUF_NULLABLE summary_;
     ::uint32_t battle_node_id_;
     int visibility_;
@@ -8709,14 +8726,14 @@ inline void BattleWatchSummary::_internal_set_featured(bool value) {
 
 // .match.BattleWatchSummary summary = 1;
 inline bool SpectateBattleRecord::has_summary() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.summary_ != nullptr);
   return value;
 }
 inline void SpectateBattleRecord::clear_summary() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.summary_ != nullptr) _impl_.summary_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::match::BattleWatchSummary& SpectateBattleRecord::_internal_summary() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -8735,16 +8752,16 @@ inline void SpectateBattleRecord::unsafe_arena_set_allocated_summary(
   }
   _impl_.summary_ = reinterpret_cast<::match::BattleWatchSummary*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SpectateBattleRecord.summary)
 }
 inline ::match::BattleWatchSummary* PROTOBUF_NULLABLE SpectateBattleRecord::release_summary() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::BattleWatchSummary* released = _impl_.summary_;
   _impl_.summary_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -8764,7 +8781,7 @@ inline ::match::BattleWatchSummary* PROTOBUF_NULLABLE SpectateBattleRecord::unsa
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:match.SpectateBattleRecord.summary)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::BattleWatchSummary* temp = _impl_.summary_;
   _impl_.summary_ = nullptr;
   return temp;
@@ -8779,7 +8796,7 @@ inline ::match::BattleWatchSummary* PROTOBUF_NONNULL SpectateBattleRecord::_inte
 }
 inline ::match::BattleWatchSummary* PROTOBUF_NONNULL SpectateBattleRecord::mutable_summary()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::BattleWatchSummary* _msg = _internal_mutable_summary();
   // @@protoc_insertion_point(field_mutable:match.SpectateBattleRecord.summary)
   return _msg;
@@ -8796,9 +8813,9 @@ inline void SpectateBattleRecord::set_allocated_summary(::match::BattleWatchSumm
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.summary_ = reinterpret_cast<::match::BattleWatchSummary*>(value);
@@ -8809,7 +8826,7 @@ inline void SpectateBattleRecord::set_allocated_summary(::match::BattleWatchSumm
 inline void SpectateBattleRecord::clear_battle_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t SpectateBattleRecord::battle_node_id() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.battle_node_id)
@@ -8817,7 +8834,7 @@ inline ::uint32_t SpectateBattleRecord::battle_node_id() const {
 }
 inline void SpectateBattleRecord::set_battle_node_id(::uint32_t value) {
   _internal_set_battle_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.battle_node_id)
 }
 inline ::uint32_t SpectateBattleRecord::_internal_battle_node_id() const {
@@ -8833,7 +8850,7 @@ inline void SpectateBattleRecord::_internal_set_battle_node_id(::uint32_t value)
 inline void SpectateBattleRecord::clear_visibility() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.visibility_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::eSpectateVisibility SpectateBattleRecord::visibility() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.visibility)
@@ -8841,7 +8858,7 @@ inline ::eSpectateVisibility SpectateBattleRecord::visibility() const {
 }
 inline void SpectateBattleRecord::set_visibility(::eSpectateVisibility value) {
   _internal_set_visibility(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.visibility)
 }
 inline ::eSpectateVisibility SpectateBattleRecord::_internal_visibility() const {
@@ -8857,7 +8874,7 @@ inline void SpectateBattleRecord::_internal_set_visibility(::eSpectateVisibility
 inline void SpectateBattleRecord::clear_tier() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tier_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::eSpectateTier SpectateBattleRecord::tier() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.tier)
@@ -8865,7 +8882,7 @@ inline ::eSpectateTier SpectateBattleRecord::tier() const {
 }
 inline void SpectateBattleRecord::set_tier(::eSpectateTier value) {
   _internal_set_tier(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.tier)
 }
 inline ::eSpectateTier SpectateBattleRecord::_internal_tier() const {
@@ -8945,7 +8962,7 @@ inline void SpectateBattleRecord::set_allocated_battle_instance_id(::std::string
 inline void SpectateBattleRecord::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t SpectateBattleRecord::deadline_ms() const {
   // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.deadline_ms)
@@ -8953,7 +8970,7 @@ inline ::uint64_t SpectateBattleRecord::deadline_ms() const {
 }
 inline void SpectateBattleRecord::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.deadline_ms)
 }
 inline ::uint64_t SpectateBattleRecord::_internal_deadline_ms() const {
@@ -8963,6 +8980,70 @@ inline ::uint64_t SpectateBattleRecord::_internal_deadline_ms() const {
 inline void SpectateBattleRecord::_internal_set_deadline_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = value;
+}
+
+// string release_track = 7;
+inline void SpectateBattleRecord::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SpectateBattleRecord::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SpectateBattleRecord.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SpectateBattleRecord::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.SpectateBattleRecord.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateBattleRecord::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:match.SpectateBattleRecord.release_track)
+  return _s;
+}
+inline const ::std::string& SpectateBattleRecord::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void SpectateBattleRecord::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateBattleRecord::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SpectateBattleRecord::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SpectateBattleRecord.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SpectateBattleRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.SpectateBattleRecord.release_track)
 }
 
 // -------------------------------------------------------------------

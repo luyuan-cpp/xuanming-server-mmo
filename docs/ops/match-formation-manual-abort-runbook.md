@@ -28,16 +28,15 @@
 4. 工作租约已到期；
 5. TiDB 时刻已过「有效截止」加 60 秒终局宽限。有效截止取 max(成局截止, 原件截止, 原件准入期限)。
 
-放行条件全部在服务端、在锁内按 SQL 可核的事实判定。工具端的「另查」提示（§5 第 3 步）不作放行条件。
+放行条件全部在服务端、在锁内按 SQL 可核的事实判定。工具端的「另查」提示（输出里的 `Also check` 段，§5 第 3 步）不作放行条件。
 
 **处置的后果**：这一局全员白打。不发结算、不计评分，原票结束，玩家可以重新匹配。帮会历练局在 guild 恢复器的下一轮（每 10 秒）读到这份 ABORT，与截止 ABORT 走完全同一条路径：同一事务释放 launch、全员角色占用与大厅，`guild_trial_battle` 按 LOSS 收尾。match 不读写 guild 的库（AGENTS.md §7.6），帮会侧不需要任何人工操作。
 
 **不做什么**（遇到就拒绝，见 §3 原因码）：
 
-- 原件合格的局（`class=auto`）：归到期恢复 / 帮会取消，人工不得抢。过了截止加宽限仍没被自动处理，查到期恢复循环本身（match 副本是否在跑、TiDB 是否可写），不要用本工具；
+- 原件合格的局（`class=auto`）：归到期恢复 / 帮会取消，人工不得抢。2026-11-06 起自动作废之前先向原 battle 实例取证，原实例仍持有房间或连不上时最多等到截止加约 13 分钟（硬上限 + 持有宽限，见设计 `cross-zone-matchmaking.md` §13.3「2026-11-06 修复：截止作废先取证」），这段时间里 `abort_wait_*` 计数在涨是正常的。超过这个时间仍没被自动处理，查到期恢复循环本身（match 副本是否在跑、TiDB 是否可写），不要用本工具；
 - 已有任何终局行：COMPLETE 已落、只有 Kafka 归档（decision=0），或终局身份与成局冲突。工具只写新终局，不覆盖已有行。这几种升级给研发；
 - state 1（还没有 Create 原件，由 `Finish(false)` 收尾）、state 5 却没有终局行（旧代码的安全中止）；
-- 成局行上的终局协议不是 1、停在 state 2/3 的局（`failed_check=outcome_protocol`）：它还在旧恢复循环里（`Pending` 照常列出它，`AcquireWork` 只对 v1 原件停发租约），每次租约到期都被续 120 秒。工具几乎总是回 `work_lease_active`，或者 `show` 之后租约一续摘要就变、回「成局已变」，所以处置不了，升级研发。state 4 的同类局不再续租，可以处置；
 - 成员原票已不在 2/3、换了轮次或换了主（`tickets_not_original`），或某名成员的票行不存在（`ticket_missing`）；
 - COMPLETE 之后个人结算还没 APPLIED、票停在 state 3：这是收件箱侧的问题，见 [收件箱手册](player-inbox-runbook.md)，释放票会让那份奖励孤立。
 
@@ -49,16 +48,16 @@
 
 ## 3. 原因码
 
-`show` / `list` 打印两类码：`failed_check` 是原件第一项不通过的核对，说明这一局为什么永久 UNKNOWN；`refusal`（`能否处理: no (…)`）说明工具为什么不处置。
+`show` / `list` 打印两类码：`failed_check` 是原件第一项不通过的核对，说明这一局为什么永久 UNKNOWN；`refusal`（`actionable: no (…)`）说明工具为什么不处置。
 
 | failed_check | 含义 | 分类 |
 |---|---|---|
-| `outcome_protocol` | 成局行上的终局协议不是 1。state 2/3 的这类局被旧恢复循环反复续租，工具处置不了（见 §2「不做什么」），升级研发；state 4 的可以处置 | shape_invalid |
+| `outcome_protocol` | 成局行上的终局协议不是 1。任何自动路径都不裁决它；2026-11-06 起过了截止就不再续租（原先 state 2/3 的会被反复续 120 秒、工具处置不了），可以处置 | shape_invalid |
 | `preflight_version` | 发房前能力版本不是 1 | shape_invalid |
 | `target_instance_missing` / `preflight_instance_mismatch` | 目标实例为空，或预检实例与目标不符 | shape_invalid |
 | `adopted_legacy` | battle 明确回执采用了旧协议。另查这一局是否已按旧路径发过结算（§5 第 3 步） | shape_invalid |
 | `adopted_invalid` | 采用回执非法 | shape_invalid |
-| `operation_missing` | operation_id 为空。原件核对不查 operation 是否为空，所以帮会历练局会被帮会取消照截止裁决自动作废；工具与它争同一把锁、同一个终局主键，只落一份 ABORT，晚到的一方回「已处理」。非活动局只有本工具能处置 | shape_invalid |
+| `operation_missing` | operation_id 为空。COMPLETE 在入口就被拒、到期恢复不选它，2026-11-06 起帮会取消也不再给它写截止 ABORT（与到期恢复同一判据），本工具是唯一出口 | shape_invalid |
 | `create_undecodable` / `create_protocol` | 原件不能解码 / 原件协议不是 1 | original_mismatch |
 | `battle_id_mismatch` / `operation_mismatch` / `target_instance_mismatch` / `config_mismatch` / `mode_mismatch` | 原件身份与成局不符 | original_mismatch |
 | `deadline_missing` / `deadline_mismatch` | 原件没有截止 / 截止与成局不符 | original_mismatch |
@@ -69,7 +68,7 @@
 |---|---|---|
 | `auto_recoverable` | 原件合格 | 等自动恢复；长时间不动查到期恢复循环 |
 | `deadline_not_due` | 还没过有效截止加 60 秒 | 等到 `effective_deadline_ms + 60000` 之后再来 |
-| `work_lease_active` | 工作租约未到期，持租副本可能还在推进 | 等 `retry_at_ms` 过去（最多 120 秒）。`failed_check=outcome_protocol` 且 state 2/3 时会一直这样，见 §2，升级研发 |
+| `work_lease_active` | 工作租约未到期，持租副本可能还在推进 | 等 `retry_at_ms` 过去（最多 120 秒）。过了截止、有原件的局不会再续租，一直这样就升级研发 |
 | `deadline_missing` | 成局与原件都没有截止 | 升级研发 |
 | `has_terminal_row` | 已有终局行（只有归档，或身份冲突） | 升级研发，附 `show` 输出 |
 | `tickets_not_original` | 原票已换轮、换主或不在 2/3 | 升级研发 |
@@ -116,7 +115,7 @@ EP=<match Pod IP>:50500
    与真正执行同一锁序、同一判据，最后整段回滚。输出一行 `[FormationManual] … executed=false` 和 `Plan only`。
 5. **执行**：同一条命令加 `-execute`。退出码 0、输出 `[FormationManual] … executed=true` 即已提交，把这一行贴进工单。服务端同时打一行同样内容的 ERROR 日志（battle_id 只进日志正文，不做指标标签），并计 `match_global_flow_total{stage="terminal",outcome="abort_manual"}`。
 6. **确认**：
-   - `show -battle <id>` 应显示 `terminal: decision=BATTLE_OUTCOME_DECISION_ABORT source_kind=MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT`，`能否处理: no (resolved)`；
+   - `show -battle <id>` 应显示 `terminal: decision=BATTLE_OUTCOME_DECISION_ABORT source_kind=MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT`，`actionable: no (resolved)`；
    - 帮会历练局：10 秒内 guild 日志出现 `[GuildTrial] launch original <launch 号> of guild <帮会> released on an authoritative match cancel receipt`，之前的 `recovery failed` 不再出现。
 
 退出码：
@@ -133,7 +132,7 @@ EP=<match Pod IP>:50500
 - 锁序与 COMPLETE、截止 ABORT、帮会取消同一入口 `terminalFormation`：全员原角色 P 升序 → `match_formation FOR UPDATE` → 原票 `FOR UPDATE`。锁内先复读终局，再取 TiDB 时刻跑放行判据，再逐字节比对操作员核对过的成局摘要；
 - `match_battle_completion` 与 `match_manual_resolution` 的主键都是 `battle_id`。多个 match 副本、多位操作员同时执行，只有一方写下 ABORT，另一方回「已处理」（退出码 3）；
 - 审计行与 ABORT 在同一事务里写：审计行写不进去时整段回滚、回「稍后重试」，不会出现有 ABORT 却没有审计的局；
-- 除 `operation_missing` 外，可处置的局都过不了原件核对：到期恢复、帮会取消、提前裁决对它们只回 UNKNOWN、不写库，COMPLETE 也会被永久拒收，所以人工 ABORT 不会作废一份合法终局。`operation_missing` 过得了核对，但 COMPLETE 在入口就因 operation 为空被拒、到期恢复也不选它；帮会历练局的取消会照截止裁决写 ABORT，与人工同一把锁、同一个终局主键，只落一份；
+- 可处置的局都不归自动路径：到期恢复、帮会取消、提前裁决只裁决 `class=auto` 的局，对其余各类只回 UNKNOWN、不写库，COMPLETE 也会被永久拒收（`operation_missing` 过得了原件核对，但 COMPLETE 在入口就因 operation 为空被拒），所以人工 ABORT 不会作废一份合法终局；
 - 有效截止取三者最大、再加 60 秒宽限：battle 房间按原件截止强制结束，准入期限之后不会再接这份 Create。
 
 ## 7. 审计
@@ -151,8 +150,7 @@ FROM match_manual_resolution ORDER BY resolved_ms DESC LIMIT 50;
 
 - 工具还没有打进 match 镜像，也没有现成的运维 Pod 模板；首次上线前补部署形态（只装工具、不带 match 写资格）；
 - 回包没有签名：连到伪造的端点会看到伪造的结论。网络策略应只允许运维 Pod 访问 match gRPC；
-- `CountStrandedExpiredFormations` 仍只数 state 2/3 的形状不合格局，看不到 state 4 与 original_mismatch；常驻指标要改成复用 `list` 的同一分类，另批做；
+- 巡检计数 `expired_unrecoverable`（`CountStrandedExpiredFormations`）2026-11-06 起与 `list` 同一圈定范围，数的就是 `list` 里 `shape_invalid` 一类（含 state 4、终局协议不是 1 的局）；`original_mismatch` 要解原件才判得出，不在这个计数里，看到期恢复的 `original_mismatch` 计数与 `list`；
 - 已有冲突终局行、只有归档行的成局，工具只报告不处置，处置方案另行设计；
-- 成局行协议不是 1、停在 state 2/3 的局被恢复循环反复续租，工具处置不了。要支持它，得让 `awaitsExpiredOutcome` / `Pending` 对过截止的非 v1 原件也停止续租，另批做；
 - 目标核对只是辅助：`-expect-target` 按工单填才有用，照抄 `show` 的 `target=` 就核不出连错环境。真正防误操作的是按环境分开的密钥（另一个环境的密钥验签不过）与成局摘要（`battle_id` 与成局行逐字节绑定）；
 - Java 版待做：同一放行判据、同一锁序与 ABORT 事务入口、审计表、独立调用方密钥、缺省关闭。

@@ -47,10 +47,12 @@ const (
 // shared/clientendpoint(k8s-client-entry D76/D78)。本函数只做 I/O(读 etcd、判停写、读排空标记、取墙钟与随机源),
 // 挑哪台、下发哪个地址、怎么签全在纯函数 signRedirectToGate 里。
 //
-// 停写(2026-11-05 起):每次直读 etcd 时把每条 gate 记录的 ModRevision 交给 svcCtx.RedirectGateRevisions,
-// 同一个 ModRevision 在本进程持续超过 gatepick.StaleAfter 的 gate 判停写(staleGateIDs)。没有 watch 镜像,
-// 判定只靠本进程读过的历史:进程刚起、或某个 zone 第一次被重定向时不判;读得稀疏时最早在第一次看到之后隔超过
-// StaleAfter 的那次重定向才判出来。
+// 停写有两个来源,任一成立即算(2026-11-05 起本进程历史,11-10 起加发布的标记):
+//   - 本进程历史:每次直读 etcd 时把每条 gate 记录的 ModRevision 交给 svcCtx.RedirectGateRevisions,同一个 ModRevision
+//     在本进程持续超过 gatepick.StaleAfter 的 gate 判停写(staleGateIDs)。进程刚起、或某个 zone 第一次被重定向时判不出,
+//     多副本各自从头学。
+//   - 目标 zone 的 login 发布的停写标记 gatepick.StaleKey(loginqueue.PublishStaleMarks):login 对本 zone 的 gate 持续做
+//     list-watch,第一次重定向到某个 zone 时也判得出。与排空标记同一次 MGET 读出(gateRedisMarks)。
 func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZoneId uint32, playerID uint64) (*scene_manager.RedirectToGateInfo, error) {
 	if svcCtx.Config.GateTokenSecret == "" {
 		return nil, fmt.Errorf("GateTokenSecret not configured, cannot sign redirect token")
@@ -60,13 +62,14 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 	if err != nil {
 		return nil, fmt.Errorf("fetch gate nodes for zone %d: %w", targetZoneId, err)
 	}
-	// 读完 etcd 立即取时刻:停写时长按「这次读返回」算,排空标记的 MGET 不算进去。
+	// 读完 etcd 立即取时刻:停写时长按「这次读返回」算,读 Redis 标记的 MGET 不算进去。
 	stale := staleGateIDs(&svcCtx.RedirectGateRevisions, targetZoneId, records, time.Now())
 	gates := gateRecordNodes(records)
+	// 两种标记都在核心实例(G4a §25.3 的 10-23 订正),不在本 zone 的控制域实例里(control-plane-zone-scoping-20261105.md §4.2)。
+	draining, publishedStale := gateRedisMarks(ctx, svcCtx.CoreRedis, gates)
 	marks := gateMarks{
-		// 排空标记在核心实例(G4a §25.3 的 10-23 订正),不在本 zone 的控制域实例里(control-plane-zone-scoping-20261105.md §4.2)。
-		draining: drainingGateIDs(ctx, svcCtx.CoreRedis, gates),
-		stale:    stale,
+		draining: draining,
+		stale:    unionMarks(stale, publishedStale),
 	}
 	return signRedirectToGate(gates, marks, svcCtx.Config.RequireClientEndpoint,
 		svcCtx.Config.GateTokenSecret, targetZoneId, playerID, time.Now(), mathrand.IntN)
@@ -75,8 +78,8 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 // gateMarks 是 AssignGateForZone 经 I/O 得到的两类按 node_id 记的标记,纯函数 signRedirectToGate 据此分档。
 // 两个 map 都可以为 nil(没有标记)。
 type gateMarks struct {
-	draining map[uint32]bool // 正在排空(Redis 标记,drainingGateIDs)
-	stale    map[uint32]bool // 注册记录停写(本进程的直读历史,staleGateIDs)
+	draining map[uint32]bool // 正在排空(Redis 标记,gateRedisMarks)
+	stale    map[uint32]bool // 注册记录停写(本进程的直读历史 staleGateIDs,并上目标 zone 的 login 发布的标记)
 }
 
 // signRedirectToGate 从目标 zone 的 gate 节点里挑一台并签重定向票据。
@@ -184,40 +187,68 @@ func selectGateTargets(nodes []*commonpb.NodeInfo, requireClientEndpoint bool) [
 	return clientendpoint.DedupeNewest(targets, gateTargetAddr, gateTargetLaunchTime)
 }
 
-// gateDrainingKeyFmt 是 gate 排空标记的键(值是标记时间)。权威定义在 login
-// (go/login/internal/logic/pkg/loginqueue/gatedrain.go 的 GateDrainingKeyFmt),写者是 tools/scripts/k8s_gate_drain.ps1;
-// scene_manager 拿不到 login 的包,这里抄一份,由 tools/scripts/tests/k8s_gate_drain.tests.ps1 钉住三处一致。
+// gateRedisMarks 一次 MGET 读出每台 gate 的两种标记(键名在 shared/gatepick,只定义一份):排空标记(运维缩容前打的,
+// 写者是 tools/scripts/k8s_gate_drain.ps1)与停写标记(目标 zone 的 login 判出的,loginqueue.PublishStaleMarks)。
+// 键序:前 len(nodes) 个是排空键、后 len(nodes) 个是停写键,各自与 nodes 的下标对应。
 //
-// 标记写在 login 的 Node.RedisClient 所在实例;scene_manager 经自己的 Redis 连接读它,今天 K8s 与本地两者是同一实例、同为 DB 0。
-// 两个隐含前提,任一被打破都会让这里静默读不到标记、退回不过滤(放行):
-//   - 拆 Redis(G4a)把排空标记挪到 redis-queue 时,scene_manager 这条读要一起指过去;
+// 失败方向是放行(两个都返回 nil、打 ERROR),与 login 的 loginqueue.DrainingGates 同语义:跨 zone 重定向因为读不到标记就拒绝,
+// 比分到一台稍后排空、或卡住的 gate 更糟;读不到停写标记时退回只靠本进程历史,与没有这条标记时一样。
+// 只查有 endpoint 的节点(fetchGateNodes 已过滤)。
+//
+// 两种标记都由 login 的 Node.RedisClient 所在的核心实例承载,这里经 svcCtx.CoreRedis 读;两个隐含前提,任一被打破都会让这里
+// 静默读不到标记、退回不过滤:
+//   - 部署时 scene-manager ConfigMap 的 CoreRedis 必须指向 login 的 Node.RedisClient 同一实例(control-plane-zone-scoping §4.2);
 //   - go-zero 的 RedisConf 没有 DB 字段,scene_manager 只能读 DB 0;login 的 Node.RedisClient.DB 改成非 0 时要同步处理。
-const gateDrainingKeyFmt = "gate:%d:draining"
-
-// drainingGateIDs 一次 MGET 查出哪些 gate 正在排空。失败方向是放行(返回 nil、打 ERROR),与 login 的
-// loginqueue.DrainingGates 同语义:跨 zone 重定向因为读不到标记就拒绝,比分到一台稍后排空的 gate 更糟。
-// 只查有 endpoint 的节点(fetchGateNodes 已过滤),键序与 nodes 对应。
-func drainingGateIDs(ctx context.Context, rdb *redis.Redis, nodes []*commonpb.NodeInfo) map[uint32]bool {
+func gateRedisMarks(ctx context.Context, rdb *redis.Redis, nodes []*commonpb.NodeInfo) (draining, stale map[uint32]bool) {
 	if rdb == nil || len(nodes) == 0 {
-		return nil
+		return nil, nil
 	}
-	keys := make([]string, 0, len(nodes))
+	keys := make([]string, 0, 2*len(nodes))
 	for _, n := range nodes {
-		keys = append(keys, fmt.Sprintf(gateDrainingKeyFmt, n.GetNodeId()))
+		keys = append(keys, gatepick.DrainingKey(n.GetNodeId()))
+	}
+	for _, n := range nodes {
+		keys = append(keys, gatepick.StaleKey(n.GetNodeId()))
 	}
 	values, err := rdb.MgetCtx(ctx, keys...)
 	if err != nil {
-		logx.Errorf("drainingGateIDs: query draining gates failed, treating all as available: %v", err)
-		return nil
+		logx.Errorf("gateRedisMarks: query gate draining / stale marks failed, treating every gate as neither: %v", err)
+		return nil, nil
 	}
-	draining := make(map[uint32]bool, len(nodes))
+	draining = make(map[uint32]bool)
+	stale = make(map[uint32]bool)
 	for i, v := range values {
-		// go-zero 的 MGET 把不存在的键返回成空串;标记值是 Unix 秒,不会是空串。
-		if i < len(nodes) && v != "" {
+		// go-zero 的 MGET 把不存在的键返回成空串;排空标记的值是 Unix 秒,停写标记的值是 "1",都不会是空串。
+		if v == "" || i >= len(keys) {
+			continue
+		}
+		if i < len(nodes) {
 			draining[nodes[i].GetNodeId()] = true
+		} else {
+			stale[nodes[i-len(nodes)].GetNodeId()] = true
 		}
 	}
-	return draining
+	return draining, stale
+}
+
+// unionMarks 合并两份按 node_id 记的标记,不修改入参;一份为空时直接返回另一份。
+func unionMarks(a, b map[uint32]bool) map[uint32]bool {
+	if len(b) == 0 {
+		return a
+	}
+	if len(a) == 0 {
+		return b
+	}
+	out := make(map[uint32]bool, len(a)+len(b))
+	for id, marked := range a {
+		out[id] = marked
+	}
+	for id, marked := range b {
+		if marked {
+			out[id] = true
+		}
+	}
+	return out
 }
 
 // gateRedirectLogEvery:eligibleTargets 两条日志各自的最小间隔。跨 zone 重定向平时稀疏,但一次大规模跨区(活动开场)
@@ -231,7 +262,7 @@ var (
 
 // eligibleTargets 给候选分档,返回最高的非空一档,保持原顺序(规则在 shared/gatepick.Eligible,与 login 挑 gate 同一份;
 // 为什么分档、为什么不拒绝见那里):完全合格的 > 连得上的(在排空或到水位,但没停写)> 全部(全部停写时)。
-// 排空看 marks.draining(Redis 标记),停写看 marks.stale(按 node_id,staleGateIDs 判),满载看 NodeInfo 自报的
+// 排空看 marks.draining(Redis 标记),停写看 marks.stale(按 node_id,本进程历史或目标 zone 的 login 发布的标记),满载看 NodeInfo 自报的
 // max_connections(人数到 90%;0 = 没声明,不判)。副作用只有指标与节流日志,now 只用于日志节流。
 func eligibleTargets(targets []gateTarget, marks gateMarks, targetZoneId uint32, now time.Time) []gateTarget {
 	kept, ex := gatepick.Eligible(targets, func(t gateTarget) gatepick.State {

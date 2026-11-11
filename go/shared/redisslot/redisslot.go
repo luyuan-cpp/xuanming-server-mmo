@@ -113,7 +113,7 @@ func buildSlotTags() {
 		}
 	}
 	if filled != SlotCount {
-		panic("redisslot: slot-tag 表未覆盖全部 slot")
+		panic("redisslot: slot-tag table does not cover all slots")
 	}
 }
 
@@ -121,7 +121,7 @@ func buildSlotTags() {
 // slot 越界时 panic:调用方只应传 HashSlot / PlayerSlot 的结果。
 func SlotTag(slot uint16) string {
 	if slot >= SlotCount {
-		panic("redisslot: slot 越界")
+		panic("redisslot: slot out of range")
 	}
 	slotTagsOnce.Do(buildSlotTags)
 	return slotTags[slot]

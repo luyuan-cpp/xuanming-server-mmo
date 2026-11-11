@@ -3,12 +3,14 @@
 //
 // # 与既有副本的关系(契约 zone_contract_v1 §2)
 //
-// 仓库里已有 7 份非 login 的同类实现:4 份 internal/noderegistry(match / scene_manager /
-// data_service / client_rpc_router 一脉)+ friend / guild / player_locator 的 internal/node,
-// 以及 login 的异源实现(internal/logic/pkg/etcd)。它们都 import proto 模块,且是
-// internal 包,跨 module 引不到,只能逐字复制 —— 这正是"改一处漏六处"的来源。
-// 本包是**唯一实现**:chat 是首个消费者;既有副本本轮一行不动,迁移放在后续批次逐个替换,
-// 迁移时以本包语义为准,不要反向往副本里补丁。
+// 本包是**唯一实现**,语义以本包为准,不要反向往副本里补丁。旧副本都 import proto 模块、又是
+// internal 包,跨 module 引不到,只能逐字复制 —— 这正是"改一处漏六处"的来源。迁移进度:
+//   - 已迁:friend 的 internal/node 已删,直接用本包;match / scene_manager / data_service /
+//     client_rpc_router 的 internal/noderegistry 自 2026-11-10 起是薄适配层,只保留各自的调用面
+//     (Register / KeepAlive / Close / Info)与 NodeInfo 填法,分配、续租、重注册、注销都转调本包
+//     (docs/design/infra-reconnect-overview.md R3、R4)。
+//   - 未迁:guild、player_locator 的 internal/node(player_locator 把能力键放进同一个注册事务),
+//     以及 login 的异源实现(internal/logic/pkg/etcd,原号被占就退出进程)。形状与本包不同,另起批次。
 //
 // # 为什么不 import proto
 //
@@ -51,9 +53,15 @@
 //	reg.Close()      // 先于 gRPC Stop:先从发现里消失,再停止接客
 //	server.Stop()
 //
+// # 指标与退避(metrics.go;infra-reconnect-overview.md §1.8、R17、R18)
+//
+// 失租次数、重注册成功 / 按原因的失败次数、换号次数和「此刻是否持有注册」的 gauge,label 只有
+// prefix 与失败原因这个固定集合。失租后的重注册按 1s 起、翻倍、封顶 30s 退避,每次等待抖 ±20%,
+// 等待可被 Close 立即打断;每轮 etcd 调用另有 reRegisterOpTimeout。
+//
 // # 并发模型
 //
-// Registration 的可变状态(lease / key / value / closed)由 mu 保护,只有 keepalive 这一条
+// Registration 的可变状态(lease / key / value / closed / held)由 mu 保护,只有 keepalive 这一条
 // goroutine 会改写,Close 与它之间靠 closed 标记收口;NodeID() 走 atomic,调用方任意 goroutine
 // 可读。Register / RegisterAfterListening 本身不起 goroutine。
 package noderegistry
@@ -63,6 +71,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"os"
 	"strconv"
@@ -150,6 +159,9 @@ type Registration struct {
 	allocKey string
 	value    string
 	closed   bool
+	// held:本句柄此刻是否持有一份已提交、租约尚未判失的注册。只用来维护 noderegistry_registered
+	// (见 setHeldLocked),不参与任何正确性判断。
+	held bool
 
 	keepAliveOnce sync.Once
 	closeOnce     sync.Once
@@ -181,8 +193,9 @@ const (
 	reRegisterOpTimeout = 10 * time.Second // 每一轮重注册的 etcd 调用预算
 	closeTimeout        = 5 * time.Second
 	revokeTimeout       = 5 * time.Second
-	backoffMin          = time.Second
-	backoffMax          = 30 * time.Second
+	// backoffMin / backoffMax 是重注册退避的中值区间(逐轮翻倍、封顶),实际等待经 jittered 抖 ±20%。
+	backoffMin = time.Second
+	backoffMax = 30 * time.Second
 
 	listenPoll        = 100 * time.Millisecond
 	listenDialTimeout = 500 * time.Millisecond
@@ -248,6 +261,8 @@ func Register(ctx context.Context, cli *clientv3.Client, spec Spec) (*Registrati
 		r.cancel()
 		return nil, fmt.Errorf("noderegistry: node_id allocation (prefix=%s): %w", spec.Prefix, err)
 	}
+	// 先预置序列再提交:提交把 noderegistry_registered 置 1,此后第一次失租也能被 increase() 看到。
+	primeMetrics(spec.Prefix)
 	r.commit(grant.ID, id, value)
 
 	logx.Infof("%s registered: zone=%d node_type=%d node_id=%d uuid=%s lease=%x ttl=%ds policy=%s release_track=%s",
@@ -310,8 +325,10 @@ func (r *Registration) Close() {
 		r.cancel()
 
 		// 先置 closed 再等:keepalive 此后到达 commit() 的任何提交都会被拒并 Revoke。
+		// 从这一刻起本句柄不再算持有注册(noderegistry_registered 随之减一)。
 		r.mu.Lock()
 		r.closed = true
+		r.setHeldLocked(false)
 		r.mu.Unlock()
 		if r.loopStarted.Load() {
 			t := time.NewTimer(closeTimeout)
@@ -670,8 +687,40 @@ func (r *Registration) commit(lease clientv3.LeaseID, id uint32, value string) b
 	r.allocKey = AllocationKey(r.spec.Prefix, r.spec.NodeType, id)
 	r.value = value
 	r.nodeID.Store(id)
+	r.setHeldLocked(true)
 	r.mu.Unlock()
 	return true
+}
+
+// setHeldLocked 切换 held 并同步 noderegistry_registered;调用方持有 mu。只在状态真正变化时改 gauge,
+// 同一句柄重复提交、重复判失租都不会多加多减。
+func (r *Registration) setHeldLocked(held bool) {
+	if r.held == held {
+		return
+	}
+	r.held = held
+	if held {
+		addRegistered(r.spec.Prefix, 1)
+	} else {
+		addRegistered(r.spec.Prefix, -1)
+	}
+}
+
+// markLeaseLost 记一次失租:lease_lost_total 加一,registered 归零,直到重注册提交成功。
+func (r *Registration) markLeaseLost() {
+	observeLeaseLost(r.spec.Prefix)
+	r.mu.Lock()
+	r.setHeldLocked(false)
+	r.mu.Unlock()
+}
+
+// countFailedAttempt 记一次失败的重注册尝试。句柄正在关闭(r.ctx 已取消)导致的失败不算:那是停机,
+// 不是依赖故障,算进去会让每次正常发版都在失败计数上留一笔。
+func (r *Registration) countFailedAttempt(reason string) {
+	if r.ctx.Err() != nil {
+		return
+	}
+	observeReRegisterFailure(r.spec.Prefix, reason)
 }
 
 // keepAliveLoop 是唯一改写身份的 goroutine:续租 → 失租 → 重注册 → 在新租约上继续续租。
@@ -686,7 +735,7 @@ func (r *Registration) keepAliveLoop() {
 			}
 			logx.Errorf("%s keepalive start failed lease=%x: %v; treating as lease lost", r.logPrefix(), int64(lease), err)
 			// KeepAlive 立即失败(如客户端续租循环已停摆)时,不退避会以最快速度反复 Grant 新租约。
-			if !r.sleep(backoffMin) {
+			if !r.sleep(jittered(backoffMin)) {
 				return
 			}
 		} else {
@@ -697,6 +746,7 @@ func (r *Registration) keepAliveLoop() {
 		if r.ctx.Err() != nil {
 			return
 		}
+		r.markLeaseLost()
 		logx.Errorf("%s lease lost: node_id=%d lease=%x, re-registering (policy=%s)",
 			r.logPrefix(), r.NodeID(), int64(lease), r.spec.OnReclaimFailed)
 		if !r.reRegister(lease) {
@@ -714,7 +764,8 @@ const (
 	attemptStop                            // 句柄已关闭或进程将退出,keepalive 结束
 )
 
-// reRegister 带指数退避重试,直到注册成功、句柄关闭或按策略退出。
+// reRegister 带指数退避重试,直到注册成功、句柄关闭或按策略退出。每次等待抖 ±20%(jittered),
+// 同一次 etcd 故障后各实例不在恢复的那一刻同拍重试;等待挂在 r.ctx 上,Close 立即打断。
 func (r *Registration) reRegister(oldLease clientv3.LeaseID) bool {
 	backoff := backoffMin
 	for {
@@ -727,11 +778,21 @@ func (r *Registration) reRegister(oldLease clientv3.LeaseID) bool {
 		case attemptStop:
 			return false
 		}
-		if !r.sleep(backoff) {
+		if !r.sleep(jittered(backoff)) {
 			return false
 		}
 		backoff = min(backoff*2, backoffMax)
 	}
+}
+
+// jittered 把退避时长 d 抖到 [0.8d, 1.2d](±20%,infra-reconnect-overview.md §1.3、R18)。
+// d 小到 d/5 为 0 时原样返回。
+func jittered(d time.Duration) time.Duration {
+	spread := d / 5
+	if spread <= 0 {
+		return d
+	}
+	return d - spread + rand.N(2*spread+1)
 }
 
 // reRegisterOnce 是一轮重注册:新租约 → CAS 重夺原 id → 失败按策略换号或退出。
@@ -745,6 +806,7 @@ func (r *Registration) reRegisterOnce(oldLease clientv3.LeaseID) attemptResult {
 	grant, err := r.cli.Grant(ctx, r.spec.LeaseTTL)
 	if err != nil {
 		logx.Errorf("%s re-register: grant lease failed: %v", r.logPrefix(), err)
+		r.countFailedAttempt(reRegisterFailGrant)
 		return attemptRetry
 	}
 	newLease := grant.ID
@@ -754,12 +816,14 @@ func (r *Registration) reRegisterOnce(oldLease clientv3.LeaseID) attemptResult {
 	if err != nil {
 		revokeLease(r.cli, newLease, r.logPrefix())
 		logx.Errorf("%s re-register: reclaim txn node_id=%d failed: %v", r.logPrefix(), oldID, err)
+		r.countFailedAttempt(reRegisterFailReclaim)
 		return attemptRetry
 	}
 	if reclaimed {
 		if !r.commit(newLease, oldID, value) {
 			return attemptStop
 		}
+		observeReRegisterSuccess(r.spec.Prefix)
 		// 双 key 已改挂新租约,旧租约上不再有我们的 key;旧租约若服务端还活着就顺手结束它。
 		revokeLease(r.cli, oldLease, "")
 		logx.Infof("%s re-register: reclaimed original node_id=%d lease=%x", r.logPrefix(), oldID, int64(newLease))
@@ -769,6 +833,7 @@ func (r *Registration) reRegisterOnce(oldLease clientv3.LeaseID) attemptResult {
 	// 原 id 已归别的 uuid。
 	if r.spec.OnReclaimFailed == ExitProcess {
 		revokeLease(r.cli, newLease, r.logPrefix())
+		r.countFailedAttempt(reRegisterFailTakenOver)
 		logx.Errorf("%s re-register: node_id=%d was taken over by another instance and policy=ExitProcess "+
 			"(node_id backs a persistent identity); exiting so the orchestrator restarts us with a fresh id",
 			r.logPrefix(), oldID)
@@ -782,10 +847,16 @@ func (r *Registration) reRegisterOnce(oldLease clientv3.LeaseID) attemptResult {
 	if err != nil {
 		revokeLease(r.cli, newLease, r.logPrefix())
 		logx.Errorf("%s re-register: allocate new node_id failed: %v", r.logPrefix(), err)
+		r.countFailedAttempt(reRegisterFailAllocate)
 		return attemptRetry
 	}
 	if !r.commit(newLease, newID, newValue) {
 		return attemptStop
+	}
+	// 计数在回调之前:回调方(以及集成测试)收到换号通知时,两个计数器已经可见。
+	observeReRegisterSuccess(r.spec.Prefix)
+	if newID != oldID {
+		observeNodeIDReallocated(r.spec.Prefix)
 	}
 	revokeLease(r.cli, oldLease, "")
 	logx.Infof("%s re-register: node_id changed %d -> %d lease=%x", r.logPrefix(), oldID, newID, int64(newLease))

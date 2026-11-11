@@ -864,6 +864,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
     kCorrelationIdFieldNumber = 10,
     kGateZoneIdFieldNumber = 9,
     kClientChannelPickFieldNumber = 11,
+    kHostedPlacementFieldNumber = 14,
     kLoginGenerationFieldNumber = 12,
     kOwnerRevisionFieldNumber = 13,
   };
@@ -992,6 +993,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
   void _internal_set_client_channel_pick(bool value);
 
   public:
+  // bool hosted_placement = 14;
+  void clear_hosted_placement() ;
+  [[nodiscard]] bool hosted_placement() const;
+  void set_hosted_placement(bool value);
+
+  private:
+  bool _internal_hosted_placement() const;
+  void _internal_set_hosted_placement(bool value);
+
+  public:
   // uint64 login_generation = 12;
   void clear_login_generation() ;
   [[nodiscard]] ::uint64_t login_generation() const;
@@ -1016,7 +1027,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1056,6 +1067,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneRequest final : public ::
     ::uint64_t correlation_id_;
     ::uint32_t gate_zone_id_;
     bool client_channel_pick_;
+    bool hosted_placement_;
     ::uint64_t login_generation_;
     ::uint64_t owner_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3034,7 +3046,7 @@ inline void EnterSceneRequest::_internal_set_client_channel_pick(bool value) {
 inline void EnterSceneRequest::clear_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t EnterSceneRequest::login_generation() const {
   // @@protoc_insertion_point(field_get:scene_manager.EnterSceneRequest.login_generation)
@@ -3042,7 +3054,7 @@ inline ::uint64_t EnterSceneRequest::login_generation() const {
 }
 inline void EnterSceneRequest::set_login_generation(::uint64_t value) {
   _internal_set_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:scene_manager.EnterSceneRequest.login_generation)
 }
 inline ::uint64_t EnterSceneRequest::_internal_login_generation() const {
@@ -3058,7 +3070,7 @@ inline void EnterSceneRequest::_internal_set_login_generation(::uint64_t value) 
 inline void EnterSceneRequest::clear_owner_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t EnterSceneRequest::owner_revision() const {
   // @@protoc_insertion_point(field_get:scene_manager.EnterSceneRequest.owner_revision)
@@ -3066,7 +3078,7 @@ inline ::uint64_t EnterSceneRequest::owner_revision() const {
 }
 inline void EnterSceneRequest::set_owner_revision(::uint64_t value) {
   _internal_set_owner_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:scene_manager.EnterSceneRequest.owner_revision)
 }
 inline ::uint64_t EnterSceneRequest::_internal_owner_revision() const {
@@ -3076,6 +3088,30 @@ inline ::uint64_t EnterSceneRequest::_internal_owner_revision() const {
 inline void EnterSceneRequest::_internal_set_owner_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = value;
+}
+
+// bool hosted_placement = 14;
+inline void EnterSceneRequest::clear_hosted_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hosted_placement_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline bool EnterSceneRequest::hosted_placement() const {
+  // @@protoc_insertion_point(field_get:scene_manager.EnterSceneRequest.hosted_placement)
+  return _internal_hosted_placement();
+}
+inline void EnterSceneRequest::set_hosted_placement(bool value) {
+  _internal_set_hosted_placement(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:scene_manager.EnterSceneRequest.hosted_placement)
+}
+inline bool EnterSceneRequest::_internal_hosted_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hosted_placement_;
+}
+inline void EnterSceneRequest::_internal_set_hosted_placement(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hosted_placement_ = value;
 }
 
 // -------------------------------------------------------------------

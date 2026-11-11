@@ -717,8 +717,10 @@ func clampSceneMemberBudget(value, def int) int {
 // (docs/design/zone-redis-regression-guard-20261022.md §4.3.2 G3b)。
 //
 // 为什么要等落盘:铸造写进 zone Redis 内存之后,EnterScene 才把新 epoch 随路由 / 重定向交给目标节点缓存。
-// everysec 下 Redis 崩溃或切主会丢最近约 1 秒的写;丢的若是这次铸造,目标节点缓存着一个 Redis 里已经不存在的值,
-// 它的下一次存盘被等值 CAS 拒掉、实体按废黜销毁(丢 ≤300s 进度)。所以铸造之后先等 WAITAOF 确认,再推路由。
+// everysec 下 Redis 崩溃或切主会丢最近约 1 秒的写;丢的若是这次铸造,目标节点缓存着一个 Redis 里已经不存在的值:
+// 它的交接标记写不出来(C++ 要求 owner_epoch 等于缓存值),从 Redis 推进的下一次铸造又会造出另一个持有者,它在新持有者
+// 认领之后的第一笔存盘被写权行拒掉、丢上次存盘以来的进度。所以铸造之后先等 WAITAOF 确认,再推路由;推不出去或没确认
+// 而回滚时,回滚写下的值也要确认落盘才许源端采纳(两段回执,docs/design/zone-redis-regression-guard-20261022.md §4.3.4)。
 //
 // 口径与 go/db 的 ServerConfig.RedisClient.WaitAOF* 一致(go/db/internal/config/config.go):
 //   - 两个份数用 *int:默认值 1 不是零值,而「显式写 0」又有合法语义 —— 两项都写 0 = 不发 WAITAOF(启动打一行 ERROR),

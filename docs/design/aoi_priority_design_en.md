@@ -24,18 +24,23 @@ Priority is split into two layers:
 |-------------|-------|--------|
 | `kNormal`   | 0 | Default: entities discovered via spatial grid query |
 | `kTeammate` | 1 | Same `TeamId` component |
-| `kAttacker` | 2 | Combat/threat system (TODO: integrate) |
+| `kCombat`   | 2 | Combat partner: whoever I hit, hit me, healed or was healed by. Registered by `CombatEngagementSystem` as an explicit `kCombat` source, revoked after 10 s without interaction or on death (replaces the never-set `kAttacker`, 2026-11-10) |
 | `kQuestNpc` | 3 | Quest/mission system marks NPC (TODO: integrate) |
 | `kBoss`     | 4 | Boss / elite monster |
 | `kPinned`   | 5 | Highest weight (255) for explicit follows that must never be evicted, e.g. skill tracking |
 
 ### Built-in Policies
 
+The tables are static: an entry's weight depends only on its sources, never on the observer's state.
+"Combat partners first while fighting, quest NPCs first afterwards" comes from the combat source's
+lifetime. Switching tables by observer state was considered and rejected; see
+[aoi-directed-interest.md](aoi-directed-interest.md) (Chinese) for the reasons.
+
 | Policy | Weight order (low → high) |
 |--------|--------------------------|
-| `kPolicyOpenWorld` | normal(0) < teammate(1) < attacker(2) < questNpc(3) < boss(4) < pinned(255) |
-| `kPolicyDungeon`   | normal(0) < questNpc(1) < teammate(2) < attacker(3) < boss(4) < pinned(255) |
-| `kPolicyPvpArena`  | normal(0) < questNpc(1) < teammate(2) < boss(3) < attacker(4) < pinned(255) |
+| `kPolicyOpenWorld` | normal(0) < teammate(1) < questNpc(3) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyDungeon`   | normal(0) < questNpc(1) < teammate(2) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyPvpArena`  | normal(0) < questNpc(1) < teammate(2) < boss(3) < combat(4) < pinned(255) |
 
 Scenes attach `ScenePriorityPolicyComp` at creation to pick a policy.
 `kPinned` always gets weight 255 across all policies — it can **never** be evicted
@@ -164,14 +169,15 @@ scanning the node.
 
 ## Future Work
 
-- **Attacker priority**: Hook combat/damage system to call
-  `InterestSystem::UpgradePriority(target, attacker, kAttacker)` on hit.
+- **Allies via threat lists**: combat interest currently covers direct interactions only (done
+  2026-11-10). Others attacking the same enemy need NPC threat lists, which do not exist yet.
 - **Quest NPC priority**: Hook mission accept to call
   `InterestSystem::UpgradePriority(player, npc, kQuestNpc)`.
 - **Boss tagging**: Scene creation marks boss entities; grid entry detects and
   assigns `kBoss` tag.
 - **Pressure integration**: Scene tick monitors entity count / CPU load and
-  writes `ScenePressureComp.pressureFactor`.
+  writes `ScenePressureComp.pressureFactor`. When capacity shrinks, trim the lowest-weight
+  entries; today a smaller capacity only rejects newcomers.
 - **Client settings RPC**: Wire client-reported display count to
   `AoiClientCapacityComp`.
 - **Custom policies**: Data-driven policy loading from configuration tables.

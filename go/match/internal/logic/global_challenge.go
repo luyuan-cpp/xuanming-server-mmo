@@ -68,7 +68,7 @@ func (l *ChallengeLogic) globalChallengeCreateFailure(err error) *pb.ChallengePl
 	case errors.Is(err, rolefence.ErrUnavailable):
 		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengeExpired, "角色状态暂时无法确认，请重新发起")}
 	default:
-		l.Error("全球切磋邀请原件提交未确认")
+		l.Error("global challenge invite original commit unconfirmed")
 		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "邀请结果尚未确认，请重试原请求")}
 	}
 }
@@ -98,7 +98,7 @@ func (l *ChallengeLogic) globalChallengeFailure(err error) (*pb.RespondChallenge
 	case errors.Is(err, authority.ErrChallengeExpired), errors.Is(err, authority.ErrOriginalPlayer), errors.Is(err, authority.ErrDirectConflict), errors.Is(err, authority.ErrDirectCancelled):
 		return &pb.RespondChallengeResponse{ErrorMessage: tipErr(constants.ErrChallengeExpired, "原切磋邀请已失效或已经作出决定")}, nil
 	default:
-		l.Error("全球切磋决定原件提交未确认")
+		l.Error("global challenge decision original commit unconfirmed")
 		return &pb.RespondChallengeResponse{ErrorMessage: tipErr(constants.ErrInternal, "切磋结果尚未确认，请重试原邀请")}, nil
 	}
 }

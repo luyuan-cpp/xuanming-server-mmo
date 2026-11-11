@@ -155,7 +155,8 @@ func (e Exclusion) FallbackReason() string {
 //   - 全部停写:要么这一区的 gate 全卡住了,分过去照样失败,与没有这层判定时一样;要么是调用方的视图有问题,
 //     一律拒绝会把一次可能的误判放大成整区进不去。
 //   - 连得上的全在排空或到水位:整区都标了排空多半是误操作,拒绝比分到待缩容的 gate 更糟(后者稍后随排空改派);
-//     全部到水位说明区级准入放进来的人比 gate 上限之和还多,gate 按 GateMaxConnections 拒连兜底。
+//     全部到水位说明有人没经过区级准入就来了:login 排队的区容量已按 AdmissionCapacity 封顶(capacity.go),
+//     只剩排队关着、重连豁免、人数上报滞后、跨 zone 传送这几条路,gate 按 GateMaxConnections 拒连兜底。
 //
 // items 为空时返回空,由调用方报「没有候选」。只影响挑哪台,不影响容量记账:调用方数在线人数时仍要数全部候选。
 func Eligible[T any](items []T, state func(T) State) ([]T, Exclusion) {

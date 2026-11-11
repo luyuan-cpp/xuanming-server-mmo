@@ -96,7 +96,7 @@ bool SceneSpawnSystem::EnsureValidEnterLocation(
 	auto* transform = tlsEcs.actorRegistry.try_get<Transform>(player);
 	if (transform == nullptr)
 	{
-		LOG_ERROR << "[SceneSpawn] 加载不变量被破坏：缺少 Transform，无法校验入场位置，player_id="
+		LOG_ERROR << "[SceneSpawn] Load invariant violated: missing Transform, cannot validate entry location, player_id="
 				  << tlsEcs.GetPlayerId(player);
 		return false;
 	}

@@ -12,6 +12,7 @@ import (
 	"guild/internal/config"
 	assetpb "proto/common/asset"
 	"shared/assetop"
+	"shared/workshard"
 )
 
 // stubAssetStore 满足 assetop.Store,什么都不做:这里只测装配与启停,不测 outbox 语义
@@ -441,6 +442,84 @@ func TestAttachMaintenanceLeaderBranches(t *testing.T) {
 			t.Fatal("AuditIntervalMs=0 且 AbandonAfterDays=0 时不得竞选")
 		}
 	})
+}
+
+// stubOwnedDueStore 在 stubAssetStore 之上实现 assetop.OwnedDueLister,让重投循环绑得上按片分工。
+type stubOwnedDueStore struct{ stubAssetStore }
+
+func (stubOwnedDueStore) ListDueOwned(context.Context, uint64, int, workshard.Filter) ([]uint64, error) {
+	return nil, nil
+}
+
+// TestAttachWorkShards:重投分工(缺口清单第 25 条)只在「Start 之前、有注册身份、Store 支持按片列到期行」时绑上;
+// 成员表圈本 zone 的 guild 注册前缀。绑上之后 Start 多起一个成员表 goroutine,Stop 照样等它退出
+// (etcd 传 nil:成员表的 Run 打 ERROR 后立即返回,成员表一直为空 = 全部片)。
+func TestAttachWorkShards(t *testing.T) {
+	t.Setenv(AssetOpSecretEnv, strings.Repeat("s", assetop.MinSecretLen))
+	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	defer func() { _ = rdb.Close() }()
+
+	if got := assetShardMembersPrefix(3); got != "GuildNodeService.rpc/zone/3/" {
+		t.Fatalf("成员表前缀 = %q,应是本 zone 的 guild 注册前缀(结尾的 / 让 zone 3 不匹配 zone 30)", got)
+	}
+	newPipeline := func(t *testing.T, store assetop.Store) *AssetPipeline {
+		t.Helper()
+		wakeOff := false
+		c := y06Defaults()
+		c.Wake.Enabled = &wakeOff
+		p, err := NewAssetPipeline(c, time.Second, rdb, rdb, store)
+		if err != nil {
+			t.Fatalf("NewAssetPipeline: %v", err)
+		}
+		t.Cleanup(p.Stop)
+		return p
+	}
+
+	t.Run("Store 不支持按片列到期行时拒绝", func(t *testing.T) {
+		p := newPipeline(t, stubAssetStore{})
+		if err := p.AttachWorkShards(3, "node-a"); err == nil {
+			t.Fatal("Store 没实现 assetop.OwnedDueLister 时必须拒绝,装配方据此拒启")
+		}
+		if p.members != nil {
+			t.Fatal("拒绝之后不得留下成员表")
+		}
+	})
+
+	t.Run("没有注册身份时拒绝", func(t *testing.T) {
+		p := newPipeline(t, stubOwnedDueStore{})
+		if err := p.AttachWorkShards(3, ""); err == nil {
+			t.Fatal("self 为空必须拒绝:成员表不空时它会让本副本一片都不做")
+		}
+	})
+
+	t.Run("Start 之前绑上,Start 之后拒绝,Stop 照样返回", func(t *testing.T) {
+		p := newPipeline(t, stubOwnedDueStore{})
+		if err := p.AttachWorkShards(3, "node-a"); err != nil {
+			t.Fatalf("Start 之前、有身份、Store 支持:必须绑上,得到 %v", err)
+		}
+		if p.members == nil {
+			t.Fatal("绑上之后应有成员表")
+		}
+		p.Start(context.Background(), nil, true)
+		if err := p.AttachWorkShards(3, "node-a"); err == nil {
+			t.Fatal("Start 之后再绑就是与后台 goroutine 的数据竞争,必须拒绝")
+		}
+		done := make(chan struct{})
+		go func() {
+			p.Stop()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Stop 5s 内没有返回:成员表 goroutine 没有随取消退出")
+		}
+	})
+
+	var nilPipeline *AssetPipeline
+	if err := nilPipeline.AttachWorkShards(3, "node-a"); err != nil {
+		t.Fatalf("nil 管线没有要分工的循环,应回 nil,得到 %v", err)
+	}
 }
 
 // 号段关闭(或没有 data_service 客户端)时 op_id 号段保持 nil,guild.go 据此把 OpIDs 留成 nil 接口。

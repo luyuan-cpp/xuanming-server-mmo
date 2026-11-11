@@ -6,10 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"shared/releasetrack"
@@ -415,5 +418,146 @@ func TestWaitForListening_StopsOnContextCancel(t *testing.T) {
 func TestWaitForListening_RejectsNonPositiveTimeout(t *testing.T) {
 	if err := waitForListening(context.Background(), "127.0.0.1:1", 0); !errors.Is(err, errInvalidSpec) {
 		t.Fatalf("want errInvalidSpec, got %v", err)
+	}
+}
+
+// ---- 退避(R18)-------------------------------------------------------------------------
+
+// 退避抖 ±20%:落在 [0.8d, 1.2d],而且确实在变(不变就等于没抖,多实例仍同拍重试)。
+func TestJitteredStaysWithinTwentyPercent(t *testing.T) {
+	for _, d := range []time.Duration{backoffMin, 7 * time.Second, backoffMax} {
+		lo, hi := d-d/5, d+d/5
+		seen := make(map[time.Duration]bool)
+		for i := 0; i < 1000; i++ {
+			got := jittered(d)
+			if got < lo || got > hi {
+				t.Fatalf("jittered(%v) = %v, want within [%v, %v]", d, got, lo, hi)
+			}
+			seen[got] = true
+		}
+		if len(seen) < 2 {
+			t.Fatalf("jittered(%v) returned the same value 1000 times", d)
+		}
+	}
+	for _, d := range []time.Duration{0, 4 * time.Nanosecond} {
+		if got := jittered(d); got != d {
+			t.Fatalf("jittered(%v) = %v, want it unchanged", d, got)
+		}
+	}
+}
+
+// 退避等待挂在句柄的 ctx 上:Close 的第一步就是取消它,等待必须立刻返回 false,不等满退避。
+func TestSleepReturnsAsSoonAsTheRegistrationCloses(t *testing.T) {
+	r := newRegistration(nil, unitSpec(), unitUUID, releasetrack.Stable)
+	time.AfterFunc(50*time.Millisecond, r.cancel)
+	start := time.Now()
+	if r.sleep(backoffMax) {
+		t.Fatal("sleep must report false once the registration is closing")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("sleep ignored cancellation for %v", elapsed)
+	}
+}
+
+// ---- 指标(R17)-------------------------------------------------------------------------
+// 每个用例用自己的 Prefix,序列互不干扰。这里只走不碰 etcd 的状态切换;Close 与真实失租在集成测试里核对。
+
+var metricsPrefixSeq atomic.Int64
+
+// metricsPrefix 给指标用例一个本次运行独有的前缀:指标是进程级全局状态,-count=N 重跑时不能撞上上一轮的序列。
+func metricsPrefix(name string) string {
+	return fmt.Sprintf("%s%d_%d.rpc", name, time.Now().UnixNano(), metricsPrefixSeq.Add(1))
+}
+
+func metricsSpec(prefix string) Spec {
+	s := unitSpec()
+	s.Prefix = prefix
+	return s
+}
+
+func registeredValue(prefix string) float64 {
+	return testutil.ToFloat64(registeredGauge.WithLabelValues(prefix))
+}
+
+// 预置:注册成功时就把本前缀的全部序列建好,第一次失租 / 失败之前序列已存在,increase() 不会漏掉第一次。
+func TestPrimeMetricsCreatesEverySeries(t *testing.T) {
+	prefix := metricsPrefix("NoderegistryPrimeUnit")
+	counts := func() []int {
+		return []int{
+			testutil.CollectAndCount(leaseLostTotal),
+			testutil.CollectAndCount(reRegisterSuccessTotal),
+			testutil.CollectAndCount(reRegisterFailureTotal),
+			testutil.CollectAndCount(nodeIDReallocatedTotal),
+			testutil.CollectAndCount(registeredGauge),
+		}
+	}
+	before := counts()
+	primeMetrics(prefix)
+	primeMetrics(prefix) // 幂等:不重复建序列
+	after := counts()
+	want := []int{1, 1, len(reRegisterFailReasons), 1, 1}
+	for i := range want {
+		if got := after[i] - before[i]; got != want[i] {
+			t.Fatalf("collector #%d: priming added %d series, want %d", i, got, want[i])
+		}
+	}
+	if registeredValue(prefix) != 0 {
+		t.Fatalf("primed registered gauge = %v, want 0 until the first commit", registeredValue(prefix))
+	}
+}
+
+// registered 跟着「提交 / 判失租」走,同一句柄重复提交、重复判失租不多加多减;失租次数逐次累加。
+func TestRegisteredGaugeFollowsCommitAndLeaseLoss(t *testing.T) {
+	prefix := metricsPrefix("NoderegistryGaugeUnit")
+	r := newRegistration(nil, metricsSpec(prefix), unitUUID, releasetrack.Stable)
+	defer r.cancel()
+	primeMetrics(prefix)
+	leaseLost := func() float64 { return testutil.ToFloat64(leaseLostTotal.WithLabelValues(prefix)) }
+
+	if !r.commit(1, 7, "{}") || registeredValue(prefix) != 1 {
+		t.Fatalf("after first commit: registered = %v, want 1", registeredValue(prefix))
+	}
+	r.commit(2, 7, "{}") // 重夺原号:仍是同一份注册
+	if registeredValue(prefix) != 1 {
+		t.Fatalf("re-commit on the same handle: registered = %v, want 1", registeredValue(prefix))
+	}
+
+	r.markLeaseLost()
+	r.markLeaseLost()
+	if registeredValue(prefix) != 0 || leaseLost() != 2 {
+		t.Fatalf("after two lease losses: registered = %v (want 0), lease_lost = %v (want 2)", registeredValue(prefix), leaseLost())
+	}
+
+	// 同一前缀第二份注册(测试与多实例进程里会有):gauge 是持有份数,不是 0/1 开关。
+	other := newRegistration(nil, metricsSpec(prefix), "uuid-other", releasetrack.Stable)
+	defer other.cancel()
+	r.commit(3, 8, "{}")
+	other.commit(4, 9, "{}")
+	if registeredValue(prefix) != 2 {
+		t.Fatalf("two handles holding: registered = %v, want 2", registeredValue(prefix))
+	}
+}
+
+// 失败按原因计数;句柄关闭(ctx 取消)之后的失败是停机造成的,不计。
+func TestReRegisterFailuresAreCountedByReasonUntilClose(t *testing.T) {
+	prefix := metricsPrefix("NoderegistryFailureUnit")
+	r := newRegistration(nil, metricsSpec(prefix), unitUUID, releasetrack.Stable)
+	primeMetrics(prefix)
+	failures := func(reason string) float64 {
+		return testutil.ToFloat64(reRegisterFailureTotal.WithLabelValues(prefix, reason))
+	}
+
+	r.countFailedAttempt(reRegisterFailGrant)
+	r.countFailedAttempt(reRegisterFailGrant)
+	r.countFailedAttempt(reRegisterFailAllocate)
+	if failures(reRegisterFailGrant) != 2 || failures(reRegisterFailAllocate) != 1 || failures(reRegisterFailReclaim) != 0 {
+		t.Fatalf("failures grant=%v allocate=%v reclaim=%v, want 2/1/0",
+			failures(reRegisterFailGrant), failures(reRegisterFailAllocate), failures(reRegisterFailReclaim))
+	}
+
+	r.cancel() // Close 的第一步
+	r.countFailedAttempt(reRegisterFailGrant)
+	if failures(reRegisterFailGrant) != 2 {
+		t.Fatalf("failure after close was counted: grant=%v, want 2", failures(reRegisterFailGrant))
 	}
 }

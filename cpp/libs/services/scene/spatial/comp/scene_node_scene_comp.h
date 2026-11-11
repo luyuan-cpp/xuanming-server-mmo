@@ -21,8 +21,9 @@
 // 显式来源的种类。新增玩法接入时在 kCount 之前加一项,kCount 固定最后。
 enum class AoiFollowKind : uint8_t
 {
-    kTeam  = 0,   // 队伍逻辑建立的关注:id 为 team_id
-    kSkill = 1,   // 技能或 Buff 效果建立的关注:id 为该效果的实例号(如 buff_id)
+    kTeam   = 0,   // 队伍逻辑建立的关注:id 为 team_id
+    kSkill  = 1,   // 技能或 Buff 效果建立的关注:id 为该效果的实例号(如 buff_id)
+    kCombat = 2,   // 交手关系(CombatEngagementSystem):每对观察者与目标最多一份,id 恒为 0;脱战、死亡时撤销
     kCount,
 };
 
@@ -106,6 +107,14 @@ struct AoiEvaluatedAtComp
     double x = 0;
     double y = 0;
     double z = 0;
+};
+
+// 空标记(按需状态):有附近候选因为名额被拒收,或者被权重更高的关注挤掉。
+// InterestSystem 拒收、挤掉只有空间来源的条目时打上;AoiSystem::Update 发现它又有空名额时
+// 重扫一次附近候选并摘掉,重扫中再被拒会重新打上。没有标记 = 名额空出后不用重扫,
+// 所以重扫只落在真被拒过的观察者身上,开销有界。
+struct AoiNearbyRefillComp
+{
 };
 
 // ---------------------------------------------------------------------------

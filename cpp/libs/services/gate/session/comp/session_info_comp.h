@@ -7,7 +7,7 @@
 #include "muduo/net/TcpConnection.h"
 #include "engine/core/type_define/type_define.h"
 #include "message_limiter/message_limiter.h"
-#include "client_liveness.h"
+#include "network/client_liveness.h"
 #include "pending_scene_entry_comp.h"
 #include "router_lane_item.h"
 
@@ -148,10 +148,10 @@ struct SessionInfo
 	// IllegalPacketCounter::ThresholdFromEnv).
 	uint32_t illegalPacketCount{0};
 
-	// 应用层心跳的存活状态(docs/design/gate-client-heartbeat.md,纯逻辑在 client_liveness.h)。发过心跳的连接
+	// 应用层心跳的存活状态(docs/design/gate-client-heartbeat.md,纯逻辑在 core 的 network/client_liveness.h)。发过心跳的连接
 	// 连续 30s 收不到任何一帧,gate 就 forceClose,之后照常走断开回调。只由 nodes/gate/handler/rpc/client_heartbeat.{h,cpp}
 	// 读写;会话 erase 即随之消失,判死检查点按会话代次核对,不需要另外清理。
-	gate_liveness::ClientLiveness liveness;
+	client_liveness::ClientLiveness liveness;
 
 	// 关连接之前置位:断开回调代发 ExitGame 时填 EXIT_GAME_REASON_LEASE_EXPIRED,scene 立即退出,不按断线保留角色
 	// (docs/design/player-connection-lost-hold.md §3)。目前只有断线租约到期、gate 关残留假死连接这一处置位:

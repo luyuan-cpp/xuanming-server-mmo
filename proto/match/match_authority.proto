@@ -218,6 +218,9 @@ message MatchFormationRecord {
   string preflight_instance_id = 20; // 发任何Create之前与完整version1正文同事务保存。
   uint32 adopted_outcome_protocol_version = 21; // 独立保存真实Create/PRESENT回执，不能由能力推算。
   bool adopted_outcome_observed = 22; // 未回包与原身份明确回显0不同；首个实际回执永久不变。
+  // 这局所在 battle 节点的发布轨道（"stable" / "canary"），选点时按选中节点记下，之后不变（docs/design/release-track-gray-canary.md §2.6）。
+  // 观战入口、观战列表与随机选场按它判 stable 观众能不能看，不看实时节点镜像。空串（本字段之前的原件，迁移补列后读出 NULL）按 stable。
+  string release_track = 23;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;

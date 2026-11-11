@@ -54,8 +54,8 @@
 namespace
 {
 	using gate_client_heartbeat::Counters;
-	using gate_liveness::kClientLiveness;
-	using gate_liveness::SteadyTime;
+	using client_liveness::kClientLiveness;
+	using client_liveness::SteadyTime;
 	using std::chrono::seconds;
 
 	constexpr SessionId kSession = 2001;

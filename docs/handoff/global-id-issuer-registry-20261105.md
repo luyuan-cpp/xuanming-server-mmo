@@ -1,6 +1,6 @@
 # 交接:发号器三份记录与全局号源登记处(交 Codex 验证,2026-11-05)
 
-> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据和 Claude Code 独立审核入口见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成，整体验收未通过。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
+> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
 > 需求来源:用户 11-05 贴的三个问题(两套 etcd 同时回档会重发、地域码防重靠人工、Java 版未对齐)和 [10-28 交接](./global-id-prelaunch-claude-20261028.md)。10-28 交接写的是 SQL `id_segment` 号段,10-30 起发号器已换成 etcd,本轮按当前代码修。
 > 设计以 [总体方案](../design/player-data-tidb-scaling-plan.md) §6.3 为准,运维以 [发号器运维手册](../ops/id-issuer-runbook.md) 为准。
 
@@ -199,7 +199,7 @@ Remove-Item $env:MMORPG_ID_ISSUER_IT_STATE
 
 ## 5. 2026-11-06 修复与 2026-11-10 交接收尾
 
-用户授权 Codex 修复后，交 Claude Code 按自己的思路独立审核；交接文字由用户复制。**尚未发送给 Claude Code，也没有 Claude 审核结论。** 本节记录客户端日期；部分日志的 UTC 日期比本地晚一天。
+用户授权 Codex 修复后，交 Claude Code 按自己的思路独立审核；交接文字由用户复制。**用户 11-10 已在 Claude Code 会话里发起审核，结论见 §6。** 本节记录客户端日期；部分日志的 UTC 日期比本地晚一天。
 
 ### 5.1 任务与改动边界
 
@@ -284,3 +284,144 @@ go test -mod=readonly -tags etcd_integration -count=1 -v -timeout 2m -run TestEt
 
 这次先交审核结果，Java 不实现。请保留其他会话改动，不自行提交或推送。若发现问题，请给出具体位置、触发条件、影响与依据；需要新增运行证据时说明要验证的假设和命令。没有实质问题也请如实说明，并列出证据边界。审核结论由你独立决定。
 ```
+
+## 6. 2026-11-10 Claude Code 独立审核结论
+
+按 §5.5 的请求在 Claude Code 会话里做的只读审核：没有改产品代码和测试，没有运行任何构建或测试（AGENTS §10.1）。
+
+**结论：整体验收不通过。** 一个地域码只对应一对本地 etcd 时，三份 CAS 预留、写序与读序、Init / Recover / Retire / Open、打散都没找到会重号的路径；11-06 的三处修复静态看是对的。问题出在这个前提：本仓的部署清单让不同物理集群的 etcd 报出相同的集群号，登记处的绑定分不出两套环境（§6.2）。另有一处中危、两处低危。
+
+### 6.1 看了什么
+
+- `issuer.go`、`etcd_store.go` 逐行看，与 `de6891478` 一致，工作区无改动。按 CAS 线性化推演了：多副本并发；三处写的任一步失败或结果未知；一份或两份记录回退，包括快照恢复带来的 revision 重复；挂起很久的旧进程恢复；rebind 时旧进程还在跑；Open 与 Recover / Retire 并发。
+- 配置与入口：`config.go` 的 `IssuerEndpoints`，`servicecontext.go` 的 `NewIdIssuer` / `checkExpectedRegion`，`data_service.go` 的入口互斥和 `-id-registry-next` 必填。AllowAutoSeed 和地域码 0 都只放给 dev、test。
+- 打散：`go/shared/idsegment/mix.go` 与 `cpp/libs/modules/id_segment/guid_mix.h` 每一步都在 63 位上可逆，所以一一对应。Go 的 `idsegment.Client`、C++ 的 `GuidSegmentClient` 都经它发号；data_service 进程内的 snapshot_row、rollback_audit、gm_recall_op 也走 `idsegment.Client`。
+- 调用方抽查：
+  - login 建角只有号段一条路，`idsegment.Minter` 没有回退。
+  - match 的 battle、challenge、team 走号段。
+  - login 里的 `PlayerIDGen`（snowflake）没有发号调用方，只剩节点槽位和水位维护（设计 §6.4 已记，可单独清理）。
+  - scene_id 仍是 snowflake，设计明示不在本线。
+  - C++ 调用方没有逐个看。
+- 部署：三套 etcd 清单的引导参数；`k8s_deploy.ps1` 的 `Resolve-IdRegistryEtcd` 和写路径预检。
+- 测试：`issuer_test.go` 的夹具和 Binding / Recovery 用例、`issuer_observation_test.go`、`etcd_integration_test.go`、`registry_open_integration_test.go`。
+
+### 6.2 高危：地域码绑定靠的 etcd 集群号，在本仓部署里分不出两套环境
+
+**位置**
+
+- 绑定只比两个集群号：`issuer.go` 的 `boundHere`（约 620 行）。`reservable`、`Init`、`Recover` 都靠它判断「是不是登记处绑的那一对」。
+- 集群号的来源：`deploy/k8s/manifests/infra/etcd.yaml` 约 148–160 行、`etcd-id-secondary.yaml` 约 134–142 行。引导令牌和 peer 地址只由 `__INFRA_NAMESPACE__` 推出，没有任何集群唯一的成分。`etcd-id-registry.yaml` 也一样。
+- 命名空间：`k8s_deploy.ps1` 的 `-InfraNamespace` 默认 `mmorpg-infra`；K8s 开服手册的部署示例写的也是 `InfraNamespace = "mmorpg-infra"`；开新地域手册没有要求各地域换命名空间。克隆旧配置时，命名空间必然相同。
+
+**依据**：etcd 引导时，成员号是「排好序的 peer 地址 + 令牌」的 SHA1 前 8 字节，集群号是「排好序的成员号」的 SHA1 前 8 字节，里面没有时间和随机数。所以两个 K8s 集群只要命名空间相同，`etcd` 的集群号就相同，`etcd-id-secondary` 的也相同。佐证有三条：
+
+- §4 演练里，同成员地址、同令牌恢复后集群号不变；
+- `TestEtcdIntegration_ClustersAreIndependent` 的失败信息本身就要求用不同的 `--initial-cluster-token`；
+- §2.4 的真 etcd 回归给五个节点各用一个令牌，正好绕开了生产的形态。
+
+**触发和后果**（R 是在用的地域码，A 是原环境，B 是另一个 K8s 集群里同命名空间的环境）：
+
+1. **克隆旧配置和快照**：B 恢复了 A 的两份本地记录（世系相同），集群号也相同，`reservable` 全部通过，B 直接发号，不需要任何运维操作。用户对问题 2 的验收「克隆旧配置和快照不得获得第二份资格」不成立。A 的下一次预留会报 `records_behind_registry`，手册 §3 把它解释成「本地两套都被旧数据覆盖过」，方向错了。
+2. **重复部署同一个码，R 还没发过号（Blocks=0）**：B 的 `-id-issuer-init` 走「接着做完没做完的初始化」分支（`Init` 约 776–785 行），建出两份本地记录，输出 `region code claimed ... created`。两套都有资格。
+3. **重复部署同一个码，R 已经发过号**：
+   - B 的初始化和发号报 `both local reservation records are missing`，而不是 `was already claimed` 或 `not the ones bound`。错误文本和手册 §2.2 的处置表都把人引向 §4.2 的 `-id-issuer-recover -id-issuer-rebind`。
+   - rebind 时集群号没变，登记处一个字节都不写，只给 B 建两份本地记录（`Recover` 约 875–894 行）。A 并不像手册 §4.2 第 3 步说的那样「从此预留被拒」，两套同时有资格。
+4. **两套都有资格之后会重号**：登记处完好时，两套靠登记处的 CAS 串行，不重号。但设计 §6.2 和手册 §4.3 说能自愈的两类登记处事故，这时都会重号：
+   - **登记处回档**：A 按自己的本地水位继续（`registry_behind` 分支），起点低于 B 已经发出的块。那些块只记在 B 的本地记录和回档前的登记处里，A 的新块和它们重叠。
+   - **登记处丢了这个码，或者整个丢了**：手册让在用地域跑 `-id-issuer-recover`，按本地最大值重新登记。先跑的若是水位低的那一套，另一套发过的块就不在新水位之下；另一套随后再跑，只会得到 `nothing to repair`。
+   - **时间下限挡不住**：B 的当前块从预留时刻往后覆盖约 256 秒的序号。A 在这段时间里按时钟抬起点，仍然落在 B 的块里。
+
+**测试为什么没发现**：
+
+- 内存替身把第二套环境和克隆都建模成集群号不同（`issuer_test.go` 约 1107 行的 `sibling(11, 12)`、约 1137–1138 行的 `clone(11)` / `clone(12)`，注释写着「集群号不同」）。
+- 真 etcd 回归用的是五个不同的令牌。
+- 两边都没建模「同命名空间 → 同集群号」这个实际部署形态。§3 提到过「完全相同清单 + 相同令牌」，但当成了罕见的恢复情形；在本仓的清单下，它就是默认情形。
+
+**建议修法**
+
+- **根因**：etcd 官方配置说明建议每个集群用唯一的 `--initial-cluster-token`。部署脚本给三套 etcd 的令牌加一个本 K8s 集群唯一的值，例如 `kube-system` 命名空间的 UID，由 `infra-up` 读出来渲染（DryRun 用参数或夹具值）。修好之后：
+  - 不同物理集群的 etcd 集群号必然不同，上面 1–3 都被拒，4 不会发生。
+  - 同一 K8s 集群里原地恢复，令牌不变、集群号不变，行为照旧。
+  - 灾备重建到新的 K8s 集群，集群号会变，按 §4.2 rebind，正是设计意图。
+  - 项目未上线，没有存量 etcd 要迁。改令牌会让已有的 etcd StatefulSet 滚动重启一次（有数据时 etcd 忽略引导参数），dev 和 kind 上可以接受。
+- **残余**：直接拷贝 etcd 数据目录（PVC）做的克隆，仍然保留原集群号。要连这种克隆也拦住，有两个方向，需要负责人取舍：
+  - 绑定里再加一个由部署脚本注入的部署身份（同样取自 K8s 集群），初始化时写进登记处，只有 rebind 能改；
+  - 改成「最后提交者」围栏：每块写一个随机令牌进三份记录，两套环境分开之后，先提交的一方保留资格。代价是「本地两套同时回档」从自动继续变成拒发、走恢复。
+- **文档**：下面几处都要写明，拦截依赖唯一令牌：
+  - 设计 §6.2 表里「另一套环境配了同一个地域码、或者克隆了快照」一行，§6.3「地域码唯一绑定」一段；
+  - 手册 §1、§2.2、§3、§4.2；
+  - 开新地域手册 §1、§6。
+
+  处置表还要补：另一套同码环境也会表现为 `records_behind_registry` 或 `both local reservation records are missing`。
+- **登记处身份（低危，一并考虑）**：地域配置只有登记处地址，没有钉住「是哪一套登记处」。在第二个集群误带 `-HostIdRegistry`，再照手册 §2.2 处置表里「not opened → 新世界走 §2.1」去开启，就多了一个世界，用过的码可以被重复认领。令牌修好之后，可以在地域配置里钉住登记处的集群号。
+
+**要补的运行证据**（交 Codex，只验假设，不改产品代码）
+
+- 假设 H1：令牌和 peer 地址都相同的两个 etcd，集群号相同。
+- 假设 H2：在这种形态下，现有代码会让第二套环境拿到资格。
+
+按 §2.4 起五个节点，只改两处：`p2` 用和 `p` 相同的 `--name p --initial-cluster-token idissuer-it-p`，`s2` 用和 `s` 相同的 `--name s --initial-cluster-token idissuer-it-s`。peer 地址本来都是 `http://127.0.0.1:2380`，端口和环境变量照旧。
+
+先核 H1，比较 `p` 与 `p2`、`s` 与 `s2` 输出里的 `cluster_id`：
+
+```powershell
+foreach ($n in @('p', 'p2', 's', 's2')) { docker exec "idissuer-it-$n" /usr/local/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint status -w json }
+```
+
+再核 H2，工作目录 `go/data_service`：
+
+```powershell
+go test -mod=readonly -tags etcd_integration -count=1 -v -timeout 2m -run 'TestEtcdIntegration_SecondPairWithTheSameCodeIsRefused' ./internal/idissuer/
+```
+
+修复前的预期：
+
+- 两组 `cluster_id` 分别相同；
+- 用例在 Init 那一步失败，报 `both local reservation records are missing`（`ErrCounterMissing`），而不是期望的 `ErrRegionClaimed`。
+
+这个失败证明问题存在，不是回归，不要改断言。用完按完整 CID 清理容器。
+
+修复后的绿灯：
+
+- 部署契约新增两条：两次渲染只差「集群唯一值」时，三套令牌都不同；同一集群重复渲染时，令牌稳定。
+- 真 etcd 回归改用部署清单渲染出的令牌形态起 `p2` / `s2`，§2.4 的四条照旧通过。
+- 如果选了「部署身份」方向，再加内存用例：
+  - `sibling(1, 2)`、`clone(1)` / `clone(2)` 这种集群号相同、部署身份不同的环境，初始化报 `ErrRegionClaimed`，发号报 `ErrBindingMismatch`；
+  - 两套曾同时有资格时，登记处回档后再领段，用 `allocated` 断言不重叠。
+
+### 6.3 中危：退役不核绑定，任何能连登记处的配置都能永久退役一个在用的码
+
+- **位置**：`issuer.go` 的 `Retire`（约 902–922 行）。读到这个码，只要还没退役就改成退役，不看本地记录、世系和集群号。
+- **触发**：
+  - 手册 §4.3 第 3 步要运维「复制一份 data-service 配置,把 Region 改成那个码,跑 -id-issuer-retire」；
+  - staging 和 prod 共用一个登记处（手册 §2.1、开新地域手册 §3）。
+
+  码填错，或者在 staging 的配置里填了生产码，都会直接退役一个在用的生产码。
+- **后果**：那个地域发完手里的块就停，峰值时约一小时，低峰更久。没有撤销退役的入口，只能换新码重新部署、初始化。不会重号（新码的值域不相交），但会停服，还会烧掉一个码，一共只有 63 个。
+- **建议**：
+  - 码在登记处是 active 时，`Retire` 要求从绑定的那一对上执行：本地记录的地域、世系和登记处一致，集群号也一致；否则拒绝，并提示到那个地域去执行。
+  - 那个地域已经不在了，就加一个显式确认开关。
+  - 登记处里没有这个码（重建时补墓碑），照旧允许。
+  - 补用例：从没有绑定的环境退役在用码，被拒，登记处不变。
+
+  即使问题 1 没修，这道核对也有效，因为 staging 本地记录的地域和世系对不上生产码。
+
+### 6.4 低危：staging 演练会手工改共用的登记处
+
+手册 §5 要求「定期在 staging 上做」，第 6 条是「删掉登记处这个码的记录」。staging 和 prod 共用一个登记处，这一步就是在生产登记处上手工删键，和 §4.7「不要手工改记录」冲突；手滑删的是生产码，就是一次 ID 安全事件。
+
+另外，问题 1 修好之前，第 5 条「另起一对本地 etcd、用同一个地域码部署」在同命名空间下会得到 §6.2 第 2、3 种结果，而不是手册写的 `was already claimed`。
+
+建议：会改登记处的演练只在隔离的登记处上做（本机自动化演练，或一套演练专用的登记处），并在手册里写明。
+
+### 6.5 证据边界
+
+- 本节全部是静态审核，上面引用的 Codex 运行结果没有重跑。
+- 11-06 的三处修复，静态看都对：
+  - `Open` 的范围比较在没有键时按零值比较，恒成立；扫描后有新键写入时比较失败，重读。
+  - G→P→S 读序加复核，挡住了正常并发被误报成回档。
+  - 写路径预检在任何写入之前。
+
+  三处都有 Codex 的红绿证据。
+- 没有逐个审：C++ 号段调用方、logic 层的错误码映射、部署脚本里登记处以外的部分。Java 按用户要求只记待做。
+- 修复版的快照演练（B 段、恢复、C 段）、`-race`、部署大套、etcd 3.6.16、staging 演练仍然没跑，见 §5.4。问题 1 与这些项无关；修完之后，要按 §6.2 补跑部署契约和真 etcd 回归。

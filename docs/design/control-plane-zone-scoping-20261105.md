@@ -131,6 +131,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 | 死节点收尾任务 `scene_manager:dead_node_reconcile:zone:<z>`(原全服一张) | 同上 | 本 zone 的领导者 |
 | `scene_manager:zones` | **删除** | — |
 | gate 排空标记 `gate:<id>:draining|drained` | 核心(G4a §25.3 的 10-23 订正) | scene_manager 只读,经新句柄 `CoreRedis` |
+| gate 停写标记 `gate:<id>:stale`(2026-11-10,键名在 `go/shared/gatepick/marks.go`) | 核心,与排空标记同一实例 | login 各副本写(本 zone 判为停写的 gate,过期 30s、不主动删,经 `Node.RedisClient`);scene_manager 只读,经 `CoreRedis`,与排空标记同一次 MGET(gate-load-balancing-design.md「满载与停写的 gate」) |
 | 落点唤醒频道 | 核心 | C++ scene PUBLISH,guild、trade 订阅 |
 | 玩家域 `player:{<id>}:*`、进场去重 | 玩家域(不动) | 经 `PlayerRedis`。没建玩家域集群时各服务的玩家域都回落到核心;scene_manager 的回落取 `CoreRedis`,**不取** `Redis` 段(那是控制域实例),否则 location / owner_epoch 在两个实例上各有一份(2026-11-10 订正,`config.go` `EffectivePlayerRedis`) |
 

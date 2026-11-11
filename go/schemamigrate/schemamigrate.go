@@ -273,7 +273,7 @@ func run(ctx context.Context, db *sql.DB, opts Options, apply bool) (Report, err
 	} else if prev, ok := applied[BaselineVersion]; ok && prev.Checksum != baseline.Checksum {
 		// 表清单增删过。新增的表由下面的漂移补建,删掉的表由漂移报成 Warnings(多余表,不删),
 		// 所以这里只留痕,不重跑基线。
-		opts.logf("基线 version=%d 已应用,表清单 checksum 已变化(台账=%s 当前=%s);新增表由漂移迁移补建",
+		opts.logf("baseline version=%d already applied, table list checksum changed (ledger=%s current=%s); new tables are created by the drift migration",
 			BaselineVersion, shortSum(prev.Checksum), shortSum(baseline.Checksum))
 	}
 
@@ -325,7 +325,7 @@ func run(ctx context.Context, db *sql.DB, opts Options, apply bool) (Report, err
 		}
 	}
 
-	opts.logf("schemamigrate %s 完成: database=%s statements=%d warnings=%d manual=%d",
+	opts.logf("schemamigrate %s finished: database=%s statements=%d warnings=%d manual=%d",
 		mode, opts.Database, len(report.Statements), len(report.Warnings), len(report.Manual))
 	for _, w := range report.Warnings {
 		opts.logf("  WARN %s", w)

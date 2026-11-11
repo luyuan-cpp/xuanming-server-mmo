@@ -48,3 +48,17 @@ struct TeamFollowJoinSeqComp
 {
 	uint32_t joinSeq{0};
 };
+
+// 队形因"队长离开本节点"(交接、退出、实体没了)解散后,原随从在等队长的去留有结论(team-follow-server-trail.md §3.7)。
+// 有结论 = 队长实体已不在本节点(交接放行 / 退出完成,location 已指向新落点或已删)、或队长不再处于离开中(交接作废、
+// 原地解冻);那时 PlayerTeamSystem 对他重新走一遍跟随检查 —— 队长去了本 zone 的别的节点就跟过去。
+// 为什么要等:队形解散的那一刻队长的交接刚开始,location 还指着本节点的旧场景,立刻检查只会跟回原地;
+// 而队长到了新节点之后的扇出只照顾那个节点上的队员,没有别的信号会叫醒本节点上的随从(离线托管的尤其如此)。
+// 挂:TeamFollowSystem 以 LEADER_GONE 摘下仍声明跟随的随从时(DissolveFormation / ReleaseOrphans)。
+// 摘:TeamFollowSystem::TakeFollowersWithSettledLeader(有结论或等满 kTeamFollowAwaitLeaderFrames)、
+//     TryAttach(已经重新接上)、SetFollowIntent(false)(暂离)。读:只在 TeamFollowSystem。
+struct TeamFollowAwaitLeaderComp
+{
+	uint64_t leaderPlayerId{0};
+	uint32_t sinceFrame{0}; // 挂上时的帧号(tlsFrameTimeManager),超时按帧数算,单测不依赖墙钟
+};

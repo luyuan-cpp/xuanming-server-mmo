@@ -207,7 +207,7 @@ Omit `-JavaSvcRegistry` or pass `-SkipJavaSvc` to skip Java service deployment.
   liveness 跟着超时,两个副本被一起杀,重启时 `ddl-auto: validate` 又要连库。actuator 换到独立连接器与线程池后,这条连锁断开。
   代价:探针不再反映业务端口能否接新连接,业务线程卡死时 liveness 仍是 UP,要靠日志与上游错误率发现。
 - **8082 只在集群内、只给 kubelet**:Service `gateway` 只暴露 8081,Ingress 只路由 `/api`。K8s 上 `/actuator/*`(health、info)只在 8082,
-  8081 上不再有;排障或核对 `/actuator/info` 的版本号用 `kubectl -n <zone ns> port-forward deploy/gateway 18082:8082`,
+  8081 上不再有;排障或核对 `/actuator/info` 的版本号用 `kubectl -n <zone ns> port-forward statefulset/gateway 18082:8082`,
   再 `curl http://127.0.0.1:18082/actuator/health`。仓库目前没有 NetworkPolicy;以后加时要放行 kubelet 到 8082 的探针流量
   (多数 CNI 默认放行本节点发起的流量,以实际 CNI 为准)。以后若开放 `/actuator/prometheus`(G2b §10 第 10 条),抓取端口同样是 8082。
 - **本机不受影响**:jar 内 `application.yaml` 刻意不写 `management.server.port`,`start_game.ps1` 与排障文档照旧按 8081 取 `/actuator/health`。
@@ -246,7 +246,7 @@ Omit `-JavaSvcRegistry` or pass `-SkipJavaSvc` to skip Java service deployment.
     `/api/assign-gate` 的准入缓存等待方(`AssignGateService.awaitAdmission`)仍是无上限 `join()`(改动前就有,G2b §9 第 7 条已记),本次未改。
   - gateway 的上一个 revision 早于 2026-10-15 探针改端口时,不做 `rollout undo`,用旧 commit 重跑 `k8s_deploy.ps1 zone-up`。
     [docs/ops/release-checklist.md](../../docs/ops/release-checklist.md) §4「快速回滚单个 Deployment」与附录 E.2 第 3 级已于 2026-10-16
-    追加这条 gateway 例外,并注明 E.2 里的 `deploy/gateway-node -n mmorpg` 是 2026-05 的旧名(当前 Deployment 叫 `gateway`,位于各 zone namespace)。
+    追加这条 gateway 例外,并注明 E.2 里的 `deploy/gateway-node -n mmorpg` 是 2026-05 的旧名(当前是 StatefulSet `gateway`,位于各 zone namespace)。
 
 ## 发布打包(版本库外制品 + release manifest)
 
@@ -622,7 +622,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   `infra-up` 会先 `kubectl delete deployment etcd --ignore-not-found` 再 apply StatefulSet
   (两者 kind 不同、名字相同,`apply` 不会回收旧 Deployment;而 Service 的 selector 会同时命中新旧 Pod,不删就是脑裂)。
   切换期间 etcd 短暂不可用;切完之后**所有节点必须重启一次重新注册**(node id 都在启动时重新申领,
-  `kubectl -n <zone-ns> rollout restart deploy` 即可)。killswitch 规则(`/mmorpg/killswitch/...`)如果有,需要重新 put。
+  `kubectl -n <zone-ns> rollout restart deploy` 再 `rollout restart statefulset` 即可,SQL 写者是 StatefulSet)。killswitch 规则(`/mmorpg/killswitch/...`)如果有,需要重新 put。
 - **`etcdctl` 怎么进**:不再有 `deploy/etcd`,用 StatefulSet 或指定成员:
   `kubectl exec -n mmorpg-infra sts/etcd -- etcdctl endpoint status --cluster -w table`(任一成员)或
   `kubectl exec -n mmorpg-infra etcd-0 -- etcdctl get --prefix --keys-only LoginNodeService.rpc/`。
@@ -728,7 +728,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 
 ## 写者 Pod 的启动目录、迁移和回收(2026-10-31;未在集群上验证)
 
-写者是 db、data-service、login、gateway 和 infra namespace 的全局服务。名册、账号和处置步骤在[开服手册](../../docs/ops/k8s-open-server-runbook.md) §1、§5、§9。
+写者是 db、data-service、login、gateway 和 infra namespace 的全局服务,都是 StatefulSet:Pod 序号就是写者名册的槽位,每次启动在同一槽位上换代,名册不随启动消耗([写者名册换代](../../docs/design/writer-roster-exhaustion-20261106.md) §5)。`k8s_deploy.ps1` 在 apply 之前删掉换类型之前留下的同名 Deployment(`Remove-LegacySqlWriterDeployment`),等就绪按 StatefulSet 等。名册、账号和处置步骤在[开服手册](../../docs/ops/k8s-open-server-runbook.md) §1、§5、§9。
 
 - **私有子目录**:控制文件都在 emptyDir 挂载根下的 `private` 子目录。Memory 介质的挂载根是 `drwxrwsrwt`、属主 root,过不了 `checkPrivateControlDirectory`(目录本身不能被组或其他人写,只有父目录能靠 sticky 放行),Java 的 `WriterAuthority` 还要求属主是自己,uid 10001 也改不了挂载根的权限。init 用 `umask 077; mkdir -p` 建 grant、runtime 下的子目录,主容器建消费目录(Java 在镜像入口)。不需要 root 容器。路径:
 
@@ -743,7 +743,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - **registrar 的后端档位**:`Add-SqlWriterBootManifest` 给 init 注入 `MMORPG_SQL_BACKEND`,全部写者都取 `-DatabaseBackend`。2026-11-06 起 login、gateway 也一样:它们登记的 `mmorpg` 在全球权威入口上,见下一节。
 - **首次部署先跑 Job**:名册里的 `generation` 由迁移 Job 随机生成,所以名册定不下来就没法起进程。迁移 Job 这一步只读目录条目的两个 schema Secret,不读名册。全局服务本来就分 Prepare 和 Workload 两步;zone 里的 db、data-service 用 `-SqlSchemaOnly` 走同一个 Prepare,tidb 档还跑网关的 `gateway-schema`(另读 gateway 条目的 `registrarImage`)。Job 重复跑是幂等的,不需要清库。目录缺名册时,不带这个开关的 `zone-up` 在写任何东西之前拒绝。
 - **`db-migrate` Job**(`manifests/go-svc/db-migrate.yaml`,目录条目 `MigrateJob`、`MigrateImageName`):存档库的表和闸门表只有 go/db 的 `cmd/migrate` 建。它不在服务二进制里,镜像是单独的 `mmorpg-db-migrate`(`go_svc_image.ps1` 的 `db-migrate` 条目)。逐库迁 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库,因为 data_service 的写资格覆盖它们;排在 db、data-service 的 Deployment 之前(`Get-ZoneScopedGoSvcNames`)。退出码:0 成功,3 锁忙重试,1 失败(FailJob),4 迁移成功但有要人工过目的漂移,记一行告警接着迁。库不存在就失败,不带 `-create-database`。
-- **写者 Pod 回收**(`manifests/go-svc/sql-writer-pod-reaper.yaml`,`Apply-SqlWriterPodReaper`):写资格一次性,写过之后主容器一重启就拒启,Pod 自己恢复不了。写者的入口脚本看到消费标记就以退出码 78 退出。每个跑写者的 namespace 一个 CronJob,每分钟删一次带 label `mmorpg.io/sql-writer=true`、主容器上一次以 78 退出的 Pod,ReplicaSet 建新 Pod 领名册下一条。还没写过就退出的进程(依赖没就绪)没有标记,容器原地重启接着用这份写资格,不删、不烧名册。Java 读的时候就消费,gateway 任何一次重启都是 78。init 反复失败、名册用完的 Pod 这里看不到,不删,由告警 `SqlWriterRegistrarFailing`(`logical-db-alerts.yaml`,要 kube-state-metrics)覆盖。权限只有这个 namespace 的 `pods` 的 get、list、delete,非 root。官方 kubectl 镜像没有 shell,所以拆成 init(`kubectl get` 经 `/go-runner` 写文件)和主容器(`kubectl delete -f`)两步。每删一次烧一条名册,所以 `k8s_deploy.ps1` 要求名册条数 ≥ 副本数 × 6。kind 上要先把镜像载入节点,或者保证节点能访问 `registry.k8s.io`。
+- **写者 Pod 回收**(`manifests/go-svc/sql-writer-pod-reaper.yaml`,`Apply-SqlWriterPodReaper`):写资格一次性,写过之后主容器一重启就拒启,Pod 自己恢复不了。写者的入口脚本看到消费标记就以退出码 78 退出。每个跑写者的 namespace 一个 CronJob,每分钟删一次带 label `mmorpg.io/sql-writer=true`、主容器上一次以 78 退出的 Pod,StatefulSet 按同一序号建新 Pod,新 Pod 在同一槽位上换代。还没写过就退出的进程(依赖没就绪)没有标记,容器原地重启接着用这份写资格,不删。Java 读的时候就消费,gateway 任何一次重启都是 78。init 反复失败的 Pod(副本数比名册槽位多、同序号另一个 Pod 抢先注册)这里看不到,不删,由告警 `SqlWriterRegistrarFailing`(`logical-db-alerts.yaml`,要 kube-state-metrics)覆盖。权限只有这个 namespace 的 `pods` 的 get、list、delete,非 root。官方 kubectl 镜像没有 shell,所以拆成 init(`kubectl get` 经 `/go-runner` 写文件)和主容器(`kubectl delete -f`)两步。删多少次都不消耗名册,`k8s_deploy.ps1` 只要求槽位数 ≥ 副本数。kind 上要先把镜像载入节点,或者保证节点能访问 `registry.k8s.io`。
 
 ## `mmorpg` 库在全球权威入口上,集群内 MySQL 只做 dev 夹具(2026-11-06~10,批 A;未编译、未在集群上验证)
 
@@ -1114,7 +1114,8 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
   不粘滞,没列出的删掉旧的 `<svc>-canary`。写 SQL 的服务要在 boot 目录里另备 `<ns>/<svc>-canary` 条目,缺了在任何写操作之前拒绝。
 - `infra-up -CanaryBattleReplicas <N> -CanaryNodeImage <ref>`(2026-11-10):另起金丝雀 battle 池 `battle-canary`(Deployment 形态是 Deployment,Agones 形态是第二个 Fleet),
   换镜像与副本数、写 canary env 与 Pod 标签、`app: battle-canary`,其余与 stable battle 相同。match 只把全员都是金丝雀会话的新成局放上去。要求 stable 池在;
-  不支持 hostPort 形态;不粘滞,没起时删掉旧的 `battle-canary`(只删本次编排形态的那种 kind,切换编排形态前先撤掉金丝雀池)。
+  不支持 hostPort 形态;不粘滞,没起时删掉旧的 `battle-canary`(只删本次编排形态的那种 kind)。切换 `-BattleOrchestrator` 时另一种 kind 的
+  `battle-canary` 与 stable battle 一起按旧形态资源删除(同一道 `-AllowDisruptiveSwitch` 闸),不用先手动撤池。
 - **stable 一律不写** env 和标签,生成物与引入参数之前逐字相同,已有 zone 不会因此滚动。`zone-status` / `infra-status` 最后列出各 Pod 的轨道标签,空 = stable。
 - **告警**:`deploy/k8s/release-track-alerts.yaml`(PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装):`ReleaseTrackZoneMixedTooLong`(一个 zone 的
   gate / scene 混轨超过 3 小时,看 `cpp_node_info`)、`ReleaseTrackCanaryForwardErrorsHigh`(路由服 `client_rpc_router_forward_by_track_total` 上
@@ -1267,7 +1268,7 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
   运维余量 20(迁移 Job、备份、探针、merge_zone / route_tool、人工会话,估计值)。写路径打印的本次部署与规划档两份都按本次部署的 K 算。
   **当前(2026-11-10 按公式手算,未运行,契约测试复核):MySQL 档(目录 1 片)峰值 2036,`max_connections = 2600`,余量 564;TiDB 档(目录 64 片、存档库 64 个)峰值约 7276,TiDB 预算 8000,余量约 724。**
   〔2026-10-31:按「每个 go/db 打开其余 3 个 zone 的库」算,K=1 峰值 2386、余量 214;K=64 峰值 5682,预算 6666(N=6)。〕下面括号里的数字是更早的历史值。
-  TiDB 预算 = (N−1) × 每台上限 / 不均衡系数,N=7(A17b 从 6 加到 7:每个实例最坏多开 64 个存档库池)、每台 2000、系数 1.5 都是规划值(`Get-MysqlConnectionPlan`),每片、每库 2 条没有压测过。`-DirectoryLogicalShards` 大于 1 且 tidb 档时,写路径的上限换成这个预算。
+  TiDB 预算 = (N−1) × 每台上限 / 不均衡系数,N=7(A17b 从 6 加到 7:每个实例最坏多开 64 个存档库池)、每台 2000、系数 1.5 都是规划值(`Get-MysqlConnectionPlan`),每片、每库 2 条没有压测过。tidb 档(不论目录片数)写路径的上限一律是这个预算:`mmorpg` 也迁到 TiDB 之后,这一档的部署里没有 MySQL;mysql 档照旧对照 `mysql.yaml` 的 `max_connections`。
   〔此前:峰值 1860,`max_connections = 2100`,余量 240(约 11%)〕
   (2026-10-16 mail 上 K8s 之后,staging `infra-up` DryRun 实测打印 `plan zones=4 peak=1860 headroom=240`;最初的规划档是峰值 1620 / 上限 1800 / 余量 180,历次变化见下面几条更正)。
   (2026-10-15 更正:加入 player-inbox 两副本 × 20 后,按公式手算峰值为 1700、余量 100(约 6%),未运行;池上限以 player_inbox.yaml 的实际值为准,
@@ -1346,7 +1347,7 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
 - **额外落点库池的旋钮与回退口径(批 C)**:go/db 原来的一个旋钮 `Placement.ExtraStoreMaxOpenConn` 拆成 `ZoneStoreMaxOpenConn` / `ZoneStoreMaxIdleConn`(每个额外 zone 家族库)
   与 `NonZoneStoreMaxOpenConn` / `NonZoneStoreMaxIdleConn`(每个非 zone 落点库),另加 `ExtraStoreConnMaxIdleSeconds`(默认 60,冷库的池回到 0 条);
   旧键只作回落(`docs/design/player-storage-placement.md` §6.1)。db ConfigMap 写的是这五个新键。
-  **回退批 C 必须用旧 commit 重跑 `k8s_deploy.ps1 zone-up` 重新生成 ConfigMap,不能只 `kubectl rollout undo deploy/db`**:
+  **回退批 C 必须用旧 commit 重跑 `k8s_deploy.ps1 zone-up` 重新生成 ConfigMap,不能只 `kubectl rollout undo statefulset/db`**:
   undo 只换回旧镜像,ConfigMap 里仍只有新键,旧二进制不认它们、按默认 8 / 2 开池(go-zero 对未知配置键静默忽略,凭记忆,未核实)。
   新键若已被调到 8 以下,回退后的实际池就比总账大。
 - **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。本项新增 9 例(批 A 7、批 B 2),当前文件 89 → 98:
@@ -1395,7 +1396,7 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   用来核对 ConfigMap 里的值真的被加载(go-zero 对不认识的键静默忽略)。只设 `PoolSize`,不设 `MaxActiveConns`:Pub/Sub 专用连接走 `NewConn`、
   不占池名额,但受 `MaxActiveConns` 约束,池满时订阅会直接失败(go-redis v9.16.0 / v9.17.3 / v9.18.0 的 `newConn`)。
   **改值 = 重算总账**:看部署时打印的 `Redis connection ledger` 一行;池等满时调用方排队(go-redis `PoolTimeout`)。本机 Windows 以前是 10 × 核数,现在同样是 20 —— 压测对比时注意这一口径变化。
-  **设不了的**:go-zero 封装的客户端(data-service 的 `NameCacheRedis`、scene-manager、match、friend 的共享库句柄)—— go-zero v1.9.2 / v1.10.0 的
+  **设不了的**:go-zero 封装的客户端(data-service 的 `NameCacheRedis`、scene-manager、friend 的共享库句柄;match 的 go-zero 句柄在 K8s 上恒指向 redis-match-cluster,不在这台)—— go-zero v1.9.2 / v1.10.0 的
   `redis.RedisConf` 没有池参数,`redisclientmanager.go` 不设 `PoolSize`、固定 `MinIdleConns: 8`,同一进程同一地址共用一个池。
   这些仍按缺省池(10G)记账,CPU limit 的输入钉子只对它们生效。
 - **公式**(P = 该服务 yaml 里的显式 `PoolSize`;G = GOMAXPROCS,只用于缺省池。Go 1.27.2 容器感知,CPU limit 500m / `"1"` 预期都是 2;**未实测,待 S6**;
@@ -1406,11 +1407,11 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   data-service    每副本 = 10G         # NameCacheRedis(go-zero,缺省池)
   scene-manager   每副本 = 10G         # go-zero,缺省池
   gateway(Java)  每副本 = 2           # Lettuce 共享连接 + 限流专用连接(staging / prod 缺省开限流;dev 关时实际 1,按 2 记)
-  match / friend  每副本 = 10G         # go-zero,缺省池
+  friend          每副本 = 10G         # go-zero,缺省池(K8s 不配 FriendRedis,私有 key 回落这台)
   trade           每副本 = P + 1       # 资产通道 + 落地唤醒订阅(资产通道开关缺省关,按开计)
-  guild           每副本 = 2P + 1 + 4  # RedisClient / PlayerLocatorRedis 两个显式池 + 落地唤醒订阅 + 摘要 bump 专用池(代码写死 4,玩家域)
+  guild           每副本 = 2P + 1 + 4 + 4  # RedisClient / PlayerLocatorRedis 两个显式池 + 落地唤醒订阅 + 申请配额专用池(代码写死 4,控制域,拆了玩家域也留下) + 摘要 bump 专用池(代码写死 4,玩家域)
   player-inbox    每副本 = P           # 核心 Redis 一个 go-redis 池,没有 Pub/Sub
-  mail            每副本 = P           # 只有玩家域句柄 PlayerRedis(服务 yaml 的 PoolSizePerNode),建了玩家域集群这一行就搬走
+  match / mail    每副本 = P           # 只有玩家域句柄 PlayerRedis(服务 yaml 的 PoolSizePerNode),建了玩家域集群这一行就搬走;match 的 MatchRedis 在 redis-match-cluster 上
   gate / scene / battle 每进程 = 1     # node.cpp 唯一的 tlsRedis.Connect:每进程一条,不是每线程
   每 zone = Σ(zone 级客户端每副本 × 副本数) + gate 台数 + scene 台数
   全局    = Σ(全局池客户端每副本 × 副本数) + battle 台数   # match / friend、trade、guild、player-inbox、mail 各 2 副本
@@ -1423,10 +1424,13 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   - player-inbox 2026-10-16 起计入:核心 Redis 一个 go-redis 池(`go/player_inbox/internal/svc/servicecontext.go` 的 `openCoreRedis`,
     围栏上界、在线提醒读 location 与后台循环选主锁共用),池上限 `CoreRedis.PoolSize`,没有 Pub/Sub。
   - 不计入(接上时在常数表加一行):client-rpc-router(不连 Redis)、
-    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;ConfigMap 的 `Redis` 段只为 `RpcServerConf` 兼容,go-zero 句柄 `NonBlock` 不预连、运行时不发命令)、
-    login 的 PasswordAuth 失败配额池(K8s 不写该段,启用后每 login 副本 +4)、match 的 MatchRedis 与 chat 的 ChatRedis(在 redis-match-cluster 上)。
+    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;K8s 的 ConfigMap 不写 `ChatRedis`,`Redis` 段只为 `RpcServerConf` 兼容,
+    按它建的 go-zero 句柄 `NonBlock` 不预连、运行时不发命令)、
+    login 的 PasswordAuth 失败配额池(K8s 不写该段,启用后每 login 副本 +4)、match 的 MatchRedis(在 redis-match-cluster 上)。
   - 契约测试钉住:显式池那几行等于服务 yaml 的值、ConfigMap 镜像同一个值、yaml 写 0 / 负数 / 非整数时部署侧 throw;
-    有缺省池的行「manifest 的 CPU limit ≤ G 核」—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列。
+    有缺省池的行「manifest 的 CPU limit ≤ G 核」—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列;
+    guild 申请配额池等于源码常量 `logic.ApplicationQuotaRedisPoolSize`,而且装配处必须引用它;
+    match ConfigMap 恒写 `MatchRedis`(redis-match-cluster 每个 Pod、`Type: cluster`)。不写时 go/match 会静默回落到这台、多一个缺省池,match 行就不能再记 0。
 - **取值**:`MAXCLIENTS=40000` 时 80% 水位 32000,需要 40032 个 fd;规划档(Z=4,来自 MySQL 规划档)的峰值与余量看部署时打印的那一行。
   契约测试钉住「规划档峰值 ≤ 80% × MAXCLIENTS」。Z≈220 或目标形态(每 zone gate 5~22、scene 9~44,login 4 核)落地时要重算。
   单实例按连接数撑到 100 个 zone 只是算术:命令量约 3 个满载 zone 就到顶,这个上限真正的用处在按用途 / 按玩家拆分之后(每个拆出的实例各自显式 `--maxclients`、各自记账)。
@@ -1793,7 +1797,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesCon
 ### `redis-split-status` 与 `redis-wipe`
 
 - `-Command redis-split-status`(`dev_tools.ps1 -Command k8s-redis-split-status`):只读。zone 列表取 zones 配置(`-ZonesConfigPath`,json / yaml),
-  对每个 zone 打印 login 的 `RedisClient` / `QueueRedis` Host、gateway 的 `spring.data.redis.host`、组号,以及 `deployment/login`、`deployment/gateway`
+  对每个 zone 打印 login 的 `RedisClient` / `QueueRedis` Host、gateway 的 `spring.data.redis.host`、组号,以及 `statefulset/login`、`statefulset/gateway`
   的 rollout 是否完成(`kubectl rollout status --timeout 10s`);再对它们线上指向的每个 queue 实例打印一行 `instance=<名> namespace=<ns> shape=single|ha ready=<就绪>/<副本> proxy=<就绪>/<副本> service_selector=<app 值>`(多个 zone 同组只查一次)。
   同一 zone 的 login 与 gateway 指向不同实例、任一 rollout 没完成 / 读不到,或指向的实例不存在、没全部就绪、高可用时代理没就绪、Service 的 selector 与形态对不上,退出码 1。
   zone 的 ConfigMap 或 Deployment 不存在只打印 `<absent>`,不算失败。
@@ -1895,6 +1899,23 @@ kubectl apply -n observability -f deploy/k8s/redis-player-alerts.yaml
 ### 契约测试
 
 `tools/scripts/tests/redis_player_cluster_contract.tests.ps1`。其余测试在 staging、prod 的 DryRun 由 `tests/lib/deploy_capture.ps1` 的 `Add-PlayerRedisDeployFixture` 补一组合法参数。
+
+## Loki:单副本与单体模式 3 副本(2026-11-10,批 B;未编译、未在集群上验证)
+
+设计见 [去单点总纲](../../docs/design/no-single-node-horizontal-scaling-20261001.md) §10。集群内 Loki 是 C++ 日志 sidecar 的写入目标,只在 `infra-up`(或不带 `-SkipInfra` 的 `all-up`)、sidecar 开着、没给 `-LokiPushUrl` 时部署。
+
+- **形态**(`-LokiReplicas`,只认 1 和 3;0 = 按档位,判据同 `-KafkaBrokers`:非 dev 或非 custom 取 3,其余取 1):
+  - 1:`manifests/infra/loki.yaml`,Deployment 加 PVC 和本地盘,只给 dev、kind。
+  - 3:`manifests/infra/loki-ha.yaml`,单体模式(`-target=all`)的 StatefulSet,三个 Pod 同时起(Parallel)。memberlist 经 headless Service `loki-memberlist`(7946,`publishNotReadyAddresses`)组环,`replication_factor: 3`;日志块与 TSDB 索引在共享 S3,每个 Pod 的 WAL 在自己的 PVC;PDB `minAvailable: 2`;反亲和用 preferred,单节点 kind 上照样起得来。
+  - 两份的 Service `loki:3100` 与 ConfigMap `loki-config` 同名,同一时刻只 apply 一份;C++ sidecar 与 Grafana 的地址不变。
+- **对象存储**(3 副本时必给):`-LokiS3Endpoint host:port`(不带 scheme、不带凭据)、`-LokiS3Bucket`、`-LokiS3Region`(缺省 us-east-1)、`-LokiS3ForcePathStyle`(Ceph RGW 与多数自建存储要开)、`-LokiS3Insecure`(走 http,只在 dev)。
+  - 访问密钥经环境变量 `MMORPG_LOKI_S3_ACCESS_KEY_ID`、`MMORPG_LOKI_S3_SECRET_ACCESS_KEY` 注入,写成 Secret `loki-s3`(键 `access-key-id`)与 `loki-s3-secret`(键 `secret-access-key`),经 `-config.expand-env` 进 Loki,不进 ConfigMap、不进 DryRun 输出。Pod 模板带它们的指纹,轮换密钥后自动滚动。
+  - 生产只接外部 S3 兼容存储:云上用云厂商的对象存储(可以和 TiDB BR 备份共用一套、另开一个桶),自建机房用平台层的 Rook-Ceph RGW。本仓库不部署生产级对象存储,理由见设计 §10。
+  - dev、kind 上验证 3 副本:`-LokiS3DevFixture`,起单进程 SeaweedFS(`manifests/infra/seaweedfs-dev.yaml`,数据在 emptyDir,同一个 Pod 里的容器建桶),Loki 指向 `seaweedfs-s3.<infra>:8333`,按路径寻址、走 http。staging、prod 拒绝。这份夹具没在集群上跑过。
+- **形态变更闸**(`Assert-LokiTopologyChangeIsSafe`,在任何写操作之前):1 → 3 要 `-ConfirmLokiTopologyChange`,脚本先删 `deployment/loki`,旧 PVC `loki-data-pvc` 留着(日志不迁移,要导出自己导);3 → 1 拒绝(日志在对象存储里,单副本的本地盘接不住)。
+- **参数不生效即拒绝**:本次不部署集群内 Loki 却给了 `-LokiReplicas`、任何 `-LokiS3*` 或 `-ConfirmLokiTopologyChange`,写路径入口拒绝。
+- **改配置要重启**:Loki 只在启动时读一次主配置,改完 ConfigMap 要 `kubectl -n <infra> rollout restart statefulset/loki`(单副本是 `deploy/loki`)。
+- **契约测试**:`tools/scripts/tests/loki_ha_deploy_contract.tests.ps1`。其余测试的非 dev infra-up 由 `lib/deploy_capture.ps1` 的 `Add-LokiObjectStoreFixture` 补虚构的对象存储参数。
 
 ## Kafka 审计 topic 预建(kafka-topic-init,2026-09-08,node-id-overhaul-plan §2.0c)
 
@@ -2098,7 +2119,7 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName yesterday -Zo
      grpc readiness/liveness 永远超时 → 0/1 + 反复重启。已补 `go s.Start()`。
   3. **dev 档 login 拒启**:生成器 dev 档回落占位密钥,而 login 的 secrets 门禁只在 go-zero
      `Mode=dev/test` 才降级为 WARN,ConfigMap 里没写 Mode(默认 pro)→ panic
-     "HMAC 密钥配置不合格"。现在 dev 档 login ConfigMap 写 `Mode: dev`(与 go/login/etc/login.yaml 一致),
+     "HMAC secret configuration invalid; refusing to start"。现在 dev 档 login ConfigMap 写 `Mode: dev`(与 go/login/etc/login.yaml 一致),
      staging/prod 不写,门禁不变。
   4. **`-WaitReady` 会等根本没部署的 auth**:`$JavaSvcCatalogue` 有 auth 条目但
      `manifests/java-svc/auth.yaml` 不存在,Apply 只告警跳过,Wait 却照等 → 必超时。已改为 manifest 不存在则跳过。
@@ -2194,7 +2215,7 @@ curl http://127.0.0.1:18081/api/server-list
 ```powershell
 kubectl exec -n mmorpg-infra etcd-0 -- etcdctl get --prefix --keys-only DataServiceNodeService.rpc
 #  → DataServiceNodeService.rpc/zone/<Z>/node_type/26/node_id/1 与 DataServiceNodeService.rpc/allocated/node_type/26/node_id/1
-kubectl logs -n mmorpg-zone-<name> deploy/data-service | grep NodeRegistry
+kubectl logs -n mmorpg-zone-<name> statefulset/data-service | grep NodeRegistry
 #  → [NodeRegistry] DataService registered: ... endpoint=<POD_IP>:9000 lease_ttl=60s
 ```
 
@@ -2709,7 +2730,8 @@ scene 通过 gRPC 直接调 go/db,在 TiDB 的 `player_store` 表上提交玩家
 
 login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:完全合格的(没停写、没排空、没到自报上限 90%)优先,没有时退到连得上的(排空中或到水位),全部停写才退到全部;退档只计 fallback,不拒绝(设计见 `docs/design/gate-load-balancing-design.md`「满载与停写的 gate」;11-06 排空并入分档,告警随之调整)。
 
-- `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale:本 zone 的 gate 全部停写,新登录多半连不上)、`LoginGatePickFallbackDegraded`(warning,reason 为 draining / full / mixed:没有完全合格的 gate,在连得上的里挑;draining 多半是整个 zone 被误标排空,full 多半是 ZoneCapacity 比 gate 上限之和还大)。
+- `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale:本 zone 的 gate 全部停写,新登录多半连不上)、`LoginGatePickFallbackDegraded`(warning,reason 为 draining / full / mixed:没有完全合格的 gate,在连得上的里挑;draining 多半是整个 zone 被误标排空,full 是有人没经过区级准入:排队关着、重连豁免或人数上报滞后,2026-11-10 起排队开着时区容量已按 gate 承载封顶)。
+- 同文件组 `login.queue-capacity`(2026-11-10 起),1 条:`LoginQueueCapacityLimitedByGates`(warning,for 10m:排队实际用的区容量 `login_queue_capacity` 被本 zone 在接客的 gate 到水位的承载压到配置的 `ZoneCapacityOverride` 以下,gate 副本不够配置的容量;每台 20000 到水位 18000,区容量 45000 至少要 3 台)。排队关着时没有这两个 gauge,不响。
 - `deploy/k8s/scene-manager-alerts.yaml` 加组 `scene-manager.gate-redirect`,1 条:`SceneManagerGateRedirectFallback`(warning,跨 zone 重定向时目标 zone 没有完全合格的 gate;目标 zone 的 gate 全卡住时由 login 那条 critical 呼人,这条不重复呼)。
   ```bash
   kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
@@ -2735,7 +2757,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
   ```powershell
   # 预览清单(不调 kubectl、不建报告目录)
   pwsh -NoProfile -Command "& ./tools/scripts/k8s_route_tool.ps1 -ZoneName <zone> -RouteToolArgs @('tidb-prepare', '-zones=1,2') -Image <data-service 镜像> -DryRun"
-  # 真跑(镜像缺省取在役 deployment/data-service 的;kind 上务必带 -KubeContext kind-mmorpg)
+  # 真跑(镜像缺省取在役 statefulset/data-service 的;kind 上务必带 -KubeContext kind-mmorpg)
   pwsh -NoProfile -Command "& ./tools/scripts/k8s_route_tool.ps1 -ZoneName <zone> -RouteToolArgs @('tidb-prepare', '-zones=1,2', '-dry-run=false') -KubeContext <ctx>"
   ```
   子命令参数里有 `-` 开头的项时用 `-Command` 形式传数组:`pwsh -File` 下 `tidb-prepare,-zones=1` 是一个字符串,脚本会拒绝(退出码 2),不替你切分。

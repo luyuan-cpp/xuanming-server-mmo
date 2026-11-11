@@ -92,8 +92,20 @@ private:
     std::uint64_t liveOwners_ = 0;
 };
 
+struct UnaryCallResult;
+using UnaryCallback = std::function<void(UnaryCallResult &&result)>;
+
+// 出站拦截:每次发起 unary 调用时在调用线程上执行一次,位置紧接在 StartUnaryCall 判空 done 之后(早于停机、在途上限、
+// 消息大小和 metadata 校验,所以本地拒绝也走包装后的回调)。可往 metadata 追加键;返回值替换完成回调,包装必须
+// 恰好调用一次原回调,不改变「恰好一次、永不在 StartUnaryCall 内同步执行」的契约。返回空回调是编程错误(LOG_FATAL)。
+// 传输层不认识这些键,也不看包装做了什么;链路追踪的实现在 engine 的 core/network/grpc_trace_hooks.h
+// (docs/design/distributed-tracing.md §5.3)。双向流不经过它。
+using UnaryCallInterceptor = std::function<UnaryCallback(Metadata &metadata, UnaryCallback done)>;
+
 struct ChannelOptions
 {
+    // 出站拦截;空 = 不拦截。见上面 UnaryCallInterceptor。
+    UnaryCallInterceptor unaryInterceptor;
     // 默认共用进程账本；测试可以注入独立域，不清空生产历史。
     std::shared_ptr<MaintenanceState> maintenance;
     std::string authority;                              // 空 = "ip:port"
@@ -131,8 +143,6 @@ struct UnaryCallResult
     Metadata trailingMetadata;
     std::string response;       // status OK 时是响应 protobuf 的字节
 };
-
-using UnaryCallback = std::function<void(UnaryCallResult &&result)>;
 
 // 双向流的回调(§13.2)。全部经 queueInLoop 投递、保持到达顺序;onClose 恰好一次;Cancel 之后一个都不再回调。
 struct StreamCallbacks

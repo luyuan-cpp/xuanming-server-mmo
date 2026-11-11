@@ -117,7 +117,8 @@ function Invoke-FixturePlan {
     return [pscustomobject]@{ Code = 0; Out = ''; Err = '' }
 }
 
-# 与 writer_authority register 同一输入输出形状:核 roster SHA,抄选中配置与环境值,写 16 字段 grant 和 .sha256。
+# 与 writer_authority register 同一输入输出形状:核槽位名册 SHA 与格式,按 -pod-name 的序号选槽位,现场生成这一代的身份,
+# 抄选中配置与环境值,写 16 字段 grant 和 .sha256,并在 grant 旁留启动记录(各库的完整请求)。
 function Invoke-FixtureRegister {
     param([string[]]$Arguments)
     $map = @{}
@@ -125,7 +126,12 @@ function Invoke-FixtureRegister {
     $rosterSha = (Get-FileHash -LiteralPath $map['-roster'] -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($rosterSha -cne $map['-roster-sha256']) { return [pscustomobject]@{ Code = 1; Out = ''; Err = 'roster sha mismatch' } }
     $roster = Get-Content -LiteralPath $map['-roster'] -Raw | ConvertFrom-Json -AsHashtable
-    $entry = $roster.entries[0]
+    if ($roster.format -cne 'SQL_WRITER_BOOT_ROSTER_V2' -or $map['-pod-name'] -cnotmatch '-(0|[1-9][0-9]{0,3})$') { return [pscustomobject]@{ Code = 1; Out = ''; Err = 'not a slot roster register' } }
+    $entry = $roster.entries[[int]$Matches[1]]
+    $newIdentity = { [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(16)) }
+    $writerKey = & $newIdentity
+    $instanceId = & $newIdentity
+    $registeredMs = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     $configBytes = [IO.File]::ReadAllBytes((Join-Path $map['-input-root'] $entry.runtimeConfigPath))
     [IO.File]::WriteAllBytes($map['-runtime-config-output'], $configBytes)
     foreach ($variable in @($entry.runtimeEnvironment)) {
@@ -134,15 +140,22 @@ function Invoke-FixtureRegister {
     }
     # 每个逻辑库一份,写成一个集合文件。
     $grants = [Collections.Generic.List[object]]::new()
+    $minted = [Collections.Generic.List[object]]::new()
     foreach ($request in @($entry.requests)) {
+        $requestId = & $newIdentity
         $grants.Add([ordered]@{
-                format = 'SQL_WRITER_BOOT_V1'; writerKey = $request.writer.writerKey; instanceId = $request.writer.instanceId; generation = $request.writer.generation
+                format = 'SQL_WRITER_BOOT_V1'; writerKey = $writerKey; instanceId = $instanceId; generation = $request.writer.generation
                 authoritySchema = $request.authoritySchema; protectedSchemas = [string[]]@($request.protectedSchemas); sqlPrincipal = $request.writer.sqlPrincipal
-                registrationDigest = [Convert]::ToBase64String([byte[]]::new(32)); deploymentId = $map['-deployment-id']; grantId = $request.requestId
-                grantedMs = $request.writer.registeredMs; permission = 'NORMAL'; physicalAuthoritySha256 = $request.deploymentDigest
+                registrationDigest = [Convert]::ToBase64String([byte[]]::new(32)); deploymentId = $map['-deployment-id']; grantId = $requestId
+                grantedMs = $registeredMs; permission = 'NORMAL'; physicalAuthoritySha256 = $request.deploymentDigest
                 lockPrimitive = $request.lockPrimitive; lockQualificationSha256 = $request.lockQualificationSha256
             })
+        $request.requestId = $requestId; $request.deploymentId = $map['-deployment-id']
+        $request.writer.writerKey = $writerKey; $request.writer.instanceId = $instanceId; $request.writer.registeredMs = $registeredMs; $request.writer.bootSeq = '1'
+        $minted.Add($request)
     }
+    $bootRecord = [ordered]@{ requests = [object[]]$minted.ToArray(); runtimeConfigPath = $entry.runtimeConfigPath; runtimeConfigSha256 = $entry.runtimeConfigSha256 }
+    [IO.File]::WriteAllText("$($map['-boot-output']).register.started.protojson", (ConvertTo-Json -InputObject $bootRecord -Depth 8 -Compress), [Text.UTF8Encoding]::new($false))
     $grantSet = [ordered]@{ format = 'SQL_WRITER_BOOT_SET_V1'; grants = [object[]]$grants.ToArray() }
     [IO.File]::WriteAllText($map['-boot-output'], (ConvertTo-Json -InputObject $grantSet -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
     $grantSha = (Get-FileHash -LiteralPath $map['-boot-output'] -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -354,7 +367,7 @@ try {
         Assert-Equal @(Get-LocalSqlBootWriterServices).Count $registers.Count '每实例注册一次'
         $identities = @{}
         foreach ($call in $registers) {
-            foreach ($flag in @('-roster', '-roster-sha256', '-input-root', '-lock-qualification', '-runtime-config-output', '-boot-output', '-deployment-id')) {
+            foreach ($flag in @('-roster', '-roster-sha256', '-input-root', '-lock-qualification', '-runtime-config-output', '-boot-output', '-deployment-id', '-pod-name')) {
                 Assert-True ($call.Arguments -ccontains $flag) "register 缺 $flag"
             }
             Assert-Equal 'register' $call.Arguments[1] '只注册'

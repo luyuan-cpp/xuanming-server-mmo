@@ -316,12 +316,12 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
   | `BagService::ConsumeInventoryAndGrant`（战斗结算的整笔换取） | 扣材料、建候选、调外层回调之前判，提交前复核 | 本入口自身：任一项被封整笔 `kAssetBlocked`，不扣材料、不发币、不改投临时格（临时格兜底只用于主包放不下）。战斗结算调用它之前先用同一个判定剔除被封的掉落（`player_battle.cpp` 的 `DropBlockedGains`，战斗结果一线 2026-11-05 落码）：被封的那一项这一局不发、解封后也不补发，其余效果照常应用、结局 APPLIED，逐项打 WARN `metric=battle_settlement_item_blocked`；所以封禁不会把结算卡在收件箱 |
   | 资产转入 `ApplyCredit`（帮会商店 / 活动、交易托管交付、邮件附件领取都经资产通道到这里），含按预设完整实例直接入包 | 货币封禁之后、号段余量与背包空间两道 RETRY 预检之前，按数量发放与完整实例一起判 | 记账式 `REJECTED kAssetBlocked`；背包满时也是 REJECTED，不回「背包满、稍后重试」 |
   | 神秘商人购买 | 扣钱之前预检 | `kMysteryMerchantItemBlocked`；发物仍经 `AddItems` 再判一次 |
-  | 任务奖励、活力奖励、GM 发物、宝石取下 | 经 `BagService::AddItems` | 透传 `kAssetBlocked`；宝石取下映射成 `kEquipInternalError`，宝石留在装备上（与全服封禁同口径） |
+  | 任务奖励、活力奖励、GM 发物、宝石取下 | 经 `BagService::AddItems` | 透传 `kAssetBlocked`（27005）；宝石取下同样原样回 27005、打一条 WARN，宝石留在装备上，解封后照常取下（全服封禁与本人封禁同口径） |
 
 - **不算新增获得、不调判定**：存档还原（`bag_marshal` 的 `RestoreItems`）、整理（`MergeAndCompact`）、同一所有者内部搬运（`TakeInstance` / `PutInstance`：装备穿脱、背包与仓库互转；临时格取回 `BagService::RetrieveFromTemporary`，经 `Bag::MoveInstancesTo` 整份搬运、不铸号）、消耗与扣出。物品进临时格的那一刻已经过了判定，取回只是换个包。
 - **错误码**：复用 `kAssetBlocked`（27005「该资产当前被禁止获取」），不新增 tip。2026-11-05 起 `BagService` 对全服物品封禁也回它（原为 `kInvalidParameter`），与货币封禁同码；资产通道对 `BagService` 回的 `kAssetBlocked` 与 `kInvalidParameter` 都记 `REJECTED kAssetBlocked`，原有的「资产拒绝 / 可重试 / 账本结局」划分不变。
 - **读缺失的口径**（持久数据「读缺失即 fail-closed」规则的一处有记录的例外，见 `ecs-component-access-rules.md`）：判定对无效句柄（`entt::null`）只判全服；有效实体缺封禁表时按「没有单人封禁」回答、不补建。理由：`BagService` 的入口历来接受没有玩家上下文的容器级调用；这个组件唯一的创建点是加载，缺了说明加载不变量已被破坏，而同一实体的存盘会因缺组件整份拒绝，资产通道与收件箱只在落盘之后才终结 / 确认，所以这种状态下发出的物品成不了盘上事实，封禁绕不过去。代价是这个实体的会话内存里可能短暂多出被封物品（随实体不存盘丢弃）；线索是存盘拒绝的 ERROR（`missing=PlayerItemGainBlockComp`）。写入口（Block / Unblock）缺组件一律拒绝、不补建。
-- **已知边界**：宝石取下被拦时打一条 ERROR（取下入口把背包满以外的失败都当内部错误）；战斗结算里被封的掉落是「这一局不发」而不是「整笔延后」，玩家与客服按 `metric=battle_settlement_item_blocked` 的 battle_id 查。
+- **已知边界**：战斗结算里被封的掉落是「这一局不发」而不是「整笔延后」，玩家与客服按 `metric=battle_settlement_item_blocked` 的 battle_id 查。宝石取下被拦是业务拒绝而不是故障：取下入口单独认出 `kAssetBlocked`，原样回 27005 并打 WARN（`PlayerEquipSystem::RemoveGem`，用例 `PlayerEquipTest.RemoveGemOfAGainBannedGemIsRefusedAndKeepsTheGem`）。
 - **运维查询**（2026-11-06 补，源码已改，未编译、未测试）：`PlayerInboxAdmin.GetItemGainBlocks(player_id)`，同样要 `x-admin-token`，只读、不写审计。回包两部分：
   - `blocked_item_config_ids`：玩家**已落盘**存档里的本人封禁表。player_inbox 不能跨库读存档库（AGENTS §7 #6），经 data_service 新增的只读 RPC `GetPlayerItemGainBlock` 读资料行（kind=PROFILE）的 `item_gain_block`；读法、错误口径与 `GetPlayerInboxLedger` 相同（data_service 两者共用 `readPersistedPlayerRow`，存档读共用 `readOwnerAndRow`）：没有写权行 `found=false`，读不成一律是错误、绝不退化成「没有」。
   - `pending`：GM 域里仍 PENDING 的物品封禁 / 解封单，按 seq 升序（scene 的执行顺序），载荷解出 `item_config_id`，带投递次数与作废指令。PENDING 行数受域的 `max_pending` 约束，读到超过它按 `open_count` 不变量被破坏报错，不拿可能残缺的列表当完整答案；载荷解不开记 0、照样列出并打 ERROR。

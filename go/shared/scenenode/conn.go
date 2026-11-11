@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"shared/tracing"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,7 +47,9 @@ func (c *ConnCache) Dial(endpoint string) (*grpc.ClientConn, error) {
 		return conn, nil
 	}
 
-	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// 裸客户端不经 zrpc,traceparent 由 shared/tracing 的拦截器写(docs/design/distributed-tracing.md §6.2)。
+	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", endpoint, err)
 	}

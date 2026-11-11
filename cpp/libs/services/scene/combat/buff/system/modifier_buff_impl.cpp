@@ -8,6 +8,7 @@
 #include "proto/common/component/player_comp.pb.h"  // Player:区分玩家缺等级(故障)与 NPC 没有等级(按 1 级)
 #include "combat/buff/comp/buff_comp.h"
 #include "combat/buff/constants/buff.h"
+#include "combat/engagement/system/combat_engagement.h"  // 别人给的回血算一次交手(治疗关系)
 #include "player/system/player_level_rules.h"  // CappedLevel:回血公式按生效等级
 #include <thread_context/ecs_context.h>
 
@@ -54,13 +55,20 @@ static bool OnHealthRegenerationBasedOnLostHealth(entt::entity parent, BuffEntry
         { static_cast<double>(level),  static_cast<double>(lostHealth) });
 
     const auto healingAmount = BuffTableManager::Instance().GetHealthRegeneration(buffTable->id());
+    const auto healthBefore = baseAttributesPbComponent->health();
     const auto currentHealth = std::min<uint64_t>(derivedAttributesPbComponent->max_health(),
-        static_cast<uint64_t>(static_cast<double>(baseAttributesPbComponent->health()) +
+        static_cast<uint64_t>(static_cast<double>(healthBefore) +
             healingAmount));
 
     baseAttributesPbComponent->set_health(currentHealth);
 
     LOG_TRACE << "Healing applied, current health: " << currentHealth;
+
+    // 真回了血才算一次交手(治疗关系):施法者与受治疗者互相关注,远处给你加血的人也看得见。
+    // 自己给自己回血、满血空跳都不算;施法者整数是 entt 句柄,已销毁的由 RecordInteraction 忽略。
+    if (currentHealth > healthBefore) {
+        CombatEngagementSystem::RecordInteraction(static_cast<entt::entity>(buffComp.buffPb.caster()), parent);
+    }
 
     return true;
 }

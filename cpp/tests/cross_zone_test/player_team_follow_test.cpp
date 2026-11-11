@@ -15,6 +15,7 @@
 
 #include "../muduo_grpc_test/muduo_test_loop.h"
 #include "engine/core/type_define/player_guid_comp.h"
+#include "frame/manager/frame_time.h"
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "muduo/net/EventLoop.h"
@@ -371,11 +372,12 @@ TEST_F(PlayerTeamFollowTest, HeldRepliesLeaveLoopFreeAndRegroupOnOwningThread)
 TEST_F(PlayerTeamFollowTest, MissingMalformedOrRemoteLeaderLocationDoesNotMovePlayer)
 {
     ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    // "远端"只剩别的 zone:队长在本 zone 别的节点上时照样跟(2026-11-10 起,team-follow-server-trail.md §3.7),
+    // 见下面的 LeaderOnAnotherNodeOfTheZoneIsFollowedBySceneChange。
     const std::vector<std::pair<int, std::string>> replies{
         {REDIS_REPLY_NIL, {}}, {REDIS_REPLY_ERROR, {}}, {REDIS_REPLY_STRING, {}},
         {REDIS_REPLY_STRING, std::string(1, '\x80')}, {REDIS_REPLY_STRING, LeaderLocation(0)},
         {REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId, kZoneId + 1)},
-        {REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId, kZoneId, kSceneNodeId + 1)},
     };
     for (const auto& [type, bytes] : replies)
     {
@@ -602,6 +604,97 @@ TEST_F(PlayerTeamFollowTest, OfflineMemberDoesNotAskSceneManagerToChangeScene)
     ExpectNoRegroup(player_);
 }
 
+// ---- 跨节点跟随与离线托管的托管落点(docs/design/team-follow-server-trail.md §3.7) ----
+
+// 进断线保留并确认挂机月卡有效(离线托管中):快照会话置无效、擦掉映射,保留组件记断开的那次登录。
+void HoldAsHostedOffline(entt::entity player, SessionId lostSession, uint64_t lostGeneration)
+{
+    auto& snapshot = tlsEcs.actorRegistry.get_or_emplace<PlayerSessionSnapshotComp>(player);
+    SessionMap().erase(snapshot.gate_session_id());
+    snapshot.set_gate_session_id(kInvalidSessionId);
+    auto& held = tlsEcs.actorRegistry.emplace_or_replace<PlayerConnectionLostComp>(player);
+    held.lostAt = connection_lost_hold::Clock::now();
+    held.sessionId = lostSession;
+    held.loginGeneration = lostGeneration;
+    held.afkPass = connection_lost_hold::AfkPass::kActive;
+    held.afkPassExpiresAtSec = TimeSystem::NowSecondsUTC() + 3600;
+    held.hostingStarted = true;
+}
+
+TEST_F(PlayerTeamFollowTest, LeaderOnAnotherNodeOfTheZoneIsFollowedBySceneChange)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    constexpr uint64_t kDestination = kCurrentSceneId + 1;
+    // 队长在本 zone 的另一个节点:照样发换场景(在线,带 gate);scene_manager 回 18 之后起服务器发起的交接。
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination, kZoneId, kSceneNodeId + 1));
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    ASSERT_NE(pending, nullptr) << "不再因为队长在别的节点就跳过";
+    EXPECT_FALSE(pending->playerRequested);
+    EXPECT_EQ(pending->sceneId, kDestination);
+
+    // 夹具的 scene_manager 回普通拒绝(5):跟随的应答只记日志、摘掉在途记录。
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    {
+        return !requests->empty() && !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
+    }, 5s));
+    const auto& request = sceneManager_.requests->front();
+    EXPECT_EQ(request.scene_id(), kDestination);
+    EXPECT_EQ(request.session_id(), SessionOnGate(kOriginalGateId));
+    EXPECT_EQ(request.gate_id(), std::to_string(kOriginalGateId));
+    EXPECT_FALSE(request.hosted_placement()) << "在线的队员走 gate 路由";
+    EXPECT_EQ(request.zone_id(), kZoneId);
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, HostedOfflineMemberFollowsWithAHostedPlacement)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    JoinTeam(player_);
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, 29u, 7u);
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    constexpr uint64_t kLostGeneration = 41;
+    const auto lostSession = SessionOnGate(kOriginalGateId);
+    // 位置读在途时玩家掉线、确认开通了挂机(客户端已关):队长在另一个节点的场景,照样跟过去。
+    HoldAsHostedOffline(player_, lostSession, kLostGeneration);
+    constexpr uint64_t kDestination = kCurrentSceneId + 1;
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination, kZoneId, kSceneNodeId + 1));
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    ASSERT_NE(pending, nullptr);
+    EXPECT_FALSE(pending->playerRequested);
+
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    {
+        return !requests->empty() && !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
+    }, 5s));
+    const auto& request = sceneManager_.requests->front();
+    EXPECT_TRUE(request.hosted_placement()) << "没有客户端:托管落点";
+    EXPECT_TRUE(request.gate_id().empty()) << "不带 gate:没有可推路由的会话";
+    EXPECT_TRUE(request.gate_instance_id().empty());
+    EXPECT_EQ(request.session_id(), lostSession) << "会话号只作登录身份:断开的那次登录";
+    EXPECT_EQ(request.login_generation(), kLostGeneration);
+    EXPECT_EQ(request.scene_id(), kDestination);
+    EXPECT_EQ(request.zone_id(), kZoneId);
+    EXPECT_EQ(request.gate_zone_id(), kZoneId);
+    EXPECT_EQ(request.owner_revision(), 7u);
+    EXPECT_NE(request.correlation_id(), 0u);
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, OfflineMemberWithoutConfirmedHostingDoesNotChangeScene)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    // 普通断线保留(还不知道有没有月卡):25 秒窗口建立在 login 断线租约之上,不搬到别处去。
+    HoldAsHostedOffline(player_, SessionOnGate(kOriginalGateId), 41);
+    auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player_);
+    held.hostingStarted = false;
+    held.afkPass = connection_lost_hold::AfkPass::kUnknown;
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1, kZoneId, kSceneNodeId + 1));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player_));
+    ExpectNoRegroup(player_);
+}
+
 // ECS 层:直接驱动 TeamFollowSystem::Update,不经 Redis / RPC。
 class TeamFollowDriveTest : public ::testing::Test
 {
@@ -722,5 +815,81 @@ TEST_F(TeamFollowDriveTest, ResendAfterEntryLeavesTheFormationUntouched)
 
     WalkLeader(6.0);
     EXPECT_NEAR(X(follower_), 6.0 - kTeamFollowSpacing, 1e-6) << "补推之后照常被带着走";
+}
+
+// ---- 队长离开本节点:原随从等队长的去留,有了结论再跟一次(team-follow-server-trail.md §3.7) ----
+
+// 队长开始一次跨节点交接(冻结 + 交接意图):下一 tick 队形以 LEADER_GONE 解散。
+void StartLeaderHandoff(entt::entity leader)
+{
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(leader);
+    tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(leader);
+}
+
+TEST_F(TeamFollowDriveTest, LeaderLeavingTheNodeIsAwaitedAndRecheckedOnceItIsGone)
+{
+    WalkLeader(2.0);
+    StartLeaderHandoff(leader_);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_)) << "记下在等队长的去留";
+    EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty())
+        << "队长还在交接中:location 还指着本节点的旧场景,现在检查只会跟回原地";
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+
+    // 交接放行:队长实体在本节点销毁,location 已指向新落点。
+    tlsEcs.playerList.erase(kLeaderId);
+    tlsEcs.actorRegistry.destroy(leader_);
+    const auto& settled = TeamFollowSystem::TakeFollowersWithSettledLeader();
+    ASSERT_EQ(settled.size(), 1u);
+    EXPECT_EQ(settled.front(), follower_) << "交给跟随检查,队长去了别的节点就跟过去";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty()) << "只交出一次";
+}
+
+TEST_F(TeamFollowDriveTest, AbortedLeaderHandoffSettlesTheWaitingFollower)
+{
+    WalkLeader(2.0);
+    StartLeaderHandoff(leader_);
+    TeamFollowSystem::Update(0.05);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+
+    // 交接作废、原地解冻:队长还在本节点,不再处于离开中 —— 重新检查,接回原来的队长身后。
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp, PlayerTravelHandoffComp>(leader_);
+    const auto& settled = TeamFollowSystem::TakeFollowersWithSettledLeader();
+    ASSERT_EQ(settled.size(), 1u);
+    EXPECT_EQ(settled.front(), follower_);
+}
+
+TEST_F(TeamFollowDriveTest, WaitingFollowerWhoLeftFollowIsNotRechecked)
+{
+    WalkLeader(2.0);
+    StartLeaderHandoff(leader_);
+    TeamFollowSystem::Update(0.05);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+
+    TeamFollowSystem::SetFollowIntent(follower_, false); // 等的时候点了暂离
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    tlsEcs.playerList.erase(kLeaderId);
+    tlsEcs.actorRegistry.destroy(leader_);
+    EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty()) << "暂离中的不再替他跟";
+}
+
+TEST_F(TeamFollowDriveTest, WaitingForTheLeaderGivesUpAfterTheTimeout)
+{
+    WalkLeader(2.0);
+    StartLeaderHandoff(leader_);
+    TeamFollowSystem::Update(0.05);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+
+    auto& frameTime = tlsFrameTimeManager.frameTime;
+    const auto savedFrame = frameTime.current_frame();
+    frameTime.set_current_frame(savedFrame + kTeamFollowAwaitLeaderFrames);
+    EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_)) << "等满放弃,交给别的信号";
+    tlsEcs.playerList.erase(kLeaderId);
+    tlsEcs.actorRegistry.destroy(leader_);
+    EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty());
+    frameTime.set_current_frame(savedFrame);
 }
 } // namespace

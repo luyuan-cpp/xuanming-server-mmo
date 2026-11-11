@@ -53,8 +53,8 @@ func resolveAuthProviders(cfg AuthConfig, relaxed bool, lookup func(string) (str
 		warnings = append(warnings, ws...)
 		out.WeChatAppSecret = secret
 		if !w.RequireUnionId {
-			warnings = append(warnings, "AuthProviders.WeChat.RequireUnionId=false:拿不到 unionid 时按 openid 建账号,"+
-				"以后接入开放平台(多应用共用 unionid)会把同一玩家分裂成两个账号,且无法事后合并")
+			warnings = append(warnings, "AuthProviders.WeChat.RequireUnionId=false: accounts are created by openid when unionid is unavailable; "+
+				"integrating the Open Platform later (multiple apps sharing one unionid) will split the same player into two accounts that cannot be merged afterwards")
 		}
 	}
 
@@ -76,8 +76,8 @@ func resolveAuthProviders(cfg AuthConfig, relaxed bool, lookup func(string) (str
 		warnings = append(warnings, ws...)
 		out.QQAppKey = key
 		if !q.RequireUnionId {
-			warnings = append(warnings, "AuthProviders.QQ.RequireUnionId=false:拿不到 unionid 时按 openid 建账号,"+
-				"以后接入 unionid 会把同一玩家分裂成两个账号,且无法事后合并")
+			warnings = append(warnings, "AuthProviders.QQ.RequireUnionId=false: accounts are created by openid when unionid is unavailable; "+
+				"adopting unionid later will split the same player into two accounts that cannot be merged afterwards")
 		}
 	}
 
@@ -145,7 +145,7 @@ func resolveAuthCredential(provider, field, envName, inline string, required, re
 		}
 		var warnings []string
 		if inline != "" {
-			warnings = append(warnings, fmt.Sprintf("AuthProviders.%s 同时配了 %s 和 %s,以 %s 为准;请删掉内联值",
+			warnings = append(warnings, fmt.Sprintf("AuthProviders.%s sets both %s and %s; %s takes precedence, remove the inline value",
 				provider, envField, field, envField))
 		}
 		return v, warnings, nil
@@ -164,7 +164,7 @@ func resolveAuthCredential(provider, field, envName, inline string, required, re
 	if err := checkCredentialValue(provider, field, inline, relaxed); err != nil {
 		return "", nil, err
 	}
-	return inline, []string{fmt.Sprintf("AuthProviders.%s.%s 使用内联明文,仅限本地开发;生产请改用 %s", provider, field, envField)}, nil
+	return inline, []string{fmt.Sprintf("AuthProviders.%s.%s uses inline plaintext, local development only; use %s in production", provider, field, envField)}, nil
 }
 
 // checkCredentialValue 拦住「看起来就不对」的凭据值。

@@ -290,7 +290,7 @@ void GateEventHandler::BindSessionEventHandler(const contracts::kafka::BindSessi
     // 等路由到达时由 RoutePlayer 一并转发。归属 zone / epoch 仍取会话里 RoutePlayer 先前存下的那份。
     if (!gate_authenticated_session::Bind(session, event))
     {
-        LOG_WARN << "绑定认证身份失败，拒绝采用旧连接或不完整身份";
+        LOG_WARN << "Failed to bind authenticated identity, refusing stale connection or incomplete identity";
         return;
     }
     if (gate_scene_route::ApplyLoginBinding(session, playerId, event.session_version(), event.login_generation(),

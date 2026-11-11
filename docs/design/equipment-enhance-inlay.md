@@ -497,7 +497,7 @@ std::vector<ResolvedGem> ResolveGemsNow(const ItemComp& item, const ItemTable& r
   `kEquipmentChanged`(按比例保持当前气血 / 法力:强化加血装不回血)。`player_attribute.h` 里 `Recalculate` 的调用约定注释扩成
   「装备栏的内容一变,**或穿着的装备的实例数据一变**」。
 
-**表校验(`ValidateTables` 追加)**。口径同一期:逐条 `++problems` + `LOG_ERROR "[PlayerEquip] 表校验: ..."`,不拒启;
+**表校验(`ValidateTables` 追加)**。口径同一期:逐条 `++problems` + `LOG_ERROR "[PlayerEquip] Table validation: ..."`,不拒启;
 **一行里互不相干的问题各计一条,同一个根因只计一次**。下面每个分号隔开的条件「恰好 +1」(用例按这张表逐项注入坏数据):
 
 - `EquipEnhance`(逐行):`id == 0` 或 `id > MaxEnhanceLevel()`(不在从 1 起的连续前缀里);`success_rate` 不在 1..10000;
@@ -700,7 +700,7 @@ public void RemoveGem(ulong itemId, uint socket);
   要连这一种也挡住,得给实例加「每次尝试都递增」的持久计数(持久结构变更,本期不做)。
 - 取下免费且走正式发放入口:同一种宝石 10 分钟内取下第 51 次起,每次都会产生一条 item 类异常获得告警(`AnomalyDetector` 默认阈值
   50 次 / 600 秒,无冷却);「嵌 → 取」循环的流水量只受限流与客户端发包间隔约束。要根治就给取下加成本(表列)。
-- 宝石 config 被封禁时取下会失败:全服封禁,或 2026-11-05 起这名玩家被 GM 单独封禁获得这种宝石(`player-inbox-service.md` §2.2)。`AddItems` 过发放封禁闸,回 `kAssetBlocked`(此前全服封禁回 `kInvalidParameter`),取下入口把它当作背包满以外的失败,对玩家表现为 `kEquipInternalError`,宝石留在装备上,每次点击各打一条 WARN + ERROR。取下走的是正式发放入口,所以单人封禁同样拦它:宝石不丢,解封之后照常取得下来。
+- 宝石 config 被封禁时取下会失败:全服封禁,或 2026-11-05 起这名玩家被 GM 单独封禁获得这种宝石(`player-inbox-service.md` §2.2)。`AddItems` 过发放封禁闸,回 `kAssetBlocked`(此前全服封禁回 `kInvalidParameter`)。取下入口单独认出这个码(见上表第 5 步):对玩家原样回 27005「该资产当前被禁止获取」,宝石留在装备上,每次点击只打一条 WARN,不当成内部错误。取下走的是正式发放入口,所以单人封禁同样拦它:宝石不丢,解封之后照常取得下来。
 - 「战斗中禁写」只认 `InBattleComp`:一期 §8 记的重登 / 离线结算窗口同样适用于强化与镶嵌;登录时 Redis 未就绪的话,窗口持续到下次进场。
   核过没有资产复制路径(强化石 / 宝石不是战斗道具,由表校验守着;金币与背包同一条记录落盘)。仍计划在 `PlayerBattleSystem::IsInBattle` 一处收口。
 - 入包边界整份信任 `equip` 段(一期 §8):消费侧已对强化等级夹取、对宝石现查并限制遍历条数,但做邮件回流 / 寄售之前仍须在玩法层补入包校验。
@@ -984,8 +984,8 @@ Codex 在 `0b40715d06` 上独立跑过同一组,也是 253 通过(见 `docs/PROG
 
 ### 11.6 还没验证的 / 不归本线的
 
-- 三条新日志(`[PlayerEquip] 强化:` / `镶嵌:` / `取下:`)在 main 上仍是中文,而仓库其余日志已在 10-13 统一成英文;不影响功能,
-  下次动 `player_equip.cpp` 时顺手改(改了要重编 scene,所以这次没有为它单独动)。
+- 三条成功日志已在 2026-11-10 的 C++ 日志英文化里改成英文:`[PlayerEquip] Enhance:` / `Inlay:` / `Gem removal:`
+  (原 `强化:` / `镶嵌:` / `取下:`),写入口与表校验的其余中文日志同批改完;要重编 scene,未编译,待 Codex 验证。
 - **客户端**:没有在 Unity 里编过、跑过(EditMode 用例、窗口级用例、实机都没有);证据只有 §11.1 那次离线的 Roslyn + NUnit。
   (10-16 更新:已在真 Unity 6000.6.0f1 里跑过 EditMode —— 副本工程 batchmode,客户端 main `db969ce4`,装备相关八个用例类全过(含真搭 uGUI 的 `EquipWindowTests` 29/29 与新面板逻辑 `EquipForgeUiStateTests` 63/63);同批另有 67 条美术资源用例失败,退回改动前同样失败,属既有问题。仍没有实机点过。)
   强化 / 镶嵌的**界面入口没有做**(按分工是 Codex 的文件,接线说明在客户端 `Docs/EquipmentForge-20261009.md`)——

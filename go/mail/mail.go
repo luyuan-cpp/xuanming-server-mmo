@@ -134,7 +134,6 @@ func run(c config, migrate bool) (runErr error) {
 	var root, relay *drainproof.Session
 	relayIngress := drainproof.New()
 	var poolOptions []authoritysql.OpenOption
-	var err error
 	if migrate {
 		permission, err = authoritysql.LoadSchemaPermission(os.Getenv)
 		if err == nil {
@@ -430,7 +429,7 @@ func run(c config, migrate bool) (runErr error) {
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, bind, closeSource, closeRelay, prepared); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("mail 排空 HOLD: %v", err)
+			logx.Errorf("mail drain HOLD: %v", err)
 		}
 	}()
 	defer func() {

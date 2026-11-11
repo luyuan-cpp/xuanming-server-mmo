@@ -98,6 +98,18 @@ bool IsReevaluationDue(entt::entity entity, const Transform& transform)
     return !IsMoving(entity) || movedSquared >= kAoiReevaluateDistance * kAoiReevaluateDistance;
 }
 
+// 有附近候选因名额被拒收或被挤掉(AoiNearbyRefillComp),现在又有空名额:重扫一次补回。
+// 位置不变也要补:打完架站着不动,战斗期间被挤掉的附近的人要回来。
+bool IsNearbyRefillDue(entt::entity entity)
+{
+    if (!tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(entity))
+    {
+        return false;
+    }
+    const auto* list = tlsEcs.actorRegistry.try_get<AoiListComp>(entity);
+    return list == nullptr || list->VisibleCount() < InterestSystem::GetEffectiveCapacity(entity);
+}
+
 // watcher 对 target 还没有空间来源、且距离进入视野半径时登记空间来源;容量与优先级由 InterestSystem 裁决。
 void TryAddSpatialSource(entt::entity watcher, entt::entity target, AoiVisibilityChanges& changes)
 {
@@ -216,7 +228,7 @@ void AoiSystem::Update(double delta) {
 
         const bool firstEntry = UpdateGridMembership(entity, sceneComp.sceneEntity,
                                                      GridSystem::CalculateHexPosition(transform));
-        if (firstEntry || IsReevaluationDue(entity, transform)) {
+        if (firstEntry || IsReevaluationDue(entity, transform) || IsNearbyRefillDue(entity)) {
             ReevaluateVisibility(entity, transform);
         }
     }
@@ -255,6 +267,9 @@ bool AoiSystem::UpdateGridMembership(const entt::entity entity, const SceneEntit
 }
 
 void AoiSystem::ReevaluateVisibility(const entt::entity entity, const Transform& transform) {
+    // 这次评估会扫一遍附近候选,待补回的标记在此消费;评估中再被拒会由 InterestSystem 重新打上。
+    tlsEcs.actorRegistry.remove<AoiNearbyRefillComp>(entity);
+
     // 先撤后建:走远的先让出名额,同一次评估里走近的就能用上。两个方向各自判定距离、容量与来源。
     AoiVisibilityChanges changes;
     DropDistantSpatialSources(entity, changes);

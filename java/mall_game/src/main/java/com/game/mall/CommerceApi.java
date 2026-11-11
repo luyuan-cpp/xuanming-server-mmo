@@ -19,8 +19,10 @@ public final class CommerceApi {
 
     /**
      * POST /internal/payments 的应答(2026-11-10 起;之前只回订单视图,适配器看不出这笔钱去了哪)。
-     * <p>HTTP 200 表示这笔付款已按 (channel, transactionId) 落库;同一笔重放也回 200、结论不变,适配器据此停止重试。
-     * order 是这笔付款所报订单的当前视图。这笔钱的去向只看 refundReason:
+     * <p>HTTP 200 表示这笔付款已按 (channel, transactionId) 落库,适配器据此停止重试;同一笔重放也回 200,不重复记账。
+     * 409 表示报来的这笔与已记下的冲突(交易号已属别的订单,或改了金额币种),是适配器的错,可以当终局;
+     * 503 表示商城存储不变量被破坏,这笔钱没有记下,适配器必须保留它、退避重试并告警。
+     * order 是这笔付款所报订单的当前视图。这笔钱的去向只看 refundReason(取这笔付款当前的退款待办):
      * <ul>
      *   <li>null:这笔是订单本身的付款,订单照常推进(order.state 为 DELIVERY_PENDING 等)。</li>
      *   <li>非 null:商城已为这笔钱建好退款待办(/internal/refunds/poll 会列出它),值是退款原因。适配器不把它计为已付、不发货,
@@ -28,7 +30,8 @@ public final class CommerceApi {
      *       都回 200,只靠这个值区分:前者是玩家对已付订单又付了一次;后者是渠道实收与订单冻结的金额币种对不上
      *       (渠道侧改价,或适配器取错了金额、币种),应单独告警排查。三者都不绑定订单,order.state 不因它们改变。</li>
      * </ul>
-     * 取消后迟到的那笔给 CANCELLED_LATE(仍绑定订单,order.state 为 REFUND_PENDING);DELIVERY_REJECTED 只会出现在交付被拒之后的重放里。
+     * 取消后迟到的那笔给 CANCELLED_LATE(仍绑定订单,order.state 为 REFUND_PENDING)。重放的结论与第一次相同,只有一个例外:
+     * 订单本身那笔在交付被拒之后重放,refundReason 由 null 变为 DELIVERY_REJECTED(这笔已转退款)。
      */
     public record PaymentOutcome(Order order, RefundReason refundReason) {}
 

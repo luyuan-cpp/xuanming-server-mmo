@@ -272,6 +272,15 @@ state=bootstrap
 1=ClientRequestRecord#6 optional uint32 enhance_level
 1=ClientRequestRecord#7 optional uint32 created_scheme_id
 1=player_database#25 optional ClientRequestLedgerComp client_request_ledger group=7
+1=ItemHold#1 optional uint64 hold_id
+1=ItemHold#2 optional uint32 kind
+1=ItemHold#3 repeated ItemHoldLine lines
+1=ItemHold#4 optional uint64 created_at_ms
+1=ItemHold#5 optional uint64 review_after_ms
+1=ItemHoldLine#1 optional uint32 config_id
+1=ItemHoldLine#2 optional uint64 count
+1=PlayerItemHoldComp#1 repeated ItemHold holds
+1=player_database#26 optional PlayerItemHoldComp item_holds group=4
 
 retired=player_database#10
 retired=player_database#17

@@ -1,0 +1,37 @@
+syntax = "proto3";
+option go_package = "db/proto/common/component";
+
+// 物品数量预留(docs/design/battle-item-reservation.md)。
+//
+// 一份预留 = 「人物背包里这几种物品各有这么多已经被某件事占用,别的路径不许拿走」。今天唯一的预留方是回合制战斗:
+// 备战时把快照里带进战斗的道具按配置号与数量记下,结算只从这份预留里扣,扣完连同余量一起释放;
+// 备战被取消、这一局作废(SQL 终局 ABORT)或永远不会有结算(没有可裁决的 SQL 原件)时整份释放。
+// 冻结按期限解开之后,这些道具仍然转不走、用不掉,晚到的结算照样扣得出 —— 「药白喝」的窗口由此关上。
+//
+// 落在 player_database.item_holds(字段 26,PROFILE 组),与背包随同一次存档、同一个整笔序号提交:
+// 一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),预留与它保护的数量要么一起在盘上,要么一起没有。
+// 持久数据:只在加载时创建(PlayerDatabaseMessageFieldsUnmarshal),存盘缺它整份拒存(docs/design/ecs-component-access-rules.md)。
+//
+// 只约束人物背包(kInventory)里可按配置号计数的单位(ItemStore::IsCountableByConfig),与战斗快照、结算扣消耗同一口径。
+// 规则只在 BagService 一处执行(cpp/libs/modules/bag/item_hold.h 是纯函数,bag_service.h 是唯一闸口)。
+// 种类存 uint32:本版本不认识的种类照样计入占用(保守),由认识它的版本释放。
+// 位置与顺序没有语义(AGENTS §11.6):按 hold_id 查找,存放顺序只为确定性序列化。字段号上线后不复用(AGENTS §4)。
+
+// 一种物品被占用的数量。
+message ItemHoldLine {
+  uint32 config_id = 1;
+  uint64 count = 2;  // > 0
+}
+
+// 一份预留。
+message ItemHold {
+  uint64 hold_id = 1;               // 预留方给的号,在本玩家名下唯一;战斗预留 = battle_id
+  uint32 kind = 2;                  // ItemHoldKind(item_hold.h):1 = 战斗
+  repeated ItemHoldLine lines = 3;  // 按 config_id 升序、互不重复、count > 0
+  uint64 created_at_ms = 4;         // 建立时刻(UTC 毫秒),只进日志
+  uint64 review_after_ms = 5;       // 预留方在这个时刻(UTC 毫秒)之后复核要不要继续留;战斗 = 冻结到期时刻
+}
+
+message PlayerItemHoldComp {
+  repeated ItemHold holds = 1;  // 同时至多 item_hold::kMaxHolds 份;正常情况 0 或 1 份
+}

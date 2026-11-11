@@ -11,6 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"shared/kafkacmd"
+	"shared/tracing"
 )
 
 // PlayerGateInfo holds the minimum session info needed to route a push to the right Gate.
@@ -95,6 +96,8 @@ func PushToPlayer(ctx context.Context, w *kafkago.Writer, builder GateCommandBui
 		Partition: kafkacmd.GateCommandPartition(gateNodeID),
 		Key:       []byte(strconv.FormatUint(info.PlayerID, 10)),
 		Value:     cmdBytes,
+		// ctx 里有 trace 就带上 traceparent,gate 消费时接上(docs/design/distributed-tracing.md §6.2)。
+		Headers: tracing.KafkaGoHeaders(ctx),
 	})
 }
 
@@ -170,6 +173,7 @@ func BroadcastToPlayers(ctx context.Context, w *kafkago.Writer, builder GateComm
 			Partition: kafkacmd.GateCommandPartition(gateNodeID),
 			Key:       []byte(g.gateID),
 			Value:     cmdBytes,
+			Headers:   tracing.KafkaGoHeaders(ctx),
 		}); err != nil {
 			logx.Errorf("BroadcastToPlayers: send to gate %s (%s/%d) failed: %v",
 				g.gateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)
@@ -225,6 +229,7 @@ func BroadcastToScene(ctx context.Context, w *kafkago.Writer, builder GateComman
 			Partition: kafkacmd.GateCommandPartition(gateNodeID),
 			Key:       []byte(g.GateID),
 			Value:     cmdBytes,
+			Headers:   tracing.KafkaGoHeaders(ctx),
 		}); err != nil {
 			logx.Errorf("BroadcastToScene: send to gate %s (%s/%d) failed: %v",
 				g.GateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)
@@ -272,6 +277,7 @@ func BroadcastToGateClients(ctx context.Context, w *kafkago.Writer, builder Gate
 			Partition: kafkacmd.GateCommandPartition(gateNodeID),
 			Key:       []byte(g.GateID),
 			Value:     cmdBytes,
+			Headers:   tracing.KafkaGoHeaders(ctx),
 		}); err != nil {
 			logx.Errorf("BroadcastToGateClients: send to gate %s (%s/%d) failed: %v",
 				g.GateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)

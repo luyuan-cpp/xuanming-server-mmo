@@ -85,7 +85,7 @@ Queue:
 [stats 60s] ... q_entered=4080 q_admitted=20 q_avg_wait=22s q_max_rank=4078  ← admitted 不涨
 ```
 **排查**:
-- **先看是不是正常回压**:`login_queue_admitted_inflight` 与该 zone 各 gate 上报的 `PlayerCount` 之和是否已到 capacity(`ZoneCapacityOverride`)。到了就是正常回压(G4b-G 起取走后占位再留一段——2026-10-15 起 20s,此前 15s——之后名额转给在线数,见上方「放行节奏」),不往下查
+- **先看是不是正常回压**:`login_queue_admitted_inflight` 与该 zone 各 gate 上报的 `PlayerCount` 之和是否已到 capacity(看 `login_queue_capacity`:2026-11-10 起它是 `ZoneCapacityOverride` 再按在接客的 gate 到水位(90%)的承载封顶之后的值,gate 台数不够时小于配置值,见 `login_queue_configured_capacity` 与告警 `LoginQueueCapacityLimitedByGates`)。到了就是正常回压(G4b-G 起取走后占位再留一段——2026-10-15 起 20s,此前 15s——之后名额转给在线数,见上方「放行节奏」),不往下查
 - `redis-cli ZCARD queue:zone:1` → 应该单调下降。不降 = ZPOPMIN 没在跑
 - 查 login 日志 `[loginqueue] elected dispatcher leader zone=<id>` 是否存在 + `[loginqueue] zone=1 admitted=N` 是否持续
 - 无 leader 日志 = `dispatcher:lock:login_queue:zone:<id>` 抢锁失败,看 Redis 连接。多 zone 共用 Redis 时每个 zone 各有一把锁(2026-10-12 G1b 起),某个 zone 没有锁键 = 该 zone 没有打开 Queue 的 login 副本
@@ -251,7 +251,7 @@ cd go/login && go test ./internal/logic/pkg/loginqueue/... -count=1
 
 ## Grafana / Prometheus 指标(已接入)
 
-login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `Prometheus` 配置块)暴露下列 6 个指标:
+login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `Prometheus` 配置块)暴露下列 8 个指标(后两个 2026-11-10 起):
 
 | 指标 | 类型 | 标签 | 用途 |
 |---|---|---|---|
@@ -261,6 +261,8 @@ login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `
 | `login_queue_admit_total` | Counter | zone | dispatcher 累计 admit 数,`rate(...[1m])` = drain QPS |
 | `login_queue_expired_total` | Counter | zone, reason | reason ∈ `bad_signature` / `ttl` / `meta_gone` / `queue_disabled` / `admit_window_passed`(2026-10-15 起:放行槽已被取走或已按 AdmitTTL 过期后再查,回 EXPIRED;此前这类查询回名次 0、最长卡 1h。稳态里它主要来自客户端取票后的重复查询,偏高说明放行后没人来取) |
 | `login_queue_dispatcher_is_leader` | Gauge | pod, zone | 1=leader,0=standby;`sum by (zone) (...) == 1` 是稳态不变量(每 zone 一个 leader)。leader 每拍重发 1、备机每轮抢锁失败重发 0(2026-10-14 起),指标开关打开前写丢的样本下一拍就补上。**序列缺失不等于 0**:整 zone 没有副本上报时 `sum by (zone)` 根本不出这一组,发现不了整 zone 缺席,见下方 `absent` 告警 |
+| `login_queue_capacity` | Gauge | zone | `FreeSlots` 实际用的区容量:`ZoneCapacityOverride`(没配按软上限)再按在接客的 gate 到自报 `max_connections` 90% 的承载封顶。每次算容量时写(快速通道每次 AssignGate、dispatcher 每个非空拍),排队关着时没有序列 |
+| `login_queue_configured_capacity` | Gauge | zone | `ZoneCapacityOverride` 里本 zone 的值,0 = 没配。大于 `login_queue_capacity` = gate 台数装不下配置的容量,排队比配置的早开始拦人,持续 10 分钟报 `LoginQueueCapacityLimitedByGates`(`deploy/k8s/login-alerts.yaml`) |
 
 > (2026-10-18 补注,`login_queue_expired_total` 与 `login_queue_admit_total` 两行;已落码,未编译、未测试,待 Codex 验证)
 > - **新增 reason `queue_gone`。** 含义:meta 在、没有放行、又不在队列。来源有三个:整个 zone 空闲超过 `QueueEntryTTL` 后队列键先到期;人工 `ZREM` / `DEL` 队列键;排队开着时混跑新旧版。

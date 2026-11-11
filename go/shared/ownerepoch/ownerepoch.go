@@ -30,6 +30,15 @@
 //	                                  scene_manager 仍然从不删除这个键;放行之后它自然过时,
 //	                                  靠 TTL 回收。
 //
+// 回滚回执(player:{id}:location 里的 PlayerLocation.rollback_receipt,scene_manager 写、C++ 源 scene 读)有两种形态
+// (zone-redis-regression-guard-20261022.md §4.3.4 两段回执):
+//
+//	"{epoch}:{saved_at_ms}"            正式回执 = 被回滚那次铸造所凭的标记原文。只在回滚后的 epoch 已确认落盘时出现,
+//	                                    C++ 源端凭它采纳回滚后的 epoch(判定表 B5)。
+//	"pending:{epoch}:{saved_at_ms}"    待确认回执(PendingRollbackReceiptPrefix + 标记原文)。回滚已写进 Redis 内存、
+//	                                    落盘还没确认:C++ 源端不得采纳(判定表 B5′,按"标记已发出"收口);scene_manager
+//	                                    在把这条 location 记的 epoch 交给任何节点之前,先确认落盘并把它改成正式回执。
+//
 // 本包刻意只依赖标准库与同模块的 redisslot:db 与 scene_manager 用的 Redis 客户端不同(go-redis vs
 // go-zero),键名与解析放在这里,读写各自用自己的客户端。
 package ownerepoch
@@ -117,3 +126,23 @@ func ParseHandoff(raw string) (Handoff, error) {
 
 // ErrNoHandoff 表示 handoff 键不存在(源 scene 还没落盘,或标记已过 TTL)。
 var ErrNoHandoff = errors.New("ownerepoch: no handoff marker")
+
+// PendingRollbackReceiptPrefix 是待确认回执的前缀(见包注释)。C++ player_ownership::kPendingRollbackReceiptPrefix
+// 与它逐字一致(scene_manager owner_epoch_crosslang_test.go 核对)。标记原文只由数字与一个冒号组成,带这个前缀的串
+// 不可能等于任何标记原文,所以 C++ 按原文逐字节比对的 B5 天然认不出它。
+const PendingRollbackReceiptPrefix = "pending:"
+
+// PendingRollbackReceipt 返回标记原文 marker 的待确认回执。
+func PendingRollbackReceipt(marker string) string {
+	return PendingRollbackReceiptPrefix + marker
+}
+
+// IsPendingRollbackReceipt 报告 receipt 是不是待确认回执。
+func IsPendingRollbackReceipt(receipt string) bool {
+	return strings.HasPrefix(receipt, PendingRollbackReceiptPrefix)
+}
+
+// FinalRollbackReceipt 把待确认回执还原成正式回执(所凭标记原文);ok 为 false 表示 receipt 不是待确认回执。
+func FinalRollbackReceipt(receipt string) (final string, ok bool) {
+	return strings.CutPrefix(receipt, PendingRollbackReceiptPrefix)
+}

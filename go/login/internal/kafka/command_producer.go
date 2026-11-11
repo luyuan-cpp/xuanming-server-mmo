@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"shared/drainproof"
+	"shared/tracing"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -49,9 +50,17 @@ func NewCommandProducer(cfg config.KafkaConfig) (*CommandProducer, error) {
 	return &CommandProducer{producer: producer, sends: drainproof.New()}, nil
 }
 
-// SendToTopicPartition 把一条命令发到显式的 (topic, partition)。
-// key 仍然填(玩家 id),它不决定落点,只用于日志与 broker 侧的可读性。
+// SendToTopicPartition 把一条命令发到显式的 (topic, partition),不带链路追踪头。
+// 留给手上没有请求 ctx 的调用方;有 ctx 的改用 SendToTopicPartitionContext。
 func (p *CommandProducer) SendToTopicPartition(topic string, partition int32, data []byte, key string) error {
+	return p.SendToTopicPartitionContext(context.Background(), topic, partition, data, key)
+}
+
+// SendToTopicPartitionContext 把一条命令发到显式的 (topic, partition),并把 ctx 里的 trace 写进消息头
+// (traceparent,docs/design/distributed-tracing.md §6.2),gate / scene 消费时接上同一条 trace。
+// ctx 只用来取 trace,不控制发送超时(超时仍由 sarama 的 Net.*Timeout 决定)。
+// key 仍然填(玩家 id),它不决定落点,只用于日志与 broker 侧的可读性。
+func (p *CommandProducer) SendToTopicPartitionContext(ctx context.Context, topic string, partition int32, data []byte, key string) error {
 	done, err := p.beginSend()
 	if err != nil {
 		return err
@@ -64,6 +73,7 @@ func (p *CommandProducer) SendToTopicPartition(topic string, partition int32, da
 		Topic:     topic,
 		Partition: partition,
 		Value:     sarama.ByteEncoder(data),
+		Headers:   tracing.SaramaHeaders(ctx),
 	}
 	if key != "" {
 		msg.Key = sarama.StringEncoder(key)

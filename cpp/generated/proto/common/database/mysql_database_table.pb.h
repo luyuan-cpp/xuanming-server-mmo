@@ -45,6 +45,7 @@
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
+#include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -2253,6 +2254,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kBattleResultsFieldNumber = 23,
     kItemGainBlockFieldNumber = 24,
     kClientRequestLedgerFieldNumber = 25,
+    kItemHoldsFieldNumber = 26,
     kPlayerIdFieldNumber = 1,
     kPersistSchemaGenFieldNumber = 21,
   };
@@ -2560,6 +2562,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::ClientRequestLedgerComp* PROTOBUF_NONNULL _internal_mutable_client_request_ledger();
 
   public:
+  // .PlayerItemHoldComp item_holds = 26 [(.OptionPersistGroup) = 4];
+  [[nodiscard]] bool has_item_holds()
+      const;
+  void clear_item_holds() ;
+  [[nodiscard]] const ::PlayerItemHoldComp& item_holds() const;
+  [[nodiscard]] ::PlayerItemHoldComp* PROTOBUF_NULLABLE release_item_holds();
+  ::PlayerItemHoldComp* PROTOBUF_NONNULL mutable_item_holds();
+  void set_allocated_item_holds(::PlayerItemHoldComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_item_holds(::PlayerItemHoldComp* PROTOBUF_NULLABLE value);
+  ::PlayerItemHoldComp* PROTOBUF_NULLABLE unsafe_arena_release_item_holds();
+
+  private:
+  const ::PlayerItemHoldComp& _internal_item_holds() const;
+  ::PlayerItemHoldComp* PROTOBUF_NONNULL _internal_mutable_item_holds();
+
+  public:
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2584,8 +2602,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
-                          19, 0,
+      ::google::protobuf::internal::TcParseTable<5, 22,
+                          20, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2632,6 +2650,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::PlayerBattleResultComp* PROTOBUF_NULLABLE battle_results_;
     ::PlayerItemGainBlockComp* PROTOBUF_NULLABLE item_gain_block_;
     ::ClientRequestLedgerComp* PROTOBUF_NULLABLE client_request_ledger_;
+    ::PlayerItemHoldComp* PROTOBUF_NULLABLE item_holds_;
     ::uint64_t player_id_;
     ::uint32_t persist_schema_gen_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3650,7 +3669,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -3658,7 +3677,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -5069,7 +5088,7 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
 inline void player_database::clear_persist_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t player_database::persist_schema_gen() const {
   // @@protoc_insertion_point(field_get:player_database.persist_schema_gen)
@@ -5077,7 +5096,7 @@ inline ::uint32_t player_database::persist_schema_gen() const {
 }
 inline void player_database::set_persist_schema_gen(::uint32_t value) {
   _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:player_database.persist_schema_gen)
 }
 inline ::uint32_t player_database::_internal_persist_schema_gen() const {
@@ -5459,6 +5478,99 @@ inline void player_database::set_allocated_client_request_ledger(::ClientRequest
 
   _impl_.client_request_ledger_ = reinterpret_cast<::ClientRequestLedgerComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.client_request_ledger)
+}
+
+// .PlayerItemHoldComp item_holds = 26 [(.OptionPersistGroup) = 4];
+inline bool player_database::has_item_holds() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00080000U);
+  PROTOBUF_ASSUME(!value || _impl_.item_holds_ != nullptr);
+  return value;
+}
+inline const ::PlayerItemHoldComp& player_database::_internal_item_holds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerItemHoldComp* p = _impl_.item_holds_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerItemHoldComp>(&::PlayerItemHoldComp_globals_);
+}
+inline const ::PlayerItemHoldComp& player_database::item_holds() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.item_holds)
+  return _internal_item_holds();
+}
+inline void player_database::unsafe_arena_set_allocated_item_holds(
+    ::PlayerItemHoldComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.item_holds_);
+  }
+  _impl_.item_holds_ = reinterpret_cast<::PlayerItemHoldComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.item_holds)
+}
+inline ::PlayerItemHoldComp* PROTOBUF_NULLABLE player_database::release_item_holds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ::PlayerItemHoldComp* released = _impl_.item_holds_;
+  _impl_.item_holds_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerItemHoldComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_item_holds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.item_holds)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ::PlayerItemHoldComp* temp = _impl_.item_holds_;
+  _impl_.item_holds_ = nullptr;
+  return temp;
+}
+inline ::PlayerItemHoldComp* PROTOBUF_NONNULL player_database::_internal_mutable_item_holds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.item_holds_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerItemHoldComp>(GetArena());
+    _impl_.item_holds_ = reinterpret_cast<::PlayerItemHoldComp*>(p);
+  }
+  return _impl_.item_holds_;
+}
+inline ::PlayerItemHoldComp* PROTOBUF_NONNULL player_database::mutable_item_holds()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ::PlayerItemHoldComp* _msg = _internal_mutable_item_holds();
+  // @@protoc_insertion_point(field_mutable:player_database.item_holds)
+  return _msg;
+}
+inline void player_database::set_allocated_item_holds(::PlayerItemHoldComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.item_holds_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  }
+
+  _impl_.item_holds_ = reinterpret_cast<::PlayerItemHoldComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.item_holds)
 }
 
 // -------------------------------------------------------------------

@@ -182,8 +182,9 @@ type Store interface {
 // 为什么条件必须在 LIMIT 之前:先 LIMIT 再在内存里过滤,队头被别的副本的片占满时本副本一行都拿不到;
 // 写在 WHERE 里,各副本只看自己的片,一个副本积压的行占不住别的副本的名额。
 //
-// 不放进 Store 主接口:Store 的生产实现除 guild、trade 外还有 mail 与 data_service 的回收,它们不在这次分工的范围里,
-// 不该为此同批改(同 PlayerPendingLister 的理由)。没实现它的 Store 绑不上分工(BindWorkOwner 回错误),照旧扫全部行。
+// 不放进 Store 主接口(同 PlayerPendingLister 的理由):Store 的生产实现 guild、trade、mail、data_service 的回收都已实现它
+// (mail 与回收是同日第二批),但测试替身与离线工具不需要分工,不该为此逐个补实现。没实现它的 Store 绑不上分工
+// (BindWorkOwner 回错误),照旧扫全部行。
 type OwnedDueLister interface {
 	ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error)
 }

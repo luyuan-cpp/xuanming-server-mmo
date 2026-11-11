@@ -230,7 +230,7 @@ func withStore(configPath string, readOnly bool, plan, directory, digest string,
 		var err error
 		writer, err = authoritysql.LoadWriterConfig(os.Getenv)
 		if err != nil {
-			fmt.Fprintln(stderr, "NORMAL工具启动身份无效:", err)
+			fmt.Fprintln(stderr, "NORMAL tool startup identity invalid:", err)
 			return exitError
 		}
 		permission = authoritysql.Writer(writer)
@@ -240,13 +240,13 @@ func withStore(configPath string, readOnly bool, plan, directory, digest string,
 	source, relay := drainproof.New(), drainproof.New()
 	if plan != "" || directory != "" || digest != "" {
 		if readOnly {
-			fmt.Fprintln(stderr, "只读list不参加写者闭合发行")
+			fmt.Fprintln(stderr, "read-only list does not take part in the writer drain publication")
 			return exitRejected
 		}
 		var err error
 		runtime, err = drainproof.LoadRuntime(plan, directory, digest)
 		if err != nil || runtime.Request.RunPhase >= databasepb.SqlWriterDrainRun_SQL_FROZEN || runtime.Seed("SOURCE") == nil || runtime.Seed("RELAY") == nil {
-			fmt.Fprintln(stderr, "有限NORMAL工具缺同boot SOURCE/RELAY原件")
+			fmt.Fprintln(stderr, "bounded NORMAL tool is missing same-boot SOURCE/RELAY originals")
 			return exitError
 		}
 		if err = runtime.BindBoot(writer.InstanceID(), writer.WriterKey()); err != nil {
@@ -276,7 +276,7 @@ func withStore(configPath string, readOnly bool, plan, directory, digest string,
 		defer cancelClose()
 		if err := closeDeps(closeCtx); err != nil {
 			source.Hold()
-			fmt.Fprintln(stderr, "工具资源闭合失败，保持HOLD:", err)
+			fmt.Fprintln(stderr, "tool resource closure failed; keeping HOLD:", err)
 			result = exitError
 			return
 		}

@@ -18,6 +18,10 @@
 //   后三种越过续冻上限(FreezeHoldDeadlineMs)→ 告警 + 照常解冻
 // 「一拍」= reaper 的一个节拍(PlayerBattleSystem::kReaperIntervalSec):下一拍再查一次。
 //
+// 解冻只放开「人」,不放开这一局带进战斗的道具(2026-11-10,docs/design/battle-item-reservation.md):
+// 道具预留只在「不会再从预留里扣」时释放 —— 结算已应用、备战被取消、ABORT、没有可裁决原件(IsBattleHoldReleasable)。
+// 越过上限解冻之后,预留由 reaper 的预留复核按同一张终局表收尾,没有上限:它只占住那几样道具,不会把人卡住。
+//
 // NONE(SQL 里还没有终局决定)要分两种(2026-11-06 负责人定):
 //   - 这一局有可裁决的 v1 Create 原件(match 回 terminal_expected = true)→ PENDING,按「结果未知」续冻。
 //     冻结到期 = 截止 + 60s 终局宽限 + 60s 投递余量,晚于 match 补写 ABORT 的时刻(截止 + 宽限,ready_recovery);
@@ -91,5 +95,25 @@ namespace battle_freeze_hold
 		}
 		// COMPLETE(本地还没应用)、PENDING(有原件的 NONE)与 UNKNOWN 都续冻;越界取值按 UNKNOWN 处理(fail-closed)。
 		return nowMs > holdDeadlineMs ? ExpiredFightingStep::kReleaseAtCap : ExpiredFightingStep::kHold;
+	}
+
+	// 冻结已不在、这一局的道具预留还在时(续冻到上限解冻、备战到期、重登时锁已过期、离线时被取消),
+	// 这一次终局回答能不能放掉预留(docs/design/battle-item-reservation.md)。只有「不会再有结算」的两种回答放:
+	// ABORT、没有可裁决的原件(NO_ORIGINAL)。COMPLETE(结算迟早到,到了从预留里扣)、PENDING(终局还没落定)、
+	// UNKNOWN(没问到)与越界取值一律留着,而且**没有上限** —— 留着只占住这一局带进战斗的道具,玩家其余的东西照常能动,
+	// 不会像冻结那样把人整个卡住;放早了,晚到的结算就只能按持有量夹紧(药白喝)。纯函数。
+	constexpr bool IsBattleHoldReleasable(const TerminalAnswer answer)
+	{
+		return answer == TerminalAnswer::kAbort || answer == TerminalAnswer::kNoOriginal;
+	}
+
+	// 预留越过「冻结到期 + 续冻上限」仍没收尾时 ERROR(metric=battle_item_hold_overdue)的节拍:每这么久一行。
+	// 与 player_inbox_rules::kStuckWarnEveryFailures 同一个考虑:落在 [10m] 日志窗口之内,还卡着的预留在任意 10 分钟窗口里都查得到一行。
+	inline constexpr uint64_t kHoldOverdueLogEveryMs = 10ULL * 60ULL * 1000ULL;
+	// overdueMs = 越过那一刻已经多久;tickMs = 调用方的节拍(reaper 一拍)。每个窗口开头的一拍为真,
+	// 节拍均匀时同一份预留每个窗口恰好一行。按时长取模、不存状态,确定、可测。tickMs 为 0 恒为假。纯函数。
+	constexpr bool IsHoldOverdueLogDue(const uint64_t overdueMs, const uint64_t tickMs)
+	{
+		return tickMs != 0 && overdueMs % kHoldOverdueLogEveryMs < tickMs;
 	}
 } // namespace battle_freeze_hold

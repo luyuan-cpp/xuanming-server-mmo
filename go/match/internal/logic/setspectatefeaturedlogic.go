@@ -45,7 +45,7 @@ func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeature
 
 	record, err := loadSpectateBattleFn(l.ctx, l.svcCtx, battleId)
 	if err != nil {
-		return l.internalReject("读观战记录", battleId, err), nil
+		return l.internalReject("read spectate record", battleId, err), nil
 	}
 	if record == nil {
 		return &pb.SetSpectateFeaturedResponse{Reject: pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NOT_FOUND}, nil
@@ -56,23 +56,23 @@ func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeature
 
 	if !in.GetFeatured() {
 		if err := unmarkSpectateFeatured(l.ctx, l.svcCtx, battleId); err != nil {
-			return l.internalReject("取消赛事局标记", battleId, err), nil
+			return l.internalReject("clear featured flag", battleId, err), nil
 		}
 	} else {
 		if err := markSpectateFeatured(l.ctx, l.svcCtx, battleId); err != nil {
-			return l.internalReject("写赛事局标记", battleId, err), nil
+			return l.internalReject("write featured flag", battleId, err), nil
 		}
 		if l.svcCtx.Config.Spectate.RelayUsable() {
 			tier, err := readSpectateTier(l.ctx, l.svcCtx, battleId)
 			if err != nil {
-				return l.internalReject("读观战档位", battleId, err), nil
+				return l.internalReject("read spectate tier", battleId, err), nil
 			}
 			if tier != battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST {
 				_, _, rejectTip := promoteSpectateBroadcast(l.ctx, l.svcCtx, record)
 				if _, _, roomMissing := spectateRejectVerdict(rejectTip); roomMissing {
 					// 只撤标记,记录与活跃集合留给观众路径的懒剔除。
 					if err := unmarkSpectateFeatured(l.ctx, l.svcCtx, battleId); err != nil {
-						return l.internalReject("撤销赛事局标记", battleId, err), nil
+						return l.internalReject("revoke featured flag", battleId, err), nil
 					}
 					return &pb.SetSpectateFeaturedResponse{Reject: pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NOT_FOUND}, nil
 				}
@@ -82,7 +82,7 @@ func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeature
 
 	tier, err := readSpectateTier(l.ctx, l.svcCtx, battleId)
 	if err != nil {
-		return l.internalReject("读观战档位", battleId, err), nil
+		return l.internalReject("read spectate tier", battleId, err), nil
 	}
 	l.Infof("[spectate] Featured flag updated battle=%d featured=%t tier=%s", battleId, in.GetFeatured(), tier.String())
 	return &pb.SetSpectateFeaturedResponse{Tier: tier}, nil

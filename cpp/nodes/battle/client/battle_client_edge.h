@@ -21,7 +21,11 @@
 //   4. 验证通过前丢弃并关闭一切非握手消息;
 //   5. ClientRequest 体 ≤ kMaxClientRequestBytes;每消息号限速(MessageLimiter,与 gate
 //      同一张表);消息号只放行 BattleClientPlayer 的四条客户端 RPC;非法包累计达阈值即关闭
-//      (阈值与 gate 同源:IllegalPacketCounter,默认 50,GATE_ILLEGAL_PACKET_THRESHOLD 可调)。
+//      (阈值与 gate 同源:IllegalPacketCounter,默认 50,GATE_ILLEGAL_PACKET_THRESHOLD 可调);
+//   6. 应用层心跳(docs/design/gate-client-heartbeat.md §14,参数与 gate 同一份 client_liveness::kClientLiveness):
+//      握手成功的应答通告心跳参数,从这一刻起连续 30s 收不到这条直连的任何一帧就 forceClose;
+//      ClientHeartbeatRequest 每 10s 窗口最多回 3 条,超出的不回、计非法包;握手前的心跳同闸 4 处置。
+//      关闭之后照常走断开回调(DetachDirectConnection),这里不加任何战斗逻辑。
 //
 // 与 gate 的关键差别:dev/test 空密钥只是**跳过签名比对**,握手包本身仍必须发 ——
 // 直连没有别的途径知道这条连接属于哪场战斗、哪个玩家。
@@ -39,6 +43,7 @@
 #include "muduo/net/TcpServer.h"
 
 #include "message_limiter/message_limiter.h"
+#include "network/client_liveness.h"
 #include "network/codec/codec.h"
 #include "network/codec/dispatcher.h"
 #include "time/comp/timer_task_comp.h"
@@ -50,9 +55,10 @@
 class BattleClientEdge : muduo::noncopyable, public std::enable_shared_from_this<BattleClientEdge>
 {
 public:
-    // 未验证连接的握手期限。gate 没有这一道(靠非法包计数),直连面加上它:
+    // 未验证连接的握手期限,与 gate 同一份(client_liveness::kClientLiveness.handshakeTimeout,10s):
     // 票据握手是客户端拿到 BattleAssignedS2C 后的第一件事,10s 远超正常 RTT。
-    static constexpr double kHandshakeTimeoutSec = 10.0;
+    static constexpr double kHandshakeTimeoutSec =
+        std::chrono::duration<double>(client_liveness::kClientLiveness.handshakeTimeout).count();
     // 与 gate CheckMessageSize 同口径:客户端合法业务消息不超过 1KB。
     static constexpr size_t kMaxClientRequestBytes = 1024;
     // battle_max_connections=0(dev/test)时的硬上限,防 fd 被吃光。
@@ -114,6 +120,11 @@ private:
         // 每消息号限速,与 gate SessionInfo 同款(表驱动,MessageLimiter.xlsx)
         MessageLimiter messageLimiter;
         TimerTaskComp handshakeTimer;
+        // 应用层心跳的存活状态(闸 6)。握手成功的应答发出时开始跟踪,只在跟踪中刷新「上一帧」时刻。
+        client_liveness::ClientLiveness liveness;
+        // 空闲检查:每条跟踪中的连接恰好一个定时器。到期时距上一帧不足阈值就按「上一帧 + 阈值」重新武装,
+        // 本端 loop 卡过就推迟约 1s,静默满阈值就 forceClose 且不再武装。回调只持 connId,随会话销毁而取消。
+        TimerTaskComp idleTimer;
         std::weak_ptr<muduo::net::TcpConnection> conn;
         std::optional<match::NetworkProbeGrant> probeGrant;
         std::string probeNonce;
@@ -138,6 +149,20 @@ private:
     void OnUnknownMessage(const muduo::net::TcpConnectionPtr &conn,
                           const std::shared_ptr<::google::protobuf::Message> &message,
                           muduo::Timestamp receiveTime);
+    // 闸 6:收心跳。找不到会话 / 握手前:关;本窗口已回满:不回、计非法包;其余回 ClientHeartbeatResponse{seq}。
+    void OnHeartbeat(const muduo::net::TcpConnectionPtr &conn,
+                     const std::shared_ptr<::ClientHeartbeatRequest> &request,
+                     muduo::Timestamp receiveTime);
+
+    // 收到本连接的一帧(握手包、ClientRequest、心跳;含随后被拒的):跟踪中的连接刷新「上一帧」。握手前不读时钟。
+    static void NoteInboundFrame(DirectSession &session);
+    // 握手成功的应答发出时调用:开始跟踪并武装第一次空闲检查。已在跟踪(重复握手)时什么都不做。
+    void StartLivenessTracking(DirectSession &session);
+    // 武装本连接的空闲检查,到期时刻 due 是单调时钟。
+    void ScheduleIdleCheck(DirectSession &session, client_liveness::SteadyTime due);
+    // 空闲检查到期(为 due 而设、在 now 执行):按 client_liveness::DecideIdleCheck 活着就重新武装、迟到就推迟、
+    // 静默满阈值就 forceClose。会话已不在就什么都不做。
+    void CheckIdle(uint64_t connId, client_liveness::SteadyTime due, client_liveness::SteadyTime now);
 
     // 把一条已验证连接上的业务请求派发给 BattleRoomManager,并回 MessageContent。
     void DispatchVerifiedRequest(DirectSession &session,

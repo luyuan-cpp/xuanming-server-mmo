@@ -236,11 +236,12 @@ namespace
 		return PlayerLifecycleSystem::IsSceneChangeBusy(player);
 	}
 
-	// 会话仍然活着才允许请求 SceneManager(照 player_lifecycle.cpp HandlePlayerAsyncSaved 的判法):
+	// 会话仍然活着才允许带 gate 请求 SceneManager(照 player_lifecycle.cpp HandlePlayerAsyncSaved 的判法):
 	// 断线宽限期内仍绑在旧 session 上的实体,拿旧 gate_session_id 去切场景会改写离线玩家的
 	// location,还会产生一次无效的 gate 路由。
-	// 只管两件要客户端在场的事:跨场景跟随(发 EnterScene)、旧客户端的归队瞬移。同场景里由服务器驱动的跟随
-	// 不看它 —— 离线队员也照样被带着走(team-follow-server-trail.md §3.6)。
+	// 只管两件要客户端在场的事:带 gate 的跨场景跟随、旧客户端的归队瞬移。同场景里由服务器驱动的跟随
+	// 不看它 —— 离线队员也照样被带着走(team-follow-server-trail.md §3.6);离线托管中的队员跨场景改发托管落点
+	// (PlayerLifecycleSystem::OfflineHostedIdentity,§3.7),同样不看它。
 	bool HasLiveSession(entt::entity player, uint64_t playerId)
 	{
 		if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
@@ -275,8 +276,8 @@ namespace
 			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
 			return false;
 		}
-		// 不看会话:离线队员(断线保留,以后的离线托管)在同一场景里照样接到队长身后、被服务器驱动。
-		// 要客户端在场的两条路径各自再判 HasLiveSession:跨场景的 EnterScene、旧客户端的归队瞬移。
+		// 不看会话:离线队员(断线保留、离线托管)在同一场景里照样接到队长身后、被服务器驱动。
+		// 跨场景的 EnterScene 在线的带 gate、离线托管的发托管落点、其余离线的不发;旧客户端的归队瞬移只对在线的人。
 		return true;
 	}
 
@@ -416,6 +417,16 @@ void PlayerTeamSystem::OnOfflineHostingStarted(entt::entity player)
 void PlayerTeamSystem::RefreshAndFollow(entt::entity player)
 {
 	RefreshMembership(player, FollowMode::kFollowLeader);
+}
+
+void PlayerTeamSystem::FollowAfterLeaderSettled()
+{
+	// 取走的是一份复用缓冲的引用;RefreshAndFollow 只发异步读,不会在本循环里回到 TakeFollowersWithSettledLeader。
+	for (const auto follower : TeamFollowSystem::TakeFollowersWithSettledLeader())
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_recheck reason=leader_settled player_id=" << GuidOf(follower);
+		RefreshAndFollow(follower);
+	}
 }
 
 void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
@@ -580,14 +591,9 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 				 << " leader_id=" << leaderId << " leader_zone_id=" << leaderLocation.zone_id();
 		co_return;
 	}
-	// PlayerLocation.node_id 是十进制字符串(scene_manager strconv.FormatUint 写入)
-	if (leaderLocation.node_id() != std::to_string(GetNodeInfo().node_id()))
-	{
-		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=cross_node player_id=" << playerId
-				 << " leader_id=" << leaderId << " leader_node_id=" << leaderLocation.node_id();
-		co_return;
-	}
-
+	// 队长在本 zone 的别的节点上也跟(2026-11-10 起,team-follow-server-trail.md §3.7,取代 team-system.md DV-6 的
+	// "只在同一节点内跟随"):换场景请求发出去,scene_manager 发现目标在别的节点就回 18,应答处理按同一个目标起服务器发起的
+	// 同 zone 交接(冻结 → 存盘 → 写交接标记 → 重发),与玩家自己换图到别的节点是同一条链,不另开捷径。
 	const uint64_t leaderSceneId = leaderLocation.scene_id();
 	if (leaderSceneId == 0)
 	{
@@ -600,32 +606,23 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 		co_return;
 	}
 
-	// 换场景要经 SceneManager 改 location 与 gate 路由:离线队员没有活会话,不能拿旧会话去切(见 HasLiveSession)。
-	// 离线队员因此留在原场景,队长回到这个场景时由扇出重新接上。以后做离线托管时,要在这里换成不带 gate 的
-	// 换场景请求(scene_manager 已接受 GateId 为空的 EnterScene,缺的是 scene 侧的落位),见 team-follow-server-trail.md §3.6。
-	if (!HasLiveSession(player, playerId))
+	// 换场景要经 SceneManager 改 location 并把人路由过去。三种队员:
+	//   * 在线的:带 gate 会话发,scene_manager 推 gate 路由;
+	//   * 离线托管中的(开通了挂机、客户端已关,§3.6):发托管落点 —— 不带 gate,带断开那次登录的身份,
+	//     scene_manager 提交之后直接通知目标 scene 节点把他放进场景(player-connection-lost-hold.md §4.2);
+	//   * 其余离线的(25 秒断线保留、没开通挂机):不切,留在原场景,队长回到这个场景时由扇出重新接上。
+	//     拿已断开的旧会话去切会改写离线玩家的 location,还会产生一次无效的 gate 路由(见 HasLiveSession)。
+	const bool liveSession = HasLiveSession(player, playerId);
+	std::optional<PlayerLifecycleSystem::HostedIdentity> hostedIdentity;
+	if (!liveSession)
+	{
+		hostedIdentity = PlayerLifecycleSystem::OfflineHostedIdentity(player);
+	}
+	if (!liveSession && !hostedIdentity)
 	{
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId
 				 << " leader_scene_id=" << leaderSceneId;
 		co_return;
-	}
-	const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
-	if (session == nullptr)
-	{
-		co_return;
-	}
-
-	// node_id 不是 entt 实体句柄(network_utils.h 禁令),必须走 ResolveLocalZoneGateEntity,
-	// 否则 gate_instance_id 为空,scene_manager 侧的 gate 防僵尸过滤会失效
-	const NodeId gateNodeId = GetGateNodeId(session->gate_session_id());
-	std::string gateInstanceId;
-	if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(session->gate_session_id()))
-	{
-		auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-		if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
-		{
-			gateInstanceId = gateNodeInfo->node_uuid();
-		}
 	}
 
 	const auto smEntity = SelectSceneManagerEntity(playerId);
@@ -639,24 +636,53 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 	::scene_manager::EnterSceneRequest request;
 	request.set_player_id(playerId);
 	request.set_scene_id(leaderSceneId);
-	request.set_session_id(session->gate_session_id());
-	request.set_gate_id(std::to_string(gateNodeId));
-	request.set_gate_instance_id(gateInstanceId);
 	request.set_gate_zone_id(GetZoneId());
 	request.set_zone_id(leaderLocation.zone_id());
+	if (hostedIdentity)
+	{
+		// 托管落点:会话号与登录代次是断开的那次登录,只作落点会话身份裁决与目标节点的角色登记,不绑定、不推送。
+		request.set_session_id(hostedIdentity->sessionId);
+		request.set_login_generation(hostedIdentity->loginGeneration);
+		request.set_hosted_placement(true);
+	}
+	else
+	{
+		const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
+		if (session == nullptr)
+		{
+			co_return;
+		}
+		// node_id 不是 entt 实体句柄(network_utils.h 禁令),必须走 ResolveLocalZoneGateEntity,
+		// 否则 gate_instance_id 为空,scene_manager 侧的 gate 防僵尸过滤会失效
+		const NodeId gateNodeId = GetGateNodeId(session->gate_session_id());
+		std::string gateInstanceId;
+		if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(session->gate_session_id()))
+		{
+			auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+			if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
+			{
+				gateInstanceId = gateNodeInfo->node_uuid();
+			}
+		}
+		request.set_session_id(session->gate_session_id());
+		request.set_gate_id(std::to_string(gateNodeId));
+		request.set_gate_instance_id(gateInstanceId);
+	}
 	// 不设 request_id:同 player_lifecycle.cpp DispatchEmergencyRelocate 的理由,
 	// SceneManager 的 60s 去重会吞掉同一玩家短时间内的第二次合法跟随
 
 	// RequestSceneChange 在发送之前登记单槽在途记录(与上面的 IsSceneChangeInFlight 成对):跟随在途
 	// 期间客户端再发换图会被 EnterSceneC2S 以"切换中"拒掉,不会覆盖这条记录;应答按 correlation_id
-	// 对号。playerRequested=false:玩家没在等这条请求的结果,被拒只记日志,不起交接、不回 tip
-	// (见 PlayerSceneChangeInFlightComp)。应答 / 进场路由到达即摘;应答丢失靠短 TTL 失效。
+	// 对号。playerRequested=false:玩家没在等这条请求的结果,被拒只记日志、不回 tip;18(目标在别的节点)
+	// 由应答处理起服务器发起的同 zone 交接(见 PlayerSceneChangeInFlightComp)。应答 / 进场路由到达即摘;
+	// 应答丢失靠短 TTL 失效。
 	const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(player, smEntity, request,
 																			 /*playerRequested=*/false);
 
 	// SceneManager 拒绝时只在其回包处理里记日志,队员留在原场景
 	LOG_INFO << "[PlayerTeam] Requesting scene change to follow leader: player_id=" << playerId << " leader_id=" << leaderId
-			 << " leader_scene_id=" << leaderSceneId << " corr=" << correlationId;
+			 << " leader_scene_id=" << leaderSceneId << " leader_node_id=" << leaderLocation.node_id()
+			 << " hosted=" << (hostedIdentity ? 1 : 0) << " corr=" << correlationId;
 }
 
 void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)

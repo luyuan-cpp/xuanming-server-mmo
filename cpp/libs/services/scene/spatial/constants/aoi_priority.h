@@ -12,7 +12,7 @@ enum class AoiPriority : uint8_t
 {
     kNormal      = 0,   // Default: entities discovered via spatial grid query
     kTeammate    = 1,   // Party/team members
-    kAttacker    = 2,   // Entities currently attacking the observer
+    kCombat      = 2,   // 交手对象:我打的、打我的、我治疗的、治疗我的(CombatEngagementSystem 登记,脱战撤销)
     kQuestNpc    = 3,   // NPCs related to active quests/missions
     kBoss        = 4,   // Boss / elite monsters
     kPinned      = 5,   // 显式关注的最高权重(如技能追踪鹰眼术、暗杀目标),登记在 AoiFollowGrant 上
@@ -38,36 +38,60 @@ struct AoiPriorityPolicy
 };
 
 // ---- Built-in policies ----
+//
+// 权重表是静态的:一条关注的权重只由「为什么关注它」(各来源的标签)决定,不随观察者的状态切换表。
+// 「战斗时先看交手的人、脱战后任务 NPC 回到最前」靠来源有寿命实现:交手来源(kCombat)只在交手期间存在,
+// 所以 kCombat 在每张表里都是除 kPinned 外最高的。按观察者状态切换权重表是被否掉的做法,
+// 理由见 docs/design/aoi-directed-interest.md「被否掉的做法：按观察者状态切换权重表」。
 
-// Open-world default: quest NPC > attacker > teammate > normal
+// Open-world default: combat > boss > quest NPC > teammate > normal
 inline constexpr AoiPriorityPolicy kPolicyOpenWorld {{
     /* kNormal   */ 0,
     /* kTeammate */ 1,
-    /* kAttacker */ 2,
+    /* kCombat   */ 5,
     /* kQuestNpc */ 3,
     /* kBoss     */ 4,
     /* kPinned   */ 255,
 }};
 
-// Dungeon / instance: boss > attacker > teammate > quest NPC > normal
+// Dungeon / instance: combat > boss > teammate > quest NPC > normal
 inline constexpr AoiPriorityPolicy kPolicyDungeon {{
     /* kNormal   */ 0,
     /* kTeammate */ 2,
-    /* kAttacker */ 3,
+    /* kCombat   */ 5,
     /* kQuestNpc */ 1,
     /* kBoss     */ 4,
     /* kPinned   */ 255,
 }};
 
-// PvP arena: attacker > teammate > boss > quest NPC > normal
+// PvP arena: combat > boss > teammate > quest NPC > normal
 inline constexpr AoiPriorityPolicy kPolicyPvpArena {{
     /* kNormal   */ 0,
     /* kTeammate */ 2,
-    /* kAttacker */ 4,
+    /* kCombat   */ 4,
     /* kQuestNpc */ 1,
     /* kBoss     */ 3,
     /* kPinned   */ 255,
 }};
+
+// 交手来源在每张表里都必须高于除 kPinned 外的所有标签(上方说明的前提),改表时由编译期守住。
+constexpr bool CombatOutranksAllButPinned(const AoiPriorityPolicy& policy)
+{
+    const auto combatIndex = static_cast<std::size_t>(AoiPriority::kCombat);
+    const auto pinnedIndex = static_cast<std::size_t>(AoiPriority::kPinned);
+    for (std::size_t i = 0; i < policy.weight.size(); ++i)
+    {
+        if (i != combatIndex && i != pinnedIndex && policy.weight[i] >= policy.weight[combatIndex])
+        {
+            return false;
+        }
+    }
+    return policy.weight[pinnedIndex] > policy.weight[combatIndex];
+}
+
+static_assert(CombatOutranksAllButPinned(kPolicyOpenWorld) && CombatOutranksAllButPinned(kPolicyDungeon) &&
+                  CombatOutranksAllButPinned(kPolicyPvpArena),
+              "kCombat must outrank every tag except kPinned in every AOI priority policy");
 
 // ---------------------------------------------------------------------------
 // Policy handle — stored on the scene as a plain enum (no pointer/reference),

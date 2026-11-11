@@ -432,11 +432,11 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | 项 | 现状（11-05 核对） | 处理 | 状态 |
 |---|---|---|---|
 | `mmorpg` 库（Java 网关的区目录、公告、白名单与写者闸门，login 的口令表） | 只在 infra 的单实例 MySQL 上。`k8s_deploy.ps1` 把 login、gateway 的写者档位写死为 mysql，网关的 JDBC 地址写死 `mysql.<infra>` | 迁到 TiDB，见 §6 | 批 A 11-10 已落码，未编译 |
-| 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话在做 |
-| scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话在做，4a、4b 已落码未编译 |
+| 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话做，5a～5c 11-05 已落码未编译 |
+| scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话做，4a～4c 11-05 已落码未编译 |
 | 选主的后台任务 | 见 §9 | 两处改分片（C1、C2），其余保持单 leader；帮会榜维护锁核对后暂不改（§9） | C1、C2 已落码未编译 |
 | 排行榜 Redis | rank 自 10-19 起以 SQL 为权威，不连 Redis。`redis-rank.yaml` 只作历史保留，部署脚本不 apply 它，契约测试「R2b Redis清单保留历史，现役SQL排行不自动部署旧写榜存储」守着 | 不是单点，不用改 | — |
-| Loki | 单副本加本地盘 | 单体模式 3 副本加共享对象存储，见 §10 | 批 B，待落码 |
+| Loki | 单副本加本地盘 | 单体模式 3 副本加共享对象存储，见 §10 | 批 B 11-10 已落码，未编译 |
 
 ## 9. 选主的后台任务：哪些要分片（2026-11-05 只读核对）
 
@@ -463,7 +463,9 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 
 §1 那条 2026-10-18 增补说 player_locator 对账「多开分担没有收益」，写于死 gate 清扫拆出 leader 之前，对补建与日审计已不成立，以本节为准。
 
-## 10. Loki：单副本 → 单体模式 3 副本加共享对象存储（2026-11-05 定，未落码）
+## 10. Loki：单副本 → 单体模式 3 副本加共享对象存储（2026-11-05 定，11-10 落码，未编译、未在集群上验证）
+
+落码结果：`-LokiReplicas` 与 `-LokiS3*` 参数、`Get-LokiTopology` / `Get-LokiS3Settings` / `Assert-LokiTopologyChangeIsSafe`（`k8s_deploy.ps1`），清单 `manifests/infra/loki-ha.yaml` 与 dev 夹具 `manifests/infra/seaweedfs-dev.yaml`，契约测试 `loki_ha_deploy_contract.tests.ps1`；用法见 `deploy/k8s/README.md`「Loki:单副本与单体模式 3 副本」。官方文档写明单体模式的高可用就是这种形态（多个实例、memberlist、共享对象存储、`replication_factor: 3`），并把它列为读写分离（SSD）模式在 Loki 4.0 退役后的去处之一。compactor 靠 Loki 自己的环在几个实例里选一个在做，这一点没在集群上验证。
 
 - 形态由 `-LokiReplicas` 选，只接受 1 或 3，缺省按档位（与 `-KafkaBrokers`、`-RedisReplicas` 同一判据：非 dev 或非 custom 取 3，其余取 1）：
   - 1：现状，单副本 Deployment 加 PVC 和本地盘，只给 dev、kind 用；
@@ -482,7 +484,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | 批 | 内容 | 规模估计 | 状态 |
 |---|---|---|---|
 | A | `mmorpg` 迁 TiDB（§6） | 实际约 20 个文件 | A1～A5 11-06～10 已落码，未编译 |
-| B | Loki 3 副本加外部 S3；dev 档可选单进程 SeaweedFS 做测试夹具 | 6～10 个文件 | 待落码 |
+| B | Loki 3 副本加外部 S3；dev 档可选单进程 SeaweedFS 做测试夹具 | 8 个文件 | 11-10 已落码，未编译 |
 | C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁缩小范围（C3，要加分数版本号，先确认有没有真实调用方再定） | 10～15 个文件 | C1 11-06、C2 11-10 已落码未编译；C3 11-10 核对后定暂不改，理由与以后的做法见 §9 |
 
 `k8s_deploy.ps1` 和它的契约测试同时有发布轨道（批 2b）、控制面按 zone 化等会话在改。动之前先给对方发消息，每次改前重读要改的那一段。Java 版（0.1.0-SNAPSHOT）只在 `PARITY.md` 登记待做。

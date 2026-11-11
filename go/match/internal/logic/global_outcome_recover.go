@@ -59,7 +59,7 @@ func (r *globalOutcomeRecovery) round(ctx context.Context, recoverer expiredOutc
 	}
 	if err != nil {
 		hold(err)
-		logx.Error("全球匹配到期终局恢复未确认，保留原件等待下轮")
+		logx.Error("global match expired-outcome recovery unconfirmed; keeping originals for the next round")
 	}
 }
 

@@ -86,19 +86,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	roleSecret := configuredRoleDirectorySecret(c)
 	// 铸造落盘确认的取值越界同样在占用任何外部资源之前拒启(fail-closed,口径同 go/db 的 RedisClient.WaitAOF*)。
 	if err := c.OwnerEpochMint.Validate(); err != nil {
-		panic("scene_manager 配置非法: " + err.Error())
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	// 无资格持有者撤销的宽限(location-release-binding.md §17.4):短于在途入场登记与交接冻结之和会打断它们,同样拒启。
 	if err := c.ValidateUnqualifiedHolderRevokeGrace(); err != nil {
-		panic("scene_manager 配置非法: " + err.Error())
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
-		panic("scene_manager 配置非法: PlayerRedis: " + err.Error())
+		panic("scene_manager invalid configuration: PlayerRedis: " + err.Error())
 	}
 	playerRedisConf := c.EffectivePlayerRedis()
 	playerRedis, err := playerredis.New(playerRedisConf)
 	if err != nil {
-		panic("scene_manager 配置非法: " + err.Error())
+		panic("scene_manager invalid configuration: " + err.Error())
 	}
 	logx.Infof("[scene_manager] player redis %s", playerRedisConf.Describe())
 	// keepalive:发现所连 etcd 成员掉电留下的半开连接,LoadReporter 的 watch 不会静默停住(etcdwatch 包注释)。
@@ -198,7 +198,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	rpc := newHomeZoneClient(c.DataServiceRpc)
 	sc.HomeZone = rpc
 	if rpc == nil {
-		panic("scene_manager必须配置DataServiceRpc以强读原角色修订")
+		panic("scene_manager requires DataServiceRpc to strongly read the original role revision")
 	}
 	directory := &roleDirectoryClient{rpc: rpc, secret: roleSecret}
 	sc.RoleDirectory = directory

@@ -453,14 +453,14 @@ func main() {
 	if trialResultActive && matchConfigured {
 		trialMatch, err = logic.NewSignedTrialStarter(svcCtx.MatchInternal, matchSecret)
 		if err != nil {
-			logx.Must(errors.New("历练开局签名依赖未就绪"))
+			logx.Must(errors.New("trial battle start signing dependency not ready"))
 		}
 	}
 	var trialCancellation logic.TrialCancellation
 	if matchConfigured {
 		trialCancellation, err = logic.NewTrialCancellation(svcCtx.MatchInternal, matchSecret)
 		if err != nil {
-			logx.Must(errors.New("历练原请求取消签名依赖未就绪"))
+			logx.Must(errors.New("trial original-request cancellation signing dependency not ready"))
 		}
 	}
 	activities := logic.ActivityDeps{
@@ -504,7 +504,8 @@ func main() {
 	// 配额不能挤占正常仓储池；go-redis 必须启用 context 截止及短套接字/取连接预算。
 	quotaRedis := redis.NewClient(&redis.Options{
 		Addr: config.AppConfig.RedisClient.Host, Password: config.AppConfig.RedisClient.Password, DB: config.AppConfig.RedisClient.DB,
-		PoolSize: 4, MaxActiveConns: 4, MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true,
+		PoolSize: logic.ApplicationQuotaRedisPoolSize, MaxActiveConns: logic.ApplicationQuotaRedisPoolSize,
+		MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true,
 		DialTimeout: logic.ApplicationQuotaBudget, ReadTimeout: logic.ApplicationQuotaBudget,
 		WriteTimeout: logic.ApplicationQuotaBudget, PoolTimeout: logic.ApplicationQuotaBudget,
 	})
@@ -747,7 +748,7 @@ func main() {
 			}
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("guild 排空 HOLD: %v", err)
+			logx.Errorf("guild drain HOLD: %v", err)
 		}
 	}()
 	defer func() {
@@ -757,7 +758,7 @@ func main() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), time.Minute)
 		defer cancelClose()
 		if err := svcCtx.StopAndReport(closeCtx); err != nil {
-			logx.Errorf("guild 退出保留资源，排空 HOLD: %v", err)
+			logx.Errorf("guild exit keeps resources; drain HOLD: %v", err)
 			return
 		}
 		shutdownComplete = true
@@ -775,7 +776,7 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 		root = admissions[0]
 	}
 	if len(admissions) > 1 {
-		panic("cleanup SOURCE 重复绑定")
+		panic("cleanup SOURCE bound more than once")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -843,7 +844,7 @@ const trialResultsPoint = "guild.kafka.trial_results"
 //
 // 返回 error 只可能是参数非法(config.Validate 与 TrialResultActive 已经挡过一遍,走到这里是装配错误)。
 // **Kafka 连不上不在此列**:消费者自己在后台每 30s 重试确保 topic,真正连上时才打
-// "历练结果消费者启动 topic=… group=…"那一行(部署验收看的就是它)。
+// "[GuildTrial] Trial result consumer started topic=… group=…"那一行(部署验收看的就是它)。
 //
 // 接线只有两处:
 //   - 结算入口:消费者只关心"提交位点还是退避重调",所以丢掉 SettleTrialResult 的去向、只留 error。

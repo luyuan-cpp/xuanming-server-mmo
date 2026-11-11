@@ -80,8 +80,9 @@ function Get-ConfigBlock {
 
 function Get-DeploymentBlock {
     param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Name)
-    $found = @(Get-ManifestBlocks -Output $Output | Where-Object { $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
-    if ($found.Count -ne 1) { throw "DryRun 输出里 Deployment $Name 应当恰好 1 份,实际 $($found.Count) 份" }
+    # SQL 写者是 StatefulSet(槽位 = 序号,writer-roster-exhaustion-20261106.md §5.5),其余是 Deployment:按名字挑工作负载,两种都认。
+    $found = @(Get-ManifestBlocks -Output $Output | Where-Object { $_ -cmatch '(?m)^kind: (?:Deployment|StatefulSet)\s*$' -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
+    if ($found.Count -ne 1) { throw "DryRun 输出里工作负载 $Name 应当恰好 1 份,实际 $($found.Count) 份" }
     return $found[0]
 }
 
@@ -292,7 +293,7 @@ Test-Case 'DryRun:data-service 的名册和这次的 K、存档库清单对不�
         param([string[]]$Schemas)
         $requests = @($Schemas | ForEach-Object { [ordered]@{ authoritySchema = $_; protectedSchemas = @($_) } })
         $rosterPath = Join-Path $root 'data-service-roster.json'
-        $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V1'; entries = @(1..12 | ForEach-Object { [ordered]@{ requests = $requests } }) }
+        $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V2'; entries = @(1..12 | ForEach-Object { [ordered]@{ requests = $requests } }) }
         [IO.File]::WriteAllText($rosterPath, (ConvertTo-Json -InputObject $roster -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
         $catalog["$ZoneNamespace/data-service"].rosterFile = $rosterPath
         $catalog["$ZoneNamespace/data-service"].rosterSha256 = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -955,8 +956,8 @@ Test-Case '回收 CronJob:zone 和 infra 各一份,先于写者,只有 pods 的�
     }
 }
 
-Test-Case '名册要留余量:最少 副本数 × 6;目录缺名册时 -SqlSchemaOnly 能跑 Job,不带这个开关在写之前拒绝' {
-    Assert-Equal -Expected 12 -Actual (Get-SqlWriterRosterMinimumEntries -Replicas 2) -Because '两副本:当前 2 + 一次滚动 2 + 每副本 4 条余量'
+Test-Case '名册按槽位:最少 副本数 个槽位;目录缺名册时 -SqlSchemaOnly 能跑 Job,不带这个开关在写之前拒绝' {
+    Assert-Equal -Expected 2 -Actual (Get-SqlWriterRosterMinimumEntries -Replicas 2) -Because '两副本两个槽位:同一序号每次启动在槽位上换代,重启、回收、滚动都不消耗槽位'
     $root = Join-Path $TempRoot 'schema-only'
     $null = New-Item -ItemType Directory -Path $root
     $catalog = @{}
@@ -980,7 +981,7 @@ Test-Case '名册要留余量:最少 副本数 × 6;目录缺名册时 -SqlSchem
     Assert-Match -Text $gatewayJob[0] -Pattern ('(?m)^\s+image: ' + [regex]::Escape($gatewayRegistrarImage) + '\s*$') -Because '镜像取 gateway 条目的 registrarImage'
     Assert-Match -Text $gatewayJob[0] -Pattern 'name: MMORPG_SQL_SCHEMA_PRINCIPAL\s+valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: principal, optional: false\}\}' -Because 'gateway-schema 的主体'
     Assert-True -Condition ($schemaOnly.Output.IndexOf('[applied] gateway-schema ->') -gt $schemaOnly.Output.IndexOf('name: data-service-migrate')) -Because 'Go 服务的 Job 先跑,网关的建表 Job 随后'
-    Assert-NotMatch -Text $schemaOnly.Output -Pattern '(?m)^kind: Deployment\s*$' -Because 'gate、scene、写者都不起'
+    Assert-NotMatch -Text $schemaOnly.Output -Pattern '(?m)^kind: (?:Deployment|StatefulSet)\s*$' -Because 'gate、scene、写者都不起'
 
     # gateway 条目缺 registrar 镜像:先渲染网关的建表 Job,一个 Job 都还没跑就拒绝。
     $catalog["$ZoneNamespace/gateway"].Remove('registrarImage')
@@ -1007,15 +1008,15 @@ Test-Case '名册要留余量:最少 副本数 × 6;目录缺名册时 -SqlSchem
     $small = New-SqlWriterCatalogFixture -Root (Join-Path $root 'small') -Namespaces @($ZoneNamespace, $Infra)
     $smallCatalog = Get-Content -LiteralPath $small -Raw | ConvertFrom-Json -AsHashtable
     $smallRoster = Join-Path $root 'small-roster.json'
-    [IO.File]::WriteAllText($smallRoster, '{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($smallRoster, '{"format":"SQL_WRITER_BOOT_ROSTER_V2","entries":[{}]}', [Text.UTF8Encoding]::new($false))
     foreach ($key in @($smallCatalog.Keys)) {
         $smallCatalog[$key].rosterFile = $smallRoster
         $smallCatalog[$key].rosterSha256 = (Get-FileHash -LiteralPath $smallRoster -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     [IO.File]::WriteAllText($small, (ConvertTo-Json -InputObject $smallCatalog -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
     $tooSmall = Invoke-LogicalDbDryRun -Arguments $ZoneArgs -Env @{ MMORPG_SQL_K8S_BOOT_CATALOG = $small }
-    Assert-True -Condition ($tooSmall.ExitCode -ne 0) -Because '条数只够副本数不够:每次 Pod 启动都永久烧一条'
-    Assert-Match -Text $tooSmall.Output -Pattern '2 replicas need at least 12 entries' -Because '点名要多少条'
+    Assert-True -Condition ($tooSmall.ExitCode -ne 0) -Because '槽位比副本少:多出来的序号选不到槽位'
+    Assert-Match -Text $tooSmall.Output -Pattern '2 replicas need at least 2 slots' -Because '点名要多少个槽位'
     Assert-NotMatch -Text $tooSmall.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写之前拒绝'
 }
 

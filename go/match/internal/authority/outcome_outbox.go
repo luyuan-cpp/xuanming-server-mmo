@@ -20,6 +20,11 @@ import (
 // 认领、投递与回写的语义与之前逐行串行的实现相同:逐行以观察到的 next_retry_ms 做 CAS 认领(改成本轮租约),
 // 只有认领者投递,回写再以同一租约值为条件。所以同一轮内并发处理不同行、多个副本同时巡检都只会有一方投递同一行;
 // 认领者投递后来不及回写就崩溃时,租约到期由任一副本重投同一份原件(至少一次,下游按 battle_id / (player, battle) 去重)。
+//
+// 到期读按片分工(缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md §2.5):整局结果按 battle_id、
+// 个人结算按 player_id,条件写在 SQL 的 LIMIT 之前(work_owner.go 的 WorkShardFilter,归属规则 svc.OwnsWork)。
+// 以前每个副本都读同一个到期队头,在认领 CAS 上空撞,加副本吞吐不涨。分工只省重复劳动,互斥仍是上面那条 CAS;
+// 没绑归属判定(单测)= 全部片。积压读数 ReadOutcomeOutboxBacklog 与按票的 SettlementLookupDue 不分片。
 
 // 投递计数与积压 gauge 的 kind 标签(封闭集合)。
 const (
@@ -154,9 +159,12 @@ func (s *Store) PublishBattleOutcomes(ctx context.Context, client func(context.C
 	return errors.Join(failures...)
 }
 
-// dueOutcomeResults 读已到期、尚未发布的 COMPLETE 结果行(按 next_retry_ms, battle_id 排序,至多 limit 行)。
+// dueOutcomeResults 读本副本负责的、已到期、尚未发布的 COMPLETE 结果行(按 next_retry_ms, battle_id 排序,至多 limit 行)。
+// 片号 = battle_id(这张表一局一行,没有 player_id 列);battle_id 在扫描索引里,条件在索引上判,不多回表。
 func (s *Store) dueOutcomeResults(ctx context.Context, stamp uint64, limit int) ([]*pb.MatchBattleCompletionRecord, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT battle_id,raw_payload,payload_digest,next_retry_ms FROM match_battle_completion WHERE decision=1 AND result_published=0 AND next_retry_ms<=? ORDER BY next_retry_ms,battle_id LIMIT ?", stamp, limit)
+	owned, shardArgs := s.WorkShardFilter(workOutcomeResult, "battle_id")
+	args := append(append([]any{stamp}, shardArgs...), limit)
+	rows, err := s.DB.QueryContext(ctx, "SELECT battle_id,raw_payload,payload_digest,next_retry_ms FROM match_battle_completion WHERE decision=1 AND result_published=0 AND next_retry_ms<=? AND "+owned+" ORDER BY next_retry_ms,battle_id LIMIT ?", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,15 +180,17 @@ func (s *Store) dueOutcomeResults(ctx context.Context, stamp uint64, limit int) 
 	return out, rows.Err()
 }
 
-// dueSettlementSources 读已到期的个人行:首投(inbox_seq=0)至多 firstLimit 行,等待 APPLIED(inbox_seq>0)至多
-// waitingLimit 行,两页分开读,首投在前。
+// dueSettlementSources 读本副本负责的、已到期的个人行:首投(inbox_seq=0)至多 firstLimit 行,等待 APPLIED(inbox_seq>0)
+// 至多 waitingLimit 行,两页分开读,首投在前。片号 = player_id,两页用同一轮算出的同一个条件;player_id 在扫描索引里。
 func (s *Store) dueSettlementSources(ctx context.Context, stamp uint64, firstLimit, waitingLimit int) ([]*pb.MatchBattleSettlementSourceRecord, error) {
+	owned, shardArgs := s.WorkShardFilter(workOutcomeSettlement, "player_id")
 	var out []*pb.MatchBattleSettlementSourceRecord
 	for _, page := range []struct {
 		seqCondition string
 		limit        int
 	}{{"=0", firstLimit}, {">0", waitingLimit}} {
-		rows, err := s.DB.QueryContext(ctx, "SELECT battle_id,player_id,settlement_proto,payload_digest,owner_account,owner_revision,issued_at_ms,inbox_seq,next_retry_ms FROM match_battle_settlement_source WHERE dispatch_state=1 AND inbox_seq"+page.seqCondition+" AND next_retry_ms<=? ORDER BY next_retry_ms,battle_id,player_id LIMIT ?", stamp, page.limit)
+		args := append(append([]any{stamp}, shardArgs...), page.limit)
+		rows, err := s.DB.QueryContext(ctx, "SELECT battle_id,player_id,settlement_proto,payload_digest,owner_account,owner_revision,issued_at_ms,inbox_seq,next_retry_ms FROM match_battle_settlement_source WHERE dispatch_state=1 AND inbox_seq"+page.seqCondition+" AND next_retry_ms<=? AND "+owned+" ORDER BY next_retry_ms,battle_id,player_id LIMIT ?", args...)
 		if err != nil {
 			return nil, err
 		}

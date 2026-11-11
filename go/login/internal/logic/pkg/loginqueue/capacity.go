@@ -11,6 +11,11 @@
 // deployed zone (PlayerCount=0 across all gates) doesn't permanently lock
 // new players out of the queue.
 //
+// 2026-11-10 起这个数再按本区 gate 的承载封顶:取它与「在接客的 gate 到水位(自报上限的 90%)一共能接的人数」
+// (gatepick.AdmissionCapacity)中较小的那个。配置的容量与 gate 台数写在两处、没有机械关联(K8s 开服档每区 45000,
+// 默认清单每区 2 台 × 20000,到水位只有 36000),容量比 gate 承载大时,排队照样放人,玩家连上 gate 才被
+// GateMaxConnections 无声拒掉。封顶之后 gate 到水位时排队就开始拦人;gate 坏了、被排空时承载随之下降,排队跟着收紧。
+//
 // Free-slots calculation deliberately includes in-flight placeholders
 // (`admitted:zset:zone:{zoneId}`, see Queue.AdmittedCount):
 //
@@ -25,7 +30,18 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
+
+	"shared/gatepick"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// capacityCapLogEvery:「配置的容量被 gate 承载压低」那条日志的最小间隔。这是一种持续的配置状态,快速通道每次 AssignGate、
+// dispatcher 每拍都会算到它;持续多久看 login_queue_capacity 与 login_queue_configured_capacity,日志只负责给出两个数。
+const capacityCapLogEvery = 10 * time.Minute
+
+var capacityCapLog logThrottle
 
 // CapacityProvider exposes the inputs capacity calculation needs. The
 // concrete implementation in svc wires GateWatcher + ZoneCapacityOverride
@@ -51,13 +67,18 @@ type CapacityProvider interface {
 // The formula is:
 //
 //	online    = sum(candidate.PlayerCount for candidate in zone)
-//	cap       = ZoneCapacity(zone) || ceil(max(online, 1) * softCapMultiplier)
+//	ceiling   = ZoneCapacity(zone) || floor(max(online, 1) * softCapMultiplier)
+//	gateCap   = gatepick.AdmissionCapacity(candidates): 在接客的 gate 到水位一共能接的人数
+//	cap       = min(ceiling, gateCap);数进来的 gate 里有没声明上限的(MaxConnections=0)时 cap = ceiling
 //	admitted  = live members of admitted:zset:zone:{zone} (expired ones dropped first)
 //	free      = max(0, cap - online - admitted)
 //
 // We use max(online, 1) in the fallback so a brand-new zone (online=0)
 // gets a non-zero capacity from the multiplier. Pinning ZoneCapacity in
 // config remains the strongly recommended path for production.
+//
+// online 数全部候选(排空中、停写的 gate 上的人也占着连接),gateCap 只数在接客的那一档:排空、卡住的 gate 上的人
+// 稍后要挪到在接客的 gate 上,两边一减正好给他们留出位置。返回的 capacity 是封顶之后的值,快速通道用它算占位预算。
 func FreeSlots(
 	ctx context.Context,
 	provider CapacityProvider,
@@ -93,7 +114,8 @@ func freeSlotsFromCandidates(
 		online += c.PlayerCount
 	}
 
-	capacity = provider.ZoneCapacity(zoneID)
+	configured := provider.ZoneCapacity(zoneID)
+	capacity = configured
 	if capacity == 0 {
 		base := online
 		if base == 0 {
@@ -105,6 +127,9 @@ func freeSlotsFromCandidates(
 		}
 		capacity = uint32(float64(base) * mult)
 	}
+	capacity = capByGates(capacity, configured, candidates, zoneID)
+	capacityGauge.Set(float64(capacity), labelZone(zoneID))
+	configuredCapacityGauge.Set(float64(configured), labelZone(zoneID))
 
 	admitted, err = queue.AdmittedCount(ctx, zoneID)
 	if err != nil {
@@ -119,6 +144,24 @@ func freeSlotsFromCandidates(
 		free = 0
 	}
 	return
+}
+
+// capByGates 把区容量 ceiling 压到本区在接客的 gate 到水位一共能接的人数以内(gatepick.AdmissionCapacity),
+// 数进来的 gate 里有没声明上限的就原样返回。configured 是配置里本区的容量(0 = 没配、ceiling 来自软上限),
+// 只在它被压低时打日志:软上限本来就随在线人数涨,被 gate 承载压住是常态,不是配置问题。
+func capByGates(ceiling, configured uint32, candidates []GateCandidate, zoneID uint32) uint32 {
+	gateCapacity, bounded := gatepick.AdmissionCapacity(candidates, candidateState)
+	if !bounded || gateCapacity >= uint64(ceiling) {
+		return ceiling
+	}
+	if configured > 0 && capacityCapLog.allow(capacityCapLogEvery) {
+		logx.Errorf("[loginqueue] zone %d admission capacity is limited by its gates: configured=%d, the serving gates "+
+			"hold %d at %d%% of their max_connections (%d gate candidates); the queue starts holding players at %d. "+
+			"Add gate replicas or lower Queue.ZoneCapacityOverride; compare login_queue_capacity with "+
+			"login_queue_configured_capacity. Further reports are suppressed for %s",
+			zoneID, configured, gateCapacity, gatepick.FullPercent, len(candidates), gateCapacity, capacityCapLogEvery)
+	}
+	return uint32(gateCapacity)
 }
 
 // ZoneCapacityFromMap is a small helper for the typical config layout

@@ -310,11 +310,36 @@ service LoginPreGate {
 ### FreeSlots 公式
 
 ```
-online       = Σ(gate.PlayerCount for gate in GateWatcher.FetchAllNodes() if gate.zoneId == z)
-capacity     = Queue.ZoneCapacityOverride[z] || ceil(max(online, 1) * SoftCapMultiplier)
+online       = Σ(gate.PlayerCount for gate in 本 zone 的全部 gate 候选)
+ceiling      = Queue.ZoneCapacityOverride[z] || floor(max(online, 1) * SoftCapMultiplier)
+gate_cap     = Σ ceil(gate.max_connections × 90%) for gate in 在接客的那一档   // gatepick.AdmissionCapacity
+capacity     = min(ceiling, gate_cap)      // 在接客的 gate 里有 max_connections = 0 的(没声明上限)时 capacity = ceiling
 admitted_inflight = 清掉过期成员后的 ZCARD admitted:zset:zone:{z}
 free         = max(0, capacity - online - admitted_inflight)
 ```
+
+**区容量按 gate 承载封顶(2026-11-10 起;已落码,未编译、未测试,待 Codex 验证)**。代码在 `go/login/internal/logic/pkg/loginqueue/capacity.go`
+的 `capByGates`,规则在 `go/shared/gatepick/capacity.go`。快速通道的 `FreeSlots` 与 dispatcher 的 `freeSlotsFromCandidates` 走同一处,
+快速通道的占位预算 `capacity − online` 也用封顶之后的值。
+
+- **为什么**:区容量与 gate 台数写在两处,没有机械关联。K8s 开服档每区 `ZoneCapacityOverride = 45000`(`k8s_deploy.ps1` 的
+  `LoginQueueZoneCapacity`),默认清单 `deploy/k8s/zones.json` 每区 2 台 gate、每台 `GateMaxConnections = 20000`,硬上限合计 40000,
+  到挑 gate 的水位(90%)只有 36000;`zones.10zones.yaml` 每区只有 1 台。排队一打开,第 40001 到 45000 名会被正常放行、拿到票,
+  连上 gate 才被拒;gate 拒连是 `forceClose`,不回任何提示,玩家看到的只是断线。gate 挂掉一台时同样:剩下的 gate 装不下,排队却还按 45000 放。
+- **水位取 90%**:与挑 gate 判满载同一条线(`gatepick.FullPercent`,`WatermarkCapacity` 恰是 `Full` 第一次成立的人数,单测钉住),
+  区级准入与挑 gate 对「满」的口径一致,余下 10% 照旧给人数上报滞后;在途占位(`admitted_inflight`)仍覆盖「票交出去、gate 还没上报」那一段。
+- **数哪些 gate**:分档同 `gatepick.Eligible`,只是不看人数(到水位的 gate 只是已经接满,水位容量照样算):有没停写、没排空的就只数它们;
+  没有时数没停写的(这时新玩家会被分给排空中的 gate);全部停写时数全部。`online` 仍数全部候选:排空中、停写的 gate 上的人稍后要挪到
+  在接客的 gate 上,容量只数在接客的、在线数全部,两边一减正好留出他们要挪过去的位置。
+- **不封顶的情况**:数进来的 gate 里有没声明上限的(dev 下 `GateMaxConnections = 0`、旧版 gate 不报 `max_connections`)时整体不封顶,与之前相同。
+- **观测**:`login_queue_capacity{zone}`(封顶之后实际用的容量)与 `login_queue_configured_capacity{zone}`(`ZoneCapacityOverride`,0 = 没配),
+  每次算容量时写,排队关着时没有序列。前者小于后者持续 10 分钟报 `LoginQueueCapacityLimitedByGates`(warning,`deploy/k8s/login-alerts.yaml`
+  组 `login.queue-capacity`);同时 login 每 10 分钟至多一条 ERROR `admission capacity is limited by its gates`,带配置值、gate 承载与候选台数。
+  软上限(没配容量)被封顶是常态,不报也不打日志。
+- **配置怎么对齐**:要让区容量真的到 45000,每区至少 3 台 gate(3 × 18000 = 54000);每区 2 台时实际只到 36000。
+  封顶只保证不放出会被 gate 拒掉的票,不替代按目标容量配 gate 副本。
+- **排队关着时**(当前所有环境,`$script:LoginQueueMergeGateCleared = $false`):快速通道不判容量,本条不起作用;
+  人数超过 gate 承载时只能靠 gate 的硬上限拒连,挑 gate 的 `LoginGatePickFallbackDegraded{reason="full"}` 会报。
 
 **关键安全属性 — admitted_inflight 必须减**:dispatcher 写出 admit 后,该玩家从 ZSET 中 popped(不在 ZCARD)、从 gate.PlayerCount 中也未出现(他还没真连上),如果 FreeSlots 不算这部分,下一拍会再放出一批,**一秒内超发数倍 admit token**,gate 那边玩家 token 验证全失败。取走后占位再留 20s(2026-10-13 起为 15s,10-15 改 20s),覆盖「票已交出、gate 还没把人数报上来」这一段(G4b-G;此前取走即撤占位,这一段漏计,见下一小节)。
 

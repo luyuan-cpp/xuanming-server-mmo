@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	dbpb "proto/common/database"
@@ -29,7 +31,10 @@ import (
 const requestLimit = 16 << 10
 const rosterLimit = 16 << 20
 const runtimeConfigLimit = 16 << 20
-const rosterEntryLimit = 1024
+
+// 名册至多 1024 个槽位;一代至多写这么多逻辑库,与 authoritysql 的 maxBootGrants 同值。
+const rosterSlotLimit = 1024
+const bootRequestLimit = 1024
 
 func main() {
 	if err := run(context.Background(), os.Args[1:], os.Getenv, os.Stdout); err != nil {
@@ -184,10 +189,10 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 	requestSHA := flags.String("request-sha256", "", "publication原件的固定原字节SHA")
 	preparedPath := flags.String("prepared", "", "实际prepared.source.json绝对路径")
 	preparedSHA := flags.String("prepared-sha256", "", "实际prepared原字节SHA")
-	rosterPath := flags.String("roster", "", "有限正式BootRoster protojson绝对路径")
-	rosterSHA := flags.String("roster-sha256", "", "已批准有限roster的原字节SHA256")
+	rosterPath := flags.String("roster", "", "register:槽位名册(SQL_WRITER_BOOT_ROSTER_V2) protojson 绝对路径")
+	rosterSHA := flags.String("roster-sha256", "", "已批准槽位名册的原字节SHA256")
 	inputRoot := flags.String("input-root", "", "受限init输入根，投影Secret软链解析后不得逃出")
-	runtimeConfig := flags.String("runtime-config", "", "单Request的完整normal配置")
+	podName := flags.String("pod-name", "", "register:本 Pod 的名字(K8s metadata.name),末尾的序号选名册里的槽位")
 	runtimeOutput := flags.String("runtime-config-output", "", "只输出选中normal完整配置到本Pod私有卷")
 	runtimeEnvironmentOutput := flags.String("runtime-env-output", "", "选中roster条目的SQL环境文件私有目录")
 	qualificationPath := flags.String("lock-qualification", "", "真实I3原件绝对路径，其SHA等Request12")
@@ -225,7 +230,7 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 		return errors.New("-schema and -ddl-file are only for prepare-schema")
 	}
 	if *command == "verify-publication-prestart" || *command == "verify-publication-runtime" {
-		if flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second || *rosterPath != "" || *rosterSHA != "" || *runtimeConfig != "" || *runtimeOutput != "" || *runtimeEnvironmentOutput != "" || *qualificationPath != "" || *bootOutput != "" || *receiptOutput != "" || *deploymentID != "" {
+		if flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second || *rosterPath != "" || *rosterSHA != "" || *podName != "" || *runtimeOutput != "" || *runtimeEnvironmentOutput != "" || *qualificationPath != "" || *bootOutput != "" || *receiptOutput != "" || *deploymentID != "" {
 			return errors.New("publication只读资格不接受生命周期写入/输出参数")
 		}
 		ctx, cancel := context.WithTimeout(parent, *timeout)
@@ -235,481 +240,659 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 	if *requestSHA != "" || *preparedPath != "" || *preparedSHA != "" {
 		return errors.New("publication原件参数不能混入生命周期命令")
 	}
-	if flags.NArg() != 0 || (*command != "register" && *command != "retire" && *command != "status") || *timeout <= 0 || *timeout > 60*time.Second || ((*requestPath == "") == (*rosterPath == "")) {
+	if flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second {
 		return errors.New("必须显式选择命令、唯一正式输入和不超过60秒的正截止")
 	}
-	ctx, cancel := context.WithTimeout(parent, *timeout)
-	defer cancel()
-	if *rosterPath != "" && (*command != "register" || !filepath.IsAbs(*rosterPath) || !filepath.IsAbs(*inputRoot) || !filepath.IsAbs(*runtimeOutput) || *runtimeConfig != "") {
-		return errors.New("roster只用于register，必须绝对roster/input-root/runtime输出且不另给runtime-config")
-	}
-	if (*rosterPath == "") != (*rosterSHA == "") {
-		return errors.New("roster和已批准原字节SHA必须同时指定")
-	}
-	if *requestPath != "" && !filepath.IsAbs(*requestPath) {
-		return errors.New("Request输入必须绝对路径")
-	}
-	if *receiptOutput != "" && !filepath.IsAbs(*receiptOutput) {
-		return errors.New("收据输出必须绝对路径")
-	}
-	if *command == "retire" && *receiptOutput == "" {
-		return errors.New("RETIRE必须指定原请求尝试及正式结局的私有receipt-output")
-	}
-	if *receiptOutput != "" {
-		if err := checkOutputPaths(*receiptOutput, ""); err != nil {
+	switch *command {
+	case "register":
+		if *requestPath != "" || *receiptOutput != "" {
+			return errors.New("register only reads the slot roster; -request and -receipt-output belong to retire and status")
+		}
+		options := registerOptions{rosterPath: *rosterPath, rosterSHA: *rosterSHA, inputRoot: *inputRoot, podName: *podName, qualificationPath: *qualificationPath,
+			runtimeOutput: *runtimeOutput, runtimeEnvironmentOutput: *runtimeEnvironmentOutput, bootOutput: *bootOutput, deploymentID: *deploymentID}
+		if err := options.check(); err != nil {
 			return err
 		}
-		if *receiptOutput == *bootOutput || *receiptOutput == *runtimeOutput {
-			return errors.New("收据输出不得复用启动grant或normal配置路径")
+		ctx, cancel := context.WithTimeout(parent, *timeout)
+		defer cancel()
+		return runRegister(ctx, options, getenv, out)
+	case "retire", "status":
+		if *rosterPath != "" || *rosterSHA != "" || *podName != "" || *bootOutput != "" || *deploymentID != "" || *runtimeOutput != "" || *qualificationPath != "" || *runtimeEnvironmentOutput != "" {
+			return errors.New("只有register可以输出启动能力/完整配置/I3资格")
+		}
+		ctx, cancel := context.WithTimeout(parent, *timeout)
+		defer cancel()
+		return runLifecycle(ctx, *command, *requestPath, *inputRoot, *receiptOutput, getenv, out)
+	default:
+		return errors.New("必须显式选择命令、唯一正式输入和不超过60秒的正截止")
+	}
+}
+
+// slotRosterFormat 是写者槽位名册的格式:一条 entry 是一个槽位,下标就是 StatefulSet 序号(writer-roster-exhaustion-20261106.md §5.1)。
+const slotRosterFormat = "SQL_WRITER_BOOT_ROSTER_V2"
+
+// bootRecordLimit 是本 Pod 启动记录的大小上限:data_service 一代要注册片库、流水库和全部存档库,一百多份请求也不到 1 MiB。
+const bootRecordLimit = 1 << 20
+
+// registerOptions 是 register 的命令行输入,纯校验都在读凭据之前做完。
+type registerOptions struct {
+	rosterPath, rosterSHA, inputRoot, podName, qualificationPath      string
+	runtimeOutput, runtimeEnvironmentOutput, bootOutput, deploymentID string
+}
+
+func (o registerOptions) check() error {
+	for _, path := range []string{o.rosterPath, o.inputRoot, o.runtimeOutput, o.bootOutput, o.qualificationPath} {
+		if !filepath.IsAbs(path) {
+			return errors.New("register needs absolute -roster, -input-root, -runtime-config-output, -boot-output and -lock-qualification paths")
 		}
 	}
-	if *runtimeEnvironmentOutput != "" && (*rosterPath == "" || !filepath.IsAbs(*runtimeEnvironmentOutput)) {
-		return errors.New("环境文件输出只用于正式roster，且必须绝对私有目录")
+	if o.rosterSHA == "" || strings.TrimSpace(o.deploymentID) == "" {
+		return errors.New("register needs the approved -roster-sha256 and the real -deployment-id of this pod")
 	}
-	if *command == "register" && (!filepath.IsAbs(*bootOutput) || !filepath.IsAbs(*qualificationPath) || strings.TrimSpace(*deploymentID) == "") {
-		return errors.New("register必须绑定绝对boot输出、真实I3原件及实际deployment-id")
+	if o.runtimeEnvironmentOutput != "" && !filepath.IsAbs(o.runtimeEnvironmentOutput) {
+		return errors.New("-runtime-env-output must be an absolute private directory")
 	}
-	if *command != "register" && (*bootOutput != "" || *deploymentID != "" || *runtimeOutput != "" || *runtimeConfig != "" || *qualificationPath != "" || *runtimeEnvironmentOutput != "") {
-		return errors.New("只有register可以输出启动能力/完整配置/I3资格")
+	_, err := slotOrdinal(o.podName)
+	return err
+}
+
+// slotOrdinal 取 StatefulSet Pod 名末尾的序号:<名字>-<十进制序号>,不带符号和前导零,最多 4 位(名册至多 1024 个槽位)。
+func slotOrdinal(podName string) (int, error) {
+	at := strings.LastIndexByte(podName, '-')
+	digits := ""
+	if at > 0 {
+		digits = podName[at+1:]
 	}
-	if *rosterPath == "" && ((*runtimeConfig == "") != (*runtimeOutput == "")) {
-		return errors.New("单Request运行配置输入和输出必须同时指定")
+	if digits == "" || len(digits) > 4 || len(digits) > 1 && digits[0] == '0' {
+		return 0, fmt.Errorf("-pod-name %q is not a StatefulSet pod name ending in its ordinal", podName)
 	}
-	if *inputRoot == "" {
-		*inputRoot = filepath.Dir(*requestPath)
+	ordinal := 0
+	for _, c := range digits {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("-pod-name %q is not a StatefulSet pod name ending in its ordinal", podName)
+		}
+		ordinal = ordinal*10 + int(c-'0')
 	}
-	root, err := resolveInputRoot(*inputRoot)
+	return ordinal, nil
+}
+
+// runRegister 把名册里本 Pod 序号的槽位注册成这个 Pod 的一代,写出 grant 集合、选中配置和环境文件。
+// 所有候选纯检查在首次SQL副作用之前完成；直接使用正式消息，不造平行roster/请求模型。
+func runRegister(ctx context.Context, o registerOptions, getenv func(string) string, out io.Writer) error {
+	root, err := resolveInputRoot(o.inputRoot)
 	if err != nil {
 		return err
 	}
-	var entries []*dbpb.SqlWriterBootRoster_Entry
-	if *rosterPath != "" {
-		raw, readErr := readBoundedInput(ctx, *rosterPath, root, rosterLimit, false)
-		if readErr != nil {
-			return readErr
-		}
-		approved, decodeErr := hex.DecodeString(*rosterSHA)
-		sum := sha256.Sum256(raw)
-		if decodeErr != nil || len(approved) != 32 || !bytes.Equal(sum[:], approved) {
-			return errors.New("init实际roster与已批准原字节SHA不符")
-		}
-		roster := &dbpb.SqlWriterBootRoster{}
-		if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, roster); err != nil || roster.Format != "SQL_WRITER_BOOT_ROSTER_V1" || len(roster.Entries) == 0 || len(roster.Entries) > rosterEntryLimit {
-			return errors.New("输入不是当前正式有限BootRoster或超1024既有issuer预算")
-		}
-		entries = roster.Entries
-	} else {
-		raw, readErr := readBoundedInput(ctx, *requestPath, root, requestLimit, false)
-		if readErr != nil {
-			return readErr
-		}
-		request := &dbpb.SqlWriterLifecycleReceipt_Request{}
-		if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, request); err != nil {
-			return errors.New("输入不是当前正式Request protojson")
-		}
-		entries = []*dbpb.SqlWriterBootRoster_Entry{{Requests: []*dbpb.SqlWriterLifecycleReceipt_Request{request}, RuntimeConfigPath: *runtimeConfig}}
-		if *runtimeConfig != "" {
-			body, readErr := readBoundedInput(ctx, *runtimeConfig, root, runtimeConfigLimit, true)
-			if readErr != nil {
-				return readErr
-			}
-			sum := sha256.Sum256(body)
-			entries[0].RuntimeConfigSha256 = bytes.Clone(sum[:])
-		}
+	raw, err := readBoundedInput(ctx, o.rosterPath, root, rosterLimit, false)
+	if err != nil {
+		return err
+	}
+	approved, decodeErr := hex.DecodeString(o.rosterSHA)
+	sum := sha256.Sum256(raw)
+	if decodeErr != nil || len(approved) != 32 || !bytes.Equal(sum[:], approved) {
+		return errors.New("the roster read by init does not match its approved SHA-256")
+	}
+	roster := &dbpb.SqlWriterBootRoster{}
+	if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, roster); err != nil || roster.Format != slotRosterFormat || len(roster.Entries) == 0 || len(roster.Entries) > rosterSlotLimit {
+		return fmt.Errorf("the input is not a %s roster with 1..%d slots", slotRosterFormat, rosterSlotLimit)
 	}
 	physical, err := hex.DecodeString(getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
 	if err != nil || len(physical) != 32 {
 		return errors.New("缺独立物理authority原件SHA")
 	}
-	var qualification []byte
-	if *command == "register" {
-		body, readErr := readBoundedInput(ctx, *qualificationPath, root, rosterLimit, false)
-		if readErr != nil {
-			return readErr
-		}
-		sum := sha256.Sum256(body)
-		qualification = bytes.Clone(sum[:])
-		if err = checkOutputPaths(*bootOutput, *runtimeOutput); err != nil {
-			return err
-		}
+	if err = validateSlotRoster(roster, physical); err != nil {
+		return err
 	}
-	// 所有候选纯检查在首次SQL副作用之前完成；直接使用正式消息，不造平行roster/请求模型。
-	seenKeys, seenInstances, seenPrincipals, seenRequests := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
-	shape := ""
-	for _, entry := range entries {
-		if entry == nil || len(entry.Requests) == 0 || len(entry.Requests) > rosterEntryLimit {
-			return errors.New("roster含空entry或正式Request")
-		}
-		if *receiptOutput != "" && len(entry.Requests) != 1 {
-			return errors.New("收据输出只用于单个逻辑库的Request")
-		}
-		for index, original := range entry.Requests {
-			if original == nil {
-				return errors.New("roster含空entry或正式Request")
-			}
-			request := proto.Clone(original).(*dbpb.SqlWriterLifecycleReceipt_Request)
-			if err = validateRequestIdentity(request, *command, physical); err != nil {
-				return err
-			}
-			if *command != "register" {
-				continue
-			}
-			if *rosterPath != "" {
-				if request.DeploymentId != "" && request.DeploymentId != "PLACEHOLDER_POD_UID" && request.DeploymentId != *deploymentID {
-					return errors.New("roster预绑定部署与实际Pod身份不符")
-				}
-				request.DeploymentId = *deploymentID
-			} else if request.DeploymentId != *deploymentID {
-				return errors.New("deployment-id必须包含在同一永久请求内，不能换Pod重发旧身份")
-			}
-			if request.LockPrimitive != dbpb.SqlWriterBootGrant_SELECT_ONLY && request.LockPrimitive != dbpb.SqlWriterBootGrant_LOCK_TOUCH {
-				return errors.New("未选定已资格锁原语")
-			}
-			if len(request.LockQualificationSha256) != 32 || !bytes.Equal(request.LockQualificationSha256, qualification) {
-				return errors.New("真实I3原件SHA与Request12不符，不发启动能力")
-			}
-			supplied := bytes.Clone(request.Writer.RegistrationDigest)
-			request, err = authoritysql.CanonicalRegistrationRequest(request)
-			if err != nil {
-				return err
-			}
-			if *rosterPath == "" && (len(supplied) != 32 || !bytes.Equal(supplied, request.Writer.RegistrationDigest)) {
-				return errors.New("单Request原注册摘要不符，不能静默改写")
-			}
-			entry.Requests[index] = request
-			if seenRequests[string(request.RequestId)] {
-				return errors.New("roster重复writer/instance/principal/request，禁止复用cap")
-			}
-			seenRequests[string(request.RequestId)] = true
-		}
-		if err = validateRosterEntry(entry); err != nil {
-			return err
-		}
-		first := entry.Requests[0]
-		if *command == "register" {
-			for _, pair := range []struct {
-				values map[string]bool
-				value  []byte
-			}{{seenKeys, first.Writer.WriterKey}, {seenInstances, first.Writer.InstanceId}, {seenPrincipals, first.Writer.SqlPrincipal}} {
-				if pair.values[string(pair.value)] {
-					return errors.New("roster重复writer/instance/principal/request，禁止复用cap")
-				}
-				pair.values[string(pair.value)] = true
-			}
-			if *rosterPath != "" && (entry.RuntimeConfigPath == "" || len(entry.RuntimeConfigSha256) != 32) {
-				return errors.New("roster entry缺normal完整配置路径/SHA")
-			}
-			if entry.RuntimeConfigPath != "" {
-				body, readErr := readBoundedInput(ctx, entry.RuntimeConfigPath, root, runtimeConfigLimit, true)
-				if readErr != nil {
-					return readErr
-				}
-				sum := sha256.Sum256(body)
-				if !bytes.Equal(sum[:], entry.RuntimeConfigSha256) {
-					return errors.New("roster完整运行配置原bytes SHA不符")
-				}
-			}
-			if len(entry.RuntimeEnvironment) > 0 && *runtimeEnvironmentOutput == "" {
-				return errors.New("正式roster环境输入没有固定私有输出目录")
-			}
-			if _, err = readRuntimeEnvironment(ctx, entry, root); err != nil {
-				return err
-			}
-			for _, variable := range entry.RuntimeEnvironment {
-				if err = checkOutputPaths(filepath.Join(*runtimeEnvironmentOutput, variable.Name), ""); err != nil {
-					return err
-				}
-			}
-		}
-		if current := rosterEntryShape(entry); shape == "" {
-			shape = current
-		} else if current != shape {
-			return errors.New("同roster必须固定同逻辑库集合/generation/恢复run")
-		}
-	}
-	permission, err := authoritysql.LoadOperatorPermission(getenv)
+	ordinal, err := slotOrdinal(o.podName)
 	if err != nil {
+		return err
+	}
+	if ordinal >= len(roster.Entries) {
+		return fmt.Errorf("pod %s is slot %d but the roster has %d slots: the workload has more replicas than the roster", o.podName, ordinal, len(roster.Entries))
+	}
+	template := roster.Entries[ordinal]
+	qualification, err := readBoundedInput(ctx, o.qualificationPath, root, rosterLimit, false)
+	if err != nil {
+		return err
+	}
+	qualificationSum := sha256.Sum256(qualification)
+	for _, request := range template.Requests {
+		if !bytes.Equal(request.LockQualificationSha256, qualificationSum[:]) {
+			return errors.New("真实I3原件SHA与Request12不符，不发启动能力")
+		}
+	}
+	if err = checkOutputPaths(o.bootOutput, o.runtimeOutput); err != nil {
+		return err
+	}
+	if _, err = selectedRuntimeConfig(ctx, template, root); err != nil {
+		return err
+	}
+	if len(template.RuntimeEnvironment) > 0 && o.runtimeEnvironmentOutput == "" {
+		return errors.New("正式roster环境输入没有固定私有输出目录")
+	}
+	if _, err = readRuntimeEnvironment(ctx, template, root); err != nil {
+		return err
+	}
+	for _, variable := range template.RuntimeEnvironment {
+		if err = checkOutputPaths(filepath.Join(o.runtimeEnvironmentOutput, variable.Name), ""); err != nil {
+			return err
+		}
+	}
+	opener, err := newCatalogOpener(ctx, "MMORPG_SQL_REGISTRAR_DSN", physical, getenv)
+	if err != nil {
+		return err
+	}
+	defer opener.close()
+	registrar := slotRegistration{
+		bootOutput:   o.bootOutput,
+		deploymentID: o.deploymentID,
+		physical:     physical,
+		open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
+			return opener.open(request)
+		},
+		loadRecord: loadBootRecord,
+		saveRecord: saveBootRecord,
+		now:        time.Now,
+		random:     rand.Reader,
+	}
+	set, boot, err := registrar.register(ctx, template)
+	if err != nil {
+		return err
+	}
+	config, err := selectedRuntimeConfig(ctx, template, root)
+	if err != nil {
+		return errors.New("选中配置在提交前变化")
+	}
+	environment, err := readRuntimeEnvironment(ctx, template, root)
+	if err != nil {
+		return err
+	}
+	if err = writeConfirmedBytes(o.runtimeOutput, config); err != nil {
+		return err
+	}
+	for _, variable := range template.RuntimeEnvironment {
+		if err = writeConfirmedBytes(filepath.Join(o.runtimeEnvironmentOutput, variable.Name), environment[variable.Name]); err != nil {
+			return err
+		}
+	}
+	if err = writeConfirmedGrantSet(o.bootOutput, set); err != nil {
+		return err
+	}
+	for _, request := range boot.Requests {
+		if _, err = fmt.Fprintf(out, "writer_authority command=register request_id=%s boot_seq=%d confirmed=true\n", hex.EncodeToString(request.RequestId), request.Writer.BootSeq); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// selectedRuntimeConfig 读这个槽位的完整运行配置,原字节 SHA 要和名册里的一致。
+func selectedRuntimeConfig(ctx context.Context, entry *dbpb.SqlWriterBootRoster_Entry, root string) ([]byte, error) {
+	body, err := readBoundedInput(ctx, entry.RuntimeConfigPath, root, runtimeConfigLimit, true)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256(body)
+	if !bytes.Equal(sum[:], entry.RuntimeConfigSha256) {
+		return nil, errors.New("roster完整运行配置原bytes SHA不符")
+	}
+	return body, nil
+}
+
+// runLifecycle 是 retire 与 status:只有单 Request 形态,逐逻辑库做。
+func runLifecycle(ctx context.Context, command, requestPath, inputRoot, receiptOutput string, getenv func(string) string, out io.Writer) error {
+	if !filepath.IsAbs(requestPath) {
+		return errors.New("Request输入必须绝对路径")
+	}
+	if command == "retire" && receiptOutput == "" {
+		return errors.New("RETIRE必须指定原请求尝试及正式结局的私有receipt-output")
+	}
+	if receiptOutput != "" {
+		if !filepath.IsAbs(receiptOutput) {
+			return errors.New("收据输出必须绝对路径")
+		}
+		if err := checkOutputPaths(receiptOutput, ""); err != nil {
+			return err
+		}
+	}
+	if inputRoot == "" {
+		inputRoot = filepath.Dir(requestPath)
+	}
+	root, err := resolveInputRoot(inputRoot)
+	if err != nil {
+		return err
+	}
+	raw, err := readBoundedInput(ctx, requestPath, root, requestLimit, false)
+	if err != nil {
+		return err
+	}
+	request := &dbpb.SqlWriterLifecycleReceipt_Request{}
+	if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, request); err != nil {
+		return errors.New("输入不是当前正式Request protojson")
+	}
+	physical, err := hex.DecodeString(getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
+	if err != nil || len(physical) != 32 {
+		return errors.New("缺独立物理authority原件SHA")
+	}
+	if err = validateRequestIdentity(request, command, physical); err != nil {
 		return err
 	}
 	dsnName := "MMORPG_SQL_REGISTRAR_DSN"
-	if *command == "retire" {
+	if command == "retire" {
 		dsnName = "MMORPG_SQL_MAINTENANCE_DSN"
+	}
+	opener, err := newCatalogOpener(ctx, dsnName, physical, getenv)
+	if err != nil {
+		return err
+	}
+	defer opener.close()
+	catalog, err := opener.open(request)
+	if err != nil {
+		return err
+	}
+	var receipt *dbpb.SqlWriterLifecycleReceipt
+	if command == "retire" {
+		fresh, attemptErr := recordAttempt(receiptOutput+".retire.started.protojson", request)
+		if attemptErr != nil {
+			return attemptErr
+		}
+		if fresh {
+			receipt, err = catalog.Retire(ctx, request)
+		} else {
+			receipt, err = catalog.LifecycleReceipt(ctx, request.RequestId)
+			if err != nil {
+				return errors.New("原RETIRE结局未定；只按原request做status，不重发或换ID")
+			}
+		}
+	} else {
+		receipt, err = catalog.LifecycleReceipt(ctx, request.RequestId)
+	}
+	if err != nil {
+		return err
+	}
+	if err = confirmLifecycle(receipt, request); err != nil {
+		return err
+	}
+	if err = writeLifecycleReceipt(receiptOutput, receipt); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "writer_authority command=%s request_id=%s confirmed=true\n", command, hex.EncodeToString(request.RequestId))
+	return err
+}
+
+// catalogOpener 按逻辑库各开一条控制连接,同一个库复用。闸门在各逻辑库自己身上;同集群共用一条控制连接串,
+// 库搬到别的集群时地址按映射给(dbplacement),账号在目标集群提前建好。
+type catalogOpener struct {
+	ctx       context.Context
+	dsn       string
+	physical  []byte
+	principal string
+	backend   authoritysql.Backend
+	placement dbplacement.Config
+	perm      authoritysql.Permission
+	catalogs  map[string]*authoritysql.Catalog
+	pools     []*sql.DB
+}
+
+func newCatalogOpener(ctx context.Context, dsnName string, physical []byte, getenv func(string) string) (*catalogOpener, error) {
+	permission, err := authoritysql.LoadOperatorPermission(getenv)
+	if err != nil {
+		return nil, err
 	}
 	dsn := getenv(dsnName)
 	if dsn == "" {
-		return errors.New("缺本命令独立控制DSN")
+		return nil, errors.New("缺本命令独立控制DSN")
 	}
 	backend, err := authoritysql.LoadBackend(getenv)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	placementConfig, err := dbplacement.ConfigFromEnv(getenv)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	// 闸门在各逻辑库自己身上，按库各连一次。同集群共用这一条控制连接串；库搬到别的集群时地址按映射给（dbplacement），账号在目标集群提前建好。
-	catalogs := make(map[string]*authoritysql.Catalog)
-	var pools []*sql.DB
-	defer func() {
-		for _, db := range pools {
-			_ = db.Close()
-		}
-	}()
-	openCatalog := func(request *dbpb.SqlWriterLifecycleReceipt_Request) (*authoritysql.Catalog, error) {
-		schema := request.AuthoritySchema
-		if catalog, ok := catalogs[schema]; ok {
-			return catalog, nil
-		}
-		schemaDSN, err := authoritysql.DSNForSchema(dsn, schema)
-		if err != nil {
-			return nil, err
-		}
-		placementOptions, err := dbplacement.ForOneShot(ctx, placementConfig, schema)
-		if err != nil {
-			return nil, err
-		}
-		db, err := authoritysql.Open(ctx, schemaDSN, schema, backend, 2, permission, placementOptions...)
-		if err != nil {
-			return nil, err
-		}
-		pools = append(pools, db)
-		catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: schema, Generation: request.Writer.Generation, ProtectedSchemas: request.ProtectedSchemas, PhysicalAuthoritySHA256: physical, Principal: getenv("MMORPG_SQL_OPERATOR_PRINCIPAL")})
-		if err != nil {
-			return nil, err
-		}
-		catalogs[schema] = catalog
-		return catalog, nil
-	}
-	for _, entry := range entries {
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		if *command != "register" {
-			// retire / status 只有单Request形态：退休逐逻辑库做。
-			request := entry.Requests[0]
-			catalog, err := openCatalog(request)
-			if err != nil {
-				return err
-			}
-			var receipt *dbpb.SqlWriterLifecycleReceipt
-			if *command == "retire" {
-				fresh, attemptErr := recordAttempt(*receiptOutput+".retire.started.protojson", request)
-				if attemptErr != nil {
-					return attemptErr
-				}
-				if fresh {
-					receipt, err = catalog.Retire(ctx, request)
-				} else {
-					receipt, err = catalog.LifecycleReceipt(ctx, request.RequestId)
-					if err != nil {
-						return errors.New("原RETIRE结局未定；只按原request做status，不重发或换ID")
-					}
-				}
-			} else {
-				receipt, err = catalog.LifecycleReceipt(ctx, request.RequestId)
-			}
-			if err != nil {
-				return err
-			}
-			if err = confirmLifecycle(receipt, request); err != nil {
-				return err
-			}
-			if err = writeLifecycleReceipt(*receiptOutput, receipt); err != nil {
-				return err
-			}
-			_, err = fmt.Fprintf(out, "writer_authority command=%s request_id=%s confirmed=true\n", *command, hex.EncodeToString(request.RequestId))
-			return err
-		}
-		registrar := bootRegistration{
-			bootOutput: *bootOutput,
-			physical:   physical,
-			open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
-				catalog, err := openCatalog(request)
-				if err != nil {
-					return nil, err
-				}
-				return catalog, nil
-			},
-			recordAttempt:  recordAttempt,
-			retractAttempt: retractAttempt,
-		}
-		consumed, err := registrar.consumed(ctx, entry)
-		if err != nil {
-			return err
-		}
-		if consumed {
-			continue
-		}
-		var config []byte
-		if entry.RuntimeConfigPath != "" {
-			config, err = readBoundedInput(ctx, entry.RuntimeConfigPath, root, runtimeConfigLimit, true)
-			if err != nil {
-				return err
-			}
-			sum := sha256.Sum256(config)
-			if !bytes.Equal(sum[:], entry.RuntimeConfigSha256) {
-				return errors.New("选中配置在提交前变化")
-			}
-		}
-		environment, readErr := readRuntimeEnvironment(ctx, entry, root)
-		if readErr != nil {
-			return readErr
-		}
-		set, receipt, consumed, err := registrar.register(ctx, entry)
-		if err != nil {
-			return err
-		}
-		if consumed {
-			continue
-		}
-		if len(config) > 0 {
-			if err = writeConfirmedBytes(*runtimeOutput, config); err != nil {
-				return err
-			}
-		}
-		for _, variable := range entry.RuntimeEnvironment {
-			if err = writeConfirmedBytes(filepath.Join(*runtimeEnvironmentOutput, variable.Name), environment[variable.Name]); err != nil {
-				return err
-			}
-		}
-		if err = writeConfirmedGrantSet(*bootOutput, set); err != nil {
-			return err
-		}
-		if err = writeLifecycleReceipt(*receiptOutput, receipt); err != nil {
-			return err
-		}
-		for _, request := range entry.Requests {
-			if _, err = fmt.Fprintf(out, "writer_authority command=%s request_id=%s confirmed=true\n", *command, hex.EncodeToString(request.RequestId)); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	return errors.New("有限roster全部已由其它明确boot消费，不生成新key或principal")
+	return &catalogOpener{ctx: ctx, dsn: dsn, physical: bytes.Clone(physical), principal: getenv("MMORPG_SQL_OPERATOR_PRINCIPAL"), backend: backend,
+		placement: placementConfig, perm: permission, catalogs: make(map[string]*authoritysql.Catalog)}, nil
 }
 
-// registrationCatalog 是注册一个 boot 用到的目录操作,生产实现 *authoritysql.Catalog。
+func (o *catalogOpener) open(request *dbpb.SqlWriterLifecycleReceipt_Request) (*authoritysql.Catalog, error) {
+	schema := request.AuthoritySchema
+	if catalog, ok := o.catalogs[schema]; ok {
+		return catalog, nil
+	}
+	schemaDSN, err := authoritysql.DSNForSchema(o.dsn, schema)
+	if err != nil {
+		return nil, err
+	}
+	placementOptions, err := dbplacement.ForOneShot(o.ctx, o.placement, schema)
+	if err != nil {
+		return nil, err
+	}
+	db, err := authoritysql.Open(o.ctx, schemaDSN, schema, o.backend, 2, o.perm, placementOptions...)
+	if err != nil {
+		return nil, err
+	}
+	o.pools = append(o.pools, db)
+	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: schema, Generation: request.Writer.Generation, ProtectedSchemas: request.ProtectedSchemas, PhysicalAuthoritySHA256: o.physical, Principal: o.principal})
+	if err != nil {
+		return nil, err
+	}
+	o.catalogs[schema] = catalog
+	return catalog, nil
+}
+
+func (o *catalogOpener) close() {
+	for _, db := range o.pools {
+		_ = db.Close()
+	}
+}
+
+// registrationCatalog 是注册一代用到的目录操作,生产实现 *authoritysql.Catalog。
 type registrationCatalog interface {
-	RegistrationConsumedByOtherDeployment(ctx context.Context, request *dbpb.SqlWriterLifecycleReceipt_Request) (bool, error)
+	LatestBoot(ctx context.Context, principal []byte) (*dbpb.SqlWriterRegistry, error)
 	RegistrationReady(ctx context.Context, request *dbpb.SqlWriterLifecycleReceipt_Request) error
 	Register(ctx context.Context, request *dbpb.SqlWriterLifecycleReceipt_Request) (*dbpb.SqlWriterLifecycleReceipt, error)
-	LifecycleReceipt(ctx context.Context, id []byte) (*dbpb.SqlWriterLifecycleReceipt, error)
 	CurrentMeta(ctx context.Context) (*dbpb.RouteMeta, error)
 }
 
-// bootRegistration 把名册的一条 entry 注册下去。一条 entry 是一个 boot,每个逻辑库一份 Request,不在一个事务里,所以结局要分清:
+// slotRegistration 把名册里的一个槽位注册成这个 Pod 的一代(writer-roster-exhaustion-20261106.md §5.3)。
+// 一代在每个逻辑库各注册一份,不在一个事务里,结局这样分:
 //
-//	闸门冻结(预检或提交时)   确定没写。不留尝试记录,不算用掉这条 entry,init 重启接着来。
-//	部分库已注册,进程还活着   重试时已注册的按原请求查收据,没注册的接着注册。同一个 Pod 的 deployment-id 不变,不算别的 boot 消费。
-//	部分库已注册,Pod 没了     新 Pod 看到这条 entry 被别的 boot 消费,换下一条。已注册的那几份是没有进程的写者,和注册完就崩的 Pod 一样,按手册退休。
-//	结局未知                  留尝试记录,不重发,只能查原请求(规格 §2)。
-//
-// 注册第一份之前逐库预检,把注定失败的情况挡在写任何东西之前,所以部分注册只剩预检和提交之间撞上冻结这一种。
-type bootRegistration struct {
-	bootOutput     string
-	physical       []byte
-	open           func(*dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error)
-	recordAttempt  func(string, *dbpb.SqlWriterLifecycleReceipt_Request) (bool, error)
-	retractAttempt func(string) error
+//	预检时冻结或不符     什么都没写,不写启动记录;init 退出,下次重新生成这一代。
+//	提交时冻结           事务已回滚,确定没写;启动记录留着,init 重跑重发同样的请求。
+//	部分库已注册         init 重跑读启动记录,还是同一代;已注册的库收据在,Register 原样返回,没注册的接着注册。
+//	结局未知             同上,原样重发:Register 在锁内先查收据,boot_seq CAS 挡住陈旧请求,同一请求最多落地一次。
+//	Pod 没了             同序号的新 Pod 是下一代,在每个库的注册事务里把这一代退休,不用人工。
+type slotRegistration struct {
+	bootOutput   string
+	deploymentID string
+	physical     []byte
+	open         func(*dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error)
+	loadRecord   func(path string) (*dbpb.SqlWriterBootRoster_Entry, error)
+	saveRecord   func(path string, entry *dbpb.SqlWriterBootRoster_Entry) error
+	now          func() time.Time
+	random       io.Reader
 }
 
-// consumed 报告这条 entry 是不是被别的 boot 用过:任一份被别的 boot 消费,整条就算用掉。
-func (r bootRegistration) consumed(ctx context.Context, entry *dbpb.SqlWriterBootRoster_Entry) (bool, error) {
-	consumed := false
-	for _, request := range entry.Requests {
-		catalog, err := r.open(request)
-		if err != nil {
-			return false, err
-		}
-		foreign, err := catalog.RegistrationConsumedByOtherDeployment(ctx, request)
-		if err != nil {
-			return false, err
-		}
-		consumed = consumed || foreign
+// bootRecordPath 是本 Pod 的启动记录:和 grant 在同一个私有 emptyDir,Pod 在它就在,Pod 换了它跟着没。
+func bootRecordPath(bootOutput string) string { return bootOutput + ".register.started.protojson" }
+
+// register 注册这一代的全部逻辑库,回写资格集合与这一代的完整请求。
+func (r slotRegistration) register(ctx context.Context, template *dbpb.SqlWriterBootRoster_Entry) (*dbpb.SqlWriterBootGrantSet, *dbpb.SqlWriterBootRoster_Entry, error) {
+	boot, fresh, err := r.boot(ctx, template)
+	if err != nil {
+		return nil, nil, err
 	}
-	return consumed, nil
-}
-
-// register 注册这条 entry 的全部逻辑库,回写资格集合和最后一份收据。consumed=true 表示这条 entry 被别的 boot 抢先用了,换下一条。
-func (r bootRegistration) register(ctx context.Context, entry *dbpb.SqlWriterBootRoster_Entry) (set *dbpb.SqlWriterBootGrantSet, receipt *dbpb.SqlWriterLifecycleReceipt, consumed bool, resultErr error) {
-	for _, request := range entry.Requests {
+	// 第一份写下去之前逐库预检,把注定失败的情况挡在写任何东西之前。
+	for _, request := range boot.Requests {
 		catalog, err := r.open(request)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, err
 		}
 		if err := catalog.RegistrationReady(ctx, request); err != nil {
-			return nil, nil, false, fmt.Errorf("logical database %s cannot register yet, nothing was written: %w", request.AuthoritySchema, err)
+			return nil, nil, fmt.Errorf("logical database %s cannot register boot %d of this slot yet: %w", request.AuthoritySchema, request.Writer.BootSeq, err)
 		}
 	}
-	set = &dbpb.SqlWriterBootGrantSet{Format: authoritysql.GrantSetFormat}
-	for _, request := range entry.Requests {
+	// 先记下这一代再注册:之后 init 重跑都重发同样的请求,不再生成新身份。
+	if fresh {
+		if err := r.saveRecord(bootRecordPath(r.bootOutput), boot); err != nil {
+			return nil, nil, err
+		}
+	}
+	set := &dbpb.SqlWriterBootGrantSet{Format: authoritysql.GrantSetFormat}
+	for _, request := range boot.Requests {
 		catalog, err := r.open(request)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, err
 		}
-		attempt := r.bootOutput + "." + hex.EncodeToString(request.RequestId) + ".register.started.protojson"
-		fresh, attemptErr := r.recordAttempt(attempt, request)
-		if attemptErr != nil {
-			return nil, nil, false, attemptErr
-		}
-		if fresh {
-			receipt, err = catalog.Register(ctx, request)
-			if authoritysql.IsWriterFrozen(err) {
-				// 事务已回滚,确定没有落地。尝试记录不能留:留着的话重试按「结局未定」处理,这条 entry 就废了。
-				if retractErr := r.retractAttempt(attempt); retractErr != nil {
-					return nil, nil, false, errors.Join(err, retractErr)
-				}
-				return nil, nil, false, fmt.Errorf("the writer gate of %s froze during registration, nothing was written for it, retry: %w", request.AuthoritySchema, err)
-			}
-		} else {
-			// init重启仅查原请求。查无/失联仍UNKNOWN，不再次Register、不新key或新principal。
-			receipt, err = catalog.LifecycleReceipt(ctx, request.RequestId)
-			if err != nil {
-				return nil, nil, false, errors.New("原注册尝试结局未定，只允许status原件查询")
-			}
+		receipt, err := catalog.Register(ctx, request)
+		if authoritysql.IsWriterFrozen(err) {
+			return nil, nil, fmt.Errorf("the writer gate of %s froze during registration, nothing was written for it, retry: %w", request.AuthoritySchema, err)
 		}
 		if err != nil {
-			if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
-				return nil, nil, false, err
-			}
-			foreign, readErr := catalog.RegistrationConsumedByOtherDeployment(ctx, request)
-			if readErr != nil {
-				return nil, nil, false, readErr
-			}
-			if foreign {
-				return nil, nil, true, nil
-			}
-			return nil, nil, false, err
+			return nil, nil, fmt.Errorf("register boot %d of this slot in %s: %w", request.Writer.BootSeq, request.AuthoritySchema, err)
 		}
 		if err = confirmLifecycle(receipt, request); err != nil {
-			foreign, readErr := catalog.RegistrationConsumedByOtherDeployment(ctx, request)
-			if readErr != nil {
-				return nil, nil, false, readErr
-			}
-			if foreign {
-				return nil, nil, true, nil
-			}
-			return nil, nil, false, err
+			return nil, nil, err
 		}
-		meta, readErr := catalog.CurrentMeta(ctx)
-		if readErr != nil {
-			return nil, nil, false, readErr
+		meta, err := catalog.CurrentMeta(ctx)
+		if err != nil {
+			return nil, nil, err
 		}
 		if meta.Writable != 1 {
-			return nil, nil, false, fmt.Errorf("the writer gate of %s is frozen, retry: %w", request.AuthoritySchema, authoritysql.ErrWriterFrozen)
+			return nil, nil, fmt.Errorf("the writer gate of %s is frozen, retry: %w", request.AuthoritySchema, authoritysql.ErrWriterFrozen)
 		}
 		if meta.Generation != request.Writer.Generation || !bytes.Equal(meta.FreezeRunId, request.MaintenanceRunId) {
-			return nil, nil, false, errors.New("原REGISTER虽确认但当前boot资格已变，HOLD不输出grant")
+			return nil, nil, fmt.Errorf("the registration in %s is confirmed but the gate generation or maintenance run changed since, no grant is written", request.AuthoritySchema)
 		}
-		set.Grants = append(set.Grants, &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: bytes.Clone(request.Writer.WriterKey), InstanceId: bytes.Clone(request.Writer.InstanceId), Generation: request.Writer.Generation, AuthoritySchema: request.AuthoritySchema, ProtectedSchemas: append([]string(nil), request.ProtectedSchemas...), SqlPrincipal: bytes.Clone(request.Writer.SqlPrincipal), RegistrationDigest: bytes.Clone(request.Writer.RegistrationDigest), DeploymentId: request.DeploymentId, GrantId: bytes.Clone(request.RequestId), GrantedMs: request.Writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: bytes.Clone(r.physical), MaintenanceRunId: bytes.Clone(request.MaintenanceRunId), LockPrimitive: request.LockPrimitive, LockQualificationSha256: bytes.Clone(request.LockQualificationSha256)})
+		set.Grants = append(set.Grants, bootGrant(request, r.physical))
 	}
-	return set, receipt, false, nil
+	return set, boot, nil
 }
 
-// retractAttempt 撤掉一次确定没有落地的注册尝试。
-func retractAttempt(path string) error {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+// boot 回本 Pod 的这一代:启动记录在就用它(必须是同一槽位模板、本 Pod 生成的),不在就现场生成,fresh=true。
+// 新一代的 boot_seq 取各库这个账号已有的最大号 + 1 里最大的那个,各库同一个号。
+func (r slotRegistration) boot(ctx context.Context, template *dbpb.SqlWriterBootRoster_Entry) (*dbpb.SqlWriterBootRoster_Entry, bool, error) {
+	record, err := r.loadRecord(bootRecordPath(r.bootOutput))
+	if err == nil {
+		if err = recordMatchesTemplate(record, template, r.deploymentID); err != nil {
+			return nil, false, err
+		}
+		return record, false, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, false, err
+	}
+	bootSeq := uint64(1)
+	for _, request := range template.Requests {
+		catalog, err := r.open(request)
+		if err != nil {
+			return nil, false, err
+		}
+		latest, err := catalog.LatestBoot(ctx, request.Writer.SqlPrincipal)
+		if err != nil {
+			return nil, false, err
+		}
+		if latest == nil || latest.BootSeq < bootSeq {
+			continue
+		}
+		if latest.BootSeq == math.MaxUint64 {
+			return nil, false, errors.New("the boot sequence of this slot is exhausted")
+		}
+		bootSeq = latest.BootSeq + 1
+	}
+	minted, err := mintBoot(template, r.deploymentID, bootSeq, r.now(), r.random)
+	if err != nil {
+		return nil, false, err
+	}
+	return minted, true, nil
+}
+
+// mintBoot 按槽位模板生成一代:writer_key、instance_id 每代新,各库同一个 boot_seq,request_id 每库一个,然后规范化出注册摘要。
+func mintBoot(template *dbpb.SqlWriterBootRoster_Entry, deploymentID string, bootSeq uint64, now time.Time, random io.Reader) (*dbpb.SqlWriterBootRoster_Entry, error) {
+	writerKey, err := randomID(random)
+	if err != nil {
+		return nil, err
+	}
+	instanceID, err := randomID(random)
+	if err != nil {
+		return nil, err
+	}
+	boot := proto.Clone(template).(*dbpb.SqlWriterBootRoster_Entry)
+	for index, request := range boot.Requests {
+		if request.RequestId, err = randomID(random); err != nil {
+			return nil, err
+		}
+		request.DeploymentId = deploymentID
+		request.Writer.WriterKey = bytes.Clone(writerKey)
+		request.Writer.InstanceId = bytes.Clone(instanceID)
+		request.Writer.RegisteredMs = uint64(now.UnixMilli())
+		request.Writer.BootSeq = bootSeq
+		canonical, err := authoritysql.CanonicalRegistrationRequest(request)
+		if err != nil {
+			return nil, err
+		}
+		boot.Requests[index] = canonical
+	}
+	if err = validateRosterEntry(boot); err != nil {
+		return nil, err
+	}
+	return boot, nil
+}
+
+func randomID(random io.Reader) ([]byte, error) {
+	id := make([]byte, 16)
+	if _, err := io.ReadFull(random, id); err != nil {
+		return nil, err
+	}
+	return id, nil
+}
+
+// stripIdentity 去掉注册器现场生成的字段,剩下的就是名册里的模板。
+func stripIdentity(request *dbpb.SqlWriterLifecycleReceipt_Request) *dbpb.SqlWriterLifecycleReceipt_Request {
+	stripped := proto.Clone(request).(*dbpb.SqlWriterLifecycleReceipt_Request)
+	stripped.RequestId = nil
+	stripped.DeploymentId = ""
+	if stripped.Writer != nil {
+		stripped.Writer.WriterKey = nil
+		stripped.Writer.InstanceId = nil
+		stripped.Writer.RegistrationDigest = nil
+		stripped.Writer.RegisteredMs = 0
+		stripped.Writer.BootSeq = 0
+	}
+	return stripped
+}
+
+// recordMatchesTemplate 核启动记录就是这份模板在本 Pod 上生成的一代:去掉身份字段之后逐字相同,部署是本 Pod,
+// 各库身份一致,每份请求都是规范化过的原件。名册换了就会换 Pod(名册 SHA 在 Pod 模板里),对不上说明记录不是这个 Pod 的。
+func recordMatchesTemplate(record, template *dbpb.SqlWriterBootRoster_Entry, deploymentID string) error {
+	refuse := errors.New("the boot record of this pod does not belong to this roster slot and pod")
+	if record == nil || len(record.Requests) != len(template.Requests) {
+		return refuse
+	}
+	outer, wanted := proto.Clone(record).(*dbpb.SqlWriterBootRoster_Entry), proto.Clone(template).(*dbpb.SqlWriterBootRoster_Entry)
+	outer.Requests, wanted.Requests = nil, nil
+	if !proto.Equal(outer, wanted) {
+		return refuse
+	}
+	first := record.Requests[0]
+	for index, request := range record.Requests {
+		if request == nil || request.Writer == nil || first.Writer == nil || request.DeploymentId != deploymentID {
+			return refuse
+		}
+		if !bytes.Equal(request.Writer.WriterKey, first.Writer.WriterKey) || !bytes.Equal(request.Writer.InstanceId, first.Writer.InstanceId) || request.Writer.BootSeq != first.Writer.BootSeq {
+			return refuse
+		}
+		canonical, err := authoritysql.CanonicalRegistrationRequest(request)
+		if err != nil || !proto.Equal(canonical, request) || !proto.Equal(stripIdentity(request), template.Requests[index]) {
+			return refuse
+		}
+	}
+	return nil
+}
+
+// loadBootRecord 读本 Pod 的启动记录;还没有时回 os.ErrNotExist。
+func loadBootRecord(path string) (*dbpb.SqlWriterBootRoster_Entry, error) {
+	raw, err := authoritysql.ReadPrivateControlFile(path, bootRecordLimit)
+	if err != nil {
+		return nil, err
+	}
+	entry := &dbpb.SqlWriterBootRoster_Entry{}
+	if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, entry); err != nil {
+		return nil, errors.New("the boot record of this pod is not a roster entry")
+	}
+	return entry, nil
+}
+
+// saveBootRecord 独占写启动记录,已经有了就失败,不覆盖。
+func saveBootRecord(path string, entry *dbpb.SqlWriterBootRoster_Entry) error {
+	body, err := (protojson.MarshalOptions{UseProtoNames: false}).Marshal(entry)
+	if err != nil {
 		return err
+	}
+	return writePrivateExclusive(path, body)
+}
+
+// bootGrant 是一份已确认注册在本 Pod 上的写资格。
+func bootGrant(request *dbpb.SqlWriterLifecycleReceipt_Request, physical []byte) *dbpb.SqlWriterBootGrant {
+	return &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: bytes.Clone(request.Writer.WriterKey), InstanceId: bytes.Clone(request.Writer.InstanceId), Generation: request.Writer.Generation,
+		AuthoritySchema: request.AuthoritySchema, ProtectedSchemas: append([]string(nil), request.ProtectedSchemas...), SqlPrincipal: bytes.Clone(request.Writer.SqlPrincipal),
+		RegistrationDigest: bytes.Clone(request.Writer.RegistrationDigest), DeploymentId: request.DeploymentId, GrantId: bytes.Clone(request.RequestId), GrantedMs: request.Writer.RegisteredMs,
+		Permission: "NORMAL", PhysicalAuthoritySha256: bytes.Clone(physical), MaintenanceRunId: bytes.Clone(request.MaintenanceRunId), LockPrimitive: request.LockPrimitive,
+		LockQualificationSha256: bytes.Clone(request.LockQualificationSha256)}
+}
+
+// validateSlotRoster 核整份槽位名册:每个槽位都是合法模板,各槽位账号互不相同,写同一组逻辑库。
+// 两个槽位共用一个账号会互相换代,谁都写不稳,所以这里就拒绝。
+func validateSlotRoster(roster *dbpb.SqlWriterBootRoster, physical []byte) error {
+	principals := make(map[string]bool, len(roster.Entries))
+	shape := ""
+	for index, entry := range roster.Entries {
+		if err := validateSlotEntry(entry, physical); err != nil {
+			return fmt.Errorf("slot %d of the roster: %w", index, err)
+		}
+		principal := string(entry.Requests[0].Writer.SqlPrincipal)
+		if principals[principal] {
+			return fmt.Errorf("slot %d of the roster reuses the SQL account of another slot", index)
+		}
+		principals[principal] = true
+		if current := rosterEntryShape(entry); shape == "" {
+			shape = current
+		} else if current != shape {
+			return errors.New("every slot of a roster must write the same logical databases with the same generation and maintenance run")
+		}
+	}
+	return nil
+}
+
+// validateSlotEntry 核一个槽位:每个要写的逻辑库一份 REGISTER 模板,同一账号、库不重复,带完整运行配置的路径和 SHA。
+func validateSlotEntry(entry *dbpb.SqlWriterBootRoster_Entry, physical []byte) error {
+	if entry == nil || len(entry.Requests) == 0 || len(entry.Requests) > bootRequestLimit {
+		return errors.New("a slot needs one REGISTER template per logical database it writes")
+	}
+	for _, request := range entry.Requests {
+		if err := validateSlotTemplate(request, physical); err != nil {
+			return err
+		}
+	}
+	if err := validateRosterEntry(entry); err != nil {
+		return err
+	}
+	if entry.RuntimeConfigPath == "" || len(entry.RuntimeConfigSha256) != 32 {
+		return errors.New("roster entry缺normal完整配置路径/SHA")
+	}
+	return nil
+}
+
+// validateSlotTemplate 核一份 REGISTER 模板:身份字段必须为空(注册器现场生成),其余固定字段齐全。
+// REGISTER 不带 epoch 与目录版本:名册是预先渲染的,cutover 和回滚都会推进 epoch(规格 §2)。
+func validateSlotTemplate(request *dbpb.SqlWriterLifecycleReceipt_Request, physical []byte) error {
+	if request == nil || request.Writer == nil || request.Kind != dbpb.SqlWriterLifecycleReceipt_REGISTER {
+		return errors.New("a slot carries a request that is not a REGISTER template")
+	}
+	writer := request.Writer
+	if len(request.RequestId) != 0 || request.DeploymentId != "" || len(writer.WriterKey) != 0 || len(writer.InstanceId) != 0 || len(writer.RegistrationDigest) != 0 || writer.RegisteredMs != 0 || writer.BootSeq != 0 {
+		return errors.New("a REGISTER template must leave request_id, deployment_id, writer_key, instance_id, registration_digest, registered_ms and boot_seq empty: the registrar makes them for each boot")
+	}
+	if request.ExpectedEpoch != 0 || request.ExpectedCatalogRevision != 0 || len(request.SuccessorRequestId) != 0 || writer.State != dbpb.SqlWriterRegistry_ACTIVE || len(writer.RetirementRequestId) != 0 || len(writer.RetirementDigest) != 0 || writer.RetiredMs != 0 {
+		return errors.New("a REGISTER template carries epoch, catalog revision, successor or retirement fields")
+	}
+	if len(request.DeploymentDigest) != 32 || !bytes.Equal(request.DeploymentDigest, physical) {
+		return errors.New("生命周期原件缺固定身份或独立物理authority摘要")
+	}
+	// 闸门只保护它所在的逻辑库。
+	if len(request.ProtectedSchemas) != 1 || request.ProtectedSchemas[0] != request.AuthoritySchema {
+		return errors.New("生命周期原件的受保护库必须恰好是闸门所在的逻辑库")
+	}
+	principal := string(writer.SqlPrincipal)
+	if principal == "" || len(principal) > 288 || strings.ContainsAny(principal, "\x00\r\n") || writer.Generation == "" {
+		return errors.New("a REGISTER template needs the SQL account of the slot and the generation of the logical database")
+	}
+	if request.LockPrimitive != dbpb.SqlWriterBootGrant_SELECT_ONLY && request.LockPrimitive != dbpb.SqlWriterBootGrant_LOCK_TOUCH {
+		return errors.New("未选定已资格锁原语")
+	}
+	if len(request.LockQualificationSha256) != 32 || len(request.MaintenanceRunId) != 0 && len(request.MaintenanceRunId) != 16 {
+		return errors.New("a REGISTER template needs the lock qualification SHA-256 and at most one 16-byte maintenance run")
 	}
 	return nil
 }
@@ -751,8 +934,9 @@ func rosterEntryShape(entry *dbpb.SqlWriterBootRoster_Entry) string {
 	return strings.Join(parts, ",")
 }
 
+// validateRequestIdentity 是 retire 与 status 的单 Request 输入核对:身份、物理 authority、epoch 与命令相符。注册只走槽位名册。
 func validateRequestIdentity(request *dbpb.SqlWriterLifecycleReceipt_Request, command string, physical []byte) error {
-	if request == nil || request.Writer == nil || len(request.RequestId) != 16 || len(request.Writer.WriterKey) != 16 || len(request.Writer.InstanceId) != 16 || request.Writer.RegisteredMs == 0 || len(request.DeploymentDigest) != 32 || !bytes.Equal(request.DeploymentDigest, physical) {
+	if request == nil || request.Writer == nil || len(request.RequestId) != 16 || len(request.Writer.WriterKey) != 16 || len(request.Writer.InstanceId) != 16 || request.Writer.RegisteredMs == 0 || request.Writer.BootSeq == 0 || len(request.DeploymentDigest) != 32 || !bytes.Equal(request.DeploymentDigest, physical) {
 		return errors.New("生命周期原件缺固定身份或独立物理authority摘要")
 	}
 	// 名册是预先渲染的,cutover 和回滚都会推进 epoch,所以 REGISTER 不带(规格 §2)。RETIRE 带,它要和同 epoch 的维护 run 对账。
@@ -763,14 +947,18 @@ func validateRequestIdentity(request *dbpb.SqlWriterLifecycleReceipt_Request, co
 	if len(request.ProtectedSchemas) != 1 || request.ProtectedSchemas[0] != request.AuthoritySchema {
 		return errors.New("生命周期原件的受保护库必须恰好是闸门所在的逻辑库")
 	}
-	if (command == "register" && request.Kind != dbpb.SqlWriterLifecycleReceipt_REGISTER) || (command == "retire" && request.Kind != dbpb.SqlWriterLifecycleReceipt_RETIRE) {
+	if command == "retire" && request.Kind != dbpb.SqlWriterLifecycleReceipt_RETIRE {
 		return errors.New("命令与原件kind不符")
 	}
-	if command != "register" && len(request.Writer.RegistrationDigest) != 32 {
+	if len(request.Writer.RegistrationDigest) != 32 {
 		return errors.New("查询/退休须绑定原REGISTER摘要")
 	}
 	if command == "retire" && request.ExpectedCatalogRevision == 0 {
 		return errors.New("RETIRE须绑定非零current catalog revision")
+	}
+	// 换代退休只由新一代的注册事务写,不从命令行发起。
+	if command == "retire" && len(request.SuccessorRequestId) != 0 {
+		return errors.New("a supersession RETIRE is written only by the registration of the next boot, not by the retire command")
 	}
 	return nil
 }

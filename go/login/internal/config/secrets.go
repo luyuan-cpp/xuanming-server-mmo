@@ -207,7 +207,7 @@ func (c SecretConf) resolve(name string, lookup func(string) (string, bool)) (*S
 		set.primary = []byte(v)
 		if c.Value != "" {
 			warnings = append(warnings,
-				fmt.Sprintf("密钥 %s 同时配了 Env 和 Value,以 Env 为准;请把 Value 删掉", name))
+				fmt.Sprintf("secret %s sets both Env and Value; Env takes precedence, remove Value", name))
 		}
 	} else if c.Value != "" {
 		set.primary = []byte(c.Value)
@@ -330,7 +330,7 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	if !gate.Configured() && cfg.GateTokenSecret != "" {
 		gate = NewSecretSet(cfg.GateTokenSecret)
 		warnings = append(warnings,
-			"顶层 GateTokenSecret 已废弃(单个 string 无法不停服轮换),请改用 Secrets.GateToken;本次按兼容路径读取")
+			"top-level GateTokenSecret is deprecated (a single string cannot be rotated without downtime); use Secrets.GateToken instead. Read via the compatibility path this time")
 	}
 
 	// QueueToken 没配时的回落:**只在宽松模式下**沿用 gate 密钥,保持本地
@@ -339,7 +339,7 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	if !queue.Configured() && relaxed && gate.Configured() {
 		queue = &SecretSet{primary: gate.Primary(), additional: gate.additional}
 		warnings = append(warnings,
-			"QueueToken 未配置,开发模式回落到 GateToken 密钥;生产必须配独立的 Secrets.QueueToken")
+			"QueueToken not configured; development mode falls back to the GateToken secret, production must configure a separate Secrets.QueueToken")
 	}
 
 	// 谁是必需的:

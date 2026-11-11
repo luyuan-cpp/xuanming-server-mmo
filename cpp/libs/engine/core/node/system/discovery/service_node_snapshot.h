@@ -14,11 +14,32 @@ class ServiceNodeSnapshot
 public:
     using NodeList = google::protobuf::RepeatedPtrField<NodeInfo>;
     enum class UpsertResult : uint8_t { kAdded, kUpdated, kRejected };
+    using ReadableTypes = std::array<bool, common::base::eNodeType_ARRAYSIZE>;
+    using UndeclaredReadFn = void (*)(uint32_t nodeType);
+
+    // 声明本节点读得到哪些类型(发现集合加自身类型,docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+    // 之后按类型读到别的类型时,每个类型调一次 onUndeclaredRead:那一类本节点不 Range 也不 watch,快照恒空,
+    // 说明读它的调用方漏进了发现集合。不声明 = 不检查(单测与只用快照做数据结构的地方)。
+    void DeclareReadableTypes(const ReadableTypes &readable, UndeclaredReadFn onUndeclaredRead)
+    {
+        readable_ = readable;
+        onUndeclaredRead_ = onUndeclaredRead;
+        reported_.fill(false);
+    }
 
     const NodeList &NodesOfType(uint32_t nodeType) const
     {
         static const NodeList empty;
-        return nodeType < byType_.size() ? byType_[nodeType] : empty;
+        if (nodeType >= byType_.size())
+        {
+            return empty;
+        }
+        if (onUndeclaredRead_ != nullptr && !readable_[nodeType] && !reported_[nodeType])
+        {
+            reported_[nodeType] = true;
+            onUndeclaredRead_(nodeType);
+        }
+        return byType_[nodeType];
     }
 
     bool HasNodesOfType(uint32_t nodeType) const
@@ -80,4 +101,8 @@ public:
 private:
     std::array<NodeList, common::base::eNodeType_ARRAYSIZE> byType_;
     std::array<uint64_t, common::base::eNodeType_ARRAYSIZE> generations_{};
+    ReadableTypes readable_{};
+    UndeclaredReadFn onUndeclaredRead_ = nullptr;
+    // 每个类型只报一次;读路径是 const,报过的标记放在 mutable 里(只在所属 loop 线程读写)。
+    mutable ReadableTypes reported_{};
 };

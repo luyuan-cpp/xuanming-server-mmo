@@ -75,7 +75,7 @@ void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardR
 	if (!PrepareForwardCall(request, sessionDetailsBin, call))
 	{
 		gate_rpc_reply_bridge::NotifyCallFailure(kForwardMethodName,
-			static_cast<int>(muduo_grpc::StatusCode::kInternal), "内部会话签名失败", &sessionDetailsBin, nullptr);
+			static_cast<int>(muduo_grpc::StatusCode::kInternal), "internal session signing failed", &sessionDetailsBin, nullptr);
 		return;
 	}
 

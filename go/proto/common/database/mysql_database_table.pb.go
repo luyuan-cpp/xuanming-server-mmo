@@ -532,8 +532,15 @@ type PlayerDatabase struct {
 	// 加载时无条件挂组件、校验不过挂失效标签(带键请求一律 fail-closed),存盘缺它整份拒存(持久数据)。
 	// 取下一个空闲号 25;下一个新字段从 26 起。
 	ClientRequestLedger *component.ClientRequestLedgerComp `protobuf:"bytes,25,opt,name=client_request_ledger,json=clientRequestLedger,proto3" json:"client_request_ledger,omitempty"` // WALLET
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 物品数量预留(docs/design/battle-item-reservation.md):备战时把带进战斗的道具按配置号与数量占住,结算只从这里扣,
+	// 作废或取消时释放。必须与 bag_component 同一次存盘提交 —— 「预留落了、背包没落」会把玩家的东西占住而没有对应的战斗,
+	// 「背包落了、预留没落」会让晚到的结算按持有量夹紧(药白喝)。一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),
+	// 所以不必与背包同组;它小、只在备战与结算时变,放 PROFILE 行,不让每一次背包写入都带上它。
+	// 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
+	// 取下一个空闲号 26;下一个新字段从 27 起。
+	ItemHolds     *component.PlayerItemHoldComp `protobuf:"bytes,26,opt,name=item_holds,json=itemHolds,proto3" json:"item_holds,omitempty"` // PROFILE
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -713,6 +720,13 @@ func (x *PlayerDatabase) GetClientRequestLedger() *component.ClientRequestLedger
 	return nil
 }
 
+func (x *PlayerDatabase) GetItemHolds() *component.PlayerItemHoldComp {
+	if x != nil {
+		return x.ItemHolds
+	}
+	return nil
+}
+
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:
 // kind 0 是写权行,其余每个 kind 一行(player_store.PlayerStoreKind),payload 是 player_database
 // 按字段投影出来的一段序列化结果。一条语句就能读出一个玩家的全部行。
@@ -830,7 +844,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -870,7 +884,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb2\v\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xed\v\n" +
 	"\x0fplayer_database\x12\"\n" +
 	"\tplayer_id\x18\x01 \x01(\x04B\x05\xc8\xfe\xa4\x02\x00R\bplayerId\x12/\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -896,7 +910,9 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x10mystery_merchant\x18\x16 \x01(\v2\x1a.PlayerMysteryMerchantCompB\x05\xc8\xfe\xa4\x02\aR\x0fmysteryMerchant\x12E\n" +
 	"\x0ebattle_results\x18\x17 \x01(\v2\x17.PlayerBattleResultCompB\x05\xc8\xfe\xa4\x02\x04R\rbattleResults\x12G\n" +
 	"\x0fitem_gain_block\x18\x18 \x01(\v2\x18.PlayerItemGainBlockCompB\x05\xc8\xfe\xa4\x02\x04R\ritemGainBlock\x12S\n" +
-	"\x15client_request_ledger\x18\x19 \x01(\v2\x18.ClientRequestLedgerCompB\x05\xc8\xfe\xa4\x02\aR\x13clientRequestLedger:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
+	"\x15client_request_ledger\x18\x19 \x01(\v2\x18.ClientRequestLedgerCompB\x05\xc8\xfe\xa4\x02\aR\x13clientRequestLedger\x129\n" +
+	"\n" +
+	"item_holds\x18\x1a \x01(\v2\x13.PlayerItemHoldCompB\x05\xc8\xfe\xa4\x02\x04R\titemHolds:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
 	"\x10\vJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14\"\xbc\x02\n" +
 	"\fplayer_store\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
@@ -955,6 +971,7 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.PlayerBattleResultComp)(nil),    // 27: PlayerBattleResultComp
 	(*component.PlayerItemGainBlockComp)(nil),   // 28: PlayerItemGainBlockComp
 	(*component.ClientRequestLedgerComp)(nil),   // 29: ClientRequestLedgerComp
+	(*component.PlayerItemHoldComp)(nil),        // 30: PlayerItemHoldComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -978,11 +995,12 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	27, // 18: player_database.battle_results:type_name -> PlayerBattleResultComp
 	28, // 19: player_database.item_gain_block:type_name -> PlayerItemGainBlockComp
 	29, // 20: player_database.client_request_ledger:type_name -> ClientRequestLedgerComp
-	21, // [21:21] is the sub-list for method output_type
-	21, // [21:21] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	30, // 21: player_database.item_holds:type_name -> PlayerItemHoldComp
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

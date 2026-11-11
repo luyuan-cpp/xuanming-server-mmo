@@ -17,12 +17,16 @@ import (
 
 // 价格时间优先只由SQL中的已验证托管订单裁决。Redis深度缓存不是撮合证据。
 // 一次事务预留双边数量+写成交交付意图；RPC全在提交后。余额从不进本库。
+//
+// 「已验证托管」在 SQL 里是 on_book=1(data.OnBook,stage=market_open 的投影):托管阶段的订单 status 也是 3,
+// 不按它过滤就会被选成最优对手单、挡住整本盘口(jubaozhai-market.md §15.9)。两边是否在盘口上仍在锁内按 workflow 复核。
 func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 	taker, err := e.Repo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	if taker.Kind != 4 || taker.Side == 0 || taker.FilledQuantity == taker.Quantity {
+	// 托管还没完成的 taker 不发起撮合:不发成交号、不抢盘口 guard 行锁。它进入 market_open 的那一步 step 会再撮一次。
+	if taker.Kind != 4 || taker.Side == 0 || !taker.OnBook || taker.FilledQuantity == taker.Quantity {
 		return nil
 	}
 	matchID, err := e.IDs.Next(ctx)
@@ -114,6 +118,7 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 				return err
 			}
 		}
+		// 提交点复核:选单的 on_book 与 taker 预检只是预选,两边是否还在盘口上以锁内读到的 workflow 为准(AGENTS §11.3)。
 		if aw.Stage != "market_open" || bw.Stage != "market_open" || aw.CancelRequested || bw.CancelRequested || a.FilledQuantity >= a.Quantity || b.FilledQuantity >= b.Quantity {
 			return nil
 		}
@@ -207,7 +212,8 @@ func marketCounterparty(ctx context.Context, q marketQuery, taker *tradepb.Trade
 		opposite = 2
 	}
 	var id uint64
-	err := q.QueryRowContext(ctx, "SELECT commerce_id FROM trade_commerce WHERE kind=4 AND side=? AND market_id=? AND item_config_id=? AND currency_type=? AND status=3 AND filled_quantity<quantity AND seller_player_id<>? AND "+filter+" ORDER BY "+order+" LIMIT 1", opposite, taker.MarketId, taker.ItemConfigId, taker.CurrencyType, taker.SellerPlayerId, taker.UnitPrice).Scan(&id)
+	// on_book=1:只选托管已完成、挂在盘口上的订单。预读与锁内重读都走这里,同一个条件。
+	err := q.QueryRowContext(ctx, "SELECT commerce_id FROM trade_commerce WHERE kind=4 AND side=? AND market_id=? AND item_config_id=? AND currency_type=? AND status=3 AND on_book=1 AND filled_quantity<quantity AND seller_player_id<>? AND "+filter+" ORDER BY "+order+" LIMIT 1", opposite, taker.MarketId, taker.ItemConfigId, taker.CurrencyType, taker.SellerPlayerId, taker.UnitPrice).Scan(&id)
 	return id, err
 }
 

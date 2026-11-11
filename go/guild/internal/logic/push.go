@@ -98,12 +98,12 @@ type KafkaGuildNotifier struct {
 func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, sessions redis.UniversalClient, admissions ...*drainproof.Session) GuildNotifier {
 	var gate *drainproof.Session
 	if len(admissions) > 1 {
-		panic("公会通知角色重复")
+		panic("guild notifier admission role passed more than once")
 	}
 	if len(admissions) == 1 {
 		gate = admissions[0]
 		if gate == nil {
-			panic("公会通知角色未装配")
+			panic("guild notifier admission role not wired")
 		}
 	}
 	if w == nil || b == nil || sessions == nil {
@@ -447,12 +447,12 @@ func launchSyncBump(fn func()) { safego.Go(guildSyncBumpPoint, fn) }
 func NewGuildSyncBumper(inner PlayerSyncBumper, admissions ...*drainproof.Session) GuildSyncBumper {
 	var gate *drainproof.Session
 	if len(admissions) > 1 {
-		panic("公会摘要角色重复")
+		panic("guild summary bumper admission role passed more than once")
 	}
 	if len(admissions) == 1 {
 		gate = admissions[0]
 		if gate == nil {
-			panic("公会摘要角色未装配")
+			panic("guild summary bumper admission role not wired")
 		}
 	}
 	if inner == nil {

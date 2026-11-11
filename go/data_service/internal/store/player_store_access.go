@@ -99,7 +99,7 @@ func (s *AccountDirectoryStore) playerStorage(ctx context.Context, playerID uint
 // ReadPlayerStoreAsset 强读写权行和钱包行。两行出自同一条语句:判「不在线」和判「账本未见」看的是同一个时刻。
 // 返回 (nil, nil) = 没有写权行或路由(角色不存在或未建完)。读不到回错误,不能当成没有:调用方拿它判账本有没有见过一笔资产。
 func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, playerID uint64) (*PlayerAssetRow, error) {
-	owner, player, err := s.readOwnerAndRow(ctx, playerID, playerStoreWalletKind, "账本行")
+	owner, player, err := s.readOwnerAndRow(ctx, playerID, playerStoreWalletKind, "wallet")
 	if err != nil || owner == nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (s *AccountDirectoryStore) ReadPlayerStoreAsset(ctx context.Context, player
 // ReadPlayerStoreProfile 强读写权行和资料行,两行出自同一条语句。返回约定同 ReadPlayerStoreAsset:
 // (nil, nil) = 没有写权行或路由;读不到回错误,不能当成没有 —— 运维查物品获取封禁表时会把「没有」读成「没封」。
 func (s *AccountDirectoryStore) ReadPlayerStoreProfile(ctx context.Context, playerID uint64) (*PlayerProfileRow, error) {
-	owner, player, err := s.readOwnerAndRow(ctx, playerID, playerStoreProfileKind, "资料行")
+	owner, player, err := s.readOwnerAndRow(ctx, playerID, playerStoreProfileKind, "profile")
 	if err != nil || owner == nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (s *AccountDirectoryStore) ReadPlayerStoreProfile(ctx context.Context, play
 
 // readOwnerAndRow 在一条语句里强读写权行和一个数据行(kind),数据行解析成只含那一行字段的 PlayerDatabase。
 // 返回 (nil, nil, nil) = 没有写权行或路由;写权行在、数据行不在时 player 只有 player_id。
-// 只读,不加锁;占一个读名额(acquirePlayerStoreRead)。what 只进错误文案。
+// 只读,不加锁;占一个读名额(acquirePlayerStoreRead)。what 是行名(英文,只进错误文案;错误文案会进日志,AGENTS §2)。
 func (s *AccountDirectoryStore) readOwnerAndRow(ctx context.Context, playerID uint64, kind int32, what string) (*playerStoreOwnerState, *dbpb.PlayerDatabase, error) {
 	if s == nil || playerID == 0 {
 		return nil, nil, accountdirectory.ErrInvalid
@@ -142,7 +142,7 @@ func (s *AccountDirectoryStore) readOwnerAndRow(ctx context.Context, playerID ui
 	rows, err := db.QueryContext(ctx, "SELECT kind,owner_epoch,save_seq,released,payload FROM player_store WHERE player_id=? AND kind IN (?,?)",
 		playerID, playerStoreOwnerKind, kind)
 	if err != nil {
-		return nil, nil, fmt.Errorf("读玩家%s: %w", what, err)
+		return nil, nil, fmt.Errorf("read player_store %s row: %w", what, err)
 	}
 	defer rows.Close()
 	var owner *playerStoreOwnerState
@@ -153,7 +153,7 @@ func (s *AccountDirectoryStore) readOwnerAndRow(ctx context.Context, playerID ui
 		var released uint32
 		var data []byte
 		if err := rows.Scan(&rowKind, &epoch, &seq, &released, &data); err != nil {
-			return nil, nil, fmt.Errorf("读玩家%s: %w", what, err)
+			return nil, nil, fmt.Errorf("read player_store %s row: %w", what, err)
 		}
 		switch rowKind {
 		case playerStoreOwnerKind:
@@ -163,14 +163,14 @@ func (s *AccountDirectoryStore) readOwnerAndRow(ctx context.Context, playerID ui
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("读玩家%s: %w", what, err)
+		return nil, nil, fmt.Errorf("read player_store %s row: %w", what, err)
 	}
 	if owner == nil {
 		return nil, nil, nil
 	}
 	player := &dbpb.PlayerDatabase{}
 	if err := proto.Unmarshal(payload, player); err != nil {
-		return nil, nil, fmt.Errorf("解析玩家%s player_id=%d: %w", what, playerID, err)
+		return nil, nil, fmt.Errorf("decode player_store %s row player_id=%d: %w", what, playerID, err)
 	}
 	player.PlayerId = playerID
 	return owner, player, nil

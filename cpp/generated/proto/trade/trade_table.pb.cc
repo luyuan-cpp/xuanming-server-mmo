@@ -847,11 +847,11 @@ constexpr TradeCommerceRecord::ParseTableT_ TradeCommerceRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_._has_bits_),
       0, // no _extensions_
-      21, 248,  // max_field_number, fast_idx_mask
+      22, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4292870144,  // skipmap
+      4290772992,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      21,  // num_field_entries
+      22,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -946,7 +946,10 @@ constexpr TradeCommerceRecord::ParseTableT_ TradeCommerceRecord::InternalGenerat
       {::_pbi::TcParser::FastV64S2,
        {424, 20, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.counterparty_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool on_book = 22;
+      {::_pbi::TcParser::FastV8S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.on_book_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1001,6 +1004,8 @@ constexpr TradeCommerceRecord::ParseTableT_ TradeCommerceRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.parent_id_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 counterparty_id = 21;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.counterparty_id_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool on_book = 22;
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.on_book_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1042,7 +1047,8 @@ inline constexpr TradeCommerceRecord::Impl_::Impl_(
         updated_ms_{::uint64_t{0u}},
         version_{::uint64_t{0u}},
         parent_id_{::uint64_t{0u}},
-        counterparty_id_{::uint64_t{0u}} {}
+        counterparty_id_{::uint64_t{0u}},
+        on_book_{false} {}
 
 template <typename>
 constexpr TradeCommerceRecord::TradeCommerceRecord(::_pbi::ConstantInitialized,
@@ -3035,7 +3041,7 @@ const ::uint32_t
         26,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_._has_bits_),
-        24, // hasbit index offset
+        25, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.commerce_id_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.request_key_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.request_digest_),
@@ -3057,6 +3063,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.workflow_proto_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.parent_id_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.counterparty_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceRecord, _impl_.on_book_),
         3,
         0,
         1,
@@ -3078,6 +3085,7 @@ const ::uint32_t
         2,
         19,
         20,
+        21,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceGuardRecord, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3238,13 +3246,13 @@ static const ::_pbi::MigrationSchema
         {50, sizeof(::trade::TradePlayerOpSeqRecord)},
         {63, sizeof(::trade::TradeAssetOpRecord)},
         {120, sizeof(::trade::TradeCommerceRecord)},
-        {165, sizeof(::trade::TradeCommerceGuardRecord)},
-        {170, sizeof(::trade::TradeCommerceWorkflow)},
-        {221, sizeof(::trade::TradeCommerceQuarantine)},
-        {234, sizeof(::trade::TradeCommerceManualAction)},
-        {253, sizeof(::trade::TradeRoleIdentity)},
-        {260, sizeof(::trade::TradeRmbConsignmentWorkflow)},
-        {297, sizeof(::trade::TradeCommerceLeg)},
+        {167, sizeof(::trade::TradeCommerceGuardRecord)},
+        {172, sizeof(::trade::TradeCommerceWorkflow)},
+        {223, sizeof(::trade::TradeCommerceQuarantine)},
+        {236, sizeof(::trade::TradeCommerceManualAction)},
+        {255, sizeof(::trade::TradeRoleIdentity)},
+        {262, sizeof(::trade::TradeRmbConsignmentWorkflow)},
+        {299, sizeof(::trade::TradeCommerceLeg)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3311,7 +3319,7 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "tatus,next_attempt_ms;player_id,stream,s"
     "tream_epoch,status,seq;ref_kind,ref_id\342\222"
     "\364\001!player_id,stream,stream_epoch,seq\250\223\364\001"
-    "\001\260\223\364\001\004\270\223\364\001\004\"\336\005\n\023TradeCommerceRecord\022\023\n\013c"
+    "\001\260\223\364\001\004\270\223\364\001\004\"\367\005\n\023TradeCommerceRecord\022\023\n\013c"
     "ommerce_id\030\001 \001(\004\022\023\n\013request_key\030\002 \001(\t\022\026\n"
     "\016request_digest\030\003 \001(\014\022\014\n\004kind\030\004 \001(\r\022\016\n\006s"
     "tatus\030\005 \001(\r\022\030\n\020seller_player_id\030\006 \001(\004\022\027\n"
@@ -3322,84 +3330,85 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "\016 \001(\r\022\022\n\nexpires_ms\030\017 \001(\004\022\022\n\ncreated_ms\030"
     "\020 \001(\004\022\022\n\nupdated_ms\030\021 \001(\004\022\017\n\007version\030\022 \001"
     "(\004\022\026\n\016workflow_proto\030\023 \001(\014\022\021\n\tparent_id\030"
-    "\024 \001(\004\022\027\n\017counterparty_id\030\025 \001(\004:\223\002\212\222\364\001\016tr"
-    "ade_commerce\222\222\364\001\013commerce_id\332\222\364\001\313\001status"
-    ",updated_ms; seller_player_id,commerce_i"
-    "d;buyer_player_id,commerce_id;kind,marke"
-    "t_id,item_config_id,side,status,unit_pri"
-    "ce,commerce_id;kind,status,expires_ms;pa"
-    "rent_id,status;counterparty_id,status\342\222\364"
-    "\001\013request_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"T\n\030TradeCom"
-    "merceGuardRecord\022\020\n\010guard_id\030\001 \001(\004:&\212\222\364\001"
-    "\024trade_commerce_guard\222\222\364\001\010guard_id\"\255\006\n\025T"
-    "radeCommerceWorkflow\0221\n\rseller_assets\030\001 "
-    "\001(\0132\032.trade.TradeAssetSelection\0220\n\014buyer"
-    "_assets\030\002 \001(\0132\032.trade.TradeAssetSelectio"
-    "n\022\030\n\020seller_confirmed\030\003 \001(\010\022\027\n\017buyer_con"
-    "firmed\030\004 \001(\010\022\030\n\020cancel_requested\030\005 \001(\010\022%"
-    "\n\004legs\030\006 \003(\0132\027.trade.TradeCommerceLeg\022\r\n"
-    "\005stage\030\007 \001(\t\022\031\n\021minimum_increment\030\010 \001(\004\022"
-    "\023\n\013highest_bid\030\t \001(\004\022\026\n\016highest_bidder\030\n"
-    " \001(\004\022\026\n\016winning_bid_id\030\013 \001(\004\022\021\n\tparent_i"
-    "d\030\014 \001(\004\022\031\n\021quantity_reserved\030\r \001(\004\022\031\n\021ex"
-    "ternal_order_sn\030\016 \001(\t\022\016\n\006sku_id\030\017 \001(\004\022\024\n"
-    "\014sku_quantity\030\020 \001(\r\022%\n\017official_bundle\030\021"
-    " \001(\0132\014.AssetBundle\022\031\n\021external_currency\030"
-    "\022 \001(\t\022\027\n\017external_amount\030\023 \001(\004\022/\n\003rmb\030\024 "
-    "\001(\0132\".trade.TradeRmbConsignmentWorkflow\022"
-    "1\n\017seller_identity\030\025 \001(\0132\030.trade.TradeRo"
-    "leIdentity\0220\n\016buyer_identity\030\026 \001(\0132\030.tra"
-    "de.TradeRoleIdentity\0222\n\nquarantine\030\027 \001(\013"
-    "2\036.trade.TradeCommerceQuarantine\0228\n\016manu"
-    "al_actions\030\030 \003(\0132 .trade.TradeCommerceMa"
-    "nualAction\"g\n\027TradeCommerceQuarantine\022\r\n"
-    "\005stage\030\001 \001(\t\022\016\n\006status\030\002 \001(\r\022\016\n\006reason\030\003"
-    " \001(\t\022\016\n\006detail\030\004 \001(\t\022\r\n\005at_ms\030\005 \001(\004\"\323\001\n\031"
-    "TradeCommerceManualAction\022\016\n\006action\030\001 \001("
-    "\t\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason\030\003 \001(\t\022\r\n\005a"
-    "t_ms\030\004 \001(\004\022\026\n\016version_before\030\005 \001(\004\0222\n\nqu"
-    "arantine\030\006 \001(\0132\036.trade.TradeCommerceQuar"
-    "antine\022\020\n\010new_legs\030\007 \003(\t\022\027\n\017superseded_l"
-    "egs\030\010 \003(\t\"<\n\021TradeRoleIdentity\022\017\n\007accoun"
-    "t\030\001 \001(\t\022\026\n\016owner_revision\030\002 \001(\004\"\323\003\n\033Trad"
-    "eRmbConsignmentWorkflow\022\026\n\016seller_accoun"
-    "t\030\001 \001(\t\022\035\n\025seller_owner_revision\030\002 \001(\004\022\033"
-    "\n\023character_player_id\030\003 \001(\004\022\r\n\005title\030\004 \001"
-    "(\t\022\022\n\nasset_kind\030\005 \001(\t\022\030\n\020escrow_referen"
-    "ce\030\006 \001(\t\022\024\n\014escrow_proof\030\007 \001(\t\022\025\n\rbuyer_"
-    "account\030\010 \001(\t\022\025\n\rmall_order_id\030\t \001(\t\022\026\n\016"
-    "transfer_tx_id\030\n \001(\004\022\026\n\016freeze_receipt\030\013"
-    " \001(\014\022\023\n\013market_zone\030\014 \001(\r\022\021\n\tprice_fen\030\r"
-    " \001(\004\022\031\n\021client_request_id\030\016 \001(\t\0225\n\022regis"
-    "tered_listing\030\017 \001(\0132\031.trade.RmbConsignme"
-    "ntView\022\027\n\017delivery_digest\030\020 \001(\014\022\034\n\024buyer"
-    "_owner_revision\030\021 \001(\004\"\272\001\n\020TradeCommerceL"
-    "eg\022\014\n\004role\030\001 \001(\t\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006s"
-    "tream\030\003 \001(\r\022\034\n\006bundle\030\004 \001(\0132\014.AssetBundl"
-    "e\022\r\n\005op_id\030\005 \001(\004\022 \n\010snapshot\030\006 \001(\0132\016.Ass"
-    "etSnapshot\022\017\n\007outcome\030\007 \001(\r\022\025\n\rsupersede"
-    "d_by\030\010 \001(\t*\373\001\n\rListingStatus\022\036\n\032LISTING_"
-    "STATUS_UNSPECIFIED\020\000\022\034\n\030LISTING_STATUS_E"
-    "SCROWING\020\001\022\031\n\025LISTING_STATUS_LISTED\020\002\022\031\n"
-    "\025LISTING_STATUS_LOCKED\020\003\022\027\n\023LISTING_STAT"
-    "US_SOLD\020\004\022\034\n\030LISTING_STATUS_RETURNING\020\005\022"
-    "\033\n\027LISTING_STATUS_RETURNED\020\006\022\"\n\036LISTING_"
-    "STATUS_ESCROW_REJECTED\020\007*\254\001\n\020TradeAssetO"
-    "pKind\022#\n\037TRADE_ASSET_OP_KIND_UNSPECIFIED"
-    "\020\000\022$\n TRADE_ASSET_OP_KIND_ESCROW_DEBIT\020\001"
-    "\022&\n\"TRADE_ASSET_OP_KIND_DELIVER_CREDIT\020\002"
-    "\022%\n!TRADE_ASSET_OP_KIND_RETURN_CREDIT\020\003*"
-    "\230\002\n\022TradeAssetOpStatus\022%\n!TRADE_ASSET_OP"
-    "_STATUS_UNSPECIFIED\020\000\022!\n\035TRADE_ASSET_OP_"
-    "STATUS_PENDING\020\001\022!\n\035TRADE_ASSET_OP_STATU"
-    "S_APPLIED\020\002\022\"\n\036TRADE_ASSET_OP_STATUS_REJ"
-    "ECTED\020\003\022!\n\035TRADE_ASSET_OP_STATUS_ABORTED"
-    "\020\004\022)\n%TRADE_ASSET_OP_STATUS_APPLIED_PART"
-    "IAL\020\005\022#\n\037TRADE_ASSET_OP_STATUS_ABANDONED"
-    "\020\006*\206\001\n\023TradeAssetOpRefKind\022\'\n#TRADE_ASSE"
-    "T_OP_REF_KIND_UNSPECIFIED\020\000\022#\n\037TRADE_ASS"
-    "ET_OP_REF_KIND_LISTING\020\001\022!\n\035TRADE_ASSET_"
-    "OP_REF_KIND_ORDER\020\002B\007Z\005tradeb\006proto3"
+    "\024 \001(\004\022\027\n\017counterparty_id\030\025 \001(\004\022\017\n\007on_boo"
+    "k\030\026 \001(\010:\233\002\212\222\364\001\016trade_commerce\222\222\364\001\013commer"
+    "ce_id\332\222\364\001\323\001status,updated_ms; seller_pla"
+    "yer_id,commerce_id;buyer_player_id,comme"
+    "rce_id;kind,market_id,item_config_id,sid"
+    "e,status,on_book,unit_price,commerce_id;"
+    "kind,status,expires_ms;parent_id,status;"
+    "counterparty_id,status\342\222\364\001\013request_key\250\223"
+    "\364\001\001\260\223\364\001\004\270\223\364\001\004\"T\n\030TradeCommerceGuardRecor"
+    "d\022\020\n\010guard_id\030\001 \001(\004:&\212\222\364\001\024trade_commerce"
+    "_guard\222\222\364\001\010guard_id\"\255\006\n\025TradeCommerceWor"
+    "kflow\0221\n\rseller_assets\030\001 \001(\0132\032.trade.Tra"
+    "deAssetSelection\0220\n\014buyer_assets\030\002 \001(\0132\032"
+    ".trade.TradeAssetSelection\022\030\n\020seller_con"
+    "firmed\030\003 \001(\010\022\027\n\017buyer_confirmed\030\004 \001(\010\022\030\n"
+    "\020cancel_requested\030\005 \001(\010\022%\n\004legs\030\006 \003(\0132\027."
+    "trade.TradeCommerceLeg\022\r\n\005stage\030\007 \001(\t\022\031\n"
+    "\021minimum_increment\030\010 \001(\004\022\023\n\013highest_bid\030"
+    "\t \001(\004\022\026\n\016highest_bidder\030\n \001(\004\022\026\n\016winning"
+    "_bid_id\030\013 \001(\004\022\021\n\tparent_id\030\014 \001(\004\022\031\n\021quan"
+    "tity_reserved\030\r \001(\004\022\031\n\021external_order_sn"
+    "\030\016 \001(\t\022\016\n\006sku_id\030\017 \001(\004\022\024\n\014sku_quantity\030\020"
+    " \001(\r\022%\n\017official_bundle\030\021 \001(\0132\014.AssetBun"
+    "dle\022\031\n\021external_currency\030\022 \001(\t\022\027\n\017extern"
+    "al_amount\030\023 \001(\004\022/\n\003rmb\030\024 \001(\0132\".trade.Tra"
+    "deRmbConsignmentWorkflow\0221\n\017seller_ident"
+    "ity\030\025 \001(\0132\030.trade.TradeRoleIdentity\0220\n\016b"
+    "uyer_identity\030\026 \001(\0132\030.trade.TradeRoleIde"
+    "ntity\0222\n\nquarantine\030\027 \001(\0132\036.trade.TradeC"
+    "ommerceQuarantine\0228\n\016manual_actions\030\030 \003("
+    "\0132 .trade.TradeCommerceManualAction\"g\n\027T"
+    "radeCommerceQuarantine\022\r\n\005stage\030\001 \001(\t\022\016\n"
+    "\006status\030\002 \001(\r\022\016\n\006reason\030\003 \001(\t\022\016\n\006detail\030"
+    "\004 \001(\t\022\r\n\005at_ms\030\005 \001(\004\"\323\001\n\031TradeCommerceMa"
+    "nualAction\022\016\n\006action\030\001 \001(\t\022\020\n\010operator\030\002"
+    " \001(\t\022\016\n\006reason\030\003 \001(\t\022\r\n\005at_ms\030\004 \001(\004\022\026\n\016v"
+    "ersion_before\030\005 \001(\004\0222\n\nquarantine\030\006 \001(\0132"
+    "\036.trade.TradeCommerceQuarantine\022\020\n\010new_l"
+    "egs\030\007 \003(\t\022\027\n\017superseded_legs\030\010 \003(\t\"<\n\021Tr"
+    "adeRoleIdentity\022\017\n\007account\030\001 \001(\t\022\026\n\016owne"
+    "r_revision\030\002 \001(\004\"\323\003\n\033TradeRmbConsignment"
+    "Workflow\022\026\n\016seller_account\030\001 \001(\t\022\035\n\025sell"
+    "er_owner_revision\030\002 \001(\004\022\033\n\023character_pla"
+    "yer_id\030\003 \001(\004\022\r\n\005title\030\004 \001(\t\022\022\n\nasset_kin"
+    "d\030\005 \001(\t\022\030\n\020escrow_reference\030\006 \001(\t\022\024\n\014esc"
+    "row_proof\030\007 \001(\t\022\025\n\rbuyer_account\030\010 \001(\t\022\025"
+    "\n\rmall_order_id\030\t \001(\t\022\026\n\016transfer_tx_id\030"
+    "\n \001(\004\022\026\n\016freeze_receipt\030\013 \001(\014\022\023\n\013market_"
+    "zone\030\014 \001(\r\022\021\n\tprice_fen\030\r \001(\004\022\031\n\021client_"
+    "request_id\030\016 \001(\t\0225\n\022registered_listing\030\017"
+    " \001(\0132\031.trade.RmbConsignmentView\022\027\n\017deliv"
+    "ery_digest\030\020 \001(\014\022\034\n\024buyer_owner_revision"
+    "\030\021 \001(\004\"\272\001\n\020TradeCommerceLeg\022\014\n\004role\030\001 \001("
+    "\t\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006stream\030\003 \001(\r\022\034\n\006"
+    "bundle\030\004 \001(\0132\014.AssetBundle\022\r\n\005op_id\030\005 \001("
+    "\004\022 \n\010snapshot\030\006 \001(\0132\016.AssetSnapshot\022\017\n\007o"
+    "utcome\030\007 \001(\r\022\025\n\rsuperseded_by\030\010 \001(\t*\373\001\n\r"
+    "ListingStatus\022\036\n\032LISTING_STATUS_UNSPECIF"
+    "IED\020\000\022\034\n\030LISTING_STATUS_ESCROWING\020\001\022\031\n\025L"
+    "ISTING_STATUS_LISTED\020\002\022\031\n\025LISTING_STATUS"
+    "_LOCKED\020\003\022\027\n\023LISTING_STATUS_SOLD\020\004\022\034\n\030LI"
+    "STING_STATUS_RETURNING\020\005\022\033\n\027LISTING_STAT"
+    "US_RETURNED\020\006\022\"\n\036LISTING_STATUS_ESCROW_R"
+    "EJECTED\020\007*\254\001\n\020TradeAssetOpKind\022#\n\037TRADE_"
+    "ASSET_OP_KIND_UNSPECIFIED\020\000\022$\n TRADE_ASS"
+    "ET_OP_KIND_ESCROW_DEBIT\020\001\022&\n\"TRADE_ASSET"
+    "_OP_KIND_DELIVER_CREDIT\020\002\022%\n!TRADE_ASSET"
+    "_OP_KIND_RETURN_CREDIT\020\003*\230\002\n\022TradeAssetO"
+    "pStatus\022%\n!TRADE_ASSET_OP_STATUS_UNSPECI"
+    "FIED\020\000\022!\n\035TRADE_ASSET_OP_STATUS_PENDING\020"
+    "\001\022!\n\035TRADE_ASSET_OP_STATUS_APPLIED\020\002\022\"\n\036"
+    "TRADE_ASSET_OP_STATUS_REJECTED\020\003\022!\n\035TRAD"
+    "E_ASSET_OP_STATUS_ABORTED\020\004\022)\n%TRADE_ASS"
+    "ET_OP_STATUS_APPLIED_PARTIAL\020\005\022#\n\037TRADE_"
+    "ASSET_OP_STATUS_ABANDONED\020\006*\206\001\n\023TradeAss"
+    "etOpRefKind\022\'\n#TRADE_ASSET_OP_REF_KIND_U"
+    "NSPECIFIED\020\000\022#\n\037TRADE_ASSET_OP_REF_KIND_"
+    "LISTING\020\001\022!\n\035TRADE_ASSET_OP_REF_KIND_ORD"
+    "ER\020\002B\007Z\005tradeb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps[4] = {
@@ -3412,7 +3421,7 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto = {
     false,
     false,
-    5476,
+    5501,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto,
     "proto/trade/trade_table.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_once,
@@ -5565,9 +5574,9 @@ TradeCommerceRecord::TradeCommerceRecord(
                offsetof(Impl_, commerce_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, commerce_id_),
-           offsetof(Impl_, counterparty_id_) -
+           offsetof(Impl_, on_book_) -
                offsetof(Impl_, commerce_id_) +
-               sizeof(Impl_::counterparty_id_));
+               sizeof(Impl_::on_book_));
 
   // @@protoc_insertion_point(copy_constructor:trade.TradeCommerceRecord)
 }
@@ -5584,9 +5593,9 @@ inline void TradeCommerceRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, commerce_id_),
            0,
-           offsetof(Impl_, counterparty_id_) -
+           offsetof(Impl_, on_book_) -
                offsetof(Impl_, commerce_id_) +
-               sizeof(Impl_::counterparty_id_));
+               sizeof(Impl_::on_book_));
 }
 TradeCommerceRecord::~TradeCommerceRecord() {
   // @@protoc_insertion_point(destructor:trade.TradeCommerceRecord)
@@ -5660,10 +5669,10 @@ PROTOBUF_NOINLINE void TradeCommerceRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.expires_ms_) -
         reinterpret_cast<char*>(&_impl_.market_id_)) + sizeof(_impl_.expires_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     ::memset(&_impl_.created_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.counterparty_id_) -
-        reinterpret_cast<char*>(&_impl_.created_ms_)) + sizeof(_impl_.counterparty_id_));
+        reinterpret_cast<char*>(&_impl_.on_book_) -
+        reinterpret_cast<char*>(&_impl_.created_ms_)) + sizeof(_impl_.on_book_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5876,6 +5885,15 @@ PROTOBUF_NOINLINE void TradeCommerceRecord::Clear() {
     }
   }
 
+  // bool on_book = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_on_book() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          22, this_._internal_on_book(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6017,7 +6035,7 @@ PROTOBUF_NOINLINE void TradeCommerceRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     // uint64 created_ms = 16;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_created_ms() != 0) {
@@ -6051,6 +6069,12 @@ PROTOBUF_NOINLINE void TradeCommerceRecord::Clear() {
       if (this_._internal_counterparty_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_counterparty_id());
+      }
+    }
+    // bool on_book = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_on_book() != 0) {
+        total_size += 3;
       }
     }
   }
@@ -6167,7 +6191,7 @@ void TradeCommerceRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_created_ms() != 0) {
         _this->_impl_.created_ms_ = from._impl_.created_ms_;
@@ -6191,6 +6215,11 @@ void TradeCommerceRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_counterparty_id() != 0) {
         _this->_impl_.counterparty_id_ = from._impl_.counterparty_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_on_book() != 0) {
+        _this->_impl_.on_book_ = from._impl_.on_book_;
       }
     }
   }
@@ -6217,8 +6246,8 @@ void TradeCommerceRecord::InternalSwap(TradeCommerceRecord* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_digest_, &other->_impl_.request_digest_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.workflow_proto_, &other->_impl_.workflow_proto_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.counterparty_id_)
-      + sizeof(TradeCommerceRecord::_impl_.counterparty_id_)
+      PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.on_book_)
+      + sizeof(TradeCommerceRecord::_impl_.on_book_)
       - PROTOBUF_FIELD_OFFSET(TradeCommerceRecord, _impl_.commerce_id_)>(
           reinterpret_cast<char*>(&_impl_.commerce_id_),
           reinterpret_cast<char*>(&other->_impl_.commerce_id_));

@@ -112,6 +112,37 @@ std::string FormatBudget(std::chrono::microseconds budget)
     return std::to_string(budget.count()) + "us";
 }
 
+// 执行一次 unary handler;装了派发拦截时经它包一层(ServerOptions::dispatchInterceptor)。
+// 拦截器多调 invoke 的被忽略,一次都没调的在这里补调:handler 恰好执行一次。
+void InvokeUnaryHandler(const UnaryDispatchInterceptor &interceptor, const UnaryMethodHandler &handler,
+                        ServerCall call, std::string_view message, const std::string &methodName)
+{
+    if (!interceptor)
+    {
+        handler(std::move(call), message);
+        return;
+    }
+    // metadata 在句柄共享的 CallToken 里(堆上):invoke 把句柄交给 handler 之前一直可读;之后 handler 可能同步完成并释放它。
+    const Metadata &metadata = call.metadata();
+    bool invoked = false;
+    const std::function<void()> invoke = [&]
+    {
+        if (invoked)
+        {
+            return;
+        }
+        invoked = true;
+        handler(std::move(call), message);
+    };
+    interceptor(metadata, invoke);
+    if (!invoked)
+    {
+        LOG_ERROR << "[GrpcServer] dispatch interceptor did not invoke the handler; invoking it now, method="
+                  << methodName;
+        invoke();
+    }
+}
+
 } // namespace
 
 // ── ServerCall / CallToken ─────────────────────────────────────────────
@@ -1403,7 +1434,8 @@ void Server::RunDispatchTurn()
         const UnaryMethodHandler &handler = methods_[record.methodIndex].handler;
         ++stats_.dispatched;
         ++dispatchedThisTurn;
-        handler(ServerCall(std::move(token)), std::string_view(message));
+        InvokeUnaryHandler(options_.dispatchInterceptor, handler, ServerCall(std::move(token)), std::string_view(message),
+                           methods_[record.methodIndex].displayName);
     }
     stats_.maxDispatchedPerTurn = std::max(stats_.maxDispatchedPerTurn, dispatchedThisTurn);
     if (!ready_.empty())

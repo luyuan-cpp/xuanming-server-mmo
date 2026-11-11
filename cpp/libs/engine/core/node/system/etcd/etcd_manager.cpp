@@ -1,6 +1,9 @@
 #include "etcd_manager.h"
+#include <string_view>
 #include <utility>
+#include <vector>
 #include "proto/common/base/common.pb.h"
+#include "node/system/node/node_allocator.h"
 #include "node/system/node/node_util.h"
 #include <muduo/base/Logging.h>
 #include "etcd_helper.h"
@@ -85,10 +88,38 @@ void EtcdManager::RegisterNodeService(bool reRegistering, bool retryUnknown, Etc
 		LOG_INFO << "Re-claiming global node-id allocation (absent-or-owned): " << allocKey;
 		EtcdHelper::PutIfAbsentOrOwned(allocKey, info.node_uuid(), info.node_uuid(), gNode->GetLeaseId(), std::move(done));
 	}
+	else if (retryUnknown)
+	{
+		// 上一次 CAS 结局未知:只复核同一个键是不是本租约写下的,不换号。
+		LOG_INFO << "Re-checking global node-id allocation after an unknown outcome: " << allocKey;
+		EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId(), std::move(done), retryUnknown);
+	}
 	else
 	{
+		// 冲突时同一个 txn 读回全服这一类型已分配的号(只取键),下一次选号直接跳过它们。选号看的发现快照只是
+		// 本节点看得到的同类(zone-scoped 类型只有本 zone,battle 只有自己),没有这份清单就会逐个去撞别的 zone 的号,
+		// 每撞一次等 1 秒(docs/design/connection-fanout-subsetting-20261106.md §2、§3.4)。
 		LOG_INFO << "Claiming global node-id allocation: " << allocKey;
-		EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId(), std::move(done), retryUnknown);
+		auto allocationPrefix = MakeNodeAllocationPrefix(info.node_type());
+		EtcdHelper::PutIfAbsentListingOnConflict(
+			allocKey, info.node_uuid(), gNode->GetLeaseId(), allocationPrefix,
+			[allocationPrefix, done = std::move(done)](std::optional<etcdserverpb::TxnResponse> reply)
+			{
+				if (reply)
+				{
+					if (const auto *listing = EtcdHelper::TxnConflictListing(*reply))
+					{
+						std::vector<std::string_view> keys;
+						keys.reserve(static_cast<std::size_t>(listing->kvs_size()));
+						for (const auto &kv : listing->kvs())
+						{
+							keys.push_back(kv.key());
+						}
+						NodeAllocator::RecordAllocatedIds(allocationPrefix, keys);
+					}
+				}
+				done(std::move(reply));
+			});
 	}
 }
 

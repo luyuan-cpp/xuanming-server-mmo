@@ -167,7 +167,8 @@ message TradeCommerceRecord {
   option(OptionTableName) = "trade_commerce";
   option(OptionPrimaryKey) = "commerce_id";
   option(OptionUniqueKey) = "request_key";
-  option(OptionIndex) = "status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status";
+  // 第 4 条是材料盘口:撮合选对手单与深度都走它,on_book 排在 unit_price 之前,价格仍能走范围。
+  option(OptionIndex) = "status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -192,6 +193,11 @@ message TradeCommerceRecord {
   bytes workflow_proto = 19;
   uint64 parent_id = 20;
   uint64 counterparty_id = 21;
+  // 材料订单是否挂在盘口上:kind=4 的买卖单(side≠0)托管完成、workflow.stage = market_open。
+  // 它是 workflow 的投影,只由 CommerceRepo.Insert / Save 按 data.OnBook 与 workflow_proto 同一条语句写出,业务代码不赋值。
+  // 托管阶段(stage=escrow)的订单 status 也是 3,不靠这一列就会被选成对手单、挡住整本盘口(jubaozhai-market.md §15.9)。
+  // 剩余量、状态、撤单仍各看自己的列;撮合提交点在锁内复核 workflow,不以这一列为准。
+  bool on_book = 22;
 }
 
 // 仅供同一业务SQL事务内锁定市场/竞拍序列；不存在Redis裁决或跨库事务。

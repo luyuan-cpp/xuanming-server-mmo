@@ -127,14 +127,14 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	if !known {
 		finish(metrics.OutcomeUnknownMessage)
 		sampledErrorf(metrics.OutcomeUnknownMessage,
-			"[forward] 消息号 %d 不在路由表(gate 与路由服生成物版本不一致?) id=%d",
+			"[forward] Message id %d not in routing table (gate and router generated artifacts out of sync?) id=%d",
 			request.MessageId, request.Id)
 		return rejected(request, constants.ErrInvalidParameter), nil
 	}
 	if !route.ClientProtocol {
 		finish(metrics.OutcomeNotClientProtocol)
 		sampledErrorf(metrics.OutcomeNotClientProtocol,
-			"[forward] 消息号 %d(%s)不是客户端协议,拒绝 id=%d",
+			"[forward] Message id %d(%s) is not a client protocol; rejecting id=%d",
 			request.MessageId, route.FullMethod, request.Id)
 		return rejected(request, constants.ErrInvalidParameter), nil
 	}
@@ -164,7 +164,7 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	if !ok {
 		finish(metrics.OutcomeNoTarget)
 		sampledErrorf(metrics.OutcomeNoTarget,
-			"[forward] 目标类型 %s 无可用实例 zone_scoped=%v zone_id=%d release_track=%s message_id=%d",
+			"[forward] No available instance for target type %s zone_scoped=%v zone_id=%d release_track=%s message_id=%d",
 			nodeTypeName, l.svcCtx.IsZoneScoped(route.NodeType), in.ZoneId, sessionTrack, request.MessageId)
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
@@ -196,7 +196,7 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 		}
 		finish(upstreamOutcome)
 		sampledErrorf(upstreamOutcome,
-			"[forward] 目标返回 gRPC 错误 code=%s method=%s target=%s(%s zone=%d node=%d) message_id=%d id=%d: %v",
+			"[forward] Target returned gRPC error code=%s method=%s target=%s(%s zone=%d node=%d) message_id=%d id=%d: %v",
 			code, route.FullMethod, target.Endpoint, nodeTypeName, target.ZoneId, target.NodeId,
 			request.MessageId, request.Id, err)
 		return rejected(request, constants.ErrServiceUnavailable), nil

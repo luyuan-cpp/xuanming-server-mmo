@@ -884,8 +884,13 @@ type TradeCommerceRecord struct {
 	WorkflowProto  []byte                 `protobuf:"bytes,19,opt,name=workflow_proto,json=workflowProto,proto3" json:"workflow_proto,omitempty"`
 	ParentId       uint64                 `protobuf:"varint,20,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
 	CounterpartyId uint64                 `protobuf:"varint,21,opt,name=counterparty_id,json=counterpartyId,proto3" json:"counterparty_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 材料订单是否挂在盘口上:kind=4 的买卖单(side≠0)托管完成、workflow.stage = market_open。
+	// 它是 workflow 的投影,只由 CommerceRepo.Insert / Save 按 data.OnBook 与 workflow_proto 同一条语句写出,业务代码不赋值。
+	// 托管阶段(stage=escrow)的订单 status 也是 3,不靠这一列就会被选成对手单、挡住整本盘口(jubaozhai-market.md §15.9)。
+	// 剩余量、状态、撤单仍各看自己的列;撮合提交点在锁内复核 workflow,不以这一列为准。
+	OnBook        bool `protobuf:"varint,22,opt,name=on_book,json=onBook,proto3" json:"on_book,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TradeCommerceRecord) Reset() {
@@ -1063,6 +1068,13 @@ func (x *TradeCommerceRecord) GetCounterpartyId() uint64 {
 		return x.CounterpartyId
 	}
 	return 0
+}
+
+func (x *TradeCommerceRecord) GetOnBook() bool {
+	if x != nil {
+		return x.OnBook
+	}
+	return false
 }
 
 // 仅供同一业务SQL事务内锁定市场/竞拍序列；不存在Redis裁决或跨库事务。
@@ -1929,7 +1941,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"lastSendMs\x12'\n" +
 	"\x0fescrow_snapshot\x18\x19 \x01(\fR\x0eescrowSnapshot\x12.\n" +
 	"\x13receipt_ack_pending\x18\x1a \x01(\bR\x11receiptAckPending\x12+\n" +
-	"\x11business_consumed\x18\x1b \x01(\bR\x10businessConsumed:\xa6\x01\x8a\x92\xf4\x01\x0etrade_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Ostatus,next_attempt_ms;player_id,stream,stream_epoch,status,seq;ref_kind,ref_id\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd6\a\n" +
+	"\x11business_consumed\x18\x1b \x01(\bR\x10businessConsumed:\xa6\x01\x8a\x92\xf4\x01\x0etrade_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Ostatus,next_attempt_ms;player_id,stream,stream_epoch,status,seq;ref_kind,ref_id\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf7\a\n" +
 	"\x13TradeCommerceRecord\x12\x1f\n" +
 	"\vcommerce_id\x18\x01 \x01(\x04R\n" +
 	"commerceId\x12\x1f\n" +
@@ -1958,7 +1970,8 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\aversion\x18\x12 \x01(\x04R\aversion\x12%\n" +
 	"\x0eworkflow_proto\x18\x13 \x01(\fR\rworkflowProto\x12\x1b\n" +
 	"\tparent_id\x18\x14 \x01(\x04R\bparentId\x12'\n" +
-	"\x0fcounterparty_id\x18\x15 \x01(\x04R\x0ecounterpartyId:\x93\x02\x8a\x92\xf4\x01\x0etrade_commerce\x92\x92\xf4\x01\vcommerce_idڒ\xf4\x01\xcb\x01status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status\xe2\x92\xf4\x01\vrequest_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"]\n" +
+	"\x0fcounterparty_id\x18\x15 \x01(\x04R\x0ecounterpartyId\x12\x17\n" +
+	"\aon_book\x18\x16 \x01(\bR\x06onBook:\x9b\x02\x8a\x92\xf4\x01\x0etrade_commerce\x92\x92\xf4\x01\vcommerce_idڒ\xf4\x01\xd3\x01status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status\xe2\x92\xf4\x01\vrequest_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"]\n" +
 	"\x18TradeCommerceGuardRecord\x12\x19\n" +
 	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xf4\b\n" +
 	"\x15TradeCommerceWorkflow\x12?\n" +

@@ -127,7 +127,7 @@ func main() {
 	if secret := strings.TrimSpace(os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")); secret != "" {
 		verifier, err := serviceauth.New(map[string]string{"guild": secret})
 		if err != nil {
-			logx.Must(fmt.Errorf("guild内部调用独立签名配置非法"))
+			logx.Must(fmt.Errorf("invalid dedicated signing configuration for guild internal calls"))
 		}
 		svcCtx.GuildCallAuth = verifier
 		svcCtx.GuildCallSecret = secret
@@ -148,7 +148,7 @@ func main() {
 	// 此门禁先于 matcher、节点发现和 RPC 注册；失败直接拒绝本进程启动。
 	if err := matchkafka.EnsureResultTopic(resultConfig); err != nil {
 		cancel()
-		panic(fmt.Errorf("全球匹配结果主题未满足耐久契约，拒绝启动: %w", err))
+		panic(fmt.Errorf("global match result topic does not meet the durability contract; refusing to start: %w", err))
 	}
 
 	// 连接池指标 mmorpg_sql_pool_*{sql_client="match",pool="primary"}:只有全球匹配权威库这一个池,抓取时现取 DBStats。
@@ -186,7 +186,7 @@ func main() {
 	if globalBackground {
 		if err := startResultConsumer(); err != nil {
 			cancel()
-			panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
+			panic(fmt.Errorf("global match full-settlement source consumer not ready; refusing to start: %w", err))
 		}
 	}
 
@@ -201,7 +201,7 @@ func main() {
 	svcCtx.SetPartyTeam(teamService)
 	teamAuthority, teamAuthorityErr := team.NewAuthorityServer(svcCtx)
 	if teamAuthorityErr != nil {
-		logx.Errorf("SQL队伍场景读取契约未就绪，拒绝启动: %v", teamAuthorityErr)
+		logx.Errorf("SQL team scene read contract not ready; refusing to start: %v", teamAuthorityErr)
 		cancel()
 		svcCtx.Stop()
 		os.Exit(1)
@@ -209,7 +209,7 @@ func main() {
 	// 角色护栏参与者(docs/design/horizontal-scale-logical-db.md §3.4):data_service 过户、删角之前先冻结本库副本并核挂起。
 	roleFence, roleFenceErr := rolefence.NewParticipantServer(svcCtx.Authority.DB, authority.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if roleFenceErr != nil {
-		logx.Errorf("角色护栏参与者未就绪，拒绝启动: %v", roleFenceErr)
+		logx.Errorf("role fence participant not ready; refusing to start: %v", roleFenceErr)
 		cancel()
 		svcCtx.Stop()
 		os.Exit(1)
@@ -327,7 +327,7 @@ func main() {
 			}}, nil
 		}
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, prepared); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("匹配排空 HOLD: %v", err)
+			logx.Errorf("match drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -413,22 +413,22 @@ func runMigration(c config.Config, allowModify bool, migrate func(context.Contex
 	// 迁移凭据不进入常驻配置；缺少任一项都不能拿runtime账号补做DDL。
 	user := os.Getenv(migrationUserEnv)
 	if strings.TrimSpace(user) == "" || os.Getenv(migrationPasswordEnv) == "" {
-		fmt.Fprintln(os.Stderr, "显式匹配迁移需要独立MATCH_MIGRATION_USER和MATCH_MIGRATION_PASSWORD环境变量")
+		fmt.Fprintln(os.Stderr, "Explicit match migration requires dedicated MATCH_MIGRATION_USER and MATCH_MIGRATION_PASSWORD environment variables")
 		return schemamigrate.ExitFailed
 	}
 	c.GlobalMatch.User, c.GlobalMatch.PasswordEnv = user, migrationPasswordEnv
 	report, err := migrate(context.Background(), c.GlobalMatch, allowModify)
 	for _, statement := range report.Statements {
-		fmt.Printf("迁移语句: %s\n", statement)
+		fmt.Printf("Migration statement: %s\n", statement)
 	}
 	for _, warning := range report.Warnings {
-		fmt.Printf("迁移告警: %s\n", warning)
+		fmt.Printf("Migration warning: %s\n", warning)
 	}
 	for _, manual := range report.Manual {
-		fmt.Printf("需人工处理: %s\n", manual)
+		fmt.Printf("Manual action required: %s\n", manual)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "匹配schema迁移失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Match schema migration failed: %v\n", err)
 	}
 	return schemamigrate.ExitCode(report, err)
 }

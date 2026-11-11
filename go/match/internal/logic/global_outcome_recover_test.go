@@ -115,7 +115,7 @@ func TestGlobalOutcomeRecoveryKeepsPerLaneCursorAcrossRounds(t *testing.T) {
 	require.Equal(t, 2, order, "一圈走完才重新洗牌")
 	require.Len(t, held, 1, "只有未确认的那一拍 Hold")
 	require.ErrorIs(t, held[0], broken)
-	require.Contains(t, logs.String(), "全球匹配到期终局恢复未确认")
+	require.Contains(t, logs.String(), "global match expired-outcome recovery unconfirmed")
 	for _, budget := range fake.deadlines {
 		require.LessOrEqual(t, budget, globalOutcomeRecoverBudget)
 		require.Greater(t, budget, time.Duration(0))

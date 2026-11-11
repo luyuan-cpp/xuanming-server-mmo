@@ -101,7 +101,7 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
-		panic(fmt.Errorf("guild SQL boot 装配失败: %w", err))
+		panic(fmt.Errorf("guild SQL boot wiring failed: %w", err))
 	}
 	return NewServiceContextWithAdmission(c, writer, drainproof.New(), drainproof.New())
 }
@@ -110,7 +110,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 新 boot 的 prepared 门禁也在这里传入，不能在 handler 已持有门禁后替换它。
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root, relay *drainproof.Session) *ServiceContext {
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
-		panic("guild SQL boot 与 SOURCE/RELAY 装配缺失或角色复用")
+		panic("guild SQL boot or SOURCE/RELAY wiring missing, or roles reused")
 	}
 	table.LoadTables(c.TableDir, false)
 
@@ -479,7 +479,7 @@ func (s *ServiceContext) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	if err := s.StopAndReport(ctx); err != nil {
-		logx.Errorf("guild 排空 HOLD: %v", err)
+		logx.Errorf("guild drain HOLD: %v", err)
 	}
 }
 

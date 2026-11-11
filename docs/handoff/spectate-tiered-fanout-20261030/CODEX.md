@@ -101,9 +101,11 @@ FIX-CPP / FIX-GO / FIX-JAVA 没有第二轮完整语义评审的记录，后续�
 
 帧大小、gate 单线程扇出上限还没有实测，`Spectate.BroadcastAutoGateThreshold`（默认 32）、`BroadcastMaxConcurrent`（默认 4）、软水位 256 KB、`kFanoutBatch` 512 都是保守默认值。这些是 C++/Go 配置与实现参数，不代表 Java 的频道容量。扇出上限必须在 Linux 上使用目标构建与部署参数实测；Windows 功能验证及已有 Linux Debug 冒烟均不能替代容量数据。压测按 AGENTS §6。
 
-## 8. 第二轮评审修正的验证（2026-11-05 新增，未编译）
+## 8. 第二轮评审修正的验证（2026-11-05 新增）
 
 修正内容与逐条来源见设计文档 §15.10，评审原文是 `reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`。第 1–3 步照常跑，下面是本批新增或改了期望的部分。任一步失败即停，保留完整输出。
+
+**2026-11-10 核对**：第 3 步（C++）已由 2026-11-08 的全量测试覆盖并通过（`build/verification/naming-audit-20261108/cpp-tests/`，本批 C++ 用例全在其中）；第 2 步的 gofmt / 构建 / 纯单测已由 2026-11-06 的运行覆盖并通过（`build/verification/battle-handoff-20261106-r4/`）。**只剩第 2 步的真 TiDB 那一项**（7 条用例，那两次运行里都是 SKIP）与第 4 步冒烟。工作区里发布轨道会话还在改 `global_spectator.go` / `spectate.go`（给实例核对加 canary 镜像），提交之后跑真 TiDB 时一并覆盖。
 
 1. **生成**：`proto/battle/battle_node.proto` 只改了注释，第 1 步照常重跑即可，生成物只有注释变化。
 2. **Go**（`go/match`）：

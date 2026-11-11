@@ -10,7 +10,7 @@
 - **按 zone 灰度**：一个 zone 只用一条轨道。金丝雀 zone 里 gate、scene、login、scene-manager、db 跑新版本；同在这个 zone 的 data-service、player-locator 保持 stable，部署时不重新下发。
 - **全局服务跟着会话走**：金丝雀 zone 的玩家（金丝雀会话）经路由服访问 chat、friend、trade、mail、rank、guild、match 时，先找 `<svc>-canary`，找不到就用 stable；stable 会话永远不会进金丝雀副本。服务之间的内部调用和全局后台工作只在 stable 上。
 
-- **战斗按整局**：一局的成员全部是金丝雀会话、且起了金丝雀 battle 池（`battle-canary`）时，这局放到金丝雀 battle 节点；有一个 stable 成员就放 stable。机房仍按 stable battle 节点选，选定的机房里没有可用的金丝雀节点就放 stable。stable 会话不看金丝雀对局。
+- **战斗按整局**：一局的成员全部是金丝雀会话、且起了金丝雀 battle 池（`battle-canary`）时，这局放到金丝雀 battle 节点；有一个 stable 成员就放 stable。机房仍按 stable battle 节点选，选定的机房里没有可用的金丝雀节点就放 stable。stable 会话不看金丝雀对局：点名观战回「这场不能观战」，随机观战和观战列表里看不到；判据是成局时记下的轨道，不受 match 重启影响。
 
 ## 1. 开始之前
 
@@ -132,4 +132,6 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -CanaryBattleReplicas 
 - **金丝雀会话为什么落到了 stable 实例上**：这个服务没有金丝雀副本，或者副本还没就绪，属于设计内的退回。stable 会话永远不会进金丝雀。
 - **gate 自报的轨道认不出**：router 回 `kInvalidParameter`，计入 `outcome="invalid_release_track"`，`release_track` 标签记 `unknown`。这是 gate 的配置错，查 gate 的 `MMORPG_RELEASE_TRACK`（只认小写）。
 - **金丝雀进程拒启**：`MMORPG_RELEASE_TRACK` 取值非法；match 的金丝雀登记了 go-zero 键，键名却不以 `.canary` 结尾。
+- **金丝雀 battle 池开着，要切换 battle 编排形态（`-BattleOrchestrator`）**：不用先撤池。切换时另一种 kind 的 `battle-canary` 和 stable battle 一起按旧形态删除，同样要带 `-AllowDisruptiveSwitch`，上面正在打的局会结束；这次 `infra-up` 照带 `-CanaryBattleReplicas` 就按新形态重新起金丝雀池。
+- **stable 玩家说某场看不了**：这场在金丝雀 battle 上（成局时记下的轨道是 canary），属于设计内的拦截，金丝雀会话照常能看。
 - **开着准入策略，金丝雀连不上 scene**：这个 zone 还没用新版部署脚本跑过 `zone-up`，scene 的准入名单里没有 `<svc>-canary`，按第 1 节第 5 条补跑。

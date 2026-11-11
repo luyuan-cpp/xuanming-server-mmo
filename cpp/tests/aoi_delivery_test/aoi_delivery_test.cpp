@@ -16,6 +16,8 @@
 #include "spatial/comp/scene_node_scene_comp.h"
 #include "spatial/constants/view.h"
 #include "combat/buff/comp/buff_comp.h"
+#include "combat/engagement/comp/combat_engagement_comp.h"
+#include "combat/engagement/system/combat_engagement.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/base_comp.pb.h"
@@ -100,6 +102,11 @@ AoiFollowGrant SkillGrant(uint64_t id, bool revealsStealth = false) {
 
 AoiFollowGrant TeamGrant(uint64_t teamId) {
     return AoiFollowGrant{AoiFollowSource{AoiFollowKind::kTeam, teamId}, AoiPriority::kTeammate, false};
+}
+
+// 任务玩法还没接入关注:用一个技能来源带任务 NPC 标签,模拟「玩家正关注着的任务 NPC」。
+AoiFollowGrant QuestNpcGrant(uint64_t id) {
+    return AoiFollowGrant{AoiFollowSource{AoiFollowKind::kSkill, id}, AoiPriority::kQuestNpc, false};
 }
 
 // 实体当前位置所在的六边形格。
@@ -728,28 +735,58 @@ TEST_F(AoiDeliveryTest, MovingEntityIsReevaluatedPerDistanceStepAndOnStop) {
     EXPECT_EQ(1, CreatesFor(stopper, stationary));
 }
 
-// 满表被拒的普通候选不记关系;名额空出后,任一方下一次位移重判时补上。
-TEST_F(AoiDeliveryTest, CapacityRejectedNeighbourIsAdmittedOnNextReevaluation) {
+// 满表被拒的附近候选不记关系,观察者打上补回标记;名额空出后下一帧就补上,不用等谁走动。
+TEST_F(AoiDeliveryTest, CapacityRejectedNeighbourIsAdmittedWhenSlotFreesWithoutMovement) {
     const auto observer = Spawn(0, 0);
-    AoiSystem::Update(0);
     tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(observer, AoiClientCapacityComp{kAoiListCapacityMin});
-    std::vector<entt::entity> fillers;
+    std::vector<entt::entity> farFollows;
     for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
-        fillers.push_back(tlsEcs.actorRegistry.create());
-        ASSERT_TRUE(InterestSystem::AddAoiEntity(observer, fillers.back(), AoiPriority::kPinned));
+        farFollows.push_back(Spawn(500.0 + 50.0 * i, 500));
+    }
+    AoiSystem::Update(0);
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        ASSERT_TRUE(AoiSystem::Follow(observer, farFollows[i], SkillGrant(i + 1)));
     }
     const auto entrant = Spawn(0, 3);
     AoiSystem::Update(0);
     ASSERT_EQ(0, CreatesFor(observer, entrant)) << "前置条件:满表拒收";
     ASSERT_EQ(1, CreatesFor(entrant, observer));
-    InterestSystem::RemoveAoiEntity(observer, fillers.front());
-    deliveries.clear();
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(observer)) << "前置条件:被拒的观察者打上补回标记";
 
-    MoveTo(entrant, 0, 4);
+    AoiSystem::Unfollow(observer, farFollows.front(), AoiFollowSource{AoiFollowKind::kSkill, 1});
+    deliveries.clear();
     AoiSystem::Update(0);
 
-    EXPECT_EQ(1, CreatesFor(observer, entrant)) << "空出的名额在下一次重判时补上";
+    EXPECT_EQ(1, CreatesFor(observer, entrant)) << "名额空出后下一帧补回附近的人";
     EXPECT_EQ(0, CreatesFor(entrant, observer)) << "反向关系早已建立,不重复创建";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(observer)) << "补回后标记摘掉";
+
+    deliveries.clear();
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty()) << "没有待补回的候选时不再重扫";
+}
+
+// 有补回标记但名额仍满:不重扫(标记只在有空名额时消费,开销有界)。
+TEST_F(AoiDeliveryTest, RefillMarkWithoutFreeSlotDoesNotRescan) {
+    const auto observer = Spawn(0, 0);
+    tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(observer, AoiClientCapacityComp{kAoiListCapacityMin});
+    std::vector<entt::entity> farFollows;
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        farFollows.push_back(Spawn(500.0 + 50.0 * i, 500));
+    }
+    AoiSystem::Update(0);
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        ASSERT_TRUE(AoiSystem::Follow(observer, farFollows[i], SkillGrant(i + 1)));
+    }
+    Spawn(0, 3);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(observer));
+    deliveries.clear();
+
+    AoiSystem::Update(0);
+
+    EXPECT_TRUE(deliveries.empty());
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(observer)) << "名额没空,标记留着等下次";
 }
 
 // 按距离出视野只撤空间来源:显式关注照常显示,客户端不收移除。
@@ -782,6 +819,193 @@ TEST_F(AoiDeliveryTest, ReevaluationDoesNotRevealStealthedTarget) {
 
     EXPECT_EQ(0, CreatesFor(observer, hidden));
     EXPECT_EQ(1, CreatesFor(hidden, observer)) << "隐身者自己照常看见别人";
+}
+
+// ---------------------------------------------------------------------------
+// 战斗关注(交手关系,CombatEngagementSystem):一次伤害或一跳治疗让双方互相显式关注,
+// 离得再远也看得见;kCombatDisengageSeconds 秒不再交手就脱战撤销,死亡立即撤销。
+// 权重表是静态的,兴趣随时变靠交手来源有寿命。设计见 docs/design/aoi-directed-interest.md「战斗关注」。
+// ---------------------------------------------------------------------------
+
+// 远处交手:双方各收一次创建,互相收得到移动;同一对再交手只续期,不重复创建。
+TEST_F(AoiDeliveryTest, CombatEngagementMakesFarCombatantsMutuallyVisible) {
+    const auto archer = Spawn(0, 0);
+    const auto target = Spawn(0, 120);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(VisibleWatchersOf(target).empty()) << "前置条件:相距 120,没有空间关注";
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordInteraction(archer, target);
+
+    EXPECT_EQ(1, CreatesFor(archer, target));
+    EXPECT_EQ(1, CreatesFor(target, archer)) << "被打的一方也看见远处的攻击者";
+    EXPECT_EQ((EntityUnorderedSet{archer}), VisibleWatchersOf(target));
+    EXPECT_EQ((EntityUnorderedSet{target}), VisibleWatchersOf(archer));
+
+    deliveries.clear();
+    CombatEngagementSystem::RecordInteraction(target, archer);
+    EXPECT_TRUE(deliveries.empty()) << "再交手只续期";
+}
+
+// 脱战:最后一次交手后满 kCombatDisengageSeconds 秒撤销;期间再交手重新计时。
+TEST_F(AoiDeliveryTest, CombatEngagementExpiresAfterDisengageTimeAndRenewsOnInteraction) {
+    const auto lhs = Spawn(0, 0);
+    const auto rhs = Spawn(0, 120);
+    AoiSystem::Update(0);
+    CombatEngagementSystem::RecordInteraction(lhs, rhs);
+    deliveries.clear();
+
+    CombatEngagementSystem::Update(kCombatDisengageSeconds - 1);
+    EXPECT_TRUE(deliveries.empty()) << "还没到脱战时间";
+
+    CombatEngagementSystem::RecordInteraction(lhs, rhs);
+    CombatEngagementSystem::Update(kCombatDisengageSeconds - 1);
+    EXPECT_TRUE(deliveries.empty()) << "再交手重新计时";
+
+    CombatEngagementSystem::Update(1);
+    EXPECT_EQ(1, DestroysFor(lhs, rhs));
+    EXPECT_EQ(1, DestroysFor(rhs, lhs));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(lhs)) << "最后一份交手关系结束时摘掉组件";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(rhs));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(lhs).HasRelation(rhs));
+}
+
+// 附近交手:脱战只撤交手来源,对方仍在视野里就照常显示,不发移除。
+TEST_F(AoiDeliveryTest, DisengageKeepsNearbyCombatantVisible) {
+    const auto lhs = Spawn(0, 0);
+    const auto rhs = Spawn(0, 5);
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordInteraction(lhs, rhs);
+    EXPECT_TRUE(deliveries.empty()) << "已在显示,交手不重复创建";
+    CombatEngagementSystem::Update(kCombatDisengageSeconds);
+
+    EXPECT_TRUE(deliveries.empty());
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(lhs).IsVisible(rhs));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(lhs).entries.at(rhs).follows.empty()) << "交手来源已撤";
+}
+
+// 死亡:死者的交手关系立即结束,远处的交手对象收到一次移除。
+TEST_F(AoiDeliveryTest, DeathEndsCombatEngagementImmediately) {
+    const auto killer = Spawn(0, 0);
+    const auto victim = Spawn(0, 120);
+    const auto healer = Spawn(0, -120);
+    AoiSystem::Update(0);
+    CombatEngagementSystem::RecordInteraction(killer, victim);
+    CombatEngagementSystem::RecordInteraction(healer, victim);
+    deliveries.clear();
+
+    CombatEngagementSystem::OnDeath(victim);
+
+    EXPECT_EQ(1, DestroysFor(killer, victim));
+    EXPECT_EQ(1, DestroysFor(healer, victim));
+    EXPECT_EQ(1, DestroysFor(victim, killer));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(victim));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(killer));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(healer));
+}
+
+// 战斗时先看交手的人:满表全是任务 NPC 时,交手对象挤掉一个;脱战后被挤掉的任务 NPC 自然回来。
+// 权重表全程没变,变的只是交手来源的有无。
+TEST_F(AoiDeliveryTest, CombatOutranksQuestNpcAndQuestNpcReturnsAfterDisengage) {
+    const auto player = Spawn(0, 0);
+    tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(player, AoiClientCapacityComp{kAoiListCapacityMin});
+    std::vector<entt::entity> questNpcs;
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        questNpcs.push_back(Spawn(500.0 + 50.0 * i, 500));
+    }
+    const auto enemy = Spawn(0, -120);
+    AoiSystem::Update(0);
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        ASSERT_TRUE(AoiSystem::Follow(player, questNpcs[i], QuestNpcGrant(i + 1)));
+    }
+    ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(player).VisibleCount());
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordInteraction(enemy, player);
+
+    EXPECT_EQ(1, CreatesFor(player, enemy)) << "交手对象挤进满表";
+    int questNpcRemovals = 0;
+    for (const auto npc : questNpcs) questNpcRemovals += DestroysFor(player, npc);
+    EXPECT_EQ(1, questNpcRemovals) << "只挤掉一个任务 NPC,它转为暂隐、关系保留";
+    EXPECT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(player).VisibleCount());
+    deliveries.clear();
+
+    CombatEngagementSystem::Update(kCombatDisengageSeconds);
+
+    EXPECT_EQ(1, DestroysFor(player, enemy)) << "脱战撤销交手关注";
+    int questNpcReturns = 0;
+    for (const auto npc : questNpcs) questNpcReturns += CreatesFor(player, npc);
+    EXPECT_EQ(1, questNpcReturns) << "空出的名额补回被挤掉的任务 NPC";
+    EXPECT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(player).VisibleCount());
+}
+
+// 冒烟场景:打架时附近的人被交手对象挤掉;脱战后站着不动,下一帧也把附近的人补回来。
+TEST_F(AoiDeliveryTest, NearbyActorEvictedDuringCombatReturnsAfterDisengageWithoutMovement) {
+    const auto player = Spawn(0, 0);
+    tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(player, AoiClientCapacityComp{kAoiListCapacityMin});
+    std::vector<entt::entity> farFollows;
+    for (uint32_t i = 1; i < kAoiListCapacityMin; ++i) {
+        farFollows.push_back(Spawn(500.0 + 50.0 * i, 500));
+    }
+    const auto nearbyNpc = Spawn(0, 3);
+    const auto enemy = Spawn(0, -120);
+    AoiSystem::Update(0);
+    for (uint32_t i = 0; i < farFollows.size(); ++i) {
+        ASSERT_TRUE(AoiSystem::Follow(player, farFollows[i], SkillGrant(i + 1)));
+    }
+    ASSERT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(player).IsVisible(nearbyNpc));
+    ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(player).VisibleCount());
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordInteraction(player, enemy);
+    ASSERT_EQ(1, DestroysFor(player, nearbyNpc)) << "前置条件:附近的普通候选被交手对象挤掉";
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(player));
+
+    CombatEngagementSystem::Update(kCombatDisengageSeconds);
+    deliveries.clear();
+    AoiSystem::Update(0);
+
+    EXPECT_EQ(1, CreatesFor(player, nearbyNpc)) << "名额空出后,不用走动也补回附近的人";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(player));
+}
+
+// 离场:对方离开场景后,交手记录在下一次脱战计时里清掉,只留离场那一次移除,不重复发。
+TEST_F(AoiDeliveryTest, CounterpartLeavingSceneEndsEngagementWithoutExtraMessages) {
+    const auto stayer = Spawn(0, 0);
+    const auto leaver = Spawn(0, 120);
+    AoiSystem::Update(0);
+    CombatEngagementSystem::RecordInteraction(stayer, leaver);
+    deliveries.clear();
+
+    AoiSystem::OnLeaveScene(leaver);
+    tlsEcs.actorRegistry.remove<SceneEntityComp, Hex>(leaver);  // 与 PlayerSceneSystem::LeaveCurrentScene 一致
+    ASSERT_EQ(1, ActorDestroysFor(stayer, leaver));
+    deliveries.clear();
+
+    CombatEngagementSystem::Update(0);
+
+    EXPECT_TRUE(deliveries.empty()) << "离场已发过移除";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(stayer));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(leaver));
+}
+
+// 自己打自己、跨场景、已销毁的实体都不算交手,也不留组件。
+TEST_F(AoiDeliveryTest, InvalidCombatInteractionsAreIgnored) {
+    const auto actor = Spawn(0, 0);
+    const auto elsewhere = Spawn(0, 120);
+    tlsEcs.actorRegistry.get<SceneEntityComp>(elsewhere).sceneEntity = tlsEcs.sceneRegistry.create();
+    const auto destroyed = Spawn(0, 5);
+    tlsEcs.actorRegistry.destroy(destroyed);
+
+    CombatEngagementSystem::RecordInteraction(actor, actor);
+    CombatEngagementSystem::RecordInteraction(actor, elsewhere);
+    CombatEngagementSystem::RecordInteraction(destroyed, actor);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(actor));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(elsewhere));
+    EXPECT_TRUE(deliveries.empty());
 }
 
 

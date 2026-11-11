@@ -808,7 +808,7 @@ func (l *GuildLogic) endTrialLobby(ctx context.Context, d *ActivityDeps, lobby *
 		pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHING, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_ENDED,
 		0, end.tipID, end.params)
 	if err != nil {
-		logx.Errorf("[GuildTrial] 大厅%d未结束（tip=%d），保留原launch/占位等待终局证明: %v",
+		logx.Errorf("[GuildTrial] lobby %d not ended (tip=%d); keeping the original launch/reservations until a terminal proof arrives: %v",
 			lobby.LobbyID, end.tipID, err)
 		return
 	}
@@ -837,7 +837,7 @@ func (l *GuildLogic) recordTrialLaunched(ctx context.Context, d *ActivityDeps, l
 		pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHING, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHED,
 		battle.BattleID, 0, nil)
 	if err != nil || !moved {
-		logx.Errorf("[GuildTrial] 大厅%d确认开局%d未提交，保留原状态等待恢复（moved=%t）: %v",
+		logx.Errorf("[GuildTrial] lobby %d launch confirmation for battle %d not committed; keeping the original state for recovery (moved=%t): %v",
 			lobby.LobbyID, battle.BattleID, moved, err)
 	}
 }

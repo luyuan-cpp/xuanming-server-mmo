@@ -979,7 +979,7 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
    - `rg -n "Timeout: 10000|Timeout: 3000" go/guild/etc` → 0 条。
    - `rg -n "(CreateTimeMs|JoinTimeMs|LastActiveMs) +int64" go/guild/internal/data` → 0 条。
 9. **本地端到端**:按 §19 切换后执行 `pwsh tools/scripts/start_game.ps1`。
-   - guild 日志含 `schemamigrate up 完成: database=mmorpg_guild`。重启 guild 一次,日志为 `statements=0`。
+   - guild 日志含 `schemamigrate up finished: database=mmorpg_guild`。重启 guild 一次,日志为 `statements=0`。
    - 用 `go_services.ps1` 同时起 zone 1 / zone 2 的 guild:都能启动;如果出现 `迁移锁忙`,随后要能成功。
    - 跑 §16.4 的 robot guild-smoke,期望通过。
 

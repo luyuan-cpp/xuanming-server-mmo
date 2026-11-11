@@ -455,8 +455,9 @@ type VerifiedTxn struct {
 
      `reason` 现有三种。`DUPLICATE_PAYMENT` 是订单已由另一笔付清,2026-11-05 落码,第一轮数据审计 §4 第 19 条;本稿原称 `ABNORMAL_SECOND` 的「非充值订单第二笔钱」即此。`AMOUNT_MISMATCH` / `CURRENCY_MISMATCH` 是金额或币种与订单冻结值不符,2026-11-10 落码,第二轮数据审计评审 R3;本稿原称的 `ABNORMAL_AMOUNT` 拆成这两个,因为适配器要分得清是金额错还是币种错。判定顺序:交易键已记过走重放;币种不同记 `CURRENCY_MISMATCH`(不同币种的金额不可比,不再比金额);币种同、金额不同记 `AMOUNT_MISMATCH`;金额币种都对、订单已付记 `DUPLICATE_PAYMENT`。金额币种先于订单状态判定,对不上的钱在任何状态下都不绑定订单:未付单仍待付款、保留预占,已取消单不转 REFUND_PENDING。
    - **重放**:同一交易键、同一订单、同一金额币种,回原结论(`refundReason` 取这笔付款的退款待办),不写任何东西;报给别的订单,或改了金额币种,回 409。同一订单的并发回调在订单行锁上排队,后到者走重放;两张订单并发报同一交易键,在回执主键上撞键,只有一张记下,另一个回 409。
+   - **409 与 503 分开**:409 只表示适配器报来的这笔与已记下的冲突,适配器可当终局;存储不变量被破坏一律回 503,这笔钱没有记下,适配器保留、退避重试并告警。503 的情形:库存预占或订单状态对不上;已记下的回执、异常付款行、退款待办互相对不上;撞上唯一键,回滚后重读,交易键却不属于别的订单。
    - **退款待办与退款回执**:以被退那笔付款的 `(channel, transaction_id)` 为主键,带 `order_sn`、`source`(2026-11-05 已落码,未编译)。来源现有 `CANCELLED_LATE / DELIVERY_REJECTED`(退订单绑定的那笔)与上面三种异常付款原因,取值集中在 `CommerceApi.RefundReason`。待办不另存金额币种,取那笔付款回执的实收值:异常付款退的是玩家实际付的钱,不是订单价。回执表主键 `(channel, payment_transaction_id)`,退款流水 `(channel, transaction_id)` 另有唯一键:一笔付款只认一条退款流水,一条退款流水也只能了结一笔付款,复用回 409。仍待做:`OVER_LIMIT / HELD_DENIED / ADMIN` 来源与 `lease_until`。
-   - 表改名:11-05 的 `commerce_duplicate_payment` 改为 `commerce_abnormal_payment`,加 `reason` 列。没写迁移,项目未上线,旧库按 `schema.sql` 重装;`SchemaVerifier` 在旧库上因缺表拒启。
+   - 表改名:11-05 的 `commerce_duplicate_payment` 改为 `commerce_abnormal_payment`,加 `reason` 列。没写迁移,项目未上线,旧库按 `schema.sql` 新建重装。`SchemaVerifier` 在旧库上因缺表拒启;存储合同戳同时换新,防止有人在旧库上重跑 `schema.sql` 补出新表、却留着只认三种来源的退款待办 CHECK(闸门只核表、列和唯一键,测不出 CHECK)。
    - TiDB 上改主键:建新表 → 搬数据 → 改名。
 2. **发放物二选一**:
    - `create()` 要求恰好一种;充值 SKU 的 `quantity=1`,跳过预占与未付上限;`cancel()` 和付款对无限库存跳过库存运算;

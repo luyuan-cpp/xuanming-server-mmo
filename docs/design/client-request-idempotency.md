@@ -1,7 +1,7 @@
 # 客户端请求幂等键：场景服经济操作的去重账本（随存档落盘）
 
 **Created:** 2026-11-05
-**状态:** 三处接入点都已落码：神秘商人购买、新建加点方案、强化。强化接在「数据覆写审计 R2 交接」会话交付的 `expected_level` 之上。2026-11-06 负责人定「改成存盘」，账本从内存改为玩家存档字段 25。**全部未编译、未测试，待 Codex 按 §8 验证。** Unity 客户端细则已交 Codex（§6）；Java 版待做（§7）。
+**状态:** 三处接入点都已落码：神秘商人购买、新建加点方案、强化。强化接在「数据覆写审计 R2 交接」会话交付的 `expected_level` 之上。2026-11-06 负责人定「改成存盘」，账本从内存改为玩家存档字段 25。服务端代码随 `a8af9372d` 入库；2026-11-08 Codex 的 `build/verification/naming-audit-20261108/` 跑过 §8 的单测：`bag_test` 932 条通过、0 条失败（本功能新增的 40 条全是 OK），`cross_zone_test` 458 条通过。§8 第 6 步的 robot 冒烟还没改、也没跑；Unity 客户端细则已交 Codex（§6），还没实施；Java 版待做（§7）。
 **任务来源:** 负责人 2026-11-05：「玩家经常做一些和经济相关的，比如使用道具，服务器响应没回来，它又对着原来道具使用一次……玩家真正意图是只使用一次」。同键换参数要拒绝（「防客户端 bug 把旧键用在新操作上 这个也要」），防重和幂等「这两个也要」。11-05 先定「不要存盘，也不要太复杂」；11-06 问「如果存盘的话怎么弄最标准，能搞成一个配置存不存盘吗」，看过 §5.3 的取舍后定「改成存盘」，不做开关。
 **关联:** [client-rpc-callback.md](client-rpc-callback.md)（§2.2：结果未知时复用业务幂等键重发）、[client-request-ordering.md](client-request-ordering.md)（§4.8：`gate_call_seq` 不能当幂等键；§5.2 I5：gate → scene 超时回 1003、不重发）、[data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md)（r2-equip#1）、[equipment-enhance-inlay.md](equipment-enhance-inlay.md)、[mystery-merchant.md](mystery-merchant.md)、[ecs-component-access-rules.md](ecs-component-access-rules.md)、[player-save-direct-commit.md](player-save-direct-commit.md)（存盘分行）、帮会经济的同类先例 `go/guild/internal/logic/economy_logic.go` 的 `withClientRequest`。
 

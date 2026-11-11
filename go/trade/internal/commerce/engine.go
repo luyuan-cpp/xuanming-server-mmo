@@ -17,6 +17,7 @@ import (
 	tradepb "proto/trade"
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/currencytype"
 	"shared/generated/pb/table"
 	"shared/roleidentity"
 	"sort"
@@ -24,6 +25,8 @@ import (
 	"strings"
 	"time"
 	"trade/internal/data"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 const (
@@ -81,7 +84,8 @@ func (p Policy) Selection(v *tradepb.TradeAssetSelection) error {
 	if v.CurrencyAmount == 0 && v.CurrencyType != 0 || v.CurrencyAmount > math.MaxInt64 {
 		return ErrInvalid
 	}
-	if v.CurrencyAmount > 0 && (v.CurrencyType == 2 || !contains(p.Currencies, v.CurrencyType)) {
+	// 绑定灵石不论 Currencies 怎么配都不可交易(配置校验 config.IsTradableCurrency 本就拒绝它进白名单)。
+	if v.CurrencyAmount > 0 && (v.CurrencyType == currencytype.BindDiamond || !contains(p.Currencies, v.CurrencyType)) {
 		return ErrNotTradable
 	}
 	var total uint64
@@ -314,7 +318,7 @@ func (e *Engine) CreatePlayerTrade(ctx context.Context, me uint64, in *tradepb.C
 	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 2, Status: Escrowing, SellerPlayerId: me, BuyerPlayerId: in.BuyerPlayerId, ExpiresMs: e.now() + 15*60*1000}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.SellerAssets, BuyerAssets: in.BuyerAssets, Stage: "offer_escrow"})
 }
 func validPrice(p uint64, c uint32, policy Policy) bool {
-	return p > 0 && p <= math.MaxInt64 && c != 2 && contains(policy.Currencies, c)
+	return p > 0 && p <= math.MaxInt64 && c != currencytype.BindDiamond && contains(policy.Currencies, c)
 }
 func (e *Engine) CreateConsignment(ctx context.Context, me uint64, in *tradepb.CreateConsignmentRequest) (*tradepb.TradeCommerceRecord, error) {
 	if err := e.Policy.Selection(in.GetAssets()); err != nil {
@@ -791,7 +795,11 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return err
 		}
 	}
-	return e.roleTx(ctx, func(tx *sql.Tx) error {
+	// parentToWake 是这一步让哪张市场成交子单收尾了时它的母单号,提交之后唤醒母单(filledParentToWake)。
+	// 事务体可能被重跑,每次进入先清零。
+	var parentToWake uint64
+	err = e.roleTx(ctx, func(tx *sql.Tx) error {
+		parentToWake = 0
 		if err := e.lockRoles(ctx, tx, 0, old.SellerPlayerId, old.BuyerPlayerId, w.HighestBidder); err != nil {
 			return err
 		}
@@ -804,7 +812,8 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return corrupt(err)
 		}
 		// 锁内读到的原样:推进完拿它判这一步有没有任何变化,没变化就不重存(缺口清单第 16 条,见 schedule.go)。
-		lockedRecord, lockedWorkflow := proto.Clone(r), proto.Clone(w)
+		lockedRecord := proto.Clone(r).(*tradepb.TradeCommerceRecord)
+		lockedWorkflow := proto.Clone(w).(*tradepb.TradeCommerceWorkflow)
 		if r.SellerPlayerId != old.SellerPlayerId || r.BuyerPlayerId != old.BuyerPlayerId {
 			// Due 之后有人买下 / 换了参与者:角色锁是按旧参与者拿的,不能在这把锁下推进。下一轮按新行重来。
 			return staleObservation()
@@ -839,6 +848,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 					return err
 				}
 				markManual(r, w, manualReasonAppliedPartial, fmt.Sprintf("腿 %s op_id=%d 部分发放", l.Role, l.OpId), e.now())
+				parentToWake = filledParentToWake(lockedRecord, r)
 				return e.Repo.Save(ctx, tx, r, w, e.now())
 			}
 			if err := recordLegOutcome(l, out); err != nil {
@@ -925,8 +935,17 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			// 合同与 workflow 都在锁内比较,别的写者在拿锁之前提交的变化这里读得到,之后的要等这把锁。
 			return e.Repo.RescheduleTx(ctx, tx, r.CommerceId, r.Version, nextDueMs(r, w, e.now()))
 		}
+		parentToWake = filledParentToWake(lockedRecord, r)
 		return e.Repo.Save(ctx, tx, r, w, e.now())
 	})
+	if err == nil && parentToWake != 0 {
+		// 子单收尾已提交:唤醒在 marketBarrier 里等它的母单(缺口清单第 16 条)。单独执行,不在子单的事务里锁母单行。
+		// 尽力而为:失败时母单最晚在 inFlightRecheck 之后自己到期。
+		if wakeErr := e.Repo.Wake(ctx, parentToWake, e.now()); wakeErr != nil {
+			logx.Errorf("[Commerce] Could not wake parent market order %d after its fill settled, it rechecks on its own schedule: %v", parentToWake, wakeErr)
+		}
+	}
+	return err
 }
 
 // Tick 推进一批到期合同,再轮转发一页收据 ACK。由 svc 的单个 goroutine(trade.commerce.reconcile)每秒调用一次;

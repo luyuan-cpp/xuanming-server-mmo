@@ -23,6 +23,7 @@
 #include "modules/mission/comp/mission_comp.h"
 #include "modules/mission/system/mission.h"
 #include "modules/bag/bag_service.h"
+#include "modules/bag/item_hold.h" // 战斗道具预留(battle-item-reservation.md)
 #include "modules/bag/bag_system.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/bag/item_system.h"
@@ -206,7 +207,10 @@ public:
     }
     ScopedLockScriptRecorder(const ScopedLockScriptRecorder&) = delete;
     ScopedLockScriptRecorder& operator=(const ScopedLockScriptRecorder&) = delete;
+    // 瞬态组停止:维护 P1、普通停机、身份冲突的第一步。战斗锁的写入链归持久组,不随它停。
     void Stop() { if (tasks_) tasks_->Stop(); }
+    // 拆除前的 StopAll:持久组也结束本地等待。
+    void StopAll() { if (tasks_) tasks_->StopAll(); }
 private:
     std::unique_ptr<muduo::net::EventLoop> loop_;
     std::unique_ptr<SceneTaskScope> tasks_;
@@ -1889,6 +1893,42 @@ TEST_F(PlayerBattleSettlementItemTest, InboxKnownConsumptionStillClampsToActualH
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold)); EXPECT_EQ(2u, KillProgress());
 }
 
+// 战斗道具预留(battle-item-reservation.md):结算从本局自己的预留里扣 —— 押着的道具照样扣得出,不被夹紧;
+// 扣完连同余量一起释放,与扣消耗同一帧。
+TEST_F(PlayerBattleSettlementItemTest, InboxConsumesFromItsOwnHoldAndReleasesIt)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 持久数据,生产里由加载创建
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    ASSERT_EQ(kSuccess, BagService::PlaceHold(player, settlement.battle_id(), item_hold::ItemHoldKind::kBattle,
+                                              {{kSettlementStackItem, 3}}, 1, 2));
+    ASSERT_EQ(0u, BagService::RemovableCount(player, Inventory(), kSettlementStackItem)) << "前提:三瓶都押着";
+    SetConsumed(kSettlementStackItem, 2);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(1u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "本局的消耗从预留里扣出,没有被夹紧";
+    EXPECT_EQ(0, tlsEcs.actorRegistry.get<PlayerItemHoldComp>(player).holds_size()) << "结算应用之后预留释放";
+    EXPECT_EQ(1u, BagService::RemovableCount(player, Inventory(), kSettlementStackItem)) << "余量放开";
+}
+
+// 别的局押着的道具不许被这一局的结算扣走:按扣掉别的预留之后的数量夹紧,那一局的预留原样留着。
+TEST_F(PlayerBattleSettlementItemTest, InboxCannotConsumeAnotherBattlesHold)
+{
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player);
+    ASSERT_NO_FATAL_FAILURE(GiveItem(kSettlementStackItem, 3));
+    constexpr uint64_t kOtherBattle = 9701;
+    ASSERT_NE(kOtherBattle, settlement.battle_id());
+    ASSERT_EQ(kSuccess, BagService::PlaceHold(player, kOtherBattle, item_hold::ItemHoldKind::kBattle,
+                                              {{kSettlementStackItem, 2}}, 1, 2));
+    SetConsumed(kSettlementStackItem, 3);
+    EXPECT_EQ(PlayerInboxExecKind::kApplied, PlayerBattleSystem::ApplyInboxSettlement(player, settlement.SerializeAsString()).kind);
+    EXPECT_EQ(2u, Inventory().GetTotalItemCount(kSettlementStackItem)) << "只扣得出没被别的局押着的那一瓶";
+    const auto& holds = tlsEcs.actorRegistry.get<PlayerItemHoldComp>(player);
+    ASSERT_EQ(1, holds.holds_size());
+    EXPECT_EQ(kOtherBattle, holds.holds(0).hold_id());
+    EXPECT_EQ(2u, item_hold::HeldCount(holds, kSettlementStackItem));
+}
+
 // C-2(2026-10-30):掉落物的配置行已被热更删掉(这里用一个表里不存在的配置号,对执行器而言与删行等价)。
 // 改动前 ConsumeInventoryAndGrant 对查不到行的配置整笔回 kInvalidParameter,执行器回 DEFER,这一局的金币、任务、HP
 // 与其余掉落永远卡在收件箱里。现在只剔除这一项(记 ERROR metric=battle_inbox_item_effect_skipped),其余照常 APPLIED。
@@ -3128,6 +3168,33 @@ TEST_F(PlayerBattleSettlementTest, SnapshotLevelIsTheCappedLevelAndTheStoredLeve
     expectSnapshotLevel(playerlevel::kMaxLevel, playerlevel::kMaxLevel);
 }
 
+// 战斗道具副本不含别的局还押着的数量(battle-item-reservation.md):那一局终局之前它们随时可能被它的结算扣走,
+// 两局各把同一瓶药算进副本,总有一边扣不出。10、11 是 item.json 里可叠加、battle_usable 的行。
+TEST_F(PlayerBattleSettlementTest, SnapshotItemsExcludeQuantitiesHeldByAnotherBattle) {
+    ItemTableManager::Instance().Load();
+    auto& registry = tlsEcs.actorRegistry;
+    registry.emplace<LevelComp>(player).set_level(10);
+    registry.emplace<PlayerUint32Comp>(player);
+    registry.emplace<PlayerProfileComp>(player);
+    registry.emplace<PlayerSkillListComp>(player);
+    registry.emplace<PlayerPetComp>(player);
+    registry.emplace<PlayerSessionSnapshotComp>(player).set_gate_session_id(kSnapshotLevelSessionId);
+    auto& bags = registry.emplace<PlayerBagsComp>(player);
+    for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{playerId});
+    bags.bags[kInventory].SetCapacityForRestore(20);
+    bags.bags[kInventory].InsertItemForRestore((uint64_t{1} << 60) + 9611, 10, /*stackSize=*/5, /*pos=*/0);
+    bags.bags[kInventory].InsertItemForRestore((uint64_t{1} << 60) + 9612, 11, /*stackSize=*/2, /*pos=*/1);
+    registry.emplace<PlayerItemHoldComp>(player);
+    ASSERT_EQ(kSuccess, BagService::PlaceHold(player, 9702, item_hold::ItemHoldKind::kBattle, {{10, 3}, {11, 2}}, 1, 2));
+
+    BattlePlayerSnapshot snapshot;
+    uint32_t errorTipId = kSuccess;
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Snapshot(player, snapshot, errorTipId)) << "tip " << errorTipId;
+    ASSERT_EQ(1, snapshot.items_size()) << "11 全被押着,不进副本";
+    EXPECT_EQ(10u, snapshot.items(0).item_table_id());
+    EXPECT_EQ(2u, snapshot.items(0).count()) << "5 瓶里押着 3 瓶,副本只带 2 瓶";
+}
+
 }  // namespace
 
 namespace {
@@ -3158,7 +3225,7 @@ TEST_F(PlayerBattleSettlementTest, CoroutineLockWaitAndStopIgnoreLateErrorAndTim
     loop->queueInLoop([&] { progressed = true; loop->quit(); });
     loop->loop();
     EXPECT_TRUE(progressed);
-    recorder.Stop();
+    recorder.StopAll();
     coroutineLockReplies[0](nullptr);
     EXPECT_TRUE(gCapturedLockRetries.empty());
     EXPECT_EQ(LockScriptCount("write_lock"), 1u);
@@ -3197,6 +3264,52 @@ TEST_F(PlayerBattleSettlementTest, CoroutineLockIntegerIsFinalAndDuplicateReplyC
     EXPECT_TRUE(gCapturedLockRetries.empty());
     EXPECT_TRUE(tlsEcs.actorRegistry.all_of<InBattleComp>(player));
     coroutineLockReplies.clear();
+}
+
+// 瞬态组停止(维护 P1、普通停机、身份冲突的第一步)之后,备战和 battle 的确认补发仍会到达。
+// 写锁、续期以及它们的有界重试要照常推进,只有拆除前的 StopAll 才停。
+// 修复前三条链挂在瞬态组上,一进入停机就停写:锁停在「备战期限 + 60 秒」,ctx 停在 PREPARING,
+// 玩家在别的节点重登就重建不出冻结。
+TEST_F(PlayerBattleSettlementTest, BattleLockWritesKeepRunningAfterGameplayStopUntilStopAll) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+    inBattle.set_deadline_ms(kFarFutureMs);
+    inBattle.set_prepare_deadline_ms(kFarFutureMs - 200000);
+    recorder.Stop();
+    ASSERT_FALSE(SceneTaskScope::IsAccepting());
+    ASSERT_TRUE(SceneTaskScope::IsDurableAccepting());
+
+    // 备战写锁:首发照常发出;没问到照常排重试,重试到点照常再发。
+    EXPECT_GT(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+    ASSERT_TRUE(FireNextLockRetry());
+    EXPECT_EQ(LockScriptCount("write_lock"), 2u);
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+
+    // 确认补发:PREPARING -> FIGHTING,随后照常条件续期,没问到照常排重试。
+    BattleConfirmedEvent event;
+    event.set_player_id(playerId);
+    event.set_battle_id(settlement.battle_id());
+    event.set_deadline_ms(kFarFutureMs + 50000);
+    PlayerBattleSystem::ConfirmBattle(event);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<InBattleComp>(player).state(), IN_BATTLE_STATE_FIGHTING);
+    EXPECT_EQ(LockScriptCount("renew_lock"), 1u);
+    ASSERT_EQ(gCapturedLockRetries.size(), 2u);
+
+    // 拆除前的 StopAll:两条在途链都结束,排着的重试到点也不再发,新的写锁和续期都不再发起。
+    recorder.StopAll();
+    while (FireNextLockRetry()) {
+    }
+    EXPECT_EQ(LockScriptCount("write_lock"), 2u);
+    EXPECT_EQ(LockScriptCount("renew_lock"), 1u);
+    EXPECT_EQ(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id()), 0u);
+    PlayerBattleSystem::ConfirmBattle(event);
+    EXPECT_EQ(LockScriptCount("write_lock"), 2u);
+    EXPECT_EQ(LockScriptCount("renew_lock"), 1u);
 }
 
 // ============================================================================

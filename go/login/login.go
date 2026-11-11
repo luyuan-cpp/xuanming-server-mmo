@@ -28,6 +28,7 @@ import (
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
+	"shared/tracing"
 	"strconv"
 	"syscall"
 	"time"
@@ -85,11 +86,11 @@ func main() {
 	// 照旧文档写成 "${VAR}" 的字面量由下面的 ResolveSecrets 拒绝启动(config/auth_providers.go)。
 	conf.MustLoad(*configFile, &config.AppConfig)
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
-		panic(fmt.Errorf("全球Login配置拒绝启动: %w", err))
+		panic(fmt.Errorf("global Login configuration rejected; refusing to start: %w", err))
 	}
 	// 新角色的存档库(总体方案 §7.2):地域码、存档库数不合法就拒绝启动,不建出落到错误库的角色。
 	if err := config.AppConfig.Placement.Validate(); err != nil {
-		panic(fmt.Errorf("Placement 配置拒绝启动: %w", err))
+		panic(fmt.Errorf("Placement configuration rejected; refusing to start: %w", err))
 	}
 
 	// 密钥门禁必须跑在**任何外部连接之前**(Kafka / Redis / etcd 都在下面)。
@@ -100,12 +101,12 @@ func main() {
 		logx.Errorf("SECURITY WARNING: %s", w)
 	}
 	if err != nil {
-		panic(fmt.Sprintf("HMAC 密钥配置不合格,拒绝启动: %v", err))
+		panic(fmt.Sprintf("HMAC secret configuration invalid; refusing to start: %v", err))
 	}
 	config.ActiveSecrets = secrets
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入):同样要在任何外部连接之前填好。
 	if err := config.AppConfig.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
-		panic(fmt.Errorf("共享 Redis 口令配置不合格,拒绝启动: %w", err))
+		panic(fmt.Errorf("shared Redis password configuration invalid; refusing to start: %w", err))
 	}
 
 	// 控制面命令 topic(gate-cmd_g<N> / scene-cmd_g<N>)**刻意不在这里建**:
@@ -120,16 +121,16 @@ func main() {
 	if *maintenancePlan != "" {
 		maintenanceRuntime, err = drainproof.LoadRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 		if err != nil {
-			panic(fmt.Errorf("维护runtime拒绝: %w", err))
+			panic(fmt.Errorf("maintenance runtime rejected: %w", err))
 		}
 	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
-		panic("维护参数必须完整提供")
+		panic("maintenance parameters must be provided in full")
 	}
 	var ctx *svc.ServiceContext
 	if maintenanceRuntime != nil {
 		ctx, err = svc.NewServiceContextForDrain(maintenanceRuntime)
 		if err != nil {
-			panic(fmt.Errorf("维护boot身份拒绝: %w", err))
+			panic(fmt.Errorf("maintenance boot identity rejected: %w", err))
 		}
 	} else {
 		ctx = svc.NewServiceContext()
@@ -146,7 +147,7 @@ func main() {
 		maintenanceCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := runMaintenanceLogin(maintenanceCtx, maintenanceRuntime, ctx); err != nil {
-			panic(fmt.Errorf("login维护排空HOLD: %w", err))
+			panic(fmt.Errorf("login maintenance drain HOLD: %w", err))
 		}
 		return
 	}
@@ -159,16 +160,16 @@ func main() {
 			digest, err := ctx.PreparedFrontier(prepareCtx)
 			cancel()
 			if err != nil {
-				logx.Errorf("维护新boot准备HOLD: %v", err)
+				logx.Errorf("maintenance new-boot prepare HOLD: %v", err)
 				return
 			}
 			ready, err := maintenanceRuntime.Readiness("SOURCE", digest)
 			if err != nil {
-				logx.Errorf("维护新boot身份HOLD: %v", err)
+				logx.Errorf("maintenance new-boot identity HOLD: %v", err)
 				return
 			}
 			if err = maintenanceRuntime.AwaitOpen(controlCtx, ready, ctx.OpenPreparedRoot); err != nil {
-				logx.Errorf("维护新boot开放HOLD: %v", err)
+				logx.Errorf("maintenance new-boot open HOLD: %v", err)
 			}
 		})
 	}
@@ -178,18 +179,18 @@ func main() {
 			if err != nil {
 				if controlCtx.Err() == nil {
 					ctx.CloseRootAdmission()
-					logx.Errorf("维护控制输入HOLD: %v", err)
+					logx.Errorf("maintenance control input HOLD: %v", err)
 				}
 				return
 			}
 			if err = runtime.BindBoot(ctx.BootInstance(), nil); err != nil {
 				ctx.CloseRootAdmission()
-				logx.Errorf("维护同boot身份HOLD: %v", err)
+				logx.Errorf("maintenance same-boot identity HOLD: %v", err)
 				return
 			}
 			if err = runMaintenanceLogin(controlCtx, runtime, ctx); err != nil {
 				ctx.CloseRootAdmission()
-				logx.Errorf("维护同boot排空HOLD: %v", err)
+				logx.Errorf("maintenance same-boot drain HOLD: %v", err)
 			}
 		})
 	}
@@ -534,6 +535,8 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	interceptors = append(interceptors,
 		loginadminserver.AdminAuthInterceptor(adminToken),
 		newSessionInterceptor(cfg),
+		// 请求顶层带 player_id 的方法,handler 与 serverbase 的日志都带上它(docs/design/distributed-tracing.md §6.2)。
+		tracing.PlayerFieldInterceptor(),
 		serverbase.UnaryInterceptor(serverbase.Options{}),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 	)

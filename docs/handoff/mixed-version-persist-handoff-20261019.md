@@ -912,7 +912,7 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 
 - **收件箱版本错位停用的周期补打**：`Halt` 只打一次，`[10m]` 窗口过后告警熄灭，停用却对实体一直有效。做法：对 `reason=version_skew`（以及同样不会自愈的 `unknown_type`）按 `kSceneLogAlertWindowMs` 节拍补打，与 `ledger_invalid` 同口径；`player-inbox-alerts.yaml` 的 PoisonSuspect 描述补一句"先排除 version_skew"（runbook A′ 已写）。10-30 时 `player_inbox_system.cpp`、`player_inbox_runtime_comp.h`、`player-inbox-alerts.yaml` 都有别的会话未提交的改动（C-1 / C-4），所以没动。
 - **战斗结算收件箱执行器**：载荷币种不认识时回 `kDefer`（`player_battle.cpp` 的 `CollectSettlementCurrencyGains` 失败分支），与 GM 执行器的 `kVersionSkew` 不一致；DEFER 在会话内只会空转。同一函数的 `>= kCurrencyMax` 判据也还没改调 `IsKnownCurrencyType`。该文件正被战斗结算的在途改动占用，没动，留给那项工作的负责人。
-- **交易 Go 侧三处币种字面量**（DRY，行为正确）：`commerce/engine.go` 与 `commerce/rmb.go` 的 `== 2`（绑定币禁售）、`svc/role_trade.go` 的 `c > 1`。改为引用 `currencytype.BindDiamond` / `isTradableCurrency`。
+- ~~**交易 Go 侧三处币种字面量**（DRY，行为正确）：`commerce/engine.go` 与 `commerce/rmb.go` 的 `== 2`（绑定币禁售）、`svc/role_trade.go` 的 `c > 1`。改为引用 `currencytype.BindDiamond` / `isTradableCurrency`。~~ 2026-11-10 已改，见 §23。
 - 设计 §13 第 10 条三项待拍板；R5 仍未守的场景见设计 §4.4 与 R5 行。
 - ~~`ValidateDebitBundle` 只要求可叠加、不看 `equip_kind`：装备行被误配成可叠加时，交易按数量扣出会让装备属性无声丢失。这是既有行为，交负责人决定是否收紧。~~ 2026-11-05 已收紧，见 §21。
 - `asset-channel-alerts.yaml` 其余 `{app=...}` 选择器仍匹配不到流（既有问题，契约测试注释已记），本批新加的那条已按正确写法。
@@ -1092,7 +1092,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 
 - 运行期字段集合指纹没做（设计 §13 第 11 条）。部署绕过发布流程时（用未封存分支的产物上线），封存门禁管不到。
 - 14.4 里其余待办照旧：
-  - 交易 Go 侧三处币种字面量。`engine.go`、`rmb.go` 这两个文件当前有别的会话的改动，本批没动。
+  - ~~交易 Go 侧三处币种字面量。`engine.go`、`rmb.go` 这两个文件当前有别的会话的改动，本批没动。~~ 2026-11-10 已改，见 §23。
   - 设计 §13 第 10 条三项待拍板。
   - ~~`ValidateDebitBundle` 不看 `equip_kind`~~，11-05 已做，见 §21。
   - ~~`asset-channel-alerts.yaml` 其余 `{app=...}` 选择器~~，11-05 已改，见 §21。
@@ -1178,7 +1178,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 | 契约测试说明「封存不跑生成后钩子」证明不了（低） | 成立 | 说明改为「只调用一次生成器」，同时覆盖 seal / verify 两条命令 |
 | 单项模式也会起 pprof（低） | 成立 | 条件加上两个台账开关 |
 | 封存只封台账、不核 proto（低，推测） | 成立 | `release-checklist.md` §2.1 ① 写明封存前先跑一次生成，并确认台账与产物无改动 |
-| 范围外：`market.go` 选对手单只按 status=3，托管阶段（stage=escrow）的单子也是 3，会被选为最优对手；`matchMarket` 发现阶段不对就本轮不成交 | 未核实到底 | `market.go` 与 `engine.go` 当前有别的会话未提交的改动，本批不动，列入下面的待办 |
+| 范围外：`market.go` 选对手单只按 status=3，托管阶段（stage=escrow）的单子也是 3，会被选为最优对手；`matchMarket` 发现阶段不对就本轮不成交 | ~~未核实到底~~ 成立（2026-11-10 核实） | ~~`market.go` 与 `engine.go` 当前有别的会话未提交的改动，本批不动，列入下面的待办~~ 2026-11-10 已修，见 §23 |
 
 **存储分组门禁（数据覆写审计 R2 的 N1，「数据覆写审计 R2 交接」会话转来）**
 
@@ -1210,7 +1210,7 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
 **待办 / 风险（在 §17 之外新增）**
 
 - ~~生成器单测不在 CI 的 Go 模块扫描里~~，11-05 已处理，见 §21。
-- 交易盘口：托管阶段的材料订单会被当成最优对手单，挡住同价位的撮合（复核的范围外观察，未核实到底）。`market.go` / `engine.go` 正被别的会话改，留给交易线负责人。
+- ~~交易盘口：托管阶段的材料订单会被当成最优对手单，挡住同价位的撮合（复核的范围外观察，未核实到底）。`market.go` / `engine.go` 正被别的会话改，留给交易线负责人。~~ 2026-11-10 核实成立并已修，见 §23。
 
 **本节文件清单**（在 §17 清单之外新增或再改；除台账表头那一处外已进整仓提交）
 - 生成器：`tools/proto_generator/protogen/internal/persistschema/{schema.go,ledger.go,apply.go,generate.go,persistschema_test.go}`、`cmd/root.go`；
@@ -1341,3 +1341,88 @@ Go 侧（`currencytype`、收件箱入箱用例、交易托管阶段撤单）仍
   1. 契约测试：`python tools/scripts/tests/test_cpp_level_comp_reads.py -v`。通过标准：退出 0，15 条全是 ok。失败时保留完整输出，误报回报给 Claude，不要为了变绿去改规则或补标记。
   2. 日志文案改动随下一次整解构建一起确认能编过即可：`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`。不需要单独为它重跑 bag_test，没有用例断言日志文本。
 - **状态**：本线服务端代码已完成。C++ 用例已有运行证据；契约测试与这次的日志改动待 Codex。Java 仍待做，`PARITY.md` 原有那一行已登记。
+
+## 23. 续：交易盘口只收已托管订单、交易币种字面量换具名常量（2026-11-10，交易盘口会话，接 §14.4 / §17 / §19）
+
+> **状态**：已落码，未编译、未测试，在工作区未提交。本节只追加；§14.4、§17、§19 里对应的待办已划掉并指向本节。Java 版待做（PARITY 已登记）。
+
+**1. 盘口对手单选择（§19 的范围外观察，核实成立）**
+
+- **核实路径**（从选单 SQL 读到撮合提交点）：
+  - 选单 `market.go` 的 `marketCounterparty` 只按 `status=3`、剩余量、价格、不同玩家过滤。
+  - 材料订单下单时就是 `status=3, stage=escrow`（`PlaceMarket`）。托管扣款落地后，`plan` 只把 stage 改成 `market_open`，status 不变。阶段只在 `workflow_proto` 里，SQL 分不出两者。
+  - 撮合事务在锁内重读同一条 SQL，锁住两单后判 `aw.Stage != "market_open" || bw.Stage != "market_open"`，直接 `return nil`：不成交、不报错、不唤醒。
+- **影响比当时写的大**：挡住的不只是同价位。价格更优的托管中订单会挡住 taker 与后面所有已上盘、价格可成交的对手单。
+  - 新单只在进入 `market_open` 那一步撮一次，之后按 1 小时复查（设计 §15.8），买卖两边会交叉挂着。
+  - 材料订单托管腿没有截止。托管扣款一直回 RETRY 时（§14.1 ② 的托管阶段撤单就是为这种情况留的出口），这本盘口一直撮不动。
+  - 深度查询同样只按 status=3 聚合，把托管中的订单算进挂单量。
+- **修法**（理由见设计 `jubaozhai-market.md` §15.9）：
+  - `trade_commerce` 新增列 `on_book`（`proto/trade/trade_table.proto` 字段 22），盘口索引改为 `kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id`。
+  - 判定只在 `data.OnBook` 一处：kind=4、side≠0、stage=market_open。`CommerceRepo.Insert` / `Save` 按要写的 workflow 现算，与 `workflow_proto` 同一条语句写出，不取记录上的旧值。`SaveStatus` 不动它，状态列已把转人工的行挡在盘口外。
+  - 选对手单（预读与锁内重读）和 `GetMarketDepth` 都加 `on_book=1`。
+  - `matchMarket` 的 taker 预检加 `!taker.OnBook`：托管中的订单不发起撮合，不发成交号，不抢盘口 guard 行锁。
+  - 提交点照旧在锁内按 workflow 复核两边的 stage、撤单与剩余量（AGENTS §11.3），只加了一行注释。
+  - 不改 status：它是客户端可见的 `CommerceOrderState`，改它要两版同批改客户端契约。
+- **已有开发库**：项目未上线，清库重建。不清库时 `schemamigrate` 补出 `on_book` 列，存量行都是 0；同名的盘口索引不会被改成新列序。存量挂单要等下一次重存才回到盘口上。
+
+**2. 交易 Go 侧币种字面量（§14.4 第 3 条）**
+
+- `commerce/engine.go`：`Policy.Selection` 的 `== 2` 与 `validPrice` 的 `!= 2` 改为 `currencytype.BindDiamond`。
+- `commerce/rmb.go`：`selection` 的 `== 2` 改为 `currencytype.BindDiamond`。没配 `CurrencyTypes` 时的默认 `[]uint32{0}` 是同一类字面量，一并改为 `currencytype.Gold`。
+- `svc/role_trade.go`：`initRmb` 的 `c > 1` 改调 `config.IsTradableCurrency`。原 `isTradableCurrency` 改为导出，白名单只在 `config.go` 这一份，配置校验与 `svc` 都调它。
+- **没改**：`engine.go` 的 `v.CurrencyType != 0` 与 `rmb.go` 的 `v.GetCurrencyType() != 0` 判的是「没填币种」（proto3 零值），不是拿某个币种做比较。
+- **行为不变**：对现有取值表（0 / 1 / 2），新旧写法接受与拒绝的集合完全相同；表外的值 `c > 1` 拒绝，白名单也拒绝。
+
+**用例**
+
+- data 包，不连库：新文件 `go/trade/internal/data/commerce_repo_test.go`，复用 `asset_op_recovery_test.go` 的录制驱动。
+  - `TestOnBookIsOnlyABookOrderInMarketOpen`
+  - `TestCommerceSaveWritesOnBookFromTheWorkflow`
+  - `TestCommerceInsertDerivesOnBookFromTheStoredWorkflow`
+  - `TestScanCommerceReadsOnBook`
+- commerce 包，不连库：
+  - 新增 `TestBindDiamondIsNotTradableEvenWhenConfigured`（`engine_test.go`）；
+  - `TestRmbSelectionRejectsMixedKindsBoundCurrencyAndUnconfiguredDiamond` 改用具名常量，补「绑定灵石被配进白名单也拒绝」一段；
+  - `rmbRuntime` 夹具的 `CurrencyTypes` 改为 `currencytype.Gold`，值不变。
+- config 包，不连库：新增 `TestIsTradableCurrencyIsGoldAndDiamondOnly`。
+- 真库：新增 `TestTiDBOrderBookSkipsOrdersStillInEscrow`（`engine_tidb_test.go` 末尾）。修复之前它卡在「托管中的更优价不能挡住已上盘的对手单」那条断言。
+- 原有 `TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren`、`TestRealDBUntradableCounterpartyIsTakenOffTheBook` 不用改：前者的订单都经 `advance` 进盘口，后者的坏对手单用 `Insert` 直接插入 `market_open` 的行，`on_book` 照样算出 1。
+
+**给 Codex**（工作目录仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7；日志放 `build/verification/trade-book-escrow/`）
+
+1. **生成**：本批改了 `proto/trade/trade_table.proto`，先重生成：
+   ```
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
+   ```
+   - 通过标准：退出 0；`go/proto/trade/trade_table.pb.go` 的 `TradeCommerceRecord` 多出 `OnBook`（字段 22）；`cpp/generated/proto/trade/trade_table.pb.{h,cc}` 同步变化。别的会话的 proto 改动带来的差异照常归属。
+   - 生成器源码本批没变，不需要 `proto-gen-build`。
+2. **Go**（在 `go/trade` 下）：
+   ```
+   go test -count=1 ./... ; go vet ./...
+   ```
+   通过标准：两条都退出 0；上面 data、commerce、config 包的不连库用例在列且通过。
+3. **交易真库用例**（需要一次性 TiDB，不要借 codex-* 容器，口径同 §17 第 5 步）：设置 `COMMERCE_TEST_DSN` 与 `COMMERCE_REQUIRE_TIDB=1`，在 `go/trade` 下执行：
+   ```
+   go test -count=1 -run 'TestTiDBOrderBookSkipsOrdersStillInEscrow|TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren|TestTiDBSellerCancelsMarketOrderStillInEscrow|TestRealDBUntradableCounterpartyIsTakenOffTheBook' ./internal/commerce/
+   ```
+   - 通过标准：4 条都通过。没有 DSN 时会 Skip，Skip 不算通过。
+   - 夹具每例新建随机库并经 `schemamigrate.Up` 建表，新列与新索引随建表出来，不需要手工 DDL。
+4. **其余模块**：
+   - C++ 只有生成文件变了，没有调用方，随下一次整解构建确认能编过即可。
+   - robot 不用 `TradeCommerceRecord`，vendor 里的绑定随它下次 `go mod vendor` 同步，本批不要求。
+5. **失败时**：保留首个编译错误与失败用例原文，不改断言重跑。下列文件上同时有别的会话的改动，失败先按行号归因，不要回退任何一方：
+   - 「Turn battle gap closure handoff」会话（缺口清单第 16 条：事件唤醒）：`engine.go` 的 `advance`、`schedule.go`、`schedule_test.go`、`engine_tidb_test.go` 的 `settleLegs` 与商城那条用例、`tick_isolation_db_test.go` 末尾、`commerce_repo.go` 的 `Wake`；
+   - 别的会话：`asset_op_repo.go`、`reconcile/`、`svc/servicecontext.go`、`svc/assetchannel.go`；「全仓服务日志改英文（AGENTS §2）」会话在改 `commerce_logic.go` 等文件的日志文案。
+
+**Java 版（AGENTS §12）**：盘口待做，Java 仓 `PARITY.md` 新增「2026-11-10 聚宝斋材料盘口只收已托管订单」一节。Java 的 `CommerceMatching` 选单与 `CommerceClientService` 深度查询是同样的写法。币种字面量只是 Go 内部写法，行为不变，Java 不登记。
+
+**本节文件清单**（工作区，未提交）
+
+- proto：`proto/trade/trade_table.proto`；
+- Go：
+  - `go/trade/internal/data/commerce_repo.go`（`CommerceColumns`、`ScanCommerce`、`OnBook`、`Insert`、`Save`）；
+  - `go/trade/internal/commerce/market.go`、`rmb.go`，以及 `engine.go`（只动 import、`Policy.Selection`、`validPrice`）；
+  - `go/trade/internal/logic/commerce_logic.go`（`GetMarketDepth`）、`go/trade/internal/config/config.go`、`go/trade/internal/svc/role_trade.go`；
+- 测试：`go/trade/internal/data/commerce_repo_test.go`（新）、`go/trade/internal/commerce/{engine_test.go,rmb_test.go,engine_tidb_test.go}`、`go/trade/internal/config/config_test.go`；
+- 文档：`docs/design/jubaozhai-market.md`（§15 一句、新增 §15.9）、本文（§14.4、§17、§19 划线与本节）、`docs/PROGRESS.md`；
+- 仓外：Java 仓 `PARITY.md`。

@@ -326,7 +326,7 @@ void CollectSceneOwnership(prometheus_text::Writer &writer)
 					   "1 when the latest holder record shows this node id taken over by a newer registration of "
 					   "another process.",
 					   prometheus_text::MetricType::kGauge);
-	writer.Sample({}, stats.superseded ? 1 : 0);
+	writer.Sample({}, stats.superseded ? 1u : 0u);
 }
 } // namespace
 

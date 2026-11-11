@@ -1,0 +1,41 @@
+{
+  "_lens": "asset-guild-mail-reward：按资产追踪帮会资金与帮贡、邮件附件、任务 / 成就 / 活跃度奖励（换视角查找第 3 轮，2026-11-10，只读代理原样返回，约 58.4 万子代理 token）",
+  "findings": [],
+  "excluded": [
+    "帮会捐献扣了玩家的钱、帮会却没加资金和帮贡：已推翻。终结在一个事务里先做 status=PENDING 的 CAS 再记对侧账（go/guild/internal/data/asset_store.go:776-860、978-1037），终结只认已提交账本里的收据（go/shared/assetop/reconcile.go:1013-1056 verifySQLCommit）。提交结果未知时有 CAS，对侧账只记一次。帮会已解散或捐献者已离帮时记 orphan、不补偿，这是 D2 定的口径（docs/design/guild-phase2/05-economy.md:3-12），不报。",
+    "捐献到期中止和已扣款撞在一起：已推翻。到期后改发 AbortDebit（reconcile.go:1140-1145）。scene 已应用的会回 APPLIED，照 APPLIED 记账（go/shared/assetop/decide.go:102 FinalStatus）；scene 没见过的记 reason 0 的占位，终结成 ABORTED 并退次数。离帮、踢人、解散都在持有成员行锁时提前截止（go/guild/internal/data/economy_repo.go:441-465；guild_manage_repo.go:1528、2196），预留必须先锁成员行（economy_repo.go:589-596），所以候选集是全的。",
+    "兑换扣了帮贡、玩家没拿到东西：已推翻。T-S 在同一事务里扣帮贡并插 op（economy_repo.go:701-802）。背包满时保持 PENDING、永不中止。REJECTED、ABORTED、ABANDONED 退帮贡和限购，人已不在帮就记 orphan（R6）；APPLIED_PARTIAL 转人工、不退。推演过离帮后重进同一帮再被拒的情况：帮贡退到新成员行，等于退回这次花掉的帮贡，不是复制。",
+    "点灯 / 团圆重复领或漏记：已推翻。帮贡、资金、ACTIVITY_REWARD 指令行和当日次数都在同一个帮会行锁事务里（go/guild/internal/data/activity_repo.go:365-523）。次数按玩家记，换帮也不能再领；资金按帮、按档期在帮会行锁下只发一次。",
+    "历练结果重复投递导致重复发奖：已推翻。SETTLED 闸门在持帮会行锁的事务里判（activity_repo.go:1357-1476 readTrialGate）。入口的预读只认不可变的 SETTLED（go/guild/internal/logic/activity_trial.go:942-949）。待入队物品转换时，插 op 和点删 owed 行在同一事务（activity_repo.go:1831-1895），删到 0 行就整体回滚。",
+    "解散或退帮后帮会侧和玩家侧对不上：已推翻。删成员（帮贡随之清空）、提前截止、删进度和 STARTED 对局、释放 launch、删 guild 行都在一个事务里（guild_manage_repo.go:2144-2241；退帮 1492-1545）。SHOP 和 ACTIVITY_REWARD 照常投递，owed 行保留。解散后才到的结果回 GuildGone、不发奖，这是设计。",
+    "assetopfix 人工终结造成一物两得：已推翻。工具先读行、再读已提交账本。JudgeManual 只在收据逐字节对得上时才给 applied 或 rejected；判「从未应用」要求写权行已释放、账本没见过这个 seq、且行已安静 30 分钟（go/shared/assetop/manual_evidence.go:122-176）。终结的 CAS 带着读行时的 lease_until_ms 和 last_send_ms（asset_store.go:242、705-712；go/guild/cmd/assetopfix/main.go:598-659）。推演了两种时序：读证据后被领取、本地 NOT_HERE 后重排，两列不变，CAS 仍会成立，但这一轮确实没有发请求；领取、发送后崩溃，租约列变了，CAS 落空。两种都不会一物两得。",
+    "180 天自动放弃把已应用的指令退掉：已推翻。放弃要同时满足：领到租约、写权行已释放、过了安全间隔、账本确定没见过这个 seq，再带令牌做 CAS（go/shared/assetop/abandon.go:349-371；asset_store.go:1194-1209）。对侧账和 REJECTED 走同一个函数。邮件的 AbandonAfter=0（go/mail/mail.go:310），不会放弃。",
+    "邮件附件领了却没标已领，或标了却没领到：已推翻。领取在一个事务里完成：锁 mail_box、把 claim_state 从 1 改成 2、分 SYSTEM_CREDIT 的 seq、插 op（go/mail/internal/data/claim.go:17-87）。终结要求 SQL 提交证据（go/mail/internal/data/asset_store.go:114-170）：APPLIED 记 3，REJECTED 回到 1 可重领（新 claim_version、新 seq），部分发放记 4 转人工。删除（inbox.go:211）和 sweep（sweep.go:19-21、90）都保护 2、4 两态和未终结的 op。SYSTEM_CREDIT 只有 mail 一个写者，scene 按流绑定调用方（cpp/libs/services/scene/player/system/asset_op_auth.cpp:262-265）。",
+    "邮件过期前领取、过期后被封禁拒绝，附件就再也领不到：只有 GM 封禁类开启时可达（player_inbox 的 EnqueueTypes 门控），与「封禁期间不补发」的口径一致；第 2 轮 asset-item 已把「REJECTED 恢复为可领」列为排除，不重报。",
+    "rank 封榜奖励重复发或丢：已推翻。快照和奖励意图在 Freeze 同一事务里写定（go/rank/internal/data/repo.go:243-370）。request_id=reward_id 判重，过期时刻也写定，过期后判重探询才会转放弃（go/rank/internal/reward/policy.go:66、98-121）。探询晚于邮件 sweep 清理时可能误判放弃，已登记为残余（docs/design/leaderboard-system.md:680）。另外生产代码里没有 FreezeRankGeneration 的调用方，只能走 RankAdmin 管理 RPC，属于门控。",
+    "mailadmin 原样重跑会重复发附件：带附件时强制显式 -request-id 和 -expire-ms，打印的重试命令去掉了 -expire-days（go/mail/cmd/mailadmin/main.go:142-160、254-273）。这是 r2-mail#1 的修复，不复审。",
+    "C++ 任务领奖：已推翻。BagService::AddItems 预检失败时零改动；成功后同一帧 ClearClaimable，奖励和领取位在同一份 player_store 提交里（cpp/libs/services/scene/player/system/player_mission.cpp:259-275）。放弃任务要求任务未完成（cpp/libs/modules/mission/system/mission.cpp:112-130），完成位清不掉，不能重复完成、重复领。交接在途时领取只改内存，随实体一起丢，两边仍一致。",
+    "C++ 活跃度领奖：已推翻。AddItems 和领取记录（(rule, period, threshold) 唯一，request_id 唯一）同一帧写进同一份快照（cpp/libs/services/scene/player/system/player_activity.cpp:286-339），重放按 request_id 回原结局。4096 条上限已登记（第 89 条）。",
+    "成就领奖：MissionListComp 有成就范围，但 CheckPlayer 只收 kPlayerMission（player_mission.cpp:30-38），没有成就领奖入口，也就没有资产路径。",
+    "GM 回收对这些奖励扣两次或扣错：已推翻。回收计划只认 *_CREDIT 流上 correlation_id 唯一的收据（go/data_service/internal/logic/recall_plan.go:269-311）。各服务的指令号都是 op_id，全系统共用一个计数器（go/data_service/internal/idissuer/issuer.go:19；go/trade/internal/data/commerce_repo.go:335；mail 的 ClaimOp；guild 的 assetOpOf）。任务、活跃度、战斗奖励没有指令号或不在账本里，进 needs_review、不自动扣；已登记交人工的按已消费剔除，不会被自动再扣一次。帮贡和帮会资金不在玩家存档里，本来就不在回收计划的范围内（docs/design/exploit_loss_prevention_zh.md:87）。",
+    "带着 GM 欠款把钱捐给帮会洗出去：已推翻。回收是有多少扣多少、不足部分挂欠款，余额先扣到 0；捐献扣款要过 CanAfford（cpp/libs/services/scene/player/system/asset_op_system.cpp:589）；之后的 AddCurrency 先还欠款。",
+    "角色过户或删角时帮会侧和玩家侧对不上：已推翻。guild 的 RoleFencePending 对未终结的 op（含 APPLIED_PARTIAL=5）、待入队物品、launch 和大厅占位都阻塞，过户还要求先离帮（go/guild/internal/data/role_fence_pending.go:21-54）；mail 的 RolePending 对 PENDING 和 MANUAL 阻塞（go/mail/internal/data/role_identity.go:58）。",
+    "别名合服时帮会侧和玩家侧对不上：已推翻。帮会、邮件、rank 都不按区存资产；帮会行保留原始区，比较走 FinalZone，资金、帮贡和 op 行都不会被改写。",
+    "在途改动「重投按片分工」（asset_store.go:456 ListDueOwned、reconcile.go:526 BindWorkOwner、go/guild/internal/svc/asset_op.go:366 AttachWorkShards，未提交）：已推翻。它只改到期扫描的 WHERE；领取仍是租约 CAS，终结仍是 status CAS。Filter 零值是 1=1（go/shared/workshard/workshard.go:84-89）。成员表出错时最多是重复扫或晚一拍，不影响恰好一次。",
+    "在途改动「帮会邮件按帮计数」（go/mail/internal/data/repo.go:296 checkSharedMailCapacity、campaign.go，未提交）：只改容量判定。go/guild 里没有 mail 客户端，带附件的帮会邮件目前没有生产发件方，没有资产影响。",
+    "trade 的 Pipeline.ResolveManually 不查证据（go/trade/internal/reconcile/pipeline.go:488-493）：没有生产调用方，trade 的 assetopfix 走的是带安静 CAS 的 quietResolver，不可达。",
+    "背包满让帮会或邮件发放卡住后重复发放：已推翻。scene 回 RETRY kAssetBagFull、不记账（asset_op_system.cpp:1140-1141、1170-1173），同 seq 重投只读回放，不会重复发。",
+    "以下是设计取舍，不报：解散或离帮后的捐献记 orphan（D2）；ACTIVITY_REWARD 因封禁被拒后不补发、帮贡不回收（docs/design/guild-phase2/06-activities.md:658 C7）；历练结果滞留超过约 7 天判 POISON、不发奖。"
+  ],
+  "unread": [
+    "go/guild/internal/logic/economy_logic.go：只读了同步投递与视图映射段（:380-460），DonateToGuild、BuyGuildShopGoods、UpgradeGuild 的 logic 正文没有逐行读",
+    "go/guild/internal/logic/activity_logic.go（点灯、团圆的 logic 层与 observed 计数），以及 trial_launch*.go、trial_lobby*.go、trial_occupancy.go（属于 r2-guild#1 的修复范围，按要求不复审）",
+    "go/guild/internal/data/guild_manage_repo.go：只读了 DisbandGuild、LeaveGuild 与提前截止，KickMember、TransferLeader、审批正文没有逐行读",
+    "go/mail/internal/server/server.go 第 160 行之后、go/mail/mail.go 中 280-360 以外的装配",
+    "go/rank/internal/server 与 data 层的 read、scores、remove",
+    "go/data_service/internal/logic/recall_logic.go、recall_review_handled.go 正文与 ledger_dataservice.go（K2、K3 的修复，按要求不复审）",
+    "cpp/libs/modules/bag/bag_service.cpp 的 AddItems 内部实现；在途新增的 item_hold.h（半成品）；player_inbox_system.cpp、gm_sanction_inbox_executor.cpp、player_battle.cpp（不在本视角）",
+    "Java 版对应实现"
+  ],
+  "coverage": "视角：帮会资金与帮贡、邮件附件、任务 / 成就 / 活跃度奖励的完整生命周期。基线 HEAD e0790ad40 加工作区，在途文件按工作区读。每类产出依次列落在哪个库或哪一行、幂等键、与玩家存档是否同一次提交、失败时谁兜底：①捐献 DONATE：落在 guild_asset_op（GUILD_DEBIT 流）与玩家账本；幂等键是 (player, stream, epoch, seq) 加收据摘要，帮会侧另有 status=PENDING 的 CAS；与存档是跨库两次提交，以已提交账本的收据为证；兜底有重投循环、600 秒 AbortDebit、离帮提前截止、180 天自动放弃、assetopfix（JudgeManual）。②商店 SHOP：同一事务扣帮贡、插 op（GUILD_CREDIT 流）、占限购；背包满保持 PENDING、永不中止；拒绝、中止、放弃时退帮贡与限购。③升级：只动 guild.funds，靠 expected_level 防连升。④点灯 / 团圆：在帮会行锁事务里记帮贡、资金、ACTIVITY_REWARD 指令行和按玩家的当日次数。⑤历练：match-results 或巡检器 → SETTLED 闸门（帮会行锁）→ 帮贡、资金、ACTIVITY_REWARD 指令行或 owed 行同事务写入；owed 转换时插 op 与删 owed 同事务。⑥退帮 / 踢人 / 解散：删成员行（帮贡清空）、捐献提前截止，解散另删进度、STARTED 对局和 guild 行；SHOP 与 ACTIVITY_REWARD 照常投递，owed 保留；过户和删角由 RoleFencePending 阻塞。⑦邮件领取：一个 mail 事务里把 claim_state 从 1 改成 2、分 SYSTEM_CREDIT 的 seq、插 mail_asset_op；终结要求 SQL 提交证据，APPLIED 记 3，REJECTED 回 1 可重领，部分发放记 4 转人工；sweep 和删除都保护 2、4 两态。⑧rank 封榜奖励：Freeze 同一事务写快照和 rank_mail_reward，request_id=reward_id 判重，过期时刻写定，过期后判重探询才放弃；生产代码没有 Freeze 调用方。⑨mailadmin：带附件时强制显式请求号和过期时刻。⑩C++ 任务 / 活跃度：AddItems 与领取位或领取记录同一帧、同一份 player_store 提交；成就没有接线。⑪GM 回收：只认 *_CREDIT 流上 correlation_id 唯一的收据，任务、活跃度、战斗奖励没有指令号，进 needs_review。结论：按本视角查完，没有找到未登记的新问题，findings 为空，推翻过程见 excluded。说明：有一次 grep -r 超时，被工具转入后台，工具在会话的 tasks 目录自动生成了一个空的输出文件 b1mogja9x.output，已经用 TaskStop 停掉；本审计没有用重定向或写工具创建、修改任何文件，也没有跑构建、测试、静态检查，没有给其他会话发消息。"
+}

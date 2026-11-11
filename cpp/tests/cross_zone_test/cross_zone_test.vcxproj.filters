@@ -22,6 +22,9 @@
     <ClCompile Include="discovery_zone_scope_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="discovery_set_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Include">

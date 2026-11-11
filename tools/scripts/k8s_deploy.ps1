@@ -177,7 +177,7 @@ param(
 	#   none :不拆。login 不写 Node.QueueRedis(与 RedisClient 共用同一个 client),gateway 的 spring.data.redis.host 仍是核心 redis.<infra>,
 	#          渲染结果与引入本参数之前逐字节相同。
 	#   queue:拆出排队实例 redis-queue-g<N>(N = zones 配置里该 zone 的 redisQueueGroup,缺省 0)。login 整段写 Node.QueueRedis(只承载排队键
-	#          queue:* / admit:* / admitted:* 与放行锁),gateway 的 Bucket4j 限流桶(rl:zone / rl:ip)改连它;gate 排空标记 gate:<id>:draining|drained、
+	#          queue:* / admit:* / admitted:* 与放行锁),gateway 的 Lua 限流桶(rl:zone / rl:ip,RedisRateLimitStore)改连它;gate 排空标记 gate:<id>:draining|drained、
 	#          会话、锁等其余一切仍在核心。infra-up / 带 infra 的 all-up 另按 zones 配置里出现过的每个组 apply 一份 queue 实例,
 	#          形态与核心同一套 -RedisReplicas 档位规则:1 = manifests/infra/redis-purpose.yaml 单实例,3(非 dev 档缺省)=
 	#          redis-purpose-ha.yaml 的 1 主 2 从 + 哨兵 + 2 个代理(同名 Service 指向代理,地址不随形态变)。容量见 -RedisQueueMaxMemory。
@@ -254,8 +254,8 @@ param(
 	[int]$AgonesHealthPeriodSeconds = 10,
 	[int]$AgonesHealthFailureThreshold = 3,
 	[int]$AgonesHealthInitialDelaySeconds = 30,
-	# 高密度容量:给每个 GameServer 挂一个 rooms Counter,SceneManager 通过
-	# GameServerAllocation 原子预占名额。
+	# 高密度容量:给每个 GameServer 挂一个 rooms List,每个名额是一个按身份的条目,SceneManager 通过
+	# GameServerAllocation 原子预占名额(docs/design/agones-scene-node-high-density.md §13)。
 	#
 	# Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开 FeatureGate
 	# (CountsAndLists=true),所以这里默认关闭,由运维确认版本后再开。
@@ -266,7 +266,7 @@ param(
 	# 开了 -AgonesHighDensity 却不给这个值,脚本会直接报错而不是替你猜一个。
 	[int]$AgonesRoomCapacity = 0,
 	# FleetAutoscaler:按剩余房间容量自动增减 Fleet replicas。
-	# 需要 -AgonesHighDensity(依赖 rooms Counter)。
+	# 需要 -AgonesHighDensity(依赖 rooms List)。
 	[switch]$AgonesAutoscale,
 	# 集群里始终保持的**空闲房间**数量。低于它就扩 Pod,高于上界就缩。
 	# 这是缓冲区,不是容量:太小会让高峰期玩家等 Pod 调度(几十秒),
@@ -274,7 +274,7 @@ param(
 	[int]$AgonesBufferRooms = 5,
 	# Fleet 的 Pod 副本数下界 / 上界。
 	#
-	# 注意单位换算:Agones 的 Counter 策略里 minCapacity / maxCapacity 是**整个
+	# 注意单位换算:Agones 的 List 策略里 minCapacity / maxCapacity 是**整个
 	# Fleet 的总房间容量**,不是副本数。所以要乘 -AgonesRoomCapacity 才是要写进
 	# YAML 的值。之前直接把副本数塞进容量字段,差了 RoomCapacity 倍
 	# (MaxReplicas=8 + RoomCapacity=6 本该是 48 个房间的容量,却写成了 8,
@@ -436,7 +436,7 @@ param(
 	# 确认本次部署就是要关掉或改动线上 login 的第三方登录配置(见上一段「防误关」)。不给时,线上配置会被本次参数关掉或改掉
 	# 就在任何写操作之前拒绝;给了只打警告放行。它是许可不是指令:线上与本次一致时给了也不改任何东西。不粘滞,只在被指定时透传。
 	[switch]$ConfirmLoginAuthProviderChange,
-	# 削峰(G4b,docs/design/open-server-rate-limit-design.md §十一):gateway Bucket4j 限流 / login 登录排队。
+	# 削峰(G4b,docs/design/open-server-rate-limit-design.md §十一):gateway 限流(Lua 脚本 RedisRateLimitStore,2026-11-05 起不再用 Bucket4j)/ login 登录排队。
 	# auto(缺省)= 跟随 -ReleaseProfile:dev 关(ConfigMap 与 G4b 之前逐字相同);staging / prod 开,阈值见 $script:PeakShavingLaunchTier。
 	# off 只用于事故止血与基线压测(AGENTS §6 对比的「关削峰」那一轮);on 只用于 dev 档联调。
 	# 不粘滞:以 off 运行的环境,下一次部署(含 dev_tools.ps1 包装入口)不传就按档位恢复为开。
@@ -1333,7 +1333,8 @@ function Get-AssetOpConsistencyVerdict {
 	return 'ok'
 }
 
-# 线上 Deployment 的 Pod 模板注解值;Deployment 或注解不存在返回 $null。查询失败 fail-closed(throw)。
+# 线上工作负载的 Pod 模板注解值;工作负载或注解不存在返回 $null。查询失败 fail-closed(throw)。
+# 资源类型按 Get-WorkloadKind 取:调用方 guild / trade 是 SQL 写者,线上是 StatefulSet。
 function Get-LiveDeploymentPodAnnotation {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
@@ -1341,10 +1342,11 @@ function Get-LiveDeploymentPodAnnotation {
 		[Parameter(Mandatory = $true)][string]$Key
 	)
 
-	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'deployment', $Name, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
+	$kind = Get-WorkloadKind -Name $Name
+	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', $kind, $Name, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
 	if ($result.ExitCode -ne 0) {
-		throw "查询线上 Deployment $Name 失败(namespace=$Namespace,exit $($result.ExitCode)):$($result.Stderr)。fail-closed:不知道现状就无法判断资产通道两侧是否对得上。"
+		throw "查询线上 $kind $Name 失败(namespace=$Namespace,exit $($result.ExitCode)):$($result.Stderr)。fail-closed:不知道现状就无法判断资产通道两侧是否对得上。"
 	}
 	if ([string]::IsNullOrWhiteSpace($result.Stdout)) { return $null }
 	$document = $result.Stdout | ConvertFrom-Json
@@ -1412,7 +1414,7 @@ function Assert-AssetOpClusterConsistency {
 			$live = Get-LiveDeploymentPodAnnotation -Namespace $InfraNamespace -Name $caller -Key $spec.HashAnnotation
 			$verdict = Get-AssetOpConsistencyVerdict -CallerHash $live -SceneHash $desired[$caller]
 			if ($verdict -eq 'scene-off-while-caller-on') {
-				throw "$caller 的资产通道还开着(namespace $InfraNamespace 的 Deployment $caller 带签名密钥指纹),本次却不给 scene 注入验签密钥(-AssetOps off):这个 zone 的每一次资产 RPC 都会被 scene 拒绝。先 infra-up -AssetOps off 关掉调用方,或本次照传 -AssetOps on -NetworkPolicies on 与同一组密钥。"
+				throw "$caller 的资产通道还开着(namespace $InfraNamespace 的 $caller 带签名密钥指纹),本次却不给 scene 注入验签密钥(-AssetOps off):这个 zone 的每一次资产 RPC 都会被 scene 拒绝。先 infra-up -AssetOps off 关掉调用方,或本次照传 -AssetOps on -NetworkPolicies on 与同一组密钥。"
 			}
 			if ($verdict -eq 'key-mismatch') {
 				throw "本次给 scene 的 $($spec.Env) 与线上 $caller 正在用的签名密钥不同(Pod 模板指纹对不上):scene 验签会全部失败。换密钥按「先 infra-up -AssetOps off、换值、再逐 zone 与 infra 打开」(deploy/k8s/README.md「gRPC 口准入与资产通道」)。"
@@ -2758,7 +2760,8 @@ function Get-RedisMaxClientsFromManifest {
 	Get-RedisConnectionLedgerInputs 按它记账 —— 总账读到的就是集群里生效的池上限,不再按 10 × GOMAXPROCS 估,也不随 CPU limit 漂。
 	写路径入口的 Write-RedisConnectionLedger 先于任何集群写操作把全部目标读一遍,不合格就在 apply 之前 throw,不留半截部署。
 	为什么要求正整数:Go 侧 0 / 不写 = go-redis 缺省 10 × GOMAXPROCS(负数拒启),镜像一个 0 进 ConfigMap,集群里生效的就不是写出来的值。
-	go-zero 封装的客户端(data-service 的 NameCacheRedis、scene-manager / match / friend)没有池参数,不在这里,总账按缺省池记。
+	go-zero 封装的客户端(data-service 的 NameCacheRedis、scene-manager、friend)没有池参数,不在这里,总账按缺省池记;
+	match 的 go-zero 句柄在 K8s 上恒指向 redis-match-cluster,不连这台。
 	新增一个要镜像的池 = 这里加一行,再在 ConfigMap 模板里写出来;Get-RedisConnectionLedgerInputs 读的是同一批键。
 	玩家域句柄 PlayerRedis 与 login 的 LoginRedis 不在这里,见 Get-RedisPlayerPoolMirror。
 
@@ -2846,16 +2849,17 @@ function Get-RedisPlayerPoolMirror {
 	    (按 limit 向上取整、下限 2,外部常识);go-zero 链进的 automaxprocs 若生效可能是 1。**未实测,待 S6**(在目标集群上只读取各 Go Pod 的
 	    GOMAXPROCS 一次)。按 2 记,偏保守。契约测试钉住:有缺省池的行,manifest 的 CPU limit ≤ 2 核 —— 调大 limit 就变红,逼着重算这一列;
 	  - PubSub      Pub/Sub 专用连接(go-redis 用 NewConn 另建,不占池名额,另算);
-	  - Fixed       非 Go 客户端的固定连接数(Java gateway)。
+	  - Fixed       不按池配置键记账的固定连接数:非 Go 客户端(Java gateway),以及代码里写死池上限的 Go 小池(guild 的申请配额池)。
 	C++(gate / scene / battle)每进程 1 条(CppConnectionsPerProcess),台数由部署形态决定,不在这张表里(见 Get-RedisConnectionLedger 的参数)。
 	-PlayerDomainSplit(2026-10-31,设计 §6):行上的 PlayerMirror / PlayerFixed 是玩家域的池(login 那一行另带它自己的登录域池,Get-RedisPlayerPoolMirror)。不建集群时这些客户端也连这台 Redis,
 	记进本总账:单实例上玩家域句柄是独立的客户端,不与控制域共用连接。建了集群就搬到玩家域那一份(Get-RedisPlayerConnectionLedgerInputs),本总账只剩控制域;
 	C++ scene 两边都有:这里每进程 1 条(tlsRedis),玩家域每主节点 1 条(tlsPlayerRedis)。
 	不计入(写在这里,接上时加一行):
 	  - client-rpc-router、go/db:不连 Redis;
-	  - chat:不连 Redis。聊天权威在 SQL,会话身份只认 gate 签名的原件;ConfigMap 的 Redis 段只为 RpcServerConf 兼容,
-	    go-zero 句柄 NonBlock(缺省 true)不预连,运行时也不发命令;
-	  - match 的 MatchRedis、chat 的 ChatRedis:K8s 上指向 redis-match-cluster,是另一套实例;
+	  - chat:不连 Redis。聊天权威在 SQL,会话身份只认 gate 签名的原件;K8s 的 ConfigMap 不写 ChatRedis,Redis 段只为 RpcServerConf 兼容。
+	    go/chat 的 NewRedisHandles 仍按 Redis 段建一个 go-zero 句柄,但 NonBlock(缺省 true)不预连、没有调用方发命令,所以不建连接;
+	  - match 的 MatchRedis:K8s 上恒指向 redis-match-cluster,是另一套实例(ConfigMap 恒写这一段,k8s_deploy_contract 钉住;
+	    不写时 go/match 的 NewRedisHandles 会静默回落到这台、多一个缺省池,match 行就不能再记 0);
 	  - rank:现役 SQL 权威榜不连接 Redis，不计共享 Redis 总账；旧 R2b 专用 Redis 不部署。
 	  - login 的 PasswordAuth 失败配额池(auth_init.go passwordQuotaRedisOptions,PoolSize 4)与 SaToken 客户端:K8s 的 login ConfigMap
 	    不写这两段;启用 PasswordAuth 后每个 login 副本 +4;
@@ -2863,7 +2867,7 @@ function Get-RedisPlayerPoolMirror {
 	新增一个连这台 Redis 的服务 = 这里加一行。缺 manifest、replicas 不是恰好一处、MAXCLIENTS 不是恰好一处、PoolSize 不是正整数,照常 throw。
 #>
 function Get-RedisConnectionLedgerInputs {
-	# -QueueSplit:排队与限流已拆到 redis-queue-g<N>(G4a 第 1a 批,-RedisSplit queue)。gateway 的 Redis 只用于 Bucket4j 限流,整行移到
+	# -QueueSplit:排队与限流已拆到 redis-queue-g<N>(G4a 第 1a 批,-RedisSplit queue)。gateway 的 Redis 只用于 Lua 限流(RedisRateLimitStore),整行移到
 	# queue 实例的总账(Get-RedisQueueConnectionLedgerInputs),核心这里去掉;login 的 RedisClient 池仍连核心,行不变。
 	# 缺省 $false = 不拆,与以前的调用方逐字相同。
 	param(
@@ -2901,7 +2905,9 @@ function Get-RedisConnectionLedgerInputs {
 		# assetop:wake 的 Pub/Sub 连接(AssetOp.Wake 缺省开)。开关从服务yaml镜像，缺省关闭；按打开计，开关翻转时不必回来改账。
 		[ordered]@{ Name = 'trade'; Scope = 'global'; Manifest = "$goSvc/trade.yaml"; PoolMirror = 'trade'; PlayerMirror = 'trade'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 1; Fixed = 0 }
 		# guild 两个控制域显式池(RedisClient、PlayerLocatorRedis)加玩家域句柄；摘要 bump 专用池固定4(玩家域,go/guild/internal/svc playerSyncRedisPoolSize)，另有唤醒订阅。
-		[ordered]@{ Name = 'guild'; Scope = 'global'; Manifest = "$goSvc/guild.yaml"; PoolMirror = 'guild'; PlayerMirror = 'guild'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 1; Fixed = 0; PlayerFixed = 4 }
+		# Fixed 4:入帮申请配额专用客户端(go/guild/guild.go 的 quotaRedis,池上限 logic.ApplicationQuotaRedisPoolSize),连 RedisClient.Host 即核心库;
+		# 配额恒开(ApplicationQuotaPerMinute 只许 1..600),拆不拆玩家域都留在这一份。
+		[ordered]@{ Name = 'guild'; Scope = 'global'; Manifest = "$goSvc/guild.yaml"; PoolMirror = 'guild'; PlayerMirror = 'guild'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 1; Fixed = 4; PlayerFixed = 4 }
 		# player-inbox:go/player_inbox/internal/svc/servicecontext.go openCoreRedis 的 redis.NewClient(核心 Redis,CoreRedis.PoolSize,
 		# 启动时 Ping,只剩后台循环选主锁);围栏上界读 owner_epoch、在线提醒读 location 走玩家域句柄,没有 Pub/Sub。
 		[ordered]@{ Name = 'player-inbox'; Scope = 'global'; Manifest = "$goSvc/player-inbox.yaml"; PoolMirror = 'player-inbox'; PlayerMirror = 'player-inbox'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 0; Fixed = 0 }
@@ -2994,7 +3000,7 @@ function Get-RedisPlayerConnectionLedgerInputs {
 	连 queue 实例的只有两类客户端,都按 zone 计:
 	  - login:Node.QueueRedis 是独立的 go-redis 池(login 的 newQueueRedis),池上限与 RedisClient 同值 —— ConfigMap 里 QueueRedis.PoolSize
 	    镜像的就是 Node.RedisClient.PoolSize(Get-RedisPoolMirror 同一个键);
-	  - gateway:与核心总账 gateway 行同一口径(Lettuce 共享连接 1 条 + Bucket4j 专用连接 1 条,按 2 记)。
+	  - gateway:与核心总账 gateway 行同一口径(Spring 的 Lettuce 共享连接 1 条 + 限流专用连接 1 条 RateLimitConfig.rateLimitConnection,按 2 记)。
 	没有 C++、没有全局池。maxclients 读 manifests/infra/redis-purpose.yaml 的 MAXCLIENTS(所有组共用这一个模板)。
 	缺 manifest、replicas 不是恰好一处、MAXCLIENTS 不是恰好一处、PoolSize 不是正整数,照常 throw。
 #>
@@ -4381,7 +4387,7 @@ function Get-RedisHaScriptsDigest {
 # ─────────────────────────────────────────────────────────────────
 # 共享 Redis 按用途拆实例(G4a 第 1a 批:queue;docs/design/shared-redis-split-by-purpose.md §25.3、§3.2.1、§4.2~§4.6,冲突处以 §25.3 为准)
 # ─────────────────────────────────────────────────────────────────
-# 本批只拆排队与限流:login 的 Node.QueueRedis(queue:* / admit:* / admitted:* 与放行锁)和 gateway 的 Bucket4j 限流桶(rl:zone / rl:ip)
+# 本批只拆排队与限流:login 的 Node.QueueRedis(queue:* / admit:* / admitted:* 与放行锁)和 gateway 的 Lua 限流桶(rl:zone / rl:ip,RedisRateLimitStore)
 # 按 zone 组搬到 redis-queue-g<N>(组 = zones 配置的 redisQueueGroup,排队键名一个都不改);其余全部留在核心 redis —— 会话、锁、位置、
 # gate 排空标记 gate:<id>:draining|drained(k8s_gate_drain.ps1 与 scene_manager 的跨 zone 重定向读核心上的那一份)。
 # §4 里 mapping / dbctl / 迁移标记 / 墓碑 / purge 的内容不在这里(§25.3:数据可清空,不迁移;映射已直读全局库,玩家存档不进 Redis)。
@@ -5371,19 +5377,21 @@ function Read-RedisQueueInstanceLive {
 	return ConvertFrom-RedisQueueInstanceLive -InstanceName $InstanceName -StatefulSet $statefulSet -Proxy $proxy -Service $service
 }
 
-# Deployment 的 rollout 是否完成(只读,短超时):'absent'(没有这个 Deployment)/ 'complete' / 'incomplete'(超时或失败:还有旧 ReplicaSet 的 Pod,
+# 工作负载的 rollout 是否完成(只读,短超时):'absent'(没有这个对象)/ 'complete' / 'incomplete'(超时或失败:还有旧版本的 Pod,
 # 或新 Pod 没就绪)/ 'error'(查询本身失败)。只看 ConfigMap 不够:ConfigMap 改了不等于旧 Pod 都退场了,旧 Pod 还在往旧实例写(§4.4)。
+# -Kind:login、gateway 是 SQL 写者,线上是 StatefulSet(docs/design/writer-roster-exhaustion-20261106.md §5.5);scene-manager 是 Deployment。
 function Get-RedisSplitRolloutState {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
-		[Parameter(Mandatory = $true)][string]$Deployment
+		[Parameter(Mandatory = $true)][string]$Deployment,
+		[ValidateSet('deployment', 'statefulset')][string]$Kind = 'deployment'
 	)
 
-	$found = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'deployment', $Deployment, '-n', $Namespace, '--ignore-not-found', '-o', 'name') `
+	$found = Invoke-ClientEntryKubectl -KubectlArgs @('get', $Kind, $Deployment, '-n', $Namespace, '--ignore-not-found', '-o', 'name') `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
 	if ($found.ExitCode -ne 0) { return 'error' }
 	if ([string]::IsNullOrWhiteSpace([string]$found.Stdout)) { return 'absent' }
-	$status = Invoke-ClientEntryKubectl -KubectlArgs @('rollout', 'status', "deployment/$Deployment", '-n', $Namespace, '--timeout', ('{0}s' -f $script:RedisSplitStatusRolloutTimeoutSeconds)) `
+	$status = Invoke-ClientEntryKubectl -KubectlArgs @('rollout', 'status', "$Kind/$Deployment", '-n', $Namespace, '--timeout', ('{0}s' -f $script:RedisSplitStatusRolloutTimeoutSeconds)) `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
 	if ($status.ExitCode -eq 0) { return 'complete' }
 	return 'incomplete'
@@ -5409,7 +5417,7 @@ function Show-RedisSplitStatus {
 	Write-Host "Redis split status: zones_config=$zonesPath infra_namespace=$InfraNamespace"
 	if ($DryRun) {
 		foreach ($zone in $zones) {
-			Write-Host "[dry-run] would read ConfigMaps $($GoSvcCatalogue['login'].ConfigMap) / $($JavaSvcCatalogue['gateway'].ConfigMap) and rollout status of deployment/login / deployment/gateway in namespace $(Get-ZoneNamespace -Name ([string]$zone.name))"
+			Write-Host "[dry-run] would read ConfigMaps $($GoSvcCatalogue['login'].ConfigMap) / $($JavaSvcCatalogue['gateway'].ConfigMap) and rollout status of statefulset/login / statefulset/gateway in namespace $(Get-ZoneNamespace -Name ([string]$zone.name))"
 		}
 		Write-Host "[dry-run] would also read statefulset, proxy deployment and service of every redis-queue-g<N> those ConfigMaps point at, and fail if it is absent, not ready, or its Service does not match its shape."
 		foreach ($zone in $zones) {
@@ -5435,8 +5443,8 @@ function Show-RedisSplitStatus {
 			Write-Host "  zone=$zoneName namespace=$namespace group=$($zone.redisQueueGroup) ERROR reading ConfigMaps"
 			continue
 		}
-		$loginRollout = Get-RedisSplitRolloutState -Namespace $namespace -Deployment 'login'
-		$gatewayRollout = Get-RedisSplitRolloutState -Namespace $namespace -Deployment 'gateway'
+		$loginRollout = Get-RedisSplitRolloutState -Namespace $namespace -Deployment 'login' -Kind statefulset
+		$gatewayRollout = Get-RedisSplitRolloutState -Namespace $namespace -Deployment 'gateway' -Kind statefulset
 		$loginCoreText = if ($live.LoginPresent) { $live.LoginCoreHostPort } else { '<absent>' }
 		$loginQueueText = if (-not $live.LoginPresent) { '<absent>' } elseif ($live.QueueRedisPresent) { $live.LoginQueueHostPort } else { '<none: shares RedisClient>' }
 		$gatewayText = if ($live.GatewayPresent) { $live.GatewayHost } else { '<absent>' }
@@ -5450,7 +5458,7 @@ function Show-RedisSplitStatus {
 		}
 		foreach ($pair in @(@{ Name = 'login'; State = $loginRollout }, @{ Name = 'gateway'; State = $gatewayRollout })) {
 			if ($pair.State -eq 'incomplete' -or $pair.State -eq 'error') {
-				$failures.Add("zone ${zoneName}:deployment/$($pair.Name) 的 rollout 状态是 $($pair.State)(还有旧 Pod 连着旧实例,或查询失败)")
+				$failures.Add("zone ${zoneName}:statefulset/$($pair.Name) 的 rollout 状态是 $($pair.State)(还有旧 Pod 连着旧实例,或查询失败)")
 			}
 		}
 		# 地址对、滚完了还不够:指向的实例要在、要就绪。login 与 gateway 分开取,切换没做完时两者可能指向不同实例,都要查。
@@ -6076,8 +6084,9 @@ function Get-GlobalGoSvcNames {
 function Get-GlobalGoSvcNamesBeforeZones {
 	return @(Get-GlobalGoSvcNames | Where-Object { $GoSvcCatalogue[$_].StartsBeforeZones })
 }
-# 进程排在第一个 zone 的 data-service 之后的全局服务。排序只为输出稳定。这些服务之间的启动依赖靠重启收敛:依赖没就绪时进程退出,主容器重启过又没 Ready,
-# 回收 CronJob 就删掉这个 Pod,新 Pod 领名册下一条(deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml),所以等得久了是在烧名册。
+# 进程排在第一个 zone 的 data-service 之后的全局服务。排序只为输出稳定。这些服务之间的启动依赖靠重启收敛:依赖没就绪时进程还没写过就退出,
+# 容器原地重启接着用这一代的写资格;写过之后崩溃的,回收 CronJob 删 Pod,StatefulSet 按同一序号重建、在槽位上换代
+# (deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml),等多久都不消耗名册。
 function Get-GlobalGoSvcNamesAfterDataService {
 	return @(Get-GlobalGoSvcNames | Where-Object { -not $GoSvcCatalogue[$_].StartsBeforeZones } | Sort-Object)
 }
@@ -9231,18 +9240,18 @@ function New-SceneFleetYaml {
 	# Pod 模板注解(sidecar 配置指纹 + zone Redis 口令指纹),同 New-NodeDeploymentYaml;Fleet 的 Pod 模板 metadata 子键在第 10 列。
 	$podAnnotationBlock = New-CppPodAnnotationBlock -KeyIndent "          " -SceneAssetOp
 
-	$countersBlock = ""
+	$roomsListBlock = ""
 	if ($AgonesHighDensity) {
 		if ($AgonesRoomCapacity -le 0) {
 			throw "-AgonesHighDensity requires -AgonesRoomCapacity <N>. 不要拍一个数字:每进程房间容量必须来自压测(帧耗时/AOI/玩家数/内存),见 docs/design/agones-scene-node-high-density.md §8。"
 		}
-		# rooms Counter。SceneManager 侧 internal/agones 的 CounterName 常量
-		# 必须与这里同名,改一个就要改另一个。
-		$countersBlock = @"
+		# rooms List:每个名额是一个条目,值由 SceneManager 生成(scene_id 加随机串),占用数 = 条目数
+		# (docs/design/agones-scene-node-high-density.md §13)。SceneManager 侧 internal/agones 的 RoomListName 常量
+		# 与 FleetAutoscaler 的 list.key 都必须与这里同名,改一个就要改另外两个。
+		$roomsListBlock = @"
 
-      counters:
+      lists:
         rooms:
-          count: 0
           capacity: $AgonesRoomCapacity
 "@
 	}
@@ -9300,7 +9309,7 @@ $gameServerContainerLine      ports:
         disabled: false
         initialDelaySeconds: $AgonesHealthInitialDelaySeconds
         periodSeconds: $AgonesHealthPeriodSeconds
-        failureThreshold: $AgonesHealthFailureThreshold$countersBlock
+        failureThreshold: $AgonesHealthFailureThreshold$roomsListBlock
       template:
         metadata:$podAnnotationBlock
           labels:
@@ -9363,8 +9372,8 @@ $sceneAssetEnvBlock
 scene_manager 是否接管 Agones 容量:-SceneOrchestrator agones 且 -AgonesHighDensity。
 
 .DESCRIPTION
-高密度模式下 Fleet 给每个 GameServer 挂 rooms Counter,FleetAutoscaler 也按 rooms 扩缩,而 rooms 只有 scene_manager 经
-GameServerAllocation 记账,所以 scene_manager 必须同时打开 Agones.Enabled 与 HighDensityEnabled,并拿到访问 Agones API 的身份
+高密度模式下 Fleet 给每个 GameServer 挂 rooms List,FleetAutoscaler 也按 rooms 扩缩,而 rooms 只有 scene_manager 经
+GameServerAllocation 与按条目的增删记账,所以 scene_manager 必须同时打开 Agones.Enabled 与 HighDensityEnabled,并拿到访问 Agones API 的身份
 (manifests/go-svc/scene-manager-agones-rbac.yaml)。
 
 只开 -SceneOrchestrator agones、不开高密度时不接管:Go 侧 Enabled=true、HighDensityEnabled=false 是「一个 GameServer 一次只接
@@ -9398,7 +9407,7 @@ Agones:
 
 <#
 .SYNOPSIS
-生成一个基于 rooms Counter 的 Agones FleetAutoscaler。
+生成一个基于 rooms List 的 Agones FleetAutoscaler。
 
 .DESCRIPTION
 管的是**进程数(Pod)**,不是频道数。两件事分开:
@@ -9407,9 +9416,10 @@ Agones:
     见 docs/design/world-channel-autoscale.md。
   - 进程数由这里决定:房间总需求上来了就多开 Scene Node,空闲太多就回收。
 
-用 Counter 策略而不是 Buffer 策略:高密度模型下"还剩几个 Ready 的
+用 List 策略而不是 Buffer 策略:高密度模型下"还剩几个 Ready 的
 GameServer"没有意义(一个进程能装 N 个房间),真正该看的是"还剩几个空闲
-**房间名额**"。
+**房间名额**"(列表容量减条目数)。rooms 2026-11-10 前是 Counter,改成按条目的 List 见
+docs/design/agones-scene-node-high-density.md §13;两种策略的 bufferSize / minCapacity / maxCapacity 含义与单位相同。
 
 缩容风险:Agones 缩 Fleet 时会挑 Ready(未分配)的 GameServer 下手,
 Allocated 的不会被动。但一个进程只要还有 1 个房间就是 Allocated,所以
@@ -9423,12 +9433,13 @@ function New-SceneFleetAutoscalerYaml {
 		[Parameter(Mandatory = $true)][int]$ZoneIdLabel
 	)
 
-	# 副本数 -> 总房间容量。Counter 策略的 min/maxCapacity 单位是"整个 Fleet 的
-	# 房间总数",不是 Pod 数。实测(Agones 1.58,kubectl apply --dry-run=server):
+	# 副本数 -> 总房间容量。List 策略的 min/maxCapacity 单位是"整个 Fleet 的
+	# 房间总数",不是 Pod 数。实测(Agones 1.58,kubectl apply --dry-run=server,当时还是 Counter 策略):
 	# 缺 maxCapacity 会被 CRD 校验直接拒掉 ——
 	#   spec.policy.counter.maxCapacity: Invalid value: 0: should be >= 1
+	# List 策略同名字段同样必填,上集群前按设计稿 §13.8 核对。
 	if ($AgonesMaxReplicas -le 0) {
-		throw "-AgonesAutoscale requires -AgonesMaxReplicas <N>. Agones 的 Counter 策略里 maxCapacity 必填(>=1),而且它是总房间容量而不是副本数;上界必须由运维显式给,脚本不替你猜。"
+		throw "-AgonesAutoscale requires -AgonesMaxReplicas <N>. Agones 的 List 策略里 maxCapacity 必填(>=1),而且它是总房间容量而不是副本数;上界必须由运维显式给,脚本不替你猜。"
 	}
 
 	$minReplicas = $AgonesMinReplicas
@@ -9461,8 +9472,8 @@ metadata:
 spec:
   fleetName: $FleetName
   policy:
-    type: Counter
-    counter:
+    type: List
+    list:
       key: rooms
       bufferSize: $AgonesBufferRooms
       minCapacity: $minCapacity
@@ -9808,6 +9819,16 @@ function Write-CppOpenFileLimitRefusals {
 	}
 }
 
+# SQL 写者(Go 的 $script:SqlWriterGoSvcs 与 Java 的 gateway,含各自的 <svc>-canary)是 StatefulSet:Pod 序号就是写者名册的槽位
+# (docs/design/writer-roster-exhaustion-20261106.md §5.5)。其余 Go / Java 服务和 C++ 节点是 Deployment。
+# 按名字等 rollout、读线上对象的地方按它取 kubectl 资源类型。
+function Get-WorkloadKind {
+	param([Parameter(Mandatory = $true)][string]$Name)
+	$service = $Name -creplace '-canary$', ''
+	if ($script:SqlWriterGoSvcs -ccontains $service -or $service -ceq 'gateway') { return 'statefulset' }
+	return 'deployment'
+}
+
 function Wait-ForDeploymentReady {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
@@ -9815,6 +9836,12 @@ function Wait-ForDeploymentReady {
 		# C++ 节点(gate / scene 池 / battle):失败时多捞一遍 B0-4 拒启行(Write-CppOpenFileLimitRefusals)。Go / Java 服务不传。
 		[switch]$CppNode
 	)
+
+	# SQL 写者是 StatefulSet(Get-WorkloadKind):调用点(zone、全局服务、金丝雀副本)不用分辨,在这里转过去。
+	if ((Get-WorkloadKind -Name $DeploymentName) -ceq 'statefulset') {
+		Wait-ForStatefulSetReady -Namespace $Namespace -StatefulSetName $DeploymentName
+		return
+	}
 
 	if ($DryRun) {
 		Write-Host "[dry-run] kubectl rollout status deployment/$DeploymentName -n $Namespace --timeout ${WaitTimeoutSeconds}s"
@@ -10725,9 +10752,9 @@ function New-GoSvcConfigMapYaml {
 		if ((Get-PlayerRedisTopology).Enabled) { $sceneManagerWaitAOFNumReplicas = '1' }
 		$sceneManagerWaitAOFTimeoutMs   = Get-AuthoritativeScalar -RelativePath $sceneManagerYaml -KeyPath 'OwnerEpochMint.WaitAOFTimeoutMs'
 	}
-	# Agones 段(Test-SceneManagerAgonesEnabled):Fleet 的 rooms 容量和 FleetAutoscaler 的 Counter 策略都按 rooms 计数算,
-	# 而 rooms 只有 scene_manager 经 GameServerAllocation 记账。以前这份 ConfigMap 不写这一段,Go 侧 Agones.Enabled 落回 false:
-	# 选节点走 Redis 负载分,rooms 计数恒为 0,自动扩容对人数增长无感。Namespace 不写,Go 侧读 POD_NAMESPACE(manifest 经
+	# Agones 段(Test-SceneManagerAgonesEnabled):Fleet 的 rooms 容量和 FleetAutoscaler 的 List 策略都按 rooms 条目数算,
+	# 而 rooms 只有 scene_manager 经 GameServerAllocation 与按条目的增删记账。以前这份 ConfigMap 不写这一段,Go 侧 Agones.Enabled
+	# 落回 false:选节点走 Redis 负载分,rooms 恒为空,自动扩容对人数增长无感。Namespace 不写,Go 侧读 POD_NAMESPACE(manifest 经
 	# downward API 注入)。RoomCapacity 只是参考值,容量以 GameServer 上的 rooms capacity 为准。访问 Agones API 的身份见 Apply-OneGoSvc。
 	$sceneManagerAgonesBlock = ''
 	if ($SvcName -eq 'scene-manager' -and (Test-SceneManagerAgonesEnabled)) {
@@ -11898,7 +11925,7 @@ Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
   Key: ""
-# 仅保留RpcServerConf的兼容字段；正式SQL聊天不创建此句柄，不读旧ChatRedis历史。
+# 只为 RpcServerConf 兼容:chat 按此段建的 go-zero 句柄不预连(NonBlock 缺省 true),聊天授权与历史只走 SQL、没有调用方发命令,所以不建连接。不写 ChatRedis。
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
@@ -12796,14 +12823,15 @@ function Select-GoSvcCanaryDeployment {
 		[Parameter(Mandatory = $true)][string]$ManifestContent
 	)
 
-	$documents = @([regex]::Split($ManifestContent, '(?m)^---[ \t]*\r?\n') | Where-Object { $_ -cmatch '(?m)^kind:[ \t]*Deployment[ \t]*\r?$' })
+	# SQL 写者的工作负载是 StatefulSet(槽位 = 序号,Get-WorkloadKind),其余全局服务是 Deployment。canary 只留这一份文档。
+	$documents = @([regex]::Split($ManifestContent, '(?m)^---[ \t]*\r?\n') | Where-Object { $_ -cmatch '(?m)^kind:[ \t]*(?:Deployment|StatefulSet)[ \t]*\r?$' })
 	if ($documents.Count -ne 1) {
-		throw "The manifest of $SvcName must contain exactly one Deployment (got $($documents.Count)); cannot render its canary copy."
+		throw "The manifest of $SvcName must contain exactly one Deployment or StatefulSet (got $($documents.Count)); cannot render its canary copy."
 	}
 	$deployment = $documents[0]
 	$replicaPattern = '(?m)^  replicas:[ \t]*\d+[ \t]*(?=\r?$)'
 	if ([regex]::Matches($deployment, $replicaPattern).Count -ne 1) {
-		throw "The Deployment of $SvcName must have exactly one spec.replicas line; cannot set the canary replica count."
+		throw "The workload of $SvcName must have exactly one spec.replicas line; cannot set the canary replica count."
 	}
 	return [regex]::Replace($deployment, $replicaPattern, "  replicas: $CanaryReplicas")
 }
@@ -13305,11 +13333,39 @@ function Get-SqlWriterCatalogEntry {
     return $catalog[$key]
 }
 
-# 名册至少要有多少条。一条 entry 是一个 boot,只能用一次:当前这一代要 副本数 条,一次滚动发布再换 副本数 条;
-# 写者主容器重启过又没 Ready,回收 CronJob 就删 Pod 换下一条,节点驱逐同样烧一条,所以每个副本再留 4 条余量。算法和用完之后怎么办见 docs/ops/k8s-open-server-runbook.md §1。
+# 名册至少要有多少条。一条 entry 是一个槽位,下标就是 StatefulSet 序号;同一槽位每次启动换代,名册不随启动、崩溃回收、驱逐和滚动发布消耗
+# (docs/design/writer-roster-exhaustion-20261106.md §5)。所以条数就是这个工作负载副本数的上限:至少等于副本数,扩容之前先加槽位。
 function Get-SqlWriterRosterMinimumEntries {
     param([Parameter(Mandatory=$true)][int]$Replicas)
-    return $Replicas*6
+    return $Replicas
+}
+
+# 全部写者名册的账号互不重复:一个账号就是一个槽位,两个槽位(同一名册里,或者两个工作负载、两个 zone 之间)共用一个账号会互相换代,谁都写不稳
+# (docs/design/writer-roster-exhaustion-20261106.md §5.6)。目录和名册按原字节 SHA 固定,同一份目录一次运行只核一遍。
+function Assert-SqlWriterRosterAccountsDisjoint {
+    $catalogFile=[Environment]::GetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG','Process')
+    if([string]::IsNullOrWhiteSpace($catalogFile)){throw 'SQL部署必须提供MMORPG_SQL_K8S_BOOT_CATALOG，不使用共享runtime账号默认值'}
+    $checked=$catalogFile+'|'+(Get-MaintenanceSha256 -Path $catalogFile)
+    if($script:SqlWriterRosterAccountsChecked -ceq $checked){return}
+    $catalog=Read-MaintenanceJson -Path $catalogFile
+    $owners=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    foreach($key in @($catalog.Keys)){
+        $entry=$catalog[$key]
+        if(-not $entry.Contains('rosterFile') -or -not $entry.Contains('rosterSha256')){continue}
+        $roster=Read-MaintenanceJson -Path $entry.rosterFile -ExpectedSha256 $entry.rosterSha256
+        $slot=0
+        foreach($rosterEntry in @($roster.entries)){
+            foreach($rosterRequest in @($rosterEntry.requests)){
+                if($null -eq $rosterRequest -or -not $rosterRequest.Contains('writer') -or -not $rosterRequest.writer.Contains('sqlPrincipal')){continue}
+                $principal=[string]$rosterRequest.writer.sqlPrincipal
+                $owner="$key slot $slot"
+                if($owners.ContainsKey($principal) -and $owners[$principal] -cne $owner){throw "The SQL writer account of $owner is also used by $($owners[$principal]): one account is one slot, two slots on it would supersede each other. Give every slot of every roster its own account, see docs/ops/k8s-open-server-runbook.md section 1."}
+                $owners[$principal]=$owner
+            }
+            $slot++
+        }
+    }
+    $script:SqlWriterRosterAccountsChecked=$checked
 }
 
 function Get-SqlWriterDeploymentEntry {
@@ -13327,15 +13383,19 @@ function Get-SqlWriterDeploymentEntry {
     $roster=Read-MaintenanceJson -Path $entry.rosterFile -ExpectedSha256 $entry.rosterSha256
     Assert-MaintenanceProperties -Value $roster -Required @('format','entries')
     $minimumEntries=Get-SqlWriterRosterMinimumEntries -Replicas ([int]$entry.replicas)
-    if($roster.format -cne 'SQL_WRITER_BOOT_ROSTER_V1' -or @($roster.entries).Count -lt $minimumEntries -or @($roster.entries).Count -gt 1024 -or [int]$entry.replicas -lt 1){throw "The boot roster of $Namespace/$SvcName does not fit: $($entry.replicas) replicas need at least $minimumEntries entries and at most 1024, it has $(@($roster.entries).Count). Every Pod start uses one entry for good, see docs/ops/k8s-open-server-runbook.md section 1."}
-    # 闸门跟着逻辑库走：一条entry是一个boot，要写的每个逻辑库一份Request，受保护库只有它自己。
+    if($roster.format -cne 'SQL_WRITER_BOOT_ROSTER_V2' -or @($roster.entries).Count -lt $minimumEntries -or @($roster.entries).Count -gt 1024 -or [int]$entry.replicas -lt 1){throw "The boot roster of $Namespace/$SvcName does not fit: $($entry.replicas) replicas need at least $minimumEntries slots and at most 1024, it has $(@($roster.entries).Count). The roster is SQL_WRITER_BOOT_ROSTER_V2 with one slot per StatefulSet ordinal; restarts reuse the slot of their ordinal, see docs/ops/k8s-open-server-runbook.md section 1."}
+    # 闸门跟着逻辑库走：一个槽位要写的每个逻辑库一份REGISTER模板，受保护库只有它自己。身份由init每次启动现场生成，模板里不许预先填。
     foreach($rosterEntry in $roster.entries){
         if(@($rosterEntry.requests).Count -lt 1){throw '有限roster的entry缺逻辑库Request'}
         foreach($rosterRequest in $rosterEntry.requests){
             if(@($rosterRequest.protectedSchemas).Count -ne 1 -or @($rosterRequest.protectedSchemas)[0] -cne $rosterRequest.authoritySchema){throw '有限roster的Request必须按逻辑库拆开，受保护库只有闸门所在的库'}
+            $prefilled=@('requestId','deploymentId' | Where-Object { $rosterRequest.Contains($_) })
+            if($rosterRequest.Contains('writer')){$prefilled+=@('writerKey','instanceId','registrationDigest','registeredMs','bootSeq' | Where-Object { $rosterRequest.writer.Contains($_) })}
+            if($prefilled.Count -ne 0){throw "The boot roster of $Namespace/$SvcName is not a slot roster: its REGISTER templates carry $($prefilled -join ', '), which the registrar makes for each boot."}
         }
     }
-    # 这里仅校验本地批准原件；init再次核同SHA、所有entry身份及真实永久REGISTER结局后才选中一个。
+    Assert-SqlWriterRosterAccountsDisjoint
+    # 这里仅校验本地批准原件；init再次核同SHA、全部槽位模板，按Pod序号选槽位、现场生成这一代并在各库注册。
     return $entry
 }
 
@@ -13346,7 +13406,10 @@ function Add-SqlWriterBootManifest {
     if([string]::IsNullOrEmpty($CatalogSvcName)){$CatalogSvcName=$SvcName}
     $entry=Get-SqlWriterDeploymentEntry -Namespace $Namespace -SvcName $CatalogSvcName
     $replicas=[regex]::Matches($ManifestContent,'(?m)^  replicas:\s*(\d+)\s*$')
-    if($replicas.Count -ne 1 -or [int]$replicas[0].Groups[1].Value -ne [int]$entry.replicas){throw 'boot计划与真实Deployment副本集合不符'}
+    if($replicas.Count -ne 1 -or [int]$replicas[0].Groups[1].Value -ne [int]$entry.replicas){throw 'boot计划与真实工作负载副本集合不符'}
+    # 写者是 StatefulSet:Pod 序号就是名册的槽位,init 按 -pod-name 选槽位(docs/design/writer-roster-exhaustion-20261106.md §5.5)。
+    # Deployment 的 Pod 名是随机后缀,选不出槽位;金丝雀副本也一样。
+    if([regex]::Matches($ManifestContent,'(?m)^kind:[ \t]*StatefulSet[ \t]*\r?$').Count -ne 1 -or [regex]::Matches($ManifestContent,'(?m)^kind:[ \t]*Deployment[ \t]*\r?$').Count -ne 0 -or $ManifestContent -notmatch '(?m)^  serviceName:[ \t]*\S'){throw "The SQL writer $SvcName must be a StatefulSet with a serviceName: its Pod ordinal is the slot of its writer roster (docs/design/writer-roster-exhaustion-20261106.md section 5.5)."}
     if(-not $ManifestContent.Contains('sql-writer-registrar')){
         # 注入块只来自同批data-service模板；所有normal编辑限定具名containers范围，绝不误改init。
         $prototype=[IO.File]::ReadAllText((Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/data-service.yaml'))
@@ -13407,6 +13470,7 @@ function Add-SqlWriterBootManifest {
     $registrarIndent=$registrarAnchors[0].Groups['indent'].Value
     $ManifestContent=$ManifestContent.Insert($registrarAnchors[0].Index,$registrarIndent+'- name: MMORPG_SQL_BACKEND'+"`n"+$registrarIndent+'  value: "'+$registrarBackend+'"'+"`n")
     if(-not $ManifestContent.Contains('"-roster"') -or -not $ManifestContent.Contains('"-runtime-config-output"') -or -not $ManifestContent.Contains('sql-writer-runtime-input')){throw '现有boot模板没有真正有限roster与选中配置隔离'}
+    if(-not $ManifestContent.Contains('"-pod-name","$(POD_NAME)"') -or $ManifestContent -notmatch 'fieldPath: metadata\.name\b'){throw "The registrar init of $SvcName must pass -pod-name from metadata.name: the Pod ordinal picks the roster slot."}
     $replace=@{PLACEHOLDER_SQL_WRITER_REQUEST_SECRET=$entry.requestSecret;PLACEHOLDER_SQL_WRITER_RUNTIME_SECRET=$entry.runtimeConfigSecret;PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET=$entry.registrarSecret;PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE=$entry.registrarImage;PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256=$entry.physicalAuthoritySha256;PLACEHOLDER_SQL_WRITER_ROSTER_SHA256=$entry.rosterSha256}
     foreach($key in $replace.Keys){$ManifestContent=$ManifestContent.Replace($key,[string]$replace[$key])}
     if($ManifestContent -match 'PLACEHOLDER_SQL_WRITER_'){throw 'SQL boot占位残留，拒绝部署'}
@@ -13705,11 +13769,13 @@ function Apply-OneGoSvc {
 		# 改名放在全部渲染注入之后、apply 之前(见 Select-GoSvcCanaryDeployment 上方说明)。下面删残留 Secret、策略那些收尾都归稳定版,
 		# canary 只 apply 自己这份 Deployment 就结束。
 		$manifestContent = Rename-CanaryWorkload -Name $SvcName -ManifestContent $manifestContent
+		if ($SvcName -in $script:SqlWriterGoSvcs) { Remove-LegacySqlWriterDeployment -Namespace $Namespace -Name "$SvcName-canary" }
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 		Write-Host "  [applied] $SvcName-canary -> $svcImage (replicas $CanaryReplicas, release_track=canary)"
 		return
 	}
 
+	if ($SvcName -in $script:SqlWriterGoSvcs) { Remove-LegacySqlWriterDeployment -Namespace $Namespace -Name $SvcName }
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
 	if ($SvcName -eq 'scene-manager' -and $null -eq $sceneManagerAgonesRbac) {
@@ -13745,6 +13811,14 @@ function Apply-OneGoSvc {
 	}
 
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
+}
+
+# SQL 写者从 Deployment 换成了 StatefulSet(docs/design/writer-roster-exhaustion-20261106.md §5.5)。两者类型不同、名字相同,
+# kubectl apply 只会新建 StatefulSet,不回收旧 Deployment;同一个 app 选择器下两个控制器各管一套 Pod,旧 Pod 还拿着旧名册的身份。
+# 所以 apply StatefulSet 之前先删同名的旧 Deployment(与 etcd / kafka / redis 换类型同一做法)。全新集群和已经切过的集群上是 no-op。
+function Remove-LegacySqlWriterDeployment {
+	param([Parameter(Mandatory = $true)][string]$Namespace, [Parameter(Mandatory = $true)][string]$Name)
+	Invoke-Kubectl -Args @("delete", "deployment", $Name, "-n", $Namespace, "--ignore-not-found")
 }
 
 # 写者 Pod 回收 CronJob,每个跑写者的 namespace 一份,先于写者落地。为什么要它、判据和不写 shell 的理由见 deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml。
@@ -13815,7 +13889,7 @@ function Assert-GlobalGoSvcCanaryPreflight {
 		if ($script:SqlWriterGoSvcs -cnotcontains $svcName) { continue }
 		$entry = Get-SqlWriterDeploymentEntry -Namespace $InfraNamespace -SvcName "$svcName-canary"
 		if ([int]$entry.replicas -ne $CanaryReplicas) {
-			throw "The boot catalog entry $InfraNamespace/$svcName-canary has replicas $($entry.replicas), but -CanaryReplicas is ${CanaryReplicas}: they must match, every canary Pod start consumes a roster entry of its own."
+			throw "The boot catalog entry $InfraNamespace/$svcName-canary has replicas $($entry.replicas), but -CanaryReplicas is ${CanaryReplicas}: they must match, every canary Pod ordinal needs a slot of its own roster."
 		}
 	}
 }
@@ -13835,7 +13909,8 @@ function Apply-GlobalGoSvcCanaries {
 			}
 		}
 		else {
-			Invoke-Kubectl -Args @("delete", "deployment", "$svcName-canary", "-n", $InfraNamespace, "--ignore-not-found")
+			# 两种类型一起删:SQL 写者的 canary 是 StatefulSet,其余是 Deployment;换类型之前留下的旧 Deployment 也在这里收掉。
+			Invoke-Kubectl -Args @("delete", "deployment,statefulset", "$svcName-canary", "-n", $InfraNamespace, "--ignore-not-found")
 		}
 	}
 }
@@ -13883,16 +13958,17 @@ function Apply-GlobalGoSvcWorkloads {
 function Find-ReadyDataServiceNamespace {
 	if ($DryRun) {
 		$assumed = Get-ZoneNamespace -Name $ZoneName
-		Write-Host "[dry-run] would look for a ready deployment/data-service in the $NamespacePrefix-* namespaces (none found = deferred); rendering as if $assumed has one"
+		Write-Host "[dry-run] would look for a ready statefulset/data-service in the $NamespacePrefix-* namespaces (none found = deferred); rendering as if $assumed has one"
 		return $assumed
 	}
-	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'deployment', '--all-namespaces', '--field-selector', 'metadata.name=data-service', '-o', 'json') `
+	# data-service 是 SQL 写者,线上是 StatefulSet(Get-WorkloadKind)。
+	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'statefulset', '--all-namespaces', '--field-selector', 'metadata.name=data-service', '-o', 'json') `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
 	if ($result.ExitCode -ne 0) {
-		throw "读取各 zone 的 deployment/data-service 失败(kubectl 退出码 $($result.ExitCode)):$($result.Stderr)。读不到不等于没有;基础设施已 apply,修好之后重跑 infra-up。"
+		throw "读取各 zone 的 statefulset/data-service 失败(kubectl 退出码 $($result.ExitCode)):$($result.Stderr)。读不到不等于没有;基础设施已 apply,修好之后重跑 infra-up。"
 	}
 	try { $list = ([string]$result.Stdout) | ConvertFrom-Json -ErrorAction Stop }
-	catch { throw "各 zone 的 deployment/data-service 的 kubectl 输出不是合法 JSON:$($_.Exception.Message)。基础设施已 apply,修好之后重跑 infra-up。" }
+	catch { throw "各 zone 的 statefulset/data-service 的 kubectl 输出不是合法 JSON:$($_.Exception.Message)。基础设施已 apply,修好之后重跑 infra-up。" }
 	$prefix = "$NamespacePrefix-"
 	foreach ($item in @($list.items)) {
 		if ($null -eq $item) { continue }
@@ -14031,7 +14107,7 @@ function New-JavaSvcConfigMapYaml {
 	# @Value 的嵌套占位符解析失败,gateway 拒启(fail-closed),而不是按空口令起来、限流静默 fail-open。
 	# 只看口令是否非空、与限流开关无关;空口令不写:dev 档(口令回落空串)的产物逐字不变。
 	$gatewayRedisPasswordLine = ''
-	# spring.data.redis.host(G4a 第 1a 批,-RedisSplit;唯一来源 Get-RedisPurposeTopology)。gateway 的 Redis 只用于 Bucket4j 限流桶
+	# spring.data.redis.host(G4a 第 1a 批,-RedisSplit;唯一来源 Get-RedisPurposeTopology)。gateway 的 Redis 只用于 Lua 限流桶(RedisRateLimitStore)
 	# rl:zone / rl:ip(RateLimitConfig;ZoneHealthProbeService 注入了 StringRedisTemplate 但不读写任何键),所以跟着排队实例走:
 	# queue → redis-queue-g<N>.<infra>,none → 核心 redis.<infra>(产物与拆分前逐字节相同)。端口与口令行不变:queue 实例同为 6379、
 	# 用同一个可选 Secret redis-auth。探针分组不含 redis(java/gateway_node 的 management.endpoint.health.group),queue 实例不在时
@@ -14349,6 +14425,8 @@ function Apply-JavaSvcManifests {
 			Apply-InjectedSecret -Namespace $Namespace -Name $script:GatewayAdminApiKeySecretName -Key $script:GatewayAdminApiKeySecretKey `
 				-Value $script:GatewayAdminApiKey -AppLabel "gateway"
 			Invoke-GatewaySchemaJob -Namespace $Namespace -Rendered $gatewaySchemaJob
+			# gateway 是 SQL 写者,工作负载是 StatefulSet:先收掉换类型之前的同名 Deployment(Remove-LegacySqlWriterDeployment)。
+			Remove-LegacySqlWriterDeployment -Namespace $Namespace -Name $svcName
 		}
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
@@ -14806,7 +14884,7 @@ function Apply-Zone {
 
 		if ($SceneOrchestrator -eq "agones" -and $AgonesAutoscale) {
 			if (-not $AgonesHighDensity) {
-				throw "-AgonesAutoscale requires -AgonesHighDensity: the Counter policy scales on the rooms Counter, which only exists in high-density mode."
+				throw "-AgonesAutoscale requires -AgonesHighDensity: the List policy scales on the rooms List, which only exists in high-density mode."
 			}
 			$autoscalerYaml = New-SceneFleetAutoscalerYaml `
 				-FleetName $scenePool.Name `
@@ -15255,7 +15333,8 @@ function Apply-BattlePool {
 
 # 金丝雀 battle 池(-CanaryBattleReplicas,发布轨道设计 §2.6)。Workload 是 New-BattleWorkloadManifest -Canary 的结果,$null = 这次不起。
 # 不粘滞:不起时删掉以前留下的 battle-canary,只删本次编排形态的那种 kind(Agones 是 Fleet,其余是 Deployment)。
-# 切换 battle 编排形态之前先撤掉金丝雀池,否则另一种 kind 的 battle-canary 会留下。删掉之后,还没开局的金丝雀局按 stable 放,
+# 另一种 kind 的 battle-canary 不归这里删:切换 battle 编排形态时它和 stable battle 一起列在 Get-BattleObsoleteResources 里,
+# 由 Apply-BattlePool 开头的 Remove-ClientEntryObsoleteResources 删(同一道 -AllowDisruptiveSwitch 闸),不用先手动撤池。删掉之后,还没开局的金丝雀局按 stable 放,
 # 正在打的局随 Pod 一起结束(与缩容稳定版 battle 相同),所以中止时先等金丝雀会话的局打完更稳妥(手册「中止」)。
 function Apply-CanaryBattlePool {
 	param([AllowNull()]$Workload)

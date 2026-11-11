@@ -228,7 +228,7 @@ void BattleNodeImpl::CreateBattle(const std::shared_ptr<CreateBattleCall>& call)
     // 2) 分配许可(集群外入口 D82)。拿不到(排空标签在、allocate 未确认、lifecycle 已停 / 仍在 Starting、等待超时)即拒绝:
     //    此刻还没进 Handle*,房间、定时器、推送、Kafka 事件一概没有发生。非 Agones 环境许可恒放行(启停窗口由第 1、3 道兜住)。
     //    回调只捕获 call 与 weak 闸,不捕获 this(AGENTS §11.7)。
-    if (!creationTasks_.Start(CreateBattleWithPermit(loop_, call, admission_), "战斗创建许可"))
+    if (!creationTasks_.Start(CreateBattleWithPermit(loop_, call, admission_), "BattleCreationPermit"))
         call->Reject(NotAllocatable());
     return;
     ///<<< END WRITING YOUR CODE

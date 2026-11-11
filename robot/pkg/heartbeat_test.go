@@ -19,6 +19,7 @@ import (
 	"github.com/luyuancpp/muduoclient/muduo"
 	"google.golang.org/protobuf/proto"
 
+	"proto/battle"
 	"proto/common/base"
 )
 
@@ -166,6 +167,51 @@ func TestNoAdvertMeansNoHeartbeatAndNoGoroutine(t *testing.T) {
 	h.gc.hb.mu.Unlock()
 	if running {
 		t.Fatal("heartbeat goroutine started although the gate advertised no interval")
+	}
+}
+
+// 战斗直连与大厅连接同一套(设计 §14):battle 在握手成功应答里通告,当场发第一条,之后按通告的间隔一条。
+// battle 从握手成功应答起按读空闲判死,所以第一条不能等满间隔。
+func TestBattleVerifyStartsHeartbeatOnTheDirectConnection(t *testing.T) {
+	h := newHeartbeatHarness(t)
+	conn := h.gc.conn()
+	h.gc.onBattleVerified(conn, &battle.BattleTokenVerifyResponse{
+		Success: true, BattleId: 7, HeartbeatIntervalMs: 10000, HeartbeatTimeoutMs: 30000,
+	})
+
+	if first := h.nextSent(t); first.seq != 1 || first.conn != conn {
+		t.Fatalf("first heartbeat = seq %d on %p, want seq 1 on the verified direct connection %p", first.seq, first.conn, conn)
+	}
+	if got := h.gc.HeartbeatTimeout(); got != 30*time.Second {
+		t.Fatalf("HeartbeatTimeout() = %s, want the advertised 30s", got)
+	}
+	if waited := h.parked(t); waited != 10*time.Second {
+		t.Fatalf("heartbeat goroutine waits %s for the next heartbeat, want the advertised 10s", waited)
+	}
+	if waited := h.tick(t); waited != 10*time.Second {
+		t.Fatalf("heartbeat goroutine waits %s between heartbeats, want the advertised 10s", waited)
+	}
+	if s := h.nextSent(t); s.seq != 2 || s.conn != conn {
+		t.Fatalf("heartbeat = seq %d on %p, want seq 2 on %p", s.seq, s.conn, conn)
+	}
+	h.assertNothingSent(t)
+	h.assertSingleGoroutine(t)
+}
+
+// 还没实现直连心跳的 battle(Java 版)不通告:一条都不发,也不起 goroutine,否则它会把心跳当未知消息强关直连。
+func TestBattleWithoutAdvertSendsNoHeartbeat(t *testing.T) {
+	h := newHeartbeatHarness(t)
+	h.gc.onBattleVerified(h.gc.conn(), &battle.BattleTokenVerifyResponse{Success: true, BattleId: 7})
+
+	h.assertNothingSent(t)
+	if got := h.gc.HeartbeatInterval(); got != 0 {
+		t.Fatalf("HeartbeatInterval() = %s, want 0 for a battle node that does not advertise heartbeats", got)
+	}
+	h.gc.hb.mu.Lock()
+	running := h.gc.hb.running
+	h.gc.hb.mu.Unlock()
+	if running {
+		t.Fatal("heartbeat goroutine started although the battle node advertised no interval")
 	}
 }
 

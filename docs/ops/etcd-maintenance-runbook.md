@@ -242,6 +242,28 @@ Git Bash 下,以 `/` 开头的参数(`/mmorpg/killswitch/...` 这类键)要加 `
 里映射回退一行同一口径),保证恢复后的 revision 严格大于恢复前任何进程见过的值。恢复之后核对:各服务启动日志里 `[snowflakealloc]` 的申领
 都成功、没有 `slot ownership lost`;有的话按「槽被别人接管」处理,该进程已自己停发。
 
+**revision 倒退(换成一套全新的 etcd、revision 从 1 重计,或者没带 `--bump-revision` 从快照恢复)**:除了重启全部节点
+(`docs/design/grpc-muduo-transport.md` 的 revision 单调前提),本 zone 控制域 Redis 里的节点号持有者 `node:zone:*:holder`
+(scene_manager 写,scene 节点据它认出「自己的节点号已被别的进程接走」,[归属对账](../design/scene-node-ownership-reconcile.md) §4.6)
+记着倒退之前的修订号,与新登记不可比。scene_manager 自动处理,不用手工清 Redis:
+
+- 领导者每轮全量同步(约一分钟)先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:zone:<z>`,再线性一致地读 etcd 当前修订号。
+  当前修订号小于水位就换一次 etcd 纪元:`scene_manager:etcd_epoch:zone:<z>` 加一,水位降到当前修订号。ERROR 日志
+  `[NodeHolder] etcd revision went back in zone N: current revision C is below the recorded W ...`,计数
+  `scene_manager_etcd_revision_regressions_total`,告警 `SceneManagerEtcdRevisionRegressed`(critical)。
+- 换纪元之后,快照里在册的号当场改写成新集群里的登记;其余的号旧记录先留着,下一次登记时不比修订号直接覆盖。
+- 不要删水位与纪元两个键:删了水位,紧接着的一次倒退认不出来;删了纪元,本 zone 的持有者记录会全部按旧纪元重写一遍(无害,但没必要)。
+
+处置:
+
+1. 计划内的换集群或恢复:换完之后每个 zone 亮一次告警是预期的。核对日志里的当前修订号与水位确实对应这次操作,再按本节重启全部 scene 节点:
+   不重启的老进程认不出自己的节点号已被新进程接走,会一直留着已被改派的场景。
+2. 不是计划内的:先查清 scene_manager 连的是哪一套 etcd(配置、DNS、负载均衡),是不是有人把 etcd 指到了别的集群或旧备份;发号器的水位
+   是否也跟着回退了(按本节开头的「水位回退」处理)。
+3. 带 `--bump-revision` 恢复时 revision 不倒退,不会换纪元:恢复之后的登记修订号都更大,持有者记录照旧单调,不用处理。
+
+修正之前 scene 节点只会认不出被接走,不会误排空。
+
 发号器(data_service `AllocateIdSegment`)的两套独立 etcd 与全局号源登记处是另一回事,恢复与初始化只走 [发号器运维手册](id-issuer-runbook.md),
 **登记处不许从备份恢复**(AGENTS.md §7 不变量 1)。
 

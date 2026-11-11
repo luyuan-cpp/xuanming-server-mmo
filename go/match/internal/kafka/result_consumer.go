@@ -135,7 +135,7 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 		safego.Go("match.kafka.results", func() {
 			if err := owner.Run(ctx); err != nil {
 				cfg.RelayAdmission.Hold()
-				logx.Errorf("结果消费者 HOLD: %v", err)
+				logx.Errorf("[rating] result consumer HOLD: %v", err)
 			}
 		})
 		return startResultLagProbe(ctx, cfg)
@@ -160,7 +160,7 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 			func() {
 				defer func() {
 					if err := reader.Close(); err != nil {
-						logx.Error("关闭评级结果消费者失败")
+						logx.Error("[rating] failed to close the rating result consumer")
 					}
 				}()
 				runResultConsumer(ctx, reader, handle, sleepCtx, record)
@@ -169,7 +169,7 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 				return
 			}
 			// 未确认的位点绝不提交；换 reader 后从 broker 的原位点恢复。每轮最多三次业务调用。
-			logx.Error("评级 SQL 尚未确认，保留 Kafka 原位点并退避恢复")
+			logx.Error("[rating] rating SQL not yet confirmed; keeping the original Kafka offset and backing off before resuming")
 			if !sleepCtx(ctx, delay) {
 				return
 			}
@@ -241,7 +241,7 @@ func runResultConsumer(ctx context.Context, reader resultReader, handle ResultHa
 			if ctx.Err() != nil || errors.Is(err, context.Canceled) {
 				return
 			}
-			logx.Errorf("结果拉取失败，等待原有退避: %v", err)
+			logx.Errorf("[rating] result fetch failed; waiting for the existing backoff: %v", err)
 			if !wait(ctx, resultFetchBackoff) {
 				return
 			}
@@ -261,11 +261,11 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 		// 损坏原件尚未归档，必须保留位点供人工处置，不能把日志当成入账收据。
 		// 单轮处理立即返回错误；由 consumer owner 保留原消息并退避恢复，不消耗业务重试次数。
 		metrics.ObserveRatingUpdate("unknown", "decode_error")
-		logx.Errorf("结果原件解码失败,保留位点等待人工处置 topic=%s partition=%d offset=%d: %v", msg.Topic, msg.Partition, msg.Offset, err)
+		logx.Errorf("[rating] failed to decode result original; keeping offset for manual handling topic=%s partition=%d offset=%d: %v", msg.Topic, msg.Partition, msg.Offset, err)
 		return fmt.Errorf("结果原件解码失败: %w", err)
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(event.GetBattleId(), 10) {
-		logx.Errorf("结果 key 与 battle_id 不符 partition=%d offset=%d", msg.Partition, msg.Offset)
+		logx.Errorf("[rating] result key does not match battle_id partition=%d offset=%d", msg.Partition, msg.Offset)
 	}
 	var last error
 	for attempt := 1; attempt <= resultHandleMaxAttempts; attempt++ {
@@ -280,10 +280,10 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 			// 永久错误不在本轮反复尝试；既有归档不能证明冲突消息也已处理。
 			// 保留原位点、错误和指标，等待人工核对两份原件（cross-zone-matchmaking.md §13.4）。
 			metrics.ObserveRatingUpdate(matchpb.MatchMode(event.GetMatchMode()).String(), "original_conflict")
-			logx.Errorf("结果原件与已归档的不一致,保留位点等待人工处置 topic=%s partition=%d offset=%d battle=%d: %v", msg.Topic, msg.Partition, msg.Offset, event.GetBattleId(), last)
+			logx.Errorf("[rating] result original differs from the archived one; keeping offset for manual handling topic=%s partition=%d offset=%d battle=%d: %v", msg.Topic, msg.Partition, msg.Offset, event.GetBattleId(), last)
 			return last
 		}
-		logx.Errorf("结果处理未确认 attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
+		logx.Errorf("[rating] result handling unconfirmed attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
 		// 闸门冻结是搬库窗口:确定没写,不占重试次数,不然窗口稍长消费者就停了。等到 handler 的预算用完为止。
 		if authoritysql.IsWriterFrozen(last) {
 			attempt--

@@ -339,7 +339,7 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	installDefaultFakeSceneNode(t)
 	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-dead", podIP: "10.0.89.10", state: "Allocated", count: 3, capacity: 4},
+		&fakeGameServer{name: "gs-dead", podIP: "10.0.89.10", state: "Allocated", capacity: 4},
 		&fakeGameServer{name: "gs-first", podIP: "10.0.89.20", state: "Ready", capacity: 4},
 		&fakeGameServer{name: "gs-late", podIP: "10.0.89.30", state: "Ready", capacity: 4},
 	)
@@ -349,9 +349,10 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	setResolveCASLoadScores(t, mr)
 
 	const lostScene, adoptScene, wonScene uint64 = 89010, 89011, 89012
+	records := make(map[uint64]string)
 	for _, id := range []uint64{lostScene, adoptScene, wonScene} {
 		seedWorldChannelOwnedByDeadNode(t, mr, id)
-		require.NoError(t, mr.Set(sceneAgonesGsKey(id), "gs-dead"))
+		records[id] = seedAgonesRoom(t, sc, alloc, id, "gs-dead")
 	}
 	logic := NewEnterSceneLogic(context.Background(), sc)
 
@@ -365,7 +366,7 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	require.Zero(t, release, "属主不是本次挑中的节点,不得归还死节点的名额")
 	gs, err := mr.Get(sceneAgonesGsKey(lostScene))
 	require.NoError(t, err)
-	require.Equal(t, "gs-dead", gs)
+	require.Equal(t, records[lostScene], gs)
 
 	// 落空,属主恰是 late,先提交的写者没转名额:由这里补转。
 	require.True(t, reassignSceneNode(sc, resolveCASZone, adoptScene, resolveNodeDead, resolveNodeLate, freshPlacementGeneration(t, sc, resolveCASZone)))
@@ -374,18 +375,14 @@ func TestResolveScene_DeadOwner_AgonesRoomFollowsOwnership(t *testing.T) {
 	require.Equal(t, resolveNodeLate, nid)
 	require.EqualValues(t, 1, alloc.roomsOf("gs-late"))
 	require.EqualValues(t, 2, alloc.roomsOf("gs-dead"))
-	gs, err = mr.Get(sceneAgonesGsKey(adoptScene))
-	require.NoError(t, err)
-	require.Equal(t, "gs-late", gs)
+	requireAgonesRecordOn(t, sc, alloc, adoptScene, "gs-late")
 
 	// 改派成功:名额跟到 late,死节点 GameServer 上再还一份。
 	_, nid, err = logic.resolveScene(wonScene, resolveCASConfID, resolveCASZone)
 	require.NoError(t, err)
 	require.Equal(t, resolveNodeLate, nid)
-	require.EqualValues(t, 2, alloc.roomsOf("gs-late"), "新节点必须记账,否则 rooms Counter 少算")
-	require.EqualValues(t, 1, alloc.roomsOf("gs-dead"), "死节点上只剩 lostScene 那一份")
+	require.EqualValues(t, 2, alloc.roomsOf("gs-late"), "新节点必须记账,否则 rooms 少算")
+	require.Equal(t, []string{parseAgonesRoom(records[lostScene]).Entry}, alloc.entriesOf("gs-dead"), "死节点上只剩 lostScene 那一条")
 	require.EqualValues(t, 0, alloc.roomsOf("gs-first"))
-	gs, err = mr.Get(sceneAgonesGsKey(wonScene))
-	require.NoError(t, err)
-	require.Equal(t, "gs-late", gs)
+	requireAgonesRecordOn(t, sc, alloc, wonScene, "gs-late")
 }

@@ -29,6 +29,7 @@
 #include "error_reporter/error_reporter.h"
 #include "network/node_utils.h"
 #include "network/grpc_client_runtime.h"
+#include "network/grpc_trace_hooks.h"
 #include "node/system/node/thread_observability.h"
 #include "network/traffic_statistics.h"
 #include "network/rpc_channel_stats.h"
@@ -949,6 +950,7 @@ Node::Node(muduo::net::EventLoop *loop, const std::string &logFilePath)
 Node::Node(muduo::net::EventLoop *loop,
 		   uint32_t nodeType,
 		   CanConnectNodeTypeList connectTo,
+		   DiscoveryNodeTypeList discover,
 		   ::google::protobuf::Service *rpcService)
 	: Node(loop, "logs/cpp_nodes/" + NodeUtils::NodeTypeToShortName(nodeType))
 {
@@ -958,6 +960,18 @@ Node::Node(muduo::net::EventLoop *loop,
 	}
 	MutableNodeInfo().set_node_type(nodeType);
 	targetNodeTypeWhitelist = std::move(connectTo);
+	discoveryNodeTypes_ = std::move(discover);
+	// 连得上的前提是发现得到(docs/design/connection-fanout-subsetting-20261106.md §3.4)。在 Initialize 之前查:
+	// 那里的 InitEtcdService 就按发现集合 Range。
+	for (const uint32_t connectType : targetNodeTypeWhitelist)
+	{
+		if (!discoveryNodeTypes_.contains(connectType))
+		{
+			LOG_FATAL << eNodeType_Name(static_cast<eNodeType>(nodeType)) << " connects to "
+					  << eNodeType_Name(static_cast<eNodeType>(connectType))
+					  << " but does not discover it; add it to the discovery set in main.cpp";
+		}
+	}
 	Initialize();
 	node::observability::RegisterThreadObservability(eventLoop, "logs/" + NodeUtils::NodeTypeToShortName(nodeType));
 	RegisterTrafficStatsReporter(eventLoop);
@@ -1352,7 +1366,9 @@ void Node::StartGrpcServer()
 		LOG_FATAL << "gRPC server bind address must be a canonical IPv4 literal: " << serverAddress;
 	}
 
-	const muduo_grpc::ServerOptions serverOptions{};
+	muduo_grpc::ServerOptions serverOptions;
+	// 入站接续调用方带来的 trace,不合法就开新根(docs/design/distributed-tracing.md §5.3)。
+	serverOptions.dispatchInterceptor = grpc_tracing::DispatchUnderIncomingTrace;
 	auto server = muduo_grpc::Server::Create(eventLoop, grpcEp.ip(), static_cast<uint16_t>(grpcEp.port()),
 											 serverOptions);
 	if (!server)
@@ -1429,7 +1445,7 @@ void Node::OnGrpcServerDrained()
 		stats.lateFinish != 0 || stats.dropped != 0 || stats.droppedOffLoop != 0)
 	{
 		shutdownFailure_.store(true, std::memory_order_release);
-		LOG_ERROR << "gRPC 生命周期 HOLD：已接收业务存在超时、丢弃或未知完成；连接清空不是成功闭合";
+		LOG_ERROR << "gRPC lifecycle HOLD: accepted work had timeouts, drops or unknown completions; drained connections are not a successful closure";
 	}
 	LOG_INFO << "gRPC server drained. drain_ms=" << drainMs << " "
 			 << muduo_grpc::FormatServerStats(stats);
@@ -1525,6 +1541,9 @@ void Node::StartRpcServer()
 		LOG_TRACE << "RPC server already started, skipping.";
 		return;
 	}
+
+	// node_id 已由分配键 CAS 定下:自身类型不在发现集合里时从这里开始只看自己那一条发现键(注册自检与劫持检测都靠它)。
+	serviceDiscoveryManager.WatchOwnRegistrationKey();
 
 	const NodeInfo &localNodeInfo = GetNodeInfo();
 
@@ -1662,24 +1681,24 @@ void Node::InitMaintenanceControl()
 {
     const char* directory = GetNonEmptyEnv("MMORPG_MAINTENANCE_CONTROL_DIR");
     const char* prepare=GetNonEmptyEnv("MMORPG_MAINTENANCE_PREPARE_ONLY");
-    if(prepare&&std::string(prepare)!="1")FatalStartupConfig("maintenance","prepare-only只能显式为1");
-    if (!directory) {if(prepare)FatalStartupConfig("maintenance","prepare-only缺私有控制目录");return;}
+    if(prepare&&std::string(prepare)!="1")FatalStartupConfig("maintenance","prepare-only must be explicitly set to 1");
+    if (!directory) {if(prepare)FatalStartupConfig("maintenance","prepare-only is missing the private control directory");return;}
     const char* helper = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER");
     const char* helperHash = GetNonEmptyEnv("MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256");
     if (!helper || !helperHash || !PathFromUtf8(directory).is_absolute() ||
         !PathFromUtf8(helper).is_absolute() || !std::regex_match(helperHash, std::regex("[0-9a-fA-F]{64}")) ||
         !RpcChannel::ProcessMaintenance()->EnableAcknowledgedSends()) {
-        FatalStartupConfig("maintenance", "维护控制目录/固定文件助手配置无效，或首次发布已经发生");
+        FatalStartupConfig("maintenance", "maintenance control directory/fixed file helper config is invalid, or the first publish has already happened");
     }
     auto control = std::make_unique<NodeMaintenanceControl>();
     control->directory = directory; control->helper = helper;
     control->prepareBoot=prepare!=nullptr;maintenancePrepareBoot_=control->prepareBoot;
-    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot_)||(maintenancePrepareBoot_&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only必须早于首次接收");
+    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot_)||(maintenancePrepareBoot_&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only must take effect before the first receive");
     control->helperHash = boost::to_lower_copy(std::string(helperHash));
     try {
         const auto uuid = boost::uuids::string_generator()(GetNodeInfo().node_uuid());
         control->instance.assign(reinterpret_cast<const char*>(uuid.data()), uuid.size());
-    } catch (...) { FatalStartupConfig("maintenance", "实际节点 boot UUID 无效"); }
+    } catch (...) { FatalStartupConfig("maintenance", "actual node boot UUID is invalid"); }
     maintenanceControl_ = std::move(control);
     maintenanceControlTimer_.RunEvery(0.1, [this] { PollMaintenanceControl(); });
 }
@@ -1693,7 +1712,7 @@ void Node::CloseMaintenanceSource()
     if(!maintenanceInboundRelay_) RpcChannel::ProcessMaintenance()->CloseSources();
     if (!maintenanceSourceClose_ || !shutdownDrainCompleteFn_ || !maintenanceRelayStop_) {
         control.held = true; shutdownFailure_.store(true, std::memory_order_release);
-        LOG_ERROR << "维护 HOLD：实际节点未装配 source/relay 生命周期钩子";
+        LOG_ERROR << "Maintenance HOLD: actual node has no source/relay lifecycle hooks installed";
     } else if (!sourceBusinessClosed_) {
         sourceBusinessClosed_ = true; maintenanceSourceClose_(*this);
     }
@@ -1707,7 +1726,7 @@ void Node::PollMaintenanceControl()
     if (!maintenanceControl_ || shutdownStarted.load(std::memory_order_acquire)) return;
     auto& control = *maintenanceControl_;
     const auto hold = [&] {
-        if (!control.held) LOG_ERROR << "维护 HOLD：私有原件、实际 owner 结果或生命周期门禁未满足";
+        if (!control.held) LOG_ERROR << "Maintenance HOLD: private original, actual owner result or lifecycle gate not satisfied";
         control.held = true; shutdownFailure_.store(true, std::memory_order_release);
         CloseMaintenanceSource();
     };
@@ -2007,7 +2026,7 @@ void Node::FinalizeTeardownInLoop()
 	if (!kafkaManager.Shutdown())
 	{
 		shutdownFailure_.store(true, std::memory_order_release);
-		LOG_ERROR << "Kafka 生命周期 HOLD：native producer 或已接收回调尚未确认，禁止以进程退出签闭合";
+		LOG_ERROR << "Kafka lifecycle HOLD: native producer or accepted callbacks not yet confirmed; process exit must not be signed off as a closure";
 	}
 	// 拆除前钩子(SetBeforeTeardown):排在 producer 最后一次有界 flush 之后(重入时 kafkaManager.Shutdown 只返回缓存结果,
 	// 不再 flush),排在 Redis / ECS / 注册表拆除与 logSystem.stop() 之前 —— 业务在这里停掉自己的定时器并把未落定的事

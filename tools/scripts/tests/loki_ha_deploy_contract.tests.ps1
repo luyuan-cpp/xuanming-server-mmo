@@ -51,10 +51,15 @@ function Invoke-LokiDryRun {
     return Invoke-CapturedPwsh -ScriptPath (Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1') -Arguments $Arguments -Env $Env
 }
 
+function Get-KindBlocks {
+    param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Kind, [Parameter(Mandatory = $true)][string]$Name)
+    return @(Get-ManifestBlocks -Output $Output | ForEach-Object { ($_ -replace "`r`n", "`n") -split '(?m)^---[ \t]*$' } |
+        Where-Object { $_ -cmatch ('(?m)^kind: ' + $Kind + '\s*$') -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
+}
+
 function Get-KindBlock {
     param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Kind, [Parameter(Mandatory = $true)][string]$Name)
-    $found = @(Get-ManifestBlocks -Output $Output | ForEach-Object { ($_ -replace "`r`n", "`n") -split '(?m)^---[ \t]*$' } |
-        Where-Object { $_ -cmatch ('(?m)^kind: ' + $Kind + '\s*$') -and $_ -cmatch ('(?m)^  name: ' + [regex]::Escape($Name) + '\s*$') })
+    $found = @(Get-KindBlocks -Output $Output -Kind $Kind -Name $Name)
     if ($found.Count -ne 1) { throw "DryRun 输出里 $Kind $Name 应当恰好 1 份,实际 $($found.Count) 份" }
     return $found[0]
 }
@@ -158,7 +163,7 @@ Test-Case 'dev 缺省单副本:Deployment loki 加 PVC,不渲染 StatefulSet 与
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "输出: $($run.Output)"
     Assert-Match -Text $run.Output -Pattern 'Loki: replicas=1 manifest=loki\.yaml object_store=local-disk' -Because '入口打印本次形态'
     $null = Get-KindBlock -Output $run.Output -Kind 'Deployment' -Name 'loki'
-    Assert-NotMatch -Text $run.Output -Pattern '(?m)^kind: StatefulSet\s*\r?\n(?:.*\r?\n)*?  name: loki\s*$' -Because '单副本不是 StatefulSet'
+    Assert-Equal -Expected 0 -Actual @(Get-KindBlocks -Output $run.Output -Kind 'StatefulSet' -Name 'loki').Count -Because '单副本不是 StatefulSet'
     Assert-NotMatch -Text $run.Output -Pattern 'seaweedfs' -Because '没开夹具'
 }
 
@@ -210,7 +215,9 @@ Test-Case 'dev 夹具:SeaweedFS 先于 Loki 渲染,Loki 指向它、按路径寻
     Assert-Match -Text $config -Pattern "endpoint: seaweedfs-s3\.${Infra}:8333" -Because 'Loki 指向夹具'
     Assert-Match -Text $config -Pattern 's3forcepathstyle: true' -Because '夹具按路径寻址'
     Assert-Match -Text $config -Pattern 'insecure: true' -Because '夹具走 http'
-    Assert-True -Condition ($run.Output.IndexOf('name: seaweedfs') -lt $run.Output.IndexOf('kind: StatefulSet')) -Because '桶要先于 Loki 能写'
+    $fixtureAt = $run.Output.IndexOf('mmorpg.io/seaweedfs-s3-config-hash')
+    $lokiAt = $run.Output.IndexOf('serviceName: loki-memberlist')
+    Assert-True -Condition ($fixtureAt -ge 0 -and $lokiAt -gt $fixtureAt) -Because '夹具先于 Loki 渲染,桶要先能写'
     Assert-Match -Text $run.Output -Pattern 'Secret seaweedfs-dev-s3-config \(key s3\.json; value hidden\)' -Because '身份配置里有密钥,只进 Secret'
     Assert-NotMatch -Text $run.Output -Pattern 'mmorpg-loki-dev-secret' -Because '夹具的开发密钥同样不进输出'
 }

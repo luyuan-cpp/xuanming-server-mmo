@@ -11,6 +11,8 @@
       - reason 取值必须是 go/shared/gatepick/eligibility.go 的 Reason* 常量,login 两条规则合起来覆盖全部取值;
       - 两个计数都不预置 0 值序列,每条规则都要带「新序列」分支(unless … offset),否则第一次回落 increase() 看不见;
       - PrometheusRule 形状、每条规则有 severity / summary / description / for,告警名在 deploy/k8s 的告警文件里不重名。
+    2026-11-10 起同文件还有 login.queue-capacity 组(排队的区容量被 gate 承载压低):钉住它引用的两个 gauge 由 loginqueue 注册、
+    两边按同一组标签聚合。
     只读文本,不执行部署入口,不访问任何集群。规则语法由 promtool 另验(见 docs/PROGRESS.md 对应条目)。
 
 .EXAMPLE
@@ -159,6 +161,41 @@ Test-Case '三条回落告警的名字在 deploy/k8s 的全部告警文件里各
     foreach ($name in $names) {
         Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq $name })).Count -Because "$name 在 Alertmanager 里按 alertname 分组,重名会互相掩盖"
     }
+}
+
+Test-Case 'login-alerts.yaml:login.queue-capacity 组只有 LoginQueueCapacityLimitedByGates,引用的两个 gauge 由 loginqueue 注册,两边按 (namespace, zone) 比较' {
+    $group = Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.queue-capacity'
+    Assert-Match -Text $group -Pattern '(?m)^      interval:[ ]*30s[ ]*$' -Because '评估间隔'
+    $rules = @(Get-AlertRules -GroupText $group)
+    Assert-Equal -Expected 'LoginQueueCapacityLimitedByGates' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+    $rule = $rules[0]
+    Assert-Match -Text $rule.Body -Pattern '(?m)^            severity:[ ]*warning[ ]*$' -Because '不断线、不多放,只是容量规划与实际不符'
+    foreach ($field in @('summary', 'description', 'runbook_url')) {
+        Assert-Match -Text $rule.Body -Pattern ('(?m)^            {0}:' -f $field) -Because "要有 $field"
+    }
+    Assert-Match -Text $rule.Body -Pattern '(?m)^          for:[ ]*10m[ ]*$' -Because 'gauge 按次写,gate 刚重启、刚标排空时会短暂压低,持续 10 分钟才报'
+
+    # 两个 gauge 用包级常量 metricNamespace 作 Namespace,不是字面量,按常量值拼全名。
+    $metricsSource = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/loginqueue/metrics.go'
+    $ns = [regex]::Match($metricsSource, '(?m)^const metricNamespace = "(?<v>[a-z_]+)"').Groups['v'].Value
+    Assert-Equal -Expected 'login_queue' -Actual $ns -Because '夹具前提:loginqueue 指标的 Namespace 常量'
+    $registered = @([regex]::Matches($metricsSource, '(?s)Namespace:\s*metricNamespace,\s*Subsystem:\s*"(?<sub>[a-z_]*)",\s*Name:\s*"(?<n>[a-z0-9_]+)"') | ForEach-Object {
+            if ($_.Groups['sub'].Value) { '{0}_{1}_{2}' -f $ns, $_.Groups['sub'].Value, $_.Groups['n'].Value }
+            else { '{0}_{1}' -f $ns, $_.Groups['n'].Value }
+        })
+    $expr = Get-RuleExpr -Body $rule.Body
+    $referenced = @([regex]::Matches($expr, '\blogin_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-Equal -Expected 'login_queue_capacity,login_queue_configured_capacity' -Actual ($referenced -join ',') -Because '只比较实际容量与配置容量'
+    foreach ($metric in $referenced) {
+        Assert-True -Condition ($registered -ccontains $metric) -Because "$metric 必须由 loginqueue/metrics.go 注册(改名后告警静默失效)"
+    }
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($expr, '\bmin by \(namespace, zone\) \(login_queue_[a-z_]+\)')).Count -Because '两边按同一组标签取各副本最小值,否则比较对不上序列'
+    Assert-Match -Text $expr -Pattern '\(login_queue_capacity\)\s*<\s*min by \(namespace, zone\) \(login_queue_configured_capacity\)' -Because '实际容量小于配置容量才报;没配容量时配置值为 0,永远不报'
+
+    $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
+            ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
+        } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginQueueCapacityLimitedByGates' })).Count -Because '告警名不重名'
 }
 
 exit (Complete-TestRun -SuiteName 'gate_pick_alerts_contract')

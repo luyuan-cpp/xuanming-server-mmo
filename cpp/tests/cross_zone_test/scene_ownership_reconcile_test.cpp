@@ -228,6 +228,12 @@ TEST(SceneOwnershipRules, HolderTrackerNeedsANewerRegistrationOfAnotherProcess)
 	EXPECT_EQ(tracker.ownRevision, 200u);
 	EXPECT_EQ(tracker.Observe(Value("150:uuid-other"), kSelfUuid, kUnconfirmed), so::SlotHolder::kThisProcessOrUnknown);
 
+	// etcd 换成新集群、修订号从头计,scene_manager 把本进程的记录改写成新集群里的登记:跟着用新修订号比,
+	// 新集群里接走这个号的进程(修订号比它大)照样认得出。
+	EXPECT_EQ(tracker.Observe(Value("30:uuid-self"), kSelfUuid, kConfirmed), so::SlotHolder::kThisProcessOrUnknown);
+	EXPECT_EQ(tracker.ownRevision, 30u);
+	EXPECT_EQ(tracker.Observe(Value("40:uuid-other"), kSelfUuid, kUnconfirmed), so::SlotHolder::kAnotherProcess);
+
 	// 没有信息:键不存在、读不到、记录损坏、不知道自己的 uuid。
 	EXPECT_EQ(tracker.Observe(Missing(), kSelfUuid, kUnconfirmed), so::SlotHolder::kThisProcessOrUnknown);
 	EXPECT_EQ(tracker.Observe(Unreadable(), kSelfUuid, kUnconfirmed), so::SlotHolder::kThisProcessOrUnknown);

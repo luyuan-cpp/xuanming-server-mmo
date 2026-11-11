@@ -158,10 +158,15 @@ message BattleTokenVerifyRequest {
 }
 
 // 握手应答(battle 节点 → 客户端)。失败时 battle 节点随后主动断开。
+// 心跳两项与 gate 的 ClientTokenVerifyResponse 同义同值(docs/design/gate-client-heartbeat.md §14):成功时填,
+// 客户端收到非 0 的间隔就要在这条直连上立即发第一条 ClientHeartbeatRequest、之后每个间隔一条;
+// battle 从发出本应答起,连续 heartbeat_timeout_ms 收不到这条直连的任何一帧就断开它。
 message BattleTokenVerifyResponse {
   bool success = 1;
   string error = 2;       // 失败原因(非敏感,可直接展示 / 记日志)
   uint64 battle_id = 3;   // 成功时回填,客户端据此把连接与本地战斗状态机对上
+  uint32 heartbeat_interval_ms = 4;  // 客户端在本直连上每隔这么久发一条 ClientHeartbeatRequest;0 = 这台 battle 不支持心跳,不发
+  uint32 heartbeat_timeout_ms = 5;   // battle 连续这么久收不到本直连任何一帧就断开;客户端同样按它判 battle 已死
 }
 
 // 落点分配(battle 节点 → 客户端,大厅公告:无直连时经大厅通道 Kafka gate-cmd 推送;D26):

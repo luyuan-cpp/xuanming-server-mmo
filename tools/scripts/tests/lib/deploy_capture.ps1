@@ -41,8 +41,8 @@ function New-SqlWriterCatalogFixture {
 
     $null = [System.IO.Directory]::CreateDirectory($Root)
     $rosterPath = Join-Path $Root 'roster.json'
-    # 两副本要至少 12 条(k8s_deploy.ps1 Get-SqlWriterRosterMinimumEntries)。
-    [System.IO.File]::WriteAllText($rosterPath, ('{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[' + ((@('{}') * 12) -join ',') + ']}'), [System.Text.UTF8Encoding]::new($false))
+    # 槽位名册:一个槽位一个 StatefulSet 序号,条数至少等于副本数(k8s_deploy.ps1 Get-SqlWriterRosterMinimumEntries)。12 个槽位,副本数随便调都够。
+    [System.IO.File]::WriteAllText($rosterPath, ('{"format":"SQL_WRITER_BOOT_ROSTER_V2","entries":[' + ((@('{}') * 12) -join ',') + ']}'), [System.Text.UTF8Encoding]::new($false))
     $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $catalog = @{}
     foreach ($namespace in $Namespaces) {
@@ -98,6 +98,44 @@ function Add-PlayerRedisDeployFixture {
         $result.Env = @{} + $Env
         $result.Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'
     }
+    return $result
+}
+
+<#
+.SYNOPSIS
+    给跑 k8s_deploy.ps1 的子进程补 3 副本 Loki 的对象存储参数与访问密钥,返回 @{ Arguments; Env }。
+
+.DESCRIPTION
+    部署集群内 Loki 时,staging / prod 与非 custom 的 OpsProfile 缺省 3 副本,要 -LokiS3Endpoint、-LokiS3Bucket 和两个访问密钥
+    (docs/design/no-single-node-horizontal-scaling-20261001.md §10)。绝大多数用例测的不是这道闸,不补的话这些档位的 infra-up、all-up
+    全部停在这里。虚构地址只用于 DryRun,不解析也不连接。以下情形原样不动:命令不部署 infra(zone-up、all-up -SkipInfra);
+    关了 sidecar 或给了 -LokiPushUrl(不部署集群内 Loki);用例自己给了 -LokiReplicas 或任何 -LokiS3*(测闸本身);缺省就是 1 副本(dev 且 custom)。
+#>
+function Add-LokiObjectStoreFixture {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][hashtable]$Env
+    )
+
+    $result = @{ Arguments = $Arguments; Env = $Env }
+    $valueOf = {
+        param([string]$Name, [string]$Default)
+        $at = [array]::IndexOf($Arguments, $Name)
+        if ($at -ge 0 -and ($at + 1) -lt $Arguments.Count) { return [string]$Arguments[$at + 1] }
+        return $Default
+    }
+    $command = & $valueOf '-Command' ''
+    $deploysInfra = ($command -eq 'infra-up') -or ($command -eq 'all-up' -and $Arguments -notcontains '-SkipInfra')
+    if (-not $deploysInfra) { return $result }
+    foreach ($flag in @('-NoCppLogSidecar', '-LokiPushUrl', '-LokiReplicas', '-LokiS3Endpoint', '-LokiS3Bucket', '-LokiS3Region',
+            '-LokiS3ForcePathStyle', '-LokiS3Insecure', '-LokiS3DevFixture')) {
+        if ($Arguments -contains $flag) { return $result }
+    }
+    if ((& $valueOf '-ReleaseProfile' 'dev') -eq 'dev' -and (& $valueOf '-OpsProfile' 'custom') -eq 'custom') { return $result }
+    $result.Arguments = @($Arguments) + @('-LokiS3Endpoint', 's3.invalid:443', '-LokiS3Bucket', 'contract-logs')
+    $result.Env = @{} + $Env
+    if (-not $result.Env.ContainsKey('MMORPG_LOKI_S3_ACCESS_KEY_ID')) { $result.Env['MMORPG_LOKI_S3_ACCESS_KEY_ID'] = 'contract-loki-key-id-0001' }
+    if (-not $result.Env.ContainsKey('MMORPG_LOKI_S3_SECRET_ACCESS_KEY')) { $result.Env['MMORPG_LOKI_S3_SECRET_ACCESS_KEY'] = 'contract-loki-secret-value-0123456789' }
     return $result
 }
 
@@ -178,6 +216,10 @@ function Invoke-CapturedPwsh {
         $fixture = Add-PlayerRedisDeployFixture -Arguments $Arguments -Env $Env
         $Arguments = $fixture.Arguments
         $Env = Add-PlayerStoreAllowlistFixture -Arguments $Arguments -Env $fixture.Env
+        # 3 副本 Loki 的对象存储参数,见 Add-LokiObjectStoreFixture。
+        $lokiFixture = Add-LokiObjectStoreFixture -Arguments $Arguments -Env $Env
+        $Arguments = $lokiFixture.Arguments
+        $Env = $lokiFixture.Env
     }
 
     $savedEnv = @{}

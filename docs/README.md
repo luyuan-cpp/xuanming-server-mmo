@@ -110,6 +110,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留：备战时押住带进战斗的道具，结算从预留里扣，作废或取消时释放；冻结解开后晚到的结算不再按持有量夹紧（2026-11-10 已落码，未编译）
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放：只录 PVP，观众版帧随终局原件同事务存进 match 库，每名玩家保留最近 100 条（2026-11-06 已落码，未编译）
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复：近期战斗结果随结算同一次存档提交，客户端落地查询（2026-11-05，未编译）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
@@ -170,6 +171,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [db_zone_isolation.md](design/db_zone_isolation.md) — DB Zone Isolation (2026-04-11)
 - [global-data-layer-tidb-decision.md](design/global-data-layer-tidb-decision.md) — 全区全服数据层 + TiDB 架构决策
 - [landing-recovery-sync-digest.md](design/landing-recovery-sync-digest.md) — 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
+- [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与 match 终局发件箱按玩家分片，多副本分摊到期扫描（缺口清单第 25 条，2026-11-10）
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 - [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计

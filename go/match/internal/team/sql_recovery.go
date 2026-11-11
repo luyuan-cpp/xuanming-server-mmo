@@ -79,7 +79,7 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 		warn := func(err error) {
 			if err != nil && time.Since(lastWarning) >= 10*time.Second {
 				lastWarning = time.Now()
-				logx.Errorf("队伍SQL恢复失败 phase=%s: %v", point, err)
+				logx.Errorf("team SQL recovery failed phase=%s: %v", point, err)
 			}
 		}
 		s.svcCtx.StartRelayLoop(ctx, point, 500*time.Millisecond, func(parent context.Context) {

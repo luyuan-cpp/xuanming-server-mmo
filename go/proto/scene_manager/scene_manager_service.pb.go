@@ -359,8 +359,17 @@ type EnterSceneRequest struct {
 	LoginGeneration uint64 `protobuf:"varint,12,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"`
 	// 账号目录放行的所有权修订；完整参与幂等指纹，不能用新买家的修订替旧路由补权。0拒绝。
 	OwnerRevision uint64 `protobuf:"varint,13,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 托管落点(docs/design/player-connection-lost-hold.md §4.2):没有客户端在场的换场景,只由 scene 节点替离线托管中的
+	// 角色发(组队跟随换图、跨节点交接的重发)。服务端内部字段,客户端不可见。
+	// - 置位时 gate_id / gate_instance_id 必须为空;session_id / login_generation 填断开的那次登录(角色的登录身份),
+	//   只作落点会话身份裁决与目标节点的角色登记,不绑定、不推送。
+	// - scene_manager 在提交点之后不发 gate 路由,改为直接给目标 scene 节点发 PlayerHostedPlacementEvent
+	//   (proto/common/event/player_placement_event.proto),broker ACK 是提交点,失败与推 gate 路由失败同一套回滚。
+	// - 只限本 zone:跨 zone 没有 gate 可重定向,预检时拒绝。
+	// - 进 request_id 指纹(业务语义);proto3 不序列化 false,不带它的请求指纹与加字段前逐字节相同。
+	HostedPlacement bool `protobuf:"varint,14,opt,name=hosted_placement,json=hostedPlacement,proto3" json:"hosted_placement,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *EnterSceneRequest) Reset() {
@@ -482,6 +491,13 @@ func (x *EnterSceneRequest) GetOwnerRevision() uint64 {
 		return x.OwnerRevision
 	}
 	return 0
+}
+
+func (x *EnterSceneRequest) GetHostedPlacement() bool {
+	if x != nil {
+		return x.HostedPlacement
+	}
+	return false
 }
 
 type EnterSceneResponse struct {
@@ -773,7 +789,7 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"creatorIds\"I\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x12\x17\n" +
-	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\xd4\x03\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\"\xff\x03\n" +
 	"\x11EnterSceneRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12\x1d\n" +
@@ -791,7 +807,8 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	" \x01(\x04R\rcorrelationId\x12.\n" +
 	"\x13client_channel_pick\x18\v \x01(\bR\x11clientChannelPick\x12)\n" +
 	"\x10login_generation\x18\f \x01(\x04R\x0floginGeneration\x12%\n" +
-	"\x0eowner_revision\x18\r \x01(\x04R\rownerRevision\"\x98\x02\n" +
+	"\x0eowner_revision\x18\r \x01(\x04R\rownerRevision\x12)\n" +
+	"\x10hosted_placement\x18\x0e \x01(\bR\x0fhostedPlacement\"\x98\x02\n" +
 	"\x12EnterSceneResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12#\n" +

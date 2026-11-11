@@ -119,6 +119,7 @@ func spectateRecordFromFormation(f *matchpb.MatchFormationRecord) (*matchpb.Spec
 		Visibility:       create.GetSpectateVisibility(),
 		BattleInstanceId: f.TargetInstanceId,
 		DeadlineMs:       f.DeadlineMs,
+		ReleaseTrack:     f.GetReleaseTrack(),
 	}, nil
 }
 

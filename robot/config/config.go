@@ -599,7 +599,7 @@ func (c *TeamBackfillSmokeConfig) validate() error {
 }
 
 // PvpTeamSmokeConfig 配置 "pvp-team-smoke" 模式(docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP
-// 与计分组排」与 §12.5 第 4 步):全部账号登同一个 zone,按人数档分组并发跑组排的全部情况。
+// 与计分组排」与 §12.5 第 5 步):全部账号登同一个 zone,按人数档分组并发跑组排的全部情况。
 //
 // 规则参数必须与被测 match 的配置相同:场景用它们算「这段时间内不该成局」的窗口和评分夹具。0 = 用 match 的缺省值。
 type PvpTeamSmokeConfig struct {

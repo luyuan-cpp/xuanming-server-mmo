@@ -11,6 +11,10 @@ namespace EtcdHelper
 	void PutServiceNodeInfo(const NodeInfo &nodeInfo, const std::string &key, int64_t lease = 0);
 	void RangeQuery(const std::string &prefix);
 	void StartWatchingPrefix(const std::string &prefix, int64_t revision);
+	// 精确键(range_end 为空):只 Range / watch 这一个键。发现键 `.../node_id/1` 当前缀用会把 10、11、100 号也套进来,
+	// 本节点只看自己那一条登记时用这两个(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+	void RangeKey(const std::string &key);
+	void StartWatchingKey(const std::string &key, int64_t revision);
 	void StopAllWatching(); // placeholder — extensible
 	using TxnCompletion = EtcdRegistrationCompletion<etcdserverpb::TxnResponse>;
 	void GrantLease(uint32_t ttlSeconds, EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done);
@@ -18,6 +22,12 @@ namespace EtcdHelper
 	                 TxnCompletion done, bool checkSameLease = false);
 	void PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease, TxnCompletion done,
 	                 bool checkSameLease = false);
+	// 与 PutIfAbsent(VERSION == 0 的 CAS)相同,另在失败分支里只取键(keys_only)列出 listPrefix 下的全部键,
+	// 一次往返就知道冲突时这一前缀已被占了哪些键。给 node_id 分配键用(NodeAllocator::RecordAllocatedIds)。
+	void PutIfAbsentListingOnConflict(const std::string &key, const std::string &value, int64_t lease,
+	                                  const std::string &listPrefix, TxnCompletion done);
+	// PutIfAbsentListingOnConflict 失败时失败分支的清单;成功、或不是这种 txn 的应答返回 nullptr。
+	const etcdserverpb::RangeResponse *TxnConflictListing(const etcdserverpb::TxnResponse &reply);
 	// 无条件把 key 挂到 lease 上(txn 不带 compare,恒成功)。
 	// 只给"这个 key 按定义就该属于自己"的场景用,例如按 IP+端口作用域的端口 key 重注册。
 	void PutWithLease(const std::string &key, const std::string &newValue, int64_t lease, TxnCompletion done);

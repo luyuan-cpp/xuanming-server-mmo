@@ -102,7 +102,7 @@ Test-Case 'release-track-alerts.yaml:PrometheusRule 形状,两组各一条规则
 Test-Case 'ReleaseTrackZoneMixedTooLong:cpp_node_info 由 node.cpp 输出、带三个 label;node_type 3 / 4 是 scene / gate,release_track 取值是轨道名' {
     Assert-Match -Text $script:NodeCpp -Pattern 'BeginFamily\("cpp_node_info"' -Because 'cpp_node_info 必须由 C++ 节点输出(改名后规则静默失效)'
     foreach ($label in @('node_type', 'zone_id', 'release_track')) {
-        Assert-Match -Text $script:NodeCpp -Pattern ('\{"{0}",' -f $label) -Because "cpp_node_info 要带 $label label"
+        Assert-Match -Text $script:NodeCpp -Pattern ('\{{"{0}",' -f $label) -Because "cpp_node_info 要带 $label label"
     }
     $expr = Get-RuleExpr -Body (Get-AlertRules -GroupText (Get-AlertGroupText -Text $script:Alerts -Group 'release-track.zone'))[0].Body
     $sceneType = [regex]::Match($script:NodeProto, '(?m)^\s*SceneNodeService\s*=\s*(?<n>\d+)\s*;').Groups['n'].Value

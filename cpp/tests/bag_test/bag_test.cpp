@@ -4194,6 +4194,7 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(player); // 同上,经 mysql_database_table.pb.h 可见
     tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player); // 同上,近期战斗结果(battle-result-recovery.md)
     tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player); // 同上,客户端请求幂等键账本(client-request-idempotency.md §5.3)
+    tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 同上,物品数量预留(battle-item-reservation.md)
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);

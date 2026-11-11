@@ -407,14 +407,30 @@ class CommerceStoreTest {
         }
     }
     // 原用例 wrongAmountAndBrokenReservationRollbackAllPaymentFacts 还断言金额币种不符回 409、什么都不落 —— 那正是缺陷行为
-    // (钱停在渠道里,见上面几例);这里只留库存预占损坏时整笔回滚。
+    // (钱停在渠道里,见上面几例);这里只留库存预占损坏时整笔回滚。存储损坏回 503:409 留给适配器报错了交易,适配器会把 409 当终局。
     @Test void brokenReservationRollsBackAllPaymentFacts() {
         try (var f = new CommerceFixture()) {
             f.sku(1, 2, 100); var order = f.store.create("1", request("rollback-001", 1, 1));
             f.jdbc.update("UPDATE pms_sku_stock SET lock_stock=0 WHERE id=1");
-            assertEquals(409, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "broken-reservation"))).status());
+            assertEquals(503, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "broken-reservation"))).status());
             assertEquals(0, f.count("commerce_payment_receipt")); assertEquals(0, f.count("commerce_delivery_intent")); assertEquals(0, f.count("commerce_refund_intent"));
             assertEquals("AWAITING_PAYMENT", f.store.get("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")).state()); assertEquals(2, f.value("pms_sku_stock", "stock"));
+        }
+    }
+    @Test void 存储不自洽时付款回503_不当成适配器的错也不误报已付() {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 3, 100); var order = f.store.create("1", request("inconsistent-001", 1, 1));
+            // 孤儿退款待办占着交易键:异常付款写到第三行撞键,整笔回滚。交易键并不属于别的订单,不能回 409 让适配器放掉这笔钱。
+            f.jdbc.update("INSERT INTO commerce_refund_intent(channel,transaction_id,order_sn,source,status) VALUES(?,?,?,?,'PENDING')",
+                ascii("test"), ascii("orphan-short"), order.orderId(), "AMOUNT_MISMATCH");
+            assertEquals(503, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "orphan-short", 99, "CNY"))).status());
+            assertEquals(0, f.count("commerce_payment_receipt")); assertEquals(0, f.count("commerce_abnormal_payment"));
+
+            // 异常付款丢了退款待办:照常重放会回 refundReason=null,被当成订单本身的付款,必须拒绝。
+            f.store.recordTrustedPayment(payment(order, "lost-intent", 99, "CNY"));
+            f.jdbc.update("DELETE FROM commerce_refund_intent WHERE channel=? AND transaction_id=?", ascii("test"), ascii("lost-intent"));
+            assertEquals(503, assertThrows(CommerceException.class, () -> f.store.recordTrustedPayment(payment(order, "lost-intent", 99, "CNY"))).status());
+            assertEquals("AWAITING_PAYMENT", f.store.get("1", owned(order)).state());
         }
     }
     @Test void concurrentOrdersCannotShareOnePaymentTransaction() throws Exception {

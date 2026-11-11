@@ -10,6 +10,10 @@
 #         没有完全合格的,在连得上的里挑,那些 gate 全在排空 / 全到水位 / 两种都有
 #       login_gate_pick_excluded_total{reason=stale|draining|full}   每次挑每台被剔除的 gate 计一次(回落时被用上的不计);
 #         剔除说明分档在起作用,本身不告警
+#   - login 排队的区容量(2026-11-10 起,组 login.queue-capacity;go/login/internal/logic/pkg/loginqueue/metrics.go,Namespace
+#     "login_queue"):login_queue_capacity{zone} 是 FreeSlots 实际用的容量(配置值再按本区在接客的 gate 到水位的承载封顶,
+#     capacity.go 的 capByGates),login_queue_configured_capacity{zone} 是 Queue.ZoneCapacityOverride(0 = 没配)。
+#     两者都是 gauge,每次算容量时写;排队关着时不算容量,没有序列,这组规则不响。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
@@ -28,8 +32,11 @@
 #   - stale 是 critical:本 zone 一台连得上的 gate 都不剩,新登录多半连不上 gate(gate 全卡住),或者 gate 全都写不进
 #     etcd(etcd 写满 / 不可写);要马上有人看。
 #   - draining / full / mixed 是 warning:玩家还能被分到连得上的 gate。draining 多半是整个 zone 都被标了排空(误操作,
-#     或缩容时副本数算错);full 是区级准入放进来的人比 gate 上限之和还多,是容量配置问题,gate 按 GateMaxConnections 拒连兜底;
+#     或缩容时副本数算错);full 是有人没经过区级准入就来了:排队的区容量已按 gate 到水位的承载封顶(2026-11-10 起),
+#     排队开着时只剩重连豁免与人数上报滞后,排队关着时快速通道不判容量,gate 按 GateMaxConnections 拒连兜底;
 #     mixed 是两种都有。
+#   - LoginQueueCapacityLimitedByGates 是 warning、for 10m:gate 台数装不下配置的区容量,排队会比配置的早开始拦人。
+#     不会断线、不会多放,只是容量规划与实际不符;按 namespace、zone 取各副本的最小值比较。
 #   - login 自己的视图出问题不会造成「全部停写」:镜像跟不上 etcd 时读路径回落直读,直读不判停写(node_cache.go 的 cacheStaleAfter)。
 #   - 没有实测基线(代码未压测),首轮演练后回头校准。
 #
@@ -91,7 +98,30 @@ spec:
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次挑 gate 时本 zone 没有一台 gate 既没排空、又没到自报 max_connections 的 90%,
               只能在连得上的里挑(停写的 gate 照样剔掉)。reason=draining:连得上的 gate 全被标了排空,多半是整个 zone 被误标,
               或缩容时剩下的副本也被标了,查 gate:<id>:draining 与 tools/scripts/k8s_gate_drain.ps1 的执行记录;
-              reason=full:全到水位,拦人的地方本该是区级准入,说明 ZoneCapacity(Queue.ZoneCapacityOverride)比本 zone 全部 gate 的
-              GateMaxConnections 之和还大,或者 gate 台数比预期少,把 ZoneCapacity 调到 gate 上限之和的 90% 以下或扩 gate 副本;
+              reason=full:全到水位。排队的区容量已按 gate 到水位的承载封顶,排队开着时走到这里只剩重连豁免与人数上报滞后;
+              排队关着时快速通道不判容量,人数超过 gate 承载就会走到这里。持续出现就扩 gate 副本,排队开着时一并看
+              LoginQueueCapacityLimitedByGates;
               reason=mixed:两种都有,按上面两条分别查。被剔除的台次看 login_gate_pick_excluded_total。
             runbook_url: docs/design/gate-load-balancing-design.md
+
+    # 区容量被 gate 承载压低(2026-11-10 起):配置的 Queue.ZoneCapacityOverride 够不着,排队会比配置的早开始拦人。
+    - name: login.queue-capacity
+      interval: 30s
+      rules:
+        - alert: LoginQueueCapacityLimitedByGates
+          expr: |
+            min by (namespace, zone) (login_queue_capacity)
+              < min by (namespace, zone) (login_queue_configured_capacity)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} zone {{ $labels.zone }} 的排队容量被 gate 承载压到了配置值以下"
+            description: >-
+              login 排队实际用的区容量(login_queue_capacity,当前 {{ $value | printf "%.0f" }})比配置的
+              Queue.ZoneCapacityOverride(login_queue_configured_capacity)小:本区在接客的 gate 到自报 max_connections 的 90%
+              一共只装得下这么多人,排队到这里就开始拦人,不会再放出连上 gate 才被拒的票。不断线、不多放,是容量规划与实际不符:
+              gate 副本比配置的容量需要的少(每台 GateMaxConnections 20000 到水位 18000,配 45000 至少要 3 台),或有 gate
+              停写、被标了排空、挂了。扩 gate 副本,或把 ZoneCapacityOverride 调到 gate 承载以内;
+              login 日志搜 "admission capacity is limited by its gates" 看当时的两个数与 gate 台数。
+            runbook_url: docs/design/login-queue-2026-05.md

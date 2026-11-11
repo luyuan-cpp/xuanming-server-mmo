@@ -86,13 +86,13 @@ void ApplyFollowUps(entt::entity player, const MissionFollowUps& followUps) {
     for (const uint32_t missionId : followUps.autoGrant) {
         const auto result = PlayerMissionSystem::ClaimReward(player, MissionListComp::kPlayerMission, missionId);
         if (result != kSuccess)
-            LOG_WARN << "任务自动奖励保留待重试 mission=" << missionId << " tip=" << result;
+            LOG_WARN << "Mission auto reward kept pending retry mission=" << missionId << " tip=" << result;
     }
     for (const uint32_t missionId : followUps.chainAccept) {
         const auto result = PlayerMissionSystem::Accept(player, MissionListComp::kPlayerMission,
             missionId, TimeSystem::NowMillisecondsUTC());
         if (result != kSuccess)
-            LOG_WARN << "任务链接取被拒 mission=" << missionId << " tip=" << result;
+            LOG_WARN << "Mission chain accept rejected mission=" << missionId << " tip=" << result;
     }
     for (const uint32_t missionId : followUps.completed) {
         PlayerActivitySystem::OnMissionCompleted(player, MissionListComp::kPlayerMission,
@@ -227,12 +227,12 @@ void PlayerMissionSystem::OnCondition(entt::entity player, const ConditionEvent&
     if (!tlsEcs.actorRegistry.valid(player) || PlayerLifecycleSystem::IsPlayerFrozen(player)) return;
     auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
     if (container == nullptr) {
-        LOG_ERROR << "任务条件推进失败:缺少持久任务组件 entity=" << entt::to_integral(player);
+        LOG_ERROR << "Mission condition progress failed: missing persistent mission component entity=" << entt::to_integral(player);
         return;
     }
     auto* missions = container->GetMutable(MissionListComp::kPlayerMission);
     if (missions == nullptr) {
-        LOG_ERROR << "任务条件推进失败:缺少玩家任务 scope entity=" << entt::to_integral(player);
+        LOG_ERROR << "Mission condition progress failed: missing player mission scope entity=" << entt::to_integral(player);
         return;
     }
     MissionFollowUps followUps;

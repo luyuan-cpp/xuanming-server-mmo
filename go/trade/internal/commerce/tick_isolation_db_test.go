@@ -1075,3 +1075,31 @@ func TestRealDBDueSplitsByShardAcrossReplicas(t *testing.T) {
 		require.Equal(t, owner == "replica-a", dueA[id], "合同 %d 归 %s", id, owner)
 	}
 }
+
+// 缺口清单第 16 条:腿在途的合同推进一轮没有变化时,不改版本,排到在途兜底复查(inFlightRecheck);
+// 资产指令终结一侧在提交之后唤醒它(这里走生产的自动放弃路径),合同立刻到期,不用等兜底。
+// 修复前在途合同每秒都被重存一次;离线玩家的腿可能几小时不终结。
+func TestRealDBInFlightLegWaitsForFinalizationWake(t *testing.T) {
+	e := realDBEngine(t)
+	clock := newTestClock()
+	e.Now = clock.Now
+	offer := consignment(t, e, 161, "inflight-wake-01")
+	tick(t, e)
+	sent, sentW := state(t, e, offer.CommerceId)
+	debit := leg(sentW, "seller_debit")
+	require.NotNil(t, debit)
+	require.NotZero(t, debit.GetOpId(), "第一轮发出卖家托管扣款腿")
+
+	clock.Advance(time.Second)
+	tick(t, e)
+	waiting, _ := state(t, e, offer.CommerceId)
+	require.Equal(t, sent.Version, waiting.Version, "腿在途时空转不改版本")
+	require.Equal(t, e.now()+uint64(inFlightRecheck.Milliseconds()), waiting.UpdatedMs, "排到在途兜底复查")
+	require.False(t, dueIDs(t, e)[offer.CommerceId], "兜底到期之前不再每轮空转")
+
+	abandonOp(t, e, debit.OpId)
+	require.True(t, dueIDs(t, e)[offer.CommerceId], "终结一侧在提交后唤醒合同")
+	tick(t, e)
+	_, after := state(t, e, offer.CommerceId)
+	require.EqualValues(t, tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_ABANDONED, leg(after, "seller_debit").GetOutcome(), "唤醒之后这一轮就读到结局")
+}

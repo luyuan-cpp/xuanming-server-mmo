@@ -4,7 +4,8 @@
 // 三处挑 gate 都先过 eligibleGates:快速通道 PickGate、dispatcher 一拍的 newBatchPickFn、排队领票时的复核
 // (admit_recheck.go)。分档规则在 shared/gatepick.Eligible(scene_manager 跨 zone 重定向共用同一份),
 // 这里只做 GateCandidate 的适配、指标与日志。
-// 它只影响「挑哪台」,不影响容量记账:FreeSlots 仍按全部候选的人数算 online,卡住、排空中或满载的 gate 上的人照样占着名额。
+// 它只影响「挑哪台」,不影响容量记账:FreeSlots 仍按全部候选的人数算 online,卡住、排空中或满载的 gate 上的人照样占着名额;
+// 区容量另按在接客的 gate 到水位的承载封顶(gatepick.AdmissionCapacity,见 capacity.go 的 capByGates)。
 // 设计与取舍见 docs/design/gate-load-balancing-design.md「满载与停写的 gate」。
 package loginqueue
 
@@ -63,8 +64,8 @@ var (
 // 总会给出非空的一档,退档时计 fallback,不拒绝(理由见 gatepick.Eligible):
 //   - 全部停写:要么本 zone 的 gate 全卡住了,分过去照样失败;要么是本 login 的视图有问题,一律拒绝会把误判放大成整区登不上。
 //   - 连得上的全在排空:整个 zone 都标了排空多半是误操作,拒绝所有登录比分到待缩容的 gate 更糟。
-//   - 连得上的全到水位:拦人的地方是区级准入(FreeSlots),走到这里说明 ZoneCapacity 配得比 gate 上限之和还大;
-//     gate 按 GateMaxConnections 拒连兜底。
+//   - 连得上的全到水位:拦人的地方是区级准入(FreeSlots),它已按 gate 到水位的承载封顶(2026-11-10 起),
+//     走到这里只剩不过准入的路径:排队关着(快速通道不判容量)、重连豁免、人数上报滞后;gate 按 GateMaxConnections 拒连兜底。
 //
 // 候选为空时返回空,由调用方报「没有候选」。
 func eligibleGates(candidates []GateCandidate) []GateCandidate {

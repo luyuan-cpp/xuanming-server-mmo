@@ -1,6 +1,6 @@
 # 分布式日志关联与链路追踪（todo.md #152）
 
-> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；其余各批尚未落码。**
+> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证，其中 client_rpc_router 的裸客户端与 scene_manager 的玩家拦截器留待对应文件空出来再接（§6.2）；其余各批尚未落码。**
 > **范围：** 本仓的 C++ 节点、Go 微服务、`java/gateway_node`。Java 版服务器守同一份约定、自己实现，见 §12。
 > **相关：** 现有采集链路见 [grafana-loki-local-logs.md](../ops/grafana-loki-local-logs.md)；RPC0 信封见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §4.1；muduo_grpc 见 [grpc-muduo-transport.md](grpc-muduo-transport.md)。
 
@@ -90,7 +90,8 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 每线程一份**日志上下文**：`TraceContext` 加 `player_id`（0 表示无）。沿用 `thread_context/trace_context_tls.{h,cpp}`：
 
 - 读：`Current()`、`CurrentPlayerId()`、`CurrentTraceHex()`（48 个十六进制字符，给日志后缀用，§5.1）。
-- 装：`ScopedSpan`（建子 span 或开根）、`ScopedSpan(parent)`（恢复捕获值）、`ScopedPlayerId`；`Set()` 只给作用域类的实现用。
+- 装：`ScopedRoot`（不看当前、总是开新根，给入口用）、`ScopedSpan`（有 trace 建子 span，没有就开根）、`ScopedSpan(parent)`（恢复捕获值）、`ScopedPlayerId`；`Set()` 只给作用域类的实现用。
+- 包：`Bind(fn)`，记下包装时的 trace，执行时用 `ScopedSpan(captured)` 装回；只给一次性续跑用（§4.3）。
 - 线程局部变量放在 `detail` 里，不对外暴露。
 
 ### 4.2 安装规则
@@ -109,10 +110,10 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 | RPC0 回包、超时回调 | 已做：发起时捕获 `call.trace`，`Deliver` 里恢复 | 不变 |
 | gRPC 客户端完成回调 | 无 | 出站钩子包一层完成回调（§5.3） |
 | Kafka 消费（poll 线程 → loop 线程） | 无 | `Work` 带上解析出的上下文，`Run` 时接续（§5.4） |
-| 协程（`LoopTaskScope` + boost.cobalt） | 部分丢：执行器走 `queueInLoop` 的那一支丢上下文 | 执行器投递时捕获、执行时恢复（§5.6） |
-| 业务直接调用的一次性 `queueInLoop` / `runAfter` | 无 | 要续上就用 `tracing::Bind(fn)` 包一层；不包就是无上下文（安全，只是查不到） |
+| 协程（`LoopTaskScope` + boost.cobalt） | 第 3 批已做：`AwaitCallback` 挂起时记下、完成时装回；执行器的投递分支用 `Bind` | 见 §5.6。协程里经 `AwaitCallback` 等的 Redis、etcd 回包因此也接得上 |
+| 业务直接调用的一次性 `queueInLoop` / `runAfter` | `Bind` 已有（第 3 批） | 要续上就用 `tracing::Bind(fn)` 包一层；不包就是无上下文（安全，只是查不到） |
 | 周期定时器 `runEvery` | — | **永不捕获**：不然发起它的那个请求的 trace，会挂在之后每一次 tick 上 |
-| Redis 回包（muduo contrib `Hiredis`） | 无 | 在引擎封装处（`infra/storage` 下的 Redis 客户端）包一层；没有封装的调用点按 `Bind` 处理 |
+| 不经协程的 Redis 回包（muduo contrib `Hiredis`） | 无 | 在引擎封装处（`infra/storage` 下的 Redis 客户端）包一层；没有封装的调用点按 `Bind` 处理。尚未排批 |
 
 ## 5. C++ 接缝
 
@@ -147,24 +148,25 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 - **合法性**：trace_id 全 0 或 parent_span_id 为 0，都当作没有。flags 只取低 8 位。
 - **读写只有一处**：`cpp/libs/engine/core/network/rpc_trace_envelope.h` 的 `WriteTraceToRpcEnvelope` / `ReadTraceFromRpcEnvelope`。全仓只有 RpcChannel 构造 REQUEST 帧（2026-11-10 核对）。
 - **发送**：`RpcChannel::CallMethodWithResponseType` 和 `RpcChannel::SendRequest` 建信封时写入当前上下文；上下文无效就什么都不写。RESPONSE、RPC_ERROR、HEARTBEAT 不写：回包由调用方自己恢复捕获的上下文。
-- **接收**：`ScopedDispatchTrace` 改为拿请求信封构造（在 `CallServiceMethod` 开头）：合法就 `ChildSpan`，否则 `NewRoot`。退出时恢复，和原来一样。派发前的拒绝（未知方法、解析失败等）也在这个作用域里，拒绝日志同样带 trace。
+- **接收**：`CallServiceMethod` 开头读出信封上的 trace，交给 `tracing::ScopedIncoming`：合法就 `ChildSpan`，否则 `NewRoot`，退出时恢复。原来的 `ScopedDispatchTrace` 第 4 批并进了这个通用作用域类，gRPC 入站用的也是它。派发前的拒绝（未知方法、解析失败等）也在这个作用域里，拒绝日志同样带 trace。
 - **兼容**：旧收方忽略新字段；旧发方不填，新收方开根。项目未上线，混跑不阻塞。
 - 改 proto 后按 AGENTS §4 重新生成（未获客户端任务授权，用 `proto_gen.no-unity.yaml`），并完整编译受影响的 C++ / Go。muduo-rpc-channel.md §4.1 的线格式已同步。
 - **测试**：信封读写的纯函数在 `rpc_trace_envelope_test.cpp`；端到端在 `rpc_channel_loopback_test.cpp` 第五节，覆盖客户端帧、对端 handler、回包回调、不合法信封。
 
 ### 5.3 gRPC（muduo_grpc）：传输层开两个通用钩子，由 engine 注册
 
-`muduo_grpc` 是独立工程（`muduo_grpc.vcxproj`，只依赖 muduo、boost、nghttp2），不认识线程局部上下文。所以不在里面读 TLS，而是加两个可选钩子：
+第 4 批已做。`muduo_grpc` 是独立工程（`muduo_grpc.vcxproj`，只依赖 muduo、boost、nghttp2），不认识线程局部上下文。所以不在里面读 TLS，而是加两个可选钩子，契约写在 [grpc-muduo-transport.md](grpc-muduo-transport.md) §18：
 
-- **出站钩子**（加在 `ChannelOptions` 上）：在 `Channel::StartUnaryCall` 入口执行，紧接在判空 `done` 之后（早于停机、在途上限、消息大小和 metadata 这几项检查，这样本地拒绝也拿到包装后的回调），运行在调用线程上。它可以往 metadata 追加键，返回值替换完成回调。为空表示不拦截。
-- **派发钩子**（加在 `ServerOptions` 上）：派发泵调用 handler（`server.cpp` 里的 `handler(ServerCall(...), message)`）时包一层，参数是本次调用的 metadata 和一个 `invoke`。钩子必须恰好调用一次 `invoke`。为空表示直接调用。
+- **出站钩子** `ChannelOptions::unaryInterceptor`：在 `Channel::StartUnaryCall` 入口执行，紧接在判空 `done` 之后，运行在调用线程上。它早于停机、在途上限、消息大小、metadata 和截止这几项检查，所以本地拒绝也拿到包装后的回调。它可以往 metadata 追加键，返回值替换完成回调；返回空回调按编程错误 `LOG_FATAL`。为空表示不拦截。
+- **派发钩子** `ServerOptions::dispatchInterceptor`：派发泵调用 handler 时包一层，参数是本次调用的 metadata 和一个 `invoke`。钩子多调 `invoke` 的被忽略；一次都没调的，服务端补调一次并打 ERROR。所以 handler 恰好执行一次。为空表示直接调用。
 
-engine 侧的追踪实现：
+engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,cpp}`：
 
-- **出站**：当前上下文有效时写 `traceparent`；同时捕获上下文，在完成回调外层用 `ScopedSpan` 恢复，做法与 RpcChannel 的 `Deliver` 一致。本地拒绝也走包装后的回调，完成契约不变：恰好一次、在 loop 线程上、不在 Send 栈内同步回调。
-- **入站**：从 metadata 取 `traceparent`，接续或开根；作用域覆盖整个同步 handler，包括守护段。守护段发起异步步骤、之后再 `Proceed()` 的情况，由那个异步原语自己的恢复传下去（§4.3）。
-- **注册点**：业务通道在 `node_connector.cpp:75`，服务端在 `node.cpp:1350`。etcd 通道（`muduo_etcd_transport.cpp:156`）不装。
-- 生成的客户端桩（`cpp/generated/grpc_client/`）和各 `*Impl::RegisterMethods` 都不用改。
+- **出站** `grpc_tracing::InjectTraceIntoUnaryCall`：当前上下文有效、且调用方没写过 `traceparent` 时写入；完成回调用 `tracing::Bind` 包一层，在发起时的 trace 下执行，做法与 RpcChannel 的 `Deliver` 一致。完成契约不变：恰好一次、在 loop 线程上、不在 Send 栈内同步回调。
+- **入站** `grpc_tracing::DispatchUnderIncomingTrace`：从 metadata 取 `traceparent`，用 `tracing::ScopedIncoming` 接续或开根（与 RPC0 派发同一条规则，同一个作用域类）；作用域覆盖整个同步 handler，包括守护段。守护段发起异步步骤、之后再 `Proceed()` 的情况，由那个异步原语自己的恢复传下去（§4.3）。
+- **不经通道的本地完成**：生成客户端缺通道、序列化失败时走 `QueueGrpcLocalCompletion`（`grpc_client_runtime.h`），不经过出站钩子，那里另用 `tracing::Bind` 包一层。
+- **注册点**：业务通道在 `node_connector.cpp`，节点服务端在 `node.cpp` 建 `ServerOptions` 处。etcd 通道（`muduo_etcd_transport.cpp`）不装。
+- 生成的客户端桩（`cpp/generated/grpc_client/`）和各 `*Impl::RegisterMethods` 都不用改。双向流不经过钩子，目前没有业务流需要追踪。
 - **验签不受影响**：callerauth 只签 caller、方法和 subject（`go/shared/callerauth/sign.go`），多一个 `traceparent` 头不改变签名内容。
 
 ### 5.4 Kafka（librdkafka）
@@ -174,17 +176,22 @@ engine 侧的追踪实现：
 
 ### 5.5 入口：开根与玩家上下文
 
-- **gate 开根**：`GateClientSessionHandler::DispatchClientRpcMessage`（`client_session_handler.cpp:1088`）、`DispatchTokenVerify`（`:1267`）、`HandleConnectionEstablished`（`:707`）、`HandleConnectionDisconnection`（`:527`）。已登录的会话同时装上 `player_id`（`session.playerId`）。
-- **scene 装玩家**：`SceneHandler::ProcessClientPlayerMessage`（`scene_handler.cpp:140`，写在守护段内）在 `CheckRoutedPlayerIdentity` 通过之后，装上 `request->player_id()`。trace 已经由 RPC0 接续，这里不开根。
-- 其他带玩家的入口（玩家 Kafka 命令等）按需补，不追求一次铺满。
-- **高频消息关闭名单**：gate 侧一张 message_id 常量表（普通 `constexpr` 数组，不用宏生成），命中的消息不开根，于是 RPC0 也不带字段。**名单初始为空**，等压测数据说明值得省再加（AGENTS §11.3：性能改动要有数据）。
+- **gate 开根**（第 3 批已做）：`GateClientSessionHandler` 的 `DispatchClientRpcMessage`、`DispatchTokenVerify`、`HandleConnectionEstablished`、`HandleConnectionDisconnection` 开头各放一个 `tracing::ScopedRoot`。这四个入口按定义不属于别的请求，所以用 `ScopedRoot` 而不是 `ScopedSpan()`：线程上万一残留了上下文，也不会接上它。
+- **gate 装玩家**：取到会话之后装 `ScopedPlayerId`。会话的「没绑角色」有 `0` 和 `kInvalidGuid`（`UINT64_MAX`）两种写法，统一经 `PlayerForLogContext` 归成 0；直接传 `kInvalidGuid` 会在日志里打出一个假的 player_id。
+- **scene 装玩家**：`SceneHandler::ProcessClientPlayerMessage`（写在守护段内）在 `CheckRoutedPlayerIdentity` 通过之后装上会话绑定的玩家（`kInvalidGuid` 同样归 0）。trace 已经由 RPC0 接续，这里不开根。
+- 其他带玩家的入口（玩家 Kafka 命令、scene_manager 发来的 gRPC 等）按需补，不追求一次铺满。
+- **gate 路由 lane**（第 4 批已做）：路由模式下同一会话的 gRPC 类请求单飞排队，下一条请求从上一条的完成回调（或过期扫描）里发出。gRPC 完成回调恢复上下文之后，不处理的话下一条请求会挂到上一条的 trace 上。现在 `RouterLaneItem` 带 `trace` 字段，`gate_lane::Admit` 入队时存当前 trace（与会话快照同样取入队时刻）；`Pump` 发出每一条前用 `ScopedSpan(item->trace)` 装回，回给客户端的拒绝信封也落在这条请求的 trace 上。没有单测：lane 的装配代码不在任何测试工程里，靠冒烟核对。
+- **高频消息关闭名单**：暂不实现，开关和名单一起等压测数据说明值得省再加（AGENTS §11.3：性能改动要有数据）。第 3 批之后，gate 转给 scene 的每条客户端消息都多 29 字节，下一轮登录压测要对比 gate → scene 的 RPC0 带宽。
 
 ### 5.6 协程执行器
 
-- `LoopTaskScope` 的 `SceneExecutor`（`cpp/libs/engine/core/async/loop_task_scope.cpp`）有两条路：允许就地执行且当前就在 loop 线程时，直接执行，上下文自然保留；否则经 `queueInLoop` 投递，上下文丢失。只改投递那一支：投递时捕获，执行时用 RAII 装上。
-- 协程的每次恢复都是一次性投递，符合 §4.2 第 3 条。`LoopTaskScope::Start` 时的上下文就是任务的初始上下文：请求里起的协程挂请求的 trace，启动流程里起的后台协程不挂。
-- 要在请求作用域里启动常驻循环的协程，先用清空上下文的 RAII 作用域包住 `Start`，否则这个请求的 trace 会挂在它之后的每一轮上。
-- 效果：协程 co_await 一次 RPC0 之后，`Deliver` 在恢复的上下文里完成 awaitable，执行器投递时又捕获到它，协程就在原来的 trace 下继续执行。
+第 3 批已做，两处接点：
+
+- **`loop_async::AwaitCallback`（`core/async/coroutine_callback.h`），主要的一处**：全仓协程只经它等回调式异步操作（RPC、Redis、etcd、延时），没有协程之间互相唤醒的通道（2026-11-10 核对）。`initiate` 时记下协程当前的 trace，`Finish` 里用 `ScopedSpan(captured)` 装回，再完成 awaitable。默认执行器允许就地执行，协程大多直接在 `Finish` 里继续，所以落在协程自己的 trace 上。完成回调本身是什么上下文都不影响协程：可能是别的请求的，也可能像 Redis、etcd 回包那样没有。停止（`nullopt`）也走 `Finish`，取消路径上协程的收尾日志同样挂回原请求，不挂到发起停止的那一方。
+- **`SceneExecutor` 的投递分支（`core/async/loop_task_scope.cpp`），兜底**：要求「不阻塞」的执行会经 `queueInLoop` 投递，离开当前作用域。投递的函数用 `tracing::Bind` 包一层，记下投递时的 trace，执行时装回；就地执行的分支本来就在当前上下文里，不用管。
+- 协程本来不在 trace 里时，恢复后也不在，不会接上唤醒方的 trace（宁可丢，不可错）。
+- 协程的每次恢复都是一次性的，符合 §4.2 第 3 条。`LoopTaskScope::Start` 时的上下文就是任务的初始上下文：请求里起的协程挂请求的 trace，启动流程里起的后台协程不挂。现有任务都是一次性短操作（写或续期战斗锁、写会话结束凭据、发布迁移、创建场景或战斗的许可等待），没有从请求里起的常驻循环。以后真要在请求作用域里起常驻循环的协程，先用清空上下文的 RAII 作用域包住 `Start`，否则这个请求的 trace 会挂在它之后的每一轮上。
+- **测试**：`cpp/tests/cross_zone_test/loop_task_scope_test.cpp` 末尾 3 条：恢复时回到挂起时的 trace、本来没有 trace 的协程不接唤醒方的、停止路径上收尾日志挂回原请求。投递分支靠 `Bind` 的单测覆盖（`trace_context_test.cpp`）。
 
 ### 5.7 修正 `trace_context.h`
 
@@ -203,17 +210,17 @@ engine 侧的追踪实现：
 
 ### 6.2 要补的
 
-1. **新包 `go/shared/tracing`**，把传播相关的代码收在一处：
-   - `UnaryClientInterceptor()`：给裸 `grpc.NewClient` 用。它开一个 client span，按全局传播器写 metadata。**必须在已有的出站 metadata 上追加**（用 `metadata.AppendToOutgoingContext`，或先拷贝再合并），不能整体替换：`callerauth.SignedOutgoingContext` 是整体替换语义，并且先于拦截器执行；拦截器再整体替换一次，就会把签名头冲掉。要接的 5 处：
-     - `go/scene_manager/internal/logic/scene_node_client.go:40`
-     - `go/shared/scenenode/conn.go:48`
-     - `go/client_rpc_router/internal/discovery/node_watcher.go:362`
-     - `go/match/internal/discovery/node_watcher.go:373`
-     - `go/match/internal/authority/rank_publisher.go:32`
+1. **新包 `go/shared/tracing`**（第 4 批已建，`grpc.go` 与 `grpc_test.go`），把传播相关的代码收在一处：
+   - `UnaryClientInterceptor()`：给裸 `grpc.NewClient` 用。它开一个 client span，按全局传播器写 metadata，做法照 go-zero zrpc 客户端的 tracing 拦截器（那份在 go-zero 的 internal 包里，引用不了）：先用 `metadata.FromOutgoingContext` 取出已有的出站 metadata 再追加，所以 callerauth 已经写好的签名头原样保留。拦截器在调用方建好 ctx 之后才执行，不会被签名那一步的整体替换冲掉。要接的 5 处，第 4 批接了 4 处：
+     - `go/scene_manager/internal/logic/scene_node_client.go`（已接）
+     - `go/shared/scenenode/conn.go`（已接）
+     - `go/match/internal/discovery/node_watcher.go`（已接）
+     - `go/match/internal/authority/rank_publisher.go`（已接）
+     - `go/client_rpc_router/internal/discovery/node_watcher.go` 的 `DialEndpoint`：**未接**。2026-11-10 这个函数正被别的会话整段重写，等它落定后加一个 `grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor())` 即可。没接之前，路由模式下路由服往后端的调用不带 traceparent，链路在路由服断开。
 
      `go/mail/cmd/mailadmin` 和 `go/match/cmd/spectatefeatured` 是运维命令行，可以不接。
-   - **Kafka 载体**：为 sarama（`RecordHeader`）和 kafka-go（`kafka.Header`）各写一个 `TextMapCarrier`，注入和提取都走 `otel.GetTextMapPropagator()`。
-   - `PlayerFieldInterceptor()`：服务端拦截器。请求实现了 `GetPlayerId() uint64` 且值非零时，用 `logx.ContextWithFields` 加上 `player_id`。在各服务 main 里用 `AddUnaryInterceptors` 接上，先接 login、data_service、scene_manager。
+   - **Kafka 载体**：为 sarama（`RecordHeader`）和 kafka-go（`kafka.Header`）各写一个 `TextMapCarrier`，注入和提取都走 `otel.GetTextMapPropagator()`。第 5 批写。
+   - `PlayerFieldInterceptor()`：服务端拦截器。请求实现了 `GetPlayerId() uint64` 且值非零时，用 `logx.ContextWithFields` 加上 `player_id`。第 4 批接了 login（排在会话拦截器之后、serverbase 之前）和 data_service（排在关停开关之后）。scene_manager 的 main（`scene_manager_service.go`）2026-11-10 有别的会话的大批未提交改动，**未接**，同样等它落定再接。
 2. **Kafka 接点**（落码时用 `WriteMessages`、`ProducerMessage`、`FetchMessage`、`ReadMessage` 全量 grep 再核对一遍）：
    - 生产（sarama）：`login/internal/kafka/command_producer.go`。`CommandProducer.SendToTopicPartition` 现在不收 ctx，要加一个 ctx 参数，并改 `login/internal/svc/` 里的 4 处调用；kafka-go 的 `WriteMessages` 本来就带 ctx
    - 生产（kafka-go）：`mail/internal/notify/notify.go`、`match/internal/svc/servicecontext.go`、`player_inbox/internal/svc/servicecontext.go`、`scene_manager/internal/svc/servicecontext.go`、`shared/kafkautil/gate_push.go`
@@ -284,8 +291,8 @@ engine 侧的追踪实现：
 |---|---|---|
 | 1 | §5.7 原语修正，§4.1 上下文改造，§5.1 日志后缀 | 单测通过；本进程内一次 RPC0 派发的日志带完整 `trace_id` |
 | 2 | §5.2 RPC0 信封（含 proto 生成） | 回环用例通过；scene 处理一条玩家消息时推给 gate 的消息，两边日志 `trace_id` 相同、`span_id` 不同（gate 收客户端消息时开根在第 3 批，此前 gate → scene 这一跳 scene 仍开新根） |
-| 3 | §5.5 入口开根与玩家上下文，§5.6 协程执行器 | 客户端一条消息从 gate 到 scene 是同一个 trace；co_await 之后 trace 不变；周期任务不带 trace |
-| 4 | §5.3 gRPC 钩子，§6.2 第 1 项的客户端拦截器与玩家拦截器 | C++ → Go、Go → C++ 都接得上；login 的日志带 `player_id` |
+| 3 | §5.5 入口开根与玩家上下文，§5.6 协程（`AwaitCallback` 与执行器），`ScopedRoot`、`Bind` | 单测通过；客户端一条消息从 gate 到 scene 是同一个 trace，两边日志都带 `player_id`；co_await 之后 trace 不变；周期任务不带 trace |
+| 4 | §5.3 gRPC 钩子，§6.2 第 1 项的客户端拦截器与玩家拦截器，§5.5 路由 lane 排队项带 trace | C++ → Go、Go → C++ 都接得上；login 的日志带 `player_id`；路由模式下排队发出的请求挂自己的 trace，不挂前一条的。补尾：client_rpc_router 的 `DialEndpoint` 与 scene_manager 的玩家拦截器（§6.2） |
 | 5 | §5.4 与 §6.2 第 2 项的 Kafka | scene → Kafka → data_service 接得上；login → Kafka → gate 接得上 |
 | 6 | §7 Java gateway_node | 外部带 `traceparent` 的 HTTP 请求被开新根；出站 gRPC 接得上 |
 | 7 | §9.1 本地 Alloy 规则，§9.3 看板变量与文档同步 | 本机登录一次，一条 `trace_id` 查询能看到 Java、gate、login、data_service、scene 的行 |
@@ -311,13 +318,19 @@ engine 侧的追踪实现：
   - 回包回调在调用方原来的 trace 下执行；
   - trace 非零、span 为零的信封：开根，且请求照常派发；
   - RESPONSE、HEARTBEAT 帧不带这几个字段。
-- gRPC（`grpc_client_loopback_test.cpp`）：出站带 `traceparent`；服务端 handler 看到接续的 trace；完成回调恢复调用方上下文；本地拒绝的回调同样恢复。
-- 协程：co_await 一次 RPC0 之后，日志的 trace 不变；在请求作用域里起的 `runEvery`，tick 不带 trace。
+- gRPC（第 4 批已写）：
+  - `grpc_client_loopback_test.cpp` 的 `GrpcTraceLoopbackTest` 4 条：出站带 `traceparent`，服务端接续、完成回调恢复；不在 trace 里的调用不写头、服务端开根；调用方已写的 `traceparent` 不重复；缺通道的本地完成同样恢复。
+  - `muduo_grpc_test/server_test.cpp` 末尾 4 条：钩子本身的契约（追加 metadata 与包装顺序、通道本地拒绝也包装、多调 `invoke` 只执行一次、不调由服务端补调）。
+  - `trace_context_test.cpp` 加 1 条 `ScopedIncoming`。
+  - 路由 lane 排队项带 trace 没有单测，靠冒烟。
+- 协程（第 3 批已写，`loop_task_scope_test.cpp` 3 条）：回包在别的 trace 里或没有 trace 时，协程恢复后仍是挂起时的 trace；本来没有 trace 的协程不接唤醒方的；停止路径同样挂回原请求。
+- `ScopedRoot` 与 `Bind`（第 3 批已写，`trace_context_test.cpp` 4 条）：`ScopedRoot` 不接当前 trace；`Bind` 在包装时的 trace 下执行，包装时没有就不带，执行完恢复，参数和返回值原样透传。
+- gate、scene 入口的开根与装玩家没有单测，靠冒烟核对日志。`runEvery` 不用 `Bind` 是使用约定，没有机械检查。
 
 **Go**（`go test`）：
 
-- `go/shared/tracing`：拦截器写入 `traceparent`，并保留已有的签名 metadata；sarama、kafka-go 两种载体注入与提取往返一致；`PlayerFieldInterceptor` 只在 `GetPlayerId` 非零时加字段。
-- 扩展 `go/shared/grpcinterop/muduo_server_interop_test.go`：Go 客户端带 `traceparent` 调 muduo_grpc 服务端，服务端拿得到。
+- `go/shared/tracing`（第 4 批已写 4 条）：拦截器写入 `traceparent` 并保留已有的签名 metadata；调用方没有 span 时开根；`PlayerFieldInterceptor` 只在 `GetPlayerId` 非零时加字段。sarama、kafka-go 两种载体的往返用例在第 5 批。
+- Go 客户端带 `traceparent` 调 muduo_grpc 服务端的跨语言互通：C++ 侧已由 `grpc_client_loopback_test` 覆盖解析，Go 侧由上面的拦截器用例覆盖写入；真跨进程的核对放在冒烟里（`go/shared/grpcinterop` 的互通用例没扩展）。
 
 **Java**（`mvn -pl gateway_node test`）：外部 `traceparent` 不被采信；出站 gRPC 带 `traceparent`；JSON 日志带 `traceId`。
 

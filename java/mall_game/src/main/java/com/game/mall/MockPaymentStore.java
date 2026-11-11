@@ -102,6 +102,8 @@ public final class MockPaymentStore {
         props.requireMockPayment();
         // 三个阶段各自REQUIRES_NEW；任何外层事务也不能把提供方原件与OMS提交合并，崩溃后可恢复。
         // mock原件按冻结金额币种生成，不会出现金额币种不符；mock付款接口沿用订单视图应答。
+        // 已知缺口(11-05 起，仅 dev/test)：若订单在原件提交后、投递前被另一允许渠道付清，这笔会记成重复付款，
+        // 而本接口只回订单视图，REFUND_SCAN 也只认绑定订单的那笔，这笔的退款待办没有 mock 执行者。dev 只开 mock 渠道时不会发生。
         var order = transaction(budget, () -> orders.recordTrustedPayment(fact.receipt()).order());
         markApplied(fact, budget);
         return order;

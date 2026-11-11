@@ -49,7 +49,7 @@ func directoryError(err error) error {
 	case errors.Is(err, accountdirectory.ErrConflict):
 		return status.Error(codes.FailedPrecondition, "账号角色归属或身份已变化")
 	default:
-		logx.Errorf("[account-directory] SQL依赖失败: %v", err)
+		logx.Errorf("[account-directory] SQL dependency failed: %v", err)
 		return status.Error(codes.Unavailable, "全局账号目录暂不可用")
 	}
 }

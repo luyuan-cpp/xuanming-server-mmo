@@ -30,10 +30,15 @@ final class SchemaVerifier {
         Map.entry("commerce_withdrawal_receipt", "withdrawal_id,channel,transaction_id,amount_fen,successful"),
         Map.entry("commerce_mock_payout", "withdrawal_id,request_id,transaction_id,amount_fen,successful,created_ms,applied"),
         Map.entry("commerce_request_nonce", "caller_role,nonce,expires_ms"));
+    /**
+     * 存储合同戳,与 schema.sql 末行一致。2026-11-10 起换新:之前装的库里,退款待办的 CHECK 只认三种来源,
+     * 记不下金额或币种不符的付款(那笔待办插不进去,整笔回滚);下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
+     */
+    static final String STORAGE_CONTRACT = "mall-game-official-sku-v1-minor-units-abnormal-payment";
     private SchemaVerifier() {}
     static void verify(JdbcTemplate jdbc, DataSource source) throws SQLException {
         List<Map<String, Object>> version = jdbc.queryForList("SELECT version,storage_contract FROM commerce_schema_version");
-        if (version.size() != 1 || ((Number)version.get(0).get("version")).intValue() != 1 || !"mall-game-official-sku-v1-minor-units".equals(version.get(0).get("storage_contract"))) {
+        if (version.size() != 1 || ((Number)version.get(0).get("version")).intValue() != 1 || !STORAGE_CONTRACT.equals(version.get(0).get("storage_contract"))) {
             throw new IllegalStateException("商城存储版本不兼容，必须使用独立迁移后的商城库");
         }
         try (Connection connection = source.getConnection()) {

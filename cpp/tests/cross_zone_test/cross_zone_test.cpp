@@ -790,6 +790,7 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
+#include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/player_battle_result_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
@@ -1015,6 +1016,7 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<PlayerMysteryMerchantComp>(player);
     registry.emplace<PlayerBattleResultComp>(player); // 近期战斗结果(battle-result-recovery.md)
     registry.emplace<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
+    registry.emplace<PlayerItemHoldComp>(player); // 物品数量预留(battle-item-reservation.md)
     registry.emplace<CurrencyComp>(player);
     registry.emplace<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
@@ -3799,7 +3801,7 @@ TEST(TravelFreezeCap, NamesCoverEveryValue)
     }
     for (const auto site : {tfc::MarkSentSite::kFreezeCap, tfc::MarkSentSite::kDispatchWindow,
                             tfc::MarkSentSite::kNoGateSession, tfc::MarkSentSite::kNoSceneManager,
-                            tfc::MarkSentSite::kReceiptAnomaly})
+                            tfc::MarkSentSite::kReceiptAnomaly, tfc::MarkSentSite::kRollbackUnconfirmed})
     {
         EXPECT_STRNE(tfc::MarkSentSiteName(site), "?") << "site=" << static_cast<uint32_t>(site);
     }
@@ -3809,6 +3811,8 @@ TEST(TravelFreezeCap, NamesCoverEveryValue)
         << "runbook 按这段原文 grep(也是 DestroyDeposedPlayer 的 reasonTag)";
     EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kReceiptAnomaly), "travel_receipt_anomaly")
         << "GO-2 判定表 B6 的收口点,runbook 同样按原文 grep";
+    EXPECT_STREQ(tfc::MarkSentSiteName(tfc::MarkSentSite::kRollbackUnconfirmed), "travel_rollback_unconfirmed")
+        << "判定表 B5′(两段回执的待确认回执)的收口点,runbook 同样按原文 grep";
 }
 
 TEST(TravelFreezeCap, RemainingUntilNeverNegative)
@@ -4044,6 +4048,7 @@ namespace
 {
 constexpr to::Ownership kAllOwnership[] = {
     to::Ownership::kUnchanged,       to::Ownership::kRolledBackToSelf, to::Ownership::kReceiptAnomaly,
+    to::Ownership::kRollbackUnconfirmed,
     to::Ownership::kReturnedToSelf,  to::Ownership::kMovedElsewhere,   to::Ownership::kLocationUnknown,
 };
 static_assert(std::size(kAllOwnership) == to::kOwnershipCount, "新增结论时补进这张表,并补判定用例");
@@ -4120,6 +4125,84 @@ TEST(TravelOwnership, WallClockFloorRollbackIsAdopted)
 
     facts.locationOwnerEpoch = kRolledBackEpoch - 1; // 键与 location 不一致仍是异常
     EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kReceiptAnomaly);
+}
+
+// 两段回执(zone-redis-regression-guard-20261022.md §4.3.4):回执是本次标记原文的待确认形态 = 那次回滚还没确认落盘。
+// 交叉校验全部成立也不采纳(B5′);待确认形态带前缀,不可能等于标记原文,B5 认不出它。
+TEST(TravelOwnership, PendingRollbackReceiptIsNeverAdopted)
+{
+    const auto pending = player_ownership::PendingRollbackReceiptValue(5, 456);
+    EXPECT_EQ(pending, "pending:5:456") << "与 Go shared/ownerepoch.PendingRollbackReceipt 同一格式";
+    EXPECT_NE(pending, player_ownership::HandoffRedisValue(5, 456));
+    EXPECT_TRUE(pending.starts_with(player_ownership::kPendingRollbackReceiptPrefix));
+
+    auto facts = RolledBackToSelfFacts();
+    facts.receiptIsMine = false;
+    facts.pendingReceiptIsMine = true;
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kRollbackUnconfirmed) << "交叉校验全部成立也不采纳";
+
+    facts.locationOnSelf = false;
+    facts.locationOwnerEpoch = facts.redisEpoch - 1;
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kRollbackUnconfirmed) << "不看其余交叉校验";
+
+    facts.redisEpoch = facts.cachedEpoch;
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kUnchanged) << "epoch 未变仍最先判";
+
+    facts = RolledBackToSelfFacts();
+    facts.receiptIsMine = false;
+    facts.pendingReceiptIsMine = true;
+    facts.locationParsed = false;
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kLocationUnknown) << "location 解析不了就不看回执";
+}
+
+// B5′ 走真实取证应答入口:location 带本次标记原文的待确认回执、其余条件都满足 B5。不采纳,epoch 停在缓存值;按"标记已发出"
+// 收口:实体不存盘销毁,rollback_unconfirmed 与 mark_sent_destroyed 各 +1,rolled_back_adopted 与 B6 计数不动。
+TEST(TravelOwnershipEcs, PendingRollbackReceiptConcludesWithoutAdopting)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    constexpr uint64_t kCachedEpoch = 5;
+    constexpr uint64_t kRollbackEpoch = 7;
+    constexpr uint64_t kRequestedAtMs = 457;
+    constexpr uint32_t kSelfNodeId = 31;
+    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, kRequestedAtMs, kCachedEpoch, kT0);
+    TestLocalNodeInfo().set_node_id(kSelfNodeId);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = kCachedEpoch;
+
+    storage::PlayerLocation location;
+    location.set_zone_id(kCapSelfZone);
+    location.set_node_id(std::to_string(kSelfNodeId));
+    location.set_owner_epoch(kRollbackEpoch);
+    location.set_rollback_receipt(player_ownership::PendingRollbackReceiptValue(kCachedEpoch, kRequestedAtMs));
+    std::string locationBytes;
+    ASSERT_TRUE(location.SerializeToString(&locationBytes));
+
+    // hiredis 回复只在本次同步调用中借用这些栈对象和字符串,不经过连接、不交给 freeReplyObject。
+    char epochText[] = "7";
+    redisReply epochReply{};
+    epochReply.type = REDIS_REPLY_STRING;
+    epochReply.str = epochText;
+    epochReply.len = sizeof(epochText) - 1;
+    redisReply locationReply{};
+    locationReply.type = REDIS_REPLY_STRING;
+    locationReply.str = locationBytes.data();
+    locationReply.len = locationBytes.size();
+    redisReply* elements[] = {&epochReply, &locationReply};
+    redisReply reply{};
+    reply.type = REDIS_REPLY_ARRAY;
+    reply.elements = std::size(elements);
+    reply.element = elements;
+
+    const auto before = travel_handoff_stats::Read();
+    const auto savesBefore = dirty_save_stats::Read();
+    PlayerTravelOutcomeTestAccess::JudgeReply(kCapPlayerId, kRequestedAtMs, kCachedEpoch, reply);
+
+    const auto after = travel_handoff_stats::Read();
+    EXPECT_EQ(after.rolledBackAdopted, before.rolledBackAdopted) << "待确认回执绝不采纳";
+    EXPECT_EQ(after.rollbackUnconfirmed, before.rollbackUnconfirmed + 1);
+    EXPECT_EQ(after.markSentDestroyed, before.markSentDestroyed + 1) << "按标记已发出收口";
+    EXPECT_EQ(after.rollbackReceiptAnomaly, before.rollbackReceiptAnomaly) << "不混进 B6 的计数";
+    EXPECT_EQ(dirty_save_stats::Read().total, savesBefore.total) << "不存盘";
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "不存盘销毁";
 }
 
 // 回执、回复形状、玩家与交接代际都有效,必须进入真实 B5。缺组件应在采纳 epoch / 解冻之前拒绝。
@@ -9800,4 +9883,314 @@ TEST(HandoffMarkWithdrawQueue, OldConfirmationCannotConsumeNewHolderEvenWithSame
     EXPECT_TRUE(queue.Confirm(7,"7:100","old"));EXPECT_EQ(1u,queue.size());
     EXPECT_FALSE(queue.Confirm(7,"7:100","old"));EXPECT_TRUE(queue.HasPlayer(7));
     EXPECT_TRUE(queue.Confirm(7,"7:100","new"));EXPECT_EQ(0u,queue.size());
+}
+
+// ── 离线托管的角色换场景:托管落点(docs/design/player-connection-lost-hold.md §4.2、team-follow-server-trail.md §3.7)──
+// 纯判定 + ECS 级接缝。托管落点在节点上的入口是 HandleHostedPlacement → RoleAdmissionSystem::RequestEnter(SQL 登记、交接栅栏),
+// 再进 HandleEnterGameNode;本文件直接测后者(与上面的断线保留接回同一写法,授权由测试监听器装的 SQL 确认原件提供)。
+
+TEST(ConnectionLostHoldAfkPass, HostingNeedsAConfirmedPassWithTimeLeft)
+{
+    constexpr uint64_t kNow = 1'800'000'000;
+    const auto lead = static_cast<uint64_t>(clh::kHostingExitLead.count());
+    EXPECT_TRUE(clh::IsHosting(true, clh::AfkPass::kActive, kNow + 3600, kNow));
+    EXPECT_FALSE(clh::IsHosting(false, clh::AfkPass::kActive, kNow + 3600, kNow)) << "还没按托管开始处理过:普通保留";
+    EXPECT_FALSE(clh::IsHosting(true, clh::AfkPass::kUnknown, kNow + 3600, kNow));
+    EXPECT_FALSE(clh::IsHosting(true, clh::AfkPass::kInactive, kNow + 3600, kNow));
+    EXPECT_FALSE(clh::IsHosting(true, clh::AfkPass::kActive, kNow + lead, kNow)) << "快到期:马上就该退了,不搬";
+    EXPECT_TRUE(clh::IsHosting(true, clh::AfkPass::kActive, kNow + lead + 1, kNow));
+    // 与 JudgeHold 判"托管继续"是同一个条件。
+    EXPECT_EQ(clh::JudgeHold(std::chrono::hours(1), clh::AfkPass::kActive, kNow + lead + 1, kNow, false), clh::HoldVerdict::kKeep);
+    EXPECT_NE(clh::JudgeHold(std::chrono::hours(1), clh::AfkPass::kActive, kNow + lead, kNow, false), clh::HoldVerdict::kKeep);
+}
+
+TEST(HostedPlacementEcs, OfflineHostedIdentityOnlyWhileHosting)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    constexpr uint64_t kLostGeneration = 1760400000200;
+    auto& identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+    identity.sessionId = kSessionAtExit;
+    identity.loginGeneration = kLostGeneration;
+    EXPECT_FALSE(PlayerLifecycleSystem::OfflineHostedIdentity(player)) << "在线:不是离线托管";
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    EXPECT_FALSE(PlayerLifecycleSystem::OfflineHostedIdentity(player)) << "普通保留(还不知道月卡):不搬";
+
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
+    const auto hosted = PlayerLifecycleSystem::OfflineHostedIdentity(player);
+    ASSERT_TRUE(hosted) << "托管中:可以替他换场景";
+    EXPECT_EQ(hosted->sessionId, kSessionAtExit) << "断开的那次登录";
+    EXPECT_EQ(hosted->loginGeneration, kLostGeneration);
+
+    tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+    EXPECT_FALSE(PlayerLifecycleSystem::OfflineHostedIdentity(player)) << "退出中:不再替他做任何事";
+    tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
+
+    tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).loginGeneration = 0;
+    EXPECT_FALSE(PlayerLifecycleSystem::OfflineHostedIdentity(player)) << "没有登录代次给不出完整身份(角色登记要求非 0)";
+}
+
+TEST(HostedPlacementEcs, ContextCarriesTheLostLoginAndNoNotifiableSession)
+{
+    PlayerLifecycleSystem::HostedPlacement placement;
+    placement.playerId = kExitPlayerId;
+    placement.sceneId = 78;
+    placement.homeZoneId = 3;
+    placement.ownerEpoch = 9;
+    placement.sessionId = kSessionAtExit;
+    placement.loginGeneration = 1760400000300;
+    placement.ownerRevision = 7;
+    const auto ctx = PlayerLifecycleSystem::HostedPlacementContext(placement);
+    ASSERT_TRUE(ctx);
+    EXPECT_TRUE(ctx->hostedPlacement);
+    EXPECT_EQ(ctx->enterInfo.session_id(), kSessionAtExit) << "会话号照常当登录身份用";
+    EXPECT_EQ(ctx->NotifiableSessionId(), 0u) << "没有在场的客户端:任何提示都不推";
+    EXPECT_EQ(ctx->enterInfo.enter_gs_type(), 0u) << "不是一次登录";
+    EXPECT_EQ(ctx->enterInfo.scene_id(), 78u);
+    EXPECT_EQ(ctx->homeZoneId, 3u);
+    EXPECT_EQ(ctx->ownerEpoch, 9u);
+    EXPECT_EQ(ctx->loginGeneration, 1760400000300u);
+    EXPECT_EQ(ctx->ownerRevision, 7u);
+
+    PlayerEnterContext gateRoute;
+    gateRoute.enterInfo.set_session_id(kSessionAtExit);
+    EXPECT_EQ(gateRoute.NotifiableSessionId(), kSessionAtExit) << "gate 路由照旧推给自己的会话";
+
+    using Mutate = void (*)(PlayerLifecycleSystem::HostedPlacement&);
+    const Mutate broken[] = {
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.playerId = kInvalidGuid; },
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.sceneId = 0; },
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.ownerEpoch = 0; },
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.sessionId = kInvalidSessionId; },
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.sessionId = 0; },
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.loginGeneration = 0; },
+        [](PlayerLifecycleSystem::HostedPlacement& p) { p.ownerRevision = 0; },
+    };
+    for (std::size_t i = 0; i < std::size(broken); ++i)
+    {
+        SCOPED_TRACE(i);
+        auto copy = placement;
+        broken[i](copy);
+        EXPECT_FALSE(PlayerLifecycleSystem::HostedPlacementContext(copy)) << "字段不全的整条丢弃";
+    }
+}
+
+namespace
+{
+// 断线保留中的角色被托管落点从源场景换到 target(同一节点)。夹具与 ConnectionLostHoldReentry 相同:
+// 场景 + 邻居 AOI,实体带登录身份 (kSessionAtExit, kReentryLoginGeneration)。
+class HostedPlacementReentry : public SceneEntryPermissionTest
+{
+protected:
+    void SetUp() override
+    {
+        ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+        ASSERT_NO_FATAL_FAILURE(SceneEntryPermissionTest::SetUp());
+        auto& identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+        identity.sessionId = kSessionAtExit;
+        identity.loginGeneration = kReentryLoginGeneration;
+    }
+
+    // 托管落点的上下文(HostedPlacementContext 的形状),目标是 target。owner_epoch 不填:本节不测归属。
+    static PlayerLifecycleSystem::EnterGameNodeOutcome EnterTargetHosted(SessionId session, uint64_t generation)
+    {
+        PlayerEnterContext context;
+        context.enterInfo.set_scene_id(kRelocateSourceScene + 1);
+        context.enterInfo.set_session_id(session);
+        context.loginGeneration = generation;
+        context.hostedPlacement = true;
+        SetFixtureAdmission(context);
+        return PlayerLifecycleSystem::HandleEnterGameNode(kExitPlayerId, context);
+    }
+
+    // 一条普通 gate 路由(新的一次登录接回),回到源场景。
+    static PlayerLifecycleSystem::EnterGameNodeOutcome EnterSourceRoute(SessionId session, uint64_t generation)
+    {
+        PlayerEnterContext context;
+        context.enterInfo.set_scene_id(kRelocateSourceScene);
+        context.enterInfo.set_session_id(session);
+        context.enterInfo.set_enter_gs_type(LOGIN_RECONNECT);
+        context.loginGeneration = generation;
+        SetFixtureAdmission(context);
+        return PlayerLifecycleSystem::HandleEnterGameNode(kExitPlayerId, context);
+    }
+
+    SceneEntity CurrentScene() const
+    {
+        const auto* scene = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+        return scene != nullptr ? scene->sceneEntity : SceneEntity{entt::null};
+    }
+
+    void ExpectNoBoundSession() const
+    {
+        EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(player).gate_session_id(), kInvalidSessionId)
+            << "托管落点不绑会话";
+        EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u) << "死会话号不映射到这名玩家";
+        const auto* identity = tlsEcs.actorRegistry.try_get<PlayerLoginIdentityComp>(player);
+        ASSERT_NE(identity, nullptr);
+        EXPECT_EQ(identity->sessionId, kSessionAtExit) << "登录身份照常是断开的那次登录";
+        EXPECT_EQ(identity->loginGeneration, kReentryLoginGeneration);
+    }
+};
+} // namespace
+
+TEST_F(HostedPlacementReentry, SameNodeHostedMoveKeepsTheHoldAndBindsNoSession)
+{
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              EnterTargetHosted(kSessionAtExit, kReentryLoginGeneration));
+
+    EXPECT_EQ(CurrentScene(), target) << "就地换到队长的场景";
+    const auto* held = tlsEcs.actorRegistry.try_get<PlayerConnectionLostComp>(player);
+    ASSERT_NE(held, nullptr) << "同一次登录不算接回:保留随实体留着";
+    EXPECT_TRUE(held->lostAt == lostAt) << "计时不重来";
+    ASSERT_NO_FATAL_FAILURE(ExpectNoBoundSession());
+}
+
+TEST_F(HostedPlacementReentry, ArrivalWithoutAHoldRebuildsTheOfflineHold)
+{
+    // 从别的节点搬来的实体在本节点从没有过活会话、也没有保留:摘掉会话来模拟这个入场形态。
+    PlayerLifecycleSystem::RemovePlayerSession(player);
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    const auto before = clh::Clock::now();
+
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              EnterTargetHosted(kSessionAtExit, kReentryLoginGeneration));
+
+    EXPECT_EQ(CurrentScene(), target);
+    const auto* held = tlsEcs.actorRegistry.try_get<PlayerConnectionLostComp>(player);
+    ASSERT_NE(held, nullptr) << "按断线托管重建保留";
+    EXPECT_EQ(held->sessionId, kSessionAtExit);
+    EXPECT_EQ(held->loginGeneration, kReentryLoginGeneration);
+    EXPECT_TRUE(held->lostAt >= before);
+    EXPECT_EQ(held->afkPass, clh::AfkPass::kUnknown) << "月卡要在本节点重新确认(宿主没有 Redis,查询没发出去)";
+    EXPECT_FALSE(held->hostingStarted);
+    ASSERT_NO_FATAL_FAILURE(ExpectNoBoundSession());
+
+    // 月卡确认有效:托管开始,之后服务器可以替他继续跟着队长换场景。
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, held->lostAt, false, true, std::to_string(now + 3600), now);
+    const auto hosted = PlayerLifecycleSystem::OfflineHostedIdentity(player);
+    ASSERT_TRUE(hosted);
+    EXPECT_EQ(hosted->sessionId, kSessionAtExit);
+    EXPECT_EQ(hosted->loginGeneration, kReentryLoginGeneration);
+}
+
+TEST_F(HostedPlacementReentry, StaleHostedPlacementAfterANewLoginIsRejected)
+{
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    constexpr uint64_t kNewLoginGeneration = kReentryLoginGeneration + 1;
+    // 玩家重新登录接回(gate 路由),之后才到达的是断开那次登录的托管落点:入场栅栏按登录代次拒掉。
+    ASSERT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              EnterSourceRoute(kNewerSession, kNewLoginGeneration));
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected,
+              EnterTargetHosted(kSessionAtExit, kReentryLoginGeneration));
+
+    EXPECT_EQ(CurrentScene(), source) << "不被旧的托管落点搬走";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "也不被重新放进保留";
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kNewerSession, kNewLoginGeneration));
+}
+
+TEST_F(HostedPlacementReentry, ExitingCharacterIsNotPulledBack)
+{
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    // 托管到期(或被别的退出取代)正在退出:退出存盘在途,保留已摘。
+    tlsEcs.actorRegistry.remove<PlayerConnectionLostComp>(player);
+    tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+    tlsEcs.actorRegistry.emplace<PlayerExitIntentComp>(player);
+
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected,
+              EnterTargetHosted(kSessionAtExit, kReentryLoginGeneration));
+
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player)) << "来晚的托管落点不取消退出";
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerExitIntentComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    EXPECT_EQ(CurrentScene(), source);
+}
+
+TEST_F(HostedPlacementReentry, LiveSessionEntityIsNotTurnedIntoAnOfflineHold)
+{
+    // 纵深防御(按构造走不到):同一次登录的托管落点撞上仍绑着活会话的实体。会话不能被摘、实体不动。
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kSessionAtExit, kReentryLoginGeneration));
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected,
+              EnterTargetHosted(kSessionAtExit, kReentryLoginGeneration));
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kSessionAtExit, kReentryLoginGeneration));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    EXPECT_EQ(CurrentScene(), source);
+}
+
+// ── 服务器发起的同 zone 交接(组队跟随换到本 zone 别的节点,team-follow-server-trail.md §3.7)──
+
+TEST(TravelHandoffInitiatorEcs, OnlyAServerInitiatedHandoffAcceptsAnOfflineHostedCharacter)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    entt::entity player{entt::null};
+    ASSERT_TRUE(MakeReplyTestPlayer(player)); // 本 zone = kReplyTestZone,持有 epoch 7 的资格
+    auto& identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+    identity.sessionId = kSessionAtExit;
+    identity.loginGeneration = 1760400000400;
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
+    ASSERT_TRUE(PlayerLifecycleSystem::OfflineHostedIdentity(player));
+    ScopedFakeSceneManagerNode sceneManager;
+    constexpr uint64_t kLeaderScene = 4321;
+
+    EXPECT_NE(PlayerLifecycleSystem::StartTravelHandoff(player, kReplyTestZone, kLeaderScene, 0,
+                                                        PlayerLifecycleSystem::TravelInitiator::kPlayer),
+              PlayerLifecycleSystem::kTravelAccepted)
+        << "玩家自己发起的交接要活会话";
+    EXPECT_FALSE((tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, PlayerFrozenComp>(player)));
+
+    EXPECT_NE(PlayerLifecycleSystem::StartTravelHandoff(player, kReplyTestZone + 1, 0, 0,
+                                                        PlayerLifecycleSystem::TravelInitiator::kServer),
+              PlayerLifecycleSystem::kTravelAccepted)
+        << "跨 zone 没有托管落点(没有 gate 可重定向)";
+    EXPECT_FALSE((tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, PlayerFrozenComp>(player)));
+
+    EXPECT_EQ(PlayerLifecycleSystem::StartTravelHandoff(player, kReplyTestZone, kLeaderScene, 0,
+                                                        PlayerLifecycleSystem::TravelInitiator::kServer),
+              PlayerLifecycleSystem::kTravelAccepted)
+        << "组队跟随替离线托管的角色发起:同 zone 交接照常冻结、存盘、写标记";
+    const auto* travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+    ASSERT_NE(travel, nullptr) << "宿主没有 Redis:写标记前就地撤销要等资格撤回确认,保持冻结";
+    EXPECT_TRUE(travel->serverInitiated);
+    EXPECT_EQ(travel->sceneId, kLeaderScene);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+}
+
+TEST(TravelHandoffInitiatorEcs, ServerInitiatedAbortUnfreezesWithoutTip)
+{
+    for (const bool serverInitiated : {false, true})
+    {
+        SCOPED_TRACE(testing::Message() << "server_initiated=" << serverInitiated);
+        ScopedPersistedPlayerCleanup cleanup;
+        entt::entity player{entt::null};
+        ASSERT_TRUE(MakeReplyTestPlayer(player));
+        AttachHandoff(player, /*correlationId=*/0);
+        auto& travel = tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player);
+        travel.targetZoneId = kReplyTestZone; // 同 zone:玩家发起的未成回 kEnterSceneFailed
+        travel.serverInitiated = serverInitiated;
+        // 资格已原地撤回确认(ResumeTravelAfterRevocation / 撤销脚本回 1 之后的形态):直接走解冻收尾。
+        travel.revokedFence = tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).handoffFence;
+
+        MirrorTipPushProbe tipPush;
+        PlayerTipSystem::SendToPlayer(player, kEnterSceneFailed, {});
+        ASSERT_EQ(tipPush.Count(), 1) << "观察器校准:宿主没有 gate,推一次 tip 留一行 ERROR";
+        tipPush.Reset();
+
+        PlayerTravelOutcomeTestAccess::Abort(kExitPlayerId, "server-initiated abort regression");
+
+        EXPECT_FALSE((tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, PlayerFrozenComp>(player))) << "解冻";
+        EXPECT_EQ(tipPush.Count(), serverInitiated ? 0 : 1) << "服务器发起的交接未成不回失败 tip";
+    }
 }

@@ -244,4 +244,5 @@ CREATE TABLE IF NOT EXISTS commerce_mock_payout (
   CHECK(amount_fen>0), CHECK(successful IN (0,1)), CHECK(applied IN (0,1))
 );
 
-INSERT INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v1-minor-units');
+-- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-10 起换新，之前装的库(退款待办 CHECK 认不出金额币种不符)须重装。
+INSERT INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v1-minor-units-abnormal-payment');

@@ -13,6 +13,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -136,10 +137,10 @@ func TestSceneTeardown_SweepReleasesTheRoomOfALostResidueSweep(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstance}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	ctx := context.Background()
-	alloc := newFakeAllocator(&fakeGameServer{name: "gs-left", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4})
+	alloc := newFakeAllocator(&fakeGameServer{name: "gs-left", podIP: "10.0.0.8", state: "Allocated", capacity: 4})
 	withAgones(t, sc, alloc, true)
 	const sceneID uint64 = 89623
-	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-left"))
+	seedAgonesRoom(t, sc, alloc, sceneID, "gs-left")
 	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 
@@ -160,14 +161,17 @@ func TestSceneTeardown_SweepReleasesTheRoomOfALostResidueSweep(t *testing.T) {
 	require.Equal(t, 1, releases)
 }
 
-// 认领方与扫描同时做同一个任务(认领方慢过了租期):其余步骤重跑无害,名额只还一次,任务只删一次。
+// 认领方与扫描同时做同一个任务(认领方慢过了租期):各步骤重跑无害,名额删的始终是快照里那一条,只还一次;
+// 任务只删一次。2026-11-10 之前名额是计数,靠任务上「先置位、至多一次」挡住第二次归还,置位之后进程退出就漏一份。
 func TestSceneTeardown_ConcurrentRunsReleaseTheRoomOnce(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	ctx := context.Background()
-	alloc := newFakeAllocator(&fakeGameServer{name: "gs-two", podIP: "10.0.0.9", state: "Allocated", count: 2, capacity: 4})
+	alloc := newFakeAllocator(&fakeGameServer{name: "gs-two", podIP: "10.0.0.9", state: "Allocated", count: 1, capacity: 4})
 	withAgones(t, sc, alloc, true)
 	const sceneID uint64 = 89624
-	seedClaimScene(t, mr, sceneID, "node-a", "gs-two", 0)
+	room := agonesRoom{GameServer: "gs-two", Entry: newAgonesRoomEntry(sceneID)}
+	alloc.addEntryForTest("gs-two", room.Entry)
+	seedClaimScene(t, mr, sceneID, "node-a", room.record(), 0)
 
 	claim, err := ClaimIdleSceneTeardown(sc, claimTestZone, sceneID)
 	require.NoError(t, err)
@@ -176,14 +180,41 @@ func TestSceneTeardown_ConcurrentRunsReleaseTheRoomOnce(t *testing.T) {
 
 	require.NoError(t, runSceneTeardown(ctx, sc, job, nil))
 	require.NoError(t, runSceneTeardown(ctx, sc, job, nil))
-	_, releases, _ := alloc.stats()
-	require.Equal(t, 1, releases, "同一任务的名额至多还一次")
-	require.EqualValues(t, 1, alloc.roomsOf("gs-two"))
+	require.EqualValues(t, 1, alloc.roomsOf("gs-two"), "删的是这个场景那一条,别的名额不动")
+	require.NotContains(t, alloc.entriesOf("gs-two"), room.Entry)
 
 	require.True(t, completeSceneTeardown(ctx, sc, job, nil, false))
 	require.False(t, completeSceneTeardown(ctx, sc, job, nil, true), "任务已删,后到的一方不再记完成")
-	_, releases, _ = alloc.stats()
-	require.Equal(t, 1, releases)
+	require.EqualValues(t, 1, alloc.roomsOf("gs-two"))
+	for _, removed := range alloc.removed {
+		require.Equal(t, room.record(), removed, "每次归还都只删快照里那一条")
+	}
+}
+
+// 归还失败(K8s API 不可用)时任务留着,扫描重做到成功。2026-11-10 之前归还是「至多一次」,这一份就永远漏了。
+func TestSceneTeardown_FailedRoomReleaseIsRetriedBySweep(t *testing.T) {
+	sc, mr := newIntegrationSvcCtx(t)
+	ctx := context.Background()
+	alloc := newFakeAllocator(&fakeGameServer{name: "gs-f", podIP: "10.0.0.12", state: "Allocated", capacity: 4})
+	withAgones(t, sc, alloc, true)
+	const sceneID uint64 = 89637
+	room := agonesRoom{GameServer: "gs-f", Entry: newAgonesRoomEntry(sceneID)}
+	alloc.addEntryForTest("gs-f", room.Entry)
+	seedClaimScene(t, mr, sceneID, "node-a", room.record(), 0)
+	deferredBefore := teardownJobCount(t, teardownKindInstance, "deferred")
+
+	alloc.removeErr = errors.New("apiserver down")
+	destroyed, err := destroyInstanceForce(ctx, sc, claimTestZone, sceneID, "explicit")
+	require.NoError(t, err)
+	require.True(t, destroyed, "认领已提交,销毁已经发生")
+	require.EqualValues(t, 1, alloc.roomsOf("gs-f"), "前提:这次没还掉")
+	requireTeardownPending(t, mr, claimTestZone, sceneID, true)
+	require.Equal(t, deferredBefore+1, teardownJobCount(t, teardownKindInstance, "deferred"))
+
+	alloc.removeErr = nil
+	require.Equal(t, 1, sweepSceneTeardownJobs(ctx, sc, claimTestZone, pastLease()))
+	require.EqualValues(t, 0, alloc.roomsOf("gs-f"), "扫描重做时还掉")
+	requireTeardownPending(t, mr, claimTestZone, sceneID, false)
 }
 
 // 镜像的 force 认领回包丢失:扫描按快照里的镜像源把它从源的子集合摘掉,指标 kind 记 mirror。
@@ -286,10 +317,12 @@ func TestSceneTeardown_SweepReleasesTheRoomOfALostRollback(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	ctx := context.Background()
-	alloc := newFakeAllocator(&fakeGameServer{name: "gs-r", podIP: "10.0.0.10", state: "Allocated", count: 1, capacity: 4})
+	alloc := newFakeAllocator(&fakeGameServer{name: "gs-r", podIP: "10.0.0.10", state: "Allocated", capacity: 4})
 	withAgones(t, sc, alloc, true)
 	const sceneID uint64 = 89631
-	seedClaimScene(t, mr, sceneID, "node-a", "gs-r", 0)
+	room := agonesRoom{GameServer: "gs-r", Entry: newAgonesRoomEntry(sceneID)}
+	alloc.addEntryForTest("gs-r", room.Entry)
+	seedClaimScene(t, mr, sceneID, "node-a", room.record(), 0)
 	require.NoError(t, mr.Set(nodeSceneCountKey(claimTestZone, "node-a"), "1"))
 
 	_, err := atomicRollbackInstanceAllocation(sc, claimTestZone, sceneID, "node-a")
@@ -312,7 +345,7 @@ func TestSceneTeardown_SweepFinishesALostWorldDrain(t *testing.T) {
 	hook := &lostReplyEvalHook{script: luaAtomicDestroyInstanceForce}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	ctx := context.Background()
-	alloc := newFakeAllocator(&fakeGameServer{name: "gs-w", podIP: "10.0.0.11", state: "Allocated", count: 1, capacity: 4})
+	alloc := newFakeAllocator(&fakeGameServer{name: "gs-w", podIP: "10.0.0.11", state: "Allocated", capacity: 4})
 	withAgones(t, sc, alloc, true)
 	const (
 		channel uint64 = 89632
@@ -320,7 +353,7 @@ func TestSceneTeardown_SweepFinishesALostWorldDrain(t *testing.T) {
 	)
 	channelStr := strconv.FormatUint(channel, 10)
 	require.NoError(t, mr.Set(sceneNodeKey(channel), "node-a"))
-	require.NoError(t, mr.Set(sceneAgonesGsKey(channel), "gs-w"))
+	seedAgonesRoom(t, sc, alloc, channel, "gs-w")
 	require.NoError(t, mr.Set(sceneDrainingKey(channel), "1"))
 	_, err := mr.SAdd(worldDrainingSetKey(claimTestZone, confID), channelStr)
 	require.NoError(t, err)
@@ -339,6 +372,7 @@ func TestSceneTeardown_SweepFinishesALostWorldDrain(t *testing.T) {
 	require.False(t, mr.Exists(sceneDrainingKey(channel)))
 	_, releases, _ := alloc.stats()
 	require.Equal(t, 1, releases)
+	require.EqualValues(t, 0, alloc.roomsOf("gs-w"))
 	require.Equal(t, drainedBefore+1, autoscaleOutcomeCount(t, claimTestZone, "scale_in", "drained"))
 }
 

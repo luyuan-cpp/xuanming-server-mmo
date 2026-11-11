@@ -620,7 +620,7 @@ func (c *Config) Validate() error {
 			}
 		}
 		for _, currency := range c.Commerce.CurrencyTypes {
-			if !isTradableCurrency(currency) {
+			if !IsTradableCurrency(currency) {
 				return errors.New("交易货币只允许金币0与显式启用钻石1，绑定币禁售")
 			}
 		}
@@ -633,7 +633,7 @@ func (c *Config) Validate() error {
 			return errors.New("人民币寄售必须开启商城与SQL资产通道")
 		}
 		for _, currency := range c.Rmb.CurrencyTypes {
-			if !isTradableCurrency(currency) {
+			if !IsTradableCurrency(currency) {
 				return errors.New("人民币寄售不能交易绑定币")
 			}
 		}
@@ -653,9 +653,9 @@ func HasRpcTarget(c zrpc.RpcClientConf) bool {
 	return c.Etcd.Key != "" || len(c.Endpoints) > 0 || c.Target != ""
 }
 
-// isTradableCurrency:交易与人民币寄售可用的币种,是取值表(shared/currencytype)的子集。只点名常量、
+// IsTradableCurrency:交易与人民币寄售可用的币种,是取值表(shared/currencytype)的子集。只点名常量、
 // 不写数字:扩白名单时不可能写出表外的值,否则 scene 会把它判成版本错位,截止为 0 的交付流将永久 RETRY。
-// 绑定灵石禁售。
-func isTradableCurrency(currency uint32) bool {
+// 绑定灵石禁售。白名单只在这里一份:配置校验与 svc 装配人民币寄售都调它。
+func IsTradableCurrency(currency uint32) bool {
 	return currency == currencytype.Gold || currency == currencytype.Diamond
 }

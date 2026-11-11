@@ -10,9 +10,18 @@ import (
 	mailpb "proto/mail"
 	"shared/assetop"
 	table "shared/generated/pb/table"
+	"shared/workshard"
 )
 
+// ListDue 扫全部片的到期行,即不带分片条件的 ListDueOwned。重投循环绑了按片分工(assetop.Loop.BindWorkOwner)之后不再调它。
 func (r *Repo) ListDue(ctx context.Context, now uint64, limit int) ([]uint64, error) {
+	return r.ListDueOwned(ctx, now, limit, workshard.Filter{})
+}
+
+// ListDueOwned 是 assetop.OwnedDueLister:两段读,新行(attempts < FreshAttemptLimit)优先,老行只补缺口,按 op_id 去重。
+// owned 是本副本负责的片(片号 = player_id % 64,缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md),
+// 两段都接在 WHERE 里、LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。
+func (r *Repo) ListDueOwned(ctx context.Context, now uint64, limit int, owned workshard.Filter) ([]uint64, error) {
 	if limit <= 0 || limit > 1000 {
 		return nil, ErrInvalid
 	}
@@ -23,7 +32,8 @@ func (r *Repo) ListDue(ctx context.Context, now uint64, limit int) ([]uint64, er
 		if remaining == 0 {
 			break
 		}
-		rows, err := r.db.QueryContext(ctx, "SELECT op_id FROM mail_asset_op WHERE status=1 AND next_attempt_ms<=? AND lease_until_ms<? AND attempts "+comparison+" ? ORDER BY next_attempt_ms,op_id LIMIT ?", now, now, assetop.FreshAttemptLimit, remaining)
+		args := append([]any{now, now, assetop.FreshAttemptLimit}, owned.Args()...)
+		rows, err := r.db.QueryContext(ctx, listDueQuery(comparison, owned), append(args, remaining)...)
 		if err != nil {
 			return nil, err
 		}
@@ -45,6 +55,14 @@ func (r *Repo) ListDue(ctx context.Context, now uint64, limit int) ([]uint64, er
 		}
 	}
 	return ids, nil
+}
+
+// listDueQuery 拼一段到期扫描:comparison 只取 "<"(新行)或 ">="(老行);分片条件只来自 workshard.SQLFilter
+// (列名写死、片号只走绑定参数),不含外部输入,位置在 ORDER BY / LIMIT 之前。
+// 实参顺序与占位符一致:now、now、FreshAttemptLimit、片号……、LIMIT。
+func listDueQuery(comparison string, owned workshard.Filter) string {
+	return "SELECT op_id FROM mail_asset_op WHERE status=1 AND next_attempt_ms<=? AND lease_until_ms<? AND attempts " +
+		comparison + " ? AND " + owned.SQL() + " ORDER BY next_attempt_ms,op_id LIMIT ?"
 }
 
 func (r *Repo) ClaimOp(ctx context.Context, id, now, until, poison, token uint64) (assetop.Op, bool, error) {
@@ -83,7 +101,10 @@ func (s StoreAdapter) Claim(ctx context.Context, id, now, until, poison, token u
 	return s.Repo.ClaimOp(ctx, id, now, until, poison, token)
 }
 
-var _ assetop.Store = StoreAdapter{}
+var (
+	_ assetop.Store          = StoreAdapter{}
+	_ assetop.OwnedDueLister = StoreAdapter{}
+)
 
 func (r *Repo) lockOp(ctx context.Context, tx *sql.Tx, id uint64) (*mailpb.MailAssetOpRecord, error) {
 	p := &mailpb.MailAssetOpRecord{}

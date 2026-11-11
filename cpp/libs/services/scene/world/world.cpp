@@ -6,11 +6,13 @@
 #include "actor/actor_net_id.h"
 #include "actor/attribute/system/actor_state_attribute_sync.h"
 #include "combat/buff/system/buff.h"
+#include "combat/engagement/system/combat_engagement.h"
 #include "core/constants/fps.h"
 #include "spatial/system/aoi.h"
 #include "spatial/system/movement.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/afk.h"
+#include "player/system/player_team.h"
 #include "player/system/team_follow_system.h"
 #include "proto/common/component/frame_comp.pb.h"
 #include "core/system/id_generator.h"
@@ -65,7 +67,12 @@ void World::Update()
             // 组队跟随在 Movement 之后:读的是队长本 tick 的最终位置;队员的新位置与队长一样
             // 在下一 tick 的 AoiSystem::Update 里进格。
             TeamFollowSystem::Update(fixedDeltaTime);
+            // 队长离开本节点导致队形解散、去留有了结论的,原随从再跟一次(可能跟到别的节点去,
+            // team-follow-server-trail.md §3.7)。没有在等的随从时零开销。
+            PlayerTeamSystem::FollowAfterLeaderSettled();
             BuffSystem::Update(fixedDeltaTime);
+            // 脱战计时:到时的交手关系结束,撤销双方的战斗关注。
+            CombatEngagementSystem::Update(fixedDeltaTime);
 
             // Attribute calculation must run last (depends on state changes above)
             ActorAttributeCalculatorSystem::Update();

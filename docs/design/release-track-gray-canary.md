@@ -104,7 +104,7 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
 
 机房始终按 stable battle 节点选：探测目标、可放置的机房集合都只看 stable 镜像，canary 局在选定的机房里先找 canary 节点。所以 canary battle 池要和 stable 部署在同一批机房（`infra-up` 起的金丝雀池与 stable 用同一个机房号），不会出现「只有 canary 节点的机房」。
 
-观战：stable 会话不看 canary 对局，否则会被连到 canary battle 节点上；canary 会话两条轨道都能看。做法见 §7「批 3b 的细节」（11-10 已落码，未编译）。
+观战：stable 会话不看 canary 对局，否则会被连到 canary battle 节点上；canary 会话两条轨道都能看。一局在哪条轨道由成局原件记下（选点时按选中节点写，之后不变），点名观战、随机观战和观战列表（含赛事局）都按它判，不看实时节点镜像。做法见 §7「批 3b 的细节」（11-10 已落码，未编译）。
 
 ### 2.7 发布步骤
 
@@ -138,6 +138,8 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
 | `NodeInfo.release_track = 15` | string | 生产者只写 `"stable"` 或 `"canary"`。消费方把空串当 stable，其他值当无效节点跳过并记错误日志。13、14 号已被 `max_connections`、`admission` 占用 |
 | `ForwardRequest.release_track = 3` | string | gate 自报的会话轨道，取值同上，与 `zone_id` 同形。空串按 stable；其他认不出的值是 gate 的契约违例，router 回 `kInvalidParameter` 并计 `outcome="invalid_release_track"` |
 | `MatchNetworkProfile.release_track = 6`（批 3b） | string | 写探测计划时由服务端按会话轨道记下（取值同上，空串是本字段之前的档案，按 stable），成局时用来判这局的轨道（§2.6）。存在档案的 payload 里，不改表结构 |
+| `MatchFormationRecord.release_track = 23`（批 3b） | string | 这局所在 battle 节点的轨道，选点时按选中节点记下（canary 局退回 stable 节点时记 stable），之后不变。观战的三个入口按它判。`match_formation` 按列存，迁移补列；补列前的行读出 NULL，按 stable；认不出的值观战不放行 |
+| `SpectateBattleRecord.release_track = 7`（批 3b） | string | 由成局原件组观战记录时照抄，观战列表按它过滤。服务端内部消息，不下发客户端 |
 | gRPC metadata `x-release-track`（批 3b） | string | 客户端请求链路上把会话轨道带给目标服务：router 按 `ForwardRequest.release_track` 写，gate 直连写自己的轨道。读不到按 stable，写了多份或认不出就拒绝 |
 
 客户端协议不变，客户端不需要升级。
@@ -163,7 +165,7 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
   - 写 SQL 的服务（router 以外都是）在 RPC 里照样写库，boot 目录要另有 `<ns>/<svc>-canary` 条目：自己的注册计划、registrar 与运行配置 Secret 和名册，`replicas` 等于 `-CanaryReplicas`。两个 Deployment 共用一份名册会领到同一条 boot，所以不借稳定版那份。写路径入口先核（`Assert-GlobalGoSvcCanaryPreflight`），缺条目或副本数对不上就在任何写操作之前拒绝。match 的运行配置里 `Etcd.Key` 写 `matchservice.rpc.canary`（§2.5）。
   - `-NetworkPolicies on` 时照样能用（批 3a）：生成 NetworkPolicy 时，两侧名单里能起金丝雀的服务各自动补一个 `<app>-canary`（`Get-ReleaseTrackAppLabels`），guild、match 的策略同时保护它们的金丝雀副本，放行一侧的金丝雀调用方照样能拨。名单表只写真实清单的标签，补上的标签不看这次起没起金丝雀，没有金丝雀时选不中任何 Pod。scene 的名单在 `zone-up` 时生成，各 zone 要先用同一版脚本部署过。
 - 金丝雀 Pod 带标签 `mmorpg.io/release-track: canary`（批 3a）：zone-up 的 gate、scene（Deployment、Agones Fleet 的 GameServer 与 Pod 两层、external gate StatefulSet）和 login、scene-manager、db，以及全局服务的 `<svc>-canary`。只加在 Pod 模板，selector 不动；stable 不写，已有 zone 不会因此滚动。`zone-status`、`infra-status` 最后列出各 Pod 的轨道标签。
-- `k8s_deploy.ps1 infra-up -CanaryBattleReplicas <N> -CanaryNodeImage <ref>`（批 3b，11-10 已落码，未编译）另起 `battle-canary` 池：Deployment 形态是 `battle-canary` Deployment，Agones 形态是第二个 Fleet；镜像、拉取策略、副本数是金丝雀的，写 `MMORPG_RELEASE_TRACK=canary` 与 Pod 标签，`app: battle-canary`，其余和 stable battle 相同。只用于 infra-up；要求 stable 池在；不支持 hostPort 形态；staging、prod 同样要求固定 tag。不粘滞：没起时删掉以前留下的 `battle-canary`，只删本次编排形态的那种 kind，切换 battle 编排形态之前先撤掉金丝雀池。
+- `k8s_deploy.ps1 infra-up -CanaryBattleReplicas <N> -CanaryNodeImage <ref>`（批 3b，11-10 已落码，未编译）另起 `battle-canary` 池：Deployment 形态是 `battle-canary` Deployment，Agones 形态是第二个 Fleet；镜像、拉取策略、副本数是金丝雀的，写 `MMORPG_RELEASE_TRACK=canary` 与 Pod 标签，`app: battle-canary`，其余和 stable battle 相同。只用于 infra-up；要求 stable 池在；不支持 hostPort 形态；staging、prod 同样要求固定 tag。不粘滞：没起时删掉以前留下的 `battle-canary`，只删本次编排形态的那种 kind。切换 `-BattleOrchestrator` 时，另一种 kind 的 `battle-canary` 和 stable battle 一起列为旧形态资源，过同一道 `-AllowDisruptiveSwitch` 闸删除，不用先手动撤池。
 - 告警 `deploy/k8s/release-track-alerts.yaml`（批 3a）：`ReleaseTrackZoneMixedTooLong`（一个 zone 的 gate / scene 混轨超过 3 小时，按 `cpp_node_info`）、`ReleaseTrackCanaryForwardErrorsHigh`（canary 会话经 router 的失败率超过 stable 的 2 倍再加 1 个百分点，canary 每秒 0.1 次请求以上，持续 10 分钟）。负责人没有给门槛，这两组数是起步值，依据写在规则里，首次金丝雀之后按实测调。不做 namespace 标签：金丝雀 zone 里 data-service、player-locator 仍是 stable，按 namespace 打标签会标错。
 
 ## 6. 不做的事
@@ -216,9 +218,14 @@ AGENTS.md §10.2 规定预计改动 30 个以上文件要先停下请示，本�
 2. **档案记轨道**。`GetNetworkProbePlan` 存计划时把会话轨道写进 `MatchNetworkProfile.release_track`。`CommitProfile` 本来就读出计划里那份档案、只换回执再写回，所以轨道原样保留，不接受回执里自带的值。排队票入队时复制档案，刷新回执时一起刷新。
 3. **成局判轨道**。`buildGlobalDirect`（点名成局）和 `claimGroup`（排队成局）读完全员档案后算这局的轨道（`battleTrackOf` / `poolClaimTrack`）：全员都是 canary 才是 canary，缺档案、空串、认不出一律按 stable。选点用 `pickBattleNode`：机房仍按 stable 节点选定，canary 局在这个机房里先在 canary 镜像里选，选不到退回 stable；stable 局只在 stable 节点里选。
 4. **两份 battle 镜像**。原方案是让 `BattleNodes` 收两条轨道、在各调用点按轨道过滤；落码时改成保留 `BattleNodes` 只收 stable，另起 `CanaryBattleNodes`（`NodeWatcher.CanaryOnly()`）。这样探测目标、机房集合、节点计数这些已有调用点一处不用改，仍然只看 stable；只有新成局选点和按节点号确认已有对局（`battleInstanceRegistered` / `battleInstanceReplaced`，经 `battleEntryOfNode` 先查 stable 再查 canary）用到 canary 镜像。探测只给 stable 节点：机房按 stable 选，canary 会话不需要 canary 节点的延迟。
-5. **观战**。`locateGlobalWatch` 里，stable 会话碰到正面确认在 canary 镜像里（node_id 与实例 uuid 都对上）的对局，直接回 `ErrBattleNotWatchable`，不摘观战索引，canary 会话仍能看。查不到不拦，交给原有判定：要求「正面确认是 stable 才放行」会把镜像暂缺时可重试的 L0 失败变成永久拒绝。代价是一个很窄的放过窗口：match 刚启动、canary 镜像还没同步到这台节点时，stable 会话可能看到 canary 对局。没有把轨道写进成局原件：`match_formation` 按列存，加列要改审计会话正在改的那批 authority 文件，收益只是把这个窗口关掉。随机选场与精选列表没有按观众轨道过滤：stable 观众随机选中 canary 局时这次请求以 16018 结束，重发即可。
-6. **部署**。`infra-up -CanaryBattleReplicas N -CanaryNodeImage <ref>` 另起一个 battle 池：同一条渲染路径（`New-BattleWorkloadManifest -Canary`），换镜像、拉取策略、轨道与副本数，渲染完由 `Rename-CanaryWorkload` 改名成 `battle-canary`、全部 `app: battle` 换成 `app: battle-canary`（容器名不变）；写 canary env 与 Pod 标签（Agones Fleet 两层）。和 stable 共用 battle-node-config、机房号、探测与终局密钥、Agones SDK 身份。不粘滞，没起就删以前留下的 `battle-canary`（只删本次编排形态的那种 kind）。要求 stable 池在（`-BattleReplicas > 0`）；不支持 hostPort 形态，两个池会抢 hostPort 20000。
-7. **测试**。router 的 metadata 用例（`TestForwardWritesSessionTrackMetadata`）；Go 与 C++ 键名对拍；`NodeWatcher.CanaryOnly()`；match 的会话轨道读取、成局判轨道（全员 canary、混合、旧档案、解不开）、选点（canary 局用 canary、选不到退回、stable 局不进 canary）、两份镜像的查找（`internal/logic/release_track_test.go`）；部署契约 4 条。观战拦截那三行没有单独的用例：`locateGlobalWatch` 的用例要真库夹具，判据函数已单测。
+5. **观战**。选点时把选中节点的轨道写进成局原件 `MatchFormationRecord.release_track`（`buildGlobalDirect` 与 `claimGroup` 两处；canary 局退回 stable 节点时记 stable），之后不变。观战只按原件判（`viewerMayWatch`）：stable 观众只看记着 stable 或空串（补列前的行）的对局，canary 观众都能看，认不出的值不放行。三个入口用同一条判据：
+   - **点名观战**：`locateGlobalWatch` 在原有判定之后回 `ErrBattleNotWatchable`（16018），意图按此结案；不发 battle RPC、不落 L0 原件、不摘观战索引（canary 观众仍能看）。
+   - **随机观战**：stable 观众走 `pickRandomBattleFor`，每抽一场读一次原件，抽到 canary 局就重抽，最多 8 次，抽不到按「没有可看的场」结案；跳过的场不摘索引。代价是 stable 观众每次随机多一次按主键读。
+   - **观战列表（含赛事局）**：`watchableSummary` 按观众轨道过滤，滤掉的场不摘索引。canary 镜像里有节点时 stable 观众多读一倍候选；镜像为空时不多读，残留的 canary 场照样滤掉，只是这一页可能短一点（与懒剔除不回填同口径）。
+
+   最初的落码按实时 canary 镜像判，match 刚启动、镜像还没同步时会放过，随机与列表也没过滤；11-10 改成按原件判，结论只取决于原件，与镜像何时同步无关。`match_formation` 按列存，加列要改 `store.go` 的列清单、插入与读取三处（读取用 `sql.NullString` 接补列前的 NULL），动手前与数据覆盖审计会话分过工。
+6. **部署**。`infra-up -CanaryBattleReplicas N -CanaryNodeImage <ref>` 另起一个 battle 池：同一条渲染路径（`New-BattleWorkloadManifest -Canary`），换镜像、拉取策略、轨道与副本数，渲染完由 `Rename-CanaryWorkload` 改名成 `battle-canary`、全部 `app: battle` 换成 `app: battle-canary`（容器名不变）；写 canary env 与 Pod 标签（Agones Fleet 两层）。和 stable 共用 battle-node-config、机房号、探测与终局密钥、Agones SDK 身份。不粘滞，没起就删以前留下的 `battle-canary`（只删本次编排形态的那种 kind）。切换编排形态时，`Get-BattleObsoleteResources` 每个方向列两项（另一种 kind 的 stable battle 与 `battle-canary`），由 `Apply-BattlePool` 开头的旧形态删除一起删，写路径入口的 `Assert-ClientEntryClusterState` 也按这份清单先判，过同一道 `-AllowDisruptiveSwitch` 闸；集群里没有 Agones CRD 时 Fleet 项按 ApiGroup 跳过。要求 stable 池在（`-BattleReplicas > 0`）；不支持 hostPort 形态，两个池会抢 hostPort 20000。
+7. **测试**。router 的 metadata 用例（`TestForwardWritesSessionTrackMetadata`）；Go 与 C++ 键名对拍；`NodeWatcher.CanaryOnly()`；match 的会话轨道读取、成局判轨道（全员 canary、混合、旧档案、解不开）、选点（canary 局用 canary、选不到退回、stable 局不进 canary）、两份镜像的查找（`internal/logic/release_track_test.go`）；部署契约 4 条，旧形态清单每个方向两项（`k8s_client_entry_contract.tests.ps1`）。观战：判据 `viewerMayWatch`（六种组合，认不出的轨道不放行）、选中节点的轨道就是原件记的轨道、列表按观众轨道过滤（含赛事局、不摘索引、多读候选、认不出的会话轨道报错）是单测；点名观战被拦（16018、不发 RPC、不落原件、不摘索引，canary 观众同一场直连）和随机观战跳过 canary 局是两条真库用例（`global_spectate_lobby_native_test.go`，要 `MATCH_IT_TIDB`）。
 
 **与其他会话的冲突**：11-05 工作区里，login（`loginqueue`、`node`）、scene_manager（`world_init`、`createscenelogic`）、gate 的 `main.cpp`、九个全局服务的入口文件、`k8s_deploy.ps1`、`common.proto` 都有其他会话未提交的改动。批 1 只碰当时没人在改的文件，`common.proto` 只在 `NodeInfo` 末尾追加字段；批 2 的服务入口和部署脚本，要等那些改动入库后再动。
 

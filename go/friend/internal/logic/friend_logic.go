@@ -189,7 +189,7 @@ func NewDeps(svcCtx *svc.ServiceContext) *Deps {
 	})
 	roleStates, err := rolefence.NewDirectoryReader(svcCtx.DataService, roleFenceCaller, os.Getenv(rolefence.SecretEnv(roleFenceCaller)))
 	if err != nil {
-		panic("好友角色护栏的调用方密钥 " + rolefence.SecretEnv(roleFenceCaller) + " 不可用：" + err.Error())
+		panic("friend role fence caller key " + rolefence.SecretEnv(roleFenceCaller) + " unavailable: " + err.Error())
 	}
 	repo.ConfigureRoleFence(rolefence.NewGuard(svcCtx.DB, roleStates))
 	return &Deps{

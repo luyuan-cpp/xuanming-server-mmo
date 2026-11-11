@@ -854,3 +854,14 @@ func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) 
 		require.True(t, markerReleasesEpoch(raw, epoch))
 	})
 }
+
+// 待确认回执的前缀是跨语言契约(zone-redis-regression-guard-20261022.md §4.3.4):scene_manager 写,C++ 源端取证按它
+// 认出「回滚还没确认落盘」、不采纳(判定表 B5′)。拼错一个字符,C++ 会把待确认回执当成别人的回执,判成 B7 销毁且不踢线。
+func TestPendingRollbackReceiptPrefixMatchesCpp(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(crossLangRepoRoot, "cpp/libs/services/scene/player/comp/player_ownership_comp.h"))
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Skip("仅Go源码包无C++源")
+	}
+	require.NoError(t, err)
+	require.Contains(t, string(data), `kPendingRollbackReceiptPrefix = "`+ownerepoch.PendingRollbackReceiptPrefix+`";`)
+}

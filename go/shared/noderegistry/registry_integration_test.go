@@ -2,9 +2,9 @@
 
 package noderegistry
 
-// 集成测试:需要本地 etcd (127.0.0.1:2379) 在跑。
-// 启动 etcd: pwsh tools/scripts/dev_tools.ps1 -Command etcd-up
-// 跑测试:    go test -tags=integration ./noderegistry/...
+// 集成测试:需要本地 etcd (127.0.0.1:2379) 在跑,连不上就 SKIP。
+// 启动 etcd: 仓库根 docker compose -f deploy/docker-compose.yml up -d etcd
+// 跑测试:    go test -count=1 -tags=integration ./noderegistry/...
 //
 // 覆盖契约 zone_contract_v1 §2 的 etcd 侧不变量:
 //   1. 同一租约、同一 Txn 写双 key;allocKey 值 = uuid,rpcPath 值 = 回调产物
@@ -15,8 +15,9 @@ package noderegistry
 //   6. 客户端先判失租、服务端旧 key 仍在时重夺成功(不误判成"被抢")
 //   7. Close 与重注册交错时不留孤儿 key
 //   8. RegisterAfterListening 等端口可连才注册
+//   9. 失租 / 重注册 / 换号 / 退出与 registered gauge 的指标随上面的场景变化(R17)
 //
-// 用例之间用独立 Prefix 隔离,结束时删掉整个前缀。
+// 用例之间用独立 Prefix 隔离,结束时删掉整个前缀;指标按 prefix 分序列,同样互不干扰。
 
 import (
 	"context"
@@ -30,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -328,6 +330,9 @@ func TestClose_DeletesBothKeysRevokesLeaseAndIsIdempotent(t *testing.T) {
 
 	r := register(t, cli, itSpec(prefix))
 	lease, _, rpcKey, allocKey, _ := r.snapshot()
+	if got := registeredValue(prefix); got != 1 {
+		t.Fatalf("registered gauge after Register = %v, want 1", got)
+	}
 	r.Close()
 	r.Close()
 	r.Close()
@@ -337,6 +342,9 @@ func TestClose_DeletesBothKeysRevokesLeaseAndIsIdempotent(t *testing.T) {
 	}
 	if !leaseGone(t, cli, lease) {
 		t.Fatal("Close must revoke the lease")
+	}
+	if got := registeredValue(prefix); got != 0 {
+		t.Fatalf("registered gauge after (repeated) Close = %v, want 0", got)
 	}
 	r.KeepAlive() // Close 之后 KeepAlive 不得复活任何东西
 	time.Sleep(500 * time.Millisecond)
@@ -403,6 +411,20 @@ func TestKeepAlive_ReclaimsOriginalIDAfterLeaseRevoked(t *testing.T) {
 		t.Fatalf("free original id must be reclaimed: %d -> %d", oldID, r.NodeID())
 	}
 	assertHeldBy(t, cli, prefix, oldID, r.NodeUUID, newLease)
+
+	// 成功计数紧跟在提交之后,等它可见;重夺原号不算换号。
+	waitFor(t, 5*time.Second, "reregister_success_total to count the reclaim", func() bool {
+		return testutil.ToFloat64(reRegisterSuccessTotal.WithLabelValues(prefix)) >= 1
+	})
+	if got := testutil.ToFloat64(leaseLostTotal.WithLabelValues(prefix)); got < 1 {
+		t.Fatalf("lease_lost_total = %v, want >= 1", got)
+	}
+	if got := testutil.ToFloat64(nodeIDReallocatedTotal.WithLabelValues(prefix)); got != 0 {
+		t.Fatalf("node_id_reallocated_total = %v after reclaiming the original id, want 0", got)
+	}
+	if got := registeredValue(prefix); got != 1 {
+		t.Fatalf("registered gauge after re-registration = %v, want 1", got)
+	}
 }
 
 // ReallocateNewID:原 id 已被 B 占用 → 换新 id,回调 (old,new),值里的 nodeId 经 BuildValue 重建,
@@ -449,6 +471,17 @@ func TestKeepAlive_ReallocatesNewIDWhenOriginalTaken(t *testing.T) {
 	}
 	assertHeldBy(t, cli, prefix, ids[1], a.NodeUUID, newLease)
 	assertHeldBy(t, cli, prefix, aID, b.NodeUUID, bLease)
+
+	// 计数在回调之前,收到回调时已可见。registered 是本前缀持有份数:A(已重注册)+ B。
+	if got := testutil.ToFloat64(nodeIDReallocatedTotal.WithLabelValues(prefix)); got != 1 {
+		t.Fatalf("node_id_reallocated_total = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(reRegisterSuccessTotal.WithLabelValues(prefix)); got < 1 {
+		t.Fatalf("reregister_success_total = %v, want >= 1", got)
+	}
+	if got := registeredValue(prefix); got != 2 {
+		t.Fatalf("registered gauge = %v, want 2 (A re-registered + B)", got)
+	}
 }
 
 // ExitProcess:原 id 被占 → 不换号、Revoke 新租约、调 exitProcess;etcd 里不留 A 的 key。
@@ -485,6 +518,12 @@ func TestKeepAlive_ExitProcessPolicyExitsWhenOriginalTaken(t *testing.T) {
 		t.Fatalf("ExitProcess must not commit a new lease, got %x", int64(lease))
 	}
 	assertHeldBy(t, cli, prefix, aID, b.NodeUUID, bLease)
+	if got := testutil.ToFloat64(reRegisterFailureTotal.WithLabelValues(prefix, reRegisterFailTakenOver)); got != 1 {
+		t.Fatalf("reregister_failure_total{reason=taken_over} = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(nodeIDReallocatedTotal.WithLabelValues(prefix)); got != 0 {
+		t.Fatalf("node_id_reallocated_total = %v under ExitProcess, want 0", got)
+	}
 
 	resp, err := cli.Get(context.Background(), prefix+"/", clientv3.WithPrefix())
 	if err != nil {

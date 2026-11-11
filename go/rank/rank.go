@@ -303,7 +303,7 @@ func run(c config, migrate bool) (runErr error) {
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, bind, closeSource, closeRelay, prepared); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("rank 排空 HOLD: %v", err)
+			logx.Errorf("rank drain HOLD: %v", err)
 		}
 	}()
 	defer func() {
@@ -317,5 +317,5 @@ func run(c config, migrate bool) (runErr error) {
 	return domainhost.ServeWithReady(ctx, c.Config, base.ENodeType_RankNodeService, func(s *grpc.Server) {
 		rankpb.RegisterClientPlayerRankServer(s, handler)
 		rankpb.RegisterRankAdminServer(s, handler)
-	}, func() { close(listening) }, root, relay, relayIngress)
+	}, func(string) { close(listening) }, root, relay, relayIngress)
 }

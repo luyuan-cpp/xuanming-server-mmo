@@ -16,6 +16,7 @@ import "proto/common/component/player_skill_comp.proto";
 import "proto/common/component/currency_comp.proto";
 import "proto/common/component/player_item_gain_block_comp.proto";
 import "proto/common/component/client_request_ledger_comp.proto";
+import "proto/common/component/player_item_hold_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
 
 // ------------------- User basic info table -------------------
@@ -182,6 +183,13 @@ message player_database
   // 加载时无条件挂组件、校验不过挂失效标签(带键请求一律 fail-closed),存盘缺它整份拒存(持久数据)。
   // 取下一个空闲号 25;下一个新字段从 26 起。
   ClientRequestLedgerComp client_request_ledger = 25 [(OptionPersistGroup) = 7];  // WALLET
+  // 物品数量预留(docs/design/battle-item-reservation.md):备战时把带进战斗的道具按配置号与数量占住,结算只从这里扣,
+  // 作废或取消时释放。必须与 bag_component 同一次存盘提交 —— 「预留落了、背包没落」会把玩家的东西占住而没有对应的战斗,
+  // 「背包落了、预留没落」会让晚到的结算按持有量夹紧(药白喝)。一次存盘的所有脏行同事务(player-save-direct-commit.md §1.1),
+  // 所以不必与背包同组;它小、只在备战与结算时变,放 PROFILE 行,不让每一次背包写入都带上它。
+  // 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
+  // 取下一个空闲号 26;下一个新字段从 27 起。
+  PlayerItemHoldComp item_holds = 26 [(OptionPersistGroup) = 4];  // PROFILE
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:

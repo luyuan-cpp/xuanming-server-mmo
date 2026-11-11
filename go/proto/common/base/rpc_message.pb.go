@@ -153,7 +153,16 @@ type GameRpcMessage struct {
 	// 调用号(= muduo RpcMessage.id):发起方 channel 内单调递增、从 1 开始;0 = 单向(调用方不要应答)。
 	// id != 0 的 REQUEST,服务端必须恰好回一帧 RESPONSE 或 RPC_ERROR(Empty / 0 字节响应也回)。
 	// uint64:按 5 万次/s 算 uint32 约 24 小时回绕;不用原版的 fixed64,小号 varint 只占 1-3 字节。
-	Id            uint64 `protobuf:"varint,6,opt,name=id,proto3" json:"id,omitempty"`
+	Id uint64 `protobuf:"varint,6,opt,name=id,proto3" json:"id,omitempty"`
+	// 链路追踪(docs/design/distributed-tracing.md §5.2):W3C trace-context 的二进制形态,只在 REQUEST 上填。
+	// 四个字段全 0 = 没有 trace(proto3 不编码 0 值,没有 trace 的帧不多一个字节),收方开新根;
+	// trace_id 或 parent_span_id 为 0 同样当作没有。读写只经 network/rpc_trace_envelope.h。
+	// hi / lo / parent_span_id 都按大端把字节拼成整数:%016llx 打出来与日志里的 trace_id / span_id 一致。
+	// 用 fixed64 而不是 bytes:16 字节超过 MSVC 与 libstdc++ 的短串上限,bytes 每帧都要堆分配;随机值 varint 要 9-10 字节。
+	TraceIdHi     uint64 `protobuf:"fixed64,7,opt,name=trace_id_hi,json=traceIdHi,proto3" json:"trace_id_hi,omitempty"`          // TraceId.bytes[0..7]
+	TraceIdLo     uint64 `protobuf:"fixed64,8,opt,name=trace_id_lo,json=traceIdLo,proto3" json:"trace_id_lo,omitempty"`          // TraceId.bytes[8..15]
+	ParentSpanId  uint64 `protobuf:"fixed64,9,opt,name=parent_span_id,json=parentSpanId,proto3" json:"parent_span_id,omitempty"` // 发送方当前 span;收方在它下面建子 span
+	TraceFlags    uint32 `protobuf:"varint,10,opt,name=trace_flags,json=traceFlags,proto3" json:"trace_flags,omitempty"`         // W3C flags,只用最低位 sampled
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -230,11 +239,39 @@ func (x *GameRpcMessage) GetId() uint64 {
 	return 0
 }
 
+func (x *GameRpcMessage) GetTraceIdHi() uint64 {
+	if x != nil {
+		return x.TraceIdHi
+	}
+	return 0
+}
+
+func (x *GameRpcMessage) GetTraceIdLo() uint64 {
+	if x != nil {
+		return x.TraceIdLo
+	}
+	return 0
+}
+
+func (x *GameRpcMessage) GetParentSpanId() uint64 {
+	if x != nil {
+		return x.ParentSpanId
+	}
+	return 0
+}
+
+func (x *GameRpcMessage) GetTraceFlags() uint32 {
+	if x != nil {
+		return x.TraceFlags
+	}
+	return 0
+}
+
 var File_proto_common_base_rpc_message_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_rpc_message_proto_rawDesc = "" +
 	"\n" +
-	"#proto/common/base/rpc_message.proto\"\xc1\x01\n" +
+	"#proto/common/base/rpc_message.proto\"\xc8\x02\n" +
 	"\x0eGameRpcMessage\x12$\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x10.GameMessageTypeR\x04type\x12\x18\n" +
 	"\arequest\x18\x02 \x01(\fR\arequest\x12\x1a\n" +
@@ -242,7 +279,13 @@ const file_proto_common_base_rpc_message_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\x0e2\x0e.GameErrorCodeR\x05error\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x05 \x01(\rR\tmessageId\x12\x0e\n" +
-	"\x02id\x18\x06 \x01(\x04R\x02id*v\n" +
+	"\x02id\x18\x06 \x01(\x04R\x02id\x12\x1e\n" +
+	"\vtrace_id_hi\x18\a \x01(\x06R\ttraceIdHi\x12\x1e\n" +
+	"\vtrace_id_lo\x18\b \x01(\x06R\ttraceIdLo\x12$\n" +
+	"\x0eparent_span_id\x18\t \x01(\x06R\fparentSpanId\x12\x1f\n" +
+	"\vtrace_flags\x18\n" +
+	" \x01(\rR\n" +
+	"traceFlags*v\n" +
 	"\x0fGameMessageType\x12\v\n" +
 	"\aREQUEST\x10\x00\x12\f\n" +
 	"\bRESPONSE\x10\x01\x12\r\n" +

@@ -209,8 +209,8 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 
 			// Agones 高密度模式:世界频道也要占一个 rooms 名额。
 			//
-			// 漏掉这一步的话 rooms Counter 只统计副本,而 FleetAutoscaler 用的
-			// 正是 Counter=rooms —— 大世界人数涨到要开新频道时,Pod 完全不会
+			// 漏掉这一步的话 rooms 列表只统计副本,而 FleetAutoscaler 用的
+			// 正是 List=rooms —— 大世界人数涨到要开新频道时,Pod 完全不会
 			// 跟着扩。优先按哈希目标节点占,占不到才回落自由分配(落点可能偏离
 			// 哈希目标,rebalance 之后会把它搬回去)。
 			//
@@ -229,11 +229,11 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 			// (它们走 rebalance),但集合要准,诊断靠它。
 			reg := sceneRegistration{SceneID: sceneId, ZoneID: zoneId, NodeID: targetNode}
 			if placement != nil {
-				reg.AgonesGs = placement.GameServerName
+				reg.AgonesRoom = placement.room()
 			}
 			if outcome := registerWorldChannel(svcCtx, reg, confId); outcome != registrationRegistered {
-				if placement != nil && outcome.releasesReservation() {
-					ReleaseAgonesRoom(ctx, svcCtx, placement.Namespace, placement.GameServerName, "scene_registration_"+outcome.String())
+				if outcome.releasesReservation() {
+					abandonAgonesPlacement(ctx, svcCtx, zoneId, placement, "scene_registration_"+outcome.String())
 				}
 				logx.Errorf("[World] channel %d (scene=%d, conf=%d) on node %s not registered: %s",
 					i, sceneId, confId, targetNode, outcome)

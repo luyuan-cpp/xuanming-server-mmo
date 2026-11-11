@@ -46,10 +46,10 @@ message GuildInfo {
 
 // ── Request/Response ────────────────────────────────────────────────
 
+// 建帮者与所在区一律取会话与服务端归属,请求体不带身份(docs/design/gate-online-identity.md §9.6)。
 message CreateGuildRequest {
-  uint64 player_id = 1;
-  string name      = 2;
-  uint32 zone_id   = 3;  // Zone where the guild is created
+  reserved 1, 3;  // 原 player_id / zone_id:服务端从不采信,上线前删除
+  string name = 2;
 }
 
 message CreateGuildResponse {
@@ -85,7 +85,7 @@ message GetPlayerGuildResponse {
 // 不按幂等成功处理;客户端收到后拉 GetPlayerGuild 刷新即可。
 
 message LeaveGuildRequest {
-  uint64 player_id = 1;
+  reserved 1;  // 原 player_id:身份只取会话,上线前删除
   uint64 expected_guild_id = 2;  // 见上方 expected_guild_id 说明
 }
 
@@ -94,7 +94,7 @@ message LeaveGuildResponse {
 }
 
 message DisbandGuildRequest {
-  uint64 player_id = 1;
+  reserved 1;  // 原 player_id:身份只取会话,上线前删除
   uint64 expected_guild_id = 2;  // 见上方 expected_guild_id 说明
 }
 
@@ -103,8 +103,8 @@ message DisbandGuildResponse {
 }
 
 message SetAnnouncementRequest {
+  reserved 2;  // 原 player_id:身份只取会话,上线前删除
   uint64 guild_id     = 1;
-  uint64 player_id    = 2;
   string announcement = 3;
 }
 
@@ -520,17 +520,18 @@ message GuildRankEntry {
 message UpdateGuildScoreRequest {
   uint64 guild_id = 1;
   int64  score    = 2;  // New ranking score
-  uint32 zone_id  = 3;  // Zone for per-zone ranking (0 = update global only)
+  uint32 zone_id  = 3;  // 调用方认为的区,只用于不一致日志;进哪张分区榜以 MySQL 里帮会的区为准(没有全服榜)
 }
 
 message UpdateGuildScoreResponse {
   TipInfoMessage error_message = 1;
 }
 
+// 帮会榜只有本区榜:区取请求者的归属区,没有全服榜(docs/design/gate-online-identity.md §9.6)。
 message GetGuildRankRequest {
+  reserved 3;  // 原 zone_id:服务端一律用归属区,上线前删除
   uint32 page      = 1;  // Page number (1-based)
-  uint32 page_size = 2;  // Items per page
-  uint32 zone_id   = 3;  // 0 = global ranking, >0 = per-zone ranking
+  uint32 page_size = 2;  // Items per page, clamped to MaxRankPageSize
 }
 
 message GetGuildRankResponse {
@@ -541,9 +542,10 @@ message GetGuildRankResponse {
   uint32 page_size   = 5;
 }
 
+// 查的是请求者归属区榜上的名次;别区的帮会在本区榜上不存在。
 message GetGuildRankByGuildRequest {
+  reserved 2;  // 原 zone_id:服务端一律用归属区,上线前删除
   uint64 guild_id = 1;
-  uint32 zone_id  = 2;  // 0 = global ranking, >0 = per-zone ranking
 }
 
 message GetGuildRankByGuildResponse {
@@ -554,8 +556,9 @@ message GetGuildRankByGuildResponse {
 // ── Service definition ─────────────────────────────────────────────────────
 
 // 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
-// 身份与 zone 一律由服务端决定:请求体里的 player_id 只对不带会话的只读 GetPlayerGuild(mail 领附件读所在帮)生效,
-// 写方法一律只认会话、不带会话即拒绝(docs/design/gate-online-identity.md §7.5);zone_id 只认服务端归属。
+// 身份与 zone 一律由服务端决定:客户端方法的请求体里没有玩家与区字段,只认会话与服务端归属;
+// 唯一带 player_id 的是 GetPlayerGuild,只在不带会话的内部只读调用(mail 领附件读所在帮)时采信
+// (docs/design/gate-online-identity.md §7.5、§9.6)。
 // 本开关是服务级的,整个服务都登记在路由表;gate 上行白名单按方法方向收号,只收 REQUEST / ONE_WAY
 // (docs/design/client-rpc-callback.md §7 R4)。UpdateGuildScore 标了 CLIENT_RPC_SERVER_ONLY,仍登记在路由表,
 // 但不进 gate 上行白名单,客户端发上来在 gate 按非法包丢弃(计一次非法包、不回包,到不了路由服与 guild);

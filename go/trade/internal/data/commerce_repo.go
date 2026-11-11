@@ -21,14 +21,26 @@ type CommerceRepo struct {
 	Ops *AssetOpRepo
 }
 
-const CommerceColumns = "commerce_id,request_key,request_digest,kind,status,seller_player_id,buyer_player_id,market_id,item_config_id,side,unit_price,quantity,filled_quantity,currency_type,expires_ms,created_ms,updated_ms,version,workflow_proto,parent_id,counterparty_id"
+const CommerceColumns = "commerce_id,request_key,request_digest,kind,status,seller_player_id,buyer_player_id,market_id,item_config_id,side,unit_price,quantity,filled_quantity,currency_type,expires_ms,created_ms,updated_ms,version,workflow_proto,parent_id,counterparty_id,on_book"
 
 type commerceScanner interface{ Scan(...any) error }
 
 func ScanCommerce(row commerceScanner) (*tradepb.TradeCommerceRecord, error) {
 	r := &tradepb.TradeCommerceRecord{}
-	err := row.Scan(&r.CommerceId, &r.RequestKey, &r.RequestDigest, &r.Kind, &r.Status, &r.SellerPlayerId, &r.BuyerPlayerId, &r.MarketId, &r.ItemConfigId, &r.Side, &r.UnitPrice, &r.Quantity, &r.FilledQuantity, &r.CurrencyType, &r.ExpiresMs, &r.CreatedMs, &r.UpdatedMs, &r.Version, &r.WorkflowProto, &r.ParentId, &r.CounterpartyId)
+	err := row.Scan(&r.CommerceId, &r.RequestKey, &r.RequestDigest, &r.Kind, &r.Status, &r.SellerPlayerId, &r.BuyerPlayerId, &r.MarketId, &r.ItemConfigId, &r.Side, &r.UnitPrice, &r.Quantity, &r.FilledQuantity, &r.CurrencyType, &r.ExpiresMs, &r.CreatedMs, &r.UpdatedMs, &r.Version, &r.WorkflowProto, &r.ParentId, &r.CounterpartyId, &r.OnBook)
 	return r, err
+}
+
+// OnBook 报告合同是不是挂在材料盘口上的订单:kind=4 的买卖单(side≠0),托管已完成、workflow 处在 market_open。
+//
+// trade_commerce.on_book 是它的持久投影,只由 Insert / Save 按本函数与 workflow_proto 在同一条语句里写出,两者不会分叉;
+// 撮合选对手单与 taker 预检(commerce 包 market.go)、盘口深度(logic.GetMarketDepth)都按这一列。
+// 托管阶段(stage=escrow)的订单 status 同样是 3:只看 status 会把它选成最优对手单,撮合事务发现阶段不对就不成交,
+// 排在它后面、已经上盘的订单一单也撮不上(jubaozhai-market.md §15.9)。
+// 剩余量、状态、撤单不并进来:它们各有自己的列,也有不经 workflow 的写法(SaveStatus 只改状态);
+// 撮合提交点在锁内复核 workflow,不以这一列为准。
+func OnBook(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
+	return r.GetKind() == 4 && r.GetSide() != 0 && w.GetStage() == "market_open"
 }
 func (r *CommerceRepo) Get(ctx context.Context, id uint64) (*tradepb.TradeCommerceRecord, error) {
 	return ScanCommerce(r.DB.QueryRowContext(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE commerce_id=?", id))
@@ -39,16 +51,27 @@ func (r *CommerceRepo) ByRequest(ctx context.Context, key string) (*tradepb.Trad
 func (r *CommerceRepo) Lock(ctx context.Context, tx *sql.Tx, id uint64) (*tradepb.TradeCommerceRecord, error) {
 	return ScanCommerce(tx.QueryRowContext(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE commerce_id=? FOR UPDATE", id))
 }
+// Insert 写一条新合同。on_book 不取 v 上的值,按 v.WorkflowProto 现算(OnBook):解不开的 workflow 不进盘口,
+// 插入照常进行,坏 workflow 由合同推进按 corrupt 隔离。
 func (r *CommerceRepo) Insert(ctx context.Context, tx *sql.Tx, v *tradepb.TradeCommerceRecord) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO trade_commerce ("+CommerceColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", v.CommerceId, v.RequestKey, v.RequestDigest, v.Kind, v.Status, v.SellerPlayerId, v.BuyerPlayerId, v.MarketId, v.ItemConfigId, v.Side, v.UnitPrice, v.Quantity, v.FilledQuantity, v.CurrencyType, v.ExpiresMs, v.CreatedMs, v.UpdatedMs, v.Version, v.WorkflowProto, v.ParentId, v.CounterpartyId)
-	return err
+	w, decodeErr := Workflow(v)
+	onBook := decodeErr == nil && OnBook(v, w)
+	_, err := tx.ExecContext(ctx, "INSERT INTO trade_commerce ("+CommerceColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", v.CommerceId, v.RequestKey, v.RequestDigest, v.Kind, v.Status, v.SellerPlayerId, v.BuyerPlayerId, v.MarketId, v.ItemConfigId, v.Side, v.UnitPrice, v.Quantity, v.FilledQuantity, v.CurrencyType, v.ExpiresMs, v.CreatedMs, v.UpdatedMs, v.Version, v.WorkflowProto, v.ParentId, v.CounterpartyId, onBook)
+	if err != nil {
+		return err
+	}
+	v.OnBook = onBook
+	return nil
 }
+
+// Save 按版本条件重存合同与 workflow。on_book 不取 v 上的值,按要写的 w 现算(OnBook),与 workflow_proto 同一条语句落库。
 func (r *CommerceRepo) Save(ctx context.Context, tx *sql.Tx, v *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, now uint64) error {
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(w)
 	if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE trade_commerce SET status=?,buyer_player_id=?,filled_quantity=?,expires_ms=?,updated_ms=?,version=version+1,workflow_proto=? WHERE commerce_id=? AND version=?", v.Status, v.BuyerPlayerId, v.FilledQuantity, v.ExpiresMs, now, raw, v.CommerceId, v.Version)
+	onBook := OnBook(v, w)
+	result, err := tx.ExecContext(ctx, "UPDATE trade_commerce SET status=?,buyer_player_id=?,filled_quantity=?,expires_ms=?,updated_ms=?,version=version+1,workflow_proto=?,on_book=? WHERE commerce_id=? AND version=?", v.Status, v.BuyerPlayerId, v.FilledQuantity, v.ExpiresMs, now, raw, onBook, v.CommerceId, v.Version)
 	if err != nil {
 		return err
 	}
@@ -62,6 +85,7 @@ func (r *CommerceRepo) Save(ctx context.Context, tx *sql.Tx, v *tradepb.TradeCom
 	v.Version++
 	v.WorkflowProto = raw
 	v.UpdatedMs = now
+	v.OnBook = onBook
 	return nil
 }
 // SaveStatus 只改状态列(版本 +1),workflow_proto 原样保留。只给"合同解不开、走不了 Save"的隔离用:
@@ -129,13 +153,19 @@ func (r *CommerceRepo) RescheduleTx(ctx context.Context, tx *sql.Tx, id, version
 	return err
 }
 
-// Wake 把仍在推进中的合同的下次到期提前到 atMs:只提前、不推后,不改版本。给「别处的事件让这条合同可以往前走」用,
-// 现在是撮合失败后下一轮重撮(commerce.Engine.step)。
+// Wake 把仍在推进中的合同的下次到期提前到 atMs:只提前、不推后,不改版本。给「别处的事件让这条合同可以往前走」用:
+// 撮合失败后下一轮重撮、成交子单收尾后唤醒母单(commerce.Engine),以及资产指令终结后唤醒腿所属的合同
+// (AssetOpRepo.wakeContractOf,同一条语句)。
 //
 // 自动提交的单条主键点改,只锁这一行,不在任何别的事务里,所以与合同推进的锁序不成环。行已不在推进状态
 // (结案、转人工)或本来就更早到期时影响 0 行,不是错误。
 func (r *CommerceRepo) Wake(ctx context.Context, id, atMs uint64) error {
-	_, err := r.DB.ExecContext(ctx, "UPDATE trade_commerce SET updated_ms=? WHERE commerce_id=? AND updated_ms>? AND status IN ("+dueStatuses+")", atMs, id, atMs)
+	return wakeCommerce(ctx, r.DB, id, atMs)
+}
+
+// wakeCommerce 是 Wake 的语句,资产指令终结一侧(AssetOpRepo)也用它,两边不各写一份。
+func wakeCommerce(ctx context.Context, db *sql.DB, id, atMs uint64) error {
+	_, err := db.ExecContext(ctx, "UPDATE trade_commerce SET updated_ms=? WHERE commerce_id=? AND updated_ms>? AND status IN ("+dueStatuses+")", atMs, id, atMs)
 	return err
 }
 

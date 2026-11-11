@@ -64,7 +64,7 @@ func terminalResultFixtureWithDeadline(t *testing.T, s *Store, deadlineDelta int
 	f.RetryAtMs = f.CreatedMs
 	members, err := proto.Marshal(&pb.MatchFormationRecord{Members: f.Members})
 	require.NoError(t, err)
-	_, err = s.DB.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", f.BattleId, f.OperationId, f.State, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, members, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, []byte{}, false, []byte{}, uint32(0), uint32(0), "", uint32(0), false)
+	_, err = s.DB.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", f.BattleId, f.OperationId, f.State, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, members, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, []byte{}, false, []byte{}, uint32(0), uint32(0), "", uint32(0), false, f.ReleaseTrack)
 	require.NoError(t, err)
 	for _, r := range []*pb.MatchAuthorityTicketRecord{a, b} {
 		_, err = s.DB.ExecContext(ctx, "UPDATE match_authority_ticket SET owner_account=?,owner_revision=1,state=2,formation_id=901 WHERE player_id=? AND ticket=?", "original-owner", r.PlayerId, r.Ticket)

@@ -57,7 +57,7 @@ func formationInFlight(f *pb.MatchFormationRecord) bool {
 
 // autoTerminalOriginal 是「自动路径会给这一局写出终局」的唯一判据(2026-11-06):成局在途(formationInFlight)且原件可裁决
 // (outcomeAdjudicable),为真时返回可裁决的 Create 原件。截止 ABORT(abortTerminalTx,到期恢复与帮会取消共用)、到期恢复的
-// 取证排期(deadlineProbeDue)与 scene 冻结到期查询(TerminalOutcomeExpected)都只调它,所以「回包说会有终局」与「恢复循环
+// 取证判据(deadlineAbortPending)与 scene 冻结到期查询(TerminalOutcomeExpected)都只调它,所以「回包说会有终局」与「恢复循环
 // 实际写终局」是同一组判据:为真且还没有终局行的局,match 可用时到期恢复最迟在 截止 + 宽限 + 硬上限 + 持有宽限 之后写出
 // ABORT(COMPLETE 先落库就以 COMPLETE 为准,见 judgeDeadlineAbort);为假的局任何自动路径都不写终局,COMPLETE 也落不了库
 // (completableOriginal 比它严,commitBattleOutcomeLocked 拒 state 5),只能人工处置(formationfix)。纯函数。
@@ -148,7 +148,7 @@ func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterB
 }
 
 // RecoverExpiredOutcomeLane 扫 battle_id % lanes == lane 这条车道的一页候选(lanes=1 即全部候选):先逐局读整行,再在锁外
-// 并行向各局原执行实例取证(probeDeadlinePage,2026-11-06),最后逐局在原 P→formation 锁内裁决(recoverExpiredOutcome)。
+// 并行向各局原执行实例取证(probeDeadlinePage,2026-11-06;已有终局行的不问),最后逐局在原 P→formation 锁内裁决(recoverExpiredOutcome)。
 // 沿原state/retry_at_ms索引每页至多 ExpiredOutcomePageSize 局，只选尚无合法终局的v1资格形状。
 // 游标只用于调度；故障项仍推进，下轮重访，旧0/明确采用0保持UNKNOWN且不占候选页。返回本车道的新游标,扫到末尾回零值。
 // 等证据的局由裁决把下次取证排进 retry_at_ms(全集群共用),排期到之前不再进候选页。
@@ -166,15 +166,21 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 	}
 	// 先减宽限再绑定SQL参数，避免deadline+grace的uint64溢出；锁内仍重新读SQL时钟。
 	// 车道条件只读 battle_id(二级索引里本就带主键),在索引侧就能过滤,车道页的回表约为全量页的 1/lanes(由索引结构推算,未压测)。
-	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND f.deadline_ms>0 AND f.deadline_ms<=? AND f.battle_id%?=? AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+") ORDER BY f.retry_at_ms,f.battle_id LIMIT "+strconv.Itoa(ExpiredOutcomePageSize), stamp-terminalOutcomeGraceMs, lanes, lane, cursor.AfterRetryMs, cursor.AfterRetryMs, cursor.AfterBattle)
+	// 第三列 has_terminal:这一局已有任何终局行(只有归档、或身份与成局不符的行;同一原件的合法终局已被 NOT EXISTS 排除)。
+	// 这类局照旧进页(锁外回放、冲突照报),但不取证:锁内只回放既有行、不会排期,取证用不上,不排除的话每圈都要白问一次 battle
+	// (评审修正 2026-11-06)。按主键点查,与 NOT EXISTS 同代价。
+	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id,EXISTS(SELECT 1 FROM match_battle_completion c WHERE c.battle_id=f.battle_id) FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND f.deadline_ms>0 AND f.deadline_ms<=? AND f.battle_id%?=? AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+") ORDER BY f.retry_at_ms,f.battle_id LIMIT "+strconv.Itoa(ExpiredOutcomePageSize), stamp-terminalOutcomeGraceMs, lanes, lane, cursor.AfterRetryMs, cursor.AfterRetryMs, cursor.AfterBattle)
 	if err != nil {
 		return cursor, err
 	}
-	type candidate struct{ retryMs, battle uint64 }
+	type candidate struct {
+		retryMs, battle uint64
+		hasTerminal     bool
+	}
 	var formations []candidate
 	for rows.Next() {
 		var f candidate
-		if err := rows.Scan(&f.retryMs, &f.battle); err != nil {
+		if err := rows.Scan(&f.retryMs, &f.battle, &f.hasTerminal); err != nil {
 			rows.Close()
 			return cursor, err
 		}
@@ -190,8 +196,9 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 	}
 	// 先用独立标量游标读整行、再解析完整原件:损坏的一条记失败、不卡住整页,页尾游标照样推进到最后一个候选。
 	type visit struct {
-		at ExpiredOutcomeCursor
-		f  *pb.MatchFormationRecord
+		at          ExpiredOutcomeCursor
+		f           *pb.MatchFormationRecord
+		hasTerminal bool
 	}
 	var failures []error
 	var visits []visit
@@ -207,11 +214,15 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 		if original.RetryAtMs != c.retryMs {
 			continue // 并发worker换了租约、或别的副本刚排了下次取证，后续完整轮次重访，绝不沿旧观察写入。
 		}
-		visits = append(visits, visit{at: ExpiredOutcomeCursor{AfterRetryMs: c.retryMs, AfterBattle: c.battle}, f: original})
+		visits = append(visits, visit{at: ExpiredOutcomeCursor{AfterRetryMs: c.retryMs, AfterBattle: c.battle}, f: original, hasTerminal: c.hasTerminal})
 	}
+	// 取证对象:已有终局行的位置置 nil(probeDeadlinePage 不问);其余按 deadlineAbortPending。候选 SQL 已按 SQL 时刻筛过排期,
+	// 这里不再拿较早读到的 stamp 比 retry_at_ms(理由见 deadlineAbortPending)。
 	records := make([]*pb.MatchFormationRecord, len(visits))
 	for i, v := range visits {
-		records[i] = v.f
+		if !v.hasTerminal {
+			records[i] = v.f
+		}
 	}
 	// 取证只发 RPC、不持锁、不在事务里;一页并行,原实例连不上时整页最多多等一个 DeadlineProbeTimeout。
 	evidence := s.probeDeadlinePage(ctx, stamp, records)
@@ -231,7 +242,8 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 // RecoverExpiredOutcome 不根据节点死亡猜终局。原发房前能力与完整 v1 Create证明所有个人效果必须先过本SQL门；
 // 到期后先在锁外向原执行实例取一次证(deadlineEvidence,2026-11-06),再在原P→formation锁内按 judgeDeadlineAbort 争唯一ABORT:
 // 有「原实例没有冻结待提交的终局」的证据才作废,原实例仍持有房间或判不了就等,最多等到硬上限。
-// 原工作租约仍有效时不抢占(也不取证)；多副本重放只读取同原操作/UUID的已提交终局。
+// 原工作租约或取证排期仍有效时锁内不抢占、不改排期(锁外取证不看排期,可能多问一次 battle,无害,见 deadlineAbortPending)；
+// 多副本重放只读取同原操作/UUID的已提交终局。
 //
 // 不可恢复成局(ErrUnrecoverableFormation)在这里计数并打 ERROR,对外仍回 UNKNOWN、nil:现有调用方
 // (RecoverExpiredOutcomes 的整轮失败、logic globalAbortPrepared 的 HoldRelay)会把非 nil error 当成本轮未确认的故障,
@@ -284,6 +296,9 @@ func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 		if decision, exists, readErr := readExisting(); readErr != nil || exists {
 			return decision, readErr
 		}
+		if s.rescheduledConcurrently(ctx, observed) {
+			return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
+		}
 		return 0, err
 	}
 	defer tx.Rollback()
@@ -291,6 +306,10 @@ func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 		_ = tx.Rollback()
 		if decision, exists, err := readExisting(); err != nil || exists {
 			return decision, err
+		}
+		if f.RetryAtMs != observed.RetryAtMs && formationInFlight(f) {
+			// 别的副本刚给这一局排了下次取证(见 rescheduledConcurrently):这一轮跳过,不算故障。
+			return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 		}
 		return 0, ErrWorkLease
 	}
@@ -326,6 +345,16 @@ func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 	}
 	observeDeadlineAbort(f.BattleId, verdict, evidence, terminalAbortDeadline)
 	return decision, nil
+}
+
+// rescheduledConcurrently:锁外观察之后,这一局的 retry_at_ms 已被改过、仍在途(2026-11-06)。retry_at_ms 变了说明别人动过它:
+// 过了截止加宽限之后只剩别的副本的取证排期(截止之后不再发工作租约),之前是别的 worker 接了工作租约;COMPLETE 与 ABORT
+// 由调用方先复读终局认出。这份观察已过期,按「这一轮已经有人处理」跳过,不算故障 —— 与车道页跳过「retry_at_ms 已变」的候选、
+// 提前作废把「租约已被接手」当成交给接手者同一口径。多副本同一拍撞上同一局时,落败方不再因为对方改了排期而报未确认、
+// 拖住排空证明。读失败按没变处理(调用方照原错误返回)。
+func (s *Store) rescheduledConcurrently(ctx context.Context, observed *pb.MatchFormationRecord) bool {
+	latest, err := s.Formation(ctx, observed.GetBattleId())
+	return err == nil && formationInFlight(latest) && latest.RetryAtMs != observed.GetRetryAtMs()
 }
 
 // ReadyAfter 的游标仅调度巡检，不能授权释放。即使前面的房间一直 UNKNOWN，

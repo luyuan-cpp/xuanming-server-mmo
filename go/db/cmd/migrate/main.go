@@ -89,7 +89,7 @@ func main() {
 		logf("target database=%s storage=%d admitted_by=%s allowlist=%s", target, *storageID, admittedBy, runnerAllow.String())
 		if admittedBy == proto_sql.StoreAdmittedByFamily && *createDatabase {
 			// CreateDatabase 只认外部白名单;家族放行不延伸到建库,见包注释。提前说清楚,免得以为是 bug。
-			logf("注意:%s 仅由 Placement.AllowStoreFamilies 放行;-create-database 仍要求它出现在外部白名单里(%s)",
+			logf("Note: %s is admitted only by Placement.AllowStoreFamilies; -create-database still requires it in the external allowlist (%s)",
 				target, dbguard.AllowedDatabasesEnv)
 		}
 	}
@@ -227,10 +227,10 @@ func runStatus(ctx context.Context, runner *migrate.Runner) {
 		log.Fatalf("status: %v", err)
 	}
 	if len(applied) == 0 {
-		logf("database=%s 尚无 %s 台账(或台账为空);跑 -command up 建立基线", database, migrate.SchemaMigrationsTable)
+		logf("database=%s has no %s ledger yet (or the ledger is empty); run -command up to establish the baseline", database, migrate.SchemaMigrationsTable)
 		return
 	}
-	logf("database=%s 已应用 %d 条迁移:", database, len(applied))
+	logf("database=%s applied %d migration(s):", database, len(applied))
 	dirty := 0
 	for _, a := range applied {
 		state := "ok"
@@ -241,7 +241,7 @@ func runStatus(ctx context.Context, runner *migrate.Runner) {
 		logf("  version=%-4d %-28s %s checksum=%s", a.Version, a.Name, state, a.Checksum[:12])
 	}
 	if dirty > 0 {
-		logf("发现 %d 条 dirty 记录:下一次 up 会被拒绝,请先人工核对该版本的语句是否已生效", dirty)
+		logf("Found %d dirty record(s): the next up will be rejected; first verify manually whether that version's statements took effect", dirty)
 		os.Exit(2)
 	}
 }

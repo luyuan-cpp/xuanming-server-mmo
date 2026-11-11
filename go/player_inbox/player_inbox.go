@@ -337,7 +337,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 			}
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("player_inbox 排空 HOLD: %v", err)
+			logx.Errorf("player_inbox drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -581,7 +581,7 @@ func logReport(stage string, r schemamigrate.Report) {
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "拒绝常驻自动迁移；请先执行独立 -migrate"
+		return "resident auto-migration refused; run standalone -migrate first"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
 }

@@ -12,13 +12,13 @@ namespace gate_client_heartbeat
 namespace
 {
 
-using gate_liveness::HeartbeatAction;
-using gate_liveness::LivenessSweeper;
-using gate_liveness::SteadyTime;
+using client_liveness::HeartbeatAction;
+using client_liveness::LivenessSweeper;
+using client_liveness::SteadyTime;
 
 constexpr std::chrono::seconds kSummaryInterval{30};
 
-thread_local LivenessSweeper tlsSweeper{gate_liveness::kClientLiveness};
+thread_local LivenessSweeper tlsSweeper{client_liveness::kClientLiveness};
 thread_local Counters tlsCounters;
 // 汇总行:上一次检查的时刻,与上一次打出时的计数(计数没变就不打)。
 thread_local std::optional<SteadyTime> tlsLastSummaryAt;
@@ -85,7 +85,7 @@ void CloseIdleSession(const uint32_t sessionId, const uint64_t incarnation, cons
 	}
 	++tlsCounters.idleClosed;
 	const auto silentMs = std::chrono::duration_cast<std::chrono::milliseconds>(silentFor).count();
-	const auto timeoutMs = gate_liveness::kClientLiveness.idleTimeout.count();
+	const auto timeoutMs = client_liveness::kClientLiveness.idleTimeout.count();
 	// 客户端掉线是正常事件,不是服务端故障,打 INFO。绑定了角色的连接逐条打(排查「这个玩家为什么掉线」要用),
 	// 与断开日志同一口径;未绑定角色的连接数量由公网流量决定,采样。
 	const bool boundPlayer = session->playerId != 0 && session->playerId != kInvalidGuid;
@@ -148,7 +148,7 @@ void ExpectHandshake(const SessionId sessionId, const SessionInfo &session, cons
 void OnTokenVerified(const SessionId sessionId, SessionInfo &session, ClientTokenVerifyResponse &response,
 					 const SteadyTime now)
 {
-	const auto &policy = gate_liveness::kClientLiveness;
+	const auto &policy = client_liveness::kClientLiveness;
 	response.set_heartbeat_interval_ms(static_cast<uint32_t>(policy.interval.count()));
 	response.set_heartbeat_timeout_ms(static_cast<uint32_t>(policy.idleTimeout.count()));
 	// 回包里告诉了客户端「每 10s 一条心跳」,从这一刻起就按 30s 判死。客户端在收到回包后立即发第一条心跳。
@@ -178,7 +178,7 @@ void HandleHeartbeat(const muduo::net::TcpConnectionPtr &conn, const ClientHeart
 	SessionInfo &session = sessionIt->second;
 	session.liveness.NoteInbound(now);
 
-	switch (gate_liveness::AdmitHeartbeat(session.liveness, session.verified, now, gate_liveness::kClientLiveness))
+	switch (client_liveness::AdmitHeartbeat(session.liveness, session.verified, now, client_liveness::kClientLiveness))
 	{
 	case HeartbeatAction::kRejectUnverified:
 		// 与验签之前发 ClientRequest 同一处置:验签之前除了验签请求,什么都不收。

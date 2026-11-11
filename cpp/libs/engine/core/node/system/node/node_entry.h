@@ -166,20 +166,23 @@ int RunNodeMain(StartNodeFn&& startNode)
     return 0;
 }
 
+// discover:本节点从 etcd 发现的节点类型,必须包含 connectTo(Node 构造时校验,docs/design/connection-fanout-subsetting-20261106.md §3.4)。
 template <typename THandler, typename TContext, typename THooks = void, typename ConfigureFn>
 int RunSimpleNodeMainWithOwnedContext(uint32_t nodeType,
                                       Node::CanConnectNodeTypeList connectTo,
+                                      Node::DiscoveryNodeTypeList discover,
                                       ConfigureFn&& configure)
 {
     return RunNodeMain([
         nodeType,
         connectTo = std::move(connectTo),
+        discover = std::move(discover),
         configure = std::forward<ConfigureFn>(configure)
     ](muduo::net::EventLoop& loop) mutable {
         auto context = std::make_unique<TContext>();
         detail::ApplyPreConstructionHooks<THooks>();
         THandler handler;
-        Node node(&loop, nodeType, std::move(connectTo), &handler);
+        Node node(&loop, nodeType, std::move(connectTo), std::move(discover), &handler);
         detail::ApplyPostConstructionHooks<THooks>(node);
         detail::InstallSignalHandlers(loop);
         configure(node, *context);

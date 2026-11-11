@@ -360,7 +360,7 @@ func TestSelectOrRecoverWorldChannel_LazyReassignTransfersAgonesRoom(t *testing.
 	t.Cleanup(clearKnownNodesForTest)
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-old", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 4},
+		&fakeGameServer{name: "gs-old", podIP: "10.0.0.8", state: "Allocated", capacity: 4},
 		&fakeGameServer{name: "gs-new", podIP: "10.0.0.9", state: "Ready", capacity: 4},
 	)
 	withAgones(t, sc, alloc, true)
@@ -369,16 +369,14 @@ func TestSelectOrRecoverWorldChannel_LazyReassignTransfersAgonesRoom(t *testing.
 	// "10" 已死(不在负载集、没有近期 death_at),"20" 活着:频道 503 陈旧,懒改派到 "20"。
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
 	seedWorldChannel(sc, testZoneId, readUnknownWorldConf, 503, "10")
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(503), "gs-old"))
+	seedAgonesRoom(t, sc, alloc, 503, "gs-old")
 
 	sid, nid, err := SelectOrRecoverWorldChannel(context.Background(), sc, readUnknownWorldConf, testZoneId)
 	require.NoError(t, err)
 	require.Equal(t, uint64(503), sid)
 	require.Equal(t, "20", nid)
 	requireSceneOwner(t, sc, 503, "20")
-	gs, err := sc.Redis.Get(sceneAgonesGsKey(503))
-	require.NoError(t, err)
-	assert.Equal(t, "gs-new", gs, "agones_gs 要跟着频道转到新节点的 GameServer")
+	requireAgonesRecordOn(t, sc, alloc, 503, "gs-new")
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-new"), "新节点必须记账")
 	assert.EqualValues(t, 0, alloc.roomsOf("gs-old"), "老 GameServer 的名额要还回去")
 }
@@ -554,12 +552,12 @@ func TestAutoscale_FinishDrainAtomicDestroyFailureKeepsRoomMapping(t *testing.T)
 	ctx := context.Background()
 	sc.Redis.Zadd(testLoadKey(), 0, "10")
 	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 2, capacity: 8},
+		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 8},
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeInstance)
 	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 1500, 102: 40})
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(102), "gs-a"))
+	record := seedAgonesRoom(t, sc, alloc, 102, "gs-a")
 	_, in := AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 	require.Equal(t, 1, in)
 	sc.Redis.Set(sceneNodeKey(102), "10")
@@ -572,7 +570,7 @@ func TestAutoscale_FinishDrainAtomicDestroyFailureKeepsRoomMapping(t *testing.T)
 	requireSceneOwner(t, sc, 102, "10", "脚本报错的这一拍一个键都不能删")
 	gs, err := sc.Redis.Get(sceneAgonesGsKey(102))
 	require.NoError(t, err)
-	assert.Equal(t, "gs-a", gs, "agones_gs 映射是归还名额的唯一依据,不能删")
+	assert.Equal(t, record, gs, "agones_gs 映射是归还名额的唯一依据,不能删")
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-a"))
 	assert.Equal(t, before+1, autoscaleOutcomeCount(t, testZoneId, "scale_in", "error"))
 
@@ -1023,12 +1021,12 @@ func TestOrphanCleanup_AtomicDestroyFailureKeepsRoomMapping(t *testing.T) {
 	ctx := context.Background()
 	sc.Redis.Zadd(testLoadKey(), 0, "10")
 	alloc := newFakeAllocator(
-		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 2, capacity: 8},
+		&fakeGameServer{name: "gs-a", podIP: "10.0.0.8", state: "Allocated", count: 1, capacity: 8},
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeMainWorld)
 	seedChannels(t, sc, testZoneId, readUnknownOrphanConf, map[uint64]int64{921: 0})
-	require.NoError(t, sc.Redis.Set(sceneAgonesGsKey(921), "gs-a"))
+	record := seedAgonesRoom(t, sc, alloc, 921, "gs-a")
 
 	fired := injectRedisFaultsForTest(t, mr, redisFaultRule{cmd: "GET", key: sceneAgonesGsKey(921), times: 1})
 	assert.Equal(t, 0, CleanupOrphanWorldChannels(ctx, sc))
@@ -1036,7 +1034,7 @@ func TestOrphanCleanup_AtomicDestroyFailureKeepsRoomMapping(t *testing.T) {
 	requireSceneOwner(t, sc, 921, "10", "脚本报错时还没动这个场景")
 	gs, err := sc.Redis.Get(sceneAgonesGsKey(921))
 	require.NoError(t, err)
-	assert.Equal(t, "gs-a", gs)
+	assert.Equal(t, record, gs)
 	assert.EqualValues(t, 2, alloc.roomsOf("gs-a"))
 	members, err := sc.Redis.Smembers(worldChannelsKey(testZoneId, readUnknownOrphanConf))
 	require.NoError(t, err)

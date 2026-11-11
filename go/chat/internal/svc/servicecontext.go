@@ -72,7 +72,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterConfig, root *drainproof.Session) *ServiceContext {
 	if root == nil {
-		panic("聊天根门禁未装配")
+		panic("chat root admission gate not wired")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -83,7 +83,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	db, store, err := OpenAuthorityWithPermission(ctx, c, false, authoritysql.Writer(writer), states)
 	if err != nil {
 		directoryConn.Close()
-		panic("聊天权威SQL初始化失败：" + err.Error())
+		panic("chat authority SQL initialization failed: " + err.Error())
 	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
@@ -121,7 +121,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 func NewRedisHandles(c config.Config) (chatRds, sharedRds *redis.Redis, target string) {
 	sharedRds = redis.MustNewRedis(c.Redis.RedisConf)
 	if c.ChatRedis.Host == "" {
-		logx.Infof("[chat] 旧缓存句柄沿共享配置建立；聊天授权和历史只用SQL host=%s type=%s", c.Redis.Host, c.Redis.Type)
+		logx.Infof("[chat] Legacy cache handle built from shared configuration; chat authorization and history use SQL only host=%s type=%s", c.Redis.Host, c.Redis.Type)
 		return sharedRds, sharedRds, fmt.Sprintf("shared-fallback host=%s type=%s", c.Redis.Host, c.Redis.Type)
 	}
 	chatRds = redis.MustNewRedis(c.ChatRedis)
@@ -190,7 +190,7 @@ func (sc *ServiceContext) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := sc.StopAndReport(ctx); err != nil {
-		logx.Errorf("聊天关闭 HOLD: %v", err)
+		logx.Errorf("chat shutdown HOLD: %v", err)
 	}
 }
 

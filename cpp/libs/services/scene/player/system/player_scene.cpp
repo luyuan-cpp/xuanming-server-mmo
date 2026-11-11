@@ -310,12 +310,12 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	if (!ownership.IsCurrent()) return false;
 	if (const auto result = CheckEnterScene(player, scene); result != kSuccess)
 	{
-		LOG_ERROR << "入场预检拒绝 entity=" << entt::to_integral(player) << " tip=" << result;
+		LOG_ERROR << "Scene entry precheck rejected entity=" << entt::to_integral(player) << " tip=" << result;
 		return false;
 	}
 	if (!tlsEcs.actorRegistry.all_of<Transform>(player))
 	{
-		LOG_ERROR << "HandleEnterScene: 持久组件 Transform 缺失，" << ActorLog(player);
+		LOG_ERROR << "HandleEnterScene: persistent component Transform missing, " << ActorLog(player);
 		return false;
 	}
 	const auto sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(scene);

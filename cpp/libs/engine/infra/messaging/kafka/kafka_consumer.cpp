@@ -12,6 +12,8 @@
 #include <stdexcept>
 #include <librdkafka/src/rdkafka.h>
 #include "google/protobuf/util/message_differencer.h"
+#include "messaging/kafka/kafka_trace_header.h"
+#include "thread_context/trace_context_tls.h"
 
 namespace
 {
@@ -399,16 +401,18 @@ void KafkaConsumer::backgroundPollLoop()
 	}
 }
 
-void KafkaConsumer::dispatch(const std::string& topic, std::string payload)
+void KafkaConsumer::dispatch(const std::string& topic, std::string payload, const tracing::TraceContext& trace)
 {
     if(!msgCallback_) return;
     const auto ledger=dispatchLedger_;
     { std::lock_guard<std::mutex> lock(ledger->mutex); if(ledger->accepted==std::numeric_limits<std::uint64_t>::max()){ledger->unknown=true;return;} ++ledger->accepted; }
     struct Ticket { std::shared_ptr<DispatchLedger> ledger; bool returned=false; ~Ticket(){std::lock_guard<std::mutex> lock(ledger->mutex);++ledger->settled;if(!returned)ledger->unknown=true;} };
-    struct Work { std::shared_ptr<Ticket> ticket; MessageCallback callback; std::string topic,payload;
-        void Run(){ callback(topic,payload); callback={}; ticket->returned=true; } };
+    // 回调在消息头带来的 trace 下执行:合法就建子 span,没有或不合法就开新根(docs/design/distributed-tracing.md §5.4)。
+    // 不论在 poll 线程上就地执行还是投递到 loop 线程,都不接执行线程上碰巧在场的上下文。
+    struct Work { std::shared_ptr<Ticket> ticket; MessageCallback callback; std::string topic,payload; tracing::TraceContext trace;
+        void Run(){ const tracing::ScopedIncoming incoming(trace); callback(topic,payload); callback={}; ticket->returned=true; } };
     const auto work=std::make_shared<Work>(); work->ticket=std::make_shared<Ticket>();work->ticket->ledger=ledger;
-    work->callback=msgCallback_;work->topic=topic;work->payload=std::move(payload);
+    work->callback=msgCallback_;work->topic=topic;work->payload=std::move(payload);work->trace=trace;
     if(dispatchLoop_) dispatchLoop_->get().queueInLoop([work]{work->Run();}); else work->Run();
 }
 
@@ -449,8 +453,10 @@ void KafkaConsumer::consumeOnce(bool blocking)
             }
         }
         ownerLock.unlock();
+		// 消息头归 msg 所有,只在这里读:解析结果按值交给派发。
 		dispatch(msg->topic_name(),
-			std::string(static_cast<const char *>(msg->payload()), msg->len()));
+			std::string(static_cast<const char *>(msg->payload()), msg->len()),
+			kafka_trace::TraceFromHeaders(msg->headers()));
 		return;
 
 	case RdKafka::ERR__TIMED_OUT:

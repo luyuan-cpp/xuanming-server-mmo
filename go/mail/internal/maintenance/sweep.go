@@ -56,7 +56,7 @@ func Run(ctx context.Context, repo *data.Repo, c Config, admissions ...*drainpro
 	}
 	c = c.Defaults()
 	if err := c.Validate(); err != nil {
-		logx.Error("[mail] sweep配置无效，未启动清理")
+		logx.Error("[mail] invalid sweep configuration; cleanup not started")
 		return
 	}
 	metrics.Register()

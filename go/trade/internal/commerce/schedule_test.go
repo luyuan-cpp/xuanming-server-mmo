@@ -10,6 +10,7 @@ import (
 func TestNextDueMsByStage(t *testing.T) {
 	const now = uint64(1_000_000)
 	hour := uint64(idleRecheck.Milliseconds())
+	fallback := uint64(inFlightRecheck.Milliseconds())
 	settled := &tradepb.TradeCommerceLeg{Role: "seller_debit", OpId: 7, Outcome: 2}
 	inFlight := &tradepb.TradeCommerceLeg{Role: "buyer_debit_1", OpId: 8}
 	cases := []struct {
@@ -30,16 +31,18 @@ func TestNextDueMsByStage(t *testing.T) {
 			&tradepb.TradeCommerceWorkflow{Stage: "confirm"}, now},
 		{"挂着的市场单一小时复查,不看截止", &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Quantity: 5, FilledQuantity: 2, ExpiresMs: now + 1},
 			&tradepb.TradeCommerceWorkflow{Stage: "market_open"}, now + hour},
-		{"全部成交的母单等子单收尾,每轮复查", &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Quantity: 5, FilledQuantity: 5},
-			&tradepb.TradeCommerceWorkflow{Stage: "market_open"}, now},
-		{"等子单的母单每轮复查", &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Quantity: 5, FilledQuantity: 5},
-			&tradepb.TradeCommerceWorkflow{Stage: "market_wait"}, now},
+		{"全部成交的母单等子单收尾,子单收尾会唤醒,30 秒兜底", &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Quantity: 5, FilledQuantity: 5},
+			&tradepb.TradeCommerceWorkflow{Stage: "market_open"}, now + fallback},
+		{"撤单后等子单的母单 30 秒兜底", &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Quantity: 5, FilledQuantity: 5},
+			&tradepb.TradeCommerceWorkflow{Stage: "market_wait"}, now + fallback},
 		{"官方退款一小时复查", &tradepb.TradeCommerceRecord{Kind: 1, Status: 8},
 			&tradepb.TradeCommerceWorkflow{Stage: "official_refund"}, now + hour},
-		{"有腿在途一律每轮复查", &tradepb.TradeCommerceRecord{Kind: 3, ExpiresMs: now + 600_000},
-			&tradepb.TradeCommerceWorkflow{Stage: "open", Legs: []*tradepb.TradeCommerceLeg{settled, inFlight}}, now},
+		{"有腿在途:终结会唤醒,30 秒兜底,不看截止", &tradepb.TradeCommerceRecord{Kind: 3, ExpiresMs: now + 600_000},
+			&tradepb.TradeCommerceWorkflow{Stage: "open", Legs: []*tradepb.TradeCommerceLeg{settled, inFlight}}, now + fallback},
 		{"人民币寄售不改节奏", &tradepb.TradeCommerceRecord{Kind: 6, ExpiresMs: now + 600_000},
 			&tradepb.TradeCommerceWorkflow{Stage: "open"}, now},
+		{"人民币寄售有腿在途也不改节奏", &tradepb.TradeCommerceRecord{Kind: 6},
+			&tradepb.TradeCommerceWorkflow{Stage: "rmb_escrow", Legs: []*tradepb.TradeCommerceLeg{inFlight}}, now},
 		{"没列出的 stage 每轮复查", &tradepb.TradeCommerceRecord{Kind: 3},
 			&tradepb.TradeCommerceWorkflow{Stage: "deliver"}, now},
 		{"进程时钟已过截止也不早于现在", &tradepb.TradeCommerceRecord{Kind: 3, ExpiresMs: now - 5},
@@ -51,6 +54,33 @@ func TestNextDueMsByStage(t *testing.T) {
 		if got := nextDueMs(c.r, c.w, now); got != c.want {
 			t.Errorf("%s: 下次到期 = now%+d, 应为 now%+d", c.name, int64(got)-int64(now), int64(c.want)-int64(now))
 		}
+	}
+}
+
+// 缺口清单第 16 条:成交子单从推进中变成已成交、已取消或转人工时唤醒母单;别的变化、别的种类都不唤醒。
+func TestFilledParentToWake(t *testing.T) {
+	fill := func(status uint32) *tradepb.TradeCommerceRecord {
+		return &tradepb.TradeCommerceRecord{Kind: 4, Side: 0, ParentId: 900, Status: status}
+	}
+	for _, settled := range []uint32{Settled, Cancelled, Manual} {
+		if got := filledParentToWake(fill(Delivering), fill(settled)); got != 900 {
+			t.Errorf("子单收尾为 %d 时应唤醒母单,得到 %d", settled, got)
+		}
+	}
+	if got := filledParentToWake(fill(Escrowing), fill(Delivering)); got != 0 {
+		t.Errorf("子单还在推进,不应唤醒母单: %d", got)
+	}
+	if got := filledParentToWake(fill(Settled), fill(Settled)); got != 0 {
+		t.Errorf("已收尾的子单再推进一次不重复唤醒: %d", got)
+	}
+	parent := &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Status: Escrowing}
+	done := &tradepb.TradeCommerceRecord{Kind: 4, Side: 1, Status: Settled}
+	if got := filledParentToWake(parent, done); got != 0 {
+		t.Errorf("母单自己结案不唤醒谁: %d", got)
+	}
+	consignment := &tradepb.TradeCommerceRecord{Kind: 3, ParentId: 900, Status: Settled}
+	if got := filledParentToWake(&tradepb.TradeCommerceRecord{Kind: 3, ParentId: 900, Status: Delivering}, consignment); got != 0 {
+		t.Errorf("不是市场子单不唤醒: %d", got)
 	}
 }
 

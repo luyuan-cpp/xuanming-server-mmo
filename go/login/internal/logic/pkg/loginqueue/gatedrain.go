@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"shared/gatepick"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -29,10 +31,11 @@ import (
 
 // GateDrainingKeyFmt 标记某台 gate 正在排空。值是标记时间(Unix 秒),
 // 便于运维看它排了多久。带 TTL,防止标记的人挂了之后 gate 永久不接客。
-const GateDrainingKeyFmt = "gate:%d:draining"
+// 键名只在 shared/gatepick 定义一份(scene_manager 跨 zone 重定向读同一个键),这里是它的别名。
+const GateDrainingKeyFmt = gatepick.DrainingKeyFmt
 
 func gateDrainingKey(nodeID uint32) string {
-	return fmt.Sprintf(GateDrainingKeyFmt, nodeID)
+	return gatepick.DrainingKey(nodeID)
 }
 
 // MarkGateDraining 把一台 gate 标成排空中。

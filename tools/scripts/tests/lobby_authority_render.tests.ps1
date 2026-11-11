@@ -100,7 +100,10 @@ Assert-Render ($guildPools.Count -eq 2 -and $guildPlayerPools.Login -eq 0) '帮�
 $expectedPools = $guildPools['RedisClient.PoolSize'] + $guildPools['PlayerLocatorRedis.PoolSize'] + $guildPlayerPools.Player
 $guildSvcSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'go/guild/internal/svc/servicecontext.go') -Raw
 $syncPool = [regex]::Match($guildSvcSource, '(?m)^\s*(?:const\s+)?playerSyncRedisPoolSize\s*=\s*(\d+)\s*$')
-Assert-Render ($syncPool.Success -and $guildLedger.Fixed -eq [int]$syncPool.Groups[1].Value) '帮会摘要专用池预算与实际源码不符'
+# 不建集群时 Fixed = 申请配额专用池(连核心库) + 摘要 bump 池(回落到核心库)。
+$guildQuotaSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go') -Raw
+$quotaPool = [regex]::Match($guildQuotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$')
+Assert-Render ($syncPool.Success -and $quotaPool.Success -and $guildLedger.Fixed -eq ([int]$syncPool.Groups[1].Value + [int]$quotaPool.Groups[1].Value)) '帮会摘要专用池与申请配额池的预算与实际源码不符'
 Assert-Render ($guildLedger.ConfiguredPoolConns -eq $expectedPools -and $guildLedger.PubSub -eq 1) '帮会的池与唤醒订阅未进入Redis连接总账'
 Assert-Render ($mail['KafkaBrokers[0]'] -eq 'kafka.fixture-infra:9092' -or $mail['KafkaBrokers'] -match 'kafka\.fixture-infra:9092') '邮件提醒不能拨本地Kafka'
 $trade = Read-RenderedConfig 'trade'

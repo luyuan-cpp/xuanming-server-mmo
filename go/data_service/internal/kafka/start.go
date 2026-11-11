@@ -259,7 +259,7 @@ func superviseOwned(ctx context.Context, name string, resumeAfter time.Duration,
 	defer func() {
 		if reader, ok := activeReader.(*ownedReader); ok {
 			if err := reader.Close(); err != nil {
-				logx.Errorf("[%s] reader owner 关闭 HOLD: %v", name, err)
+				logx.Errorf("[%s] reader owner close HOLD: %v", name, err)
 			}
 		}
 	}()
@@ -280,7 +280,7 @@ func superviseOwned(ctx context.Context, name string, resumeAfter time.Duration,
 			if owner != nil {
 				owner.RecordUnknown(buildErr)
 			}
-			logx.Errorf("[%s] consumer 构造失败: %v", name, buildErr)
+			logx.Errorf("[%s] consumer construction failed: %v", name, buildErr)
 			return
 		}
 		activeReader = reader

@@ -17,6 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
@@ -238,6 +240,9 @@ public class CommerceStore {
      * </ol>
      * 并发:同一订单的回调在订单行锁上排队,后到者看见先到者已提交的回执,走重放;报同一交易键的两张订单各持各的行锁,
      * 在回执主键上撞键,先提交的成功,另一个整笔回滚并回 409。
+     * <p>409 只表示适配器报来的这笔与已记下的冲突(交易键已属别的订单,或改了金额币种),适配器可以当终局。存储不变量被破坏
+     * (库存预占、订单状态、已记录的几行互相对不上、撞上别的唯一键)一律回 503:这笔钱没有记下,适配器必须保留它、退避重试并告警,
+     * 不能当终局放掉。
      */
     public CommerceApi.PaymentOutcome recordTrustedPayment(CommerceApi.Payment in) {
         requireOrderId(in.orderId());
@@ -257,10 +262,24 @@ public class CommerceStore {
                 int state = order.model().getStatus();
                 if (PAID_STATES.contains(state)) { return abnormalPayment(order, in, CommerceApi.RefundReason.DUPLICATE_PAYMENT); }
                 if (state == 4) { return latePayment(order, in); }
-                if (state != 0) { throw new CommerceException(409, "订单状态冲突"); }
+                if (state != 0) { throw new CommerceException(503, "订单状态无法处理"); }
                 return firstPayment(order, in);
             }));
-        } catch (DuplicateKeyException conflict) { throw new CommerceException(409, "支付流水已用于其他订单"); }
+        } catch (DuplicateKeyException conflict) { throw duplicateKeyConflict(in); }
+    }
+
+    /**
+     * 写入撞了唯一键,事务已整笔回滚。回滚后重读这个交易键:它确实已记在另一张订单名下(两张订单并发报同一笔,先提交的那张赢了),
+     * 才是适配器的错,回 409;读不到、记录不自洽、或者就记在本单名下,说明撞的是别的唯一键(孤儿待办、本单已有绑定回执之类),
+     * 存储已经坏了,回 503。
+     */
+    private CommerceException duplicateKeyConflict(CommerceApi.Payment in) {
+        KnownPayment owner = knownPayment(in);
+        if (owner != null && owner.consistent() && !in.orderId().equals(owner.order())) {
+            return new CommerceException(409, "支付流水已用于其他订单");
+        }
+        LOG.error("payment insert hit an unexpected unique key, storage invariant broken: order={} channel={}", in.orderId(), in.channel());
+        return new CommerceException(503, "付款记录撞上未预期的唯一约束");
     }
 
     /** 付款与订单冻结的币种、金额比较,都相符返回 null。币种不同就不再比金额:不同币种的金额没有可比性。 */
@@ -275,15 +294,16 @@ public class CommerceStore {
         jdbc.update("INSERT INTO commerce_payment_receipt(channel,transaction_id,order_sn,amount_minor,currency) VALUES (?,?,?,?,?)",
                 ascii(in.channel()), ascii(in.transactionId()), in.orderId(), in.amountMinor(), in.currency());
         // 复用上游 stock/lock_stock 一并扣减结构；补足状态 CAS、幂等收据及非负条件。
+        // 下单时已预占、又持着订单行锁，下面两处只会因存储损坏失败：回 503，不回 409(见 recordTrustedPayment)。
         if (order.skuId() == 0) {
             if (!consignments.paid(in.orderId())) { throw new CommerceException(503, "寄售订单关联缺失"); }
         } else {
             int deducted = jdbc.update("UPDATE pms_sku_stock SET stock=stock-?,lock_stock=lock_stock-? WHERE id=? AND stock>=? AND lock_stock>=?",
                 order.quantity(), order.quantity(), order.skuId(), order.quantity(), order.quantity());
-            if (deducted != 1) { throw new CommerceException(409, "库存预占状态异常"); }
+            if (deducted != 1) { throw new CommerceException(503, "库存预占状态异常"); }
         }
         int changed = jdbc.update("UPDATE oms_order SET status=1,payment_time_ms=? WHERE order_sn=? AND status=0", clock.millis(), in.orderId());
-        if (changed != 1) { throw new CommerceException(409, "订单状态冲突"); }
+        if (changed != 1) { throw new CommerceException(503, "订单状态冲突"); }
         jdbc.update("INSERT INTO commerce_delivery_intent(order_sn,buyer_id,sku_id,quantity,status,created_ms) VALUES (?,?,?,?,?,?)",
                 in.orderId(), order.buyer(), order.skuId(), order.quantity(), "PENDING", clock.millis());
         // 此提交只确认支付和交付意图；没有可信游戏资产持久回执，永不迁移到完成。
@@ -313,7 +333,12 @@ public class CommerceStore {
         jdbc.update("INSERT INTO commerce_abnormal_payment(channel,transaction_id,order_sn,reason,created_ms) VALUES(?,?,?,?,?)",
             ascii(in.channel()), ascii(in.transactionId()), in.orderId(), reason.name(), clock.millis());
         queueRefund(in, reason);
-        LOG.warn("abnormal payment recorded and queued for refund: reason={} order={} channel={}", reason, in.orderId(), in.channel());
+        // 提交成功后才记日志：事务回滚时不能留下「已记录」的假象。
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() {
+                LOG.warn("abnormal payment recorded and queued for refund: reason={} order={} channel={}", reason, in.orderId(), in.channel());
+            }
+        });
         return new CommerceApi.PaymentOutcome(view(order), reason);
     }
 
@@ -325,13 +350,14 @@ public class CommerceStore {
 
     /**
      * 同一交易键再次报来。一笔渠道交易只属于一张订单、只有一个金额币种:都对得上就回已记下的结论(refundReason 取这笔付款的
-     * 退款待办,没有待办即 null),不写任何东西;对不上回 409,这是适配器的错,不替它猜。
+     * 退款待办,没有待办即 null),不写任何东西;对不上回 409,这是适配器的错,不替它猜。已记下的几行互相对不上回 503:
+     * 例如异常付款丢了退款待办,照常重放就会回 refundReason=null,被适配器当成订单本身的付款。
      */
     private CommerceApi.PaymentOutcome replay(Stored order, CommerceApi.Payment in, KnownPayment known) {
-        if (known.boundOrder() == null && known.abnormalOf() == null) {
-            throw new CommerceException(503, "未绑定订单的付款回执缺异常付款记录");
+        if (!known.consistent()) {
+            throw new CommerceException(503, "付款回执与异常付款记录或退款待办不一致");
         }
-        if (!in.orderId().equals(known.boundOrder()) && !in.orderId().equals(known.abnormalOf())) {
+        if (!in.orderId().equals(known.order())) {
             throw new CommerceException(409, "支付流水已用于其他订单");
         }
         if (known.amountMinor() != in.amountMinor() || !known.currency().equals(in.currency())) {
@@ -341,20 +367,38 @@ public class CommerceStore {
     }
 
     /**
-     * 某个交易键已有的记录:boundOrder 是它绑定的订单(异常付款为 null),abnormalOf 是它作为异常付款冲的那张订单,
-     * refundReason 是它的退款待办的原因(没有待办为 null)。
+     * 某个交易键已有的记录:boundOrder 是它绑定的订单(异常付款为 null);abnormalOf / abnormalReason 是它作为异常付款冲的那张订单
+     * 和原因(绑定的付款没有这一行,都为 null);refundReason 是它的退款待办的原因(没有待办为 null)。
      */
-    private record KnownPayment(String boundOrder, String abnormalOf, long amountMinor, String currency,
-                                CommerceApi.RefundReason refundReason) {}
+    private record KnownPayment(String boundOrder, String abnormalOf, CommerceApi.RefundReason abnormalReason,
+                                long amountMinor, String currency, CommerceApi.RefundReason refundReason) {
+        /** 这笔付款记在哪张订单名下:绑定的那张,或异常付款冲的那张。 */
+        String order() { return boundOrder != null ? boundOrder : abnormalOf; }
+
+        /**
+         * 同一事务写下的几行必须自洽。绑定订单的回执:没有异常付款行,退款待办没有或是订单本身的退款。
+         * 不绑定订单的回执:恰有一行异常付款,退款待办与它同原因。
+         */
+        boolean consistent() {
+            if (boundOrder != null) {
+                return abnormalOf == null && (refundReason == null || refundReason.refundsOrdersOwnPayment());
+            }
+            return abnormalOf != null && abnormalReason != null && !abnormalReason.refundsOrdersOwnPayment()
+                && abnormalReason == refundReason;
+        }
+    }
     private KnownPayment knownPayment(CommerceApi.Payment in) {
-        var rows = jdbc.query("SELECT p.order_sn,a.order_sn,p.amount_minor,p.currency,r.source FROM commerce_payment_receipt p "
+        var rows = jdbc.query("SELECT p.order_sn,a.order_sn,a.reason,p.amount_minor,p.currency,r.source FROM commerce_payment_receipt p "
                 + "LEFT JOIN commerce_abnormal_payment a ON a.channel=p.channel AND a.transaction_id=p.transaction_id "
                 + "LEFT JOIN commerce_refund_intent r ON r.channel=p.channel AND r.transaction_id=p.transaction_id "
                 + "WHERE p.channel=? AND p.transaction_id=?",
-            (row, index) -> new KnownPayment(row.getString(1), row.getString(2), row.getLong(3), row.getString(4),
-                row.getString(5) == null ? null : CommerceApi.RefundReason.stored(row.getString(5))),
+            (row, index) -> new KnownPayment(row.getString(1), row.getString(2), storedReason(row.getString(3)),
+                row.getLong(4), row.getString(5), storedReason(row.getString(6))),
             ascii(in.channel()), ascii(in.transactionId()));
         return rows.isEmpty() ? null : rows.getFirst();
+    }
+    private static CommerceApi.RefundReason storedReason(String value) {
+        return value == null ? null : CommerceApi.RefundReason.stored(value);
     }
 
     private Stored byRequest(String buyer, String requestId) {

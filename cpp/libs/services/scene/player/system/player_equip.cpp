@@ -616,7 +616,7 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 		}
 		++problems;
 		LOG_ERROR << "[PlayerEquip] Table validation: battle attribute " << raw << " has no display row in EquipAttribute(requires a row with effect="
-				  << equiprules::ToRaw(EffectKind::kCombat) << "、effect_param=" << raw
+				  << equiprules::ToRaw(EffectKind::kCombat) << ", effect_param=" << raw
 				  << " and nonempty name);this attribute will be missing from the battle attribute panel";
 	}
 
@@ -706,60 +706,60 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 	for (const auto& row : EquipEnhanceTableManager::Instance().FindAll().data()) {
 		if (row.id() == 0 || row.id() > maxEnhanceLevel) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id()
-					  << " 不在从 1 起连续的强化等级里(当前连续到 " << maxEnhanceLevel
-					  << "),这一行永远用不到(id 必须从 1 起连续,中间不能缺)";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id()
+					  << " is outside the enhance levels contiguous from 1 (currently contiguous up to " << maxEnhanceLevel
+					  << "), this row is never used (ids must be contiguous from 1 with no gaps)";
 		} else if (row.id() > 1) {
 			// 连续等级内:bonus_permyriad 是「总加成」不是增量,越强化越低就是填错了。
 			const EquipEnhanceTable* previous = EnhanceRow(row.id() - 1);
 			if (previous != nullptr && row.bonus_permyriad() < previous->bonus_permyriad()) {
 				++problems;
-				LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 的 bonus_permyriad="
-						  << row.bonus_permyriad() << " 小于上一级的 " << previous->bonus_permyriad()
-						  << "(它是强化到本级后的总加成,不是相对上一级的增量)";
+				LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " bonus_permyriad="
+						  << row.bonus_permyriad() << " is less than the previous level's " << previous->bonus_permyriad()
+						  << " (it is the total bonus after enhancing to this level, not an increment over the previous level)";
 			}
 		}
 		if (row.success_rate() == 0 || row.success_rate() > equiprules::kPermyriadBase) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 的 success_rate="
-					  << row.success_rate() << " 不在 1.." << equiprules::kPermyriadBase
-					  << "(万分比;0 = 这一级无法强化,写入口会拒绝且不收费)";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " success_rate="
+					  << row.success_rate() << " is not in 1.." << equiprules::kPermyriadBase
+					  << " (per ten thousand; 0 = this level cannot be enhanced, the write entry rejects it without charging)";
 		}
 		if (row.cost_gold() > kMaxPayableGold) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 的 cost_gold=" << row.cost_gold()
-					  << " 超过 INT64_MAX,没有人付得起(写入口按金币不足拒绝)";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " cost_gold=" << row.cost_gold()
+					  << " exceeds INT64_MAX, nobody can afford it (the write entry rejects it as insufficient gold)";
 		}
 		if (row.material_id() != 0) {
 			const ItemTable* materialRow = ItemRow(row.material_id());
 			if (materialRow == nullptr) {
 				// Item 行都没有,「是不是装备 / 是不是战斗道具」无从谈起:同一个根因,不再查后两项。
 				++problems;
-				LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 的 material_id="
-						  << row.material_id() << " 不在 Item 表里,这一级无法强化";
+				LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " material_id="
+						  << row.material_id() << " is absent from the Item table, this level cannot be enhanced";
 			} else {
 				if (materialRow->equip_kind() != 0) {
 					++problems;
-					LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 的 material_id="
-							  << row.material_id() << " 是装备(equip_kind=" << materialRow->equip_kind()
-							  << ");按 config 扣材料会把装备实例当材料销毁,写入口会拒绝这一级";
+					LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " material_id="
+							  << row.material_id() << " is equipment (equip_kind=" << materialRow->equip_kind()
+							  << "); deducting materials by config would destroy equipment instances as materials, the write entry rejects this level";
 				}
 				if (materialRow->battle_usable() != 0) {
 					++problems;
-					LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 的 material_id="
+					LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " material_id="
 							  << row.material_id()
-							  << " 是战斗道具(battle_usable != 0);战斗结算按 config 扣物,会与强化扣材料在重登窗口里交错";
+							  << " is a battle item (battle_usable != 0); battle settlement deducts items by config and would interleave with enhance material deduction in the relogin window";
 				}
 			}
 			if (row.material_count() == 0) {
 				++problems;
-				LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 配了 material_id="
-						  << row.material_id() << " 但 material_count=0,这一级实际不扣材料";
+				LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " sets material_id="
+						  << row.material_id() << " but material_count=0, this level deducts no material";
 			}
 		} else if (row.material_count() != 0) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipEnhance id=" << row.id() << " 没配 material_id 却填了 material_count="
-					  << row.material_count() << ",这一级实际不扣材料";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " has no material_id but sets material_count="
+					  << row.material_count() << ", this level deducts no material";
 		}
 	}
 
@@ -769,34 +769,34 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 		if (itemRow == nullptr) {
 			// 同上:Item 行不存在时不再查后两项。
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGem id=" << row.id() << " 不在 Item 表里,这种宝石无法镶嵌、"
-					  << "已嵌的也取不下来";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGem id=" << row.id() << " is absent from the Item table, this gem cannot be inlaid, "
+					  << "and inlaid ones cannot be removed";
 		} else {
 			if (itemRow->equip_kind() != 0) {
 				++problems;
-				LOG_ERROR << "[PlayerEquip] 表校验: EquipGem id=" << row.id() << " 对应的物品是装备(equip_kind="
-						  << itemRow->equip_kind() << ");按 config 扣发会销毁 / 重铸装备实例,写入口不把它当宝石";
+				LOG_ERROR << "[PlayerEquip] Table validation: EquipGem id=" << row.id() << " maps to an equipment item (equip_kind="
+						  << itemRow->equip_kind() << "); deducting/granting by config would destroy / re-mint equipment instances, the write entry does not treat it as a gem";
 			}
 			if (itemRow->battle_usable() != 0) {
 				++problems;
-				LOG_ERROR << "[PlayerEquip] 表校验: EquipGem id=" << row.id()
-						  << " 对应的物品是战斗道具(battle_usable != 0);战斗结算按 config 扣物,会与镶嵌扣宝石在重登窗口里交错";
+				LOG_ERROR << "[PlayerEquip] Table validation: EquipGem id=" << row.id()
+						  << " maps to a battle item (battle_usable != 0); battle settlement deducts items by config and would interleave with inlay gem deduction in the relogin window";
 			}
 		}
 		if (row.gem_type() == 0) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGem id=" << row.id()
-					  << " 的 gem_type=0(类型必须 >= 1;0 在孔位表里表示「任意」,这种宝石哪个孔都嵌不进)";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGem id=" << row.id()
+					  << " gem_type=0 (type must be >= 1; 0 means 'any' in the socket table, this gem fits no socket)";
 		}
 		// 属性行存在但 effect 不被规则层接受:EquipAttribute 段已经报过那一行,同一个根因,这里不再计、不再打。
 		if (AttributeRow(row.attr_id()) == nullptr) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGem id=" << row.id() << " 的 attr_id=" << row.attr_id()
-					  << " 不在 EquipAttribute 里,这种宝石嵌上也不生效";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGem id=" << row.id() << " attr_id=" << row.attr_id()
+					  << " is absent from EquipAttribute, this gem has no effect when inlaid";
 		}
 		if (row.value() == 0) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGem id=" << row.id() << " 的 value=0,这种宝石嵌上没有任何效果";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGem id=" << row.id() << " value=0, this gem has no effect at all when inlaid";
 		}
 	}
 
@@ -809,13 +809,13 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 	for (const auto& row : EquipGemSocketTableManager::Instance().FindAll().data()) {
 		if (row.equip_kind() == 0) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGemSocket id=" << row.id()
-					  << " 的 equip_kind=0(不是任何部位),这个孔不属于任何装备";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGemSocket id=" << row.id()
+					  << " equip_kind=0 (no equipment kind), this socket belongs to no equipment";
 		}
 		if (row.socket() >= equiprules::kMaxGemSockets) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGemSocket id=" << row.id() << " 的 socket=" << row.socket()
-					  << " 超出单件装备的孔位上限(必须 < " << equiprules::kMaxGemSockets << ")";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGemSocket id=" << row.id() << " socket=" << row.socket()
+					  << " exceeds the per-equipment socket limit (must be < " << equiprules::kMaxGemSockets << ")";
 		}
 		if (row.equip_kind() != 0) {
 			socketsByKind[row.equip_kind()].push_back(row.socket());
@@ -827,8 +827,8 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 		for (std::size_t i = 1; i < sockets.size(); ++i) {
 			if (sockets[i] == sockets[i - 1]) {
 				++problems;
-				LOG_ERROR << "[PlayerEquip] 表校验: EquipGemSocket 部位 equip_kind=" << equipKind << " 的 socket="
-						  << sockets[i] << " 重复出现,多出来的行不生效";
+				LOG_ERROR << "[PlayerEquip] Table validation: EquipGemSocket for equip_kind=" << equipKind << " socket="
+						  << sockets[i] << " is duplicated, the extra rows have no effect";
 			}
 		}
 		// 界内的孔位号去重后必须是 0..n-1(从 0 起连续)。缺口数 = (界内最大号 + 1) − 界内不同号的个数;
@@ -853,9 +853,9 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 			inRangeSockets == 0 ? 0 : static_cast<std::size_t>(highestInRange) + 1 - inRangeSockets;
 		if (gaps > outOfRangeRows) {
 			++problems;
-			LOG_ERROR << "[PlayerEquip] 表校验: EquipGemSocket 部位 equip_kind=" << equipKind
-					  << " 的孔位号不是从 0 起连续的(界内最大孔位号=" << highestInRange << ",缺了 " << gaps
-					  << " 个号,其中越界的行只能解释 " << outOfRangeRows << " 个)";
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipGemSocket for equip_kind=" << equipKind
+					  << " socket numbers are not contiguous from 0 (max_in_range_socket=" << highestInRange << ", missing " << gaps
+					  << " numbers, of which out-of-range rows explain only " << outOfRangeRows << ")";
 		}
 	}
 
@@ -1172,7 +1172,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	}
 	const uint32_t configId = located.item->get().config_id();
 	if (!located.initialized) {
-		LOG_WARN << "[PlayerEquip] 强化被拒,实例未初始化(没有 equip 段): player_id=" << tlsEcs.GetPlayerId(player)
+		LOG_WARN << "[PlayerEquip] Enhance refused, instance not initialized (no equip section): player_id=" << tlsEcs.GetPlayerId(player)
 				 << " guid=" << itemId << " config=" << configId;
 		return kEquipEnhanceUnavailable;
 	}
@@ -1197,7 +1197,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	const uint32_t targetLevel = currentLevel + 1;
 	const EquipEnhanceTable* enhanceRow = EnhanceRow(targetLevel);
 	if (enhanceRow == nullptr) {
-		LOG_ERROR << "[PlayerEquip] 强化失败,EquipEnhance 缺行: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId
+		LOG_ERROR << "[PlayerEquip] Enhance failed, EquipEnhance row missing: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId
 				  << " config=" << configId << " target_level=" << targetLevel << " max_level=" << maxLevel;
 		return kEquipInternalError;
 	}
@@ -1216,7 +1216,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		//    扣的就是玩家的装备实例(甚至是正在强化的这一件)。表校验只打日志,这里 fail-closed。
 		const ItemTable* materialRow = ItemRow(materialId);
 		if (materialRow == nullptr || materialRow->equip_kind() != 0) {
-			LOG_ERROR << "[PlayerEquip] 强化失败,材料行不可用(不存在或被配成了装备): player_id=" << tlsEcs.GetPlayerId(player)
+			LOG_ERROR << "[PlayerEquip] Enhance failed, material row unusable (missing or configured as equipment): player_id=" << tlsEcs.GetPlayerId(player)
 					  << " guid=" << itemId << " target_level=" << targetLevel << " material_id=" << materialId
 					  << " material_row_found=" << (materialRow != nullptr);
 			return kEquipInternalError;
@@ -1224,14 +1224,20 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		// 7. 静默预检:「材料不够」是玩家随手能触发的常规拒绝,不让它走到底层会打 ERROR + 调用栈的不足分支。
 		//    与提交段的扣除同一个判据(Bag::CheckQuantities):必须在下面扣金币之前判完,否则扣了金币才发现材料扣不出。
 		//    只有算上带更新版本字段的材料才够 = 版本错位(混版本设计 §4.4 第 6 批):不当普通单位扣,回暂不可用。
-		switch (inventory.CheckQuantities({{materialId, materialCount}})) {
-		case ItemStore::QuantityVerdict::kEnough:
+		//    材料还押在一局未结算的战斗里(战斗道具预留,battle-item-reservation.md)同样回暂不可用:结算或作废之后就能用。
+		switch (BagService::CheckRemovable(player, inventory, {{materialId, materialCount}})) {
+		case BagService::RemovalVerdict::kEnough:
 			break;
-		case ItemStore::QuantityVerdict::kVersionSkew:
+		case BagService::RemovalVerdict::kHeld:
+			LOG_INFO << "[PlayerEquip] Enhance material held for an unsettled battle: player_id="
+					 << tlsEcs.GetPlayerId(player) << " material=" << materialId;
+			return kFeatureUnavailable;
+		case BagService::RemovalVerdict::kVersionSkew:
 			LOG_WARN << "[PlayerEquip] metric=persist_version_skew where=equip_enhance player_id="
 					 << tlsEcs.GetPlayerId(player) << " material=" << materialId;
 			return kFeatureUnavailable;
-		case ItemStore::QuantityVerdict::kInsufficient:
+		case BagService::RemovalVerdict::kInsufficient:
+		case BagService::RemovalVerdict::kCount:
 			return kEquipEnhanceMaterialNotEnough;
 		}
 	}
@@ -1254,7 +1260,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(costGold),
 															TX_EQUIP_ENHANCE, itemId);
 			err != kSuccess) {
-			LOG_ERROR << "[PlayerEquip] 强化失败(扣金币),什么都没动: player_id=" << tlsEcs.GetPlayerId(player)
+			LOG_ERROR << "[PlayerEquip] Enhance failed (gold deduction), nothing changed: player_id=" << tlsEcs.GetPlayerId(player)
 					  << " guid=" << itemId << " config=" << configId << " target_level=" << targetLevel
 					  << " cost_gold=" << costGold << " err=" << err;
 			return kEquipInternalError;
@@ -1268,7 +1274,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		if (const auto err =
 				BagService::RemoveItemsExact(player, inventory, materials, TX_EQUIP_ENHANCE, itemId, extra);
 			err != kSuccess) {
-			LOG_ERROR << "[PlayerEquip][ENHANCE_PARTIAL] 强化扣材料失败,已扣的金币(gold_deducted)不退、材料与等级未动,需人工对账: player_id="
+			LOG_ERROR << "[PlayerEquip][ENHANCE_PARTIAL] Enhance material deduction failed, deducted gold (gold_deducted) is not refunded, materials and level unchanged, manual reconciliation required: player_id="
 					  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
 					  << " from_level=" << currentLevel << " gold_deducted=" << costGold
 					  << " material_id=" << materialId << " material_count=" << materialCount << " err=" << err;
@@ -1278,7 +1284,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	// 12. 写等级。一律重新按 guid 取:located.item 是纯校验段的借用,不带进提交段。
 	ItemComp* instance = RefetchInitializedInstance(holder, itemId);
 	if (instance == nullptr) {
-		LOG_ERROR << "[PlayerEquip][INSTANCE_LOST] 强化已扣费,但写等级时取不到这件装备,需人工补偿: player_id="
+		LOG_ERROR << "[PlayerEquip][INSTANCE_LOST] Enhance cost already charged, but the equipment could not be fetched when writing the level, manual compensation required: player_id="
 				  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
 				  << " from_level=" << currentLevel << " success=" << success << " gold_deducted=" << costGold
 				  << " material_id=" << (needsMaterial ? materialId : 0)
@@ -1293,7 +1299,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		OnEquipmentChanged(player);
 	}
 	// 15.
-	LOG_INFO << "[PlayerEquip] 强化: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
+	LOG_INFO << "[PlayerEquip] Enhance: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
 			 << " from_level=" << currentLevel << " to_level=" << newLevel << " success=" << success
 			 << " worn=" << worn << " cost_gold=" << costGold << " material_id=" << (needsMaterial ? materialId : 0)
 			 << " material_count=" << (needsMaterial ? materialCount : 0);
@@ -1321,7 +1327,7 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 	}
 	const uint32_t configId = located.item->get().config_id();
 	if (!located.initialized) {
-		LOG_WARN << "[PlayerEquip] 镶嵌被拒,实例未初始化(没有 equip 段): player_id=" << tlsEcs.GetPlayerId(player)
+		LOG_WARN << "[PlayerEquip] Inlay refused, instance not initialized (no equip section): player_id=" << tlsEcs.GetPlayerId(player)
 				 << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				 << " gem_config=" << gemConfigId;
 		return kEquipGemSocketInvalid;
@@ -1348,12 +1354,12 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 		if (fit == equiprules::GemFit::kSocketOccupied && !IsGemEffectiveOn(located.item->get(), located.row->get(), socket)) {
 			// 玩家看到的是「已镶但未生效」:宝石行 / 属性行被改掉了,或同孔有重复记录。照常拒绝(先取下),留一条线索。
 			const EquipGem* occupant = FirstGemRecordOn(located.item->get(), socket);
-			LOG_WARN << "[PlayerEquip] 镶嵌被拒,目标孔被一颗当前不生效的宝石占着: player_id=" << tlsEcs.GetPlayerId(player)
+			LOG_WARN << "[PlayerEquip] Inlay refused, target socket is occupied by a currently ineffective gem: player_id=" << tlsEcs.GetPlayerId(player)
 					 << " guid=" << itemId << " config=" << configId << " socket=" << socket
 					 << " occupant_gem_config=" << (occupant != nullptr ? occupant->gem_config_id() : 0);
 		}
 		if (fit == equiprules::GemFit::kCount) {
-			LOG_ERROR << "[PlayerEquip] 镶嵌失败,孔位判定返回了枚举之外的结果: player_id=" << tlsEcs.GetPlayerId(player)
+			LOG_ERROR << "[PlayerEquip] Inlay failed, socket fit check returned a value outside the enum: player_id=" << tlsEcs.GetPlayerId(player)
 					  << " guid=" << itemId << " socket=" << socket << " gem_config=" << gemConfigId;
 		}
 		return err;
@@ -1361,21 +1367,27 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 	// 5. 记录条数上限。干净数据走不到这里(孔位数 <= kMaxGemSockets,满了会先被第 4 步判成已占);
 	//    走到 = 实例上有孔位定义之外的脏记录。消费侧只看前 kMaxGemSockets 条,再追加的那一条不会生效,所以拒。
 	if (storedGems.size() >= static_cast<int>(equiprules::kMaxGemSockets)) {
-		LOG_ERROR << "[PlayerEquip] 镶嵌失败,实例上的宝石记录已达上限(脏数据): player_id=" << tlsEcs.GetPlayerId(player)
+		LOG_ERROR << "[PlayerEquip] Inlay failed, gem records on the instance reached the limit (dirty data): player_id=" << tlsEcs.GetPlayerId(player)
 				  << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				  << " gem_records=" << storedGems.size() << " limit=" << equiprules::kMaxGemSockets;
 		return kEquipInternalError;
 	}
 	// 6. 静默预检:背包里至少有 1 颗可按数量扣的宝石,与提交段扣除同一个判据(Bag::CheckQuantities)。
 	//    只有带更新版本字段的宝石 = 版本错位(混版本设计 §4.4 第 6 批):不当普通宝石嵌进去,回暂不可用。
-	switch (inventory.CheckQuantities({{gemConfigId, 1}})) {
-	case ItemStore::QuantityVerdict::kEnough:
+	//    宝石还押在一局未结算的战斗里(战斗道具预留,battle-item-reservation.md)同样回暂不可用。
+	switch (BagService::CheckRemovable(player, inventory, {{gemConfigId, 1}})) {
+	case BagService::RemovalVerdict::kEnough:
 		break;
-	case ItemStore::QuantityVerdict::kVersionSkew:
+	case BagService::RemovalVerdict::kHeld:
+		LOG_INFO << "[PlayerEquip] Inlay gem held for an unsettled battle: player_id="
+				 << tlsEcs.GetPlayerId(player) << " gem=" << gemConfigId;
+		return kFeatureUnavailable;
+	case BagService::RemovalVerdict::kVersionSkew:
 		LOG_WARN << "[PlayerEquip] metric=persist_version_skew where=equip_inlay player_id="
 				 << tlsEcs.GetPlayerId(player) << " gem=" << gemConfigId;
 		return kFeatureUnavailable;
-	case ItemStore::QuantityVerdict::kInsufficient:
+	case BagService::RemovalVerdict::kInsufficient:
+	case BagService::RemovalVerdict::kCount:
 		return kEquipGemNotOwned;
 	}
 	Bag& holder = located.bag->get();
@@ -1389,7 +1401,7 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 	if (const auto err =
 			BagService::RemoveItemsExact(player, inventory, gemToConsume, TX_EQUIP_INLAY, itemId, extra);
 		err != kSuccess) {
-		LOG_ERROR << "[PlayerEquip] 镶嵌失败(扣宝石),什么都没动: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId
+		LOG_ERROR << "[PlayerEquip] Inlay failed (gem deduction), nothing changed: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId
 				  << " config=" << configId << " socket=" << socket << " gem_config=" << gemConfigId
 				  << " err=" << err;
 		return kEquipInternalError;
@@ -1397,7 +1409,7 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 	// 8. 写实例。一律重新按 guid 取。
 	ItemComp* instance = RefetchInitializedInstance(holder, itemId);
 	if (instance == nullptr) {
-		LOG_ERROR << "[PlayerEquip][GEM_LOST] 宝石已扣,但写孔位时取不到这件装备,需人工补偿: player_id="
+		LOG_ERROR << "[PlayerEquip][GEM_LOST] Gem already deducted, but the equipment could not be fetched when writing the socket, manual compensation required: player_id="
 				  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				  << " gem_config=" << gemConfigId;
 		return kEquipInternalError;
@@ -1409,7 +1421,7 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 	if (worn) {
 		OnEquipmentChanged(player);
 	}
-	LOG_INFO << "[PlayerEquip] 镶嵌: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
+	LOG_INFO << "[PlayerEquip] Inlay: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
 			 << " socket=" << socket << " gem_config=" << gemConfigId << " worn=" << worn;
 	return kSuccess;
 }
@@ -1437,7 +1449,7 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 	const EquipGem* record = FirstGemRecordOn(located.item->get(), socket);
 	if (record == nullptr) {
 		if (!located.initialized) {
-			LOG_WARN << "[PlayerEquip] 取下被拒,实例未初始化(没有 equip 段): player_id=" << tlsEcs.GetPlayerId(player)
+			LOG_WARN << "[PlayerEquip] Gem removal refused, instance not initialized (no equip section): player_id=" << tlsEcs.GetPlayerId(player)
 					 << " guid=" << itemId << " config=" << configId << " socket=" << socket;
 		}
 		return kEquipGemSocketEmpty;
@@ -1450,7 +1462,7 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 	//     永远并不了堆的「宝石」。与镶嵌入口同一个取舍。
 	const ItemTable* gemItemRow = ItemRow(gemConfigId);
 	if (gemItemRow == nullptr || gemItemRow->equip_kind() != 0) {
-		LOG_ERROR << "[PlayerEquip] 取下失败,宝石的 Item 行不可用(不存在或被配成了装备),宝石仍在装备上: player_id="
+		LOG_ERROR << "[PlayerEquip] Gem removal failed, gem Item row unusable (missing or configured as equipment), gem stays socketed: player_id="
 				  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				  << " gem_config=" << gemConfigId << " gem_row_found=" << (gemItemRow != nullptr);
 		return kEquipInternalError;
@@ -1481,12 +1493,12 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 	if (addErr == kAssetBlocked) {
 		// 获得封禁(全服封禁或本人被 GM 封禁该宝石):业务拒绝,不是故障。宝石留在装备上不会丢,
 		// 解封后照常取下;客户端按 27005 显示「该资产当前被禁止获取」。
-		LOG_WARN << "[PlayerEquip] 取下被拒,宝石的获得被封禁,宝石仍在装备上: player_id=" << tlsEcs.GetPlayerId(player)
+		LOG_WARN << "[PlayerEquip] gem removal refused: gaining this gem is blocked, gem stays socketed: player_id=" << tlsEcs.GetPlayerId(player)
 				 << " guid=" << itemId << " config=" << configId << " socket=" << socket << " gem_config=" << gemConfigId;
 		return kAssetBlocked;
 	}
 	if (addErr != kSuccess) {
-		LOG_ERROR << "[PlayerEquip] 取下失败(退回宝石),宝石仍在装备上: player_id=" << tlsEcs.GetPlayerId(player)
+		LOG_ERROR << "[PlayerEquip] Gem removal failed (gem refund), gem stays socketed: player_id=" << tlsEcs.GetPlayerId(player)
 				  << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				  << " gem_config=" << gemConfigId << " err=" << addErr;
 		return kEquipInternalError;
@@ -1494,7 +1506,7 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 	// 6. 抹宝石。重新按 guid 取(装备在人物背包里时,第 5 步的 Insert 就发生在同一个仓库)。
 	ItemComp* instance = RefetchInitializedInstance(holder, itemId);
 	if (instance == nullptr) {
-		LOG_ERROR << "[PlayerEquip][INSTANCE_LOST] 宝石已退回背包,但抹孔位时取不到这件装备,需人工核对: player_id="
+		LOG_ERROR << "[PlayerEquip][INSTANCE_LOST] Gem already returned to the bag, but the equipment could not be fetched when clearing the socket, manual check required: player_id="
 				  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				  << " gem_config=" << gemConfigId;
 		return kEquipInternalError;
@@ -1513,7 +1525,7 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 		if (!refundedRecordRemoved && recordConfigId == gemConfigId) {
 			refundedRecordRemoved = true;  // 这一条就是刚退回去的那颗
 		} else {
-			LOG_ERROR << "[PlayerEquip] 取下时清掉了同孔的多余宝石记录(脏数据,不退物): player_id="
+			LOG_ERROR << "[PlayerEquip] Gem removal cleared an extra gem record on the same socket (dirty data, no refund): player_id="
 					  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId << " socket=" << socket
 					  << " gem_config_id=" << recordConfigId;
 		}
@@ -1524,11 +1536,11 @@ uint32_t PlayerEquipSystem::RemoveGem(entt::entity player, Guid itemId, uint32_t
 		OnEquipmentChanged(player);
 	}
 	if (!wasEffective) {
-		LOG_WARN << "[PlayerEquip] 取下的是一颗当时不生效的宝石(表里已没有它的宝石行 / 孔位定义 / 属性行): player_id="
+		LOG_WARN << "[PlayerEquip] Removed gem was not effective at the time (its gem row / socket definition / attribute row is gone from the tables): player_id="
 				 << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId << " socket=" << socket
 				 << " gem_config=" << gemConfigId;
 	}
-	LOG_INFO << "[PlayerEquip] 取下: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
+	LOG_INFO << "[PlayerEquip] Gem removal: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
 			 << " socket=" << socket << " gem_config=" << gemConfigId << " worn=" << worn;
 	return kSuccess;
 }

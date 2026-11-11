@@ -19,6 +19,7 @@ import (
 	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"shared/accountdirectory"
+	"shared/currencytype"
 	"trade/internal/data"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -92,9 +93,10 @@ func (s *RmbConsignments) selection(in *tradepb.CreateRmbConsignmentRequest) (st
 	policy := s.Engine.Policy
 	policy.Currencies = s.CurrencyTypes
 	if len(policy.Currencies) == 0 {
-		policy.Currencies = []uint32{0}
+		policy.Currencies = []uint32{currencytype.Gold}
 	}
-	if v.GetCurrencyType() == 2 {
+	// 绑定灵石不论配置都不可寄售(配置校验 config.IsTradableCurrency 本就拒绝它进 CurrencyTypes)。
+	if v.GetCurrencyType() == currencytype.BindDiamond {
 		return "", ErrNotTradable
 	}
 	if err := policy.Selection(v); err != nil {

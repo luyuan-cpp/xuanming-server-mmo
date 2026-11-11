@@ -1,5 +1,5 @@
 # pvp-team-smoke 配置:人数档真人 PVP(PVP_TEAM,1V1～5V5)计分组排的端到端冒烟
-# (docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP 与计分组排」;§12.5 第 4 步)。
+# (docs/design/global-match-hierarchical-pools.md 开头「人数档真人 PVP 与计分组排」;§12.5 第 5 步)。
 #
 # 覆盖的情况(名字可填进 pvp_team_smoke.cases 只跑其中几种):
 #   1v1 / 1v1-rating-window(1500 对 1700,容差放宽一档后成局)
@@ -23,6 +23,7 @@
 # 用法(三步,前两步每轮都要做:换库后 player_id 会变,上一轮打完评分也变了):
 #   1. robot/ 目录:.\robot.exe -c etc/pvp_team_smoke.yaml(phase: prepare)→ 日志 PVP_TEAM_SMOKE_PREPARED,写出 fixture_path
 #   2. go/match 目录:go run ./cmd/ratingfixture -f etc/match_service.yaml -in ../../robot/logs/pvp_team_smoke_fixture.json
+#      -f 改为当前 match 实例实际使用的配置路径(本地启动脚本可能派生 MySQL 配置),并沿用它的口令环境变量。
 #   3. robot/ 目录:把 phase 改成 run 再跑一次 → 全过日志有 PVP_TEAM_SMOKE_OK,退出码 0;任一失败 PVP_TEAM_SMOKE_FAIL case=… reason=…,退出码 1
 # 不同人数档的情况并发跑,同一人数档顺序跑;最长的是 5V5 一组(5 人队等单人 30 秒 + 四局战斗),整轮约 5 分钟。
 

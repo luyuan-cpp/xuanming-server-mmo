@@ -127,7 +127,7 @@ func Build(c config.Config, dial func(endpoint string) (*grpc.ClientConn, error)
 func NewServiceContext(c config.Config) *ServiceContext {
 	sc, err := Build(c, nil)
 	if err != nil {
-		panic("client_rpc_router 配置非法: " + err.Error())
+		panic("client_rpc_router invalid configuration: " + err.Error())
 	}
 	// keepalive:节点镜像的 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
 	etcdCli, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{

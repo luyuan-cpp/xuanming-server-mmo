@@ -365,7 +365,7 @@ func runFriend(c config.Config) (runErr error) {
 			// friend 没有 Kafka consumer；RPC 与 sweep 共用 prepared SOURCE 门禁。
 			return &serverbase.PreparedPublication{NoConsumers: true}, nil
 		}); err != nil && controlCtx.Err() == nil {
-			logx.Errorf("friend 排空 HOLD: %v", err)
+			logx.Errorf("friend drain HOLD: %v", err)
 		}
 	}()
 	defer func() { cancelControl(); <-controlDone }()
@@ -642,7 +642,7 @@ func logReport(stage string, r schemamigrate.Report) {
 // schemaModeLabel 是横幅里的建表策略描述。
 func schemaModeLabel(c config.Config) string {
 	if c.ShouldAutoMigrate() {
-		return "拒绝常驻自动迁移；请先执行独立 -migrate"
+		return "resident auto-migration refused; run standalone -migrate first"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
 }

@@ -140,22 +140,60 @@ bool NodeUtils::IsZoneScopedNodeType(uint32_t nodeType)
 	}
 }
 
-std::string NodeUtils::DiscoveryPrefixFor(const std::string &configuredPrefix, uint32_t zoneId)
+std::optional<uint32_t> NodeUtils::NodeTypeOfDiscoveryPrefix(const std::string &configuredPrefix)
 {
 	static constexpr std::string_view kRpcSuffix = ".rpc";
 	if (configuredPrefix.size() <= kRpcSuffix.size() ||
 		configuredPrefix.compare(configuredPrefix.size() - kRpcSuffix.size(), kRpcSuffix.size(), kRpcSuffix) != 0)
 	{
-		return configuredPrefix;
+		return std::nullopt;
 	}
 	eNodeType nodeType{};
-	if (!eNodeType_Parse(configuredPrefix.substr(0, configuredPrefix.size() - kRpcSuffix.size()), &nodeType) ||
-		!IsZoneScopedNodeType(nodeType))
+	if (!eNodeType_Parse(configuredPrefix.substr(0, configuredPrefix.size() - kRpcSuffix.size()), &nodeType))
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(nodeType);
+}
+
+std::string NodeUtils::DiscoveryPrefixFor(const std::string &configuredPrefix, uint32_t zoneId)
+{
+	const auto nodeType = NodeTypeOfDiscoveryPrefix(configuredPrefix);
+	if (!nodeType || !IsZoneScopedNodeType(*nodeType))
 	{
 		return configuredPrefix;
 	}
 	// 与 EtcdManager::MakeNodeEtcdPrefix 同一键形:<Svc>.rpc/zone/<z>/node_type/<t>/node_id/<n>。
 	return configuredPrefix + "/zone/" + std::to_string(zoneId) + "/";
+}
+
+NodeUtils::DiscoveryScopePlan NodeUtils::PlanDiscoveryScopes(const std::vector<std::string> &configuredPrefixes,
+															 const std::set<uint32_t> &discoverTypes, uint32_t zoneId)
+{
+	DiscoveryScopePlan plan;
+	std::set<uint32_t> configuredTypes;
+	for (const auto &configured : configuredPrefixes)
+	{
+		const auto nodeType = NodeTypeOfDiscoveryPrefix(configured);
+		if (!nodeType || !discoverTypes.contains(*nodeType))
+		{
+			plan.skippedPrefixes.push_back(configured);
+			continue;
+		}
+		if (!configuredTypes.insert(*nodeType).second)
+		{
+			continue; // 同一前缀配了两次:只看一次
+		}
+		plan.scopes.push_back(DiscoveryPrefixFor(configured, zoneId));
+	}
+	for (const auto nodeType : discoverTypes)
+	{
+		if (!configuredTypes.contains(nodeType))
+		{
+			plan.missingTypes.push_back(nodeType);
+		}
+	}
+	return plan;
 }
 
 bool NodeUtils::IsGlobalPoolNodeType(uint32_t nodeType)

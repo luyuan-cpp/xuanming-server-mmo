@@ -54,7 +54,7 @@ const (
 	ownerEpochMintPoolSize = 32
 	// ownerEpochMintWriteTimeout 是写命令的套接字超时(铸造脚本与 WAITAOF 都很小)。
 	ownerEpochMintWriteTimeout = 3 * time.Second
-	// ownerEpochMintReadTimeoutSlack:读超时在 WAITAOF 超时之外多给的时间(同 go/db durableClientReadTimeoutSlack)。
+	// ownerEpochMintReadTimeoutSlack:读超时在 WAITAOF 超时之外多给的时间,让 WAITAOF 的服务端超时先于客户端读超时到期。
 	ownerEpochMintReadTimeoutSlack = time.Second
 	// ownerEpochMintAttempts 是 EVAL 结果未知(传输错误)时整条 pipeline 的最多发送次数,含首发。与 go-zero 客户端
 	// 以前的自动重发同量级;重发能不能认出「首发已生效」由铸造脚本的重放识别决定(只对凭标记的铸造)。
@@ -80,7 +80,8 @@ type OwnerEpochMinter interface {
 	// NowMs 是 G3a 墙钟地板用的当前毫秒(Unix 毫秒)。
 	NowMs() uint64
 	// EvalAndConfirm 执行铸造脚本,并按配置确认这次写已落盘。返回 error 表示 EVAL 被 Redis 拒绝(确定性错误),
-	// 或重发耗尽仍不知道 EVAL 执行了没有;error 为 nil 时 MintEvalResult.Reply 是脚本回复,Durability 是落盘结论。
+	// 或重发耗尽仍不知道 EVAL 执行了没有,或一次都没到达 Redis(errors.Is(err, ErrOwnerEpochMintNotSent),一个字节都没改);
+	// error 为 nil 时 MintEvalResult.Reply 是脚本回复,Durability 是落盘结论。
 	EvalAndConfirm(ctx context.Context, script string, keys []string, args ...any) (MintEvalResult, error)
 }
 
@@ -112,10 +113,18 @@ type MintEvalResult struct {
 	Elapsed time.Duration
 }
 
-// ErrOwnerEpochMintNotSent:请求剩余时间已不够发一次 WAITAOF(不足 1ms),整条 pipeline 一条都没发,Redis 一个字节都没改。
-var ErrOwnerEpochMintNotSent = errors.New("owner epoch mint not sent: deadline budget too short for WAITAOF")
+// ErrOwnerEpochMintNotSent:整条 pipeline 一次都没到达 Redis,Redis 一个字节都没改。两种来源:请求剩余时间已不够发一次
+// WAITAOF(不足 1ms,一条都没发);此前没有结果未知的发送,而这一次连连接都没拿到(池等待超时、拨号失败、新连接握手失败,
+// 见 errMintPipelineNotSent)。用 errors.Is 判,具体原因在包装链里。
+var ErrOwnerEpochMintNotSent = errors.New("owner epoch mint not sent: nothing reached redis")
 
-// errUnexpectedWaitAOFReply:WAITAOF 的回复不是两个非负整数。确定性错误,不重试。取值与 go/db、data_service 的同名哨兵一致。
+// errMintPipelineNotSent:这一次尝试的 pipeline 没有发出去 —— 找不到持有 slot 的主节点,或连接都没拿到。go-redis 9.17 在这种情形
+// 只从 Pipelined 返回错误,不给任何一条命令设错误或值(MaxRetries=0 时 generalProcessPipeline 遇到「可重试」的取连接错误直接
+// 退出重试循环,不调 setCmdsErr),所以 sendPipeline 必须自己认出来,不能把「EVAL 既无错误也无值」当成脚本回复交回去。
+// 只在本文件内使用:EvalAndConfirm 据此区分「确定没发出去」与「发出去了、结果未知」。
+var errMintPipelineNotSent = errors.New("owner epoch mint pipeline never reached redis")
+
+// errUnexpectedWaitAOFReply:WAITAOF 的回复不是两个非负整数。确定性错误,不重试。
 var errUnexpectedWaitAOFReply = errors.New("unexpected WAITAOF reply")
 
 // mintAOFAck 是 WAITAOF 的确认要求,由已 Validate 的 config.OwnerEpochMintConfig 换算。
@@ -202,8 +211,12 @@ func (m *RedisOwnerEpochMinter) WaitsForAOF() bool {
 //     (WAITAOF 的 timeout 0 是无限阻塞)—— 还没有结果未知的发送时回 ErrOwnerEpochMintNotSent;
 //   - EVAL 回 MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING / READONLY:确定没执行,刷新路由表后重发,不计入结果未知的次数,
 //     有自己的上限 ownerEpochMintNotExecutedLimit;
+//   - pipeline 没发出去(errMintPipelineNotSent:找不到 slot 主节点、池等待超时、拨号失败、新连接握手失败):确定没执行,**不重发**,
+//     立即返回 —— 此前没有结果未知的发送时回 ErrOwnerEpochMintNotSent(包装),调用方据此知道 Redis 一个字节都没改,可以用剩下的
+//     预算兜底;此前已有结果未知的发送时仍按结果未知返回。ctx 在等连接时到期,go-redis 给各条命令设的是 ctx 错误,与发出去之后
+//     的读写失败分不开,按结果未知处理(保守一侧);
 //   - EVAL 是其余错误回复(脚本 error_reply、WRONGTYPE、OOM 等):确定性的,不重发,返回 error;
-//   - EVAL 传输错误(含取连接失败、ctx 截止):结果未知,退避后在新连接上重发整条 pipeline,最多 ownerEpochMintAttempts 次。
+//   - EVAL 传输错误(发出去之后读写失败、ctx 截止):结果未知,退避后在新连接上重发整条 pipeline,最多 ownerEpochMintAttempts 次。
 //     首发若已生效,凭标记的铸造会被脚本的重放识别认出来;脚本在识别分支里把 owner_epoch 原值写回一次,所以新连接上的
 //     WAITAOF 仍覆盖首发那次写。不凭标记的铸造认不出,重发回 0(已登记的残余,调用方据 Attempts 打日志);
 //   - EVAL 有回复之后不再重发:WAITAOF 的结论原样写进 Durability,由调用方按「推送失败」处理不满足的情形。
@@ -214,6 +227,7 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 	if err := playerredis.CheckKeys(keys); err != nil {
 		return MintEvalResult{}, fmt.Errorf("owner epoch mint keys rejected, nothing sent: %w", err)
 	}
+	// lastErr 只记「发出去了、结果未知」的那一类错误:为 nil(等价于 attempt == 1)说明此前没有任何一次结果未知的发送。
 	var lastErr error
 	attempt := 1
 	notExecuted := 0
@@ -226,7 +240,7 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 			waitMs, ok = waitAOFBudgetMs(time.Now(), deadline, hasDeadline, m.ack.timeout, ownerEpochMintDeadlineMargin)
 			if !ok {
 				if lastErr == nil {
-					return MintEvalResult{}, ErrOwnerEpochMintNotSent
+					return MintEvalResult{}, fmt.Errorf("%w: deadline budget too short for WAITAOF", ErrOwnerEpochMintNotSent)
 				}
 				return MintEvalResult{Attempts: attempt - 1},
 					fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s), no budget left to resend: %w", attempt-1, lastErr)
@@ -265,6 +279,16 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 			}
 			continue
 		}
+		if errors.Is(evalErr, errMintPipelineNotSent) {
+			// 这一次一个字节都没发出去,不在这里重试:多半是池被占满(每条连接都在等 WAITAOF)或节点连不上,再排一次队只会把调用方
+			// 剩下的预算耗在等连接上,最后被 ctx 截止打成「结果未知」,调用方就没时间兜底了(例如回滚改走共享连接池)。
+			// 排在错误回复的判断之前:新连接握手被拒(WRONGPASS 等)也是错误回复,但脚本根本没跑。
+			if lastErr == nil {
+				return MintEvalResult{}, fmt.Errorf("%w: %w", ErrOwnerEpochMintNotSent, evalErr)
+			}
+			return MintEvalResult{Attempts: attempt - 1},
+				fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s); the resend never reached redis: %w (earlier unknown result: %v)", attempt-1, evalErr, lastErr)
+		}
 		if isRedisErrorReply(evalErr) {
 			return MintEvalResult{Attempts: attempt},
 				fmt.Errorf("owner epoch mint script rejected by redis (deterministic, not resent): %w", evalErr)
@@ -283,8 +307,8 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 	}
 }
 
-// sendPipeline 发一次 EVAL + WAITAOF。第三个返回值是 EVAL 的结论:nil = EVAL 有正常回复。
-// askAddr 非空时前置 ASKING 发往这个节点,否则发往持有 keys[0] 所在 slot 的主节点。
+// sendPipeline 发一次 EVAL + WAITAOF。第三个返回值是 EVAL 的结论:nil = EVAL 有正常回复;包装 errMintPipelineNotSent = 这一次
+// 一个字节都没发出去。askAddr 非空时前置 ASKING 发往这个节点,否则发往持有 keys[0] 所在 slot 的主节点。
 func (m *RedisOwnerEpochMinter) sendPipeline(ctx context.Context, askAddr, script string, keys []string, args []any, waitMs int64) (*goredis.Cmd, *goredis.Cmd, error) {
 	var node *goredis.Client
 	if askAddr != "" {
@@ -293,12 +317,13 @@ func (m *RedisOwnerEpochMinter) sendPipeline(ctx context.Context, askAddr, scrip
 	} else {
 		var err error
 		if node, err = playerredis.MasterForKey(ctx, m.client, keys[0]); err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("%w: locating the slot master: %w", errMintPipelineNotSent, err)
 		}
 	}
 	var evalCmd, waitCmd *goredis.Cmd
-	// 不看 Pipelined 的返回值:它只是第一条失败命令的错误,逐条命令的结果才是判据。
-	_, _ = node.Pipelined(ctx, func(p goredis.Pipeliner) error {
+	// 判据是逐条命令的结果:Pipelined 的返回值只是第一条失败命令的错误(EVAL 有回复、WAITAOF 读失败时它也非空)。
+	// 只有一个例外要靠它 —— 连接都没拿到,见下。
+	_, pipelineErr := node.Pipelined(ctx, func(p goredis.Pipeliner) error {
 		if askAddr != "" {
 			p.Do(ctx, "ASKING")
 		}
@@ -311,7 +336,20 @@ func (m *RedisOwnerEpochMinter) sendPipeline(ctx context.Context, askAddr, scrip
 	if evalCmd == nil {
 		return nil, nil, errors.New("pipeline callback was not invoked")
 	}
-	return evalCmd, waitCmd, evalCmd.Err()
+	if err := evalCmd.Err(); err != nil {
+		return evalCmd, waitCmd, err
+	}
+	if evalCmd.Val() == nil {
+		// 连接都没拿到(池等待超时、拨号失败、新连接握手失败):go-redis 9.17 的 generalProcessPipeline 在 MaxRetries=0 时遇到这类
+		// 「可重试」的取连接错误直接退出循环,不调 setCmdsErr,错误只从 Pipelined 返回,各条命令既没有错误也没有值。
+		// 有回复的 EVAL 必有值或错误(脚本回 nil 时 go-redis 设 redis.Nil),所以「两样都没有」只可能是这种情形。
+		// 以前这里按「EVAL 有回复」交回 Reply = nil:铸造报「CAS 返回值非法」,回滚被当成结果未知、不执行也不兜底。
+		if pipelineErr == nil {
+			pipelineErr = errors.New("EVAL has neither a reply nor an error")
+		}
+		return evalCmd, waitCmd, fmt.Errorf("%w: %w", errMintPipelineNotSent, pipelineErr)
+	}
+	return evalCmd, waitCmd, nil
 }
 
 // judgeWaitAOF 把 WAITAOF 那条命令的结果翻成结论。waitCmd 为 nil = 没发(两项都配 0)。
@@ -380,8 +418,8 @@ func (m *RedisOwnerEpochMinter) Close() error {
 	return m.client.Close()
 }
 
-// 以下纯函数与 go/data_service/internal/routing/route_publish.go、go/db/internal/kafka/durable_enqueue.go 的同名函数语义
-// 逐字一致(各模块一份:不为几行代码开公共包,同 go/db 那边的取舍),**几处要改一起改**。
+// 以下是本通道的纯函数。全仓现在只有 scene_manager 发 WAITAOF:go/db 重试入队与 data_service 路由发布那两份同名实现已随
+// 存档迁 TiDB、映射直读 TiDB 删除,没有别的副本要同步改。
 
 // isRedisErrorReply 判断 err 是不是 Redis 回的错误回复(确定性错误)。网络错误、ctx 错误都不是。
 func isRedisErrorReply(err error) bool {
@@ -422,7 +460,7 @@ func waitAOFBudgetMs(now, deadline time.Time, hasDeadline bool, configured, marg
 	return ms, true
 }
 
-// mintRetryBackoff 在 [Min, Max] 内均匀取一个等待时长(同 data_service publishRetryBackoff)。
+// mintRetryBackoff 在 [Min, Max] 内均匀取一个等待时长。
 func mintRetryBackoff() time.Duration {
 	return ownerEpochMintRetryBackoffMin + rand.N(ownerEpochMintRetryBackoffMax-ownerEpochMintRetryBackoffMin+1)
 }

@@ -104,8 +104,8 @@
 ## 8. 服务端状态(2026-11-10)
 
 - 协议已生成:`MatchServiceListBattleReports` 消息号 379、`MatchServiceGetBattleReport` 380,tip 码 `kMatchBattleReportNotFound = 16025`。客户端按自己的流程用默认配置重新生成 C# 即可拿到同样的号。
-- C++ 编译与用例、Go 编译与纯逻辑用例已有运行证据;真 TiDB 用例、robot 冒烟和导表后的限频还没跑(交 Codex,设计稿 §17)。
-- `data/MessageLimiter.xlsx` 已加两行限频(379 每 2 秒 1 次、380 每秒 1 次),导表后生效。
+- Codex 11-10 续验:battle 库编译与引擎 307/307 通过,三组体积见设计 §9;match build / vet、robot build / vet / 3 个解码用例通过。真 TiDB 与跨区冒烟因资源门槛尚未执行,输入版本与具体证据见设计稿 §17.1。
+- `data/MessageLimiter.xlsx` 的两行限频(379 每 2 秒 1 次、380 每秒 1 次)已导表落入服务端产物,批次 34;运行中加载效果待冒烟。
 - Java 版服务端待做(设计稿 §16);客户端契约两版相同,客户端不用区分。
 
 ## 9. 落码前请在客户端仓核对

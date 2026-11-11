@@ -292,3 +292,19 @@ func TestManualResolverIsWiredIn(t *testing.T) {
 		t.Errorf("Loop.Manual 没挂上:%v", err)
 	}
 }
+
+// TestBindWorkOwner:重投分工(缺口清单第 25 条)绑得上 trade 的 outbox(AssetOpRepo 实现了 assetop.OwnedDueLister);
+// owns 为 nil 拒绝,nil 管线回 ErrSignerMissing。绑定只记下判定,不碰库(newTestRepo 没有连接池,碰库会 panic)。
+func TestBindWorkOwner(t *testing.T) {
+	p := newTestPipeline(t, &fakeIDs{})
+	if err := p.BindWorkOwner(nil); err == nil {
+		t.Fatal("owns 为 nil 必须拒绝:绑了分工却没有判定,扩副本时看不出分工没生效")
+	}
+	if err := p.BindWorkOwner(func(string) bool { return true }); err != nil {
+		t.Fatalf("AssetOpRepo 实现了 OwnedDueLister,应绑得上: %v", err)
+	}
+	var nilPipeline *Pipeline
+	if err := nilPipeline.BindWorkOwner(func(string) bool { return true }); !errors.Is(err, ErrSignerMissing) {
+		t.Fatalf("nil 管线 err = %v, want errors.Is(..., ErrSignerMissing)", err)
+	}
+}

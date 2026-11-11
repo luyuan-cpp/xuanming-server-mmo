@@ -527,8 +527,23 @@ COMPLETE 而结算还没到本地、有可裁决原件而终局还没落定(NONE
 (只可能是旧版本或缺陷留下的异常,这一域本来只收 APPLIED),不算收尾,照旧续冻到上限再告警,按本节处置让原件真正执行成功。
 FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直不来的局,这名玩家最多约 15 分钟内排不了队。
 续到上限打 ERROR `metric=battle_freeze_hold_cap_reached terminal=not_queried_past_cap` 后照常解冻(越过上限的那一拍不再查询):按日志里的 `battle_id` 走上面的步骤查这一局的收件箱条目与 Match 侧
-`match_battle_settlement_source`,结算之后再到会按当时持有量夹紧消耗。`terminal=UNKNOWN` 持续出现(`metric=battle_terminal_query_unknown`)
+`match_battle_settlement_source`。解冻只放开人,这一局带进战斗的道具仍被预留押着(下一段),结算之后再到照样从预留里扣。`terminal=UNKNOWN` 持续出现(`metric=battle_terminal_query_unknown`)
 先查 scene 的 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`、match 节点发现与 match 是否可达。
+
+**战斗道具预留(2026-11-10,`docs/design/battle-item-reservation.md`)**:备战时把快照里的道具按配置号与数量押住
+(存档 `player_database.item_holds`),结算只从这份预留里扣,扣完释放;备战取消、SQL 终局 ABORT、或没有可裁决原件时整份释放
+(INFO `metric=battle_item_hold_released reason=`)。冻结解开之后,押着的道具交易、帮会捐献、强化、镶嵌、GM 回收都暂不可用
+(资产通道回 RETRY + `kAssetInBattle`,日志 `metric=asset_debit_items_held` / `asset_recall_items_held`),玩家其余照常。
+
+- **冻结已不在的预留**由 scene 的 reaper 每 30 秒复核:到了冻结到期时刻、玩家此刻可改,就向 match 查 SQL 终局,ABORT / NO_ORIGINAL 释放,
+  COMPLETE / PENDING / UNKNOWN 留着,**没有上限**。越过「冻结到期 + 15 分钟」仍没收尾,每 10 分钟一行 ERROR `metric=battle_item_hold_overdue`
+  (值班查询 `count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0`)。
+- **处置**:按日志里的 `battle_id` 查结算为什么没到,走本节上面的步骤 —— 发件箱积压看下面「Match 个人结算首投积压」;
+  条目已在收件箱而整笔延后看上面的原因表(两包都满就让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
+  结算一应用,预留随之释放,不需要人工放。
+- **禁止**手改 `player_database.item_holds` 或用 GM 放掉预留来「解卡」:押着的就是结算要扣的东西,放掉等于让玩家把药白喝;
+  结算若确实永远到不了(原件损坏),按事故上报负责人,走存档修复流程。
+- 玩家离线时被取消的备战只删锁,预留留在存档里,下次加载后按 SQL 终局收尾;这段时间这些道具押着,属预期。
 
 **条目根本没进收件箱**:如果 `ListItems` 查不到这局,而 Match 侧该玩家的 `match_battle_settlement_source` 一直停在 `inbox_seq=0`
 (Match 指标 `match_outcome_outbox_backlog_rows{kind="first"}` 不降、`match_outcome_outbox_delivery_total{kind="first",outcome="failed"}` 在涨),先看收件箱的
@@ -543,7 +558,7 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
 | 告警 | 条件 | 含义 |
 |---|---|---|
 | `MatchSettlementInboxLagging`(warning) | 超过 60 秒,持续 2 分钟 | 打满时限的局到期时结算还没到,scene 正在续冻这些玩家(上面一段的 `battle_freeze_held terminal=COMPLETE`),结算一到自动解冻,不需要人工放 |
-| `MatchSettlementInboxStalled`(critical) | 超过 300 秒,持续 1 分钟 | 离 scene 的续冻上限(冻结到期后 15 分钟,约 COMPLETE 之后 16 分钟)还剩约 10 分钟;到上限照常解冻,之后才到的结算按持有量夹紧消耗 |
+| `MatchSettlementInboxStalled`(critical) | 超过 300 秒,持续 1 分钟 | 离 scene 的续冻上限(冻结到期后 15 分钟,约 COMPLETE 之后 16 分钟)还剩约 10 分钟;到上限照常解冻,之后这一局带进战斗的道具仍被预留押着(交易、捐献、强化暂不可用),积压一直不消玩家就一直拿不走它们 |
 
 处置顺序:
 

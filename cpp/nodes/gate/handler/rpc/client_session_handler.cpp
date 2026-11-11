@@ -7,6 +7,7 @@
 #include "scene_client_call_reply.h"
 #include "session_details_builder.h"
 #include "core/security/caller_auth.h"
+#include "thread_context/trace_context_tls.h"
 
 #include <algorithm>
 #include <cassert>
@@ -313,7 +314,8 @@ static bool SendViaRouter(const ClientRequest &request, const SessionDetails &se
 // 经 gate_drain_migration::SetRequestSender 注入。与断线通知同一种 gate 合成请求:会话身份走同一个 BuildSessionDetails、
 // 带会话代次(login 按 gate_instance_id + 会话代次认这条连接),gate_call_seq 留 0 —— 不进路由 lane,不占客户端请求的单飞槽,
 // 也不排在客户端请求后面。应答只交给 done,不进回包桥、不推给客户端;票据是否送出由 drain_migration 复核会话后决定。
-// 返回 false = 没发出(没有路由服 / login 实例、缺通道、会话序列化或签名失败),done 不会被调用。
+// 返回 false = 没发出(没有路由服 / login 实例、缺通道、会话序列化失败、直连模式签名失败),done 不会被调用;
+// 路由模式的签名失败由 SendForwardForInternalReply 同步回调 done(按调用失败退避),这里仍返回 true。
 static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInfo &session,
 	gate_drain_migration::ReplyCallback done)
 {
@@ -628,8 +630,18 @@ bool GateClientSessionHandler::NotifySceneExitGame(const SessionId sessionId, co
 	return (*rpcClient)->SendRequest<SceneProcessClientPlayerMessageRpc>(exitMsg);
 }
 
+// 日志上下文里的玩家:会话绑定了角色就给它,没绑(0 或 kInvalidGuid)给 0,0 在日志上下文里表示没有玩家
+// (docs/design/distributed-tracing.md §4.1)。直接传 kInvalidGuid 会在日志里打出一个假的 player_id。
+static Guid PlayerForLogContext(const Guid playerId)
+{
+	return playerId != 0 && playerId != kInvalidGuid ? playerId : 0;
+}
+
 void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::TcpConnectionPtr &conn)
 {
+	// 断线事件是一条链路的起点:开新根(docs/design/distributed-tracing.md §3.3)。通知 scene 的 RPC0 请求经信封带上它;
+	// 通知 login 走 gRPC,在该设计 §10.1 第 4 批接上。
+	tracing::ScopedRoot disconnectTrace;
 	const auto sessionId = GetSessionId(conn);
 
 	// 从未建立过会话的连接(HandleConnectionEstablished 里三条 fail-closed 拒连:
@@ -659,6 +671,7 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 	const bool loginStarted = sessionFound && sessionIt->second.loginStarted;
 	const Guid playerId = sessionFound ? sessionIt->second.playerId : kInvalidGuid;
 	const bool hasBoundPlayer = playerId != 0 && playerId != kInvalidGuid;
+	tracing::ScopedPlayerId playerContext(PlayerForLogContext(playerId));
 	const bool shouldNotifyLogin = loginStarted || hasBoundPlayer;
 	bool sceneNotified = false;
 	uint32_t sceneNodeId = 0;
@@ -752,7 +765,7 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 				}
 				else
 				{
-					LOG_ERROR << "断线通知签名失败；继续清理本地会话";
+					LOG_ERROR << "Disconnect notification signing failed; continuing local session cleanup";
 				}
 			}
 		}
@@ -810,6 +823,9 @@ static void OnClientHighWaterMark(const muduo::net::TcpConnectionPtr &conn, size
 
 void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpConnectionPtr &conn)
 {
+	// 建连事件是一条链路的起点:开新根(docs/design/distributed-tracing.md §3.3)。只动线程局部变量,不分配,
+	// 不影响下面「第一道闸」的口径。
+	tracing::ScopedRoot connectTrace;
 	// 并发连接上限。必须是第一道闸:在发 session_id、建 SessionInfo 之前拒掉,
 	// 否则限流本身就先付出了它想省下的那份内存。
 	//
@@ -1202,6 +1218,9 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 													   const RpcClientMessagePtr &request,
 													   muduo::Timestamp)
 {
+	// 客户端的每条消息都是一条请求的起点:开新根(docs/design/distributed-tracing.md §3.3)。转给 scene 的 RPC0 请求经信封带上它;
+	// 走 gRPC 的转发在该设计 §10.1 第 4 批接上。客户端帧里没有 trace 字段,客户端指定不了 trace_id。
+	tracing::ScopedRoot requestTrace;
 	auto sessionId = GetSessionId(conn);
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
@@ -1212,6 +1231,7 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	}
 
 	auto &session = sessionIt->second;
+	tracing::ScopedPlayerId playerContext(PlayerForLogContext(session.playerId));
 	// 任何一帧都说明客户端还活着,随后被拒的也算(docs/design/gate-client-heartbeat.md §5.3)。尚未开始跟踪的连接不读时钟。
 	gate_client_heartbeat::NoteInboundFrame(session);
 
@@ -1387,6 +1407,8 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 												  const ClientTokenVerifyRequestPtr &message,
 												  muduo::Timestamp)
 {
+	// 验签消息同样是请求的起点:开新根(docs/design/distributed-tracing.md §3.3)。
+	tracing::ScopedRoot requestTrace;
 	auto sessionId = GetSessionId(conn);
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
@@ -1397,6 +1419,7 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	}
 
 	auto &session = sessionIt->second;
+	tracing::ScopedPlayerId playerContext(PlayerForLogContext(session.playerId));
 	gate_client_heartbeat::NoteInboundFrame(session);
 
 	auto sendReply = [&](bool success, const std::string &error)

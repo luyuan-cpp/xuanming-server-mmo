@@ -153,6 +153,8 @@ function Reset-MigrateFixture {
     # 桩只替真函数做占位替换这一步(换成目录里的 Secret 名和摘要),清单才和真部署同形状,「占位必须全部替换」的断言继续管得住其余占位。
     Set-Item Function:script:Add-SqlWriterBootManifest { param($ManifestContent, $Namespace, $SvcName, $RuntimeKind) $script:Events.Add("render:boot:$SvcName"); return ($ManifestContent -creplace 'PLACEHOLDER_SQL_WRITER_[A-Z0-9_]+', 'fixture-sql-writer') }
     Set-Item Function:script:Add-SqlWriterPlacementEnv { param($ManifestContent) return $ManifestContent }
+    # 写者换成 StatefulSet 之前留下的同名 Deployment 由它收掉(k8s_deploy.ps1 Remove-LegacySqlWriterDeployment)。只记事件,不走 Invoke-Kubectl:那个桩把一切 delete 记成 delete:Job。
+    Set-Item Function:script:Remove-LegacySqlWriterDeployment { param($Namespace, $Name) $script:Events.Add("delete:legacy-deployment:$Name") }
     Set-Item Function:script:Assert-DataServiceRosterSchemas { param($Namespace) $script:Events.Add('check:roster') }
     Set-Item Function:script:Add-IdIssuerExpectedRegionEnv { param($ManifestContent) return $ManifestContent }
     Set-Item Function:script:Add-PlayerInboxMatchSecretEnv { param($ManifestContent) return $ManifestContent }
@@ -205,8 +207,9 @@ function Reset-MigrateFixture {
             $script:MigrationContent = $InputContent
             $script:Events.Add('apply:Job')
             $script:JobApplied = $true
-        } elseif ($InputContent -match '(?m)^kind: Deployment\s*$') {
-            $script:Events.Add('apply:Deployment')
+        } elseif ($InputContent -match '(?m)^kind: (?:Deployment|StatefulSet)\s*$') {
+            # 工作负载:SQL 写者是 StatefulSet(槽位 = 序号,writer-roster-exhaustion-20261106.md §5.5),其余是 Deployment。本套的服务都是写者。
+            $script:Events.Add('apply:Workload')
             $script:DeploymentContent = $InputContent
         } elseif ($InputContent -match '(?m)^kind: ConfigMap\s*$') {
             $script:Events.Add('apply:ConfigMap')
@@ -257,7 +260,7 @@ foreach ($profile in @('staging', 'prod')) {
         $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 }
         Assert-Match -Text $failure -Pattern 'trade-migrate.*failed' -Because '必须报告迁移失败，而不是其它模拟或参数错误'
         Assert-True -Condition ($script:Events -contains 'apply:Job') -Because '负向用例必须真正走到新 Job 的 apply'
-        Assert-True -Condition ($script:Events -notcontains 'apply:Deployment') -Because '失败后不得部署服务'
+        Assert-True -Condition ($script:Events -notcontains 'apply:Workload') -Because '失败后不得部署服务'
     }
 }
 
@@ -267,7 +270,7 @@ Test-Case '成功 Job 才放行 Deployment，且 ConfigMap 与 Job 的顺序正�
     Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Job 要读取先前创建的 ConfigMap'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '迁移必须先于服务部署'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because '迁移必须先于服务部署'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能直接放行'
 }
 
@@ -308,7 +311,7 @@ Test-Case '-Stage Prepare 只做 ConfigMap 与迁移 Job,不碰 Deployment 与�
     Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 -Stage Prepare
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -ge 0 -and [Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Prepare 先 ConfigMap 再 Job'
-    Assert-True -Condition ($events -notcontains 'apply:Deployment') -Because 'Prepare 不起进程:data-service 就绪之前 trade 读不到合服映射'
+    Assert-True -Condition ($events -notcontains 'apply:Workload') -Because 'Prepare 不起进程:data-service 就绪之前 trade 读不到合服映射'
     Assert-True -Condition (@($events | Where-Object { $_ -like 'apply:Secret:*' }).Count -eq 0) -Because '只有工作负载引用的 Secret 留给 Workload,迁移 Job 不读它'
 
     Reset-MigrateFixture
@@ -325,11 +328,11 @@ Test-Case '-Stage Workload 只起进程:不重写 ConfigMap、不重跑迁移 Jo
     $script:AssetOpSecrets = @{ trade = 'contract-asset-op-secret-trade-0123456789abcdef'; guild = 'contract-asset-op-secret-guild-0123456789abcdef' }
     Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 -Stage Workload
     $events = @($script:Events)
-    Assert-True -Condition ($events -contains 'apply:Deployment') -Because 'Workload 要 apply Deployment'
+    Assert-True -Condition ($events -contains 'apply:Workload') -Because 'Workload 要 apply Deployment'
     foreach ($absent in @('apply:ConfigMap', 'apply:Job', 'delete:Job', 'query:Job')) {
         Assert-True -Condition ($events -notcontains $absent) -Because "Workload 不该有 $absent:ConfigMap 与 Job 第一步已经做过"
     }
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -ge 0 -and [Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,Secret 必须先于 Deployment'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -ge 0 -and [Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'secretKeyRef 不是 optional,Secret 必须先于 Deployment'
 }
 
 # 全新集群的 data-service、db 走同一个 Prepare:名册要按 Job 种下的 generation 写,所以这一步不读名册。
@@ -340,7 +343,7 @@ foreach ($svc in @('data-service', 'db')) {
         Apply-OneGoSvc -SvcName $svc -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Stage Prepare
         $events = @($script:Events)
         Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -ge 0 -and [Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Prepare 先 ConfigMap 再 Job'
-        Assert-True -Condition ($events -notcontains 'apply:Deployment') -Because '名册没定之前不起进程'
+        Assert-True -Condition ($events -notcontains 'apply:Workload') -Because '名册没定之前不起进程'
         Assert-True -Condition ($events -notcontains "render:boot:$svc") -Because '这一步还没有 generation,不能要求名册'
         Assert-True -Condition ($events -notcontains 'check:roster') -Because '同上'
     }
@@ -352,7 +355,7 @@ Test-Case 'data-service 重复部署:Job 再跑一遍(-migrate 对齐全的库�
     Apply-OneGoSvc -SvcName 'data-service' -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'check:roster') -ge 0 -and [Array]::IndexOf($events, 'check:roster') -lt [Array]::IndexOf($events, 'apply:ConfigMap')) -Because '名册不对在写操作之前拦下'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'Job 先于 Deployment'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'Job 先于 Deployment'
 }
 
 Test-Case 'db 的迁移 Job:单独的镜像,库清单来自 MMORPG_DB_ALLOWED_DATABASES,排在 db Deployment 之前' {
@@ -364,7 +367,7 @@ Test-Case 'db 的迁移 Job:单独的镜像,库清单来自 MMORPG_DB_ALLOWED_DA
         Apply-OneGoSvc -SvcName db -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
     } finally { [Environment]::SetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', $saved) }
     $events = @($script:Events)
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'db 的闸门表由这个 Job 建,registrar 要等它'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'db 的闸门表由这个 Job 建,registrar 要等它'
     $job = $script:MigrationContent
     Assert-Match -Text $job -Pattern 'image: registry\.invalid/audit/mmorpg-db-migrate:test' -Because 'cmd/migrate 不在服务二进制里'
     Assert-Match -Text $script:DeploymentContent -Pattern 'image: registry\.invalid/audit/mmorpg-db:test' -Because 'Deployment 仍是服务镜像'
@@ -454,7 +457,7 @@ Test-Case 'friend 的迁移门禁与 trade 同链路：ConfigMap → Job → Dep
     Apply-OneGoSvc -SvcName friend -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'friend-migrate Job 要读取先前创建的 ConfigMap'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false，表没建出来 friend 会拒启，迁移必须先于 Deployment'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'staging/prod 的 Schema.AutoMigrate=false，表没建出来 friend 会拒启，迁移必须先于 Deployment'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能因为是新服务就直接放行'
 }
 
@@ -466,7 +469,7 @@ Test-Case 'data-service 的迁移门禁:ConfigMap → Job → Deployment,且 Dep
     Apply-OneGoSvc -SvcName 'data-service' -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because '迁移 Job 要读取先前创建的 ConfigMap'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '表与号段行没就位,Store.Required 会让 data-service 拒启'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because '表与号段行没就位,Store.Required 会让 data-service 拒启'
     Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
     Assert-Match -Text $script:DeploymentContent -Pattern '(?m)^  replicas: 2\s*$' -Because 'data-service 不再是单副本'
     Assert-Match -Text $script:DeploymentContent -Pattern 'name: data-service-pdb' -Because 'PDB 随主 manifest 一起 apply'
@@ -480,7 +483,7 @@ Test-Case 'player-inbox 的迁移门禁与 trade 同链路,未注入运维口令
     Apply-OneGoSvc -SvcName 'player-inbox' -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'player-inbox-migrate Job 要读取先前创建的 ConfigMap'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false,表没建出来 player-inbox 会拒启,迁移必须先于 Deployment'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'staging/prod 的 Schema.AutoMigrate=false,表没建出来 player-inbox 会拒启,迁移必须先于 Deployment'
     Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
     Assert-True -Condition (-not ($events | Where-Object { $_ -like 'apply:Secret:*' })) -Because '未注入口令时不能建出一个空口令的 Secret'
     $content = $script:DeploymentContent
@@ -500,7 +503,7 @@ Test-Case 'player-inbox 注入运维口令:先建 Secret 再 apply Deployment,en
     $events = @($script:Events)
     $secretAt = [Array]::IndexOf($events, 'apply:Secret:player-inbox-admin-token')
     Assert-True -Condition ($secretAt -ge 0) -Because '口令已解析时必须建 Secret'
-    Assert-True -Condition ($secretAt -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,Secret 必须先于引用它的 Deployment'
+    Assert-True -Condition ($secretAt -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'secretKeyRef 不是 optional,Secret 必须先于引用它的 Deployment'
     $content = $script:DeploymentContent
     Assert-Match -Text $content -Pattern '- name: PLAYER_INBOX_ADMIN_TOKEN\s+valueFrom:\s+secretKeyRef:\s+name: player-inbox-admin-token\s+key: admin-token' -Because '口令只经 Secret 进容器'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: PLAYER_INBOX_ADMIN_TOKEN').Count) -Because '只能注入一份'
@@ -517,13 +520,13 @@ Test-Case 'mail 的迁移门禁与 trade 同链路,只引用现役预置生产�
     Apply-OneGoSvc -SvcName 'mail' -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'mail-migrate Job 要读取先前创建的 ConfigMap'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false,表没建出来 mail 会拒启,迁移必须先于 Deployment'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'staging/prod 的 Schema.AutoMigrate=false,表没建出来 mail 会拒启,迁移必须先于 Deployment'
     Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
     # gate-identity-auth 是在线服务必需的内部身份验签密钥(与令牌无关),单独钉住;其余 Secret 一个都不能建。
     Assert-True -Condition (-not ($events | Where-Object { $_ -like 'apply:Secret:*' -and $_ -ne 'apply:Secret:gate-identity-auth' })) -Because '未注入令牌时不能建出一个空令牌的 Secret'
     Assert-Equal -Expected 1 -Actual @($events | Where-Object { $_ -eq 'apply:Secret:gate-identity-auth' }).Count -Because '内部身份验签密钥恰好建一次'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:gate-identity-auth') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,验签密钥 Secret 必须先于 Deployment'
-    Assert-True -Condition ([Array]::LastIndexOf($events, 'delete:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '只替换本轮迁移Job，不删除运行实例仍引用的预置Secret'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:gate-identity-auth') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'secretKeyRef 不是 optional,验签密钥 Secret 必须先于 Deployment'
+    Assert-True -Condition ([Array]::LastIndexOf($events, 'delete:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because '只替换本轮迁移Job，不删除运行实例仍引用的预置Secret'
     $content = $script:DeploymentContent
     Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '镜像、拉取策略与令牌指纹占位都必须被替换'
     Assert-NotMatch -Text $content -Pattern 'MMORPG_MAIL_ADMIN_TOKEN|mail-admin-token-hash|mail-admin-auth' -Because '历史M1口令不得恢复成第二条授权路径'
@@ -543,7 +546,7 @@ Test-Case 'mail 遗留运维令牌不覆盖现役生产者Secret,密钥值不进
     Apply-OneGoSvc -SvcName 'mail' -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ($events -notcontains 'apply:Secret:mail-admin-auth') -Because '不创建已退出使用的历史M1口令Secret'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '预置Secret不能绕过正式迁移门禁'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because '预置Secret不能绕过正式迁移门禁'
     $content = $script:DeploymentContent
     Assert-Match -Text $content -Pattern '- name: MAIL_PRODUCER_SECRET_ADMIN\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: mail-producer-admin, optional: false\}' -Because '只从当前生产者Secret取管理签名密钥'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, 'name: MAIL_PRODUCER_SECRET_ADMIN').Count) -Because '管理生产者只能引用一份密钥'
@@ -564,7 +567,7 @@ foreach ($profile in @('staging', 'prod')) {
         Assert-Match -Text $failure -Pattern 'mail-migrate.*failed' -Because '必须报告迁移失败,而不是其它模拟或参数错误'
         Assert-True -Condition ($script:Events -contains 'apply:Job') -Because '负向用例必须真正走到新 Job 的 apply'
         Assert-True -Condition ($script:Events -notcontains 'apply:Secret:mail-admin-auth') -Because '门禁失败时令牌 Secret 不得被覆盖(轮换令牌时旧 Pod 重启会读到新值)'
-        Assert-True -Condition ($script:Events -notcontains 'apply:Deployment') -Because '失败后不得部署服务'
+        Assert-True -Condition ($script:Events -notcontains 'apply:Workload') -Because '失败后不得部署服务'
     }
 }
 
@@ -595,7 +598,7 @@ Test-Case 'trade 资产通道打开:先建 Secret 再 apply Deployment,env 走 s
     $events = @($script:Events)
     $secretAt = [Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade')
     Assert-True -Condition ($secretAt -ge 0) -Because '打开时必须建 Secret'
-    Assert-True -Condition ($secretAt -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,Secret 必须先于 Deployment'
+    Assert-True -Condition ($secretAt -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'secretKeyRef 不是 optional,Secret 必须先于 Deployment'
     $content = $script:DeploymentContent
     Assert-Match -Text $content -Pattern '- name: MMORPG_ASSET_OP_SECRET_TRADE\s+valueFrom:\s+secretKeyRef:\s+name: asset-op-secret-trade\s+key: secret' -Because '签名密钥只经 Secret 进容器'
     Assert-Match -Text $content -Pattern 'mmorpg.io/asset-op-secret-trade-hash: "[0-9a-f]{12}"' -Because '模板带指纹,换密钥即滚动'
@@ -614,7 +617,7 @@ Test-Case 'guild 资产off仅移除唯一inline资产env，SQL与Match签名保�
     Assert-True -Condition (-not ($script:Events | Where-Object { $_ -like 'apply:Secret:*' -and $_ -ne 'apply:Secret:gate-identity-auth' })) -Because 'off不创建可选资产Secret'
     Assert-Equal -Expected 1 -Actual @($script:Events | Where-Object { $_ -eq 'apply:Secret:gate-identity-auth' }).Count -Because '内部身份验签密钥与资产开关无关,恰好建一次'
     $events = @($script:Events)
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '资产off不能旁路正式SQL迁移门禁'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because '资产off不能旁路正式SQL迁移门禁'
 }
 
 Test-Case 'guild 资产on保原inline引用改成本域Secret，先Secret后Deployment且保SQL' {
@@ -626,7 +629,7 @@ Test-Case 'guild 资产on保原inline引用改成本域Secret，先Secret后Depl
     Apply-OneGoSvc -SvcName guild -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     $secretAt = [Array]::IndexOf($events, 'apply:Secret:asset-op-secret-guild')
-    Assert-True -Condition ($secretAt -ge 0 -and $secretAt -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '非optional Secret必须先存在'
+    Assert-True -Condition ($secretAt -ge 0 -and $secretAt -lt [Array]::IndexOf($events, 'apply:Workload')) -Because '非optional Secret必须先存在'
     Assert-Match -Text $script:DeploymentContent -Pattern 'secretKeyRef: \{name: asset-op-secret-guild, key: secret, optional: false\}' -Because '保留inline实际形状并用本域Secret'
     Assert-Match -Text $script:DeploymentContent -Pattern 'mmorpg.io/asset-op-secret-guild-hash: "[0-9a-f]{12}"' -Because '注入指纹触发轮换'
     Assert-Match -Text $script:DeploymentContent -Pattern 'MMORPG_GUILD_SQL_DSN' -Because '资产on不能删除SQL配置'
@@ -884,7 +887,7 @@ Test-Case '全球match即使dev不带WaitReady也须先完成独立迁移Job' {
     Apply-OneGoSvc -SvcName match -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because '迁移先消费同一ConfigMap'
-    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'match常驻形态不自动DDL'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Workload')) -Because 'match常驻形态不自动DDL'
     Assert-True -Condition ($events -contains 'query:Job') -Because 'dev也必须核真实Job完成'
     Assert-Match -Text $script:MigrationContent -Pattern 'args:.*"-migrate"' -Because '运行正式迁移CLI'
     Assert-Match -Text $script:MigrationContent -Pattern 'MATCH_MIGRATION_USER' -Because '独立迁移账号'
@@ -902,7 +905,7 @@ Test-Case 'match迁移失败不得部署常驻进程' {
     $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName match -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 }
     Assert-Match -Text $failure -Pattern 'match-migrate.*failed' -Because '返回原迁移失败'
     Assert-True -Condition ($script:Events -contains 'apply:Job') -Because '确实运行迁移链'
-    Assert-True -Condition ($script:Events -notcontains 'apply:Deployment') -Because '失败不能继续接流'
+    Assert-True -Condition ($script:Events -notcontains 'apply:Workload') -Because '失败不能继续接流'
 }
 
 exit (Complete-TestRun -SuiteName 'k8s_migrate_gate')

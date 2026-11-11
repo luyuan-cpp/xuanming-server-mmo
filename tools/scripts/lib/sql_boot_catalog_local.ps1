@@ -1036,9 +1036,10 @@ function New-LocalSqlBootAccountName {
     return $name
 }
 
-# 为一个实例备齐注册原件:私有配置、环境值、正式 Request 与单条目 roster。不碰数据库。
-# 账号每次启动都换新:writer_registry.sql_principal 永久唯一,主体不能复用。
-# 实例要写的每个逻辑库一份 Request,身份和账号相同;writer_authority 把它们注册在各自的库,grant 写成一个集合。
+# 为一个实例备齐注册原件:私有配置、环境值、REGISTER 模板与单槽位名册(SQL_WRITER_BOOT_ROSTER_V2)。不碰数据库。
+# 本机每次启动都建新账号,一个账号就是一个槽位,所以本机的槽位只有第一代(K8s 上同一槽位每次启动换代,见
+# docs/design/writer-roster-exhaustion-20261106.md §5)。模板不带身份:writer_key、instance、request_id 由 writer_authority 现场生成。
+# 实例要写的每个逻辑库一份模板,账号相同;writer_authority 把这一代注册在各自的库,grant 写成一个集合。
 function New-LocalSqlBootInstanceFiles {
     param(
         [Parameter(Mandatory)]$Settings,
@@ -1098,28 +1099,20 @@ function New-LocalSqlBootInstanceFiles {
     $qualificationSha = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $qualificationCopy).Sha256 } else { Get-MaintenanceSha256 $qualificationCopy }
     $inputConfigSha = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $inputConfig).Sha256 } else { Get-MaintenanceSha256 $inputConfig }
     $deploymentId = "local-$BootId-$key"
-    $writerKey = New-LocalSqlBootIdentity
-    $instanceId = New-LocalSqlBootIdentity
-    $registeredMs = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     $requests = [Collections.Generic.List[object]]::new()
     $registrations = [Collections.Generic.List[object]]::new()
     foreach ($database in $Databases) {
         $meta = $MetaByDatabase[$database]
         $request = [ordered]@{
-            requestId = (New-LocalSqlBootIdentity)
             kind = 'REGISTER'
             writer = [ordered]@{
-                writerKey = $writerKey
                 generation = $meta.Generation
-                instanceId = $instanceId
                 sqlPrincipal = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($principal))
                 state = 'ACTIVE'
-                registeredMs = $registeredMs
             }
             authoritySchema = $database
             protectedSchemas = [string[]]@($database)
             deploymentDigest = (ConvertTo-LocalSqlBootBase64 -Hex $PhysicalSha256)
-            deploymentId = $deploymentId
             lockPrimitive = $Settings.LockPrimitive
             lockQualificationSha256 = (ConvertTo-LocalSqlBootBase64 -Hex $qualificationSha)
         }
@@ -1135,7 +1128,7 @@ function New-LocalSqlBootInstanceFiles {
     }
     if ($environmentEntries.Count -gt 0) { $entry['runtimeEnvironment'] = [object[]]$environmentEntries.ToArray() }
     $rosterFile = Join-Path $inputRoot 'roster.json'
-    $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V1'; entries = [object[]]@($entry) }
+    $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V2'; entries = [object[]]@($entry) }
     $rosterSha256 = if ($null -ne $FixtureIo) { Write-LocalJavaFixtureJson $FixtureIo $rosterFile $roster } else { Write-MaintenanceImmutableJson -Path $rosterFile -Value $roster }
 
     return [pscustomobject]@{
@@ -1215,7 +1208,8 @@ function New-LocalSqlBootControlEnvironment {
     }
 }
 
-# 正式注册:每实例一次,单条目 roster。控制凭据只在这一个子进程的环境里;常驻进程拿不到(Enter-SqlWriterBootEnvironment 也会清)。
+# 正式注册:每实例一次,单槽位名册,本实例就是槽位 0(Pod 名按 StatefulSet 的写法 <实例>-0)。
+# 控制凭据只在这一个子进程的环境里;常驻进程拿不到(Enter-SqlWriterBootEnvironment 也会清)。
 function Register-LocalSqlBootInstance {
     param([Parameter(Mandatory)]$Item, [Parameter(Mandatory)][string]$Tool, [Parameter(Mandatory)][hashtable]$ControlEnvironment, [Parameter(Mandatory)][string]$PhysicalSha256, [switch]$PreserveInputs, $FixtureIo = $null)
     $operationSeconds=if ($null -ne $FixtureIo) { Get-LocalJavaFixtureOperationSeconds $FixtureIo 30 } else { 30 }
@@ -1228,6 +1222,7 @@ function Register-LocalSqlBootInstance {
         '-runtime-config-output', $Item.RuntimeFile
         '-boot-output', $Item.GrantFile
         '-deployment-id', $Item.DeploymentId
+        '-pod-name', "$($Item.InstanceKey)-0"
         '-timeout', "${operationSeconds}s"
     )
     if ($Item.EnvironmentNames.Count -gt 0) { $arguments += @('-runtime-env-output', $Item.EnvironmentDirectory) }
@@ -1770,11 +1765,11 @@ function New-LocalJavaFixtureBoot {
     Invoke-LocalJavaFixtureSource $Settings $sql ''
     $control=Get-LocalJavaFixtureControlEnvironment $Settings $Owner.operators.registrar $schema 'registrar'
     $entry=Register-LocalSqlBootInstance -Item $prepared -Tool $Settings.WriterTool -ControlEnvironment $control -PhysicalSha256 $Settings.PhysicalSha256 -PreserveInputs -FixtureIo $Settings
-    $request=Read-LocalJavaFixtureJson $Settings $prepared.Registrations[0].RequestFile $prepared.Registrations[0].RequestSha256
-    $requestId=[Convert]::ToHexString([Convert]::FromBase64String($request.requestId)).ToLowerInvariant()
-    $canonical="$($prepared.GrantFile).$requestId.register.started.protojson"
-    $canonicalRecord=Read-LocalJavaFixtureFile $Settings $canonical
-    $registered=[ordered]@{format='JAVA_OWNED_TIDB_REGISTERED_V1';nonce=$Settings.Nonce;entry=$entry;item=$prepared;canonicalFile=$canonical;canonicalSha256=$canonicalRecord.Sha256}
+    # writer_authority 把这一代每个逻辑库的完整请求记在 grant 旁的启动记录里;本例只写一个库,取那一份当退休用的原件。
+    $bootRecord=Read-LocalJavaFixtureJson $Settings "$($prepared.GrantFile).register.started.protojson"
+    $canonical=Join-Path $bootRoot 'register.canonical.json'
+    $canonicalSha256=Write-LocalJavaFixtureJson $Settings $canonical @($bootRecord.requests)[0]
+    $registered=[ordered]@{format='JAVA_OWNED_TIDB_REGISTERED_V1';nonce=$Settings.Nonce;entry=$entry;item=$prepared;canonicalFile=$canonical;canonicalSha256=$canonicalSha256}
     $null=Write-LocalJavaFixtureJson $Settings (Join-Path $bootRoot 'boot.registered.json') $registered
     return [ordered]@{ format='JAVA_OWNED_TIDB_CONTEXT_V1'; nonce=$Settings.Nonce; ownerFile=$Settings.OwnerFile; ownerSha256=$Settings.OwnerSha256; jdbcUrl="jdbc:mysql://127.0.0.1:24000/$schema"; username=$prepared.User; password=$prepared.Password; environment=[ordered]@{ MMORPG_SQL_WRITER_GRANT_FILE=$entry.grantFile; MMORPG_SQL_WRITER_GRANT_SHA256=$entry.grantSha256; MMORPG_SQL_WRITER_CONSUME_DIR=$entry.consumeDir; MMORPG_SQL_DEPLOYMENT_ID=$entry.deploymentId; MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=$Settings.PhysicalSha256 } }
 }

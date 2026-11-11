@@ -6358,6 +6358,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     kCreateRequestFieldNumber = 11,
     kActivityContextFieldNumber = 15,
     kPreflightInstanceIdFieldNumber = 20,
+    kReleaseTrackFieldNumber = 23,
     kBattleIdFieldNumber = 1,
     kStateFieldNumber = 3,
     kPhysicalRegionFieldNumber = 4,
@@ -6505,6 +6506,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
   ::std::string* PROTOBUF_NONNULL _internal_mutable_preflight_instance_id();
 
   public:
+  // string release_track = 23;
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -6649,8 +6665,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
-                          2, 117,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          2, 130,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -6686,6 +6702,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     ::google::protobuf::internal::ArenaStringPtr create_request_;
     ::google::protobuf::internal::ArenaStringPtr activity_context_;
     ::google::protobuf::internal::ArenaStringPtr preflight_instance_id_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::uint64_t battle_id_;
     ::uint32_t state_;
     ::uint32_t physical_region_;
@@ -7218,6 +7235,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchNetworkProfile final : public 
     kPlanIdFieldNumber = 1,
     kSessionBindingFieldNumber = 2,
     kOwnerAccountFieldNumber = 4,
+    kReleaseTrackFieldNumber = 6,
     kOwnerRevisionFieldNumber = 5,
   };
   // repeated .match.NetworkProbeReceipt receipts = 3;
@@ -7286,6 +7304,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchNetworkProfile final : public 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_owner_account();
 
   public:
+  // string release_track = 6;
+  void clear_release_track() ;
+  [[nodiscard]] const ::std::string& release_track() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_release_track(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_release_track();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_release_track();
+  void set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_release_track() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_release_track(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
+
+  public:
   // uint64 owner_revision = 5;
   void clear_owner_revision() ;
   [[nodiscard]] ::uint64_t owner_revision() const;
@@ -7300,8 +7333,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchNetworkProfile final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          1, 69,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          1, 82,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7333,6 +7366,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchNetworkProfile final : public 
     ::google::protobuf::internal::ArenaStringPtr plan_id_;
     ::google::protobuf::internal::ArenaStringPtr session_binding_;
     ::google::protobuf::internal::ArenaStringPtr owner_account_;
+    ::google::protobuf::internal::ArenaStringPtr release_track_;
     ::uint64_t owner_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -7832,7 +7866,7 @@ inline void MatchNetworkProfile::set_allocated_owner_account(::std::string* PROT
 inline void MatchNetworkProfile::clear_owner_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t MatchNetworkProfile::owner_revision() const {
   // @@protoc_insertion_point(field_get:match.MatchNetworkProfile.owner_revision)
@@ -7840,7 +7874,7 @@ inline ::uint64_t MatchNetworkProfile::owner_revision() const {
 }
 inline void MatchNetworkProfile::set_owner_revision(::uint64_t value) {
   _internal_set_owner_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:match.MatchNetworkProfile.owner_revision)
 }
 inline ::uint64_t MatchNetworkProfile::_internal_owner_revision() const {
@@ -7850,6 +7884,70 @@ inline ::uint64_t MatchNetworkProfile::_internal_owner_revision() const {
 inline void MatchNetworkProfile::_internal_set_owner_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = value;
+}
+
+// string release_track = 6;
+inline void MatchNetworkProfile::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& MatchNetworkProfile::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchNetworkProfile.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchNetworkProfile::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchNetworkProfile.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchNetworkProfile::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:match.MatchNetworkProfile.release_track)
+  return _s;
+}
+inline const ::std::string& MatchNetworkProfile::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void MatchNetworkProfile::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchNetworkProfile::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchNetworkProfile::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchNetworkProfile.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchNetworkProfile::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchNetworkProfile.release_track)
 }
 
 // -------------------------------------------------------------------
@@ -11468,7 +11566,7 @@ inline void MatchFormationMember::_internal_set_team_index(::uint32_t value) {
 inline void MatchFormationRecord::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t MatchFormationRecord::battle_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.battle_id)
@@ -11476,7 +11574,7 @@ inline ::uint64_t MatchFormationRecord::battle_id() const {
 }
 inline void MatchFormationRecord::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.battle_id)
 }
 inline ::uint64_t MatchFormationRecord::_internal_battle_id() const {
@@ -11556,7 +11654,7 @@ inline void MatchFormationRecord::set_allocated_operation_id(::std::string* PROT
 inline void MatchFormationRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t MatchFormationRecord::state() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.state)
@@ -11564,7 +11662,7 @@ inline ::uint32_t MatchFormationRecord::state() const {
 }
 inline void MatchFormationRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.state)
 }
 inline ::uint32_t MatchFormationRecord::_internal_state() const {
@@ -11580,7 +11678,7 @@ inline void MatchFormationRecord::_internal_set_state(::uint32_t value) {
 inline void MatchFormationRecord::clear_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t MatchFormationRecord::physical_region() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.physical_region)
@@ -11588,7 +11686,7 @@ inline ::uint32_t MatchFormationRecord::physical_region() const {
 }
 inline void MatchFormationRecord::set_physical_region(::uint32_t value) {
   _internal_set_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.physical_region)
 }
 inline ::uint32_t MatchFormationRecord::_internal_physical_region() const {
@@ -11604,7 +11702,7 @@ inline void MatchFormationRecord::_internal_set_physical_region(::uint32_t value
 inline void MatchFormationRecord::clear_target_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t MatchFormationRecord::target_node_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.target_node_id)
@@ -11612,7 +11710,7 @@ inline ::uint32_t MatchFormationRecord::target_node_id() const {
 }
 inline void MatchFormationRecord::set_target_node_id(::uint32_t value) {
   _internal_set_target_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.target_node_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_target_node_id() const {
@@ -11756,7 +11854,7 @@ inline void MatchFormationRecord::set_allocated_target_endpoint(::std::string* P
 inline void MatchFormationRecord::clear_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t MatchFormationRecord::mode() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.mode)
@@ -11764,7 +11862,7 @@ inline ::uint32_t MatchFormationRecord::mode() const {
 }
 inline void MatchFormationRecord::set_mode(::uint32_t value) {
   _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.mode)
 }
 inline ::uint32_t MatchFormationRecord::_internal_mode() const {
@@ -11780,7 +11878,7 @@ inline void MatchFormationRecord::_internal_set_mode(::uint32_t value) {
 inline void MatchFormationRecord::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t MatchFormationRecord::config_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.config_id)
@@ -11788,7 +11886,7 @@ inline ::uint32_t MatchFormationRecord::config_id() const {
 }
 inline void MatchFormationRecord::set_config_id(::uint32_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.config_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_config_id() const {
@@ -11923,7 +12021,7 @@ inline void MatchFormationRecord::set_allocated_create_request(::std::string* PR
 inline void MatchFormationRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t MatchFormationRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.created_ms)
@@ -11931,7 +12029,7 @@ inline ::uint64_t MatchFormationRecord::created_ms() const {
 }
 inline void MatchFormationRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.created_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_created_ms() const {
@@ -11947,7 +12045,7 @@ inline void MatchFormationRecord::_internal_set_created_ms(::uint64_t value) {
 inline void MatchFormationRecord::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t MatchFormationRecord::deadline_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.deadline_ms)
@@ -11955,7 +12053,7 @@ inline ::uint64_t MatchFormationRecord::deadline_ms() const {
 }
 inline void MatchFormationRecord::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.deadline_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_deadline_ms() const {
@@ -11971,7 +12069,7 @@ inline void MatchFormationRecord::_internal_set_deadline_ms(::uint64_t value) {
 inline void MatchFormationRecord::clear_retry_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retry_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t MatchFormationRecord::retry_at_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.retry_at_ms)
@@ -11979,7 +12077,7 @@ inline ::uint64_t MatchFormationRecord::retry_at_ms() const {
 }
 inline void MatchFormationRecord::set_retry_at_ms(::uint64_t value) {
   _internal_set_retry_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.retry_at_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_retry_at_ms() const {
@@ -12059,7 +12157,7 @@ inline void MatchFormationRecord::set_allocated_activity_context(::std::string* 
 inline void MatchFormationRecord::clear_requeue_on_failure() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.requeue_on_failure_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline bool MatchFormationRecord::requeue_on_failure() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.requeue_on_failure)
@@ -12067,7 +12165,7 @@ inline bool MatchFormationRecord::requeue_on_failure() const {
 }
 inline void MatchFormationRecord::set_requeue_on_failure(bool value) {
   _internal_set_requeue_on_failure(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.requeue_on_failure)
 }
 inline bool MatchFormationRecord::_internal_requeue_on_failure() const {
@@ -12138,7 +12236,7 @@ MatchFormationRecord::_internal_mutable_prepared() {
 inline void MatchFormationRecord::clear_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t MatchFormationRecord::outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.outcome_protocol_version)
@@ -12146,7 +12244,7 @@ inline ::uint32_t MatchFormationRecord::outcome_protocol_version() const {
 }
 inline void MatchFormationRecord::set_outcome_protocol_version(::uint32_t value) {
   _internal_set_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.outcome_protocol_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_outcome_protocol_version() const {
@@ -12162,7 +12260,7 @@ inline void MatchFormationRecord::_internal_set_outcome_protocol_version(::uint3
 inline void MatchFormationRecord::clear_preflight_supported_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.preflight_supported_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t MatchFormationRecord::preflight_supported_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.preflight_supported_version)
@@ -12170,7 +12268,7 @@ inline ::uint32_t MatchFormationRecord::preflight_supported_version() const {
 }
 inline void MatchFormationRecord::set_preflight_supported_version(::uint32_t value) {
   _internal_set_preflight_supported_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.preflight_supported_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_preflight_supported_version() const {
@@ -12250,7 +12348,7 @@ inline void MatchFormationRecord::set_allocated_preflight_instance_id(::std::str
 inline void MatchFormationRecord::clear_adopted_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t MatchFormationRecord::adopted_outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.adopted_outcome_protocol_version)
@@ -12258,7 +12356,7 @@ inline ::uint32_t MatchFormationRecord::adopted_outcome_protocol_version() const
 }
 inline void MatchFormationRecord::set_adopted_outcome_protocol_version(::uint32_t value) {
   _internal_set_adopted_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.adopted_outcome_protocol_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_adopted_outcome_protocol_version() const {
@@ -12274,7 +12372,7 @@ inline void MatchFormationRecord::_internal_set_adopted_outcome_protocol_version
 inline void MatchFormationRecord::clear_adopted_outcome_observed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_observed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool MatchFormationRecord::adopted_outcome_observed() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.adopted_outcome_observed)
@@ -12282,7 +12380,7 @@ inline bool MatchFormationRecord::adopted_outcome_observed() const {
 }
 inline void MatchFormationRecord::set_adopted_outcome_observed(bool value) {
   _internal_set_adopted_outcome_observed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.adopted_outcome_observed)
 }
 inline bool MatchFormationRecord::_internal_adopted_outcome_observed() const {
@@ -12292,6 +12390,70 @@ inline bool MatchFormationRecord::_internal_adopted_outcome_observed() const {
 inline void MatchFormationRecord::_internal_set_adopted_outcome_observed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_observed_ = value;
+}
+
+// string release_track = 23;
+inline void MatchFormationRecord::clear_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::std::string& MatchFormationRecord::release_track() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchFormationRecord.release_track)
+  return _internal_release_track();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchFormationRecord::set_release_track(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  _impl_.release_track_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchFormationRecord.release_track)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchFormationRecord::mutable_release_track()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::std::string* _s = _internal_mutable_release_track();
+  // @@protoc_insertion_point(field_mutable:match.MatchFormationRecord.release_track)
+  return _s;
+}
+inline const ::std::string& MatchFormationRecord::_internal_release_track() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.release_track_.Get();
+}
+inline void MatchFormationRecord::_internal_set_release_track(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.release_track_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchFormationRecord::_internal_mutable_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.release_track_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchFormationRecord::release_release_track() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchFormationRecord.release_track)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  auto* released = _impl_.release_track_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchFormationRecord::set_allocated_release_track(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  _impl_.release_track_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.release_track_.IsDefault()) {
+    _impl_.release_track_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchFormationRecord.release_track)
 }
 
 // -------------------------------------------------------------------

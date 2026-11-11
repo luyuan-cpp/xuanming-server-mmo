@@ -379,7 +379,11 @@ Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群�
     Assert-Equal -Expected '0/0/1' -Actual ('{0}/{1}/{2}' -f $smSplit.ConfiguredPoolConns, $smSplit.Fixed, $smSplit.DefaultPools) -Because '铸造通道搬到玩家域,控制域只剩 go-zero 缺省池'
     $guildSplit = @(& $rowOf $split 'guild')[0]
     $guildControl = [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'RedisClient.PoolSize') + [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'PlayerLocatorRedis.PoolSize')
-    Assert-Equal -Expected "$guildControl/0" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池留下,玩家域句柄、摘要池搬走'
+    # 入帮申请配额专用池(go/guild/internal/logic/application_quota.go 的 ApplicationQuotaRedisPoolSize)连核心库,拆了玩家域也留下。
+    $quotaSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go'))
+    $quotaPool = [int][regex]::Match($quotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$').Groups[1].Value
+    Assert-True -Condition ($quotaPool -gt 0) -Because "写死的配额池上限要从源码读到(实际 $quotaPool),写法变了同步本用例"
+    Assert-Equal -Expected "$guildControl/$quotaPool" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池与申请配额池留下,玩家域句柄、摘要池搬走'
     $plan = @{ ZoneCount = 1; CppZoneProcesses = 6; BattleProcesses = 1; RolloutExtraPodsPerDeployment = 2; OpsReserve = 50; WarnRatio = 0.8 }
     Assert-True -Condition ((Get-RedisConnectionLedger -Inputs $split @plan).Steady -lt (Get-RedisConnectionLedger -Inputs $unsplit @plan).Steady) -Because '搬走之后控制域的账变小,而且没有 0 条的行让总账函数拒绝'
 }

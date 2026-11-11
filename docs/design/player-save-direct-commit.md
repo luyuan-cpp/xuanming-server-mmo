@@ -1,6 +1,6 @@
 # 存盘直接提交 TiDB:落码规格
 
-> **状态**:v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**;开关缺省 redis,行为不变,新分支只在 `PlayerStorePath=direct` 时走。B8(翻默认值、删旧路径)要等全链路验收。
+> **状态**:v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**。当时的过渡开关 `PlayerStorePath: redis | direct` 同日已随 B8 删除:直接提交 SQL 是唯一的存盘路径,玩家存档不经过 Redis(§8 末「2026-10-30」一条)。
 > **上游**:[总体方案](./player-data-tidb-scaling-plan.md) §3、§4(本文是它 §13 的 A0,细化 A1~A6);[TiDB 决策 §9](./global-data-layer-tidb-decision.md)(方向与键族,本文回答 §9.4)。
 > **现状依据**:[三路盘点](../handoff/player-save-direct-commit-20261030/survey.md),行号以它为准。标注:[C] 读代码确认,[D] 文档记载,[I] 推断。
 > **用户已定**:玩家数据只放 TiDB;存盘服务放 go/db;关键变化立即存 + 拆出热行;正常运行不丢、不回档;存盘不再按归属区选 topic 和库。

@@ -28,6 +28,7 @@
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
     <ClInclude Include="messaging\kafka\kafka_producer.h" />
     <ClInclude Include="messaging\kafka\kafka_producer_policy.h" />
+    <ClInclude Include="messaging\kafka\kafka_trace_header.h" />
     <ClInclude Include="storage\redis_cluster\redis_cluster_client.h" />
     <ClInclude Include="storage\redis_cluster\redis_cluster_topology.h" />
     <ClInclude Include="storage\redis_cluster\redis_command_route.h" />

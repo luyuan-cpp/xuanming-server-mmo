@@ -59,6 +59,9 @@ public:
     using RpcServerPtr = std::unique_ptr<muduo::net::RpcServer>;
     using ServiceList = std::vector<::google::protobuf::Service *>;
     using CanConnectNodeTypeList = std::set<uint32_t>;
+    // 本节点从 etcd 发现(Range / watch)哪些节点类型(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+    // 必须包含建连白名单;自身类型不在里面时只看本节点自己那一条发现键。
+    using DiscoveryNodeTypeList = std::set<uint32_t>;
 
     using PartitionClassIds = std::vector<int32_t>;
 
@@ -79,9 +82,11 @@ public:
 
     // Full construction: derives log dir from nodeType (e.g. GateNodeService -> "logs/gate").
     // Calls Initialize() and registers thread observability.
+    // discover 必须包含 connectTo,否则拒启(连不上没发现的类型)。
     Node(muduo::net::EventLoop *loop,
          uint32_t nodeType,
          CanConnectNodeTypeList connectTo,
+         DiscoveryNodeTypeList discover,
          ::google::protobuf::Service *rpcService = nullptr);
 
     virtual ~Node();
@@ -99,6 +104,8 @@ public:
     virtual google::protobuf::Service *GetNodeRpcService() { return rpcService_ ? &rpcService_->get() : nullptr; }
     muduo::AsyncLogging &Log() { return logSystem; }
     CanConnectNodeTypeList &GetTargetNodeTypeWhitelist() { return targetNodeTypeWhitelist; }
+    const DiscoveryNodeTypeList &GetDiscoveryNodeTypes() const { return discoveryNodeTypes_; }
+    bool DiscoversNodeType(uint32_t nodeType) const { return discoveryNodeTypes_.contains(nodeType); }
 
     // 连接与发现的三处接缝(docs/design/connection-fanout-subsetting-20261106.md §3.2),都只在 loop 线程用。
     //
@@ -330,6 +337,8 @@ protected:
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
     // No EventLoop timer is required for either path.
     CanConnectNodeTypeList targetNodeTypeWhitelist;
+    // 构造时给定,之后不变(构造里 InitEtcdService 就按它 Range)。
+    DiscoveryNodeTypeList discoveryNodeTypes_;
     // 按节点类型的建连准入与发现观察者(SetConnectionAdmission / SetDiscoveryObserver),空 = 没装。
     std::array<ConnectionAdmissionFn, eNodeType_ARRAYSIZE> connectionAdmission_;
     std::array<DiscoveryObserverFn, eNodeType_ARRAYSIZE> discoveryObservers_;
@@ -435,6 +444,15 @@ struct DependencyGate
                     double probeIntervalSec = 1.0,
                     uint32_t logEveryNTicks = 5)
     {
+        // 要等的类型必须在本节点的发现集合里,否则永远等不到(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+        for (const uint32_t nodeType : requiredNodeTypes)
+        {
+            if (!node.DiscoversNodeType(nodeType))
+            {
+                LOG_FATAL << nodeName << " waits for " << eNodeType_Name(static_cast<eNodeType>(nodeType))
+                          << ", which is not in this node's discovery set";
+            }
+        }
         probeTimer.RunEvery(probeIntervalSec,
                             [this, &node, requiredNodeTypes, onReady = std::move(onReady), nodeName, logEveryNTicks]
                             {

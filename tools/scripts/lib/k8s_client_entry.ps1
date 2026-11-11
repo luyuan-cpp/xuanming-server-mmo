@@ -2207,15 +2207,27 @@ function Get-GateObsoleteResources {
 function Get-BattleObsoleteResources {
 	param([Parameter(Mandatory = $true)][ValidateSet('deployment', 'agones')][string]$BattleOrchestrator)
 
+	# 金丝雀 battle 池(k8s_deploy.ps1 -CanaryBattleReplicas,发布轨道设计 §2.6)与稳定版同形态、同 kind,名字是 battle-canary。
+	# 切换形态时一起删掉另一种 kind 的那一份,否则它会留在集群里继续注册成 canary battle 节点,本次又按新形态另起一份。
 	$contract = Get-ClientEntryContract
 	if ($BattleOrchestrator -eq 'agones') {
-		return ,@(New-ClientEntryObsoleteItem -Kind 'deployment' -Name 'battle' -KicksPlayers $true `
-			-CurrentShape 'deployment battle' -KeepHint '-BattleOrchestrator deployment' `
-			-Reason 'battle 从 Deployment 切到 Agones Fleet:旧 Deployment 上在打的战斗全部作废(先公告,ingress_final §6 第 2 批)。')
+		return ,@(
+			(New-ClientEntryObsoleteItem -Kind 'deployment' -Name 'battle' -KicksPlayers $true `
+				-CurrentShape 'deployment battle' -KeepHint '-BattleOrchestrator deployment' `
+				-Reason 'battle 从 Deployment 切到 Agones Fleet:旧 Deployment 上在打的战斗全部作废(先公告,ingress_final §6 第 2 批)。'),
+			(New-ClientEntryObsoleteItem -Kind 'deployment' -Name 'battle-canary' -KicksPlayers $true `
+				-CurrentShape 'deployment battle-canary' -KeepHint '-BattleOrchestrator deployment' `
+				-Reason '金丝雀 battle 池随 battle 从 Deployment 切到 Agones Fleet:旧 Deployment 上在打的金丝雀局全部作废。')
+		)
 	}
-	return ,@(New-ClientEntryObsoleteItem -Kind $contract.AgonesFleetResource -Name 'battle' -ApiGroup $contract.AgonesApiGroup -KicksPlayers $true `
-		-CurrentShape 'fleet battle' -KeepHint '-BattleOrchestrator agones' `
-		-Reason 'battle 从 Agones Fleet 切回 Deployment:Fleet 上在打的战斗全部作废。')
+	return ,@(
+		(New-ClientEntryObsoleteItem -Kind $contract.AgonesFleetResource -Name 'battle' -ApiGroup $contract.AgonesApiGroup -KicksPlayers $true `
+			-CurrentShape 'fleet battle' -KeepHint '-BattleOrchestrator agones' `
+			-Reason 'battle 从 Agones Fleet 切回 Deployment:Fleet 上在打的战斗全部作废。'),
+		(New-ClientEntryObsoleteItem -Kind $contract.AgonesFleetResource -Name 'battle-canary' -ApiGroup $contract.AgonesApiGroup -KicksPlayers $true `
+			-CurrentShape 'fleet battle-canary' -KeepHint '-BattleOrchestrator agones' `
+			-Reason '金丝雀 battle 池随 battle 从 Agones Fleet 切回 Deployment:Fleet 上在打的金丝雀局全部作废。')
+	)
 }
 
 <#

@@ -88,8 +88,14 @@ public:
 	// 离线托管开始(开通了挂机的玩家下线,角色留在世界里):由服务器开启跟随,不等客户端声明(用户 2026-11-06 要求)。
 	// 不在队伍里什么都不做;已经接在队长身后只挂意图;否则挂意图并走一遍刷新与跟随检查,同场景里接到队长身后。
 	// 下线前点过「暂离」的,托管期间照样跟;重连后客户端按自己当前的选择重新声明(team-follow-server-trail.md §5)。
-	// 调用点:离线托管入口(挂机月卡玩家断线后不按 25 秒退出,待做,见 team-follow-server-trail.md §3.6)。
+	// 调用点:AfkHostingSystem::ApplyProbeResult(第一次确认挂机月卡有效,含托管落点到了新节点之后重建的那次)。
 	static void OnOfflineHostingStarted(entt::entity player);
+
+	// 队长离开本节点(交接、退出)导致队形解散之后,队长的去留有了结论:对原随从重新走一遍跟随检查
+	// (TeamFollowSystem::TakeFollowersWithSettledLeader,team-follow-server-trail.md §3.7)。队长去了本 zone 的别的节点,
+	// 在线的随从发普通换场景、离线托管的发托管落点,都经 18 起服务器发起的同 zone 交接跟过去。
+	// 调用点:World::Update,紧跟 TeamFollowSystem::Update 之后。没有在等的随从时零开销。
+	static void FollowAfterLeaderSettled();
 
 	// ---- AOI ----
 
@@ -124,8 +130,9 @@ private:
 	// 事件驱动路径,不在 per-tick 上(AGENTS §7 #5)。
 	static void ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch);
 
-	// 非队长跟随队长:战斗 / 会话 / battle:lock / zone / 节点守卫全部通过之后,
-	// 队长在别的场景 -> 请求 SceneManager 切过去;已在同一场景 -> RegroupToLeader。
+	// 非队长跟随队长:战斗 / 交接在途 / 换图在途 / battle:lock / zone 守卫全部通过之后,
+	// 队长在别的场景(本节点或本 zone 的别的节点) -> 请求 SceneManager 切过去(在线带 gate,离线托管发托管落点,
+	// 其余离线的不切);已在同一场景 -> RegroupToLeader。
 	static void CheckFollowLeader(entt::entity player, uint64_t leaderId);
 
 	// 同一场景实例内的归队:声明了跟随的交给 TeamFollowSystem::TryAttach(服务器驱动走位);

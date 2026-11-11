@@ -92,34 +92,34 @@ func (l *StartActivityBattleLogic) reject(kind string, reject matchpb.ActivityBa
 func validateStartActivityBattle(in *matchpb.StartActivityBattleRequest) string {
 	members := in.GetMemberPlayerIds()
 	if len(members) == 0 || len(members) > kMaxBattleTeamSize {
-		return "人数越界"
+		return "member count out of range"
 	}
 	seen := make(map[uint64]struct{}, len(members))
 	for _, pid := range members {
 		if pid == 0 {
-			return "名单含 0"
+			return "member list contains 0"
 		}
 		if _, dup := seen[pid]; dup {
-			return "名单重复"
+			return "duplicate member"
 		}
 		seen[pid] = struct{}{}
 	}
 	if in.GetBattleConfigId() == 0 {
-		return "battle_config_id 为 0"
+		return "battle_config_id is 0"
 	}
 	actx := in.GetActivityContext()
 	if actx == nil {
-		return "缺少活动上下文"
+		return "missing activity context"
 	}
 	if _, known := battlepb.EBattleActivityKind_name[int32(actx.GetKind())]; !known ||
 		actx.GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE {
-		return "活动类型为 NONE 或未知"
+		return "activity kind is NONE or unknown"
 	}
 	if actx.GetGuildId() == 0 || actx.GetActivityId() == 0 || actx.GetPeriodKey() == 0 || actx.GetGuildPeriodKey() == 0 {
-		return "活动上下文字段为 0"
+		return "activity context field is 0"
 	}
 	if actx.GetInitiatorPlayerId() != members[0] {
-		return "发起人不在名单首位"
+		return "initiator is not first in the member list"
 	}
 	return ""
 }

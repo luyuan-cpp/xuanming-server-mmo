@@ -15,8 +15,10 @@ AOI 空间查询（六边形网格邻居）填充的是**关注列表（Interest
 ## 优先级标签与策略权重
 
 优先级分为两个层次：
-1. **语义标签** (`AoiPriority` 枚举) — 实体所属的分类。
+1. **语义标签** (`AoiPriority` 枚举) — 「为什么关注它」的分类，登记在每个来源上。
 2. **优先级策略** (`AoiPriorityPolicy`) — 场景级别的权重表，为每个标签分配一个淘汰权重。
+
+权重表是静态的：一条关注的权重只由它有哪些来源决定，不随观察者的状态切换表。「战斗时先看交手的人、脱战后任务 NPC 回到最前」靠交手来源有寿命实现，见 [AOI 单向关注](aoi-directed-interest.md)「战斗关注」；按观察者状态切换权重表是被否掉的做法，理由见同文「被否掉的做法：按观察者状态切换权重表」。
 
 ### 标签定义
 
@@ -24,29 +26,30 @@ AOI 空间查询（六边形网格邻居）填充的是**关注列表（Interest
 |------|-----|------|
 | `kNormal` | 0 | 默认：通过空间网格查询发现的实体 |
 | `kTeammate` | 1 | 同队：拥有相同的 `TeamId` 组件 |
-| `kAttacker` | 2 | 攻击者：来自战斗/仇恨系统（TODO：接入） |
+| `kCombat` | 2 | 交手对象：我打的、打我的、我治疗的、治疗我的。由 `CombatEngagementSystem` 登记显式来源 `kCombat`，脱战（10 秒不再交手）、死亡时撤销（2026-11-10 起，取代原来没人设置的 `kAttacker`） |
 | `kQuestNpc` | 3 | 任务NPC：由任务系统标记（TODO：接入） |
 | `kBoss` | 4 | Boss / 精英怪 |
-| `kPinned` | 5 | 预留锁定标签，权重恒为 255；玩法尚未接入 |
+| `kPinned` | 5 | 锁定标签，权重恒为 255，供技能追踪这类不能被挤掉的显式关注使用 |
 
 ### 内置策略
 
 | 策略 | 权重顺序（低 → 高） |
 |------|---------------------|
-| `kPolicyOpenWorld`（开放世界） | normal(0) < teammate(1) < attacker(2) < questNpc(3) < boss(4) < pinned(255) |
-| `kPolicyDungeon`（副本） | normal(0) < questNpc(1) < teammate(2) < attacker(3) < boss(4) < pinned(255) |
-| `kPolicyPvpArena`（PvP 竞技场） | normal(0) < questNpc(1) < teammate(2) < boss(3) < attacker(4) < pinned(255) |
+| `kPolicyOpenWorld`（开放世界） | normal(0) < teammate(1) < questNpc(3) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyDungeon`（副本） | normal(0) < questNpc(1) < teammate(2) < boss(4) < combat(5) < pinned(255) |
+| `kPolicyPvpArena`（PvP 竞技场） | normal(0) < questNpc(1) < teammate(2) < boss(3) < combat(4) < pinned(255) |
 
-场景在创建时附加 `ScenePriorityPolicyComp` 来选择使用哪种策略。
+`kCombat` 在每张表里都高于除 `kPinned` 外的所有标签，`aoi_priority.h` 用 `static_assert` 守住。
+场景在创建时附加 `ScenePriorityPolicyComp` 来选择使用哪种策略（生产尚未挂，实际都是开放世界）。
 `kPinned` 在所有策略中始终为权重 255 —— 它**永远不会**被空间逻辑淘汰。
 
 ### 淘汰规则
 
 容量只数**正在显示**的条目（`AoiListComp::visibleCount`）。一个条目的权重取它的空间标签与各显式来源标签中最高的一个。当显示名额已满、又有关系需要显示时，比较它与已显示条目中**最低权重**者的**策略权重**：
-- 新关系权重 > 最低条目权重 → 淘汰最低条目，显示新关系。被淘汰者只剩空间来源时整条删除，任一方下一次位移重判时重新评估；带显式来源时转为暂不显示，关系保留。
-- 否则：新的空间关系被拒，不建条目；新的显式关注照常登记，暂不显示。
+- 新关系权重 > 最低条目权重 → 淘汰最低条目，显示新关系。被淘汰者只剩空间来源时整条删除，观察者打上补回标记；带显式来源时转为暂不显示，关系保留。
+- 否则：新的空间关系被拒，不建条目，观察者打上补回标记；新的显式关注照常登记，暂不显示。
 
-淘汰只改本观察者的表，并只通知本观察者的客户端移除一次；目标那一侧的关系各自独立，不要求互相占位。观察者让出名额后（空间离开、撤销关注、目标离场），按权重补上满足可见条件的暂隐显式关注，并发送创建与当前位置。
+淘汰只改本观察者的表，并只通知本观察者的客户端移除一次；目标那一侧的关系各自独立，不要求互相占位。观察者让出名额后（空间离开、撤销关注、脱战、目标离场），按权重补上满足可见条件的暂隐显式关注，并发送创建与当前位置；还有空名额且带补回标记（`AoiNearbyRefillComp`）的，下一帧重扫一次附近候选，把被拒、被挤掉的附近的人补回来，见 [AOI 单向关注](aoi-directed-interest.md)「名额空出后补回附近的人」。
 
 ## 动态容量
 
@@ -164,10 +167,10 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 
 ## 后续计划
 
-- **攻击者优先级**：接入战斗/伤害系统，受击时调用 `InterestSystem::UpgradePriority(target, attacker, kAttacker)`。
+- **同一个敌人的其他攻击者也算友方交手**：交手关注第一步只做直接交手（2026-11-10 已落码）。第二步要靠 NPC 的仇恨列表（谁打过它）推出「和我打同一个怪的人」，仇恨列表落地时在 `CombatEngagementSystem::RecordInteraction` 同一入口登记。
 - **任务NPC优先级**：接受任务时调用 `InterestSystem::UpgradePriority(player, npc, kQuestNpc)`。
 - **Boss 标记**：场景创建时标记 Boss 实体；网格进入时检测并分配 `kBoss` 标签。
-- **压力集成**：场景 tick 监控器根据实体数量 / CPU 负载写入 `ScenePressureComp.pressureFactor`。
+- **压力集成**：场景 tick 监控器根据实体数量 / CPU 负载写入 `ScenePressureComp.pressureFactor`。接上之后，容量调小时要按权重裁掉超出的最低条目（只剩空间来源的删除并打补回标记，有显式来源的转暂隐）；现在容量调小只会拒收新来的，已在表里的不裁。
 - **客户端设置 RPC**：将客户端上报的显示数量接入 `AoiClientCapacityComp`。
 - **玩法接入显式关注**：技能追踪（鹰眼术）、任务目标、切磋对象等按各自来源调用 `AoiSystem::Follow` / `Unfollow`；队伍需要视野外同步时由队伍逻辑分别建立两个方向的关注。
 - **自定义策略**：从配置表数据驱动加载策略。
@@ -224,3 +227,12 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 原来「后续计划」里的滞后 / 缓冲期由这次的两个半径实现，已从计划中删去。
 - `AoiSystem::UpdateGridState` / `HandleEntityVisibility` 改为 `UpdateGridMembership`（只挪格子成员）与 `ReevaluateVisibility`（按距离重判）；上两节提到的跨格进出处理以本节为准。
 - 未编译，待 Codex 按 [AOI 单向关注](aoi-directed-interest.md)「验证」执行。
+
+## 2026-11-10 战斗关注、补回附近的人，权重表保持静态
+
+负责人要求：关注列表优先于格子；名额满、压力大时先看当时感兴趣的，战斗时先看交手的敌人和友方，不在战斗时任务 NPC 优先。讨论中提过「权重随观察者状态变」，比较后定为不用，改为来源有寿命、权重表不变。规则、反例与理由见 [AOI 单向关注](aoi-directed-interest.md)「战斗关注」「名额空出后补回附近的人」「被否掉的做法：按观察者状态切换权重表」。要点：
+
+- `kAttacker` 改名为 `kCombat`（值仍为 2，运行期枚举，不进协议、不落盘），在三张表里都调到除 `kPinned` 外最高；开放世界原来任务 NPC 高于攻击者，与「战斗时先看交手的人」相反。
+- 新增 `CombatEngagementSystem`：伤害、治疗登记双方交手来源，10 秒脱战、死亡时撤销。
+- 新增补回标记 `AoiNearbyRefillComp`：被拒、被挤掉的附近候选在名额空出后的下一帧补回。
+- 未编译；Java 版待做（`PARITY.md` 已登记）。

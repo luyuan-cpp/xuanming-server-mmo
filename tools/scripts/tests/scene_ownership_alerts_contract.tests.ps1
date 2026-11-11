@@ -9,7 +9,9 @@
       - 规则引用的每个指标名都由 C++ 采集回调的 BeginFamily 导出;
       - stage 取值是采集回调里写死的样本标签,outcome 取值是 scene_ownership_reconciler.h 的 kSweepOutcomeNames;
       - PrometheusRule 形状、规则名单、每条规则的 severity / summary / description / runbook_url / for;
-      - 告警名在 deploy/k8s 的全部告警文件里不重名。
+      - 告警名在 deploy/k8s 的全部告警文件里不重名;
+      - scene_manager 的 SceneManagerEtcdRevisionRegressed(scene-manager-alerts.yaml,节点号持有者换纪元)的字段,
+        以及它读的计数器由 go/scene_manager/internal/metrics 注册。
     只读文本,不执行部署入口,不访问任何集群。规则语法由 promtool 另验(见 docs/PROGRESS.md 对应条目)。
 
 .EXAMPLE
@@ -111,11 +113,32 @@ Test-Case 'scene-ownership-alerts.yaml:引用的指标都由 C++ 导出,stage / 
     }
 }
 
-Test-Case '五条告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
+Test-Case 'scene-manager-alerts.yaml:SceneManagerEtcdRevisionRegressed 的字段,指标由 go/scene_manager 的 metrics 包注册' {
+    $text = Read-RepoText -RelativePath 'deploy/k8s/scene-manager-alerts.yaml'
+    $rule = @(Get-AlertRules -GroupText (Get-AlertGroupText -Text $text -Group 'scene-manager.node-role-split') |
+            Where-Object { $_.Name -ceq 'SceneManagerEtcdRevisionRegressed' })
+    Assert-Equal -Expected 1 -Actual $rule.Count -Because '规则在 scene-manager.node-role-split 组里'
+    $body = $rule[0].Body
+    Assert-Match -Text $body -Pattern '(?m)^            severity:[ ]*critical[ ]*$' -Because 'etcd 历史丢了,要人确认并重启节点'
+    Assert-Match -Text $body -Pattern '(?m)^            summary:' -Because '要有 summary'
+    Assert-Match -Text $body -Pattern '(?m)^            description:' -Because '要有 description'
+    Assert-Match -Text $body -Pattern '(?m)^            runbook_url:[ ]*docs/ops/etcd-maintenance-runbook\.md[ ]*$' -Because '处置在 etcd 运维手册 §7a'
+    Assert-Match -Text $body -Pattern '(?m)^          for:[ ]*0m[ ]*$' -Because '倒退一次就要人看,不等'
+    Assert-Match -Text (Get-RuleExpr -Body $body) -Pattern '\bscene_manager_etcd_revision_regressions_total\b' -Because '表达式读倒退计数'
+
+    # 全名 = metrics 包的 subsystem 常量 + Name 字段;计数器要登记在 register() 里,否则序列不存在、告警永远不响。
+    $metricsSource = Read-RepoText -RelativePath 'go/scene_manager/internal/metrics/metrics.go'
+    $holderSource = Read-RepoText -RelativePath 'go/scene_manager/internal/metrics/node_holder.go'
+    Assert-Match -Text $metricsSource -Pattern '(?m)^const subsystem = "scene_manager"' -Because '指标前缀'
+    Assert-Match -Text $holderSource -Pattern '(?m)^\s*Name:\s*"etcd_revision_regressions_total"' -Because '指标名逐字一致'
+    Assert-Match -Text $metricsSource -Pattern '(?m)^\s*etcdRevisionRegressionsTotal,' -Because '计数器登记在 register() 的 MustRegister 里'
+}
+
+Test-Case '本文件钉的六条告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
     $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
             ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
         } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
-    foreach ($name in $script:ExpectedRules.Keys) {
+    foreach ($name in (@($script:ExpectedRules.Keys) + 'SceneManagerEtcdRevisionRegressed')) {
         Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq $name })).Count -Because "$name 在 Alertmanager 里按 alertname 分组,重名会互相掩盖"
     }
 }

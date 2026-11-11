@@ -45,7 +45,7 @@ type Repo struct {
 
 func New(db *sql.DB, mailIDs, opIDs NextID, exists func(uint32) bool, guilds GuildDirectory) *Repo {
 	if guilds == nil {
-		panic("帮会目录未装配")
+		panic("guild directory not wired")
 	}
 	seq, err := assetop.NewSeqTables("mail_player_op_seq", "mail_asset_op", 1)
 	if err != nil {

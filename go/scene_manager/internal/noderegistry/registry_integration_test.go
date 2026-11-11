@@ -2,30 +2,55 @@
 
 package noderegistry
 
-// 集成测试:需要本地 etcd (127.0.0.1:2379) 在跑。
-// 启动 etcd: pwsh tools/scripts/dev_tools.ps1 -Command etcd-up
-// 跑测试:    go test -tags=integration ./internal/noderegistry/...
+// 集成测试:需要本地 etcd (127.0.0.1:2379) 在跑,连不上就 SKIP。
+// 启动 etcd: 仓库根 docker compose -f deploy/docker-compose.yml up -d etcd
+// 跑测试:    go test -count=1 -tags=integration ./internal/noderegistry/...
+//
+// 本包已是 shared/noderegistry 的薄适配层,node_id 分配、CAS、续租与重注册的细节由
+// go/shared/noderegistry/registry_integration_test.go 覆盖。这里只经本包的公开接口
+// (Register / KeepAlive / Close / Info)核对适配层接得对:
+//  1. 写进 etcd 的 NodeInfo 字段齐全,Info 回填的 node_id / uuid 与 etcd 一致,双 key 同一租约;Close 删双 key 并 Revoke;
+//  2. Close 只删仍归本实例(uuid)的 key,不删接管了同一 node_id 的别的实例;
+//  3. 失租后重夺原 node_id;
+//  4. 原 node_id 已归别的实例时换新号继续服务,不覆盖对方的注册;
+//  5. 注册时跳过别的实例占着的 node_id;
+//  6. 跨 zone 并发注册,node_id 不重复。
+//
+// 节点类型用不存在的枚举值(1300000 起),前缀因此都是 ".rpc",碰不到本机正在跑的真实服务的 key;
+// 用例之间靠 node_type 段隔离,开始前与结束后都删掉自己 node_type 的 key。shared 按整个前缀扫已占号,
+// 别的 node_type 的 key 也算占用,所以用例不假设分到的 node_id 是几,只核对相互关系;
+// 「被别的实例接管」直接往 etcd 写入侵者的双 key,不靠注册顺序去凑。
 
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	base "proto/common/base"
+	"shared/nodeinfo"
+	sharedregistry "shared/noderegistry"
+	"shared/releasetrack"
 )
 
-const testEtcdEndpoint = "127.0.0.1:2379"
+const (
+	testEtcdEndpoint        = "127.0.0.1:2379"
+	testLeaseTTL     int64  = 5
+	testIP                  = "127.0.0.1"
+	testPort         uint32 = 9150
+)
 
-var nodeTypeCounter uint32 = 1300000
+var nodeTypeCounter atomic.Uint32
 
+// uniqueNodeType 返回一个不存在的节点类型枚举值,每个用例独占。
 func uniqueNodeType() uint32 {
-	nodeTypeCounter++
-	return nodeTypeCounter
+	return 1300000 + nodeTypeCounter.Add(1)
 }
 
 func newTestClient(t *testing.T) *clientv3.Client {
@@ -43,373 +68,371 @@ func newTestClient(t *testing.T) *clientv3.Client {
 		cli.Close()
 		t.Skipf("etcd ping failed: %v", err)
 	}
+	t.Cleanup(func() { cli.Close() })
 	return cli
 }
 
-func cleanupNodeType(t *testing.T, cli *clientv3.Client, nodeType uint32) {
-	t.Helper()
-	prefix := fmt.Sprintf("%s.rpc", base.ENodeType_name[int32(nodeType)])
+// deleteNodeTypeKeys 删掉 nodeType 名下两棵子树(allocated/… 与 zone/…)的全部 key。
+func deleteNodeTypeKeys(cli *clientv3.Client, nodeType uint32) {
+	prefix := rpcPrefix(nodeType)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = cli.Delete(ctx,
-		fmt.Sprintf("%s/allocated/node_type/%d/", prefix, nodeType),
-		clientv3.WithPrefix())
+	_, _ = cli.Delete(ctx, fmt.Sprintf("%s/allocated/node_type/%d/", prefix, nodeType), clientv3.WithPrefix())
 	resp, err := cli.Get(ctx, prefix+"/zone/", clientv3.WithPrefix(), clientv3.WithKeysOnly())
-	if err == nil {
-		needle := fmt.Sprintf("/node_type/%d/", nodeType)
-		for _, kv := range resp.Kvs {
-			k := string(kv.Key)
-			for i := 0; i+len(needle) <= len(k); i++ {
-				if k[i:i+len(needle)] == needle {
-					_, _ = cli.Delete(ctx, k)
-					break
-				}
-			}
+	if err != nil {
+		return
+	}
+	needle := fmt.Sprintf("/node_type/%d/", nodeType)
+	for _, kv := range resp.Kvs {
+		if strings.Contains(string(kv.Key), needle) {
+			_, _ = cli.Delete(ctx, string(kv.Key))
 		}
 	}
 }
 
-func makeInfo(nodeType, zoneID uint32) *base.NodeInfo {
-	return &base.NodeInfo{
-		NodeType:     nodeType,
-		ZoneId:       zoneID,
-		NodeUuid:     uuid.New().String(),
-		LaunchTime:   uint64(time.Now().Unix()),
-		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),
-		Endpoint:     &base.EndpointComp{Ip: "127.0.0.1", Port: 9000},
-	}
+// isolateNodeType 给用例一个独占节点类型:先清掉上次异常退出留下的同名 key,结束时再清一遍。
+// 清理登记在 newTestClient 之后,按 t.Cleanup 的后进先出顺序先于关闭 client 执行。
+func isolateNodeType(t *testing.T, cli *clientv3.Client) uint32 {
+	t.Helper()
+	nt := uniqueNodeType()
+	deleteNodeTypeKeys(cli, nt)
+	t.Cleanup(func() { deleteNodeTypeKeys(cli, nt) })
+	return nt
 }
 
-func grantLease(t *testing.T, cli *clientv3.Client, ttl int64) clientv3.LeaseID {
+// register 经公开的 Register 注册,并登记 Close(Close 幂等,用例里提前 Close 也没关系)。
+func register(t *testing.T, cli *clientv3.Client, nodeType, zoneID uint32) *NodeRegistration {
+	t.Helper()
+	nr, err := Register(cli, nodeType, zoneID, testIP, testPort, testLeaseTTL)
+	if err != nil {
+		t.Fatalf("Register(node_type=%d zone=%d): %v", nodeType, zoneID, err)
+	}
+	t.Cleanup(nr.Close)
+	return nr
+}
+
+func allocKey(nodeType, id uint32) string {
+	return sharedregistry.AllocationKey(rpcPrefix(nodeType), nodeType, id)
+}
+
+func rpcKey(nodeType, zoneID, id uint32) string {
+	return sharedregistry.RpcPath(rpcPrefix(nodeType), zoneID, nodeType, id)
+}
+
+func getKV(t *testing.T, cli *clientv3.Client, key string) *clientv3.GetResponse {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	resp, err := cli.Grant(ctx, ttl)
+	resp, err := cli.Get(ctx, key)
 	if err != nil {
-		t.Fatalf("grant lease: %v", err)
+		t.Fatalf("get %s: %v", key, err)
 	}
-	return resp.ID
+	return resp
 }
 
-func TestAllocStartsFromOne(t *testing.T) {
-	cli := newTestClient(t)
-	defer cli.Close()
-	nt := uniqueNodeType()
-	defer cleanupNodeType(t, cli, nt)
-
-	info := makeInfo(nt, 1)
-	lease := grantLease(t, cli, 30)
-	defer cli.Revoke(context.Background(), lease)
-
-	id, err := allocateNodeID(context.Background(), cli, rpcPrefix(nt), info, lease)
-	if err != nil {
-		t.Fatalf("allocate: %v", err)
+// holderOf 读 node_id 的分配键:归属 uuid 与所挂租约;key 不存在时 ok=false。
+func holderOf(t *testing.T, cli *clientv3.Client, nodeType, id uint32) (holder string, lease clientv3.LeaseID, ok bool) {
+	t.Helper()
+	resp := getKV(t, cli, allocKey(nodeType, id))
+	if len(resp.Kvs) == 0 {
+		return "", 0, false
 	}
-	if id != 1 {
-		t.Fatalf("expected first allocation=1, got %d", id)
-	}
+	return string(resp.Kvs[0].Value), clientv3.LeaseID(resp.Kvs[0].Lease), true
 }
 
-func TestAllocSkipsZero(t *testing.T) {
-	cli := newTestClient(t)
-	defer cli.Close()
-	nt := uniqueNodeType()
-	defer cleanupNodeType(t, cli, nt)
-
-	prefix := rpcPrefix(nt)
-	leases := make([]clientv3.LeaseID, 0, 4)
-	defer func() {
-		for _, l := range leases {
-			cli.Revoke(context.Background(), l)
+// idHeldBy 在 nodeType 的分配子树里找归属 uuid 的 node_id。
+func idHeldBy(t *testing.T, cli *clientv3.Client, nodeType uint32, uuid string) (uint32, bool) {
+	t.Helper()
+	subtree := fmt.Sprintf("%s/allocated/node_type/%d/node_id/", rpcPrefix(nodeType), nodeType)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	resp, err := cli.Get(ctx, subtree, clientv3.WithPrefix())
+	if err != nil {
+		t.Fatalf("get %s: %v", subtree, err)
+	}
+	for _, kv := range resp.Kvs {
+		if string(kv.Value) != uuid {
+			continue
 		}
-	}()
-
-	for i := 0; i < 3; i++ {
-		l := grantLease(t, cli, 30)
-		leases = append(leases, l)
-		id, err := allocateNodeID(context.Background(), cli, prefix, makeInfo(nt, 1), l)
+		id, err := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), subtree), 10, 32)
 		if err != nil {
-			t.Fatalf("alloc #%d: %v", i, err)
+			t.Fatalf("unexpected allocation key %s", kv.Key)
 		}
-		if id == 0 {
-			t.Fatalf("allocator returned 0")
-		}
+		return uint32(id), true
 	}
+	return 0, false
+}
 
-	l := grantLease(t, cli, 30)
-	leases = append(leases, l)
-	id, err := allocateNodeID(context.Background(), cli, prefix, makeInfo(nt, 1), l)
-	if err != nil {
-		t.Fatalf("alloc 4th: %v", err)
+func leaseGone(t *testing.T, cli *clientv3.Client, lease clientv3.LeaseID) bool {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	ttl, err := cli.TimeToLive(ctx, lease)
+	return err == nil && ttl.TTL <= 0
+}
+
+// simulateLeaseLoss 撤销注册所挂的租约:etcd 随即删掉双 key,效果等同租约过期。返回被撤销的租约。
+func simulateLeaseLoss(t *testing.T, cli *clientv3.Client, nodeType, id uint32) clientv3.LeaseID {
+	t.Helper()
+	_, lease, ok := holderOf(t, cli, nodeType, id)
+	if !ok {
+		t.Fatalf("node_id=%d is not registered", id)
 	}
-	if id != 4 {
-		t.Fatalf("expected id=4, got %d", id)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if _, err := cli.Revoke(ctx, lease); err != nil {
+		t.Fatalf("revoke lease %x: %v", int64(lease), err)
+	}
+	return lease
+}
+
+// seedTakeover 模拟另一个实例合法占住 (nodeType, id):在它自己的租约上、同一个 Txn 里写分配键与
+// zone 下的发现键;id 意外已被占用就让用例失败,不覆盖。返回入侵者的 uuid。
+func seedTakeover(t *testing.T, cli *clientv3.Client, nodeType, zoneID, id uint32) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	grant, err := cli.Grant(ctx, 30)
+	if err != nil {
+		t.Fatalf("grant intruder lease: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, _ = cli.Revoke(ctx, grant.ID)
+	})
+	intruder := fmt.Sprintf("intruder-%d-%d", nodeType, id)
+	value := fmt.Sprintf(`{"nodeId":%d,"nodeType":%d,"zoneId":%d,"nodeUuid":%q}`, id, nodeType, zoneID, intruder)
+	resp, err := cli.Txn(ctx).
+		If(clientv3.Compare(clientv3.Version(allocKey(nodeType, id)), "=", 0)).
+		Then(
+			clientv3.OpPut(allocKey(nodeType, id), intruder, clientv3.WithLease(grant.ID)),
+			clientv3.OpPut(rpcKey(nodeType, zoneID, id), value, clientv3.WithLease(grant.ID)),
+		).
+		Commit()
+	if err != nil || !resp.Succeeded {
+		t.Fatalf("seed takeover of node_id=%d: succeeded=%v err=%v", id, resp != nil && resp.Succeeded, err)
+	}
+	return intruder
+}
+
+func waitFor(t *testing.T, within time.Duration, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out after %v waiting for: %s", within, what)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func TestAllocCrossZoneUnique(t *testing.T) {
+// 注册值由 BuildValue 从模板生成,Info 回填的身份与 etcd 一致:client_rpc_router 拿 Info.NodeUuid 在
+// 同轨道路由服里排名次,各服务拿 Info 打启动日志,对不上就是用错了身份。
+func TestRegister_WritesNodeInfoAndBackfillsInfo(t *testing.T) {
+	t.Setenv(releasetrack.EnvVar, "canary") // 进程轨道要原样进注册值
 	cli := newTestClient(t)
-	defer cli.Close()
-	nt := uniqueNodeType()
-	defer cleanupNodeType(t, cli, nt)
+	nt := isolateNodeType(t, cli)
+	const zone uint32 = 3
 
-	prefix := rpcPrefix(nt)
-	const perZone = 20
+	nr := register(t, cli, nt, zone)
+	id := nr.Info.GetNodeId()
+	if id == 0 || nr.Info.GetNodeUuid() == "" {
+		t.Fatalf("Info not backfilled: node_id=%d uuid=%q", id, nr.Info.GetNodeUuid())
+	}
+	holder, lease, ok := holderOf(t, cli, nt, id)
+	if !ok || holder != nr.Info.GetNodeUuid() {
+		t.Fatalf("allocation key node_id=%d: holder=%q present=%v, Info says %q", id, holder, ok, nr.Info.GetNodeUuid())
+	}
+	p := getKV(t, cli, rpcKey(nt, zone, id))
+	if len(p.Kvs) != 1 || clientv3.LeaseID(p.Kvs[0].Lease) != lease {
+		t.Fatalf("rpc path node_id=%d: want one key on lease %x, got %+v", id, int64(lease), p.Kvs)
+	}
+	var got base.NodeInfo
+	if err := nodeinfo.Unmarshal(p.Kvs[0].Value, &got); err != nil {
+		t.Fatalf("rpc path value is not a NodeInfo: %v", err)
+	}
+	if got.GetNodeId() != id || got.GetNodeUuid() != nr.Info.GetNodeUuid() ||
+		got.GetNodeType() != nt || got.GetZoneId() != zone ||
+		got.GetEndpoint().GetIp() != testIP || got.GetEndpoint().GetPort() != testPort ||
+		got.GetGrpcEndpoint().GetIp() != testIP || got.GetGrpcEndpoint().GetPort() != testPort ||
+		got.GetProtocolType() != uint32(base.ENodeProtocolType_PROTOCOL_GRPC) ||
+		got.GetReleaseTrack() != releasetrack.Canary.String() ||
+		got.GetLaunchTime() != nr.Info.GetLaunchTime() {
+		t.Fatalf("registered NodeInfo %v does not match Info %v", &got, nr.Info)
+	}
+
+	nr.Close()
+	nr.Close() // 幂等
+	if _, _, ok := holderOf(t, cli, nt, id); ok || len(getKV(t, cli, rpcKey(nt, zone, id)).Kvs) != 0 {
+		t.Fatal("Close must delete both keys")
+	}
+	if !leaseGone(t, cli, lease) {
+		t.Fatal("Close must revoke the lease")
+	}
+}
+
+// A 失租、另一个实例合法接管同一 node_id;A 随后 Close 不得删掉对方的 key(R3)。
+func TestClose_LeavesKeysOfTheInstanceThatTookOver(t *testing.T) {
+	cli := newTestClient(t)
+	nt := isolateNodeType(t, cli)
+
+	a := register(t, cli, nt, 1)
+	id := a.Info.GetNodeId()
+	simulateLeaseLoss(t, cli, nt, id) // 没开 KeepAlive,A 不会重注册
+	intruder := seedTakeover(t, cli, nt, 2, id)
+
+	a.Close()
+	if holder, _, ok := holderOf(t, cli, nt, id); !ok || holder != intruder {
+		t.Fatalf("A's Close touched node_id=%d held by %q: holder=%q present=%v", id, intruder, holder, ok)
+	}
+	if len(getKV(t, cli, rpcKey(nt, 2, id)).Kvs) != 1 {
+		t.Fatal("A's Close deleted the rpc path of the instance that took over")
+	}
+}
+
+// 失租后原 node_id 没人占:在新租约上重夺原号,发现键随之改挂(R4:续约断了不会从此在发现里消失)。
+func TestKeepAlive_ReclaimsOriginalIDAfterLeaseLoss(t *testing.T) {
+	cli := newTestClient(t)
+	nt := isolateNodeType(t, cli)
+
+	nr := register(t, cli, nt, 1)
+	id := nr.Info.GetNodeId()
+	nr.KeepAlive()
+	oldLease := simulateLeaseLoss(t, cli, nt, id)
+
+	var newLease clientv3.LeaseID
+	waitFor(t, 15*time.Second, "original node_id reclaimed on a new lease", func() bool {
+		holder, lease, ok := holderOf(t, cli, nt, id)
+		newLease = lease
+		return ok && holder == nr.Info.GetNodeUuid() && lease != oldLease
+	})
+	p := getKV(t, cli, rpcKey(nt, 1, id))
+	if len(p.Kvs) != 1 || clientv3.LeaseID(p.Kvs[0].Lease) != newLease {
+		t.Fatalf("rpc path node_id=%d not moved to the new lease %x: %+v", id, int64(newLease), p.Kvs)
+	}
+}
+
+// 失租后原 node_id 已归别的实例:换新号继续服务,不覆盖对方的注册,uuid 不变;Close 只删自己的新号。
+// 钉住的是旧副本修过的历史 bug:失租后直接 Put 旧 key,覆盖别人的 NodeInfo,C++ 把流量路由到错误节点。
+func TestKeepAlive_SwitchesIDWithoutOverwritingTheInstanceThatTookOver(t *testing.T) {
+	cli := newTestClient(t)
+	nt := isolateNodeType(t, cli)
+
+	a := register(t, cli, nt, 1)
+	aID := a.Info.GetNodeId()
+	uuidA := a.Info.GetNodeUuid()
+	simulateLeaseLoss(t, cli, nt, aID)
+	intruder := seedTakeover(t, cli, nt, 2, aID)
+	a.KeepAlive()
+
+	var newID uint32
+	waitFor(t, 15*time.Second, "A re-registered under a new node_id", func() bool {
+		id, ok := idHeldBy(t, cli, nt, uuidA)
+		newID = id
+		return ok
+	})
+	if newID == aID {
+		t.Fatalf("A reclaimed node_id=%d that another instance holds", aID)
+	}
+	if holder, _, ok := holderOf(t, cli, nt, aID); !ok || holder != intruder {
+		t.Fatalf("A overwrote node_id=%d: holder=%q present=%v, want %q", aID, holder, ok, intruder)
+	}
+	if v := getKV(t, cli, rpcKey(nt, 2, aID)); len(v.Kvs) != 1 || !strings.Contains(string(v.Kvs[0].Value), intruder) {
+		t.Fatalf("rpc path of the instance that took over node_id=%d was changed: %+v", aID, v.Kvs)
+	}
+	p := getKV(t, cli, rpcKey(nt, 1, newID))
+	if len(p.Kvs) != 1 {
+		t.Fatalf("A's new rpc path node_id=%d is missing", newID)
+	}
+	var got base.NodeInfo
+	if err := nodeinfo.Unmarshal(p.Kvs[0].Value, &got); err != nil || got.GetNodeId() != newID || got.GetNodeUuid() != uuidA {
+		t.Fatalf("A's new NodeInfo: node_id=%d uuid=%q err=%v, want node_id=%d uuid=%q",
+			got.GetNodeId(), got.GetNodeUuid(), err, newID, uuidA)
+	}
+
+	a.Close()
+	if _, ok := idHeldBy(t, cli, nt, uuidA); ok || len(getKV(t, cli, rpcKey(nt, 1, newID)).Kvs) != 0 {
+		t.Fatal("Close left A's new keys behind")
+	}
+	if holder, _, ok := holderOf(t, cli, nt, aID); !ok || holder != intruder {
+		t.Fatalf("A's Close deleted node_id=%d held by %q", aID, intruder)
+	}
+}
+
+// 注册时跳过别的实例占着的 node_id,不覆盖它的分配键。
+func TestRegister_SkipsNodeIDHeldByAnotherInstance(t *testing.T) {
+	cli := newTestClient(t)
+	nt := isolateNodeType(t, cli)
+
+	probe := register(t, cli, nt, 1)
+	id := probe.Info.GetNodeId()
+	probe.Close() // id 空出来,随即被别的实例占住
+	intruder := seedTakeover(t, cli, nt, 2, id)
+
+	nr := register(t, cli, nt, 1)
+	if nr.Info.GetNodeId() == id {
+		t.Fatalf("Register took node_id=%d held by %q", id, intruder)
+	}
+	if holder, _, ok := holderOf(t, cli, nt, id); !ok || holder != intruder {
+		t.Fatalf("Register overwrote node_id=%d: holder=%q present=%v", id, holder, ok)
+	}
+}
+
+// 跨 zone 并发注册:分配键路径不带 zone,不同 zone 的实例也不会拿到同一个 node_id。
+// 这里不开 KeepAlive,租约给足 30s,免得慢机器上早注册的 key 先过期、把号让给后来者。
+func TestRegister_ConcurrentAcrossZonesGetsUniqueIDs(t *testing.T) {
+	cli := newTestClient(t)
+	nt := isolateNodeType(t, cli)
+
+	const (
+		perZone  = 10
+		leaseTTL = int64(30)
+	)
 	zones := []uint32{1, 2, 3}
-
-	var mu sync.Mutex
-	allIDs := make(map[uint32]bool)
-	leases := make([]clientv3.LeaseID, 0, len(zones)*perZone)
-
-	defer func() {
-		for _, l := range leases {
-			cli.Revoke(context.Background(), l)
-		}
-	}()
-
-	var wg sync.WaitGroup
+	var (
+		mu   sync.Mutex
+		regs []*NodeRegistration
+		wg   sync.WaitGroup
+	)
 	errCh := make(chan error, len(zones)*perZone)
-
-	for _, z := range zones {
+	for _, zone := range zones {
 		for i := 0; i < perZone; i++ {
 			wg.Add(1)
-			go func(zone uint32) {
+			go func() {
 				defer wg.Done()
-				l := grantLease(t, cli, 30)
-				mu.Lock()
-				leases = append(leases, l)
-				mu.Unlock()
-
-				id, err := allocateNodeID(context.Background(), cli, prefix, makeInfo(nt, zone), l)
+				nr, err := Register(cli, nt, zone, testIP, testPort, leaseTTL)
 				if err != nil {
-					errCh <- err
+					errCh <- fmt.Errorf("zone=%d: %w", zone, err)
 					return
 				}
 				mu.Lock()
-				if allIDs[id] {
-					errCh <- fmt.Errorf("duplicate node_id=%d (zone=%d)", id, zone)
-				}
-				allIDs[id] = true
+				regs = append(regs, nr)
 				mu.Unlock()
-			}(z)
+			}()
 		}
 	}
 	wg.Wait()
 	close(errCh)
-
+	for _, nr := range regs {
+		t.Cleanup(nr.Close)
+	}
 	for err := range errCh {
-		t.Fatalf("cross-zone uniqueness violated: %v", err)
-	}
-	if len(allIDs) != len(zones)*perZone {
-		t.Fatalf("expected %d unique IDs, got %d", len(zones)*perZone, len(allIDs))
-	}
-	if allIDs[0] {
-		t.Fatalf("0 was allocated")
-	}
-}
-
-func TestAllocDifferentTypeReuse(t *testing.T) {
-	cli := newTestClient(t)
-	defer cli.Close()
-	ntA := uniqueNodeType()
-	ntB := uniqueNodeType()
-	defer cleanupNodeType(t, cli, ntA)
-	defer cleanupNodeType(t, cli, ntB)
-
-	leaseA := grantLease(t, cli, 30)
-	leaseB := grantLease(t, cli, 30)
-	defer cli.Revoke(context.Background(), leaseA)
-	defer cli.Revoke(context.Background(), leaseB)
-
-	idA, err := allocateNodeID(context.Background(), cli, rpcPrefix(ntA), makeInfo(ntA, 1), leaseA)
-	if err != nil {
-		t.Fatalf("alloc A: %v", err)
-	}
-	idB, err := allocateNodeID(context.Background(), cli, rpcPrefix(ntB), makeInfo(ntB, 1), leaseB)
-	if err != nil {
-		t.Fatalf("alloc B: %v", err)
-	}
-	if idA != 1 || idB != 1 {
-		t.Fatalf("expected both first allocations =1, got A=%d B=%d", idA, idB)
-	}
-}
-
-func TestAllocReclaimAfterRevoke(t *testing.T) {
-	cli := newTestClient(t)
-	defer cli.Close()
-	nt := uniqueNodeType()
-	defer cleanupNodeType(t, cli, nt)
-
-	prefix := rpcPrefix(nt)
-	lease1 := grantLease(t, cli, 30)
-	id1, err := allocateNodeID(context.Background(), cli, prefix, makeInfo(nt, 1), lease1)
-	if err != nil {
-		t.Fatalf("alloc 1: %v", err)
-	}
-	if _, err := cli.Revoke(context.Background(), lease1); err != nil {
-		t.Fatalf("revoke: %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
-
-	lease2 := grantLease(t, cli, 30)
-	defer cli.Revoke(context.Background(), lease2)
-	id2, err := allocateNodeID(context.Background(), cli, prefix, makeInfo(nt, 1), lease2)
-	if err != nil {
-		t.Fatalf("alloc 2: %v", err)
-	}
-	if id2 != id1 {
-		t.Fatalf("expected reclaim id=%d, got id=%d", id1, id2)
-	}
-}
-
-func TestAllocCASRetryOnConflict(t *testing.T) {
-	cli := newTestClient(t)
-	defer cli.Close()
-	nt := uniqueNodeType()
-	defer cleanupNodeType(t, cli, nt)
-
-	prefix := rpcPrefix(nt)
-	intruderLease := grantLease(t, cli, 30)
-	defer cli.Revoke(context.Background(), intruderLease)
-
-	allocKey := allocationKey(prefix, nt, 1)
-	if _, err := cli.Put(context.Background(), allocKey, "intruder-uuid", clientv3.WithLease(intruderLease)); err != nil {
-		t.Fatalf("seed intruder: %v", err)
+		t.Fatalf("concurrent register: %v", err)
 	}
 
-	myLease := grantLease(t, cli, 30)
-	defer cli.Revoke(context.Background(), myLease)
-
-	info := makeInfo(nt, 1)
-	ok, err := tryClaimNodeID(context.Background(), cli, prefix, 1, info, myLease)
-	if err != nil {
-		t.Fatalf("tryClaim id=1: %v", err)
-	}
-	if ok {
-		t.Fatalf("tryClaim id=1 should have failed (intruder holds it)")
-	}
-
-	id, err := allocateNodeID(context.Background(), cli, prefix, makeInfo(nt, 1), myLease)
-	if err != nil {
-		t.Fatalf("allocateNodeID: %v", err)
-	}
-	if id != 2 {
-		t.Fatalf("expected id=2 (next free), got %d", id)
-	}
-}
-
-// TestReRegisterRefusesOverwrite 是 scene_manager 独有的关键测试:
-//
-// 场景:实例 A 持有 (nodeType, node_id=1, zone=1)。
-//      A 的 lease 因为网络故障失效,etcd 自动清掉 A 的两个 key。
-//      期间实例 B(zone=2,新 NodeUuid)启动,allocator 看到 id=1 空闲,占住它。
-//      此后 A 网络恢复,触发 reRegister。
-//
-// 期望:
-//   - reRegister 必须发现 allocationKey 已被别的 uuid 占用(allocationKey.Version != 0)
-//   - 不能盲目 Put 老 key 覆盖 B 的 NodeInfo
-//   - 应当走 "allocate 新 node_id" 分支,A 拿到新 id(比如 2),不影响 B
-//
-// 这条断言是把 scene_manager 历史 bug —— 直接 Put 覆盖 —— 钉死。
-func TestReRegisterRefusesOverwrite(t *testing.T) {
-	cli := newTestClient(t)
-	defer cli.Close()
-	nt := uniqueNodeType()
-	defer cleanupNodeType(t, cli, nt)
-
-	prefix := rpcPrefix(nt)
-
-	// 1) A 注册并占住 id=1
-	leaseA := grantLease(t, cli, 30)
-	infoA := makeInfo(nt, 1)
-	idA, err := allocateNodeID(context.Background(), cli, prefix, infoA, leaseA)
-	if err != nil {
-		t.Fatalf("A alloc: %v", err)
-	}
-	if idA != 1 {
-		t.Fatalf("A should get id=1, got %d", idA)
-	}
-
-	// 构造 NodeRegistration 模拟 A 的注册状态
-	nrA := &NodeRegistration{
-		client:   cli,
-		leaseID:  leaseA,
-		ttl:      30,
-		prefix:   prefix,
-		rpcKey:   rpcPath(prefix, infoA.ZoneId, infoA.NodeType, idA),
-		allocKey: allocationKey(prefix, infoA.NodeType, idA),
-		Info:     infoA,
-	}
-	// nrA.value 不影响测试逻辑(reRegister 不读它的旧 value)
-	nrA.value = "{}"
-
-	// 2) 模拟 A lease 丢失 —— revoke 即可
-	if _, err := cli.Revoke(context.Background(), leaseA); err != nil {
-		t.Fatalf("revoke A: %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
-
-	// 3) B 启动,以全新 uuid 占住 id=1
-	leaseB := grantLease(t, cli, 30)
-	defer cli.Revoke(context.Background(), leaseB)
-	infoB := makeInfo(nt, 2) // 不同 zone,但新 schema 下 zone 不影响 allocation key
-	idB, err := allocateNodeID(context.Background(), cli, prefix, infoB, leaseB)
-	if err != nil {
-		t.Fatalf("B alloc: %v", err)
-	}
-	if idB != 1 {
-		t.Fatalf("B should also get id=1 after A's lease expired, got %d", idB)
-	}
-
-	// 4) A 触发 reRegister。它应当发现 id=1 已经被 B(NodeUuid != A.NodeUuid)占用,
-	//    走 "allocate 新 node_id" 分支,而不是覆盖 B。
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	go func() {
-		// reRegister 内部带无限退避循环,需要靠 ctx 退出
-		nrA.reRegister(ctx)
-	}()
-
-	// 等 A 完成 reRegister。轮询直到 A 拿到一个新的、合法的 node_id。
-	deadline := time.Now().Add(3 * time.Second)
-	var aNewID uint32
-	for time.Now().Before(deadline) {
-		if nrA.Info.NodeId != idA {
-			aNewID = nrA.Info.NodeId
-			break
+	seen := make(map[uint32]string, len(regs))
+	for _, nr := range regs {
+		id := nr.Info.GetNodeId()
+		if id == 0 {
+			t.Fatal("node_id 0 was allocated")
 		}
-		time.Sleep(50 * time.Millisecond)
+		if other, dup := seen[id]; dup {
+			t.Fatalf("node_id=%d handed to both %s and %s", id, other, nr.Info.GetNodeUuid())
+		}
+		seen[id] = nr.Info.GetNodeUuid()
 	}
-	cancel() // 让 reRegister goroutine 退出
-
-	if aNewID == 0 {
-		t.Fatalf("A reRegister did not pick a new node_id (still=%d)", nrA.Info.NodeId)
-	}
-	if aNewID == idB {
-		t.Fatalf("A reRegister picked the same id=%d as B — collision!", aNewID)
-	}
-
-	// 5) 关键断言:B 的 NodeInfo 没有被 A 覆盖。
-	bRpcKey := rpcPath(prefix, infoB.ZoneId, infoB.NodeType, idB)
-	resp, err := cli.Get(context.Background(), bRpcKey)
-	if err != nil {
-		t.Fatalf("get B rpcKey: %v", err)
-	}
-	if len(resp.Kvs) == 0 {
-		t.Fatalf("B's rpcKey was deleted — A overwrote it!")
-	}
-
-	// allocationKey 的 value 应当仍是 B 的 NodeUuid
-	bAllocKey := allocationKey(prefix, infoB.NodeType, idB)
-	resp, err = cli.Get(context.Background(), bAllocKey)
-	if err != nil {
-		t.Fatalf("get B allocKey: %v", err)
-	}
-	if len(resp.Kvs) == 0 {
-		t.Fatalf("B's allocKey was deleted — A overwrote it!")
-	}
-	if string(resp.Kvs[0].Value) != infoB.NodeUuid {
-		t.Fatalf("B's allocKey value = %q, expected B uuid %q (likely overwritten)",
-			string(resp.Kvs[0].Value), infoB.NodeUuid)
+	if len(seen) != len(zones)*perZone {
+		t.Fatalf("want %d unique node_ids, got %d", len(zones)*perZone, len(seen))
 	}
 }

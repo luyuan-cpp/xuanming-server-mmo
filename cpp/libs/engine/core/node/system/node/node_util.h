@@ -5,7 +5,9 @@
 #include <muduo/net/TcpConnection.h>
 #include <algorithm>
 #include <optional>
+#include <set>
 #include <string>
+#include <vector>
 
 // Re-export common::base types at global scope for backward compatibility.
 using common::base::eNodeProtocolType;
@@ -133,6 +135,24 @@ namespace NodeUtils
 	// 分配键 "<prefix>/allocated/..." 都不在里面。其余类型、认不出的前缀原样返回(全局池照旧看全服)。
 	// 纯函数,只按字面精确匹配 "<eNodeType 名>.rpc",不做子串匹配。
 	std::string DiscoveryPrefixFor(const std::string &configuredPrefix, uint32_t zoneId);
+
+	// 配置的一个发现前缀对应的节点类型:只认字面精确的 "<eNodeType 名>.rpc",认不出返回 nullopt。
+	std::optional<uint32_t> NodeTypeOfDiscoveryPrefix(const std::string &configuredPrefix);
+
+	// 本节点实际要 Range / watch 的前缀(docs/design/connection-fanout-subsetting-20261106.md §3.4)。
+	// 配置的前缀表只回答「部署里有哪些服务」;本节点只看其中属于自己发现集合的类型,zone-scoped 类型再收窄到本 zone
+	// (DiscoveryPrefixFor)。纯函数。自身类型不在发现集合里时本节点自己那条发现键另由 ServiceDiscoveryManager 加上。
+	struct DiscoveryScopePlan
+	{
+		// 要 Range / watch 的前缀,按配置里的顺序,去重。
+		std::vector<std::string> scopes;
+		// 配置里有、但不属于发现集合(或认不出)的前缀:本节点不看。
+		std::vector<std::string> skippedPrefixes;
+		// 发现集合里有、配置里没有的类型:部署里没有这个服务,读它的调用方照旧报找不到。
+		std::vector<uint32_t> missingTypes;
+	};
+	DiscoveryScopePlan PlanDiscoveryScopes(const std::vector<std::string> &configuredPrefixes,
+										   const std::set<uint32_t> &discoverTypes, uint32_t zoneId);
 
 	// 全局池节点类型:实例不分 zone,任一 zone 的调用方都可以路由过去。
 	// gate 的 PickRandomNode 对这两类**不比对 zone**(设计文档

@@ -3264,15 +3264,18 @@ type SqlWriterRegistry struct {
 	WriterKey           []byte                  `protobuf:"bytes,1,opt,name=writer_key,json=writerKey,proto3" json:"writer_key,omitempty"`
 	Generation          string                  `protobuf:"bytes,2,opt,name=generation,proto3" json:"generation,omitempty"`
 	InstanceId          []byte                  `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
-	SqlPrincipal        []byte                  `protobuf:"bytes,4,opt,name=sql_principal,json=sqlPrincipal,proto3" json:"sql_principal,omitempty"` // VARBINARY(288)，永久UNIQUE；每boot主体不得重用。
+	SqlPrincipal        []byte                  `protobuf:"bytes,4,opt,name=sql_principal,json=sqlPrincipal,proto3" json:"sql_principal,omitempty"` // VARBINARY(288)。槽位账号:同一槽位(StatefulSet 序号)的各代共用,同一时刻至多一代 ACTIVE。
 	RegistrationDigest  []byte                  `protobuf:"bytes,5,opt,name=registration_digest,json=registrationDigest,proto3" json:"registration_digest,omitempty"`
 	State               SqlWriterRegistry_State `protobuf:"varint,6,opt,name=state,proto3,enum=SqlWriterRegistry_State" json:"state,omitempty"`
 	RegisteredMs        uint64                  `protobuf:"varint,7,opt,name=registered_ms,json=registeredMs,proto3" json:"registered_ms,omitempty"`
 	RetirementRequestId []byte                  `protobuf:"bytes,8,opt,name=retirement_request_id,json=retirementRequestId,proto3" json:"retirement_request_id,omitempty"`
 	RetirementDigest    []byte                  `protobuf:"bytes,9,opt,name=retirement_digest,json=retirementDigest,proto3" json:"retirement_digest,omitempty"`
 	RetiredMs           uint64                  `protobuf:"varint,10,opt,name=retired_ms,json=retiredMs,proto3" json:"retired_ms,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 这个账号上第几次启动(代次),从 1 起严格递增,允许空洞;(sql_principal, boot_seq) 唯一。
+	// 注册事务要求新一代的号大于这个账号已有的全部号(CAS),见 docs/design/writer-roster-exhaustion-20261106.md §5。
+	BootSeq       uint64 `protobuf:"varint,11,opt,name=boot_seq,json=bootSeq,proto3" json:"boot_seq,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SqlWriterRegistry) Reset() {
@@ -3371,6 +3374,13 @@ func (x *SqlWriterRegistry) GetRetirementDigest() []byte {
 func (x *SqlWriterRegistry) GetRetiredMs() uint64 {
 	if x != nil {
 		return x.RetiredMs
+	}
+	return 0
+}
+
+func (x *SqlWriterRegistry) GetBootSeq() uint64 {
+	if x != nil {
+		return x.BootSeq
 	}
 	return 0
 }
@@ -4251,11 +4261,13 @@ func (x *SqlWriterMaintenanceReceipt) GetReceiptDigest() []byte {
 	return nil
 }
 
-// init受限有限授权roster；每entry的身份/主体全预固定，不铸新UUID或复制runtime秘密进grant。
+// 写者槽位名册(init 只读,按原字节 SHA 批准)。一条 entry 是一个槽位,下标就是 StatefulSet 序号;
+// 账号与逻辑库预先固定,每次启动的 writer 身份由注册器现场生成,不复制 runtime 秘密进 grant。
+// 同一个消息也是注册器的启动记录:身份填好之后写进本 Pod 私有目录,init 重跑时原样重发。
 type SqlWriterBootRoster struct {
 	state         protoimpl.MessageState       `protogen:"open.v1"`
-	Format        string                       `protobuf:"bytes,1,opt,name=format,proto3" json:"format,omitempty"`   // SQL_WRITER_BOOT_ROSTER_V1。
-	Entries       []*SqlWriterBootRoster_Entry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"` // 至多现有issuer预算1024，duplicate key/instance/principal/request拒绝。
+	Format        string                       `protobuf:"bytes,1,opt,name=format,proto3" json:"format,omitempty"`   // SQL_WRITER_BOOT_ROSTER_V2。
+	Entries       []*SqlWriterBootRoster_Entry `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"` // 槽位数 = 副本数上限,至多 1024;各槽位账号互不相同。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4318,8 +4330,11 @@ type SqlWriterLifecycleReceipt_Request struct {
 	DeploymentId            string                           `protobuf:"bytes,10,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`              // 必须非空且进入永久请求摘要；init绑定真实PodUID，重放不得换部署。
 	LockPrimitive           SqlWriterBootGrant_LockPrimitive `protobuf:"varint,11,opt,name=lock_primitive,json=lockPrimitive,proto3,enum=SqlWriterBootGrant_LockPrimitive" json:"lock_primitive,omitempty"`
 	LockQualificationSha256 []byte                           `protobuf:"bytes,12,opt,name=lock_qualification_sha256,json=lockQualificationSha256,proto3" json:"lock_qualification_sha256,omitempty"` // 同REGISTER原件永久绑定，必须精确等boot grant15/16；无I3资格不发grant。
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// 只用于换代退休:同一槽位的新一代在注册事务里退休上一代时,填那份 REGISTER 的 request_id。
+	// REGISTER、人工退休、排空退休都必须为空;换代退休没有维护 run。
+	SuccessorRequestId []byte `protobuf:"bytes,13,opt,name=successor_request_id,json=successorRequestId,proto3" json:"successor_request_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *SqlWriterLifecycleReceipt_Request) Reset() {
@@ -4432,6 +4447,13 @@ func (x *SqlWriterLifecycleReceipt_Request) GetLockPrimitive() SqlWriterBootGran
 func (x *SqlWriterLifecycleReceipt_Request) GetLockQualificationSha256() []byte {
 	if x != nil {
 		return x.LockQualificationSha256
+	}
+	return nil
+}
+
+func (x *SqlWriterLifecycleReceipt_Request) GetSuccessorRequestId() []byte {
+	if x != nil {
+		return x.SuccessorRequestId
 	}
 	return nil
 }
@@ -6486,8 +6508,10 @@ func (*SqlWriterMaintenanceReceipt_Evidence_PublicationReadiness) isSqlWriterMai
 }
 
 type SqlWriterBootRoster_Entry struct {
-	state               protoimpl.MessageState                    `protogen:"open.v1"`
-	Requests            []*SqlWriterLifecycleReceipt_Request      `protobuf:"bytes,1,rep,name=requests,proto3" json:"requests,omitempty"`                                              // 这个boot要写的每个逻辑库各一份，同一账号；任一份已被别的boot消费，整条entry就算用掉。
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 这个槽位要写的每个逻辑库各一份 REGISTER 模板,同一账号。名册里身份字段(request_id、writer_key、instance_id、
+	// registration_digest、registered_ms、boot_seq、deployment_id)必须为空;启动记录里由注册器填好。
+	Requests            []*SqlWriterLifecycleReceipt_Request      `protobuf:"bytes,1,rep,name=requests,proto3" json:"requests,omitempty"`
 	RuntimeConfigPath   string                                    `protobuf:"bytes,2,opt,name=runtime_config_path,json=runtimeConfigPath,proto3" json:"runtime_config_path,omitempty"` // 只在受限init input-root内解析，normal只挂选中副本。
 	RuntimeConfigSha256 []byte                                    `protobuf:"bytes,3,opt,name=runtime_config_sha256,json=runtimeConfigSha256,proto3" json:"runtime_config_sha256,omitempty"`
 	RuntimeEnvironment  []*SqlWriterBootRoster_RuntimeEnvironment `protobuf:"bytes,4,rep,name=runtime_environment,json=runtimeEnvironment,proto3" json:"runtime_environment,omitempty"` // 仅固定SQL环境变量白名单；原件只存私有文件路径/SHA，不存秘密值。
@@ -6933,7 +6957,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\n" +
 	"ack_digest\x18\x05 \x01(\fR\tackDigest\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:?\x8a\x92\xf4\x01\x19account_role_trade_holder\x92\x92\xf4\x01\x1clisting_id,scene_instance_id\"\xfc\x03\n" +
+	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:?\x8a\x92\xf4\x01\x19account_role_trade_holder\x92\x92\xf4\x01\x1clisting_id,scene_instance_id\"\x97\x04\n" +
 	"\x13sql_writer_registry\x12\x1d\n" +
 	"\n" +
 	"writer_key\x18\x01 \x01(\fR\twriterKey\x12\x1e\n" +
@@ -6950,7 +6974,8 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x11retirement_digest\x18\t \x01(\fR\x10retirementDigest\x12\x1d\n" +
 	"\n" +
 	"retired_ms\x18\n" +
-	" \x01(\x04R\tretiredMs\"3\n" +
+	" \x01(\x04R\tretiredMs\x12\x19\n" +
+	"\bboot_seq\x18\v \x01(\x04R\abootSeq\"3\n" +
 	"\x05State\x12\x11\n" +
 	"\rSTATE_UNKNOWN\x10\x00\x12\n" +
 	"\n" +
@@ -6967,7 +6992,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\fwriter_epoch\x18\x04 \x01(\x04R\vwriterEpoch\x120\n" +
 	"\x05state\x18\x05 \x01(\x0e2\x1a.sql_writer_registry.StateR\x05state\x12\x1d\n" +
 	"\n" +
-	"lock_touch\x18\x06 \x01(\rR\tlockTouch:$\x8a\x92\xf4\x01\vwriter_slot\x92\x92\xf4\x01\x0fwriter_key,slot\"\xd9\b\n" +
+	"lock_touch\x18\x06 \x01(\rR\tlockTouch:$\x8a\x92\xf4\x01\vwriter_slot\x92\x92\xf4\x01\x0fwriter_key,slot\"\x8b\t\n" +
 	"\x1csql_writer_lifecycle_receipt\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\fR\trequestId\x126\n" +
@@ -6979,7 +7004,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\rrequest_proto\x18\x05 \x01(\fR\frequestProto\x12%\n" +
 	"\x0eprevious_epoch\x18\x06 \x01(\x04R\rpreviousEpoch\x12'\n" +
 	"\x0fresulting_epoch\x18\a \x01(\x04R\x0eresultingEpoch\x12)\n" +
-	"\x10catalog_revision\x18\b \x01(\x04R\x0fcatalogRevision\x1a\xd2\x04\n" +
+	"\x10catalog_revision\x18\b \x01(\x04R\x0fcatalogRevision\x1a\x84\x05\n" +
 	"\aRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\fR\trequestId\x126\n" +
@@ -6994,7 +7019,8 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\rdeployment_id\x18\n" +
 	" \x01(\tR\fdeploymentId\x12K\n" +
 	"\x0elock_primitive\x18\v \x01(\x0e2$.sql_writer_boot_grant.LockPrimitiveR\rlockPrimitive\x12:\n" +
-	"\x19lock_qualification_sha256\x18\f \x01(\fR\x17lockQualificationSha256\"D\n" +
+	"\x19lock_qualification_sha256\x18\f \x01(\fR\x17lockQualificationSha256\x120\n" +
+	"\x14successor_request_id\x18\r \x01(\fR\x12successorRequestId\"D\n" +
 	"\x04Kind\x12\x10\n" +
 	"\fKIND_UNKNOWN\x10\x00\x12\f\n" +
 	"\bREGISTER\x10\x01\x12\n" +

@@ -217,6 +217,25 @@ spec:
               不用逐个核对。
             runbook_url: docs/ops/scene-node-role-split.md
 
+        # etcd 修订号倒退:领导者全量同步读到的 etcd 当前修订号小于本 zone 记下的水位,只可能是 etcd 换成了新集群或从备份
+        # 恢复(同一个 etcd 的修订号只增不减)。领导者已自动换了节点号持有者的纪元(go/scene_manager/internal/logic/node_holder.go,
+        # docs/design/scene-node-ownership-reconcile.md §4.6);告警是让运维确认这次倒退是计划内的,并按换集群的流程重启节点。
+        - alert: SceneManagerEtcdRevisionRegressed
+          expr: |
+            sum(increase(scene_manager_etcd_revision_regressions_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "scene_manager 发现 etcd 修订号倒退:etcd 换了集群或从备份恢复过"
+            description: |
+              日志 "[NodeHolder] etcd revision went back in zone N: current revision C is below the recorded W" 带 zone、当前修订号与
+              倒退前的水位。etcd 的历史没了:租约、节点号分配与注册都从头来。计划内的换集群或恢复,换完之后各 zone 亮一次是预期的;
+              不是计划内的,先查清是谁把 etcd 指到了别的集群或旧备份。按 docs/ops/etcd-maintenance-runbook.md §7a 重启全部 scene 节点:
+              不重启的老进程认不出自己的节点号已被新进程接走。节点号持有者记录不用手工清:快照里在册的号当场改写,
+              其余的号在下一次登记时覆盖。
+            runbook_url: docs/ops/etcd-maintenance-runbook.md
+
         - alert: SceneManagerLoadRefreshFailing
           expr: |
             sum(increase(scene_manager_load_refresh_total{outcome=~"read_failed|write_failed"}[10m])) > 0
@@ -855,9 +874,13 @@ spec:
         # --- 新场景登记(scene_manager_scene_registration_total,go/scene_manager/internal/logic/scene_registration.go)---
         # 新场景的全部 Redis 状态由一段脚本登记。kind 为 instance / world_channel;outcome:
         #   registered  正常;
-        #   aborted     EVAL 回错,作废成功,名额已还。Redis 抖动时会有,不单独告警;
-        #   conflict    新铸的 scene_id 已有映射或别人的记录,一个键都没写、名额不还;
-        #   unknown     作废也失败,结局未知,名额不还(可能多占一份)。
+        #   aborted     EVAL 回错,作废成功,这次占的 Agones 名额条目已放弃。Redis 抖动时会有,不单独告警;
+        #   conflict    新铸的 scene_id 已有映射或别人的记录,一个键都没写,这次占的名额条目已放弃;
+        #   fenced      这次占的名额拖过了在途占用的截止时刻、已被对账取消,一个键都没写。不单独告警,
+        #               持续出现说明从占名额到登记慢过 5 分钟,查 Redis 与 K8s API 延迟;
+        #   unknown     作废也失败,结局未知,名额条目与在途占用都留着,过期之后由 Agones rooms 对账按记录判。
+        # (名额是 GameServer 上 rooms 列表里按身份的条目,放弃只删自己那一条,见
+        #  docs/design/agones-scene-node-high-density.md §13。)
         # 两个告警健康时恒 0:任一次即告警,不设 for。每次登记都给同 zone、同 kind 预建这两条值为 0 的序列,
         # increase() 能看到第一次跳变。代码未编译、未实测。
         - alert: SceneManagerSceneRegistrationConflict
@@ -872,7 +895,7 @@ spec:
               建实例回 ErrDuplicateScene,铺频道跳过这一个。两种来历:发号器重复发号(worker id 被两个进程同时持有、
               时钟回拨),或这次登记其实已落地、随后场景马上被销毁或改派(死节点收尾),go-redis 的重发或作废查询晚到。
               处置:scene_manager 日志搜 "[SceneRegistration]",拿 scene_id 查 GET scene:{id}:node 与 scene:{id}:registration;
-              查发号器(SceneIDGen)的 worker 租约日志。conflict 时不还 Agones 名额,对照 scene_manager_agones_counter_drift。
+              查发号器(SceneIDGen)的 worker 租约日志。conflict 时这次占的 Agones 名额条目已放弃,不会多占。
             runbook_url: docs/design/scene-creation-architecture.md
 
         - alert: SceneManagerSceneRegistrationUnknown
@@ -883,12 +906,36 @@ spec:
           annotations:
             summary: "zone {{ $labels.zone_id }} 新场景登记结局未知({{ $labels.kind }},10 分钟内 {{ $value }} 次)"
             description: |
-              登记脚本与作废脚本都回错,不知道登记有没有落地。预占的 Agones 名额没还:登记已落地时空闲回收会按 agones_gs 归还;
-              没落地时这份名额一直占着,scene_manager_agones_counter_drift 会显示出来。
+              登记脚本与作废脚本都回错,不知道登记有没有落地。预占的 Agones 名额条目与它的在途占用都留着:在途占用
+              5 分钟后过期,Agones rooms 对账按记录判 —— 登记已落地(记录指向这一条)就留着,没落地就取消在途占用、删掉条目。
+              不用人工还名额。
               处置:先查控制域 Redis(连接数、慢日志、主从切换、go-zero 熔断日志);scene_manager 日志搜
-              "[SceneRegistration] COUNTER DRIFT risk",行里有 scene_id、节点和 GameServer。Redis 恢复后,GET scene:{id}:node
-              不存在而 GameServer 的 rooms 计数偏高,就是这一份没还。
+              "[SceneRegistration]" 与 "outcome stays unknown",行里有 scene_id、节点和名额记录。Redis 恢复后看
+              scene_manager_agones_rooms_reconciled_total 是否把这一份收掉。
             runbook_url: docs/design/scene-creation-architecture.md
+
+        # --- Agones rooms 名额对账(scene_manager_agones_*,go/scene_manager/internal/logic/agones_reconcile.go)---
+        # 名额是 GameServer 上 rooms 列表里按身份的条目,本 zone 的领导者每 ReconcileIntervalSeconds(缺省 60s)逐条对账:
+        # 删孤儿条目、取消过期的在途占用、补加记录指向却缺失的条目、把改派时没转过来的名额转过来
+        # (docs/design/agones-scene-node-high-density.md §13.5)。agones_counter_drift 是一轮结束时仍没收敛的条目与场景数,
+        # 只由领导者发布,跟随者写 0,所以取 max。偶尔一轮不为 0(读写失败、GameServer 满了)下一轮会再试;
+        # 持续 15 分钟说明有一类不一致对账收不回来。代码未编译、未实测。
+        - alert: SceneManagerAgonesRoomsNotConverging
+          expr: |
+            max by (zone) (scene_manager_agones_counter_drift) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "zone {{ $labels.zone }} 的 Agones rooms 名额对账 15 分钟仍没收敛({{ $value }} 条)"
+            description: |
+              一轮对账结束时仍有 {{ $value }} 个名额条目或场景对不上。常见原因:
+              GameServer 满了,补不上缺失条目或转不过来改派后的名额(看 scene_manager_agones_rooms_reconciled_total
+              的 missing_no_capacity / rehome_no_capacity,同时节点在被超卖);K8s API 或控制域 Redis 读写失败;
+              rooms 列表里有不是 scene_manager 写的条目(有人手工改过 GameServer);条目属于登记在别的 zone 的场景。
+              处置:scene_manager 日志搜 "[AgonesReconcile]",逐条看是哪台 GameServer、哪个条目或场景;
+              kubectl get gs -n <zone ns> -o yaml 对照 status.lists.rooms.values 与 Redis 的 scene:{id}:agones_gs。
+            runbook_url: docs/design/agones-scene-node-high-density.md
 
         # --- 场景拆除任务(scene_manager_scene_teardown_*,go/scene_manager/internal/logic/scene_teardown_job.go)---
         # 销毁认领在提交的同一步写下拆除任务,镜像级联、C++ DestroyScene、Agones 归还等副作用做完才删;认领方没做完的

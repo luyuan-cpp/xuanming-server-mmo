@@ -8,6 +8,10 @@
 > - 接回判据 `IsResumedBy` 原先只比会话号,gate 以同一 node_id 重启后拿回旧号的新登录摘不掉保留(§5 第 0.1 步)。
 >
 > 新增用例 `ConnectionLostHoldReentry.*` 与 `ConnectionLostHold.SameSessionNumberResumesOnlyWithNewerLogin`。
+>
+> 2026-11-10 补(**未编译、未测试**):离线托管的角色跟着队长换场景(同节点 / 本 zone 跨节点)—— 托管落点(§4.2):scene 发不带 gate 的
+> EnterScene,scene_manager 提交后直接给目标 scene 节点发 `PlayerHostedPlacementEvent`,目标节点不绑会话入场、按断线托管重建保留。
+> 新增协议字段与 Kafka 事件,要先跑协议生成;验证见 §10 第 6 条。
 
 ## 0. 一句话
 
@@ -78,8 +82,8 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 
 为什么要摘会话:实体此刻确实没有活会话了。依赖「有没有活会话」的路径因此都自然按断线处理,不用改那些文件:
 
-- 跨节点交接不会发起(`HasLiveGateSession`);
-- 跨场景的队伍跟随跳过它(`player_team.cpp` 换场景分支的 `HasLiveSession`);同一场景里由服务器驱动的跟随不看会话,照常带着它走,只是不给它发跟随推送([team-follow-server-trail.md](team-follow-server-trail.md) §3.6,`team_follow_system.cpp` 的 `HasLiveGateSession`);
+- 跨节点交接不会发起(`HasLiveGateSession`;例外是服务器替离线托管中的角色发起的交接,重发改为托管落点,§4.2);
+- 跨场景的队伍跟随不带 gate 去切(`player_team.cpp` 换场景分支的 `HasLiveSession`):普通保留中的留在原场景,离线托管中的改发托管落点(§4.2);同一场景里由服务器驱动的跟随不看会话,照常带着它走,只是不给它发跟随推送([team-follow-server-trail.md](team-follow-server-trail.md) §3.6,`team_follow_system.cpp` 的 `HasLiveGateSession`);
 - 排空、疏散只存盘不改派(`EnqueueRelocateTicket`);
 - 推送不再发往 gate。
 
@@ -123,8 +127,75 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 租约到期时退出存盘已经落地、断线释放标记已写,LeaveScene 照常当场拿到证据。两台机器的墙钟差超过这 5 秒时,可能走到
 「保留拖过租约」的慢路径(§7),只是清理多等一个 claim 超时,不影响数据。
 
-没做:托管中的角色不会自己去别处(不打怪、不换图);节点排空 / 疏散时照原规则存盘退出,托管提前结束 —— 把托管中的角色搬到别的节点
-要"没有客户端的实体换场景",与离线队员跨场景跟随是同一件事(team-follow-server-trail.md §3.6 第 2 条)。
+没做:托管中的角色不会自己去别处(不打怪、不自己换图;跟着队长换场景见 §4.2);节点排空 / 疏散时照原规则存盘退出,托管提前结束 ——
+把托管中的角色搬到别的节点用的是 §4.2 同一套"托管落点",排空 / 疏散改用它是后续(§8 第 8 条)。
+
+### 4.2 离线托管的角色换场景:托管落点(2026-11-10,用户要求「队员开了离线挂机卡,然后完全杀掉客户端」也要跟着队长过去)
+
+> 代码已写,**未编译、未测试**(验证见 §10 第 6 条)。跟随侧的规则(谁替他发、什么时候发)在 [team-follow-server-trail.md](team-follow-server-trail.md) §3.7,
+> 这里讲"没有客户端的角色怎么换场景"本身。
+
+**问题**:同一场景里,离线托管的队员靠服务器驱动走位,不需要客户端(§4.1)。换场景不一样:普通换场景的提交点是 scene_manager 推给 gate 的
+路由事件(RoutePlayerEvent → gate → 目标节点 PlayerEnterGameNode),离线的角色没有 gate 会话,这条路走不通;scene_manager 接受不带
+`GateId` 的 EnterScene,但第 6 步落点成功就算提交、不发任何路由,没有人通知 scene 去挪这个实体。
+
+**做法:托管落点** —— 把"推 gate 路由"换成"直接推给目标 scene 节点",别的一概不变。
+
+1. **请求**(scene → scene_manager):`EnterSceneRequest.hosted_placement = true`,不带 `gate_id` / `gate_instance_id`;`session_id` 与
+   `login_generation` 填**断开的那次登录**(`PlayerConnectionLostComp` 里记的会话号与代次,也就是 location 里记的落点会话身份)。
+   只有离线托管中的角色可以发(`PlayerLifecycleSystem::OfflineHostedIdentity`:断线保留 + 挂机月卡确认有效且离到期还远 + 不在退出中,
+   判据 `connection_lost_hold::IsHosting` 与 `JudgeHold` 判"托管继续"同一个条件)。普通 25 秒保留不搬:那个窗口建立在 login 断线租约
+   30 秒之上(§7),搬到别的节点会在那里重新开一个窗口、拖过租约;托管期间 player_locator 一直续租,没有这个顾虑。
+2. **scene_manager**(`go/scene_manager/internal/logic/enter_hosted_placement.go`,`enterscenelogic.go` 只有几处接线):
+   - 预检,在任何去重、预占与写之前:带了 gate、缺登录身份 → 5;跨 zone → 5(没有 gate 可重定向,第二条腿也没有客户端去连);
+     目标节点在本副本的节点镜像里没有唯一的实例号 → 4(投递不了防僵尸的事件,可重试)。拒绝原因记 `enter_scene_rejected_total{reason="hosted_placement_*"}`。
+   - 其余与普通换场景完全相同:落点会话身份裁决、换手门(跨节点要源节点为当前代写的落盘标记,没有就回 18)、铸造(跨节点铸新代,同节点不铸)、
+     CAS 落点、3b 归属查询(目标节点建实体要 home_zone,与 gate 路由下发的是同一个值)。
+   - **提交点**:第 7 步(以及同落点的第 4 步)不推 gate 路由,改推 `PlayerHostedPlacementEvent`(`proto/common/event/player_placement_event.proto`)
+     给目标 scene 节点:`SceneCommand{DispatchEvent}` 发到 `scene-cmd_g<N>`、分区 = 目标节点号 % P、key = player_id、`target_instance_id` = 目标节点实例号。
+     broker ACK 是提交点;失败按推 gate 路由失败同一套回滚(location 退回、epoch 只进不退、人数还回去,回 7)。同落点(location 已经指着这个场景,
+     通常是上一条事件还没被消费)照样再发一次,失败只回 7、不回滚。
+   - 第 7b 步跨节点时给源节点派 ReleasePlayer,不变(源节点交接在途,忽略它,由交接应答收尾)。
+3. **目标节点**(`PlayerPlacementEventHandler` → `PlayerLifecycleSystem::HandleHostedPlacement`):事件是 gate 路由在"没有 gate 会话"时的等价物,
+   字段与 `PlayerEnterGameNodeRequest` 一一对应。组一份 `PlayerEnterContext{hostedPlacement = true}`,走与 gate 路由**同一条入场链**:
+   `RoleAdmissionSystem::RequestEnter`(全局 SQL 角色登记 + `handoff_fence` 交接栅栏)→ `HandleEnterGameNode`(入场会话栅栏、复用实体或认领载入)
+   → `EnterScene`。`hostedPlacement` 只改三件事:
+   - 会话号照常当**登录身份**用(角色登记原件、入场栅栏、`PlayerLoginIdentityComp`、断线保留的接回判据),但**不绑** SessionMap、快照会话保持无效、
+     **不推**任何提示(`PlayerEnterContext::NotifiableSessionId` 为 0);
+   - 入场完成后(`EnterScene` 第 3.0 步 `EnterHostedHold`)按断线托管重建保留:同节点换图的实体本来就在保留中,原样留着(计时与月卡状态不重来);
+     从别的节点搬来的新实体挂 `PlayerConnectionLostComp{now, 断开的会话, 代次}` 并查一次月卡 —— 确认有效时算托管开始,由服务器开启组队跟随
+     (`OnOfflineHostingStarted`),接到队长身后;
+   - 不取消退出:角色已在退出中(托管到期、被别的退出取代)时这条落点来晚了,让退出照常收尾(重连能取消退出,是因为有一条活着的新会话要接回)。
+4. **源节点,同节点**:scene_manager 不铸代,location 指到新场景,事件发回本节点,`HandleEnterGameNode` 复用实体、`EnterScene` 就地换场景。
+   EnterScene 的应答对跟随只记日志。
+5. **源节点,跨节点**:第一跳拿 18,与玩家自己换图到别的节点**同一条交接链**:`StartTravelHandoff(..., TravelInitiator::kServer)` 冻结、存盘、
+   写落盘标记,`PublishAndEnterTravel` 重发 —— 没有活会话时重发托管落点;scene_manager 凭标记铸新代、提交、给目标节点发事件;源节点收到成功应答后
+   `ResolveTravelOutcome` 原子取证,判已放行就不存盘销毁(`DestroyDeposedPlayer`)。服务器发起的交接未成只记日志、不回 tip(`PlayerTravelHandoffComp.serverInitiated`)。
+
+**不变量怎么保住**
+
+| 不变量 | 机制(都是既有的,托管落点没有另开) |
+|---|---|
+| 不丢档 | 跨节点:写落盘标记之前源节点已把冻结那一刻的状态落盘(骨架 I1);scene_manager 只凭当前代的标记放行;目标节点认领载入的就是那份。同节点:实体不动,只换场景 |
+| 不双活 | 源节点从冻结起不再改状态,放行后不存盘销毁;scene_manager 铸新代,目标节点以新代认领 TiDB 写权行,源节点迟到的写被写权行拒(STALE_OWNER);一次只有一个提交点(broker ACK) |
+| 归属 epoch | 跨节点铸新代(凭标记的铸造),同节点不铸;事件带落点那一刻的代次,目标节点入场时按它认领 / 更新缓存(与 gate 路由同口径) |
+| 交接栅栏 | 目标节点照常在 `RequestEnter` 里登记 `handoff_fence`(`kRegisterFenceLua` 要求 owner_epoch 等于事件的代次),载入按它认领 |
+| 角色登记 | 目标节点照常在全局 SQL 登记入场原件(会话号与代次是断开的那次登录,`ValidAdmission` 要求非 0);源节点的登记随实体销毁按既有规则关闭。组队读(`ReadTeamAdmission`)认的就是这份原件,托管中照样读得到 |
+| 登录身份 | location、目标节点的 `PlayerLoginIdentityComp` 与 `PlayerConnectionLostComp` 都是断开的那次登录:之后的重新登录按 §5 接回;租约到期的会话结束释放按 `location-release-binding.md` §13 比对身份,照常命中目标节点上的实体 |
+| Kafka 防僵尸 / 保序 | `target_instance_id` = 目标节点实例号(节点镜像里拿不到唯一实例号就在写之前拒);key = player_id |
+
+**失败、超时、重复、回滚**
+
+| 情形 | 结果 |
+|---|---|
+| scene_manager 预检拒绝(4 / 5)、身份裁决拒绝(25)、换手门第一跳(18 以外) | 一个字节都没改;跟随只记日志,下一次跟随检查再试 |
+| 推事件失败(broker 没 ACK) | 回滚落点,回 7;同节点:什么都没动;跨节点:源节点按既有取证(B4 / B5)解冻或采纳回滚后的代次,静默 |
+| EnterScene 传输失败(结果未知) | 同节点:若已提交,事件照样会到,实体照样换过去;跨节点:交给交接的应答看门狗与冻结上限裁决(与玩家自己换图相同) |
+| 事件重复 / 迟到 | 入场会话栅栏按登录代次挡住被新登录取代的旧事件;角色登记对在途的同一份上下文只重放;已在目标场景时幂等;实体在退出中不拉回 |
+| 事件丢了(目标节点消费前崩溃)、目标节点角色登记被拒、载入失败 | 不丢数据:玩家留在 location 指向的落点上无人持有;重新登录照常从盘上载入;不再登录的,月卡到期后 player_locator 停止续租,租约到期走会话结束释放清掉 location。期间他不在世界里(残余,§8 第 9 条) |
+| 托管落点到了、月卡刚好到期 | 目标节点查月卡不成立,按普通 25 秒窗口退出(租约仍有续租余量,§7 的时序不受影响) |
+| 交接中重新登录 | 新登录的 EnterScene 抢先:location 记成新身份,在途的托管落点被 25 拒,源节点按 B4 静默解冻;托管落点抢先:新登录按新 location 派到目标节点,与目标节点的托管载入谁先谁后都由入场栅栏按代次收敛到新登录 |
+| 托管落点撞上仍有活会话的实体(按构造走不到) | `HandleEnterGameNode` 在摘会话之前直接拒,不碰会话 |
 
 ## 5. 重连接回
 
@@ -186,13 +257,18 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 2. 客户端大厅断线后不会自动重登(审计 §3.1),属于客户端仓。没有客户端自动重连时,服务端的保留只在玩家手动重进时生效。
 3. 保留期间战斗结束:结算照常应用到实体上,终局推送发不出去。重连后的结果面板由另一批「近期战斗结果」恢复([battle-result-recovery.md](battle-result-recovery.md),11-05 落码、未编译),本批不重复做。
 4. 按 player_id 移动玩家、又不看活会话的入口:11-06 核对时没有。客户端换图要有客户端;镜像自动进场在进入保留时已撤掉;队伍跟随与跨节点交接都先看活会话;GM 传送(`TeleportRequest`)回 1006。以后新增这类入口要先看 `HasLiveGateSession`。漏看的后果是路由在 gate 被丢弃、location 指向新场景,重连按新 location 落地;不重连时与 gate 崩溃同一残余,由租约到期的会话结束释放和 `location-release-binding.md` §17 的撤销兜底。
+   2026-11-10 起唯一的例外是托管落点(§4.2):只替离线托管中的角色发、不带 gate,提交点是直接推给目标 scene 节点的事件,不会落进"路由在 gate 被丢弃"这条残余。
 5. 实时场景 CD 与 Buff:保留内重连沿用实体,运行时状态还在;保留到期之后才重连仍会丢。规则未定,见审计 §9.2。
 6. 保留中的实体仍被 AOI 当作观察者计算,发给它的推送在 scene 侧因为没有会话直接丢弃。量级等于断线未归的玩家数,不处理。
-7. 月卡离线托管:2026-11-06 已做(§4.1),挂机月卡有效的玩家断线后角色常驻到重连或月卡到期。ExitGame handler 里那条 TODO 指的就是这件事;托管中的角色还不会自己活动、也不能被搬到别的节点(§4.1 末段)。
+7. 月卡离线托管:2026-11-06 已做(§4.1),挂机月卡有效的玩家断线后角色常驻到重连或月卡到期。ExitGame handler 里那条 TODO 指的就是这件事;托管中的角色还不会自己活动(§4.1 末段)。2026-11-10 起能跟着队长换场景、搬到本 zone 的别的节点(§4.2)。
+8. 节点排空 / 疏散时托管中的角色仍按原规则存盘退出,托管提前结束。改用 §4.2 的托管落点把他们改派到别的节点是后续:要动 `EnqueueRelocateTicket` 的"只给有活会话的人发票"与改派待确认表(它按会话踢线),本批没做。
+9. 托管落点提交之后目标节点没把人建起来(事件在消费前丢了、目标节点角色登记被拒、载入失败):不丢数据,但角色不在世界里,直到重新登录或月卡到期后租约清理(§4.2 失败表)。频率 = 目标节点在那一刻出故障的概率;要补的话是 scene_manager 在提交后按 location 核对"持有者有没有登记入场原件",没有就重发事件,本批没做。
 
 ## 9. 双版本
 
 Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家的策略与 C++ 不同(`muduo-rpc-channel.md` §8.3 末段)。要做的是同一组行为:断线带原因、保留 25 秒、新会话接回、重连回原场景。
+
+2026-11-10 托管落点(§4.2):Java 版待做,只在 Java 仓 `PARITY.md` 末尾登记,本轮不写 Java 代码。客户端不可见(协议字段与 Kafka 事件都是服务端内部),要对齐的是行为:离线托管的队员跟着队长换场景、到了之后照常被接到队长身后。
 
 2026-11-06 核对 §5 第 3 步的判据修正时看过 Java 版,没有同类问题,没有改 Java 仓:Java gate 发进场前先让旧场景放掉旧玩家,scene 每次进场都重新加载、新建实例并完整入场(`game-scene` 的 `SceneWorld.onPlayerEnter` / `finishPlayerLoaded`),不复用实体,也就没有「按已摘掉的快照会话判换会话」这一步。Java 做断线保留的接回时若改成复用实体,要用 §5 的两条判据:换会话按登录身份判(会话号或登录代次变了),不能比已摘掉的会话;接回保留也比登录代次,不能只比会话号。
 
@@ -219,6 +295,14 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
 5. 本地联调(可选,不替代以上):起本地全套,机器人进大世界副本或非默认地图后断开 TCP。
    - 25 秒内用 access_token 重登:scene 日志依次有 `[ConnectionLostHold] holding player` 和 `resumed by a new session`;RoutePlayerEvent 的 scene_id 等于断线前的场景;客户端收到入场通知。
    - 超过 25 秒不重连:出现 `hold of player … expired`,随后是原来的退出存盘日志;30 秒租约到期时 LeaveScene 应判 `released`,不应出现 `pending`。
+6. 2026-11-10 托管落点(§4.2),**未编译、未测试**。命令与顺序写在 `docs/PROGRESS.md` 同日条目,这里只列用例:
+   - 先跑协议生成(新增 `EnterSceneRequest.hosted_placement`、`proto/common/event/player_placement_event.proto`;生成器会把新的 `.pb.cc` 同步进
+     `cpp/generated/proto/proto.vcxproj`、生成事件号与 scene 的 Kafka 白名单 / 分发;`cpp/nodes/scene/handler/event/player_placement_event_handler.{h,cpp}`
+     已按生成器模板手写好守护段,生成时原样保留)。
+   - Go(`go/scene_manager/internal/logic/enter_hosted_placement_test.go`,8 条):同节点不铸代、事件发到目标节点分区并带实例号与断开那次登录;跨节点凭标记铸代、
+     先提交后派 ReleasePlayer;没有标记回 18 不写;推事件失败回滚(epoch bump 到 3);请求形状不对 / 跨 zone / 目标节点没有唯一实例号都在写之前拒;同落点重发事件。
+   - C++(`cross_zone_test`):`ConnectionLostHoldAfkPass.HostingNeedsAConfirmedPassWithTimeLeft`、`HostedPlacementEcs.*` 2 条、`HostedPlacementReentry.*` 5 条、
+     `TravelHandoffInitiatorEcs.*` 2 条;跟随侧见 team-follow-server-trail.md §8。
 
 ## 11. 改动清单
 
@@ -239,3 +323,13 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
 - scene_manager:`go/scene_manager/internal/logic/enter_resume_scene.go`(新增)、`enterscenelogic.go`(第 3a 步与回落指标)、`enter_resume_scene_test.go`(新增)。
 - login:`go/login/internal/logic/pkg/sessionmanager/session_manager.go`(租约与 C++ 常量互注)。
 - 测试:`cpp/tests/cross_zone_test/cross_zone_test.cpp`(`ConnectionLostHold*`)。
+- 2026-11-10 托管落点(§4.2):
+  - proto:`proto/scene_manager/scene_manager_service.proto`(`EnterSceneRequest.hosted_placement = 14`)、`proto/common/event/player_placement_event.proto`(新增)。
+  - scene_manager:`enter_hosted_placement.go`(新增:预检、实例号、`routePlacement` / `routeHostedPlayerToScene`)、`enterscenelogic.go`(接线 6 处)、
+    `metrics/metrics.go`(Help 补三个 reason)、`enter_hosted_placement_test.go`(新增)。
+  - scene 库:`player_lifecycle.{h,cpp}`(`PlayerEnterContext.hostedPlacement` / `NotifiableSessionId`、`OfflineHostedIdentity`、`HostedPlacementContext`、
+    `HandleHostedPlacement`、`EnterHostedHold`、入场链不绑不推、`TravelInitiator`、`PublishAndEnterTravel` 的托管重发、跟随应答的 18、
+    服务器发起的交接不回 tip)、`role_admission_system.cpp`(被拒时推给可推的会话、在途比对带 `hostedPlacement`)、
+    `connection_lost_hold.h`(`IsHosting`)、`player/comp/player_ownership_comp.h`(`PlayerTravelHandoffComp.serverInitiated`)。
+  - scene 节点:`handler/event/player_placement_event_handler.{h,cpp}`(新增,守护段)、`scene.vcxproj` / `.filters`(登记)。
+  - 跟随侧文件见 team-follow-server-trail.md §3.7。

@@ -401,9 +401,12 @@ Test-Case '库:模式切换清单 —— 会踢人的条目带 CurrentShape / Ke
     Assert-True -Condition ($external[0].KicksPlayers -and $external[0].KeepHint -eq '-ClientEntryMode podip') -Because '删 gate Deployment = 整台踢人,报错要告诉操作者保持现状传什么'
     Assert-True -Condition (-not $external[1].KicksPlayers) -Because 'gate-entry 残留删了不踢人'
     $toFleet = Get-BattleObsoleteResources -BattleOrchestrator agones
-    Assert-True -Condition ($toFleet.Count -eq 1 -and $toFleet[0].Kind -eq 'deployment' -and $toFleet[0].KicksPlayers) -Because 'battle 切 Fleet:删 Deployment 形态,在打的局作废'
+    Assert-True -Condition ($toFleet.Count -eq 2 -and $toFleet[0].Kind -eq 'deployment' -and $toFleet[0].KicksPlayers) -Because 'battle 切 Fleet:删 Deployment 形态,在打的局作废'
+    Assert-Equal -Expected 'deployment battle|deployment battle-canary' -Actual (($toFleet | ForEach-Object { "$($_.Kind) $($_.Name)" }) -join '|') -Because '金丝雀 battle 池(发布轨道设计 §2.6)随稳定版一起切换形态,另一种 kind 的那份一起删'
+    Assert-True -Condition ($toFleet[1].KicksPlayers -and $toFleet[1].KeepHint -eq '-BattleOrchestrator deployment') -Because '删金丝雀池同样作废在打的局,要过同一道闸'
     $toDeployment = Get-BattleObsoleteResources -BattleOrchestrator deployment
-    Assert-True -Condition ($toDeployment.Count -eq 1 -and $toDeployment[0].Kind -eq 'fleets.agones.dev' -and $toDeployment[0].ApiGroup -eq 'agones.dev') -Because '切回 Deployment 删 Fleet;集群没装 Agones 时按 ApiGroup 跳过'
+    Assert-True -Condition ($toDeployment.Count -eq 2 -and $toDeployment[0].Kind -eq 'fleets.agones.dev' -and $toDeployment[0].ApiGroup -eq 'agones.dev') -Because '切回 Deployment 删 Fleet;集群没装 Agones 时按 ApiGroup 跳过'
+    Assert-True -Condition ($toDeployment[1].Name -eq 'battle-canary' -and $toDeployment[1].Kind -eq 'fleets.agones.dev' -and $toDeployment[1].ApiGroup -eq 'agones.dev' -and $toDeployment[1].KicksPlayers) -Because '金丝雀 battle 池的 Fleet 同样删、同样按 ApiGroup 跳过'
     if ($LibCallDefects.Count -gt 0) { throw "podip 分支未执行:$($LibCallDefects -join '; ')" }
     foreach ($case in @(@{ Replicas = 2; Count = 5; Entry = $true }, @{ Replicas = 1; Count = 4; Entry = $false })) {
         $podip = Get-GateObsoleteResources -ClientEntryMode podip -GateReplicas $case.Replicas

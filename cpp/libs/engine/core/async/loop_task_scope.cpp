@@ -12,6 +12,7 @@
 
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
+#include "thread_context/trace_context_tls.h"
 
 namespace
 {
@@ -50,7 +51,9 @@ namespace
 			}
 			// muduo 的 Functor 可拷贝，Cobalt 的完成对象可能只可移动。
 			auto pending = std::make_shared<std::decay_t<Work>>(std::forward<Work>(work));
-			loop.get().queueInLoop([pending] { (*pending)(); });
+			// 投递出去再执行的恢复会离开当前作用域：记下此刻的 trace，执行时装回(docs/design/distributed-tracing.md §5.6)。
+			// 协程恢复都是一次性投递；就地执行的分支本来就在当前上下文里，不用管。
+			loop.get().queueInLoop(tracing::Bind([pending] { (*pending)(); }));
 		}
 	};
 }

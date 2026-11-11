@@ -14,7 +14,7 @@ spec:
       targetPort: 6000
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: db
   labels:
@@ -26,19 +26,18 @@ spec:
   # 存盘接口无状态,并发写由 player_store 表上的事务判定兜住,多实例不需要分区独占。
   # MySQL 连接预算:每个实例最多 MaxOpenConn(60)条,外加每个额外落点库 8 条(Placement.ZoneStore* / NonZoneStore*);
   # 按 zone 数 × 副本数计入共用 MySQL 的总账,公式与规划见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger
-  # (滚动发布时每个 Deployment 按多 2 个实例计:maxSurge 的新 Pod + 仍在优雅退出、连接未释放的旧 Pod)。
+  # (滚动发布时每个工作负载按多 2 个实例计:新 Pod + 仍在优雅退出、连接未释放的旧 Pod;StatefulSet 一次只换一个,这样算偏保守)。
   replicas: 2
-  # minReadySeconds:新 Pod Ready 之后再等 20s 才算可用、才开始停旧 Pod。
-  # 新 Pod Ready 后很快崩溃的不会被算作可用,滚动随之停住,旧 Pod 不会被停掉。
-  # 这个字段属于 Deployment spec、不在 Pod 模板里:改它不触发 Pod 重建,在下一次滚动时生效。
-  minReadySeconds: 20
-  # 先起新的、Ready 之后再停旧的。以前没写 strategy,默认滚动策略在 1 副本时同样是先起后停 ——
-  # 也就是说"单实例"在每次发布的重叠期本来就不成立;现在显式写出来,并且重叠是安全的。
-  strategy:
+  # SQL 写者是 StatefulSet:Pod 序号就是写者名册的槽位,每次启动在同一槽位上换代,名册不随启动次数消耗
+  # (docs/design/writer-roster-exhaustion-20261106.md §5.5)。滚动一次换一个副本,不能 maxSurge。
+  serviceName: db
+  podManagementPolicy: Parallel
+  updateStrategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+  # minReadySeconds:新 Pod Ready 之后再等 20s 才算可用、才去换下一个副本。
+  # 新 Pod Ready 后很快崩溃的不会被算作可用,滚动随之停住,其余副本不会被换掉。
+  # 这个字段属于工作负载 spec、不在 Pod 模板里:改它不触发 Pod 重建,在下一次滚动时生效。
+  minReadySeconds: 20
   selector:
     matchLabels:
       app: db
@@ -66,7 +65,7 @@ spec:
                   matchLabels:
                     app: db
                 topologyKey: kubernetes.io/hostname
-      # 独立registrar只在init读取有限预批准roster与控制凭据；normal只见本Pod选中配置。
+      # 独立registrar只在init读取槽位名册与控制凭据,按 Pod 序号选槽位、现场生成这一代的身份;normal只见本Pod选中配置。
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -76,10 +75,12 @@ spec:
         - name: sql-writer-registrar
           image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
           command: ["/bin/sh", "-ec"]
-          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/db.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/db.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)","-pod-name","$(POD_NAME)"]
           env:
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
             - name: MMORPG_SQL_OPERATOR_PRINCIPAL
               valueFrom:
                 secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: principal, optional: false}
