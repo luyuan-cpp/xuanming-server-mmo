@@ -203,6 +203,10 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildTrialServiceBusy = 14041;</code>
      */
     kGuildTrialServiceBusy(14041),
+    /**
+     * <code>kGuildTrialBattleAborted = 14042;</code>
+     */
+    kGuildTrialBattleAborted(14042),
     UNRECOGNIZED(-1),
     ;
 
@@ -387,6 +391,10 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildTrialServiceBusy = 14041;</code>
      */
     public static final int kGuildTrialServiceBusy_VALUE = 14041;
+    /**
+     * <code>kGuildTrialBattleAborted = 14042;</code>
+     */
+    public static final int kGuildTrialBattleAborted_VALUE = 14042;
 
 
     public final int getNumber() {
@@ -456,6 +464,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14039: return kGuildTrialInviteDeclined;
         case 14040: return kGuildTrialInviteCooldown;
         case 14041: return kGuildTrialServiceBusy;
+        case 14042: return kGuildTrialBattleAborted;
         default: return null;
       }
     }
@@ -521,7 +530,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\254\t\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\313\t\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -551,8 +560,9 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "tyJoinTooRecent\020\325m\022\035\n\030kGuildTrialInviteE" +
       "xpired\020\326m\022\036\n\031kGuildTrialInviteDeclined\020\327" +
       "m\022\036\n\031kGuildTrialInviteCooldown\020\330m\022\033\n\026kGu" +
-      "ildTrialServiceBusy\020\331mB$\n\016com.game.table" +
-      "Z\022generated/pb/tableb\006proto3"
+      "ildTrialServiceBusy\020\331m\022\035\n\030kGuildTrialBat" +
+      "tleAborted\020\332mB$\n\016com.game.tableZ\022generat" +
+      "ed/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

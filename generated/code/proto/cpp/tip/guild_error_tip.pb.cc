@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025guild_error_tip.proto*\254\t\n\013guild_error\022"
+    "\n\025guild_error_tip.proto*\313\t\n\013guild_error\022"
     "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu"
     "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot"
     "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea"
@@ -65,14 +65,15 @@ const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "tyJoinTooRecent\020\325m\022\035\n\030kGuildTrialInviteE"
     "xpired\020\326m\022\036\n\031kGuildTrialInviteDeclined\020\327"
     "m\022\036\n\031kGuildTrialInviteCooldown\020\330m\022\033\n\026kGu"
-    "ildTrialServiceBusy\020\331mB$\n\016com.game.table"
-    "Z\022generated/pb/tableb\006proto3"
+    "ildTrialServiceBusy\020\331m\022\035\n\030kGuildTrialBat"
+    "tleAborted\020\332mB$\n\016com.game.tableZ\022generat"
+    "ed/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_guild_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_guild_5ferror_5ftip_2eproto = {
     false,
     false,
-    1268,
+    1299,
     descriptor_table_protodef_guild_5ferror_5ftip_2eproto,
     "guild_error_tip.proto",
     &descriptor_table_guild_5ferror_5ftip_2eproto_once,
@@ -91,7 +92,7 @@ guild_error_descriptor() {
   return file_level_enum_descriptors_guild_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t guild_error_internal_data_[] = {
-    65536u, 2752512u, 14026u, 14015u, 14034u, 14007u, 14022u, 14030u, 14038u, 14003u, 14011u, 14019u, 14024u, 14028u, 14032u, 14036u, 14040u, 14001u, 14005u, 14009u, 14013u, 14017u, 14021u, 14023u, 14025u, 14027u, 14029u, 14031u, 14033u, 14035u, 14037u, 14039u, 14041u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, 14018u, 14020u, };
+    65536u, 2818048u, 14027u, 14015u, 14035u, 14007u, 14023u, 14031u, 14039u, 14003u, 14011u, 14019u, 14025u, 14029u, 14033u, 14037u, 14041u, 14001u, 14005u, 14009u, 14013u, 14017u, 14021u, 14024u, 14026u, 14028u, 14030u, 14032u, 14034u, 14036u, 14038u, 14040u, 14042u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, 14018u, 14020u, 14022u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {
