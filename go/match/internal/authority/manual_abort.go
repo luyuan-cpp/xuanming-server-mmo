@@ -32,10 +32,10 @@ import (
 //
 // 为什么放行条件(assessManualAbort)足以证明「这一局不会再有合法终局」:
 //   - 原件过不了 supportedOutcomeOriginal,COMPLETE 的 validateTerminalResult 读同一个判据,battle 的任何结果都会被永久拒收;
-//     到期恢复、帮会取消、提前裁决也都先过这道判据,对这类成局只回 UNKNOWN、不写库,所以人工 ABORT 不会与合法终局抢。
-//     唯一的例外是 operation_missing(operation_id 为空):它过得了这道判据(判据不核 operation 是否为空),COMPLETE 在入口就因
-//     operation 为空被拒,到期恢复的候选 SQL 也不选它,但帮会历练局的取消会照截止裁决写 ABORT。人工与它走同一把锁、同一个终局
-//     主键,只落一份 ABORT,后到的一方回已处理,结果无害;
+//     到期恢复、帮会取消、提前裁决都只裁决 autoTerminalOriginal 为真的局(在途、原件可裁决且在到期恢复候选形状里,即 AUTO 类),
+//     对其余各类只回 UNKNOWN、不写库,所以人工 ABORT 不会与合法终局抢。operation_missing(operation_id 为空)过得了原件判据
+//     (判据不核 operation 是否为空),但 COMPLETE 在入口就因 operation 为空被拒,2026-11-06 起帮会取消也与到期恢复同一判据、
+//     不再对它写截止 ABORT(原先会写,与人工同一把锁、同一个终局主键,只落一份,结果无害),本工具是它唯一的出口;
 //   - 要求 TiDB 时刻已过 max(成局截止, 原件截止, 原件准入期限) 加 60 秒终局宽限:battle 房间按原件截止强制结束,
 //     准入期限之后不会再接这份 Create;宽限与截止裁决同一个常量;
 //   - 要求工作租约已到期:持租者还可能在推进这一局(与到期恢复同一条);
@@ -299,7 +299,8 @@ const StrandedFormationPageMax = 100
 // 与到期恢复同一顺序;COMPLETE 已退休(retry_at_ms=terminalOutcomeNoRetryMs)的局不在内。先只取标量游标、再逐局读整行:
 // 行本身解不开(formationUnreadable)的一局只标 formation_unreadable,不卡住整页(同 RecoverExpiredOutcomeLane);
 // 读库失败(连接、超时、ctx)让整页返回错误,入口回 retry,不把瞬时错误报成数据损坏。返回本页、下一页游标(到末尾为零值)
-// 与 TiDB 时刻。补上 CountStrandedExpiredFormations 看不到的 state 4 与 original_mismatch。
+// 与 TiDB 时刻。圈定范围与巡检计数 CountStrandedExpiredFormations 同一条 expiredInFlightSQL;计数只数其中 shape_invalid 一类,
+// original_mismatch 要解原件才判得出,只在这里列出。
 func (s *Store) ListStrandedFormations(ctx context.Context, after ExpiredOutcomeCursor, limit int) ([]*pb.StrandedFormation, ExpiredOutcomeCursor, uint64, error) {
 	if s == nil || s.DB == nil {
 		return nil, after, 0, errors.New("人工处置权威未装配")
@@ -314,8 +315,9 @@ func (s *Store) ListStrandedFormations(ctx context.Context, after ExpiredOutcome
 	if stamp < terminalOutcomeGraceMs {
 		return nil, ExpiredOutcomeCursor{}, stamp, nil
 	}
-	rows, err := s.DB.QueryContext(ctx, "SELECT retry_at_ms,battle_id FROM match_formation WHERE state IN(2,3,4) AND retry_at_ms<? AND (retry_at_ms>? OR (retry_at_ms=? AND battle_id>?)) AND deadline_ms>0 AND deadline_ms<=? AND LENGTH(create_request)>0 ORDER BY retry_at_ms,battle_id LIMIT "+strconv.Itoa(limit),
-		terminalOutcomeNoRetryMs, after.AfterRetryMs, after.AfterRetryMs, after.AfterBattle, stamp-terminalOutcomeGraceMs)
+	// 圈定范围与巡检计数共用 expiredInFlightSQL(2026-11-06),两边口径一致。
+	rows, err := s.DB.QueryContext(ctx, "SELECT f.retry_at_ms,f.battle_id FROM match_formation f WHERE "+expiredInFlightSQL+" AND (f.retry_at_ms>? OR (f.retry_at_ms=? AND f.battle_id>?)) ORDER BY f.retry_at_ms,f.battle_id LIMIT "+strconv.Itoa(limit),
+		terminalOutcomeNoRetryMs, stamp-terminalOutcomeGraceMs, after.AfterRetryMs, after.AfterRetryMs, after.AfterBattle)
 	if err != nil {
 		return nil, after, 0, err
 	}

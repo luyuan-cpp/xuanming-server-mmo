@@ -43,7 +43,7 @@ AOI 空间查询（六边形网格邻居）填充的是**关注列表（Interest
 ### 淘汰规则
 
 容量只数**正在显示**的条目（`AoiListComp::visibleCount`）。一个条目的权重取它的空间标签与各显式来源标签中最高的一个。当显示名额已满、又有关系需要显示时，比较它与已显示条目中**最低权重**者的**策略权重**：
-- 新关系权重 > 最低条目权重 → 淘汰最低条目，显示新关系。被淘汰者只剩空间来源时整条删除，下次跨格重新评估；带显式来源时转为暂不显示，关系保留。
+- 新关系权重 > 最低条目权重 → 淘汰最低条目，显示新关系。被淘汰者只剩空间来源时整条删除，任一方下一次位移重判时重新评估；带显式来源时转为暂不显示，关系保留。
 - 否则：新的空间关系被拒，不建条目；新的显式关注照常登记，暂不显示。
 
 淘汰只改本观察者的表，并只通知本观察者的客户端移除一次；目标那一侧的关系各自独立，不要求互相占位。观察者让出名额后（空间离开、撤销关注、目标离场），按权重补上满足可见条件的暂隐显式关注，并发送创建与当前位置。
@@ -102,10 +102,12 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 
 ## 隐身可见性
 
-`ViewSystem::CanSee(observer, target)` 用于空间关注的进入检查：
+空间关注用两个判定，隐身规则相同、距离不同：
 
-1. 距离检查。
-2. 目标带 `StealthedTagComp`（`kBuffTypeStealth` Buff 维护）时不可见，**除非**观察者对它的某个显式来源授予了侦测能力（`AoiFollowGrant::revealsStealth`）。普通关注、队伍关系和空间邻近都不能看穿隐身。
+- `ViewSystem::CanSee(observer, target)`：建立空间关注，三维距离不超过视野半径（含等号）。
+- `ViewSystem::CanKeepSeeing(observer, target)`：维持已有的空间关注，三维距离不超过离开半径（视野半径 × `kAoiLeaveRadiusFactor`）。两个半径之间是滞后区间，评估时机见 [AOI 单向关注](aoi-directed-interest.md)「空间关注的评估时机」。
+
+隐身规则：目标带 `StealthedTagComp`（`kBuffTypeStealth` Buff 维护）时不可见，**除非**观察者对它的某个显式来源授予了侦测能力（`AoiFollowGrant::revealsStealth`）。普通关注、队伍关系和空间邻近都不能看穿隐身。
 
 隐身标签从无到有、从有到无时，`BuffSystem` 调用 `AoiSystem::RefreshTargetVisibility`：
 
@@ -140,7 +142,9 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 | `InterestSystem::GetVisibleWatchers(target, out)` | 正在显示 target 的观察者，移动、属性、技能广播的接收者 |
 | `InterestSystem::GetEffectiveCapacity(watcher)` | 动态解析有效容量 |
 | `InterestSystem::GetPriorityPolicy(watcher)` | 获取场景的策略（默认：开放世界） |
-| `ViewSystem::CanSee(observer, target)` | 空间可见判定：距离 + 隐身（侦测授权例外） |
+| `ViewSystem::CanSee(observer, target)` | 进视野判定：距离 ≤ 视野半径 + 隐身（侦测授权例外） |
+| `ViewSystem::CanKeepSeeing(observer, target)` | 维持判定：距离 ≤ 离开半径 + 隐身（侦测授权例外） |
+| `AoiSystem::Update` | 更新格子成员；首次入格或位置变化到了重判时机时按距离重判空间来源（两个方向） |
 | `ViewSystem::IsStealthed(entity)` | 检查是否有隐身 Buff |
 
 ## 相关文件
@@ -150,8 +154,9 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 | `spatial/constants/aoi_priority.h` | 优先级标签、`AoiPriorityPolicy` 结构体、内置策略、动态容量常量 |
 | `spatial/comp/scene_node_scene_comp.h` | `AoiEntry`、`AoiListComp`（正向）、`AoiWatchersComp`（反向）、`AoiFollowSource` / `AoiFollowGrant`、容量与策略组件 |
 | `spatial/system/interest.h/.cpp` | 两张索引的唯一写者：来源合并、容量淘汰与补位、隐身可见条件、离场清理 |
-| `spatial/system/aoi.h/.cpp` | 网格评估、显式关注入口、可见性变化的净化与组包下发 |
-| `spatial/system/view.h/.cpp` | `CanSee()`、`IsStealthed()`、技能广播接收者 |
+| `spatial/constants/view.h` | 视野半径、离开半径系数、重判步长、格子尺寸 |
+| `spatial/system/aoi.h/.cpp` | 格子成员、按距离的位移重判、显式关注入口、可见性变化的净化与组包下发 |
+| `spatial/system/view.h/.cpp` | `CanSee()`、`CanKeepSeeing()`、`IsStealthed()`、技能广播接收者 |
 | `spatial/system/movement.cpp` | 移动广播接收者、同场景瞬移后给显式关注者补发新位置 |
 | `actor/attribute/system/actor_state_attribute_sync.cpp` | 属性同步接收者改为反向索引中的可见观察者 |
 | `combat/buff/system/buff.cpp` | 隐身标签变化时调用 `RefreshTargetVisibility` |
@@ -164,7 +169,6 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - **Boss 标记**：场景创建时标记 Boss 实体；网格进入时检测并分配 `kBoss` 标签。
 - **压力集成**：场景 tick 监控器根据实体数量 / CPU 负载写入 `ScenePressureComp.pressureFactor`。
 - **客户端设置 RPC**：将客户端上报的显示数量接入 `AoiClientCapacityComp`。
-- **滞后/缓冲期**：为在网格边界反复振荡的实体添加一个宽限期，避免频繁添加/移除。只作用于空间来源，不能绑到显式关注的存续上。
 - **玩法接入显式关注**：技能追踪（鹰眼术）、任务目标、切磋对象等按各自来源调用 `AoiSystem::Follow` / `Unfollow`；队伍需要视野外同步时由队伍逻辑分别建立两个方向的关注。
 - **自定义策略**：从配置表数据驱动加载策略。
 
@@ -209,3 +213,14 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 容量淘汰此前静默删除条目、客户端留下不再更新的残影；现在被淘汰者通知观察者本人一次。
 - 隐身此前只在跨格时生效，已在显示的观察者会一直收到隐身者的坐标；现在隐身开始与结束都立即重判。
 - 内存：每个条目多一个空的 `std::vector<AoiFollowGrant>` 和两个布尔，约增加 24～32 字节；反向索引与正向条目一一对应。没有压测数据，上线前随 AOI 压测复核。
+
+## 2026-11-10 空间关注改为按距离重判
+
+冒烟发现：移动进入新的一组格子时对方被 `CanSee` 的距离挡住，之后在格子里怎么走都互相看不见。根因是距离只在跨格那一刻判一次（格子 20 m、视野 10 m，跨格时新格子里的人至少在 20 m 外），同一组格子里的靠近不会再判；出视野则只看是否离开七格（20～73 m）。完整推导与规则见 [AOI 单向关注](aoi-directed-interest.md)「空间关注的评估时机」，要点：
+
+- 进视野三维距离 ≤ 10 m（含等号），出视野 > 20 m，中间是滞后区间；格子只负责找进视野的候选，出视野与格子无关。
+- 每个模拟步比较当前位置与上次评估位置：静止的实体位置一变就重判，移动中的累计位移 ≥ 1 m 才重判；首次入格立即判。每次重判两个方向都处理。
+- 口径与 Java 版一致（Java 仓 `docs/reference/mmorpg-client-contract-aoi.md` §8、`PARITY.md`「视野（AOI）进出通知」行），Java 不用改代码。
+- 原来「后续计划」里的滞后 / 缓冲期由这次的两个半径实现，已从计划中删去。
+- `AoiSystem::UpdateGridState` / `HandleEntityVisibility` 改为 `UpdateGridMembership`（只挪格子成员）与 `ReevaluateVisibility`（按距离重判）；上两节提到的跨格进出处理以本节为准。
+- 未编译，待 Codex 按 [AOI 单向关注](aoi-directed-interest.md)「验证」执行。

@@ -11,8 +11,10 @@
 #include <vector>
 #include "hexagons_grid.h"
 #include "spatial/system/aoi.h"
+#include "spatial/system/grid.h"
 #include "spatial/system/interest.h"
 #include "spatial/comp/scene_node_scene_comp.h"
+#include "spatial/constants/view.h"
 #include "combat/buff/comp/buff_comp.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -98,6 +100,11 @@ AoiFollowGrant SkillGrant(uint64_t id, bool revealsStealth = false) {
 
 AoiFollowGrant TeamGrant(uint64_t teamId) {
     return AoiFollowGrant{AoiFollowSource{AoiFollowKind::kTeam, teamId}, AoiPriority::kTeammate, false};
+}
+
+// 实体当前位置所在的六边形格。
+Hex HexOf(entt::entity entity) {
+    return GridSystem::CalculateHexPosition(tlsEcs.actorRegistry.get<Transform>(entity));
 }
 
 class AoiDeliveryTest : public ::testing::Test {
@@ -594,6 +601,187 @@ TEST_F(AoiDeliveryTest, FollowRejectsSelfAndOtherSceneTargets) {
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(watcher));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiWatchersComp>(elsewhere));
     EXPECT_TRUE(deliveries.empty());
+}
+
+// ---------------------------------------------------------------------------
+// 空间关注按距离重判(2026-11-10 冒烟回归):进视野 ≤ 视野半径、出视野 > 离开半径,
+// 任一方位置变化后重新评估,不再只在跨格那一刻判距离。口径见 spatial/constants/view.h。
+// 下面的坐标都取在格子内部(x = 0 的竖线不经过格边),格子关系用前置断言写明。
+// ---------------------------------------------------------------------------
+
+// 冒烟复现:两人同在一格、相距 14,之后走到 5 m。修复前同格内移动不再判距离,永远互相看不见。
+TEST_F(AoiDeliveryTest, ApproachWithinSameGridEntersViewWithoutCrossing) {
+    const auto stationary = Spawn(0, 0);
+    const auto walker = Spawn(0, 14);
+    AoiSystem::Update(0);
+    ASSERT_EQ(0, hex_distance(HexOf(stationary), HexOf(walker))) << "前置条件:同一格";
+    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:相距 14,超出视野半径";
+    deliveries.clear();
+
+    MoveTo(walker, 0, 5);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ(1, CreatesFor(stationary, walker)) << "静止的一方也收到走近者的创建";
+    EXPECT_EQ(1, CreatesFor(walker, stationary));
+    EXPECT_EQ((EntityUnorderedSet{stationary}), VisibleWatchersOf(walker));
+    EXPECT_EQ((EntityUnorderedSet{walker}), VisibleWatchersOf(stationary));
+
+    deliveries.clear();
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty()) << "位置没变不重新评估,不重复发送";
+}
+
+// 冒烟复现:跨进新的一组格子时对方还在视野外,之后在格子里走近。修复前对方所在格
+// 早已是邻格、不在「新进入的格子」里,不会再判,走到跟前也看不见。
+TEST_F(AoiDeliveryTest, CrossIntoGridsWithDistantNeighbourThenApproachEntersView) {
+    const auto stationary = Spawn(0, 0);
+    const auto walker = Spawn(0, 120);
+    AoiSystem::Update(0);
+    ASSERT_GT(hex_distance(HexOf(stationary), HexOf(walker)), 1) << "前置条件:起点不在邻格";
+
+    MoveTo(walker, 0, 30);
+    AoiSystem::Update(0);
+    ASSERT_EQ(1, hex_distance(HexOf(stationary), HexOf(walker))) << "前置条件:跨进了以对方所在格为邻格的格子";
+    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:相距 30,超出视野半径";
+    deliveries.clear();
+
+    MoveTo(walker, 0, 20);
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty()) << "相距 20 仍在视野外";
+
+    MoveTo(walker, 0, 8);
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, CreatesFor(stationary, walker));
+    EXPECT_EQ(1, CreatesFor(walker, stationary));
+}
+
+// 出视野按距离:视野半径与离开半径之间是滞后区间;同一组格子里走远到离开半径外也会移除,
+// 之后回到滞后区间不重新进视野,走到视野半径(含等号)才重新进。
+TEST_F(AoiDeliveryTest, DistanceHysteresisKeepsViewUntilLeaveRadiusWithinSameGrids) {
+    const double viewRadius = kMaxViewRadius;
+    const double leaveRadius = kMaxViewRadius * kAoiLeaveRadiusFactor;
+    const double bandMiddle = (viewRadius + leaveRadius) / 2;
+    const auto stationary = Spawn(0, 0);
+    const auto walker = Spawn(0, 5);
+    AoiSystem::Update(0);
+    ASSERT_EQ((EntityUnorderedSet{stationary}), VisibleWatchersOf(walker));
+    deliveries.clear();
+
+    MoveTo(walker, 0, bandMiddle);
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty()) << "滞后区间内保持显示";
+
+    MoveTo(walker, 0, leaveRadius + 1);
+    ASSERT_LE(hex_distance(HexOf(stationary), HexOf(walker)), 1) << "前置条件:仍在邻格内,移除来自距离而不是格子";
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, DestroysFor(stationary, walker));
+    EXPECT_EQ(1, DestroysFor(walker, stationary));
+    EXPECT_TRUE(VisibleWatchersOf(walker).empty());
+    EXPECT_TRUE(VisibleWatchersOf(stationary).empty());
+
+    deliveries.clear();
+    MoveTo(walker, 0, bandMiddle);
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty()) << "滞后区间内不重新进视野";
+
+    MoveTo(walker, 0, viewRadius);
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, CreatesFor(stationary, walker)) << "视野半径含等号";
+    EXPECT_EQ(1, CreatesFor(walker, stationary));
+}
+
+// 移动中(速度非零)累计位移达到 kAoiReevaluateDistance 才重判;停下来(速度清零)时按精确位置立即重判。
+TEST_F(AoiDeliveryTest, MovingEntityIsReevaluatedPerDistanceStepAndOnStop) {
+    const double start = kMaxViewRadius + 0.5;
+    const auto stationary = Spawn(0, 0);
+    const auto walker = Spawn(0, start);
+    tlsEcs.actorRegistry.emplace<Velocity>(walker).set_y(-1);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:起点在视野外";
+    deliveries.clear();
+
+    // 走了 0.8 步,已进视野半径:还在移动,先攒着。
+    MoveTo(walker, 0, start - 0.8 * kAoiReevaluateDistance);
+    ASSERT_LE(start - 0.8 * kAoiReevaluateDistance, kMaxViewRadius);
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty()) << "移动中累计位移不足一步,先不评估";
+
+    // 累计到 1.6 步:按当前位置评估。
+    MoveTo(walker, 0, start - 1.6 * kAoiReevaluateDistance);
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, CreatesFor(stationary, walker));
+    EXPECT_EQ(1, CreatesFor(walker, stationary));
+
+    // 停步:另一人从另一侧走进视野半径后速度清零,位移不足一步也立即按精确位置评估,不会停在视野内却看不见。
+    const auto stopper = Spawn(0, -start);
+    auto& stopperVelocity = tlsEcs.actorRegistry.emplace<Velocity>(stopper);
+    stopperVelocity.set_y(1);
+    AoiSystem::Update(0);
+    ASSERT_EQ(0, CreatesFor(stationary, stopper)) << "前置条件:起点在视野外";
+    MoveTo(stopper, 0, -(start - 0.8 * kAoiReevaluateDistance));
+    AoiSystem::Update(0);
+    EXPECT_EQ(0, CreatesFor(stationary, stopper)) << "移动中累计位移不足一步,先不评估";
+
+    stopperVelocity.Clear();
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, CreatesFor(stationary, stopper)) << "停下来的那一刻按精确位置判一次";
+    EXPECT_EQ(1, CreatesFor(stopper, stationary));
+}
+
+// 满表被拒的普通候选不记关系;名额空出后,任一方下一次位移重判时补上。
+TEST_F(AoiDeliveryTest, CapacityRejectedNeighbourIsAdmittedOnNextReevaluation) {
+    const auto observer = Spawn(0, 0);
+    AoiSystem::Update(0);
+    tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(observer, AoiClientCapacityComp{kAoiListCapacityMin});
+    std::vector<entt::entity> fillers;
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        fillers.push_back(tlsEcs.actorRegistry.create());
+        ASSERT_TRUE(InterestSystem::AddAoiEntity(observer, fillers.back(), AoiPriority::kPinned));
+    }
+    const auto entrant = Spawn(0, 3);
+    AoiSystem::Update(0);
+    ASSERT_EQ(0, CreatesFor(observer, entrant)) << "前置条件:满表拒收";
+    ASSERT_EQ(1, CreatesFor(entrant, observer));
+    InterestSystem::RemoveAoiEntity(observer, fillers.front());
+    deliveries.clear();
+
+    MoveTo(entrant, 0, 4);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ(1, CreatesFor(observer, entrant)) << "空出的名额在下一次重判时补上";
+    EXPECT_EQ(0, CreatesFor(entrant, observer)) << "反向关系早已建立,不重复创建";
+}
+
+// 按距离出视野只撤空间来源:显式关注照常显示,客户端不收移除。
+TEST_F(AoiDeliveryTest, DistanceLeaveKeepsExplicitFollow) {
+    const auto watcher = Spawn(0, 0);
+    const auto target = Spawn(0, 5);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(AoiSystem::Follow(watcher, target, SkillGrant(1)));
+    deliveries.clear();
+
+    MoveTo(target, 0, kMaxViewRadius * kAoiLeaveRadiusFactor + 1);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ(0, DestroysFor(watcher, target)) << "显式来源仍在,不移除";
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).IsVisible(target));
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target).spatial);
+    EXPECT_EQ(1, DestroysFor(target, watcher)) << "反方向只有空间来源,按距离移除";
+}
+
+// 重判不绕过隐身:走近的隐身目标不进普通观察者的视野。
+TEST_F(AoiDeliveryTest, ReevaluationDoesNotRevealStealthedTarget) {
+    const auto observer = Spawn(0, 0);
+    const auto hidden = Spawn(0, 15);
+    tlsEcs.actorRegistry.emplace<StealthedTagComp>(hidden);
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    MoveTo(hidden, 0, 3);
+    AoiSystem::Update(0);
+
+    EXPECT_EQ(0, CreatesFor(observer, hidden));
+    EXPECT_EQ(1, CreatesFor(hidden, observer)) << "隐身者自己照常看见别人";
 }
 
 

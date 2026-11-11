@@ -2,7 +2,7 @@
 
 本批由 Claude 改代码，**未编译、未运行任何测试**（只对改动文件跑过 `gofmt -l`，无输出）。设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.2，计划见同目录 [PLAN.md](PLAN.md)。
 
-**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 [上一批执行清单](../gate-online-identity-single-source-20261105/CODEX.md) 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。
+**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 [上一批执行清单](../gate-online-identity-single-source-20261105/CODEX.md) 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。
 
 ## 改了什么
 
@@ -33,9 +33,9 @@ git status --short > $env:TEMP\gate-simplify-after.txt
 
 通过标准：
 
-- 新增 `go/shared/generated/clientrpc/methods.go`。另外只允许出现 `guild.proto` 注释变化带来的生成物注释差异（如 `go/proto/guild/guild_grpc.pb.go`）。其它新差异停下报告，不要回退（可能是其他会话未提交的 proto 改动）。
+- 新增 `go/shared/generated/clientrpc/methods.go`。另外只允许出现 `guild.proto` 带来的生成物差异：注释差异（如 `go/proto/guild/guild_grpc.pb.go`），以及第 4 批删字段带来的 `go/proto/guild/guild.pb.go`、`cpp/generated/proto/guild/guild.pb.{h,cc}` 字段差异（第 8 节第 1 步核对）。其它新差异停下报告，不要回退（可能是其他会话未提交的 proto 改动）。
 - 生成物里没有 `UpdateGuildScore`、login 的 `Disconnect`，也没有任何 `Notify*`。
-- 客户端可发起方法数：friend 10、guild 26、trade 35、mail 5、rank 2、chat 2、`match.MatchService` 10、`teampb.ClientPlayerTeam` 12。
+- 客户端可发起方法数：friend 10、guild 26、trade 35、mail 5、rank 2、chat 2、`match.MatchService` 12、`teampb.ClientPlayerTeam` 12。（`match.MatchService` 原写 10，没算上 GetBattleReport / ListBattleReports；11-06 提交的生成物里是 12。）
 
 ## 2. 静态检查（仓库根）
 
@@ -170,8 +170,9 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
 ## 回执与范围
 
-- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1 批、第 2 批还是第 3 批。
-- C++ 不改，不需要 C++ 编译；生成步骤若产生 `cpp/generated` 差异，停下报告。客户端不改、不重编。Java 版不适用（设计 §8）。
+- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批还是第 1～4 批中的哪一批。
+- 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。
+- 第 4 批：C++ 手写代码不改，但 guild 的 C++ 生成物会变，要重编 C++；客户端要按新协议重新生成并重编（第 8 节）。Java 版本轮不写代码，只在 Java 仓 `PARITY.md` 记 TODO（设计 §8）。
 
 ## 文件（本批）
 

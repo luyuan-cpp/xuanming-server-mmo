@@ -1,70 +1,92 @@
-# Guild Ranking Architecture (2025-03-25)
+# Guild Ranking Architecture
 
-## Problem
-Need to support both **global (cross-server) rankings** and **per-zone rankings** simultaneously, working correctly under both zone-locked and zone-unlocked scenarios.
+> Current implementation. Rewritten on 2026-11-10 against the code after the global ranking was removed; the code change is not compiled yet, verification is section 8 of the [Codex checklist](../handoff/gate-online-identity-simplify-20261105/CODEX.md). The 2025-03-25 draft had two rankings, global plus per-zone; the owner decided on 2026-11-10 to remove the global one, see §6.
+> Same content as the Chinese [guild_ranking_architecture_zh.md](guild_ranking_architecture_zh.md) and [guild_ranking_architecture.md](guild_ranking_architecture.md); keep all three in sync.
 
-## Solution: Dual Redis ZSET Strategy
+## 1. Summary
 
-### Redis Keys
-- **Global ranking**: `guild_rank` — all guilds, single ZSET
-- **Per-zone ranking**: `guild_rank:zone:{zoneId}` — one ZSET per zone
+- Guild rankings are per zone only: one ZSET per final zone, and players only see the ranking of their home zone. There is no global ranking and no aggregation service.
+- The authoritative score is MySQL `guild.score`. The ZSETs are a derived read projection; `RebuildRanks` rebuilds them from MySQL when they are lost or wrong.
+- Which ranking a guild is on depends only on the guild row's `zone_id` in MySQL, resolved to its final zone through the merge mapping. `zone_id` is the zone the guild was created in and is not rewritten by a merge. A zone passed by a caller never decides the ranking.
 
-### Writes (Pipeline dual-write)
-- `UpdateGuildScore`: Pipeline simultaneously `ZADD guild_rank` + `ZADD guild_rank:zone:{zoneId}`
-- `RemoveGuildFromRank`: Pipeline simultaneously `ZREM` both keys
-- `CreateGuild`: Initialize with score=0, write to both ZSETs
-- `DisbandGuild`: Remove from both ZSETs
+## 2. Data and Redis keys
 
-### Reads (zone_id routing)
-- `zone_id=0` → read `guild_rank` (global)
-- `zone_id>0` → read `guild_rank:zone:{zoneId}` (per-zone)
-- Pagination: `ZCARD` for total, `ZREVRANGE start stop` for current page, client uses `ceil(total/page_size)` to compute total pages
+| Name | Type | Content |
+|---|---|---|
+| MySQL `guild.score` | column | Authoritative score |
+| MySQL `guild.zone_id` | column | Zone the guild was created in. Guilds are only created in the requester's home zone, so it is never 0; a merge does not rewrite it |
+| `guild_rank:zone:<final zone>` | ZSET | member = guild_id, score = ranking score |
+| `guild_rank:maintenance_lock` | string | Ranking maintenance lock; score updates, removals, rebuilds and folds are mutually exclusive. SETNX, TTL 5 minutes, waits at most 5 seconds, released only by the matching token |
+| `guild_rank:rebuild:<token>:zone:<zone>` | ZSET | Temporary key during a rebuild. Renamed onto the live key at the swap, deleted on exit if the swap did not happen |
 
-### Zone-lock / Zone-unlock Has No Impact
-- Ranking data isolation relies on the `zone_id` field, not on the zone-lock mechanism
-- Global ranking is read-only display; no cross-zone operations involved
-- When zones are unlocked, a guild's `zone_id` is fixed at creation time, so per-zone rankings remain accurate
+The keys carry no hash tag. guild uses its own `RedisClient` (`go/guild/etc/guild.yaml`, DB 0). Every key starting with `guild_rank` belongs to the guild ranking: `RebuildRanks` deletes all existing `guild_rank:zone:*` keys, so other services must not use this prefix ([leaderboard design](leaderboard-system.md) §3.1).
 
-### Redis Architecture
-- All guild instances connect to the same **global Redis** (DB:2), not per-zone Redis
-- Under Redis Cluster, a single ZSET key lands on one slot/node — no cross-shard issues
-- No additional aggregation/ranking service needed
+## 3. Writes
 
-## Data Model Changes
-- `GuildData` adds `ZoneID uint32`
-- MySQL `guild` table adds `zone_id INT UNSIGNED` + `KEY idx_zone`
-- Proto: `CreateGuildRequest`, `GuildInfo`, `UpdateGuildScoreRequest`, `GetGuildRankRequest`, `GetGuildRankByGuildRequest` all add `zone_id`
+- **Score update**: `UpdateGuildScore` in the data layer takes the maintenance lock, then in one READ COMMITTED transaction locks the guild row with `SELECT zone_id ... FOR UPDATE` and runs `UPDATE guild SET score`. Deadlocks and write conflicts are retried a bounded number of times, and an unknown commit outcome is reported as `ErrWriteConflict`. After the commit it invalidates the guild cache and runs `ZADD` on the final zone's ranking.
+  - MySQL first, Redis second, on purpose: a lost ZSET can be rebuilt; writing the ZSET first would lose the score for good on a Redis failure.
+  - The ranking is chosen only by the `zone_id` in MySQL; a caller's zone is used only for a mismatch log.
+  - A row with `zone_id=0` is corrupt data: the score is still persisted, but the guild goes on no ranking and an ERROR is logged.
+- **Score RPC**: the RPC of the same name, `UpdateGuildScore`, is marked `CLIENT_RPC_SERVER_ONLY`; a client sending it is dropped by the gate as an illegal packet. Nothing in the repository calls it in normal operation; the robot only uses it to check that clients cannot send it.
+- **Guild creation**: after a guild is created, the logic layer writes a score of 0 into its ranking. A failure is only logged: the authoritative score is in MySQL, and the missing entry is filled by the next score update or by the startup rebuild.
+- **Disband and removal**: `RemoveGuildFromRank` takes the maintenance lock, then picks the zone. While the guild row still exists, the MySQL `zone_id` wins; once the row is deleted (the normal disband path), it uses the zone read with `FOR UPDATE` inside the disband transaction. It then runs `ZREM` on every ranking found by `SCAN guild_rank:zone:*` plus the final zone's ranking.
+  - Why not just one ranking: before a merge is folded, the entry may still sit on the source zone's old key; after a merge is undone, it may still sit on the target zone's key. Removing it from only one ranking leaves a ghost entry with no name.
+  - A failed removal after a disband is only logged; the startup rebuild repairs it.
 
-## When Would You Need a Separate Ranking Service?
-- Only when guild data is scattered across per-zone independent Redis instances (not shared) would an aggregation service be needed
-- Current architecture uses global Redis — **not needed**
+## 4. Reads
 
-## Merge-Zone Tool
+- **Entry**: the client methods `GetGuildRank` (a page) and `GetGuildRankByGuild` (one guild's position) only accept requests with a session; a call without a session gets `PermissionDenied`.
+- **Zone**: always the home zone from data_service. An unknown home zone answers `kGuildHomeZoneUnknown`; a lookup failure is returned as an error. The server does not read a zone from the request body; removal of those fields is item 2 of §9.6 in [Gate online identity](gate-online-identity.md).
+- **Paging**: pages are 1-based, default 1; the page size defaults to 20 and is clamped to `MaxRankPageSize` (50). Each entry is filled with the guild name, level and member count from the guild cache; leader names for a whole page are fetched in one batch.
+- **Position**: `GetGuildRankByGuild` returns the position on the requester's home-zone ranking. A guild from another zone is not on that ranking and answers `kGuildNotRanked`.
+- **Data layer**: `GetGuildRankPage` / `GetGuildRank` require a non-zero zoneID; 0 returns `ErrRankZoneRequired`. A 0 can only be a caller bug, so it is not answered with an empty ranking that would pass for "nobody is ranked". A merged-away zone reads its final zone's ranking.
+  - Consistency: total plus page (`ZCARD` + `ZREVRANGE`) and position plus score (`ZREVRANK` + `ZSCORE`) are each read in one Lua script, from one snapshot.
+  - Out of range: the page start is computed in 64 bits; an out-of-range start returns an empty page and never wraps around to the top.
 
-### Location
-- Go module: `tools/merge_zone/` (see `go.mod`)
-- PowerShell wrapper: `tools/scripts/merge_zone.ps1` (runs `go build` and executes the binary)
-- **RPC equivalent**: `DataService/RemapHomeZoneForMerge` (same mapping semantics as the player-mapping step in the CLI)
+## 5. Rebuild and self-repair
 
-### What It Does
-1. **Name conflict detection**: SQL JOIN to find guilds with same name in source and target zones
-2. **MySQL migration**: primary-key point updates over the manifest written before any write — `UPDATE guild SET zone_id = <target> WHERE guild_id = ? AND zone_id = <source>`, ascending `guild_id`, one autocommit statement per guild — then invalidate `guild:v2` caches and re-count the source zone (still > 0 → abort, step not marked done). The session runs at READ COMMITTED; a row hitting 1213 / 1205 is retried a bounded number of times (capped exponential backoff, cancellable); any failure aborts with the merge fences **left in place** and logs the resume steps (GET to check run_id → DEL both fences → re-run). Why not a zone-wide `UPDATE ... WHERE zone_id = <source>`: it walks `idx_guild_0` (secondary entry first, then the primary key), the reverse of the online `DisbandGuild` (primary key `FOR UPDATE` → DELETE removes the secondary entry), so the two deadlock (1213) — same lock-order class as [`docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md`](../ops/incident-friend-lock-order-deadlock-2026-09-21.md)
-3. **Redis per-zone ZSET merge**: `ZRANGE` source `guild_rank:zone:*` → `ZADD` target → `DEL` source key
-4. **(Multi-cluster required) Player string-key copy**: copies all `player:{playerId}:*` string keys from the **source zone data Redis** to the **target zone data Redis**, **before** rewriting `player:zone` — otherwise `ClientForPlayer` would read the wrong (empty) cluster. If source/target endpoints and DB are identical, the tool skips this step (single-Redis dev).
-5. **Player home-zone mapping**: rewrites `player:zone:{playerId}` on **mapping Redis** (`-mapping-redis-*`)
+`RebuildRanks` runs at guild startup, on stable replicas only; canary replicas skip it ([release track design](release-track-gray-canary.md) §2.5). If the rebuild fails, the process refuses to start rather than serve an incomplete ranking. Steps:
 
-### Usage
-```powershell
-go run -C tools/merge_zone . -source-zone=102 -target-zone=101 -dry-run
-go run -C tools/merge_zone . -source-zone=102 -target-zone=101 -apply
+1. Take the maintenance lock.
+2. Read everything with `SELECT guild_id, zone_id, score FROM guild`.
+3. Write into temporary keys by final zone under the current merge mapping.
+4. In one MULTI/EXEC, delete every existing `guild_rank:zone:*` key and rename the temporary keys onto the live keys.
 
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone 102 -TargetZone 101 -DryRun
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone 102 -TargetZone 101 -Apply
-```
+This repairs missing entries, stale scores, a lost ranking and ghost entries left by disbands. After a merge or an undone merge, one restart brings the rankings back in line with the mapping. Rows with `zone_id=0` go on no ranking; they are counted and an ERROR is logged.
 
-Optional skip flags: `-skip-guild-mysql`, `-skip-guild-rank`, `-skip-player-mapping`. Non-dry runs require `-apply` to avoid accidents.
+## 6. Why there is no global ranking
 
-### Properties
-- **Idempotent**: safe to re-run (MySQL UPDATE is no-op for already-migrated rows, Redis ZADD overwrites)
-- **Conflict-safe**: name-conflict guilds are logged and skipped (resolve manually)
-- **Global ZSET untouched**: only per-zone ZSETs are merged; `guild_rank` (global) already has all guilds
+The 2025-03-25 draft asked for two rankings: every score update wrote both `guild_rank` and the per-zone ranking, and `zone_id=0` read the global one. On 2026-11-10 the owner decided that neither operations nor GMs need a global ranking, and it was removed. Reasons:
+
+- **No reader**: clients only see their zone's ranking. The only reader of the global ranking was the no-session branch of the guild read methods; the entry gate already rejected such calls in production, and the branch was deleted on 2026-11-06 (item 1 of §9.6 in [Gate online identity](gate-online-identity.md)). The merge tool, the data consistency check, the merge runbook, the robot and the gateway admin all use per-zone rankings only.
+- **Only cost**: one extra ZADD per score update, and every guild on a single key, which becomes a single-slot hotspot on Redis Cluster.
+- **Both versions agree**: the Java version never had a global ranking.
+
+A `guild_rank` key left over in an old environment is no longer read or written, and `RebuildRanks` does not delete it. The project has not launched, so there is no migration code. Two ways to clean it:
+
+- Wiping before a stress run removes it: `pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`; on K8s use `-Command k8s-redis-wipe`.
+- To delete only that key: `redis-cli -h <guild RedisClient address> -n 0 DEL guild_rank`.
+
+## 7. The merge tool and guild rankings
+
+The merge tool `tools/merge_zone` only records one merge mapping, "source zone → target zone", in the global `zone_merged_into` table. It does not change guild rows and does not touch ranking keys (see the [merge runbook](../ops/merge-zone-runbook.md)). Guild rankings follow the mapping:
+
+- **New scores**: written by `Final(guild.zone_id)` into the final zone's ranking; reading the source zone also reads the final zone's ranking.
+- **Old entries**: entries written to the source zone's old key before the merge are folded into the final zone by `FoldMergedZoneRanks`.
+  - Scheduling: runs on every replica, on the guild trial's owed-reward loop, every 10 seconds by default. In steady state it costs one `EXISTS` per source zone.
+  - Folding: when an old key exists it takes the maintenance lock, walks the old key with `ZSCAN` and runs `ZADD NX` member by member into the final zone, and deletes the old key only after every member is written. `NX` keeps scores written after the merge; `ZUNIONSTORE` is not used because the two keys are in different slots on Redis Cluster.
+  - Failure: a fold that fails halfway starts over in the next round; `NX` makes that idempotent.
+- **Undoing a merge**: the tool asks for one guild restart, and the startup rebuild puts the rankings back under the current mapping.
+
+## 8. Scaling constraints
+
+- **Serialized score updates**: score updates, removals, rebuilds and folds all take the same maintenance lock, so score updates are serialized. Today the only update is the score of 0 written at guild creation, so it is not a bottleneck; this must change before a high-rate score producer is connected, see item 23 of the [gap list](../handoff/server-gap-audit-20261101.md).
+- **Not Cluster-ready yet**: guild uses a single-instance Redis client. The `RebuildRanks` swap touches several keys in one MULTI/EXEC (deleting old zone rankings, renaming temporary keys), and a temporary key and its live key are in different slots, so it must change before guild moves to Redis Cluster.
+- **Key size**: with one key per zone, a key holds one zone's guilds and does not grow with the number of guilds across all zones.
+
+## 9. Code
+
+- **Data layer**: `go/guild/internal/data/guild_repo.go` — `UpdateGuildScore`, `RebuildRanks`, `RemoveGuildFromRank`, `FoldMergedZoneRanks`, `GetGuildRankPage`, `GetGuildRank`, `zoneRankKey`.
+- **Logic layer**: `go/guild/internal/logic/guild_logic.go` — `GetGuildRank`, `GetGuildRankByGuild`, and ranking upkeep in guild creation and disband; the fold scheduling is in `trial_background.go`.
+- **Startup rebuild**: `go/guild/guild.go`.
+- **Protocol**: `proto/guild/guild.proto` — `UpdateGuildScore`, `GetGuildRank`, `GetGuildRankByGuild`.

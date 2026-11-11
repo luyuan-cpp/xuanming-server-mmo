@@ -25480,3 +25480,80 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
   - 随机选场与精选列表没有按观众轨道过滤：stable 观众随机选中金丝雀局时，这次请求以 16018 结束，重发即可。
   - 切换 battle 编排形态之前，要先撤掉金丝雀池。
 - **Java 版（AGENTS §12）**：0.1.0-SNAPSHOT 待做，`PARITY.md` 11-05 一节已登记，不新增。
+
+## 2026-11-10 Claude：客户端心跳现状核对（只改文档）
+
+- **起因**：负责人问客户端与服务器的心跳能不能也接上。
+- **结论**：gate↔客户端心跳 11-06 已做完，不需要再写代码。
+  - 三端都已落码：C++ gate、Unity、Java；robot 也已带上心跳。
+  - 11-06 分层验证：C++ 35 项、Unity 35 项、Java 新增 22 项全过。
+  - 11-08 主仓整解 `msbuild game.sln /m:1`（HEAD `c17837c9c`）已包含这批代码。
+  - 从 `c17837c9c` 到 HEAD `e0790ad40`，心跳相关文件只改了 `client_session_handler.cpp` 一行（限流接口改名），与心跳无关。
+- **还没跑的**：端到端 `heartbeat-idle-smoke` 与回归冒烟。步骤见 11-06「robot 客户端心跳与判死冒烟」条第 3、4 步。汇总字段按 11-06「验签即判死与握手期限」条的更正：`handshake_timeouts`、`excess`、`before_verify`、`deferred` 应为 0。
+- **新发现的缺口**：战斗直连（客户端 ↔ battle）验签之后没有心跳和空闲超时，两版服务器相同。已写进 `docs/design/gate-client-heartbeat.md` §12 残余，没有动代码。要补的话是一次客户端契约改动：Unity 与 robot 的战斗连接要同批发心跳。
+- **Java 版（AGENTS §12）**：`0.1.0-SNAPSHOT` 的 gate 心跳已做；战斗直连同样缺心跳，本条不登记 `PARITY.md`，等决定做不做再一并登记。
+
+## 2026-11-10 Claude：更正「全服匹配完成度复核」条目的验证状态（只改文档）
+
+- **更正**：那条写「第三批、R6 / R7 / R5、第四批的专项测试 Codex 都还没跑」不准确。
+- **已有证据**：Codex 的 `build/verification/battle-handoff-20261106-r4/`（2026-11-06 03:59）对当时的 `go/match` 跑了以下三项，exit 都是 0：
+  - `go build`（`match-final-build`）
+  - `go vet`（`match-final-vet`）
+  - `go test ./...`（`match-final-test`）：顶层 438 通过、0 失败、178 跳过，21 个包全过；第四批纯单测 `TestWorkShardFilterKeepsOnlyOwnedShards` 在内，结果是通过。
+- **跳过的是真 TiDB 用例**（没设 `MATCH_IT_TIDB`，结果都是 SKIP）：
+  - 第四批分片：`TestWorkTiDBPendingReturnsOnlyOwnedShards`、`TestWorkTiDBRankPublisherSendsOnlyOwnedShards`、`TestTeamTiDBMaintenanceReadsOnlyOwnedShards`。
+  - 停写语义改过断言的四条：`TestRatingTiDBTransactionOutboxReplayAndStopBarrier`、`TestRatingTiDBModesKeepSeparateRatingsSourcesAndBoards`、`TestRatingTiDBShardedSourceCursorsVersionsAndStopTotal`、`TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss`。
+  - 同一目录的真 TiDB 选跑（35 条，`10-match-tidb-selected-tests.txt`）不含本线用例。
+- **本线仍缺**：设计 §12.3～§12.7 里需要真 TiDB 的那几步。
+- **范围限定**：11-06 之后 `go/match` 又被别的会话改过（11-10 终局协议 B1～B6、发布轨道按整局选节点、共享 `workshard` 打分）。那次结果只代表 11-06 的源码，当前源码要按各自条目重新验证。
+- 本次没有编译，也没有运行任何测试或程序。
+
+## 2026-11-10 Claude:断线重连 R2(SQL 守卫放行坏连接信号)负责人确认保留
+
+- **决定**:负责人 11-10 回复「保留 R2 改动」。11-06 第二轮改了 `go/shared/authoritysql` 守卫原先有意钉住的一条行为:连接池复用连接之前,如果存活检查失败,或者重放会话、核验身份失败,守卫原来回「结局未知」,现在回 `ErrBadConn`,由 database/sql 换一条连接。这一条按现状保留,不再等守卫作者确认。
+- **验证现状**:
+  - Codex 11-08 的运行跑过 `shared/authoritysql` 整包,包里 0 个失败,日志在 `build/verification/naming-audit-20261108/go-shared.test-r4.log`。
+  - R2 的三条用例都是 PASS:`TestMySQLResetSessionRecheckAfterDemotion`、`TestWriterDriverResetFailureDiscardsConnectionWithBadConn`、`TestPooledConnectionFailingLivenessCheckIsReplacedTransparently`。
+  - `driver.go` 最后一次改动在 11-06(`1194c4d46`),之后没变,所以这次运行覆盖的就是现在的代码。
+  - TiDB 滚动重启、空闲连接被断开的演练(`docs/design/infra-reconnect-overview.md` §5)还没做。
+- **文件**:`docs/design/infra-reconnect-overview.md`(§4.1 的 R2 行)、本文件。
+- **同批其余条目**:R6、R7、R13、R17、R18 仍未修,状态以 §4.1 为准。R11 已按负责人 11-06 的口径改为「保留位点并告警」,是别的会话改的,见上文相关条目。
+
+## 2026-11-10 Claude：删全服帮会榜 guild_rank：负责人答复与文档改正（设计 §9.6 第 3 条；代码由「Gate 在线身份传递实现审核」会话同批落码，未编译；Java 0.1.0-SNAPSHOT 已等价）
+
+- **负责人答复（2026-11-10）**：运维和 GM 都不需要全服帮会榜，删掉；现在就做，不等 §9.6 第 1 条（第 3 批）的 Codex 回执。
+  - 问之前逐处核过读者：第 3 批之后 `guild_rank` 只写不读。`tools/merge_zone`、`tools/data_consistency_check`、`docs/ops/merge-zone-runbook.md`、robot、网关后台都只碰 `guild_rank:zone:*`；Java 版本来就不提供全服榜。
+  - 答复已记入设计 §9.6 第 3 条，以及简化计划 `PLAN.md` 第 6 节第 3 条。原第 3 条里「日后另设内部 RPC 读全服视图」一句和答复矛盾，已删。
+- **分工**：
+  - 来由：本会话由 11-06「清理 guild 三个读方法的无会话死分支」会话的卡片派出。动手前发现「Gate 在线身份传递实现审核」会话已经在同一批文件里删了全服榜，也在删 §9.6 第 2 条的请求体字段。两边当场分了工。
+  - 对方：go/guild 的代码与测试、协议、robot、`CODEX.md` 第 8 节、Java 仓 `PARITY.md`。代码改动与验证命令见对方同日条目。
+  - 本会话：只改文档，没有改任何代码。
+  - 评审意见：我看过对方的改动，提了三处，对方都已改：
+    - `TestGuildRankReadsRequireZone` 原先用 `mr.Keys()` 为空来证明「没访问 Redis」。读命令不建键，这条断言证明不了，已改成 `mr.CommandCount()` 为 0。
+    - `guild.go` 启动重建的注释还写着全服榜。
+    - `GetGuildRank` 的注释也还写着全服榜。
+- **文档**：
+  - `docs/design/guild_ranking_architecture{,_zh,_en}.md`：按只有本服榜重写正文，没有只加「已取代」标注。正文覆盖键、写入、读取、重建、为什么没有全服榜、合服折叠、扩展约束、代码位置。
+  - 同时改正原文里早已过时的两处：
+    - 合服工具的描述。合服现在只写映射、不搬公会行，旧榜由 guild 周期折叠。
+    - 「全局 Redis DB 2」。
+  - `guild_friend_service_notes_zh.md` 的排行榜一节、`leaderboard-system.md` §3.1 的键列表：去掉全服键。
+  - `docs/README.md` 的索引行：跟着改标题。
+- **残留键**：`RebuildRanks` 只扫 `guild_rank:zone:*`，不会删旧环境里的 `guild_rank`；这个键也不再有人读写。项目未上线，不写迁移代码。
+  - 压测前清库时一并清掉：`dev_tools.ps1 -Command redis-wipe-local` 或 `-Command k8s-redis-wipe`，都要带 `-ConfirmWipeAllRedis`。
+  - 只删这一个键：`redis-cli -h <guild 的 RedisClient 地址> -n 0 DEL guild_rank`。
+- **静态核对**：
+  - `rg guildRankKey go/guild` 无输出。
+  - `go/guild` 里裸写的 `guild_rank` 只剩断言「全服键不存在」的测试。
+  - 本会话改的文档没有 CR，`git diff --check` 干净。
+  - 未编译、未测试。
+- **验证**：按 `docs/handoff/gate-online-identity-simplify-20261105/CODEX.md` 第 8 节执行：先生成协议再编译，覆盖第 2、3 条的代码与测试。本条不另列命令。
+- **Java 版**：本来就不提供全服榜，删除后两版一致。`PARITY.md` 帮会核心行有意差异⑩里全服榜的部分，由对方会话改成「已不存在」；本会话没改 Java 仓。
+- **文件**（本会话）：
+  - `docs/design/gate-online-identity.md`（只改 §9.6 第 3 条）
+  - `docs/design/guild_ranking_architecture.md`、`guild_ranking_architecture_zh.md`、`guild_ranking_architecture_en.md`
+  - `docs/design/guild_friend_service_notes_zh.md`、`docs/design/leaderboard-system.md`（各改一处）
+  - `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`（只改第 6 节第 3 条）
+  - `docs/README.md`（一行）
+  - 本文件
+  - 未提交。

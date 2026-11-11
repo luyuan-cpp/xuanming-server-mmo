@@ -39,7 +39,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
 
-全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a 已落码未编译，战斗按整局的批 3b 待做），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
+全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a、3b（战斗按整局）全部已落码未编译），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
 
 ## 索引
 
@@ -140,7 +140,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild 存储架构现状与 Actor 历史提案
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
 - [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
-- [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — Guild Ranking Architecture (2025-03-25) · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
+- [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — 帮会排行榜架构:只有本服榜(2026-11-10 删全服榜后重写) · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
 - [jubaozhai-market.md](design/jubaozhai-market.md) — 聚宝斋(玩家间人民币寄售交易)设计 — 2026-09-14
 - [leaderboard-system.md](design/leaderboard-system.md) — 排行榜(leaderboard / rank)v1 设计
 - [mail-system.md](design/mail-system.md) — mail(邮件)M1:全局服务 + 系统邮件 / 定向邮件 + 领取短路

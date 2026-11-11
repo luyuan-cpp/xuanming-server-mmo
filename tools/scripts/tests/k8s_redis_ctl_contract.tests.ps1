@@ -10,7 +10,9 @@
          C++ node-config 的 scene_control_redis 指向 redis-ctl-g<N>,zoneredis 仍是核心;
       2. zones 配置的 redisQueueGroup: 2 → redis-ctl-g2(组号与排队实例同一个字段);
       3. infra-up DryRun 不带 -RedisSplit 也渲染 redis-ctl-g0:不带 app: redis、noeviction + maxmemory、没有未替换的占位;
-      4. 纯函数:实例名、容量缺省(dev 128mb、release 1gb)与非法值、线上 ConfigMap 解析、切换判定。
+      4. 纯函数:实例名、容量缺省(dev 128mb、release 1gb)与非法值、线上 ConfigMap 解析、切换判定;
+      5. 没建玩家域集群时 scene-manager 的 PlayerRedis 不写地址,只能回落到 CoreRedis 的核心(Go 侧 EffectivePlayerRedis,config_test.go 钉住);
+      6. 控制域实例的连接总账:写路径每组一行,按组合计 zone 与 scene 进程,超水位只告警。
     子进程一律 -DryRun(不连集群);纯函数按 AST 从 k8s_deploy.ps1 抽出,在本进程里直接调用。
 
 .EXAMPLE
@@ -97,6 +99,31 @@ Test-Case 'zone-up DryRun:scene-manager 控制域 = redis-ctl-g0,CoreRedis = 核
         -Because 'scene_manager 的 ZoneId 必须是本 zone(锁、watch、编排都按它)'
 }
 
+Test-Case 'zone-up DryRun without a player Redis cluster: scene-manager PlayerRedis has no Addrs, so it relies on falling back to CoreRedis (the core), not to the control instance' {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $zoneRun.Output -Name 'go-svc-scene-manager-config')
+    $addrKeys = @($flat.Scalars.Keys | Where-Object { $_ -like 'data.scene_manager_service.yaml.PlayerRedis.Addrs*' })
+    Assert-Equal -Expected 0 -Actual $addrKeys.Count -Because 'without a cluster only the pool size is rendered; the address comes from EffectivePlayerRedis (go/scene_manager/internal/config/config.go)'
+    Assert-True -Condition ($flat.Scalars.Contains('data.scene_manager_service.yaml.PlayerRedis.PoolSizePerNode')) -Because 'the PlayerRedis section itself is rendered'
+    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.CoreRedis.Host') `
+        -Because 'the player domain falls back to CoreRedis, which must be the same core instance every other service and the C++ scene use'
+    Assert-Equal -Expected "redis.$Infra" -Actual (Get-CtlConfigValue -Output $zoneRun.Output -ConfigMap 'node-config' -KeyPath 'data.game_config.yaml.zoneredis.host') `
+        -Because 'C++ scene without a player_redis section uses zoneredis (the core) for the player domain'
+}
+
+Test-Case 'write path prints one ctl connection ledger line per group: scene-manager control pool plus one connection per scene process' {
+    $out = $zoneRun.Output
+    $m = [regex]::Match($out, 'Redis ctl connection ledger: instance=redis-ctl-g0 zones=1 scene_processes=(?<scene>\d+) steady=(?<steady>\d+) ')
+    Assert-True -Condition $m.Success -Because "zone-up prints the ctl ledger line. Output: $out"
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, 'Redis ctl connection ledger:').Count) -Because 'one group, one line'
+    $smManifest = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/scene-manager.yaml') -Raw
+    $smReplicas = [int]([regex]::Match($smManifest, '(?m)^\s+replicas:\s*(\d+)').Groups[1].Value)
+    # 每个 scene-manager 副本一个 go-zero 缺省池 = 10 × GOMAXPROCS(按 2 计)= 20 条;每个 scene 进程 1 条。
+    Assert-Equal -Expected ($smReplicas * 20 + [int]$m.Groups['scene'].Value) -Actual ([int]$m.Groups['steady'].Value) -Because 'steady = scene-manager replicas x 20 + scene processes'
+    Assert-Match -Text $zoneGroup2Run.Output -Pattern 'Redis ctl connection ledger: instance=redis-ctl-g2 zones=1 ' -Because 'the group follows redisQueueGroup'
+    Assert-Match -Text $infraRun.Output -Pattern 'Redis ctl connection ledger: instance=redis-ctl-g0 zones=1 ' -Because 'infra-up prints it too (zones from the zones config)'
+    Assert-Match -Text $out -Pattern 'Redis connection ledger: zones=1 ' -Because 'the core ledger line is unchanged and has a different prefix'
+}
+
 Test-Case 'zone-up DryRun:C++ node-config 的 scene_control_redis 指向 redis-ctl-g0,zoneredis 仍是核心' {
     $out = $zoneRun.Output
     Assert-Equal -Expected "redis-ctl-g0.$Infra" -Actual (Get-CtlConfigValue -Output $out -ConfigMap 'node-config' -KeyPath 'data.game_config.yaml.scene_control_redis.host') `
@@ -138,7 +165,8 @@ Test-Case 'infra-up DryRun(不带 -RedisSplit):渲染 redis-ctl-g0,noeviction + 
 $deployParseErrors = $null
 $deployAst = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$deployParseErrors)
 if ($deployParseErrors.Count -gt 0) { throw "k8s_deploy.ps1 解析失败:$($deployParseErrors[0].Message)" }
-$ctlFunctionNames = @('Get-RedisCtlInstanceName', 'Resolve-RedisCtlMemory', 'ConvertFrom-RedisCtlLiveYaml', 'Get-RedisCtlSwitchVerdict')
+$ctlFunctionNames = @('Get-RedisCtlInstanceName', 'Resolve-RedisCtlMemory', 'ConvertFrom-RedisCtlLiveYaml', 'Get-RedisCtlSwitchVerdict',
+    'Write-RedisCtlConnectionLedger', 'Get-RedisConnectionLedger')
 foreach ($fnAst in $deployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($ctlFunctionNames -contains $fnAst.Name) {
         Set-Item -Path "Function:script:$($fnAst.Name)" -Value $fnAst.Body.GetScriptBlock()
@@ -179,6 +207,55 @@ Test-Case 'ConvertFrom-RedisCtlLiveYaml + Get-RedisCtlSwitchVerdict:不存在放
     Assert-Equal -Expected 'unchanged' -Actual (Get-RedisCtlSwitchVerdict -Live $same -DesiredHostPort 'redis-ctl-g0.ns:6379') -Because '同址不动'
     $unknown = ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml 'Name: x'
     Assert-Equal -Expected 'refuse' -Actual (Get-RedisCtlSwitchVerdict -Live $unknown -DesiredHostPort 'redis-ctl-g0.ns:6379') -Because '认不出线上地址按地址不同拒绝(fail-closed)'
+    $emptyData = ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml ''
+    Assert-Equal -Expected 'True/refuse' -Actual ('{0}/{1}' -f $emptyData.Present, (Get-RedisCtlSwitchVerdict -Live $emptyData -DesiredHostPort 'redis-ctl-g0.ns:6379')) `
+        -Because 'a ConfigMap without the data key is present but unreadable; only $null means absent'
+}
+
+# 总账(Write-RedisCtlConnectionLedger):算式是 Get-RedisConnectionLedger 的同一份函数体;客户端输入、组的划分与 Redis 形态换成替身。
+$script:CtlGroupByZone = @{}
+$script:CtlLedgerMaxClients = 10000
+function Get-ZoneRedisCtlTopology {
+    param([Parameter(Mandatory = $true)][int]$CurrentZoneId)
+    $name = 'redis-ctl-g{0}' -f $script:CtlGroupByZone[$CurrentZoneId]
+    return [pscustomobject]@{ Service = $name; Host = "$name.ns"; Port = 6379; HostPort = "$name.ns:6379" }
+}
+function Get-RedisCtlConnectionLedgerInputs {
+    return [ordered]@{
+        MaxClients = $script:CtlLedgerMaxClients; GoPoolSizePerProc = 10; CppConnectionsPerProcess = 1
+        Clients    = @([ordered]@{ Name = 'scene-manager'; Scope = 'zone'; Replicas = 2; ConfiguredPoolConns = 0; DefaultPools = 1; GoMaxProcs = 2; PubSub = 0; Fixed = 0 })
+    }
+}
+function Get-RedisTopology { return $null }
+function Get-RedisQueueShapeFor { param([AllowNull()]$Topology) return [pscustomobject]@{ HighAvailability = $false } }
+function Invoke-CtlLedger {
+    param([Parameter(Mandatory = $true)][hashtable]$SceneByZone)
+    $scene = [System.Collections.Generic.Dictionary[int, int]]::new()
+    foreach ($key in $SceneByZone.Keys) { $scene[[int]$key] = [int]$SceneByZone[$key] }
+    $plan = [ordered]@{ ZoneCount = 10; ScenePerZone = 4; RolloutExtraPodsPerDeployment = 1; OpsReserve = 100; WarnRatio = 0.8 }
+    return (@(Write-RedisCtlConnectionLedger -SceneProcessesByZone $scene -LedgerPlan $plan 6>&1 3>&1) | ForEach-Object { $_.ToString() }) -join "`n"
+}
+
+Test-Case 'Write-RedisCtlConnectionLedger: one line per group, zones and scene processes summed per group, plan puts every zone in one group' {
+    $script:CtlGroupByZone = @{ 101 = 0; 102 = 0; 103 = 1 }
+    $script:CtlLedgerMaxClients = 10000
+    $printed = Invoke-CtlLedger -SceneByZone @{ 101 = 3; 102 = 5; 103 = 2 }
+    # 每 zone = 2 副本 × 1 个缺省池 × 10 × GOMAXPROCS 2 = 40;滚动余量 = 1 × (20 + 1 个 C++ 工作负载 × 1) = 21;峰值 = 稳态 + 21 + 100。
+    Assert-Match -Text $printed -Pattern 'Redis ctl connection ledger: instance=redis-ctl-g0 zones=2 scene_processes=8 steady=88 peak=209 maxclients=10000 warn_at=8000 headroom=9791; plan zones=10 peak=561 headroom=9439 ' `
+        -Because 'group 0: two zones, 3 + 5 scene processes; plan: 10 zones x 40 + 40 scene processes'
+    Assert-Match -Text $printed -Pattern 'Redis ctl connection ledger: instance=redis-ctl-g1 zones=1 scene_processes=2 steady=42 peak=163 ' -Because 'group 1: one zone'
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($printed, 'Redis ctl connection ledger:').Count) -Because 'one line per group'
+    Assert-NotMatch -Text $printed -Pattern 'OverWarnRatio|proxy ledger' -Because 'far below maxclients; single-instance shape has no proxy line'
+    Assert-Equal -Expected '' -Actual (Invoke-CtlLedger -SceneByZone @{}) -Because 'no zones, no line'
+}
+
+Test-Case 'Write-RedisCtlConnectionLedger: above the warn ratio it warns (per group and plan) without throwing' {
+    $script:CtlGroupByZone = @{ 101 = 0; 102 = 0; 103 = 1 }
+    $script:CtlLedgerMaxClients = 200
+    $printed = Invoke-CtlLedger -SceneByZone @{ 101 = 3; 102 = 5; 103 = 2 }
+    Assert-Match -Text $printed -Pattern '\[RedisCtlConnectionLedger\]OverWarnRatio:redis-ctl-g0 zones=2 peak 209; redis-ctl-g1 zones=1 peak 163; plan zones=10 in one group peak 561; maxclients=200 warn_at=160 ' `
+        -Because 'warn_at = floor(200 x 0.8) = 160; every ledger above it is named'
+    Assert-Match -Text $printed -Pattern 'Deployment continues: warning only, not blocking' -Because 'the ledger never blocks a deployment'
 }
 
 Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue

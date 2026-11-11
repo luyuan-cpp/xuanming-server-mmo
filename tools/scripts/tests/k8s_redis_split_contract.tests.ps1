@@ -288,6 +288,10 @@ foreach ($constantName in @('RedisHaScriptsDigestPlaceholder', 'RedisQueueStorag
     if ($constantAssignment.Count -ne 1) { throw "k8s_deploy.ps1 顶层 `$script:$constantName 的赋值应当恰好 1 处,实际 $($constantAssignment.Count) 处" }
     . ([scriptblock]::Create($constantAssignment[0].Extent.Text))
 }
+# redis-split-status 的控制域一段按 $GoSvcCatalogue 取 scene-manager 的 ConfigMap 名与配置文件名:同样取 k8s_deploy.ps1 里那一条赋值(纯字面量)。
+$catalogueAssignment = @($deployTopLevelAssignments | Where-Object { $_.Left.Extent.Text -ceq '$GoSvcCatalogue' })
+if ($catalogueAssignment.Count -ne 1) { throw "k8s_deploy.ps1 top-level `$GoSvcCatalogue should be assigned exactly once, found $($catalogueAssignment.Count)" }
+. ([scriptblock]::Create($catalogueAssignment[0].Extent.Text))
 
 Test-Case 'Get-RedisPurposeTopologyFor:none 时 Queue 就是 Core;queue 时按组取 redis-queue-g<N>;负组号与未知档位拒绝' {
     $none = Get-RedisPurposeTopologyFor -Split 'none' -InfraNamespace 'ns' -QueueGroup 3
@@ -461,6 +465,9 @@ Test-Case 'redis-split-status DryRun:按 zones 配置逐 zone 打出将要读的
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "DryRun 必须成功。输出: $($run.Output)"
     Assert-Match -Text $run.Output -Pattern '\[dry-run\] would read ConfigMaps go-svc-login-config / java-svc-gateway-config and rollout status of deployment/login / deployment/gateway in namespace mmorpg-zone-split-test' -Because '对每个 zone 打出要读的对象'
     Assert-Match -Text $run.Output -Pattern '\[dry-run\] would also read statefulset, proxy deployment and service of every redis-queue-g<N> those ConfigMaps point at' -Because '实例的形态与就绪状态同样只打计划'
+    Assert-Match -Text $run.Output -Pattern '\[dry-run\] would read ConfigMaps go-svc-scene-manager-config / node-config and rollout status of deployment/scene-manager in namespace mmorpg-zone-split-test, expecting control Redis redis-ctl-g0\.[a-z0-9-]+:6379' `
+        -Because 'the control domain is checked for every zone, independent of -RedisSplit'
+    Assert-Match -Text $run.Output -Pattern '\[dry-run\] would also read statefulset, proxy deployment and service of the redis-ctl-g<N> of every zone group' -Because 'control instances are only planned in DryRun'
 }
 
 # ─────────────────────────────────────────────────────────────────

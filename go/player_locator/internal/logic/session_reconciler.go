@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,8 +50,9 @@ import (
 //     不扫全键空间。
 //   - 死 gate 清扫按「成员登记 + 段租约」分给各副本(gate_sweep.go、slot_shard.go),不选主:16384 个 slot 的登记集
 //     一个 leader 读不动,而且一个 leader 看不清 etcd 就是全服停摆。
-//   - 写者检查、就绪标记、补建 / 审计是全服一份的控制面,由一个 leader 跑(本文件,shared/leader,控制域 Redis 锁)。
+//   - 写者检查、就绪标记、补建 / 审计的调度是全服一份的控制面,由一个 leader 跑(本文件,shared/leader,控制域 Redis 锁)。
 //     选主只为削减负载,不是正确性 fence:两个 leader 短暂重叠时,所有动作都走整字节 CAS 或字节守卫 Lua,重叠无害。
+//     玩家域是 Cluster 时,补建 / 审计一遍里的扫描按死 gate 清扫的段分给各副本做,leader 只发布、等完成(index_pass.go)。
 //     leader 看不清 etcd / 控制域 Redis 时主动让位(连续 3 拍失败,或 3 拍内没有一次成功),本进程多等一个 TTL 再竞选。
 //   - 漏进索引的会话(旧版写者、外部篡改)靠补建 / 审计扫描补:就绪标记缺失时连续跑限速的全键扫描,
 //     就绪后按 AuditIntervalSeconds 跑。扫描只补索引、清脏成员,不转换会话 —— 转换只有清扫一条路径。
@@ -73,8 +75,9 @@ const (
 	keyErrorLogLimit = 10
 
 	// 补建 / 审计一遍扫描内,单页处理失败时重做这一页:最多 passPageMaxAttempts 次,退避从 passPageRetryBase
-	// 翻倍到 passPageRetryMax。一遍可能跑几个小时,一次抖动不该让整遍作废。只有一个 leader 在扫,不存在多个客户端
-	// 同时重试的惊群,所以不加抖动。SCAN 本身的失败不在这里重试:ScanEachMaster 按 fail-closed 让整遍失败。
+	// 翻倍到 passPageRetryMax。一遍可能跑几个小时,一次抖动不该让整遍作废。玩家域是 Cluster 时各副本同时在扫,
+	// 主从切换会让它们同一刻失败,退避加抖动(deps.jitter),不在同一刻一起重试。SCAN 本身的失败不在这里重试:
+	// ScanEachMaster 按 fail-closed 让整遍失败。
 	passPageMaxAttempts = 5
 	passPageRetryBase   = time.Second
 	passPageRetryMax    = 30 * time.Second
@@ -111,17 +114,37 @@ type reconcilerDeps struct {
 	// slot 分布、有无进行中的迁移,变了就返回错误(SCAN 游标只在同一个 Redis 进程、同一份拓扑上有覆盖保证)。
 	// 单测注入,miniredis 不支持 INFO server。
 	scanSessions func(ctx context.Context, c redis.UniversalClient, match string, count int64, fn func(keys []string) error) error
+	// listSlotKeys 非 nil 时补建 / 审计按段分给各副本做(index_pass.go):玩家域是 Cluster,生产为 playerredis.SlotKeys。
+	// nil 时 leader 自己整库扫描(单实例玩家域,只在 dev)。单测注入,miniredis 不支持 CLUSTER 命令。
+	listSlotKeys slotKeyLister
+	// jitter 把单页重试的退避换成实际要等的时长;nil = 原样等(单测钉住退避序列)。
+	jitter func(d time.Duration) time.Duration
 }
 
-func productionReconcilerDeps(cli *clientv3.Client) reconcilerDeps {
-	return reconcilerDeps{
+// equalJitter 等 d/2 再加 [0, d/2) 的随机值:期望仍随 d 翻倍,各副本不在同一刻重试。
+func equalJitter(d time.Duration) time.Duration {
+	if d <= 1 {
+		return d
+	}
+	half := d / 2
+	return half + rand.N(d-half)
+}
+
+// productionReconcilerDeps 装配生产依赖。玩家域是 Cluster 才按段分摊补建 / 审计:单实例没有按 slot 列键的命令。
+func productionReconcilerDeps(cli *clientv3.Client, player redis.UniversalClient) reconcilerDeps {
+	deps := reconcilerDeps{
 		view:         newEtcdClusterView(cli),
 		now:          time.Now,
 		newPacer:     newIntervalPacer,
 		newTicker:    newRealTicker,
 		sleep:        sleepCtx,
 		scanSessions: playerredis.ScanEachMaster,
+		jitter:       equalJitter,
 	}
+	if _, cluster := player.(*redis.ClusterClient); cluster {
+		deps.listSlotKeys = playerredis.SlotKeys
+	}
+	return deps
 }
 
 func newRealTicker(interval time.Duration) (func(ctx context.Context) error, func()) {
@@ -172,7 +195,7 @@ func StartSessionReconciler(ctx context.Context, svcCtx *svc.ServiceContext, p R
 	}
 	cfg := p.Reconcile.Normalized()
 	primeReconcileMetrics()
-	deps := productionReconcilerDeps(p.EtcdClient)
+	deps := productionReconcilerDeps(p.EtcdClient, svcCtx.PlayerRedis)
 
 	sweeper := newGateSweeper(svcCtx, nil, cfg, interval, deps)
 	shard := newSlotShard(svcCtx.PlayerRedis, shardRoleGateSweep, p.InstanceID, sweeper.eligible.Load)
@@ -180,6 +203,12 @@ func StartSessionReconciler(ctx context.Context, svcCtx *svc.ServiceContext, p R
 	proc.AddShutdownListener(shard.Stop)
 	safego.Go("player_locator.gate_sweep_shard", func() { shard.Run(ctx) })
 	safego.Go("player_locator.gate_sweep", func() { sweeper.run(ctx) })
+	// 补建 / 审计的一遍按死 gate 清扫的段分摊:每个副本做自己那些段,leader 只发布、等完成(index_pass.go)。
+	// 用自己的一份 sessionReconciler(自己的限速器),和 leader 任期里那一份互不相干。
+	if deps.listSlotKeys != nil {
+		worker := newIndexPassWorker(newSessionReconciler(svcCtx, cfg, interval, deps), shard, deps.listSlotKeys)
+		safego.Go("player_locator.index_pass", func() { worker.run(ctx) })
+	}
 
 	elector := leader.New(leader.NewGoRedisStore(svcCtx.RedisClient), reconcilerLeaderKey, leader.Options{
 		TTL:           reconcilerLeaderTTL,
@@ -191,9 +220,9 @@ func StartSessionReconciler(ctx context.Context, svcCtx *svc.ServiceContext, p R
 	proc.AddShutdownListener(elector.Stop)
 
 	logx.Infof("SessionReconciler started: interval=%v leader_key=%s id=%s audit_interval_s=%d scan_count=%d "+
-		"scan_pages_per_s=%d transitions_per_s=%d dead_gate_members_per_round=%d",
+		"scan_pages_per_s=%d transitions_per_s=%d dead_gate_members_per_round=%d sharded_passes=%v",
 		interval, reconcilerLeaderKey, p.LeaderID, cfg.AuditIntervalSeconds, cfg.ScanCount,
-		cfg.ScanPagesPerSecond, cfg.MaxTransitionsPerSecond, cfg.DeadGateMembersPerRound)
+		cfg.ScanPagesPerSecond, cfg.MaxTransitionsPerSecond, cfg.DeadGateMembersPerRound, deps.listSlotKeys != nil)
 	campaignSessionReconciler(ctx, elector.Run, reconcilerLeaderTTL, deps.sleep, func(lctx context.Context) bool {
 		return newSessionReconciler(svcCtx, cfg, interval, deps).run(lctx)
 	})
@@ -700,7 +729,18 @@ func (p passReport) String() string {
 //
 // 扫描期间拓扑或节点身份变化时整遍作废(deps.scanSessions fail-closed):游标跨了进程或换了节点,不再有「开始时就在的
 // 键都扫到」的保证。补进来的成员照样有效,只是不能据此宣布就绪 / 记审计完成。
+//
+// 玩家域是 Cluster 时(deps.listSlotKeys 非 nil)这一遍按段分给各副本做,leader 只发布、等完成(fullPassSharded);
+// 否则 leader 自己整库扫(fullPassLocal)。两条路径对每个 slot 做的事和判据相同。
 func (r *sessionReconciler) fullPass(ctx context.Context, audit bool) (passReport, error) {
+	if r.deps.listSlotKeys != nil {
+		return r.fullPassSharded(ctx, audit)
+	}
+	return r.fullPassLocal(ctx, audit)
+}
+
+// fullPassLocal 是 leader 自己扫完整个玩家域的一遍(单实例玩家域)。
+func (r *sessionReconciler) fullPassLocal(ctx context.Context, audit bool) (passReport, error) {
 	rep := passReport{actions: map[string]int{}}
 	if err := r.backfillKeyspace(ctx, audit, &rep); err != nil {
 		return rep, err
@@ -730,9 +770,13 @@ func (r *sessionReconciler) retryPassPage(ctx context.Context, rep *passReport, 
 			return fmt.Errorf("%s: giving up the pass after %d attempts: %w", what(), attempt, err)
 		}
 		rep.pageRetries++
+		wait := backoff
+		if r.deps.jitter != nil {
+			wait = r.deps.jitter(backoff)
+		}
 		logx.Errorf("SessionReconciler: %s failed (attempt %d/%d), retrying in %v: %v",
-			what(), attempt, passPageMaxAttempts, backoff, err)
-		if serr := r.deps.sleep(ctx, backoff); serr != nil {
+			what(), attempt, passPageMaxAttempts, wait, err)
+		if serr := r.deps.sleep(ctx, wait); serr != nil {
 			return serr
 		}
 		backoff = min(backoff*2, passPageRetryMax)

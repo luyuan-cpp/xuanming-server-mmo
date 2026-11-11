@@ -165,7 +165,7 @@
 
 | 公会榜做法(`go/guild/internal/data/guild_repo.go`) | rank 为什么不照抄 |
 |---|---|
-| 键 `guild_rank` / `guild_rank:zone:<id>` / `guild_rank:maintenance_lock` / `guild_rank:rebuild:<uuid>:*` | `RebuildRanks` 会 `SCAN guild_rank:zone:*` 再 DEL / RENAME。任何以 `guild_rank` 开头的键(例如 `guild_rank:zone:player`)都会在公会启动重建时被删。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
+| 键 `guild_rank:zone:<id>` / `guild_rank:maintenance_lock` / `guild_rank:rebuild:<uuid>:*` | `RebuildRanks` 会 `SCAN guild_rank:zone:*` 再 DEL / RENAME。任何以 `guild_rank` 开头的键(例如 `guild_rank:zone:player`)都会在公会启动重建时被删。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
 | MySQL `guild.score` 是权威,ZSET 是读加速 | rank v1 **没有**持久化副本,权威在 match(§3.5) |
 | 每次写分拿全局 SETNX 锁(等 ≤5s,TTL 5min) | 玩家评分每局每人一次,全局锁会把写路径串行化;rank 单条写是一条 Lua,本身原子 |
 | 覆盖写绝对值,无版本号 | Kafka 会乱序与重放,必须带单调版本(`rating_gen`, `games`) |

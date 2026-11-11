@@ -45,6 +45,13 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 			return nil, false, err
 		}
 	}
+	// 截止作废的证据只能在事务之前取(事务里不调 RPC,2026-11-06)。意图一旦带上 battle_id 就不再变;锁内读到的成局不是这一局时
+	// 不用这份证据。
+	evidenceBattle := observed.GetBattleId()
+	evidence, err := s.deadlineEvidenceOf(ctx, evidenceBattle)
+	if err != nil {
+		return nil, false, err
+	}
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return nil, false, err
@@ -70,7 +77,7 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 	}
 	battle, cancelled := current.BattleId, current.Cancelled
 	out := &pb.CancelActivityBattleResponse{BattleId: battle}
-	abortWritten := false // 本事务写下了截止 ABORT(而不是回放既有终局),提交成功后计数
+	var verdict deadlineAbortVerdict // verdict.abort:本事务写下了截止 ABORT(而不是回放既有终局),提交成功后计数
 	if battle == 0 {
 		if start != nil {
 			err = closeDirectPendingTx(ctx, tx, current, start.Tickets)
@@ -93,7 +100,10 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 		if start == nil || start.Formation.BattleId != formation.BattleId || start.Formation.OperationId != formation.OperationId {
 			return nil, false, ErrDirectConflict
 		}
-		out.TerminalDecision, abortWritten, err = s.abortTerminalTx(ctx, tx, formation)
+		if formation.BattleId != evidenceBattle {
+			evidence = DeadlineEvidenceUndetermined
+		}
+		out.TerminalDecision, verdict, err = s.abortTerminalTx(ctx, tx, formation, evidence)
 		if err != nil {
 			return nil, false, err
 		}
@@ -112,8 +122,8 @@ func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectInten
 	if err = tx.Commit(); err != nil {
 		return nil, false, err
 	}
-	if abortWritten {
-		observeTerminalAbort(battle, terminalAbortCancel)
+	if verdict.abort {
+		observeDeadlineAbort(battle, verdict, evidence, terminalAbortCancel)
 	}
 	return out, false, nil
 }

@@ -640,38 +640,38 @@ func (s *Store) commitBattleOutcomeLocked(ctx context.Context, req *pb.CommitBat
 	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE, nil
 }
 
-// abortTerminalTx 是截止裁决,只给已持全部原P与formation锁的入口(到期恢复、帮会取消)使用；绝不调用运行时猜终局。
-// 已有终局回它的决定(written=false);过了截止加宽限才在本事务里经 commitAbortTx 写 ABORT(written=true),
-// 由调用方提交,提交成功后计数。
-func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord) (decision pb.BattleOutcomeDecision, written bool, err error) {
+// abortTerminalTx 是截止裁决,只给已持全部原P与formation锁的入口(到期恢复、帮会取消)使用；事务里不调用运行时。
+// evidence 是调用方在事务之前向原执行实例取到的截止作废证据(deadlineEvidence / probeDeadlinePage),时间判据只在
+// judgeDeadlineAbort(2026-11-06)。已有终局回它的决定(verdict.abort=false);自动路径不裁决的局(autoTerminalOriginal 为假:
+// 不在途,或原件不可裁决)回 UNKNOWN;judgeDeadlineAbort 判可以作废时在本事务里经 commitAbortTx 写 ABORT(verdict.abort=true),
+// 由调用方提交,提交成功后 observeDeadlineAbort 计数;判要等时 verdict.nextProbeMs 是到期恢复下次取证的排期。
+// 缺终局的 state 5 不再补 ABORT(2026-11-06):新代码写 state 5 时同一事务写终局或根本没有 Create 原件,
+// 缺终局的 state 5 只来自旧代码,项目未上线不兼容(与到期恢复同一口径,scene 查询回不会落定)。
+func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, evidence DeadlineAbortEvidence) (pb.BattleOutcomeDecision, deadlineAbortVerdict, error) {
 	old, err := readTerminal(ctx, tx, f.BattleId)
 	if err != nil {
-		return 0, false, err
+		return 0, deadlineAbortVerdict{}, err
 	}
 	if old != nil {
-		return old.Decision, false, nil
+		return old.Decision, deadlineAbortVerdict{}, nil
 	}
-	r, err := supportedOutcomeOriginal(f)
-	if err != nil {
-		return 0, false, nil
+	r, ok := autoTerminalOriginal(f)
+	if !ok {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, deadlineAbortVerdict{}, nil
 	}
 	stamp, err := now(ctx, tx)
 	if err != nil {
-		return 0, false, err
+		return 0, deadlineAbortVerdict{}, err
 	}
-	if !terminalAbortDue(r.DeadlineMs, stamp) {
-		return 0, false, nil
-	}
-	// 旧恢复流程可能先将运行时ABORTED收为state5；它自身不是终局证明。
-	// 仍须本函数前面的原cap/version/UUID/body与deadline全部成立，才能补SQL ABORT。
-	if f.State != 2 && f.State != 3 && f.State != 4 && f.State != 5 {
-		return 0, false, nil
+	verdict := judgeDeadlineAbort(r.DeadlineMs, stamp, f.RetryAtMs, evidence)
+	if !verdict.abort {
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, verdict, nil
 	}
 	// 截止裁决的 ABORT 没有 Battle 原字节：format_version=0、来源记为 MATCH_DEADLINE_ABORT，不冒充 BATTLE_RPC。
 	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT); err != nil {
-		return 0, false, err
+		return 0, deadlineAbortVerdict{}, err
 	}
-	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, true, nil
+	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, verdict, nil
 }
 
 // PublishBattleOutcomesOnce 按默认参数(DefaultOutcomeOutboxOptions:结果 8 行、首投 4 行、等待 4 行、逐行串行,

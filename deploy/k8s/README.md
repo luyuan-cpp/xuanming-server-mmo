@@ -1725,6 +1725,9 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 DryRun 不查集群,只打出每个 zone 将要写的地址(`Redis split: zone=… resolved=… queue_redis=…`)。zone 写路径同时打印 queue 实例的连接总账
 (`Redis queue connection ledger: instance=redis-queue-g<N> …`,MAXCLIENTS 从 `redis-purpose.yaml` 读;全部 zone 都拆时核心总账去掉 gateway 那一行)。
 高可用形态再按单个代理算一次水位(`Redis queue proxy ledger: instance=redis-queue-g<N> proxy_maxconn=3000 proxies=2+1 warn_at=2400 …`),超过只告警,以 `[RedisQueueConnectionLedger]OverProxyWarnRatio:` 开头。
+控制域实例 `redis-ctl-g<N>`(不受 `-RedisSplit` 控制,[控制面按 zone 化](../../docs/design/control-plane-zone-scoping-20261105.md) §4.6)每次走写路径都按组打一行
+`Redis ctl connection ledger: instance=redis-ctl-g<N> zones=<本组 zone 数> scene_processes=<本组 scene 进程数> …`:每个 scene-manager 副本一个 go-zero 缺省池、
+每个 scene 进程 1 条;规划档按全部 zone 落在同一组算。高可用形态另有 `Redis ctl proxy ledger:` 一行,超水位以 `[RedisCtlConnectionLedger]` 开头告警,不阻断。
 
 ### 首次上线的部署命令
 
@@ -1783,10 +1786,13 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesCon
   的 rollout 是否完成(`kubectl rollout status --timeout 10s`);再对它们线上指向的每个 queue 实例打印一行 `instance=<名> namespace=<ns> shape=single|ha ready=<就绪>/<副本> proxy=<就绪>/<副本> service_selector=<app 值>`(多个 zone 同组只查一次)。
   同一 zone 的 login 与 gateway 指向不同实例、任一 rollout 没完成 / 读不到,或指向的实例不存在、没全部就绪、高可用时代理没就绪、Service 的 selector 与形态对不上,退出码 1。
   zone 的 ConfigMap 或 Deployment 不存在只打印 `<absent>`,不算失败。
+  控制域每个 zone 另打一行 `ctl_expected=<本组 redis-ctl-g<N>> scene-manager.Redis=… node-config.scene_control_redis=… rollout scene-manager=…`,
+  再对本组实例打一行 `instance=redis-ctl-g<N> …`(同组只查一次)。scene-manager 的 `Redis.Host` 或 node-config 的 `scene_control_redis.host`
+  不是本组实例、`deployment/scene-manager` 没滚完,或实例不存在、没就绪,同样退出码 1;两份 ConfigMap 都不存在只打印 `<absent>`。
 - `-Command redis-wipe -ConfirmWipeAllRedis`(`dev_tools.ps1 -Command k8s-redis-wipe -ConfirmWipeAllRedis -InfraNamespace mmorpg-stress-…`):
   AGENTS.md §6.2 压测前清库的 K8s 做法。要求 infra namespace 匹配脚本里写死的 `^mmorpg-stress-`,且显式给 `-ConfirmWipeAllRedis`,缺一即拒绝(DryRun 同样先判)。
   实例按 infra namespace 里**实际存在**的 StatefulSet 列(不按本次参数,漏写一个用途也不会漏清):核心 `redis`(单实例或高可用,清其中的主)、
-  每个 `redis-queue-g<N>`、`redis-match-cluster`、`redis-player`(后两个逐主节点)。每个 Pod `kubectl exec -c redis` 进去先问 `ROLE`,主节点 `FLUSHALL SYNC`,再读 `DBSIZE`;
+  每个 `redis-queue-g<N>`、每个控制域实例 `redis-ctl-g<N>`、`redis-match-cluster`、`redis-player`(后两个逐主节点)。每个 Pod `kubectl exec -c redis` 进去先问 `ROLE`,主节点 `FLUSHALL SYNC`,再读 `DBSIZE`;
   口令用 Pod 自己的 `REDIS_PASSWORD` 经 `REDISCLI_AUTH` 交给 redis-cli,不上本机命令行。每个实例至少一个主、每个主 FLUSHALL 回 OK 且 DBSIZE=0
   才算通过,否则退出码 1;从节点的 DBSIZE 只打印。只清 Redis:MySQL / etcd / Kafka 仍按 AGENTS.md §6.2 另行处理。
 

@@ -418,24 +418,18 @@ func globalDestroy(store formationDestroyAuthority, f *pb.MatchFormationRecord) 
 // 墓碑保留期内也建不了。拨号或任一 RPC 失败、实例不符（Battle 空回包）、UNKNOWN、PRESENT 都返回 false。
 // PRESENT 且实例相符时按既有规则记采用版本，采用 1 则提交 state 4。2026-11-05 从 globalDestroy 拆出（评审修正）：
 // 提前 ABORT 的证据只能来自这里，不能借 globalDestroy「无原件」那条不问 Battle 的 true。
+// 两次 RPC 本身在 askOriginalInstance（截止作废取证复用同一次交互，global_deadline_evidence.go）；DestroyBattle 失败一律返回 false。
 func tombstoneAndConfirmAborted(store battleAdoptionRecorder, f *pb.MatchFormationRecord) bool {
-	conn, e := discovery.DialEndpoint(f.TargetEndpoint)
-	if e != nil {
-		return false
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, e = battlepb.NewBattleNodeClient(conn).DestroyBattle(ctx, &battlepb.DestroyBattleRequest{BattleId: f.BattleId, Reason: "global_match_abort_if_absent", PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
-	if e != nil {
+	answer := askOriginalInstance(ctx, f)
+	if answer.destroyErr != nil || answer.queryErr != nil {
 		return false
 	}
-	q, e := battlepb.NewBattleNodeClient(conn).QueryBattleCreation(ctx, &battlepb.QueryBattleCreationRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
-	if e != nil {
-		return false
-	}
+	q := answer.query
 	if q.State == battlepb.BattleCreationState_BATTLE_CREATION_PRESENT {
 		if f.OutcomeProtocolVersion == 1 && q.GetTargetInstanceId() == f.TargetInstanceId {
-			if e = store.RecordBattleAdopted(ctx, f, q.TargetInstanceId, q.AdoptedOutcomeProtocolVersion); e == nil && q.AdoptedOutcomeProtocolVersion == 1 {
+			if e := store.RecordBattleAdopted(ctx, f, q.TargetInstanceId, q.AdoptedOutcomeProtocolVersion); e == nil && q.AdoptedOutcomeProtocolVersion == 1 {
 				_ = store.Finish(ctx, f, true)
 			}
 		}

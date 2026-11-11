@@ -8,7 +8,7 @@ import "github.com/zeromicro/go-zero/core/metric"
 // 要定位具体 gate / 玩家看同一时刻的日志。
 //
 // 计数器每个副本各报一份,规则用 sum()。gauge 分两类:
-//   - leader 专属(legacy_writers、gate_index_ready、last_success 的 writers / repair / audit):进程启动预置 0、任期开始与
+//   - leader 专属(legacy_writers、gate_index_ready、gate_index_pass_segments_done、last_success 的 writers / repair / audit):进程启动预置 0、任期开始与
 //     结束都清零(resetReconcileLeaderGauges),所以每个副本都导出这些序列,非零值只可能来自现任。规则乘上
 //     reconcile_is_leader==1 过滤后再 max();
 //   - 每个副本一份(dead_gates、dead_gate_members、gate_index_members、slot_shard_segments、last_success 的 index):
@@ -33,6 +33,8 @@ const (
 	metricSlotShardSegments        = "slot_shard_segments"
 	metricLiveViewHolding          = "reconcile_live_view_holding"
 	metricLiveViewReleasedTotal    = "reconcile_live_view_released_total"
+	metricGateIndexPassSegments    = "gate_index_pass_segments_done"
+	metricReconcilePassSlotsTotal  = "reconcile_pass_slots_total"
 )
 
 // reconcile_round_total / reconcile_last_success_unix 的 loop 取值。
@@ -198,6 +200,20 @@ var (
 		Help: "Times the live view gate released a hold on this replica: the missing gate count stayed unchanged for the " +
 			"hold time, so the missing gates are treated as dead from then on. Per replica, sum it.",
 	})
+	// 补建 / 审计按段分摊(index_pass.go,玩家域是 Cluster 时)。
+	gateIndexPassSegmentsDone = metric.NewGaugeVec(&metric.GaugeVecOpts{
+		Namespace: reconcileMetricsNamespace,
+		Name:      metricGateIndexPassSegments,
+		Help: "Slot segments (of 256) that finished the backfill or audit pass the leader is waiting for; 0 when no pass " +
+			"runs or the player store is standalone. Leader-only.",
+	})
+	reconcilePassSlotsTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: reconcileMetricsNamespace,
+		Name:      metricReconcilePassSlotsTotal,
+		Help: "Slots this replica processed for a sharded backfill or audit pass, by result (ok | redis_error). " +
+			"redis_error stops that segment until the next interval. Per replica, sum it.",
+		Labels: []string{"result"},
+	})
 )
 
 // reconcileMetricFullNames 是本文件注册的全部指标全名(告警文件守卫用,见 reconcile_metrics_test.go)。
@@ -207,6 +223,7 @@ func reconcileMetricFullNames() []string {
 		metricReconcileDeadGates, metricReconcileDeadGateMembers,
 		metricReconcileLegacyWriters, metricReconcileIsLeader, metricGateIndexReady, metricGateIndexMembers,
 		metricSlotShardSegments, metricLiveViewHolding, metricLiveViewReleasedTotal,
+		metricGateIndexPassSegments, metricReconcilePassSlotsTotal,
 	}
 	for i, n := range names {
 		names[i] = reconcileMetricsNamespace + "_" + n
@@ -235,6 +252,8 @@ func primeReconcileMetrics() {
 	gateIndexMembers.Set(0)
 	reconcileLiveViewHolding.Set(0)
 	reconcileLiveViewReleasedTotal.Add(0)
+	reconcilePassSlotsTotal.Add(0, reconcileResultOK)
+	reconcilePassSlotsTotal.Add(0, reconcileResultRedisError)
 	for _, loop := range reconcileLoops {
 		reconcileLastSuccessUnix.Set(0, loop)
 	}
@@ -245,6 +264,7 @@ func primeReconcileMetrics() {
 func resetReconcileLeaderGauges() {
 	reconcileLegacyWriters.Set(0)
 	gateIndexReady.Set(0)
+	gateIndexPassSegmentsDone.Set(0)
 	for _, loop := range reconcileLeaderLoops {
 		reconcileLastSuccessUnix.Set(0, loop)
 	}

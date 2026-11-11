@@ -96,6 +96,7 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		nodeDeathAtKey(zoneID, nodeID),
 		nodeReconcileScenesKey(zoneID, nodeID),
 		nodeReconcileInstanceKey(zoneID, nodeID),
+		nodeHolderKey(zoneID, nodeID),
 		activeInstancesKey(zoneID),
 		worldChannelsKey(zoneID, confID),
 		worldDrainingSetKey(zoneID, confID),

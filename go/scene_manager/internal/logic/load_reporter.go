@@ -688,6 +688,8 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 	seenByZone := make(map[uint32]map[string]struct{})
 
 	next := make(map[string]nodeEntry, len(kvs))
+	// 快照里每条在册登记的持有者记录,领导者在下面的领导者分支里统一写(node_holder.go)。
+	holders := make([]nodeHolderRecord, 0, len(kvs))
 	for _, kv := range kvs {
 		key := string(kv.Key)
 		entry, ok := parseNodeEntry(kv.Value)
@@ -700,6 +702,9 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 			continue
 		}
 		next[key] = entry
+		holders = append(holders, nodeHolderRecord{
+			ZoneID: entry.reg.ZoneId, NodeID: entry.nodeID, NodeUUID: entry.reg.NodeUuid, ModRevision: kv.ModRevision,
+		})
 
 		zoneId := entry.reg.ZoneId
 		if seenByZone[zoneId] == nil {
@@ -776,6 +781,9 @@ func applyNodeSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, kvs []*m
 		logx.Info("[LoadReporter] became leader during this full sync; leader actions wait for the resync requested by the leadership change")
 	}
 	if leaderView && isLeader() {
+		// 节点号持有者:补上 watch 可能漏掉的 PUT,并给在册节点续 TTL。按修订号单调写,与副本的 PUT 写入先后无关(node_holder.go)。
+		publishNodeHolders(svcCtx, holders)
+
 		// 中途失去领导权:降级即停,新领导者的 resync fullSync 会重扫同一批(与旧写法一致,
 		// 后面的 drain / init / rebalance / 孤儿清理本轮都不做)。
 		if !sweepStaleLoadSetMembers(svcCtx, seenByZone, loadSets, lastInstancesByIdentity(prevKnown)) {
@@ -1032,6 +1040,10 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		// 节点(重新)注册 = 它此刻是活的,上一次的死亡标记必须抹掉,否则
 		// IsNodeAlive 说活、再入屏障却还压着它名下的场景,两个判定自相矛盾。
 		clearNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
+		// 这个节点号此刻由这一代进程持有。失联之后号被接走的老进程靠它认出自己已不是这个号(node_holder.go)。
+		publishNodeHolder(svcCtx, nodeHolderRecord{
+			ZoneID: entry.reg.ZoneId, NodeID: entry.nodeID, NodeUUID: entry.reg.NodeUuid, ModRevision: ev.Kv.ModRevision,
+		})
 		// 同理取消上一次死亡的推迟摘除(GO-6;只有领导者的队列里可能有它)。不取消的话
 		// 「重新注册后再死」会沿用上一次死亡的 firstObservedAt,截止时间提前。
 		cancelDeferredNodeDetachOnReregister(svcCtx, entry.reg.ZoneId, entry.nodeID)

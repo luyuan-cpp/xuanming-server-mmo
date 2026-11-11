@@ -848,31 +848,48 @@ var ErrWorkLease = errors.New("成局工作租约已失效或被其他副本持�
 
 const WorkLeaseMs uint64 = 120000
 
-// ErrAwaitingExpiredOutcome 表示成局只剩到期终局一个出口，不再发工作租约（2026-10-22 修复，
-// social-match-battle#0）。判定规则见 awaitsExpiredOutcome。
-var ErrAwaitingExpiredOutcome = errors.New("成局已过权威截止，只能由到期终局恢复裁决")
+// ErrAwaitingExpiredOutcome 表示成局已过权威截止、不再发工作租约（2026-10-22 修复，social-match-battle#0）：
+// 自动路径会裁决的(autoTerminalOriginal)只剩到期终局恢复一个出口,其余只能人工处置(formationfix)。判定规则见 awaitsExpiredOutcome。
+var ErrAwaitingExpiredOutcome = errors.New("成局已过权威截止，只能由到期终局恢复或人工处置裁决")
 
-// awaitsExpiredOutcome：已持久 v1 Create 原件且已过权威截止的成局，唯一出口是 RecoverExpiredOutcomes
-// 在原 P→formation 锁内争唯一 SQL 终局，而它要求工作租约已经到期。worker 此时能做的只剩查询目标
-// Battle 后 Unknown，每次取租约都把 retry_at 再推后 120 秒；多副本巡检或重放的开局请求一直抢在前面时，
-// 到期出口迟迟走不到，票据停在 state 2/3。所以过截止后不再发租约，也不进 Pending 候选。
+// awaitsExpiredOutcome：已持久 Create 原件且已过权威截止的成局，不再发工作租约，也不进 Pending 候选。
+// 原件可裁决的，唯一出口是 RecoverExpiredOutcomes 在原 P→formation 锁内争唯一 SQL 终局，而它要求工作租约已经到期；
+// worker 此时能做的只剩查询目标 Battle 后 Unknown，每次取租约都把 retry_at 再推后 120 秒，多副本巡检或重放的开局请求
+// 一直抢在前面时，到期出口迟迟走不到，票据停在 state 2/3。
+// 2026-11-06 起不分终局协议(原先只拦 v1,评审 B4 残余):成局行协议不是 1 的局任何自动路径都不裁决,过截止后仍被
+// AcquireWork 每次续 120 秒,retry_at_ms 一直在变,人工处置工具也因摘要与租约不断变化而处置不了,只能空转。
+// 现在它们与其余不可裁决的局一样停住:巡检计数(CountStrandedExpiredFormations)、formationfix 处置。
 // expiredOutcomeSQL 是同一规则的 SQL 写法，供候选扫描在索引侧过滤，两处必须一起改。
 func awaitsExpiredOutcome(f *pb.MatchFormationRecord, nowMs uint64) bool {
-	return f.OutcomeProtocolVersion == 1 && len(f.CreateRequest) != 0 && f.DeadlineMs != 0 && f.DeadlineMs <= nowMs
+	return len(f.CreateRequest) != 0 && f.DeadlineMs != 0 && f.DeadlineMs <= nowMs
 }
 
-const expiredOutcomeSQL = "(outcome_protocol_version=1 AND LENGTH(create_request)>0 AND deadline_ms>0 AND deadline_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED))"
+const expiredOutcomeSQL = "(LENGTH(create_request)>0 AND deadline_ms>0 AND deadline_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED))"
 
-// CountStrandedExpiredFormations 数被上面的门禁挡住、却进不了到期终局恢复的成局（2026-10-22 评审补，
-// social-match-battle#0）：state 2/3、满足 expiredOutcomeSQL，但不满足 RecoverExpiredOutcomes 的候选形状
-// recoverableOutcomeShapeSQL（能力证据缺失、preflight_instance 与 target 不一致、adopted 观察值不合法等）。
-// 它们领不到租约、不进 Pending、也不会被到期恢复选中，票据静默停在 state 2/3。修复前同样没有出口，
-// 但每 120 秒的租约轮回至少会出 recover/unknown 计数；门禁之后连这个信号也没了，所以由巡检单独报数。
+// expiredInFlightSQL 圈出「已过权威截止加终局宽限、仍在途(state 2/3/4)、带持久 Create 原件、COMPLETE 调度字段尚未退休」的成局
+// (表别名 f),按顺序绑定两个参数:terminalOutcomeNoRetryMs、TiDB 时刻减 terminalOutcomeGraceMs。人工处置的列表
+// (ListStrandedFormations)与巡检计数(CountStrandedExpiredFormations)共用这一条,两边口径一致(2026-11-06)。
+const expiredInFlightSQL = "f.state IN(2,3,4) AND f.retry_at_ms<? AND f.deadline_ms>0 AND f.deadline_ms<=? AND LENGTH(f.create_request)>0"
+
+// CountStrandedExpiredFormations 数过了截止、到期终局恢复却裁决不了的成局（2026-10-22 评审补，social-match-battle#0）：
+// expiredInFlightSQL 圈出的成局里，不满足到期恢复候选形状 recoverableOutcomeShapeSQL 的（终局协议不是 1、能力证据缺失、
+// preflight_instance 与 target 不一致、adopted 观察值不合法、operation 为空等），即 formationfix 列表里 shape_invalid 一类。
+// 它们领不到租约、不进 Pending、也不会被到期恢复选中，票据静默停在 state 2/3/4，所以由巡检单独报数。
+// 2026-11-06 与人工处置列表对齐口径：补上 state 4（已开局的同类局同样没有出口）与非 v1 成局（原先 expiredOutcomeSQL 只认 v1，
+// 它们根本不在计数里）；截止加终局宽限之后才算（与列表、到期恢复同一分界），COMPLETE 已退休的不算。
 // 只读，只给报数用，不参与任何释放判定；处置见 cross-zone-matchmaking.md §13.3。
-// 形状合格但 Create 正文与成局字段对不上（supportedOutcomeOriginal 失败）的一类不在 SQL 里判，不计入。
+// 形状合格但 Create 正文与成局字段对不上（original_mismatch）的一类 SQL 判不出，不计入：到期恢复每次访问时计
+// global_flow_total{stage="recover",outcome="original_mismatch"}，列表里单列一类。
 func (s *Store) CountStrandedExpiredFormations(ctx context.Context) (uint64, error) {
+	stamp, err := s.Now(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if stamp < terminalOutcomeGraceMs {
+		return 0, nil
+	}
 	var stranded uint64
-	err := s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation f WHERE f.state IN(2,3) AND "+expiredOutcomeSQL+" AND NOT ("+recoverableOutcomeShapeSQL+")").Scan(&stranded)
+	err = s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_formation f WHERE "+expiredInFlightSQL+" AND NOT ("+recoverableOutcomeShapeSQL+")", terminalOutcomeNoRetryMs, stamp-terminalOutcomeGraceMs).Scan(&stranded)
 	return stranded, err
 }
 
@@ -1171,9 +1188,4 @@ func (s *Store) finish(ctx context.Context, work *pb.MatchFormationRecord, succe
 		}
 	}
 	return tx.Commit()
-}
-
-func (s *Store) ReleaseReady(ctx context.Context, pid uint64, ticket string, id uint64) error {
-	_, e := s.DB.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=? AND ticket=? AND formation_id=? AND state=3", pid, ticket, id)
-	return e
 }

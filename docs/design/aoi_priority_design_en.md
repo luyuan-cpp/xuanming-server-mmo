@@ -104,13 +104,24 @@ idea is replaced by explicit follows; the Chinese version of this document has t
   priority tag and an optional stealth-detection grant. Re-adding a source updates it in place;
   unfollow revokes only that source.
 - One relation may have a spatial source and several explicit sources but only one client-visible
-  state. Leaving the grid removes only the spatial source; the client gets one removal when the last
-  source is gone.
+  state. Moving beyond the leave radius removes only the spatial source; the client gets one removal
+  when the last source is gone.
+
+## Spatial Re-evaluation (2026-11-10)
+
+Spatial interest is decided by distance and re-evaluated whenever a position changes, not only when an
+entity crosses a hex cell (that left people who approached within the same cells invisible forever).
+Enter: 3D distance ≤ view radius (10 m, inclusive), candidates from the current hex and its six
+neighbours. Leave: 3D distance > leave radius (view radius × 2 = 20 m), independent of the grid; the
+band in between is the hysteresis. A stationary entity is re-evaluated as soon as its position changes;
+a moving one after every 1 m of accumulated displacement. Each re-evaluation handles both directions.
+Same rules as the Java version. Details: [aoi-directed-interest.md](aoi-directed-interest.md).
 
 ## Stealth Visibility
 
-`ViewSystem::CanSee(observer, target)` is the spatial enter check: distance, then stealth.
-A stealthed target is visible only when one of the observer's explicit sources for it sets
+`ViewSystem::CanSee(observer, target)` is the spatial enter check (distance ≤ view radius, then stealth);
+`ViewSystem::CanKeepSeeing(observer, target)` keeps an existing spatial source (distance ≤ leave radius,
+then stealth). A stealthed target is visible only when one of the observer's explicit sources for it sets
 `revealsStealth`. When the stealth tag appears or disappears, `BuffSystem` calls
 `AoiSystem::RefreshTargetVisibility`: watchers without detection get one removal (explicit
 sources are kept), and on reveal paused follows plus nearby observers get a fresh create with the
@@ -134,7 +145,8 @@ scanning the node.
 | `InterestSystem::UpgradePriority(watcher, target, priority)` | Upgrade priority (compares policy weights, not raw enum values) |
 | `InterestSystem::GetEffectiveCapacity(watcher)` | Dynamically resolve effective capacity |
 | `InterestSystem::GetPriorityPolicy(watcher)` | Get scene's policy (default: open-world) |
-| `ViewSystem::CanSee(observer, target)` | Full visibility check: distance + stealth state |
+| `ViewSystem::CanSee(observer, target)` | Enter check: distance ≤ view radius + stealth state |
+| `ViewSystem::CanKeepSeeing(observer, target)` | Keep check: distance ≤ leave radius + stealth state |
 | `ViewSystem::IsStealthed(entity)` | Check for active stealth buff |
 
 ## Files Changed
@@ -144,8 +156,9 @@ scanning the node.
 | `spatial/constants/aoi_priority.h` | Priority tags, `AoiPriorityPolicy` struct, built-in policies, dynamic capacity constants |
 | `spatial/comp/scene_node_scene_comp.h` | `AoiListComp` (entries map), `AoiClientCapacityComp`, `ScenePressureComp`, `ScenePriorityPolicyComp` |
 | `spatial/system/interest.h/.cpp` | Policy-aware `AddAoiEntity`, `GetEffectiveCapacity`, `GetPriorityPolicy`, `UpgradePriority` |
-| `spatial/system/view.h/.cpp` | `CanSee()`, `IsStealthed()` |
-| `spatial/system/aoi.cpp` | Grid evaluation with `CanSee` / `DetermineAoiPriority`, explicit follow entry points, netted visibility delivery |
+| `spatial/constants/view.h` | View radius, leave radius factor, re-evaluation step, hex size |
+| `spatial/system/view.h/.cpp` | `CanSee()`, `CanKeepSeeing()`, `IsStealthed()` |
+| `spatial/system/aoi.cpp` | Grid membership, distance re-evaluation with `CanSee` / `CanKeepSeeing` / `DetermineAoiPriority`, explicit follow entry points, netted visibility delivery |
 | `actor/attribute/system/actor_state_attribute_sync.cpp` | Updated for `entries` API |
 | `tests/aoi_test/*` | Priority, capacity, pin/team, dynamic capacity, policy tests |
 
@@ -161,6 +174,4 @@ scanning the node.
   writes `ScenePressureComp.pressureFactor`.
 - **Client settings RPC**: Wire client-reported display count to
   `AoiClientCapacityComp`.
-- **Hysteresis / grace period**: Add a grace period before removing entities
-  that oscillate across grid boundaries.
 - **Custom policies**: Data-driven policy loading from configuration tables.
