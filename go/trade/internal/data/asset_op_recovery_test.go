@@ -569,9 +569,11 @@ func TestAbandonCommitsWithTokenAndReportsLeaseLost(t *testing.T) {
 			t.Fatalf("Abandon: %v", err)
 		}
 		calls := s.recordedCalls()
-		want := []string{"BEGIN", collapseSpaces(sqlLockAssetOp), collapseSpaces(sqlAbandonAssetOp), "COMMIT"}
+		// COMMIT 之后在事务外读这条指令的归属,好唤醒所属合同(缺口清单第 16 条,wakeContractOf);
+		// 录制驱动对这条读回空行,所以后面没有唤醒 UPDATE。
+		want := []string{"BEGIN", collapseSpaces(sqlLockAssetOp), collapseSpaces(sqlAbandonAssetOp), "COMMIT", sqlReadAssetOpOwner}
 		if !reflect.DeepEqual(callSQLs(calls), want) {
-			t.Fatalf("放弃应是 BEGIN → 主键点锁 → CAS → COMMIT,录到 %+v", callSQLs(calls))
+			t.Fatalf("放弃应是 BEGIN → 主键点锁 → CAS → COMMIT → 事务外读归属,录到 %+v", callSQLs(calls))
 		}
 		if lockArgs := calls[1].args; len(lockArgs) != 1 || argInt(t, lockArgs[0]) != op.OpID {
 			t.Errorf("点锁实参 = %v, want (op_id=%d)", lockArgs, op.OpID)
@@ -676,9 +678,11 @@ func TestTerminalWritersLockRowBeforeCAS(t *testing.T) {
 				t.Fatalf("= (%v, %v), want (true, nil)", done, err)
 			}
 			calls := s.recordedCalls()
-			want := []string{"BEGIN", collapseSpaces(sqlLockAssetOp), collapseSpaces(tc.cas), "COMMIT"}
+			// 三个写者终结成功之后都在事务外读一次归属,好唤醒所属合同(缺口清单第 16 条,wakeContractOf);
+			// 录制驱动对这条读回空行,所以后面没有唤醒 UPDATE。唤醒本身由 TestTerminalWritersWakeOwningContractAfterCommit 钉住。
+			want := []string{"BEGIN", collapseSpaces(sqlLockAssetOp), collapseSpaces(tc.cas), "COMMIT", sqlReadAssetOpOwner}
 			if tc.name == "Finalize" {
-				want = []string{"BEGIN", collapseSpaces(sqlLockAssetOp), "SELECT ref_kind FROM " + AssetOpTableName + " WHERE op_id=?", collapseSpaces(tc.cas), "COMMIT"}
+				want = []string{"BEGIN", collapseSpaces(sqlLockAssetOp), "SELECT ref_kind FROM " + AssetOpTableName + " WHERE op_id=?", collapseSpaces(tc.cas), "COMMIT", sqlReadAssetOpOwner}
 			}
 			if got := callSQLs(calls); !reflect.DeepEqual(got, want) {
 				t.Fatalf("语句序列 = %+v\nwant %+v", got, want)
@@ -703,6 +707,69 @@ func TestTerminalWritersLockRowBeforeCAS(t *testing.T) {
 				if strings.HasPrefix(c.sql, "UPDATE ") {
 					t.Errorf("点锁读不到行时不得发 CAS,录到 %s", c.sql)
 				}
+			}
+		})
+	}
+}
+
+// TestTerminalWritersWakeOwningContractAfterCommit:终结 / 人工终结 / 放弃提交之后,指令属于交易合同(ref_kind=ORDER)时,
+// 在事务外把那张合同提前到终结时刻到期(缺口清单第 16 条):先读归属,再发一条只往前拉、不改版本的唤醒 UPDATE。
+// 唤醒排在 COMMIT 之后:合同推进的锁序是「合同行 → op 行」,在 op 行锁里再锁合同行会成环。
+func TestTerminalWritersWakeOwningContractAfterCommit(t *testing.T) {
+	const opID, contractID, nowMs = 41, 77, 9_000
+	debit := assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT
+	owner := func(query string, args []driver.Value) ([]string, [][]driver.Value) {
+		switch query {
+		case collapseSpaces(sqlLockAssetOp):
+			return []string{"op_id"}, [][]driver.Value{{args[0]}}
+		case "SELECT ref_kind FROM " + AssetOpTableName + " WHERE op_id=?":
+			return []string{"ref_kind"}, [][]driver.Value{{int64(tradepb.TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_ORDER)}}
+		case sqlReadAssetOpOwner:
+			return []string{"ref_kind", "ref_id"}, [][]driver.Value{{int64(tradepb.TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_ORDER), int64(contractID)}}
+		}
+		return nil, nil
+	}
+	writers := map[string]func(repo *AssetOpRepo) error{
+		"Finalize": func(repo *AssetOpRepo) error {
+			// 合同的腿(ORDER)终结要带玩家 SQL 已提交且已落盘的证据,否则 Finalize 拒绝。
+			_, err := repo.Finalize(context.Background(), assetop.Op{OpID: opID, LeaseToken: 5, Stream: debit},
+				assetop.StatusApplied, assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true, SQLCommitted: true}, nowMs)
+			return err
+		},
+		"ResolveManually": func(repo *AssetOpRepo) error {
+			_, err := repo.ResolveManually(context.Background(),
+				assetop.ManualResolution{OpID: opID, Final: assetop.StatusAborted, Operator: "ops", Reason: "test"}, nowMs)
+			return err
+		},
+		"Abandon": func(repo *AssetOpRepo) error {
+			return repo.Abandon(context.Background(), assetop.Op{OpID: opID, LeaseToken: 5, Stream: debit}, nowMs)
+		},
+	}
+	for name, run := range writers {
+		t.Run(name, func(t *testing.T) {
+			s := &recovScript{affected: 1, rowsFor: owner}
+			if err := run(s.repo(t)); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			calls := s.recordedCalls()
+			commit := -1
+			for i, c := range calls {
+				if c.sql == "COMMIT" {
+					commit = i
+				}
+			}
+			if commit < 0 || len(calls) != commit+3 {
+				t.Fatalf("COMMIT 之后应恰好是读归属、唤醒两条,录到 %+v", callSQLs(calls))
+			}
+			if calls[commit+1].sql != sqlReadAssetOpOwner || argInt(t, calls[commit+1].args[0]) != opID {
+				t.Fatalf("COMMIT 之后先读归属 (op_id=%d),录到 %s %v", opID, calls[commit+1].sql, calls[commit+1].args)
+			}
+			wake := calls[commit+2]
+			if !strings.HasPrefix(wake.sql, "UPDATE trade_commerce SET updated_ms=? WHERE commerce_id=? AND updated_ms>?") {
+				t.Fatalf("再唤醒所属合同,录到 %s", wake.sql)
+			}
+			if len(wake.args) != 3 || argInt(t, wake.args[0]) != nowMs || argInt(t, wake.args[1]) != contractID || argInt(t, wake.args[2]) != nowMs {
+				t.Fatalf("唤醒实参 = %v, want (updated_ms=%d, commerce_id=%d, 只往前拉 %d)", wake.args, nowMs, contractID, nowMs)
 			}
 		})
 	}

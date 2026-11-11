@@ -28,10 +28,15 @@
 //
 // 两段共用同一份 Friend.Sweep 参数(Mode / RetentionDays / BatchLimit),不新增配置键。
 //
-// # 多副本:各跑各的,不引入 leader
+// # 多副本:按片分工,不引入 leader(2026-11-11 起,消除单节点总纲 §9)
 //
-// DELETE 幂等,两个副本同时跑最坏只是其中一个删到空批。为此专门引入 shared/leader
-// 会把一个"删旧数据"的后台任务变成有分布式状态的东西(AGENTS.md §11.2 YAGNI)。
+// 清理的活随社交量增长(终态申请与被申请过的 id 都随玩家数累积),所以不能交给单个领导者。
+// 以前每个 stable 副本都读同一批候选、抢同一批行,加副本只多出重复读和空删,吞吐不变。
+// 现在按玩家 id 分 64 片(data.SweepWorkKind),由 etcd 里注册的 stable friend 副本按最高随机权重哈希分
+// (shared/workshard,与 guild / trade 终态清理、player_inbox 对账同一套);每个副本一轮只删自己片里的一批,
+// 总吞吐随副本数增长。成员表由 StartSweep 随清理循环一起起停,本副本的身份在注册之后由 friend.go 补上。
+// 分工只省重复劳动,正确性仍在 SQL 提交点(逐行点锁 + WHERE 复核):成员表变化的几秒里同一片可能两个副本都删,
+// 后到的删到 0 行;也可能一片一轮没人删,终态行多留一轮。
 // 启动时加随机抖动,只是为了让多副本不要恰好同一秒一起压库。
 //
 // # 职责分界(看懂这条再改)
@@ -43,9 +48,12 @@
 //
 // # 调用方
 //
-// go/friend/friend.go 的 runFriend,在 `metrics.Start(c.MetricsListenAddr)` 之后一行:
+// go/friend/friend.go 的 runFriend,在 `metrics.Start(c.MetricsListenAddr)` 之后(只在 stable 副本上):
 //
-//	logic.StartSweep(ctx, deps)
+//	logic.StartSweep(ctx, deps, sweepShards)
+//
+// sweepShards 是本 zone 注册的 friend 实例的成员表,注册成功之后 friend.go 调 SetSelf 补上本副本的身份;
+// 补上之前若成员表里已有别的副本,本副本一片都不清。
 //
 // 那个 ctx 就是 main 里 signal.NotifyContext 的 ctx:进程收到 SIGTERM 时循环自行退出,
 // 不需要额外的停机钩子(ticker 在 safego.Loop 的 defer 里 Stop)。
@@ -65,9 +73,11 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"friend/internal/config"
+	"friend/internal/data"
 	"friend/internal/metrics"
 	"shared/authoritysql"
 	"shared/safego"
+	"shared/workshard"
 )
 
 // sweepPoint 是 safego 的点位名,会直接变成 Prometheus label safego_panic_total{point=...}。
@@ -93,33 +103,44 @@ const sweepRoundBudget = 30 * time.Second
 //   - delete 返回 (待清理行数, 实际删除行数, nil),两个数都受 batchLimit 封顶;
 //   - 待删行数异常(存在 updated_ms 恒为 0 的终态行 ⇒ 写入方漏写,见 F2-14)时
 //     **只统计不删**,返回 deleted=0 且不报错 —— 它不是故障,是刻意的拒绝;
-//   - nowMs 由调用方给(单测要固定时钟),data 层不自己取 time.Now。
+//   - nowMs 由调用方给(单测要固定时钟),data 层不自己取 time.Now;
+//   - owns 判本副本是否负责某一片(归属键 workshard.ShardKey(data.SweepWorkKind, n));nil = 不分工,数和删全部片。
+//     两个返回值都只算本副本负责的片;updated_ms 的保险不分片(看全表)。
 type SweepStore interface {
-	SweepTerminalRequests(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (pending int64, deleted int64, err error)
+	SweepTerminalRequests(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) (pending int64, deleted int64, err error)
 	// SweepIdleCapacityRows:回收零好友且超过保留期的 friend_capacity 行,契约同上(无 updated_ms 保险)。
-	SweepIdleCapacityRows(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (idle int64, deleted int64, err error)
+	SweepIdleCapacityRows(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64, owns func(key string) bool) (idle int64, deleted int64, err error)
 }
 
 // StartSweep 起后台清理循环,立即返回;ctx 结束时循环自行退出。
 //
+// shards 是按片分工的成员表(friend.go 用本 zone 注册的 friend 实例前缀构造,注册之后 SetSelf);
+// nil = 不分工,本副本清全部片(单测与没有 etcd 的形态)。成员表的整表轮询与清理循环同起同停:
+// 返回的停止函数等两者都真实退出,所以 svcCtx 关 etcd 连接时成员表已经不再读它。
+//
 // 首轮不是立刻跑,而是先等一个 [0, Interval) 的随机抖动再进入 ticker 节拍:
 // 多副本同时重启(滚动升级、K8s 驱逐)时不要在同一秒一起对 friend_request 发 DELETE。
-func StartSweep(ctx context.Context, deps *Deps) func(context.Context) error {
+// 抖动期间成员表已在读,首轮开始时多半已经拿到分工。
+func StartSweep(ctx context.Context, deps *Deps, shards *workshard.Membership) func(context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
+	membersDone := make(chan struct{})
 	stop := func(waitCtx context.Context) error {
 		cancel()
-		select {
-		case <-done:
-			return nil
-		case <-waitCtx.Done():
-			return waitCtx.Err()
+		for _, finished := range []<-chan struct{}{done, membersDone} {
+			select {
+			case <-finished:
+			case <-waitCtx.Done():
+				return waitCtx.Err()
+			}
 		}
+		return nil
 	}
 	cfg := deps.SvcCtx.Config.Friend.Sweep
 	if deps.Sweeps == nil {
 		logx.Errorf("[friend] SweepStore not wired; sweep not started (terminal friend requests and zero-friend capacity rows will not be reclaimed)")
 		close(done)
+		close(membersDone)
 		return stop
 	}
 	// Interval <= 0 在生产不可能出现(config.Validate 拒收),这里不启动而不是用 0 间隔 ——
@@ -127,11 +148,23 @@ func StartSweep(ctx context.Context, deps *Deps) func(context.Context) error {
 	if cfg.Interval <= 0 {
 		logx.Errorf("[friend] Invalid sweep Interval=%v; cleanup not started", cfg.Interval)
 		close(done)
+		close(membersDone)
 		return stop
 	}
 
-	logx.Infof("[friend] Sweep started mode=%s interval=%v retention_days=%d batch=%d (cleanup targets: terminal friend_request rows + zero-friend friend_capacity rows, sharing these parameters)",
-		cfg.Mode, cfg.Interval, cfg.RetentionDays, cfg.BatchLimit)
+	var owns func(key string) bool
+	if shards == nil {
+		close(membersDone)
+	} else {
+		owns = shards.Owns
+		safego.Go(sweepPoint+".members", func() {
+			defer close(membersDone)
+			shards.Run(runCtx, deps.SvcCtx.Etcd)
+		})
+	}
+
+	logx.Infof("[friend] Sweep started mode=%s interval=%v retention_days=%d batch=%d sharded=%t kind=%s (cleanup targets: terminal friend_request rows + zero-friend friend_capacity rows, sharing these parameters)",
+		cfg.Mode, cfg.Interval, cfg.RetentionDays, cfg.BatchLimit, shards != nil, data.SweepWorkKind)
 
 	safego.Go(sweepPoint+".start", func() {
 		defer close(done)
@@ -177,7 +210,7 @@ func StartSweep(ctx context.Context, deps *Deps) func(context.Context) error {
 					}
 				}()
 				// 关闭只停止下一轮；已接收 SQL 保留自己的有界预算，不以取消制造终局。
-				deps.runSweepRound(context.WithoutCancel(runCtx))
+				deps.runSweepRound(context.WithoutCancel(runCtx), owns)
 			})
 		}
 	})
@@ -192,10 +225,14 @@ func StartSweep(ctx context.Context, deps *Deps) func(context.Context) error {
 // 两张表的回收没有先后依赖,让 friend_request 上的一条慢语句连带停掉 friend_capacity 的回收,
 // 等于把后者的增长闸门挂在前者的健康上。预算被前一段耗尽时,后一段会立刻因 ctx 到期失败并
 // 打一条失败日志,这是刻意接受的噪声:它如实说明"这一轮容量行没回收",比静默跳过好排查。
-func (d *Deps) runSweepRound(ctx context.Context) {
+//
+// owns 是本副本的分片归属判定(StartSweep 传入成员表的 Owns,nil = 全部片),两段都按它只清本副本的片;
+// 本轮负责几片记进 friend_sweep_owned_shards,全部 stable 副本加起来应为 64。
+func (d *Deps) runSweepRound(ctx context.Context, owns func(key string) bool) {
 	cfg := d.SvcCtx.Config.Friend.Sweep
 	ctx, cancel := context.WithTimeout(ctx, sweepRoundTimeout(cfg.Interval))
 	defer cancel()
+	metrics.SetSweepOwnedShards(float64(ownedSweepShards(owns)))
 
 	// 配置里拼错了模式。config.Validate 本该拒掉(它按 options 标签校验),
 	// 走到这里说明校验被绕过或配置在运行期被改过 —— 必须报出来,
@@ -208,8 +245,22 @@ func (d *Deps) runSweepRound(ctx context.Context) {
 			cfg.Mode, config.SweepModeReportOnly, config.SweepModeDelete)
 	}
 
-	d.sweepTerminalRequests(ctx, cfg)
-	d.sweepIdleCapacityRows(ctx, cfg)
+	d.sweepTerminalRequests(ctx, cfg, owns)
+	d.sweepIdleCapacityRows(ctx, cfg, owns)
+}
+
+// ownedSweepShards 数本副本此刻负责的清理分片数;owns 为 nil(不分工)时是全部 64 片。
+func ownedSweepShards(owns func(key string) bool) int {
+	if owns == nil {
+		return workshard.Shards
+	}
+	owned := 0
+	for shard := 0; shard < workshard.Shards; shard++ {
+		if owns(workshard.ShardKey(data.SweepWorkKind, shard)) {
+			owned++
+		}
+	}
+	return owned
 }
 
 // isKnownSweepMode 报告 mode 是不是两个合法取值之一。
@@ -219,10 +270,10 @@ func isKnownSweepMode(mode string) bool {
 	return mode == config.SweepModeReportOnly || mode == config.SweepModeDelete
 }
 
-// sweepTerminalRequests 是一轮里的第一段:friend_request 的终态行。
-func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) {
+// sweepTerminalRequests 是一轮里的第一段:friend_request 的终态行(只清 owns 负责的片)。
+func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf, owns func(key string) bool) {
 	pending, deleted, err := d.Sweeps.SweepTerminalRequests(
-		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
+		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli(), owns)
 	if err != nil {
 		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 			d.SvcCtx.RootAdmission.Hold()
@@ -236,6 +287,7 @@ func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) 
 	// 每轮都刷 Gauge(包括 0):长期不更新是"sweep 根本没在跑"的唯一信号,
 	// 只在 >0 时刷会让"没有积压"和"循环死了"在看板上长得一样。
 	// ⚠ pending 受 BatchLimit 封顶,等于 BatchLimit 只说明"积压 ≥ 一批",不是精确积压。
+	// ⚠ 按片分工后它是**本副本负责的片**的读数,看全服积压要对各副本求和。
 	// ⚠ 未知模式**不刷** Gauge —— label 必须是 metrics 包声明的有限枚举(metrics.go 顶部),
 	// 拿配置里拼错的串当 label 会造出一条没人认识的序列;拼错这件事由 runSweepRound 的错误日志表达。
 	// 所以 Set 放在两个合法 case 的第一行,而不是 switch 之前;switch 刻意没有 default。
@@ -250,7 +302,7 @@ func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) 
 		if pending > 0 {
 			// delete 模式、有待清理行、却一行没删:最可能是 SQL 侧那道保险触发了
 			// (发现终态行的 updated_ms 恒为 0 ⇒ 某条写路径漏写 updated_ms,F2-14),
-			// 也可能是并发的另一个副本刚把这一批删掉了。两种都要看得见:
+			// 也可能是成员表变化的几秒里另一个副本也负责这一片、刚把这一批删掉了。两种都要看得见:
 			// 前者是必须修的缺陷,后者是无害的空批,分辨靠 data 层那条拒绝日志。
 			logx.WithContext(ctx).Errorf("[friend] WARN sweep(delete) found %d rows to clean but deleted none: check data-layer anomalous deletion-count guard (updated_ms writer missing), or another replica may have deleted them first",
 				pending)
@@ -270,11 +322,11 @@ func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) 
 //
 // 与第一段的差别只有一处:delete 模式下"看到了却一行没删"**不告警**。这张表没有
 // "updated_ms 恒为 0 就拒删"那道保险,零删除只可能是提交点复核生效了 —— 候选读与逐行 DELETE
-// 之间该玩家刚加上好友(friend_count 不再是 0),或另一个副本抢先删了这一批。两种都是预期内的
-// 竞态而不是缺陷,为它打 WARN 只会制造常亮的噪音。
-func (d *Deps) sweepIdleCapacityRows(ctx context.Context, cfg config.SweepConf) {
+// 之间该玩家刚加上好友(friend_count 不再是 0),或成员表变化时另一个副本也负责这一片、抢先删了这一批。
+// 两种都是预期内的竞态而不是缺陷,为它打 WARN 只会制造常亮的噪音。
+func (d *Deps) sweepIdleCapacityRows(ctx context.Context, cfg config.SweepConf, owns func(key string) bool) {
 	idle, deleted, err := d.Sweeps.SweepIdleCapacityRows(
-		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
+		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli(), owns)
 	if err != nil {
 		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 			d.SvcCtx.RootAdmission.Hold()

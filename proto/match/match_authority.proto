@@ -291,6 +291,11 @@ enum MatchBattleCompletionSourceKind {
   // battle 冻结的终局只会原样重放，这份原件被确定性规则拒收就不会再有别的结果；版本错位类拒收（未知字段等）不算。
   // 同样没有 Battle 原字节，format_version 为 0。
   MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT = 6;
+  // 原执行进程确定已不在时 Match 提前写的 ABORT（2026-11-11，go/match/internal/authority/instance_gone.go，
+  // docs/design/battle-instance-loss-early-abort.md §4）：两次确定证据（原地址上是另一个实例 / 原端口拒连 /
+  // K8s 里原 IP 已没有 Pod）相隔不少于复核间隔，期间原实例从没亲口应答过。截止之前也可以写。
+  // 同样没有 Battle 原字节，format_version 为 0。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT = 7;
 }
 
 // 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。

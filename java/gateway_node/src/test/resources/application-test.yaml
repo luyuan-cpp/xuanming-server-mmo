@@ -44,5 +44,13 @@ zone-probe:
   interval-ms: 60000
   status-ttl-ms: 180000
 
+# 测试上下文没有真实 etcd:本副本不替任何区发布(健康汇总发布者空转,不申请租约)。
+gateway:
+  home-zone-ids: []
+
 cdn:
   base-url: "https://cdn.example.com"
+
+# test profile 按 test 档运行:上面的 gate.token-secret 是测试占位值,GateTokenSecretGuard 在 test / dev 档只告警,生产档会拒启。
+mmorpg:
+  run-mode: test

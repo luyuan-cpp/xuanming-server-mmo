@@ -607,9 +607,10 @@ type PvpTeamSmokeConfig struct {
 	Zone uint32 `yaml:"zone"`
 	// BattleConfigId 是开放了 PVP_TEAM 的模板(PlayMode 表第 6 行是 1),必须非 0。
 	BattleConfigId uint32 `yaml:"battle_config_id"`
-	// Phase:prepare = 登录要写评分的账号、写评分夹具文件后退出;run = 读夹具核对后跑全部情况。
+	// Phase:prepare = 登录全部参战账号、写评分夹具文件后退出;run = 读夹具核对、取用后跑全部情况。
 	Phase string `yaml:"phase"`
-	// FixturePath 是评分夹具文件:prepare 写、run 读;go/match/cmd/ratingfixture 按它写 match_rating。
+	// FixturePath 是评分夹具文件:prepare 写;go/match/cmd/ratingfixture 按它写 match_rating,再写回写库时刻 applied_ms;
+	// run 读、核对,并把 applied_ms 清零(一次写库只够跑一轮)。
 	FixturePath string `yaml:"fixture_path"`
 	// Cases 只跑列出的情况(排障用),空 = 全部。名字见 pvp_team_smoke_scenario.go 的 pvpSmokeCases。
 	Cases []string `yaml:"cases"`

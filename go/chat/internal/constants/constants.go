@@ -20,6 +20,19 @@ const MaxActorVerifyTTLSeconds = 3600
 // MaxWorldHistoryCacheMs 是世界频道近窗快照的配置上限:它就是别的副本上新消息最晚多久才出现在历史里。
 const MaxWorldHistoryCacheMs = 5000
 
+// WorldStreamShards 是世界频道写入分到的流键个数:流键 world-v3:<k>,k = 发送者 player_id % WorldStreamShards
+// (docs/design/chat-world-channel-fanout.md §5)。全服的世界频道写入以前都追加在同一个流键的索引尾部,TiDB 上是一个热点 Region;
+// 分段之后热点能被拆开。读最新一窗时每段各取最新 N 条,在内存里合并。
+// 这是存储布局契约:改它会让已有的世界频道历史读不到,只在清库时改。
+const WorldStreamShards = 8
+
+// MaxWorldChannelCooldownMs 是世界频道发言间隔的配置上限(10 分钟)。
+const MaxWorldChannelCooldownMs = 600000
+
+// OriginalRetentionDays 是聊天原件(chat_send_authority)在 TiDB 上的保留天数,到期由表的 TTL 属性在库里删除(authority/schema.go),
+// 运行账号仍然没有 DELETE。它必须不短于历史可见窗口 HistoryTTLSeconds(配置校验守着);请求去重只回看几秒到几分钟,远短于它。
+const OriginalRetentionDays = 30
+
 const (
 	// ErrInvalidParameter:取不到会话(缺 / 坏 x-session-detail-bin)、请求体缺 message、
 	// PRIVATE 缺对端或对端是自己、频道枚举值未知、request_id 超长。

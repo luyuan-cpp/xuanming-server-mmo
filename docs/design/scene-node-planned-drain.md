@@ -1,6 +1,6 @@
 # scene 节点计划排空：重启、缩容、滚动升级时把玩家搬到别的节点（2026-11-11）
 
-> **状态**：方案已定，按 §9 分批落码；全部未生成协议、未编译，待 Codex 验证。Java 版待做（§10）。
+> **状态**：方案已定，2026-11-11 批 1~4 全部落码（§9）；未生成协议、未编译、未运行，待 Codex 验证。battle 的计划排空进程缺省关闭，要部署按对局时长给宽限期并注入预算才生效（§9 批 4）。Java 版待做（§10）。
 > **需求来源**：负责人 2026-11-11：「scene 重启之前是把当前的节点玩家传送到已有 scene 节点（新版本节点优先），或者是收缩的时候，这样玩家就像无感一样」；同日要求「按最标准的方式做：数据强一致、代码易懂、可水平扩展，Java 留待做」。总需求与逐节点现状见 [全类型节点平滑停机需求](node-lifecycle-elasticity-release-20261023.md) §3.7。
 > **核对基线**：HEAD `e0790ad40` 加 11-11 工作区。十几个会话并行在改，行号会漂，按函数名找。
 > **上线状态**：未上线，玩家数据可以整体清空，不为旧部署做兼容。新旧版本只在滚动窗口里并存，按 §6 的发布顺序。
@@ -150,7 +150,7 @@
 ## 6. 部署与发布顺序
 
 - **Deployment（缺省）**：`zone-up` 换镜像即可。K8s 先起新 Pod、就绪后给旧 Pod 发 SIGTERM，旧 Pod 按本文排空。缩容（减副本）同理。部署脚本给 scene 注入 `MMORPG_BUILD_LABEL` 与 `MMORPG_PLANNED_DRAIN_BUDGET_SECONDS`，宽限期缺省改为 120 秒。
-- **Agones**：Fleet 模板更新只替换 Ready 的 GameServer。旧构建的 Allocated GameServer 要逐台打 `mmorpg.io/drain` 标签，等它排空并自己退出、Fleet 补出新构建后再打下一台。这一步的脚本留作后续（§9 批 4），未做之前 Agones 形态的旧 GameServer 会一直留在旧构建上。
+- **Agones**：Fleet 模板更新只替换 Ready 的 GameServer。旧构建的 Allocated GameServer 要逐台打 `mmorpg.io/drain` 标签，等它排空并自己退出、Fleet 补出新构建后再打下一台：`zone-up` 换完 Fleet 模板后对每个 scene Fleet 跑 `pwsh -File tools/scripts/k8s_scene_roll.ps1 -Namespace <zone ns> -Fleet <fleet>`（缺省每次 1 台，`-MaxConcurrent` 可调，`-DryRun` 只列名字）。Fleet 缩容时 Agones 的 allocationOverflow 打的是同一个标签，scene 同样按计划排空处理。
 - **顺序**：scene_manager 先于 scene 升级（它要先认得 CLOSED、`build` 与 `evacuation`），与发布轨道的「保护先随 stable 上线」同一纪律。首次上线整批带上即可。
 
 ## 7. 契约
@@ -180,14 +180,21 @@
 
 ## 9. 实施分批与验证
 
-| 批 | 内容 | 状态 |
-|---|---|---|
-| 1 | 协议字段；scene_manager：排空与构建镜像、选点排除与偏好、排空迁移、疏散解析、指标、单测 | 见 PROGRESS 同名条目 |
-| 2 | C++：Node 计划排空阶段与信号、通用 admission 对账（battle 改用）、注册写 build；scene 排空编排、疏散去向与限速、单测 | 同上 |
-| 3 | 部署：scene 宽限期 120、注入 `MMORPG_BUILD_LABEL` 与预算；契约测试 | 同上 |
-| 4 | Agones 旧构建 GameServer 逐台排空脚本；battle 计划排空（拒新局 → 等局结束 → 退出） | 待做 |
+| 批 | 内容 | 主要文件 | 状态 |
+|---|---|---|---|
+| 1 | 协议字段；scene_manager：排空与构建镜像、选点排除与偏好、排空迁移协程、疏散解析、指标、单测 | `proto/common/base/common.proto`、`proto/scene_manager/scene_manager_service.proto`、`go/scene_manager/internal/logic/{node_drain,enter_evacuation,load_reporter,node_selection,world_rebalance,world_init,enterscenelogic,safe_points}.go`、`node_drain_test.go`、`internal/metrics/{planned_drain,metrics}.go` | 11-11 落码，未编译 |
+| 2 | C++：Node 计划排空阶段与信号拆分、注册写 build、通用 admission 对账（battle 改用）；scene 排空编排、疏散去向与限速、单测 | `cpp/libs/engine/core/node/system/node/{node.h,node.cpp,node_entry.h,node_planned_drain.h,node_admission_advertise.h,node_admission_publisher.h}`、`core.vcxproj{,.filters}`、`cpp/nodes/scene/{main.cpp,scene_planned_drain.h,scene_planned_drain.cpp,scene.vcxproj{,.filters}}`、`cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp,relocate_target.h}`、`cpp/libs/services/scene/world/scene_planned_drain_rules.h`、`cpp/nodes/battle/{battle_admission_advertise.h,main.cpp}`、`cpp/tests/cross_zone_test/{planned_drain_test.cpp,cross_zone_test.vcxproj{,.filters}}` | 11-11 落码，未编译 |
+| 3 | 部署：scene 宽限期 120、两种编排注入 `MMORPG_BUILD_LABEL` 与预算；契约测试 | `tools/scripts/k8s_deploy.ps1`、`tools/scripts/tests/scene_planned_drain_deploy.tests.ps1` | 11-11 落码，未运行 |
+| 4 | Agones 旧构建 GameServer 逐台排空脚本；battle 计划排空（关准入 → 等房间清零 → 普通停机） | `tools/scripts/k8s_scene_roll.ps1`、`tools/scripts/tests/k8s_scene_roll.tests.ps1`、`cpp/nodes/battle/main.cpp` | 11-11 落码，未编译；battle 缺省关闭，部署侧（battle 宽限期与预算注入）等负责人给对局时长 |
 
 验证命令与通过标准在 PROGRESS 的落码条目里（AGENTS.md §10.1：协议生成、编译、单测、冒烟由 Codex 执行）。
+
+**已知残余**：
+
+- 计划排空窗口里，同一个 scene_id 在新旧两台各有一份实例（§4.3），gate 的场景广播只按 scene_id 过滤；11-11 没有调用方，新增调用方时要按发送节点过滤。
+- scene_manager 的 `removeScenePlayer` 按场景当前属主摘节点成员，注释写着「改派只发生在旧节点已死之后」。计划排空打破了这个前提：窗口里从旧实例下线的玩家，会被从新属主的节点成员集合里摘（他本来就不在），旧节点的集合残留到它退出、被死节点收尾整键删掉。只影响负载分计数，不影响归属与存档。
+- 托管中的角色（没有客户端）没有 gate 会话，疏散时只存盘、不改派（现有规则）；托管落点搬人留给组队跟随的托管落点批。
+- 限速初值 200 人/秒、宽限期 120 秒、自疏散时刻取预算一半，都没有压测基线。
 
 ## 10. Java 版
 

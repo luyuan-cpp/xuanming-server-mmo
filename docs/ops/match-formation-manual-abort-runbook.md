@@ -34,7 +34,7 @@
 
 **不做什么**（遇到就拒绝，见 §3 原因码）：
 
-- 原件合格的局（`class=auto`）：归到期恢复 / 帮会取消，人工不得抢。2026-11-06 起自动作废之前先向原 battle 实例取证，原实例仍持有房间或连不上时最多等到截止加约 14 分钟（硬上限 + 持有宽限，再加恢复循环两次访问这一局的延迟；原 battle 成批被黑洞、恢复循环每拍都要等满取证期限时可到约 16 分钟，见设计 `cross-zone-matchmaking.md` §13.3「2026-11-06 修复：截止作废先取证」），这段时间里 `abort_wait_*` 计数在涨是正常的。原 battle 连不上（超时、黑洞、node_id 已被新进程占用）都不算证据，一律等到这个上限；只有原地址上换了实例、或原地址端口当场拒连且注册中心已不在册才提前作废。match 可用而 `abort_wait_battle_still_holds` 仍在涨、match 日志里同一 battle_id 有 `metric=match_terminal_outcome_rejected reason=original_conflict` 的，是 battle 的 COMPLETE 被永久拒收、它还持有房间：同样等到上限自动作废，不要用本工具抢，把 battle_id 交研发查原件为什么被拒。超过这个时间仍没被自动处理，查到期恢复循环本身（match 副本是否在跑、TiDB 是否可写），不要用本工具；
+- 原件合格的局（`class=auto`）：归到期恢复 / 帮会取消，人工不得抢。2026-11-06 起自动作废之前先向原 battle 实例取证，原实例仍持有房间或连不上时最多等到截止加约 14 分钟（硬上限 + 持有宽限，再加恢复循环两次访问这一局的延迟；原 battle 成批被黑洞、恢复循环每拍都要等满取证期限时可到约 16 分钟，见设计 `cross-zone-matchmaking.md` §13.3「2026-11-06 修复：截止作废先取证」），这段时间里 `abort_wait_*` 计数在涨是正常的。原 battle 连不上（超时、黑洞、node_id 已被新进程占用）都不算证据，一律等到这个上限；只有原地址上换了实例、或原地址端口当场拒连且注册中心已不在册才提前作废。battle 的 COMPLETE 被永久拒收、它还持有房间的（match 日志里同一 battle_id 有 `metric=match_terminal_outcome_rejected reason=original_conflict`）：2026-11-11 起原件内容不合格的局在截止加 60 秒宽限之后、battle 下一次重放时就自动作废（计 `global_flow_total{stage="terminal",outcome="abort_rejected_original"}`，ERROR 日志带 battle_id 与拒收原因）；只有版本错位类拒收（带本版本不认识的字段等，滚动升级期间常见）仍等到上限。两种都不要用本工具抢，把 battle_id 交研发查原件为什么被拒。超过这个时间仍没被自动处理，看 `match_global_deadline_abort_overdue_formations`（每分钟巡检，大于 0 即「超期未作废」），查到期恢复循环本身（match 副本是否在跑、是否要加副本、TiDB 是否可写），不要用本工具；
 - 已有任何终局行：COMPLETE 已落、只有 Kafka 归档（decision=0），或终局身份与成局冲突。工具只写新终局，不覆盖已有行。这几种升级给研发；
 - state 1（还没有 Create 原件，由 `Finish(false)` 收尾）、state 5 却没有终局行（旧代码的安全中止）；
 - 成员原票已不在 2/3、换了轮次或换了主（`tickets_not_original`），或某名成员的票行不存在（`ticket_missing`）；

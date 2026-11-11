@@ -252,7 +252,7 @@ message TradeCommerceQuarantine {
 
 // 一次人工处理(go/trade/cmd/commercefix resolve)。
 message TradeCommerceManualAction {
-  string action = 1;                        // resume / reissue / refund
+  string action = 1;                        // resume / reissue / refund / partial / redirect / void-auction
   string operator = 2;
   string reason = 3;                        // 操作人写的依据,例如工单号和核对结论
   uint64 at_ms = 4;
@@ -260,6 +260,25 @@ message TradeCommerceManualAction {
   TradeCommerceQuarantine quarantine = 6;   // 处理时的转人工记录
   repeated string new_legs = 7;
   repeated string superseded_legs = 8;
+  // redirect(jubaozhai-market.md §15.7.1 第 1 类):改绑的是哪一方(seller / buyer)、原角色、目标角色、改前改后的原身份、
+  // 原地改投到目标角色的未发出腿。改后合同上只剩新身份,原身份只在这里。
+  string party = 9;
+  uint64 from_player_id = 10;
+  uint64 to_player_id = 11;
+  TradeRoleIdentity identity_before = 12;
+  TradeRoleIdentity identity_after = 13;
+  repeated string retargeted_legs = 14;
+  // void-auction(第 3 类):联动的另一张合同(拍品记出价号,出价记拍品号)。
+  uint64 linked_commerce_id = 15;
+  // partial(第 2 类):每条部分发放 / 部分扣出的腿与人工认定的缺口。
+  repeated TradeCommercePartialPart partial_parts = 16;
+}
+
+// partial 动作里人工认定的一条腿的缺口(commerce.ResolveManual)。缺口只含实例、宝宝和整条货币:
+// 按数量的物品是一整批,scene 不会只成一部分(资产通道 §4.33)。
+message TradeCommercePartialPart {
+  string leg = 1;
+  AssetBundle missing = 2;
 }
 
 // 合同原件中的角色归属；后台恢复只能复用此原件，不能借用过户后的当前账号或修订。

@@ -41,7 +41,7 @@ $parseErrors = $null
 $deployAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count -gt 0) { throw "部署脚本语法错误: $($parseErrors[0].Message)" }
 $deployFunctions = @(
-    'Resolve-DirectoryLogicalShards', 'Resolve-IdIssuerRegion', 'Resolve-IdRegistryEtcd', 'Get-DataServiceWriterSchemas', 'Get-DataServiceRosterProblems', 'Get-SqlWriterRosterMinimumEntries',
+    'Resolve-DirectoryLogicalShards', 'Resolve-RegionCode', 'Resolve-IdIssuerRegion', 'Resolve-IdRegistryEtcd', 'Get-DataServiceWriterSchemas', 'Get-DataServiceRosterProblems', 'Get-SqlWriterRosterMinimumEntries',
     'Resolve-PlayerStoreShards', 'Assert-PlayerStoreAllowlist', 'Get-RoleProofStorageIds',
     'Get-DbPlacementPlan', 'New-DbPlacementYaml', 'ConvertTo-DbPlacementJson',
     'Get-AuthoritativeScalar', 'Get-MysqlConnectionPlan', 'Get-MysqlMaxConnectionsFromManifest', 'Get-ManifestDeploymentReplicas',
@@ -177,6 +177,14 @@ Test-Case '-Region:dev 缺省 0,staging 和 prod 必须显式且不能用 0,范�
         Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 0 -ReleaseProfileName $profileName }) -Pattern 'reserved for dev' -Because "$profileName 不能用 dev 的地域码,漏写也是 0"
     }
     Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 64 -ReleaseProfileName 'dev' }) -Pattern 'out of range' -Because '超界'
+}
+
+Test-Case '-IdIssuerRegion:缺省等于 -Region;给了只换发号器地域码,规则与 -Region 相同;存档地域只认 -Region' {
+    Assert-Equal -Expected 7 -Actual (Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'prod' -IssuerOverride -1) -Because '没给 -IdIssuerRegion 就是 -Region'
+    Assert-Equal -Expected 9 -Actual (Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'prod' -IssuerOverride 9) -Because '换码之后发号器用新码'
+    Assert-Equal -Expected 7 -Actual (Resolve-RegionCode -Requested 7 -ReleaseProfileName 'prod') -Because '存档地域只认 -Region,不跟着换码变'
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'prod' -IssuerOverride 0 }) -Pattern 'cannot use -IdIssuerRegion 0' -Because '生产不能把发号器地域码换成 dev 的 0,报错点名 -IdIssuerRegion'
+    Assert-Match -Text (Get-ThrownMessage { Resolve-IdIssuerRegion -Requested 7 -ReleaseProfileName 'dev' -IssuerOverride 64 }) -Pattern '-IdIssuerRegion 64 is out of range' -Because '超界'
 }
 
 Test-Case '-IdRegistryEtcd:dev 不写,staging 和 prod 必须给或者本集群托管,不能是本集群两套发号 etcd' {
@@ -682,7 +690,7 @@ Test-Case '旧键从脚本、调试栈和渲染产物里清零' {
 }
 
 Test-Case '包装入口:dev_tools 把逻辑库参数转到底,不粘滞' {
-    $names = @('DirectoryLogicalShards', 'Region', 'PlayerStoreShards', 'SqlClusters', 'SqlDefaultCluster')
+    $names = @('DirectoryLogicalShards', 'Region', 'IdIssuerRegion', 'PlayerStoreShards', 'SqlClusters', 'SqlDefaultCluster')
     foreach ($script in @('k8s_deploy.ps1', 'dev_tools.ps1')) {
         $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) $script), [ref]$null, [ref]$null)
         $declared = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
@@ -931,6 +939,30 @@ Test-Case 'DryRun:login 的 Placement 按地域码和 K 渲染,存档库池按 K
     Assert-True -Condition ($noShards.ExitCode -ne 0) -Because "prod 没给 -PlayerStoreShards 必须拒绝。输出: $($noShards.Output)"
     Assert-Match -Text $noShards.Output -Pattern 'must pass -PlayerStoreShards explicitly' -Because '点名参数'
     Assert-NotMatch -Text $noShards.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在任何清单之前'
+}
+
+Test-Case 'DryRun:-IdIssuerRegion 只换发号器地域码,存档库和 login 的 Placement 仍按 -Region(换码之后老玩家的存档库不动)' {
+    $run = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-IdIssuerRegion', '9')) -Env $ProdEnv
+    Assert-True -Condition ($run.ExitCode -eq 0) -Because "换码之后照常部署。输出: $($run.Output)"
+    $ds = Get-ConfigFlat -Output $run.Output -ConfigMap 'go-svc-data-service-config'
+    Assert-Equal -Expected '9' -Actual (Get-FlatValue -Flat $ds -KeyPath 'data.data_service.yaml.IdSegment.Issuer.Region') -Because '发号器用新码'
+    Assert-Match -Text (Get-DeploymentBlock -Output $run.Output -Name 'data-service') -Pattern 'name: MMORPG_ID_ISSUER_EXPECTED_REGION\s+value: "9"' -Because 'data_service 启动比对的是发号器地域码'
+    $login = Get-ConfigFlat -Output $run.Output -ConfigMap 'go-svc-login-config'
+    Assert-Equal -Expected '7' -Actual $login.Scalars['data.login.yaml.Placement.Region'] -Because '新号仍落本地域原来的存档库'
+    Assert-Match -Text $run.Output -Pattern 'Player store databases: region=7 shards=64 databases=player_store_1007000_db\.\.player_store_1007063_db' -Because '存档库清单按 -Region 核'
+    Assert-Match -Text $run.Output -Pattern 'Id issuer: region=9 ' -Because '入口打印发号器地域码'
+}
+
+Test-Case 'DryRun:staging/prod 的 data-service ConfigMap 写登记处双向 TLS 的三个证书路径并核对客户端证书 Secret,dev 不写' {
+    $prod = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'go-svc-data-service-config'
+    foreach ($pair in @(@('CAFile', 'ca.crt'), @('CertFile', 'tls.crt'), @('KeyFile', 'tls.key'))) {
+        Assert-Equal -Expected "/etc/mmorpg/id-registry-tls/$($pair[1])" -Actual (Get-FlatValue -Flat $prod -KeyPath "data.data_service.yaml.IdSegment.Issuer.RegistryTLS.$($pair[0])") `
+            -Because "RegistryTLS.$($pair[0]) 指向 data-service.yaml 挂载的客户端证书"
+    }
+    Assert-Match -Text $prodZoneRun.Output -Pattern '\[dry-run\] would check that Secret id-registry-client-tls in namespace \S+ has ca\.crt, tls\.crt and tls\.key' -Because 'DryRun 打出将要核对的预置 Secret'
+    $dev = Get-ConfigFlat -Output $devZoneRun.Output -ConfigMap 'go-svc-data-service-config'
+    Assert-Equal -Expected 0 -Actual @($dev.Scalars.Keys | Where-Object { $_ -like 'data.data_service.yaml.IdSegment.Issuer.RegistryTLS*' }).Count -Because 'dev 的登记处在自己的 etcd 上,没有 TLS'
+    Assert-NotMatch -Text $devZoneRun.Output -Pattern 'would check that Secret id-registry-client-tls' -Because 'dev 不核客户端证书'
 }
 
 Test-Case '回收 CronJob:zone 和 infra 各一份,先于写者,只有 pods 的三个动词,非 root,只认主容器的退出码 78' {

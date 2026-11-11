@@ -76,11 +76,12 @@ TEST_F(PlayerFeatureSnapshotTest, MissingBagReadDoesNotInitializeOrPublishStaleD
     EXPECT_EQ(nullptr, tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player));
 }
 
-// 回滚快照同样是只读路径(审计 F059 / F060):玩家缺持久化组件时 CaptureAndSend 必须放弃这条快照,
-// 而不是像旧 marshal 那样 get_or_emplace 补出零值组件、把零货币 / 空账本写进回滚链路。
+// 回滚快照同样是只读路径(审计 F059 / F060):请求快照不能像旧 marshal 那样 get_or_emplace 补出零值组件。
+// 2026-11-11 起快照随存盘提交、由 go/db 按提交后的行拼(docs/design/player-audit-outbox.md §5.5):缺持久化组件的玩家
+// 存盘会被拒,快照请求随实体一起作废,不会落成一份零值快照。本用例没开审计发件箱(没有存盘),请求直接被拒。
 // 本用例的玩家只有 Guid,任何一个持久化组件都不在。
 TEST_F(PlayerFeatureSnapshotTest, RollbackSnapshotOfIncompletePlayerDoesNotCreateComponents) {
-    EXPECT_EQ(0u, SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN));
+    EXPECT_EQ(0u, SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGIN));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<Transform>(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CurrencyComp>(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerAssetOpLedgerComp>(player));

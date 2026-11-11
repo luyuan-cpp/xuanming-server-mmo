@@ -461,8 +461,9 @@ func TestForwardWritesSessionTrackMetadata(t *testing.T) {
 	}
 }
 
-// forward_by_track_total 按会话轨道记同一批终态(发布轨道设计 §2.7 的金丝雀观察项):空串记 stable,认不出记 unknown;
+// forward_by_track_total 按会话轨道记同一批终态(发布轨道设计 §2.8 的金丝雀判据):空串记 stable,认不出记 unknown;
 // 早于轨道检查的拒绝(未知消息号)也记在会话自己的轨道上,两条轨道的错误率才能直接比。
+// forward_by_track_seconds 按同一个轨道 label 记耗时,每次 Forward 恰好一个样本,两条轨道的 p99 才能直接比。
 func TestForwardCountsOutcomeBySessionTrack(t *testing.T) {
 	route, _ := game.LookupRoute(game.MatchServiceJoinQueueMessageId)
 	dialer := newBufDialer(t)
@@ -489,11 +490,14 @@ func TestForwardCountsOutcomeBySessionTrack(t *testing.T) {
 	}
 	for i, tc := range cases {
 		before := metrics.ForwardByTrackValue(tc.label, tc.outcome)
+		beforeLatency := metrics.ForwardByTrackLatencyCount(tc.label)
 		_, err := logic.NewForwardLogic(ctxWithSession(), sc).
 			Forward(forwardReqOnTrack(tc.messageId, uint64(100+i), 1, []byte("q"), tc.track))
 		require.NoError(t, err)
 		require.Equal(t, before+1, metrics.ForwardByTrackValue(tc.label, tc.outcome),
 			"message_id=%d track=%q 应当记在 (%s, %s) 上", tc.messageId, tc.track, tc.label, tc.outcome)
+		require.Equal(t, beforeLatency+1, metrics.ForwardByTrackLatencyCount(tc.label),
+			"message_id=%d track=%q 的耗时应当记在 release_track=%s 上,恰好一个样本", tc.messageId, tc.track, tc.label)
 	}
 }
 

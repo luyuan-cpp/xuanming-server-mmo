@@ -1088,6 +1088,11 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      `BattleGone`,全程没有报错。收缩后没有中继兜底,只能从 `match_request_battle_ticket_total{outcome="not_found"}` 的异常升高看出来。
      处置(淘汰策略、ChatRedis 拆分、内存告警)归 [handoff-backlog-2026-09-05.md](../handoff/handoff-backlog-2026-09-05.md) D-03 / P2-D1,
      待用户拍板;拍板前不单独改这个集群的淘汰策略。
+     〔2026-11-11 更正:这条的两个前提都已不成立。
+     - 淘汰策略:10-23 起这个集群改为 `noeviction`,写满时写命令报错、由告警发现,不再静默淘汰带 TTL 的记录(见该清单注释)。
+     - chat:10-21 改为 SQL 原件,K8s 上不再连这个集群;11-11 连句柄与 `ChatRedis` 段都删了。
+
+     上面的静默淘汰风险已不存在,剩下的是写满时写失败。这个集群 11-11 起也有了显式 maxclients 与单独一份连接总账(`deploy/k8s/README.md`「Redis 连接总账」)。〕
    - 以上 match 改动未编译、未测试,待 Codex 验证。
 5. **match 侧**:`createBattle` 不区分 RPC 失败与 tip≠0 明确拒绝,明确拒绝后若 `DestroyBattle` 也失败,会走 `create_failed_room_alive`
    保守分支(不解冻,冻结等 scene 的 `prepare_deadline_ms` 清掉、票据等 matched TTL 自愈);`PickRandom` 不排除坏节点,签票失败的节点
@@ -1217,7 +1222,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
      若 `player_battle.cpp` 因删 include 报错,只补回真正需要的那一个并回报。可选 Linux:`bash tools/scripts/build_linux.sh`(GCC `-Wall -Wextra`)。
    - **(2026-09-30 补)全量之后**:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`。必须带 `-Build`:不带时只跑已有 exe,多数 gtest 工程
      不在 game.sln 的构建配置里,不会针对新的 core 与 proto 重新链接。通过标准见 k8s-client-entry.md「上线之前:代码验证」第 3 步
-     (退出码 0,汇总表里没有「无 exe」行)。至此 C++ 顺序为「重生(第 3 步)→ `game.sln` 全量 → `run_cpp_tests -Build`」,与该文档一致。
+     (退出码 0,汇总表里没有「no exe」行;2026-11-11 汇总表改英文前写作「无 exe」)。至此 C++ 顺序为「重生(第 3 步)→ `game.sln` 全量 → `run_cpp_tests -Build`」,与该文档一致。
 6. **独立 gtest**(不进 vcxproj):
    - `battle_push_policy_test`,Linux / 带 g++ 的容器:
      `GT=third_party/googletest/googletest; g++ -std=c++23 -I cpp/nodes/battle -I "$GT/include" -I "$GT" cpp/nodes/battle/tests/battle_push_policy_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lpthread -o /tmp/battle_push_policy_test && /tmp/battle_push_policy_test`。

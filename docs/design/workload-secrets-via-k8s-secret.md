@@ -31,7 +31,7 @@ C++ scene 读 node-config 但不用这几把令牌,不注入。用户名(`MMORPG
 
 - **Secret 对象**:一把密钥一个单键 Opaque Secret,每个有消费者的 namespace 各一份同名副本(Secret 不能跨 namespace 引用),由部署脚本先于工作负载建好,
   经 `Apply-InjectedSecret` 写入(DryRun 只打一行隐去值的意图)。名字:`gate-token`、`spectate-token`、`battle-token`、`match-ops-caller`、`login-queue-token`、
-  `mysql-auth`、`gateway-db-auth`;内部调用方验签复用已有的 `gate-identity-auth`。
+  `mysql-auth`、`gateway-db-auth`。gate 的会话身份签名私钥用的是已有的 `gate-identity-auth`(只给 gate,见 §2 表末行与 §5.1),不在本表里。
 - **容器环境变量名**与部署输入变量名相同:一把密钥全仓只有一个名字,运维看到 Pod 的 env 就知道它对应哪个输入。
 - **ConfigMap**:原来写明文的位置写空串;Go 服务另写一个指名变量的键(见 §4.2);gateway 写 `"${变量名}"`。
 - **指纹**:`mmorpg.io/<Secret 名>-hash`,值是 `Get-InjectedSecretFingerprint`(用途串 `<Secret 名>/workload`)。
@@ -61,14 +61,23 @@ C++ scene 读 node-config 但不用这几把令牌,不注入。用户名(`MMORPG
 
   MySQL 口令在迁移分支**之前**解析:`-migrate` Job 要连库,部署同样给 Job 注入这个变量(共享 Redis 口令相反,迁移不连 Redis,放在迁移分支之后)。
 - login 不改代码:`Secrets.*.Env` 早已支持(`go/login/internal/config/secrets.go`,指名了变量却没有值任何模式都拒启)。部署改写成
-  `Secrets.GateToken.Env` / `InternalAuth.Env` / `QueueToken.Env`,不再写顶层 `GateTokenSecret`(那是只读一个值、不能轮换的兼容入口)。
+  `Secrets.GateToken.Env`(排队开时另有 `QueueToken.Env`),不再写顶层 `GateTokenSecret`(那是只读一个值、不能轮换的兼容入口)。
+  11-11 起 login 的 `Secrets` 里不再有 `InternalAuth`:内部身份声明改由 gate 的 Ed25519 签名,login 只拿公钥列表(gate-online-identity.md §10.1)。
 
 ### 4.3 gateway(本仓 `java/gateway_node`)
 
-`gate.token-secret: "${MMORPG_GATE_TOKEN_SECRET}"`、`spring.datasource.password: "${MMORPG_GATEWAY_DB_PASSWORD}"`,Java 代码不改。
-注意 `GateProperties` 与数据源都是 `@ConfigurationProperties` 绑定,Spring Boot 绑定时对解析不了的占位**保留原文**(宽松),不像 `@Value` 那样拒启:
-变量缺失时令牌密钥会是字面量 `${MMORPG_GATE_TOKEN_SECRET}`。K8s 上 `secretKeyRef` 不写 optional,Secret 缺失 Pod 起不来,这种情形只在绕过部署脚本时出现;
-gateway 启动期校验令牌密钥(拒绝占位与过短值)是既有缺口(以前 jar 缺省值 `change-me…` 同样能起),列为 §8 后续。
+ConfigMap 写 `gate.token-secret: "${MMORPG_GATE_TOKEN_SECRET}"`、`spring.datasource.password: "${MMORPG_GATEWAY_DB_PASSWORD}"`,由 Spring 解析占位。
+有两处 Spring 的行为要单独兜住:
+
+- **宽松绑定**:`GateProperties` 与数据源都是 `@ConfigurationProperties` 绑定,Spring Boot 对解析不了的占位**保留原文**,不像 `@Value` 那样拒启。
+  变量缺失时令牌密钥会是字面量 `${MMORPG_GATE_TOKEN_SECRET}`;jar 内的缺省值又是公开占位串 `change-me…`。两种都等于拿公开常量签 CDN 链接。
+  K8s 上 `secretKeyRef` 不写 optional,Secret 缺失 Pod 起不来,但绕过部署脚本时仍会发生,所以 gateway 自己在启动时校验(批 6,11-11):
+  `GateTokenSecretGuard` 在生产档(`mmorpg.run-mode` 不是 dev / test)遇到空值、未解析的 `${...}`、公开占位串、短于 32 字节即拒启,dev / test 只告警;
+  判定口径(占位前缀、32 字节下限)与 login 的 `go/login/internal/config/secrets.go` 一致,改一边要同步另一边。test profile
+  (`src/test/resources/application-test.yaml`)写明 `mmorpg.run-mode: test`。数据源口令不另加校验:错了 Hikari 启动时就连不上库。
+- **递归解析**:Spring 解析出变量的值之后,会把这个值再当占位解析一遍(`PropertyPlaceholderHelper`)。值里有 `${x}` 就会被换成别的属性、
+  或者解析失败,密钥被静默改掉。部署侧 `Assert-SpringPlaceholderSafe`(批 6,11-11)在部署 gateway 时、任何写操作之前检查 gate 令牌、数据源口令、
+  共享 Redis 口令与管理面口令,值里含 `${` 即拒绝;单独的 `$` 不受影响。
 
 ## 5. 部署侧(批 4,`tools/scripts/k8s_deploy.ps1`)
 
@@ -102,7 +111,7 @@ gateway 启动期校验令牌密钥(拒绝占位与过短值)是既有缺口(以
 ### 5.3 ConfigMap
 
 - node-config / battle-node-config:三把令牌写空串,生成期校验照旧(长度、分域、占位)。
-- login:不再写顶层 `GateTokenSecret`;写 `Secrets.GateToken.Env`、`Secrets.InternalAuth.Env`,排队开时 `Secrets.QueueToken.Env`。
+- login:不再写顶层 `GateTokenSecret`;写 `Secrets.GateToken.Env`,排队开时 `Secrets.QueueToken.Env`(`Secrets.InternalAuth` 11-11 起取消,见 §4.2)。
 - scene-manager:`GateTokenSecretEnv`。match:`Spectate.TicketSecretEnv`,运营入口开时 `Spectate.OpsCallerSecretEnv`。
 - db / data-service / trade / friend / player-inbox:口令字段写空串(data-service 必须写出,不写会落回缺省值),顶层 `MySQLPasswordEnv`。
 - gateway:`spring.datasource.password: "${MMORPG_GATEWAY_DB_PASSWORD}"`、`gate.token-secret: "${MMORPG_GATE_TOKEN_SECRET}"`。
@@ -124,6 +133,7 @@ gateway 启动期校验令牌密钥(拒绝占位与过短值)是既有缺口(以
 | 3 | C++:三把令牌的环境变量覆盖(§4.1),`configuration_table_test` 两条用例 | 11-10 已写回 main,未编译 |
 | 4 | 部署脚本切换、迁移清单、契约测试(§5);顺带补玩家域 Redis 口令的 Go 服务指纹 `mmorpg.io/player-redis-auth-hash` | 11-11 已写回 main,未运行 |
 | 5 | 部署文档(`deploy/k8s/README.md` 新节「工作负载密钥只放 Secret」)、交接 §9.6、PROGRESS | 11-11 已写回 main |
+| 6 | §8 里原列为后续的两项现在补上:gateway 启动期校验 `gate.token-secret`(`GateTokenSecretGuard` + 单测,test profile 写明 test 档);部署侧拒绝含 `${` 的 Spring 密钥(`Assert-SpringPlaceholderSafe` + 契约测试) | 11-11 已写回 main,未编译、未运行 |
 
 上线顺序:先发带新读法的镜像(批 2、3 都向后兼容:不指名变量时行为不变),再用新部署脚本(批 4)。反过来会让旧镜像读到空密钥。
 
@@ -158,9 +168,18 @@ gateway 启动期校验令牌密钥(拒绝占位与过短值)是既有缺口(以
 6. 可选,要拉镜像,先征得负责人同意:kind 上带全部 `MMORPG_*` 密钥跑全新 `infra-up` 与一个 `zone-up`,确认 `kubectl get cm -A -o yaml` 里搜不到任何一个值
    (值从环境变量取,不敲在命令行上),各服务与 C++ 节点正常起来;再只换一把密钥重跑,确认它的消费者滚动、其余不动。
 
+批 6:
+
+7. gateway(仓库根,按本仓 Java 工程的既有口径):`mvn -f java/gateway_node/pom.xml -Dtest=GateTokenSecretGuardTest test`(5 条全 PASS),
+   再跑整套 `mvn -f java/gateway_node/pom.xml test`,不应新增失败。重点看 `LoginEndpointIntegrationTest`、`GatewayTracingIntegrationTest`:
+   它们用 test profile 起上下文,profile 里的 `gate.token-secret: test-secret` 是占位值,靠 `mmorpg.run-mode: test` 只告警;红了先查 profile 是否生效。
+8. 部署契约:第 4 步那套里新增 1 条「纯函数 Assert-SpringPlaceholderSafe」,应 `[PASS]`。
+
 ## 8. 后续与风险
 
-- gateway 启动期校验令牌密钥(§4.3):`GateProperties` 是宽松绑定,变量缺失时会拿到字面量;K8s 上不会发生,绕过部署脚本时才有风险。既有缺口,未做。
-- 内部调用方验签密钥(`gate-identity-auth`)在 login 等服务的 Pod 模板上没有指纹,只换它时这些服务不滚动。以前写在 ConfigMap 时同样不滚动,不是本次引入的;未做。
+- gateway 启动期校验令牌密钥:11-11 已补(批 6,§4.3 末段)。
+- 经 Spring 占位交给 gateway 的密钥里含 `${`:11-11 起部署时拒绝(批 6,§4.3 末段)。
+- 内部调用方验签的滚动:11-11 起已不是问题。验签方只拿 gate 的公钥列表,它是明文 env,写在各服务的 Pod 模板里;换密钥对时公钥一变,
+  模板就变,各服务随之滚动。gate 自己的模板里同样有这份公钥列表,私钥换了也会滚动(gate-online-identity.md §10.1)。
 - 玩家域 Redis 口令的 Go 服务指纹:批 4 已补(`mmorpg.io/player-redis-auth-hash`)。
 - 都只按代码与文档核对过,没有在集群上跑过(§7 第 6 步)。

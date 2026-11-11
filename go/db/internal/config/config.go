@@ -37,6 +37,9 @@ type Config struct {
 	// MySQLPasswordEnv:MySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
 	// 写了它,ServerConfig.Database.Passwd 必须为空,由 ResolveMySQLPassword 在加载配置后填;本机 etc/db.yaml 不写,照用 Passwd。
 	MySQLPasswordEnv string `json:",optional"`
+
+	// AuditOutbox:审计发件箱转发循环(docs/design/player-audit-outbox.md §7),见 audit_outbox.go 的 AuditOutboxConfig。
+	AuditOutbox AuditOutboxConfig `json:"AuditOutbox,optional"`
 }
 
 // PlacementConfig 控制 go/db 能打开哪些存档库、每个库的连接池多大。

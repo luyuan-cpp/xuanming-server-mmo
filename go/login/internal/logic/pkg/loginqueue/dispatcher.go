@@ -82,6 +82,10 @@ type Dispatcher struct {
 	// tests that don't bother setting an identity.
 	podID string
 
+	// inflight 记本进程挑定的 gate(在途票),下一拍取候选时由 provider 算进负载,跨拍不再从同一份滞后人数起算。
+	// nil = 不记(单测与没接线的调用方)。只在 Start 之前经 SetGateInflight 设一次,之后只读。
+	inflight *GateInflight
+
 	cancel  context.CancelFunc
 	stopped chan struct{}
 	mu      sync.Mutex
@@ -172,6 +176,12 @@ func (d *Dispatcher) SetPodID(id string) {
 	d.mu.Lock()
 	d.podID = id
 	d.mu.Unlock()
+}
+
+// SetGateInflight 接上本进程的在途记账(与快速通道、CandidatesForZone 用同一份),必须在 Start 之前调用。
+// 每挑定一台 gate 记一张在途票,见 gate_inflight.go。
+func (d *Dispatcher) SetGateInflight(inflight *GateInflight) {
+	d.inflight = inflight
 }
 
 func (d *Dispatcher) podLabel() string {
@@ -354,7 +364,7 @@ func (d *Dispatcher) dispatchOnce(ctx context.Context) {
 	budget := capacity - online
 	batch := min(free, queueLen)
 
-	admitted, err := d.queue.PopAdmit(ctx, zoneID, int(batch), budget, newBatchPickFn(candidates))
+	admitted, err := d.queue.PopAdmit(ctx, zoneID, int(batch), budget, recordPicks(newBatchPickFn(candidates), d.inflight))
 	// PopAdmit 出错时已放行数仍然有效(2026-10-18 起):先记账,再判错误。此前出错直接返回,本拍已放行的人不计入。
 	recordAdmit(zoneID, admitted)
 	if admitted > 0 {

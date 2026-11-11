@@ -63,6 +63,10 @@ namespace
     // 周期决定开闸 / 排空 / 解除排空最迟多久被 match 看到(排空标签本身每 5s 读一次,LifecycleOptions.drainPollInterval)。
     constexpr double kAdmissionAdvertiseIntervalSec = 1.0;
 
+    // 计划排空的进程缺省预算:0 = 关闭(docs/design/scene-node-planned-drain.md §9)。等对局要几分钟,缺省宽限期 30 秒装不下,
+    // 由部署按对局时长调大宽限期并注入 MMORPG_PLANNED_DRAIN_BUDGET_SECONDS 才打开。
+    constexpr std::chrono::seconds kBattlePlannedDrainDefaultBudget{0};
+
     // 日志用:"ip:port";未设置(podip 形态的 client_endpoint)打 "(unset)"。
     std::string EndpointForLog(const EndpointComp &endpoint)
     {
@@ -477,5 +481,26 @@ int main(int argc, char *argv[])
             // 并把排空预算内仍没落定的终局逐局打进日志(match 在权威截止后判 ABORT)。
             node.SetBeforeTeardown([](Node &)
                                    { BattleRoomManager::Instance().StopSqlOutcomes(); });
+
+            // 计划排空(docs/design/scene-node-planned-drain.md §4.1、§9):SIGTERM 先只关建房准入、不作废在打的房间,
+            // 等它们自然打完、终局拿到 SQL 决定(房间离表)再进普通停机;到预算还没打完的照旧走上面的停机收尾
+            // (match 在权威截止后判 ABORT)。Agones 形态的排空标签本来就是这个语义(关准入、房间归零后回 Ready)。
+            // 进程缺省关闭:battle 的宽限期缺省 30 秒装不下一局,要等部署按对局时长调大宽限期并注入
+            // MMORPG_PLANNED_DRAIN_BUDGET_SECONDS 才生效,不注入时 SIGTERM 行为与以前相同。
+            node.SetPlannedDrain(
+                [&context](Node &n)
+                {
+                    context.battleNodeService->CloseAdmission();
+                    // 关闸当场把 CLOSED 对账进 etcd,与 closeSource 同一个理由:match 越早看到,越少白拨。
+                    if (const auto gate = context.battleNodeService->AdmissionGateView().lock())
+                    {
+                        ReconcileAdvertisedAdmission(n, gate->Phase(), *context.admissionAdvertise);
+                    }
+                    LOG_INFO << "[PlannedDrain] battle admission closed; waiting for live rooms to finish. rooms="
+                             << BattleRoomManager::Instance().RoomCount();
+                },
+                [](Node &)
+                { return BattleRoomManager::Instance().RoomCount() == 0; },
+                kBattlePlannedDrainDefaultBudget);
         });
 }

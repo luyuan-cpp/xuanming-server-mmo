@@ -36,6 +36,7 @@
 #include "proto/common/base/message.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "handler/event/gate_event_handler.h"
+#include "handler/event/world_chat_push_budget.h"
 #include "handler/event/gate_kafka_command_router.h"
 #include "handler/event/scene_entry_dispatch.h"
 #include "rpc/service_metadata/chat_service_metadata.h"
@@ -309,40 +310,6 @@ namespace
         return node::kafka::RegisterKafkaCommandHandler<SpectateFrameEvent>(gateNode, broadcastOptions, onFrame);
     }
 
-    // 世界频道推送的每台 gate 转发预算(docs/design/chat-world-channel-fanout.md §4)。推送开销是「世界消息数 × 本机在线人数」,
-    // 全服聊天量一涨(刷屏、脚本),不设上限每台 gate 的下行就按平方增长。预算按 gate 计、不按会话计:本机所有会话收的是同一条
-    // 广播流,超出预算的那几条对本机所有会话一起不推,每台 gate 的推送开销只与本机在线人数成正比。不推的消息仍在 chat 的历史里,
-    // 客户端打开面板或重连时拉得到。每秒 10 条、突发 20 条是人读得完的量级,不是压测结论,压测后按下行带宽再定。
-    // 只在 gate 主循环上用:Kafka 回调经 queueInLoop 投递到主循环(KafkaManager::StartBackgroundPolling),不加锁。
-    class WorldChatPushBudget
-    {
-    public:
-        bool TryTake(std::chrono::steady_clock::time_point now)
-        {
-            if (!started_)
-            {
-                started_ = true;
-                last_ = now;
-            }
-            const double elapsedSeconds = std::chrono::duration<double>(now - last_).count();
-            last_ = now;
-            tokens_ = std::min(kBurst, tokens_ + elapsedSeconds * kPerSecond);
-            if (tokens_ < 1.0)
-            {
-                return false;
-            }
-            tokens_ -= 1.0;
-            return true;
-        }
-
-    private:
-        static constexpr double kPerSecond = 10.0;
-        static constexpr double kBurst = 20.0;
-        double tokens_ = kBurst;
-        std::chrono::steady_clock::time_point last_{};
-        bool started_ = false;
-    };
-
     // 世界频道广播(docs/design/chat-world-channel-fanout.md §4):chat 每条世界消息只往 chat-world-bcast_g<N> 写一次,
     // 每台 gate assign 全部分区,推给本机全部已绑定的会话。这个 topic 上只接 BroadcastToAllEvent(不是 GateCommand 信封,
     // 踢人、重定向这类命令进不来),消息号也只认世界频道推送:别的消息号说明有生产者写错了 topic,丢弃并记 ERROR,
@@ -587,8 +554,18 @@ int main(int argc, char *argv[])
                 node.SetBeforeShutdown(closeSource);
                 node.SetMaintenanceInboundRelay(); // 内部推送/路由是relay；客户端TCP根由closeSource关闭。
                 node.SetMaintenanceSourceClose(closeSource);
-                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
-                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); context.drainMigrationTimer.Cancel(); });
+                // 拆除前收尾:普通停机由 SetBeforeTeardown 调;维护路径(P3)关闭中继时 Node 只调 SetMaintenanceRelayStop 的钩子,
+                // 随即置 beforeTeardownRan_,不再调 SetBeforeTeardown 的钩子。两处挂同一段收尾,两条路径停的定时器始终一致。
+                const auto stopGateTimers = [&context](Node &)
+                {
+                    context.sceneEntryRetryTimer.Cancel();
+                    context.routerLaneExpiryTimer.Cancel();
+                    context.spectateSweepTimer.Cancel();
+                    context.clientLivenessSweepTimer.Cancel();
+                    context.drainMigrationTimer.Cancel();
+                };
+                node.SetMaintenanceRelayStop(stopGateTimers);
+                node.SetBeforeTeardown(stopGateTimers);
                 node.SetShutdownDrainComplete([closingSessions](Node &)
                                               {
                     const auto &sessions = tlsSessionManager.sessions();

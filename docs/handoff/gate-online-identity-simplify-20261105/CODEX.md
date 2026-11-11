@@ -303,9 +303,124 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 - 文档：`docs/design/gate-online-identity.md`（顶部状态、§8、§9 标题、§9.6 第 2 条）、本目录 `PLAN.md` 第 6 节第 2 条与本文件、`docs/PROGRESS.md`，以及 Java 仓 `PARITY.md` 的 TODO
 - 以下由「删除只写不读的全服帮会榜 guild_rank」会话改：§9.6 第 3 条、PLAN.md 第 6 节第 3 条、帮会排行三份架构文档、`guild_friend_service_notes_zh.md`、`leaderboard-system.md`
 
+## 9. §7 批 1：gate 改 Ed25519 签名、验证方只持公钥（2026-11-11 落码，未编译）
+
+设计见 [gate 在线身份](../../design/gate-online-identity.md) §3、§4、§10.1。负责人 2026-11-11 要求开始处理 §7 的已知边界，并定了「没做完就按最标准的方式做」。项目未上线，gate 与全部验证方同批换算法，不留混跑窗口。本批没有编译，也没有运行任何测试，只对改动的 Go 文件跑过 `gofmt -l`（无输出）。
+
+改了什么：
+
+- **算法**：会话身份签名由 HMAC-SHA256（v1）换成 Ed25519（v2，RFC 8032），canonical 第一行改为 `mmorpg-gate-identity/v2`。签名头名称、±30s 时间窗、nonce 表都不变。
+- **gate 只持私钥**：
+  - `cpp/libs/engine/core/security/caller_auth.h` 新增 `InitProcessSigner`：启动时解析种子，核对公钥列表里有与它配对的那一把；
+  - 旧的 HMAC `Sign` 与 `kSecretEnv` 删除，`Append` 去掉密钥参数；
+  - `cpp/nodes/gate/main.cpp` 换成新的启动检查；
+  - `client_session_handler.cpp` 三处、`router_muduo_forward.cpp` 一处签名调用，去掉 `std::getenv` 参数。
+- **验证方只持公钥**：
+  - `go/shared/callerauth` 新增 `keys.go`（`KeySet`、`PublicKeys`、`ParsePublicKeys`、`Ed25519Signer`），验签选项由 `Secrets` 改名为 `Keys`；
+  - `GateInterceptor` 读 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS`，缺失或格式不对时拒启；
+  - `callerauthtest.Key` 换成固定种子的 Ed25519 测试密钥，对外用法不变；
+  - `go/mail/flow_integration_test.go` 跟着改了一个字段名。
+- **login**：
+  - 删 `Secrets.InternalAuth`，涉及 `internal/config/secrets.go`、`etc/login.yaml`、`internal/svc/servicecontext.go`、`internal/config/auth_providers_test.go`；
+  - `login.go` 的 `newSessionInterceptor` 改读公钥，缺失时启动报错。
+- **新工具**：`go/shared/cmd/identitykeygen`，含单测。
+- **部署**：
+  - 私钥只进 Secret `gate-identity-auth`（键 `signing-key`），只有 gate 引用；
+  - 公钥列表明文注入 gate、login 与 7 个在线服务；
+  - 改动的文件：`tools/scripts/k8s_deploy.ps1`、`lib/release_common.ps1`（新增 `Assert-InternalIdentityKeyShape`）、`lib/k8s_client_entry.ps1`、`lib/gate_identity_environment.ps1`、`cpp_nodes.ps1`（gate 一处加 `-IncludeSigningKey`）、`deploy-staging.sh`、`deploy/debug/compose.game.yml`、`prepare_docker_debug.py`；
+  - dev 档、本机、docker 调试统一用 RFC 8032 §7.1 TEST 1 的公开测试密钥对。
+
+1. **静态检查**（仓库根）：
+
+   ```powershell
+   rg -n 'MMORPG_INTERNAL_AUTH_SECRET|INTERNAL_AUTH_SECRET|SecretVerifier|InternalAuthSecret\b|mmorpg-login-caller-auth/v1' go cpp tools deploy --glob '!**/vendor/**' --glob '!**/generated/**'
+   rg -n 'caller_auth::Sign\(|kSecretEnv' cpp/nodes/gate cpp/libs/engine/core/security cpp/tests/routing_identity_test
+   gofmt -l go/shared go/login go/mail
+   ```
+
+   通过标准：
+   - 第一条无输出；只允许 `prepare_docker_debug.py` 里 `environment.pop("INTERNAL_AUTH_SECRET", None)` 这一处，它清理的是旧 `.env`。
+   - 第二条无输出。
+   - `gofmt -l` 对本批文件无输出；其他会话的文件若有输出，只记录，不改。
+
+2. **Go 构建、vet 与测试**（串行，每个模块单独执行）：
+
+   ```powershell
+   Push-Location go/shared
+   go build ./... ; go vet ./...
+   go test -count=1 ./callerauth/... ./cmd/identitykeygen/... ./roleidentity/...
+   go test -run '^$' -bench BenchmarkPublicKeysVerify -benchmem ./callerauth
+   Pop-Location
+   foreach ($m in 'login','chat','friend','guild','trade','mail','rank','match') {
+       Push-Location "go/$m"; go build ./... ; go vet ./... ; go test -count=1 ./... ; Pop-Location
+   }
+   ```
+
+   - 通过标准：build / vet 无输出，test 全绿。失败保留完整输出，不自动重试，不改断言。
+   - 重点用例：
+     - `callerauth`：`TestCanonicalV2Vector`、`TestEd25519Rfc8032Vector`、`TestMissingPublicKeysRefusesStartup`、`TestMalformedPublicKeysRefuseStartup`（6 个子用例）、`TestPublicKeysRejectWrongLengthSignature`、`TestZeroSignerRefusesToSign`；
+     - `verifier_test.go` 全部，其中 `TestVerify_轮换期新旧密钥都认` 覆盖新旧公钥并列；
+     - `identitykeygen` 三个用例；
+     - login 的 `TestResolveSecretsIncludesAuthProviders`；
+     - 各服务里用 `callerauthtest` 的用例，签名已换成 Ed25519，断言没改。
+   - 基准：回执记录 `BenchmarkPublicKeysVerify` 的 ns/op、B/op、allocs/op 和机器型号，只记数，不下性能结论（AGENTS.md §6）。
+   - 有 MySQL 时，mail 的 `flow_integration_test.go` 与 match 的 `rank_mail_chain_integration_test.go` 按它们原有的口径跑；没有环境就写「未跑」。
+
+3. **C++**（串行 `/m:1`）：
+
+   ```powershell
+   msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64
+   pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter routing_identity_test
+   ```
+
+   - 通过标准：0 错误；`GateAuthenticatedIdentity.CanonicalMatchesGoVector`、`Ed25519MatchesRfc8032Vector`、`SignerRefusesUnpairedOrMalformedKeys` 全过，其余用例不回退。
+   - `caller_auth.h` 用到的 `EVP_PKEY_new_raw_private_key`、`EVP_PKEY_get_raw_public_key`、`EVP_DigestSign`、`OPENSSL_cleanse` 在 OpenSSL 3 与 BoringSSL 里都有。若 gate 链接的那一版报找不到声明或 const 不匹配，保留首条错误报告，不要换算法。
+
+4. **部署脚本契约测试**（pwsh 7，仓库根）：
+
+   ```powershell
+   foreach ($t in 'gate_identity_environment','go_services_ports','k8s_client_entry_contract','k8s_deploy_contract','k8s_redis_split_contract','logical_db_deploy_contract','redis_player_cluster_contract','lobby_authority_render','k8s_migrate_gate') {
+       pwsh -NoProfile -File "tools/scripts/tests/$t.tests.ps1"
+   }
+   python -m py_compile tools/scripts/prepare_docker_debug.py
+   ```
+
+   - 通过标准：全部通过。
+   - `k8s_migrate_gate` 本批没改，但它断言 `gate-identity-auth` 恰好建一次。现在只有 Apply-Zone 建它，Go 服务不再引用它，所以应当仍是一次。
+   - 失败按用例名报告。
+
+5. **本机冒烟**（dev 档）：
+   1. `cpp_nodes.ps1` 起 gate、`go_services.ps1` 起 Go 服务。gate 不打印 `Internal session signing key rejected`；login 与在线服务不因 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS` 拒启。
+   2. 机器人 Login → EnterGame → 聊天、好友、公会、邮件、排行榜各发一个请求，全部成功；各服务 `caller_auth_session_verify_total{result!="ok"}` 为 0。
+   3. 负向：先把 `MMORPG_INTERNAL_AUTH_SIGNING_KEY` 与 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS` 一起显式注入，公钥列表只放另一把 64 位十六进制公钥（例如 `'a' * 64`），再单独起 gate。gate 应拒启，日志带 `does not list the public key`。只设公钥列表、不设私钥时，本机启动器会先以「两者必须一起注入」拒绝，走不到 gate 自己的配对检查。
+   4. `k8s_deploy.ps1` dev 档 `-DryRun`：gate 的 env 有 `MMORPG_INTERNAL_AUTH_SIGNING_KEY` 的 secretKeyRef（Secret `gate-identity-auth`、键 `signing-key`），以及明文的 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS`；8 个验证方只有明文公钥，没有任何 `gate-identity-auth` 引用；login ConfigMap 没有 `Secrets.InternalAuth`。
+
+6. **回执注明**：签名算法已换，验证方只持公钥；性能只有基准数，没有压测对比；Java 只登记待核对。
+
+第 9 批文件：
+
+- C++：`cpp/libs/engine/core/security/caller_auth.h`、`cpp/nodes/gate/main.cpp`、`cpp/nodes/gate/handler/rpc/client_session_handler.cpp`、`router_muduo_forward.cpp`、`cpp/tests/routing_identity_test/session_details_builder_test.cpp`
+- Go：
+  - `go/shared/callerauth/{callerauth,keys,session,verifier}.go`
+  - `go/shared/callerauth/{session_test,verifier_test}.go`
+  - `go/shared/callerauth/callerauthtest/callerauthtest.go`
+  - `go/shared/cmd/identitykeygen/{main,main_test}.go`（新增）
+  - `go/mail/flow_integration_test.go`
+  - `go/login/login.go`、`internal/config/secrets.go`、`internal/config/auth_providers_test.go`、`internal/svc/servicecontext.go`、`etc/login.yaml`
+- 部署：
+  - `tools/scripts/k8s_deploy.ps1`、`tools/scripts/lib/{release_common,k8s_client_entry,gate_identity_environment}.ps1`、`tools/scripts/cpp_nodes.ps1`、`tools/scripts/deploy-staging.sh`、`tools/scripts/prepare_docker_debug.py`、`deploy/debug/compose.game.yml`
+  - 测试：`tools/scripts/tests/{gate_identity_environment,go_services_ports,k8s_client_entry_contract,k8s_deploy_contract,k8s_redis_split_contract,logical_db_deploy_contract,redis_player_cluster_contract,lobby_authority_render}.tests.ps1`
+- 文档：
+  - `docs/design/gate-online-identity.md`（顶部状态、§3、§4、§6、§7.4、§8、§10）
+  - `deploy/k8s/README.md`
+  - `docs/ops/k8s-open-server-runbook{,_zh,_en}.md`、`docs/ops/linux-staging-stress-runbook.md`
+  - `docs/design/workload-secrets-via-k8s-secret.md`、`docs/design/login-queue-2026-05.md`
+  - 本文件、`docs/PROGRESS.md`
+  - Java 仓 `PARITY.md`
+
 ## 回执与范围
 
-- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批还是第 1～4 批中的哪一批。
+- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批，还是第 9 节的 §7 批 1（Ed25519 签名）。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。
 - 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。（2026-11-11 补注：`proto/guild/guild_db.proto` 加了 `GuildRecord.score_version = 12`，所以 `cpp/generated/proto/guild/guild_db.pb.{h,cc}` 与 `go/proto/guild/guild_db.pb.go` 的差异也是预期的，见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）
 - 第 4 批：C++ 手写代码不改，但 guild 的 C++ 生成物会变，要重编 C++；客户端要按新协议重新生成并重编（第 8 节）。Java 版本轮不写代码，只在 Java 仓 `PARITY.md` 记 TODO（设计 §8）。
 

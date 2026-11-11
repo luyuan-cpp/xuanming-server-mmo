@@ -139,17 +139,22 @@ function Add-LokiObjectStoreFixture {
     return $result
 }
 
+# 存档库清单夹具的占位值:MMORPG_DB_ALLOWED_DATABASES 写它,Invoke-CapturedPwsh 按本次的地域码和 K 换成真实库名
+# (Add-PlayerStoreAllowlistFixture)。它不是合法库名:没经过换值就交给部署脚本,会被 Get-RoleProofStorageIds 当场拒绝。
+$PlayerStoreAllowlistFixture = 'fixture-player-stores-of-this-region'
+
 <#
 .SYNOPSIS
-    给存档库清单夹具 MMORPG_DB_ALLOWED_DATABASES 补上本次地域的存档库,返回新的 Env。
+    把存档库清单夹具的占位值换成本次地域的存档库,返回新的 Env。
 
 .DESCRIPTION
-    部署脚本要求清单恰好含本地域的 K 个存档库(k8s_deploy.ps1 Assert-PlayerStoreAllowlist,设计 player-data-tidb-scaling-plan.md §7.2),
-    而清单夹具大多只写了各区主库 zone_<n>_db。地域码和 K 随档位变(dev 缺省地域 0、K=1;staging / prod 由
-    Add-PlayerRedisDeployFixture 补成地域 1、K=64,用例也可能自己给),一份写死的清单对不上所有档位。
-    所以只要清单里一个 player_store_* 都没有,就按本次参数补齐(库名公式用 release_common.ps1 的 Get-RegionPlayerStoreDbNames,
-    与部署脚本同一份)。以下情形原样不动:清单里已经写了 player_store_*(测这道闸本身);清单为空或没给(测「没给清单」);
-    地域码或 K 越界、写成非数字(测参数闸,让部署脚本自己拒绝)。
+    部署脚本要求 MMORPG_DB_ALLOWED_DATABASES 恰好是本地域的 K 个存档库,别的库一个都不许有(k8s_deploy.ps1
+    Assert-PlayerStoreAllowlist,设计 player-data-tidb-scaling-plan.md §7.2;A17c 起 zone 库已退役)。地域码和 K 随档位变
+    (dev 缺省地域 0、K=1;staging / prod 由 Add-PlayerRedisDeployFixture 补成地域 1、K=64,用例也可能自己给),
+    一份写死的清单对不上所有档位,所以夹具写占位值 $PlayerStoreAllowlistFixture,这里按本次参数换成库名
+    (库名公式用 release_common.ps1 的 Get-RegionPlayerStoreDbNames,与部署脚本同一份)。
+    不是占位值就原样不动:用例自己写了清单(测这道闸本身)、清单为空或没给(测「没给清单」)。
+    地域码或 K 越界、写成非数字时也原样不动(测参数闸,让部署脚本自己拒绝)。
 #>
 function Add-PlayerStoreAllowlistFixture {
     param(
@@ -158,8 +163,7 @@ function Add-PlayerStoreAllowlistFixture {
     )
 
     if (-not $Env.ContainsKey('MMORPG_DB_ALLOWED_DATABASES')) { return $Env }
-    $listed = [string]$Env['MMORPG_DB_ALLOWED_DATABASES']
-    if ([string]::IsNullOrWhiteSpace($listed) -or $listed -match 'player_store_') { return $Env }
+    if ([string]$Env['MMORPG_DB_ALLOWED_DATABASES'] -cne $PlayerStoreAllowlistFixture) { return $Env }
 
     # 参数没给 = 部署脚本的缺省:地域 -1(dev 取 0),K 0(dev 取 1)。staging / prod 到这里时已由上一步补齐。
     $values = @{ '-Region' = -1; '-PlayerStoreShards' = 0 }
@@ -175,7 +179,7 @@ function Add-PlayerStoreAllowlistFixture {
     if ($region -gt 63 -or $shards -lt 1 -or $shards -gt 1000) { return $Env }
 
     $result = @{} + $Env
-    $result['MMORPG_DB_ALLOWED_DATABASES'] = (@($listed.TrimEnd(',')) + @(Get-RegionPlayerStoreDbNames -Region $region -Shards $shards)) -join ','
+    $result['MMORPG_DB_ALLOWED_DATABASES'] = @(Get-RegionPlayerStoreDbNames -Region $region -Shards $shards) -join ','
     return $result
 }
 
@@ -210,7 +214,7 @@ function Invoke-CapturedPwsh {
     )
 
     # 部署脚本(以及照抄它 param 块的驱动)在 staging / prod 要带玩家域集群参数,见 Add-PlayerRedisDeployFixture;
-    # 存档库清单夹具按本次的地域码和 K 补上本地域的存档库,见 Add-PlayerStoreAllowlistFixture。
+    # 存档库清单夹具的占位值按本次的地域码和 K 换成本地域的存档库,见 Add-PlayerStoreAllowlistFixture。
     $scriptLeaf = [System.IO.Path]::GetFileName($ScriptPath)
     if ($scriptLeaf -ceq 'k8s_deploy.ps1' -or $scriptLeaf -like 'mmorpg-client-entry-dryrun-*') {
         $fixture = Add-PlayerRedisDeployFixture -Arguments $Arguments -Env $Env

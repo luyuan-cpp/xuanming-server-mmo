@@ -128,8 +128,8 @@ func TestTiDBTrialLaunchClaimSkipsUndecodableRow(t *testing.T) {
 	ctx, db, activities, _, _ := prepareTrialLaunchForClaim(t, requestID, battleID)
 	// 一行摘要对不上的原件(手工误改,或日后收紧解码规则后的历史行)。request_id 更小、检查时刻相同,排在到期队列队头。
 	badOriginal := []byte{1, 2, 3}
-	_, err := db.ExecContext(ctx, "INSERT INTO guild_trial_launch("+trialLaunchColumns+",next_check_ms) VALUES(?,0,1,?,?,?,?,?,1)",
-		badID, badOriginal, []byte("not-a-sha256-digest"), testNowMs, testNowMs, []byte{})
+	_, err := db.ExecContext(ctx, "INSERT INTO guild_trial_launch("+trialLaunchColumns+",next_check_ms,realtime_end_tip) VALUES(?,0,1,?,?,?,?,?,1,?)",
+		badID, badOriginal, []byte("not-a-sha256-digest"), testNowMs, testNowMs, []byte{}, []byte{})
 	require.NoError(t, err)
 	makeTrialLaunchDue(t, ctx, db, requestID)
 

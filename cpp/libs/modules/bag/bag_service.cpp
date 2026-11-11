@@ -177,10 +177,11 @@ uint32_t BagService::AddItems(
 
 	// 同一批按配置号升序预检、占格和记流水,不依赖请求哈希表的历史插入顺序。
 	// 任一项被封禁(全服或本人)整批拒绝,在容器做任何规划之前:一件不发,不留半笔。
+	// 交易退回本人托管的物品不是新增获得,不判封禁(GainBlockService::CountsAsGain,审计 r2-trade#1)。
 	const auto ordered = SortedByConfigId(itemsToAdd);
 	for (const auto &[configId, count] : ordered)
 	{
-		if (GainBlockService::IsItemGainBlocked(playerEntity, configId))
+		if (GainBlockService::CountsAsGain(txType) && GainBlockService::IsItemGainBlocked(playerEntity, configId))
 		{
 			LOG_WARN << "BagService::AddItems: item gain blocked (global or this player), whole batch rejected. config_id="
 					 << configId << " player=" << bag.PlayerGuid();
@@ -570,7 +571,7 @@ uint32_t BagService::AddItems(
 	for (const auto &param : itemsToAdd)
 	{
 		const auto configId = param.itemPBComp.config_id();
-		if (GainBlockService::IsItemGainBlocked(playerEntity, configId))
+		if (GainBlockService::CountsAsGain(txType) && GainBlockService::IsItemGainBlocked(playerEntity, configId))
 		{
 			LOG_WARN << "BagService::AddItems: item gain blocked (global or this player), whole batch rejected. config_id="
 					 << configId << " player=" << bag.PlayerGuid();

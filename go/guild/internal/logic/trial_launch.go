@@ -7,6 +7,7 @@ import (
 
 	"guild/internal/data"
 	battlepb "proto/battle"
+	base "proto/common/base"
 	pb "proto/guild"
 	matchpb "proto/match"
 
@@ -17,6 +18,7 @@ type trialLaunchStore interface {
 	TrialLaunchEnabled() bool
 	PrepareTrialLaunch(context.Context, uint64, data.TrialBattleKey, uint32, []*pb.GuildTrialRoleIdentity, uint64) (*pb.GuildTrialLaunchOriginal, error)
 	ExpediteTrialLaunchCheck(context.Context, uint64) error
+	RecordTrialLaunchEndReason(context.Context, uint64, *base.TipInfoMessage) error
 	ClaimDueTrialLaunches(context.Context, int) (data.DueTrialLaunches, error)
 	FinishCancelledTrialLaunch(context.Context, *pb.GuildTrialLaunchOriginal, *matchpb.CancelActivityBattleResponse, uint64) error
 }
@@ -45,12 +47,15 @@ func prepareOriginalTrialLaunch(ctx context.Context, d *ActivityDeps, lobby *dat
 	return nil
 }
 
-// expediteTrialLaunchCheck 在 match 已确定地没有开成这一局时(startTrialAtMatch 判定),把原件的首次检查提前到现在
-// (data.ActivityRepo.ExpediteTrialLaunchCheck),恢复器下一轮就重放取消、释放占用,不必等开局窗口之后的宽限
-// (2026-11-05 修复,r2-guild#1 复审)。requestID 为 0 = 没有永久原件,无事可做。
-// 只是调度提示,不参与释放判定:失败只打日志,原件照旧在宽限之后被检查。用独立预算、不继承请求的取消 ——
-// 走到这里时请求预算可能已经见底(预算不足没调 match 正是其中一种)。
-func expediteTrialLaunchCheck(ctx context.Context, d *ActivityDeps, requestID uint64) {
+// handOffFailedTrialStart 在 match 已确定地没有开成这一局时(startTrialAtMatch 判定)把原件交给恢复器,两步,顺序固定:
+//  1. 记下回给发起人的结束原因(data.ActivityRepo.RecordTrialLaunchEndReason,2026-11-11):大厅由恢复器释放时才关,
+//     名单上所有人看到同一个具体原因(如有人离线),不再一律是「服务繁忙」。先记再提前,恢复器释放时一定读得到它;
+//  2. 把原件的首次检查提前到现在(data.ActivityRepo.ExpediteTrialLaunchCheck),恢复器下一轮就重放取消、释放占用,
+//     不必等开局窗口之后的宽限(2026-11-05 修复,r2-guild#1 复审)。
+//
+// requestID 为 0 = 没有永久原件,无事可做。两步都不参与释放判定:失败只打日志(原因退回默认、原件照旧在宽限之后被检查)。
+// 用独立预算、不继承请求的取消 —— 走到这里时请求预算可能已经见底(预算不足没调 match 正是其中一种)。
+func handOffFailedTrialStart(ctx context.Context, d *ActivityDeps, requestID uint64, end trialEnd) {
 	if requestID == 0 {
 		return
 	}
@@ -60,6 +65,10 @@ func expediteTrialLaunchCheck(ctx context.Context, d *ActivityDeps, requestID ui
 	}
 	postCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), trialAfterLaunchBudget)
 	defer cancel()
+	// 与 endTrialLobby 写进大厅的是同一对 tip id 与参数(不用 end.tip():无参数时它会带上给日志看的英文说明)。
+	if err := store.RecordTrialLaunchEndReason(postCtx, requestID, &base.TipInfoMessage{Id: end.tipID, Parameters: end.params}); err != nil {
+		logx.Errorf("[GuildTrial] recording the end reason of launch original %d failed, its lobby will end with the default reason: %v", requestID, err)
+	}
 	if err := store.ExpediteTrialLaunchCheck(postCtx, requestID); err != nil {
 		logx.Errorf("[GuildTrial] expedite recovery check of launch original %d failed, it will be checked after the launch grace instead: %v", requestID, err)
 	}

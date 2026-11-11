@@ -31,12 +31,12 @@ import (
 //     this process's own (orchestrated_zones.go; 2026-11-05 the zone registry
 //     scene_manager:zones was removed, docs/design/control-plane-zone-scoping-20261105.md §4.3),
 //     candidate (zone, confId) groups come from the fields of
-//     world_channels:desired:zone:{z}. The old SCAN world_channels:zone:*
+//     world_channels:desired:{ctl:<z>}. The old SCAN over every channel set
 //     walked the whole shared Redis on the LoadReporter goroutine — hours at
 //     launch scale.
 //
 // 发现覆盖范围(2026-10-16):生产代码里往频道集合 SADD 的唯一入口是 initWorldScenesForZone,它先经
-// DesiredWorldChannelCount 播种 world_channels:desired:zone:{z} 的字段、后 SADD。所以「有频道集合」基本蕴含
+// DesiredWorldChannelCount 播种 world_channels:desired:{ctl:<z>} 的字段、后 SADD。所以「有频道集合」基本蕴含
 // 「有期望数字段」。覆盖不到的组合:
 //   - 2026-10-23 之前 DesiredWorldChannelCount 的 HSETNX 出错兜底路径(直接返回种子值、不写字段)建出来的
 //     集合;该兜底已改为回 error、本轮不补建,新数据不再产生这种组合;
@@ -45,7 +45,8 @@ import (
 // 这些只会残留成垃圾键,不影响路由。反过来,「集合已空、期望数字段还在」的残留以前 SCAN 找不到,现在能清掉。
 // 期望数字段是发现索引,所以 deleteOrphanChannel 把删它放到最后一步。
 
-const orphanKeyPrefix = "world_channels:zone:"
+// orphanKeyPrefix 是频道集合键 world_channels:{ctl:<z>}:<conf> 在 tag 之前的那一段。
+const orphanKeyPrefix = "world_channels:"
 
 // CleanupOrphanWorldChannels finds (zone, confId) channel groups whose confId
 // is no longer in World.json and deletes them. Returns the number of groups
@@ -99,27 +100,38 @@ func CleanupOrphanWorldChannels(ctx context.Context, svcCtx *svc.ServiceContext)
 	return removed
 }
 
-// parseWorldChannelsKey parses "world_channels:zone:{z}:{confId}" into its
+// parseWorldChannelsKey parses "world_channels:{ctl:<z>}:<confId>" (worldChannelsKey) into its
 // components. Returns false for malformed keys so a stray entry doesn't
 // blow up the whole cleanup pass.
 //
-// 2026-10-16 起生产代码不再调用它(孤儿清理改为点查,不再 SCAN 键名)。保留是为了守住键前缀约束:
-// 别的键(线号表、分线目录)不得被解析成频道集合,否则仍在滚动窗口里跑 SCAN 的旧版本 scene_manager
-// 会误删它们(TestWorldChannelDirectoryKeyFmt_CrossLanguageContract / TestParseWorldChannelsKey 在用)。
+// 2026-10-16 起生产代码不再调用它(孤儿清理改为点查,不再 SCAN 键名)。保留是为了守住键形约束:
+// 别的键(线号表、分线目录,以及 world_channels: 下的期望数、冷却、排空、放置序号)不得被解析成频道集合
+// (TestWorldChannelDirectoryKeyFmt_CrossLanguageContract / TestParseWorldChannelsKey 在用)。
+// tag 必须是 sceneControlTag 的规范写法(zone 十进制、无前导零),逐字节比对,不手认族前缀。
 func parseWorldChannelsKey(key string) (zone uint32, confId uint64, ok bool) {
-	if !strings.HasPrefix(key, orphanKeyPrefix) {
+	rest, found := strings.CutPrefix(key, orphanKeyPrefix)
+	if !found || !strings.HasPrefix(rest, "{") {
 		return 0, 0, false
 	}
-	rest := key[len(orphanKeyPrefix):]
-	sep := strings.IndexByte(rest, ':')
-	if sep <= 0 {
+	tagEnd := strings.IndexByte(rest, '}')
+	if tagEnd < 0 {
 		return 0, 0, false
 	}
-	z, err := strconv.ParseUint(rest[:sep], 10, 32)
-	if err != nil {
+	tag := rest[:tagEnd+1]
+	confPart, found := strings.CutPrefix(rest[tagEnd+1:], ":")
+	if !found {
 		return 0, 0, false
 	}
-	c, err := strconv.ParseUint(rest[sep+1:], 10, 64)
+	// tag 形如 {<族前缀>:<zone>}:取最后一个冒号后的十进制,再按规范写法重建、逐字节比对。
+	sep := strings.LastIndexByte(tag, ':')
+	if sep < 0 {
+		return 0, 0, false
+	}
+	z, err := strconv.ParseUint(tag[sep+1:len(tag)-1], 10, 32)
+	if err != nil || sceneControlTag(uint32(z)) != tag {
+		return 0, 0, false
+	}
+	c, err := strconv.ParseUint(confPart, 10, 64)
 	if err != nil {
 		return 0, 0, false
 	}

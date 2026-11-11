@@ -2822,11 +2822,12 @@ func TestDestroyScene_CascadesToMirrors(t *testing.T) {
 // reconcileDeadNodeScenesForTest 复刻生产路径的两步:先抄一次
 // node:zone:{z}:{n}:scenes 快照(生产里由 enqueueDeadNodeReconcile 在判死那一刻
 // 抄),再在屏障过后做收尾。测试用它可以跳过屏障等待,只验证收尾逻辑本身。
+// 逐个认领要核对收尾任务(R1-I6),所以先在任务表里放一条(生产里由入队脚本写)。
 func reconcileDeadNodeScenesForTest(t *testing.T, sc *svc.ServiceContext, entry nodeEntry) {
 	t.Helper()
 	members, err := sc.Redis.Smembers(nodeScenesKey(entry.reg.ZoneId, entry.nodeID))
 	require.NoError(t, err)
-	reconcileDeadNodeScenes(context.Background(), sc, entry, members)
+	reconcileDeadNodeScenes(context.Background(), sc, entry, members, seedDeadNodeTaskForTest(t, sc, entry.reg.ZoneId, entry.nodeID))
 }
 
 // TestReconcileDeadNode_DestroysOrphanInstances verifies the sweep run

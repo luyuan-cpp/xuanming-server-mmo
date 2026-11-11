@@ -139,7 +139,7 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 		QueueToken:   res.QueueToken,
 		QueueRank:    res.Rank,
 		QueueTotal:   res.Total,
-		RetryAfterMs: queueCfg.DefaultRetryAfterMs,
+		RetryAfterMs: loginqueue.RetryAfterForRank(queueCfg.DefaultRetryAfterMs, res.Rank, queueCfg.AdmitTTL),
 	}, nil
 }
 
@@ -174,7 +174,7 @@ func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateRespon
 		resp.QueueToken = token
 		resp.QueueRank = state.Rank
 		resp.QueueTotal = state.Total
-		resp.RetryAfterMs = config.AppConfig.Queue.DefaultRetryAfterMs
+		resp.RetryAfterMs = loginqueue.RetryAfterForRank(config.AppConfig.Queue.DefaultRetryAfterMs, state.Rank, config.AppConfig.Queue.AdmitTTL)
 	}
 	return resp, nil
 }
@@ -198,7 +198,8 @@ func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateRespon
 			Error:  "no gate available for requested zone",
 		}, nil
 	}
-	admit, err := loginqueue.PickAndSignGateToken(candidates, l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
+	// 签出的票记进本进程的在途账,本进程后面的挑选会把它算进这台 gate 的负载(loginqueue/gate_inflight.go)。
+	admit, err := loginqueue.PickAndSignGateToken(candidates, l.svcCtx.GateInflight(), l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
 	if err != nil {
 		logx.Errorf("[loginqueue] fast-path sign zone=%d err=%v", zoneID, err)
 		return &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "sign failed"}, nil

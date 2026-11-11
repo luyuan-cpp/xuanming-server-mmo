@@ -44,7 +44,7 @@ Write-Host "=== k8s_deploy.ps1 deployment generator contract tests ==="
 function Invoke-DeployDryRun {
     param([Parameter(Mandatory = $true)][string[]]$Arguments, [hashtable]$Env = @{})
     if ($Arguments -notcontains '-DryRun') { throw '部署合同夹具只允许显式-DryRun，禁止连接或写集群。' }
-    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db' }
+    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = $PlayerStoreAllowlistFixture }
     foreach ($key in $Env.Keys) { $fixtureEnv[$key] = $Env[$key] }
     $fixtureArgs = @($Arguments)
     if (-not ($fixtureArgs | Where-Object { $_ -match '^-GlobalAuthorityTiDBHost(?::|$)' })) {
@@ -221,19 +221,17 @@ Test-Case "自检:子进程输出的中文必须无损带回(否则后面断错�
 # 1. 生成的 ConfigMap 必须与各服务 etc/*.yaml 跨文件一致
 # ─────────────────────────────────────────────────────────────────
 
-Test-Case "db ConfigMap 的 Database 关键值 == go/db/etc/db.yaml" {
+Test-Case "db ConfigMap 不再写本区库的池参数(A17c:go/db 只连地域存档库,池参数只在 Placement.Store*)" {
     $block = Select-ManifestByName -Output $devOut -Name "go-svc-db-config"
     Assert-True -Condition ($null -ne $block) -Because "DryRun 输出里应当有 go-svc-db-config"
     $flat = ConvertTo-FlatManifest -Block $block
-
-    $pairs = @(
-        @{ Gen = 'data.db.yaml.ServerConfig.Database.MaxOpenConn';  Etc = 'ServerConfig.Database.MaxOpenConn' }
-        @{ Gen = 'data.db.yaml.ServerConfig.Database.MaxIdleConn';  Etc = 'ServerConfig.Database.MaxIdleConn' }
-    )
-    foreach ($p in $pairs) {
-        $expected = Get-EtcValue -RelativePath 'go/db/etc/db.yaml' -KeyPath $p.Etc
-        $actual = Get-FlatValue -Flat $flat -KeyPath $p.Gen
-        Assert-Equal -Expected $expected -Actual $actual -Because "$($p.Etc) 必须与 go/db/etc/db.yaml 一致(生成器不得自带常数)"
+    # go/db 的 DatabaseConfig 已经没有这两个字段(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c),写出来 go-zero 也不读,
+    # 只会让看 ConfigMap 的人以为它还生效。
+    foreach ($retired in @('data.db.yaml.ServerConfig.Database.MaxOpenConn', 'data.db.yaml.ServerConfig.Database.MaxIdleConn')) {
+        Assert-True -Condition (-not $flat.Scalars.Contains($retired)) -Because "$retired 已随本区库退役,ConfigMap 不该再写"
+    }
+    foreach ($retiredKey in @('ZoneStoreMaxOpenConn', 'ZoneStoreMaxIdleConn', 'NonZoneStoreMaxOpenConn', 'NonZoneStoreMaxIdleConn', 'ExtraStoreConnMaxIdleSeconds')) {
+        Assert-NotMatch -Text $block -Pattern ('(?m)^\s+' + $retiredKey + ':') -Because "Placement.$retiredKey 是 A17c 之前的旧键,存档库池只写 Store* 三个键"
     }
 }
 
@@ -260,11 +258,11 @@ Test-Case "ConfigMap 镜像 MySQL 池参数 == 服务 yaml(db Placement、data-s
     # 背景(G2b,docs/handoff/launch-readiness-20261013/spec_G2b.md §4.1.4):所有 zone 的 go/db、data_service、Java gateway 共用同一台
     # MySQL,连接总账(k8s_deploy.ps1 的 Get-MysqlConnectionLedgerInputs)读的是服务自己的配置。这几组池参数以前不进 ConfigMap,
     # 集群里生效的是「Go 默认值 / jar 内那份恰好等于服务 yaml」:两边一漂移,总账算的就不是集群的账,而且不会有任何报错。
-    # db 的额外落点库池按库所属家族分两个旋钮(ZoneStore* / NonZoneStore*),外加池内空闲连接的回收秒数,五个键都镜像。
+    # db 的存档库池(A17c 起 go/db 只连地域存档库)上限、空闲数,外加池内空闲连接的回收秒数,三个键都镜像。
     # 字段名用 PoolKeys 而不是 Keys:哈希表自带 Keys 属性,同名字段读起来有歧义。
     $mirrors = @(
         @{ ConfigMap = 'go-svc-db-config'; Prefix = 'data.db.yaml.'; Source = 'go/db/etc/db.yaml'
-           PoolKeys = @('Placement.ZoneStoreMaxOpenConn', 'Placement.ZoneStoreMaxIdleConn', 'Placement.NonZoneStoreMaxOpenConn', 'Placement.NonZoneStoreMaxIdleConn', 'Placement.ExtraStoreConnMaxIdleSeconds') }
+           PoolKeys = @('Placement.StoreMaxOpenConn', 'Placement.StoreMaxIdleConn', 'Placement.StoreConnMaxIdleSeconds') }
         @{ ConfigMap = 'go-svc-data-service-config'; Prefix = 'data.data_service.yaml.'; Source = 'go/data_service/etc/data_service.yaml'
            PoolKeys = @('PlayerName.MaxOpenConn', 'PlayerName.MaxIdleConn', 'RouteStore.MaxOpenConn', 'RouteStore.MaxIdleConn', 'Directory.StoragePools.MaxOpenConn', 'Directory.StoragePools.MaxIdleConn', 'Directory.StoragePools.ConnMaxIdleSeconds') }
         @{ ConfigMap = 'java-svc-gateway-config'; Prefix = 'data.application.yaml.'; Source = 'java/gateway_node/src/main/resources/application.yaml'
@@ -1401,9 +1399,9 @@ Test-Case "data-service 的 NameCacheRedis 指向共享 Redis、不写 DB 键;go
     }
 }
 
-Test-Case "login ConfigMap 必须带 Secrets.InternalAuth / GateToken,且只写变量名(否则生产 login 拒绝启动)" {
+Test-Case "login ConfigMap 必须带 Secrets.GateToken,且只写变量名(否则生产 login 拒绝启动);不再有 Secrets.InternalAuth" {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-login-config")
-    Assert-Equal -Expected 'MMORPG_INTERNAL_AUTH_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Env') -Because "生产模式 EnforceInternalAuth 恒 true 且关不掉,未配置时 ResolveSecrets 直接返回 error;容器经 Secret gate-identity-auth 拿这个变量"
+    Assert-True -Condition (-not $flat.Scalars.Contains('data.login.yaml.Secrets.InternalAuth.Env')) -Because "内部身份验签改由 gate 的 Ed25519 公钥(env MMORPG_INTERNAL_AUTH_PUBLIC_KEYS),login 的 Secrets 里不再有 InternalAuth(gate-online-identity.md §10.1)"
     Assert-Equal -Expected 'MMORPG_GATE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.GateToken.Env') -Because 'gate 令牌改走 Secrets.GateToken.Env(顶层 GateTokenSecret 是不能轮换的兼容入口)'
     foreach ($key in @('data.login.yaml.Secrets.InternalAuth.Value', 'data.login.yaml.Secrets.GateToken.Value', 'data.login.yaml.GateTokenSecret')) {
         Assert-True -Condition (-not $flat.Scalars.Contains($key)) -Because "密钥明文不进 ConfigMap(不得写 $key)"
@@ -1453,11 +1451,12 @@ $ProdEnv = @{
     MMORPG_REDIS_PASSWORD     = 'contract-test-redis-pw-01'
     MMORPG_GATEWAY_DB_USER    = 'gateway_app'
     MMORPG_GATEWAY_DB_PASSWORD= 'contract-test-gwdb-pw-01'
-    # login 的 Secrets.InternalAuth:生产模式恒强制验签且关不掉,缺了 login 拒启。
-    # 刻意与 GATE_TOKEN_SECRET 不同 —— secrets.go 会拒绝跨用途复用主密钥。
-    MMORPG_INTERNAL_AUTH_SECRET = 'contract-test-internal-auth-0123456789abcdef'
-    # db 库名白名单:三个来源全空时 db 在默认 strict 档下拒启。
-    MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db'
+    # gate 的会话身份签名私钥与验证方公钥列表(gate-online-identity.md §10.1):RFC 8032 §7.1 TEST 1 的公开测试密钥对,
+    # 形状合格、两者配对;私钥是密钥(只进 Secret),公钥不是(明文进 env)。
+    MMORPG_INTERNAL_AUTH_SIGNING_KEY = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60'
+    MMORPG_INTERNAL_AUTH_PUBLIC_KEYS = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
+    # db 库名白名单:三个来源全空时 db 在默认 strict 档下拒启。占位值由夹具换成本次地域的存档库(lib/deploy_capture.ps1)。
+    MMORPG_DB_ALLOWED_DATABASES = $PlayerStoreAllowlistFixture
     # gateway 管理面口令(k8s-client-entry D91 纵深防御):非 dev 档缺失即拒绝部署;
     # 取 ≥32 位非占位串,且与上面各密钥都不同。
     MMORPG_GATEWAY_ADMIN_API_KEY = 'contract-test-gw-admin-key-0123456789abcdef'
@@ -1485,6 +1484,31 @@ $prodRun = Invoke-DeployDryRun -Arguments $ProdArgs -Env $ProdEnv
 
 Test-Case "prod 档位 + 注入环境变量时生成器可以正常出产物" {
     Assert-Equal -Expected 0 -Actual $prodRun.ExitCode -Because "注入齐全时不该失败。输出: $($prodRun.Output)"
+}
+
+Test-Case 'Pod 间加密(gate-online-identity.md §10.3):prod DryRun 没声明只告警、声明后不查集群;核对项逐项钉住;不认识的取值拒绝' {
+    Assert-Match -Text $prodRun.Output -Pattern 'PodNetworkEncryption: none' -Because 'prod 档打出本次声明'
+    Assert-Match -Text $prodRun.Output -Pattern 'WARNING: ReleaseProfile=prod requires pod-to-pod transparent encryption' -Because 'DryRun 没声明只告警,真部署会被拒'
+    Assert-NotMatch -Text $devOut -Pattern 'requires pod-to-pod transparent encryption' -Because 'dev 档不要求 Pod 间加密'
+    $declared = Invoke-DeployDryRun -Arguments ($ProdArgs + @('-PodNetworkEncryption', 'cilium-wireguard')) -Env $ProdEnv
+    Assert-Equal -Expected 0 -Actual $declared.ExitCode -Because "声明后 DryRun 照常出产物。输出: $($declared.Output)"
+    Assert-Match -Text $declared.Output -Pattern '\[dry-run\] pod network encryption check skipped \(no cluster access\): cilium-wireguard' -Because 'DryRun 不查集群'
+
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
+    $fn = $ast.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -ceq 'Get-PodNetworkEncryptionProbe' }, $true)
+    Assert-True -Condition ($null -ne $fn) -Because '部署脚本要有 Get-PodNetworkEncryptionProbe'
+    Set-Item -Path 'Function:script:Get-PodNetworkEncryptionProbe' -Value $fn.Body.GetScriptBlock()
+    $cilium = Get-PodNetworkEncryptionProbe -Mode 'cilium-wireguard'
+    Assert-Equal -Expected 'get configmap cilium-config -n kube-system -o jsonpath={.data.enable-wireguard}' -Actual ($cilium.Args -join ' ') -Because 'Cilium 的 WireGuard 开关在 kube-system/cilium-config'
+    Assert-Equal -Expected 'true' -Actual $cilium.Expected -Because 'Cilium 开了透明加密时 enable-wireguard 为 "true"'
+    $calico = Get-PodNetworkEncryptionProbe -Mode 'calico-wireguard'
+    Assert-Equal -Expected 'get felixconfiguration default -o jsonpath={.spec.wireguardEnabled}' -Actual ($calico.Args -join ' ') -Because 'Calico 的 WireGuard 开关在 FelixConfiguration default'
+    Assert-Equal -Expected 'true' -Actual $calico.Expected -Because 'Calico 开了透明加密时 wireguardEnabled 为 true'
+
+    $bad = Invoke-DeployDryRun -Arguments $ProdArgs -Env ($ProdEnv + @{ MMORPG_POD_NETWORK_ENCRYPTION = 'ipsec' })
+    Assert-True -Condition ($bad.ExitCode -ne 0) -Because '环境变量给了不认识的加密方式必须拒绝'
+    Assert-Match -Text $bad.Output -Pattern "PodNetworkEncryption 'ipsec' is not one of" -Because '报错点名取值与来源'
 }
 
 Test-Case 'data-service ConfigMap 的 RouteStore 段只写连接池与合服映射刷新周期,取值镜像服务 yaml,池按目录片数摊开' {
@@ -2180,7 +2204,7 @@ Test-Case 'login Secrets.QueueToken.Env == MMORPG_LOGIN_QUEUE_TOKEN_SECRET 且�
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Run.Output -Name 'go-svc-login-config')
         Assert-Equal -Expected 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.QueueToken.Env') -Because "$($case.Label) 档 Secrets.QueueToken 只写变量名(生产模式开排队缺它 login 拒启)"
         Assert-True -Condition (-not $flat.Scalars.Contains('data.login.yaml.Secrets.QueueToken.Value')) -Because "$($case.Label) 档排队令牌明文不进 ConfigMap"
-        Assert-Equal -Expected 'MMORPG_INTERNAL_AUTH_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Env') -Because "$($case.Label) 档 QueueToken 并进同一个 Secrets: 段,不能把 InternalAuth 挤掉"
+        Assert-True -Condition (-not $flat.Scalars.Contains('data.login.yaml.Secrets.InternalAuth.Env')) -Because "$($case.Label) 档 Secrets 里只剩 GateToken / QueueToken,不再有 InternalAuth(gate-online-identity.md §10.1)"
         Assert-Equal -Expected 'MMORPG_GATE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.GateToken.Env') -Because "$($case.Label) 档 QueueToken 并进同一个 Secrets: 段,不能把 GateToken 挤掉"
         $doc = Select-WorkloadSecretDoc -Output $case.Run.Output -Name 'login' -Label "$($case.Label) login"
         Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'login-queue-token' -Label "$($case.Label) login"
@@ -2240,7 +2264,7 @@ Test-Case '负向:prod 缺 MMORPG_LOGIN_QUEUE_TOKEN_SECRET 在任何写操作之
 Test-Case '负向:排队密钥与 GATE / INTERNAL_AUTH 相同时拒绝,只点变量名不回显值' {
     foreach ($reused in @(
         @{ EnvName = 'MMORPG_GATE_TOKEN_SECRET'; SecretValue = $ProdEnv.MMORPG_GATE_TOKEN_SECRET }
-        @{ EnvName = 'MMORPG_INTERNAL_AUTH_SECRET'; SecretValue = $ProdEnv.MMORPG_INTERNAL_AUTH_SECRET }
+        @{ EnvName = 'MMORPG_INTERNAL_AUTH_SIGNING_KEY'; SecretValue = $ProdEnv.MMORPG_INTERNAL_AUTH_SIGNING_KEY }
     )) {
         $env2 = @{} + $ProdEnv
         $env2['MMORPG_LOGIN_QUEUE_TOKEN_SECRET'] = $reused.SecretValue
@@ -2860,6 +2884,19 @@ Test-Case '玩家收件箱:node-config 与 bin/etc 都含 PlayerInboxNodeService
     foreach ($key in $expectedInboxKeys) {
         Assert-Equal -Expected $authoritativeGame[$key] -Actual $nodeGame[$key] -Because "node-config 的 $key 必须与 bin/etc/game_config.yaml 一致(不传 -PlayerInboxConsumer 也一样,开关不由参数渲染)"
     }
+}
+
+Test-Case '待寄邮件:node-config 与 bin/etc 都含 MailNodeService.rpc,deadline 门禁核对了 MailNodeService,scene 注入 battle 发件密钥' {
+    # scene 按这个前缀发现 mail,以 battle 身份把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md)。
+    # 任一处漏写都不报错:前缀漏了发现不到 mail,密钥漏了签不了名,条目只会一直留在玩家的待寄队列里。
+    Assert-Match -Text (Select-ManifestByName -Output $devOut -Name 'node-config') -Pattern '- "MailNodeService\.rpc"' -Because 'K8s 的 node ConfigMap 遮蔽镜像里的 bin/etc,前缀必须在生成器里也写出来'
+    $authoritativeDeploy = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'bin/etc/base_deploy_config.yaml') -Raw
+    Assert-Match -Text $authoritativeDeploy -Pattern '(?m)^\s*-\s*"MailNodeService\.rpc"' -Because '本地栈读 bin/etc/base_deploy_config.yaml 的前缀表'
+    $okLine = [string]($devOut -split "`r?`n" | Where-Object { $_ -match 'GrpcClient deadline budget OK' } | Select-Object -First 1)
+    Assert-Match -Text $okLine -Pattern 'MailNodeService' -Because 'Assert-GrpcClientDeadlineBudget 的目标表必须含 MailNodeService(scene → mail 的 deadline ≥ zrpc Timeout + 2000)'
+    $scene = Select-ManifestByName -Output $devOut -Name 'scene'
+    Assert-Match -Text $scene -Pattern 'name: MAIL_PRODUCER_SECRET_BATTLE\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: mail-producer-battle, optional: false\}' -Because 'scene 签名用的 battle 发件密钥只经 Secret 注入,缺键时 Pod 起不来,而不是带着空密钥让欠玩家的物品寄不出去'
+    Assert-NotMatch -Text (Select-ManifestByName -Output $devOut -Name 'gate') -Pattern 'MAIL_PRODUCER_SECRET_BATTLE' -Because '只有 scene 寄信,gate 不该拿到这把密钥(最小权限)'
 }
 
 Test-Case '玩家收件箱:-PlayerInboxConsumer 只核对、不改值 —— 与 yaml 一致时放行且渲染值仍取 yaml;不一致时在任何写操作之前拒绝并指向 yaml' {
@@ -3650,14 +3687,14 @@ foreach ($mysqlLedgerFnName in $mysqlLedgerFunctionNames) {
     if (-not (Test-Path "Function:$mysqlLedgerFnName")) { throw "k8s_deploy.ps1 缺少函数 $mysqlLedgerFnName(MySQL 连接总账被删了?后续断言无意义)" }
 }
 
-# 用仓库权威文件的输入算一份总账。Z 和存档库数 E_n 由调用方给,其余形态参数(E_z / 滚动余量 / 运维余量)取规划档。
-# E_n:对照规划档传 $Plan.NonZoneStores;对照写路径打印的那一行传本次部署的 -PlayerStoreShards(dev 缺省 1),
+# 用仓库权威文件的输入算一份总账。Z 和存档库数 E 由调用方给,其余形态参数(滚动余量 / 运维余量)取规划档。
+# E:对照规划档传 $Plan.PlayerStoreShards;对照写路径打印的那一行传本次部署的 -PlayerStoreShards(dev 缺省 1),
 # Write-MysqlConnectionLedger 的本次部署与规划档两份都按本次部署的 K 算(设计 player-data-tidb-scaling-plan.md §7.2)。
 function Get-RepoMysqlConnectionLedger {
     param(
         [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Plan,
         [Parameter(Mandatory = $true)][int]$ZoneCount,
-        [Parameter(Mandatory = $true)][int]$NonZoneStores,
+        [Parameter(Mandatory = $true)][int]$PlayerStoreShards,
         # 给了就换掉 mysql.yaml 的 max_connections:tidb 档的部署一律对照 TiDB 规划预算(Write-MysqlConnectionLedger)。
         [int]$MaxConnections = 0
     )
@@ -3665,8 +3702,7 @@ function Get-RepoMysqlConnectionLedger {
     $RepoRoot = Get-RepoRoot
     $inputs = Get-MysqlConnectionLedgerInputs
     if ($MaxConnections -gt 0) { $inputs['MaxConnections'] = $MaxConnections }
-    return Get-MysqlConnectionLedger -Inputs $inputs -ZoneCount $ZoneCount -ExtraZoneStores $Plan.ExtraZoneStores `
-        -NonZoneStores $NonZoneStores `
+    return Get-MysqlConnectionLedger -Inputs $inputs -ZoneCount $ZoneCount -PlayerStoreShards $PlayerStoreShards `
         -RolloutExtraPodsPerDeployment $Plan.RolloutExtraPodsPerDeployment -OpsReserve $Plan.OpsReserve
 }
 
@@ -3701,95 +3737,89 @@ Test-Case 'MySQL 连接总账:规划档峰值 ≤ mysql.yaml 的 max_connections
     # max_connections 是按规划档的峰值取的(mysql.yaml「连接上限」注释)。调大任何一个池、加副本、改规划档而不同步上限,
     # 都在这里点名失败,而不是等集群里出 1040。
     $plan = Get-MysqlConnectionPlan
-    $ledger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $plan.ZoneCount -NonZoneStores $plan.NonZoneStores
-    Assert-True -Condition ($ledger.Peak -le $ledger.MaxConnections) -Because ("规划档(zones={0},每个 go/db、data_service 实例打开本地域全部 {1} 个存档库)的峰值 {2} 超过 max_connections={3}:要么收紧池 / 规划档,要么同步抬高 deploy/k8s/manifests/infra/mysql.yaml 的 max_connections 与内存 limits。分项:{4}" -f $plan.ZoneCount, $plan.NonZoneStores, $ledger.Peak, $ledger.MaxConnections, (Format-MysqlConnectionLedger -Ledger $ledger))
+    $ledger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $plan.ZoneCount -PlayerStoreShards $plan.PlayerStoreShards
+    Assert-True -Condition ($ledger.Peak -le $ledger.MaxConnections) -Because ("规划档(zones={0},每个 go/db、data_service 实例打开本地域全部 {1} 个存档库)的峰值 {2} 超过 max_connections={3}:要么收紧池 / 规划档,要么同步抬高 deploy/k8s/manifests/infra/mysql.yaml 的 max_connections 与内存 limits。分项:{4}" -f $plan.ZoneCount, $plan.PlayerStoreShards, $ledger.Peak, $ledger.MaxConnections, (Format-MysqlConnectionLedger -Ledger $ledger))
 }
 
 Test-Case 'MySQL 连接总账:deploy/k8s/zones.json 的 zone 数峰值 ≤ max_connections(存档库按规划档)' {
     # 仓库自带的 zones 配置(all-up 的默认输入)也必须装得下:Z 取 zones.json 的 zone 数,存档库数取规划档的 MySQL 档,
-    # 其余形态参数取规划档。存档库和区脱钩之后 zone 库不放新号(E_z = 0),连接随 zone 数线性增长。往 zones.json 加 zone 加到超限时,这里先于部署失败。
+    # 其余形态参数取规划档。zone 库已退役(A17c),连接随 zone 数线性增长。往 zones.json 加 zone 加到超限时,这里先于部署失败。
     $zoneCount = @((Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.json') -Raw | ConvertFrom-Json).zones).Count
     Assert-True -Condition ($zoneCount -gt 0) -Because "deploy/k8s/zones.json 里应当至少有一个 zone(本断言的前提),实际 $zoneCount 个"
     $plan = Get-MysqlConnectionPlan
-    $ledger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $zoneCount -NonZoneStores $plan.NonZoneStores
-    Assert-True -Condition ($ledger.Peak -le $ledger.MaxConnections) -Because ("deploy/k8s/zones.json 的 {0} 个 zone(每个实例打开 {1} 个存档库)峰值 {2} 超过 max_connections={3}。分项:{4}" -f $zoneCount, $plan.NonZoneStores, $ledger.Peak, $ledger.MaxConnections, (Format-MysqlConnectionLedger -Ledger $ledger))
+    $ledger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $zoneCount -PlayerStoreShards $plan.PlayerStoreShards
+    Assert-True -Condition ($ledger.Peak -le $ledger.MaxConnections) -Because ("deploy/k8s/zones.json 的 {0} 个 zone(每个实例打开 {1} 个存档库)峰值 {2} 超过 max_connections={3}。分项:{4}" -f $zoneCount, $plan.PlayerStoreShards, $ledger.Peak, $ledger.MaxConnections, (Format-MysqlConnectionLedger -Ledger $ledger))
 }
 
-Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 → 500另加现役目录与路由独立池),对旧 max_connections=500 判超限,输入非法即 throw' {
+Test-Case '自检:总账公式逐项可复算(E=1 的名义值、滚动余量、互不相同的输入),对旧 max_connections=500 判超限,输入或形态非法即 throw' {
     $RepoRoot = Get-RepoRoot
     $directoryPool = Get-AccountDirectoryPoolMaxOpen
-    # 合成输入 = 2026-10-12 手算那一版的口径(docs/PROGRESS.md「落点多库连接拓扑核算」):gateway 还是每副本 10 条,
-    # max_connections 还是 500。不读仓库文件:本用例验的是公式本身,不该随服务配置的调整变红。每次取一份新的,下面有几处会改它。
+    # 合成输入,不读仓库文件:本用例验的是公式本身,不该随服务配置的调整变红。每次取一份新的,下面有几处会改它。
+    # 2026-11-11 A17c 起 go/db 没有本区库(DbHomeMaxOpen 和两个额外库旋钮一并删掉),2026-10-12 那份按「本区库 60 条」手算的
+    # 历史核算(Z=4 → 920、Z=2 → 500)不能再用现行公式复现,这里改成按公式逐项复算;max_connections 仍取当时的 500。
     $newLegacyInputs = {
         [ordered]@{
             MaxConnections = 500
-            DbReplicas = 2; DbHomeMaxOpen = 60; DbZoneStoreMaxOpen = 8; DbNonZoneStoreMaxOpen = 8
+            DbReplicas = 2; DbStoreMaxOpen = 60
             DsReplicas = 2; DsAuditStorePools = 3; DsAuditMaxOpen = 5; DsPlayerNameMaxOpen = 20; DsDirectoryMaxOpen = $directoryPool; DsRouteMaxOpen = 20
-            # 2026-10-31 逻辑库拆分:data_service 每个存档库一个池(建角、判死、过户证明)。当时的核算里没有它,E_z=0 时也有本 zone 这一个库。
             DsStoragePoolMaxOpen = 8
             GatewayReplicas = 2; GatewayMaxPool = 10
             FriendReplicas = 2; FriendMaxOpen = 20; TradeReplicas = 2; TradeMaxOpen = 20
-            # 2026-10-15 起全局池多了玩家收件箱(player-inbox,docs/design/player-inbox-service.md §10);当时的核算里没有它。
             PlayerInboxReplicas = 2; PlayerInboxMaxOpen = 20
-            # 2026-10-16 起又多了帮会(guild 上 K8s,池上限同批补上);同样不在当时的核算里。
             GuildReplicas = 2; GuildMaxOpen = 20
-            # 2026-10-16 邮件 mail 上 K8s(docs/design/mail-system.md §12.3);同样不在当时的核算里。
             MailReplicas = 2; MailMaxOpen = 20
             RankReplicas = 2; RankMaxOpen = 20
             ChatReplicas = 2; ChatMaxOpen = 16
-            # 2026-10-31 match 第一次进总账(它的池写死在 go/match/internal/authority/schema.go);同样不在当时的核算里。
             MatchReplicas = 2; MatchMaxOpen = 16
         }
     }
 
-    # 当时的名义值:不算额外落点库(E_z = E_n = 0)、route store 不计、不含滚动余量与运维余量。route store 的独立池现在恒计,断言另加它($routePool)。
-    # 每 zone = 2 × (db 60 + ds 35 + gateway 10) = 210;全局 = friend 2 × 20 + trade 2 × 20 = 80。
-    # 收件箱(2 × 20 = 40)是后加的全局池:断言按「2026-10-12 的核算 + 40」比,历史那份核算本身仍逐项复现。
-    # 帮会(2 × 20 = 40)同理是 2026-10-16 后加的全局池,下面的断言一并加上;邮件(2 × 20 = 40)同日加入,同样一并加上。
-    # chat 同样(2 × 16),match 同样(2 × 16)。
-    $inboxGlobal = 2 * 20 + 2 * 20 + 2 * 20 + 2 * 20 + 2 * 16 + 2 * 16
-    $routePool = 20
-    # data_service 每实例多出来的独立池:目录、路由。E_z = E_n = 0 时没有存档库池:存档库和区脱钩之后(A17b)
-    # zone 库不放玩家,公式不再另加「本 zone 那一个」存档库池。
-    $dsOwnPools = $directoryPool + $routePool
-    $nominalShape = @{ ExtraZoneStores = 0; NonZoneStores = 0; RolloutExtraPodsPerDeployment = 0; OpsReserve = 0 }
-    foreach ($case in @(@{ Zones = 4; Steady = 920 }, @{ Zones = 2; Steady = 500 })) {
-        $ledger = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount $case.Zones @nominalShape
-        Assert-Equal -Expected ('60/{0}/10/{1}/{2}' -f (35 + $dsOwnPools), (210 + 2 * $dsOwnPools), (80 + $inboxGlobal)) -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ledger.DbPerInstance, $ledger.DsPerInstance, $ledger.GatewayPerInstance, $ledger.PerZone, $ledger.Global) -Because "Z=$($case.Zones):db / ds / gateway 每实例、每 zone、全局(friend + trade + 收件箱) 五项"
-        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * $dsOwnPools) -Actual $ledger.Steady -Because "Z=$($case.Zones) 的稳态应为历史核算、现役全局池与每zone目录池、路由池、存档库池总和"
-        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * $dsOwnPools) -Actual $ledger.Peak -Because '不含滚动余量与运维余量时,峰值 = 稳态'
-        Assert-Equal -Expected (500 - $case.Steady - $inboxGlobal - $case.Zones * 2 * $dsOwnPools) -Actual $ledger.Headroom -Because '余量 = max_connections − 峰值(当时 Z=2 恰好为 0,加上收件箱后两者都为负)'
+    # E = 1(地域只有一个存档库,池就是 K=1 的预算)、不含滚动余量与运维余量时:
+    #   db 每实例 = 1 × 60;ds 每实例 = 审计 3 × 5 + 名字 20 + 目录 + 路由 20 + 存档库 8;gateway 每实例 10
+    #   每 zone = 2 × (db + ds + gateway);全局 = friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 2 × 20 + chat / match 各 2 × 16 = 304
+    $dsPerInstance = 3 * 5 + 20 + $directoryPool + 20 + 8
+    $perZone = 2 * (60 + $dsPerInstance + 10)
+    $globalPools = 6 * 2 * 20 + 2 * 2 * 16
+    $nominalShape = @{ PlayerStoreShards = 1; RolloutExtraPodsPerDeployment = 0; OpsReserve = 0 }
+    foreach ($zones in @(4, 2)) {
+        $ledger = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount $zones @nominalShape
+        Assert-Equal -Expected ('60/{0}/10/{1}/{2}' -f $dsPerInstance, $perZone, $globalPools) -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ledger.DbPerInstance, $ledger.DsPerInstance, $ledger.GatewayPerInstance, $ledger.PerZone, $ledger.Global) -Because "Z=${zones}:db / ds / gateway 每实例、每 zone、全局 五项"
+        Assert-Equal -Expected ($zones * $perZone + $globalPools) -Actual $ledger.Steady -Because "Z=$zones 的稳态 = Z × 每 zone + 全局"
+        Assert-Equal -Expected $ledger.Steady -Actual $ledger.Peak -Because '不含滚动余量与运维余量时,峰值 = 稳态'
+        Assert-Equal -Expected (500 - $ledger.Peak) -Actual $ledger.Headroom -Because '余量 = max_connections − 峰值'
+        Assert-True -Condition (-not $ledger.PerLogicalDb.Contains('zone_store')) -Because 'zone 库已退役(A17c),按逻辑库的账里没有 zone 主库这一项'
     }
 
     # 旧上限 500 对规划档必须判超限(峰值 > max_connections,余量为负)—— 这就是上限要跟着规划档走的原因。
     $plan = Get-MysqlConnectionPlan
     $planShape = @{
-        ZoneCount = $plan.ZoneCount; ExtraZoneStores = $plan.ExtraZoneStores; NonZoneStores = $plan.NonZoneStores
+        ZoneCount = $plan.ZoneCount; PlayerStoreShards = $plan.PlayerStoreShards
         RolloutExtraPodsPerDeployment = $plan.RolloutExtraPodsPerDeployment; OpsReserve = $plan.OpsReserve
     }
     $overLimit = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) @planShape
     Assert-True -Condition ($overLimit.Peak -gt 500 -and $overLimit.Headroom -lt 0) -Because ("规划档对旧上限 500 必须判超限,实际:{0}" -f (Format-MysqlConnectionLedger -Ledger $overLimit))
 
-    # 滚动口径：R=2比R=0多2×所有域每实例池之和，额外含正规源读取的目录独立池。
+    # 滚动口径:R=2 比 R=0 多 2 × 所有 Deployment 每实例池之和。
     # 多出来的是「实例」(maxSurge 的新 Pod + 仍在优雅退出、连接还没释放的旧 Pod),不乘副本数,也不乘 zone 数。
-    $rolloutShape = @{ ZoneCount = 4; ExtraZoneStores = 0; NonZoneStores = 0; OpsReserve = 0 }
+    $rolloutShape = @{ ZoneCount = 4; PlayerStoreShards = 1; OpsReserve = 0 }
     $withoutRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 0 @rolloutShape
     $withRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 2 @rolloutShape
-    # 257 = db 60 + ds 审计 15 + 名字 20 + gateway 10 + friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 20 + chat 16 + match 16(E_z = E_n = 0,没有存档库池)。
-    Assert-Equal -Expected (2 * (257 + $directoryPool + $routePool)) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 + 排行 + chat + match 每实例之和)'
-    Assert-Equal -Expected (2 * (257 + $directoryPool + $routePool)) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
+    # 每实例之和 = db 60 + ds + gateway 10 + friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 20 + chat 16 + match 16。
+    $perInstanceSum = 60 + $dsPerInstance + 10 + 6 * 20 + 2 * 16
+    Assert-Equal -Expected (2 * $perInstanceSum) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 + 排行 + chat + match 每实例之和)'
+    Assert-Equal -Expected (2 * $perInstanceSum) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
     Assert-Equal -Expected $withoutRollout.Steady -Actual $withRollout.Steady -Because '滚动余量不进稳态'
 
-    # 逐项钉公式:副本数、池上限、形态参数各取互不相同的值,任何一项漏算、两个额外库旋钮接反、副本数错配、存档库池没摊开,结果都对不上。
-    #   每库存档池(E_n = 3,Get-PlayerStorePoolLimit):go/db max(2, ceil(11 / 3)) = 4,data_service max(2, ceil(3 / 3)) = 2(每库至少 2 条)
-    #   db 每实例 = 60 + 2 × 7(zone 家族额外库)+ 3 × 4(地域存档库)= 86
-    #   ds 每实例 = 3 × 5 + 20 + 13(独立目录池) + 30(route store)+ 2 × 3(zone 家族库)+ 3 × 2(地域存档库)= 90
-    #   每zone=2×86+3×90+4×10=482；全局610含rank/chat/match；稳态3×482+610=2056。
-    #   滚动273；峰值2056+273+7=2336；余量5000−2336=2664。
-    #   按逻辑库:地域存档库 = (3×2+1) × 4 + (3×3+1) × 2 = 48;zone 主库 = (2+1) × 60 + (3−1) × 2 × 7 + (3×3+1) × 3 = 238。
+    # 逐项钉公式:副本数、池上限、形态参数各取互不相同的值,任何一项漏算、副本数错配、存档库池没摊开,结果都对不上。
+    #   每库存档池(E = 3,Get-PlayerStorePoolLimit):go/db max(2, ceil(11 / 3)) = 4,data_service max(2, ceil(3 / 3)) = 2(每库至少 2 条)
+    #   db 每实例 = 3 × 4 = 12
+    #   ds 每实例 = 3 × 5 + 20 + 13(独立目录池)+ 30(route store)+ 3 × 2(地域存档库)= 84
+    #   每 zone = 2 × 12 + 3 × 84 + 4 × 10 = 316;全局 610(含 rank / chat / match);稳态 3 × 316 + 610 = 1558。
+    #   滚动 12 + 84 + 10 + 20 + 40 + 3 + 2 + 4 + 6 + 7 + 5 = 193;峰值 1558 + 193 + 7 = 1758;余量 5000 − 1758 = 3242。
+    #   按逻辑库:地域存档库 = (3×2+1) × 4 + (3×3+1) × 2 = 48。
     $distinctInputs = [ordered]@{
         MaxConnections = 5000
-        DbReplicas = 2; DbHomeMaxOpen = 60; DbZoneStoreMaxOpen = 7; DbNonZoneStoreMaxOpen = 11
+        DbReplicas = 2; DbStoreMaxOpen = 11
         DsReplicas = 3; DsAuditStorePools = 3; DsAuditMaxOpen = 5; DsPlayerNameMaxOpen = 20; DsDirectoryMaxOpen = 13; DsRouteMaxOpen = 30
         DsStoragePoolMaxOpen = 3
         GatewayReplicas = 4; GatewayMaxPool = 10
@@ -3801,36 +3831,41 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
         ChatReplicas = 11; ChatMaxOpen = 7
         MatchReplicas = 12; MatchMaxOpen = 5
     }
-    $distinct = Get-MysqlConnectionLedger -Inputs $distinctInputs -ZoneCount 3 -ExtraZoneStores 2 -NonZoneStores 3 -RolloutExtraPodsPerDeployment 1 -OpsReserve 7
-    Assert-Equal -Expected '86/90/10/482/610/2056/273/7/2336/5000/2664' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
-    Assert-Equal -Expected '4/2/48/238' -Actual ('{0}/{1}/{2}/{3}' -f $distinct.DbStorePool, $distinct.DsStorePool, $distinct.PerLogicalDb['player_store'], $distinct.PerLogicalDb['zone_store']) -Because '每库存档池按 E_n 摊开(go/db、data_service 各一条规则),按逻辑库的账分得出地域存档库与 zone 主库'
+    $distinct = Get-MysqlConnectionLedger -Inputs $distinctInputs -ZoneCount 3 -PlayerStoreShards 3 -RolloutExtraPodsPerDeployment 1 -OpsReserve 7
+    Assert-Equal -Expected '12/84/10/316/610/1558/193/7/1758/5000/3242' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
+    Assert-Equal -Expected '4/2/48' -Actual ('{0}/{1}/{2}' -f $distinct.DbStorePool, $distinct.DsStorePool, $distinct.PerLogicalDb['player_store']) -Because '每库存档池按 E 摊开(go/db、data_service 各一条规则),按逻辑库的账分得出地域存档库'
 
     # 输入非法一律 throw 并点名是哪个键(fail-closed:不能拿一个猜出来的连接数去和上限比)。
     $missingKey = & $newLegacyInputs
     $missingKey.Remove('GatewayMaxPool')
     $zeroValue = & $newLegacyInputs
-    $zeroValue['DbHomeMaxOpen'] = 0
+    $zeroValue['DbStoreMaxOpen'] = 0
     $notNumber = & $newLegacyInputs
     $notNumber['DsAuditMaxOpen'] = '5x'
     $zeroDirectory = & $newLegacyInputs
     $zeroDirectory['DsDirectoryMaxOpen'] = 0
     foreach ($bad in @(
         @{ Why = '缺键'; Key = 'GatewayMaxPool'; Inputs = $missingKey }
-        @{ Why = '值为 0'; Key = 'DbHomeMaxOpen'; Inputs = $zeroValue }
+        @{ Why = '值为 0'; Key = 'DbStoreMaxOpen'; Inputs = $zeroValue }
         @{ Why = '值不是数字'; Key = 'DsAuditMaxOpen'; Inputs = $notNumber }
         @{ Why = '新增独立目录池不能为0'; Key = 'DsDirectoryMaxOpen'; Inputs = $zeroDirectory }
     )) {
         $message = ''
         try { Get-MysqlConnectionLedger -Inputs $bad.Inputs -ZoneCount 4 @nominalShape | Out-Null } catch { $message = $_.Exception.Message }
-        Assert-Match -Text $message -Pattern ('MySQL 连接总账.*输入 {0}=' -f $bad.Key) -Because "$($bad.Why) 必须 throw 并点名 $($bad.Key),不能当成 0 条或某个默认值算下去"
+        Assert-Match -Text $message -Pattern ('MySQL connection ledger: input {0}=' -f $bad.Key) -Because "$($bad.Why) 必须 throw 并点名 $($bad.Key),不能当成 0 条或某个默认值算下去"
     }
 
-    # 形态参数越界同样 throw:滚动期间多出来的实例数不能是负数。
+    # 形态参数越界同样 throw:滚动期间多出来的实例数不能是负数;存档库数不能是 0(go/db 的连接全在存档库池里,E = 0 等于 go/db 不连任何库)。
     $negativeRollout = @{} + $nominalShape
     $negativeRollout['RolloutExtraPodsPerDeployment'] = -1
     $message = ''
     try { Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount 4 @negativeRollout | Out-Null } catch { $message = $_.Exception.Message }
-    Assert-Match -Text $message -Pattern 'RolloutExtraPodsPerDeployment=-1\b.*不能为负' -Because 'R 传 -1 必须 throw 并点名参数与值,不能把滚动余量算成负数去抵稳态'
+    Assert-Match -Text $message -Pattern 'RolloutExtraPodsPerDeployment=-1\b.*must not be negative' -Because 'R 传 -1 必须 throw 并点名参数与值,不能把滚动余量算成负数去抵稳态'
+    $noStore = @{} + $nominalShape
+    $noStore['PlayerStoreShards'] = 0
+    $message = ''
+    try { Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount 4 @noStore | Out-Null } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern 'PlayerStoreShards=0\b.*must be positive' -Because 'E 传 0 必须 throw 并点名参数与值'
 }
 
 Test-Case '连 MySQL 的 ConfigMap 只有总账认识的那些(zone-up 三个、infra-up 五个:friend / trade / player-inbox / guild / mail)' {
@@ -3910,11 +3945,11 @@ Test-Case '部署写路径打印 MySQL connection ledger(zone-up DryRun)' {
     $plan = Get-MysqlConnectionPlan
     # 基线 DryRun 是 dev 档、没给 -PlayerStoreShards:存档库数 K = 1,本次部署与规划档两份都按它算。
     # 基线是 tidb 档(缺省):上限是 TiDB 规划预算,不是 mysql.yaml(这一档的部署里没有 MySQL)。
-    $planLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $plan.ZoneCount -NonZoneStores 1 -MaxConnections $plan.TidbConnectionBudget
+    $planLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $plan.ZoneCount -PlayerStoreShards 1 -MaxConnections $plan.TidbConnectionBudget
     # 基线 DryRun($BaseArgs)不带 -ZonesConfigPath,读的是 deploy/k8s/zones.json;Z = 其中的全部 zone ∪ 本次 -ZoneId(基线是 101)。
-    # 现状:zones.json 是 101、102 两个 zone,101 已在其中,所以 Z = 2。E_z 取规划档(0),其余形态参数取规划档。
+    # 现状:zones.json 是 101、102 两个 zone,101 已在其中,所以 Z = 2。其余形态参数取规划档。
     $zoneIds = @(@((Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.json') -Raw | ConvertFrom-Json).zones | ForEach-Object { [int]$_.zoneId }) + @(101) | Sort-Object -Unique)
-    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $zoneIds.Count -NonZoneStores 1 -MaxConnections $plan.TidbConnectionBudget
+    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $zoneIds.Count -PlayerStoreShards 1 -MaxConnections $plan.TidbConnectionBudget
 
     $ledgerLines = @($devOut -split "`r?`n" | Where-Object { $_ -match '^\s*MySQL connection ledger: zones=' })
     Assert-Equal -Expected 1 -Actual $ledgerLines.Count -Because 'zone-up 写路径入口必须恰好打印一行 MySQL connection ledger(Write-MysqlConnectionLedger)'
@@ -3953,8 +3988,8 @@ $tenZoneIds = @([regex]::Matches($tenZonesRaw, '(?m)^[ \t]+zoneId:[ \t]*(\d+)[ \
 
 Test-Case 'all-up(zones.10zones.yaml):总账只数 zones 配置,zones=10 不并入 -ZoneId,峰值仍超限并打 [MySQLConnectionLedger]OverLimit' {
     # all-up / infra-up 不为 -ZoneId 部署 zone 级工作负载(db / data-service / gateway):-ZoneId 在这两条命令里用作全局 Go 服务与
-    # battle 的 ZoneId、mysql-init-sql 预建库的输入,本身不产生每 zone 的 MySQL 连接,不论缺省值 101 还是显式传入都不并入。
-    # 以前按 Get-InfraZoneIds 的口径把它并进来,zones 配置不含它时 Z 凭空多 1,可能打出虚假的 OverLimit
+    # battle 的 ZoneId,本身不产生每 zone 的 MySQL 连接,不论缺省值 101 还是显式传入都不并入。
+    # 以前把它并进来过,zones 配置不含它时 Z 凭空多 1,可能打出虚假的 OverLimit
     # (见 Write-MysqlConnectionLedger 注释)。这里显式传一个不在配置里的 -ZoneId(取缺省值 101):
     # all-up 不论缺省还是显式都不并入它;显式传是为了不依赖脚本缺省值 —— 缺省值哪天改成配置里已有的 zone,不传就区分不出新旧口径。
     # 只部署 C++ 节点:-SkipInfra(不装配 battle 全局池,免得还要 battle 密钥)、-SkipGoSvc、-SkipJavaSvc;dev 档不走发布预检。
@@ -3962,7 +3997,7 @@ Test-Case 'all-up(zones.10zones.yaml):总账只数 zones 配置,zones=10 不并�
     Assert-True -Condition ($tenZoneIds -notcontains 101) -Because '夹具前提:zones.10zones.yaml 不含 101,否则并不并入 -ZoneId 结果相同,本例区分不出新旧口径'
     $plan = Get-MysqlConnectionPlan
     # dev 档、没给 -PlayerStoreShards:存档库数 K = 1。
-    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $tenZoneIds.Count -NonZoneStores 1
+    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $tenZoneIds.Count -PlayerStoreShards 1
     Assert-True -Condition ($deployLedger.Peak -gt $deployLedger.MaxConnections) -Because ("夹具前提:10 个 zone 的峰值必须超过 max_connections,否则「仍打 OverLimit」无从谈起。分项:{0}" -f (Format-MysqlConnectionLedger -Ledger $deployLedger))
 
     $allUpArgs = @('-Command', 'all-up', '-DryRun', '-SkipInfra', '-SkipGoSvc', '-SkipJavaSvc', '-ZonesConfigPath', $tenZonesConfigPath, '-ZoneId', '101', '-DatabaseBackend', 'mysql')
@@ -3987,7 +4022,7 @@ Test-Case '对照 zone-up(zones.10zones.yaml):-ZoneId 不在配置里也并入�
     Assert-True -Condition ($tenZoneIds.Count -gt 0 -and $tenZoneIds -notcontains $outsideZoneId) -Because "夹具前提:zones.10zones.yaml 读得出 zoneId,且不含 $outsideZoneId(实际 $($tenZoneIds -join ','))"
     $plan = Get-MysqlConnectionPlan
     $zoneCount = $tenZoneIds.Count + 1
-    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $zoneCount -NonZoneStores 1
+    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $zoneCount -PlayerStoreShards 1
 
     $zoneUpArgs = @('-Command', 'zone-up', '-ZoneName', 'contract-test', '-ZoneId', [string]$outsideZoneId, '-DryRun', '-SkipGoSvc', '-SkipJavaSvc', '-ZonesConfigPath', $tenZonesConfigPath, '-DatabaseBackend', 'mysql')
     $run = Invoke-DeployDryRun -Arguments $zoneUpArgs
@@ -3995,10 +4030,10 @@ Test-Case '对照 zone-up(zones.10zones.yaml):-ZoneId 不在配置里也并入�
     $ledgerLines = @($run.Output -split "`r?`n" | Where-Object { $_ -match '^\s*MySQL connection ledger: zones=' })
     Assert-Equal -Expected 1 -Actual $ledgerLines.Count -Because 'zone-up 写路径入口必须恰好打印一行 MySQL connection ledger'
     $deployPart = 'MySQL connection ledger: zones={0} steady={1} peak={2} max_connections={3} headroom={4};' -f $zoneCount, $deployLedger.Steady, $deployLedger.Peak, $deployLedger.MaxConnections, $deployLedger.Headroom
-    Assert-Match -Text ([string]$ledgerLines[0]) -Pattern ('^\s*' + [regex]::Escape($deployPart)) -Because "zone-up 本次部署那一份 = zones 配置的 $($tenZoneIds.Count) 个 zone ∪ -ZoneId $outsideZoneId = $zoneCount 个(E_z = $($zoneCount - 1))"
+    Assert-Match -Text ([string]$ledgerLines[0]) -Pattern ('^\s*' + [regex]::Escape($deployPart)) -Because "zone-up 本次部署那一份 = zones 配置的 $($tenZoneIds.Count) 个 zone ∪ -ZoneId $outsideZoneId = $zoneCount 个"
 }
 
-Test-Case 'infra-up(zones.10zones.yaml):总账只数 zones 配置,zones=10 不并入 -ZoneId;预建库照旧并入 -ZoneId' {
+Test-Case 'infra-up(zones.10zones.yaml):总账只数 zones 配置,zones=10 不并入 -ZoneId;mysql-init-sql 不按 zone 建库' {
     # 与 all-up 例同一口径,但走 infra-up 那一支(all-up 例带 -SkipInfra,覆盖不到这里)。现有的 $battleInfraRun 读默认 zones.json(101、102),
     # 而 -ZoneId 缺省也是 101,并不并入结果都是 zones=2,区分不出新旧口径;所以换成不含 101 的 zones.10zones.yaml,并显式传 -ZoneId 101
     # (理由同 all-up 例)。复用 $BattleInfraArgs / $BattleTestEnv:infra-up 要装配 battle 全局池,需要 battle / gate 票据密钥。
@@ -4007,7 +4042,7 @@ Test-Case 'infra-up(zones.10zones.yaml):总账只数 zones 配置,zones=10 不�
     Assert-True -Condition (($BattleInfraArgs -contains '-DryRun') -and -not ($BattleInfraArgs -contains '-ZoneId') -and -not ($BattleInfraArgs -contains '-ZonesConfigPath')) -Because '夹具前提:infra-up 必须是 DryRun(不带它会对本机当前 kubectl context 真执行 apply),且 $BattleInfraArgs 自己不带 -ZoneId / -ZonesConfigPath(重复传参会让子进程直接失败)'
     $plan = Get-MysqlConnectionPlan
     # dev 档、没给 -PlayerStoreShards:存档库数 K = 1。
-    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $tenZoneIds.Count -NonZoneStores 1
+    $deployLedger = Get-RepoMysqlConnectionLedger -Plan $plan -ZoneCount $tenZoneIds.Count -PlayerStoreShards 1
     Assert-True -Condition ($deployLedger.Peak -gt $deployLedger.MaxConnections) -Because ("夹具前提:10 个 zone 的峰值必须超过 max_connections,否则「仍打 OverLimit」无从谈起。分项:{0}" -f (Format-MysqlConnectionLedger -Ledger $deployLedger))
 
     # 预建库要看 mysql-init-sql:集群内 MySQL 只在 dev 的 mysql 档、入口就是它时部署(Test-InfraMysqlInUse)。
@@ -4020,15 +4055,15 @@ Test-Case 'infra-up(zones.10zones.yaml):总账只数 zones 配置,zones=10 不�
     Assert-NotMatch -Text ([string]$ledgerLines[0]) -Pattern 'zones_config=missing' -Because 'zones 配置在场,行尾不该带缺席标记'
     # 只断警告开头不含空格的那一段(理由同上面「负向:zones.10zones.yaml…」例)。
     Assert-Match -Text $run.Output -Pattern '\[MySQLConnectionLedger\]OverLimit:' -Because '10 个 zone 的峰值仍超过 max_connections,修口径不能顺手把真实超限的告警也去掉'
-    # 对照:mysql-init-sql 预建库的口径(Get-InfraZoneIds = zones 配置 ∪ -ZoneId)有意不同,照旧预建 -ZoneId 的库,留给之后的 zone-up -ZoneId。
-    # 仓库静态的 deploy/mysql-init/00_init_zone_dbs.sql 只建 zone_1_db / zone_2_db,且 CREATE 里库名不带反引号,不会冒充这一行。
+    # 对照:mysql-init-sql 不再按 zone 建库(zone 库已退役,docs/design/player-data-tidb-scaling-plan.md §7.2 A17c):
+    # zones 配置的 10 个 zone 和 -ZoneId 101 一个 zone 库都不建,只建 dev 地域 0、K=1 的存档库。
     $initSql = Select-ManifestByName -Output $run.Output -Name 'mysql-init-sql'
-    Assert-Match -Text $initSql -Pattern ([regex]::Escape('CREATE DATABASE IF NOT EXISTS `zone_101_db`;')) -Because 'infra-up 的 mysql-init-sql 仍要预建 -ZoneId 101 的库:总账不并入 -ZoneId,不等于预建库也不并入'
+    Assert-NotMatch -Text $initSql -Pattern 'CREATE DATABASE IF NOT EXISTS `?zone_' -Because 'zone 库已退役,mysql-init-sql 一个 zone 库都不建'
+    Assert-Match -Text $initSql -Pattern ([regex]::Escape('CREATE DATABASE IF NOT EXISTS `player_store_1000000_db`;')) -Because 'dev 地域 0、K=1 的存档库照旧预建'
 }
 
-Test-Case 'zones 配置缺席(zone-up DryRun):总账按 zones=1 算、行尾标 zones_config=missing,不打 Get-InfraZoneIds 的 WARNING' {
-    # Write-MysqlConnectionLedger 的缺席分支(spec_G2b §5):Z 取 1(只有 -ZoneId),行尾带 zones_config=missing,且不调 Get-InfraZoneIds ——
-    # 它那条 WARNING 讲的是「mysql-init-sql 只预建 -ZoneId 的库」,出现在 zone-up 的输出里是误导。
+Test-Case 'zones 配置缺席(zone-up DryRun):总账按 zones=1 算、行尾标 zones_config=missing' {
+    # Write-MysqlConnectionLedger 的缺席分支(spec_G2b §5):Z 取 1(只有 -ZoneId),行尾带 zones_config=missing。
     # -ZonesConfigPath 给临时目录下一个不存在的绝对路径(只造路径、不建文件);zone-up 不在别处读 zones 配置。
     $missingZonesPath = Join-Path ([System.IO.Path]::GetTempPath()) ('zones-config-missing-' + [guid]::NewGuid().ToString('N') + '.json')
     Assert-True -Condition (-not (Test-Path -LiteralPath $missingZonesPath)) -Because '夹具前提:zones 配置路径必须不存在'
@@ -4038,7 +4073,6 @@ Test-Case 'zones 配置缺席(zone-up DryRun):总账按 zones=1 算、行尾标 
     Assert-Equal -Expected 1 -Actual $ledgerLines.Count -Because '写路径入口必须恰好打印一行 MySQL connection ledger'
     Assert-Match -Text ([string]$ledgerLines[0]) -Pattern 'MySQL connection ledger: zones=1 ' -Because 'zones 配置缺席时本次部署那一份只算 -ZoneId 一个 zone'
     Assert-Match -Text ([string]$ledgerLines[0]) -Pattern 'zones_config=missing\s*$' -Because '缺席要在行尾标出来,部署的人才知道这份账没算其它 zone'
-    Assert-NotMatch -Text $run.Output -Pattern 'Zones configuration missing' -Because '缺席分支不调 Get-InfraZoneIds,不该出现它那条讲 mysql-init-sql 预建库的 WARNING'
 }
 
 # 连接池镜像门禁(Assert-MysqlPoolMirror)读的全部文件。夹具用例把它们拷到临时目录再逐项改坏,不碰仓库。
@@ -4085,7 +4119,7 @@ function Set-FixtureYamlScalar {
 
 Test-Case '负向:ConfigMap 要镜像的 MySQL 池参数不合格时,入口门禁 Assert-MysqlPoolMirror throw 并点名文件与键路径(夹具是临时目录里的配置副本,不碰仓库)' {
     # spec_G2b §5:池参数不合格要在任何 apply 之前 throw,不留半截部署。Go 服务的空闲数下限是 1(0 在 Go 侧 = 没配、取默认),
-    # Hikari minimum-idle 的下限是 0;ExtraStoreConnMaxIdleSeconds 必须为正(Go 侧把 ≤0 当成没写)。每次只改一个键,其余保持仓库原值。
+    # Hikari minimum-idle 的下限是 0;Placement.StoreConnMaxIdleSeconds 必须为正(Go 侧把 ≤0 当成没写)。每次只改一个键,其余保持仓库原值。
     # 两个「超过上限」的值按仓库当前上限 + 1 取:调池上限不需要来改本用例。
     $routeStoreMaxOpen = [int](Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'RouteStore.MaxOpenConn')
     $hikariMaxPool = [int](Get-EtcValue -RelativePath 'java/gateway_node/src/main/resources/application.yaml' -KeyPath 'spring.datasource.hikari.maximum-pool-size')
@@ -4109,8 +4143,9 @@ Test-Case '负向:ConfigMap 要镜像的 MySQL 池参数不合格时,入口门�
             @{ Why = 'PlayerName 上限为 0'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'PlayerName.MaxOpenConn'; Value = '0' }
             @{ Why = '存档库池上限为 0'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'Directory.StoragePools.MaxOpenConn'; Value = '0' }
             @{ Why = '存档库池空闲连接回收秒数为 0(冷库的池回不到 0 条,总账就不是这个账了)'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'Directory.StoragePools.ConnMaxIdleSeconds'; Value = '0' }
-            @{ Why = 'zone 家族额外库空闲数为 0(Go 侧下限 1)'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.ZoneStoreMaxIdleConn'; Value = '0' }
-            @{ Why = '额外库空闲连接回收秒数为 0'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.ExtraStoreConnMaxIdleSeconds'; Value = '0' }
+            @{ Why = 'go/db 存档库池空闲数为 0(Go 侧下限 1)'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.StoreMaxIdleConn'; Value = '0' }
+            @{ Why = 'go/db 存档库池上限为 0'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.StoreMaxOpenConn'; Value = '0' }
+            @{ Why = 'go/db 存档库池空闲连接回收秒数为 0'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.StoreConnMaxIdleSeconds'; Value = '0' }
             @{ Why = 'Hikari minimum-idle 为负(下限 0)'; File = 'java/gateway_node/src/main/resources/application.yaml'; KeyPath = 'spring.datasource.hikari.minimum-idle'; Value = '-1' }
             @{ Why = 'Hikari minimum-idle 超过 maximum-pool-size'; File = 'java/gateway_node/src/main/resources/application.yaml'; KeyPath = 'spring.datasource.hikari.minimum-idle'; Value = [string]($hikariMaxPool + 1) }
             # 2026-10-15:Hikari connection-timeout 下限 250(0 = 无限等,低于 250 拒启)。
@@ -4165,7 +4200,7 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
 
     $alerts = [regex]::Matches($effective, '(?m)^[ ]*- alert:[ ]*(?<name>\S+)')
     $expectedAlerts = @('MysqlConnectionsRefused', 'MysqlConnectionsNearMax', 'SqlPoolSlowAcquire', 'SqlPoolSaturated',
-        'DbExtraStorePoolsBeyondPlan', 'GatewayHikariAcquireTimeout', 'GatewayHikariSaturated')
+        'DbStorePoolsBeyondPlan', 'GatewayHikariAcquireTimeout', 'GatewayHikariSaturated')
     $actualAlerts = @($alerts | ForEach-Object { $_.Groups['name'].Value })
     Assert-Equal -Expected ($expectedAlerts | Sort-Object -CaseSensitive | Join-String -Separator ',') `
         -Actual ($actualAlerts | Sort-Object -CaseSensitive | Join-String -Separator ',') `
@@ -4176,19 +4211,19 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
         Assert-Match -Text $body -Pattern '(?m)^[ ]+severity:[ ]*\S+' -Because "规则 $($alerts[$i].Groups['name'].Value) 必须带 labels.severity(严重级约定见文件头)"
     }
 
-    # 旧 zone 存档库已退役,非区库按生产 TiDB 规划档核对;不能拿 MySQL 小 K 档误报合法的生产存档库。
-    # 提取依赖告警文件「每个阈值单独占一行,形如 pool="extra_zone"}) > 3」的写法(文件里该规则上方的注释写明了这条约定)。
+    # zone 库已退役(A17c),go/db 的池类别只剩 store,阈值按生产 TiDB 规划档核对;不能拿 MySQL 小 K 档误报合法的生产存档库。
+    # 提取依赖告警文件「阈值单独占一行,形如 pool="store"}) > 64」的写法(文件里该规则上方的注释写明了这条约定)。
     # 把表达式改写成别的形状会让本条变红 —— 有意为之:要么保持这个形状,要么同步改这里的提取方式。
     $plan = Get-MysqlConnectionPlan
     foreach ($threshold in @(
-        @{ Pool = 'extra_zone'; PlanKey = 'ExtraZoneStores' }
-        @{ Pool = 'extra_non_zone'; PlanKey = 'TidbNonZoneStores' }
+        @{ Pool = 'store'; PlanKey = 'TidbPlayerStoreShards' }
     )) {
         $thresholdPattern = 'pool="' + [regex]::Escape($threshold.Pool) + '"\}\) > (?<n>\d+)'
         $found = [regex]::Matches($effective, $thresholdPattern)
         Assert-Equal -Expected 1 -Actual $found.Count -Because "$alertsRelativePath 里 pool=`"$($threshold.Pool)`" 的阈值应当恰好出现 1 处(形如 pool=`"$($threshold.Pool)`"}) > N,单独占一行),实际 $($found.Count) 处"
         Assert-Equal -Expected $plan[$threshold.PlanKey] -Actual $found[0].Groups['n'].Value -Because "pool=`"$($threshold.Pool)`" 的阈值必须等于 Get-MysqlConnectionPlan 的 $($threshold.PlanKey):改规划档必须同改告警阈值(反之亦然),并重算 max_connections"
     }
+    Assert-NotMatch -Text $effective -Pattern 'pool="(home|extra_zone|extra_non_zone)"' -Because 'go/db 的 home / extra_zone / extra_non_zone 池类别已随 zone 库退役(go/db/internal/metrics 只剩 PoolStore),按旧类别写的表达式永远不响'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -4202,6 +4237,8 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
 $redisLedgerFunctionNames = @(
     'Get-RedisConnectionPlan', 'Get-RedisMaxClientsFromManifest', 'Get-RedisPoolMirror', 'Get-RedisConnectionLedgerInputs', 'Get-RedisConnectionLedger',
     'Get-RedisPlayerPoolMirror',
+    # match 私有集群自己的一份总账(2026-11-11)。
+    'Get-RedisMatchConnectionLedgerInputs',
     'Get-RedisPodTemplateDigest', 'Get-RedisCoreRestartVerdict', 'Assert-RedisCoreRestartConfirmed', 'Get-LiveRedisCoreTemplateDigest',
     # 没有 sts 与旧 Deployment 时再查孤儿 redis-<n> Pod(2026-10-19,半截的 1 → 3 切换不再被当成全新集群)。
     'Get-LiveRedisOrphanPodOrdinals',
@@ -4324,7 +4361,8 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
         Assert-Equal -Expected 0 -Actual $client.ConfiguredPoolConns -Because "$($client.Name) 没有 PoolMirror,ConfiguredPoolConns 只能是 0(显式池上限必须有服务 yaml 出处)"
     }
 
-    foreach ($client in $inputs.Clients) {
+    # match 私有集群那份总账(Get-RedisMatchConnectionLedgerInputs)同样按缺省池记 match 的 go-zero 集群句柄,一并核副本数与 CPU limit。
+    foreach ($client in @($inputs.Clients) + @((Get-RedisMatchConnectionLedgerInputs).Clients)) {
         $manifestText = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) $client.Manifest)) -replace "`r`n", "`n"
         $replicas = [regex]::Matches($manifestText, '(?m)^  replicas:[ \t]*(\d+)[ \t]*$')
         Assert-Equal -Expected 1 -Actual $replicas.Count -Because "$($client.Manifest) 里两格缩进的 replicas 行应恰好 1 处"
@@ -5572,7 +5610,7 @@ Test-Case 'mail 现役部署:全局双副本、滚动冗余、PDB及跨节点偏
 
 Test-Case 'mail 现役签名:各生产者与资产密钥只引用必需Secret' {
     $manifest = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/mail.yaml') -Raw
-    foreach ($name in @('MAIL_PRODUCER_SECRET_ADMIN','MAIL_PRODUCER_SECRET_RANK','MAIL_PRODUCER_SECRET_GUILD','MMORPG_ASSET_OP_SECRET_MAIL')) {
+    foreach ($name in @('MAIL_PRODUCER_SECRET_ADMIN','MAIL_PRODUCER_SECRET_RANK','MAIL_PRODUCER_SECRET_GUILD','MAIL_PRODUCER_SECRET_BATTLE','MMORPG_ASSET_OP_SECRET_MAIL')) {
         Assert-Match -Text $manifest -Pattern ('name: '+$name+'\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: [^,]+, optional: false\}') -Because '缺密钥时容器拒绝启动，不能静默降级或把值写入ConfigMap'
     }
 }
@@ -5699,6 +5737,28 @@ Test-Case 'Redis 连接总账:match 行没有缺省池的前提 —— match Con
     $matchRow = @((Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'match' })
     Assert-Equal -Expected 1 -Actual $matchRow.Count -Because 'Redis 连接总账里 match 只能有一行'
     Assert-Equal -Expected '0/0' -Actual ('{0}/{1}' -f $matchRow[0].DefaultPools, $matchRow[0].GoMaxProcs) -Because '前提成立时 match 在核心 Redis 上没有缺省池'
+}
+
+Test-Case 'Redis 连接总账:redis-match-cluster 单独一份 —— 只有 match 的 go-zero 集群句柄,每副本对每个主节点一个缺省池;写路径打一行,-WaitReady 等建群 Job 后逐节点核对 maxclients' {
+    $RepoRoot = Get-RepoRoot
+    $inputs = Get-RedisMatchConnectionLedgerInputs
+    Assert-Equal -Expected (Get-RedisMaxClientsFromManifest -RelativePath 'deploy/k8s/manifests/infra/redis-match-cluster.yaml') -Actual $inputs.MaxClients -Because 'maxclients 读 redis-match-cluster.yaml 的 MAXCLIENTS'
+    Assert-Equal -Expected 'match' -Actual (@($inputs.Clients | ForEach-Object { $_.Name }) -join ',') -Because '连这套集群的只有 match(chat 已不连 Redis);新增一个连它的服务 = 这份总账加一行'
+    $row = @($inputs.Clients)[0]
+    Assert-Equal -Expected 'global/0/1/2/0/0' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}' -f $row.Scope, $row.ConfiguredPoolConns, $row.DefaultPools, $row.GoMaxProcs, $row.PubSub, $row.Fixed) `
+        -Because 'go-zero 的集群客户端没有池参数:每副本对每个主节点一个缺省池(10 × GOMAXPROCS,G 按 2 记),没有订阅、没有固定连接'
+    # 写路径(这里是 -WaitReady 的 infra-up DryRun)打的那一行,数值与纯函数同源:滚动余量、运维余量、告警比例取规划档,只有全局客户端,zone 数传 1。
+    $plan = Get-RedisConnectionPlan
+    $ledger = Get-RedisConnectionLedger -Inputs $inputs -ZoneCount 1 -CppZoneProcesses 0 -BattleProcesses 0 `
+        -RolloutExtraPodsPerDeployment $plan.RolloutExtraPodsPerDeployment -OpsReserve $plan.OpsReserve -WarnRatio $plan.WarnRatio -CppSurgeWorkloads 0
+    Assert-Equal -Expected 0 -Actual $battleInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($battleInfraRun.Output)"
+    $expectedLine = 'Redis match connection ledger: per_master match_replicas={0} steady={1} peak={2} maxclients={3} warn_at={4} headroom={5} ' -f
+        $row.Replicas, $ledger.Steady, $ledger.Peak, $ledger.MaxClients, $ledger.WarnAt, $ledger.Headroom
+    Assert-Match -Text $battleInfraRun.Output -Pattern ([regex]::Escape($expectedLine)) -Because '写路径打一行 match 集群的每主节点连接数,数值就是纯函数算出的那一份'
+    Assert-True -Condition ($ledger.Peak -le $ledger.WarnAt) -Because ("规划档 match 集群每主节点峰值 {0} 超过告警水位 {1}" -f $ledger.Peak, $ledger.WarnAt)
+    # -WaitReady:先等建群 Job,再逐节点核对 maxclients(DryRun 只打计划;节点数读清单的 replicas)。
+    Assert-Match -Text $battleInfraRun.Output -Pattern '\[dry-run\] kubectl wait --for=condition=complete job/redis-match-cluster-init -n contract-battle-infra ' -Because '-WaitReady 要等 match 集群建好,match 起来就能用它'
+    Assert-Match -Text $battleInfraRun.Output -Pattern ('\[dry-run\] redis maxclients check skipped \(manifest MAXCLIENTS={0}\) statefulset=redis-match-cluster' -f $inputs.MaxClients) -Because '-WaitReady 逐节点核对 match 集群生效的 maxclients'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -7320,7 +7380,7 @@ Test-Case '工作负载密钥:迁移 Job 与 route-tool 的清单在主容器里
 Test-Case '工作负载密钥(prod zone-up):整份 DryRun 输出不含任何一把的值;ConfigMap 只写空串或变量名;每个消费者经 Secret 注入并带指纹,不读的不注入;Secret 先于引用、每把只写一次' {
     $out = [string]$prodRun.Output
     foreach ($envName in @('MMORPG_GATE_TOKEN_SECRET', 'MMORPG_SPECTATE_TOKEN_SECRET', 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET', 'MMORPG_MYSQL_PASSWORD',
-            'MMORPG_GATEWAY_DB_PASSWORD', 'MMORPG_INTERNAL_AUTH_SECRET', 'MMORPG_GATEWAY_ADMIN_API_KEY')) {
+            'MMORPG_GATEWAY_DB_PASSWORD', 'MMORPG_INTERNAL_AUTH_SIGNING_KEY', 'MMORPG_GATEWAY_ADMIN_API_KEY')) {
         Assert-True -Condition (-not $out.Contains([string]$ProdEnv[$envName])) -Because "prod DryRun 整份输出(ConfigMap、工作负载、Secret 意图行)里不得出现 $envName 的值"
     }
     $dsFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-data-service-config')
@@ -7418,6 +7478,29 @@ Test-Case '部署输出先后固定:Get-GlobalGoSvcNames 按名字排序,$JavaSv
     $all = [regex]::Matches($text, '\$JavaSvcCatalogue\.Keys').Count
     $sorted = [regex]::Matches($text, '\$JavaSvcCatalogue\.Keys \| Sort-Object').Count
     Assert-True -Condition ($all -gt 0 -and $all -eq $sorted) -Because "遍历 `$JavaSvcCatalogue.Keys 的地方都要排序(共 $all 处,排了序的 $sorted 处)"
+}
+
+Test-Case '纯函数 Assert-SpringPlaceholderSafe:经 Spring 占位交给 gateway 的密钥含 "${" 一律拒绝且只点变量名、不回显值;单独的 "$" 与空值放行;部署 gateway 时四把密钥都过它' {
+    $fn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Assert-SpringPlaceholderSafe' }, $true)
+    Assert-True -Condition ($null -ne $fn) -Because 'k8s_deploy.ps1 必须有 Assert-SpringPlaceholderSafe'
+    $assert = $fn.Body.GetScriptBlock()
+    foreach ($value in @('', 'plain-value-with-$dollar-0123456789abcdef', 'p@ss$word{not-a-placeholder}0123456789')) {
+        $message = ''
+        try { & $assert -EnvName 'MMORPG_GATE_TOKEN_SECRET' -Value $value } catch { $message = $_.Exception.Message }
+        Assert-Equal -Expected '' -Actual $message -Because '不含 "${" 的值必须放行(单独的 "$" 不触发 Spring 递归解析)'
+    }
+    $secret = 'abc${HOME}def-0123456789abcdef0123'
+    $message = ''
+    try { & $assert -EnvName 'MMORPG_GATEWAY_DB_PASSWORD' -Value $secret } catch { $message = $_.Exception.Message }
+    Assert-True -Condition ($message.Contains('MMORPG_GATEWAY_DB_PASSWORD')) -Because '含 "${" 必须拒绝并点名变量'
+    Assert-True -Condition (-not $message.Contains($secret) -and -not $message.Contains('HOME')) -Because '报错不得回显值'
+    # Initialize-InjectedSecrets 在部署 gateway 时对 gate 令牌、数据源口令、共享 Redis 口令、管理面口令都调了它(gateway 的 ConfigMap 以 ${...} 引用这四把)。
+    $init = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Initialize-InjectedSecrets' }, $true)
+    $loop = [regex]::Match($init.Extent.Text, 'foreach \(\$springSecret in @\((?<list>[\s\S]*?)\)\) \{\s*Assert-SpringPlaceholderSafe')
+    Assert-True -Condition $loop.Success -Because 'Initialize-InjectedSecrets 里要有对 gateway 密钥逐个调用 Assert-SpringPlaceholderSafe 的循环'
+    foreach ($envName in @('MMORPG_GATE_TOKEN_SECRET', 'MMORPG_GATEWAY_DB_PASSWORD', 'MMORPG_REDIS_PASSWORD', 'MMORPG_GATEWAY_ADMIN_API_KEY')) {
+        Assert-True -Condition ($loop.Groups['list'].Value.Contains("'$envName'")) -Because "$envName 经 Spring 占位交给 gateway,必须在检查清单里"
+    }
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -8103,7 +8186,7 @@ Test-Case 'Kafka Assert-KafkaStorageChangeIsSafe 与 Write-KafkaDiskLedger:扩�
     $lines = @(Write-KafkaDiskLedger -Plan (Resolve-KafkaDiskPlan) 6>&1 3>&1 | ForEach-Object { [string]$_ })
     $ledger = @($lines | Where-Object { $_ -like 'Kafka disk ledger: brokers=*' })
     Assert-Equal -Expected 1 -Actual $ledger.Count -Because '恰好一行账本'
-    $want = 'Kafka disk ledger: brokers=1 rf=1 audit_partitions=9 command_partitions=512 segment_bytes=33554432 broker_retention_bytes=536870912 other_topics_reserve_gib=4 pvc_gib=35 pvc_source=live required_gib=40 live_sts_gib=35 live_pvc_min_gib=none'
+    $want = 'Kafka disk ledger: brokers=1 rf=1 audit_partitions=9 command_partitions=512 segment_bytes=33554432 broker_retention_bytes=536870912 audit_retention_bytes=536870912 other_topics_reserve_gib=4 pvc_gib=35 pvc_source=live required_gib=40 live_sts_gib=35 live_pvc_min_gib=none'
     Assert-Equal -Expected $want -Actual $ledger[0] -Because '账本行字段与顺序(README「Kafka 磁盘预算」一节照抄这一行;改字段要两边一起改)'
     Assert-Match -Text ($lines -join "`n") -Pattern '\[KafkaDiskLedger\]BelowRequired:' -Because '盘小于公式值要告警(只告警不阻断)'
     Assert-Match -Text ($lines -join "`n") -Pattern ([regex]::Escape('infra-up -KafkaStorageGi 40')) -Because '告警给出扩盘后的重跑参数'
@@ -8157,14 +8240,15 @@ Test-Case 'zone-up 不算 Kafka 盘预算:DryRun 输出没有账本行;db Config
     }
 }
 
-Test-Case 'Kafka infra-up DryRun:kafka 清单的 PVC 是 40Gi(prod 档),-KafkaProfile dev 是 20Gi;没有残留的 __KAFKA_STORAGE_SIZE__;账本行恰好一行' {
+Test-Case 'Kafka infra-up DryRun:kafka 清单的 PVC 是 80Gi(prod 档,审计 topic 每分区 4GiB),-KafkaProfile dev 是 20Gi;没有残留的 __KAFKA_STORAGE_SIZE__;账本行恰好一行' {
     Assert-Equal -Expected 0 -Actual $battleInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($battleInfraRun.Output)"
     $kafka = Select-ManifestByName -Output $battleInfraRun.Output -Name 'kafka'
-    Assert-Match -Text $kafka -Pattern '(?m)^\s+storage: 40Gi\s*$' -Because 'prod 档:RequiredGi 40'
+    # 缺口清单第 3 条(2026-11-11):prod 档审计 topic 每分区 4GiB,1.3 × (9 × (4096 + 32)MiB + 512 × 32MiB + 4GiB) ≈ 73.2GiB,取到 80。
+    Assert-Match -Text $kafka -Pattern '(?m)^\s+storage: 80Gi\s*$' -Because 'prod 档:RequiredGi 80'
     Assert-NotMatch -Text $battleInfraRun.Output -Pattern '__KAFKA_STORAGE_SIZE__' -Because '占位必须替换'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($battleInfraRun.Output, 'Kafka disk ledger: brokers=').Count) -Because '写路径入口恰好打一行盘预算'
     $prodLedger = Get-S5bLedgerText -Output $battleInfraRun.Output
-    foreach ($token in @('pvc_source=computed', 'required_gib=40', 'pvc_gib=40', 'audit_partitions=9', 'command_partitions=512')) {
+    foreach ($token in @('pvc_source=computed', 'required_gib=80', 'pvc_gib=80', 'audit_retention_bytes=4294967296', 'audit_partitions=9', 'command_partitions=512')) {
         Assert-Match -Text $prodLedger -Pattern ('(?<![\w])' + [regex]::Escape($token) + '(?![\w])') -Because "账本行要有 $token"
     }
     Assert-NotMatch -Text $battleInfraRun.Output -Pattern '\[KafkaDiskLedger\]BelowRequired:' -Because '按公式建盘不告警'
@@ -8174,7 +8258,7 @@ Test-Case 'Kafka infra-up DryRun:kafka 清单的 PVC 是 40Gi(prod 档),-KafkaPr
     Assert-Match -Text (Select-ManifestByName -Output $devRunS5b.Output -Name 'kafka') -Pattern '(?m)^\s+storage: 20Gi\s*$' -Because 'dev 档按公式约 14Gi,取下限 20Gi'
     Assert-NotMatch -Text $devRunS5b.Output -Pattern '__KAFKA_STORAGE_SIZE__' -Because '占位必须替换'
     $ledger = Get-S5bLedgerText -Output $devRunS5b.Output
-    foreach ($token in @('segment_bytes=16777216', 'broker_retention_bytes=134217728', 'required_gib=20', 'pvc_source=computed')) {
+    foreach ($token in @('segment_bytes=16777216', 'broker_retention_bytes=134217728', 'audit_retention_bytes=134217728', 'required_gib=20', 'pvc_source=computed')) {
         Assert-Match -Text $ledger -Pattern ('(?<![\w])' + [regex]::Escape($token) + '(?![\w])') -Because "dev 档账本行要有 $token"
     }
 
@@ -8188,7 +8272,7 @@ Test-Case 'Kafka infra-up DryRun -KafkaStorageGi 30:显式的盘小于公式值 
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "盘小于公式值只告警、不阻断。输出: $($run.Output)"
     Assert-Match -Text (Select-ManifestByName -Output $run.Output -Name 'kafka') -Pattern '(?m)^\s+storage: 30Gi\s*$' -Because '显式值渲染进模板'
     $ledger = Get-S5bLedgerText -Output $run.Output
-    foreach ($token in @('pvc_source=explicit', 'pvc_gib=30', 'required_gib=40')) {
+    foreach ($token in @('pvc_source=explicit', 'pvc_gib=30', 'required_gib=80')) {
         Assert-Match -Text $ledger -Pattern ('(?<![\w])' + [regex]::Escape($token) + '(?![\w])') -Because "账本行要有 $token"
     }
     Assert-Match -Text $run.Output -Pattern '\[KafkaDiskLedger\]BelowRequired:' -Because '盘小于公式值要告警'
@@ -9273,6 +9357,37 @@ Test-Case 'scene_manager 不接管 Agones(默认编排):不写 Agones 段,不挂
     }) | Select-Object -First 1
     Assert-True -Condition ($null -ne $deployment) -Because 'DryRun 输出里应当有 scene-manager 的 Deployment'
     Assert-NotMatch -Text $deployment -Pattern 'serviceAccountName' -Because '不接管时不挂有 Agones 权限的身份'
+}
+
+# ─── 发号器地域码绑定的部署侧(docs/handoff/global-id-issuer-registry-20261105.md §8.4)───────────────────────────────
+# 地域码绑定到「部署身份 + 两套本地 etcd 的集群号」。部署身份是 kube-system 的 UID,data-service 运行期用 ServiceAccount data-service 读;
+# etcd 的集群号只由 peer 地址和引导令牌算出,所以三套 etcd 的令牌也带这个 UID。复用基线 zone-up($devOut)与 battle 那次 infra-up 的输出。
+Test-Case 'zone-up DryRun:data-service 读集群身份的 RBAC 先于它的 StatefulSet,绑定落在本 zone 命名空间' {
+    $blocks = @(Get-ManifestBlocks -Output $devOut)
+    $rbacAt = -1
+    $workloadAt = -1
+    for ($i = 0; $i -lt $blocks.Count; $i++) {
+        if ($rbacAt -lt 0 -and $blocks[$i] -cmatch '(?m)^kind: ClusterRoleBinding\s*$' -and $blocks[$i] -cmatch '(?m)^  name: mmorpg-cluster-identity-mmorpg-zone-contract-test\s*$') { $rbacAt = $i }
+        if ($workloadAt -lt 0 -and $blocks[$i] -cmatch '(?m)^kind: StatefulSet\s*$' -and $blocks[$i] -cmatch '(?m)^  name: data-service\s*$') { $workloadAt = $i }
+    }
+    Assert-True -Condition ($rbacAt -ge 0) -Because 'zone-up 要 apply data-service 读集群身份的 RBAC,绑定名带本 zone 命名空间'
+    Assert-True -Condition ($workloadAt -gt $rbacAt) -Because 'RBAC 先于 StatefulSet,否则第一次预留读身份拿到 403'
+    $rbac = $blocks[$rbacAt]
+    Assert-Match -Text $rbac -Pattern '(?m)^kind: ServiceAccount\s*$' -Because 'ServiceAccount data-service 与绑定同一份清单'
+    Assert-Match -Text $rbac -Pattern 'subjects:\s*\n\s*- kind: ServiceAccount\s*\n\s*name: data-service\s*\n\s*namespace: mmorpg-zone-contract-test' -Because '只授权本 zone 的 data-service'
+    Assert-NotMatch -Text $rbac -Pattern '(?-i)__[A-Z][A-Z0-9_]*__' -Because '占位全部替换'
+    Assert-Match -Text $blocks[$workloadAt] -Pattern '(?m)^      serviceAccountName: data-service\s*$' -Because 'Pod 用专用身份读 kube-system,不用 default'
+}
+
+Test-Case 'infra-up DryRun:etcd 引导令牌带本 K8s 集群的 UID(DryRun 是全零标记),不留 __KUBE_CLUSTER_UID__' {
+    Assert-True -Condition ($battleInfraRun.ExitCode -eq 0) -Because '夹具前提:battle 那次 infra-up DryRun 成功'
+    $out = $battleInfraRun.Output
+    Assert-Match -Text $out -Pattern 'Kubernetes cluster uid: 00000000-0000-0000-0000-000000000000 \[dry-run marker\]' -Because 'DryRun 不连集群,打出固定标记值'
+    $etcd = @(Get-ManifestBlocks -Output $out | Where-Object { $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch '(?m)^  name: etcd\s*$' })
+    Assert-Equal -Expected 1 -Actual $etcd.Count -Because 'infra-up 恰好 apply 一份主 etcd'
+    Assert-Match -Text $etcd[0] -Pattern 'name: ETCD_INITIAL_CLUSTER_TOKEN\s*\n\s*value: "mmorpg-etcd-contract-battle-infra-00000000-0000-0000-0000-000000000000"' `
+        -Because '令牌 = 命名空间 + 本 K8s 集群的 UID,两个集群用同一份清单也起不出同一个集群号'
+    Assert-NotMatch -Text $out -Pattern '__KUBE_CLUSTER_UID__' -Because '占位全部替换'
 }
 
 exit (Complete-TestRun -SuiteName "k8s_deploy contract")

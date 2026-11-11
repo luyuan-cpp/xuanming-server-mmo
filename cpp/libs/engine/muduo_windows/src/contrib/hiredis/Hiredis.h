@@ -79,6 +79,8 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   // redisAsyncContext* context() { return context_; }
   bool connected() const;
   const char* errstr() const;
+  // 当前连接的原生 socket，只给诊断与测试用：不要直接读写或关闭它。只能在 connect() 之后、断开之前调用。
+  int fd() const;
 
   void setConnectCallback(const ConnectCallback& cb) { connectCb_ = cb; }
   void setDisconnectCallback(const DisconnectCallback& cb) { disconnectCb_ = cb; }
@@ -113,7 +115,6 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
   void handleRead(muduo::Timestamp receiveTime);
   void handleWrite();
 
-  int fd() const;
   void logConnection(bool up) const;
   void setChannel();
   void removeChannel();

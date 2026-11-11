@@ -4,6 +4,9 @@
 //     同一批终态按 gate 自报的会话轨道再记一份,金丝雀观察拿两条轨道的整体错误率比较
 //     (docs/design/release-track-gray-canary.md §2.7)。不带 message_id,基数固定为 3 × 终态数;
 //   - client_rpc_router_forward_seconds{message_id}          Forward 端到端耗时;
+//   - client_rpc_router_forward_by_track_seconds{release_track}
+//     同一段耗时按会话轨道再记一份,金丝雀判定拿两条轨道的 p99 比较(发布轨道设计 §2.8)。
+//     分桶与 forward_seconds 相同,基数固定为 3 × 分桶数;
 //   - client_rpc_router_targets{node_type}                   各目标类型当前发现到的实例数;
 //   - client_rpc_router_target_conns                         缓存着的目标连接数(每轮空闲回收后采样);
 //   - client_rpc_router_idle_target_conns_closed_total       空闲回收关掉的目标连接数。
@@ -52,6 +55,9 @@ const UnknownMessageIdLabel = "unknown"
 // 其余请求的 label 是 releasetrack.Track 的 String(),只有 stable、canary 两个值。
 const TrackLabelUnknown = "unknown"
 
+// forwardLatencyBuckets 是两份 Forward 耗时直方图共用的分桶:同一次 Forward 在两边落进同一个桶,按轨道求和才等于总数。
+var forwardLatencyBuckets = []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5}
+
 var (
 	forwardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
@@ -69,8 +75,15 @@ var (
 		Subsystem: subsystem,
 		Name:      "forward_seconds",
 		Help:      "End-to-end Forward latency (metadata check -> response bytes ready), by client message id.",
-		Buckets:   []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		Buckets:   forwardLatencyBuckets,
 	}, []string{"message_id"})
+
+	forwardByTrackSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "forward_by_track_seconds",
+		Help:      "End-to-end Forward latency (same span and buckets as forward_seconds), by the session release track reported by the gate (stable|canary|unknown).",
+		Buckets:   forwardLatencyBuckets,
+	}, []string{"release_track"})
 
 	targets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
@@ -95,7 +108,7 @@ var registerOnce sync.Once
 
 func register() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(forwardTotal, forwardByTrackTotal, forwardSeconds, targets, targetConns, idleTargetConnsClosed)
+		prometheus.MustRegister(forwardTotal, forwardByTrackTotal, forwardSeconds, forwardByTrackSeconds, targets, targetConns, idleTargetConnsClosed)
 	})
 }
 
@@ -109,11 +122,12 @@ func MessageIdLabel(messageId uint32, known bool) string {
 }
 
 // ObserveForward 记录一次 Forward 的终态与耗时。trackLabel 是会话轨道(stable / canary,认不出时为 TrackLabelUnknown),
-// 两个计数器在这里一起记,每次 Forward 恰好各记一次,按轨道求和与 forward_total 的总数相等。
+// 两个计数器与两份耗时直方图在这里一起记,每次 Forward 恰好各记一次:按轨道求和与 forward_total、forward_seconds 的总数相等。
 func ObserveForward(messageIdLabel string, trackLabel string, outcome string, elapsed time.Duration) {
 	forwardTotal.WithLabelValues(messageIdLabel, outcome).Inc()
 	forwardByTrackTotal.WithLabelValues(trackLabel, outcome).Inc()
 	forwardSeconds.WithLabelValues(messageIdLabel).Observe(elapsed.Seconds())
+	forwardByTrackSeconds.WithLabelValues(trackLabel).Observe(elapsed.Seconds())
 }
 
 // ForwardTotalValue 读回某 (message_id, outcome) 的计数(单测断言用;计数器本身
@@ -125,6 +139,23 @@ func ForwardTotalValue(messageIdLabel string, outcome string) float64 {
 // ForwardByTrackValue 读回某 (release_track, outcome) 的计数(单测断言用,同上)。
 func ForwardByTrackValue(trackLabel string, outcome string) float64 {
 	return counterValue(forwardByTrackTotal, trackLabel, outcome)
+}
+
+// ForwardByTrackLatencyCount 读回某条轨道的耗时样本数(单测断言用,同上)。
+func ForwardByTrackLatencyCount(trackLabel string) uint64 {
+	observer, err := forwardByTrackSeconds.GetMetricWithLabelValues(trackLabel)
+	if err != nil {
+		return 0
+	}
+	metric, ok := observer.(prometheus.Metric)
+	if !ok {
+		return 0
+	}
+	var m dto.Metric
+	if err := metric.Write(&m); err != nil {
+		return 0
+	}
+	return m.GetHistogram().GetSampleCount()
 }
 
 func counterValue(vec *prometheus.CounterVec, labels ...string) float64 {

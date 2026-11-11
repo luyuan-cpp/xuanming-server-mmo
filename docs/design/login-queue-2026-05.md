@@ -307,6 +307,22 @@ service LoginPreGate {
 >
 > **八、Java 版**:待做,由主会话在 Java 仓库 `PARITY.md` 登记。
 
+> **(2026-11-11 更正,上面「二、查询」第 3 步「`GETDEL` 取到」与「`admit_window_passed`」两支、「一、出队」的「重叠 leader / 多副本」一条、「五、残余风险」第 1 条;原文保留;已落码,未编译、未测试,待 Codex 验证。对应 [infra-reconnect-overview.md](infra-reconnect-overview.md) §4.1 R7、R8)**
+>
+> - **重取窗口(R8)。** `lookupScript` 取走放行槽时,在同一段里把放行槽 JSON 与重取截止(取走时刻 + 交票后宽限 G,login 进程时钟)写进 meta,字段 `taken_slot`、`retake_until`。meta 是 hash 时才写,`HSET` 不改 TTL。之后放行槽不在、meta 有 `admitted_at` 时:截止之前回「重取」,同一个槽现签一张新票、ADMITTED,占位改为 `now + G`;过了截止才回 EXPIRED(`admit_window_passed`)。
+>   - 为什么:取走那次的回包丢了(go-redis 读超时后重发同一条 `EVALSHA`、客户端重试),旧版第二次只能拿到 `admit_window_passed`,排到号的玩家拿不到票、从队尾重排。取走时签票失败(`signFn` 报错)同样能在窗口里重试。
+>   - 宽限取 G:截止之前,取走时写下的占位(`now + G`)一定还在,重取不会签出没有名额兜着的票。截止在取走那次写死、重取不推后它,所以占位最晚到取走时刻 + 2G,一直轮询也不会让它永不到期。
+>   - 窗口里同一令牌能多拿几张票,不扩大危害面:gate 票不是一次性的(C++ gate 只验签名、gate 号与过期,不记用过没有),一张票在有效期里本来就能被重复使用。重取同样先核对 token 索引,改写过的令牌拿不到。
+>   - 重取不再记等待时长(第一次取走时记过),每次打一行 INFO `admit slot re-signed within the retake window`。
+> - **名额进放行脚本(R7)。** `PopAdmit` 多一个参数 `budget`(容量 − 在线,与快速通道 `TryReserveFastPathSlot` 同一口径)。放行脚本在 META_GONE / ALREADY 两支之后、`HSET` 之前数一次 `ZCOUNT 占位键 (now +inf`,已到 `budget` 就回 OVER_BUDGET(6):什么都不写,条目留在队列,不计数,本批在这一块之后停下,不算错误。
+>   - `ZCOUNT` 是只读命令,不破坏写满时的 fail-closed;「分数 > now」与 `AdmittedCount` 清掉 ≤ now 之后的集合相同。
+>   - 重叠 leader 各按同一份快照放满时,在途上界从 2×(capacity − online) 收紧到 capacity − online;两边快照的 budget 不同时取较大的那个。
+>   - `budget` 为 0 时一个都不放、不碰 Redis。
+> - **残余风险第 1 条不再可达。** `ZCOUNT` 在 `HSET` 之前读同一个占位键,类型不对时脚本在那里就报 `WRONGTYPE`、什么都没写;ALREADY 分支留作纵深防御。
+> - **用例**:新增 `TestPoll_RetakeInsideWindow_ReturnsSameSlot`、`TestPoll_LookupResentAfterTake_ReturnsSameSlot`、`TestPoll_SignFailureThenRetryInsideRetakeWindow_SameSlot`、`TestPopAdmit_BudgetCapsInFlightAcrossOverlappingLeaders`、`TestPopAdmit_BudgetSharesFastPathPlaceholdersAndSkipsExpired`、`TestPopAdmit_OverBudgetStopsAfterTheChunk`、`TestPopAdmit_ZeroBudgetAdmitsNothingWithoutTouchingRedis`、`TestPopAdmit_AdmittedAtWhileQueued_CleanedAsAlready`、`TestDispatchOnce_OverlappingLeadersSameSnapshot_CappedByBudget`。改名:`TestConsume_RepeatPollDoesNotExtendPlaceholder` → `TestConsume_RepeatPollExtendsPlaceholderOnlyInsideRetakeWindow`,`TestPopAdmit_ScriptErrorStopsBatch_PartialWriteCleanedAsAlready` → `…_WrongTypePlaceholderWritesNothing`。原先断言「取走后立刻再查回 EXPIRED」的几条改为拨过窗口再查;`TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit` 的上界收紧到 cap。
+> - **混跑。** 键名与键值格式不变,只是 meta 多两个字段。新旧 login 混跑时,旧版取走不写重取记录(那张票照旧找不回来),旧版放行不判名额(上界照旧);都不写坏数据。项目未上线,排队关着滚即可。
+> - **Java 版**:Java 的 `LoginQueue` 放行脚本本来就在脚本里按名额放(`DISPATCH`),查询脚本按请求号认得 Redisson 的重发;客户端换请求重试仍回过期,这一点与本版不同,待做,由主会话决定是否登记。
+
 ### FreeSlots 公式
 
 ```
@@ -557,7 +573,7 @@ if lock.IsLocked() {
 > - **只写一次。** 两个 leader 可能 `ZRANGE` 到同一批。放行脚本先 `ZSCORE` 判成员仍在队列,并在同一段里 `ZREM`,所以每个 queueId 只被写一次,后到的拿到 GONE。
 > - **挑 gate 失败。** 条目只被跳过、从未离开队列,不再有「放回」。
 > - **不丢人。** 后半句列出的「既有丢条目路径」已全部消除,所以双 leader 与单 leader 一样不丢人。
-> - **第 2 条不变。** 超发上界仍是 ≤ 2×(cap − online)。
+> - **第 2 条不变。** 超发上界仍是 ≤ 2×(cap − online)。(2026-11-11 起收紧为 ≤ cap − online:名额进了放行脚本,见 §5 决策树后的 2026-11-11 更正。)
 > - **用例。** `TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit` 的快照改用 `TxPipelined` 原子地读两个 `ZRange`:条目现在原子地从队列移进占位,非原子快照会看到同一条出现两次。另有 `TestPopAdmit_OverlappingLeaders_SameEntryAdmittedOnce` 钉住「只写一次」。
 > - **混跑。** 本版本与旧版混跑(排队开着)时「不丢人」不成立,只能排队关着滚,见 §5「新旧版本混跑与部署顺序」后的 10-18 更正。
 
@@ -758,7 +774,15 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
    - 放行:第一条单发探路,之后每块至多 128 条放进一个 pipeline,一块一次往返;每条仍是独立的一段 `admitEntryScript`,写满与部分写入的语义逐条不变。
    - 轮询:token 核对、取放行槽、读状态与续期合成一段 `lookupScript`,排队中一次轮询从三次往返降到一次。
    - 排队实例按 zone 组分开:G4a 第 1a 批已有(`k8s_deploy.ps1 -RedisSplit queue`,每组一个 `redis-queue-g<N>`),首次上线显式带上(`shared-redis-split-by-purpose.md` §25.3),本条没有改部署脚本。
-   - **没做**:盘点修法方向里的「名次改用入队序号差加进程内缓存」。它把客户端看到的名次从精确值改成上界(中途离队的人仍被算在前面),也改了空闲续期的触发方式,只为省 Redis CPU;按「性能靠实测」,等压测证明单台 redis-queue 扛不住 10 万人排队的轮询再做。轮询合并之后 Redis 侧每次执行的命令数与此前大致相同,省下的是往返与命令解析。
+   - **名次改用「入队序号差加进程内缓存」:不做(2026-11-11 定案,缺口清单第 14 条残余)。** 原文记作「等压测证明扛不住再做」,负责人 11-11 要求不等压测、现在定案:
+     - 它省不了往返:轮询已是一段 `lookupScript` 一次往返,ZRANK 就在这段脚本里,O(log N),10 万人排队时十几次比较;改序号差只省这一条命令的 CPU。
+     - 代价是客户端可见语义:名次从精确值变成上界(中途离队的人仍被算在前面),名次会停住、跳变;空闲续期的触发方式也要跟着改,两版客户端要同批改。
+     - 10 万人排队真正的压力是轮询次数(每人每 2 秒一次约 5 万段脚本/s,一个 zone 的排队键只能在一个主节点上)。标准做法是服务端按名次拉长下发的
+       `RetryAfterMs`,名次与总数的定义不变。**2026-11-11 已落码(未编译、未测试)**:`loginqueue.RetryAfterForRank`(`retry_after.go`):0 基名次小于 2000 的按
+       `DefaultRetryAfterMs`;之后与名次成正比(base × (rank+1) / 2000);上限 min(30s, AdmitTTL/2),不短于 base。AssignGate 入队、带令牌重入与
+       QueryQueueStatus 三处回包共用它。10 万人时轮询约 6000 次/s,约为固定 2 秒的八分之一。客户端不遵守时退回固定间隔,不影响正确性
+       (放行槽、续期、过期都不看间隔);Java 网关原样透传 `retry_after_ms`(0 时按 2000),HTTP 客户端契约本来就按它轮询(`AssignGateRequest` 的
+       queueToken 注释:基础间隔 = max(retry_after_ms, 下限))。这条规则原排在第 34 条(全部 Redis 上 Cluster)第 4 批,提前在这里落,第 4 批不用再做。
    - Java 版:已有等价,不加 `PARITY.md` 行。game-gateway 的 `LoginQueue` 放行是一段 Lua(`DISPATCH`)放一批,查询是一段 Lua(`LOOKUP`)一次往返(Java 仓 `game-gateway/.../queue/LoginQueue.java`)。
 
 ---

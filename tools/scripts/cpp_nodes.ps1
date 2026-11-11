@@ -135,7 +135,7 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 $NodeCatalogue = [ordered]@{
     gate   = @{ Exe = "gate.exe";   Desc = "Gate Node (client TCP bridge + Kafka routing)" }
     scene  = @{ Exe = "scene.exe";  Desc = "Scene Node (gameplay + ECS systems)" }
-    battle = @{ Exe = "battle.exe"; Desc = "Battle Node (回合制战斗房间, gRPC, 全局池)" }
+    battle = @{ Exe = "battle.exe"; Desc = "Battle Node (turn-based battle rooms, gRPC, global pool)" }
 }
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -500,7 +500,7 @@ function Invoke-Start {
         while(-not [IO.File]::Exists($identityFile)){if($clock.ElapsedMilliseconds -ge 60000){throw '新boot没有实际身份原件，保持关闭'};Start-Sleep -Milliseconds 50}
         $identity=Read-MaintenanceJson -Path $identityFile
         if([string]::IsNullOrEmpty([string]$identity.nodeUuid) -or [uint32]$identity.nodeId -eq 0){throw '新boot身份尚未实际分配'}
-        Write-Host 'prepare-only新boot身份已写；需绑定实际UUID激活runtime，再等待prepared原件，不代表SOURCE已开放。' -ForegroundColor Yellow
+        Write-Host 'prepare-only: new boot identity written; bind the actual UUID to activate the runtime, then wait for the prepared record. This does not mean SOURCE is open.' -ForegroundColor Yellow
     }else{Write-Host "`nAll requested nodes launched. Use -Command status to check." -ForegroundColor Green}
 }
 

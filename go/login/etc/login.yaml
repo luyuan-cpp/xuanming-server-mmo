@@ -445,7 +445,9 @@ AuthProviders:
 # AssignGate login queue (Redis ZSET-backed). When Enabled=false (default),
 # AssignGate signs and returns a gate token immediately, just like the legacy
 # behavior. When Enabled=true:
-#   - capacity is computed per-zone from gate PlayerCount + ZoneCapacityOverride
+#   - capacity per zone = zone_config.capacity (the gateway's zone directory, published to etcd
+#     /mmorpg/zone_policy/zone/<id> and read by this login; 2026-11-10 起这是唯一来源,本文件不再配区容量),
+#     capped at what the zone's gates hold at 90% of max_connections; gate PlayerCount is the online count
 #   - over-capacity callers are enqueued and receive a queue_token; clients
 #     poll QueryQueueStatus until the dispatcher promotes them.
 #   - reconnect/replace callers (existing PlayerSession) bypass the queue.
@@ -463,8 +465,9 @@ AuthProviders:
 #      下滚完:排队开着混跑时,旧版 leader 弹出、尚未写完的条目会被新版判为 queue_gone 并打回队尾,上面「不丢人」在
 #      本版本的升级窗口里不成立。
 #   1. Deploy with Enabled=false → verify no behavior change.
-#   2. Set ZoneCapacityOverride for each live zone (use observed peak * 0.9
-#      as the initial value; tune from there).
+#   2. Set zone_config.capacity for each live zone (PUT /admin/zones/<id> on the gateway; use observed
+#      peak * 0.9 as the initial value; tune from there) and size gate replicas so that
+#      replicas * GateMaxConnections * 90% >= capacity (login_queue_capacity shows the effective value).
 #   3. Flip Enabled=true on one canary login pod, watch admit/queue counters.
 #   4. Roll out fleet-wide.
 #
@@ -499,12 +502,8 @@ Queue:
   # (2026-10-12 G1b;此前全服一把,多 zone 共用 Redis 时只有 leader 所在 zone 出队)。各 zone 照写这个默认值即可;
   # 同一 zone 的副本必须同值,否则该 zone 会长期双 leader。
   DispatcherLockKey: "dispatcher:lock:login_queue"
-  # ZoneCapacityOverride pins per-zone admission ceilings. Keys are zone IDs
-  # as decimal strings; values are absolute concurrent online player ceilings.
-  # When unset for a zone, FreeSlots falls back to PlayerCount * SoftCapMultiplier.
-  # ZoneCapacityOverride:
-  #   "1": 5000
-  #   "2": 5000
+  # 区容量不在这里配:只认区服目录 zone_config.capacity(见上面第一段)。读不到区服策略时
+  # FreeSlots 退回 PlayerCount * SoftCapMultiplier,仍按 gate 承载封顶。
 
 # 控制面命令的生产者。login 只生产不消费。
 Kafka:

@@ -185,5 +185,8 @@
   <ItemGroup>
     <ClCompile Include="scene_placement_fence_test.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="planned_drain_test.cpp" />
+  </ItemGroup>
 </Project>
 

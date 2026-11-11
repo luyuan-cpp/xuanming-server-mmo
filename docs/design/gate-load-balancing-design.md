@@ -217,13 +217,31 @@ dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `A
 
 - Java 版（`game-discovery` 的 `GatePicker`）三项都未做，记在 Java 仓 `PARITY.md` 待做；做的时候按同一分档（排空并入，不先行剔除）。
 
+### 本进程在途票（2026-11-11 起；已落码，未编译、未测试，待 Codex 验证）
+
+gate 人数每 10s 才上报一次，login 看到的人数最多晚约 15s。只按它挑，两条挑法都会在一个上报周期里往同一台最闲的 gate 上堆人：
+快路径各请求互相看不到刚分出去的人；dispatcher 一拍之内有 `gatePicker` 记账，跨拍又从同一份滞后人数起算。
+
+- **记账**：`loginqueue.GateInflight`（`go/login/internal/logic/pkg/loginqueue/gate_inflight.go`）按 gate 记本进程交出去的票的
+  交出时刻。快路径在签票成功之后记（`PickAndSignGateToken`），排队在 dispatcher 挑定之后记（`recordPicks` 包住
+  `newBatchPickFn`）。一个进程一份，在 `ServiceContext.initLoginQueue` 里建，快路径、dispatcher、`CandidatesForZone` 共用。
+- **用法**：`CandidatesForZone` 给每台候选填 `GateCandidate.Inflight`（窗口内的票数）；两条挑法比的负载都是
+  `PlayerCount + Inflight`（`GateCandidate.load`），dispatcher 一拍之内再加本快照已分的人数。
+- **窗口取交票宽限 `defaultHandoffGrace`（20s）**：区级容量（`FreeSlots`）按同一个窗口把交出去的票算作在途占位，这里只是按 gate 拆开记。
+  窗口内已经连上、又被下一次上报算进人数的人会被多算一次，只让那台显得更忙、挑选往别处摊；放多少人仍由 `FreeSlots` 管，
+  满载判定（90% 水位）仍只看上报人数，不会因此多放或误判满载。
+- **取舍**：只记本进程的，多副本各记各的，看不到别的副本交出去的票，仍比不记好；不跨进程同步、不引入共享存储。
+  放行槽没写成，或取走时复核改挑了别的 gate，那张票会在原来那台上多算到窗口结束，只影响摊法，不影响谁能进入。
+- 测试：`gate_inflight_test.go`（窗口边界、副本不改入参、下线 gate 被清掉、nil 不记账、快路径按在途比负载、dispatcher 跨拍带上在途、
+  只有签票成功才记）。
+
+**告警补齐（2026-11-11）**：`deploy/k8s/login-alerts.yaml` 新增 `login.gate-health` 组两条持续型告警：
+`LoginGateStaleExcludedSustained`（critical，停写 gate 连续 5 分钟被剔除，即超过租约时长仍在 etcd 里，它上面的玩家多半卡住了）与
+`LoginQueueAdmitRecheckBlind`（warning，取走时复核连续 10 分钟读不到候选）。`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 钉住组成与指标来源。
+
 **还没做**（容量模型 A0-7 的其余部分与评审登记）：
 
-- 跨请求的本地分配累加：快路径只靠随机二选一摊开，不记「本周期已分给某台多少人」；
-- dispatcher 跨拍仍从同一份滞后人数起算，同一个上报周期内连续几拍都会先填同一台最闲的 gate；
-- 三条回落告警（2026-11-05 加，11-06 随分档改了 reason 口径并把 `LoginGatePickFallbackFull` 改名 `LoginGatePickFallbackDegraded`）
-  还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据；
-  `login_queue_admit_gate_recheck_total{outcome="unchecked"}` 与停写剔除的持续增长没有告警，只进看板。
+- 回落告警与 `login.gate-health` 组还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据（交 Codex 与首轮演练）。
 
 ## 有状态连接与跨 Gate 重连
 

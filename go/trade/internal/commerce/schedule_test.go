@@ -57,15 +57,22 @@ func TestNextDueMsByStage(t *testing.T) {
 	}
 }
 
-// 缺口清单第 16 条:成交子单从推进中变成已成交、已取消或转人工时唤醒母单;别的变化、别的种类都不唤醒。
+// 缺口清单第 16 条:成交子单从推进中变成已成交、已取消时唤醒母单;别的变化、别的种类都不唤醒。
+// 2026-11-11 起子单转人工不再连带母单,也不唤醒它(jubaozhai-market.md §15.7.1 第 4 类)。
 func TestFilledParentToWake(t *testing.T) {
 	fill := func(status uint32) *tradepb.TradeCommerceRecord {
 		return &tradepb.TradeCommerceRecord{Kind: 4, Side: 0, ParentId: 900, Status: status}
 	}
-	for _, settled := range []uint32{Settled, Cancelled, Manual} {
+	for _, settled := range []uint32{Settled, Cancelled} {
 		if got := filledParentToWake(fill(Delivering), fill(settled)); got != 900 {
 			t.Errorf("子单收尾为 %d 时应唤醒母单,得到 %d", settled, got)
 		}
+	}
+	if got := filledParentToWake(fill(Delivering), fill(Manual)); got != 0 {
+		t.Errorf("子单转人工不算收尾,不唤醒母单: %d", got)
+	}
+	if got := filledParentToWake(fill(Delivering), fill(Settled)); got != 900 {
+		t.Errorf("人工处理完的子单(状态已回到推进中)结案时照常唤醒母单: %d", got)
 	}
 	if got := filledParentToWake(fill(Escrowing), fill(Delivering)); got != 0 {
 		t.Errorf("子单还在推进,不应唤醒母单: %d", got)

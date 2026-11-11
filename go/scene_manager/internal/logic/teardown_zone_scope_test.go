@@ -70,7 +70,7 @@ func TestDestroyInstance_SceneInAnotherZoneIsAnError(t *testing.T) {
 	require.ErrorIs(t, err, errSceneInOtherZone)
 	require.False(t, destroyed)
 
-	destroyed, err = destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle")
+	destroyed, err = destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle", nil)
 	require.ErrorIs(t, err, errSceneInOtherZone)
 	require.False(t, destroyed)
 

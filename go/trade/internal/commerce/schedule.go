@@ -96,8 +96,9 @@ func waitsForTimeOrPlayers(r *tradepb.TradeCommerceRecord, w *tradepb.TradeComme
 }
 
 // filledParentToWake 判这一步推进是不是让一张市场成交子单收尾了:子单(kind 4、side 0、有母单)从推进中变成
-// 已成交、已取消或转人工时,回它的母单号,由 advance 在提交之后唤醒母单(母单在 marketBarrier 里等子单收尾,
-// 见 waitsForOtherRows)。其余情况回 0。
+// 已成交或已取消时,回它的母单号,由 advance 在提交之后唤醒母单(母单在 marketBarrier 里等子单收尾,
+// 见 waitsForOtherRows)。其余情况回 0。子单转人工不唤醒:母单接着等它被人工处理完,那之后引擎把子单推进到
+// 结案的那一步才唤醒(jubaozhai-market.md §15.7.1 第 4 类)。
 func filledParentToWake(before, after *tradepb.TradeCommerceRecord) uint64 {
 	if after.Kind != 4 || after.Side != 0 || after.ParentId == 0 {
 		return 0
@@ -108,9 +109,10 @@ func filledParentToWake(before, after *tradepb.TradeCommerceRecord) uint64 {
 	return after.ParentId
 }
 
-// fillSettledStatus 是 marketBarrier 认的子单收尾状态:已取消(7)与已成交(11)算收尾,转人工(10)会让母单转人工。
+// fillSettledStatus 是 marketBarrier 认的子单收尾状态:已取消(7)与已成交(11)。转人工(10)不算收尾,
+// 母单等它被人工处理完,不跟着转人工(2026-11-11 起,jubaozhai-market.md §15.7.1 第 4 类)。
 func fillSettledStatus(status uint32) bool {
-	return status == Cancelled || status == Settled || status == Manual
+	return status == Cancelled || status == Settled
 }
 
 // expiryAdvances 报告截止时刻会不会推进这个 stage,对应 plan 里按 expires_ms 下架寄售、结拍、取消角色交易的三处。

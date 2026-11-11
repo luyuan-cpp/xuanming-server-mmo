@@ -10,8 +10,12 @@
 # **不要从备份恢复它。** 它是本地两套 etcd 一起回档时的证据,和它们一起回档就什么也证明不了。它整个丢了数据时,
 # 按运维手册 §4.3 从各地域的本地记录重建。
 #
-# 跨集群访问:这里只有集群内的 Service。别的集群要经私网(VPC 对等、专线)访问,只放行各集群 data-service 的出口;
-# 和现有 etcd 一样没开认证,不能暴露到公网。
+# 跨集群访问:这里只有集群内的 Service。别的集群要经私网(VPC 对等、专线)访问,只放行各集群 data-service 的出口,不能暴露到公网。
+# 客户端口是双向 TLS(2026-11-11):服务端证书和信任的 CA 在运维预置的 Secret etcd-id-registry-tls(ca.crt、tls.crt、tls.key),
+# 客户端必须出示这个 CA 签的证书(--client-cert-auth),data-service 的客户端证书在各 zone 的 Secret id-registry-client-tls。
+# 服务端证书的 SAN 要覆盖各地域 -IdRegistryEtcd 用的主机名和本集群的 etcd-id-registry.__INFRA_NAMESPACE__。
+# 探针和指标走单独的 http 监听口 2381(--listen-metrics-urls):客户端口要证书,kubelet 和 Prometheus 拿不到。
+# peer 仍是集群内 http。k8s_deploy.ps1 在任何写操作之前核对 Secret 在不在、三个键齐不齐。
 #
 # 所有 __INFRA_NAMESPACE__ 占位由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换成 -InfraNamespace。
 #
@@ -84,9 +88,10 @@ spec:
       labels:
         app: etcd-id-registry
       # 与 etcd.yaml 同一套抓取注解:deploy/k8s/etcd-alerts.yaml 的无主、空间告警同样覆盖登记处(它不可用时各地域新块预留失败)。
+      # 端口是 2381 的 http 指标口:2379 开了双向 TLS,Prometheus 没有客户端证书。
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "2379"
+        prometheus.io/port: "2381"
         prometheus.io/path: "/metrics"
     spec:
       # 尽量散到不同节点,也尽量别和本集群两套发号 etcd 的成员挤在一起。
@@ -135,12 +140,24 @@ spec:
             # PVC 下的 data/ 子目录(同 etcd.yaml)。
             - name: ETCD_DATA_DIR
               value: /var/lib/etcd/data
+            # 客户端口双向 TLS:只认 etcd-id-registry-tls 里那个 CA 签的客户端证书(各地域 data-service 的 id-registry-client-tls)。
             - name: ETCD_LISTEN_CLIENT_URLS
-              value: "http://0.0.0.0:2379"
+              value: "https://0.0.0.0:2379"
+            - name: ETCD_CLIENT_CERT_AUTH
+              value: "true"
+            - name: ETCD_TRUSTED_CA_FILE
+              value: /etc/etcd/tls/ca.crt
+            - name: ETCD_CERT_FILE
+              value: /etc/etcd/tls/tls.crt
+            - name: ETCD_KEY_FILE
+              value: /etc/etcd/tls/tls.key
+            # 探针与 Prometheus 用的 http 口:只有 /health 和 /metrics,不能读写数据。
+            - name: ETCD_LISTEN_METRICS_URLS
+              value: "http://0.0.0.0:2381"
             - name: ETCD_LISTEN_PEER_URLS
               value: "http://0.0.0.0:2380"
             - name: ETCD_ADVERTISE_CLIENT_URLS
-              value: "http://$(POD_NAME).etcd-id-registry-headless.__INFRA_NAMESPACE__.svc.cluster.local:2379"
+              value: "https://$(POD_NAME).etcd-id-registry-headless.__INFRA_NAMESPACE__.svc.cluster.local:2379"
             - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
               value: "http://$(POD_NAME).etcd-id-registry-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
             - name: ETCD_INITIAL_CLUSTER
@@ -163,10 +180,12 @@ spec:
               name: client
             - containerPort: 2380
               name: peer
+            - containerPort: 2381
+              name: metrics
           readinessProbe:
             httpGet:
               path: /health
-              port: 2379
+              port: 2381
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
@@ -174,7 +193,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health?serializable=true
-              port: 2379
+              port: 2381
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -186,6 +205,15 @@ spec:
           volumeMounts:
             - name: etcd-data
               mountPath: /var/lib/etcd
+            - name: etcd-tls
+              mountPath: /etc/etcd/tls
+              readOnly: true
+      volumes:
+        # 运维预置,不写 optional:证书缺了 etcd 起不来,比无认证地跑起来好。0440 + fsGroup 1001,etcd 进程能读、别人不能。
+        - name: etcd-tls
+          secret:
+            secretName: etcd-id-registry-tls
+            defaultMode: 288
   volumeClaimTemplates:
     - metadata:
         name: etcd-data

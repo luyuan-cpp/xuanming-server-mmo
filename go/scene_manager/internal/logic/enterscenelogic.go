@@ -19,6 +19,7 @@ import (
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
 	"shared/redisslot"
+	"shared/tracing/kafkagotrace"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -1533,8 +1534,11 @@ func (l *EnterSceneLogic) sendRedirectToGate(in *scene_manager.EnterSceneRequest
 		return fmt.Errorf("address RedirectToGate command: %w", err)
 	}
 	// 不用可取消 context：kafka-go 在 context 返回后仍可能继续投递批次。
-	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。WithoutCancel 同样不可取消,只多保留请求的值:
+	// trace 写进消息头,gate 处理这条命令时接上同一次进场(docs/design/distributed-tracing.md §6.2)。
+	sendCtx := context.WithoutCancel(l.ctx)
+	msg.Headers = kafkagotrace.Headers(sendCtx)
+	if err := l.svcCtx.Kafka.WriteMessages(sendCtx, msg); err != nil {
 		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 
@@ -1899,8 +1903,11 @@ func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest,
 		return fmt.Errorf("address RoutePlayer command: %w", err)
 	}
 	// 不用可取消 context：kafka-go 在 context 返回后仍可能继续投递批次。
-	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。WithoutCancel 同样不可取消,只多保留请求的 trace
+	// (同 sendRedirectToGate)。
+	sendCtx := context.WithoutCancel(l.ctx)
+	msg.Headers = kafkagotrace.Headers(sendCtx)
+	if err := l.svcCtx.Kafka.WriteMessages(sendCtx, msg); err != nil {
 		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 

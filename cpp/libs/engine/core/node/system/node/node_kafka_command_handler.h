@@ -117,23 +117,12 @@ bool RegisterKafkaCommandHandler(Node& node,
             return;
         }
 
-        if (node.RequiresMaintenanceTargetIdentity()) {
-            uint64_t targetNode=0;std::string nodeField,targetInstance,instanceField;
-            if(!detail::TryReadUintField(*command,filter.nodeIdFieldNames,targetNode,nodeField) ||
-               !detail::TryReadStringField(*command,filter.instanceIdFieldNames,targetInstance,instanceField) ||
-               targetNode!=node.GetNodeId() || targetInstance!=node.GetNodeInfo().node_uuid()) {
-                consumed->foreign.fetch_add(1, std::memory_order_relaxed);
-                return;
-            }
-            // P8之后共享manual分区必须精确目标boot；不把空兼容位视为本实例命令。
-        }
-        if (!detail::ValidateCommandTarget(t, *command, node.GetNodeId(),
-                node.GetNodeInfo().node_uuid(), filter)) {
-            consumed->foreign.fetch_add(1, std::memory_order_relaxed);
+        const bool forThisNode = detail::IsCommandForThisNode(t, *command, node.GetNodeId(),
+            node.GetNodeInfo().node_uuid(), filter, node.RequiresMaintenanceTargetIdentity());
+        (forThisNode ? consumed->own : consumed->foreign).fetch_add(1, std::memory_order_relaxed);
+        if (!forThisNode) {
             return;
         }
-
-        consumed->own.fetch_add(1, std::memory_order_relaxed);
         dispatch(t, *command);
     };
 

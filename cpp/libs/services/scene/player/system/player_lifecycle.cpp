@@ -42,7 +42,7 @@
 #include "player/system/player_store_client.h"
 #include "player/system/player_store_projection.h"
 #include "player/system/save_timing_stats.h"
-#include "modules/transaction_log/transaction_log_system.h" // 资产流水跟着存盘提交走(MakePlayerStoreOptions)
+#include "modules/audit/audit_outbox.h" // 审计记录随存盘提交进发件箱(MakePlayerStoreOptions,docs/design/player-audit-outbox.md)
 #include "utils/random/random.h"
 #include "player/system/player_inbox_system.h" // FinishExitAfterPersist:销毁前尽力补发收件箱 Ack(评审 M4)
 #include "player/system/release_fence.h" // HandleReleaseFromSceneManager 的纯判定与计数
@@ -3415,11 +3415,11 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 	tlsEcs.playerList.erase(playerId);
 	RoleAdmissionSystem::OnDestroyed(playerId);
 
-	// 存盘状态:还有未落定的存盘时这次不生效,落定时由 onSettled 回收(连同没放行的流水)。
+	// 存盘状态:还有未落定的存盘时这次不生效,落定时由 onSettled 回收(连同没交出去的审计记录)。
 	if (PlayerStore().Forget(playerId))
 	{
-		// 存盘都已落定:已提交的流水早在提交时放行,还排着的描述的是没落库的改动。
-		TransactionLogSystem::DiscardPending(playerId, "entity destroyed and its saves settled");
+		// 存盘都已落定:已提交的审计记录早已随存盘写进发件箱,还排着的描述的是没落库的改动。
+		AuditOutbox::Discard(playerId, "entity destroyed and its saves settled");
 	}
 }
 
@@ -3883,8 +3883,9 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 	// sending messages to the (already-disconnected) gate session.
 	PlayerSceneSystem::LeaveCurrentScene(player);
 
-	// Capture a logout snapshot before persisting (safety net for rollback).
-	SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGOUT);
+	// 下线审计快照(回档兜底):请求先进审计队列,紧接着的最终存盘(带 release)把它交给 go/db,
+	// go/db 按这一笔提交后的行拼出整档、同一个事务写进发件箱(docs/design/player-audit-outbox.md §5.5)。
+	(void)SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGOUT);
 
 	auto saveResult = SavePlayerImpl(player, /*allowSkipWhenPersisted=*/true);
 	if (saveResult == SaveResult::kRejected)
@@ -4977,8 +4978,12 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 		return entt::null;
 	}
 
-	// Capture a login snapshot for rollback safety net.
-	SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN);
+	// 进场审计快照(回档兜底):请求先进审计队列,要等这名玩家下一笔存盘才落库。请求一笔关键进度存盘(1 秒节流),
+	// 让快照约 1 秒内随存盘提交,内容是进场初始化之后提交的状态(docs/design/player-audit-outbox.md §5.5)。
+	if (SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGIN) != 0)
+	{
+		RequestKeyProgressSave(player, "audit_snapshot_login");
+	}
 
 	return player;
 }
@@ -5031,19 +5036,25 @@ namespace
 				(void)stamp.AppendToString(&profileBytes);
 			};
 		}
-		// 资产流水跟着存盘提交走(TransactionLogSystem 类注释):闸门和放行钩子在这里一起接上,建状态机的地方就是开闸的地方。
-		// 只开闸门不接钩子,流水永远出不去;只接钩子不开闸门,行为与以前相同。
-		TransactionLogSystem::EnableCommitGating(true);
-		options.commitMark = [] { return TransactionLogSystem::CommitMark(); };
-		options.onCommittedThrough = [](Guid playerId, uint64_t commitMark) { TransactionLogSystem::PublishThrough(playerId, commitMark); };
+		// 审计记录(流水、快照请求)随存盘提交进发件箱(AuditOutbox 类注释,docs/design/player-audit-outbox.md):
+		// 开关和四个钩子在这里一起接上,建状态机的地方就是开发件箱的地方。只开不接钩子,审计记录永远交不出去;
+		// 只接钩子不开,流水照旧直接发 Kafka、快照请求被拒。
+		AuditOutbox::Enable(true);
+		options.commitMark = [] { return AuditOutbox::Mark(); };
+		options.auditDue = [](Guid playerId, uint64_t commitMark) { return AuditOutbox::HasDue(playerId, commitMark); };
+		options.attachAudit = [](Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)
+		{
+			AuditOutbox::AttachDue(playerId, commitMark, *request.mutable_transaction_logs(), *request.mutable_audit_snapshots());
+		};
+		options.onCommittedThrough = [](Guid playerId, uint64_t commitMark) { AuditOutbox::AckThrough(playerId, commitMark); };
 		options.onSettled = [](Guid playerId)
 		{
 			// 实体在存盘未落定时销毁(被废黜):DestroyPlayer 那次 Forget 没有生效,这里补上。
 			if (!tlsEcs.actorRegistry.valid(tlsEcs.GetPlayer(playerId)))
 			{
 				PlayerLifecycleSystem::PlayerStore().Forget(playerId);
-				// 实体没了、存盘都落定了:还没放行的流水描述的改动没有落库,随改动一起丢。
-				TransactionLogSystem::DiscardPending(playerId, "entity gone and its saves settled");
+				// 实体没了、存盘都落定了:还没交出去的审计记录描述的改动没有落库,随改动一起丢。
+				AuditOutbox::Discard(playerId, "entity gone and its saves settled");
 			}
 		};
 		options.sendClaim = SendPlayerStoreClaimOverGrpc;
@@ -5063,9 +5074,9 @@ namespace
 		};
 		options.onClaimed = [](Guid playerId, const playerstore::LoadAndClaimResponse *response)
 		{
-			// 认领只在本节点没有这名玩家的实体、存盘都已落定时发生:队列里还剩的,只可能是上一个实体没落库的改动。
-			// 在载入建实体之前丢掉,否则新实体第一次提交会把它们当成自己的改动放行出去(初始化发的物品就会记两遍)。
-			TransactionLogSystem::DiscardPending(playerId, "claimed again on this node");
+			// 认领只在本节点没有这名玩家的实体、存盘都已落定时发生:审计队列里还剩的,只可能是上一个实体没落库的改动。
+			// 在载入建实体之前丢掉,否则新实体第一次提交会把它们当成自己的改动交出去(初始化发的物品就会记两遍)。
+			AuditOutbox::Discard(playerId, "claimed again on this node");
 			PlayerLifecycleSystem::HandlePlayerStoreClaimed(playerId, response);
 		};
 		// 只顺带的行(位置)最多被定时存盘推迟多少秒(player-save-direct-commit.md §1.1)。初值 300,压测后定;

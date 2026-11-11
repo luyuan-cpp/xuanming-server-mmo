@@ -3,40 +3,30 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "proto/common/rollback/player_snapshot.pb.h"
 
-// Kafka topic for player snapshot entries —— 这里是**基名**,不是实际发送用的名字。
-//
-// 实际名字带 topic 世代后缀 `_g<N>`:分区数是 topic 的不可变契约(分区键 = player_id 的按玩家有序
-// 全靠它),改分区数不许原地改,只能换一代 —— 新名字、新分区数、消费者(go/data_service)
-// 同步切到同一代。世代号与 go/data_service/etc/data_service.yaml 的 Kafka.TopicGeneration 对齐;
-// 两边不一致就是生产者写进没人消费的 topic,快照静默丢失。
-//
-// 2026-09-09:后缀不再是编译期常量,改由部署配置 AuditTopicGeneration 拼
-// (modules/audit/audit_topic.h 的 AuditTopicName;0 = 第一代)。换代只改配置,不必改这里、
-// 也不必重出镜像。**别把这个常量直接交给 KafkaProducer** —— 裸名字会被 broker 自动建成
-// 1 分区,消费端的分区契约随即永久失配。
-constexpr char kPlayerSnapshotTopicBase[] = "player_snapshot_topic";
-
 // Current schema version tag — bump when player_database fields change.
 constexpr char kSnapshotSchemaVersion[] = "v1";
 
-// Stateless utility that captures a complete serialized snapshot of a player's
-// state and sends it to Kafka for persistence.  The Go DB service writes these
-// to the `player_snapshot` MySQL table.
+// 玩家审计快照(回档的依据),随存盘提交(2026-11-11,审计发件箱,docs/design/player-audit-outbox.md §5.5)。
+//
+// scene 只交一份快照请求(snapshot_id、trigger、schema_version、zone_id),进这名玩家的审计队列(AuditOutbox),
+// 随他的下一笔存盘交给 go/db;go/db 在提交这笔存档的同一个 TiDB 事务里,按这一笔写完之后的全部数据行拼出整档,
+// 写进本存档库的发件箱,再由转发循环投 player_snapshot topic,data_service 落 player_snapshot 表。所以:
+//   - 快照就是库里某一笔提交的原样,不会是从没提交过的内存状态;
+//   - Kafka 停多久都不丢;存盘请求也不会因为带整档而变大;
+//   - 这名玩家的存盘最终没提交(被废黜、缺持久化组件拒存),快照请求随改动一起作废,不会落成一份零值快照。
 //
 // Snapshots are the foundation for:
 // - Application-level rollback (GM loads a snapshot → diffs → selective restore)
-// - Periodic safety nets (timer-driven captures)
 // - Pre-trade / pre-maintenance safeguards
 //
 // Usage:
-//   SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN);
-//   SnapshotSystem::CaptureAndSend(player, SNAPSHOT_GM_MANUAL);
+//   SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGIN);   // 调用方随后要让这名玩家存一次盘
+//   SnapshotSystem::RequestAuditSnapshot(player, SNAPSHOT_LOGOUT);  // 随后的最终存盘带走它
 class SnapshotSystem
 {
 public:
-    // Marshal current player state, build a PlayerSnapshotEntry, and push to Kafka.
-    // Returns the assigned snapshot_id (from the snapshot id segment), or 0 on failure
-    // (including "segment not ready": the snapshot is skipped, fail-closed).
-    // 只读:不改变实体的组件集合。持久化组件缺失时同样返回 0、不发快照(不消耗号段)。
-    static uint64_t CaptureAndSend(entt::entity player, SnapshotTrigger trigger);
+    // 核实体与 Guid → 抽样(audit_snapshot_policy.h)→ 领 snapshot_id → 入审计队列。返回 snapshot_id;
+    // 没抽中、号段没号、实体不合法、或这个进程没开审计发件箱(没有存盘,快照没有提交的地方)时返回 0。
+    // 只读:不改变实体的组件集合,也不序列化存档。快照要等这名玩家下一笔存盘提交才落库。
+    static uint64_t RequestAuditSnapshot(entt::entity player, SnapshotTrigger trigger);
 };

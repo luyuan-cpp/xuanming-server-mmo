@@ -98,8 +98,9 @@ constexpr AssetOpStreamRule kAssetOpStreamRules[] = {
 	 {TX_GUILD_SHOP, TX_GUILD_ACTIVITY_REWARD, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_TRADE_DEBIT, AssetOpDirection::kDebit, 3,
 	 {TX_AUCTION_SELL, TX_TRADE, TX_AUCTION_BUY}},
-	{ASSET_OP_STREAM_TRADE_CREDIT, AssetOpDirection::kCredit, 2,
-	 {TX_AUCTION_BUY, TX_TRADE, TX_UNKNOWN}},
+	// TX_AUCTION_RETURN:退回本人托管的资产,不判获取封禁(GainBlockService::CountsAsGain,审计 r2-trade#1)。
+	{ASSET_OP_STREAM_TRADE_CREDIT, AssetOpDirection::kCredit, 3,
+	 {TX_AUCTION_BUY, TX_TRADE, TX_AUCTION_RETURN}},
 	{ASSET_OP_STREAM_SYSTEM_CREDIT, AssetOpDirection::kCredit, 3,
 	 {TX_SYSTEM_GRANT, TX_MAIL_ATTACHMENT, TX_GM_GRANT}},
 	{ASSET_OP_STREAM_GM_RECALL, AssetOpDirection::kDebit, 1,
@@ -1096,9 +1097,12 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 {
 	const auto& bundle = request.bundle();
 	const auto txType = static_cast<TransactionType>(request.tx_type());
+	// 交易退回本人托管的资产不是新增获得,(a)(a') 两道封禁都不判;发币与入包的入口按同一个交易类型同样放行
+	// (GainBlockService::CountsAsGain,审计 r2-trade#1)。
+	const bool countsAsGain = GainBlockService::CountsAsGain(txType);
 
 	// (a) 货币封禁预检:封禁是终局拒绝,必须在任何改动之前判掉。
-	for (const auto& currency : bundle.currencies())
+	if (countsAsGain) for (const auto& currency : bundle.currencies())
 	{
 		const auto type = static_cast<CurrencyType>(currency.currency_type());
 		if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency, currency.currency_type()) ||
@@ -1113,7 +1117,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 	// 排在号段余量与背包空间两道 RETRY 预检之前:被封禁的物品无论背包满不满都是 REJECTED,
 	// 不能先回「背包满、稍后重试」(封禁不是容量不足)。完整实例的 config_id 已由第 8 步
 	// ValidateCreditBundle 核对与 instance_proto 里的一致,这里不必解码。
-	for (const auto& item : bundle.items())
+	if (countsAsGain) for (const auto& item : bundle.items())
 	{
 		if (GainBlockService::IsItemGainBlocked(player, item.config_id()))
 		{
@@ -1121,7 +1125,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 			return;
 		}
 	}
-	for (const auto& transfer : bundle.item_instances())
+	if (countsAsGain) for (const auto& transfer : bundle.item_instances())
 	{
 		if (GainBlockService::IsItemGainBlocked(player, transfer.config_id()))
 		{

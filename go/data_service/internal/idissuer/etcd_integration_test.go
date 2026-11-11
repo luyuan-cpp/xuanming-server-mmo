@@ -96,7 +96,7 @@ func (e *itEnv) issuer(observe func(string)) *Issuer {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/")
+	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/", nil)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func (e *itEnv) put(endpoints []string, key string, value []byte) {
 
 func (e *itEnv) registryHighWater() uint64 {
 	e.t.Helper()
-	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/")
+	g, err := newEtcdRegistryAt(e.registry, e.root+"registry/", nil)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestEtcdIntegration_StoreContract(t *testing.T) {
 		t.Fatal("a plain number is not a valid record and must not be read as absent")
 	}
 
-	registry, err := newEtcdRegistryAt(env.registry, root+"contract/registry/")
+	registry, err := newEtcdRegistryAt(env.registry, root+"contract/registry/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

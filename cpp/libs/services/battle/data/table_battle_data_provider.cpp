@@ -18,15 +18,25 @@
 
 namespace turnbattle {
 
-bool TableBattleDataProvider::LoadBattleRewards(const std::string& path) {
+namespace {
+
+// 启动边界读一份小配置(奖励、剧本):空文件、读不出或超过 1 MiB 都按不可用处理
+bool ReadSmallConfigFile(const std::string& path, const char* label, std::string& content) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input || input.tellg() <= 0 || input.tellg() > 1024 * 1024) {
-        LOG_ERROR << "Battle reward config unavailable or exceeds 1 MiB: " << path;
+        LOG_ERROR << label << " unavailable or exceeds 1 MiB: " << path;
         return false;
     }
-    std::string json(static_cast<size_t>(input.tellg()), '\0');
+    content.assign(static_cast<size_t>(input.tellg()), '\0');
     input.seekg(0);
-    if (!input.read(json.data(), static_cast<std::streamsize>(json.size()))) return false;
+    return static_cast<bool>(input.read(content.data(), static_cast<std::streamsize>(content.size())));
+}
+
+}  // namespace
+
+bool TableBattleDataProvider::LoadBattleRewards(const std::string& path) {
+    std::string json;
+    if (!ReadSmallConfigFile(path, "Battle reward config", json)) return false;
     BattleRewardConfig candidate;
     const auto status = google::protobuf::util::JsonStringToMessage(json, &candidate);
     if (!status.ok()) {
@@ -70,6 +80,34 @@ const BattleRewardProfile* TableBattleDataProvider::FindBattleReward(
         }
     }
     return nullptr;
+}
+
+bool TableBattleDataProvider::LoadBattleScripts(const std::string& path) {
+    std::string json;
+    if (!ReadSmallConfigFile(path, "Battle script config", json)) return false;
+    // protobuf 自带的 JSON 解析:字段名、类型、枚举名都按 proto 定义检查,未知字段默认拒绝
+    BattleScriptConfig config;
+    const auto status = google::protobuf::util::JsonStringToMessage(json, &config);
+    if (!status.ok()) {
+        LOG_ERROR << "Invalid battle script config: " << status.ToString();
+        return false;
+    }
+    std::string error;
+    auto catalog = BattleScriptCatalog::Build(config, *this, error);
+    if (!catalog.has_value()) {
+        LOG_ERROR << "Battle script config rejected: " << error;
+        return false;
+    }
+    scripts = std::move(*catalog);
+    LOG_INFO << "Battle scripts loaded: path=" << path << " scripts=" << scripts.ScriptCount()
+             << " bindings=" << scripts.BindingCount();
+    return true;
+}
+
+std::shared_ptr<const BattleScript> TableBattleDataProvider::FindBattleScript(uint32_t matchMode,
+                                                                              uint32_t battleConfigId,
+                                                                              eBattleScriptSide side) const {
+    return scripts.Find(matchMode, battleConfigId, side);
 }
 
 const SkillTable* TableBattleDataProvider::FindSkill(uint32_t skillTableId) const {

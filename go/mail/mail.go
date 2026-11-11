@@ -359,8 +359,11 @@ func run(c config, migrate bool) (runErr error) {
 		// 成员表先于重投循环起:第一拍读到之前成员表为空,本副本做全部片(保活优先)。
 		go func() { defer close(membersDone); members.Run(workerCtx, etcd) }()
 		go func() { defer close(loopDone); loop.Run(workerCtx) }()
-		go func() { defer close(sweepDone); maintenance.Run(sweepCtx, repo, c.Sweep, root) }()
-		logx.Infof("[mail] Asset redelivery due scan sharded by player_id: kind=%s members_prefix=%s", assetOpWorkKind, membersPrefix)
+		// 过期清理复用同一份成员表,按 mail_id 分片、另一个类别键(缺口清单第 25 条第四批,设计 §14.2):
+		// 系统 / 帮会 / 活动邮件的 owner_player_id 都是 0,按收件人分会全挤进一片。正确性仍靠每封点锁后按原条件复核再删。
+		go func() { defer close(sweepDone); maintenance.Run(sweepCtx, repo, c.Sweep, members.Owns, root) }()
+		logx.Infof("[mail] Asset redelivery due scan sharded by player_id: kind=%s members_prefix=%s; expiry sweep sharded by mail_id: kind=%s",
+			assetOpWorkKind, membersPrefix, data.SweepWorkKind)
 	} else {
 		// canary 副本:不起重投、成员表与清理,canary 领到的附件由 stable 的重投循环投出。完成通道直接关掉,
 		// closeSource / closeRelay 等它们时立即返回,否则停机要等满超时再 HOLD。

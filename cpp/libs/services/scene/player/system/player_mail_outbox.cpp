@@ -55,9 +55,11 @@ namespace
 	struct MailOutboxSendStateComp
 	{
 		uint64_t inFlightRequestId{0}; // 0 = 没有在途
+		uint64_t inFlightAttempt{0};   // 在途那一次的尝试号:判丢失后重寄同一条,请求号相同,靠它认出迟到的旧回答
 		uint64_t inFlightSinceMs{0};
 		uint64_t nextAttemptMs{0};     // 失败退避到这个时刻(UTC 毫秒);0 = 随时
 		uint32_t failStreak{0};        // 连续失败次数(含没发出去、在途丢失),寄到一封归 0
+		uint64_t attempts{0};          // 已发起的尝试次数,尝试号从 1 起
 	};
 
 	uint64_t InFlightLostAfterMs()
@@ -86,29 +88,6 @@ namespace
 		return ready[tlsRandom.Rand<std::size_t>(0, ready.size() - 1)];
 	}
 
-	// 请求由条目逐字段确定性重建,不带过期时刻(邮件按首次落库那一刻 + 个人邮件有效期算,判重先于一切依赖当前时间的校验,
-	// 重寄不会因此变成新请求)。条目形状不合法返回 false,不发。
-	bool BuildRequest(const uint64_t playerId, const MailOutboxEntry& entry, mailpb::SendMailRequest& request)
-	{
-		if (!mail_outbox_rules::ValidateEntry(entry).empty())
-		{
-			return false;
-		}
-		request.set_sender_kind(kBattleSenderKind);
-		request.set_request_id(entry.request_id());
-		request.set_recipient_player_id(playerId);
-		request.set_title(entry.title());
-		request.set_body(entry.body());
-		auto* attachments = request.mutable_attachments();
-		for (const auto& item : entry.items())
-		{
-			auto* line = attachments->add_items();
-			line->set_config_id(item.config_id());
-			line->set_count(static_cast<uint32_t>(item.count())); // ValidateEntry 已保证每封合计不超过 4096
-		}
-		return true;
-	}
-
 	SendStart DefaultSend(const uint64_t playerId, const MailOutboxEntry& entry, PlayerMailOutboxSystem::SendDone done)
 	{
 		const char* secret = std::getenv(kBattleProducerSecretEnv);
@@ -117,7 +96,7 @@ namespace
 			return SendStart::kNoSecret;
 		}
 		mailpb::SendMailRequest request;
-		if (!BuildRequest(playerId, entry, request))
+		if (!PlayerMailOutboxSystem::BuildSendRequest(playerId, entry, request))
 		{
 			return SendStart::kInvalidEntry;
 		}
@@ -161,8 +140,14 @@ namespace
 		return mail_outbox_rules::Find(persisted->snapshot->player_database_data().mail_outbox(), requestId) != nullptr;
 	}
 
+	uint64_t DefaultNowMs()
+	{
+		return TimeSystem::NowMillisecondsUTC();
+	}
+
 	PlayerMailOutboxSystem::SendFn gSend = &DefaultSend;
 	PlayerMailOutboxSystem::DurableFn gIsDurable = &DefaultIsDurable;
+	std::function<uint64_t()> gNowMs = &DefaultNowMs;
 
 	void RecordFailure(MailOutboxSendStateComp& state, const bool rejected, const uint64_t nowMs)
 	{
@@ -175,19 +160,21 @@ namespace
 
 	void SendOne(entt::entity player, const uint64_t playerId, const uint64_t requestId, const uint64_t nowMs)
 	{
+		auto& state = tlsEcs.actorRegistry.get_or_emplace<MailOutboxSendStateComp>(player);
 		const auto* outbox = tlsEcs.actorRegistry.try_get<PlayerMailOutboxComp>(player);
 		const auto* entry = outbox != nullptr ? mail_outbox_rules::Find(*outbox, requestId) : nullptr;
 		if (entry == nullptr)
 		{
 			return;
 		}
-		const auto started = gSend(playerId, *entry, [playerId, requestId](PlayerMailOutboxSystem::SendOutcome outcome) {
-			PlayerMailOutboxSystem::OnSendDone(playerId, requestId, outcome, TimeSystem::NowMillisecondsUTC());
+		const uint64_t attempt = ++state.attempts;
+		const auto started = gSend(playerId, *entry, [playerId, requestId, attempt](PlayerMailOutboxSystem::SendOutcome outcome) {
+			PlayerMailOutboxSystem::OnSendDone(playerId, requestId, attempt, outcome, gNowMs());
 		});
-		auto& state = tlsEcs.actorRegistry.get_or_emplace<MailOutboxSendStateComp>(player);
 		if (started == SendStart::kSent)
 		{
 			state.inFlightRequestId = requestId;
+			state.inFlightAttempt = attempt;
 			state.inFlightSinceMs = nowMs;
 			return;
 		}
@@ -210,6 +197,32 @@ namespace
 				  << ", or an invalid entry); the items stay owed in the outbox until this is fixed";
 	}
 } // namespace
+
+bool PlayerMailOutboxSystem::BuildSendRequest(const uint64_t playerId, const MailOutboxEntry& entry,
+											  mailpb::SendMailRequest& request)
+{
+	// 判重先于一切依赖当前时间的校验(go/mail Repo.Send),所以不带过期时刻时重寄不会变成新请求;
+	// 有效期按首次落库那一刻 + 个人邮件有效期算,玩家总有完整的领取期。
+	if (playerId == 0 || !mail_outbox_rules::ValidateEntry(entry).empty())
+	{
+		return false;
+	}
+	mailpb::SendMailRequest built;
+	built.set_sender_kind(kBattleSenderKind);
+	built.set_request_id(entry.request_id());
+	built.set_recipient_player_id(playerId);
+	built.set_title(entry.title());
+	built.set_body(entry.body());
+	auto* attachments = built.mutable_attachments();
+	for (const auto& item : entry.items())
+	{
+		auto* line = attachments->add_items();
+		line->set_config_id(item.config_id());
+		line->set_count(static_cast<uint32_t>(item.count())); // ValidateEntry 已保证每封合计不超过 4096
+	}
+	request = std::move(built);
+	return true;
+}
 
 uint32_t PlayerMailOutboxSystem::PrepareBattleOverflow(entt::entity player, const uint64_t battleId,
 													   const mail_outbox_rules::MailItems& items, PreparedMails& out)
@@ -275,7 +288,7 @@ void PlayerMailOutboxSystem::CommitPrepared(entt::entity player, const uint64_t 
 
 void PlayerMailOutboxSystem::Tick()
 {
-	TickAt(TimeSystem::NowMillisecondsUTC());
+	TickAt(gNowMs());
 }
 
 void PlayerMailOutboxSystem::TickAt(const uint64_t nowMs)
@@ -312,6 +325,7 @@ void PlayerMailOutboxSystem::TickAt(const uint64_t nowMs)
 						 << " request_id=" << state->inFlightRequestId << " in_flight_ms=" << inFlightMs
 						 << ",no answer within the call deadline; treated as unknown and retried";
 				state->inFlightRequestId = 0;
+				state->inFlightAttempt = 0; // 那一次的回答若迟到,按「不是当前」处理;寄到了照样删条目
 				RecordFailure(*state, /*rejected=*/false, nowMs);
 				continue;
 			}
@@ -335,8 +349,8 @@ void PlayerMailOutboxSystem::TickAt(const uint64_t nowMs)
 	}
 }
 
-void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t requestId, const SendOutcome outcome,
-										const uint64_t nowMs)
+void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t requestId, const uint64_t attempt,
+										const SendOutcome outcome, const uint64_t nowMs)
 {
 	const auto player = tlsEcs.GetPlayer(playerId);
 	if (!tlsEcs.actorRegistry.valid(player) || tlsEcs.GetPlayerId(player) != playerId)
@@ -344,17 +358,19 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 		return; // 玩家已不在本节点:条目在他的存档里,下一个持有者再寄(邮件判重,不会多一封)
 	}
 	auto* state = tlsEcs.actorRegistry.try_get<MailOutboxSendStateComp>(player);
-	const bool current = state != nullptr && state->inFlightRequestId == requestId;
+	const bool current =
+		state != nullptr && state->inFlightRequestId == requestId && state->inFlightAttempt == attempt;
 	if (current)
 	{
 		state->inFlightRequestId = 0;
+		state->inFlightAttempt = 0;
 	}
 	const auto verdict = mail_outbox_rules::ClassifySend(outcome.callOk, outcome.tipId, outcome.mailId);
 	if (verdict != SendVerdict::kDelivered)
 	{
 		if (!current)
 		{
-			return; // 不是当前在途那封的失败回答(已按在途丢失处理过):不再记一次
+			return; // 不是当前在途那一次的失败回答(那一次已按在途丢失处理过):不再记一次
 		}
 		RecordFailure(*state, verdict == SendVerdict::kRejected, nowMs);
 		if (!mail_outbox_rules::IsFailureLogDue(state->failStreak))
@@ -412,4 +428,9 @@ void PlayerMailOutboxSystem::SetSendForTest(SendFn fn)
 void PlayerMailOutboxSystem::SetDurableCheckForTest(DurableFn fn)
 {
 	gIsDurable = fn ? std::move(fn) : DurableFn(&DefaultIsDurable);
+}
+
+void PlayerMailOutboxSystem::SetNowForTest(std::function<uint64_t()> fn)
+{
+	gNowMs = fn ? std::move(fn) : std::function<uint64_t()>(&DefaultNowMs);
 }

@@ -19,7 +19,7 @@ import (
 //   - 记录 scene:{id}:agones_gs = "<GameServer 名>/<条目>"(agonesRoom):这个场景占的是哪台上的哪一条。
 //     由登记脚本(scene_registration.go)或改派转移的 CAS(luaCommitAgonesRoomTransfer)写,认领脚本在销毁的
 //     同一步读出、删掉,交给拆除任务去删条目。
-//   - 在途占用 agones_rooms:zone:{z}:holds(有序集合,成员是条目,分数是截止时刻 Unix 秒):向 Agones 要名额
+//   - 在途占用 agones_rooms:{ctl:<z>}:holds(有序集合,成员是条目,分数是截止时刻 Unix 秒):向 Agones 要名额
 //     **之前**先写。把名额写进记录的脚本在同一步 ZREM 它,删到了才写记录;删不到说明已被对账取消,一个键都不写。
 //
 // 一个条目该留着,当且仅当下面三条之一成立,其余都是孤儿,对账删掉(agones_reconcile.go):
@@ -34,9 +34,9 @@ import (
 // 被挡住(建场景失败、转移落空),不会记错。
 const agonesRoomHoldTTL = 5 * time.Minute
 
-// agonesRoomHoldsKey 是本 zone 的在途占用。
+// agonesRoomHoldsKey 是本 zone 的在途占用 agones_rooms:{ctl:<z>}:holds。
 func agonesRoomHoldsKey(zoneID uint32) string {
-	return fmt.Sprintf("agones_rooms:zone:%d:holds", zoneID)
+	return fmt.Sprintf("agones_rooms:%s:holds", sceneControlTag(zoneID))
 }
 
 // newAgonesRoomEntry 生成一次占用的条目:"<scene_id>.<32 位十六进制随机串>"。

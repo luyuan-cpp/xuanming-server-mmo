@@ -755,6 +755,9 @@ func (r *AssetOpRepo) Finalize(ctx context.Context, op assetop.Op, status asseto
 	return finalized, nil
 }
 
+// sqlReadAssetOpOwner 是 wakeContractOf 在终结事务提交之后、事务之外读指令归属的那一条(非加锁读)。
+const sqlReadAssetOpOwner = "SELECT ref_kind,ref_id FROM " + AssetOpTableName + " WHERE op_id=?"
+
 // wakeContractOf 在一条资产指令终结(自动终结、自动放弃、人工终结)提交之后,把它所属的交易合同提前到现在到期
 // (缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8 第 3 点)。合同推进只在锁住合同行之后读腿的结局,
 // 看不到这张表的变化;以前在途腿的合同靠每轮复查才发现结局,现在由终结这一侧唤醒,合同那边按兜底间隔复查。
@@ -768,7 +771,7 @@ func (r *AssetOpRepo) wakeContractOf(ctx context.Context, opID, nowMs uint64) {
 	}
 	var refKind uint32
 	var refID uint64
-	if err := r.db.QueryRowContext(ctx, "SELECT ref_kind,ref_id FROM "+AssetOpTableName+" WHERE op_id=?", opID).Scan(&refKind, &refID); err != nil {
+	if err := r.db.QueryRowContext(ctx, sqlReadAssetOpOwner, opID).Scan(&refKind, &refID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			logx.Errorf("[TradeAsset] Could not read the owning contract of finalized asset op op_id=%d, the contract rechecks on its own schedule: %v", opID, err)
 		}

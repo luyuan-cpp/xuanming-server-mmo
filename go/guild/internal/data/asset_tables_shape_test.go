@@ -29,10 +29,11 @@ func TestAssetTablesShape(t *testing.T) {
 		"guild_player_op_seq": {
 			"PRIMARY": {[]string{"player_id", "stream"}, true},
 		},
+		// idx_guild_asset_op_0 带 op_id 让到期扫描的 ORDER BY 走索引顺序,带 player_id 让分片条件在索引上判
+		// (2026-11-11,缺口清单第 25 条)。
 		"guild_asset_op": {
 			"PRIMARY":              {[]string{"op_id"}, true},
 			"uk_guild_asset_op":    {[]string{"player_id", "stream", "stream_epoch", "seq"}, true},
-			// op_id 让到期扫描的 ORDER BY 走索引顺序,player_id 让分片条件在索引上判(2026-11-11,缺口清单第 25 条)。
 			"idx_guild_asset_op_0": {[]string{"status", "next_attempt_ms", "op_id", "player_id"}, false},
 			"idx_guild_asset_op_1": {[]string{"guild_id", "op_id"}, false},
 			"idx_guild_asset_op_2": {[]string{"player_id", "stream", "stream_epoch", "status", "seq"}, false},

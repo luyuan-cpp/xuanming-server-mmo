@@ -1,6 +1,6 @@
 # 分布式日志关联与链路追踪（todo.md #152）
 
-> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证，其中 client_rpc_router 的裸客户端与 scene_manager 的玩家拦截器留待对应文件空出来再接（§6.2）；第 5 批（§5.4、§6.2 的 Kafka 载体与第 2 项）2026-11-11 已落码，未编译、未测试，待 Codex 验证，其中 login 发往 gate 的调用方切换和另外几处 Go 生产、消费点留待对应文件空出来再接，几处不继承请求 ctx 的发送要另改（§6.2）；第 6 批（§7，gateway_node）2026-11-11 已落码，未编译、未测试，待 Codex 验证，config_node 排在后面；第 7 批（§9.1 本地 Alloy、§9.3 看板与文档）2026-11-11 已改完配置，没有试跑，待 Codex 校验与冒烟。阶段一到此全部落码；阶段二（§10.2，K8s 采集）、阶段三（§10.3）没有开始。**
+> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 5 批（§5.4、§6.2 的 Kafka 载体与第 2 项）2026-11-11 已落码，未编译、未测试，待 Codex 验证；第 4、5 批留下的补尾（client_rpc_router 拨号、scene_manager 玩家拦截器、login 发 gate 的命令、mail / match / guild / chat 的生产消费点、几处不继承请求 ctx 的发送）2026-11-11 全部接完，未编译（§6.2）；第 6 批（§7，gateway_node）2026-11-11 已落码，未编译、未测试，待 Codex 验证，config_node 排在后面；第 7 批（§9.1 本地 Alloy、§9.3 看板与文档）2026-11-11 已改完配置，没有试跑，待 Codex 校验与冒烟。阶段一到此全部落码；阶段二（§10.2，K8s 采集）、阶段三（§10.3）没有开始。**
 > **范围：** 本仓的 C++ 节点、Go 微服务、`java/gateway_node`。Java 版服务器守同一份约定、自己实现，见 §12。
 > **相关：** 现有采集链路见 [grafana-loki-local-logs.md](../ops/grafana-loki-local-logs.md)；RPC0 信封见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §4.1；muduo_grpc 见 [grpc-muduo-transport.md](grpc-muduo-transport.md)。
 
@@ -211,15 +211,15 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 - zrpc 服务端和客户端的 tracing 拦截器默认开着。
 - 用 `logx.WithContext(ctx)` 打的行，以及 goctl 生成的 logic 里用 `l.Logger` 打的行，都自带 `trace` / `span`。
 
-### 6.2 要补的
+### 6.2 要补的（2026-11-11 全部接完）
 
 1. **新包 `go/shared/tracing`**（第 4 批已建，`grpc.go` 与 `grpc_test.go`），把传播相关的代码收在一处：
-   - `UnaryClientInterceptor()`：给裸 `grpc.NewClient` 用。它开一个 client span，按全局传播器写 metadata，做法照 go-zero zrpc 客户端的 tracing 拦截器（那份在 go-zero 的 internal 包里，引用不了）：先用 `metadata.FromOutgoingContext` 取出已有的出站 metadata 再追加，所以 callerauth 已经写好的签名头原样保留。拦截器在调用方建好 ctx 之后才执行，不会被签名那一步的整体替换冲掉。要接的 5 处，第 4 批接了 4 处：
-     - `go/scene_manager/internal/logic/scene_node_client.go`（已接）
-     - `go/shared/scenenode/conn.go`（已接）
-     - `go/match/internal/discovery/node_watcher.go`（已接）
-     - `go/match/internal/authority/rank_publisher.go`（已接）
-     - `go/client_rpc_router/internal/discovery/node_watcher.go` 的 `DialEndpoint`：**未接**。2026-11-10 这个函数正被别的会话整段重写，等它落定后加一个 `grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor())` 即可。没接之前，路由模式下路由服往后端的调用不带 traceparent，链路在路由服断开。
+   - `UnaryClientInterceptor()`：给裸 `grpc.NewClient` 用。它开一个 client span，按全局传播器写 metadata，做法照 go-zero zrpc 客户端的 tracing 拦截器（那份在 go-zero 的 internal 包里，引用不了）：先用 `metadata.FromOutgoingContext` 取出已有的出站 metadata 再追加，所以 callerauth 已经写好的签名头原样保留。拦截器在调用方建好 ctx 之后才执行，不会被签名那一步的整体替换冲掉。要接的 5 处都已接：
+     - `go/scene_manager/internal/logic/scene_node_client.go`（第 4 批）
+     - `go/shared/scenenode/conn.go`（第 4 批）
+     - `go/match/internal/discovery/node_watcher.go`（第 4 批）
+     - `go/match/internal/authority/rank_publisher.go`（第 4 批）
+     - `go/client_rpc_router/internal/discovery/node_watcher.go`（2026-11-11 补尾）：这个文件已改成按 endpoint 缓存连接的 `connPool`，拦截器挂在生产用的 `defaultConnPool` 拨号函数上，`DialEndpoint` 取到的连接都带。路由服是 zrpc 服务端，入站已由 go-zero 接上 gate 传来的 trace；转发只抄应用层前缀的 metadata、不抄 `traceparent`，所以由拦截器在路由服的 span 下开 client span 再写头，不会覆盖什么。
 
      `go/mail/cmd/mailadmin` 和 `go/match/cmd/spectatefeatured` 是运维命令行，可以不接。
    - **Kafka 载体**（第 5 批已写）：按客户端库拆成两个子包，注入和提取都走 `otel.GetTextMapPropagator()`，同名键取最后一个（与 C++ 的 `get_last` 同口径）：
@@ -227,7 +227,8 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
      - `go/shared/tracing/saramatrace`：`Headers(ctx)` 生成 sarama 生产消息头。本仓只有 login 用 sarama，而且只生产，所以只有注入。
 
      不放进 `shared/tracing` 根包：根包被只做 gRPC 的模块引用（scene_manager 直接引，mail、player_inbox、trade 经 `shared/scenenode` 引），这几个模块的 go.mod 里没有 sarama，trade 连 kafka-go 都没有，放进根包会让它们编不过。拆开后每个模块只依赖自己本来就用的 Kafka 客户端。
-   - `PlayerFieldInterceptor()`：服务端拦截器。请求实现了 `GetPlayerId() uint64` 且值非零时，用 `logx.ContextWithFields` 加上 `player_id`。第 4 批接了 login（排在会话拦截器之后、serverbase 之前）和 data_service（排在关停开关之后）。scene_manager 的 main（`scene_manager_service.go`）2026-11-10 有别的会话的大批未提交改动，**未接**，同样等它落定再接。
+   - `PlayerFieldInterceptor()`：服务端拦截器。请求实现了 `GetPlayerId() uint64` 且值非零时，用 `logx.ContextWithFields` 加上 `player_id`。第 4 批接了 login（排在会话拦截器之后、serverbase 之前）和 data_service（排在关停开关之后）。scene_manager 2026-11-11 补尾接上，放在 `buildUnaryInterceptors` 链尾、紧贴 handler：serverbase 不按 ctx 打日志，放哪一层都一样，放链尾不用给现有的 ①②③ 重新编号。
+     日志字段的值写成十进制字符串（第 7 批改，原因见 §9.1）。
 2. **Kafka 接点**（第 5 批按 `WriteMessages`、`ProducerMessage`、`FetchMessage`、`ReadMessage` 全量 grep 核对过，2026-11-11）：
    - **已接**：
      - `shared/kafkautil/gate_push.go`：`PushToPlayer`、`BroadcastToPlayers`、`BroadcastToScene`、`BroadcastToGateClients` 写的消息都带头，经这几个函数推 gate 的服务不用改就带上。
@@ -235,15 +236,16 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
      - `login/internal/kafka/command_producer.go`：新增 `SendToTopicPartitionContext(ctx, …)`，原 `SendToTopicPartition` 委托它并传 `context.Background()`。ctx 只用来取 trace，不控制超时（超时仍由 sarama 的 `Net.*Timeout` 决定）。
      - data_service 消费：`snapshot_consumer.go` 的 `decode`（3 条）和 `txlog_consumer.go` 的 `decodeTxLog`（2 条）逐条日志，经 `message_log.go` 的 `messageLogger(msg)` 挂上这条消息自己的 trace。解码在剥掉消息头之前，取得到头。批里为省内存剥掉了 `Value`、`Key`、`Headers`，所以落库阶段的 STOPPED 日志不挂 trace，它们点名了 guid、玩家和 offset。
      - C++ 两端是通用接点（§5.4），gate、scene 消费的命令都在消息头的 trace 下处理。
-   - **未接，等对应文件空出来再接**（2026-11-11 这些文件都有别的会话没提交的改动）：
-     - login 的调用方：`svc/gate_command.go` 的 `PushTipToUnboundSession`，`svc/servicecontext.go` 的 `SendBindSessionToGate`、`KickSessionOnGate`、`PushTipToSession`。这几个函数都不收 ctx，补尾要给它们加 ctx 参数、改调 `SendToTopicPartitionContext`，并改 logic 层的调用方（`entergamelogic.go` 也在改）。**没接之前 login → Kafka → gate 这一跳接不上**，§10.1 第 5 批的这条验收要等补尾。`svc/gate_migration.go` 的 `SendGateDrainMigration` 是排空监视器发的整台 gate 命令，本来没有请求 trace，不接。
-     - 生产：`mail/internal/notify/notify.go`（发 gate）、`mail/mail.go` 与 `player_inbox/internal/svc/servicecontext.go` 的转发 writer、`match/internal/svc/servicecontext.go` 的对局结果发布。
-     - 消费：`guild/internal/kafka/trial_result_consumer.go`、`match/internal/kafka/result_consumer.go`。接法同 data_service：逐条日志用 `logx.WithContext(kafkagotrace.ContextFrom(…))`。
-     - `chat/internal/svc/world_push.go` 的世界频道推送文件本身没被改，但 chat 的 go.mod、go.sum 现在没有 kafka-go 这个依赖，先不碰；要接时照 `gate_push.go` 加一行。
-   - **不继承请求 ctx 的发送**：下面几处为了不被请求的取消带走，用 `context.Background()` 另起预算，trace 也一起丢了，只在写消息处加头没有用。补尾时预算改从 `context.WithoutCancel(请求 ctx)` 派生（Go 1.21 起的标准做法：去掉取消和截止时间，保留值），trace 和 logx 字段就一起带过去，再在写消息处加头：
-     - `match/internal/team/notify.go` 的 `publish`、`publishOnline`、`publishRegroup`（组队副作用里的 scene 刷新与推送）；
-     - `match/internal/logic/push.go` 的 `pushToPlayer`（不收请求 ctx，要改签名）；
-     - `scene_manager/internal/logic/enterscenelogic.go` 两处、`enter_hosted_placement.go` 一处，直接传 `context.Background()`（文件有别的会话没提交的改动）。
+   - **2026-11-11 补尾接上的**（当时这些文件里都有别的会话没提交的改动，只在不重叠的位置加了几行）：
+     - login 发 gate 的命令：`svc/gate_command.go` 的 `PushTipToUnboundSession`，`svc/servicecontext.go` 的 `SendBindSessionToGate`、`KickSessionOnGate`、`PushTipToSession` 都加了 ctx 参数，改调 `SendToTopicPartitionContext`；`entergamelogic.go` 的三个接口与调用点跟着带 ctx。`svc/gate_migration.go` 的 `SendGateDrainMigration` 是排空监视器发的整台 gate 命令，本来没有请求 trace，不改。
+     - 生产：`mail/internal/notify/notify.go`（新邮件提醒，发 gate）、`match/internal/svc/servicecontext.go` 的对局结果发布、`chat/internal/svc/world_push.go` 的世界频道推送（chat 的 go.mod 已由别的会话补上 kafka-go）。`mail/mail.go` 与 `player_inbox/internal/svc/servicecontext.go` 的转发 writer 只是原样转发，消息头由组消息的地方写，不用改。
+     - 消费：`guild/internal/kafka/trial_result_consumer.go`（两条入口 `processRecord`、`processRecordOnce`）、`match/internal/kafka/result_consumer.go`（`processResultRecord`）在开头用 `kafkagotrace.ContextFrom` 把消息自己的 trace 挂到 ctx 上，往下的结算、推送和逐条日志都接上；取消仍由消费者的 ctx 决定。
+   - **不继承请求 ctx 的发送**（2026-11-11 补尾改完）：这几处为了不被请求的取消带走，原来用 `context.Background()` 另起预算，trace 和 logx 字段（player_id）也一起丢了，只在写消息处加头没有用。现在一律从 `context.WithoutCancel(请求 ctx)` 派生（Go 1.21 起标准库给「请求返回后继续跑的工作」的做法：去掉取消和截止时间，保留值），预算和不可取消的性质都不变：
+     - **login 的 EnterGame 后台链**（补尾时新发现，影响最大）：`chainCtx` 原来是 `context.WithTimeout(context.Background(), …)`，整条异步入场链——Bind、Kick、失败 tip 三种 gate 命令，链上调 scene_manager 的 gRPC，以及链上的日志——都丢了 trace 和 player_id。现在从 `detachedCtx := context.WithoutCancel(ctx)` 派生；失败通知在 `chainCancel` 之后执行，所以直接用 `detachedCtx`。带过去的其余值（会话元数据、验签原件）链上没有代码读，login 的出站拦截器也不读（核对过 go-zero 自带的客户端拦截器与 `scenenode`）。用例 `entergame_trace_test.go`：带 trace 的 EnterGame 走完后台链，Bind 命令拿到同一个 trace_id。
+     - `guild/internal/logic/push.go`：`GuildNotifier.Notify` 加 ctx 参数，`notify` / `notifyTrialRoster` 跟着带；恢复任务的推送传 `context.Background()`（§3.3）。
+     - `match/internal/team/notify.go` 的 `publish`、`publishOnline`、`publishRegroup` 加 ctx 参数（`mutateEffects` 跟着带），`writeSceneCommand` 写头；SQL 维护任务里的两处传维护循环自己的 ctx，没有 trace。
+     - `match/internal/logic/push.go` 的 `pushToPlayer` 加 ctx 参数，挑战邀请与挑战结果两处调用传请求 ctx。
+     - `scene_manager/internal/logic/enterscenelogic.go` 的 RedirectToGate、RoutePlayer 两处与 `enter_hosted_placement.go` 一处：原注释要的是「不可取消的 context」，`WithoutCancel(l.ctx)` 同样不可取消，再写头。
    - **本来就没有 trace**：`player_locator/internal/logic/leasemonitor.go` 是周期扫描，不接。
    - 批量消费时按条取上下文；整批级别的日志不挂 trace。
 3. **日志调用不做全量迁移**：不带 ctx 的 `logx.Xxx` 直接调用约 1600 处（含测试）。请求路径上的新代码用 `logx.WithContext(ctx)` 或 logic 的 `l.Logger`。
@@ -331,8 +333,8 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 | 1 | §5.7 原语修正，§4.1 上下文改造，§5.1 日志后缀 | 单测通过；本进程内一次 RPC0 派发的日志带完整 `trace_id` |
 | 2 | §5.2 RPC0 信封（含 proto 生成） | 回环用例通过；scene 处理一条玩家消息时推给 gate 的消息，两边日志 `trace_id` 相同、`span_id` 不同（gate 收客户端消息时开根在第 3 批，此前 gate → scene 这一跳 scene 仍开新根） |
 | 3 | §5.5 入口开根与玩家上下文，§5.6 协程（`AwaitCallback` 与执行器），`ScopedRoot`、`Bind` | 单测通过；客户端一条消息从 gate 到 scene 是同一个 trace，两边日志都带 `player_id`；co_await 之后 trace 不变；周期任务不带 trace |
-| 4 | §5.3 gRPC 钩子，§6.2 第 1 项的客户端拦截器与玩家拦截器，§5.5 路由 lane 排队项带 trace | C++ → Go、Go → C++ 都接得上；login 的日志带 `player_id`；路由模式下排队发出的请求挂自己的 trace，不挂前一条的。补尾：client_rpc_router 的 `DialEndpoint` 与 scene_manager 的玩家拦截器（§6.2） |
-| 5 | §5.4 与 §6.2 的 Kafka 载体和第 2 项 | scene → Kafka → data_service 接得上；login → Kafka → gate 接得上。补尾：login 调用方切换、mail / match / guild 等几处生产消费点、几处不继承请求 ctx 的发送（§6.2） |
+| 4 | §5.3 gRPC 钩子，§6.2 第 1 项的客户端拦截器与玩家拦截器，§5.5 路由 lane 排队项带 trace | C++ → Go、Go → C++ 都接得上；login 的日志带 `player_id`；路由模式下排队发出的请求挂自己的 trace，不挂前一条的。补尾（client_rpc_router 拨号、scene_manager 玩家拦截器）2026-11-11 已接（§6.2） |
+| 5 | §5.4 与 §6.2 的 Kafka 载体和第 2 项 | scene → Kafka → data_service 接得上；login → Kafka → gate 接得上。补尾（login 调用方切换与 EnterGame 后台链、mail / match / guild / chat 的生产消费点、几处不继承请求 ctx 的发送）2026-11-11 已接（§6.2） |
 | 6 | §7 Java gateway_node | 外部带 `traceparent` 的 HTTP 请求被开新根；出站 gRPC 接得上。补尾：config_node（§7） |
 | 7 | §9.1 本地 Alloy 规则，§9.3 看板变量与文档同步 | 本机登录并进游戏一次。网关 `/api/login` 的一条 `trace_id` 查得到 Java 网关、login 以及 login 经 zrpc 调到的服务的行；进游戏后客户端一条消息的 `trace_id` 查得到 gate、scene 的行；按 `player_id` 串得起这个玩家在 gate、scene、login 的行。两段不是同一条 trace：gate 对每条客户端消息开根（§3.3），原先写的「一条 trace_id 看到 Java、gate、login、data_service、scene」按设计做不到，2026-11-11 改正 |
 
@@ -374,6 +376,7 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
   - `go/shared/tracing/kafkagotrace` 6 条：对固定 id 写出的值与 C++ 用例的字面值逐字相同；往返后消费端拿到同一个 trace、且标为远端；ctx 里没有 trace 时不写头；没有、坏值、全零、别的键都不产生 trace；同名键取最后一个；`logx.WithContext(ContextFrom(…))` 打的行带生产端的 trace_id。
   - `go/shared/tracing/saramatrace` 2 条：写出同一个字面值；没有 trace 时不写头。
   - 子包的用例自己设 W3C 传播器、结束时恢复，不依赖 go-zero 的 init。
+- login（补尾，`internal/logic/clientplayerlogin/entergame_trace_test.go` 1 条）：带 trace 的 EnterGame 走完后台链，Bind 命令拿到同一个 trace_id；链 ctx 退回 `context.Background()` 就变红。其余补尾是参数透传，现有用例跟着改了签名（login、match、guild 的假实现与直接调用），没有另加用例。
 - Go 客户端带 `traceparent` 调 muduo_grpc 服务端的跨语言互通：C++ 侧已由 `grpc_client_loopback_test` 覆盖解析，Go 侧由上面的拦截器用例覆盖写入；真跨进程的核对放在冒烟里（`go/shared/grpcinterop` 的互通用例没扩展）。
 
 **Java**（在 `java/gateway_node` 下 `mvn test`，第 6 批已写）：

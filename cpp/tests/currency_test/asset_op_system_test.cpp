@@ -973,6 +973,57 @@ TEST_F(AssetOpSystemTest, CreditOfAPlayerBannedCompleteInstanceIsRejected)
 	EXPECT_EQ(0u, inventory.OccupiedGridCount());
 }
 
+// 交易退回本人托管的资产(TX_AUCTION_RETURN)不是新增获得(数据覆写审计 r2-trade#1):本人被封禁获取金币、
+// 这件物品与这种可叠加物品,退回照常入账、入包,不转人工。同一包按成交所得(TX_AUCTION_BUY)发,仍是记账式终局拒绝。
+// 走的是真实的 CurrencySystem::AddCurrency 与 BagService::AddItems,两层封禁判断都按交易类型放行。
+TEST_F(AssetOpSystemTest, TradeReturnOfOwnEscrowIgnoresGainBlocks)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
+	GiveBags();
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
+	constexpr uint32_t kStackable = 10;
+	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player_, kCurrencyGold));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 1));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, kStackable));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+
+	const auto credit = [&](uint64_t seq, TransactionType txType, uint64_t instanceGuid)
+	{
+		::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_CREDIT, seq, 30, txType);
+		ItemComp escrowed;
+		escrowed.set_item_id(instanceGuid);
+		escrowed.set_config_id(1);
+		escrowed.set_size(1);
+		auto* transfer = request.mutable_bundle()->add_item_instances();
+		transfer->set_item_uuid(escrowed.item_id());
+		transfer->set_config_id(1);
+		transfer->set_stack_size(1);
+		transfer->set_instance_proto(escrowed.SerializeAsString());
+		auto* stack = request.mutable_bundle()->add_items();
+		stack->set_config_id(kStackable);
+		stack->set_count(2);
+		SignForTest("credit", request, "trade");
+		::AssetOpResponse response;
+		PlayerAssetOpSystem::Credit(request, response);
+		return response;
+	};
+
+	const auto delivered = credit(1, TX_AUCTION_BUY, 950199996);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, delivered.outcome()) << "成交所得照常判封禁";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), delivered.reason().id());
+	EXPECT_EQ(0u, Gold());
+	EXPECT_EQ(nullptr, inventory.GetItemCompByGuid(950199996));
+
+	const auto returned = credit(2, TX_AUCTION_RETURN, 950199997);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, returned.outcome()) << "退回本人托管的资产不受封禁约束";
+	EXPECT_FALSE(returned.partial());
+	EXPECT_EQ(30u, Gold());
+	EXPECT_NE(nullptr, inventory.GetItemCompByGuid(950199997));
+	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackable));
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_TRADE_CREDIT));
+}
+
 TEST_F(AssetOpSystemTest, CreditFirstCurrencyFailsRetry)
 {
 	// 只有 1 条货币且失败 → 一点没改,回 RETRY 且不记账(可安全重投)。

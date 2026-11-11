@@ -14,10 +14,10 @@ import (
 
 // 场景与节点的成员集合(docs/design/redis-player-store-cluster.md §5.10)。
 //
-//	instance:<scene>:members        SET,成员是十进制 player_id;场景人数 = SCARD
-//	node:zone:<zone>:<node>:members SET,同上;节点人数 = SCARD,只进负载分与每节点指标
+//	instance:<scene>:members         SET,成员是十进制 player_id;场景人数 = SCARD
+//	node:{ctl:<zone>}:<node>:members SET,同上;节点人数 = SCARD,只进负载分与每节点指标
 //
-// 这两把键在控制域(svcCtx.Redis),不带 hash tag;位置等玩家域键在 svcCtx.PlayerRedis,一段 Lua 不能同时碰两边,
+// 这两把键在控制域(svcCtx.Redis),不带玩家域的 tag;位置等玩家域键在 svcCtx.PlayerRedis,一段 Lua 不能同时碰两边,
 // 所以「删位置」与「摘成员」是两步。计数器在两步之间失败时人数永久多计(实例永不销毁),集合没有这个问题:
 // SADD / SREM 天然幂等,原样重发、调用方重试、并发重进场都不会多减或漏减。
 //
@@ -39,8 +39,8 @@ import (
 const (
 	// InstanceMembersKeyFmt 是场景的成员集合,见文件头。
 	InstanceMembersKeyFmt = "instance:%d:members"
-	// NodeMembersKeyFmt 是节点的成员集合,见文件头。
-	NodeMembersKeyFmt = "node:zone:%d:%s:members"
+	// NodeMembersKeyFmt 是节点的成员集合,见文件头。第一个 %s 是 sceneControlTag(zone)。
+	NodeMembersKeyFmt = "node:%s:%s:members"
 )
 
 func instanceMembersKey(sceneID uint64) string {
@@ -48,7 +48,7 @@ func instanceMembersKey(sceneID uint64) string {
 }
 
 func nodeMembersKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodeMembersKeyFmt, zoneID, nodeID)
+	return fmt.Sprintf(NodeMembersKeyFmt, sceneControlTag(zoneID), nodeID)
 }
 
 // luaAddSceneMember / luaRemoveSceneMember:KEYS 是要动的成员集合(1~2 把,都在控制域),ARGV[1] 是十进制 player_id。

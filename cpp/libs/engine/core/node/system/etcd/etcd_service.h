@@ -21,6 +21,9 @@ class EtcdService final : public EtcdResponseSink {
 public:
     // 重试回调捕获 this;已武装的定时器可移动,宿主地址仍必须固定。
     EtcdService() = default;
+    // 注册任务归 registrationTasks_(LoopTaskScope),它的析构要在所属 EventLoop 线程上停止本地等待:
+    // 析构必须在注册 loop 的线程上、且早于该 EventLoop 析构。生产里 Node 是 loop 线程上的栈对象,天然满足;
+    // 在别的线程析构 Node(~Node 里 EventLoop 外析构的分支)会撞 assertInLoopThread 而终止。
     ~EtcdService() override;
     EtcdService(const EtcdService&) = delete;
     EtcdService& operator=(const EtcdService&) = delete;

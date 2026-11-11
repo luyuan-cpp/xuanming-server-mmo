@@ -8,6 +8,7 @@ import (
 
 	"shared/dbplacement"
 	"shared/dirshard"
+	"shared/kafkautil"
 	"shared/playerredis"
 	"shared/redisauth"
 	"shared/rolefence"
@@ -331,6 +332,42 @@ type IdIssuerConfig struct {
 	// 地域码绑定和第三份预留记录都在这里。生产必须配,地址不能和 PrimaryEtcd、SecondaryEtcd 有交集。
 	// dev 可以不写,回落到 PrimaryEtcd(再回落到 Etcd.Hosts),放不同的键。
 	RegistryEtcd []string `json:",optional"`
+
+	// RegistryTLS 是连登记处的双向 TLS(docs/ops/id-issuer-runbook.md §1)。登记处跨集群经私网访问:
+	// 它只收世界 CA 签的客户端证书;发号器也只认世界 CA 签的服务端证书,连到别的环境误起的登记处,握手就失败。
+	// 生产(AllowAutoSeed=false)三项必填;dev、test 的登记处在自己的 etcd 上,不开 TLS,三项必须为空(RegistryTLSFiles)。
+	RegistryTLS RegistryTLSConfig `json:",optional"`
+}
+
+// RegistryTLSConfig 是登记处双向 TLS 的三个 PEM 文件:世界 CA、本地域的客户端证书和私钥。
+// K8s 上由 Secret id-registry-client-tls 挂到 /etc/mmorpg/id-registry-tls/(ca.crt、tls.crt、tls.key)。
+type RegistryTLSConfig struct {
+	CAFile   string `json:",optional"`
+	CertFile string `json:",optional"`
+	KeyFile  string `json:",optional"`
+}
+
+// RegistryTLSFiles 核对登记处的 TLS 配置并返回三个路径。dev、test(AllowAutoSeed=true)返回空值:不开 TLS。
+func (c IdSegmentConfig) RegistryTLSFiles() (RegistryTLSConfig, error) {
+	files := c.Issuer.RegistryTLS
+	set := 0
+	for _, path := range []string{files.CAFile, files.CertFile, files.KeyFile} {
+		if strings.TrimSpace(path) != "" {
+			set++
+		}
+	}
+	if c.AllowAutoSeed {
+		if set != 0 {
+			return RegistryTLSConfig{}, errors.New("IdSegment.Issuer.RegistryTLS must be empty when AllowAutoSeed=true: " +
+				"a dev or test id registry is a key on its own plain etcd")
+		}
+		return RegistryTLSConfig{}, nil
+	}
+	if set != 3 {
+		return RegistryTLSConfig{}, errors.New("IdSegment.Issuer.RegistryTLS needs CAFile, CertFile and KeyFile when AllowAutoSeed=false: " +
+			"the shared id registry only accepts mutual TLS (docs/ops/id-issuer-runbook.md §1)")
+	}
+	return files, nil
 }
 
 // DefaultIdSegmentTags 是走号段的永久身份清单。
@@ -661,14 +698,9 @@ func (k KafkaConfig) EffectiveSnapshotTopic() string {
 // topicForGeneration 拼 `<base>_g<N>`。base 为空时返回空,交给 kafka.Start 的 validate
 // 报错,而不是拼出一个只有后缀的名字。generation=0 只可能来自"整段 Kafka 未出现"
 // (go-zero 不回填未出现结构里的 default),此时按第一代 1 处理:名字保持规范。
+// 2026-11-11 起 go/db 的审计发件箱转发是这两个 topic 的生产者,两边共用 kafkautil.AuditTopicName,不各拼各的。
 func topicForGeneration(base string, generation uint32) string {
-	if base == "" {
-		return ""
-	}
-	if generation == 0 {
-		generation = 1
-	}
-	return fmt.Sprintf("%s_g%d", base, generation)
+	return kafkautil.AuditTopicName(base, generation)
 }
 
 type SnapshotMySQLConfig struct {

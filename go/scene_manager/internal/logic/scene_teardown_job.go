@@ -26,7 +26,7 @@ import (
 //
 // 做法是事务性发件箱:
 //   - 认领脚本在提交的同一步写任务 scene:{id}:teardown(hash,不带 TTL),并把场景放进本 zone 的待办有序集合
-//     scene_teardown:zone:{z}:pending,分数是认领时刻。认领提交了,任务就一定在;任务在,别的认领一律落空。
+//     scene_teardown:{ctl:<z>}:pending,分数是认领时刻。认领提交了,任务就一定在;任务在,别的认领一律落空。
 //   - 认领方当场按任务做副作用(completeSceneTeardown),全部做完才删任务。
 //   - 没做完的(进程退出、某一步失败、Eval 回错让调用方以为没认领到)留在待办里。本 zone 的领导者每
 //     sceneTeardownSweepInterval 扫一次,认领超过 sceneTeardownJobLease 的任务按同一份做法重做。
@@ -68,7 +68,7 @@ func sceneTeardownJobKey(sceneID uint64) string {
 }
 
 func sceneTeardownPendingKey(zoneID uint32) string {
-	return fmt.Sprintf("scene_teardown:zone:%d:pending", zoneID)
+	return fmt.Sprintf("scene_teardown:%s:pending", sceneControlTag(zoneID))
 }
 
 // sceneTeardownJob 是一条拆除任务。Claim 是认领脚本删除前读到的快照(Token 是任务的身份),副作用一律以它为准。

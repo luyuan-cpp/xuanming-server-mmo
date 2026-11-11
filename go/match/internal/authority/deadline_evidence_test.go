@@ -150,13 +150,12 @@ func TestDeadlineAbortSceneConstantsMatchCpp(t *testing.T) {
 // 取证期限、SQL 也慢到用满一拍预算(globalOutcomeRecoverBudget)那种更坏的情形不保证,与积压同归残余。
 // 硬上限还要盖住工作租约,「retry_at_ms 越过硬上限」才是持有宽限的记号;持有宽限要长于 battle 越界之后的慢速重放间隔
 // (result_commit.h kSqlOutcomeSlowRetryInterval = 60 秒)。
-// 前提是没有积压:一条车道里同时到期的局超过一页(8 局)时,一局要隔几圈才访问到,这条不等式就不再保证;那时 scene 按上限解冻,
-// 晚到的结算由战斗道具预留兜住(docs/design/battle-item-reservation.md),归残余。
+// 前提是恢复跟得上:2026-11-11 起一拍在预算之内把一条车道连续扫空(logic/global_outcome_recover.go),一条车道同时到期超过一页
+// 不再要隔几圈;一拍预算也清不完的积压(或 match 长期不可用)由每分钟巡检按 deadlineAbortOverdueMs 报「超期未作废」,
+// 它就是下面黑洞那一档的最晚落定时刻。那时 scene 按上限解冻,晚到的结算由战斗道具预留兜住(docs/design/battle-item-reservation.md)。
 func TestDeadlineAbortBoundsFitSceneFreezeHold(t *testing.T) {
-	const (
-		recoveryTickMs            uint64 = 1000 // logic.globalOutcomeRecoverInterval
-		sceneHoldDeadlineAfterDue        = sceneTerminalGraceMs + sceneDeliveryMarginMs + sceneFreezeHoldCapMs
-	)
+	const sceneHoldDeadlineAfterDue = sceneTerminalGraceMs + sceneDeliveryMarginMs + sceneFreezeHoldCapMs
+	recoveryTickMs := uint64(ExpiredOutcomeRecoverTick / time.Millisecond)
 	probeTimeoutMs := uint64(DeadlineProbeTimeout / time.Millisecond)
 	require.Equal(t, sceneTerminalGraceMs, terminalOutcomeGraceMs, "终局宽限 match 与 scene 同值")
 	visitDelayMs := func(tickMs uint64) uint64 { return 2*ExpiredOutcomeLanes*tickMs + 2*probeTimeoutMs }
@@ -165,6 +164,7 @@ func TestDeadlineAbortBoundsFitSceneFreezeHold(t *testing.T) {
 	}
 	require.Less(t, matchLatest(recoveryTickMs), sceneHoldDeadlineAfterDue, "match 可用时截止 ABORT 必须早于 scene 按续冻上限解冻")
 	require.Less(t, matchLatest(recoveryTickMs+probeTimeoutMs), sceneHoldDeadlineAfterDue, "原 battle 被黑洞、每拍多等一个取证期限时也要早于")
+	require.Equal(t, matchLatest(recoveryTickMs+probeTimeoutMs), deadlineAbortOverdueMs, "「超期未作废」的巡检阈值就是黑洞那一档的最晚落定时刻")
 	require.LessOrEqual(t, WorkLeaseMs, terminalOutcomeGraceMs+deadlineAbortHardCapMs, "工作租约不得越过硬上限")
 	require.Greater(t, deadlineHeldPatienceMs, battleSlowReplayMs, "持有宽限至少盖住 battle 的一次慢速重放")
 	require.Greater(t, deadlineAbortHardCapMs, deadlineProbeBackoffMs, "硬上限之内至少取证两次以上")

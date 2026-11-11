@@ -399,6 +399,10 @@ message GuildTrialLaunchRecord {
   // 恢复器调度(2026-11-05,r2-guild#1 评审;go/guild/internal/data/trial_launch_repo.go「恢复器的到期认领」)。只决定何时、由哪个副本去查,不参与释放判定。
   uint64 next_check_ms = 9;             // 下一次检查时刻(SQL 时钟毫秒):新原件 = max(开局截止, Prepare 提交) + 30s;每次认领改成 SQL 现在 + 退避间隔
   uint32 check_attempts = 10;           // 认领次数(只增不减),决定退避间隔
+  // 实时开局路径拿到 match 的确定答复而没开成时的结束原因(2026-11-11):base.TipInfoMessage 的确定性原字节(tip id 与参数,
+  // 如「某人离线」)。只用于恢复器作废释放时写回大厅,让名单上所有人看到与发起人同一个具体原因;不参与任何释放判定。
+  // 空 = 没有记录(Start 结局未知、开局后作废),释放时写默认原因。只写一次,只对还没登记对局的 state1 原件写。
+  bytes realtime_end_tip = 11;
 }
 
 // 原件的可索引投影；与launch同事务写入/终结，防止角色过户漏过尚未发奖的对局。

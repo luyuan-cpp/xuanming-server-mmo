@@ -1488,3 +1488,206 @@ TEST(PlayerStoreClientTest, ZeroFallbackNeverDefers)
     ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
     EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1")));
 }
+
+// ── 审计发件箱(docs/design/player-audit-outbox.md §5.2)──────────────────────────────────
+namespace
+{
+    // 假的审计队列,语义与 AuditOutbox 相同:按水位排队,按快照水位交出,放行时删掉水位不大于它的。
+    struct AuditProbe
+    {
+        uint64_t mark{0};
+        std::vector<std::pair<uint64_t, uint64_t>> queued; // (水位, tx_id)
+        std::vector<uint64_t> acked;
+
+        void Record(uint64_t txId) { queued.emplace_back(++mark, txId); }
+
+        void Install(PlayerStoreClient::Options &options)
+        {
+            options.commitMark = [this] { return mark; };
+            options.auditDue = [this](Guid, uint64_t commitMark) { return !queued.empty() && queued.front().first <= commitMark; };
+            options.attachAudit = [this](Guid, uint64_t commitMark, playerstore::SavePlayerRequest &request)
+            {
+                for (const auto &[recordMark, txId] : queued)
+                {
+                    if (recordMark > commitMark)
+                    {
+                        break;
+                    }
+                    request.add_transaction_logs()->set_tx_id(txId);
+                }
+            };
+            options.onCommittedThrough = [this](Guid, uint64_t commitMark)
+            {
+                acked.push_back(commitMark);
+                while (!queued.empty() && queued.front().first <= commitMark)
+                {
+                    queued.erase(queued.begin());
+                }
+            };
+        }
+    };
+
+    std::vector<uint64_t> TxIdsOf(const playerstore::SavePlayerRequest &request)
+    {
+        std::vector<uint64_t> ids;
+        for (const auto &entry : request.transaction_logs())
+        {
+            ids.push_back(entry.tx_id());
+        }
+        return ids;
+    }
+
+    // 认识审计字段的 go/db 的回包:COMMITTED / EQUAL 时 audit_outbox_written 为真。传 false 模拟旧 go/db。
+    void ReplyWithAudit(Fixture &f, playerstore::SavePlayerResult result, bool auditWritten)
+    {
+        ASSERT_FALSE(f.sent.empty());
+        Fixture::Sent front = std::move(f.sent.front());
+        f.sent.pop_front();
+        playerstore::SavePlayerResponse response;
+        response.set_result(result);
+        response.set_audit_outbox_written(auditWritten);
+        front.done(true, &response);
+    }
+}
+
+// 有到期的审计记录:没有脏行也写一笔(净变化为零的改动同样有流水要交),提交并确认写了发件箱才放行。
+TEST(PlayerStoreClientTest, DueAuditForcesAWriteAndIsReleasedAfterTheOutboxWrite)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    audit.Record(1);
+
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h0"), {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(0, f.sent.front().request.rows_size()) << "行没变,只带审计记录";
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1}));
+    EXPECT_TRUE(audit.acked.empty()) << "发出去不算提交";
+
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{1}));
+    EXPECT_TRUE(audit.queued.empty());
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, Rows("h0"), {}, nullptr))
+        << "交完了、行也没变,不再写";
+}
+
+// 取快照之后才记的不在这份快照里:留给下一笔。
+TEST(PlayerStoreClientTest, AuditRecordedAfterTheSnapshotWaitsForTheNextSave)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    audit.Record(1);
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+    audit.Record(2);
+
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1}));
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
+    ASSERT_EQ(1u, audit.queued.size());
+    EXPECT_EQ(2u, audit.queued.front().second);
+
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1"), {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{2}));
+}
+
+// 结果未知按同内容重发:审计记录和行一样,不重新组装;之后记的不混进来。
+TEST(PlayerStoreClientTest, UnknownOutcomeResendsTheSameAuditRecords)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    audit.Record(1);
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+    const std::string original = f.sent.front().request.SerializeAsString();
+    audit.Record(2);
+
+    f.ReplyUnknown();
+    f.FireTimers();
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(original, f.sent.front().request.SerializeAsString());
+
+    // 之前那次其实提交了:EQUAL 也是提交,确认写了发件箱就放行这份快照的水位。
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_EQUAL, true);
+    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{1}));
+    ASSERT_EQ(1u, audit.queued.size());
+    EXPECT_EQ(2u, audit.queued.front().second);
+}
+
+// 旧 go/db 不认识审计字段:存档提交了,审计没写。行照常确认,审计记录不放行,下一笔再交。
+TEST(PlayerStoreClientTest, AuditIsKeptWhenTheStoreDidNotWriteTheOutbox)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    audit.Record(1);
+    PlayerStoreClient::SaveStatus status{PlayerStoreClient::SaveStatus::kRejected};
+    client.Submit(kPlayer, Rows("h1"), {}, [&status](const PlayerStoreClient::SaveResult &result) { status = result.status; });
+
+    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, false);
+    EXPECT_EQ(PlayerStoreClient::SaveStatus::kCommitted, status) << "存档本身提交了";
+    EXPECT_TRUE(audit.acked.empty());
+    EXPECT_EQ(1u, audit.queued.size());
+
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1"), {}, nullptr)) << "行已确认,只为审计再写一笔";
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(0, f.sent.front().request.rows_size());
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1}));
+}
+
+// 没带审计记录的一笔不看 audit_outbox_written:旧回包照常放行水位(只有行,没有可丢的审计)。
+TEST(PlayerStoreClientTest, SavesWithoutAuditIgnoreTheOutboxFlag)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+    EXPECT_TRUE(TxIdsOf(f.sent.front().request).empty());
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    EXPECT_EQ(1u, audit.acked.size());
+}
+
+// 被拒的那一笔不放行,审计记录随下一笔再交。
+TEST(PlayerStoreClientTest, RejectedSaveKeepsAuditForTheNextSave)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
+    audit.Record(1);
+    client.Submit(kPlayer, Rows("h1"), {}, nullptr);
+
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    EXPECT_TRUE(audit.acked.empty());
+    ASSERT_FALSE(client.HasUnsettled(kPlayer));
+
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, Rows("h1"), {}, nullptr));
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1}));
+}
+
+// 有到期的审计记录时定时存盘不推迟,哪怕只有位置变了。
+TEST(PlayerStoreClientTest, PeriodicSaveIsNotDeferredWhileAuditIsDue)
+{
+    Fixture f;
+    AuditProbe audit;
+    audit.Install(f.options);
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1"))) << "对照:没有审计记录时照常推迟";
+
+    audit.Record(1);
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l2")));
+}

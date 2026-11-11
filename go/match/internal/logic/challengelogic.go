@@ -81,16 +81,17 @@ func (l *ChallengeLogic) RespondChallenge(in *matchpb.RespondChallengeRequest) (
 
 // pushResult 推挑战结果(尽力而为:推送失败不回滚业务状态,只记日志)。
 func (l *ChallengeLogic) pushResult(toPlayerId, challengeId uint64, accepted bool, responderId uint64) {
-	pushChallengeResult(l.svcCtx, toPlayerId, challengeId, accepted, responderId)
+	pushChallengeResult(l.ctx, l.svcCtx, toPlayerId, challengeId, accepted, responderId)
 }
 
-func pushChallengeResult(svcCtx *svc.ServiceContext, toPlayerId, challengeId uint64, accepted bool, responderId uint64) {
+// ctx 是应答这次挑战的请求 ctx,推送只取它的 trace(见 pushToPlayer)。
+func pushChallengeResult(ctx context.Context, svcCtx *svc.ServiceContext, toPlayerId, challengeId uint64, accepted bool, responderId uint64) {
 	result := &matchpb.ChallengeResultS2C{
 		ChallengeId: challengeId,
 		Accepted:    accepted,
 		ResponderId: responderId,
 	}
-	if err := pushToPlayer(svcCtx, toPlayerId,
+	if err := pushToPlayer(ctx, svcCtx, toPlayerId,
 		uint32(game.MatchServiceNotifyChallengeResultMessageId), result); err != nil {
 		if errors.Is(err, errPlayerOffline) {
 			logx.Infof("[challenge] Result notification target offline; abandoning player=%d challenge=%d", toPlayerId, challengeId)

@@ -82,7 +82,8 @@ func lastCall(t *testing.T, s *recovScript, prefix string) recovCall {
 
 // Save 写的 on_book 按要写的 workflow 现算,记录上带来的旧值不算数;写成功之后记录跟库一致。
 func TestCommerceSaveWritesOnBookFromTheWorkflow(t *testing.T) {
-	const wantSQL = "UPDATE trade_commerce SET status=?,buyer_player_id=?,filled_quantity=?,expires_ms=?,updated_ms=?,version=version+1,workflow_proto=?,on_book=? WHERE commerce_id=? AND version=?"
+	// seller_player_id 2026-11-11 起也写:人工改绑(redirect)会换卖方(jubaozhai-market.md §15.7.1 第 1 类)。
+	const wantSQL = "UPDATE trade_commerce SET status=?,seller_player_id=?,buyer_player_id=?,filled_quantity=?,expires_ms=?,updated_ms=?,version=version+1,workflow_proto=?,on_book=? WHERE commerce_id=? AND version=?"
 	for _, c := range []struct {
 		name  string
 		stage string
@@ -103,7 +104,7 @@ func TestCommerceSaveWritesOnBookFromTheWorkflow(t *testing.T) {
 		if call.sql != wantSQL {
 			t.Fatalf("%s: 语句 =\n  %s\nwant\n  %s", c.name, call.sql, wantSQL)
 		}
-		if got := call.args[6]; got != c.want {
+		if got := call.args[7]; got != c.want {
 			t.Fatalf("%s: 写入的 on_book = %v,want %v(全部实参 %v)", c.name, got, c.want, call.args)
 		}
 		if v.OnBook != c.want {

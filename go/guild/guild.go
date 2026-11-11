@@ -500,7 +500,8 @@ func main() {
 	//
 	// WithSyncBumper:落地恢复摘要(docs/design/landing-recovery-sync-digest.md §3)。guild 的所有 bump 点(含资产终结的
 	// OnAssetFinalized)都经 logic 的 syncBumper 发出,**不接这一项,guild 四个域的 bump 全不生效**(静默退化为 Noop)。
-	// svcCtx.PlayerSyncBumper 由 NewServiceContext 无条件建好(指向核心 Redis DB 0 的专用客户端),NewGuildSyncBumper 自己判 nil。
+	// svcCtx.PlayerSyncBumper 由 NewServiceContext 无条件建好(玩家域的专用小池客户端 newPlayerSyncRedis,没建玩家域集群时回落到核心库),
+	// NewGuildSyncBumper 自己判 nil。
 	// 配额不能挤占正常仓储池；go-redis 必须启用 context 截止及短套接字/取连接预算。
 	quotaRedis := redis.NewClient(&redis.Options{
 		Addr: config.AppConfig.RedisClient.Host, Password: config.AppConfig.RedisClient.Password, DB: config.AppConfig.RedisClient.DB,

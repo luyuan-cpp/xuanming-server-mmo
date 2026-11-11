@@ -197,6 +197,8 @@ spec:
             - name: svc-config
               mountPath: /app/etc
               readOnly: true
+            # 全局号源登记处的双向 TLS 客户端证书(staging、prod),IdSegment.Issuer.RegistryTLS 指向这里的 ca.crt、tls.crt、tls.key。
+            - {name: id-registry-client-tls, mountPath: /etc/mmorpg/id-registry-tls, readOnly: true}
           resources:
             requests:
               cpu: 100m
@@ -216,6 +218,10 @@ spec:
           emptyDir: {medium: Memory, sizeLimit: 1Mi}
         - name: svc-config
           emptyDir: {medium: Memory, sizeLimit: 20Mi}
+        # 运维在每个 zone 命名空间预置(键 ca.crt、tls.crt、tls.key)。写 optional:dev 没有登记处 TLS,不建这个 Secret;
+        # staging、prod 由 k8s_deploy.ps1 在任何写操作之前核对它在、三个键齐,data_service 在生产配置下缺证书文件也拒绝装配发号器。
+        - name: id-registry-client-tls
+          secret: {secretName: id-registry-client-tls, defaultMode: 288, optional: true}
 ---
 # PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 各服务目录里登记的主 manifest,独立的 *-pdb.yaml 不会被应用。
 # minAvailable: 1 —— 节点排空 / 集群升级一次只能带走一个副本,发号不会被自愿驱逐打成零。

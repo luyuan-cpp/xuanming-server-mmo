@@ -358,9 +358,11 @@ type HomeZoneConf struct {
 //     loginqueue.defaultHandoffGrace,不是配置,依据见该常量的注释(G4b-G)。
 //     占位键的整键 TTL 只增不减(剩余不足本副本的 max(AdmitTTL, 20s) + 1min 才续),排队开着时
 //     也可以滚动调整它;调小之后,已续上的较大整键 TTL 要自然走完才收敛(见 loginqueue.admittedKeyTTL)。
+//   - 区容量不在这里配(2026-11-10 起):只有区服目录 zone_config.capacity 一个来源,经 etcd 发布给本区 login
+//     (loginqueue/capacity.go、zonepolicy 包)。此前这里的 ZoneCapacityOverride 与网关的区服目录各写一份,已删。
 //   - SoftCapMultiplier (e.g. 1.5) is the headroom factor applied to the
-//     largest observed PlayerCount when no explicit ZoneCapacityOverride is
-//     set, so freshly-deployed zones aren't capped at "current load".
+//     largest observed PlayerCount while the zone policy cannot be read,
+//     so freshly-deployed zones aren't capped at "current load".
 //   - DispatcherLockKey 是出队 leader 锁键的**前缀**,实际锁键是
 //     <DispatcherLockKey>:zone:<Node.ZoneId>(loginqueue.ZoneDispatcherLockKey),
 //     每个 zone 一个 leader。dispatcher 只看得见本 zone 的 gate,锁的范围必须与之相同。
@@ -386,10 +388,6 @@ type QueueConf struct {
 	DefaultRetryAfterMs uint32        `json:"DefaultRetryAfterMs,default=2000"`
 	DispatcherLockTTL   time.Duration `json:"DispatcherLockTTL,default=30s"`
 	DispatcherLockKey   string        `json:"DispatcherLockKey,default=dispatcher:lock:login_queue"`
-	// ZoneCapacityOverride lets ops pin the per-zone admission ceiling
-	// without trusting gate-side soft caps. Key is zone_id (string for YAML),
-	// value is the absolute number of concurrent online players permitted.
-	ZoneCapacityOverride map[string]uint32 `json:"ZoneCapacityOverride,optional"`
 }
 
 // InternalAuthConf 控制内部调用方身份声明的验签闸门(见

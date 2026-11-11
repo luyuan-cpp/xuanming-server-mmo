@@ -77,7 +77,7 @@ func deadNodeReconcileOutcomeCountForTest(t *testing.T, outcome string) float64 
 // 没结论的场景原样留在反向索引里(同一 node_id 再次判死时还能抄进收尾范围)。整个用例只注入 2 次失败。
 func TestDeadNodeReconcile_AbandonsAfterGiveUpDeadline(t *testing.T) {
 	const node = "8994"
-	hook := &failEvalHook{script: luaAtomicDestroyInstanceForce}
+	hook := &failEvalHook{script: luaAtomicDestroyOrphanOfDeadNode}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	c := newTakeoverCase(t, sc, mr, node, 89941)
 	c.declareDead(t)

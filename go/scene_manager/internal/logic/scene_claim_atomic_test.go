@@ -169,7 +169,7 @@ func TestDestroyInstance_IdleMappingMissingStaysOutOfActiveSet(t *testing.T) {
 	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 
-	destroyed, err := destroyInstanceInternal(context.Background(), sc, claimTestZone, sceneID, false, "", "idle")
+	destroyed, err := destroyInstanceInternal(context.Background(), sc, claimTestZone, sceneID, false, "", "idle", nil)
 	require.NoError(t, err)
 	require.True(t, destroyed)
 	requireActiveInstance(t, sc, claimTestZone, sceneID, false)

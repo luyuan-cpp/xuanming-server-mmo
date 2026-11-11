@@ -196,9 +196,18 @@ IdSegment:
     PrimaryEtcd: ["a:2379", "b:2379"]
     SecondaryEtcd: ["c:2379"]
     RegistryEtcd: ["r:2379"]
+    RegistryTLS:
+      CAFile: /etc/mmorpg/id-registry-tls/ca.crt
+      CertFile: /etc/mmorpg/id-registry-tls/tls.crt
+      KeyFile: /etc/mmorpg/id-registry-tls/tls.key
 `)
 	if c.IdSegment.Issuer.Region != 5 {
 		t.Fatalf("Region = %d", c.IdSegment.Issuer.Region)
+	}
+	wantTLS := RegistryTLSConfig{CAFile: "/etc/mmorpg/id-registry-tls/ca.crt", CertFile: "/etc/mmorpg/id-registry-tls/tls.crt",
+		KeyFile: "/etc/mmorpg/id-registry-tls/tls.key"}
+	if files, err := c.IdSegment.RegistryTLSFiles(); err != nil || files != wantTLS {
+		t.Fatalf("RegistryTLS = %+v %v", files, err)
 	}
 	primary, secondary, registry, err := c.IdSegment.IssuerEndpoints(nil)
 	if err != nil {
@@ -256,6 +265,35 @@ func TestIdSegmentIssuerEndpoints(t *testing.T) {
 	}
 	if _, _, _, err := (IdSegmentConfig{AllowAutoSeed: true}).IssuerEndpoints(nil); err == nil {
 		t.Fatal("dev without any etcd must be rejected")
+	}
+}
+
+// 登记处只走双向 TLS:生产三个文件都要有;dev、test 的登记处是本地 etcd 上的键,不开 TLS,配了也拒绝。
+func TestIdSegmentRegistryTLSFiles(t *testing.T) {
+	full := RegistryTLSConfig{CAFile: "/tls/ca.crt", CertFile: "/tls/tls.crt", KeyFile: "/tls/tls.key"}
+	for _, tc := range []struct {
+		name    string
+		cfg     IdSegmentConfig
+		want    RegistryTLSConfig
+		wantErr bool
+	}{
+		{name: "production with all three files", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{RegistryTLS: full}}, want: full},
+		{name: "production without TLS", cfg: IdSegmentConfig{}, wantErr: true},
+		{name: "production missing the key", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{RegistryTLS: RegistryTLSConfig{CAFile: full.CAFile, CertFile: full.CertFile}}}, wantErr: true},
+		{name: "production with a blank path", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{RegistryTLS: RegistryTLSConfig{CAFile: full.CAFile, CertFile: " ", KeyFile: full.KeyFile}}}, wantErr: true},
+		{name: "dev without TLS", cfg: IdSegmentConfig{AllowAutoSeed: true}},
+		{name: "dev refuses TLS", cfg: IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{RegistryTLS: full}}, wantErr: true},
+		{name: "dev refuses even one TLS file", cfg: IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{RegistryTLS: RegistryTLSConfig{CAFile: full.CAFile}}}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.cfg.RegistryTLSFiles()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Fatalf("files = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 

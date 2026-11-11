@@ -5,15 +5,14 @@
 //  1. How many players can zone Z host concurrently? (zoneCapacity)
 //  2. How many free slots does zone Z have RIGHT NOW? (freeSlots)
 //
-// The capacity number is config-first, with a fallback derived from the
-// gates' observed PlayerCount * SoftCapMultiplier. Operators should pin a
-// real number in YAML for production; the multiplier exists so a freshly
-// deployed zone (PlayerCount=0 across all gates) doesn't permanently lock
-// new players out of the queue.
+// 区容量只有一个来源(2026-11-10 起):Java 网关的区服目录 zone_config.capacity,运维经 /admin/zones 改,
+// 经 etcd 发布给本区 login(zonepolicy 包;CapacityProvider.ZoneCapacity 读它)。区服列表的负载档用的是同一个数。
+// 此前 login 另有一份 Queue.ZoneCapacityOverride 配置,两处各写各的,已删。读不到区服策略时退回软上限
+// (gate 上报的在线人数 × SoftCapMultiplier),免得 zone 刚部署、在线为 0 时把新玩家永远挡在队列里。
 //
-// 2026-11-10 起这个数再按本区 gate 的承载封顶:取它与「在接客的 gate 到水位(自报上限的 90%)一共能接的人数」
-// (gatepick.AdmissionCapacity)中较小的那个。配置的容量与 gate 台数写在两处、没有机械关联(K8s 开服档每区 45000,
-// 默认清单每区 2 台 × 20000,到水位只有 36000),容量比 gate 承载大时,排队照样放人,玩家连上 gate 才被
+// 这个数再按本区 gate 的承载封顶:取它与「在接客的 gate 到水位(自报上限的 90%)一共能接的人数」
+// (gatepick.AdmissionCapacity)中较小的那个。区容量与 gate 台数写在两处、没有机械关联(区服目录缺省 45000,
+// 默认清单每区 3 台 × 20000,到水位 54000;只有 1 台时 18000),容量比 gate 承载大时,排队照样放人,玩家连上 gate 才被
 // GateMaxConnections 无声拒掉。封顶之后 gate 到水位时排队就开始拦人;gate 坏了、被排空时承载随之下降,排队跟着收紧。
 //
 // Free-slots calculation deliberately includes in-flight placeholders
@@ -29,7 +28,6 @@ package loginqueue
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"shared/gatepick"
@@ -44,8 +42,8 @@ const capacityCapLogEvery = 10 * time.Minute
 var capacityCapLog logThrottle
 
 // CapacityProvider exposes the inputs capacity calculation needs. The
-// concrete implementation in svc wires GateWatcher + ZoneCapacityOverride
-// + the queue's in-flight placeholder count.
+// concrete implementation in svc wires GateWatcher + the zone policy read
+// from etcd (zone_config.capacity).
 type CapacityProvider interface {
 	// CandidatesForZone returns every gate serving zoneID (deduplicated by
 	// client address), in arbitrary order. Gates marked draining stay in the
@@ -56,8 +54,8 @@ type CapacityProvider interface {
 	// dispatcher 每个非空拍只调一次;快速通道每次 AssignGate 调一到两次(FreeSlots、签票各一次);
 	// 排队取走放行时每次调一次(NewAdmitSigner 复核放行时选定的 gate,2026-11-05 起)。
 	CandidatesForZone(ctx context.Context, zoneID uint32) ([]GateCandidate, error)
-	// ZoneCapacity is the configured ceiling for zoneID, or 0 when
-	// unconfigured (caller falls back to softCap formula).
+	// ZoneCapacity is zone_config.capacity for zoneID, or 0 when the zone
+	// policy is unknown (caller falls back to the softCap formula).
 	ZoneCapacity(zoneID uint32) uint32
 }
 
@@ -74,8 +72,8 @@ type CapacityProvider interface {
 //	free      = max(0, cap - online - admitted)
 //
 // We use max(online, 1) in the fallback so a brand-new zone (online=0)
-// gets a non-zero capacity from the multiplier. Pinning ZoneCapacity in
-// config remains the strongly recommended path for production.
+// gets a non-zero capacity from the multiplier. The fallback only applies
+// while the zone policy cannot be read (see package zonepolicy).
 //
 // online 数全部候选(排空中、停写的 gate 上的人也占着连接),gateCap 只数在接客的那一档:排空、卡住的 gate 上的人
 // 稍后要挪到在接客的 gate 上,两边一减正好给他们留出位置。返回的 capacity 是封顶之后的值,快速通道用它算占位预算。
@@ -147,7 +145,7 @@ func freeSlotsFromCandidates(
 }
 
 // capByGates 把区容量 ceiling 压到本区在接客的 gate 到水位一共能接的人数以内(gatepick.AdmissionCapacity),
-// 数进来的 gate 里有没声明上限的就原样返回。configured 是配置里本区的容量(0 = 没配、ceiling 来自软上限),
+// 数进来的 gate 里有没声明上限的就原样返回。configured 是区服目录给的容量(0 = 读不到区服策略、ceiling 来自软上限),
 // 只在它被压低时打日志:软上限本来就随在线人数涨,被 gate 承载压住是常态,不是配置问题。
 func capByGates(ceiling, configured uint32, candidates []GateCandidate, zoneID uint32) uint32 {
 	gateCapacity, bounded := gatepick.AdmissionCapacity(candidates, candidateState)
@@ -157,21 +155,9 @@ func capByGates(ceiling, configured uint32, candidates []GateCandidate, zoneID u
 	if configured > 0 && capacityCapLog.allow(capacityCapLogEvery) {
 		logx.Errorf("[loginqueue] zone %d admission capacity is limited by its gates: configured=%d, the serving gates "+
 			"hold %d at %d%% of their max_connections (%d gate candidates); the queue starts holding players at %d. "+
-			"Add gate replicas or lower Queue.ZoneCapacityOverride; compare login_queue_capacity with "+
+			"Add gate replicas or lower zone_config.capacity (PUT /admin/zones/<id>); compare login_queue_capacity with "+
 			"login_queue_configured_capacity. Further reports are suppressed for %s",
 			zoneID, configured, gateCapacity, gatepick.FullPercent, len(candidates), gateCapacity, capacityCapLogEvery)
 	}
 	return uint32(gateCapacity)
-}
-
-// ZoneCapacityFromMap is a small helper for the typical config layout
-// (`map[string]uint32` keyed by zone_id). Returns 0 when missing.
-func ZoneCapacityFromMap(m map[string]uint32, zoneID uint32) uint32 {
-	if m == nil {
-		return 0
-	}
-	if v, ok := m[strconv.FormatUint(uint64(zoneID), 10)]; ok {
-		return v
-	}
-	return 0
 }

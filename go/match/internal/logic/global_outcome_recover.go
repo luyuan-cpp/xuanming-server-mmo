@@ -11,8 +11,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// globalOutcomeRecoverInterval 是到期终局恢复循环(match.global.outcome.recover)的节拍。
-const globalOutcomeRecoverInterval = time.Second
+// globalOutcomeRecoverInterval 是到期终局恢复循环(match.global.outcome.recover)的节拍。定义在 authority:截止 ABORT 的
+// 最晚落定时刻与「超期未作废」的巡检阈值都按它推算(authority.deadlineAbortOverdueMs),两边只有一份。
+const globalOutcomeRecoverInterval = authority.ExpiredOutcomeRecoverTick
 
 // globalOutcomeRecoverBudget 是一拍到期终局恢复(车道页,每圈第一拍再加一页全量页,各至多 8 局)的时间预算。
 // 2026-11-06 起每页先在锁外并行向各局原 battle 实例取证(authority.DeadlineProbeTimeout,原实例连不上时要等满),

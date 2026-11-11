@@ -65,13 +65,14 @@ func (r *CommerceRepo) Insert(ctx context.Context, tx *sql.Tx, v *tradepb.TradeC
 }
 
 // Save 按版本条件重存合同与 workflow。on_book 不取 v 上的值,按要写的 w 现算(OnBook),与 workflow_proto 同一条语句落库。
+// seller_player_id 只有人工改绑(commerce.ResolveManual 的 redirect)会改,其余写者原样带回读到的值。
 func (r *CommerceRepo) Save(ctx context.Context, tx *sql.Tx, v *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, now uint64) error {
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(w)
 	if err != nil {
 		return err
 	}
 	onBook := OnBook(v, w)
-	result, err := tx.ExecContext(ctx, "UPDATE trade_commerce SET status=?,buyer_player_id=?,filled_quantity=?,expires_ms=?,updated_ms=?,version=version+1,workflow_proto=?,on_book=? WHERE commerce_id=? AND version=?", v.Status, v.BuyerPlayerId, v.FilledQuantity, v.ExpiresMs, now, raw, onBook, v.CommerceId, v.Version)
+	result, err := tx.ExecContext(ctx, "UPDATE trade_commerce SET status=?,seller_player_id=?,buyer_player_id=?,filled_quantity=?,expires_ms=?,updated_ms=?,version=version+1,workflow_proto=?,on_book=? WHERE commerce_id=? AND version=?", v.Status, v.SellerPlayerId, v.BuyerPlayerId, v.FilledQuantity, v.ExpiresMs, now, raw, onBook, v.CommerceId, v.Version)
 	if err != nil {
 		return err
 	}

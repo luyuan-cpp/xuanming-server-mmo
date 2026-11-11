@@ -73,6 +73,10 @@ public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
             + " z.maintenanceMsg = COALESCE(:maintenanceMsg, z.maintenanceMsg), z.updatedAt = :now"
             + " WHERE z.zoneId = :zoneId";
 
+    /** {@link #updateCreateRoleClosed} 的语句(JPQL)。 */
+    String UPDATE_CREATE_ROLE_CLOSED_JPQL = "UPDATE ZoneConfig z SET z.createRoleClosed = :closed, z.updatedAt = :now"
+            + " WHERE z.zoneId = :zoneId";
+
     /** {@link #deleteByZoneId} 的语句(JPQL)。Hibernate 翻译成按主键定位的单条 DELETE。 */
     String DELETE_BY_ID_JPQL = "DELETE FROM ZoneConfig z WHERE z.zoneId = :zoneId";
 
@@ -172,6 +176,16 @@ public interface ZoneConfigRepository extends Repository<ZoneConfig, Long> {
     @Query(UPDATE_MANUAL_STATUS_JPQL)
     int updateManualStatus(@Param("zoneId") Long zoneId, @Param("manualStatus") int manualStatus,
                            @Param("maintenanceMsg") String maintenanceMsg, @Param("now") LocalDateTime now);
+
+    /**
+     * 只改「暂停创建新角色」开关,刷新 updated_at;其余列不动(2026-11-10)。区服不存在时什么也不写。
+     * 取锁与返回值口径同 {@link #updateSettings}。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(UPDATE_CREATE_ROLE_CLOSED_JPQL)
+    int updateCreateRoleClosed(@Param("zoneId") Long zoneId, @Param("closed") boolean closed,
+                               @Param("now") LocalDateTime now);
 
     /**
      * 按主键删除,返回删掉的行数(0 = 本来就不在)。DELETE 的行数就是真正删掉的行数,不受 found rows 参数影响,

@@ -26,8 +26,8 @@ import (
 // 里只在新值的修订号不小于已存值时覆盖,副本之间先后乱序也不会把新持有者盖回旧的。
 //
 // 不随 watch DELETE 删除:节点死了,它是这个号最后一次登记的进程仍是事实,新进程登记时自然覆盖。键带 TTL,全量同步给
-// 在册节点每次续上;号长期没人用时自己过期。键以 node:zone:{z}: 开头,与其他节点级控制域键一样只由本 zone 的
-// scene_manager 写(control-plane-zone-scoping-20261105.md §4.3),合服按前缀清得到。
+// 在册节点每次续上;号长期没人用时自己过期。键以 node:{ctl:<z>}: 开头,与其他节点级控制域键一样只由本 zone 的
+// scene_manager 写(control-plane-zone-scoping-20261105.md §4.3),并与它们同槽(redis-cluster-all-domains-20261110.md §4.1)。
 //
 // etcd 纪元。etcd 修订号倒退(换成一套新集群,或从备份恢复;运维规定所有节点重启,etcd-maintenance-runbook.md §7a)之后,
 // 倒退之前写下的记录与新登记的修订号没有可比性,单调覆盖会把修订号更小的新登记拒掉。所以修订号只在同一个纪元里比:
@@ -52,11 +52,12 @@ import (
 // 水位只在控制域丢数据时才会没有;没有水位的那一轮只建立水位。水位刚丢、etcd 又恰在这一轮之前倒退,这次倒退认不出来:
 // 旧记录里修订号大于新登记的,要等过期(不再续期,最长一天)才让位。只是少一层识别,不会误判排空。
 
-// NodeHolderKeyFmt 是节点号持有者键。跨语言契约:C++ 侧 scene_ownership::NodeHolderKey 读同一个键,改名必须同批改。
-const NodeHolderKeyFmt = "node:zone:%d:%s:holder"
+// NodeHolderKeyFmt 是节点号持有者键 node:{ctl:<z>}:<n>:holder,第一个 %s 是 sceneControlTag(zone)。
+// 跨语言契约:C++ 侧 scene_ownership::NodeHolderKey 读同一个键,渲染出来的键逐字节相同,改名必须同批改。
+const NodeHolderKeyFmt = "node:%s:%s:holder"
 
 // nodeHolderEpochKeyFmt 记着持有者记录写入时本 zone 的 etcd 纪元,与持有者记录同写同过期。只有 scene_manager 读写。
-const nodeHolderEpochKeyFmt = "node:zone:%d:%s:holder_epoch"
+const nodeHolderEpochKeyFmt = "node:%s:%s:holder_epoch"
 
 // nodeHolderTTLSeconds 是持有者记录的存活时间。全量同步约每分钟续一次,一天足够盖住领导者长时间缺位;
 // 失联的老进程只在号被别人接走之后才需要它,那时新进程在册、记录一直被续着。
@@ -65,35 +66,37 @@ const nodeHolderTTLSeconds = 24 * 60 * 60
 // etcdRevisionSeenKeyFmt 是本 zone 的修订号水位:领导者在全量同步里读到过的 etcd 当前修订号的最大值,十进制串。
 // etcdEpochKeyFmt 是本 zone 的 etcd 纪元,每认出一次倒退加一,没有时按 0。两个键都只由本 zone 的领导者写,不设 TTL:
 // 水位过期就认不出倒退,纪元过期会让同一纪元的记录全部当成旧纪元重写一遍。只有 scene_manager 读写,不是跨语言契约。
+// %s 是 sceneControlTag(zone):纪元与持有者记录出现在同一段脚本里(luaPublishNodeHolder),必须同槽。
 const (
-	etcdRevisionSeenKeyFmt = "scene_manager:etcd_revision_seen:zone:%d"
-	etcdEpochKeyFmt        = "scene_manager:etcd_epoch:zone:%d"
+	etcdRevisionSeenKeyFmt = "scene_manager:etcd_revision_seen:%s"
+	etcdEpochKeyFmt        = "scene_manager:etcd_epoch:%s"
 )
 
 // etcdRevisionReadTimeout 是全量同步里读 etcd 当前修订号的预算。在后台循环上,超时只让这一轮不判断倒退。
 const etcdRevisionReadTimeout = 2 * time.Second
 
 func nodeHolderKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodeHolderKeyFmt, zoneID, nodeID)
+	return fmt.Sprintf(NodeHolderKeyFmt, sceneControlTag(zoneID), nodeID)
 }
 
 func nodeHolderEpochKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(nodeHolderEpochKeyFmt, zoneID, nodeID)
+	return fmt.Sprintf(nodeHolderEpochKeyFmt, sceneControlTag(zoneID), nodeID)
 }
 
 func etcdRevisionSeenKey(zoneID uint32) string {
-	return fmt.Sprintf(etcdRevisionSeenKeyFmt, zoneID)
+	return fmt.Sprintf(etcdRevisionSeenKeyFmt, sceneControlTag(zoneID))
 }
 
 func etcdEpochKey(zoneID uint32) string {
-	return fmt.Sprintf(etcdEpochKeyFmt, zoneID)
+	return fmt.Sprintf(etcdEpochKeyFmt, sceneControlTag(zoneID))
 }
 
 // luaPublishNodeHolder 写入一次登记。已存记录属于当前纪元、而且修订号更大时不动;属于旧纪元(或没有纪元而当前纪元
 // 不是 0)时直接覆盖。修订号按十进制串比较(generation_after,见 luaPlacementGenerationAfter:先比长度再比字典序,
 // 不经 tonumber,大于 2^53 不丢精度);纪元按串相等比较,没有时按 '0'。
 //
-// KEYS[1] = node:zone:{z}:{n}:holder,KEYS[2] = node:zone:{z}:{n}:holder_epoch,KEYS[3] = scene_manager:etcd_epoch:zone:{z}。
+// KEYS[1] = node:{ctl:<z>}:<n>:holder,KEYS[2] = node:{ctl:<z>}:<n>:holder_epoch,KEYS[3] = scene_manager:etcd_epoch:{ctl:<z>}
+// (同一个 zone 的 tag,同槽)。
 // ARGV[1] = 修订号十进制串,ARGV[2] = node_uuid,ARGV[3] = 存活秒数。
 // 回 1 = 写入(同一次登记重写时只是续期),0 = 已存的登记更新,一个字节不动。已存值没有冒号(损坏)时按没有处理,覆盖。
 const luaPublishNodeHolder = luaPlacementGenerationAfter + `

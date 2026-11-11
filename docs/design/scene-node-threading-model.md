@@ -37,6 +37,16 @@ etcd 注册、领段及创建许可由各自对象或节点作用域持有。etc
 
 维护 P1、普通关机和身份冲突入口关闭瞬态任务准入并发出本地取消，持久任务在拆除前才停止。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。晚到的 Redis 和 gRPC 回包只持等待状态的弱引用。号段任务的 TLS 所有者还由 `SceneRuntimeContext` 析构兜底收掉，覆盖启动异常，先于局部 EventLoop 销毁。整个路径沿用已有线程，以及下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
 
+单次完成协议全仓只有 `loop_async::AwaitCallback` 一份（`core/async/coroutine_callback.h`）。队伍跟随的 Redis GET 与镜像的 CreateScene 原先各自手写了一份等价的 Cobalt `op`（取消槽、提交内重入延后交付、晚回包只持弱引用）。2026-11-11 起两处都改成接到公共等待体的薄接线：跟随在 hiredis 回调里把应答转成自有的 `GetResult`，镜像在 gRPC 回调里复制 `CreateSceneResponse`。生成的 gRPC 客户端恰好回调一次，连本地拒绝也延后交付，所以镜像的提交恒为接纳。行为不变，原有跟随与镜像用例照样覆盖。以后接新的单次异步接口一律用 `AwaitCallback`，不再手写 `op`。
+
+2026-11-11 审查定案，以下几处保持现状，原因写在这里，免得下次重开：
+
+- **认领应答整份复制保留。** `GrpcDone` 契约规定回包只在回调期间有效，零拷贝要改全仓生成客户端的完成签名。认领每次登录或交接只发生一次，不在帧路径上。没有剖析数据之前，不为它改全局契约（AGENTS.md §11.3）。
+- **只等一次的存盘协程不退回裸回调。** 它们和多跳任务共用同一套停止语义：`StopAll` 之后不再执行业务。提交内同步完成要延后到提交返回之后才交付，由 `PlayerStoreClientTest.InlineReplyIsDeliveredAfterSendReturns` 钉住。改回回调要逐处重新证明这两条，换来的只是少一层包装。
+- **换图与改派的 EnterScene 应答仍由协程等待。** `LifecycleCoroutineTest.TravelPublishesBeforeEnterAndLateReplyCannotMovePlayer` 钉住「拆除点之后的晚应答不能再移动玩家」。两条停机路径现在都在同一个拆除点 `StopAll`，这条保证在维护路径上同样成立。
+- **注册冲突的晚回包仍记全服分配清单。** 预算过期后才到的冲突回包照样调用 `NodeAllocator::RecordAllocatedIds`。清单只是选号提示，号的归属以分配键 CAS 为准。旧清单最多让下一次选号多撞一轮 CAS，不会让两个节点拿到同一个号。
+- **Cobalt 等待体的小缓冲用库默认值。** `BOOST_COBALT_SBO_BUFFER_SIZE` 保持 4096 字节。没有剖析数据说明协程帧分配或这块缓冲是瓶颈，不调这个值。
+
 ## 2. 当前帧与派发预算
 
 `core/constants/fps.h` 的目标为 **20 FPS，固定模拟步长 50ms**，

@@ -3,6 +3,7 @@ package idissuer
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,16 +107,18 @@ type EtcdRegistry struct {
 }
 
 // NewEtcdRegistry 建登记处的 etcd 客户端。不设 DialTimeout,理由同 NewEtcdStore。
-func NewEtcdRegistry(endpoints []string) (*EtcdRegistry, error) {
-	return newEtcdRegistryAt(endpoints, registryRoot)
+// tlsConfig 是双向 TLS(LoadRegistryTLS),生产必须给;nil 只给 dev、test 的本地登记处。
+// 地址照旧写 host:port、不带 scheme:tlsConfig 非空时客户端对每个地址都走 TLS,并按地址里的主机名核对服务端证书。
+func NewEtcdRegistry(endpoints []string, tlsConfig *tls.Config) (*EtcdRegistry, error) {
+	return newEtcdRegistryAt(endpoints, registryRoot, tlsConfig)
 }
 
 // newEtcdRegistryAt 让真 etcd 上的回归用自己的键根,不碰正式的登记处键。
-func newEtcdRegistryAt(endpoints []string, root string) (*EtcdRegistry, error) {
+func newEtcdRegistryAt(endpoints []string, root string, tlsConfig *tls.Config) (*EtcdRegistry, error) {
 	if len(endpoints) == 0 {
 		return nil, errors.New("id issuer: no etcd endpoints for the id registry")
 	}
-	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
+	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints, TLS: tlsConfig})
 	if err != nil {
 		return nil, fmt.Errorf("id issuer: connect etcd for the id registry: %w", err)
 	}

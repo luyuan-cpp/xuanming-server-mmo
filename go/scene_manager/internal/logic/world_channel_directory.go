@@ -36,20 +36,21 @@ const (
 	// WorldChannelLineNoKeyFmt:HASH per (zone, confId),field = scene_id(十进制),value = 线号(从 1 起)。
 	// 无 TTL:线号要在线的整个生命周期里保持不变。
 	//
-	// 这两把键刻意不用 world_channels:zone: 前缀:旧版本 scene_manager 的孤儿清理按那个前缀 SCAN
-	// (orphan_cleanup.go orphanKeyPrefix;2026-10-16 起新版本改为点查,滚动窗口里旧版本仍可能在跑),
-	// 会把它们当成频道集合来解析;merge_zone 也按那个前缀清源 zone 的频道集合。
-	WorldChannelLineNoKeyFmt = "world_channel_lineno:zone:%d:%d"
+	// 这两把键刻意不用 world_channels: 前缀:孤儿清理按频道集合的键形 world_channels:{ctl:<z>}:<conf> 解析
+	// (orphan_cleanup.go parseWorldChannelsKey),不能把它们认成频道集合。
+	//
+	// 下面两个格式里第一个 %s 是 sceneControlTag(zone)(docs/design/redis-cluster-all-domains-20261110.md §3)。
+	WorldChannelLineNoKeyFmt = "world_channel_lineno:%s:%d"
 
 	// WorldChannelDirectoryKeyFmt:STRING per (zone, confId),值是 scenepb.SceneChannelDirectory 的
 	// 序列化字节,带 TTL(见 worldChannelDirectoryTTLSeconds)。
 	//
-	// **跨语言契约,字面量不许改**:C++ scene 节点按同一格式拼键来读,对应常量是
-	// cpp/libs/services/scene/player/system/player_scene.cpp 的 kWorldChannelDirectoryKeyFmt
-	// (那边的占位符是 C printf 的 %u,这边是 Go 的 %d;契约是**渲染出来的键**逐字节相同:
-	// world_channel_directory:zone:{zone 十进制}:{conf 十进制})。
+	// **跨语言契约,渲染出来的键不许单边改**:C++ scene 节点拼同一把键来读,对应的是
+	// cpp/libs/services/scene/player/system/player_scene.cpp 的 WorldChannelDirectoryKey。契约是**渲染出来的键**
+	// 逐字节相同:world_channel_directory:{ctl:<zone 十进制>}:<conf 十进制>,两边的 tag 都由各自的族表生成
+	// (Go redisslot.ZoneControlTag、C++ redis_slot::ZoneControlTag)。
 	// 改这里必须同批改那里;TestWorldChannelDirectoryKeyFmt_CrossLanguageContract 钉住本侧字面量与渲染结果。
-	WorldChannelDirectoryKeyFmt = "world_channel_directory:zone:%d:%d"
+	WorldChannelDirectoryKeyFmt = "world_channel_directory:%s:%d"
 
 	// 目录 TTL = worldChannelDirectoryTTLRounds × 发布周期 + 一个选主竞选间隔(worldChannelDirectoryTTLSeconds)。
 	//
@@ -76,16 +77,16 @@ const (
 )
 
 func worldChannelLineNoKey(zoneID uint32, confID uint64) string {
-	return fmt.Sprintf(WorldChannelLineNoKeyFmt, zoneID, confID)
+	return fmt.Sprintf(WorldChannelLineNoKeyFmt, sceneControlTag(zoneID), confID)
 }
 
 func worldChannelDirectoryKey(zoneID uint32, confID uint64) string {
-	return fmt.Sprintf(WorldChannelDirectoryKeyFmt, zoneID, confID)
+	return fmt.Sprintf(WorldChannelDirectoryKeyFmt, sceneControlTag(zoneID), confID)
 }
 
 // luaAllocWorldChannelLineNumbers 原子地把线号表对齐到「这张图当前全部的线」,并返回整张表。
 //
-// KEYS[1] = world_channel_lineno:zone:{zone}:{conf}
+// KEYS[1] = world_channel_lineno:{ctl:<zone>}:<conf>
 // ARGV[i] = scene_id 的十进制字符串,Go 侧已按**数值**升序排好、去重。
 // Return  = {scene_id, 线号, scene_id, 线号, ...},顺序与 ARGV 一致,线号是十进制字符串。
 //

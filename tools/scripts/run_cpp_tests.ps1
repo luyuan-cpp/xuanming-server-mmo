@@ -113,7 +113,7 @@ if ($Build) {
     foreach ($name in $projects.Keys) {
         $proj = Join-Path $repoRoot $projects[$name]
         if (-not (Test-Path $proj)) {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'FAIL'; 结果 = "缺工程文件 $($projects[$name])" })
+            $results.Add([pscustomobject]@{ Name = $name; Build = 'FAIL'; Result = "missing project file $($projects[$name])" })
             continue
         }
         # 串行 /m:1:并发会报假的 C1041/LNK1104
@@ -122,9 +122,9 @@ if ($Build) {
         if ($LogDir) { $log | Set-Content -LiteralPath (Join-Path $LogDir "$name.build.log") -Encoding utf8 }
         $err = $log | Select-String -Pattern 'error [A-Z]+[0-9]+' | Select-Object -First 1
         if ($buildExitCode -ne 0 -or $err) {
-            $msg = if ($err) { $err.ToString().Trim() -replace '\s+', ' ' } else { "MSBuild 退出码 $buildExitCode，禁止运行旧 EXE" }
+            $msg = if ($err) { $err.ToString().Trim() -replace '\s+', ' ' } else { "MSBuild exit code $buildExitCode; refusing to run a stale EXE" }
             if ($msg.Length -gt 160) { $msg = $msg.Substring(0, 160) }
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'FAIL'; 结果 = $msg })
+            $results.Add([pscustomobject]@{ Name = $name; Build = 'FAIL'; Result = $msg })
         }
     }
 }
@@ -158,10 +158,10 @@ try {
     $env:GTEST_FILTER = '*'
     $env:GTEST_REPEAT = '1'
     foreach ($name in $projects.Keys) {
-        if ($results | Where-Object { $_.名称 -eq $name -and $_.构建 -eq 'FAIL' }) { $failed++; continue }
+        if ($results | Where-Object { $_.Name -eq $name -and $_.Build -eq 'FAIL' }) { $failed++; continue }
         $exe = Join-Path $testOutDir "$name.exe"
         if (-not (Test-Path $exe)) {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = '-'; 结果 = '无 exe(先跑 -Build)' })
+            $results.Add([pscustomobject]@{ Name = $name; Build = '-'; Result = 'no exe (run -Build first)' })
             $failed++
             continue
         }
@@ -182,7 +182,7 @@ try {
                 -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         }
         catch {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "启动失败:$($_.Exception.Message)" })
+            $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "start failed: $($_.Exception.Message)" })
             $failed++
             continue
         }
@@ -190,11 +190,11 @@ try {
             $killError = ''
             try { $proc.Kill() } catch { $killError = $_.Exception.Message }
             if (-not $proc.WaitForExit(5000)) {
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "超时且自有测试进程未退出，PID=$($proc.Id)；$killError" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "timed out and the test process did not exit, PID=$($proc.Id); $killError" })
                 $results | Format-Table -AutoSize
                 throw "$name 超时后未能退出，停止后续测试；保留日志：$stdout；$stderr"
             }
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "超时 ${TimeoutSeconds}s，已确认进程退出" })
+            $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "timed out after ${TimeoutSeconds}s; process exit confirmed" })
             $failed++
         }
         else {
@@ -208,7 +208,7 @@ try {
             $passCount = if ($pass.Success) { [int]$pass.Groups[1].Value } else { 0 }
             $skipCount = if ($skip.Success) { [int]$skip.Groups[1].Value } else { 0 }
             if (-not $ran.Success) {
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 $($proc.ExitCode),无 gtest 输出" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "exit code $($proc.ExitCode), no gtest output" })
                 $failed++
             }
             elseif ($proc.ExitCode -ne 0 -and -not $fail.Success) {
@@ -216,28 +216,28 @@ try {
                 # gtest 来不及打 PASSED 汇总。不能按「没失败」放行(readfile2string_test 就是这样假绿的)。
                 $lastRun = ([regex]::Matches($out, '\[ RUN      \] ([A-Za-z0-9_]+\.[A-Za-z0-9_]+)') | Select-Object -Last 1)
                 $where = if ($lastRun) { $lastRun.Groups[1].Value } else { '?' }
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 $($proc.ExitCode),疑似崩在 $where(无 PASSED 汇总)" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "exit code $($proc.ExitCode), likely crashed in $where (no PASSED summary)" })
                 $failed++
             }
             elseif (-not $pass.Success) {
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "退出码 0 但无 PASSED 汇总,输出异常" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "exit code 0 but no PASSED summary; abnormal output" })
                 $failed++
             }
             elseif ($fail.Success) {
                 $names = ([regex]::Matches($out, '\[  FAILED  \] ([A-Za-z0-9_]+\.[A-Za-z0-9_]+)') |
                     ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique) -join ', '
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 过,挂:$names" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) passed, failed: $names" })
                 $failed++
             }
             elseif ($runCount -le 0 -or ($passCount + $skipCount) -ne $runCount) {
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "用例汇总不完整：运行 $runCount，通过 $passCount，跳过 $skipCount" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "incomplete test summary: ran $runCount, passed $passCount, skipped $skipCount" })
                 $failed++
             }
             elseif ($skip.Success) {
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 通过，$($skip.Groups[1].Value) 跳过" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) passed, $($skip.Groups[1].Value) skipped" })
             }
             else {
-                $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) 全过" })
+                $results.Add([pscustomobject]@{ Name = $name; Build = 'OK'; Result = "$($pass.Groups[1].Value)/$($ran.Groups[1].Value) all passed" })
             }
         }
         if (-not $LogDir) { Remove-Item $stdout, $stderr -ErrorAction SilentlyContinue }
@@ -253,5 +253,5 @@ if ($failed -gt 0) {
     Write-Host "$failed test projects failed" -ForegroundColor Red
     exit 1
 }
-Write-Host "全部 $($projects.Count) 个测试程序正常完成；用例跳过情况见汇总。" -ForegroundColor Green
+Write-Host "All $($projects.Count) test programs completed normally; see the summary for skipped cases." -ForegroundColor Green
 exit 0

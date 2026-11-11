@@ -119,14 +119,19 @@ public:
         // 只顺带的行(PERSIST_ROW_SAVE_PIGGYBACK,即 LOCATION)被定时存盘推迟的上限(规格 §1.1)。
         // 从第一次推迟算起,超过它定时存盘就照常写。<= 0 = 不推迟,定时存盘遇到位置变化也写(压测对照用)。
         double piggybackFallbackSec{300.0};
-        // 可选:提交水位。生产用它让资产流水跟着存盘提交走(TransactionLogSystem 类注释)。
-        // Submit 收快照时调 commitMark 取一个单调值记在这份快照上;能确定「这份快照里的改动都已在库里」时,
-        // 调 onCommittedThrough(玩家, 这份快照的水位)。确定的情形只有三种:这一笔 COMMITTED 或 EQUAL;
-        // 快照和已确认的内容一样、不用写(Submit 回 kAlreadyPersisted,或排队的那份轮到时不用写)。
-        // 被拒、结果未知、被更新的快照取代都不调;取代它的那份水位更大,提交时一并放行。
+        // 可选:提交水位。生产用它让审计记录跟着存盘提交走(AuditOutbox 类注释,docs/design/player-audit-outbox.md §5.2)。
+        // Submit 收快照时调 commitMark 取一个单调值记在这份快照上;能确定「这份快照里的审计记录都已在库里」时,
+        // 调 onCommittedThrough(玩家, 这份快照的水位)。确定的情形只有三种:这一笔 COMMITTED 或 EQUAL(带了审计记录时还要
+        // go/db 回 audit_outbox_written);快照和已确认的内容一样、也没有到期的审计记录而不用写(Submit 回 kAlreadyPersisted,
+        // 或排队的那份轮到时不用写)。被拒、结果未知、被更新的快照取代都不调;取代它的那份水位更大,提交时一并放行。
         // 推迟的定时存盘(DeferPeriodicSave)不进状态机,不会走到这里。
         std::function<uint64_t()> commitMark;
         std::function<void(Guid playerId, uint64_t commitMark)> onCommittedThrough;
+        // 可选:审计发件箱,要和 commitMark 一起接。auditDue 回答这名玩家水位不大于这份快照的审计记录还有没有:有就算没有脏行
+        // 也写一笔(净变化为零的改动同样有流水要交),定时存盘也不推迟。attachAudit 在组请求时把它们拷进请求;
+        // 重试发的是同一份请求,审计记录和行一样同内容、同序号。
+        std::function<bool(Guid playerId, uint64_t commitMark)> auditDue;
+        std::function<void(Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)> attachAudit;
     };
 
     explicit PlayerStoreClient(Options options);
@@ -197,6 +202,8 @@ private:
         Callbacks callbacks;
         // 这份快照的提交水位(Options::commitMark),提交时交给 onCommittedThrough。
         uint64_t commitMark{0};
+        // 请求里带了审计记录:提交时还要 go/db 回 audit_outbox_written 才放行(旧 go/db 会静默丢掉审计字段)。
+        bool carriesAudit{false};
     };
 
     struct Pending
@@ -261,7 +268,8 @@ private:
     void Attempt(Guid playerId, State &state);
     void ScheduleRetry(Guid playerId, State &state);
     void HandleSaveResponse(Guid playerId, State &state, const playerstore::SavePlayerResponse &response);
-    void Finish(Guid playerId, State &state, const SaveResult &result, bool committed);
+    // committed 时更新已确认的行;auditWritten 为假(带了审计记录而 go/db 没写发件箱)时不放行审计记录,留到下一笔再交。
+    void Finish(Guid playerId, State &state, const SaveResult &result, bool committed, bool auditWritten = true);
     void Advance(Guid playerId);
     // 这个玩家的存盘都落定了:通知调用方,再放行等着它的认领。
     void NotifySettled(Guid playerId);
@@ -285,6 +293,8 @@ private:
 
     std::shared_ptr<Lifetime> lifetime_;
     Options options_;
+    // 提交了带审计记录的一笔、go/db 却没写发件箱的次数,只给日志节流用。
+    uint64_t auditNotWrittenCount_{0};
     std::unordered_map<Guid, State> states_;
     std::unordered_set<Guid> detachedInFlight_;
     std::unordered_map<Guid, Claim> claims_;

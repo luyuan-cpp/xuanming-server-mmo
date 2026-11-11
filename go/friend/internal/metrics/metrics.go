@@ -1,5 +1,5 @@
 // Package metrics 暴露 friend 服务的 Prometheus 指标:S2C 推送、申请频控、在线查询、
-// sweep 积压(终态好友申请)与 sweep 看到的可回收零好友容量行,共五个。
+// sweep 积压(终态好友申请)、sweep 看到的可回收零好友容量行,以及本副本负责的清理分片数,共六个。
 // 端口约定见契约 §7 分工表:friend 的 /metrics 是 :9180(`etc/friend.yaml` 的 MetricsListenAddr)。
 //
 // 两条硬约束(AGENTS.md §9):
@@ -106,6 +106,15 @@ var (
 		Help:      "friend_capacity rows with zero friends and older than the retention period that the last sweep pass saw, capped at BatchLimit, by sweep mode (report_only|delete).",
 	}, []string{"mode"})
 
+	// sweepOwnedShards:本副本上一轮负责的清理分片数(2026-11-11 起清理按玩家 id 分 64 片,见 logic/sweep.go 文件头)。
+	// 全部 stable 副本加起来应为 64;明显小于 64 说明有片没人清(终态行多留,不影响正确性)。
+	// 上面两个行数 Gauge 也因此是本副本负责的片的读数,看全服要对各副本求和。canary 不跑清理,这个值留在 0。
+	sweepOwnedShards = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "sweep_owned_shards",
+		Help:      "Sweep shards (of 64, keyed by player id) this replica owned in its last sweep round; all stable replicas together should total 64.",
+	})
+
 	registerOnce sync.Once
 )
 
@@ -136,6 +145,11 @@ func SetSweepPendingRows(mode string, rows float64) {
 	sweepPendingRows.WithLabelValues(mode).Set(rows)
 }
 
+// SetSweepOwnedShards 刷新本副本这一轮负责的清理分片数(0..64)。每轮开头都刷。
+func SetSweepOwnedShards(shards float64) {
+	sweepOwnedShards.Set(shards)
+}
+
 // SetSweepIdleCapacityRows 刷新某个 sweep 模式下"零好友且超过保留期"的 friend_capacity 行数。
 // mode 与 rows 的约定同 SetSweepPendingRows:mode 只许是两个合法模式之一(未知模式不要调,
 // 拿拼错的串当 label 会造出一条没人认识的序列);合法模式下每轮都要调,**包括 0**。
@@ -160,6 +174,7 @@ func register() {
 			onlineLookupTotal,
 			sweepPendingRows,
 			sweepIdleCapacityRows,
+			sweepOwnedShards,
 		)
 		for _, reason := range []string{ReasonRequestReceived, ReasonRequestAccepted} {
 			for _, outcome := range []string{OutcomeOK, OutcomeOffline, OutcomeError} {

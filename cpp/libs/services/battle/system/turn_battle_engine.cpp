@@ -10,6 +10,7 @@
 #include <string>
 
 #include "system/battle_result_activity.h"
+#include "system/battle_script.h"
 #include "system/combat_damage_rules.h"
 #include "modules/currency/constants/currency.h"
 #include "muduo/base/Logging.h"
@@ -270,6 +271,9 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
             SanitizeSnapshotBuffs(actor);
         }
     }
+
+    // 战斗剧本同样要等全部单位就位:按阵位给单位认领角色位、给怪物派生技能集(开局状态里就能看到)
+    BindBattleScripts();
 
     initialized = true;
     return true;
@@ -722,7 +726,7 @@ uint32_t TurnBattleEngine::CheckItemUse(const BattleActorState& actor,
     return kSuccess;
 }
 
-bool TurnBattleEngine::IsTurnBattleCastableSkill(const SkillTable& skillRow) const {
+bool TurnBattleEngine::IsTurnBattleCastableSkill(const SkillTable& skillRow) {
     // 黑名单而不是白名单:表里存量技能未必都填了 skill_type,白名单会把没填的一律判死。
     // 被动技能没有施放动作;开关技能是状态切换;持续施法依赖引擎已删除的相位概念 ——
     // 这三类若被当成普通技能提交,会按 damage 表达式打出玩家本不该有的伤害。
@@ -924,6 +928,9 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
 }
 
 void TurnBattleEngine::FillDefaultActions() {
+    // 有剧本的队先按剧本出手;剧本没给出行动的单位(没认领角色位、规则全落空)照下面的现行默认走
+    FillScriptActions();
+
     for (const auto& actor : actors) {
         if (!IsActorActive(actor)) {
             continue;
@@ -959,6 +966,298 @@ void TurnBattleEngine::FillDefaultActions() {
         }
         pendingActions[actor.actor_id()] = defaultAction;
     }
+}
+
+// ---------------------------------------------------------------------------
+// 战斗剧本(docs/design/battle-script.md)
+// ---------------------------------------------------------------------------
+
+void TurnBattleEngine::BindBattleScripts() {
+    for (uint32_t teamIndex = 0; teamIndex < 2; ++teamIndex) {
+        // 哪一方:队里有怪物就是 PVE 的怪物方,否则是玩家组成的一方(PVE 进攻方、PVP 两方)
+        const bool monsterSide =
+            std::any_of(actors.begin(), actors.end(), [teamIndex](const BattleActorState& actor) {
+                return actor.team_index() == teamIndex && actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER;
+            });
+        auto script = dataProvider->FindBattleScript(
+            createRequest.match_mode(), createRequest.battle_config_id(),
+            monsterSide ? BATTLE_SCRIPT_SIDE_MONSTER : BATTLE_SCRIPT_SIDE_PLAYER);
+        if (script == nullptr) {
+            continue;
+        }
+
+        // 认领:单位按阵位(插入序)逐个找第一个接收它、且还没满员的角色位(角色位已按 order 排好)
+        std::map<uint32_t, uint32_t> roleMembers;  // role_id → 已认领数
+        for (auto& actor : actors) {
+            if (actor.team_index() != teamIndex) {
+                continue;
+            }
+            for (const auto& role : script->roles()) {
+                if (!ScriptRoleAccepts(role, actor)) {
+                    continue;
+                }
+                auto& members = roleMembers[role.role_id()];
+                if (role.max_members() != 0 && members >= role.max_members()) {
+                    continue;
+                }
+                ++members;
+                scriptRoleOf[actor.actor_id()] = role.role_id();
+                // 怪物表没有技能列:认领了角色位的怪物,技能集就是该角色位规则引用的技能(升序去重)。
+                // 玩家与宝宝的技能来自快照,剧本引用了他们没有的技能,出手前的校验链会拦下、落到下一条规则
+                if (actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+                    std::set<uint32_t> skillIds;
+                    for (const auto& rule : role.rules()) {
+                        if (rule.action() == BATTLE_ACTION_SKILL && rule.skill_id() != 0) {
+                            skillIds.insert(rule.skill_id());
+                        }
+                    }
+                    for (const auto skillId : skillIds) {
+                        const auto& owned = actor.skill_table_ids();
+                        if (std::find(owned.begin(), owned.end(), skillId) == owned.end()) {
+                            actor.add_skill_table_ids(skillId);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        teamScripts[teamIndex] = std::move(script);
+    }
+}
+
+bool TurnBattleEngine::ScriptRoleAccepts(const BattleScriptRole& role, const BattleActorState& actor) {
+    if (role.actor_type() != BATTLE_ACTOR_TYPE_NONE && role.actor_type() != actor.actor_type()) {
+        return false;
+    }
+    if (role.class_id() != 0 &&
+        (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || actor.class_id() != role.class_id())) {
+        return false;
+    }
+    if (role.monster_id() != 0 &&
+        (actor.actor_type() != BATTLE_ACTOR_TYPE_MONSTER || actor.monster_table_id() != role.monster_id())) {
+        return false;
+    }
+    return true;
+}
+
+void TurnBattleEngine::FillScriptActions() {
+    for (uint32_t teamIndex = 0; teamIndex < 2; ++teamIndex) {
+        const auto& script = teamScripts[teamIndex];
+        if (script == nullptr) {
+            continue;
+        }
+
+        // 手动提交的行动先登记成本角色位的认领:跟随的角色位(组合技、集火)可以接着队友手选的目标打。
+        // target_id 为 0 的(交给引擎选)没有确定目标,不登记
+        ScriptClaims claims;
+        for (const auto& actor : actors) {
+            if (actor.team_index() != teamIndex) {
+                continue;
+            }
+            const auto roleIt = scriptRoleOf.find(actor.actor_id());
+            const auto actionIt = pendingActions.find(actor.actor_id());
+            if (roleIt != scriptRoleOf.end() && actionIt != pendingActions.end() &&
+                actionIt->second.target_id() != 0) {
+                claims.emplace_back(roleIt->second, actionIt->second.target_id());
+            }
+        }
+
+        // 决策顺序 = 角色位 order(脚本已排好),同一角色位内按阵位。先决策的先定目标,后决策的才能跟
+        for (const auto& role : script->roles()) {
+            for (const auto& actor : actors) {
+                if (actor.team_index() != teamIndex || !IsActorActive(actor) ||
+                    pendingActions.find(actor.actor_id()) != pendingActions.end()) {
+                    continue;
+                }
+                const auto roleIt = scriptRoleOf.find(actor.actor_id());
+                if (roleIt == scriptRoleOf.end() || roleIt->second != role.role_id()) {
+                    continue;
+                }
+                auto action = SelectScriptAction(actor, role, claims);
+                if (!action.has_value()) {
+                    continue;  // 规则全落空:留给 FillDefaultActions 的现行默认
+                }
+                if (action->target_id() != 0) {
+                    claims.emplace_back(role.role_id(), action->target_id());
+                }
+                pendingActions[actor.actor_id()] = std::move(*action);
+            }
+        }
+    }
+}
+
+std::optional<BattleAction> TurnBattleEngine::SelectScriptAction(const BattleActorState& actor,
+                                                                 const BattleScriptRole& role,
+                                                                 const ScriptClaims& claims) const {
+    for (const auto& rule : role.rules()) {
+        const bool conditionsHold =
+            std::all_of(rule.conditions().begin(), rule.conditions().end(),
+                        [this, &actor](const BattleScriptCondition& condition) {
+                            return ScriptConditionHolds(actor, condition);
+                        });
+        if (!conditionsHold) {
+            continue;
+        }
+
+        BattleAction action;
+        action.set_action_type(rule.action());
+        action.set_skill_table_id(rule.skill_id());
+        std::vector<uint64_t> targetIds;
+        switch (rule.target().side()) {
+        case BATTLE_SCRIPT_TARGET_SELF:
+            // 防御没有目标;对自己放技能统一填自己:老技能的单体校验要非 0 目标,职业自身技能收 0 或自己
+            targetIds.push_back(rule.action() == BATTLE_ACTION_DEFEND ? 0 : actor.actor_id());
+            break;
+        case BATTLE_SCRIPT_TARGET_ENGINE_PICK:
+            targetIds.push_back(0);
+            break;
+        case BATTLE_SCRIPT_TARGET_ENEMY:
+        case BATTLE_SCRIPT_TARGET_ALLY:
+            targetIds = CollectScriptTargets(actor, rule.target(), role.role_id(), claims);
+            break;
+        default:
+            break;  // 规范化已拒绝;万一漏进来,这条规则不出手
+        }
+        // 按顺序试每个候选:与手动提交同一条校验链,手动做不到的剧本也做不到
+        for (const auto targetId : targetIds) {
+            action.set_target_id(targetId);
+            if (CheckActionPrerequisites(actor, action) == kSuccess) {
+                return action;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+bool TurnBattleEngine::ScriptConditionHolds(const BattleActorState& actor,
+                                            const BattleScriptCondition& condition) const {
+    bool holds = false;
+    switch (condition.kind()) {
+    case BATTLE_SCRIPT_COND_SELF_HP_BELOW:
+        holds = RatioBelowPermyriad(actor.attributes().health(), actor.max_health(), condition.p1());
+        break;
+    case BATTLE_SCRIPT_COND_ROUND_AT_LEAST:
+        holds = roundIndex >= condition.p1();
+        break;
+    case BATTLE_SCRIPT_COND_ROUND_EVERY:
+        holds = condition.p1() != 0 && roundIndex >= condition.p2() &&
+                (roundIndex - condition.p2()) % condition.p1() == 0;
+        break;
+    case BATTLE_SCRIPT_COND_ENEMY_COUNT_AT_LEAST:
+        holds = CollectAliveEnemyIds(actor).size() >= condition.p1();
+        break;
+    default:
+        // 规范化已拒绝未知种类;万一漏进来,不论是否取反都不成立(不出手比乱出手安全)
+        return false;
+    }
+    return holds != condition.negate();
+}
+
+bool TurnBattleEngine::ScriptFilterHolds(const BattleActorState& candidate, const BattleScriptTargetFilter& filter,
+                                         uint32_t ownRoleId, const ScriptClaims& claims) const {
+    // 只读出手方本来就看得到的状态(气血、buff、单位种类、职业、速度 —— 都在下发给客户端的状态里);
+    // 对面的冷却、道具余量、装备概率这类被 RedactStateForViewer 清掉的字段一律不读
+    bool holds = false;
+    switch (filter.kind()) {
+    case BATTLE_SCRIPT_FILTER_HP_BELOW:
+        holds = RatioBelowPermyriad(candidate.attributes().health(), candidate.max_health(), filter.p1());
+        break;
+    case BATTLE_SCRIPT_FILTER_HAS_BUFF_TYPE:
+        holds = ActorHasBuffOfType(candidate, filter.p1());
+        break;
+    case BATTLE_SCRIPT_FILTER_HAS_BUFF:
+        holds = std::any_of(candidate.buffs().begin(), candidate.buffs().end(),
+                            [&filter](const BattleBuffEntry& buff) { return buff.buff_table_id() == filter.p1(); });
+        break;
+    case BATTLE_SCRIPT_FILTER_IS_MONSTER:
+        holds = candidate.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && candidate.monster_table_id() == filter.p1();
+        break;
+    case BATTLE_SCRIPT_FILTER_IS_CLASS:
+        holds = candidate.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && candidate.class_id() == filter.p1();
+        break;
+    case BATTLE_SCRIPT_FILTER_IS_ACTOR_TYPE:
+        holds = static_cast<uint32_t>(candidate.actor_type()) == filter.p1();
+        break;
+    case BATTLE_SCRIPT_FILTER_CLAIMED_BY_ROLE: {
+        const uint32_t roleId = filter.p1() == 0 ? ownRoleId : filter.p1();
+        holds = std::any_of(claims.begin(), claims.end(), [roleId, &candidate](const auto& claim) {
+            return claim.first == roleId && claim.second == candidate.actor_id();
+        });
+        break;
+    }
+    default:
+        return false;  // 同 ScriptConditionHolds:未知种类不论是否取反都不成立
+    }
+    return holds != filter.negate();
+}
+
+std::vector<uint64_t> TurnBattleEngine::CollectScriptTargets(const BattleActorState& actor,
+                                                             const BattleScriptTarget& target, uint32_t ownRoleId,
+                                                             const ScriptClaims& claims) const {
+    const bool wantAlly = target.side() == BATTLE_SCRIPT_TARGET_ALLY;
+    std::vector<const BattleActorState*> candidates;
+    for (const auto& other : actors) {
+        if (!IsActorActive(other) || (other.team_index() == actor.team_index()) != wantAlly) {
+            continue;
+        }
+        const bool passes = std::all_of(target.filters().begin(), target.filters().end(),
+                                        [&](const BattleScriptTargetFilter& filter) {
+                                            return ScriptFilterHolds(other, filter, ownRoleId, claims);
+                                        });
+        if (passes) {
+            candidates.push_back(&other);
+        }
+    }
+
+    // 全序:排序键 → 阵位 → actor_id(无符号;怪物 / 宝宝的局内号带 bit63)。比较全是整数,不消耗随机数;
+    // 速度用吃了增减益的值,与出手序同口径
+    const auto order = target.order();
+    std::sort(candidates.begin(), candidates.end(),
+              [this, order](const BattleActorState* lhs, const BattleActorState* rhs) {
+                  switch (order) {
+                  case BATTLE_SCRIPT_ORDER_HP_LOWEST:
+                      if (lhs->attributes().health() != rhs->attributes().health()) {
+                          return lhs->attributes().health() < rhs->attributes().health();
+                      }
+                      break;
+                  case BATTLE_SCRIPT_ORDER_HP_HIGHEST:
+                      if (lhs->attributes().health() != rhs->attributes().health()) {
+                          return lhs->attributes().health() > rhs->attributes().health();
+                      }
+                      break;
+                  case BATTLE_SCRIPT_ORDER_HP_RATIO_LOWEST:
+                      if (RatioLess(lhs->attributes().health(), lhs->max_health(), rhs->attributes().health(),
+                                    rhs->max_health())) {
+                          return true;
+                      }
+                      if (RatioLess(rhs->attributes().health(), rhs->max_health(), lhs->attributes().health(),
+                                    lhs->max_health())) {
+                          return false;
+                      }
+                      break;
+                  case BATTLE_SCRIPT_ORDER_SPEED_HIGHEST: {
+                      const uint64_t lhsSpeed = EffectiveSpeed(*lhs);
+                      const uint64_t rhsSpeed = EffectiveSpeed(*rhs);
+                      if (lhsSpeed != rhsSpeed) {
+                          return lhsSpeed > rhsSpeed;
+                      }
+                      break;
+                  }
+                  default:  // FORMATION
+                      break;
+                  }
+                  if (lhs->formation_slot() != rhs->formation_slot()) {
+                      return lhs->formation_slot() < rhs->formation_slot();
+                  }
+                  return lhs->actor_id() < rhs->actor_id();
+              });
+
+    std::vector<uint64_t> targetIds;
+    targetIds.reserve(candidates.size());
+    for (const auto* candidate : candidates) {
+        targetIds.push_back(candidate->actor_id());
+    }
+    return targetIds;
 }
 
 std::vector<uint64_t> TurnBattleEngine::BuildTurnOrder() const {
@@ -1316,6 +1615,10 @@ uint64_t TurnBattleEngine::SkillManaCost(const BattleActorState& actor, const Sk
     if (IsClassSkill(skillRow)) {
         return classskill::ManaCost(actor.max_mana(), skillRow.mana_percent());
     }
+    return LegacySkillManaCost(skillRow);
+}
+
+uint64_t TurnBattleEngine::LegacySkillManaCost(const SkillTable& skillRow) {
     // cost_resource[] 平铺多列,Excel 空格补 {0,0};只认法力资源 id
     uint64_t cost = 0;
     for (const auto& entry : skillRow.cost_resource()) {

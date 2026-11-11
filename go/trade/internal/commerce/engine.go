@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"math"
 	assetpb "proto/common/asset"
-	rollbackpb "proto/common/rollback"
 	tradepb "proto/trade"
 	"shared/assetop"
 	"shared/authoritysql"
@@ -581,6 +580,32 @@ func finalCredits(w *tradepb.TradeCommerceWorkflow) (bool, bool) {
 	return true, true
 }
 
+// marketRemainder 是市场单托管里还没被成交划走的部分:卖单是剩余数量的物品,买单是剩余数量按单价折成的货币。
+// 成交的那部分在撮合时已划给成交子单,由子单的腿交付。玩家撤单(plan)与人工整单退回(manual.go)共用这一个算法。
+// 全部成交时回空包;已成交量超过总量是持久数据自相矛盾,回错误,不能用回绕的无符号减法算出一笔巨款。
+func marketRemainder(r *tradepb.TradeCommerceRecord) (*assetpb.AssetBundle, error) {
+	if r.FilledQuantity > r.Quantity {
+		return nil, fmt.Errorf("市场单已成交量 %d 超过总量 %d", r.FilledQuantity, r.Quantity)
+	}
+	remaining := r.Quantity - r.FilledQuantity
+	switch {
+	case remaining == 0:
+		return &assetpb.AssetBundle{}, nil
+	case r.Side == 1:
+		if r.UnitPrice > math.MaxInt64/uint64(remaining) {
+			return nil, fmt.Errorf("市场单剩余货币溢出: 单价 %d × 剩余 %d", r.UnitPrice, remaining)
+		}
+		return &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: r.CurrencyType, Amount: uint64(remaining) * r.UnitPrice}}}, nil
+	default:
+		return &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: r.ItemConfigId, Count: remaining}}}, nil
+	}
+}
+
+// emptyBundle 报告资产包里什么都没有(不用发)。
+func emptyBundle(b *assetpb.AssetBundle) bool {
+	return len(b.GetCurrencies())+len(b.GetItems())+len(b.GetItemInstances())+len(b.GetItemUuids()) == 0 && b.GetPetInstance() == nil && b.GetPetId() == 0
+}
+
 // maxNewLegsPerStep 是 advance 一步最多发出的新腿数(一步预取这么多 op_id)。人工处理一次加的腿也不能超过它。
 const maxNewLegsPerStep = 8
 
@@ -758,16 +783,11 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 			return err
 		}
 		if r.Kind == 4 {
-			remaining := r.Quantity - r.FilledQuantity
-			if remaining == 0 {
-				b = &assetpb.AssetBundle{}
-			} else if r.Side == 1 {
-				b = &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: r.CurrencyType, Amount: uint64(remaining) * r.UnitPrice}}}
-			} else {
-				b = &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: r.ItemConfigId, Count: remaining}}}
+			if b, err = marketRemainder(r); err != nil {
+				return err
 			}
 		}
-		if len(b.Currencies)+len(b.Items)+len(b.ItemInstances) > 0 || b.PetInstance != nil {
+		if !emptyBundle(b) {
 			addLeg(w, "seller_return", r.SellerPlayerId, 4, b)
 		}
 	}
@@ -925,10 +945,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			if l.Stream == 3 {
 				kind = tradepb.TradeAssetOpKind_TRADE_ASSET_OP_KIND_ESCROW_DEBIT
 			}
-			txType := uint32(rollbackpb.TransactionType_TX_AUCTION_BUY)
-			if l.Stream == 3 {
-				txType = uint32(rollbackpb.TransactionType_TX_AUCTION_SELL)
-			}
+			txType := legTxType(l) // 退回腿带 TX_AUCTION_RETURN,不受获取封禁约束(leg_tx_type.go)
 			l.OpId = ids[i]
 			deadline := uint64(0)
 			if l.Stream == 3 {

@@ -94,6 +94,16 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 
+	// 2b. 本区暂停创建新角色(区服目录的 create_role_closed,运维开关,2026-11-10 起;读法见 svc/zone_policy.go)。
+	//     放在加建角锁、铸号、登记名字之前:拒绝路径不碰任何存储。只拦新建,账号在本区的已有角色照常登录进场。
+	//     读不到区服策略时不拦(fail-open):这是运营节奏上的软开关,不是资产或权限闸门,拦错的代价是整区建不了角。
+	if l.svcCtx.CreateRoleClosed() {
+		logx.Infof("CreatePlayer rejected: zone %d has paused new characters (account=%s)",
+			config.AppConfig.Node.ZoneId, account)
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginZoneCreateRoleClosed)
+		return resp, nil
+	}
+
 	// 3. Lock (UUID + Lua safe release — prevents concurrent character creation)
 	createLock, err := locker.NewRedisLocker(l.svcCtx.LoginRedis).TryLock(
 		l.ctx, redisslot.AccountCreateLockKey(account),

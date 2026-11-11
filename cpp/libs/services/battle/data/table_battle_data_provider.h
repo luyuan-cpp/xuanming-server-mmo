@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "data/battle_data_provider.h"
+#include "system/battle_script.h"
 
 // 生产环境数据供给实现:读全局表管理器
 // (SkillTableManager/BuffTableManager/CooldownTableManager/SkillPermissionTableManager/
@@ -16,6 +17,12 @@ public:
     bool LoadBattleRewards(const std::string& path);
     const BattleRewardProfile* FindBattleReward(uint32_t battleConfigId,
                                                const std::string& strategyKey) const override;
+
+    // 官方战斗剧本(docs/design/battle-script.md §5):启动时在各表 Load 之后读一次 BattleScriptConfig 的 protobuf JSON,
+    // 对照已加载的表整份校验;失败返回 false 且不替换已装的目录(节点据此拒绝启动)。没有任何绑定是合法配置
+    bool LoadBattleScripts(const std::string& path);
+    std::shared_ptr<const BattleScript> FindBattleScript(uint32_t matchMode, uint32_t battleConfigId,
+                                                         eBattleScriptSide side) const override;
     const SkillTable* FindSkill(uint32_t skillTableId) const override;
     const BuffTable* FindBuff(uint32_t buffTableId) const override;
     const SkillPermissionTable* FindSkillPermission(uint32_t combatStateId) const override;
@@ -32,6 +39,7 @@ public:
     double GetBuffBonusDamage(uint32_t buffTableId) override;
 private:
     BattleRewardConfig rewards;
+    BattleScriptCatalog scripts;
 };
 
 }  // namespace turnbattle

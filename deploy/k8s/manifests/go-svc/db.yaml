@@ -24,7 +24,7 @@ spec:
   # 2 副本(2026-10-08,docs/design/no-single-node-horizontal-scaling-20261001.md §3)。
   # scene 按 zone 发现 PlayerStoreNodeService 并经 gRPC 调 LoadAndClaim / SavePlayer(docs/design/player-save-direct-commit.md):
   # 存盘接口无状态,并发写由 player_store 表上的事务判定兜住,多实例不需要分区独占。
-  # MySQL 连接预算:每个实例最多 MaxOpenConn(60)条,外加每个额外落点库 8 条(Placement.ZoneStore* / NonZoneStore*);
+  # MySQL 连接预算:go/db 只连本地域的 K 个存档库(zone 库已退役,A17c),每库一个池,上限 = Placement.StoreMaxOpenConn(K=1 的预算 60)按 K 摊开、每库至少 2 条;
   # 按 zone 数 × 副本数计入共用 MySQL 的总账,公式与规划见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger
   # (滚动发布时每个工作负载按多 2 个实例计:新 Pod + 仍在优雅退出、连接未释放的旧 Pod;StatefulSet 一次只换一个,这样算偏保守)。
   replicas: 2

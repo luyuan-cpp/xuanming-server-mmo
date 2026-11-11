@@ -193,7 +193,7 @@ func TestDeadNodeReconcileTakeover_FollowerLeavesCountersAndTaskAlone(t *testing
 // 销毁脚本第一次报错(结论未知):这一轮不删计数、不出队;下一拍只重试没结论的场景,收完后才删计数、出队。
 // 修复前:报错的场景留在反向索引里,但计数照删、任务照出队,没有任何重试。
 func TestDeadNodeReconcileTakeover_FailedSceneRetriedNextTick(t *testing.T) {
-	hook := &failFirstEvalHook{script: luaAtomicDestroyInstanceForce}
+	hook := &failFirstEvalHook{script: luaAtomicDestroyOrphanOfDeadNode}
 	sc, mr := newIntegrationSvcCtxWithRedisOptions(t, redis.WithHook(hook))
 	c := newTakeoverCase(t, sc, mr, "8992", 89921)
 	c.declareDead(t)

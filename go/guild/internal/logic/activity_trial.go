@@ -725,13 +725,14 @@ func (l *GuildLogic) startTrialBattle(ctx context.Context, d *ActivityDeps, lobb
 }
 
 // startTrialAtMatch 调 match 开战(callTrialMatch)。没开成而 match 的答复是确定的(startSettled)时,这次 Start 已不在途,
-// 把永久原件交给恢复器马上检查(expediteTrialLaunchCheck):SQL 大厅有 launch 原件就结束不了(endPendingLobby 拒绝),
-// 名单上的人要等恢复器凭取消墓碑释放;不提前的话每一次业务拒绝都要多挂约 35s(开局截止 + 宽限,2026-11-05 修复,r2-guild#1 复审)。
+// 把永久原件连同结束原因交给恢复器马上检查(handOffFailedTrialStart):SQL 大厅有 launch 原件就结束不了(endPendingLobby 拒绝),
+// 名单上的人要等恢复器凭取消墓碑释放;不提前的话每一次业务拒绝都要多挂约 35s(开局截止 + 宽限,2026-11-05 修复,r2-guild#1 复审);
+// 不记原因的话释放时大厅写的是默认的「服务繁忙」,只有发起人看到真正原因(2026-11-11 修复)。
 // 结局未知的失败不提前:Start 可能仍在 match 处理中,提前取消会把合法的 Start 拒成「服务繁忙」。
 func startTrialAtMatch(ctx context.Context, d *ActivityDeps, lobby *data.TrialLobby, dungeonID uint32, battle data.TrialBattleKey) (uint64, trialEnd) {
 	battleID, end, startSettled := callTrialMatch(ctx, d, lobby, dungeonID, battle)
 	if end.failed() && startSettled {
-		expediteTrialLaunchCheck(ctx, d, battle.LaunchRequestID)
+		handOffFailedTrialStart(ctx, d, battle.LaunchRequestID, end)
 	}
 	return battleID, end
 }

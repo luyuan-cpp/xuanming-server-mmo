@@ -10,13 +10,24 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/redisslot"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// sceneControlTag 是 zone 的控制域 hash tag「{ctl:<zone>}」(docs/design/redis-cluster-all-domains-20261110.md §3)。
+//
+// 控制域的每把键都把它写在原来 zone 段的位置(键格式里标着「tag」的 %s):同一个 zone 的键落在同一个槽,
+// 脚本、MGET 与 pipeline 在 Redis Cluster 上才能原子执行;不同 zone 散到不同槽,加主节点就能扩写入。
+// 只经这里生成,不手拼;族前缀表在 shared/redisslot,与 C++ redis_slot.h 逐字一致。
+func sceneControlTag(zoneID uint32) string {
+	return redisslot.ZoneControlTag(redisslot.ControlFamilySceneControl, zoneID)
+}
+
 // Redis key for the active-instance sorted set (score = create timestamp).
+// 键格式里第一个 %s 是 sceneControlTag(zone)。
 const (
-	ActiveInstancesKeyFmt = "instances:zone:%d:active"
+	ActiveInstancesKeyFmt = "instances:%s:active"
 	SceneNodeKeyFmt       = "scene:%d:node"
 	SceneZoneKeyFmt       = "scene:%d:zone"
 	// SceneMirrorFlagKeyFmt marks a scene as a mirror so the lifecycle
@@ -37,7 +48,7 @@ const (
 	// scene node. Populated by the scene registration scripts
 	// (scene_registration.go), drained by every destroy path.
 	// Used by the node-death reconciliation loop to find orphan instances.
-	NodeScenesKeyFmt = "node:zone:%d:%s:scenes"
+	NodeScenesKeyFmt = "node:%s:%s:scenes"
 )
 
 func sceneMirrorFlagKey(sceneID uint64) string {
@@ -53,7 +64,7 @@ func sceneMirrorsKey(sourceSceneID uint64) string {
 }
 
 func nodeScenesKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodeScenesKeyFmt, zoneID, nodeID)
+	return fmt.Sprintf(NodeScenesKeyFmt, sceneControlTag(zoneID), nodeID)
 }
 
 func sceneZoneKey(sceneID uint64) string {
@@ -61,7 +72,7 @@ func sceneZoneKey(sceneID uint64) string {
 }
 
 func activeInstancesKey(zoneID uint32) string {
-	return fmt.Sprintf(ActiveInstancesKeyFmt, zoneID)
+	return fmt.Sprintf(ActiveInstancesKeyFmt, sceneControlTag(zoneID))
 }
 
 func sceneNodeKey(sceneID uint64) string {

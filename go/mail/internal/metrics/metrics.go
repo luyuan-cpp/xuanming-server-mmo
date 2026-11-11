@@ -8,6 +8,7 @@
 //
 // 所有 label 组合都在 register 里**预建 0 值序列**:Prometheus 里"从未发生过"的序列根本不存在,
 // `increase(...[1h]) > 0` 一类告警在序列缺失时既不报警也不报错,与"一切正常"长得一样(设计 §4.7)。
+// 唯一的例外是活性 gauge sweep_last_run_unixtime:它不是事件计数,只在清理循环运行时有序列(MarkSweepRun / ClearSweepRun)。
 package metrics
 
 import (
@@ -90,12 +91,6 @@ var (
 		Help:      "Legacy M1 short-circuit counter; canonical M2 claim path never increments it.",
 	})
 
-	listTruncatedTotal = prometheus.NewCounter(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "list_truncated_total",
-		Help:      "ListMails calls whose active system mail set hit Mail.MaxActiveSystemMails (players see fewer system mails).",
-	})
-
 	guildLookupFailuresTotal = prometheus.NewCounter(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "guild_lookup_failures_total",
@@ -121,11 +116,15 @@ var (
 		Help:      "Rows with expire_ms = 0 seen by sweep (counted, never deleted; send-side validation was bypassed), by table.",
 	}, []string{"table"})
 
-	sweepLastRunUnixtime = prometheus.NewGauge(prometheus.GaugeOpts{
+	// sweepLastRunUnixtime 是清理循环的活性(缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.3)。
+	// 不带可变 label 的 GaugeVec:循环起来才有序列、退出就删,canary(不跑清理)和停机排空中的副本都没有序列,
+	// 告警 MailSweepStalled 按副本逐条判,不必另滤 0。
+	sweepLastRunUnixtime = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "sweep_last_run_unixtime",
-		Help:      "Unix time at the end of the last sweep pass, written every pass regardless of rows deleted; stops advancing when the loop is stuck.",
-	})
+		Help: "Unix time at the end of the last finished sweep pass (failed passes and passes with 0 rows included), " +
+			"also written when the loop starts; the series exists only while the sweep loop runs and stops advancing when the loop is stuck.",
+	}, nil)
 
 	registerOnce sync.Once
 )
@@ -143,11 +142,6 @@ func ObservePush(outcome string) {
 // ObserveClaimShortCircuit 记一次领取短路(设计 §4.3:M1 里这是领取的唯一可观察痕迹)。
 func ObserveClaimShortCircuit() {
 	claimShortCircuitTotal.Inc()
-}
-
-// ObserveListTruncated 记一次 ListMails 读系统有效集时撞到上限(有告警 MailSystemListTruncated)。
-func ObserveListTruncated() {
-	listTruncatedTotal.Inc()
 }
 
 // ObserveGuildLookupFailure 记一次读所在帮会失败:这一次按没有帮算,帮会文本邮件看不到。
@@ -170,9 +164,14 @@ func AddSweepInvalidRows(table string, rows float64) {
 	sweepInvalidRows.WithLabelValues(table).Add(rows)
 }
 
-// MarkSweepRun 在每轮 sweep 结束时写当前时刻(有告警 MailSweepStalled:它长期不前进 = 循环卡死或停止调度)。
+// MarkSweepRun 在清理循环起来时、每轮 sweep 跑完时写当前时刻(有告警 MailSweepStalled:它长期不前进 = 循环卡在某一轮里)。
 func MarkSweepRun(now time.Time) {
-	sweepLastRunUnixtime.Set(float64(now.Unix()))
+	sweepLastRunUnixtime.WithLabelValues().Set(float64(now.Unix()))
+}
+
+// ClearSweepRun 在清理循环退出时删掉活性序列:停掉的循环不该被当成卡住。
+func ClearSweepRun() {
+	sweepLastRunUnixtime.Reset()
 }
 
 // Register 注册全部指标并预建 0 值序列。幂等:重复调用不会 panic。
@@ -182,7 +181,6 @@ func Register() {
 			adminSendTotal,
 			pushTotal,
 			claimShortCircuitTotal,
-			listTruncatedTotal,
 			guildLookupFailuresTotal,
 			sweepCandidateRows,
 			sweepDeletedTotal,

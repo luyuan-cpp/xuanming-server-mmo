@@ -36,6 +36,7 @@ import (
 	"shared/playersync"
 	"shared/rolefence"
 	"shared/serviceauth"
+	"shared/tracing/kafkagotrace"
 
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -416,8 +417,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		}
 		return inboxpb.NewPlayerInboxClient(conn), nil
 	}
+	// ctx 里有 trace 就写进消息头,guild 等结果消费者接上同一条 trace(docs/design/distributed-tracing.md §6.2);
+	// 后台 outbox 中继发的没有 trace,不带头。
 	publishResult := func(ctx context.Context, battle uint64, raw []byte) error {
-		return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw})
+		return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw,
+			Headers: kafkagotrace.Headers(ctx)})
 	}
 	sc.RefreshBattleSettlement = func(ctx context.Context, ticket *matchpb.MatchAuthorityTicketRecord) error {
 		return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)

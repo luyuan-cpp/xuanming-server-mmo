@@ -43,14 +43,14 @@ const (
 	//   field "state" = scenepb.MysteryMerchantState 的序列化字节;
 	//   field "v"     = round_id * mysteryMerchantVersionRoundFactor + revision 的十进制,只供写入脚本比较。
 	//
-	// **跨语言契约,字面量不许改**:C++ scene 节点按同一格式拼键、读同一个 field,对应常量是
-	// cpp/libs/services/scene/player/system/player_mystery_merchant.cpp 的 kMysteryMerchantKeyFmt /
-	// kMysteryMerchantStateField(那边的占位符是 C printf 的 %u,这边是 Go 的 %d;契约是**渲染出来的键**
-	// 逐字节相同:mystery_merchant:zone:{zone 十进制})。改这里必须同批改那里;
-	// TestMysteryMerchantKey_CrossLanguageContract 钉住本侧字面量与渲染结果。
+	// **跨语言契约,渲染出来的键不许单边改**:C++ scene 节点拼同一把键、读同一个 field,对应的是
+	// cpp/libs/services/scene/player/system/player_mystery_merchant.cpp 的 MysteryMerchantKey /
+	// kMysteryMerchantStateField。契约是**渲染出来的键**逐字节相同:mystery_merchant:{ctl:<zone 十进制>},
+	// 两边的 tag 都由各自的族表生成(Go redisslot.ZoneControlTag、C++ redis_slot::ZoneControlTag)。改这里必须同批改那里;
+	// TestMysteryMerchantKey_CrossLanguageContract 钉住本侧字面量与渲染结果。%s 是 sceneControlTag(zone)。
 	//
-	// 键名刻意不用 world_channels:zone: 前缀:孤儿清理按那个前缀 SCAN(orphan_cleanup.go)。
-	MysteryMerchantKeyFmt = "mystery_merchant:zone:%d"
+	// 键名刻意不用 world_channels: 前缀:孤儿清理按频道集合的键形解析(orphan_cleanup.go)。
+	MysteryMerchantKeyFmt = "mystery_merchant:%s"
 	// MysteryMerchantStateField / MysteryMerchantVersionField 是上面那把 HASH 的两个 field 名。
 	MysteryMerchantStateField   = "state"
 	MysteryMerchantVersionField = "v"
@@ -90,12 +90,12 @@ const (
 )
 
 func mysteryMerchantKey(zoneID uint32) string {
-	return fmt.Sprintf(MysteryMerchantKeyFmt, zoneID)
+	return fmt.Sprintf(MysteryMerchantKeyFmt, sceneControlTag(zoneID))
 }
 
 // luaWriteMysteryMerchantState 原子地写入一份新记录,**版本只进不退**。
 //
-// KEYS[1] = mystery_merchant:zone:{zone}
+// KEYS[1] = mystery_merchant:{ctl:<zone>}
 // ARGV[1] = 新版本号(十进制),ARGV[2] = MysteryMerchantState 字节,ARGV[3] = TTL 秒,
 // ARGV[4] = '1' 表示强制覆盖(跳过版本比较),其它值照常比较
 // Return  = 1 已写入 / 0 已有同版本或更新的记录(没写)

@@ -221,13 +221,12 @@ func (e *Engine) marketBarrier(ctx context.Context, tx *sql.Tx, r *tradepb.Trade
 	if r.Kind != 4 || r.Side == 0 {
 		return nil
 	}
-	var pending, bad int
-	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(status NOT IN (7,11)),0),COALESCE(SUM(status=10),0) FROM trade_commerce WHERE kind=4 AND side=0 AND (parent_id=? OR counterparty_id=?)", r.CommerceId, r.CommerceId).Scan(&pending, &bad); err != nil {
+	// 转人工的子单(status=10)算没收尾:母单等它被人工处理完再结案,不跟着转人工(2026-11-11,jubaozhai-market.md §15.7.1 第 4 类)。
+	// 子单的资产在撮合时已从两边母单的托管里划出,由子单自己的腿交付;母单只对剩下的部分负责,剩余挂单量照常成交或撤单。
+	// 以前这里把母单也转人工,一张子单出事就冻住母单剩下的挂单量,玩家撤不了单。
+	var pending int
+	if err := tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(status NOT IN (7,11)),0) FROM trade_commerce WHERE kind=4 AND side=0 AND (parent_id=? OR counterparty_id=?)", r.CommerceId, r.CommerceId).Scan(&pending); err != nil {
 		return err
-	}
-	if bad > 0 {
-		markManual(r, w, manualReasonMarketFill, "名下有转人工的成交子单", e.now())
-		return nil
 	}
 	if w.Stage == "done" && pending > 0 {
 		w.Stage = "market_wait"

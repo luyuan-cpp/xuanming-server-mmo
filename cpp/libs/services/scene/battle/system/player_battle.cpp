@@ -1861,28 +1861,18 @@ bool CollectExactSettlementItems(const ::BattleSettlementData& settlement,
     return collect(settlement.items_consumed(), consumed) && collect(settlement.items_gained(), gained);
 }
 
-// 一项因配置行已不存在而被剔除的结算物品(只供成功应用之后打日志)。
-struct SkippedSettlementItem
+// 本节点 Item 表查不到的最小配置号;都查得到返回 0(配置号 0 已被 CollectExactSettlementItems 判为坏载荷,到不了这里)。
+// 取最小的只为日志确定。查不到意味着什么、为什么整笔 DEFER,见 ApplySettlementToEntity 里的调用处。
+uint32_t SmallestItemConfigUnknownToThisNode(const ItemCountMap& items)
 {
-    std::string side;
-    uint32_t configId = 0;
-    uint32_t count = 0;
-};
-
-// 掉落 / 消耗项的配置行已被热更删掉(C-2,2026-10-30)。这份终局是开局快照与引擎早已定下的事实,
-// 配置行之后被删既不是版本错位,也不会自愈:整笔 DEFER 会让这一局的金币、任务、HP 与其余物品永远卡在收件箱里,
-// 判版本错位则连同之后每一局一起停用整个战斗结算域。所以只把这些项从整笔候选里剔除,其余效果照常应用,
-// 调用方在应用成功后逐项记 ERROR(metric=battle_inbox_item_effect_skipped),交人工按流水补偿。
-// 只认「行不存在」:行还在、但行或玩家实例带本版本不认识的字段 / 实例不可计数,仍按版本错位处理
-// (HasUnsupportedInboxConsumption)。按配置号升序处理,日志顺序确定。
-void DropItemsWithoutConfigRow(ItemCountMap& items, const char* side, std::vector<SkippedSettlementItem>& skipped)
-{
-    for (const auto& [configId, count] : SortedByConfigId(items))
+    uint32_t smallest = 0;
+    for (const auto& entry : items)
     {
+        const uint32_t configId = entry.first;
         if (ItemTableManager::Instance().Exists(configId)) continue;
-        skipped.push_back(SkippedSettlementItem{side, configId, count});
-        items.erase(configId);
+        if (smallest == 0 || configId < smallest) smallest = configId;
     }
+    return smallest;
 }
 
 // 掉落里此刻被获得封禁的项(全服或本人:GainBlockService::IsItemGainBlocked,与各入包入口、资产通道同一个判定)。
@@ -1979,8 +1969,9 @@ bool HasUnsupportedInboxConsumption(entt::entity player, const ::BattleSettlemen
     std::set<uint32_t> configs;
     for (const auto& entry : settlement.items_consumed()) {
         const auto* row = ItemTableManager::Instance().FindByIdSilent(entry.item_table_id()).first;
-        // 配置行已被热更删掉不是版本错位(C-2):这一项由 ApplySettlementToEntity 剔除并记 ERROR,这里跳过;
-        // 行还在却带本版本不认识的字段,才是版本错位。
+        // 本节点表里查不到这一行不在这里判:Item 表行 id 只增不删(cfg_ids_permanent),查不到只可能是这一行还没热更到
+        // 本节点,或结算来自更新版本的 battle 节点,热更到之后本地续做即可成功,所以由 ApplySettlementToEntity 整笔 DEFER,
+        // 不停用整个域。行还在却带本版本不认识的字段,热更不会让它消失,才是版本错位。
         if (!row) continue;
         if (HasNestedUnknownFields(*row)) return true;
         configs.insert(entry.item_table_id());
@@ -2075,7 +2066,7 @@ std::vector<std::pair<uint32_t, uint32_t>> ItemLinesOf(const ItemCountMap& items
 }
 
 // 这一局本人实际入账的结果。货币取实际入账的金额(先抵欠款的部分也算在内;被封禁的币种已从 currencyGains 摘掉,不记);
-// 掉落取剔除了配置行已删项与被封禁项之后的清单(granted);消耗取 min(要求, 实际持有)(consumed)。经验系统没接入,不记经验。
+// 掉落取剔除了被封禁项之后的清单(granted);消耗取 min(要求, 实际持有)(consumed)。经验系统没接入,不记经验。
 PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, const SettlementCurrencyGains& currencyGains,
                                      const ItemCountMap& granted, const ItemCountMap& consumed, const uint64_t settledAtMs)
 {
@@ -2345,16 +2336,27 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     ItemCountMap inboxConsumed, inboxGained, actualConsumption;
     std::set<uint64_t> inboxPets;
     std::map<std::string, uint32_t> skippedPets;
-    std::vector<SkippedSettlementItem> skippedItems;
     std::string originalPets;
     if (!HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
         !CollectExactSettlementItems(settlement, inboxConsumed, inboxGained)) return false;
     if (!CollectApplicableInboxPets(player, settlement, inboxPets, skippedPets)) return false;
-    // 配置行已被热更删掉的掉落 / 消耗只剔除这一项,不拖住整笔(C-2,DropItemsWithoutConfigRow 的说明)。
-    // 必须在下面按候选算实际可扣量之前做:actualConsumption 与 ConsumeInventoryAndGrant 只看剔除后的两张表。
-    DropItemsWithoutConfigRow(inboxConsumed, "consumed", skippedItems);
-    DropItemsWithoutConfigRow(inboxGained, "gained", skippedItems);
-    // 被获得封禁的掉落同样只剔除这一项(DropBlockedGains 的说明)。排在号段预检与入包之前:被封的掉落不铸号、不进候选。
+    // 消耗或掉落里有本节点 Item 表查不到的配置号:整笔 DEFER、零副作用(混版本持久字段保护设计 §12 载荷行、§13 第 10 条)。
+    // Item 表行 id 只增不删(data/AGENTS.md「行 id 只增不删」,导表器按 cfg_ids_permanent 守住),查不到只可能是这一行
+    // 还没热更到本节点,或结算来自更新版本的 battle 节点。剔除这一项就是丢掉玩家这一局的掉落;热更到这一行之后本地续做
+    // 即可成功,与号段暂缺、跨区冻结同一条路:收件箱照常退避重试,不停用本域。
+    // 必须在剔除封禁项、按候选算实际可扣量之前:查不到的项既不能当「被封」剔掉,也不能当「持有 0」夹紧。
+    const uint32_t unknownConsumed = SmallestItemConfigUnknownToThisNode(inboxConsumed);
+    const uint32_t unknownGained = SmallestItemConfigUnknownToThisNode(inboxGained);
+    if (unknownConsumed != 0 || unknownGained != 0)
+    {
+        LOG_WARN << "[PlayerBattle] metric=persist_version_skew where=battle_item player_id=" << playerId
+                 << " battle_id=" << battleId << " side=" << (unknownConsumed != 0 ? "consumed" : "gained")
+                 << " config_id=" << (unknownConsumed != 0 ? unknownConsumed : unknownGained)
+                 << "; item config is not in this node's item table (row not hot-updated here yet, or settlement from a newer"
+                    " battle node), deferring the whole settlement without side effects";
+        return false;
+    }
+    // 被获得封禁的掉落只剔除这一项(DropBlockedGains 的说明)。排在号段预检与入包之前:被封的掉落不铸号、不进候选。
     const auto blockedDrops = DropBlockedGains(player, inboxGained);
     if (settlement.pets_size() > 0) originalPets = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
     // 实际可扣量 = 可计数总量 - 别的局的道具预留;本局自己的预留可以动用(battle-item-reservation.md)。
@@ -2368,7 +2370,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 
     // 掉落要铸的新实例身份必须先有着落(审计 cpp-economy#0)。号段暂缺是会自己消失的条件,
     // 与跨区冻结同类:整笔 DEFER、零副作用,条目留在收件箱。
-    // 按真正交给 ConsumeInventoryAndGrant 的掉落算(已剔除配置行已删与被封禁的项):剔除的项不铸号,
+    // 按真正交给 ConsumeInventoryAndGrant 的掉落算(已剔除被封禁的项):剔除的项不铸号,
     // 按原件算会把本可发放的结算误判成号段不足。
     if (!HasItemGuidsForDrops(inboxGained, playerId, battleId))
     {
@@ -2462,11 +2464,6 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     for (const auto& [reason, count] : skippedPets)
         LOG_ERROR << "metric=battle_inbox_pet_effect_skipped reason=" << reason
                   << " battle_id=" << battleId << " count=" << count;
-    for (const auto& skipped : skippedItems)
-        LOG_ERROR << "metric=battle_inbox_item_effect_skipped reason=item_table_missing side=" << skipped.side
-                  << " count=" << skipped.count << " config_id=" << skipped.configId
-                  << " battle_id=" << battleId << " player_id=" << playerId
-                  << ";item config row no longer exists, this item effect was dropped and the rest of the settlement applied";
     // 被获得封禁而跳过的掉落与币种:封禁本意就是不发,不补偿、解封后也不补发,只留痕供客服与对账按 battle_id 查。
     for (const auto& [configId, count] : blockedDrops)
         LOG_WARN << "[PlayerBattle] metric=battle_settlement_item_blocked source=inbox battle_id=" << battleId
@@ -2545,7 +2542,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         }
     }
     // 本人近期战斗结果:与上面全部效果同一帧写入,随同一次存档提交;存档确认提交之后由 CompleteInboxSettlement 公开
-    // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除配置行已删项与被封禁项之后的掉落(两包都放不下而改投邮件的
+    // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除被封禁项之后的掉落(两包都放不下而改投邮件的
     // 那一批也算:它已经是玩家的,经邮件领取)、未被封禁的币种、按实际持有夹紧的消耗。
     RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption);
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。

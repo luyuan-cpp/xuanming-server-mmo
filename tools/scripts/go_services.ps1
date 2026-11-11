@@ -179,8 +179,8 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #               要能跑完,比其它服务留得宽;K8s 侧对应 45s 宽限减 5s preStop。
 #               超时被强杀不丢已提交的数据:提交点在 SQL 事务,没回包的存盘结局未知,由 scene 按序号重发(同序号幂等)。
 $ServiceCatalogue = [ordered]@{
-    mail = @{ Dir = "mail"; Entry = "mail.go"; Port = 50900; Desc = "邮件（全局权威邮箱与附件到账）"; ConfigFlag = "-f"; ConfigFile = "etc/mail.yaml"; AllowMultiInstance = $true; Tier = 1 }
-    rank = @{ Dir = "rank"; Entry = "rank.go"; Port = 51100; Desc = "排行榜（全局代次、封榜与奖励）"; ConfigFlag = "-f"; ConfigFile = "etc/rank.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    mail = @{ Dir = "mail"; Entry = "mail.go"; Port = 50900; Desc = "Mail (global authoritative mailbox + attachment delivery)"; ConfigFlag = "-f"; ConfigFile = "etc/mail.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    rank = @{ Dir = "rank"; Entry = "rank.go"; Port = 51100; Desc = "Rank (global generations, freeze and rewards)"; ConfigFlag = "-f"; ConfigFile = "etc/rank.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # 按包构建/运行:db.go 依赖同目录 player_store_wiring.go,单文件 go build 找不到 newPlayerStoreServer。
     db              = @{ Dir = "db";              Entry = ".";                        Port = 6000;  Desc = "DB (PlayerStore gRPC + TiDB)";      ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0; StopTimeoutSeconds = 35 }
     data_service    = @{ Dir = "data_service";    Entry = "data_service.go";          Port = 9000;  Desc = "Data Service (global directory + id issuer)"; ConfigFlag = "-f";            ConfigFile = "etc/data_service.yaml";          AllowMultiInstance = $true;  Tier = 0 }
@@ -208,7 +208,7 @@ $ServiceCatalogue = [ordered]@{
     # 同批先起;它自身不依赖别的 Go 服务(只按 etcd 发现转发)。
     # 端口 50600 与 match 的 50500 同一安全区间(已观测的 Windows 保留区 50000-50171 与 51573-51872 之间),
     # 与 go/client_rpc_router/etc/client_rpc_router.yaml 的 ListenOn 保持一致。
-    client_rpc_router = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; Port = 50600; Desc = "Client RPC Router (gate 唯一 gRPC 目标)"; ConfigFlag = "-f"; ConfigFile = "etc/client_rpc_router.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    client_rpc_router = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; Port = 50600; Desc = "Client RPC Router (the only gRPC target of gate)"; ConfigFlag = "-f"; ConfigFile = "etc/client_rpc_router.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # 全局聊天：多副本共用TiDB原件和原会话P锁，会话身份只认 gate 签名原件、不连 login 的 Redis，多实例只在路由服与
     # NodeInfo 视角等价;本地双 zone 仍按既有规则每 zone 起一份(-Zone 位移端口与 ZoneId),不另开特例。
     # **前提:gate 必须以路由服模式启动(GATE_CLIENT_RPC_ROUTER=1)**。chat 只承诺经 gate → client_rpc_router
@@ -219,7 +219,7 @@ $ServiceCatalogue = [ordered]@{
     # 注意 -Zone 2 位移后是 51700,恰好落在已观测的 51573-51872 里:由 Resolve-BindablePort 自动上挪并走派生 yaml,
     # 路由服经 etcd NodeInfo 发现实际端口,不受影响(ZonePortShift 刻意不为它改)。
     # 必须与 go/chat/etc/chat.yaml 的 ListenOn、k8s_deploy.ps1 $GoSvcCatalogue 的 Port、manifests/go-svc/chat.yaml 保持一致。
-    chat              = @{ Dir = "chat"; Entry = "chat.go"; Port = 50700; Desc = "Chat (全局聊天,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/chat.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    chat              = @{ Dir = "chat"; Entry = "chat.go"; Port = 50700; Desc = "Chat (global chat, reachable via router)"; ConfigFlag = "-f"; ConfigFile = "etc/chat.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # 公会 guild:全局一份(port-decisions D-2),帮会按 zone_id **数据维度**隔离而不是按部署隔离 ——
     # 客户端请求属于哪个区由 guild 查 data_service 的玩家归属映射决定(docs/design/guild-zone-client-access.md)。
     # 与 chat 一样**只承诺路由服模式可达**(GATE_CLIENT_RPC_ROUTER=1):直连模式下 gate 白名单里没有 Guild,
@@ -227,7 +227,7 @@ $ServiceCatalogue = [ordered]@{
     # Tier 1:只依赖基础设施(MySQL / Redis / etcd)与 data_service(Tier 0;号段 + 归属 zone,NonBlock 拨号),不拨 login 等服务。
     # 多开安全:建帮 / 入会 / 公告都是 MySQL 事务,启动时的榜单重建有 Redis 维护锁(guild_rank:maintenance_lock)。
     # 端口 50300 与 go/guild/etc/guild.yaml 的 ListenOn 一致;-Zone 2 位移后 51300,不在已观测的保留区间内。
-    guild             = @{ Dir = "guild"; Entry = "guild.go"; Port = 50300; Desc = "Guild (公会,按 zone 隔离,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/guild.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    guild             = @{ Dir = "guild"; Entry = "guild.go"; Port = 50300; Desc = "Guild (isolated per zone, reachable via router)"; ConfigFlag = "-f"; ConfigFile = "etc/guild.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # 聚宝斋 trade(docs/design/jubaozhai-market.md):全局一份(TradeNodeService),商品按 market_zone **数据维度**
     # 隔离,与 chat / guild 一样**只承诺路由服模式可达**(GATE_CLIENT_RPC_ROUTER=1)。
     # Tier 1:依赖 MySQL 独占库 mmorpg_trade(库由 deploy/mysql-init/00_init_zone_dbs.sql 预建,表由 trade 启动期
@@ -237,7 +237,7 @@ $ServiceCatalogue = [ordered]@{
     # 端口 50800 / metrics 9230 与 go/trade/etc/trade.yaml 一致;-Zone 2 位移后 51800 / 10230,51800 可能落入历史观测的
     # 保留区 51573-51872,由 Resolve-BindablePort 自动上挪(同 chat)。trade.yaml 形状满足本脚本 -Zone 改写:
     # 顶层单行 ListenOn / MetricsListenAddr、顶层 ZoneId 写在所有嵌套段之前、DataServiceRpc.Etcd.Key: dataservice.rpc 会被加 .z<N>。
-    trade             = @{ Dir = "trade"; Entry = "trade.go"; Port = 50800; Desc = "Trade (聚宝斋,按 market_zone 隔离,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/trade.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    trade             = @{ Dir = "trade"; Entry = "trade.go"; Port = 50800; Desc = "Trade (marketplace, isolated per market_zone, reachable via router)"; ConfigFlag = "-f"; ConfigFile = "etc/trade.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # 好友 friend(docs/design/friend-port-20260918.md):全局一份(FriendNodeService),好友关系天然跨 zone,
     # 业务代码禁止读 ZoneId 做分支;与 chat / guild / trade 一样**只承诺路由服模式可达**(GATE_CLIENT_RPC_ROUTER=1)。
     # 本目录**没有 Global 这个字段**(chat / guild / trade 同样不写,port-decisions D-2):"全服一份"是 K8s 侧的
@@ -250,7 +250,7 @@ $ServiceCatalogue = [ordered]@{
     # $GoSvcCatalogue 与 ConfigMap、manifests/go-svc/friend.yaml 五处逐字一致(契约 §7);-Zone 2 位移后 51400 / 10180,
     # 均不在已观测的 Windows 保留区间内。friend.yaml 形状满足本脚本 -Zone 改写:顶层单行 ListenOn / MetricsListenAddr、
     # 顶层 ZoneId 写在所有嵌套段之前;它自己的 Etcd.Key 是空串(D-13),不会被 .z<N> 后缀规则碰到。
-    friend            = @{ Dir = "friend"; Entry = "friend.go"; Port = 50400; Desc = "Friend (全局好友,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/friend.yaml"; AllowMultiInstance = $true;  Tier = 1 }
+    friend            = @{ Dir = "friend"; Entry = "friend.go"; Port = 50400; Desc = "Friend (global friends, reachable via router)"; ConfigFlag = "-f"; ConfigFile = "etc/friend.yaml"; AllowMultiInstance = $true;  Tier = 1 }
     # 玩家持久收件箱 player_inbox(docs/design/player-inbox-service.md,D3 独立进程):全服一份(PlayerInboxNodeService),
     # 按全局唯一的 player_id 存;调用方是 C++ scene(按 etcd 前缀 PlayerInboxNodeService.rpc 直连 FetchItems / AckItems)
     # 与运维(PlayerInboxAdmin,x-admin-token),**不经路由服**,与 gate 的路由模式无关。
@@ -264,7 +264,7 @@ $ServiceCatalogue = [ordered]@{
     # $GoSvcCatalogue 与 ConfigMap、manifests/go-svc/player-inbox.yaml 逐字一致;-Zone 2 位移后 51950 / 10270,均不在已观测的
     # Windows 保留区间内。player_inbox.yaml 形状须满足本脚本 -Zone 改写:顶层单行 ListenOn / MetricsListenAddr、顶层 ZoneId
     # 写在所有嵌套段之前;自己的 Etcd.Key 是空串(D-13),DataServiceRpc.Etcd.Key: dataservice.rpc 会被加 .z<N>(照 trade)。
-    player_inbox      = @{ Dir = "player_inbox"; Entry = "player_inbox.go"; Port = 50950; Desc = "Player Inbox (玩家持久收件箱,scene 直连)"; ConfigFlag = "-f"; ConfigFile = "etc/player_inbox.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    player_inbox      = @{ Dir = "player_inbox"; Entry = "player_inbox.go"; Port = 50950; Desc = "Player Inbox (persistent player inbox, direct from scene)"; ConfigFlag = "-f"; ConfigFile = "etc/player_inbox.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # mail/rank 已按上面的现役条目登记：SQL/TiDB DSN、分用途生产者签名及全局语义；不恢复M1运行时。
 }
 

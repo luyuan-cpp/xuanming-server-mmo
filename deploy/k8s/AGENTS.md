@@ -121,6 +121,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
   - **各档位一条注入路径**:dev 的回落值也经 Secret 注入。这一点与共享 Redis 口令不同(dev 没有 Redis 口令,不注入),所以 11-10 起 dev 产物不再与之前逐字相同,是有意的。
   - **新增一把密钥**:目录表加一项、消费者的 ConfigMap 写变量名、服务代码按上面的读法接、契约测试的 `$WorkloadSecretSpecs` 同步,同批改。ConfigMap 生成器里写变量名字面量、不读目录表(契约测试按 AST 单独抽生成器跑),两边一致由契约测试核对。
   - **上线顺序**:凡是让 ConfigMap 依赖服务新读法的改动,先发带新读法的镜像,再用新部署脚本;新读法必须向后兼容(不写指名键时行为不变)。反过来旧镜像会读到空密钥。
+  - **经 Spring 占位交给 gateway 的密钥不得含 `${`**(2026-11-11):Spring 会把占位解析出来的值再解析一遍,值被静默改写。`Assert-SpringPlaceholderSafe` 在部署 gateway 时、任何写操作之前检查 gate 令牌、数据源口令、共享 Redis 口令与管理面口令;新增经 `${...}` 交给 gateway 的密钥,要加进那份检查清单。gateway 启动时另由 `GateTokenSecretGuard` 校验 `gate.token-secret`(生产档拒绝空值、未解析的占位、公开占位串与短于 32 字节)。
 - Go-side routing is driven by `StrictNodeTypeSeparation` in `scene_manager_service.yaml`. Keep `true` in production; flip to `false` only during the rollout window described in `docs/ops/scene-node-role-split.md`.
 - `-DryRun` 会把每份将 apply 的 manifest 打印在 `--- BEGIN MANIFEST --- / --- END MANIFEST ---` 之间(以前只打印临时文件路径,而该文件当场就被删,DryRun 等于无法验证)。
 

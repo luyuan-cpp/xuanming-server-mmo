@@ -305,4 +305,88 @@ Test-Case 'Apply-OneGoSvc 只给 data-service 渲染 RBAC,渲染在写操作之�
         -Because 'ClusterRoleBinding 是集群级对象,删命名空间带不走;名字与清单里的 mmorpg-cluster-identity-__ZONE_NAMESPACE__ 一致'
 }
 
+# ── 登记处双向 TLS(交接 §9)────────────────────────────────────────────────────────────────────────
+
+Test-Case '登记处 etcd:客户端口 https 且要求客户端证书,证书来自预置 Secret,探针和指标走 2381 的 http 口' {
+    $text = Get-NonCommentText (Read-RepoText $script:RegistryPath)
+    foreach ($env in @(
+            @{ Name = 'ETCD_LISTEN_CLIENT_URLS'; Value = 'https://0\.0\.0\.0:2379' }
+            @{ Name = 'ETCD_ADVERTISE_CLIENT_URLS'; Value = 'https://\$\(POD_NAME\)\.etcd-id-registry-headless\.' }
+            @{ Name = 'ETCD_CLIENT_CERT_AUTH'; Value = 'true' }
+            @{ Name = 'ETCD_TRUSTED_CA_FILE'; Value = '/etc/etcd/tls/ca\.crt' }
+            @{ Name = 'ETCD_CERT_FILE'; Value = '/etc/etcd/tls/tls\.crt' }
+            @{ Name = 'ETCD_KEY_FILE'; Value = '/etc/etcd/tls/tls\.key' }
+            @{ Name = 'ETCD_LISTEN_METRICS_URLS'; Value = 'http://0\.0\.0\.0:2381' }
+        )) {
+        Assert-Match -Text $text -Pattern ('name: ' + $env.Name + '\s*\n\s*value:\s*"?' + $env.Value) -Because "登记处要设 $($env.Name)"
+    }
+    Assert-NotMatch -Text $text -Pattern 'http://0\.0\.0\.0:2379|"http://\$\(POD_NAME\)\.etcd-id-registry-headless\.[^"]*:2379"' -Because '客户端口不能再有明文 http'
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($text, '(?m)^\s*port:\s*2381\s*$').Count) -Because '就绪、存活两个探针都走 2381:客户端口要证书,kubelet 拿不到'
+    Assert-Match -Text $text -Pattern 'prometheus\.io/port:\s*"2381"' -Because 'Prometheus 没有客户端证书,指标走 2381'
+    Assert-Match -Text $text -Pattern '- name: etcd-tls\s*\n\s*mountPath: /etc/etcd/tls\s*\n\s*readOnly: true' -Because '证书卷只读挂在 /etc/etcd/tls'
+    Assert-Match -Text $text -Pattern 'secret:\s*\n\s*secretName: etcd-id-registry-tls\s*\n\s*defaultMode: 288\s*\n' -Because '服务端证书来自预置 Secret etcd-id-registry-tls'
+    Assert-NotMatch -Text $text -Pattern 'secretName: etcd-id-registry-tls[^\n]*\n[^\n]*\n\s*optional:\s*true' -Because '服务端证书不能可选:缺了宁可起不来,也不能无认证地跑'
+}
+
+Test-Case 'data-service:登记处客户端证书挂在 ConfigMap 写的同一个目录,staging/prod 在写操作之前核对两份 Secret' {
+    $manifest = Get-NonCommentText (Read-RepoText $script:DataServiceManifestPath)
+    Assert-Match -Text $manifest -Pattern '- \{name: id-registry-client-tls, mountPath: /etc/mmorpg/id-registry-tls, readOnly: true\}' -Because '客户端证书只读挂在 /etc/mmorpg/id-registry-tls'
+    Assert-Match -Text $manifest -Pattern '- name: id-registry-client-tls\s*\n\s*secret: \{secretName: id-registry-client-tls, defaultMode: 288, optional: true\}' `
+        -Because 'dev 没有这个 Secret 所以可选;staging/prod 由部署脚本核对它在'
+    $deploy = Read-RepoText $script:DeployPath
+    foreach ($file in @('CAFile: /etc/mmorpg/id-registry-tls/ca.crt', 'CertFile: /etc/mmorpg/id-registry-tls/tls.crt', 'KeyFile: /etc/mmorpg/id-registry-tls/tls.key')) {
+        Assert-Match -Text $deploy -Pattern ([regex]::Escape("'      $file'")) -Because "ConfigMap 模板的 RegistryTLS 写 $file,与清单的挂载目录一致"
+    }
+    Assert-Match -Text $script:DeployFunctions['Apply-Infra'].Extent.Text -Pattern '(?s)if \(\$HostIdRegistry\) \{\s*Assert-TlsSecretProvisioned -Namespace \$InfraNamespace -Name ''etcd-id-registry-tls''' `
+        -Because '托管登记处时核对服务端证书'
+    $applyInfra = $script:DeployFunctions['Apply-Infra'].Extent.Text
+    Assert-True -Condition ($applyInfra.IndexOf("-Name 'etcd-id-registry-tls'") -lt $applyInfra.IndexOf('Ensure-Namespace -Namespace $InfraNamespace')) -Because '服务端证书在第一个写操作之前核对'
+    $applyOne = $script:DeployFunctions['Apply-OneGoSvc'].Extent.Text
+    Assert-Match -Text $applyOne -Pattern '(?s)if \(\$SvcName -eq ''data-service'' -and \$ReleaseProfile -ne ''dev'' -and \$Stage -ne ''Prepare''\) \{\s*Assert-TlsSecretProvisioned -Namespace \$Namespace -Name ''id-registry-client-tls''' `
+        -Because 'staging/prod 部署 data-service 时核对客户端证书'
+    $checkAt = $applyOne.IndexOf("-Name 'id-registry-client-tls'")
+    $writeAts = @(@('Sync-WorkloadSecrets -Namespace', 'New-GoSvcConfigMapYaml') | ForEach-Object { $applyOne.IndexOf($_) } | Where-Object { $_ -ge 0 })
+    Assert-True -Condition ($checkAt -ge 0 -and $checkAt -lt ($writeAts | Measure-Object -Minimum).Minimum) -Because '客户端证书在本服务第一个写操作之前核对'
+}
+
+Test-Case 'Assert-TlsSecretProvisioned:Secret 在且三个键都有值才放行,缺 Secret、缺键、读失败都拒绝,DryRun 不连集群' {
+    Import-DeployFunction -Name @('Assert-TlsSecretProvisioned', 'Build-KubectlBaseArgs')
+    $script:KubeContext = ''
+    $script:KubeConfig = ''
+    $script:StubCalls = [System.Collections.Generic.List[string]]::new()
+    Set-Item -Path 'Function:script:kubectl' -Value {
+        $script:StubCalls.Add(($args -join ' '))
+        $global:LASTEXITCODE = $script:StubExitCode
+        return $script:StubOutput
+    }
+    $full = '{"data":{"ca.crt":"Y2E=","tls.crt":"Y3J0","tls.key":"a2V5"}}'
+    try {
+        $script:DryRun = $false
+        $script:StubExitCode = 0
+        $script:StubOutput = $full
+        Assert-Equal -Expected '' -Actual (Get-ThrownMessage { Assert-TlsSecretProvisioned -Namespace 'ns-a' -Name 'id-registry-client-tls' -Purpose 'test' }) -Because '三个键都有值时放行'
+        Assert-Equal -Expected 'get secret id-registry-client-tls -n ns-a --ignore-not-found -o json' -Actual $script:StubCalls[0] -Because '只读这一个 Secret'
+        foreach ($case in @(
+                @{ Exit = 0; Output = ''; Pattern = 'is missing'; Why = 'Secret 不存在' }
+                @{ Exit = 0; Output = '{"data":{"ca.crt":"Y2E=","tls.crt":"Y3J0"}}'; Pattern = 'lacks tls\.key'; Why = '缺私钥' }
+                @{ Exit = 0; Output = '{"data":{"ca.crt":"","tls.crt":"Y3J0","tls.key":"a2V5"}}'; Pattern = 'lacks ca\.crt'; Why = 'CA 是空值' }
+                @{ Exit = 1; Output = ''; Pattern = 'Cannot read Secret'; Why = 'kubectl 读失败' }
+            )) {
+            $script:StubExitCode = $case.Exit
+            $script:StubOutput = $case.Output
+            $message = Get-ThrownMessage { Assert-TlsSecretProvisioned -Namespace 'ns-a' -Name 'id-registry-client-tls' -Purpose 'test' }
+            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why)时必须拒绝"
+            Assert-Match -Text $message -Pattern 'Nothing was written for this step\.$' -Because "$($case.Why)时写明这一步什么都没写"
+        }
+        $script:DryRun = $true
+        $script:StubCalls.Clear()
+        Assert-Equal -Expected '' -Actual (Get-ThrownMessage { Assert-TlsSecretProvisioned -Namespace 'ns-a' -Name 'id-registry-client-tls' -Purpose 'test' }) -Because 'DryRun 只打说明'
+        Assert-Equal -Expected 0 -Actual $script:StubCalls.Count -Because 'DryRun 一次 kubectl 都不调'
+    }
+    finally {
+        Remove-Item -Path 'Function:script:kubectl' -ErrorAction SilentlyContinue
+        $script:DryRun = $false
+    }
+}
+
 exit (Complete-TestRun -SuiteName 'id_issuer_deploy_contract')

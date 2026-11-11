@@ -18,15 +18,17 @@ import (
 
 	"shared/kafkautil"
 	"shared/safego"
+	"shared/tracing/kafkagotrace"
 
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
 
-// 对局结果消费者(设计文档 cross-zone-matchmaking.md §11):battle 节点打完一局
-// 把 contracts.kafka.BattleResultEvent 发到 ResultTopic(默认 match-results,
-// 全局无 zone 段,key=battle_id,payload 直接是事件、不套 *Command 信封),
+// 对局结果消费者(设计文档 cross-zone-matchmaking.md §11):一局的终局提交进 match 的 SQL 之后,
+// match 自己的终局发件箱(svc 的 outcome outbox)把 contracts.kafka.BattleResultEvent 发到 ResultTopic
+// (默认 match-results,全局无 zone 段,key=battle_id,payload 直接是事件、不套 *Command 信封),
+// 只发 COMPLETE 的局,作废(ABORT)的局不进这个 topic;battle 节点已不直接发它。
 // match 用消费组 ResultConsumerGroup(默认 match-rating)消费并更新 Elo。
 //
 // 多实例:同组分摊分区,每条结果只被一个实例消费;重复投递(rebalance /
@@ -179,7 +181,8 @@ func StartResultConsumer(ctx context.Context, cfg ResultConsumerConfig, handle R
 	return startResultLagProbe(ctx, cfg)
 }
 
-// resultTopicPartitions 是结果 topic 的分区数契约(未配置取 3,与 battle 端一致)。
+// resultTopicPartitions 是结果 topic 的分区数契约(未配置取 3;topic 由先起的一方建出来,分区数建后不可变,
+// guild 的 trial 消费者要配同一个数)。
 func resultTopicPartitions(cfg ResultConsumerConfig) int32 {
 	if cfg.Partitions <= 0 {
 		return 3
@@ -256,16 +259,19 @@ func runResultConsumer(ctx context.Context, reader resultReader, handle ResultHa
 
 // processResultRecord 只返回业务结局；实际 offset 提交由唯一 consumer owner 完成。
 func processResultRecord(ctx context.Context, msg kafkago.Message, handle ResultHandler, wait func(context.Context, time.Duration) bool, record ResultRecordHandler) error {
+	// 这条结果的归档、评分处理与逐条日志接上 battle 发结果时的 trace(docs/design/distributed-tracing.md §6.2);
+	// 取消仍由消费者的 ctx 决定。
+	ctx = kafkagotrace.ContextFrom(ctx, msg.Headers)
 	event := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, event); err != nil {
 		// 损坏原件尚未归档，必须保留位点供人工处置，不能把日志当成入账收据。
 		// 单轮处理立即返回错误；由 consumer owner 保留原消息并退避恢复，不消耗业务重试次数。
 		metrics.ObserveRatingUpdate("unknown", "decode_error")
-		logx.Errorf("[rating] failed to decode result original; keeping offset for manual handling topic=%s partition=%d offset=%d: %v", msg.Topic, msg.Partition, msg.Offset, err)
+		logx.WithContext(ctx).Errorf("[rating] failed to decode result original; keeping offset for manual handling topic=%s partition=%d offset=%d: %v", msg.Topic, msg.Partition, msg.Offset, err)
 		return fmt.Errorf("结果原件解码失败: %w", err)
 	}
 	if key := string(msg.Key); key != "" && key != strconv.FormatUint(event.GetBattleId(), 10) {
-		logx.Errorf("[rating] result key does not match battle_id partition=%d offset=%d", msg.Partition, msg.Offset)
+		logx.WithContext(ctx).Errorf("[rating] result key does not match battle_id partition=%d offset=%d", msg.Partition, msg.Offset)
 	}
 	var last error
 	for attempt := 1; attempt <= resultHandleMaxAttempts; attempt++ {
@@ -280,10 +286,10 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 			// 永久错误不在本轮反复尝试；既有归档不能证明冲突消息也已处理。
 			// 保留原位点、错误和指标，等待人工核对两份原件（cross-zone-matchmaking.md §13.4）。
 			metrics.ObserveRatingUpdate(matchpb.MatchMode(event.GetMatchMode()).String(), "original_conflict")
-			logx.Errorf("[rating] result original differs from the archived one; keeping offset for manual handling topic=%s partition=%d offset=%d battle=%d: %v", msg.Topic, msg.Partition, msg.Offset, event.GetBattleId(), last)
+			logx.WithContext(ctx).Errorf("[rating] result original differs from the archived one; keeping offset for manual handling topic=%s partition=%d offset=%d battle=%d: %v", msg.Topic, msg.Partition, msg.Offset, event.GetBattleId(), last)
 			return last
 		}
-		logx.Errorf("[rating] result handling unconfirmed attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
+		logx.WithContext(ctx).Errorf("[rating] result handling unconfirmed attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
 		// 闸门冻结是搬库窗口:确定没写,不占重试次数,不然窗口稍长消费者就停了。等到 handler 的预算用完为止。
 		if authoritysql.IsWriterFrozen(last) {
 			attempt--

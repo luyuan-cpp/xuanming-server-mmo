@@ -135,6 +135,43 @@ const deadlineHeldPatienceMs uint64 = 2 * 60 * 1000
 // 到期恢复取证一次(排期没到不进候选页,锁内也不裁决),与副本数无关。帮会取消不按它(deadlineEvidenceOf)。
 const deadlineProbeBackoffMs uint64 = 30 * 1000
 
+// ExpiredOutcomeRecoverTick 是到期终局恢复循环(logic 的 match.global.outcome.recover)的节拍。定义在这里,是因为截止 ABORT 的
+// 最晚落定时刻(deadlineAbortOverdueMs)要用它推算;logic 直接引用,两边只有一份。
+const ExpiredOutcomeRecoverTick = time.Second
+
+// deadlineAbortOverdueMs:截止之后过了这么久仍没有终局的可裁决在途成局,巡检记为「超期未作废」(CountOverdueDeadlineAborts,2026-11-11)。
+// 取 match 可用、恢复跟得上时截止 ABORT 的最晚落定时刻里较坏的一档(原 battle 被黑洞、每拍多等一个取证期限):
+// 终局宽限 + 硬上限 + 持有宽限 + 两次访问延迟;每次访问最多隔两圈(每圈 ExpiredOutcomeLanes 拍)再加两个取证期限。
+// 推导与「早于 scene 续冻上限」的核对见 TestDeadlineAbortBoundsFitSceneFreezeHold(断言它就是那一档)。超过它说明恢复跟不上积压,
+// 或 match / 它的库长期不可用:scene 可能已按续冻上限解冻(晚到的结算由战斗道具预留兜住),值班要加副本或查库。
+const deadlineAbortOverdueMs = terminalOutcomeGraceMs + deadlineAbortHardCapMs + deadlineHeldPatienceMs +
+	2*(2*ExpiredOutcomeLanes*uint64((ExpiredOutcomeRecoverTick+DeadlineProbeTimeout)/time.Millisecond)+2*uint64(DeadlineProbeTimeout/time.Millisecond))
+
+// CountOverdueDeadlineAborts 数「超期未作废」的成局(2026-11-11,每分钟巡检报数):在途(state 2/3/4)、在到期恢复的候选形状里、
+// 截止之后已过 deadlineAbortOverdueMs、仍没有同一原件的终局行。返回条数与最早一局超期了多久(毫秒;没有时为 0)。
+// 形状合格却过不了原件核对的局(original_mismatch,自动路径永远裁决不了,只能 formationfix)也在里面,SQL 分不出;
+// 形状不合格的另由 CountStrandedExpiredFormations 报。只读,不加锁,不改任何行。
+func (s *Store) CountOverdueDeadlineAborts(ctx context.Context) (uint64, uint64, error) {
+	stamp, err := s.Now(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if stamp < deadlineAbortOverdueMs {
+		return 0, 0, nil
+	}
+	threshold := stamp - deadlineAbortOverdueMs
+	var rows uint64
+	var oldestDeadline sql.NullInt64
+	err = s.DB.QueryRowContext(ctx, "SELECT COUNT(*),MIN(f.deadline_ms) FROM match_formation f WHERE f.state IN(2,3,4) AND "+recoverableOutcomeShapeSQL+" AND f.deadline_ms>0 AND f.deadline_ms<=? AND NOT EXISTS(SELECT 1 FROM match_battle_completion c WHERE "+matchingOutcomeTerminalSQL+")", threshold).Scan(&rows, &oldestDeadline)
+	if err != nil {
+		return 0, 0, err
+	}
+	if rows == 0 || !oldestDeadline.Valid || oldestDeadline.Int64 < 0 || uint64(oldestDeadline.Int64) > threshold {
+		return rows, 0, nil
+	}
+	return rows, threshold - uint64(oldestDeadline.Int64), nil
+}
+
 // deadlineAbortVerdict 是 judgeDeadlineAbort 的结论。
 type deadlineAbortVerdict struct {
 	abort       bool   // 可以写截止 ABORT

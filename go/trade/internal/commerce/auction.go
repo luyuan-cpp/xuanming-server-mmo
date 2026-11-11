@@ -36,6 +36,16 @@ func (e *Engine) PlaceBid(ctx context.Context, me, lotID uint64, in *tradepb.Pla
 	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: BidKind, Status: Escrowing, SellerPlayerId: me, ParentId: lotID, UnitPrice: in.Amount, CurrencyType: lot.CurrencyType, ExpiresMs: lot.ExpiresMs}, &tradepb.TradeCommerceWorkflow{SellerAssets: &tradepb.TradeAssetSelection{CurrencyType: lot.CurrencyType, CurrencyAmount: in.Amount}, Stage: "bid_freeze"})
 }
 
+// lockAuctionGuard 锁一件拍品的 guard 行。要同时锁拍品和它的出价的事务都先锁它,再按拍品 → 出价的顺序锁合同行:
+// acceptBid,以及人工处理出价与作废拍卖(manual.go)。guard_id 就是拍品号;市场盘口的 guard_id 置了最高位,不会撞。
+func lockAuctionGuard(ctx context.Context, tx *sql.Tx, lotID uint64) error {
+	if _, err := tx.ExecContext(ctx, "INSERT IGNORE INTO trade_commerce_guard(guard_id) VALUES(?)", lotID); err != nil {
+		return err
+	}
+	var guard uint64
+	return tx.QueryRowContext(ctx, "SELECT guard_id FROM trade_commerce_guard WHERE guard_id=? FOR UPDATE", lotID).Scan(&guard)
+}
+
 // 每个lot的guard先于任何合同锁。冻结完成只获得参选资格，提交最高价时再次检查结束时间/增幅。
 // 多副本/迟到结果输掉竞价时写原币退款待办，不偷换或取消已发出的扣币seq。
 func (e *Engine) acceptBid(ctx context.Context, bidID uint64) error {
@@ -55,11 +65,7 @@ func (e *Engine) acceptBid(ctx context.Context, bidID uint64) error {
 		if err := e.lockRoles(ctx, tx, 0, candidate.SellerPlayerId, parentSeller, parentBuyer); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT IGNORE INTO trade_commerce_guard(guard_id) VALUES(?)", candidate.ParentId); err != nil {
-			return err
-		}
-		var guard uint64
-		if err := tx.QueryRowContext(ctx, "SELECT guard_id FROM trade_commerce_guard WHERE guard_id=? FOR UPDATE", candidate.ParentId).Scan(&guard); err != nil {
+		if err := lockAuctionGuard(ctx, tx, candidate.ParentId); err != nil {
 			return err
 		}
 		// 拍品行不存在或 workflow 解不开时这条出价按"不合格"退款,不整轮报错(2026-10-20,第一轮审计 §2.5 go-asset-services#0):

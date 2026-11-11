@@ -386,7 +386,8 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
 
 - Secret 注入、指纹滚动、Spring 嵌套占位的解析都没有在集群上跑过(§9.5 第 6 步)。Spring 那一条与 `admin.api-key` 的既有先例一样,只按文档核对过。
 - Spring 会把占位解析出来的值再当占位解析一遍:口令里含 `${…}` 会被改写或解析失败。这是既有行为(以前写明文时同样如此),Go 与 C++ 不受影响。
-  字符集检查没有拦 `$`,本批不改;生成口令时不要用 `$`。
+  11-11 起部署 gateway 时由 `Assert-SpringPlaceholderSafe` 拒绝含 `${` 的共享 Redis 口令(以及 gate 令牌、数据源口令、管理面口令),
+  单独的 `$` 不受影响(`docs/design/workload-secrets-via-k8s-secret.md` §4.3)。
 - 同一批 ConfigMap 里别的明文(MySQL 口令、gateway 数据源口令、`GateTokenSecret`、`Secrets.InternalAuth`、排队令牌,以及盘点时又找到的 battle / 观战令牌、
   match 运营入口密钥):11-10 起按同一套做法改走 Secret,见 `docs/design/workload-secrets-via-k8s-secret.md`(未编译、未测试)。
 - 玩家域 Redis 口令(`PLAYER_REDIS_PASSWORD`)的 Go 服务指纹:11-10 补上 `mmorpg.io/player-redis-auth-hash`(同上设计文档批 4),只换玩家域口令时 Go 服务也滚动。

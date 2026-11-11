@@ -220,6 +220,12 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_router_subset\</ObjectFileName>
     </ClCompile>
+    <!-- 世界频道推送的每台 gate 转发预算(handler/event/world_chat_push_budget.h,docs/design/chat-world-channel-fanout.md §4):
+         纯逻辑头,只依赖 STL。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/tests/world_chat_push_budget_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_world_chat\</ObjectFileName>
+    </ClCompile>
     <!-- gate 路由 lane(docs/design/client-request-ordering.md §4):纯逻辑头 router_lane.h 只依赖 STL;装配层 client_request_lane.cpp
          直接编进测试,发送函数与发出钩子注入替身,会话表 tlsSessionManager 来自 gate.lib。ObjectFileName 的理由同上。 -->
     <ClCompile Include="../../nodes/gate/handler/rpc/client_request_lane.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

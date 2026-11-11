@@ -12,6 +12,7 @@ import (
 	basepb "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	"shared/kafkacmd"
+	"shared/tracing/kafkagotrace"
 
 	"github.com/prometheus/client_golang/prometheus"
 	kafkago "github.com/segmentio/kafka-go"
@@ -98,6 +99,8 @@ func (p *worldPublisher) PushWorld(ctx context.Context, message *chatpb.ChatMess
 		Topic: p.topic,
 		Key:   []byte(strconv.FormatUint(message.SenderPlayerId, 10)),
 		Value: event,
+		// 发言请求的 trace 写进消息头,各 gate 广播时接上同一条 trace(docs/design/distributed-tracing.md §6.2)。
+		Headers: kafkagotrace.Headers(ctx),
 	})
 }
 

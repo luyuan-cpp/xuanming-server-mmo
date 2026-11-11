@@ -100,12 +100,24 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+          # 启动薄壳(2026-11-11,与 redis.yaml、redis-player-cluster.yaml 同一做法):打印 fd 限值,显式 --maxclients。
+          # 被容器 nofile 硬限下调时,redis-server 只在启动日志里留一条,这一行是事后唯一的证据;硬限不够只打 ERROR、不拒启。
+          # MAXCLIENTS 只在这里定义一次,与核心、玩家域集群同值;部署脚本的 match 集群总账(Get-RedisMatchConnectionLedgerInputs)
+          # 与 -WaitReady 的逐节点核对都从这一行读值。改它要滚动重启六个节点(或逐节点 CONFIG SET 后再滚动)。
           command:
             - sh
             - -c
-            - >
-              exec redis-server /etc/redis/redis.conf
-              --cluster-announce-hostname "${POD_NAME}.redis-match-cluster.${POD_NAMESPACE}.svc.cluster.local"
+            - |
+              MAXCLIENTS=40000
+              need=$((MAXCLIENTS + 32))
+              soft=$(ulimit -Sn 2>/dev/null || echo unknown)
+              hard=$(ulimit -Hn 2>/dev/null || echo unknown)
+              echo "redis fd limit: soft=$soft hard=$hard need=$need maxclients=$MAXCLIENTS"
+              case "$hard" in
+                unlimited|unknown) ;;
+                *) if [ "$hard" -lt "$need" ]; then echo "ERROR: nofile hard limit $hard < $need, redis-server will lower maxclients below $MAXCLIENTS" >&2; fi ;;
+              esac
+              exec redis-server /etc/redis/redis.conf --maxclients "$MAXCLIENTS" --cluster-announce-hostname "${POD_NAME}.redis-match-cluster.${POD_NAMESPACE}.svc.cluster.local"
           ports:
             - containerPort: 6379
               name: redis

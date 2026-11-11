@@ -50,6 +50,7 @@
     <ClInclude Include="handler\event\scene_entry_dispatch.h" />
     <ClInclude Include="handler\event\gate_event_handler.h" />
     <ClInclude Include="handler\event\gate_kafka_command_router.h" />
+    <ClInclude Include="handler\event\world_chat_push_budget.h" />
     <ClInclude Include="handler\gate_push_delivery.h" />
     <ClInclude Include="handler\gate_redirect_delivery.h" />
     <ClInclude Include="handler\rpc\client_session_handler.h" />

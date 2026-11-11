@@ -1,6 +1,6 @@
 # 发布轨道：灰度与金丝雀发布设计（2026-11-05）
 
-> **状态**：方案已定。批 1（轨道身份与会话轨道）、批 2（金丝雀 zone 与全局服务的后台开关）11-05 已落码；批 2b（全局服务的金丝雀副本）的 guild、match 代码 11-05 落码，`infra-up` 生成 `<svc>-canary` 与 match 的注册键校验 11-06 落码；批 3a（准入名单带金丝雀、金丝雀 Pod 标签、按轨道的转发计数、告警、[操作手册](../ops/release-track-canary-runbook.md)）11-06 落码；批 3b（战斗按整局、金丝雀 battle 池）11-10 落码，同日修完它的四条残余（观战按成局原件记的轨道判、随机观战与观战列表按观众轨道过滤、补观战用例、切换编排形态时一起删金丝雀 battle 池）。服务器代码已按本文全部落码，分层验证结果见下行与 §7。负责人 11-05 要求「按你想法看看灰度和金丝雀对不对，没做完就按最标准的方式做：数据强一致、代码易懂、可水平扩展，Java 留待做」，方案由 Claude 选定。
+> **状态**：方案已定。批 1（轨道身份与会话轨道）、批 2（金丝雀 zone 与全局服务的后台开关）11-05 已落码；批 2b（全局服务的金丝雀副本）的 guild、match 代码 11-05 落码，`infra-up` 生成 `<svc>-canary` 与 match 的注册键校验 11-06 落码；批 3a（准入名单带金丝雀、金丝雀 Pod 标签、按轨道的转发计数、告警、[操作手册](../ops/release-track-canary-runbook.md)）11-06 落码；批 3b（战斗按整局、金丝雀 battle 池）11-10 落码，同日修完它的四条残余（观战按成局原件记的轨道判、随机观战与观战列表按观众轨道过滤、补观战用例、切换编排形态时一起删金丝雀 battle 池）。服务器代码已按本文全部落码，分层验证结果见下行与 §7。下行验证之后，11-11 又按通行做法定了金丝雀判定（§2.8），路由服补了按会话轨道的耗时直方图与延迟告警，这部分未编译。负责人 11-05 要求「按你想法看看灰度和金丝雀对不对，没做完就按最标准的方式做：数据强一致、代码易懂、可水平扩展，Java 留待做」，方案由 Claude 选定。
 > **验证（2026-11-11）**：no-unity 协议生成及后处理完成；Go 核心指定用例、六个注册包的 11 条轨道用例、C++ `client_endpoint_test` 79 条（含 9 条发布轨道用例）和告警契约 5 条通过。Windows 整解曾退出 0；随后最新复核被并发新增邮件 outbox 组件缺少生成头阻塞，不能据此宣称最新整解通过。trade 两条 SQL 序列测试及完整部署契约仍未全绿，部分长套执行期间输入发生变化；真库门控用例、集群冒烟、Linux 与 promtool 未验证。完整命令、快照范围与失败原件见 `docs/PROGRESS.md` 2026-11-11「发布轨道五批验证」条目。
 > **需求来源**：[全类型节点平滑停机、水平扩展与灰度／金丝雀需求](node-lifecycle-elasticity-release-20261023.md) §2、§4.2、§5。该文把灰度粒度留给「后续设计」，本文把它定下来。
 > **核对基线**：HEAD `993b6da9d` 加 11-05 工作区；批 2b 的 `infra-up` 部分按 HEAD `f6fddb466` 加 11-06 工作区。同时有十几个会话在改，行号会漂，按函数名找。
@@ -112,17 +112,61 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
 | 步骤 | 操作 | 通过条件 |
 |---|---|---|
 | 1 开金丝雀 | 选定 zone：`zone-up -ReleaseTrack canary -NodeImage <新>`，gate 用排空脚本逐台换。要验证全局服务时，再 `infra-up -CanaryServices <svc,…> -CanaryGoSvcTag <新>`；要验证战斗时加 `-CanaryBattleReplicas <N> -CanaryNodeImage <新>`。其余参数与线上 stable 相同（§5.3） | 新版实例全部就绪；各实例的 `NodeInfo.release_track` 与部署一致（金丝雀 zone、`<svc>-canary`、`battle-canary` 是 canary，其余是 stable） |
-| 2 观察 | 按轨道和 zone 比较错误率、延迟、登录恢复、场景迁移、Kafka lag、存盘拒绝与死信、对局作废、结算完整性 | 观察窗口和阈值由负责人定。需求文档 §2 没给数值，本文不代填 |
-| 3 扩大（灰度） | 对更多 zone 重复第 1 步 | 每批重复第 2 步 |
-| 4 晋升 | 逐 zone `zone-up -ReleaseTrack stable -NodeImage <新>`；全部 zone 换完后跑一次不带 `-CanaryServices`、`-CanaryBattleReplicas` 的 `infra-up -GoSvcTag <新> -NodeImage <新>`：稳定版（含 battle）换成新版本，随后删掉全部 `<svc>-canary` 与 `battle-canary` | 新版本成为 stable，金丝雀轨道清空 |
+| 2 观察 | 按轨道和 zone 比较错误率、延迟、登录恢复、场景迁移、Kafka lag、存盘拒绝与死信、对局作废、结算完整性 | 按 §2.8 判定：窗口与流量下限满足、五条判据全部通过；不通过按「中止」处理 |
+| 3 扩大（灰度） | 按 §2.8 的批次对更多 zone 重复第 1 步：第 2 批 10%、第 3 批 50% | 每批按 §2.8 重新判定，上一批通过才开下一批 |
+| 4 晋升 | 第 3 批判定通过后，逐 zone `zone-up -ReleaseTrack stable -NodeImage <新>`；全部 zone 换完后跑一次不带 `-CanaryServices`、`-CanaryBattleReplicas` 的 `infra-up -GoSvcTag <新> -NodeImage <新>`：稳定版（含 battle）换成新版本，随后删掉全部 `<svc>-canary` 与 `battle-canary` | 新版本成为 stable，金丝雀轨道清空 |
 | 中止 | 先停新流量：跑一次不带 `-CanaryServices`（或只列要留下的服务）、不带 `-CanaryBattleReplicas` 的 `infra-up`，其余参数照旧，删掉 `<svc>-canary` 与 `battle-canary`；来不及跑部署时直接删这几个工作负载。金丝雀会话随即退回 stable，还没开局的金丝雀局改放 stable battle；`battle-canary` 上正在打的局随 Pod 结束，能等就等这些局打完再删。zone 级回退：`zone-up -ReleaseTrack stable -NodeImage <旧>` | zone 回退受 [混版本持久字段保护](mixed-version-persist-field-protection.md) 的回退门禁约束，不满足就向前修复，不承诺一键任意回退 |
 
 持久 schema 升世代的版本不能按 zone 金丝雀 go/db，按混版本文档的顺序：先 DDL，再 go/db 全部 zone，再 login，最后 scene。
+
+### 2.8 金丝雀判定
+
+需求文档 §2 没给观察窗口和门槛的数。负责人 11-11 要求不等压测、先按通行做法定，这里按金丝雀分析的通行结构定下：
+
+- **只和同一时段的 stable 比**，不和历史比。流量起伏、外部依赖抖动这类与版本无关的变化，两条轨道同时受影响，比较时自然抵消。
+- **每项判据都是「相对倍数 + 绝对下限 + 最低样本量」三件套**：只看倍数，两边都接近 0 时一次偶发就翻倍；只看绝对值，又和流量大小绑死；样本太少时任何比较都是噪声。
+- **一项不过就判不通过**，按 §2.7「中止」处理；修好后发新版本，从第 1 批重来，窗口重新计。
+- **能机械化的判据做成告警**（`deploy/k8s/release-track-alerts.yaml`），窗口内响过一次就算不过，不靠人盯曲线。
+
+**批次与窗口**。最后一批停在 50%：再往上 stable 只剩很少几个 zone，同时段的基线就不可信了；全量是第 4 步「晋升」，不是金丝雀。
+
+| 批次 | 金丝雀覆盖 | 最短观察窗口 |
+|---|---|---|
+| 第 1 批 | 1 个 zone，选在线人数最少、但不是空服的那个；要验证全局服务与战斗时，同批开 `<svc>-canary` 与 `battle-canary` | 24 小时，并且包含一次晚高峰和一次跨天（按天刷新的逻辑只在跨天那一刻跑） |
+| 第 2 批 | zone 总数的 10%，向上取整，且比上一批至少多 1 个 | 2 小时 |
+| 第 3 批 | zone 总数的 50%，向上取整 | 2 小时，并且包含一次晚高峰（一半玩家在新版本上，容量问题只在满载时出现） |
+
+zone 少于 2 个时没有同时段的 stable 可比，不能按本节做金丝雀，只能整体发布、按普通告警观察。
+
+**流量下限**。达不到的时段不计入窗口，窗口顺延：
+
+- 金丝雀会话经路由服的请求，每秒至少 1 次，和耗时判据的最低样本量相同；
+- 开了 `battle-canary` 时，窗口内至少 300 局在金丝雀 battle 上打完（终局判定为 COMPLETE 或 ABORT）。300 局时 1 个百分点是 3 局，与下面作废率的绝对下限对得上。
+
+**判据**（全部满足才通过）：
+
+| # | 判据 | 门槛 | 怎么判 |
+|---|---|---|---|
+| 1 | 全局服务请求失败率 | canary 会话 ≤ stable × 2 + 1 个百分点；canary 每秒 0.1 次以上才比 | 告警 `ReleaseTrackCanaryForwardErrorsHigh`，连续 10 分钟超过就响 |
+| 2 | 全局服务请求耗时 p99 | canary 会话 ≤ max(stable × 1.5, stable + 50 毫秒)；canary 每秒 1 次以上才比 | 告警 `ReleaseTrackCanaryForwardLatencyHigh`，同上 |
+| 3 | 其余告警 | 金丝雀 zone 的 namespace、`<svc>-canary`、`battle-canary` 涉及的规则在窗口内没有响过 | 查 Prometheus 的 `ALERTS`。同一时段 stable 也在响的是共同原因：先暂停扩大，查清再判 |
+| 4 | 进程稳定 | 金丝雀 Pod 没有非计划重启 | `kubectl get pods -A -l mmorpg.io/release-track=canary` 的 RESTARTS 全是 0；部署动作换掉的 Pod 是新 Pod，不算 |
+| 5 | 对局作废率 | canary 局 ≤ stable 局 × 2 + 1 个百分点 | 按成局原件记的轨道（`match_formation.release_track`）连终局表 `match_battle_completion` 统计 ABORT 占比，SQL 在手册里 |
+
+**数据完整性零容忍**：存盘被拒（`ScenePlayerStoreSaveRefused`）、个人结算积压等数据类告警，本身就是「出现一次就响」的规则，归在判据 3 里；在金丝雀上响而 stable 同期没响，直接判不通过，不看倍数。
+
+**门槛为什么是这几个数**：失败率与作废率用「2 倍 + 1 个百分点」，失败是离散事件，基线常在 1% 以下，翻倍才区分得出版本问题与抖动，1 个百分点挡住两边都接近 0 时的偶发。耗时用 1.5 倍：耗时退化多是渐进的（多一次查询、多一段锁等待），等到翻倍才响太迟。50 毫秒约是路由服耗时分桶 0.05～0.1 秒的一格，差距小于一格多半是插值与抖动。窗口长度见上表：第 1 批要覆盖一个完整的日周期，后面几批验证的是规模，2 小时够出现容量与连接数问题。这些数都写在告警规则的 description 里，改动要同时改本节、规则与契约测试。
+
+**判定记录**：每批结束时把批次、zone 列表、窗口起止、流量、五条判据的值与结论写进当次发布单，不通过时写明按哪一条中止。
 
 ## 3. 数据一致性
 
 - 轨道只决定由哪个版本的二进制处理请求，不参与任何提交判定。提交点仍由各服务的事务、owner epoch、围栏和幂等保证，混轨不放宽一致性。前提是两个版本的在线协议和持久数据双向兼容，按混版本持久字段保护文档的规则执行。
 - 不会出现「一段有状态流程跨两个版本」：zone 内状态整 zone 一条轨道；会话的轨道跟着 TCP 连接；全局服务的金丝雀只处理请求，状态在 SQL 权威；战斗整局一条轨道。
+  - 跨 zone 传送是例外：玩家从金丝雀 zone 去 stable zone 时，玩家存档要被另一个版本的 scene 认领。
+    - 金丝雀版本升过存档世代时，stable scene 的认领会被 go/db 判 `SCHEMA_TOO_NEW` 挡住（`decideClaim`，不抬代次），玩家进场失败，不丢数据。这是可用性问题。
+    - 金丝雀 zone 回退之后，同样挡住在金丝雀版本上存过盘的玩家。
+    - 所以升存档世代的版本不按 zone 金丝雀，按混版本设计 §8.2 的顺序发布（2026-11-10，数据覆写审计第 3 轮时钟与混版一路的核对）。
 - 退回只有一个方向，canary 会话退到 stable。stable 会话永远不会被送进新版本。
 
 ## 4. 水平扩展
@@ -151,7 +195,7 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
 - C++ `cpp/libs/engine/core/node/system/node/release_track.h`：纯头文件，同名同义的 `Parse`、`Name`、`FromEnv`、`Select`。节点在 `Node::InitRpcServer` 里解析一次，非法就 `FatalStartupConfig` 拒启。
 - Go 服务经 `shared/noderegistry` 注册时，轨道由该包统一写进 `releaseTrack`：`Register` 读一次环境变量，非法就拒注册；各服务的 `BuildValue` 不用管。这样 canary 进程不会因为漏填被当成 stable。
 - 两边用同一组固定样例做单测对拍，做法同发号器的 `MixID` 与 `MixGuid`：`go/shared/releasetrack/releasetrack_test.go` 与 `cpp/tests/client_endpoint_test/release_track_test.cpp`。
-- 观测：C++ 节点的 `cpp_node_info` 多一个 `release_track` 标签（只有两个取值）；router 的 `client_rpc_router_forward_total` 多一个 `outcome="invalid_release_track"`。批 3a 起 router 另有 `client_rpc_router_forward_by_track_total{release_track, outcome}`：同一批终态按 gate 自报的会话轨道再记一份，认不出的轨道记 `unknown`，不带 message_id，基数固定。会话轨道在 `Forward` 开头只解析一次，所以早于轨道检查的拒绝（如未知消息号）也记在会话自己的轨道上，两条轨道的失败率可以直接比。
+- 观测：C++ 节点的 `cpp_node_info` 多一个 `release_track` 标签（只有两个取值）；router 的 `client_rpc_router_forward_total` 多一个 `outcome="invalid_release_track"`。批 3a 起 router 另有 `client_rpc_router_forward_by_track_total{release_track, outcome}`：同一批终态按 gate 自报的会话轨道再记一份，认不出的轨道记 `unknown`，不带 message_id，基数固定。会话轨道在 `Forward` 开头只解析一次，所以早于轨道检查的拒绝（如未知消息号）也记在会话自己的轨道上，两条轨道的失败率可以直接比。11-11 起另有 `client_rpc_router_forward_by_track_seconds{release_track}`：同一段耗时按会话轨道再记一份，分桶与 `forward_seconds` 共用，两条轨道的 p99 可以直接比（§2.8 判据 2）。
 
 ### 5.3 部署
 
@@ -167,13 +211,13 @@ battle 是全局池。一局战斗的成员全部来自 canary 会话时，放�
   - `-NetworkPolicies on` 时照样能用（批 3a）：生成 NetworkPolicy 时，两侧名单里能起金丝雀的服务各自动补一个 `<app>-canary`（`Get-ReleaseTrackAppLabels`），guild、match 的策略同时保护它们的金丝雀副本，放行一侧的金丝雀调用方照样能拨。名单表只写真实清单的标签，补上的标签不看这次起没起金丝雀，没有金丝雀时选不中任何 Pod。scene 的名单在 `zone-up` 时生成，各 zone 要先用同一版脚本部署过。
 - 金丝雀 Pod 带标签 `mmorpg.io/release-track: canary`（批 3a）：zone-up 的 gate、scene（Deployment、Agones Fleet 的 GameServer 与 Pod 两层、external gate StatefulSet）和 login、scene-manager、db，以及全局服务的 `<svc>-canary`。只加在 Pod 模板，selector 不动；stable 不写，已有 zone 不会因此滚动。`zone-status`、`infra-status` 最后列出各 Pod 的轨道标签。
 - `k8s_deploy.ps1 infra-up -CanaryBattleReplicas <N> -CanaryNodeImage <ref>`（批 3b，11-10 已落码，未编译）另起 `battle-canary` 池：Deployment 形态是 `battle-canary` Deployment，Agones 形态是第二个 Fleet；镜像、拉取策略、副本数是金丝雀的，写 `MMORPG_RELEASE_TRACK=canary` 与 Pod 标签，`app: battle-canary`，其余和 stable battle 相同。只用于 infra-up；要求 stable 池在；不支持 hostPort 形态；staging、prod 同样要求固定 tag。不粘滞：没起时删掉以前留下的 `battle-canary`，只删本次编排形态的那种 kind。切换 `-BattleOrchestrator` 时，另一种 kind 的 `battle-canary` 和 stable battle 一起列为旧形态资源，过同一道 `-AllowDisruptiveSwitch` 闸删除，不用先手动撤池。
-- 告警 `deploy/k8s/release-track-alerts.yaml`（批 3a）：`ReleaseTrackZoneMixedTooLong`（一个 zone 的 gate / scene 混轨超过 3 小时，按 `cpp_node_info`）、`ReleaseTrackCanaryForwardErrorsHigh`（canary 会话经 router 的失败率超过 stable 的 2 倍再加 1 个百分点，canary 每秒 0.1 次请求以上，持续 10 分钟）。负责人没有给门槛，这两组数是起步值，依据写在规则里，首次金丝雀之后按实测调。不做 namespace 标签：金丝雀 zone 里 data-service、player-locator 仍是 stable，按 namespace 打标签会标错。
+- 告警 `deploy/k8s/release-track-alerts.yaml`（批 3a，11-11 补第三条）：`ReleaseTrackZoneMixedTooLong`（一个 zone 的 gate / scene 混轨超过 3 小时，按 `cpp_node_info`）、`ReleaseTrackCanaryForwardErrorsHigh`（canary 会话经 router 的失败率超过 stable 的 2 倍再加 1 个百分点，canary 每秒 0.1 次请求以上，持续 10 分钟）、`ReleaseTrackCanaryForwardLatencyHigh`（canary 会话经 router 的 p99 超过 stable 的 1.5 倍且至少慢 50 毫秒，canary 每秒 1 次请求以上，持续 10 分钟）。门槛按 §2.8 定，依据写在规则里。不做 namespace 标签：金丝雀 zone 里 data-service、player-locator 仍是 stable，按 namespace 打标签会标错。
 
 ## 6. 不做的事
 
 - 不做 zone 内按玩家比例的金丝雀，理由见 §2.2。
 - 不做动态权重，也不热切换百分比；扩大和中止都靠部署动作。
-- 轨道不进 `persist_schema_gen`，也不进任何持久数据。
+- 轨道不进玩家存档（`persist_schema_gen`），玩家数据里没有轨道。唯一落库的是成局原件上「这局放在哪条轨道的 battle 上」（§5.1 `MatchFormationRecord.release_track`）：它是这局的放置事实，随成局写入、不再修改，观战与对局作废率统计（§2.8 判据 5）按它判。
 - 金丝雀副本不承担服务间调用和全局后台工作，见 §2.5。
 
 ## 7. 实施分批
@@ -208,9 +252,9 @@ AGENTS.md §10.2 规定预计改动 30 个以上文件要先停下请示，本�
 **批 3a 的细节**（11-06 已落码，未编译；参数与行为见 §5.3）：
 
 - **按轨道的转发计数**单独一个计数器，不在 `client_rpc_router_forward_total` 上加 label：已有的标签集合不变，看板和单测不受影响；新计数器不带 message_id，3 个轨道值乘 11 个终态，基数固定。
-- **Pod 标签只写 canary**，和 env 同一判据。stable 写 `stable` 也说得通，但那样每个 Pod 模板都会变，已有 zone 全部滚动一次；缺标签当 stable 由 Prometheus 的 relabel 补，写法在手册里。仓库不部署 Prometheus，relabel 规则也不在仓库里。
+- **Pod 标签只写 canary**，和 env 同一判据。stable 写 `stable` 也说得通，但那样每个 Pod 模板都会变，已有 zone 全部滚动一次；缺标签当 stable 由 Prometheus 的 relabel 补，写法在手册里。仓库不部署 Prometheus，relabel 规则也不在仓库里；§2.8 的判据都不依赖它（路由服按会话轨道分、C++ 有 `cpp_node_info`、zone 按 namespace 比、对局按成局原件），它只在按轨道聚合 Go 服务自己的指标时用得上。
 - **准入名单在生成时补 `<app>-canary`**，名单表不写：表里每个标签都要对应一个真实清单（契约测试逐个核对），金丝雀副本是 `infra-up -CanaryServices` 按需生成的。补上的标签固定存在，起停金丝雀不用重新生成 zone 里的策略。
-- **告警的门槛是起步值**：负责人没有给数（§2.7）。混轨 3 小时按每台 gate 的排空预算约 35 分钟、5 台顺序排空估算；失败率比较用「超过基线 2 倍再加 1 个百分点」，这是金丝雀分析的常见判据，两边都接近 0 时不会响。
+- **告警的门槛**：混轨 3 小时按每台 gate 的排空预算约 35 分钟、5 台顺序排空估算；失败率比较用「超过基线 2 倍再加 1 个百分点」，两边都接近 0 时不会响。11-11 起门槛按 §2.8 的金丝雀判定定案，不再是待负责人给数的起步值。
 - **手册**：[灰度与金丝雀发布手册](../ops/release-track-canary-runbook.md)，把 §2.7 的步骤展开成命令和核对项。
 
 **批 3b 的细节**（11-10 已落码，未编译）。11-06 定方案时在改 match 和 battle 的几个会话 11-10 都已结束；动手前和「数据覆盖审计交接文档」会话分了工，它在改 `go/match/internal/authority` 的终局与恢复文件和 `global_match.go` 的终局函数，这些本批都没碰。
@@ -227,6 +271,13 @@ AGENTS.md §10.2 规定预计改动 30 个以上文件要先停下请示，本�
    最初的落码按实时 canary 镜像判，match 刚启动、镜像还没同步时会放过，随机与列表也没过滤；11-10 改成按原件判，结论只取决于原件，与镜像何时同步无关。`match_formation` 按列存，加列要改 `store.go` 的列清单、插入与读取三处（读取用 `sql.NullString` 接补列前的 NULL），动手前与数据覆盖审计会话分过工。
 6. **部署**。`infra-up -CanaryBattleReplicas N -CanaryNodeImage <ref>` 另起一个 battle 池：同一条渲染路径（`New-BattleWorkloadManifest -Canary`），换镜像、拉取策略、轨道与副本数，渲染完由 `Rename-CanaryWorkload` 改名成 `battle-canary`、全部 `app: battle` 换成 `app: battle-canary`（容器名不变）；写 canary env 与 Pod 标签（Agones Fleet 两层）。和 stable 共用 battle-node-config、机房号、探测与终局密钥、Agones SDK 身份。不粘滞，没起就删以前留下的 `battle-canary`（只删本次编排形态的那种 kind）。切换编排形态时，`Get-BattleObsoleteResources` 每个方向列两项（另一种 kind 的 stable battle 与 `battle-canary`），由 `Apply-BattlePool` 开头的旧形态删除一起删，写路径入口的 `Assert-ClientEntryClusterState` 也按这份清单先判，过同一道 `-AllowDisruptiveSwitch` 闸；集群里没有 Agones CRD 时 Fleet 项按 ApiGroup 跳过。要求 stable 池在（`-BattleReplicas > 0`）；不支持 hostPort 形态，两个池会抢 hostPort 20000。
 7. **测试**。router 的 metadata 用例（`TestForwardWritesSessionTrackMetadata`）；Go 与 C++ 键名对拍；`NodeWatcher.CanaryOnly()`；match 的会话轨道读取、成局判轨道（全员 canary、混合、旧档案、解不开）、选点（canary 局用 canary、选不到退回、stable 局不进 canary）、两份镜像的查找（`internal/logic/release_track_test.go`）；部署契约 4 条，旧形态清单每个方向两项（`k8s_client_entry_contract.tests.ps1`）。观战：判据 `viewerMayWatch`（六种组合，认不出的轨道不放行）、选中节点的轨道就是原件记的轨道、列表按观众轨道过滤（含赛事局、不摘索引、多读候选、认不出的会话轨道报错）是单测；点名观战被拦（16018、不发 RPC、不落原件、不摘索引，canary 观众同一场直连）和随机观战跳过 canary 局是两条真库用例（`global_spectate_lobby_native_test.go`，要 `MATCH_IT_TIDB`）。
+
+**收尾（11-11，未编译）：金丝雀判定定案**。负责人 11-11 要求查出的问题当场修、等压测再定的先按通行做法定。本轮定下 §2.8（批次、窗口、流量下限、五条判据与门槛的依据），并补齐能机械化的部分：
+
+- 路由服新增 `client_rpc_router_forward_by_track_seconds{release_track}`（`go/client_rpc_router/internal/metrics/metrics.go`），与 `forward_seconds` 共用分桶 `forwardLatencyBuckets`，在 `ObserveForward` 里一起记。单独一个直方图，不给 `forward_seconds` 加 label：已有的序列与看板不变，新直方图基数是 3 条轨道乘 13 个桶。
+- 告警新增 `ReleaseTrackCanaryForwardLatencyHigh`；`release_track_alerts_contract.tests.ps1` 改成按组钉死规则名单，并新增延迟规则的用例：指标注册与共用分桶、两边都取 p99 并按 le 聚合、只比较 stable 与 canary。
+- 对局作废率不加指标，用 SQL 按成局原件的轨道统计：终局提交在 `authority/completion.go`，这一块数据覆盖审计会话正在改，而原件和终局表本来就在 TiDB 里，是强一致的权威数据。
+- §6「轨道不进任何持久数据」改正为只不进玩家存档；批 3b 起成局原件记了这局 battle 的轨道。
 
 **与其他会话的冲突**：11-05 工作区里，login（`loginqueue`、`node`）、scene_manager（`world_init`、`createscenelogic`）、gate 的 `main.cpp`、九个全局服务的入口文件、`k8s_deploy.ps1`、`common.proto` 都有其他会话未提交的改动。批 1 只碰当时没人在改的文件，`common.proto` 只在 `NodeInfo` 末尾追加字段；批 2 的服务入口和部署脚本，要等那些改动入库后再动。
 

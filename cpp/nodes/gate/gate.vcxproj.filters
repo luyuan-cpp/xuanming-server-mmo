@@ -89,6 +89,9 @@
     <ClInclude Include="handler\event\gate_kafka_command_router.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="handler\event\world_chat_push_budget.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\gate_push_delivery.h">
       <Filter>Header Files</Filter>
     </ClInclude>

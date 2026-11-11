@@ -681,7 +681,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
      - scene:`cpp\libs\services\scene\scene.vcxproj` → `cpp\nodes\scene\scene.vcxproj`;
      - 测试:`cpp\tests\client_endpoint_test\client_endpoint_test.vcxproj` → `cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj`。
    - **C++ 单测(放在全量之后)**:`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build`。必须带 `-Build`:不带时脚本只跑已有 exe,
-     而多数 gtest 工程没进 game.sln 的构建配置,不会针对新的 core 与 proto 重新链接。通过:退出码 0,汇总表里没有「无 exe」行。
+     而多数 gtest 工程没进 game.sln 的构建配置,不会针对新的 core 与 proto 重新链接。通过:退出码 0,汇总表里没有「no exe」行(2026-11-11 汇总表改英文前写作「无 exe」)。
    - `check_no_raw_pointer_member.ps1 -ProjectDir <各工程>`;
    - battle 的两个独立 gtest(`cpp/nodes/battle/tests/battle_room_table_test.cpp`、`battle_admission_gate_test.cpp`)按文件头命令编译运行。
    - Linux:`tools/scripts/build_linux.sh`,`ldd bin/battle | grep libcurl` 应有输出。

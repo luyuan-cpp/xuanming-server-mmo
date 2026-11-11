@@ -45,7 +45,7 @@ func TestEtcdIntegration_OpenRechecksConcurrentRegionEntry(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			r, err := newEtcdRegistryAt(endpoints, itRoot(t)+"registry/")
+			r, err := newEtcdRegistryAt(endpoints, itRoot(t)+"registry/", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

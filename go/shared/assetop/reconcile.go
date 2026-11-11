@@ -569,22 +569,35 @@ func (l *Loop) nowMs() uint64 { return uint64(l.now().UnixMilli()) }
 //
 // 每一轮各自 recover:某一轮炸掉只丢那一轮,循环继续 —— 一个补偿循环静默停摆
 // 比单轮出错危险得多。
+//
+// 活性(assetop_loop_last_run_unixtime,缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.3):
+// 起来时写一次,每跑完一轮写一次(runTick),退出时删掉序列。值停住 = 循环卡在某一轮里,或每一轮都 panic;
+// 绑了按片分工时它名下的片没人扫,而 assetop_owned_shards 之和仍是 64。
 func (l *Loop) Run(ctx context.Context) {
 	ticker := time.NewTicker(l.cfg.Interval)
 	defer ticker.Stop()
 	ageTicker := time.NewTicker(pendingAgeInterval)
 	defer ageTicker.Stop()
+	l.metrics.markLoopRun(l.now())
+	defer l.metrics.clearLoopRun()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			safego.Run("assetop.reconcile_tick", func() { l.Tick(ctx) })
+			safego.Run("assetop.reconcile_tick", func() { l.runTick(ctx) })
 		case <-ageTicker.C:
 			safego.Run("assetop.pending_age", func() { l.refreshPendingAge(ctx) })
 		}
 	}
+}
+
+// runTick 是 Run 的一轮:Tick 返回之后写活性时刻,这一轮成败都写(读到期行失败有 assetop_store_errors_total{op="list"},
+// 不该同时报成循环卡死)。Tick panic 时(safego.Run 兜住)走不到写时刻这一步:每一轮都 panic 的循环要当停摆报出来。
+func (l *Loop) runTick(ctx context.Context) {
+	l.Tick(ctx)
+	l.metrics.markLoopRun(l.now())
 }
 
 // RunMaintenance 按 AuditInterval 跑日对账(AuditOnce)、按 AbandonInterval 跑自动放弃(AbandonOnce),

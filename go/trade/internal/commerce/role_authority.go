@@ -128,6 +128,110 @@ func (e *Engine) checkContractIdentities(ctx context.Context, tx *sql.Tx, r *tra
 	return nil
 }
 
+// ownerChanged 判参与方的角色是否已不可逆地不归合同里的原身份(jubaozhai-market.md §15.7.1 第 1 类):
+// 副本修订号已超过原身份,或修订号相同而账号不同。owner_revision 只增不减,这两种复查多少次都不会变回来。
+// 副本修订号落后于原身份是副本要自愈,不算;角色已删(Ownership 回 ErrConflict)由调用方另判。
+func ownerChanged(owned *dspb.AccountRoleOwnership, identity *tradepb.TradeRoleIdentity) bool {
+	return owned.GetOwnerRevision() > identity.GetOwnerRevision() ||
+		owned.GetOwnerRevision() == identity.GetOwnerRevision() && owned.GetAccount() != identity.GetAccount()
+}
+
+// 合同的两方。改绑(redirect)按名字点名,转人工记录也用这两个名字。
+const (
+	partySeller = "seller"
+	partyBuyer  = "buyer"
+)
+
+// contractParty 是合同的一方:它的角色与合同里存的原身份。
+type contractParty struct {
+	name     string
+	player   uint64
+	identity *tradepb.TradeRoleIdentity
+}
+
+// contractParties 是合同的卖方与买方(没有的一方不列),按 player_id 升序:读它们的角色护栏副本要按这个顺序加锁,
+// 与 advance 的 lockRoles 同一锁序。
+func contractParties(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) []contractParty {
+	parties := make([]contractParty, 0, 2)
+	if r.GetSellerPlayerId() != 0 {
+		parties = append(parties, contractParty{name: partySeller, player: r.GetSellerPlayerId(), identity: w.GetSellerIdentity()})
+	}
+	if r.GetBuyerPlayerId() != 0 {
+		parties = append(parties, contractParty{name: partyBuyer, player: r.GetBuyerPlayerId(), identity: w.GetBuyerIdentity()})
+	}
+	if len(parties) == 2 && parties[1].player < parties[0].player {
+		parties[0], parties[1] = parties[1], parties[0]
+	}
+	return parties
+}
+
+// partyRoleChange 是一方的角色已不可逆地不归原身份的证据,写进转人工记录。不带账号原文,只说账号是否相同。
+type partyRoleChange struct {
+	party       string
+	player      uint64
+	deleted     bool   // 角色已删(账号清空)
+	revision    uint64 // 副本里现在的修订号(删角时为 0)
+	contractRev uint64 // 合同里原身份的修订号
+	sameAccount bool
+}
+
+func (c partyRoleChange) String() string {
+	if c.deleted {
+		return fmt.Sprintf("%s player=%d role deleted (contract owner_revision=%d)", c.party, c.player, c.contractRev)
+	}
+	return fmt.Sprintf("%s player=%d owner_revision=%d (contract %d) same_account=%t", c.party, c.player, c.revision, c.contractRev, c.sameAccount)
+}
+
+// describeRoleChanges 把几方的证据拼成一行,写进转人工记录的 detail。
+func describeRoleChanges(changes []partyRoleChange) string {
+	parts := make([]string, 0, len(changes))
+	for _, c := range changes {
+		parts = append(parts, c.String())
+	}
+	return strings.Join(parts, "; ")
+}
+
+// partyRoleChangeOf 在调用方的事务里读一方的角色护栏副本(Ownership 自带行锁),回它是否已不可逆地不归原身份。
+// 副本缺行(要自愈)时判不了,回 nil;合同缺原身份是坏数据,由 checkContractIdentities 按 corrupt 隔离,这里也回 nil。
+// 存储错误原样返回。
+func partyRoleChangeOf(ctx context.Context, tx *sql.Tx, roles RoleLocker, p contractParty) (*partyRoleChange, error) {
+	if p.identity == nil {
+		return nil, nil
+	}
+	owned, err := roles.Ownership(ctx, tx, p.player)
+	var stale *rolefence.StaleError
+	switch {
+	case errors.As(err, &stale):
+		return nil, nil
+	case errors.Is(err, ErrConflict):
+		// Ownership 只在账号已清空(删角墓碑)时回 ErrConflict。
+		return &partyRoleChange{party: p.name, player: p.player, deleted: true, contractRev: p.identity.GetOwnerRevision()}, nil
+	case err != nil:
+		return nil, err
+	}
+	if !ownerChanged(owned, p.identity) {
+		return nil, nil
+	}
+	return &partyRoleChange{party: p.name, player: p.player, revision: owned.GetOwnerRevision(), contractRev: p.identity.GetOwnerRevision(),
+		sameAccount: owned.GetAccount() == p.identity.GetAccount()}, nil
+}
+
+// changedParties 按 player_id 升序逐方调 partyRoleChangeOf,回已不可逆地不归原身份的那几方。
+// 锁序与 advance 相同(先角色、后合同):调用方之后再锁合同行。
+func changedParties(ctx context.Context, tx *sql.Tx, roles RoleLocker, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) ([]partyRoleChange, error) {
+	var out []partyRoleChange
+	for _, p := range contractParties(r, w) {
+		change, err := partyRoleChangeOf(ctx, tx, roles, p)
+		if err != nil {
+			return nil, err
+		}
+		if change != nil {
+			out = append(out, *change)
+		}
+	}
+	return out, nil
+}
+
 // OwnsRecord 用持久原账号/修订筛选私有历史，角色的新主人不会继承旧主的合同身份。
 func OwnsRecord(ctx context.Context, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
 	original, ok := roleidentity.Original(ctx)

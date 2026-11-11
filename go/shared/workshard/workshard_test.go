@@ -27,7 +27,9 @@ func TestOwnerSpreadsShortShardKeysAcrossMembers(t *testing.T) {
 		// 缺口清单第 25 条:资产指令重投与终局发件箱的类别键。
 		"trade-assetop:", "guild-assetop:", "outcome-result:", "outcome-settlement:",
 		// 缺口清单第 25 条第二批:邮件附件与 GM 回收的重投、帮会与交易的终态清理。
-		"mail-assetop:", "gm-recall-assetop:", "guild-assetop-cleanup:", "trade-assetop-cleanup:"} {
+		"mail-assetop:", "gm-recall-assetop:", "guild-assetop-cleanup:", "trade-assetop-cleanup:",
+		// 缺口清单第 25 条第四批:GM 回收派发、邮件过期清理。
+		"gm-recall-dispatch:", "mail-expiry-sweep:"} {
 		t.Run(prefix, func(t *testing.T) {
 			counts := make(map[string]int, len(members))
 			for shard := 0; shard < Shards; shard++ {

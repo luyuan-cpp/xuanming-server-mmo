@@ -13,6 +13,7 @@ import (
 	"scene_manager/internal/svc"
 	"shared/safego"
 
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 )
@@ -35,28 +36,30 @@ import (
 //	这个静态配置,自动缩容刚摘掉的频道会在几秒内被它重新建出来 —— 缩容根本
 //	不成立。所以期望值下沉到 Redis,配置只作为**初始种子**,扩缩容改的是
 //	Redis 里那份,两边共用同一个权威。
+//
+// 下面以 zone 为键的格式里,第一个 %s 是 sceneControlTag(zone)。
 const (
 	// WorldDesiredChannelsKeyFmt: hash confId -> 期望频道数。
-	WorldDesiredChannelsKeyFmt = "world_channels:desired:zone:%d"
+	WorldDesiredChannelsKeyFmt = "world_channels:desired:%s"
 	// SceneDrainingKeyFmt: 该频道正在排空(已从路由集合摘除,等玩家走干净)。
 	// 带 TTL,防止进程在排空中途挂掉后留下永久标记。
 	SceneDrainingKeyFmt = "scene:%d:draining"
 	// WorldAutoscaleCooldownKeyFmt: 每个 (zone, confId) 的冷却窗口。
 	// 扩完不马上缩、缩完不马上扩,避免在阈值边缘抖动。
-	WorldAutoscaleCooldownKeyFmt = "world_channels:cooldown:zone:%d:%d"
+	WorldAutoscaleCooldownKeyFmt = "world_channels:cooldown:%s:%d"
 	// WorldDrainingSetKeyFmt: 正在排空的频道集合(SET of sceneId)。
 	// 需要单独一个索引:排空的第一步就是把频道从 world_channels 摘掉,
 	// 摘掉之后 GetAllWorldChannels 就再也看不到它,没有这个集合就没法
 	// 在后续 tick 里找回来继续收敛。
-	WorldDrainingSetKeyFmt = "world_channels:draining:zone:%d:%d"
+	WorldDrainingSetKeyFmt = "world_channels:draining:%s:%d"
 )
 
 func worldDrainingSetKey(zoneID uint32, confID uint64) string {
-	return fmt.Sprintf(WorldDrainingSetKeyFmt, zoneID, confID)
+	return fmt.Sprintf(WorldDrainingSetKeyFmt, sceneControlTag(zoneID), confID)
 }
 
 func worldDesiredChannelsKey(zoneID uint32) string {
-	return fmt.Sprintf(WorldDesiredChannelsKeyFmt, zoneID)
+	return fmt.Sprintf(WorldDesiredChannelsKeyFmt, sceneControlTag(zoneID))
 }
 
 func sceneDrainingKey(sceneID uint64) string {
@@ -64,7 +67,7 @@ func sceneDrainingKey(sceneID uint64) string {
 }
 
 func worldAutoscaleCooldownKey(zoneID uint32, confID uint64) string {
-	return fmt.Sprintf(WorldAutoscaleCooldownKeyFmt, zoneID, confID)
+	return fmt.Sprintf(WorldAutoscaleCooldownKeyFmt, sceneControlTag(zoneID), confID)
 }
 
 // DesiredWorldChannelCount 返回某地图当前的期望频道数。
@@ -145,12 +148,67 @@ func clampDesiredWorldChannelCount(svcCtx *svc.ServiceContext, n int) int {
 	return n
 }
 
-// setDesiredWorldChannelCount 写回期望频道数,并钳到 [min, max]。
-func setDesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, n int) {
-	n = clampDesiredWorldChannelCount(svcCtx, n)
-	if err := svcCtx.Redis.Hset(worldDesiredChannelsKey(zoneID), strconv.FormatUint(confID, 10), strconv.Itoa(n)); err != nil {
-		logx.Errorf("[WorldAutoscale] set desired channels zone=%d conf=%d=%d failed: %v", zoneID, confID, n, err)
+// 伸缩决策提交脚本的返回值(luaCommitWorldScaleOut 与 luaBeginDrainWorldChannel 共用,2026-11-11)。
+const (
+	// worldDrainNotRouted:只有缩容脚本回它 —— 频道已不在路由集合里(别的实例抢先摘掉了),什么都没写。
+	worldDrainNotRouted = 0
+	// worldScaleCommitted:写成了;或 go-redis 重发了本次已写成的同一条命令(冷却标记里是本次的令牌)。
+	worldScaleCommitted = 1
+	// worldScaleCooldown:冷却中 —— 本轮读冷却之后,别的领导者抢先伸缩了这张图。什么都没写。
+	worldScaleCooldown = 2
+	// worldScaleDesiredChanged:期望频道数与本轮读到的旧值不同(读之后被改过,或字段值非法),什么都没写。
+	worldScaleDesiredChanged = 3
+)
+
+// luaCommitWorldScaleOut 把一次扩容决策提交成一步:判冷却、比对期望频道数旧值、写新值、起冷却
+// (2026-11-11,docs/design/infra-reconnect-overview.md §4.1 R7)。此前是 EXISTS 冷却 → HGET 期望数 → HSET 期望数 + 1 →
+// SETEX 冷却四次往返:两个重叠的领导者(Redis 主从切换丢了选主锁)都过了冷却检查时,后到的会读到先到的新值再 +1,多扩一条频道。
+// 现在后到的那个在脚本里看到冷却标记(或期望数已变),什么都不写。
+//
+// KEYS[1] = 冷却标记 world_channels:cooldown:{ctl:<z>}:<conf>,KEYS[2] = 期望频道数哈希 world_channels:desired:{ctl:<z>}
+// (同一个 zone、同一个控制域实例,与 reentry_barrier.go 的多键脚本同一口径)。
+// ARGV[1] = confID,ARGV[2] = 本轮读到的期望频道数(旧值,十进制),ARGV[3] = 新的期望频道数,ARGV[4] = 冷却秒数,
+// ARGV[5] = 本次决策的令牌(写进冷却标记;别处只看冷却标记在不在)。
+// 返回 worldScaleCommitted / worldScaleCooldown / worldScaleDesiredChanged。
+//
+// 比对用字符串相等:期望数由 strconv.Itoa 写,权威值不会有别的写法;字段被写成非法值时 DesiredWorldChannelCount 回种子值,
+// 这里比不上、不写,由调用方打 ERROR —— 保留坏值并告警,不拿种子值 +1 把它盖掉。
+// 重发安全:go-zero 的句柄 MaxRetries 为 3,读超时后会重发同一条 EVAL;第一次已执行时冷却标记里是本次的令牌,回已提交。
+const luaCommitWorldScaleOut = `
+local cd = redis.call('GET', KEYS[1])
+if cd then
+    if cd == ARGV[5] then
+        return 1
+    end
+    return 2
+end
+if redis.call('HGET', KEYS[2], ARGV[1]) ~= ARGV[2] then
+    return 3
+end
+redis.call('HSET', KEYS[2], ARGV[1], ARGV[3])
+redis.call('SET', KEYS[1], ARGV[5], 'EX', ARGV[4])
+return 1
+`
+
+// worldAutoscaleCooldownSeconds 是一次伸缩之后冷却标记的存活秒数;配置非正时取 120。
+func worldAutoscaleCooldownSeconds(svcCtx *svc.ServiceContext) int64 {
+	if sec := svcCtx.Config.WorldAutoscale.CooldownSeconds; sec > 0 {
+		return sec
 	}
+	return 120
+}
+
+// commitWorldScaleOut 跑 luaCommitWorldScaleOut,把期望频道数从 oldDesired 改成 newDesired 并起冷却。
+// err 非空表示结局未知(脚本可能执行了,也可能没有),调用方不得按「已扩容」继续。
+func commitWorldScaleOut(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, oldDesired, newDesired int) (int64, error) {
+	res, err := svcCtx.Redis.Eval(luaCommitWorldScaleOut,
+		[]string{worldAutoscaleCooldownKey(zoneID, confID), worldDesiredChannelsKey(zoneID)},
+		strconv.FormatUint(confID, 10), strconv.Itoa(oldDesired), strconv.Itoa(newDesired),
+		worldAutoscaleCooldownSeconds(svcCtx), uuid.NewString())
+	if err != nil {
+		return 0, err
+	}
+	return toInt64(res), nil
 }
 
 // StartWorldAutoscaler 起一个周期性扩缩容循环。
@@ -266,8 +324,8 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	lightest := loads[0]
 	if len(loads) > minCh && lightest.players < cfg.ScaleInPlayerThreshold {
 		if victim, ok := pickScaleInVictim(svcCtx, loads, cfg); ok {
+			// 冷却标记由排空脚本在同一步里写(2026-11-11 起,见 luaBeginDrainWorldChannel)。
 			if beginDrainWorldChannel(ctx, svcCtx, zoneID, confID, victim) {
-				markCooldown(svcCtx, zoneID, confID)
 				return 0, 1
 			}
 		} else {
@@ -294,15 +352,40 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 			return 0, 0
 		}
 
-		setDesiredWorldChannelCount(svcCtx, zoneID, confID, desired+1)
+		// 判冷却、比对期望数旧值、写新值并起冷却,一段脚本(2026-11-11,R7):上面的 inCooldown 只是省一次往返的预检,
+		// 重叠的领导者都过了预检时,以脚本里的判定为准。
+		newDesired := clampDesiredWorldChannelCount(svcCtx, desired+1)
+		outcome, err := commitWorldScaleOut(svcCtx, zoneID, confID, desired, newDesired)
+		if err != nil {
+			// 结局未知:写成了的话期望数已是新值,下一次 fullSync / 节点 PUT 的补建会把频道建出来;没写成就什么都没变。
+			logx.Errorf("[WorldAutoscale] zone=%d conf=%d: committing scale-out %d -> %d failed, outcome unknown: %v",
+				zoneID, confID, desired, newDesired, err)
+			metrics.ObserveWorldAutoscale(zoneID, "scale_out", "error")
+			return 0, 0
+		}
+		switch outcome {
+		case worldScaleCommitted:
+		case worldScaleCooldown:
+			logx.Infof("[WorldAutoscale] zone=%d conf=%d: another leader scaled this map after this round read the cooldown; "+
+				"not scaling out", zoneID, confID)
+			return 0, 0
+		case worldScaleDesiredChanged:
+			logx.Errorf("[WorldAutoscale] zone=%d conf=%d: desired channel count changed since it was read as %d, or holds an "+
+				"invalid value; not scaling out this round (check %s field %d)",
+				zoneID, confID, desired, worldDesiredChannelsKey(zoneID), confID)
+			return 0, 0
+		default:
+			logx.Errorf("[WorldAutoscale] zone=%d conf=%d: unexpected scale-out commit result %d; not scaling out",
+				zoneID, confID, outcome)
+			return 0, 0
+		}
 		// 立刻把新频道建出来,不等下一次 fullSync —— 玩家现在就挤着。
 		// waitForLock=true:跑在 autoscaler 自己的 goroutine 上,等锁无害,
 		// 而期望频道数已 +1,尽快落地。
 		initWorldScenesForZone(ctx, svcCtx, zoneID, []uint64{confID}, true)
-		markCooldown(svcCtx, zoneID, confID)
 
 		logx.Infof("[WorldAutoscale] zone=%d conf=%d: all %d channel(s) >= %d players, scaled out to %d",
-			zoneID, confID, len(loads), cfg.ScaleOutPlayerThreshold, desired+1)
+			zoneID, confID, len(loads), cfg.ScaleOutPlayerThreshold, newDesired)
 		metrics.ObserveWorldAutoscale(zoneID, "scale_out", "ok")
 		return 1, 0
 	}
@@ -381,18 +464,37 @@ func pickScaleInVictim(svcCtx *svc.ServiceContext, loads []channelLoad, cfg conf
 // 期望频道数同步减 1,否则 initWorldScenesForZone 会立刻把它补回来。
 // 排空标记带 TTL:进程在排空中途挂掉时,标记会自己过期,下一轮 sweep 会重新接手,不会留下永久"半死"频道。
 //
-// 重发安全:回包丢失时第二次 SREM 回 0,调用方按「别的实例抢先」收手,频道已经在排空集合里,sweep 接着推进。
+// 判冷却与比对期望数旧值也在这一步里(2026-11-11,docs/design/infra-reconnect-overview.md §4.1 R7):此前冷却在脚本外判、
+// 期望数在脚本外读,冷却在排空之后另写。两个重叠的领导者都过了冷却检查时,各自摘掉一条频道、期望数各减一次,多缩一条。
+// 现在冷却标记在同一步里写(值是本次决策的令牌),后到的看到冷却或期望数已变就什么都不动。
 //
-// KEYS[1] = 频道集合,KEYS[2] = 排空集合,KEYS[3] = 排空标记,KEYS[4] = 期望频道数哈希
-// ARGV[1] = sceneId,ARGV[2] = 排空标记 TTL 秒,ARGV[3] = confID,ARGV[4] = 新的期望频道数
-// Return: 1 = 移动了,0 = 不在频道集合里(别的实例抢先摘掉了)。
+// 重发安全:回包丢失、go-zero 句柄重发同一条命令时,冷却标记里是本次的令牌,回 1,调用方照常推进排空。(此前重发时
+// 第二次 SREM 回 0,调用方按「别的实例抢先」收手,本拍不推进,等下一拍 sweep。)
+//
+// KEYS[1] = 频道集合,KEYS[2] = 排空集合,KEYS[3] = 排空标记,KEYS[4] = 期望频道数哈希,KEYS[5] = 冷却标记
+// (都在控制域实例上,除排空标记外同一个 zone;与 reentry_barrier.go 的多键脚本同一口径)
+// ARGV[1] = sceneId,ARGV[2] = 排空标记 TTL 秒,ARGV[3] = confID,ARGV[4] = 新的期望频道数,
+// ARGV[5] = 本轮读到的期望频道数(旧值,十进制),ARGV[6] = 冷却秒数,ARGV[7] = 本次决策的令牌
+// Return: worldScaleCommitted(1)= 移动了;worldDrainNotRouted(0)= 不在频道集合里(别的实例抢先摘掉了);
+// worldScaleCooldown(2)、worldScaleDesiredChanged(3)见常量。后三种什么都没写。
 const luaBeginDrainWorldChannel = `
+local cd = redis.call('GET', KEYS[5])
+if cd then
+    if cd == ARGV[7] then
+        return 1
+    end
+    return 2
+end
+if redis.call('HGET', KEYS[4], ARGV[3]) ~= ARGV[5] then
+    return 3
+end
 if redis.call('SREM', KEYS[1], ARGV[1]) == 0 then
     return 0
 end
 redis.call('SADD', KEYS[2], ARGV[1])
 redis.call('SET', KEYS[3], '1', 'EX', ARGV[2])
 redis.call('HSET', KEYS[4], ARGV[3], ARGV[4])
+redis.call('SET', KEYS[5], ARGV[7], 'EX', ARGV[6])
 return 1
 `
 
@@ -408,14 +510,16 @@ func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zon
 	if ttl <= 0 {
 		ttl = 300
 	}
-	moved, err := svcCtx.Redis.Eval(luaBeginDrainWorldChannel,
+	res, err := svcCtx.Redis.Eval(luaBeginDrainWorldChannel,
 		[]string{
 			worldChannelsKey(zoneID, confID),
 			worldDrainingSetKey(zoneID, confID),
 			sceneDrainingKey(victim.sceneID64),
 			worldDesiredChannelsKey(zoneID),
+			worldAutoscaleCooldownKey(zoneID, confID),
 		},
-		victim.sceneID, ttl, strconv.FormatUint(confID, 10), clampDesiredWorldChannelCount(svcCtx, desired-1))
+		victim.sceneID, ttl, strconv.FormatUint(confID, 10), clampDesiredWorldChannelCount(svcCtx, desired-1),
+		strconv.Itoa(desired), worldAutoscaleCooldownSeconds(svcCtx), uuid.NewString())
 	if err != nil {
 		// 结局未知:脚本没执行时频道还在路由集合里,下一拍重新决策;执行了时频道在排空集合里,sweep 接着推进。
 		logx.Errorf("[WorldAutoscale] zone=%d conf=%d: moving channel %s to draining failed: %v",
@@ -423,8 +527,23 @@ func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zon
 		metrics.ObserveWorldAutoscale(zoneID, "scale_in", "error")
 		return false
 	}
-	if toInt64(moved) == 0 {
+	switch outcome := toInt64(res); outcome {
+	case worldScaleCommitted:
+	case worldDrainNotRouted:
 		// 别的实例抢先摘掉了。不重复处理。
+		return false
+	case worldScaleCooldown:
+		logx.Infof("[WorldAutoscale] zone=%d conf=%d: another leader scaled this map after this round read the cooldown; "+
+			"not draining channel %s", zoneID, confID, victim.sceneID)
+		return false
+	case worldScaleDesiredChanged:
+		logx.Errorf("[WorldAutoscale] zone=%d conf=%d: desired channel count changed since it was read as %d, or holds an "+
+			"invalid value; not draining channel %s this round (check %s field %d)",
+			zoneID, confID, desired, victim.sceneID, worldDesiredChannelsKey(zoneID), confID)
+		return false
+	default:
+		logx.Errorf("[WorldAutoscale] zone=%d conf=%d: unexpected drain result %d for channel %s; nothing assumed moved",
+			zoneID, confID, outcome, victim.sceneID)
 		return false
 	}
 
@@ -591,6 +710,10 @@ func runWorldDrainTeardown(ctx context.Context, svcCtx *svc.ServiceContext, job 
 
 // inCooldown 报告这张图是否还在伸缩冷却期。读不到冷却标记按「仍在冷却」处理:本轮不伸缩,
 // 下一拍再看。按「不在冷却」处理会在 Redis 抖动时连续扩缩,正是冷却要防的来回抖。
+//
+// (2026-11-11 起)这里只是省掉人数统计之后那几次往返的预检:冷却标记由伸缩脚本在提交的同一步里写
+// (luaCommitWorldScaleOut、luaBeginDrainWorldChannel,值是那次决策的令牌),脚本里还会再判一次。原来的 markCooldown
+// 在伸缩之后另写一次 SETEX,随之删除。
 func inCooldown(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) bool {
 	exists, err := svcCtx.Redis.Exists(worldAutoscaleCooldownKey(zoneID, confID))
 	if err != nil {
@@ -598,14 +721,4 @@ func inCooldown(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) bool {
 		return true
 	}
 	return exists
-}
-
-func markCooldown(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) {
-	sec := svcCtx.Config.WorldAutoscale.CooldownSeconds
-	if sec <= 0 {
-		sec = 120
-	}
-	if err := svcCtx.Redis.Setex(worldAutoscaleCooldownKey(zoneID, confID), "1", int(sec)); err != nil {
-		logx.Errorf("[WorldAutoscale] set cooldown zone=%d conf=%d failed: %v", zoneID, confID, err)
-	}
 }

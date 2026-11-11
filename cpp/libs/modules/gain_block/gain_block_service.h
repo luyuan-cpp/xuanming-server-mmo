@@ -4,6 +4,7 @@
 #include <unordered_set>
 
 #include "entt/src/entt/entity/entity.hpp"
+#include "proto/common/rollback/transaction_log.pb.h"
 
 // 获得封禁的判定与状态入口,各获得入口在变更玩家资产之前检查。两层,互相独立:
 //
@@ -20,9 +21,18 @@
 // (player_battle.cpp 的 DropBlockedGains)都调它;新增物品获得入口也必须调它,
 // 不要只调 IsGloballyBlocked(kItem, …),那样会漏掉单人封禁。
 // 存档还原与同一所有者内部搬运(整理、仓库互转、装备穿脱)不是新增获得,不调它。
+// 带交易类型的获得入口(AddCurrency、BagService::AddItems、资产转入)先问 CountsAsGain:交易退回本人托管的资产
+// 也不是新增获得。
 class GainBlockService
 {
 public:
+    // 这次转入算不算新增获得。交易把玩家自己托管的资产退回(TX_AUCTION_RETURN:撤单、过期、整单退款、竞价退回)
+    // 是同一所有者的资产回到名下,与上面的内部搬运同类,不受获取封禁约束。不豁免的话,被封禁的卖家取不回自己托管的东西,
+    // 买家的退款也进不了账,合同只能转人工(数据覆写审计 r2-trade#1)。成交所得(TX_AUCTION_BUY)照常判封禁。
+    // 只看交易类型:TX_AUCTION_RETURN 只由交易服务给退回腿使用(go/trade/internal/commerce/leg_tx_type.go),
+    // 资产通道按流绑定调用方,别的服务发不出这条流。
+    static constexpr bool CountsAsGain(TransactionType txType) { return txType != TX_AUCTION_RETURN; }
+
     enum class GainType : uint32_t
     {
         kCurrency = 0,

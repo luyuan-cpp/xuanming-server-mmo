@@ -3,7 +3,9 @@
 #   kubectl apply -n observability -f deploy/k8s/release-track-alerts.yaml
 # 抓取前提:C++ 节点的 /metrics(k8s_deploy.ps1 -CppMetricsPort)与 client-rpc-router 的 :9200(Pod 模板 prometheus.io/port 注解)都在抓。
 # 没有序列时规则不触发,和「一切正常」长得一样。
-# 阈值是起步值:负责人没有给观察窗口与门槛的数(设计文档 §2.7),依据写在各条规则的 description 里,首次金丝雀之后按实测调。
+# 阈值按设计文档 §2.8「金丝雀判定」定:和同一时段的 stable 比,每条都是「相对倍数 + 绝对下限 + 最低样本量」,依据写在各条规则的
+# description 里。金丝雀批次的观察窗口内这里任何一条响过,这一批就判不通过(手册「判定」)。改门槛要同步 §2.8 与
+# tools/scripts/tests/release_track_alerts_contract.tests.ps1。
 # label 只用 zone_id、node_type、release_track 与有限的 outcome 枚举,不含玩家号、会话号。
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -63,8 +65,36 @@ spec:
           annotations:
             summary: "金丝雀会话经路由服的请求失败率明显高于 stable"
             description: >-
-              按会话轨道比较路由服转发的失败率(目标不可用、连不上、超时、目标报错):canary 超过 stable 的 2 倍再加 1 个百分点,
+              按会话轨道比较路由服转发的失败率(目标不可用、连不上、超时、目标报错,设计 §2.8 判据 2):canary 超过 stable 的 2 倍再加 1 个百分点,
               并且 canary 的请求量在每秒 0.1 次以上,持续 10 分钟。这是常见的金丝雀判据(和基线比相对倍数,再加绝对下限,
               两边都接近 0 时不响)。受影响的是真实的金丝雀玩家,先按手册「中止」停掉新流量,再查原因。
               这个比较只覆盖经路由服的全局服务请求;zone 内的登录、场景、存盘要按 zone_id 对比金丝雀 zone 与其它 zone,见手册「观察」。
+            runbook_url: docs/ops/release-track-canary-runbook.md
+
+        - alert: ReleaseTrackCanaryForwardLatencyHigh
+          expr: |
+            (
+              histogram_quantile(0.99, sum by (le) (rate(client_rpc_router_forward_by_track_seconds_bucket{release_track="canary"}[10m])))
+                >
+              1.5 * histogram_quantile(0.99, sum by (le) (rate(client_rpc_router_forward_by_track_seconds_bucket{release_track="stable"}[10m])))
+            )
+            and
+            (
+              histogram_quantile(0.99, sum by (le) (rate(client_rpc_router_forward_by_track_seconds_bucket{release_track="canary"}[10m])))
+                >
+              0.05 + histogram_quantile(0.99, sum by (le) (rate(client_rpc_router_forward_by_track_seconds_bucket{release_track="stable"}[10m])))
+            )
+            and
+            sum(rate(client_rpc_router_forward_by_track_seconds_count{release_track="canary"}[10m])) > 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "金丝雀会话经路由服的请求 p99 耗时明显高于 stable"
+            description: >-
+              按会话轨道比较路由服转发的 p99 耗时(从元数据检查到回包就绪,和 forward_seconds 同一段,设计 §2.8 判据 3):
+              canary 超过 stable 的 1.5 倍,并且至少慢 50 毫秒,canary 的请求量在每秒 1 次以上,持续 10 分钟。
+              结构和失败率那条相同(相对倍数、绝对下限、最低样本量)。倍数取 1.5 而不是 2:耗时退化多是渐进的(多一次查询、多一段锁等待),
+              等到翻倍才响太迟。50 毫秒约是分桶 0.05~0.1 秒的一格,差距小于一格多半是插值与抖动;每秒 1 次让 10 分钟窗口有约 600 个样本,
+              p99 由最慢的约 6 个决定,样本更少时 p99 只是最大值。受影响的是真实的金丝雀玩家,先按手册「中止」停掉新流量,再查原因。
             runbook_url: docs/ops/release-track-canary-runbook.md

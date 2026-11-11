@@ -1,12 +1,12 @@
 #pragma once
 
 // scene 节点按控制面的期望状态核对本地场景归属:纯规则(缺口清单第 33 条)。
-// 设计见 docs/design/scene-node-ownership-reconcile.md。本头不碰 ECS、不碰 Redis,单测直接喂读数。
+// 设计见 docs/design/scene-node-ownership-reconcile.md。本头不碰 ECS、不连 Redis(只用 redis_slot.h 拼键),单测直接喂读数。
 //
 // 期望状态的事实源是 scene_manager 写在本 zone 控制域 Redis 里的两把键,节点只读、不写控制域任何键
 // (control-plane-zone-scoping-20261105.md §4.3:zone z 的控制域键只由 zone z 的 scene_manager 读写):
 //   - scene:{id}:node:场景的属主 node_id(十进制串);
-//   - node:zone:{z}:{n}:holder:本节点号最近一次登记的进程("<etcd ModRevision>:<node_uuid>",§4.6)。
+//   - node:{ctl:<z>}:<n>:holder:本节点号最近一次登记的进程("<etcd ModRevision>:<node_uuid>",§4.6)。
 // 一个本地实体「不归本节点」= 映射不是本节点号,或者本节点号已被更新的登记接走(那时映射里的号指的是别的进程)。
 // 满足下面两条才排空并销毁:
 //   1. 连续 kNotMineConfirmations 次读到「不归本节点」(读失败不算证据,不改连击数);
@@ -25,6 +25,8 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+
+#include "engine/infra/storage/redis_cluster/redis_slot.h"
 
 namespace scene_ownership
 {
@@ -50,8 +52,11 @@ inline constexpr std::size_t kMaxScenesPerRead = 256;
 
 // 本节点每轮核对最多新开始改派多少名住户(§4.7)。改派一名住户 = 一次退出存盘、一次交接标记、一次 EnterScene、
 // 一次目标节点的认领载入。按住户而不按场景限:一个满员世界频道就有几百人。没有住户的场景不占预算,随时销毁。
-// 本轮第一个有住户的场景即使超出预算也放行,保证进度。取值是保守的初值,没有压测基线,待按压测里 EnterScene 与
-// go/db 的吞吐复核。
+// 本轮第一个有住户的场景即使超出预算也放行,保证进度。
+// 取值依据(缺口清单第 33 条,2026-11-11 定案):200 名 / 10 秒 = 每个节点每秒 20 名,与 R18 压测(1 zone 45k、4 个 scene)
+// 实测的每个节点每秒约 17.5 次进场同量级,当时进场全部成功、apply 均值约 33ms。按节点限而不按 zone 限:一个节点的号被接走
+// 时只有它在排空,按 zone 均摊会让它慢上 n 倍;全 zone 一起排空(控制域丢数据)时总速率随节点数涨,下游(scene_manager、
+// go/db、TiDB)都是无状态或可扩的,按 zone 规模扩副本。偏小时 SceneOwnershipReleaseBacklog 会响,设计稿 §4.7。
 inline constexpr std::size_t kMaxRelocationsPerSweep = 200;
 
 // scene_manager 写的场景属主键。跨语言契约:与 go/scene_manager/internal/logic/createscenelogic.go 的
@@ -61,11 +66,12 @@ inline std::string SceneNodeKey(std::uint64_t sceneId)
 	return "scene:" + std::to_string(sceneId) + ":node";
 }
 
-// scene_manager 写的节点号持有者键。跨语言契约:与 go/scene_manager/internal/logic/node_holder.go 的
-// NodeHolderKeyFmt("node:zone:%d:%s:holder")是同一个键,两边改名必须同批改。
+// scene_manager 写的节点号持有者键 node:{ctl:<z>}:<n>:holder。跨语言契约:与 go/scene_manager/internal/logic/node_holder.go 的
+// nodeHolderKey 渲染出来的键逐字节相同,两边改名必须同批改;tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。
 inline std::string NodeHolderKey(std::uint32_t zoneId, std::string_view nodeId)
 {
-	return "node:zone:" + std::to_string(zoneId) + ":" + std::string(nodeId) + ":holder";
+	return "node:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId) + ":" +
+		   std::string(nodeId) + ":holder";
 }
 
 // 一个场景的 scene:{id}:node 读数。

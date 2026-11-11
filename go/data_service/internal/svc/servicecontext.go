@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -664,7 +665,7 @@ func checkExpectedRegion(expected string, region uint32) error {
 	return nil
 }
 
-// NewIdIssuer 按配置装配发号器。只校验配置,不连 etcd。服务启动和 -id-issuer-init 共用。
+// NewIdIssuer 按配置装配发号器。只校验配置、读登记处的 TLS 证书文件,不连 etcd。服务启动和 -id-issuer-init 共用。
 func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if c.IdSegment.Issuer.Region > uint32(idissuer.MaxRegion) {
 		return nil, fmt.Errorf("IdSegment.Issuer.Region = %d exceeds %d", c.IdSegment.Issuer.Region, idissuer.MaxRegion)
@@ -684,6 +685,17 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 登记处只走双向 TLS(生产);dev、test 的登记处是本地 etcd 上的键,不开 TLS。证书在建任何连接之前读,错了在装配时就报。
+	registryTLSFiles, err := c.IdSegment.RegistryTLSFiles()
+	if err != nil {
+		return nil, err
+	}
+	var registryTLS *tls.Config
+	if registryTLSFiles.CAFile != "" {
+		if registryTLS, err = idissuer.LoadRegistryTLS(registryTLSFiles.CAFile, registryTLSFiles.CertFile, registryTLSFiles.KeyFile); err != nil {
+			return nil, err
+		}
+	}
 	primary, err := idissuer.NewEtcdStore(primaryHosts, idIssuerPrimaryKey)
 	if err != nil {
 		return nil, err
@@ -692,7 +704,7 @@ func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if err != nil {
 		return nil, errors.Join(err, primary.Close())
 	}
-	registry, err := idissuer.NewEtcdRegistry(registryHosts)
+	registry, err := idissuer.NewEtcdRegistry(registryHosts, registryTLS)
 	if err != nil {
 		return nil, errors.Join(err, primary.Close(), secondary.Close())
 	}

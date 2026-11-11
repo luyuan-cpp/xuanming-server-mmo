@@ -200,7 +200,7 @@ spec:
     # 成员表只圈本 zone;全局服务只在 infra namespace。成员表变化(扩缩容、滚动)的几秒里会多或少几片,for 只防这段抖动。
     # 低于 64 = 有片没人扫:多半是在 etcd 登记着却不跑重投循环的副本(滚动修改 AssetOp.Enabled / Recall.Enabled 的窗口),
     # 或循环没起来。高于 64 只是重复扫(某副本连续 30 秒读不到成员表就做全部片),不告警。
-    # 盲区:副本的循环卡死时 gauge 停在旧值,和仍为 64,只能看 assetop_pending_oldest_age_seconds 是否持续上涨。
+    # 盲区:副本的循环卡死时 gauge 停在旧值,和仍为 64,这两条都不响;由下面 asset-channel.loop-liveness 组的 AssetOpRedeliveryLoopStalled 按副本报。
     - name: asset-channel.work-shards
       interval: 60s
       rules:
@@ -235,6 +235,47 @@ spec:
               到期扫描缺片已持续超过 35 分钟(当前只有 {{ $value | printf "%.0f" }} 片有人扫,应为 64),且该服务最老的未决资产指令已超过 30 分钟。
               缺片不会自愈:登记着却不跑重投循环的副本不退出、不恢复,它名下的片就一直没人扫;trade 的合同推进与收据 ACK 用同一份成员表,
               托管资产也会跟着停在合同里。先按 AssetOpOwnedShardsMissing 找出那个副本,让它的配置与其余副本一致后重启,或把它缩掉。
+
+    # 周期循环的活性(缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.3)。
+    # 每个循环一个「最近一次跑完一轮的时刻」gauge(Unix 秒):起来时写一次,每跑完一轮写一次(这一轮成败都写,panic 的那一轮不写),
+    # 循环退出时删掉序列。没起循环(canary、Recall.Enabled=false)或已经停掉循环(停机排空)的副本没有序列,不会误报。
+    # 按副本逐条判,不聚合:分片之后一个副本卡住,别的副本照常推进,max() 看不出来;卡住的副本名下的片没人做,
+    # 而 assetop_owned_shards 之和仍是 64(上面 work-shards 组的盲区)。
+    # 阈值按「一轮最长要跑多久」取若干倍:
+    #   - 重投一轮最长约 Interval + ceil(Batch / Workers) × OpBudget,默认 2 + 13 × 2.5 ≈ 35 秒;guild 把间隔、单行预算调到上限
+    #     (60 秒、10 秒)时约 190 秒。300 秒都盖得住;再调大 Batch 时要复核。
+    #   - 回收派发间隔 1 秒、一轮总预算 30 秒(recallDispatchRoundLimit),300 秒约 10 轮。
+    # mail 过期清理的同类规则 MailSweepStalled 在 mail-alerts.yaml。契约测试 tools/scripts/tests/loop_liveness_alerts_contract.tests.ps1
+    # 钉住指标名、按副本判的式子与阈值和代码常量的关系。
+    - name: asset-channel.loop-liveness
+      interval: 60s
+      rules:
+        - alert: AssetOpRedeliveryLoopStalled
+          expr: |
+            time() - assetop_loop_last_run_unixtime > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.service }} 有副本的资产指令重投循环卡住了"
+            description: >-
+              副本 {{ $labels.pod }} 的重投循环已经 {{ $value | printf "%.0f" }} 秒没有跑完一轮(正常不超过几十秒)。
+              它在 etcd 里还登记着、占着自己那几片,这几片里在线玩家没走完的资产指令没人重投,资产到账被拖住(不丢)。
+              先看这个副本的 goroutine 栈与 safego_panic_total{point="assetop.reconcile_tick"}(每一轮都 panic 也会停住),
+              再重启它或把它缩掉:它从 etcd 摘掉之后,它的片由别的副本接手。
+
+        - alert: RecallDispatchLoopStalled
+          expr: |
+            time() - data_service_recall_dispatch_last_run_unixtime > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 有 data_service 副本的 GM 回收派发循环卡住了"
+            description: >-
+              副本 {{ $labels.pod }} 的回收派发循环已经 {{ $value | printf "%.0f" }} 秒没有跑完一轮(间隔 1 秒,一轮至多 30 秒)。
+              它名下那几片的 PLANNED 回收行没人派发,GM 回收停在计划里(不丢,也不会重复扣)。
+              先看 safego_panic_total{point="data_service.recall.dispatch"} 与这个副本的 goroutine 栈,再重启它或把它缩掉。
 
     # 交易合同推进(go/trade commerce.Engine.Tick,docs/design/jubaozhai-market.md §15.3,2026-10-22 补)。
     # 指标没有 service 标签(只有 trade 一个服务);每个副本各自计数,所以用 sum。

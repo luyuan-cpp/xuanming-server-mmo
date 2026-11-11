@@ -1,6 +1,6 @@
 # 交接：帮会捐献 / 兑换恢复记录的两个出口（2026-10-23）
 
-> **当前状态（2026-11-11）**：客户端前两个出口已实现并通过完整帮会 EditMode 263/263；Go 隔离 HEAD 单测、vet、构建与独立 MySQL 集成 10/10 通过，Java 定向单测 36/36 通过，见 §4。随后负责人要求补齐损坏记录出口，新增契约及验证见 §5，真实联网冒烟见 §6。11-10 Claude Code 两路只读审核见 §8 与 §8.1：资产安全未发现问题；第 1 条（停在捐献 / 商店页时恢复结论被进页自动读取覆盖）已改客户端并提交为 `db1295f6`，未编译，Codex 按 §8.2 验证；低危两条（第 4、5 条）11-11 已改客户端、未提交、未编译，见 §8.4；协议第 4 批的客户端跟进（第 6 条）由 Codex 按 `gate-online-identity-simplify-20261105/CODEX.md` 第 2 步改（11-11 进行中）；「双击即确认」负责人已定加 1 秒间隔，11-11 已改客户端、未编译（§8.3）。客户端侧原始测试证据已随 `Logs/` 丢失，见 §8 第 3 条。下文保留原交接规格；[参考补丁](guild-economy-recovery-client-20261023.patch) 基于历史客户端 `242e35060`，当前客户端已落地，不要再次应用。
+> **当前状态（2026-11-11）**：客户端前两个出口已实现并通过完整帮会 EditMode 263/263；Go 隔离 HEAD 单测、vet、构建与独立 MySQL 集成 10/10 通过，Java 定向单测 36/36 通过，见 §4。随后负责人要求补齐损坏记录出口，新增契约及验证见 §5，真实联网冒烟见 §6。11-10 Claude Code 两路只读审核见 §8 与 §8.1：资产安全未发现问题；第 1 条（停在捐献 / 商店页时恢复结论被进页自动读取覆盖）已改客户端并提交为 `db1295f6`，未编译，Codex 按 §8.2 验证；低危两条（第 4、5 条）11-11 已改客户端、未提交、未编译，见 §8.4；协议第 4 批的客户端跟进（第 6 条）由 Codex 按 `gate-online-identity-simplify-20261105/CODEX.md` 第 2 步改（11-11 进行中）；「双击即确认」负责人已定加 1 秒间隔，11-11 已改客户端、未编译（§8.3）；审核时顺带看到的两处同类问题（本人申请列表读取后停在「正在读取」、回包清理本机记录时的替换竞态提示）11-11 已改、未编译（§8.5）。客户端侧原始测试证据已随 `Logs/` 丢失，见 §8 第 3 条。下文保留原交接规格；[参考补丁](guild-economy-recovery-client-20261023.patch) 基于历史客户端 `242e35060`，当前客户端已落地，不要再次应用。
 >
 > **规格**：[05-economy.md §5.44.1](../design/guild-phase2/05-economy.md)。负责人 2026-10-22 拍板：超窗记录「玩家确认后作废」。项目未上线，不涉及存量兼容。
 >
@@ -336,3 +336,34 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 6. §8.3（1 秒间隔）已于 2026-11-11 叠在本节之上落码，本节新增用例与联网用例里的作废确认都已按 §8.3 拨钟或等满 1 秒。
 
 本次客户端与服务端文档都未提交；Java 版不涉及（只改两版共用的客户端），不加 `PARITY.md` 行。
+
+### 8.5 审核时顺带看到的两处同类问题（2026-11-11，Claude Code，未编译）
+
+审核时看到、当时判为范围外的两处，负责人 11-11 要求「查出的问题现在修」，一并改了客户端 `Assets/Scripts/Game/Guild/GuildClient.cs`。
+
+**A. 本人申请列表读取后状态栏停在「正在读取帮会，请稍候…」。** `LoadMyApplications` 的回包只换列表、从不写文案，原设计靠调用方在发出读取后自己写结果（`ApplyToJoin` / `CancelApplication` / `Review` 处的注释写明了这一约定）。但排队补拉（`DrainQueued` 的 `MyApplicationsQueued`）与落地恢复（`DrainSync`）发出的这一发没有调用方补写，`Request` 发出时写的「正在读取」就一直留着。玩家未入帮时打开帮会窗口就会看到；被请离 / 帮会解散的通知、申请未获通过的推送也在一帧之后被盖掉。原有 `KickNoticeSurvivesRefresh` 只测到帮会刷新为止，没有走到紧接着的列表重拉。
+- 改法：`LoadMyApplications` 记下读取前的文案，回包时若状态栏仍是「正在读取」（在途期间没有推送、调用方也没写别的）就放回去。调用方「发出后再写结果」的约定不变：那时状态栏已不是「正在读取」，不会被放回的旧文案盖掉。
+- 这条规则覆盖了 §8.2 里申请列表那一份「恢复结论沿用一次」：恢复结论只是读取前文案的一种。`_economyRecoveryNotice` 只剩捐献页、商店页、活动页三个消费者。不在帮时登记结论的两行已无人读取（`Refresh(结论)` 的「不在帮」分支、超窗作废的 `Info == null` 分支），一并删掉；注释同步。
+- 行为变化：以前申请列表只沿用结论一次，玩家之后再拉列表会落到「正在读取」；现在列表读取总是放回读取前的文案。其他操作改写文案、读取失败、`Reset` 之后都不会翻出旧结论。
+
+**B. 回包清理本机记录时发现已被替换，提示成本机故障。** 与 §8.1 第 5 条同类，是那条漏掉的同类入口。服务端回包后 `ConfirmEconomyReply` 按原内容 CAS 清理本机记录；若另一个守 `.lock` 协议的进程已把槽位换成别的记录，原先提示「服务端已回复，本机原记录尚未清理；请保留记录并恢复查账」，玩家照做再点，恢复的是换进来的新请求。现在单独接住 `InvalidOperationException`，提示 `EconomyRecordChangedText`（「待确认记录已变化，本次未作废也未重发；请重新读取后恢复。」）。I/O 故障仍用原文案。
+
+**用例**：
+- `GuildUiTests.cs` 的 `GuildClientTests` 新增 `QueuedMyApplicationsReadKeepsTheTextShownBeforeIt`。被请离后、收到申请未获通过的推送后，各排一次列表重拉，回包后状态栏分别仍是被请离通知与推送文案。旧代码上应红（停在「正在读取」）。
+- `GuildEconomyRecoveryTests.cs` 有四条随行为变化改了断言：
+  - `QueuedApplicationsRefreshPreservesTheOldGuildConclusionOnce` 改名为 `QueuedApplicationsRefreshKeepsTheOldGuildConclusion`。第二段改成「浏览帮会榜改写文案后再拉列表，状态栏是浏览的文案，不翻出旧结论」。
+  - `CorruptRetirementConclusionSurvivesNotInGuildAndOneApplicationsRefresh` 第二段同样改写。
+  - `AnotherUserActionBeforeApplicationsRefreshSupersedesTheRecoveryConclusion` 与 `ResetDoesNotRestoreAnOldRecoveryConclusionOnApplicationsRefresh` 加了精确断言：回包后分别是「没有待确认的捐献或兑换。」与「尚未加入帮会，和同道相聚于此。」，以前只断言「不是旧结论」，停在「正在读取」也能通过。
+  - `LateProcessCannotClearAReplacementRecord` 的断言由「尚未清理」改为「已变化」且不含「尚未清理」。
+
+**并行情况**：写入时另一个会话正按服务端 `docs/design/client-request-ordering.md` §4.4、§4.7 改同一个 `GuildClient.cs` 的 `Request` 失败分支（「确定未执行」与「结果未知」分开收口），并新增 `GuildRequestFailureTests.cs`。两边改的是不同函数，编辑工具都核对过文件未被同时改写。该文件仍在被改，本节不记 SHA，验证按用例名核对。
+
+**给 Codex**（同 §8.3 末那一轮，帮会与网络两个 EditMode 程序集一起跑）：
+1. 通过标准追加：按名字找到 `QueuedMyApplicationsReadKeepsTheTextShownBeforeIt`、`QueuedApplicationsRefreshKeepsTheOldGuildConclusion`（4 条）以及上面改过断言的另外三条，全部通过；结果里不应再出现旧名 `QueuedApplicationsRefreshPreservesTheOldGuildConclusionOnce`。
+2. 红（可选，变异法）：
+   - 临时删掉 `LoadMyApplications` 回包里的 `if (Status == LoadingMessage) Status = statusBefore;`，只跑 `-testFilter "QueuedMyApplicationsReadKeepsTheTextShownBeforeIt;QueuedApplicationsRefreshKeepsTheOldGuildConclusion;AnotherUserActionBeforeApplicationsRefresh;ResetDoesNotRestoreAnOldRecoveryConclusion"`，预期全部失败。
+   - 临时删掉 `ConfirmEconomyReply` 里的 `catch (InvalidOperationException)` 那一行，只跑 `-testFilter "LateProcessCannotClearAReplacementRecord"`，预期失败。
+   - 每项做完立即恢复，`git diff` 核对只剩原来的改动。
+3. 失败时保留结果 XML 与第一条断言原文；结果存 `build/verification/guild-recovery-notice-20261110/`。
+
+本次未提交；Java 版不涉及，不加 `PARITY.md` 行。

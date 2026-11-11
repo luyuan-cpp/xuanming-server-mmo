@@ -10,14 +10,17 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"scene_manager/internal/config"
 	"scene_manager/internal/svc"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 const autoscaleTestConfID = uint64(1)
@@ -47,6 +50,16 @@ func mustDesiredWorldChannelCount(t *testing.T, sc *svc.ServiceContext, zoneID u
 	n, err := DesiredWorldChannelCount(sc, zoneID, confID)
 	require.NoError(t, err)
 	return n
+}
+
+// setDesiredWorldChannelCount 直接写期望频道数,并钳到 [min, max]。2026-11-11 起只给用例铺数据:生产路径的扩容与缩容都在
+// 提交脚本里比对旧值后再写(luaCommitWorldScaleOut、luaBeginDrainWorldChannel),这个函数没有生产调用方了,从
+// world_autoscale.go 挪到这里,签名与行为不变。
+func setDesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, n int) {
+	n = clampDesiredWorldChannelCount(svcCtx, n)
+	if err := svcCtx.Redis.Hset(worldDesiredChannelsKey(zoneID), strconv.FormatUint(confID, 10), strconv.Itoa(n)); err != nil {
+		logx.Errorf("[WorldAutoscale] set desired channels zone=%d conf=%d=%d failed: %v", zoneID, confID, n, err)
+	}
 }
 
 // seedChannels 手工铺一组频道及其人数,绕开 initWorldScenesForZone。
@@ -281,4 +294,155 @@ func TestAutoscale_DisabledIsInert(t *testing.T) {
 	sc.Config.WorldAutoscale.Enabled = false
 	StartWorldAutoscaler(context.Background(), sc)
 	// 没有可断言的副作用 —— 这条用例保证的是"不 panic 也不起循环"。
+}
+
+// ── 重叠领导者:判冷却、比对期望数、写新值在一段脚本里(2026-11-11,infra-reconnect-overview.md §4.1 R7) ──────
+
+// hookBeforeFirstDesiredRead 在这一轮第一次读期望频道数(Go 侧的 HGET,在冷却预检之后)之前跑一次 mutate,模拟另一个领导者
+// 恰好在本轮读完冷却、还没读期望数时提交了一次伸缩。钩子跑在 miniredis 的服务端协程上、还没拿库锁,mutate 里可以调 mr.*
+// (同 identHookOnceBeforeEval);只触发一次 —— 之后脚本里的 HGET 也经过钩子,那时库锁在手,再调 mr.* 会死锁。
+// mutate 里只能用 t.Errorf,不能用 require(FailNow 必须在用例协程里调)。
+func hookBeforeFirstDesiredRead(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, mutate func()) *atomic.Bool {
+	t.Helper()
+	var fired atomic.Bool
+	key := worldDesiredChannelsKey(zoneID)
+	mr.Server().SetPreHook(func(_ *server.Peer, cmd string, args ...string) bool {
+		if cmd != "HGET" || len(args) == 0 || args[0] != key || !fired.CompareAndSwap(false, true) {
+			return false
+		}
+		mutate()
+		return false
+	})
+	t.Cleanup(func() { mr.Server().SetPreHook(nil) })
+	return &fired
+}
+
+// 两个领导者都过了冷却预检。另一个领导者恰在本轮读完冷却、还没读期望数时提交了扩容(期望数 2 → 3,起冷却);本轮读到 3,
+// 提交脚本看到冷却标记不是本次的令牌,什么都不写:期望数停在 3,冷却标记仍是对方的。
+// 修复前红:本轮在脚本外把读到的 3 写成 4(不再看冷却),一轮多扩一条频道。
+func TestAutoscale_ScaleOutYieldsToConcurrentLeaderCommit(t *testing.T) {
+	sc, mr := newAutoscaleCtx(t)
+	sc.Redis.Zadd(testLoadKey(), 0, "10")
+	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 3000, 102: 3000})
+	cooldownKey := worldAutoscaleCooldownKey(testZoneId, autoscaleTestConfID)
+
+	fired := hookBeforeFirstDesiredRead(t, mr, testZoneId, func() {
+		mr.HSet(worldDesiredChannelsKey(testZoneId), strconv.FormatUint(autoscaleTestConfID, 10), "3")
+		if err := mr.Set(cooldownKey, "other-leader"); err != nil {
+			t.Errorf("simulate the other leader's cooldown: %v", err)
+		}
+	})
+	out, in := AutoscaleWorldChannelsForZone(context.Background(), sc, testZoneId)
+	require.True(t, fired.Load(), "前提不成立:这一轮没有读期望频道数")
+	assert.Zero(t, out)
+	assert.Zero(t, in)
+	assert.Equal(t, 3, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID), "对方写的 3 不能再被加一")
+	cooldown, err := mr.Get(cooldownKey)
+	require.NoError(t, err)
+	assert.Equal(t, "other-leader", cooldown, "冷却标记仍是先提交的那一方的")
+}
+
+// 缩容同理。另一个领导者恰在本轮读完冷却、还没读期望数时排空了 103(移进排空集合,期望数 3 → 2,起冷却);本轮挑中的 102
+// 不能再摘:路由集合里仍有 101、102,期望数停在 2,102 没有排空标记。
+// 修复前红:本轮读到 2,排空脚本照样摘掉 102、把期望数写成 1,一轮里缩掉两条。
+func TestAutoscale_ScaleInYieldsToConcurrentLeaderCommit(t *testing.T) {
+	sc, mr := newAutoscaleCtx(t)
+	sc.Redis.Zadd(testLoadKey(), 0, "10")
+	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 1500, 102: 40, 103: 50})
+
+	fired := hookBeforeFirstDesiredRead(t, mr, testZoneId, func() {
+		if _, err := mr.SRem(worldChannelsKey(testZoneId, autoscaleTestConfID), "103"); err != nil {
+			t.Errorf("simulate the other leader's drain (SREM): %v", err)
+		}
+		if _, err := mr.SAdd(worldDrainingSetKey(testZoneId, autoscaleTestConfID), "103"); err != nil {
+			t.Errorf("simulate the other leader's drain (SADD): %v", err)
+		}
+		mr.HSet(worldDesiredChannelsKey(testZoneId), strconv.FormatUint(autoscaleTestConfID, 10), "2")
+		if err := mr.Set(worldAutoscaleCooldownKey(testZoneId, autoscaleTestConfID), "other-leader"); err != nil {
+			t.Errorf("simulate the other leader's cooldown: %v", err)
+		}
+	})
+	_, in := AutoscaleWorldChannelsForZone(context.Background(), sc, testZoneId)
+	require.True(t, fired.Load(), "前提不成立:这一轮没有读期望频道数")
+	assert.Zero(t, in)
+	routed, err := sc.Redis.Smembers(worldChannelsKey(testZoneId, autoscaleTestConfID))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"101", "102"}, routed, "本轮挑中的 102 不能再摘")
+	assert.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
+	assert.False(t, mr.Exists(sceneDrainingKey(102)))
+}
+
+// 扩容提交脚本本身:同一令牌重发(go-zero 句柄读超时后重发同一条 EVAL)回已提交、期望数只加一次;冷却期内别的令牌回冷却;
+// 冷却过后旧值对不上回期望数已变,不写、不起冷却。去掉令牌比对的写法红在第二次运行上(回冷却)。
+func TestCommitWorldScaleOutScript_ReplayCooldownAndStaleRead(t *testing.T) {
+	sc, mr := newAutoscaleCtx(t)
+	setDesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID, 2)
+	conf := strconv.FormatUint(autoscaleTestConfID, 10)
+	cooldownKey := worldAutoscaleCooldownKey(testZoneId, autoscaleTestConfID)
+	keys := []string{cooldownKey, worldDesiredChannelsKey(testZoneId)}
+	run := func(oldDesired, newDesired, token string) int64 {
+		t.Helper()
+		res, err := sc.Redis.Eval(luaCommitWorldScaleOut, keys, conf, oldDesired, newDesired, int64(120), token)
+		require.NoError(t, err)
+		return toInt64(res)
+	}
+
+	for i := range 2 {
+		assert.EqualValues(t, worldScaleCommitted, run("2", "3", "token-1"), "run %d of the same command", i+1)
+	}
+	assert.Equal(t, 3, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID), "重发不能再加一次")
+	assert.Positive(t, mr.TTL(cooldownKey), "冷却标记要带 TTL")
+
+	assert.EqualValues(t, worldScaleCooldown, run("3", "4", "token-2"))
+	assert.Equal(t, 3, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
+
+	mr.Del(cooldownKey)
+	assert.EqualValues(t, worldScaleDesiredChanged, run("2", "3", "token-3"))
+	assert.Equal(t, 3, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
+	assert.False(t, mr.Exists(cooldownKey), "没提交就不起冷却")
+}
+
+// 排空脚本:同一令牌重发回已移动,一个键都不再动(此前重发回 0,本拍不推进排空);冷却标记与期望数在同一步里写好。
+// 冷却过后旧值对不上回期望数已变,频道留在路由集合里。去掉令牌比对的写法红在第二次运行上(回冷却)。
+func TestBeginDrainScript_ReplayAndStaleRead(t *testing.T) {
+	sc, mr := newAutoscaleCtx(t)
+	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 1500, 102: 40})
+	conf := strconv.FormatUint(autoscaleTestConfID, 10)
+	cooldownKey := worldAutoscaleCooldownKey(testZoneId, autoscaleTestConfID)
+	run := func(sceneID string, sceneID64 uint64, newDesired int, oldDesired, token string) int64 {
+		t.Helper()
+		res, err := sc.Redis.Eval(luaBeginDrainWorldChannel,
+			[]string{
+				worldChannelsKey(testZoneId, autoscaleTestConfID),
+				worldDrainingSetKey(testZoneId, autoscaleTestConfID),
+				sceneDrainingKey(sceneID64),
+				worldDesiredChannelsKey(testZoneId),
+				cooldownKey,
+			},
+			sceneID, int64(300), conf, newDesired, oldDesired, int64(120), token)
+		require.NoError(t, err)
+		return toInt64(res)
+	}
+
+	for i := range 2 {
+		assert.EqualValues(t, worldScaleCommitted, run("102", 102, 1, "2", "token-1"), "run %d of the same command", i+1)
+	}
+	routed, err := sc.Redis.Smembers(worldChannelsKey(testZoneId, autoscaleTestConfID))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"101"}, routed)
+	draining, err := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"102"}, draining)
+	assert.Equal(t, 1, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID), "重发不能再减一次")
+	cooldown, err := mr.Get(cooldownKey)
+	require.NoError(t, err)
+	assert.Equal(t, "token-1", cooldown, "冷却标记在同一步里写,值是这次决策的令牌")
+	assert.Positive(t, mr.TTL(cooldownKey))
+
+	mr.Del(cooldownKey)
+	assert.EqualValues(t, worldScaleDesiredChanged, run("101", 101, 1, "2", "token-2"))
+	routed, err = sc.Redis.Smembers(worldChannelsKey(testZoneId, autoscaleTestConfID))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"101"}, routed, "旧值对不上时不能摘")
+	assert.False(t, mr.Exists(cooldownKey), "没提交就不起冷却")
 }

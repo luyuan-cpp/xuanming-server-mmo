@@ -46,7 +46,7 @@ func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, ch
 	}
 	challengerName := challengePublicName(l.ctx, l.svcCtx, challenger)
 	notification := globalChallengeInvitationNotice(invitation, challengerName)
-	if err = pushToPlayer(l.svcCtx, invitation.TargetPlayerId, uint32(game.MatchServiceNotifyChallengeInviteMessageId), notification); err != nil {
+	if err = pushToPlayer(l.ctx, l.svcCtx, invitation.TargetPlayerId, uint32(game.MatchServiceNotifyChallengeInviteMessageId), notification); err != nil {
 		// 通知失败不撤销已提交原件；同正文重试会重推原编号且不刷新有效期。
 		metrics.ObserveChallenge("invite", "push_failed")
 		return &pb.ChallengePlayerResponse{ChallengeId: invitation.ChallengeId, ErrorMessage: tipErr(constants.ErrInternal, "邀请通知尚未确认，请重试原请求")}, nil

@@ -1,8 +1,10 @@
 #pragma once
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include <string>
 #include "proto/battle/battle_data.pb.h"
+#include "proto/battle/battle_script.pb.h"
 
 #include "table/proto/skill_table.pb.h"
 #include "table/proto/buff_table.pb.h"
@@ -37,6 +39,18 @@ public:
     // 按副本与服务端识别的战斗策略选档；返回值复制进引擎，整场不受后续配置变化影响。
     virtual const BattleRewardProfile* FindBattleReward(uint32_t battleConfigId,
                                                        const std::string& strategyKey) const = 0;
+
+    // 官方战斗剧本(docs/design/battle-script.md §5):按 (MatchMode, 副本 id, 哪一方) 取绑定的剧本。
+    // 返回校验、规范化过的只读副本(角色位按 order、规则按 priority 排好);引擎开局持有 shared_ptr 用满整场,
+    // 之后配置换新也不影响已开的局。没有绑定返回空 = 这一方出手走现行默认行为。
+    // 缺省实现没有任何剧本:未接剧本的数据源(含既有单测数据源)行为不变。
+    virtual std::shared_ptr<const BattleScript> FindBattleScript(uint32_t matchMode, uint32_t battleConfigId,
+                                                                 eBattleScriptSide side) const {
+        (void)matchMode;
+        (void)battleConfigId;
+        (void)side;
+        return nullptr;
+    }
 
     // 冷却时长(毫秒;CooldownTable.duration 与实时战斗同口径),查不到返回 0
     virtual uint64_t GetCooldownDurationMs(uint32_t cooldownTableId) const = 0;

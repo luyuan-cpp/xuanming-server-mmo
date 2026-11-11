@@ -12,6 +12,7 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"shared/kafkacmd"
+	"shared/tracing/kafkagotrace"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -141,8 +142,10 @@ func (l *EnterSceneLogic) routeHostedPlayerToScene(in *scene_manager.EnterSceneR
 		return fmt.Errorf("address hosted placement command: %w", err)
 	}
 	// 与 routePlayerToGate 同理不用可取消的 context:kafka-go 在 context 返回后仍可能继续投递批次,
-	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 给出有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 给出有界终态。WithoutCancel 同样不可取消,只多保留请求的 trace。
+	sendCtx := context.WithoutCancel(l.ctx)
+	msg.Headers = kafkagotrace.Headers(sendCtx)
+	if err := l.svcCtx.Kafka.WriteMessages(sendCtx, msg); err != nil {
 		return fmt.Errorf("push hosted placement to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 	l.Logger.Infof("[HostedPlacement] pushed hosted placement to Kafka %s/%d for player %d -> node %s instance %s scene %d home_zone=%d owner_epoch=%d session=%d login_generation=%d",

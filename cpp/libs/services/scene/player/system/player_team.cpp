@@ -1,12 +1,11 @@
 #include "player_team.h"
 #include "player_team_follow_scope.h"
+#include "core/async/coroutine_callback.h"
 #include "core/system/scene_task_scope.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 // 固定的 Cobalt 运行时已编入 third_party 静态库，由两套工程统一链接。
 #define BOOST_COBALT_NO_LIB 1
-#include <boost/asio/dispatch.hpp>
-#include <boost/cobalt/op.hpp>
 #include <boost/cobalt/task.hpp>
 #include <hiredis/hiredis.h>
 
@@ -70,108 +69,36 @@ namespace
 	namespace cobalt = boost::cobalt;
 	using muduo::net::EventLoop;
 
-	enum class GetStatus : uint8_t { kString, kNil, kError, kRejected, kNoReply, kStopped, kUnexpectedReply };
+	// 一次 GET 的自有结果。NIL、空串、ERROR、意外类型、空回复与未接纳各自分开;本地停止不在这里,由等待体交 nullopt。
+	enum class GetStatus : uint8_t { kString, kNil, kError, kRejected, kNoReply, kUnexpectedReply };
 	struct GetResult
 	{
 		GetStatus status;
 		std::string bytes{};
 	};
 
-	class GetCompletion
+	// Redis 回复只借用到回调返回:在回调里转成自有结果,字符串按长度复制、保留内嵌零字节。
+	GetResult ToGetResult(const redisReply* reply)
 	{
-	public:
-		using Handler = cobalt::completion_handler<GetResult>;
-		GetCompletion(EventLoop& loop, Handler handler) : loop_(loop), handler_(std::move(handler)) {}
+		if (reply == nullptr) return {GetStatus::kNoReply};
+		if (reply->type == REDIS_REPLY_NIL) return {GetStatus::kNil};
+		if (reply->type == REDIS_REPLY_ERROR) return {GetStatus::kError};
+		if (reply->type != REDIS_REPLY_STRING) return {GetStatus::kUnexpectedReply};
+		if (reply->len == 0) return {GetStatus::kString};
+		if (reply->str == nullptr) return {GetStatus::kError};
+		return {GetStatus::kString, std::string(reply->str, reply->len)};
+	}
 
-		void Receive(const redisReply* reply)
-		{
-			loop_.assertInLoopThread();
-			if (result_) return;
-			if (reply == nullptr) return Choose({GetStatus::kNoReply});
-			if (reply->type == REDIS_REPLY_NIL) return Choose({GetStatus::kNil});
-			if (reply->type == REDIS_REPLY_ERROR) return Choose({GetStatus::kError});
-			if (reply->type != REDIS_REPLY_STRING) return Choose({GetStatus::kUnexpectedReply});
-			if (reply->len == 0) return Choose({GetStatus::kString});
-			if (reply->str == nullptr) return Choose({GetStatus::kError});
-			Choose({GetStatus::kString, std::string(reply->str, reply->len)});
-		}
-
-		void Choose(GetResult result)
-		{
-			loop_.assertInLoopThread();
-			if (result_) return;
-			result_.emplace(std::move(result));
-			if (!submitting_) Deliver(false);
-		}
-
-		void Submitted(int status)
-		{
-			loop_.assertInLoopThread();
-			submitting_ = false;
-			// 只有提交被接纳才承认回复。已选出的本地停止仍然有效。
-			if (status != REDIS_OK && (!result_ || result_->status != GetStatus::kStopped))
-			{
-				result_.emplace(GetResult{GetStatus::kRejected});
-			}
-			if (result_) Deliver(true);
-		}
-
-	private:
-		void Deliver(bool immediate)
-		{
-			auto handler = std::move(*handler_);
-			handler_.reset();
-			auto slot = handler.get_cancellation_slot();
-			if (slot.is_connected()) slot.clear();
-			// 提交栈里的结果走 Cobalt 的即时完成协议，返回 await_suspend 后才继续业务。
-			// 正常 Redis 回调就在本 loop，当场恢复以保留与其它 Redis 命令的先后。
-			if (immediate)
-			{
-				auto executor = handler.get_immediate_executor();
-				asio::dispatch(executor, [handler = std::move(handler), result = std::move(*result_)]() mutable {
-					handler(std::move(result));
-				});
-				return;
-			}
-			handler(std::move(*result_));
-		}
-
-		EventLoop& loop_;
-		std::optional<Handler> handler_;
-		std::optional<GetResult> result_;
-		bool submitting_ = true;
-	};
-
-	class FollowRedisGet final : public cobalt::op<GetResult>
+	// 跟随的一次 GET 接到公共等待体:提交返回 REDIS_OK 才承诺回调,否则记 kRejected;提交栈里同步到达的回复
+	// 走 Cobalt 的即时完成协议,提交返回之后才继续业务;正常回复在 Redis 回调栈上当场恢复,保留与其它 Redis 命令的先后。
+	// 键只借用到提交返回(RedisGet 的约定),所以按值放进提交闭包。
+	auto AwaitFollowGet(EventLoop& loop, const PlayerTeamFollowScope::RedisGet& get, std::string key)
 	{
-	public:
-		FollowRedisGet(EventLoop& loop, const PlayerTeamFollowScope::RedisGet& submit, std::string key)
-			: loop_(loop), submit_(submit), key_(std::move(key)) {}
-
-		void initiate(cobalt::completion_handler<GetResult> handler) override
-		{
-			loop_.assertInLoopThread();
-			auto slot = handler.get_cancellation_slot();
-			state_ = std::make_shared<GetCompletion>(loop_, std::move(handler));
-			const std::weak_ptr<GetCompletion> weak = state_;
-			if (slot.is_connected())
-			{
-				slot.assign([weak](asio::cancellation_type) {
-					if (const auto state = weak.lock()) state->Choose({GetStatus::kStopped});
-				});
-			}
-			const int status = submit_(key_, [weak](const redisReply* reply) {
-				if (const auto state = weak.lock()) state->Receive(reply);
-			});
-			state_->Submitted(status);
-		}
-
-	private:
-		EventLoop& loop_;
-		const PlayerTeamFollowScope::RedisGet& submit_;
-		std::string key_;
-		std::shared_ptr<GetCompletion> state_;
-	};
+		return loop_async::AwaitCallback<GetResult>(loop,
+			[&get, key = std::move(key)](auto done) {
+				return get(key, [done](const redisReply* reply) { done(ToGetResult(reply)); }) == REDIS_OK;
+			}, GetResult{GetStatus::kRejected});
+	}
 
 	// key 契约见 player_team.h 头注释;与 Go 侧 go/match/internal/team/keys.go 同一份口径。
 	constexpr std::string_view kTeamReadMethod = "/teampb.TeamAuthority/ReadMembership";
@@ -569,18 +496,19 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 	}
 
 	// 本人战斗锁与队长位置属于不同玩家 slot，顺序读取。登录时 InBattleComp 仍可能在异步重建。
-	const auto lock = co_await FollowRedisGet{loop, state->get, BattleLockKey(playerId)};
+	const auto lock = co_await AwaitFollowGet(loop, state->get, BattleLockKey(playerId));
 	loop.assertInLoopThread();
-	if ((co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none || !IsSamePlayer(player, playerId))
+	// nullopt 是本地停止;拿到结果之后也可能被同步代码重入停止,下一次等待前先查取消状态。
+	if (!lock || (co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none || !IsSamePlayer(player, playerId))
 	{
 		co_return;
 	}
-	if (lock.status == GetStatus::kError || lock.status == GetStatus::kRejected || lock.status == GetStatus::kNoReply)
+	if (lock->status == GetStatus::kError || lock->status == GetStatus::kRejected || lock->status == GetStatus::kNoReply)
 	{
 		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
 		co_return;
 	}
-	if (lock.status != GetStatus::kNil)
+	if (lock->status != GetStatus::kNil)
 	{
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
 		co_return;
@@ -590,24 +518,24 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 		co_return;
 	}
 
-	const auto location = co_await FollowRedisGet{loop, state->get, player_ownership::LocationRedisKey(leaderId)};
+	const auto location = co_await AwaitFollowGet(loop, state->get, player_ownership::LocationRedisKey(leaderId));
 	loop.assertInLoopThread();
-	if ((co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none || !IsSamePlayer(player, playerId))
+	if (!location || (co_await cobalt::this_coro::cancelled) != asio::cancellation_type::none || !IsSamePlayer(player, playerId))
 	{
 		co_return;
 	}
-	if (location.status == GetStatus::kRejected || location.status == GetStatus::kNoReply)
+	if (location->status == GetStatus::kRejected || location->status == GetStatus::kNoReply)
 	{
 		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
 		co_return;
 	}
-	if (!CanFollow(player, playerId) || location.status != GetStatus::kString)
+	if (!CanFollow(player, playerId) || location->status != GetStatus::kString)
 	{
 		co_return;
 	}
 
 	storage::PlayerLocation leaderLocation;
-	if (!player_ownership::ParsePlayerLocationBytes(location.bytes, leaderLocation))
+	if (!player_ownership::ParsePlayerLocationBytes(location->bytes, leaderLocation))
 	{
 		co_return; // 队长不在任何场景(或位置缺失/损坏):不跟随
 	}

@@ -25,6 +25,11 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "mail_outbox_rules.h"
 
+namespace mailpb
+{
+	class SendMailRequest;
+}
+
 class PlayerMailOutboxSystem
 {
 public:
@@ -84,11 +89,19 @@ public:
 	// 这一条是否已在最近一次已提交的存档快照里(可以寄)。
 	using DurableFn = std::function<bool(entt::entity player, uint64_t requestId)>;
 
-	// 寄送完成(生产与单测同一入口)。回了 mail_id 就删条目(不论是不是这一次在途的那封:迟到的「寄到了」照样算数);
-	// 其余只处理当前在途的那封,按 mail_outbox_rules::ClassifySend 记一次失败并退避。实体已不在或换了人时什么都不做。
-	static void OnSendDone(uint64_t playerId, uint64_t requestId, SendOutcome outcome, uint64_t nowMs);
+	// 由条目逐字段确定性地建出发给邮件的请求(不签名):sender_kind = 5(battle)、收件人 = playerId、物品按条目原序
+	// (config_id 升序)、不带过期时刻(邮件按首次落库那一刻算有效期)。同一条目每次建出的字节相同,邮件据此判重。
+	// 条目形状不合法(mail_outbox_rules::ValidateEntry 不过)返回 false、不改 request。
+	static bool BuildSendRequest(uint64_t playerId, const MailOutboxEntry& entry, mailpb::SendMailRequest& request);
+
+	// 寄送完成(生产与单测同一入口)。attempt 是发出这一次时记下的尝试号:同一条目判丢失后重寄,两次的请求号相同,
+	// 只有尝试号能分出哪一次是当前在途的。回了 mail_id 就删条目(不论是不是当前那一次:迟到的「寄到了」照样算数);
+	// 其余只处理当前在途的那一次,按 mail_outbox_rules::ClassifySend 记一次失败并退避。实体已不在或换了人时什么都不做。
+	static void OnSendDone(uint64_t playerId, uint64_t requestId, uint64_t attempt, SendOutcome outcome, uint64_t nowMs);
 
 	// 单测替身。传空恢复生产实现。生产代码不调用。
 	static void SetSendForTest(SendFn fn);
 	static void SetDurableCheckForTest(DurableFn fn);
+	// 时钟(UTC 毫秒):Tick 与寄送回调都从它取「现在」。传空恢复 TimeSystem::NowMillisecondsUTC。
+	static void SetNowForTest(std::function<uint64_t()> fn);
 };

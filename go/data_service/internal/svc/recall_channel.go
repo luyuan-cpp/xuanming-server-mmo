@@ -65,7 +65,18 @@ const (
 	// recallAssetOpWorkKind 是回收重投按片分工的归属键前缀:片号 = player_id % 64(缺口清单第 25 条,
 	// docs/design/assetop-redelivery-sharding-20261110.md §10)。与别的服务的类别键都不同名,写死成常量,不进配置。
 	recallAssetOpWorkKind = "gm-recall-assetop"
+	// recallDispatchWorkKind 是派发(PLANNED → PENDING)按片分工的归属键前缀,片号同样是 player_id % 64(第四批,设计 §14.2)。
+	// 不复用重投的类别键:派发只把行改成 PENDING,投递由重投那一片的负责者做,两件事不必落在同一个副本上。
+	recallDispatchWorkKind = "gm-recall-dispatch"
 )
+
+// recallDispatchStore 是派发一轮用到的存储能力。*store.RecallStore 满足它;单测注入假实现,不连库。
+type recallDispatchStore interface {
+	// ListPlannedOwned 读 owned 那些片里到期的 PLANNED 行,条件在 LIMIT 之前;零值 owned 不过滤。
+	ListPlannedOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]store.RecallPlanned, error)
+	Dispatch(ctx context.Context, op store.RecallPlanned, nowMs uint64) (store.RecallDispatchResult, error)
+	DeferPlanned(ctx context.Context, opID, until, nowMs uint64) error
+}
 
 // recallShardMembersPrefix 是回收重投成员表圈住的 etcd 前缀:本 zone 注册的 data_service 实例
 // (DataServiceNodeService.rpc/zone/<z>/,与 internal/noderegistry 注册时的路径同形)。
@@ -206,7 +217,8 @@ func (l recallLedger) ReadSQLCommittedLedger(ctx context.Context, playerID uint6
 
 // RecallChannel 是回收的后台部分:节点镜像、重投循环、落地唤醒、派发。构造后除生命周期字段外只读。
 type RecallChannel struct {
-	store       *store.RecallStore
+	// store 是派发读写的回收存储(生产是 *store.RecallStore,与重投循环同一个)。
+	store       recallDispatchStore
 	relay       *drainproof.Session
 	loop        *assetop.Loop
 	wake        *assetopwake.Subscriber
@@ -218,6 +230,9 @@ type RecallChannel struct {
 	// members 是重投循环按片分工的成员表(本 zone 注册的 stable data_service 实例,recallShardMembersPrefix)。
 	// 构造时绑到 loop 上;本副本的身份在 etcd 注册之后由 ServiceContext.BindRecallWorkMember 补上。
 	members *workshard.Membership
+	// owns 判本副本是否负责派发的某个归属键(第四批,设计 §14.2)。生产是 members.Owns,与重投共用同一份成员表;
+	// nil 表示不分工、派全部片(只有单测会这样造)。单测换成可控的判定,模拟成员表变化。
+	owns func(key string) bool
 
 	mu        sync.Mutex
 	started   bool
@@ -322,6 +337,8 @@ func newRecallChannel(c config.Config, recall *store.RecallStore, assets PlayerS
 	if err = ch.loop.BindWorkOwner(recallAssetOpWorkKind, ch.members.Owns); err != nil {
 		return nil, fmt.Errorf("shard recall redelivery: %w", err)
 	}
+	// 派发也按玩家分片,用同一份成员表、另一个类别键(第四批,设计 §14.2)。
+	ch.owns = ch.members.Owns
 	ch.wake, err = assetopwake.New(ch.redis, assetopwake.Config{Service: RecallAssetCaller}, ch.loop, assetMetrics)
 	if err != nil {
 		return nil, err
@@ -345,7 +362,8 @@ func (r *RecallChannel) Start() {
 	r.goWithHold(recallLoopPoint, func() { r.loop.Run(ctx) })
 	r.goWithHold(recallDispatchPoint, func() { r.runDispatch(ctx) })
 	r.wake.Start(ctx)
-	logx.Infof("[BatchRecall] asset channel started: due scan sharded by player_id kind=%s", recallAssetOpWorkKind)
+	logx.Infof("[BatchRecall] asset channel started: due scan and dispatch sharded by player_id redelivery_kind=%s dispatch_kind=%s",
+		recallAssetOpWorkKind, recallDispatchWorkKind)
 }
 
 // bindWorkMember 记下本副本注册 etcd 用的 node_uuid,重投循环从此按片分工。注册之前成员表若已有别的副本,本副本一片都不做。
@@ -407,17 +425,30 @@ func (r *RecallChannel) closeResources() error {
 	return r.closeErr
 }
 
+// runDispatch 每 recallDispatchInterval 派发一轮,直到 ctx 结束。
+//
+// 活性(data_service_recall_dispatch_last_run_unixtime,第四批,设计 §14.3):起来时写一次,每跑完一轮写一次(这一轮成败都写),
+// 退出时删掉序列。值停住 = 循环卡在某一轮里,或每一轮都 panic;分片之后它名下的片没人派,有告警 RecallDispatchLoopStalled。
 func (r *RecallChannel) runDispatch(ctx context.Context) {
 	ticker := time.NewTicker(recallDispatchInterval)
 	defer ticker.Stop()
+	metrics.MarkRecallDispatchRun(time.Now())
+	defer metrics.ClearRecallDispatchRun()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			safego.Run(recallDispatchPoint, func() { r.dispatchRound(ctx) })
+			safego.Run(recallDispatchPoint, func() { r.dispatchOnce(ctx) })
 		}
 	}
+}
+
+// dispatchOnce 是派发循环的一轮:dispatchRound 返回之后记活性时刻。dispatchRound panic 时(打 Hold 之后重新抛出,
+// 由 safego.Run 兜住)走不到记时刻这一步:每一轮都 panic 的循环要当停摆报出来。
+func (r *RecallChannel) dispatchOnce(ctx context.Context) {
+	r.dispatchRound(ctx)
+	metrics.MarkRecallDispatchRun(time.Now())
 }
 
 // dispatchRound 派发一轮。每一轮走 RELAY 门禁。提交结局不明的失败打 Hold,闸门冻结不算:这一笔确定没写,下一轮接着做。
@@ -437,7 +468,10 @@ func (r *RecallChannel) dispatchRound(ctx context.Context) {
 	defer cancel()
 
 	nowMs := uint64(time.Now().UnixMilli())
-	planned, err := r.store.ListPlanned(work, nowMs, recallDispatchBatch)
+	// 只派本副本负责的片(第四批,设计 §14.2):片号 = player_id % 64,归属每轮开头算一次,一轮里不变。
+	// 正确性不靠分工:派不派得成仍由 Dispatch 在 role_fence 行锁下的状态 CAS 决定,两个副本扫到同一行只有一方派成。
+	owned := workshard.SQLFilter(r.owns, recallDispatchWorkKind, "player_id")
+	planned, err := r.store.ListPlannedOwned(work, nowMs, recallDispatchBatch, owned)
 	if err != nil {
 		// 纯读,没有结局未知,不打 Hold。Hold 不会自己清零,一次瞬断就把这个进程的排空证明打废了。
 		logx.Errorf("[BatchRecall] list planned ops failed: %v", err)
@@ -508,4 +542,5 @@ var (
 	_ assetop.PlayerPendingLister = (*store.RecallStore)(nil)
 	_ assetop.OwnedDueLister      = (*store.RecallStore)(nil)
 	_ RecallStore                 = (*store.RecallStore)(nil)
+	_ recallDispatchStore         = (*store.RecallStore)(nil)
 )

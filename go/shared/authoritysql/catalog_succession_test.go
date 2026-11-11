@@ -134,6 +134,42 @@ func TestSuccessionRetirementLinksTheRegistration(t *testing.T) {
 	}
 }
 
+// 一代结束时它的 slot 行随结束它的事务删掉(§5.8):锁读一行都没有是「这一代已不在役」,回空集交调用方判;只缺一部分是目录坏了。
+// 空集过不了 activeSlotsAt,所以 Retire、冻结经 lockSlots 回确定的 ErrWriterDenied,不会把 sql.ErrNoRows 交出去。
+func TestLockedSlotsOutcome(t *testing.T) {
+	full := make([]*databasepb.SqlWriterSlot, WriterSlotCount)
+	for i := range full {
+		full[i] = &databasepb.SqlWriterSlot{WriterKey: bytes.Repeat([]byte{7}, 16), Slot: uint32(i), Generation: "ab", WriterEpoch: 7, State: databasepb.SqlWriterRegistry_ACTIVE}
+	}
+	if rows, err := lockedSlots(nil, 0); err != nil || rows != nil {
+		t.Fatalf("已结束的一代回空集: %v %v", rows, err)
+	}
+	if rows, err := lockedSlots(full, WriterSlotCount); err != nil || len(rows) != WriterSlotCount {
+		t.Fatalf("在役的一代原样返回: %d %v", len(rows), err)
+	}
+	for _, c := range []struct {
+		name  string
+		rows  []*databasepb.SqlWriterSlot
+		count int
+	}{
+		{"slot 0 没了,别的还在", nil, WriterSlotCount - 1},
+		{"锁到一半没了", full[:5], WriterSlotCount - 1},
+		{"锁齐了计数却多", full, WriterSlotCount + 1},
+		{"计数为零却锁到了行", full[:1], 0},
+	} {
+		if _, err := lockedSlots(c.rows, c.count); !errors.Is(err, ErrWriterDenied) || IsWriterFrozen(err) {
+			t.Fatalf("%s 要拒绝: %v", c.name, err)
+		}
+	}
+	c := successionCatalogForTest()
+	if c.activeSlotsAt(nil, 7) {
+		t.Fatal("已结束的一代不能当在役")
+	}
+	if !c.activeSlotsAt(full, 7) || c.activeSlotsAt(full, 8) {
+		t.Fatal("在役判据:64 行都在这个 epoch 上 ACTIVE")
+	}
+}
+
 // 换代退休只由 Register 在同一事务里写:Retire 在碰任何 SQL 之前就拒绝(这里的目录没有连接)。
 func TestRetireRefusesSupersessionRequests(t *testing.T) {
 	retire := successionRetirement(successionRegisterForTest(t, 5), successionPredecessorForTest(4), 7, 11)

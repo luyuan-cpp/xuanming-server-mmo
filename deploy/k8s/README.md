@@ -740,6 +740,14 @@ Pod 模板带只哈希这把密钥的指纹 `mmorpg.io/<Secret 名>-hash`,换密
     部署账号要有读 `namespaces/kube-system` 的权限。DryRun 不连集群,令牌里是全零的标记值,输出行 `Kubernetes cluster uid: ... [dry-run marker]`。
     已有数据的 etcd 忽略引导令牌,改它只触发一次滚动重启,集群号不变;有 C++ 节点在跑的集群,主 etcd 这次滚动按上面「已有集群换镜像会逐个滚动
     3 个成员」的口径放进全栈维护窗口。项目未上线,首次部署没有这个问题。
+  - **登记处双向 TLS**:`etcd-id-registry` 的客户端口是 https 并要求客户端证书(`--client-cert-auth`)。探针和 Prometheus 走单独的 http 指标口 2381(`--listen-metrics-urls`)。
+    证书由运维签发并预置:托管集群 infra 命名空间的 Secret `etcd-id-registry-tls`,各 zone 命名空间的 Secret `id-registry-client-tls`,键都是
+    `ca.crt`、`tls.crt`、`tls.key`。data-service 把客户端证书挂在 `/etc/mmorpg/id-registry-tls`,staging / prod 的 ConfigMap 模板在 `IdSegment.Issuer.RegistryTLS`
+    写这三个路径;常驻进程读的是运维预置的配置 Secret,那里同样要写。`infra-up -HostIdRegistry` 和 staging / prod 部署 data-service 时,
+    在写操作之前核对对应的 Secret 在、三个键都有值,缺了就拒绝;DryRun 只打 `[dry-run] would check that Secret …`。dev 没有登记处 TLS。
+  - **换码(`-IdIssuerRegion`)**:发号器地域码缺省等于 `-Region`。换码之后(发号器手册 §4.4、§4.5)给 `-IdIssuerRegion <新码>`,只换 data-service 的
+    `IdSegment.Issuer.Region` 和 `MMORPG_ID_ISSUER_EXPECTED_REGION`;存档库名、`MMORPG_DB_ALLOWED_DATABASES` 的核对和 login 的 `Placement.Region` 仍按 `-Region`,
+    老玩家的存档库不动。不粘滞:换码之后这个地域每次部署都要照传,`dev_tools.ps1` 转发。
 - **guild 还没有 K8s ConfigMap / manifest**(存量缺口:`$GoSvcCatalogue` 没有它,`manifests/go-svc/` 也没有 `guild.yaml`,`go_svc_image.ps1` 之外没人碰它)。
   补的时候除了 MySQL DataSource / Redis 之外,还要写 `ClusterId`、`SnowflakeCacheDir`(+ 同名 emptyDir)、`DataServiceRpc`、`IdSegment`,
   形状照 `go/guild/etc/guild.yaml`;guild_id 号段与 PlayerId 走同一个 `AllocateIdSegment`(不同 `biz_tag`)。
@@ -1474,11 +1482,18 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
     围栏上界、在线提醒读 location 与后台循环选主锁共用),池上限 `CoreRedis.PoolSize`,没有 Pub/Sub。
   - 不计入(接上时在常数表加一行):client-rpc-router(不连 Redis)、
     chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;go/chat 不建任何 Redis 句柄,ConfigMap 也不写 `Redis` / `ChatRedis` 段)、
-    login 的 PasswordAuth 失败配额池(K8s 不写该段,启用后每 login 副本 +4)、match 的 MatchRedis(在 redis-match-cluster 上)。
+    login 的 PasswordAuth 失败配额池(K8s 不写该段,启用后每 login 副本 +4)、match 的 MatchRedis(在 redis-match-cluster 上,记在下面那套集群自己的总账)。
+  - **match 私有集群 redis-match-cluster(2026-11-11 起单独一份总账)**:
+    - 只有 match 连它。go-zero 的集群客户端没有池参数,对每个节点各一个缺省池,所以每主节点 = match 副本数 × 10G,G 同上按 2 记。
+    - `MAXCLIENTS=40000` 写在集群清单 Pod 模板的启动薄壳里,与核心同值,启动时打印同格式的 `redis fd limit:` 一行。
+    - 写路径打一行 `Redis match connection ledger: per_master match_replicas=<n> steady=… peak=… maxclients=… warn_at=… headroom=…`,超过 80% 水位打 `[RedisMatchConnectionLedger]OverWarnRatio:`,只告警。
+    - `-WaitReady` 等建群 Job `redis-match-cluster-init` 完成,再逐节点核对生效的 maxclients(同核心与玩家域集群)。
+    - 改 `MAXCLIENTS` 会改 Pod 模板,六个节点会滚动重启。
   - 契约测试钉住:显式池那几行等于服务 yaml 的值、ConfigMap 镜像同一个值、yaml 写 0 / 负数 / 非整数时部署侧 throw;
-    有缺省池的行「manifest 的 CPU limit ≤ G 核」—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列;
+    有缺省池的行「manifest 的 CPU limit ≤ G 核」(含 match 集群那份)—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列;
     guild 申请配额池等于源码常量 `logic.ApplicationQuotaRedisPoolSize`,而且装配处必须引用它;
-    match ConfigMap 恒写 `MatchRedis`(redis-match-cluster 每个 Pod、`Type: cluster`)。不写时 go/match 会静默回落到这台、多一个缺省池,match 行就不能再记 0。
+    match ConfigMap 恒写 `MatchRedis`(redis-match-cluster 每个 Pod、`Type: cluster`)。不写时 go/match 会静默回落到这台、多一个缺省池,match 行就不能再记 0;
+    match 集群清单的 `MAXCLIENTS` 恰好一处、与核心同值(`redis_maxclients_contract` T8)。
 - **取值**:`MAXCLIENTS=40000` 时 80% 水位 32000,需要 40032 个 fd;规划档(Z=4,来自 MySQL 规划档)的峰值与余量看部署时打印的那一行。
   契约测试钉住「规划档峰值 ≤ 80% × MAXCLIENTS」。Z≈220 或目标形态(每 zone gate 5~22、scene 9~44,login 4 核)落地时要重算。
   单实例按连接数撑到 100 个 zone 只是算术:命令量约 3 个满载 zone 就到顶,这个上限真正的用处在按用途 / 按玩家拆分之后(每个拆出的实例各自显式 `--maxclients`、各自记账)。

@@ -211,6 +211,12 @@ func (c *Catalog) lockSlotRows(ctx context.Context, tx *sql.Tx, key []byte) ([]*
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+c.table("writer_slot")+" WHERE writer_key=?", key).Scan(&count); err != nil {
 		return nil, err
 	}
+	return lockedSlots(rows, count)
+}
+
+// lockedSlots 判 lockSlotRows 的结果:一行都没锁到、表里也没有 = 这一代已结束,回空集;slot 0..63 全锁到、表里正好 64 行,原样返回;
+// 别的(缺一部分、计数对不上)都是目录坏了,拒绝,不替它修。
+func lockedSlots(rows []*databasepb.SqlWriterSlot, count int) ([]*databasepb.SqlWriterSlot, error) {
 	switch {
 	case count == 0 && len(rows) == 0:
 		return nil, nil

@@ -437,7 +437,7 @@
      - 已落码，未编译、未测试：GateWatcher 的 list-watch 镜像（按每台 gate 计新鲜度，有一台超过 15s 没刷新或镜像未同步时回落直读）；快路径 PickGate 改为随机二选一（同人数取第一次抽中的，不按 NodeID）；
      - gate 排空监视仍直读 etcd（要 fail-closed），不读镜像；排空脚本清标记前多等 20s，等各 login 的镜像跟上；
      - **当前 K8s 默认每 zone 2 台 gate**：两台人数不等时与旧规则相同；全体同人数（开新区第一个上报窗口）时从全落 NodeID 最小的一台变为两台各半；之后的窗口里羊群依旧，充分摊开要每 zone 至少 3 台，滞后窗口里最闲那台最多拿 2/n；
-     - 没做：本地累加已分配数，dispatcher 跨拍仍从同一份滞后人数起算；scene_manager 跨 zone 重定向的选 gate 已于同日改为随机二选一并补排空过滤（共用 `go/shared/gatepick`，Java `GatePicker` 同步；未编译、未测试），但不剔除停写与满载的 gate；
+     - 本地累加已分配数、dispatcher 跨拍从同一份滞后人数起算两条已于 2026-11-11 落码（未编译）：两条挑法都按「上报人数 + 本进程在途票」比负载，见 gate-load-balancing-design.md「本进程在途票」；scene_manager 跨 zone 重定向的选 gate 已于同日改为随机二选一并补排空过滤（共用 `go/shared/gatepick`，Java `GatePicker` 同步；未编译、未测试），但不剔除停写与满载的 gate；
      - 2026-11-05 补：「黑洞」与单台上限已落码（未编译、未测试）。login 挑 gate 前剔除三个上报周期没重写记录的 gate（按 etcd ModRevision 判，与镜像新鲜度分开）和人数到自报 `max_connections` 90% 的 gate，全部不合格时回落全集；
        同日又补（未编译、未测试）：scene_manager 跨 zone 重定向同样剔除这两类 gate（每次直读 etcd，本进程按 ModRevision 记历史判停写，规则与 login 共用 `go/shared/gatepick`）；排队玩家取走放行时先复核放行时选定的 gate，停写、满载或已不在候选里就重挑；
        见 gate-load-balancing-design.md「满载与停写的 gate」；

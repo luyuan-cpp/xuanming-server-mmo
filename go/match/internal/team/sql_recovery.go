@@ -123,7 +123,7 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 					s.svcCtx.HoldRelay(err)
 					warn(err)
 					if err == nil && pinned != nil && pinned.Commit != nil {
-						s.publish(0, []*CommitResult{pinned.Commit})
+						s.publish(call, 0, []*CommitResult{pinned.Commit})
 					}
 				case 4:
 					err := s.svcCtx.Authority.CloseCompletedTeamLaunch(call, launch)
@@ -178,7 +178,7 @@ func (s *Service) expireSQLTeams(ctx context.Context, afterExpiry, afterTeam uin
 		commit, err := s.store.sql.expireIdle(ctx, team.id)
 		s.svcCtx.HoldRelay(err)
 		if err == nil && commit != nil {
-			s.publish(0, []*CommitResult{commit})
+			s.publish(ctx, 0, []*CommitResult{commit})
 		}
 	}
 	return afterExpiry, afterTeam

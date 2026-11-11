@@ -26,6 +26,7 @@ import (
 	"login/internal/logic/pkg/node"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/token"
+	"login/internal/logic/pkg/zonepolicy"
 	login_proto "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	dspb "proto/data_service"
@@ -99,6 +100,9 @@ type ServiceContext struct {
 	LoginQueue       *loginqueue.Queue
 	QueueDispatcher  *loginqueue.Dispatcher
 	queueCapProvider loginqueue.CapacityProvider
+	// gateInflight 是本进程交出去、还没反映进 gate 上报人数的票(按 gate 记,见 loginqueue/gate_inflight.go)。
+	// 快速通道签票、dispatcher 挑定时记,CandidatesForZone 取候选时算进每台的负载;initLoginQueue 里与 queueCapProvider 一起建。
+	gateInflight *loginqueue.GateInflight
 
 	// PreloadPool 跑 EnterGame 的异步入场链,不为每次登录起一个无界的 goroutine。名字是预加载时代留下的:
 	// 现在没有预加载,scene 进场时直接从 TiDB 认领存档。非阻塞,池满时 Submit 立即返回失败,
@@ -122,6 +126,10 @@ type ServiceContext struct {
 	gateWatchStop context.CancelFunc
 	// gateStaleStop 取消 startGateStalePublisher 起的停写标记发布循环(gate_stale_publisher.go);nil = 没起。
 	gateStaleStop context.CancelFunc
+	// ZonePolicy 读本区的区服策略(区容量、是否暂停创建新角色),见 zone_policy.go;没有 etcd 客户端时为 nil。
+	ZonePolicy *zonepolicy.Reader
+	// zonePolicyStop 取消 startZonePolicyReader 起的读循环;nil = 没起。
+	zonePolicyStop context.CancelFunc
 	// authCleanup 只拥有生产口令的专用 Redis 池与只读 SQL 连接。
 	authCleanup func()
 }
@@ -236,6 +244,7 @@ func NewServiceContext() *ServiceContext {
 		PlayerLocatorClient: plClient,
 		SceneManagerClient:  smClient,
 		GateWatcher:         gateWatcher,
+		ZonePolicy:          newZonePolicyReader(etcdClient, config.AppConfig.Node.ZoneId),
 		TokenManager:        tokenMgr,
 		PreloadPool:         preloadPool,
 		bootInstance:        uuid.New(),
@@ -378,15 +387,23 @@ func (s *ServiceContext) QueueCapacityProvider() loginqueue.CapacityProvider {
 	return s.queueCapProvider
 }
 
+// GateInflight 返回本进程的在途票记账,快速通道签票时传给 PickAndSignGateToken;nil = 不记(没走 initLoginQueue 的测试)。
+func (s *ServiceContext) GateInflight() *loginqueue.GateInflight {
+	return s.gateInflight
+}
+
 // gateWatcherCapacityProvider adapts NodeWatcher to the loginqueue.CapacityProvider
 // interface. 这里只产出本 zone 的候选集(按 zone 过滤、去重、给排空中的 gate 打标记,见 candidatesFromNodes),
 // 不排序、不挑 gate。挑 gate 有两条规则,都在 loginqueue:快速通道经 PickAndSignGateToken → PickGate
-// 在一份候选上随机抽两台、取人数少的那台;dispatcher 每个非空拍取一次候选,由 newBatchPickFn 在这一份上
-// 逐条挑并记账(负载 = PlayerCount + 本拍已分给它的人数,取最少,同数取 NodeID 最小)。
+// 在一份候选上随机抽两台、取负载少的那台;dispatcher 每个非空拍取一次候选,由 newBatchPickFn 在这一份上
+// 逐条挑并记账(负载再加本拍已分给它的人数,取最少,同数取 NodeID 最小)。两条的负载都是上报人数加本进程在途票数,
+// 在途票数在这里由 inflight 填(2026-11-11 起)。
 // gate 节点读自 NodeWatcher 的进程内 list-watch 镜像,镜像不新鲜时回落直读 etcd(见 node.NodeWatcher.Nodes)。
 type gateWatcherCapacityProvider struct {
 	watcher *node.NodeWatcher
-	caps    map[string]uint32 // zone_id (decimal string) → capacity ceiling
+	// policy 给区容量:区服目录 zone_config.capacity,经 etcd 发布给本区 login(zone_policy.go)。区容量只有这一个来源,
+	// 2026-11-10 起不再读 login 配置里的 Queue.ZoneCapacityOverride(已删)。
+	policy *zonepolicy.Reader
 	// drain 查 gate 排空标记:缩容前被标记 draining 的 gate 不再接新玩家(候选里打 Draining 标记,挑 gate 时分档)。
 	// 按 zone 缓存 gateDrainMarkRefresh(缺口清单第 31 条),选 gate 的各条路径不再每次各打一次 MGET。
 	// 它的 Redis 为 nil 时不打标记(早期初始化路径)。
@@ -394,6 +411,8 @@ type gateWatcherCapacityProvider struct {
 	// requireClientEndpoint 取自配置 RequireClientEndpoint:true 时没自报客户端地址的 gate
 	// 不进候选集(见 buildGateCandidates)。启动期定值,运行中不变。
 	requireClientEndpoint bool
+	// inflight 给每台候选填上本进程的在途票数(GateCandidate.Inflight),两条挑法按它比负载;nil 时不填。
+	inflight *loginqueue.GateInflight
 }
 
 func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zoneID uint32) ([]loginqueue.GateCandidate, error) {
@@ -401,7 +420,7 @@ func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zon
 	if err != nil {
 		return nil, err
 	}
-	return candidatesFromNodes(ctx, g.drain, nodes, zoneID, g.requireClientEndpoint), nil
+	return g.inflight.Annotate(candidatesFromNodes(ctx, g.drain, nodes, zoneID, g.requireClientEndpoint)), nil
 }
 
 // candidatesFromNodes 是 CandidatesForZone 取完节点之后的全部逻辑。单独拆出来,是为了让
@@ -430,8 +449,17 @@ func candidatesFromNodes(ctx context.Context, drain *loginqueue.DrainMarkCache, 
 // (他们之后照常随排空流程改派),调小则回到每次都查。
 const gateDrainMarkRefresh = time.Second
 
+// ZoneCapacity 回区服目录给的区容量;读不到区服策略、或问的不是本 login 的区时回 0,FreeSlots 退回软上限
+// (仍按 gate 承载封顶)。
 func (g *gateWatcherCapacityProvider) ZoneCapacity(zoneID uint32) uint32 {
-	return loginqueue.ZoneCapacityFromMap(g.caps, zoneID)
+	if zoneID != g.policy.ZoneID() {
+		return 0
+	}
+	p, ok := g.policy.Current()
+	if !ok {
+		return 0
+	}
+	return p.Capacity
 }
 
 // gateChoice 是 buildGateCandidates 的中间态:去重要用 launch_time,而 GateCandidate
@@ -546,11 +574,13 @@ func (s *ServiceContext) initLoginQueue() {
 	// queue was off, which made every AssignGate call to a Queue.Enabled=false
 	// login crash on a nil-receiver method call inside CandidatesForZone.
 	// Found during 3-zone × 15000 stress 2026-05.
+	s.gateInflight = loginqueue.NewGateInflight(nil)
 	s.queueCapProvider = &gateWatcherCapacityProvider{
 		watcher:               s.GateWatcher,
-		caps:                  cfg.ZoneCapacityOverride,
+		policy:                s.ZonePolicy,
 		drain:                 loginqueue.NewDrainMarkCache(s.RedisClient, gateDrainMarkRefresh, nil),
 		requireClientEndpoint: config.AppConfig.RequireClientEndpoint,
+		inflight:              s.gateInflight,
 	}
 	logx.Infof("[GateSelect] RequireClientEndpoint=%v (true: gates without clientEndpoint are never handed to clients)",
 		config.AppConfig.RequireClientEndpoint)
@@ -597,6 +627,8 @@ func (s *ServiceContext) initLoginQueue() {
 		panic(fmt.Errorf("login queue dispatcher: %w", err))
 	}
 	s.QueueDispatcher = queueDispatcher
+	// dispatcher 挑定的 gate 记进同一份在途票,下一拍与快速通道都能看到(Start 之前接上)。
+	s.QueueDispatcher.SetGateInflight(s.gateInflight)
 	// Identify this pod in the dispatcher_is_leader gauge so Grafana can
 	// answer "which replica is leading right now". Hostname is the simplest
 	// stable identifier across both bare-metal and K8s deployments; falling
@@ -619,6 +651,7 @@ func (s *ServiceContext) Start() {
 	s.startGateWatcher()
 	s.startGateDrainMonitor()
 	s.startGateStalePublisher()
+	s.startZonePolicyReader()
 }
 
 // startGateWatcher 起 gate 目录的 list-watch,让 AssignGate 与排队 dispatcher 读进程内镜像,
@@ -860,6 +893,9 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		}
 		if s.gateStaleStop != nil {
 			s.gateStaleStop()
+		}
+		if s.zonePolicyStop != nil {
+			s.zonePolicyStop()
 		}
 		if s.preloadStatsStop != nil {
 			close(s.preloadStatsStop)

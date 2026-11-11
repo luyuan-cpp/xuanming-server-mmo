@@ -722,7 +722,8 @@ func withClientRequest[R any](key uint64, replay func() (R, string, bool, error)
 		return replayed, replayedResult, nil
 	}
 	if raced || lookupErr != nil {
-		// 锁内读到了去重记录,事后却查不到(查询失败):既给不出首次结果,也绝不能重新执行。按故障回,客户端带同一个键重发即可。
+		// raced:锁内读到了去重记录,事后却查不到 —— 首次确已提交。lookupErr:查询失败,不知道首次是否已提交。
+		// 两种都给不出首次结果,也绝不能重新执行;按故障回,客户端带同一个键重发即可。
 		var zero R
 		return zero, resultError, status.Error(codes.Unavailable, "guild client request outcome unavailable, retry with the same key")
 	}

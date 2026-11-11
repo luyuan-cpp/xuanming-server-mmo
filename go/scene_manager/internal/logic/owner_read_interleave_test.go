@@ -172,7 +172,7 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 	})
 	entry := nodeEntry{nodeID: interleaveNodeDead}
 	entry.reg.ZoneId = interleaveZone
-	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member})
+	reconcileDeadNodeScenes(context.Background(), sc, entry, []string{member}, seedDeadNodeTaskForTest(t, sc, interleaveZone, interleaveNodeDead))
 
 	require.True(t, hook.fired.Load(), "改派必须真的插在收尾读属主之后")
 	require.EqualValues(t, 0, live.fake.destroyCalls.Load(), "收尾不得向新属主发 DestroyScene")

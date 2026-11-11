@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"context"
 	"testing"
 
 	"match/internal/metrics"
@@ -19,12 +20,12 @@ func TestPushToPlayerRecordsKafkaPushMetric(t *testing.T) {
 	errBefore := metrics.KafkaPushValue("error")
 	okBefore := metrics.KafkaPushValue("ok")
 
-	err := pushToPlayer(svcCtx, 31, 1, msg)
+	err := pushToPlayer(context.Background(), svcCtx, 31, 1, msg)
 	require.ErrorIs(t, err, errPlayerOffline)
 	require.Equal(t, errBefore+1, metrics.KafkaPushValue("error"))
 
 	require.NoError(t, mr.Set(playercontract.SessionKey(32), "\x0a\x05ab")) // 截断的 length-delimited 字段
-	err = pushToPlayer(svcCtx, 32, 1, msg)
+	err = pushToPlayer(context.Background(), svcCtx, 32, 1, msg)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errPlayerOffline)
 	require.Equal(t, errBefore+2, metrics.KafkaPushValue("error"))

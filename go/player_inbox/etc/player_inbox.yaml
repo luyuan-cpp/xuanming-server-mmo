@@ -128,7 +128,8 @@ PlayerInbox:
   # 同币种旧欠款、并用后来那单覆盖到期时间,挂错之后也没有撤销路径。合并语义、撤销类型与单笔上限做完之前,
   # 把它列进来 config.Validate 拒启;GmSanctionPlayer 对它回 kPlayerInboxDisabled。
   EnqueueTypes: [PLAYER_INBOX_MSG_BATTLE_SETTLEMENT]
-  # 终态行保留 30 天(必须大于签发窗 7 天);PENDING 行、流行、审计行永不自动删除(设计 §9.1)。
+  # 条目行全部永久保留(终态行是 request 的永久收据,SweepTerminal 不删行,设计 §9.1)。下面两项只给空转的清理循环用,
+  # 调它们不会改变容量;配置校验仍要求保留天数大于签发窗 7 天。
   TerminalRetentionDays: 30
   SweepIntervalSeconds: 600
   # 提醒补发循环 30 秒一轮(设计 §6.3)。

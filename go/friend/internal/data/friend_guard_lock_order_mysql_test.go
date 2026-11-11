@@ -666,7 +666,7 @@ func TestCapacityRowReclaimRacesWithGuardedWrites(t *testing.T) {
 			}
 			// nowMs 取真实时刻(理由见函数头):只有被 age 过的行才早于截止点。
 			// 不 sleep:每一圈至少有一次 MySQL 往返,本身就是让出点;而回收转得越勤,窗口越容易撞上。
-			_, deleted, err := repo.SweepIdleCapacityRows(ctx, SweepModeDelete, retentionDays, batchLimit, time.Now().UnixMilli())
+			_, deleted, err := repo.SweepIdleCapacityRows(ctx, SweepModeDelete, retentionDays, batchLimit, time.Now().UnixMilli(), nil)
 			sweptRows.Add(deleted)
 			if err != nil {
 				return fmt.Errorf("sweeper: %w", err)

@@ -11,8 +11,8 @@
 2. **路由服 → 目标:zone 跟着子集走,全服池再取一次子集。** 稳态下一台路由服只收到分给它的那些 zone 的请求,zone-scoped 目标(login、scene_manager)只会拨这些 zone 的实例。全服池目标(match、chat、friend、guild 等)用确定性 aperture:同轨道路由服按 node_uuid 排名,在目标环上均匀各占一段,每台路由服约连 k_t 台(缺省 4),每台目标收到的请求一样多、一台不漏。连接按空闲回收,子集变了之后旧连接自然消失。
 3. **gate ↔ scene 的 zone 内全连接保持不变。** 它的上界是 G_z × S_z,随单 zone 规模增长,不随全服 zone 数增长;单 zone 规模由开服容量限定。重新评估的触发条件:单 zone 的 G_z × S_z 超过 10 000 条连接(经验值,待压测),或者做万人同屏的时候(那时整体重做,现在不预留)。
 4. **每类 C++ 节点只发现自己用到的类型。** 每类节点显式声明自己的发现集合,与 `CanConnectNodeTypeList` 并列。共享的前缀列表(本机 `bin/etc/base_deploy_config.yaml` 13 个,K8s 模板 11 个)只回答「部署里有哪些前缀」,不再决定每个节点 watch 什么。battle 的集合是 {Match},自身类型只 watch 自己那一条键,不再 watch 全部 battle。
-5. **控制面命令 topic 的分区数先不改。** 每个节点只 assign `node_id % P` 那一个分区,读放大等于同分区的节点数。按该 topic 的设计口径(控制面总量每秒几百条),P = 256 时每个节点每秒只解码几条。读放大计数与告警已加(§3.5),超过阈值再按既有规则换代号、换更大的 P,绝不原地扩分区。
-6. **场景亲和先测再定。** 场景广播已经按 gate 分组,每台 gate 一份。亲和只能减少一个场景的玩家分散在几台 gate 上。scene 侧已加每次广播涉及几台 gate 的直方图(§3.6),压测证明它是瓶颈再做。要做时作为 gatepick 判定的一维(同一档里偏好已有该场景玩家的 gate),不在调用方另加一层过滤。
+5. **控制面命令 topic 不换代、P 不改(2026-11-11 定案,缺口清单第 30 条残余)。** 每个节点只 assign `node_id % P` 那一个分区,每个节点每秒要解码的条数 ≈ 该类型命令总速率 ÷ P,与节点数无关;读放大比值(同分区节点数)随节点数涨,但解码量不涨。按最大目标口径(2000 万 PCU,登录速率 ≈ PCU/1800 ≈ 1.1 万/s,每次登录给 gate、scene 各发几条)每个 topic 约 3~5 万条/s,P = 256 时每个节点每秒约 120~200 条小消息,远低于一个节点的解码能力。所以不预先换代;读放大计数与告警(§3.5)只用来抓异常(某个分区被打偏、某类命令暴涨),真响了才按既有规则换代号、换更大的 P,绝不原地扩分区。
+6. **场景亲和不做(2026-11-11 定案,缺口清单第 30 条残余)。** 理由见 §3.6 末尾:每次广播至多发本 zone 的 gate 数(G_z)份、每份只带本 gate 的收件人,开销的上界由单 zone 规模限定,不随全服规模增长;亲和要拿 gate 的负载均衡与故障隔离去换,而且玩家几分钟就换一次场景,登录时定的亲和很快失效。等做万人同屏时整体重做,现在不预留。
 
 ## 2. 现状(2026-11-06 核对)
 
@@ -105,13 +105,21 @@
 - 计数表只在注册命令消费时追加(启动期),第一次注册时把采集回调登记进 `/metrics`,不改 node.h/.cpp。
 - 告警 `NodeCommandTopicReadAmplificationHigh`(`deploy/k8s/node-command-topic-alerts.yaml`,经验值,待压测):单节点(按 namespace、pod、node_type、topic 聚合)foreign 每秒超过 50 条,且 foreign 超过 own 的 50 倍,持续 10 分钟,severity warning。比值用乘法写,own 为 0 时不除零。契约测试 `tools/scripts/tests/node_command_topic_alerts_contract.tests.ps1` 核对指标名、label 名与取值都是 C++ 写出的。
 - 处理办法沿用 `node_command_topic.h` 的契约:换代号、换更大的 P(2 的幂),生产端与消费端按同一配置一起切换,不在同名 topic 上扩分区。
+- **2026-11-11 定案:不预先换代**(§1 第 5 条)。每个节点的解码量 ≈ 命令总速率 ÷ P,与节点数无关,P = 256 在最大目标口径下每个节点每秒也只有一两百条;告警是异常检测,不是扩容信号。告警的 50 条/s、50 倍两个阈值仍是经验值,压测里按 `node_command_consumed_total` 的实测分布复核。
 
 ### 3.6 场景亲和(先测;直方图为批 4,已落码未编译)
 
 - 直方图 `scene_broadcast_gate_fanout{kind}`(`cpp/libs/engine/core/network/broadcast_fanout_stats.h`):每次广播实际发给了几台 gate,桶上界 1、2、4、8、16、32、64。kind 取 players(按收件人集合广播 `BroadcastToPlayerClients`:AOI 进出视野、移动、视野内消息)或 scene(整场景广播 `BroadcastToSceneClients`,目前没有调用方)。原设计只数场景广播,但实际流量都走按收件人集合广播,两条一起记。只记至少发给一台 gate 的广播。
 - 场景类型(主世界 / 副本)不进标签:引擎层只有 scene_id,要知道类型就得改每个调用方;主世界与副本跑在不同的 scene 部署上(`docs/ops/scene-node-role-split.md`),抓取目标自带的标签已经能分开。
 - Prometheus 文本写出器(`metrics/prometheus_text.h`)为此加了 histogram 类型(`_bucket{le}` / `_sum` / `_count`)。scene 的 `main.cpp` 调 `RegisterBroadcastFanoutMetrics()` 登记。
-- 压测中如果它长期接近 G_z,而且 gate 的入站广播是瓶颈,再做亲和:作为 gatepick 判定的一维,在同一档里偏好已经有该玩家目标场景玩家的 gate。前提是 login 在 AssignGate 时知道玩家要去的场景(落点或上次位置),那时另写设计。
+- **2026-11-11 定案:场景亲和不做**(原文「压测中长期接近 G_z 且 gate 入站广播是瓶颈再做」,负责人 11-11 要求不等压测、现在定案):
+  - 开销有界:每次广播至多发 G_z 份(本 zone 的 gate 数;按容量模型 C_z 4.5 万~10 万、每台 gate 4500~2 万人,G_z 约 3~22,设计口径每 zone 10 台),
+    每份只带本 gate 的收件人(收件人多时自动用位图),所以总字节数与分散到几台 gate 基本无关,多出来的只是每份的固定开销 × 至多 G_z。
+    它的上界由单 zone 规模限定,不随全服 zone 数增长,不挡水平扩展。
+  - 代价大:把一个场景的玩家集中到少数几台 gate,热门场景会压垮一台 gate,一台 gate 挂掉会把整个场景的人一起踢下线;
+    gatepick 要多一维,login 要在 AssignGate 时就知道玩家去哪个场景;玩家每 5 分钟左右换一次场景(容量模型 T_sw),登录时定的亲和很快失效。
+  - 业界的常规做法也是连接层(gate / 代理)按连接数均衡,与场景的空间划分解耦。
+  - `scene_broadcast_gate_fanout` 直方图留着做观测;做万人同屏(负责人定为做成实时 MMO 之后)时连同 gate ↔ scene 的全连接一起重做,现在不预留。
 
 ## 4. 失败与一致性
 

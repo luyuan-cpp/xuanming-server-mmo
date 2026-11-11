@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
@@ -25,15 +26,43 @@ func TestPrebuiltZeroSeries(t *testing.T) {
 		"mail_admin_send_total":            3 * 7 * 5, // method × sender_kind × outcome
 		"mail_push_total":                  4,
 		"mail_claim_short_circuit_total":   1,
-		"mail_list_truncated_total":        1,
 		"mail_guild_lookup_failures_total": 1,
 		"mail_sweep_candidate_rows":        3 * 2, // table × mode
 		"mail_sweep_deleted_total":         3,
 		"mail_sweep_invalid_rows_total":    3,
-		"mail_sweep_last_run_unixtime":     1,
 	} {
 		assert.Equal(t, want, got[name], "%s 应恰好预建 %d 条序列", name, want)
 	}
+	// 缺口清单第 35 条:ListMails 没有「系统有效集撞上限」的路径,截断计数已删,不能再注册一个永远是 0 的序列。
+	_, truncated := got["mail_list_truncated_total"]
+	assert.False(t, truncated, "mail_list_truncated_total 已删")
+}
+
+// 清理循环的活性 gauge(缺口清单第 25 条第四批):不预建,循环写过才有序列、值就是写入的时刻,循环退出删掉序列。
+func TestSweepLastRunExistsOnlyWhileTheLoopRuns(t *testing.T) {
+	Register()
+	lastRun := func() (float64, bool) {
+		families, err := prometheus.DefaultGatherer.Gather()
+		require.NoError(t, err)
+		for _, mf := range families {
+			if mf.GetName() == "mail_sweep_last_run_unixtime" && len(mf.GetMetric()) == 1 {
+				return mf.GetMetric()[0].GetGauge().GetValue(), true
+			}
+		}
+		return 0, false
+	}
+	ClearSweepRun()
+	_, ok := lastRun()
+	assert.False(t, ok, "没写过(或循环已退出)时不该有序列")
+
+	MarkSweepRun(time.Unix(1234, 0))
+	value, ok := lastRun()
+	require.True(t, ok)
+	assert.Equal(t, float64(1234), value)
+
+	ClearSweepRun()
+	_, ok = lastRun()
+	assert.False(t, ok, "循环退出之后删掉序列")
 }
 
 // TestSweepModeLabelsMatchConfig:mode label 的两个取值与 config 的合法模式逐字相同(本包是叶子包,不 import config;

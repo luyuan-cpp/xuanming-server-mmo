@@ -14,7 +14,7 @@
 //	login_queue_expired_total     Counter     per zone+reason  EXPIRED responses (token invalid / meta gone / etc.)
 //	login_queue_dispatcher_is_leader  Gauge   per pod+zone  1 = this pod leads its zone, 0 = standby
 //	login_queue_capacity          Gauge       per zone     admission ceiling FreeSlots used (after the gate cap, 2026-11-10)
-//	login_queue_configured_capacity Gauge     per zone     Queue.ZoneCapacityOverride, 0 = unset (soft cap)
+//	login_queue_configured_capacity Gauge     per zone     zone_config.capacity from the zone policy, 0 = policy unknown (soft cap)
 //
 // Why only these six (and not, say, "rank histogram" or "per-gate admit
 // distribution"):
@@ -84,22 +84,23 @@ var (
 		Namespace: metricNamespace,
 		Subsystem: "",
 		Name:      "capacity",
-		Help: "Admission ceiling FreeSlots used for the zone at its last computation: Queue.ZoneCapacityOverride " +
-			"(or the soft cap when unset), capped at what the zone's serving gates hold at 90% of their " +
+		Help: "Admission ceiling FreeSlots used for the zone at its last computation: zone_config.capacity from the " +
+			"zone policy (or the soft cap while the policy is unknown), capped at what the zone's serving gates hold at 90% of their " +
 			"self-reported max_connections. Written on every capacity computation (AssignGate fast path, " +
 			"dispatcher ticks with a non-empty queue); absent while the queue is disabled.",
 		Labels: []string{"zone"},
 	})
 
-	// configuredCapacityGauge 是 Queue.ZoneCapacityOverride 里本区的值,0 = 没配(按软上限)。与 capacityGauge 同时写。
-	// 它大于 login_queue_capacity 时,gate 台数装不下配置的容量,排队会比配置的早开始拦人(告警 LoginQueueCapacityLimitedByGates)。
+	// configuredCapacityGauge 是区服目录给本区的容量(zone_config.capacity,经 zonepolicy 读),0 = 读不到区服策略(按软上限)。
+	// 与 capacityGauge 同时写。它大于 login_queue_capacity 时,gate 台数装不下目录的容量,排队会比目录写的早开始拦人
+	// (告警 LoginQueueCapacityLimitedByGates)。
 	configuredCapacityGauge = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: metricNamespace,
 		Subsystem: "",
 		Name:      "configured_capacity",
-		Help: "Queue.ZoneCapacityOverride for the zone; 0 = not configured (soft cap in use). Above " +
-			"login_queue_capacity means the zone's gates cannot hold the configured capacity and the queue " +
-			"starts holding players earlier than configured: add gate replicas or lower the override.",
+		Help: "zone_config.capacity for the zone as read from the zone policy in etcd; 0 = policy unknown (soft cap in use). " +
+			"Above login_queue_capacity means the zone's gates cannot hold the directory capacity and the queue " +
+			"starts holding players earlier than configured: add gate replicas or lower zone_config.capacity.",
 		Labels: []string{"zone"},
 	})
 

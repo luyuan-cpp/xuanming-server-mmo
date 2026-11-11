@@ -88,6 +88,13 @@ enum TransactionType
   TX_EQUIP_ENHANCE = 27;     // 装备强化:扣金币 + 销毁材料(成败都扣)。correlation_id = 装备 item guid
   TX_EQUIP_INLAY = 28;       // 宝石镶嵌:销毁 1 颗宝石物品。correlation_id = 装备 item guid
   TX_EQUIP_GEM_REMOVE = 29;  // 取下宝石:发回 1 颗宝石物品。correlation_id = 装备 item guid
+
+  // ── 聚宝斋退回(数据覆写审计 r2-trade#1)──────────────────────────────────
+  //
+  // 交易把玩家自己托管的资产还给他:撤单、过期、整单退款、竞价退回,以及它们的人工补发。
+  // 资产本来就是这名玩家的,不算新增获得,不受获取封禁约束(C++ GainBlockService::CountsAsGain);
+  // 成交所得(交付腿)仍用 TX_AUCTION_BUY,照常判封禁。correlation_id 同其他交易腿。
+  TX_AUCTION_RETURN = 30;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

@@ -1,6 +1,8 @@
 package com.game.gateway.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -34,6 +36,18 @@ public class ZoneConfig {
 
     @Column(name = "sort_order")
     private int sortOrder;
+
+    /**
+     * 本区暂停创建新角色(2026-11-10,区服满员处理):已有角色照常登录进场,login 只拦 CreatePlayer。运维开关,只经
+     * {@code POST /admin/zones/{id}/create-role/close|open} 改;POST 新建区服时取库缺省(开着),PUT 整行替换不碰它。
+     * 本区网关的 ZonePolicyPublisher 把它与 capacity 一起发布给本区 login。
+     *
+     * <p>{@code @ColumnDefault}:原生 INSERT(ZoneConfigRepository.INSERT_IF_ABSENT_SQL)不写这一列,靠库缺省;
+     * 测试库由 Hibernate 按实体建表(create-drop),不写缺省就是 NOT NULL 无缺省,插入会失败。生产 DDL 见 schema.sql。
+     */
+    @Column(name = "create_role_closed", nullable = false)
+    @ColumnDefault("false")
+    private boolean createRoleClosed;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -77,6 +91,9 @@ public class ZoneConfig {
 
     public int getSortOrder() { return sortOrder; }
     public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
+
+    public boolean isCreateRoleClosed() { return createRoleClosed; }
+    public void setCreateRoleClosed(boolean createRoleClosed) { this.createRoleClosed = createRoleClosed; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

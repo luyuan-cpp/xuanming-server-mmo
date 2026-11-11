@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "proto/common/database"
 	"shared/authoritysql"
+	"shared/authoritysql/sqltest"
 )
 
 // 写者名册按槽位换代(缺口清单第 22 条,docs/design/writer-roster-exhaustion-20261106.md §5)的真库回归,MySQL 与 TiDB 都跑。
@@ -152,8 +153,9 @@ func TestSlotSuccessionRetiresPreviousGeneration(t *testing.T) {
 		!bytes.Equal(retireRequest.Writer.WriterKey, first.Writer.WriterKey) || retireRequest.Writer.BootSeq != first.Writer.BootSeq {
 		t.Fatalf("换代退休的全文: %+v", retireRequest)
 	}
-	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=? AND state=2", first.Writer.WriterKey); got != authoritysql.WriterSlotCount {
-		t.Fatalf("上一代的 64 个 slot 都要 REVOKED: %d", got)
+	// 一代结束时它的 slot 行随结束它的事务删掉(§5.8);登记行留作墓碑(上面已核 REVOKED)。
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=?", first.Writer.WriterKey); got != 0 {
+		t.Fatalf("上一代的 slot 行要随换代删掉: %d", got)
 	}
 	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=? AND state=1 AND writer_epoch=?", next.Writer.WriterKey, after.WriterEpoch); got != authoritysql.WriterSlotCount {
 		t.Fatalf("新一代 64 个 slot 在当前 epoch: %d", got)
@@ -163,6 +165,10 @@ func TestSlotSuccessionRetiresPreviousGeneration(t *testing.T) {
 	}
 	if err = bumpGateBusiness(ctx, old); !errors.Is(err, authoritysql.ErrWriterDenied) || authoritysql.IsWriterFrozen(err) {
 		t.Fatalf("上一代的写要被拒,而且不是可重试的冻结: %v", err)
+	}
+	// slot 行已删,旧进程再试也只收到拒绝:闸门找不到自己的行,和读到 REVOKED 同一结局。
+	if err = bumpGateBusiness(ctx, old); !errors.Is(err, authoritysql.ErrWriterDenied) || authoritysql.IsWriterFrozen(err) {
+		t.Fatalf("上一代再写仍要被拒: %v", err)
 	}
 	// 重放同一请求(init 重跑、上一次提交结局未知):原样返回,不再落地。
 	again, err := catalog.Register(ctx, next)
@@ -188,6 +194,19 @@ func TestSlotSuccessionRetiresPreviousGeneration(t *testing.T) {
 	if _, err = catalog.Retire(ctx, forged); !errors.Is(err, authoritysql.ErrWriterDenied) {
 		t.Fatalf("Retire 不接受换代退休: %v", err)
 	}
+	// 已被换代的一代不能再人工退休:它的 slot 行已删,回确定的拒绝(不把「没有行」交给调用方),什么都不写。
+	late := proto.Clone(first).(*pb.SqlWriterLifecycleReceipt_Request)
+	late.RequestId = fixtureID(t)
+	late.Kind = pb.SqlWriterLifecycleReceipt_RETIRE
+	late.ExpectedEpoch = after.WriterEpoch
+	late.ExpectedCatalogRevision = after.CatalogRevision
+	late.DeploymentId = "operator-late-retire"
+	if _, err = catalog.Retire(ctx, late); !errors.Is(err, authoritysql.ErrWriterDenied) || errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("退休已被换代的一代: %v", err)
+	}
+	if unchanged, err := catalog.CurrentMeta(ctx); err != nil || unchanged.CatalogRevision != after.CatalogRevision {
+		t.Fatalf("被拒的退休不写目录: %v", err)
+	}
 	latest, err := catalog.LatestBoot(ctx, first.Writer.SqlPrincipal)
 	if err != nil || latest == nil || latest.BootSeq != first.Writer.BootSeq+1 || latest.State != pb.SqlWriterRegistry_ACTIVE || !bytes.Equal(latest.WriterKey, next.Writer.WriterKey) {
 		t.Fatalf("槽位当前是新一代: %+v %v", latest, err)
@@ -206,6 +225,8 @@ func TestSlotSuccessionChainKeepsOneActiveGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	current := latestRegistration(t, ctx, fixture.Operator)
+	registersBefore := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_lifecycle_receipt WHERE kind=1")
+	retiresBefore := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_lifecycle_receipt WHERE kind=2")
 	const boots = 20
 	for boot := 0; boot < boots; boot++ {
 		next := nextBoot(t, current, "succession-chain")
@@ -226,6 +247,17 @@ func TestSlotSuccessionChainKeepsOneActiveGeneration(t *testing.T) {
 	}
 	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_registry WHERE sql_principal=?", current.Writer.SqlPrincipal); got != boots+1 {
 		t.Fatalf("每一代一行注册,退休的留作永久收据: %d", got)
+	}
+	// slot 行只属于在役的一代(§5.8):整张表恰好是 ACTIVE 写者数 × 64,不随启动次数增长。
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot"); got != len(active)*authoritysql.WriterSlotCount {
+		t.Fatalf("writer_slot 只有在役写者的行: %d 行, ACTIVE %d 个", got, len(active))
+	}
+	// 收据一份不删:每次换代一份 REGISTER、一份 RETIRE。
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_lifecycle_receipt WHERE kind=1"); got != registersBefore+boots {
+		t.Fatalf("REGISTER 收据: %d want %d", got, registersBefore+boots)
+	}
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_lifecycle_receipt WHERE kind=2"); got != retiresBefore+boots {
+		t.Fatalf("RETIRE 收据: %d want %d", got, retiresBefore+boots)
 	}
 	latest, err := catalog.LatestBoot(ctx, current.Writer.SqlPrincipal)
 	if err != nil || latest.BootSeq != boots+1 || !bytes.Equal(latest.WriterKey, current.Writer.WriterKey) {
@@ -269,8 +301,16 @@ func TestSlotSuccessionWaitsOutFreeze(t *testing.T) {
 	if receipt.PreviousEpoch != released.WriterEpoch {
 		t.Fatalf("收据记解冻后的 epoch: %d want %d", receipt.PreviousEpoch, released.WriterEpoch)
 	}
-	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=? AND state=2 AND writer_epoch=?", first.Writer.WriterKey, released.WriterEpoch); got != authoritysql.WriterSlotCount {
-		t.Fatalf("上一代按解冻后的 epoch 退休: %d", got)
+	// 上一代按解冻后的 epoch 退休:它的 slot 行按这个 epoch 删掉(删除带 epoch 条件、必须正好 64 行),退休收据记的也是它。
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=?", first.Writer.WriterKey); got != 0 {
+		t.Fatalf("上一代的 slot 行随换代删掉: %d", got)
+	}
+	var retirementID []byte
+	if err = fixture.Operator.QueryRowContext(ctx, "SELECT retirement_request_id FROM writer_registry WHERE writer_key=? AND state=2", first.Writer.WriterKey).Scan(&retirementID); err != nil {
+		t.Fatalf("上一代置 REVOKED: %v", err)
+	}
+	if retire, err := catalog.LifecycleReceipt(ctx, retirementID); err != nil || retire.PreviousEpoch != released.WriterEpoch {
+		t.Fatalf("上一代按解冻后的 epoch 退休: %+v %v", retire, err)
 	}
 }
 
@@ -321,5 +361,172 @@ func TestSlotSuccessionAndDrainRun(t *testing.T) {
 	active, err := catalog.ActiveWriterKeys(ctx)
 	if err != nil || len(active) != 1 || !bytes.Equal(active[0], second.Writer.WriterKey) {
 		t.Fatalf("ACTIVE 还是 P0 里的那一代: %v %v", active, err)
+	}
+	// run 之前那次换代已删掉第 1 代的 slot 行;run 期间被拒的换代一行不动,P0 里那一代的 64 行还在役。
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=?", first.Writer.WriterKey); got != 0 {
+		t.Fatalf("run 之前换代已删上一代的 slot 行: %d", got)
+	}
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=? AND state=1 AND writer_epoch=?", second.Writer.WriterKey, meta.WriterEpoch); got != authoritysql.WriterSlotCount {
+		t.Fatalf("被拒的换代不碰在役一代的 slot 行: %d", got)
+	}
+}
+
+// 换代要等上一代在途的写事务结束才删它的 slot 行(§5.8「没有在途事务」):在途那笔照常提交、不丢,
+// 换代随后落地,上一代下一笔写被拒。锁等待按库里的锁视图观测,不靠 sleep 推定已经卡住。
+func TestSlotSuccessionWaitsForInFlightTransaction(t *testing.T) {
+	ctx, fixture, schema, _ := twoLogicalDBFixture(t)
+	catalog, err := fixture.CatalogFor(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := fixture.Open(ctx, schema, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := latestRegistration(t, ctx, fixture.Operator)
+	tx, err := old.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("上一代开事务: %v", err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, "UPDATE gate_business SET value=value+1 WHERE id=1"); err != nil {
+		t.Fatalf("上一代在途的写: %v", err)
+	}
+	next := nextBoot(t, first, "succession-in-flight")
+	done := make(chan error, 1)
+	go func() {
+		_, e := catalog.Register(ctx, next)
+		done <- e
+	}()
+	waitWriterSlotLockWait(t, ctx, fixture, schema, done)
+	if err = tx.Commit(); err != nil {
+		t.Fatalf("在途事务在换代之前提交: %v", err)
+	}
+	select {
+	case err = <-done:
+		if err != nil {
+			t.Fatalf("在途事务提交之后换代落地: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	var value int64
+	if err = fixture.Operator.QueryRowContext(ctx, "SELECT value FROM gate_business WHERE id=1").Scan(&value); err != nil || value != 1 {
+		t.Fatalf("换代之前提交的那笔写要保留: %d %v", value, err)
+	}
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=?", first.Writer.WriterKey); got != 0 {
+		t.Fatalf("上一代的 slot 行随换代删掉: %d", got)
+	}
+	if err = bumpGateBusiness(ctx, old); !errors.Is(err, authoritysql.ErrWriterDenied) || authoritysql.IsWriterFrozen(err) {
+		t.Fatalf("上一代下一笔写被拒,不是可重试的冻结: %v", err)
+	}
+}
+
+// waitWriterSlotLockWait 等到本用例库里有事务在等锁(用例里只有换代会等,等的是上一代在途事务持着的 slot 行);
+// done 先回来说明没等锁就结束了,用例失败。TiDB 看 information_schema.DATA_LOCK_WAITS(与 writer_tidb_test.go 同口径,按随机库名过滤),
+// MySQL 看 performance_schema.data_locks 里 writer_slot 上 WAITING 的锁。每次查询本身就是节拍,不 sleep。
+func waitWriterSlotLockWait(t *testing.T, ctx context.Context, fixture *sqltest.Fixture, schema string, done <-chan error) {
+	t.Helper()
+	query, args := "SELECT COUNT(*) FROM performance_schema.data_locks WHERE OBJECT_SCHEMA=? AND OBJECT_NAME='writer_slot' AND LOCK_STATUS='WAITING'", []any{schema}
+	if fixture.Backend() == authoritysql.BackendTiDB {
+		query, args = "SELECT COUNT(*) FROM information_schema.DATA_LOCK_WAITS WHERE KEY_INFO LIKE ?", []any{"%" + schema + "%"}
+	}
+	for {
+		var waits int
+		if err := fixture.Schema.QueryRowContext(ctx, query, args...).Scan(&waits); err != nil {
+			t.Fatalf("读不到锁等待视图: %v", err)
+		}
+		if waits > 0 {
+			return
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("换代没等上一代的在途事务就结束了: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		default:
+		}
+	}
+}
+
+// 人工退休(缩容留下的末代,非 run 的 RETIRE,writer 原样复制 REGISTER 里的、带 bootSeq)也结束这一代:slot 行删掉、登记行 REVOKED,
+// 重放同一请求原样返回;旧进程写被拒;同一槽位的下一代之后照常注册(没有在役的上一代,只注册不换代),slot 行仍只属于在役的一代;
+// 已退休的一代换个 request_id 再退一次,回确定的拒绝,不是「没有行」。
+func TestManualRetireEndsGenerationAndSlotRegistersAgain(t *testing.T) {
+	ctx, fixture, schema, _ := twoLogicalDBFixture(t)
+	catalog, err := fixture.CatalogFor(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := fixture.Open(ctx, schema, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = bumpGateBusiness(ctx, old); err != nil {
+		t.Fatalf("退休之前能写: %v", err)
+	}
+	first := latestRegistration(t, ctx, fixture.Operator)
+	meta, err := catalog.CurrentMeta(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retire := proto.Clone(first).(*pb.SqlWriterLifecycleReceipt_Request)
+	retire.RequestId = fixtureID(t)
+	retire.Kind = pb.SqlWriterLifecycleReceipt_RETIRE
+	retire.ExpectedEpoch = meta.WriterEpoch
+	retire.ExpectedCatalogRevision = meta.CatalogRevision
+	retire.DeploymentId = "operator-scale-down"
+	receipt, err := catalog.Retire(ctx, retire)
+	if err != nil {
+		t.Fatalf("人工退休: %v", err)
+	}
+	if receipt.CatalogRevision != meta.CatalogRevision+1 || receipt.PreviousEpoch != meta.WriterEpoch {
+		t.Fatalf("退休只推进一次目录版本、不动 epoch: %+v", receipt)
+	}
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot WHERE writer_key=?", first.Writer.WriterKey); got != 0 {
+		t.Fatalf("退休删掉这一代的 slot 行: %d", got)
+	}
+	var retirementID []byte
+	if err = fixture.Operator.QueryRowContext(ctx, "SELECT retirement_request_id FROM writer_registry WHERE writer_key=? AND state=2", first.Writer.WriterKey).Scan(&retirementID); err != nil || !bytes.Equal(retirementID, retire.RequestId) {
+		t.Fatalf("登记行置 REVOKED 并指回这份 RETIRE: %x %v", retirementID, err)
+	}
+	// 重放同一请求(人工重跑、上一次结局未知):按收据原样返回,不受 slot 行已删影响,不再推进目录。
+	again, err := catalog.Retire(ctx, retire)
+	if err != nil || !proto.Equal(again, receipt) {
+		t.Fatalf("重放退休: %v", err)
+	}
+	if current, err := catalog.CurrentMeta(ctx); err != nil || current.CatalogRevision != receipt.CatalogRevision {
+		t.Fatalf("重放不推进目录版本: %v", err)
+	}
+	if err = bumpGateBusiness(ctx, old); !errors.Is(err, authoritysql.ErrWriterDenied) || authoritysql.IsWriterFrozen(err) {
+		t.Fatalf("退休之后的写被拒,不是可重试的冻结: %v", err)
+	}
+	// 同一槽位再扩回来:没有在役的上一代,只注册(目录版本 +1,没有换代退休),号接着往上走。
+	next := nextBoot(t, first, "after-manual-retire")
+	registered, err := catalog.Register(ctx, next)
+	if err != nil {
+		t.Fatalf("退休之后同一槽位注册下一代: %v", err)
+	}
+	after, err := catalog.CurrentMeta(ctx)
+	if err != nil || registered.CatalogRevision != receipt.CatalogRevision+1 || after.CatalogRevision != registered.CatalogRevision {
+		t.Fatalf("只注册、不换代: %+v %v", registered, err)
+	}
+	active, err := catalog.ActiveWriterKeys(ctx)
+	if err != nil || len(active) != 1 || !bytes.Equal(active[0], next.Writer.WriterKey) {
+		t.Fatalf("在役的是新一代: %v %v", active, err)
+	}
+	if got := countRows(t, ctx, fixture.Operator, "SELECT COUNT(*) FROM writer_slot"); got != authoritysql.WriterSlotCount {
+		t.Fatalf("slot 行只属于在役的一代: %d", got)
+	}
+	// 已退休的一代换个 request_id 再退:它没有 slot 行,回确定的拒绝,什么都不写。
+	late := proto.Clone(retire).(*pb.SqlWriterLifecycleReceipt_Request)
+	late.RequestId = fixtureID(t)
+	late.ExpectedEpoch = after.WriterEpoch
+	late.ExpectedCatalogRevision = after.CatalogRevision
+	if _, err = catalog.Retire(ctx, late); !errors.Is(err, authoritysql.ErrWriterDenied) || errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("再退已退休的一代: %v", err)
+	}
+	if current, err := catalog.CurrentMeta(ctx); err != nil || current.CatalogRevision != after.CatalogRevision {
+		t.Fatalf("被拒的退休不写目录: %v", err)
 	}
 }

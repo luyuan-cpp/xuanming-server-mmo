@@ -189,6 +189,7 @@
 - **放行的 pipeline**:今天 `PopAdmit` 把放行脚本放进普通 pipeline(`queue.go:992`)。集群客户端的 pipeline 在 EOF / 超时后会整批重发,这正是守卫拒绝「pipeline 里带 EVAL」的原因。改成先按槽取主节点,再用节点客户端发 pipeline,与 owner_epoch 铸造通道的做法相同(`playerredis.MasterForKey` + `NewNodeClient`)。
 - **死配置 `QueueShardCount`**:Go 代码没有任何地方读它(`config.go:596`、`login.yaml:51`)[C]。连同 `k8s_deploy.ps1` 的镜像和契约用例一起删。
 - **轮询间隔**:单 zone 的热度见 §6.2。服务端按名次拉长下发的 `RetryAfterMs`(`querystatuslogic.go:100`)。
+  **2026-11-11 已由缺口清单第 14 条提前落码(未编译,`loginqueue.RetryAfterForRank`,规则见 `login-queue-2026-05.md` §14 第 10 条),第 4 批不用再做;下面几条是当时的设计口径。**
   - 前 2000 名每 2 秒一次;之后按预计等待时间线性增长,上限 30 秒。
   - 名次与总数的定义不变。
   - 前提是客户端遵守 `RetryAfterMs`。动手前先查 Java 仓 `docs/reference/mmorpg-client-contract-*.md`,没有客户端任务授权时不读客户端仓。
@@ -266,7 +267,7 @@
   - `player_name_logic.go:599` 的 mget 是死代码,随批删。
 - **trade、player_inbox**:只有选主锁、唤醒去重这类单键,换句柄即可。
 - **mail、chat、match 的旧 `Redis` 段**:在 K8s 上不对核心发命令 [C]。
-  - chat 两个 go-zero 句柄没有调用方,删掉。
+  - chat 两个 go-zero 句柄没有调用方,删掉。2026-11-11 已由「Redis 登录总账审核」会话删掉,连同 `ChatRedis` 段与 `Redis.Host` 必填校验,见 PROGRESS 同日条目。
   - mail 的 `SharedRedisAddr` 与 match 的 `Redis` 段只是玩家域没写地址时的回落,开发环境留着。
 
 ### 4.9 match 私有集群
@@ -410,9 +411,9 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 | 2a | scene_manager 键构造集中化与改形(§4.1),连同四个跨语言键的 C++ 常量;删 `scene:<id>:zone`;只给场景号的入口收敛(§3.3);CreateScene 的 zone 0 | 25–30 | 1;与「场景销毁认领」「Returning scene node」会话对段落 | 未开工 |
 | 2b | scene_manager 句柄换 UniversalClient(go-zero 调用改写)、shared/leader 补 UniversalClient 版 store(§4.7)、`load_refresh` 核对、契约测试重写 | 25–30 | 2a;shared/leader 一处与断线重连会话对清单 | 未开工 |
 | 3 | C++ `tlsControlRedis`;三处读与归属对账;SPUBLISH 与 Go `assetopwake` 的 64 路 SSUBSCRIBE、`ChannelWithSubscriptions`(跨语言同批);CreateScene 校验 zone(内部协议加字段,先跑协议生成);gate、battle 去掉 Redis 连接 | 20–25 | 1、2a;「Hiredis 生命周期收尾审核」会话 | 未开工 |
-| 4 | login 排队与 gate 标记(键改形、UniversalClient、放行改节点客户端 pipeline、按名次拉长轮询间隔、删 `QueueShardCount`);scene_manager 读 gate 标记;`k8s_gate_drain.ps1`;`gatepick`;Java 网关限流两段单键脚本与 Lettuce 集群 | 25–30 | 1;gate 排空迁移相关会话、「Zone 人数满的处理」会话 | 未开工 |
-| 5 | guild(缓存 tag、榜按 zone、去 SCAN、锁按 zone、assetopfix);friend 换句柄;player_locator 控制键 tag;data_service(唤醒、名字缓存 `MGetBySlot`);trade、player_inbox 换句柄;chat 删无用句柄;R8 收口;`tools/data_consistency_check` | 25–30 | 1;唤醒只订本副本分片依赖第 25 条 | 未开工 |
-| 6 | 部署:集群模板通用化与 `redis-control`、`k8s_deploy.ps1` 参数与渲染、总账、wipe / status、告警、手册、compose;退役核心、queue、ctl、rank 清单与参数;match 集群升 8.10.2;部署契约测试 | 25–30 | 2–5;「Redis 登录总账审核」会话 | 未开工 |
+| 4 | login 排队与 gate 标记(键改形、UniversalClient、放行改节点客户端 pipeline、删 `QueueShardCount`;按名次拉长轮询间隔已由第 14 条 11-11 提前落码);scene_manager 读 gate 标记;`k8s_gate_drain.ps1`;`gatepick`;Java 网关限流两段单键脚本与 Lettuce 集群 | 25–30 | 1;gate 排空迁移相关会话、「Zone 人数满的处理」会话 | 未开工 |
+| 5 | guild(缓存 tag、榜按 zone、去 SCAN、锁按 zone、assetopfix);friend 换句柄;player_locator 控制键 tag;data_service(唤醒、名字缓存 `MGetBySlot`);trade、player_inbox 换句柄;chat 删无用句柄(11-11 已做,见 §4.8);R8 收口;`tools/data_consistency_check` | 25–30 | 1;唤醒只订本副本分片依赖第 25 条 | 未开工 |
+| 6 | 部署:集群模板通用化与 `redis-control`、`k8s_deploy.ps1` 参数与渲染、总账、wipe / status、告警、手册、compose;退役核心、queue、ctl、rank 清单与参数;match 集群升 8.10.2;部署契约测试。match 集群的显式 maxclients、单独一份总账与 `-WaitReady` 逐节点核对 11-11 已由「Redis 登录总账审核」会话补上,通用化时并入 | 25–30 | 2–5;「Redis 登录总账审核」会话 | 未开工 |
 | 7 | 文档改写:控制面设计稿 §4 / §5,玩家域设计 §5.1 域表,TiDB 总体方案 §2.1 / §8.4,G4a 设计稿(标历史),AGENTS.md §6 压测口径,`deploy/k8s/README.md`,`tools/scripts/README.md` | ~10 | 6 | 未开工 |
 
 合计约 170~200 个文件。

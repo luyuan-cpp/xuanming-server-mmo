@@ -18,13 +18,16 @@ const globalExpiredAuditInterval = time.Minute
 type globalOutcomeAuditor interface {
 	CountStrandedExpiredFormations(context.Context) (uint64, error)
 	ReadOutcomeOutboxBacklog(context.Context) (authority.OutcomeOutboxBacklog, error)
+	CountOverdueDeadlineAborts(context.Context) (uint64, uint64, error)
 }
 
 // globalAuditGauges 是巡检读数的 gauge 出口(2026-10-30,评审 B-4 / B-6):到期滞留成局的存量,
-// 与终局发件箱三类(result / first / waiting)的积压条数和最老待投年龄。label 只有 kind,不带 battle_id / player_id。
+// 与终局发件箱三类(result / first / waiting)的积压条数和最老待投年龄;2026-11-11 加「超期未作废」的存量与最早超期秒数。
+// label 只有 kind,不带 battle_id / player_id。
 type globalAuditGauges struct {
 	strandedExpired func(count uint64)
 	outboxBacklog   func(kind string, rows uint64, oldestAgeSeconds float64)
+	overdueAborts   func(count uint64, oldestOverdueSeconds float64)
 }
 
 // productionAuditGauges 是生产用的 gauge 出口(metrics/outcome.go)。
@@ -32,12 +35,14 @@ func productionAuditGauges() globalAuditGauges {
 	return globalAuditGauges{
 		strandedExpired: metrics.SetGlobalExpiredStranded,
 		outboxBacklog:   metrics.SetOutcomeOutboxBacklog,
+		overdueAborts:   metrics.SetGlobalDeadlineAbortOverdue,
 	}
 }
 
 // auditStrandedExpiredFormations 是每分钟的全球终局巡检(matcher.go 按这个名字挂到 relay 循环上):
 //   - 过了权威截止、却进不了到期终局恢复的成局（2026-10-22 评审补，social-match-battle#0）;
-//   - 终局发件箱的积压(2026-10-30,评审 B-6)。
+//   - 终局发件箱的积压(2026-10-30,评审 B-6);
+//   - 超期未作废的可裁决成局(2026-11-11)。
 func auditStrandedExpiredFormations(ctx context.Context, s *svc.ServiceContext) {
 	auditGlobalOutcomes(ctx, s.Authority, productionAuditGauges())
 }
@@ -45,6 +50,30 @@ func auditStrandedExpiredFormations(ctx context.Context, s *svc.ServiceContext) 
 func auditGlobalOutcomes(ctx context.Context, a globalOutcomeAuditor, gauges globalAuditGauges) {
 	auditStrandedExpired(ctx, a, gauges)
 	auditOutcomeOutboxBacklog(ctx, a, gauges)
+	auditOverdueDeadlineAborts(ctx, a, gauges)
+}
+
+// auditOverdueDeadlineAborts 报「超期未作废」(2026-11-11,authority.Store.CountOverdueDeadlineAborts):自动路径可裁决、
+// 截止之后已超过最晚落定时刻仍没有终局的在途成局。match 可用、恢复跟得上时这个数恒为 0;大于 0 说明到期恢复一拍预算清不完积压
+// (加副本,吞吐随副本数线性增长),或 match / 它的库长期不可用,scene 可能已按续冻上限解冻(晚到的结算由战斗道具预留兜住)。
+// 形状合格却过不了原件核对的局(original_mismatch)永远不会自动落定,也计在里面,用 formationfix 处置。
+// 存量写 gauge(0 也写;读失败保留上一次读数,不伪造 0);大于 0 时打一行 ERROR,不带 battle_id(明细按手册的 SQL 查)。
+func auditOverdueDeadlineAborts(ctx context.Context, a globalOutcomeAuditor, gauges globalAuditGauges) {
+	check, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	overdue, oldestMs, err := a.CountOverdueDeadlineAborts(check)
+	if err != nil {
+		if ctx.Err() == nil {
+			logx.Errorf("global overdue deadline-abort audit failed: %v", err)
+		}
+		return
+	}
+	gauges.overdueAborts(overdue, float64(oldestMs)/1000)
+	if overdue == 0 {
+		return
+	}
+	logx.Errorf("global formations are overdue for their deadline abort: count=%d oldest_overdue_ms=%d; expired-outcome recovery is not keeping up "+
+		"(add match replicas, check the match database), or the formations cannot be adjudicated automatically (see go/match/cmd/formationfix)", overdue, oldestMs)
 }
 
 // auditStrandedExpired 报告过了权威截止加宽限、却进不了到期终局恢复的成局(口径与 formationfix 列表里 shape_invalid 一类相同,

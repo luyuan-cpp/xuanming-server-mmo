@@ -34,8 +34,10 @@ func (s *ServiceContext) initDataServiceClient() {
 func (s *ServiceContext) initGuildIDSegment() {
 	cfg := s.Config.IdSegment
 	if !cfg.Enabled {
-		logx.Infof("[id-segment] guild_id minting: snowflake-only (IdSegment.Enabled=false; "+
-			"set IdSegment.Enabled=true + DataServiceRpc to mint from the id issuer, biz_tag=%s)", guildIDBizTag)
+		// 没有回退号源(AGENTS §7 第 1 条):号段关着就发不出 guild_id,建帮一律失败。日志按这个实际后果写,
+		// 原先写的 snowflake-only 会让运维以为还能建帮。
+		logx.Errorf("[id-segment] guild_id minting disabled (IdSegment.Enabled=false): creating a guild will fail; "+
+			"set IdSegment.Enabled=true and DataServiceRpc to mint from the id issuer, biz_tag=%s", guildIDBizTag)
 		return
 	}
 	if s.DataServiceClient == nil {

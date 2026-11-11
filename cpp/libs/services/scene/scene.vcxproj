@@ -73,6 +73,8 @@
     <ClInclude Include="player\system\player_inbox_registry.h" />
     <ClInclude Include="player\system\gm_sanction_inbox_executor.h" />
     <ClInclude Include="player\system\player_inbox_system.h" />
+    <ClInclude Include="player\system\mail_outbox_rules.h" />
+    <ClInclude Include="player\system\player_mail_outbox.h" />
     <ClInclude Include="player\system\player_store_client.h" />
     <ClInclude Include="player\system\player_store_projection.h" />
     <ClInclude Include="player\system\handoff_mark_withdraw.h" />
@@ -164,6 +166,7 @@
     <ClCompile Include="player\system\player_inbox_registry.cpp" />
     <ClCompile Include="player\system\gm_sanction_inbox_executor.cpp" />
     <ClCompile Include="player\system\player_inbox_system.cpp" />
+    <ClCompile Include="player\system\player_mail_outbox.cpp" />
     <ClCompile Include="player\system\player_store_client.cpp" />
     <ClCompile Include="player\system\player_store_projection.cpp" />
     <ClCompile Include="player\system\player_database_loader.cpp" />

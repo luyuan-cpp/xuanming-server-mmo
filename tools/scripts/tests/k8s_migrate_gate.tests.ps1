@@ -53,7 +53,9 @@ function Reset-MigrateFixture {
         'Wait-GoSvcMigrateJobSettled', 'Assert-GoSvcMigrateJobNotInFlight', 'Wait-ForGoSvcMigrateJob',
         'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcEnvEntries', 'Add-GoSvcCommandTopicEnv', 'Add-GoSvcTopicReplicationEnv',
         'Get-SqlRuntimeManifestRange', 'Add-SchemaPermissionManifest', 'Get-DbAllowedDatabaseNames', 'Apply-GoSvcManifests', 'Get-ZoneScopedGoSvcNames',
-        'Test-InfraMysqlInUse', 'Get-SqlEntryEndpoint', 'Get-GlobalAuthoritySqlSettings', 'Get-FriendSqlSettings')) {
+        'Test-InfraMysqlInUse', 'Get-SqlEntryEndpoint', 'Get-GlobalAuthoritySqlSettings', 'Get-FriendSqlSettings',
+        # data-service 读集群身份的 RBAC 渲染(发号器地域码绑定,docs/handoff/global-id-issuer-registry-20261105.md §8.4):用真函数读真清单。
+        'New-DataServiceIdentityRbacYaml')) {
         Restore-ProductionFunction $name
     }
     # 迁移 Job 的 init 容器等这次实际的 SQL 入口(Get-SqlEntryEndpoint),只有入口是集群内 MySQL 时才先等 deploy/mysql(Test-InfraMysqlInUse)。
@@ -75,6 +77,7 @@ function Reset-MigrateFixture {
     $script:ReleaseTrack = 'stable'
     $script:DeploymentContent = $null
     $script:MigrationContent = $null
+    $script:IdentityRbacContent = $null
     $script:CommandTopicContractError = $null
     $script:Calls = [Collections.Generic.List[object]]::new()
     $script:Events = [Collections.Generic.List[string]]::new()
@@ -156,6 +159,8 @@ function Reset-MigrateFixture {
     # 写者换成 StatefulSet 之前留下的同名 Deployment 由它收掉(k8s_deploy.ps1 Remove-LegacySqlWriterDeployment)。只记事件,不走 Invoke-Kubectl:那个桩把一切 delete 记成 delete:Job。
     Set-Item Function:script:Remove-LegacySqlWriterDeployment { param($Namespace, $Name) $script:Events.Add("delete:legacy-deployment:$Name") }
     Set-Item Function:script:Assert-DataServiceRosterSchemas { param($Namespace) $script:Events.Add('check:roster') }
+    # 登记处双向 TLS 的预置 Secret 核对要读集群,这里只记事件(真函数的形状由 id_issuer_deploy_contract 核)。
+    Set-Item Function:script:Assert-TlsSecretProvisioned { param($Namespace, $Name, $Purpose) $script:Events.Add("check:tls:$Name") }
     Set-Item Function:script:Add-IdIssuerExpectedRegionEnv { param($ManifestContent) return $ManifestContent }
     Set-Item Function:script:Add-PlayerInboxMatchSecretEnv { param($ManifestContent) return $ManifestContent }
     # schema Job 的注入用真函数,目录条目只有它要的两个 Secret:迁移 Job 在名册定下来之前就要跑。
@@ -213,6 +218,10 @@ function Reset-MigrateFixture {
             $script:DeploymentContent = $InputContent
         } elseif ($InputContent -match '(?m)^kind: ConfigMap\s*$') {
             $script:Events.Add('apply:ConfigMap')
+        } elseif ($InputContent -match '(?m)^kind: ClusterRoleBinding\s*$') {
+            # data-service 读集群身份的 RBAC:ServiceAccount、ClusterRole、ClusterRoleBinding 同一份清单。
+            $script:Events.Add('apply:IdentityRbac')
+            $script:IdentityRbacContent = $InputContent
         } else { throw '未识别的模拟 apply 内容' }
     }
     Set-Item Function:script:Invoke-Kubectl {
@@ -344,6 +353,8 @@ foreach ($svc in @('data-service', 'db')) {
         $events = @($script:Events)
         Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -ge 0 -and [Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Prepare 先 ConfigMap 再 Job'
         Assert-True -Condition ($events -notcontains 'apply:Workload') -Because '名册没定之前不起进程'
+        Assert-True -Condition ($events -notcontains 'apply:IdentityRbac') -Because '读集群身份的 RBAC 随工作负载走,Prepare 不起进程也就不 apply'
+        Assert-True -Condition (@($events | Where-Object { $_ -like 'check:tls:*' }).Count -eq 0) -Because 'Prepare 不起进程,不核登记处客户端证书'
         Assert-True -Condition ($events -notcontains "render:boot:$svc") -Because '这一步还没有 generation,不能要求名册'
         Assert-True -Condition ($events -notcontains 'check:roster') -Because '同上'
     }
@@ -473,6 +484,16 @@ Test-Case 'data-service 的迁移门禁:ConfigMap → Job → Deployment,且 Dep
     Assert-True -Condition ($events -contains 'query:Job') -Because '放行必须来自 Job 查询结果'
     Assert-Match -Text $script:DeploymentContent -Pattern '(?m)^  replicas: 2\s*$' -Because 'data-service 不再是单副本'
     Assert-Match -Text $script:DeploymentContent -Pattern 'name: data-service-pdb' -Because 'PDB 随主 manifest 一起 apply'
+    # 发号器地域码绑定的部署身份(docs/handoff/global-id-issuer-registry-20261105.md §8.4):Pod 用 ServiceAccount data-service 读 kube-system 的 UID。
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:IdentityRbac') -ge 0 -and [Array]::IndexOf($events, 'apply:IdentityRbac') -lt [Array]::IndexOf($events, 'apply:Workload')) `
+        -Because '读集群身份的 RBAC 先于 StatefulSet,否则第一次预留读身份拿到 403'
+    Assert-Match -Text $script:IdentityRbacContent -Pattern '(?m)^  name: mmorpg-cluster-identity-audit-zone\s*$' -Because 'ClusterRoleBinding 名字带本 zone 命名空间'
+    Assert-Match -Text $script:IdentityRbacContent -Pattern '(?m)^    namespace: audit-zone\s*$' -Because '只授权本 zone 的 data-service'
+    Assert-Match -Text $script:DeploymentContent -Pattern '(?m)^      serviceAccountName: data-service\s*$' -Because 'Pod 用专用身份,不用 default'
+    # 夹具是 prod:登记处双向 TLS 的客户端证书在本服务第一个写操作(ConfigMap)之前核对。
+    Assert-True -Condition ([Array]::IndexOf($events, 'check:tls:id-registry-client-tls') -ge 0 -and [Array]::IndexOf($events, 'check:tls:id-registry-client-tls') -lt [Array]::IndexOf($events, 'apply:ConfigMap')) `
+        -Because '证书缺了 data_service 装配不了发号器,要在写任何东西之前拒绝'
+    Assert-Match -Text $script:DeploymentContent -Pattern 'name: id-registry-client-tls\s+secret: \{secretName: id-registry-client-tls, defaultMode: 288, optional: true\}' -Because '证书卷来自预置 Secret'
 }
 
 # player-inbox(玩家收件箱,全局库 mmorpg_player_inbox)走同一条门禁。用真 manifest 跑,顺带钉住两个文件都在、占位全部可替换
@@ -530,7 +551,7 @@ Test-Case 'mail 的迁移门禁与 trade 同链路,只引用现役预置生产�
     $content = $script:DeploymentContent
     Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '镜像、拉取策略与令牌指纹占位都必须被替换'
     Assert-NotMatch -Text $content -Pattern 'MMORPG_MAIL_ADMIN_TOKEN|mail-admin-token-hash|mail-admin-auth' -Because '历史M1口令不得恢复成第二条授权路径'
-    foreach ($producer in @('ADMIN', 'RANK', 'GUILD')) {
+    foreach ($producer in @('ADMIN', 'RANK', 'GUILD', 'BATTLE')) {
         $key = $producer.ToLowerInvariant()
         Assert-Match -Text $content -Pattern ("- name: MAIL_PRODUCER_SECRET_$producer\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: mail-producer-$key, optional: false\}") -Because '每个生产者只引用自己的必需密钥，缺失时拒启'
     }

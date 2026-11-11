@@ -20,6 +20,8 @@
         启动脚本 redis-start.sh 的 `set -- redis-server` 参数表带 --maxclients "$MAXCLIENTS",exec 之前打印同格式的 fd 限值;
       - T7 高可用形态的入口代理:PROXY_MAXCONN 只在 Deployment redis-proxy 的 Pod 模板里定义一次,haproxy 配置的 global / defaults
         两处 maxconn 都由它生成,不留字面量(代理先到线的不等式在 k8s_deploy_contract.tests.ps1 的高可用一节核)。
+      - T8 match 私有集群(redis-match-cluster.yaml,2026-11-11):MAXCLIENTS 只定义一次、与 redis.yaml 同值,
+        唯一一条 exec redis-server 带 --maxclients "$MAXCLIENTS",exec 之前打印同格式的 fd 限值,硬限不足只打 ERROR。
     修复前(redis.yaml 没有 MAXCLIENTS)T1~T4 以「应当恰好出现 1 次,实际 0 次」一类文本失败,退出码非 0。
 
     设计与取值:docs/handoff/global-singletons-p0-findings-20261014.md「## P0-E」;运维:deploy/k8s/README.md「Redis 连接上限与总账」。
@@ -35,6 +37,7 @@ $ErrorActionPreference = 'Stop'
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $script:RedisPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/redis.yaml'
 $script:RedisHaPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/redis-ha.yaml'
+$script:RedisMatchClusterPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/redis-match-cluster.yaml'
 $script:ComposePath = Join-Path $script:RepoRoot 'deploy/docker-compose.yml'
 
 # 读文件放在各用例里调用:文件缺失时每条用例各自报红,而不是整个脚本中断。
@@ -226,6 +229,24 @@ Test-Case 'T7:redis-ha.yaml 的 PROXY_MAXCONN 在 Deployment redis-proxy 的 Pod
     Assert-Match -Text $code -Pattern 'echo "  maxconn \$\(\(PROXY_MAXCONN \+ 100\)\)"' -Because 'global 的上限比前端多留一点(诊断口与健康检查)'
     Assert-Match -Text $code -Pattern 'echo "  maxconn \$\{PROXY_MAXCONN\}"' -Because 'defaults(前端业务连接)的上限就是 PROXY_MAXCONN,与 Redis 的 maxclients 对得上账'
     Assert-NotMatch -Text $code -Pattern '(?m)^[ \t]*maxconn[ \t]+\d+' -Because '不得再有写死的 maxconn 数字(那一份不进连接上限不等式)'
+}
+
+Test-Case 'T8:redis-match-cluster.yaml 的 MAXCLIENTS 恰好定义 1 次、与 redis.yaml 同值;唯一一条 exec redis-server 带 --maxclients "$MAXCLIENTS",exec 之前打印 fd 限值,硬限不足只打 ERROR' {
+    $code = Get-NonCommentText (Read-RepoText $script:RedisMatchClusterPath)
+    $definitions = [regex]::Matches($code, '(?m)^[ \t]*MAXCLIENTS=(\S*)[ \t]*$')
+    Assert-Equal -Expected 1 -Actual $definitions.Count -Because 'MAXCLIENTS 只在启动薄壳里定义一次(部署脚本的 match 集群总账与 -WaitReady 的逐节点核对都从这一行读值)'
+    Assert-Match -Text $definitions[0].Groups[1].Value -Pattern '^[1-9][0-9]*$' -Because '部署脚本按字面量读它,不展开 shell 变量'
+    Assert-Equal -Expected (Get-RedisManifestMaxClients) -Actual ([long]$definitions[0].Groups[1].Value) -Because '与核心、玩家域集群同一个上限:节点的 nofile 硬限按同一个 need 配,运维只记一个数'
+    # 启动薄壳 = 从 MAXCLIENTS= 一行到 exec redis-server 一行(本集群无口令,只有这一条 exec)。
+    $startup = [regex]::Match($code, '(?ms)^[ \t]*MAXCLIENTS=\S*[ \t]*$.*?^[^\n]*\bexec[ \t]+redis-server\b[^\n]*$')
+    Assert-True -Condition $startup.Success -Because '启动薄壳应当从 MAXCLIENTS= 一行开始,到 exec redis-server 一行结束'
+    $execLines = @(($code -split "`n") | Where-Object { $_ -match '\bexec[ \t]+redis-server\b' })
+    Assert-Equal -Expected 1 -Actual $execLines.Count -Because '本集群无口令分支,exec redis-server 只有一条'
+    Assert-Match -Text $execLines[0] -Pattern '--maxclients[ \t]+"\$MAXCLIENTS"(?:[ \t]|$)' -Because "exec redis-server 必须带 --maxclients `"`$MAXCLIENTS`"(漏了就回到 Redis 缺省 10000):$($execLines[0].Trim())"
+    Assert-Match -Text $startup.Value -Pattern 'echo "redis fd limit: soft=\$soft hard=\$hard need=\$need maxclients=\$MAXCLIENTS"' -Because 'fd 限值用与 redis.yaml 同格式的一行打印,且在 exec redis-server 之前(薄壳从 MAXCLIENTS= 开始、到 exec 结束)'
+    Assert-Match -Text $startup.Value -Pattern 'if \[ "\$hard" -lt "\$need" \]; then echo "ERROR: nofile hard limit' -Because '硬限低于 maxclients + 32 时必须在日志里明说'
+    Assert-NotMatch -Text $startup.Value -Pattern '\bexit\b' -Because '硬限不足是有意的 fail-open:只打 ERROR,启动薄壳里不能 exit'
+    Assert-NotMatch -Text $startup.Value -Pattern 'ulimit[ \t]+-[SH]?n[ \t]+(?!2>)\S' -Because '只读不改 nofile'
 }
 
 exit (Complete-TestRun -SuiteName 'redis_maxclients_contract')

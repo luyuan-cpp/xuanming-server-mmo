@@ -21,16 +21,17 @@ import (
 )
 
 // Redis keys for world scene management.
+// 以 zone 为键的格式里,第一个 %s 是 sceneControlTag(zone)(docs/design/redis-cluster-all-domains-20261110.md §3)。
 const (
 	// SET per (zone, confId): holds sceneId strings for each channel.
-	WorldChannelsKeyFmt = "world_channels:zone:%d:%d"
+	WorldChannelsKeyFmt = "world_channels:%s:%d"
 
 	// worldInitLockKeyFmt: zone 级补建互斥锁。initWorldScenesForZone 的
 	// "数集合缺多少补多少"是无原子性的读改写,而它有两类并发入口:
 	// 领导者的后台循环(fullSync / watch PUT / autoscaler 扩容)与**任意副本**
 	// 上 CreateScene 的 on-demand 兜底(createscenelogic.go)。不加锁时
 	// 两个实例同时看到 existing=0 就会把同一批频道位建两份。
-	worldInitLockKeyFmt = "world_init:lock:zone:%d"
+	worldInitLockKeyFmt = "world_init:lock:%s"
 	// worldInitLockTTLSeconds: 锁 TTL。补建正常几百 ms 内完成,TTL 只是
 	// 持有者进程死亡时的自愈上限。
 	worldInitLockTTLSeconds = 60
@@ -66,7 +67,7 @@ end
 // 选择"跳过本轮补建":Redis 出错时无锁裸跑会复活双建竞态;等待超时说明
 // 持有者异常(正常几百 ms 内放锁),下一拍会收敛。
 func acquireWorldInitLock(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, maxWait time.Duration) (string, bool) {
-	key := fmt.Sprintf(worldInitLockKeyFmt, zoneId)
+	key := worldInitLockKey(zoneId)
 	token := uuid.NewString()
 	deadline := time.Now().Add(maxWait)
 	for {
@@ -86,7 +87,7 @@ func acquireWorldInitLock(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 }
 
 func releaseWorldInitLock(svcCtx *svc.ServiceContext, zoneId uint32, token string) {
-	key := fmt.Sprintf(worldInitLockKeyFmt, zoneId)
+	key := worldInitLockKey(zoneId)
 	res, err := svcCtx.Redis.Eval(luaReleaseWorldInitLock, []string{key}, token)
 	if err != nil {
 		// 释放失败无碍正确性:锁到 TTL 自然过期,只是这段时间别的补建要等。
@@ -109,7 +110,12 @@ type WorldChannelCandidate struct {
 }
 
 func worldChannelsKey(zoneID uint32, confId uint64) string {
-	return fmt.Sprintf(WorldChannelsKeyFmt, zoneID, confId)
+	return fmt.Sprintf(WorldChannelsKeyFmt, sceneControlTag(zoneID), confId)
+}
+
+// worldInitLockKey 是 zone 级补建互斥锁 world_init:lock:{ctl:<z>}。
+func worldInitLockKey(zoneID uint32) string {
+	return fmt.Sprintf(worldInitLockKeyFmt, sceneControlTag(zoneID))
 }
 
 // initWorldScenesForZone ensures world scenes (with N channels each) exist for a single zone.
@@ -869,12 +875,12 @@ func sceneReassignReceiptKey(sceneID uint64, token string) string {
 
 // WorldPlacementSeqKeyFmt / ScenePlacementGenKeyFmt 是上面两把键的格式。
 const (
-	WorldPlacementSeqKeyFmt = "world_channels:placement_seq:zone:%d"
+	WorldPlacementSeqKeyFmt = "world_channels:placement_seq:%s"
 	ScenePlacementGenKeyFmt = "scene:%d:placement_gen"
 )
 
 func worldPlacementSeqKey(zoneID uint32) string {
-	return fmt.Sprintf(WorldPlacementSeqKeyFmt, zoneID)
+	return fmt.Sprintf(WorldPlacementSeqKeyFmt, sceneControlTag(zoneID))
 }
 
 func scenePlacementGenKey(sceneID uint64) string {

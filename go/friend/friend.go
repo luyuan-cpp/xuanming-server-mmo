@@ -57,6 +57,7 @@ import (
 	"shared/roleidentity"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
+	"shared/workshard"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -261,8 +262,15 @@ func runFriend(c config.Config) (runErr error) {
 	// 停机和正式排空均须等待 sweep 的实际停止；
 	// 关闭只停止下一轮；已接纳轮次使用自己的预算，必须在关闭 SQL 池之前真实返回。
 	// canary 副本不起清理(发布轨道设计 §2.5):不起就不绑停止函数,CloseSource 对没绑的情况本来就安全。
+	//
+	// 按片分工(2026-11-11,消除单节点总纲 §9):成员表圈本 zone 注册的 friend 实例。K8s 上 friend 是全局服务,
+	// 全部副本同一份 ConfigMap(同一个 ZoneId)、同一个好友库,圈得住全部清理者;本机每个 zone 各起一份、
+	// 连同一个库但注册前缀不同,各自做全部片,只是重复(与 mail 的附件重投同一判断)。
+	// 本副本的身份在下面注册成功之后 SetSelf;canary 不起清理,sweepShards 留 nil,SetSelf 对 nil 是空操作。
+	var sweepShards *workshard.Membership
 	if releaseTrack.RunsGlobalBackgroundWork() {
-		stopSweep := logic.StartSweep(ctx, deps)
+		sweepShards = workshard.NewMembership(sweepMembersPrefix(c.ZoneId))
+		stopSweep := logic.StartSweep(ctx, deps, sweepShards)
 		if err := svcCtx.BindSourceStop(stopSweep); err != nil {
 			return err
 		}
@@ -356,6 +364,8 @@ func runFriend(c config.Config) (runErr error) {
 	}
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
+	// 注册之后才知道本副本在成员表里的身份;NodeUUID 进程内不变,失租换 node_id 重注册也不变。
+	sweepShards.SetSelf(nr.NodeUUID)
 
 	controlCtx, cancelControl := context.WithCancel(ctx)
 	controlDone := make(chan struct{})
@@ -398,8 +408,8 @@ func runFriend(c config.Config) (runErr error) {
 	fmt.Printf("  player_redis:  %s\n", playerRedisConf.Describe())
 	fmt.Printf("  quota:         friends=%d blocks=%d pending_out=%d pending_in=%d\n",
 		c.Friend.MaxFriends, c.Friend.MaxBlocks, c.Friend.MaxPendingRequests, c.Friend.MaxIncomingRequests)
-	fmt.Printf("  sweep:         mode=%s interval=%v retention=%dd\n",
-		c.Friend.Sweep.Mode, c.Friend.Sweep.Interval, c.Friend.Sweep.RetentionDays)
+	fmt.Printf("  sweep:         mode=%s interval=%v retention=%dd sharded=%t\n",
+		c.Friend.Sweep.Mode, c.Friend.Sweep.Interval, c.Friend.Sweep.RetentionDays, sweepShards != nil)
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:       %s\n", c.MetricsListenAddr)
 	}
@@ -645,6 +655,12 @@ func schemaModeLabel(c config.Config) string {
 		return "resident auto-migration refused; run standalone -migrate first"
 	}
 	return "plan-only (tables owned by " + migrateRemedyCommand + ")"
+}
+
+// sweepMembersPrefix 是清理按片分工的成员表圈住的 etcd 前缀:本 zone 注册的 friend 实例
+// (FriendNodeService.rpc/zone/<z>/),与下面注册时用的前缀同形。圈法的理由见 runFriend 里起清理的那段注释。
+func sweepMembersPrefix(zoneID uint32) string {
+	return noderegistry.RpcZonePrefix(base.ENodeType_name[int32(nodeType)]+".rpc", zoneID)
 }
 
 // nodeInfoValueBuilder 返回 noderegistry 的 BuildValue 回调:按 C++ NodeInfo 约定生成 protojson。

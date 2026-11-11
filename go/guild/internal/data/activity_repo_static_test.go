@@ -367,6 +367,14 @@ func TestActivityStatementsShape(t *testing.T) {
 	}
 	assert.Contains(t, sqlExpediteTrialLaunchCheck, "check_attempts=0", "提前检查只对从未认领的原件生效")
 
+	// 实时路径结束原因的自动提交写(2026-11-11):只改展示列 realtime_end_tip、只写一次、只对没登记对局的 state1 原件;
+	// 改到调度列、状态或 battle_id 就参与了释放判定,这里钉住。
+	{
+		setClause, where, _ := strings.Cut(sqlRecordTrialLaunchEndTip, " WHERE ")
+		assert.Equal(t, "UPDATE guild_trial_launch SET realtime_end_tip=?", setClause)
+		assert.Equal(t, "request_id=? AND state=1 AND battle_id=0 AND LENGTH(realtime_end_tip)=0", where)
+	}
+
 	// 普通读:不许带任何锁定子句。
 	for name, query := range map[string]string{
 		"sqlSelectActivityProgress":            sqlSelectActivityProgress,

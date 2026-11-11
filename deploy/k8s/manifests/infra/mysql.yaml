@@ -88,6 +88,8 @@ data:
     # 2026-11-06 存档库和区脱钩(docs/design/player-data-tidb-scaling-plan.md §7.2,A17b):zone 库不再放玩家,go/db 本 zone 库池 60 → 8,
     # 存盘改走地域存档库池(K=1 的预算 60,按 K 摊开),规划档不再按「打开其余 zone 的库」算。手算峰值 2436 → 2036(未运行,契约测试复核),
     # 本值不动,余量 564;内存 limits 不动。
+    # 2026-11-11 zone 库退役(同上 §7.2,A17c):go/db 没有本区库,每实例少 8 条(本 zone 库池),规划档 10 个 go/db 实例少 80 条,
+    # 手算峰值 2036 → 1956(未运行,契约测试复核),本值与内存 limits 都不动。
     # 运行中的实例不会自己变:上线前按本段末尾两种做法(维护窗口 rollout restart / SET GLOBAL)任选其一让 mysqld 拿到 2600,否则总账按 2600 通过、线上仍是旧值。
     # 以前的 500 只够 2 个 zone 的稳态(恰好 500,零余量);4 个 zone 稳态就要 920(docs/PROGRESS.md 2026-10-12)。
     # 超限的后果不只是变慢:go/db 把 1040 当普通错误,耗尽重试后进没有消费者的死信(读代码推断,未实测)。
@@ -169,8 +171,8 @@ spec:
             - name: mysql-config
               mountPath: /etc/mysql/conf.d
               readOnly: true
-            # deploy/mysql-init/*.sql(+ k8s_deploy.ps1 按 zones 配置生成的
-            # 01_k8s_zone_dbs.sql)以 ConfigMap mysql-init-sql 挂到 initdb 目录,
+            # deploy/mysql-init/*.sql(+ k8s_deploy.ps1 按 -Region / -PlayerStoreShards 生成的
+            # 01_k8s_player_store_dbs.sql)以 ConfigMap mysql-init-sql 挂到 initdb 目录,
             # 与 compose 的 ./mysql-init 卷等价。ConfigMap 由 k8s_deploy.ps1
             # Apply-Infra 在 apply 本文件之前生成(New-MysqlInitConfigMapYaml)。
             # 注意:initdb 只在数据目录为空的**首次**启动执行;PVC 已有数据时不会

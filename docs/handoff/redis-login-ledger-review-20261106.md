@@ -335,9 +335,11 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 
 ### 没动的
 
-- **几份历史文档仍写着 ChatRedis**：
-  - `docs/design/microservice-zone-contract-20260914.md`、`docs/design/disconnect-reconnect-audit-20261020.md`、`docs/design/turn-based-battle-server.md` 的 09-30 补充，都是当时的记录，不改。
-  - `docs/design/data-consistency-guarantee-map-20261020.md` 第 58 行把组队状态和聊天历史合成一行，记为 best-effort。聊天历史改到 SQL 之后，这一行早就过时了，要按 SQL 原件的一致性重写，归保障地图的维护者。
+- **几份历史文档仍写着 ChatRedis**（下一节收尾时又逐个复核过，结论以这里为准）：
+  - `docs/design/disconnect-reconnect-audit-20261020.md` 是 10-20 的审计快照，当时 chat 还在 Redis 上，不改。
+  - `docs/design/data-consistency-guarantee-map-20261020.md` 第 58 行在 §1 里。文件头已写明 §0~§5 是 10-20 架构的快照，当时这一行是对的，不改。现状在 §6.1，表里已经含「队伍」（库内事务强一致）。此前说「这一行早就过时」不准确。
+  - `docs/design/microservice-zone-contract-20260914.md` 的 §19（10-21）是 chat 的现行契约，其中两句与现状不符，11-11 已改正，见下一节。§9 等旧节由 §19 声明取代，不改。
+  - `docs/design/turn-based-battle-server.md` 09-30 补充的风险前提已经不成立，11-11 加了带日期的更正，见下一节。
 - **其他会话在 go/chat 里的在途改动没碰**：日志改英文、`least_privilege_tidb_test.go`、`chat_logic.go`。对方刚把 `NewRedisHandles` 里的一条日志改成英文，那条日志随函数一起删掉了。
 
 ### 顺带发现的疑点（11-11 已改）
@@ -390,3 +392,71 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 ### Java
 
 这是本仓 go/chat 的死代码清理，不是功能改动，Java 版 chat 是自己的实现，不适用，不新增 `PARITY.md` 条目。
+
+## 2026-11-11 Claude 收尾：match 集群补连接上限与总账，改正剩余过时说明
+
+负责人要求：查出的问题现在修，按最标准的做法定，不等压测。已落码，未运行，未提交。
+
+### 改了什么
+
+**1. redis-match-cluster 补齐其他 Redis 实例都有的三件事**
+
+核心、queue / ctl 实例、玩家域集群都有显式 maxclients、连接总账和部署后核对，只有 match 私有集群一样都没有：连接上限停在 Redis 缺省的 10000，还会被容器 nofile 悄悄压低，而且没有人记账。
+
+- `deploy/k8s/manifests/infra/redis-match-cluster.yaml`：redis 容器改用启动薄壳，与玩家域集群同一写法：
+  - `MAXCLIENTS=40000` 只定义一次，与核心、玩家域集群同值；
+  - 打印 `redis fd limit:` 一行，硬限不够只打 ERROR、不拒启；
+  - `exec redis-server ... --maxclients "$MAXCLIENTS"`。
+  - **注意**：改的是 Pod 模板，下次 `infra-up` 会滚动重启六个节点。StatefulSet 缺省按序滚动，`nodes.conf` 在 PVC 上，已建好的集群会原样重新入群。项目未上线，不另设重启闸。
+- `tools/scripts/k8s_deploy.ps1`：
+  - 新增 `Get-RedisMatchConnectionLedgerInputs`。只有 match 一行：每副本对每个主节点一个 go-zero 缺省池（10 × GOMAXPROCS，G 按 2 记），maxclients 读集群清单。
+  - 新增 `Write-RedisMatchConnectionLedger`，挂在 `Write-RedisConnectionLedger` 末尾，写路径每次都打一行 `Redis match connection ledger: per_master match_replicas=… steady=… peak=… maxclients=… warn_at=… headroom=…`；超过 80% 水位打 `[RedisMatchConnectionLedger]OverWarnRatio:`，只告警。
+  - 新增 `Wait-RedisMatchClusterReady`。`Apply-Infra` 记下这次 apply 的清单内容，`-WaitReady` 时先等建群 Job `redis-match-cluster-init` 完成，再逐节点核对生效的 maxclients（复用 `Test-RedisLiveMaxClients`）。节点数读清单的 `replicas`。这一步排在全局 Go 服务之前。
+  - 两处注释指向新的那份总账：核心总账「不计入」里 MatchRedis 那条、`Get-RedisPoolMirror` 注释里 match 那句。
+- **数值**（按公式手算，以部署打印为准）：每主节点稳态 = 2 副本 × 20 = 40，滚动余量 = 2 × 20 = 40，加运维余量 50，峰值约 130；maxclients 40000，告警水位 32000。
+- 测试：
+  - `redis_maxclients_contract.tests.ps1` 新增 T8：`MAXCLIENTS` 恰好一处、与 `redis.yaml` 同值；唯一一条 `exec redis-server` 带 `--maxclients "$MAXCLIENTS"`；薄壳打印 fd 限值，硬限不足只打 ERROR、不 exit、不改 nofile。
+  - `k8s_deploy_contract.tests.ps1`：
+    - AST 抽取名单加 `Get-RedisMatchConnectionLedgerInputs`；
+    - 「Redis 总账输入:…」的副本数 / CPU limit 钉子把 match 集群那份输入也纳进来；
+    - 新增「Redis 连接总账:redis-match-cluster 单独一份…」：核对输入形状，再在 `$battleInfraRun`（带 `-WaitReady` 的 infra-up DryRun）里核对打印的那一行与纯函数算出的一致、规划档峰值不超过告警水位，以及等建群 Job、逐节点核对 maxclients 的两行 DryRun 输出。
+- `deploy/k8s/README.md`「Redis 连接总账」一节：新增 match 集群一条；「契约测试钉住」补上 CPU limit 也覆盖 match 集群那份，以及 T8。
+
+**2. 剩余的过时说明**
+
+- `go/guild/guild.go`：配额客户端上方的注释原写 `PlayerSyncBumper`「指向核心 Redis DB 0」，改为「玩家域的专用小池客户端 newPlayerSyncRedis，没建玩家域集群时回落到核心库」。只改注释。
+- `docs/design/microservice-zone-contract-20260914.md` §19 两句：
+  - 「原账号由只读全局 login Redis 捕获」改为「取自 gate 签名的会话身份原件（`roleidentity.Original`），chat 不读 login 的 Redis」。已对照 `go/chat/internal/authority/actor_verify.go` 核实。
+  - 「Redis 句柄仅是既有可丢缓存装配」改为「chat 不建任何 Redis 句柄」。
+  - §19 其余句子这次没有逐条复核。
+- `docs/design/turn-based-battle-server.md` 09-30 补充：加带日期的更正。这个集群 10-23 起已是 noeviction，chat 不再连它，静默淘汰的风险已不存在。
+- `docs/design/redis-cluster-all-domains-20261110.md`（「全部 Redis 上 Cluster」那条线的设计稿）：
+  - §4.8 与第 5 批注明「chat 删无用句柄」11-11 已做；
+  - 第 6 批注明 match 集群的 maxclients、总账与 `-WaitReady` 核对已补，通用化时并入。
+
+### 静态检查（Claude 实际做了的）
+
+- 三个 ps1（`k8s_deploy.ps1`、`k8s_deploy_contract`、`redis_maxclients_contract`）PowerShell 解析 0 错误，新增的三个函数各只定义一次。
+- `redis-match-cluster.yaml` 用 PyYAML 解析通过，四个文档都在，渲染出的启动薄壳与预期逐行一致。
+- 部署脚本读 `MAXCLIENTS` 的正则、T8 的各条正则对清单逐个匹配，都对上。
+- `gofmt -l go/guild/guild.go` 无输出。
+- `git diff --check` 干净；换行符与各文件原有的一致：`k8s_deploy_contract` 全 CRLF，其余 LF。
+
+### 交 Codex 验证
+
+执行约定同前几节：同一 pwsh 会话先清 `Env:MMORPG_*`，记 HEAD 与文件 diff stat，红了保留第一条失败的完整输出。
+
+1. `pwsh -NoProfile -File tools/scripts/tests/redis_maxclients_contract.tests.ps1`：T1~T8 全部 PASS。
+2. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`：
+   - 必须 PASS：「Redis 连接总账:redis-match-cluster 单独一份…」「Redis 总账输入:…」，以及前几节点名的各条；
+   - 以「发布轨道:」开头的各条，按发布轨道会话的清单判定。
+3. Go：guild 只改了注释，与前面「修复三处发现」一节的 `go/guild` 命令一起跑。
+4. **集群冒烟**（可选，dev 集群）：
+   - 跑 `infra-up -WaitReady`，match 集群六个 Pod 滚动重启后回到 `cluster_state:ok`；
+   - 输出里应有 `Redis match connection ledger: per_master match_replicas=2 …`；
+   - 还应有 `Redis maxclients check OK: live=40000 manifest MAXCLIENTS=40000 nodes=6 statefulset=redis-match-cluster`；
+   - 出现 `[RedisMaxClients]Mismatch` 时，看对应 Pod 日志里的 `redis fd limit:` 一行。
+
+### Java
+
+部署脚本、清单与契约测试只在本仓，Java 版没有 K8s 清单。不适用，不新增 `PARITY.md` 条目。

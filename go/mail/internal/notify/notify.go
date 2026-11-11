@@ -21,6 +21,7 @@ import (
 	locator "proto/player_locator"
 	"shared/kafkacmd"
 	"shared/redisslot"
+	"shared/tracing/kafkagotrace"
 )
 
 var outcomes = promauto.NewCounterVec(prometheus.CounterOpts{Name: "mail_notifications_total", Help: "提交后可丢失定向邮件提醒"}, []string{"outcome"})
@@ -99,6 +100,8 @@ func (n *Notifier) publish(ctx context.Context, player, mail uint64) (string, er
 		return "", err
 	}
 	// 与共享gate推送同一控制面契约：目标实例围栏、按节点分区、玩家ID作为key。
-	err = n.Publisher.WriteMessages(ctx, kafka.Message{Topic: kafkacmd.GateCommandTopic(), Partition: kafkacmd.GateCommandPartition(gate), Key: []byte(strconv.FormatUint(player, 10)), Value: value})
+	// ctx 派生自发信请求,带着它的 trace 写进消息头,gate 投递时接上同一条 trace(docs/design/distributed-tracing.md §6.2)。
+	err = n.Publisher.WriteMessages(ctx, kafka.Message{Topic: kafkacmd.GateCommandTopic(), Partition: kafkacmd.GateCommandPartition(gate), Key: []byte(strconv.FormatUint(player, 10)), Value: value,
+		Headers: kafkagotrace.Headers(ctx)})
 	return "sent", err
 }

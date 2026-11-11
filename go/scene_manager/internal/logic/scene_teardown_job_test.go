@@ -144,7 +144,7 @@ func TestSceneTeardown_SweepReleasesTheRoomOfALostResidueSweep(t *testing.T) {
 	_, err := mr.ZAdd(activeInstancesKey(claimTestZone), 1, strconv.FormatUint(sceneID, 10))
 	require.NoError(t, err)
 
-	destroyed, err := destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle")
+	destroyed, err := destroyInstanceInternal(ctx, sc, claimTestZone, sceneID, false, "", "idle", nil)
 	require.True(t, hook.fired.Load(), "注入必须真的发生")
 	require.Error(t, err)
 	require.False(t, destroyed)

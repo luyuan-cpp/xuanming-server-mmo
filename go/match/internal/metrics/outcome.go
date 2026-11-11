@@ -23,10 +23,25 @@ var (
 		Subsystem: subsystem, Name: "outcome_outbox_delivery_total",
 		Help: "终局发件箱逐行处理结局:published / pending / applied / failed / corrupt / claim_lost / deferred / store_error。",
 	}, []string{"kind", "outcome"})
+	globalDeadlineAbortOverdue = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem, Name: "global_deadline_abort_overdue_formations",
+		Help: "全球成局里截止之后超过最晚落定时刻(约 16 分钟)仍没有终局的可裁决在途存量(每分钟巡检,2026-11-11)。大于 0 说明到期恢复跟不上积压或 match / 库长期不可用,scene 可能已按续冻上限解冻;按 cross-zone-matchmaking.md 13.3 处置(加副本或查库)。",
+	})
+	globalDeadlineAbortOverdueOldest = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem, Name: "global_deadline_abort_overdue_oldest_seconds",
+		Help: "上一项里最早一局已超期多少秒(每分钟巡检;没有超期为 0)。",
+	})
 )
 
 func outcomeCollectors() []prometheus.Collector {
-	return []prometheus.Collector{globalExpiredStranded, outcomeOutboxBacklogRows, outcomeOutboxOldestAge, outcomeOutboxDeliveryTotal}
+	return []prometheus.Collector{globalExpiredStranded, outcomeOutboxBacklogRows, outcomeOutboxOldestAge, outcomeOutboxDeliveryTotal,
+		globalDeadlineAbortOverdue, globalDeadlineAbortOverdueOldest}
+}
+
+// SetGlobalDeadlineAbortOverdue 写「超期未作废」的存量与最早一局超期的秒数(0 也写:恢复跟上之后读数要能回落)。
+func SetGlobalDeadlineAbortOverdue(count uint64, oldestOverdueSeconds float64) {
+	globalDeadlineAbortOverdue.Set(float64(count))
+	globalDeadlineAbortOverdueOldest.Set(oldestOverdueSeconds)
 }
 
 // SetGlobalExpiredStranded 写到期滞留成局的存量(0 也写:处置之后读数要能回落)。

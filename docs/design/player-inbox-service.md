@@ -314,13 +314,16 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
   |---|---|---|
   | `BagService::AddItem`、两种 `BagService::AddItems`（按数量 / 按完整实例） | 容器规划之前逐项判，任一项命中整批拒绝 | `kAssetBlocked`；一件不发、不铸号、不记流水 |
   | `BagService::ConsumeInventoryAndGrant`（战斗结算的整笔换取） | 扣材料、建候选、调外层回调之前判，提交前复核 | 本入口自身：任一项被封整笔 `kAssetBlocked`，不扣材料、不发币、不改投临时格（临时格兜底只用于主包放不下）。战斗结算调用它之前先用同一个判定剔除被封的掉落（`player_battle.cpp` 的 `DropBlockedGains`，战斗结果一线 2026-11-05 落码）：被封的那一项这一局不发、解封后也不补发，其余效果照常应用、结局 APPLIED，逐项打 WARN `metric=battle_settlement_item_blocked`；所以封禁不会把结算卡在收件箱 |
-  | 资产转入 `ApplyCredit`（帮会商店 / 活动、交易托管交付、邮件附件领取都经资产通道到这里），含按预设完整实例直接入包 | 货币封禁之后、号段余量与背包空间两道 RETRY 预检之前，按数量发放与完整实例一起判 | 记账式 `REJECTED kAssetBlocked`；背包满时也是 REJECTED，不回「背包满、稍后重试」 |
+  | 资产转入 `ApplyCredit`（帮会商店 / 活动、交易托管交付、邮件附件领取都经资产通道到这里），含按预设完整实例直接入包 | 货币封禁之后、号段余量与背包空间两道 RETRY 预检之前，按数量发放与完整实例一起判 | 记账式 `REJECTED kAssetBlocked`；背包满时也是 REJECTED，不回「背包满、稍后重试」。交易退回本人托管的资产（`TX_AUCTION_RETURN`）不判，见下方「交易退回不算获得」 |
   | 神秘商人购买 | 扣钱之前预检 | `kMysteryMerchantItemBlocked`；发物仍经 `AddItems` 再判一次 |
   | 任务奖励、活力奖励、GM 发物、宝石取下 | 经 `BagService::AddItems` | 透传 `kAssetBlocked`（27005）；宝石取下同样原样回 27005、打一条 WARN，宝石留在装备上，解封后照常取下（全服封禁与本人封禁同口径） |
 
 - **不算新增获得、不调判定**：存档还原（`bag_marshal` 的 `RestoreItems`）、整理（`MergeAndCompact`）、同一所有者内部搬运（`TakeInstance` / `PutInstance`：装备穿脱、背包与仓库互转；临时格取回 `BagService::RetrieveFromTemporary`，经 `Bag::MoveInstancesTo` 整份搬运、不铸号）、消耗与扣出。物品进临时格的那一刻已经过了判定，取回只是换个包。
 - **错误码**：复用 `kAssetBlocked`（27005「该资产当前被禁止获取」），不新增 tip。2026-11-05 起 `BagService` 对全服物品封禁也回它（原为 `kInvalidParameter`），与货币封禁同码；资产通道对 `BagService` 回的 `kAssetBlocked` 与 `kInvalidParameter` 都记 `REJECTED kAssetBlocked`，原有的「资产拒绝 / 可重试 / 账本结局」划分不变。
 - **读缺失的口径**（持久数据「读缺失即 fail-closed」规则的一处有记录的例外，见 `ecs-component-access-rules.md`）：判定对无效句柄（`entt::null`）只判全服；有效实体缺封禁表时按「没有单人封禁」回答、不补建。理由：`BagService` 的入口历来接受没有玩家上下文的容器级调用；这个组件唯一的创建点是加载，缺了说明加载不变量已被破坏，而同一实体的存盘会因缺组件整份拒绝，资产通道与收件箱只在落盘之后才终结 / 确认，所以这种状态下发出的物品成不了盘上事实，封禁绕不过去。代价是这个实体的会话内存里可能短暂多出被封物品（随实体不存盘丢弃）；线索是存盘拒绝的 ERROR（`missing=PlayerItemGainBlockComp`）。写入口（Block / Unblock）缺组件一律拒绝、不补建。
+- **交易退回不算获得**（2026-11-10，数据覆写审计 r2-trade#1）：
+  - 交易把玩家自己托管的资产还给他（撤单、过期、整单退款、竞价退回），带交易类型 `TX_AUCTION_RETURN`。资产转入、`AddCurrency`、两种带交易类型的 `BagService::AddItems`，都先问 `GainBlockService::CountsAsGain`，对它不判封禁，与「同一所有者内部搬运」同一口径。
+  - 交易的成交所得照常判封禁：被拒后合同转人工，解封后补发；交付顺序的改进写在[聚宝斋设计](jubaozhai-market.md) §6.2 末「获取封禁与托管交易」。打开 GM 封禁处置时，在途交易受的影响见手册 §2 第 6 步。
 - **已知边界**：战斗结算里被封的掉落是「这一局不发」而不是「整笔延后」，玩家与客服按 `metric=battle_settlement_item_blocked` 的 battle_id 查。宝石取下被拦是业务拒绝而不是故障：取下入口单独认出 `kAssetBlocked`，原样回 27005 并打 WARN（`PlayerEquipSystem::RemoveGem`，用例 `PlayerEquipTest.RemoveGemOfAGainBannedGemIsRefusedAndKeepsTheGem`）。
 - **运维查询**（2026-11-06 补，源码已改，未编译、未测试）：`PlayerInboxAdmin.GetItemGainBlocks(player_id)`，同样要 `x-admin-token`，只读、不写审计。回包两部分：
   - `blocked_item_config_ids`：玩家**已落盘**存档里的本人封禁表。player_inbox 不能跨库读存档库（AGENTS §7 #6），经 data_service 新增的只读 RPC `GetPlayerItemGainBlock` 读资料行（kind=PROFILE）的 `item_gain_block`；读法、错误口径与 `GetPlayerInboxLedger` 相同（data_service 两者共用 `readPersistedPlayerRow`，存档读共用 `readOwnerAndRow`）：没有写权行 `found=false`，读不成一律是错误、绝不退化成「没有」。
@@ -488,7 +491,7 @@ message player_inbox_audit {
 ```
 
 **审计行自足**（评审 L9，2026-10-16 追加 10–15 共 6 列）：
-- 审计行永不自动删除，条目终态行 30 天后物理删除。追加这 6 列之前，条目行一删就看不出「做了什么」。
+- 审计行永不自动删除；条目行现在也永久保留（§9.1，原先终态行 30 天后物理删除）。追加这 6 列，是为了在条目行会被删的那个设计下，审计里仍看得出「做了什么」。
 - 内容取自同一事务里的条目行：入箱路径按主键普通读一次，作废路径用锁内已读到的那一行。读不到或身份对不上就报错、整个事务回滚（fail-closed）。锁序不变：流行 → 条目行 → 审计行。
 - 三处写审计：入箱成功（SANCTION）、作废（VOID）、强制终结（FORCE_VOID）。FORCE_VOID 单列一个 action：同一条目常先挂过指令再强制终结，审计主键含 action 且 INSERT IGNORE，共用 VOID 会吞掉这次终结的审计行。
 - 新列都有缺省值，schemamigrate 自动 ADD COLUMN，不进人工清单，也不需要另登记门禁。
@@ -516,7 +519,7 @@ message player_inbox_audit {
   - **旧公式写出的行对按玩家的读写静默不可见**：所有按玩家的 SQL 都带 `WHERE shard = RowShard(player_id)`，旧行查不出来，锁内判重读不到它，同一 request_id 会再入箱一次（IB-2 失效）；只有按分片扫描的读会撞上读出断言。所以按旧公式写过数据的库必须先清空收件箱三张表。
   - **启动核对**：启动路径与 `-migrate` 在表结构对齐之后跑 `inbox.CheckRowShards`，逐表核对 `(shard, player_id)`。有一行不一致就拒启；`-migrate` 按「需人工」退出（退出码 4），K8s Job 停下而不是反复重试。
 - **没有 CHECK 约束**：TiDB 默认不执行 CHECK。shard 的一致性靠四样东西保证：唯一的计算函数、按分片扫描时的读出断言、启动时的整库核对、单测。
-- **量级假设**：单条流在保留期内不超过数百行。Fetch 用主键范围扫描，再按 `state=PENDING` 过滤。如果指标 `player_inbox_fetch_scanned_rows` 显示超出，再加普通索引 `(shard,player_id,domain,state,seq)`。
+- **量级假设**：原先按「单条流在保留期内不超过数百行」设计；终态行改为永久保留之后（§9.1），单条流的行数会随对局数一直增长。Fetch 用主键范围扫描，再按 `state=PENDING` 过滤。如果指标 `player_inbox_fetch_scanned_rows` 显示超出，再加普通索引 `(shard,player_id,domain,state,seq)`。
 
 ### 4.3 条目状态机
 
@@ -529,7 +532,7 @@ message player_inbox_audit {
 | PENDING 且 `delivery_count>0` | 管理员作废 / 隔离（普通模式） | 仍是 PENDING，挂上 `directive=VOID`（IB-5） |
 | PENDING 且 `delivery_count>0` | 管理员强制作废（`mode=FORCE_MISMATCH`），且已落盘账本证明成立（`force_verdict=PROVEN`） | VOIDED（`finalized_by=ADMIN`，`void_reason` 取请求，审计 `FORCE_VOID`）；证明不成立时**不变**（§7.9） |
 | PENDING | Ack 结果为 MISMATCH / NOT_DELIVERED / SKIP_NOT_REQUESTED | **不变**，告警，消费方停用这名玩家的这个域（§7.7） |
-| 任一终态 | — | 不再变化；超过保留期后物理删除 |
+| 任一终态 | — | 不再变化；行永久保留，作为这个 request 的收据（§9.1） |
 
 ### 4.4 消费端账本
 
@@ -828,7 +831,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 **生产方契约**（写进 runbook 和接口注释）：
 - `request_id` 和 `issued_at_ms` 都按工单只生成一次，重试时两者都原样带回。
 - `issued_at` 在内容摘要里，所以在保留期内刷新它重试会得到 CONFLICT，这个错误是看得见的，不会静默重复入箱。
-- 终态行保留 30 天，大于时间窗 7 天。遵守契约的重试，要么命中还在的行（返回 DUPLICATE），要么因签发时间超过 7 天被拒，不会重复入箱。
+- 终态行永久保留（§9.1）。遵守契约的重试一定命中还在的行，返回 DUPLICATE，不会重复入箱。签发时间超过 7 天的请求照旧被拒，但判重排在时间窗之前，原来那条收据总在。
 
 **分配公式的说明**：`now_ms << 12` 约为 2^53，每毫秒可以容纳 4096 个号，远大于 `max_pending`。
 - 同一条流内，单调性由 `next_seq` 保证，不受时钟回拨影响。
@@ -1244,9 +1247,15 @@ v1 不接版本摘要（D4 已拍板）。只有当落地拉取的负载超出�
 
 ### 9.1 保留期
 
-- 终态行保留 30 天，最少不低于 7 天，必须覆盖生产方的重试窗口。
-- 清理循环只在领导者上跑：按分片走 `(shard, state, updated_ms)` 索引普通读，再按主键逐行执行 `DELETE … WHERE <pk> AND state IN (终态) AND updated_ms < cutoff`，每轮最多 500 行。
-- **永不自动删除** PENDING 行，也不删除流行和审计行。
+（2026-11-10 按 §1 第 48 行的「永久收据」重写，数据覆写审计 r2-doc#2。原文写的是「终态行保留 30 天、领导者清理循环逐行 DELETE」，代码早已不删。）
+
+- **条目行全部永久保留**，包括终态行、PENDING 行、流行和审计行。原唯一行是这个 request 的永久收据：删了它，旧的 GM `request_id` 就能在换主、旧实例重投或原保留期之后再次入箱。判重靠收据还在，不靠时间窗。
+- `SweepTerminal` 保留调度接缝，恒返回 0、不删任何行（`store_maintenance.go`）。领导者上的清理循环照常起，只是空转；`TerminalRetentionDays`、`SweepIntervalSeconds` 两个配置项现在只给这个空转的循环用。
+- **容量**：条目行随两类入箱永久增长。
+  - GM 处置：每条处置一行。
+  - 战斗结算：每局全球对局给每名成员一行，这是增长的大头。
+  - Fetch、挂起护栏都走 `(shard, player_id, state)` 索引，行数增长不影响它们的正确性。单玩家对账 `ReconcilePlayer` 一次最多读 5000 行，老玩家超过这个数时只做部分核对（`store_maintenance.go`），手册与指标按此口径解读。
+- 将来要归档，必须保留同一唯一键、原摘要和原 owner 墓碑，不能恢复有限 TTL 的去重（§1 第 48 行）。
 
 ### 9.2 过期
 

@@ -29,6 +29,8 @@
 #include "proto/contracts/kafka/scene_command.pb.h"
 #include "handler/event/scene_kafka_command_router.h"
 #include "id_segment_bootstrap.h"
+#include "scene_planned_drain.h"
+#include "world/scene_planned_drain_rules.h"
 #include "modules/id_segment/guid_segment_registry.h"
 
 #include <chrono>
@@ -41,6 +43,8 @@ using namespace muduo::net;
 
 namespace
 {
+    // Agones 排空标签键,与 battle 同一个(main.cpp kAgonesDrainLabelKey、k8s 部署脚本)。
+    constexpr char kAgonesDrainLabelKey[] = "mmorpg.io/drain";
 
     struct SceneRuntimeContext
     {
@@ -66,6 +70,8 @@ namespace
         bool shutdownDrainLogged = false;
         // 本次停机里"drain 只剩改派待确认表"的逐条清单已经打过(每次停机只打一次)。
         bool relocateBacklogLogged = false;
+        // 计划排空编排(scene_planned_drain.h)。定时器回调捕获 Node,三条停机路径与拆除钩子都会先 Stop()。
+        ScenePlannedDrain plannedDrain;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop), teamFollow(loop), tasks(loop) {}
         // 启动途中抛异常也必须在局部 EventLoop 销毁前收掉 TLS 中的任务所有者。
@@ -184,6 +190,8 @@ int main(int argc, char *argv[])
         // 先复制实体列表,再逐个走完整 HandleExitGameNode 流程。
         auto exitAllPlayers = [&context](Node &)
         {
+            // 计划排空(如果走过)到此结束:剩下的人按停机原因存盘下线。先停它的定时器,它的回调捕获着 Node。
+            context->plannedDrain.Stop();
             context->tasks.Stop();
             context->grpcService.CloseCreationAdmission();
             // 停机后不再续段(定时器取消、不再发 gRPC);手里的号照常发完。
@@ -194,9 +202,15 @@ int main(int argc, char *argv[])
             // 顺序不能反:worker 还在跑的时候进程正在退出,health / ready 请求
             // 会打到一个正在拆的对象上。
             //
-            // 刻意**不**在这里调 POST /shutdown —— SIGTERM 通常正是 Agones
+            // SIGTERM 触发的停机刻意**不**调 POST /shutdown —— SIGTERM 通常正是 Agones
             // 删 Pod 发出来的,再回敬一个 /shutdown 就是递归触发删除。
-            // 只有进程自己决定自我终止时才调 RequestShutdown()。
+            // 只有进程自己决定自我终止时才调 RequestShutdown():Agones 排空标签触发的计划排空就是
+            // (docs/design/scene-node-planned-drain.md §4.1),请 Agones 删掉本 GameServer、由 Fleet 按当前模板补一台。
+            // Stop() 之前收下的 /shutdown 一定发出(GameServerLifecycle::RequestShutdown 的注释)。
+            if (context->plannedDrain.TriggeredByAgonesLabel())
+            {
+                agones::GameServerLifecycle::Instance().RequestShutdown();
+            }
             agones::GameServerLifecycle::Instance().Stop();
 			context->dependencyGate.probeTimer.Cancel();
 			context->worldTimer.Cancel();
@@ -238,6 +252,7 @@ int main(int argc, char *argv[])
         // 否则维护路径释放 Hiredis 时持久任务还在等回包,号段传输和归属对账也没停(2026-11-11 订正,此前 P3 只停两个定时器)。
         const auto beforeTeardown = [&context](Node &)
         {
+            context->plannedDrain.Stop();
             context->tasks.StopAll();
             context->grpcService.CloseCreationAdmission();
             StopGuidSegmentTransport();
@@ -358,6 +373,8 @@ int main(int argc, char *argv[])
         // 反过来做的话,新节点认领时会从 TiDB 读到存盘前的旧数据(回档)。
         node.SetOnConflictShutdown([&context](Node &, NodeIdConflictReason)
                                    {
+            // 计划排空中撞上身份冲突:整节点疏散接管(它不限速),排空的定时器不再推进。
+            context->plannedDrain.Stop();
             context->tasks.Stop();
             context->grpcService.CloseCreationAdmission();
             // 整节点疏散接管全部玩家,不再按单个场景的归属排空。
@@ -371,6 +388,18 @@ int main(int argc, char *argv[])
         // 到期兜底(go/db / SceneManager 卡住时)由 Node 的看门狗负责,不会无限等。
         node.SetConflictDrainComplete([](Node &)
                                       { return PlayerLifecycleSystem::IsEmergencyRelocateDrained(); });
+
+        // 计划排空(docs/design/scene-node-planned-drain.md):SIGTERM(K8s 滚动、缩容、删 Pod)与 Agones 排空标签先把玩家
+        // 疏散到别的节点 —— 关建场景准入、发布 admission = CLOSED,scene_manager 把本节点的世界频道迁走后发 DestroyScene,
+        // 住户按限速存盘、带着原频道号改派;副本与没赶上迁移的到自疏散时刻由本节点自己疏散。完成或到预算才进普通停机,
+        // 剩下的人由 exitAllPlayers 存盘下线。预算由部署按 Pod 宽限期注入(MMORPG_PLANNED_DRAIN_BUDGET_SECONDS)。
+        node.SetPlannedDrain(
+            [&context](Node &n)
+            { context->plannedDrain.Begin(n, [&context]
+                                          { context->grpcService.CloseCreationAdmission(); }); },
+            [&context](Node &n)
+            { return context->plannedDrain.IsComplete(n); },
+            scene_planned_drain::kDefaultBudget);
 
         node.SetAfterStart([&context, idSegmentKinds](Node& n) {
             // 路由 node_id 到这里已是终值(StartRpcServer 打完 banner 才调 afterStartFn_),
@@ -387,8 +416,9 @@ int main(int argc, char *argv[])
             // AGONES_SDK_HTTP_PORT,或 Windows 构建拿不到 curl 传输层,
             // 都会退化成 Disabled —— 不起线程、不发 HTTP、所有 gate 直接放行。
             //
-            // scene 用默认 LifecycleOptions:不开 EventLoop 心跳绑定(D84)、不开排空标签(D83),
-            // 行为与下沉前的 SceneLifecycle 一致;这两项目前只有 battle 开启。
+            // scene 不开 EventLoop 心跳绑定(D84);开排空标签(D83,与 battle 同键 mmorpg.io/drain):标签出现时 lifecycle
+            // 拒绝新的分配许可,ScenePlannedDrain 每秒看一眼它的判定,看到就进计划排空(docs/design/scene-node-planned-drain.md
+            // §4.1)。标签由运维 / 部署脚本给旧构建的 Allocated GameServer 打,或由 Fleet 缩容时的 allocationOverflow 打。
             {
                 const auto agonesEnv = agones::ReadAgonesEnv();
                 std::unique_ptr<agones::HttpTransport> transport;
@@ -404,8 +434,11 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
+                    agones::LifecycleOptions options;
+                    options.drainLabelKey = kAgonesDrainLabelKey;
                     agones::GameServerLifecycle::Instance().Start(
-                        std::move(transport), agonesEnv.BaseUrl(), agones::LifecycleOptions{});
+                        std::move(transport), agonesEnv.BaseUrl(), std::move(options));
+                    context->plannedDrain.WatchAgonesDrainLabel(n);
                 }
             }
 

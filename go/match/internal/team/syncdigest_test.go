@@ -216,7 +216,7 @@ func TestTeamCommitsBumpSyncDigest(t *testing.T) {
 	l := newTeamLedger(t, allOnline(1, 2, 3, 4, 5))
 	publish := func(caller uint64, op Op) {
 		t.Helper()
-		h.service.publish(caller, []*CommitResult{l.commit(op)})
+		h.service.publish(context.Background(), caller, []*CommitResult{l.commit(op)})
 	}
 
 	// 建队:队长本人。
@@ -242,7 +242,7 @@ func TestTeamCommitsBumpSyncDigest(t *testing.T) {
 	l.now = ruleNow + ApplicationTTLMs
 	expiry := l.commit(RefreshOp(1))
 	require.True(t, expiry.Decision.ExpiryOnly, "用例前提:这一版只是过期清理")
-	h.service.publish(1, []*CommitResult{expiry})
+	h.service.publish(context.Background(), 1, []*CommitResult{expiry})
 	require.Empty(t, digest.take(t), "纯过期清理不 bump")
 
 	// 解散:全体成员(移出者拿到空视图);未过期邀请的被邀请人收到撤销,收件箱变了。
@@ -262,7 +262,7 @@ func TestTeamKickAndDeclineBumpSyncDigest(t *testing.T) {
 	l := newTeamLedger(t, allOnline(1, 2, 3))
 	publish := func(caller uint64, op Op) {
 		t.Helper()
-		h.service.publish(caller, []*CommitResult{l.commit(op)})
+		h.service.publish(context.Background(), caller, []*CommitResult{l.commit(op)})
 	}
 	publish(1, CreateOp(1, ruleTid, testZone))
 	publish(2, ApplyOp(2, testZone))
@@ -285,8 +285,8 @@ func TestTeamBumpsPlayerRedis(t *testing.T) {
 	h.service.syncDigest = playersync.NewBumper(playersync.NewGoRedisEvaler(h.svcCtx.PlayerRedis), "team")
 	l := newTeamLedger(t, allOnline(1, 3))
 
-	h.service.publish(1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
-	h.service.publish(1, []*CommitResult{l.commit(InviteOp(1, 3, testZone))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
+	h.service.publish(context.Background(), 1, []*CommitResult{l.commit(InviteOp(1, 3, testZone))})
 
 	leader := playersync.Key(1)
 	require.Equal(t, strconv.FormatUint(ruleNow, 10), h.mr.HGet(leader, playersync.GenerationField), "g 以 Redis TIME 起种")

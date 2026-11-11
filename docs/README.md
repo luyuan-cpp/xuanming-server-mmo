@@ -39,7 +39,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
 
-全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，仅文档，尚未完成全类型验收）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a、3b（战斗按整局）全部已落码未编译），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
+全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，尚未完成全类型验收；§3.7 是 11-11 的逐节点核对）。scene 重启、缩容、滚动升级时把玩家疏散到别的节点的做法见 [scene 节点计划排空](design/scene-node-planned-drain.md)（2026-11-11 落码未编译）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a、3b（战斗按整局）全部已落码未编译），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
 
 ## 索引
 
@@ -221,7 +221,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 基础设施与中间件
 
-- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;阶段一第 1~7 批全部落码:第 1 批 11-08 已验证,第 2~7 批待 Codex 验证;K8s 采集是阶段二,未开始)
+- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;阶段一第 1~7 批与补尾 11-11 全部落码:第 1 批 11-08 已验证,其余待 Codex 验证;K8s 采集是阶段二,未开始)
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
 - [go-zero-rpc-timeout-fix.md](design/go-zero-rpc-timeout-fix.md) — go-zero RPC Client Timeout Fix
@@ -253,6 +253,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [gateway-k8s-deployment.md](design/gateway-k8s-deployment.md) — Gateway Service Notes
 - [release-packaging-standard-20260914.md](design/release-packaging-standard-20260914.md) — 服务端发布打包标准(对标 luyuan-go/xuanming-server)
 - [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05；批 1、2、2b、3a、3b 全部已落码未编译）
+- [scene-node-planned-drain.md](design/scene-node-planned-drain.md) — scene 节点计划排空：重启、缩容、滚动升级时先迁频道再按限速把玩家疏散到别的节点（同频道、坐标保留，新构建优先）；battle 同一套 Node 机制等局结束（2026-11-11 批 1~4 落码未编译）
 - [gate-drain-session-migration.md](design/gate-drain-session-migration.md) — gate 排空时把在线玩家按限速迁到同 zone 其他 gate（msg 124 + 租约内重连回原场景；2026-11-05 设计，11-06 批 A login 一侧、11-10 批 B gate 一侧都已落码未编译；开关默认关，客户端跳数清零与 Java 待做）
 - [rolling-update-restart-resilience-tests.md](design/rolling-update-restart-resilience-tests.md) — Rolling Update & Node Restart Resilience Tests
 - [vs2026_cross_machine_compatibility.md](design/vs2026_cross_machine_compatibility.md) — VS2026 跨电脑兼容性维护记录 · [EN](design/vs2026_cross_machine_compatibility_en.md) · [中文](design/vs2026_cross_machine_compatibility_zh.md)
@@ -361,6 +362,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [stress-1zone-45k-2026-06-03-round17.md](stress/stress-1zone-45k-2026-06-03-round17.md) — Stress Test — 1 Zone × 45k Robots — Round 17 (2026-06-03)
 - [stress-1zone-45k-2026-06-04-round18.md](stress/stress-1zone-45k-2026-06-04-round18.md) — Stress Test — 1 Zone × 45k Robots — Round 18 (2026-06-04)
 - [stress-3zone-2026-05-23-postmortem.md](stress/stress-3zone-2026-05-23-postmortem.md) — 3 Zone × 15000 压测 — 复盘(2026-05-23)
+- [stress-gap-items-verification-20261111.md](stress/stress-gap-items-verification-20261111.md) — 缺口清单压测项(第 3、14、15、24、30、33 条)11-11 定案后的复核方案:场景、规模档、逐条判据与不成立时的动作(未运行)
 - [stress-test-2026-05-ephemeral-port.md](stress/stress-test-2026-05-ephemeral-port.md) — 压测复盘: ephemeral port 扩容前后对比 (2026-05)
 - [stress-test-2026-05-http-login.md](stress/stress-test-2026-05-http-login.md) — 端到端阶梯压测: HTTP /api/login 路径 (2026-05-09)
 - [stress-test-progress.md](stress/stress-test-progress.md) — 1000-Robot Stress Test Progress

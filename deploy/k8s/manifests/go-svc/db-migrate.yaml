@@ -1,4 +1,5 @@
-# db-migrate:存档库(MMORPG_DB_ALLOWED_DATABASES 列出的 zone_<n>_db、player_store_<n>_db)的建表 Job,每个 zone 一份,迁的是同一批库。
+# db-migrate:存档库(MMORPG_DB_ALLOWED_DATABASES 列出的本地域 player_store_<id>_db)的建表 Job,每个 zone 一份,迁的是同一批库。
+# zone 库已退役(docs/design/player-data-tidb-scaling-plan.md §7.2,A17c),清单里出现 zone_<n>_db 部署脚本就拒绝,这里再拦一道。
 #
 # 为什么要它:存档库的表和闸门表(route_meta、writer_slot 等)只有 go/db 的 cmd/migrate 建。常驻 go/db 没有 DDL 权限,而 go/db 和 data-service 的
 # registrar 都要在这些库上注册写者(data_service 的写资格覆盖全部存档库,k8s_deploy.ps1 Get-DataServiceWriterSchemas):
@@ -105,17 +106,17 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              # 库名和编号的对应与 placement.StoreDBName 相同:zone_<n>_db、player_store_<n>_db。
+              # 库名和编号的对应与 placement.StoreDBName 相同:只有地域存档库 player_store_<id>_db(编号 >= 1000000 由 cmd/migrate 核)。
               for database in $(echo "$DB_ALLOWED_DATABASES" | tr ',' ' '); do
-                storage_id="${database#zone_}"
-                storage_id="${storage_id#player_store_}"
+                storage_id="${database#player_store_}"
                 storage_id="${storage_id%_db}"
                 case "$storage_id" in
-                  ''|*[!0-9]*)
-                    echo "ERROR: $database is not a zone_<n>_db or player_store_<n>_db name" >&2
-                    exit 1
-                    ;;
+                  ''|*[!0-9]*) storage_id="" ;;
                 esac
+                if [ -z "$storage_id" ] || [ "player_store_${storage_id}_db" != "$database" ]; then
+                  echo "ERROR: $database is not a player store database player_store_<id>_db (zone databases are retired)" >&2
+                  exit 1
+                fi
                 echo "migrating $database (storage id $storage_id)"
                 code=0
                 /app/service -f /app/etc/db.yaml -command up -storage-id "$storage_id" || code=$?
