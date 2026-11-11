@@ -104,7 +104,7 @@ uint8_t EntryWeight(const AoiEntry& entry, const AoiPriorityPolicy& policy)
     return weight;
 }
 
-// 距离只约束空间来源(由网格评估把关);显式关注可以超出视野,但仍受隐身约束。
+// 距离只约束空间来源(由 AoiSystem 按进出视野半径把关);显式关注可以超出视野,但仍受隐身约束。
 bool IsEligible(entt::entity target, const AoiEntry& entry)
 {
     return !ViewSystem::IsStealthed(target) || entry.RevealsStealth();
@@ -161,11 +161,17 @@ EntryIterator FindLowestVisible(AoiListComp& list, const AoiPriorityPolicy& poli
 }
 
 // 容量已满时,为权重 weight 的 incoming 让出一个名额:只淘汰权重严格更低的已显示条目。
-// 被淘汰者只剩空间来源时整条删除(下次跨格重新评估);有显式来源时转为暂隐,名额空出后补回。
+// 被淘汰者只剩空间来源时整条删除(任一方位置变化后重新评估);有显式来源时转为暂隐,名额空出后补回。
 // 淘汰只改本观察者的表,目标那一侧的关系各自独立,不要求互相占位。
 bool EvictForWeight(entt::entity watcher, AoiListComp& list, uint8_t weight, entt::entity incoming,
                     const AoiPriorityPolicy& policy, AoiVisibilityChanges* changes)
 {
+    // 权重 0 挤不掉任何条目(要求严格更低),不必扫表:满表的人群里每次位移重判,
+    // 普通候选都会走到这里。
+    if (weight == 0)
+    {
+        return false;
+    }
     const auto lowest = FindLowestVisible(list, policy, incoming);
     if (lowest == list.entries.end() || weight <= EntryWeight(lowest->second, policy))
     {

@@ -18,7 +18,8 @@ type RoleDirectory interface {
 }
 
 // PlayerStoreHolderReleaser 只按代次释放写权,见 data_service 的 ReleaseDeadPlayerStoreHolder(不带 seen)。
-// 只剩无资格撤销之后的补释放在用;LeaveScene 判死释放用 PlayerStoreDeadHolderFence。
+// 只剩无资格撤销在用:撤销之前按 E−1 围写权行(logic.fenceUnclaimedPlayerStore,location-release-binding.md §17.9);
+// LeaveScene 判死释放用 PlayerStoreDeadHolderFence。
 type PlayerStoreHolderReleaser interface {
 	ReleaseDeadPlayerStoreHolder(ctx context.Context, player, ownerEpoch uint64) error
 }

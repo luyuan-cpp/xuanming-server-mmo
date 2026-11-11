@@ -151,6 +151,7 @@ func (g *writerFakeGate) enter(context.Context, driver.Conn) error {
 	g.wire.record("slot-current-ACTIVE")
 	return g.enterErr
 }
+
 func (g *writerFakeGate) admitRead(context.Context, driver.Conn) error {
 	g.wire.record("read-meta")
 	return g.readErr
@@ -429,6 +430,58 @@ func TestWriterDriverCanceledRowsRollbackAndQuarantine(t *testing.T) {
 	if w.commits != 0 || w.rollbacks != 1 || c.IsValid() {
 		t.Fatal("取消后不得提交/复用")
 	}
+}
+
+// 显式事务里的读照旧走事务闸门,提交点的语义不变;读闸门只管事务外(事务外三种结局见 TestWriterDriverReadAdmissionWithoutTransaction)。
+func TestWriterDriverExplicitTxReadKeepsFullGate(t *testing.T) {
+	w := &writerFakeWire{}
+	c := writerFixture(w)
+	tx, err := c.BeginTx(context.Background(), driver.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := c.QueryContext(context.Background(), "SELECT n FROM t", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = rows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"pre-BEGIN", "begin", "slot-current-ACTIVE", "query", "rows-close", "commit"}; !reflect.DeepEqual(w.events, want) {
+		t.Fatalf("步骤=%v", w.events)
+	}
+}
+
+// 预处理语句执行的读同样只过读闸门,每次执行都重新核。
+func TestWriterDriverPreparedReadUsesReadGate(t *testing.T) {
+	w := &writerFakeWire{}
+	c := writerFixture(w)
+	stmt, err := c.PrepareContext(context.Background(), "SELECT n FROM t WHERE id=?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		rows, err := stmt.(driver.StmtQueryContext).QueryContext(context.Background(), []driver.NamedValue{{Ordinal: 1, Value: int64(i)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gates := 0
+	for _, event := range w.events {
+		if event == "read-meta" {
+			gates++
+		}
+	}
+	if gates != 2 || w.begins != 0 || w.commits != 0 || w.queries != 2 {
+		t.Fatalf("每次执行一次读闸门、不开事务: gates=%d begins=%d commits=%d queries=%d", gates, w.begins, w.commits, w.queries)
+	}
+	_ = stmt.Close()
 }
 
 func TestWriterDriverOldTxCannotCloseNextTransactionRows(t *testing.T) {

@@ -975,7 +975,7 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
   - `cross_zone_test/save_seq_test.cpp` 新增 NaN 用例。原用例把改 `player_id` 换成改等级:`player_id` 不进任何行,换尺子之后改它测不出不收敛。
 - **压测汇总**:`stress_summarize.ps1` 汇总 `[SaveTiming]`。原来 `[DirtySave]` 只扫 `run\logs\cpp_nodes`,节点日志实际在 `bin\logs\cpp_nodes`,一直读不到;现在两处都扫,旧路径的文件名前加 `run/`。
 - **注释**:`dirty_save_stats.h`、`last_persisted_snapshot_comp.h`、`player_lifecycle.h`。
-- **工程文件**:`scene.vcxproj`、`.filters`、`CMakeLists.txt` 加 `player_save_metrics.cpp`;`bag_test.vcxproj`、`.filters` 加两个测试文件。
+- **工程文件**:`scene.vcxproj`、`.filters` 加 `player_save_metrics.cpp`;`bag_test.vcxproj`、`.filters` 加两个测试文件。`CMakeLists.txt` 那一行是手加的,其实不用加:它由 `build_linux.sh` 按 vcxproj 生成,手加的位置和生成结果一致。
 - **Java 版**:存盘比较用 record 的 `equals`,double 分量按 `Double.compare` 比,NaN 判相等,退出收敛问题不适用。分段耗时指标登记在 Java 仓 `PARITY.md` 待做。
 
 ### 和「玩家数据存储策略优化」会话的分工
@@ -991,7 +991,7 @@ C++ 一律串行 `/m:1`;测试工程只链接预编好的库,先编库再跑测�
    - `bag_test`:`SaveTimingStats.*`、`SaveTimingLine.*`、`PlayerSaveMetrics.*`、`PlayerSaveCostTest.*`、`PlayerStoreClientTest.*`;
    - `cross_zone_test`:`SaveSeq.*`、`ExitPersistPayload.*`。
 3. 基准取数:在 PowerShell 里设 `$env:PLAYER_SAVE_COST_ITERATIONS = '2000'`,再跑 `build\cpp\tests\bag_test.exe --gtest_filter=PlayerSaveCostTest.*`,把输出里全部 `[SaveCost]` 行原样贴进回执。这是 Debug 构建,只看各项之间的比例。
-4. Linux:按现有 `build_linux.sh` 编 scene,确认 `player_save_metrics.cpp` 能编过。另外,`core/system/scene_task_scope.cpp` 是别的会话加的,只进了 `scene.vcxproj`,`CMakeLists.txt` 里没有;Linux 链接报 `SceneTaskScope` 找不到就是这个原因。
+4. Linux:按现有 `build_linux.sh` 编 scene,确认 `player_save_metrics.cpp` 能编过。(11-10 更正:原来这里说 `scene_task_scope.cpp` 没进 `CMakeLists.txt` 会导致 Linux 链接失败,是错的。`build_linux.sh` 按 `.vcxproj` 重新生成各目录的 `CMakeLists.txt`,文件进了 vcxproj 就会编到。)
 5. 脚本语法:在 PowerShell 里执行 `$errs = $null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/scripts/stress_summarize.ps1).Path, [ref]$null, [ref]$errs); $errs.Count`,输出 0。
 6. 本机调试栈冒烟,要有玩家在线 1 分钟以上:
    - scene 日志里每 30 秒有一行 `[SaveTiming]`;

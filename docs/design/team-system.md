@@ -2277,7 +2277,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 | # | 事实 | 证据 | 后果 |
 |---|---|---|---|
 | 1 | **别的玩家在客户端上不会动。** 服务端从不发送 `ActorMoveS2C`(133) / `ActorMoveListS2C`(135);移动只置 `ActorBaseAttributesS2C`(66)的 Transform / Velocity 脏位,且不带 `entity_id`(只有战斗状态那条路会置 `kEntityIdFieldNumber`)。客户端只注册了 133 / 135 的处理器,没有 66 的 proto 类也没有处理器 | `player_movement_handler.cpp`(改动前)三个 handler 只调 `ApplyReportedLocation` / `ApplyReportedVelocity`;`actor_attribute_calculator.cpp:78-83`;客户端 `GameClient.cs` `OnNotify(MessageIds.NotifyActorMove…)`、`Assets/Scripts/Proto/Generated/` 无 `PlayerStateAttributeSync.cs` | 队员客户端看不到队长在走,任何「跟着走」都无从谈起 |
-| 2 | **可见性只在跨六边形格时重新评估。** `AoiSystem::UpdateGridState` 在 `hex_distance(previous, current) == 0` 时直接返回;进格时用 `CanSee`(半径 `kMaxViewRadius = 10`)判一次,之后同格内不再判 | `aoi.cpp` `UpdateGridState` / `HandleEntityVisibility`;`spatial/constants/view.h` | 两人同在一个格子(边长 20)里却相距 10 以上时互相不可见,之后走到脸贴脸也建立不了可见性;同格瞬移同理 |
+| 2 | **可见性只在跨六边形格时重新评估。** `AoiSystem::UpdateGridState` 在 `hex_distance(previous, current) == 0` 时直接返回;进格时用 `CanSee`(半径 `kMaxViewRadius = 10`)判一次,之后同格内不再判 | `aoi.cpp` `UpdateGridState` / `HandleEntityVisibility`;`spatial/constants/view.h` | 两人同在一个格子(边长 20)里却相距 10 以上时互相不可见,之后走到脸贴脸也建立不了可见性;同格瞬移同理。**2026-11-10 已修(未编译)**:改为任一方位置变化后按距离重判,进 ≤ 10 m、出 > 20 m,见 [AOI 单向关注](aoi-directed-interest.md)「空间关注的评估时机」 |
 | 3 | **同图换线保留坐标。** `HandleEnterScene` 只在换地图时落到出生点,同图不同线沿用原坐标 | `player_scene.cpp` `mapChanged` | 既有的跟随换线之后,队员仍站在自己原来的位置,不在队长身边 |
 
 ### V.2 结论
@@ -2293,7 +2293,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
    - 挂 `TeleportSettleComp`(新增 `spatial/comp/teleport_settle_comp.h`,运行时状态,不落盘):移动是客户端上报、服务器只做导航射线裁决,瞬移发出时客户端可能还有按旧位置发的 MoveStart / MoveSync / MoveStop 在路上,照常裁决会把人沿直线拉回旧位置。挂着组件期间,离瞬移目标超过 `kTeleportSettleRadius`(3)的上报整条丢弃;第一条落在目标附近的上报即视为客户端已落位,摘除组件;`kTeleportSettleTimeoutMs`(3000,单调时钟)之后仍在远处上报则放弃等待、照常相信客户端(与瞬移前的信任模型一致,不会把人卡死);期间换了场景则直接作废。没有定时器,判定都发生在下一条上报到达时。判定是纯函数 `JudgeReportAfterTeleport`,有单测;
    - 实体是玩家时给它自己的客户端发 `TeleportS2C`,`reason = 5`(`kTeleportReasonTeamRegroup`;proto 注释目前只列到 4,下次重生成该 proto 时把注释补上,取值本身不需要改 proto);
    - `AoiSystem::ResetEntityVisibility(entity)`(见下)。
-4. **`AoiSystem::ResetEntityVisibility`**(`aoi.{h,cpp}`):把同场景瞬移当作「离开旧位置、重新进场」。立刻:自己的非 `kPinned` 条目全部摘掉并通知自己的客户端销毁;旧格及邻格里看着它的观察者摘掉并收到销毁(对方钉住的不动);移出格子、摘掉 `Hex`。下一次 `AoiSystem::Update`:没有 `Hex` 的实体走「首次进场」分支,在新位置重建双向可见性。**没有去改事实 2 本身**(给 Update 加同格重评估是另一件事,影响所有玩家的每帧开销,不在本轮范围)。
+4. **`AoiSystem::ResetEntityVisibility`**(`aoi.{h,cpp}`):把同场景瞬移当作「离开旧位置、重新进场」。立刻:自己的非 `kPinned` 条目全部摘掉并通知自己的客户端销毁;旧格及邻格里看着它的观察者摘掉并收到销毁(对方钉住的不动);移出格子、摘掉 `Hex`。下一次 `AoiSystem::Update`:没有 `Hex` 的实体走「首次进场」分支,在新位置重建双向可见性。当时**没有去改事实 2 本身**(给 Update 加同格重评估影响所有玩家的每帧开销,不在那一轮范围);2026-11-10 已按位移重判修掉,瞬移仍走本条的重置,理由见 `aoi.h` `ResetEntityVisibility` 注释。
 5. **移动广播** `MovementSystem::BroadcastMove(entity)`:把实体此刻的权威 Transform / Velocity 发成 `ActorMoveS2C`(`move_state` 0/1)。
    - **接收者 = 正在显示 entity 的玩家**:AOI 反向索引 `AoiWatchersComp` 里可见、且有网关会话的观察者([AOI 单向关注](aoi-directed-interest.md))。关注是单向的,接收与否只看对方是否关注并显示我,与我的兴趣表无关;隐身期间没有侦测授权的观察者不在名单里。查反向索引不扫 7 格,每条移动上报的代价与观察者数成正比。属性同步(`ActorStateAttributeSyncSystem`)用同一份名单。
    - **调用点**:MoveStart / MoveSync / MoveStop 裁决之后;以及服务器自己把速度清零的三处 —— 战斗 / 归属冻结中收到 MoveStop、`MovementSystem::Update` 撞墙清速、`PlayerLifecycleSystem::StopMotionForExit`(走着掉线)。后一类不广播的话,观察者会按最后一次上报的速度一直外推下去(客户端另有 1 秒外推上限兜底,见 V.4)。

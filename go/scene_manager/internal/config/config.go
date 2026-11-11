@@ -27,7 +27,7 @@ func (c *Config) EffectiveCoreRedis() redis.RedisConf {
 }
 
 // ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass 与 CoreRedis.Pass,规则见 redisauth.Apply。
-// 没写 CoreRedis.Host 时 EffectiveCoreRedis 用 Redis 段;玩家域没写 Addrs 时回落到 Redis 段(EffectivePlayerRedis)——
+// 没写 CoreRedis.Host 时 EffectiveCoreRedis 用 Redis 段;玩家域没写 Addrs 时回落到核心实例(EffectivePlayerRedis)——
 // 填完之后这几条路径用的都是这个口令。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
@@ -200,11 +200,12 @@ type Config struct {
 
 	// PlayerRedis: 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、
 	// 切线冷却、进场去重、owner_epoch、handoff、handoff_fence。嵌入的 Redis 段只剩控制域(场景路由、成员集合、选主锁)。
-	// 一段脚本不能跨这两个域。读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
+	// 一段脚本不能跨这两个域。读取走 EffectivePlayerRedis():没写 Addrs 时指向核心实例(EffectiveCoreRedis),开发环境不用改。
 	PlayerRedis playerredis.Config `json:",optional"`
 
-	// CoreRedis: 核心共享实例(docs/design/control-plane-zone-scoping-20261105.md §4.2)。scene_manager 只在这里读 gate 排空标记
-	// gate:<id>:draining|drained(G4a §25.3 的 10-23 订正:排空标记留在核心,运维脚本与 login 都读那一份)。
+	// CoreRedis: 核心共享实例(docs/design/control-plane-zone-scoping-20261105.md §4.2)。scene_manager 经 CoreRedis 句柄只读 gate 排空标记
+	// gate:<id>:draining|drained(G4a §25.3 的 10-23 订正:排空标记留在核心,运维脚本与 login 都读那一份);
+	// PlayerRedis 没写 Addrs 时玩家域也回落到这个实例(EffectivePlayerRedis),与别的服务、C++ scene 同一份。
 	// 上面嵌入的 Redis 段是本 zone 所属组的控制域实例(K8s 上 redis-ctl-g<N>),两者在部署上是不同实例。
 	// 没写 Host 时指向 Redis 段那一个实例:开发环境两者是同一个,不用改。读取走 EffectiveCoreRedis()。
 	CoreRedis redis.RedisConf `json:",optional"`
@@ -636,14 +637,20 @@ const (
 	playerRedisFallbackDialTimeoutMs = 5000
 )
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
-// PlayerRedis 段里单独写的池与超时在两种情况下都生效。
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向核心实例(EffectiveCoreRedis:写了
+// CoreRedis 就是它,没写就是 Redis 段;开发环境三者是同一个实例)。PlayerRedis 段里单独写的池与超时在两种情况下都生效。
+//
+// 不能回落到 Redis 段:K8s 上 Redis 段是本 zone 所属组的控制域实例 redis-ctl-g<N>,而没建玩家域集群时,login、player_locator、
+// data_service 等服务的玩家域都回落到各自连的核心实例,C++ scene 的 node-config 不写 player_redis 段时也沿用核心(zoneredis)。
+// scene_manager 若回落到控制域,location、owner_epoch、handoff 就在两个实例上各有一份、各写各的,
+// 跨服务的 CAS 全部失效(docs/design/control-plane-zone-scoping-20261105.md §4.2)。
 func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	core := c.EffectiveCoreRedis()
 	return c.PlayerRedis.OrDefault(playerredis.Config{
-		Addrs:           []string{c.Redis.Host},
-		Username:        c.Redis.User,
-		Password:        c.Redis.Pass,
-		TLS:             c.Redis.Tls,
+		Addrs:           []string{core.Host},
+		Username:        core.User,
+		Password:        core.Pass,
+		TLS:             core.Tls,
 		PoolSizePerNode: playerRedisFallbackPoolSize,
 		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
 		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,

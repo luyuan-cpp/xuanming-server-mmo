@@ -21,7 +21,7 @@
 | etcd | C++：自写 muduo_h2 传输；Go：clientv3 + 9 份注册实现；Java：jetcd 轮询 | 都能重连，失租后都会重新注册。Go 的 watch 有静默停住的窗口（R1），注册实现之间行为不一致（R3、R4） |
 | Kafka | librdkafka / kafka-go / sarama | 都由库重连；Go 消费处理完才提交 |
 | 服务间 gRPC | C++ muduo_grpc；Go zrpc；Java grpc-java | 都按需重连；每次调用带截止 |
-| 节点链路（gate↔scene RPC0） | `RpcClient` / `RpcChannel` | 握手核对实例身份，心跳 5s、判死 15s（11-05 落码，未编译） |
+| 节点链路（gate↔scene RPC0） | `RpcClient` / `RpcChannel` | 握手核对实例身份，心跳 5s、判死 15s（11-05 落码；11-08 Codex 编译通过、17 个心跳单测全过；冒烟未跑，见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §21.11） |
 
 **没做好的是另外两件事**：一是断线那一刻在途的调用怎么收场（结局未知怎么判、由哪一层重试）；二是「持有类状态」（选主锁、注册身份、watch 视图）在失联期间还可不可信。§4 列出 19 个缺口：高 2 个、中 11 个、低 6 个。已核实的条目里，没有会写坏权威数据（资产、存档、ID）的，这些都有权威库一侧的围栏兜底；但 R7 的下游是否全部兜住待确认，R13 会丢审计流水。两个高危影响的都是成片的可用性：一个是看不到节点上下线，一个是数据库重启后业务成批失败、排空被卡住。
 
@@ -468,7 +468,10 @@ C++ 有三个 Redis 句柄：
   - J2：数据库重启后，每个连接池成批报「结局未知」；
   - J5：链路一断，就踢掉其上全部玩家。
 
-  J5 已在 Java 仓 `PARITY.md` 登记过；J1～J4 本次登记为「Java 待做」（2026-11-06「依赖断线与重连核对」）。
+  登记情况（都在 Java 仓 `PARITY.md`）：
+  - J1～J3 登记为「Java 待做」（2026-11-06「依赖断线与重连核对」）；
+  - J4 的口径负责人 11-06 已定为「保留位点并告警」，Java 现有行为与之一致，剩下的核对并入同日「Match 损坏结果与原件冲突保留位点（Java 待核对）」；
+  - J5 在 11-05「节点链路恢复与业务状态解耦（Java 范围核对）」里登记过。
 
 ### 7.2 各依赖
 
@@ -579,7 +582,7 @@ C++ 有三个 Redis 句柄：
 | J1 | 中 · 已复核 | 除 `NodeRpcClients`、`SceneAssetOpClients` 外的全部 Dubbo 引用：<br>• gate 的 9 个后端；<br>• gateway→login、login→scene-manager、team→match、battle→match、guild→match、rank→mail、trade→login、match→inbox、scene→scene-manager、game-data→guild。<br>例如 `game-gate/…/gate/GateConfiguration.java:105-106`、`game-battle/…/battle/BattleConfiguration.java:283` | ① 后端重启：Triple 客户端断线 1s 后重连一次，那一次落空就要等 60s（`dubbo.application.least-reconnect-duration` 的缺省值）。后端回来之后约一分钟内，gate 对它的号仍回信封 1003，211 回 4030。<br>② 后端主机掉电、留下半开连接：心跳 60s、判死 180s，最长约 4 分钟里，每次调用都要耗满超时才失败。<br>机制见 `game-api/…/api/asset/SceneAssetOpClients.java:52-66`。Java 设计文档把它记为遗留，调参待定（`docs/design/architecture.md:1357-1361`） | • 统一给消费端配与 `NodeRpcClients.reconnectParameters()` 相同的一组参数（重连间隔与空闲心跳）；<br>• 取值要权衡：1s 的代价是空闲连接每秒一次 PING，也可以取与节点链路同档的 5s（判死约 15s）；<br>• 改完后，把钉住现状的 `BackendReconnectTest` 改成钉新值 |
 | J2 | 中 · 已复核 | `game-common/…/common/sql/AuthorityConnection.java:119`、`:130`、`:152-157`；Druid 的借出校验（各服务 `application.yaml` 里的 `test-while-idle`，阈值用缺省的 60s） | TiDB 滚动重启或切主之后：<br>① 60s 内用过的空闲连接，借出时不校验，首次往返就报连接错误（08S01）；<br>② 守卫把它判成「结局未知」08007。可这时事务还没有 COMMIT，库会回滚，实际是「确定没执行」；<br>③ 业务因此不能透明重试，调用方只能按结局未知处理，客户端多半收到 1003，要带原键重发。<br>每个池最多 `max-active` 条连接，各失败一次。COMMIT 返回「已回滚」的码，同样被判成未知。<br>这与本仓 R6 是同一处设计，但 Java 没有 Hold，不会卡住排空 | • 显式事务里 COMMIT 之前的连接错误，改判「事务已中止」，用一个区别于 08007 的状态码，让调用方能在预算内整笔重试；<br>• COMMIT 的错误，只对文档注明「已回滚」的码判确定，其余仍判未知；<br>• 把 Druid 的 `time-between-eviction-runs-millis` 调到秒级（借出时闲置超过它就校验），或者开 `test-on-borrow`。<br>需要守卫作者评审，与 R6 两版一起定 |
 | J3 | 低 · 已复核 | `game-gate/…/gate/link/SceneLinkManager.java:184-203`、`SceneLink.java:335-380` | 链路建立失败（连接被拒、握手被拒或超时）时，只把这条链路摘掉；下一帧一到，就立刻建新的一代。<br>链路层没有冷却，重连节奏全看业务发帧：scene 刚死、目录条目还在的 15s 里，或者握手一直被拒时，每个进场帧都会触发一次建连。<br>会话级补发也没有抖动 | • 每个 scene 节点建链失败后进入冷却：0.5s 起翻倍，8s 封顶，加抖动（同 C++ `muduo-rpc-channel.md` §8.3）；<br>• 冷却期间 `send` 直接回 0，进场按「暂时不可用」走会话补发；<br>• `PendingSceneEntry` 的退避也加上抖动 |
-| J4 | 低 · 已复核 | `game-match/…/match/rating/BattleResultConsumer.java:30-34`、`:266-270`；开关 `game.match.global.enabled` 缺省关闭（`RatingConfiguration.java:148`） | 开启 global 模式后，遇到解不出的结果，或者被库按数据错误拒绝的结果（SQLState 22 / 23），都会保留原位点原地重试，这个分区后续的评分全部停住。<br>这是有意的停住，为的是不丢全球结果；但它与 §2「坏消息记录后跳过」相反，是本仓 R11 的同类问题。<br>缺省模式（旧兼容）会跳过并提交 | 开启 global 之前定口径，二选一：<br>• 像 guild 历练那样，把坏消息写进 SQL 毒丸表后提交（`game-guild/…/guild/activity/GuildActivityRuntime.java:277-290`）；<br>• 坚持停住，但要配好停住告警和处置手册 |
+| J4 | 低 · 已复核，口径已定 | `game-match/…/match/rating/BattleResultConsumer.java:30-34`、`:266-270`；开关 `game.match.global.enabled` 缺省关闭（`RatingConfiguration.java:148`） | 开启 global 模式后，遇到解不出的结果，或者被库按数据错误拒绝的结果（SQLState 22 / 23），都会保留原位点原地重试，这个分区后续的评分全部停住。<br>负责人 2026-11-06 已确认这就是要的口径：保留位点并告警，等人工处置，不跳过，也不写毒丸表（§4.1 R11，契约见 `cross-zone-matchmaking.md` §13.4）。所以 §2「坏消息记录后跳过」不适用于全球对局结果。<br>global 关闭（当前缺省）时走旧兼容模式，跳过并提交 | 停住的行为不用改。剩下的事并入 Java 仓 `PARITY.md` 2026-11-06「Match 损坏结果与原件冲突保留位点（Java 待核对）」：<br>• 永久错误在单轮处理里不做无效重试；<br>• 核对错误日志、指标和提交停滞告警；<br>• 补用例：解码失败、同局原件冲突都不评分、不推进位点，重放成功后只入账一次；<br>• 旧兼容模式不能成为全球生产语义 |
 | J5 | 中 · 已复核、已登记 | gate：`ClientDispatcher.java:1432`；scene：`SceneLinkService.java:57-63`、`NodeLinkHandler.java:194-201` | 链路一断（对端读不动、15s 收不到帧、TCP 被重置），gate 就关掉其上全部会话，scene 把这些玩家移出并写回。<br>结果是一次网络抖动，就让这个 gate 在这个 scene 上的玩家全部掉线 | 按 C++ 版的做法：短暂断链时保留内存状态，恢复后只换通信绑定；实例是否消失，只看节点目录或租约。<br>Java 仓 `PARITY.md` 2026-11-05「节点链路恢复与业务状态解耦（Java 范围核对）」已登记，本次不重复登记 |
 
 11-05 登记的「节点握手双向身份核对与失败退避（Java 待做）」第 2 项，这次一并核过：

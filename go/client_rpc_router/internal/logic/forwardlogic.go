@@ -148,7 +148,7 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	if trackErr != nil {
 		finish(metrics.OutcomeInvalidReleaseTrack)
 		sampledErrorf(metrics.OutcomeInvalidReleaseTrack,
-			"[forward] gate 自报的发布轨道无法识别,拒绝 zone_id=%d message_id=%d id=%d: %v",
+			"[forward] Rejecting a release track reported by the gate that is not recognized zone_id=%d message_id=%d id=%d: %v",
 			in.ZoneId, request.MessageId, request.Id, trackErr)
 		return rejected(request, constants.ErrInvalidParameter), nil
 	}
@@ -179,7 +179,11 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	}
 	callCtx, cancel := context.WithTimeout(l.ctx, l.svcCtx.ForwardTimeout)
 	defer cancel()
-	callCtx = metadata.NewOutgoingContext(callCtx, forwardableMetadata(incoming))
+	outgoing := forwardableMetadata(incoming)
+	// 会话轨道交给目标服务(发布轨道设计 §2.6,match 据此决定战斗放在哪条轨道的 battle 上)。
+	// 按本跳解析过的值写,覆盖 gate 带来的同名键:目标只认路由服这一个来源。
+	outgoing.Set(releasetrack.MetadataKey, sessionTrack.String())
+	callCtx = metadata.NewOutgoingContext(callCtx, outgoing)
 
 	var responseBytes []byte
 	err = conn.Invoke(callCtx, route.FullMethod, request.Body, &responseBytes, grpc.ForceCodec(rawcodec.Codec{}))

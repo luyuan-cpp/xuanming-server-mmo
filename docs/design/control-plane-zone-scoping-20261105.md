@@ -212,7 +212,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 7. scene_manager 的进场去重键 `enter_scene:dedup:` 不在控制域,本设计没有动它。
 8. Redis 连接总账没有为 `redis-ctl-g<N>` 单列一行:scene-manager 的控制域连接仍记在核心那一行(多算核心、少算控制域),每个 scene 进程多出的一条 `scene_control_redis` 连接也没计入。控制域实例 `MAXCLIENTS` 10000,同组 zone 的 scene-manager 池加 scene 进程数远低于它,但要在压测前补上。
 9. `redis-split-status` 不列控制域实例;`redis-wipe` 已覆盖 `redis-ctl-g<N>`。
-10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:zone:<S>`(不以 `node:zone:` 开头,不在合服按前缀清的范围里),要由合服流程显式删掉;`tools/merge_zone` 没有改。
+10. 合服:源 zone 下线后没有领导者再处理 `scene_manager:dead_node_reconcile:zone:<S>`。合服流程不清源区的 Redis 热状态(`tools/merge_zone` 只改映射,不连 Redis),这张表与 `scene_nodes:zone:<S>:*` 一样留作没人读的垃圾键,不删:撤销合服、把源区节点拉回来时,源区的领导者照表里剩下的接着收尾,与进程重启后接手同一条路径,删了反而丢掉这些死节点的收尾。想让表里不留任务,收源区 namespace 前看 `scene_manager_dead_node_reconcile_pending{zone_id="<S>"}` 回到 0,写在 [合服手册](../ops/merge-zone-runbook.md) §8 末尾(2026-11-10)。
 11. 顺带发现:K8s 的 player-locator ConfigMap 没有 `SceneManagerRpc` 段(本机 `player_locator.yaml` 有),断线租约到期时的 LeaveScene 在 K8s 上可能发不出去。不在本设计范围,未核实影响,另行处理。
 
 ## 7. 分批与文件

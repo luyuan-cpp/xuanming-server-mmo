@@ -160,7 +160,7 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 **默认整个地域一起回档**,所有逻辑库回到同一个 T,这样跨库的资产、目录和存档才对得上。只回一个库是例外,要按 §4.1a 处理并人工核账。
 
 1. **挑 T。** T 不能落在搬库或排空的冻结窗口里,否则恢复出来的闸门是关的,写者全部被挡。
-2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-RedisSplit`、`-PlayerRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
+2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-PlayerStoreShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-RedisSplit`、`-PlayerRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
 3. **恢复。** TiDB 档按 §4.1b,MySQL 档按 §4.1。先恢复到影子库或新集群核对,原库保留到开流量之后。T 之后搬过库的,恢复到映射现在指向的集群,但备份要用 T 时刻那个集群的。
 4. **核对闸门。** 每个逻辑库执行 `SELECT writable,HEX(freeze_run_id) FROM route_meta`,结果应该是可写、没有冻结标记。
 5. **跳过 `match-results` 的积压。** T 之后的对局结果和数据库一起丢弃。起服之前把 `match-rating`、`guild-trial` 两个消费组的位点都重置到最新:

@@ -132,6 +132,8 @@ func newCreatePlayerHarnessWithNames(t *testing.T, resolver *homezone.Resolver, 
 	t.Cleanup(func() { _ = rdb.Close() })
 
 	config.AppConfig.Node.ZoneId = hzZoneID
+	// 建角选库必填(总体方案 §7.2):本机口径,地域 0、一个存档库。
+	config.AppConfig.Placement = config.PlacementConf{Region: 0, StorageShards: 1}
 	config.AppConfig.Node.SessionExpireMin = 30
 	config.AppConfig.Locker.AccountLockTTL = 10
 	config.AppConfig.Account.MaxPlayersPerAccount = 5
@@ -283,8 +285,8 @@ func TestCreatePlayer_ReleasesLockOnHomeZoneFailure(t *testing.T) {
 	}
 }
 
-// registerHomeZone 恒带 storage_id(player-storage-placement.md §8.3)。配了地域存档库:按 player_id 在本地域 K 个库里取模,
-// 和 login 所在区无关(总体方案 §7.2);过渡期没配:NewPlayerStorageId=0 → 本 login 的 Node.ZoneId,显式填了 → 原样透传。
+// registerHomeZone 恒带 storage_id(player-storage-placement.md §8.3):按 player_id 在本地域 K 个存档库里取模,
+// 和 login 所在区无关(总体方案 §7.2)。没配 StorageShards 拒绝建角,不回落到本 zone 的库。
 // home_zone 在所有情形下都不变。
 func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 	savedZone, savedPlacement := config.AppConfig.Node.ZoneId, config.AppConfig.Placement
@@ -302,10 +304,8 @@ func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 		placement   config.PlacementConf
 		wantStorage uint32
 	}{
-		"region storage":            {placement: config.PlacementConf{Region: 1, StorageShards: 64}, wantStorage: regionStorage},
-		"dev region storage":        {placement: config.PlacementConf{Region: 0, StorageShards: 1}, wantStorage: placement.DefaultGlobalStorageID},
-		"storage 0 uses login zone": {placement: config.PlacementConf{}, wantStorage: hzZoneID},
-		"global storage 1000000":    {placement: config.PlacementConf{NewPlayerStorageId: 1000000}, wantStorage: 1000000},
+		"region storage":     {placement: config.PlacementConf{Region: 1, StorageShards: 64}, wantStorage: regionStorage},
+		"dev region storage": {placement: config.PlacementConf{Region: 0, StorageShards: 1}, wantStorage: placement.DefaultGlobalStorageID},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -326,11 +326,26 @@ func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 			}
 		})
 	}
+
+	// 没配存档库数:拒绝建角,一次登记都不发(旧版这里会回落到本 zone 的库)。
+	config.AppConfig.Placement = config.PlacementConf{}
+	fake := &fakeRegisterClient{}
+	l := NewCreatePlayerLogic(context.Background(), &svc.ServiceContext{HomeZone: homezone.New(fake, 0, 0, 0)})
+	tip := l.registerHomeZone(hzAccount, hzPlayerID)
+	if tip == nil || tip.Id != uint32(table.LoginError_kLoginDataSerializeFailed) {
+		t.Fatalf("missing StorageShards must refuse the new player, got tip %v", tip)
+	}
+	if fake.calls != 0 {
+		t.Fatalf("RegisterPlayerZone calls = %d, want 0 (no storage chosen)", fake.calls)
+	}
 }
 
 // registerHomeZone 单测:成功返回 nil;任何失败都返回既有的 kLoginDataSerializeFailed。
 func TestRegisterHomeZone(t *testing.T) {
+	savedPlacement := config.AppConfig.Placement
+	t.Cleanup(func() { config.AppConfig.Placement = savedPlacement })
 	config.AppConfig.Node.ZoneId = hzZoneID
+	config.AppConfig.Placement = config.PlacementConf{Region: 0, StorageShards: 1}
 
 	ok := &fakeRegisterClient{}
 	l := NewCreatePlayerLogic(context.Background(), &svc.ServiceContext{HomeZone: homezone.New(ok, 0, 0, 0)})

@@ -18,7 +18,9 @@
 #include "authenticated_session_binding.h"
 #include "scene_entry_dispatch.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/rpc/drain_migration.h"
 #include "handler/gate_push_delivery.h"
+#include "handler/gate_redirect_delivery.h"
 #include "spectate/gate_spectate_client.h"
 #include <session/system/session_identity_fence.h>
 
@@ -153,6 +155,17 @@ void GateEventHandler::KickPlayerEventHandler(const contracts::kafka::KickPlayer
     if (!conn || !conn->connected())
     {
         LOG_DEBUG << "KickPlayer: connection already closed. session_id=" << sessionId;
+        return;
+    }
+
+    // 已推过 124 的会话:客户端正在换连接,这次踢线是新连接上 ReplaceLogin 的正常后果,不推「账号在别处登录」,直接关
+    // (docs/design/gate-drain-session-migration.md §4.3;排空迁移与跨 zone 传送都一样)。
+    if (session.routerLane.Redirected())
+    {
+        conn->shutdown();
+        LOG_INFO << "KickPlayer: closed redirected session without kick notice, session_id=" << sessionId
+                 << " player_id=" << session.playerId
+                 << " kicker_login_generation=" << event.login_generation();
         return;
     }
 
@@ -298,27 +311,6 @@ void GateEventHandler::RedirectToGateEventHandler(const contracts::kafka::Redire
 {
 ///<<< BEGIN WRITING YOUR CODE
     const auto sessionId = event.session_id();
-    auto &sessions = tlsSessionManager.sessions();
-    auto it = sessions.find(sessionId);
-    if (it == sessions.end())
-    {
-        // Normal race: player disconnected before RedirectToGate landed.
-        LOG_WARN << "RedirectToGate: session already gone (disconnect race), session_id=" << sessionId
-                 << " player_id=" << event.player_id();
-        return;
-    }
-
-    auto conn = it->second.conn.lock();
-    if (!conn || !conn->connected())
-    {
-        LOG_DEBUG << "RedirectToGate: connection already closed, session_id=" << sessionId;
-        return;
-    }
-
-    // 路由 lane(docs/design/client-request-ordering.md O9):会话转去别的 gate,丢弃还没发出的排队项,
-    // 之后到达的路由类请求回带请求 id 的 1003;在途那一条的回包照常下发。不这样做,旧连接上排着的请求会继续发出,
-    // 与目标 zone 新 gate 上的新会话请求交错执行。与 Java 版 ClientDispatcher.enterRedirected 一致。
-    gate_lane::OnSessionRedirected(it->second);
 
     // Build client-facing redirect message.
     RedirectToGateNotify notify;
@@ -328,19 +320,37 @@ void GateEventHandler::RedirectToGateEventHandler(const contracts::kafka::Redire
     notify.set_token_signature(event.token_signature().data(), event.token_signature().size());
     notify.set_token_deadline(event.token_deadline());
 
-    MessageContent mc;
-    mc.set_message_id(SceneClientPlayerCommonRedirectToGateMessageId);
-    mc.set_serialized_message(notify.SerializeAsString());
-    GetGateCodec().send(conn, mc);
-
-    LOG_INFO << "RedirectToGate: sent redirect to player " << event.player_id()
-             << " session_id=" << sessionId
-             << " target=" << event.target_gate_ip() << ":" << event.target_gate_port();
+    // 推 124 的唯一收口(handler/gate_redirect_delivery.h):身份栅栏、丢弃路由排队项(O9)、推送与滞留关闭登记都在那里,
+    // 排空迁移的要票应答走同一个函数(docs/design/gate-drain-session-migration.md §4.3)。
+    switch (gate_redirect::PushRedirect(sessionId, event.player_id(), notify, std::chrono::steady_clock::now()))
+    {
+    case gate_drain_migration::PushOutcome::kPushed:
+        LOG_INFO << "RedirectToGate: sent redirect to player " << event.player_id()
+                 << " session_id=" << sessionId
+                 << " target=" << event.target_gate_ip() << ":" << event.target_gate_port();
+        break;
+    case gate_drain_migration::PushOutcome::kSessionGone:
+        // Normal race: player disconnected before RedirectToGate landed.
+        LOG_WARN << "RedirectToGate: session already gone (disconnect race), session_id=" << sessionId
+                 << " player_id=" << event.player_id();
+        break;
+    case gate_drain_migration::PushOutcome::kConnectionGone:
+        LOG_DEBUG << "RedirectToGate: connection already closed, session_id=" << sessionId;
+        break;
+    case gate_drain_migration::PushOutcome::kIdentityMismatch:
+        // session_id 序号回绕或 node_id 复用后,这张票本来会推给另一名玩家(R13)。
+        LOG_WARN << "RedirectToGate: identity fence dropped the redirect, session_id=" << sessionId
+                 << " event_player_id=" << event.player_id();
+        break;
+    }
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::GateDrainMigrationEventHandler(const contracts::kafka::GateDrainMigrationEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
+    // login 的排空判定每拍发一条(每个 login 副本各一条):收到即开启或续期迁移许可,rate / lease 为 0 立即停。
+    // 挑会话、要票与推 124 在 handler/rpc/drain_migration.cpp 的 Tick 里(docs/design/gate-drain-session-migration.md §4.3)。
+    gate_drain_migration::OnLease(event, std::chrono::steady_clock::now());
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::PushToPlayerEventHandler(const contracts::kafka::PushToPlayerEvent& event)

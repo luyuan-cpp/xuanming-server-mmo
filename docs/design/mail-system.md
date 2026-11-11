@@ -148,7 +148,7 @@
 | 玩家侧状态 | 就在本人行上 | 只在**有交互**(已读 / 删除 / M2 领取)时物化一行 `mail_system_state` |
 | 读成本 | 一次按 owner 扫 | 多一次"有效系统邮件集"查询(有界,见下)+ 一次按 (player, id IN …) 的点查 |
 
-代价与约束:读时合并要求**有效系统邮件数有界**,否则每次列表都要扫一遍。约束手段:`SendSystemMail` 强制 `expire_ms`(不许永不过期,最长 `Mail.MaxSystemMailTtlDays`),并在发件时检查"当前有效系统邮件数 < `Mail.MaxActiveSystemMails`"(推荐 100)。这个检查在并发发件下是软上限(两个运维同时发可能各自看到 99),接受理由:发件方只有运维,并发极低;读侧另有 `ORDER BY sys_mail_id DESC LIMIT` 硬上限并在截断时打 WARN + 计指标(并有告警,§4.7),所以超额时丢弃的是 **`sys_mail_id` 最小的**几封(号段单调,即最早发出的),不会拖垮查询。没有 `ORDER BY` 时截掉哪几封由执行计划决定(走 `expire_ms` 索引时截掉的是最晚过期的),翻页也可能不稳定 —— 所以排序必须写进 SQL。
+代价与约束:读时合并要求**有效系统邮件数有界**,否则每次列表都要扫一遍。约束手段:`SendSystemMail` 强制 `expire_ms`(不许永不过期,最长 `Mail.MaxSystemMailTtlDays`),并在发件时检查"当前有效系统邮件数 < `Mail.MaxActiveSystemMails`"(推荐 100)。帮会邮件(文本与活动)不计入这个全服上限,按帮另计 `Mail.MaxActiveGuildMailsPerGuild`(缺省 20,2026-11-10,缺口清单第 27 条):它们只对本帮成员可见,不进别人的列表查询;共用一个全服上限时,帮会一多就会把系统邮件挤满。这个检查在并发发件下是软上限(两个运维同时发可能各自看到 99),接受理由:发件方只有运维,并发极低;读侧另有 `ORDER BY sys_mail_id DESC LIMIT` 硬上限并在截断时打 WARN + 计指标(并有告警,§4.7),所以超额时丢弃的是 **`sys_mail_id` 最小的**几封(号段单调,即最早发出的),不会拖垮查询。没有 `ORDER BY` 时截掉哪几封由执行计划决定(走 `expire_ms` 索引时截掉的是最晚过期的),翻页也可能不稳定 —— 所以排序必须写进 SQL。
 
 **不用"每玩家一个已看最大 sys_mail_id 游标"**:游标只能表达"看过",表达不了单封的已删 / 已领,最后还是要物化行;两套状态并存只会多一处不一致。
 
@@ -1310,3 +1310,15 @@ Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送�
 - 回归:`go/mail/cmd/mailadmin/main_test.go`(本机随机端口的 MailAdmin 替身,不依赖真库;断言只比对替身实收的请求,不依赖当前时间的取值),含 `TestUnrecognizedTipCodeIsUnknownLikeFault`、`TestSuccessTipCodeIsDelivered`。
 
 `Mail.MaxPersonalMailTtlDays` 与排行榜奖励联动:`go/rank/etc/rank.yaml` 的 `MailMaxPersonalMailTtlDays` 必须同值,改有效期两边同批改,见 [leaderboard-system.md](leaderboard-system.md)「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」。Java 版没有运维发件 CLI,r2-mail#1 不适用。
+
+### 2026-11-10 帮会邮件按帮计数(缺口清单第 27 条;未编译、未运行)
+
+- 问题:系统邮件和帮会邮件(文本与活动)共用全服 `Mail.MaxActiveSystemMails`(100)。帮会邮件只对本帮可见,却挤占全服名额:帮会一多,运维的系统邮件就发不出去;一个帮发得多,别的帮也发不了。
+- 做法:发件与建活动的封顶收进同一个判定 `checkSharedMailCapacity`(`go/mail/internal/data/repo.go`),按 `guild_id` 是否为 0 分两类计数:
+  - `guild_id=0` 是系统邮件,数 `owner_player_id=0 AND guild_id=0 AND kind IN (0,2)` 的有效行,上限 `MaxActiveSystemMails`;
+  - 非 0 是帮会邮件,数这个帮的有效共享行,上限新配置 `Mail.MaxActiveGuildMailsPerGuild`(缺省 20,允许 1~100,`go/mail/etc/mail.yaml` 与 ConfigMap 同源)。
+  - 两类不会混:`Send` 与 `CreateCampaign` 都校验系统邮件 `guild_id=0`、帮会邮件非 0。活动的幂等占位行(kind=0)和它的消息行算在各自那一类,与改动前的口径相同。
+- 仍是软上限,理由同前:并发发件可能略超,读侧 `ListMails` 另有 `LIMIT` 硬上限。帮会计数走 `(guild_id, mail_id)` 索引,只扫这个帮的行。
+- 帮会邮件目前还没有调用方,这一条先把数据口径改对,接入帮会公告时不用再动封顶。
+- 顺带发现、没改:`metrics.ObserveListTruncated` 已经没有调用方(读侧封顶在 2026-10-30 改成分页 `LIMIT` 时去掉了),告警 `MailSystemListTruncated`(`deploy/k8s/mail-alerts.yaml`)因此永远不会触发。要删要改另记,不在本条。
+- 回归:`go/mail/internal/data/repo_integration_test.go` 的 `TestTiDBGuildMailCapIsPerGuildAndSeparateFromSystemCap`(门控同文件其他 TiDB 用例)、`TestMailLimitsGuildCapDefaultsAndRange`(纯单测);部署契约 `k8s_deploy_contract.tests.ps1` 的邮件配置镜像清单加了新键。

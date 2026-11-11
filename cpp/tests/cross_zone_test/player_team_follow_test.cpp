@@ -708,4 +708,19 @@ TEST_F(TeamFollowDriveTest, LeaderLeavingTheTeamReleasesTheFollowerOnTheNextTick
     EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_));
 }
+
+TEST_F(TeamFollowDriveTest, ResendAfterEntryLeavesTheFormationUntouched)
+{
+    WalkLeader(3.0);
+    const double before = X(follower_);
+    // 接回会话后补推一次状态(测试里没有可投递的网关会话,不发),不能顺带改动队形或驱动。
+    TeamFollowSystem::ResendStateAfterEntry(follower_);
+    TeamFollowSystem::ResendStateAfterEntry(leader_); // 队长不是任何人的随从:什么都不做
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_));
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(leader_));
+    EXPECT_DOUBLE_EQ(X(follower_), before);
+
+    WalkLeader(6.0);
+    EXPECT_NEAR(X(follower_), 6.0 - kTeamFollowSpacing, 1e-6) << "补推之后照常被带着走";
+}
 } // namespace

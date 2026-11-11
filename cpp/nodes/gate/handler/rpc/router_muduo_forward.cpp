@@ -47,12 +47,11 @@ void LogMissingSessionEchoSampled()
     }
 }
 
-} // namespace
-
-void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
-                 const std::string &sessionDetailsBin)
+// 构造一次 Forward 调用:路径、序列化的请求、截止、会话 metadata 与调用方签名。签名失败返回 false。
+// SendForward 与 SendForwardForInternalReply 共用这一份,线上字节两条路径逐字相同。
+bool PrepareForwardCall(const client_rpc_router::ForwardRequest &request, const std::string &sessionDetailsBin,
+                        muduo_grpc::UnaryCallRequest &call)
 {
-    muduo_grpc::UnaryCallRequest call;
     call.method = kForwardPath;
     call.message = request.SerializeAsString();
     call.deadline = std::chrono::steady_clock::now() +
@@ -61,10 +60,19 @@ void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardR
     // (grpc_async_client.cpp.tmpl 的 Start<Svc><Method>Call)的 Base64Encode 同一层;线上的 -bin 编码由传输层再做一层。
     // 两层都不能省(§4.2);字节本身原样转发,不解析、不重新序列化(路由 lane 的字段要原值往返)。
     call.metadata.emplace_back(kSessionBinMetaKey, Base64Encode(sessionDetailsBin));
-	const auto messageId = request.request().message_id();
-	if (messageId >= gRpcMethodRegistry.size() ||
-		!caller_auth::Append(call.metadata, gRpcMethodRegistry[messageId].grpcFullMethod,
-			sessionDetailsBin, std::getenv(caller_auth::kSecretEnv)))
+    const auto messageId = request.request().message_id();
+    return messageId < gRpcMethodRegistry.size() &&
+           caller_auth::Append(call.metadata, gRpcMethodRegistry[messageId].grpcFullMethod,
+                               sessionDetailsBin, std::getenv(caller_auth::kSecretEnv));
+}
+
+} // namespace
+
+void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
+                 const std::string &sessionDetailsBin)
+{
+    muduo_grpc::UnaryCallRequest call;
+	if (!PrepareForwardCall(request, sessionDetailsBin, call))
 	{
 		gate_rpc_reply_bridge::NotifyCallFailure(kForwardMethodName,
 			static_cast<int>(muduo_grpc::StatusCode::kInternal), "内部会话签名失败", &sessionDetailsBin, nullptr);
@@ -104,6 +112,38 @@ void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardR
                 return;
             }
             gate_rpc_reply_bridge::DeliverReply(*replySession, reply, nullptr);
+        });
+}
+
+void SendForwardForInternalReply(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
+                                 const std::string &sessionDetailsBin,
+                                 std::function<void(const MessageContent *reply)> done)
+{
+    muduo_grpc::UnaryCallRequest call;
+    if (!PrepareForwardCall(request, sessionDetailsBin, call))
+    {
+        LOG_ERROR << "Router Forward for an internal reply not sent: caller signature failed, message_id="
+                  << request.request().message_id();
+        done(nullptr);
+        return;
+    }
+    // 应答只交给 done:这条调用由 gate 自己合成、自己处理,会话还在也不能把回包推给客户端。
+    channel.StartUnaryCall(
+        std::move(call),
+        [done = std::move(done)](muduo_grpc::UnaryCallResult &&result)
+        {
+            if (!result.status.ok())
+            {
+                done(nullptr);
+                return;
+            }
+            MessageContent reply;
+            if (!reply.ParseFromString(result.response))
+            {
+                done(nullptr);
+                return;
+            }
+            done(&reply);
         });
 }
 

@@ -439,9 +439,11 @@ no node counters, but the cascade, the source's mirror-set SREM and the Agones r
   - scene_count:在认领脚本里按期望属主扣(只在 > 0 时减),不留到脚本外,扫描晚做也不会扣到复用同一 node_id 的
     新进程头上。世界频道只扣活属主(活不活在认领前判),死属主的计数键由死节点收尾整个删。
   - Agones 名额:任务上原子置位后才调 K8s,一个任务至多还一次(`luaTakeTeardownRoom`,同一次调用的重发仍认得出自己)。
-    置位之后、调用之前进程退出,这份名额不还 —— 这时 scene_count 已经减了,两数对不上,Agones 对账会告警。
-    选「至多一次」而不是「至少一次」:后者在置位丢失时还两次,把容量算少、让 FleetAutoscaler 超卖;与
-    TransferAgonesRoomForScene 结局未知时「两边都不还」同一取舍。
+    两种情况这份名额不还:置位之后、调用之前进程退出;归还调用本身失败(`ReleaseRoom` 有界重试用完,或请求已生效、
+    回包丢了;只记 `scene_manager_agones_counter_rollback_total{outcome="failed"}` 与 `COUNTER DRIFT` 日志,任务照常删)。
+    这时 scene_count 已经减了,两数对不上,Agones 对账会告警。
+    选「至多一次」而不是「至少一次」:计数的增减不带名额身份,分不清上一次调用生效没有,重试可能还两次,把容量算少、
+    让 FleetAutoscaler 超卖;与 TransferAgonesRoomForScene 结局未知时「两边都不还」同一取舍。
 - **重发与并发**:同 token 的任务在 = 这次是 go-redis 的原样重发,原样返回快照、一个键都不动(R5)。别的 token 的任务在 =
   上一次拆除还没做完,一律回 `pending`:谁都认领不到,同一个 scene_id 被重新登记(号源出错)也挡在这里,直到旧任务做完。
   认领方慢过了租期、与扫描同时做时,两边重跑的都是幂等步骤,名额与删任务各只发生一次。
@@ -452,8 +454,12 @@ no node counters, but the cascade, the source's mirror-set SREM and the Agones r
 - **观测**:`scene_manager_scene_teardown_jobs_total{zone_id, kind, outcome=completed|recovered|deferred}`;
   `scene_manager_scene_teardown_oldest_pending_seconds{zone_id}`(只有领导者发布,跟随者归零),告警
   `SceneManagerSceneTeardownStuck`(> 600s 持续 10 分钟)。日志前缀 `[SceneTeardown]`。
-- **仍不保证的**:Agones 至多一次留下的那份名额(由对账告警暴露,不自动收);C++ 节点在 DestroyScene 之后才处理完
-  一个在途的 CreateScene(回滚的那次补发早到),实体仍会留下,要 C++ 侧的墓碑才能收。
+- **仍不保证的**:Agones 至多一次留下的那份名额(由对账告警暴露,不自动收)。标准的根治是让每个名额在 GameServer 上
+  有按 scene_id 的条目(Agones Lists,或与计数同一次更新写入的注解),增删按条目幂等、可以重试,对账逐条收敛;
+  已登记在缺口清单第 1 条「仍剩」,按负责人 11-06 的安排在额度重置之后做。
+  C++ 节点在 DestroyScene 之后才处理完一个在途的 CreateScene(回滚的那次补发早到)时实体仍会留下,scene_manager
+  这边收不了;由节点侧的归属对账收(`scene-node-ownership-reconcile.md`,缺口清单第 33 条):节点连续两次读到映射
+  不是自己、过 60 秒宽限就排空销毁。
 
 #### 销毁只改本 zone 的键(2026-11-06)
 

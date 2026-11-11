@@ -52,9 +52,17 @@ function Reset-MigrateFixture {
     foreach ($name in @('Apply-OneGoSvc', 'Apply-GoSvcMigrateJob', 'Get-GoSvcMigrateJobState',
         'Wait-GoSvcMigrateJobSettled', 'Assert-GoSvcMigrateJobNotInFlight', 'Wait-ForGoSvcMigrateJob',
         'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcEnvEntries', 'Add-GoSvcCommandTopicEnv', 'Add-GoSvcTopicReplicationEnv',
-        'Get-SqlRuntimeManifestRange', 'Add-SchemaPermissionManifest', 'Get-DbAllowedDatabaseNames', 'Apply-GoSvcManifests', 'Get-ZoneScopedGoSvcNames')) {
+        'Get-SqlRuntimeManifestRange', 'Add-SchemaPermissionManifest', 'Get-DbAllowedDatabaseNames', 'Apply-GoSvcManifests', 'Get-ZoneScopedGoSvcNames',
+        'Test-InfraMysqlInUse', 'Get-SqlEntryEndpoint', 'Get-GlobalAuthoritySqlSettings', 'Get-FriendSqlSettings')) {
         Restore-ProductionFunction $name
     }
+    # 迁移 Job 的 init 容器等这次实际的 SQL 入口(Get-SqlEntryEndpoint),只有入口是集群内 MySQL 时才先等 deploy/mysql(Test-InfraMysqlInUse)。
+    # 缺省给外部 TiDB 入口;用例要测集群内 MySQL 时自己改这三个变量。
+    $script:GlobalAuthorityTiDBHost = 'tidb.invalid:4000'
+    $script:FriendTiDBHost = ''
+    $script:TradeTiDBHost = ''
+    $script:MatchTiDBHost = ''
+    $script:DatabaseBackend = 'tidb'
     # Add-GoSvcEnvEntries:Add-GoSvcCommandTopicEnv / Add-GoSvcSecretEnv 共用的 env 注入助手,由 k8s_deploy 属主从两者中抽出。
     # 抽出之前部署脚本里还没有它,所以按"存在才恢复"处理;抽出之后调用方依赖它,若它缺席或改名,
     # 调用处会报"命令未找到",Add-GoSvcCommandTopicEnv 与 Apply-OneGoSvc 的用例随之变红,不会静默通过。
@@ -261,6 +269,34 @@ Test-Case '成功 Job 才放行 Deployment，且 ConfigMap 与 Job 的顺序正�
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Job 要读取先前创建的 ConfigMap'
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '迁移必须先于服务部署'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能直接放行'
+}
+
+# docs/design/no-single-node-horizontal-scaling-20261001.md §6:tidb 档没有集群内 MySQL,init 容器等实际入口,脚本不等 deploy/mysql。
+Test-Case 'wait-sql 等这次实际的 SQL 入口;只有入口是集群内 MySQL(dev)时才先等 deploy/mysql' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
+    Assert-Match -Text $script:MigrationContent -Pattern 'name: SQL_HOST\s+value: "tidb\.invalid"' -Because '主机取 -GlobalAuthorityTiDBHost'
+    Assert-Match -Text $script:MigrationContent -Pattern 'name: SQL_PORT\s+value: "4000"' -Because '端口跟着入口,不写死 3306'
+    Assert-NotMatch -Text $script:MigrationContent -Pattern 'mysql\.audit-infra|MYSQL_ADDR' -Because '外部 TiDB 时清单里没有集群内 MySQL 的地址'
+    Assert-True -Condition ($script:Events -notcontains 'ready:mysql') -Because 'tidb 档不等一台没有部署的 MySQL'
+
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    $script:ReleaseProfile = 'dev'
+    $script:WaitReady = $true
+    $script:GlobalAuthorityTiDBHost = 'mysql.audit-infra:3306'
+    $script:DatabaseBackend = 'mysql'
+    Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
+    Assert-Match -Text $script:MigrationContent -Pattern 'name: SQL_HOST\s+value: "mysql\.audit-infra"' -Because 'dev 用集群内 MySQL 时等的就是它'
+    Assert-True -Condition ([Array]::IndexOf(@($script:Events), 'ready:mysql') -ge 0 -and [Array]::IndexOf(@($script:Events), 'ready:mysql') -lt [Array]::IndexOf(@($script:Events), 'apply:Job')) -Because '先等 deploy/mysql 就绪,再 apply Job'
+
+    Reset-MigrateFixture
+    $script:GlobalAuthorityTiDBHost = 'mysql.audit-infra:3306'
+    $script:DatabaseBackend = 'mysql'
+    $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 }
+    Assert-Match -Text $failure -Pattern 'is the in-cluster MySQL' -Because 'prod 不许把入口指到集群内单实例 MySQL'
+    Assert-True -Condition ($script:Events -notcontains 'apply:Job') -Because '拒绝发生在 apply 之前'
 }
 
 # 全局服务分两步(k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests):第一步只有 ConfigMap 与迁移 Job,第二步只有工作负载。

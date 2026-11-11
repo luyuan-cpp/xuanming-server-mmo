@@ -129,9 +129,13 @@ type ServiceContext struct {
 	// SceneNodes / BattleNodes 是 etcd list-watch 内存镜像:
 	//   - SceneNodes:按 player:{id}:location 里的 (zone_id, node_id) 定位
 	//     scene 节点 gRPC 地址(PrepareBattle / CancelBattlePrepare 对端);
-	//   - BattleNodes:全局池,机房内按负载选点(internal/battleplace)后写进成局原件。
-	SceneNodes  *discovery.NodeWatcher
-	BattleNodes *discovery.NodeWatcher
+	//   - BattleNodes:全局池,机房内按负载选点(internal/battleplace)后写进成局原件。只收 stable 节点;
+	//   - CanaryBattleNodes:同一前缀下只收 canary 节点(发布轨道设计 §2.6)。全员都是金丝雀会话的新成局先在这里、
+	//     在按 stable 节点选定的机房里选点,选不到退回 BattleNodes;按节点号确认已有对局的实例时两份都查。
+	//     探测目标、机房集合与节点计数只看 BattleNodes,所以 canary battle 节点要和 stable 的部署在同一批机房。
+	SceneNodes        *discovery.NodeWatcher
+	BattleNodes       *discovery.NodeWatcher
+	CanaryBattleNodes *discovery.NodeWatcher
 
 	// DataServiceClient 是 data_service 的 gRPC 客户端:领号段、查玩家昵称与展示资料。
 	// DataServiceRpc 没配任何目标时为 nil,号段装配随之拒绝启动。连接是 NonBlock 的:data_service 没起
@@ -300,6 +304,9 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.BattleNodes = discovery.NewNodeWatcher("battle", BattleNodeRpcPrefix,
 		metrics.SetDiscoveredNodes,
 		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).StableOnly()
+	sc.CanaryBattleNodes = discovery.NewNodeWatcher("battle-canary", BattleNodeRpcPrefix,
+		metrics.SetDiscoveredNodes,
+		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) }).CanaryOnly()
 	sc.MatchNodes = discovery.NewNodeWatcher("match", MatchNodeRpcPrefix, metrics.SetDiscoveredNodes, nil).StableOnly()
 	sc.Placement = battleplace.New()
 

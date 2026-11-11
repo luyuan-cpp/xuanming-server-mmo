@@ -59,7 +59,9 @@
 
 ### 4.3 部署
 
-`-Region`、`-DirectoryLogicalShards` 和 `-IdRegistryEtcd` 在 staging、prod 必须显式给,prod 的 K 只能是 64。这些参数不粘滞,这个地域以后每次部署都要照传同样的值,回滚也一样。托管登记处的那个集群可以用 `-HostIdRegistry` 代替 `-IdRegistryEtcd`。
+`-Region`、`-DirectoryLogicalShards`、`-PlayerStoreShards` 和 `-IdRegistryEtcd` 在 staging、prod 必须显式给,prod 的目录片数只能是 64。这些参数不粘滞,这个地域以后每次部署都要照传同样的值,回滚也一样。托管登记处的那个集群可以用 `-HostIdRegistry` 代替 `-IdRegistryEtcd`。
+
+新地域的存档库是 `player_store_<1000000 + 地域码×1000 + 0..K-1>_db`(K = `-PlayerStoreShards`,初值 64,上线后不能改),部署前在这个地域的 TiDB 上建好空库,`MMORPG_DB_ALLOWED_DATABASES` 恰好列出这 K 个库外加各区主库 `zone_<n>_db`([总体方案 §7.2](../design/player-data-tidb-scaling-plan.md))。
 
 ```powershell
 $Deploy = @{
@@ -68,6 +70,7 @@ $Deploy = @{
   Region = <地域码>
   IdRegistryEtcd = "<登记处的 host:port>"
   DirectoryLogicalShards = 64
+  PlayerStoreShards = 64
   GlobalAuthorityTiDBHost = "<这个地域的 TiDB 入口>"
   PhysicalRegion = <机房编号>
   # 其余参数见 K8s 开服手册 §4
@@ -132,6 +135,8 @@ mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。�
 | 部署报 `must pass -Region explicitly` | 没给地域码 | 给,不要猜,查 §3 的表 |
 | 部署或 data_service 启动报 `reserved for dev` | 地域码是 0,或者配置漏写 | 查 §3 的表,用分配给这个地域的码 |
 | 部署报 `must use -DirectoryLogicalShards 64` | prod 的 K 不是 64 | 改成 64 |
+| 部署报 `must pass -PlayerStoreShards explicitly` | 没给本地域的存档库数 | 给这个地域定下的 K(初值 64),以后每次部署照传 |
+| 部署报 `must list exactly the <K> player store databases of region <r>` | `MMORPG_DB_ALLOWED_DATABASES` 里的存档库和 `-Region`、`-PlayerStoreShards` 推出来的不一致 | 看报错里的 missing / unexpected:少了就补库名(库要先建好),多了一般是地域码或 K 填错,改参数,不要删库 |
 | 日志 `belongs to another region` | 记录里的地域和配置不一致 | 配错了 `-Region`。改回去,重新部署。**不要改记录** |
 | data_service 启动报 `IdSegment.Issuer.Region` 和 `MMORPG_ID_ISSUER_EXPECTED_REGION` 不一致 | 运维预置的 Secret 里地域码抄错了,或者 `-Region` 传错了 | 查 §3 的表,改错的那一边 |
 | 部署报 `must pass -IdRegistryEtcd` | 没给登记处地址 | 给全世界共用的那个登记处地址,托管它的集群可以带 `-HostIdRegistry` |

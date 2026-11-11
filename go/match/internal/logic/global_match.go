@@ -173,7 +173,12 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 			region, bestMax, bestSum = candidate, maxRTT, sum
 		}
 	}
-	target, found := s.Placement.Pick(nodes, region)
+	// 战斗按整局选轨道(发布轨道设计 §2.6):全员档案都是 canary 才先在 canary battle 节点里选,机房仍是上面按 stable 节点定的那个。
+	memberProfiles := make([]*pb.MatchNetworkProfile, 0, len(members))
+	for _, pid := range members {
+		memberProfiles = append(memberProfiles, profiles[pid])
+	}
+	target, found := pickBattleNode(s, battleTrackOf(memberProfiles), nodes, region)
 	if region == 0 || !found {
 		return nil, nil, errors.New("没有满足全员硬延迟的共同机房")
 	}

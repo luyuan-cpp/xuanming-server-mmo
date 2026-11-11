@@ -4,7 +4,10 @@
 //     同一批终态按 gate 自报的会话轨道再记一份,金丝雀观察拿两条轨道的整体错误率比较
 //     (docs/design/release-track-gray-canary.md §2.7)。不带 message_id,基数固定为 3 × 终态数;
 //   - client_rpc_router_forward_seconds{message_id}          Forward 端到端耗时;
-//   - client_rpc_router_targets{node_type}                   各目标类型当前发现到的实例数。
+//   - client_rpc_router_targets{node_type}                   各目标类型当前发现到的实例数;
+//   - client_rpc_router_target_conns                         缓存着的目标连接数(每轮空闲回收后采样);
+//   - client_rpc_router_idle_target_conns_closed_total       空闲回收关掉的目标连接数。
+//     这两个看子集与空闲回收的效果(connection-fanout-subsetting-20261106.md §3.3),不带 label。
 //
 // message_id 作 label 是有界的:取值只可能是生成路由表里的消息号(gate 白名单
 // 放过来的都在表里),不在表里的一律记 "unknown",不让任意数字进 label。
@@ -74,13 +77,25 @@ var (
 		Name:      "targets",
 		Help:      "Target service instances currently visible in the etcd watch cache, by node type.",
 	}, []string{"node_type"})
+
+	targetConns = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "target_conns",
+		Help:      "Cached gRPC connections to target service instances, sampled after each idle sweep.",
+	})
+
+	idleTargetConnsClosed = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "idle_target_conns_closed_total",
+		Help:      "Cached target connections closed because they were unused for the idle timeout.",
+	})
 )
 
 var registerOnce sync.Once
 
 func register() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(forwardTotal, forwardByTrackTotal, forwardSeconds, targets)
+		prometheus.MustRegister(forwardTotal, forwardByTrackTotal, forwardSeconds, targets, targetConns, idleTargetConnsClosed)
 	})
 }
 
@@ -123,6 +138,12 @@ func counterValue(vec *prometheus.CounterVec, labels ...string) float64 {
 // SetTargets 更新某目标节点类型当前发现到的实例数(NodeWatcher 的 onCount 回调)。
 func SetTargets(nodeType string, count int) {
 	targets.WithLabelValues(nodeType).Set(float64(count))
+}
+
+// ObserveIdleConnSweep 记录一轮空闲回收:关了 closed 条,还缓存着 remaining 条。
+func ObserveIdleConnSweep(closed, remaining int) {
+	idleTargetConnsClosed.Add(float64(closed))
+	targetConns.Set(float64(remaining))
 }
 
 // Start 启动 Prometheus /metrics 端点;addr 为空则关闭(与 match 同模式)。

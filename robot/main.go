@@ -181,7 +181,7 @@ func main() {
 	}
 
 	// Guild-smoke 模式:三个机器人做「公会按 zone 隔离」端到端冒烟
-	// (建帮 zone 由服务端决定 → 同区可见 / 可加入 → 别区不可见 / 不可加入 / 同名被拒 → 公告权限 → 身份伪造与内部方法被拒 → 解散)。
+	// (建帮 zone 由服务端决定 → 同区可见 / 可加入 → 别区不可见 / 不可加入 / 同名被拒 → 公告权限 → 按会话身份退帮、内部方法被拒 → 解散)。
 	// 见 guild_smoke_scenario.go 与 docs/design/guild-zone-client-access.md;前置条件写在 etc/guild_smoke.yaml 文件头。
 	if cfg.Mode == "guild-smoke" {
 		RunGuildSmoke(cfg)

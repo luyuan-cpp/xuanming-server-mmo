@@ -800,7 +800,7 @@ function Get-ClientEntryNodeBaseEnv {
 	$releaseTrack = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ReleaseTrack'))
 	if (-not [string]::IsNullOrEmpty($releaseTrack)) {
 		if ($releaseTrack -cnotin $contract.ReleaseTracks) {
-			throw "Get-ClientEntryNodeBaseEnv: PodCommon.ReleaseTrack 只收小写 $($contract.ReleaseTracks -join ' / ')(留空 = 不写 $($contract.ReleaseTrackEnv)),实际 '$releaseTrack'。"
+			throw "Get-ClientEntryNodeBaseEnv: PodCommon.ReleaseTrack only accepts lowercase $($contract.ReleaseTracks -join ' / ') (empty = do not write $($contract.ReleaseTrackEnv)), got '$releaseTrack'."
 		}
 		if ($releaseTrack -ceq 'canary') {
 			$entries += @{ Name = $contract.ReleaseTrackEnv; Value = $releaseTrack }
@@ -816,7 +816,8 @@ function Get-ClientEntryNodeBaseEnv {
 
 # 金丝雀 Pod 的轨道标签行(契约 ReleaseTrackPodLabel),接在调用方 Pod 模板 labels 段最后一行之后(带前导换行)。
 # 与 Get-ClientEntryNodeBaseEnv 写 MMORPG_RELEASE_TRACK 同一判据:只有 canary 才写,缺成员、空串或 stable 返回空串(生成物逐字不变)。
-# 取值校验在 Get-ClientEntryNodeBaseEnv,同一个 PodCommon 两处都会走到。现在只有 gate 的 StatefulSet 用:battle 只在 infra-up 渲染,只会是 stable。
+# 取值校验在 Get-ClientEntryNodeBaseEnv,同一个 PodCommon 两处都会走到。用在 gate 的 StatefulSet(金丝雀 zone)与 battle 的 Agones Fleet
+# (infra-up -CanaryBattleReplicas 的金丝雀 battle 池);hostPort 形态的 battle 不支持金丝雀池,不用。
 function Get-ClientEntryReleaseTrackPodLabelLine {
 	param(
 		[Parameter(Mandatory = $true)]$PodCommon,
@@ -1265,6 +1266,9 @@ function New-BattleFleetYaml {
 	$volumeBlock = Get-ClientEntryPodVolumeYaml -PodCommon $PodCommon -ConfigMapName $ConfigMapName -ItemIndent '            '
 	$sidecar = Get-ClientEntrySidecarBlocks -PodCommon $PodCommon -KeyIndent '          '
 	$annotationBlock = Get-ClientEntryPodAnnotationBlock -PodCommon $PodCommon -KeyIndent '          '
+	# 金丝雀 battle 池(PodCommon.ReleaseTrack = canary)的轨道标签:GameServer 模板与它的 Pod 模板两层,Fleet 自己的 labels 不加;stable 是空串。
+	$gameServerTrackLabel = Get-ClientEntryReleaseTrackPodLabelLine -PodCommon $PodCommon -ItemIndent '        '
+	$podTrackLabel = Get-ClientEntryReleaseTrackPodLabelLine -PodCommon $PodCommon -ItemIndent '            '
 
 	# container: battle 始终显式写出:原生 sidecar 在 initContainers 里,但将来再加普通容器时不写这行 Fleet 会被拒。
 	return ConvertTo-ClientEntryLf -Text @"
@@ -1289,7 +1293,7 @@ spec:
       labels:
         app: battle
         mmorpg.io/role: battle
-        mmorpg.io/build: $buildValue
+        mmorpg.io/build: $buildValue$gameServerTrackLabel
     spec:
       container: battle
       ports:
@@ -1309,7 +1313,7 @@ spec:
           labels:
             app: battle
             mmorpg.io/role: battle
-            mmorpg.io/build: $buildValue
+            mmorpg.io/build: $buildValue$podTrackLabel
         spec:
           serviceAccountName: $($contract.AgonesSdkServiceAccount)
           terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$($sidecar.InitBlock)

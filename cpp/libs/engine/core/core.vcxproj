@@ -381,6 +381,7 @@
     <ClInclude Include="network\codec\dispatcher.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
+    <ClInclude Include="network\rpc_trace_envelope.h" />
     <ClInclude Include="tracing\log_context_suffix.h" />
     <ClInclude Include="tracing\trace_context.h" />
     <ClInclude Include="metrics\prometheus_text.h" />

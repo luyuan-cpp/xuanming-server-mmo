@@ -1285,7 +1285,13 @@ public:
 	// 本节点身份当前是否确认有效(M3)的只读探针,由节点入口(nodes/scene/main.cpp)注入:scene 库不直接依赖
 	// Node(单测宿主没有 Node,链进 node.cpp 会拖进整条 gRPC / etcd 依赖)。未注入 / 传空 = 身份不确认,
 	// A1′ 一律不写(fail-closed)。探针只在 scene 逻辑线程上调用。
+	// 每次调用(含传空)都把下面「身份不确认期间补存」的节奏清零:新的探针从第 0 槽、未进入补存算起。
 	static void SetNodeIdentityProbe(std::function<bool()> probe);
+
+	// 身份不确认期间补存,每秒调一次(推导见 player_lifecycle.cpp kIdentityAtRiskSaveIntervalSec 上方的注释)。探针已注入、身份不确认、有在线
+	// 玩家时,只给「玩家号 % 5 == 本秒的槽」的那批可改玩家(IsPlayerMutable)调 SavePlayer,每名玩家 5 秒一次;
+	// 身份确认或没注入探针时什么都不做。由 SetNodeIdentityProbe 挂上的 1 秒定时器与单测调用,只在 scene 逻辑线程上。
+	static void RunIdentityAtRiskSaves();
 
 	// 只读查询有效玩家实体是否带有 PlayerFrozenComp。该标记用于同 zone / 跨 zone 的归属交接，
 	// 也用于角色交易封存；业务修改必须保护已冻结的交接或交易原件，不能继续制造分叉。

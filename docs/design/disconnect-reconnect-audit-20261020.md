@@ -196,7 +196,7 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 ### 9.1 优先修复：新会话复用同场景实体，漏掉入场基线
 
 > 2026-11-01 已修(未编译、未测试,待 Codex 验证):`EnterScene` 发现会话变了且实体还在目标场景时,先离场再走完整入场;同一会话的重复路由仍然幂等。Java 版未核对,`PARITY.md` 已记待做。
-> 2026-11-06 修正(未编译):上面那次修复判「会话变了」比的是会话快照,而入口第 2 步已先把快照会话置无效,同一会话的重复路由实际也会先离场再入场,「仍然幂等」当时并不成立。现改为比实体的登录身份(会话号不同,或号相同而登录代次更新),判据与用例见 [断线保留](player-connection-lost-hold.md) §5 第 3 步。
+> 2026-11-06 修正(11-08 Codex 跑整套 `cross_zone_test`,对应用例通过):上面那次修复判「会话变了」比的是会话快照,而入口第 2 步已先把快照会话置无效,同一会话的重复路由实际也会先离场再入场,「仍然幂等」当时并不成立。现改为比实体的登录身份(会话号不同,或号相同而登录代次更新),判据与用例见 [断线保留](player-connection-lost-hold.md) §5 第 3 步。
 
 **条件**：旧实体尚在目标场景，例如旧 Gate→Scene 的 ExitGame 尚未到达/丢失，或在线顶号先于旧会话退出。`HandleEnterGameNode` 复用实体，`EnterScene` 将 snapshot 绑定到新 session；`HandleEnterScene` 却因 `oldScene==scene` 直接返回 true。入场通知与自身创建在这个 return 后面，因而都没有发出。后续 team/battle/landing 钩子也不补场景基线。[复用](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2631)、[新绑定](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2781)、[幂等早退](../../cpp/libs/services/scene/player/system/player_scene.cpp#L231)、[后续钩子](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2878)
 

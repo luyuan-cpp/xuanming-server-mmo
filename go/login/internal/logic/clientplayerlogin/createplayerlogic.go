@@ -666,7 +666,7 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 // 存档库按地域选、和区无关(总体方案 §7.2):zone 只决定 home_zone,storage_id 由 player_id 在本地域 K 个库里取模。
 func (l *CreatePlayerLogic) registerHomeZone(account string, playerID uint64) *login_proto_common.TipInfoMessage {
 	zone := config.AppConfig.Node.ZoneId
-	storageID, err := config.AppConfig.Placement.StorageIDForNewPlayer(playerID, zone)
+	storageID, err := config.AppConfig.Placement.StorageIDForNewPlayer(playerID)
 	if err != nil {
 		logx.Errorf("Refusing to create player: no storage for the new player (account=%s player_id=%d zone=%d): %v",
 			account, playerID, zone, err)

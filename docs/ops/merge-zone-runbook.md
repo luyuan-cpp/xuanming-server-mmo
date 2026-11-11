@@ -250,7 +250,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZ
 
 **下线之后不能再撤销**,除非先把源区的节点拉回来:撤销后这些玩家的最终区回到源区,没有节点接他们。
 
-源区留在共享 Redis 里的热状态(`scene_manager:zones` 的登记、`scene_nodes:zone:<源>:*`)不清:陈旧位置由持有节点判死兜住,目标区没有 gate 时分配 gate 会拒绝,剩下的只是垃圾键(读代码得出,未实测)。
+源区留在 Redis 里的热状态(`scene_nodes:zone:<源>:*`、死节点收尾任务表 `scene_manager:dead_node_reconcile:zone:<源>`)不清:陈旧位置由持有节点判死兜住,目标区没有 gate 时分配 gate 会拒绝,剩下的只是垃圾键(读代码得出,未实测)。收尾任务表只由源区自己的 scene_manager 领导者读写(2026-11-05 起按 zone 选主),namespace 收掉后没有人再读它;撤销合服、把源区节点拉回来时,源区的领导者照表里剩下的接着收尾,与进程重启后接手是同一条路径。想让表里不留任务,第 4 步收 namespace 前看 `scene_manager_dead_node_reconcile_pending{zone_id="<源>"}` 回到 0(scene 全部退出后约一个再入屏障加一拍,默认 25 秒)。
 
 ### 源库为什么不退役
 

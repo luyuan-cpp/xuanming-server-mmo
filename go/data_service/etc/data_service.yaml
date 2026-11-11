@@ -49,7 +49,9 @@ Store:
 
 # 目录分片(docs/design/horizontal-scale-logical-db.md §5.1)。LogicalShards 是 64 的约数,上线后不能改:生产首次上线定 64,开发定 1。
 # K=1 时目录库就是 SnapshotMySQL.DBName,否则是 <DBName>_00..;流水和快照总在 <DBName>_ledger。每片一个连接池、一份写资格。
-# StoragePools 是连每个存档库的连接池,按需打开,计入每个存档库的连接总账。
+# StoragePools 是连每个存档库的连接池,按需打开,计入每个存档库的连接总账。这里写的是「本地域只有一个存档库」(K=1)时的预算,
+# K8s 的 ConfigMap 按 -PlayerStoreShards 摊到每个库(k8s_deploy.ps1 Get-PlayerStorePoolLimit,每库至少 2 条;
+# docs/design/player-data-tidb-scaling-plan.md §7.2)。
 # AccountDirectory、PlayerName、RouteStore 的 MaxOpenConn 写的是 K=1 的预算,K8s 的 ConfigMap 按 K 摊到每片(k8s_deploy.ps1 Get-DirectoryShardPoolLimit)。
 Directory:
   LogicalShards: 1

@@ -301,6 +301,8 @@
     # 0 / -1 / 留空 = 没给,不转发。追加在参数块末尾,理由同上。
     [int]$DirectoryLogicalShards = 0,
     [int]$Region = -1,
+    # 每地域的存档库数 K(docs/design/player-data-tidb-scaling-plan.md §7.2)。0 = 没给,不转发。
+    [int]$PlayerStoreShards = 0,
     [string]$SqlClusters = "",
     [string]$SqlDefaultCluster = "",
     # 全新集群先跑迁移 Job(k8s_deploy.ps1 同名参数,docs/ops/k8s-open-server-runbook.md §5);写者 Pod 回收 CronJob 的镜像。留空不转发,默认值只在 k8s_deploy.ps1。
@@ -833,6 +835,7 @@ function Invoke-K8sDeploy {
     # 逻辑库:给了才传。档位规则只在 k8s_deploy.ps1(Assert-LogicalDbPreflight)。
     if ($DirectoryLogicalShards -gt 0) { $args.DirectoryLogicalShards = $DirectoryLogicalShards }
     if ($Region -ge 0) { $args.Region = $Region }
+    if ($PlayerStoreShards -gt 0) { $args.PlayerStoreShards = $PlayerStoreShards }
     if (-not [string]::IsNullOrWhiteSpace($SqlClusters)) { $args.SqlClusters = $SqlClusters }
     if (-not [string]::IsNullOrWhiteSpace($SqlDefaultCluster)) { $args.SqlDefaultCluster = $SqlDefaultCluster }
     if ($SqlSchemaOnly) { $args.SqlSchemaOnly = $true }

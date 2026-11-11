@@ -55,7 +55,7 @@ const businessDDLLimit = 1 << 20
 // 改别的库。字符串里带分号的语句会被拆坏,拆出来的片段过不了这道检查,同样整份拒绝。
 func loadBusinessDDL(path string) ([]string, error) {
 	if !filepath.IsAbs(path) {
-		return nil, errors.New("ddl-file必须是绝对路径")
+		return nil, errors.New("ddl-file must be an absolute path")
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -67,7 +67,7 @@ func loadBusinessDDL(path string) ([]string, error) {
 		return nil, err
 	}
 	if len(raw) > businessDDLLimit {
-		return nil, errors.New("ddl-file超过大小上限")
+		return nil, errors.New("ddl-file is larger than the size limit")
 	}
 	var kept []string
 	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
@@ -88,7 +88,7 @@ func loadBusinessDDL(path string) ([]string, error) {
 		statements = append(statements, statement)
 	}
 	if len(statements) == 0 {
-		return nil, errors.New("ddl-file没有可执行的语句")
+		return nil, errors.New("ddl-file has no statement to run")
 	}
 	return statements, nil
 }
@@ -110,10 +110,10 @@ func checkBusinessDDLStatement(statement string) error {
 	case head(3) == "INSERT IGNORE INTO":
 		table = words[3]
 	default:
-		return fmt.Errorf("ddl-file只接受CREATE TABLE IF NOT EXISTS与INSERT IGNORE INTO,拒绝: %.60s", statement)
+		return fmt.Errorf("ddl-file accepts only CREATE TABLE IF NOT EXISTS and INSERT IGNORE INTO, rejected: %.60s", statement)
 	}
 	if strings.Contains(strings.SplitN(table, "(", 2)[0], ".") {
-		return fmt.Errorf("ddl-file的表名不许带库名: %.60s", statement)
+		return fmt.Errorf("ddl-file table names must not carry a database name: %.60s", statement)
 	}
 	return nil
 }
@@ -169,7 +169,7 @@ func prepareSchemaWithDDL(ctx context.Context, schema string, getenv func(string
 	}
 	for i, statement := range businessDDL {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
-			return fmt.Errorf("prepare-schema执行ddl-file第%d句失败(%.60s): %w", i+1, statement, err)
+			return fmt.Errorf("prepare-schema failed at ddl-file statement %d (%.60s): %w", i+1, statement, err)
 		}
 	}
 	return nil
@@ -179,7 +179,7 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 	flags := flag.NewFlagSet("writer_authority", flag.ContinueOnError)
 	command := flags.String("command", "", "register、retire、status、prepare-schema或publication只读资格")
 	schemaName := flags.String("schema", "", "prepare-schema的显式目标逻辑库")
-	ddlFile := flags.String("ddl-file", "", "prepare-schema建完闸门表后在同一逻辑库执行的业务表DDL绝对路径(只认幂等语句)")
+	ddlFile := flags.String("ddl-file", "", "absolute path of business-table DDL that prepare-schema runs in the same logical database after the gate tables (idempotent statements only)")
 	requestPath := flags.String("request", "", "单个正式Request/维护Receipt protojson绝对路径")
 	requestSHA := flags.String("request-sha256", "", "publication原件的固定原字节SHA")
 	preparedPath := flags.String("prepared", "", "实际prepared.source.json绝对路径")
@@ -206,7 +206,7 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 			}
 		})
 		if mixed || flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second {
-			return errors.New("prepare-schema只接受显式schema、可选ddl-file和不超过60秒的正截止，不混生命周期参数")
+			return errors.New("prepare-schema accepts only an explicit -schema, an optional -ddl-file and a positive -timeout of at most 60s; lifecycle flags are not allowed")
 		}
 		// 先校验整份 DDL 再连库:文件有一句不合格就一句都不执行,也不先建闸门表。
 		var businessDDL []string
@@ -222,7 +222,7 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 		return prepareSchemaWithDDL(ctx, *schemaName, getenv, businessDDL)
 	}
 	if *schemaName != "" || *ddlFile != "" {
-		return errors.New("schema、ddl-file参数只用于prepare-schema")
+		return errors.New("-schema and -ddl-file are only for prepare-schema")
 	}
 	if *command == "verify-publication-prestart" || *command == "verify-publication-runtime" {
 		if flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second || *rosterPath != "" || *rosterSHA != "" || *runtimeConfig != "" || *runtimeOutput != "" || *runtimeEnvironmentOutput != "" || *qualificationPath != "" || *bootOutput != "" || *receiptOutput != "" || *deploymentID != "" {

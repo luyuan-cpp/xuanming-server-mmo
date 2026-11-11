@@ -51,8 +51,8 @@ type NodeWatcher struct {
 	nodes    map[string]NodeEntry
 	onCount  func(kind string, count int) // 镜像规模变化上报(指标)
 	onRemove func(entry NodeEntry)        // 节点消失回调(清连接缓存)
-	// stableOnly 为真时 canary 节点不进镜像,见 StableOnly。
-	stableOnly bool
+	// keepTrack 非空时只收这条轨道的节点,别的在解析时就丢掉,见 StableOnly / CanaryOnly。
+	keepTrack *releasetrack.Track
 }
 
 // StableOnly 让镜像只收 stable 节点(docs/design/release-track-gray-canary.md §2.5),返回 w 以便接在构造之后。
@@ -60,7 +60,18 @@ type NodeWatcher struct {
 // 若把 canary 的 MatchNodeService 算进 HRW 成员表,落到它名下的池 stable 既不撮合也不恢复,这些池就停了。
 // 在解析时就丢掉,所以快照、随机选点和按节点号查找都看不到 canary。scene 按 zone 选,不用它。必须在 Run 之前调用。
 func (w *NodeWatcher) StableOnly() *NodeWatcher {
-	w.stableOnly = true
+	return w.keepOnly(releasetrack.Stable)
+}
+
+// CanaryOnly 让镜像只收 canary 节点(设计文档 §2.6),用法同 StableOnly。match 单独镜像 canary battle 节点:
+// 只有全员都是金丝雀会话的新成局才到这里选点,金丝雀会话观战与按节点号确认对局实例时也查这里;
+// 其余一切(探测目标、机房集合、节点计数)只看 stable 镜像。
+func (w *NodeWatcher) CanaryOnly() *NodeWatcher {
+	return w.keepOnly(releasetrack.Canary)
+}
+
+func (w *NodeWatcher) keepOnly(track releasetrack.Track) *NodeWatcher {
+	w.keepTrack = &track
 	return w
 }
 
@@ -246,7 +257,7 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 			w.name, key, reg.GetZoneId(), reg.GetNodeId(), err)
 		return NodeEntry{}, false
 	}
-	if w.stableOnly && track.IsCanary() {
+	if w.keepTrack != nil && track != *w.keepTrack {
 		return NodeEntry{}, false
 	}
 	return NodeEntry{

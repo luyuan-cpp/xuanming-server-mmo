@@ -1,6 +1,7 @@
 #include "client_session_handler.h"
 #include "client_heartbeat.h"
 #include "client_request_lane.h"
+#include "drain_migration.h"
 #include "login_admission.h"
 #include "rpc_reply_bridge.h"
 #include "scene_client_call_reply.h"
@@ -25,6 +26,7 @@
 #include "error_reporter/error_reporter.h"
 #include "node/system/node/node.h"
 #include "grpc_client/login/login_grpc_client.h"
+#include "handler/gate_redirect_delivery.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "handler/event/scene_entry_dispatch.h"
 #include "spectate/gate_spectate_client.h"
@@ -225,6 +227,61 @@ static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid 
 									   session);
 }
 
+// 选一个路由服实例,取它的 muduo_grpc 通道。没有实例或缺通道返回 nullptr(各自采样 WARN);
+// 指针只在本次调用里用,不保存(通道归节点实体所有)。messageIdForLog 只进日志。
+static muduo_grpc::Channel *PickRouterChannel(const uint32_t messageIdForLog)
+{
+	const auto routerNode = PickRandomNode(eNodeType::ClientRpcRouterNodeService);
+	if (!routerNode)
+	{
+		// 路由服全部下线时这里的频率 = 全部在线玩家的 gRPC 类消息频率,必须采样;
+		// 每 1024 条留一行趋势证据,配合客户端收到的 kServiceUnavailable 定性。
+		static uint64_t unavailableCount = 0;
+		if ((unavailableCount++ & 0x3FF) == 0)
+		{
+			LOG_WARN << "No available router instance;message not forwarded(sampled), latest_message_id=" << messageIdForLog
+					 << ", unavailable_total=" << unavailableCount;
+		}
+		return nullptr;
+	}
+
+	// 传输只有一种:路由服节点实体上的 muduo_grpc 通道(NodeConnector::ConnectToGrpcNode 建,
+	// docs/design/grpc-muduo-transport.md §14)。一次调用只发一次,失败不重发。
+	// 缺通道按「没有路由服」处理(fail-closed),绝不对缺失的组件解引用。关机阶段 0(FinalizeShutdownInLoop)清掉
+	// MuduoGrpcChannelPtr、NodeInfo 要到拆除才清,这段窗口(排空预算到期后强行 Finalize、Finalize 之后才断开的会话)
+	// 靠 PickRandomNode 的候选条件(HasUsableGrpcClient)挡住,正常关机另有排空门(main.cpp 的 SetShutdownDrainComplete:
+	// beforeShutdown 记下的会话都走完断线处理、通道都空闲才 Finalize)。这里再挡一层,防选点条件日后改松时落成空指针解引用。
+	// 返回 nullptr 后 lane 回带 id 的 1003,断线通知只留痕、由 login 租约兜底。
+	auto &routerRegistry = tlsNodeContextManager.GetRegistry(eNodeType::ClientRpcRouterNodeService);
+	const auto *routerChannel = routerRegistry.try_get<MuduoGrpcChannelPtr>(*routerNode);
+	if (routerChannel == nullptr || !*routerChannel)
+	{
+		static uint64_t noTransportCount = 0;
+		if ((noTransportCount++ & 0x3FF) == 0)
+		{
+			LOG_WARN << "Router instance has no gRPC channel;message not forwarded(sampled)"
+					 << ", router_entity=" << entt::to_integral(*routerNode)
+					 << ", latest_message_id=" << messageIdForLog << ", no_transport_total=" << noTransportCount;
+		}
+		return nullptr;
+	}
+	return routerChannel->get();
+}
+
+// 路由服收的信封:原包,加本 gate 的 zone 与发布轨道。
+static client_rpc_router::ForwardRequest MakeForwardRequest(const ClientRequest &request)
+{
+	client_rpc_router::ForwardRequest forwardRequest;
+	forwardRequest.mutable_request()->CopyFrom(request);
+	// zone-scoped 目标(login)由路由服按这个 zone 挑同 zone 实例,与直连模式下
+	// PickRandomNode 的 zone 过滤语义一致(D33)。
+	forwardRequest.set_zone_id(gNode->GetNodeInfo().zone_id());
+	// 会话的发布轨道就是本 gate 的轨道(发布轨道设计 §2.3):路由服按它给全局类型选实例,
+	// 与 PickRandomNode 按轨道选路由服是同一条规则。
+	forwardRequest.set_release_track(gNode->GetNodeInfo().release_track());
+	return forwardRequest;
+}
+
 // 路由模式专用:把一条 ClientRequest **原包**交给路由服(client-rpc-router.md D30
 // 不透明转发)。不解析 body、不挑业务实例 —— 目标由路由服按生成的路由表和
 // zone_id 选;会话身份仍走同一段 metadata,Go 侧拦截器看到的与 gate 直连时完全相同。
@@ -235,50 +292,12 @@ static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid 
 // 路由 lane 经 gate_lane::SetRouterSender 注入本函数(client_request_lane.h)。
 static bool SendRawViaRouter(const ClientRequest &request, const std::string &sessionDetailsBin)
 {
-	const auto routerNode = PickRandomNode(eNodeType::ClientRpcRouterNodeService);
-	if (!routerNode)
+	muduo_grpc::Channel *routerChannel = PickRouterChannel(request.message_id());
+	if (routerChannel == nullptr)
 	{
-		// 路由服全部下线时这里的频率 = 全部在线玩家的 gRPC 类消息频率,必须采样;
-		// 每 1024 条留一行趋势证据,配合客户端收到的 kServiceUnavailable 定性。
-		static uint64_t unavailableCount = 0;
-		if ((unavailableCount++ & 0x3FF) == 0)
-		{
-			LOG_WARN << "No available router instance;message not forwarded(sampled), latest_message_id=" << request.message_id()
-					 << ", unavailable_total=" << unavailableCount;
-		}
 		return false;
 	}
-
-	client_rpc_router::ForwardRequest forwardRequest;
-	forwardRequest.mutable_request()->CopyFrom(request);
-	// zone-scoped 目标(login)由路由服按这个 zone 挑同 zone 实例,与直连模式下
-	// PickRandomNode 的 zone 过滤语义一致(D33)。
-	forwardRequest.set_zone_id(gNode->GetNodeInfo().zone_id());
-	// 会话的发布轨道就是本 gate 的轨道(发布轨道设计 §2.3):路由服按它给全局类型选实例,
-	// 与上面 PickRandomNode 按轨道选路由服是同一条规则。
-	forwardRequest.set_release_track(gNode->GetNodeInfo().release_track());
-
-	// 传输只有一种:路由服节点实体上的 muduo_grpc 通道(NodeConnector::ConnectToGrpcNode 建,
-	// docs/design/grpc-muduo-transport.md §14)。一次调用只发一次,失败不重发。
-	// 缺通道按「没有路由服」处理(fail-closed),绝不对缺失的组件解引用。关机阶段 0(FinalizeShutdownInLoop)清掉
-	// MuduoGrpcChannelPtr、NodeInfo 要到拆除才清,这段窗口(排空预算到期后强行 Finalize、Finalize 之后才断开的会话)
-	// 靠 PickRandomNode 的候选条件(HasUsableGrpcClient)挡住,正常关机另有排空门(main.cpp 的 SetShutdownDrainComplete:
-	// beforeShutdown 记下的会话都走完断线处理、通道都空闲才 Finalize)。这里再挡一层,防选点条件日后改松时落成空指针解引用。
-	// 返回 false 后 lane 回带 id 的 1003,断线通知只留痕、由 login 租约兜底。
-	auto &routerRegistry = tlsNodeContextManager.GetRegistry(eNodeType::ClientRpcRouterNodeService);
-	const auto *routerChannel = routerRegistry.try_get<MuduoGrpcChannelPtr>(*routerNode);
-	if (routerChannel == nullptr || !*routerChannel)
-	{
-		static uint64_t noTransportCount = 0;
-		if ((noTransportCount++ & 0x3FF) == 0)
-		{
-			LOG_WARN << "Router instance has no gRPC channel;message not forwarded(sampled)"
-					 << ", router_entity=" << entt::to_integral(*routerNode)
-					 << ", latest_message_id=" << request.message_id() << ", no_transport_total=" << noTransportCount;
-		}
-		return false;
-	}
-	gate_router_muduo::SendForward(**routerChannel, forwardRequest, sessionDetailsBin);
+	gate_router_muduo::SendForward(*routerChannel, MakeForwardRequest(request), sessionDetailsBin);
 	return true;
 }
 
@@ -286,6 +305,81 @@ static bool SendRawViaRouter(const ClientRequest &request, const std::string &se
 static bool SendViaRouter(const ClientRequest &request, const SessionDetails &sessionDetails)
 {
 	return SendRawViaRouter(request, sessionDetails.SerializeAsString());
+}
+
+// 排空迁移向 login 要一张换 gate 的票(ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3),
+// 经 gate_drain_migration::SetRequestSender 注入。与断线通知同一种 gate 合成请求:会话身份走同一个 BuildSessionDetails、
+// 带会话代次(login 按 gate_instance_id + 会话代次认这条连接),gate_call_seq 留 0 —— 不进路由 lane,不占客户端请求的单飞槽,
+// 也不排在客户端请求后面。应答只交给 done,不进回包桥、不推给客户端;票据是否送出由 drain_migration 复核会话后决定。
+// 返回 false = 没发出(没有路由服 / login 实例、缺通道、会话序列化或签名失败),done 不会被调用。
+static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInfo &session,
+	gate_drain_migration::ReplyCallback done)
+{
+	SessionDetails sessionDetails = BuildSessionDetails(sessionId, session.playerId, &session);
+	sessionDetails.set_session_incarnation(session.incarnation);
+	std::string sessionDetailsBin;
+	if (!sessionDetails.SerializeToString(&sessionDetailsBin))
+	{
+		LOG_ERROR << "Gate migration request not sent: session details serialization failed, session_id=" << sessionId;
+		return false;
+	}
+	const loginpb::GateMigrationRequest request;
+
+	if (gate_router_mode::IsRouterModeEnabled())
+	{
+		// 路由模式:gate 对 login 零 stub,合成一条 ClientRequest 经路由服转给同 zone 的 login(与断线通知同一条 Forward)。
+		muduo_grpc::Channel *routerChannel = PickRouterChannel(ClientPlayerLoginRequestGateMigrationMessageId);
+		if (routerChannel == nullptr)
+		{
+			return false;
+		}
+		ClientRequest migrationRequest;
+		migrationRequest.set_id(0);
+		migrationRequest.set_message_id(ClientPlayerLoginRequestGateMigrationMessageId);
+		migrationRequest.set_body(request.SerializeAsString());
+		gate_router_muduo::SendForwardForInternalReply(*routerChannel, MakeForwardRequest(migrationRequest), sessionDetailsBin,
+			[done = std::move(done)](const MessageContent *reply)
+			{
+				// 路由服把 login 的应答原样装进 MessageContent;信封带 tip(路由服或下游拒绝)或 body 解不出都按调用失败。
+				gate_drain_migration::RequestReply result;
+				result.delivered = reply != nullptr &&
+					!(reply->has_error_message() && reply->error_message().id() != 0) &&
+					result.response.ParseFromString(reply->serialized_message());
+				done(result);
+			});
+		return true;
+	}
+
+	// 直连模式:login 无状态,任选一个同 zone 实例。metadata 与客户端请求的直连转发相同(会话、轨道、调用方签名)。
+	const auto loginNode = PickRandomNode(eNodeType::LoginNodeService);
+	if (!loginNode)
+	{
+		return false;
+	}
+	GrpcCallOptions options;
+	options.metadata.emplace_back(kSessionBinMetaKey, sessionDetailsBin);
+	options.metadata.emplace_back(release_track::kMetadataKey, GetNodeInfo().release_track());
+	if (!caller_auth::Append(options.metadata,
+		gRpcMethodRegistry[ClientPlayerLoginRequestGateMigrationMessageId].grpcFullMethod,
+		sessionDetailsBin, std::getenv(caller_auth::kSecretEnv)))
+	{
+		LOG_ERROR << "Gate migration request not sent: caller signature failed, session_id=" << sessionId;
+		return false;
+	}
+	loginpb::SendClientPlayerLoginRequestGateMigration(
+		tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request,
+		[done = std::move(done)](const GrpcCallOutcome &outcome, const loginpb::GateMigrationResponse *response)
+		{
+			gate_drain_migration::RequestReply result;
+			result.delivered = outcome.ok() && response != nullptr;
+			if (result.delivered)
+			{
+				result.response = *response;
+			}
+			done(result);
+		},
+		options);
+	return true;
 }
 
 GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
@@ -298,6 +392,9 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 
 	// 路由 lane 的发送出口(client_request_lane.h)。函数指针,不捕获任何对象(AGENTS.md §11.7)。
 	gate_lane::SetRouterSender(&SendRawViaRouter);
+	// 排空迁移的两个出口(drain_migration.h):向 login 要票、推 msg 124。同样是函数指针,不捕获对象。
+	gate_drain_migration::SetRequestSender(&SendGateMigrationRequest);
+	gate_drain_migration::SetRedirectPusher(&gate_redirect::PushRedirect);
 
 	messageDispatcher.registerMessageCallback<ClientTokenVerifyRequest>(
 		std::bind(&GateClientSessionHandler::DispatchTokenVerify, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
@@ -1043,6 +1140,9 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 		{
 			options.metadata.emplace_back(kSessionBinMetaKey, serializedSessionDetails);
 		}
+		// 会话轨道交给目标服务(发布轨道设计 §2.6,match 据此决定战斗放在哪条轨道的 battle 上)。直连时会话就挂在本 gate 上,
+		// 会话轨道等于本 gate 的轨道;路由模式由路由服按 ForwardRequest.release_track 写同一个键(见 SendRawViaRouter)。
+		options.metadata.emplace_back(release_track::kMetadataKey, GetNodeInfo().release_track());
 		if (!caller_auth::Append(options.metadata, rpcHandlerMeta.grpcFullMethod, serializedSessionDetails,
 			std::getenv(caller_auth::kSecretEnv)))
 		{
@@ -1256,6 +1356,10 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 			return;
 		}
 		gate_scene_entry::OnClientEnterGame(sessionId, session);
+		// 排空迁移避开「EnterGame 已发出、绑定还没回来」的窗口(drain_migration.h kEnterGameSettle)。按收包时刻记,两种模式
+		// 共用这一个点:路由模式下 EnterGame 可能还排在 lane 里、晚一点才发出,这段差额相对 5 分钟很小;万一撞上,
+		// 新连接上的 EnterGame 由 login 会话栅栏回「登录中」,客户端重试即可,不涉及数据。
+		gate_drain_migration::NoteEnterGameForwarded(session, std::chrono::steady_clock::now());
 	}
 
 	if (messageInfo.protocol == PROTOCOL_TCP)

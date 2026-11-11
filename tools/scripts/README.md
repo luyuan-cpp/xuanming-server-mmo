@@ -84,7 +84,23 @@ python tools/scripts/rebuild_docker_debug.py go --services player-inbox
 docker --context desktop-linux compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d --no-build --pull never --no-deps --force-recreate data-service-sql-boot data-service
 ```
 
-`stop` 之后再 `up` 不用管：一次性容器每次 `up` 都重跑，注册出新授权。运行中重复 `up` 也会重跑注册，常驻容器不受影响。
+首次建栈仍使用上述 Compose 初始化流程。已完成初始化的原栈，日常停止后使用下节启动入口，避免重放初始化和迁移任务。
+
+### start_docker_debug.py（已初始化 Docker 调试栈的日常启动）
+
+先打开 Docker Desktop，在本仓库根目录执行：
+
+```powershell
+# 只读预检，列出将检查或启动的服务。
+python -X utf8 -B tools/scripts/start_docker_debug.py
+
+# 每次手动开服使用这一条；同一次调用先预检，再按依赖顺序恢复原容器。
+python -X utf8 -B tools/scripts/start_docker_debug.py --execute
+```
+
+入口仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。16 个常驻服务及五个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
+
+每次调用独立保存 `build/verification/docker-start-<UTC>/`，包含启动计划、旧退出状态和结果。Compose 显式卷核对原卷名与读写属性；镜像声明的默认匿名卷核对原身份、目标、匿名标签、驱动及存在状态，所有实际挂载卷均纳入前后不变的基线，不要求匿名卷带 Compose 项目标签。脚本不构建、不拉取镜像、不重建容器、不清卷、不重放初始化或迁移；任一步失败立即停止并显示脱敏原因，保留已启动的服务及失败证据，不自动重试。成功输出 `Server startup completed.`，表示运行就绪检查完成；源码一致性仍由 VS Code 附加前检查执行，不能据此断言旧崩溃原因已修复。
 
 默认客户端入口为 `http://127.0.0.1:8081`，同一网关另保留 `http://127.0.0.1:18081`；gate 为 `127.0.0.1:28000`，battle 为 `127.0.0.1:28010`。可用 `--gateway-port` 调整附加 HTTP 端口、用 `--gate-port` / `--battle-port` 调整对应入口；`8081` 保留给客户端默认网关。VS Code 附加到固定名称的三个调试容器。此栈只启用登录、建角、主世界进场、战斗与全球匹配结算所需服务，未启动域的请求按现有路由契约失败。校验配置时使用 `docker compose ... config --quiet`，不要把展开后的配置与 `.env` 打印或上传。
 

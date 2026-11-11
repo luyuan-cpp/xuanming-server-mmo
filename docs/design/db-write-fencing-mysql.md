@@ -1865,3 +1865,52 @@ SQL_RELEASED 后只允许同 run 的全新预批准身份注册。新 boot 先�
 - **回档 `-Apply` 在 #3 裁决前不可用**（`k8s_zone_rollback.ps1`）：没有可回档的线上 zone。
 
 首次上线直接以「go/db `dual` + scene / login 严格提交屏障」整批起步，缺省配置即可正常登录。上面这些机制保留，供上线之后的回退、混跑与回档使用；届时再按 §8.3、§8.6 的门禁执行。上线后本段作废，改以当时的线上状态为准。
+
+### 2026-11-10 写事务闸门的开销与热点：先测再改（缺口清单第 20 条，未编译、未运行）
+
+**问题**（11-05 全链路水平扩展盘点）：每笔写事务过闸门要多发几条语句，而且所有实例的写事务都改写本逻辑库同一张小表 `writer_slot`。在 TiDB 上，这张表很可能只落在一个 Region 里，成为单 Region 写热点，加副本也提不高写吞吐。
+
+**每笔写事务的闸门语句**（`go/shared/authoritysql/writer.go`，11-10 核对）：
+
+1. BEGIN 之前点读一次 `route_meta(id=1)`（`beforeBegin`），核世代、可写和 epoch。这一次必须在 BEGIN 之前，不能挪进 RR 快照（`driver.go` `beginLocked` 的注释）。
+2. BEGIN 之后，锁住本实例轮到的那个 slot 行（每个实例 64 行轮转）。按锁原语二选一：
+   - `LOCK_TOUCH`：先按第 1 步读到的 epoch 做条件改写 `UPDATE writer_slot SET lock_touch=1-lock_touch WHERE … writer_epoch=? …`，再普通读这一行；
+   - `SELECT_ONLY`：直接 `SELECT … FOR UPDATE` 这一行。
+3. 再读一次 `route_meta`，核可写，以及 epoch 与 slot 行一致。
+4. 读 `writer_registry`，核注册摘要、主体和 instance。
+
+合计每笔写事务多出 4～5 个往返；在 `LOCK_TOUCH` 档，每笔写事务还都写一次 `writer_slot`。事务外的纯读从 11-06 起只过读闸门：一次 `route_meta` 点读，不开事务，也不碰 `writer_slot`（第 21 条）。
+
+**先测**（交 Codex，按 AGENTS §6 全流程，对比表用 `stress_summarize.ps1` 出）：
+
+- **负载**：以玩家存盘（go/db）为主的写负载，单 zone、单存档库。存档副本数按 1 → 2 → 4 阶梯加，每档稳态不少于 5 分钟。
+- **客户端侧**：用新指标 `writer_gate_seconds{logical_db, phase}`（phase 取 `before_begin`、`enter`、`read`），和同一个库的写事务总耗时对比（go/db 存盘接口已有耗时直方图）。
+- **库侧（TiDB）**：
+  - 在 `information_schema.cluster_statements_summary` 里按语句摘要，看 `route_meta` 点读、`writer_slot` 改写或加锁读、`writer_registry` 读的执行次数与平均耗时，并与业务语句对比；
+  - 用 Dashboard 的流量可视化（KeyViz）看 `writer_slot`、`route_meta` 所在 Region 的读写热度；
+  - 用 `information_schema.tidb_hot_regions` 和 `SHOW TABLE writer_slot REGIONS` 看这几张表落在几个 Region、leader 在哪几台 TiKV 上。
+- **判据**（任一成立就改）：
+  - 加副本后，存档 TPS 没有随副本数近似线性增长，同时热点 Region 的写 QPS 顶住不涨；
+  - `before_begin` 与 `enter` 两段的 p50 之和，超过写事务 p50 的 20%。
+- 两条都不成立就不改，结论记在本节。不预先宣称有提升。
+
+**改法候选**（测出问题后从上往下取，风险依次升高）：
+
+1. **事务内两条普通读合成一条**：`route_meta` 和 `writer_registry` 用一条只读语句一起读。两种锁原语都适用，这条读不加锁。
+   - 等价性：两条读都发生在 slot 行锁之后；退休与冻结都要先拿到 slot 行锁才能落地。所以锁之后读一个快照，与读两个快照判出的结果相同。
+   - 收益：每笔写事务省 1 个往返。
+   - `SELECT_ONLY` 档的加锁读不能一起并进来：`FOR UPDATE` 会把 `route_meta` 也锁上，本库全部写事务就被串行化了。
+2. **预切分 `writer_slot`**：按 `writer_key` 前缀切成多个 Region，让各实例的 slot 行分到不同 TiKV 上，消除单 Region 写热点。不改闸门语义，只改建表（TiDB 的 SPLIT TABLE 或建表选项）。项目未上线，迁移按整批重建。
+3. **加库，而不是提高单个闸门的吞吐**：玩家档每 zone 一个库，是 `NewPlayerStorageId` 的静态规则。写热点按库分摊，加库按[玩家数据 TiDB 扩容方案](player-data-tidb-scaling-plan.md)的分库办法做。
+4. **不做：去掉 BEGIN 之前那次 `route_meta` 读。** 它给 `LOCK_TOUCH` 档的条件写提供 epoch，这是一次当前读的 epoch 校验；挪进事务就落进了 RR 快照（见 `beginLocked` 注释）。要动它，得连锁原语资格一起重新论证。
+
+**本轮落码**：只加测量用的 `writer_gate_seconds`，闸门判定不变。
+
+- 定义在 `go/shared/authoritysql/metrics.go`；
+- 三个观察点在 `writer.go` 的 `beforeBegin`、`enter`、`admitRead`；
+- 单测 `metrics_gate_test.go`。
+
+**验证**（交 Codex）：
+
+1. 在 `go/shared` 下（`GOTOOLCHAIN=local`）跑 `go vet ./authoritysql/` 与 `go test -count=1 ./authoritysql/`。
+2. 真库闸门用例按 `writer_gate_tidb_test.go` 文件头的门控跑一遍，确认判定不变。

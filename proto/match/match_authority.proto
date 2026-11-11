@@ -11,6 +11,9 @@ message MatchNetworkProfile {
   repeated NetworkProbeReceipt receipts = 3;
   string owner_account = 4; // 服务端捕获的原会话账号；不得由当前目录反查补权。
   uint64 owner_revision = 5;
+  // 写计划时服务端按会话轨道记下（x-release-track，取值 "stable" / "canary"；空串是本字段之前的档案，按 stable 算）。
+  // 回执提交沿用计划里的值，不接受客户端自带。成局时全员都是 canary 才放 canary battle（docs/design/release-track-gray-canary.md §2.6）。
+  string release_track = 6;
 }
 
 // 全局观战占用与匹配票在同P事务内互斥；时间到期不意味着远端已取消。

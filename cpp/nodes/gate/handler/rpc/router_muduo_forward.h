@@ -11,7 +11,10 @@
 //   失败 → 按发出的 SessionDetails 原始字节交失败桥;不重试。
 // 通道由 NodeConnector::ConnectToGrpcNode 统一建在路由服节点实体上(MuduoGrpcChannelPtr),这里不建通道。
 
+#include <functional>
 #include <string>
+
+class MessageContent;
 
 namespace muduo_grpc
 {
@@ -31,5 +34,13 @@ namespace gate_router_muduo
 // x-session-detail-bin 的内容 —— 不解析、不重新序列化,路由服原值回写,lane 靠它认领回包。
 void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
                  const std::string &sessionDetailsBin);
+
+// gate 自己要处理应答的转发(排空迁移的 ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3)。
+// 与 SendForward 同一份请求构造(:path、两层 base64 的会话 metadata、调用方签名、截止),区别只在完成之后:
+// 不进回包桥、不推给客户端,把路由服回的 MessageContent 交给 done;调用失败、应答解析失败或签名失败时交 nullptr。
+// done 恰好被调用一次,在 gate 的 EventLoop 线程上;签名失败时同步调用。
+void SendForwardForInternalReply(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
+                                 const std::string &sessionDetailsBin,
+                                 std::function<void(const MessageContent *reply)> done);
 
 } // namespace gate_router_muduo

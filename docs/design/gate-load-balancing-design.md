@@ -194,8 +194,20 @@ dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `A
 
 - 跨请求的本地分配累加：快路径只靠随机二选一摊开，不记「本周期已分给某台多少人」；
 - dispatcher 跨拍仍从同一份滞后人数起算，同一个上报周期内连续几拍都会先填同一台最闲的 gate；
-- scene_manager 的停写判定只靠本进程读过的历史，第一次重定向到某个 zone 时判不出；要第一次就挡住，得有 watch 镜像或 gate 侧的
-  心跳时间，前者要等控制面按 zone 化（缺口清单第 4 条）之后按 zone 收窄 watch 再议；
+- scene_manager 的停写判定只靠本进程读过的历史，第一次重定向到某个 zone 时判不出，多副本还各自从头学。后果限于目标 zone 的
+  gate 刚卡住、租约还没到期（NodeTTL，默认 180s）的那段时间：落到没有历史的副本上的那一次跨区传送，可能把票签给卡住的 gate，
+  玩家连不上，重登回家（等待落点不牵引），不丢数据。11-10 定了做法，登记在缺口清单开头的重置后清单里（第 7 条「仍剩」），还没落码：
+  - **不用的两种**：给 scene_manager 加 watch——跨区要看的是别的 zone 的 gate，按 zone 收窄的 watch（第 4 条，11-05 已落码）
+    看不到，全服 watch 正是第 4 条要消除的；gate 在 NodeInfo 里自报心跳时间——要拿 gate 的墙钟和 scene_manager 的墙钟比，
+    时钟偏差没有可靠上界（AGENTS §11.3）。
+  - **定的做法**：由目标 zone 里本来就在持续观察本 zone gate 的一方发布判定，做法同 Kubernetes 节点控制器：观察者用自己的
+    单调时钟判，消费者只读结果。login 的 `NodeWatcher` 已经对本 zone 的 gate 做 list-watch、按 ModRevision 判停写
+    （`WatchedNode.Stale`）。各 login 副本每个上报周期给判为停写的 gate 写一条 `gate:<node_id>:stale`，过期时间 = `gatepick.StaleAfter`，
+    不主动删：恢复后不再续写，30s 内自然过期。正常时零写入；放在核心 Redis，与 `gate:<id>:draining` 同一实例。
+    scene_manager 读排空标记的那次 MGET 一并读出它：有标记或本进程历史判出，任一成立即算停写；读失败照旧放行。
+    两个键名在 Go 侧只定义一份（现在 scene_manager 抄了一份排空键名，借这次一起收进共用包），继续由 `k8s_gate_drain.tests.ps1` 钉住。
+  - **要测的**：各副本判断不一时只要有一个副本写了标记就会剔除，误判上界仍是健康 gate 至多约 25s 不变（小于 30s）；
+    目标 zone 的 login 全挂时没有标记，回到只靠本进程历史，不比现在差；还要验证标记过期之后 gate 能重新参与；以及 Redis 读失败时放行。
 - 三条回落告警（2026-11-05 加，11-06 随分档改了 reason 口径并把 `LoginGatePickFallbackFull` 改名 `LoginGatePickFallbackDegraded`）
   还没过 promtool、没部署到任何 Prometheus，阈值与 severity 没有演练依据；
   `login_queue_admit_gate_recheck_total{outcome="unchecked"}` 与停写剔除的持续增长没有告警，只进看板。

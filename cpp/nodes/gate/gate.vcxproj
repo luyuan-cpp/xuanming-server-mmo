@@ -23,9 +23,11 @@
     <ClCompile Include="handler\event\gate_event_handler.cpp" />
     <ClCompile Include="handler\event\gate_kafka_command_router.cpp" />
     <ClCompile Include="handler\gate_push_delivery.cpp" />
+    <ClCompile Include="handler\gate_redirect_delivery.cpp" />
     <ClCompile Include="handler\rpc\client_session_handler.cpp" />
     <ClCompile Include="handler\rpc\client_heartbeat.cpp" />
     <ClCompile Include="handler\rpc\client_request_lane.cpp" />
+    <ClCompile Include="handler\rpc\drain_migration.cpp" />
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp" />
     <ClCompile Include="handler\rpc\rpc_reply_bridge.cpp" />
     <ClCompile Include="handler\rpc\gate_service_handler.cpp" />
@@ -48,9 +50,11 @@
     <ClInclude Include="handler\event\gate_event_handler.h" />
     <ClInclude Include="handler\event\gate_kafka_command_router.h" />
     <ClInclude Include="handler\gate_push_delivery.h" />
+    <ClInclude Include="handler\gate_redirect_delivery.h" />
     <ClInclude Include="handler\rpc\client_session_handler.h" />
     <ClInclude Include="handler\rpc\client_heartbeat.h" />
     <ClInclude Include="handler\rpc\client_request_lane.h" />
+    <ClInclude Include="handler\rpc\drain_migration.h" />
     <ClInclude Include="handler\rpc\router_muduo_forward.h" />
     <ClInclude Include="handler\rpc\rpc_reply_bridge.h" />
     <ClInclude Include="handler\rpc\gate_service_handler.h" />

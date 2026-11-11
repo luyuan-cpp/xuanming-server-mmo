@@ -1,6 +1,6 @@
 # 灰度与金丝雀发布手册（2026-11-06）
 
-> **状态**：部署脚本、告警与本手册 11-06 已落码，**未编译、未跑契约测试、未上集群**，待 Codex 验证。首次真集群演练时按本文逐步核对，发现与实际不符就改本文。
+> **状态**：部署脚本、告警与本手册 11-06 已落码，金丝雀 battle 池与战斗按整局 11-10 补上，**未编译、未跑契约测试、未上集群**，待 Codex 验证。首次真集群演练时按本文逐步核对，发现与实际不符就改本文。
 > **设计**：[发布轨道：灰度与金丝雀发布设计](../design/release-track-gray-canary.md)。规则以设计文档为准，本文只写操作步骤。
 > **告警**：[`deploy/k8s/release-track-alerts.yaml`](../../deploy/k8s/release-track-alerts.yaml)。
 
@@ -10,7 +10,7 @@
 - **按 zone 灰度**：一个 zone 只用一条轨道。金丝雀 zone 里 gate、scene、login、scene-manager、db 跑新版本；同在这个 zone 的 data-service、player-locator 保持 stable，部署时不重新下发。
 - **全局服务跟着会话走**：金丝雀 zone 的玩家（金丝雀会话）经路由服访问 chat、friend、trade、mail、rank、guild、match 时，先找 `<svc>-canary`，找不到就用 stable；stable 会话永远不会进金丝雀副本。服务之间的内部调用和全局后台工作只在 stable 上。
 
-战斗还不分轨道，battle 节点只有 stable（批 3b 再做）。
+- **战斗按整局**：一局的成员全部是金丝雀会话、且起了金丝雀 battle 池（`battle-canary`）时，这局放到金丝雀 battle 节点；有一个 stable 成员就放 stable。机房仍按 stable battle 节点选，选定的机房里没有可用的金丝雀节点就放 stable。stable 会话不看金丝雀对局。
 
 ## 1. 开始之前
 
@@ -75,6 +75,18 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -CanaryServices client
 - match 有额外前提：线上 stable 必须已经是「镜像只收 stable」的版本，否则落到金丝雀名下的匹配池会停摆（设计 §7「批 2b 的细节」）。
 - 核对：`infra-status` 最后一栏能看到 `<svc>-canary` 的 Pod 带 `canary`；`kubectl -n <infra> get endpoints <svc>` 里不应出现金丝雀 Pod 的 IP（稳定版 Service 不选它）。
 
+### 3.1 开金丝雀 battle 池
+
+要验证战斗的新版本时，在同一次 `infra-up` 里加两个参数（同样不粘滞，还在验证就每次照带）：
+
+```bash
+pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -CanaryBattleReplicas 2 -CanaryNodeImage <新 C++ 节点镜像>
+```
+
+- 另起一个 `battle-canary`（Deployment 形态是 Deployment，Agones 形态是第二个 Fleet），和 stable battle 共用 battle-node-config、机房号与密钥。要求 stable battle 池在（`-BattleReplicas > 0`）；hostPort 形态（`-ClientEntryMode external` 不用 Agones）不支持，两个池会抢 hostPort 20000。
+- 只有全员都是金丝雀会话的新成局会放上去，所以先开金丝雀 zone，再开金丝雀 battle 池才有流量。match 先要是 11-10 之后的版本（会读会话轨道、有 canary battle 镜像）。
+- 核对：`infra-status` 的轨道一栏里 `battle-canary` 的 Pod 带 `canary`；金丝雀 zone 的玩家开局后，`kubectl -n <infra> logs` 里对局建在 `battle-canary` 的 Pod 上。
+
 ## 4. 观察
 
 观察窗口和门槛由负责人定，设计文档没有给数。下面是要看的东西：
@@ -97,18 +109,22 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -CanaryServices client
 ## 6. 晋升
 
 1. 逐 zone 换回 stable 轨道，镜像用新版本：`zone-up -ReleaseTrack stable -NodeImage <新镜像>`，gate 照样逐台排空。
-2. 全部 zone 换完后，跑一次不带 `-CanaryServices` 的 `infra-up -GoSvcTag <新 tag>`：稳定版换成新 tag，随后删掉全部 `<svc>-canary`。
+2. 全部 zone 换完后，跑一次不带 `-CanaryServices`、`-CanaryBattleReplicas` 的 `infra-up -GoSvcTag <新 tag> -NodeImage <新镜像>`：稳定版（含 battle）换成新版本，随后删掉全部 `<svc>-canary` 与 `battle-canary`。
 3. 核对：`zone-status`、`infra-status` 的轨道一栏全是空的；`cpp_node_info` 里没有 `release_track="canary"`。
 
 ## 7. 中止
 
-1. **先停新流量**：其余参数照旧，跑一次不带 `-CanaryServices`（或只列要留下的服务）的 `infra-up`，删掉 `<svc>-canary`。来不及跑部署时，直接删 Deployment：
+1. **先停新流量**：其余参数照旧，跑一次不带 `-CanaryServices`（或只列要留下的服务）、不带 `-CanaryBattleReplicas` 的 `infra-up`，删掉 `<svc>-canary` 与 `battle-canary`。来不及跑部署时，直接删工作负载：
 
    ```bash
    kubectl -n <infra ns> delete deployment <svc>-canary
    ```
 
-   金丝雀会话随即退回 stable（router 找不到金丝雀副本就用 stable），稳定版的流量不受影响。
+   ```bash
+   kubectl -n <infra ns> delete deployment battle-canary
+   ```
+
+   Agones 形态的金丝雀 battle 池是 Fleet，删 `fleet battle-canary`。金丝雀会话随即退回 stable（router 找不到金丝雀副本就用 stable），还没开局的金丝雀局改放 stable battle，稳定版的流量不受影响。`battle-canary` 上正在打的局会随 Pod 结束，和缩容 stable battle 一样；能等就等这些局打完再删。
 2. **zone 回退**：`zone-up -ReleaseTrack stable -NodeImage <旧镜像>`，gate 逐台排空。zone 回退受[混版本持久字段保护](../design/mixed-version-persist-field-protection.md)的回退门禁约束，不满足就向前修复，不承诺一键任意回退。
 
 ## 8. 常见问题

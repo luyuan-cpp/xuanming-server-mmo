@@ -141,7 +141,7 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | G2 | **闸门位置比注释声称的晚**：拒绝发生时 `TcpConnection`、两个 1KB Buffer、`connections_` map 节点、`epoll_ctl ADD` 已全部完成 | `TcpServer.cc newConnection` 先于我们的回调执行；`Buffer.h:45-46`（`kCheapPrepend=8`+`kInitialSize=1024`） |
 | G3 | **只有总量、没有速率**。每秒建 5000 条又立刻关的攻击者永远碰不到 `:468` 那条闸 | `client_message_processor.cpp:468` 是唯一判据 |
 | G4 | **`RLIMIT_NOFILE` 全链路无人设**：镜像没设、k8s 没有该 API 字段、进程从不 `setrlimit`。containerd 依赖 systemd v240+ 隐式默认 **soft=1024**——真正生效的上限很可能是 ~1000 而不是 20000，**`GateMaxConnections` 那条分支是够不着的死代码** | `Dockerfile.runtime`/`Dockerfile.cpp` 无 ulimit；`cpp/` 下 `setrlimit` 仅命中 Windows shim |
-| G5 | **muduo 两行 per-connection `LOG_INFO` 抵消了全部采样纪律** | `TcpServer.cc:80`（newConnection）+ `:109`（removeConnectionInLoop）**无条件**；`Logging.h:20-29` 里 `INFO==2`；`node.cpp:1092-1098` 把 `log_level` **直接 `static_cast`** 进 `muduo::Logger::LogLevel`；而 `bin/etc/base_deploy_config.yaml:25` 是 `LogLevel: 2`，注释却写「2=WARN」——**注释错了，实际是 INFO，这两行现在就在打**。更糟：proto3 缺键得 0 = **TRACE**。**（2026-10-30 更正：注释已按 muduo 枚举改正，键现位于 `bin/etc/base_deploy_config.yaml:31`，值仍为 2 = INFO；缺键 / 越界已改为拒启。两行 per-connection 日志在 Linux 构建（`third_party/muduo-linux`，即 K8s；gitlink 在 `b55b0ac` 与 `f1fc77e` 之间翻转过，两版都是）仍是 `LOG_INFO`、照打；Windows 构建用的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d`（2026-04-13）起已是 `LOG_TRACE`。见下方 P0-3 的同日说明）** |
+| G5 | **muduo 两行 per-connection `LOG_INFO` 抵消了全部采样纪律** | `TcpServer.cc:80`（newConnection）+ `:109`（removeConnectionInLoop）**无条件**；`Logging.h:20-29` 里 `INFO==2`；`node.cpp:1092-1098` 把 `log_level` **直接 `static_cast`** 进 `muduo::Logger::LogLevel`；而 `bin/etc/base_deploy_config.yaml:25` 是 `LogLevel: 2`，注释却写「2=WARN」——**注释错了，实际是 INFO，这两行现在就在打**。更糟：proto3 缺键得 0 = **TRACE**。**（2026-11-10 状态：已修，见 P0-3。注释已按 muduo 枚举改正，键现位于 `bin/etc/base_deploy_config.yaml:31`，生产值定为 2 = INFO；缺键 / 越界拒启。两行 per-connection 日志两个平台都已是 `LOG_TRACE`：Windows 的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d`（2026-04-13），Linux 的 `third_party/muduo-linux` 经 `tools/archived/muduo_linux_overlay/muduo/net/TcpServer.cc`（2026-11-10 落码，未编译）。上面「这两行现在就在打」是修复前的状态）** |
 | G6 | **`sockets::accept` 对 `ENFILE`/`ENOBUFS`/`ENOMEM` 直接 `LOG_FATAL` → abort** | `SocketsOps.cc:125-156`。即便把连接上限调到 1，只要内核在 accept 时返回 `ENOBUFS`（连接洪水的典型产物）gate 照样崩。这条与 gate 自己的上限**完全正交** |
 | G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙 |
 | G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的 |
@@ -274,39 +274,32 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P0-3 · 修 LogLevel（对应 G5）
 
-- 改 `bin/etc/base_deploy_config.yaml:25` 的注释（`0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR 5=FATAL`），
-  并把生产值定到 **3(WARN)**。
-- `Node::InitLogSystem`（`node.cpp:1092-1098`）加一条越界/缺键校验：proto3 缺键得 0 = TRACE
-  是典型的「配置缺失静默降级成最坏值」。
-- 否则 `TcpServer.cc:80` / `:109` 两行 per-connection INFO 会让**连接风暴照样是日志风暴**，
-  handler 里 1/1024 的克制被完全抵消。
+**状态（2026-11-10）**：下面第 1、2 条已落码。2026-11-04 Codex 在 Windows Debug 上验证通过：五个工程串行编译退出 0，`client_endpoint_test` 70/70，K8s 契约 283/283，14 种非法值都按预期拒启并以 1 退出。第 3 条 2026-11-10 落码，未编译，待 Codex 在 Linux 上验证。
 
-> **（2026-10-22 部分落地，未执行，待 Codex 验证）** 只做了配置口径这一半：
-> - `bin/etc/base_deploy_config.yaml` 的注释已改成上面的真实枚举；值仍是 **2(INFO)**，没有按本节建议定到 3(WARN)——
->   运维手册与演练取证大量依赖 INFO 行（如 `Player marked for unregistration`、`[DirtySave]`、启动横幅），改 WARN 要先逐条换掉这些判据，另行决策。
->   因此上面 per-connection 两行 INFO 仍在打，本节「连接风暴即日志风暴」的结论不变。
-> - 新发现并修掉：`k8s_deploy.ps1` 生成的 `node-config` / `battle-node-config` 原先写死 `LogLevel: 1`，K8s 上实际一直是 **DEBUG**；
->   现改为从 `bin/etc` 镜像，生成期校验是 0..5 的整数。`release_preflight.ps1` 的 `debug.cpp.loglevel` 原先按「0=DEBUG」把下界设成 1（放过 DEBUG），现改为 2。
-> - **未做**：`Node::InitLogSystem` 的越界 / 缺键校验（缺键仍得 0 = TRACE）。K8s 生成期总会写出这一键，本机靠注释提醒。
-> - **（2026-10-30 更正）** 上面「per-connection 两行 INFO 仍在打」只对 Linux 构建成立：`third_party/muduo-linux` 的 `TcpServer.cc:80` / `:109` 是 `LOG_INFO`（gitlink 在 `b55b0ac` 与 `f1fc77e` 之间翻转过，两版相同），`tools/archived/muduo_linux_overlay` 不覆盖 `TcpServer.cc`，所以 K8s 上照打，本节结论不变。
->   Windows 构建用的 `muduo_windows` 与 `third_party/muduo` 里这两行自 `52ebf9e5d`（2026-04-13）起已是 `LOG_TRACE`，本机 `LogLevel: 2` 看不到，不要据此判断 G5 不成立。
+**定案：生产保持 2（INFO），不改 3（WARN）；G5 靠去掉那两行连接日志解决。** 原计划把生产值定到 3（WARN）来压住 G5，没有采用，原因有两点：
+- INFO 是业界和本仓其余服务（go-zero、Spring Boot）的默认生产级别。运维手册与演练取证大量依赖 INFO 行，如 `Player marked for unregistration`、`[DirtySave]`、启动横幅。改 WARN 要先逐条换掉这些判据，代价大于收益。
+- G5 的根因只是 muduo 的两行连接生命周期日志。Windows 的两份副本在 `52ebf9e5d`（2026-04-13）已降为 `LOG_TRACE`，只有 Linux 子模块漏了。把它补上，INFO 与 G5 就不冲突。
 
-> **（2026-10-22 后半落地：缺键 / 越界校验，未编译，待 Codex 验证）** 即上一条「未做」那一项。
-> - **语义：fail-closed，启动失败，不回落 INFO。** 缺键、YAML 空值（`LogLevel:` / `~`）、序列或映射、非十进制整数（`INFO`、`-1`、`+2`、`2.5`、`0x2`、带空白）、越界（> 5）一律拒启：
->   先同步写入并刷新一行 stderr `FATAL LogLevel config: ...`（`kubectl logs --previous` 可见，文本带枚举对照），再直接以 `EXIT_FAILURE` 退出。
->   这是网络和外部服务初始化前的配置拒绝。2026-11-04 起不再经过 `LOG_FATAL` / `abort()`，避免 Windows Debug 的运行库弹窗阻塞无人值守启动。
->   理由：
->   1. 项目未上线，没有缺这一键的存量部署。仓库里实际的配置来源都写了这一键：`bin/etc`、`k8s_deploy.ps1` 生成的两份 node ConfigMap、`prepare_docker_debug.py` 从 `bin/etc` 复制的 debug 配置；`tools/archived/debug_gate.sh` 写的是 1，也合法。
->   2. 落 INFO 再打 ERROR，会把「配置生成器漏键」这类错误再藏一次。K8s 写死 `LogLevel: 1` 跑了很久没人发现，就是同一类静默。
->   3. 与同一启动段的 fd 上限门槛一样，配置不满足就拒启；LogLevel 的直接退出不改变其他启动门槛的诊断行为。
->
->   代价：手写的本机 yaml 漏了这一键会起不来，按报错补一行即可。滚动发布时配置错的新 Pod 起不来，旧 Pod 不受影响；K8s 生成期已先拦下非法值。
-> - **C++ 侧只核结构（0..5 的整数），不核下界。** 0 / 1（TRACE / DEBUG）仍合法，本机临时调级是正常用法；生产下界 2 是发布策略，仍由 `release_preflight.ps1` 的 `debug.cpp.loglevel` 判。没有引入映射表，数值仍直接是 muduo 枚举。
-> - **位置**：
->   - 纯判定：`cpp/libs/engine/config/node_log_level.h` 的 `Parse` / `IsValidValue`。不依赖 muduo，单测在 `cpp/tests/client_endpoint_test/node_log_level_test.cpp`。
->   - 拒启：`config.cpp::readBaseDeployConfig`。只有那里分得清「缺键」与「写了 0」，因为 proto3 的 uint32 没有 presence。测试工程经 `test_config_helper.h` 读同一份 `bin/etc`，同样受这条约束。
->   - `Node::InitLogSystem`：`static_cast` 前再核一次数值（越界值转枚举是未定义行为），并用 `static_assert` 把上界钉在 `muduo::Logger::FATAL` 上。
-> - 生产值是否定到 3(WARN) 仍未决，见上一条。
+1. **数值口径**：`bin/etc/base_deploy_config.yaml` 的 `LogLevel` 直接按 muduo 枚举解释（`0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR 5=FATAL`），没有映射表。原注释写成「0=DEBUG…2=WARN」，已改正。
+   - K8s 的 `node-config` / `battle-node-config` 由 `k8s_deploy.ps1` 从这里镜像，生成期由 `ConvertTo-CppNodeLogLevel` 校验是 0..5 的整数。2026-10-22 前这里写死 1，K8s 上实际一直是 DEBUG。
+   - `release_preflight.ps1` 的 `debug.cpp.loglevel` 下界为 2，所有档位都判 FAIL。原来按「0=DEBUG」写成 1，恰好放过 DEBUG。
+2. **缺键 / 越界拒启（fail-closed，不回落 INFO）**：
+   - 一律拒启的情形：缺键、YAML 空值（`LogLevel:` / `~`）、序列或映射、非十进制整数（`INFO`、`-1`、`+2`、`2.5`、`0x2`、带空白）、越界（> 5）。
+   - 拒启方式：先同步写入并刷新一行 stderr `FATAL LogLevel config: ...`（`kubectl logs --previous` 可见，文本带枚举对照），再直接以 `EXIT_FAILURE` 退出。这是网络和外部服务初始化前的配置拒绝，2026-11-04 起不经过 `LOG_FATAL` / `abort()`，避免 Windows Debug 的运行库弹窗阻塞无人值守启动。
+   - 为什么拒启而不回落 INFO：
+     1. 项目未上线，没有缺这一键的存量部署。仓库里实际的配置来源都写了这一键：`bin/etc`、`k8s_deploy.ps1` 生成的两份 node ConfigMap、`prepare_docker_debug.py` 从 `bin/etc` 复制的 debug 配置；`tools/archived/debug_gate.sh` 写的是 1，也合法。
+     2. 落 INFO 再打 ERROR，会把「配置生成器漏键」这类错误再藏一次。K8s 写死 `LogLevel: 1` 跑了很久没人发现，就是同一类静默。
+     3. 与同一启动段的 fd 上限门槛一样，配置不满足就拒启；LogLevel 的直接退出不改变其他启动门槛的诊断行为。
+   - 代价：手写的本机 yaml 漏了这一键会起不来，按报错补一行即可。滚动发布时配置错的新 Pod 起不来，旧 Pod 不受影响；K8s 生成期已先拦下非法值。
+   - C++ 侧只核结构（0..5 的整数），不核下界。0 / 1（TRACE / DEBUG）仍合法，本机临时调级是正常用法；生产下界 2 是发布策略，由预检判。
+   - 位置：
+     - 纯判定：`cpp/libs/engine/config/node_log_level.h` 的 `Parse` / `IsValidValue`，不依赖 muduo，单测在 `cpp/tests/client_endpoint_test/node_log_level_test.cpp`。
+     - 拒启：`config.cpp::readBaseDeployConfig`，经 `node_log_level::RejectStartup`。只有那里分得清「缺键」与「写了 0」，因为 proto3 的 uint32 没有 presence。测试工程经 `test_config_helper.h` 读同一份 `bin/etc`，同样受这条约束。
+     - `Node::InitLogSystem`：`static_cast` 前再核一次数值（越界值转枚举是未定义行为），并用 `static_assert` 把上界钉在 `muduo::Logger::FATAL` 上。
+3. **两行连接日志降为 TRACE（G5）**：
+   - Linux 构建经 `tools/archived/muduo_linux_overlay/muduo/net/TcpServer.cc` 覆盖上游，把 `newConnection` / `removeConnectionInLoop` 两行 `LOG_INFO` 改为 `LOG_TRACE`，与 Windows 的 `52ebf9e5d` 一致。之后在 INFO 级别下，客户端连接的建立与断开不再逐条打日志；gate 处理函数里每 1024 次一条的采样 WARN 不受影响。
+   - 覆盖层是整文件替换，而 gitlink 在 `b55b0ac`（v2.0.2）与 `f1fc77e`（v2.0.3-1）之间翻转过。两版 `TcpServer.cc` 只差 `start()` 里 `assert(!acceptor_->listenning())` / `listening()` 的拼写，所以覆盖版去掉了这条 assert，两版都能编。去掉它不损失保护：`started_.getAndSet(1)` 已保证 `listen` 只排一次，`acceptor_` 是私有成员。
+   - 没有脚本、告警或运维手册依赖这两行（2026-11-10 全仓检索）。
 
 ### P0-4 · 降级 muduo 的三条必崩路径（对应 G6，3 行改动）
 

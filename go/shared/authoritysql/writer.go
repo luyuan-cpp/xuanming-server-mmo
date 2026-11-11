@@ -9,6 +9,7 @@ import (
 	"io"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	databasepb "proto/common/database"
@@ -194,6 +195,7 @@ func (g runtimeGate) beforeBegin(ctx context.Context, conn driver.Conn) (gateAtt
 	if g.config.boot == nil || g.config.boot.closed.Load() {
 		return nil, ErrWriterDenied
 	}
+	defer observeWriterGate(g.config.AuthoritySchema(), gatePhaseBeforeBegin, time.Now())
 	meta, err := readRawMeta(ctx, conn, g.config.AuthoritySchema())
 	if err != nil {
 		return nil, err
@@ -219,6 +221,7 @@ func (g runtimeGate) admitRead(ctx context.Context, conn driver.Conn) error {
 	if g.config.boot == nil || g.config.boot.closed.Load() {
 		return ErrWriterDenied
 	}
+	defer observeWriterGate(g.config.AuthoritySchema(), gatePhaseRead, time.Now())
 	meta, err := readRawMeta(ctx, conn, g.config.AuthoritySchema())
 	if err != nil {
 		return err
@@ -238,6 +241,7 @@ func (a *runtimeAttempt) enter(ctx context.Context, conn driver.Conn) error {
 	if a.config.boot.closed.Load() {
 		return ErrWriterDenied
 	}
+	defer observeWriterGate(grant.AuthoritySchema, gatePhaseEnter, time.Now())
 	query := "SELECT generation,writer_epoch,state FROM " + qualified(grant.AuthoritySchema, "writer_slot") + " WHERE writer_key=? AND slot=?"
 	args := []driver.NamedValue{{Ordinal: 1, Value: grant.WriterKey}, {Ordinal: 2, Value: int64(a.slot)}}
 	touched := true

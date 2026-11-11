@@ -238,7 +238,8 @@ func claimGroup(ctx context.Context, s *svc.ServiceContext, claim poolClaim, nod
 			return metrics.PoolClaimPartyGone
 		}
 	}
-	node, ok := s.Placement.Pick(nodes, claim.group.Region)
+	// 战斗按整局选轨道(发布轨道设计 §2.6):组里全员都是金丝雀会话才先在 canary battle 节点里选,机房仍是撮合按 stable 节点定的。
+	node, ok := pickBattleNode(s, poolClaimTrack(claim), nodes, claim.group.Region)
 	if !ok {
 		return metrics.PoolClaimNoNode
 	}

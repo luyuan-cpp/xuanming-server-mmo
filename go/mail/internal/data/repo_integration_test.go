@@ -562,3 +562,56 @@ func TestTiDBGuildTextFollowsCurrentGuildAndFrozenRewardsSurviveLeave(t *testing
 		t.Fatalf("历史名单资格不能随离帮撤回: %v", err)
 	}
 }
+
+// 缺口清单第 27 条:共享邮件按可见范围分开封顶。帮会邮件按帮计数,一个帮发满只挡住它自己,不挤占全服系统邮件,
+// 别的帮照常发;系统邮件发满也不挡帮会邮件。修复前两类共用全服 MaxActiveSystemMails,帮会多了会把系统邮件挤满。
+func TestTiDBGuildMailCapIsPerGuildAndSeparateFromSystemCap(t *testing.T) {
+	ctx, _, r := mailFixture(t)
+	if err := r.ConfigureLimits(Limits{MaxActiveSystemMails: 2, MaxActiveGuildMailsPerGuild: 2}); err != nil {
+		t.Fatal(err)
+	}
+	guildMail := func(guild, request uint64) error {
+		_, err := r.Send(ctx, "guild", mailpb.MailKind_MAIL_KIND_GUILD, &mailpb.SendMailRequest{SenderKind: 2, RequestId: request, GuildId: guild, Title: "帮会通知", Body: "按帮计数"})
+		return err
+	}
+	systemMail := func(request uint64) error {
+		_, err := r.Send(ctx, "admin", mailpb.MailKind_MAIL_KIND_SYSTEM, &mailpb.SendMailRequest{SenderKind: 1, RequestId: request, Title: "公告", Body: "全服计数"})
+		return err
+	}
+	for request := uint64(1); request <= 2; request++ {
+		if err := guildMail(77, request); err != nil {
+			t.Fatalf("帮 77 第 %d 封: %v", request, err)
+		}
+	}
+	if err := guildMail(77, 3); !errors.Is(err, ErrBoxFull) {
+		t.Fatalf("帮 77 发满之后应拒: %v", err)
+	}
+	if err := guildMail(78, 4); err != nil {
+		t.Fatalf("别的帮不受帮 77 影响: %v", err)
+	}
+	for request := uint64(10); request <= 11; request++ {
+		if err := systemMail(request); err != nil {
+			t.Fatalf("帮会邮件不占系统上限,第 %d 封系统邮件: %v", request, err)
+		}
+	}
+	if err := systemMail(12); !errors.Is(err, ErrBoxFull) {
+		t.Fatalf("系统邮件发满之后应拒: %v", err)
+	}
+	if err := guildMail(78, 5); err != nil {
+		t.Fatalf("系统邮件发满不挡帮会邮件: %v", err)
+	}
+}
+
+func TestMailLimitsGuildCapDefaultsAndRange(t *testing.T) {
+	if got := (Limits{}).Defaults().MaxActiveGuildMailsPerGuild; got != 20 {
+		t.Fatalf("帮会邮件上限缺省应为 20: %d", got)
+	}
+	for _, bad := range []uint32{101, 1000} {
+		if err := (Limits{MaxActiveGuildMailsPerGuild: bad}).Defaults().Validate(); err == nil {
+			t.Fatalf("帮会邮件上限 %d 越界应拒", bad)
+		}
+	}
+	if err := (Limits{MaxActiveGuildMailsPerGuild: 100}).Defaults().Validate(); err != nil {
+		t.Fatalf("上界 100 应可用: %v", err)
+	}
+}

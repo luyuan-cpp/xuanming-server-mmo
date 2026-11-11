@@ -15,6 +15,7 @@
 #include "handler/rpc/client_session_handler.h"
 #include "handler/rpc/client_heartbeat.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/rpc/drain_migration.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "muduo_grpc/channel.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
@@ -220,6 +221,9 @@ namespace
         // 客户端连接的存活扫描:握手期限与空闲超时(handler/rpc/client_heartbeat.cpp,docs/design/gate-client-heartbeat.md §5.4)。
         // 回调不捕获任何对象;必须主动扫:死掉的客户端不会再发任何东西来触发检查。没有到期的检查点时每轮只做一次堆顶比较。
         TimerTaskComp clientLivenessSweepTimer;
+        // 排空迁移的每秒一拍与重定向滞留关闭(handler/rpc/drain_migration.cpp,docs/design/gate-drain-session-migration.md §4.3)。
+        // 回调不捕获任何对象;没有迁移许可、也没有待关的滞留连接时每拍只做两次判空。
+        TimerTaskComp drainMigrationTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -528,6 +532,8 @@ int main(int argc, char *argv[])
                 context.sourceClosed = true;
                 context.dependencyGate.probeTimer.Cancel();
                 context.playerCountReportTimer.Cancel();
+                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭。
+                context.drainMigrationTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
@@ -561,7 +567,7 @@ int main(int argc, char *argv[])
                 node.SetMaintenanceInboundRelay(); // 内部推送/路由是relay；客户端TCP根由closeSource关闭。
                 node.SetMaintenanceSourceClose(closeSource);
                 node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
-                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); });
+                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); context.clientLivenessSweepTimer.Cancel(); context.drainMigrationTimer.Cancel(); });
                 node.SetShutdownDrainComplete([closingSessions](Node &)
                                               {
                     const auto &sessions = tlsSessionManager.sessions();
@@ -641,6 +647,11 @@ int main(int argc, char *argv[])
                         // 维护关源与停机关源都先关掉全部客户端连接、等会话删完才停中继与拆除,所以这两处取消时已没有要扫的连接。
                         context.clientLivenessSweepTimer.RunEvery(gate_client_heartbeat::kSweepIntervalSeconds, [] {
                             gate_client_heartbeat::SweepLiveness(std::chrono::steady_clock::now());
+                        });
+                        // 排空迁移:login 发来许可后每拍至多迁 rate 个连接;推过 124 仍不走的连接满 60 秒关掉。
+                        // 与上面几个扫描一样紧跟客户端回调装上;关源(disconnectAllClients)时取消。
+                        context.drainMigrationTimer.RunEvery(gate_drain_migration::kTickIntervalSeconds, [] {
+                            gate_drain_migration::Tick(std::chrono::steady_clock::now());
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

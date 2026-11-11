@@ -201,7 +201,7 @@
 
 核实成立的保证(各路复核过):写权判定先判代次、再判持有者、最后才比序号;认领在同一个事务里抬代次再读全部行;交接标记只在最终存盘提交、且没有排队快照之后才写,写了标记就不再存盘;判死释放用 location 记的那一代,库里更新就不动;发号器两套 etcd 都写成功才发号;外部腿只认已提交账本才终结,自动放弃的「已释放」和「账本未见」出自同一次读、按租约令牌提交;写者闸门冻结之后旧位置的写提交不了;搬库翻转结局未知时绝不解冻;过户、删角之后旧会话写不进存档。
 
-### 6.3 本轮改动(未编译,待 Codex 验证)
+### 6.3 本轮改动(验证状态见 6.4)
 
 1. **资产流水跟着存盘提交走。**
    - `TransactionLogSystem`(`cpp/libs/modules/transaction_log/transaction_log_system.*`)开闸之后,只涉及一名玩家的流水按玩家排队,带进程内单调的水位。
@@ -215,8 +215,20 @@
 4. **人工终结以已提交账本为证据,trade 与 guild 一份判据(11-06 统一)。** `go/shared/assetop/manual_evidence.go` 的 `JudgeManual`:位图分类与自动终结同一套(`ClassifySeq`);有结局时还要收据是这一条请求(`CommittedOutcomeOf`,与重投循环终结同口径);部分发放兼看账本标记和行上粘性的 `last_reason`;判「从未应用」要求写权行已释放、账本没见过、而且行安静(`RowQuiet`:此刻没人持租约,距最后一次可能的投递超过 `ManualQuietGap`,即 30 分钟与租约取大,`last_send_ms` 为 0 按不安静)。账本判不了一律不终结:没流水不等于没应用,也还没有能从提交后的流水还原整笔发放的证明。`go/trade/cmd/assetopfix`:`list` 与 `resolve` 都读账本,终结走 `AssetOpRepo.ResolveManuallyIfQuiet`(条件写带读证据时的 `lease_until_ms`、`last_send_ms`,中间被领过就落空,退出码 3);`OpFromRecord` 抽成重投循环与工具共用的还原函数。guild 工具 11-06 改调同一份判据(请求还原不出按 none)。GM 回收的 `ResolveRecallOp` 也用这份判据读已提交账本,按回收自己的结局对表放行(判不了只收 `PARTIAL`:不放回来源,只会少扣),终结在 settle 里带同样的见证,详见 `exploit_loss_prevention_zh.md`「人工终结」。手册 `trade-commerce-quarantine-runbook.md` §4.1、§4.2 同步。
 5. **不凭标记的路由回滚先看交接资格原件(11-06)。** 目标节点入场时先跑 C++ `kRegisterFenceLua`(核对 owner_epoch == 铸出值,写出这一代的资格原件 `player:{id}:handoff_fence`),登记成功之后才认领存档;原件代次只升不降。`go/scene_manager/internal/logic/owner_epoch.go` 的 `luaRollbackPlayerPlacement` 对不凭标记的 bump 在同一次原子执行里读这份原件:已属于铸出值 → 一个字节不动、保留落点(`target_registered`,目标节点就是有 location 的现任);缺失或更早 → 照常 INCR 并退回 location,之后迟到的登记被 owner_epoch 拒掉,目标节点认领不了;比铸出值新或写坏 → 不回滚并告警(`fence_not_proof`,并入 `SceneManagerEnterSceneRollbackRedisError`)。判据与无资格持有者撤销(`location-release-binding.md` §17)同口径。不加 RPC,也不碰登录热路径:只在推路由失败的回滚里多读一个同 slot 的键。设计文档 `cross-zone-scene-travel.md` §13.7「设计残余」第一条、手册 `cross-zone-failure-test-runbook.md` §2.3 / §2.4 同步。
 
-### 6.4 没覆盖、没验证
+### 6.4 验证状态与没覆盖的(11-10 核对)
 
-- 全部改动未编译、未测试。杀进程、TiDB 切主、etcd 分区这类故障注入从没跑过,压测也没跑:「崩溃时不回档」目前只有读代码的证据。
-- Java 版、独立的 xuanming-server 仓不在这次范围内。
+6.3 的改动都已随保存提交进 main(`a8af9372d` 起)。Codex 的运行证据按条:
+
+| 条 | 已有的运行证据 | 出处 |
+|---|---|---|
+| 1 流水跟着提交走 | 11-08 主仓整解(`game.sln` Debug / x64,exit 0)之后,`currency_test` 的 `TransactionLogCommitGateTest.*` 7 条、`bag_test` 新增的 4 条提交水位用例全部 PASS | PROGRESS 11-08 Codex「命名审查阶段复验完成」,`build/verification/naming-audit-20261108/cpp-tests/` |
+| 2 身份不确认期间补存 | 11-08 整解编译通过。11-10 补了 3 条单测(`cross_zone_test` 的 `PlayerStoreDirectEcs.UnconfirmedIdentitySavesEachPlayerOnceEveryFiveSeconds` 等),补存入口改为 `PlayerLifecycleSystem::RunIdentityAtRiskSaves`,**未编译,待 Codex** | PROGRESS 11-10 Claude「身份不确认期间补存补单测」 |
+| 3 本地换图旁路关掉 | 只改配置与注释,没有运行证据 | — |
+| 4 人工终结统一判据 | `go/shared` assetop 144 PASS(9 条真 MySQL 门控 SKIP);trade 的 assetopfix、data、reconcile、svc 共 111 PASS | PROGRESS 11-06 Codex「数据一致性验证续跑」「修正 scene_manager 五项旧夹具」 |
+| 5 回滚先看资格原件 | `go/scene_manager` 的 `./internal/logic/...` 全量 756 PASS;回滚 Lua 在真 Redis 7.2.16 与 8.10.2 上 16/16(两种先后、6 类资格原件,返回 4 / 5 时 6 个键逐字节不变) | 同上两条 |
+
+还没有运行证据的:
+- 流水「提交之后才出现」的运行期核对,本地跨节点换图冒烟,etcd 单边失联演练,真实 SQL 条件写竞态,Kafka「报错但已投递」注入,告警规则的 promtool 校验。
+- 杀进程、TiDB 切主、etcd 分区这类故障注入从没跑过,压测也没跑:「崩溃时不回档」除单测外只有读代码的证据。
+- Java 版:只读核对后,只有流水早于提交一项适用,已在 Java `PARITY.md` 登记待做;人工终结由 R2 交接会话登记;补存与回滚两项 Java 已有等价做法。独立的 xuanming-server 仓不在这次范围内。
 - 四路都没读到的:match 的 direct_admission、challenge、spectator、global_pool_matcher;C++ 回合引擎;trade 的 rmb_mall、role_authority;Java `CommerceStore` 全文;tools/dbmove 的 replication、checksum。

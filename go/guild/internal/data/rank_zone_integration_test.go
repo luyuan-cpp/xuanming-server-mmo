@@ -133,7 +133,6 @@ func TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint(t *testing.T) {
 
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, sourceZone))
 
-	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(targetZone), guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(sourceZone), guildID)
 }
@@ -165,7 +164,6 @@ func TestDisbandPath_RemovesFromAuthoritativeZoneAfterRowIsGone(t *testing.T) {
 		"DisbandGuild 必须返回删除事务里 FOR UPDATE 读到的权威 zone —— 清榜只有它可信")
 
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, zoneFromDelete))
-	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(actualZone), guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(staleZone), guildID)
 
@@ -207,6 +205,7 @@ func TestUpdateGuildScore_WritesTheFinalZoneRank(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, float64(777), score)
 	assertNotRanked(t, ctx, repo, zoneRankKey(10), guildID)
+	assertNoGlobalRank(t, ctx, repo)
 	var zone uint32
 	require.NoError(t, db.QueryRow("SELECT zone_id FROM guild WHERE guild_id=?", guildID).Scan(&zone))
 	assert.Equal(t, uint32(10), zone, "合服不改写 zone_id")
@@ -224,6 +223,7 @@ func TestRebuildRanks_FollowsTheCurrentMapping(t *testing.T) {
 	require.NoError(t, repo.RebuildRanks(ctx))
 	assert.EqualValues(t, 2, repo.rdb.ZCard(ctx, zoneRankKey(20)).Val())
 	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, zoneRankKey(10)).Val(), "源区的旧键要清掉")
+	assertNoGlobalRank(t, ctx, repo)
 
 	bindMergedZones(t, repo, nil)
 	require.NoError(t, repo.RebuildRanks(ctx))
@@ -248,8 +248,37 @@ func TestDisbandPath_RemovesFromTheFinalZoneRank(t *testing.T) {
 	assert.Equal(t, uint32(10), res.ZoneID)
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, res.ZoneID))
 
-	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
 	assertNotRanked(t, ctx, repo, zoneRankKey(20), guildID)
+}
+
+// zone_id=0 的行是坏数据(帮会都按归属区建):分数照常落库、不报错,但写分与重建都不让它进任何榜;
+// 同库的正常帮会照常上榜。删全服榜之前,这类行只进全服榜。
+func TestUnzonedGuildIsPersistedButNeverRanked(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const (
+		unzonedGuild uint64 = 5131
+		zonedGuild   uint64 = 5135
+	)
+	seedGuild(t, db, unzonedGuild, "no-zone", 0)
+	seedGuild(t, db, zonedGuild, "has-zone", 30)
+
+	require.NoError(t, repo.UpdateGuildScore(ctx, unzonedGuild, 0, 321))
+	var score int64
+	require.NoError(t, db.QueryRow("SELECT score FROM guild WHERE guild_id=?", unzonedGuild).Scan(&score))
+	assert.EqualValues(t, 321, score, "分数照常落库")
+	assert.Empty(t, repo.rdb.Keys(ctx, "guild_rank*").Val(), "写分不建任何榜键")
+
+	require.NoError(t, repo.RebuildRanks(ctx))
+	assert.Equal(t, []string{zoneRankKey(30)}, repo.rdb.Keys(ctx, "guild_rank*").Val(),
+		"重建只留正常帮会所在区的榜,不留临时键、锁键和全服键")
+	assert.EqualValues(t, 1, repo.rdb.ZCard(ctx, zoneRankKey(30)).Val())
+}
+
+// assertNoGlobalRank:帮会榜只有分区榜,写分与重建都不得再建全服键 guild_rank(docs/design/gate-online-identity.md §9.6)。
+func assertNoGlobalRank(t *testing.T, ctx context.Context, repo *GuildRepo) {
+	t.Helper()
+	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, "guild_rank").Val(), "不应存在全服帮会榜")
 }
 
 func assertNotRanked(t *testing.T, ctx context.Context, repo *GuildRepo, key string, guildID uint64) {

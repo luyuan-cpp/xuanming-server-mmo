@@ -323,7 +323,7 @@
 
 | 项 | 负载公式（参数出处） | S1 | S2 | S3 | 现有上限（出处） | 差距 / 说明 |
 |---|---|---|---|---|---|---|
-| 日志 | N_save + N_snap + 4E 行/s：每次存盘一行（`player_lifecycle.cpp:3743`）、每份快照一行（`snapshot_system.cpp:109`）、每条连接两行，都在 INFO 级；LogLevel 2 实际是 INFO（G5） | 0.6 万~1.2 万行/s | 2.8 万~6.1 万 | 5.6 万~12.2 万行/s，11~24 MB/s | Loki 1 个副本，ingestion_rate_mb 16，盘 10Gi，保留 168 小时（`loki.yaml:34`、`:89`、`:93`、`:133`） | S3 0.7~1.5 倍；保留 7 天要 6.7~14.5 TB |
+| 日志 | N_save + N_snap + 4E 行/s：每次存盘一行（`player_lifecycle.cpp:3743`）、每份快照一行（`snapshot_system.cpp:109`）、每条连接两行，都在 INFO 级；LogLevel 2 实际是 INFO（G5） | 0.6 万~1.2 万行/s | 2.8 万~6.1 万 | 5.6 万~12.2 万行/s，11~24 MB/s | Loki 1 个副本，ingestion_rate_mb 16，盘 10Gi，保留 168 小时（`loki.yaml:34`、`:89`、`:93`、`:133`） | S3 0.7~1.5 倍；保留 7 天要 6.7~14.5 TB。**（2026-11-10：输入已变，本行待重算）**存盘那行已降为 DEBUG，直写 TiDB 的存盘路径也不再逐次打 INFO；每条连接两行两个平台都已降为 TRACE（Windows `52ebf9e5d`，Linux 2026-11-10 覆盖层，见 [gate 准入设计](gate-connection-admission-control.md) P0-3）。INFO 下仍逐事件打的有每份快照一行（`snapshot_system.cpp:116`）和退出路径上的几行。所以 S3 至少少掉 N_save 一项（2.2 万~5.6 万行/s），上面「超出 Loki」的结论偏悲观；存储各行也要随直写 TiDB 一起重算 |
 | 监控 | 抓取目标 ≈ N_cpp + Go 实例；SM 序列见 §2.2 | 0.2k~0.8k | 1k~4.5k | 2k~9k | 仓库里没有 Prometheus 清单；gate 容器没有 resources，是 BestEffort（G11） | 节点数无法从清单推算 |
 | 停服维护 | 全服 kNodeShutdown：每人一次退出存盘加一份 LOGOUT 快照（`cpp/nodes/scene/main.cpp:168`、`:199`） | 100 万份，15~300 GB | 500 万份 | 1000 万份，150 GB~3 TB | 快照 topic 共 1.5 GiB | 99% 以上会被按大小删除 |
 | 停服后全服重登 | PCU/T_return，T_return 取 600 秒 [I] | 1,667/s | 8,333 | 1.67 万 | — | 相当于开服峰值的下沿；叠加口令哈希和 HTTP 入口；Redis 若也重启，f_miss=1 |

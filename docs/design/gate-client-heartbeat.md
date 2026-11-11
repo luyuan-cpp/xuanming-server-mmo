@@ -260,6 +260,11 @@ Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项�
 - 判死之前 30 秒内推给死连接的数据照样丢失,由断线保留、重连后的完整入场画面和各业务有主协议兜底(`player-connection-lost-hold.md` §2 非目标)。
 - robot 只做了发送一侧,不判 gate 已死:vendored muduo 断线后静默重拨、`Recv` 不报错,拿不到可靠的断线信号。robot 的会话失败仍靠各请求自己的超时;要做,得先改 muduo 客户端(Close 时关 incoming、断线不自动重拨),另起一项。
 - gate 卡顿恢复之后,如果 1 秒内还没读完积压的输入(积压的连接极多),仍可能误判一次。同节点链路 §21.9。
+- **战斗直连(客户端 ↔ battle,`BattleClientEdge`)验签之后没有心跳与空闲超时**(2026-11-10 核对,两版服务器相同:C++ 只有 `kHandshakeTimeoutSec` 10 秒握手期限,Java `game.battle.handshake-timeout` 同为 10 秒)。直连面没有注册 `ClientHeartbeatRequest`,客户端在这条连接上发心跳会落进未知消息处理。后果:
+  - 半开的直连要等 TCP 重传耗尽(Linux 缺省十几分钟)或这场战斗结束才释放;这段时间里观众占着席位,不进重连宽限;
+  - 玩家一侧掉线不卡战斗(回合 25 秒超时自动出招,`kActionTimeoutMs`);
+  - battle 主机掉电或网络分区时,参战客户端要等 TCP 自己报错才知道。
+  要补就照本文做:`BattleTokenVerifyResponse` 通告同样的两个参数;直连面收心跳、限频、按完整帧 30 秒判死,只 `forceClose`,断开走既有 `DetachDirectConnection`;Unity 与 robot 的战斗连接同批发心跳,否则验签后 30 秒没有上行就会被关;Java 版同批对齐或登记待做。尚未排期。
 
 ## 13. 改动清单
 

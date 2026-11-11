@@ -706,6 +706,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 | 参数 | dev | staging | prod | 写到哪 |
 |---|---|---|---|---|
 | `-DirectoryLogicalShards` | 缺省 1 | 必须显式,64 的约数 | 必须显式 64 | data-service 的 `Directory.LogicalShards`、`mysql-init-sql` 的片库、连接总账 |
+| `-PlayerStoreShards` | 缺省 1 | 必须显式,1..1000 | 必须显式,1..1000(TiDB 档初值 64) | login 的 `Placement.StorageShards`、`MMORPG_DB_ALLOWED_DATABASES` 必须恰好列出的本地域存档库、go/db 与 data-service 每库的存档库池、`mysql-init-sql` 的存档库、连接总账 |
 | `-Region` | 缺省 0 | 必须显式,1..63 | 必须显式,1..63 | data-service 的 `IdSegment.Issuer.Region` |
 | `-SqlClusters`、`-SqlDefaultCluster` | 留空时单集群 `main` | 同左 | 同左 | 各写者的 `DbPlacement` 段、registrar init 的 `MMORPG_DB_PLACEMENT` |
 
@@ -739,10 +740,36 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   | SQL 环境文件 | `/run/sql-writer/runtime/private/env/<变量名>` | `/app/etc/private/env/<变量名>` |
 
   调试栈(`sql_boot_catalog_docker.ps1`)靠 root chown,路径不变。
-- **registrar 的后端档位**:`Add-SqlWriterBootManifest` 给 init 注入 `MMORPG_SQL_BACKEND`。login、gateway 固定 `mysql`(写区域 MySQL 上的 `mmorpg`),其余取 `-DatabaseBackend`。不设就是 tidb,连 MySQL 的注册必败。
-- **首次部署先跑 Job**:名册里的 `generation` 由迁移 Job 随机生成,所以名册定不下来就没法起进程。迁移 Job 这一步只读目录条目的两个 schema Secret,不读名册。全局服务本来就分 Prepare 和 Workload 两步;zone 里的 db、data-service 用 `-SqlSchemaOnly` 走同一个 Prepare。Job 重复跑是幂等的,不需要清库。目录缺名册时,不带这个开关的 `zone-up` 在写任何东西之前拒绝。
+- **registrar 的后端档位**:`Add-SqlWriterBootManifest` 给 init 注入 `MMORPG_SQL_BACKEND`,全部写者都取 `-DatabaseBackend`。2026-11-06 起 login、gateway 也一样:它们登记的 `mmorpg` 在全球权威入口上,见下一节。
+- **首次部署先跑 Job**:名册里的 `generation` 由迁移 Job 随机生成,所以名册定不下来就没法起进程。迁移 Job 这一步只读目录条目的两个 schema Secret,不读名册。全局服务本来就分 Prepare 和 Workload 两步;zone 里的 db、data-service 用 `-SqlSchemaOnly` 走同一个 Prepare,tidb 档还跑网关的 `gateway-schema`(另读 gateway 条目的 `registrarImage`)。Job 重复跑是幂等的,不需要清库。目录缺名册时,不带这个开关的 `zone-up` 在写任何东西之前拒绝。
 - **`db-migrate` Job**(`manifests/go-svc/db-migrate.yaml`,目录条目 `MigrateJob`、`MigrateImageName`):存档库的表和闸门表只有 go/db 的 `cmd/migrate` 建。它不在服务二进制里,镜像是单独的 `mmorpg-db-migrate`(`go_svc_image.ps1` 的 `db-migrate` 条目)。逐库迁 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库,因为 data_service 的写资格覆盖它们;排在 db、data-service 的 Deployment 之前(`Get-ZoneScopedGoSvcNames`)。退出码:0 成功,3 锁忙重试,1 失败(FailJob),4 迁移成功但有要人工过目的漂移,记一行告警接着迁。库不存在就失败,不带 `-create-database`。
 - **写者 Pod 回收**(`manifests/go-svc/sql-writer-pod-reaper.yaml`,`Apply-SqlWriterPodReaper`):写资格一次性,写过之后主容器一重启就拒启,Pod 自己恢复不了。写者的入口脚本看到消费标记就以退出码 78 退出。每个跑写者的 namespace 一个 CronJob,每分钟删一次带 label `mmorpg.io/sql-writer=true`、主容器上一次以 78 退出的 Pod,ReplicaSet 建新 Pod 领名册下一条。还没写过就退出的进程(依赖没就绪)没有标记,容器原地重启接着用这份写资格,不删、不烧名册。Java 读的时候就消费,gateway 任何一次重启都是 78。init 反复失败、名册用完的 Pod 这里看不到,不删,由告警 `SqlWriterRegistrarFailing`(`logical-db-alerts.yaml`,要 kube-state-metrics)覆盖。权限只有这个 namespace 的 `pods` 的 get、list、delete,非 root。官方 kubectl 镜像没有 shell,所以拆成 init(`kubectl get` 经 `/go-runner` 写文件)和主容器(`kubectl delete -f`)两步。每删一次烧一条名册,所以 `k8s_deploy.ps1` 要求名册条数 ≥ 副本数 × 6。kind 上要先把镜像载入节点,或者保证节点能访问 `registry.k8s.io`。
+
+## `mmorpg` 库在全球权威入口上,集群内 MySQL 只做 dev 夹具(2026-11-06~10,批 A;未编译、未在集群上验证)
+
+设计见 [去单点总纲](../../docs/design/no-single-node-horizontal-scaling-20261001.md) §6。`mmorpg` 上是 Java 网关的区目录、公告、白名单和这个库自己的写者闸门,login 也作为写者登记在这里。以前它是最后一个只放在 infra 单实例 MySQL 上的逻辑库。
+
+- **网关连哪里**(`Resolve-GatewaySqlMode`,写路径入口 `Assert-LogicalDbPreflight` 与 ConfigMap 生成共用这一处):
+  - JDBC 主机就是 `-GlobalAuthorityTiDBHost`。和 Go 服务一样所有档位都要显式给,不再回落 infra MySQL:回落了,网关写 infra MySQL 上的 `mmorpg`,login 写入口上的 `mmorpg`,同一个库分成两份。
+  - tidb 档写 `mmorpg.sql.require-tidb: true`、`mmorpg.run-mode: prod`(与 jar 内缺省一致)。
+  - mysql 档只在 dev 可用,写 `false` 与 `dev`。网关只在 run-mode 为 dev、test 时允许关掉 TiDB 强会话核验(`AuthorityDatabaseConfiguration`),所以 staging、prod 的 mysql 档部署网关在写之前拒绝,报错里给出 `-SkipJavaSvc` 和 `-DatabaseBackend tidb` 两条出路。MySQL 省钱档要部署网关,得先给 `java/authority_jdbc` 加 mysql 档(同 Go 的 `authoritysql`,逐连接核对不是只读实例),还没做。
+- **写者**:login、gateway 的 registrar 档位跟 `-DatabaseBackend`,init 注入 `MMORPG_DB_PLACEMENT`,和其余写者一样按库映射拨号。
+- **建表 Job `gateway-schema`**(`manifests/java-svc/gateway-schema.yaml`,`New-GatewaySchemaJobManifests` / `Invoke-GatewaySchemaJob`),只在 tidb 档:
+  - 网关没有 Go 的 `-migrate`。Job 跑 `writer_authority -command prepare-schema -schema mmorpg -ddl-file /app/gateway-schema/schema.sql`:闸门表走与其余逻辑库同一份 `authoritysql.EnsureCatalogSchema`;业务表和种子行执行网关的 `schema.sql`,脚本把它原样渲染进 ConfigMap `gateway-schema-sql`。`-ddl-file` 只认 `CREATE TABLE IF NOT EXISTS` 与 `INSERT IGNORE INTO`,表名不许带库名,有一句不合格整份拒绝,重跑无害。
+  - 镜像是 boot 目录 gateway 条目的 `registrarImage`(按摘要固定,`writer_authority` 就在里面);DSN 与主体出自同一个 `schemaPermissionSecret`(键 `dsn`、`principal`),网关常驻账号不给 DDL 权限。
+  - 排在网关 Deployment 之前;staging、prod 与 `-SqlSchemaOnly` 恒等它完成,失败或超时中断发布;dev 只在 `-WaitReady` 下等。`zone-up` 开头(名册检查旁边)先渲染一次,目录条目不对在任何写操作之前拒绝。
+  - `mmorpg` 全区共用,每个 zone 的 `zone-up` 各跑一次,语句都是幂等的。
+- **集群内单实例 MySQL**(`manifests/infra/mysql.yaml` 与 `mysql-init-sql`,`Test-InfraMysqlInUse`):1 副本、没有主从,只当 dev、kind 的夹具。
+  - 只在 dev 的 mysql 档、入口就是 `mysql.<infra>:3306` 时部署;这时 `mmorpg` 由 mysql-init 的 `gateway_tables.sql` 建,不跑 `gateway-schema`。
+  - tidb 档不部署它。staging、prod 把入口写成它,或者入口是它却选了 tidb 档,都在写之前拒绝。
+  - 已经部署过的不会被删,PVC 留给手工处理。项目未上线,旧环境按开服手册重建。
+  - 迁移 Job 的 init 容器 `wait-sql` 等这次实际的入口(`SQL_HOST`、`SQL_PORT` 由 `Get-SqlEntryEndpoint` 替换);脚本只在入口是集群内 MySQL 时先等 `deploy/mysql` 就绪。
+- **连接总账**:tidb 档一律对照 TiDB 规划预算(打印行 `limit=tidb_budget`),mysql 档对照 `mysql.yaml` 的 `max_connections`(`limit=mysql_manifest`)。
+- **运维要准备的**(开服手册 §1、§5):
+  1. TiDB 上预建 `mmorpg`,与其余逻辑库同一口径显式写排序规则;schema 账号对它有 DDL 权限。
+  2. boot 目录的 gateway 条目带 `schemaPermissionSecret` 和 `registrarImage`。
+  3. 网关、login 的 `runtimeConfigSecret` 按 TiDB 入口重做:网关的 JDBC URL 指向入口,`mmorpg.sql.require-tidb: true`、`mmorpg.run-mode: prod`。ConfigMap 只是模板,写者 Pod 读的是这份 Secret。
+  4. 先 `zone-up -SqlSchemaOnly` 让 Job 种下 `route_meta.generation`,再按它写 login、gateway 的名册(锁原语 `SELECT_ONLY`)。
 
 ## 全局服务的部署顺序(2026-10-30;未在集群上验证)
 
@@ -819,9 +846,10 @@ trade 是全局池服务(`$GoSvcCatalogue.trade`,`Global = $true`):`infra-up` / 
   - **退出码**:0 成功 → Complete;3 锁忙 → 按 `backoffLimit: 4` 退避重试;1 失败 / 4 需人工(类型漂移、缺主键、表清单异常)→
     `podFailurePolicy` 的 `FailJob` 立即失败。`podFailurePolicy` 需要 **Kubernetes ≥ 1.26**,且 Pod 必须 `restartPolicy: Never`。
     Go panic(2)、OOMKilled(137)与 initContainer 失败走 backoff 重试;节点驱逐(`DisruptionTarget`)不计次数。
-  - **initContainer `wait-mysql`**(同一镜像里 busybox 的 `nc`)等 `mysql.<InfraNamespace>:3306` 可连,预算 `WAIT_MYSQL_TIMEOUT_SECONDS=150`
+  - **initContainer `wait-sql`**(同一镜像里 busybox 的 `nc`)等这次实际的 SQL 入口可连(`SQL_HOST`、`SQL_PORT`,2026-11-10 起由脚本按 `-GlobalAuthorityTiDBHost` 替换,
+    不再写死 `mysql.<InfraNamespace>:3306`),预算 `WAIT_SQL_TIMEOUT_SECONDS=150`
     (按 `/proc/uptime` 单调计时;截止后最多再跑一轮 `nc -w 3` + `sleep 5`,硬上限 158s;超时以 1 退出,走 backoff 重试):
-    mysql 的 readinessProbe 走 localhost socket,initdb 期间 Pod 就可能 Ready 而 3306 还没开;不等的话 `-migrate` 以 1 退出,被当成不可重试。
+    入口是集群内 MySQL(只有 dev)时,它的 readinessProbe 走 localhost socket,initdb 期间 Pod 就可能 Ready 而端口还没开;不等的话 `-migrate` 以 1 退出,被当成不可重试。
   - 只有 `dev` 档不带 `-WaitReady` 时脚本才只打印核对命令、不等 Job:自己看 `kubectl -n mmorpg-infra get job trade-migrate`(COMPLETIONS `1/1`)
     与 `kubectl -n mmorpg-infra logs job/trade-migrate`。`infra-status` 的 `job` 一栏也会列它。
   - staging / prod 的 trade 启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动(CrashLoop)并打印补救命令;
@@ -857,10 +885,10 @@ friend 与 trade 同形:全局池服务(`$GoSvcCatalogue.friend`,`Global = $true
   否则 `friend-migrate` 以退出码 1 失败(日志点名库名),发布在 friend Deployment 之前中断。本地 compose 的存量卷同理。
 - **建表**:`manifests/go-svc/friend-migrate.yaml`,`args: ["-f", "/app/etc/friend.yaml", "-migrate"]`,
   按 `proto/friend/friend_table.proto` 建 `friend` / `friend_request` / `friend_block` / `friend_capacity` 四张表。
-  目录条目用 `MigrateJob = "friend-migrate.yaml"` 登记。`WAIT_MYSQL_TIMEOUT_SECONDS=150` 与 `trade-migrate.yaml` 取同一个值,
+  目录条目用 `MigrateJob = "friend-migrate.yaml"` 登记。`WAIT_SQL_TIMEOUT_SECONDS=150` 与 `trade-migrate.yaml` 取同一个值,
   同样与 `$GoSvcMigrateJobMinWaitSeconds`(300)联动,改其一必须核对另一个。
 - **后端档位(2026-10-30)**:`-DatabaseBackend tidb|mysql`(缺省 tidb)一个参数切 db、data-service、friend、trade、player-inbox、guild、mail、rank、chat、match 的 ConfigMap。mysql 档时 `-GlobalAuthorityTiDBHost` 填 MySQL 主库地址(参数名沿用);服务逐连接核对不是 TiDB、不是只读实例,不符拒绝。直接跑的工具(writer_authority、admission_recover、maintenance_phase、password_admin、merge_zone)不读服务 yaml,要设环境变量 `MMORPG_SQL_BACKEND=mysql`。历练结果 topic 的 RF3 门禁不随档位放开,mysql 档生产仍要 3 个 Kafka broker。差异和回归清单见 `docs/design/player-data-tidb-scaling-plan.md` §9.3、§9.4。
-- **全服 TiDB 入口（2026-10-15）**:staging/prod 部署全局 friend 时必须显式传 `-FriendTiDBHost "<同一权威入口>:4000"`，全部副本连接同一逻辑库，服务启动核对真实引擎和档位(`-DatabaseBackend`,缺省 tidb,见方案 §9),tidb 档为每个物理连接固定 RC 与 pessimistic。脚本不创建 TiDB 集群/库/账号，须先准备 `mmorpg_friend` 与注入账号权限。dev 不传则保留 infra MySQL；`zone-up` / `all-up -SkipInfra` 不部署 friend，不要求此参数。不得把按 zone 独立库拼接当成全服强一致。
+- **全服 TiDB 入口（2026-10-15）**:staging/prod 部署全局 friend 时必须显式传 `-FriendTiDBHost "<同一权威入口>:4000"`，全部副本连接同一逻辑库，服务启动核对真实引擎和档位(`-DatabaseBackend`,缺省 tidb,见方案 §9),tidb 档为每个物理连接固定 RC 与 pessimistic。脚本不创建 TiDB 集群/库/账号，须先准备 `mmorpg_friend` 与注入账号权限。部署 Go 服务时所有档位都要显式给入口;集群内单实例 MySQL 只在 dev 的 mysql 档、入口就是 `mysql.<infra>:3306` 时部署(2026-11-10,`Test-InfraMysqlInUse`);`zone-up` / `all-up -SkipInfra` 不部署 friend。不得把按 zone 独立库拼接当成全服强一致。
 - **存量申请升级**:先停旧 friend 写者，再用新二进制 `-migrate`。新增 `request_id` 列可自动补齐，旧表的普通索引不会自动新建；缺索引时迁移明确 exit 4，必须审阅当前 proto 生成的 `friend_request` 索引定义、补建后再迁移到 exit 0，禁止跳过门禁。当前生成名为 `idx_friend_request_2`、列为 `request_id`；新建库由 proto 一次生成。旧 pending 的零 ID 由新服务安全补号，保留原时间，客户端须带非零 request_id；旧业务写者与新协议不能混跑。实际 TiDB 8.5.2 的旧表升级/缺索引拒绝/补索引再迁移已验证，见 `docs/design/friend-port-20260918.md` §9.6。
 - **⚠ 旧建表路径已退役**:`deploy/mysql-init/guild_friend_tables.sql` 过去在 initdb 里把 friend 三张表建进**共享库 `mmorpg`**(= `MYSQL_DATABASE`;该文件没有 `USE` 语句,initdb 按 `--database=$MYSQL_DATABASE` 落库,**不是 `zone_N_db`**),
   还带一段 `friend_capacity` 回填与 `friend_capacity_backfill_v1` 门禁。2026-09-18 两段一起删除(D-10 修订)。
@@ -1084,6 +1112,9 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
 - `infra-up -CanaryServices <svc,…> -CanaryGoSvcTag <tag> [-CanaryReplicas N]`:为点名的全局服务另起一个 `<svc>-canary` Deployment
   (`app: <svc>-canary`,稳定版 Service 选不中;同样写 env 和轨道标签)。只收 client-rpc-router、chat、friend、trade、mail、rank、guild、match;
   不粘滞,没列出的删掉旧的 `<svc>-canary`。写 SQL 的服务要在 boot 目录里另备 `<ns>/<svc>-canary` 条目,缺了在任何写操作之前拒绝。
+- `infra-up -CanaryBattleReplicas <N> -CanaryNodeImage <ref>`(2026-11-10):另起金丝雀 battle 池 `battle-canary`(Deployment 形态是 Deployment,Agones 形态是第二个 Fleet),
+  换镜像与副本数、写 canary env 与 Pod 标签、`app: battle-canary`,其余与 stable battle 相同。match 只把全员都是金丝雀会话的新成局放上去。要求 stable 池在;
+  不支持 hostPort 形态;不粘滞,没起时删掉旧的 `battle-canary`(只删本次编排形态的那种 kind,切换编排形态前先撤掉金丝雀池)。
 - **stable 一律不写** env 和标签,生成物与引入参数之前逐字相同,已有 zone 不会因此滚动。`zone-status` / `infra-status` 最后列出各 Pod 的轨道标签,空 = stable。
 - **告警**:`deploy/k8s/release-track-alerts.yaml`(PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装):`ReleaseTrackZoneMixedTooLong`(一个 zone 的
   gate / scene 混轨超过 3 小时,看 `cpp_node_info`)、`ReleaseTrackCanaryForwardErrorsHigh`(路由服 `client_rpc_router_forward_by_track_total` 上
@@ -1185,6 +1216,8 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
 
 > 状态(2026-10-17):已完成本地 DryRun 与连接总账契约验证,结果见 `docs/PROGRESS.md` 的邮件合并验证条目。**未在运行集群应用配置**;本节所有数值(`max_connections` 2600(2026-10-31 起,此前 2100)、6Gi、各池大小、余量、告警阈值)都是按公式推算或凭经验取的,**待压测确认**,不能据此下容量结论(AGENTS §6)。
 
+> 2026-11-10:tidb 档(缺省)的部署里没有这台 MySQL(`mmorpg` 也在全球权威入口上,见上面「`mmorpg` 库在全球权威入口上」),总账一律对照 TiDB 规划预算,打印行写 `limit=tidb_budget`。下面讲的 `max_connections` 只约束 mysql 档。
+
 所有 zone 的 go/db、data-service、Java gateway 与全局的 friend、trade、player-inbox(2026-10-15 起)、guild、mail(2026-10-16 起)**共用 infra namespace 里那一台 MySQL**(`manifests/infra/mysql.yaml`,单副本)。
 以前每个服务各自写一句「要算进 `max_connections`」,没有任何地方把它们加起来:`max_connections` 曾是 500,2 个 zone 的稳态恰好 500、零余量,4 个 zone 的稳态就要 920。
 超限的后果不只是变慢:go/db 把 1040(Too many connections)当结果未知回给 scene,存盘由 scene 同内容退避重试、进度这期间只在 scene 内存里,认领重试 30 秒后进场失败(读代码推断,未实测)。
@@ -1202,11 +1235,13 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
     (不看 `-SkipGoSvc` / `-SkipJavaSvc`,`infra-up` 也核),不合格即 throw;生成 ConfigMap 取值时再核一次。
     (2026-10-15 补:gateway 另镜像 `spring.datasource.hikari.connection-timeout`(现值 3000 毫秒,取连接的等待上限,不进总账),
     核对规则是不小于 250 的整数 —— HikariCP 把 0 当成无限等、低于 250 拒启。来由与探针改端口见上面「gateway 探针、管理端口与回退口径」。)
-- **公式**(Z = zone 数;E_z = 每个 go/db 实例打开的额外 zone 家族库数;E_n = 非 zone 落点库数;R = 滚动期间每个 Deployment 多出的实例数):
+- **公式**(Z = zone 数;E_z = 每个实例按需打开的 zone 家族存档库数,存档库和区脱钩之后规划档 0;E_n = 本地域的存档库数 K(`-PlayerStoreShards`);
+  R = 滚动期间每个 Deployment 多出的实例数。2026-11-06 起,见 [总体方案 §7.2](../../docs/design/player-data-tidb-scaling-plan.md) A17b):
   ```text
-  db 每实例 = 60 + 8·E_z + 8·E_n       # Database.MaxOpenConn + Placement.ZoneStoreMaxOpenConn / NonZoneStoreMaxOpenConn(每个额外库一个池)
+  每库存档池 = max(2, ceil(预算 / E_n))  # Get-PlayerStorePoolLimit;预算是服务 yaml 写的 K=1 值:go/db 60(NonZoneStoreMaxOpenConn)、data_service 8(StoragePools)
+  db 每实例 = 8 + 8·E_z + E_n·每库存档池(60)   # Database.MaxOpenConn(本 zone 库,只剩写者闸门)+ ZoneStoreMaxOpenConn + 地域存档库池
   目录每片  = 名字 + 账号目录 + 路由    # K=1 时 20 + 8 + 20;K 大时每项 max(2, ceil(值 / K)),K=64 时 2 + 2 + 2
-  ds 每实例 = 2·5 + K·目录每片 + (E_z + 1 + E_n)·8   # 流水库的 snapshot / transaction_log 各一个池 + 目录各片 + 每个存档库一个池
+  ds 每实例 = 3·5 + K·目录每片 + 8·E_z + E_n·每库存档池(8)   # 流水库的三个池 + 目录各片 + zone 库池 + 每个地域存档库一个池
   gw 每实例 = 5                        # Java gateway 的 Hikari maximum-pool-size
   每 zone   = 2·db + 2·ds + 2·gw       # 各 2 副本
   全局      = 2·20(friend) + 2·20(trade) + 2·20(player-inbox,2026-10-15 起;池上限取 go/player_inbox/etc/player_inbox.yaml)
@@ -1217,9 +1252,11 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
   surge     = R·(db + ds + gw + 20·6 + 16 + 16)
   peak      = steady + surge + 运维余量
   ```
-- **规划档**:Z=4、E_z=3(最坏情形:每个 go/db 实例都打开了其余全部 zone 的库,打开后常驻)、E_n=0(Phase 2 未开)、R=2、
-  运维余量 20(迁移 Job、备份、探针、merge_zone / route_tool、人工会话,估计值)。**当前(2026-10-31 按公式手算,未运行):K=1 峰值 2386,`max_connections = 2600`,余量 214(约 8%);K=64 峰值 5682,TiDB 预算 6666,余量 984。** 下面括号里的数字是历史值。
-  TiDB 预算 = (N−1) × 每台上限 / 不均衡系数,N=6、每台 2000、系数 1.5 都是规划值(`Get-MysqlConnectionPlan`),每片 2 条没有压测过。`-DirectoryLogicalShards` 大于 1 且 tidb 档时,写路径的上限换成这个预算。
+- **规划档**:Z=4、E_z=0(zone 库不放新号)、E_n:MySQL 档 4(`NonZoneStores`)、TiDB 档 64(`TidbNonZoneStores`)、R=2、
+  运维余量 20(迁移 Job、备份、探针、merge_zone / route_tool、人工会话,估计值)。写路径打印的本次部署与规划档两份都按本次部署的 K 算。
+  **当前(2026-11-10 按公式手算,未运行,契约测试复核):MySQL 档(目录 1 片)峰值 2036,`max_connections = 2600`,余量 564;TiDB 档(目录 64 片、存档库 64 个)峰值约 7276,TiDB 预算 8000,余量约 724。**
+  〔2026-10-31:按「每个 go/db 打开其余 3 个 zone 的库」算,K=1 峰值 2386、余量 214;K=64 峰值 5682,预算 6666(N=6)。〕下面括号里的数字是更早的历史值。
+  TiDB 预算 = (N−1) × 每台上限 / 不均衡系数,N=7(A17b 从 6 加到 7:每个实例最坏多开 64 个存档库池)、每台 2000、系数 1.5 都是规划值(`Get-MysqlConnectionPlan`),每片、每库 2 条没有压测过。`-DirectoryLogicalShards` 大于 1 且 tidb 档时,写路径的上限换成这个预算。
   〔此前:峰值 1860,`max_connections = 2100`,余量 240(约 11%)〕
   (2026-10-16 mail 上 K8s 之后,staging `infra-up` DryRun 实测打印 `plan zones=4 peak=1860 headroom=240`;最初的规划档是峰值 1620 / 上限 1800 / 余量 180,历次变化见下面几条更正)。
   (2026-10-15 更正:加入 player-inbox 两副本 × 20 后,按公式手算峰值为 1700、余量 100(约 6%),未运行;池上限以 player_inbox.yaml 的实际值为准,
@@ -1441,7 +1478,7 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
      `pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-infra-up -WaitReady -ConfirmRedisCoreRestart <其余照常的参数>`。
      注意(2026-10-19):staging / prod 档不给 `-RedisReplicas` 时按档位解析为 3,线上还是单实例时这条命令**就是 1 → 3 切换**(`[RedisTopology]Upgrade:`)。
      只想让清单生效、不切形态,显式加 `-RedisReplicas 1`;要切换,按下一节「切换与回退」做全套(含第 4 步)。
-     计划内重启走 SIGTERM,退出前会刷 AOF(30 秒 grace);丢写只在非正常退出。`infra-up` 会连带 apply `mysql.yaml`(其 Recreate 约束见上一节),建议两次重启并进同一个窗口。
+     计划内重启走 SIGTERM,退出前会刷 AOF(30 秒 grace);丢写只在非正常退出。`infra-up` 在 dev 的 mysql 档(入口是集群内 MySQL)会连带 apply `mysql.yaml`(其 Recreate 约束见上一节),建议两次重启并进同一个窗口。
   3. 核对:输出里有 `Redis maxclients check OK`;`kubectl -n <infra> logs redis-0 -c redis` 里有 `redis fd limit:` 一行、没有 `ERROR`、没有 Redis 自己下调 maxclients 的日志。
   4. 回滚:在线 `CONFIG SET maxclients <旧值>`;清单回退需要再重启一次(同样要 `-ConfirmRedisCoreRestart`)。以后要调大:先在线改,再改清单,等下一次窗口。
 - **排查**(单实例都在 redis-0 里执行;高可用形态在当前主所在的 Pod 里执行,谁是主见下一节「运维」;口令同上经 `REDISCLI_AUTH`):`redis-cli config get maxclients`;`redis-cli info clients`(`connected_clients`);

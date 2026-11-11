@@ -29,12 +29,11 @@ func recoverableOutcomeShape(f *pb.MatchFormationRecord) bool {
 // errOutsideRecoveryShape:原件过得了 supportedOutcomeOriginal,成局行却不在到期恢复的候选形状里(只剩 operation_id 为空)。
 var errOutsideRecoveryShape = errors.New("成局不在到期恢复候选形状里(operation_id为空)，终局保持UNKNOWN")
 
-// outcomeAdjudicable 是「自动路径会裁决这份成局的终局」的全部原件判据(2026-11-06):在到期恢复的候选形状里
+// outcomeAdjudicable 是「自动路径能裁决这份成局的终局」的全部原件判据(2026-11-06):在到期恢复的候选形状里
 // (recoverableOutcomeShape,即候选 SQL),且持久 Create 原件过得了截止 ABORT 与 COMPLETE 共读的 supportedOutcomeOriginal。
-// 到期恢复、截止 ABORT(abortTerminalTx,含帮会取消)、提前 ABORT(AbortWithoutRoom)与 scene 冻结到期查询
-// (TerminalOutcomeExpected)都只调它,所以「回包说会有终局」与「恢复循环最终写终局」是同一组判据。COMPLETE 的
-// completableOriginal 比它严,且 COMPLETE 入口要求 operation 非空,过得了 COMPLETE 的一定过得了它。人工处置工具的 AUTO 类
-// (classifyStranded)与它同一口径,其余各类只能人工处置。
+// COMPLETE 的 completableOriginal 比它严,且 COMPLETE 入口要求 operation 非空,过得了 COMPLETE 的一定过得了它。
+// 人工处置工具的 AUTO 类(classifyStranded)与它同一口径,其余各类只能人工处置。只看原件,不看成局状态;
+// 「自动路径会不会写终局」还要求成局在途,见 autoTerminalOriginal。
 // 形状合格却过不了原件核对回 ErrUnrecoverableFormation;其余不过回普通错误(旧协议、能力证据不全、operation 为空)。纯函数。
 func outcomeAdjudicable(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRequest, error) {
 	shape := recoverableOutcomeShape(f)
@@ -54,6 +53,20 @@ func outcomeAdjudicable(f *pb.MatchFormationRecord) (*battlepb.CreateBattleReque
 // 有没有持久 Create 原件另由 outcomeAdjudicable 判(state 3 也可能是还没落原件就失联的局)。
 func formationInFlight(f *pb.MatchFormationRecord) bool {
 	return f != nil && f.State >= 2 && f.State <= 4
+}
+
+// autoTerminalOriginal 是「自动路径会给这一局写出终局」的唯一判据(2026-11-06):成局在途(formationInFlight)且原件可裁决
+// (outcomeAdjudicable),为真时返回可裁决的 Create 原件。截止 ABORT(abortTerminalTx,到期恢复与帮会取消共用)、到期恢复的
+// 取证排期(deadlineProbeDue)与 scene 冻结到期查询(TerminalOutcomeExpected)都只调它,所以「回包说会有终局」与「恢复循环
+// 实际写终局」是同一组判据:为真且还没有终局行的局,match 可用时到期恢复最迟在 截止 + 宽限 + 硬上限 + 持有宽限 之后写出
+// ABORT(COMPLETE 先落库就以 COMPLETE 为准,见 judgeDeadlineAbort);为假的局任何自动路径都不写终局,COMPLETE 也落不了库
+// (completableOriginal 比它严,commitBattleOutcomeLocked 拒 state 5),只能人工处置(formationfix)。纯函数。
+func autoTerminalOriginal(f *pb.MatchFormationRecord) (*battlepb.CreateBattleRequest, bool) {
+	if !formationInFlight(f) {
+		return nil, false
+	}
+	r, err := outcomeAdjudicable(f)
+	return r, err == nil
 }
 
 // ErrUnrecoverableFormation:成局满足到期恢复的候选形状(recoverableOutcomeShape),持久 Create 原件却与成局字段对不上
@@ -134,9 +147,11 @@ func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterB
 	return next.AfterRetryMs, next.AfterBattle, err
 }
 
-// RecoverExpiredOutcomeLane 扫 battle_id % lanes == lane 这条车道的一页候选(lanes=1 即全部候选),逐局交给
-// RecoverExpiredOutcome 在锁内裁决。沿原state/retry_at_ms索引每页至多 ExpiredOutcomePageSize 局，只选尚无合法终局的v1资格形状。
+// RecoverExpiredOutcomeLane 扫 battle_id % lanes == lane 这条车道的一页候选(lanes=1 即全部候选):先逐局读整行,再在锁外
+// 并行向各局原执行实例取证(probeDeadlinePage,2026-11-06),最后逐局在原 P→formation 锁内裁决(recoverExpiredOutcome)。
+// 沿原state/retry_at_ms索引每页至多 ExpiredOutcomePageSize 局，只选尚无合法终局的v1资格形状。
 // 游标只用于调度；故障项仍推进，下轮重访，旧0/明确采用0保持UNKNOWN且不占候选页。返回本车道的新游标,扫到末尾回零值。
+// 等证据的局由裁决把下次取证排进 retry_at_ms(全集群共用),排期到之前不再进候选页。
 // 不退休旧调度字段(那是全量扫描,只在 RecoverExpiredOutcomes 里做)。
 func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint64, cursor ExpiredOutcomeCursor) (ExpiredOutcomeCursor, error) {
 	if lanes == 0 || lane >= lanes {
@@ -173,36 +188,66 @@ func (s *Store) RecoverExpiredOutcomeLane(ctx context.Context, lanes, lane uint6
 	if len(formations) == 0 {
 		return ExpiredOutcomeCursor{}, nil
 	}
+	// 先用独立标量游标读整行、再解析完整原件:损坏的一条记失败、不卡住整页,页尾游标照样推进到最后一个候选。
+	type visit struct {
+		at ExpiredOutcomeCursor
+		f  *pb.MatchFormationRecord
+	}
 	var failures []error
-	for _, f := range formations {
+	var visits []visit
+	for _, c := range formations {
 		if err := ctx.Err(); err != nil {
 			return cursor, errors.Join(append(failures, err)...)
 		}
-		cursor = ExpiredOutcomeCursor{AfterRetryMs: f.retryMs, AfterBattle: f.battle}
-		// 先用独立标量游标推进，再解析完整原件；损坏的一条不能把整页卡在同一位置。
-		original, err := s.Formation(ctx, f.battle)
-		if err == nil && original.RetryAtMs != f.retryMs {
-			continue // 并发worker换了租约，后续完整轮次重访，绝不沿旧观察写入。
-		}
-		if err == nil {
-			_, err = s.RecoverExpiredOutcome(ctx, original)
-		}
+		original, err := s.Formation(ctx, c.battle)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("到期成局恢复未确认 battle=%d: %w", f.battle, err))
+			failures = append(failures, fmt.Errorf("到期成局恢复未确认 battle=%d: %w", c.battle, err))
+			continue
+		}
+		if original.RetryAtMs != c.retryMs {
+			continue // 并发worker换了租约、或别的副本刚排了下次取证，后续完整轮次重访，绝不沿旧观察写入。
+		}
+		visits = append(visits, visit{at: ExpiredOutcomeCursor{AfterRetryMs: c.retryMs, AfterBattle: c.battle}, f: original})
+	}
+	records := make([]*pb.MatchFormationRecord, len(visits))
+	for i, v := range visits {
+		records[i] = v.f
+	}
+	// 取证只发 RPC、不持锁、不在事务里;一页并行,原实例连不上时整页最多多等一个 DeadlineProbeTimeout。
+	evidence := s.probeDeadlinePage(ctx, stamp, records)
+	for i, v := range visits {
+		if err := ctx.Err(); err != nil {
+			return cursor, errors.Join(append(failures, err)...)
+		}
+		cursor = v.at
+		if _, err := s.recoverExpiredOutcomeReported(ctx, v.f, evidence[i]); err != nil {
+			failures = append(failures, fmt.Errorf("到期成局恢复未确认 battle=%d: %w", v.f.BattleId, err))
 		}
 	}
-	return cursor, errors.Join(failures...)
+	last := formations[len(formations)-1]
+	return ExpiredOutcomeCursor{AfterRetryMs: last.retryMs, AfterBattle: last.battle}, errors.Join(failures...)
 }
 
-// RecoverExpiredOutcome 不查询Battle、也不根据节点死亡猜终局。原发房前能力与完整
-// v1 Create证明所有个人效果必须先过本SQL门；到期后在原P→formation锁内争唯一ABORT。
-// 原工作租约仍有效时不抢占；多副本重放只读取同原操作/UUID的已提交终局。
+// RecoverExpiredOutcome 不根据节点死亡猜终局。原发房前能力与完整 v1 Create证明所有个人效果必须先过本SQL门；
+// 到期后先在锁外向原执行实例取一次证(deadlineEvidence,2026-11-06),再在原P→formation锁内按 judgeDeadlineAbort 争唯一ABORT:
+// 有「原实例没有冻结待提交的终局」的证据才作废,原实例仍持有房间或判不了就等,最多等到硬上限。
+// 原工作租约仍有效时不抢占(也不取证)；多副本重放只读取同原操作/UUID的已提交终局。
 //
 // 不可恢复成局(ErrUnrecoverableFormation)在这里计数并打 ERROR,对外仍回 UNKNOWN、nil:现有调用方
 // (RecoverExpiredOutcomes 的整轮失败、logic globalAbortPrepared 的 HoldRelay)会把非 nil error 当成本轮未确认的故障,
 // 而这一类是永久状态,不是本轮故障。要区分它的新调用方用 recoverExpiredOutcome 拿哨兵。
 func (s *Store) RecoverExpiredOutcome(ctx context.Context, observed *pb.MatchFormationRecord) (pb.BattleOutcomeDecision, error) {
-	decision, err := s.recoverExpiredOutcome(ctx, observed)
+	evidence, err := s.deadlineEvidence(ctx, observed)
+	if err != nil {
+		return 0, err
+	}
+	return s.recoverExpiredOutcomeReported(ctx, observed, evidence)
+}
+
+// recoverExpiredOutcomeReported 是到期恢复的单局裁决(RecoverExpiredOutcome 与车道页共用):不可恢复成局计数、打 ERROR 后
+// 按 UNKNOWN、nil 回(理由见 RecoverExpiredOutcome)。evidence 是调用方在锁外取到的截止作废证据。
+func (s *Store) recoverExpiredOutcomeReported(ctx context.Context, observed *pb.MatchFormationRecord, evidence DeadlineAbortEvidence) (pb.BattleOutcomeDecision, error) {
+	decision, err := s.recoverExpiredOutcome(ctx, observed, evidence)
 	if errors.Is(err, ErrUnrecoverableFormation) {
 		reportUnrecoverableFormation(observed.GetBattleId(), err)
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
@@ -210,25 +255,27 @@ func (s *Store) RecoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 	return decision, err
 }
 
-// recoverExpiredOutcome 是 RecoverExpiredOutcome 的实现;形状合格却过不了原件核对时回 ErrUnrecoverableFormation(决定为 UNKNOWN)。
-func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFormationRecord) (pb.BattleOutcomeDecision, error) {
+// recoverExpiredOutcome 是到期恢复的锁内裁决;形状合格却过不了原件核对时回 ErrUnrecoverableFormation(决定为 UNKNOWN)。
+// evidence 只在锁外取得(事务里不调 RPC)。判要等时把下次取证的时刻写进 retry_at_ms,与判定在同一把锁、同一个事务里。
+func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFormationRecord, evidence DeadlineAbortEvidence) (pb.BattleOutcomeDecision, error) {
 	if observed == nil {
 		return 0, errors.New("到期恢复缺持久创建原件")
 	}
-	if _, err := supportedOutcomeOriginal(observed); err != nil {
-		if recoverableOutcomeShape(observed) {
-			return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, fmt.Errorf("%w: %v", ErrUnrecoverableFormation, err)
+	if _, err := outcomeAdjudicable(observed); err != nil {
+		if errors.Is(err, ErrUnrecoverableFormation) {
+			return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, err
 		}
-		// 旧协议 / 能力证据不全:按设计保持 UNKNOWN(过截止的由巡检 CountStrandedExpiredFormations 计数)。
+		// 旧协议 / 能力证据不全 / operation 为空:不归自动路径,保持 UNKNOWN(过截止的由巡检 CountStrandedExpiredFormations
+		// 计数,用 formationfix 处置)。
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
 	readExisting := func() (pb.BattleOutcomeDecision, bool, error) { return s.committedTerminal(ctx, observed) }
 	if decision, exists, err := readExisting(); err != nil || exists {
 		return decision, err
 	}
-	// 兼容旧代码已经写出的state5：没有唯一终局就保留UNKNOWN。原票可能已换轮，
-	// 不能补锁当前新票或以旧状态号倒造一份安全ABORT。
-	if observed.State != 2 && observed.State != 3 && observed.State != 4 {
+	// 缺终局的 state 5 只来自旧代码(新代码写 state 5 时同一事务写终局,或根本没有 Create 原件):不归自动路径,保持 UNKNOWN。
+	// 原票可能已换轮，不能补锁当前新票或以旧状态号倒造一份安全ABORT。
+	if !formationInFlight(observed) {
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
 	tx, f, _, err := s.terminalFormation(ctx, observed.BattleId)
@@ -251,24 +298,47 @@ func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFor
 	if err != nil {
 		return 0, err
 	}
-	if f.RetryAtMs > stamp || (f.State != 2 && f.State != 3 && f.State != 4) {
+	// 原工作租约、或上次取证排下的间隔(含持有宽限)还没过:不抢占、不改排期。
+	if f.RetryAtMs > stamp || !formationInFlight(f) {
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
-	decision, written, err := s.abortTerminalTx(ctx, tx, f)
-	if err != nil || !written {
+	decision, verdict, err := s.abortTerminalTx(ctx, tx, f, evidence)
+	if err != nil {
 		return decision, err
+	}
+	if !verdict.abort {
+		if verdict.nextProbeMs == 0 {
+			return decision, nil
+		}
+		// 只是排期,不授权任何写入:与判定同在这把锁里,COMPLETE、别的 ABORT 入口与别的副本都改不了这一行。
+		// 提交结果未知也无害,下一轮按读到的 retry_at_ms 重来。
+		if _, err = tx.ExecContext(ctx, "UPDATE match_formation SET retry_at_ms=? WHERE battle_id=?", verdict.nextProbeMs, f.BattleId); err != nil {
+			return 0, err
+		}
+		if err = tx.Commit(); err != nil {
+			return 0, fmt.Errorf("截止作废取证排期提交未知: %w", err)
+		}
+		observeDeadlineWait(evidence)
+		return decision, nil
 	}
 	if err = tx.Commit(); err != nil {
 		return 0, fmt.Errorf("到期ABORT提交未知，必须复用原件重查: %w", err)
 	}
-	observeTerminalAbort(f.BattleId, terminalAbortDeadline)
+	observeDeadlineAbort(f.BattleId, verdict, evidence, terminalAbortDeadline)
 	return decision, nil
 }
 
 // ReadyAfter 的游标仅调度巡检，不能授权释放。即使前面的房间一直 UNKNOWN，
 // 下一页也照常访问；进程重启从头扫描不会改变任何票据的业务状态。
+//
+// 按片分工(2026-11-06,global-match-hierarchical-pools.md §5.2):只读本副本负责的片(片号 = player_id % WorkShards,
+// work_owner.go 的 workReadyTicket),条件在 LIMIT 之前,加副本就分摊,扫一圈的时间随副本数缩短;没绑归属(单测)时条件是 1=1。
+// 归属只管分工:释放的互斥仍在 ReleaseCompletedReady 的原 P→票锁与条件更新。副本下线或成员表变化时,这一片在本副本下一轮
+// 计算归属时就归新的负责者,游标扫到末尾回零值后从头访问,所以接手的片在一圈之内被扫到。
 func (s *Store) ReadyAfter(ctx context.Context, afterMs, afterPlayer uint64) ([]*pb.MatchAuthorityTicketRecord, error) {
-	rows, err := s.DB.QueryContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE state=3 AND (enqueued_ms>? OR (enqueued_ms=? AND player_id>?)) ORDER BY enqueued_ms,player_id LIMIT 8", afterMs, afterMs, afterPlayer)
+	owned, shardArgs := s.WorkShardFilter(workReadyTicket, "player_id")
+	args := append([]any{afterMs, afterMs, afterPlayer}, shardArgs...)
+	rows, err := s.DB.QueryContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE state=3 AND (enqueued_ms>? OR (enqueued_ms=? AND player_id>?)) AND "+owned+" ORDER BY enqueued_ms,player_id LIMIT 8", args...)
 	if err != nil {
 		return nil, err
 	}

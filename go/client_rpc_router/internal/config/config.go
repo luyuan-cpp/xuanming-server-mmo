@@ -33,6 +33,14 @@ type Config struct {
 	// yaml 里写名字可读,启动时 ResolveZoneScopedNodeTypes 校验、非法名字 fail-fast。
 	ZoneScopedNodeTypes []string `json:",optional"`
 
+	// GlobalTargetSubsetSize:全服池目标类型(不在 ZoneScopedNodeTypes 里的)每条发布轨道,本路由服只在约这么多台里挑
+	// (确定性子集,discovery/subset.go;docs/design/connection-fanout-subsetting-20261106.md §3.3)。同轨道各路由服的
+	// 范围在环上均匀错开,每台目标收到的请求一样多、一台都不漏;一台路由服长期运行也只连这几台,不会连上全服全部目标。
+	// 目标实例多于「同轨道路由服数 × 本值」时,每台路由服多连几台,保证每台目标都有路由服连。
+	// 缺省 4;0 = 不取子集(在全部实例里挑);不许是 1:只挑一台时它一重启,本路由服对这类目标在租约到期前全部失败。
+	// 实例数不多于本值时取全部。
+	GlobalTargetSubsetSize int `json:",default=4"`
+
 	// MetricsListenAddr:Prometheus /metrics 监听地址,留空关闭。
 	// 端口分工:9101=login / 9150=scene_manager / 9160=db / 9170=guild / 9180=friend /
 	// 9190=player_locator;路由服开启时用 9200(设计文档写的 9180 与 friend 撞,待修正)。
@@ -85,6 +93,9 @@ func (c *Config) Validate() error {
 	}
 	if _, err := c.ResolveZoneScopedNodeTypes(); err != nil {
 		return err
+	}
+	if c.GlobalTargetSubsetSize < 0 || c.GlobalTargetSubsetSize == 1 {
+		return fmt.Errorf("GlobalTargetSubsetSize (%d) must be 0 (no subsetting) or at least 2: with a single target per router, every forward of that type fails while that one instance restarts", c.GlobalTargetSubsetSize)
 	}
 	if err := c.validateStatContentSuppressed(); err != nil {
 		return err

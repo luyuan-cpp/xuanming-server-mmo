@@ -307,7 +307,7 @@ func main() {
 	sf := sfHandle.NewNode()
 
 	// repo 已在建表之后创建。
-	// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。
+	// 每次启动从 MySQL 权威快照重建各区帮会榜(没有全服榜);失败拒绝启动,避免对外提供不完整榜单。
 	// canary 副本不重建:重建持维护锁整表删了再写,作用于全部玩家的榜单,由 stable 副本承担(发布轨道设计 §2.5)。
 	if globalBackground {
 		if err := repo.RebuildRanks(context.Background()); err != nil {

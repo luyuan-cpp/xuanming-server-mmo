@@ -62,7 +62,7 @@ type ServiceContext struct {
 	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
 	HomeZone      HomeZoneClient
 	RoleDirectory RoleDirectory
-	// PlayerStoreHolders:持有节点判死后释放写权。生产恒非 nil(与 RoleDirectory 同一个客户端)。
+	// PlayerStoreHolders:无资格撤销之前按 E−1 围写权行(logic.fenceUnclaimedPlayerStore)。生产恒非 nil(与 RoleDirectory 同一个客户端)。
 	PlayerStoreHolders PlayerStoreHolderReleaser
 	// PlayerStoreDeadHolders:LeaveScene 判死释放的「读写权行 → 比较并写」两步(logic.releaseDeadPlayerStoreHolder)。
 	// 生产恒非 nil(同一个客户端);PlayerStoreHolders 非 nil 而它为 nil 时判死释放 fail-closed。
@@ -73,7 +73,7 @@ type ServiceContext struct {
 	SceneIDGen     *snowflake.Node
 	// RedirectGateRevisions 记跨 zone 重定向每次直读到的 gate 注册记录版本,判 gate 停写用(logic.AssignGateForZone),零值可用。
 	RedirectGateRevisions gatepick.RevisionTracker
-	snowflakeHd      *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
+	snowflakeHd           *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
 	// ownerEpochMintRedis 是 OwnerEpochMint 的生产实现本体,只为 Stop 时关闭它的专用连接池。
 	ownerEpochMintRedis *RedisOwnerEpochMinter
 	stopOnce            sync.Once

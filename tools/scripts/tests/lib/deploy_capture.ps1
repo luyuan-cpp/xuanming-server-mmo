@@ -65,11 +65,12 @@ function New-SqlWriterCatalogFixture {
 
 .DESCRIPTION
     staging / prod 必须显式给 -PlayerRedisMasters,要 apply 集群时还要容量,开了集群还要口令(docs/design/redis-player-store-cluster.md §5.1)。
-    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)、-Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)
+    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)、-Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)、
+    -PlayerStoreShards(每地域的存档库数,docs/design/player-data-tidb-scaling-plan.md §7.2)
     和 -IdRegistryEtcd(全局号源登记处,docs/ops/id-issuer-runbook.md §1)。
     绝大多数用例测的不是这些闸,不补的话全部非 dev 档的 DryRun 都停在这里。
     用例自己给了 -PlayerRedisMasters(含 0,测闸本身)就原样不动;-Env 写了 MMORPG_PLAYER_REDIS_PASSWORD(含空串)就用它。
-    -DirectoryLogicalShards、-Region 同理(测闸本身时给 0、-1)。
+    -DirectoryLogicalShards、-Region、-PlayerStoreShards 同理(测闸本身时给 0、-1、0)。
     dev 档不补:dev 缺省不建集群,K=1、地域 0,这是要钉住的行为。
 #>
 function Add-PlayerRedisDeployFixture {
@@ -84,6 +85,7 @@ function Add-PlayerRedisDeployFixture {
     $logicalDb = @()
     if ($Arguments -notcontains '-DirectoryLogicalShards') { $logicalDb += @('-DirectoryLogicalShards', '64') }
     if ($Arguments -notcontains '-Region') { $logicalDb += @('-Region', '1') }
+    if ($Arguments -notcontains '-PlayerStoreShards') { $logicalDb += @('-PlayerStoreShards', '64') }
     # 全局号源登记处同理(Resolve-IdRegistryEtcd):测闸本身时用例自己给 -IdRegistryEtcd ''。
     if ($Arguments -notcontains '-IdRegistryEtcd' -and $Arguments -notcontains '-HostIdRegistry') { $logicalDb += @('-IdRegistryEtcd', 'id-registry.invalid:2379') }
     $result.Arguments = @($Arguments) + $logicalDb
@@ -96,6 +98,46 @@ function Add-PlayerRedisDeployFixture {
         $result.Env = @{} + $Env
         $result.Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'
     }
+    return $result
+}
+
+<#
+.SYNOPSIS
+    给存档库清单夹具 MMORPG_DB_ALLOWED_DATABASES 补上本次地域的存档库,返回新的 Env。
+
+.DESCRIPTION
+    部署脚本要求清单恰好含本地域的 K 个存档库(k8s_deploy.ps1 Assert-PlayerStoreAllowlist,设计 player-data-tidb-scaling-plan.md §7.2),
+    而清单夹具大多只写了各区主库 zone_<n>_db。地域码和 K 随档位变(dev 缺省地域 0、K=1;staging / prod 由
+    Add-PlayerRedisDeployFixture 补成地域 1、K=64,用例也可能自己给),一份写死的清单对不上所有档位。
+    所以只要清单里一个 player_store_* 都没有,就按本次参数补齐(库名公式用 release_common.ps1 的 Get-RegionPlayerStoreDbNames,
+    与部署脚本同一份)。以下情形原样不动:清单里已经写了 player_store_*(测这道闸本身);清单为空或没给(测「没给清单」);
+    地域码或 K 越界、写成非数字(测参数闸,让部署脚本自己拒绝)。
+#>
+function Add-PlayerStoreAllowlistFixture {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][hashtable]$Env
+    )
+
+    if (-not $Env.ContainsKey('MMORPG_DB_ALLOWED_DATABASES')) { return $Env }
+    $listed = [string]$Env['MMORPG_DB_ALLOWED_DATABASES']
+    if ([string]::IsNullOrWhiteSpace($listed) -or $listed -match 'player_store_') { return $Env }
+
+    # 参数没给 = 部署脚本的缺省:地域 -1(dev 取 0),K 0(dev 取 1)。staging / prod 到这里时已由上一步补齐。
+    $values = @{ '-Region' = -1; '-PlayerStoreShards' = 0 }
+    foreach ($name in @($values.Keys)) {
+        $at = [array]::IndexOf($Arguments, $name)
+        if ($at -lt 0) { continue }
+        $parsed = 0
+        if (($at + 1) -ge $Arguments.Count -or -not [int]::TryParse([string]$Arguments[$at + 1], [ref]$parsed)) { return $Env }
+        $values[$name] = $parsed
+    }
+    $region = if ($values['-Region'] -lt 0) { 0 } else { $values['-Region'] }
+    $shards = if ($values['-PlayerStoreShards'] -eq 0) { 1 } else { $values['-PlayerStoreShards'] }
+    if ($region -gt 63 -or $shards -lt 1 -or $shards -gt 1000) { return $Env }
+
+    $result = @{} + $Env
+    $result['MMORPG_DB_ALLOWED_DATABASES'] = (@($listed.TrimEnd(',')) + @(Get-RegionPlayerStoreDbNames -Region $region -Shards $shards)) -join ','
     return $result
 }
 
@@ -129,12 +171,13 @@ function Invoke-CapturedPwsh {
         [hashtable]$Env = @{}
     )
 
-    # 部署脚本(以及照抄它 param 块的驱动)在 staging / prod 要带玩家域集群参数,见 Add-PlayerRedisDeployFixture。
+    # 部署脚本(以及照抄它 param 块的驱动)在 staging / prod 要带玩家域集群参数,见 Add-PlayerRedisDeployFixture;
+    # 存档库清单夹具按本次的地域码和 K 补上本地域的存档库,见 Add-PlayerStoreAllowlistFixture。
     $scriptLeaf = [System.IO.Path]::GetFileName($ScriptPath)
     if ($scriptLeaf -ceq 'k8s_deploy.ps1' -or $scriptLeaf -like 'mmorpg-client-entry-dryrun-*') {
         $fixture = Add-PlayerRedisDeployFixture -Arguments $Arguments -Env $Env
         $Arguments = $fixture.Arguments
-        $Env = $fixture.Env
+        $Env = Add-PlayerStoreAllowlistFixture -Arguments $Arguments -Env $fixture.Env
     }
 
     $savedEnv = @{}

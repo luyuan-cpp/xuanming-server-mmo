@@ -1,6 +1,6 @@
 # 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
 
-状态:**分析与方案已写,未落码,等负责人拍板。** 推荐方案(§3.B)要改写者闸门的一条既有不变量,改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、部署脚本与手册,预计 30 个文件以上,按 AGENTS §10.2 先报告再动手。
+状态:**2026-11-10 定案(§4),未落码。** 负责人要求「待拍板项按有依据的标准做法直接定案」,两个待定项按 §4 定了。改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、排空收据、部署脚本与手册,超过 30 个文件,按 §4 分 4 批落码,每批不超过 30 个文件。
 上游:[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md) 第 22 条;相关:[MySQL 写入围栏](db-write-fencing-mysql.md)「2026-10-26:单次 writer 身份与永久排空收据」、[逻辑库自治与水平扩展](horizontal-scale-logical-db.md)「写资格什么时候消费」、[开服手册](../ops/k8s-open-server-runbook.md) §1、§9。
 
 ## 1. 现状
@@ -41,10 +41,28 @@
 
 进程启动时由集群内组件现建账号、现生成 REGISTER:集群里要常驻 CREATE USER / GRANT 权限,违背「运行期不签发身份」的前提,一旦这个组件失守就能凭空造写者。
 
-## 4. 建议与待拍板
+## 4. 定案(2026-11-10)与分批
 
-- 推荐 B,A 先做当作 B 落地前的告警。
-- 落地顺序:先改 `db-write-fencing-mysql.md` 2026-10-26 节与 `horizontal-scale-logical-db.md`「写资格」两节的不变量与收据规则,再分批落码:①proto(名册模板、代次)与 `Catalog` 的换代注册;②注册器;③排空收据接受「同槽位下一代」的 RETIRE;④部署脚本、名册校验(× 6 规则改成「槽位数 ≥ 副本上限 + 滚动余量」)、回收 CronJob、手册;⑤Java 网关核对(它只消费 grant;grant 格式不变就不用改,变了按 Java 惯用方式同批改)。项目未上线,存量名册与注册整批重建。
-- **需要负责人确认两件事**:
-  1. 同意把「每次启动一个新 SQL 账号」放宽为「槽位账号长期不变、每次启动换代(writer key 与 instance 仍每代唯一)」,或者要每槽位两个账号轮换保留数据库层兜底。
-  2. 槽位按 StatefulSet 序号分(§3.B 第 1 种),还是保持 Deployment、按租约领(第 2 种)。
+### 4.1 两个待定项
+
+1. **账号按槽位,不按启动。** 采用 §3.B:槽位的 SQL 账号长期不变,每次启动换一代 writer key 与 instance(两者仍每代唯一,REVOKED 仍永久)。不做「每槽位两个账号轮换」:所有写路径都经闸门(Go 的 `authoritysql`、Java 网关的 `WriterAuthority`),旧代下一笔事务就被注册表拒掉;轮换账号只多挡「绕过闸门的写」,而这种写在本项目不存在,多出一倍账号与授权换来的是假想场景。依据:Kafka 事务生产者(固定 `transactional.id` + producer epoch)、etcd / ZooKeeper 租约的 fencing token 都是「身份长期不变、按代围栏」。
+2. **槽位 = StatefulSet 序号。** 写者服务从 Deployment 换成 StatefulSet,Pod 名后缀就是槽位,K8s 保证同一序号同一时刻只有一个 Pod;节点失联后强删重建时,新 Pod 换代即围栏掉旧的。不选「Deployment + 租约领槽」:要多一套续期写入,续期断了还会把活着的进程误判成死的、互相围栏。代价:StatefulSet 滚动一次换一个副本、不能 `maxSurge`,发布慢一些;写者服务都无本地状态,PVC 不用加。
+
+### 4.2 不变量改写(落码前先改规格)
+
+- `db-write-fencing-mysql.md` 2026-10-26 节:「主体和 instance 永久唯一」改为「writer key 与 instance 每代唯一、REVOKED 永久;SQL 主体按槽位,同槽位上下两代共用」。
+- `horizontal-scale-logical-db.md` §2「写资格什么时候消费」:一次性的是**一代**,不是一个账号;写后崩溃的 Pod 被回收、同序号重建后换代,名册不再消耗。
+- 排空收据:RETIRE 多一个来源——同槽位的下一代在换代事务里退休上一代(非 run 的 RETIRE,收据照写全文)。「每个 key 恰一次 RETIRE」「ACTIVE 等于初始集合减合法退役」两条规则不变;排空期间(`freeze_run_id` 非空)不换代,与现在「冻结时注册器什么也不写」相同。
+
+### 4.3 分批(每批不超过 30 个文件,批内一起编译验证)
+
+| 批 | 内容 | 主要文件 |
+|---|---|---|
+| 1 协议与目录 | 名册改成槽位模板(账号、逻辑库、权限档位、锁原语资格);新表或新列记每个槽位的当前代次与当前 writer key;`Catalog.Supersede`:每个逻辑库一个事务,锁上一代的 64 个 slot 与 meta,核未冻结,非 run RETIRE 上一代、注册新一代、代次 +1,幂等(同一 Pod UID 重放回原收据);真库用例(MySQL 与 TiDB) | `proto/common/database/*.proto`、`go/shared/authoritysql/catalog.go` 与测试 |
+| 2 注册器 | `writer_authority register` 从 `POD_NAME` 取序号选槽位模板,现场生成 instance,按模板拼 REGISTER 并调 `Supersede`;消费标记语义不变(写后崩溃仍以 78 退出、Pod 被回收、同序号重建) | `go/data_service/cmd/writer_authority/*`、`tools/scripts/lib/sql_boot_catalog_*.ps1` |
+| 3 排空收据 | 排空 run 的 ACTIVE 记账接受「同槽位下一代」的 RETIRE;用例覆盖「换代发生在 run 之前 / 之后」「run 期间拒绝换代」 | `go/shared/authoritysql/maintenance.go` 与测试 |
+| 4 部署与手册 | 写者服务换 StatefulSet;名册校验「槽位数 ≥ 副本上限」取代「条数 ≥ 副本数 × 6」;回收 CronJob 不变(删 78 退出的 Pod,StatefulSet 按同序号重建);开服手册 §1、§9、`deploy/k8s/README.md`;契约测试 | `tools/scripts/k8s_deploy.ps1`、`deploy/k8s/manifests/go-svc/*`、`tools/scripts/tests/*` |
+
+- 批 1 到批 3 在 Go 内部,先落;批 4 动部署,和正在改 `k8s_deploy.ps1` 的会话先分工再动。
+- Java 网关(`java/gateway_node` 的 `WriterAuthority`)只消费 grant:grant 格式不变就不用改,变了在批 2 同批改。Java 版仓库(`D:\luyuan\xuanming-server-mmo`)只在 `PARITY.md` 登记待做。
+- 项目未上线:存量名册、注册与账号整批重建,不做迁移。

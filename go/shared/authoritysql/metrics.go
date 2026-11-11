@@ -77,3 +77,27 @@ func (b *writerBoot) noteAdmitted() {
 // noteReadable 在事务外纯读看到闸门可写时调:冻结已经结束,清掉冻结计时。不算过过闸门(admitted 只由写事务置上),
 // 启动阶段「读在冻结时放行」的规则因此不受只读流量影响。
 func (b *writerBoot) noteReadable() { b.frozen.clear() }
+
+// 写者闸门每一步花的时间(缺口清单第 20 条:先测再改,见 docs/design/db-write-fencing-mysql.md 2026-11-10 节)。
+// 与业务事务耗时对比,判断闸门的几次往返是不是写事务的主要开销,再决定要不要合并读、预切分 slot 表。
+const (
+	gatePhaseBeforeBegin = "before_begin" // BEGIN 之前读 route_meta
+	gatePhaseEnter       = "enter"        // BEGIN 之后锁 slot、复核 slot / route_meta / 注册
+	gatePhaseRead        = "read"         // 事务外纯读的读闸门
+)
+
+// writerGateSeconds 按 (逻辑库, 步骤) 记闸门耗时。logical_db 只有本进程持有写资格的那几个库,phase 三个值,基数有界。
+// 第一次观察时才注册(registerWriterGateSeconds),与 writer_frozen_seconds 同一做法:不持写资格的进程不多出空序列。
+var writerGateSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "writer_gate_seconds",
+	Help:    "写者闸门每一步的耗时(before_begin / enter / read),用来判断闸门往返占写事务耗时的比例。",
+	Buckets: prometheus.ExponentialBuckets(0.0002, 2, 12), // 0.2ms 到约 410ms
+}, []string{"logical_db", "phase"})
+
+var registerWriterGateSeconds sync.Once
+
+// observeWriterGate 记一次闸门耗时,从 started 到现在。注册失败(同名序列已被别的收集器占用)不影响业务,只是不上报。
+func observeWriterGate(logicalDB, phase string, started time.Time) {
+	registerWriterGateSeconds.Do(func() { _ = prometheus.Register(writerGateSeconds) })
+	writerGateSeconds.WithLabelValues(logicalDB, phase).Observe(time.Since(started).Seconds())
+}

@@ -45,37 +45,38 @@ func clientCtx(playerID uint64) context.Context {
 	return session.WithDetails(context.Background(), &base.SessionDetails{SessionId: 1, PlayerId: playerID})
 }
 
-// 归属查不到让流程停在铸号之前:repo 与发号器都传 nil,误触即 panic。请求体里的 ZoneId=7 如果被采用,这里就不会被拒。
+// 归属查不到让流程停在铸号之前:repo 与发号器都传 nil,误触即 panic。请求体里没有区字段,区只能来自归属。
 func TestCreateGuild_ClientIdentityAndZoneComeFromServer(t *testing.T) {
 	homeZones := &fakeHomeZones{zone: 0}
 	l := NewGuildLogic(nil, nil, nil, homeZones)
 
-	resp, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{PlayerId: 999, Name: "青云门", ZoneId: 7})
+	resp, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{Name: "青云门"})
 
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrHomeZoneUnknown, resp.GetErrorMessage().GetId())
-	assert.Equal(t, uint64(42), homeZones.lastPlayer, "身份必须取会话,不能取请求体里伪造的 999")
+	assert.Equal(t, uint64(42), homeZones.lastPlayer, "身份取会话")
 }
 
 // 旧客户端写方法不再接受无会话调用(docs/design/gate-online-identity.md §7.5):以前它们按「内部调用」
-// 用请求体里的 player_id 执行,能连上 guild 端口的进程不需要 gate 签名就能替任意玩家建帮、退帮、解散、改公告。
+// 用请求体里的 player_id 执行,能连上 guild 端口的进程不需要 gate 签名就能替任意玩家建帮、退帮、解散、改公告;
+// 那些字段现已从协议删除(§9.6),无会话调用拿不到任何身份。
 // repo 与发号器都传 nil:越过身份闸走到归属查询或仓储就会 panic,这里要求在那之前就被 PermissionDenied。
 func TestLegacyWritesWithoutSessionAreRefused(t *testing.T) {
 	for name, call := range map[string]func(l *GuildLogic) error{
 		"CreateGuild": func(l *GuildLogic) error {
-			_, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
+			_, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{Name: "内部建帮"})
 			return err
 		},
 		"LeaveGuild": func(l *GuildLogic) error {
-			_, err := l.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{PlayerId: 1001})
+			_, err := l.LeaveGuild(context.Background(), &pb.LeaveGuildRequest{})
 			return err
 		},
 		"DisbandGuild": func(l *GuildLogic) error {
-			_, err := l.DisbandGuild(context.Background(), &pb.DisbandGuildRequest{PlayerId: 1001})
+			_, err := l.DisbandGuild(context.Background(), &pb.DisbandGuildRequest{})
 			return err
 		},
 		"SetAnnouncement": func(l *GuildLogic) error {
-			_, err := l.SetAnnouncement(context.Background(), &pb.SetAnnouncementRequest{PlayerId: 1001, GuildId: 1, Announcement: "冒名公告"})
+			_, err := l.SetAnnouncement(context.Background(), &pb.SetAnnouncementRequest{GuildId: 1, Announcement: "冒名公告"})
 			return err
 		},
 	} {
@@ -98,7 +99,7 @@ func TestLegacyWritesWithoutSessionAreRefused(t *testing.T) {
 }
 
 // 三个旧读方法同样不再受理无会话调用(docs/design/gate-online-identity.md §9.6):以前它们不查归属区,
-// 沿用请求体里的 zone_id(全服榜 zone_id=0、页长不夹),现在与四个写方法一样在身份闸拒绝。
+// 沿用请求体里的 zone_id(全服榜、页长不夹),现在与四个写方法一样在身份闸拒绝;zone_id 字段与全服榜都已删除。
 // repo 传 nil:越过身份闸走到仓储就会 panic,这里要求在那之前、也在归属查询之前就被 PermissionDenied。
 func TestLegacyReadsWithoutSessionAreRefused(t *testing.T) {
 	for name, call := range map[string]func(l *GuildLogic) error{
@@ -107,11 +108,11 @@ func TestLegacyReadsWithoutSessionAreRefused(t *testing.T) {
 			return err
 		},
 		"GetGuildRank": func(l *GuildLogic) error {
-			_, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{ZoneId: 0, PageSize: 500})
+			_, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{PageSize: 500})
 			return err
 		},
 		"GetGuildRankByGuild": func(l *GuildLogic) error {
-			_, err := l.GetGuildRankByGuild(context.Background(), &pb.GetGuildRankByGuildRequest{GuildId: 1, ZoneId: 7})
+			_, err := l.GetGuildRankByGuild(context.Background(), &pb.GetGuildRankByGuildRequest{GuildId: 1})
 			return err
 		},
 	} {
@@ -228,16 +229,13 @@ func newCacheOnlyRepo(t *testing.T) (*data.GuildRepo, *miniredis.Miniredis) {
 	return data.NewGuildRepo(rdb, nil, time.Minute), mr
 }
 
-// seedGuild 按 data 包的键契约(guild_repo.go 的 guildKey / guildRankKey / zoneRankKey)写缓存与两张榜。
-// 逻辑层已经不读全服榜(guildRankKey),仍写进去当对照:请求体里的 zone_id=0 若被采信,读到的就是这张榜。
+// seedGuild 按 data 包的键契约(guild_repo.go 的 guildKey / zoneRankKey)写缓存与该帮所在区的榜。帮会榜只有分区榜。
 func seedGuild(t *testing.T, mr *miniredis.Miniredis, guild data.GuildData, score float64) {
 	t.Helper()
 	payload, err := json.Marshal(guild)
 	require.NoError(t, err)
 	require.NoError(t, mr.Set(fmt.Sprintf("guild:v2:%d", guild.GuildID), string(payload)))
 	member := strconv.FormatUint(guild.GuildID, 10)
-	_, err = mr.ZAdd("guild_rank", score, member)
-	require.NoError(t, err)
 	_, err = mr.ZAdd(fmt.Sprintf("guild_rank:zone:%d", guild.ZoneID), score, member)
 	require.NoError(t, err)
 }
@@ -248,8 +246,8 @@ func TestGetGuildRank_ClientSeesOnlyHomeZone(t *testing.T) {
 	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
 	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2})
 
-	// 客户端要全服榜(zone 0)、一页 500 条:zone 被归属 zone 覆盖,页长被夹到上限。
-	resp, err := l.GetGuildRank(clientCtx(42), &pb.GetGuildRankRequest{ZoneId: 0, PageSize: 500})
+	// 客户端一页要 500 条:只读归属区的榜,页长被夹到上限。
+	resp, err := l.GetGuildRank(clientCtx(42), &pb.GetGuildRankRequest{PageSize: 500})
 	require.NoError(t, err)
 	require.Len(t, resp.GetEntries(), 1)
 	assert.Equal(t, uint64(501), resp.GetEntries()[0].GetGuildId())
@@ -257,9 +255,8 @@ func TestGetGuildRank_ClientSeesOnlyHomeZone(t *testing.T) {
 	assert.Equal(t, uint32(1), resp.GetTotalCount())
 	assert.Equal(t, constants.MaxRankPageSize, resp.GetPageSize())
 
-	// 不带会话的调用不再「保留全服榜与原页长」:业务层自己拒绝,不按请求体的 zone_id / page_size 读榜。
-	// 全服榜里两个帮都在,放行的话这里会读到七区帮。
-	internal, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{ZoneId: 0, PageSize: 500})
+	// 不带会话的调用不再「保留全服榜与原页长」:业务层自己拒绝,不读任何榜。
+	internal, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{PageSize: 500})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 	assert.Nil(t, internal, "被拒的请求不带任何榜单条目")
 }
@@ -349,7 +346,7 @@ func TestGetGuildRankByGuild_ClientOnlyRanksInHomeZone(t *testing.T) {
 	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
 
 	other, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}).
-		GetGuildRankByGuild(clientCtx(42), &pb.GetGuildRankByGuildRequest{GuildId: 701, ZoneId: 7})
+		GetGuildRankByGuild(clientCtx(42), &pb.GetGuildRankByGuildRequest{GuildId: 701})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrNotRanked, other.GetErrorMessage().GetId())
 

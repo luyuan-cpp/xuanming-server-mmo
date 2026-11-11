@@ -86,4 +86,13 @@ func TestParseReleaseTrackAndStableOnly(t *testing.T) {
 	require.Equal(t, releasetrack.Stable, entry.Track)
 	_, ok = stableOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`}`))
 	require.True(t, ok, "没写轨道的节点按 stable 收")
+
+	canaryOnly := NewNodeWatcher("battle-canary", testBattlePrefix, nil, nil).CanaryOnly()
+	entry, ok = canaryOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"releaseTrack":"canary"}`))
+	require.True(t, ok)
+	require.Equal(t, releasetrack.Canary, entry.Track)
+	_, ok = canaryOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"releaseTrack":"stable"}`))
+	require.False(t, ok, "只收 canary 的镜像不能收 stable,否则 stable 节点会被当成金丝雀局的落点")
+	_, ok = canaryOnly.parse(battleRegistrationKey, []byte(battleRegistrationHead+`}`))
+	require.False(t, ok, "没写轨道的节点是 stable,不进 canary 镜像")
 }

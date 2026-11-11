@@ -16,8 +16,10 @@ import (
 
 // 在第一次成功的榜读取响应后，从另一个连接改榜。旧的多命令读取会把前后两版
 // 拼在同一回包；单个 Redis 脚本必须返回改榜前的完整快照。
-// GUILD_RANK_TEST_REDIS 非空时连真实 Redis；所有被测键在传输边界改为随机前缀，
-// 不碰正式 guild_rank 键，也不清空实例或数据库。
+// GUILD_RANK_TEST_REDIS 非空时连真实 Redis；被测的分区榜键在传输边界改为随机前缀，
+// 不碰正式 guild_rank:zone:* 键，也不清空实例或数据库。
+const snapshotTestZone = uint32(2)
+
 type rankSnapshotHook struct {
 	key   string
 	after func(context.Context) error
@@ -35,7 +37,7 @@ func (h *rankSnapshotHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		// 既覆盖旧的直接命令，也覆盖脚本 KEYS；不修改脚本、成员或返回值。
 		for i, arg := range cmd.Args() {
-			if key, ok := arg.(string); ok && key == guildRankKey {
+			if key, ok := arg.(string); ok && key == zoneRankKey(snapshotTestZone) {
 				cmd.Args()[i] = h.key
 			}
 		}
@@ -86,7 +88,7 @@ func TestGetGuildRankPageUsesOneSnapshotDuringRemoval(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	entries, total, err := repo.GetGuildRankPage(ctx, 0, 1, 10)
+	entries, total, err := repo.GetGuildRankPage(ctx, snapshotTestZone, 1, 10)
 	require.NoError(t, err)
 	require.Equal(t, uint32(2), total)
 	require.Equal(t, []RankEntry{{GuildID: 101, Score: 20, Rank: 1}, {GuildID: 102, Score: 10, Rank: 2}}, entries)
@@ -98,7 +100,7 @@ func TestGetGuildRankUsesOneSnapshotDuringScoreChange(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	entry, err := repo.GetGuildRank(ctx, 101, 0)
+	entry, err := repo.GetGuildRank(ctx, 101, snapshotTestZone)
 	require.NoError(t, err)
 	require.Equal(t, RankEntry{GuildID: 101, Score: 20, Rank: 1}, entry)
 }
@@ -109,10 +111,10 @@ func TestGetGuildRankUsesOneSnapshotDuringRemoval(t *testing.T) {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	entry, err := repo.GetGuildRank(ctx, 101, 0)
+	entry, err := repo.GetGuildRank(ctx, 101, snapshotTestZone)
 	require.NoError(t, err)
 	require.Equal(t, RankEntry{GuildID: 101, Score: 20, Rank: 1}, entry)
-	missing, err := repo.GetGuildRank(ctx, 101, 0)
+	missing, err := repo.GetGuildRank(ctx, 101, snapshotTestZone)
 	require.NoError(t, err)
 	require.Equal(t, RankEntry{}, missing)
 }

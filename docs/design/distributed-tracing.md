@@ -1,6 +1,6 @@
 # 分布式日志关联与链路追踪（todo.md #152）
 
-> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，未编译、未测试，待 Codex 验证；其余各批尚未落码。**
+> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；其余各批尚未落码。**
 > **范围：** 本仓的 C++ 节点、Go 微服务、`java/gateway_node`。Java 版服务器守同一份约定、自己实现，见 §12。
 > **相关：** 现有采集链路见 [grafana-loki-local-logs.md](../ops/grafana-loki-local-logs.md)；RPC0 信封见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §4.1；muduo_grpc 见 [grpc-muduo-transport.md](grpc-muduo-transport.md)。
 
@@ -144,11 +144,13 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 
 - **为什么用 fixed64，不用 bytes 或 string**：16 字节超过 MSVC 和 libstdc++ 的短串优化上限（15），用 `bytes` 时每帧解析、序列化都要堆分配。随机 64 位值用 varint 编码要 9～10 字节，fixed64 恒为 8 字节。字符串形态的 `traceparent` 要 55 字节。
 - **字节序**：按大端拼。这样 `%016llx%016llx` 打出来就和 `TraceId::ToHex()` 一致，抓包能直接对上日志。
-- **合法性**：trace 非零但 span 为零，当作没有。
-- **发送**：`RpcChannel::CallMethodWithResponseType`（`rpc_channel.cpp:659` 建信封）和 `RpcChannel::SendRequest`（`:718`）在当前上下文有效时写入。RESPONSE、RPC_ERROR、HEARTBEAT 不写：回包由调用方自己恢复捕获的上下文。
-- **接收**：`ScopedDispatchTrace`（`:121`，在 `CallServiceMethod` 的 `:1106` 使用）改成先读信封：合法就 `ChildSpan`，否则 `NewRoot`。退出时恢复，和现在一样。
+- **合法性**：trace_id 全 0 或 parent_span_id 为 0，都当作没有。flags 只取低 8 位。
+- **读写只有一处**：`cpp/libs/engine/core/network/rpc_trace_envelope.h` 的 `WriteTraceToRpcEnvelope` / `ReadTraceFromRpcEnvelope`。全仓只有 RpcChannel 构造 REQUEST 帧（2026-11-10 核对）。
+- **发送**：`RpcChannel::CallMethodWithResponseType` 和 `RpcChannel::SendRequest` 建信封时写入当前上下文；上下文无效就什么都不写。RESPONSE、RPC_ERROR、HEARTBEAT 不写：回包由调用方自己恢复捕获的上下文。
+- **接收**：`ScopedDispatchTrace` 改为拿请求信封构造（在 `CallServiceMethod` 开头）：合法就 `ChildSpan`，否则 `NewRoot`。退出时恢复，和原来一样。派发前的拒绝（未知方法、解析失败等）也在这个作用域里，拒绝日志同样带 trace。
 - **兼容**：旧收方忽略新字段；旧发方不填，新收方开根。项目未上线，混跑不阻塞。
-- 改 proto 后按 AGENTS §4 重新生成（未获客户端任务授权，用 `proto_gen.no-unity.yaml`），并完整编译受影响的 C++ / Go。落码时同步更新 muduo-rpc-channel.md §4.1 的线格式。
+- 改 proto 后按 AGENTS §4 重新生成（未获客户端任务授权，用 `proto_gen.no-unity.yaml`），并完整编译受影响的 C++ / Go。muduo-rpc-channel.md §4.1 的线格式已同步。
+- **测试**：信封读写的纯函数在 `rpc_trace_envelope_test.cpp`；端到端在 `rpc_channel_loopback_test.cpp` 第五节，覆盖客户端帧、对端 handler、回包回调、不合法信封。
 
 ### 5.3 gRPC（muduo_grpc）：传输层开两个通用钩子，由 engine 注册
 
@@ -281,7 +283,7 @@ engine 侧的追踪实现：
 | 批 | 内容 | 验收 |
 |---|---|---|
 | 1 | §5.7 原语修正，§4.1 上下文改造，§5.1 日志后缀 | 单测通过；本进程内一次 RPC0 派发的日志带完整 `trace_id` |
-| 2 | §5.2 RPC0 信封（含 proto 生成） | gate → scene 的同一请求，两边日志 `trace_id` 相同、`span_id` 不同 |
+| 2 | §5.2 RPC0 信封（含 proto 生成） | 回环用例通过；scene 处理一条玩家消息时推给 gate 的消息，两边日志 `trace_id` 相同、`span_id` 不同（gate 收客户端消息时开根在第 3 批，此前 gate → scene 这一跳 scene 仍开新根） |
 | 3 | §5.5 入口开根与玩家上下文，§5.6 协程执行器 | 客户端一条消息从 gate 到 scene 是同一个 trace；co_await 之后 trace 不变；周期任务不带 trace |
 | 4 | §5.3 gRPC 钩子，§6.2 第 1 项的客户端拦截器与玩家拦截器 | C++ → Go、Go → C++ 都接得上；login 的日志带 `player_id` |
 | 5 | §5.4 与 §6.2 第 2 项的 Kafka | scene → Kafka → data_service 接得上；login → Kafka → gate 接得上 |

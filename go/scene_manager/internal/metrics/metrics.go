@@ -467,8 +467,8 @@ var (
 		Help:      "etcd re-checks made while deciding whether a player's holding scene process was replaced by a new process reusing its node id, by result.",
 	}, []string{"zone_id", "result"})
 
-	// deadNodeReconcilePending 是还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile 按 zone 计,
-	// 含屏障未过的与有成员没结论、等下一拍重试的),只由领导者发布,降级的副本把自己发过的 zone 写回 0。
+	// deadNodeReconcilePending 是本 zone 还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile:zone:{z},
+	// 含屏障未过的与有成员没结论、等下一拍重试的),只由本 zone 的领导者发布,降级的副本把自己发过的 zone 写回 0。
 	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了,看 dead_node_reconcile_total 的 retry / abandoned。
 	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
@@ -483,7 +483,7 @@ var (
 	//   abandoned      本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在反向索引里
 	//   instance_back  判死的那一代进程(同一个 node_uuid)已按原 node_id 重新注册:它名下的实例都还活着,任务撤掉,
 	//                  一个场景都不拆、计数不删(节点失租后重新拿租约,etcd_service.cpp OnKeepAliveResponse)
-	// retry / abandoned 健康时恒 0;instance_back 只在节点失租又回来时出现。只有领导者会发出。
+	// retry / abandoned 健康时恒 0;instance_back 只在节点失租又回来时出现。只有本 zone 的领导者会发出。
 	deadNodeReconcileTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "dead_node_reconcile_total",

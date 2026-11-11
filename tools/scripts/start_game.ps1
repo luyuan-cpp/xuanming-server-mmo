@@ -163,7 +163,7 @@ function Get-LocalKafkaContract {
     # data_service 启动时按自己配置的分区数原地加，所以这里只要求配置是正整数，不要求等于预建清单。
     foreach ($key in @('TransactionLogPartitions','SnapshotPartitions')) {
         $number = 0L
-        if (-not [long]::TryParse($values[$key],[ref]$number) -or $number -le 0) { throw "data_service Kafka.$key 必须是正整数，已中止主题预建。" }
+        if (-not [long]::TryParse($values[$key],[ref]$number) -or $number -le 0) { throw "data_service Kafka.$key must be a positive integer; topic pre-creation aborted." }
     }
     $generation = $values['Kafka.CommandTopicGeneration']
     $partitions = $values['Kafka.CommandTopicPartitions']
@@ -193,7 +193,7 @@ function Assert-LocalKafkaTopic($Spec) {
     $partitionCount = [long]$header.Groups[1].Value
     if ($Spec.GrowOnly) {
         if ($partitionCount -lt $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
-            throw "Kafka 审计主题 $topic 分区或副本契约不符（应至少 $($Spec.Partitions) 分区、1 副本，实际 $partitionCount 分区）。审计主题只许加分区：运行 kafka-topic-init 原地加分区后重试。"
+            throw "Kafka audit topic $topic does not meet its contract (needs at least $($Spec.Partitions) partitions and 1 replica, has $partitionCount partitions). Audit topics only grow: run kafka-topic-init to add partitions in place, then retry."
         }
     } elseif ($partitionCount -ne $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
         throw "Kafka 主题 $topic 分区或副本契约不符（应为 $($Spec.Partitions) 分区、1 副本）。保留现有主题，必须协调换代，禁止原地扩分区。"

@@ -28,8 +28,12 @@ public:
     static bool IsWithinViewRadius(entt::entity observer, entt::entity entrant);
 
     // 空间可见判定:距离 + 隐身。目标隐身时,只有观察者对它的显式关注授予了侦测能力
-    // (AoiFollowGrant::revealsStealth)才算可见。
+    // (AoiFollowGrant::revealsStealth)才算可见。两个半径见 spatial/constants/view.h:
+    //   CanSee:        建立空间关注,距离不超过视野半径;
+    //   CanKeepSeeing: 维持已有的空间关注,距离不超过离开半径(视野半径 × kAoiLeaveRadiusFactor)。
+    // 缺 Transform 的一方无法量距离,两者都返回 false。
     static bool CanSee(entt::entity observer, entt::entity target);
+    static bool CanKeepSeeing(entt::entity observer, entt::entity target);
 
     // Check whether the target entity has an active stealth buff.
     static bool IsStealthed(entt::entity entity);
@@ -41,5 +45,7 @@ public:
     static void LookAtPosition(entt::entity entity, const Vector3& pos);
 private:
     static bool BothAreNpcs(entt::entity observer, entt::entity entrant);
+    // 隐身规则:目标没隐身,或观察者对它有授予侦测的显式来源。
+    static bool PassesStealthRule(entt::entity observer, entt::entity target);
 };
 

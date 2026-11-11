@@ -58,7 +58,9 @@ func observeTerminalAbort(battleID uint64, outcome string) {
 // 截止加宽限只说明「COMPLETE 本该到了」,不说明「不会再来」。match 或它的库不可用的时间跨过截止加宽限时,截止前已经正常
 // 打完、battle 正在重放 CommitBattleOutcome 的局,恢复后通常是截止 ABORT 先写,整局作废、奖励丢失。所以截止 ABORT
 // (到期恢复与帮会取消,abortTerminalTx)先向原执行实例要证据:证明它没有冻结待提交的终局,才作废;原实例仍持有房间就
-// 等它在自己的重放窗口内提交;判不了时最多再等硬上限。时间判据只写在 judgeDeadlineAbort,取证只走 DeadlineAbortProbe。
+// 等它在自己的重放窗口内提交;判不了时最多再等硬上限。时间判据只写在 judgeDeadlineAbort,要不要取证只看 deadlineProbeDue,
+// 取证只走 DeadlineAbortProbe(生产实现复用提前作废的那一次 DestroyBattle + QueryBattleCreation,不另写探测)。
+// 截止之后作废本身不破坏一致性(准入早已关闭,房间不会再建,作废对全员对称);证据只决定「什么时候作废才不丢一份已经打完的结果」。
 
 // DeadlineAbortEvidence 是截止作废之前从原执行实例取到的证据。
 type DeadlineAbortEvidence uint8
@@ -72,8 +74,10 @@ const (
 	// DeadlineEvidenceNoRoom:原实例对这份 operation 立了拒收墓碑并回 ABORTED:没有房间,以后也建不了。房间只在拿到 match
 	// 的签名决定之后或 30 小时本地清理之后才离开,所以 ABORTED 不会出现在「房间打完、COMPLETE 还在路上」的局上(NoRoomProof)。
 	DeadlineEvidenceNoRoom
-	// DeadlineEvidenceInstanceGone:原进程已不在 —— 原地址上应答的是另一个实例,或原地址连不上且注册中心已没有这个实例。
-	// 房间与待提交的终局只在 battle 进程内存里,进程不在就永远不会再提交。
+	// DeadlineEvidenceInstanceGone:原进程已不在 —— 原地址上应答的是另一个实例(battle 的实例 UUID 每个进程生成一次,
+	// 对不符的 UUID 拒 DestroyBattle、查询回空包);注册中心里原 node_id 已登记成另一个实例;或原地址当场就连不上(不是等到
+	// 期限才超时)且已同步的注册中心镜像里没有原实例。房间与待提交的终局只在 battle 进程内存里,进程不在就永远不会再提交。
+	// 只凭「注册中心查不到」不算(etcd 抖动、租约短暂失效时也查不到,§13.3 2026-10-22 同一口径),要原地址也确认不了才算。
 	DeadlineEvidenceInstanceGone
 )
 
@@ -105,7 +109,10 @@ const DeadlineProbeTimeout = 2 * time.Second
 // 截止 ABORT 最晚在 截止 + 宽限 + 硬上限 + 持有宽限(截止 + 13 分钟)再加一圈恢复延迟之内落定,早于 scene 按上限解冻,
 // scene 按 SQL 终局解冻;不等式由 TestDeadlineAbortBoundsFitSceneFreezeHold 钉住。match 自己不可用超过 scene 上限时,
 // scene 已按上限解冻,之后到的 COMPLETE 照常应用(消耗按当时持有量夹紧并打 battle_inbox_shortfall_after_freeze_released),
-// 之后到的 ABORT 不产生结算。硬上限还要大于一个工作租约(WorkLeaseMs),「retry_at_ms 越过硬上限」才只能来自持有宽限(见下)。
+// 之后到的 ABORT 不产生结算。battle 侧补提交的总跨度是 30 小时(result_commit.h:冻结后 6 小时内每 5 秒、之后 24 小时内每 60 秒),
+// 远长于这里的等待:match 可用时 battle 在整个等待窗口里都在重放;battle 放弃重放、本地删房之后,查询回无房间,按证据作废。
+// 宽限 + 硬上限还要不小于一个工作租约(WorkLeaseMs):租约最晚到 截止 + WorkLeaseMs,「retry_at_ms 越过硬上限」才只能来自
+// 持有宽限(见 judgeDeadlineAbort)。
 const deadlineAbortHardCapMs uint64 = 10 * 60 * 1000
 
 // deadlineHeldPatienceMs:越过硬上限之后第一次看到原实例仍持有房间(battleStillHolds),再给它多久提交。硬上限从截止起算,
@@ -115,15 +122,15 @@ const deadlineAbortHardCapMs uint64 = 10 * 60 * 1000
 // 被永久拒收或它连不上 match,再等只是把全员占住。
 const deadlineHeldPatienceMs uint64 = 2 * 60 * 1000
 
-// deadlineProbeBackoffMs:等证据期间同一局两次取证的最小间隔。经 retry_at_ms 排期、全集群共用:每局每 30 秒至多被到期恢复
-// 取证一次,与副本数无关。
+// deadlineProbeBackoffMs:等证据期间同一局两次取证的最小间隔。经 retry_at_ms 排期、全集群共用:每局每 30 秒至多被取证一次
+// (到期恢复与帮会取消都按这份排期,deadlineProbeDue),与副本数无关。
 const deadlineProbeBackoffMs uint64 = 30 * 1000
 
 // deadlineAbortVerdict 是 judgeDeadlineAbort 的结论。
 type deadlineAbortVerdict struct {
 	abort       bool   // 可以写截止 ABORT
 	capped      bool   // abort 为真时:越过硬上限、没有证据(计 abort_deadline_cap 并打 ERROR)
-	nextProbeMs uint64 // abort 为假时下次取证的时刻,由到期恢复按原值 CAS 写回 retry_at_ms;0 = 不改排期
+	nextProbeMs uint64 // abort 为假时下次取证的时刻,到期恢复在同一把锁里写进 retry_at_ms;0 = 不改排期。帮会取消不用它
 }
 
 // deadlineAbortCapMs 是「没有证据也作废」的起点:截止 + 终局宽限 + 硬上限,上溢饱和。
@@ -135,18 +142,18 @@ func deadlineAbortCapMs(deadlineMs uint64) uint64 {
 	return deadlineMs + after
 }
 
-// judgeDeadlineAbort 是截止 ABORT 的全部时间判据,纯函数;到期恢复(锁外预判与锁内复核)与帮会取消都只调它。
-// deadlineMs:原件截止;stampMs:SQL 时刻;retryAtMs:成局行的 retry_at_ms;evidence:这一次取到的证据。
+// judgeDeadlineAbort 是截止 ABORT 的全部时间判据,纯函数;到期恢复与帮会取消都在锁内只调它(经 abortTerminalTx)。
+// deadlineMs:原件截止;stampMs:锁内读到的 SQL 时刻;retryAtMs:锁内成局行的 retry_at_ms;evidence:锁外这一次取到的证据。
 //   - 没过截止 + 宽限:不作废(与 terminalAbortDue 同一分界);
 //   - 有证据(NoRoom / InstanceGone):作废;
 //   - 没到硬上限(battleStillHolds 或判不了):等,下次取证排在 min(stamp + 取证间隔, 硬上限);
-//   - 过了硬上限、原实例仍持有房间:retry_at_ms 不超过硬上限 = 越过上限后第一次看到,排到 stamp + 持有宽限再看;
-//     超过硬上限 = 持有宽限是之前排下的,没到就等,到了就作废;
-//   - 过了硬上限、判不了:作废。
+//   - 过了硬上限、持有宽限还没过(retry_at_ms 在硬上限之后且还没到):等,不论这一次证据如何(宽限给的是「看到过房间」的局);
+//   - 过了硬上限、原实例仍持有房间、持有宽限还没开始(retry_at_ms 不超过硬上限):排到 stamp + 持有宽限再看;
+//   - 其余(过了硬上限且判不了,或持有宽限已过):作废,计 abort_deadline_cap。
 //
 // 只有「越过硬上限后看到 battleStillHolds」会把 retry_at_ms 排过硬上限:没到上限的排期都截在上限上,工作租约只在截止前发、
-// 最晚到截止 + WorkLeaseMs,COMPLETE 改成 terminalOutcomeNoRetryMs 时已有终局、不再走到这里。所以「retry_at_ms 超过硬上限」
-// 就是「持有宽限已经开始」的持久记号。帮会取消不改排期,只读这个记号。
+// 最晚到截止 + WorkLeaseMs(不超过宽限 + 硬上限),COMPLETE 改成 terminalOutcomeNoRetryMs 时已有终局、不再走到这里。所以
+// 「retry_at_ms 超过硬上限」就是「持有宽限已经开始」的持久记号。帮会取消不改排期,只读这个记号。
 func judgeDeadlineAbort(deadlineMs, stampMs, retryAtMs uint64, evidence DeadlineAbortEvidence) deadlineAbortVerdict {
 	if !terminalAbortDue(deadlineMs, stampMs) {
 		return deadlineAbortVerdict{}
@@ -158,10 +165,10 @@ func judgeDeadlineAbort(deadlineMs, stampMs, retryAtMs uint64, evidence Deadline
 	switch {
 	case stampMs < capAt:
 		return deadlineAbortVerdict{nextProbeMs: min(stampMs+deadlineProbeBackoffMs, capAt)}
+	case retryAtMs > capAt && stampMs < retryAtMs:
+		return deadlineAbortVerdict{}
 	case evidence == DeadlineEvidenceBattleStillHolds && retryAtMs <= capAt:
 		return deadlineAbortVerdict{nextProbeMs: stampMs + deadlineHeldPatienceMs}
-	case evidence == DeadlineEvidenceBattleStillHolds && stampMs < retryAtMs:
-		return deadlineAbortVerdict{}
 	}
 	return deadlineAbortVerdict{abort: true, capped: true}
 }
@@ -180,14 +187,16 @@ func (s *Store) probeDeadline(ctx context.Context, f *pb.MatchFormationRecord) D
 	return s.deadlineProbe(probeCtx, f)
 }
 
-// deadlineEvidenceNeeded:到期恢复此刻要不要为这份成局取证 —— 在途(state 2/3/4)、排期已到、原件可裁决、已过截止 + 宽限。
-// 只看成局行,不查终局行(候选 SQL 已排除有终局的;刚落定的多取一次证也无害)。
-func deadlineEvidenceNeeded(f *pb.MatchFormationRecord, stampMs uint64) bool {
-	if !formationInFlight(f) || f.RetryAtMs > stampMs {
+// deadlineProbeDue:此刻要不要为这份成局向原执行实例取证 —— 截止 ABORT 只差证据(自动路径会裁决它:autoTerminalOriginal;
+// 已过截止 + 宽限),且排期已到(retry_at_ms 不晚于 stampMs:原工作租约已到期,上次取证排下的间隔或持有宽限已过)。
+// 到期恢复与帮会取消都只调它,两条入口按同一份排期问 battle,不会因为帮会每 10 秒重放取消就把 battle 问得更勤。
+// 只看成局行,不查终局行(到期恢复的候选 SQL 已排除有终局的,帮会取消先查过;刚落定的多取一次证也无害)。纯函数。
+func deadlineProbeDue(f *pb.MatchFormationRecord, stampMs uint64) bool {
+	if f == nil || f.RetryAtMs > stampMs {
 		return false
 	}
-	r, err := outcomeAdjudicable(f)
-	return err == nil && terminalAbortDue(r.DeadlineMs, stampMs)
+	r, ok := autoTerminalOriginal(f)
+	return ok && terminalAbortDue(r.DeadlineMs, stampMs)
 }
 
 // probeDeadlinePage 为到期恢复的一页成局并行取证(不持锁、不在事务里),不需要取证的位置回 Undetermined。原实例连不上时
@@ -201,7 +210,7 @@ func (s *Store) probeDeadlinePage(ctx context.Context, stampMs uint64, formation
 		panicked any
 	)
 	for i, f := range formations {
-		if !deadlineEvidenceNeeded(f, stampMs) {
+		if !deadlineProbeDue(f, stampMs) {
 			continue
 		}
 		wg.Add(1)

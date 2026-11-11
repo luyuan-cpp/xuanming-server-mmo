@@ -64,12 +64,12 @@ spec:
     spec:
       restartPolicy: Never
       initContainers:
-        # 等 MySQL 的 3306 真正可连再跑迁移。manifests/infra/mysql.yaml 的 readinessProbe 走 localhost socket,
+        # 等 SQL 入口真正可连再跑迁移。入口是集群内 MySQL(只有 dev)时,manifests/infra/mysql.yaml 的 readinessProbe 走 localhost socket,
         # initdb 期间(临时实例 --skip-networking)Pod 就可能被判 Ready;而 -migrate 连不上会以 1 退出,
         # 被上面的 FailJob 规则当成"不可重试"直接判 Job 失败(全新集群第一次 infra-up 必踩)。
         # 所以这里只等 TCP 可连。上限按**时间预算**算,不用"轮数 × sleep"(AGENTS.md §11.3):
-        #   WAIT_MYSQL_TIMEOUT_SECONDS=150,截止时间取自 /proc/uptime(开机秒数,单调,不受 NTP 调时影响);
-        #   每轮 nc -w 3 + sleep 5,截止后最多再跑一轮 → 硬上限 = WAIT_MYSQL_TIMEOUT_SECONDS + 8s = 158s(不含调度 / 拉镜像)。
+        #   WAIT_SQL_TIMEOUT_SECONDS=150,截止时间取自 /proc/uptime(开机秒数,单调,不受 NTP 调时影响);
+        #   每轮 nc -w 3 + sleep 5,截止后最多再跑一轮 → 硬上限 = WAIT_SQL_TIMEOUT_SECONDS + 8s = 158s(不含调度 / 拉镜像)。
         # ⚠ 这个上限要明显小于 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds(300,脚本等本 Job 的预算下限):
         #   staging/prod 恒等本 Job,预算装不下"拉镜像 + 本等待 + 迁移"时,正常等待会被脚本误判超时、中断发布。改其一必须核对另一个。
         # ⚠ 与 trade-migrate.yaml 保持同一个值:两个 Job 在同一次 infra-up 里串行跑,各自吃满 158s 时
@@ -78,36 +78,39 @@ spec:
         # (规则限定 containerName: friend-migrate),走 backoffLimit 重试。
         # 复用同一个 alpine 运行镜像里 busybox 的 nc,不引入新镜像;镜像里没有 nc 时只打印并放行
         # (等待只是把竞态挡在迁移之外,迁移本身仍 fail-closed)。
-        - name: wait-mysql
+        - name: wait-sql
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
-            - name: MYSQL_ADDR
-              value: "mysql.__INFRA_NAMESPACE__"
-            # 等 3306 的总预算(秒)。约束见上面注释:与 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds 联动。
-            - name: WAIT_MYSQL_TIMEOUT_SECONDS
+            # 这次实际的 SQL 入口,由 k8s_deploy.ps1 的 Get-SqlEntryEndpoint 替换:tidb 档是外部 TiDB,只有 dev 用集群内 MySQL 时才是 mysql.<infra>。
+            - name: SQL_HOST
+              value: "PLACEHOLDER_SQL_ENTRY_HOST"
+            - name: SQL_PORT
+              value: "PLACEHOLDER_SQL_ENTRY_PORT"
+            # 等入口可连的总预算(秒)。约束见上面注释:与 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds 联动。
+            - name: WAIT_SQL_TIMEOUT_SECONDS
               value: "150"
           command:
             - sh
             - -c
             - |
               if ! command -v nc >/dev/null 2>&1; then
-                echo "nc not found in image, skip waiting for $MYSQL_ADDR:3306"
+                echo "nc not found in image, skip waiting for $SQL_HOST:$SQL_PORT"
                 exit 0
               fi
               uptime_s() { cut -d. -f1 /proc/uptime; }
-              deadline=$(( $(uptime_s) + $WAIT_MYSQL_TIMEOUT_SECONDS ))
+              deadline=$(( $(uptime_s) + $WAIT_SQL_TIMEOUT_SECONDS ))
               while :; do
-                if nc -z -w 3 "$MYSQL_ADDR" 3306; then
-                  echo "$MYSQL_ADDR:3306 reachable"
+                if nc -z -w 3 "$SQL_HOST" "$SQL_PORT"; then
+                  echo "$SQL_HOST:$SQL_PORT reachable"
                   exit 0
                 fi
                 now=$(uptime_s)
                 if [ "$now" -ge "$deadline" ]; then
-                  echo "ERROR: $MYSQL_ADDR:3306 not reachable within ${WAIT_MYSQL_TIMEOUT_SECONDS}s" >&2
+                  echo "ERROR: $SQL_HOST:$SQL_PORT not reachable within ${WAIT_SQL_TIMEOUT_SECONDS}s" >&2
                   exit 1
                 fi
-                echo "waiting for $MYSQL_ADDR:3306 ($(( deadline - now ))s left)..."
+                echo "waiting for $SQL_HOST:$SQL_PORT ($(( deadline - now ))s left)..."
                 sleep 5
               done
           resources:

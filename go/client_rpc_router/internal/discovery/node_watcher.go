@@ -6,6 +6,11 @@
 // (设计决策 D33 的 zone 过滤)与 PickRandomForTrack(按会话的发布轨道选全局实例,
 // docs/design/release-track-gray-canary.md §2.4)。两份副本后续收成 go/shared 一份
 // (设计文档 §5「后续」);改 watch / 连接缓存行为时请同步另一份。
+//
+// 2026-11-10 起路由服这份另有两处 match 那份没有的行为(connection-fanout-subsetting-20261106.md §3.3):
+// 全服池类型只在本路由服的确定性子集里挑(SetSubset、subset.go),连接缓存记最后取用时刻、
+// 空闲满 IdleConnTimeout 就关(CloseIdleConns)。match 只连本 zone 与全服 battle,没有「连上全服全部目标」的问题,
+// 收成 shared 一份时再决定 match 要不要这两处。
 package discovery
 
 import (
@@ -72,6 +77,14 @@ type NodeWatcher struct {
 	// 节点上下线才变,选点是每个请求一次:以前每个请求都在读锁里把全服镜像拷一遍再过滤,开销随全服实例数增长
 	// (缺口清单第 28 条);现在选点无锁读这份索引,O(1)。
 	index atomic.Pointer[pickIndex]
+
+	// subsetRank / subsetPeers / subsetSize 决定 PickRandomForTrack 的候选:每条发布轨道里本路由服那段弧上的实例
+	// (subset.go 的 newAperture)。rank 是本路由服在同轨道路由服里的名次,peers 是同轨道路由服数,注册成功之后才设;
+	// 没设(peers 为 0)或 subsetSize <= 0 时候选是全部实例。只在 mu 写锁里改,改完立即重建索引。
+	// zone-scoped 类型不设,PickRandomInZone 不受影响。
+	subsetRank  int
+	subsetPeers int
+	subsetSize  int
 }
 
 // pickIndex 是某一时刻镜像的选点视图,建好之后不再修改。
@@ -83,26 +96,47 @@ type pickIndex struct {
 }
 
 type trackGroup struct {
-	track   releasetrack.Track
-	entries []NodeEntry
+	track releasetrack.Track
+	// ring 是这条轨道的全部实例,按 node_uuid 排好(sortRing),各路由服排出同一个环。
+	ring []NodeEntry
+	// arc 是本路由服在这个环上挑选的那段弧(subset.go)。先按轨道分组再取子集(设计 §3.1):canary 组有实例就只在
+	// canary 组的弧上挑;弧长至少一台目标,组非空就一定挑得到。
+	arc aperture
 }
 
-func buildPickIndex(nodes map[string]NodeEntry) *pickIndex {
+func buildPickIndex(nodes map[string]NodeEntry, subsetRank, subsetPeers, subsetSize int) *pickIndex {
 	index := &pickIndex{byZone: make(map[uint32][]NodeEntry)}
 	byTrack := make(map[releasetrack.Track][]NodeEntry)
 	for _, entry := range nodes {
 		index.byZone[entry.ZoneId] = append(index.byZone[entry.ZoneId], entry)
 		byTrack[entry.Track] = append(byTrack[entry.Track], entry)
 	}
-	for track, entries := range byTrack {
-		index.trackGroups = append(index.trackGroups, trackGroup{track: track, entries: entries})
+	for track, ring := range byTrack {
+		sortRing(ring)
+		index.trackGroups = append(index.trackGroups, trackGroup{
+			track: track,
+			ring:  ring,
+			arc:   newAperture(subsetRank, subsetPeers, len(ring), subsetSize),
+		})
 	}
 	return index
 }
 
 // rebuildIndexLocked 按当前镜像重建选点索引。调用方持 mu 写锁:索引的替换顺序与镜像的修改顺序一致。
 func (w *NodeWatcher) rebuildIndexLocked() {
-	w.index.Store(buildPickIndex(w.nodes))
+	w.index.Store(buildPickIndex(w.nodes, w.subsetRank, w.subsetPeers, w.subsetSize))
+}
+
+// SetSubset 设定全服池类型的挑选范围:rank 是本路由服在同轨道路由服里的名次,peers 是同轨道路由服数(PeerRank 的结果),
+// size 是 GlobalTargetSubsetSize(0 = 不取子集)。只对全服池类型调用;zone-scoped 类型按 zone 挑,不取子集。
+// 立即按当前镜像重建索引,之后的镜像变化沿用这组参数。
+func (w *NodeWatcher) SetSubset(rank, peers, size int) {
+	w.mu.Lock()
+	w.subsetRank = rank
+	w.subsetPeers = peers
+	w.subsetSize = size
+	w.rebuildIndexLocked()
+	w.mu.Unlock()
 }
 
 // NewNodeWatcher 构造 watcher;onCount / onRemove 可为 nil。
@@ -320,14 +354,16 @@ func (w *NodeWatcher) reportCount(count int) {
 
 // PickRandomForTrack 是全局池节点类型的选法:先按会话的发布轨道留下可用的实例
 // (releasetrack.Select:canary 会话有 canary 就只用 canary、没有退回 stable;stable 会话只用 stable),
-// 再在其中均匀随机取一个(负载感知不在本期)。没有可用实例返回 false。
-// Select 在轨道组之间判断(每条轨道至多一组、组都非空),所以「退回」的语义与按实例过滤时完全相同。
+// 再在这条轨道上本路由服那段弧里均匀随机取一个(subset.go;负载感知不在本期)。没有可用实例返回 false。
+// Select 在轨道组之间判断(每条轨道至多一组、组都非空),所以「退回」的语义与按实例过滤时完全相同;
+// 子集只在组内收窄候选,不改变选哪条轨道。
 func (w *NodeWatcher) PickRandomForTrack(session releasetrack.Track) (NodeEntry, bool) {
 	chosen := releasetrack.Select(session, w.index.Load().trackGroups, func(group trackGroup) releasetrack.Track { return group.track })
 	if len(chosen) == 0 {
 		return NodeEntry{}, false
 	}
-	return pickRandom(chosen[0].entries)
+	group := chosen[0]
+	return group.ring[group.arc.pick(rand.Intn)], true
 }
 
 // PickRandomInZone 只在 zone_id 相同的节点里随机取一个(zone-scoped 节点类型
@@ -351,50 +387,128 @@ func (w *NodeWatcher) Count() int {
 	return len(w.nodes)
 }
 
-// ---------------------------------------------------------------------------
-// gRPC 连接缓存(按 endpoint 复用;节点下线时由 watcher onRemove 清理)
-// ---------------------------------------------------------------------------
-
-var (
-	connMu    sync.RWMutex
-	connCache = make(map[string]*grpc.ClientConn)
-)
-
-// DialEndpoint 返回缓存的 gRPC 连接或新建一条。内网 overlay,insecure
-// transport(与 scene_manager defaultNodeDialer 同口径)。
-func DialEndpoint(endpoint string) (*grpc.ClientConn, error) {
-	connMu.RLock()
-	conn, ok := connCache[endpoint]
-	connMu.RUnlock()
-	if ok {
-		return conn, nil
+// Entries 返回镜像里全部节点的快照,顺序不定。
+func (w *NodeWatcher) Entries() []NodeEntry {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	entries := make([]NodeEntry, 0, len(w.nodes))
+	for _, entry := range w.nodes {
+		entries = append(entries, entry)
 	}
+	return entries
+}
 
-	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+// ---------------------------------------------------------------------------
+// gRPC 连接缓存(按 endpoint 复用;节点下线时由 watcher onRemove 清理,空闲满 IdleConnTimeout 由 CloseIdleConns 回收)
+// ---------------------------------------------------------------------------
+
+// IdleConnTimeout:一条缓存连接多久没被取用就关。gate 侧的 zone 子集或本路由服的全服池子集变了之后,
+// 不再被挑的实例的连接靠它回收,缓存不会只增不减(connection-fanout-subsetting-20261106.md §3.3)。
+// 它必须远大于一次转发的期限(ForwardTimeoutMs,秒级,svc.Build 校验):在途调用用的连接一定刚被取用过,不会被关。
+const IdleConnTimeout = 10 * time.Minute
+
+// IdleConnSweepInterval 是空闲回收的扫描周期。
+const IdleConnSweepInterval = time.Minute
+
+// connEntry 是一条缓存连接与它最后一次被取用的单调时刻(纳秒)。
+type connEntry struct {
+	conn     *grpc.ClientConn
+	lastUsed atomic.Int64
+}
+
+// connPool 按 endpoint 缓存连接。取用在读锁里记时刻,回收在写锁里判空闲,两者互斥:
+// 一条连接要么在回收之前被取用(时刻是新的,不关),要么已被回收(取用方找不到、新拨一条),
+// 不会出现「刚取到的连接被当成空闲关掉」。
+type connPool struct {
+	mu    sync.RWMutex
+	conns map[string]*connEntry
+	now   func() time.Duration // 单调时钟
+	dial  func(endpoint string) (*grpc.ClientConn, error)
+}
+
+func newConnPool(now func() time.Duration, dial func(endpoint string) (*grpc.ClientConn, error)) *connPool {
+	return &connPool{conns: make(map[string]*connEntry), now: now, dial: dial}
+}
+
+// defaultConnPool 是生产用的那一份。内网 overlay,insecure transport(与 scene_manager defaultNodeDialer 同口径)。
+var defaultConnPool = newConnPool(monotonicSinceStart(), func(endpoint string) (*grpc.ClientConn, error) {
+	return grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+})
+
+// monotonicSinceStart 返回进程内单调时钟:time.Since 用的是 time.Now 自带的单调读数,不受墙钟调整影响。
+func monotonicSinceStart() func() time.Duration {
+	start := time.Now()
+	return func() time.Duration { return time.Since(start) }
+}
+
+func (p *connPool) get(endpoint string) (*grpc.ClientConn, error) {
+	p.mu.RLock()
+	if entry, ok := p.conns[endpoint]; ok {
+		entry.lastUsed.Store(int64(p.now()))
+		p.mu.RUnlock()
+		return entry.conn, nil
+	}
+	p.mu.RUnlock()
+
+	conn, err := p.dial(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("grpc dial %s: %w", endpoint, err)
 	}
 
-	connMu.Lock()
-	if existing, ok := connCache[endpoint]; ok {
-		connMu.Unlock()
+	p.mu.Lock()
+	if existing, ok := p.conns[endpoint]; ok {
+		existing.lastUsed.Store(int64(p.now()))
+		p.mu.Unlock()
 		_ = conn.Close()
-		return existing, nil
+		return existing.conn, nil
 	}
-	connCache[endpoint] = conn
-	connMu.Unlock()
+	entry := &connEntry{conn: conn}
+	entry.lastUsed.Store(int64(p.now()))
+	p.conns[endpoint] = entry
+	p.mu.Unlock()
 
 	logx.Infof("[discovery] Connected to node %s", endpoint)
 	return conn, nil
 }
 
-// RemoveEndpointConn 关闭并移除某 endpoint 的缓存连接。
-func RemoveEndpointConn(endpoint string) {
-	connMu.Lock()
-	defer connMu.Unlock()
-	if conn, ok := connCache[endpoint]; ok {
-		_ = conn.Close()
-		delete(connCache, endpoint)
+func (p *connPool) remove(endpoint string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if entry, ok := p.conns[endpoint]; ok {
+		_ = entry.conn.Close()
+		delete(p.conns, endpoint)
 		logx.Infof("[discovery] Removed node connection %s", endpoint)
 	}
+}
+
+// closeIdle 关掉最后一次取用距今不少于 maxIdle 的连接,返回关了几条、还剩几条。
+func (p *connPool) closeIdle(maxIdle time.Duration) (closed, remaining int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.now()
+	for endpoint, entry := range p.conns {
+		if now-time.Duration(entry.lastUsed.Load()) < maxIdle {
+			continue
+		}
+		_ = entry.conn.Close()
+		delete(p.conns, endpoint)
+		closed++
+		logx.Infof("[discovery] Closed idle node connection %s", endpoint)
+	}
+	return closed, len(p.conns)
+}
+
+// DialEndpoint 返回缓存的 gRPC 连接或新建一条。
+func DialEndpoint(endpoint string) (*grpc.ClientConn, error) {
+	return defaultConnPool.get(endpoint)
+}
+
+// RemoveEndpointConn 关闭并移除某 endpoint 的缓存连接(节点下线或换了端口)。
+func RemoveEndpointConn(endpoint string) {
+	defaultConnPool.remove(endpoint)
+}
+
+// CloseIdleConns 关掉空闲满 IdleConnTimeout 的缓存连接,返回关了几条、还剩几条。svc 每 IdleConnSweepInterval 调一次。
+func CloseIdleConns() (closed, remaining int) {
+	return defaultConnPool.closeIdle(IdleConnTimeout)
 }

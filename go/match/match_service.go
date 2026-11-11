@@ -164,6 +164,7 @@ func main() {
 	// 组队给 scene 发 PlayerTeamRefreshEvent 也从这里取 NodeUuid)。
 	svcCtx.LaunchRelayTask("match.watch.scene", func() { svcCtx.SceneNodes.Run(ctx, svcCtx.Etcd) })
 	svcCtx.LaunchRelayTask("match.watch.battle", func() { svcCtx.BattleNodes.Run(ctx, svcCtx.Etcd) })
+	svcCtx.LaunchRelayTask("match.watch.battle.canary", func() { svcCtx.CanaryBattleNodes.Run(ctx, svcCtx.Etcd) })
 	// match 实例自身的注册:按池撮合用它作成员表,决定每个池由哪个副本负责(internal/poolowner)。
 	svcCtx.LaunchRelayTask("match.watch.match", func() { svcCtx.MatchNodes.Run(ctx, svcCtx.Etcd) })
 

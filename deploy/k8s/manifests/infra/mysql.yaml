@@ -74,9 +74,10 @@ data:
     # 共用这台 MySQL 的是全部 zone 的 go/db、data_service、Java gateway,外加全局的 friend、trade、player-inbox、guild、mail。
     # 总账公式与规划参数在 tools/scripts/k8s_deploy.ps1(Get-MysqlConnectionPlan / Get-MysqlConnectionLedger),
     # 部署写路径打印 "MySQL connection ledger" 一行;契约测试钉住「规划峰值 ≤ 本值」。
-    # 规划档:4 个 zone、每个 go/db 实例打开其余 3 个 zone 的库(最坏)、Phase 2 未开、route store 恒计入,
-    # 峰值 1620(含一个 zone 滚动发布 —— 每个 Deployment 多 1 个新 Pod + 1 个仍在优雅退出的旧 Pod —— 与运维余量 20),
-    # 本值留约 10% 余量。
+    # 规划档(2026-11-06 起,存档库和区脱钩之后):4 个 zone;zone 库不放玩家;每个 go/db、data_service 实例打开本地域全部存档库
+    # (MySQL 档 K=4,每库的池按 K 摊开,Get-PlayerStorePoolLimit);route store 恒计入;含一个 zone 滚动发布
+    # (每个 Deployment 多 1 个新 Pod + 1 个仍在优雅退出的旧 Pod)与运维余量 20。本值留约 10% 以上余量。下面是历次调整的记录。
+    # 最早(2026-10-12)的规划档是「每个 go/db 实例打开其余 3 个 zone 的库」,峰值 1620。
     # 2026-10-15 加入玩家收件箱 player-inbox(2 副本 × 池 20,全局)后,按公式手算峰值 1700、余量约 6%(未运行,
     # 池上限以 go/player_inbox/etc/player_inbox.yaml 为准,契约测试复核);再加全局池前先重做规划档。
     # 2026-10-16 加入邮件 mail(2 副本 × 池 20,全局;docs/design/mail-system.md §12.3)时重做了规划档:guild 加入后峰值已是 1780(余量 20),
@@ -84,6 +85,9 @@ data:
     # 内存按下面 Deployment 的核算重算过(+300 条连接 ≈ +0.3Gi,仍在 5Gi limits 之内),limits 不动。
     # 2026-10-31 逻辑库拆分(docs/design/horizontal-scale-logical-db.md):data_service 多了流水库和全部存档库的池,go/db 不变,match 的池(固定 16)第一次进总账。
     # 规划档峰值 1860 → 2386,超过 2100。本值调到 2600:余量 214(约 8%)。K=64 的生产档不走这台 MySQL,上限换 TiDB 预算,见 Get-MysqlConnectionPlan。
+    # 2026-11-06 存档库和区脱钩(docs/design/player-data-tidb-scaling-plan.md §7.2,A17b):zone 库不再放玩家,go/db 本 zone 库池 60 → 8,
+    # 存盘改走地域存档库池(K=1 的预算 60,按 K 摊开),规划档不再按「打开其余 zone 的库」算。手算峰值 2436 → 2036(未运行,契约测试复核),
+    # 本值不动,余量 564;内存 limits 不动。
     # 运行中的实例不会自己变:上线前按本段末尾两种做法(维护窗口 rollout restart / SET GLOBAL)任选其一让 mysqld 拿到 2600,否则总账按 2600 通过、线上仍是旧值。
     # 以前的 500 只够 2 个 zone 的稳态(恰好 500,零余量);4 个 zone 稳态就要 920(docs/PROGRESS.md 2026-10-12)。
     # 超限的后果不只是变慢:go/db 把 1040 当普通错误,耗尽重试后进没有消费者的死信(读代码推断,未实测)。

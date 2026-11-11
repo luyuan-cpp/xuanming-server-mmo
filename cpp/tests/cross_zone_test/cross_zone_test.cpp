@@ -2456,6 +2456,86 @@ TEST(PlayerStoreDirectEcs, KeyProgressIsANoOpOnTheOldPath)
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerKeyProgressSaveComp>(player));
 }
 
+// ── 身份不确认期间补存(PlayerLifecycleSystem::RunIdentityAtRiskSaves)──────────────────────────────────────
+// 节点和 etcd 单边失联时,丢失上限由补存节奏决定:每秒一槽,玩家号 % 5 落在本秒的槽才存,每名玩家 5 秒一次。
+
+namespace
+{
+constexpr uint64_t kIdentityAtRiskSlots = 5;
+
+// 注入探针会把补存节奏清零(从第 0 槽、未进入补存算起);析构时清掉探针,未注入 = 不补存,不影响后面的用例。
+struct ScopedNodeIdentityProbe
+{
+    explicit ScopedNodeIdentityProbe(std::function<bool()> probe)
+    {
+        PlayerLifecycleSystem::SetNodeIdentityProbe(std::move(probe));
+    }
+    ~ScopedNodeIdentityProbe() { PlayerLifecycleSystem::SetNodeIdentityProbe({}); }
+};
+
+// 代替 1 秒定时器走 seconds 秒。
+void RunIdentityAtRiskSeconds(uint64_t seconds)
+{
+    for (uint64_t second = 0; second < seconds; ++second)
+    {
+        PlayerLifecycleSystem::RunIdentityAtRiskSaves();
+    }
+}
+} // namespace
+
+TEST(PlayerStoreDirectEcs, UnconfirmedIdentitySavesEachPlayerOnceEveryFiveSeconds)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    ScopedNodeIdentityProbe identity([] { return false; });
+    constexpr uint64_t ownSlot = kExitPlayerId % kIdentityAtRiskSlots;
+
+    RunIdentityAtRiskSeconds(ownSlot);
+    EXPECT_TRUE(f.sent.empty()) << "还没轮到这名玩家的槽";
+    PlayerLifecycleSystem::RunIdentityAtRiskSaves();
+    ASSERT_EQ(1u, f.sent.size()) << "轮到它的槽:存一次";
+    EXPECT_FALSE(f.sent.front().request.release()) << "补存是在线存盘,不是退出释放";
+    EXPECT_EQ(kDirectEpoch, f.sent.front().request.owner_epoch()) << "带实体当前的写权代次,由 go/db 的写权行围栏";
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    TouchHotRow(player); // 下一轮有脏行,存盘才真的发出去
+    RunIdentityAtRiskSeconds(kIdentityAtRiskSlots - 1);
+    EXPECT_TRUE(f.sent.empty()) << "同一名玩家 5 秒才轮到一次";
+    PlayerLifecycleSystem::RunIdentityAtRiskSaves();
+    EXPECT_EQ(1u, f.sent.size()) << "下一轮又存一次";
+}
+
+TEST(PlayerStoreDirectEcs, ConfirmedOrRemovedIdentityProbeAddsNoSaves)
+{
+    PlayerStoreDirectFixture f;
+    MakeClaimedPlayer();
+    {
+        ScopedNodeIdentityProbe identity([] { return true; });
+        RunIdentityAtRiskSeconds(2 * kIdentityAtRiskSlots);
+        EXPECT_TRUE(f.sent.empty()) << "身份确认:只按定时存盘的节奏,不补存";
+    }
+    // 探针已清掉(停机时节点入口也这样做):IsNodeIdentityConfirmed 为假,但不再由节点身份管着,不能每 5 秒存全员。
+    RunIdentityAtRiskSeconds(2 * kIdentityAtRiskSlots);
+    EXPECT_TRUE(f.sent.empty());
+}
+
+TEST(PlayerStoreDirectEcs, IdentityAtRiskSavesSkipFrozenPlayersAndStopOnceConfirmed)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    bool confirmed = false;
+    ScopedNodeIdentityProbe identity([&confirmed] { return confirmed; });
+
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    RunIdentityAtRiskSeconds(kIdentityAtRiskSlots);
+    EXPECT_TRUE(f.sent.empty()) << "冻结中的实体在自己的交接流程里,补存不插一笔";
+
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+    confirmed = true;
+    RunIdentityAtRiskSeconds(kIdentityAtRiskSlots);
+    EXPECT_TRUE(f.sent.empty()) << "身份恢复:回到定时存盘的节奏";
+}
+
 TEST(ExitPersistEcs, CancelExitOnReconnectRemovesBothMarkers)
 {
     const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);

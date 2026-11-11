@@ -64,10 +64,14 @@
 - 连接层在闸门上看到 `writable=0` 或 epoch 变了就回 `ErrWriterFrozen`,并置上请求 ctx 的观察位(`ObserveWriterFrozen`)。主体、世代不符或写者已退休仍回 `ErrWriterDenied`。
 - `serverbase.UnaryInterceptor`(match 用 `WriterFrozenInterceptor`)看观察位:handler 报告失败时(返回错误或带内错误码非 0)回 `Unavailable`。handler 常把存储错误翻成带内错误码,哨兵到不了拦截器,所以不靠错误链。handler 吞掉冻结错误、照常回成功时不改。
 - go/db 存盘冻结时回 `Unavailable`,不记未知结局。scene 的 `PlayerStoreClient` 对 `Unavailable` 本来就按原序号退避重试,不用改。
-- **读写都暂停**。写者池上的读也开自动事务、也过闸门,窗口里回 `ErrWriterFrozen`。不改这个语义:窗口是秒级,回可重试错误最简单,放开读就要回答读到的是不是冻结点之后的数据。不经闸门的只读连接池(`Reader` 权限)照常读,读到冻结时的数据。
+- **读写都暂停**。窗口里写者池上的读也回 `ErrWriterFrozen`:窗口是秒级,回可重试错误最简单;放开读就要回答读到的是不是冻结点之后的数据(搬库切换之后还连着源库的读,读到的是已被目标库超过的旧数据)。不经闸门的只读连接池(`Reader` 权限)照常读,读到冻结时的数据。
+- **事务外的纯读只过读闸门**(2026-11-06,缺口清单第 21 条;`writerGate.admitRead`):写者池上不在事务里的读语句(`SELECT` / `SHOW` / `DESCRIBE`)先在同一条物理连接上读一次 `route_meta`:世代相符、`writable=1` 就直接读,不开事务、不锁不改 `writer_slot`、不读注册表;冻结回 `ErrWriterFrozen`(启动阶段照下面「启动路径扛冻结」放行),世代不符或写资格已关闭回 `ErrWriterDenied`。
+  - 为什么可以:读不需要写资格(主体、注册、slot 是写的前提),数据都在主库上,谁读都是同一份已提交数据。以前每条读都开一个自动事务:读 `route_meta` 两次、锁或改写一个 `writer_slot`(LOCK_TOUCH 档下是一次真正的写)、读注册表、提交,所有实例的读都在改写这张小表(第 20 条的热点之一)。
+  - 为什么不丢一致性:先核后读是两条自动提交语句。核的那一刻库可写、之后才冻结时,读到的不晚于冻结那一刻的数据(冻结之后源库不再有写),线性化到核的那一刻;核到冻结就挡回去,所以读不到切换之后的旧库。
+  - 显式事务里的读、走 `Query` 的写照旧走事务闸门,提交点语义不变。读到可写时清掉 `writer_frozen_seconds` 的计时,但不算「过过闸门」,启动阶段的放行规则不受只读流量影响。
 - **结局分类**:`authoritysql.IsWriterFrozen(err)` 判「冻结,这次确定没写」,要求错误树的每个叶子都是冻结,混进别的失败(尤其 `ErrOutcomeUnknown`)就不算。`ClassifyOutcome(err)` 分成 `OutcomeOK`、`OutcomeFrozen`、`OutcomeUnknown`、`OutcomeFailed`,结局未知优先。后台循环对冻结不打排空 HOLD:trade 恢复循环和清理、`shared/assetop` 重投、player_inbox 清理和提醒、rank 发奖、mail、friend、guild 的清理和历练巡检、match 的 relay 工作。match 结果消费者撞冻结不占重试次数,否则窗口稍长消费者就停了。RPC 路径的判定在 serverbase。
 - **trade 恢复循环的判定更宽**:`commerce.OutcomeKnown(err)` 在冻结之外还放过事务回滚之后的拒绝(`errRolePreparing`、`errRoleConflict`、`Rejection`、`rolefence.ErrUnavailable`、`ErrRoleNotFound`)和只读步骤的失败(拉商城待办、读合同、读目录)。这些在产生错误的地方标记(`rolledBack`、`noWrite`),判定走错误树,每个分支都要确定才算。没标的都算未知:回报商城失败、提交失败。只读步骤的语句被连接层报成 `ErrOutcomeUnknown` 也标成确定:连接层不分读写,这条语句本来没写。合同推进的单行失败照旧由 `deferCommerce` 推迟,不回给调用方,所以单行提交结局未知在这里也不 Hold:连接层把事务里被取消的语句也报成结局未知,按它 Hold 的话,行锁等待超过子预算就会打 Hold。
-- **观测**:`writer_frozen_seconds{logical_db}`,这个进程观察到闸门连续冻结了多久,解冻后第一笔过闸归零,15 秒没再撞到也归零(没有写流量的进程不受影响,也不上报)。第一次撞到才注册序列。告警 `WriterGateFrozenTooLong`:超过 2 分钟,多半是工具被杀或翻转结局未知,处置见手册 §6。
+- **观测**:`writer_frozen_seconds{logical_db}`,这个进程观察到闸门连续冻结了多久,解冻后第一笔过闸、或第一条事务外的读读到可写就归零,15 秒没再撞到也归零(没有流量的进程不受影响,也不上报)。第一次撞到才注册序列。告警 `WriterGateFrozenTooLong`:超过 2 分钟,多半是工具被杀或翻转结局未知,处置见手册 §6。
 
 **写资格什么时候消费**:写资格是一次性的,因为进程写过之后崩了,重启时内存里的 boot 状态没了,排空证明也接不上。进程还没写过就退出没有东西丢,所以 `LoadWriterConfigs` 只核消费标记不存在,**第一条写语句之前才写标记**(`grantMarker`,纯读不写)。启动时依赖没就绪(合服映射、Redis、Kafka)、读到一半退出,同一个 Pod 重启接着用这份,不烧名册。Go 服务都是这样;Java 的 `WriterAuthority` 还是读的时候就消费,比这严。
 
@@ -604,6 +608,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 - 鉴权:`ServiceCallAuth`,caller 是 `db`,密钥 `MMORPG_ROLE_FENCE_SECRET_DB`,和角色护栏的调用方同一命名。data_service 没配密钥时这个 RPC 回 `Unavailable`,其余照常;配了就不能和别的调用方共用。go/db 缺配置或缺密钥拒绝启动。go/db 不在启动时读一次:data_service 可能还没起来。
 - `storage_id` 建角后不变,所以不在写事务里核路由。物理位置由 §8 的映射决定,闸门在同一事务里拦住旧位置的写。
 - **不做按玩家搬库**。负责人要的是搬物理库,§8 覆盖。要做按玩家搬库时,必须在写权行加「已搬走」墓碑并在 `decideSave`、`decideClaim` 里判,这条记在这里。`player_route.frozen_run_id` 没有用处,删除。
+- **go/db 不缓存落点**(2026-11-06,缺口清单第 21 条)。每次认领都调一次 `GetPlayerRoute`,只是一跳 RPC 加目录分片上一条主键点读;这条读走 §2 的读闸门(一条 `route_meta` 加一条点读,不开事务、不碰 `writer_slot`),随 data_service 副本数与目录分片数水平扩展。storage_id 写一次不变,现在加缓存不会错,但省下的只有这一跳,将来做按玩家搬库时还要为它补失效协议(上一条的墓碑)。压测证明这一跳是瓶颈再做,做时按上一条的墓碑让存储侧复核。
 
 一个进程要写多个存档库时,各库一份闸门(§2),库可以在不同集群。
 

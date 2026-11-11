@@ -267,6 +267,9 @@ $splitFunctionNames = @(
     'Get-RedisQueueShapeFor', 'Get-RedisQueueHaObjectNames', 'Get-RedisQueueHaLimitsFor', 'ConvertTo-RedisQueueInstanceManifest', 'Get-RedisQueueGroupsToApply',
     'Assert-RedisQueueTopologyChangeIsSafe', 'New-RedisQueueInstanceManifests', 'Apply-RedisQueueInstances',
     'ConvertFrom-RedisQueueInstanceAddress', 'ConvertFrom-RedisQueueInstanceLive', 'Read-RedisQueueInstanceLive', 'Get-RedisSplitRolloutState', 'Show-RedisSplitStatus', 'Invoke-RedisWipe',
+    # redis-split-status 的控制域一段(缺口第 5 条):读线上 ConfigMap 与 redis-ctl-g<N>,走同一个 Invoke-ClientEntryKubectl 替身。
+    'Get-RedisCtlInstanceName', 'Get-ZoneRedisCtlTopology', 'Read-LiveConfigMapData', 'ConvertFrom-RedisCtlLiveYaml', 'ConvertFrom-RedisCtlNodeConfigYaml',
+    'Get-RedisCtlZoneProblems', 'Get-RedisCtlZoneStatus',
     # 总账的告警路径(第 8 节):客户端输入 Get-RedisQueueConnectionLedgerInputs 换成替身,算式与判定是同一份函数体。
     'Get-RedisConnectionLedger', 'Write-RedisQueueConnectionLedger'
 )
@@ -1152,15 +1155,15 @@ Test-Case 'ConvertFrom-RedisQueueInstanceLive:形态与客户端那条路上的�
     Assert-Equal -Expected 'single/0' -Actual ('{0}/{1}' -f $healthySingle.Shape, @($healthySingle.Problems).Count) -Because '单实例不要求代理'
 
     foreach ($case in @(
-            @{ Label = '没有 StatefulSet'; Sts = $null; Proxy = $null; Service = (New-LiveService -App $name); Shape = 'absent'; Pattern = "没有 statefulset/$name" },
-            @{ Label = '没有 Service'; Sts = (New-LiveWorkload -Replicas 1 -Ready 1); Proxy = $null; Service = $null; Shape = 'single'; Pattern = "没有 service/$name" },
-            @{ Label = '副本数不是 1 / 3'; Sts = (New-LiveWorkload -Replicas 2 -Ready 2); Proxy = $null; Service = (New-LiveService -App $name); Shape = 'unknown'; Pattern = '有 2 个副本' },
-            @{ Label = 'redis Pod 没全部就绪'; Sts = (New-LiveWorkload -Replicas 3 -Ready 2); Proxy = (New-LiveWorkload -Replicas 2 -Ready 2); Service = (New-LiveService -App $proxyName); Shape = 'ha'; Pattern = '就绪 2/3' },
-            @{ Label = 'status 里还没有 readyReplicas'; Sts = (New-LiveWorkload -Replicas 1 -Ready $null); Proxy = $null; Service = (New-LiveService -App $name); Shape = 'single'; Pattern = '就绪 0/1' },
-            @{ Label = '高可用没有代理'; Sts = (New-LiveWorkload -Replicas 3 -Ready 3); Proxy = $null; Service = (New-LiveService -App $proxyName); Shape = 'ha'; Pattern = "没有 deployment/$proxyName" },
-            @{ Label = '代理没全部就绪'; Sts = (New-LiveWorkload -Replicas 3 -Ready 3); Proxy = (New-LiveWorkload -Replicas 2 -Ready 1); Service = (New-LiveService -App $proxyName); Shape = 'ha'; Pattern = "deployment/$proxyName 就绪 1/2" },
-            @{ Label = '高可用而 Service 还选 redis Pod'; Sts = (New-LiveWorkload -Replicas 3 -Ready 3); Proxy = (New-LiveWorkload -Replicas 2 -Ready 2); Service = (New-LiveService -App $name); Shape = 'ha'; Pattern = "应当选 app=$proxyName" },
-            @{ Label = '单实例而 Service 还选代理'; Sts = (New-LiveWorkload -Replicas 1 -Ready 1); Proxy = $null; Service = (New-LiveService -App $proxyName); Shape = 'single'; Pattern = "应当选 app=$name" }
+            @{ Label = '没有 StatefulSet'; Sts = $null; Proxy = $null; Service = (New-LiveService -App $name); Shape = 'absent'; Pattern = "statefulset/$name is missing" },
+            @{ Label = '没有 Service'; Sts = (New-LiveWorkload -Replicas 1 -Ready 1); Proxy = $null; Service = $null; Shape = 'single'; Pattern = "service/$name is missing" },
+            @{ Label = '副本数不是 1 / 3'; Sts = (New-LiveWorkload -Replicas 2 -Ready 2); Proxy = $null; Service = (New-LiveService -App $name); Shape = 'unknown'; Pattern = 'has 2 replicas' },
+            @{ Label = 'redis Pod 没全部就绪'; Sts = (New-LiveWorkload -Replicas 3 -Ready 2); Proxy = (New-LiveWorkload -Replicas 2 -Ready 2); Service = (New-LiveService -App $proxyName); Shape = 'ha'; Pattern = 'ready 2/3' },
+            @{ Label = 'status 里还没有 readyReplicas'; Sts = (New-LiveWorkload -Replicas 1 -Ready $null); Proxy = $null; Service = (New-LiveService -App $name); Shape = 'single'; Pattern = 'ready 0/1' },
+            @{ Label = '高可用没有代理'; Sts = (New-LiveWorkload -Replicas 3 -Ready 3); Proxy = $null; Service = (New-LiveService -App $proxyName); Shape = 'ha'; Pattern = "deployment/$proxyName is missing" },
+            @{ Label = '代理没全部就绪'; Sts = (New-LiveWorkload -Replicas 3 -Ready 3); Proxy = (New-LiveWorkload -Replicas 2 -Ready 1); Service = (New-LiveService -App $proxyName); Shape = 'ha'; Pattern = "deployment/$proxyName ready 1/2" },
+            @{ Label = '高可用而 Service 还选 redis Pod'; Sts = (New-LiveWorkload -Replicas 3 -Ready 3); Proxy = (New-LiveWorkload -Replicas 2 -Ready 2); Service = (New-LiveService -App $name); Shape = 'ha'; Pattern = "should select app=$proxyName" },
+            @{ Label = '单实例而 Service 还选代理'; Sts = (New-LiveWorkload -Replicas 1 -Ready 1); Proxy = $null; Service = (New-LiveService -App $proxyName); Shape = 'single'; Pattern = "should select app=$name" }
         )) {
         $r = ConvertFrom-RedisQueueInstanceLive -InstanceName $name -StatefulSet $case.Sts -Proxy $case.Proxy -Service $case.Service
         Assert-Equal -Expected $case.Shape -Actual $r.Shape -Because "$($case.Label) 的形态"
@@ -1209,6 +1212,16 @@ Test-Case 'Show-RedisSplitStatus(线上事实注入):打印 zone 实际指向的
         if ($Joined -like 'get statefulset redis-queue-g0 -n infra-ns *') { return New-KubectlReply -Stdout '{"spec":{"replicas":3},"status":{"readyReplicas":3}}' }
         if ($Joined -like 'get deployment redis-queue-g0-proxy -n infra-ns *') { return New-KubectlReply -Stdout '{"spec":{"replicas":2},"status":{"readyReplicas":2}}' }
         if ($Joined -like 'get service redis-queue-g0 -n infra-ns *') { return New-KubectlReply -Stdout '{"spec":{"selector":{"app":"redis-queue-g0-proxy"}}}' }
+        # 控制域(缺口第 5 条):两个 zone 都在组 0,scene-manager 与 node-config 都指向 redis-ctl-g0.ns(本次 -InfraNamespace 是 ns)。
+        if ($Joined -like 'get configmap go-svc-scene-manager-config -n mmorpg-zone-split-* -o json') {
+            return New-KubectlReply -Stdout ((@{ data = @{ 'scene_manager_service.yaml' = "Redis:`n  Host: redis-ctl-g0.ns:6379`n  Type: node`nCoreRedis:`n  Host: redis.ns:6379`n" } }) | ConvertTo-Json -Depth 5)
+        }
+        if ($Joined -like 'get configmap node-config -n mmorpg-zone-split-* -o json') {
+            return New-KubectlReply -Stdout ((@{ data = @{ 'game_config.yaml' = "zoneredis:`n  host: `"redis.ns`"`n  port: 6379`nscene_control_redis:`n  host: `"redis-ctl-g0.ns`"`n  port: 6379`n  db: 0`n" } }) | ConvertTo-Json -Depth 5)
+        }
+        if ($Joined -like 'get statefulset redis-ctl-g0 -n ns *') { return New-KubectlReply -Stdout '{"spec":{"replicas":1},"status":{"readyReplicas":1}}' }
+        if ($Joined -like 'get deployment redis-ctl-g0-proxy -n ns *') { return New-KubectlReply }
+        if ($Joined -like 'get service redis-ctl-g0 -n ns *') { return New-KubectlReply -Stdout '{"spec":{"selector":{"app":"redis-ctl-g0"}}}' }
         if ($Joined -like 'get deployment * -o name') { return New-KubectlReply -Stdout 'deployment.apps/x' }
         if ($Joined -like 'rollout status *') { return New-KubectlReply }
         throw "kubectl 替身没想到的调用:$Joined"
@@ -1217,10 +1230,38 @@ Test-Case 'Show-RedisSplitStatus(线上事实注入):打印 zone 实际指向的
     Assert-Match -Text $printed -Pattern 'Redis split status: OK' -Because '地址一致、滚完、实例就绪'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($printed, 'instance=redis-queue-g0 namespace=infra-ns shape=ha ready=3/3 proxy=2/2 service_selector=redis-queue-g0-proxy').Count) -Because '两个 zone 同组,实例只查、只打一次;namespace 取自线上地址,不取本次参数'
     Assert-Equal -Expected 'mmorpg-zone-split-0,mmorpg-zone-split-1' -Actual ($script:SplitReadNamespaces -join ',') -Because '每个 zone 各读一次 ConfigMap'
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($printed, 'ctl_expected=redis-ctl-g0\.ns:6379 scene-manager\.Redis=redis-ctl-g0\.ns:6379 node-config\.scene_control_redis=redis-ctl-g0\.ns rollout scene-manager=complete').Count) `
+        -Because 'control domain: one line per zone, scene-manager and node-config both on the group instance'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($printed, 'instance=redis-ctl-g0 namespace=ns shape=single ready=1/1 proxy=<none> service_selector=redis-ctl-g0').Count) `
+        -Because 'control instance of a shared group is checked and printed once'
 
     $body = ($deployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Show-RedisSplitStatus' }, $true)).Body.Extent.Text
     Assert-Match -Text $body -Pattern 'foreach \(\$problem in \$instance\.Problems\) \{ \$failures\.Add' -Because '实例的问题要进失败列表(退出码 1),不能只打印'
     Assert-Match -Text $body -Pattern 'foreach \(\$address in @\(\$live\.LoginQueueHostPort, \$live\.GatewayHost\)\)' -Because 'login 与 gateway 分开取:切换没做完时两者可能指向不同实例'
+    Assert-Match -Text $body -Pattern 'foreach \(\$problem in \(Get-RedisCtlZoneStatus [^\r\n]*\)\) \{\s*\$failures\.Add\(\$problem\)' -Because 'control domain problems must reach the failure list (exit code 1), not only be printed'
+}
+
+Test-Case 'Get-RedisCtlZoneProblems / ConvertFrom-RedisCtlNodeConfigYaml: wrong group, missing scene_control_redis section and unfinished rollout are problems; absent ConfigMaps are not' {
+    $expected = [pscustomobject]@{ Service = 'redis-ctl-g1'; Host = 'redis-ctl-g1.ns'; Port = 6379; HostPort = 'redis-ctl-g1.ns:6379' }
+    $smOk = ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml "Redis:`n  Host: redis-ctl-g1.ns:6379`n"
+    $nodeOk = ConvertFrom-RedisCtlNodeConfigYaml -GameConfigYaml "zoneredis:`n  host: `"redis.ns`"`nscene_control_redis:`n  host: `"redis-ctl-g1.ns`"`n  port: 6379`n"
+    Assert-Equal -Expected 'redis-ctl-g1.ns' -Actual $nodeOk.Host -Because 'reads scene_control_redis.host, not zoneredis.host'
+    Assert-Equal -Expected 0 -Actual @(Get-RedisCtlZoneProblems -SceneManager $smOk -NodeConfig $nodeOk -Expected $expected -SceneManagerRollout 'complete').Count -Because 'both on the group instance, rollout complete'
+    $absentSm = ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml $null
+    $absentNode = ConvertFrom-RedisCtlNodeConfigYaml -GameConfigYaml $null
+    Assert-Equal -Expected 'False/False' -Actual ('{0}/{1}' -f $absentSm.Present, $absentNode.Present) -Because '$null means the ConfigMap does not exist (not coerced to an empty string)'
+    Assert-Equal -Expected 0 -Actual @(Get-RedisCtlZoneProblems -SceneManager $absentSm -NodeConfig $absentNode -Expected $expected -SceneManagerRollout 'absent').Count -Because 'zone not deployed is not a problem'
+    foreach ($case in @(
+            @{ Label = 'scene-manager on another group'; Sm = (ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml "Redis:`n  Host: redis-ctl-g0.ns:6379`n"); Node = $nodeOk; Rollout = 'complete'; Pattern = "scene-manager control Redis is 'redis-ctl-g0\.ns:6379'" },
+            @{ Label = 'scene-manager on the core Redis'; Sm = (ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml "Redis:`n  Host: redis.ns:6379`n"); Node = $nodeOk; Rollout = 'complete'; Pattern = "scene-manager control Redis is 'redis\.ns:6379'" },
+            @{ Label = 'node-config without scene_control_redis (C++ copies zoneredis)'; Sm = $smOk; Node = (ConvertFrom-RedisCtlNodeConfigYaml -GameConfigYaml "zoneredis:`n  host: `"redis.ns`"`n"); Rollout = 'complete'; Pattern = "scene_control_redis\.host is ''" },
+            @{ Label = 'rollout not finished'; Sm = $smOk; Node = $nodeOk; Rollout = 'incomplete'; Pattern = 'deployment/scene-manager rollout is incomplete' },
+            @{ Label = 'rollout query failed'; Sm = $smOk; Node = $nodeOk; Rollout = 'error'; Pattern = 'deployment/scene-manager rollout is error' }
+        )) {
+        $problems = @(Get-RedisCtlZoneProblems -SceneManager $case.Sm -NodeConfig $case.Node -Expected $expected -SceneManagerRollout $case.Rollout)
+        Assert-Equal -Expected 1 -Actual $problems.Count -Because "$($case.Label): exactly one problem"
+        Assert-Match -Text ($problems -join ' | ') -Pattern $case.Pattern -Because "$($case.Label) must be reported"
+    }
 }
 
 Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue

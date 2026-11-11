@@ -221,11 +221,11 @@ ensure_topic() {
     if run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic "$topic"; then
       actual=$(sed -n 's/.*PartitionCount:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$cli_output")
       if [ "$grow" = grow ]; then
-        case "$actual" in ''|*[!0-9]*) fail_cli "无法解析分区数: $topic";; esac
+        case "$actual" in ''|*[!0-9]*) fail_cli "cannot parse the partition count of topic $topic";; esac
         [ "$actual" -lt "$partitions" ] || break
         # data_service 的 EnsureTopics 可能同时在加:alter 失败不退出,回到上面重读分区数,由本阶段截止时间兜底。
         run_cli "$topic_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --alter --topic "$topic" --partitions "$partitions" || true
-        wait_metadata "$topic_deadline" "审计 topic 分区数在截止时间前仍少于配置: $topic expected>=$partitions actual=$actual"
+        wait_metadata "$topic_deadline" "audit topic $topic still has fewer partitions than configured at the deadline: expected>=$partitions actual=$actual"
         continue
       fi
       [ "$actual" = "$partitions" ] || fail_cli "分区契约不符: $topic expected=$partitions actual=$actual"

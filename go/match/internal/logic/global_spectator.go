@@ -277,6 +277,15 @@ func (l *WatchBattleLogic) locateGlobalWatch(battle, player uint64) (target glob
 		removeSpectateBattle(s, battle)
 		return target, constants.ErrBattleNotWatchable, nil
 	}
+	// 发布轨道(设计 §2.6):stable 会话不看 canary battle 节点上的对局,否则会被连到 canary 节点上;canary 会话两条轨道都能看。
+	// 不摘观战索引:这场对 canary 会话仍可看。轨道读不出是内部链路故障,不算结论。判据与放过窗口见 battleOnCanaryNode。
+	viewerTrack, err := sessionReleaseTrack(l.ctx)
+	if err != nil {
+		return target, 0, fmt.Errorf("read the viewer release track: %w", err)
+	}
+	if !viewerTrack.IsCanary() && battleOnCanaryNode(s, formation.GetTargetNodeId(), formation.GetTargetInstanceId()) {
+		return target, constants.ErrBattleNotWatchable, nil
+	}
 	session, err := loadPlayerSession(s, player)
 	if err != nil {
 		return target, 0, err

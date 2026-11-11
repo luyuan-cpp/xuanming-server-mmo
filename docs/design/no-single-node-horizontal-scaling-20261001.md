@@ -354,9 +354,9 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 真实集群:staging 上按 README「切换」步骤做一次 1 → 3,再做删主 Pod、杀主进程两项,用 robot 登录压测看中断时长与丢写。
 
-## 6. MySQL：单实例 → TiDB（2026-11-05 改写为批 A 设计，未落码）
+## 6. MySQL：单实例 → TiDB（2026-11-05 设计，11-06～10 批 A 落码，未编译、未在集群上验证）
 
-方向见 [全局数据层 TiDB 决策](global-data-layer-tidb-decision.md)。10-01 时 deploy 里没有任何 TiDB 清单；此后 tidb 档（`-DatabaseBackend tidb`，缺省值）已让 db、data_service、guild、trade、friend、player_inbox、match、mail、rank、chat 的逻辑库全部连外部 TiDB（脚本不建 TiDB 集群，`-GlobalAuthorityTiDBHost` 指向入口）。还留在 infra 单实例 MySQL（`manifests/infra/mysql.yaml`，1 副本，无主从）上的只剩 `mmorpg` 逻辑库，负责人 11-05 拍板把它迁到 TiDB。
+方向见 [全局数据层 TiDB 决策](global-data-layer-tidb-decision.md)。10-01 时 deploy 里没有任何 TiDB 清单；此后 tidb 档（`-DatabaseBackend tidb`，缺省值）已让 db、data_service、guild、trade、friend、player_inbox、match、mail、rank、chat 的逻辑库全部连外部 TiDB（脚本不建 TiDB 集群，`-GlobalAuthorityTiDBHost` 指向入口）。还留在 infra 单实例 MySQL（`manifests/infra/mysql.yaml`，1 副本，无主从）上的只剩 `mmorpg` 逻辑库，负责人 11-05 拍板把它迁到 TiDB。批 A 做完之后，tidb 档的部署里不再有这台 MySQL；它只剩 dev 的 mysql 档用作夹具。
 
 ### 6.1 `mmorpg` 上有什么、谁依赖它
 
@@ -366,22 +366,27 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 ### 6.2 现在被固定在 MySQL 的地方（11-05 只读核对）
 
-| 位置 | 现状 | 批 A 的改法 |
+| 位置 | 11-05 的现状 | 批 A 的改法（已落码） |
 |---|---|---|
-| `k8s_deploy.ps1` 的 `New-JavaSvcConfigMapYaml` | JDBC 主机写死 `mysql.<infra>:3306/mmorpg`；不写 `mmorpg.sql.require-tidb`，而网关这一项缺省 true、prod 档不许关。按现在的配置，prod 档网关连 MySQL 本来就起不来（读代码得出，未实测） | 主机与档位取 `Get-GlobalAuthoritySqlSettings`。tidb 档写 require-tidb true；dev 回落 MySQL 时写 run-mode dev 加 require-tidb false，与本机脚本同法 |
+| `k8s_deploy.ps1` 的 `New-JavaSvcConfigMapYaml` | JDBC 主机写死 `mysql.<infra>:3306/mmorpg`；不写 `mmorpg.sql.require-tidb`，而网关这一项缺省 true、prod 档不许关。按当时的配置，prod 档网关连 MySQL 本来就起不来（读代码得出，未实测） | 规则收在 `Resolve-GatewaySqlMode` 一处，写路径入口和 ConfigMap 生成都调它。主机就是 `-GlobalAuthorityTiDBHost`，所有档位都要显式给，不回落 infra MySQL（理由见下）。tidb 档写 require-tidb true、run-mode prod；mysql 档只在 dev，写 false 与 dev；staging、prod 的 mysql 档部署网关在写之前拒绝 |
 | `Add-SqlWriterBootManifest` | login、gateway 的 registrar 档位写死 mysql | 一律跟 `-DatabaseBackend` |
 | `Apply-OneGoSvc` 与 Java 的部署路径 | login 不加 `MMORPG_DB_PLACEMENT`，Java 路径从不加 | 两处都加，`mmorpg` 按库映射连 |
-| `Apply-Infra` | `$infraManifests` 无条件 apply `mysql.yaml` | 只在 mysql 档部署；前提是下一行先改掉 |
-| 5 个 `*-migrate.yaml` 与 `Apply-GoSvcMigrateJob` | init 容器等待写死 `mysql.<infra>:3306`；非 dev 档先等 `deploy/mysql` 就绪 | 等实际的 SQL 入口 |
-| MySQL 连接总账 | gateway 计入 `mmorpg`；tidb 档在 K=1 时仍对照 `mysql.yaml` 的上限 | tidb 档一律对照 TiDB 预算 |
-| `mmorpg` 的建库建表 | 只靠 `mysql.yaml` 的 `MYSQL_DATABASE=mmorpg` 和 mysql-init 里的 `gateway_tables.sql`，TiDB 上没有任何入口 | 新增建表 Job，见 §6.3 |
+| `Apply-Infra` | `$infraManifests` 无条件 apply `mysql.yaml` | 由 `Test-InfraMysqlInUse` 决定：只在 dev 的 mysql 档、入口就是 `mysql.<infra>:3306` 时部署。staging、prod 把入口写成它，或者入口是它却选了 tidb 档，都在写之前拒绝 |
+| 5 个 `*-migrate.yaml` 与 `Apply-GoSvcMigrateJob` | init 容器等待写死 `mysql.<infra>:3306`；非 dev 档先等 `deploy/mysql` 就绪 | init 容器改名 `wait-sql`，等 `Get-SqlEntryEndpoint` 给出的实际入口（`SQL_HOST`、`SQL_PORT`）；只在入口是集群内 MySQL 时先等 `deploy/mysql` |
+| MySQL 连接总账 | gateway 计入 `mmorpg`；tidb 档在 K=1 时仍对照 `mysql.yaml` 的上限 | tidb 档一律对照 TiDB 预算，mysql 档对照 `mysql.yaml` |
+| `mmorpg` 的建库建表 | 只靠 `mysql.yaml` 的 `MYSQL_DATABASE=mmorpg` 和 mysql-init 里的 `gateway_tables.sql`，TiDB 上没有任何入口 | 新增建表 Job `gateway-schema`，见 §6.3 |
+
+网关不回落 infra MySQL 的理由：login 也登记在 `mmorpg` 上，而部署 Go 服务早已要求所有档位显式给入口。网关单独回落的话，网关写 infra MySQL 上的 `mmorpg`，login 写入口上的 `mmorpg`，同一个库分成两份，两个写者闸门各管一份。
+
+MySQL 省钱档（staging、prod 的 mysql 档）现在部署不了网关：`AuthorityDatabaseConfiguration` 只在 run-mode 为 dev、test 时允许关掉 TiDB 强会话核验。要支持，得先给 `java/authority_jdbc` 加 mysql 档（同 Go 的 `authoritysql`：逐连接核对不是只读实例），这是后续项。Go 服务的 mysql 档不受影响。
 
 ### 6.3 TiDB 上的建库建表
 
 - 库：与其余逻辑库同一口径，由运维预建，显式写排序规则（TiDB 一期 §2.6）。
 - 闸门表：与其余逻辑库走同一份 `authoritysql.EnsureCatalogSchema`，由 `writer_authority -command prepare-schema -schema mmorpg` 执行，不再复制第三份闸门 DDL。本机脚本给商城建库就是这条路。
-- 业务表（zone_config、zone_whitelist、announcement）和种子行：在同一个 Job 里、闸门表之后执行，DDL 以网关的 `schema.sql` 为唯一来源（`GatewaySchemaContractTest` 已在真 TiDB 上校验过它）。
-- Job 用 schema 权限账号，与其余 `*-migrate` Job 同法；网关的常驻账号不给 DDL 权限。
+- 业务表（zone_config、zone_whitelist、announcement）和种子行：同一次调用加 `-ddl-file`，在闸门表之后执行，DDL 以网关的 `schema.sql` 为唯一来源（`GatewaySchemaContractTest` 已在真 TiDB 上校验过它）。`-ddl-file` 只认 `CREATE TABLE IF NOT EXISTS` 与 `INSERT IGNORE INTO`，表名不许带库名；先校验整份再连库，有一句不合格一句都不执行。部署脚本把 `schema.sql` 原样渲染进 ConfigMap `gateway-schema-sql`。
+- Job（`manifests/java-svc/gateway-schema.yaml`）用 schema 权限账号，与其余 `*-migrate` Job 同法；网关的常驻账号不给 DDL 权限。镜像取 boot 目录 gateway 条目的 `registrarImage`（`writer_authority` 就在里面，按摘要固定），所以 gateway 条目在名册之前就要有它。排在网关 Deployment 之前；staging、prod 与 `-SqlSchemaOnly` 恒等它完成；`zone-up` 开头先渲染一次，目录条目不对在任何写操作之前拒绝。
+- mysql 档（只在 dev）不跑这个 Job：集群内 MySQL 由 mysql-init 的 `gateway_tables.sql` 建这个库。
 - 三张业务表补 `COLLATE=utf8mb4_0900_ai_ci`（TiDB 一期 §4 第 10 项：只写 CHARSET 的表，两边的排序规则一定不同）。这个值就是 MySQL 上这些表现在实际用的排序规则，MySQL 档的行为不变。
 
 ### 6.4 网关代码在 TiDB 上要改的一处
@@ -396,15 +401,15 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 - 运维侧要按 TiDB 重新产出：runtimeConfigSecret、registrar DSN、名册（新 generation，锁原语从 LOCK_TOUCH 换成 SELECT_ONLY）、物理身份摘要。写进开服手册，脚本不代办。
 - 存量数据：项目未上线，不写 `mmorpg` 从 MySQL 到 TiDB 的数据迁移；已有的环境按开服手册重建。
 
-### 6.6 批 A 的落码顺序
+### 6.6 批 A 的落码顺序与状态（11-10）
 
-1. A1：网关代码与 DDL（§6.3 的 COLLATE、§6.4）。MySQL 档行为不变，可以先合。
-2. A2：建表 Job，以及 `k8s_deploy.ps1` 里网关的 JDBC 与档位、两个写者的档位与库映射、连接总账。
-3. A3：migrate Job 的等待目标改为实际 SQL 入口，`mysql.yaml` 改成只在 mysql 档部署。
-4. A4：翻转契约测试（`logical_db_deploy_contract.tests.ps1` 与 `k8s_deploy_contract.tests.ps1` 里钉住「login、gateway 用 mysql」的用例），新增「mysql 档产物逐字不变」用例。
-5. A5：改 `deploy/k8s/README.md`、TiDB 一期文档、[逻辑库设计](horizontal-scale-logical-db.md)、`docs/ops/db-move-runbook.md` 和开服手册。
+1. A1：网关代码与 DDL（§6.3 的 COLLATE、§6.4）。11-06 已落码，未编译。
+2. A2：建表 Job（含 `writer_authority -ddl-file`），以及 `k8s_deploy.ps1` 里网关的 JDBC 与档位、两个写者的档位与库映射、连接总账。11-06～10 已落码，未编译。
+3. A3：migrate Job 的等待目标改为实际 SQL 入口，`mysql.yaml` 只在 dev 的 mysql 档、入口就是它时部署。11-10 已落码，未编译。
+4. A4：契约测试随 A2、A3 一起改了，没有单独成批：`logical_db_deploy_contract`（翻转 login、gateway 的两条，新增网关入口、建表 Job、`-SqlSchemaOnly`、集群内 MySQL 四条）、`k8s_deploy_contract`（总账三条换上限或加 `-DatabaseBackend mysql`）、`k8s_migrate_gate`（等实际入口一条）、`k8s_client_entry_contract`（假 kubectl 夹具补入口）。原计划的「mysql 档产物逐字不变」不做：mysql 档本身也变了（网关只剩 dev、集群内 MySQL 只剩 dev），钉逐字不变等于钉住要改掉的行为。
+5. A5：`deploy/k8s/README.md`（新增「`mmorpg` 库在全球权威入口上」一节）、开服手册 §1、§5、`docs/ops/db-move-runbook.md` §9 已改。
 
-A2 到 A4 要改 `k8s_deploy.ps1`，发布轨道批 2b 同时也在改这个文件，等它改完再动。
+验证命令在 `docs/PROGRESS.md` 的「批 A2、A3」条目。
 
 ## 7. guild 的 K8s 清单(第一、二块已落码:部署本体、资产通道与 gRPC 口准入;BK8s 其余块按批推进)
 
@@ -426,7 +431,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 
 | 项 | 现状（11-05 核对） | 处理 | 状态 |
 |---|---|---|---|
-| `mmorpg` 库（Java 网关的区目录、公告、白名单与写者闸门，login 的口令表） | 只在 infra 的单实例 MySQL 上。`k8s_deploy.ps1` 把 login、gateway 的写者档位写死为 mysql，网关的 JDBC 地址写死 `mysql.<infra>` | 迁到 TiDB，见 §6 | 批 A，待落码 |
+| `mmorpg` 库（Java 网关的区目录、公告、白名单与写者闸门，login 的口令表） | 只在 infra 的单实例 MySQL 上。`k8s_deploy.ps1` 把 login、gateway 的写者档位写死为 mysql，网关的 JDBC 地址写死 `mysql.<infra>` | 迁到 TiDB，见 §6 | 批 A 11-10 已落码，未编译 |
 | 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话在做 |
 | scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话在做，4a、4b 已落码未编译 |
 | 选主的后台任务 | 见 §9 | 两处改分片，一把挂在请求路径上的全服锁缩小范围，其余保持单 leader | 批 C，待落码 |
@@ -474,7 +479,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 
 | 批 | 内容 | 规模估计 | 状态 |
 |---|---|---|---|
-| A | `mmorpg` 迁 TiDB（§6） | 12～18 个文件 | 待落码 |
+| A | `mmorpg` 迁 TiDB（§6） | 实际约 20 个文件 | A1～A5 11-06～10 已落码，未编译 |
 | B | Loki 3 副本加外部 S3；dev 档可选单进程 SeaweedFS 做测试夹具 | 6～10 个文件 | 待落码 |
 | C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁缩小范围（C3，要加分数版本号，先确认有没有真实调用方再定） | 10～15 个文件 | C1 11-06 已落码未编译；C2、C3 待做 |
 

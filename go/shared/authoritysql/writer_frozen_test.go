@@ -121,6 +121,69 @@ func TestGateClassifiesFrozenApartFromDenied(t *testing.T) {
 	}
 }
 
+// 读闸门(admitRead,2026-11-06)只核 route_meta:可写放行;冻结回 ErrWriterFrozen;世代不符、写资格已关闭回 ErrWriterDenied。
+// 它不读 slot 与注册表:读不需要写资格,那两行退休或不符都不影响读。读放行不算过过闸门。
+func TestRuntimeGateAdmitRead(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*gateConn)
+		closed bool
+		want   error
+	}{
+		{name: "可写放行", change: func(*gateConn) {}},
+		{name: "slot 已退休、注册主体不符也照样读", change: func(c *gateConn) { c.slot[2] = int64(2); c.registry[2] = []byte("other@%") }},
+		{name: "冻结", change: func(c *gateConn) { c.meta[1] = int64(0) }, want: ErrWriterFrozen},
+		{name: "世代不符", change: func(c *gateConn) { c.meta[0] = "cd" }, want: ErrWriterDenied},
+		{name: "写资格已关闭", change: func(*gateConn) {}, closed: true, want: ErrWriterDenied},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			conn := healthyGateConn()
+			test.change(conn)
+			config := gateConfig(databasepb.SqlWriterBootGrant_SELECT_ONLY)
+			config.boot.closed.Store(test.closed)
+			err := runtimeGate{config: config}.admitRead(context.Background(), conn)
+			switch test.want {
+			case nil:
+				if err != nil {
+					t.Fatalf("应放行: %v", err)
+				}
+			case ErrWriterFrozen:
+				if !IsWriterFrozen(err) {
+					t.Fatalf("应判冻结: %v", err)
+				}
+			case ErrWriterDenied:
+				if !errors.Is(err, ErrWriterDenied) || errors.Is(err, ErrWriterFrozen) {
+					t.Fatalf("应判资格不符、不是可重试的冻结: %v", err)
+				}
+			}
+			if config.boot.admitted.Load() {
+				t.Fatal("读放行不算过过闸门:启动阶段「冻结时放行读」的规则不能被只读流量改掉")
+			}
+		})
+	}
+}
+
+// 读闸门撞到冻结开始计时,之后读到可写就归零(只读进程上冻结结束后指标不会一直涨)。
+func TestRuntimeGateAdmitReadTracksFrozen(t *testing.T) {
+	config := gateConfig(databasepb.SqlWriterBootGrant_SELECT_ONLY)
+	gate := runtimeGate{config: config}
+	frozen := healthyGateConn()
+	frozen.meta[1] = int64(0)
+	if err := gate.admitRead(context.Background(), frozen); !IsWriterFrozen(err) {
+		t.Fatalf("应判冻结: %v", err)
+	}
+	if !config.boot.frozen.active.Load() {
+		t.Fatal("撞到冻结要开始计时")
+	}
+	if err := gate.admitRead(context.Background(), healthyGateConn()); err != nil {
+		t.Fatal(err)
+	}
+	if config.boot.frozen.active.Load() || config.boot.admitted.Load() {
+		t.Fatal("读到可写要归零,且不算过过闸门")
+	}
+}
+
 // 事务进入期间 writable 被置 0:第一次读到可写,持 slot 之后复核读到冻结。
 func TestGateFreezeDuringEnterIsFrozen(t *testing.T) {
 	conn := healthyGateConn()

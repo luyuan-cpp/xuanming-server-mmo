@@ -490,3 +490,59 @@ zlib、hiredis、yaml-cpp 也必须按 `/MDd` 构建；Debug 的 `/WHOLEARCHIVE`
 Scene/Battle 的 gRPC 创建守护段由各自服务对象的 `LoopTaskScope` 持有单次任务，等待现有 `AcquireAllocationPermitAsync` 后复核停机/准入并 `Proceed`。许可按值移入自有 RAII 对象，覆盖同步建房全过程。关闸取消本地等待，晚到许可仍自行释放，不能再次创建房间。
 
 这层接续不启动线程、不调用阻塞许可接口、不增加期限或重试。原 Agones worker、超时和投回 EventLoop 的顺序保持不变。正常许可回复在原 loop 回调栈续跑。Java 不使用这套 C++ Agones 适配，无客户端契约变化。
+
+
+## 13. 2026-11-10:rooms 改为按 scene_id 的 List 条目(设计,缺口清单第 1 条「仍剩」)
+
+### 13.1 问题
+
+rooms 是一个 Counter,只有数,没有「这一份是哪个场景的」。三个来源会让它多记,而且收不回来:
+
+1. 建实例时 Agones 预占在 Redis 登记之前,进程在两者之间崩溃;
+2. 拆除任务的归还是「至多一次」(先置位再调 K8s),置位之后、调用之前进程退出;
+3. 归还调用失败,或请求已生效、回包丢了。为了不多还,这一份不再重试。
+
+多记只浪费容量,不会超卖。但对账(§8.6)分不清哪一份是漏的,只能告警,运维也没有安全的手工修法。
+
+### 13.2 方案:每个名额是一个按 scene_id 的 List 条目
+
+高密度模式下每个 GameServer 挂一个 Agones List `rooms`(与 Counter 同属 `CountsAndLists` 特性),`capacity` 取
+`-AgonesRoomCapacity`,条目值是十进制 scene_id。占用数 = 条目数。名额有了身份,增删都按条目做,天然幂等。
+
+| 动作 | 做法 | 幂等 |
+|---|---|---|
+| 自由分配 | GameServerAllocation 的选择器带 `lists.rooms.minAvailable: 1`,动作 `lists.rooms.addValues: [scene_id]`,选中与占位是同一个操作 | 同一 scene_id 已在列表里时 Agones 忽略重复值 |
+| 指定节点(镜像共置、改派到新节点) | 读 GameServer,条目已在 = 成功;条目数达到 capacity = `ErrNoCapacity`;否则追加后带 resourceVersion 更新 status,409 冲突有界重试 | 是 |
+| 归还 | 读 GameServer,条目不在 = 成功;GameServer 已不存在 = 成功;否则删除后带 resourceVersion 更新,409 冲突有界重试 | 是,所以调用方可以放心重试 |
+
+由此改变的调用方语义:
+
+- **scene_id 先铸再分配**:条目值在分配时就要有。建实例把 `SceneIDGen.Generate` 挪到选节点之前;铺世界频道本来就先铸号。分配失败浪费一个号,无害。
+- **拆除任务的归还改为「做到为止」**:去掉「先置位、至多一次」;归还失败任务留着,下一次扫描重做,成功才删任务。不会多还:条目不在就是成功。
+- **改派转移名额**:先在新 GameServer 上加条目,Redis 的改派提交之后再从旧 GameServer 删条目;提交落空(属主已变或场景已销毁)就删掉新加的这一条。两边都是按条目操作,结局未知时可以重做,不再需要「两边都不还」的取舍。
+- **登记结局未知**:仍不还(§「新场景的登记」):登记可能已落地,条目被删就少记、会超卖。漏下的孤儿条目由下面的对账收。
+
+### 13.3 对账:逐个条目,两个方向都能收敛
+
+领导者每 `ReconcileIntervalSeconds`(缺省 60s)对每个 zone 做一轮,只碰本 zone 的 GameServer 与本 zone 的场景键:
+
+- **孤儿条目**(GameServer 上有,Redis 里 `scene:{id}:agones_gs` 不是这台,或场景已不存在):第一次看到时记在领导者内存里;连续两轮都是孤儿、且距第一次看到满宽限期(缺省 60s,不短于两轮间隔)就删掉。宽限期盖住「已分配、还没登记」与「已加新条目、改派还没提交」两个窗口。领导者换人时内存清空、从头计时,只会晚删,不会误删。
+- **缺失条目**(Redis 里场景的 `agones_gs` 是这台,列表里没有):同样两轮确认后补加;GameServer 满了只记指标与告警,不挤掉别人。
+- 指标:`scene_manager_agones_rooms_reconciled_total{zone_id,action}`,action 取 `orphan_removed`、`missing_added`、`missing_no_capacity`;原来的 `scene_manager_agones_counter_drift{zone}` 改为本轮还未收敛的条目数。
+- Redis 读不到、K8s 列不出时整轮跳过,不改任何一方。
+
+### 13.4 部署
+
+- Fleet 模板:`counters.rooms` 换成 `lists.rooms: {capacity: N}`(N = `-AgonesRoomCapacity`)。
+- FleetAutoscaler:策略从 `type: Counter` 换成 `type: List`(`list.key: rooms`,`bufferSize`、`minCapacity`、`maxCapacity` 的含义与单位不变)。
+- RBAC 不变(`gameservers` get / list,`gameservers/status` get / update / patch)。
+- 项目未上线,不做 Counter 到 List 的迁移:换版本整批重建 Fleet。
+
+### 13.5 不选的做法
+
+- **保留 Counter、另写按场景号的注解**:注解在 metadata、计数在 status,GameServer 的 status 走子资源,一次归还要两次写,中间失败又分不清哪份漏了,回到本节的老问题。List 把身份和数量放在同一个字段里,一次写完。
+- **对账直接把 Counter 改成 Redis 里的数**:Counter 被 GameServerAllocation 和本进程并发修改,按数覆盖会把别人刚占的名额抹掉,超卖。
+
+### 13.6 改动范围(落码时核对)
+
+`go/scene_manager/internal/agones/{allocator.go,k8s_allocator.go}` 与其测试;`internal/logic/` 的 `agones_binding.go`、`agones_reconcile.go`、`createscenelogic.go`(先铸号)、`world_init.go`(传号)、`scene_teardown_job.go`(归还做到为止)和用到假分配器的测试;`internal/metrics/metrics.go`;`tools/scripts/k8s_deploy.ps1` 的 `New-SceneFleetYaml`、`New-SceneFleetAutoscalerYaml` 与部署合同测试;`deploy/k8s/scene-manager-alerts.yaml` 的漂移告警说明;本文 §8 与 `scene-creation-architecture.md` 里讲 rooms Counter 的段落按新做法改写。C++ 节点不碰 rooms,不改。Java 版不接 Agones(PARITY「场景实例与主世界频道」行有意差异 D14),不适用。

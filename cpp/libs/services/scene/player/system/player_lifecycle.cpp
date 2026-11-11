@@ -7093,55 +7093,14 @@ namespace
 	// 正好在节点已经不太健康的时候卡住游戏循环。
 	constexpr uint64_t kIdentityAtRiskSaveIntervalSec = 5;
 
-	void RunIdentityAtRiskSaves()
+	// 补存节奏:是否已进入补存(只为在进出时各打一条日志),以及下一秒轮到的槽。只在 scene 逻辑线程上读写;
+	// SetNodeIdentityProbe 每次调用都清零,新的探针从第 0 槽、未进入补存算起。
+	struct IdentityAtRiskSaveState
 	{
-		static thread_local bool atRisk = false;
-		static thread_local uint64_t slot = 0;
-		// 探针被清掉(停机时节点入口会清)说明不再由节点身份管着,不算身份不确认。
-		if (!tlsNodeIdentityProbe)
-		{
-			return;
-		}
-		if (IsNodeIdentityConfirmed())
-		{
-			if (atRisk)
-			{
-				atRisk = false;
-				LOG_WARN << "[IdentityAtRisk] node identity confirmed again; back to the periodic save cadence";
-			}
-			return;
-		}
-		if (tlsEcs.playerList.empty())
-		{
-			return; // 启动期(租约还没授予)也走到这里:没有玩家就没有要补的,也不打日志
-		}
-		if (!atRisk)
-		{
-			atRisk = true;
-			slot = 0;
-			LOG_WARN << "[IdentityAtRisk] node identity is no longer confirmed (etcd keepalive late, re-registering or evacuating);"
-					 << " saving every player every " << kIdentityAtRiskSaveIntervalSec << "s until it is, so a takeover loses at most that much"
-					 << " (online=" << tlsEcs.playerList.size() << ", metric=identity_at_risk_saves)";
-		}
-		const uint64_t currentSlot = slot;
-		slot = (slot + 1) % kIdentityAtRiskSaveIntervalSec;
-		// 先收集后存:存盘的回调不会在这一轮同步回来,但不在遍历 playerList 时调可能改它的东西,和定时存盘一样稳妥。
-		std::vector<entt::entity> players;
-		for (const auto &entry : tlsEcs.playerList)
-		{
-			if (entry.first % kIdentityAtRiskSaveIntervalSec == currentSlot && PlayerLifecycleSystem::IsPlayerMutable(entry.second))
-			{
-				players.push_back(entry.second);
-			}
-		}
-		for (const auto player : players)
-		{
-			if (tlsEcs.actorRegistry.valid(player))
-			{
-				PlayerLifecycleSystem::SavePlayer(player);
-			}
-		}
-	}
+		bool atRisk = false;
+		uint64_t slot = 0;
+	};
+	thread_local IdentityAtRiskSaveState tlsIdentityAtRiskSave;
 
 	// 写法同 EnsureTravelFreezeCapTimer:节点入口注入身份探针时在当前线程的 EventLoop 上挂一次,没有 loop(单测宿主)直接返回。
 	// 每秒看一次身份,真正的存盘节奏由 RunIdentityAtRiskSaves 自己控制;loop 析构时定时器随之销毁。
@@ -7158,13 +7117,63 @@ namespace
 			return;
 		}
 		armed = true;
-		loop->runEvery(1.0, [] { RunIdentityAtRiskSaves(); });
+		loop->runEvery(1.0, [] { PlayerLifecycleSystem::RunIdentityAtRiskSaves(); });
 	}
 } // namespace
+
+void PlayerLifecycleSystem::RunIdentityAtRiskSaves()
+{
+	auto &state = tlsIdentityAtRiskSave;
+	// 探针被清掉(停机时节点入口会清)说明不再由节点身份管着,不算身份不确认。
+	if (!tlsNodeIdentityProbe)
+	{
+		return;
+	}
+	if (IsNodeIdentityConfirmed())
+	{
+		if (state.atRisk)
+		{
+			state.atRisk = false;
+			LOG_WARN << "[IdentityAtRisk] node identity confirmed again; back to the periodic save cadence";
+		}
+		return;
+	}
+	if (tlsEcs.playerList.empty())
+	{
+		return; // 启动期(租约还没授予)也走到这里:没有玩家就没有要补的,也不打日志
+	}
+	if (!state.atRisk)
+	{
+		state.atRisk = true;
+		state.slot = 0;
+		LOG_WARN << "[IdentityAtRisk] node identity is no longer confirmed (etcd keepalive late, re-registering or evacuating);"
+				 << " saving every player every " << kIdentityAtRiskSaveIntervalSec << "s until it is, so a takeover loses at most that much"
+				 << " (online=" << tlsEcs.playerList.size() << ", metric=identity_at_risk_saves)";
+	}
+	const uint64_t currentSlot = state.slot;
+	state.slot = (state.slot + 1) % kIdentityAtRiskSaveIntervalSec;
+	// 先收集后存:存盘的回调不会在这一轮同步回来,但不在遍历 playerList 时调可能改它的东西,和定时存盘一样稳妥。
+	std::vector<entt::entity> players;
+	for (const auto &entry : tlsEcs.playerList)
+	{
+		if (entry.first % kIdentityAtRiskSaveIntervalSec == currentSlot && IsPlayerMutable(entry.second))
+		{
+			players.push_back(entry.second);
+		}
+	}
+	for (const auto player : players)
+	{
+		if (tlsEcs.actorRegistry.valid(player))
+		{
+			SavePlayer(player);
+		}
+	}
+}
 
 void PlayerLifecycleSystem::SetNodeIdentityProbe(std::function<bool()> probe)
 {
 	tlsNodeIdentityProbe = std::move(probe);
+	tlsIdentityAtRiskSave = {};
 	// 只有真的注入了探针才挂补存定时器:没有探针时 IsNodeIdentityConfirmed 恒为假(fail-closed),挂上会一直补存。
 	if (tlsNodeIdentityProbe)
 	{

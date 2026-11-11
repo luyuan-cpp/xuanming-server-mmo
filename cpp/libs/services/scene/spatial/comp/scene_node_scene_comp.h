@@ -12,7 +12,8 @@
 // AOI 单向关注(docs/design/aoi-directed-interest.md)。
 // 关注是有向的:观察者 A 关注目标 B,A 的客户端显示 B、接收 B 的移动与属性;B 是否关注 A 是另一条关系。
 // 一条关系的来源分两类:
-//   - 空间来源:网格评估(本格及相邻六格 + CanSee)认定 A 能看见 B,由 AoiSystem 维护;
+//   - 空间来源:按距离判定,由 AoiSystem 维护。候选取本格及相邻六格,距离进入视野半径时建立,
+//     超出离开半径时撤销(两个半径见 spatial/constants/view.h);任一方位置变化后重新评估;
 //   - 显式来源:玩法按需建立和撤销(技能追踪、队伍、任务……),可以超出网格范围。
 // 下面两张索引描述同一批关系,只由 InterestSystem 写:正向在观察者身上,反向在目标身上。
 // ---------------------------------------------------------------------------
@@ -77,6 +78,13 @@ struct AoiListComp
     // 是否存在关注关系(可能暂时不可见)。
     [[nodiscard]] bool HasRelation(entt::entity target) const { return entries.contains(target); }
 
+    // 对 target 的关系是否带空间来源(带空间来源必然在显示)。
+    [[nodiscard]] bool HasSpatialSource(entt::entity target) const
+    {
+        const auto it = entries.find(target);
+        return it != entries.end() && it->second.spatial;
+    }
+
     // 当前显示中的目标数(占用的容量)。
     [[nodiscard]] std::size_t VisibleCount() const { return visibleCount; }
 };
@@ -87,6 +95,17 @@ struct AoiListComp
 struct AoiWatchersComp
 {
     std::unordered_map<entt::entity, bool> watchers;
+};
+
+// 实体上次视野评估时的位置(米)。按需状态,只由 AoiSystem 写:每次评估空间关注后记下,
+// 每帧拿当前位置和它比,决定要不要重新评估(规则见 spatial/constants/view.h 的 kAoiReevaluateDistance)。
+// 第一次入格评估时创建;实体销毁自然清理。换场景、同场景瞬移后实体按首次入格重新评估并覆盖它,
+// 所以不随 Hex 一起摘。
+struct AoiEvaluatedAtComp
+{
+    double x = 0;
+    double y = 0;
+    double z = 0;
 };
 
 // ---------------------------------------------------------------------------

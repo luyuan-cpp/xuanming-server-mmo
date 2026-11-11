@@ -28,8 +28,8 @@ func TestResolveSharedRedisPasswordFillsControlAndCore(t *testing.T) {
 	if got := c.EffectiveCoreRedis().Pass; got != "pw-from-secret" {
 		t.Fatalf("EffectiveCoreRedis must carry the password, got %q", got)
 	}
-	if got := c.EffectivePlayerRedis().Password; got != "pw-from-secret" {
-		t.Fatalf("PlayerRedis falls back to the Redis section and must carry the same password, got %q", got)
+	if got := c.EffectivePlayerRedis(); got.Password != "pw-from-secret" || len(got.Addrs) != 1 || got.Addrs[0] != "redis.infra:6379" {
+		t.Fatalf("PlayerRedis falls back to the core section and must carry the same password, got addrs=%v password=%q", got.Addrs, got.Password)
 	}
 }
 

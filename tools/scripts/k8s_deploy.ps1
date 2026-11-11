@@ -56,6 +56,13 @@ param(
 	[string[]]$CanaryServices = @(),
 	[string]$CanaryGoSvcTag = "",
 	[ValidateRange(1, 100)][int]$CanaryReplicas = 1,
+	# 金丝雀 battle 池(docs/design/release-track-gray-canary.md §2.6,批 3b)。只用于部署 battle 的 infra-up,不粘滞:
+	# 大于 0 时另起一个 battle-canary(镜像 -CanaryNodeImage,MMORPG_RELEASE_TRACK=canary,app: battle-canary),和稳定版 battle
+	# 同一份 battle-node-config、同一个机房号;0 = 删掉以前留下的 battle-canary(中止、晋升收尾)。match 只把全员都是金丝雀会话的
+	# 新成局放上去,机房仍按稳定版 battle 节点选,所以要求稳定版 battle 池在(-BattleReplicas > 0)。
+	# 不支持 hostPort 形态(-ClientEntryMode external 而不用 Agones):每个节点只能跑一个占 hostPort 20000 的 battle,两个池会抢端口。
+	[ValidateRange(0, 1000)][int]$CanaryBattleReplicas = 0,
+	[string]$CanaryNodeImage = "",
 	# 全服好友权威 TiDB 的同一 SQL 入口(host:port)。staging/prod 必填，禁止回落到 infra MySQL。
 	# 这里只选择已有数据库，不创建 TiDB 集群、数据库或账号。
 	[string]$FriendTiDBHost = "",
@@ -602,7 +609,7 @@ $script:PlayerInboxAdminToken = ""
 $script:AssetOpsOn = ($AssetOps -eq 'on')
 # 金丝雀以 zone 为单位(设计文档 §2.2):all-up 会部署全部 zone,infra-up 只管全局服务,两者带 canary 都不对。
 if ($ReleaseTrack -ceq 'canary' -and $Command -ne 'zone-up') {
-	throw "-ReleaseTrack canary 只能用于 zone-up(本次是 $Command):金丝雀以 zone 为单位,见 docs/design/release-track-gray-canary.md §2.2。"
+	throw "-ReleaseTrack canary can only be used with zone-up (got $Command): a canary rolls out zone by zone (docs/design/release-track-gray-canary.md section 2.2)."
 }
 # 金丝雀 zone 里不重新下发的服务:它们按 zone 部署,后台却是全局作用域(data-service 注册进全局池;player-locator 的死 gate 清扫
 # 按全服 slot 分段、对账 leader 全服一把锁),换成新版本等于把新的全局后台逻辑放给全部玩家。设计文档 §2.2、§2.5。
@@ -618,18 +625,36 @@ $script:CanaryReadyGoSvcs = @('client-rpc-router', 'chat', 'friend', 'trade', 'm
 $script:CanaryGoSvcs = @($CanaryServices | ForEach-Object { "$_" -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($script:CanaryGoSvcs.Count -gt 0) {
 	if ($Command -ne 'infra-up') {
-		throw "-CanaryServices 只能用于 infra-up(本次是 $Command):全局服务的金丝雀副本部署在 infra namespace,见 docs/design/release-track-gray-canary.md §2.4。"
+		throw "-CanaryServices can only be used with infra-up (got $Command): canary copies of global services live in the infra namespace (docs/design/release-track-gray-canary.md section 2.4)."
 	}
 	$canaryNotReady = @($script:CanaryGoSvcs | Where-Object { $script:CanaryReadyGoSvcs -cnotcontains $_ })
 	if ($canaryNotReady.Count -gt 0) {
-		throw "-CanaryServices 里这些服务还不能起金丝雀副本:$($canaryNotReady -join ', ')。只支持 $($script:CanaryReadyGoSvcs -join ', '),理由见 docs/design/release-track-gray-canary.md §7。"
+		throw "-CanaryServices lists services without canary support: $($canaryNotReady -join ', '). Supported: $($script:CanaryReadyGoSvcs -join ', ') (docs/design/release-track-gray-canary.md section 7)."
 	}
 	if (@($script:CanaryGoSvcs | Select-Object -Unique).Count -ne $script:CanaryGoSvcs.Count) {
-		throw "-CanaryServices 里有重复的服务:$($script:CanaryGoSvcs -join ', ')。"
+		throw "-CanaryServices lists a service more than once: $($script:CanaryGoSvcs -join ', ')."
 	}
 	if ([string]::IsNullOrWhiteSpace($CanaryGoSvcTag)) {
-		throw "-CanaryServices 需要 -CanaryGoSvcTag:金丝雀副本跑的是新版本镜像,不能沿用稳定版的 tag。"
+		throw '-CanaryServices needs -CanaryGoSvcTag: canary copies run the new image and must not reuse the stable tag.'
 	}
+}
+# 金丝雀 battle 池的参数组合(见参数处说明)。和上面一样在脚本顶层判,任何写操作之前。
+if ($CanaryBattleReplicas -gt 0) {
+	if ($Command -ne 'infra-up') {
+		throw "-CanaryBattleReplicas can only be used with infra-up (got $Command): the battle pool lives in the infra namespace (docs/design/release-track-gray-canary.md section 2.6)."
+	}
+	if ([string]::IsNullOrWhiteSpace($CanaryNodeImage)) {
+		throw '-CanaryBattleReplicas needs -CanaryNodeImage: the canary battle pool runs the new C++ node image.'
+	}
+	if ($BattleReplicas -le 0) {
+		throw '-CanaryBattleReplicas needs the stable battle pool (-BattleReplicas > 0): match picks regions from stable battle nodes and falls back to them.'
+	}
+	if ($BattleOrchestrator -ne 'agones' -and $ClientEntryMode -eq 'external') {
+		throw '-CanaryBattleReplicas does not support the hostPort battle Deployment (-ClientEntryMode external without -BattleOrchestrator agones): each node runs one battle on hostPort 20000, so the two pools would compete for the same port.'
+	}
+}
+elseif (-not [string]::IsNullOrWhiteSpace($CanaryNodeImage)) {
+	throw '-CanaryNodeImage is only used together with -CanaryBattleReplicas greater than 0.'
 }
 $script:AssetOpSecretKey = 'secret'
 $script:AssetOpCallers = [ordered]@{
@@ -843,6 +868,8 @@ function Assert-ImmutableReleaseImages {
 	if (-not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry)) { $refs += "$GoSvcRegistry/mmorpg-*:$GoSvcTag" }
 	# 全局服务金丝雀副本的镜像(-CanaryGoSvcTag)同样不能是可变 tag:回退时要能退回同一份二进制。
 	if (-not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry) -and $script:CanaryGoSvcs.Count -gt 0) { $refs += "$GoSvcRegistry/mmorpg-*:$CanaryGoSvcTag" }
+	# 金丝雀 battle 池的镜像同理。
+	if ($CanaryBattleReplicas -gt 0) { $refs += $CanaryNodeImage }
 	if (-not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) { $refs += "$JavaSvcRegistry/mmorpg-*:$JavaSvcTag" }
 	# 回收 CronJob 跟着写者一起部署,镜像同样不能是可变 tag。
 	if ($refs.Count -gt 1) { $refs += $SqlWriterReaperImage }
@@ -2457,9 +2484,10 @@ function Write-MysqlConnectionLedger {
 	$deployExtraZoneStores = [int]$ledgerPlan.ExtraZoneStores
 	$ledgerStoreShards = if ([int]$PlayerStoreShards -gt 0) { [int]$PlayerStoreShards } else { 1 }
 
-	# 目录分片之后 TiDB 档的上限是规划预算,不再是 mysql.yaml(K=1 时两边都能跑,仍按 mysql.yaml 从严)。
+	# tidb 档一律对照 TiDB 规划预算:mmorpg 也在 TiDB 上之后(docs/design/no-single-node-horizontal-scaling-20261001.md §6),
+	# tidb 档的部署里没有 MySQL,mysql.yaml 的 max_connections 不再约束任何连接。mysql 档照旧对照 mysql.yaml。
 	$ledgerShards = if ([int]$DirectoryLogicalShards -gt 0) { [int]$DirectoryLogicalShards } else { 1 }
-	$ledgerAgainstTidbBudget = ($DatabaseBackend -ceq 'tidb' -and $ledgerShards -gt 1)
+	$ledgerAgainstTidbBudget = ($DatabaseBackend -ceq 'tidb')
 	if ($ledgerAgainstTidbBudget) { $ledgerInputs['MaxConnections'] = $ledgerPlan.TidbConnectionBudget }
 
 	$deployLedger = Get-MysqlConnectionLedger -Inputs $ledgerInputs -ZoneCount $deployZoneCount `
@@ -2839,7 +2867,8 @@ function Get-RedisConnectionLedgerInputs {
 		[ordered]@{ Name = 'data-service'; Scope = 'zone'; Manifest = "$goSvc/data-service.yaml"; PoolMirror = 'data-service'; PlayerMirror = 'data-service'; DefaultPools = 1; GoMaxProcs = $g; PubSub = 1; Fixed = 0 }
 		# player-locator:go/player_locator/internal/svc/servicecontext.go 的 redis.NewClient(RedisClient.PoolSize)。
 		[ordered]@{ Name = 'player-locator'; Scope = 'zone'; Manifest = "$goSvc/player-locator.yaml"; PoolMirror = 'player-locator'; PlayerMirror = 'player-locator'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 0; Fixed = 0 }
-		# scene-manager:go/scene_manager/internal/svc/servicecontext.go 的 redis.MustNewRedis(go-zero,缺省池,控制域)与玩家域句柄 PlayerRedis。
+		# scene-manager:go/scene_manager/internal/svc/servicecontext.go 的 coreRedis(go-zero,缺省池,CoreRedis 段,只读 gate 排空标记)与玩家域句柄 PlayerRedis
+		# (没建集群时回落到核心,EffectivePlayerRedis)。控制域句柄 controlRedis 连本 zone 组的 redis-ctl-g<N>,记在控制域实例那一份(Get-RedisCtlConnectionLedgerInputs)。
 		# PlayerFixed 32:go/scene_manager/internal/svc/owner_epoch_mint.go 的铸造专用客户端(ownerEpochMintPoolSize = 32,铸造 EVAL 与
 		# WAITAOF 同一条连接、启动探针也从它取,不占别的池;键在玩家域,Cluster 下按节点计)。按开启计;OwnerEpochMint 两项份数都写 0 时仍会建客户端、只是不发 WAITAOF。
 		[ordered]@{ Name = 'scene-manager'; Scope = 'zone'; Manifest = "$goSvc/scene-manager.yaml"; PlayerMirror = 'scene-manager'; DefaultPools = 1; GoMaxProcs = $g; PubSub = 0; Fixed = 0; PlayerFixed = 32 }
@@ -2890,7 +2919,8 @@ function Get-RedisConnectionLedgerInputs {
 		MaxClients               = Get-RedisMaxClientsFromManifest
 		GoPoolSizePerProc        = 10
 		# cpp/libs/engine/core/node/system/node/node.cpp 的 tlsRedis.Connect 是 C++ 唯一的建连点:每进程 1 条(不是每线程);
-		# redis_manager.cpp 断线重连先销毁旧连接再新建,不叠加。玩家域的 tlsPlayerRedis 不在这里,见玩家域那一份。
+		# redis_manager.cpp 断线重连先销毁旧连接再新建,不叠加。玩家域的 tlsPlayerRedis 不在这里,见玩家域那一份;
+		# scene 的 tlsSceneControlRedis 连控制域实例,见控制域实例那一份。
 		CppConnectionsPerProcess = 1
 		Clients                  = $clients
 	}
@@ -2964,6 +2994,36 @@ function Get-RedisQueueConnectionLedgerInputs {
 			foreach ($poolSize in (Get-RedisPoolMirror -Target $client.PoolMirror).Values) { $configuredPoolConns += $poolSize }
 		}
 		$client['ConfiguredPoolConns'] = $configuredPoolConns
+	}
+	return [ordered]@{
+		MaxClients               = Get-RedisMaxClientsFromManifest -RelativePath 'deploy/k8s/manifests/infra/redis-purpose.yaml'
+		GoPoolSizePerProc        = 10
+		CppConnectionsPerProcess = 1
+		Clients                  = $clients
+	}
+}
+
+<#
+.SYNOPSIS
+	控制域实例(redis-ctl-g<N>,缺口第 5 条)的 Redis 连接总账输入,形状同 Get-RedisConnectionLedgerInputs,交给同一个 Get-RedisConnectionLedger。
+
+.DESCRIPTION
+	连控制域实例的只有本组 zone 的两类客户端(docs/design/control-plane-zone-scoping-20261105.md §4.2、§4.5),都按 zone 计:
+	  - scene-manager:go/scene_manager/internal/svc/servicecontext.go 的 controlRedis(redis.MustNewRedis,go-zero 缺省池,GOMAXPROCS 按 2 计,
+	    口径同核心总账)。同一进程的 coreRedis 地址不同、是另一个池,记在核心总账的 scene-manager 行;玩家域句柄不连这里;
+	  - C++ scene:每进程 1 条 tlsSceneControlRedis(cpp/libs/services/scene/core/system/redis.cpp 的 RedisSystem::Initialize)。
+	    gate、battle 不连;scene 进程数由 Write-RedisCtlConnectionLedger 按组传入(CppConnectionsPerProcess 是每进程条数)。
+	没有全局池、没有非 Go 客户端。maxclients 读 manifests/infra/redis-purpose.yaml 的 MAXCLIENTS(与排队实例共用模板)。
+	新增一个连控制域实例的客户端 = 这里加一行。缺 manifest、replicas 不是恰好一处、MAXCLIENTS 不是恰好一处,照常 throw。
+#>
+function Get-RedisCtlConnectionLedgerInputs {
+	$ledgerName = 'Redis connection ledger (ctl instance)'
+	$clients = @(
+		[ordered]@{ Name = 'scene-manager'; Scope = 'zone'; Manifest = 'deploy/k8s/manifests/go-svc/scene-manager.yaml'; DefaultPools = 1; GoMaxProcs = 2; PubSub = 0; Fixed = 0 }
+	)
+	foreach ($client in $clients) {
+		$client['Replicas'] = Get-ManifestDeploymentReplicas -RelativePath $client.Manifest -LedgerName $ledgerName
+		$client['ConfiguredPoolConns'] = 0
 	}
 	return [ordered]@{
 		MaxClients               = Get-RedisMaxClientsFromManifest -RelativePath 'deploy/k8s/manifests/infra/redis-purpose.yaml'
@@ -3220,6 +3280,8 @@ function Write-RedisConnectionLedger {
 	}
 
 	Write-RedisQueueConnectionLedger -TopologyByZone $queueTopologyByZone -LedgerPlan $ledgerPlan
+	# 控制域实例(缺口第 5 条):每个组一行,scene 进程数按组合计。zone 集合与上面同一份。
+	Write-RedisCtlConnectionLedger -SceneProcessesByZone $sceneByZone -LedgerPlan $ledgerPlan
 	Write-RedisPlayerConnectionLedger -Topology $playerTopology -ZoneCount $sceneByZone.Count -SceneProcesses $deploySceneProcesses -LedgerPlan $ledgerPlan
 }
 
@@ -3341,6 +3403,90 @@ function Write-RedisQueueConnectionLedger {
 	if ($overProxy.Count -gt 0) {
 		# 开头不留空格,理由同上一条告警。
 		Write-Warning ("[RedisQueueConnectionLedger]OverProxyWarnRatio:{0}; proxy_maxconn={1} warn_at={2} (deploy/k8s/manifests/infra/redis-purpose-ha.yaml). Deployment continues: warning only, not blocking. Raise PROXY_MAXCONN in redis-purpose-ha.yaml (proxies roll automatically) while keeping PROXY_MAXCONN x (proxies + maxSurge) + 1000 <= MAXCLIENTS, or split zones into more redisQueueGroup values." -f
+			($overProxy -join '; '), $proxyLimits.ProxyMaxConn, $proxyWarnAt)
+	}
+}
+
+<#
+.SYNOPSIS
+	控制域实例(redis-ctl-g<N>)的 Redis 连接总账:本次总账 zone 集合里每个出现的组打一行;任一份峰值超过告警水位时告警,不阻断(同核心那份)。
+
+.DESCRIPTION
+	输入 Get-RedisCtlConnectionLedgerInputs(scene-manager 的控制域池);C++ 是该组各 zone 的 scene 进程数之和(每进程 1 条),没有全局池与 battle;
+	滚动余量按一个 C++ 工作负载计(scene;拆分池时差一两条不影响结论,同玩家域那份)。本次部署那一份 = 属于该组的 zone;规划档按
+	Get-RedisConnectionPlan 的 zone 数全部落在同一组算(最坏情况,同 queue 那份)。控制域实例不受 -RedisSplit 控制,每次走写路径都打。
+	组号按 zoneId 取(Get-ZoneRedisCtlTopology),与渲染 scene-manager ConfigMap、node-config 的是同一个函数。
+	行首是「Redis ctl connection ledger:」,与核心那行(「Redis connection ledger: zones=」)不同前缀,按前缀找核心那行的契约测试不受影响。
+	高可用形态每组再打一行「Redis ctl proxy ledger:」(单个代理承载全部客户端的水位),口径同 Write-RedisQueueConnectionLedger,同样不阻断。
+#>
+function Write-RedisCtlConnectionLedger {
+	param(
+		[Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.IDictionary]$SceneProcessesByZone,
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$LedgerPlan
+	)
+
+	# 实例名 → { Zones; SceneProcesses }。
+	$groups = [ordered]@{}
+	foreach ($zoneIdKey in @($SceneProcessesByZone.Keys)) {
+		$instance = [string](Get-ZoneRedisCtlTopology -CurrentZoneId ([int]$zoneIdKey)).Service
+		if (-not $groups.Contains($instance)) { $groups[$instance] = [pscustomobject]@{ Zones = 0; SceneProcesses = 0 } }
+		$groups[$instance].Zones += 1
+		$groups[$instance].SceneProcesses += [int]$SceneProcessesByZone[$zoneIdKey]
+	}
+	if ($groups.Count -eq 0) { return }
+
+	$ledgerArgs = @{
+		Inputs                        = Get-RedisCtlConnectionLedgerInputs
+		BattleProcesses               = 0
+		RolloutExtraPodsPerDeployment = [int]$LedgerPlan.RolloutExtraPodsPerDeployment
+		OpsReserve                    = [int]$LedgerPlan.OpsReserve
+		WarnRatio                     = [double]$LedgerPlan.WarnRatio
+		CppSurgeWorkloads             = 1
+	}
+	$planZones = [int]$LedgerPlan.ZoneCount
+	$planLedger = Get-RedisConnectionLedger @ledgerArgs -ZoneCount $planZones -CppZoneProcesses ($planZones * [int]$LedgerPlan.ScenePerZone)
+	$ledgers = [ordered]@{}
+	$overWarn = New-Object System.Collections.Generic.List[string]
+	foreach ($instance in @($groups.Keys | Sort-Object)) {
+		$group = $groups[$instance]
+		$ledger = Get-RedisConnectionLedger @ledgerArgs -ZoneCount $group.Zones -CppZoneProcesses $group.SceneProcesses
+		$ledgers[$instance] = $ledger
+		Write-Host ("Redis ctl connection ledger: instance={0} zones={1} scene_processes={2} steady={3} peak={4} maxclients={5} warn_at={6} headroom={7}; plan zones={8} peak={9} headroom={10} (deploy/k8s/manifests/infra/redis-purpose.yaml)" -f
+			$instance, $group.Zones, $group.SceneProcesses, $ledger.Steady, $ledger.Peak, $ledger.MaxClients, $ledger.WarnAt, $ledger.Headroom, $planZones, $planLedger.Peak, $planLedger.Headroom)
+		if ($ledger.Peak -gt $ledger.WarnAt) { $overWarn.Add(("{0} zones={1} peak {2}" -f $instance, $group.Zones, $ledger.Peak)) }
+	}
+	if ($planLedger.Peak -gt $planLedger.WarnAt) { $overWarn.Add(("plan zones={0} in one group peak {1}" -f $planZones, $planLedger.Peak)) }
+	if ($overWarn.Count -gt 0) {
+		# 开头不留空格,理由同核心那条告警(ConsoleHost 可能在空格处折行)。
+		Write-Warning ("[RedisCtlConnectionLedger]OverWarnRatio:{0}; maxclients={1} warn_at={2} (deploy/k8s/manifests/infra/redis-purpose.yaml). Deployment continues: warning only, not blocking. Raise MAXCLIENTS in redis-purpose.yaml and redis-purpose-ha.yaml to the same value (restarts the queue and ctl instances) or split zones into more redisQueueGroup values." -f
+			($overWarn -join '; '), $planLedger.MaxClients, $planLedger.WarnAt)
+	}
+
+	# 高可用形态:客户端经代理连控制域实例,一个代理不在时它的客户端全部重连到另一个,再按「单个代理的 PROXY_MAXCONN」算一次告警水位
+	# (同一个 WarnRatio,口径同 queue 那份)。上限读 redis-purpose-ha.yaml;Get-RedisQueueHaLimitsFor 顺带核对 MAXCLIENTS 与代理不等式,不成立 throw。
+	$ctlShape = Get-RedisQueueShapeFor -Topology (Get-RedisTopology)
+	if (-not $ctlShape.HighAvailability) { return }
+	$haTemplateRelative = 'deploy/k8s/manifests/infra/' + $ctlShape.Template
+	$haTemplateFull = Join-Path $RepoRoot ($haTemplateRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+	if (-not (Test-Path -LiteralPath $haTemplateFull)) {
+		throw "Redis connection ledger (ctl instance): the high-availability shape is selected (replicas=$($ctlShape.Replicas)) but $haTemplateRelative is missing (fail-closed)."
+	}
+	$haTemplate = [string](Get-Content -LiteralPath $haTemplateFull -Raw)
+	$overProxy = New-Object System.Collections.Generic.List[string]
+	$proxyLimits = $null
+	$proxyWarnAt = 0
+	foreach ($instance in @($ledgers.Keys)) {
+		$ledger = $ledgers[$instance]
+		$proxyLimits = Get-RedisQueueHaLimitsFor -ManifestContent ($haTemplate.Replace('__REDIS_NAME__', $instance)) -InstanceName $instance -SingleInstanceMaxClients $ledger.MaxClients
+		$proxyWarnAt = [int][Math]::Floor($proxyLimits.ProxyMaxConn * [double]$LedgerPlan.WarnRatio)
+		Write-Host ("Redis ctl proxy ledger: instance={0} proxy_maxconn={1} proxies={2}+{3} warn_at={4} (one proxy carries every client while the other is down); deploy peak={5} plan peak={6}" -f
+			$instance, $proxyLimits.ProxyMaxConn, $proxyLimits.ProxyReplicas, $proxyLimits.ProxyMaxSurge, $proxyWarnAt, $ledger.Peak, $planLedger.Peak)
+		if ($ledger.Peak -gt $proxyWarnAt) { $overProxy.Add(("{0} zones={1} peak {2}" -f $instance, $groups[$instance].Zones, $ledger.Peak)) }
+	}
+	if ($planLedger.Peak -gt $proxyWarnAt) { $overProxy.Add(("plan zones={0} in one group peak {1}" -f $planZones, $planLedger.Peak)) }
+	if ($overProxy.Count -gt 0) {
+		# 开头不留空格,理由同上一条告警。
+		Write-Warning ("[RedisCtlConnectionLedger]OverProxyWarnRatio:{0}; proxy_maxconn={1} warn_at={2} (deploy/k8s/manifests/infra/redis-purpose-ha.yaml). Deployment continues: warning only, not blocking. Raise PROXY_MAXCONN in redis-purpose-ha.yaml (proxies roll automatically) while keeping PROXY_MAXCONN x (proxies + maxSurge) + 1000 <= MAXCLIENTS, or split zones into more redisQueueGroup values." -f
 			($overProxy -join '; '), $proxyLimits.ProxyMaxConn, $proxyWarnAt)
 	}
 }
@@ -4823,7 +4969,7 @@ function Get-RedisCtlInstanceName {
 	param([Parameter(Mandatory = $true)][int]$Group)
 
 	if ($Group -lt 0) {
-		throw "redisQueueGroup 必须是 ≥ 0 的整数,实际 $Group。"
+		throw "redisQueueGroup must be an integer >= 0, got $Group."
 	}
 	return 'redis-ctl-g{0}' -f $Group
 }
@@ -4862,7 +5008,7 @@ function Resolve-RedisCtlMemory {
 	}
 	$m = [regex]::Match($text, '^(?<n>[1-9][0-9]{0,6})(?<u>kb|mb|gb)$', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
 	if (-not $m.Success) {
-		throw "-RedisCtlMaxMemory '$text' 不合法:写成 <正整数><kb|mb|gb>,例如 512mb / 1gb(redis-server 的 maxmemory 写法)。本次未做任何写操作。"
+		throw "-RedisCtlMaxMemory '$text' is invalid: write <positive integer><kb|mb|gb>, e.g. 512mb or 1gb (redis-server maxmemory syntax). Nothing has been written."
 	}
 	$amount = [long]$m.Groups['n'].Value
 	$unit = $m.Groups['u'].Value.ToLowerInvariant()
@@ -4881,7 +5027,7 @@ function New-RedisCtlInstanceManifests {
 	$shape = Get-RedisQueueShapeFor -Topology (Get-RedisTopology)
 	$templatePath = Join-Path $InfraManifestsDir $shape.Template
 	if (-not (Test-Path -LiteralPath $templatePath)) {
-		throw "要 apply 控制域实例 redis-ctl-g<N>(replicas=$($shape.Replicas)),但找不到 deploy/k8s/manifests/infra/$($shape.Template)(fail-closed:不悄悄退回核心,也不悄悄退回单实例)。本次未做任何写操作。"
+		throw "Applying the ctl instances redis-ctl-g<N> (replicas=$($shape.Replicas)) needs deploy/k8s/manifests/infra/$($shape.Template), which is missing (fail-closed: no silent fallback to the core Redis or to the single-instance shape). Nothing has been written."
 	}
 	$template = [string](Get-Content -LiteralPath $templatePath -Raw)
 	$memory = $script:RedisCtlMemory
@@ -4910,11 +5056,12 @@ function New-RedisCtlInstanceManifests {
 
 # 线上 scene-manager ConfigMap 里控制域 Redis 的现状(纯函数)。-SceneManagerYaml 为 $null = ConfigMap 不存在。
 # 返回 { Present; HostPort };Present 而读不出顶层 Redis.Host 时 HostPort 为空串(调用方按地址不同拒绝)。
+# 参数刻意不标 [string]:PowerShell 会把传给 [string] 参数的 $null 转成空串,「不存在」就变成了「在而读不出」(同 ConvertFrom-RedisPurposeLiveYaml)。
 function ConvertFrom-RedisCtlLiveYaml {
-	param([AllowNull()][AllowEmptyString()][string]$SceneManagerYaml)
+	param([AllowNull()]$SceneManagerYaml)
 
 	if ($null -eq $SceneManagerYaml) { return [pscustomobject]@{ Present = $false; HostPort = '' } }
-	$m = [regex]::Match($SceneManagerYaml, '(?m)^Redis:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n)*?[ \t]+Host:[ \t]*"?(?<host>[^"\r\n#\s]+)"?')
+	$m = [regex]::Match([string]$SceneManagerYaml, '(?m)^Redis:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n)*?[ \t]+Host:[ \t]*"?(?<host>[^"\r\n#\s]+)"?')
 	$hostPort = if ($m.Success) { $m.Groups['host'].Value.Trim() } else { '' }
 	return [pscustomobject]@{ Present = $true; HostPort = $hostPort }
 }
@@ -4931,6 +5078,122 @@ function Get-RedisCtlSwitchVerdict {
 	if ($Live.HostPort -eq $DesiredHostPort) { return 'unchanged' }
 	if ($Confirmed) { return 'switch' }
 	return 'refuse'
+}
+
+# 读一个 namespace 里某个 ConfigMap 的一个数据键(只读 kubectl;控制域的写路径入口闸与 redis-split-status 共用)。
+# ConfigMap 不存在返回 $null;存在而没有该键返回空串(调用方按「认不出线上形状」处理)。kubectl 失败、输出不是 JSON 一律 throw:
+# 读不到不等于不存在(fail-closed)。Invoke-ClientEntryKubectl 不看 $DryRun,DryRun 判断由调用方负责。
+function Read-LiveConfigMapData {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$ConfigMap,
+		[Parameter(Mandatory = $true)][string]$DataKey
+	)
+
+	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'configmap', $ConfigMap, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
+	if ($result.ExitCode -ne 0) {
+		throw "Reading ConfigMap $ConfigMap in namespace $Namespace failed (kubectl exit code $($result.ExitCode)): $($result.Stderr). Fail-closed: unreadable is not the same as absent; nothing has been written."
+	}
+	$jsonText = ([string]$result.Stdout).Trim()
+	if ($jsonText -eq '') { return $null }
+	try { $configMapObject = $jsonText | ConvertFrom-Json -ErrorAction Stop }
+	catch { throw "kubectl output for ConfigMap $ConfigMap in namespace $Namespace is not valid JSON; nothing has been written: $($_.Exception.Message)" }
+	$dataProperty = $configMapObject.PSObject.Properties['data']
+	if ($null -eq $dataProperty -or $null -eq $dataProperty.Value) { return '' }
+	$property = $dataProperty.Value.PSObject.Properties[$DataKey]
+	if ($null -eq $property) { return '' }
+	return [string]$property.Value
+}
+
+# 线上 node-config 的 game_config.yaml 里 scene_control_redis.host(纯函数)。-GameConfigYaml 为 $null = ConfigMap 不存在。
+# 返回 { Present; Host };Present 而读不出这一段的 host 时 Host 为空串:C++ 缺这一段会照抄 zoneredis(核心,config.cpp),调用方按地址不同处理。
+# 参数不标 [string],理由同 ConvertFrom-RedisCtlLiveYaml。
+function ConvertFrom-RedisCtlNodeConfigYaml {
+	param([AllowNull()]$GameConfigYaml)
+
+	if ($null -eq $GameConfigYaml) { return [pscustomobject]@{ Present = $false; Host = '' } }
+	$m = [regex]::Match([string]$GameConfigYaml, '(?m)^scene_control_redis:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n)*?[ \t]+host:[ \t]*"?(?<host>[^"\r\n#\s]+)"?')
+	$hostName = if ($m.Success) { $m.Groups['host'].Value.Trim() } else { '' }
+	return [pscustomobject]@{ Present = $true; Host = $hostName }
+}
+
+# 一个 zone 的控制域接线有没有问题(纯函数,redis-split-status 用)。返回问题文本(空数组 = 没问题)。
+# scene-manager 的 Redis 段与 scene 的 scene_control_redis 都必须指向本 zone 所属组的实例(-Expected = Get-ZoneRedisCtlTopology):
+# 两边不一致时 scene 读到的分线目录与神秘商人不是 scene_manager 写的那一份。没部署的一方(ConfigMap 不存在)不算问题。
+function Get-RedisCtlZoneProblems {
+	param(
+		[Parameter(Mandatory = $true)]$SceneManager,
+		[Parameter(Mandatory = $true)]$NodeConfig,
+		[Parameter(Mandatory = $true)]$Expected,
+		[Parameter(Mandatory = $true)][string]$SceneManagerRollout
+	)
+
+	$problems = @()
+	if ($SceneManager.Present -and $SceneManager.HostPort -cne $Expected.HostPort) {
+		$problems += "scene-manager control Redis is '$($SceneManager.HostPort)', expected $($Expected.HostPort) for this zone's redisQueueGroup"
+	}
+	if ($NodeConfig.Present -and $NodeConfig.Host -cne $Expected.Host) {
+		$problems += "node-config scene_control_redis.host is '$($NodeConfig.Host)', expected $($Expected.Host): scene would read the world channel directory and mystery merchant from a different instance than scene_manager writes"
+	}
+	if ($SceneManagerRollout -eq 'incomplete' -or $SceneManagerRollout -eq 'error') {
+		$problems += "deployment/scene-manager rollout is $SceneManagerRollout (old pods may still use the previous control instance, or the query failed)"
+	}
+	return [string[]]$problems
+}
+
+<#
+.SYNOPSIS
+	redis-split-status 的控制域一段(缺口第 5 条):打印一个 zone 的 scene-manager 控制域地址、node-config 的 scene_control_redis、
+	scene-manager 的 rollout,以及本 zone 组的 redis-ctl-g<N> 的形态与就绪状态;返回问题文本(空 = 没问题),由调用方并进失败列表。
+
+.DESCRIPTION
+	控制域实例不受 -RedisSplit 控制,所以每个 zone 都查。scene-manager 与 node-config 都不存在(zone 没部署)时只打 <absent>,不查实例、不算问题。
+	实例按本 zone 的组取(Get-ZoneRedisCtlTopology,namespace 是 -InfraNamespace):线上地址与它不同本身就是问题。多个 zone 同组只查一次
+	(-InstancesChecked 由调用方跨 zone 共用)。读不到(kubectl 失败、非 JSON)记为问题,不 throw:其余 zone 照常查完。
+#>
+function Get-RedisCtlZoneStatus {
+	param(
+		[Parameter(Mandatory = $true)][string]$ZoneName,
+		[Parameter(Mandatory = $true)][int]$ZoneId,
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][hashtable]$InstancesChecked
+	)
+
+	$expected = Get-ZoneRedisCtlTopology -CurrentZoneId $ZoneId
+	try {
+		$sceneManager = ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml (Read-LiveConfigMapData -Namespace $Namespace -ConfigMap $GoSvcCatalogue['scene-manager'].ConfigMap -DataKey $GoSvcCatalogue['scene-manager'].ConfigFile)
+		$nodeConfig = ConvertFrom-RedisCtlNodeConfigYaml -GameConfigYaml (Read-LiveConfigMapData -Namespace $Namespace -ConfigMap 'node-config' -DataKey 'game_config.yaml')
+	}
+	catch {
+		Write-Host "  zone=$ZoneName namespace=$Namespace ctl ERROR reading ConfigMaps"
+		return [string[]]@("zone ${ZoneName}: $($_.Exception.Message)")
+	}
+	$rollout = Get-RedisSplitRolloutState -Namespace $Namespace -Deployment 'scene-manager'
+	$sceneManagerText = if ($sceneManager.Present) { $sceneManager.HostPort } else { '<absent>' }
+	$nodeConfigText = if ($nodeConfig.Present) { $nodeConfig.Host } else { '<absent>' }
+	Write-Host "  zone=$ZoneName namespace=$Namespace ctl_expected=$($expected.HostPort) scene-manager.Redis=$sceneManagerText node-config.scene_control_redis=$nodeConfigText rollout scene-manager=$rollout"
+	$problems = New-Object System.Collections.Generic.List[string]
+	foreach ($problem in (Get-RedisCtlZoneProblems -SceneManager $sceneManager -NodeConfig $nodeConfig -Expected $expected -SceneManagerRollout $rollout)) {
+		$problems.Add("zone ${ZoneName}: $problem")
+	}
+	if (-not $sceneManager.Present -and -not $nodeConfig.Present) { return [string[]]$problems.ToArray() }
+
+	$instanceKey = "$InfraNamespace/$($expected.Service)"
+	if ($InstancesChecked.ContainsKey($instanceKey)) { return [string[]]$problems.ToArray() }
+	$InstancesChecked[$instanceKey] = $true
+	try {
+		$instance = Read-RedisQueueInstanceLive -InstanceName $expected.Service -Namespace $InfraNamespace
+	}
+	catch {
+		Write-Host "  instance=$($expected.Service) namespace=$InfraNamespace ERROR reading"
+		$problems.Add("ctl instance ${instanceKey}: $($_.Exception.Message)")
+		return [string[]]$problems.ToArray()
+	}
+	$proxyText = if ($null -eq $instance.ProxyReplicas) { '<none>' } else { "$($instance.ProxyReadyReplicas)/$($instance.ProxyReplicas)" }
+	Write-Host "  instance=$($expected.Service) namespace=$InfraNamespace shape=$($instance.Shape) ready=$($instance.ReadyReplicas)/$($instance.Replicas) proxy=$proxyText service_selector=$($instance.ServiceSelector)"
+	foreach ($problem in $instance.Problems) { $problems.Add("ctl instance ${instanceKey}: $problem") }
+	return [string[]]$problems.ToArray()
 }
 
 # 写路径入口(任何写操作之前):本次要 apply 控制域实例时先定容量(取值不合法在这里拒绝);本次部署 zone 的
@@ -4967,23 +5230,7 @@ function Assert-RedisCtlPreflight {
 	$problems = @()
 	foreach ($zone in $zones) {
 		$namespace = Get-ZoneNamespace -Name $zone.Name
-		$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'configmap', $GoSvcCatalogue['scene-manager'].ConfigMap, '-n', $namespace, '--ignore-not-found', '-o', 'json') `
-			-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
-		if ($result.ExitCode -ne 0) {
-			throw "读取 namespace $namespace 的 scene-manager ConfigMap 失败(kubectl 退出码 $($result.ExitCode)):$($result.Stderr)。fail-closed:读不到不等于没部署过,尚未做任何写操作。"
-		}
-		$yamlText = $null
-		$jsonText = ([string]$result.Stdout).Trim()
-		if ($jsonText -ne '') {
-			try { $configMap = $jsonText | ConvertFrom-Json -ErrorAction Stop }
-			catch { throw "namespace $namespace 的 scene-manager ConfigMap 的 kubectl 输出不是合法 JSON,尚未做任何写操作:$($_.Exception.Message)" }
-			$yamlText = ''
-			$dataProperty = $configMap.PSObject.Properties['data']
-			if ($null -ne $dataProperty -and $null -ne $dataProperty.Value) {
-				$property = $dataProperty.Value.PSObject.Properties[$GoSvcCatalogue['scene-manager'].ConfigFile]
-				if ($null -ne $property) { $yamlText = [string]$property.Value }
-			}
-		}
+		$yamlText = Read-LiveConfigMapData -Namespace $namespace -ConfigMap $GoSvcCatalogue['scene-manager'].ConfigMap -DataKey $GoSvcCatalogue['scene-manager'].ConfigFile
 		$live = ConvertFrom-RedisCtlLiveYaml -SceneManagerYaml $yamlText
 		$desired = (Get-ZoneRedisCtlTopology -CurrentZoneId $zone.ZoneId).HostPort
 		$verdict = Get-RedisCtlSwitchVerdict -Live $live -DesiredHostPort $desired -Confirmed ([bool]$ConfirmRedisCtlSwitch)
@@ -4992,12 +5239,12 @@ function Assert-RedisCtlPreflight {
 			Write-Warning "[RedisCtl]Confirmed:-ConfirmRedisCtlSwitch supplied, zone $($zone.Name) (namespace=$namespace) switches its scene_manager control Redis $($live.HostPort) -> $desired. The new instance starts empty: stop this zone's scene nodes first, then let the leader re-create the world channels."
 		}
 		elseif ($verdict -eq 'refuse') {
-			$problems += "zone $($zone.Name)(namespace=$namespace):线上 scene-manager 的控制域 Redis 是 '$($live.HostPort)',本次要改成 $desired"
+			$problems += "zone $($zone.Name) (namespace=$namespace): live scene-manager control Redis is '$($live.HostPort)', this run would change it to $desired"
 		}
 	}
 	if ($problems.Count -gt 0) {
-		throw ("scene-manager 的控制域 Redis 地址与线上不一致($($problems.Count) 个 zone),未做任何写操作:`n  - " + ($problems -join "`n  - ") +
-			"`n新实例是空的,本 zone 的场景路由要从零重建:先停本 zone 的 scene 节点,再加 -ConfirmRedisCtlSwitch 重跑(docs/design/control-plane-zone-scoping-20261105.md §4.6)。")
+		throw ("scene-manager control Redis differs from the live ConfigMap in $($problems.Count) zone(s); nothing has been written:`n  - " + ($problems -join "`n  - ") +
+			"`nThe new instance starts empty and the zone's scene routes are rebuilt from scratch: stop the zone's scene nodes first, then re-run with -ConfirmRedisCtlSwitch (docs/design/control-plane-zone-scoping-20261105.md §4.6).")
 	}
 }
 
@@ -5013,7 +5260,8 @@ function ConvertFrom-RedisQueueInstanceAddress {
 
 <#
 .SYNOPSIS
-	线上 queue 实例的形态与就绪状态(纯函数)。-StatefulSet / -Proxy / -Service 是 kubectl get -o json 解析出的对象,$null = 不存在(Read-RedisQueueInstanceLive 读好传入)。
+	线上 queue 实例或控制域实例(redis-ctl-g<N>,同一套模板与对象命名)的形态与就绪状态(纯函数)。-StatefulSet / -Proxy / -Service 是
+	kubectl get -o json 解析出的对象,$null = 不存在(Read-RedisQueueInstanceLive 读好传入)。问题文本只写对象名,不写是哪类实例:调用方自己加前缀。
 
 .DESCRIPTION
 	返回 { Name; Shape; Replicas; ReadyReplicas; ProxyReplicas; ProxyReadyReplicas; ServiceSelector; Problems }。
@@ -5037,24 +5285,24 @@ function ConvertFrom-RedisQueueInstanceLive {
 	$replicas = $null
 	$ready = 0
 	if ($null -eq $StatefulSet) {
-		$problems.Add("没有 statefulset/${InstanceName}:login / gateway 指向的实例没部署(先跑 infra-up -RedisSplit queue)")
+		$problems.Add("statefulset/${InstanceName} is missing: the instance its clients point at is not deployed (run infra-up; queue instances also need -RedisSplit queue)")
 	}
 	else {
 		$replicas = [int]$StatefulSet.spec.replicas
 		$ready = [int]$StatefulSet.status.readyReplicas
 		$shape = switch ($replicas) { 1 { 'single' } 3 { 'ha' } default { 'unknown' } }
-		if ($shape -eq 'unknown') { $problems.Add("statefulset/$InstanceName 有 $replicas 个副本,本脚本只产生 1 或 3") }
-		if ($ready -lt $replicas) { $problems.Add("statefulset/$InstanceName 就绪 $ready/$replicas") }
+		if ($shape -eq 'unknown') { $problems.Add("statefulset/$InstanceName has $replicas replicas; this script only produces 1 or 3") }
+		if ($ready -lt $replicas) { $problems.Add("statefulset/$InstanceName ready $ready/$replicas") }
 	}
 	$serviceSelector = ''
 	if ($null -eq $Service) {
-		$problems.Add("没有 service/${InstanceName}:客户端的入口不在")
+		$problems.Add("service/${InstanceName} is missing: clients have no entry point")
 	}
 	else {
 		$serviceSelector = [string]$Service.spec.selector.app
 		$expectedSelector = switch ($shape) { 'single' { $InstanceName } 'ha' { $proxyName } default { $null } }
 		if ($null -ne $expectedSelector -and $serviceSelector -cne $expectedSelector) {
-			$problems.Add("service/$InstanceName 选的是 app=$serviceSelector,形态 $shape 应当选 app=$expectedSelector(上次切换或回退没做完)")
+			$problems.Add("service/$InstanceName selects app=$serviceSelector, but shape $shape should select app=$expectedSelector (a previous switch or rollback did not finish)")
 		}
 	}
 	$proxyReplicas = $null
@@ -5064,8 +5312,8 @@ function ConvertFrom-RedisQueueInstanceLive {
 		$proxyReady = [int]$Proxy.status.readyReplicas
 	}
 	if ($shape -eq 'ha') {
-		if ($null -eq $Proxy) { $problems.Add("没有 deployment/${proxyName}:高可用形态下客户端连的是代理") }
-		elseif ($proxyReady -lt $proxyReplicas) { $problems.Add("deployment/$proxyName 就绪 $proxyReady/$proxyReplicas") }
+		if ($null -eq $Proxy) { $problems.Add("deployment/${proxyName} is missing: in the high-availability shape clients connect through the proxy") }
+		elseif ($proxyReady -lt $proxyReplicas) { $problems.Add("deployment/$proxyName ready $proxyReady/$proxyReplicas") }
 	}
 	return [pscustomobject]@{
 		Name               = $InstanceName
@@ -5135,6 +5383,8 @@ function Get-RedisSplitRolloutState {
 	执行 k8s_gate_drain.ps1 或滚动 gate 之前,以它为闸(§3.2.1 约束 3)。group= 是 zones 配置里的 redisQueueGroup(拆分时该连的组)。
 	ConfigMap / Deployment 不存在(zone 没部署 login 或 gateway)只打印 <absent>,不算失败。DryRun 只打印将要读什么。
 	queue 实例按线上地址取(ConvertFrom-RedisQueueInstanceAddress):查的是 zone 实际连的那个,namespace 也取自地址,不取本次参数;多个 zone 同组只查一次。
+	控制域实例(redis-ctl-g<N>,缺口第 5 条)不受 -RedisSplit 控制,每个 zone 都另查一段(Get-RedisCtlZoneStatus):scene-manager 的 Redis 段、
+	node-config 的 scene_control_redis 要指向本 zone 组的实例,scene-manager 滚完,实例在且就绪;不满足同样以退出码 1 结束。
 #>
 function Show-RedisSplitStatus {
 	$zonesPath = Resolve-ZonesConfigPath
@@ -5145,6 +5395,10 @@ function Show-RedisSplitStatus {
 			Write-Host "[dry-run] would read ConfigMaps $($GoSvcCatalogue['login'].ConfigMap) / $($JavaSvcCatalogue['gateway'].ConfigMap) and rollout status of deployment/login / deployment/gateway in namespace $(Get-ZoneNamespace -Name ([string]$zone.name))"
 		}
 		Write-Host "[dry-run] would also read statefulset, proxy deployment and service of every redis-queue-g<N> those ConfigMaps point at, and fail if it is absent, not ready, or its Service does not match its shape."
+		foreach ($zone in $zones) {
+			Write-Host "[dry-run] would read ConfigMaps $($GoSvcCatalogue['scene-manager'].ConfigMap) / node-config and rollout status of deployment/scene-manager in namespace $(Get-ZoneNamespace -Name ([string]$zone.name)), expecting control Redis $((Get-ZoneRedisCtlTopology -CurrentZoneId ([int]$zone.zoneId)).HostPort)"
+		}
+		Write-Host "[dry-run] would also read statefulset, proxy deployment and service of the redis-ctl-g<N> of every zone group, and fail if it is absent, not ready, or its Service does not match its shape."
 		return
 	}
 	$failures = New-Object System.Collections.Generic.List[string]
@@ -5152,6 +5406,10 @@ function Show-RedisSplitStatus {
 	foreach ($zone in $zones) {
 		$zoneName = [string]$zone.name
 		$namespace = Get-ZoneNamespace -Name $zoneName
+		# 控制域放在最前面:下面排队那段读不到 ConfigMap 时 continue,不能把控制域的检查一起跳过。
+		foreach ($problem in (Get-RedisCtlZoneStatus -ZoneName $zoneName -ZoneId ([int]$zone.zoneId) -Namespace $namespace -InstancesChecked $instancesChecked)) {
+			$failures.Add($problem)
+		}
 		try {
 			$live = Read-RedisPurposeLiveFacts -Namespace $namespace
 		}
@@ -5863,6 +6121,45 @@ function Resolve-IdIssuerRegion {
 	return [int]$Requested
 }
 
+# 每地域的存档库数 K(设计 player-data-tidb-scaling-plan.md §7.2):dev 缺省 1;staging、prod 必须显式给 1..1000,没有回落值。
+# 上线后不能改:K 一变小,落在后面那些库里的老号就不在清单里了,所以从不猜。
+function Resolve-PlayerStoreShards {
+	param($Requested = $PlayerStoreShards, [string]$ReleaseProfileName = $ReleaseProfile)
+
+	$k = [int]$Requested
+	if ($k -eq 0) {
+		if ($ReleaseProfileName -eq 'dev') { return 1 }
+		throw "-ReleaseProfile $ReleaseProfileName must pass -PlayerStoreShards explicitly (1..1000, the number of player store databases of this region; small on MySQL, 64 on TiDB). It cannot change after launch, so it is never guessed. Nothing was written."
+	}
+	if ($k -lt 1 -or $k -gt 1000) {
+		throw "-PlayerStoreShards $k is out of range: it must be in 1..1000. Nothing was written."
+	}
+	return $k
+}
+
+# 存档库清单里的 player_store_* 必须恰好是本地域的 K 个库(设计 §7.2):少一个,落在那个库的玩家存不了盘;多一个,多半是地域码
+# 或 K 填错,而 data_service 会照单给它发写资格。zone_<n>_db 是各区 go/db 的本区主库,照旧放行;库名形状、重复、总数
+# 由 Get-RoleProofStorageIds 核。纯函数,返回本地域的库名(下标就是片号)。
+function Assert-PlayerStoreAllowlist {
+	param(
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$DatabaseNames,
+		[Parameter(Mandatory = $true)][int]$RegionCode,
+		[Parameter(Mandatory = $true)][int]$Shards
+	)
+	$null = Get-RoleProofStorageIds -DatabaseNames $DatabaseNames
+	$expected = [string[]]@(Get-RegionPlayerStoreDbNames -Region $RegionCode -Shards $Shards)
+	$listed = @($DatabaseNames -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -cmatch '^player_store_' })
+	$missing = @($expected | Where-Object { $_ -cnotin $listed })
+	$unexpected = @($listed | Where-Object { $_ -cnotin $expected })
+	if ($missing.Count -gt 0 -or $unexpected.Count -gt 0) {
+		# K 可以到 1000:错误里每类只列前 5 个。
+		$sample = { param($names) if ($names.Count -eq 0) { 'none' } elseif ($names.Count -le 5) { $names -join ',' } else { ((@($names | Select-Object -First 5)) -join ',') + ',...' } }
+		throw ("MMORPG_DB_ALLOWED_DATABASES must list exactly the {0} player store databases of region {1} ({2}..{3}) besides the zone home databases zone_<n>_db; missing {4}: {5}; unexpected {6}: {7}. Check -Region and -PlayerStoreShards. Nothing was written." -f
+			$Shards, $RegionCode, $expected[0], $expected[-1], $missing.Count, (& $sample $missing), $unexpected.Count, (& $sample $unexpected))
+	}
+	return $expected
+}
+
 # 全局号源登记处的地址(设计 player-data-tidb-scaling-plan.md §6.3):dev 不写,回落到本地 etcd;staging、prod 必须显式给,
 # 或者本集群带 -HostIdRegistry(地址取本集群的 etcd-id-registry Service)。这里只核形状、不和本集群两套发号 etcd 同名;
 # 是不是同一套 etcd、是不是登记处给这个地域码绑的那一对,由发号器运行期比 etcd 自报的集群号。
@@ -6061,14 +6358,20 @@ function Assert-LogicalDbPreflight {
 	}
 	# 网关的 mmorpg 档位也在这里核:staging / prod 的 mysql 档网关起不来,不能等 Go 服务都 apply 了才在生成 ConfigMap 时失败。
 	if (Test-ZoneGatewayDeployed) { $null = Resolve-GatewaySqlMode }
+	# 入口写成集群内单实例 MySQL 时的两种错配(非 dev、或档位不是 mysql)同样在这里拒绝(Test-InfraMysqlInUse)。
+	$null = Test-InfraMysqlInUse
 	if ($deploysDataService) {
 		# db、data-service 的 ConfigMap 和 db-migrate 都要这份清单。放到生成 ConfigMap 时才发现缺了,gate、scene 已经 apply 了。
 		# 所有档位都要显式给:没有回落值,从 ZoneId 推导等于自己校验自己(见 New-GoSvcConfigMapYaml 里的说明)。
 		$allowedDatabases = [string][Environment]::GetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES')
 		if ([string]::IsNullOrWhiteSpace($allowedDatabases)) {
-			throw "MMORPG_DB_ALLOWED_DATABASES is not set (comma separated, such as zone_1_db,zone_2_db). Every release profile must set it: db and data-service refuse to start without it, and it is never derived from -ZoneId. Nothing was written."
+			throw "MMORPG_DB_ALLOWED_DATABASES is not set (comma separated: the zone home databases plus the player store databases of this region, such as zone_1_db,player_store_1000000_db). Every release profile must set it: db and data-service refuse to start without it, and it is never derived from -ZoneId. Nothing was written."
 		}
-		$null = Get-RoleProofStorageIds -DatabaseNames $allowedDatabases
+		# 存档库必须恰好是本地域的 K 个库(设计 player-data-tidb-scaling-plan.md §7.2)。地域码和 K 在这里第一次解析:staging、prod 漏给就拒绝,
+		# login 的 Placement、go/db 和 data-service 的存档库池、db-migrate 迁的库都用同一对值,不会各自猜。
+		$storeRegion = Resolve-IdIssuerRegion
+		$playerStores = @(Assert-PlayerStoreAllowlist -DatabaseNames $allowedDatabases -RegionCode $storeRegion -Shards (Resolve-PlayerStoreShards))
+		Write-Host ("Player store databases: region={0} shards={1} databases={2}..{3}" -f $storeRegion, $playerStores.Count, $playerStores[0], $playerStores[-1])
 	}
 	if (-not $deploysDataService -and -not (Test-GlobalGoSvcDeployed)) {
 		if ($DirectoryLogicalShards -ne 0) { Assert-DirectoryLogicalShards -LogicalShards ([int]$DirectoryLogicalShards) }
@@ -8015,26 +8318,35 @@ function New-CppOpenFileLimitModeEnvLines {
 # lib 的三个生成器经 PodCommon.ReleaseTrack 写同一个变量(Get-ClientEntryNodeBaseEnv),Go 服务经 Add-GoSvcReleaseTrackEnv。
 # env 名取 lib 契约,几处同一份。stable 返回空数组:进程不设即 stable,模板与引入参数之前逐字相同。
 function New-CppReleaseTrackEnvLines {
-	param([Parameter(Mandatory = $true)][string]$ItemIndent)
+	param(
+		[Parameter(Mandatory = $true)][string]$ItemIndent,
+		# 缺省取 -ReleaseTrack(zone-up 的金丝雀 zone);金丝雀 battle 池(New-BattleWorkloadManifest -Canary)显式传 canary。
+		# 不加 ValidateSet:取值已在脚本参数处校验,按 AST 单独抽函数跑的测试里 -ReleaseTrack 未定义,空串要能按 stable 处理。
+		[string]$Track = $ReleaseTrack
+	)
 
-	if ($ReleaseTrack -cne 'canary') {
+	if ($Track -cne 'canary') {
 		return @()
 	}
 	return @(
 		"${ItemIndent}- name: $((Get-ClientEntryContract).ReleaseTrackEnv)",
-		"${ItemIndent}  value: `"$ReleaseTrack`""
+		"${ItemIndent}  value: `"$Track`""
 	)
 }
 
 # 金丝雀 Pod 的轨道标签行(lib 契约 ReleaseTrackPodLabel,发布轨道设计 §5.3),与 New-CppReleaseTrackEnvLines 同一判据:
 # canary 才写,stable 返回空串,模板逐字不变、不触发滚动。返回值带前导换行,直接接在模板 labels 段最后一行后面。
 function New-CppReleaseTrackPodLabelLine {
-	param([Parameter(Mandatory = $true)][string]$ItemIndent)
+	param(
+		[Parameter(Mandatory = $true)][string]$ItemIndent,
+		# 同 New-CppReleaseTrackEnvLines。
+		[string]$Track = $ReleaseTrack
+	)
 
-	if ($ReleaseTrack -cne 'canary') {
+	if ($Track -cne 'canary') {
 		return ''
 	}
-	return "`n${ItemIndent}$((Get-ClientEntryContract).ReleaseTrackPodLabel): $ReleaseTrack"
+	return "`n${ItemIndent}$((Get-ClientEntryContract).ReleaseTrackPodLabel): $Track"
 }
 
 function Get-SceneAccountDirectoryEnvLines {
@@ -8066,7 +8378,12 @@ function New-NodeDeploymentYaml {
 		# (New-SceneFleetYaml 用 $SceneTerminationGracePeriodSeconds)取同一个数,否则同一个
 		# scene 进程换个编排方式 drain 预算就从 60s 掉到 30s —— drain 期写的存档/踢人日志正是
 		# 最该留下的那批,而原生 sidecar 要等业务容器退完才停,预算不够就一起被砍。
-		[int]$TerminationGracePeriodSeconds = 30
+		[int]$TerminationGracePeriodSeconds = 30,
+		# 镜像、拉取策略与发布轨道:缺省取 -NodeImage、解析好的 -ImagePullPolicy 与 -ReleaseTrack。
+		# 只有金丝雀 battle 池(New-BattleWorkloadManifest -Canary)传它自己的三项,其余调用方都不传。
+		[string]$Image = $NodeImage,
+		[string]$PullPolicy = $ImagePullPolicy,
+		[string]$Track = $ReleaseTrack
 	)
 
 	# C++ 日志 sidecar(见参数 -NoCppLogSidecar):与业务容器共享 node-logs 卷,只读读 muduo 写的文件。
@@ -8131,9 +8448,9 @@ function New-NodeDeploymentYaml {
 	# Prometheus 出口(-CppMetricsPort):gate / scene / battle 都开,0 不写。
 	$extraEnvLines += @(New-CppMetricsEnvLines -ItemIndent "`t`t`t")
 	# 发布轨道(-ReleaseTrack canary,只在 zone-up):gate / scene 写;battle 只在 infra-up 渲染,那里只能是 stable,stable 不写。
-	$extraEnvLines += @(New-CppReleaseTrackEnvLines -ItemIndent "`t`t`t")
+	$extraEnvLines += @(New-CppReleaseTrackEnvLines -ItemIndent "`t`t`t" -Track $Track)
 	# Pod 模板上的轨道标签,判据同上;只加在 Pod 模板,selector 不动(selector 是 Pod 标签的子集)。
-	$releaseTrackPodLabel = New-CppReleaseTrackPodLabelLine -ItemIndent "`t`t"
+	$releaseTrackPodLabel = New-CppReleaseTrackPodLabelLine -ItemIndent "`t`t" -Track $Track
 	$metricsPortBlock = (@(New-CppMetricsPortLines -ItemIndent "`t`t`t") | ForEach-Object { "`n$_" }) -join ''
 	# node-logs emptyDir 会遮住镜像目录；Node 构造器立即打开 logs/cpp_nodes/<role>，先建父目录。
 	$grpcEnvBlock = $extraEnvLines -join "`n"
@@ -8244,8 +8561,8 @@ spec:
 	  terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$sidecarInitBlock
 	  containers:
 		- name: $NodeName
-		  image: $NodeImage
-		  imagePullPolicy: $ImagePullPolicy
+		  image: $Image
+		  imagePullPolicy: $PullPolicy
 		  workingDir: /app/bin
 		  command: ["/bin/sh", "-lc"]
 		  args: ["mkdir -p /app/bin/logs/cpp_nodes && $CppLogPrunerCommand$StartCommand"]
@@ -9070,7 +9387,14 @@ function New-CppPodAnnotationBlock {
 	日志 sidecar 的 zone 标签:zone 内节点传 zone 名,battle 这类全局池传 "global"(同 New-NodeDeploymentYaml)。
 #>
 function New-CppNodePodCommon {
-	param([Parameter(Mandatory = $true)][string]$SidecarZoneLabel)
+	param(
+		[Parameter(Mandatory = $true)][string]$SidecarZoneLabel,
+		# 镜像、拉取策略与发布轨道:缺省取 -NodeImage、解析好的 -ImagePullPolicy 与 -ReleaseTrack;
+		# 只有金丝雀 battle 池(New-BattleWorkloadManifest -Canary)传它自己的三项。
+		[string]$Image = $NodeImage,
+		[string]$PullPolicy = $ImagePullPolicy,
+		[string]$Track = $ReleaseTrack
+	)
 
 	$sidecar = @{ SidecarContainerYaml = ''; SidecarVolumeYaml = ''; SidecarConfigHash = '' }
 	if ($script:CppLogSidecarEnabled) {
@@ -9088,10 +9412,10 @@ function New-CppNodePodCommon {
 	# zone Redis 口令环境变量(Secret redis-auth)。lib 的三个模板(external gate、battle Fleet、battle hostPort)都不是 scene,
 	# 不连 scene_control_redis,所以不带 -SceneControl。口令为空时是空列表,生成物与不传时逐字相同。
 	$secretEnv = @(Get-CppZoneRedisSecretEnvEntries)
-	return New-ClientEntryPodCommon -Image $NodeImage -ImagePullPolicy $ImagePullPolicy -SnowflakeCacheDir $SnowflakeCacheDir `
+	return New-ClientEntryPodCommon -Image $Image -ImagePullPolicy $PullPolicy -SnowflakeCacheDir $SnowflakeCacheDir `
 		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
 		-GrpcServerMaxPollers 0 -PodAnnotations $podAnnotations -OpenFileLimitMode $NodeOpenFileLimitMode -MetricsPort $CppMetricsPort `
-		-ReleaseTrack $ReleaseTrack -SecretEnv $secretEnv @sidecar
+		-ReleaseTrack $Track -SecretEnv $secretEnv @sidecar
 }
 
 <#
@@ -9733,6 +10057,51 @@ function Get-GlobalAuthoritySqlSettings {
 	return $settings
 }
 
+<#
+.SYNOPSIS
+	这次的全球权威 SQL 入口是不是 infra 里那台单实例 MySQL(manifests/infra/mysql.yaml)。是,才部署它和 mysql-init-sql,迁移 Job 才等它就绪。
+
+.DESCRIPTION
+	那台 MySQL 只有 1 副本、没有主从,是 dev / kind 的夹具(docs/design/no-single-node-horizontal-scaling-20261001.md §6):
+	  - tidb 档的入口是外部 TiDB,这台 MySQL 上没有任何库在用,不部署;
+	  - mysql 档(省钱档)在 staging / prod 必须指向外部 MySQL 主库,入口写成集群内这一台就拒绝;
+	  - 入口是这一台却选了 tidb 档,服务启动时核对引擎必然失败,同样在这里拒绝;
+	  - 不给入口时只有 dev 回落这一台(Get-GlobalAuthoritySqlSettings)。部署 Go 服务和网关都要求显式入口,
+	    只有两者都不部署的 dev infra-up 走得到这一支;staging / prod 不给入口就不部署它,要入口的服务各自拒绝。
+	写路径入口 Assert-LogicalDbPreflight 先调一次,把拒绝放在任何写操作之前。
+#>
+function Test-InfraMysqlInUse {
+	$entries = @($GlobalAuthorityTiDBHost, $FriendTiDBHost, $TradeTiDBHost, $MatchTiDBHost | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+	if ($entries.Count -eq 0) { return ($ReleaseProfile -eq 'dev') }
+	$sql = Get-GlobalAuthoritySqlSettings -Profile $ReleaseProfile -CanonicalHost $GlobalAuthorityTiDBHost `
+		-FriendHost $FriendTiDBHost -TradeHost $TradeTiDBHost -MatchHost $MatchTiDBHost -DevelopmentHost "mysql.${InfraNamespace}:3306" -Backend $DatabaseBackend
+	$inClusterHosts = @("mysql.${InfraNamespace}:3306", "mysql.${InfraNamespace}.svc:3306", "mysql.${InfraNamespace}.svc.cluster.local:3306")
+	if ($sql.Host -notin $inClusterHosts) { return $false }
+	if ($ReleaseProfile -ne 'dev') {
+		throw "-GlobalAuthorityTiDBHost $($sql.Host) is the in-cluster MySQL (manifests/infra/mysql.yaml): one replica and no failover, for dev only. In $ReleaseProfile point it at TiDB, or at an external MySQL primary with -DatabaseBackend mysql. Nothing was written."
+	}
+	if ($sql.Backend -ne 'mysql') {
+		throw "-GlobalAuthorityTiDBHost $($sql.Host) is the in-cluster MySQL but -DatabaseBackend is $($sql.Backend): every service checks the real engine at startup and would refuse it. Add -DatabaseBackend mysql. Nothing was written."
+	}
+	return $true
+}
+
+<#
+.SYNOPSIS
+	全球权威 SQL 入口拆成 @{ Host; Port },给迁移 Job 的 init 容器等它可连(PLACEHOLDER_SQL_ENTRY_HOST / _PORT)。
+
+.DESCRIPTION
+	地址与 Get-GlobalAuthoritySqlSettings 同源(它已核过只有 host:port,IPv6 写成 [addr]:port)。
+	逻辑库搬到别的集群(-SqlClusters)之后,迁移进程按库映射连真实位置;这里只等默认集群,也就是写者首先连的那个入口。
+#>
+function Get-SqlEntryEndpoint {
+	$sql = Get-GlobalAuthoritySqlSettings -Profile $ReleaseProfile -CanonicalHost $GlobalAuthorityTiDBHost `
+		-FriendHost $FriendTiDBHost -TradeHost $TradeTiDBHost -MatchHost $MatchTiDBHost -DevelopmentHost "mysql.${InfraNamespace}:3306" -Backend $DatabaseBackend
+	$at = $sql.Host.LastIndexOf(':')
+	if ($at -lt 1) { throw "SQL entry $($sql.Host) has no port." }
+	return @{ Host = $sql.Host.Substring(0, $at).Trim('[', ']'); Port = $sql.Host.Substring($at + 1) }
+}
+
 # 与GoDB的独立外部库清单共源；只反解正规storage族，不把当前zone自证为白名单。
 function Get-RoleProofStorageIds {
 	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$DatabaseNames)
@@ -10001,11 +10370,25 @@ function New-GoSvcConfigMapYaml {
 		$dbPoolMirror = Get-MysqlPoolMirror -Target 'db'
 		$dbZoneStoreMaxOpenConn         = $dbPoolMirror['Placement.ZoneStoreMaxOpenConn']
 		$dbZoneStoreMaxIdleConn         = $dbPoolMirror['Placement.ZoneStoreMaxIdleConn']
-		$dbNonZoneStoreMaxOpenConn      = $dbPoolMirror['Placement.NonZoneStoreMaxOpenConn']
-		$dbNonZoneStoreMaxIdleConn      = $dbPoolMirror['Placement.NonZoneStoreMaxIdleConn']
+		# 地域存档库池:服务 yaml 写的是 K=1 的预算,按存档库数 K 摊到每个库(Get-PlayerStorePoolLimit,设计 player-data-tidb-scaling-plan.md §7.2),
+		# 空闲数不超过摊开后的上限。连接总账按同一条规则记账。
+		$dbNonZoneStoreMaxOpenConn      = Get-PlayerStorePoolLimit -Base $dbPoolMirror['Placement.NonZoneStoreMaxOpenConn'] -Shards (Resolve-PlayerStoreShards)
+		$dbNonZoneStoreMaxIdleConn      = [Math]::Min([int]$dbPoolMirror['Placement.NonZoneStoreMaxIdleConn'], $dbNonZoneStoreMaxOpenConn)
 		$dbExtraStoreConnMaxIdleSeconds = $dbPoolMirror['Placement.ExtraStoreConnMaxIdleSeconds']
 	}
-	$loginPlacementBlock = Get-AuthoritativeYamlBlock -RelativePath 'go/login/etc/login.yaml' -Key 'Placement'
+	# 建号选库(设计 player-data-tidb-scaling-plan.md §7.2):地域码与 data-service 的 IdSegment.Issuer.Region 同源(-Region),
+	# 存档库数取 -PlayerStoreShards;写路径入口已核过 MMORPG_DB_ALLOWED_DATABASES 恰好是这 K 个库。
+	# 不镜像 go/login/etc/login.yaml 的 Placement 段:那一段是本机的地域 0、K=1。
+	$loginPlacementBlock = ''
+	if ($SvcName -eq 'login') {
+		$loginPlacementBlock = (@(
+				'# 建号选库(docs/design/player-data-tidb-scaling-plan.md §7.2):新号按 player_id % StorageShards 落本地域的存档库,和 ZoneId 无关。'
+				'# Region 与 data-service 的 IdSegment.Issuer.Region 同值;StorageShards 上线后不能改。'
+				'Placement:'
+				"  Region: $(Resolve-IdIssuerRegion)"
+				"  StorageShards: $(Resolve-PlayerStoreShards)"
+			) -join "`n")
+	}
 
 	$loginSessionExpireMin  = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.SessionExpireMin'
 	$loginMaxLoginDevices   = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.MaxLoginDevices'
@@ -10078,8 +10461,9 @@ function New-GoSvcConfigMapYaml {
 		$dsRouteStoreMaxOpenConn = Get-DirectoryShardPoolLimit -Base $dsPoolMirror['RouteStore.MaxOpenConn'] -LogicalShards $dsLogicalShards
 		$dsRouteStoreMaxIdleConn = [Math]::Min([int]$dsPoolMirror['RouteStore.MaxIdleConn'], $dsRouteStoreMaxOpenConn)
 		$dsRouteStoreMergedZoneRefreshSec = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'RouteStore.MergedZoneRefreshSec'
-		$dsStoragePoolMaxOpenConn = $dsPoolMirror['Directory.StoragePools.MaxOpenConn']
-		$dsStoragePoolMaxIdleConn = $dsPoolMirror['Directory.StoragePools.MaxIdleConn']
+		# 存档库池每个地域存档库一个,与 go/db 同一条摊开规则(Get-PlayerStorePoolLimit,设计 player-data-tidb-scaling-plan.md §7.2)。
+		$dsStoragePoolMaxOpenConn = Get-PlayerStorePoolLimit -Base $dsPoolMirror['Directory.StoragePools.MaxOpenConn'] -Shards (Resolve-PlayerStoreShards)
+		$dsStoragePoolMaxIdleConn = [Math]::Min([int]$dsPoolMirror['Directory.StoragePools.MaxIdleConn'], $dsStoragePoolMaxOpenConn)
 		$dsStoragePoolConnMaxIdleSeconds = $dsPoolMirror['Directory.StoragePools.ConnMaxIdleSeconds']
 		# 参与者都在 infra namespace,data-service 在 zone namespace:写全 Service 名。端口取服务目录,不抄第二份。
 		$dsRoleFenceBlock = (@('RoleFence:', '  Participants:') + @($script:RoleFenceParticipantServices.Keys | ForEach-Object {
@@ -10253,11 +10637,22 @@ function New-GoSvcConfigMapYaml {
 	$routerTimeout          = ''
 	$routerLeaseTTL         = ''
 	$routerForwardTimeoutMs = ''
+	$routerOptionalLines    = ''
 	if ($SvcName -eq 'client-rpc-router') {
 		$routerName             = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'Name'
 		$routerTimeout          = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'Timeout'
 		$routerLeaseTTL         = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'LeaseTTL'
 		$routerForwardTimeoutMs = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'ForwardTimeoutMs'
+		# 全服池子集大小是调参值,允许缺席(与 chat 的可选键同一写法):yaml 里有就逐字镜像,没有就整行不写、交给 Go 侧 default。
+		$routerOptional = New-Object System.Collections.Generic.List[string]
+		$routerYamlFull = Join-Path $RepoRoot ($routerYaml -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+		foreach ($routerKey in @('GlobalTargetSubsetSize')) {
+			$routerScalar = Get-YamlScalar -Path $routerYamlFull -KeyPath $routerKey
+			if ($routerScalar.Found) {
+				$routerOptional.Add("${routerKey}: $($routerScalar.Value)")
+			}
+		}
+		$routerOptionalLines = $routerOptional -join "`n"
 	}
 
 	# 聚宝斋 trade 的契约值:键名与 go/trade/etc/trade.yaml、go/trade/internal/config 逐字一致,值只从服务 yaml 取。
@@ -10471,7 +10866,9 @@ function New-GoSvcConfigMapYaml {
 	$internalAuthSecret = $script:InternalAuthSecret
 
 	# 玩家域的配置段与 login 自己的登录域段(-PlayerRedisMasters,见 New-PlayerRedisConfigYaml;池上限从服务 yaml 镜像,Get-RedisPlayerPoolMirror)。只在生成带这些段的服务时求值。
-	# 漏渲染的后果:Go 没写 Addrs 时静默落到控制域,上了集群之后表现是全员不在线,而且不报错。guild 与 mail 的文本不走这里的模板,在各自分支里写。
+	# 漏渲染的后果:Go 没写 Addrs 时静默回落到服务自己连的共享实例,上了集群之后表现是全员不在线,而且不报错。guild 与 mail 的文本不走这里的模板,在各自分支里写。
+	# 没建集群时本段只写池上限,地址靠回落:各服务回落到核心;scene-manager 的 Redis 段是控制域实例,它回落到 CoreRedis 段指的核心
+	# (go/scene_manager/internal/config/config.go EffectivePlayerRedis),所以 scene-manager 的 CoreRedis 必须指向核心。
 	# 登录域只有 login 连:chat、friend、guild、match、mail、trade 只认 gate 签名的会话身份原件,不渲染 LoginRedis / GlobalLoginSessions;chat 也没有玩家域段。
 	$playerRedisBlock = ''
 	$loginRedisBlock = ''
@@ -10523,8 +10920,10 @@ function New-GoSvcConfigMapYaml {
 	if ($SvcName -in @('db','data-service')) {
 		$dbAllowedDatabases = Resolve-InjectedSecret -EnvName "MMORPG_DB_ALLOWED_DATABASES" `
 			-DevFallback '' -ReleaseProfile $ReleaseProfile `
-			-Purpose "db 库名白名单(逗号分隔,如 zone_1_db,zone_2_db)" -MinLength 3
+			-Purpose "db 库名白名单(逗号分隔,各区主库加本地域的存档库,如 zone_1_db,player_store_1000000_db)" -MinLength 3
 		$roleProofStorageIds = @(Get-RoleProofStorageIds -DatabaseNames $dbAllowedDatabases)
+		# 写路径入口已核过;生成时再核一次,单独渲染的路径也拦得住。规则只有 Assert-PlayerStoreAllowlist 一份(设计 player-data-tidb-scaling-plan.md §7.2)。
+		$null = Assert-PlayerStoreAllowlist -DatabaseNames $dbAllowedDatabases -RegionCode (Resolve-IdIssuerRegion) -Shards (Resolve-PlayerStoreShards)
 		$dbAllowedList = @($dbAllowedDatabases -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 		if ($dbAllowedList.Count -eq 0) {
 			throw "生成 db ConfigMap 失败:库名白名单解析后为空(MMORPG_DB_ALLOWED_DATABASES='$dbAllowedDatabases')。"
@@ -10769,7 +11168,8 @@ DataServiceRpc:
 # 按映射拨号(设计 §8.1)。和下面的 Placement 不是一回事:Placement 管玩家落在哪个库,DbPlacement 管库落在哪个物理集群。
 ${dbPlacementTop}
 # 额外落点库连接池(镜像 go/db/etc/db.yaml;计入 MySQL 连接总账 Get-MysqlConnectionLedger)。每个额外落点库一个池,
-# 按库所属家族分两个旋钮:ZoneStore* = zone 家族库(冷缓存访客读、合服后留在源区库的玩家),NonZoneStore* = 非 zone 落点库(Phase 2);
+# 按库所属家族分两个旋钮:ZoneStore* = zone 家族库(存档库和区脱钩之后只剩没清库的旧号),NonZoneStore* = 地域存档库
+# (全部存盘都走它;服务 yaml 写的是 K=1 的预算,这里已按 -PlayerStoreShards 摊到每个库,Get-PlayerStorePoolLimit);
 # ExtraStoreConnMaxIdleSeconds = 这些池里空闲连接的回收秒数。本 zone 库的池仍是上面的 Database.MaxOpenConn / MaxIdleConn。
 # AllowStoreFamilies 不写 = 取缺省 true。
 Placement:
@@ -11124,6 +11524,8 @@ Redis:
   Pass: ""
   Key: scenemanagerservice
 # 核心共享实例:只读 gate 排空标记 gate:<id>:draining|drained(排空标记留在核心,G4a §25.3 的 10-23 订正)。
+# 没建玩家域集群时下面的 PlayerRedis 只写池上限,地址回落到这里(EffectivePlayerRedis),与别的服务、C++ scene 的玩家域是同一个实例;
+# 回落到上面的控制域实例会让 location / owner_epoch 有两份。
 CoreRedis:
   Host: redis.${InfraNamespace}:6379
   Type: node
@@ -11342,6 +11744,7 @@ ZoneScopedNodeTypes:
   - LoginNodeService
 # 端口分工(契约 §7):9200 = 路由服;与 manifests/go-svc/client-rpc-router.yaml 的 metrics 容器端口 / 注解一致。
 MetricsListenAddr: ":9200"
+${routerOptionalLines}
 "@
 		}
 		"trade" {
@@ -11663,11 +12066,11 @@ $($svcConfig -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
 # 的预算下限,单位秒。实际预算 = max(-WaitTimeoutSeconds, 本值),统一由 Get-GoSvcMigrateJobWaitSeconds 给出。
 # 为什么要下限:-WaitTimeoutSeconds 默认 180s 是按 Deployment rollout 定的,而 staging/prod 恒等迁移 Job(D-14 第 4 条)。
 # 一次**正常**的迁移 Pod 要走完:调度 + 首次拉 mmorpg-<svc> 镜像(Job 先于 Deployment,是该镜像在节点上的第一个消费者)
-#   + initContainer wait-mysql 等 3306(manifests/go-svc/trade-migrate.yaml 的 WAIT_MYSQL_TIMEOUT_SECONDS=150,
+#   + initContainer wait-sql 等 SQL 入口可连(manifests/go-svc/trade-migrate.yaml 的 WAIT_SQL_TIMEOUT_SECONDS=150,
 #     截止后最多再多一轮 sleep 5 + nc -w 3,硬上限 158s)
 #   + 迁移本身(go/schemamigrate 每条 DDL 硬超时 60s;P1 两张表,正常几秒)。
-# 158 + 约 60(调度 / 拉镜像)+ 约 60(迁移)≈ 280,取 300。预算装不下这些时,全新集群 initdb 还没开 3306 的
-# 正常等待会被脚本误判为超时、中断发布。改大 WAIT_MYSQL_TIMEOUT_SECONDS(或别的建表服务的 Job 等得更久)时必须同步抬高本值。
+# 158 + 约 60(调度 / 拉镜像)+ 约 60(迁移)≈ 280,取 300。预算装不下这些时,全新集群 initdb 还没开端口的
+# 正常等待会被脚本误判为超时、中断发布。改大 WAIT_SQL_TIMEOUT_SECONDS(或别的建表服务的 Job 等得更久)时必须同步抬高本值。
 $GoSvcMigrateJobMinWaitSeconds = 300
 
 # 迁移 Job 等待的实际预算(秒):-WaitTimeoutSeconds 与下限 $GoSvcMigrateJobMinWaitSeconds 取大。
@@ -11725,7 +12128,12 @@ function Apply-GoSvcMigrateJob {
 		$content = $content.Replace("PLACEHOLDER_DB_ALLOWED_DATABASES", (@(Get-DbAllowedDatabaseNames) -join ','))
 	}
 	$content=Add-SchemaPermissionManifest -Content $content -Namespace $Namespace -SvcName $SvcName
-	# initContainer 等 MySQL 用的地址:Job 与 MySQL 不一定同 namespace(目录允许非 Global 服务将来也挂 MigrateJob),写 FQDN 前缀。
+	# init 容器 wait-sql 等的是这次实际的 SQL 入口(Get-SqlEntryEndpoint),不再写死 mysql.<infra>:3306:tidb 档没有那台 MySQL。
+	if ($content.Contains("PLACEHOLDER_SQL_ENTRY_")) {
+		$sqlEntry = Get-SqlEntryEndpoint
+		$content = $content.Replace("PLACEHOLDER_SQL_ENTRY_HOST", $sqlEntry.Host).Replace("PLACEHOLDER_SQL_ENTRY_PORT", $sqlEntry.Port)
+	}
+	# 清单里引用 infra 服务的地址写 FQDN 前缀:Job 与 infra 不一定同 namespace(目录允许非 Global 服务也挂 MigrateJob)。
 	$content = $content.Replace("__INFRA_NAMESPACE__", $InfraNamespace)
 	# 与 Apply-Infra 同一条 fail-closed:任何占位没替换就拒绝 apply,不把占位原样送进集群。
 	$leftover = [regex]::Matches($content, '(__[A-Z][A-Z0-9_]*__|PLACEHOLDER_[A-Z_]+)') | ForEach-Object { $_.Value } | Sort-Object -Unique
@@ -11737,11 +12145,12 @@ function Apply-GoSvcMigrateJob {
 	# 只有 dev 档把"等不等"交给 -WaitReady(不等时靠 registrar 的 init 重试收敛)。-SqlSchemaOnly 恒等:下一步要读 generation。
 	$gateOnJob = [bool]$WaitReady -or ($ReleaseProfile -ne 'dev') -or ($SvcName -eq 'match') -or [bool]$SqlSchemaOnly
 
-	if ($gateOnJob) {
-		# MySQL 起不来时 -migrate 连库失败以 1 退出,会被 podFailurePolicy 当成不可重试直接判 Job 失败;
-		# 先等 mysql Deployment 滚动完成,把"镜像还在拉 / Pod 还没调度"这类原因挡在 Job 之外,失败时报的也是真实原因。
+	if ($gateOnJob -and (Test-InfraMysqlInUse)) {
+		# 入口是集群内那台 MySQL 时(只有 dev,Test-InfraMysqlInUse):它起不来,-migrate 连库失败以 1 退出,会被 podFailurePolicy
+		# 当成不可重试直接判 Job 失败;先等 mysql Deployment 滚动完成,把"镜像还在拉 / Pod 还没调度"这类原因挡在 Job 之外。
 		# (全局服务经 Apply-Infra → Apply-GlobalGoSvcManifests 调到,mysql.yaml 在同一次 Apply-Infra 里已 apply;
 		#  zone 内的 data-service 经 zone-up 调到,那时 mysql 应当已由先前的 infra-up 部署在 infra namespace。)
+		# 外部 TiDB 或外部 MySQL 主库不归本脚本部署,只由 init 容器 wait-sql 等它可连。
 		Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName "mysql"
 	}
 
@@ -12146,14 +12555,14 @@ function Add-PodTemplateLabel {
 	)
 
 	if ($ManifestContent -match ('(?m)(^[ \t]*|[{,][ \t]*)' + [regex]::Escape($Key) + ':')) {
-		throw "服务 $SvcName 的 manifest 已经写了标签 ${Key}:这个标签由 k8s_deploy.ps1 注入,manifest 里不要手写。"
+		throw "The manifest of $SvcName already sets the label ${Key}: k8s_deploy.ps1 injects it, do not write it in the manifest."
 	}
 	$blockPattern = '(?m)^  template:[ \t]*\r?\n    metadata:[ \t]*\r?\n      labels:[ \t]*(?=\r?$)'
 	$inlinePattern = '(?m)^(?<head>  template:[ \t]*\r?\n    metadata:[ \t]*\r?\n      labels:[ \t]*\{)(?<body>[^\r\n{}]*)\}(?=[ \t]*\r?$)'
 	$blockMatches = [regex]::Matches($ManifestContent, $blockPattern)
 	$inlineMatches = [regex]::Matches($ManifestContent, $inlinePattern)
 	if ($blockMatches.Count + $inlineMatches.Count -ne 1) {
-		throw "服务 $SvcName 的 manifest 应当恰好有一处紧跟 template.metadata 的 Pod 模板 labels(块式或行内式),实际 $($blockMatches.Count + $inlineMatches.Count) 处,无法加标签 $Key。"
+		throw "The manifest of $SvcName must have exactly one Pod template labels section right under template.metadata (block or flow style), got $($blockMatches.Count + $inlineMatches.Count); cannot add the label $Key."
 	}
 	if ($blockMatches.Count -eq 1) {
 		$at = $blockMatches[0].Index + $blockMatches[0].Length
@@ -12167,7 +12576,7 @@ function Add-PodTemplateLabel {
 # 全局服务金丝雀副本的清单改写(Apply-OneGoSvc -Canary;发布轨道设计 §2.4、§2.5,§7 批 2b)。分两步,中间照常做各项注入:
 #   1. Select-GoSvcCanaryDeployment(读清单后立刻):只留 Deployment 那份文档,副本数换成 -CanaryReplicas。Service、PDB 归稳定版,
 #      canary 不另起;副本数要先换,SQL 写者 boot 会拿它和 <ns>/<svc>-canary 条目的 replicas 核对。
-#   2. Rename-GoSvcCanaryDeployment(apply 之前):Deployment 名改成 <svc>-canary,全部 app: <svc> 换成 app: <svc>-canary
+#   2. Rename-CanaryWorkload(apply 之前):Deployment 名改成 <svc>-canary,全部 app: <svc> 换成 app: <svc>-canary
 #      (metadata.labels、selector、Pod 模板、反亲和)。这样稳定版 Service 的 selector 选不中 canary Pod,内部调用方经 Service
 #      连不到它;两个 Deployment 的 selector 也不重叠。容器名不改:SQL 写者注入按容器名找主容器。
 # 形状不对一律 throw,不猜。
@@ -12179,33 +12588,35 @@ function Select-GoSvcCanaryDeployment {
 
 	$documents = @([regex]::Split($ManifestContent, '(?m)^---[ \t]*\r?\n') | Where-Object { $_ -cmatch '(?m)^kind:[ \t]*Deployment[ \t]*\r?$' })
 	if ($documents.Count -ne 1) {
-		throw "服务 $SvcName 的 manifest 应当恰好有 1 份 Deployment(实际 $($documents.Count) 份),无法生成金丝雀副本。"
+		throw "The manifest of $SvcName must contain exactly one Deployment (got $($documents.Count)); cannot render its canary copy."
 	}
 	$deployment = $documents[0]
 	$replicaPattern = '(?m)^  replicas:[ \t]*\d+[ \t]*(?=\r?$)'
 	if ([regex]::Matches($deployment, $replicaPattern).Count -ne 1) {
-		throw "服务 $SvcName 的 Deployment 应当恰好有一行 spec.replicas,无法换成金丝雀副本数。"
+		throw "The Deployment of $SvcName must have exactly one spec.replicas line; cannot set the canary replica count."
 	}
 	return [regex]::Replace($deployment, $replicaPattern, "  replicas: $CanaryReplicas")
 }
 
-function Rename-GoSvcCanaryDeployment {
+# 把一个工作负载改成金丝雀副本:metadata.name 改成 <name>-canary,全部 app: <name> 换成 app: <name>-canary。
+# 用在全局服务的 <svc>-canary(Apply-OneGoSvc -Canary,Deployment)与金丝雀 battle 池(New-BattleWorkloadManifest -Canary,
+# Deployment 或 Agones Fleet)。容器名、mmorpg.io/role 等其它标签不改。两种 app 写法都认:块式(app: x 独占一行)与流式({app: x, ...})。
+function Rename-CanaryWorkload {
 	param(
-		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$Name,
 		[Parameter(Mandatory = $true)][string]$ManifestContent
 	)
 
-	$canaryName = "$SvcName-canary"
-	$namePattern = '(?m)^  name:[ \t]*' + [regex]::Escape($SvcName) + '[ \t]*(?=\r?$)'
+	$canaryName = "$Name-canary"
+	$namePattern = '(?m)^  name:[ \t]*' + [regex]::Escape($Name) + '[ \t]*(?=\r?$)'
 	if ([regex]::Matches($ManifestContent, $namePattern).Count -ne 1) {
-		throw "服务 $SvcName 的 Deployment 应当恰好有一处 metadata.name: $SvcName,无法改名成 $canaryName。"
+		throw "The workload $Name must have exactly one metadata.name: $Name; cannot rename it to $canaryName."
 	}
 	$ManifestContent = [regex]::Replace($ManifestContent, $namePattern, "  name: $canaryName")
-	# 块式(app: x 独占一行)与流式({app: x} / {app: x, ...})两种写法都认。
-	$appPattern = '(?<=\bapp:[ \t]*)' + [regex]::Escape($SvcName) + '(?=[ \t]*(?:\r?$|[,}]))'
+	$appPattern = '(?<=\bapp:[ \t]*)' + [regex]::Escape($Name) + '(?=[ \t]*(?:\r?$|[,}]))'
 	$appMatches = [regex]::Matches($ManifestContent, $appPattern, [System.Text.RegularExpressions.RegexOptions]::Multiline)
 	if ($appMatches.Count -lt 2) {
-		throw "服务 $SvcName 的 Deployment 至少要有 selector 与 Pod 模板两处 app: $SvcName(实际 $($appMatches.Count) 处),无法改成 app: $canaryName。"
+		throw "The workload $Name needs at least two app: $Name labels (selector and Pod template), got $($appMatches.Count); cannot relabel it to app: $canaryName."
 	}
 	$ManifestContent = [regex]::Replace($ManifestContent, $appPattern, $canaryName, [System.Text.RegularExpressions.RegexOptions]::Multiline)
 	return $ManifestContent
@@ -12834,7 +13245,7 @@ function Apply-OneGoSvc {
 	)
 
 	if ($Canary -and $Stage -ne 'Workload') {
-		throw "Apply-OneGoSvc -Canary 只用于 Workload 阶段(本次 $Stage):金丝雀副本不另起 ConfigMap、迁移 Job 与 Service。"
+		throw "Apply-OneGoSvc -Canary is only used in the Workload stage (got $Stage): a canary copy has no ConfigMap, schema Job or Service of its own."
 	}
 	$info = $GoSvcCatalogue[$SvcName]
 	$svcTag = if ($Canary) { $CanaryGoSvcTag } else { $GoSvcTag }
@@ -13083,7 +13494,7 @@ function Apply-OneGoSvc {
 	if ($Canary) {
 		# 改名放在全部渲染注入之后、apply 之前(见 Select-GoSvcCanaryDeployment 上方说明)。下面删残留 Secret、策略那些收尾都归稳定版,
 		# canary 只 apply 自己这份 Deployment 就结束。
-		$manifestContent = Rename-GoSvcCanaryDeployment -SvcName $SvcName -ManifestContent $manifestContent
+		$manifestContent = Rename-CanaryWorkload -Name $SvcName -ManifestContent $manifestContent
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 		Write-Host "  [applied] $SvcName-canary -> $svcImage (replicas $CanaryReplicas, release_track=canary)"
 		return
@@ -13188,13 +13599,13 @@ function Apply-GlobalGoSvcManifests {
 function Assert-GlobalGoSvcCanaryPreflight {
 	if ($script:CanaryGoSvcs.Count -eq 0) { return }
 	if (-not (Test-GlobalGoSvcDeployed)) {
-		throw "-CanaryServices 需要本次部署全局 Go 服务:带了 -SkipGoSvc 或没给 -GoSvcRegistry 时,金丝雀副本不会起,以前留下的也不会删。"
+		throw '-CanaryServices needs the global Go services to be deployed in this run: with -SkipGoSvc or without -GoSvcRegistry no canary copy is started and stale ones are not deleted.'
 	}
 	foreach ($svcName in $script:CanaryGoSvcs) {
 		if ($script:SqlWriterGoSvcs -cnotcontains $svcName) { continue }
 		$entry = Get-SqlWriterDeploymentEntry -Namespace $InfraNamespace -SvcName "$svcName-canary"
 		if ([int]$entry.replicas -ne $CanaryReplicas) {
-			throw "boot 目录里 $InfraNamespace/$svcName-canary 的 replicas 是 $($entry.replicas),本次 -CanaryReplicas 是 ${CanaryReplicas}:两者要相同,每个金丝雀 Pod 启动都要领一条自己的名册。"
+			throw "The boot catalog entry $InfraNamespace/$svcName-canary has replicas $($entry.replicas), but -CanaryReplicas is ${CanaryReplicas}: they must match, every canary Pod start consumes a roster entry of its own."
 		}
 	}
 }
@@ -13607,7 +14018,7 @@ $($schemaLines -join "`n")
 	$job = $job.Replace('PLACEHOLDER_DB_PLACEMENT_REQUIRED', $placementRequired)
 	$leftover = [regex]::Matches($job, '(__[A-Z][A-Z0-9_]*__|PLACEHOLDER_[A-Z_]+)') | ForEach-Object { $_.Value } | Sort-Object -Unique
 	if ($leftover.Count -gt 0) {
-		throw "gateway-schema.yaml 里有未替换的占位:$($leftover -join ', ')。请在 New-GatewaySchemaJobManifests 里补对应的 Replace。"
+		throw "gateway-schema.yaml has unreplaced placeholders: $($leftover -join ', '). Add the matching Replace in New-GatewaySchemaJobManifests. Nothing was written."
 	}
 	return [pscustomobject]@{ ConfigMap = $configMap; Job = $job; Image = [string]$entry.registrarImage }
 }
@@ -14061,6 +14472,8 @@ function Apply-Zone {
 	}
 	# 名册没定就别往下走,否则 gate、scene 已经 apply 了才在 Go 服务那一步失败。
 	Assert-ZoneSqlWriterRosters -Namespace $namespace
+	# 网关建表 Job 的目录条目(schema Secret、registrar 镜像)同理先核:只渲染不写,真正 apply 在 Apply-JavaSvcManifests 里再渲染一次。
+	if (Test-ZoneGatewayDeployed) { $null = New-GatewaySchemaJobManifests -Namespace $namespace }
 	$scenePlan = Resolve-SceneDeploymentPlan `
 		-LegacySceneReplicas $CurrentSceneReplicas `
 		-WorldReplicas $CurrentSceneWorldReplicas `
@@ -14296,7 +14709,8 @@ function Get-InfraZoneIds {
 	K8s 上 Java 网关查 zone_config 报表不存在,db 服务因 zone_<id>_db 不存在拒启。
 
 	除仓库里的 sql 原样带入(CRLF 统一成 LF)外,再按 zones 配置与本次 -ZoneId
-	生成 01_k8s_zone_dbs.sql 预建每个 zone 的库并授权给 appuser。文件名以 01_
+	生成 01_k8s_zone_dbs.sql 预建每个 zone 的主库和本地域的存档库(dev 缺省地域 0、K=1,即 player_store_1000000_db;
+	staging、prod 没给 -Region / -PlayerStoreShards 时不建,存档库在外部 SQL 入口上由运维预建)并授权给 appuser。文件名以 01_
 	开头保证排在 00_init_zone_dbs.sql 之后、gateway_tables.sql 之前(initdb 按
 	文件名顺序执行);CREATE DATABASE IF NOT EXISTS 与 00_ 里的 zone_1/2 重叠无害。
 
@@ -14334,7 +14748,7 @@ function New-MysqlInitConfigMapYaml {
 
 	$zoneIds = Get-InfraZoneIds
 	$zoneSql = @(
-		"-- 由 k8s_deploy.ps1 Apply-Infra 生成,不要手改:按 zones 配置 + -ZoneId 预建每个 zone 的库。",
+		"-- 由 k8s_deploy.ps1 Apply-Infra 生成,不要手改:按 zones 配置 + -ZoneId 预建每个 zone 的主库,再按 -Region / -PlayerStoreShards 预建本地域的存档库。",
 		"-- zones = $($zoneIds -join ',')",
 		""
 	)
@@ -14342,6 +14756,21 @@ function New-MysqlInitConfigMapYaml {
 		$zoneSql += ('CREATE DATABASE IF NOT EXISTS `zone_{0}_db`;' -f $id)
 		# 单引号字符串:双引号里的反引号会被 PowerShell 当转义符吃掉,SQL 里的库名引号就没了。
 		$zoneSql += ('GRANT ALL PRIVILEGES ON `zone_{0}_db`.* TO ''appuser''@''%'';' -f $id)
+	}
+	# 地域存档库(设计 player-data-tidb-scaling-plan.md §7.2):与写路径入口 Assert-PlayerStoreAllowlist 要求清单恰好列出的那 K 个库同一公式。
+	# 集群内这台 MySQL 只在 dev 的 mysql 档、入口就是它时部署;staging、prod 的存档库在外部 SQL 入口上,由运维按同一份清单预建
+	# (docs/ops/k8s-open-server-runbook.md)。万一非 dev 档走到这里又没给 -Region / -PlayerStoreShards,这里不建,也不猜。
+	$storeRegion = if ($ReleaseProfile -eq 'dev' -or [int]$Region -ge 0) { Resolve-IdIssuerRegion } else { $null }
+	$storeShards = if ($ReleaseProfile -eq 'dev' -or [int]$PlayerStoreShards -gt 0) { Resolve-PlayerStoreShards } else { $null }
+	if ($null -ne $storeRegion -and $null -ne $storeShards) {
+		$zoneSql += "-- player store databases of region $storeRegion (K = $storeShards)"
+		foreach ($database in (Get-RegionPlayerStoreDbNames -Region $storeRegion -Shards $storeShards)) {
+			$zoneSql += ('CREATE DATABASE IF NOT EXISTS `{0}`;' -f $database)
+			$zoneSql += ('GRANT ALL PRIVILEGES ON `{0}`.* TO ''appuser''@''%'';' -f $database)
+		}
+	}
+	else {
+		$zoneSql += "-- player store databases not created: -Region and -PlayerStoreShards were not given (staging / prod keep them on the external SQL entry)"
 	}
 	$zoneSql += "FLUSH PRIVILEGES;"
 	$entries["01_k8s_zone_dbs.sql"] = (($zoneSql -join "`n") + "`n")
@@ -14501,13 +14930,30 @@ function Apply-KafkaTopicInitJob {
 	口令到 Initialize-InjectedSecrets 才解析,而入口预检排在密钥解析之前。
 #>
 function New-BattleWorkloadManifest {
+	param(
+		# 金丝雀 battle 池(-CanaryBattleReplicas,发布轨道设计 §2.6):镜像、拉取策略、轨道与副本数换成金丝雀的,渲染完改名成 battle-canary。
+		# 其余(battle-node-config、机房号、探测与终局密钥)和稳定版完全相同。hostPort 形态在脚本参数处已拒绝。
+		[switch]$Canary
+	)
+
+	$nodeArgs = @{}
+	$replicas = $BattleReplicas
+	$image = $NodeImage
+	if ($Canary) {
+		if ($BattleOrchestrator -ne 'agones' -and $ClientEntryMode -eq 'external') {
+			throw 'Internal error: the canary battle pool does not support the hostPort battle Deployment.'
+		}
+		$replicas = $CanaryBattleReplicas
+		$image = $CanaryNodeImage
+		$nodeArgs = @{ Image = $CanaryNodeImage; PullPolicy = (Resolve-ImagePullPolicy -ImageRef $CanaryNodeImage); Track = 'canary' }
+	}
 	$health = $null
 	if ($BattleOrchestrator -eq 'agones') {
 		$health = Resolve-BattleFleetHealth -InitialDelaySeconds $AgonesHealthInitialDelaySeconds `
 			-PeriodSeconds $AgonesHealthPeriodSeconds -FailureThreshold $AgonesHealthFailureThreshold
-		$yaml = New-BattleFleetYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global') -Replicas $BattleReplicas `
+		$yaml = New-BattleFleetYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global' @nodeArgs) -Replicas $replicas `
 			-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode $ClientEntryMode `
-			-Health $health -BuildLabel (Get-ImageBuildLabel -Image $NodeImage) -ClientPublicHost $ClientPublicHost
+			-Health $health -BuildLabel (Get-ImageBuildLabel -Image $image) -ClientPublicHost $ClientPublicHost
 	}
 	elseif ($ClientEntryMode -eq 'external') {
 		# Deployment + hostPort 20000:只用于验证与回退(D86),每个节点只能跑 1 个副本、没有忙碌保护(preflight 已警告)。
@@ -14516,8 +14962,8 @@ function New-BattleWorkloadManifest {
 			-ClientPublicHost $ClientPublicHost
 	}
 	else {
-		$yaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $BattleReplicas `
-			-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config'
+		$yaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $replicas `
+			-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' @nodeArgs
 	}
 	# 三种battle编排使用同一注入路径；密钥只引用已有Secret，不进入配置或脚本输出。
 	# battle 自己不连 match 的 SQL，这里只要机房号；SQL 入口在生成 match 配置时核。
@@ -14532,7 +14978,13 @@ function New-BattleWorkloadManifest {
 		-SecretName 'domain-service-secrets' -SecretKey 'match-probe'
 	$yaml = Add-GoSvcSecretEnv -SvcName 'battle' -ManifestContent $yaml -EnvName 'MMORPG_MATCH_OUTCOME_SECRET_BATTLE' `
 		-SecretName 'domain-service-secrets' -SecretKey 'match-outcome-battle'
-	return [pscustomobject]@{ Orchestrator = $BattleOrchestrator; Health = $health; Yaml = $yaml }
+	$name = 'battle'
+	if ($Canary) {
+		# 改名放在全部注入之后:Deployment / Fleet 名换成 battle-canary,全部 app: battle 换成 app: battle-canary,容器名不变。
+		$yaml = Rename-CanaryWorkload -Name 'battle' -ManifestContent $yaml
+		$name = 'battle-canary'
+	}
+	return [pscustomobject]@{ Orchestrator = $BattleOrchestrator; Health = $health; Yaml = $yaml; Name = $name; Replicas = $replicas; Image = $image }
 }
 
 function Apply-BattlePool {
@@ -14591,6 +15043,37 @@ function Apply-BattlePool {
 	}
 }
 
+# 金丝雀 battle 池(-CanaryBattleReplicas,发布轨道设计 §2.6)。Workload 是 New-BattleWorkloadManifest -Canary 的结果,$null = 这次不起。
+# 不粘滞:不起时删掉以前留下的 battle-canary,只删本次编排形态的那种 kind(Agones 是 Fleet,其余是 Deployment)。
+# 切换 battle 编排形态之前先撤掉金丝雀池,否则另一种 kind 的 battle-canary 会留下。删掉之后,还没开局的金丝雀局按 stable 放,
+# 正在打的局随 Pod 一起结束(与缩容稳定版 battle 相同),所以中止时先等金丝雀会话的局打完更稳妥(手册「中止」)。
+function Apply-CanaryBattlePool {
+	param([AllowNull()]$Workload)
+
+	$kind = if ($BattleOrchestrator -eq 'agones') { 'fleet' } else { 'deployment' }
+	if ($null -eq $Workload) {
+		Invoke-Kubectl -Args @('delete', $kind, 'battle-canary', '-n', $InfraNamespace, '--ignore-not-found')
+		return
+	}
+	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $Workload.Yaml
+	Write-Host "  [applied] battle-canary -> $($Workload.Image) (replicas $($Workload.Replicas), release_track=canary)"
+	if (-not $WaitReady) {
+		return
+	}
+	if ($BattleOrchestrator -eq 'agones') {
+		try {
+			Wait-ForFleetReady -Namespace $InfraNamespace -FleetName 'battle-canary' -ExpectedReplicas $Workload.Replicas `
+				-TimeoutSeconds ([Math]::Max($WaitTimeoutSeconds, 300)) -KubeContext $KubeContext -KubeConfig $KubeConfig -DryRun:$DryRun
+		}
+		catch {
+			Write-CppOpenFileLimitRefusals -Namespace $InfraNamespace -WorkloadName 'battle-canary'
+			throw
+		}
+		return
+	}
+	Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'battle-canary' -CppNode
+}
+
 # fail-closed:渲染好的 infra 清单里还有 __XXX__ 形态的占位就拒绝 apply。以前只有 kafka.yaml 走替换,别的清单里新加占位会原样送进集群,
 # 要到 Pod 起不来才发现。Apply-Infra 的循环与按用途拆出的 queue 实例(New-RedisQueueInstanceManifests)共用这一份检查。
 function Assert-InfraManifestPlaceholdersReplaced {
@@ -14615,6 +15098,11 @@ function Apply-Infra {
 		$battleConfigMapYaml = New-NodeConfigMapYaml -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId `
 			-ConfigName 'battle-node-config' -IncludeBattleSettings
 		$battleWorkload = New-BattleWorkloadManifest
+	}
+	# 金丝雀 battle 池(-CanaryBattleReplicas)同样在这里渲染,形状不对在任何基础设施写操作之前 throw。
+	$canaryBattleWorkload = $null
+	if ($CanaryBattleReplicas -gt 0) {
+		$canaryBattleWorkload = New-BattleWorkloadManifest -Canary
 	}
 	# 共享 Redis 的形态(-RedisReplicas,见 Get-RedisTopology):单实例 apply redis.yaml,高可用 apply redis-ha.yaml。两份清单里的
 	# 对象同名(Service redis / redis-headless、PDB redis-pdb、StatefulSet redis),所以同一时刻只 apply 其中一份。
@@ -14672,7 +15160,12 @@ function Apply-Infra {
 	# 阶段 1 的 CronJob etcd-compact(etcd-maintenance.yaml)2026-11-05 退役:官方镜像没有 shell,它的脚本跑不了,内置压缩做的是同一件事。
 	# 以前 apply 过的残留在下面 etcd.yaml 那一支里删掉。
 	# 共享 Redis 那一项按拓扑取 redis.yaml 或 redis-ha.yaml(见上)。
-	$infraManifests = @("etcd.yaml", $redisTopology.Manifest, "redis-match-cluster.yaml", "kafka.yaml", "mysql.yaml")
+	$infraManifests = @("etcd.yaml", $redisTopology.Manifest, "redis-match-cluster.yaml", "kafka.yaml")
+	# mysql.yaml:单实例 MySQL,dev 夹具。只在全球权威 SQL 入口就是它时部署(Test-InfraMysqlInUse);tidb 档与外部 MySQL 主库都不部署,
+	# 不在集群里留一个没人用的单点(docs/design/no-single-node-horizontal-scaling-20261001.md §6)。已经部署过的不在这里删,PVC 留给手工处理。
+	if (Test-InfraMysqlInUse) {
+		$infraManifests += "mysql.yaml"
+	}
 	# etcd-id-secondary.yaml:发号器第二份预留记录所在的独立 etcd(docs/ops/id-issuer-runbook.md)。
 	# dev 档不起,两份记录放同一套 etcd 的不同键。
 	if ($ReleaseProfile -ne 'dev') {
@@ -14879,6 +15372,8 @@ function Apply-Infra {
 
 	if ($BattleReplicas -gt 0) {
 		Apply-BattlePool -ConfigMapYaml $battleConfigMapYaml -Workload $battleWorkload
+		# 金丝雀 battle 池排在稳定版之后:用同一份 battle-node-config 与 Agones SDK 身份,都由 Apply-BattlePool 先建好。
+		Apply-CanaryBattlePool -Workload $canaryBattleWorkload
 	}
 
 	# 全局池服务一份、放 infra namespace、所有 zone 共用。这里只做第一步,依赖 data-service 的进程见 Apply-GlobalGoSvcWorkloads。

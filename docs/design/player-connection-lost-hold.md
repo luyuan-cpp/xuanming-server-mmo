@@ -3,7 +3,7 @@
 > 2026-11-05,Claude。代码已随用户的快照提交入库(`0f484db0d`、`6452b949d` 等),协议生成物里已有 `ExitGameReason`。**未编译、未测试**,验证步骤见 §10。Java 版待做,见 §9。
 > 2026-11-06 补:回原场景排除回收中的频道(§6 第一段),新增用例 `TestEnterScene_ZeroZoneReconnectSkipsDrainingChannel`。同样未编译。
 > 2026-11-06 再补(未编译):开通挂机(挂机月卡有效)的玩家断线后离线托管,不按 25 秒退出,保留到重连、月卡到期或被别的退出取代(§4.1);保留中的队员照常被服务器驱动的组队跟随带着走(§4),托管开始时由服务器开启跟随。
-> 2026-11-06 修正(未编译),两处判据都改为比登录身份:
+> 2026-11-06 修正,两处判据都改为比登录身份。11-08 Codex 跑整套 `cross_zone_test`,458 项全部 PASS,含下面新增的 5 条与按新签名改过的 2 条(§10 第 2 条);本地联调没做。
 > - `EnterScene` 判「换会话」原先比会话快照,同一会话的重复路由也被拆掉重进(§5 第 3 步);
 > - 接回判据 `IsResumedBy` 原先只比会话号,gate 以同一 node_id 重启后拿回旧号的新登录摘不掉保留(§5 第 0.1 步)。
 >
@@ -182,7 +182,7 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 
 ## 8. 残余与后续
 
-1. **gate 与客户端之间没有应用层心跳和空闲超时**,客户端协议里也没有心跳消息。手机断网这类不发 FIN 的掉线,gate 要等 TCP 自己报错才知道,在那之前角色一直按在线处理。这一条要新增客户端可见消息,两版服务器和客户端同批改,本批只登记。节点链路(gate↔scene RPC0)的心跳已由另一会话做完。
+1. **gate 与客户端之间的应用层心跳**:2026-11-06 已另起一批做完([gate-client-heartbeat.md](gate-client-heartbeat.md),C++/Go、客户端与 Java 都已落码,协议已生成,验证状态见该文 §11)。验签后开始判死,空闲 30 秒强关连接;强关走既有断开回调,代发 `ExitGame(DISCONNECTED)`,随后就是本文的断线保留,没有另开一条下线路径。未验签的连接有 10 秒握手期限,它们没绑玩家,不代发 ExitGame。节点链路(gate↔scene RPC0)的心跳由另一会话做完(`muduo-rpc-channel.md`)。
 2. 客户端大厅断线后不会自动重登(审计 §3.1),属于客户端仓。没有客户端自动重连时,服务端的保留只在玩家手动重进时生效。
 3. 保留期间战斗结束:结算照常应用到实体上,终局推送发不出去。重连后的结果面板由另一批「近期战斗结果」恢复([battle-result-recovery.md](battle-result-recovery.md),11-05 落码、未编译),本批不重复做。
 4. 按 player_id 移动玩家、又不看活会话的入口:11-06 核对时没有。客户端换图要有客户端;镜像自动进场在进入保留时已撤掉;队伍跟随与跨节点交接都先看活会话;GM 传送(`TeleportRequest`)回 1006。以后新增这类入口要先看 `HasLiveGateSession`。漏看的后果是路由在 gate 被丢弃、location 指向新场景,重连按新 location 落地;不重连时与 gate 崩溃同一残余,由租约到期的会话结束释放和 `location-release-binding.md` §17 的撤销兜底。
@@ -207,6 +207,7 @@ Java 版待做,已登记在 Java 仓 `PARITY.md`。Java 目前断链清退玩家
    - 11-06 补 5 条,同一个过滤串已包含:`ConnectionLostHold.SameSessionNumberResumesOnlyWithNewerLogin` 1 条、`ConnectionLostHoldReentry.*` 4 条。`IsResumedBy` 与 `ResumeConnectionLostHold` 多了登录代次参数,原有的 `ConnectionLostHold.OnlyANewBoundSessionResumes`、`ConnectionLostHoldEcs.OnlyANewSessionResumesTheHold` 只补了代次 0,期望不变。
    - 另跑 `--gtest_filter=EnterFenceEcs.*:SceneEntryPermissionTest.*`,确认入场栅栏与场景入场的原有用例不回归。
    - 两条回归用例各守一条判据:`SameLoginRepeatRouteStaysInScene` 守第 3 步(拿快照比时,玩家会被移出格子、`Hex` 被摘);`ReusedSessionNumberWithNewerLoginResumesHold` 守第 0.1 步(只比会话号时,保留摘不掉)。
+   - 运行证据:11-08 Codex 的整套运行已覆盖上面这 7 条,`cross_zone_test` 458 项全部 PASS(`build/verification/naming-audit-20261108/cpp-tests/cross_zone_test/cross_zone_test.stdout.log`)。测试能链接上三参的 `ResumeConnectionLostHold`,说明库是带本次修正重编过的。
    - 11-06 离线托管(§4.1)补 7 条,同一个过滤串已包含:`ConnectionLostHoldAfkPass.*` 3 条(解析、托管中的判定、没有月卡时的普通窗口)、
      `ConnectionLostHoldAfkPassEcs.*` 4 条(月卡有效过了 25 秒不退出、月卡没了按断线退出、迟到 / 失败 / 别的保留的结果不改状态、托管开始替队员开启跟随)。
      原有 `ConnectionLostHoldEcs.*` 不回归:测试里玩家域 Redis 没连上,查询是空操作,保留仍按 25 秒到期。

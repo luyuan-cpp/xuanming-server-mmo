@@ -366,7 +366,7 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
 
 	// 4.5 补发"自己"的 ActorCreate:AOI 可见性遍历刻意跳过 observer 本身
-	// (aoi.cpp HandleEntityVisibility 的 otherEntity == entity 分支),因此
+	// (aoi.cpp ForEachNearbyEntity 的 other != entity 判断),因此
 	// 除这里之外没有任何路径把玩家自己的 actor 下发给客户端——单人在线时
 	// 客户端将收不到任何 ActorCreate,本地角色/相机绑定/移动控制器全部
 	// 无法建立。客户端靠 guid == player_id 识别并绑定本地角色。

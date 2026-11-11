@@ -1,6 +1,6 @@
 # Gate 在线身份：login 认证、gate 持有、签名传递、提交点复核
 
-日期：2026-11-05（美东）。状态：已落码。C++/Go 版链路由 Codex 编译与真连接验收（见 [审核交接](../handoff/gate-auth-role-fence-review-20261104.md)）；同日删除在线域的 login Redis 回退，未编译，待 Codex 按 [执行清单](../handoff/gate-online-identity-single-source-20261105/CODEX.md) 验证。同日另定简化方案（§9）：第 1 批（统一在线域客户端入口、关闭 guild 无会话冒名口）2026-11-06 已落码，**未编译**，与上一批合并由 Codex 按 [第 1 批执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 验证；第 2 批（删 friend 入口重复预检）2026-11-06 已落码，**未编译**，验收见同一清单的第 2 批一节，计划见 [简化计划](../handoff/gate-online-identity-simplify-20261105/PLAN.md)；§9.6 第 1 条（guild 三个读方法删无会话分支）2026-11-06 已落码，**未编译**，验收见同一清单第 7 节。Java 版待做（§8）。
+日期：2026-11-05（美东）。状态：已落码。C++/Go 版链路由 Codex 编译与真连接验收（见 [审核交接](../handoff/gate-auth-role-fence-review-20261104.md)）；同日删除在线域的 login Redis 回退，未编译，待 Codex 按 [执行清单](../handoff/gate-online-identity-single-source-20261105/CODEX.md) 验证。同日另定简化方案（§9）：第 1 批（统一在线域客户端入口、关闭 guild 无会话冒名口）2026-11-06 已落码，**未编译**，与上一批合并由 Codex 按 [第 1 批执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 验证；第 2 批（删 friend 入口重复预检）2026-11-06 已落码，**未编译**，验收见同一清单的第 2 批一节，计划见 [简化计划](../handoff/gate-online-identity-simplify-20261105/PLAN.md)；§9.6 第 1 条（guild 三个读方法删无会话分支）2026-11-06 已落码，**未编译**，验收见同一清单第 7 节；§9.6 第 2、3 条（删 guild 请求体里被忽略的身份与区字段、删全服帮会榜）2026-11-10 已落码，**未编译**，验收见同一清单第 8 节。Java 版待做（§8）。
 
 ## 1. 分工
 
@@ -81,9 +81,10 @@ login 与在线域都没有「验签失败告警放行」的宽松档：2026-11-
 
 - C++/Go 版：本文全部内容。
 - Java 版（`D:\luyuan\xuanming-server-mmo`）：入场时 `SessionContext` 使用 `ownerAccount` 已修（Java 83d57c8f）；在线域是否只认 gateway 绑定的原账号、gate 重启后新连接只能重新登录，**待核对**，已在 Java 仓 `PARITY.md` 记 TODO。Java 内部走既有 Dubbo 认证，不要求与本文签名格式相同。
-- §9 简化方案只改本仓服务端内部接缝，不改客户端契约；Java 版内部认证机制不同，不适用，不往 `PARITY.md` 加行。Java 在线域那条 TODO 核对时，一并查有没有「不带会话就按请求体身份执行」的入口（§7.5 的同类问题）。
+- §9 第 1～3 批只改本仓服务端内部接缝，不改客户端契约；Java 版内部认证机制不同，不适用，不往 `PARITY.md` 加行。Java 在线域那条 TODO 核对时，一并查有没有「不带会话就按请求体身份执行」的入口（§7.5 的同类问题）。
+- §9.6 第 2 条删了 guild 六个客户端请求里的字段，是**客户端契约变更**：Java 版本轮不改代码，已在 Java 仓 `PARITY.md` 记 TODO（同步 `game-proto` 里的 `guild.proto`，并确认 Java 版不依赖这些请求体字段）。§9.6 第 3 条删全服帮会榜后两版一致（Java 本来就不提供）。
 
-## 9. 简化方案（2026-11-05 定；第 1、2 批均于 2026-11-06 落码，未编译）
+## 9. 简化方案（2026-11-05 定；第 1～3 批 2026-11-06、第 4 批 2026-11-10 落码，均未编译）
 
 目标：在线域只有一处取身份、一条准入规则；不降低 §1～§3 的任何安全属性，并关闭 §7.5 的缺口。落码顺序、文件清单与 Codex 验收见 [简化计划](../handoff/gate-online-identity-simplify-20261105/PLAN.md)。
 
@@ -155,5 +156,5 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
 ### 9.6 剩余（2026-11-06 记）
 
 1. **guild 三个读方法的无会话分支**（2026-11-06 已删，未编译，验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 7 节）：GetGuild、GetGuildRank、GetGuildRankByGuild 原先对不带会话的调用不查归属区、沿用请求体 `zone_id`（全服榜 `zone_id=0`）、不夹页长。生产里入口准入早已拒绝这类调用，只有单测故意走这条路径。现在三个方法与四个写方法一样先过 `requireClientSession`，区一律取 `clientZone`，榜单页长夹到 `MaxRankPageSize`。随之没有调用者的两处一并收掉：`viewerOf`（只为无会话调用回 0，CreateGuild / SetAnnouncement / GetGuild 现在直接传会话里的 player_id）与 `visibleIn` 的「`zoneID==0` 不按区过滤」；`expected_guild.go` 里「只给客户端来源计 absent」的判断同理删掉（五个调用方都只受理客户端来源）。测试改成客户端来源：请求者用本区旁观者（不在被查的帮里），`guildInfoFor` 不给他现算待审数，所以不需要待审数替身，也不用为测试给 `GuildLogic` 新开接缝；「内部调用保留全服榜」改为断言无会话被拒，另加三个读方法无会话被拒的表驱动用例。运维要全服榜，另设带 `serviceauth` 的内部 RPC，不复活这条分支。
-2. **guild 四个写方法请求体里的身份字段**：CreateGuild / LeaveGuild / DisbandGuild / SetAnnouncement 的 `player_id`（CreateGuild 还有 `zone_id`）服务端一律忽略。删字段是客户端契约变更，按 AGENTS.md §12 两版同批改；Java 本轮只记 TODO，所以留到 Java 对齐时一起删。同类的还有 GetGuildRank / GetGuildRankByGuild 请求体里的 `zone_id`：第 1 条之后对任何调用方都忽略，随这一条一起删。
-3. **全服帮会榜只写不读**（2026-11-06 第 1 条落码后发现，未处理）：全服榜 ZSET `guild_rank` 唯一的读者是刚删掉的无会话分支，现在仍由 `UpdateGuildScore`（每次推分多一次 ZADD）、`RemoveGuildFromRank`、`RebuildRanks` 维护，`GetGuildRankPage` / `GetGuildRank` 的「`zoneID=0` 读全服榜」只剩 data 层单测在用；[帮会排行架构](guild_ranking_architecture_zh.md)（另有同名的原稿与英文版）仍按「全服 + 本服双榜」描述。要不要删由负责人定：不需要全服榜就删维护路径、data 层的 0 值口径与相关用例并改正三份架构文档；需要就按第 1 条末尾另设带 `serviceauth` 的内部 RPC 来读。Java 版不提供全服榜（PARITY.md 帮会核心行有意差异⑩），删掉也不产生两版差异。
+2. **guild 请求体里的身份与区字段**（2026-11-10 已删，未编译，验收见 [执行清单](../handoff/gate-online-identity-simplify-20261105/CODEX.md) 第 8 节）：CreateGuild 的 `player_id` / `zone_id`，LeaveGuild、DisbandGuild、SetAnnouncement 的 `player_id`，GetGuildRank、GetGuildRankByGuild 的 `zone_id`，服务端早已一律忽略（身份取会话、区取归属）。项目未上线，按标准做法从协议删掉并把字段号写成 `reserved`，不再给读代码的人留「也许会被采信」的误会。唯一还带 `player_id` 的客户端请求是 GetPlayerGuild，只在不带会话的内部只读调用（mail 领附件）时采信。仓库内的 robot 冒烟同步：建帮不再故意填错区、别区查榜不再伪造区、第 8 步改为按会话身份退帮。这是客户端契约变更：Unity 客户端与协议生成由 Codex 处理；Java 版本轮只在 `PARITY.md` 记 TODO（§8）。
+3. **全服帮会榜**（2026-11-10 负责人定删除，当日已删，未编译，验收同上第 8 节）：负责人 2026-11-10 答复：运维 / GM 都不需要全服帮会榜，删掉；现在就做，不等第 1 条的 Codex 回执。问之前逐处核过读者：第 1 条之后全服榜 ZSET `guild_rank` 只写不读，客户端只看本区榜，`tools/merge_zone`、`tools/data_consistency_check`、合服运维手册、robot 与 Java 网关后台都只碰分区榜 `guild_rank:zone:*`，Java 版本来就不提供全服榜。留着它，每次推分多一次 ZADD，全部帮会挤在一个键上，上 Redis Cluster 就是单槽热点。删除范围：`UpdateGuildScore` 只写最终区的分区榜；`RebuildRanks` 只重建分区榜；`RemoveGuildFromRank` 只从各分区榜摘除；data 层 `GetGuildRankPage` / `GetGuildRank` 不给区直接回 `ErrRankZoneRequired`，不再有「`zoneID=0` 读全服榜」的口径。`zone_id=0` 的帮会行是坏数据（帮会都按归属区建），分数照常落库、不进任何榜并打错误日志。三份[帮会排行架构](guild_ranking_architecture_zh.md)文档已按只有分区榜重写。旧环境里残留的 `guild_rank` 键不再有人读写，`RebuildRanks` 只扫 `guild_rank:zone:*`，不会顺手删它；项目未上线，不写迁移代码：压测前清库（`dev_tools.ps1 -Command redis-wipe-local` 或 `-Command k8s-redis-wipe`，都要带 `-ConfirmWipeAllRedis`）时一并清掉，只删这一个键用 `redis-cli -h <guild 的 RedisClient 地址> -n 0 DEL guild_rank`。

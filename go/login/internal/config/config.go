@@ -116,8 +116,8 @@ type Config struct {
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
 
 	// Placement 决定新角色的存档落点:本地域的 StorageShards 个存档库里按 player_id 取模选一个
-	// (docs/design/player-data-tidb-scaling-plan.md §7.2)。整块缺省是过渡期的旧语义(落在本 login 所在 zone 的库),
-	// 启动时打 ERROR;批次 A17b 起缺省拒绝启动。
+	// (docs/design/player-data-tidb-scaling-plan.md §7.2)。必填:没配 StorageShards 拒绝启动(PlacementConf.Validate);
+	// 标成 optional 只是让缺席时报出点名的错误,而不是 go-zero 的通用缺键错误。
 	Placement PlacementConf `json:"Placement,optional"`
 
 	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
@@ -186,51 +186,28 @@ type GateDrainMigrateConf struct {
 //
 // 存档库和区脱钩:区(home_zone)是玩法分组、会别名合服;存档库是物理落点、会整库搬集群,两者不再互相推导。
 // 每个地域固定 StorageShards 个存档库 player_store_{1000000 + Region×1000 + 片号}_db,新号按 player_id 取模选库
-// (placement.RegionStorageIDForPlayer)。
+// (placement.RegionStorageIDForPlayer),和 login 所在的区(Node.ZoneId)无关。zone_{n}_db 不再放新号。
 type PlacementConf struct {
 	// Region 是地域码,与 data_service 发号器的地域码(Issuer.Region)同值;0 只给 dev、test。
 	Region uint32 `json:"Region,optional"`
-	// StorageShards 是本地域的存档库数 K(1..1000)。上线后不能改:改了只影响之后建的号,各库玩家数从此不均。
-	// 0 = 过渡期的旧语义(下面的 NewPlayerStorageId),启动时打 ERROR;批次 A17b 起 0 拒绝启动。
+	// StorageShards 是本地域的存档库数 K(1..1000),必填。上线后不能改:K 一变小,落在后面那些库里的老号就不在
+	// go/db、data_service 的库名清单里了。K8s 由 k8s_deploy.ps1 的 -Region / -PlayerStoreShards 渲染。
 	StorageShards uint32 `json:"StorageShards,optional"`
-	// NewPlayerStorageId 是脱钩之前的落点配置,只在 StorageShards 为 0 时生效:0 = 本 login 所在 zone(Node.ZoneId);
-	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db。批次 A17b 删除。
-	NewPlayerStorageId uint32 `json:"NewPlayerStorageId,optional"`
 }
 
 // Validate 在启动时核对地域码与存档库数;不合法就拒绝启动,不建出落到错误库的角色。
 func (c PlacementConf) Validate() error {
 	if c.StorageShards == 0 {
-		if c.Region != 0 {
-			return fmt.Errorf("Placement.Region=%d is set but Placement.StorageShards is 0: region storage needs both", c.Region)
-		}
-		return nil
-	}
-	if c.NewPlayerStorageId != 0 {
-		return fmt.Errorf("Placement.NewPlayerStorageId=%d conflicts with Placement.StorageShards=%d: remove NewPlayerStorageId",
-			c.NewPlayerStorageId, c.StorageShards)
+		return fmt.Errorf("Placement.StorageShards is required: the number of player store databases of region %d (1..%d)",
+			c.Region, placement.RegionStorageStride)
 	}
 	return placement.ValidateRegionStorage(c.Region, c.StorageShards)
 }
 
-// UsesRegionStorage 报告新角色是否按地域存档库落点(StorageShards 已配)。
-func (c PlacementConf) UsesRegionStorage() bool {
-	return c.StorageShards != 0
-}
-
-// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
-// 配了 StorageShards:本地域的 K 个存档库里按 player_id 取模。没配(过渡期):NewPlayerStorageId,为 0 时用 loginZone。
-func (c PlacementConf) StorageIDForNewPlayer(playerID uint64, loginZone uint32) (uint32, error) {
-	if c.UsesRegionStorage() {
-		return placement.RegionStorageIDForPlayer(c.Region, c.StorageShards, playerID)
-	}
-	if c.NewPlayerStorageId != 0 {
-		return c.NewPlayerStorageId, nil
-	}
-	if loginZone == 0 {
-		return 0, fmt.Errorf("no storage for new players: Placement.StorageShards is 0 and Node.ZoneId is 0")
-	}
-	return loginZone, nil
+// StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id:本地域的 K 个存档库里按 player_id 取模。
+// 发号打散之后 player_id 均匀,取模就是均匀分布;落点写进目录之后只认目录,不再按这条公式算。
+func (c PlacementConf) StorageIDForNewPlayer(playerID uint64) (uint32, error) {
+	return placement.RegionStorageIDForPlayer(c.Region, c.StorageShards, playerID)
 }
 
 // 没写 Addrs、Node.RedisClient 也没写对应项时,玩家域与登录域连接的口径:go-redis 对单实例的缺省值
@@ -302,7 +279,7 @@ func (c *Config) ValidateRedisDomains() error {
 // Login不另造TiDB开关：真实强SQL/已核ready由DS正式门禁负责，Login必须指向该DS而不能静默降级。
 func (c *Config) ValidateGlobalAuthority(getenv func(string) string) error {
 	if c.Node.ZoneId == 0 {
-		return fmt.Errorf("全球Login必须配置非零Node.ZoneId，NewPlayerStorageId=0才可取正规本区落点")
+		return fmt.Errorf("global login needs a non-zero Node.ZoneId: it is the home zone written for new players")
 	}
 	rpc := c.DataServiceRpc
 	target := strings.TrimSpace(rpc.Target) != ""

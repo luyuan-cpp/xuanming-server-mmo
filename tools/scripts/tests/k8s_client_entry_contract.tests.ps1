@@ -1858,7 +1858,7 @@ $RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueM
 # 玩家域 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage')
 # 逻辑库只走 dev_tools → k8s_deploy(给了才传):k8s_image.ps1 不部署 Go 服务,用不到它们。不粘滞:漏传 = staging / prod 被拒。
-$LogicalDbWrapperKeys = @('DirectoryLogicalShards', 'Region', 'SqlClusters', 'SqlDefaultCluster')
+$LogicalDbWrapperKeys = @('DirectoryLogicalShards', 'Region', 'PlayerStoreShards', 'SqlClusters', 'SqlDefaultCluster')
 $WrapperPairs = @(
     @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'
         Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'GateRouterMode',

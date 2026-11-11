@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// 没写 PlayerRedis.Addrs:指向 Redis 段那一个实例,连接身份原样带过去,开发环境不用改配置。
+// 没写 PlayerRedis.Addrs、也没写 CoreRedis(开发环境):指向 Redis 段那一个实例,连接身份原样带过去,不用改配置。
 func TestEffectivePlayerRedisFallsBackToRedisSection(t *testing.T) {
 	var c Config
 	c.Redis.Host = "redis.infra:6379"
@@ -32,6 +32,29 @@ func TestEffectivePlayerRedisFallsBackToRedisSection(t *testing.T) {
 	got = c.EffectivePlayerRedis()
 	assert.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
 	assert.Equal(t, 7, got.PoolSizePerNode)
+}
+
+// K8s 没建玩家域集群时的形状:Redis 段是控制域实例 redis-ctl-g<N>,CoreRedis 是核心,PlayerRedis 只写池上限。
+// 玩家域必须回落到核心:别的服务与 C++ scene 的玩家域都在核心,回落到控制域会让 location / owner_epoch 有两份
+// (control-plane-zone-scoping-20261105.md §4.2)。连接身份取核心那一段,不混进控制域的。
+func TestEffectivePlayerRedisFallsBackToCoreNotControlInstance(t *testing.T) {
+	var c Config
+	c.Redis.Host = "redis-ctl-g0.infra:6379"
+	c.Redis.User = "control-user"
+	c.Redis.Pass = "control"
+	c.CoreRedis.Host = "redis.infra:6379"
+	c.CoreRedis.User = "core-user"
+	c.CoreRedis.Pass = "core"
+	c.PlayerRedis.PoolSizePerNode = 7
+
+	got := c.EffectivePlayerRedis()
+	assert.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
+	assert.False(t, got.Cluster)
+	assert.Equal(t, "core-user", got.Username)
+	assert.Equal(t, "core", got.Password)
+	assert.False(t, got.TLS)
+	assert.Equal(t, 7, got.PoolSizePerNode)
+	require.NoError(t, got.Validate())
 }
 
 // 写了 Addrs:完全按它来,不混进 Redis 段的连接身份。

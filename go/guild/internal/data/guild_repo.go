@@ -200,7 +200,11 @@ func playerGuildCacheGenerationKey(playerID uint64) string {
 	return fmt.Sprintf("player_guild:v2:cache_generation:%d", playerID)
 }
 
-const guildRankKey = "guild_rank" // Redis ZSET: member=guildID, score=rankScore (global)
+// 帮会榜只有分区榜 guild_rank:zone:{最终区}(Redis ZSET,member=guildID,score=帮会积分),由 MySQL guild.score 重建。
+// 没有全服榜:客户端只看本区榜,运维和 GM 也不需要(负责人 2026-11-10 定,docs/design/gate-online-identity.md §9.6;
+// Java 版同样不提供)。
+// ErrRankZoneRequired 是查榜不给区时的错误,只可能是调用方写错了。
+var ErrRankZoneRequired = errors.New("guild rank: a zone is required, there is no global guild rank")
 
 const (
 	guildRankLockKey  = "guild_rank:maintenance_lock"
@@ -599,7 +603,7 @@ type RankEntry struct {
 }
 
 // UpdateGuildScore persists the score to MySQL (authoritative) first, then
-// updates the global and per-zone ranking ZSETs (read acceleration).
+// updates the guild's per-zone ranking ZSET (read acceleration).
 //
 // 先 MySQL 后 Redis 的顺序是刻意的:ZSET 丢了可以由 RebuildRanks 重建,
 // 反过来「只进了 ZSET 没进 MySQL」的分数在 Redis 故障后就永久消失 ——
@@ -646,22 +650,22 @@ func (r *GuildRepo) UpdateGuildScore(ctx context.Context, guildID uint64, zoneID
 		return err
 	}
 
-	z := redis.Z{Score: float64(score), Member: guildID}
-	pipe := r.rdb.Pipeline()
-	pipe.ZAdd(ctx, guildRankKey, z)
-	if authoritativeZoneID > 0 {
-		pipe.ZAdd(ctx, zoneRankKey(r.FinalZone(authoritativeZoneID)), z)
+	if authoritativeZoneID == 0 {
+		// 帮会都按区建(CreateGuild 只用会话的归属区),zone_id=0 的行是坏数据:分数照常落库,不进任何榜。
+		logx.Errorf("UpdateGuildScore: guild %d has no zone; score persisted but not ranked", guildID)
+		return nil
 	}
-	if _, err := pipe.Exec(ctx); err != nil {
+	z := redis.Z{Score: float64(score), Member: guildID}
+	if err := r.rdb.ZAdd(ctx, zoneRankKey(r.FinalZone(authoritativeZoneID)), z).Err(); err != nil {
 		return fmt.Errorf("update rank cache for guild %d: %w", guildID, err)
 	}
 	return nil
 }
 
-// RebuildRanks 始终从 MySQL 权威快照重建全局榜和所有 zone 榜，而不是只在
+// RebuildRanks 始终从 MySQL 权威快照重建所有 zone 榜，而不是只在
 // ZCARD==0 时运行。临时 key 构造完成后用 MULTI/EXEC 一次切换，因此能修复单项
 // 缺失、旧值、zone 榜丢失与解散后的幽灵条目。分区榜按当前映射的最终区重建,
-// 合服、撤销合服之后重启一次就回到与映射一致的状态。
+// 合服、撤销合服之后重启一次就回到与映射一致的状态。zone_id=0 的坏行不进任何榜,只计数打日志。
 func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 	release, err := r.acquireRankLock(ctx)
 	if err != nil {
@@ -676,11 +680,10 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 	defer rows.Close()
 
 	token := uuid.NewString()
-	tempGlobalKey := fmt.Sprintf("guild_rank:rebuild:%s:global", token)
 	tempZoneKeys := make(map[uint32]string)
-	tempKeys := []string{tempGlobalKey}
+	var tempKeys []string
 	pipe := r.rdb.Pipeline()
-	rebuilt := 0
+	rebuilt, unzoned := 0, 0
 	zones := r.mergedZones()
 	for rows.Next() {
 		var guildID uint64
@@ -689,25 +692,28 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 		if err := rows.Scan(&guildID, &zoneID, &score); err != nil {
 			return fmt.Errorf("scan guild row for rank rebuild: %w", err)
 		}
-		z := redis.Z{Score: float64(score), Member: guildID}
-		pipe.ZAdd(ctx, tempGlobalKey, z)
-		if zoneID > 0 {
-			final := zones.Final(zoneID)
-			tempKey, ok := tempZoneKeys[final]
-			if !ok {
-				tempKey = fmt.Sprintf("guild_rank:rebuild:%s:zone:%d", token, final)
-				tempZoneKeys[final] = tempKey
-				tempKeys = append(tempKeys, tempKey)
-			}
-			pipe.ZAdd(ctx, tempKey, z)
+		if zoneID == 0 {
+			unzoned++
+			continue
 		}
+		final := zones.Final(zoneID)
+		tempKey, ok := tempZoneKeys[final]
+		if !ok {
+			tempKey = fmt.Sprintf("guild_rank:rebuild:%s:zone:%d", token, final)
+			tempZoneKeys[final] = tempKey
+			tempKeys = append(tempKeys, tempKey)
+		}
+		pipe.ZAdd(ctx, tempKey, redis.Z{Score: float64(score), Member: guildID})
 		rebuilt++
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	defer r.rdb.Del(context.Background(), tempKeys...)
-	if rebuilt > 0 {
+	if unzoned > 0 {
+		logx.Errorf("RebuildRanks: %d guild rows have no zone and are left out of every rank", unzoned)
+	}
+	if len(tempKeys) > 0 {
+		defer r.rdb.Del(context.Background(), tempKeys...)
 		if _, err := pipe.Exec(ctx); err != nil {
 			return fmt.Errorf("populate temporary rank zsets: %w", err)
 		}
@@ -722,26 +728,24 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 		return fmt.Errorf("scan old zone rank keys: %w", err)
 	}
 
-	if _, err := r.rdb.TxPipelined(ctx, func(tx redis.Pipeliner) error {
-		tx.Del(ctx, guildRankKey)
-		if len(oldZoneKeys) > 0 {
-			tx.Del(ctx, oldZoneKeys...)
+	if len(oldZoneKeys) > 0 || len(tempZoneKeys) > 0 {
+		if _, err := r.rdb.TxPipelined(ctx, func(tx redis.Pipeliner) error {
+			if len(oldZoneKeys) > 0 {
+				tx.Del(ctx, oldZoneKeys...)
+			}
+			for zoneID, tempKey := range tempZoneKeys {
+				tx.Rename(ctx, tempKey, zoneRankKey(zoneID))
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("swap rebuilt rank zsets: %w", err)
 		}
-		if rebuilt > 0 {
-			tx.Rename(ctx, tempGlobalKey, guildRankKey)
-		}
-		for zoneID, tempKey := range tempZoneKeys {
-			tx.Rename(ctx, tempKey, zoneRankKey(zoneID))
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("swap rebuilt rank zsets: %w", err)
 	}
 	logx.Infof("guild rank ZSETs reconciled from MySQL: %d guilds, %d zones", rebuilt, len(tempZoneKeys))
 	return nil
 }
 
-// RemoveGuildFromRank 把公会从全局榜和分区榜里摘掉。
+// RemoveGuildFromRank 把公会从所有分区榜里摘掉。
 //
 // zoneID 是**提示**不是权威:
 //
@@ -785,8 +789,10 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 		zoneKeys[zoneRankKey(r.FinalZone(effectiveZone))] = struct{}{}
 	}
 
+	if len(zoneKeys) == 0 {
+		return nil // 还没有任何分区榜,也就没有要摘的条目。
+	}
 	pipe := r.rdb.Pipeline()
-	pipe.ZRem(ctx, guildRankKey, guildID)
 	for key := range zoneKeys {
 		pipe.ZRem(ctx, key, guildID)
 	}
@@ -963,13 +969,13 @@ if not rank then return {} end
 return {rank, redis.call("ZSCORE", KEYS[1], ARGV[1])}
 `)
 
-// GetGuildRankPage returns a page of guilds sorted by score descending.
-// page is 1-based; zoneID=0 means global ranking. A merged-away zone reads the rank of its final zone.
+// GetGuildRankPage returns a page of the zone's guild rank sorted by score descending.
+// page is 1-based; zoneID must be non-zero (ErrRankZoneRequired). A merged-away zone reads the rank of its final zone.
 func (r *GuildRepo) GetGuildRankPage(ctx context.Context, zoneID, page, pageSize uint32) ([]RankEntry, uint32, error) {
-	key := guildRankKey
-	if zoneID > 0 {
-		key = zoneRankKey(r.FinalZone(zoneID))
+	if zoneID == 0 {
+		return nil, 0, ErrRankZoneRequired
 	}
+	key := zoneRankKey(r.FinalZone(zoneID))
 
 	// uint32 页码和页长先按 uint64 相乘，超大起点在脚本内先与榜长比较，
 	// 为空页时不传给 ZREVRANGE，避免无符号转有符号后环绕回榜首。
@@ -1016,13 +1022,13 @@ func (r *GuildRepo) GetGuildRankPage(ctx context.Context, zoneID, page, pageSize
 	return entries, uint32(total), nil
 }
 
-// GetGuildRank returns a single guild's rank and score. zoneID=0 means global. Rank is 1-based (0 = not ranked).
-// A merged-away zone reads the rank of its final zone.
+// GetGuildRank returns a single guild's rank and score on the zone's rank. Rank is 1-based (0 = not ranked).
+// zoneID must be non-zero (ErrRankZoneRequired). A merged-away zone reads the rank of its final zone.
 func (r *GuildRepo) GetGuildRank(ctx context.Context, guildID uint64, zoneID uint32) (RankEntry, error) {
-	key := guildRankKey
-	if zoneID > 0 {
-		key = zoneRankKey(r.FinalZone(zoneID))
+	if zoneID == 0 {
+		return RankEntry{}, ErrRankZoneRequired
 	}
+	key := zoneRankKey(r.FinalZone(zoneID))
 
 	member := fmt.Sprintf("%d", guildID)
 

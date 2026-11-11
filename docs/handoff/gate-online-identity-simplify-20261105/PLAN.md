@@ -68,4 +68,4 @@ Codex 跑一次，回执逐条记红 / 绿；与上表不符就停下报告，�
 
 1. **已落码（第 3 批，2026-11-06，未编译）**：guild 的 GetGuild、GetGuildRank、GetGuildRankByGuild 删掉无会话分支，与四个写方法一样先过 `requireClientSession`，区一律取 `clientZone`，榜单页长夹到 `MaxRankPageSize`；随之删 `viewerOf`、`visibleIn` 的 `zoneID==0` 口径与 `expected_guild.go` 里恒真的「只计客户端来源」判断。`guild_logic_names_test.go` 6 处改成客户端来源（`clientCtx` + `fakeHomeZones`）；请求者用本区旁观者，`guildInfoFor` 不给他现算待审数，所以没有加待审数替身，也没有为测试新开接缝。`client_zone_test.go`「内部调用保留全服榜」改为断言无会话被拒，新增 `TestLegacyReadsWithoutSessionAreRefused`。文件清单与验收见 CODEX.md 第 7 节（设计 §9.6 第 1 条）。
 2. guild 四个写方法请求体里被忽略的 `player_id` / `zone_id` 是客户端契约，随 Java 对齐两版同批删；GetGuildRank / GetGuildRankByGuild 请求体里的 `zone_id` 第 3 批之后也一律忽略，一并删（设计 §9.6 第 2 条）。
-3. 全服帮会榜 `guild_rank` 第 3 批之后只写不读：删维护路径还是另设带 `serviceauth` 的内部 RPC 来读，待负责人定（设计 §9.6 第 3 条）。
+3. **已落码（2026-11-10，未编译）**：负责人 2026-11-10 定运维 / GM 不需要全服帮会榜，删掉，不等第 3 批回执。`UpdateGuildScore` / `RebuildRanks` / `RemoveGuildFromRank` 只维护分区榜 `guild_rank:zone:*`；data 层读榜不给区回 `ErrRankZoneRequired`；三份帮会排行架构文档按只有分区榜重写。代码与测试由「Gate 在线身份传递实现审核」会话与第 2 条同批落码，验收见 CODEX.md 第 8 节（设计 §9.6 第 3 条）。

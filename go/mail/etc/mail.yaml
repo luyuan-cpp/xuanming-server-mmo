@@ -46,6 +46,8 @@ Mail:
   MaxActiveSystemMails: 100
   MaxPersonalMailTtlDays: 30
   MaxSystemMailTtlDays: 30
+  # 每个帮会同时有效的帮会邮件上限,按帮计数,不占全服的 MaxActiveSystemMails(缺口清单第 27 条)
+  MaxActiveGuildMailsPerGuild: 20
 Sweep:
   Mode: report_only
   Interval: 5m
