@@ -81,7 +81,7 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 1 = 最大压力 → 服务器容量 = `kAoiListCapacityMin`（20）
 - 中间值线性插值。
 
-场景的 tick/负载监控器每帧设置 `pressureFactor`（集成 TODO）。
+压力来自模拟步耗时（2026-11-11 接上）：`AoiLoadMonitor` 按「这一步耗时 / 步长」的指数平均算出利用率，0.5 以下压力为 0、0.9 时为 1，量化成 10 档、带防抖，每秒最多决定一次；`AoiSystem::ApplyServerPressure` 把它写进本线程的每个场景（`ScenePressureComp` 的唯一写入口），容量因此收缩时按权重裁表、回升时补回。规则与理由见 [AOI 单向关注](aoi-directed-interest.md)「服务器压力：容量收缩时按权重裁表」；阈值待压测校准。
 
 ### 客户端上报数量
 
@@ -167,10 +167,10 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 
 ## 后续计划
 
-- **同一个敌人的其他攻击者也算友方交手**：交手关注第一步只做直接交手（2026-11-10 已落码）。第二步要靠 NPC 的仇恨列表（谁打过它）推出「和我打同一个怪的人」，仇恨列表落地时在 `CombatEngagementSystem::RecordInteraction` 同一入口登记。
+- **仇恨值与 AI 选目标**：NPC 的仇恨名单（2026-11-11 已落码，见 [AOI 单向关注](aoi-directed-interest.md)「仇恨名单」）只记成员，用来让一起打同一个怪的人互相算友方；AI 选目标需要仇恨值时在这份名单上加。生产代码还不刷怪，名单在刷怪接上后才生效。
 - **任务NPC优先级**：接受任务时调用 `InterestSystem::UpgradePriority(player, npc, kQuestNpc)`。
 - **Boss 标记**：场景创建时标记 Boss 实体；网格进入时检测并分配 `kBoss` 标签。
-- **压力集成**：场景 tick 监控器根据实体数量 / CPU 负载写入 `ScenePressureComp.pressureFactor`。接上之后，容量调小时要按权重裁掉超出的最低条目（只剩空间来源的删除并打补回标记，有显式来源的转暂隐）；现在容量调小只会拒收新来的，已在表里的不裁。
+- **压力阈值校准**：压力监控与按权重裁表已在 2026-11-11 接上，阈值（利用率 0.5 / 0.9、10 档、每秒一次）没有压测数据，上线前随 AOI 压测校准；要不要把事件循环处理 RPC 的耗时并入压力信号，也等压测数据再定。
 - **客户端设置 RPC**：将客户端上报的显示数量接入 `AoiClientCapacityComp`。
 - **玩法接入显式关注**：技能追踪（鹰眼术）、任务目标、切磋对象等按各自来源调用 `AoiSystem::Follow` / `Unfollow`；队伍需要视野外同步时由队伍逻辑分别建立两个方向的关注。
 - **自定义策略**：从配置表数据驱动加载策略。
@@ -235,4 +235,12 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - `kAttacker` 改名为 `kCombat`（值仍为 2，运行期枚举，不进协议、不落盘），在三张表里都调到除 `kPinned` 外最高；开放世界原来任务 NPC 高于攻击者，与「战斗时先看交手的人」相反。
 - 新增 `CombatEngagementSystem`：伤害、治疗登记双方交手来源，10 秒脱战、死亡时撤销。
 - 新增补回标记 `AoiNearbyRefillComp`：被拒、被挤掉的附近候选在名额空出后的下一帧补回。
+- 未编译；Java 版待做（`PARITY.md` 已登记）。
+
+## 2026-11-11 仇恨名单与服务器压力裁表
+
+接着做上一节留下的两项，详见 [AOI 单向关注](aoi-directed-interest.md)「仇恨名单」「服务器压力：容量收缩时按权重裁表」：
+
+- **仇恨名单**（`CombatAllyRosterComp`，挂在 NPC 上）：和 NPC 敌对交手的非 NPC 实体按先后进名单，最多 40 人，名单里两两互相算友方交手；给正在打怪的人加血会把治疗者也记进名单（治疗仇恨）。只对 NPC 推，玩家之间的混战不推。`RecordInteraction` 拆成 `RecordDamage` / `RecordHeal`，交手记录多了「敌对」标记。
+- **服务器压力**：`AoiLoadMonitor` 按模拟步耗时算压力，`AoiSystem::ApplyServerPressure` 每秒写进各场景；容量收缩时 `InterestSystem::ApplyCapacity` 按权重从低到高、同权重先远后近裁表，回升时补回。新增三个 `/metrics` 读数。
 - 未编译；Java 版待做（`PARITY.md` 已登记）。

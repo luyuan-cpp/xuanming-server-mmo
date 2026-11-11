@@ -304,7 +304,7 @@ kind 上:`zone-up` 后 `data-service-migrate` Job Complete、两个 Pod Ready;`k
   - **gate 排空的 exec 目标**:`k8s_gate_drain.ps1` 的 Redis 命令不再 `exec svc/redis`(高可用形态下 Service redis 指向 haproxy,代理镜像没有 redis-cli),
     改为 `exec statefulset/redis -c redis`(任一 redis 节点 Pod 的 redis 容器);`-h` 仍是 login 配置里的 Service 地址,经代理落到主。
   - **切换后的手工步骤**:单实例 → 高可用之后,对每个 zone 重跑 `zone-up`(WAITAOF 副本份数变 1),再在各 zone namespace 里
-    `kubectl rollout restart deploy/db` 与 `deploy/data-service`(只改 ConfigMap 不会滚动它们)。
+    `kubectl rollout restart statefulset/db` 与 `statefulset/data-service`(只改 ConfigMap 不会滚动它们)。
 
 ### 5.2 实测(2026-10-08,本机 kind 单节点,隔离命名空间)
 
@@ -368,7 +368,7 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 | 位置 | 11-05 的现状 | 批 A 的改法（已落码） |
 |---|---|---|
-| `k8s_deploy.ps1` 的 `New-JavaSvcConfigMapYaml` | JDBC 主机写死 `mysql.<infra>:3306/mmorpg`；不写 `mmorpg.sql.require-tidb`，而网关这一项缺省 true、prod 档不许关。按当时的配置，prod 档网关连 MySQL 本来就起不来（读代码得出，未实测） | 规则收在 `Resolve-GatewaySqlMode` 一处，写路径入口和 ConfigMap 生成都调它。主机就是 `-GlobalAuthorityTiDBHost`，所有档位都要显式给，不回落 infra MySQL（理由见下）。tidb 档写 require-tidb true、run-mode prod；mysql 档只在 dev，写 false 与 dev；staging、prod 的 mysql 档部署网关在写之前拒绝 |
+| `k8s_deploy.ps1` 的 `New-JavaSvcConfigMapYaml` | JDBC 主机写死 `mysql.<infra>:3306/mmorpg`；不写 `mmorpg.sql.require-tidb`，而网关这一项缺省 true、prod 档不许关。按当时的配置，prod 档网关连 MySQL 本来就起不来（读代码得出，未实测） | 规则收在 `Resolve-GatewaySqlMode` 一处，写路径入口和 ConfigMap 生成都调它。主机就是 `-GlobalAuthorityTiDBHost`，所有档位都要显式给，不回落 infra MySQL（理由见下）。档位写成 `mmorpg.sql.backend`（tidb 或 mysql），两档都是 run-mode prod；mysql 档由 Java 侧按 MySQL 主库严格核对（见下） |
 | `Add-SqlWriterBootManifest` | login、gateway 的 registrar 档位写死 mysql | 一律跟 `-DatabaseBackend` |
 | `Apply-OneGoSvc` 与 Java 的部署路径 | login 不加 `MMORPG_DB_PLACEMENT`，Java 路径从不加 | 两处都加，`mmorpg` 按库映射连 |
 | `Apply-Infra` | `$infraManifests` 无条件 apply `mysql.yaml` | 由 `Test-InfraMysqlInUse` 决定：只在 dev 的 mysql 档、入口就是 `mysql.<infra>:3306` 时部署。staging、prod 把入口写成它，或者入口是它却选了 tidb 档，都在写之前拒绝 |
@@ -378,7 +378,9 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 网关不回落 infra MySQL 的理由：login 也登记在 `mmorpg` 上，而部署 Go 服务早已要求所有档位显式给入口。网关单独回落的话，网关写 infra MySQL 上的 `mmorpg`，login 写入口上的 `mmorpg`，同一个库分成两份，两个写者闸门各管一份。
 
-MySQL 省钱档（staging、prod 的 mysql 档）现在部署不了网关：`AuthorityDatabaseConfiguration` 只在 run-mode 为 dev、test 时允许关掉 TiDB 强会话核验。要支持，得先给 `java/authority_jdbc` 加 mysql 档（同 Go 的 `authoritysql`：逐连接核对不是只读实例），这是后续项。Go 服务的 mysql 档不受影响。
+MySQL 主从省钱档也能部署网关（11-11 落码，未编译）。原来 `AuthorityDatabaseConfiguration` 只有「必须 TiDB」和「dev、test 下什么都放」两种，生产接不了 MySQL 主库。现在 `java/authority_jdbc` 的 `AuthorityDataSource` 加了 mysql 档，判据与 Go 的 `authoritysql` 一致：每条新的物理连接先核对端，版本串与 `version_comment` 里没有 TiDB、`read_only` 与 `super_read_only` 都是 0；再把会话固定成 RC 加严格模式并读回，不发任何 `tidb_*` 语句。配置怎么解析成档位的规则只在 `AuthorityDataSource.Backend.resolve`，网关与 auth 共用：`mmorpg.sql.backend` 取 tidb 或 mysql；`require-tidb=false` 仍只许 dev、test，而且只对 tidb 档有意义。商城（`mall_game`）有自己的 `commerce.*` 配置，不在 K8s 部署里，这次不动。
+
+Java 只在新建物理连接时核对；连接在池里复用时不再核，这一点比 Go 宽。主从切换时旧主上的连接会被断开，新连接照常核对，所以不会写进从库。Go 侧在每次取用连接时都核。
 
 ### 6.3 TiDB 上的建库建表
 
@@ -386,7 +388,7 @@ MySQL 省钱档（staging、prod 的 mysql 档）现在部署不了网关：`Aut
 - 闸门表：与其余逻辑库走同一份 `authoritysql.EnsureCatalogSchema`，由 `writer_authority -command prepare-schema -schema mmorpg` 执行，不再复制第三份闸门 DDL。本机脚本给商城建库就是这条路。
 - 业务表（zone_config、zone_whitelist、announcement）和种子行：同一次调用加 `-ddl-file`，在闸门表之后执行，DDL 以网关的 `schema.sql` 为唯一来源（`GatewaySchemaContractTest` 已在真 TiDB 上校验过它）。`-ddl-file` 只认 `CREATE TABLE IF NOT EXISTS` 与 `INSERT IGNORE INTO`，表名不许带库名；先校验整份再连库，有一句不合格一句都不执行。部署脚本把 `schema.sql` 原样渲染进 ConfigMap `gateway-schema-sql`。
 - Job（`manifests/java-svc/gateway-schema.yaml`）用 schema 权限账号，与其余 `*-migrate` Job 同法；网关的常驻账号不给 DDL 权限。镜像取 boot 目录 gateway 条目的 `registrarImage`（`writer_authority` 就在里面，按摘要固定），所以 gateway 条目在名册之前就要有它。排在网关 Deployment 之前；staging、prod 与 `-SqlSchemaOnly` 恒等它完成；`zone-up` 开头先渲染一次，目录条目不对在任何写操作之前拒绝。
-- mysql 档（只在 dev）不跑这个 Job：集群内 MySQL 由 mysql-init 的 `gateway_tables.sql` 建这个库。
+- tidb 档和外部 MySQL 主库（mysql 档）都跑这个 Job，`MMORPG_SQL_BACKEND` 跟着档位。只有入口就是集群内单实例 MySQL（只在 dev）时不跑：那台由 mysql-init 的 `gateway_tables.sql` 建这个库。
 - 三张业务表补 `COLLATE=utf8mb4_0900_ai_ci`（TiDB 一期 §4 第 10 项：只写 CHARSET 的表，两边的排序规则一定不同）。这个值就是 MySQL 上这些表现在实际用的排序规则，MySQL 档的行为不变。
 
 ### 6.4 网关代码在 TiDB 上要改的一处
@@ -434,7 +436,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | `mmorpg` 库（Java 网关的区目录、公告、白名单与写者闸门，login 的口令表） | 只在 infra 的单实例 MySQL 上。`k8s_deploy.ps1` 把 login、gateway 的写者档位写死为 mysql，网关的 JDBC 地址写死 `mysql.<infra>` | 迁到 TiDB，见 §6 | 批 A 11-10 已落码，未编译 |
 | 控制域 Redis 全服单主 | 所有 zone 的场景路由、世界频道和选主锁在一个主节点上 | 按 zone 组分实例，见[控制面按 zone 化](control-plane-zone-scoping-20261105.md)第 5 条 | 另一会话做，5a～5c 11-05 已落码未编译 |
 | scene_manager 全服一个 leader，C++ 每 2 秒全量读 etcd | 同上 | 按 zone 选主、只发现本 zone，同一设计第 4 条 | 另一会话做，4a～4c 11-05 已落码未编译 |
-| 选主的后台任务 | 见 §9 | 两处改分片（C1、C2），其余保持单 leader；帮会榜维护锁核对后暂不改（§9） | C1、C2 已落码未编译 |
+| 选主的后台任务 | 见 §9 | 两处改分片（C1、C2）；帮会榜维护锁退出写分路径，只留给重建与合服折叠互斥（C3）；其余保持单 leader（§9） | C1、C2、C3 已落码未编译 |
 | 排行榜 Redis | rank 自 10-19 起以 SQL 为权威，不连 Redis。`redis-rank.yaml` 只作历史保留，部署脚本不 apply 它，契约测试「R2b Redis清单保留历史，现役SQL排行不自动部署旧写榜存储」守着 | 不是单点，不用改 | — |
 | Loki | 单副本加本地盘 | 单体模式 3 副本加共享对象存储，见 §10 | 批 B 11-10 已落码，未编译 |
 
@@ -450,11 +452,19 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 | 同一把锁下的定时对账 | 全服 | 每小时读 24 小时内由消费方终结的行，每轮最多 2000 名玩家，超出就截断 | 业务量（战斗结算也进对账） | **改分片**（11-06 已落码，未编译）：64 个逻辑片用 HRW 分给 etcd 里注册的 stable 副本（与 match 的 poolowner 同法），每个副本只对账自己的分片，gauge 按本副本的分片求和，告警仍取 max() > 0。做法见[收件箱设计](player-inbox-service.md) §9.3「分片归属」 |
 | `player_locator:session_reconciler:leader` 下的写者检查 | 全服 | 每 60 秒一次 etcd 只读 Txn | 节点数 | 保持 |
 | 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**（11-10 已落码，未编译）：玩家域是 Cluster 时复用死 gate 清扫的 256 段租约，每个副本逐 slot 用 `CLUSTER GETKEYSINSLOT` 列键补成员、清脏成员，进度按段记在控制域；leader 只发布一遍、等它做完，就绪与审计的判据不变。单实例玩家域（dev）仍由 leader 自己扫。做法见会话索引设计 §4.5 |
-| `guild_rank:maintenance_lock` | 全服互斥，挂在请求路径上 | 帮会积分写入、解散和启动重建都抢它；不续期，持锁者崩溃最长堵 5 分钟 | 积分写入量 | **暂不改**（11-10 核对后定）：积分写入现在只有建帮时写一次初始 0 分，`UpdateGuildScore` 这个内部 RPC 在 Go、C++ 里都没有调用方，锁上的流量就是建帮、解散的量，不是容量问题。11-10 全服榜已整体删除，剩下的只有本区榜。等有了真实的积分来源（活跃度、战绩）再改，做法见表下 |
-
-`guild_rank:maintenance_lock` 以后要改时的做法（有了真实的积分来源时）：`guild` 行加 `score_version`，在写分的同一个事务里递增；榜上用 Lua 条件写入，只接受比已记版本更新的分数（版本记在同一区的 HASH 里），乱序到达的旧写入被丢弃，积分写入就不用抢锁。整表重建按快照里的版本做同样的条件合并，不再整键 RENAME 覆盖；只有合区折叠和重建之间仍要互斥。现在就做等于给一个不存在的负载加一套版本协议，按 AGENTS.md §11.2 的 YAGNI 不做。
+| `guild_rank:maintenance_lock` | 全服互斥，不在请求路径上 | 启动重建（stable 副本）与合服折叠（有源区旧键时）之间互斥；不续期 | 不随积分写入量增长：写分、建帮上榜、解散摘榜都不拿它 | **已改**（C3，负责人 11-10 要求现在就改，11-11 落码，未编译）：写分改成按 `score_version` 的条件写入，锁只留给重建与折叠，做法见表下 |
 | login 出队 `dispatcher:lock:login_queue:zone:<z>` | 按 zone | 每秒放行一批，受空位封顶 | 排队人数 | 保持按 zone |
 | guild 历练巡检 `guild:trial:sweep:lease` | 全服 | 每 60 秒只扫超时的对局，每轮最多 200 条 | 异常 | 保持 |
+
+`guild_rank:maintenance_lock` 的改法（C3）。原来帮会积分写入、解散摘榜、启动重建、合服折叠都抢这一把全服锁，全服所有帮会的积分写入因此串行，加副本也没用。11-10 曾以「积分写入只有建帮时写一次 0 分」定为暂不改，负责人看过后要求现在就改。验收见 [PROGRESS](../PROGRESS.md) 2026-11-11「帮会积分写入不再抢全服锁」，细节见[帮会排行架构](guild_ranking_architecture_zh.md) §3、§5、§7。
+
+- `guild` 行加 `score_version`（`guild_db.proto` 字段 12），在写分的同一事务里加 1。同一帮会的写分在 guild 行锁上串行，版本随提交顺序严格递增。
+- 榜上每一项的版本记在同区的 HASH 里，所有写榜走同一段 Lua 条件写入：版本不比已记的旧才写。乱序到达的旧写入被丢弃，所以写分不用抢锁。
+- 解散时在帮会合服组的每个区立墓碑。墓碑按区存成 ZSET，按到期时刻排序，保留 24 小时；立墓碑与摘榜是同一段脚本，迟到的旧写入写不回来。清理不要任务：立新墓碑时顺手删掉到期的，墓碑键带 TTL。
+- 整表重建按快照里的版本做同样的条件合并，不再整键 RENAME 覆盖。不在快照里的条目先回库复核再删，快照之后新建的帮会不会被误删。
+- 合服折叠也按版本合并，不再 `ZADD NX`。并完按读到的版本摘源区，期间新写进来的版本不丢。
+- 锁只留给重建与合服折叠互斥，免得两个副本重复搬；正确性不靠它。
+- 每个脚本只碰一个区的键，上 Redis Cluster 时给同区的键打同一个 tag 即可（[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §3.2 的 `gr` 族）。
 
 另外两点：
 
@@ -485,6 +495,6 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 |---|---|---|---|
 | A | `mmorpg` 迁 TiDB（§6） | 实际约 20 个文件 | A1～A5 11-06～10 已落码，未编译 |
 | B | Loki 3 副本加外部 S3；dev 档可选单进程 SeaweedFS 做测试夹具 | 8 个文件 | 11-10 已落码，未编译 |
-| C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁缩小范围（C3，要加分数版本号，先确认有没有真实调用方再定） | 10～15 个文件 | C1 11-06、C2 11-10 已落码未编译；C3 11-10 核对后定暂不改，理由与以后的做法见 §9 |
+| C | §9 的三处：player_inbox 对账分片（C1）、player_locator 补建与审计分片（C2）、guild 排行锁退出写分路径（C3，加分数版本号） | 10～15 个文件 | C1 11-06、C2 11-10、C3 11-11 已落码未编译；C3 做法见 §9 表下 |
 
 `k8s_deploy.ps1` 和它的契约测试同时有发布轨道（批 2b）、控制面按 zone 化等会话在改。动之前先给对方发消息，每次改前重读要改的那一段。Java 版（0.1.0-SNAPSHOT）只在 `PARITY.md` 登记待做。

@@ -1,6 +1,6 @@
 # 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
 
-状态:**2026-11-10 定案(§4),同日按 §5 落码,未编译,待 Codex 验证(命令见 `docs/PROGRESS.md` 2026-11-10「写者名册按槽位换代」)。** 负责人要求「待拍板项按有依据的标准做法直接定案」,两个待定项按 §4 定了。改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、排空收据、部署脚本与手册,超过 30 个文件,按 §4 分 4 批落码,每批不超过 30 个文件。
+状态:**2026-11-10 定案(§4),11-10~11 按 §5 落码完毕,未生成、未编译、未测试,待 Codex 验证(命令、顺序与通过标准见 `docs/PROGRESS.md` 2026-11-11「写者名册按槽位换代」)。** 负责人要求「待拍板项按有依据的标准做法直接定案」,两个待定项按 §4 定了。改动跨 `go/shared/authoritysql`、`writer_authority` 注册器、proto、排空收据、部署脚本与手册,超过 30 个文件,按 §4 分 4 批落码,每批不超过 30 个文件。
 上游:[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md) 第 22 条;相关:[MySQL 写入围栏](db-write-fencing-mysql.md)「2026-10-26:单次 writer 身份与永久排空收据」、[逻辑库自治与水平扩展](horizontal-scale-logical-db.md)「写资格什么时候消费」、[开服手册](../ops/k8s-open-server-runbook.md) §1、§9。
 
 ## 1. 现状
@@ -89,6 +89,8 @@
 
 RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 REGISTER 仍满足「收据版本 = 期望版本 + 1」。两份在同一事务里,外面看不到先后。
 
+人工退休(缩容后留下的末代)和排空 run 的退休照旧由运维准备 RETIRE 原件,`writer` 要原样复制这一代 REGISTER 收据里的 `writer`,包括 `boot_seq`。`boot_seq` 为 0 的生命周期请求,闸门(`validateLifecycle`)和注册器(`validateRequestIdentity`)都在发 SQL 之前拒绝;退休的 UPDATE 按 `writer_key`、`instance_id`、`sql_principal`、`registration_digest`、`boot_seq` 一起匹配那一行。`successor_request_id` 只有换代事务能填,手工 RETIRE 带它也在发 SQL 之前被拒。
+
 ### 5.3 注册器
 
 - 新参数 `-pod-name`(K8s 注入 `metadata.name`):序号取最后一个 `-` 之后的十进制数,选 `entries[序号]`;序号超出名册就拒绝,说明副本数比槽位多。
@@ -104,7 +106,7 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 
 - 写者服务(db、data-service、login、gateway 和 infra namespace 的全局写者,含 `<svc>-canary`)从 Deployment 改成 StatefulSet:`serviceName` 用同名 Service;`podManagementPolicy: Parallel`,扩缩容和首次部署不按序号排队;`updateStrategy: RollingUpdate`,一次换一个副本,不能 `maxSurge`。Pod 模板注入 `POD_NAME`,registrar init 加 `-pod-name`。
 - 名册校验改成「格式 V2、槽位数 ≥ 副本数、≤ 1024」,不再要求副本数 × 6。
-- 首次切换要先删同名的旧 Deployment:同一个 label 选择器不能同时归两个控制器。
+- 首次切换要先删同名的旧 Deployment:同一个 label 选择器不能同时归两个控制器。`k8s_deploy.ps1` 在 apply 写者之前删(`Remove-LegacySqlWriterDeployment`;gateway 排在建表 Job 之后),所以首次切换时这个服务有一段没有副本,直到 StatefulSet 的 Pod 就绪;项目未上线,不做无中断迁移。
 - 回收 CronJob 不变:删掉主容器以 78 退出的 Pod,StatefulSet 按同序号重建,新 Pod 换代。
 - 节点失联:StatefulSet 不会在别的节点自动重建同序号的 Pod,要等节点对象被删或人工强删。强删是安全的:新 Pod 换代,旧代下一笔事务被拒。
 
@@ -130,5 +132,6 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 
 ### 5.8 不做与残余
 
-- REVOKED 的注册行和 64 个 slot 行永久保留,每次启动多 65 行,和原来一样。要瘦身另开:按 key 删 REVOKED 的 slot 行是安全的,闸门查不到 slot 行就拒绝。
+- REVOKED 的注册行和 64 个 slot 行永久保留,每个逻辑库每次启动多 65 行,和原来一样;原来 1024 条的名册上限顺带限住了行数,现在不限。2026-11-11 复核后先不做瘦身,理由:不影响正确性;这些行只在 `tools/dbmove` 搬库比对时被整表读,其余路径都按 `writer_key` 主键查;按 AGENTS §11.3,性能改动要等有数据。要做时的做法:换代事务里把上一代的 64 个 slot 行删掉(注册账号要加 `writer_slot` 的 DELETE),注册行与 RETIRE 收据留作永久证明,writer key 也就不会被重新启用。运行期闸门查不到 slot 行时已经回 `ErrWriterDenied`(`rawOne` 读到 EOF);目录侧 `lockSlotRows` 现在原样返回「没有行」,删行之前要先改成回 `ErrWriterDenied`,并补「被换代的旧进程仍然只收到拒绝」的真库用例。
+- 缩容留下的末代(§5.6 最后一行)先不自动退休:数量不超过槽位数;忘了退休时,下一次排空收不了尾、停下来(没有进程替它关闭),不会写坏数据;自动化要新加注册器命令和部署脚本里的收尾 Job。缩容变频繁时再做:部署脚本发现副本数变小、等多出来的序号的 Pod 删完之后,跑一次 Job,按名册把这些槽位当前 ACTIVE 的那一代用非 run 的 RETIRE 退休(写者已经没了,退休只会挡住它,总是安全的)。
 - Java 版(`D:\luyuan\xuanming-server-mmo`)只在 `PARITY.md` 登记待做。本仓库的 Java 网关只消费 grant,核 REGISTER 原文用的 descriptor 在构建时由 proto 生成,不用改代码,要重新构建。

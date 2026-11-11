@@ -160,7 +160,7 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
     - **整队维护**（`TeamLaunchesAfter` 的 prepared / queued / forming / completed 四个循环）：片号 = 发起者 `actor_id`，这一列在扫描索引里，不用回表。原先每个副本每 500ms 给每支排队整队开一个锁全员票的事务。
     - **闲置队伍到期**：片号 = `team_id`。
     - **投榜**（`PublishRankOnce`）：每个 (计分模式, 来源片) 一个键。原先每个副本串行投全部 64 片；两个副本偶尔同投一片也安全，rank 按 (榜, 片, 游标) 幂等。
-    - **已建房票巡检**（`ReadyAfter`）：同类问题，每个副本都扫全部 state=3 的票、逐张开事务。片号 = `player_id`，键常量 `workReadyTicket` 已定义；`ready_recovery.go` 正由数据覆盖审计会话改，约定在它的下一批里接上同一分片条件（2026-11-06）。
+    - **已建房票巡检**（`ReadyAfter`）：同类问题，每个副本都扫全部 state=3 的票、逐张开事务。片号 = `player_id`，键 `workReadyTicket`。2026-11-10 已在 `ready_recovery.go` 的 `ReadyAfter` 里接上（数据覆盖审计批 B5，未编译）：条件在 `ORDER BY` 之前，片参数追加在绑定参数末尾；没绑归属时条件为 `1=1`。这条巡检只是兜底，终局发件箱和 `JoinQueue` 的按需路径照样会释放票，所以某片暂时没有副本负责也不会漏放。回归用例 `TestReadyTiDBReadyAfterReadsOnlyOwnedShards`。
     - **终局发件箱**（`PublishBattleOutcomes`，2026-11-10 落码，未编译；缺口清单第 25 条）：整局结果（`match_battle_completion`，一局一行、没有 `player_id` 列）片号 = `battle_id`，键 `outcome-result`；个人结算（`match_battle_settlement_source`，首投与等待两页共用）片号 = `player_id`，键 `outcome-settlement`。条件在 `LIMIT` 之前，分片列都在扫描索引里。原先每个副本每 2 秒读同一个到期队头、在 `next_retry_ms` 认领 CAS 上空撞。积压读数与按票的 `SettlementLookupDue` 不分片。设计与验证见 [assetop-redelivery-sharding-20261110.md](assetop-redelivery-sharding-20261110.md) §2.5、§8。
   - **不在这条规则里**：到期终局恢复（`RecoverExpiredOutcomeLane`）由数据覆盖审计会话按车道轮转，所有副本都跑，同一成局靠行锁只写一份终局（两套做法互不依赖）。
 - 原计划的 `recovery_shard` 列与"提交前核对租约"的软围栏随租约表一起不做；成局推进改用 `battle_id` 取模，不需要新列。

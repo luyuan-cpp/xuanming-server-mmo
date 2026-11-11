@@ -13,8 +13,9 @@
 // ordering-smoke O7),EnterGame 要等 Login 完成之后才发出,那时 Login 的回包已经处理完。直连模式没有 lane,收包即发出,
 // 连发的 EnterGame 在 Login 回包之前到达就会被拒(直连本来就不保序;真实客户端要先从 Login 回包的角色列表拿 player_id)。
 //
-// 同一文件还放着客户端入口的另外两道 login 相关判定(IsGateSynthesizedOnly、EnterGameRoleSwitchRejectTip),调用点都在
-// client_session_handler.cpp 的 DispatchClientRpcMessage(收包时判,直连 / 路由两种模式共用)。
+// 同一文件还放着客户端入口的另外两道 login 相关判定,调用点都在 client_session_handler.cpp:IsGateSynthesizedOnly 在
+// DispatchClientRpcMessage 收包时判(两种模式共用);EnterGameRoleSwitchRejectTip 随 EnterGame 发出时判(LoginTransitionRejectTip:
+// 直连模式收包即发出,路由模式由 lane 的发出钩子在轮到它时判,排在前面的 LeaveGame 那时已经生效)。
 //
 // 纯函数、零状态,单独成文件是为了在 routing_identity_test 里直接测,不把会话表、连接、RPC 注册链拖进测试工程。
 

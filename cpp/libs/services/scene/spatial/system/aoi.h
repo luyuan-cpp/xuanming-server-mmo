@@ -43,6 +43,12 @@ public:
     // (玩家经 PlayerSceneSystem::LeaveCurrentScene,DestroyPlayer 兜底补调)。
     static void OnLeaveScene(entt::entity entity);
 
+    // 服务器压力(AoiLoadMonitor 的读数)写进本线程的每个场景(ScenePressureComp 的唯一写入口),
+    // 值真有变化的场景里,每个观察者按新容量校正名额:超出的按权重从低到高、同权重先远后近裁掉,
+    // 容量回升时补回暂隐的显式关注,被裁掉的附近的人由补回重扫补上。新建的场景在下一次调用时拿到当前压力。
+    // World::Update 每秒调一次。
+    static void ApplyServerPressure(double pressureFactor);
+
     // 实体在**同一场景内**被瞬移之后调用(MovementSystem::TeleportWithinScene),调用前 Transform 必须
     // 已经写成新位置。效果等价于"从旧位置离开视野、在新位置重新进场":
     //   - 立刻:撤掉它看别人、别人看它的空间来源,失去全部来源的关系通知双方客户端移除;

@@ -201,11 +201,11 @@ func playerGuildCacheGenerationKey(playerID uint64) string {
 }
 
 // 帮会榜只有分区榜,没有全服榜:客户端只看本区榜,运维和 GM 也不需要(负责人 2026-11-10 定,
-// docs/design/gate-online-identity.md §9.6;Java 版同样不提供)。每个最终区两个键,只经下面「Ranking」一节的脚本一起改:
-//   - guild_rank:zone:{最终区}    ZSET,member = guild_id,score = 帮会积分;
-//   - guild_rank:version:{最终区} HASH,field = guild_id,value = 榜上那个分数对应的 guild.score_version。
+// docs/design/gate-online-identity.md §9.6;Java 版同样不提供)。每个最终区三个键,只经下面「写榜协议」一节的脚本改:
+//   - guild_rank:zone:{最终区}      ZSET,member = guild_id,score = 帮会积分;
+//   - guild_rank:version:{最终区}   HASH,field = guild_id,value = 榜上那个分数对应的 guild.score_version;
+//   - guild_rank:tombstone:{最终区} ZSET,该区的解散墓碑,挡住解散前提交、解散后才到的旧写入。
 //
-// 另有每个已解散帮会一个墓碑 guild_rank:tombstone:{guild_id}(带 TTL),挡住解散前提交、解散后才到的旧写入。
 // 权威分在 MySQL guild.score / score_version,RebuildRanks 按版本把榜与它对齐。
 // ErrRankZoneRequired 是查榜不给区时的错误,只可能是调用方写错了。
 var ErrRankZoneRequired = errors.New("guild rank: a zone is required, there is no global guild rank")
@@ -221,7 +221,8 @@ const (
 
 	// rankTombstoneTTL 是解散墓碑的保留时长。迟到的旧写入只有三个来源:解散前已提交、还没写榜的推分(同一请求内,
 	// 受请求超时约束,秒级);启动重建读完快照到合并之间(分钟级);折叠读出源区条目到并进目标区之间(秒级)。
-	// 一天远大于三者;过期由 Redis 自己删,不需要清理任务。
+	// 一天远大于三者。清理不要任务:每次立墓碑先删掉本区已到期的,再把整个墓碑键的 TTL 续到这一条的到期时刻,
+	// 一个区一天没人解散,墓碑键由 Redis 自己过期删除。
 	rankTombstoneTTL = 24 * time.Hour
 
 	// rankBatchSize 是榜维护一条 pipeline、一次回库复核、折叠一页的条目数。
@@ -269,8 +270,10 @@ func zoneRankVersionKey(zoneID uint32) string {
 	return fmt.Sprintf("guild_rank:version:%d", zoneID)
 }
 
-func rankTombstoneKey(guildID uint64) string {
-	return fmt.Sprintf("guild_rank:tombstone:%d", guildID)
+// zoneRankTombstoneKey 是同区的解散墓碑 ZSET:member = guild_id,score = 墓碑到期时刻(Redis 服务器时间,毫秒)。
+// 墓碑按区存、与同区榜键并列,所以写榜脚本只碰一个区的键(上 Cluster 时三个键打同一个 tag 即可)。
+func zoneRankTombstoneKey(zoneID uint32) string {
+	return fmt.Sprintf("guild_rank:tombstone:%d", zoneID)
 }
 
 // ── Read (cache-aside + singleflight) ──────────────────────────
@@ -641,25 +644,43 @@ type RankEntry struct {
 //
 // guild.score_version 在写 score 的同一事务里 +1。同一帮会的写分在 guild 行锁上串行,所以版本随提交顺序严格递增,
 // 一个版本只对应一个已提交的分数。榜上每一项都在同区的版本 HASH 里记着自己的版本,所有写榜都走 rankUpsertScript:
-// 版本不比已记的旧才写,帮会已解散(墓碑在)不写。由此:
+// 版本不比已记的旧才写,帮会已解散(本区墓碑在)不写。由此:
 //   - 写分不拿全服锁:几个副本并发推分、提交之后乱序到达 Redis,榜上留下的总是最后提交的那个分数;
 //   - 重建、折叠与写分交错:它们手里快照的版本不比之后提交的推分新,盖不掉它(RebuildRanks、FoldMergedZoneRanks);
-//   - 解散之后:先立墓碑再摘榜,迟到的旧写入连同重建、折叠手里的旧快照都被墓碑拒绝(RemoveGuildFromRank)。
+//   - 解散之后:立墓碑与摘榜在同一段脚本里,迟到的旧写入连同重建、折叠手里的旧快照都被墓碑拒绝(RemoveGuildFromRank)。
 //
-// 这几个脚本都只碰一个区的两个键,写入时外加该帮会的墓碑键。guild 的 RedisClient 是单实例 *redis.Client,
-// 与本文件的缓存代次脚本一样不带 hash tag;要上 Redis Cluster 时连同那两个脚本一起改键名
-// (docs/design/guild_ranking_architecture_zh.md §8)。
+// 每个脚本都只碰一个区的键(分区榜、版本 HASH、墓碑)。guild 的 RedisClient 是单实例 *redis.Client,与本文件的
+// 缓存代次脚本一样不带 hash tag;上 Redis Cluster 时给同区三个键打同一个 tag 即可,不用改协议
+// (docs/design/guild_ranking_architecture_zh.md §8)。墓碑的到期时刻用 Redis 服务器的 TIME,各副本的时钟差不进来。
 
 // rankUpsertScript 是带版本的条件写入,推分、建帮上榜、重建合并、折叠合并都走它。
 // 版本相等也写:同一版本只对应一个已提交的分数,重写是幂等的,还能修好被手工改过的分数。
-// KEYS[1] = 分区榜,KEYS[2] = 同区版本 HASH,KEYS[3] = 该帮会的墓碑;ARGV[1] = guild_id,ARGV[2] = 分数,ARGV[3] = 版本。
+// KEYS[1] = 分区榜,KEYS[2] = 同区版本 HASH,KEYS[3] = 同区墓碑;ARGV[1] = guild_id,ARGV[2] = 分数,ARGV[3] = 版本。
 // 返回值见 rankWriteApplied 等三个常量。
 var rankUpsertScript = redis.NewScript(`
-if redis.call("EXISTS", KEYS[3]) == 1 then return -1 end
+local buried = redis.call("ZSCORE", KEYS[3], ARGV[1])
+if buried then
+  local now = redis.call("TIME")
+  if tonumber(buried) > tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000) then return -1 end
+end
 local recorded = redis.call("HGET", KEYS[2], ARGV[1])
 if recorded and tonumber(recorded) > tonumber(ARGV[3]) then return 0 end
 redis.call("ZADD", KEYS[1], ARGV[2], ARGV[1])
 redis.call("HSET", KEYS[2], ARGV[1], ARGV[3])
+return 1
+`)
+
+// rankBuryScript 给已解散的帮会在一个区立墓碑并摘掉它的榜项,三件事在同一段脚本里:在它之前执行的写入留下的项
+// 被它摘掉,在它之后的写入被墓碑拒绝,中间没有缝。顺带删掉本区已到期的墓碑,并把墓碑键的 TTL 续到这一条的到期时刻。
+// KEYS 同 rankUpsertScript;ARGV[1] = guild_id,ARGV[2] = 墓碑保留毫秒数。
+var rankBuryScript = redis.NewScript(`
+local now = redis.call("TIME")
+local nowMs = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+redis.call("ZREMRANGEBYSCORE", KEYS[3], "-inf", nowMs)
+redis.call("ZADD", KEYS[3], nowMs + tonumber(ARGV[2]), ARGV[1])
+redis.call("PEXPIRE", KEYS[3], ARGV[2])
+redis.call("ZREM", KEYS[1], ARGV[1])
+redis.call("HDEL", KEYS[2], ARGV[1])
 return 1
 `)
 
@@ -670,8 +691,9 @@ const (
 	rankWriteDisbanded int64 = -1 // 帮会已解散(墓碑在),丢弃
 )
 
-// rankRemoveScript 把一个帮会从一个区摘掉,榜项与版本一起删,不看版本。只用于已解散的帮会:它的任何版本都是幽灵。
-// KEYS[1] = 分区榜,KEYS[2] = 同区版本 HASH;ARGV[1] = guild_id。
+// rankRemoveScript 把一个成员从一个区摘掉,榜项与版本一起删,不看版本、不立墓碑。用于帮会还活着时的摘榜、
+// 已解散帮会在它合服组之外的区(见 removeFromAllRanks),以及不是 guild_id 的垃圾成员。
+// KEYS[1] = 分区榜,KEYS[2] = 同区版本 HASH;ARGV[1] = 成员。
 var rankRemoveScript = redis.NewScript(`
 redis.call("ZREM", KEYS[1], ARGV[1])
 redis.call("HDEL", KEYS[2], ARGV[1])
@@ -725,19 +747,24 @@ func (it rankItem) upsertArgs() []any {
 	return []any{it.guildID, it.score, version}
 }
 
-func rankUpsertKeys(zone uint32, guildID uint64) []string {
-	return []string{zoneRankKey(zone), zoneRankVersionKey(zone), rankTombstoneKey(guildID)}
+// rankZoneKeys 是一个区的三个榜键,rankUpsertScript、rankBuryScript 用;rankEntryKeys 是前两个。
+func rankZoneKeys(zone uint32) []string {
+	return []string{zoneRankKey(zone), zoneRankVersionKey(zone), zoneRankTombstoneKey(zone)}
 }
 
 func rankEntryKeys(zone uint32) []string {
 	return []string{zoneRankKey(zone), zoneRankVersionKey(zone)}
 }
 
-// 下面四个把一条写榜命令排进 pipeline,zone 都是已解析的最终区。pipeline 里一律用 EVAL:
+// 下面四个把一条写榜命令排进 pipeline,zone 都是已解析的区。pipeline 里一律用 EVAL:
 // Script.Run 的 EVALSHA 失败回退要先看到这条命令的结果,在 pipeline 里等不到。
 
 func queueRankUpsert(ctx context.Context, pipe redis.Pipeliner, zone uint32, item rankItem) *redis.Cmd {
-	return rankUpsertScript.Eval(ctx, pipe, rankUpsertKeys(zone, item.guildID), item.upsertArgs()...)
+	return rankUpsertScript.Eval(ctx, pipe, rankZoneKeys(zone), item.upsertArgs()...)
+}
+
+func queueRankBury(ctx context.Context, pipe redis.Pipeliner, zone uint32, guildID uint64) *redis.Cmd {
+	return rankBuryScript.Eval(ctx, pipe, rankZoneKeys(zone), guildID, rankTombstoneTTL.Milliseconds())
 }
 
 func queueRankRemove(ctx context.Context, pipe redis.Pipeliner, zone uint32, member string) *redis.Cmd {
@@ -746,10 +773,6 @@ func queueRankRemove(ctx context.Context, pipe redis.Pipeliner, zone uint32, mem
 
 func queueRankRemoveIfVersion(ctx context.Context, pipe redis.Pipeliner, zone uint32, member, observed string) *redis.Cmd {
 	return rankRemoveIfVersionScript.Eval(ctx, pipe, rankEntryKeys(zone), member, observed)
-}
-
-func queueRankTombstone(ctx context.Context, pipe redis.Pipeliner, guildID uint64) *redis.StatusCmd {
-	return pipe.Set(ctx, rankTombstoneKey(guildID), "1", rankTombstoneTTL)
 }
 
 // 写分事务的两条语句。guild 表上 guild_id 只有 PRIMARY 一条路(guild_lock_plan_mysql_test.go 用 EXPLAIN 钉住)。
@@ -829,7 +852,7 @@ func (r *GuildRepo) publishRank(ctx context.Context, guildID uint64, zoneID uint
 		return err
 	}
 	final := r.FinalZone(zoneID)
-	result, err := rankUpsertScript.Run(ctx, r.rdb, rankUpsertKeys(final, guildID), item.upsertArgs()...).Int64()
+	result, err := rankUpsertScript.Run(ctx, r.rdb, rankZoneKeys(final), item.upsertArgs()...).Int64()
 	if err != nil {
 		return fmt.Errorf("update rank cache for guild %d: %w", guildID, err)
 	}
@@ -982,11 +1005,11 @@ func (r *GuildRepo) reconcileRanks(ctx context.Context, snapshot []rankRow, look
 	}
 
 	// 2. 扫现有分区榜,可疑条目回库复核。列成员与处理分开:先把一张榜列完再动它,不边扫边删。
-	rankZones, err := r.rankZones(ctx)
+	existing, err := r.rankZones(ctx)
 	if err != nil {
 		return err
 	}
-	for zone := range rankZones {
+	for zone := range existing {
 		members, garbage, err := r.zoneMembers(ctx, zone)
 		if err != nil {
 			return err
@@ -1055,9 +1078,8 @@ func (r *GuildRepo) settleRankSuspects(ctx context.Context, zones *placement.Mer
 		row, ok := current[id]
 		switch {
 		case !ok:
-			// 墓碑与摘除排在同一条 pipeline 里,按序执行,墓碑在前:之后到的旧写入都被拒绝。
-			queueRankTombstone(ctx, removals, id)
-			queueRankRemove(ctx, removals, zone, member)
+			// 在这个区立墓碑并摘掉(同一段脚本),之后到的旧写入都被拒绝。
+			queueRankBury(ctx, removals, zone, id)
 			stats.ghosts++
 		case row.zoneID != 0 && zones.Final(row.zoneID) == zone:
 			item, err := row.item()
@@ -1168,15 +1190,17 @@ func (r *GuildRepo) removeGarbageMembers(ctx context.Context, zone uint32, garba
 //     调用方传进来的值只用来记一条不一致日志。帮会还活着,不立墓碑:之后的推分照常让它回到榜上。
 //  2. 公会行已删(DisbandGuild 的正常路径)→ 用调用方传进来的值,它必须是
 //     DisbandResult.ZoneID(解散事务内 FOR UPDATE 读到的),不能是 guild:v2:{id} 缓存。
-//     这时先立墓碑 guild_rank:tombstone:{id}(rankTombstoneTTL)再摘:解散前提交、解散后才到的推分,
-//     以及重建、折叠手里的旧快照,都会被条件写入脚本拒绝,不会把帮会写回榜上。
+//     这时在它的合服组(ZoneMembers:解析到同一最终区的全部原始区,含最终区)的每个区立墓碑(保留 rankTombstoneTTL):
+//     解散前提交、解散后才到的推分,以及重建、折叠手里的旧快照,都会被条件写入脚本拒绝,不会把帮会写回榜上。
 //
-// 无论走哪条,最后都扫一遍 guild_rank:zone:* 把该 guildID 从**每一个**分区榜里
+// 无论走哪条,都扫一遍 guild_rank:zone:* 把该 guildID 从**每一个**分区榜里
 // 摘掉:合服之后条目可能还在源区的旧键上(还没折叠),撤销合服之后可能还在目标区的键上(还没重建),
 // 只摘最终区那一张会留下一个查不到名字的幽灵条目。代价是一次 SCAN(zone 数量级),换"解散即从所有榜上消失"的确定性。
 //
-// 为什么不用和写分互斥:墓碑在 SCAN 之前立。墓碑之前执行完的写入留下的条目在 SCAN 开始时已经存在,一定会被扫到、摘掉;
-// 墓碑之后的写入都被脚本拒绝。两类之间没有缝。
+// 为什么不用和写分互斥:一个区的立墓碑与摘榜在同一段脚本里(rankBuryScript),在它之前执行的写入留下的项被它摘掉,
+// 在它之后的写入被墓碑拒绝。写榜只写进 Final(zone_id),映射缓存滞后的副本算出来的也在合服组里(还不知道合服的写原始区,
+// 知道的写最终区),所以墓碑立在合服组就够,不必每个区都立。剩一个窗口:刚合服时摘榜的副本还没刷新到新映射、
+// 推分的副本已经刷新了,迟到的推分会写进摘榜副本不知道的新最终区,留下一个幽灵条目,到下次重建才摘掉;只影响榜上的显示。
 func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zoneID uint32) error {
 	effectiveZone := zoneID
 	disbanded := false
@@ -1196,22 +1220,20 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	return r.removeFromAllRanks(ctx, guildID, effectiveZone, disbanded)
 }
 
-// removeFromAllRanks 是 RemoveGuildFromRank 的 Redis 半段:disbanded 时先立墓碑,再把 guildID 从每张分区榜摘掉。
-// zoneID 是帮会的原始区,0 = 不知道(只扫现有的榜)。
+// removeFromAllRanks 是 RemoveGuildFromRank 的 Redis 半段:把 guildID 从每张分区榜摘掉;disbanded 时在它的合服组里
+// 立墓碑(与摘榜同一段脚本)。zoneID 是帮会的原始区,0 = 不知道(只扫现有的榜,也立不了墓碑)。
 func (r *GuildRepo) removeFromAllRanks(ctx context.Context, guildID uint64, zoneID uint32, disbanded bool) error {
-	if disbanded {
-		// 必须在下面的 SCAN 之前,理由见 RemoveGuildFromRank。
-		if err := r.rdb.Set(ctx, rankTombstoneKey(guildID), "1", rankTombstoneTTL).Err(); err != nil {
-			return fmt.Errorf("write rank tombstone of guild %d: %w", guildID, err)
-		}
-	}
 	zones, err := r.rankZones(ctx)
 	if err != nil {
 		return err
 	}
+	group := make(map[uint32]struct{})
 	if zoneID > 0 {
-		// 分区榜可能因为没人推过分而还不存在;显式带上它,对不存在的键摘除是 no-op。
-		zones[r.FinalZone(zoneID)] = struct{}{}
+		// 合服组的区即使还没有榜键也带上:分区榜可能因为没人推过分而还不存在,墓碑要先立好,等着迟到的写入。
+		for _, zone := range r.ZoneMembers(zoneID) {
+			group[zone] = struct{}{}
+			zones[zone] = struct{}{}
+		}
 	}
 	if len(zones) == 0 {
 		return nil // 还没有任何分区榜,也就没有要摘的条目。
@@ -1219,7 +1241,11 @@ func (r *GuildRepo) removeFromAllRanks(ctx context.Context, guildID uint64, zone
 	member := strconv.FormatUint(guildID, 10)
 	pipe := r.rdb.Pipeline()
 	for zone := range zones {
-		queueRankRemove(ctx, pipe, zone, member)
+		if _, inGroup := group[zone]; disbanded && inGroup {
+			queueRankBury(ctx, pipe, zone, guildID)
+		} else {
+			queueRankRemove(ctx, pipe, zone, member)
+		}
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("remove guild %d from rank: %w", guildID, err)

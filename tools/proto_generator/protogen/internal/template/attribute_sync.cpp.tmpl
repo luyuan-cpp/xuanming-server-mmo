@@ -78,11 +78,11 @@ void {{ .MessageName }}SyncAttributes(entt::entity entity, uint32_t message_id, 
 void Set{{ .MessageName }}AttrDirtyBit(entt::entity entity, std::size_t bitIdx)
 {
     if (bitIdx >= {{ .MessageName }}DirtyMaskComp{}.dirtyMask.size()) {
-        LOG_ERROR << "属性脏位越界: bit=" << bitIdx;
+        LOG_ERROR << "Attribute dirty bit out of range: bit=" << bitIdx;
         return;
     }
     if (!tlsEcs.actorRegistry.valid(entity)) {
-        LOG_ERROR << "属性脏位写入无效实体: entity=" << entt::to_integral(entity);
+        LOG_ERROR << "Attribute dirty bit write on invalid entity: entity=" << entt::to_integral(entity);
         return;
     }
     // 此处延迟创建:实际标脏是本按需状态的唯一写入口。

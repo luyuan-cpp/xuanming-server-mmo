@@ -532,14 +532,14 @@ rooms 原来是一个 Counter,只有数,没有「这一份是谁的」。下面�
 | 指定 GameServer(镜像共置、改派转移、对账补加) | 读 GameServer:条目已在就是成功;条目数到了 capacity 回 `ErrNoCapacity`;否则追加后带 resourceVersion 更新,409 冲突有界重试 | 同上 |
 | 删除 | 读 GameServer:条目不在、GameServer 已不存在都算成功;否则删掉后带 resourceVersion 更新,409 冲突有界重试 | 调用方可以放心重试 |
 | 登记结局 | `registered`:在途占用已消费。`conflict` / `aborted` / `fenced`:记录没指向这一条,删自己的条目与在途占用。`unknown`:都不动,在途占用过期之后由对账按记录判 | — |
-| 改派转移 | 写在途占用 → 在新 GameServer 加条目 → CAS:属主仍是新节点才改记录,同一步消费在途占用。改成了就删旧条目。落空就删新条目:属主已变、场景已销毁、记录已在新 GameServer、在途占用被取消 | CAS 结局未知:都不动,交给对账 |
+| 改派转移 | 改派之前先在目标上占名额(§13.10,写在途占用、加条目),改派 CAS 落地之后提交:属主仍是新节点才改记录,同一步消费在途占用。改成了就删旧条目。落空就删新条目:属主已变、场景已销毁、记录已在新 GameServer、在途占用被取消 | CAS 结局未知:都不动,交给对账 |
 | 拆除任务 | 按快照里的记录删条目;失败时任务留着,扫描重做到成功。去掉原来的「先置位、至多一次」 | 重做 |
 
 由此改变的调用方语义:
 
 - **建实例先铸 scene_id 再要名额**:条目里要有它。分配失败浪费一个号,无害。铺世界频道本来就先铸号。
 - **conflict 也删自己的条目**:原来分不清 conflict 的两种来历,怕双还,都不还;现在删的是自己那一条,不会删到别人的。
-- **新节点满了的改派**仍然先不动旧的(不能让场景一份名额都不占),由对账每轮重试转过来。
+- **改派先占名额再搬**(§13.10):目标满了不搬,属主已死的路径改落到 GSA 挑的有空位的节点;都没有空位就不搬。对账「转过来」只收进程中途退出留下的那一种。
 
 ### 13.5 对账
 
@@ -595,3 +595,24 @@ rooms 原来是一个 Counter,只有数,没有「这一份是谁的」。下面�
 - `internal/logic/scene_teardown_job.go`:归还做到为止。
 - `internal/metrics/metrics.go`;`tools/scripts/k8s_deploy.ps1` 与部署合同测试;`deploy/k8s/scene-manager-alerts.yaml`。
 - C++ 节点不碰 rooms,不改。Java 版不接 Agones(PARITY「场景实例与主世界频道」行有意差异 D14),不适用。
+
+### 13.10 改派前先占名额(2026-11-11 定案,已落码,未编译)
+
+- **原来**:世界频道的四条改派路径按一致性哈希或最低负载挑目标节点,不问 Agones 有没有空位:rebalance 迁移、懒改派、init 的死节点改派、EnterScene 的死节点自愈。它们先改归属、建实体,事后才转名额。目标 GameServer 满了就保留旧名额(场景不能一份都不占)。
+  - 整个 Fleet 的占用总数是对的,但记在了旧 GameServer 上:旧的看着比实际满,新的比实际空。
+  - GSA 会按新的那台「还有空位」继续往里放,那台进程就超出压测定下的容量。
+- **做法**:改派与新建频道一样「先占名额再搬」(`reserveAgonesRoomForWorldChannel`)。
+  1. 选好目标之后,先在它的 GameServer 上占名额:写在途占用、加条目。
+     - rebalance 的「换更好的家」:只认计划的目标,满了这次不搬。搬到别处就违背了这次迁移的目的。
+     - 属主已死的四条路径(rebalance 的 urgent、懒改派、init 的死节点改派、EnterScene 的死节点自愈):目标满了交给 GSA,在本 zone 挑一台有空位、承载大世界的 GameServer,落点改成它对应的节点。落点偏离哈希目标的,之后由 rebalance 搬回去,与新建频道同一做法。
+     - 哪台都占不到:不搬。频道留在死节点上、暂时进不去(选频道时跳过它),玩家落到别的频道;下一拍、下一次请求再试,FleetAutoscaler 扩出空位之后就能搬。这与新建频道没有容量时 fail-closed 是同一取舍:不把房间塞进 Agones 认为已经满了的进程。EnterScene 的死节点自愈这时回错误,由上游重试。
+  2. 带着放置代次在落点上建实体,再走原来的改派 CAS(`luaReassignSceneNode`,不改)。
+  3. CAS 落地:用这次占的名额提交记录(`commitReservedAgonesRoom` → `commitAgonesRoomTransfer`)。属主仍是落点才改记录,同一步消费在途占用;改成了就删旧条目。
+  4. 任何一步没成,就放弃这次占的条目:分配代次、建实体、读镜像集合失败,CAS 落空或被屏障挡住。落空时回收预建实体照旧。
+  5. CAS 落空但属主恰是落点:别的写者挑了同一个节点,或脚本其实已执行。这时实体留着,名额照常提交:别的写者已提交的,记录已在这台上,这次的条目放弃;没提交的,这次就是那一份。两边都按条目,只会留一条。属主比对本身出错时放弃这次的条目:旧条目仍记着,总数不少,之后由对账转过来。
+- **为什么不把名额记录并进改派 CAS**:改派 CAS 之后、名额提交之前,两个条目都在:旧的有记录指着,新的有在途占用护着。这时只会多记一份、不会少记,也就不会超卖。进程在这时退出,在途占用过期之后对账收:新条目按孤儿删,场景按「名额记在别的 GameServer 上」转过来。并进同一个脚本只是缩短这个窗口,却要改所有改派写者共用的脚本和它的回执格式。
+- **代码**:
+  - `agones_binding.go`:`reserveAgonesRoomForWorldChannel`、`commitReservedAgonesRoom`;原来事后转名额的 `TransferAgonesRoomForScene` 删除。
+  - `world_rebalance.go`:`migrateWorldChannel`;`destroyUnownedMigrationTarget` 回是否留下了实体,新增 `settleLostChannelMove`。
+  - `world_init.go`:`moveWorldChannelOffDeadNode`(回实际落点)、`lazyReassignStaleWorldChannel`(回实际落点)、`commitPreCreatedWorldChannel`(带名额)。
+  - `enterscenelogic.go`:`reassignSceneOffDeadNode`、`adoptOwnerAfterLostReassign`。

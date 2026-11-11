@@ -9,6 +9,7 @@
 #include "combat/engagement/system/combat_engagement.h"
 #include "core/constants/fps.h"
 #include "spatial/system/aoi.h"
+#include "spatial/system/aoi_load.h"
 #include "spatial/system/movement.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/afk.h"
@@ -52,12 +53,16 @@ void World::Update()
     double accumulatedTime = std::clamp(tlsFrameTimeManager.frameTime.time_accumulator() + deltaTime, -1.0, 1.0);
     int simulationIterations = 0;
     const double fixedDeltaTime = tlsFrameTimeManager.frameTime.delta_time();
+    // 服务器压力监控:每个场景线程一份,按模拟步耗时调 AOI 关注容量(spatial/system/aoi_load.h)。
+    static thread_local AoiLoadMonitor aoiLoad;
 
     while (accumulatedTime > fixedDeltaTime)
     {
         accumulatedTime -= fixedDeltaTime;
         if (simulationIterations < kMaxSimulationIterationsPerFrame)
         {
+            const auto stepStart = steady_clock::now();
+
             // AFK detection must run first: it adds/removes AfkComp tags
             // that Movement, AOI, and sync systems use for exclusion.
             AfkSystem::Update(fixedDeltaTime);
@@ -77,6 +82,13 @@ void World::Update()
             // Attribute calculation must run last (depends on state changes above)
             ActorAttributeCalculatorSystem::Update();
             ActorStateAttributeSyncSystem::Update(fixedDeltaTime);
+
+            // 这一步的耗时报给压力监控;到了做决定的时候(每秒一次)把压力写进各场景,容量变了就裁表或补回。
+            const double stepSeconds = duration<double>(steady_clock::now() - stepStart).count();
+            if (aoiLoad.Observe(stepSeconds, fixedDeltaTime))
+            {
+                AoiSystem::ApplyServerPressure(aoiLoad.PressureFactor());
+            }
 
             tlsFrameTimeManager.frameTime.set_current_frame(tlsFrameTimeManager.frameTime.current_frame() + 1);
         }

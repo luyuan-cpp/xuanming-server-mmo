@@ -286,7 +286,6 @@ func runChat(c config.Config) (runErr error) {
 	fmt.Printf("  node_id:     %d (etcd CAS)\n", nr.NodeID())
 	fmt.Printf("  node_uuid:   %s\n", nr.NodeUUID)
 	fmt.Printf("  zone:        %d (affects registration path only)\n", c.ZoneId)
-	fmt.Printf("  chat_redis:  %s\n", svcCtx.ChatRedisTarget)
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:     %s\n", c.MetricsListenAddr)
 	}

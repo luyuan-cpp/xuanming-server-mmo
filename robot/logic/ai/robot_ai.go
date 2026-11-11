@@ -7,15 +7,23 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
 	"proto/chat"
+	base "proto/common/base"
 	"proto/common/component"
 	"proto/scene"
 	"robot/generated/pb/game"
 	"robot/logic/gameobject"
+	"robot/logic/handler"
 	"robot/metrics"
 	"robot/pkg"
 )
+
+// actionReplyTimeout 是 AI 动作请求等回包的预算,取客户端超时 15 s(docs/design/client-request-ordering.md §5.2 的 I4、
+// client-rpc-callback.md §2.3)。gate 在它之前一定给出回包或带请求号的错误信封:scene 路径等满 12 s 回 1003,
+// 路由路径是 gate deadline 8 s 加 lane 排队上限 5 s。
+const actionReplyTimeout = 15 * time.Second
 
 // ErrMatchOutcomeUnknown 标记 MatchQueue.Join 的结局未知(超时、断线、路由层信封拒绝):请求可能已被 match 受理。
 // RobotAI 按「已在队列里」处理,到时按请求号撤单 —— 服务端按 request_id 撤得掉结局未知的入队,并永久挡住它迟到入队。
@@ -59,6 +67,9 @@ type RobotAI struct {
 	queued     QueueTicket   // 当前要撤的那次入队意图;RequestID 与 Ticket 都空 = 不在队列里
 	queuedAt   time.Time
 	now        func() time.Time // 单测注入;nil = time.Now
+
+	// dispatch 把动作请求的成功回包交给类型化 handler;nil = handler.MessageBodyHandler。单测注入。
+	dispatch func(*pkg.GameClient, *base.MessageContent)
 }
 
 func NewRobotAI(client *pkg.GameClient, stats *metrics.Stats) *RobotAI {
@@ -197,6 +208,68 @@ func (ai *RobotAI) pickAction() Action {
 
 // --- Action implementations (flat, no deep call chain) ---
 
+// sendAction 发一个有回包的动作请求(ReleaseSkill / EnterScene / SendChat)。回包按请求号认领(pkg.GameClient.Call),
+// 不再落进 RecvLoop 的通用分发:通用分发按消息号派发,认不出这条回包属于哪次请求,错误信封的空 body 还会被
+// 类型化 handler 解成一份全零响应、看上去像受理(client-request-ordering.md O6)。回包怎么处理见 onActionReply。
+// 只有本地没发出才返回错误,此时不计发送;发出后的结局(含超时、信封拒绝)都在 onActionReply 里处理。
+// SceneInfoC2S 是单向消息(CLIENT_RPC_ONE_WAY,没有回包),仍用 SendRequest。
+func (ai *RobotAI) sendAction(action Action, messageId uint32, body proto.Message) error {
+	// notSent 只在本地没发出时写入,而那种结局的 done 在 Call 返回前同步调用(pkg.GameClient.Call 的约定);
+	// 其余结局在别的 goroutine 上完成但不碰它,所以 Call 返回后读它不与 done 竞争。
+	var notSent error
+	ai.client.Call(messageId, body, actionReplyTimeout, func(reply *base.MessageContent, err error) {
+		if errors.Is(err, pkg.ErrRPCNotSent) {
+			notSent = err
+			return
+		}
+		ai.onActionReply(action, messageId, reply, err)
+	})
+	if notSent != nil {
+		return notSent
+	}
+	if ai.stats != nil {
+		ai.stats.MsgSent()
+	}
+	return nil
+}
+
+// onActionReply 处理一次动作请求的结局,跑在派发回包的 RecvLoop goroutine(超时在定时器 goroutine)上,不得阻塞。
+//   - 成功回包:交给类型化 handler,与改造前同一 goroutine、同一收包顺序,不会与同连接上的推送处理器交错;
+//     回包体里的业务拒绝(如 ReleaseSkillResponse.error_message)照旧由 handler 记;
+//   - 错误信封:gate / 路由服在信封里拒绝,body 为空,不交 handler,只记日志;
+//   - 超时 / 断线:结局未知,不交 handler。动作本身不重发,下一拍按权重另选动作。
+func (ai *RobotAI) onActionReply(action Action, messageId uint32, reply *base.MessageContent, err error) {
+	if reply != nil && ai.stats != nil {
+		ai.stats.MsgRecv() // 按请求号认领的回包与信封不经过 RecvLoop 的 onMessage,在这里计数
+	}
+	var playerID uint64
+	if ai.client != nil {
+		playerID = ai.client.PlayerId
+	}
+	var tipErr *pkg.ServerTipError
+	switch {
+	case err == nil:
+		dispatch := ai.dispatch
+		if dispatch == nil {
+			dispatch = handler.MessageBodyHandler
+		}
+		dispatch(ai.client, reply)
+	case errors.As(err, &tipErr):
+		zap.L().Warn("robot action rejected by gate envelope",
+			zap.String("action", action.String()),
+			zap.Uint64("player_id", playerID),
+			zap.Uint32("message_id", messageId),
+			zap.Uint32("tip_id", tipErr.Tip))
+	default:
+		// 压测时可能成片超时,只在 debug 级别记;判断看汇总统计里 MsgRecv 与 MsgSent 的差。
+		zap.L().Debug("robot action reply outcome unknown",
+			zap.String("action", action.String()),
+			zap.Uint64("player_id", playerID),
+			zap.Uint32("message_id", messageId),
+			zap.Error(err))
+	}
+}
+
 func (ai *RobotAI) recordBehavior(action Action, start time.Time, success bool, detail string) {
 	if ai.stats == nil {
 		return
@@ -247,7 +320,7 @@ func (ai *RobotAI) castSkill() {
 		return
 	}
 
-	err := ai.client.SendRequest(game.SceneSkillClientPlayerReleaseSkillMessageId, &scene.ReleaseSkillRequest{
+	err := ai.sendAction(ActionCastSkill, game.SceneSkillClientPlayerReleaseSkillMessageId, &scene.ReleaseSkillRequest{
 		SkillTableId: skillID,
 		TargetId:     targetID,
 		Position:     &component.Vector3{X: x, Y: 0, Z: z},
@@ -258,7 +331,6 @@ func (ai *RobotAI) castSkill() {
 		return
 	}
 	ai.stats.SkillSent()
-	ai.stats.MsgSent()
 	ai.recordBehavior(ActionCastSkill, start, true, fmt.Sprintf("skill_id=%d target=%d", skillID, targetID))
 }
 
@@ -293,7 +365,7 @@ func (ai *RobotAI) switchScene() {
 		return
 	}
 
-	err := ai.client.SendRequest(game.SceneSceneClientPlayerEnterSceneMessageId, &scene.EnterSceneC2SRequest{
+	err := ai.sendAction(ActionSwitchScene, game.SceneSceneClientPlayerEnterSceneMessageId, &scene.EnterSceneC2SRequest{
 		SceneInfo: &scene.SceneInfoComp{SceneConfigId: sceneConfID},
 	})
 	if err != nil {
@@ -302,7 +374,6 @@ func (ai *RobotAI) switchScene() {
 		return
 	}
 	ai.stats.SceneSwitchSent()
-	ai.stats.MsgSent()
 	ai.recordBehavior(ActionSwitchScene, start, true, fmt.Sprintf("scene_conf_id=%d", sceneConfID))
 }
 
@@ -314,7 +385,7 @@ func (ai *RobotAI) sendChat() {
 	}
 	msg := messages[rand.Intn(len(messages))]
 
-	err := ai.client.SendRequest(game.ClientPlayerChatSendChatMessageId, &chat.SendChatRequest{
+	err := ai.sendAction(ActionChat, game.ClientPlayerChatSendChatMessageId, &chat.SendChatRequest{
 		Message: &chat.ChatMessage{
 			Content: fmt.Sprintf("[robot] %s", msg),
 		},
@@ -324,6 +395,5 @@ func (ai *RobotAI) sendChat() {
 		ai.recordBehavior(ActionChat, start, false, err.Error())
 		return
 	}
-	ai.stats.MsgSent()
 	ai.recordBehavior(ActionChat, start, true, msg)
 }

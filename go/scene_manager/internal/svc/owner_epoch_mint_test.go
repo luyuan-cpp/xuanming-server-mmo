@@ -264,9 +264,14 @@ func TestEvalAndConfirmNotSentWhenBudgetTooShort(t *testing.T) {
 
 // 启动探针:开启时发一次 WAITAOF,被拒即报错(svc 据此拒启);关闭时一条命令都不发。
 func TestProbe(t *testing.T) {
-	m, rec, _ := newRecordedMinter(t, config.OwnerEpochMintConfig{})
+	m, rec, mr := newRecordedMinter(t, config.OwnerEpochMintConfig{})
 	require.Error(t, m.Probe(context.Background()), "miniredis 不认 WAITAOF,探针必须失败")
-	assert.Equal(t, []string{"waitaof"}, rec.recordedSingles())
+	assert.Empty(t, rec.recordedSingles(), "探针不单发 WAITAOF")
+	assert.Equal(t, [][]string{{"set", "waitaof"}}, rec.recordedPipelines(),
+		"先在同一条连接上写探针键,WAITAOF 才有偏移可等(新连接偏移为 0,不先写就查不出副本没开 AOF)")
+	probeKey := ownerEpochMintProbeKeyPrefix + "{0}"
+	assert.True(t, mr.Exists(probeKey), "单实例第一个候选就是本节点")
+	assert.Greater(t, mr.TTL(probeKey), time.Duration(0), "探针键带 TTL,自然消失")
 
 	off, offRec, _ := newRecordedMinter(t, config.OwnerEpochMintConfig{WaitAOFNumLocal: intPtr(0), WaitAOFNumReplicas: intPtr(0)})
 	require.NoError(t, off.Probe(context.Background()))

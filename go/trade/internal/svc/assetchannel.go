@@ -366,7 +366,10 @@ func maintenanceLeaderID() string {
 // (不拨共享 Redis、不建节点镜像)。只删保留期外的 APPLIED / REJECTED / ABORTED / ABANDONED,
 // PENDING 与 APPLIED_PARTIAL 永不删(data.AssetOpRepo.CleanupTerminalOps)。调用方只在 AssetOp.CleanupEnabled 时调用,
 // 且必须在建表(ensureSchema)之后。
-func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.Session) (stop func(), err error) {
+//
+// owns 是按片分工的归属判定(data.CleanupConf.Owns,缺口清单第 25 条第二批):生产传 ServiceContext.AssetOpCleanupOwner(),
+// 即重投循环与合同推进那份成员表;nil = 不分工,本副本清全部行(通道关着时就是这样)。
+func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, owns func(key string) bool, roots ...*drainproof.Session) (stop func(), err error) {
 	if db == nil {
 		return nil, errors.New("trade: 终态资产指令清理缺 MySQL 连接池")
 	}
@@ -375,6 +378,7 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 		return nil, fmt.Errorf("trade: 终态资产指令清理装配失败: %w", err)
 	}
 	conf := cleanupConfFrom(c)
+	conf.Owns = owns
 	if len(roots) > 1 || (len(roots) == 1 && roots[0] == nil) {
 		return nil, drainproof.ErrHold
 	}
@@ -411,7 +415,9 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 					defer finish()
 					budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 					defer release()
-					if _, err := repo.CleanupTerminalOps(budget, time.Now(), conf.TerminalRetention); err != nil {
+					// 片的归属每轮开头算一次,一轮里不变。
+					owned := workshard.SQLFilter(conf.Owns, data.CleanupWorkKind, "player_id")
+					if _, err := repo.CleanupTerminalOpsOwned(budget, time.Now(), conf.TerminalRetention, owned); err != nil {
 						if !authoritysql.IsWriterFrozen(err) {
 							owner.Hold()
 						}
@@ -425,8 +431,8 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 			timer.Reset(conf.Interval)
 		}
 	})
-	logx.Infof("[trade] Asset cleanup started: goroutine %s interval=%v terminal_retention=%v",
-		assetOpCleanupPoint, conf.Interval, conf.TerminalRetention)
+	logx.Infof("[trade] Asset cleanup started: goroutine %s interval=%v terminal_retention=%v sharded_by_player=%t",
+		assetOpCleanupPoint, conf.Interval, conf.TerminalRetention, conf.Owns != nil)
 	return func() {
 		cancel()
 		<-done

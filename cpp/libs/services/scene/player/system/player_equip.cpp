@@ -968,6 +968,14 @@ uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
 	if (slots.empty()) {
 		return kEquipNoSlot;
 	}
+	// 穿上就是把这一件移出人物背包。它的数量若还押在一局未结算的战斗里(战斗道具预留,
+	// docs/design/battle-item-reservation.md),移走之后结算扣不出。今天的物品表里没有既是装备又可参战的行;
+	// 这道闸让「预留只覆盖还在人物背包里的数量」不依赖配表约定。人物背包里出包的入口只有 BagService 与这里。
+	if (BagService::CheckRemovableInstances(player, inventory, {itemId}) == BagService::RemovalVerdict::kHeld) {
+		LOG_INFO << "[PlayerEquip] Equip refused, item held for an unsettled battle: player_id=" << tlsEcs.GetPlayerId(player)
+				 << " guid=" << itemId << " config=" << configId;
+		return kFeatureUnavailable;
+	}
 
 	// 选槽:槽号升序里第一个空槽;都占着就替换槽号最小的那个。
 	// 选定的槽显式传给 PutInstance —— 自动找位取的是表行序里的第一个空槽,不保证是槽号最小的。
@@ -1222,7 +1230,8 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 			return kEquipInternalError;
 		}
 		// 7. 静默预检:「材料不够」是玩家随手能触发的常规拒绝,不让它走到底层会打 ERROR + 调用栈的不足分支。
-		//    与提交段的扣除同一个判据(Bag::CheckQuantities):必须在下面扣金币之前判完,否则扣了金币才发现材料扣不出。
+		//    与提交段的扣除同一个判据(BagService::CheckRemovable,RemoveItemsExact 内部也用它):必须在下面扣金币之前判完,
+		//    否则扣了金币才发现材料扣不出。
 		//    只有算上带更新版本字段的材料才够 = 版本错位(混版本设计 §4.4 第 6 批):不当普通单位扣,回暂不可用。
 		//    材料还押在一局未结算的战斗里(战斗道具预留,battle-item-reservation.md)同样回暂不可用:结算或作废之后就能用。
 		switch (BagService::CheckRemovable(player, inventory, {{materialId, materialCount}})) {
@@ -1372,7 +1381,7 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 				  << " gem_records=" << storedGems.size() << " limit=" << equiprules::kMaxGemSockets;
 		return kEquipInternalError;
 	}
-	// 6. 静默预检:背包里至少有 1 颗可按数量扣的宝石,与提交段扣除同一个判据(Bag::CheckQuantities)。
+	// 6. 静默预检:背包里至少有 1 颗可按数量扣的宝石,与提交段扣除同一个判据(BagService::CheckRemovable)。
 	//    只有带更新版本字段的宝石 = 版本错位(混版本设计 §4.4 第 6 批):不当普通宝石嵌进去,回暂不可用。
 	//    宝石还押在一局未结算的战斗里(战斗道具预留,battle-item-reservation.md)同样回暂不可用。
 	switch (BagService::CheckRemovable(player, inventory, {{gemConfigId, 1}})) {

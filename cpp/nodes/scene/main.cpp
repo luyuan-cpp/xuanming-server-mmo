@@ -12,6 +12,7 @@
 #include "core/config/config.h"
 #include "world/world.h"
 #include "world/scene_ownership_reconciler.h"
+#include "spatial/system/aoi_load.h"
 #include "core/system/redis.h"
 #include "core/system/scene_task_scope.h"
 #include "frame/manager/frame_time.h"
@@ -151,6 +152,8 @@ int main(int argc, char *argv[])
         RegisterSceneOwnershipMetrics();
         // 每次广播发给了几台 gate 的直方图(network/broadcast_fanout_stats.h),同一个出口。
         RegisterBroadcastFanoutMetrics();
+        // 服务器压力监控的读数:模拟步利用率、AOI 压力、因容量收缩裁掉的关注条目(spatial/system/aoi_load.h)。
+        RegisterAoiLoadMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);

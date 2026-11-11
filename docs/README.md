@@ -75,6 +75,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [hmac-message-signing.md](design/hmac-message-signing.md) — Per-Message HMAC Signing — Design (todo.md #76)
 - [java-gateway-portal-decision.md](design/java-gateway-portal-decision.md) — Java Gateway Portal Decision (2026-04-14)
 - [k8s-client-entry.md](design/k8s-client-entry.md) — gate / battle 集群外客户端入口(D76–D93)
+- [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret:gate / battle / 观战令牌、login 密钥、MySQL 与 gateway 数据源口令离开 ConfigMap(2026-11-10 起分批落码,未编译)
 - [k8s_gate_exposure_guidance.md](design/k8s_gate_exposure_guidance.md) — K8s Gate Exposure Guidance / K8s gate 暴露方式指南 · [EN](design/k8s_gate_exposure_guidance_en.md) · [中文](design/k8s_gate_exposure_guidance_zh.md)
 - [login-node-stateless-no-affinity.md](design/login-node-stateless-no-affinity.md) — Login Node: Stateless, No Session Affinity
 - [login-queue-2026-05.md](design/login-queue-2026-05.md) — Login Queue (AssignGate Real Queue) — 2026-05
@@ -219,7 +220,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 基础设施与中间件
 
-- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;2026-11-06 重写,未落码)
+- [distributed-tracing.md](design/distributed-tracing.md) — 分布式日志关联与链路追踪(todo.md #152;阶段一第 1~5 批已落码:第 1 批 11-08 已验证,第 2~5 批待 Codex 验证)
 - [double-buffer-queue-optimizations.md](design/double-buffer-queue-optimizations.md) — DoubleBufferQueue Optimizations (2026-04-16)
 - [error-reporting.md](design/error-reporting.md) — Error Aggregation & Reporting — Design (todo.md #250)
 - [go-zero-rpc-timeout-fix.md](design/go-zero-rpc-timeout-fix.md) — go-zero RPC Client Timeout Fix
@@ -233,6 +234,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
 - [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
 - [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化(发现只看本 zone、scene_manager 按 zone 选主)与控制域 Redis 按 zone 组分实例(缺口第 4、5 条)
+- [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:新建控制集群,排队、控制域、gate 标记、唤醒频道、选主锁与各服务私有键按 hash tag 分片,go-zero Redis 句柄退役(缺口第 34 条;设计稿,未落码)
 - [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:gate→路由服与路由服→全服池目标按 HRW 取确定性子集、每类 C++ 节点只发现自己用到的类型、命令 topic 读放大与场景亲和先测(缺口第 30 条、第 28 条后半;设计稿,未落码)
 - [thread-count-monitoring.md](design/thread-count-monitoring.md) — Thread Count Monitoring & Control per Process · [EN](design/thread-count-monitoring_en.md) · [中文](design/thread-count-monitoring_zh.md)
 - [traffic-statistics-design.md](design/traffic-statistics-design.md) — Traffic Statistics Design

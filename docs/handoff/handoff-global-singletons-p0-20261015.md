@@ -387,11 +387,10 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
 - Secret 注入、指纹滚动、Spring 嵌套占位的解析都没有在集群上跑过(§9.5 第 6 步)。Spring 那一条与 `admin.api-key` 的既有先例一样,只按文档核对过。
 - Spring 会把占位解析出来的值再当占位解析一遍:口令里含 `${…}` 会被改写或解析失败。这是既有行为(以前写明文时同样如此),Go 与 C++ 不受影响。
   字符集检查没有拦 `$`,本批不改;生成口令时不要用 `$`。
-- 同一批 ConfigMap 里还有别的明文:MySQL 口令(`MMORPG_MYSQL_PASSWORD`)、gateway 数据源口令、`GateTokenSecret`、`Secrets.InternalAuth`、排队令牌密钥。
-  属同类问题,不在本批范围,建议另立任务按同一套做法迁移。
-- 玩家域 Redis 口令(`PLAYER_REDIS_PASSWORD`)给 Go 服务注入了环境变量,但 Go 服务的 Pod 模板没有对应指纹,只换玩家域口令时 Go 服务不滚动(既有缺口,本批没动)。
-- 部署脚本的 DryRun 输出与 apply 先后每次运行都可能不同(既有问题,本批没动):`Get-GlobalGoSvcNames` 与 `Apply-JavaSvcManifests` 直接遍历普通哈希表的 `.Keys`,
-  而同文件的 `Get-ZoneScopedGoSvcNames`、`Get-GlobalGoSvcNamesAfterDataService` 已为输出稳定按名字排序。要固定,在这两处加排序即可;
-  全局服务与 Java 服务的 apply 先后会随之固定下来(现在本来就是随机的)。
+- 同一批 ConfigMap 里别的明文(MySQL 口令、gateway 数据源口令、`GateTokenSecret`、`Secrets.InternalAuth`、排队令牌,以及盘点时又找到的 battle / 观战令牌、
+  match 运营入口密钥):11-10 起按同一套做法改走 Secret,见 `docs/design/workload-secrets-via-k8s-secret.md`(未编译、未测试)。
+- 玩家域 Redis 口令(`PLAYER_REDIS_PASSWORD`)的 Go 服务指纹:11-10 补上 `mmorpg.io/player-redis-auth-hash`(同上设计文档批 4),只换玩家域口令时 Go 服务也滚动。
+- 部署脚本的 DryRun 输出与 apply 先后不固定:11-10 已把 `Get-GlobalGoSvcNames` 与两处 `$JavaSvcCatalogue.Keys` 遍历改为按名字排序(同上设计文档批 1)。
+  本节比对脚本按内容比的判据不变:它比的是 11-06 的旧脚本,旧脚本仍是乱序。
 - Java 版(AGENTS.md §12):核对了 `D:\luyuan\xuanming-server-mmo`,`deploy/` 下只有 compose、docker、sql、ci,没有 K8s 清单、ConfigMap 或 `secretKeyRef`。
   本批是本仓库 K8s 部署侧与 Go 配置加载的改动,**不适用**,不往 PARITY 加行。本仓库的 `java/gateway_node` 属于 C++/Go 版,代码不用改。

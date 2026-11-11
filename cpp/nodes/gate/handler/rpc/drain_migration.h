@@ -41,7 +41,8 @@ inline constexpr std::chrono::seconds kRetryBackoff{10};
 inline constexpr std::chrono::seconds kRedirectLinger{60};
 // 停在选角界面的连接,转发过 EnterGame 之后这么久不迁。不短于 login EnterGame 后台链的总预算
 // (go/login/internal/logic/clientplayerlogin/entergamelogic.go 的 enterGameChainBudget,5 分钟):那段时间里 login
-// 可能还在给这条连接绑角色,迁走会让新连接上的 EnterGame 撞上「登录中」。改那边时同步改这里。
+// 可能还在给这条连接绑角色,迁走会让新连接上的 EnterGame 撞上「登录中」。改那边时同步改这里;
+// go/login/internal/logic/clientplayerlogin/gate_drain_settle_crosslang_test.go 按下面这行的写法读本值对拍,改写法要同步那个用例。
 inline constexpr std::chrono::minutes kEnterGameSettle{5};
 
 // 一个会话这一拍按什么身份迁。票据绑不绑玩家由 login 按 SessionDetails 的 player_id 判,gate 只决定迁不迁。

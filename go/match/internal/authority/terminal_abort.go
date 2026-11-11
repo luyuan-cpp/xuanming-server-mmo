@@ -79,7 +79,8 @@ const (
 	// 对不符的 UUID 拒 DestroyBattle、查询回空包);或原地址的 TCP 端口当场拒连(RST:主机在,端口上已没有进程在听)且已同步的
 	// 注册中心镜像里没有原实例。房间与待提交的终局只在 battle 进程内存里,进程不在就永远不会再提交。
 	// 不算的(评审修正 2026-11-06):只凭「注册中心查不到」(etcd 抖动、租约短暂失效时也查不到,§13.3 2026-10-22 同一口径);
-	// gRPC 调用失败,哪怕在期限之内当场失败(缓存连接停在 TRANSIENT_FAILURE 时 RPC 当场回 Unavailable,黑洞端点也会这样);
+	// gRPC 调用失败,哪怕在期限之内当场失败(对端一连上就关、地址上不是 battle 时都会这样;最初取证走缓存连接,它停在
+	// TRANSIENT_FAILURE 时黑洞端点也当场回 Unavailable);
 	// 超时、主机或网络不可达;「原 node_id 已登记成另一个实例」(分区中的原进程还活着,恢复后重注册失败才停机,停机前还会补提交一轮)。
 	DeadlineEvidenceInstanceGone
 )
@@ -109,8 +110,10 @@ const DeadlineProbeTimeout = 2 * time.Second
 // deadlineAbortHardCapMs(hardCap):截止 + 终局宽限之后,拿不到「原实例没有冻结终局」的证据时最多再等多久;过了就不再
 // 要证据,直接作废,计 abort_deadline_cap 并打 ERROR。取值与 scene 冻结到期之后的续冻一起定(player_battle.h:FIGHTING 冻结
 // 到期 = 截止 + 60 秒终局宽限 + 60 秒投递余量,续冻上限 kFreezeHoldCapMs = 15 分钟,合计截止 + 17 分钟):match 可用时,
-// 截止 ABORT 最晚在 截止 + 宽限 + 硬上限 + 持有宽限(截止 + 13 分钟)再加一圈恢复延迟之内落定,早于 scene 按上限解冻,
-// scene 按 SQL 终局解冻;不等式由 TestDeadlineAbortBoundsFitSceneFreezeHold 钉住。match 自己不可用超过 scene 上限时,
+// 截止 ABORT 最晚在 截止 + 宽限 + 硬上限 + 持有宽限(截止 + 13 分钟)再加两次访问延迟之内落定(越过硬上限后的第一次访问、
+// 持有宽限之后的下一次访问,各至多两圈加两个取证期限;持有宽限从第一次访问的锁内时刻起算),约截止 + 14.2 分钟,早于 scene
+// 按上限解冻,scene 按 SQL 终局解冻;不等式由 TestDeadlineAbortBoundsFitSceneFreezeHold 钉住(含原 battle 被黑洞、每拍多等
+// 一个取证期限的一档)。match 自己不可用超过 scene 上限时,
 // scene 按上限解冻只放开人,带进战斗的道具仍由战斗道具预留押着(2026-11-10 起,docs/design/battle-item-reservation.md):
 // 之后到的 COMPLETE 从这份预留里扣,不再按当时持有量夹紧;之后到的 ABORT(或查到没有可裁决原件)不产生结算,只释放预留。
 // 所以这里的等待上限决定的是「人被冻多久」,不再决定结算扣不扣得出。battle 侧补提交的总跨度是 30 小时(result_commit.h:冻结后 6 小时内每 5 秒、之后 24 小时内每 60 秒),

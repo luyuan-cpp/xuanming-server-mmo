@@ -85,8 +85,11 @@ effectiveCapacity = min(clientReportedCapacity, serverPressureCapacity)
 - 1 = max pressure → server capacity = `kAoiListCapacityMin` (20)
 - Linear interpolation between the two.
 
-The scene's tick/load monitor sets `pressureFactor` each frame (integration
-TODO).
+Pressure comes from simulation step time (wired 2026-11-11): `AoiLoadMonitor` smooths
+step time / fixed step, maps 0.5 → 0 and 0.9 → 1 in 10 levels with hysteresis, and decides at
+most once per second. `AoiSystem::ApplyServerPressure` writes it into every scene on the thread;
+when capacity shrinks, entries are trimmed lowest weight first, farthest first among equals, and
+restored when it grows back. Thresholds still need calibration from stress tests.
 
 ### Client Reported Count
 
@@ -157,15 +160,16 @@ scanning the node.
 
 ## Future Work
 
-- **Allies via threat lists**: combat interest currently covers direct interactions only (done
-  2026-11-10). Others attacking the same enemy need NPC threat lists, which do not exist yet.
+- **Threat values for AI**: NPC threat rosters (2026-11-11) only record members, so fighters of the
+  same NPC see each other as allies. Add threat values when AI target selection needs them. The
+  server does not spawn NPCs yet, so rosters take effect once spawning lands.
 - **Quest NPC priority**: Hook mission accept to call
   `InterestSystem::UpgradePriority(player, npc, kQuestNpc)`.
 - **Boss tagging**: Scene creation marks boss entities; grid entry detects and
   assigns `kBoss` tag.
-- **Pressure integration**: Scene tick monitors entity count / CPU load and
-  writes `ScenePressureComp.pressureFactor`. When capacity shrinks, trim the lowest-weight
-  entries; today a smaller capacity only rejects newcomers.
+- **Pressure calibration**: the pressure monitor and weight-ordered trimming are wired
+  (2026-11-11); calibrate the thresholds with stress tests and decide whether RPC handling time
+  should feed the signal too.
 - **Client settings RPC**: Wire client-reported display count to
   `AoiClientCapacityComp`.
 - **Custom policies**: Data-driven policy loading from configuration tables.

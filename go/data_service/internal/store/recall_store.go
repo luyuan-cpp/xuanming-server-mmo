@@ -16,6 +16,7 @@ import (
 	"shared/assetop"
 	"shared/idsegment"
 	"shared/rolefence"
+	"shared/workshard"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -830,8 +831,19 @@ func (s *RecallStore) CancelBatch(ctx context.Context, requestID uint64, operato
 
 // ── assetop.Store ──────────────────────────────────────────────────────────
 
-// ListDue 见 assetop.Store。两段读:新行优先,老行补缺口。
+// ListDue 见 assetop.Store:扫全部片的到期行,即不带分片条件的 ListDueOwned。重投循环绑了按片分工
+// (assetop.Loop.BindWorkOwner)之后不再调它。
 func (s *RecallStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
+	return s.ListDueOwned(ctx, nowMs, limit, workshard.Filter{})
+}
+
+// ListDueOwned 见 assetop.OwnedDueLister。两段读:新行优先,老行补缺口,按 op_id 去重。
+// owned 是本副本负责的片(片号 = player_id % 64,缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md),
+// 两段都接在 WHERE 里、LIMIT 之前:别的副本的行再早到期也不占本副本的名额。零值不过滤。
+func (s *RecallStore) ListDueOwned(ctx context.Context, nowMs uint64, limit int, owned workshard.Filter) ([]uint64, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
 	seen := make(map[uint64]bool, limit)
 	ids := make([]uint64, 0, limit)
 	for _, comparison := range []string{"<", ">="} {
@@ -839,8 +851,8 @@ func (s *RecallStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 		if remaining == 0 {
 			break
 		}
-		rows, err := s.db.QueryContext(ctx, "SELECT op_id FROM gm_recall_op WHERE status=? AND next_attempt_ms<=? AND lease_until_ms<? AND attempts "+comparison+" ? ORDER BY next_attempt_ms,op_id LIMIT ?",
-			recallStatusPending, nowMs, nowMs, assetop.FreshAttemptLimit, remaining)
+		args := append([]any{recallStatusPending, nowMs, nowMs, assetop.FreshAttemptLimit}, owned.Args()...)
+		rows, err := s.db.QueryContext(ctx, recallListDueQuery(comparison, owned), append(args, remaining)...)
 		if err != nil {
 			return nil, err
 		}
@@ -862,6 +874,14 @@ func (s *RecallStore) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 		}
 	}
 	return ids, nil
+}
+
+// recallListDueQuery 拼一段到期扫描:comparison 只取 "<"(新行)或 ">="(老行);分片条件只来自 workshard.SQLFilter
+// (列名写死、片号只走绑定参数),不含外部输入,位置在 ORDER BY / LIMIT 之前。
+// 实参顺序与占位符一致:PENDING、now、now、FreshAttemptLimit、片号……、LIMIT。
+func recallListDueQuery(comparison string, owned workshard.Filter) string {
+	return "SELECT op_id FROM gm_recall_op WHERE status=? AND next_attempt_ms<=? AND lease_until_ms<? AND attempts " +
+		comparison + " ? AND " + owned.SQL() + " ORDER BY next_attempt_ms,op_id LIMIT ?"
 }
 
 // recallOpColumns 是还原一行请求要读的列,scanRecallOp 按这个列序扫。Claim 与 ReadOpState 共用。

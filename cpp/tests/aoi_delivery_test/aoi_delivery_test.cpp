@@ -7,6 +7,7 @@
 #include "engine/core/utils/registry/actor_log.h"
 #include "generated/attribute/actorbaseattributess2c_attribute_sync.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
+#include <algorithm>
 #include <limits>
 #include <vector>
 #include "hexagons_grid.h"
@@ -21,8 +22,11 @@
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/base_comp.pb.h"
+#include "proto/common/component/npc_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/scene/player_scene.pb.h"
+#include "proto/scene/scene_info.pb.h"
+#include "spatial/system/aoi_load.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "thread_context/ecs_context.h"
 
@@ -136,6 +140,13 @@ protected:
         tlsEcs.actorRegistry.emplace<Player>(entity);
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, 10000 + entt::to_integral(entity));
         return entity;
+    }
+    // 生产代码还不刷怪:按 NPC 的身份造一个(带 Npc 标记,不是玩家)。
+    entt::entity SpawnNpc(double x, double y) {
+        const auto npc = Spawn(x, y);
+        tlsEcs.actorRegistry.remove<Player, PlayerGuidComp>(npc);
+        tlsEcs.actorRegistry.emplace<Npc>(npc);
+        return npc;
     }
     static void MoveTo(entt::entity entity, double x, double y) {
         auto& location = *tlsEcs.actorRegistry.get<Transform>(entity).mutable_location();
@@ -835,7 +846,7 @@ TEST_F(AoiDeliveryTest, CombatEngagementMakesFarCombatantsMutuallyVisible) {
     ASSERT_TRUE(VisibleWatchersOf(target).empty()) << "前置条件:相距 120,没有空间关注";
     deliveries.clear();
 
-    CombatEngagementSystem::RecordInteraction(archer, target);
+    CombatEngagementSystem::RecordDamage(archer, target);
 
     EXPECT_EQ(1, CreatesFor(archer, target));
     EXPECT_EQ(1, CreatesFor(target, archer)) << "被打的一方也看见远处的攻击者";
@@ -843,7 +854,7 @@ TEST_F(AoiDeliveryTest, CombatEngagementMakesFarCombatantsMutuallyVisible) {
     EXPECT_EQ((EntityUnorderedSet{target}), VisibleWatchersOf(archer));
 
     deliveries.clear();
-    CombatEngagementSystem::RecordInteraction(target, archer);
+    CombatEngagementSystem::RecordDamage(target, archer);
     EXPECT_TRUE(deliveries.empty()) << "再交手只续期";
 }
 
@@ -852,13 +863,13 @@ TEST_F(AoiDeliveryTest, CombatEngagementExpiresAfterDisengageTimeAndRenewsOnInte
     const auto lhs = Spawn(0, 0);
     const auto rhs = Spawn(0, 120);
     AoiSystem::Update(0);
-    CombatEngagementSystem::RecordInteraction(lhs, rhs);
+    CombatEngagementSystem::RecordDamage(lhs, rhs);
     deliveries.clear();
 
     CombatEngagementSystem::Update(kCombatDisengageSeconds - 1);
     EXPECT_TRUE(deliveries.empty()) << "还没到脱战时间";
 
-    CombatEngagementSystem::RecordInteraction(lhs, rhs);
+    CombatEngagementSystem::RecordDamage(lhs, rhs);
     CombatEngagementSystem::Update(kCombatDisengageSeconds - 1);
     EXPECT_TRUE(deliveries.empty()) << "再交手重新计时";
 
@@ -877,7 +888,7 @@ TEST_F(AoiDeliveryTest, DisengageKeepsNearbyCombatantVisible) {
     AoiSystem::Update(0);
     deliveries.clear();
 
-    CombatEngagementSystem::RecordInteraction(lhs, rhs);
+    CombatEngagementSystem::RecordDamage(lhs, rhs);
     EXPECT_TRUE(deliveries.empty()) << "已在显示,交手不重复创建";
     CombatEngagementSystem::Update(kCombatDisengageSeconds);
 
@@ -892,8 +903,8 @@ TEST_F(AoiDeliveryTest, DeathEndsCombatEngagementImmediately) {
     const auto victim = Spawn(0, 120);
     const auto healer = Spawn(0, -120);
     AoiSystem::Update(0);
-    CombatEngagementSystem::RecordInteraction(killer, victim);
-    CombatEngagementSystem::RecordInteraction(healer, victim);
+    CombatEngagementSystem::RecordDamage(killer, victim);
+    CombatEngagementSystem::RecordHeal(healer, victim);
     deliveries.clear();
 
     CombatEngagementSystem::OnDeath(victim);
@@ -923,7 +934,7 @@ TEST_F(AoiDeliveryTest, CombatOutranksQuestNpcAndQuestNpcReturnsAfterDisengage) 
     ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(player).VisibleCount());
     deliveries.clear();
 
-    CombatEngagementSystem::RecordInteraction(enemy, player);
+    CombatEngagementSystem::RecordDamage(enemy, player);
 
     EXPECT_EQ(1, CreatesFor(player, enemy)) << "交手对象挤进满表";
     int questNpcRemovals = 0;
@@ -959,7 +970,7 @@ TEST_F(AoiDeliveryTest, NearbyActorEvictedDuringCombatReturnsAfterDisengageWitho
     ASSERT_EQ(kAoiListCapacityMin, tlsEcs.actorRegistry.get<AoiListComp>(player).VisibleCount());
     deliveries.clear();
 
-    CombatEngagementSystem::RecordInteraction(player, enemy);
+    CombatEngagementSystem::RecordDamage(player, enemy);
     ASSERT_EQ(1, DestroysFor(player, nearbyNpc)) << "前置条件:附近的普通候选被交手对象挤掉";
     ASSERT_TRUE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(player));
 
@@ -976,7 +987,7 @@ TEST_F(AoiDeliveryTest, CounterpartLeavingSceneEndsEngagementWithoutExtraMessage
     const auto stayer = Spawn(0, 0);
     const auto leaver = Spawn(0, 120);
     AoiSystem::Update(0);
-    CombatEngagementSystem::RecordInteraction(stayer, leaver);
+    CombatEngagementSystem::RecordDamage(stayer, leaver);
     deliveries.clear();
 
     AoiSystem::OnLeaveScene(leaver);
@@ -999,13 +1010,217 @@ TEST_F(AoiDeliveryTest, InvalidCombatInteractionsAreIgnored) {
     const auto destroyed = Spawn(0, 5);
     tlsEcs.actorRegistry.destroy(destroyed);
 
-    CombatEngagementSystem::RecordInteraction(actor, actor);
-    CombatEngagementSystem::RecordInteraction(actor, elsewhere);
-    CombatEngagementSystem::RecordInteraction(destroyed, actor);
+    CombatEngagementSystem::RecordDamage(actor, actor);
+    CombatEngagementSystem::RecordDamage(actor, elsewhere);
+    CombatEngagementSystem::RecordDamage(destroyed, actor);
+    CombatEngagementSystem::RecordHeal(actor, actor);
+    CombatEngagementSystem::RecordHeal(elsewhere, actor);
 
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(actor));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatEngagementComp>(elsewhere));
     EXPECT_TRUE(deliveries.empty());
+}
+
+// ---------------------------------------------------------------------------
+// 仇恨名单(CombatAllyRosterComp):一起打同一个 NPC 的人互相算友方交手,离得再远也互相看得见。
+// ---------------------------------------------------------------------------
+
+// 两个人一前一后打同一个怪:第二个人出手时,两人互相关注;怪的仇恨名单按加入先后记着他们。
+TEST_F(AoiDeliveryTest, FightersOfTheSameNpcBecomeCombatAllies) {
+    const auto boss = SpawnNpc(0, 0);
+    const auto archer = Spawn(0, 120);
+    const auto warrior = Spawn(0, -120);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(VisibleWatchersOf(archer).empty()) << "前置条件:彼此相距 240,没有空间关注";
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordDamage(archer, boss);
+    EXPECT_EQ(0, CreatesFor(archer, warrior)) << "还没有共同的敌人";
+    CombatEngagementSystem::RecordDamage(warrior, boss);
+
+    EXPECT_EQ(1, CreatesFor(archer, warrior)) << "一起打同一个怪,远处的友方也看得见";
+    EXPECT_EQ(1, CreatesFor(warrior, archer));
+    EXPECT_EQ(1, CreatesFor(warrior, boss));
+    EXPECT_EQ((std::vector<entt::entity>{archer, warrior}),
+              tlsEcs.actorRegistry.get<CombatAllyRosterComp>(boss).members);
+}
+
+// 治疗仇恨:给正在打怪的人加血,治疗者也进怪的仇恨名单,和打这个怪的其他人互相算友方。
+TEST_F(AoiDeliveryTest, HealAggroPutsHealerOnTheNpcRosterAndAmongItsFighters) {
+    const auto boss = SpawnNpc(0, 0);
+    const auto tank = Spawn(0, 120);
+    const auto dps = Spawn(120, 0);
+    const auto healer = Spawn(0, -120);
+    AoiSystem::Update(0);
+    CombatEngagementSystem::RecordDamage(tank, boss);
+    CombatEngagementSystem::RecordDamage(dps, boss);
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordHeal(healer, tank);
+
+    EXPECT_EQ(1, CreatesFor(healer, tank)) << "治疗关系";
+    EXPECT_EQ(1, CreatesFor(healer, boss)) << "治疗者和坦克正在打的怪也算交手";
+    EXPECT_EQ(1, CreatesFor(healer, dps)) << "进了怪的仇恨名单,和打这个怪的其他人互相算友方";
+    EXPECT_EQ(1, CreatesFor(dps, healer));
+    const auto& roster = tlsEcs.actorRegistry.get<CombatAllyRosterComp>(boss).members;
+    EXPECT_NE(roster.end(), std::ranges::find(roster, healer));
+}
+
+// 玩家之间的混战不推友方:打同一个人的两个人可能彼此也是敌人。
+TEST_F(AoiDeliveryTest, PlayersHittingTheSamePlayerDoNotBecomeAllies) {
+    const auto victim = Spawn(0, 0);
+    const auto lhs = Spawn(0, 120);
+    const auto rhs = Spawn(0, -120);
+    AoiSystem::Update(0);
+    deliveries.clear();
+
+    CombatEngagementSystem::RecordDamage(lhs, victim);
+    CombatEngagementSystem::RecordDamage(rhs, victim);
+
+    EXPECT_EQ(0, CreatesFor(lhs, rhs));
+    EXPECT_EQ(0, CreatesFor(rhs, lhs));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatAllyRosterComp>(victim)) << "仇恨名单只挂在 NPC 上";
+}
+
+// 怪死了:它的仇恨名单清空、交手双方各收一次移除;刚一起打完的两个人按脱战时间才互相移除。
+TEST_F(AoiDeliveryTest, NpcDeathClearsRosterAndAlliesExpireByDisengageTime) {
+    const auto boss = SpawnNpc(0, 0);
+    const auto archer = Spawn(0, 120);
+    const auto warrior = Spawn(0, -120);
+    AoiSystem::Update(0);
+    CombatEngagementSystem::RecordDamage(archer, boss);
+    CombatEngagementSystem::RecordDamage(warrior, boss);
+    deliveries.clear();
+
+    CombatEngagementSystem::OnDeath(boss);
+
+    EXPECT_EQ(1, DestroysFor(archer, boss));
+    EXPECT_EQ(1, DestroysFor(warrior, boss));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<CombatAllyRosterComp>(boss));
+    EXPECT_EQ(0, DestroysFor(archer, warrior)) << "友方交手不随怪的死亡立即撤销";
+
+    CombatEngagementSystem::Update(kCombatDisengageSeconds);
+    EXPECT_EQ(1, DestroysFor(archer, warrior));
+    EXPECT_EQ(1, DestroysFor(warrior, archer));
+}
+
+// 仇恨名单有上限:满了以后来的人照样看得见怪,但不和名单里的人互相关注;有人离开后,它下一次出手时补进来。
+TEST_F(AoiDeliveryTest, RosterCapStopsAllyFanOutUntilASlotFrees) {
+    const auto boss = SpawnNpc(0, 0);
+    std::vector<entt::entity> fighters;
+    for (std::size_t i = 0; i <= kMaxCombatAllyRoster; ++i) {
+        fighters.push_back(Spawn(300.0 + 50.0 * static_cast<double>(i), 300));
+    }
+    AoiSystem::Update(0);
+    for (const auto fighter : fighters) {
+        CombatEngagementSystem::RecordDamage(fighter, boss);
+    }
+    const auto late = fighters.back();
+    const auto& roster = tlsEcs.actorRegistry.get<CombatAllyRosterComp>(boss).members;
+    ASSERT_EQ(kMaxCombatAllyRoster, roster.size());
+    ASSERT_EQ(roster.end(), std::ranges::find(roster, late)) << "前置条件:名单满了,最后一个没进去";
+    EXPECT_EQ(0, CreatesFor(late, fighters.front())) << "名单外的人不和名单里的人互相关注";
+    EXPECT_EQ(1, CreatesFor(late, boss)) << "但照样看得见自己打的怪";
+
+    CombatEngagementSystem::OnDeath(fighters.front());
+    deliveries.clear();
+    CombatEngagementSystem::RecordDamage(late, boss);
+
+    const auto& refilled = tlsEcs.actorRegistry.get<CombatAllyRosterComp>(boss).members;
+    EXPECT_NE(refilled.end(), std::ranges::find(refilled, late)) << "空出位置后,下一次出手补进名单";
+    EXPECT_EQ(1, CreatesFor(late, fighters[1]));
+    EXPECT_EQ(1, CreatesFor(fighters[1], late));
+}
+
+// ---------------------------------------------------------------------------
+// 服务器压力(AoiLoadMonitor + AoiSystem::ApplyServerPressure):模拟步耗时高了就调小关注容量,
+// 超出的按权重从低到高、同权重先远后近裁掉,压力回落后补回。
+// ---------------------------------------------------------------------------
+
+// 持续满负荷时压力升到顶,负载回落后降回 0。
+TEST(AoiLoadMonitorTest, PressureRisesUnderSustainedOverloadAndRecovers) {
+    AoiLoadMonitor monitor;
+    constexpr double kStep = 0.05;
+    for (int i = 0; i < 200; ++i) monitor.Observe(0.2 * kStep, kStep);
+    EXPECT_DOUBLE_EQ(0.0, monitor.PressureFactor()) << "利用率 20% 不受压";
+
+    for (int i = 0; i < 1000; ++i) monitor.Observe(1.0 * kStep, kStep);
+    EXPECT_DOUBLE_EQ(1.0, monitor.PressureFactor()) << "满负荷持续一段时间,压力到顶";
+
+    for (int i = 0; i < 1000; ++i) monitor.Observe(0.2 * kStep, kStep);
+    EXPECT_DOUBLE_EQ(0.0, monitor.PressureFactor()) << "负载回落,压力回到 0";
+}
+
+// 每秒只决定一次;档位边界附近的小幅波动不换档,偏离够一档才换。
+TEST(AoiLoadMonitorTest, DecidesOncePerIntervalAndHoldsLevelWithinHysteresis) {
+    AoiLoadMonitor monitor;
+    constexpr double kStep = 0.05;
+    int decisions = 0;
+    for (int i = 0; i < 100; ++i) decisions += monitor.Observe(0.1 * kStep, kStep) ? 1 : 0;
+    EXPECT_EQ(5, decisions) << "20 FPS 下 100 步 = 5 秒,每秒决定一次";
+
+    const auto settle = [&monitor](double utilization) {
+        for (int i = 0; i < 2000; ++i) monitor.Observe(utilization * kStep, kStep);
+    };
+    settle(0.7);
+    EXPECT_DOUBLE_EQ(0.5, monitor.PressureFactor()) << "利用率 0.7 对应第 5 档";
+    settle(0.72);
+    EXPECT_DOUBLE_EQ(0.5, monitor.PressureFactor()) << "只偏离半档,不换";
+    settle(0.74);
+    EXPECT_DOUBLE_EQ(0.6, monitor.PressureFactor()) << "偏离一档,换到第 6 档";
+}
+
+// 压力把容量降到下限:权重高的留下,同权重离得近的留下,其余裁掉并通知观察者;压力回落后下一帧补回。
+TEST_F(AoiDeliveryTest, ServerPressureTrimsLowestWeightFarthestFirstAndRestoresWhenItDrops) {
+    tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene);
+    const auto observer = Spawn(0, 0);
+    std::vector<entt::entity> nearby;
+    for (int i = 0; i < 25; ++i) {
+        nearby.push_back(Spawn(0, 1.0 + 0.3 * i));
+    }
+    const auto questNpc = Spawn(0, -120);
+    AoiSystem::Update(0);
+    ASSERT_TRUE(AoiSystem::Follow(observer, questNpc, QuestNpcGrant(1)));
+    const auto& list = tlsEcs.actorRegistry.get<AoiListComp>(observer);
+    ASSERT_EQ(26u, list.VisibleCount()) << "前置条件:25 个附近的人加一个任务 NPC";
+    deliveries.clear();
+
+    AoiSystem::ApplyServerPressure(1.0);
+
+    EXPECT_EQ(kAoiListCapacityMin, list.VisibleCount()) << "满压力时容量降到下限";
+    EXPECT_TRUE(list.IsVisible(questNpc)) << "权重高的留下";
+    for (int i = 0; i < 19; ++i) {
+        EXPECT_TRUE(list.IsVisible(nearby[i])) << "同权重离得近的留下,i=" << i;
+    }
+    for (int i = 19; i < 25; ++i) {
+        EXPECT_FALSE(list.HasRelation(nearby[i])) << "离得最远的先裁,i=" << i;
+        EXPECT_EQ(1, DestroysFor(observer, nearby[i]));
+    }
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<AoiNearbyRefillComp>(observer)) << "被裁的附近的人等容量回升时补回";
+    EXPECT_FLOAT_EQ(1.0f, tlsEcs.sceneRegistry.get<ScenePressureComp>(scene).pressureFactor);
+    deliveries.clear();
+
+    AoiSystem::ApplyServerPressure(0.0);
+    AoiSystem::Update(0);
+
+    for (int i = 19; i < 25; ++i) {
+        EXPECT_EQ(1, CreatesFor(observer, nearby[i])) << "压力回落后补回,i=" << i;
+    }
+    EXPECT_EQ(26u, list.VisibleCount());
+}
+
+// 压力每次都写进本线程的全部场景:之后新建的场景下一次就拿到当前压力;值没变的场景不再校正。
+TEST_F(AoiDeliveryTest, ServerPressureReachesScenesCreatedLater) {
+    tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene);
+    AoiSystem::ApplyServerPressure(0.5);
+    const auto later = tlsEcs.sceneRegistry.create();
+    tlsEcs.sceneRegistry.emplace<SceneInfoComp>(later);
+    EXPECT_FALSE(tlsEcs.sceneRegistry.any_of<ScenePressureComp>(later));
+
+    AoiSystem::ApplyServerPressure(0.5);
+
+    EXPECT_FLOAT_EQ(0.5f, tlsEcs.sceneRegistry.get<ScenePressureComp>(later).pressureFactor);
+    EXPECT_FLOAT_EQ(0.5f, tlsEcs.sceneRegistry.get<ScenePressureComp>(scene).pressureFactor);
 }
 
 

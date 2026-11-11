@@ -12,6 +12,7 @@
 //
 // 线程模型:gate 只有一个 EventLoop,会话表与本文件的状态都只在 loop 线程上读写,不加锁。
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -101,15 +102,23 @@ public:
 		return true;
 	}
 
-	// 会话转去别的 gate:丢弃全部排队项(它们从未发出),之后的准入一律拒绝。在途那一条照常认领。
-	// 返回丢弃的条数。
-	std::size_t MarkRedirected()
+	// 会话转去别的 gate:之后的准入一律拒绝;全部排队项按收包顺序取出交给调用方。它们从未发出、确定未执行,
+	// 调用方要逐条回执(O4「每个请求恰好一个回执」、O9:回带请求 id 的 1003,客户端到新 gate 上重试安全)。
+	// 在途那一条照常认领。再次调用返回空。
+	[[nodiscard]] std::deque<Item> MarkRedirected()
 	{
 		redirected_ = true;
-		return DropQueued();
+		return std::exchange(queued_, std::deque<Item>{});
 	}
 
-	// 丢弃全部排队项(断线时用),返回丢弃的条数。在途序号不变,由调用方从在途索引里注销。
+	// 排队项(不含在途那一条)里有没有满足 pred 的。至多扫一遍队列(≤ 深度上限)。
+	template <typename Pred>
+	bool AnyQueued(Pred pred) const
+	{
+		return std::any_of(queued_.begin(), queued_.end(), pred);
+	}
+
+	// 丢弃全部排队项(断线时用:连接已没了,回执无处可发),返回丢弃的条数。在途序号不变,由调用方从在途索引里注销。
 	std::size_t DropQueued()
 	{
 		const std::size_t dropped = queued_.size();

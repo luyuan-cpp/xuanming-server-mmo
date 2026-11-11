@@ -3,15 +3,19 @@ package svc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"data_service/internal/config"
 	"data_service/internal/store"
 
+	base "proto/common/base"
 	componentpb "proto/common/component"
 	dbpb "proto/common/database"
 	rfpb "proto/role_fence"
 	"shared/accountdirectory"
+	"shared/assetop"
+	sharedregistry "shared/noderegistry"
 	"shared/rolefence"
 
 	"github.com/stretchr/testify/assert"
@@ -108,4 +112,27 @@ func TestStopRecallChannel_NoopWhenNotAssembled(t *testing.T) {
 	s := &ServiceContext{}
 	s.StartRecallChannel()
 	require.NoError(t, s.StopRecallChannel(context.Background()))
+}
+
+// 回收重投的成员表只圈本 zone 的 data_service 注册(缺口清单第 25 条第二批,设计 §10.2):前缀与 noderegistry 写的发现键同形,
+// 以 "/" 结尾,zone 1 不会圈进 zone 10 的副本;分配占位键不在前缀下。
+func TestRecallShardMembersPrefix_IsTheZoneRegistrationPrefix(t *testing.T) {
+	prefix := recallShardMembersPrefix(1)
+	assert.Equal(t, "DataServiceNodeService.rpc/zone/1/", prefix)
+	nodeType := uint32(base.ENodeType_DataServiceNodeService)
+	assert.True(t, strings.HasPrefix(sharedregistry.RpcPath("DataServiceNodeService.rpc", 1, nodeType, 3), prefix), "本 zone 的注册键在前缀下")
+	assert.False(t, strings.HasPrefix(sharedregistry.RpcPath("DataServiceNodeService.rpc", 10, nodeType, 3), prefix), "别的 zone 不圈进来")
+	assert.False(t, strings.HasPrefix(sharedregistry.AllocationKey("DataServiceNodeService.rpc", nodeType, 3), prefix), "占位键不在前缀下")
+}
+
+// 回收的 outbox(store.RecallStore)绑得上按片分工:没实现 OwnedDueLister 的话 newRecallChannel 回错误、Recall.Enabled=true 时拒启。
+// 类别键与本仓库别的分片工作都不同名。没装配回收通道时补身份是空操作。
+func TestRecallLoopBindsWorkOwner(t *testing.T) {
+	loop, err := assetop.NewLoop(recallLoopConfig(), &store.RecallStore{}, &assetop.Caller{}, nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, loop.BindWorkOwner(recallAssetOpWorkKind, func(string) bool { return true }))
+	for _, other := range []string{"guild-assetop", "trade-assetop", "mail-assetop", "outcome-result", "outcome-settlement", "trade-commerce"} {
+		assert.NotEqual(t, other, recallAssetOpWorkKind)
+	}
+	(&ServiceContext{}).BindRecallWorkMember("uuid-a")
 }

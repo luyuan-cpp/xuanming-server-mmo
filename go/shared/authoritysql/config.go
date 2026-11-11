@@ -44,8 +44,8 @@ type writerBoot struct {
 	marker *grantMarker
 }
 
-// grantMarker 在这份写资格第一次写之前落盘。写资格一次性,是因为进程写过之后崩了,重启时内存里的 boot 状态没了,
-// 排空证明也接不上。进程还没写过就退出没有东西丢:启动时依赖没就绪,同一个 Pod 重启接着用这份,不用烧名册。
+// grantMarker 在这份写资格第一次写之前落盘。写资格按代一次性,是因为进程写过之后崩了,重启时内存里的 boot 状态没了,
+// 排空证明也接不上;这时删 Pod,同一槽位的下一代重新注册。进程还没写过就退出没有东西丢:启动时依赖没就绪,同一个 Pod 重启接着用这一代。
 type grantMarker struct {
 	dir, name string
 	content   []byte

@@ -1191,7 +1191,15 @@ func (r *AssetOpRepo) queryOpIDs(ctx context.Context, query string, args ...any)
 type CleanupConf struct {
 	Interval          time.Duration
 	TerminalRetention time.Duration
+	// Owns 判本副本是否负责清理的某一片(缺口清单第 25 条第二批):片号 = player_id % 64,第 n 片的归属键是
+	// workshard.ShardKey(CleanupWorkKind, n)。生产接重投循环与合同推进那份成员表(svc.AssetChannel.Members);
+	// nil = 不分工,本副本清全部行(通道关着、没有成员表时就是这样,与分片前相同)。正确性不靠它:点删前仍有主键点锁与带原条件的复核。
+	Owns func(key string) bool
 }
+
+// CleanupWorkKind 是终态清理按片分工的归属键前缀。与重投(trade-assetop)、合同推进(trade-commerce)、收据 ACK
+// (trade-receipt-ack)都不同名,各自按最高随机权重哈希独立分工。写死成常量,不进配置。
+const CleanupWorkKind = "trade-assetop-cleanup"
 
 // 清理节律,与 guild 同值(05 §5.22):单批 500 行、批间 100ms、每轮至多 20 批,一批候选不足 500 行即停。
 const (
@@ -1204,10 +1212,16 @@ const (
 )
 
 // 清理点删之前的主键点锁与终结类写者共用 sqlLockAssetOp(同一形状,见"op 行的写者:先主键点锁再 CAS")。
+//
+// 候选读拆成「头 + 分片条件 + 尾」(缺口清单第 25 条第二批,docs/design/assetop-redelivery-sharding-20261110.md §11):
+// 分片条件(workshard.Filter,按 player_id,零值是恒真 1=1)接在 WHERE 末尾、ORDER BY / LIMIT 之前;
+// sqlListCleanupTerminalOps 是不分片的形状(= 头 + "1=1" + 尾),CleanupTerminalOps 用它。
 const (
-	sqlListCleanupTerminalOps = "SELECT `op_id` FROM " + AssetOpTableName +
-		" WHERE `status` IN (?, ?, ?, ?) AND `receipt_ack_pending`=0 AND (`ref_kind`<>2 OR `business_consumed`=1) AND `next_attempt_ms` < ? ORDER BY `op_id` ASC LIMIT ?"
-	sqlCleanupTerminalOp = "DELETE FROM " + AssetOpTableName +
+	sqlListCleanupTerminalOpsHead = "SELECT `op_id` FROM " + AssetOpTableName +
+		" WHERE `status` IN (?, ?, ?, ?) AND `receipt_ack_pending`=0 AND (`ref_kind`<>2 OR `business_consumed`=1) AND `next_attempt_ms` < ? AND "
+	sqlListCleanupTerminalOpsTail = " ORDER BY `op_id` ASC LIMIT ?"
+	sqlListCleanupTerminalOps     = sqlListCleanupTerminalOpsHead + "1=1" + sqlListCleanupTerminalOpsTail
+	sqlCleanupTerminalOp          = "DELETE FROM " + AssetOpTableName +
 		" WHERE `op_id` = ? AND `status` IN (?, ?, ?, ?) AND `receipt_ack_pending`=0 AND (`ref_kind`<>2 OR `business_consumed`=1) AND `next_attempt_ms` < ?"
 )
 
@@ -1238,7 +1252,8 @@ const cleanupPoint = "trade.asset_op_cleanup"
 // RunCleanup 阻塞运行终态行清理循环,ctx 取消即返回;调用方用 safego.Go(cleanupPoint 同名点位)启动,
 // 形状与 guild 的 GuildAssetStore.RunCleanup 相同。
 //
-// 每个副本都跑:删除幂等,多副本同时跑无害;随机初始延迟 [0, Interval) 只是把各副本错开,少抢同一批行锁。
+// 每个 stable 副本都跑,c.Owns 装配了时各清各的片;没装配时各副本清全部行:删除幂等,多副本同时跑无害。
+// 随机初始延迟 [0, Interval) 只是把各副本错开,少抢同一批行锁。
 // 每一轮各自 recover:单轮 panic 只丢那一轮,清理不会从此静默停摆。
 // Interval 或 TerminalRetention 非正时不启动(打 ERROR):config.Validate 在 CleanupEnabled 时已拦,这里只防绕过装配层。
 func (r *AssetOpRepo) RunCleanup(ctx context.Context, c CleanupConf) {
@@ -1256,7 +1271,7 @@ func (r *AssetOpRepo) RunCleanup(ctx context.Context, c CleanupConf) {
 		case <-timer.C:
 		}
 		safego.Run(cleanupPoint, func() {
-			deleted, err := r.CleanupTerminalOps(ctx, time.Now(), c.TerminalRetention)
+			deleted, err := r.CleanupTerminalOpsOwned(ctx, time.Now(), c.TerminalRetention, workshard.SQLFilter(c.Owns, CleanupWorkKind, "player_id"))
 			if err != nil && ctx.Err() == nil {
 				logx.Errorf("[TradeAsset] Terminal asset op cleanup failed (deleted %d before the error): %v", deleted, err)
 				return
@@ -1269,10 +1284,17 @@ func (r *AssetOpRepo) RunCleanup(ctx context.Context, c CleanupConf) {
 	}
 }
 
-// CleanupTerminalOps 跑一轮终态行清理(可测:时刻由调用方给),返回本轮删掉的行数。
+// CleanupTerminalOps 跑一轮终态行清理(可测:时刻由调用方给),返回本轮删掉的行数。即不带分片条件的 CleanupTerminalOpsOwned。
 // retention <= 0 拒绝执行(删光所有终态行不可能是有意的配置);时钟早于保留期时没有可删的行。
 // 出错时已删的行数仍如实返回、照常计指标(每行各自提交,删掉的就是删掉了)。
 func (r *AssetOpRepo) CleanupTerminalOps(ctx context.Context, now time.Time, retention time.Duration) (int64, error) {
+	return r.CleanupTerminalOpsOwned(ctx, now, retention, workshard.Filter{})
+}
+
+// CleanupTerminalOpsOwned 同 CleanupTerminalOps,只清 owned 里的片(片号 = player_id % 64,缺口清单第 25 条第二批):
+// 候选读的分片条件在 LIMIT 之前,别的副本的片再多也占不住本副本一批的名额。零值 owned 不过滤。
+// 某一片暂时没人清(成员表变化、登记着却没开清理的副本)只是终态行多留一轮;trade 没有回档检查消费本表、不写清理水位(见上)。
+func (r *AssetOpRepo) CleanupTerminalOpsOwned(ctx context.Context, now time.Time, retention time.Duration, owned workshard.Filter) (int64, error) {
 	if retention <= 0 {
 		return 0, fmt.Errorf("trade asset cleanup: 保留期必须为正(当前 %v)", retention)
 	}
@@ -1285,7 +1307,7 @@ func (r *AssetOpRepo) CleanupTerminalOps(ctx context.Context, now time.Time, ret
 
 	var total int64
 	for i := 0; i < cleanupMaxBatches; i++ {
-		candidates, deleted, err := r.cleanupTerminalOpsBatch(ctx, cutoffMs)
+		candidates, deleted, err := r.cleanupTerminalOpsBatch(ctx, cutoffMs, owned)
 		total += deleted
 		if deleted > 0 {
 			recordCleanupDeleted(deleted)
@@ -1308,11 +1330,12 @@ func (r *AssetOpRepo) CleanupTerminalOps(ctx context.Context, now time.Time, ret
 	return total, nil
 }
 
-// cleanupTerminalOpsBatch:普通读至多 cleanupBatchSize 个保留期外的终态 op_id(升序),逐行短事务点锁 + 点删并复核条件。
-func (r *AssetOpRepo) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs uint64) (int, int64, error) {
+// cleanupTerminalOpsBatch:普通读至多 cleanupBatchSize 个保留期外的终态 op_id(升序,只取 owned 里的片),逐行短事务点锁 + 点删并复核条件。
+func (r *AssetOpRepo) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs uint64, owned workshard.Filter) (int, int64, error) {
 	st := cleanupStatuses()
 	readCtx, cancel := r.bounded(ctx)
-	opIDs, err := r.queryOpIDs(readCtx, sqlListCleanupTerminalOps, st[0], st[1], st[2], st[3], cutoffMs, cleanupBatchSize)
+	args := append([]any{st[0], st[1], st[2], st[3], cutoffMs}, owned.Args()...)
+	opIDs, err := r.queryOpIDs(readCtx, cleanupTerminalOpsQuery(owned), append(args, cleanupBatchSize)...)
 	cancel()
 	if err != nil {
 		return 0, 0, fmt.Errorf("list terminal %s: %w", AssetOpTableName, err)
@@ -1326,6 +1349,12 @@ func (r *AssetOpRepo) cleanupTerminalOpsBatch(ctx context.Context, cutoffMs uint
 		}
 	}
 	return len(opIDs), deleted, nil
+}
+
+// cleanupTerminalOpsQuery 拼清理的候选读:分片条件只来自 workshard.SQLFilter(列名写死、片号只走绑定参数),不含外部输入。
+// 实参顺序与占位符一致:四个终态、cutoff、片号……、LIMIT。零值 owned 拼出来的就是 sqlListCleanupTerminalOps。
+func cleanupTerminalOpsQuery(owned workshard.Filter) string {
+	return sqlListCleanupTerminalOpsHead + owned.SQL() + sqlListCleanupTerminalOpsTail
 }
 
 // deleteTerminalOp 在一个 RC 短事务里删一行:先主键点锁(不带复核条件),再跑带复核条件的主键点删。

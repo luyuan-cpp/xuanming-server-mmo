@@ -1,10 +1,12 @@
 // 会话路由 lane 纯逻辑单测(docs/design/client-request-ordering.md §4)。
 //
-// 与 gate_security_test.cpp 同一做法:不进 gate.vcxproj 的 ClCompile 列表,不被编进 gate 可执行文件,独立跑。
+// 不进 gate.vcxproj 的 ClCompile 列表,不被编进 gate 可执行文件。2026-11-10 起登记在
+// cpp/tests/routing_identity_test/routing_identity_test.vcxproj,随该工程跑(run_cpp_tests.ps1 -Filter routing_identity_test);
+// 装配层(client_request_lane.cpp)的用例在同工程的 client_request_lane_test.cpp。
 // router_lane.h 只依赖 STL(InflightIndex 在 engine/core 的 utils/data_structures/inflight_index.h,同样只依赖 STL),
-// 所以这份测试不需要 muduo / protobuf / 引擎库,只多一个 include 目录。
+// 所以这份测试也能脱离引擎单独编译,只多一个 include 目录。
 //
-// 跑法(仓库根目录,带 g++ 的环境;gtest 用仓库里已经 vendored 的那份):
+// 单独跑法(仓库根目录,带 g++ 的环境;gtest 用仓库里已经 vendored 的那份):
 //
 //   GT=third_party/googletest/googletest
 //   g++ -std=c++23 -I cpp/libs/services/gate/session/comp -I cpp/libs/engine/core -I "$GT/include" -I "$GT"
@@ -140,8 +142,13 @@ TEST(RouterLane, RedirectDropsQueuedRejectsNewButKeepsInFlight)
 	lane.Admit({2, "b"}, kDepth);
 	lane.Admit({3, "c"}, kDepth);
 
-	EXPECT_EQ(2u, lane.MarkRedirected());
+	const auto dropped = lane.MarkRedirected();
+	ASSERT_EQ(2u, dropped.size()) << "被丢的排队项要交给调用方逐条回执(O4 每个请求恰好一个回执)";
+	EXPECT_EQ("b", dropped[0].name) << "按收包顺序交出";
+	EXPECT_EQ("c", dropped[1].name);
+	EXPECT_EQ(0u, lane.QueuedCount());
 	EXPECT_TRUE(lane.Redirected());
+	EXPECT_TRUE(lane.MarkRedirected().empty()) << "再次重定向没有可交出的条目,不会重复回执";
 	EXPECT_EQ(AdmitResult::kRejectedRedirected, lane.Admit({4, "d"}, kDepth));
 	EXPECT_EQ(1u, lane.InFlightSeq()) << "在途那一条照常认领";
 	EXPECT_TRUE(lane.Complete(1));
@@ -156,6 +163,25 @@ TEST(RouterLane, DropQueuedOnDisconnectKeepsInFlightSequence)
 	lane.Admit({2, "b"}, kDepth);
 	EXPECT_EQ(1u, lane.DropQueued());
 	EXPECT_EQ(1u, lane.InFlightSeq()) << "断线时调用方要拿到在途序号去注销在途索引";
+}
+
+// LeaveGame 屏障靠它判「收到了、还没发出」:只看排队项,已发出(在途)的那一条不算。
+TEST(RouterLane, AnyQueuedSeesOnlyItemsNotYetSent)
+{
+	RouterLane<TestItem> lane;
+	const auto isLeave = [](const TestItem &item) { return item.name == "leave"; };
+	EXPECT_FALSE(lane.AnyQueued(isLeave));
+
+	lane.Admit({1, "leave"}, kDepth);
+	EXPECT_TRUE(lane.AnyQueued(isLeave));
+	ASSERT_EQ("leave", SendNext(lane));
+	EXPECT_FALSE(lane.AnyQueued(isLeave)) << "发出之后就不再算排队";
+
+	lane.Admit({2, "login"}, kDepth);
+	lane.Admit({3, "leave"}, kDepth);
+	EXPECT_TRUE(lane.AnyQueued(isLeave));
+	(void)lane.MarkRedirected();
+	EXPECT_FALSE(lane.AnyQueued(isLeave)) << "重定向交出全部排队项之后队列为空";
 }
 
 TEST(InflightIndex, InsertRejectsZeroAndDuplicate)

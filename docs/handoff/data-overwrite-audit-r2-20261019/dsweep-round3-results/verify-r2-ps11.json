@@ -1,0 +1,22 @@
+{
+  "_lens": "对抗复核 r2-ps#11（单视角：代码路径、时序与可达性，并裁定严重度；2026-11-10，只读代理原样返回，约 32.5 万子代理 token）",
+  "verdict": "成立",
+  "severity_after": "medium",
+  "reason": "推翻不了。主链逐条核对都成立。(1) go/db 的认领判定只拿库里世代和请求里 scene 的世代比，从不看 go/db 自己认识的世代，所以新 scene 经旧 go/db 照常认领成功。(2) 旧 go/db 按本二进制编译进来的行种名表做校验，这一步排在世代判定之前：带新行种 K 的存盘直接回 INVALID，走不到 SCHEMA_TOO_NEW。(3) C++ 只对 NO_OWNER、SCHEMA_TOO_NEW、UNSPECIFIED 三种结果重试，INVALID 走确定性拒绝；退出中的实体被拒后直接销毁，不存盘，也没有保留实体、延后或重试的兜底。(4) 默认发布路径可达，不需要人为违反顺序：zone-up 先 apply scene 清单，再 apply Go 服务；Go 服务的 tag 跟随 NodeImage；release-checklist 第⑦步就是用同一个 tag 跑现有 zone-up；部署脚本里没有世代预检，go/db 注册进 etcd 的节点信息里也没有世代号，scene 选 go/db 时在本 zone 就绪节点里随机挑，不按版本过滤。复核还补到两条更硬的证据：其一，staging/prod 的 zone-up 在 scene 已经 apply 之后，恒等 db 的迁移 Job 完成才 apply db 工作负载，db 再按 StatefulSet 一次换一个副本、每个等 minReadySeconds 20，所以必然有一段新 scene 已起、go/db 全是旧版的窗口；其二，迁移 Job 失败时脚本在 scene 已发布之后 throw，zone 会无限期停在新 scene 加旧 go/db 的状态。(5) 没有登记为可接受残余：player-save-direct-commit §9 第 8 条只接受了「旧 scene 读新世代行被拒」这一可用性问题，没有覆盖本场景。设计 §8.2、§8.3 和 deploy/k8s/README 都断言「顺序错了不丢数据」，INVALID 告警的说明还写成「是 scene 的 bug」，会把排查引偏。\n需要更正的细节有两处，都只扩大影响面，不推翻结论。①触发时序第④步的先后不对：go/db 全是旧版时，一笔回 TOO_NEW 的在途存盘会用原内容一直重试，后续快照只并进排队，K 变脏后的存盘根本发不出去。INVALID 的真实来源有两个：一是第一笔就带 K——存盘拼装对每个持久组件都写 mutable_xxx()->CopyFrom，组件即使为空也设了存在位，所以 K 行字节非空，而库里没有 K 行，认领播种时已确认内容是空串，于是第一笔必然脏；二是 go/db 新旧副本混跑时，卡住的那笔在新副本上提交，下一笔带 K 落到旧副本。②「没碰 K 的玩家不丢」通常不成立：只要新字段按现有惯例是组件，窗口内新 scene 上几乎所有玩家的存盘都是 INVALID，下线即丢认领以来的进度。不出故障时每人损失不超过窗口时长；go/db 滚动停住或迁移失败时，损失没有上限。\n严重度：默认可达的回档和丢资产（本地掉落、货币、消耗都随实体丢失）本应 high，但只在混版窗口出现，降一级为 medium，与 r2-ps#1 先例一致。缺省参数和官方发布清单就会走到这条路径，不属于「运维工具人为误用」，所以不按 low 封顶。修复方向补充一点：只在认领时加 knownGen 判定，覆盖不了 go/db 新旧副本混跑的阶段，必须让 validateSave 对本二进制不认识的正值行种回可重试的结果，比如 TOO_NEW。",
+  "evidence": [
+    "go/db/internal/playerstore/decide.go:59-72 decideClaim 只在 :67 比 row.schemaGen > binarySchemaGen,没有 knownGen 参数;:31-53 decideSave 只在 :48 判 schemaGen > knownGen 回 SCHEMA_TOO_NEW",
+    "go/db/internal/playerstore/store.go:112-137 validateSave,:121 按编译进来的 storepb.PlayerStoreKind_name 判未知 kind 回 INVALID;:144 先调 validateSave,:156 才调 decideSave;:194 LoadAndClaim 调 decideClaim 传的是 req.GetBinarySchemaGen(),不是 s.knownGen",
+    "go/db/player_store_wiring.go:63,78 KnownGen=persistschema.Gen;:157-170 注册进 etcd 的 NodeInfo 不带世代;proto/common/base/common.proto:20-60 NodeInfo 没有世代或版本字段",
+    "cpp/libs/services/scene/player/system/player_store_client.cpp:461-502 存盘回包 switch:只有 NO_OWNER/SCHEMA_TOO_NEW/UNSPECIFIED 重试(:468-478),default 分支 kRejected 并在 :486 执行 uncertain |= sentKinds;:262-294 有在途时新快照只进 pending(TOO_NEW 的在途会挡住后续快照);:82-99 PickReadyPlayerStoreNode 在就绪节点里随机挑,不按版本过滤;:750-764 认领播种 confirmed 时库里没有的行为空串",
+    "cpp/libs/services/scene/player/system/player_lifecycle.cpp:5227-5232 OnPlayerStoreSaveDone 的 default 分支进 HandlePlayerSaveRefused;:5398-5406 → DisposeRefusedSave :5408-5436,其中 :5415-5426 退出中直接 DestroyDeposedPlayer;:4896 认领请求带 binary_schema_gen=kPersistSchemaGen;:4968-5007 认领成功后不核对 go/db 版本;:3853-3860 退出流程发存盘后没有 INVALID 专用的保留或重试",
+    "cpp/libs/services/scene/player/system/player_database_loader.cpp:296-327 存盘拼装对每个持久组件写 mutable_xxx()->CopyFrom(设存在位);cpp/libs/services/scene/player/system/player_store_projection.cpp:153-186 ProjectPlayer 按行序列化,存在但为空的子消息也序列化成非空字节,新行种对所有玩家首笔即脏",
+    "cpp/libs/services/scene/player/system/player_persist_marshal.h:59-62 输出世代 = max(kPersistSchemaGen, 加载世代),新 scene 每笔都带 N+1",
+    "tools/scripts/k8s_deploy.ps1:14859-14883 先 apply scene Fleet/Deployment;:14919 之后才 Apply-GoSvcManifests;:14924 Wait-ForZoneReady 在最后;:9953-9963 Agones 模式不等 Fleet 就绪;:853-859 GoSvcTag 跟随 NodeImage",
+    "tools/scripts/k8s_deploy.ps1:6075-6079 db 排在 zone Go 服务第一个;:12381-12402 staging/prod 恒等 db 迁移 Job 完成才 apply db 工作负载(此时 scene 已 apply);:12600 迁移失败 throw,db 工作负载不 apply,新 scene 停在旧 go/db 上",
+    "deploy/k8s/manifests/go-svc/db.yaml:30-41 StatefulSet RollingUpdate 一次换一个副本、minReadySeconds 20(工作区未提交改动;HEAD 是 Deployment,maxSurge 1 / maxUnavailable 0 / minReadySeconds 20,同样有新旧重叠)",
+    "docs/ops/release-checklist.md:113-120 第⑦步用同一 tag 跑现有 zone-up,没有「先只升 go/db」的步骤;tools/scripts/release_preflight.ps1:462-514 只有台账封存检查,没有线上 go/db 世代预检",
+    "docs/design/mixed-version-persist-field-protection.md:462-466 §8.2 写「顺序违反不会丢数据」,可选预检(第 4 批)未做;:474 §8.3 go/db 行写「回滚更低不丢数据」;deploy/k8s/README.md:2712 同样写「顺序错了不丢数据」",
+    "deploy/k8s/player-store-alerts.yaml:73-83 INVALID 告警说明写「是 scene 的 bug」,会把排查引偏;:125-138 scene 侧告警说明明写「退出时回到上一次提交,本次在线进度全部丢失」",
+    "docs/design/player-save-direct-commit.md:74 新加一行取下一个空闲号;:80「再加行要先核这条」(新行种是预期中的改动);:84 定时存盘缺省 60 秒;:225 TOO_NEW 重试;:228 INVALID 退出时放弃这一笔;:410 §9 第 8 条只登记了「旧 scene 读新世代行被拒」(可用性),没有登记本场景"
+  ]
+}

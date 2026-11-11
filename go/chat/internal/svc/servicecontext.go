@@ -1,11 +1,10 @@
-// Package svc装配同域SQL、etcd及既有缓存句柄和低基数指标。
+// Package svc装配同域SQL、etcd、世界频道推送和低基数指标。chat 不连 Redis。
 package svc
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"shared/authoritysql"
@@ -22,7 +21,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 )
@@ -33,14 +31,6 @@ type ServiceContext struct {
 	AuthorityDB *sql.DB
 	// directoryConn 是读角色权威状态的 data_service 连接,聊天不写资产,校验走 RPC。
 	directoryConn *grpc.ClientConn
-
-	// 保留旧缓存配置接口；正式发送/拉取只依赖Authority，不向这些句柄回落授权或历史。
-	ChatRedis   *redis.Redis
-	SharedRedis *redis.Redis
-
-	// ChatRedisTarget 是 ChatRedis 实际落点的可读描述,启动横幅打印用
-	// 它不代表聊天历史权威库；历史固定在SQL。
-	ChatRedisTarget string
 
 	// Etcd 供 shared/noderegistry 注册与 shared/killswitch 监听共用 —— 连的是同一个集群,不开第二条连接。
 	//
@@ -95,7 +85,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic("failed to create etcd client: " + err.Error())
 	}
 
-	chatRds, sharedRds, target := NewRedisHandles(c)
 	worldPush, kafkaWriter := newWorldPublisher(c)
 	var pusher WorldPusher
 	if worldPush != nil {
@@ -105,29 +94,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	return &ServiceContext{
 		Authority: store, AuthorityDB: db, directoryConn: directoryConn,
 		WriterConfig: writer, RootAdmission: root,
-		Config:          c,
-		ChatRedis:       chatRds,
-		SharedRedis:     sharedRds,
-		ChatRedisTarget: target,
-		Etcd:            etcdCli,
-		WorldPush:       pusher,
-		kafkaWriter:     kafkaWriter,
+		Config:      c,
+		Etcd:        etcdCli,
+		WorldPush:   pusher,
+		kafkaWriter: kafkaWriter,
 	}
-}
-
-// NewRedisHandles 按配置建立 (ChatRedis, SharedRedis) 两个句柄,并返回 ChatRedis 落点描述。
-// ChatRedis.Host 为空即未配置,私有 key 回落到共享库,两者返回同一句柄。
-// 拆成独立函数是为了不依赖 etcd 就能测回落逻辑(与 match 的 NewRedisHandles 同形)。
-func NewRedisHandles(c config.Config) (chatRds, sharedRds *redis.Redis, target string) {
-	sharedRds = redis.MustNewRedis(c.Redis.RedisConf)
-	if c.ChatRedis.Host == "" {
-		logx.Infof("[chat] Legacy cache handle built from shared configuration; chat authorization and history use SQL only host=%s type=%s", c.Redis.Host, c.Redis.Type)
-		return sharedRds, sharedRds, fmt.Sprintf("shared-fallback host=%s type=%s", c.Redis.Host, c.Redis.Type)
-	}
-	chatRds = redis.MustNewRedis(c.ChatRedis)
-	logx.Infof("[chat] Separate ChatRedis configuration active host=%s type=%s (shared database host=%s used only for contract key access)",
-		c.ChatRedis.Host, c.ChatRedis.Type, c.Redis.Host)
-	return chatRds, sharedRds, fmt.Sprintf("ChatRedis host=%s type=%s", c.ChatRedis.Host, c.ChatRedis.Type)
 }
 
 // Stop关闭本服务拥有的SQL/etcd客户端。幂等，必须先排空RPC。

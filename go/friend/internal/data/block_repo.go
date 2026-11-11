@@ -255,7 +255,8 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 // 但**要开事务**(单语句 RC 事务,提交前查 ctx;客户端请求按会话保序,docs/design/client-request-ordering.md §6.1)。
 // 原先是自动提交的单条 DELETE,"单条语句本身原子"只保证了原子,保证不了截止之后不落地:请求截止时 go-sql-driver
 // 只断开连接、不发 KILL QUERY,服务端那条 DELETE 若正排在这一行的锁后面(Block ②④、对方 AddFriend 的拉黑探针、
-// 另一个 Unblock),会一直等到拿到锁或 innodb_lock_wait_timeout(friend 连接串没设,MySQL 缺省 50 s),
+// 另一个 Unblock),会一直等到拿到锁或 innodb_lock_wait_timeout(当时连接没设,MySQL 缺省 50 s;现由 authoritysql 逐连接设为 1 s,
+// 见 svc/session_lock_wait.go —— 上限只缩短等待,不阻止拿到锁之后照常执行),
 // 拿到锁后照样执行并**自动提交** —— 此时路由服早已回超时、gate 已放行同一会话的下一条,这条 DELETE
 // 就成了晚于下一条落地的迟到写(§1.3 同类乱序)。放进显式事务后,没走到 COMMIT 就不会提交:语句跑过截止时
 // database/sql 回滚并丢弃连接,服务端在连接断开时回滚未提交事务;剩余窗口只有"查完 ctx 之后发出的那一条 COMMIT"

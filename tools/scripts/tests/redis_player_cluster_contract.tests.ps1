@@ -66,6 +66,14 @@ function Get-WorkloadBlock {
     return $found[0]
 }
 
+# SQL 写者都是 StatefulSet:Pod 序号就是写者名册的槽位(docs/design/writer-roster-exhaustion-20261106.md §5.5);其余 Go 服务是 Deployment。
+# 名单同 k8s_deploy.ps1 的 $script:SqlWriterGoSvcs。
+function Get-ServiceWorkloadKind {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    if (@('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player-inbox') -ccontains $Name) { return 'StatefulSet' }
+    return 'Deployment'
+}
+
 function Get-ThrownMessage([scriptblock]$Action) {
     try { & $Action | Out-Null } catch { return $_.Exception.Message }
     return ''
@@ -473,8 +481,8 @@ Test-Case '-PlayerRedisMasters 3 的 infra-up:全局服务的 PlayerRedis 写种
         Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 的 PlayerRedis"
         Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'PasswordEnv')) -Because "$service 的 PlayerRedis 只写变量名"
         Assert-True -Condition (-not $flat.Scalars.Contains($prefix + 'Password')) -Because "$service 的 PlayerRedis 不写口令值"
-        $deployment = Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name $service
-        Assert-Match -Text $deployment -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-player-auth\s+key: password' -Because "$service 容器要有口令:没有的话只有一屏 NOAUTH"
+        $workload = Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name $service) -Name $service
+        Assert-Match -Text $workload -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-player-auth\s+key: password' -Because "$service 容器要有口令:没有的话只有一屏 NOAUTH"
     }
     foreach ($service in $SignedIdentityServices) {
         $leftover = @(Get-LoginSessionKeys -Flat (Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config") -Prefix $ServiceConfigs[$service])
@@ -482,7 +490,7 @@ Test-Case '-PlayerRedisMasters 3 的 infra-up:全局服务的 PlayerRedis 写种
     }
     $chatFlat = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-chat-config'
     Assert-Equal -Expected 0 -Actual @($chatFlat.Scalars.Keys | Where-Object { ([string]$_).StartsWith($ServiceConfigs['chat'] + 'PlayerRedis', [System.StringComparison]::Ordinal) }).Count -Because 'chat 没有玩家域段'
-    Assert-NotMatch -Text (Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name 'chat') -Pattern 'PLAYER_REDIS_PASSWORD' -Because 'chat 不连 Redis,容器不拿玩家域口令'
+    Assert-NotMatch -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name 'chat') -Name 'chat') -Pattern 'PLAYER_REDIS_PASSWORD' -Because 'chat 不连 Redis,容器不拿玩家域口令'
 }
 
 Test-Case '-PlayerRedisMasters 3 的 zone-up:node-config 写 player_redis,scene 有口令与配置指纹,gate 没有;zone 的 Go 服务写种子;WAITAOF 取 1' {
@@ -505,7 +513,7 @@ Test-Case '-PlayerRedisMasters 3 的 zone-up:node-config 写 player_redis,scene 
         $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
         Assert-Equal -Expected $Seeds[0] -Actual (Get-FlatValue -Flat $flat -KeyPath ($ServiceConfigs[$service] + 'PlayerRedis.Addrs[0]')) -Because "$service 的种子"
         Assert-Equal -Expected 'PLAYER_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($ServiceConfigs[$service] + 'PlayerRedis.PasswordEnv')) -Because "$service 只写变量名"
-        Assert-Match -Text (Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name $service) -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:' -Because "$service 容器要有口令"
+        Assert-Match -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name $service) -Name $service) -Pattern '- name: PLAYER_REDIS_PASSWORD\s+valueFrom:' -Because "$service 容器要有口令"
     }
     $sceneManager = Get-ConfigFlat -Output $out -ConfigMap 'go-svc-scene-manager-config'
     Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $sceneManager -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because '铸造的键在集群上,每主至少 1 副本'

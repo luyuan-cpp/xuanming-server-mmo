@@ -306,6 +306,16 @@ func (sc *ServiceContext) BindWorkMember(nodeUUID string) {
 	}
 }
 
+// AssetOpCleanupOwner 返回终态清理按片分工用的归属判定(缺口清单第 25 条第二批,设计 §11):与重投循环、合同推进共用同一份
+// 成员表(本 zone 注册的 stable trade 副本),类别键另起(data.CleanupWorkKind)。成员表的整表读在 StartAssetChannel 里
+// 随重投循环起,清理也只在 stable 副本上跑,圈法相同。通道没装配(AssetOp.Enabled=false)时回 nil:清理不分工,清全部行。
+func (sc *ServiceContext) AssetOpCleanupOwner() func(key string) bool {
+	if sc.Assets == nil || sc.Assets.Members == nil {
+		return nil
+	}
+	return sc.Assets.Members.Owns
+}
+
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
 // sql_mode=%27STRICT_TRANS_TABLES%27 强制会话级严格模式(%27 是转义的单引号)。标题 / 描述是自由文本,
 // 非严格模式下超长写入会**静默截断且无报错**,在连接层兜底。
@@ -319,11 +329,14 @@ func (sc *ServiceContext) BindWorkMember(nodeUUID string) {
 // 与别人的插入意向锁互等。RC 下只剩记录锁。自动提交语句每条各取新快照,读语义与 RR 下相同。
 // 前提同 WithTxRetry:binlog_format=ROW。
 //
+// 锁等待上限(session_lock_wait.go):行锁 innodb_lock_wait_timeout=1 由 authoritysql 逐连接设置,不在这里重复;
+// mysql 档在这里追加元数据锁 lock_wait_timeout=1,TiDB 档不发。启动时 openMySQL / OpenToolMySQL 读回两者核对。
+//
 // 返回值含密码,只能交给 sql.Open,绝不打日志。
 func BuildDSN(c config.MySQLConf) string {
 	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27"+
 		"&transaction_isolation=%%27READ-COMMITTED%%27",
-		c.User, c.Password, c.Host, c.DBName)
+		c.User, c.Password, c.Host, c.DBName) + sessionLockWaitDSNParams(authoritysql.Backend(c.Backend))
 }
 
 // MySQLTarget 是连接目标的可读描述(不含密码),供横幅与错误信息使用。
@@ -360,7 +373,15 @@ func OpenSchemaMySQL(c config.MySQLConf) (*sql.DB, error) {
 func openMySQL(c config.MySQLConf, permission authoritysql.Permission, options ...authoritysql.OpenOption) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission, options...)
+	db, err := authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission, options...)
+	if err != nil {
+		return nil, err
+	}
+	if err := verifySessionLockWaits(ctx, db, authoritysql.Backend(c.Backend)); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("MySQL %s: %w", MySQLTarget(c), err)
+	}
+	return db, nil
 }
 
 // NewListingIDSegment 按 IdSegment 配置建 listing_id 号段客户端。Enabled=false 或客户端为 nil 直接报错:

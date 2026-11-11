@@ -52,6 +52,8 @@
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
+#include "modules/bag/item_hold.h" // 战斗道具预留:穿戴入口的预留闸
+#include "proto/common/component/player_item_hold_comp.pb.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -1584,6 +1586,28 @@ TEST_F(PlayerEquipTest, EquipAndUnequipAreRefusedWhileFrozenOrInBattle)
 	tlsEcs.actorRegistry.remove<InBattleComp>(player);
 	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA));
 	EXPECT_EQ(kSuccess, PlayerEquipSystem::Unequip(player, kGuidB));
+}
+
+// 战斗道具预留(docs/design/battle-item-reservation.md):穿上 = 移出人物背包,押着的数量不许移出。
+// 今天的物品表里没有既是装备又可参战的行,这里直接在武器的配置号上建一份预留,盯住穿戴入口这道闸。
+// 预留押的是数量不是哪一件:两件同款押一件,穿哪一件都行,第二件就不行;释放之后照常能穿。
+TEST_F(PlayerEquipTest, EquipRefusesToTakeTheLastHeldUnitOutOfTheInventory)
+{
+	tlsEcs.actorRegistry.emplace_or_replace<PlayerItemHoldComp>(player); // 持久数据,生产里由加载创建
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidA, kWeaponL1), 0}});
+	Inventory().RestoreItems({{MakeRolledInstance(kGuidB, kWeaponL1), 1}});
+	constexpr uint64_t kHeldBattle = 4243;
+	ASSERT_EQ(kSuccess, BagService::PlaceHold(player, kHeldBattle, item_hold::ItemHoldKind::kBattle, {{kWeaponL1, 1}},
+											  /*createdAtMs=*/1, /*reviewAfterMs=*/2));
+
+	ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidA)) << "两件押一件:第一件可以穿";
+	const BagState inventoryBefore = Capture(Inventory());
+	const BagState equipmentBefore = Capture(Equipment());
+	EXPECT_EQ(kFeatureUnavailable, PlayerEquipSystem::Equip(player, kGuidB)) << "剩下的这件被押着";
+	ExpectBagsUnchanged(inventoryBefore, equipmentBefore);
+
+	ASSERT_TRUE(BagService::ReleaseHold(player, kHeldBattle));
+	EXPECT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kGuidB)) << "释放之后照常能穿(替换下第一件)";
 }
 
 TEST_F(PlayerEquipTest, WriteEntriesRejectInvalidEntitiesAndPlayersWithoutBags)

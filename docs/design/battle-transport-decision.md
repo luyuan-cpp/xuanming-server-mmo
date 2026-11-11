@@ -81,7 +81,7 @@
 
 gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate 对全局池里**每个** battle 实例建 channel + stub + 独立 CompletionQueue(`node_connector.cpp:39-80`、`grpc_init_client.cpp:213-221`)。N×M 已经存在,只是跑在 HTTP/2 上。D6「battle 不做节点间 muduo RPC」的结论仍成立,理由改为:**没有任何 C++ 节点需要同步调 battle**(唯一 C++ 调用方 gate 在直连落地后也不调了),不是「省连接」。
 
-> (2026-09-29 更正)上面描述的是收缩前的旧模式。收缩后(D66),gate 两种模式的白名单都不含 `BattleNodeService`(`gate/main.cpp:218-219`)。gate 仍发现并缓存 battle 的节点记录:`bin/etc/base_deploy_config.yaml:46` 保留了 `BattleNodeService.rpc` 发现前缀,`service_discovery_manager.cpp:86-113` 照常把 NodeInfo 写进 `ServiceNodeList` 并打「Node added」日志;但随后在 `:125-127` 按白名单返回,不建 channel / stub / CQ(D66)。所以这张 N×M 连接网已经没有了。「唯一 C++ 调用方 gate 也不调了」现在是事实:节点间控制面只剩 Go match 经 `grpc_endpoint` 调 battle(`cpp/libs/engine/core/node/system/node/node_util.h:132-145` 注释)。生成器为 `BattleClientPlayer` 产出的 gate 侧 gRPC 客户端桩仍编进 gate,但不会被调用,是有意保留的死代码(D66,KISS)。
+> (2026-09-29 更正)上面描述的是收缩前的旧模式。收缩后(D66),gate 两种模式的白名单都不含 `BattleNodeService`(`gate/main.cpp:218-219`)。gate 仍发现并缓存 battle 的节点记录:`bin/etc/base_deploy_config.yaml:46` 保留了 `BattleNodeService.rpc` 发现前缀,`service_discovery_manager.cpp:86-113` 照常把 NodeInfo 写进 `ServiceNodeList` 并打「Node added」日志;但随后在 `:125-127` 按白名单返回,不建 channel / stub / CQ(D66)。所以这张 N×M 连接网已经没有了。「唯一 C++ 调用方 gate 也不调了」现在是事实:节点间控制面只剩 Go match 经 `grpc_endpoint` 调 battle(`cpp/libs/engine/core/node/system/node/node_util.h:132-145` 注释)。生成器为 `BattleClientPlayer` 产出的 gate 侧 gRPC 客户端桩仍编进 gate,但不会被调用,是有意保留的死代码(D66,KISS)。(2026-11-10 再更正)gate 已不再发现、缓存 battle 的节点记录:各 C++ 节点只 Range / watch 自己发现集合里的类型,gate 与 scene 的集合都不含 Battle,battle 自己也只看自己那一条发现键([connection-fanout-subsetting-20261106.md](./connection-fanout-subsetting-20261106.md) §3.4);配置里的 `BattleNodeService.rpc` 只表示部署里有 battle。
 
 ### 3.4 关于 Go 重写的事实
 

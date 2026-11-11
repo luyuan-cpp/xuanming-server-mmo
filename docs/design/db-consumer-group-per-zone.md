@@ -705,7 +705,7 @@ GROUP_ID_NOT_FOUND
   - 最终形状下可以直接用旧镜像部署。
   - 交接形状下必须先收尾，落到最终形状，再退镜像。
 - **手工兜底**，只留给「收尾之前必须退镜像」这一种情形，例如新组 X 还没接手全部分区，FinalizeHandoff 的前置检查过不了。这一流程没有脚本化，也没有验证过：
-  1. db 缩到 0（`kubectl scale deployment db -n <zone ns> --replicas=0`），等两组都没有成员。
+  1. db 缩到 0（`kubectl scale statefulset db -n <zone ns> --replicas=0`），等两组都没有成员。
   2. 以旧组 Y 为目标：如果 X 在某些分区已经越过 Y，用 `kafka-consumer-groups.sh --reset-offsets --to-offset` 或 `--from-file` 把 Y 的位点灌到 max(X, Y)；不灌的话，Y 从冻结点重放，写会被游标吸收（前提是游标键还在），读要全部重算。
   3. 用 `--delete-offsets --group X --topic T` 删掉 X 在本 topic 上的位点，并 describe 复核。
   4. 手工把 ConfigMap 改回 final(Y)：只写 `GroupID: "Y"`。

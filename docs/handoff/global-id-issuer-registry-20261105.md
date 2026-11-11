@@ -1,6 +1,6 @@
 # 交接:发号器三份记录与全局号源登记处(交 Codex 验证,2026-11-05)
 
-> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
+> 状态:**Codex 已修复 §4.1 三项问题并补回归；最新证据见 §5。Go 固定副本构建、单测及真 etcd 回归通过；部署大套和本轮快照演练尚未全部完成。Claude Code 11-10 独立审核见 §6：发现 1 个高危问题（同命名空间部署出的 etcd 集群号相同，地域码绑定分不出两套环境），整体验收不通过，待用户决定是否修复。11-11 第二轮独立审核见 §7：同意 §6，另补修法限制与 4 个新问题（1 个中低、3 个低）。** Java 版本轮不实现(用户 11-05:「java 先不要实现」),只在 Java 仓 `PARITY.md` 记待做。
 > 需求来源:用户 11-05 贴的三个问题(两套 etcd 同时回档会重发、地域码防重靠人工、Java 版未对齐)和 [10-28 交接](./global-id-prelaunch-claude-20261028.md)。10-28 交接写的是 SQL `id_segment` 号段,10-30 起发号器已换成 etcd,本轮按当前代码修。
 > 设计以 [总体方案](../design/player-data-tidb-scaling-plan.md) §6.3 为准,运维以 [发号器运维手册](../ops/id-issuer-runbook.md) 为准。
 
@@ -425,3 +425,104 @@ go test -mod=readonly -tags etcd_integration -count=1 -v -timeout 2m -run 'TestE
   三处都有 Codex 的红绿证据。
 - 没有逐个审：C++ 号段调用方、logic 层的错误码映射、部署脚本里登记处以外的部分。Java 按用户要求只记待做。
 - 修复版的快照演练（B 段、恢复、C 段）、`-race`、部署大套、etcd 3.6.16、staging 演练仍然没跑，见 §5.4。问题 1 与这些项无关；修完之后，要按 §6.2 补跑部署契约和真 etcd 回归。
+
+## 7. 2026-11-11 Claude Code 第二轮独立审核
+
+用户另开 Claude Code 会话，按同一份审核请求再审一遍。只读：没有改产品代码和测试，没有运行任何构建或测试（AGENTS §10.1）。对象是 `de6891478` 收录的版本：`internal/idissuer` 在工作区没有改动；`data_service.go`、`servicecontext.go`、`dev_tools.ps1`、`k8s_deploy.ps1` 的未提交改动来自别的会话（英文日志、追踪、存档库分片），不涉及发号器逻辑。
+
+**结论：同意 §6，整体验收不通过。** §6.2 的根因按 etcd 源码核实成立。另外补两类内容：§6.2 修法的限制，以及 §6 没列的 4 个问题（1 个中低、3 个低）。
+
+### 7.1 对 §6 的核实
+
+- **§6.2 成立。**
+  - 算法：etcd v3.6.16（部署版本）`server/etcdserver/api/membership/member.go` 的 `computeMemberID` 只哈希「排序后的 peer 地址 + 令牌」；引导时 `cluster.go` 的 `NewClusterFromURLsMap` 传 `now=nil`；`genID` 再哈希排序后的成员号。成员名不参与，没有时间和随机数。
+  - 部署形态：三份清单的令牌和 peer 地址只由 `__INFRA_NAMESPACE__` 推出，开新地域手册又是一个地域一个 K8s context。所以默认部署下，每个地域报的都是同一对集群号，绑定在地域之间没有区分度。
+  - 测试：内存夹具和 Codex 的真 etcd 环境都没覆盖这个形态；真 etcd 环境见证据目录 `start-etcd-tests.ps1` 第 10 行，每个节点 `--initial-cluster-token $name`。
+- **补一个比克隆更常见的触发：把地域整体迁到新的 K8s 集群（命名空间不变）。** 新集群初始化报 `both local reservation records are missing`，照手册 §4.2 跑 rebind。rebind 不改登记处，手册第 3 步说的「原来那两套从此预留被拒」不会发生，切换期间新旧两边同时有资格。
+- **§6.3、§6.4、§6.5 同意。** §6.5 说 `Open` 的范围比较在空范围上恒成立，这条有真 etcd 佐证：`TestEtcdIntegration_StoreContract` 在空登记处上 `Open` 成功（`11-etcd-integration-serial.log`）。
+
+### 7.2 §6.2 修法的限制（影响验收口径）
+
+- **只改令牌，挡不住集群级备份恢复。** Velero、VolumeSnapshot 一类工具恢复的是 PVC 里的 etcd 数据目录。集群号存在数据里，有数据时 etcd 忽略引导令牌。§6.2 把这算作残余「直接拷贝 PVC」，但它正是集群级备份恢复的标准形态，比如拿生产备份刷 staging，而 staging 和生产共用登记处。
+- **「部署身份」不能放在会被一起恢复的地方。** 部署脚本渲染进 ConfigMap、Secret、环境变量的值，会和 PVC 一起被恢复回来。可行的做法有两种：data-service 在运行期从环境读（比如经 K8s API 读 `kube-system` 命名空间的 UID，要加 RBAC）；或者走「最后提交者」围栏。
+- **「最后提交者」围栏要容忍一拍滞后。** 写序是本地两份先、登记处后，预留中断后本地会比登记处多走一次。规则如果写成「本地令牌等于登记处令牌」，每次中断都会把本环境自己锁死。本地记录要同时保留上一个已提交的令牌，判定按「本地当前或上一个令牌等于登记处」。
+- **只修令牌时，设计和手册要写明边界。** 「克隆快照被拒」只对重新引导出来的 etcd 成立，对数据目录级的克隆不成立。
+
+### 7.3 新问题
+
+**中低：换码这条兜底路径和存档库命名冲突。**
+
+- 位置：
+  - 手册 §4.4 第 3 步、§4.5 把「退役旧码、用新码部署」当最后兜底，并说旧码发过的 ID 继续有效。
+  - 设计 §7.2 第 2 条（已入库）规定 `storage_id = 1000000 + 地域码 × 1000 + 片号`。
+  - 工作区里别的会话未提交的 `k8s_deploy.ps1` `Assert-PlayerStoreAllowlist`，要求 `MMORPG_DB_ALLOWED_DATABASES` 恰好是本地域码的 K 个库；login 的 `Placement.Region` 也由同一个 `-Region` 渲染。
+- 触发：§4.4、§4.5，以及 §6.3 误退役之后的任何一次换码。
+- 影响：
+  - 换码之后，部署预检拒绝列出旧码的存档库；
+  - 不列的话，老玩家所在的库没有写资格，存不了盘。
+
+  不影响唯一性，影响这几条事故能不能恢复。
+- 要负责人定：把存档命名用的地域号和发号器的地域码拆成两个参数，或者在预检和手册里写明换码时保留旧码的库。
+
+**低：认领允许跳号，一次输入错误就永久烧掉一段码。**
+
+- 位置：`etcd_store.go` 的 `ClaimNew` 只要求 `region ≥ next`，提交后 `next = region + 1`；`-id-registry-next` 只限 1..64。
+- 触发：`-Region` 和 Secret 里的 `Region` 一起写错，比如 5 写成 50。`checkExpectedRegion` 只比这两处，两处是同一个人填的。重建时 `-id-registry-next` 填大也一样。
+- 影响：中间的码全部作废，没有撤销入口。总共 63 个码，每次换码还要用掉一个。不影响唯一性。
+- 建议：`ClaimNew` 要求 `region == next`，跳号要显式开关；重建时 `Open` 默认要求 `next` 等于已有最大码 +1。
+
+**低：dev / test 档可以指向共用登记处，而且不受绑定约束。**
+
+- 位置：`config.go` 的 `IssuerEndpoints` 在 `AllowAutoSeed=true` 时照收显式的 `RegistryEtcd`；`servicecontext.go` 的 `NewIdIssuer` 允许 `Mode=test` 开 `AllowAutoSeed`。这时发号器跳过独立性和绑定核对；登记处没有这个码就直接 CAS 认领，不走 `next_region`。
+- 触发：部署脚本的 dev 档拒绝 `-IdRegistryEtcd`，所以只有手写配置会触发。
+- 影响：这个环境成为在用码的第二个发号环境，后果和 §6.2 同类。
+- 建议：`AllowAutoSeed` 时禁止显式 `RegistryEtcd`，或者限定 `Region=0`。
+
+**低：logic 层指标的 label 基数没有封顶。**
+
+- 位置：`id_segment_logic.go` 只按格式判定 tag，格式合法但没登记的 tag 原样记成 `biz_tag` label，和注释「label 基数必须有界」不符。
+- 建议：label 只取 `EffectiveTags` 里的值。
+- 顺带一处：`ErrSameCluster`、`ErrRegionMismatch` 走 default 分支，记成 `source_error` 并返回可重试错误。它们是配置错误，指标上应归 `refused`。
+
+### 7.4 独立推演没找到问题的部分
+
+- **唯一性的核心论证。** 登记处线性化、不回档也不丢键时，所有通过核对的预留在这个码的键上排成全序。每次成功预留的起点不低于读到的水位，而水位在 `claimAfter`、`Recover`、`Retire` 下只增不减，所以块不重叠；多个环境同码时也一样。重号的必要条件只有两种：至少两个环境有资格，且登记处这个码回档或丢失；或者三处同时回档。
+- **失败与重试。** 任一步出错或结果未知，整块作废。客户端对 Txn 的自动重试最多把已提交的写看成冲突，不会误认领。快照恢复会让 revision 重复，但要三处 CAS 同时偶然命中才有害，登记处不回档时不会发生。
+- **打散和调用方。** 打散在 63 位上每步可逆，Go 与 C++ 逐位一致。Go `client.go`、C++ `guid_segment_client.cpp` 都按服务端给的 `hi` 截止，不假设 `hi-lo == step`。`Minter` 没有回退；`mixIds=false` 只出现在测试里。
+- **其余**：值域上限、地域位核对，以及 `Open`、`ClaimNew`、`Recover`、`Retire` 之间的并发，都没找到问题。
+
+### 7.5 证据边界与补验证
+
+- 全部是静态审核。etcd 集群号的算法按 v3.6.16 源码核实；3.5.15 没有单独看，§4 的演练结果与之一致。
+- 没看：C++ 号段的业务调用方（只看了 `GuidSegmentClient` 本体）、部署脚本登记处以外的部分、Java。
+- 没有任何运行证据：
+  - 大量副本同时重启时的预留争抢（每次最多 8 次重试，登记处跨地域），不下性能结论；
+  - 登记处的跨集群访问。登记处 Service 只是 ClusterIP，跨集群全靠手工配网络，也没演练过。
+
+  §5.4 的未完成项仍未完成。
+- **H1 / H2**：按 §6.2 的命令。我核过可行：`SecondPairWithTheSameCodeIsRefused` 的第二对和第一对共用键根，令牌相同时 `Init` 会落到 `ErrCounterMissing`。
+- **H3**：已有数据目录的 etcd 换了引导令牌重启，集群号不变。这对应 §7.2 第一条，修复前后都应成立，不是回归。用本地已有的 3.5.15 镜像，单节点：
+
+  ```powershell
+  $img = 'quay.io/coreos/etcd:v3.5.15'
+  docker volume create idissuer-h3
+  docker run -d --name idissuer-h3-a -p 127.0.0.1:24811:2379 -v idissuer-h3:/etcd-data $img /usr/local/bin/etcd --name p --data-dir /etcd-data/data `
+    --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://127.0.0.1:24811 `
+    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://127.0.0.1:2380 `
+    --initial-cluster p=http://127.0.0.1:2380 --initial-cluster-token idissuer-h3-cluster-a
+  docker exec idissuer-h3-a /usr/local/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint status -w json
+  docker rm -f idissuer-h3-a
+  docker run -d --name idissuer-h3-b -p 127.0.0.1:24812:2379 -v idissuer-h3:/etcd-data $img /usr/local/bin/etcd --name p --data-dir /etcd-data/data `
+    --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls http://127.0.0.1:24812 `
+    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://127.0.0.1:2380 `
+    --initial-cluster p=http://127.0.0.1:2380 --initial-cluster-token idissuer-h3-cluster-b
+  docker exec idissuer-h3-b /usr/local/bin/etcdctl --endpoints=http://127.0.0.1:2379 endpoint status -w json
+  docker rm -f idissuer-h3-b
+  docker volume rm idissuer-h3
+  ```
+
+  预期两次输出的 `cluster_id` 相同。Docker 目前因 §5.4 的启动故障不可用，恢复后再跑；容器和卷按上面的名字清理，不要按宽泛名称批量删。
+- 其余几项靠代码就能确定，不需要运行证据。修复时各补一条内存用例：
+  - 从没绑定的环境退役在用码，被拒；
+  - `next=1` 时初始化 5，被拒，登记处不变；
+  - `AllowAutoSeed` 带显式 `RegistryEtcd`，配置报错。

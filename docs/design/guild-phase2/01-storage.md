@@ -187,7 +187,7 @@ message GuildRecord {
   option(OptionTableName) = "guild";
   option(OptionPrimaryKey) = "guild_id";
   option(OptionUniqueKey) = "name_norm";      // 生成 uk_guild;帮名全服唯一,判重只看规范化值
-  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 合服 / 分区榜重建;idx_guild_1 = 按会长查
+  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 按区查询(zone_id IN 合服组);idx_guild_1 = 按会长查
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -199,11 +199,12 @@ message GuildRecord {
   string announcement = 5;    // ≤ MaxAnnouncementBytes=600
   uint64 create_time_ms = 6;
   uint32 max_members = 7;     // 建帮写入;B5 起按 GuildLevel.max_members 改写
-  uint32 zone_id = 8;         // 帮会归属 zone;merge_zone 步骤 3 改写
+  uint32 zone_id = 8;         // 建帮时的归属区,此后不改写;合服只登记映射 zone_merged_into,按区比较、查询先解析到最终区
   int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
   uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
   string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于 191 前缀)
-  // 追加区:从 12 起。
+  uint64 score_version = 12;  // 2026-11-11 追加:score 的版本,写分事务里 +1;Redis 榜按它条件写入(guild_ranking_architecture_zh.md §3)
+  // 追加区:从 13 起。
 }
 
 message GuildPlayerStateRecord {
@@ -1011,7 +1012,7 @@ func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 >    - `guild_friend_tables.sql` 删除帮会表与遗留迁移过程;`guild_schema_migration` 门表、`MigrateLegacyRankScores`、friend 的 `friend_capacity_backfill_v1` 门一并删除。friend 缺容量行时按权威边重算。
 >    - 帮名唯一键改为 `uk_guild(name_norm)`,规范化在 Go 侧完成,不依赖排序规则;tools/merge_zone 与 data_consistency_check 经 `-guild-schema`(默认 `mmorpg_guild`)限定库名。
 >    - 开发期改表纪律(只追加;索引组只追加到末尾;缺普通索引即拒启)见 `guild-phase2.md` §6.4。
->    - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(merge_zone 步骤 3 已覆盖);biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 随 B5 加入;TiDB BR 按库恢复清单加入 `mmorpg_guild`。
+>    - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(合服不改写它:merge_zone 只登记映射 `zone_merged_into`,读的时候解析到最终区,见 `player-data-tidb-scaling-plan.md` §7.1);biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 随 B5 加入;TiDB BR 按库恢复清单加入 `mmorpg_guild`。
 >    - TiDB Phase 1 是逻辑库对逻辑库迁移,库名不改。data_service 与 go/db 本轮不改迁移路径。
 
 - **"被推翻 / 修订的旧条目"** 追加:"本条 §8 原文'friend、guild……留在 `mmorpg`,`guild_schema_migration` 门表照旧':**修订**(2026-09-16,guild 迁 `mmorpg_guild`)。"

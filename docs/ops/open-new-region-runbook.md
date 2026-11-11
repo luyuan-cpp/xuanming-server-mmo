@@ -92,8 +92,8 @@ Logical databases: directory_shards=64 directory=mmorpg_global_00..63 ledger=mmo
 ConfigMap 里的 `IdSegment.Issuer` 只是模板,常驻进程读的是运维预置的 Secret,所以要核 Pod 里生效的配置。Secret 里的 `IdSegment.Issuer` 要有 `Region` 和 `RegistryEtcd`,`RegistryEtcd` 等于部署时的 `-IdRegistryEtcd`。下面两个数都要等于这个地域的码:
 
 ```powershell
-kubectl --context <context> -n <zone-namespace> exec deploy/data-service -- grep -n 'Region:' /app/etc/private/data_service.yaml
-kubectl --context <context> -n <zone-namespace> exec deploy/data-service -- printenv MMORPG_ID_ISSUER_EXPECTED_REGION
+kubectl --context <context> -n <zone-namespace> exec statefulset/data-service -- grep -n 'Region:' /app/etc/private/data_service.yaml
+kubectl --context <context> -n <zone-namespace> exec statefulset/data-service -- printenv MMORPG_ID_ISSUER_EXPECTED_REGION
 ```
 
 第二个数是部署脚本从 `-Region` 注入的。data_service 启动时比对它和配置,不一致就拒绝启动,所以 Secret 抄错会在这里暴露,不会悄悄发出别的地域的号。
@@ -105,7 +105,7 @@ kubectl --context <context> -n <zone-namespace> exec deploy/data-service -- prin
 新地域的码还没在登记处认领,发号器拒绝发号,这是刻意的。整个世界第一次部署时,先按[发号器运维手册](id-issuer-runbook.md) §2.1 托管并开启登记处。在第一个 zone 的 data-service 就绪之后、放流量之前做这一步。在任意一个 data-service Pod 里跑一次:
 
 ```bash
-kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
+kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
 ```
 
 mail、rank 不因为它卡启动,它们的发号器预领失败只记日志。没初始化时建角和发号报错,scene 的号段门禁不放行,所以带 `WaitReady` 的部署要另开一个终端跑这一步,或者第一遍不带 `WaitReady`。初始化之后不用重启任何服务。

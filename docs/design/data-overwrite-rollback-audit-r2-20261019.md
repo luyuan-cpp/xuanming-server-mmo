@@ -3,7 +3,7 @@
 > 只读静态审计，**未编译、未运行**。对象是 2026-10-19 的工作区，包括其他会话尚未提交的改动。
 > 本文登记问题、修复方向与最终状态。修复的代码改动在各条 PROGRESS 条目里；全部要按 AGENTS.md §10.1 交 Codex 验证，并按 §12 同步 Java 版（Java 待做已登记在 Java 仓 `PARITY.md` 2026-11-06「数据覆写审计第二轮遗留修复」）。
 > 第一轮见 [data-overwrite-rollback-audit-20261018.md](data-overwrite-rollback-audit-20261018.md)。本轮按该文 §8 第 3 步执行。
-> **状态：已收口（2026-11-06），只差两件事留到 2026-11-12 20:00 UTC 周额度重置之后**：换视角查找第 2 轮、Java 商城付款金额不符的修复（§5.0 末尾）。全部条目的最终状态以 **§5.0** 为准；所有「已修」都**未编译、未测试**，没有一条有运行证据。
+> **状态：已收口（2026-11-06）；2026-11-10 补跑换视角查找第 2、3 轮（§3.10、§3.11），第 3 轮仍有新发现，按轮数上限停止。** 新增 4 个编号：r2-ps#11（medium，仅混版窗口，对抗复核成立）、r2-trade#1（low）、r2-doc#1 / #2（low，文档）。这 4 条都还没修，修复批次交负责人定（§6「2026-11-10」）。原留待的 Java 商城付款金额不符，已由另一会话于 11-10 修完（未编译）。全部条目的最终状态以 **§5.0** 为准；所有「已修」都**未编译、未测试**，没有一条有运行证据。
 > 经过：第一波（增量对抗评审 4 路）、第二波（新落码增量评审 6 路）、第三波两批 10 路（§3.6、§3.7）、第四波的第一轮 low 复核（§3.8）与换视角查找第 1 轮（§3.9）；10-23～24 负责人要求把发现修完；11-05 负责人要求「都按最标准的做」，本会话按 10-30 映射直读 TiDB、10-31 玩家数据只存 TiDB 之后的代码把三份审计的全部条目重判一遍，仍成立的分批修完，每批都经独立评审与修一轮（§6「2026-11-06 收口」）。
 
 ## 0. 前置检查（§8 第 1、2 步）
@@ -18,16 +18,17 @@
 
 ## 1. 结论
 
-**最终结论（2026-11-06）：**
+**最终结论（2026-11-06；11-10 补换视角查找第 2、3 轮）：**
 
-- 本轮共登记 46 个编号（第一至三波、第一轮 low 复核与换视角查找第 1 轮），**没有 high**。medium 11 条：r2-battle#1、r2-mz#1、r2-ps#1、r2-lc#1、r2-lc#2、r2-login#1、r2-guild#1、r2-match#1、r2-rr#5、r2-kc#1、r2-v1#1；其余 35 条 low。
+- 本轮共登记 50 个编号（第一至三波、第一轮 low 复核与换视角查找第 1～3 轮），**没有 high**。medium 12 条：r2-battle#1、r2-mz#1、r2-ps#1、r2-lc#1、r2-lc#2、r2-login#1、r2-guild#1、r2-match#1、r2-rr#5、r2-kc#1、r2-v1#1、r2-ps#11；其余 38 条 low。
+- **换视角查找**（§3.9～§3.11）：第 1 轮新 medium 2 条、low 3 条；第 2 轮新 low 2 条（r2-trade#1、r2-doc#1）；第 3 轮新 medium 1 条、low 1 条（r2-ps#11、r2-doc#2）。三轮都有新发现，按交接 §4.2 的 3 轮上限停止，没有达到「连续两轮无新发现」。11-10 新增的 4 条都还没修。
 - **处置结果**（逐条见 §5.0）：
   - 已修、仍成立：r2-gate#1、r2-sm#1/#2/#3、r2-ds#1、r2-lc#1/#2、r2-ps#2/#5/#8/#9 是 10 月修的；11-05～06 本会话又修了 r2-kc#1、r2-ps#6/#7、r2-mail#1/#2、r2-mm#1、r2-dcc#1、r2-battle#3、r2-v1#1 的残余窗口、r2-equip#1、r2-inbox#1（文档），以及不在本表编号体系里的 cpp-economy#2、handover-single-writer-v#1 的 scene_manager 侧、第一轮 §4 第 2、5、7（下游）、9、18、19、20、21 条、一致性保证图 §6.2 第 10 条和多集群 PITR 建角残留。
   - 其他会话修：r2-battle#2、r2-guild#1（「数据覆盖审计交接文档」）、r2-v1#1 主路径与 r2-v1#2（「全球经济系统代码审核」）、r2-ps#10（混版本持久化）。
   - 随迁移失效（机制已删）：r2-db#1/#2/#3、r2-rr#1~#5、r2-ps#1（go/db 侧）、r2-ps#3/#4、r2-low#1/#2（代码部分）、r2-login#1、r2-battle#1/#4、r2-mz#1/#2、r2-ds#2。
   - 负责人拍板：r2-match#1（10-23，首发开全球匹配）。
 - **独立评审查出并修掉的必修**共 8 处（R1、R2a、R2b、R3～R7 八轮，见 §6 收口段），其中 6 处会直接丢数据或给丢数据背书：排空框架把被保留期删掉、谁都没处理过的记录记成已结清；`ReleasePlayerName` 被拒时也写不可逆墓碑；奖励尝试上限让还能领几十天的奖励被提前放弃；临时格取回在战斗中被拒，延后的结算一直补不上；号段续段误报 buffers_full 导致结算永久延后；状态缺失的 FIGHTING 冻结永远解不了冻。
-- **仍开着**：match 不可用跨过截止 + 60s 把已打完的局 ABORT（low，转「数据覆盖审计交接文档」会话，在做）；第一轮第 12 条评级停写卡消费（转「全服匹配方案讨论」会话，在做）；换视角查找第 2 轮与 Java 商城付款金额不符（额度重置之后）。各批的已知残余写在对应 PROGRESS 条目的「残余」里，都已接受或另有负责方。
+- **仍开着**：match 不可用跨过截止 + 60s 把已打完的局 ABORT（low，转「数据覆盖审计交接文档」会话，在做）；第一轮第 12 条评级停写卡消费（转「全服匹配方案讨论」会话，在做）；11-10 新增 4 条待修：r2-ps#11 在上线后第一次带新行种的发布前必修，r2-trade#1 在打开 GM 封禁处置前修，r2-doc#1 / #2 只改文档与注释（修复批次见 §6「2026-11-10」）。各批的已知残余写在对应 PROGRESS 条目的「残余」里，都已接受或另有负责方。
 - **验证现状**：所有修复都未编译、未测试。Codex 要按各条 PROGRESS 条目的「交 Codex」段执行；涉及 proto 的批次（C、D、F、J、K1、K2、K3、N、R2b）先跑一次 `proto-gen-run`（no-unity 配置），涉及 Tip.xlsx 的（F、R6）先导表；批次代号与 PROGRESS 条目的对应见 §6 收口段。
 
 **各波当时的结论**（写于对应日期，状态以 §5.0 为准）：
@@ -310,7 +311,7 @@
 
 | 编号 | 问题 | 位置 | 触发时序 | 可达性 | 已登记 | 自信度 |
 |---|---|---|---|---|---|---|
-| r2-ps#11 | **scene 比 go/db 新时，认领不核对 go/db 认识的世代，照常抬代次；带新行种的存盘被旧 go/db 判成 INVALID，走不到 SCHEMA_TOO_NEW，玩家下线时不存盘就销毁，认领以来的进度（含资产）全丢** | 认领判定只比库里世代与 scene 世代、不比 go/db 的 `knownGen`：`go/db/internal/playerstore/decide.go` 的 `decideClaim`，调用处 `store.go` 的 LoadAndClaim；未知行种在判世代之前就回 INVALID：`store.go` 的 `validateSave`（按本二进制编译进来的 `PlayerStoreKind_name` 判），`decideSave` 的 TOO_NEW 走不到；C++ 只有 NO_OWNER、TOO_NEW、UNSPECIFIED 重试，其余按确定性拒绝并把发过的行种并入 uncertain：`player_store_client.cpp` 处理存盘回包的 switch；退出中被拒直接 `DestroyDeposedPlayer`：`player_lifecycle.cpp` 的 `HandlePlayerSaveRefused` → `DisposeRefusedSave`；默认发布先发 scene 后发 go/db：`tools/scripts/k8s_deploy.ps1` zone-up 主流程先 apply scene 清单（约 :14870-14880），再 `Apply-GoSvcManifests`（约 :14916），Agones 模式下不等 Fleet 就绪（约 :9954-9963）；Go 服务 tag 缺省跟随 NodeImage（约 :853-859）；设计反而写「不丢数据」：`mixed-version-persist-field-protection.md` §8.2、§8.3 go/db 行 | ① 版本 R2 新增持久字段并放进新行种 K（`player-save-direct-commit.md` §1.1「新加一行取下一个空闲号」），世代 N → N+1。② 按默认 `zone-up` 发布，zone z 的新 scene 先起来，服务它的 go/db 还是 R1。③ 玩家 P 登录到 R2 scene，认领落到 R1 go/db，判 CLAIMED，写权行抬到这个实例。④ 此后每笔存盘都带世代 N+1：不含 K 的回 SCHEMA_TOO_NEW，按重试保留；P 用了新功能、K 变脏后，存盘回 INVALID，K 并入 uncertain，之后每一笔都是 INVALID。⑤ P 在 go/db 换完之前下线：退出存盘 INVALID，不存盘销毁，认领以来的进度全丢。没碰 K 的玩家下线时是 TOO_NEW，实体保留到 go/db 升级后落盘，不丢；scene 进程在那之前退出则同样丢 | 仅混版窗口，没有开关。默认发布流程即可触发：任何一次带新行种的版本按默认 `zone-up` 发布，scene 先于 go/db 换版本。`release-checklist.md` 没有「先只升 go/db」的步骤，`k8s_deploy.ps1` 没有世代预检（§8.2「可选项（第 4 批）」未做）；文档里的发布顺序只是人工前提。按 r2-ps#1 的先例，滚动发布里默认可达的丢资产本应 high，只在混版窗口出现降一级，定 medium。项目未上线，首次上线整批起步不触发；上线后第一次带新行种的发布前必修 | 未登记；§8.2「顺序如果被违反，C1 / C2 只会延后或失败，不会丢数据」与 §8.3「go/db 回滚更低不丢数据」是旧 Redis 路径（有父快照兜底）的结论，在 player_store 路径上不成立 | 很可能。查找员原报 low（按「人为违反顺序」）；主会话核对后补了默认发布先 scene 后 go/db 的证据，暂定 medium。对抗复核：待填 |
+| r2-ps#11 | **scene 比 go/db 新时，认领不核对 go/db 认识的世代，照常抬代次；带新行种的存盘被旧 go/db 判成 INVALID，走不到 SCHEMA_TOO_NEW，玩家下线时不存盘就销毁，认领以来的进度（含资产）全丢** | 认领判定只比库里世代与 scene 世代、不比 go/db 的 `knownGen`：`go/db/internal/playerstore/decide.go` 的 `decideClaim`，调用处 `store.go` 的 LoadAndClaim；未知行种在判世代之前就回 INVALID：`store.go` 的 `validateSave`（按本二进制编译进来的 `PlayerStoreKind_name` 判），`decideSave` 的 TOO_NEW 走不到；C++ 只有 NO_OWNER、TOO_NEW、UNSPECIFIED 重试，其余按确定性拒绝并把发过的行种并入 uncertain：`player_store_client.cpp` 处理存盘回包的 switch；退出中被拒直接 `DestroyDeposedPlayer`：`player_lifecycle.cpp` 的 `HandlePlayerSaveRefused` → `DisposeRefusedSave`；默认发布先发 scene 后发 go/db：`tools/scripts/k8s_deploy.ps1` zone-up 主流程先 apply scene 清单（约 :14870-14880），再 `Apply-GoSvcManifests`（约 :14916），Agones 模式下不等 Fleet 就绪（约 :9954-9963）；Go 服务 tag 缺省跟随 NodeImage（约 :853-859）；设计反而写「不丢数据」：`mixed-version-persist-field-protection.md` §8.2、§8.3 go/db 行 | ① 版本 R2 新增持久字段并放进新行种 K（`player-save-direct-commit.md` §1.1「新加一行取下一个空闲号」），世代 N → N+1。② 按默认 `zone-up` 发布，zone z 的新 scene 先起来，服务它的 go/db 还是 R1。③ 玩家 P 登录到 R2 scene，认领落到 R1 go/db，判 CLAIMED，写权行抬到这个实例。④ 新 scene 拼装存盘时对每个持久组件都设存在位（`player_database_loader.cpp` 的 `mutable_xxx()->CopyFrom`），K 行投影出的字节非空；库里没有 K 行，认领播种的已确认内容是空串。所以每名玩家的第一笔存盘就带 K，被 `validateSave` 判 INVALID，K 并入 uncertain，之后每一笔都是 INVALID。go/db 新旧副本混跑时，回 TOO_NEW 的在途那笔在新副本上提交，下一笔带 K 落到旧副本，同样 INVALID。⑤ 玩家在 go/db 换完之前下线：退出存盘 INVALID，不存盘就销毁，认领以来的进度（含本地掉落、货币、消耗）全丢。窗口内新 scene 上几乎所有玩家都受影响。不出故障时，每人损失不超过窗口时长；db 迁移 Job 失败或滚动停住时，损失没有上限 | 仅混版窗口，没有开关。默认发布流程即可触发，任何一次带新行种的版本都会出现：<br>- 按 `release-checklist.md` 第⑦步用同一个 tag 跑 `zone-up`，scene 先于 go/db 换版本。<br>- staging / prod 的 `zone-up` 在 scene 已经 apply 之后，还要等 db 迁移 Job 完成才 apply db 工作负载（`k8s_deploy.ps1` 约 :12381-12402），db 再一次换一个副本、每个等 minReadySeconds 20。所以窗口必然出现。<br>- 迁移 Job 失败时，脚本在 scene 已发布之后才 throw（约 :12600），zone 会一直停在新 scene 加旧 go/db。<br>- go/db 注册进 etcd 的节点信息不带世代（`proto/common/base/common.proto` 的 NodeInfo），scene 在就绪节点里随机挑（`player_store_client.cpp` 的 `PickReadyPlayerStoreNode`）。<br>- 发布清单没有「先只升 go/db」的步骤；`release_preflight.ps1` 只查台账封存，不查线上 go/db 世代（§8.2「可选项（第 4 批）」未做）；文档里的发布顺序只是人工前提。<br>按 r2-ps#1 的先例，滚动发布里默认可达的丢资产本应 high，只在混版窗口出现，降一级定 medium；走的是缺省参数和官方发布清单，不属于「运维工具人为误用」，不按 low 封顶。项目未上线，首次上线整批起步不触发；上线后第一次带新行种的发布前必修 | 未登记。`player-save-direct-commit.md` §9 第 8 条只接受了「旧 scene 读新世代行被拒」这一可用性问题。§8.2「顺序如果被违反，C1 / C2 只会延后或失败，不会丢数据」、§8.3「go/db 回滚更低不丢数据」与 `deploy/k8s/README.md:2712` 同类说法，是旧 Redis 路径（有父快照兜底）的结论，在 player_store 路径上不成立；`deploy/k8s/player-store-alerts.yaml:73-83` 的 INVALID 告警说明写「是 scene 的 bug」，会把排查引偏 | **成立（2026-11-10 对抗复核：成立，medium）**。查找员原报 low（按「人为违反顺序」）；主会话补了默认发布先 scene 后 go/db 的证据。复核又补了迁移 Job 必然拉开窗口、迁移失败后无限期停留两条，并更正了 ④ 的先后与影响面：原文只算碰过 K 的玩家，实际窗口内几乎所有玩家都受影响。复核原文在 `dsweep-round3-results/verify-r2-ps11.json` |
 
 **low：**
 
@@ -402,6 +403,9 @@
 | r2-v1#2 | low | 已修（「全球经济系统代码审核」会话） | 跳过被封部分、其余 APPLIED、解封不补发 |
 | r2-inbox#1 | low | 已收口（文档） | 收件箱手册写明关消费会停掉全球结算，处置步骤排除 Battle 域 |
 | r2-equip#1 | low | 已修（11-06） | `expected_level` 乐观比较；R6 修 1 处并补 3 条跟进；幂等键由「重复请求去重处理」会话接 |
+| r2-trade#1 | low | 待修（11-10 新增） | 修复批次 T（§6「2026-11-10」）；打开 GM 封禁处置（`EnqueueTypes` 加 GM 封禁类）之前修 |
+| r2-ps#11 | medium（仅混版窗口） | 待修（11-10 新增，对抗复核成立） | 修复批次 S；上线后第一次带新行种的发布之前必修 |
+| r2-doc#1 / #2 | low | 待修（11-10 新增） | 修复批次 U，只改注释、日志文案与文档 |
 
 **本轮新增或转入、已修**（不在上表的编号体系里，详见 PROGRESS 同日条目）：cpp-economy#2 临时格满即拒并可取回；handover-single-writer-v#1 的 scene_manager 侧（判死释放比三列并复核注册表）；第一轮 §4 第 2（新路径：存盘最终被拒的计数、指标与告警）、5、7（下游：GM 回收计划、guild 与 GM 回收的人工终结改以已提交账本为证据）、9、18、19、20、21 条（各条修复说明写回第一轮文档 §4）；一致性保证图 §6.2 第 10 条（角色名「预留 → 绑定」）；多集群 PITR 后建角残留的核账与修复工具。
 
@@ -410,9 +414,9 @@
 - 第一轮第 12 条评级来源停写后结果消费卡到 HOLD：「全服匹配方案讨论」会话认领，口径为评分照记、跳过投榜、不阻塞消费。
 - match 个人结算首投积压的告警：「Match 发件箱积压时结算延迟」会话已落码（`deploy/k8s/match-outcome-outbox-alerts.yaml`）。
 
-**留到 2026-11-12 20:00 UTC 周额度重置之后**（11-06 周额度已过 80%，按会话组约定只做风险最高的事）：
-- 换视角查找第 2 轮（D_ROUNDS 的资产追踪、按故障、按入口三个视角；连续两轮无新发现才停）。第 1 轮（§3.9）有新发现，按规则还要再跑。
-- Java 商城付款金额或币种与订单不符时仍回 409、不落记录（钱停在渠道），应与重复付款同法落异常付款记录和退款待办（评审 R3 建议）。
+**原留到 2026-11-12 周额度重置之后的两件，11-10 都已做**（当时周额度只用了 2%，不必等）：
+- 换视角查找第 2、3 轮：见 §3.10、§3.11。第 3 轮仍有新发现，按 3 轮上限停止，新增编号见上表末 4 行。
+- Java 商城付款金额或币种与订单不符：另一会话已修（未编译），见 PROGRESS 2026-11-10「数据审计遗留·商城付款金额或币种不符」与「评审修正·商城付款金额或币种不符」。Java 独立仓同类问题已登记 `PARITY.md` 待做。
 
 ### 5.1 修复方向（当时的建议与状态，保留作历史；最终状态见 §5.0）
 
@@ -466,7 +470,43 @@
 
 ## 6. 后续各波与收口
 
-**2026-11-06 收口（以本段与 §5.0 为准；下面 11-05 及更早各段是当时的进度记录）：**
+**2026-11-10 换视角查找第 2、3 轮（以本段与 §5.0 为准）：**
+
+- **做了什么**：
+  - 按交接 §1 的做法跑了第 2 轮（§3.10）。第 2 轮有新发现，接着跑了第 3 轮（§3.11），这是交接 §4.2 规定的 3 轮上限。
+  - 每轮 3 个只读查找代理。第 3 轮报出的 medium 由主会话补证据，再用 1 个对抗复核代理按脚本 `verify` 的单视角口径复核。
+  - 脚本 `PRE` 已改到 11-09 的 HEAD 与新机制，第 2、3 轮的视角也按新代码路径改写了。各轮 args 与原始返回都在交接目录（`dsweep-round<N>-args.json`、`dsweep-round<N>-results/`）。
+  - 起跑时周额度只用了 2%，所以没等 11-12 重置。
+- **结论**：新增 4 个编号，都还没修：
+  - r2-ps#11：medium，仅混版窗口，对抗复核成立；
+  - r2-trade#1：low，门控在 GM 封禁处置；
+  - r2-doc#1 / #2：low，文档。
+  - 三轮都有新发现，因轮数上限停止。是否续跑由负责人定；要续的话，先修完 r2-ps#11，再按 `D_ROUNDS[3]` 跑一轮，即跨区与号段、网络分区与租约、运维 CLI。
+- **修复批次（交负责人定；三批文件互不相交，可以并行）**：
+  - **批 S，player_store 混版世代闸（r2-ps#11，上线后第一次带新行种的发布之前必修）**：
+    - go/db `internal/playerstore`：`validateSave` 对本二进制不认识的正值行种改回可重试的 `SCHEMA_TOO_NEW`，INVALID 只留给 0、重复、写权行 kind 与空身份。只有这一条能覆盖 go/db 新旧副本混跑。
+    - `decideClaim` 加一格：`binary_schema_gen > knownGen` 回 `LOAD_AND_CLAIM_SCHEMA_TOO_NEW`、不抬代次。新 scene 拿不到旧 go/db 的写权，玩家进场失败、重试即可，不丢数据。
+    - 单测：判定表两格；未知行种加高世代回 TOO_NEW、不写库；补一条真库集成用例。
+    - C++ 侧核对认领回 TOO_NEW 时按进场失败处理（与库里世代更高时同一个结局）。
+    - 部署：`zone-up` 改成先 apply go/db、等滚动完成，再 apply scene；纵深做 §8.2 的第 4 批，即 go/db 节点信息带世代、发布预检核 go/db 世代 ≥ scene 世代。
+    - 文档：改正 `mixed-version-persist-field-protection.md` §8.2 / §8.3、`player-save-direct-commit.md` §4 两张判定表、`deploy/k8s/README.md:2712`，以及 `player-store-alerts.yaml` 的 INVALID 告警说明。
+    - Java：核对 Java 版 `PlayerStore` 有没有「旧服务按编译期枚举拒新行」的同类口子，只登记 `PARITY.md` 待做。
+    - 协调：`k8s_deploy.ps1`、`player_lifecycle.cpp` 正被其他会话改（未提交），动之前先分好工。
+  - **批 T，交易托管与获取封禁（r2-trade#1，打开 GM 封禁处置之前修）**：
+    - 口径是「搬运不算获得」：交易把玩家自己托管的资产退回（seller_return、buyer_return、bid_return、人工 refund 腿），不受单玩家获取封禁约束，与临时格取回同一口径。
+    - C++ `ApplyCredit` 按交易类型豁免 (a) / (a′)。先核对退回腿与交付腿是否共用交易类型；共用就新增类型，改 proto 按 AGENTS §4 走生成。
+    - go/trade：交付先发 buyer_receive，APPLIED 之后才发 seller_receive；buyer_receive 被封禁拒绝时，自动退回买家货款和卖家物品，不转人工。下单前可以经 data_service `GetPlayerItemGainBlock` 预检，只降频，不替代提交点判定。`manual.go` 的退款规则随之调整。
+    - 文档：`jubaozhai-market.md:142`、`player-inbox-service.md:317`，以及收件箱手册封禁处置一节，写明对在途交易的影响。
+    - Java：登记待做。
+    - 协调：「Turn battle gap closure handoff」会话正在改 `go/trade/internal/data/asset_op_repo.go` 的终结函数，trade commerce 也有在途改动，动之前先分好工。
+  - **批 U，注释与文档（r2-doc#1、r2-doc#2，加 §3.10 / §3.11 里几处说法不准）**：
+    - 两个结果消费者的文件头、`recall_plan.go` 文件头、`guild_id_minter.go` 的日志（按 AGENTS §2 写英文，说明建帮会失败）、`loops.go` 头注释、`player_bag_handler.cpp:273`、`player_exit_intent.h` 里引用 saveoutbox 的注释。
+    - `exploit_loss_prevention_zh.md:117`；`player-inbox-service.md` §9.1 等四处与 `player_inbox.yaml` 注释，按 :48 的永久收据重写，容量说明补上战斗结算域；`horizontal-scale-logical-db.md:83`；`release-track-gray-canary.md:124`。
+    - 可选：`TerminalRetention` / `SweepInterval` 删掉，或在 `Validate` 里标成保留字段；`ReconcilePlayer` 的 5000 行上限改为按 seq 分页，或在手册里写明会截断。
+    - 协调：收件箱设计与手册正被别的会话改（未提交）。
+- **额度**：7 个代理（查找 6、复核 1），约 413 万子代理 token；周额度从 2% 涨到约 50%（含同期其他会话）。证据见 §7。
+
+**2026-11-06 收口（以 11-10 段、本段与 §5.0 为准；下面 11-05 及更早各段是当时的进度记录）：**
 
 - **修复批次与 PROGRESS 条目**（标题都以「数据审计遗留·」开头，日期 2026-11-05～06；全部未编译、未测试）：
   - A：排空框架消费者遇再均衡或暂时失败不再永久停取（r2-kc#1）。评审 R5 修 1 处必修。C2 把告警改为按分区的已提交位点停滞判。
@@ -560,6 +600,13 @@
 - 第二波：工作流 `wf_12bc0724-9b9`，6 个代理（只查找），工作流计 225.6 万子代理 token；另有 5 个收尾续跑实例约 136 万（见 §2"第二波的两份输出"），合计约 362 万。开跑前 5 小时窗口 21%、周额度 86%；结束时 5 小时窗口 45%、周额度 93%（含其他会话）。
 - **教训**：给工作流里正在跑的代理发消息，不会让它提前收尾，而是另起一个续跑实例并行跑，费用翻倍。以后要压缩规模，应在开跑前就限定代理数，或直接停掉整条工作流。
 - 代理完整返回保存在本会话转录里（工作流结果见该 run 的 `journal.jsonl`）；中间结论同步记在会话组共享笔记 `audit-r2-progress.md`。
+- **2026-11-10 换视角查找第 2、3 轮**：没开工作流，用 Agent 工具直接起代理，提示照脚本 `PRE` 与 `D_ROUNDS[1]`、`D_ROUNDS[2]` 拼，复核照脚本 `verify` 的单视角口径。
+  - 第 2 轮 3 个查找代理，约 206 万子代理 token（78.3 万、67.6 万、60.2 万），每个跑 26～28 分钟；周额度 2% → 24%。
+  - 第 3 轮 3 个查找代理，约 174.5 万（58.4 万、55.2 万、61.0 万），每个 30～36 分钟；周额度 24% → 44%。
+  - r2-ps#11 复核 1 个代理，约 32.5 万。
+  - 各数都含同期其他会话的消耗（工作区里有十来个会话在并行）。按这个账号的实测，只读查找代理约每个 7% 周额度，交接里旧账号「约 1%」的口径已不适用。
+  - 原始返回都已落进交接目录 `dsweep-round2-results/`、`dsweep-round3-results/`；会话草稿目录跨天会被清空，不放那里。
+  - 只读核对：7 份转录里都没有 Edit / Write 调用，`git show` 没有重定向，%TEMP% 里没有仓库文件副本。
 
 
 ### 2026-10-23 r2-lc#1/#2：迟到消息实际反证与修复状态

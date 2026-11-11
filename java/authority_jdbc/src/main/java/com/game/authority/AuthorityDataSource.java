@@ -21,14 +21,50 @@ public final class AuthorityDataSource implements DataSource {
     private static final String J_MALL_MYSQL="SET SESSION sql_mode=CONCAT(@@SESSION.sql_mode,',STRICT_TRANS_TABLES'),innodb_lock_wait_timeout=5";
     private static final String R_MALL_INIT="SET SESSION tidb_snapshot='',tidb_txn_mode='pessimistic',tidb_replica_read='leader',tidb_read_consistency='strict',tidb_read_staleness=0,tidb_low_resolution_tso=OFF,sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',innodb_lock_wait_timeout=5";
     private static final String R_MALL_MYSQL="SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',innodb_lock_wait_timeout=5";
+    /** mysql 档逐物理连接的核对,与 Go 的 authoritysql(mysqlServerSQL)同一组判据。 */
+    static final String MYSQL_SERVER_SQL="SELECT VERSION(),@@version_comment,@@read_only,@@super_read_only";
+    /** mysql 档的会话固定:与 TiDB 档同样是 RC 加严格模式,不发任何 tidb_* 语句。 */
+    static final String MYSQL_SESSION_SQL="SET SESSION transaction_isolation='READ-COMMITTED',sql_mode=CONCAT(@@SESSION.sql_mode,',STRICT_TRANS_TABLES')";
+
+    /**
+     * 物理连接按哪一档核对(主仓 docs/design/no-single-node-horizontal-scaling-20261001.md §6;Go 侧同名档位见 shared/authoritysql/backend.go):
+     * TIDB 只认真实 TiDB 并固定强会话;MYSQL 只认可写的 MySQL 主库(不是 TiDB、不是只读实例)并固定 RC;
+     * ANY 不核对端,只给 dev / test 的本机库与 H2 夹具。
+     */
+    public enum Backend {
+        TIDB, MYSQL, ANY;
+
+        /**
+         * 配置 → 档位,规则只在这里。backend 取 mmorpg.sql.backend(tidb | mysql);requireTiDb 取 mmorpg.sql.require-tidb,只对 tidb 档有意义;
+         * runMode 取 mmorpg.run-mode。tidb 档关掉强核验只许 dev / test;mysql 档在任何运行模式下都按主库严格核对。
+         */
+        public static Backend resolve(String backend,boolean requireTiDb,String runMode){
+            String name=backend==null?"tidb":backend.trim().toLowerCase(Locale.ROOT);
+            switch(name){
+                case "tidb":
+                    if(requireTiDb)return TIDB;
+                    if(Set.of("dev","test").contains(runMode))return ANY;
+                    throw new IllegalStateException("mmorpg.sql.require-tidb=false turns off the TiDB session check and is only allowed with mmorpg.run-mode dev or test, got "+runMode);
+                case "mysql":
+                    return MYSQL;
+                default:
+                    throw new IllegalStateException("mmorpg.sql.backend must be tidb or mysql, got "+backend);
+            }
+        }
+    }
+
     private final String url;
     private final Properties properties;
     private final WriterAuthority authority;
-    private final boolean requireTiDb;
+    private final Backend backend;
     private final List<String> initialization;
+    /** 旧调用方的写法:requireTiDb=true 是 TIDB 档,false 是 ANY 档(只给 dev / test)。 */
     public AuthorityDataSource(String url,Properties credentials,WriterAuthority authority,boolean requireTiDb,List<String> initialization)throws SQLException {
+        this(url,credentials,authority,requireTiDb?Backend.TIDB:Backend.ANY,initialization);
+    }
+    public AuthorityDataSource(String url,Properties credentials,WriterAuthority authority,Backend backend,List<String> initialization)throws SQLException {
         this.url=Objects.requireNonNull(url);this.properties=new Properties();this.properties.putAll(credentials);
-        this.authority=Objects.requireNonNull(authority);this.requireTiDb=requireTiDb;
+        this.authority=Objects.requireNonNull(authority);this.backend=Objects.requireNonNull(backend);
         validateUrl(url);
         this.initialization=checkedInitialization(initialization);
         validateProperties(credentials);
@@ -84,15 +120,23 @@ public final class AuthorityDataSource implements DataSource {
     }
     @Override public Connection getConnection()throws SQLException{
         Connection raw=DriverManager.getConnection(url,properties);
-        try{initialize(raw,requireTiDb,initialization);return AuthorityConnection.wrap(raw,authority);}
+        try{initialize(raw,backend,initialization);return AuthorityConnection.wrap(raw,authority);}
         catch(SQLException|RuntimeException|Error failure){try{raw.close();}catch(SQLException close){failure.addSuppressed(close);}throw failure;}
     }
-    /** 仅physical adapter安装阶段使用；输入必须是上面已审固定SQL等集。 */
+    /** 仅physical adapter安装阶段使用；输入必须是上面已审固定SQL等集。requireTiDb=true 是 TIDB 档,false 是 ANY 档。 */
     public static void initialize(Connection raw,boolean requireTiDb,List<String> sqls)throws SQLException{
+        initialize(raw,requireTiDb?Backend.TIDB:Backend.ANY,sqls);
+    }
+    public static void initialize(Connection raw,Backend backend,List<String> sqls)throws SQLException{
         if(!raw.getAutoCommit())throw new SQLException("新physical连接已有事务");
         List<String> accepted=checkedInitialization(sqls);
         String product=raw.getMetaData().getDatabaseProductName();
         boolean h2="H2".equals(product);
+        if(backend==Backend.MYSQL){
+            initializeMySqlPrimary(raw,h2,accepted);
+            return;
+        }
+        boolean requireTiDb=backend==Backend.TIDB;
         boolean tidb=false;
         if(!h2)try(var s=raw.createStatement();var r=s.executeQuery("SELECT VERSION()")){tidb=r.next()&&r.getString(1).toLowerCase(Locale.ROOT).contains("tidb");}
         if(requireTiDb&&!tidb)throw new SQLException("normal生产连接必须是真实TiDB");
@@ -111,6 +155,35 @@ public final class AuthorityDataSource implements DataSource {
                     throw new SQLException("physical强会话初始化没有精确读回");
             }
         }
+    }
+    /**
+     * mysql 档:先核对端再动会话。每条新的物理连接都核:主从切换之后同一地址可能已经是从库,只在启动时核一次拦不住。
+     * TiDB 的强会话语句(STRONG_SESSION_SQL)跳过,别的带 tidb_* 的初始化语句拒绝。
+     */
+    private static void initializeMySqlPrimary(Connection raw,boolean h2,List<String> accepted)throws SQLException{
+        if(h2)throw new SQLException("mmorpg.sql.backend=mysql needs a MySQL primary, got H2");
+        try(var s=raw.createStatement();var r=s.executeQuery(MYSQL_SERVER_SQL)){
+            if(!r.next())throw new SQLException("mmorpg.sql.backend=mysql could not read the server version and read-only flags");
+            checkMySqlServer(r.getString(1),r.getString(2),r.getLong(3),r.getLong(4));
+        }
+        for(String sql:accepted){
+            if(sql.equals(STRONG_SESSION_SQL))continue;
+            if(sql.contains("tidb_"))throw new SQLException("mmorpg.sql.backend=mysql does not accept TiDB session initialization");
+            try(var statement=raw.createStatement()){statement.execute(sql);}
+        }
+        try(var s=raw.createStatement()){s.execute(MYSQL_SESSION_SQL);}
+        try(var s=raw.createStatement();var r=s.executeQuery("SELECT @@SESSION.transaction_isolation")){
+            if(!r.next()||!"READ-COMMITTED".equalsIgnoreCase(r.getString(1)))throw new SQLException("mmorpg.sql.backend=mysql session did not read back READ-COMMITTED");
+        }
+    }
+    /**
+     * mysql 档的纯判定,与 Go 的 authoritysql.checkMySQLServer 同一判据:版本串与 version_comment 都看(TiDB 配了 server-version 时
+     * VERSION() 里没有 TiDB 字样);只读实例一律拒绝 —— 持 SUPER 的账号写得进从库,写进去就是静默分叉,权威读也要读到最新提交。
+     */
+    static void checkMySqlServer(String version,String comment,long readOnly,long superReadOnly)throws SQLException{
+        String text=((version==null?"":version)+" "+(comment==null?"":comment)).toLowerCase(Locale.ROOT);
+        if(text.contains("tidb"))throw new SQLException("mmorpg.sql.backend=mysql is connected to TiDB");
+        if(readOnly!=0||superReadOnly!=0)throw new SQLException("mmorpg.sql.backend=mysql must connect to the primary (read_only="+readOnly+" super_read_only="+superReadOnly+")");
     }
     @Override public Connection getConnection(String user,String password)throws SQLException{
         if(!Objects.equals(user,properties.getProperty("user"))||!Objects.equals(password,properties.getProperty("password")))

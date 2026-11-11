@@ -322,7 +322,8 @@ function Invoke-Dev([string]$Label, [string[]]$Arguments) {
     if ($reply.Code -ne 0) { throw "$Label 启动失败，查看 $logDir 下同名日志。" }
 }
 # friend / guild / mail 的异步推送经 shared/kafkautil 写 gate-cmd,必须与 gate 使用同一代主题。
-# chat v1 只读写 Redis 历史,trade 资产通道走 gRPC,db/router 也不生产命令主题;不纳入此契约。
+# chat 不写 gate-cmd / scene-cmd,但世界频道推送写 chat-world-bcast_g<N>,代号同样取 KAFKA_COMMAND_TOPIC_GENERATION,目前不在名单里;
+# trade 资产通道走 gRPC,db/router 也不生产命令主题;不纳入此契约。
 # 校验与落记录共用名单,防止服务被复用后才在第一次推送时暴露旧 generation。
 function Test-UsesKafkaCommandContract([string]$Name) {
     # player_inbox:在线提醒(PlayerInboxNotifyEvent)发往 scene-cmd,与 guild / friend 的推送同为命令主题生产者。
@@ -577,7 +578,7 @@ try {
         Assert-NodeStartup 'battle'
         Wait-LocalNode 'battle'
         Write-Step '5/6 Start login, match, chat, guild services and game gateway'
-        # chat / guild 与路由服同为 Tier 1（chat 只依赖 etcd + Redis；guild 另依赖 MySQL 与 data_service）；
+        # chat / guild 与路由服同为 Tier 1（chat 依赖 etcd、SQL 原件库与 data_service，不连 Redis；guild 另依赖 MySQL 与 data_service）；
         # 直连模式下它们也照样起，只是玩家不可达（见 -GateRouterMode）。
         # 第 1 步因缺 exe 跳过的可选服务不在这里启动，否则 Start-LocalGoServices 会因“没有启动记录”抛错。
         # match 与 guild 的表已在第 3 步生成写者启动目录时建好。

@@ -125,7 +125,7 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 - **现状**：原来的 `DefaultPools = 1` 把这种情况一并按保守值算进去了；改成 0 之后，这层兜底没有了。`tools/scripts/tests` 下没有任何用例断言 match ConfigMap 的 `MatchRedis` 段。
 - **建议**：在 `k8s_deploy_contract` 加一条 DryRun 断言：`go-svc-match-config` 的 `MatchRedis.Host` 等于六个 `redis-match-cluster-N.redis-match-cluster.<infra>.svc.cluster.local:6379`，`MatchRedis.Type` 是 `cluster`。Because 写明这条断言是总账 match 行为 0 的前提。
 
-**3. 文档与注释过时**（低；11-10 已改正注释，chat 的死句柄没删，见下文「修复三处发现」）
+**3. 文档与注释过时**（低；11-10 已改正注释，见下文「修复三处发现」；chat 的两个死句柄 11-11 已删，见文末「删除 chat 的两个死句柄」）
 
 - `deploy/k8s/README.md`「Redis 连接总账」一节：
   - 「设不了的」名单还列着 match；
@@ -236,10 +236,7 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 
 ### 有意没做的
 
-- **chat 的两个死句柄没删**。
-  - 删掉 `go/chat/internal/svc/servicecontext.go` 的 `NewRedisHandles` 和 `ChatRedis` / `SharedRedis` 字段会更干净。
-  - 但那是 go/chat 的代码改动，要连带改 chat 的配置字段、yaml、本机启动脚本和单测，超出这三处的范围。
-  - 这两个句柄今天不产生连接，所以只改正了注释。要做就另开一项。
+- **chat 的两个死句柄**：这一轮没删，只改正了注释。负责人随后要求删除，11-11 已删，见文末「删除 chat 的两个死句柄」。
 - **guild.go 配额客户端上方的一行旧注释没动**。注释说 `svcCtx.PlayerSyncBumper` 是「指向核心 Redis DB 0 的专用客户端」，实际是玩家域客户端，没建集群时才回落到核心库。这一行不在这次的发现里，也不在我改的行里。
 - **chat 的一条中文启动日志没改**。`NewRedisHandles` 里打的是 `[chat] 旧缓存句柄沿共享配置建立…`，按 AGENTS §2 应改英文，归「全仓服务日志改英文」会话。
 
@@ -288,3 +285,98 @@ Java：本次修复属于本仓 PowerShell 部署总账，Java 版没有同一�
 ### Java
 
 三处只涉及本仓的部署脚本、契约测试、README 和 go/guild 的一个常量。Java 版每个进程只有一个 Redisson 客户端，没有独立小池，所以不适用，不新增 `PARITY.md` 条目。
+
+## 2026-11-11 Claude 删除 chat 的两个死句柄
+
+负责人回复「删掉死句柄」。已落码，未编译，未测试，未提交。
+
+### 改了什么
+
+**go/chat**
+
+- `internal/svc/servicecontext.go`：
+  - 删掉 `ChatRedis`、`SharedRedis`、`ChatRedisTarget` 三个字段和 `NewRedisHandles`；
+  - `fmt` 与 go-zero `stores/redis` 两个 import 随之删掉；
+  - 包注释改为「chat 不连 Redis」。
+- `chat.go`：启动横幅删掉 `chat_redis:` 一行。go、tools、robot 下没有任何脚本解析这一行。
+- `internal/config/config.go`：
+  - 删掉 `ChatRedis` 字段和 `stores/redis` import；
+  - `Validate` 删掉「`Redis.Host` 不能为空」这条校验及其说明；
+  - 类型注释改写为：chat 不连 Redis；`RpcServerConf` 的 `Redis` 段是 optional，只在 `Auth=true` 时用。
+- `internal/config/sensitive_words_test.go`：删掉 `cfg.Redis.Host` 这一行，它只为通过上面那条校验而写。
+- `etc/chat.yaml`：删掉 `Redis` 和 `ChatRedis` 两段，换成两行说明。
+
+**为什么能整段删**
+
+- go-zero v1.10.0 里 `RpcServerConf.Redis` 是 `json:",optional"`。
+- go/db、client_rpc_router 同样嵌入 `RpcServerConf`，yaml 里都没有 `Redis` 段。
+- chat 不开 `Auth`，zrpc 不会连 Redis。
+
+**部署与脚本**
+
+- `k8s_deploy.ps1`：
+  - chat ConfigMap 模板删掉 `Redis` 段，换成一行注释说明为什么不写；
+  - 总账「不计入」名单的 chat 一条改为：go/chat 不建任何 Redis 句柄，ConfigMap 也不写 Redis / ChatRedis 段。
+- chat 不在 `SharedRedisAuthGoServices` 里，本来就没有口令注入和指纹注解，manifest 不用改。
+- `start_game.ps1`：两行注释原来写 chat「只读写 Redis 历史」「只依赖 etcd + Redis」，已改正。
+
+**测试**
+
+- `k8s_deploy_contract.tests.ps1` 的「chat ConfigMap:带世界频道推送的 Kafka brokers…」一条：加一个断言，渲染出的 chat ConfigMap 里没有 `Redis:` / `ChatRedis:` 段。
+- `chat_authority_deploy.tests.ps1`：
+  - 模板分支的反向断言加上 `Redis:`；
+  - 新增一个断言：`go/chat/etc/chat.yaml` 也没有这两段。
+
+**注释与文档**
+
+- `robot/chat_smoke_scenario.go` 的说明注释：原来写历史在 ChatRedis、幂等靠 SET NX，改为历史在 SQL 原件库、幂等靠 SQL 收据。
+- `deploy/k8s/README.md`：「不计入」里的 chat 一条。
+- `docs/design/shared-redis-split-by-purpose.md`：句柄盘点表的 go/chat 一行。
+
+### 没动的
+
+- **几份历史文档仍写着 ChatRedis**：
+  - `docs/design/microservice-zone-contract-20260914.md`、`docs/design/disconnect-reconnect-audit-20261020.md`、`docs/design/turn-based-battle-server.md` 的 09-30 补充，都是当时的记录，不改。
+  - `docs/design/data-consistency-guarantee-map-20261020.md` 第 58 行把组队状态和聊天历史合成一行，记为 best-effort。聊天历史改到 SQL 之后，这一行早就过时了，要按 SQL 原件的一致性重写，归保障地图的维护者。
+- **其他会话在 go/chat 里的在途改动没碰**：日志改英文、`least_privilege_tidb_test.go`、`chat_logic.go`。对方刚把 `NewRedisHandles` 里的一条日志改成英文，那条日志随函数一起删掉了。
+
+### 顺带发现的疑点（没改）
+
+- **现象**：`tools/scripts/start_game.ps1` 的 `Test-UsesKafkaCommandContract` 名单里没有 chat。
+- **为什么可能有问题**：
+  - chat 的世界频道推送写 `chat-world-bcast_g<N>`，代号同样取自启动器注入的 `KAFKA_COMMAND_TOPIC_GENERATION`。
+  - 这份名单的用途，是在复用已在跑的进程之前核对它的代号。
+- **可能的后果**：换代后复用旧的 chat 进程，世界频道推送会写进旧代号的主题，gate 收不到，玩家只能靠拉历史看到新消息。
+- **范围**：只影响本机启动器；K8s 每次滚动都会重新注入代号。
+- **处理**：注释已改为只陈述事实。要不要把 chat 加进名单，归世界频道推送那条线确认。
+
+### 静态检查（Claude 实际做了的）
+
+- chat 的四个 Go 文件和 robot 的一个文件，`gofmt -l` 无输出。
+- 删掉 `fmt`、`stores/redis` 两个 import 之后，文件里已无引用；`errors` 在 config.go 里仍有 5 处使用。
+- 四个 ps1（`k8s_deploy.ps1`、`start_game.ps1`、`k8s_deploy_contract`、`chat_authority_deploy`）PowerShell 解析 0 错误。
+- `chat.yaml` 用 PyYAML 解析通过，顶层没有 `Redis` / `ChatRedis`。
+- `git diff --check` 干净；换行符与各文件原有的一致。
+
+### 交 Codex 验证
+
+执行约定同上一节。go/chat 里还有其他会话未提交的改动，红了先看失败用例是不是本批的。
+
+1. **Go**：工作目录 `go/chat`，设 `GOTOOLCHAIN=local`、`GOPROXY=off`，依次跑 `go vet ./...`、`go build ./...`、`go test -count=1 ./...`。
+   - 真库用例没设环境变量时是 SKIP，属正常，写明即可。
+   - robot 只改了注释，不用单独编。
+2. **脚本契约**（仓库根目录）：
+   - `pwsh -NoProfile -File tools/scripts/tests/chat_authority_deploy.tests.ps1`：全部 PASS。
+   - `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`：「chat ConfigMap:带世界频道推送的 Kafka brokers,WorldHistoryCacheMs 逐字镜像服务 yaml」PASS；和上一节的两条新用例在同一次运行里看。
+   - 下面三份读 chat ConfigMap 的其他键，作回归用，全部 PASS：
+     - `pwsh -NoProfile -File tools/scripts/tests/redis_player_cluster_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/logical_db_deploy_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`
+3. **本机冒烟**（可选）：
+   - `pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start` 起 chat；
+   - 启动不报配置错，尤其不能出现 `Redis.Key is not set` 这类加载错误；横幅里没有 `chat_redis` 一行；
+   - 再跑一次 robot 的 chat 冒烟，输出 `CHAT_SMOKE_OK`。
+
+### Java
+
+这是本仓 go/chat 的死代码清理，不是功能改动，Java 版 chat 是自己的实现，不适用，不新增 `PARITY.md` 条目。

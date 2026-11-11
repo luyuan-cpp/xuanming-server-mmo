@@ -10142,6 +10142,8 @@ TEST(TravelHandoffInitiatorEcs, OnlyAServerInitiatedHandoffAcceptsAnOfflineHoste
     const uint64_t now = TimeSystem::NowSecondsUTC();
     AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
     ASSERT_TRUE(PlayerLifecycleSystem::OfflineHostedIdentity(player));
+    // 进保留改过会话快照:重新按当前内存标一次"盘上已是同一份",交接的存盘走快路径,宿主里不发真实存盘。
+    ASSERT_TRUE(MarkPersisted(player));
     ScopedFakeSceneManagerNode sceneManager;
     constexpr uint64_t kLeaderScene = 4321;
 

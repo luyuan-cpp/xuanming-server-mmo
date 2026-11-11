@@ -109,3 +109,45 @@ func TestListDueIsUnshardedListDueOwned(t *testing.T) {
 		t.Fatalf("limit=0 不应发 SQL,录到 %d 条", n)
 	}
 }
+
+// TestCleanupTerminalOpsOwnedPutsShardFilterBeforeLimit:终态清理按片分工(缺口清单第 25 条第二批,设计 §11)。
+// 候选读带分片条件,位置在 ORDER BY / LIMIT 之前;实参是四个终态、cutoff、升序片号、LIMIT;
+// 零值条件拼出来的就是 sqlListCleanupTerminalOps(CleanupTerminalOps 与既有清理用例钉的那一份)。
+func TestCleanupTerminalOpsOwnedPutsShardFilterBeforeLimit(t *testing.T) {
+	s := &recovScript{}
+	captureCleanupDeleted(t)
+	repo := s.repo(t)
+	mine := map[string]bool{workshard.ShardKey(CleanupWorkKind, 33): true, workshard.ShardKey(CleanupWorkKind, 1): true}
+	owned := workshard.SQLFilter(func(key string) bool { return mine[key] }, CleanupWorkKind, "player_id")
+
+	n, err := repo.CleanupTerminalOpsOwned(context.Background(), cleanupTestNow, cleanupTestRetention, owned)
+	if err != nil || n != 0 {
+		t.Fatalf("CleanupTerminalOpsOwned = (%d, %v),want (0, nil)", n, err)
+	}
+	calls := s.recordedCalls()
+	if len(calls) != 1 {
+		t.Fatalf("候选读回空时只发这一条,录到 %d 条: %+v", len(calls), calls)
+	}
+	want := collapseSpaces(sqlListCleanupTerminalOpsHead + "MOD(player_id,64) IN(?,?)" + sqlListCleanupTerminalOpsTail)
+	if calls[0].sql != want {
+		t.Fatalf("候选读 =\n  %s\nwant\n  %s", calls[0].sql, want)
+	}
+	st := cleanupStatuses()
+	wantArgs := []uint64{uint64(st[0]), uint64(st[1]), uint64(st[2]), uint64(st[3]), cleanupTestCutoffMs, 1, 33, cleanupBatchSize}
+	if len(calls[0].args) != len(wantArgs) {
+		t.Fatalf("候选读实参 %v,want %v", calls[0].args, wantArgs)
+	}
+	for i, w := range wantArgs {
+		if got := argInt(t, calls[0].args[i]); got != w {
+			t.Fatalf("候选读第 %d 个实参 = %d,want %d(全部 %v)", i+1, got, w, calls[0].args)
+		}
+	}
+	if cleanupTerminalOpsQuery(workshard.Filter{}) != sqlListCleanupTerminalOps {
+		t.Fatal("零值条件拼出来的必须就是不分片的 sqlListCleanupTerminalOps")
+	}
+	for _, other := range []string{testDueWorkKind, "trade-commerce", "trade-receipt-ack"} {
+		if CleanupWorkKind == other {
+			t.Fatalf("清理的类别键与 %q 重名", other)
+		}
+	}
+}

@@ -61,8 +61,20 @@ const (
 	ownerEpochMintAttempts = 3
 	// ownerEpochMintDeadlineMargin:WAITAOF 的等待上限 = min(配置值, ctx 剩余 − 本值),给回包留余量。
 	ownerEpochMintDeadlineMargin = 100 * time.Millisecond
-	// ownerEpochMintProbeTimeoutSlack:启动探针的 ctx 超时 = WAITAOF 超时 + 本值。
+	// ownerEpochMintProbeTimeoutSlack:启动探针的 ctx 超时 = 探针 WAITAOF 的等待上限 + 本值。
 	ownerEpochMintProbeTimeoutSlack = 2 * time.Second
+	// ownerEpochMintProbeWaitAOFTimeout:启动探针里 WAITAOF 的最短等待。探针先写后等,等的是真实的刷盘与副本上报
+	// (副本每秒一次 cron 上报,高可用最坏近 2s,docs/design/zone-redis-regression-guard-20261022.md §4.3.3),
+	// 铸造的预算(WaitAOFTimeoutMs)对启动期太紧;取两者较大的那个。
+	ownerEpochMintProbeWaitAOFTimeout = 5 * time.Second
+	// ownerEpochMintProbeKeyPrefix:启动探针写的键(后面接 {n} 作 hash tag,Cluster 下据它挑一个落在被探节点上的 slot)。
+	// 不是玩家键,不进 player:{id} 命名空间,带 TTL 自然消失。
+	ownerEpochMintProbeKeyPrefix = "scene_manager:owner_epoch_mint_probe:"
+	// ownerEpochMintProbeKeyTTL:探针键的存活时间。
+	ownerEpochMintProbeKeyTTL = time.Minute
+	// ownerEpochMintProbeKeySearchLimit:Cluster 下为一个主节点找落在它 slot 上的探针键最多试几个 tag。一个 tag 落在给定
+	// 主节点上的概率约 1/主节点数,64 个主节点试 4096 个仍找不到的概率约 e^-64。
+	ownerEpochMintProbeKeySearchLimit = 4096
 	// ownerEpochMintRetryBackoffMin / Max:重发前的抖动等待,同时失败的请求错开重来。
 	ownerEpochMintRetryBackoffMin = 10 * time.Millisecond
 	ownerEpochMintRetryBackoffMax = 50 * time.Millisecond
@@ -378,26 +390,80 @@ func judgeWaitAOFReply(waitCmd *goredis.Cmd, numLocal, numReplicas int) (MintDur
 	return MintDurabilityConfirmed, nil
 }
 
-// Probe 是启动期的 WAITAOF 能力探针:按配置发一次 WAITAOF(timeout = 配置值),报错或份数不足返回 error,调用方据此拒启。
-// 未开启时什么都不发,返回 nil。
+// Probe 是启动期的 WAITAOF 能力探针:在每个主节点的同一条连接上先写一个探针键、再发 WAITAOF,报错或份数不足返回 error,
+// 调用方据此拒启。未开启时什么都不发,返回 nil。
 //
 // 为什么在启动期挡:WAITAOF 的配置错误(appendonly no 回 ERR、Redis < 7.2 回 unknown command、NumReplicas 写了 1 而拓扑里
-// 没有副本)是确定性的,留到运行期就是每一次铸造都被当成未落盘回滚,所有换节点 / 首登都失败。探针用的连接上没写过东西,
-// 本地确认会立即返回;timeout 仍取配置值,免得赶上 fsync 间隙误判。
+// 没有副本或副本没开 AOF)是确定性的,留到运行期就是每一次铸造都被当成未落盘回滚,所有换节点 / 首登都失败。
+//
+// 为什么要先写:WAITAOF 等的是本连接最后一次写的复制偏移。新连接没写过东西(偏移 0),本地份数立即算满;副本记的
+// 刷盘偏移初值也是 0,没开 AOF 的副本从不上报(networking.c 的 repl_aof_off 初值、replication.c replicationSendAck 不发
+// FACK),0 ≥ 0 照样计数 —— 不先写的探针查不出「副本没开 AOF」。先写一次,确认的就是真实的刷盘与副本上报。
+// 等待取 max(配置值, ownerEpochMintProbeWaitAOFTimeout):配置值是铸造的预算,对启动期太紧,健康拓扑也可能偶尔判失败。
 //
 // Cluster 下逐个主节点探:配置错误可能只在其中一个节点上。主节点是副本时(探针之后才切的主)不在这里管,运行期按「未落盘」回滚。
 func (m *RedisOwnerEpochMinter) Probe(ctx context.Context) error {
 	if !m.ack.enabled() {
 		return nil
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, m.ack.timeout+ownerEpochMintProbeTimeoutSlack)
+	probeCtx, cancel := context.WithTimeout(ctx, m.probeWaitAOFTimeout()+ownerEpochMintProbeTimeoutSlack)
 	defer cancel()
 	return playerredis.ForEachMaster(probeCtx, m.client, m.probeNode)
 }
 
+// probeWaitAOFTimeout 是探针里 WAITAOF 的等待上限,见 Probe。
+func (m *RedisOwnerEpochMinter) probeWaitAOFTimeout() time.Duration {
+	return max(m.ack.timeout, ownerEpochMintProbeWaitAOFTimeout)
+}
+
+// probeKeyFor 给 node 找一个落在它自己 slot 上的探针键:单实例第一个就是;Cluster 下按 tag 逐个试,用路由表
+// (playerredis.MasterForKey)认出持有者,与 node 按地址比。找不到返回 error(路由表还没覆盖到这个节点)。
+func (m *RedisOwnerEpochMinter) probeKeyFor(ctx context.Context, node *goredis.Client) (string, error) {
+	addr := node.Options().Addr
+	for i := 0; i < ownerEpochMintProbeKeySearchLimit; i++ {
+		key := fmt.Sprintf("%s{%d}", ownerEpochMintProbeKeyPrefix, i)
+		owner, err := playerredis.MasterForKey(ctx, m.client, key)
+		if err != nil {
+			return "", fmt.Errorf("locating the slot master of probe key %s: %w", key, err)
+		}
+		if owner.Options().Addr == addr {
+			return key, nil
+		}
+	}
+	return "", fmt.Errorf("no probe key routes to master %s within %d tags", addr, ownerEpochMintProbeKeySearchLimit)
+}
+
 func (m *RedisOwnerEpochMinter) probeNode(ctx context.Context, node *goredis.Client) error {
-	timeoutMs := m.ack.timeout.Milliseconds()
-	acks, err := node.Do(ctx, "WAITAOF", m.ack.numLocal, m.ack.numReplicas, timeoutMs).Slice()
+	timeoutMs := m.probeWaitAOFTimeout().Milliseconds()
+	key, err := m.probeKeyFor(ctx, node)
+	if err != nil {
+		return fmt.Errorf("owner epoch mint WAITAOF probe: %w", err)
+	}
+	var setCmd *goredis.StatusCmd
+	var waitCmd *goredis.Cmd
+	// 探针键的写与 WAITAOF 必须在同一条连接上,所以放进同一个 pipeline。判据是逐条命令的结果;Pipelined 的返回值只用于
+	// 「连接都没拿到」这一种情形(各条命令既无错误也无值,见 sendPipeline)。
+	_, pipelineErr := node.Pipelined(ctx, func(p goredis.Pipeliner) error {
+		setCmd = p.Set(ctx, key, fmt.Sprint(time.Now().UnixMilli()), ownerEpochMintProbeKeyTTL)
+		waitCmd = p.Do(ctx, "WAITAOF", m.ack.numLocal, m.ack.numReplicas, timeoutMs)
+		return nil
+	})
+	if setCmd == nil || waitCmd == nil {
+		return errors.New("owner epoch mint WAITAOF probe: pipeline callback was not invoked")
+	}
+	if err := setCmd.Err(); err != nil {
+		if !isRedisErrorReply(err) {
+			return fmt.Errorf("owner epoch mint WAITAOF probe not executed (connection / context): %w", err)
+		}
+		return fmt.Errorf("owner epoch mint WAITAOF probe write of %s rejected: %w", key, err)
+	}
+	if setCmd.Val() == "" {
+		if pipelineErr == nil {
+			pipelineErr = errors.New("probe write has neither a reply nor an error")
+		}
+		return fmt.Errorf("owner epoch mint WAITAOF probe not executed (connection / context): %w", pipelineErr)
+	}
+	acks, err := waitCmd.Slice()
 	if err != nil {
 		if !isRedisErrorReply(err) {
 			// 没执行(连不上、ctx 已结束)单独报,否则会报成「needs appendonly yes」,把运维引错方向。

@@ -110,10 +110,11 @@ func Serve(ctx context.Context, c Config, nodeType base.ENodeType, register func
 }
 
 // ServeWithReady 在真实监听和注册成功后通知同一生命周期 owner；通知不等于开放 SOURCE。
-func ServeWithReady(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) error {
+// 回调收到本进程注册 etcd 用的 node_uuid(进程内不变,失租换号也不变):按片分工的成员表(shared/workshard)要用它认出自己。
+func ServeWithReady(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), listening func(nodeUUID string), roots ...*drainproof.Session) error {
 	return serve(ctx, c, nodeType, register, listening, roots...)
 }
-func serve(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), listening func(), roots ...*drainproof.Session) (runErr error) {
+func serve(ctx context.Context, c Config, nodeType base.ENodeType, register func(*grpc.Server), listening func(nodeUUID string), roots ...*drainproof.Session) (runErr error) {
 	if len(roots) < 1 || len(roots) > 3 || roots[0] == nil {
 		return errors.New("领域服务缺少显式根发行者门禁")
 	}
@@ -278,7 +279,7 @@ func serve(ctx context.Context, c Config, nodeType base.ENodeType, register func
 	}
 	registration.KeepAlive()
 	if listening != nil {
-		listening()
+		listening(registration.NodeUUID)
 	}
 	healthy.Store(true)
 	fmt.Printf("%s SERVICE STARTED SUCCESSFULLY\n", strings.ToUpper(strings.TrimSuffix(c.Name, ".rpc")))

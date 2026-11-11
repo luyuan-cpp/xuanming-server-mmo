@@ -10,7 +10,9 @@
 #   - guild / trade 的指标端口已开放并有 ServiceMonitor / PodMonitor 指向它。
 #     guild 目前在 K8s 上没有部署清单;trade 的资产通道默认关闭(AssetOp.Enabled=false)。
 #     这两件事落地之前,本文件里 assetop_* 与 guild_trial_* 规则不会触发。
-#   - assetop_* 的 service 是 ConstLabel(guild / trade),按服务区分时用 by (service)。
+#   - assetop_* 的 service 是 ConstLabel(guild / trade / mail / data_service),按服务区分时用 by (service)。
+#     data_service 随 zone 部署(每个 zone namespace 一份),按片分工的成员表也只圈本 zone,所以 asset-channel.work-shards
+#     组按 (namespace, service) 聚合;guild / trade / mail 是全局服务,只在 infra namespace 一份,加上 namespace 结果不变。
 #   - trade_commerce_* 只由 trade 暴露,同样要等 trade 的资产通道打开(AssetOp.Enabled=true)才会有数据。
 #
 # 为什么「最老年龄」只看 online_retry 类:离线玩家的 PENDING 行会把不分类的
@@ -51,8 +53,14 @@
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_freeze_hold_cap_reached" [10m]) > 0
 #             (2026-11-06,r2-v1#1 残余)FIGHTING 冻结到期查 SQL 终局后续冻,续到上限(到期 + 15 分钟)仍没应用就照常解冻并打这一行:
 #             要么 match 写了 COMPLETE 而收件箱一直没投到,要么有原件却迟迟没有终局(match 不可用或 ABORT 补写滞后)。
-#             解冻之后结算若再到,消耗按持有量夹紧(正文有 battle_id,按它核对 match_battle_completion 与收件箱);
-#             设计见 docs/design/turn-battle-gap-closure.md §11。
+#             解冻只放开人:这一局带进战斗的道具仍被预留押着(2026-11-10),结算再到照样从预留里扣,不再按持有量夹紧;
+#             正文有 battle_id,按它核对 match_battle_completion 与收件箱。设计见 docs/design/turn-battle-gap-closure.md §11
+#             与 docs/design/battle-item-reservation.md。
+#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0
+#             (2026-11-10)冻结已经不在,这一局带进战斗的道具还押在预留里,越过「冻结到期 + 15 分钟」仍没收尾,每局每 10 分钟一行。
+#             预留只在结算应用、或 SQL 终局是 ABORT / 没有可裁决原件时释放;COMPLETE、终局未定、查不到都留着,没有上限,
+#             这段时间玩家转不走、用不掉押着的那几样道具(人照常能玩)。前因与上一条相同:收件箱迟迟没投到,或 match 不可用。
+#             正文有 player_id 与 battle_id,按 battle_id 核对 match_battle_completion 与收件箱;处置见 docs/ops/player-inbox-runbook.md §6.1。
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_terminal_query_unknown" [10m]) > 20
 #             scene 查不到 match 的终局(MatchInternal.GetBattleTerminalDecision:没发出去、传输失败、回包验签不过、带内 retry),
 #             按「结果未知」续冻,会一直拖到续冻上限。查 scene 的场景密钥与 match 是否同源、scene 能否发现并连上 match、match 是否可用;
@@ -181,6 +189,48 @@ spec:
               过去 1 天有 {{ $value | printf "%.0f" }} 条 PENDING 超过 180 天且玩家仍不在线的资产指令
               被终结为 ABANDONED(docs/design/landing-recovery-sync-digest.md §6.3)。
               如需补偿,以审计行与 scene 流水为依据人工处理。
+
+    # 重投到期扫描的按片分工(缺口清单第 25 条,docs/design/assetop-redelivery-sharding-20261110.md §3、§12)。
+    # assetop_owned_shards 是每个 stable 副本此刻负责的片数,只有绑了分工的重投循环才报(guild / trade / mail / data_service),
+    # 同一服务各副本之和应为 64(go/shared/workshard 的 Shards)。按 (namespace, service) 聚合:data_service 每个 zone 一份,
+    # 成员表只圈本 zone;全局服务只在 infra namespace。成员表变化(扩缩容、滚动)的几秒里会多或少几片,for 只防这段抖动。
+    # 低于 64 = 有片没人扫:多半是在 etcd 登记着却不跑重投循环的副本(滚动修改 AssetOp.Enabled / Recall.Enabled 的窗口),
+    # 或循环没起来。高于 64 只是重复扫(某副本连续 30 秒读不到成员表就做全部片),不告警。
+    # 盲区:副本的循环卡死时 gauge 停在旧值,和仍为 64,只能看 assetop_pending_oldest_age_seconds 是否持续上涨。
+    - name: asset-channel.work-shards
+      interval: 60s
+      rules:
+        - alert: AssetOpOwnedShardsMissing
+          expr: |
+            sum by (namespace, service) (assetop_owned_shards) < 64
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.service }} 的资产指令重投有片没人扫"
+            description: >-
+              各 stable 副本负责的到期扫描片数加起来只有 {{ $value | printf "%.0f" }} 片(应为 64)。
+              没人扫的片里,首投没走完的行只剩提交后的同步投递与玩家重新上线时的落地唤醒,在线玩家的重试停住,资产到账被拖住(不丢)。
+              对比该服务在 etcd 本 zone 前缀下登记的 stable 实例与报这个 gauge 的副本:登记着却没有序列的那个,
+              查它的 AssetOp.Enabled(data_service 是 Recall.Enabled)是否与其余副本一致、重投循环是否起来、指标是否被抓取;
+              同时看 assetop_pending_oldest_age_seconds,片没人扫时它会持续上涨。
+
+        # 缺口持续半小时以上且该服务有等了半小时以上的未决行:成员表不会自己变,缺口不会自愈,要人处置。
+        # 离线玩家的停放行本来就会让最老年龄常年偏高,所以第二个条件在实践中几乎总成立,这条是按持续时间升级的同一缺口。
+        - alert: AssetOpOwnedShardsMissingBacklogAging
+          expr: |
+            (sum by (namespace, service) (assetop_owned_shards) < 64)
+            and on (namespace, service)
+            (max by (namespace, service) (assetop_pending_oldest_age_seconds) > 1800)
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.service }} 的资产指令重投缺片已超过半小时"
+            description: >-
+              到期扫描缺片已持续超过 35 分钟(当前只有 {{ $value | printf "%.0f" }} 片有人扫,应为 64),且该服务最老的未决资产指令已超过 30 分钟。
+              缺片不会自愈:登记着却不跑重投循环的副本不退出、不恢复,它名下的片就一直没人扫;trade 的合同推进与收据 ACK 用同一份成员表,
+              托管资产也会跟着停在合同里。先按 AssetOpOwnedShardsMissing 找出那个副本,让它的配置与其余副本一致后重启,或把它缩掉。
 
     # 交易合同推进(go/trade commerce.Engine.Tick,docs/design/jubaozhai-market.md §15.3,2026-10-22 补)。
     # 指标没有 service 标签(只有 trade 一个服务);每个副本各自计数,所以用 sum。

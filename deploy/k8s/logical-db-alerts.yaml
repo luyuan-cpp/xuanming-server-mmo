@@ -35,8 +35,8 @@
 #     搬库的 audit 也要等它归零(docs/ops/db-move-runbook.md)。
 #   - 搬库窗口是秒级(docs/ops/db-move-runbook.md §5),读写都暂停。超过 2 分钟多半是工具被杀,或者翻转结局未知,所以是 critical。
 #     排空(maintenance_drain)也冻结闸门,时间更长,排空期间这条会响,按排空的计划静默。
-#   - 写者 Pod 的 init 反复失败时这个副本一直起不来。回收 CronJob 刻意不删它们(deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml),删了白烧名册,所以要靠这条告警发现,是 critical。
-#     最要紧的原因是名册用完,处置见 docs/ops/k8s-open-server-runbook.md §1。
+#   - 写者 Pod 的 init 反复失败时这个副本一直起不来。回收 CronJob 刻意不删它们(deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml),删了也是同样的原因再失败,
+#     所以要靠这条告警发现,是 critical。常见原因是副本数比名册槽位多,或者同序号另一个 Pod 先注册了,处置见 docs/ops/k8s-open-server-runbook.md §1、§9。
 #   - 协调者 fail-closed:参与者不可达或副本过时,过户和删角拒绝,不会放过去。玩家看到的是操作失败,数据没事。
 #   - result=blocked 是业务拒绝(参与者还有挂起项),只进看板,不设告警。
 #   - 推送失败在下次访问时自愈,所以是 warning。
@@ -121,7 +121,7 @@ spec:
     - name: logical-db.writer-boot
       interval: 30s
       rules:
-        # 写者 Pod 卡在 Init:名册用完、账号或名册配错、闸门表还没建。排空和搬库的冻结窗口是秒级,init 重试几次就过去了,不会撑到 for 的时长。
+        # 写者 Pod 卡在 Init:副本数比名册槽位多、账号或名册配错、闸门表还没建。排空和搬库的冻结窗口是秒级,init 重试几次就过去了,不会撑到 for 的时长。
         - alert: SqlWriterRegistrarFailing
           expr: |
             sum by (namespace, pod) (increase(kube_pod_init_container_status_restarts_total{container="sql-writer-registrar"}[15m])) >= 3
@@ -133,7 +133,8 @@ spec:
             description: >-
               过去 15 分钟 init 容器 sql-writer-registrar 重启约 {{ $value | printf "%.0f" }} 次。回收 CronJob 不删这种 Pod。
               看 `kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c sql-writer-registrar --previous`。
-              日志是「有限roster全部已由其它明确boot消费」就是名册用完了:按手册 docs/ops/k8s-open-server-runbook.md §1 换一份新名册重新部署,在这之前还活着的副本不受影响,但再少一个就补不回来。
+              日志是「is slot N but the roster has M slots」就是副本数比名册槽位多:按手册 docs/ops/k8s-open-server-runbook.md §1 先加槽位。
+              「cannot register boot N of this slot yet」后面跟 denied:同序号另一个 Pod 先注册了,多半是强删之后旧节点上的 Pod 还在,处置见手册 §9「节点失联」。
               其余按日志查账号、generation 和闸门表。
 
     - name: logical-db.role-fence

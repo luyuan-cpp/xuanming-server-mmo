@@ -10,16 +10,17 @@ ListenOn: 127.0.0.1:53000
 # 10000 在路由模式下本来就不生效,handler 实际只有约 5s。预算链要求「目标 Timeout + 1000 ≤ ForwardTimeoutMs」,
 # 这样路由服回超时的时候 login handler 的 ctx 已经取消、不会再发出新的写;否则 gate 放行同一会话的下一条请求后,
 # 这一条仍可能晚落地,顺序就乱了。由 tools/scripts/k8s_deploy.ps1 的 Assert-RouterForwardBudget 在部署前核对。
-# 代价:CreatePlayer 持锁后串行三次跨进程 gRPC(发号 / 名字登记 / player_route 登记,各自子预算 3s,见下方 Locker
-# 注释)合计必须在 4s 内完成;常态各是毫秒级,任何一步拖慢时整体在 4s 处失败,建角失败可重试(名字注册表幂等)。
-# 子预算没有按 4s 重分(2026-10-15 核对):名义之和 = 发号 3s + 名字 3s + player_route 3s(开种子再 +1s)= 9~10s > 4s,
-# 但每一步的 ctx 都派生自 handler ctx,实际一律截在 4s;截止之后建角不再发出任何写、只做补偿(createplayerlogic.go
-# 6c''),所以超出的名义预算只影响「慢在哪一步、以哪一步失败」,不影响提交语义。要不要按 4s 重分、怎么分(名字那步
-# 还牵连同名重试的 1s 门槛),由 login 负责人定(client-request-ordering.md §5.3)。
-# 2026-10-15 补:名字登记之前还有一次新铸 id 的只读探测(6b',1s ctx 预算,见下方 Locker 注释),上面的名义之和
-# 再 +1s(10~11s);它同样派生自 handler ctx,结论不变。
-# (2026-10-16 更正)探测已删去 1s 子预算,直接用 handler ctx(子预算还会截断连接池排队与拨号,探测又 fail-closed,
-# 会在 Redis 停顿 1~3s 时单独拒绝建角);上面名义之和不再 +1s,结论不变。见 new-player-first-enter-no-cold-read.md §9。
+# CreatePlayer 持锁后串行四跳跨进程调用,按 handler 截止分摊(2026-11-10,internal/logic/pkg/createbudget;
+# client-request-ordering.md §5.3),不再是各跳固定超时相加(原先 发号 3s + 名字 3s + player_route 3s,名义之和远超 4s):
+#   第 i 跳的截止 = min(开始时刻 + 本跳上限, handler 截止 − Σ后面每一跳(下限 + 50ms 跳间间隙));
+#   剩下的不够本跳下限就不发这一跳(写一个都不发出去),建角以 kLoginDataSerializeFailed 失败、已登记的名字释放,客户端重试。
+#   各跳 上限 / 下限(毫秒):发号 300 / 0;名字登记 1700 / 800(一次 + 结果未知时同名重试一次 = 2 × 800 + 100 调度余量,
+#   下限 = 单次登记预算,同名重试仍要求剩余 ≥ 800);player_route 登记 800 / 800(下方 HomeZone.RegisterTimeout);
+#   SQL 账号目录提交 800 / 800(提交点一定拿满上限,结果未知时的强读回另走独立 1s)。
+#   推导:本地余量 250(读登录态、拿建角锁、读 SQL 账号目录)+ 300 + 1700 + 800 + 800 + 3 个跳间间隙 150 = 4000 ≤ Timeout。
+#   前置步骤与跳间都在余量之内时每一跳拿满自己的上限;超出时先截短发号,截到放不下后面的下限就在发号前放弃。
+#   login 启动时核对「本地余量 + 各跳上限 + 跳间间隙 ≤ Timeout」,不满足拒绝启动:调大 RegisterTimeout 或调小本值之前先按上式重算;
+#   本值也不能再大(上面的 I1)。
 # EnterGame 的预加载链在 RPC 返回之后后台跑(chainBudget 5min),不受本值约束。
 # 上限约束(上游比下游宽):gate 直连 login 的 C++ deadline = bin/etc/base_deploy_config.yaml 的
 # GrpcClient.CallDeadlineMs.LoginNodeService(12000),必须 >= 本值 + 2000,由 Assert-GrpcClientDeadlineBudget 核对。
@@ -94,40 +95,21 @@ SnowflakeCacheDir: ../../run/snowflake
 
 # Distributed lock config
 Locker:
-  # AccountLockTTL 要盖住 CreatePlayer 持锁后的耗时,否则锁在建角中途过期、同账号的第二个
-  # 建角请求就能并发读到同一份账号 blob。持锁后串行跑的几步:
-  #   - 三次跨进程 gRPC,各有 ctx 截止时间管得住的硬预算:发号 3s(idsegment FetchTimeout)
-  #     + 名字登记 3s(建角侧总预算)+ player_route 登记 3s(HomeZone.RegisterTimeout)= 9s;
-  #   - 三次 Redis:读 blob、围栏写 blob、写未确认时的回读。常态是毫秒级;Redis 变慢但每次
-  #     回包都还在 3s 以内时,三步合计 < 9s。
-  #     各步预算直接相加是 gRPC 9s + Redis 4×3s = 21s,但在现行 zrpc Timeout(本文件顶部,4s)下到不了:
-  #     除回读、名字补偿释放、建角锁释放与提交后的反查映射写(7b)外,每一步的 ctx 都派生自 handler ctx,
-  #     4s 一到 gRPC 立即失败、go-redis 不再发新命令(建角在每次写之前也显式查 ctx,见 createplayerlogic.go 6c''),
-  #     围栏写最晚在 handler 起算 4s 内发出,Redis 还在 3s 内回包时约 7s 前执行;围栏写确认之后的 7b 走独立 ctx,
-  #     单次最多再等约 3s 读超时,锁在它之后才释放,合计约 10s,下面的 20 仍盖得住。
-  #     种子在慢 Redis 下的真实代价:多吃最多 3s 的 handler 预算,围栏写可能来不及发出,本次建角失败
-  #     (名字释放,player_route 映射与孤儿种子留下)。把 Timeout 调到约 17s 以上时 21s 才可达,届时重算
-  #     (docs/design/new-player-first-enter-no-cold-read.md §10 P6)。
-  #   - 2026-10-15 起名字登记之前多一次只读探测(6b':新铸 id 的父键 / owner_epoch,两条 EXISTS 走一个 pipeline、
-  #     一次往返;1s ctx 预算同样只掐重发,单次最坏仍是 3s 读超时),不看种子开关。Redis 因此是 4 次(开种子 5 次),
-  #     各步预算直接相加是 21s(开种子 24s)。探测的 ctx 派生自 handler ctx、排在围栏写之前,所以上面「围栏写最晚在
-  #     handler 起算 4s 内发出、合计约 10s、20 仍盖得住」的推导不变;上调 Timeout 按 P6 重算时把这一次算进去
-  #     (同文 §10 P7)。
-  #     (2026-10-16 更正)探测已不另设 1s 子预算,直接用 handler ctx;「ctx 预算只掐重发」不准确,ctx 截止还会截断
-  #     连接池排队与拨号。「围栏写最晚在 handler 起算 4s 内发出」的结论不变。
-  # 原值 10 是名字登记加入之前定的,已经盖不住;20 盖住「gRPC 三步全部拖满 + Redis 慢但还在回包」。
-  # **20 不是硬上界**,不要把它读成「有余量的保证」:
-  #   - Redis 那个 3s 是**单次** socket 读超时。svc/servicecontext.go 构造客户端时
-  #     并没有把上面 Node.RedisClient 的 Read/WriteTimeout 传进去,数值相同只是巧合;
-  #     (2026-10-23 更正,上句原文保留:现在 redisOptions 已把 Dial / Read / WriteTimeout 原样传入,
-  #     3s 就是这里配的 ReadTimeout;拨号超时随之由 go-redis 缺省 5s 变为配置的 3s。推导不变。)
-  #   - 客户端没开 ContextTimeoutEnabled,ctx 截止时间不约束 socket 读写;MaxRetries 走默认值 3,
-  #     读超时的命令会被原样重发 —— Redis 卡住时读 blob、写 blob 各自最长约 4×3s + 退避 ≈ 12.5s。
-  #     回读那一步代码里套的 1s ctx 预算只能掐掉重发,单次等待仍可到 3s。
-  # 超出 TTL 之后的正确性完全靠围栏 + 回读,不靠这个数:账号 blob 由 Lua 围栏脚本写入
-  # (createplayerlogic.go 的 writeAccountBlobScript),锁已易主就拒写;脚本回 -1 或报错时先回读
-  # blob 再决定要不要释放名字(被 go-redis 重发掉的那一次可能已经写成功)。后果最多是这次
-  # 建角失败,不会覆盖别人的写入,也不会放出重名。
+  # AccountLockTTL 要盖住 CreatePlayer 持锁后的耗时,否则锁在建角中途过期、同账号的第二个建角请求就能并发跑起来。
+  # 持锁后的耗时(2026-11-10 按截止分摊重算,原先按「发号 3s + 名字 3s + player_route 3s + 账号 blob 三次 Redis」估的
+  # 推导已随账号 blob 改为 SQL 账号目录、子预算按截止分摊而作废):
+  #   - handler 之内:发号 / 名字登记 / player_route 登记 / SQL 账号目录提交四跳按 handler 截止分摊(本文件顶部 Timeout 注释),
+  #     读登录态、拿锁、读 SQL 账号目录、提交前复核锁令牌的 Redis 命令也都用 handler ctx。建角锁与这些键都在 LoginRedis 上,
+  #     它的客户端用 ctx 截止约束套接字读写、不自动重发(shared/playerredis:ContextTimeoutEnabled、MaxRetries=-1),
+  #     所以全部截在 Timeout(4s)之内;
+  #   - handler 截止之后只剩补偿与收尾,各走独立 ctx:提交结果未知时的强读回 1s,或名字补偿释放 1s(结果未知时的第二次释放
+  #     在 10s 后异步发,不持锁);然后释放建角锁(1s ctx,同样截在 1s)。
+  #   合计最坏约 4 + 1 + 1 = 6s,20 盖得住。
+  # **20 不是硬上界**,不要把它读成「有余量的保证」:上式没算调度与 GC 停顿;给 LoginRedis 配了 DisableContextTimeout 时
+  # ctx 不再约束套接字读写,单条命令最长等满 ReadTimeout(3s),最坏约 4 + 3 + 1 + 3 = 11s。超出 TTL 之后的正确性不靠这个数:
+  # 角色上限与唯一归属由 SQL 账号目录的事务裁决,提交前还按令牌复核建角锁
+  # (createplayerlogic.go persistAccountRole),锁已易主就不提交、释放名字。后果最多是这次建角失败,不会覆盖别人的写入,
+  # 也不会放出重名。
   # tools/scripts/k8s_deploy.ps1 从本文件读这个值,自动跟随;deploy/login-stack.linux 那份是 30。
   AccountLockTTL: 20 # 秒;不是硬上界,见上
   # PlayerLockTTL is the base TTL of the player lock. The EnterGame chain runs
@@ -253,13 +235,16 @@ IdSegment:
 #   角色列表缺名回源 BatchGetPlayerName 也用这个值:两次查询串行、各自计时,
 #   缺名账号(B3a 之前建的老角色)最坏 2×,全部有名的账号仍只有一跳。
 # EnterLookupTimeout:EnterGame 那一次单查的预算(异步链路,可宽)。
-# RegisterTimeout:CreatePlayer 登记 player_route 的预算(写失败建角整体失败,给宽)。
+# RegisterTimeout:CreatePlayer 登记 player_route 这一跳的上限与下限(写失败建角整体失败;拿不满它就不发)。
+#   按 handler 截止分摊,与名字登记、SQL 账号目录提交同档 800ms;四跳之和放进 Timeout 的推导见本文件顶部,
+#   login 启动时核对,调大到放不下就拒绝启动。原值 3s 名义上就超出了整个 handler 预算(2026-11-10 改)。
+#   不写 = homezone.DefaultRegisterTimeout(800ms),K8s ConfigMap 与 deploy/login-stack.linux 不渲染本块,走缺省。
 HomeZone:
   RefreshRoleListDisabled: false
   RedirectOnEnterEnabled: false
   RoleListLookupTimeout: 500ms
   EnterLookupTimeout: 1500ms
-  RegisterTimeout: 3s
+  RegisterTimeout: 800ms
 
 # ─────────────────────────────────────────────────────────────────────────
 # 建角钉存储落点(docs/design/player-data-tidb-scaling-plan.md §7.2;player-storage-placement.md §8.3)

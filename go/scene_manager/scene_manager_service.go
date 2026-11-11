@@ -58,6 +58,10 @@ func main() {
 	if err := c.ResolveSharedRedisPassword(os.LookupEnv); err != nil {
 		logx.Must(fmt.Errorf("shared Redis password: %w", err))
 	}
+	// gate 令牌密钥(GateTokenSecretEnv,K8s 上经 Secret gate-token 注入):指名了变量却没有值就拒启,不带空密钥去签跨 zone 令牌。
+	if err := c.ResolveGateTokenSecret(os.LookupEnv); err != nil {
+		logx.Must(fmt.Errorf("gate token secret: %w", err))
+	}
 
 	// 再入屏障:进程起来之前先把常数与配置校验一遍(设计文档
 	// docs/design/scene-owner-reentry-barrier.md §3.2 要求的"机械校验")。

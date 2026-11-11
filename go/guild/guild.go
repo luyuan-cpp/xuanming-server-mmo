@@ -307,8 +307,8 @@ func main() {
 	sf := sfHandle.NewNode()
 
 	// repo 已在建表之后创建。
-	// 每次启动从 MySQL 权威快照重建各区帮会榜(没有全服榜);失败拒绝启动,避免对外提供不完整榜单。
-	// canary 副本不重建:重建持维护锁整表删了再写,作用于全部玩家的榜单,由 stable 副本承担(发布轨道设计 §2.5)。
+	// 每次启动按 MySQL 权威快照与版本把各区帮会榜对齐(没有全服榜);失败拒绝启动,避免对外提供不完整榜单。
+	// canary 副本不重建:重建扫全表、逐项改全部区的榜,作用于全部玩家的榜单,由 stable 副本承担(发布轨道设计 §2.5)。
 	if globalBackground {
 		if err := repo.RebuildRanks(context.Background()); err != nil {
 			panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
@@ -585,8 +585,11 @@ func main() {
 		defer assetPipe.Stop()
 	}
 	// 终态清理是全局作用域的后台,canary 副本不起(发布轨道设计 §2.5)。
+	// 资产通道开着时按玩家分片,与重投循环共用一份成员表(缺口清单第 25 条第二批);通道关着时没有成员表,清全部行。
 	if config.AppConfig.AssetOp.CleanupEnabled && globalBackground {
-		stopCleanup := startAssetOpCleanup(assetStore, svc.CleanupConfFrom(config.AppConfig.AssetOp), root)
+		cleanupConf := svc.CleanupConfFrom(config.AppConfig.AssetOp)
+		cleanupConf.Owns = assetPipe.CleanupOwner()
+		stopCleanup := startAssetOpCleanup(assetStore, cleanupConf, root)
 		if err := svcCtx.BindSourceStop(func(ctx context.Context) error {
 			done := make(chan struct{})
 			go func() { stopCleanup(); close(done) }()
@@ -827,8 +830,8 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 			timer.Reset(c.Interval)
 		}
 	})
-	logx.Infof("[guild] Asset cleanup started: goroutine guild.asset_op_cleanup interval=%v terminal_retention=%v counter_retention=%v",
-		c.Interval, c.TerminalRetention, c.CounterRetention)
+	logx.Infof("[guild] Asset cleanup started: goroutine guild.asset_op_cleanup interval=%v terminal_retention=%v counter_retention=%v sharded_by_player=%t",
+		c.Interval, c.TerminalRetention, c.CounterRetention, c.Owns != nil)
 	return func() {
 		cancel()
 		<-done

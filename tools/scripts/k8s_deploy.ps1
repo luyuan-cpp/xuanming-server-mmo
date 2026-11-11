@@ -493,7 +493,7 @@ param(
 	[switch]$SkipInfra,
 	[switch]$SkipGoSvc,
 	# 首次部署先拿 generation(docs/ops/k8s-open-server-runbook.md §5):zone-up / all-up 只跑 zone 里 db、data-service 的 ConfigMap 与迁移 Job,
-	# 以及 tidb 档 mmorpg 的建表 Job(gateway-schema),不起写者进程,也不读名册。
+	# 以及 mmorpg 的建表 Job(gateway-schema,入口是集群内单实例 MySQL 时除外),不起写者进程,也不读名册。
 	# 名册要按 Job 建出来的 route_meta.generation 写,定下来之后去掉这个开关再跑一次,Job 重复跑是幂等的。
 	[switch]$SqlSchemaOnly,
 	[string]$GoSvcRegistry = "",
@@ -723,6 +723,34 @@ $script:SharedRedisAuthGoServices = @('login', 'data-service', 'player-locator',
 # 只补指纹的 Go 服务:mail 的 ConfigMap 一直写 SharedRedisPasswordEnv: MMORPG_MAIL_REDIS_PASSWORD,manifest 自带对 redis-auth 的
 # 可选引用(go-svc/mail.yaml),口令早已不进 ConfigMap;缺的只是换口令时的滚动。
 $script:SharedRedisAuthHashOnlyGoServices = @('mail')
+
+# 工作负载密钥目录(2026-11-10,docs/design/workload-secrets-via-k8s-secret.md §3、§5):键是 Secret 名(单键 Opaque,每个有消费者的
+# namespace 各一份同名副本)。Env 是容器环境变量名,与部署输入变量同名;Consumers 是读它的工作负载(Go / Java 服务名,C++ 写 cpp:<角色>);
+# Value 在写路径上(Initialize-InjectedSecrets 之后)求值,返回空串 = 本次不注入(排队关、运营入口没开)。
+# 建 Secret(Sync-WorkloadSecrets)、注入 env 与写指纹(Add-WorkloadSecretsToManifest、Get-CppNodeWorkloadSecretEnvEntries / Annotations)只按这张表走。
+# ConfigMap 里写变量名的键各服务不同(MySQLPasswordEnv、GateTokenSecretEnv、login 的 Secrets.*.Env、match 的 Spectate.*Env、gateway 的 ${...}),
+# 写在各自的生成器里;那里的变量名与这里的 Env 一致由契约测试核对(生成器会被契约测试按 AST 单独抽出来跑,所以不在生成器里读这张表)。
+# 内部调用方验签(MMORPG_INTERNAL_AUTH_SECRET,Secret gate-identity-auth)不在表里:Apply-OneGoSvc 开头那段早已把它注入 login 等服务,
+# login 的 ConfigMap 只写 Secrets.InternalAuth.Env。
+$script:WorkloadSecretCatalog = [ordered]@{
+	'gate-token'        = @{ Env = 'MMORPG_GATE_TOKEN_SECRET'; SecretKey = 'secret'; Consumers = @('cpp:gate', 'cpp:battle', 'login', 'scene-manager', 'gateway')
+		Value = { [string]$script:GateTokenSecret } }
+	'spectate-token'    = @{ Env = 'MMORPG_SPECTATE_TOKEN_SECRET'; SecretKey = 'secret'; Consumers = @('cpp:gate', 'match')
+		Value = { Resolve-SpectateTokenSecret -ReleaseProfile $ReleaseProfile -GateTokenSecret $script:GateTokenSecret } }
+	'battle-token'      = @{ Env = 'MMORPG_BATTLE_TOKEN_SECRET'; SecretKey = 'secret'; Consumers = @('cpp:battle')
+		Value = { Resolve-BattleTokenSecret } }
+	'match-ops-caller'  = @{ Env = 'MMORPG_MATCH_OPS_CALLER_SECRET'; SecretKey = 'secret'; Consumers = @('match')
+		Value = { Resolve-MatchOpsCallerSecret -ReleaseProfile $ReleaseProfile -SpectateTokenSecret (Resolve-SpectateTokenSecret -ReleaseProfile $ReleaseProfile -GateTokenSecret $script:GateTokenSecret) } }
+	'login-queue-token' = @{ Env = 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET'; SecretKey = 'secret'; Consumers = @('login')
+		Value = { [string]$script:LoginQueueTokenSecret } }
+	'mysql-auth'        = @{ Env = 'MMORPG_MYSQL_PASSWORD'; SecretKey = 'password'; Consumers = @('db', 'data-service', 'trade', 'friend', 'player-inbox')
+		Value = { [string]$script:MysqlPassword } }
+	'gateway-db-auth'   = @{ Env = 'MMORPG_GATEWAY_DB_PASSWORD'; SecretKey = 'password'; Consumers = @('gateway')
+		Value = { [string]$script:GatewayDbPassword } }
+}
+# ConfigMap 里写顶层 MySQLPasswordEnv 的 Go 服务(= 目录表 mysql-auth 的 Go 消费者,契约测试核对两者一致)。脚本级变量:按 AST 单独渲染
+# ConfigMap 的测试不定义它,条件为假,不追加这一行。
+$script:MySqlPasswordEnvGoServices = @('db', 'data-service', 'trade', 'friend', 'player-inbox')
 
 # 削峰(G4b)开服档起步值。单一来源:ConfigMap 生成、Pod 指纹、部署打印都只读这里。全部「待压测确认」(L-14)。
 #   ZoneDefaultRps/Burst   docs/design/open-server-rate-limit-design.md「Layer 1 配额参考」的「开服日 / 大版本回归」档
@@ -1054,9 +1082,11 @@ function Resolve-MatchOpsCallerSecret {
 
 .DESCRIPTION
 	- BroadcastMaxConcurrent / BroadcastAutoGateThreshold / TicketTTLSeconds 镜像 go/match/etc/match_service.yaml(查不到即 throw);
-	- TicketSecret / OpsCallerSecret 来自部署注入,不镜像服务 yaml 里的本机 dev 值。与 login 的 Secrets.*.Value 一样写明文 Value,暴露面相同;
+	- 两把密钥不进 ConfigMap(2026-11-10,docs/design/workload-secrets-via-k8s-secret.md):只写变量名 TicketSecretEnv(恒写)与
+	  OpsCallerSecretEnv(运营入口开时才写;不写 = 关闭),值经 Secret spectate-token / match-ops-caller 注入同名环境变量(工作负载密钥目录),
+	  match 启动时由 Config.ResolveSpectateSecrets 填进 TicketSecret / OpsCallerSecret 再校验;
 	- RelayEnabled 按部署拓扑写,不镜像服务 yaml,理由见函数体。
-	密钥在写路径入口已判过一次;这里现取现判,生成器被单独调用(渲染夹具、契约测试)时同样 fail-closed。
+	密钥值在写路径入口已判过一次;这里现取现判(只判不写),生成器被单独调用(渲染夹具、契约测试)时同样 fail-closed。
 #>
 function New-MatchSpectateYaml {
 	$y = 'go/match/etc/match_service.yaml'
@@ -1070,18 +1100,20 @@ function New-MatchSpectateYaml {
 	# node-config 都指向它,所以写 true。以后真拆成跨机房多 Kafka 集群时,在这里改 false(观众只走 L0,满了回 16021),重跑 infra-up 后手动滚动 match
 	# (只改 ConfigMap 时 Pod 模板不变,不会自动滚动)。
 	$relayEnabled = 'true'
+	# 两把密钥只判不写:ConfigMap 只放变量名。运营入口没开($opsCallerSecret 为空)时不写 OpsCallerSecretEnv,match 读到空 = 入口关闭。
+	$opsCallerSecretEnvLine = if ([string]::IsNullOrEmpty($opsCallerSecret)) { '' } else { "`n  OpsCallerSecretEnv: MMORPG_MATCH_OPS_CALLER_SECRET" }
 
 	return @"
 # 观战分级扩容(docs/design/battle-spectate-tiered-fanout.md §15.6 / §15.7),由 k8s_deploy.ps1 New-MatchSpectateYaml 生成:
-# RelayEnabled 按部署拓扑写(Q6:全部 battle 与 gate 共用一个 Kafka 集群才能打开),TicketSecret 与 gate 的 SpectateTokenSecret 同值,
-# OpsCallerSecret 为空 = 运营入口关闭,其余三项镜像 go/match/etc/match_service.yaml。match 只在启动时读,改完要滚动。
+# RelayEnabled 按部署拓扑写(Q6:全部 battle 与 gate 共用一个 Kafka 集群才能打开);凭证密钥与 gate 的 SpectateTokenSecret 同值,
+# 两把密钥都经 Secret 注入环境变量,这里只写变量名(不写 OpsCallerSecretEnv = 运营入口关闭);其余三项镜像 go/match/etc/match_service.yaml。
+# match 只在启动时读;换密钥由 Pod 模板上的指纹注解带动滚动。
 Spectate:
   RelayEnabled: $relayEnabled
   BroadcastMaxConcurrent: $broadcastMaxConcurrent
   BroadcastAutoGateThreshold: $broadcastAutoGateThreshold
   TicketTTLSeconds: $ticketTtlSeconds
-  TicketSecret: "$ticketSecret"
-  OpsCallerSecret: "$opsCallerSecret"
+  TicketSecretEnv: MMORPG_SPECTATE_TOKEN_SECRET${opsCallerSecretEnvLine}
 "@
 }
 
@@ -2856,8 +2888,7 @@ function Get-RedisPlayerPoolMirror {
 	C++ scene 两边都有:这里每进程 1 条(tlsRedis),玩家域每主节点 1 条(tlsPlayerRedis)。
 	不计入(写在这里,接上时加一行):
 	  - client-rpc-router、go/db:不连 Redis;
-	  - chat:不连 Redis。聊天权威在 SQL,会话身份只认 gate 签名的原件;K8s 的 ConfigMap 不写 ChatRedis,Redis 段只为 RpcServerConf 兼容。
-	    go/chat 的 NewRedisHandles 仍按 Redis 段建一个 go-zero 句柄,但 NonBlock(缺省 true)不预连、没有调用方发命令,所以不建连接;
+	  - chat:不连 Redis。聊天权威在 SQL,会话身份只认 gate 签名的原件;go/chat 不建任何 Redis 句柄,ConfigMap 也不写 Redis / ChatRedis 段;
 	  - match 的 MatchRedis:K8s 上恒指向 redis-match-cluster,是另一套实例(ConfigMap 恒写这一段,k8s_deploy_contract 钉住;
 	    不写时 go/match 的 NewRedisHandles 会静默回落到这台、多一个缺省池,match 行就不能再记 0);
 	  - rank:现役 SQL 权威榜不连接 Redis，不计共享 Redis 总账；旧 R2b 专用 Redis 不部署。
@@ -4201,7 +4232,7 @@ function Assert-RedisTopologyChangeIsSafe {
 	$live = $reading.Replicas
 	$verdict = Get-RedisTopologyChangeVerdict -LiveReplicas $live -DesiredReplicas $Topology.Replicas
 	if ($verdict -eq 'upgrade') {
-		Write-Warning "[RedisTopology]Upgrade:shared Redis 1 -> 3 (single instance -> primary + 2 replicas + sentinels + 2 proxies). redis-0 restarts with its data and becomes the primary; redis-1 / redis-2 full-sync from it; Service redis switches to the proxies. Logins in all zones are interrupted while redis-0 restarts (maintenance window, needs -ConfirmRedisCoreRestart). Afterwards re-run zone-up for every zone and rollout restart deploy/db and deploy/data-service so WAITAOF waits for 1 replica. To keep the single instance this time, re-run with -RedisReplicas 1."
+		Write-Warning "[RedisTopology]Upgrade:shared Redis 1 -> 3 (single instance -> primary + 2 replicas + sentinels + 2 proxies). redis-0 restarts with its data and becomes the primary; redis-1 / redis-2 full-sync from it; Service redis switches to the proxies. Logins in all zones are interrupted while redis-0 restarts (maintenance window, needs -ConfirmRedisCoreRestart). Afterwards re-run zone-up for every zone and rollout restart statefulset/db and statefulset/data-service so WAITAOF waits for 1 replica. To keep the single instance this time, re-run with -RedisReplicas 1."
 	}
 	if ($verdict -ne 'refuse') { return $verdict }
 	$advice = if ($live -ne 1 -and $live -ne 3) {
@@ -6077,8 +6108,9 @@ function Get-ZoneScopedGoSvcNames {
 	$first = @(@('db', 'data-service') | Where-Object { $names -contains $_ })
 	return @($first) + @($names | Where-Object { $first -notcontains $_ } | Sort-Object)
 }
+# 按名字排序:$GoSvcCatalogue 是普通哈希表,.NET 的字符串哈希每个进程随机取种子,不排序时全局服务的 apply 先后与 DryRun 输出每次都可能不同。
 function Get-GlobalGoSvcNames {
-	return @($GoSvcCatalogue.Keys | Where-Object { $GoSvcCatalogue[$_].Global })
+	return @($GoSvcCatalogue.Keys | Where-Object { $GoSvcCatalogue[$_].Global } | Sort-Object)
 }
 # 进程排在 zone 之前起的全局服务(目录字段 StartsBeforeZones)。
 function Get-GlobalGoSvcNamesBeforeZones {
@@ -8204,6 +8236,25 @@ function ConvertTo-CppNodeLogLevel {
 	return $level
 }
 
+<#
+.SYNOPSIS
+	battle 直连票据 HMAC 密钥(MMORPG_BATTLE_TOKEN_SECRET):解析、校验并返回原值。battle-node-config 生成器(只判不写)与工作负载密钥目录
+	(battle-token,经 Secret 注入 battle)共用这一处。只在部署 battle 池时调用:zone / status / down 不因无关密钥被阻断。
+	K8s 不注入 BATTLE_RUN_MODE,battle 按 prod 跑,所以 dev 档也必须满足它的启动门禁(≥ 32 字节、与 gate 令牌不同)。报错不回显值。
+#>
+function Resolve-BattleTokenSecret {
+	$battleTokenSecret = Resolve-InjectedSecret -EnvName 'MMORPG_BATTLE_TOKEN_SECRET' `
+		-DevFallback 'change-me-in-production-battle-ticket-shared-key' `
+		-ReleaseProfile $ReleaseProfile -Purpose 'Battle 直连票据 HMAC 共享密钥' -MinLength 32
+	if ([System.Text.Encoding]::UTF8.GetByteCount($battleTokenSecret.Trim()) -lt 32) {
+		throw '生成 battle ConfigMap 失败:MMORPG_BATTLE_TOKEN_SECRET 去除首尾空白后必须至少 32 字节。'
+	}
+	if ($battleTokenSecret.Trim() -ceq ([string]$script:GateTokenSecret).Trim()) {
+		throw '生成 battle ConfigMap 失败:MMORPG_BATTLE_TOKEN_SECRET 必须与 MMORPG_GATE_TOKEN_SECRET 不同。'
+	}
+	return $battleTokenSecret
+}
+
 function New-NodeConfigMapYaml {
 	param(
 		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
@@ -8244,6 +8295,9 @@ function New-NodeConfigMapYaml {
 	# 拒绝启动(cpp/nodes/gate/main.cpp::ValidateGateTokenSecretOrDie),而部署链
 	# 从不设置 GATE_RUN_MODE,ResolveRunModeOnce 默认就是 prod —— 也就是说这一项
 	# 缺失时 K8s 上的 gate 会直接 CrashLoopBackOff。
+	# 三把令牌(gate / battle / 观战)都不进这份 ConfigMap(2026-11-10,docs/design/workload-secrets-via-k8s-secret.md):键照写、值写空串,
+	# 值经 Secret gate-token / battle-token / spectate-token 注入同名环境变量,config.cpp 用变量覆盖 yaml(工作负载密钥目录)。
+	# 这里仍现取现判,不合格就在生成期拒绝。
 	$gateTokenSecret = $script:GateTokenSecret
 	if ([string]::IsNullOrWhiteSpace($gateTokenSecret)) {
 		# 与 Get-AuthoritativeScalar 同一条纪律:宁可在生成期炸,也不产出一份
@@ -8264,33 +8318,24 @@ function New-NodeConfigMapYaml {
 
 	$battleSettingsBlock = ''
 	if ($IncludeBattleSettings) {
-		# 只有 battle 池解析自己的密钥；zone/status/down 不因无关密钥而被阻断。
-		$battleTokenSecret = Resolve-InjectedSecret -EnvName 'MMORPG_BATTLE_TOKEN_SECRET' `
-			-DevFallback 'change-me-in-production-battle-ticket-shared-key' `
-			-ReleaseProfile $ReleaseProfile -Purpose 'Battle 直连票据 HMAC 共享密钥' -MinLength 32
-		# K8s 不注入 BATTLE_RUN_MODE，运行时按 prod 执行，dev 发布也必须满足其启动门禁。
-		if ([System.Text.Encoding]::UTF8.GetByteCount($battleTokenSecret.Trim()) -lt 32) {
-			throw '生成 battle ConfigMap 失败:MMORPG_BATTLE_TOKEN_SECRET 去除首尾空白后必须至少 32 字节。'
-		}
-		if ($battleTokenSecret.Trim() -ceq $gateTokenSecret.Trim()) {
-			throw '生成 battle ConfigMap 失败:MMORPG_BATTLE_TOKEN_SECRET 必须与 MMORPG_GATE_TOKEN_SECRET 不同。'
-		}
+		# 只有 battle 池解析自己的密钥；zone/status/down 不因无关密钥而被阻断。只判不写(值经 Secret battle-token 注入)。
+		$null = Resolve-BattleTokenSecret
 		$battleMaxConnections = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'BattleMaxConnections'
 		if ([int]$battleMaxConnections -lt 1 -or [int]$battleMaxConnections -gt 65535) {
 			throw '生成 battle ConfigMap 失败:BattleMaxConnections 必须在 1..65535。'
 		}
-		$battleSettingsBlock = "BattleTokenSecret: `"${battleTokenSecret}`"`nBattleMaxConnections: ${battleMaxConnections}"
+		$battleSettingsBlock = "BattleTokenSecret: `"`"`nBattleMaxConnections: ${battleMaxConnections}"
 	}
 
 	# 观战订阅凭证 HMAC 密钥(BaseDeployConfig.spectate_token_secret,键名 SpectateTokenSecret):gate 验签,match 用同值签发。
 	# 只写 node-config(gate / scene 共用);battle 不验凭证,battle-node-config 不写。K8s 不注入 GATE_RUN_MODE,gate 按 prod 跑,
 	# 这份 ConfigMap 又遮蔽镜像里的 bin/etc,所以缺这一键 gate 会拒绝启动。校验见 Resolve-SpectateTokenSecret。
-	# C++ 只在启动时读:轮换要滚动全部 gate 与 match(与 gate / battle 令牌相同,Pod 模板没有这把密钥的指纹);
-	# 滚动窗口内新旧密钥混跑,订阅被拒(回 MatchSpectateTicketInvalid)而不是放行。
+	# C++ 只在启动时读:换密钥靠 gate 与 match Pod 模板上的 spectate-token 指纹带动滚动;
+	# 滚动窗口内新旧密钥混跑,订阅被拒(回 MatchSpectateTicketInvalid)而不是放行。只判不写(值经 Secret spectate-token 注入)。
 	$spectateSettingsBlock = ''
 	if (-not $IncludeBattleSettings) {
-		$spectateTokenSecret = Resolve-SpectateTokenSecret -ReleaseProfile $ReleaseProfile -GateTokenSecret $gateTokenSecret
-		$spectateSettingsBlock = "SpectateTokenSecret: `"${spectateTokenSecret}`""
+		$null = Resolve-SpectateTokenSecret -ReleaseProfile $ReleaseProfile -GateTokenSecret $gateTokenSecret
+		$spectateSettingsBlock = "SpectateTokenSecret: `"`""
 	}
 
 	# 永久 guid 号段。整块从权威文件原样搬运,而不是在这里抄一份常数:
@@ -8331,7 +8376,7 @@ Etcd:
     - "etcd.${InfraNamespace}:2379"
   KeepaliveInterval: ${keepaliveInterval}
   NodeTTLSeconds: ${nodeTtlSeconds}
-GateTokenSecret: "${gateTokenSecret}"
+GateTokenSecret: ""
 GateMaxConnections: ${gateMaxConnections}
 ${battleSettingsBlock}
 ${spectateSettingsBlock}
@@ -8351,8 +8396,9 @@ service_discovery_prefixes:
   - "LoginNodeService.rpc"
   # 与 bin/etc/base_deploy_config.yaml 对齐(2026-09-02 跨 zone 匹配审计发现此处只有三条):
   # 缺 MatchNodeService 时直连模式("0")的 gate 发现不到 match,JoinQueue 报 "Node not found ... message id: 157"。
-  # BattleNodeService 已不供 gate 使用(两种模式下 gate 都不连 battle、不中继战斗,turn-based §22 D66);保留它是因为
-  # battle-node-config 也由本模板生成,battle 按这些前缀 watch 自己的节点键(etcd_service 劫持检测与注册自检)。
+  # BattleNodeService 已不供 gate 使用(两种模式下 gate 都不连 battle、不中继战斗,turn-based §22 D66)。C++ 节点只看
+  # 自己发现集合里的类型,没有一类把 Battle 放进去;battle 只 watch 自己那一条发现键(劫持检测与注册自检),不按这一条
+  # 前缀看同类(docs/design/connection-fanout-subsetting-20261106.md §3.4)。保留它只表示部署里有 battle,与本机配置一致。
   # 这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
   - "SceneManagerNodeService.rpc"
   - "BattleNodeService.rpc"
@@ -8620,7 +8666,7 @@ function New-NodeDeploymentYaml {
 	}
 	# Pod 模板注解:sidecar 配置指纹(开 sidecar 时)+ zone Redis 口令指纹(有口令时),同一个 annotations: 段,列位置同上(6 / 8)。
 	# scene(SceneNodeType ≥ 0)在 -AssetOps on 时另带两条资产密钥指纹,见 New-CppPodAnnotationBlock。
-	$podAnnotationBlock = New-CppPodAnnotationBlock -KeyIndent "      " -SceneAssetOp:($SceneNodeType -ge 0)
+	$podAnnotationBlock = New-CppPodAnnotationBlock -KeyIndent "      " -SceneAssetOp:($SceneNodeType -ge 0) -Role $NodeName
 
 	# 用数组逐行拼,最后 join 换行。
 	# 旧写法是 `$block += @"..."@` 连续追加两个 here-string —— here-string 内容不含
@@ -8644,6 +8690,12 @@ function New-NodeDeploymentYaml {
 	# zone Redis 口令(gate / scene / battle 都连 zoneredis,scene 另连 scene_control_redis):经本 namespace 的 Secret redis-auth 注入,
 	# 不在 node-config 里(Get-CppZoneRedisSecretEnvEntries)。口令为空(dev 未注入)时不写,模板与引入口令之前逐字相同。
 	$extraEnvLines += @(Get-CppZoneRedisEnvLines -Indent "`t`t`t" -SceneControl:($SceneNodeType -ge 0))
+	# 工作负载密钥(gate:gate 令牌与观战凭证;battle:battle 票据与 gate 令牌;scene 不读):经本 namespace 的 Secret 注入,
+	# node-config / battle-node-config 里这几键写空串,config.cpp 用变量覆盖 yaml(Get-CppNodeWorkloadSecretEnvEntries)。
+	foreach ($entry in @(Get-CppNodeWorkloadSecretEnvEntries -Role $NodeName)) {
+		$extraEnvLines += "`t`t`t- name: $($entry.Name)"
+		$extraEnvLines += "`t`t`t  valueFrom: {secretKeyRef: {name: $($entry.SecretName), key: $($entry.SecretKey), optional: false}}"
+	}
 	# 资产通道验签密钥(-AssetOps on,只给 scene):guild / trade 两把都要,值经 Secret 注入(secretKeyRef 不写 optional,
 	# Secret 由 Apply-Zone 先于 scene 建好)。off 时不写,模板与引入开关之前逐字相同。
 	if ($SceneNodeType -ge 0 -and $script:AssetOpsOn) {
@@ -9572,7 +9624,10 @@ function New-CppPodAnnotationBlock {
 		[Parameter(Mandatory = $true)][string]$KeyIndent,
 		# scene 的 Pod 模板:-AssetOps on 时追加两条资产密钥指纹($script:AssetOpCallers 的 HashAnnotation),
 		# 只换密钥也会滚动,并供 Assert-AssetOpClusterConsistency 跨命令核对。off 时不写,注解段与引入开关之前逐字相同。
-		[switch]$SceneAssetOp
+		[switch]$SceneAssetOp,
+		# 节点角色(gate / scene / battle):工作负载密钥指纹按角色取(Get-CppNodeWorkloadSecretAnnotations),跟在 zone Redis 口令指纹之后。
+		# 不传或传 scene 时没有这几条。
+		[string]$Role = ''
 	)
 
 	$annotations = [ordered]@{}
@@ -9581,6 +9636,10 @@ function New-CppPodAnnotationBlock {
 	}
 	$zoneRedisAuth = Get-CppZoneRedisAuthAnnotations
 	foreach ($key in $zoneRedisAuth.Keys) { $annotations[$key] = $zoneRedisAuth[$key] }
+	if (-not [string]::IsNullOrEmpty($Role)) {
+		$workloadSecretAnnotations = Get-CppNodeWorkloadSecretAnnotations -Role $Role
+		foreach ($key in $workloadSecretAnnotations.Keys) { $annotations[$key] = $workloadSecretAnnotations[$key] }
+	}
 	if ($SceneAssetOp -and $script:AssetOpsOn) {
 		$assetOpHashes = Get-AssetOpDesiredHashes
 		foreach ($caller in $assetOpHashes.Keys) { $annotations[$script:AssetOpCallers[$caller].HashAnnotation] = $assetOpHashes[$caller] }
@@ -9614,7 +9673,9 @@ function New-CppNodePodCommon {
 		# 只有金丝雀 battle 池(New-BattleWorkloadManifest -Canary)传它自己的三项。
 		[string]$Image = $NodeImage,
 		[string]$PullPolicy = $ImagePullPolicy,
-		[string]$Track = $ReleaseTrack
+		[string]$Track = $ReleaseTrack,
+		# 节点角色(gate / battle):工作负载密钥的 env 与指纹按角色取(Get-CppNodeWorkloadSecretEnvEntries / Annotations)。
+		[string]$Role = ''
 	)
 
 	$sidecar = @{ SidecarContainerYaml = ''; SidecarVolumeYaml = ''; SidecarConfigHash = '' }
@@ -9628,11 +9689,16 @@ function New-CppNodePodCommon {
 	$podAnnotations = [ordered]@{}
 	$zoneRedisAuth = Get-CppZoneRedisAuthAnnotations
 	foreach ($key in $zoneRedisAuth.Keys) { $podAnnotations[$key] = $zoneRedisAuth[$key] }
+	# 工作负载密钥指纹跟在 zone Redis 口令指纹之后(与 New-CppPodAnnotationBlock 同序)。
+	$workloadSecretAnnotations = if ([string]::IsNullOrEmpty($Role)) { [ordered]@{} } else { Get-CppNodeWorkloadSecretAnnotations -Role $Role }
+	foreach ($key in $workloadSecretAnnotations.Keys) { $podAnnotations[$key] = $workloadSecretAnnotations[$key] }
 	$metricsAnnotations = Get-CppMetricsAnnotations
 	foreach ($key in $metricsAnnotations.Keys) { $podAnnotations[$key] = $metricsAnnotations[$key] }
 	# zone Redis 口令环境变量(Secret redis-auth)。lib 的三个模板(external gate、battle Fleet、battle hostPort)都不是 scene,
 	# 不连 scene_control_redis,所以不带 -SceneControl。口令为空时是空列表,生成物与不传时逐字相同。
+	# 工作负载密钥的 env 接在后面(按 -Role 取,不传时没有)。
 	$secretEnv = @(Get-CppZoneRedisSecretEnvEntries)
+	if (-not [string]::IsNullOrEmpty($Role)) { $secretEnv += @(Get-CppNodeWorkloadSecretEnvEntries -Role $Role) }
 	return New-ClientEntryPodCommon -Image $Image -ImagePullPolicy $PullPolicy -SnowflakeCacheDir $SnowflakeCacheDir `
 		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
 		-GrpcServerMaxPollers 0 -PodAnnotations $podAnnotations -OpenFileLimitMode $NodeOpenFileLimitMode -MetricsPort $CppMetricsPort `
@@ -9673,7 +9739,7 @@ function New-ExternalGateManifests {
 	)
 
 	$plan = Resolve-ZoneGatePlan -CurrentZoneName $CurrentZoneName -Replicas $Replicas -NodePortBase $NodePortBase
-	$podCommon = New-CppNodePodCommon -SidecarZoneLabel $CurrentZoneName
+	$podCommon = New-CppNodePodCommon -SidecarZoneLabel $CurrentZoneName -Role 'gate'
 	return [pscustomobject]@{
 		Plan            = $plan
 		Replicas        = $Replicas
@@ -9976,7 +10042,8 @@ function Wait-ForZoneReady {
 		}
 	}
 	if (-not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) {
-		foreach ($svcName in $JavaSvcCatalogue.Keys) {
+		# 按名字排序,与 Apply-JavaSvcManifests 同一先后(理由见 Get-GlobalGoSvcNames)。
+		foreach ($svcName in @($JavaSvcCatalogue.Keys | Sort-Object)) {
 			# 目录里有条目但没有 manifest 的服务(auth:仓库里没有可打包的工程,
 			# manifests/java-svc/auth.yaml 也不存在)在 Apply-JavaSvcManifests 里只告警不 apply,
 			# 这里若照等就会在 `rollout status deploy/auth` 上白白超时,拖垮整条 -WaitReady。
@@ -11096,11 +11163,10 @@ function New-GoSvcConfigMapYaml {
 	# mail/rank 沿用下方服务 YAML 整体镜像；容量、Sweep、签名与 SQL 配置保持单一事实源。
 
 	$mysqlUser = $script:MysqlUser
-	$mysqlPassword = $script:MysqlPassword
 	# 共享 Redis 口令不进 ConfigMap(2026-11-06):各段的 Pass / Password 恒写空串,口令非空时在整份配置末尾追加一行
 	# SharedRedisPasswordEnv(见下方 switch 之后),服务启动时由 go/shared/redisauth 从容器环境变量填各段。
-	$gateTokenSecret = $script:GateTokenSecret
-	$internalAuthSecret = $script:InternalAuthSecret
+	# 其余密钥同理(2026-11-10,docs/design/workload-secrets-via-k8s-secret.md):MySQL 口令字段写空串、末尾追加 MySQLPasswordEnv,
+	# gate 令牌、login 的几把 HMAC 密钥只写变量名;值经 Secret 注入(工作负载密钥目录)。
 
 	# 玩家域的配置段与 login 自己的登录域段(-PlayerRedisMasters,见 New-PlayerRedisConfigYaml;池上限从服务 yaml 镜像,Get-RedisPlayerPoolMirror)。只在生成带这些段的服务时求值。
 	# 漏渲染的后果:Go 没写 Addrs 时静默回落到服务自己连的共享实例,上了集群之后表现是全员不在线,而且不报错。guild 与 mail 的文本不走这里的模板,在各自分支里写。
@@ -11225,7 +11291,8 @@ function New-GoSvcConfigMapYaml {
 	# login 的 go-zero Mode。secrets.go 只在 Mode=dev/test 时把密钥校验降级为 WARN,
 	# 其余(含不写,默认 pro)一律 fail-closed。dev 档位的密钥本来就是占位回落
 	# (Initialize-InjectedSecrets),不写 Mode 的话 login 起来就 panic
-	# "HMAC 密钥配置不合格,拒绝启动"(2026-09-03 kind 实跑);与 go/login/etc/login.yaml
+	# "HMAC 密钥配置不合格,拒绝启动"(2026-09-03 kind 实跑;2026-11-10 起文案为
+	# "HMAC secret configuration invalid; refusing to start");与 go/login/etc/login.yaml
 	# 的 `Mode: dev` 口径一致。staging/prod 不写,保持 pro 的严格门禁。
 	$loginModeLine = if ($ReleaseProfile -eq 'dev') { 'Mode: dev' } else { '' }
 
@@ -11255,11 +11322,11 @@ function New-GoSvcConfigMapYaml {
 		$queueYaml = New-LoginQueueYaml -CurrentZoneId $CurrentZoneId
 		if (-not [string]::IsNullOrEmpty($queueYaml)) {
 			$loginQueueBlock = "`n" + $queueYaml
-			# Secrets.QueueToken 与 InternalAuth 同处一个 Secrets: 键(不能另起一个 Secrets:,重复键后者覆盖前者)。与兄弟项 InternalAuth
-			# 一样写明文 Value(暴露面相同)。dev 档允许为空:不写 → login 宽松档回落 GateToken 密钥并打 WARN(secrets.go ResolveSecrets);
-			# staging / prod 由 Initialize-InjectedSecrets 保证非空、≥32、与另两把不同。
+			# Secrets.QueueToken 与 GateToken / InternalAuth 同处一个 Secrets: 键(不能另起一个 Secrets:,重复键后者覆盖前者)。与兄弟项一样
+			# 只写变量名(值经 Secret login-queue-token 注入,工作负载密钥目录)。dev 档允许为空:不写 → login 宽松档回落 GateToken 密钥并打 WARN
+			# (secrets.go ResolveSecrets);staging / prod 由 Initialize-InjectedSecrets 保证非空、≥32、与另两把不同。
 			if (-not [string]::IsNullOrEmpty($script:LoginQueueTokenSecret)) {
-				$loginQueueTokenSecretBlock = "`n  QueueToken:`n    Value: `"$($script:LoginQueueTokenSecret)`""
+				$loginQueueTokenSecretBlock = "`n  QueueToken:`n    Env: MMORPG_LOGIN_QUEUE_TOKEN_SECRET"
 			}
 		}
 	}
@@ -11377,7 +11444,7 @@ ServerConfig:
   Database:
     Hosts: "$($authoritySql.Host)"
     User: "${mysqlUser}"
-    Passwd: "${mysqlPassword}"
+    Passwd: ""
     MaxOpenConn: ${dbMaxOpenConn}
     MaxIdleConn: ${dbMaxIdleConn}
     Net: ""
@@ -11448,7 +11515,7 @@ SnapshotMySQL:
   Backend: $($authoritySql.Backend)
   Host: "$($authoritySql.Host)"
   User: "${mysqlUser}"
-  Password: "${mysqlPassword}"
+  Password: ""
   DBName: "${GlobalDbName}"
   MaxOpenConn: ${dsMysqlMaxOpenConn}
   MaxIdleConn: ${dsMysqlMaxIdleConn}
@@ -11650,19 +11717,19 @@ DataServiceRpc:
 IdSegment:
   Enabled: true
   Step: ${loginIdSegmentStep}
-GateTokenSecret: "${gateTokenSecret}"
-# Secrets.InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥。
-#
-# 生产模式下 EnforceInternalAuth 恒为 true(config/secrets.go,配置关不掉),
-# 于是 ResolveSecrets 里 internal.validate(..., required=true) 会因为"未配置"
-# 直接返回 error,login 拒绝启动。以前这份 ConfigMap 只有上面那个**已废弃**的
-# 顶层 GateTokenSecret,没有 Secrets 段,所以生产 login 起不来。
-#
-# 必须是与 GateToken 不同的一把:secrets.go 里有跨用途复用主密钥的检查,
-# 生产复用会直接拒绝启动(一处泄露不该牵连另一处)。
+# Secrets:login 用到的 HMAC 密钥一律只写环境变量名(Env),值经 Secret 注入容器(docs/design/workload-secrets-via-k8s-secret.md):
+#   - GateToken:签发给客户端、由 C++ gate 校验的连接令牌(Secret gate-token)。以前写的顶层 GateTokenSecret 是只读一个值、
+#     不能轮换的兼容入口,不再写。
+#   - InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥(Secret gate-identity-auth,容器早已注入这个变量)。
+#     生产模式下 EnforceInternalAuth 恒为 true(config/secrets.go,配置关不掉),未配置 login 拒启。
+#   - QueueToken:排队开时才写。
+# 几把必须互不相同:secrets.go 里有跨用途复用主密钥的检查,生产复用会直接拒绝启动(一处泄露不该牵连另一处)。
+# 指名了变量却没有值,login 任何模式都拒启(SecretConf.resolve)。
 Secrets:
+  GateToken:
+    Env: MMORPG_GATE_TOKEN_SECRET
   InternalAuth:
-    Value: "${internalAuthSecret}"${loginQueueTokenSecretBlock}
+    Env: MMORPG_INTERNAL_AUTH_SECRET${loginQueueTokenSecretBlock}
 # 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(NodeInfo.client_endpoint,D78):
 # true = 缺地址的 gate 不下发;false = 回落 endpoint(PodIP)。取值见 k8s_deploy.ps1 -RequireClientEndpoint(默认跟随 -ClientEntryMode)。
 RequireClientEndpoint: ${requireClientEndpointValue}${loginDevPasswordAuthBlock}${loginQueueBlock}${loginAuthProvidersBlock}
@@ -11798,8 +11865,8 @@ SnowflakeCacheDir: ${SnowflakeCacheDir}
 # 不开的话 scene-manager.yaml 注释里让运维盯的告警口径全部落空。
 MetricsListenAddr: ":9150"
 # 跨 zone 重定向签发 gate 令牌要用,缺了 gate_redirect.go 直接返回
-# "GateTokenSecret not configured"。以前这份 ConfigMap 压根没有这一项。
-GateTokenSecret: "${gateTokenSecret}"
+# "GateTokenSecret not configured"。值不进 ConfigMap:只写变量名,经 Secret gate-token 注入,启动时由 ResolveGateTokenSecret 填进 GateTokenSecret。
+GateTokenSecretEnv: MMORPG_GATE_TOKEN_SECRET
 # DataService gRPC 客户端:同一连接查home zone与原owner_revision(LookupAccountRole)，不新增SQL/Redis池，连接总账数不变。
 # Lookup仅用scene-manager.yaml独立Secret account-directory-scene-manager，不给SM login/trade写密钥。
 # EnterScene 用home zone随 RoutePlayerEvent
@@ -11925,11 +11992,7 @@ Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
   Key: ""
-# 只为 RpcServerConf 兼容:chat 按此段建的 go-zero 句柄不预连(NonBlock 缺省 true),聊天授权与历史只走 SQL、没有调用方发命令,所以不建连接。不写 ChatRedis。
-Redis:
-  Host: redis.${InfraNamespace}:6379
-  Type: node
-  Key: chatservice
+# chat 不连 Redis:不写 Redis / ChatRedis 段。RpcServerConf 的 Redis 段是 optional,只在 Auth=true 时用,chat 不开 Auth。
 # 全局池:ZoneId 只影响注册路径,路由服对 ChatNodeService 不做 zone 过滤(ZoneScopedNodeTypes 默认仅 Login),
 # 任何 zone 的玩家都会被路由到这里的实例;业务代码不读它。取命令行 -ZoneId(Apply-GlobalGoSvcManifests),
 # 与 match 同口径;Go 侧 config.Validate 拒 0。
@@ -12014,7 +12077,7 @@ KillSwitchPrefix: ""
 MySQL:
   Host: "$($tradeSql.Host)"
   User: "${mysqlUser}"
-  Password: "${mysqlPassword}"
+  Password: ""
   DBName: "${tradeMysqlDBName}"
   Backend: $($tradeSql.Backend)
   MaxOpenConn: ${tradeMysqlMaxOpenConn}
@@ -12140,7 +12203,7 @@ KillSwitchPrefix: ""
 MySQL:
   Host: "$($friendSql.Host)"
   User: "${mysqlUser}"
-  Password: "${mysqlPassword}"
+  Password: ""
   DBName: "${friendMysqlDBName}"
   MaxOpenConn: ${friendMysqlMaxOpenConn}
   MaxIdleConn: ${friendMysqlMaxIdleConn}
@@ -12220,7 +12283,7 @@ MySQL:
   Host: "$($authoritySql.Host)"
   Backend: $($authoritySql.Backend)
   User: "${mysqlUser}"
-  Password: "${mysqlPassword}"
+  Password: ""
   DBName: "${playerInboxMysqlDBName}"
   MaxOpenConn: ${playerInboxMysqlMaxOpenConn}
   MaxIdleConn: ${playerInboxMysqlMaxIdleConn}
@@ -12286,6 +12349,16 @@ ${playerInboxLoopLines}
 			throw "生成 $SvcName ConfigMap 失败:配置里已有顶层 SharedRedisPasswordEnv。它由 k8s_deploy.ps1 按 Secret $($script:RedisAuthSecretName) 生成,服务 yaml 与模板里都不要写。"
 		}
 		$svcConfig = $svcConfigText.TrimEnd() + "`nSharedRedisPasswordEnv: $($script:SharedRedisPasswordEnv)"
+	}
+	# MySQL 口令的变量名(2026-11-10):这几个服务的口令字段在上面的模板里恒写空串,这里在整份配置末尾追加顶层 MySQLPasswordEnv
+	# (Deployment 经工作负载密钥目录 mysql-auth 注入同名环境变量,迁移 Job 的清单静态引用同一个 Secret)。各档位都写:dev 的回落口令同样经 Secret 注入。
+	# 名单是脚本级变量:按 AST 单独渲染 ConfigMap 的测试不定义它,条件为假。
+	if ($SvcName -in $script:MySqlPasswordEnvGoServices) {
+		$svcConfigText = $svcConfig -join "`n"
+		if ($svcConfigText -match '(?m)^MySQLPasswordEnv:') {
+			throw "生成 $SvcName ConfigMap 失败:配置里已有顶层 MySQLPasswordEnv。它由 k8s_deploy.ps1 按 Secret mysql-auth 生成,服务 yaml 与模板里都不要写。"
+		}
+		$svcConfig = $svcConfigText.TrimEnd() + "`nMySQLPasswordEnv: MMORPG_MYSQL_PASSWORD"
 	}
 
 	return @"
@@ -13233,6 +13306,104 @@ function Add-SharedRedisAuthToManifest {
 
 <#
 .SYNOPSIS
+	一个消费者(Go / Java 服务名,或 C++ 的 cpp:<角色>)本次要注入的工作负载密钥,每项 { SecretName; Env; SecretKey; Value },按目录表
+	($script:WorkloadSecretCatalog)的顺序。值为空的不返回(排队关、运营入口没开)。
+.DESCRIPTION
+	只在写路径上调用(Initialize-InjectedSecrets 之后):取值脚本块里的解析器对未解析 / 不合格的值 fail-closed。先按消费者筛再取值:
+	不读某把密钥的消费者不会触发它的解析,zone-up 不因只给全局服务用的密钥被阻断。目录表没定义时(按 AST 单独抽函数的测试)返回空。
+#>
+function Get-WorkloadSecretsFor {
+	param([Parameter(Mandatory = $true)][string]$Consumer)
+
+	if ($null -eq $script:WorkloadSecretCatalog) { return }
+	foreach ($name in $script:WorkloadSecretCatalog.Keys) {
+		$entry = $script:WorkloadSecretCatalog[$name]
+		if ($entry.Consumers -notcontains $Consumer) { continue }
+		$value = [string](& $entry.Value)
+		if ($value.Length -eq 0) { continue }
+		[pscustomobject]@{ SecretName = $name; Env = $entry.Env; SecretKey = $entry.SecretKey; Value = $value }
+	}
+}
+
+# 工作负载密钥的 Pod 模板指纹:键 mmorpg.io/<Secret 名>-hash,值只哈希这把密钥(用途串 <Secret 名>/workload 做域分隔,见 Get-InjectedSecretFingerprint)。
+function Get-WorkloadSecretHashAnnotation {
+	param([Parameter(Mandatory = $true)][string]$SecretName)
+	return "mmorpg.io/$SecretName-hash"
+}
+function Get-WorkloadSecretFingerprint {
+	param([Parameter(Mandatory = $true)][object]$Secret)
+	return Get-InjectedSecretFingerprint -SecretName "$($Secret.SecretName)/workload" -Value $Secret.Value
+}
+
+<#
+.SYNOPSIS
+	把一个消费者要的工作负载密钥写成本 namespace 的单键 Secret(Apply-InjectedSecret,DryRun 只打一行隐去值的意图)。
+	必须先于引用它们的工作负载与迁移 Job apply(secretKeyRef 不写 optional,Secret 缺失的 Pod 卡在 CreateContainerConfigError)。
+	同一次运行里同一个 namespace 的同一把只写一次:同一把密钥常有几个消费者(zone namespace 的 gate-token 给 gate、login、scene-manager、gateway)。
+#>
+function Sync-WorkloadSecrets {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$Consumer
+	)
+
+	if ($null -eq $script:WorkloadSecretsSynced) { $script:WorkloadSecretsSynced = @{} }
+	foreach ($secret in @(Get-WorkloadSecretsFor -Consumer $Consumer)) {
+		$syncKey = "$Namespace/$($secret.SecretName)"
+		if ($script:WorkloadSecretsSynced.ContainsKey($syncKey)) { continue }
+		Apply-InjectedSecret -Namespace $Namespace -Name $secret.SecretName -Key $secret.SecretKey -Value $secret.Value -AppLabel $secret.SecretName
+		$script:WorkloadSecretsSynced[$syncKey] = $true
+	}
+}
+
+<#
+.SYNOPSIS
+	给 Go / Java 服务的 manifest 注入这个服务要的工作负载密钥:每把一条 secretKeyRef env(Add-GoSvcSecretEnv,不写 optional)与一条只哈希
+	这把密钥的 Pod 模板指纹(Add-PodTemplateAnnotationEntry,换密钥即滚动)。只改本地文本,在本服务任何集群写操作之前调用;
+	指纹追加在已有注解段末,所以排在本服务其余注解写入之后。
+#>
+function Add-WorkloadSecretsToManifest {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent
+	)
+
+	foreach ($secret in @(Get-WorkloadSecretsFor -Consumer $SvcName)) {
+		$ManifestContent = Add-GoSvcSecretEnv -SvcName $SvcName -ManifestContent $ManifestContent `
+			-EnvName $secret.Env -SecretName $secret.SecretName -SecretKey $secret.SecretKey
+		$ManifestContent = Add-PodTemplateAnnotationEntry -SvcName $SvcName -ManifestContent $ManifestContent `
+			-Key (Get-WorkloadSecretHashAnnotation -SecretName $secret.SecretName) -Value (Get-WorkloadSecretFingerprint -Secret $secret)
+	}
+	return $ManifestContent
+}
+
+<#
+.SYNOPSIS
+	C++ 节点按角色要的工作负载密钥 env,每项 @{ Name; SecretName; SecretKey }(与 Get-CppZoneRedisSecretEnvEntries 同形,lib 的 PodCommon.SecretEnv
+	直接收)。gate:gate 令牌与观战凭证;battle:battle 票据与 gate 令牌(battle 启动时核两者不同);scene 不读这几把,返回空。
+	config.cpp 对这几个变量做 yaml 覆盖(docs/design/workload-secrets-via-k8s-secret.md §4.1)。
+#>
+function Get-CppNodeWorkloadSecretEnvEntries {
+	param([Parameter(Mandatory = $true)][string]$Role)
+
+	foreach ($secret in @(Get-WorkloadSecretsFor -Consumer "cpp:$Role")) {
+		@{ Name = $secret.Env; SecretName = $secret.SecretName; SecretKey = $secret.SecretKey }
+	}
+}
+
+# C++ 节点 Pod 模板上的工作负载密钥指纹([ordered],目录表顺序)。scene 返回空表。
+function Get-CppNodeWorkloadSecretAnnotations {
+	param([Parameter(Mandatory = $true)][string]$Role)
+
+	$annotations = [ordered]@{}
+	foreach ($secret in @(Get-WorkloadSecretsFor -Consumer "cpp:$Role")) {
+		$annotations[(Get-WorkloadSecretHashAnnotation -SecretName $secret.SecretName)] = Get-WorkloadSecretFingerprint -Secret $secret
+	}
+	return $annotations
+}
+
+<#
+.SYNOPSIS
 	把部署侧解析好的一个密钥写成 zone namespace 的单键 Opaque Secret。必须先于引用它的 Deployment apply
 	(secretKeyRef 不写 optional,Secret 缺失的 Pod 卡在 CreateContainerConfigError)。
 
@@ -13351,12 +13522,13 @@ function Assert-SqlWriterRosterAccountsDisjoint {
     $owners=[Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
     foreach($key in @($catalog.Keys)){
         $entry=$catalog[$key]
-        if(-not $entry.Contains('rosterFile') -or -not $entry.Contains('rosterSha256')){continue}
+        if($null -eq $entry -or -not $entry.Contains('rosterFile') -or -not $entry.Contains('rosterSha256')){continue}
         $roster=Read-MaintenanceJson -Path $entry.rosterFile -ExpectedSha256 $entry.rosterSha256
         $slot=0
         foreach($rosterEntry in @($roster.entries)){
             foreach($rosterRequest in @($rosterEntry.requests)){
-                if($null -eq $rosterRequest -or -not $rosterRequest.Contains('writer') -or -not $rosterRequest.writer.Contains('sqlPrincipal')){continue}
+                # 只核账号;条目形状由部署这个服务时的 Get-SqlWriterDeploymentEntry 与 init 里的注册器核。DryRun 夹具的空条目没有账号。
+                if($null -eq $rosterRequest -or -not $rosterRequest.Contains('writer') -or $null -eq $rosterRequest.writer -or -not $rosterRequest.writer.Contains('sqlPrincipal')){continue}
                 $principal=[string]$rosterRequest.writer.sqlPrincipal
                 $owner="$key slot $slot"
                 if($owners.ContainsKey($principal) -and $owners[$principal] -cne $owner){throw "The SQL writer account of $owner is also used by $($owners[$principal]): one account is one slot, two slots on it would supersede each other. Give every slot of every roster its own account, see docs/ops/k8s-open-server-runbook.md section 1."}
@@ -13712,6 +13884,18 @@ function Apply-OneGoSvc {
 	} elseif ($SvcName -in $script:SharedRedisAuthHashOnlyGoServices) {
 		$manifestContent = Add-SharedRedisAuthToManifest -SvcName $SvcName -ManifestContent $manifestContent -HashOnly
 	}
+	# 工作负载密钥(docs/design/workload-secrets-via-k8s-secret.md):本服务要的每把一条 secretKeyRef env 与一条指纹(MySQL 口令、gate 令牌、
+	# login 的排队令牌、match 的两把观战密钥),排在上面各段注解写入之后。目录表是脚本级变量:k8s_migrate_gate.tests.ps1 按 AST 单独抽出本函数跑,
+	# 那里没有它,条件为假。
+	if ($script:WorkloadSecretCatalog) {
+		$manifestContent = Add-WorkloadSecretsToManifest -SvcName $SvcName -ManifestContent $manifestContent
+		# 玩家域 Redis 口令的指纹(env 已在上面由 Add-PlayerRedisSecretEnv 注入,Secret redis-player-auth):只换玩家域口令时 Go 服务也滚动
+		# (交接 docs/handoff/handoff-global-singletons-p0-20261015.md §9.6 记过的缺口)。没开集群或没口令时不写。排在其余注解写入之后。
+		if ($SvcName -in $script:PlayerRedisClientServices -and -not [string]::IsNullOrEmpty((Get-PlayerRedisPasswordEnvName))) {
+			$manifestContent = Add-PodTemplateAnnotationEntry -SvcName $SvcName -ManifestContent $manifestContent `
+				-Key 'mmorpg.io/player-redis-auth-hash' -Value (Get-InjectedSecretFingerprint -SecretName 'player-redis/go' -Value $script:PlayerRedisPassword)
+		}
+	}
 
 	# gRPC 口准入(-NetworkPolicies on,只 guild / match):开放端口取本服务 manifest 里声明的其它全部 containerPort,gRPC 口取目录的 Port。
 	# 先渲染(形状不对在写操作之前 throw),在 Deployment 之前 apply。
@@ -13737,6 +13921,12 @@ function Apply-OneGoSvc {
 		}
 		$manifestContent = [regex]::Replace($manifestContent, $podSpecPattern, "    spec:`n      serviceAccountName: scene-manager`n      containers:")
 		$sceneManagerAgonesRbac = Get-Content -LiteralPath (Join-Path $GoSvcManifestsDir 'scene-manager-agones-rbac.yaml') -Raw
+	}
+
+	# 工作负载密钥的 Secret 先于 ConfigMap、迁移 Job 与 Deployment 写入。各 Stage 都写:全局服务的 Prepare 只起迁移 Job,它同样引用 mysql-auth;
+	# 同一次运行里重复的只写一次(Sync-WorkloadSecrets)。条件同上(按 AST 单独抽本函数的测试没有目录表)。
+	if ($script:WorkloadSecretCatalog) {
+		Sync-WorkloadSecrets -Namespace $Namespace -Consumer $SvcName
 	}
 
 	if ($Stage -ne 'Workload') {
@@ -14000,10 +14190,12 @@ function Write-GlobalGoSvcPendingReminder {
 	if ($DryRun -or -not (Test-ZoneDbDeployed)) { return }
 	$svcNames = @(Get-GlobalGoSvcNamesAfterDataService | Where-Object { Test-Path (Join-Path $GoSvcManifestsDir $GoSvcCatalogue[$_].Manifest) })
 	if ($svcNames.Count -eq 0) { return }
-	$result = Invoke-ClientEntryKubectl -KubectlArgs (@('get', 'deployment') + $svcNames + @('-n', $InfraNamespace, '--ignore-not-found', '-o', 'name')) `
+	# SQL 写者是 StatefulSet(Get-WorkloadKind),别的是 Deployment:两种一起查,每个名字在两种里各找一次,缺的被 --ignore-not-found 略过。
+	# 输出是 <kind>.apps/<名字>,下面只取名字。本函数会被契约测试按 AST 单独抽出来调,不依赖 Get-WorkloadKind。
+	$result = Invoke-ClientEntryKubectl -KubectlArgs (@('get', 'deployment,statefulset') + $svcNames + @('-n', $InfraNamespace, '--ignore-not-found', '-o', 'name')) `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
 	if ($result.ExitCode -ne 0) {
-		Write-Warning "[GlobalGoSvc]ReadFailed:could not read the global Go service Deployments in namespace ${InfraNamespace}: $($result.Stderr)"
+		Write-Warning "[GlobalGoSvc]ReadFailed:could not read the global Go service workloads in namespace ${InfraNamespace}: $($result.Stderr)"
 		return
 	}
 	$found = @(([string]$result.Stdout) -split '\r?\n' | ForEach-Object { ($_ -replace '^.*/', '').Trim() } | Where-Object { $_ })
@@ -14051,17 +14243,18 @@ function New-GatewayRateLimitBlockText {
 <#
 .SYNOPSIS
 	网关的 mmorpg 连哪里、按什么档位核验:返回 @{ Host; Backend; RequireTidb; RunMode }。
-	java-svc-gateway-config 的地址与两个开关、要不要跑建表 Job(gateway-schema,只在 tidb 档)都由它定。
+	java-svc-gateway-config 的地址、mmorpg.sql.backend 与另两个开关都由它定。
 
 .DESCRIPTION
 	mmorpg 与其余逻辑库在同一个全球权威 SQL 入口上(2026-11-05,docs/design/no-single-node-horizontal-scaling-20261001.md §6)。
 	login 也登记在这个库上,网关与 login 必须连同一个库,所以和 Go 服务一样所有档位都要显式给 -GlobalAuthorityTiDBHost,
 	不再回落 infra MySQL:回落了,网关写 infra MySQL 上的 mmorpg,login 写入口上的 mmorpg,同一个库分成两份。
-	tidb 档 require-tidb true、run-mode prod(与 jar 内缺省一致);mysql 档只在 dev 可用,require-tidb false、run-mode dev。
-	网关只在 run-mode 为 dev / test 时允许关掉 TiDB 强会话核验(AuthorityDatabaseConfiguration),非 TiDB 的库在别的档位起不来,
-	所以 staging / prod 的 mysql 档部署网关直接拒绝。MySQL 省钱档要部署网关,得先给 java/authority_jdbc 加 mysql 档
-	(同 Go 的 authoritysql:逐连接核对不是只读实例),见设计文档 §6.6。
-	写路径入口 Assert-LogicalDbPreflight、ConfigMap 生成与建表 Job 渲染都调它,规则只有这一处。
+	档位跟 -DatabaseBackend,写成网关的 mmorpg.sql.backend(规则在 java/authority_jdbc 的 AuthorityDataSource.Backend.resolve):
+	  - tidb:每条物理连接核对端是真实 TiDB 并固定强会话,require-tidb true;
+	  - mysql(MySQL 主从省钱档,任何档位都可用):每条物理连接核对端是可写的 MySQL 主库、不是 TiDB,会话固定 RC,与 Go 的
+	    authoritysql 同一判据。require-tidb 只对 tidb 档有意义,这里写 false。
+	两档 run-mode 都是 prod(与 jar 内缺省一致):不靠 dev 模式放宽核验。
+	写路径入口 Assert-LogicalDbPreflight 与 ConfigMap 生成都调它,规则只有这一处。
 #>
 function Resolve-GatewaySqlMode {
 	$sql = Get-GlobalAuthoritySqlSettings -Profile $ReleaseProfile -CanonicalHost $GlobalAuthorityTiDBHost `
@@ -14072,10 +14265,7 @@ function Resolve-GatewaySqlMode {
 	if ($sql.Backend -eq 'tidb') {
 		return @{ Host = $sql.Host; Backend = 'tidb'; RequireTidb = 'true'; RunMode = 'prod' }
 	}
-	if ($ReleaseProfile -eq 'dev') {
-		return @{ Host = $sql.Host; Backend = 'mysql'; RequireTidb = 'false'; RunMode = 'dev' }
-	}
-	throw "gateway: -ReleaseProfile $ReleaseProfile needs the mmorpg database on TiDB (-DatabaseBackend tidb). The gateway turns off its TiDB session check only in run-mode dev or test (AuthorityDatabaseConfiguration), so it cannot start on MySQL in $ReleaseProfile. Deploy with -SkipJavaSvc, or use -DatabaseBackend tidb."
+	return @{ Host = $sql.Host; Backend = 'mysql'; RequireTidb = 'false'; RunMode = 'prod' }
 }
 
 function New-JavaSvcConfigMapYaml {
@@ -14088,9 +14278,13 @@ function New-JavaSvcConfigMapYaml {
 	$info = $JavaSvcCatalogue[$SvcName]
 	$configMapName = $info.ConfigMap
 
-	$gateTokenSecret = $script:GateTokenSecret
 	$gatewayDbUser = $script:GatewayDbUser
-	$gatewayDbPassword = $script:GatewayDbPassword
+	# 数据源口令与 gate 令牌不进 ConfigMap(2026-11-10,docs/design/workload-secrets-via-k8s-secret.md):只写成对容器环境变量的引用,
+	# 值经 Secret gateway-db-auth / gate-token 注入同名变量(工作负载密钥目录)。注意两者都是 @ConfigurationProperties 绑定,Spring Boot
+	# 对解析不了的占位保留原文而不是拒启;K8s 上 secretKeyRef 不写 optional,变量缺失时 Pod 根本起不来(设计 §4.3)。
+	# 拼成变量再嵌进下面的双引号 here-string,不用转义 $(同 $gatewayAdminApiKeyRef)。
+	$gatewayDbPasswordRef = '${MMORPG_GATEWAY_DB_PASSWORD}'
+	$gatewayTokenSecretRef = '${MMORPG_GATE_TOKEN_SECRET}'
 
 	# gate.rate-limit(D91 的 trusted-proxies + G4b 的削峰阈值):片段接在下面已有的 gate: 键下(不能另起一个 gate:),
 	# 两者共用同一个 rate-limit: 键,只写 application.yaml 这一处、不另设 env(ingress_final §3 二选一)。
@@ -14137,6 +14331,7 @@ function New-JavaSvcConfigMapYaml {
 	$gatewayHikariConnectionTimeout = ''
 	$gatewayJdbcTimeoutQuery = ''
 	$gatewayJdbcHost = ''
+	$gatewaySqlBackend = ''
 	$gatewayRequireTidb = ''
 	$gatewayRunMode = ''
 	if ($SvcName -eq 'gateway') {
@@ -14163,6 +14358,7 @@ function New-JavaSvcConfigMapYaml {
 		# mmorpg 的入口与档位只由 Resolve-GatewaySqlMode 决定(写路径入口 Assert-LogicalDbPreflight 已经用同一个函数核过)。
 		$gatewaySql = Resolve-GatewaySqlMode
 		$gatewayJdbcHost = $gatewaySql.Host
+		$gatewaySqlBackend = $gatewaySql.Backend
 		$gatewayRequireTidb = $gatewaySql.RequireTidb
 		$gatewayRunMode = $gatewaySql.RunMode
 	}
@@ -14213,7 +14409,7 @@ spring:
     # connectTimeout / socketTimeout 镜像 jar 内 spring.datasource.url 的查询串(2026-10-16)。
     url: jdbc:mysql://${gatewayJdbcHost}/mmorpg?useSSL=false&allowPublicKeyRetrieval=true${gatewayJdbcTimeoutQuery}
     username: "${gatewayDbUser}"
-    password: "${gatewayDbPassword}"
+    password: "${gatewayDbPasswordRef}"
     # 连接池大小镜像 java/gateway_node/src/main/resources/application.yaml(单一真相),计入 MySQL 连接总账;
     # connection-timeout(取连接的等待上限,毫秒)同样镜像该文件。
     hikari:
@@ -14227,16 +14423,18 @@ spring:
 etcd:
   endpoints: http://etcd.${InfraNamespace}:2379
 gate:
-  token-secret: "${gateTokenSecret}"${gatewayRateLimitBlock}
+  token-secret: "${gatewayTokenSecretRef}"${gatewayRateLimitBlock}
 zone:
   probe:
     interval-ms: 5000
 admin:
   api-key: "${gatewayAdminApiKeyRef}"
-# TiDB 强会话核验与运行模式跟着 SQL 档位走(Resolve-GatewaySqlMode):tidb 档 true / prod,dev 的 mysql 档 false / dev。
+# 物理连接的核对档位跟着 -DatabaseBackend 走(Resolve-GatewaySqlMode):tidb 档核对真实 TiDB,mysql 档核对可写的 MySQL 主库;
+# 两档都是 run-mode prod,require-tidb 只对 tidb 档有意义。
 mmorpg:
   run-mode: ${gatewayRunMode}
   sql:
+    backend: ${gatewaySqlBackend}
     require-tidb: ${gatewayRequireTidb}
 "@
 		}
@@ -14258,21 +14456,21 @@ $($svcConfig -split "`n" | ForEach-Object { "    $_" } | Out-String)
 
 <#
 .SYNOPSIS
-	渲染 mmorpg 逻辑库在 TiDB 上的建表 Job(gateway-schema)与它读的 DDL ConfigMap;mysql 档返回 $null。只渲染,不写集群。
+	渲染 mmorpg 逻辑库的建表 Job(gateway-schema)与它读的 DDL ConfigMap;入口是集群内单实例 MySQL 时返回 $null。只渲染,不写集群。
 
 .DESCRIPTION
 	网关没有 Go 的 -migrate:闸门表由 writer_authority prepare-schema 走共享的 EnsureCatalogSchema 建,业务表与种子行由同一次调用的
 	-ddl-file 执行网关的 schema.sql(唯一来源)。设计见 docs/design/no-single-node-horizontal-scaling-20261001.md §6.3,清单见
 	deploy/k8s/manifests/java-svc/gateway-schema.yaml。
 	镜像与 schema Secret 取自 boot 目录里 <ns>/gateway 的条目(Get-SqlWriterCatalogEntry,名册定下来之前就能读),都不合格就 throw。
-	mysql 档(只在 dev,入口应是 infra MySQL,见 Resolve-GatewaySqlMode)不建 Job:那里由 mysql-init 的 gateway_tables.sql 建这个库。
-	入口给成别的 MySQL 时没人建表,网关按 ddl-auto: validate 启动即失败,不会写错库。
+	tidb 档与外部 MySQL 主库(mysql 档)都跑,MMORPG_SQL_BACKEND 跟着档位。只有入口就是集群内单实例 MySQL(只在 dev,Test-InfraMysqlInUse)时
+	不建 Job:那台由 mysql-init 的 gateway_tables.sql 建这个库。
 #>
 function New-GatewaySchemaJobManifests {
 	param([Parameter(Mandatory = $true)][string]$Namespace)
 
 	$sql = Resolve-GatewaySqlMode
-	if ($sql.Backend -ne 'tidb') { return $null }
+	if (Test-InfraMysqlInUse) { return $null }
 
 	$entry = Get-SqlWriterCatalogEntry -Namespace $Namespace -SvcName 'gateway'
 	if (-not $entry.Contains('schemaPermissionSecret') -or [string]$entry.schemaPermissionSecret -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
@@ -14302,6 +14500,7 @@ $($schemaLines -join "`n")
 	$job = $job.Replace('PLACEHOLDER_SCHEMA_PERMISSION_SECRET', [string]$entry.schemaPermissionSecret)
 	$job = $job.Replace('PLACEHOLDER_DB_PLACEMENT_JSON', $placementJson)
 	$job = $job.Replace('PLACEHOLDER_DB_PLACEMENT_REQUIRED', $placementRequired)
+	$job = $job.Replace('PLACEHOLDER_SQL_BACKEND', $sql.Backend)
 	$leftover = [regex]::Matches($job, '(__[A-Z][A-Z0-9_]*__|PLACEHOLDER_[A-Z_]+)') | ForEach-Object { $_.Value } | Sort-Object -Unique
 	if ($leftover.Count -gt 0) {
 		throw "gateway-schema.yaml has unreplaced placeholders: $($leftover -join ', '). Add the matching Replace in New-GatewaySchemaJobManifests. Nothing was written."
@@ -14316,7 +14515,7 @@ $($schemaLines -join "`n")
 .DESCRIPTION
 	门禁与等待口径同 Apply-GoSvcMigrateJob:staging / prod 与 -SqlSchemaOnly 恒等 Job Complete,失败或超时中断发布,gateway Deployment 不 apply;
 	dev 只在 -WaitReady 下等。mmorpg 全区共用,每个 zone 的 zone-up 各跑一次,语句都是幂等的(-ddl-file 只认 CREATE TABLE IF NOT EXISTS
-	与 INSERT IGNORE INTO)。Rendered 为 $null(mysql 档)时什么也不做。
+	与 INSERT IGNORE INTO)。Rendered 为 $null(入口是集群内单实例 MySQL)时什么也不做。
 #>
 function Invoke-GatewaySchemaJob {
 	param(
@@ -14329,7 +14528,7 @@ function Invoke-GatewaySchemaJob {
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $Rendered.ConfigMap
 	Invoke-Kubectl -Args @("delete", "job", $jobName, "-n", $Namespace, "--ignore-not-found")
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $Rendered.Job
-	Write-Host "  [applied] $jobName -> $($Rendered.Image) (mmorpg schema Job on TiDB, before gateway Deployment)"
+	Write-Host "  [applied] $jobName -> $($Rendered.Image) (mmorpg schema Job, before gateway Deployment)"
 	if ([bool]$WaitReady -or ($ReleaseProfile -ne 'dev') -or [bool]$SqlSchemaOnly) {
 		Wait-ForGoSvcMigrateJob -Namespace $Namespace -JobName $jobName -SvcName 'gateway'
 		return
@@ -14354,7 +14553,8 @@ function Apply-JavaSvcManifests {
 
 	Write-Host "Applying Java service manifests to namespace $Namespace (registry=$JavaSvcRegistry tag=$JavaSvcTag)"
 
-	foreach ($svcName in $JavaSvcCatalogue.Keys) {
+	# 按名字排序:$JavaSvcCatalogue 是普通哈希表,不排序时 apply 先后与 DryRun 输出每次运行都可能不同(理由见 Get-GlobalGoSvcNames)。
+	foreach ($svcName in @($JavaSvcCatalogue.Keys | Sort-Object)) {
 		$info = $JavaSvcCatalogue[$svcName]
 		$svcImage = "$JavaSvcRegistry/$($info.ImageName):$JavaSvcTag"
 		$isGateway = ($svcName -eq 'gateway')
@@ -14376,7 +14576,7 @@ function Apply-JavaSvcManifests {
 		$manifestContent=Add-SqlWriterBootManifest -ManifestContent $manifestContent -Namespace $Namespace -SvcName $svcName -RuntimeKind java
 		# 网关的写者 registrar 与 Go 写者一样按库映射连 mmorpg(2026-11-05,docs/design/no-single-node-horizontal-scaling-20261001.md §6)。
 		$manifestContent=Add-SqlWriterPlacementEnv -ManifestContent $manifestContent
-		# mmorpg 在 TiDB 上的建表 Job 也在这里先渲染(mysql 档为 $null),形状或目录条目不对在任何写操作之前拦下。
+		# mmorpg 的建表 Job 也在这里先渲染(入口是集群内单实例 MySQL 时为 $null),形状或目录条目不对在任何写操作之前拦下。
 		$gatewaySchemaJob = if ($isGateway) { New-GatewaySchemaJobManifests -Namespace $Namespace } else { $null }
 
 		# gateway 管理面口令(admin.api-key)只经 Secret 进容器(见 $script:GatewayAdminApiKeyEnv 处的说明):env 走 secretKeyRef,
@@ -14412,18 +14612,22 @@ function Apply-JavaSvcManifests {
 			# 共享 Redis 口令:容器经 secretKeyRef 拿 SHARED_REDIS_PASSWORD(ConfigMap 的 spring.data.redis.password 只写对它的引用),
 			# 口令指纹追加在上面那段注解末尾,不动口令指纹第一行、削峰指纹第二行的位置。口令为空(dev 未注入)时原样返回。
 			$manifestContent = Add-SharedRedisAuthToManifest -SvcName $svcName -ManifestContent $manifestContent
+			# 数据源口令与 gate 令牌(工作负载密钥目录 gateway-db-auth / gate-token):env 与指纹同样追加在注解段末。
+			$manifestContent = Add-WorkloadSecretsToManifest -SvcName $svcName -ManifestContent $manifestContent
 			if (-not [string]::IsNullOrWhiteSpace($GatewayIngressHost)) {
 				$ingressYaml = New-GatewayIngressYaml -IngressHost $GatewayIngressHost -ZoneName $CurrentZoneName `
 					-IngressClassName $GatewayIngressClassName -TlsSecret $GatewayIngressTlsSecret -ServicePort $info.HttpPort
 			}
 		}
 
-		# 写操作:ConfigMap → Secret → mmorpg 建表 Job(tidb 档,门禁下等它完成)→ Deployment(secretKeyRef 不是 optional,
-		# Secret 必须先于 Deployment 落地;闸门表没建好之前 registrar 注册不了)→ Ingress。
+		# 写操作:ConfigMap → Secret → mmorpg 建表 Job(tidb 档,门禁下等它完成)→ 工作负载(secretKeyRef 不是 optional,
+		# Secret 必须先于工作负载落地;闸门表没建好之前 registrar 注册不了)→ Ingress。gateway 的工作负载是 StatefulSet,
+		# apply 之前先删换类型之前留下的同名 Deployment,排在建表 Job 之后。
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
 		if ($isGateway) {
 			Apply-InjectedSecret -Namespace $Namespace -Name $script:GatewayAdminApiKeySecretName -Key $script:GatewayAdminApiKeySecretKey `
 				-Value $script:GatewayAdminApiKey -AppLabel "gateway"
+			Sync-WorkloadSecrets -Namespace $Namespace -Consumer $svcName
 			Invoke-GatewaySchemaJob -Namespace $Namespace -Rendered $gatewaySchemaJob
 			# gateway 是 SQL 写者,工作负载是 StatefulSet:先收掉换类型之前的同名 Deployment(Remove-LegacySqlWriterDeployment)。
 			Remove-LegacySqlWriterDeployment -Namespace $Namespace -Name $svcName
@@ -14746,7 +14950,7 @@ function Apply-Zone {
 	)
 
 	$namespace = Get-ZoneNamespace -Name $CurrentZoneName
-	# -SqlSchemaOnly:只跑 db、data-service 的 ConfigMap 与迁移 Job,以及 tidb 档 mmorpg 的建表 Job(gateway-schema,网关与 login
+	# -SqlSchemaOnly:只跑 db、data-service 的 ConfigMap 与迁移 Job,以及 mmorpg 的建表 Job(gateway-schema,入口是集群内单实例 MySQL 时除外;网关与 login
 	# 都登记在这个库上),gate、scene 和所有写者进程都不起。下一步按 Job 种下的 generation 写名册。
 	if ($SqlSchemaOnly) {
 		Write-Host "Applying zone schema Jobs only: zone=$CurrentZoneName zone_id=$CurrentZoneId namespace=$namespace"
@@ -14786,6 +14990,9 @@ function Apply-Zone {
 	# 共享 Redis 口令的本 namespace 副本:gate / scene 的 ZONE_REDIS_PASSWORD(scene 另有 SCENE_CONTROL_REDIS_PASSWORD)按 secretKeyRef
 	# 引用它(optional: false),先于任一 C++ 工作负载落地;dev 无口令时删掉残留,C++ 也不引用它。
 	Sync-RedisAuthSecret -Namespace $namespace
+	# gate 的工作负载密钥(gate 令牌、观战凭证)在本 namespace 的 Secret,先于 gate 工作负载落地;zone 级 Go 服务与 gateway 要的在
+	# Apply-OneGoSvc / Apply-JavaSvcManifests 里各自同步(同一把只写一次)。
+	Sync-WorkloadSecrets -Namespace $namespace -Consumer 'cpp:gate'
 
 	$configMapName = "node-config"
 	$gateServiceName = "gate-entry"
@@ -15239,13 +15446,13 @@ function New-BattleWorkloadManifest {
 	if ($BattleOrchestrator -eq 'agones') {
 		$health = Resolve-BattleFleetHealth -InitialDelaySeconds $AgonesHealthInitialDelaySeconds `
 			-PeriodSeconds $AgonesHealthPeriodSeconds -FailureThreshold $AgonesHealthFailureThreshold
-		$yaml = New-BattleFleetYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global' @nodeArgs) -Replicas $replicas `
+		$yaml = New-BattleFleetYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global' -Role 'battle' @nodeArgs) -Replicas $replicas `
 			-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode $ClientEntryMode `
 			-Health $health -BuildLabel (Get-ImageBuildLabel -Image $image) -ClientPublicHost $ClientPublicHost
 	}
 	elseif ($ClientEntryMode -eq 'external') {
 		# Deployment + hostPort 20000:只用于验证与回退(D86),每个节点只能跑 1 个副本、没有忙碌保护(preflight 已警告)。
-		$yaml = New-BattleHostPortDeploymentYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global') `
+		$yaml = New-BattleHostPortDeploymentYaml -PodCommon (New-CppNodePodCommon -SidecarZoneLabel 'global' -Role 'battle') `
 			-Replicas $BattleReplicas -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' `
 			-ClientPublicHost $ClientPublicHost
 	}
@@ -15294,6 +15501,8 @@ function Apply-BattlePool {
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -AllowDisruptiveSwitch:$AllowDisruptiveSwitch -DryRun:$DryRun
 
 	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $ConfigMapYaml
+	# battle 的工作负载密钥(battle 票据、gate 令牌)在 infra namespace 的 Secret,先于 battle 工作负载落地(金丝雀池同一把,只写一次)。
+	Sync-WorkloadSecrets -Namespace $InfraNamespace -Consumer 'cpp:battle'
 	# battle 是全局池,跑在 infra namespace,所以日志 sidecar 的 ConfigMap 也要在这里建一份
 	# (zone namespace 里的那份对它不可见)。它不属于任何 zone:传空串 = 不写 mmorpg.io/zone 标签,
 	# 这样 {mmorpg.io/zone=<某个真 zone>} 的选择器不会把它误选进去。

@@ -1601,14 +1601,18 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 	return sid, nid, nil
 }
 
-// deadNodeReassignFollowUpTimeout 是死节点改派里两件收尾动作的时限:归属落地后转移 Agones 名额,
-// CAS 落空后回收预建的实体。两者都不挂请求 ctx —— 请求超时或取消时,K8s / RPC 写入可能已经生效、
+// deadNodeReassignFollowUpTimeout 是死节点改派里收尾动作的时限:归属落地后提交 Agones 名额、没用上的名额放弃,
+// CAS 落空后回收预建的实体。它们都不挂请求 ctx —— 请求超时或取消时,K8s / RPC 写入可能已经生效、
 // 本端却拿到错误(名额白占一份,或实体没回收)。时限只为不让 EnterScene 的应答被拖住。
 const deadNodeReassignFollowUpTimeout = 3 * time.Second
 
 // reassignSceneOffDeadNode 是 resolveScene 的死节点自愈:场景 sceneId 的属主 deadNode 已摘出负载集。
-// 只给大世界频道做,顺序与 rebalance(migrateWorldChannel)相同:先在新节点上建实体,再用
-// reassignSceneNode 的 CAS 改归属,最后转移 Agones 名额。
+// 只给大世界频道做,顺序与 rebalance(migrateWorldChannel)相同:先在落点的 GameServer 上占 Agones 名额,
+// 再在落点上建实体,然后用 reassignSceneNode 的 CAS 改归属,最后提交名额。
+//
+// 先占名额(docs/design/agones-scene-node-high-density.md §13.10):不把频道搬进 Agones 认为已经满了的进程。
+// 属主已死、频道必须搬走,挑中的节点满了就交给 GSA 在本 zone 另挑一台有空位的,落点改成它;哪台都占不到就
+// 不搬,归属一个字节不改,回错误由上游重试(FleetAutoscaler 扩出空位之后就能搬)。之后任何一步没成都放弃这次占的名额。
 //
 // 只给频道做:
 //   - 频道是常驻的,死节点上那份必须在别处重建,玩家才有地方去;rebalance、init 与懒改派做的是同一件事。
@@ -1656,44 +1660,60 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 			sceneId, deadNode, ErrReentryBarrierPending)
 	}
 	// 频道只能落在能承载大世界的节点上(仅承载副本的节点会在 C++ EnterScene 按类型拒绝)。
-	newNodeId, err := GetBestNodeForPurpose(l.ctx, l.svcCtx, zoneId, constants.NodePurposeWorld)
+	bestNodeId, err := GetBestNodeForPurpose(l.ctx, l.svcCtx, zoneId, constants.NodePurposeWorld)
 	if err != nil {
 		return 0, "", fmt.Errorf("scene %d mapped to dead node %s and no live world-hosting node: %w", sceneId, deadNode, err)
 	}
-	// 先分配这次放置的代次,再带着它建实体,挂请求 ctx(docs/design/world-channel-placement-generation.md)。
-	// 任何失败(计数器出错、节点拒绝、请求被截断、超时)都在改归属之前返回,归属一个字节都没改。截断与超时的
-	// 结论未知:节点可能已经建出实体,这份实体不回收 —— 下一次改派多半仍挑它,按 scene_id 幂等复用;与
-	// migrateWorldChannel 建场景失败时的取舍相同。
+	// 先占名额:挑中的节点满了时落点换成回落分配挑的节点(见函数注释)。
+	newNodeId, placement, ok := reserveAgonesRoomForWorldChannel(l.ctx, l.svcCtx, zoneId, sceneId, bestNodeId, true)
+	if !ok {
+		return 0, "", fmt.Errorf("scene %d on dead node %s: no Agones room capacity in zone %d, ownership unchanged",
+			sceneId, deadNode, zoneId)
+	}
+	if newNodeId == deadNode {
+		// 回落分配挑中了属主自己(它的 Pod 还在 etcd 里,负载集却已判死):搬过去等于没搬。
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "fallback_picked_old_owner")
+		return 0, "", fmt.Errorf("scene %d on dead node %s: free allocation picked the dead owner, ownership unchanged",
+			sceneId, deadNode)
+	}
+	// 再分配这次放置的代次,带着它建实体,挂请求 ctx(docs/design/world-channel-placement-generation.md)。
+	// 任何失败(计数器出错、节点拒绝、请求被截断、超时)都在改归属之前返回,归属一个字节都没改,占的名额放弃。
+	// 截断与超时的结论未知:节点可能已经建出实体,这份实体不回收 —— 下一次改派多半仍挑它,按 scene_id 幂等复用;
+	// 与 migrateWorldChannel 建场景失败时的取舍相同。
 	generation, err := allocatePlacementGeneration(l.svcCtx, zoneId)
 	if err != nil {
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "placement_generation_unavailable")
 		return 0, "", fmt.Errorf("scene %d on dead node %s, ownership unchanged: %w", sceneId, deadNode, err)
 	}
 	if _, err := RequestNodeCreateSceneAtGeneration(l.ctx, l.svcCtx, zoneId, newNodeId, uint32(sceneConfId), sceneId, generation); err != nil {
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "create_scene_failed")
 		return 0, "", fmt.Errorf("scene %d on dead node %s: CreateScene on %s failed, ownership unchanged: %w", sceneId, deadNode, newNodeId, err)
 	}
 	if !reassignWorldChannelNode(l.svcCtx, zoneId, sceneId, deadNode, newNodeId, worldChannelsKey(zoneId, sceneConfId), generation) {
-		return l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation)
+		return l.adoptOwnerAfterLostReassign(sceneId, sceneConfId, zoneId, deadNode, newNodeId, generation, placement)
 	}
 	l.Logger.Infof("resolveScene: world channel %d was on dead node %s, reassigned to %s", sceneId, deadNode, newNodeId)
-	l.transferAgonesRoomAfterReassign(sceneId, zoneId, newNodeId)
+	l.commitAgonesRoomAfterReassign(sceneId, zoneId, newNodeId, placement)
 	return sceneId, newNodeId, nil
 }
 
 // adoptOwnerAfterLostReassign 处理 reassignSceneOffDeadNode 的 CAS 落空。此时 triedNode 上已经按放置代次 generation
-// 预建了实体;reassignWorldChannelNode 本次什么都没写,Redis 出错除外(脚本可能已执行,结论未知)。按这次的代次跑一次
-// 回收(reclaimUnownedWorldChannelEntity,限时 deadNodeReassignFollowUpTimeout,不挂请求 ctx):在一个脚本里比对属主、
-// 抬代次高水位,属主不是 triedNode 才拆预建的实体。比对时读到的属主就是重读结果,据此定应答,不再改派。
+// 预建了实体、在它的 GameServer 上占了名额(placement,没开 Agones 时为 nil);reassignWorldChannelNode 本次什么都没写,
+// Redis 出错除外(脚本可能已执行,结论未知)。按这次的代次跑一次回收(reclaimUnownedWorldChannelEntity,限时
+// deadNodeReassignFollowUpTimeout,不挂请求 ctx):在一个脚本里比对属主、抬代次高水位,属主不是 triedNode 才拆预建的
+// 实体。比对时读到的属主就是重读结果,据此定应答,不再改派。
 //
 // 不为落空另开错误码:落空的常见原因是别的写者刚做完同一件事,答案已经在 Redis 里,
 // 让玩家重试一圈拿到的也是这一次重读的结果。
 //
-//   - 比对失败:不知道预建的实体是不是现任属主的,不回收(同 destroyUnownedMigrationTarget),回错误。
+//   - 比对失败:不知道预建的实体是不是现任属主的,不回收(同 destroyUnownedMigrationTarget),放弃这次的名额,回错误。
+//     脚本其实已执行的话,旧条目仍记着,总数不少,之后由名额对账转过来。
 //   - 属主就是 triedNode:预建的实体正是现任属主的实体 —— 别的写者挑了同一个节点,或者 Redis 报错而本次脚本
-//     其实已执行。直接采用(高水位已抬到 generation,之后迁出时的拆除拆得到这份实体)。名额转移照做:它对同一个
-//     目标幂等(见 TransferAgonesRoomForScene),而后一种情况、以及不转名额的写者先提交的情况,都只能靠这里转。
+//     其实已执行。直接采用(高水位已抬到 generation,之后迁出时的拆除拆得到这份实体)。名额照常提交:别的写者已提交的,
+//     记录已在这台上,这次的条目放弃;没提交的,这次就是那一份。两边都按条目,只会留一条(commitAgonesRoomTransfer)。
 //
 // 其余情况属主都不是 triedNode,预建的实体没有归属,已按 generation 回收(拆除失败只记日志:留下的空实体没有映射
-// 指向它,不影响路由),再按属主定结果:
+// 指向它,不影响路由),这次的名额放弃,再按属主定结果:
 //
 //   - 属主是活节点:别的写者已接手,直接用它。
 //   - 属主仍是 deadNode:不是被抢,是没改成 —— 第二道屏障拦下、频道在提交前被缩容排空摘出在役集合、代次过期,
@@ -1701,11 +1721,12 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 //   - 映射没了:场景已被销毁,与入口处「查无此场景」同一处理。
 //   - 属主身份歧义或也不活:拒绝,不连环改派;下一次请求按当时的属主重新判定。
 func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint64, zoneId uint32, deadNode, triedNode string,
-	generation uint64) (uint64, string, error) {
+	generation uint64, placement *agonesPlacement) (uint64, string, error) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
 	reclaim, err := reclaimUnownedWorldChannelEntity(ctx, l.svcCtx, zoneId, sceneConfId, sceneId, triedNode, generation)
 	cancel()
 	if err != nil {
+		l.abandonAgonesRoomAfterReassign(zoneId, placement, "reassign_outcome_unknown")
 		return 0, "", fmt.Errorf("scene %d: reassign off dead node %s to %s has an unknown outcome and the owner check failed; the entity pre-created on %s is left in place: %w",
 			sceneId, deadNode, triedNode, triedNode, err)
 	}
@@ -1713,9 +1734,10 @@ func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint6
 	if reclaim.Kept {
 		l.Logger.Infof("resolveScene: scene %d reassign %s -> %s lost the CAS, but %s already owns it; adopting the pre-created entity",
 			sceneId, deadNode, triedNode, triedNode)
-		l.transferAgonesRoomAfterReassign(sceneId, zoneId, triedNode)
+		l.commitAgonesRoomAfterReassign(sceneId, zoneId, triedNode, placement)
 		return sceneId, owner, nil
 	}
+	l.abandonAgonesRoomAfterReassign(zoneId, placement, "reassign_lost")
 
 	if reclaim.DestroyErr != nil {
 		l.Logger.Errorf("resolveScene: reclaiming unowned pre-created scene %d on %s failed (owner=%q): %v",
@@ -1744,13 +1766,21 @@ func (l *EnterSceneLogic) adoptOwnerAfterLostReassign(sceneId, sceneConfId uint6
 	return sceneId, owner, nil
 }
 
-// transferAgonesRoomAfterReassign 在归属已经落到 newNode 之后,把 Agones 名额转过去。名额只是容量记账,
-// 占不到时 TransferAgonesRoomForScene 保留旧名额并打日志,交给 reconcile 暴露漂移,不拦本次进场。
-// Agones 未启用时是 no-op。
-func (l *EnterSceneLogic) transferAgonesRoomAfterReassign(sceneId uint64, zoneId uint32, newNode string) {
+// commitAgonesRoomAfterReassign 在归属已经落到 newNode 之后,提交改派之前在 newNode 上预占的名额(commitReservedAgonesRoom:
+// 写进记录、删旧条目)。名额只是容量记账,提交出错不拦本次进场:旧条目仍记着、新条目由在途占用护着,只会多记、不会少记,
+// 在途占用过期之后对账按记录收拾。Agones 未启用时 placement 为 nil,什么都不做。
+func (l *EnterSceneLogic) commitAgonesRoomAfterReassign(sceneId uint64, zoneId uint32, newNode string, placement *agonesPlacement) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
 	defer cancel()
-	TransferAgonesRoomForScene(ctx, l.svcCtx, sceneId, newNode, zoneId)
+	commitReservedAgonesRoom(ctx, l.svcCtx, zoneId, sceneId, newNode, placement)
+}
+
+// abandonAgonesRoomAfterReassign 放弃改派之前预占、最终没用上的名额(建实体失败、CAS 落空且属主不是落点等)。
+// 删条目失败不用管:在途占用已删,没有记录指着的条目由对账当孤儿收。Agones 未启用时 placement 为 nil,什么都不做。
+func (l *EnterSceneLogic) abandonAgonesRoomAfterReassign(zoneId uint32, placement *agonesPlacement, reason string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), deadNodeReassignFollowUpTimeout)
+	defer cancel()
+	abandonAgonesPlacement(ctx, l.svcCtx, zoneId, placement, reason)
 }
 
 func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint64, zoneId uint32, playerId uint64) (uint64, string, bool, error) {

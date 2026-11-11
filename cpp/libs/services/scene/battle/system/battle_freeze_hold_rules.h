@@ -24,10 +24,14 @@
 //
 // NONE(SQL 里还没有终局决定)要分两种(2026-11-06 负责人定):
 //   - 这一局有可裁决的 v1 Create 原件(match 回 terminal_expected = true)→ PENDING,按「结果未知」续冻。
-//     冻结到期 = 截止 + 60s 终局宽限 + 60s 投递余量,晚于 match 补写 ABORT 的时刻(截止 + 宽限,ready_recovery);
-//     到期还是 NONE,只说明 ABORT 还没写成(match 不可用或恢复任务滞后),而 COMPLETE 不判截止、仍可能先落库,
-//     所以 NONE 不是终局证据。这样「解冻之后 COMPLETE 才落库」只剩续冻上限之后的一段,归入有告警的那条残余。
-//   - 没有成局行,或原件不可裁决(终局协议 0、旧局、battle 明确采用旧协议、坏形状;match 回 terminal_expected = false)
+//     冻结到期 = 截止 + 60s 终局宽限 + 60s 投递余量。match 过了截止 + 宽限不立刻补写 ABORT,先向原 battle 实例取证,
+//     有「没有房间」或「原进程已不在」的证据才写;没有证据就等到硬上限(截止 + 宽限 + 10 分钟,越过后第一次看到房间还在
+//     再给 2 分钟)。match 可用时 ABORT 最晚约在截止 + 14.2 分钟落定(另算恢复循环两次访问的延迟),仍早于续冻上限(截止 + 17 分钟)
+//     (2026-11-10,docs/design/cross-zone-matchmaking.md §13.3)。所以冻结到期时查到 NONE 很常见,只说明 ABORT 还没写成
+//     (match 正在取证、不可用或恢复任务滞后),而 COMPLETE 不判截止、仍可能先落库,NONE 不是终局证据,照常续冻。
+//     这样「解冻之后 COMPLETE 才落库」只剩续冻上限之后的一段,归入有告警的那条残余。
+//   - 没有成局行,或原件不可裁决(终局协议 0、旧局、battle 明确采用旧协议、坏形状、operation 为空、缺终局的旧 state 5、
+//     只有归档没有决定的终局行;与截止 ABORT 同一判据 autoTerminalOriginal;match 回 terminal_expected = false)
 //     → NO_ORIGINAL,照常解冻,不能被 NONE 拖满上限:COMPLETE 与截止 ABORT 两条写终局的路径都要求原件可裁决
 //     (go/match/internal/authority/terminal_read.go 的 TerminalOutcomeExpected),这种局永远不会有结算。
 //     现网 gather 只经 SaveSupportedIntent 落 v1 原件,这一类只剩上线前的旧成局与锁值对不上任何成局的情形。

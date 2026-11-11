@@ -202,4 +202,7 @@ logging:
 mmorpg:
   run-mode: ${MMORPG_RUN_MODE:prod}
   sql:
+    # tidb | mysql(AuthorityDataSource.Backend.resolve):mysql 是 MySQL 主从省钱档,每条物理连接核对端是可写的 MySQL 主库。
+    backend: ${MMORPG_SQL_BACKEND:tidb}
+    # 只对 tidb 档有意义;false 关掉 TiDB 强会话核验,只许 run-mode dev / test。
     require-tidb: ${MMORPG_SQL_REQUIRE_TIDB:true}

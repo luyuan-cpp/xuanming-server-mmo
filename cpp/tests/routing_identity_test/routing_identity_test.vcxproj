@@ -220,6 +220,25 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_router_subset\</ObjectFileName>
     </ClCompile>
+    <!-- gate 路由 lane(docs/design/client-request-ordering.md §4):纯逻辑头 router_lane.h 只依赖 STL;装配层 client_request_lane.cpp
+         直接编进测试,发送函数与发出钩子注入替身,会话表 tlsSessionManager 来自 gate.lib。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/rpc/client_request_lane.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_lane\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/router_lane_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../libs/services/gate/session/comp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_lane\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="client_request_lane_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_lane\</ObjectFileName>
+    </ClCompile>
+    <!-- 排空迁移遇上 lane 不空的会话:只测 Classify,被测源码随上面 drain_migration 那组编进来。 -->
+    <ClCompile Include="drain_migration_lane_busy_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_drain_migration\</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

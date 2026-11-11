@@ -355,17 +355,8 @@ func acquireAgonesRoomOnGameServer(
 	}, nil
 }
 
-// ReserveAgonesRoomForWorldChannel 为一个**世界频道**预占房间名额。
-//
-// 世界频道与副本的分配策略不同,不能直接复用 AcquireAgonesPlacement:
-// 频道的落点是 assignNodeByHash 的一致性哈希结果,rebalance 依赖这个分布
-// 保持稳定;让 GSA 自由挑会和 rebalance 互相打架(它挑一个、rebalance 又
-// 想搬回哈希目标)。所以这里先按**指定节点**预占,只有那个节点没容量时
-// 才回落到自由分配,并把实际落点返回给调用方。
-//
-// 返回 (实际节点, 预占的名额, 是否成功)。Agones 未启用时返回 (preferredNode, nil, true) —— 不做任何事。
-// scene:{id}:agones_gs 由调用方的登记脚本和频道的其余状态一起写(registerWorldChannel),
-// 登记没落地时由调用方放弃这里占的名额(abandonAgonesPlacement)。
+// ReserveAgonesRoomForWorldChannel 为一个新建的**世界频道**预占房间名额:先按指定节点占,那个节点没容量时回落自由分配。
+// 见 reserveAgonesRoomForWorldChannel。
 //
 // 没有这一步的后果:世界频道不占 rooms 名额 -> 列表少算 ->
 // FleetAutoscaler(policy=List,key=rooms)对大世界的人数增长完全无感,
@@ -377,22 +368,63 @@ func ReserveAgonesRoomForWorldChannel(
 	preferredNode string,
 	zoneID uint32,
 ) (string, *agonesPlacement, bool) {
+	return reserveAgonesRoomForWorldChannel(ctx, svcCtx, zoneID, sceneID, preferredNode, true)
+}
+
+// reserveAgonesRoomForWorldChannel 在把世界频道放到 preferredNode 之前,先在那台 GameServer 上占名额(写在途占用、加条目)。
+// 新建频道与四条改派路径都先占名额再放:不把房间塞进 Agones 认为已经满了的进程(docs/design/agones-scene-node-high-density.md
+// §13.10)。
+//
+// 世界频道与副本的分配策略不同,不能直接复用 AcquireAgonesPlacement:频道的落点是 assignNodeByHash 的一致性哈希结果,
+// rebalance 依赖这个分布保持稳定;让 GSA 自由挑会和 rebalance 互相打架(它挑一个、rebalance 又想搬回哈希目标)。
+// 所以先按**指定节点**占。那个节点没容量时:
+//   - allowFallback 为 true(新建频道,或属主已死、频道必须搬走):回落到 GSA 自由分配,在本 zone 挑一台有空位、承载大世界的
+//     GameServer,返回它对应的节点。落点偏离哈希目标的,之后由 rebalance 搬回去;
+//   - allowFallback 为 false(rebalance 换更好的家):不放,搬到别处就违背了这次迁移的目的。
+//
+// 返回 (实际节点, 预占的名额, 是否成功)。Agones 未启用时返回 (preferredNode, nil, true) —— 不做任何事。
+// 返回 false 时一个名额都没留:调用方这次不放。成功时调用方要么把名额写进记录(新建:登记脚本;改派:CAS 落地之后
+// commitReservedAgonesRoom),要么 abandonAgonesPlacement 放弃。
+func reserveAgonesRoomForWorldChannel(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	zoneID uint32,
+	sceneID uint64,
+	preferredNode string,
+	allowFallback bool,
+) (string, *agonesPlacement, bool) {
 	if !AgonesEnabled(svcCtx) {
 		return preferredNode, nil, true
 	}
 
 	placement, err := AcquireAgonesRoomOnNode(ctx, svcCtx, preferredNode, zoneID, sceneID)
-	if err != nil {
-		logx.Infof("[Agones] world channel %d: hash-target node %s cannot take a room (%v), "+
-			"falling back to free allocation (rebalance will re-home it later)", sceneID, preferredNode, err)
+	if err == nil {
+		return preferredNode, placement, true
+	}
+	if !allowFallback {
+		logx.Infof("[Agones] world channel %d: node %s cannot take a room (%v); not placing it there", sceneID, preferredNode, err)
+		return "", nil, false
+	}
+	logx.Infof("[Agones] world channel %d: hash-target node %s cannot take a room (%v), "+
+		"falling back to free allocation (rebalance will re-home it later)", sceneID, preferredNode, err)
 
-		placement, err = AcquireAgonesPlacement(ctx, svcCtx, zoneID, sceneID, constants.NodePurposeWorld)
-		if err != nil {
-			logx.Errorf("[Agones] world channel %d: no room capacity in zone %d: %v", sceneID, zoneID, err)
-			return "", nil, false
-		}
+	placement, err = AcquireAgonesPlacement(ctx, svcCtx, zoneID, sceneID, constants.NodePurposeWorld)
+	if err != nil {
+		logx.Errorf("[Agones] world channel %d: no room capacity in zone %d: %v", sceneID, zoneID, err)
+		return "", nil, false
 	}
 	return placement.NodeID, placement, true
+}
+
+// commitReservedAgonesRoom 在改派 CAS 落地之后,把改派之前预占的名额提交进记录(commitAgonesRoomTransfer:属主仍是 newNode
+// 才改记录、同一步消费在途占用,改成了就删旧条目)。placement 为 nil(没开 Agones)时什么都不做。
+// 调用方传不随请求取消的 ctx:K8s 删旧条目可能已经生效、本端却拿到错误。
+func commitReservedAgonesRoom(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, sceneID uint64,
+	newNode string, placement *agonesPlacement) {
+	if placement == nil {
+		return
+	}
+	commitAgonesRoomTransfer(ctx, svcCtx, sceneID, newNode, zoneID, placement)
 }
 
 // luaCommitAgonesRoomTransfer 是名额记录改写的比较并交换:只有 scene:{id}:node 仍是 newNode
@@ -477,56 +509,7 @@ const (
 	agonesTransferFailed
 	// agonesTransferUnknown:CAS 结局未知,两边都没动,在途占用过期之后由对账按记录收。
 	agonesTransferUnknown
-	// agonesTransferSkipped:没开 Agones。
-	agonesTransferSkipped
 )
-
-// TransferAgonesRoomForScene 把一个场景的房间名额转到新节点,调用前场景归属必须已经改到 newNode
-// (reassignSceneNode 成功之后)。见 transferAgonesRoom。
-func TransferAgonesRoomForScene(
-	ctx context.Context,
-	svcCtx *svc.ServiceContext,
-	sceneID uint64,
-	newNode string,
-	zoneID uint32,
-) {
-	transferAgonesRoom(ctx, svcCtx, sceneID, newNode, zoneID)
-}
-
-// transferAgonesRoom 把场景的名额转到 newNode 所在的 GameServer。改派之后调,对账发现「场景在这个节点、名额记在
-// 别的 GameServer 上」时也调。
-//
-// 场景换节点(rebalance、init 的死节点改派、EnterScene 的死节点自愈等)不转移名额的话:
-// 旧 GameServer 永远不还(容量凭空蒸发),新 GameServer 没记账(容量被超卖)。两个方向都会让 FleetAutoscaler 算错。
-//
-// 顺序是**先占新的再还旧的**:反过来的话,中间窗口里新节点可能已经没容量了,
-// 于是名额两头都不在,频道变成"不占任何容量"的幽灵。
-//
-// 记录改写走 luaCommitAgonesRoomTransfer 的比较并交换,要还的旧条目取脚本原子读出的值,不在占名额之前预读:
-// K8s 往返期间场景可能被销毁(销毁方已按旧记录删过条目),或被另一个写者再次搬走并转过名额。
-//   - 改成了:删旧记录指向的那一条。
-//   - 没改成(属主已不是 newNode、场景已销毁、记录已在新 GameServer、在途占用被取消):放弃这次占的新条目。
-//     删的都是自己这次占的那一条,不会删到别人的(agones_room_ledger.go 的条目说明)。
-//   - Redis 出错:先用同一个 token 问清结局(2026-11-05):已改写就照常删旧条目;没改写就同时作废,放弃新条目。
-//     问也出错才是结局未知:两边都不动,在途占用过期之后对账按记录判 —— 记录指向新条目就留新删旧,否则删新留旧。
-//   - 新节点占不到名额:**不**动旧的 —— 动了就等于这个场景不占任何容量,比多占一份更糟。对账每轮重试转过来。
-func transferAgonesRoom(
-	ctx context.Context,
-	svcCtx *svc.ServiceContext,
-	sceneID uint64,
-	newNode string,
-	zoneID uint32,
-) agonesTransferResult {
-	if !AgonesEnabled(svcCtx) {
-		return agonesTransferSkipped
-	}
-
-	placement, err := AcquireAgonesRoomOnNode(ctx, svcCtx, newNode, zoneID, sceneID)
-	if err != nil {
-		return failedAgonesTransfer(sceneID, newNode, err)
-	}
-	return commitAgonesRoomTransfer(ctx, svcCtx, sceneID, newNode, zoneID, placement)
-}
 
 // failedAgonesTransfer 记下「新节点上没占到名额」并折成结局:一个键都没动,旧名额留着,对账每轮重试。
 func failedAgonesTransfer(sceneID uint64, newNode string, err error) agonesTransferResult {
@@ -538,8 +521,19 @@ func failedAgonesTransfer(sceneID uint64, newNode string, err error) agonesTrans
 	return agonesTransferFailed
 }
 
-// commitAgonesRoomTransfer 把已在新 GameServer 上占好的名额(placement)提交进记录,再按结局删旧条目或放弃新条目,
-// 见 transferAgonesRoom。
+// commitAgonesRoomTransfer 把已在 newNode 的 GameServer 上占好的名额(placement)提交进记录,再按结局删旧条目或放弃新条目。
+// 改派 CAS 落地之后调(commitReservedAgonesRoom),对账发现「场景在这个节点、名额记在别的 GameServer 上」时也调。
+//
+// 场景换节点不转移名额的话:旧 GameServer 永远不还(容量凭空蒸发),新 GameServer 没记账(容量被超卖)。
+// 顺序是**先占新的再还旧的**:反过来的话,中间窗口里新节点可能已经没容量了,于是名额两头都不在,频道变成"不占任何容量"的幽灵。
+//
+// 记录改写走 luaCommitAgonesRoomTransfer 的比较并交换,要还的旧条目取脚本原子读出的值,不在占名额之前预读:
+// K8s 往返期间场景可能被销毁(销毁方已按旧记录删过条目),或被另一个写者再次搬走并转过名额。
+//   - 改成了:删旧记录指向的那一条。
+//   - 没改成(属主已不是 newNode、场景已销毁、记录已在新 GameServer、在途占用被取消):放弃这次占的新条目。
+//     删的都是自己这次占的那一条,不会删到别人的(agones_room_ledger.go 的条目说明)。
+//   - Redis 出错:先用同一个 token 问清结局(2026-11-05):已改写就照常删旧条目;没改写就同时作废,放弃新条目。
+//     问也出错才是结局未知:两边都不动,在途占用过期之后对账按记录判 —— 记录指向新条目就留新删旧,否则删新留旧。
 func commitAgonesRoomTransfer(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,

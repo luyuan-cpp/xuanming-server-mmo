@@ -23,7 +23,8 @@ scene 节点每 10 秒用一条 MGET 读本节点号的持有者记录 `node:zon
 全 zone 也不会同一时刻一起改派。
 
 这是 Kubernetes kubelet 的做法:按 API server 上的期望状态停掉本地多余的 Pod。期望状态只有一份(scene_manager 写的映射与持有者),
-节点按它收敛,不自己判断谁该死。节点不写控制域任何键;scene_manager 侧只多写一把持有者键(§4.6),不加协议。
+节点按它收敛,不自己判断谁该死。节点不写控制域任何键;scene_manager 侧多写节点号持有者(连同纪元旁记)与本 zone 的 etcd 修订号水位、
+纪元两个键(§4.6),不加协议。
 
 ## 2. 问题
 
@@ -152,22 +153,39 @@ A 判死时没被改派(比如 B 在屏障走完之前就登记了,这个号看�
 
 **scene_manager 写持有者**(`go/scene_manager/internal/logic/node_holder.go`):
 
-- 每次 watch PUT(每个副本都写,与 `clearNodeDeath` 同一口径)与领导者的全量同步,把这次登记写成
-  `node:zone:{z}:{n}:holder = "<etcd ModRevision>:<node_uuid>"`,TTL 24 小时(全量同步约每分钟给在册节点续一次)。
-- Lua 只在新值的修订号不小于已存值时覆盖(十进制串先比长度再比字典序,与放置代次同一个比较函数,大于 2^53 不丢精度)。
+- 每次 watch PUT(每个副本都写,与死亡标记的清除同一口径)与领导者的全量同步,把这次登记写成
+  `node:zone:{z}:{n}:holder = "<etcd ModRevision>:<node_uuid>"`,TTL 24 小时(全量同步约每分钟给在册节点续一次)。旁边同写同过期一个
+  `node:zone:{z}:{n}:holder_epoch`,记着写入时本 zone 的 etcd 纪元(见下)。C++ 只读持有者记录本身。
+- 同一个纪元里,Lua 只在新值的修订号不小于已存值时覆盖(十进制串先比长度再比字典序,与放置代次同一个比较函数,大于 2^53 不丢精度)。
   ModRevision 是 etcd 全局单调的修订号,B 只能在 A 的分配键过期之后登记,它那次登记的修订号一定更大;副本之间先后乱序也盖不回旧的。
 - 不随 DELETE 删除:节点死了,它是这个号最后一次登记的进程仍是事实,新进程登记时自然覆盖。没有 node_uuid 或修订号的登记不写。
 - 只发已过存活集闸门的快照:批量发布放在 `applyNodeSnapshot` 的领导者分支里,闸门(B1-1)拒掉的残缺快照在替换镜像之前就返回了。
-- **etcd 换成新集群、修订号从 1 重计**(运维规定所有节点重启):控制域里旧集群的记录修订号比新集群的任何登记都大,单调写会把新登记
-  全部拒掉。全量同步带上这次快照的应答头修订号,已存记录比它还新就直接覆盖:快照是线性一致读,同一个 etcd 里任何已观察到的登记都
-  不晚于它,所以这只可能是换集群之前留下的。watch PUT 不知道 etcd 当前修订号,只做单调覆盖;换集群后最迟一次全量同步(约一分钟)修正。
 - 键以 `node:zone:{z}:` 开头,与其他节点级控制域键一样只由本 zone 的 scene_manager 写,合服按前缀清得到;不带 hash tag。
+
+**etcd 修订号倒退**(换成新集群、修订号从 1 重计,或者不带 `--bump-revision` 从快照恢复;运维规定所有节点重启,
+`docs/ops/etcd-maintenance-runbook.md` §7a):倒退之前写下的记录与新登记的修订号不可比,单调写会把修订号更小的新登记拒掉。
+所以修订号只在同一个**纪元**里比:
+
+- 已存记录的纪元不是当前纪元(`scene_manager:etcd_epoch:zone:{z}`,没有时按 0)时,写入不比修订号、直接覆盖。
+- 纪元只由领导者推进。每轮全量同步先读本 zone 的修订号水位 `scene_manager:etcd_revision_seen:zone:{z}`(领导者读到过的 etcd 当前修订号
+  的最大值),再线性一致地读 etcd 当前修订号 C。C 小于水位就是倒退了:一个脚本里比较并写,水位仍是刚读到的值时纪元加一、水位降到 C;
+  ERROR、计数与告警见 §8。随后照常发布快照,快照里在册的号当场换成新纪元的记录;不在快照里的号,旧记录留在旧纪元,
+  下一次登记时直接被覆盖。不倒退时水位抬到 C,只升不降。两个 zone 级键不设 TTL,只由本 zone 的领导者写。
+- **先读水位、后读 C** 是判据成立的前提:水位里的值都是某一任领导者读 etcd 得到的修订号、读到之后才写进来;同一个 etcd 里,
+  晚于那次读的线性一致读一定不小于它。领导者交接时新旧两任同时在跑、或者这一轮的快照读得很早,都不会误判成倒退。
+- **不用快照应答头的修订号判断**:快照读完到写持有者之间,跟随者的 watch PUT 可能已经写进快照之后的新登记,修订号比快照头大,
+  但不是残留;拿快照头当「etcd 当前修订号」,正常轮就会把它盖回快照里的上一代。所以正常轮严格单调,只有认出倒退才换纪元。
+- **不只覆盖「修订号大于 C」的旧记录**:倒退之前的记录修订号也可能落在新登记与 C 之间,一样拒得掉新登记;倒退那一刻没在册的号也要能
+  被之后的登记覆盖。纪元让「旧」不靠修订号的大小来判断。
+- 换纪元那一轮有一个窗口:倒退之后、换纪元之前写下的新登记也属于旧纪元,会被快照里同号的登记覆盖;它比快照还新时,这个号的记录暂时
+  回到上一代。本副本的 watch 从快照修订号之后接着读(`watchAndRefresh`),随后在新纪元里按单调覆盖改回。这几秒里只是那个号的上一代
+  进程晚一点认出被顶替;新进程看到的持有者修订号小于自己见过的,不会被误判顶替(下表)。
 
 **节点判定**(`scene_ownership::HolderTracker`,跨轮记着本进程自己那次登记的修订号 `ownRevision`):
 
 | 持有者读数 | 判定 |
 |---|---|
-| 是本进程的 uuid | 记下修订号(最近一次见到的,不取历史最大:记录单调写,只有 etcd 换集群后被全量同步改写时才会变小,那时要跟着新集群比);按映射判 |
+| 是本进程的 uuid | 记下修订号(最近一次见到的,不取历史最大:记录在同一个纪元里单调写,只有 etcd 修订号倒退、换了纪元之后才会变小,那时要跟着新集群比);按映射判 |
 | 别人的 uuid,修订号 > ownRevision,本节点身份**不**确认有效 | **被接走**:本地实体一律 `superseded` |
 | 别人的 uuid,但本节点身份确认有效 | 按映射判:本进程此刻持有分配键,那条只能是登记之前留下的旧值 |
 | 别人的 uuid,但修订号不大于 ownRevision,或还没见过本进程自己的记录(ownRevision = 0) | 按映射判:证明不了别人更新 |
@@ -180,7 +198,7 @@ A 判死时没被改派(比如 B 在屏障走完之前就登记了,这个号看�
 
 本进程那次登记的修订号也可以从自己注册时 etcd 应答头里拿,不必等 scene_manager 写回来。没有这样做:要改 `etcd_service.cpp` 的注册路径
 并多注入一个探针,而它能补的只是上面那一种「scene_manager 一次都没写过」的情形;从持有者记录学到的修订号与 scene_manager 用的是同一个
-来源,换集群时一起被修正,不会出现节点拿新集群的小修订号、记录还是旧集群大修订号而误判被接走的窗口。
+来源,etcd 修订号倒退时一起换纪元,不会出现节点拿新集群的小修订号、记录还是旧集群大修订号而误判被接走的窗口。
 
 被接走之后 A 不主动退出进程:它的场景全部排空、没人再往它身上放东西;重连 etcd 时照常因分配键冲突疏散退出。
 
@@ -260,11 +278,13 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 
 **开销**:每轮每个节点发 ceil(本地场景数 / 256) 条 MGET,每条多带一个持有者键;一个控制域实例每秒读的键数 ≈ 同组全部场景数 / 10。
 例:一组 2 万个场景约 2000 键/s。上一轮没回来不发下一轮,不叠加。scene_manager 每次 PUT 与每次全量同步(领导者,每个在册节点一次)
-多一次 EVAL。
+多一次 EVAL;领导者每轮全量同步另多一次 GET(水位)、一次 etcd 线性一致读(只要应答头,`WithCountOnly`)与一次 EVAL(抬水位)。
 
 **日志**(前缀 `[SceneOwnership]`,英文):开始排空时一条 WARN(scene_id、读数归类、读到的属主、本节点号、连击、已核对秒数、住户数);
 有绑定留着时一条 WARN;销毁时一条 INFO;本批有实体在等预算时一条 INFO;判定本节点号被接走 / 不再被接走时各一条 ERROR / WARN;
-启停各一条 INFO。之后每轮重试只有 `BeginSceneDrain` 自己的那行 WARN。scene_manager 写持有者失败时 `[NodeHolder]` 一条 ERROR。
+启停各一条 INFO。之后每轮重试只有 `BeginSceneDrain` 自己的那行 WARN。scene_manager 写持有者失败时 `[NodeHolder]` 一条 ERROR;
+认出 etcd 修订号倒退、换了纪元时一条 ERROR(`etcd revision went back in zone N: current revision C is below the recorded W ...`,带新纪元);
+读不到 etcd 当前修订号、读不到或读到损坏的水位、换纪元写失败时各一条 ERROR,这一轮只做单调覆盖。
 
 **指标**(`RegisterSceneOwnershipMetrics`,设了 `MMORPG_METRICS_PORT` 才有出口,K8s 缺省 9400;标签都是低基数,启动即以 0 导出):
 
@@ -289,6 +309,10 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 | `SceneOwnershipReleaseBacklog` | warning | 某个 scene Pod 排空中与等预算的实体数持续 15 分钟大于 0 |
 | `SceneOwnershipReconcileBlind` | warning | 某个 scene Pod 10 分钟里过半轮次读不到控制域,持续 5 分钟 |
 
+scene_manager 侧另有一个计数 `scene_manager_etcd_revision_regressions_total`(不带标签,`go/scene_manager/internal/metrics/node_holder.go`,
+只在换纪元写成时加一)与告警 `SceneManagerEtcdRevisionRegressed`(critical,`deploy/k8s/scene-manager-alerts.yaml` 的
+`scene-manager.node-role-split` 组,15 分钟内有增长即响;处置见 etcd 运维手册 §7a;字段与指标注册也由上面那个契约测试钉住)。
+
 ## 9. 残余与风险
 
 1. **认不出被接走的一种情形**:本进程登记之后 scene_manager 一次都没写过它的持有者记录(这段时间没有 scene_manager 在跑,或写入一直失败),
@@ -305,6 +329,11 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 6. **排空期间每轮重调一次 DestroyScene**,`BeginSceneDrain` 每次打一行 WARN;与 scene_manager 重发 DestroyScene 的频率同量级。
 7. **断线保留中的玩家会被直接退出**(只存盘不改派):与频道缩容排空同一口径。短重连时 scene_manager 按 location 回到同号场景的新属主。
 8. **告警规则没有过 promtool,也没有装进任何集群**(§10 第 7 步)。
+9. **水位丢了的那一轮认不出倒退**:修订号水位只在控制域丢数据(或有人手工删键)时才会没有,没有水位的那一轮只建立水位。水位刚丢、etcd 又
+   恰在这一轮之前倒退,这次倒退认不出来:旧记录里修订号大于新登记的,要等过期(不再续期,最长一天)才让位,期间这些号认不出顶替。
+   只少一层识别,不会误判排空。
+10. **倒退时没重启的老进程认不出被接走**:它记着倒退之前的大修订号,新集群里接走它节点号的登记修订号更小。所以 etcd 运维手册 §7a
+    要求修订号倒退后重启全部 scene 节点;告警 `SceneManagerEtcdRevisionRegressed` 提醒这一步。
 
 ## 10. 文件与验证
 
@@ -317,11 +346,13 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 - `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` `HandleCreateScene`、`cpp/nodes/scene/handler/rpc/scene_handler.cpp`
   `SceneHandler::CreateScene`:去重分支改调 `ReuseExistingScene`。
 - `cpp/nodes/scene/main.cpp`:`SceneRuntimeContext` 持有 `SceneOwnershipReconciler`;登记指标;`SetAfterStart` 里 Start;三条停机路径与 Node 析构后 Stop。
-- Go 新增 `go/scene_manager/internal/logic/node_holder.go`;`load_reporter.go` 的 watch PUT 分支与 `applyNodeSnapshot` 领导者分支各一处调用;
-  `scene_keys_contract_test.go` 的「控制域键不带 hash tag」名单加持有者键。
+- Go 新增 `go/scene_manager/internal/logic/node_holder.go`(持有者、纪元旁记、修订号水位与纪元)与 `internal/metrics/node_holder.go`
+  (倒退计数,登记进 `metrics.go` 的 `register()`);`load_reporter.go` 的 watch PUT 分支调 `publishNodeHolder`、`applyNodeSnapshot`
+  领导者分支调 `publishSnapshotHolders`;`scene_keys_contract_test.go` 的「控制域键不带 hash tag」名单加持有者、纪元旁记、水位、纪元四个键。
 - 用例:C++ `cpp/tests/cross_zone_test/scene_ownership_reconcile_test.cpp`(登记进 `cross_zone_test.vcxproj` 与 `.filters`);
   Go `go/scene_manager/internal/logic/node_holder_test.go`;告警契约 `tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1`。
 - 告警 `deploy/k8s/scene-ownership-alerts.yaml`;安装说明 `deploy/k8s/README.md`;处置 `docs/ops/scene-node-role-split.md`。
+  `deploy/k8s/scene-manager-alerts.yaml` 加 `SceneManagerEtcdRevisionRegressed`,处置 `docs/ops/etcd-maintenance-runbook.md` §7a。
 
 **给 Codex**:仓库根执行,MSBuild 串行 `/m:1`,失败不连续重试,保留第一条 `error C` / `LNK` 原文。同一工作区里还有别的会话在改
 `scene_lifecycle`、两个 CreateScene / DestroyScene 入口与 `go/scene_manager`,编译错误先按文件归属分清。
@@ -332,13 +363,14 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
 4. `build\cpp\tests\cross_zone_test.exe --gtest_filter=SceneOwnership*`:`SceneOwnershipRules.*` 11 条、`SceneOwnershipReply.*` 2 条、
    `SceneOwnershipEcs.*` 14 条,共 27 条全部 PASS;再跑 `--gtest_filter=RelocateConfirmEcs.*:ExitPersistEcs.*` 与 `cross_zone_test.exe` 全量,原有用例不回归。
 5. Go,工作目录 `go/scene_manager`,`GOTOOLCHAIN=local`、`GOPROXY=off`:
-   - `gofmt -l internal/logic/node_holder.go internal/logic/node_holder_test.go internal/logic/load_reporter.go internal/logic/scene_keys_contract_test.go` 无输出;
-   - `go vet ./internal/logic/`、`go build ./...`;
-   - `go test ./internal/logic/ -count=1 -v -run 'TestNodeHolderKeyShape|TestPublishNodeHolder_|TestWatchPutPublishesTheNodeHolder|TestApplyNodeSnapshot_|TestControlDomainKeysCarryNoHashTag|TestDeadNodeReregister_|TestNodeViewGate'`,
-     其中本条新增 9 条全部 PASS;
+   - `gofmt -l internal/logic/node_holder.go internal/logic/node_holder_test.go internal/logic/load_reporter.go internal/logic/scene_keys_contract_test.go internal/metrics/node_holder.go internal/metrics/metrics.go` 无输出;
+   - `go vet ./internal/logic/ ./internal/metrics/`、`go build ./...`;
+   - `go test ./internal/logic/ -count=1 -v -run 'TestNodeHolderKeyShape|TestPublishNodeHolder_|TestWatchPutPublishesTheNodeHolder|TestApplyNodeSnapshot_|TestStartNewEtcdEpoch_|TestPublishSnapshotHolders_|TestControlDomainKeysCarryNoHashTag|TestDeadNodeReregister_|TestNodeViewGate'`,
+     其中 `node_holder_test.go` 的 15 条(`TestApplyNodeSnapshot_WithoutAWatermarkOnlyRecordsIt` 含 2 个子用例)全部 PASS;
    - `go test ./... -count=1`,既有失败逐条点名归因。
-6. `pwsh -NoProfile -File tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1`:4 个 Test-Case 全绿。
-7. `promtool check rules deploy/k8s/scene-ownership-alerts.yaml`(先按 PrometheusRule 取出 `spec` 下的 `groups`,与其他告警文件的校验方法相同):0 error。
+6. `pwsh -NoProfile -File tools/scripts/tests/scene_ownership_alerts_contract.tests.ps1`:5 个 Test-Case 全绿。
+7. `promtool check rules` 分别校验 `deploy/k8s/scene-ownership-alerts.yaml` 与 `deploy/k8s/scene-manager-alerts.yaml`(先按 PrometheusRule 取出
+   `spec` 下的 `groups`,与其他告警文件的校验方法相同):0 error。
 8. Linux:`build_linux.sh` 按 vcxproj 重新生成 CMakeLists 后编 scene 库与 scene 节点,0 error。
 9. **变异取红**:在工作树里逐个改,只改所列的那一处,重编(C++ 第 1、3 步;Go 直接跑)再跑对应过滤器,跑完立即手工改回,用 `git diff -- <文件>`
    核对与改前一致。这几个文件别的会话也在改,不要用 `git checkout` / `git stash` 恢复。
@@ -359,15 +391,26 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
      `NodeIdTakenOverReleasesScenesStillMappedToIt` 红。
    - M10:`Sweep` 里在读控制域之前加回旧门禁 `if (!session->IdentityConfirmed()) { return finish(SweepOutcome::kNoScenes); }`。期望
      `ReconcilerSweepsWithoutEtcdIdentityButNeedsControlRedis` 红。
-   - M11(Go):`luaPublishNodeHolder` 里删掉 `generation_after` 那一段判断(无条件 SET)。期望 `TestPublishNodeHolder_NewerRegistrationWins`、
-     `TestPublishNodeHolder_ComparesRevisionsAsDecimalStrings`、`TestWatchPutPublishesTheNodeHolder` 红。
+   - M11(Go):`luaPublishNodeHolder` 里删掉 `if sep and generation_after(...) then return 0 end` 那三行(同一纪元里也无条件 SET)。期望
+     `TestPublishNodeHolder_NewerRegistrationWins`、`TestPublishNodeHolder_ComparesRevisionsAsDecimalStrings`、`TestWatchPutPublishesTheNodeHolder`,
+     以及 `TestApplyNodeSnapshot_` 里的 `NormalRoundKeepsANewerFollowerWrite`、`EtcdRevisionRegressionStartsANewEpoch`、`EarlySnapshotIsNotARegression`、
+     `WithoutAWatermarkOnlyRecordsIt`、`UnreadableEtcdRevisionOnlyPublishesMonotonically` 红。
    - M12(Go):`handleWatchEvent` 里删掉 `publishNodeHolder(...)` 那一句。期望 `TestWatchPutPublishesTheNodeHolder` 红。
-   - M13(Go):`applyNodeSnapshot` 里删掉 `publishNodeHolders(svcCtx, holders, revision)`。期望 `TestApplyNodeSnapshot_LeaderPublishesHoldersOfRegisteredNodes`、
-     `TestApplyNodeSnapshot_RepairsHoldersLeftFromBeforeAnEtcdReset` 红。
-   - M14(Go):`luaPublishNodeHolder` 里删掉 `and (ARGV[4] == '' or not generation_after(currentRevision, ARGV[4]))`。期望
-     `TestApplyNodeSnapshot_RepairsHoldersLeftFromBeforeAnEtcdReset` 红(换集群之前的记录修不掉)。
+   - M13(Go):`applyNodeSnapshot` 里删掉 `publishSnapshotHolders(ctx, svcCtx, svcCtx.Config.ZoneId, holders)`。期望 `TestApplyNodeSnapshot_`
+     开头的用例除 `FollowerDoesNotPublishHolders` 外全部红。
+   - M14(Go):`luaPublishNodeHolder` 里把 `(redis.call('GET', KEYS[2]) or '0') == epoch` 改成 `true`(不看纪元)。期望
+     `TestApplyNodeSnapshot_EtcdRevisionRegressionStartsANewEpoch` 红(倒退之前的记录不让位)。
    - M15:`HolderTracker::Observe` 里把 `ownRevision = record->revision;` 改成 `ownRevision = std::max(ownRevision, record->revision);`。期望
-     `HolderTrackerNeedsANewerRegistrationOfAnotherProcess` 红(换集群之后认不出接走号的进程)。
+     `HolderTrackerNeedsANewerRegistrationOfAnotherProcess` 红(etcd 修订号倒退、换纪元之后认不出接走号的进程)。
+   - M16(Go):`publishSnapshotHolders` 里把 `seen > current` 改成 `seen > 0`(有水位就当倒退)。期望
+     `TestApplyNodeSnapshot_NormalRoundKeepsANewerFollowerWrite`、`TestApplyNodeSnapshot_EarlySnapshotIsNotARegression`、
+     `TestApplyNodeSnapshot_EtcdRevisionRegressionStartsANewEpoch`(第二轮又换了一次纪元)红。
+   - M17(Go):`luaStartNewEtcdEpoch` 里删掉开头的比较(`if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end`)。期望
+     `TestStartNewEtcdEpoch_ComparesAndSets` 红。
+   - M18(Go):`luaStartNewEtcdEpoch` 里把 `INCR` 与 `SET` 两行对调。期望 `TestStartNewEtcdEpoch_ComparesAndSets` 红(纪元没换成,水位却降了)。
+   - M19(Go):`publishSnapshotHolders` 里删掉 `&& isLeader()`。期望 `TestPublishSnapshotHolders_NonLeaderDoesNotStartANewEpoch` 红。
+   - M20(Go):`luaRaiseEtcdRevisionSeen` 里删掉 `and not generation_after(ARGV[1], current)`(水位能降)。期望
+     `TestPublishSnapshotHolders_NonLeaderDoesNotStartANewEpoch` 红。
 10. **冒烟**(本机 `dev-start`,一个 zone、两个 scene 节点,`MMORPG_METRICS_PORT` 打开):
     - 让节点 A 的 etcd 租约过期超过 200 秒,而 A 的进程、A 到 gate 与 Redis 的连接都保持(例如用现成的 TCP 代理只切断 A 到 etcd 的链路)。
       期间至少一个机器人留在 A 承载的世界频道、一个留在 A 上的副本。本机没有不改系统环境就能做到的手段时,这一步报告「未冒烟」,
@@ -379,7 +422,7 @@ CreateScene 命中(或第一次核对)已满 60 秒。逐条对照:
       `scene_ownership_superseded` 变 1;
     - 对照组:断开不到 180 秒就恢复,之后没有任何 `[SceneOwnership]` 排空日志。
 
-**通过标准**:第 1~3、8 步 0 error;第 4 步 27 条、第 5 步新增 9 条全绿,原有用例不回归;第 6 步全绿;第 7 步 0 error;第 9 步每个变异的红绿
+**通过标准**:第 1~3、8 步 0 error;第 4 步 27 条、第 5 步 `node_holder_test.go` 15 条全绿,原有用例不回归;第 6 步全绿;第 7 步 0 error;第 9 步每个变异的红绿
 与上面一致;第 10 步日志与指标符合描述(或明确报告未冒烟)。失败时保留:第一条编译错误原文;失败用例单跑的完整输出;冒烟时 A 的
 scene 日志与 scene_manager 日志中 T0 到恢复后 60 秒的片段。
 

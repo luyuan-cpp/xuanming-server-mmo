@@ -70,7 +70,7 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 | 步 | 动作 | 验收 |
 |---|---|---|
 | 1 | 收件箱库与表就位(K8s:`infra-up` 的 `player-inbox-migrate` Job;本地:启动期 AutoMigrate 或 `player_inbox -f etc/player_inbox.yaml -migrate`);TiDB 上做 §12 的索引预切 | `plan` 只出现 `inbox_ledger`(以及已放行的 `fence_*`)的 ADD COLUMN;`SHOW COLUMNS FROM zone_<N>_db.player_database` 末列是 `inbox_ledger`;`kubectl -n mmorpg-infra get job player-inbox-migrate` 为 1/1;`-migrate` 输出里有 `row shard layout check OK` |
-| 2 | 全部 zone 的 go/db 升到认识新字段的版本 | `kubectl get deploy db -o jsonpath='{..image}'` 各 zone 一致 |
+| 2 | 全部 zone 的 go/db 升到认识新字段的版本 | `kubectl get statefulset db -o jsonpath='{..image}'` 各 zone 一致 |
 | 3 | 部署收件箱服务,`EnqueueTypes` **为空** | `player-inbox` 两副本 Ready;etcd 有 `PlayerInboxNodeService.rpc/...` 键;`GmSanctionPlayer` 返回 `kPlayerInboxDisabled`;写路径打印 `player-inbox consumer gate: consumer_enabled=false ... enqueue_types=0 ... OK` |
 | 4 | 全部 scene 升级,`consumer_enabled=false`(`bin/etc/game_config.yaml` 仓库默认是 `true`,要走这一步先改成 `false` 并提交;K8s:逐 zone `zone-up`) | **这就是回滚下限**。存档能原样往返 `inbox_ledger`,scene 不发 Fetch(收件箱 `player_inbox_fetch_total` 不涨)。每个 scene 启动时打一行 WARN `[PlayerInbox] metric=inbox_consumer_disabled`,之后每 5 分钟补打一行:这一步出现它是预期的 |
 | 5 | 打开消费:把 `bin/etc/game_config.yaml` 的 `player_inbox.consumer_enabled` 改成 `true` 并提交,再逐 zone `zone-up` 并滚动 scene(ConfigMap 变了不会自己重启 C++ 进程)。可以加 `-PlayerInboxConsumer on`,把预期写进命令(§2.1) | 门禁行变为 `consumer_enabled=true`;scene 启动行变为 INFO `[PlayerInbox] consumer_enabled=1 ...`,`metric=inbox_consumer_disabled` 不再出现;`player_inbox_fetch_total{path="fast"}` 随登录上涨,`fence` 以 `NO_STREAM` 为主 |

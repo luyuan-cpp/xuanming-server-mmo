@@ -386,6 +386,23 @@ func (p *AssetPipeline) AttachWorkShards(zoneID uint32, self string) error {
 	return nil
 }
 
+// CleanupOwner 返回终态清理按片分工用的归属判定(data.CleanupConf.Owns,缺口清单第 25 条第二批,设计 §11):
+// 与重投循环共用 AttachWorkShards 建的那份成员表(本 zone 注册的 stable guild 副本),类别键另起(data.CleanupWorkKind)。
+// 成员表的整表读随重投循环在 Start 里起;清理只在 stable 副本上跑,canary 两样都不起,所以圈法与重投相同。
+// 没装配分工(nil 管线 = AssetOp.Enabled=false,或没调 AttachWorkShards)时回 nil:清理不分工,本副本清全部行。
+// 必须在 AttachWorkShards 之后调用;返回的函数可在任意 goroutine 调用。
+func (p *AssetPipeline) CleanupOwner() func(key string) bool {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.members == nil {
+		return nil
+	}
+	return p.members.Owns
+}
+
 // Start 起 scene 节点镜像与重投循环两个后台 goroutine,以及(装配了的话)维护选主与落地唤醒订阅。
 // ctx 取消或 Stop 都会让它们退出;重复调用、Stop 之后再调都是空操作;nil 接收者安全。
 //

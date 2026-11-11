@@ -58,6 +58,8 @@ type enterGameSessionState struct {
 // enterGameChainBudget 是 EnterGame 后台链(预加载 → 写会话 → 绑 gate → 进场)的总预算。
 // gate 连接会话栅栏里没绑定玩家、或已关闭的记录的寿命由它派生:记录必须比所有还可能读它的操作活得久(sessionfence.TTLFor)。
 // 绑定了玩家的记录不用它:绑定只由 LeaveGame / Disconnect 解除,寿命由 sessionfence 自己管(包注释「寿命」)。
+// gate 排空迁移的 kEnterGameSettle(cpp/nodes/gate/handler/rpc/drain_migration.h)不得短于本值,
+// gate_drain_settle_crosslang_test.go 读头文件对拍;改长这里要同批改长那边。
 const enterGameChainBudget = 5 * time.Minute
 
 var sessionFenceTTL = sessionfence.TTLFor(enterGameChainBudget)

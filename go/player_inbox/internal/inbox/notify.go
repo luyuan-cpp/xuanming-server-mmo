@@ -15,6 +15,7 @@ import (
 	"shared/kafkacmd"
 	"shared/redisslot"
 	"shared/scenenode"
+	"shared/tracing/kafkagotrace"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -192,6 +193,9 @@ func (n *KafkaNotifier) notify(ctx context.Context, playerID uint64, domain inbo
 	if err != nil {
 		return NotifyError, err
 	}
+	// 入箱请求里发的提醒带上请求的 traceparent,scene 消费时接上同一条 trace(docs/design/distributed-tracing.md §6.2);
+	// 补发循环的 ctx 里没有 trace,不带头。
+	msg.Headers = kafkagotrace.Headers(ctx)
 	if err := n.Writer.WriteMessages(ctx, msg); err != nil {
 		return NotifyError, err
 	}

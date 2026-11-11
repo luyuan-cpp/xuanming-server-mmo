@@ -165,10 +165,10 @@
 
 | 公会榜做法(`go/guild/internal/data/guild_repo.go`) | rank 为什么不照抄 |
 |---|---|
-| 键 `guild_rank:zone:<id>` / `guild_rank:maintenance_lock` / `guild_rank:rebuild:<uuid>:*` | `RebuildRanks` 会 `SCAN guild_rank:zone:*` 再 DEL / RENAME。任何以 `guild_rank` 开头的键(例如 `guild_rank:zone:player`)都会在公会启动重建时被删。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
+| 键 `guild_rank:zone:<id>` / `guild_rank:version:<id>` / `guild_rank:tombstone:<id>` / `guild_rank:maintenance_lock` | `RebuildRanks` 会 `SCAN guild_rank:zone:*`,把每张榜上与 MySQL 对不上的成员摘掉;摘榜、折叠也按这几个键名读写。别的服务以 `guild_rank` 开头的键会被当成公会榜改写。**rank 的所有键不得以 `guild_rank` 开头**;同理避开 `match:*`(match 已有 `match:{mq}:rank:*`) |
 | MySQL `guild.score` 是权威,ZSET 是读加速 | rank v1 **没有**持久化副本,权威在 match(§3.5) |
-| 每次写分拿全局 SETNX 锁(等 ≤5s,TTL 5min) | 玩家评分每局每人一次,全局锁会把写路径串行化;rank 单条写是一条 Lua,本身原子 |
-| 覆盖写绝对值,无版本号 | Kafka 会乱序与重放,必须带单调版本(`rating_gen`, `games`) |
+| 写分不拿锁(2026-11-11 起):按 `guild.score_version` 的 Lua 条件写入;全服 SETNX 锁只让启动重建与合服折叠互斥 | 同样不拿全局锁:玩家评分每局每人一次,全局锁会把写路径串行化;rank 单条写是一条 Lua,本身原子 |
+| 版本来自 MySQL:`guild.score_version` 在写分事务里加 1,榜上只接受不比已记版本旧的分数 | 版本来自上游:Kafka 会乱序与重放,必须带单调版本(`rating_gen`, `games`) |
 | 同分依赖 Redis member 字节序(十进制 id 字符串) | 既不是先到先得也不按数值,rank 显式定义同分规则(§3.3) |
 | `RebuildRanks` 用 SCAN + 多键 RENAME | 契约 §4:私有 Redis 不用 SCAN、不做跨 slot 多键操作 |
 | 分页越界返回**空页**(`rank_page_test.go` 的"超过末页""页码为零"断言空) | rank 越界**钳到末页**、page=0 当 1(§4.2),语义相反,测试不能照抄期望值(T5) |

@@ -290,24 +290,28 @@ static client_rpc_router::ForwardRequest MakeForwardRequest(const ClientRequest 
 // zone_id 选;会话身份仍走同一段 metadata,Go 侧拦截器看到的与 gate 直连时完全相同。
 //
 // sessionDetailsBin 是序列化好的 SessionDetails,原样作为 x-session-detail-bin。
-// 返回是否已发出;本地尚未发现任何可用的路由服实例(启动窗口 / 路由服全部下线 / 缺通道)返回 false。
+// 返回 kSent = 已交给路由服通道,之后恰好一次完成;两种「没发出」都不会有任何回调(client_request_lane.h 的契约):
+//   kNoRouter     本地尚未发现任何可用的路由服实例(启动窗口 / 路由服全部下线 / 缺通道),PickRouterChannel 已采样留痕;
+//   kCallNotBuilt 调用没构造出来(签名失败、消息号越界、没有 gRPC 方法名),SendForward 已采样留痕。
 // 调用方决定后果:路由 lane 回客户端带请求 id 的 kServiceUnavailable;断线通知没有客户端可回,只留痕。
 // 路由 lane 经 gate_lane::SetRouterSender 注入本函数(client_request_lane.h)。
-static bool SendRawViaRouter(const ClientRequest &request, const std::string &sessionDetailsBin)
+static gate_lane::RouterSendResult SendRawViaRouter(const ClientRequest &request, const std::string &sessionDetailsBin)
 {
 	muduo_grpc::Channel *routerChannel = PickRouterChannel(request.message_id());
 	if (routerChannel == nullptr)
 	{
-		return false;
+		return gate_lane::RouterSendResult::kNoRouter;
 	}
-	gate_router_muduo::SendForward(*routerChannel, MakeForwardRequest(request), sessionDetailsBin);
-	return true;
+	return gate_router_muduo::SendForward(*routerChannel, MakeForwardRequest(request), sessionDetailsBin)
+			   ? gate_lane::RouterSendResult::kSent
+			   : gate_lane::RouterSendResult::kCallNotBuilt;
 }
 
 // 不经路由 lane 的发送(gate 合成的断线通知):SessionDetails 的 gate_call_seq 留 0,回包不归 lane 认领。
+// 返回是否已交给路由服;没发出时 PickRouterChannel / SendForward 已采样留痕,调用方只留痕、不重试。
 static bool SendViaRouter(const ClientRequest &request, const SessionDetails &sessionDetails)
 {
-	return SendRawViaRouter(request, sessionDetails.SerializeAsString());
+	return SendRawViaRouter(request, sessionDetails.SerializeAsString()) == gate_lane::RouterSendResult::kSent;
 }
 
 // 排空迁移向 login 要一张换 gate 的票(ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3),
@@ -386,6 +390,84 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 	return true;
 }
 
+// ---- 客户端 LeaveGame / EnterGame 的会话状态变化(client-request-ordering.md §4.4、§4.6;location-release-binding.md §3.5)----
+//
+// 两者都在请求**真正发出**的那一刻生效:直连模式收包即发出,由 DispatchClientRpcMessage 在收包点调用;路由模式经路由 lane,
+// 由 lane 的发出钩子在轮到这条请求时按收包顺序调用(gate_lane::SetSendHooks)。路由模式以前也在收包时做,有两个问题(2026-11-10 改):
+//   - 回执与状态不一致:lane 拒绝 LeaveGame(满 32 回 1008;已重定向、排队超过 5 s、没发出回 1003)时回执说「没执行、可重试」,
+//     scene 实体却已退出、gate 的路由与原账号已清;排空迁移推 124 时丢掉排在慢请求后面的 LeaveGame,login 从没收到,旧角色长期 ONLINE。
+//   - 越过排在前面、还没发出的请求:它们按入队快照带着原账号,发出前身份复核必然失配、被回「未登录」。现在它们先按收包顺序执行。
+// 原先收包时做要保护的性质 —— 客户端发出 LeaveGame 之后,gate 不再替旧角色受理新请求 —— 由收包时的两处保住,都只拒绝、不提前退出实体:
+// 不经 lane 的请求在 LeaveGame 还排着时回 1003(RejectedBehindQueuedLeaveGame);经 lane 的请求入队快照不带原账号(gate_lane::Admit)。
+
+// 发出前的拒绝判定:返回 0 = 放行;非 0 = 不转发,回带请求 id 的该码信封(确定未执行)。只读会话。
+// 现在只有 EnterGame 的换角闸(login_admission.h EnterGameRoleSwitchRejectTip,纵深防御):会话已绑定角色、没 LeaveGame 就要进另一个
+// 角色时不转发,回与 login 拒绝换角同码的信封,不计非法包、不断连。路由模式在发出时判,排在前面的 LeaveGame 已经生效,
+// 「LeaveGame → Login → EnterGame(另一个角色)」不等回包连发也不会被误拒。
+static uint32_t LoginTransitionRejectTip(const SessionId sessionId, const SessionInfo &session, const ClientRequest &request)
+{
+	if (request.message_id() != ClientPlayerLoginEnterGameMessageId)
+	{
+		return 0;
+	}
+	const uint32_t rejectTip = gate_login_admission::EnterGameRoleSwitchRejectTip(session, request.body());
+	if (rejectTip != 0)
+	{
+		static uint64_t roleSwitchRejectedCount = 0;
+		if ((roleSwitchRejectedCount++ & 0x3FF) == 0)
+		{
+			LOG_WARN << "EnterGame rejected: session is already bound to a role (sampled)"
+					 << " latest_session_id=" << sessionId << " latest_tip=" << rejectTip
+					 << " rejected_total=" << roleSwitchRejectedCount;
+		}
+	}
+	return rejectTip;
+}
+
+// 随请求发出生效的会话状态变化。
+//   LeaveGame(世界 → 选角,TCP 不断):先替这条会话通知绑定的 scene 退出,再清掉会话的 scene 路由状态与原账号
+//     (gate_scene_entry::OnClientLeaveGame)。以前 gate 不处理 LeaveGame,ExitGame 只在 TCP 断开时代发:持有节点的实体不退出也不存盘,
+//     login 侧却随即删会话、删 location,下一次进场按首次落点铸新 epoch,持有节点之后的存盘被拒、实体被当废黜销毁(回档,审计 §2.1)。
+//     发出之后 login 侧失败(回 1003,结果未知)时实体退出、location 保留,下一次 EnterGame 走同落点重连或换手门,都不回档。
+//   EnterGame:记下「LeaveGame 之后已再次请求进场」(gate_scene_entry::OnClientEnterGame)。在这之前到达 gate 的 Bind / 路由只可能属于
+//     LeaveGame 之前那条登录链(login 只在处理 EnterGame 时发 Bind),一律丢弃。按发出顺序记:lane 里排在 LeaveGame 之前的 EnterGame
+//     先发出、先置位,随后被 LeaveGame 的重置清掉,不会被误当成新的一次(第二轮审计 r2-gate#1)。同时给排空迁移记下转发时刻,
+//     避开「EnterGame 已发出、绑定还没回来」的窗口(drain_migration.h kEnterGameSettle);还排在 lane 里的 EnterGame 由
+//     drain_migration.cpp Classify 的「lane 不空就跳过」挡住。
+static void ApplyLoginTransition(const SessionId sessionId, SessionInfo &session, const ClientRequest &request)
+{
+	if (request.message_id() == ClientPlayerLoginLeaveGameMessageId)
+	{
+		gate_scene_entry::OnClientLeaveGame(sessionId, session);
+	}
+	else if (request.message_id() == ClientPlayerLoginEnterGameMessageId)
+	{
+		gate_scene_entry::OnClientEnterGame(sessionId, session);
+		gate_drain_migration::NoteEnterGameForwarded(session, std::chrono::steady_clock::now());
+	}
+}
+
+// LeaveGame 屏障:路由模式下 ApplyLoginTransition 要等 LeaveGame 在 lane 里真正发出才执行。它还排着时,不经 lane 的请求
+// (scene 的 TCP 消息、gate 本地的观战订阅)排不到它后面,照常处理就是在登出之前执行了客户端在登出之后才发的请求。所以不处理,
+// 回带请求 id 的 1003(确定未执行,重试安全;与 LeaveGame 生效后 scene 路由已清时客户端看到的同码,应答为 Empty 的移动号同样回)。
+// 直连模式 lane 恒空,这里恒不成立。返回 true = 已回执,调用方不再处理。
+static bool RejectedBehindQueuedLeaveGame(const SessionId sessionId, SessionInfo &session, const ClientRequest &request)
+{
+	if (!gate_lane::HasQueuedRequest(session, ClientPlayerLoginLeaveGameMessageId))
+	{
+		return false;
+	}
+	static uint64_t rejectedCount = 0;
+	if ((rejectedCount++ & 0x3FF) == 0)
+	{
+		LOG_INFO << "Request arrived while the session's LeaveGame is still queued in the router lane; rejected with 1003 (sampled)"
+				 << " latest_session_id=" << sessionId << " latest_message_id=" << request.message_id()
+				 << " rejected_total=" << rejectedCount;
+	}
+	gate_lane::SendEnvelope(session, request.id(), request.message_id(), kServiceUnavailable);
+	return true;
+}
+
 GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 												 ProtobufDispatcher &dispatcherParam)
 	: protobufCodec(codec),
@@ -394,8 +476,9 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 	messageDispatcher.registerMessageCallback<ClientRequest>(
 		std::bind(&GateClientSessionHandler::DispatchClientRpcMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-	// 路由 lane 的发送出口(client_request_lane.h)。函数指针,不捕获任何对象(AGENTS.md §11.7)。
+	// 路由 lane 的发送出口与发出钩子(client_request_lane.h)。函数指针,不捕获任何对象(AGENTS.md §11.7)。
 	gate_lane::SetRouterSender(&SendRawViaRouter);
+	gate_lane::SetSendHooks(&LoginTransitionRejectTip, &ApplyLoginTransition);
 	// 排空迁移的两个出口(drain_migration.h):向 login 要票、推 msg 124。同样是函数指针,不捕获对象。
 	gate_drain_migration::SetRequestSender(&SendGateMigrationRequest);
 	gate_drain_migration::SetRedirectPusher(&gate_redirect::PushRedirect);
@@ -681,8 +764,9 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 	{
 		// 告诉 scene 连接断了。连接意外断开(断网、gate 停机、顶号踢旧连接、高水位)填 DISCONNECTED:scene 把角色
 		// 停在原地、留到重连窗口结束,窗口内新会话接回同一个实体;只有关连接前已置位 exitSceneImmediatelyOnClose
-		// (断线租约到期后关残留假死连接)才要求立即退出。主动登出在 LeaveGame 收包时已经代发过 LOGOUT,
-		// 并清掉了 scene 指向,这里不会再发。docs/design/player-connection-lost-hold.md §3。
+		// (断线租约到期后关残留假死连接)才要求立即退出。主动登出在 LeaveGame 发出时(直连收包即发出;路由模式在 lane
+		// 发出的那一刻)已经代发过 LOGOUT,并清掉了 scene 指向,这里不会再发。还排在路由 lane 里、没发出的 LeaveGame 随断线丢弃,
+		// 从没执行过,按断线处理(DISCONNECTED),与 login 那边收到的 Disconnect 一致。docs/design/player-connection-lost-hold.md §3。
 		if (sessionIt->second.exitSceneImmediatelyOnClose)
 		{
 			exitReason = EXIT_GAME_REASON_LEASE_EXPIRED;
@@ -722,8 +806,8 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 			// 同 zone 的 login,Login 侧看到的请求体与 metadata 与直连时完全相同。
 			// id=0:这是单向通知;回包 MessageContent 到达时会话已 erase,桥接找不到会话
 			// 直接丢弃 —— 与直连模式下 LoginNodeDisconnectResponse 的处置一致。
-			// 无路由服时 SendViaRouter 已采样 WARN 留痕;这里没有客户端可回 tip,Login 侧
-			// 的会话状态由其自身租约超时兜底(与直连模式下 login 全下线时的行为一致)。
+			// 没发出时(无路由服采样 WARN;签名失败等调用没构造出来采样 ERROR,不再进失败桥)已经留痕;这里没有客户端
+			// 可回 tip,Login 侧的会话状态由其自身租约超时兜底(与直连模式下 login 全下线时的行为一致)。
 			ClientRequest disconnectRequest;
 			disconnectRequest.set_id(0);
 			disconnectRequest.set_message_id(ClientPlayerLoginDisconnectMessageId);
@@ -1188,7 +1272,8 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 //
 // 发出走会话路由 lane(docs/design/client-request-ordering.md §4):同一会话的请求按收包顺序单飞,
 // 上一条观察到完成才发下一条;没有路由服、lane 满、排队超时等拒绝都由 lane 回带请求 id 的信封。
-// Login.Login 的 loginStarted 置位也随 lane 移到真正发出的那一刻(client_request_lane.cpp Pump)。
+// Login.Login 的 loginStarted 置位也随 lane 移到真正发出的那一刻(client_request_lane.cpp Pump);LeaveGame / EnterGame 的
+// 会话状态变化同样在发出时由 lane 的发出钩子执行(ApplyLoginTransition 一节)。
 static void HandleRouterForward(SessionId sessionId, const RpcClientMessagePtr &request)
 {
 	assert(request->message_id() < gRpcMethodRegistry.size());
@@ -1326,6 +1411,11 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	// 同时覆盖直连与路由两种模式。排在体积 / 限流 / GM 几道闸之后,订阅消息与其它消息占同一份额度。
 	if (messageInfo.targetNodeType == eNodeType::GateNodeService)
 	{
+		// 不经路由 lane:LeaveGame 还排在 lane 里时不受理(LeaveGame 屏障,RejectedBehindQueuedLeaveGame)。
+		if (RejectedBehindQueuedLeaveGame(sessionId, session, *request))
+		{
+			return;
+		}
 		gate_spectate::HandleClientRequest(sessionId, session, *request);
 		return;
 	}
@@ -1349,43 +1439,27 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 		return;
 	}
 
-	// 客户端 LeaveGame(世界 → 选角,TCP 不断):先替这条会话通知绑定的 scene 退出,再清掉会话的 scene 路由状态,然后照常转发给
-	// login(docs/design/location-release-binding.md §3.5)。以前 gate 不处理 LeaveGame,ExitGame 只在 TCP 断开时代发:
-	// 持有节点的实体不退出也不存盘,login 侧却随即删会话、删 location,下一次进场按首次落点铸新 epoch,持有节点之后的存盘被拒、
-	// 实体被当废黜销毁(回档,审计 §2.1)。在收包时做:直连 / 路由两种模式共用这一个点;login 侧失败时实体退出、location 保留,
-	// 下一次 EnterGame 走同落点重连或换手门,都不回档。
-	if (request->message_id() == ClientPlayerLoginLeaveGameMessageId)
+	// 客户端 LeaveGame / EnterGame 的会话状态变化在请求真正发出的那一刻生效(LoginTransitionRejectTip / ApplyLoginTransition
+	// 一节,location-release-binding.md §3.5)。路由模式下它们是 PROTOCOL_GRPC、进路由 lane,由 lane 的发出钩子按收包顺序执行;
+	// 其余情形(直连模式)收包即发出,在这里执行。直连模式行为与 2026-11-10 之前相同。
+	const bool viaRouterLane = messageInfo.protocol == PROTOCOL_GRPC && gate_router_mode::IsRouterModeEnabled();
+	if (!viaRouterLane)
 	{
-		gate_scene_entry::OnClientLeaveGame(sessionId, session);
-	}
-	// 客户端 EnterGame:同一个收包点记下"LeaveGame 之后已再次请求进场"。在这之前到达 gate 的 Bind / 路由只可能属于 LeaveGame
-	// 之前那条登录链(login 只在处理 EnterGame 时发 Bind),一律丢弃;按收包顺序记,路由模式下 lane 里排在 LeaveGame 之前的
-	// EnterGame 不会被误当成新的一次(第二轮审计 r2-gate#1,location-release-binding.md §3.5)。
-	// 记之前先过换角闸(login_admission.h EnterGameRoleSwitchRejectTip,纵深防御):会话已绑定角色、没 LeaveGame 就要进另一个
-	// 角色时不转发,回带请求 id 的信封(与 login 拒绝换角同码),不计非法包、不断连。与 LeaveGame 的重置同一个收包点,按收包顺序生效。
-	else if (request->message_id() == ClientPlayerLoginEnterGameMessageId)
-	{
-		if (const uint32_t rejectTip = gate_login_admission::EnterGameRoleSwitchRejectTip(session, request->body()); rejectTip != 0)
+		if (const uint32_t rejectTip = LoginTransitionRejectTip(sessionId, session, *request); rejectTip != 0)
 		{
-			static uint64_t roleSwitchRejectedCount = 0;
-			if ((roleSwitchRejectedCount++ & 0x3FF) == 0)
-			{
-				LOG_WARN << "EnterGame rejected: session is already bound to a role (sampled)"
-						 << " latest_session_id=" << sessionId << " latest_tip=" << rejectTip
-						 << " rejected_total=" << roleSwitchRejectedCount;
-			}
 			gate_lane::SendEnvelope(session, request->id(), request->message_id(), rejectTip);
 			return;
 		}
-		gate_scene_entry::OnClientEnterGame(sessionId, session);
-		// 排空迁移避开「EnterGame 已发出、绑定还没回来」的窗口(drain_migration.h kEnterGameSettle)。按收包时刻记,两种模式
-		// 共用这一个点:路由模式下 EnterGame 可能还排在 lane 里、晚一点才发出,这段差额相对 5 分钟很小;万一撞上,
-		// 新连接上的 EnterGame 由 login 会话栅栏回「登录中」,客户端重试即可,不涉及数据。
-		gate_drain_migration::NoteEnterGameForwarded(session, std::chrono::steady_clock::now());
+		ApplyLoginTransition(sessionId, session, *request);
 	}
 
 	if (messageInfo.protocol == PROTOCOL_TCP)
 	{
+		// 不经路由 lane:LeaveGame 还排在 lane 里时不交给 scene(LeaveGame 屏障,RejectedBehindQueuedLeaveGame)。
+		if (RejectedBehindQueuedLeaveGame(sessionId, session, *request))
+		{
+			return;
+		}
 		HandleTcpNodeMessage(session, request, sessionId, conn);
 	}
 	else if (messageInfo.protocol == PROTOCOL_GRPC)

@@ -68,13 +68,14 @@ CREATE TABLE IF NOT EXISTS `player_store` (
 | kWallet(钱包) | 7 | `currency`、`asset_op_ledger`、`inbox_ledger`、`mystery_merchant`、`client_request_ledger`(客户端请求幂等键账本,2026-11-06 别的批次加,[请求幂等](client-request-idempotency.md) §5.3) | 小,任何经济行为都改它 | 定时 |
 | kBag(背包) | 8 | `bag_component` | 最大的一行,只在道具操作时变 | 定时 |
 | kGrowth(成长) | 3 | `skill_list`、`attribute_component`、`pet_component`、`mission_component` | 中等,随进度变 | 定时 |
-| kProfile(资料) | 4 | `uint32_pb_component`(职业)、`uint64_pb_component`(注册时间)、`profile_component`、`battle_results`、`item_gain_block`、`stress_test_probe` | 都很小,大多建角后不变 | 定时 |
+| kProfile(资料) | 4 | `uint32_pb_component`(职业)、`uint64_pb_component`(注册时间)、`profile_component`、`battle_results`、`item_gain_block`、`item_holds`、`stress_test_probe` | 都很小,大多建角后不变 | 定时 |
 | 元数据(不入 payload) | — | `player_id`、`persist_schema_gen` | | |
 
 - 退役号:1(旧 kHot)、2(旧 kAsset),proto 里 `reserved`。新加一行取下一个空闲号,不回填。
 - 钱包和背包分开之后,一次交易同时改了两者时两行同一事务提交(原则 1)。
 - 职业、注册时间移到资料行:建角只写写权行和资料行(§5.4);展示资料读 kCharacter(等级)和 kProfile(职业、名字、外观、性别)(§5.6)。
 - `battle_results`(本人近期战斗结果,[战斗结果重登恢复](battle-result-recovery.md) §4.1)和 `item_gain_block`(物品获取封禁,[玩家收件箱](player-inbox-service.md) §2.2)是 2026-11-05 别的批次加的,原本就放资料行,不动:只在结算、GM 处置时变,资料行仍然小。
+- `item_holds`(物品数量预留,字段 26,[战斗道具预留](battle-item-reservation.md))2026-11-10 加在资料行:最多 8 份 × 每份 256 种,只在备战、结算、取消、终局复核时变;建起来、取消和按终局释放时请求关键进度存盘,结算时随结算那一次存盘。它和背包分在两行没关系:结算的扣物与释放预留是同一帧的改动,按原则 1 在同一个事务里提交。
 - `derived_attributes_component` 字段名沿用旧名(改名要动生成代码和全部调用点,随 §1.2 的改名批一起);装的是基础属性和当前血蓝,真正的派生属性 `DerivedAttributesComp` 不落库、加载时重算。基础属性能不能由职业和加点重算,待核对:能重算的就不该落库(AGENTS §11.6),只存当前血蓝。
 - 新加字段按上面的原则选行。小而常变的不放背包行;资产、账本、任务领取标记不放只顺带的行。
 - 认领回包的上限按「每行都到上限」算(§5.2,`playerstore.New` 校验):现在 6 个数据行 × 1 MiB + 64 KiB ≤ 8 MiB(第二批删掉 kLegacy1 之前是 7 行)。再加行要先核这条。

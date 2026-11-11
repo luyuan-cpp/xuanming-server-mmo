@@ -8,6 +8,7 @@ import (
 	"login/internal/config"
 	loginlogic "login/internal/logic/clientplayerlogin"
 	loginauth "login/internal/logic/pkg/callerauth"
+	"login/internal/logic/pkg/createbudget"
 	"login/internal/logic/pkg/node"
 	"login/internal/rpclogging"
 	loginserver "login/internal/server/clientplayerlogin"
@@ -91,6 +92,12 @@ func main() {
 	// 新角色的存档库(总体方案 §7.2):地域码、存档库数不合法就拒绝启动,不建出落到错误库的角色。
 	if err := config.AppConfig.Placement.Validate(); err != nil {
 		panic(fmt.Errorf("Placement configuration rejected; refusing to start: %w", err))
+	}
+	// 建角各跳按 handler 截止分摊(docs/design/client-request-ordering.md §5.3):本地余量 + 各跳上限 + 跳间间隙
+	// 放不进 zrpc Timeout 就拒绝启动,不让「名义预算之和超过 handler 预算」再静默上线。
+	if err := createbudget.New(config.AppConfig.HomeZone.RegisterTimeout).Validate(
+		time.Duration(config.AppConfig.Timeout) * time.Millisecond); err != nil {
+		panic(fmt.Errorf("CreatePlayer budget configuration rejected; refusing to start: %w", err))
 	}
 
 	// 密钥门禁必须跑在**任何外部连接之前**(Kafka / Redis / etcd 都在下面)。

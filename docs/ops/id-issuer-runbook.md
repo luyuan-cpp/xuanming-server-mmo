@@ -39,7 +39,7 @@
 3. 第一个 data-service 就绪之后,在任意一个 data-service Pod 里开启登记处,第一个可认领的码是 1:
 
    ```bash
-   kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-registry-open -id-registry-next 1
+   kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-registry-open -id-registry-next 1
    ```
 
    输出 `id registry opened, the first claimable region code is 1`。已开启时什么也不做。staging 和 prod 共用这一个登记处,和[地域码登记表](open-new-region-runbook.md) §3 是同一套码。
@@ -53,7 +53,7 @@
 在第一个 zone 的 data-service 就绪之后、放流量之前,在任意一个 data-service Pod 里跑一次:
 
 ```bash
-kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
+kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
 ```
 
 输出 `region code claimed in the id registry and both reservation records created` 就完成了。重复执行是安全的:这个码已经由这两套 etcd 初始化过时输出 `already initialized`,什么也不做。认领之后、建本地记录之前中断过,再跑一次接着做完。不需要重启任何服务,scene 和 login 的客户端按退避自动重试。
@@ -130,7 +130,7 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
 2. 在这个地域任意一个 data-service Pod 里跑:
 
    ```bash
-   kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-recover -id-issuer-rebind
+   kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-recover -id-issuer-rebind
    ```
 
 3. 输出 `bound region <码> to these etcd clusters (...) above high_water=<水位>`。两份本地记录按登记处水位重建,原来那两套 etcd 从此预留被拒。不带 `-id-issuer-rebind` 时只报 `rerun with -id-issuer-rebind`,不写任何东西。

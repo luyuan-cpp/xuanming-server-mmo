@@ -66,6 +66,47 @@ TEST(BaseDeployConfigTest, GateMaxConnectionsUsesShippedSafeDefault)
 	EXPECT_LE(maxConnections, 131071u);
 }
 
+// 三把令牌密钥可由环境变量注入(K8s Secret,docs/design/workload-secrets-via-k8s-secret.md §4.1),覆盖 yaml。
+// 先读配置、再清变量、最后断言:断言失败提前返回时也不会把变量漏给后面的用例。断言不打印密钥值(AGENTS.md §11.3)。
+TEST(BaseDeployConfigEnvOverride, TokenSecretsFromEnvOverrideYaml)
+{
+	constexpr const char *kGateSecret = "env-gate-token-secret-0123456789abcdef";
+	constexpr const char *kBattleSecret = "env-battle-token-secret-0123456789abcd";
+	constexpr const char *kSpectateSecret = "env-spectate-token-secret-0123456789ab";
+	BaseDeployConfig cfg;
+	SetEnvVar("MMORPG_GATE_TOKEN_SECRET", kGateSecret);
+	SetEnvVar("MMORPG_BATTLE_TOKEN_SECRET", kBattleSecret);
+	SetEnvVar("MMORPG_SPECTATE_TOKEN_SECRET", kSpectateSecret);
+	const bool loaded = readBaseDeployConfig("etc/base_deploy_config.yaml", cfg);
+	ClearEnvVar("MMORPG_GATE_TOKEN_SECRET");
+	ClearEnvVar("MMORPG_BATTLE_TOKEN_SECRET");
+	ClearEnvVar("MMORPG_SPECTATE_TOKEN_SECRET");
+	ASSERT_TRUE(loaded);
+	EXPECT_TRUE(cfg.gate_token_secret() == kGateSecret) << "MMORPG_GATE_TOKEN_SECRET must win over the yaml GateTokenSecret";
+	EXPECT_TRUE(cfg.battle_token_secret() == kBattleSecret) << "MMORPG_BATTLE_TOKEN_SECRET must win over the yaml BattleTokenSecret";
+	EXPECT_TRUE(cfg.spectate_token_secret() == kSpectateSecret) << "MMORPG_SPECTATE_TOKEN_SECRET must win over the yaml SpectateTokenSecret";
+}
+
+// 变量不设或为空串时照用 yaml:本机不设这些变量,行为与引入覆盖之前相同。两次读取的结果逐字段一致即可,不依赖 yaml 里的具体值。
+TEST(BaseDeployConfigEnvOverride, TokenSecretsWithoutEnvKeepYaml)
+{
+	ClearEnvVar("MMORPG_GATE_TOKEN_SECRET");
+	ClearEnvVar("MMORPG_BATTLE_TOKEN_SECRET");
+	ClearEnvVar("MMORPG_SPECTATE_TOKEN_SECRET");
+	BaseDeployConfig withoutEnv;
+	ASSERT_TRUE(readBaseDeployConfig("etc/base_deploy_config.yaml", withoutEnv));
+	EXPECT_FALSE(withoutEnv.gate_token_secret().empty()) << "the shipped yaml must keep a local GateTokenSecret";
+
+	SetEnvVar("MMORPG_GATE_TOKEN_SECRET", "");
+	BaseDeployConfig withEmptyEnv;
+	const bool loaded = readBaseDeployConfig("etc/base_deploy_config.yaml", withEmptyEnv);
+	ClearEnvVar("MMORPG_GATE_TOKEN_SECRET");
+	ASSERT_TRUE(loaded);
+	EXPECT_TRUE(withEmptyEnv.gate_token_secret() == withoutEnv.gate_token_secret()) << "an empty variable must not override the yaml";
+	EXPECT_TRUE(withEmptyEnv.battle_token_secret() == withoutEnv.battle_token_secret());
+	EXPECT_TRUE(withEmptyEnv.spectate_token_secret() == withoutEnv.spectate_token_secret());
+}
+
 // ---------------------------------------------------------------------------
 // 验证各配置表能正常加载并遍历
 // ---------------------------------------------------------------------------

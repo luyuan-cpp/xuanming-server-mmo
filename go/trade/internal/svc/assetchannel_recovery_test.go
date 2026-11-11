@@ -20,7 +20,27 @@ import (
 	"shared/assetop"
 	"shared/assetopwake"
 	"shared/scenenode"
+	"shared/workshard"
 )
+
+// TestAssetOpCleanupOwner:终态清理的按片分工(缺口清单第 25 条第二批)复用重投与合同推进那份成员表。
+// 通道没装配(AssetOp.Enabled=false)时回 nil:清理不分工、清全部行;装配了就回成员表的判定,
+// 成员表还没读到时做全部片(保活优先)。清理的类别键与同一份成员表上的其余工作都不同名。
+func TestAssetOpCleanupOwner(t *testing.T) {
+	if (&ServiceContext{}).AssetOpCleanupOwner() != nil {
+		t.Fatal("通道没装配时清理不分工,应回 nil")
+	}
+	sc := &ServiceContext{Assets: &AssetChannel{Members: workshard.NewMembership("TradeNodeService.rpc/zone/1/")}}
+	owns := sc.AssetOpCleanupOwner()
+	if owns == nil || !owns(workshard.ShardKey(data.CleanupWorkKind, 7)) {
+		t.Fatal("装配了成员表时应回它的判定,还没读到成员表时做全部片")
+	}
+	for _, other := range []string{"trade-assetop", "trade-commerce", "trade-receipt-ack"} {
+		if data.CleanupWorkKind == other {
+			t.Fatalf("清理的类别键 %q 与同一份成员表上的别的工作重名", other)
+		}
+	}
+}
 
 // recoveryDefaults 是 AssetOp 段落地恢复与清理键的默认值(与 etc/trade.yaml、guild 的同名键同值)。
 func recoveryDefaults() config.AssetOpConf {
@@ -169,7 +189,7 @@ func TestMaintenanceLeaderKeyAndID(t *testing.T) {
 
 // TestStartAssetOpCleanupRejectsNilDB:没有连接池时拒绝装配(调用方据此拒启),而不是起一个必然 panic 的 goroutine。
 func TestStartAssetOpCleanupRejectsNilDB(t *testing.T) {
-	if stop, err := StartAssetOpCleanup(nil, recoveryDefaults()); err == nil || stop != nil {
+	if stop, err := StartAssetOpCleanup(nil, recoveryDefaults(), nil); err == nil || stop != nil {
 		t.Errorf("nil 连接池 = (stop!=nil:%v, %v), want 报错且不返回 stop", stop != nil, err)
 	}
 }
@@ -184,7 +204,7 @@ func TestStartAssetOpCleanupStopWaits(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	c := recoveryDefaults()
 	c.CleanupIntervalMinutes = 1440
-	stop, err := StartAssetOpCleanup(db, c)
+	stop, err := StartAssetOpCleanup(db, c, nil)
 	if err != nil {
 		t.Fatalf("StartAssetOpCleanup: %v", err)
 	}

@@ -289,7 +289,7 @@ GateDrain:
   - 滞留关闭：满 60 秒关真实的回环连接，会话已不在或号已复用时不关。
   - 客户端入口拒绝客户端自发的新消息号（`gate_client_entry_admission_test.cpp`）。
   - 单测进不去的两处：`PushRedirect` 的身份栅栏（依赖路由 lane 的实现文件 `client_request_lane.cpp`）与「推过 124 的会话被踢时不推提示」（在 `gate_event_handler.cpp`，拖着节点注册表与场景入口），都不在测试工程里，靠核对调用点与下面的 robot 集成验证。
-- 跨语言：许可事件与新 RPC 的字段两边各放一份固定样例对拍，做法同发布轨道的对拍单测。
+- 跨语言：许可事件与新 RPC 的字段两边都由同一份 proto 生成，没有手写的第二份，单位写在字段名里（`lease_ms`、`rate_per_second`），所以不另做字节对拍。两边各写一份字面量的只有选角避让窗口：gate 的 `kEnterGameSettle` 不得短于 login 的 `enterGameChainBudget`，由 `go/login/internal/logic/clientplayerlogin/gate_drain_settle_crosslang_test.go` 读 C++ 头文件对拍，做法同发布轨道的 `crosslang_test.go`。
 
 集成（本地或 kind，用 robot）：
 
@@ -400,7 +400,7 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 | `cpp/libs/services/gate/session/comp/session_info_comp.h` | 会话上的迁移状态：在途标记、退避截止、最近一次 EnterGame 时刻、推 124 的时刻 |
 | `cpp/nodes/gate/main.cpp` | `drainMigrationTimer` 每秒一拍；关源与拆除前取消 |
 | `cpp/nodes/gate/gate.vcxproj`、`.filters` | 登记两组新文件。`CMakeLists.txt` 由 `build_linux.sh` 按 vcxproj 生成，没有手改 |
-| 单测 | `cpp/nodes/gate/tests/drain_migration_test.cpp`（新，22 例：调度 20 例、滞留关闭真连接 2 例）；`cpp/tests/routing_identity_test/gate_client_entry_admission_test.cpp` 加 1 例；`routing_identity_test.vcxproj` 登记被测源码与新测试（仅 Debug\|x64，同 gate 其他被测源码的做法） |
+| 单测 | `cpp/nodes/gate/tests/drain_migration_test.cpp`（新，22 例：调度 20 例、滞留关闭真连接 2 例）；`cpp/tests/routing_identity_test/gate_client_entry_admission_test.cpp` 加 1 例；`routing_identity_test.vcxproj` 登记被测源码与新测试（仅 Debug\|x64，同 gate 其他被测源码的做法）；`go/login/internal/logic/clientplayerlogin/gate_drain_settle_crosslang_test.go`（新）读 C++ 头文件核对选角避让窗口不短于 login EnterGame 后台链预算 |
 | 批 A 收尾 | `go/login/internal/svc/gate_command.go` 的空事件报错、`tools/scripts/k8s_gate_drain.ps1` 两条迁移配置的 throw 改成英文（AGENTS §2：服务与脚本的诊断文案用英文；测试按键名匹配，不受影响） |
 
 ### 18.2 与上文的差异与补充决定
@@ -414,6 +414,8 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 ### 18.3 验证（交 Codex，AGENTS §10.1）
 
 步骤与命令写在 `docs/PROGRESS.md` 2026-11-10 同名条目：整解编译、`routing_identity_test` 全量、批 A 的 Go 与脚本测试、robot 单测，以及按 §11 的本地两台 gate 迁移冒烟（`GateDrain.Migrate.Enabled=true`）。没有运行结果之前，本节所有内容都只是静态落码。
+
+**第一步必须先重生 login 的 goctl 服务包装**（`pwsh -NoProfile -ExecutionPolicy Bypass -File go/build.ps1`）。11-10 复核时 `go/login/internal/server/clientplayerlogin/clientplayerloginserver.go` 还没有 `RequestGateMigration`：Go pb 与 goctl 的输入 proto 都已带上这个方法，只差这一步。不重生时 login 照样编得过（服务结构体嵌着 `UnimplementedClientPlayerLoginServer`），但 gate 每次要票都收到 UNIMPLEMENTED，迁移一律退避、永远不生效，单测测不出来。更正写在 PROGRESS 同日「goctl 服务包装必须重生」一条。
 
 ### 18.4 还没做的
 

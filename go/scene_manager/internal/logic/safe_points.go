@@ -32,7 +32,7 @@ const (
 	// 它停摆的表现是崩溃留下的残留成员摘不掉:实例不销毁、选线躲着它。
 	SafePointSceneMemberReconcile = "scene_manager.scene_member_reconcile"
 
-	// SafePointAgonesReconcile 是 Agones rooms 计数与 Redis 映射的周期比对。
+	// SafePointAgonesReconcile 是 Agones rooms 名额条目与 Redis 名额记录的周期对账(agones_reconcile.go)。
 	SafePointAgonesReconcile = "scene_manager.agones_reconcile"
 
 	// SafePointSceneTeardownSweep 是拆除任务的周期扫描(scene_teardown_job.go)。

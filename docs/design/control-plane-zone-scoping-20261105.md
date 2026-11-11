@@ -17,6 +17,8 @@
 
 **第 5 条:控制域 Redis 按 zone 组分实例,不上 Cluster。**
 
+> 2026-11-10 负责人改口径:「我要分布式水平扩展」,按 zone 组分实例不算完成。控制域改上 Redis Cluster,每个 zone 的控制域键共用一个 hash tag `{ctl:<z>}`,设计见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)。下面第 3 条的不变量照用,它是按 zone 打 tag 的前提;§4.1 的选型与 §4.6 的部署形态由该设计取代,落码后改写本节。
+
 1. 每个 zone 组一个控制域实例 `redis-ctl-g<N>`。组号沿用 zones 配置的 `redisQueueGroup`,一个组是一组 zone 共用的 Redis 单元,排队实例和控制域实例各一个。
 2. 键名一个都不改。原来全服唯一的三把键:选主锁、死节点收尾任务表改按 zone 起名;zone 登记集合 `scene_manager:zones` 删除。
 3. **新不变量**:zone z 的控制域键只由 zone z 的 scene_manager 读写。别的 zone 的事实只从与 zone 无关的介质取:etcd、玩家域 Redis、Kafka、重定向票据(§4.3)。
@@ -110,6 +112,8 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 
 ### 4.1 选型
 
+> 2026-11-10 起本节的结论作废:负责人要求控制域也上 Cluster,见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)。下面是当时的取舍,落码时改写。
+
 两个候选:按 zone 组分实例;或者上 Redis Cluster,并给控制域键加 `{zone}` hash tag。取前者,理由:
 
 1. **§4.3 的不变量让 Cluster 的长处用不上**。Cluster 的主要好处是一个地址能到任何键;不变量之后,一个进程只碰本 zone 的键,一个实例就够。
@@ -129,6 +133,7 @@ C++ 只连本 zone 的 scene_manager 之后,一个 zone 没有部署 scene_manag
 | 场景路由 `scene:<id>:node|zone|source|mirror|mirrors|draining|agones_gs|claim`、成员 `instance:<id>:members`、`node:zone:<z>:<n>:*`、`instances:zone:<z>:active`、`scene_nodes:zone:<z>:load`、世界频道 `world_channels:*:zone:<z>:*`、分线目录与线号、神秘商人、`world_init:lock:zone:<z>` | zone 所属组的 `redis-ctl-g<N>` | 本 zone 的 scene_manager;C++ scene 只读分线目录、神秘商人,以及归属对账读的本地场景 `scene:<id>:node` 与本节点号的 `node:zone:<z>:<n>:holder`(2026-11-06 / 11-10,scene-node-ownership-reconcile.md) |
 | 选主锁 `scene_manager:leader:lock:zone:<z>`(原 `scene_manager:leader:lock`) | 同上 | 本 zone 的 scene_manager |
 | 死节点收尾任务 `scene_manager:dead_node_reconcile:zone:<z>`(原全服一张) | 同上 | 本 zone 的领导者 |
+| etcd 修订号水位 `scene_manager:etcd_revision_seen:zone:<z>` 与 etcd 纪元 `scene_manager:etcd_epoch:zone:<z>`(2026-11-10,节点号持有者认 etcd 倒退用,scene-node-ownership-reconcile.md §4.6) | 同上 | 本 zone 的领导者写;纪元由各副本写持有者时在同一段 Lua 里读 |
 | `scene_manager:zones` | **删除** | — |
 | gate 排空标记 `gate:<id>:draining|drained` | 核心(G4a §25.3 的 10-23 订正) | scene_manager 只读,经新句柄 `CoreRedis` |
 | gate 停写标记 `gate:<id>:stale`(2026-11-10,键名在 `go/shared/gatepick/marks.go`) | 核心,与排空标记同一实例 | login 各副本写(本 zone 判为停写的 gate,过期 30s、不主动删,经 `Node.RedisClient`);scene_manager 只读,经 `CoreRedis`,与排空标记同一次 MGET(gate-load-balancing-design.md「满载与停写的 gate」) |

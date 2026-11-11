@@ -106,6 +106,12 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出。
 	conf.MustLoad(*configFile, &c)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
+	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
+	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(os.Stderr, "[player_inbox] %v\n", err)
+		os.Exit(schemamigrate.ExitFailed)
+	}
 
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp, checkRowShardLayout))

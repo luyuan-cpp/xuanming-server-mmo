@@ -145,6 +145,25 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_spectate_token_secret(root["SpectateTokenSecret"].as<std::string>());
 	}
 
+	// 三把令牌密钥的环境变量覆盖(后者生效,与 ZONE_REDIS_PASSWORD 同一模式):K8s 上它们只放 Secret,经 secretKeyRef 注入同名变量,
+	// node-config / battle-node-config 里写空串(docs/design/workload-secrets-via-k8s-secret.md §4.1)。本机不设变量,照用 yaml。
+	// 缺变量时取 yaml 的值;生产档下为空由各节点既有的空密钥校验拒启。值不进日志。
+	if (const char *envSecret = GetNonEmptyEnv("MMORPG_GATE_TOKEN_SECRET"))
+	{
+		baseConfig.set_gate_token_secret(envSecret);
+		LOG_INFO << "MMORPG_GATE_TOKEN_SECRET env override applied (value hidden)";
+	}
+	if (const char *envSecret = GetNonEmptyEnv("MMORPG_BATTLE_TOKEN_SECRET"))
+	{
+		baseConfig.set_battle_token_secret(envSecret);
+		LOG_INFO << "MMORPG_BATTLE_TOKEN_SECRET env override applied (value hidden)";
+	}
+	if (const char *envSecret = GetNonEmptyEnv("MMORPG_SPECTATE_TOKEN_SECRET"))
+	{
+		baseConfig.set_spectate_token_secret(envSecret);
+		LOG_INFO << "MMORPG_SPECTATE_TOKEN_SECRET env override applied (value hidden)";
+	}
+
 	if (root["BattleMaxConnections"])
 	{
 		baseConfig.set_battle_max_connections(root["BattleMaxConnections"].as<uint32_t>());

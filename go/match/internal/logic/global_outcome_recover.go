@@ -37,7 +37,8 @@ type expiredOutcomeRecoverer interface {
 //   - 全量页:每圈第一拍再调一次 RecoverExpiredOutcomes(退休旧调度字段 + 不分车道扫一页)。这两条 SQL 都要走完在途的
 //     state 4 行,成本与在途局数成正比、与积压无关,所以每圈只跑一次(2026-11-05 评审修正:原先每拍都退休、车道页不满
 //     还补一页,积压为空时每副本每拍全量扫四遍,比分车道之前还贵一倍)。它与车道页互不依赖,车道页出错也照跑;
-//   - 游标语义不变:每条车道与全量页各有一个游标,按返回值推进,出错也推进(单条损坏不能卡住整页),扫到末尾回零值。
+//   - 游标语义不变:每条车道与全量页各有一个游标,按返回值推进,出错也推进(单条损坏不能卡住整页),扫到末尾回零值;
+//     这一页在锁内改了取证排期时也回零值(2026-11-10,理由见 authority.Store.RecoverExpiredOutcomeLane)。
 type globalOutcomeRecovery struct {
 	lanes   [authority.ExpiredOutcomeLanes]authority.ExpiredOutcomeCursor
 	overall authority.ExpiredOutcomeCursor

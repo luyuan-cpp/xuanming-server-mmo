@@ -68,6 +68,7 @@
     <ClCompile Include="../../libs/services/scene/actor/actor_net_id.cpp" />
     <ClCompile Include="../../libs/services/scene/core/system/id_generator.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/aoi.cpp" />
+    <ClCompile Include="../../libs/services/scene/spatial/system/aoi_load.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/grid.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/interest.cpp" />
     <ClCompile Include="../../libs/services/scene/spatial/system/view.cpp" />

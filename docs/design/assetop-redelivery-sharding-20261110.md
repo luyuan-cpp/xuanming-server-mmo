@@ -1,6 +1,7 @@
 # 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 
 > 状态:**已落码,未编译、未运行**,待 Codex 按 §8 验证。对应[服务器代码缺口清单](../handoff/server-gap-audit-20261101.md)第 25 条。
+> 第二批(2026-11-11,「G4a Redis 设计稿修订应用」会话):mail 与 GM 回收的重投分片(§10)、guild / trade 终态清理分片(§11)、分片缺口告警(§12),**同样已落码,未编译、未运行**,待 Codex 按 §13.3 验证。
 > 复用 `go/shared/workshard`(先例:trade 合同推进,[聚宝斋设计](jubaozhai-market.md) §15.8)与 match 的 `svc.OwnsWork`([全服匹配设计](global-match-hierarchical-pools.md) §5.2、§12.7)。
 > 不改表、不改协议、不改 proto,不需要重新生成。
 
@@ -20,7 +21,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 - **`assetop.OwnedDueLister`**(Store 的可选能力):`ListDueOwned(ctx, nowMs, limit, owned workshard.Filter)`。契约与 `ListDue` 相同(两段读、只回主键、不加锁、按 op_id 去重、总条数 ≤ limit),只多一个条件:`owned` 用 AND 接进**两段** SQL 的 WHERE,放在 `ORDER BY … LIMIT` 之前。零值 `owned` 不过滤。guild 的 `GuildAssetStore`、trade 的 `AssetOpRepo` 实现它;两边的 `ListDue` 改为委托 `ListDueOwned(…, workshard.Filter{})`,SQL 只多一个恒真的 `1=1`,不另写一份。
 - **`Loop.BindWorkOwner(kind, owns)`**:`Run` 之前调用一次。Store 没实现 `OwnedDueLister`、`kind` 为空或 `owns` 为 nil 时回错误,装配方拒启:绑了分工却悄悄扫全部行,扩副本时看不出分工没生效。绑上之后 `Tick` 每轮用 `workshard.SQLFilter(owns, kind, "player_id")` 生成条件交给 `ListDueOwned`;没绑照旧调 `ListDue`。
 - **只影响 `Tick`**。同步投递(`ProcessOne`)、落地唤醒(`WakePlayer`)、日对账与自动放弃(`RunMaintenance`,本来就选主)、最老未决年龄 gauge 都不看归属。落地唤醒由抢到去重键的任一副本处理某个玩家的全部未决行,与分片无关,保持不变。
-- **为什么做成可选能力,而不是改 `Store.ListDue` 的签名**:`assetop.Store` 的生产实现除 guild、trade 外还有 mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`),另有 4 个测试替身(assetop 的 `fakeStore`、assetoptest 的 `singleRowStore`、guild 的 `countingAssetStore` 与 `stubAssetStore`)。改签名要同批改 8 处,而 mail 与回收不在本条范围,它们的成员表怎么圈要另行确认(§5 第 1 条)。本包已有同样做法的可选能力(`PlayerPendingLister`、`PendingAgeReader` 等)。代价是 Store 上有两个列到期行的入口,两个实现里 `ListDue` 都只是一行委托。
+- **为什么做成可选能力,而不是改 `Store.ListDue` 的签名**:`assetop.Store` 的生产实现除 guild、trade 外还有 mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`),另有 4 个测试替身(assetop 的 `fakeStore`、assetoptest 的 `singleRowStore`、guild 的 `countingAssetStore` 与 `stubAssetStore`)。改签名要同批改 8 处;第一批只分 guild、trade,第二批给 mail 与回收也实现了它(§10),测试替身仍不需要分工。本包已有同样做法的可选能力(`PlayerPendingLister`、`PendingAgeReader` 等)。代价是 Store 上有两个列到期行的入口,四个生产实现里 `ListDue` 都只是一行委托。
 - **新指标 `assetop_owned_shards`**(gauge,只带 `service` 常量 label):本副本本轮负责的片数(0..64)。只有绑了分工的循环才报,没绑 = 没有序列。各 stable 副本加起来应为 64;成员表变化的几秒里会多或少几片;长期少于 64 说明有登记着却不跑循环的副本(§3)。
 - assetop 包头「不引 etcd 客户端」的边界不变:本包只用 `workshard` 的纯函数拼条件,成员表由装配方经 `owns` 注入,本包不读 etcd。
 
@@ -73,7 +74,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 | 成员表变化的几秒里各副本看法不一 | 某一片可能两个副本都扫(多几次空 CAS,与分片前相同),也可能暂时没人扫(下一拍补上) |
 | 副本崩溃 | 它名下的片停到 etcd 租约过期(guild、trade 的 `LeaseTTL` 都是 60 秒),再加一次整表读(5 秒);match 用 watch,租约过期即换主。只是延迟,不丢 |
 | 副本正常停机 | trade 先注销 etcd 再排空(`trade.go`);guild 先停资产管线、后关注册(`guild.go` 的 defer 顺序),停机窗口里它名下的片要等注销之后的一次整表读 |
-| 登记着却不跑重投循环的副本(滚动修改 `AssetOp.Enabled` 的窗口,或循环卡死) | 它名下的片停到它退出或恢复。兜底:提交后的同步投递照常;落地唤醒任一副本都能处理;`assetop_pending_oldest_age_seconds` 告警;`sum(assetop_owned_shards)` 低于 64 可直接看出(卡死的副本还在报旧值,要靠前一项) |
+| 登记着却不跑重投循环的副本(滚动修改 `AssetOp.Enabled` / `Recall.Enabled` 的窗口,或循环卡死) | 它名下的片停到它退出或恢复。兜底:提交后的同步投递照常;落地唤醒任一副本都能处理;`sum by (namespace, service) (assetop_owned_shards)` 低于 64 有告警(§12);卡死的副本还在报旧值、和仍为 64,只能看 `assetop_pending_oldest_age_seconds` 是否持续上涨 |
 | etcd 连续 30 秒读不到 | 成员表判过期,本副本做全部片(保活优先) |
 | 本副本还没注册完(trade 的循环起得比注册早) | 成员表不空时什么都不做,交给表里的副本;表为空时做全部片 |
 | canary 副本 | 不跑重投循环和发件箱,也不进成员表(`workshard.StableMembers` 与 `StableOnly()` 过滤) |
@@ -88,14 +89,14 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 ## 5. 不做的部分与原因
 
-1. mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`)的重投循环不分片:不在第 25 条范围。要分片时,先实现 `OwnedDueLister`,再按 §2.3 的不变量确认成员表怎么圈(mail 是全局服务;回收跑在 data_service 上,要看它的部署形态),最后调 `BindWorkOwner`。
+1. mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`)的重投循环:第一批没做,第二批已分片,圈法与理由见 §10。
 2. 不给 `idx_0` 加 `player_id`:理由见 §2.4,等压测证据。
 3. 不缓存「本副本没有片」,也不跳过 `1=0` 的查询:成员表随时会变,一次空查询的代价可以忽略。
 4. 落地唤醒、同步投递、日对账与自动放弃、最老未决年龄 gauge 都不改。
 5. 已建房票巡检(`ReadyAfter`)按 2026-11-06 的约定由数据覆盖审计会话接分片([全服匹配设计](global-match-hierarchical-pools.md) §5.2),本条不碰。
 6. trade `asset_op_repo.go` 的 `Finalize`、`Abandon`、`ResolveManually` 由另一项改,本条只动 `ListDue` 一段。
-7. 没有新增告警规则。可以加 `sum by (service) (assetop_owned_shards) < 64` 持续 5 分钟,等多副本冒烟确认读数之后再加。
-8. 顺带看到、不在本条范围:终态行清理每个 stable 副本都跑(guild `guild.go` 的 `startAssetOpCleanup`、trade `svc.StartAssetOpCleanup`),各副本读同一批候选、逐行点锁点删,重复的只是删除且按周期跑(`CleanupIntervalMinutes`),量小。要分时可以照本条按 `player_id` 分片,或者并进维护选主;是否登记成新缺口由清单维护者定。
+7. 告警规则:第一批没加,第二批已加,见 §12。式子按 data_service 随 zone 部署改成 `sum by (namespace, service) (assetop_owned_shards) < 64`。
+8. 终态行清理每个 stable 副本都跑(guild `guild.go` 的 `startAssetOpCleanup`、trade `svc.StartAssetOpCleanup`):第二批已按 `player_id` 分片,不改单领导者,理由见 §11。
 
 ## 6. 改动清单
 
@@ -159,4 +160,123 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 ## 9. Java 版
 
-服务端内部改动,没有客户端契约。Java 版只登记待做(负责人 2026-11-05 起定 Java 留作 todo):核对 Java 的帮会 / 交易资产重投与匹配终局发件箱是否每个副本都扫同一个到期队头,是的话按同一口径分片(成员表为空时全做、本实例不在表里时不做、片号按玩家,结果行没有玩家列时按局号),条件放在 SQL 的 LIMIT 之前。
+服务端内部改动,没有客户端契约。Java 版只登记待做(负责人 2026-11-05 起定 Java 留作 todo):核对 Java 的帮会 / 交易资产重投与匹配终局发件箱是否每个副本都扫同一个到期队头,是的话按同一口径分片(成员表为空时全做、本实例不在表里时不做、片号按玩家,结果行没有玩家列时按局号),条件放在 SQL 的 LIMIT 之前。第二批同样只登记待做:邮件附件与 GM 回收的重投、帮会与交易的终态清理按同一口径分片(成员表只圈连同一个库、都在跑这项工作的实例,圈不准宁可不分),以及「各实例负责片数之和应为 64」的告警。
+
+## 10. 第二批:mail 与 GM 回收的重投分片
+
+### 10.1 动手前的核对(两个服务的副本连不连同一个库)
+
+**mail**:
+
+- K8s 上是全局服务(`k8s_deploy.ps1` 的 `$GoSvcCatalogue` 里 `Global = $true`),infra namespace 一个 Deployment。全部副本同一份 ConfigMap(同一个 `ZoneId`)、同一个独占库 `mmorpg_mail`;`DbPlacement` 搬库时全部副本跟着同一份映射走,连的仍是同一个逻辑库。
+- 注册由 `shared/domainhost` 做:路径 `MailNodeService.rpc/zone/<ZoneId>/node_type/<t>/node_id/<n>`,值是 protojson 的 NodeInfo,`releaseTrack` 由 `shared/noderegistry` 补上,所以 canary 能被 `workshard.StableMembers` 过滤掉。
+- stable 副本都跑重投循环(没有开关);canary 不跑重投、清理,第二批起也不跑成员表。
+- 本机:`go_services.ps1` 每个 zone 起一份,连同一个库、注册在不同的 zone 前缀下,与 guild 相同:每份的成员表里只有自己,各自做全部片,只是重复。
+
+**data_service 的 GM 回收**:
+
+- `gm_recall_op` 在流水库 `<SnapshotMySQL.DBName>_ledger`(`dirshard.LedgerDBName`)。K8s 上它是 `mmorpg_global_ledger`,全集群一份,**各 zone 的 data_service 都连它**。
+- 但 data_service 随 zone 部署:每个 zone namespace 一个 Deployment、一份 ConfigMap,注册在 `DataServiceNodeService.rpc/zone/<z>/`。`Recall.Enabled`(K8s 上取部署开关 `AssetOpsOn`)与库名都是各 zone 自己的配置。
+- 回收通道在每个副本上都起,不看发布轨道(canary 也跑);`Store.Required=true`,回收存储装配不起来的副本拒启,所以同一 zone 里「登记着却没有回收循环」只会出现在滚动修改 `Recall.Enabled` 的窗口。
+
+### 10.2 圈法
+
+- **mail 按 zone 圈**:`MailNodeService.rpc/zone/<ZoneId>/`,理由同 guild(§2.3)。
+- **回收按 zone 圈,不圈全服**:全服各 zone 连的是同一个流水库,圈全服在今天的 K8s 部署里是准的(每一片只有一个副本扫);但它要假定所有 zone 的配置一致,哪个 zone 关了回收、晚升级或连了别的库,落在它名下的片就没人做,这正是 §2.3 说的「圈多了」。按 zone 圈,同一前缀下的副本出自同一份配置,只会「圈少了」:每一片由每个 zone 各一个副本扫,Z 个 zone 就是 Z 份,比分片前的「全部 Z × R 个副本都扫全部行」少,且不会漏片。正确性仍由 Claim 的租约 CAS 保证。
+- **回收的 canary**:跑循环但不进成员表(`StableMembers` 过滤)。成员表里有 stable 副本时 canary 一片都不扫,成员表为空时扫全部片。这与发布轨道「canary 不跑全局后台」一致,但回收的派发与落地唤醒仍在 canary 上跑(第二批不改)。
+
+### 10.3 做法
+
+- **mail**:`Repo.ListDueOwned`(`internal/data/asset_store.go`),两段 SQL 都由 `listDueQuery` 拼,分片条件在 `ORDER BY … LIMIT` 之前;`ListDue` 委托它。重投循环的 Store 是值类型的 `StoreAdapter`(内嵌 `*Repo`),方法经内嵌指针提升,`BindWorkOwner` 的类型断言能过。类别键 `mail-assetop`。`mail.go` 建成员表、绑到循环;stable 上成员表先于循环起,停机时 `closeRelay` 与节点镜像、循环一起等它退出。
+- **mail 的身份**:注册在 `domainhost` 里,mail 原来拿不到 node_uuid。`domainhost.ServeWithReady` 的回调改为 `func(nodeUUID string)`,注册成功后把 uuid 交给调用方(进程内不变,失租换号也不变);mail 在回调里 `members.SetSelf`,rank 忽略参数。注册之前成员表若已有别的副本,本副本一片都不做,与 trade 相同。
+- **mail 的指标**:mail 原来给 `assetop.NewLoop` 和 `Caller` 传的 metrics 是 nil,assetop_* 一条序列都没有(包括最老未决年龄)。第二批改为 `assetop.NewMetrics(prometheus.DefaultRegisterer, "mail")`,同一个句柄交给 Loop 与 Caller;domainhost 的 `/metrics` 暴露的正是默认注册表。从此 `AssetOpUnknownOutcome` 等既有规则也覆盖 mail。
+- **回收**:`RecallStore.ListDueOwned`(`internal/store/recall_store.go`,`recallListDueQuery` 拼两段);`ListDue` 委托它,limit 非正时不发 SQL。类别键 `gm-recall-assetop`。`newRecallChannel` 建成员表并 `BindWorkOwner`,绑不上就回错误(`Recall.Enabled=true` 时 `configureRecall` panic,拒启)。`Start` 里成员表先于循环起(点位 `data_service.recall.members`,panic 时 Hold)。本副本的 uuid 由 `startNodeRegistration` 的新参数 `onRegistered` 在注册成功后交给 `ServiceContext.BindRecallWorkMember`;没装配回收时是空操作。
+- **不做**:回收的派发循环(`ListPlanned` → `Dispatch`,PLANNED → PENDING)每个副本仍读同一个队头,靠 `Dispatch` 的状态 CAS 互斥;mail 的过期邮件清理(`maintenance.Run`)每个 stable 副本都跑。两者都不在第 25 条里,量都按周期跑;要分时照本节同一写法。
+
+## 11. 第二批:guild / trade 终态清理去重
+
+### 11.1 分片还是单领导者
+
+先看清理 SQL 能不能把片条件放在 `LIMIT` 之前:
+
+- guild 一轮清三类,候选读都是「普通读 + 若干 AND 条件 + `ORDER BY … LIMIT`」,三张表都有 `player_id`:终态指令(`guild_asset_op`)、客户端幂等键去重记录(`guild_client_request`)、过期日键 / 周键计数行(`guild_daily_counter`);
+- trade 只有终态指令一类(`trade_asset_op`),形状相同。
+
+都能放,所以**分片**,复用重投那份成员表按 `player_id` 分,不改单领导者。不选单领导者的理由:
+
+- 清理与资产通道开关独立(通道关着时历史终态行照样要清)。guild 的维护选主只在开了对账或放弃时才竞选;trade 的清理连共享 Redis 都不拨。改成单领导者,两边都要新增一把锁和一条通道关着时也要起的选主。
+- 单领导者把清理吞吐封顶在一个副本上(每轮至多 20 批 × 500 行);分片后每个副本只读、只删自己那份,总吞吐随副本数增长。
+
+### 11.2 做法
+
+- `data.CleanupConf` 多一个 `Owns func(key string) bool`(guild、trade 各一份),nil 表示不分工、清全部行。类别键另起:`guild-assetop-cleanup`、`trade-assetop-cleanup`(`data.CleanupWorkKind`),与重投、合同推进、收据 ACK 都不同名,同一片的重投与清理不必落在同一个副本上。
+- 片的归属每轮开头算一次(`workshard.SQLFilter(c.Owns, CleanupWorkKind, "player_id")`),一轮里不变。候选读拆成「头 + 分片条件 + 尾」,条件在 `ORDER BY … LIMIT` 之前;不带后缀的常量(`sqlListCleanupTerminalOps` 等)= 头 + `1=1` + 尾,仍是不分片的形状,给「候选读不加锁」的静态检查与既有用例。
+- 成员表来源:guild `AssetPipeline.CleanupOwner()`,trade `ServiceContext.AssetOpCleanupOwner()`,都返回重投那份 `workshard.Membership` 的 `Owns`。成员表只在资产通道开着时才有;通道关着时回 nil,清理与分片前相同。trade 的 `StartAssetOpCleanup` 多一个 `owns` 参数,`data.AssetOpRepo` 新增 `CleanupTerminalOpsOwned`,`CleanupTerminalOps` 委托它。
+- 点锁 + 带原条件复核的点删、分批、批间停顿、每轮上限都不变。
+
+### 11.3 不变量与失败推演
+
+- 圈法:清理只在 `CleanupEnabled` 且 stable 的副本上跑,成员表是本 zone 注册的 stable 副本,与重投同一份配置。滚动修改 `CleanupEnabled` 的窗口里,还没开清理的副本名下的片这几轮没人清,只是终态行多留,不会误删:删除仍在主键点锁之后按状态与判龄条件复核。
+- guild 的清理水位(`asset_op_cleanup_watermark.go`)仍由每个副本在删本副本的片之前推进:它是只增的「这以下可能已删」,哪个副本先删都先写它,分片不改变 write-ahead 的论证;某些片暂时没删只让水位偏保守。trade 没有回档检查消费本表,不写水位(不变)。
+- 成员表变化的几秒里某片可能两个副本都清(与分片前相同,点锁排队、点删复核落空)或暂时没人清(下一轮补上)。
+
+## 12. 第二批:分片缺口告警
+
+规则在 `deploy/k8s/asset-channel-alerts.yaml` 的 `asset-channel.work-shards` 组,契约测试 `tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`。
+
+| 规则 | 式子 | for | 级别 |
+|---|---|---|---|
+| `AssetOpOwnedShardsMissing` | `sum by (namespace, service) (assetop_owned_shards) < 64` | 5m | warning |
+| `AssetOpOwnedShardsMissingBacklogAging` | 上式 `and on (namespace, service) (max by (namespace, service) (assetop_pending_oldest_age_seconds) > 1800)` | 30m | critical |
+
+- **按 (namespace, service) 聚合**:§5 第 7 条原式只按 service。data_service 每个 zone namespace 一份、成员表只圈本 zone,全服加起来是 Z × 64;guild、trade、mail 只在 infra namespace,加上 namespace 结果不变。
+- **与最老未决年龄配合**:片没人扫时,在线玩家没走完的行停在那里,最老年龄会持续上涨。离线停放行本来就让最老年龄常年偏高,所以第二条在实践中等于「缺片持续 35 分钟以上」的升级:成员表不会自己变,缺口不会自愈,trade 的合同推进与收据 ACK 用同一份成员表,托管资产也会停在合同里,要人处置。
+- **高于 64 不告警**:只是重复扫(某副本连续 30 秒读不到成员表就做全部片),正确性由 CAS 保证。
+- **盲区**:循环卡死的副本 gauge 停在旧值,和仍为 64,两条都不响,只能看最老未决年龄;要补需要一个每轮推进的活性指标,本批不加。
+- **mail 的序列**:第二批之前 mail 没有任何 assetop_* 序列(§10.3),规则对 mail 永远不响;契约测试钉住四个绑了分工的循环都拿到了 metrics。
+
+## 13. 第二批改动清单、测试与验证命令
+
+### 13.1 改动
+
+| 文件 | 改动 |
+|---|---|
+| `go/shared/assetop/reconcile.go`、`metrics.go` | 注释:四个生产 Store 都实现了 `OwnedDueLister`;gauge 的告警口径 |
+| `go/shared/domainhost/host.go` | `ServeWithReady` 回调带上 node_uuid |
+| `go/rank/rank.go` | 回调签名跟着改,忽略参数 |
+| `go/mail/internal/data/asset_store.go` | `ListDueOwned`、`listDueQuery`;`ListDue` 委托 |
+| `go/mail/mail.go` | 成员表、`BindWorkOwner(mail-assetop)`、assetop 指标、身份回调、停机等成员表退出 |
+| `go/data_service/internal/store/recall_store.go` | `ListDueOwned`、`recallListDueQuery`;`ListDue` 委托 |
+| `go/data_service/internal/svc/recall_channel.go` | 成员表、`BindWorkOwner(gm-recall-assetop)`、`BindRecallWorkMember` |
+| `go/data_service/data_service.go` | `startNodeRegistration` 注册成功后回调 uuid |
+| `go/guild/internal/data/asset_store.go` | `CleanupConf.Owns`、`CleanupWorkKind`;三条候选读拆头尾,分片条件在 LIMIT 之前 |
+| `go/guild/internal/svc/asset_op.go`、`go/guild/guild.go` | `AssetPipeline.CleanupOwner`;清理接上它 |
+| `go/trade/internal/data/asset_op_repo.go` | `CleanupConf.Owns`、`CleanupWorkKind`、`CleanupTerminalOpsOwned`;候选读拆头尾(只动清理一段,`Finalize` / `Abandon` / `resolveManually` 没碰) |
+| `go/trade/internal/svc/assetchannel.go`、`servicecontext.go`、`go/trade/trade.go` | `StartAssetOpCleanup` 多 `owns` 参数;`AssetOpCleanupOwner` |
+| `deploy/k8s/asset-channel-alerts.yaml` | `asset-channel.work-shards` 组两条规则;文件头 service 取值 |
+
+### 13.2 测试(都没有运行)
+
+- `go/shared/workshard/workshard_test.go`:分散回归加 4 个类别键(`mail-assetop`、`gm-recall-assetop`、`guild-assetop-cleanup`、`trade-assetop-cleanup`)。
+- `go/mail/internal/data/asset_store_test.go`(新):`TestListDueQueryPutsShardFilterBeforeLimit`、`TestListDueOwnedRejectsLimitBeforeSQL`、`TestStoreAdapterBindsWorkOwner`。
+- `go/data_service/internal/store/recall_store_test.go`:`TestRecallListDueQueryPutsShardFilterBeforeLimit`、`TestRecallListDueOwned_NonPositiveLimitSkipsSQL`;`recall_store_integration_test.go`(`integration` 标签,真库):`TestRecallStore_ListDueOwnedReadsOnlyOwnedShards`。
+- `go/data_service/internal/svc/recall_channel_test.go`:`TestRecallShardMembersPrefix_IsTheZoneRegistrationPrefix`、`TestRecallLoopBindsWorkOwner`。
+- `go/guild/internal/data/economy_repo_test.go`:纯单测 `TestCleanupCandidateQueriesPutShardFilterBeforeLimit`;真库 `TestCleanupOnce_OnlyOwnedShards`。`go/guild/internal/svc/asset_op_test.go`:`TestCleanupOwner`。
+- `go/trade/internal/data/asset_op_due_shard_test.go`:`TestCleanupTerminalOpsOwnedPutsShardFilterBeforeLimit`(录制驱动)。`go/trade/internal/svc/assetchannel_recovery_test.go`:`TestAssetOpCleanupOwner`,两处 `StartAssetOpCleanup` 调用补 `nil`。
+- `tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`(新):规则名单、级别、for;指标由 assetop 注册、service 是常量 label;阈值等于 `workshard.Shards`;两条规则同一组聚合 label;四个循环都拿到 metrics;告警名不重名。
+
+### 13.3 给 Codex 的验证命令
+
+工作目录同 §8,PowerShell 7,Go 命令前先 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。按顺序跑,失败保留编译错误全文、失败用例名与断言原文,不改弱断言,不连续重试。§8 第 1~8 步若还没跑,先跑完它们。
+
+1. `cd go/shared; gofmt -l assetop workshard domainhost; go vet ./assetop/... ./workshard/... ./domainhost/...; go test ./assetop/... ./workshard/... -count=1`。通过:gofmt 无输出;全部 PASS,`TestOwnerSpreadsShortShardKeysAcrossMembers` 的 4 个新前缀子用例在列。
+2. `cd go/rank; go build ./...; go vet ./...`。通过:无报错(只改了回调签名)。
+3. `cd go/mail; gofmt -l mail.go internal/data; go build ./...; go vet ./...; go test ./internal/data/ -count=1 -run 'TestListDueQueryPutsShardFilterBeforeLimit|TestListDueOwnedRejectsLimitBeforeSQL|TestStoreAdapterBindsWorkOwner'`。通过:3 个用例 PASS。
+4. `cd go/data_service; gofmt -l data_service.go internal/store internal/svc; go build ./...; go vet ./...; go test ./internal/store/ ./internal/svc/ -count=1`。通过:全部 PASS,`TestRecallListDueQueryPutsShardFilterBeforeLimit`、`TestRecallListDueOwned_NonPositiveLimitSkipsSQL`、`TestRecallShardMembersPrefix_IsTheZoneRegistrationPrefix`、`TestRecallLoopBindsWorkOwner` 在列。
+5. data_service 真库(一次性 MySQL / TiDB,按 `internal/store/storetest` 的 `DATA_SERVICE_IT_MYSQL_HOST` / `_USER` / `_PASSWORD`):`go test -tags=integration ./internal/store/ -count=1 -run 'TestRecallStore_'`。通过:`TestRecallStore_ListDueOwnedReadsOnlyOwnedShards` 与既有 `TestRecallStore_*` 全部 PASS。
+6. `cd go/guild; gofmt -l guild.go internal/svc internal/data; go build ./...; go vet ./...; go test ./internal/svc/... ./internal/data/... -count=1`。通过:全部 PASS,`TestCleanupOwner`、`TestCleanupCandidateQueriesPutShardFilterBeforeLimit`、既有 `TestEconomyCandidateReadsTakeNoLocks` 在列。
+7. guild 真库(同 §8 第 4 步的 DSN):`go test ./internal/data/ -count=1 -run 'Cleanup'`。通过:`TestCleanupOnce_OnlyOwnedShards`、`TestCleanupOnce_KeepsPendingAndPartial` 与清理水位用例 PASS、不 Skip。
+8. `cd go/trade; gofmt -l trade.go internal/data internal/svc; go build ./...; go vet ./...; go test ./internal/data/... ./internal/svc/... -count=1`。通过:全部 PASS,`TestCleanupTerminalOpsOwnedPutsShardFilterBeforeLimit`、既有 `TestCleanupTerminalOps*`、`TestAssetOpCleanupOwner`、`TestStartAssetOpCleanup*` 在列。
+9. 仓库根目录:`pwsh -NoProfile -File tools/scripts/tests/assetop_work_shard_alerts_contract.tests.ps1`,通过:`fail=0`;`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,通过:LogQL 契约那条(含 asset-channel-alerts.yaml)照旧 PASS。
+10. 规则语法:按 PROGRESS 2026-11-10「死节点收尾告警」条目的做法,用固定摘要的 `prom/prometheus` 容器(`--network none --rm`,只读挂载)对 `deploy/k8s/asset-channel-alerts.yaml` 提取的 `.spec` 跑 `promtool check rules`,期望 `SUCCESS`,规则数等于文件里 `- alert:` 的条数(写本条时 16)。
+11. 多副本冒烟(同 §8 第 9 步的环境):mail、data_service(同一 zone,`Recall.Enabled=true`)各起 2 个副本,`assetop_owned_shards{service="mail"}` 与 `{service="data_service"}` 两副本之和各为 64;guild / trade 开 `CleanupEnabled` 时,两副本启动日志都带 `sharded_by_player=true`,造一批保留期外的终态行后两边的 `*_cleanup_deleted_total` 合计等于造的行数、各自只删自己片里的行。

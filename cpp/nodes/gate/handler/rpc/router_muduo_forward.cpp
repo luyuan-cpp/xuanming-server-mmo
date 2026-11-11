@@ -47,8 +47,19 @@ void LogMissingSessionEchoSampled()
     }
 }
 
-// 构造一次 Forward 调用:路径、序列化的请求、截止、会话 metadata 与调用方签名。签名失败返回 false。
-// SendForward 与 SendForwardForInternalReply 共用这一份,线上字节两条路径逐字相同。
+// 调用没构造出来、什么都没发的采样留痕(签名失败多半是内部身份密钥缺失,会按请求速率重复出现)。
+void LogForwardNotBuiltSampled(uint32_t messageId)
+{
+    static uint64_t notBuiltCount = 0;
+    if ((notBuiltCount++ & 0x3FF) == 0)
+    {
+        LOG_ERROR << "Router Forward not sent: caller signature failed or the message has no gRPC method (sampled)"
+                  << ", latest_message_id=" << messageId << ", not_built_total=" << notBuiltCount;
+    }
+}
+
+// 构造一次 Forward 调用:路径、序列化的请求、截止、会话 metadata 与调用方签名。消息号越界、没有 gRPC 方法名
+// 或签名失败返回 false。SendForward 与 SendForwardForInternalReply 共用这一份,线上字节两条路径逐字相同。
 bool PrepareForwardCall(const client_rpc_router::ForwardRequest &request, const std::string &sessionDetailsBin,
                         muduo_grpc::UnaryCallRequest &call)
 {
@@ -61,23 +72,29 @@ bool PrepareForwardCall(const client_rpc_router::ForwardRequest &request, const 
     // 两层都不能省(§4.2);字节本身原样转发,不解析、不重新序列化(路由 lane 的字段要原值往返)。
     call.metadata.emplace_back(kSessionBinMetaKey, Base64Encode(sessionDetailsBin));
     const auto messageId = request.request().message_id();
-    return messageId < gRpcMethodRegistry.size() &&
-           caller_auth::Append(call.metadata, gRpcMethodRegistry[messageId].grpcFullMethod,
-                               sessionDetailsBin, std::getenv(caller_auth::kSecretEnv));
+    if (messageId >= gRpcMethodRegistry.size())
+    {
+        return false;
+    }
+    const char *fullMethod = gRpcMethodRegistry[messageId].grpcFullMethod;
+    return fullMethod != nullptr && fullMethod[0] != '\0' &&
+           caller_auth::Append(call.metadata, fullMethod, sessionDetailsBin, std::getenv(caller_auth::kSecretEnv));
 }
 
 } // namespace
 
-void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
+bool SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,
                  const std::string &sessionDetailsBin)
 {
     muduo_grpc::UnaryCallRequest call;
-	if (!PrepareForwardCall(request, sessionDetailsBin, call))
-	{
-		gate_rpc_reply_bridge::NotifyCallFailure(kForwardMethodName,
-			static_cast<int>(muduo_grpc::StatusCode::kInternal), "internal session signing failed", &sessionDetailsBin, nullptr);
-		return;
-	}
+    if (!PrepareForwardCall(request, sessionDetailsBin, call))
+    {
+        // 没发出、通道没被碰过:返回 false 由调用方当场回执(路由 lane 回带请求 id 的 1003 并发下一条)。
+        // 不进失败桥:此刻 lane 还没把序号登记进在途索引,失败桥认领会落空,而调用方原先拿到「已发出」会把这条
+        // 当成在途、等一个永远不会来的完成(约 9 s 后才由本地截止兜住,还误记 router_lane_expired)。
+        LogForwardNotBuiltSampled(request.request().message_id());
+        return false;
+    }
 
     channel.StartUnaryCall(
         std::move(call),
@@ -113,6 +130,7 @@ void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardR
             }
             gate_rpc_reply_bridge::DeliverReply(*replySession, reply, nullptr);
         });
+    return true;
 }
 
 void SendForwardForInternalReply(muduo_grpc::Channel &channel, const client_rpc_router::ForwardRequest &request,

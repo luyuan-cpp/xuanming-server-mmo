@@ -107,6 +107,88 @@ if ($devRun.ExitCode -ne 0) {
 }
 $devOut = $devRun.Output
 
+# ─── 工作负载密钥的断言工具(docs/design/workload-secrets-via-k8s-secret.md;用例在本文件靠后的同名一节与前面改写过的几条里) ───
+# 契约表:每把密钥的变量名与 Secret 键。与 k8s_deploy.ps1 的 $script:WorkloadSecretCatalog 逐项一致由那一节的第一条用例核。
+$WorkloadSecretSpecs = [ordered]@{
+    'gate-token'        = @{ Env = 'MMORPG_GATE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('cpp:gate', 'cpp:battle', 'login', 'scene-manager', 'gateway') }
+    'spectate-token'    = @{ Env = 'MMORPG_SPECTATE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('cpp:gate', 'match') }
+    'battle-token'      = @{ Env = 'MMORPG_BATTLE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('cpp:battle') }
+    'match-ops-caller'  = @{ Env = 'MMORPG_MATCH_OPS_CALLER_SECRET'; Key = 'secret'; Consumers = @('match') }
+    'login-queue-token' = @{ Env = 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('login') }
+    'mysql-auth'        = @{ Env = 'MMORPG_MYSQL_PASSWORD'; Key = 'password'; Consumers = @('db', 'data-service', 'trade', 'friend', 'player-inbox') }
+    'gateway-db-auth'   = @{ Env = 'MMORPG_GATEWAY_DB_PASSWORD'; Key = 'password'; Consumers = @('gateway') }
+}
+
+# DryRun 输出里名为 -Name 的工作负载(Deployment / StatefulSet / Fleet)那一份文档(manifest 块按 --- 切开)。不是恰好 1 份即 throw。
+function Select-WorkloadSecretDoc {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Output,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $namePattern = '(?m)^  name:[ \t]*' + [regex]::Escape($Name) + '[ \t]*$'
+    $docs = @(foreach ($block in (Get-ManifestBlocks -Output $Output)) {
+            foreach ($doc in (($block -replace "`r`n", "`n") -split '(?m)^---[ \t]*$')) {
+                if ($doc -cmatch '(?m)^kind:[ \t]*(Deployment|StatefulSet|Fleet)[ \t]*$' -and $doc -cmatch $namePattern) { $doc }
+            }
+        })
+    if ($docs.Count -ne 1) { throw "${Label}:DryRun 输出里名为 $Name 的工作负载应恰好 1 份,实际 $($docs.Count) 份" }
+    return $docs[0]
+}
+
+# 工作负载里 -SecretName 对应的变量:恰好一条,secretKeyRef 到本 namespace 同名 Secret 的键,不是 optional,不写明文 value。
+# 认四种写法:Add-GoSvcSecretEnv 的块式(不写 optional)、lib 的块式(optional: false)、本脚本 C++ Deployment 的流式(optional: false)、
+# 手写清单(迁移 Job)的「valueFrom: 换行 secretKeyRef: {流式}」(optional: false)。
+function Assert-WorkloadSecretEnvRef {
+    param(
+        [Parameter(Mandatory = $true)][string]$Doc,
+        [Parameter(Mandatory = $true)][string]$SecretName,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $spec = $WorkloadSecretSpecs[$SecretName]
+    $text = $Doc -replace "`r`n", "`n"
+    $env = [regex]::Escape($spec.Env); $name = [regex]::Escape($SecretName); $key = [regex]::Escape($spec.Key)
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, '(?m)^[ ]*- name: ' + $env + '[ ]*$').Count) -Because "${Label}:$($spec.Env) 只能注入一份"
+    $block = '(?m)^[ ]*- name: ' + $env + '[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef:[ ]*\n[ ]+name: ' + $name + '[ ]*\n[ ]+key: ' + $key + '[ ]*\n(?:[ ]+optional: false[ ]*\n|(?![ ]+optional:))'
+    $flow = '(?m)^[ ]*- name: ' + $env + '[ ]*\n[ ]+valueFrom: \{secretKeyRef: \{name: ' + $name + ', key: ' + $key + ', optional: false\}\}[ ]*$'
+    $mixed = '(?m)^[ ]*- name: ' + $env + '[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef: \{name: ' + $name + ', key: ' + $key + ', optional: false\}[ ]*$'
+    Assert-True -Condition (($text -cmatch $block) -or ($text -cmatch $flow) -or ($text -cmatch $mixed)) -Because "${Label}:$($spec.Env) 必须 secretKeyRef 到本 namespace 的 Secret $SecretName 的 $($spec.Key) 键,且不是 optional"
+}
+
+# 只哈希这把密钥的期望指纹(与 k8s_deploy.ps1 Get-InjectedSecretFingerprint 同一算法:SHA256("<Secret 名>/workload`n<值>") 的前 12 位十六进制)。
+function Get-ExpectedWorkloadSecretHash {
+    param([Parameter(Mandatory = $true)][string]$SecretName, [Parameter(Mandatory = $true)][string]$Value)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("$SecretName/workload`n$Value")) } finally { $sha256.Dispose() }
+    return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 12))
+}
+
+# Pod 模板上 -SecretName 的指纹恰好一条,值加双引号,等于只由这把密钥算出的期望值。
+function Assert-WorkloadSecretHash {
+    param(
+        [Parameter(Mandatory = $true)][string]$Doc,
+        [Parameter(Mandatory = $true)][string]$SecretName,
+        [Parameter(Mandatory = $true)][string]$Value,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $text = $Doc -replace "`r`n", "`n"
+    $found = [regex]::Matches($text, '(?m)^[ ]+' + [regex]::Escape("mmorpg.io/$SecretName-hash") + ': "(?<hash>[0-9a-f]{12})"[ ]*$')
+    Assert-Equal -Expected 1 -Actual $found.Count -Because "${Label}:Pod 模板上 mmorpg.io/$SecretName-hash 应恰好 1 条"
+    Assert-True -Condition ($found.Count -eq 1 -and $found[0].Groups['hash'].Value -ceq (Get-ExpectedWorkloadSecretHash -SecretName $SecretName -Value $Value)) -Because "${Label}:$SecretName 的指纹只由这把密钥决定(换密钥即滚动)"
+}
+
+# 不该读某把密钥的工作负载:不注入、不带指纹。
+function Assert-NoWorkloadSecret {
+    param(
+        [Parameter(Mandatory = $true)][string]$Doc,
+        [Parameter(Mandatory = $true)][string]$SecretName,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $text = $Doc -replace "`r`n", "`n"
+    Assert-True -Condition ($text -notmatch ('(?m)^[ ]*- name: ' + [regex]::Escape($WorkloadSecretSpecs[$SecretName].Env) + '[ ]*$')) -Because "${Label}:不读 $SecretName,不得注入 $($WorkloadSecretSpecs[$SecretName].Env)"
+    Assert-True -Condition (-not $text.Contains("mmorpg.io/$SecretName-hash")) -Because "${Label}:不读 $SecretName,不得带它的指纹"
+}
+
 # Agones 渲染路径复用同一次 DryRun(Fleet 与 Deployment 是两套模板,sidecar / 日志保留
 # 这类断言必须两边都过 —— 只改一边正是本仓踩过的坑)。
 $agonesRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SceneOrchestrator', 'agones', '-SkipGoSvc', '-SkipJavaSvc'))
@@ -592,10 +674,10 @@ Test-Case 'db 指标端口:ConfigMap MetricsListenAddr ":9160" 与 manifest 9160
 }
 
 
-Test-Case "scene-manager ConfigMap 必须带 GateTokenSecret(否则跨 zone 重定向签不了令牌)" {
+Test-Case "scene-manager ConfigMap 必须指名 gate 令牌的变量 GateTokenSecretEnv,且不写明文(否则跨 zone 重定向签不了令牌)" {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-scene-manager-config")
-    $v = Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.GateTokenSecret'
-    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "gate_redirect.go 在空值时直接返回 'GateTokenSecret not configured'"
+    Assert-Equal -Expected 'MMORPG_GATE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.GateTokenSecretEnv') -Because "gate_redirect.go 在空值时直接返回 'GateTokenSecret not configured';密钥由 ResolveGateTokenSecret 从这个变量填"
+    Assert-True -Condition (-not $flat.Scalars.Contains('data.scene_manager_service.yaml.GateTokenSecret')) -Because '密钥明文不进 ConfigMap(经 Secret gate-token 注入)'
 }
 
 Test-Case "scene-manager ConfigMap 的 Timeout / KafkaWriteTimeoutSeconds / HomeZoneLookupTimeoutMs == go/scene_manager/etc/scene_manager_service.yaml" {
@@ -1259,10 +1341,11 @@ Test-Case "「C++ 不调用」表名副其实:表里的方法 C++ 既不直接�
     }
 }
 
-Test-Case "node ConfigMap 必须带 GateTokenSecret(否则 gate 在 prod 运行模式下拒绝启动)" {
+Test-Case "node ConfigMap 的 GateTokenSecret 写空串,gate 必须经 Secret gate-token 拿 MMORPG_GATE_TOKEN_SECRET(否则 gate 在 prod 运行模式下拒绝启动)" {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "node-config")
-    $v = Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.GateTokenSecret'
-    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "ValidateGateTokenSecretOrDie 在空密钥 + prod 下 LOG_FATAL,而部署链从不设 GATE_RUN_MODE(默认即 prod)"
+    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.GateTokenSecret') -ceq '') -Because '密钥明文不进 ConfigMap,config.cpp 用环境变量覆盖 yaml'
+    $gate = Select-WorkloadSecretDoc -Output $devOut -Name 'gate' -Label 'dev gate'
+    Assert-WorkloadSecretEnvRef -Doc $gate -SecretName 'gate-token' -Label 'dev gate'
 }
 
 Test-Case "node ConfigMap 的 NodeTTLSeconds 必须与 bin/etc 权威值一致" {
@@ -1318,10 +1401,13 @@ Test-Case "data-service 的 NameCacheRedis 指向共享 Redis、不写 DB 键;go
     }
 }
 
-Test-Case "login ConfigMap 必须带 Secrets.InternalAuth(否则生产 login 拒绝启动)" {
+Test-Case "login ConfigMap 必须带 Secrets.InternalAuth / GateToken,且只写变量名(否则生产 login 拒绝启动)" {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-login-config")
-    $v = Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Value'
-    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "生产模式 EnforceInternalAuth 恒 true 且关不掉,未配置时 ResolveSecrets 直接返回 error"
+    Assert-Equal -Expected 'MMORPG_INTERNAL_AUTH_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Env') -Because "生产模式 EnforceInternalAuth 恒 true 且关不掉,未配置时 ResolveSecrets 直接返回 error;容器经 Secret gate-identity-auth 拿这个变量"
+    Assert-Equal -Expected 'MMORPG_GATE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.GateToken.Env') -Because 'gate 令牌改走 Secrets.GateToken.Env(顶层 GateTokenSecret 是不能轮换的兼容入口)'
+    foreach ($key in @('data.login.yaml.Secrets.InternalAuth.Value', 'data.login.yaml.Secrets.GateToken.Value', 'data.login.yaml.GateTokenSecret')) {
+        Assert-True -Condition (-not $flat.Scalars.Contains($key)) -Because "密钥明文不进 ConfigMap(不得写 $key)"
+    }
 }
 
 Test-Case "db ConfigMap 必须带非空的库名白名单(否则 db 在 strict 档下拒启)" {
@@ -1419,15 +1505,14 @@ Test-Case 'data-service ConfigMap 的 RouteStore 段只写连接池与合服映�
     }
 }
 
-Test-Case "prod 档位下 db 段不得出现 root/root 或空密码" {
+Test-Case "prod 档位下 db 的 MySQL 账号来自注入值,口令只经 Secret mysql-auth 注入(ConfigMap 写空串并指名变量)" {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name "go-svc-db-config")
-    $user = Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.ServerConfig.Database.User'
-    $passwd = Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.ServerConfig.Database.Passwd'
-
-    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($passwd)) -Because "空密码 = 库随便连"
-    Assert-True -Condition (-not (Test-PlaceholderSecret -Value $passwd)) -Because "prod 的 MySQL 密码不得是 'root' / '123456' 这类占位串(实际 '$passwd')"
-    Assert-True -Condition (-not ($user -eq 'root' -and $passwd -eq 'root')) -Because "root/root 是生成器以前写死的值,在真集群上连都连不上"
-    Assert-Equal -Expected $ProdEnv.MMORPG_MYSQL_PASSWORD -Actual $passwd -Because "密码必须来自环境变量注入"
+    Assert-Equal -Expected $ProdEnv.MMORPG_MYSQL_USER -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.ServerConfig.Database.User') -Because "用户名必须来自环境变量注入(root/root 是生成器以前写死的值,在真集群上连都连不上)"
+    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.ServerConfig.Database.Passwd') -ceq '') -Because '口令明文不进 ConfigMap'
+    Assert-Equal -Expected 'MMORPG_MYSQL_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.MySQLPasswordEnv') -Because 'db 启动时由 ResolveMySQLPassword 从这个变量填口令'
+    $doc = Select-WorkloadSecretDoc -Output $prodRun.Output -Name 'db' -Label 'prod db'
+    Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'mysql-auth' -Label 'prod db'
+    Assert-WorkloadSecretHash -Doc $doc -SecretName 'mysql-auth' -Value $ProdEnv.MMORPG_MYSQL_PASSWORD -Label 'prod db'
 }
 
 Test-Case "prod 档位下所有 ConfigMap 都不得残留占位密钥串" {
@@ -1435,22 +1520,27 @@ Test-Case "prod 档位下所有 ConfigMap 都不得残留占位密钥串" {
     Assert-NotMatch -Text $prodRun.Output -Pattern 'password:\s*"?123456"?' -Because "Java Gateway 数据源密码以前写死 123456"
 }
 
-Test-Case "prod 档位下 login / scene-manager / gateway 的 GateTokenSecret 都来自同一个注入值" {
+Test-Case "prod 档位下 login / scene-manager / gateway / gate 的 gate 令牌都指向同一个变量,经同一个 Secret gate-token 注入、带同一个指纹" {
     foreach ($case in @(
-        @{ Cm = 'go-svc-login-config';         Key = 'data.login.yaml.GateTokenSecret' }
-        @{ Cm = 'go-svc-scene-manager-config'; Key = 'data.scene_manager_service.yaml.GateTokenSecret' }
-        @{ Cm = 'java-svc-gateway-config';     Key = 'data.application.yaml.gate.token-secret' }
+        @{ Cm = 'go-svc-login-config';         Key = 'data.login.yaml.Secrets.GateToken.Env';                Expected = 'MMORPG_GATE_TOKEN_SECRET' }
+        @{ Cm = 'go-svc-scene-manager-config'; Key = 'data.scene_manager_service.yaml.GateTokenSecretEnv';   Expected = 'MMORPG_GATE_TOKEN_SECRET' }
+        @{ Cm = 'java-svc-gateway-config';     Key = 'data.application.yaml.gate.token-secret';              Expected = '${MMORPG_GATE_TOKEN_SECRET}' }
     )) {
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name $case.Cm)
-        $v = Get-FlatValue -Flat $flat -KeyPath $case.Key
-        Assert-Equal -Expected $ProdEnv.MMORPG_GATE_TOKEN_SECRET -Actual $v -Because "$($case.Cm) 的 gate 密钥必须来自 MMORPG_GATE_TOKEN_SECRET"
+        Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath $case.Key) -ceq $case.Expected) -Because "$($case.Cm) 只写对 MMORPG_GATE_TOKEN_SECRET 的引用(期望 '$($case.Expected)')"
+    }
+    foreach ($name in @('login', 'scene-manager', 'gateway', 'gate')) {
+        $doc = Select-WorkloadSecretDoc -Output $prodRun.Output -Name $name -Label "prod $name"
+        Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'gate-token' -Label "prod $name"
+        Assert-WorkloadSecretHash -Doc $doc -SecretName 'gate-token' -Value $ProdEnv.MMORPG_GATE_TOKEN_SECRET -Label "prod $name"
     }
 }
 
 Test-Case "login 的 go-zero Mode:dev 档必须写且 == go/login/etc/login.yaml,prod 档必须不写(保持 pro 门禁)" {
     # 背景(2026-09-03 kind B 档实跑):dev 档密钥是占位回落,login 的 secrets 门禁只在
     # Mode=dev/test 才降级为 WARN;ConfigMap 不写 Mode 就是默认 pro → login 起来即 panic
-    # "HMAC 密钥配置不合格,拒绝启动"。修法是 dev 档写 Mode(值与 etc 权威文件一致),
+    # "HMAC 密钥配置不合格,拒绝启动"(2026-11-10 起文案为 "HMAC secret configuration invalid; refusing to start")。
+    # 修法是 dev 档写 Mode(值与 etc 权威文件一致),
     # 但 prod 档绝不能跟着写 —— 写了等于把生产的 fail-closed 门禁一起关掉。
     $devFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-login-config")
     $expected = Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Mode'
@@ -2085,13 +2175,16 @@ Test-Case 'staging / prod 的 gateway 带 spring.data.redis.password,值只是�
     Assert-True -Condition (-not $devFlat.Scalars.Contains('data.application.yaml.spring.data.redis.password')) -Because 'dev 档没有 Redis 口令(MMORPG_REDIS_PASSWORD 为空)时不写 password 键,dev 产物逐字不变'
 }
 
-Test-Case 'login Secrets.QueueToken.Value == MMORPG_LOGIN_QUEUE_TOKEN_SECRET,InternalAuth 不受影响' {
+Test-Case 'login Secrets.QueueToken.Env == MMORPG_LOGIN_QUEUE_TOKEN_SECRET 且经 Secret login-queue-token 注入,InternalAuth / GateToken 不受影响' {
     foreach ($case in @(@{ Label = 'staging'; Run = $peakStagingRun }, @{ Label = 'prod'; Run = $prodRun })) {
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Run.Output -Name 'go-svc-login-config')
-        $queueToken = Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.QueueToken.Value'
-        Assert-True -Condition ($queueToken -ceq $ProdEnv.MMORPG_LOGIN_QUEUE_TOKEN_SECRET) -Because "$($case.Label) 档 Secrets.QueueToken 必须来自 MMORPG_LOGIN_QUEUE_TOKEN_SECRET(生产模式开排队缺它 login 拒启)"
-        $internalAuth = Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Value'
-        Assert-True -Condition ($internalAuth -ceq $ProdEnv.MMORPG_INTERNAL_AUTH_SECRET) -Because "$($case.Label) 档 Secrets.InternalAuth 仍须是 MMORPG_INTERNAL_AUTH_SECRET:QueueToken 并进同一个 Secrets: 段,不能把它挤掉"
+        Assert-Equal -Expected 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.QueueToken.Env') -Because "$($case.Label) 档 Secrets.QueueToken 只写变量名(生产模式开排队缺它 login 拒启)"
+        Assert-True -Condition (-not $flat.Scalars.Contains('data.login.yaml.Secrets.QueueToken.Value')) -Because "$($case.Label) 档排队令牌明文不进 ConfigMap"
+        Assert-Equal -Expected 'MMORPG_INTERNAL_AUTH_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Env') -Because "$($case.Label) 档 QueueToken 并进同一个 Secrets: 段,不能把 InternalAuth 挤掉"
+        Assert-Equal -Expected 'MMORPG_GATE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.GateToken.Env') -Because "$($case.Label) 档 QueueToken 并进同一个 Secrets: 段,不能把 GateToken 挤掉"
+        $doc = Select-WorkloadSecretDoc -Output $case.Run.Output -Name 'login' -Label "$($case.Label) login"
+        Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'login-queue-token' -Label "$($case.Label) login"
+        Assert-WorkloadSecretHash -Doc $doc -SecretName 'login-queue-token' -Value $ProdEnv.MMORPG_LOGIN_QUEUE_TOKEN_SECRET -Label "$($case.Label) login"
     }
 }
 
@@ -2199,9 +2292,10 @@ Test-Case 'all-up 多 zone(prod):每个 zone 的 login 锁键与 ZoneCapacityOve
     # 指纹必须各不相同。指纹若退化成只含密钥,改排队配置后 login 不会滚动,而用例 8 的「dev on 对 prod」(两边只差密钥)照样绿。
     # 不用 Get-PeakShavingAnnotation:它经 Select-ManifestByName 只取第一个同名块,拿不到第二个 zone 的 login。
     $loginDeployments = @(Get-ManifestBlocks -Output $peakAllUpRun.Output | Where-Object {
-        $_ -match '(?m)^\s*kind:\s*Deployment\s*$' -and $_ -match '(?m)^\s*name:\s*login\s*$' -and $_.Contains('mmorpg.io/peak-shaving-hash')
+        # login 是 SQL 写者,是 StatefulSet(Pod 序号就是写者名册的槽位)。
+        $_ -match '(?m)^\s*kind:\s*StatefulSet\s*$' -and $_ -match '(?m)^\s*name:\s*login\s*$' -and $_.Contains('mmorpg.io/peak-shaving-hash')
     })
-    Assert-Equal -Expected $expectedZoneIds.Count -Actual $loginDeployments.Count -Because '每个 zone 各有一份带削峰指纹的 login Deployment'
+    Assert-Equal -Expected $expectedZoneIds.Count -Actual $loginDeployments.Count -Because '每个 zone 各有一份带削峰指纹的 login StatefulSet'
     $loginPeaks = @()
     foreach ($block in $loginDeployments) {
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'mmorpg\.io/peak-shaving-hash').Count) -Because 'login manifest 里削峰指纹注解应恰好 1 处'
@@ -2734,9 +2828,9 @@ Test-Case '负向:-GateRouterMode 只收 "0" / "1",拼错必须在入口被拒' 
         Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl apply' -Because '参数校验必须先于任何资源变更'
     }
 }
-Test-Case '发现前缀:node-config 含 ClientRpcRouterNodeService.rpc;battle-node-config 保留 BattleNodeService.rpc' {
+Test-Case '发现前缀:node-config 含 ClientRpcRouterNodeService.rpc;battle-node-config 含 MatchNodeService.rpc' {
     Assert-Match -Text (Select-ManifestByName -Output $devOut -Name 'node-config') -Pattern '- "ClientRpcRouterNodeService\.rpc"' -Because '默认路由模式下 gate 的依赖门等 ClientRpcRouter,发现不到它 gate 永远过不了依赖门,登录 / 匹配全部 no_target'
-    Assert-Match -Text (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config') -Pattern '- "BattleNodeService\.rpc"' -Because 'gate 已不连 battle(turn-based §22 D66),但 battle 自己按这些前缀 watch 自身节点键做劫持检测与注册自检,不能当死前缀删掉'
+    Assert-Match -Text (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config') -Pattern '- "MatchNodeService\.rpc"' -Because 'battle 的发现集合只有 Match(battle 自己只 watch 自己那一条发现键,不按 BattleNodeService 前缀看同类,connection-fanout-subsetting-20261106.md §3.4);配置里没有这一条,battle 一个发现范围都没有,启动即拒启'
 }
 
 Test-Case '队伍跟随在本地与 K8s 均能发现 TeamAuthority' {
@@ -3280,7 +3374,15 @@ Test-Case 'node-config 与 battle-node-config 原样镜像 battle_rewards.json�
 
 Test-Case 'battle 配置必须满足独立票据密钥与权威连接上限' {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config')
-    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.BattleTokenSecret') -ceq $BattleTestEnv.MMORPG_BATTLE_TOKEN_SECRET) -Because 'battle 密钥必须来自独立环境注入，测试不回显值'
+    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.BattleTokenSecret') -ceq '') -Because 'battle 票据密钥明文不进 ConfigMap(经 Secret battle-token 注入,config.cpp 用环境变量覆盖)'
+    Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.GateTokenSecret') -ceq '') -Because 'gate 令牌明文同样不进 battle-node-config'
+    Assert-True -Condition (-not ([string]$battleInfraRun.Output).Contains($BattleTestEnv.MMORPG_BATTLE_TOKEN_SECRET)) -Because 'battle 密钥必须来自独立环境注入,整份输出不得出现它的值'
+    $battle = Select-WorkloadSecretDoc -Output $battleInfraRun.Output -Name 'battle' -Label 'battle'
+    foreach ($secretName in @('battle-token', 'gate-token')) {
+        Assert-WorkloadSecretEnvRef -Doc $battle -SecretName $secretName -Label 'battle'
+        Assert-WorkloadSecretHash -Doc $battle -SecretName $secretName -Value $BattleTestEnv[$WorkloadSecretSpecs[$secretName].Env] -Label 'battle'
+    }
+    Assert-NoWorkloadSecret -Doc $battle -SecretName 'spectate-token' -Label 'battle'
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'BattleMaxConnections') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.BattleMaxConnections') -Because '连接上限必须取权威配置'
     Assert-Match -Text (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config') -Pattern 'etcd.contract-battle-infra:2379' -Because 'battle 必须连接调用方指定的隔离 infra'
 }
@@ -5721,6 +5823,8 @@ Test-Case 'chat ConfigMap:带世界频道推送的 Kafka brokers,WorldHistoryCac
     Assert-Match -Text $chatConfig -Pattern 'Kafka:\s+Brokers:\s+- "kafka\.[a-z0-9-]+:9092"' -Because '没有 brokers 时 chat 不推,玩家只能靠拉历史看到世界频道的新消息'
     $cacheMs = Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'WorldHistoryCacheMs'
     Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldHistoryCacheMs: {0}\s*$" -f [regex]::Escape($cacheMs)) -Because '世界频道快照时长与服务 yaml 同一个值'
+    # chat 不连 Redis(2026-11-11 删掉了两个从不发命令的句柄):段写回来就等于给它恢复一条没记账的连接路径。
+    Assert-NotMatch -Text $chatConfig -Pattern '(?m)^\s*(?:Redis|ChatRedis):\s*$' -Because 'chat 不连 Redis,ConfigMap 不写 Redis / ChatRedis 段'
 }
 
 Test-Case 'client-rpc-router ConfigMap:GlobalTargetSubsetSize 逐字镜像服务 yaml(全服池子集大小,本地与 K8s 同一个值)' {
@@ -5745,23 +5849,37 @@ Test-Case '本机 dev 值:bin/etc 的 SpectateTokenSecret == match 的 Spectate.
     Assert-True -Condition ($opsCallerSecret -cne $ticketSecret) -Because '运营入口密钥不得复用观战凭证密钥'
 }
 
-Test-Case 'node-config 写 SpectateTokenSecret(gate 验签):值来自 MMORPG_SPECTATE_TOKEN_SECRET,dev 未注入回落占位值,battle-node-config 不写' {
+Test-Case 'node-config 的 SpectateTokenSecret 写空串,gate 经 Secret spectate-token 拿 MMORPG_SPECTATE_TOKEN_SECRET(指纹只由注入值决定);battle-node-config 不写,battle 不注入' {
     Assert-Equal -Expected 0 -Actual $spectateZoneRun.ExitCode -Because "注入观战密钥的 zone-up DryRun 必须成功。输出: $($spectateZoneRun.Output)"
     $key = 'data.base_deploy_config.yaml.SpectateTokenSecret'
-    $injected = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $spectateZoneRun.Output -Name 'node-config')
-    Assert-True -Condition ((Get-FlatValue -Flat $injected -KeyPath $key) -ceq $SpectateTestSecret) -Because 'dev 档注入了就写注入值'
-    $prod = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'node-config')
-    Assert-True -Condition ((Get-FlatValue -Flat $prod -KeyPath $key) -ceq $ProdEnv.MMORPG_SPECTATE_TOKEN_SECRET) -Because 'prod 档的值必须来自环境变量注入'
-    # K8s 不注入 GATE_RUN_MODE,gate 按 prod 跑:dev 档的回落值同样要过 gate 的启动门禁。
-    $dev = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name 'node-config')
-    $fallback = Get-FlatValue -Flat $dev -KeyPath $key
-    Assert-SpectateSecretShape -EnvName 'dev 回落值' -Value $fallback
-    Assert-True -Condition ($fallback -cne (Get-FlatValue -Flat $dev -KeyPath 'data.base_deploy_config.yaml.GateTokenSecret')) -Because 'dev 回落值也必须与 gate 令牌不同'
+    foreach ($case in @(
+            @{ Label = 'dev 注入'; Output = [string]$spectateZoneRun.Output; Value = $SpectateTestSecret }
+            @{ Label = 'prod'; Output = [string]$prodRun.Output; Value = $ProdEnv.MMORPG_SPECTATE_TOKEN_SECRET }
+        )) {
+        $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Output -Name 'node-config')
+        Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath $key) -ceq '') -Because "$($case.Label):观战凭证密钥明文不进 node-config"
+        Assert-True -Condition (-not $case.Output.Contains($case.Value)) -Because "$($case.Label):整份输出不得出现观战凭证密钥的值"
+        $gate = Select-WorkloadSecretDoc -Output $case.Output -Name 'gate' -Label "$($case.Label) gate"
+        Assert-WorkloadSecretEnvRef -Doc $gate -SecretName 'spectate-token' -Label "$($case.Label) gate"
+        Assert-WorkloadSecretHash -Doc $gate -SecretName 'spectate-token' -Value $case.Value -Label "$($case.Label) gate"
+    }
     $battle = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config')
     Assert-True -Condition (-not $battle.Scalars.Contains($key)) -Because 'battle 不验观战凭证,不该拿到这把密钥'
 }
 
-Test-Case 'match ConfigMap 的 Spectate 段:RelayEnabled 按单 Kafka 集群写 true,三项镜像服务 yaml,两把密钥来自注入' {
+Test-Case '纯函数 Resolve-SpectateTokenSecret:dev 未注入时的回落值过 gate 的启动门禁,且与 gate 令牌不同(K8s 不注入 GATE_RUN_MODE,gate 按 prod 跑)' {
+    $ReleaseProfile = 'dev'
+    $saved = [System.Environment]::GetEnvironmentVariable('MMORPG_SPECTATE_TOKEN_SECRET')
+    try {
+        [System.Environment]::SetEnvironmentVariable('MMORPG_SPECTATE_TOKEN_SECRET', '')
+        $fallback = Resolve-SpectateTokenSecret -ReleaseProfile 'dev' -GateTokenSecret $BattleTestEnv.MMORPG_GATE_TOKEN_SECRET
+        Assert-SpectateSecretShape -EnvName 'dev 回落值' -Value $fallback
+        Assert-True -Condition ($fallback -cne $BattleTestEnv.MMORPG_GATE_TOKEN_SECRET) -Because 'dev 回落值也必须与 gate 令牌不同'
+    }
+    finally { [System.Environment]::SetEnvironmentVariable('MMORPG_SPECTATE_TOKEN_SECRET', $saved) }
+}
+
+Test-Case 'match ConfigMap 的 Spectate 段:RelayEnabled 按单 Kafka 集群写 true,三项镜像服务 yaml,两把密钥只写变量名并经 Secret 注入' {
     Assert-Equal -Expected 0 -Actual $spectateInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($spectateInfraRun.Output)"
     $cm = Select-ManifestByName -Output $spectateInfraRun.Output -Name 'go-svc-match-config'
     Assert-True -Condition ($null -ne $cm) -Because 'infra-up 产物里应当有 go-svc-match-config'
@@ -5770,13 +5888,23 @@ Test-Case 'match ConfigMap 的 Spectate 段:RelayEnabled 按单 Kafka 集群写 
     foreach ($key in @('Spectate.BroadcastMaxConcurrent', 'Spectate.BroadcastAutoGateThreshold', 'Spectate.TicketTTLSeconds')) {
         Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath $key) -Actual ([string]$flat[$key]) -Because "ConfigMap 的 $key 必须等于服务 yaml(生成器不得自带常数)"
     }
-    Assert-True -Condition ([string]$flat['Spectate.TicketSecret'] -ceq $SpectateTestSecret) -Because 'match 签发用的密钥必须与 gate 验签的是同一个注入值'
-    Assert-True -Condition ([string]$flat['Spectate.OpsCallerSecret'] -ceq $SpectateOpsTestSecret) -Because '运营入口密钥来自 MMORPG_MATCH_OPS_CALLER_SECRET'
+    Assert-Equal -Expected 'MMORPG_SPECTATE_TOKEN_SECRET' -Actual ([string]$flat['Spectate.TicketSecretEnv']) -Because 'match 签发用的密钥与 gate 验签的是同一个变量(同一个 Secret spectate-token)'
+    Assert-Equal -Expected 'MMORPG_MATCH_OPS_CALLER_SECRET' -Actual ([string]$flat['Spectate.OpsCallerSecretEnv']) -Because '注入了运营入口密钥就指名它的变量'
+    foreach ($key in @('Spectate.TicketSecret', 'Spectate.OpsCallerSecret')) {
+        Assert-True -Condition (-not $flat.Contains($key)) -Because "$key 的明文不进 ConfigMap"
+    }
+    $out = [string]$spectateInfraRun.Output
+    Assert-True -Condition (-not $out.Contains($SpectateTestSecret) -and -not $out.Contains($SpectateOpsTestSecret)) -Because '整份 infra-up 输出不得出现两把观战密钥的值'
+    $match = Select-WorkloadSecretDoc -Output $out -Name 'match' -Label 'infra-up match'
+    Assert-WorkloadSecretEnvRef -Doc $match -SecretName 'spectate-token' -Label 'infra-up match'
+    Assert-WorkloadSecretHash -Doc $match -SecretName 'spectate-token' -Value $SpectateTestSecret -Label 'infra-up match'
+    Assert-WorkloadSecretEnvRef -Doc $match -SecretName 'match-ops-caller' -Label 'infra-up match'
+    Assert-WorkloadSecretHash -Doc $match -SecretName 'match-ops-caller' -Value $SpectateOpsTestSecret -Label 'infra-up match'
     Assert-NotMatch -Text $spectateInfraRun.Output -Pattern 'MMORPG_MATCH_OPS_CALLER_SECRET unset' -Because '注入了就不打「入口关闭」的说明'
     Assert-Match -Text $spectateInfraRun.Output -Pattern 'Kafka spectate topic bootstrap: gate-spectate_g\d+\(partitions=\d+\) spectate-bcast_g\d+\(partitions=\d+\)' -Because '部署输出要打一行观战 topic 的预建值'
 }
 
-Test-Case '纯函数 New-MatchSpectateYaml:dev 未注入时 TicketSecret 回落占位值、OpsCallerSecret 为空(运营入口关闭),不写本机 dev 值;服务 yaml 缺键即 throw' {
+Test-Case '纯函数 New-MatchSpectateYaml:只写 TicketSecretEnv、不写任何密钥值;dev 未注入运营入口密钥时不写 OpsCallerSecretEnv(入口关闭);服务 yaml 缺键即 throw' {
     $RepoRoot = Get-RepoRoot
     $ReleaseProfile = 'dev'
     $saved = @{}
@@ -5786,10 +5914,12 @@ Test-Case '纯函数 New-MatchSpectateYaml:dev 未注入时 TicketSecret 回落�
     }
     try {
         $script:GateTokenSecret = $BattleTestEnv.MMORPG_GATE_TOKEN_SECRET
-        $flat = (ConvertFrom-YamlToFlatMap -Text (New-MatchSpectateYaml)).Scalars
-        Assert-SpectateSecretShape -EnvName 'dev 回落值' -Value ([string]$flat['Spectate.TicketSecret'])
-        Assert-True -Condition ([string]$flat['Spectate.TicketSecret'] -cne (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'Spectate.TicketSecret')) -Because 'K8s 不用服务 yaml 里的本机 dev 值'
-        Assert-True -Condition ($flat.Contains('Spectate.OpsCallerSecret') -and [string]$flat['Spectate.OpsCallerSecret'] -ceq '') -Because '未注入 = 显式写空串,运营入口关闭'
+        $yaml = New-MatchSpectateYaml
+        $flat = (ConvertFrom-YamlToFlatMap -Text $yaml).Scalars
+        Assert-Equal -Expected 'MMORPG_SPECTATE_TOKEN_SECRET' -Actual ([string]$flat['Spectate.TicketSecretEnv']) -Because '凭证密钥只写变量名'
+        Assert-True -Condition (-not $flat.Contains('Spectate.TicketSecret') -and -not $flat.Contains('Spectate.OpsCallerSecret')) -Because '密钥值不进 ConfigMap'
+        Assert-True -Condition (-not $yaml.Contains((Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'Spectate.TicketSecret'))) -Because 'K8s 不用服务 yaml 里的本机 dev 值'
+        Assert-True -Condition (-not $flat.Contains('Spectate.OpsCallerSecretEnv')) -Because '未注入运营入口密钥 = 不指名变量,运营入口关闭'
         Assert-Equal -Expected 'true' -Actual ([string]$flat['Spectate.RelayEnabled']) -Because '与部署拓扑一致,不跟随服务 yaml'
         $RepoRoot = Join-Path (Get-RepoRoot) 'no-such-dir'
         $message = ''
@@ -5986,11 +6116,16 @@ function Get-RankManifestDocumentsOfKind {
 Test-Case 'rank 部署形态:全局池 2 副本滚动 + PDB + 反亲和 + POD_IP;正规SQL迁移且gRPC / metrics端口同源' {
     Assert-True -Condition ($rankGrpcPort -match '^\d+$' -and $rankMetricsPort -match '^\d+$') -Because "夹具前提:$rankYamlPath 的 ListenOn / MetricsListenAddr 能解析出端口"
     Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
-    $deploy = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'Deployment' -Name 'rank'
+    # rank 是 SQL 写者,是 StatefulSet:Pod 序号就是写者名册的槽位(docs/design/writer-roster-exhaustion-20261106.md §5.5)。
+    $deploy = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'StatefulSet' -Name 'rank'
     $svc = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'Service' -Name 'rank'
     $pdb = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'PodDisruptionBudget' -Name 'rank-pdb'
     Assert-Match -Text $deploy -Pattern '(?m)^  replicas: 2\s*$' -Because '单副本 = 全服排行榜是单点'
-    Assert-Match -Text $deploy -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+(?:maxSurge: 1\s+maxUnavailable: 0|\{maxSurge: 1,\s*maxUnavailable: 0\})' -Because '先起新的再停旧的，块式与内联映射保持相同策略'
+    # 同一序号同时只能有一个 Pod(两个会互相换代),所以不能先起新的:滚动一次换一个副本,另一个副本和 PDB 保住服务。
+    Assert-Match -Text $deploy -Pattern '(?m)^  serviceName: rank\s*$' -Because 'StatefulSet 要 serviceName,用同名 Service'
+    Assert-Match -Text $deploy -Pattern '(?m)^  podManagementPolicy: Parallel\s*$' -Because '起副本不按序号排队,一个副本卡住不挡别的'
+    Assert-Match -Text $deploy -Pattern 'updateStrategy:\s+(?:type: RollingUpdate|\{type: RollingUpdate\})' -Because '模板变了自动滚动,不留 OnDelete'
+    Assert-NotMatch -Text $deploy -Pattern 'maxSurge' -Because 'StatefulSet 没有 maxSurge;写了说明还按 Deployment 理解'
     Assert-Match -Text $deploy -Pattern 'podAntiAffinity' -Because '两个副本不该落在同一个节点上'
     Assert-Match -Text $pdb -Pattern '(?m)^  minAvailable: 1\s*$' -Because 'PDB 必须写在主 manifest 里,至少留一个副本'
     Assert-Match -Text $deploy -Pattern 'name: POD_IP\s+valueFrom:\s+fieldRef:\s+(?:fieldPath: status\.podIP|\{fieldPath: status\.podIP\})' -Because 'ListenOn 是 0.0.0.0,注册进 etcd 的必须是 Pod IP(go/rank/rank.go advertisedHost)'
@@ -6334,8 +6469,9 @@ Test-Case '资产通道默认关:scene / guild / trade 不带签名密钥与指�
         Assert-Match -Text $guildInfraRun.Output -Pattern ('kubectl delete networkpolicy ' + $policy + ' -n contract-battle-infra --ignore-not-found') -Because 'infra 的准入策略同样不粘滞'
     }
     foreach ($svc in @('guild', 'trade')) {
-        $deploy = @(Get-ManifestBlocks -Output $guildInfraRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch ('(?m)^  name: ' + $svc + '\s*$') }) | Select-Object -First 1
-        Assert-True -Condition ($null -ne $deploy) -Because "infra-up 产物里应当有 $svc 的 Deployment"
+        # guild、trade 是 SQL 写者,是 StatefulSet。
+        $deploy = @(Get-ManifestBlocks -Output $guildInfraRun.Output | Where-Object { $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch ('(?m)^  name: ' + $svc + '\s*$') }) | Select-Object -First 1
+        Assert-True -Condition ($null -ne $deploy) -Because "infra-up 产物里应当有 $svc 的 StatefulSet"
         Assert-NotMatch -Text $deploy -Pattern '(?m)^\s*- name: MMORPG_ASSET_OP_SECRET_' -Because "$svc 关着时不注入签名密钥(manifest 也不许手写,Add-GoSvcSecretEnv 会拒)"
         Assert-NotMatch -Text $deploy -Pattern '(?m)^\s+mmorpg\.io/asset-op-secret-\w+-hash:|PLACEHOLDER_' -Because "$svc 关着时指纹占位整行删掉,Pod 模板与开关引入之前相同"
     }
@@ -6486,8 +6622,9 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         @{ Svc = 'trade'; Env = 'MMORPG_ASSET_OP_SECRET_TRADE'; Other = 'MMORPG_ASSET_OP_SECRET_GUILD'; Secret = 'asset-op-secret-trade'; Value = $assetOpTradeSecret }
     )
     foreach ($spec in $specs) {
-        $deploy = @(Get-ManifestBlocks -Output $out | Where-Object { $_ -cmatch '(?m)^kind: Deployment\s*$' -and $_ -cmatch ('(?m)^  name: ' + $spec.Svc + '\s*$') }) | Select-Object -First 1
-        Assert-True -Condition ($null -ne $deploy) -Because "infra-up 产物里应当有 $($spec.Svc) 的 Deployment"
+        # guild、trade 是 SQL 写者,是 StatefulSet。
+        $deploy = @(Get-ManifestBlocks -Output $out | Where-Object { $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch ('(?m)^  name: ' + $spec.Svc + '\s*$') }) | Select-Object -First 1
+        Assert-True -Condition ($null -ne $deploy) -Because "infra-up 产物里应当有 $($spec.Svc) 的 StatefulSet"
         $envPattern = if ($spec.Svc -eq 'guild') {
             '- name: ' + $spec.Env + '\s+valueFrom:\s+secretKeyRef: \{name: ' + $spec.Secret + ', key: secret, optional: false\}'
         } else {
@@ -6500,7 +6637,8 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         Assert-Match -Text $deploy -Pattern ('mmorpg\.io/' + $spec.Secret + '-hash: "' + $hash + '"') -Because '指纹与 scene 一侧同一算法,跨命令核对靠它'
         Assert-NotMatch -Text $deploy -Pattern 'PLACEHOLDER_' -Because '占位必须全部替换'
         $secretAt = $out.IndexOf("# Secret $($spec.Secret) (key secret; value hidden)")
-        Assert-True -Condition ($secretAt -ge 0 -and $secretAt -lt (Get-WorkloadOffset -Output $out -Kind 'Deployment' -Name $spec.Svc)) -Because 'Secret 必须先于引用它的 Deployment'
+        $workloadAt = Get-WorkloadOffset -Output $out -Kind 'StatefulSet' -Name $spec.Svc
+        Assert-True -Condition ($secretAt -ge 0 -and $workloadAt -ge 0 -and $secretAt -lt $workloadAt) -Because 'Secret 必须先于引用它的 StatefulSet'
     }
     Assert-True -Condition (-not $out.Contains($assetOpGuildSecret) -and -not $out.Contains($assetOpTradeSecret)) -Because '密钥值绝不进产物'
     $guildEmbedded = Get-ConfigMapEmbeddedText -Block (Select-ManifestByName -Output $out -Name 'go-svc-guild-config') -FileName 'guild.yaml'
@@ -6527,8 +6665,9 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         $declared = @(Get-ManifestContainerPorts -ManifestContent $manifest | Where-Object { $_ -ne $p.Port })
         Assert-Equal -Expected ($declared -join ',') -Actual ($shape.OpenPorts -join ',') -Because '清单里声明的其它端口(metrics)要对所有来源开放'
         $policyAt = $out.IndexOf("name: $($p.Name)")
-        $deployAt = Get-WorkloadOffset -Output $out -Kind 'Deployment' -Name $p.Svc
-        Assert-True -Condition ($policyAt -ge 0 -and $deployAt -ge 0 -and $policyAt -lt $deployAt) -Because '策略先于 Deployment'
+        # guild、match 是 SQL 写者,是 StatefulSet。
+        $deployAt = Get-WorkloadOffset -Output $out -Kind 'StatefulSet' -Name $p.Svc
+        Assert-True -Condition ($policyAt -ge 0 -and $deployAt -ge 0 -and $policyAt -lt $deployAt) -Because '策略先于 StatefulSet'
     }
 }
 
@@ -7143,6 +7282,142 @@ Test-Case '共享 Redis 口令(带口令的 infra-up):全局服务只写变量�
     $secretLine = [regex]::Match($out, '(?m)^\[dry-run\] kubectl apply -n contract-battle-infra -f -   # Secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
     $firstRef = $out.IndexOf("- name: $SharedRedisEnvName")
     Assert-True -Condition ($secretLine.Success -and $firstRef -gt $secretLine.Index) -Because 'infra 的 Secret redis-auth 必须先于引用它的全局 Go 服务落地(secretKeyRef 不是 optional)'
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 工作负载密钥只放 K8s Secret(2026-11-10,docs/design/workload-secrets-via-k8s-secret.md)
+# ─────────────────────────────────────────────────────────────────
+# gate / battle / 观战令牌、login 的 HMAC 密钥、match 运营入口密钥、MySQL 与 gateway 数据源口令:ConfigMap 只写空串或变量名,工作负载经
+# secretKeyRef 注入、Pod 模板带只哈希这把密钥的指纹,迁移 Job 的清单静态引用 mysql-auth。断言工具与契约表 $WorkloadSecretSpecs 在文件开头
+# ($devOut 之后),前面改写过的几条单项用例也用它们。复用 $prodRun(prod zone-up,ProdEnv 每把一个独特值);另起 1 个 DryRun:dev 档 infra-up
+# (参数同 $guildInfraArgs),MySQL 口令给一个独特值。断言一律不回显值。
+
+Test-Case '工作负载密钥:k8s_deploy.ps1 的目录表与契约表逐项一致;写 MySQLPasswordEnv 的服务名单 = mysql-auth 的 Go 消费者' {
+    $assign = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:WorkloadSecretCatalog' }, $true)
+    Assert-True -Condition ($null -ne $assign) -Because 'k8s_deploy.ps1 里必须有 $script:WorkloadSecretCatalog'
+    # 只求值右边的字面量:取值脚本块在部署写路径上才调用,这里只读形状。
+    $catalog = & ([scriptblock]::Create($assign.Right.Extent.Text))
+    Assert-Equal -Expected (@($WorkloadSecretSpecs.Keys) -join ',') -Actual (@($catalog.Keys) -join ',') -Because '两边的 Secret 名与顺序必须一致'
+    foreach ($name in $WorkloadSecretSpecs.Keys) {
+        Assert-Equal -Expected $WorkloadSecretSpecs[$name].Env -Actual $catalog[$name].Env -Because "$name 的变量名"
+        Assert-Equal -Expected $WorkloadSecretSpecs[$name].Key -Actual $catalog[$name].SecretKey -Because "$name 的键"
+        Assert-Equal -Expected (@($WorkloadSecretSpecs[$name].Consumers) -join ',') -Actual (@($catalog[$name].Consumers) -join ',') -Because "$name 的消费者"
+    }
+    $mysqlGoConsumers = @($WorkloadSecretSpecs['mysql-auth'].Consumers | Where-Object { $_ -notlike 'cpp:*' } | Sort-Object) -join ','
+    Assert-Equal -Expected $mysqlGoConsumers -Actual (@(Get-SharedRedisScriptList -Name 'MySqlPasswordEnvGoServices' | Sort-Object) -join ',') -Because 'ConfigMap 写 MySQLPasswordEnv 的服务必须正好是 mysql-auth 的 Go 消费者'
+}
+
+Test-Case '工作负载密钥:迁移 Job 与 route-tool 的清单在主容器里静态引用 mysql-auth(不是 optional),init 容器不拿口令' {
+    foreach ($file in @('db-migrate.yaml', 'data-service-migrate.yaml', 'trade-migrate.yaml', 'friend-migrate.yaml', 'player-inbox-migrate.yaml', 'data-service-route-tool.yaml')) {
+        $text = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) "deploy/k8s/manifests/go-svc/$file")) -replace "`r`n", "`n"
+        $containers = [regex]::Match($text, '(?m)^      containers:[ ]*$')
+        Assert-True -Condition $containers.Success -Because "${file}:应当有 containers: 段"
+        Assert-WorkloadSecretEnvRef -Doc $text.Substring($containers.Index) -SecretName 'mysql-auth' -Label $file
+        Assert-True -Condition (-not $text.Substring(0, $containers.Index).Contains('MMORPG_MYSQL_PASSWORD')) -Because "${file}:口令只给主容器,init 容器 wait-sql 不连库"
+    }
+}
+
+Test-Case '工作负载密钥(prod zone-up):整份 DryRun 输出不含任何一把的值;ConfigMap 只写空串或变量名;每个消费者经 Secret 注入并带指纹,不读的不注入;Secret 先于引用、每把只写一次' {
+    $out = [string]$prodRun.Output
+    foreach ($envName in @('MMORPG_GATE_TOKEN_SECRET', 'MMORPG_SPECTATE_TOKEN_SECRET', 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET', 'MMORPG_MYSQL_PASSWORD',
+            'MMORPG_GATEWAY_DB_PASSWORD', 'MMORPG_INTERNAL_AUTH_SECRET', 'MMORPG_GATEWAY_ADMIN_API_KEY')) {
+        Assert-True -Condition (-not $out.Contains([string]$ProdEnv[$envName])) -Because "prod DryRun 整份输出(ConfigMap、工作负载、Secret 意图行)里不得出现 $envName 的值"
+    }
+    $dsFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-data-service-config')
+    Assert-True -Condition ((Get-FlatValue -Flat $dsFlat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Password') -ceq '') -Because 'data-service 的口令写显式空串(不写会落回缺省值 apppass123,被当成字面量而拒启)'
+    Assert-Equal -Expected 'MMORPG_MYSQL_PASSWORD' -Actual (Get-FlatValue -Flat $dsFlat -KeyPath 'data.data_service.yaml.MySQLPasswordEnv') -Because 'data-service 启动时从这个变量填口令'
+    $gwFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'java-svc-gateway-config')
+    Assert-True -Condition ((Get-FlatValue -Flat $gwFlat -KeyPath 'data.application.yaml.spring.datasource.password') -ceq '${MMORPG_GATEWAY_DB_PASSWORD}') -Because 'gateway 数据源口令只写对容器环境变量的引用'
+    $expectations = [ordered]@{
+        'gate'          = @('gate-token', 'spectate-token')
+        'login'         = @('gate-token', 'login-queue-token')
+        'scene-manager' = @('gate-token')
+        'db'            = @('mysql-auth')
+        'data-service'  = @('mysql-auth')
+        'gateway'       = @('gate-token', 'gateway-db-auth')
+    }
+    foreach ($workload in $expectations.Keys) {
+        $doc = Select-WorkloadSecretDoc -Output $out -Name $workload -Label "prod $workload"
+        foreach ($secretName in $WorkloadSecretSpecs.Keys) {
+            if ($expectations[$workload] -contains $secretName) {
+                Assert-WorkloadSecretEnvRef -Doc $doc -SecretName $secretName -Label "prod $workload"
+                Assert-WorkloadSecretHash -Doc $doc -SecretName $secretName -Value ([string]$ProdEnv[$WorkloadSecretSpecs[$secretName].Env]) -Label "prod $workload"
+            }
+            else {
+                Assert-NoWorkloadSecret -Doc $doc -SecretName $secretName -Label "prod $workload"
+            }
+        }
+    }
+    foreach ($secretName in @('gate-token', 'spectate-token', 'login-queue-token', 'mysql-auth', 'gateway-db-auth')) {
+        $pattern = '(?m)^\[dry-run\] kubectl apply -n mmorpg-zone-contract-test -f -   # Secret ' + [regex]::Escape($secretName) + ' \(key ' + [regex]::Escape($WorkloadSecretSpecs[$secretName].Key) + '; value hidden\)'
+        $line = [regex]::Match($out, $pattern)
+        $firstRef = $out.IndexOf("- name: $($WorkloadSecretSpecs[$secretName].Env)")
+        Assert-True -Condition ($line.Success -and $firstRef -gt $line.Index) -Because "zone namespace 的 Secret $secretName 必须先于引用它的工作负载落地(secretKeyRef 不是 optional)"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, $pattern).Count) -Because "同一次运行里 Secret $secretName 只写一次"
+    }
+}
+
+$WorkloadSecretInfraMysqlPassword = 'contract-workload-mysql-pw-0123'
+$workloadSecretInfraRun = Invoke-DeployDryRun -Arguments $guildInfraArgs -Env ($BattleTestEnv + @{ MMORPG_MYSQL_PASSWORD = $WorkloadSecretInfraMysqlPassword })
+
+Test-Case '工作负载密钥(dev infra-up):全局服务与 battle 经 infra namespace 的 Secret 注入并带指纹,整份输出不含值;ConfigMap 口令写空串并指名变量;Secret 先于引用' {
+    Assert-Equal -Expected 0 -Actual $workloadSecretInfraRun.ExitCode -Because "infra-up DryRun 应当成功。输出: $($workloadSecretInfraRun.Output)"
+    $out = [string]$workloadSecretInfraRun.Output
+    foreach ($value in @($WorkloadSecretInfraMysqlPassword, $BattleTestEnv.MMORPG_BATTLE_TOKEN_SECRET, $BattleTestEnv.MMORPG_GATE_TOKEN_SECRET)) {
+        Assert-True -Condition (-not $out.Contains($value)) -Because 'infra-up 整份输出不得出现任何工作负载密钥的值'
+    }
+    foreach ($svc in @('trade', 'friend', 'player-inbox')) {
+        $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name "go-svc-$svc-config")
+        $file = ($svc -replace '-', '_') + '.yaml'
+        Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath "data.$file.MySQL.Password") -ceq '') -Because "$svc 的 MySQL 口令明文不进 ConfigMap"
+        Assert-Equal -Expected 'MMORPG_MYSQL_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath "data.$file.MySQLPasswordEnv") -Because "$svc 启动时从这个变量填口令"
+        $doc = Select-WorkloadSecretDoc -Output $out -Name $svc -Label "infra-up $svc"
+        Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'mysql-auth' -Label "infra-up $svc"
+        Assert-WorkloadSecretHash -Doc $doc -SecretName 'mysql-auth' -Value $WorkloadSecretInfraMysqlPassword -Label "infra-up $svc"
+    }
+    $battle = Select-WorkloadSecretDoc -Output $out -Name 'battle' -Label 'infra-up battle'
+    foreach ($secretName in @('battle-token', 'gate-token')) { Assert-WorkloadSecretEnvRef -Doc $battle -SecretName $secretName -Label 'infra-up battle' }
+    Assert-NoWorkloadSecret -Doc $battle -SecretName 'mysql-auth' -Label 'infra-up battle'
+    foreach ($secretName in @('mysql-auth', 'battle-token', 'gate-token')) {
+        $pattern = '(?m)^\[dry-run\] kubectl apply -n contract-battle-infra -f -   # Secret ' + [regex]::Escape($secretName) + ' \(key '
+        $line = [regex]::Match($out, $pattern)
+        $firstRef = $out.IndexOf("- name: $($WorkloadSecretSpecs[$secretName].Env)")
+        Assert-True -Condition ($line.Success -and $firstRef -gt $line.Index) -Because "infra namespace 的 Secret $secretName 必须先于引用它的工作负载与迁移 Job 落地"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, $pattern).Count) -Because "同一次运行里 Secret $secretName 只写一次"
+    }
+}
+
+Test-Case '玩家域 Redis 口令(prod,开集群):注入了 PLAYER_REDIS_PASSWORD 的 Go 服务都带 mmorpg.io/player-redis-auth-hash 指纹,值只由玩家域口令决定' {
+    $docs = @(foreach ($block in (Get-ManifestBlocks -Output $prodRun.Output)) {
+            foreach ($doc in (($block -replace "`r`n", "`n") -split '(?m)^---[ \t]*$')) {
+                # C++ scene 另有自己的配置指纹(mmorpg.io/player-redis-config-hash),这里只看 Go 服务(不挂 /app/bin/etc)。
+                if ($doc -cmatch '(?m)^kind:[ \t]*(Deployment|StatefulSet)[ \t]*$' -and $doc -cmatch '(?m)^[ ]*- name: PLAYER_REDIS_PASSWORD[ ]*$' -and $doc -notmatch 'mountPath: /app/bin/etc') { $doc }
+            }
+        })
+    Assert-True -Condition ($docs.Count -gt 0) -Because 'prod 档开了玩家域集群(Add-PlayerRedisDeployFixture),应当有 Go 服务注入 PLAYER_REDIS_PASSWORD(夹具前提)'
+    # 口令:ProdEnv 给了就用它,没给时是 Add-PlayerRedisDeployFixture 补的夹具值。
+    $playerRedisPassword = if ($ProdEnv.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) { [string]$ProdEnv.MMORPG_PLAYER_REDIS_PASSWORD } else { 'contract-player-redis-pw-01' }
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes("player-redis/go`n$playerRedisPassword")) } finally { $sha256.Dispose() }
+    $expected = (($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 12)
+    foreach ($doc in $docs) {
+        $name = [regex]::Match($doc, '(?m)^  name:[ \t]*(\S+)').Groups[1].Value
+        $found = [regex]::Matches($doc, '(?m)^[ ]+mmorpg\.io/player-redis-auth-hash: "(?<hash>[0-9a-f]{12})"[ ]*$')
+        Assert-True -Condition ($found.Count -eq 1 -and $found[0].Groups['hash'].Value -ceq $expected) -Because "prod ${name}:注入了玩家域口令就要恰好带一条它的指纹(只哈希口令,夹具口令见 Add-PlayerRedisDeployFixture)"
+    }
+}
+
+Test-Case '部署输出先后固定:Get-GlobalGoSvcNames 按名字排序,$JavaSvcCatalogue.Keys 的每一处遍历都排序(哈希表的先后每个进程都可能不同)' {
+    $fn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-GlobalGoSvcNames' }, $true)
+    Assert-True -Condition ($null -ne $fn) -Because 'k8s_deploy.ps1 必须有 Get-GlobalGoSvcNames'
+    $GoSvcCatalogue = @{}
+    foreach ($name in @('zeta', 'alpha', 'mike', 'echo', 'kilo', 'bravo', 'yankee', 'delta')) { $GoSvcCatalogue[$name] = @{ Global = $true } }
+    $GoSvcCatalogue['zone-only'] = @{ Global = $false }
+    Assert-Equal -Expected 'alpha,bravo,delta,echo,kilo,mike,yankee,zeta' -Actual (@(& $fn.Body.GetScriptBlock()) -join ',') -Because '全局服务按名字排序,apply 先后与 DryRun 输出才稳定'
+    $text = $deadlineDeployAst.Extent.Text
+    $all = [regex]::Matches($text, '\$JavaSvcCatalogue\.Keys').Count
+    $sorted = [regex]::Matches($text, '\$JavaSvcCatalogue\.Keys \| Sort-Object').Count
+    Assert-True -Condition ($all -gt 0 -and $all -eq $sorted) -Because "遍历 `$JavaSvcCatalogue.Keys 的地方都要排序(共 $all 处,排了序的 $sorted 处)"
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -8146,7 +8421,8 @@ Test-Case 'all-up:全局服务的迁移 Job 先于 data-service,进程排在第�
         $applied = Get-OutputIndex -Text $out -Needle "[applied] $svc ->"
         Assert-True -Condition ($applied -gt $dataServiceReady) -Because "$svc 的进程必须排在 data-service 就绪之后"
         Assert-True -Condition ($applied -lt $secondZone) -Because "$svc 的进程在第一个 zone 之后就起,不等其余 zone"
-        Assert-True -Condition ((Get-OutputIndex -Text $out -Needle "kubectl rollout status deployment/$svc -n contract-order-infra") -gt $applied) -Because "-WaitReady 下要等 $svc 就绪,而且是 apply 之后才等"
+        # 这一批全局服务都是 SQL 写者,是 StatefulSet(Wait-ForDeploymentReady 转给 Wait-ForStatefulSetReady)。
+        Assert-True -Condition ((Get-OutputIndex -Text $out -Needle "kubectl rollout status statefulset/$svc -n contract-order-infra") -gt $applied) -Because "-WaitReady 下要等 $svc 就绪,而且是 apply 之后才等"
         $configMaps = @(Get-ManifestBlocks -Output $out | Where-Object { $_ -match '(?m)^kind: ConfigMap\s*$' -and $_ -match ('(?m)^  name:\s*go-svc-' + [regex]::Escape($svc) + '-config\s*$') })
         Assert-Equal -Expected 1 -Actual $configMaps.Count -Because "$svc 的 ConfigMap 只在第一步写一次"
     }
@@ -8255,11 +8531,16 @@ Test-Case 'zone-up 的提醒:infra-up 留下的全局服务进程还没起就告
     $GoSvcCatalogue = @{ guild = @{ Global = $true; Manifest = 'guild.yaml' }; trade = @{ Global = $true; Manifest = 'trade.yaml' } }
     function Test-ZoneDbDeployed { return $true }
     $script:StubDeployments = $null
-    function Invoke-ClientEntryKubectl { param($KubectlArgs, $KubeContext, $KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure) return $script:StubDeployments }
-    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = "deployment.apps/trade`n"; Stderr = '' }
+    $script:ReminderArgs = $null
+    function Invoke-ClientEntryKubectl { param($KubectlArgs, $KubeContext, $KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure) $script:ReminderArgs = @($KubectlArgs); return $script:StubDeployments }
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = "statefulset.apps/trade`n"; Stderr = '' }
     $warnings = (Write-GlobalGoSvcPendingReminder 3>&1 | Out-String -Width 4096)
     Assert-Match -Text $warnings -Pattern '\[GlobalGoSvc\]NotStarted:guild not deployed' -Because '缺哪个点名哪个'
-    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = "deployment.apps/guild`ndeployment.apps/trade`n"; Stderr = '' }
+    # guild、trade 是 SQL 写者,线上是 StatefulSet:只查 Deployment 会把起好的服务报成没起。
+    $reminderQuery = @($script:ReminderArgs) -join ' '
+    Assert-Match -Text $reminderQuery -Pattern '^get deployment,statefulset ' -Because "两种工作负载一起查。实际:$reminderQuery"
+    Assert-True -Condition (@($script:ReminderArgs) -ccontains 'guild' -and @($script:ReminderArgs) -ccontains 'trade') -Because "点名要查的服务。实际:$reminderQuery"
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = "statefulset.apps/guild`nstatefulset.apps/trade`n"; Stderr = '' }
     Assert-Equal -Expected '' -Actual ((Write-GlobalGoSvcPendingReminder 3>&1 | Out-String).Trim()) -Because '都在就不打扰'
     $script:StubDeployments = [pscustomobject]@{ ExitCode = 1; Stdout = ''; Stderr = 'forbidden' }
     Assert-Match -Text (Write-GlobalGoSvcPendingReminder 3>&1 | Out-String -Width 4096) -Pattern '\[GlobalGoSvc\]ReadFailed:' -Because 'zone 已经部署完,读失败不该让它变成失败'

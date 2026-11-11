@@ -94,6 +94,8 @@ public:
     // 执行点只有本类:RemoveItem / RemoveItemsClamped / RemoveItemsExact / RemoveItemsByGuid 一律不拿走被预留占住的数量
     // (前两种按「可出包数量」夹紧或拒绝,后两种整批拒绝、一件不扣);唯一能动用某份预留的是
     // ConsumeInventoryAndGrant(consumeFromHoldId = 那份预留的号)。整理、取回临时格、入包不改数量,不受影响。
+    // 本类之外把实例移出人物背包的入口只有穿戴(PlayerEquipSystem::Equip,经 Bag::TakeInstance),它在纯校验段问
+    // CheckRemovableInstances;以后新加的移出入口(存仓库、丢弃、出售)同样先问,不得绕开。
     // 这**不是**「局中挡一切背包写」的战斗闸(D48 红线照旧:战斗闸只放在玩法入口层):预留只管数量,不看 InBattleComp;
     // 战斗结算扣的正是它自己那份预留,不会被自己拦住。
     //
@@ -125,7 +127,7 @@ public:
     // 按数量出包的静默预检(不打日志),出包调用方用它代替 Bag::CheckQuantities。需求为 0 的项视为满足。只读。
     [[nodiscard]] static RemovalVerdict CheckRemovable(entt::entity playerEntity, const Bag &bag,
                                                        const ItemCountMap &quantities);
-    // 按实例出包(RemoveItemsByGuid)的预留预检:这批实例里可计数的单位按配置号求和,超过可出包数量即 kHeld,否则 kEnough。
+    // 按实例出包(RemoveItemsByGuid、穿戴)的预留预检:这批实例里可计数的单位按配置号求和,超过可出包数量即 kHeld,否则 kEnough。
     // 不在包里、重复、不可叠加之类的问题不在这里判(Bag::ReserveForBatchRemove 判)。只读(bag 非 const 只因按 guid 取实例)。
     [[nodiscard]] static RemovalVerdict CheckRemovableInstances(entt::entity playerEntity, Bag &bag,
                                                                 const std::vector<Guid> &guids);

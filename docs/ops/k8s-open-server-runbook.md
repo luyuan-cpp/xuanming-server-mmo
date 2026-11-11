@@ -243,7 +243,7 @@ kubectl get svc -n mmorpg-zone-yesterday
 
 - **`Init:Error` / `Init:CrashLoopBackOff`**:看 `kubectl logs <pod> -c sql-writer-registrar --previous`。`pod <名字> is slot N but the roster has M slots` 是副本数比名册槽位多,先加槽位(§1)。`cannot register boot N of this slot yet` 后面跟 denied:这个槽位已经有同号或更新的一代,多半是节点失联之后强删过 Pod、旧节点上的 Pod 还在(见下面「节点失联」);确认旧 Pod 没了,删掉这个 Pod,StatefulSet 重建时取更大的号。`the boot record of this pod does not belong to this roster slot and pod` 是启动记录和名册对不上,同样删 Pod 重建。闸门表缺失是迁移 Job 没跑或没覆盖这个库,`generation` 不符是名册按错的库写的。这种 Pod 回收 CronJob 不删,告警是 `SqlWriterRegistrarFailing`。闸门冻结(排空、搬库)时 init 什么也不写,解冻后自己过去。
 - **主容器崩溃、被 OOMKill**:写资格一次性,写过之后容器原地重启读到消费标记就拒启,入口脚本以退出码 78 退出,这个 Pod 自己恢复不了。`sql-writer-pod-reaper` 每分钟删一次主容器上一次以 78 退出的写者 Pod,StatefulSet 按同一序号重建,新 Pod 在同一槽位上换代、把上一代退休,名册不消耗。不用人工删。还没写过就退出的进程没有消费标记,原地重启,不删。看它删了什么:`kubectl -n <namespace> logs job/<job> -c select-restarted-writers`(删之前)、`-c delete-restarted-writers`(删之后),两边都写明 namespace 和 Pod 名。
-- **没有进程的写者**:被删 Pod 的那一代由同序号的新 Pod 在换代时退休,不用人工。例外是缩容:被缩掉的序号最后一代留着 ACTIVE,下一次排空之前按非 run 的 RETIRE 退休([设计 §2](../design/horizontal-scale-logical-db.md))。
+- **没有进程的写者**:被删 Pod 的那一代由同序号的新 Pod 在换代时退休,不用人工。例外是缩容:被缩掉的序号最后一代留着 ACTIVE,下一次排空之前按非 run 的 RETIRE 退休([设计 §2](../design/horizontal-scale-logical-db.md))。RETIRE 原件的 `writer` 原样复制这一代 REGISTER 收据里的 `writer`(含 `bootSeq`),缺 `bootSeq` 的请求会被拒绝([写者名册换代](../design/writer-roster-exhaustion-20261106.md) §5.2)。
 - **节点失联**:StatefulSet 不会在别的节点自动重建同序号的 Pod,要等节点对象被删,或者人工 `kubectl -n <namespace> delete pod <pod> --force --grace-period=0`。强删是安全的:新 Pod 换代之后,旧节点上的进程就算还活着,下一笔写也会被闸门拒绝(写不进去,不会写坏数据)。
 - **Job 或 CronJob 起不来**:`sql-writer-pod-reaper` 的镜像拉不到时只是这一分钟没回收,不影响别的 Pod。看 `kubectl -n <namespace> describe job <job>`。
 

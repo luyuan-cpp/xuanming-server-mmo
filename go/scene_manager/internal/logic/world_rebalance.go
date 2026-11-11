@@ -236,8 +236,12 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 // migrateWorldChannel performs the create-swap-destroy dance for a single
 // channel. Steps:
 //
-//  0. 分配这次迁移的放置代次(docs/design/world-channel-placement-generation.md):下面的建场景、CAS、拆老实体、
-//     落空回收都带它,节点据此认出晚到的旧请求。分配失败就不迁,什么都没发。
+//  0. 先在目标的 GameServer 上占 Agones 名额(docs/design/agones-scene-node-high-density.md §13.10):不把频道搬进
+//     Agones 认为已经满了的进程。老节点已不在(reasonNodeGone)时频道必须搬走,计划的目标满了就让 GSA 在本 zone
+//     另挑一台有空位的,落点改成它;换更好的家(reasonBetterHome)只认计划的目标,满了这次不搬。占不到就不迁,
+//     什么都没发;之后任何一步没成都放弃这次占的名额。
+//     然后分配这次迁移的放置代次(docs/design/world-channel-placement-generation.md):下面的建场景、CAS、拆老实体、
+//     落空回收都带它,节点据此认出晚到的旧请求。分配失败就不迁。
 //  1. CreateScene on target node (C++ is idempotent by sceneId).
 //  2. Rewrite scene:{sid}:node in Redis. Any EnterScene that races this
 //     write sees either oldNode (still valid, scene still exists) or
@@ -266,15 +270,34 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 		return false
 	}
 
+	target, placement, ok := reserveAgonesRoomForWorldChannel(ctx, svcCtx, zoneId, sceneId, newNode, reason == reasonNodeGone)
+	if !ok {
+		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: no Agones room capacity for moving it to %s (%s); not migrating this round",
+			zoneId, confId, sceneId, newNode, reason)
+		return false
+	}
+	if target == oldNode {
+		// 只在回落分配挑中了老节点时出现:GSA 按 etcd 里登记的 Pod 地址认节点,负载集却已判它不在。搬过去等于没搬,这次不搬。
+		abandonAgonesPlacement(ctx, svcCtx, zoneId, placement, "migrate_target_is_owner")
+		return false
+	}
+	if target != newNode {
+		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: planned target %s is full; moving it to %s instead (%s)",
+			zoneId, confId, sceneId, newNode, target, reason)
+		newNode = target
+	}
+
 	generation, err := allocatePlacementGeneration(svcCtx, zoneId)
 	if err != nil {
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: not migrating to %s (%s): %v",
 			zoneId, confId, sceneId, newNode, reason, err)
+		abandonAgonesPlacement(ctx, svcCtx, zoneId, placement, "placement_generation_unavailable")
 		return false
 	}
 	if _, err := RequestNodeCreateSceneAtGeneration(ctx, svcCtx, zoneId, newNode, uint32(confId), sceneId, generation); err != nil {
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: CreateScene on new node %s failed (%s): %v",
 			zoneId, confId, sceneId, newNode, reason, err)
+		abandonAgonesPlacement(ctx, svcCtx, zoneId, placement, "create_scene_failed")
 		return false
 	}
 
@@ -286,7 +309,7 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	dependentMirrors, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
 	if err != nil {
 		noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("mirror set of scene %d before migrating it to %s", sceneId, newNode), err)
-		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation)
+		settleLostChannelMove(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation, placement)
 		return false
 	}
 
@@ -300,19 +323,19 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	//   - 计划是陈旧的:本进程不持 zone 锁,任意副本上的 initWorldScenesForZone
 	//     或 EnterScene 的懒改派可能已经把频道派到别的节点;
 	//   - 代次过期:别的写者在本次分配代次之后、提交之前,以更新的代次回收过这个频道的预建实体。
-	// 这些情况下 newNode 上刚建的实体都没有归属,按本次的代次回收掉;名额与计数都没动。
+	// 这些情况下 newNode 上刚建的实体都没有归属,按本次的代次回收掉,第 0 步占的名额放弃;计数没动
+	// (settleLostChannelMove;属主恰是 newNode 时实体留着、名额照常提交)。
 	if !reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode, generation) {
 		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: ownership not updated (reentry barrier, owner changed concurrently, stale placement generation, or Redis failure); migration invalidated",
 			zoneId, confId, sceneId)
-		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation)
+		settleLostChannelMove(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation, placement)
 		return false
 	}
 
-	// Agones 名额跟着频道走。不转移的话旧 GameServer 的计数永远不还
-	// (容量凭空蒸发)、新的没记账(容量被超卖),两个方向都会让
-	// FleetAutoscaler 算错。先占新的再还旧的,见 TransferAgonesRoomForScene。
+	// Agones 名额跟着频道走:提交第 0 步在 newNode 上占好的那一条,改成了就删旧条目(commitReservedAgonesRoom)。
+	// 不转的话旧 GameServer 的名额永远不还、新的没记账,两个方向都会让 FleetAutoscaler 算错。
 	// scene_count 已在 reassignSceneNode 的脚本里挪好,这里不再调。
-	TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
+	commitReservedAgonesRoom(ctx, svcCtx, zoneId, sceneId, newNode, placement)
 
 	// Best-effort cleanup of the old scene entity. Skip when the old node
 	// is already gone — nothing to clean up — or when oldNode appears dead
@@ -342,8 +365,10 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 //
 // 比对之后、DestroyScene 到达之前,别的写者把归属改到 newNode 也拆不到它的实体:回收脚本先把代次高水位抬到 generation,
 // 那次改派的代次一定更新,节点把这次拆除当成过期的忽略(docs/design/world-channel-placement-generation.md)。
+//
+// 返回 true 只在比对确认 newNode 就是现任属主、实体留着的时候;比对出错(不知道)与已回收都回 false。
 func destroyUnownedMigrationTarget(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32,
-	confId, sceneId uint64, newNode string, generation uint64) {
+	confId, sceneId uint64, newNode string, generation uint64) bool {
 
 	reclaim, err := reclaimUnownedWorldChannelEntity(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation)
 	switch {
@@ -353,6 +378,7 @@ func destroyUnownedMigrationTarget(ctx context.Context, svcCtx *svc.ServiceConte
 	case reclaim.Kept:
 		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: another writer already moved it to %s; keeping that entity",
 			zoneId, confId, sceneId, newNode)
+		return true
 	case reclaim.DestroyErr != nil:
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: reclaiming the unowned entity on %s failed (owner=%q): %v",
 			zoneId, confId, sceneId, newNode, reclaim.Owner, reclaim.DestroyErr)
@@ -360,6 +386,25 @@ func destroyUnownedMigrationTarget(ctx context.Context, svcCtx *svc.ServiceConte
 		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: reclaimed unowned entity on %s at placement generation %d (owner=%q)",
 			zoneId, confId, sceneId, newNode, generation, reclaim.Owner)
 	}
+	return false
+}
+
+// settleLostChannelMove 收拾一次没改成的频道换节点(先占名额、先建后改的落空一半):按放置代次回收 newNode 上预建的实体
+// (destroyUnownedMigrationTarget),并处理换节点之前预占的 Agones 名额(docs/design/agones-scene-node-high-density.md §13.10):
+//   - 比对确认属主恰是 newNode(别的写者挑了同一个节点,或 CAS 其实已执行):实体留着,名额照常提交 —— 别的写者已提交的,
+//     记录已在这台上,这次的条目放弃;没提交的,这次就是那一份(commitReservedAgonesRoom)。两边都按条目,只会留一条;
+//   - 其余(属主不是 newNode,或比对出错不知道):放弃这次的条目。比对出错而 CAS 其实已执行时,旧条目仍记着,总数不少,
+//     之后由对账转过来。
+//
+// rebalance、懒改派与 init 的死节点改派共用;resolveScene 的死节点自愈落空后还要按属主定应答,另写(adoptOwnerAfterLostReassign)。
+// placement 为 nil(没开 Agones)时只回收实体。
+func settleLostChannelMove(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confId, sceneId uint64,
+	newNode string, generation uint64, placement *agonesPlacement) {
+	if destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode, generation) {
+		commitReservedAgonesRoom(ctx, svcCtx, zoneId, sceneId, newNode, placement)
+		return
+	}
+	abandonAgonesPlacement(ctx, svcCtx, zoneId, placement, "channel_move_lost")
 }
 
 // cascadeMirrorsOnSourceMigration force-destroys mirrors that were co-located

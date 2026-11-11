@@ -24,7 +24,7 @@ message GuildRecord {
   option(OptionTableName) = "guild";
   option(OptionPrimaryKey) = "guild_id";
   option(OptionUniqueKey) = "name_norm";      // 生成 uk_guild;帮名全服唯一,判重只看规范化值
-  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 合服 / 分区榜重建;idx_guild_1 = 按会长查
+  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 按区查询(zone_id IN 合服组);idx_guild_1 = 按会长查
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -36,7 +36,7 @@ message GuildRecord {
   string announcement = 5;    // ≤ MaxAnnouncementBytes=600
   uint64 create_time_ms = 6;
   uint32 max_members = 7;     // 建帮写入;B5 起按 GuildLevel.max_members 改写
-  uint32 zone_id = 8;         // 帮会归属 zone;merge_zone 步骤 3 改写
+  uint32 zone_id = 8;         // 建帮时的归属区,此后不改写;合服只登记映射 zone_merged_into,按区比较、查询先解析到最终区
   int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
   uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
   string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)

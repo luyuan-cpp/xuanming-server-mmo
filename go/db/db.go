@@ -65,6 +65,10 @@ func main() {
 
 	// Load config
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入):指名了变量却没有值就拒启,不带空口令去连库。
+	if err := config.AppConfig.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		panic(fmt.Sprintf("config rejected: %v", err))
+	}
 	// 回填 optional 段的默认值(迁移超时、连接池)。见 config.Normalize 注释。
 	config.AppConfig.Normalize()
 

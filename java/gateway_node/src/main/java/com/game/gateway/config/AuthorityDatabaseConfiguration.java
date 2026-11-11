@@ -20,15 +20,17 @@ public class AuthorityDatabaseConfiguration {
                 if(!(bean instanceof HikariDataSource pool))throw new IllegalStateException("未知SQL池缺少physical受管接缝："+name);
                 try{
                     if(pool.getHikariPoolMXBean()!=null||pool.getDataSource()!=null)throw new IllegalStateException("SQL池已启动或已有未知DataSource");
-                    boolean required=environment.getProperty("mmorpg.sql.require-tidb",Boolean.class,true);
-                    String mode=environment.getProperty("mmorpg.run-mode","prod");
-                    if(!required&&!Set.of("dev","test").contains(mode))throw new IllegalStateException("生产不能关闭TiDB强会话核验");
+                    // 档位规则只在 AuthorityDataSource.Backend.resolve:tidb 档关强核验只许 dev / test,mysql 档按主库严格核对。
+                    AuthorityDataSource.Backend backend=AuthorityDataSource.Backend.resolve(
+                            environment.getProperty("mmorpg.sql.backend","tidb"),
+                            environment.getProperty("mmorpg.sql.require-tidb",Boolean.class,true),
+                            environment.getProperty("mmorpg.run-mode","prod"));
                     if(boot==null)boot=WriterAuthority.consumeEnvironment();
                     Properties credentials=new Properties();credentials.putAll(pool.getDataSourceProperties());
                     if(pool.getUsername()!=null)credentials.setProperty("user",pool.getUsername());
                     if(pool.getPassword()!=null)credentials.setProperty("password",pool.getPassword());
                     String init=pool.getConnectionInitSql();
-                    pool.setDataSource(new AuthorityDataSource(pool.getJdbcUrl(),credentials,boot,required,init==null?List.of():List.of(init)));
+                    pool.setDataSource(new AuthorityDataSource(pool.getJdbcUrl(),credentials,boot,backend,init==null?List.of():List.of(init)));
                     pool.setConnectionInitSql(null);
                     return bean;
                 }catch(java.io.IOException|java.sql.SQLException failure){throw new IllegalStateException("SQL启动grant或physical封口失败",failure);}

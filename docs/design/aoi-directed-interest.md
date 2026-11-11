@@ -1,6 +1,6 @@
 # AOI 单向关注与范围外同步
 
-状态：服务端已落码（2026-11-05），未编译，待 Codex 按文末「验证」执行；Java 版待做。2026-11-10 空间关注改为任一方位置变化后按距离重判（见「空间关注的评估时机」），这部分 Java 版早已按同一口径实现；同日加了战斗关注与名额空出后补回附近的人（见「战斗关注」「名额空出后补回附近的人」），Java 版待做。2026-11-10 的改动都未编译。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
+状态：服务端已落码（2026-11-05），未编译，待 Codex 按文末「验证」执行；Java 版待做。2026-11-10 空间关注改为任一方位置变化后按距离重判（见「空间关注的评估时机」），这部分 Java 版早已按同一口径实现；同日加了战斗关注与名额空出后补回附近的人（见「战斗关注」「名额空出后补回附近的人」）；2026-11-11 加了 NPC 仇恨名单与服务器压力裁表（见「仇恨名单」「服务器压力」）。这三批 Java 版待做，C++ 都未编译。网格、容量和优先级规则见 [AOI 优先级、容量与可见性设计](aoi_priority_design_zh.md)。
 
 ## 前言
 
@@ -63,7 +63,7 @@
 
 | 规则 | 口径 |
 | --- | --- |
-| 什么算交手 | 一次伤害（`SkillSystem` 的 `DealDamage`，目标没死时）或一跳真回了血的治疗（`kBuffTypeHealthRegenerationBasedOnLostHealth`，施法者是别人时）。第一步只做直接交手：我打的、打我的、我治疗的、治疗我的 |
+| 什么算交手 | 三种来路：① 敌对——一次伤害（`SkillSystem` 的 `DealDamage`，目标没死时），我打的、打我的；② 治疗——一跳真回了血、施法者是别人的治疗（`kBuffTypeHealthRegenerationBasedOnLostHealth`），我治疗的、治疗我的；③ 一起打同一个怪——同在一个 NPC 的仇恨名单里，见下文「仇恨名单」 |
 | 交手时做什么 | 双方互相登记显式来源 `AoiFollowKind::kCombat`（每对最多一份，id 恒为 0），标签 `AoiPriority::kCombat`，脱战计时重新开始。离得再远也互相看得见、收得到对方的移动与技能 |
 | 权重 | `kCombat` 在每张权重表里都高于除 `kPinned` 外的所有标签（`aoi_priority.h` 用 `static_assert` 守住）。满表时交手对象先挤掉别的 |
 | 脱战 | 一对实体 `kCombatDisengageSeconds`（10 秒）没有再交手，双方撤销交手来源，这就是知乎原文的 lazy time。对方仍在附近就照旧按空间来源显示，不发移除 |
@@ -72,9 +72,23 @@
 
 于是「战斗中交手对象排在最前、脱战后任务 NPC 自然回到最前」不需要任何人去切换表：交手来源只在交手期间存在，它一撤，原来被挤成暂隐的任务 NPC 由 `FillFreeSlots` 补回，被挤掉的附近的人由下一节补回。
 
-实现在 `combat/engagement/`：`CombatEngagementSystem`（`RecordInteraction` / `Update` / `OnDeath`）与按需组件 `CombatEngagementComp`（对方 → 距脱战还剩的秒数，两边各记一份、互为镜像）。`World::Update` 每个模拟步在 `BuffSystem::Update` 之后调一次 `CombatEngagementSystem::Update`。
+实现在 `combat/engagement/`：`CombatEngagementSystem`（`RecordDamage` / `RecordHeal` / `Update` / `OnDeath`），按需组件 `CombatEngagementComp`（对方 → 交手记录：距脱战还剩的秒数、有没有敌对；两边各记一份、互为镜像）与 `CombatAllyRosterComp`（NPC 的仇恨名单）。`World::Update` 每个模拟步在 `BuffSystem::Update` 之后调一次 `CombatEngagementSystem::Update`。
 
-**第二步（未做）**：「和我打同一个怪的其他人」也算友方交手，要靠 NPC 的仇恨列表（谁打过它）推出来；仇恨列表本身还没有，等它落地时在同一个入口登记。
+### 仇恨名单：一起打同一个怪的人互相算友方
+
+「和我打同一个怪的其他人」也是我在意的战斗对象。每个 NPC 记一份仇恨名单（`CombatAllyRosterComp`）：正在和它敌对交手的非 NPC 实体，按加入先后最多 `kMaxCombatAllyRoster`（40，一个团队副本的人数）名。
+
+| 规则 | 口径 |
+| --- | --- |
+| 进名单 | 一次伤害里一方是 NPC、另一方不是时，不是 NPC 的一方进这个 NPC 的名单（谁先动手都一样） |
+| 互相算友方 | 进名单或再次出手时，与名单里的其他人互相登记（续期）交手来源，离得再远也互相看得见。没有专门的友方来源：一起打怪也是交手，和敌对、治疗共用同一份 `kCombat` 来源与同一个脱战计时 |
+| 治疗仇恨 | 给正在和 NPC 敌对交手的人加血，治疗者也和那个 NPC 敌对交手、进它的名单（MMO 的标准治疗仇恨）。治疗者因此看得见怪，也和打这个怪的其他人互相算友方 |
+| 名单满了 | 后来的人照样和这个 NPC 交手、看得见它，只是不和名单里的人互相关注；名单里有人离开后，它下一次出手时补进来。名单里两两互相关注，开销 O(K²) 有界；更多人的混战靠空间关注 |
+| 出名单 | 成员和这个 NPC 的交手记录结束（脱战、死亡、离场）时移出；空了摘除组件，NPC 销毁时随实体清理 |
+| 友方何时撤销 | 不在出名单时撤：友方交手各自计时，不再一起打就按脱战时间结束。一方停手后最多再保留约两个脱战时间（它离开名单前，同伴的出手还会续一次） |
+| 只对 NPC 推 | 玩家之间的混战里，打同一个人的两个人可能彼此也是敌人，不推友方；NPC 之间互相治疗没有阵营规则，也不推治疗仇恨 |
+
+名单只记成员、不记仇恨值：AOI 只需要知道谁在打这个怪。以后 AI 选目标需要仇恨值时，在这份名单上加。生产代码目前还不刷怪（没有地方给实体挂 `Npc`），名单在刷怪接上后才会生效；用例里自己造 NPC 验证。
 
 ## 名额空出后补回附近的人
 
@@ -84,7 +98,25 @@
 - `AoiSystem::Update` 发现带标记的观察者又有空名额，就对它做一次完整重判（同位移重判），并在重判开始时摘掉标记；重判中再被拒会重新打上。
 - 只有真被拒过的观察者才会重扫，名额没空不重扫，开销有界。
 
-**压力收缩时裁表（未做）**：容量按服务器压力调小时，应按权重裁掉超出的最低条目。`ScenePressureComp` 现在没人写，容量实际固定为 100；等压力监控接上时一起做。
+## 服务器压力：容量收缩时按权重裁表
+
+场景线程忙不过来时，每个观察者少显示、少同步几个，先保住模拟步不超时。容量 = min(客户端期望数, 服务器压力给的上限)，压力 0 时上限 200、压力 1 时 20（`ScenePressureComp::GetServerCapacity`）。
+
+**压力从哪来**（`spatial/system/aoi_load.h` 的 `AoiLoadMonitor`，常量在 `aoi_priority.h`）：
+
+- 每个模拟步把这一步的耗时报进来，利用率 = 耗时 / 步长（50 ms），按指数平均平滑（每步权重 0.05，20 FPS 下时间常数约 1 秒）。这是 MSPT 一类的信号，事件循环里处理 RPC 的耗时不在内；要不要并入，等压测数据再定。
+- 平滑利用率 0.5 以下压力为 0，0.9 时压力为 1，中间线性；量化成 10 档。每秒最多决定一次，偏离当前档位超过 3/4 档才换档，档位边界附近的抖动不会让容量来回变。
+- 档位变化打一条 INFO 日志；`/metrics` 有 `scene_aoi_load_step_utilization_percent`、`scene_aoi_load_pressure_percent`、`scene_aoi_load_trimmed_entries_total`（`RegisterAoiLoadMetrics`，scene 节点启动时登记）。
+- 这些阈值没有压测数据支撑，上线前随 AOI 压测校准。
+
+**压力怎么用**（`AoiSystem::ApplyServerPressure`，`World::Update` 每秒调一次）：
+
+- 把压力写进本线程的每个场景（`ScenePressureComp` 的唯一写入口）。新建的场景在下一次调用时拿到当前压力，最多晚 1 秒。
+- 值真有变化的场景里，每个观察者按新容量校正名额（`InterestSystem::ApplyCapacity`）。超出的按权重从低到高、同权重先远后近裁掉（再按句柄排，结果不依赖容器遍历顺序）。只剩空间来源的删除并打补回标记，有显式来源的转暂隐、关系保留。
+- 容量回升时，暂隐的显式关注当场补回，被裁掉的附近的人由上一节的补回重扫在下一帧补回。
+- 所有观察者的变化合成一批下发，每个观察者收一条列表消息。
+
+客户端上报期望显示数的 RPC 还没接（`AoiClientCapacityComp` 没人写）；接上时，改完容量对这个观察者调一次 `InterestSystem::ApplyCapacity`，经 `AoiSystem` 下发。
 
 ## 被否掉的做法：按观察者状态切换权重表
 
@@ -120,6 +152,12 @@
 | A 的表满了全是任务 NPC，A 被远处的敌人打 | 敌人挤掉一个任务 NPC（转暂隐）；脱战后敌人移除、那个任务 NPC 重新创建 |
 | 打架时附近的 NPC 被交手对象挤掉，脱战后 A 站着不动 | 下一帧把附近的 NPC 补回来 |
 | B 被打死；或 B 离场 | 死亡：交手双方立即各收一次移除；离场：只收离场那一次移除，交手记录随后清掉 |
+| A、B 相距 240 m，先后打同一个怪 | B 出手时 A、B 互相创建；怪的仇恨名单按先后记着 A、B |
+| H 给正在打怪的 A 加血 | H 看见 A 和那个怪，并和打这个怪的其他人互相创建 |
+| 两个玩家打同一个玩家 | 两人之间不建关系 |
+| 怪死了 | 打它的人各收一次它的移除；彼此之间的友方关系按脱战时间结束 |
+| 第 41 个人打一个已有 40 人的怪 | 看得见怪，但不和名单里的人互相关注；名单里有人死了，它下一次出手补进名单 |
+| 场景线程持续满负荷 | 压力升到顶，容量降到 20：权重高的留下，同权重近的留下，其余各收一次移除；负载回落后补回 |
 
 ## 实现
 
@@ -144,8 +182,12 @@
 | `AoiSystem::RefreshTargetVisibility(target)` | `BuffSystem` 在隐身标签出现、消失时调用 |
 | `AoiSystem::OnLeaveScene(entity)` | 离场、换场景、销毁前的唯一 AOI 清理入口；`DestroyPlayer` 兜底补调 `LeaveCurrentScene` |
 | `AoiSystem::Update` | 更新格子成员；首次入格、位置变化到了重判时机、或有待补回的附近候选且有空名额时，按距离重判空间来源（两个方向），只增删空间来源 |
-| `CombatEngagementSystem::RecordInteraction(source, target)` | 一次伤害或一跳治疗：双方登记或续期交手来源 |
-| `CombatEngagementSystem::Update(delta)` / `OnDeath(entity)` | 脱战计时到时、死亡时撤销交手来源 |
+| `CombatEngagementSystem::RecordDamage(attacker, target)` | 一次伤害：双方登记或续期交手来源；打的是 NPC 时进它的仇恨名单、与名单里的人续期友方交手 |
+| `CombatEngagementSystem::RecordHeal(healer, target)` | 一跳治疗：双方登记或续期交手来源；治疗仇恨推给 target 正在打的 NPC |
+| `CombatEngagementSystem::Update(delta)` / `OnDeath(entity)` | 脱战计时到时、死亡时撤销交手来源并移出仇恨名单 |
+| `AoiLoadMonitor::Observe(stepSeconds, fixedDeltaSeconds)` | 每个模拟步报耗时，每秒给出一次压力档位 |
+| `AoiSystem::ApplyServerPressure(pressureFactor)` | 压力写进各场景，容量变了的场景按权重裁表或补回 |
+| `InterestSystem::ApplyCapacity(watcher, changes)` | 按当前有效容量校正一个观察者的名额，返回裁掉的条数 |
 | `InterestSystem::GetVisibleWatchers(target, out)` | 移动、属性、技能广播的接收者 |
 
 `InterestSystem` 的写函数把可见性变化按发生顺序写进 `AoiVisibilityChanges`。`AoiSystem::SendVisibilityChanges` 求出每对（观察者，目标）的净变化，同一批里显示又隐藏的不发；只涉及一个目标的观察者按目标合并成一次广播，涉及多个目标的收一条列表消息；离场者的移除用 `ActorDestroyS2C`。消息号、消息体与客户端契约不变。
@@ -168,7 +210,7 @@
 未编译。交给 Codex，在仓库根目录用 VS 2026 Developer PowerShell 串行执行：
 
 1. 先编库：`msbuild cpp/libs/modules/modules.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`，再 `msbuild cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`。测试工程链接预编好的库，改了库不先编库就会跑旧代码。
-2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。
+2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。2026-11-11 的用例在「仇恨名单」一节（一起打怪互相算友方、治疗仇恨、玩家混战不推友方、怪死后友方按脱战结束、名单上限与补位）与「服务器压力」一节（压力升降、每秒决定一次与防抖、按权重和距离裁表并在回落后补回、新建场景拿到当前压力）；`aoi_delivery_test.vcxproj` 加编了 `combat_engagement.cpp` 与 `aoi_load.cpp`。
 3. 编 Scene 节点，确认 `actor_state_attribute_sync.cpp`、`buff.cpp`、`movement.cpp` 链接无误。
 
 旧 `Pin/Unpin` 的删除见[第六批修复记录](../handoff/ecs-refactor/batch6-review-fixes.md) T3.4，那次删掉的是只在离场时全节点扫描的远端清理；现在由反向索引承担同一职责。

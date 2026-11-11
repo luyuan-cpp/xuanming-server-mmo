@@ -97,7 +97,7 @@ g N 的 data-service 保持运行。
 
 - K8s 上「新配置」= 用改过的仓库重新生成并 apply **两份** ConfigMap:`go-svc-data-service-config`(`Kafka.TopicGeneration` / `*Partitions`)
   与 `node-config`(`AuditTopicGeneration`,由 data_service.yaml 镜像)。本仓的生成入口是 `k8s_deploy.ps1 -Command zone-up`
-  (多 zone 用 `all-up`),参数与平时部署相同;之后 `kubectl -n <zone-ns> rollout restart deploy/data-service`。
+  (多 zone 用 `all-up`),参数与平时部署相同;之后 `kubectl -n <zone-ns> rollout restart statefulset/data-service`。
 - **在起任何 scene 之前**核对:`kubectl -n <zone-ns> get cm node-config -o yaml` 里 `AuditTopicGeneration: N+1`,
   `go-svc-data-service-config` 里 `TopicGeneration: N+1`。不要只靠契约测试。
 - 日志应见 `[kafka] consumers started: ... topic=player_snapshot_topic_g<N+1> ... p=S`(2026-11-06 起审计 topic 不再建 marker,没有 `kafka immutable partition marker ensured` 这一行);

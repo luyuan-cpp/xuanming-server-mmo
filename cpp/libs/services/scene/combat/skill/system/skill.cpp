@@ -841,8 +841,9 @@ void DealDamage(DamageEventComp& damageEvent, const entt::entity caster, const e
 	if (IsTargetDead(target)) {
 		HandleTargetDeath(caster, target, damageEvent);
 	} else {
-		// 一次伤害算一次交手:双方登记或续期战斗关注。致死的一击不再登记,死亡已结束它的全部交手关系。
-		CombatEngagementSystem::RecordInteraction(caster, target);
+		// 一次伤害算一次敌对交手:双方登记或续期战斗关注;打的是 NPC 时进它的仇恨名单。
+		// 致死的一击不再登记,死亡已结束它的全部交手关系。
+		CombatEngagementSystem::RecordDamage(caster, target);
 	}
 
 	TriggerAfterDamageEvents(caster, target, damageEvent);

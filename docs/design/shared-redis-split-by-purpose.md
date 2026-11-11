@@ -84,7 +84,7 @@
 | go/player_locator | `RedisClient`(`go/player_locator/internal/config/config.go:11`) | go-redis | `:3699-3702` | |
 | go/scene_manager | `Redis`(go-zero RedisKeyConf) | go-zero | `:3731-3735` | |
 | go/match | `Redis`(共享)+ `MatchRedis`(`go/match/internal/config/config.go:21`,match 自己的 Redis Cluster) | go-zero / go-redis | `:3792-3800` | |
-| go/chat | `Redis`(共享;v1 不读任何契约键,`go/chat/internal/svc/servicecontext.go:29-33`)+ `ChatRedis`(`internal/config/config.go:36`) | go-zero | `:3869-3882` | ChatRedis 复用 match 的集群 |
+| go/chat | 无。聊天权威改到 SQL 后,两个句柄(共享 `Redis`、`ChatRedis`)不再发命令,2026-11-11 连同 `ChatRedis` 配置段一起删除 | — | ConfigMap 不写 `Redis` / `ChatRedis` 段 | 以前的 ChatRedis 复用 match 的集群 |
 | go/trade | `SharedRedis`(`go/trade/internal/config/config.go:95-109`) | go-redis | `:4008-4011` | 只读 `player:{id}:location` |
 | go/friend | `Redis`(共享)+ `FriendRedis`(`go/friend/internal/config/config.go:93-95`) | go-zero | `:4056-4064`;FriendRedis 刻意不配,回落共享库 | |
 | go/guild | `RedisClient`(DB 2)、`PlayerLocatorRedis`(DB 0)、`MergeMarkerRedis`(`go/guild/internal/config/config.go:41-42`、`:60`;`go/guild/etc/guild.yaml:14-38`) | | **K8s 上没有清单**(no-single-node §7) | |

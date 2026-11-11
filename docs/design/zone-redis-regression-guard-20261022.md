@@ -261,7 +261,7 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 - **代价**（未实测，不得据此宣称结论）：everysec 下 WAITAOF 要等下一次后台刷盘，按源码阅读推断平均约 0.5s、最坏约 1s；HA 还要加从库刷盘。超时的代码缺省是 1500ms，`scene_manager_service.yaml` 与 K8s 渲染取 2000（理由见 §4.3.3「时间预算」）。
   - 只在持有者变化时付出：首次登录、跨节点交接、跨 zone。同节点换图、同落点重连不铸造，不受影响。
   - 必须按 §8.3 R-b 压测。
-- **配置**：`OwnerEpochMint.WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`（`go/scene_manager/internal/config/config.go` 的 `OwnerEpochMintConfig`）：两项都写 0 等于不发 WAITAOF，启动时打一行 ERROR；开启时启动先探一次，失败拒启。
+- **配置**：`OwnerEpochMint.WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`（`go/scene_manager/internal/config/config.go` 的 `OwnerEpochMintConfig`）：两项都写 0 等于不发 WAITAOF，启动时打一行 ERROR；开启时启动先探一次，失败拒启。探针在每个主节点的同一条连接上先写一个探针键（`scene_manager:owner_epoch_mint_probe:{n}`，Cluster 下挑落在该节点 slot 上的 tag，TTL 60s），再发 WAITAOF，等待取 max(配置值, 5s)。2026-11-10 起这样做：新连接没写过东西时偏移为 0，副本记的刷盘偏移初值也是 0，没开 AOF 的副本从不上报，0 ≥ 0 照样计数，不先写的探针查不出「副本没开 AOF」（Claude 审核第 3 条，第二轮审核会话同意）。
 - **连接总账**：在 `k8s_deploy.ps1` 的池表里给 scene_manager 加 Fixed 连接，写法同 db 行的 `Fixed 2`。
 
 #### 4.3.3 G3b 落码定稿（2026-10-24，未编译、未测试，待 Codex 验证）
@@ -331,6 +331,8 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 - logic `owner_epoch_mint_test.go`：确认先于推路由；`not_durable` / `error` 在同 zone 交接、跨 zone 第一条腿、首次落点、同节点 epoch 0 四条路径上的回滚终态与人数；关闭时照常放行；没发送时零写入、回 3；缺铸造通道时 fail-closed；不铸造的 CAS 不经铸造通道；截止预算；识别分支写回原值。
 - svc `owner_epoch_mint_test.go`：EVAL 与 WAITAOF 在同一 pipeline；关闭时只发 EVAL；脚本错误不重发；结果未知时整条重发及次数上限；预算不足不发；启动探针；WAITAOF 回复判定、预算、客户端参数三个纯函数。2026-11-10 补：连接都没拿到时回 `ErrOwnerEpochMintNotSent`、不重发（替身与真实拨号失败各一条），先结果未知再没发出去仍报结果未知。
 - svc `owner_epoch_mint_realredis_test.go`（2026-11-10 第二轮审核补）：单实例真 Redis 上 6 条，设 `MMORPG_TEST_REDIS_ADDR` 才跑——确认落盘、`1 1` 份数不足、探针、写回原值推进复制偏移（只读分支不推进）、CAS 不过不写、池耗尽回 not_sent。
+- svc `TestProbe`（2026-11-10 改）：探针是一条 pipeline（先写探针键、再 WAITAOF），不单发；探针键带 TTL。
+- logic `owner_epoch_realredis_test.go`（2026-11-10 Claude 补）：同一环境变量，测 logic 自己的脚本与调用链——铸造脚本重放识别写回原值会推进复制偏移、CAS 落败不推进、确认脚本原样时推进而变了不推进；两段回执全链（共享连接回滚 → 铸造通道确认 + WAITAOF → 正式回执；`1 1` 时停在待确认回执）。
 - `k8s_deploy_contract.tests.ps1` 两条：总账 Fixed 与源码常量一致；ConfigMap 镜像 yaml 并按拓扑渲染 numreplicas。
 - 真 Redis 上的 AOF 与切主演练仍按 §8.1 G3b、§8.2 D2。§9 提到的 `k8s_deploy.ps1` 重启提示原文是「在存盘关键写补上 WAITAOF 之前」，C++ 存盘 Lua 至今没加，提示仍然成立，不改。
 

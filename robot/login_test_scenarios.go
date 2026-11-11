@@ -1111,7 +1111,9 @@ func prepareBehaviorClient(host string, port int, account, password string, stat
 		// startListOwnedSkills 发,JoinQueue / WatchBattle 由 battle 冒烟(跨区版也经 battleSmokeLogin 复用本函数)的
 		// smokeCaller 发。它们的 id = 0 回包说明服务端没回显请求号,丢弃,等它的那次调用随后以超时收场;若交给 handler,
 		// 空 body 会被解成全零响应,match 的 handler 还会打出 "join queue ok" 这类与超时相矛盾的成功日志。
-		// ReleaseSkill / EnterScene 不在此列:testMultiRobotBehavior 的 AI 循环仍以 SendRequest 发它们,回包要交 handler。
+		// ReleaseSkill / EnterScene / SendChat 也已只经 Call 发出(testSkillCast 等经 smokeCaller,testMultiRobotBehavior 的
+		// AI 循环经 RobotAI.sendAction),回包不到这里。没列进下面:信封错误已由 MessageBodyHandler 丢弃,没回显请求号的
+		// 成功回包交 handler 只多一行日志或一条技能应答 / 聊天 tip 记录,本文件的用例都不读这两样。
 		switch msg.GetMessageId() {
 		case game.SceneSkillClientPlayerListSkillsMessageId,
 			game.MatchServiceJoinQueueMessageId,

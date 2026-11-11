@@ -484,7 +484,12 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 		result = r
 		return nil
 	})
-	return result, err
+	if err != nil {
+		// 没有提交(截止后 Commit 不发、提交失败、重跑后被拒):result 是某次尝试在内存里改出来的副本,不是库里的状态,
+		// 不能随错误回给客户端当成订单视图(client-request-ordering §6.1)。
+		return nil, err
+	}
+	return result, nil
 }
 func (e *Engine) Get(ctx context.Context, me, id uint64) (*tradepb.TradeCommerceRecord, error) {
 	r, err := e.Repo.Get(ctx, id)

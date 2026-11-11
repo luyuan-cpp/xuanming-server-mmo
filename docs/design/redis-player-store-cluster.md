@@ -91,7 +91,7 @@
 |---|---|---|---|
 | **玩家域 player** | 一切以 player_id 为身份的键，以及由玩家派生、必须与玩家同槽的按 slot 索引（§5.2 表） | 新建 Redis Cluster，Redis ≥ 8.4（取 8.10.x），每主 1 副本（可选 2 副本，§7），AOF everysec，PVC 持久化；每个 Pod 一个 ClusterIP Service，以 `cluster-announce-ip/port/bus-port` 宣告 Service IP（§5.6「连接」） | `slot = CRC16(<pid 十进制>) mod 16384`；slot → 主节点由集群管理 |
 | **登录域 login** | 连接栅栏、登录态、设备集、账号索引、令牌、令牌家族、口令配额（第 11 批从控制域拆出，§10.2） | K8s 缺省与玩家域共用一个 Redis Cluster，配置上能拆开（`LoginRedis`） | 连接键按 `{<gate>:<inc>}`，账号键按 `{AccountTag(account)}` |
-| **控制域 control** | 场景路由、账号锁、选主锁、重试队列、task:result、协议世代、战斗活动结果、队伍、各服务私有键、工具互斥键 | 现有共享实例（含 redis-ha），名字与地址不变；排队族已由 G4a 第 1a 批拆到按 zone 组的 queue 实例 | 不分片（上限与路线见 §10.2） |
+| **控制域 control** | 场景路由、账号锁、选主锁、重试队列、task:result、协议世代、战斗活动结果、队伍、各服务私有键、工具互斥键 | 现有共享实例（含 redis-ha），名字与地址不变；排队族已由 G4a 第 1a 批拆到按 zone 组的 queue 实例 | 不分片（上限与路线见 §10.2）。2026-11-10 负责人定控制域也上 Cluster，改为新建的控制集群，见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) |
 | **映射域 mapping** | `player:zone/placement/maprev`、合服围栏镜像、就绪标记 | 2026-10-23 起改为直读 TiDB，移出 Redis（§5.13） | 不适用 |
 
 **接缝规则（可机械检查）**：玩家域客户端只接受带 hash tag 的键，非玩家域的键一律不带 `{<数字>}`。C++ 路由层与 Go 玩家域客户端的守卫在发送前检查（§5.6、§5.7），本机单实例开发时同样生效。

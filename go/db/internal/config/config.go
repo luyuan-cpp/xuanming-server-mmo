@@ -5,6 +5,7 @@ import (
 
 	"shared/authoritysql"
 	"shared/dbplacement"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -32,6 +33,10 @@ type Config struct {
 	// DbPlacement:逻辑库按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Database.Hosts。
 	// 和上面的 Placement 不是一回事:Placement 管玩家落在哪个库,DbPlacement 管库落在哪个物理集群。
 	DbPlacement dbplacement.Config `json:"DbPlacement,optional"`
+
+	// MySQLPasswordEnv:MySQL 口令所在的环境变量名(K8s 上经 Secret mysql-auth 注入,docs/design/workload-secrets-via-k8s-secret.md)。
+	// 写了它,ServerConfig.Database.Passwd 必须为空,由 ResolveMySQLPassword 在加载配置后填;本机 etc/db.yaml 不写,照用 Passwd。
+	MySQLPasswordEnv string `json:",optional"`
 }
 
 // PlacementConfig 控制 go/db 能打开哪些落点库、每个库的连接池多大。
@@ -280,6 +285,13 @@ func (c *Config) Validate() error {
 		return err
 	}
 	return c.ValidateGlobalAuthority()
+}
+
+// ResolveMySQLPassword 按 MySQLPasswordEnv 把 MySQL 口令填进 ServerConfig.Database.Passwd,规则见 secretenv.Fill
+// (变量缺席或为空、或 Passwd 同时写了字面量都返回错误)。主进程与 cmd/migrate 在 conf.MustLoad 之后、连库之前调用;lookup 生产传 os.LookupEnv。
+func (c *Config) ResolveMySQLPassword(lookup func(string) (string, bool)) error {
+	return secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
+		secretenv.Target{Field: "ServerConfig.Database.Passwd", Value: &c.ServerConfig.Database.Passwd})
 }
 
 // ValidateGlobalAuthority 是普通服务启动的配置门禁,不执行 DDL。Mode 不放宽它。

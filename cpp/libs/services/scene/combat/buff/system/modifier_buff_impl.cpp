@@ -64,10 +64,11 @@ static bool OnHealthRegenerationBasedOnLostHealth(entt::entity parent, BuffEntry
 
     LOG_TRACE << "Healing applied, current health: " << currentHealth;
 
-    // 真回了血才算一次交手(治疗关系):施法者与受治疗者互相关注,远处给你加血的人也看得见。
-    // 自己给自己回血、满血空跳都不算;施法者整数是 entt 句柄,已销毁的由 RecordInteraction 忽略。
+    // 真回了血才算一次交手(治疗关系):施法者与受治疗者互相关注,远处给你加血的人也看得见;
+    // 受治疗者正在打的 NPC 也把施法者记进仇恨名单(治疗仇恨)。
+    // 自己给自己回血、满血空跳都不算;施法者整数是 entt 句柄,已销毁的由 RecordHeal 忽略。
     if (currentHealth > healthBefore) {
-        CombatEngagementSystem::RecordInteraction(static_cast<entt::entity>(buffComp.buffPb.caster()), parent);
+        CombatEngagementSystem::RecordHeal(static_cast<entt::entity>(buffComp.buffPb.caster()), parent);
     }
 
     return true;

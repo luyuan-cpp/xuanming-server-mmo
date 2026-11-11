@@ -33,7 +33,8 @@ Test-Case 'Chat渲染携SQL原件与同域目录、不渲染登录态段，账�
     }
     # 会话身份只认 gate 签名的原件:chat 不读 login 的 Redis,渲染分支里不能再有登录态段。
     Assert-NotMatch $chat 'GlobalLoginSessions|LoginRedis|\$\{loginRedisBlock\}|LOGIN_REDIS_PASSWORD' '登录态段已删,不能恢复'
-    Assert-NotMatch $chat '(?m)^ChatRedis:|^\s+(?:Pass|Password):' '旧缓存不能恢复成聊天权威，也不在兼容配置内写密码值'
+    Assert-NotMatch $chat '(?m)^(?:Redis|ChatRedis):|^\s+(?:Pass|Password):' 'chat 不连 Redis：渲染分支不写 Redis / ChatRedis 段，也不写密码值'
+    Assert-NotMatch (ChatSource 'go/chat/etc/chat.yaml') '(?m)^(?:Redis|ChatRedis):' 'chat 不连 Redis：本机配置也不写 Redis / ChatRedis 段'
     Assert-NotMatch $chat 'AccountRoleSchema' '身份校验走目录 RPC，聊天不再跨库读角色目录'
     $config=Join-Path $chatRepo 'go/chat/etc/chat.yaml'
     Assert-Equal 'CHAT_AUTHORITY_DSN' (Get-YamlScalar -Path $config -KeyPath 'DSNEnv').Value '镜像正规环境名'

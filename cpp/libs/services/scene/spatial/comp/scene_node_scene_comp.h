@@ -130,6 +130,8 @@ struct AoiClientCapacityComp
 // Per-scene: server pressure metric.
 // pressureFactor in [0, 1]: 0 = idle, 1 = maximum pressure.
 // GetServerCapacity() linearly interpolates between max and min capacity.
+// 按需状态:唯一写入口是 AoiSystem::ApplyServerPressure(压力来自 AoiLoadMonitor 的模拟步耗时,每秒一次);
+// 缺失 = 不受压。容量因此收缩时按权重裁表,见 docs/design/aoi-directed-interest.md「服务器压力」。
 // ---------------------------------------------------------------------------
 struct ScenePressureComp
 {

@@ -7,7 +7,7 @@
 //   * 关(默认):除战斗外行为与改前一致 —— gate 对 login / scene_manager / match
 //     每类各持 gRPC stub,按 message_id 用 typed sender 直连业务服务;
 //   * 开:gate 对 Go 业务服务**零 stub**,gRPC 类客户端消息与断线通知一律原包
-//     转给路由服(ClientRpcRouterNodeService),连接数 = 路由服副本数。
+//     转给路由服(ClientRpcRouterNodeService),只连本 zone 子集里的 k 台(handler/rpc/router_subset.h)。
 // 战斗与本开关无关:两种模式下 gate 都不中继战斗、不连 battle,BattleClientPlayer 号
 // 一律回 kServiceUnavailable,战斗只走客户端直连(turn-based §22 D66)。
 //

@@ -266,10 +266,10 @@ guard 键的前缀 `kafka:retry:guard:` 与队列前缀（`kafka:retry:queue:`�
 1. 先修 Kafka 或交接闸：查 broker 是否可达、本 zone 消费组的 describe、go/db 日志里的 `group handoff waiting`，同时看 DbConsumerGroupHandoffWaiting / DbConsumerGroupHandoffStuck。
 2. 交接闸卡住、broker 可达、MySQL 健康时，可以切到 shared，由 shared 实例排空 p*：
    ```
-   kubectl -n mmorpg-zone-<z> set env deploy/db DB_RETRY_ROUTING=shared
-   kubectl -n mmorpg-zone-<z> rollout status deploy/db
+   kubectl -n mmorpg-zone-<z> set env statefulset/db DB_RETRY_ROUTING=shared
+   kubectl -n mmorpg-zone-<z> rollout status statefulset/db
    ```
-   `set env` 会改 Pod 模板，天然触发滚动。恢复后去掉覆盖：`kubectl -n mmorpg-zone-<z> set env deploy/db DB_RETRY_ROUTING-`（同样触发滚动）。`kubectl set env` 加的变量不在 last-applied 里，`k8s_deploy.ps1` 的 apply 不会删它，而且环境变量优先于配置键，所以必须显式去掉。
+   `set env` 会改 Pod 模板，天然触发滚动。恢复后去掉覆盖：`kubectl -n mmorpg-zone-<z> set env statefulset/db DB_RETRY_ROUTING-`（同样触发滚动）。`kubectl set env` 加的变量不在 last-applied 里，`k8s_deploy.ps1` 的 apply 不会删它，而且环境变量优先于配置键，所以必须显式去掉。
 3. **broker 不可达时不要这么做**：新 Pod 在 `NewKeyOrderedKafkaConsumer` 的 `sarama.NewConsumerGroup` 处起不来，滚动会卡住。
 4. owner 模式下做 S2 反向交接时允许这段停滞，不要求先切 shared。
 
@@ -420,7 +420,7 @@ type durableEnqueue interface {
 - **观测**：`db_retry_stranded_receipts`（无 label 的 gauge，每个 Pod 一份）是表长。持续 > 0 说明 Redis 一直拒绝这次搬移，例如目的键类型不对。告警 DbRetryStrandedReceipts（§11）持续 10 分钟才报。
 - **处置**：
   1. 先按 go/db 日志 `stranded retry receipt still cannot be moved` 里的 dest / err 查原因并修好；
-  2. 仍不归零时重启该 Pod（`kubectl -n mmorpg-zone-<z> delete pod <pod>`，或 `rollout restart deploy/db` 整体滚动），由停机 release 把本实例 processing 整表还回收件箱（日志 `returned … unfinished retry receipts to the ready queue on shutdown`）；
+  2. 仍不归零时重启该 Pod（`kubectl -n mmorpg-zone-<z> delete pod <pod>`，或 `rollout restart statefulset/db` 整体滚动），由停机 release 把本实例 processing 整表还回收件箱（日志 `returned … unfinished retry receipts to the ready queue on shutdown`）；
   3. release 失败或进程被强杀时，等租约过期由别的实例回收。
   - 不要清空 Redis，不要手工删 processing：owner 重试的位点早已提交，收据是唯一副本。
 
@@ -504,7 +504,7 @@ type durableEnqueue interface {
   - owner 模式下拿不到分区的副本是热备：只分拣共享收件箱、回收孤儿收据，不执行重试；`db_owned_partitions = 0`，Setup 打 INFO 而不是 ERROR。
   - 热备不是故障，但多开的副本白占连接：MySQL / Redis 连接总账都按 manifest 的副本数记。
   - 热备连接的实情：本 zone 主库池在 `proto_sql/db.go` 的 `openDB` 里设了 `SetConnMaxLifetime(5 * time.Minute)`，没设 `ConnMaxIdleTime`。从未执行过 SQL 的热备只剩启动期打开的少量连接，被降为热备的实例最多 5 分钟内还带着 ≤ MaxIdleConn 条。(c) 不减少连接总账。
-- **绕过**：门禁只看经本脚本 apply 的 manifest。`kubectl scale deploy/db --replicas=N`、`kubectl edit` 与带外 apply 的 HPA 都会绕过它。要扩副本就改 manifest 再走 zone-up，不要 `kubectl scale`。manifest 注释要求不给 db 配 HPA（sarama eager 再平衡下每次成员变化全员暂停）。门禁不替这条约定把关，只保证同一份 manifest 里万一出现的 HPA 上界不越过分区数。
+- **绕过**：门禁只看经本脚本 apply 的 manifest。`kubectl scale statefulset/db --replicas=N`、`kubectl edit` 与带外 apply 的 HPA 都会绕过它。要扩副本就改 manifest 再走 zone-up，不要 `kubectl scale`。manifest 注释要求不给 db 配 HPA（sarama eager 再平衡下每次成员变化全员暂停）。门禁不替这条约定把关，只保证同一份 manifest 里万一出现的 HPA 上界不越过分区数。
 - **manifest 未改**：修订稿 §8 把 `deploy/k8s/manifests/go-svc/db.yaml` 移出了 S1 清单，热备语义与「kubectl scale 会绕过门禁」写在本节和 `Assert-DbReplicasWithinPartitionContract` 的函数注释里。
 
 ## 9. 与 ④B2（双消费在线换代）的交互约束
@@ -523,7 +523,7 @@ B2 本轮不做（负责人拍板）。日后要做时，以下四条是硬约�
 1. 跑通 `docs/handoff/placement-reverify-checklist-20261012.md` §2「第 12 步」第 3 条（本机双 db 实例），以及 §5「已知覆盖缺口」第 1、4、7 条（第 7 条由 `TestStop_RetryLoopJoinsWaitGroup` 覆盖）。结果写回 PROGRESS。
 2. 查清并记录线上各 zone 的 go/db 镜像与副本数：
    ```
-   kubectl -n mmorpg-zone-<z> get deploy db -o jsonpath='{.spec.replicas} {.spec.template.spec.containers[0].image}'
+   kubectl -n mmorpg-zone-<z> get statefulset db -o jsonpath='{.spec.replicas} {.spec.template.spec.containers[0].image}'
    ```
    低于 `be6b4ab1d` 的 zone 先按瓶颈文档 §4.5 处理。S1 不与「副本 1→2」同批，也不在 TiDB Phase 1 迁移窗口内。
 3. 确认 K8s `redis-0` 的 `redis_version ≥ 7.2`、`appendonly = yes`：按 `redis.yaml` 的口令注入方式在容器内执行 `INFO server` / `CONFIG GET appendonly`，口令不进命令行与日志。
@@ -544,16 +544,16 @@ B2 本轮不做（负责人拍板）。日后要做时，以下四条是硬约�
   - 回滚：回旧镜像，不会残留 p*。
 - **第 3 步：单 zone 金丝雀**，建议在该 zone 完成 S2 切组之后。前提是第 2 步已完成，且该 zone 每个 Pod 都暴露 `db_retry_routing_mode`；期间冻结其它 zone 的发布。
   ```
-  kubectl -n mmorpg-zone-<z> set env deploy/db DB_RETRY_ROUTING=owner
-  kubectl -n mmorpg-zone-<z> rollout status deploy/db
+  kubectl -n mmorpg-zone-<z> set env statefulset/db DB_RETRY_ROUTING=owner
+  kubectl -n mmorpg-zone-<z> rollout status statefulset/db
   ```
   - 只被动观察：每个 Pod 启动日志 `retry routing: mode=owner source=env DB_RETRY_ROUTING`；稳定后各 Pod 的 `db_owned_partitions` 之和 = PartitionCnt；`executed_nonowner = 0`；`forwarded` 之后共享收件箱 1–2 拍归零；`requeued_revoked` 只在再平衡时刻出现（同期 `db_claim_acquired_total` 增长）；`db_ordering_lock_busy_total{origin="retry"}` 接近 0；死信速率不高于基线；没有 `processing receipt not found`；`db_retry_stranded_receipts = 0`。
-  - 回滚：`kubectl -n mmorpg-zone-<z> set env deploy/db DB_RETRY_ROUTING-`（触发滚动），shared 实例自动排空 p*。
-- **第 4 步：全量**。`go/db/etc/db.yaml` 改 `RetryRouting: owner` → `k8s_deploy.ps1 zone-up` → `kubectl -n mmorpg-zone-<z> rollout restart deploy/db` 加 `rollout status`（只改 ConfigMap 不会滚动）→ 去掉金丝雀 env（`set env … DB_RETRY_ROUTING-`）。
+  - 回滚：`kubectl -n mmorpg-zone-<z> set env statefulset/db DB_RETRY_ROUTING-`（触发滚动），shared 实例自动排空 p*。
+- **第 4 步：全量**。`go/db/etc/db.yaml` 改 `RetryRouting: owner` → `k8s_deploy.ps1 zone-up` → `kubectl -n mmorpg-zone-<z> rollout restart statefulset/db` 加 `rollout status`（只改 ConfigMap 不会滚动）→ 去掉金丝雀 env（`set env … DB_RETRY_ROUTING-`）。
   - 验收：每个 Pod 启动日志 `retry routing: mode=owner source=config`；24 小时内 `executed_nonowner = 0`；死信速率不升；p* 无长期积压；lag = 0；DbDurableEnqueueNotConfirmed、DbZoneNoPartitionClaims 不响。
   - 回滚到 shared：db.yaml 改回 `shared` → zone-up → rollout restart 加 status。
 - **告警**：`kubectl apply -n observability -f deploy/k8s/db-task-retry-alerts.yaml`（PrometheusRule）。
-- **redis-ha 接入时**：不改 db.yaml（`WaitAOFNumReplicas` 保持 0，给本机 compose 单实例；写 1 本机 go/db 的启动探针等不到副本而拒启）。K8s 上 db ConfigMap 的 `WaitAOFNumReplicas` 由 `k8s_deploy.ps1` 按共享 Redis 形态渲染（与 data-service 同一个 `Get-RouteStoreWaitAOFNumReplicas`：单实例 0、高可用 1；2026-10-19 部署侧落码，未运行，待 Codex 验证）。单实例切到高可用后，对每个 zone 重跑 zone-up（副本份数变 1），再 `kubectl -n mmorpg-zone-<z> rollout restart deploy/db` 加 `rollout status`（只改 ConfigMap 不会滚动），并重新评估 fail-closed 的可用性代价：
+- **redis-ha 接入时**：不改 db.yaml（`WaitAOFNumReplicas` 保持 0，给本机 compose 单实例；写 1 本机 go/db 的启动探针等不到副本而拒启）。K8s 上 db ConfigMap 的 `WaitAOFNumReplicas` 由 `k8s_deploy.ps1` 按共享 Redis 形态渲染（与 data-service 同一个 `Get-RouteStoreWaitAOFNumReplicas`：单实例 0、高可用 1；2026-10-19 部署侧落码，未运行，待 Codex 验证）。单实例切到高可用后，对每个 zone 重跑 zone-up（副本份数变 1），再 `kubectl -n mmorpg-zone-<z> rollout restart statefulset/db` 加 `rollout status`（只改 ConfigMap 不会滚动），并重新评估 fail-closed 的可用性代价：
   - 副本维护期间所有失败路径上的分区都会停滞；
   - 三个 Redis Pod 同时坏两个时写入被拒（`min-replicas-to-write 1`）；切主后几秒内新主还没有从时，WAITAOF 确认失败（消息重投），此期间刚启动的 go/db 会被启动探针拒启。
 
@@ -561,13 +561,13 @@ B2 本轮不做（负责人拍板）。日后要做时，以下四条是硬约�
 
 旧版本看不到 p*，直接回滚会让 p* 里的存盘滞留不落库。所以 `kubectl rollout undo` 或部署上一版本之前，必须按顺序做完：
 
-1. **切 shared**：db.yaml 改 `RetryRouting: shared` → `k8s_deploy.ps1 zone-up` → `kubectl -n mmorpg-zone-<z> rollout restart deploy/db` → `kubectl -n mmorpg-zone-<z> rollout status deploy/db`。有金丝雀 env 时一并 `set env … DB_RETRY_ROUTING-`，同样要等 rollout status。
+1. **切 shared**：db.yaml 改 `RetryRouting: shared` → `k8s_deploy.ps1 zone-up` → `kubectl -n mmorpg-zone-<z> rollout restart statefulset/db` → `kubectl -n mmorpg-zone-<z> rollout status statefulset/db`。有金丝雀 env 时一并 `set env … DB_RETRY_ROUTING-`，同样要等 rollout status。
 2. **三项人工核对**（工具的退出码 5 只看得见 R7 起登记模式的版本，更早的 S1 镜像不登记模式）：
    1. 各 db Pod 的 `db_retry_routing_mode{mode="owner"}` 都是 0（S1 之前的 Pod 没有这条序列，不算 owner）；
-   2. `kubectl -n mmorpg-zone-<z> set env deploy/db --list` 里没有 `DB_RETRY_ROUTING=owner`。`kubectl set env` 加的变量不在 last-applied 里，k8s_deploy 的 apply 不会删它，而且环境变量优先于配置键；
+   2. `kubectl -n mmorpg-zone-<z> set env statefulset/db --list` 里没有 `DB_RETRY_ROUTING=owner`。`kubectl set env` 加的变量不在 last-applied 里，k8s_deploy 的 apply 不会删它，而且环境变量优先于配置键；
    3. `rollout status` 已完成（只改 ConfigMap 不会滚动 db）。
 3. **盘点**：`retry_requeue -check` 以退出码 0 退出（命令见 §10.4），即 p* 全 0、没有 owner 实例登记、目标不是空的。**非 0 一律不许回滚**。
-4. **回滚镜像时认准 revision**：第 1 步的 `rollout restart` / `set env` 本身会生成新的 revision，之后不带参数的 `kubectl rollout undo deploy/db` 回到的是切换前那个 S1 revision，不是 S1 之前的镜像。要先用 `kubectl -n mmorpg-zone-<z> rollout history deploy/db` 找到 S1 之前镜像的 revision，再执行 `kubectl -n mmorpg-zone-<z> rollout undo deploy/db --to-revision=<N>`；或者走「部署上一版本」。
+4. **回滚镜像时认准 revision**：第 1 步的 `rollout restart` / `set env` 本身会生成新的 revision，之后不带参数的 `kubectl rollout undo statefulset/db` 回到的是切换前那个 S1 revision，不是 S1 之前的镜像。要先用 `kubectl -n mmorpg-zone-<z> rollout history statefulset/db` 找到 S1 之前镜像的 revision，再执行 `kubectl -n mmorpg-zone-<z> rollout undo statefulset/db --to-revision=<N>`；或者走「部署上一版本」。
 5. **回滚之后**：建议再跑一次 `-check` 确认 p* 仍为 0。回到的镜像早于按实例 processing 列表、不往登记表里写时，共享收件箱、死信、旧共享 processing（`kafka:retry:processing:{topic}`，这类镜像的在途收据就落在这里）也都为 0 时以 4 退出，参数核对无误即可；旧共享 processing 非 0、p* 为 0 时以 0 退出（`go/db/internal/kafka/retry_routing.go` 的 `RetryQueueDepthReport.LooksUnused`）。
 
 - **ConfigMap 兼容性已确认**：go-zero v1.10.0 忽略未知键，旧二进制读带新键的 ConfigMap 能正常启动，回滚规程不需要先改 ConfigMap。`go/db/internal/config/config_test.go` 的 `TestConfigLoaderIgnoresUnknownKeys` 钉住这一点：以后升级 go-zero、改成严格模式时，它会先红。

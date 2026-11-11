@@ -8,6 +8,7 @@ import (
 
 	"shared/playerredis"
 	"shared/redisauth"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -33,6 +34,13 @@ func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) 
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
 		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass},
 		redisauth.Target{Field: "CoreRedis.Pass", Password: &c.CoreRedis.Pass})
+}
+
+// ResolveGateTokenSecret 按 GateTokenSecretEnv 填 GateTokenSecret(跨 zone 重定向签发 gate 令牌用),规则见 secretenv.Fill。
+// 在 conf.MustLoad 之后、建依赖之前调用(scene_manager_service.go)。
+func (c *Config) ResolveGateTokenSecret(lookup func(string) (string, bool)) error {
+	return secretenv.Fill("GateTokenSecretEnv", c.GateTokenSecretEnv, lookup,
+		secretenv.Target{Field: "GateTokenSecret", Value: &c.GateTokenSecret})
 }
 
 type Config struct {
@@ -238,6 +246,9 @@ type Config struct {
 	// GateTokenSecret: HMAC-SHA256 secret shared with Gate nodes for signing
 	// connection tokens during cross-zone redirect.
 	GateTokenSecret string `json:",optional"`
+	// GateTokenSecretEnv 是 GateTokenSecret 所在的环境变量名(K8s 上经 Secret gate-token 注入,docs/design/workload-secrets-via-k8s-secret.md);
+	// ConfigMap 里 GateTokenSecret 写空串。不写 = 照用字面量(本机)。由 ResolveGateTokenSecret 在加载配置后填好,变量缺失或为空即拒启。
+	GateTokenSecretEnv string `json:",optional"`
 
 	// RequireClientEndpoint:跨 zone 重定向(RedirectToGate)下发 gate 地址时,是否要求 gate 自报了
 	// 客户端可达地址 NodeInfo.client_endpoint(k8s-client-entry D78/D79,与 login 同名开关同口径)。
@@ -327,7 +338,8 @@ type Config struct {
 //     走 GSA 选 GameServer,但不使用 Counters and Lists —— 一个进程一次
 //     只接一个房间。可用于在 beta 能力打开之前先验证分配链路。
 //   - Enabled=true 且 HighDensityEnabled=true
-//     完整高密度:rooms Counter 参与筛选并在 GSA 内原子 +1。
+//     完整高密度:rooms List 参与筛选,GSA 在同一步加这次占用的条目
+//     (docs/design/agones-scene-node-high-density.md §13)。
 //
 // Counters and Lists 在 Agones 里是 **beta** 能力,需要集群侧显式打开
 // FeatureGate。所以 HighDensityEnabled 默认 false,由运维在确认 Agones
@@ -722,21 +734,22 @@ func clampSceneMemberBudget(value, def int) int {
 // 认领之后的第一笔存盘被写权行拒掉、丢上次存盘以来的进度。所以铸造之后先等 WAITAOF 确认,再推路由;推不出去或没确认
 // 而回滚时,回滚写下的值也要确认落盘才许源端采纳(两段回执,docs/design/zone-redis-regression-guard-20261022.md §4.3.4)。
 //
-// 口径与 go/db 的 ServerConfig.RedisClient.WaitAOF* 一致(go/db/internal/config/config.go):
+// 全仓只剩这一处用 WAITAOF(go/db、data_service 的存档与路由发布已随玩家数据迁 TiDB 删掉),口径就在这里:
 //   - 两个份数用 *int:默认值 1 不是零值,而「显式写 0」又有合法语义 —— 两项都写 0 = 不发 WAITAOF(启动打一行 ERROR),
 //     只给确实没开 AOF 的环境用。nil(没写)取默认;访问一律经 NumLocal / NumReplicas;
 //   - WaitAOFTimeoutMs 0 / 不写 = 1500;实际等待取 min(本值, 请求剩余预算 − 余量),见 logic/owner_epoch.go;
-//   - 取值越界由 Validate 拒绝,svc.NewServiceContext 据此拒启;开启时启动先探一次 WAITAOF,失败同样拒启。
+//   - 取值越界由 Validate 拒绝,svc.NewServiceContext 据此拒启;开启时启动先探一次(每个主节点先写探针键再 WAITAOF),
+//     失败同样拒启。
 //
-// K8s 上 WaitAOFNumReplicas 由 tools/scripts/k8s_deploy.ps1 按共享 Redis 拓扑渲染(单实例 0、高可用 1),
-// 与 go/db、data_service 同一个函数;本地 yaml 那一项保持 0 给 compose 单实例用。
+// K8s 上 WaitAOFNumReplicas 由 tools/scripts/k8s_deploy.ps1 渲染:Get-OwnerEpochMintWaitAOFNumReplicas 按共享 Redis 的形态取
+// (单实例 0、高可用 1),建了玩家域集群时固定取 1(铸造的键在集群上,每主至少 1 副本);本地 yaml 那一项保持 0 给 compose 单实例用。
 type OwnerEpochMintConfig struct {
 	WaitAOFNumLocal    *int `json:",optional"` // 0 | 1;nil = 1
 	WaitAOFNumReplicas *int `json:",optional"` // [0, 16];nil = 0
 	WaitAOFTimeoutMs   int  `json:",optional"` // [1, 2000];0 / 不写 = 1500,负数拒启
 }
 
-// OwnerEpochMint 的默认值与上界,与 go/db 的 RedisClient.WaitAOF* 同值。
+// OwnerEpochMint 的默认值与上界。
 // 超时上界 2000:专用客户端读超时 = 本值 + 1s;everysec 下本地确认最长约 1s,2000 已留出一倍余量。
 const (
 	DefaultOwnerEpochMintWaitAOFNumLocal    = 1

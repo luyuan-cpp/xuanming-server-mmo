@@ -304,10 +304,10 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 	case err != nil:
 		return nil, fmt.Errorf("create guild: %w", err)
 	}
-	// 新公会加入排行榜(初始分数 0)。失败可容忍:score 权威在 MySQL,
-	// ZSET 缺口由启动时 RebuildRanks 或下次推分自愈。
-	if err := l.repo.UpdateGuildScore(ctx, guildID, zoneID, 0); err != nil {
-		logx.Errorf("init guild rank score: %v", err)
+	// 新公会按建帮事务写入的初始分数与版本上榜:只写一次 Redis,不再开第二个事务。失败可容忍:score 权威在 MySQL,
+	// 榜上缺的这一项由启动时 RebuildRanks 或下次推分补上。
+	if err := l.repo.AddNewGuildToRank(ctx, guildID, zoneID); err != nil {
+		logx.Errorf("add new guild %d to rank: %v", guildID, err)
 	}
 
 	// 建帮不推送:此刻帮里只有建帮者自己,而他手上这个响应就是最新状态。

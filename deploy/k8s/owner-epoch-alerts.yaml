@@ -79,5 +79,6 @@ spec:
               两段回执(docs/design/zone-redis-regression-guard-20261022.md §4.3.4):凭标记的回滚(推路由失败或铸造没确认落盘)
               之后、或进场前对待确认回执的确认,没能确认落盘。site=rollback 时源 scene 不采纳回滚值,按"标记已发出"踢线,玩家重登
               (C++ 汇总行 rollback_unconfirmed);site=enter 时这次进场回可重试错误,不下发 epoch。与 SceneManagerOwnerEpochMintNotDurable
-              同时出现属同一原因:Redis 刷盘或副本落后,核对 Redis 的 AOF 与从库状态;rollback/not_sent 成批出现多半是 Kafka 写满超时,
-              留给确认的预算不够,对照 scene_manager 的 Kafka 投递失败。
+              同时出现属同一原因:Redis 刷盘或副本落后,核对 Redis 的 AOF 与从库状态。site=rollback 的 not_sent 与 pending 在 Kafka
+              写满超时时也会响:推路由用掉了大半请求预算,留给确认的时间不够(不足 1ms 记 not_sent,等不到份数记 pending),
+              这时对照 scene_manager 的 Kafka 投递失败,Redis 本身未必有问题。

@@ -9,6 +9,7 @@
 #include "spatial/comp/scene_node_scene_comp.h"
 #include "spatial/constants/aoi_priority.h"
 #include "spatial/constants/view.h"
+#include "spatial/system/aoi_load.h"
 #include "spatial/system/grid.h"
 #include "spatial/system/interest.h"
 #include "spatial/system/view.h"
@@ -19,8 +20,11 @@
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "core/utils/stat/stat.h"
 #include "proto/scene/player_scene.pb.h"
+#include "proto/scene/scene_info.pb.h"  // SceneInfoComp:每个场景实体都有,用来遍历本线程的场景
 #include "network/client_message_sender.h"
 #include <modules/scene/comp/scene_comp.h>
+
+#include <unordered_set>
 
 // Determine the interest priority tag that |observer| should assign to |target|.
 // The tag is a semantic category; the active AoiPriorityPolicy turns it into a
@@ -295,6 +299,36 @@ void AoiSystem::Unfollow(entt::entity watcher, entt::entity target, const AoiFol
     AoiVisibilityChanges changes;
     InterestSystem::Unfollow(watcher, target, source, &changes);
     SendVisibilityChanges(changes);
+}
+
+void AoiSystem::ApplyServerPressure(double pressureFactor) {
+    // 1) 写进本线程的每个场景,记下值真有变化(含刚建、还没有压力组件)的场景。
+    const auto pressure = static_cast<float>(pressureFactor);
+    std::unordered_set<SceneEntity> changedScenes;
+    for (const auto scene : tlsEcs.sceneRegistry.view<SceneInfoComp>()) {
+        const auto* current = tlsEcs.sceneRegistry.try_get<ScenePressureComp>(scene);
+        if (current != nullptr && current->pressureFactor == pressure) {
+            continue;
+        }
+        // 此处延迟创建:ScenePressureComp 的唯一创建点(也是唯一写入口)。
+        tlsEcs.sceneRegistry.get_or_emplace<ScenePressureComp>(scene).pressureFactor = pressure;
+        changedScenes.insert(scene);
+    }
+    if (changedScenes.empty()) {
+        return;
+    }
+
+    // 2) 这些场景里的观察者按新容量校正名额,变化合成一批下发(每个观察者一条列表消息)。
+    //    校正只改各自兴趣表的条目与目标的反向索引,不增删 AoiListComp,可以边遍历边做。
+    AoiVisibilityChanges changes;
+    std::size_t trimmed = 0;
+    for (auto&& [watcher, list, sceneComp] : tlsEcs.actorRegistry.view<AoiListComp, SceneEntityComp>().each()) {
+        if (changedScenes.contains(sceneComp.sceneEntity)) {
+            trimmed += InterestSystem::ApplyCapacity(watcher, &changes);
+        }
+    }
+    SendVisibilityChanges(changes);
+    aoi_load_stats::RecordTrimmedEntries(trimmed);
 }
 
 void AoiSystem::RefreshTargetVisibility(entt::entity target) {

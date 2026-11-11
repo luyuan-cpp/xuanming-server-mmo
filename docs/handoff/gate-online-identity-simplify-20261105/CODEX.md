@@ -274,7 +274,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
      - 重点：
        - `TestUpdateGuildScore_WritesTheFinalZoneRank`、`TestRebuildRanks_FollowsTheCurrentMapping`：都加了 `assertNoGlobalRank`。
-       - 新增的 `TestUnzonedGuildIsPersistedButNeverRanked`：zone 0 的帮会分数落库、不进任何榜；重建后只剩正常帮会所在区的榜键。
+       - 新增的 `TestUnzonedGuildIsPersistedButNeverRanked`：zone 0 的帮会分数落库、不进任何榜；重建后只剩正常帮会所在区的榜键。（2026-11-11 补注：帮会积分写入改成带版本的条件写入之后，重建后还多一个同区的版本 HASH `guild_rank:version:30`，这条断言已同步改成这两个键；改动与验收见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）
        - 原有的 `TestRemoveGuildFromRank_*`、`TestDisbandPath_*`。
      - MySQL 不可达时这些用例会 Skip。Skip 不算通过，回执写「未跑」。
 
@@ -303,7 +303,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 ## 回执与范围
 
 - 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批还是第 1～4 批中的哪一批。
-- 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。
+- 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。（2026-11-11 补注：`proto/guild/guild_db.proto` 加了 `GuildRecord.score_version = 12`，所以 `cpp/generated/proto/guild/guild_db.pb.{h,cc}` 与 `go/proto/guild/guild_db.pb.go` 的差异也是预期的，见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）
 - 第 4 批：C++ 手写代码不改，但 guild 的 C++ 生成物会变，要重编 C++；客户端要按新协议重新生成并重编（第 8 节）。Java 版本轮不写代码，只在 Java 仓 `PARITY.md` 记 TODO（设计 §8）。
 
 ## 文件（本批）

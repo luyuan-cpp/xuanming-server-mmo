@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"guild/internal/config"
+	"guild/internal/data"
 	assetpb "proto/common/asset"
 	"shared/assetop"
 	"shared/workshard"
@@ -519,6 +520,43 @@ func TestAttachWorkShards(t *testing.T) {
 	var nilPipeline *AssetPipeline
 	if err := nilPipeline.AttachWorkShards(3, "node-a"); err != nil {
 		t.Fatalf("nil 管线没有要分工的循环,应回 nil,得到 %v", err)
+	}
+}
+
+// TestCleanupOwner:终态清理的按片分工(缺口清单第 25 条第二批)复用重投那份成员表。没有管线(AssetOp.Enabled=false)、
+// 没绑分工时回 nil,清理不分工、清全部行;绑上之后回成员表的判定:成员表还没读到时做全部片(保活优先)。
+func TestCleanupOwner(t *testing.T) {
+	t.Setenv(AssetOpSecretEnv, strings.Repeat("s", assetop.MinSecretLen))
+	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	defer func() { _ = rdb.Close() }()
+
+	var nilPipeline *AssetPipeline
+	if nilPipeline.CleanupOwner() != nil {
+		t.Fatal("没有资产管线时清理不分工,CleanupOwner 应回 nil")
+	}
+	wakeOff := false
+	c := y06Defaults()
+	c.Wake.Enabled = &wakeOff
+	p, err := NewAssetPipeline(c, time.Second, rdb, rdb, stubOwnedDueStore{})
+	if err != nil {
+		t.Fatalf("NewAssetPipeline: %v", err)
+	}
+	t.Cleanup(p.Stop)
+	if p.CleanupOwner() != nil {
+		t.Fatal("没绑分工(AttachWorkShards)时 CleanupOwner 应回 nil")
+	}
+	if err := p.AttachWorkShards(3, "node-a"); err != nil {
+		t.Fatalf("AttachWorkShards: %v", err)
+	}
+	owns := p.CleanupOwner()
+	if owns == nil {
+		t.Fatal("绑上分工之后清理应拿到成员表的判定")
+	}
+	if !owns(workshard.ShardKey(data.CleanupWorkKind, 5)) {
+		t.Fatal("成员表还没读到时做全部片")
+	}
+	if data.CleanupWorkKind == assetOpWorkKind {
+		t.Fatal("清理与重投的类别键必须不同名,各自独立分工")
 	}
 }
 

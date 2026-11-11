@@ -534,7 +534,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
       用本地栈 + scratchpad 里的 login 配置副本,不经过 `k8s_deploy.ps1`,不受这道门禁影响。
     - 契约测试用的环境变量 `MMORPG_TEST_LOGIN_QUEUE_GATE_CLEARED=1` 只在 `-DryRun` 下视为门槛已清;不带 `-DryRun` 时只要设置了它,脚本就在任何写操作之前拒绝。
       运维机器上不要设它。
-  - **环境变量 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`**:login 排队令牌的 HMAC 密钥,写进 login ConfigMap 的 `Secrets.QueueToken.Value`(与兄弟项 `InternalAuth` 同为明文)。
+  - **环境变量 `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`**:login 排队令牌的 HMAC 密钥。只放 Secret `login-queue-token`,经 secretKeyRef 注入同名环境变量;
+    login ConfigMap 的 `Secrets.QueueToken` 只写 `Env: MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(见下文「工作负载密钥只放 Secret」)。
     staging / prod、排队开、且本次部署 login(`zone-up` / `all-up`,给了 `-GoSvcRegistry`、不带 `-SkipGoSvc`)时**必填**:非空、不是占位串、至少 32 位,
     并且与 `MMORPG_GATE_TOKEN_SECRET`、`MMORPG_INTERNAL_AUTH_SECRET` 都不同(原样比较,不 trim);不满足即在任何写操作之前拒绝,报错只点变量名、不回显值。
     `-LoginQueue off`、`infra-up`、`-SkipGoSvc` 都不要求它。dev 档可以不设:不写 `Secrets.QueueToken`,login 宽松档回落 GateToken 密钥并打 WARN;
@@ -598,6 +599,27 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     `rate-limit Redis client -> …`(限流开)或 `RateLimiter disabled …`(关);Redis 出错时 WARN `rate-limit fail-open:限流存储出错…`,
     之后熔断 5 秒、不再碰 Redis,所以每个副本最多每 5 秒一条,放过了多少请求看上面的 fail_open 计数;恢复时 INFO `限流存储恢复`。login 的选主日志见 ②。
   - 已知风险(保护不了 EnterGame、IP 桶误伤 NAT、排队轮询压在共享 Redis 等)见设计稿 §十一。
+
+## 工作负载密钥只放 Secret(2026-11-10,`docs/design/workload-secrets-via-k8s-secret.md`;未编译、未在集群上验证)
+
+除共享 Redis 口令(上文 `redis-auth`)外,下列密钥同样不进任何 ConfigMap,也不出现在 `-DryRun` 输出里。部署脚本按 `$script:WorkloadSecretCatalog`
+在每个有消费者的 namespace 建一个单键 Secret(先于引用它的工作负载与迁移 Job),工作负载经 `secretKeyRef`(不写 optional)拿同名环境变量,
+Pod 模板带只哈希这把密钥的指纹 `mmorpg.io/<Secret 名>-hash`,换密钥即滚动。各档位一条路径:dev 档的回落值也经 Secret 注入。
+
+| Secret(键) | 部署输入 = 容器环境变量 | 读它的工作负载 | ConfigMap 里写什么 |
+|---|---|---|---|
+| `gate-token`(secret) | `MMORPG_GATE_TOKEN_SECRET` | C++ gate、C++ battle、login、scene-manager、gateway | node-config / battle-node-config 的 `GateTokenSecret: ""`;login `Secrets.GateToken.Env`;scene-manager `GateTokenSecretEnv`;gateway `gate.token-secret: "${MMORPG_GATE_TOKEN_SECRET}"` |
+| `spectate-token`(secret) | `MMORPG_SPECTATE_TOKEN_SECRET` | C++ gate、match | node-config `SpectateTokenSecret: ""`;match `Spectate.TicketSecretEnv` |
+| `battle-token`(secret) | `MMORPG_BATTLE_TOKEN_SECRET` | C++ battle | battle-node-config `BattleTokenSecret: ""` |
+| `match-ops-caller`(secret) | `MMORPG_MATCH_OPS_CALLER_SECRET`(不给 = 运营入口关闭) | match | 给了才写 `Spectate.OpsCallerSecretEnv` |
+| `login-queue-token`(secret) | `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(排队开才有) | login | `Secrets.QueueToken.Env` |
+| `mysql-auth`(password) | `MMORPG_MYSQL_PASSWORD` | db、data-service、trade、friend、player-inbox 及其 `-migrate` Job、data-service 的 route-tool Job | 口令字段写空串,顶层 `MySQLPasswordEnv` |
+| `gateway-db-auth`(password) | `MMORPG_GATEWAY_DB_PASSWORD` | gateway | `spring.datasource.password: "${MMORPG_GATEWAY_DB_PASSWORD}"` |
+
+- login 的 `Secrets.InternalAuth` 只写 `Env: MMORPG_INTERNAL_AUTH_SECRET`:容器早已经 Secret `gate-identity-auth` 注入这个变量。
+- C++ 由 `config.cpp` 用这几个变量覆盖 yaml;Go 服务在配置里指名变量(`go/shared/secretenv`),指名了却没有值就拒启;gateway 由 Spring 解析 `${...}`。
+- 迁移 Job 与 route-tool 的清单(`manifests/go-svc/*-migrate.yaml`、`data-service-route-tool.yaml`)静态引用 `mysql-auth`;Job 每次重建,不需要指纹。
+- 上线顺序:先发带新读法的镜像,再用新部署脚本;反过来旧镜像会读到空密钥。项目未上线,首次部署整批起步即可。
 
 ## Important Notes
 
@@ -751,10 +773,12 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 
 - **网关连哪里**(`Resolve-GatewaySqlMode`,写路径入口 `Assert-LogicalDbPreflight` 与 ConfigMap 生成共用这一处):
   - JDBC 主机就是 `-GlobalAuthorityTiDBHost`。和 Go 服务一样所有档位都要显式给,不再回落 infra MySQL:回落了,网关写 infra MySQL 上的 `mmorpg`,login 写入口上的 `mmorpg`,同一个库分成两份。
-  - tidb 档写 `mmorpg.sql.require-tidb: true`、`mmorpg.run-mode: prod`(与 jar 内缺省一致)。
-  - mysql 档只在 dev 可用,写 `false` 与 `dev`。网关只在 run-mode 为 dev、test 时允许关掉 TiDB 强会话核验(`AuthorityDatabaseConfiguration`),所以 staging、prod 的 mysql 档部署网关在写之前拒绝,报错里给出 `-SkipJavaSvc` 和 `-DatabaseBackend tidb` 两条出路。MySQL 省钱档要部署网关,得先给 `java/authority_jdbc` 加 mysql 档(同 Go 的 `authoritysql`,逐连接核对不是只读实例),还没做。
+  - 档位跟 `-DatabaseBackend`,写成 `mmorpg.sql.backend`,两档都是 `mmorpg.run-mode: prod`(与 jar 内缺省一致),不靠 dev 模式放宽核验。规则在 `java/authority_jdbc` 的 `AuthorityDataSource.Backend.resolve`,网关与 auth 共用:
+    - tidb 档:每条物理连接核对端是真实 TiDB 并固定强会话,`require-tidb: true`;
+    - mysql 档(2026-11-11 起,MySQL 主从省钱档,任何档位都可用):每条物理连接核对端是可写的 MySQL 主库(版本串与 `version_comment` 里没有 TiDB,`read_only`、`super_read_only` 都是 0),会话固定 RC 加严格模式,不发 `tidb_*` 语句,与 Go 的 `authoritysql` 同一判据。`require-tidb` 只对 tidb 档有意义,这里写 `false`。
+    - 本机 compose 与调试栈仍用 `require-tidb: false` 加 `run-mode: dev` 的放宽口径,不受影响。
 - **写者**:login、gateway 的 registrar 档位跟 `-DatabaseBackend`,init 注入 `MMORPG_DB_PLACEMENT`,和其余写者一样按库映射拨号。
-- **建表 Job `gateway-schema`**(`manifests/java-svc/gateway-schema.yaml`,`New-GatewaySchemaJobManifests` / `Invoke-GatewaySchemaJob`),只在 tidb 档:
+- **建表 Job `gateway-schema`**(`manifests/java-svc/gateway-schema.yaml`,`New-GatewaySchemaJobManifests` / `Invoke-GatewaySchemaJob`),tidb 档和外部 MySQL 主库都跑,`MMORPG_SQL_BACKEND` 跟着档位;只有入口是集群内单实例 MySQL 时不跑:
   - 网关没有 Go 的 `-migrate`。Job 跑 `writer_authority -command prepare-schema -schema mmorpg -ddl-file /app/gateway-schema/schema.sql`:闸门表走与其余逻辑库同一份 `authoritysql.EnsureCatalogSchema`;业务表和种子行执行网关的 `schema.sql`,脚本把它原样渲染进 ConfigMap `gateway-schema-sql`。`-ddl-file` 只认 `CREATE TABLE IF NOT EXISTS` 与 `INSERT IGNORE INTO`,表名不许带库名,有一句不合格整份拒绝,重跑无害。
   - 镜像是 boot 目录 gateway 条目的 `registrarImage`(按摘要固定,`writer_authority` 就在里面);DSN 与主体出自同一个 `schemaPermissionSecret`(键 `dsn`、`principal`),网关常驻账号不给 DDL 权限。
   - 排在网关 Deployment 之前;staging、prod 与 `-SqlSchemaOnly` 恒等它完成,失败或超时中断发布;dev 只在 `-WaitReady` 下等。`zone-up` 开头(名册检查旁边)先渲染一次,目录条目不对在任何写操作之前拒绝。
@@ -1424,8 +1448,7 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   - player-inbox 2026-10-16 起计入:核心 Redis 一个 go-redis 池(`go/player_inbox/internal/svc/servicecontext.go` 的 `openCoreRedis`,
     围栏上界、在线提醒读 location 与后台循环选主锁共用),池上限 `CoreRedis.PoolSize`,没有 Pub/Sub。
   - 不计入(接上时在常数表加一行):client-rpc-router(不连 Redis)、
-    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;K8s 的 ConfigMap 不写 `ChatRedis`,`Redis` 段只为 `RpcServerConf` 兼容,
-    按它建的 go-zero 句柄 `NonBlock` 不预连、运行时不发命令)、
+    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;go/chat 不建任何 Redis 句柄,ConfigMap 也不写 `Redis` / `ChatRedis` 段)、
     login 的 PasswordAuth 失败配额池(K8s 不写该段,启用后每 login 副本 +4)、match 的 MatchRedis(在 redis-match-cluster 上)。
   - 契约测试钉住:显式池那几行等于服务 yaml 的值、ConfigMap 镜像同一个值、yaml 写 0 / 负数 / 非整数时部署侧 throw;
     有缺省池的行「manifest 的 CPU limit ≤ G 核」—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列;

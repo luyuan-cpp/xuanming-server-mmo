@@ -89,7 +89,8 @@ func markPlayerSessionDisconnecting(ctx context.Context, svcCtx *svc.ServiceCont
 	// gate 侧发出通知前就删了本地会话、也不重试 —— login 是最后一道有状态的
 	// 关口,不能一次失败就吞掉。带退避重试若干次,吃掉 player_locator
 	// 发版/重启量级的不可用窗口;仍失败则 CRITICAL 级日志留人工线索
-	// (docs/ops/release-checklist.md 的 #B-1 SCAN 巡检就是对应的兜底)。
+	// (兜底是 docs/ops/release-checklist.md 附录 F.B-1 的「定向补救」:按日志里的玩家逐个补投断线。
+	// gate 已死的那一类由 player_locator 的死 gate 清扫自动补投,不用人工;不做全键 SCAN)。
 	const maxAttempts = 4
 	backoff := 200 * time.Millisecond
 	var lastErr error
@@ -112,6 +113,6 @@ func markPlayerSessionDisconnecting(ctx context.Context, svcCtx *svc.ServiceCont
 	}
 
 	logx.Severef("CRITICAL: session stuck ONLINE — SetSessionDisconnecting exhausted retries "+
-		"player=%d session=%d gate_instance=%q err=%v (manual fix: see release-checklist #B-1 sweep)",
+		"player=%d session=%d gate_instance=%q err=%v (manual fix: see release-checklist F.B-1 targeted remediation)",
 		playerID, sessionID, gateInstanceID, lastErr)
 }

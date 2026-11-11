@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"match/internal/authority"
 	"match/internal/discovery"
 	"match/internal/svc"
@@ -116,8 +117,8 @@ func TestOriginalAddressRefusesOnlyOnTcpReset(t *testing.T) {
 	require.False(t, connectionRefused(errors.New("connection refused")), "只认错误码,不认文案")
 }
 
-// startDroppingListener 起一个只建 TCP 连接、随即关掉的监听:gRPC 握手失败,缓存连接进入 TRANSIENT_FAILURE,之后的 RPC
-// 当场回 Unavailable(黑洞端点第二次取证时同样如此),原地址的 TCP 端口却没有拒连。
+// startDroppingListener 起一个只建 TCP 连接、随即关掉的监听:每次取证新建的连接 gRPC 握手都失败,RPC 在期限之内回 Unavailable
+// (修复前黑洞端点在缓存连接上从第二次取证起也是这样),原地址的 TCP 端口却没有拒连。
 func startDroppingListener(t *testing.T) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -139,8 +140,8 @@ func startDroppingListener(t *testing.T) string {
 	return addr
 }
 
-// 评审 must_fix 的回归:原实例不在册、缓存的 gRPC 连接已经失败(每次取证都在期限之内就回错),修复前按「当场连不上 + 不在册」
-// 判原进程已不在、提前作废;现在要原地址的 TCP 端口当场拒连才算,连得上就判不了,连续几次取证都一样。
+// 评审 must_fix 的回归:原实例不在册、gRPC 查询每次都在期限之内就回错(修复前缓存连接停在 TRANSIENT_FAILURE 时就是这样),
+// 修复前按「当场连不上 + 不在册」判原进程已不在、提前作废;现在要原地址的 TCP 端口当场拒连才算,连得上就判不了,连续几次取证都一样。
 func TestDeadlineEvidenceProbeFastGrpcFailureIsNotRefusal(t *testing.T) {
 	f := noRoomFormation(t, startDroppingListener(t), noRoomInstance, noRoomNowMs)
 	dials := 0
@@ -156,6 +157,26 @@ func TestDeadlineEvidenceProbeFastGrpcFailureIsNotRefusal(t *testing.T) {
 		require.NoError(t, ctx.Err(), "第 %d 次:在期限之内就失败了(修复前据此判原地址当场连不上)", attempt)
 		require.Equal(t, authority.DeadlineEvidenceUndetermined, probe(ctx, f), "第 %d 次:原地址连得上,不算拒连", attempt)
 		require.Equal(t, attempt, dials, "第 %d 次:查询没成、原实例不在册时另拨了一次 TCP", attempt)
+	}
+}
+
+// 评审补(2026-11-10)的回归:取证单独建连、用完即关,不在 discovery 的进程级缓存里留下到原地址的连接。修复前经 DialEndpoint
+// 取证,原实例已摘册时缓存里留下一条停在 TRANSIENT_FAILURE、退避一路涨的连接,同一 ip:port 上来的新 battle 被撮合与观战拿到
+// 这条旧连接、当场 Unavailable;原实例还活着时留下的是一条 READY 的连接。现在两种情形下取证之后,DialEndpoint 拿到的都是刚新建、
+// 还没连过的连接(IDLE)。只看连接状态,不依赖墙钟;各端点的清理(RemoveEndpointConn)由夹具注册。
+func TestAskOriginalInstanceLeavesNoCachedConnection(t *testing.T) {
+	_, alive := startNoRoomBattle(t, &noRoomCalls{})
+	for _, c := range []struct {
+		why      string
+		endpoint string
+	}{
+		{"原地址端口上没人听", closedLoopbackAddr(t)},
+		{"原实例还在", alive},
+	} {
+		askOriginalInstance(generousProbeContext(t), noRoomFormation(t, c.endpoint, noRoomInstance, noRoomNowMs))
+		conn, err := discovery.DialEndpoint(c.endpoint)
+		require.NoError(t, err, c.why)
+		require.Equal(t, connectivity.Idle, conn.GetState(), "%s:取证没有在进程级缓存里留下连接", c.why)
 	}
 }
 

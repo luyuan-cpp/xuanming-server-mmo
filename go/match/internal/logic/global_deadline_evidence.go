@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"runtime"
 	"syscall"
@@ -13,6 +14,10 @@ import (
 
 	battlepb "proto/battle"
 	pb "proto/match"
+	"shared/tracing"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // 截止作废的取证(2026-11-06,cross-zone-matchmaking.md §13.3「2026-11-06 修复」;时间判据与证据取值在
@@ -22,13 +27,16 @@ import (
 // DestroyBattle(global_match_abort_if_absent)只对尚无房间的原操作立拒收墓碑、有房间时忽略,截止之后问一次不会伤到
 // 还在等提交的房间;再 QueryBattleCreation 读结果。
 //
-// 评审修正(2026-11-06):「原地址连不上」不再从 gRPC 错误与 ctx 推断。askOriginalInstance 走按 endpoint 缓存的
+// 评审修正(2026-11-06):「原地址连不上」不再从 gRPC 错误与 ctx 推断。最初 askOriginalInstance 走按 endpoint 缓存的
 // grpc.ClientConn,一次建连失败之后它停在 TRANSIENT_FAILURE,不带 WaitForReady 的 RPC 当场回 Unavailable:黑洞端点
 // (主机与 match、etcd 一起分区,battle 还活着、终局冻结着在重放)只有第一次取证会等到期限,之后每次都像「当场连不上」,
 // 租约到期、镜像摘掉它之后就会被判成原进程已不在、提前作废,分区恢复后 battle 用同一个实例 UUID 重注册,重放的 COMPLETE
 // 只收到 ABORT。现在只认另起一次 TCP 拨号被原地址当场拒绝(RST,originalAddressRefuses),超时、不可达一律判不了,
 // 交给硬上限。「原 node_id 已登记成另一个实例」也不再单独算证据:分区中的原进程恢复后要在重注册失败时才停机,
 // 停机前还会排空、补提交一轮(battle main.cpp 的排空门,至多 15 秒)。
+// 评审补(2026-11-10):取证不再经 discovery 的进程级连接缓存,每次单独建连、用完即关(dialOriginalInstance,原因见那里)。
+// 判据不变,仍只认 TCP 拒连:一次性连接上的 RPC 照样可能在期限之内失败(对端一连上就关、地址上不是 battle),
+// gRPC 错误说明不了原地址是什么状态。
 
 // originalInstanceAnswer 是一次「立墓碑再查询」的原始结果。queryErr 为 nil 时 query 非 nil。
 type originalInstanceAnswer struct {
@@ -41,16 +49,34 @@ type originalInstanceAnswer struct {
 // reason=global_match_abort_if_absent),再查询同一 operation。DestroyBattle 失败时照样查询:battle 对不符的实例 UUID 拒绝
 // DestroyBattle(placement_operation_mismatch)、查询回空包,截止作废据查询回包认出「原地址上已是另一个实例」;提前作废
 // 只认 DestroyBattle 成功之后的 ABORTED(tombstoneAndConfirmAborted)。只发 RPC,不碰 SQL,不在任何事务或行锁里调用;
-// ctx 由调用方给期限。RPC 走缓存连接,它的失败(含当场回 Unavailable)说明不了原地址是什么状态,见文件头的评审修正。
+// ctx 由调用方给期限。两次 RPC 走这一次单独建的连接,返回前关掉,不进进程级缓存(dialOriginalInstance);
+// RPC 的失败(含当场回 Unavailable)说明不了原地址是什么状态,见文件头的评审修正。
 func askOriginalInstance(ctx context.Context, f *pb.MatchFormationRecord) originalInstanceAnswer {
-	conn, err := discovery.DialEndpoint(f.TargetEndpoint)
+	conn, err := dialOriginalInstance(f.TargetEndpoint)
 	if err != nil {
 		return originalInstanceAnswer{destroyErr: err, queryErr: err}
 	}
+	defer func() { _ = conn.Close() }()
 	client := battlepb.NewBattleNodeClient(conn)
 	_, destroyErr := client.DestroyBattle(ctx, &battlepb.DestroyBattleRequest{BattleId: f.BattleId, Reason: "global_match_abort_if_absent", PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
 	query, queryErr := client.QueryBattleCreation(ctx, &battlepb.QueryBattleCreationRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId})
 	return originalInstanceAnswer{query: query, destroyErr: destroyErr, queryErr: queryErr}
+}
+
+// dialOriginalInstance 为一次「立墓碑再查询」单独建一条 gRPC 连接,调用方用完即关(评审补 2026-11-10)。
+// 不用 discovery.DialEndpoint:取证与提前作废问的常常是已经摘册的原实例,经它建的连接会重新放回进程级缓存,而缓存只在镜像删除
+// 那一刻经 onRemove 清一次,之后没人再清 —— 每个问过的死端点都留下一条连接,它在死地址上反复重连失败,退避一路涨到 gRPC 上限
+// (约 120 秒);同一 ip:port 上来新 battle 时镜像里是新条目、不清旧连接,撮合与观战拿到的就是这条停在 TRANSIENT_FAILURE 的
+// 旧连接,不带 WaitForReady 的调用当场回 Unavailable,新节点最长约两分钟不可用。取证每局每 30 秒才问一次,会把这变成常态。
+// 拨号选项与 DialEndpoint 相同(内网 insecure,traceparent 由 shared/tracing 的拦截器写)。grpc.NewClient 不连网,第一次 RPC
+// 才建连:端口关闭时当场失败,黑洞时等满调用方给的期限,与原先第一次取证同一语义;多一次握手的代价可以接受。
+func dialOriginalInstance(endpoint string) (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
+	if err != nil {
+		return nil, fmt.Errorf("grpc dial %s: %w", endpoint, err)
+	}
+	return conn, nil
 }
 
 // battleRegistryView 是 match 的 battle 注册中心镜像(stable 与 canary 两份)对原执行实例的只读事实。
@@ -94,7 +120,8 @@ func battleRegistryOf(s *svc.ServiceContext, f *pb.MatchFormationRecord) battleR
 //   - 查询成功却没有回显实例:原地址上应答的是另一个 battle 进程(实例 UUID 每个进程生成一次,不符时 battle 回空包)
 //     → InstanceGone;回显了别的实例(battle 不会这样回)→ Undetermined;
 //   - 查询失败:原地址的 TCP 端口当场拒连、且镜像已同步、原实例已不在册 → InstanceGone;其余一律 Undetermined —— 超时、黑洞、
-//     主机或网络不可达、连得上却不是 battle、缓存连接停在 TRANSIENT_FAILURE 而当场回 Unavailable、镜像没同步过、原实例仍在册。
+//     主机或网络不可达、连得上却不是 battle、gRPC 当场回 Unavailable(对端一连上就关;修复前的缓存连接停在 TRANSIENT_FAILURE
+//     时也是这样)、镜像没同步过、原实例仍在册。
 //     只凭「注册中心查不到」或「原 node_id 已登记成另一个实例」都不算(分区中的原进程还活着,恢复后还会补提交)。
 func classifyDeadlineEvidence(f *pb.MatchFormationRecord, answer originalInstanceAnswer, refused bool, registry battleRegistryView) authority.DeadlineAbortEvidence {
 	instance := f.GetTargetInstanceId()
@@ -121,10 +148,10 @@ func classifyDeadlineEvidence(f *pb.MatchFormationRecord, answer originalInstanc
 	return authority.DeadlineEvidenceUndetermined
 }
 
-// originalAddressRefuses 另起一次 TCP 拨号(不走 gRPC 缓存连接,不发任何字节,连上就立刻关),只在对端当场回 RST
+// originalAddressRefuses 另起一次 TCP 拨号(不走 gRPC,不发任何字节,连上就立刻关),只在对端当场回 RST
 // (ECONNREFUSED)时为真:原地址的主机在,端口上已没有进程在听。超时、黑洞、主机或网络不可达、ctx 已到期、连上了
 // (不论对端是谁)一律为假。用调用方给的期限:查询已等满期限时它立即失败,不再多等。
-// Windows 本机开发环境里拒连要经过 SYN 重试(约 2 秒)才报,常超出取证期限,按判不了处理(只是等到硬上限,不会误判)。
+// Windows 本机开发环境里回环拒连要经过 SYN 重试(约 2 秒)才报,可能超出取证期限,那就按判不了处理(只是等到硬上限,不会误判)。
 func originalAddressRefuses(ctx context.Context, endpoint string) bool {
 	if endpoint == "" {
 		return false
@@ -139,7 +166,7 @@ func originalAddressRefuses(ctx context.Context, endpoint string) bool {
 }
 
 // wsaeConnRefused 是 Winsock 的 WSAECONNREFUSED:Go 在 Windows 上把拒连报成这个错误码,syscall.ECONNREFUSED 在 Windows 上
-// 只是 Go 自造的占位值,errors.Is 认不出它。Linux 的 errno 都小于 200,这个值在别的平台上不会撞上真实错误。
+// 只是 Go 自造的占位值,errors.Is 认不出它。只在 Windows 上比对。
 const wsaeConnRefused syscall.Errno = 10061
 
 // connectionRefused 判拨号错误是不是对端当场拒连。

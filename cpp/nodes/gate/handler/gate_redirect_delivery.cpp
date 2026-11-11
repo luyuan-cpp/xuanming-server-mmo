@@ -32,7 +32,8 @@ gate_drain_migration::PushOutcome PushRedirect(SessionId sessionId, Guid ticketP
 		return PushOutcome::kConnectionGone;
 	}
 
-	// 会话转去别的 gate:丢弃还没发出的路由排队项,之后到达的路由类请求回带请求 id 的 1003;在途那一条的回包照常下发。
+	// 会话转去别的 gate:还没发出的路由排队项不再发出,逐条回带请求 id 的 1003(确定未执行,到新 gate 重试安全),之后到达的
+	// 路由类请求同样回 1003;在途那一条的回包照常下发。
 	// 不这样做,旧连接上排着的请求会继续发出,与新 gate 上新会话的请求交错执行。与 Java 版 ClientDispatcher.enterRedirected 一致。
 	gate_lane::OnSessionRedirected(session);
 

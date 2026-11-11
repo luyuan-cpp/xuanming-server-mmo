@@ -57,6 +57,7 @@
 #include "generated/attribute/actorbaseattributess2c_attribute_sync.h" // StopMotionForExit:速度脏位
 #include "spatial/system/movement.h" // StopMotionForExit:停步广播
 #include "spatial/system/aoi.h"
+#include "spatial/constants/view.h" // kMaxViewRadius:玩家的视野半径,AOI 进出视野口径的唯一来源
 #include "proto/common/component/actor_comp.pb.h"                     // Velocity
 #include "proto/scene/player_state_attribute_sync.pb.h"                // ActorBaseAttributesS2C 字段号
 #include "stress_test_probe.h"
@@ -3662,7 +3663,7 @@ void PlayerLifecycleSystem::ExpireConnectionLostHolds(connection_lost_hold::Cloc
 		const auto *guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(entity);
 		if (guid == nullptr)
 		{
-			// 只由 HandleClientConnectionLost 挂,那里要求实体有 Guid;没有 Guid 的实体回查不到也处置不了。
+			// 只由 HandleClientConnectionLost 与托管落点入场(EnterHostedHold)挂,两处都要求实体有 Guid;没有 Guid 的实体回查不到也处置不了。
 			continue;
 		}
 		switch (verdictOf(view.get<PlayerConnectionLostComp>(entity)))
@@ -4785,7 +4786,8 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 		PlayerSkillSystem::EnsureInitialSkills(player);
 	}
 
-	tlsEcs.actorRegistry.emplace<ViewRadius>(player).set_radius(10);
+	// 视野半径取 AOI 口径常量(与 Java 版一致,spatial/constants/view.h 里有格子覆盖的 static_assert),不另写数字。
+	tlsEcs.actorRegistry.emplace<ViewRadius>(player).set_radius(static_cast<float>(kMaxViewRadius));
 
 	// player_locator (Go) owns the canonical session/location record.
 

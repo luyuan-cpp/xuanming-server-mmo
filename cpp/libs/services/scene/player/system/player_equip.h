@@ -149,6 +149,8 @@ public:
 	//   角色等级 < Item.equip_level                      kEquipLevelNotEnough
 	//   Item.equip_class != 0 且不等于角色职业           kEquipClassMismatch
 	//   装备栏没有任何槽接受该部位                       kEquipNoSlot
+	//   这一件的数量押在一局未结算的战斗里(战斗道具预留,BagService::CheckRemovableInstances)
+	//                                                     kFeatureUnavailable
 	//   (替换时)目标槽的占用者搬不动(数据 / 表损坏)   kEquipInternalError
 	// 搬运顺序:人物背包 TakeInstance(新)→(替换时)装备栏 TakeInstance(旧)→ 装备栏
 	//   PutInstance(新, 槽)→(替换时)人物背包 PutInstance(旧)。任何一步失败都按相反顺序放回

@@ -25,8 +25,8 @@ const (
 	workTeamLaunch        = "team-launch" // 整队维护:片号 = 发起者 actor_id % WorkShards
 	workTeamIdle          = "team-idle"   // 闲置队伍到期:片号 = team_id % WorkShards
 	workRankSource        = "rank-source" // 投榜:每个 (计分模式, 来源片) 一个键
-	// workReadyTicket 已建房票巡检(ReadyAfter):片号 = player_id % WorkShards。ready_recovery.go 正由数据覆盖审计会话改,
-	// 那一批落完后在 ReadyAfter 的 SQL 里接 WorkShardFilter(workReadyTicket, "player_id")(2026-11-06 约定)。
+	// workReadyTicket 已建房票巡检(ReadyAfter):片号 = player_id % WorkShards,条件在 ready_recovery.go ReadyAfter 的
+	// ORDER BY 之前接入(2026-11-10,数据覆盖审计批 B5)。
 	workReadyTicket = "ready-ticket"
 	// 终局发件箱(outcome_outbox.go,缺口清单第 25 条)。整局结果表 match_battle_completion 一局一行、没有 player_id 列,
 	// 按 battle_id 分;个人结算按玩家分,首投与等待两页共用一个键,同一玩家的首投和之后的 Lookup 归同一个副本。

@@ -100,6 +100,7 @@ PlayerRedis:
 # 本地凭据与 go/trade/etc/trade.yaml、go/data_service 的 SnapshotMySQL 同账号;K8s 由 ConfigMap 注入。
 # ⚠ 原配置是一整串 DataSource(含 root 密码)。改成结构化字段:K8s 的用户名与密码分开注入,
 #   DSN 由 svc.BuildDSN 统一拼(带 sql_mode=STRICT_TRANS_TABLES —— 非严格模式下超长写入静默截断)。
+# 会话锁等待上限钉在代码里、不在这里配置(svc/session_lock_wait.go):行锁 1 s、mysql 档元数据锁 1 s,启动时读回核对,不符拒启。
 MySQL:
   Host: 127.0.0.1:3306
   User: appuser

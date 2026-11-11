@@ -113,6 +113,12 @@ func main() {
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出,理由同 chat.go。
 	conf.MustLoad(*configFile, &c)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate 与常驻启动都连库,所以放在迁移分支之前;
+	// 迁移 Job 同样注入这个变量。退出码与迁移入口的 ExitFailed 一致。
+	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)
+		os.Exit(schemamigrate.ExitFailed)
+	}
 
 	if *migrateOnly {
 		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp))
@@ -275,8 +281,9 @@ func runTrade(c config.Config) (runErr error) {
 	// 终态资产指令清理(trade.asset_op_cleanup,保留期外的终态行逐行删):与 AssetOp.Enabled 独立(同 guild),
 	// 通道关着时历史终态行照样要清。必须在 ensureSchema 之后(表一定在)。装配失败即拒启:配置说要清却没在清,
 	// 表会无界增长且没有任何报错。canary 副本不清(发布轨道设计 §2.5),由 stable 副本清。
+	// 通道开着时按玩家分片,与重投、合同推进共用一份成员表(缺口清单第 25 条第二批);通道关着时没有成员表,清全部行。
 	if c.AssetOp.CleanupEnabled && releaseTrack.RunsGlobalBackgroundWork() {
-		stop, err := svc.StartAssetOpCleanup(svcCtx.DB, c.AssetOp, root)
+		stop, err := svc.StartAssetOpCleanup(svcCtx.DB, c.AssetOp, svcCtx.AssetOpCleanupOwner(), root)
 		if err != nil {
 			return err
 		}

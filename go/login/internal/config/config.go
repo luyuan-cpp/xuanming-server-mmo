@@ -341,8 +341,9 @@ type HomeZoneConf struct {
 	// (5 分钟预算),可以比角色列表宽松。
 	EnterLookupTimeout time.Duration `json:"EnterLookupTimeout,optional"`
 	// RegisterTimeout 是 CreatePlayer 写 player_route 映射(RegisterPlayerZone)的预算;
-	// 0 = homezone.DefaultRegisterTimeout(3s)。这条写失败建角**整体失败**
-	// (createplayerlogic.go),所以给得比查询宽。
+	// 0 = homezone.DefaultRegisterTimeout(800ms)。这条写失败建角**整体失败**(createplayerlogic.go)。
+	// 它是建角截止分摊里这一跳的上限与下限(login/internal/logic/pkg/createbudget):拿不满它就不发;
+	// 启动时核对「本地余量 + 各跳上限 + 跳间间隙 ≤ Timeout」,调大到放不下就拒绝启动(login.go)。
 	RegisterTimeout time.Duration `json:"RegisterTimeout,optional"`
 }
 

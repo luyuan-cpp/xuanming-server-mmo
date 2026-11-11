@@ -16,6 +16,7 @@ import (
 	rfpb "proto/role_fence"
 	"shared/assetop"
 	"shared/rolefence"
+	"shared/workshard"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -632,6 +633,40 @@ func TestRecallStore_ClaimDeliversOnlyItsOwnPendingRow(t *testing.T) {
 	assert.True(t, delivered)
 	assert.Equal(t, uint64(77), op.LeaseToken)
 	assert.Equal(t, ops[1].OpID, op.CorrelationID)
+}
+
+// 回收重投的到期扫描按玩家分片(缺口清单第 25 条第二批,片号 = player_id % 64):分片条件在两段里都生效、都在 LIMIT 之前,
+// 别的片的行再早到期也不占本副本的名额;零值条件与 ListDue 相同;一片都不归本副本时什么都不回。
+func TestRecallStore_ListDueOwnedReadsOnlyOwnedShards(t *testing.T) {
+	f := newRecallFixture(t)
+	const kind = "gm-recall-assetop"
+	const other, mine uint64 = 64*150 + 7, 64*150 + 8 // 片 7 与片 8
+	ops := f.createBatch(t, 1, 5, other, mine)
+	for i, at := range []uint64{2000, 2100} { // 别的片先派发、先到期,占住队头
+		result, err := f.store.Dispatch(f.ctx, store.RecallPlanned{OpID: ops[i].OpID, PlayerID: ops[i].PlayerID}, at)
+		require.NoError(t, err)
+		require.Equal(t, store.RecallDispatched, result)
+	}
+	// 本片那一行是老行(attempts >= FreshAttemptLimit),走第二段。
+	_, err := f.db.Raw.ExecContext(f.ctx, "UPDATE gm_recall_op SET attempts=? WHERE op_id=?", assetop.FreshAttemptLimit, ops[1].OpID)
+	require.NoError(t, err)
+
+	owned := workshard.SQLFilter(func(key string) bool { return key == workshard.ShardKey(kind, workshard.ShardOf(mine)) }, kind, "player_id")
+	ids, err := f.store.ListDueOwned(f.ctx, 3500, 1, owned)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{ops[1].OpID}, ids, "第一段的别的片新行不占名额,第二段同样只取本片")
+
+	all, err := f.store.ListDue(f.ctx, 3500, 10)
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{ops[0].OpID, ops[1].OpID}, all, "不分片:新行在前、老行补缺口")
+	unsharded, err := f.store.ListDueOwned(f.ctx, 3500, 10, workshard.Filter{})
+	require.NoError(t, err)
+	assert.Equal(t, all, unsharded, "ListDue 就是不带条件的 ListDueOwned")
+
+	none := workshard.SQLFilter(func(string) bool { return false }, kind, "player_id")
+	ids, err = f.store.ListDueOwned(f.ctx, 3500, 10, none)
+	require.NoError(t, err)
+	assert.Empty(t, ids, "一片都不归本副本:什么都不回")
 }
 
 // 载荷解不开的行推迟成毒行:只清租约,last_send_ms 不动。推迟带 status = PENDING:回读之后、推迟之前这一行若被人工终结

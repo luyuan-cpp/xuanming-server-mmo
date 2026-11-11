@@ -283,7 +283,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	}
 	resolved, err := c.ResolveGlobalAuthority(os.Getenv)
 	if err != nil {
-		panic(fmt.Sprintf("global SQL setup rejected: %v", err))
+		panic(fmt.Sprintf("global SQL wiring rejected: %v", err))
 	}
 	c = resolved
 	if err := validateGlobalCallerSecrets(os.Getenv); err != nil {

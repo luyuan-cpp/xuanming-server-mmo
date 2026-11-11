@@ -1012,7 +1012,8 @@ func (s *Store) Formation(ctx context.Context, id uint64) (*pb.MatchFormationRec
 // 一个副本备战槽满了、手里积压的成局留在队头，也占不住别的副本的名额。推进的互斥仍靠 AcquireWork 的工作租约。
 func (s *Store) Pending(ctx context.Context) ([]*pb.MatchFormationRecord, error) {
 	owned, shardArgs := s.WorkShardFilter(workFormationRecovery, "battle_id")
-	// 过截止的 v1 原件只归到期终局恢复；留在这里既领不到租约，还会占住前 32 个名额挡住后面的成局。
+	// 过截止、已持久 Create 原件的成局（2026-11-06 起不分终局协议，见 awaitsExpiredOutcome）不在这里：可裁决的只归到期终局恢复，
+	// 其余只能人工处置；留在这里既领不到租约，还会占住前 32 个名额挡住后面的成局。
 	r, e := s.DB.QueryContext(ctx, "SELECT "+formationColumns+" FROM match_formation WHERE state IN(1,2,3) AND retry_at_ms<=CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) AND NOT "+expiredOutcomeSQL+" AND "+owned+" ORDER BY retry_at_ms LIMIT 32", shardArgs...)
 	if e != nil {
 		return nil, e

@@ -125,6 +125,11 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
+            # MySQL 口令:friend 的配置(MySQLPasswordEnv)指名这个变量;Secret mysql-auth 由 k8s_deploy.ps1 先于本 Job 在本 namespace 建好
+            # (工作负载密钥目录,docs/design/workload-secrets-via-k8s-secret.md)。不写 optional:Secret 缺失时 Pod 起不来,不带空口令去连库。
+            - name: MMORPG_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: mysql-auth, key: password, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
           # 与 friend.yaml 的 args 只差最后一个 -migrate:同一份 ConfigMap,库名 / 账号 / 超时与服务完全一致,

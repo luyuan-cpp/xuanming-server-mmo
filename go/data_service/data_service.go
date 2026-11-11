@@ -206,6 +206,14 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	// MySQL 口令(MySQLPasswordEnv,K8s 上经 Secret mysql-auth 注入)。-migrate、-route-tool 与常驻启动都连库,所以在分流之前填;
+	// 迁移与 route-tool 的 Job 同样注入这个变量。
+	var mysqlAuthErr error
+	c, mysqlAuthErr = c.ResolveMySQLPassword(os.LookupEnv)
+	if mysqlAuthErr != nil {
+		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", mysqlAuthErr)
+		os.Exit(1)
+	}
 
 	if entry == entryMigrate {
 		os.Exit(runMigration(c))
@@ -229,7 +237,7 @@ func main() {
 	var globalErr error
 	c, globalErr = c.ResolveGlobalAuthority(os.Getenv)
 	if globalErr != nil {
-		fmt.Fprintf(os.Stderr, "data_service global SQL setup rejected: %v\n", globalErr)
+		fmt.Fprintf(os.Stderr, "data_service global SQL wiring rejected: %v\n", globalErr)
 		os.Exit(1)
 	}
 	// 共享 Redis 口令(SharedRedisPasswordEnv,K8s 上经 Secret redis-auth 注入)。-migrate 与发号器运维入口不连 Redis,
@@ -487,7 +495,8 @@ func runDataService(c config.Config) (runErr error) {
 	// etcd 客户端刻意不与 killswitch 共用:那把的契约是 fail-open(nil 合法、永不 panic),
 	// 这把的契约恰好相反(建不出来就拒启)。两把 defer 的 LIFO 顺序保证先注销再关客户端。
 	regCli := mustNewNodeRegistryEtcdClient(c.Etcd)
-	registrar := startNodeRegistration(c, regCli)
+	// 注册拿到 node_uuid 之后,回收重投的成员表才认得出本副本(缺口清单第 25 条);此前成员表若已有别的副本,本副本一片都不做。
+	registrar := startNodeRegistration(c, regCli, svcCtx.BindRecallWorkMember)
 	stopAuxiliary = func(ctx context.Context) error {
 		ksCancel()
 		result := registrar.closeAndReport(ctx)
@@ -996,7 +1005,9 @@ func (r *nodeRegistrar) closeAndReport(ctx context.Context) error {
 
 // startNodeRegistration 起一条 goroutine:等本进程的 gRPC 端口 accept,再按 C++ 约定注册
 // DataServiceNodeService 的 NodeInfo 并开始 keepalive。失败交还 main 做真实收尾并拒绝启动。
-func startNodeRegistration(c config.Config, cli *clientv3.Client) *nodeRegistrar {
+// onRegistered 可为 nil;注册成功后在注册 goroutine 上收到本进程的 node_uuid(进程内不变),不要在里面阻塞。
+// 生产接的是回收重投的成员表(svc.ServiceContext.BindRecallWorkMember,缺口清单第 25 条)。
+func startNodeRegistration(c config.Config, cli *clientv3.Client, onRegistered func(nodeUUID string)) *nodeRegistrar {
 	listenHost, port := parseListenOn(c.ListenOn)
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &nodeRegistrar{host: advertisedHost(listenHost), port: port, cancel: cancel, done: make(chan struct{}), failed: make(chan error, 1)}
@@ -1032,6 +1043,9 @@ func startNodeRegistration(c config.Config, cli *clientv3.Client) *nodeRegistrar
 		logx.Infof("[NodeRegistry] DataService registered: DataServiceNodeService.rpc zone=%d node_type=%d node_id=%d uuid=%s endpoint=%s:%d lease_ttl=%ds",
 			nr.Info.ZoneId, nr.Info.NodeType, nr.Info.NodeId, nr.Info.NodeUuid, r.host, port, c.LeaseTTL)
 		r.set(nr)
+		if onRegistered != nil {
+			onRegistered(nr.Info.NodeUuid)
+		}
 	}()
 	return r
 }

@@ -117,6 +117,7 @@
     <ClInclude Include="spatial\constants\view.h" />
     <ClInclude Include="spatial\manager\scene_nav.h" />
     <ClInclude Include="spatial\system\aoi.h" />
+    <ClInclude Include="spatial\system\aoi_load.h" />
     <ClInclude Include="spatial\system\grid.h" />
     <ClInclude Include="spatial\system\interest.h" />
     <ClInclude Include="spatial\system\movement.h" />
@@ -188,6 +189,7 @@
     <ClCompile Include="player\system\stress_test_probe.cpp" />
     <ClCompile Include="player\system\bag_marshal.cpp" />
     <ClCompile Include="spatial\system\aoi.cpp" />
+    <ClCompile Include="spatial\system\aoi_load.cpp" />
     <ClCompile Include="spatial\system\grid.cpp" />
     <ClCompile Include="spatial\system\interest.cpp" />
     <ClCompile Include="spatial\system\movement.cpp" />

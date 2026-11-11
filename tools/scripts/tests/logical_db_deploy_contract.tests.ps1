@@ -625,7 +625,7 @@ Test-Case '告警:规则名单和形状,指标名与取值从 Go 源码核对,�
     $alerts = Read-RepoText 'deploy/k8s/logical-db-alerts.yaml'
     $names = @([regex]::Matches($alerts, '(?m)^\s+- alert: (\S+)') | ForEach-Object { $_.Groups[1].Value })
     Assert-Equal -Expected 'DbPlacementRejected,DbPlacementSyncFailing,DbPlacementVersionLagging,RoleFencePrepareStale,RoleFencePrepareUnreachable,RoleFencePushFailing,SqlWriterRegistrarFailing,WriterGateFrozenTooLong' -Actual (($names | Sort-Object) -join ',') -Because '规则名单'
-    Assert-Match -Text $alerts -Pattern 'kube_pod_init_container_status_restarts_total\{container="sql-writer-registrar"\}' -Because '回收 CronJob 不删 init 反复失败的 Pod,要靠这条发现,名册用完也在这里'
+    Assert-Match -Text $alerts -Pattern 'kube_pod_init_container_status_restarts_total\{container="sql-writer-registrar"\}' -Because '回收 CronJob 不删 init 反复失败的 Pod,要靠这条发现,副本数比名册槽位多也在这里'
     Assert-Match -Text (Read-RepoText 'deploy/k8s/manifests/go-svc/data-service.yaml') -Pattern '(?m)^        - name: sql-writer-registrar\s*$' -Because '告警里的 init 容器名和清单一致'
     Assert-Match -Text $alerts -Pattern 'kube-state-metrics' -Because '抓取前提写明白,没有它这条是哑的'
     Assert-Equal -Expected $names.Count -Actual ([regex]::Matches($alerts, '(?m)^\s+for: \d+m\s*$').Count) -Because '每条都有 for'
@@ -766,22 +766,26 @@ Test-Case 'registrar 带 MMORPG_SQL_BACKEND:全部写者跟 -DatabaseBackend(log
 # ──────────────────────────────────────────────
 # 8b. mmorpg 在全球权威入口上(docs/design/no-single-node-horizontal-scaling-20261001.md §6)
 # ──────────────────────────────────────────────
-Test-Case '网关的 mmorpg 跟全球权威入口:tidb 档开 TiDB 强核验,dev 的 mysql 档关;不给入口、staging/prod 的 mysql 档都在写之前拒绝' {
-    $source = Read-RepoText 'java/gateway_node/src/main/java/com/game/gateway/config/AuthorityDatabaseConfiguration.java'
-    Assert-Match -Text $source -Pattern 'getProperty\("mmorpg\.sql\.require-tidb",Boolean\.class,true\)' -Because '键名和缺省值以网关为准(前提)'
-    Assert-Match -Text $source -Pattern '!required&&!Set\.of\("dev","test"\)\.contains\(mode\)' -Because '只有 dev / test 能关强核验,这是非 dev 的 mysql 档要拒绝的理由'
+Test-Case '网关的 mmorpg 跟全球权威入口:档位写成 mmorpg.sql.backend,tidb 档核对 TiDB,mysql 档(含 prod)核对 MySQL 主库;不给入口在写之前拒绝' {
+    $gatewaySource = Read-RepoText 'java/gateway_node/src/main/java/com/game/gateway/config/AuthorityDatabaseConfiguration.java'
+    Assert-Match -Text $gatewaySource -Pattern 'AuthorityDataSource\.Backend\.resolve\(\s*environment\.getProperty\("mmorpg\.sql\.backend","tidb"\)' -Because '网关按 mmorpg.sql.backend 取档位(前提)'
+    $authoritySource = Read-RepoText 'java/authority_jdbc/src/main/java/com/game/authority/AuthorityDataSource.java'
+    Assert-Match -Text $authoritySource -Pattern 'case "mysql":\s+return MYSQL;' -Because 'mysql 档在任何运行模式下都按主库严格核对(规则只在 Backend.resolve)'
+    Assert-Match -Text $authoritySource -Pattern 'Set\.of\("dev","test"\)\.contains\(runMode\)' -Because 'tidb 档关掉强核验仍只许 dev / test'
     foreach ($case in @(
-            @{ Label = 'tidb 档'; Run = $devZoneRun; RequireTidb = 'true'; RunMode = 'prod' }
-            @{ Label = 'dev 的 mysql 档'; Run = $devMysqlZoneRun; RequireTidb = 'false'; RunMode = 'dev' }
+            @{ Label = 'tidb 档'; Run = $devZoneRun; Backend = 'tidb'; RequireTidb = 'true' }
+            @{ Label = 'dev 的 mysql 档'; Run = $devMysqlZoneRun; Backend = 'mysql'; RequireTidb = 'false' }
         )) {
         Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label) 输出: $($case.Run.Output)"
         $flat = Get-ConfigFlat -Output $case.Run.Output -ConfigMap 'java-svc-gateway-config'
         $url = Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.spring.datasource.url'
         Assert-True -Condition ($url.StartsWith("jdbc:mysql://$AuthorityHost/mmorpg?")) -Because "$($case.Label):网关连的就是 login 登记的那个 mmorpg,实际 $url"
-        Assert-Equal -Expected $case.RequireTidb -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because "$($case.Label) 的强核验"
-        Assert-Equal -Expected $case.RunMode -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because "$($case.Label) 的 run-mode"
+        Assert-Equal -Expected $case.Backend -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because "$($case.Label) 的核对档位"
+        Assert-Equal -Expected $case.RequireTidb -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because "$($case.Label):require-tidb 只对 tidb 档有意义"
+        Assert-Equal -Expected 'prod' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because "$($case.Label):不靠 dev 模式放宽核验"
     }
     $prodFlat = Get-ConfigFlat -Output $prodZoneRun.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'tidb' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because 'prod 的 tidb 档'
     Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.application.yaml.mmorpg.sql.require-tidb') -Because 'prod 的 tidb 档同样开强核验'
 
     # 不给入口:Go 服务那边早就所有档位都要显式入口;只部署网关(-SkipGoSvc)时同样拒绝,不回落 infra MySQL,否则 mmorpg 分成两份。
@@ -793,13 +797,18 @@ Test-Case '网关的 mmorpg 跟全球权威入口:tidb 档开 TiDB 强核验,dev
     Assert-Match -Text $noHost.Output -Pattern 'every release profile needs -GlobalAuthorityTiDBHost' -Because '点名缺的参数'
     Assert-NotMatch -Text $noHost.Output -Pattern '--- BEGIN MANIFEST ---' -Because '在写路径入口拒绝'
 
+    # MySQL 主从省钱档在 prod 也能部署网关:Java 的 mysql 档逐条物理连接核对端是可写的 MySQL 主库。入口是外部主库,建表 Job 照跑。
     $prodMysql = Invoke-LogicalDbDryRun -Arguments ($ProdZoneArgs + @('-DirectoryLogicalShards', '64', '-Region', '7', '-DatabaseBackend', 'mysql')) -Env $ProdEnv
-    Assert-True -Condition ($prodMysql.ExitCode -ne 0) -Because "prod 的 mysql 档网关起不来,要拒绝。输出: $($prodMysql.Output)"
-    Assert-Match -Text $prodMysql.Output -Pattern 'needs the mmorpg database on TiDB' -Because '点名原因'
-    Assert-NotMatch -Text $prodMysql.Output -Pattern '--- BEGIN MANIFEST ---' -Because 'gate、scene、Go 服务都不能已经 apply 了才失败'
+    Assert-Equal -Expected 0 -Actual $prodMysql.ExitCode -Because "prod 的 mysql 档。输出: $($prodMysql.Output)"
+    $prodMysqlFlat = Get-ConfigFlat -Output $prodMysql.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'mysql' -Actual (Get-FlatValue -Flat $prodMysqlFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because 'prod 的 mysql 档按主库核对'
+    Assert-Equal -Expected 'prod' -Actual (Get-FlatValue -Flat $prodMysqlFlat -KeyPath 'data.application.yaml.mmorpg.run-mode') -Because '不靠 dev 模式放宽'
+    $prodMysqlJob = @(Get-ManifestBlocks -Output $prodMysql.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $prodMysqlJob.Count -Because '外部 MySQL 主库上同样要建表'
+    Assert-Match -Text $prodMysqlJob[0] -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "mysql"' -Because 'writer_authority 按 mysql 档连'
 }
 
-Test-Case 'tidb 档网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql,先于网关 Deployment;mysql 档不渲染' {
+Test-Case '网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就是网关的 schema.sql,先于网关 Deployment;只有入口是集群内 MySQL 时不渲染' {
     Assert-Match -Text (Read-RepoText 'go/data_service/cmd/writer_authority/main.go') -Pattern 'flags\.String\("ddl-file"' -Because 'writer_authority 有 -ddl-file(前提)'
     $jobs = @(Get-ManifestBlocks -Output $devZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
     Assert-Equal -Expected 1 -Actual $jobs.Count -Because 'tidb 档恰好一份'
@@ -830,7 +839,17 @@ Test-Case 'tidb 档网关建表 Job:registrar 镜像跑 prepare-schema,DDL 就�
     $applied = $devZoneRun.Output.IndexOf('[applied] gateway-schema -> fixture.invalid/registrar@sha256:')
     Assert-True -Condition ($applied -ge 0) -Because '打印镜像'
     Assert-True -Condition ($applied -lt $devZoneRun.Output.IndexOf('[applied] gateway -> ')) -Because 'Job 先于网关 Deployment:网关按 ddl-auto: validate 启动,表要先在'
-    Assert-NotMatch -Text $devMysqlZoneRun.Output -Pattern '(?m)^  name: gateway-schema(-sql)?\s*$' -Because 'mysql 档(dev,infra MySQL)由 mysql-init 建这个库,不跑 Job'
+
+    # mysql 档的入口是外部主库(这里是 $AuthorityHost):照样建表,writer_authority 按 mysql 档连。
+    $mysqlJob = @(Get-ManifestBlocks -Output $devMysqlZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: Job\s*$' -and $_ -cmatch '(?m)^  name: gateway-schema\s*$' })
+    Assert-Equal -Expected 1 -Actual $mysqlJob.Count -Because '外部 MySQL 主库没有 mysql-init,建表要靠这个 Job'
+    Assert-Match -Text $mysqlJob[0] -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "mysql"' -Because '档位跟 -DatabaseBackend'
+    # 入口就是集群内单实例 MySQL(只在 dev):mysql-init 的 gateway_tables.sql 建这个库,不跑 Job。
+    $inCluster = Invoke-LogicalDbDryRun -Arguments (@($ZoneArgs | ForEach-Object { if ($_ -ceq $AuthorityHost) { $InClusterMysqlHost } else { $_ } }) + @('-DatabaseBackend', 'mysql'))
+    Assert-Equal -Expected 0 -Actual $inCluster.ExitCode -Because "dev 用集群内 MySQL。输出: $($inCluster.Output)"
+    Assert-NotMatch -Text $inCluster.Output -Pattern '(?m)^  name: gateway-schema(-sql)?\s*$' -Because '集群内 MySQL 由 mysql-init 建这个库'
+    $inClusterFlat = Get-ConfigFlat -Output $inCluster.Output -ConfigMap 'java-svc-gateway-config'
+    Assert-Equal -Expected 'mysql' -Actual (Get-FlatValue -Flat $inClusterFlat -KeyPath 'data.application.yaml.mmorpg.sql.backend') -Because '集群内 MySQL 同样按主库核对'
 }
 
 Test-Case '-Region 注入 data-service 主容器,所有档位都写;go/db 注入 POD_IP;dev 的 Schema.AutoMigrate 也是 false' {
@@ -933,7 +952,7 @@ Test-Case '回收 CronJob:zone 和 infra 各一份,先于写者,只有 pods 的�
     Assert-Match -Text $text -Pattern 'runAsNonRoot: true' -Because '有的集群禁 root 容器;官方镜像默认 root,要显式钉'
     Assert-Match -Text $text -Pattern 'runAsUser: 10001' -Because '非 root 的 uid'
     Assert-Match -Text $text -Pattern '--selector=mmorpg\.io/sql-writer=true' -Because '只处理带 label 的 Pod'
-    Assert-Match -Text $text -Pattern 'if eq \(printf "%v" \.lastState\.terminated\.exitCode\) "78"' -Because '判据是主容器上一次以 78 退出:写资格已消费。还没写过就退出的进程能原地接着起,不删、不烧名册;initContainerStatuses 不看,init 反复失败时删了白烧名册'
+    Assert-Match -Text $text -Pattern 'if eq \(printf "%v" \.lastState\.terminated\.exitCode\) "78"' -Because '判据是主容器上一次以 78 退出:这一代的写资格已消费,删掉后 StatefulSet 按同序号重建、在槽位上换代。还没写过就退出的进程能原地接着起,不删;initContainerStatuses 不看,init 反复失败时删了也是同样原因再失败'
     Assert-NotMatch -Text $text -Pattern 'initContainerStatuses:?\}|range \.status\.initContainerStatuses' -Because 'init 的重启次数不算'
     Assert-Match -Text $text -Pattern 'if \.metadata\.deletionTimestamp' -Because '已经在删的跳过'
     Assert-Match -Text $text -Pattern 'deleting pod \{\{\$pod\.metadata\.name\}\} in namespace \{\{\$pod\.metadata\.namespace\}\}' -Because '删除前的日志写明 namespace 和 Pod 名'
@@ -1053,7 +1072,7 @@ Test-Case '手册:开新地域的手册写清地域码的约束,docs/README 登�
     }
     Assert-Match -Text $openServer -Pattern 'DirectoryLogicalShards = 64' -Because '部署参数示例'
     Assert-Match -Text $openServer -Pattern 'Region = ' -Because '部署参数示例'
-    foreach ($pattern in @('-id-issuer-init', 'tidb_enable_check_constraint', 'render-schema-role', '-SqlSchemaOnly', 'db-migrate', 'sql-writer-pod-reaper', '副本数 × 6', 'SqlWriterRegistrarFailing', 'schemaPermissionSecret', 'MMORPG_ID_ISSUER_EXPECTED_REGION')) {
+    foreach ($pattern in @('-id-issuer-init', 'tidb_enable_check_constraint', 'render-schema-role', '-SqlSchemaOnly', 'db-migrate', 'sql-writer-pod-reaper', '槽位数 ≥ 副本数', 'SqlWriterRegistrarFailing', 'schemaPermissionSecret', 'MMORPG_ID_ISSUER_EXPECTED_REGION')) {
         Assert-Match -Text $openServer -Pattern $pattern -Because "开服手册要写 $pattern"
     }
     # 顺序:TiDB 开关在建库之前,发号器初始化在 data-service 就绪之后、放流量之前。
@@ -1064,7 +1083,7 @@ Test-Case '手册:开新地域的手册写清地域码的约束,docs/README 登�
         Assert-Match -Text $doc -Pattern '/app/etc/private/data_service\.yaml -id-issuer-init' -Because '写者的配置在私有子目录,手册里的命令要跟着走'
         Assert-NotMatch -Text $doc -Pattern '/app/etc/data_service\.yaml -id-issuer-init' -Because '旧路径已经不存在'
     }
-    Assert-Match -Text $runbook -Pattern 'exec deploy/data-service -- grep -n ''Region:'' /app/etc/private/data_service\.yaml' -Because '核 Pod 里生效的配置,不核 ConfigMap 模板'
+    Assert-Match -Text $runbook -Pattern 'exec statefulset/data-service -- grep -n ''Region:'' /app/etc/private/data_service\.yaml' -Because '核 Pod 里生效的配置,不核 ConfigMap 模板;data-service 是 StatefulSet(写者名册的槽位)'
     Assert-NotMatch -Text $runbook -Pattern 'get configmap go-svc-data-service-config' -Because 'ConfigMap 只是模板,核它看不出 Secret 抄错'
     Assert-NotMatch -Text (Read-RepoText 'deploy/k8s/README.md') -Pattern '靠 K8s 重启收敛|K8s 下一次重启就恢复' -Because '主容器重启过的写者 Pod 由回收 CronJob 换新,不是原地恢复'
 }

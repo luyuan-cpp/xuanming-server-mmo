@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"google.golang.org/protobuf/proto"
+	pb "proto/match"
 	teampb "proto/team"
 )
 
@@ -41,7 +42,10 @@ func (s *Store) enqueuePreparedTeamLaunchOnce(ctx context.Context, observed *tea
 	if current.State == 2 {
 		return tx.Commit()
 	}
-	if current.State != 1 || current.BattleId != 0 || current.TargetSize <= current.MemberCount || version == math.MaxUint64 {
+	// 进队列的是补位单与真人 PVP(满员一侧也要排对手),与 ReserveSQLTeamMatch 的分流、EnqueueTeamLaunchTx 的准入同一口径。
+	// 原先只认补位(目标人数 > 成员数):满员 PVP 带观战退出原件时被拒成 ErrDirectConflict,开战原件永远停在 state 1。
+	queued := TeamLaunchMode(current) == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) || current.TargetSize > current.MemberCount
+	if current.State != 1 || current.BattleId != 0 || !queued || version == math.MaxUint64 {
 		return ErrDirectConflict
 	}
 	if err = s.RequireSpectatorExitsClosedTx(ctx, tx, data.SpectatorExits); err != nil {

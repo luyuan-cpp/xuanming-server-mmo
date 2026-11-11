@@ -156,6 +156,11 @@ func withStore(configPath string, readOnly bool, stderr io.Writer, fn func(ctx c
 		fmt.Fprintf(stderr, "Failed to load configuration %s: %v\n", configPath, err)
 		return exitError
 	}
+	// MySQL 口令(MySQLPasswordEnv):本工具在 trade Pod 里跑,读同一份 ConfigMap,口令从 Secret mysql-auth 注入的环境变量取。
+	if err := c.ResolveMySQLPassword(os.LookupEnv); err != nil {
+		fmt.Fprintf(stderr, "Failed to resolve the MySQL password: %v\n", err)
+		return exitError
+	}
 	logConf := c.Log
 	logConf.ServiceName = logServiceName
 	if err := logx.SetUp(logConf); err != nil {

@@ -549,13 +549,23 @@ match 的宽限只推迟 ABORT(`completion.go` 的 `terminalOutcomeGraceMs`);发
 | 未知:没发出去 / 传输失败 / 回包验签不过 / match 带内 retry / 取值不认识 | 同样续冻一拍(`metric=battle_freeze_held terminal=UNKNOWN`) |
 | 续冻到 `FreezeHoldDeadlineMs` = FreezeExpiresAtMs + 15 分钟之后仍是 COMPLETE、PENDING 或未知 | 越过上限的那一拍(第 2 步)告警 `metric=battle_freeze_hold_cap_reached`(ERROR)后照常解冻,不再查询 |
 
-**NONE 为什么分两种(2026-11-06 负责人定)。** 冻结到期 = 截止 + 60s 宽限 + 60s 余量,晚于 match 补写 ABORT 的时刻(截止 + 60s,
-`ready_recovery` 的到期恢复)。有原件的局到期还是 NONE,只说明 ABORT 还没写成(match 不可用或恢复任务滞后),而 COMPLETE 不判截止、
-仍可能先落库,所以 NONE 不是终局证据,按未知续冻;「解冻之后 COMPLETE 才落库」因此只剩续冻上限之后的一段,归入有告警的那条残余。
+**NONE 为什么分两种(2026-11-06 负责人定)。** 冻结到期 = 截止 + 60s 宽限 + 60s 余量。
+
+match 过了截止 + 宽限,不再立刻补写 ABORT(2026-11-10 起,[跨区匹配](cross-zone-matchmaking.md) §13.3「2026-11-06 修复」):
+
+- 先向原 battle 实例取证(DestroyBattle + QueryBattleCreation),有下面两种证据之一才写:
+  - 「没有房间」;
+  - 「原进程已不在」:查询失败、另起 TCP 拨号被拒、已同步的注册中心里不在册,三条同时成立。
+- 没有证据就等到硬上限:截止 + 宽限 + 10 分钟;越过硬上限后第一次看到房间还在,再给 2 分钟。
+- match 可用时,ABORT 最晚约在截止 + 14.2 分钟落定(硬上限加持有宽限之外,还要算恢复循环两次访问这一局的延迟;原 battle 成批被黑洞、每拍多等一个取证期限时约 16.3 分钟),仍早于续冻上限(截止 + 17 分钟)。
+
+所以有原件的局在冻结到期时查到 NONE 很常见,只说明 ABORT 还没写成(match 正在取证、不可用或恢复任务滞后)。而 COMPLETE 不判截止、仍可能先落库,所以 NONE 不是终局证据,按未知续冻;「解冻之后 COMPLETE 才落库」因此只剩续冻上限之后的一段,归入有告警的那条残余。
 没有可裁决原件的局另当别论:COMPLETE 与截止 ABORT 两条写终局的路径都要求原件可裁决(`authority.TerminalOutcomeExpected`,
-与 `supportedOutcomeOriginal` 同一判据),这种局永远不会有结算。核实结果:match 现在总是装配 SQL 成局权威(没有本地模式),
-所有备战都来自 match 的 gather,新成局只经 `SaveSupportedIntent` 落 v1 原件;没有可裁决原件的只剩上线前的协议 0 旧成局、
-battle 明确采用旧协议的成局、原件坏形状的成局,以及锁值对不上任何成局行的情形。它们也会走到这次查询,由 match 回
+与截止 ABORT、到期恢复同一判据 `autoTerminalOriginal`:成局在途(state 2/3/4),且原件可裁决 —— 在到期恢复的候选形状里
+(`recoverableOutcomeShape`)并过得了 `supportedOutcomeOriginal`),这种局永远不会有结算。核实结果:match 现在总是装配 SQL
+成局权威(没有本地模式),所有备战都来自 match 的 gather,新成局只经 `SaveSupportedIntent` 落 v1 原件;没有可裁决原件的只剩
+上线前的协议 0 旧成局、battle 明确采用旧协议的成局、原件坏形状的成局、operation 为空的成局、缺终局的旧 state 5,以及锁值
+对不上任何成局行的情形;已有终局行却没有决定(只有 Kafka 归档)的局同样不会落定。它们也会走到这次查询,由 match 回
 `terminal_expected=false`,scene 照常解冻。
 
 **续冻上限 15 分钟**(`PlayerBattleSystem::kFreezeHoldCapMs`):盖住 match 个人结算两到三轮失败重投(退避封顶 5 分钟,`pendingSettlementDelayMs`)
@@ -698,8 +708,8 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 - 一致性由存档本身保证,不依赖 Redis 锁的寿命,事故期间也不必冻住玩家。
 
 上面的续冻与上限保持不动,它们还管着 HP / MP、宠物状态的覆盖时序。续冻到上限解冻时**不放**预留,
-冻结已不在的预留由 reaper 按同一张终局表收尾、没有上限(`ReviewBattleItemHolds`);上面「越过上限之后照现行规则解冻……按持有量夹紧」
-那条残余因此只剩 HP / MP 与宠物状态的覆盖,道具不再夹紧。
+冻结已不在的预留由 reaper 按同一张终局表收尾、没有上限(`ReviewBattleItemHolds`);上面「残余与代价」的第一条
+(越过上限之后照现行规则解冻)因此只剩 HP / MP 与宠物状态的覆盖,道具不再夹紧。
 
 ### 11.3 用例与验证(全部未执行,待 Codex)
 

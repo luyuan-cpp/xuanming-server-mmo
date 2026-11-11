@@ -584,6 +584,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 
 - Redis 登录域和玩家域:令牌、登录态、连接栅栏、位置、会话、战斗锁进 Redis Cluster,加主节点就扩。2026-10-31 已落码,未编译([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13,存档相关批次作废)。规模按剩下的键重算(TiDB 决策 §9.5)。
 - Redis 控制域按 zone 组分实例,一个组内是单主:排队 `redis-queue-g<N>`(G4a 第 1a 批,10-24)与 scene_manager 控制域 `redis-ctl-g<N>`(场景路由、成员集合、世界频道、选主锁、死节点收尾任务,2026-11-05 落码、未编译,[control-plane-zone-scoping-20261105.md](control-plane-zone-scoping-20261105.md) §4),组号都是 zones 配置的 `redisQueueGroup`。scene_manager 按 zone 选主、只读写本 zone 的键,加组就扩写入;一个组装不下时拆组。gate 排空标记与落点唤醒频道仍在核心。实际压力看压测。
+- 2026-11-10 负责人改口径:按 zone 组分单主实例与核心单主都不算水平扩展。排队、控制域、核心剩下的全部用途改上新建的控制集群 `redis-control`,设计见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md),还没落码。
 - data_service 写门禁用的 MappingRedis 随映射直读 TiDB 删除(映射提案 §15.9),配置段只留名字缓存,改名 `NameCacheRedis`。
 
 ## 9. 按预算分三档部署

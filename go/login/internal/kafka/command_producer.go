@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"shared/drainproof"
-	"shared/tracing"
+	"shared/tracing/saramatrace"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -73,7 +73,7 @@ func (p *CommandProducer) SendToTopicPartitionContext(ctx context.Context, topic
 		Topic:     topic,
 		Partition: partition,
 		Value:     sarama.ByteEncoder(data),
-		Headers:   tracing.SaramaHeaders(ctx),
+		Headers:   saramatrace.Headers(ctx),
 	}
 	if key != "" {
 		msg.Key = sarama.StringEncoder(key)

@@ -1,5 +1,12 @@
 #pragma once
 
+// 见 kafka_consumer.h 顶部的长注释:C++ 包装层随工程源码编译,
+// 所以包含 rdkafkacpp.h 之前必须先定义 LIBRDKAFKA_STATICLIB。本头文件可能先于
+// kafka_producer.h / kafka_consumer.h 被包含,不能指望它们替自己定义。
+#ifndef LIBRDKAFKA_STATICLIB
+#define LIBRDKAFKA_STATICLIB
+#endif
+
 #include <string>
 #include <string_view>
 

@@ -301,6 +301,32 @@ func TestListDueQueryPutsShardFilterBeforeLimit(t *testing.T) {
 	assert.Contains(t, sqlListDueAgedHead, "`attempts` >= ? AND ")
 }
 
+// TestCleanupCandidateQueriesPutShardFilterBeforeLimit:终态清理按片分工(缺口清单第 25 条第二批)。三条候选读的分片条件都在
+// ORDER BY / LIMIT 之前;零值条件拼出来的就是不分片的常量(TestEconomyCandidateReadsTakeNoLocks 查的那一份);
+// 实参按占位符顺序:原有条件、片号、LIMIT。纯函数,不连库。
+func TestCleanupCandidateQueriesPutShardFilterBeforeLimit(t *testing.T) {
+	owned := workshard.SQLFilter(func(key string) bool {
+		return key == workshard.ShardKey(CleanupWorkKind, 9) || key == workshard.ShardKey(CleanupWorkKind, 2)
+	}, CleanupWorkKind, "player_id")
+	for name, q := range map[string]struct {
+		head, tail, unsharded string
+		before                int
+	}{
+		"terminal ops":    {sqlListCleanupTerminalOpsHead, sqlListCleanupTerminalOpsTail, sqlListCleanupTerminalOps, 5},
+		"client requests": {sqlListCleanupClientRequestsHead, sqlListCleanupClientRequestsTail, sqlListCleanupClientRequests, 1},
+		"counters":        {sqlListCleanupCountersHead, sqlListCleanupCountersTail, sqlListCleanupCounters, 2},
+	} {
+		query := cleanupCandidateQuery(q.head, owned, q.tail)
+		assert.True(t, strings.HasSuffix(query, " AND MOD(player_id,64) IN(?,?)"+q.tail), "%s:分片条件必须在 ORDER BY / LIMIT 之前:%s", name, query)
+		assert.Equal(t, q.before+2+1, strings.Count(query, "?"), "%s:原有条件 + 2 个片号 + LIMIT", name)
+		assert.Equal(t, q.unsharded, cleanupCandidateQuery(q.head, workshard.Filter{}, q.tail), "%s:零值条件就是不分片的那一份", name)
+		assert.Contains(t, q.unsharded, " AND 1=1 ORDER BY ", "%s", name)
+	}
+	assert.Equal(t, []any{"a", "b", 2, 9, cleanupBatchSize}, cleanupArgs(owned, "a", "b"), "原有条件、升序片号、LIMIT")
+	assert.Equal(t, []any{"a", cleanupBatchSize}, cleanupArgs(workshard.Filter{}, "a"), "零值条件没有片号实参")
+	assert.NotEqual(t, CleanupWorkKind, "guild-assetop", "清理与重投的类别键不同名")
+}
+
 // TestCounterRefundIsTheOnlyRefundRule:退次数 / 退限购的判定只此一处(counterRefund),lockCounterparty 的 seq 行守卫
 // 与 applyCounterparty 的退款都按它走 —— 两边条件一分叉,就会出现"退了款却没先锁 seq 行"(C6 的环回来)。
 // 纯函数,不连库。
@@ -2064,6 +2090,45 @@ func TestCleanupOnce_KeepsPendingAndPartial(t *testing.T) {
 		assert.Equal(t, survives, found, "period_key=%d", key)
 	}
 	assert.Equal(t, map[string]int64{"guild_asset_op": 4, "guild_daily_counter": 2}, deleted)
+}
+
+// TestCleanupOnce_OnlyOwnedShards:终态清理按片分工(缺口清单第 25 条第二批,片号 = player_id % 64)。
+// 只清本副本负责的片:别的片的保留期外终态行与过期计数行原样留着;换成不分工(Owns 为 nil)再跑一轮,剩下的也清掉。
+func TestCleanupOnce_OnlyOwnedShards(t *testing.T) {
+	f := openEconomyFixture(t)
+	const mine, other uint64 = 64*136 + 3, 64*136 + 4 // 片 3 与片 4
+	now := time.UnixMilli(int64(testNowMs))
+	oldMs := testNowMs - 31*econDayMs
+	oldDay := gameday.DayKey(now.Add(-31 * 24 * time.Hour))
+	for i, c := range []struct {
+		opID, player uint64
+	}{{801, mine}, {802, other}} {
+		rec := econShopRecord(t, c.opID, c.player, oldMs, uint64(i+1))
+		rec.Status = pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED
+		rec.NextAttemptMs = oldMs
+		rec.CreatedMs, rec.UpdatedMs = oldMs, oldMs
+		econInsertOp(t, f, rec)
+		mustExec(t, f.ctx, f.db,
+			`INSERT INTO guild_daily_counter (player_id, counter_kind, ref_id, period_key, used_count, updated_ms) VALUES (?, ?, ?, ?, ?, ?)`,
+			c.player, int32(pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP), 101, oldDay, 1, testNowMs)
+	}
+	counterExists := func(player uint64) bool {
+		_, found := econCounterUsed(t, f, player, pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP, 101, oldDay)
+		return found
+	}
+
+	conf := CleanupConf{Interval: time.Minute, TerminalRetention: 30 * 24 * time.Hour, CounterRetention: 30 * 24 * time.Hour,
+		Owns: func(key string) bool { return key == workshard.ShardKey(CleanupWorkKind, workshard.ShardOf(mine)) }}
+	require.NoError(t, f.store.CleanupOnce(f.ctx, now, conf))
+	assert.False(t, econOpExists(t, f, 801), "本片的终态行删掉")
+	assert.False(t, counterExists(mine), "本片的过期计数行删掉")
+	assert.True(t, econOpExists(t, f, 802), "别的片的终态行留给负责它的副本")
+	assert.True(t, counterExists(other), "别的片的计数行留给负责它的副本")
+
+	conf.Owns = nil
+	require.NoError(t, f.store.CleanupOnce(f.ctx, now, conf))
+	assert.False(t, econOpExists(t, f, 802), "不分工时清全部行")
+	assert.False(t, counterExists(other), "不分工时清全部行")
 }
 
 // ── 读查询 ───────────────────────────────────────────────────

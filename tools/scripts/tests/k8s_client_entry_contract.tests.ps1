@@ -1404,7 +1404,9 @@ Test-Case '端到端 -LoginDevPasswordAuth(dev):login.yaml 写 DevPasswordAuth,�
     Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.DevPasswordAuth.Enabled') -Because '开关打开'
     Assert-Equal -Expected 'LOGIN_DEV_PASSWORD_SHARED_SECRET' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.DevPasswordAuth.SharedSecretEnv') -Because 'ConfigMap 只写环境变量名'
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Mode') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Mode') -Because 'DevPasswordAuth 只在 go-zero Mode 为 dev / test 时生效,否则 login 启动即 panic'
-    $login = Select-ManifestDoc -Output $out -Kind 'Deployment' -Name 'login'
+    # login 是 SQL 写者,是 StatefulSet(Pod 序号就是写者名册的槽位,docs/design/writer-roster-exhaustion-20261106.md §5.5)。
+    $login = Select-ManifestDoc -Output $out -Kind 'StatefulSet' -Name 'login'
+    Assert-True -Condition ($null -ne $login) -Because "DryRun 输出里要有 StatefulSet/login。输出: $out"
     Assert-Match -Text $login -Pattern '- name: LOGIN_DEV_PASSWORD_SHARED_SECRET\s+valueFrom:\s+secretKeyRef:\s+name: login-dev-password\s+key: shared-secret\s' -Because '口令只经 Secret 进容器'
     # 只看这把口令:同一容器的 LoginAdmin 运维令牌是另一回事,没有它时运维面停用,manifest 里写的就是 optional: true。
     Assert-NotMatch -Text $login -Pattern 'name: login-dev-password\s+key: shared-secret\s+optional:\s*true' -Because 'Secret 缺失时要卡在 CreateContainerConfigError,不能带着空口令起来'

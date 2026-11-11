@@ -122,3 +122,17 @@ enum class AoiPolicyKind : uint8_t
 constexpr std::size_t kAoiListCapacityDefault = 100;
 constexpr uint32_t kAoiListCapacityMin     = 20;
 constexpr uint32_t kAoiListCapacityMax     = 200;
+
+// ---------------------------------------------------------------------------
+// 服务器压力(AoiLoadMonitor,spatial/system/aoi_load.h):模拟步耗时 / 步长 = 利用率,
+// 指数平均后映射成压力因子,写进 ScenePressureComp 调容量。
+// 默认值没有压测数据支撑,上线前随 AOI 压测校准(AGENTS.md §6)。
+// ---------------------------------------------------------------------------
+constexpr double kAoiLoadSmoothing = 0.05;              // 每步的指数平均权重:20 FPS 下时间常数约 1 秒
+constexpr double kAoiLoadDecisionIntervalSeconds = 1.0; // 压力档位最多每秒变一次
+constexpr double kAoiPressureLowUtilization = 0.5;      // 平滑利用率到这里之前压力为 0
+constexpr double kAoiPressureHighUtilization = 0.9;     // 到这里压力为 1,容量降到 kAoiListCapacityMin
+constexpr int kAoiPressureLevels = 10;                  // 压力量化成 10 档
+constexpr double kAoiPressureHysteresisLevels = 0.75;   // 偏离当前档位超过 3/4 档才换档,边界附近的抖动不改容量
+
+static_assert(kAoiPressureLowUtilization < kAoiPressureHighUtilization, "AOI pressure thresholds must be ordered");

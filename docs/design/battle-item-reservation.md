@@ -88,13 +88,20 @@ ERROR `metric=battle_item_hold_overdue`(`IsHoldOverdueLogDue`)。
 | 入口 | 被预留挡住时 | 调用方 |
 |---|---|---|
 | `BagService::CheckRemovable`(按数量预检) | 回 `RemovalVerdict::kHeld`(优先级:确定不足 > 版本错位 > 被预留占住 > 够) | 资产通道扣物品、强化扣材料、镶嵌扣宝石 |
-| `BagService::CheckRemovableInstances`(按实例预检) | `kHeld` | 资产通道按 guid 扣 |
+| `BagService::CheckRemovableInstances`(按实例预检) | `kHeld` | 资产通道按 guid 扣、穿上装备 |
 | `RemoveItemsExact` | 整批拒、一件不扣,`kBagInsufficientItems` + ERROR(预检之后状态变了才会走到) | 强化、镶嵌、资产通道、GM 回收 |
 | `RemoveItemsByGuid` | 整批拒、一件不扣,`kAssetInBattle`(RETRY 类,`mutated=false`) | 资产通道、GM 回收 |
 | `RemoveItemsClamped` | 夹到可出包数量 | 无生产调用方 |
 | `RemoveItem` | 拒,`kBagInsufficientItems` | 无生产调用方 |
 | `ConsumeInventoryAndGrant` | 消耗夹到「总量 - 别的预留」;`consumeFromHoldId` 那一份可用 | 战斗结算 |
-| 整理 / 取回临时格 / 入包 | 不受影响(不减少数量) | — |
+| `PlayerEquipSystem::Equip`(穿上 = 把这一件移出人物背包,`Bag::TakeInstance`) | 纯校验段先问 `CheckRemovableInstances`,`kHeld` 回 `kFeatureUnavailable`、两包不动 | 穿戴协议 |
+| 整理 / 取回临时格 / 入包 / 卸下装备 | 不受影响(不减少人物背包的数量) | — |
+
+人物背包里减少数量的入口只有上表这些(2026-11-10 按源码核对):`Bag` 的扣除原语在生产代码里只由 `BagService` 调
+(`RemoveItem` / `RemoveItems`;`RemoveItemByPos` 没有生产调用方),
+`Bag::TakeInstance` 从人物背包取件只有穿戴一处(`Bag::MoveInstancesTo` 只用于临时格 → 人物背包)。今天的物品表里没有
+既是装备又可参战的行,穿戴这道闸让不变量 1 不依赖这条配表约定。以后新加「移出人物背包」的入口(存仓库、丢弃、出售等),
+必须在纯校验段问 `CheckRemovable` / `CheckRemovableInstances`。
 
 调用方的处置:
 
@@ -103,6 +110,7 @@ ERROR `metric=battle_item_hold_overdue`(`IsHoldOverdueLogDue`)。
 - **GM 回收**:按「可出包数量」收;不够而差额就在预留里时回 RETRY + `kAssetInBattle`(`metric=asset_recall_items_held`),
   等那一局结算或作废后收全。按实例回收时人物背包里至多挑可出包的件数。
 - **强化 / 镶嵌**:回 `kFeatureUnavailable`(暂不可用),与版本错位同码。
+- **穿上装备**:回 `kFeatureUnavailable`。押的是数量不是哪一件:两件同款押一件,穿哪一件都行,第二件不行。
 
 这**不是**「局中挡一切背包写」的战斗闸:D48 红线照旧(战斗闸只放在玩法入口层),预留只管数量、不看 `InBattleComp`,
 战斗结算扣的正是它自己那份,不会被自己拦住。
@@ -139,7 +147,8 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
 
 ## 7. 代价与残余
 
-- 预留期间这一局带进战斗的道具转不走、用不掉(交易、帮会捐献、强化、镶嵌、GM 回收都暂不可用);结算一到即放开。
+- 预留期间这一局带进战斗的道具转不走、用不掉(交易、帮会捐献、强化、镶嵌、GM 回收都暂不可用;穿戴同样挡,
+  只在既是装备又可参战的行上会碰到,今天的表里没有);结算一到即放开。
   积压或 match 不可用越久,押得越久,有 `battle_item_hold_overdue` 告警。
 - 备战时人物背包里**全部**可参战的道具都被押住(快照就是这么取的),不只是这一局真正会喝掉的那几瓶。
 - 两个背包都满、而人物背包里全是被押着的满堆时,玩家仍腾不出位置,那一局结算一直延后、预留一直在。冻结已按上限解开,
@@ -156,9 +165,9 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
 | 背包 | `cpp/libs/modules/bag/item_hold.h`(新)、`bag_service.{h,cpp}`、`cpp/libs/modules/modules.vcxproj` |
 | 存档 | `cpp/libs/services/scene/player/system/player_database_loader.cpp` |
 | 战斗 | `cpp/libs/services/scene/battle/system/{player_battle.h, player_battle.cpp, battle_freeze_hold_rules.h}` |
-| 资产 / 装备 | `cpp/libs/services/scene/player/system/{asset_op_system.cpp, player_equip.cpp}` |
-| 测试 | `cpp/tests/bag_test/item_hold_test.cpp`(新)、`battle_freeze_hold_test.cpp`、`player_battle_settlement_test.cpp`、`persist_round_trip_test.cpp`、`player_feature_persistence_test.cpp`、`player_equip_attribute_test.cpp`、`bag_test.cpp`、`bag_test.vcxproj(.filters)`;`cpp/tests/cross_zone_test/cross_zone_test.cpp` |
-| 文档 | 本文、`turn-battle-gap-closure.md` §11.2、`bag-rule-policy-layering.md` §(7)、`player-inbox-runbook.md` §6.1、`deploy/k8s/match-outcome-outbox-alerts.yaml`(只改描述)、`docs/README.md` |
+| 资产 / 装备 | `cpp/libs/services/scene/player/system/{asset_op_system.cpp, player_equip.h, player_equip.cpp}`(强化 / 镶嵌预检、穿戴闸) |
+| 测试 | `cpp/tests/bag_test/item_hold_test.cpp`(新)、`battle_freeze_hold_test.cpp`、`player_battle_settlement_test.cpp`、`persist_round_trip_test.cpp`、`player_feature_persistence_test.cpp`、`player_equip_attribute_test.cpp`、`player_equip_test.cpp`、`bag_test.cpp`、`bag_test.vcxproj(.filters)`;`cpp/tests/cross_zone_test/cross_zone_test.cpp` |
+| 文档 | 本文、`turn-battle-gap-closure.md` §11.2、`bag-rule-policy-layering.md` §(7)、`player-inbox-runbook.md` §6.1、`ecs-component-access-rules.md`(持久数据表与读缺失例外)、`player-save-direct-commit.md` §1.1(资料行字段)、`deploy/k8s/match-outcome-outbox-alerts.yaml`(只改描述)、`deploy/k8s/asset-channel-alerts.yaml`(头注释固定查询:改上限那条的描述,加 `battle_item_hold_overdue`)、`docs/README.md` |
 | 别的会话已改 | `go/match/internal/authority/terminal_abort.go` 里 `deadlineAbortHardCapMs` 的注释(「数据覆盖审计交接文档」会话 11-10 改,纯注释、未编译):scene 按上限解冻只放开人,道具仍由预留押着;晚到的 COMPLETE 从预留里扣,晚到的 ABORT / 没有可裁决原件只释放预留;等待上限决定的是「人被冻多久」。`kFreezeHoldCapMs` 没变,`TestDeadlineAbortBoundsFitSceneFreezeHold` 的不等式照旧成立 |
 
 ## 9. 验证(全部未执行,交 Codex)
@@ -169,10 +178,12 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
    `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
    通过标准:生成 `cpp/generated/proto/common/component/player_item_hold_comp.pb.{h,cc}`,并已登记进 `cpp/generated/proto/proto.vcxproj`
    与 `CMakeLists.txt`;`proto/persist_schema_gen.txt` 出现 `player_database#26 … group=4` 与三个新类型的行;`go/proto` 下同名绑定生成。
+   2026-11-10 23:37 核对:工作区里这些产物已经在了(23:08 有一次生成跑过,proto 源之后没再改),重跑一次确认没有差异即可。
 2. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`:0 个 `error C` / `LNK`,`/WX` 无新告警。改了 modules 与 scene 库,先编库再跑测试。
-3. `build\cpp\tests\bag_test.exe --gtest_filter=ItemHoldRules.*:BagServiceItemHoldTest.*:BattleItemHoldRules.*:BattleItemHoldTest.*:BattleFreezeHold*:PlayerBattleSettlementItemTest.Inbox*Hold*:PlayerBattleSettlementTest.SnapshotItemsExcludeQuantitiesHeldByAnotherBattle:PersistRoundTripTest.*:PlayerFeaturePersistence*`
+3. `build\cpp\tests\bag_test.exe --gtest_filter=ItemHoldRules.*:BagServiceItemHoldTest.*:BattleItemHoldRules.*:BattleItemHoldTest.*:BattleFreezeHold*:PlayerBattleSettlementItemTest.Inbox*Hold*:PlayerBattleSettlementTest.SnapshotItemsExcludeQuantitiesHeldByAnotherBattle:PersistRoundTripTest.*:PlayerFeaturePersistence*:PlayerEquipTest.EquipRefusesToTakeTheLastHeldUnitOutOfTheInventory:PlayerEquipTest.Enhance*:PlayerEquipTest.Inlay*`
    全绿,再跑一次完整 `bag_test.exe`;`currency_test.exe --gtest_filter=AssetOpSystemTest.*:AssetOpRecallTest.*` 与 `cross_zone_test.exe` 完整套件不回归。
-4. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:match-outcome-outbox-alerts 用例照旧通过(只改了描述文字)。
+4. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:match-outcome-outbox-alerts 用例照旧通过(只改了描述文字);
+   「LogQL 契约」用例照旧通过(`asset-channel-alerts.yaml` 多了一条 `{job="cpp_nodes", service="scene"}` 的固定查询,写法与其余几条相同)。
 5. `cd go/match && go build ./...`(只改了注释)。
 
 ## 10. Java 版
